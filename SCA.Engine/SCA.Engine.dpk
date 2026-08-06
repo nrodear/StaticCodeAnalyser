@@ -43,6 +43,7 @@ contains
   uRegExMatches in 'sources\Common\uRegExMatches.pas',
   uRuleCatalog in 'sources\Common\uRuleCatalog.pas',
   uSCAConsts in 'sources\Common\uSCAConsts.pas',
+  uSourceLineEdit in 'sources\Common\uSourceLineEdit.pas',
   uYamlSubsetParser in 'sources\Common\uYamlSubsetParser.pas',
   uAbstractNotImpl in 'sources\Detectors\uAbstractNotImpl.pas',
   uAssertMessage in 'sources\Detectors\uAssertMessage.pas',

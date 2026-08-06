@@ -174,6 +174,16 @@ type
     procedure ClipCopyFire(Sender: TObject);
     // Der Oeffnen-Kern von ResultGridDblClick - auch per Enter erreichbar.
     procedure OpenSelectedFinding;
+    // Gemeinsame Aufloesung fuer alle Tasten-Aktionen am Grid: Fund der
+    // aktuellen Zeile + absoluter Pfad (DirOfProjectPath-Rebase) + Zeile.
+    function  TryResolveSelectedFinding(var AFinding: TLeakFinding;
+      var AAbsPath, ARelPath: string; var ALineNo: Integer): Boolean;
+    // Ctrl+Alt+S / Ctrl+Alt+F - die Tasten des IDE-Plugins. Das Plugin
+    // schreibt in den IDE-Editor (Strg+Z nimmt zurueck); die EXE
+    // schreibt in die DATEI, deshalb laufen beide Wege ueber
+    // uSourceLineEdit mit Byte-Treue-Probe.
+    procedure SuppressSelectedFinding;
+    procedure QuickFixSelectedFinding;
     // Panel der Auswahl nachziehen, OHNE die Zwischenablage anzufassen.
     procedure UpdateHintPanelToSelection;
     // Alle statischen Captions durch den Katalog ziehen. Die DFM-Werte
@@ -288,6 +298,8 @@ implementation
 uses
   clipbrd,
   System.IniFiles,                // TIniFile (PersistDfmTarget - kommentarschonend)
+  uSourceLineEdit,                // Suppress/Quick-Fix schreiben in die Datei
+  uQuickFix,                      // TQuickFix.ProposeFix (Ctrl+Alt+F)
   uAppTheme,                      // Hell/Dunkel der Standalone-EXE
   uStaticFiles, uRuleCatalog,
   uExport,                        // TExporter.ExportCsv (kanonischer CSV-Schreiber)
@@ -1689,16 +1701,58 @@ begin
   begin
     Key := 0;                       // kein Grid-Beep/Standardverhalten
     OpenSelectedFinding;
+  end
+  else if (Key = Ord('S')) and (Shift = [ssCtrl, ssAlt]) then
+  begin
+    Key := 0;
+    SuppressSelectedFinding;
+  end
+  else if (Key = Ord('F')) and (Shift = [ssCtrl, ssAlt]) then
+  begin
+    Key := 0;
+    QuickFixSelectedFinding;
   end;
+end;
+
+function TForm2.TryResolveSelectedFinding(var AFinding: TLeakFinding;
+  var AAbsPath, ARelPath: string; var ALineNo: Integer): Boolean;
+var
+  row     : Integer;
+  baseDir : string;
+begin
+  Result   := False;
+  AFinding := nil;
+  AAbsPath := '';
+  ARelPath := '';
+  ALineNo  := 0;
+  row := ResultGrid.Row;
+  if row < 1 then Exit;
+  if (FDisplayedFindings = nil) or (row > FDisplayedFindings.Count) then Exit;
+  AFinding := FDisplayedFindings[row - 1];
+  baseDir  := IncludeTrailingPathDelimiter(FCurrentBaseDir);
+  ARelPath := ExtractRelativePath(baseDir, AFinding.FileName);
+  if ARelPath = '' then Exit;
+  ALineNo := StrToIntDef(AFinding.LineNumber, 0);
+  // DirOfProjectPath, nicht Projectpath.Text: bei einem Projekt-Scan
+  // steht im Feld eine .dproj/.groupproj-DATEI. Ohne die Umrechnung
+  // entstand hier ein Pfad wie ...\Mein.dproj\sources\u.pas, und der
+  // Doppelklick meldete fuer JEDEN Befund eines Projekt-Scans
+  // "File not found".
+  AAbsPath := IncludeTrailingPathDelimiter(DirOfProjectPath(Projectpath.Text))
+              + ARelPath;
+  if not FileExists(AAbsPath) then
+  begin
+    StatusBar1.Panels[2].Text := _('File not found: ') + AAbsPath;
+    Exit;
+  end;
+  Result := True;
 end;
 
 procedure TForm2.OpenSelectedFinding;
 var
-  row     : Integer;
   relPath : string;
   absPath : string;
   lineNo  : Integer;
-  baseDir : string;
   f       : TLeakFinding;
   msg     : string;
 begin
@@ -1710,33 +1764,88 @@ begin
   if gOpeningFinding then Exit;
   gOpeningFinding := True;
   try
-    row := ResultGrid.Row;
-    if row < 1 then Exit;
-    if (FDisplayedFindings = nil) or (row > FDisplayedFindings.Count) then Exit;
-    f := FDisplayedFindings[row - 1];
-    baseDir := IncludeTrailingPathDelimiter(FCurrentBaseDir);
-    relPath := ExtractRelativePath(baseDir, f.FileName);
-    if relPath = '' then Exit;
-    lineNo := StrToIntDef(f.LineNumber, 0);
-    // DirOfProjectPath, nicht Projectpath.Text: bei einem Projekt-Scan
-    // steht im Feld eine .dproj/.groupproj-DATEI. Ohne die Umrechnung
-    // entstand hier ein Pfad wie ...\Mein.dproj\sources\u.pas, und der
-    // Doppelklick meldete fuer JEDEN Befund eines Projekt-Scans
-    // "File not found".
-    absPath := IncludeTrailingPathDelimiter(DirOfProjectPath(Projectpath.Text))
-               + relPath;
-    if not FileExists(absPath) then
-    begin
-      StatusBar1.Panels[2].Text := _('File not found: ') + absPath;
-      Exit;
-    end;
-
+    if not TryResolveSelectedFinding(f, absPath, relPath, lineNo) then Exit;
     msg := OpenFindingAt(absPath, relPath, lineNo);
     if (msg <> '') and not (csDestroying in ComponentState) then
       StatusBar1.Panels[2].Text := msg;
   finally
     gOpeningFinding := False;
   end;
+end;
+
+procedure TForm2.SuppressSelectedFinding;
+// Ctrl+Alt+S, wie im Plugin: '// noinspection <RuleName>' UEBER die
+// Fundzeile. Das Plugin schreibt in den IDE-Editor (Strg+Z nimmt
+// zurueck); hier geht es in die DATEI - uSourceLineEdit schreibt nur,
+// wenn die Byte-Treue-Probe besteht. Der Befund verschwindet wie im
+// Plugin erst mit dem naechsten Analyse-Lauf.
+var
+  f       : TLeakFinding;
+  absPath : string;
+  relPath : string;
+  lineNo  : Integer;
+  Marker  : string;
+  Err     : string;
+begin
+  if not TryResolveSelectedFinding(f, absPath, relPath, lineNo) then Exit;
+  if lineNo <= 0 then
+  begin
+    StatusBar1.Panels[2].Text := _('Suppress: cannot locate source line');
+    Exit;
+  end;
+  Marker := '// noinspection ' + KindName(f.Kind);
+  if TSourceLineEdit.InsertLineAbove(absPath, lineNo, Marker, Err) then
+    StatusBar1.Panels[2].Text := Format(_('Suppress inserted: %s'), [Marker])
+  else
+    StatusBar1.Panels[2].Text :=
+      Format(_('Suppress: could not write file: %s'), [Err]);
+end;
+
+procedure TForm2.QuickFixSelectedFinding;
+// Ctrl+Alt+F, wie im Plugin: Zeile lesen, TQuickFix.ProposeFix, Zeile
+// ersetzen. Statusmeldungen wortgleich zum Plugin - nur der
+// Schreibfehler nennt hier die Datei statt des IDE-Editors.
+var
+  f        : TLeakFinding;
+  absPath  : string;
+  relPath  : string;
+  lineNo   : Integer;
+  OrigLine : string;
+  Err      : string;
+  Fix      : TQuickFixResult;
+begin
+  if not TryResolveSelectedFinding(f, absPath, relPath, lineNo) then Exit;
+  if not TQuickFix.HasProviderFor(f.Kind) then
+  begin
+    StatusBar1.Panels[2].Text := Format(
+      _('Quick-Fix: no provider for ''%s'' - manual fix required'),
+      [f.RuleID]);
+    Exit;
+  end;
+  if lineNo <= 0 then
+  begin
+    StatusBar1.Panels[2].Text := _('Quick-Fix: cannot locate source line');
+    Exit;
+  end;
+  if not TSourceLineEdit.ReadLine(absPath, lineNo, OrigLine, Err) then
+  begin
+    StatusBar1.Panels[2].Text := _('Quick-Fix: line out of range');
+    Exit;
+  end;
+  Fix := TQuickFix.ProposeFix(f, OrigLine);
+  if not Fix.Applied then
+  begin
+    StatusBar1.Panels[2].Text := Format(
+      _('Quick-Fix: pattern not matched on line %d - manual fix required'),
+      [lineNo]);
+    Exit;
+  end;
+  if TSourceLineEdit.ReplaceLine(absPath, lineNo, Fix.Fixed, Err) then
+    StatusBar1.Panels[2].Text :=
+      Format(_('Quick-Fix applied: %s'), [Fix.Description])
+  else
+    StatusBar1.Panels[2].Text :=
+      Format(_('Quick-Fix: could not write file: %s'), [Err]);
 end;
 
 procedure TForm2.NavigateDelphiToLine(LineNo: Integer);

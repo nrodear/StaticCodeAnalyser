@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1900 Zeilen, 64261 Bytes
-  CPoLines_de: array[0..1899] of string = (
+  // i18n\de.po - 1908 Zeilen, 64512 Bytes
+  CPoLines_de: array[0..1907] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1914,11 +1914,19 @@ const
     'msgstr "Sonar-Export"',
     '',
     'msgid "Sonar Generic Issue Format (*.json)|*.json"',
-    'msgstr "Sonar Generic Issue Format (*.json)|*.json"'
+    'msgstr "Sonar Generic Issue Format (*.json)|*.json"',
+    '',
+    '# --- 2026-08-06: Plugin-Tasten in der EXE (Suppress/Quick-Fix) ---',
+    '',
+    'msgid "Suppress: could not write file: %s"',
+    'msgstr "Suppress: Datei nicht schreibbar: %s"',
+    '',
+    'msgid "Quick-Fix: could not write file: %s"',
+    'msgstr "Quick-Fix: Datei nicht schreibbar: %s"'
   );
 
-  // i18n\en.po - 96 Zeilen, 2805 Bytes
-  CPoLines_en: array[0..95] of string = (
+  // i18n\en.po - 104 Zeilen, 3052 Bytes
+  CPoLines_en: array[0..103] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
     '# kept for consistency and as a "neutral" fallback baseline.',
@@ -2014,11 +2022,19 @@ const
     'msgstr "Sonar export"',
     '',
     'msgid "Sonar Generic Issue Format (*.json)|*.json"',
-    'msgstr "Sonar Generic Issue Format (*.json)|*.json"'
+    'msgstr "Sonar Generic Issue Format (*.json)|*.json"',
+    '',
+    '# --- 2026-08-06: Plugin-Tasten in der EXE (Suppress/Quick-Fix) ---',
+    '',
+    'msgid "Suppress: could not write file: %s"',
+    'msgstr "Suppress: could not write file: %s"',
+    '',
+    'msgid "Quick-Fix: could not write file: %s"',
+    'msgstr "Quick-Fix: could not write file: %s"'
   );
 
-  // i18n\fr.po - 1912 Zeilen, 68735 Bytes
-  CPoLines_fr: array[0..1911] of string = (
+  // i18n\fr.po - 1920 Zeilen, 68990 Bytes
+  CPoLines_fr: array[0..1919] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -3930,7 +3946,15 @@ const
     'msgstr "Export Sonar"',
     '',
     'msgid "Sonar Generic Issue Format (*.json)|*.json"',
-    'msgstr "Format Sonar Generic Issue (*.json)|*.json"'
+    'msgstr "Format Sonar Generic Issue (*.json)|*.json"',
+    '',
+    '# --- 2026-08-06: Plugin-Tasten in der EXE (Suppress/Quick-Fix) ---',
+    '',
+    'msgid "Suppress: could not write file: %s"',
+    'msgstr "Suppress : fichier non modifiable : %s"',
+    '',
+    'msgid "Quick-Fix: could not write file: %s"',
+    'msgstr "Quick-Fix : fichier non modifiable : %s"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
