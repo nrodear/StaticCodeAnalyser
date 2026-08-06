@@ -1791,7 +1791,7 @@ msgid "Code reaches into another form's published fields - tight coupling"
 msgstr "Le code accède aux champs published d'une autre fiche - couplage fort"
 
 msgid "Create a baseline from the current findings via the dock menu \"Write baseline from current scan...\", or with the CLI --write-baseline. The file is shared across CLI, IDE and HTML export. Takes effect on the next analysis."
-msgstr "Créer une référence à partir des résultats actuels via le menu du dock \"Écrire la référence depuis l'analyse actuelle...\" ou en ligne de commande avec --write-baseline. Le fichier est partagé entre la CLI, l'IDE et l'export HTML. Prend effet à la prochaine analyse."
+msgstr "Créer une référence à partir des résultats actuels via le menu du dock \"Écrire la référence à partir de l’analyse actuelle...\" ou en ligne de commande avec --write-baseline. Le fichier est partagé entre la CLI, l'IDE et l'export HTML. Prend effet à la prochaine analyse."
 
 msgid "Delphi project/group (*.dproj;*.groupproj)"
 msgstr "Projet/groupe Delphi (*.dproj;*.groupproj)"
@@ -1877,3 +1877,8 @@ msgstr "L'éditeur configuré ne peut pas être démarré : %s"
 
 msgid "Could not open %s: %s"
 msgstr "Impossible d'ouvrir %s : %s"
+
+# --- 2026-08-06: Review-Nacharbeit ---
+
+msgid "Could not save the choice - analyser.ini is not writable: %s"
+msgstr "Impossible d'enregistrer le choix - analyser.ini n'est pas modifiable : %s"

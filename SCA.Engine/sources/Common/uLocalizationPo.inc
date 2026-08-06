@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1867 Zeilen, 63284 Bytes
-  CPoLines_de: array[0..1866] of string = (
+  // i18n\de.po - 1872 Zeilen, 63483 Bytes
+  CPoLines_de: array[0..1871] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1881,11 +1881,16 @@ const
     'msgstr "Der eingerichtete Editor l'#$00E4'sst sich nicht starten: %s"',
     '',
     'msgid "Could not open %s: %s"',
-    'msgstr "%s konnte nicht ge'#$00F6'ffnet werden: %s"'
+    'msgstr "%s konnte nicht ge'#$00F6'ffnet werden: %s"',
+    '',
+    '# --- 2026-08-06: Review-Nacharbeit ---',
+    '',
+    'msgid "Could not save the choice - analyser.ini is not writable: %s"',
+    'msgstr "Wahl konnte nicht gespeichert werden - analyser.ini ist nicht beschreibbar: %s"'
   );
 
-  // i18n\en.po - 43 Zeilen, 1392 Bytes
-  CPoLines_en: array[0..42] of string = (
+  // i18n\en.po - 62 Zeilen, 1780 Bytes
+  CPoLines_en: array[0..61] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
     '# kept for consistency and as a "neutral" fallback baseline.',
@@ -1928,11 +1933,30 @@ const
     'msgstr "Configured editor cannot be started: %s"',
     '',
     'msgid "Could not open %s: %s"',
-    'msgstr "Could not open %s: %s"'
+    'msgstr "Could not open %s: %s"',
+    '',
+    '# --- 2026-08-05: Erscheinungsbild-Menue der Standalone-EXE ---',
+    '',
+    'msgid "Appearance"',
+    'msgstr "Appearance"',
+    '',
+    'msgid "Like Windows"',
+    'msgstr "Like Windows"',
+    '',
+    'msgid "Light"',
+    'msgstr "Light"',
+    '',
+    'msgid "Dark"',
+    'msgstr "Dark"',
+    '',
+    '# --- 2026-08-06: Review-Nacharbeit ---',
+    '',
+    'msgid "Could not save the choice - analyser.ini is not writable: %s"',
+    'msgstr "Could not save the choice - analyser.ini is not writable: %s"'
   );
 
-  // i18n\fr.po - 1879 Zeilen, 67712 Bytes
-  CPoLines_fr: array[0..1878] of string = (
+  // i18n\fr.po - 1884 Zeilen, 67915 Bytes
+  CPoLines_fr: array[0..1883] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -3726,7 +3750,7 @@ const
     'msgstr "Le code acc'#$00E8'de aux champs published d''une autre fiche - couplage fort"',
     '',
     'msgid "Create a baseline from the current findings via the dock menu \"Write baseline from current scan...\", or with the CLI --write-baseline. The file is shared across CLI, IDE and HTML export. Takes effect on the next analysis."',
-    'msgstr "Cr'#$00E9'er une r'#$00E9'f'#$00E9'rence '#$00E0' partir des r'#$00E9'sultats actuels via le menu du dock \"'#$00C9'crire la r'#$00E9'f'#$00E9'rence depuis l''analyse actuelle...\" ou en ligne de commande avec --write-baseline. Le fichier est partag'#$00E9' entre la CLI, l''IDE et l''export HTML. Prend effet '#$00E0' la prochaine analyse."',
+    'msgstr "Cr'#$00E9'er une r'#$00E9'f'#$00E9'rence '#$00E0' partir des r'#$00E9'sultats actuels via le menu du dock \"'#$00C9'crire la r'#$00E9'f'#$00E9'rence '#$00E0' partir de l'#$2019'analyse actuelle...\" ou en ligne de commande avec --write-baseline. Le fichier est partag'#$00E9' entre la CLI, l''IDE et l''export HTML. Prend effet '#$00E0' la prochaine analyse."',
     '',
     'msgid "Delphi project/group (*.dproj;*.groupproj)"',
     'msgstr "Projet/groupe Delphi (*.dproj;*.groupproj)"',
@@ -3811,7 +3835,12 @@ const
     'msgstr "L'''#$00E9'diteur configur'#$00E9' ne peut pas '#$00EA'tre d'#$00E9'marr'#$00E9' : %s"',
     '',
     'msgid "Could not open %s: %s"',
-    'msgstr "Impossible d''ouvrir %s : %s"'
+    'msgstr "Impossible d''ouvrir %s : %s"',
+    '',
+    '# --- 2026-08-06: Review-Nacharbeit ---',
+    '',
+    'msgid "Could not save the choice - analyser.ini is not writable: %s"',
+    'msgstr "Impossible d''enregistrer le choix - analyser.ini n''est pas modifiable : %s"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
