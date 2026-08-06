@@ -110,6 +110,18 @@ type
     // den uSCAConsts-Globals gefuellt; davor (und bei AContext=nil) lesen die
     // Cfg*-Helfer weiter das Prozess-Global.
     Config          : TEngineScalarConfig;
+    // Engste gemeinsame Wurzel der gescannten Dateiliste (bevorzugt der
+    // Index-Liste, die beim Einzeldatei-Scan mit ProjectRoot das ganze
+    // Projekt ueberspannt). Anker fuer das tplFixtureDir-Gate der
+    // Detektoren: nur Segmente UNTERHALB dieser Wurzel zaehlen als
+    // Testverzeichnis. '' = kein Anker ableitbar (Cross-Drive,
+    // Direktaufrufe ohne Kontext) - die Gates fallen dann auf das
+    // dokumentierte unverankerte Alt-Verhalten zurueck.
+    // noinspection PublicField
+    // Oeffentliches Feld wie alle Scan-Bestandteile dieser Klasse
+    // (Config, AstFileCache, ...) - der Kontext ist ein bewusst
+    // feld-basierter per-Scan-Container, keine gekapselte Klasse.
+    ScanRootDir     : string;
     // --- vom Context besessen (Destroy gibt frei) ---
     AstFileCache    : TAstFileCache;
     SymbolRefIndex  : TSymbolReferenceIndex;
@@ -195,6 +207,14 @@ function CtxTypeIndex(AContext: TAnalyzeContext): TTypeIndex;
 // liefert er Ctx.LeakyClasses (Baseline + AutoDiscovery-Adds) -> byte-identisch.
 function CtxLeakyClasses(AContext: TAnalyzeContext): TStringList;
 
+// Anker fuer die tplFixtureDir-Gates (Review 2026-08-06 Punkt 17):
+// ScanRootDir des laufenden Scans, '' ohne Kontext (Tests/Direktaufrufe)
+// bzw. wenn keine belastbare Wurzel ableitbar war - die Gates behalten
+// dann das dokumentierte unverankerte Alt-Verhalten. Bewusst KEIN
+// Global-Fallback: es gibt kein Prozess-Global fuer die Scanwurzel,
+// und eines einzufuehren hiesse, den Global-Abbau (TD-1) umzukehren.
+function CtxScanRoot(AContext: TAnalyzeContext): string;
+
 // TD-1 (2026-07-06): Skalar-Config-Leser mit Context-oder-Global-Fallback.
 // Jede Funktion liefert den Context-Wert wenn AContext<>nil, sonst das
 // uSCAConsts-Prozess-Global. Da SnapshotConfigFromGlobals Config==Globals
@@ -269,6 +289,14 @@ begin
     Result := AContext.LeakyClasses
   else
     Result := uSCAConsts.LeakyClasses;
+end;
+
+function CtxScanRoot(AContext: TAnalyzeContext): string;
+begin
+  if Assigned(AContext) then
+    Result := AContext.ScanRootDir
+  else
+    Result := '';
 end;
 
 // --- TD-1 Skalar-Config-Leser (Context-oder-Global-Fallback) ---------------

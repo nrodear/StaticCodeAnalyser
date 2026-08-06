@@ -48,13 +48,17 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12,
+  uAnalyzeContext;   // TAnalyzeContext (ScanRootDir-Anker des Testpfad-Gates)
 
 type
   TMethodNameDetector = class
   public
+    // AContext optional (Registrierung via AddD reicht den Scan-Ctx
+    // durch; Tests/Direktaufrufe laufen mit nil) - gebraucht fuer den
+    // ScanRootDir-Anker des Testpfad-Gates.
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -145,7 +149,8 @@ begin
 end;
 
 class procedure TMethodNameDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;
@@ -190,7 +195,9 @@ begin
   // Stufe tplFixtureDir: nur Verzeichnis-Segmente, keine Dateinamen
   // (s. uDetectorUtils - Basename-Muster wuerden Kundendateien wie
   // 'MySample.pas' im Produktivbaum stilllegen und den Test-Harness).
-  if TDetectorUtils.IsTestFixturePath(FileName, '', tplFixtureDir) then Exit;
+  // Verankert an der Scanwurzel - Begruendung s. uLeakDetector2 (Gate).
+  if TDetectorUtils.IsTestFixturePath(FileName,
+       CtxScanRoot(AContext), tplFixtureDir) then Exit;
   FfiTypes := nil;
   OwnerMap := nil;
   Seen     := nil;

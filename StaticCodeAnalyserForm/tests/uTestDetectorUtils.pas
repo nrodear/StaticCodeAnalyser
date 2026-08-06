@@ -6,6 +6,13 @@ unit uTestDetectorUtils;
 // Drift dort war ein potenzieller False-Positive. Die Tests pinnen das
 // Verhalten fest, damit beide Detektoren auf einer gepruefen Basis stehen.
 
+// noinspection-file HardcodedPath, LargeClass, DuplicateString
+// Testunit-Cluster: die woertlichen Pfade SIND die Testdaten der
+// Pfad-Heuristiken (CommonDirOf/IsTestFixturePath), eine 700+-Zeilen-
+// Fixture ist Abdeckung, und wiederholte Fixture-Literale gehoeren zu
+// lesbaren Einzeltests - dieselbe Einordnung wie in den uebrigen
+// Testunits (z.B. uTestFuzzyComboSearch).
+
 interface
 
 uses
@@ -44,6 +51,13 @@ type
     [Test] procedure TestPath_FixtureDir_MatchesDirSegments;
     [Test] procedure TestPath_FixtureDir_ResourcesIsProduction;
     [Test] procedure TestPath_FixtureDir_SegmentAnchoring;
+    [Test] procedure TestPath_FixtureDir_RootAnchor_AboveRootIgnored;
+    [Test] procedure TestPath_FixtureDir_RootAnchor_BelowRootStillMatches;
+    // ---- CommonDirOf (Anker-Ableitung, 2026-08-06) ----
+    [Test] procedure CommonDir_TypicalList;
+    [Test] procedure CommonDir_SingleFile_IsItsDir;
+    [Test] procedure CommonDir_CrossDrive_IsEmpty;
+    [Test] procedure CommonDir_DriveRootOnly_IsEmpty;
     // ---- MergeAdjacentStringLiterals ----
     [Test] procedure Merge_SimpleConcat;
     [Test] procedure Merge_NoSpaceAroundPlus;
@@ -867,8 +881,12 @@ begin
 end;
 
 procedure TTestDetectorUtils.TestPath_FixtureDir_MatchesDirSegments;
-// Die sechs Segmente, die in der Vormessung tatsaechlich getroffen haben.
+// ALLE sechs Segment-Regeln der Stufe. Der Kommentar behauptete frueher
+// "sechs", geprueft waren aber nur fuenf - 'unittest' (Singular) fehlte
+// (Review 2026-08-06, Punkt 18).
 begin
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'd:'#92'repo'#92'unittest'#92'uFoo.pas', '', tplFixtureDir), 'unittest');
   Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
     'd:\repo\tests\uFoo.pas', '', tplFixtureDir), 'tests');
   Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
@@ -904,6 +922,104 @@ begin
   Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
     'd:\repo\src\testdata.pas', '', tplFixtureDir),
     'Dateiname mit "test" ist kein Segment');
+end;
+
+
+procedure TTestDetectorUtils.TestPath_FixtureDir_RootAnchor_AboveRootIgnored;
+// DER Fund der Review (Punkt 17): unverankert lief das Gate als
+// Substring ueber den ganzen Absolutpfad. Ein Produktionsrepo, dessen
+// CHECKOUT-Pfad ein Testsegment enthaelt (Windows-Benutzer 'test',
+// Ablage unter D:/Demos/...), verlor SCA001+SCA106+SCA147 komplett -
+// ohne Hinweis, nicht abschaltbar. Mit der Scanwurzel als BaseDir
+// zaehlen nur noch Segmente UNTERHALB der Wurzel.
+begin
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
+    'c:'#92'users'#92'test'#92'projects'#92'shop'#92'src'#92'uOrder.pas',
+    'c:'#92'users'#92'test'#92'projects'#92'shop', tplFixtureDir),
+    'Segment oberhalb der Scanwurzel darf nicht unterdruecken');
+  // Ohne Anker (Tests/Direktaufrufe ohne Kontext) gilt das dokumentierte
+  // Alt-Verhalten - dieser Fall ist der Grund fuer den Anker, er muss
+  // als bekanntes Verhalten festgehalten bleiben.
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'c:'#92'users'#92'test'#92'projects'#92'shop'#92'src'#92'uOrder.pas',
+    '', tplFixtureDir),
+    'unverankertes Alt-Verhalten (BaseDir leer) bleibt dokumentiert');
+end;
+
+procedure TTestDetectorUtils.TestPath_FixtureDir_RootAnchor_BelowRootStillMatches;
+// Gegenprobe: ECHTE Testverzeichnisse im Projekt bleiben unterdrueckt -
+// der Anker darf nur die Fremd-Segmente daruober abschneiden.
+begin
+  Assert.IsTrue(TDetectorUtils.IsTestFixturePath(
+    'c:'#92'users'#92'test'#92'projects'#92'shop'#92'tests'#92'uOrderTests.pas',
+    'c:'#92'users'#92'test'#92'projects'#92'shop', tplFixtureDir),
+    'tests-Segment unterhalb der Wurzel muss weiter greifen');
+  // Datei AUSSERHALB der Wurzel: kein relativer Pfad ableitbar -> keine
+  // Unterdrueckung (konservativ: lieber melden als still schlucken).
+  Assert.IsFalse(TDetectorUtils.IsTestFixturePath(
+    'd:'#92'woanders'#92'tests'#92'uFoo.pas',
+    'c:'#92'users'#92'test'#92'projects'#92'shop', tplFixtureDir),
+    'Datei ausserhalb der Wurzel wird nicht unterdrueckt');
+end;
+
+procedure TTestDetectorUtils.CommonDir_TypicalList;
+var
+  L : TStringList;
+begin
+  L := TStringList.Create;
+  try
+    L.Add('d:'#92'repo'#92'src'#92'uA.pas');
+    L.Add('d:'#92'repo'#92'src'#92'sub'#92'uB.pas');
+    L.Add('d:'#92'repo'#92'tests'#92'uC.pas');
+    Assert.AreEqual('d:'#92'repo'#92, TDetectorUtils.CommonDirOf(L), False);
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TTestDetectorUtils.CommonDir_SingleFile_IsItsDir;
+var
+  L : TStringList;
+begin
+  L := TStringList.Create;
+  try
+    L.Add('d:'#92'repo'#92'src'#92'uA.pas');
+    Assert.AreEqual('d:'#92'repo'#92'src'#92, TDetectorUtils.CommonDirOf(L), False);
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TTestDetectorUtils.CommonDir_CrossDrive_IsEmpty;
+// Cross-Drive gibt es keine gemeinsame Wurzel - '' heisst 'kein Anker',
+// und die Gates behalten dann das unverankerte Alt-Verhalten.
+var
+  L : TStringList;
+begin
+  L := TStringList.Create;
+  try
+    L.Add('c:'#92'x'#92'uA.pas');
+    L.Add('d:'#92'y'#92'uB.pas');
+    Assert.AreEqual('', TDetectorUtils.CommonDirOf(L), False);
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TTestDetectorUtils.CommonDir_DriveRootOnly_IsEmpty;
+// Die Laufwerkswurzel ist als Anker wertlos: relativ zu ihr waere wieder
+// fast der ganze Absolutpfad Segment-Material.
+var
+  L : TStringList;
+begin
+  L := TStringList.Create;
+  try
+    L.Add('c:'#92'alpha'#92'uA.pas');
+    L.Add('c:'#92'beta'#92'uB.pas');
+    Assert.AreEqual('', TDetectorUtils.CommonDirOf(L), False);
+  finally
+    L.Free;
+  end;
 end;
 
 
