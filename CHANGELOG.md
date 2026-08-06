@@ -45,10 +45,18 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Keyboard triage in the standalone EXE**: <kbd>Enter</kbd> on a grid
-  row opens the finding (same routing as double-click). Multi-row
-  selection is enabled (`goRangeSelect`) — "Sonar: send selected" now
-  works on a range, as its code always intended.
+- **Keyboard triage in the standalone EXE**: <kbd>Enter</kbd> opens the
+  finding, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd> inserts the
+  `// noinspection` marker above the finding line and
+  <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> applies the quick-fix —
+  the IDE plugin's keys. Unlike the plugin (which edits the IDE buffer,
+  undoable with Ctrl+Z) the EXE writes to the file itself, so both paths
+  run through a byte-faithful line editor: encoding (UTF-8 with/without
+  BOM, UTF-16, ANSI), line endings (CRLF/LF, even mixed) and a missing
+  trailing newline are preserved exactly, enforced by a round-trip probe
+  that refuses to write rather than damage a file. Multi-row selection
+  is enabled (`goRangeSelect`) — "Sonar: send selected" now works on a
+  range, as its code always intended.
 - **Live language switch for most of the EXE**: the filter row, grid
   headers, analyse buttons and the hamburger menu now re-caption
   immediately on language change; the language menu shows native names
