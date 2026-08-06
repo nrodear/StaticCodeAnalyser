@@ -13,12 +13,12 @@ unit uAppTheme;
 // TStyleManager.ActiveStyle. Ein gesetzter Style wirkt damit automatisch
 // bis in SeverityBg und den Grid-Renderer durch.
 //
-// WICHTIG - STYLE-VERFUEGBARKEIT: ein VCL-Style muss in die EXE GELINKT
-// sein (Projektoptionen > Anwendung > Erscheinungsbild). Ist er das nicht,
-// liefert TStyleManager.TrySetStyle einfach False. Diese Unit behandelt
-// das als Normalfall und bleibt dann beim hellen Systemstil - kein
-// Absturz, nur kein Dunkelmodus. Solange 'Windows10Dark' nicht angehakt
-// ist, ist der Dunkelmodus also wirkungslos.
+// STYLE-VERFUEGBARKEIT: der dunkle Style liegt als Ressource WIN10DARK
+// (Typ VCLSTYLE) IN der EXE - gelinkt ueber {$R 'styles\sca_styles.RES'}
+// im .dpr, Details in styles/README.md. Ein Projektoptionen-Haken ist
+// weder noetig noch erwuenscht (der schriebe IDE-spezifische .dproj-
+// Eintraege). Fehlt die Ressource oder laedt sie nicht, bleibt die
+// Anwendung beim hellen Systemstil - kein Absturz, nur kein Dunkelmodus.
 //
 // Windows-Erkennung: HKCU\...\Themes\Personalize\AppsUseLightTheme
 // (DWORD, 0 = dunkel). Der Wert fehlt auf Windows 8.1 und aelter - dann
@@ -30,7 +30,7 @@ uses
   System.Classes, System.Generics.Collections,
   Vcl.Graphics,   // TColor
   Vcl.Controls,   // TWinControl (ResolveSystemColors)
-  Vcl.Themes;     // TStyleServicesHandle (Klassenfeld FDarkHandle)
+  Vcl.Themes;     // TStyleManager (ApplyStyle, ActiveStyleIsDark)
 
 type
   /// <summary>Gemerkte Original-Farben eines Controls.</summary>
@@ -51,10 +51,21 @@ type
     class var FMode      : TAppThemeMode;
     class var FOnChanged : TNotifyEvent;
     class var FApplying  : Boolean;
-    // TStyleServicesHandle ist ein PUBLIC TYPE innerhalb von TStyleManager
-    // (Vcl.Themes.pas:1771, '= type Pointer') - unqualifiziert ist der
-    // Bezeichner E2003. Der erste Build hat genau das gezeigt.
-    class var FDarkHandle: TStyleManager.TStyleServicesHandle;
+    // Der REGISTRY-NAME des dunklen Styles (der interne Name aus dem
+    // .vsf, nicht 'WIN10DARK'). Leer = noch nicht registriert.
+    //
+    // Warum ein Name und kein TStyleServicesHandle: das Handle ist der
+    // rohe Zeiger auf den Ressourcen-TMemoryStream (Vcl.Themes.pas:1771
+    // '= type Pointer', Rueckgabe 5595), und SetStyle(Handle) baut bei
+    // JEDEM Aufruf eine neue Style-Instanz aus DIESEM Stream, ohne die
+    // Position zurueckzusetzen (6153; einziges Position:=0 steht bei der
+    // Registrierung, 5592). Die zweite Aktivierung las ab Stream-Ende,
+    // LoadFromStream lieferte nil, und SetStyle(nil) schaltete STILL auf
+    // den hellen Systemstil - 'Dark' machte hell. TrySetStyle(Name)
+    // bedient sich dagegen zuerst aus dem Instanz-Cache FStyles
+    // (6204-6209) und fasst den Stream nach der Erst-Instanziierung nie
+    // wieder an.
+    class var FDarkName: string;
     // Originalfarben je Control - s. ResolveSystemColors.
     class var FOrigColors: TDictionary<Pointer, TAppThemeColors>;
     class function ModeToStr(AMode: TAppThemeMode): string; static;
@@ -248,42 +259,68 @@ begin
 end;
 
 class procedure TAppTheme.ApplyStyle;
+
+  // Discovery ist aus (s. Initialize) - StyleNames ist damit die reine
+  // Registrierungsliste (Vcl.Themes.pas 5777-5792): Systemstil plus
+  // alles, was WIR geladen haben. Der einzige Nicht-Systemname IST der
+  // dunkle Style; sein Registry-Schluessel ist der interne .vsf-Name
+  // (5594), nicht der Ressourcenname WIN10DARK.
+  function FirstNonSystemName: string;
+  var
+    S : string;
+  begin
+    Result := '';
+    for S in TStyleManager.StyleNames do
+      if not SameText(S, STYLE_LIGHT) then
+        Exit(S);
+  end;
+
 var
   Applied : Boolean;
+  LH      : TStyleManager.TStyleServicesHandle;
 begin
   // Re-Entranz: ein Style-Wechsel loest selbst Nachrichten aus, und
   // HandleSystemThemeChanged haengt an einer davon.
   if FApplying then Exit;
   FApplying := True;
   try
-    Applied := False;
-    if EffectiveDark then
-    begin
-      // Einmal aus der eingebetteten Ressource laden; das Handle bleibt
-      // fuer die Prozesslebensdauer gueltig (TStyleManager besitzt es).
-      if not Assigned(FDarkHandle) then
-        if not TStyleManager.TryLoadFromResource(HInstance, DARK_RESOURCE,
-                 PChar(DARK_RES_TYPE), FDarkHandle) then
-          FDarkHandle := nil;
-      if Assigned(FDarkHandle) then
-        // noinspection NestedTry
-        // Aeusseres try/finally gehoert dem FApplying-Flag, dieses
-        // try/except der Politik "kein Absturz, nur kein Dunkelmodus" -
-        // dieselbe begruendete Paarung wie in PersistMode.
-        try
-          TStyleManager.SetStyle(FDarkHandle);
-          Applied := True;
-        except
-          // Politik der Unit: kein Absturz, nur kein Dunkelmodus. Handle
-          // verwerfen, damit kein weiterer Versuch mit demselben kaputten
-          // Zustand laeuft; unten faellt es sichtbar auf hell zurueck.
-          FDarkHandle := nil;
+    // noinspection NestedTry
+    // Aeusseres try/finally gehoert dem FApplying-Flag, dieses
+    // try/except der Politik "kein Absturz, nur kein Dunkelmodus".
+    try
+      Applied := False;
+      if EffectiveDark then
+      begin
+        if FDarkName = '' then
+        begin
+          // Erst nachsehen, ob schon etwas registriert ist - dann laden.
+          // Ein zweites TryLoadFromResource nach erfolgreicher
+          // Registrierung scheiterte am Namens-Duplikat (5590/5598),
+          // deshalb ist der Name das Gedaechtnis, nicht das Handle.
+          FDarkName := FirstNonSystemName;
+          if FDarkName = '' then
+            if TStyleManager.TryLoadFromResource(HInstance, DARK_RESOURCE,
+                 PChar(DARK_RES_TYPE), LH) then
+              FDarkName := FirstNonSystemName;
         end;
+        if FDarkName <> '' then
+          // Erstaktivierung liest den frisch registrierten Stream
+          // (Position 0 seit 5592), jede weitere kommt aus FStyles
+          // (6204-6209). Beliebig oft hin- und herschaltbar.
+          Applied := TStyleManager.TrySetStyle(FDarkName, False);
+      end;
+      // Hell - oder die Ressource fehlt/laedt nicht (dann bleibt es
+      // sichtbar hell statt still kaputt).
+      if not Applied then
+        TStyleManager.TrySetStyle(STYLE_LIGHT, False);
+    // noinspection EmptyExcept
+    // BEWUSST leer - Politik der Unit: kein Absturz, nur kein
+    // Dunkelmodus. Mit abgeschalteter Discovery ist dieser Pfad
+    // praktisch unerreichbar (TrySetStyle(..., False) zeigt keinen
+    // Dialog und wirft im Namenszweig nicht mehr, 6222-6224) - Gurt
+    // und Hosentraeger.
+    except
     end;
-    // Hell - oder die Ressource fehlt (dann bleibt es sichtbar hell
-    // statt still kaputt).
-    if not Applied then
-      TStyleManager.TrySetStyle(STYLE_LIGHT, False);
   finally
     FApplying := False;
   end;
@@ -345,6 +382,19 @@ end;
 
 class procedure TAppTheme.Initialize;
 begin
+  // ALS ERSTES, vor jedem Kontakt mit der Style-API: die automatische
+  // Ressourcen-Erkennung abschalten. Sie haette die eingebettete
+  // Ressource beim ersten TrySetStyle selbst registriert - danach
+  // scheiterte unser TryLoadFromResource dauerhaft am Namens-Duplikat
+  // (hell gestartete Sitzung: Dunkel nie aktivierbar), und in dunkel
+  // gestarteten Sitzungen warf der erste Hell-Wechsel die gesammelte
+  // EDuplicateStyleException aus DiscoverStyleResources (5548-5551)
+  // unbehandelt zum Nutzer. Der Guard sitzt an fuenf Stellen, u.a. in
+  // TrySetStyle (6201) und StyleNames (5782); mit False ist keine davon
+  // mehr erreichbar. Nebenwirkung: per Projektoptionen gelinkte Styles
+  // wuerden nicht mehr auto-gefunden - dieses Projekt linkt bewusst
+  // keine (styles/README.md), der einzige Style laeuft ueber diese Unit.
+  TStyleManager.AutoDiscoverStyleResources := False;
   FMode := StrToMode(
     TRepoSettings.QuickReadStr(INI_SECTION, INI_KEY, 'system'));
   ApplyStyle;
