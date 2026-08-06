@@ -41,3 +41,22 @@ msgstr "Configured editor cannot be started: %s"
 
 msgid "Could not open %s: %s"
 msgstr "Could not open %s: %s"
+
+# --- 2026-08-05: Erscheinungsbild-Menue der Standalone-EXE ---
+
+msgid "Appearance"
+msgstr "Appearance"
+
+msgid "Like Windows"
+msgstr "Like Windows"
+
+msgid "Light"
+msgstr "Light"
+
+msgid "Dark"
+msgstr "Dark"
+
+# --- 2026-08-06: Review-Nacharbeit ---
+
+msgid "Could not save the choice - analyser.ini is not writable: %s"
+msgstr "Could not save the choice - analyser.ini is not writable: %s"

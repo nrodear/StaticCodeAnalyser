@@ -2029,3 +2029,31 @@ msgstr ""
 msgid "Dark"
 msgstr ""
 
+
+# --- 2026-08-05: Befund oeffnen (externer Editor / DFM-Ziel) ---
+
+msgid "Open findings with"
+msgstr ""
+
+msgid "DFM findings: Delphi IDE"
+msgstr ""
+
+msgid "DFM findings: built-in viewer"
+msgstr ""
+
+msgid "Configure external editor..."
+msgstr ""
+
+msgid "Opened in external editor: %s  Line: %d"
+msgstr ""
+
+msgid "Configured editor cannot be started: %s"
+msgstr ""
+
+msgid "Could not open %s: %s"
+msgstr ""
+
+# --- 2026-08-06: Review-Nacharbeit ---
+
+msgid "Could not save the choice - analyser.ini is not writable: %s"
+msgstr ""

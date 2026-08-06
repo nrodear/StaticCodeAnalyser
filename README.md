@@ -448,6 +448,33 @@ Full step-by-step instructions: [I18N.md](I18N.md).
 
 ## Theme integration
 
+### Standalone EXE: light / dark
+
+The EXE follows the **Windows app theme** by default and can be pinned
+via the hamburger menu under **Appearance** (*Like Windows* / *Light* /
+*Dark*) or in `analyser.ini`:
+
+```ini
+[UI]
+; system = follow Windows (default), light, dark
+Theme=system
+```
+
+The dark style ships embedded in the EXE — no VCL-style project option
+involved. In `system` mode a Windows theme switch takes effect
+immediately (the EXE listens for the broadcast); no restart needed. The
+menu writes the very same INI key, so the setting can also be rolled out
+by distributing `analyser.ini`.
+
+### Result grid sorting (EXE)
+
+Click a column header to sort; click again to reverse. The arrow in the
+header shows the active column and direction. *Severity* sorts by rank
+(Error > Warning > Hint), not alphabetically. A double-click on the
+header row just toggles twice — it never opens a finding.
+
+### IDE plugin
+
 The plugin tracks the active Delphi IDE theme through several
 mechanisms:
 
@@ -954,8 +981,8 @@ For incremental re-scans, **use Branch-Changes instead of a full scan**
 ```
 StaticCodeAnalyserForm/tests/
   TestProject.dpr                      DUnitX runner
-  uTest<DetectorName>.pas              one file per detector, 204 files
-                                       in total — 3062 tests across 228
+  uTest<DetectorName>.pas              one file per detector, 205 files
+                                       in total — 3095 tests across 229
                                        fixtures
   uTestFindingHelper.pas               shared harness (FindingsOf /
                                        FindingsOfFile / FindingsViaPipeline)

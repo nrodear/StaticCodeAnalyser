@@ -450,6 +450,34 @@ Komplette Schritt-für-Schritt-Anleitung: [I18N.md](I18N.md).
 
 ## Theme-Integration
 
+### Standalone-EXE: Hell / Dunkel
+
+Die EXE folgt standardmäßig dem **Windows-App-Thema** und lässt sich
+über das Hamburger-Menü unter **Appearance** (*Wie Windows* / *Hell* /
+*Dunkel*) oder in der `analyser.ini` festlegen:
+
+```ini
+[UI]
+; system = Windows folgen (Vorgabe), light, dark
+Theme=system
+```
+
+Der dunkle Style ist in die EXE eingebettet — kein VCL-Style-Haken in
+den Projektoptionen beteiligt. Im Modus `system` wirkt ein
+Windows-Themenwechsel sofort (die EXE hört auf den Broadcast), ohne
+Neustart. Der Menüpunkt schreibt genau diesen INI-Schlüssel; die
+Einstellung lässt sich also auch per verteilter `analyser.ini`
+ausrollen.
+
+### Sortierung im Ergebnis-Grid (EXE)
+
+Klick auf einen Spaltenkopf sortiert, zweiter Klick kehrt um. Der Pfeil
+im Kopf zeigt Spalte und Richtung. *Severity* sortiert nach Rang
+(Error > Warning > Hint), nicht alphabetisch. Ein Doppelklick auf die
+Kopfzeile kippt nur zweimal — er öffnet nie einen Befund.
+
+### IDE-Plugin
+
 Das Plugin folgt automatisch dem aktiven Delphi-IDE-Theme:
 
 - **`StyleServices.GetSystemColor`** in Custom-Drawing (OnDrawCell, TTilePanel.Paint)
@@ -964,7 +992,7 @@ benutzen — typisch 200 ms bis 3 s. Siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES
 StaticCodeAnalyserForm/tests/
   TestProject.dpr                      DUnitX-Runner
   uTest<Detektorname>.pas              eine Datei je Detektor, insgesamt
-                                       204 Dateien — 3062 Tests in 228
+                                       205 Dateien — 3095 Tests in 229
                                        Fixtures
   uTestFindingHelper.pas               gemeinsamer Harness (FindingsOf /
                                        FindingsOfFile / FindingsViaPipeline)

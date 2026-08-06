@@ -10,6 +10,22 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Light/dark theme for the standalone EXE.** Follows the Windows app
+  theme by default (`[UI] Theme=system`), switchable in the hamburger
+  menu under *Appearance* or via the INI key. The dark style ships
+  embedded in the EXE — no VCL-style project option involved; a Windows
+  theme switch takes effect immediately, no restart. Custom-painted
+  surfaces (stat tiles, help panel) resolve their system colours against
+  the active style, because Windows dark mode does *not* change the
+  classic system colours.
+- **Result-grid sorting in the standalone EXE.** Click a column header
+  to sort, click again to reverse; the header shows an honest arrow.
+  *Severity* sorts by rank (Error > Warning > Hint).
+- **Analysable crash diagnostics** (`uCrashDiag`): caught crashes now
+  report the exception class, the NT status code (distinguishing a real
+  access violation from an exhausted stack) and a module-*relative*
+  address that survives ASLR and resolves against a map file — the RTL
+  message alone had neither.
 - **`[Editor]` in `analyser.ini` — open findings in the editor of your
   choice.** `ExternalEditor` plus an `ExternalEditorArgs` template with
   `%file%`, `%line%`, `%col%` and `%dir%`. Templates for VS Code,
@@ -29,6 +45,42 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Theme switching at runtime was broken in all three paths** (found by
+  review against the VCL source, all in unbuilt code): the second dark
+  activation re-read an already-consumed resource stream and silently
+  fell back to *light*; in a light-started session dark was never
+  activatable (VCL style auto-discovery registered the embedded resource
+  first, our load then failed forever on the duplicate name); in a
+  dark-started session the first switch to light threw an unhandled
+  `EDuplicateStyleException` at the user. Auto-discovery is now off and
+  switching goes by style *name* through the VCL instance cache.
+- **Sorting sorted by the wrong column.** The EXE passed its 5-column
+  index straight to the sorter, which maps the 6-column plugin layout:
+  clicking *Severity* sorted alphabetically by message text — with the
+  arrow sitting on *Severity*. Rank sorting was unreachable. Indexes are
+  mapped now.
+- **Double-clicking the header row opened the selected finding** (1.2 s
+  freeze plus keystrokes towards the IDE) instead of just toggling the
+  sort twice.
+- **An external editor with non-ASCII characters in its path was never
+  startable.** The quick INI readers went through the Windows profile
+  API, which reads the UTF-8 file as ANSI; the full settings loader read
+  the same file correctly. Both now use the same BOM-aware path. Also:
+  clicking the already-active *DFM findings* choice no longer rewrites
+  the INI (which used to plant a bare, undocumented `[Editor]` section
+  into pre-existing files), and a read-only `analyser.ini` now reports
+  the failed save in the status bar instead of losing the choice
+  silently.
+- **SARIF export wrote raw control characters** — the same defect fixed
+  for the Sonar export in v0.9.12: one finding message quoting e.g. `#0`
+  from scanned code made the whole file unreadable for strict JSON
+  parsers. Control characters without a short escape now leave as
+  `\u00XX`.
+- **Crash diagnostics attributed foreign addresses to the own module.**
+  `uCrashDiag` checked only the lower image bound; an address in ntdll,
+  a BPL or the heap was printed as "module-relative" to the own EXE —
+  exactly the misattribution the unit was built to avoid. The upper
+  bound (`SizeOfImage` from the own PE header) is checked now.
 - **Double-click did nothing for every finding of a project scan.** When
   the scan target is a `.dproj`/`.groupproj`, the path was rebuilt against
   the *file* rather than its directory, producing `…\My.dproj\src\u.pas`

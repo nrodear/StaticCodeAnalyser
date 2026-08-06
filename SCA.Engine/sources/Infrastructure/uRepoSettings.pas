@@ -777,6 +777,18 @@ const
     'Language=en'#13#10 +
     ';Language=de'#13#10 +
     ''#13#10 +
+    '; Theme (string, default: system)'#13#10 +
+    '; Hell/Dunkel der Standalone-EXE. Das IDE-Plugin folgt immer dem'#13#10 +
+    '; Thema der IDE und liest diesen Schluessel nicht.'#13#10 +
+    ';   system = dem Windows-App-Thema folgen (Auslieferwert); ein'#13#10 +
+    ';            Themenwechsel in Windows wirkt sofort, ohne Neustart'#13#10 +
+    ';   light  = fest hell'#13#10 +
+    ';   dark   = fest dunkel'#13#10 +
+    '; Auch waehlbar im Hamburger-Menue unter "Appearance" - der'#13#10 +
+    '; Menuepunkt schreibt genau diesen Schluessel.'#13#10 +
+    'Theme=system'#13#10 +
+    ';Theme=dark'#13#10 +
+    ''#13#10 +
     '; OverlayPosition (string, default: sameline)'#13#10 +
     '; Position des Hover-Annotation-Overlays im Editor:'#13#10 +
     ';   sameline = Overlay startet AUF der Finding-Zeile (Title-Bar'#13#10 +
