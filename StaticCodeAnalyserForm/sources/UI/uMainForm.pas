@@ -184,6 +184,13 @@ type
     // uSourceLineEdit mit Byte-Treue-Probe.
     procedure SuppressSelectedFinding;
     procedure QuickFixSelectedFinding;
+    // Kachel-Klicks wie im Plugin: Severity-/Typ-Kacheln filtern das
+    // Grid, die Quality-Kachel setzt alle Filter zurueck.
+    procedure WireTiles;
+    procedure TileClickSeverity(Sender: TObject);
+    procedure TileClickType(Sender: TObject);
+    procedure TileClickKind(Sender: TObject);
+    procedure TileClickClear(Sender: TObject);
     // Panel der Auswahl nachziehen, OHNE die Zwischenablage anzufassen.
     procedure UpdateHintPanelToSelection;
     // Alle statischen Captions durch den Katalog ziehen. Die DFM-Werte
@@ -472,6 +479,7 @@ begin
   TStatsTilesBuilder.Build(Self, PanelStats,
     FTileError, FTileWarn, FTileHint, FTileFileSev,
     FTileBug, FTileVuln, FTileDup, FTileCyclomatic, FTileScore);
+  WireTiles;   // Kacheln klickbar wie im Plugin (Filter/Reset)
 
   // ---- Hint-Panel rechts vom Grid (Before/After-Code-Beispiele) ----
   // AlwaysVisible=True - Standalone hat keinen Dock-Container, der
@@ -2337,6 +2345,161 @@ begin
   // Haken nachziehen: RadioItem setzt ihn zwar selbst, aber nur wenn der
   // Klick durchkam - SetMode kann bei gleicher Wahl frueh aussteigen.
   BuildAppearanceMenu(FMIAppearance);
+end;
+
+// Hint, Tag und OnClick landen auf dem Kachel-Container UND rekursiv
+// auf allen Kindern - sonst triggert ein Klick auf Glyph oder
+// Beschriftung nichts (Plugin-Erkenntnis, uIDEAnalyserForm.WireTile).
+// Kein Control-Cracker noetig: die Kacheln bestehen aus TPanel- und
+// TLabel-Ebenen, und BEIDE publizieren OnClick - das Plugin braucht
+// seinen Cracker nur, weil es generisch ueber TControl zuweist.
+procedure TileApplyRecursive(C: TControl; const AHint: string;
+  ATag: Integer; AHandler: TNotifyEvent);
+var
+  i : Integer;
+begin
+  C.Hint     := AHint;
+  C.ShowHint := True;
+  C.Tag      := ATag;
+  C.Cursor   := crHandPoint;   // signalisiert Klickbarkeit
+  if C is TPanel then
+    TPanel(C).OnClick := AHandler
+  else if C is TLabel then
+    TLabel(C).OnClick := AHandler;
+  if C is TWinControl then
+    for i := 0 to TWinControl(C).ControlCount - 1 do
+      TileApplyRecursive(TWinControl(C).Controls[i], AHint, ATag, AHandler);
+end;
+
+procedure TileWire(CountLbl: TLabel; const AHint: string; ATag: Integer;
+  AHandler: TNotifyEvent);
+begin
+  if not Assigned(CountLbl) or not Assigned(CountLbl.Parent)
+     or not Assigned(CountLbl.Parent.Parent) then Exit;
+  TileApplyRecursive(CountLbl.Parent.Parent, AHint, ATag, AHandler);
+end;
+
+procedure TForm2.WireTiles;
+begin
+  // Severity-Kacheln -> Severity-Combo (Hint-Texte wortgleich zum
+  // Plugin, die msgids existieren dort bereits).
+  TileWire(FTileError, _('Errors') + sLineBreak +
+    _('Real bugs / security holes (severity Error). Fix immediately.')
+    + sLineBreak + _('Click: filter grid to Errors'),
+    Ord(fmErrors), TileClickSeverity);
+  TileWire(FTileWarn, _('Warnings') + sLineBreak +
+    _('Likely bugs / risky patterns. Review before merge.')
+    + sLineBreak + _('Click: filter grid to Warnings'),
+    Ord(fmWarnings), TileClickSeverity);
+  TileWire(FTileHint, _('Hints') + sLineBreak +
+    _('Code smells / style. Refactoring candidates.')
+    + sLineBreak + _('Click: filter grid to Hints'),
+    Ord(fmHints), TileClickSeverity);
+  // Diese beiden gibt es in der EXE-Severity-Combo NICHT als fm-Modus
+  // (anders als im Plugin) - sie springen auf den generierten
+  // REGEL-Eintrag (KIND_TAG_BASE + Ord(Kind)).
+  TileWire(FTileFileSev, _('Read errors') + sLineBreak +
+    _('File could not be read / parsed. Check path/encoding.')
+    + sLineBreak + _('Click: filter grid to read errors'),
+    Ord(fkFileReadError), TileClickKind);
+  TileWire(FTileCyclomatic, _('Cyclomatic Complexity') + sLineBreak +
+    _('Methods with McCabe complexity > threshold (default 10).')
+    + sLineBreak + _('Click: filter grid to Cyclomatic'),
+    Ord(fkCyclomaticComplexity), TileClickKind);
+
+  // Typ-Kacheln -> Typ-Combo
+  TileWire(FTileBug, _('Bugs') + sLineBreak +
+    _('Findings of type Bug (wrong behaviour, crash, wrong result).')
+    + sLineBreak + _('Click: filter grid to Bug type'),
+    Ord(tfBug), TileClickType);
+  TileWire(FTileVuln, _('Security') + sLineBreak +
+    _('Security holes (SQL injection, hardcoded secrets ...).')
+    + sLineBreak + _('Click: filter grid to Vulnerability type'),
+    Ord(tfVulnerability), TileClickType);
+  TileWire(FTileDup, _('Duplicates') + sLineBreak +
+    _('Copied code (strings, blocks). Extract Method/Constant candidates.')
+    + sLineBreak + _('Click: filter grid to Duplicate type'),
+    Ord(tfCodeDuplication), TileClickType);
+
+  // Quality-Kachel = Reset (Score ist eine Aggregation, kein Filter).
+  TileWire(FTileScore, _('Quality') + sLineBreak +
+    _('Weighted quality score (lower = better).')
+    + sLineBreak + _('Click: reset filters (show everything)'),
+    0, TileClickClear);
+end;
+
+procedure TForm2.TileClickSeverity(Sender: TObject);
+// WICHTIG (Plugin-Erkenntnis): der ItemIndex-Setter feuert KEIN
+// OnChange - die Change-Handler muessen explizit gerufen werden.
+var
+  Target  : TFilterMode;
+  i, OrdT : Integer;
+begin
+  if not (Sender is TComponent) then Exit;
+  Target := TFilterMode(TComponent(Sender).Tag);
+  if TypeFilterCombo.ItemIndex <> 0 then
+    TypeFilterCombo.ItemIndex := 0;
+  OrdT := Ord(Target);
+  for i := 0 to SeverityFilterCombo.Items.Count - 1 do
+    if Integer(SeverityFilterCombo.Items.Objects[i]) = OrdT then
+    begin
+      SeverityFilterCombo.ItemIndex := i;
+      Break;
+    end;
+  TypeFilterComboChange(TypeFilterCombo);
+  SeverityFilterComboChange(SeverityFilterCombo);
+end;
+
+procedure TForm2.TileClickKind(Sender: TObject);
+// Kacheln, deren Ziel kein fm-Modus ist, sondern der generierte
+// Regel-Eintrag der Severity-Combo (Objects = KIND_TAG_BASE+Ord(Kind)).
+var
+  i, Want : Integer;
+begin
+  if not (Sender is TComponent) then Exit;
+  Want := TFindingFilter.KIND_TAG_BASE + TComponent(Sender).Tag;
+  if TypeFilterCombo.ItemIndex <> 0 then
+    TypeFilterCombo.ItemIndex := 0;
+  for i := 0 to SeverityFilterCombo.Items.Count - 1 do
+    if Integer(SeverityFilterCombo.Items.Objects[i]) = Want then
+    begin
+      SeverityFilterCombo.ItemIndex := i;
+      Break;
+    end;
+  TypeFilterComboChange(TypeFilterCombo);
+  SeverityFilterComboChange(SeverityFilterCombo);
+end;
+
+procedure TForm2.TileClickType(Sender: TObject);
+var
+  Target : TTypeFilter;
+  i      : Integer;
+begin
+  if not (Sender is TComponent) then Exit;
+  Target := TTypeFilter(TComponent(Sender).Tag);
+  if SeverityFilterCombo.ItemIndex <> 0 then
+    SeverityFilterCombo.ItemIndex := 0;
+  for i := 0 to TypeFilterCombo.Items.Count - 1 do
+    if Integer(TypeFilterCombo.Items.Objects[i]) = Ord(Target) then
+    begin
+      TypeFilterCombo.ItemIndex := i;
+      Break;
+    end;
+  SeverityFilterComboChange(SeverityFilterCombo);
+  TypeFilterComboChange(TypeFilterCombo);
+end;
+
+procedure TForm2.TileClickClear(Sender: TObject);
+// Quality-Kachel als Ein-Griff-Reset. In der EXE gehoert das SUCHFELD
+// mit dazu (das Plugin hat keines in dieser Form) - 'show everything'
+// soll wirklich alles zeigen.
+begin
+  SeverityFilterCombo.ItemIndex := 0;
+  TypeFilterCombo.ItemIndex     := 0;
+  if SearchEdit.Text <> '' then
+    SearchEdit.Text := '';           // OnChange feuert (Setter am EDIT)
+  SeverityFilterComboChange(SeverityFilterCombo);
+  TypeFilterComboChange(TypeFilterCombo);
 end;
 
 procedure TForm2.BuildOpenWithMenu(AParent: TMenuItem);
