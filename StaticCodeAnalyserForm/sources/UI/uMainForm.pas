@@ -141,6 +141,17 @@ type
     FMILanguage     : TMenuItem;
     FMIAppearance   : TMenuItem;   // Hell / Dunkel / Wie Windows
     FMIOpenWith     : TMenuItem;   // womit ein Befund geoeffnet wird
+    // Zwischenablage ENTPRELLT (Vorbild Plugin-Fix 2026-08-03,
+    // FClipCopyTimer in uIDEAnalyserForm): vorher schrieb JEDER
+    // Auswahlwechsel - auch jeder Pfeiltasten-Schritt, die VCL feuert
+    // OnClick auch bei Tastatur-Navigation - sofort und ungeschuetzt die
+    // systemweite Zwischenablage (~30x/s bei gehaltener Taste).
+    FClipTimer      : TTimer;
+    // Programmatischer Grid-Umbau (ApplyFilter nach Sortier-/Filter-
+    // wechsel) loest ueber die Zeilen-Klemmung OnClick aus - der zeigte
+    // dann einen NIE angeklickten Fund im Panel und ueberschrieb die
+    // Zwischenablage mit dessen Prompt.
+    FGridUpdating   : Boolean;
     FSortColumn     : Integer;     // -1 = unsortiert (Scan-Reihenfolge)
     FSortDescending : Boolean;
     procedure HamburgerClick(Sender: TObject);
@@ -153,6 +164,13 @@ type
     // Sortierung liegt in uFindingFilter.TFindingSorter.
     procedure ResultGridMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
+    procedure ResultGridKeyDown(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
+    procedure ClipCopyFire(Sender: TObject);
+    // Der Oeffnen-Kern von ResultGridDblClick - auch per Enter erreichbar.
+    procedure OpenSelectedFinding;
+    // Panel der Auswahl nachziehen, OHNE die Zwischenablage anzufassen.
+    procedure UpdateHintPanelToSelection;
     procedure BuildAppearanceMenu(AParent: TMenuItem);
     procedure AppearanceItemClick(Sender: TObject);
     procedure BuildOpenWithMenu(AParent: TMenuItem);
@@ -339,6 +357,12 @@ begin
   ResultGrid.OnDrawCell  := ResultGridDrawCell;
   ResultGrid.OnDblClick  := ResultGridDblClick;
   ResultGrid.OnMouseDown := ResultGridMouseDown;   // Header-Klick = sortieren
+  ResultGrid.OnKeyDown   := ResultGridKeyDown;     // Enter = Befund oeffnen
+
+  FClipTimer := TTimer.Create(Self);
+  FClipTimer.Interval := 120;        // wie im Plugin: eine Kopie nach Idle
+  FClipTimer.Enabled  := False;
+  FClipTimer.OnTimer  := ClipCopyFire;
   FSortColumn     := -1;
   FSortDescending := False;
   // Tooltip nur fuer Datei-Spalte, dynamisch ueber Application.OnShowHint.
@@ -1262,6 +1286,11 @@ var
   f        : TLeakFinding;
   i        : Integer;
 begin
+  // Klick-Seiteneffekte unterdruecken: der Grid-Umbau unten loest ueber
+  // die Zeilen-Klemmung OnClick aus (s. ResultGridClick). Try/finally,
+  // weil der 0-Treffer-Pfad frueh aussteigt.
+  FGridUpdating := True;
+  try
   Criteria.Mode       := fmAll;
   Criteria.TypeFilter := tfAll;
   Criteria.SearchLow  := '';
@@ -1395,6 +1424,13 @@ begin
   else
     StatusBar1.Panels[2].Text := Format(_('Filtered: %d of %d findings'),
       [TotalMatched, FAllFindings.Count]);
+
+  finally
+    FGridUpdating := False;
+    // Panel der neuen Lage nachziehen (auch im 0-Treffer-Exit-Pfad) -
+    // sonst zeigt es einen inzwischen ausgefilterten Fund.
+    UpdateHintPanelToSelection;
+  end;
 end;
 
 var
@@ -1481,14 +1517,24 @@ begin
   // eine Pruefung.
   Application.ProcessMessages;
   if csDestroying in ComponentState then Exit(False);
-  Result := LaunchProcess(AAbsPath, '', AError);
-  if not Result then Exit;
-  if ALine > 0 then
-  begin
-    Sleep(1200); // Delphi IDE Zeit geben, die Datei zu oeffnen
-    Application.ProcessMessages;
-    if csDestroying in ComponentState then Exit;
-    NavigateDelphiToLine(ALine);
+  // Feedback VOR dem Start: der Weg blockiert den Hauptthread gleich
+  // ~1,6 s (Sleep-Kette bis zur Tastatursimulation), und die IDE nimmt
+  // den Fokus. Ohne Hinweis wirkt die App in dieser Zeit abgestuerzt.
+  StatusBar1.Panels[2].Text := _('Opening in Delphi IDE...');
+  StatusBar1.Update;                 // sichtbar machen, bevor es blockiert
+  Screen.Cursor := crAppStart;
+  try
+    Result := LaunchProcess(AAbsPath, '', AError);
+    if not Result then Exit;
+    if ALine > 0 then
+    begin
+      Sleep(1200); // Delphi IDE Zeit geben, die Datei zu oeffnen
+      Application.ProcessMessages;
+      if csDestroying in ComponentState then Exit;
+      NavigateDelphiToLine(ALine);
+    end;
+  finally
+    Screen.Cursor := crDefault;
   end;
 end;
 
@@ -1560,19 +1606,9 @@ begin
 end;
 
 procedure TForm2.ResultGridDblClick(Sender: TObject);
-// Zeile aufloesen, oeffnen lassen, melden. Die Wegwahl steckt in
-// OpenFindingAt.
-//
-// Virtual-Mode: Pfad und Zeilennummer aus FDisplayedFindings statt aus
-// ResultGrid.Cells[] (die im Virtual-Mode leer sind).
-var
-  row     : Integer;
-  relPath : string;
-  absPath : string;
-  lineNo  : Integer;
-  baseDir : string;
-  f       : TLeakFinding;
-  msg     : string;
+// Nur noch der Maus-Einstieg: Kopfzeile aussortieren, dann den
+// gemeinsamen Oeffnen-Kern rufen (OpenSelectedFinding - auch Enter
+// landet dort).
 begin
   // Doppelklick auf die KOPFZEILE ist die naheliegende Geste, um die
   // Sortierung schnell zweimal zu kippen - er darf nicht nebenbei den
@@ -1587,6 +1623,34 @@ begin
   ResultGrid.MouseToCell(P.X, P.Y, ACol, ARow);
   if ARow = 0 then Exit;
 
+  OpenSelectedFinding;
+end;
+
+procedure TForm2.ResultGridKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+// Enter = Befund oeffnen. TCustomGrid behandelt VK_RETURN selbst nicht -
+// ohne diesen Handler war die Tastatur-Triage am Grid zu Ende und jeder
+// Fund brauchte die Maus. Bewusst OHNE den Mauspositions-Header-Guard
+// des Doppelklicks: bei Tastatur-Ausloesung ist die Mausposition
+// bedeutungslos (sie koennte zufaellig ueber der Kopfzeile stehen).
+begin
+  if (Key = VK_RETURN) and (Shift = []) then
+  begin
+    Key := 0;                       // kein Grid-Beep/Standardverhalten
+    OpenSelectedFinding;
+  end;
+end;
+
+procedure TForm2.OpenSelectedFinding;
+var
+  row     : Integer;
+  relPath : string;
+  absPath : string;
+  lineNo  : Integer;
+  baseDir : string;
+  f       : TLeakFinding;
+  msg     : string;
+begin
   // Reentranz-Sperre. Der IDE-Weg haelt den Hauptthread 1200 ms an und
   // ruft danach ProcessMessages - weitere Doppelklicks in dieser Zeit
   // landen nicht im Papierkorb, sondern in der Nachrichtenschlange und
@@ -1689,30 +1753,83 @@ begin
 end;
 
 procedure TForm2.ResultGridClick(Sender: TObject);
-// Bei Klick auf eine Befund-Zeile:
-//   1) Hint-Panel rechts mit Before/After-Code-Beispielen aktualisieren
-//      (SOFORT - sichtbares Feedback fuer den User)
-//   2) ProcessMessages laesst den Panel-Repaint durchlaufen, BEVOR
-//   3) Clipboard.AsText evtl. durch Windows-Clipboard-Listener (Snipping-
-//      Tool, Passwortmanager, Browser-Sync) 50-200ms blockiert wird.
+// Bei Klick auf eine Befund-Zeile: Hint-Panel SOFORT (sichtbares
+// Feedback), Zwischenablage ENTPRELLT ueber FClipTimer.
+//
+// Warum kein direkter Clipboard-Write mehr (Vorbild Plugin 2026-08-03):
+// die VCL feuert OnClick auch bei Tastatur-Navigation - jeder
+// Pfeiltasten-Schritt war ein systemweiter Clipboard-Write (~30x/s bei
+// gehaltener Taste), und eine gerade von einem anderen Prozess gesperrte
+// Zwischenablage (RDP, Clipboard-Manager) warf EClipboardException
+// mitten in die Triage. Mit dem Timer faellt auch das ProcessMessages
+// weg, das nur den Panel-Repaint vor dem blockierenden Write flushte.
+//
 // Index bezieht sich auf FDisplayedFindings, NICHT FAllFindings - der
 // Filter hat moeglicherweise Eintraege entfernt.
 var
   idx : Integer;
-  F   : TLeakFinding;
 begin
+  // Programmatischer Umbau (ApplyFilter nach Sortieren/Filtern): die
+  // Zeilen-Klemmung feuert OnClick fuer eine Zeile, die niemand
+  // angeklickt hat - Panel und Zwischenablage blieben sonst an einem
+  // Zufallsfund haengen. Das Panel zieht ApplyFilter selbst nach.
+  if FGridUpdating then Exit;
+
   idx := ResultGrid.Row - 1; // 0-basiert: Zeile 0 ist Header
   if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
-  F := FDisplayedFindings[idx];
   if Assigned(FHintPanel) then
-    FHintPanel.ShowFinding(F);
-  // Panel-Repaint flushen, damit der User das Before/After SOFORT sieht.
-  // Erst danach den (potenziell blockierenden) Clipboard-Write absetzen.
-  Application.ProcessMessages;
-  Clipboard.AsText := BuildClaudePrompt(F);
+    FHintPanel.ShowFinding(FDisplayedFindings[idx]);
+  if Assigned(FClipTimer) then
+  begin
+    FClipTimer.Enabled := False;   // neu bewaffnen
+    FClipTimer.Enabled := True;
+  end;
+end;
+
+procedure TForm2.ClipCopyFire(Sender: TObject);
+// Die Auswahl steht - jetzt die EINE Kopie, fuer die AKTUELLE Zeile
+// (nicht die, die den Timer bewaffnet hat: waehrend der 120 ms kann die
+// Auswahl weitergewandert sein; kopiert gehoert, wo der Nutzer steht).
+var
+  idx : Integer;
+  F   : TLeakFinding;
+begin
+  if Assigned(FClipTimer) then
+    FClipTimer.Enabled := False;
+  if csDestroying in ComponentState then Exit;
+  if FDisplayedFindings = nil then Exit;
+  idx := ResultGrid.Row - 1;
+  if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
+  F := FDisplayedFindings[idx];
+  try
+    Clipboard.AsText := BuildClaudePrompt(F);
+  except
+    // Zwischenablage gerade von einem anderen Prozess gesperrt (RDP,
+    // Clipboard-Manager): still auslassen - der naechste Auswahlwechsel
+    // versucht es erneut. Ein Dialog waere mitten in der Triage
+    // schlimmer als eine verpasste Kopie.
+    Exit;
+  end;
   StatusBar1.Panels[2].Text := Format(
     _('AI prompt copied to clipboard: %s, line %s (%s)'),
     [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]);
+end;
+
+procedure TForm2.UpdateHintPanelToSelection;
+// Nach ApplyFilter zeigt das Panel sonst einen inzwischen ausgefilterten
+// Fund. Bewusst OHNE Zwischenablage - die gehoert dem bewussten Klick.
+var
+  idx : Integer;
+begin
+  if not Assigned(FHintPanel) then Exit;
+  if (FDisplayedFindings = nil) or (FDisplayedFindings.Count = 0) then
+  begin
+    FHintPanel.ShowPlaceholder;
+    Exit;
+  end;
+  idx := ResultGrid.Row - 1;
+  if (idx < 0) or (idx >= FDisplayedFindings.Count) then idx := 0;
+  FHintPanel.ShowFinding(FDisplayedFindings[idx]);
 end;
 
 function TForm2.BuildClaudePrompt(F: TLeakFinding): string;
@@ -1751,10 +1868,20 @@ end;
 
 procedure TForm2.SaveRecentPath(const APath: string);
 begin
-  TRecentPaths.Save(
-    Projectpath, RecentIniPath, APath,
-    DEFAULT_MAX_RECENT,
-    AppPath, ppLast);
+  // Die MRU-INI liegt NEBEN DER EXE. In einem nicht schreibbaren Ordner
+  // (Program Files, Netz-Share) warf der Write hier eine Exception -
+  // und zwar VOR dem Analyse-Aufruf: jeder Klick auf 'Analyse directory'
+  // endete im Fehlerdialog, der Scan startete NIE. Dieselbe Philosophie
+  // wie LoadRecentPaths (dort seit jeher mit Guard dokumentiert): eine
+  // defekte Komfortliste darf die Kernfunktion nicht anhalten - dann
+  // merkt sich die App den Pfad eben diese Sitzung nicht.
+  try
+    TRecentPaths.Save(
+      Projectpath, RecentIniPath, APath,
+      DEFAULT_MAX_RECENT,
+      AppPath, ppLast);
+  except
+  end;
 end;
 
 procedure TForm2.ProfileComboChange(Sender: TObject);

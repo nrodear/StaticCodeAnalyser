@@ -2057,3 +2057,8 @@ msgstr ""
 
 msgid "Could not save the choice - analyser.ini is not writable: %s"
 msgstr ""
+
+# --- 2026-08-06: Triage-Quick-Wins (EXE) ---
+
+msgid "Opening in Delphi IDE..."
+msgstr ""

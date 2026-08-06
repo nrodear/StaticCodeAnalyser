@@ -246,7 +246,7 @@ object Form2: TForm2
       DefaultRowHeight = 20
       FixedCols = 0
       RowCount = 2
-      Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goColSizing, goRowSelect, goThumbTracking]
+      Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goColSizing, goRowSelect, goThumbTracking, goRangeSelect]
       TabOrder = 0
       OnClick = ResultGridClick
       ExplicitWidth = 848

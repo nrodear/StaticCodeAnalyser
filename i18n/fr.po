@@ -1882,3 +1882,8 @@ msgstr "Impossible d'ouvrir %s : %s"
 
 msgid "Could not save the choice - analyser.ini is not writable: %s"
 msgstr "Impossible d'enregistrer le choix - analyser.ini n'est pas modifiable : %s"
+
+# --- 2026-08-06: Triage-Quick-Wins (EXE) ---
+
+msgid "Opening in Delphi IDE..."
+msgstr "Ouverture dans l'EDI Delphi..."

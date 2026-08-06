@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1872 Zeilen, 63483 Bytes
-  CPoLines_de: array[0..1871] of string = (
+  // i18n\de.po - 1877 Zeilen, 63601 Bytes
+  CPoLines_de: array[0..1876] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1886,11 +1886,16 @@ const
     '# --- 2026-08-06: Review-Nacharbeit ---',
     '',
     'msgid "Could not save the choice - analyser.ini is not writable: %s"',
-    'msgstr "Wahl konnte nicht gespeichert werden - analyser.ini ist nicht beschreibbar: %s"'
+    'msgstr "Wahl konnte nicht gespeichert werden - analyser.ini ist nicht beschreibbar: %s"',
+    '',
+    '# --- 2026-08-06: Triage-Quick-Wins (EXE) ---',
+    '',
+    'msgid "Opening in Delphi IDE..."',
+    'msgstr "'#$00D6'ffne in der Delphi-IDE..."'
   );
 
-  // i18n\en.po - 62 Zeilen, 1780 Bytes
-  CPoLines_en: array[0..61] of string = (
+  // i18n\en.po - 67 Zeilen, 1895 Bytes
+  CPoLines_en: array[0..66] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
     '# kept for consistency and as a "neutral" fallback baseline.',
@@ -1952,11 +1957,16 @@ const
     '# --- 2026-08-06: Review-Nacharbeit ---',
     '',
     'msgid "Could not save the choice - analyser.ini is not writable: %s"',
-    'msgstr "Could not save the choice - analyser.ini is not writable: %s"'
+    'msgstr "Could not save the choice - analyser.ini is not writable: %s"',
+    '',
+    '# --- 2026-08-06: Triage-Quick-Wins (EXE) ---',
+    '',
+    'msgid "Opening in Delphi IDE..."',
+    'msgstr "Opening in Delphi IDE..."'
   );
 
-  // i18n\fr.po - 1884 Zeilen, 67915 Bytes
-  CPoLines_fr: array[0..1883] of string = (
+  // i18n\fr.po - 1889 Zeilen, 68036 Bytes
+  CPoLines_fr: array[0..1888] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -3840,7 +3850,12 @@ const
     '# --- 2026-08-06: Review-Nacharbeit ---',
     '',
     'msgid "Could not save the choice - analyser.ini is not writable: %s"',
-    'msgstr "Impossible d''enregistrer le choix - analyser.ini n''est pas modifiable : %s"'
+    'msgstr "Impossible d''enregistrer le choix - analyser.ini n''est pas modifiable : %s"',
+    '',
+    '# --- 2026-08-06: Triage-Quick-Wins (EXE) ---',
+    '',
+    'msgid "Opening in Delphi IDE..."',
+    'msgstr "Ouverture dans l''EDI Delphi..."'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
