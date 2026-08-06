@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1877 Zeilen, 63601 Bytes
-  CPoLines_de: array[0..1876] of string = (
+  // i18n\de.po - 1880 Zeilen, 63823 Bytes
+  CPoLines_de: array[0..1879] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1273,8 +1273,8 @@ const
     'msgid "MinSeverity \"%s\" - active on next analysis run"',
     'msgstr "MinSeverity \"%s\" - aktiv beim naechsten Analyse-Lauf"',
     '',
-    'msgid "More than %d files found - scan cancelled."',
-    'msgstr "Mehr als %d Dateien gefunden - Scan abgebrochen."',
+    'msgid "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."',
+    'msgstr "Mehr als %d Dateien gefunden - Scan angehalten. Unterordner w'#$00E4'hlen oder Ordner '#$00FC'ber die Ignorierliste ausschlie'#$00DF'en (Hamburger-Men'#$00FC')."',
     '',
     'msgid "No file opened."',
     'msgstr "Keine Datei ge'#$00F6'ffnet."',
@@ -1891,11 +1891,14 @@ const
     '# --- 2026-08-06: Triage-Quick-Wins (EXE) ---',
     '',
     'msgid "Opening in Delphi IDE..."',
-    'msgstr "'#$00D6'ffne in der Delphi-IDE..."'
+    'msgstr "'#$00D6'ffne in der Delphi-IDE..."',
+    '',
+    'msgid "Analysis cancelled."',
+    'msgstr "Analyse abgebrochen."'
   );
 
-  // i18n\en.po - 67 Zeilen, 1895 Bytes
-  CPoLines_en: array[0..66] of string = (
+  // i18n\en.po - 73 Zeilen, 2207 Bytes
+  CPoLines_en: array[0..72] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
     '# kept for consistency and as a "neutral" fallback baseline.',
@@ -1962,11 +1965,17 @@ const
     '# --- 2026-08-06: Triage-Quick-Wins (EXE) ---',
     '',
     'msgid "Opening in Delphi IDE..."',
-    'msgstr "Opening in Delphi IDE..."'
+    'msgstr "Opening in Delphi IDE..."',
+    '',
+    'msgid "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."',
+    'msgstr "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."',
+    '',
+    'msgid "Analysis cancelled."',
+    'msgstr "Analysis cancelled."'
   );
 
-  // i18n\fr.po - 1889 Zeilen, 68036 Bytes
-  CPoLines_fr: array[0..1888] of string = (
+  // i18n\fr.po - 1892 Zeilen, 68266 Bytes
+  CPoLines_fr: array[0..1891] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -3233,8 +3242,8 @@ const
     'msgid "MinSeverity \"%s\" - active on next analysis run"',
     'msgstr "MinSeverity \"%s\" - actif au prochain lancement de l''analyse"',
     '',
-    'msgid "More than %d files found - scan cancelled."',
-    'msgstr "Plus de %d fichiers trouv'#$00E9's - scan annul'#$00E9'."',
+    'msgid "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."',
+    'msgstr "Plus de %d fichiers trouv'#$00E9's - analyse arr'#$00EA't'#$00E9'e. Choisissez un sous-dossier ou excluez des dossiers via la liste d''exclusion (menu hamburger)."',
     '',
     'msgid "No file opened."',
     'msgstr "Aucun fichier ouvert."',
@@ -3855,7 +3864,10 @@ const
     '# --- 2026-08-06: Triage-Quick-Wins (EXE) ---',
     '',
     'msgid "Opening in Delphi IDE..."',
-    'msgstr "Ouverture dans l''EDI Delphi..."'
+    'msgstr "Ouverture dans l''EDI Delphi..."',
+    '',
+    'msgid "Analysis cancelled."',
+    'msgstr "Analyse annul'#$00E9'e."'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

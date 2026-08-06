@@ -1256,8 +1256,8 @@ msgstr "Min-Schweregrad:"
 msgid "MinSeverity \"%s\" - active on next analysis run"
 msgstr "MinSeverity \"%s\" - aktiv beim naechsten Analyse-Lauf"
 
-msgid "More than %d files found - scan cancelled."
-msgstr "Mehr als %d Dateien gefunden - Scan abgebrochen."
+msgid "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."
+msgstr "Mehr als %d Dateien gefunden - Scan angehalten. Unterordner wählen oder Ordner über die Ignorierliste ausschließen (Hamburger-Menü)."
 
 msgid "No file opened."
 msgstr "Keine Datei geöffnet."
@@ -1875,3 +1875,6 @@ msgstr "Wahl konnte nicht gespeichert werden - analyser.ini ist nicht beschreibb
 
 msgid "Opening in Delphi IDE..."
 msgstr "Öffne in der Delphi-IDE..."
+
+msgid "Analysis cancelled."
+msgstr "Analyse abgebrochen."

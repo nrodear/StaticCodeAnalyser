@@ -65,3 +65,9 @@ msgstr "Could not save the choice - analyser.ini is not writable: %s"
 
 msgid "Opening in Delphi IDE..."
 msgstr "Opening in Delphi IDE..."
+
+msgid "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."
+msgstr "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."
+
+msgid "Analysis cancelled."
+msgstr "Analysis cancelled."

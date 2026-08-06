@@ -1138,7 +1138,7 @@ msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:526
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:531
-msgid "More than %d files found - scan cancelled."
+msgid "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3750
@@ -2061,4 +2061,7 @@ msgstr ""
 # --- 2026-08-06: Triage-Quick-Wins (EXE) ---
 
 msgid "Opening in Delphi IDE..."
+msgstr ""
+
+msgid "Analysis cancelled."
 msgstr ""
