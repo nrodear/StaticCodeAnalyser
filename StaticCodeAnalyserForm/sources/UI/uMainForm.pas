@@ -152,6 +152,11 @@ type
     // dann einen NIE angeklickten Fund im Panel und ueberschrieb die
     // Zwischenablage mit dessen Prompt.
     FGridUpdating   : Boolean;
+    // Warum der Lauf per Abort endete ('' = Nutzer-Cancel). Wird vom
+    // ProgressCallback VOR dem Abort gesetzt und im EAbort-Zweig
+    // angezeigt - der Status-Text alleine lag waehrend des Laufs unter
+    // der Progressbar und war nie zu sehen.
+    FAbortReason    : string;
     FSortColumn     : Integer;     // -1 = unsortiert (Scan-Reihenfolge)
     FSortDescending : Boolean;
     procedure HamburgerClick(Sender: TObject);
@@ -486,15 +491,17 @@ begin
   FExportMenu.AttachToButton(FBtnExport);
 
   // ---- ProgressBar + Cancel-Button in der StatusBar (Laufzeit-Widgets)
-  // Layout: Cancel-Button rechts am StatusBar-Rand (alRight, Width=80),
-  // ProgressBar fuellt den restlichen Platz (alClient). Beide werden in
-  // BeginAnalysisUI sichtbar geschaltet und in EndAnalysisUI wieder
-  // versteckt - so bleiben die Status-Text-Panels im Ruhe-Zustand
-  // vollstaendig sichtbar.
+  // Layout: Cancel-Button rechts am StatusBar-Rand (alRight), die
+  // ProgressBar mit FESTER Breite links daneben (ebenfalls alRight).
+  // Frueher lag die Bar alClient ueber der GANZEN StatusBar und
+  // verdeckte damit genau die Panel-Texte, die der Scan schreibt
+  // ('File %d / %d (%d%%)') - sichtbar war nur ein Balken ohne Zahlen,
+  // und auch die Limit-Meldung lief ins Leere. Beide Widgets werden in
+  // BeginAnalysisUI sichtbar geschaltet und in EndAnalysisUI versteckt.
   FBtnCancel := TButton.Create(Self);
   FBtnCancel.Parent  := StatusBar1;
   FBtnCancel.Caption := _('Cancel');
-  FBtnCancel.Width   := 80;
+  FBtnCancel.Width   := MulDiv(80, Screen.PixelsPerInch, 96);
   FBtnCancel.Align   := alRight;
   FBtnCancel.Enabled := False;
   FBtnCancel.Visible := False;
@@ -502,7 +509,11 @@ begin
 
   FProgressBar := TProgressBar.Create(Self);
   FProgressBar.Parent  := StatusBar1;
-  FProgressBar.Align   := alClient;
+  // Left := 0 VOR dem Align: bei zwei alRight-Controls ordnet die VCL
+  // nach der aktuellen Position - so landet die Bar links vom Cancel.
+  FProgressBar.Left    := 0;
+  FProgressBar.Width   := MulDiv(240, Screen.PixelsPerInch, 96);
+  FProgressBar.Align   := alRight;
   FProgressBar.Min     := 0;
   FProgressBar.Max     := 100;
   FProgressBar.Position:= 0;
@@ -573,8 +584,19 @@ end;
 procedure TForm2.BeginAnalysisUI(KnownTotal: Integer);
 begin
   FCancelRequested  := False;
+  FAbortReason      := '';
   FLastProgressTick := 0;
   Screen.Cursor     := crAppStart;
+  // Analyse-Ausloeser sperren: der Callback pumpt Nachrichten, und ein
+  // zweiter Klick (der ungeduldige Normalfall) schachtelte sonst einen
+  // zweiten Lauf in den ersten - Cancel-Flag resettet, das innere
+  // EndAnalysisUI versteckte Progressbar und Cancel des aeusseren Laufs,
+  // Ergebnisse ueberschrieben sich. Export mit sperren: er laese
+  // FAllFindings, waehrend der Lauf sie ersetzt.
+  Button6.Enabled    := False;
+  Button7.Enabled    := False;
+  BtnBranch.Enabled  := False;
+  if Assigned(FBtnExport) then FBtnExport.Enabled := False;
   FBtnCancel.Enabled := True;
   FBtnCancel.Visible := True;
   if KnownTotal > 0 then
@@ -594,6 +616,10 @@ end;
 
 procedure TForm2.EndAnalysisUI;
 begin
+  Button6.Enabled       := True;
+  Button7.Enabled       := True;
+  BtnBranch.Enabled     := True;
+  if Assigned(FBtnExport) then FBtnExport.Enabled := True;
   FBtnCancel.Enabled    := False;
   FBtnCancel.Visible    := False;
   FProgressBar.Style    := pbstNormal;
@@ -611,7 +637,10 @@ var
   tick     : Cardinal;
   doUpdate : Boolean;
 begin
-  if FCancelRequested then
+  // Auch das Fenster-X zaehlt: der Scan laeuft synchron im Hauptthread,
+  // und ohne diese Pruefung lief er nach dem Schliessen-Klick stumm
+  // weiter - die App wirkte abgestuerzt, das Fenster blieb stehen.
+  if FCancelRequested or Application.Terminated then
     Abort;
 
   tick     := GetTickCount;
@@ -628,8 +657,14 @@ begin
     // ---- Scan-Phase ----
     if Current > MAX_SCAN_FILES then
     begin
-      StatusBar1.Panels[2].Text := Format(
-        _('More than %d files found - scan cancelled.'), [MAX_SCAN_FILES]);
+      // Grund merken - der Status-Text hier laege unter der Progressbar.
+      // Der EAbort-Zweig zeigt ihn nach dem Aufraeumen als Dialog, MIT
+      // Ausweg: vorher stand nur 'scan cancelled', und wer ein grosses
+      // Legacy-Projekt scannte, war ohne Hinweis am Ende.
+      FAbortReason := Format(
+        _('More than %d files found - scan stopped. Choose a subfolder, ' +
+          'or exclude folders via the ignore list (hamburger menu).'),
+        [MAX_SCAN_FILES]);
       Abort;
     end;
     if doUpdate then
@@ -992,9 +1027,24 @@ begin
         FillGridFromFindings(findings, DirOfProjectPath(path));
       except
         on EAbort do
-          // User-Cancel oder MAX_SCAN_FILES-Limit. StatusBar wurde im
-          // ProgressCallback bereits gesetzt.
-          ;
+        begin
+          // Die Vorgaengerfassung liess den Zweig leer - der Kommentar
+          // behauptete 'StatusBar bereits gesetzt', aber der Text stand
+          // (a) nur beim Limit-Fall und (b) UNTER der Progressbar. Nach
+          // dem Aufraeumen blieb ein eingefrorenes 'File 123 / 500' in
+          // der Leiste stehen.
+          if FAbortReason <> '' then
+          begin
+            StatusBar1.Panels[2].Text := FAbortReason;
+            ShowMessage(FAbortReason);   // der Ausweg muss ankommen
+          end
+          else
+            StatusBar1.Panels[2].Text := _('Analysis cancelled.');
+        end;
+        // noinspection ExceptionTooGeneral
+        // Catch-all an der Action-Grenze ist in dieser Form gewollt
+        // (s. Dateikopf): eine Analyse-Exception darf die App nicht
+        // killen, die Meldung traegt die Klartext-Ursache.
         on E: Exception do
           StatusBar1.Panels[2].Text := _('Analysis error: ') + E.Message;
       end;
