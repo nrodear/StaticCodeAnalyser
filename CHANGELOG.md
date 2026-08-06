@@ -64,6 +64,32 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   restart — the hint says so.
 - **"Opening in Delphi IDE…"** status plus busy cursor before the
   IDE-open path blocks the UI for its ~1.6 s keystroke navigation.
+- **The stat tiles are filters now, like the plugin's**: click *Errors*,
+  *Warnings*, *Hints*, *Read errors*, *Cyclomatic*, *Bugs*, *Security* or
+  *Duplicates* to filter the grid; *Quality* resets everything — in the
+  EXE including the search box, so "show everything" really does.
+- **SARIF in the export menu.** The engine always could; only the CLI
+  used it. Same scope as Sonar/HTML: all findings, not the filtered view.
+  Every export entry now states its scope in the caption ("JSON (filtered
+  view)", "SARIF (all findings)") — previously only HTML did, which made
+  the count difference between two exports of the same run inexplicable.
+- **The window remembers itself**: size, position, maximised state and
+  column widths survive a restart (clamped to a visible monitor, so an
+  unplugged second screen cannot restore the window out of sight). The
+  detail column fills the remaining width like the plugin's does, and a
+  minimum window size stops the filter row from collapsing.
+
+### Changed
+
+- The status bar follows the plugin's three-channel scheme: the finding
+  count is **persistent** in its own panel (it used to be wiped by the
+  next event message), scan progress has its own, events keep the third.
+- Splitter positions the user drags are respected — every window resize
+  used to force the help panel back to one third and the before/after
+  split back to 50/50 (this also fixes the IDE plugin).
+- CSV/JSON export dialogs ask before overwriting and open in the scanned
+  directory, matching HTML/Sonar; default file names are now
+  `sca-findings.*` instead of the hard-coded German `analyse-befunde.*`.
 
 ### Fixed
 
