@@ -132,10 +132,17 @@ type
   // Bildet die Byte-Ausgabe von System.JSON `Root.Format(2)` EXAKT nach
   // (verifiziert gegen die Delphi-12-RTL-Quelle System.JSON.pas):
   //   * String-Escapes wie TJSONString.ToChars mit Options=[] (der Pfad,
-  //     den TJSONValue.Format nimmt): NUR " \ / #8 #9 #10 #12 #13 werden
-  //     zu \" \\ \/ \b \t \n \f \r. KEIN \uXXXX - andere Steuerzeichen
-  //     und Nicht-ASCII bleiben roh. Gilt auch fuer Pair-NAMEN (deshalb
+  //     den TJSONValue.Format nimmt): " \ / #8 #9 #10 #12 #13 werden
+  //     zu \" \\ \/ \b \t \n \f \r. Gilt auch fuer Pair-NAMEN (deshalb
   //     steht im Output "contextHash\/v1" und "https:\/\/...").
+  //     EINE bewusste Abweichung vom RTL-Vorbild (2026-08-06): die
+  //     restlichen Steuerzeichen #0..#7 #11 #14..#31 gehen als \u00XX
+  //     raus statt roh. Roh sind sie nach RFC 8259 ungueltiges JSON -
+  //     ein Fund, dessen Meldung z.B. ein #0 aus einem gescannten
+  //     Literal zitiert (PasswordChar := #0), machte sonst die GANZE
+  //     Datei fuer strikte Parser unlesbar. Der Sonar-Export hatte
+  //     denselben Defekt und ist seit fb18279 dicht; Nicht-ASCII ab #128
+  //     bleibt weiterhin roh (gueltiges JSON, identisch zur RTL).
   //   * Layout wie TJSONObject/TJSONArray.Format: '{' bzw. '[' + CRLF,
   //     Items mit 2 Spaces Einrueckung pro offener Ebene, ': ' nach dem
   //     Namen, Komma nach jedem Item ausser dem letzten, schliessende
@@ -215,7 +222,7 @@ begin
   for i := 1 to L do
   begin
     case S[i] of
-      '"', '\', '/', #8, #9, #10, #12, #13:
+      '"', '\', '/', #0..#31:
       begin
         // Unveraenderten Run vor dem Sonderzeichen als Block anhaengen
         // (StartIndex des Append-Overloads ist 0-basiert).
@@ -230,6 +237,10 @@ begin
           #10 : FSb.Append('\n');
           #12 : FSb.Append('\f');
           #13 : FSb.Append('\r');
+        else
+          // Restliche Steuerzeichen: \u00XX - roh waeren sie ungueltiges
+          // JSON (s. Kopfkommentar der Klasse).
+          FSb.Append('\u00').Append(IntToHex(Ord(S[i]), 2));
         end;
         RunStart := i + 1;
       end;

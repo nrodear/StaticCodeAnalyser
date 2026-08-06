@@ -32,6 +32,11 @@ type
     [Test] procedure SeverityMapsCorrectly;
     [Test] procedure EmptyFindingsListProducesEmptyResults;
     // ---- Mehrzeilen-Bereich (Konzept_MehrzeiligeFundmarkierung) ----------
+    // Steuerzeichen in der Fund-Meldung (z.B. zitiertes #0 aus
+    // 'PasswordChar := #0') muessen als \u00XX rausgehen - roh waeren sie
+    // nach RFC 8259 ungueltiges JSON und machten die GANZE Datei fuer
+    // strikte Parser unlesbar. Der Sonar-Export hatte denselben Defekt.
+    [Test] procedure ControlCharInMessage_FileStaysParseable;
     [Test] procedure SingleLineFindingHasNoEndLine;
     [Test] procedure MultiLineFindingHasEndLine;
     [Test] procedure EndLineBeforeStartIsNotWritten;
@@ -383,6 +388,49 @@ begin
   Result := (Res.GetValue<TJSONArray>('locations').Items[0] as TJSONObject)
               .GetValue<TJSONObject>('physicalLocation')
               .GetValue<TJSONObject>('region');
+end;
+
+procedure TTestExportSARIF.ControlCharInMessage_FileStaysParseable;
+var
+  Findings : TObjectList<TLeakFinding>;
+  S        : string;
+  Root     : TJSONObject;
+  Res      : TJSONObject;
+  Msg      : string;
+begin
+  // Bewusst ZWEI Try-Bloecke NACHEINANDER statt verschachtelt: Findings
+  // wird fuer den Parse-Teil nicht mehr gebraucht.
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    // #0 und #27 sind Steuerzeichen ohne Kurz-Escape; #9 hat eines und
+    // prueft, dass der neue Zweig die alten nicht verdraengt.
+    Findings.Add(MakeFinding(fkMemoryLeak, lsError, 'src'#92'Ctl.pas', 42,
+      'Literal '#0' mit '#27' und '#9' Tab'));
+    S := TSARIFWriter.ToJsonString(Findings, '', '0.8.0', 'TestTool');
+  finally
+    Findings.Free;
+  end;
+
+  // Die Sequenzen muessen woertlich im Text stehen (IntToHex liefert
+  // Grossbuchstaben, daher \u001B) ...
+  Assert.IsTrue(Pos('\u0000', S) > 0, '\u0000 fehlt im Output');
+  Assert.IsTrue(Pos('\u001B', S) > 0, '\u001B fehlt im Output');
+  Assert.IsTrue(Pos('\t', S) > 0, 'Kurz-Escape \t verdraengt');
+  // ... und kein Steuerzeichen darf roh durchgehen.
+  Assert.IsFalse(Pos(#0, S) > 0, 'rohes #0 im Output');
+  Assert.IsFalse(Pos(#27, S) > 0, 'rohes #27 im Output');
+
+  // Und die Datei bleibt als Ganzes parsebar, mit dem Original-Text nach
+  // dem Ruecklesen.
+  Root := ParseSARIF(S);
+  try
+    Res := GetFirstResult(Root);
+    Msg := Res.GetValue<string>('message.text');
+    Assert.IsTrue(Pos(#0, Msg) > 0,
+      'Roundtrip: #0 muss nach dem Parsen wieder im Text stehen');
+  finally
+    Root.Free;
+  end;
 end;
 
 procedure TTestExportSARIF.SingleLineFindingHasNoEndLine;
