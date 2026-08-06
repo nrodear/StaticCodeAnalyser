@@ -1605,8 +1605,8 @@ msgstr "Betrifft nur die Oberfläche des Plugins - Detektor-Meldungen, Befunde u
 msgid "Language"
 msgstr "Sprache"
 
-msgid "UI language: %s - captions already on screen switch after a restart."
-msgstr "Oberflächensprache: %s - bereits angezeigte Beschriftungen wechseln erst nach einem Neustart."
+msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."
+msgstr "UI-Sprache: %s - übrige Beschriftungen (Kacheln, Hilfe-Panel) wechseln nach einem Neustart."
 
 # --- Nachtrag 2026-08-02: Baseline-Integration, Sonar- und
 # Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still
@@ -1878,3 +1878,23 @@ msgstr "Öffne in der Delphi-IDE..."
 
 msgid "Analysis cancelled."
 msgstr "Analyse abgebrochen."
+
+# --- 2026-08-06: Sprachreinheit (EXE) ---
+
+msgid "Min:"
+msgstr "Min:"
+
+msgid "Analyse file"
+msgstr "Datei analysieren"
+
+msgid "   ... %d more matches - refine the search"
+msgstr "   ... %d weitere Treffer - Suche verfeinern"
+
+msgid "   (no matches)"
+msgstr "   (keine Treffer)"
+
+msgid "Sonar export"
+msgstr "Sonar-Export"
+
+msgid "Sonar Generic Issue Format (*.json)|*.json"
+msgstr "Sonar Generic Issue Format (*.json)|*.json"

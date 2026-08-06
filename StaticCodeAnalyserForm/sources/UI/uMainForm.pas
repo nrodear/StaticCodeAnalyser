@@ -176,6 +176,11 @@ type
     procedure OpenSelectedFinding;
     // Panel der Auswahl nachziehen, OHNE die Zwischenablage anzufassen.
     procedure UpdateHintPanelToSelection;
+    // Alle statischen Captions durch den Katalog ziehen. Die DFM-Werte
+    // sind nur die Design-Zeit-Vorgabe - ohne diesen Pass blieb die
+    // Filterzeile in JEDER Sprache englisch. Wird auch beim
+    // Sprachwechsel gerufen (Sofortwirkung fuer Labels/Buttons/Header).
+    procedure ApplyUiCaptions;
     procedure BuildAppearanceMenu(AParent: TMenuItem);
     procedure AppearanceItemClick(Sender: TObject);
     procedure BuildOpenWithMenu(AParent: TMenuItem);
@@ -349,11 +354,7 @@ begin
   finally
     Settings.Free;
   end;
-  ResultGrid.Cells[0, 0] := _('File');
-  ResultGrid.Cells[1, 0] := _('Method');
-  ResultGrid.Cells[2, 0] := _('Line');
-  ResultGrid.Cells[3, 0] := _('Detail');
-  ResultGrid.Cells[4, 0] := _('Severity');
+  ApplyUiCaptions;
 
   // Branch-Button-Hint zur Laufzeit setzen (DFM-Hint waere hardcoded
   // Englisch). Pattern analog zum IDE-Plugin (FBtnAnalyseChanged.Hint).
@@ -2090,6 +2091,27 @@ end;
 // gleiche Items, gleiche Reihenfolge, gleiche Enabled-Sync-Logik.
 // ---------------------------------------------------------------------------
 
+procedure TForm2.ApplyUiCaptions;
+begin
+  // Filterzeile + Pfadzeile: die DFM-Captions wurden nie durch _()
+  // ersetzt - ein deutscher Nutzer sah dauerhaft eine gemischt-
+  // sprachige Toolbar (Button6 daneben war laengst uebersetzt).
+  LblFilter.Caption  := _('Severity:');
+  LblType.Caption    := _('Type:');
+  LblMinSev.Caption  := _('Min:');
+  LblSearch.Caption  := _('Search:');
+  LblProfile.Caption := _('Profile:');
+  Label1.Caption     := _('Project path:');
+  Button7.Caption    := _('Analyse file');
+  // Button6-Caption setzt ProjectpathChangedScope (Smart-Path) selbst.
+
+  ResultGrid.Cells[0, 0] := _('File');
+  ResultGrid.Cells[1, 0] := _('Method');
+  ResultGrid.Cells[2, 0] := _('Line');
+  ResultGrid.Cells[3, 0] := _('Detail');
+  ResultGrid.Cells[4, 0] := _('Severity');
+end;
+
 procedure TForm2.BuildHamburgerMenu;
 var
   MI : TMenuItem;
@@ -2365,13 +2387,25 @@ begin
     TAppTheme.HandleSystemThemeChanged;
 end;
 
+// Nativer Sprachname zum ISO-Kuerzel - Eigennamen, bewusst NICHT durch
+// den Katalog uebersetzt ('Deutsch' heisst in jeder UI-Sprache Deutsch).
+// Unbekannte Kuerzel (neue .po ohne Eintrag hier) zeigen das Kuerzel.
+function LanguageNativeName(const ACode: string): string;
+begin
+  if SameText(ACode, 'de') then Exit('Deutsch');
+  if SameText(ACode, 'en') then Exit('English');
+  if SameText(ACode, 'fr') then Exit('Fran'#$00E7'ais');
+  Result := ACode;
+end;
+
 procedure TForm2.BuildLanguageMenu(AParent: TMenuItem);
 // Ein Radio-Item pro verfuegbarer Sprache. Die Liste kommt aus
 // uLocalization.AvailableLanguages (eingebettete .po + externe i18n\*.po
 // neben der EXE + 'en') - im Code steht KEIN Sprachkuerzel, damit eine
 // neue Uebersetzung ohne UI-Aenderung auftaucht.
-// Caption ist das nackte ISO-639-1-Kuerzel; das Kuerzel liegt zusaetzlich
-// im Hint, damit der Click-Handler nicht von der Caption abhaengt.
+// Caption ist der NATIVE Sprachname (s. LanguageNativeName); das Kuerzel
+// liegt zusaetzlich im Hint, damit der Click-Handler nicht von der
+// Caption abhaengt.
 var
   Codes : TArray<string>;
   Cur   : string;
@@ -2388,7 +2422,7 @@ begin
   for I := Low(Codes) to High(Codes) do
   begin
     MI            := TMenuItem.Create(AParent);
-    MI.Caption    := Codes[I];
+    MI.Caption    := LanguageNativeName(Codes[I]);
     MI.Hint       := Codes[I];
     MI.RadioItem  := True;
     // Eigener GroupIndex fuer den Radio-Kreis. Alle anderen Items des
@@ -2437,10 +2471,26 @@ begin
   end;
 
   SetLanguage(Code);
-  MI.Checked := True;
+  // Sofort umstellen, was sich gefahrlos neu beschriften laesst:
+  // Filterzeile, Pfadzeile, Grid-Header, Analyse-Button.
+  ApplyUiCaptions;
+  ProjectpathChangedScope(nil);
   StatusBar1.Panels[2].Text := Format(
-    _('UI language: %s - captions already on screen switch after a restart.'),
+    _('UI language: %s - remaining captions (tiles, help panel) switch after a restart.'),
     [Code]);
+  // Das Hamburger-Menue traegt seine Captions seit dem einmaligen Aufbau
+  // in FormCreate - der Kommentar hier versprach frueher einen 'naechsten
+  // Aufbau', den es nie gab. Neu bauen - aber NACH diesem Handler:
+  // Sender ist ein Kind des Menues, das hier stuerbe (Use-after-free im
+  // eigenen Klick). ForceQueue laeuft nach der aktuellen Nachricht im
+  // Hauptthread.
+  TThread.ForceQueue(nil,
+    procedure
+    begin
+      if csDestroying in ComponentState then Exit;
+      FreeAndNil(FHamburgerMenu);
+      BuildHamburgerMenu;
+    end);
 end;
 
 procedure TForm2.HamburgerMenuPopup(Sender: TObject);

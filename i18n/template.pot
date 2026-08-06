@@ -1775,7 +1775,7 @@ msgid "UI language:"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1703
-msgid "UI language: %s - captions already on screen switch after a restart."
+msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:1322
@@ -2064,4 +2064,24 @@ msgid "Opening in Delphi IDE..."
 msgstr ""
 
 msgid "Analysis cancelled."
+msgstr ""
+
+# --- 2026-08-06: Sprachreinheit (EXE) ---
+
+msgid "Min:"
+msgstr ""
+
+msgid "Analyse file"
+msgstr ""
+
+msgid "   ... %d more matches - refine the search"
+msgstr ""
+
+msgid "   (no matches)"
+msgstr ""
+
+msgid "Sonar export"
+msgstr ""
+
+msgid "Sonar Generic Issue Format (*.json)|*.json"
 msgstr ""

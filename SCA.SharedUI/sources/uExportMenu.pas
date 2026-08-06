@@ -334,7 +334,8 @@ begin
   if Assigned(FGetBaseDir) then BaseDir := FGetBaseDir() else BaseDir := '';
   Dlg := TSaveDialog.Create(nil);
   try
-    Dlg.Filter     := 'Sonar Generic Issue Format (*.json)|*.json';
+    Dlg.Title      := _('Sonar export');
+    Dlg.Filter     := _('Sonar Generic Issue Format (*.json)|*.json');
     Dlg.DefaultExt := 'json';
     Dlg.FileName   := 'sca-findings.json';
     if BaseDir <> '' then Dlg.InitialDir := BaseDir;

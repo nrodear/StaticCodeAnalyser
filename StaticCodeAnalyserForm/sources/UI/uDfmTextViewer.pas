@@ -22,7 +22,8 @@ implementation
 uses
   System.SysUtils, System.Classes, System.IOUtils,
   Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.Buttons, Vcl.Graphics,
-  Winapi.Windows, Winapi.Messages;
+  Winapi.Windows, Winapi.Messages,
+  uLocalization;   // _() - die Fehlermeldung sprach hart deutsch
 
 procedure ShowDfmAsText(const FileName: string; HighlightLine: Integer);
 var
@@ -38,7 +39,7 @@ var
 begin
   if not TFile.Exists(FileName) then
   begin
-    Application.MessageBox(PChar('Datei nicht gefunden:'#13#10 + FileName),
+    Application.MessageBox(PChar(_('File not found: ') + #13#10 + FileName),
                            'DFM Viewer', 0);
     Exit;
   end;

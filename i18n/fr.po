@@ -1617,8 +1617,8 @@ msgstr "Ne concerne que l'interface du plugin - les messages des détecteurs, le
 msgid "Language"
 msgstr "Langue"
 
-msgid "UI language: %s - captions already on screen switch after a restart."
-msgstr "Langue de l'interface : %s - les libellés déjà affichés changent après un redémarrage."
+msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."
+msgstr "Langue de l'interface : %s - les libellés restants (tuiles, panneau d'aide) changeront après un redémarrage."
 
 # --- Nachtrag 2026-08-02: Baseline-Integration, Sonar- und
 # Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still
@@ -1890,3 +1890,23 @@ msgstr "Ouverture dans l'EDI Delphi..."
 
 msgid "Analysis cancelled."
 msgstr "Analyse annulée."
+
+# --- 2026-08-06: Sprachreinheit (EXE) ---
+
+msgid "Min:"
+msgstr "Min :"
+
+msgid "Analyse file"
+msgstr "Analyser le fichier"
+
+msgid "   ... %d more matches - refine the search"
+msgstr "   ... %d autres résultats - affinez la recherche"
+
+msgid "   (no matches)"
+msgstr "   (aucun résultat)"
+
+msgid "Sonar export"
+msgstr "Export Sonar"
+
+msgid "Sonar Generic Issue Format (*.json)|*.json"
+msgstr "Format Sonar Generic Issue (*.json)|*.json"
