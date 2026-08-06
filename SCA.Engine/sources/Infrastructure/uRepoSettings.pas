@@ -912,14 +912,17 @@ class function TRepoSettings.QuickReadBool(const ASection, AKey: string;
 // GCachedEditorScheme in uAnalyserTheme verwenden und beim Settings-Save
 // refreshen.
 var
-  Ini     : TIniFile;
+  Ini     : TMemIniFile;
   CfgPath : string;
 begin
   Result := ADefault;
   try
     CfgPath := TRepoSettings.ResolvedConfigPath;
     if (CfgPath = '') or not FileExists(CfgPath) then Exit;
-    Ini := TIniFile.Create(CfgPath);
+    // TMemIniFile wie in Load - NICHT TIniFile: das ginge ueber
+    // GetPrivateProfileString, und die Profil-API liest die von
+    // EnsureConfigExists als UTF-8+BOM geschriebene Datei als ANSI.
+    Ini := TMemIniFile.Create(CfgPath);
     try
       Result := Ini.ReadBool(ASection, AKey, ADefault);
     finally
@@ -933,14 +936,22 @@ end;
 class function TRepoSettings.QuickReadStr(
   const ASection, AKey, ADefault: string): string;
 var
-  Ini     : TIniFile;
+  Ini     : TMemIniFile;
   CfgPath : string;
 begin
   Result := ADefault;
   try
     CfgPath := TRepoSettings.ResolvedConfigPath;
     if (CfgPath = '') or not FileExists(CfgPath) then Exit;
-    Ini := TIniFile.Create(CfgPath);
+    // TMemIniFile wie in Load - NICHT TIniFile. TIniFile liest ueber
+    // GetPrivateProfileString, und die Profil-API interpretiert die von
+    // EnsureConfigExists als UTF-8+BOM geschriebene Datei als ANSI. Ein
+    // ExternalEditor-Pfad mit Umlaut (C:\Users\Juergen-mit-Umlaut\...)
+    // kam so als Zeichensalat zurueck, FileExists schlug fehl, und der
+    // eingerichtete Editor war NIE startbar. TMemIniFile laedt ueber
+    // TStringList.LoadFromFile mit BOM-Erkennung - derselbe Weg, den
+    // die Vollladung schon immer nimmt.
+    Ini := TMemIniFile.Create(CfgPath);
     try
       Result := Ini.ReadString(ASection, AKey, ADefault);
     finally

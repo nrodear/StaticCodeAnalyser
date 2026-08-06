@@ -2113,6 +2113,12 @@ var
   Ini      : TIniFile;
   Settings : TRepoSettings;
 begin
+  // Unveraendert? Dann nichts anfassen. Ein Klick auf das bereits aktive
+  // Radio-Item schrieb sonst trotzdem - und zwar VOR dem EnsureSection-
+  // Nachtrag unten haette WritePrivateProfileString bei Alt-INIs ein
+  // nacktes [Editor] ans Dateiende gelegt.
+  if TEditorCommand.Load.DfmTarget = AValue then Exit;
+
   try
     // Erst dafuer sorgen, dass Verzeichnis UND Datei da sind. Ohne das
     // wirft TIniFile.Create/WriteString beim allerersten Start
@@ -2125,6 +2131,14 @@ begin
     finally
       Settings.Free;
     end;
+    // Und den DOKUMENTIERTEN [Editor]-Block nachtragen, BEVOR die
+    // Profil-API schreibt. Andersherum legte WritePrivateProfileString
+    // bei einer Alt-INI ein nacktes '[Editor]' mit nur der einen Zeile
+    // an - und EnsureSection, das nur die Kopfzeile prueft, haengt den
+    // erklaerten Block danach nie mehr an. 'Configure external
+    // editor...' zeigte dann genau die unkommentierte Datei, die das
+    // Feature verhindern sollte.
+    TRepoSettings.EnsureSection(TEditorCommand.INI_SECTION);
     Ini := TIniFile.Create(TRepoSettings.ResolvedConfigPath);
     try
       Ini.WriteString(TEditorCommand.INI_SECTION,
@@ -2134,10 +2148,15 @@ begin
       Ini.Free;
     end;
   except
-    // BEWUSST leer: eine nicht schreibbare Konfiguration ist kein Fehler,
-    // den diese Stelle behandeln koennte - die Wahl gilt dann eben nur
-    // fuer diese Sitzung. (Keine eigene Unterdrueckung noetig: EmptyExcept
-    // steht bereits in der dateiweiten Liste am Kopf dieser Unit.)
+    // Ehrlich melden statt still verwerfen: es gibt KEINEN
+    // Sitzungszustand fuer diese Wahl - Menue und Doppelklick lesen die
+    // INI jedes Mal neu. Eine schreibgeschuetzte Datei heisst also
+    // 'Wahl wirkungslos', und das muss der Nutzer sehen. (Die
+    // Vorgaengerfassung behauptete im Kommentar eine Sitzungsgeltung,
+    // die nie existiert hat.)
+    StatusBar1.Panels[2].Text :=
+      Format(_('Could not save the choice - analyser.ini is not writable: %s'),
+        [TRepoSettings.ResolvedConfigPath]);
   end;
 end;
 
