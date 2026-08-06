@@ -74,21 +74,50 @@ function DescribeException(E: Exception): string;
 
 implementation
 
+uses
+  // PImageDosHeader/PImageNtHeaders + Signaturen (OwnImageSize). Die
+  // Unit ist ohnehin Windows-gebunden (ExceptionRecord ist 'platform').
+  Winapi.Windows;
+
+// Groesse des eigenen Moduls aus dem eigenen PE-Header. Kein API-Call,
+// keine Allokation - nur zwei Lesezugriffe auf garantiert gemappte
+// Seiten des eigenen Images; im Crash-Kontext genau richtig.
+function OwnImageSize: UIntPtr;
+var
+  Dos : PImageDosHeader;
+  Nt  : PImageNtHeaders;
+begin
+  Dos := PImageDosHeader(HInstance);
+  if Dos^.e_magic <> IMAGE_DOS_SIGNATURE then Exit(0);
+  Nt := PImageNtHeaders(UIntPtr(HInstance) + UIntPtr(Dos^._lfanew));
+  if Nt^.Signature <> IMAGE_NT_SIGNATURE then Exit(0);
+  Result := Nt^.OptionalHeader.SizeOfImage;
+end;
+
 function AddressInfo(AAddr: Pointer): string;
 var
   Base : UIntPtr;
   Addr : UIntPtr;
+  Size : UIntPtr;
 begin
   Result := '';
   if not Assigned(AAddr) then Exit;
   Base := UIntPtr(HInstance);
   Addr := UIntPtr(AAddr);
-  // Unterhalb der Modulbasis kann die Adresse nicht zu DIESEM Modul
-  // gehoeren. Dann die Basis trotzdem nennen - der Leser sieht sofort,
-  // dass die RTL-Modulangabe nicht stimmen kann.
+  Size := OwnImageSize;
+  // Ausserhalb von [Base, Base+SizeOfImage) kann die Adresse nicht zu
+  // DIESEM Modul gehoeren. Die erste Fassung pruefte nur die
+  // UNTERGRENZE - eine Adresse in ntdll oder einer BPL (laedt oberhalb)
+  // wurde als 'modulrelativ' ZUM EIGENEN MODUL ausgegeben: exakt die
+  // Fehlattribution, die diese Unit der RTL vorwirft. Basis trotzdem
+  // nennen - der Leser sieht sofort, dass eine RTL-Modulangabe nicht
+  // stimmen kann.
   if Addr < Base then
     Result := Format(' [Modulbasis $%x, Adresse liegt DARUNTER - nicht dieses Modul]',
                      [Base])
+  else if (Size > 0) and (Addr >= Base + Size) then
+    Result := Format(' [Modulbasis $%x, Bildgroesse $%x, Adresse liegt DARUEBER - nicht dieses Modul]',
+                     [Base, Size])
   else
     Result := Format(' [Modulbasis $%x, modulrelativ $%x]', [Base, Addr - Base]);
 end;

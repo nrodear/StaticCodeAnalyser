@@ -23,6 +23,7 @@ type
     [Test] procedure Describe_External_ReportsNtStatus;
     [Test] procedure Describe_External_ReportsModuleRelativeAddress;
     [Test] procedure Describe_AddressBelowBase_SaysSo;
+    [Test] procedure Describe_AddressAboveImage_SaysSo;
     [Test] procedure Describe_Nil_DoesNotCrash;
   end;
 
@@ -129,6 +130,30 @@ begin
   end;
   Assert.IsTrue(Pos('DARUNTER', S) > 0,
                 'Adresse unter der Modulbasis nicht als solche erkannt: ' + S);
+  Assert.IsTrue(Pos('modulrelativ', S) = 0,
+                'Sinnlose Differenz statt Hinweis: ' + S);
+end;
+
+procedure TTestCrashDiag.Describe_AddressAboveImage_SaysSo;
+var
+  Rec : TExceptionRecord;
+  E   : EAccessViolation;
+  S   : string;
+begin
+  // OBERHALB von Basis+Bildgroesse (ntdll, BPLs, Heap) gehoert die
+  // Adresse ebenso wenig zu diesem Modul. Die erste Fassung pruefte nur
+  // die Untergrenze und gab hier eine 'modulrelative' Differenz aus -
+  // exakt die Fehlattribution, die die Unit der RTL vorwirft.
+  // $40000000 liegt weit ueber jeder realen Bildgroesse dieses Moduls.
+  E := MakeExternal(Rec, $C0000005,
+         Pointer(UIntPtr(HInstance) + $40000000));
+  try
+    S := DescribeException(E);
+  finally
+    E.Free;
+  end;
+  Assert.IsTrue(Pos('DARUEBER', S) > 0,
+                'Adresse oberhalb des Bildes nicht als solche erkannt: ' + S);
   Assert.IsTrue(Pos('modulrelativ', S) = 0,
                 'Sinnlose Differenz statt Hinweis: ' + S);
 end;
