@@ -1898,3 +1898,11 @@ msgstr "Sonar-Export"
 
 msgid "Sonar Generic Issue Format (*.json)|*.json"
 msgstr "Sonar Generic Issue Format (*.json)|*.json"
+
+# --- 2026-08-06: Plugin-Tasten in der EXE (Suppress/Quick-Fix) ---
+
+msgid "Suppress: could not write file: %s"
+msgstr "Suppress: Datei nicht schreibbar: %s"
+
+msgid "Quick-Fix: could not write file: %s"
+msgstr "Quick-Fix: Datei nicht schreibbar: %s"

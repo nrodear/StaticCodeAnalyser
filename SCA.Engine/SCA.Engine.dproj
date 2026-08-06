@@ -109,6 +109,7 @@
         <DCCReference Include="sources\Common\uRegExMatches.pas"/>
         <DCCReference Include="sources\Common\uRuleCatalog.pas"/>
         <DCCReference Include="sources\Common\uSCAConsts.pas"/>
+        <DCCReference Include="sources\Common\uSourceLineEdit.pas"/>
         <DCCReference Include="sources\Common\uYamlSubsetParser.pas"/>
         <DCCReference Include="sources\Detectors\uAbstractNotImpl.pas"/>
         <DCCReference Include="sources\Detectors\uAssertMessage.pas"/>
