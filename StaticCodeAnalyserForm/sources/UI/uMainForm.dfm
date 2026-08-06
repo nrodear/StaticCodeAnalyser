@@ -3,7 +3,8 @@ object Form2: TForm2
   Top = 0
   Caption = 'Static Code Analysis Tool for Delphi'
   ClientHeight = 512
-  ClientWidth = 850
+  ClientWidth = 777
+  Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
   Font.Height = -12
@@ -15,7 +16,7 @@ object Form2: TForm2
   object StatusBar1: TStatusBar
     Left = 0
     Top = 493
-    Width = 850
+    Width = 777
     Height = 19
     Panels = <
       item
@@ -34,31 +35,32 @@ object Form2: TForm2
   object PanelStats: TPanel
     Left = 0
     Top = 0
-    Width = 850
+    Width = 777
     Height = 49
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 3
+    ExplicitWidth = 848
   end
   object Panel4: TPanel
     Left = 0
     Top = 49
-    Width = 850
+    Width = 777
     Height = 140
     Align = alTop
     TabOrder = 1
-    ExplicitTop = 43
+    ExplicitWidth = 848
     object Panel3: TPanel
       Left = 1
       Top = 79
-      Width = 848
+      Width = 775
       Height = 41
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 0
-      ExplicitLeft = 0
+      ExplicitWidth = 846
       DesignSize = (
-        848
+        775
         41)
       object LblFilter: TLabel
         Left = 16
@@ -71,14 +73,14 @@ object Form2: TForm2
         Left = 274
         Top = 10
         Width = 28
-        Height = 20
+        Height = 15
         Caption = 'Type:'
       end
       object LblMinSev: TLabel
         Left = 456
         Top = 9
         Width = 24
-        Height = 17
+        Height = 15
         Caption = 'Min:'
       end
       object LblSearch: TLabel
@@ -119,23 +121,23 @@ object Form2: TForm2
       object SearchEdit: TEdit
         Left = 624
         Top = 6
-        Width = 169
+        Width = 96
         Height = 23
         Anchors = [akLeft, akTop, akRight]
         TabOrder = 3
         OnChange = SearchEditChange
+        ExplicitWidth = 167
       end
     end
     object PanelActions: TPanel
       Left = 1
       Top = 1
-      Width = 848
+      Width = 775
       Height = 35
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 2
-      ExplicitLeft = 0
-      ExplicitTop = 6
+      ExplicitWidth = 846
       object LblProfile: TLabel
         Left = 352
         Top = 9
@@ -185,15 +187,14 @@ object Form2: TForm2
     object Panel1: TPanel
       Left = 1
       Top = 36
-      Width = 848
+      Width = 775
       Height = 43
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 1
-      ExplicitLeft = 2
-      ExplicitTop = 37
+      ExplicitWidth = 846
       DesignSize = (
-        848
+        775
         43)
       object Label1: TLabel
         Left = 16
@@ -205,14 +206,15 @@ object Form2: TForm2
       object Projectpath: TComboBox
         Left = 89
         Top = 14
-        Width = 584
+        Width = 511
         Height = 23
         Anchors = [akLeft, akTop, akRight]
         TabOrder = 0
         Text = 'D:\git-demos\delphi\StaticCodeAnalyser\resources'
+        ExplicitWidth = 582
       end
       object Button2: TButton
-        Left = 679
+        Left = 606
         Top = 14
         Width = 24
         Height = 23
@@ -220,24 +222,24 @@ object Form2: TForm2
         Caption = '...'
         TabOrder = 1
         OnClick = Button2Click
+        ExplicitLeft = 677
       end
     end
   end
   object Panel2: TPanel
     Left = 0
     Top = 189
-    Width = 850
+    Width = 777
     Height = 304
     Align = alClient
     BevelOuter = bvNone
     TabOrder = 2
-    ExplicitTop = 185
     ExplicitWidth = 848
-    ExplicitHeight = 300
+    ExplicitHeight = 296
     object ResultGrid: TStringGrid
       Left = 0
       Top = 0
-      Width = 850
+      Width = 777
       Height = 304
       Align = alClient
       DefaultColWidth = 100
@@ -247,7 +249,8 @@ object Form2: TForm2
       Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goColSizing, goRowSelect, goThumbTracking]
       TabOrder = 0
       OnClick = ResultGridClick
-      ExplicitTop = -6
+      ExplicitWidth = 848
+      ExplicitHeight = 296
       ColWidths = (
         176
         121
