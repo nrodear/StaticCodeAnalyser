@@ -2,35 +2,26 @@
 # Erzeugt von tools/selfscan_gate.py --update (Profil strict).
 # Das Gate schlaegt fehl, wenn eine Regel MEHR Funde hat als
 # hier. Weniger ist immer erlaubt.
-# Stand 2026-08-04 NACH dem Build der vier Zweige - gemessen, nicht geschaetzt.
-# * EmptyVisibilitySection 220 -> 0. Der Detektor uebersprang Attribut-
-#   Zeilen wie Leerzeilen, daher galt JEDE DUnitX-Fixture als leere
-#   public-Sektion. Alle 220 waren dieser FP; im eigenen Quelltext gibt
-#   es keine echte leere Sichtbarkeits-Sektion. Dass die Regel lebt, ist
-#   mit einem Prueffall belegt (leeres private mittendrin + leeres
-#   protected am Klassenende melden weiterhin).
-# * ClassPerFile 522 -> 524: zwei neue SRC-Fixtures in
-#   uTestEmptyVisibilitySection - bekannter Fixture-Preis.
-# * CognitiveComplexity 344 -> 345, Warnings 654 -> 655:
-#   ProcessOneFileParallel kreuzt die Schwelle (18/15) durch die
-#   'on EStackOverflow do raise'-Handler. Absicht (Guard-Page nach
-#   Overflow unwiederbringlich weg, s. uAstFileCache.Acquire); ein
-#   zentraler Re-Raise-Helfer muesste Exception-Objekte aus fremdem
-#   Handler-Kontext raisen - Doppel-Free-Risiko, bewusst nicht gemacht.
-# 2026-08-05 (Zweig fix/004): ClassPerFile 524 -> 525, Hints +1 -
-# dritte Fixture TTestHardcodedSecretInit in uTestHardcodedSecret.
-# Nicht an TTestHardcodedSecretExt angebaut, weil die damit auf 519
-# Zeilen kam (LargeClass-Schwelle 500). Bekannter Fixture-Preis:
-# ein Hint fuer eine eigene Klasse statt einer Warning fuer eine zu
-# grosse. Eine eigene Datei waere sauberer, kostet aber Eintraege in
-# TestProject.dpr UND .dproj fuer drei Tests.
-TIERS 0 655 2569
+#
+# Stand 2026-08-06 NACH dem Build der Review-Runde (main 8bbd96a),
+# frische Win32/Win64-Release-Exes, am INHALT verifiziert. Nur
+# Verbesserungen gegenueber dem 08-04-Stand:
+# * ClassPerFile 525 -> 519, DefaultCase 82 -> 81, HardcodedPath
+#   10 -> 7, SourceUtf8NoBom 10 -> 9 - Ertrag der Review-Fixes.
+# * Historische Begruendungen (EmptyVisibilitySection-FP 220->0,
+#   CognitiveComplexity-Ausnahme ProcessOneFileParallel u.a.) stehen
+#   in der Git-Historie dieser Datei - --update wirft Kommentare weg,
+#   deshalb hier nur der Verweis statt der Abschriften.
+# Korpus-A/B dieser Runde: after143 -> after144 REGEL-IDENTISCH
+# (551.892 = 551.892); SARIF-Steuerzeichen-Fix belegt (5 rohe -> 5
+# Escapes, 0 rohe im neuen Lauf).
+TIERS 0 651 2560
 AvoidOut 14
 BeginEndRequired 308
 BooleanParam 7
 BooleanPropertyNaming 11
 CaseStatementSize 8
-ClassPerFile 525
+ClassPerFile 519
 CognitiveComplexity 345
 CommentedOutCode 21
 CompilerDirectiveScope 1
@@ -40,7 +31,7 @@ CyclomaticComplexity 123
 DateFormatSettings 2
 DebugOutput 20
 DeepNesting 38
-DefaultCaseInCaseStatement 82
+DefaultCaseInCaseStatement 81
 DfmActionMismatch 1
 DfmDataModuleSplitHint 1
 DfmDbInUiForm 5
@@ -50,19 +41,18 @@ DfmFieldTypeMismatch 2
 DfmHardcodedCaption 15
 DfmRequiredFieldUnbound 4
 DuplicateBlock 223
-DuplicateString 230
+DuplicateString 228
 EmptyBlock 2
 EmptyExcept 37
 EmptyFinallyBlock 2
 EmptyInterface 6
 EmptyMethod 7
 EmptyOnHandler 3
-EmptyVisibilitySection 0
 ExceptionTooGeneral 32
 FieldByNameInLoop 1
 FormatLocaleHint 4
 GodClass 36
-HardcodedPath 10
+HardcodedPath 7
 HardcodedString 1
 HttpInsteadOfHttps 2
 IfElseBegin 30
@@ -84,7 +74,7 @@ PublicField 38
 PublicMemberWithoutDoc 39
 RedundantConditional 3
 SetLengthAppendInLoop 2
-SourceUtf8NoBom 10
+SourceUtf8NoBom 9
 StringConcatInLoop 37
 TodoComment 16
 UnusedLocalVar 2
