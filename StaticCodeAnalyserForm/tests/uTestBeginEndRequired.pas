@@ -16,6 +16,9 @@ type
     [Test] procedure ThenExit_NoFinding;
     [Test] procedure DoBareStmt_Reported;
     [Test] procedure BeginEndRequired_KindAndSeverity;
+    [Test] procedure NextLineStatement_Reported;
+    [Test] procedure NextLineBegin_NotReported;
+    [Test] procedure ThenWithLineComment_NextLineStatement_Reported;
   end;
 
 implementation
@@ -124,6 +127,56 @@ begin
       end;
     Assert.Fail('expected fkBeginEndRequired finding');
   finally Findings.Free; end;
+end;
+
+procedure TTestBeginEndRequired.NextLineStatement_Reported;
+// Review-HIGH 2026-08-08: die haeufigste Formatierung (`if Cond then` +
+// Statement auf der Folgezeile) war fuer den Detektor unsichtbar.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if Cond then'#13#10 +
+  '    DoSomething;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkBeginEndRequired));
+  finally F.Free; end;
+end;
+
+procedure TTestBeginEndRequired.NextLineBegin_NotReported;
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if Cond then'#13#10 +
+  '  begin'#13#10 +
+  '    DoSomething;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkBeginEndRequired));
+  finally F.Free; end;
+end;
+
+procedure TTestBeginEndRequired.ThenWithLineComment_NextLineStatement_Reported;
+// `then // Kommentar` + Statement auf der Folgezeile = gleiche Klasse.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if Cond then // warum auch immer'#13#10 +
+  '    DoSomething;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkBeginEndRequired));
+  finally F.Free; end;
 end;
 
 initialization
