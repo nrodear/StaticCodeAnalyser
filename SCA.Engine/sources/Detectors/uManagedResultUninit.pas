@@ -51,6 +51,11 @@ unit uManagedResultUninit;
 //     Result) unterscheidbar); (2) reine Bedingungs-Reads (`if Result =
 //     nil then`) - Bedingungen liegen nur als TypeRef-Strings vor und
 //     werden ausschliesslich auf Pass-Muster geprueft.
+//   * FnName-Alias nur NACKT (Korpus-Messung 2026-08-07, 1985 FPs): der
+//     Function-Name zaehlt als Result-Alias nur ohne '.'-Qualifizierer
+//     davor, ohne '(' danach (Rekursion/Overload-Delegation) und nicht
+//     nach `inherited`. 'obj.result' (fremdes FELD) ist ebenfalls kein
+//     Result-Zugriff.
 //
 // Warum praktisch FP-frei: VOR dem ersten textuellen Write gibt es keinen
 // legalen Weg, wie Result definierten Inhalt haette - die einzigen
@@ -103,11 +108,14 @@ const
 type
   // Walker-Zustand: einmal pro Methode aufgesetzt, per var durchgereicht.
   TScanState = record
-    FnNameLow : string;      // unqualifizierter Function-Name, lowercased
-    Written   : Boolean;     // Result wurde bereits (potentiell) geschrieben
-    Found     : Boolean;     // erster Lese-vor-Schreib-Zugriff gefunden
-    ReadLine  : Integer;
-    ReadWhat  : string;
+    FnNameLow     : string;  // unqualifizierter Function-Name, lowercased
+    IsShortString : Boolean; // ShortString-Return: `Result[0] := Laenge` ist
+                             // das INIT-Idiom (Korpus: 37 solcher FPs) ->
+                             // Accessor-Writes zaehlen als Initialisierung
+    Written       : Boolean; // Result wurde bereits (potentiell) geschrieben
+    Found         : Boolean; // erster Lese-vor-Schreib-Zugriff gefunden
+    ReadLine      : Integer;
+    ReadWhat      : string;
   end;
 
 // Extrahiert den Return-Typ aus 'function:RetType[;direktive...]'
@@ -327,6 +335,52 @@ begin
   end;
 end;
 
+const
+  INHERITED_KW = 'inherited';
+
+// True wenn das Wort unmittelbar VOR Position pIx (Whitespace uebersprungen)
+// exakt 'inherited' ist - dann ist das Vorkommen ein Parent-Aufruf
+// (`Result := inherited GetAsString;`), kein Result-Alias.
+function PrecededByInherited(const S: string; pIx: Integer): Boolean;
+var
+  j, w : Integer;
+begin
+  Result := False;
+  j := PrevNonSpace(S, pIx - 1);
+  if j < Length(INHERITED_KW) then Exit;
+  w := j;
+  while (w >= 1) and TDetectorUtils.IsIdentChar(S[w]) do Dec(w);
+  Result := Copy(S, w + 1, j - w) = INHERITED_KW;
+end;
+
+// True wenn das word-bounded Needle-Vorkommen an pIx tatsaechlich der
+// Result-Alias sein KANN. FP-Sturm-Fix nach der ersten Korpus-Messung
+// (2026-08-07, 1985 von 2036 Funden der Hauptklasse waren FnName-FPs):
+// der Function-Name ist in Pascal NUR als NACKTER Bezeichner der
+// Result-Alias. Uebersprungen werden
+//   'x.needle'         - qualifizierter Zugriff auf ein FREMDES Symbol
+//                        ('obj.result' ist ein Feld, 'obj.prepare(..)' ein
+//                        Methoden-Aufruf eines anderen Objekts),
+//   'needle('          - Call (Rekursion/Overload-Delegation,
+//                        `Result := GetPlainText(A, B)`), nur FnName-Needle,
+//   'inherited needle' - Parent-Aufruf, nur FnName-Needle.
+function IsAliasOccurrence(const S: string; pIx: Integer;
+  const Needle: string): Boolean;
+var
+  k : Integer;
+begin
+  Result := False;
+  if (pIx > 1) and (S[pIx - 1] = '.') then Exit;
+  if Needle <> RESULT_IDENT then                   // FnName-Needle
+  begin
+    k := pIx + Length(Needle);
+    while (k <= Length(S)) and (S[k] <= ' ') do Inc(k);
+    if (k <= Length(S)) and (S[k] = '(') then Exit;
+    if PrecededByInherited(S, pIx) then Exit;
+  end;
+  Result := True;
+end;
+
 // Alle word-bounded Vorkommen EINER Needle klassifizieren.
 procedure ClassifyNeedle(const StrippedLow, Needle: string;
   var APass, ARead: Boolean);
@@ -342,7 +396,8 @@ begin
     if pIx + Length(Needle) > n then After := ' '
     else After := StrippedLow[pIx + Length(Needle)];
     if (not TDetectorUtils.IsIdentChar(Before)) and
-       (not TDetectorUtils.IsIdentChar(After)) then
+       (not TDetectorUtils.IsIdentChar(After)) and
+       IsAliasOccurrence(StrippedLow, pIx, Needle) then
       ClassifyOccurrence(StrippedLow, pIx, APass, ARead);
     pIx := PosEx(Needle, StrippedLow, pIx + 1);
   end;
@@ -436,7 +491,7 @@ begin
          St.Written := True;
        end;
     2: begin                                       // Result[i] / Result.X / Result^
-         if not St.Written then
+         if (not St.Written) and (not St.IsShortString) then
            MarkRead(N, 'element/member write into the not-yet-assigned Result', St);
          St.Written := True;                       // danach gilt es als beschrieben
        end;
@@ -461,7 +516,7 @@ begin
      ((St.FnNameLow <> '') and
       (LhsHead(Copy(CLow, 1, Length(St.FnNameLow) + 1), St.FnNameLow) = 2)) then
   begin
-    if not St.Written then
+    if (not St.Written) and (not St.IsShortString) then
       MarkRead(N, 'method/index access on the not-yet-assigned Result', St);
     Exit;
   end;
@@ -558,10 +613,16 @@ begin
   for P in EXACT do
     if Low = P then Exit(True);
   if Low.StartsWith('tarray<') or Low.StartsWith('string[') then Exit(True);
-  if Low.EndsWith('dynarray') then Exit(True);     // TIntegerDynArray & Co.
-  // Interface-Heuristik wie SCA121: 'I' + Grossbuchstabe.
+  // TIntegerDynArray & Co. - aber NICHT mormots TDynArray: das ist ein
+  // RECORD-Wrapper, dessen `Result.Init(...)` legitime Initialisierung
+  // ist (Korpus-Messung 2026-08-07: 5 FPs).
+  if Low.EndsWith('dynarray') and (Low <> 'tdynarray') then Exit(True);
+  // Interface-Heuristik wie SCA121: 'I' + Grossbuchstabe. KOMPLETT
+  // grossgeschriebene Namen ausnehmen: ICONMETRICS/IMAGEINFO & Co. sind
+  // Windows-API-RECORDS, keine Interfaces (Korpus-Messung 2026-08-07).
   if (Length(RetType) >= 2) and (RetType[1] = 'I') and
-     CharInSet(RetType[2], ['A'..'Z']) then
+     CharInSet(RetType[2], ['A'..'Z']) and
+     (RetType <> UpperCase(RetType)) then
     Exit(True);
 end;
 
@@ -586,12 +647,14 @@ begin
   if (not HasOwnBodyBlock(MethodNode)) or
      HasAbsoluteResultAlias(MethodNode) then Exit;
 
-  RetType      := ExtractReturnType(TypeRef);
-  St.FnNameLow := LowerCase(TDetectorUtils.UnqualifiedNameLast(MethodNode.Name));
-  St.Written   := False;
-  St.Found     := False;
-  St.ReadLine  := 0;
-  St.ReadWhat  := '';
+  RetType          := ExtractReturnType(TypeRef);
+  St.FnNameLow     := LowerCase(TDetectorUtils.UnqualifiedNameLast(MethodNode.Name));
+  St.IsShortString := SameText(RetType, 'shortstring') or
+                      StartsText('string[', RetType);
+  St.Written       := False;
+  St.Found         := False;
+  St.ReadLine      := 0;
+  St.ReadWhat      := '';
   // Nur den Body-Block walken (Params/Locals-Deklarationen auslassen -
   // ein Default-Wert o.ae. enthaelt kein ausfuehrbares Result).
   for Child in MethodNode.Children do

@@ -30,7 +30,27 @@ type
     [Test] procedure Finding_KindAndSeverity;
   end;
 
+  // FP-Sturm-Fixes nach der ersten Korpus-Messung 2026-08-07 (1985
+  // FnName-FPs + 37 ShortString + 5 TDynArray + 1 ALL-CAPS) - eigene
+  // Fixture, damit keine der beiden Klassen die GodClass-Schwelle reisst.
+  [TestFixture]
+  TTestManagedResultUninitAlias = class
+  public
+    [Test] procedure RecursiveDelegation_NotReported;
+    [Test] procedure InheritedSameName_NotReported;
+    [Test] procedure QualifiedSameNameCall_NotReported;
+    [Test] procedure ForeignResultField_NotReported;
+    [Test] procedure BareFnNameAlias_Reported;
+    [Test] procedure ShortStringLengthByteIdiom_NotReported;
+    [Test] procedure TDynArrayRecordInit_NotReported;
+    [Test] procedure AllCapsPseudoInterface_NotReported;
+  end;
+
 implementation
+
+// noinspection-file ClassPerFile
+// Zwei thematisch zusammengehoerige Fixtures (Kern-Matrix + FnName-Alias-
+// Faelle) in einer Unit - gleiche Konvention wie uTestDuplicate u.a.
 
 uses
   System.SysUtils, System.Generics.Collections,
@@ -284,7 +304,136 @@ begin
   finally F.Free; end;
 end;
 
+procedure TTestManagedResultUninitAlias.RecursiveDelegation_NotReported;
+// Korpus-FP-Klasse 1 (dominant): `Result := GetPlainText(A, B)` in
+// GetPlainText - Rekursion/Overload-Delegation, kein Result-Alias.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function GetText(A: Integer): string;'#13#10 +
+  'begin'#13#10 +
+  '  Result := GetText(A, True);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninitAlias.InheritedSameName_NotReported;
+// Korpus-FP-Klasse 2: `Result := inherited GetAsString;` - Parent-Aufruf.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function GetAsString: string;'#13#10 +
+  'begin'#13#10 +
+  '  Result := inherited GetAsString;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninitAlias.QualifiedSameNameCall_NotReported;
+// Korpus-FP-Klasse 3: `Result := FOld.GetTitle;` - gleichnamige Methode
+// eines ANDEREN Objekts.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function GetTitle: string;'#13#10 +
+  'begin'#13#10 +
+  '  Result := FOldService.GetTitle;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninitAlias.ForeignResultField_NotReported;
+// `FTask.Result` ist ein FELD eines fremden Objekts, kein Result-Zugriff.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function GetVal: string;'#13#10 +
+  'begin'#13#10 +
+  '  Result := FTask.Result;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninitAlias.BareFnNameAlias_Reported;
+// Positiv-Gegenprobe: der NACKTE Function-Name bleibt Result-Alias
+// (klassischer Pascal-Stil) - Lesen vor Schreiben wird weiter gemeldet.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Acc(L: TStrings): string;'#13#10 +
+  'begin'#13#10 +
+  '  Acc := Acc + L[0];'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninitAlias.ShortStringLengthByteIdiom_NotReported;
+// `Result[0] := AnsiChar(Len)` setzt bei ShortString das Laengenbyte -
+// das IST die Initialisierung (mormot/DCU32-Idiom, 37 Korpus-FPs).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function PackByte(B: Byte): ShortString;'#13#10 +
+  'begin'#13#10 +
+  '  Result[0] := AnsiChar(1);'#13#10 +
+  '  Result[1] := AnsiChar(B);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninitAlias.TDynArrayRecordInit_NotReported;
+// mormots TDynArray ist ein RECORD-Wrapper (kein dynamisches Array) -
+// `Result.Init(...)` ist legitime Initialisierung. Der *DynArray-
+// Suffix-Match nimmt 'TDynArray' exakt aus.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Wrap(T: Pointer): TDynArray;'#13#10 +
+  'begin'#13#10 +
+  '  Result.Init(T, FValue);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninitAlias.AllCapsPseudoInterface_NotReported;
+// ICONMETRICS/IMAGEINFO & Co. sind Windows-API-RECORDS in ALL-CAPS -
+// die I+Grossbuchstabe-Interface-Heuristik nimmt Voll-Versalien aus.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function GetMetrics: ICONMETRICS;'#13#10 +
+  'begin'#13#10 +
+  '  Result.iIconSpacing := 4;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestManagedResultUninit);
+  TDUnitX.RegisterTestFixture(TTestManagedResultUninitAlias);
 
 end.
