@@ -51,11 +51,18 @@ unit uManagedResultUninit;
 //     Result) unterscheidbar); (2) reine Bedingungs-Reads (`if Result =
 //     nil then`) - Bedingungen liegen nur als TypeRef-Strings vor und
 //     werden ausschliesslich auf Pass-Muster geprueft.
-//   * FnName-Alias nur NACKT (Korpus-Messung 2026-08-07, 1985 FPs): der
-//     Function-Name zaehlt als Result-Alias nur ohne '.'-Qualifizierer
-//     davor, ohne '(' danach (Rekursion/Overload-Delegation) und nicht
-//     nach `inherited`. 'obj.result' (fremdes FELD) ist ebenfalls kein
-//     Result-Zugriff.
+//   * FnName-Alias NUR als ZUWEISUNGSZIEL (2. Korpus-Messung 2026-08-07):
+//     in einem Delphi-AUSDRUCK ist der nackte Function-Name IMMER ein
+//     (rekursiver/parameterloser) Aufruf - `Result := Put;` ruft die
+//     parameterlose Ueberladung, liest nie Result. Der Alias existiert
+//     nur links vom ':='. Lese-Erkennung laeuft daher ausschliesslich
+//     ueber die 'result'-Needle; 'obj.result' (fremdes FELD, auch mit
+//     Token-Spaces 'obj . result') zaehlt nicht.
+//   * Parse-Artefakte entschaerft: IFDEF-Zwillings-Zuweisungen (zweites
+//     `result :=` als Text in der RHS) gelten als Write; RHS-Texte mit
+//     EINGEBETTETER anonymer Methode werden nicht als Lesen gewertet
+//     (deren Result gehoert der anonymen Function); `Result[0] :=
+//     Char(Api(@Result[1], N))` ist API-Puffer-Fuellung (Pass = Write).
 //
 // Warum praktisch FP-frei: VOR dem ersten textuellen Write gibt es keinen
 // legalen Weg, wie Result definierten Inhalt haette - die einzigen
@@ -116,6 +123,12 @@ type
     Found         : Boolean; // erster Lese-vor-Schreib-Zugriff gefunden
     ReadLine      : Integer;
     ReadWhat      : string;
+  end;
+
+  // Klassifikation der Result-Vorkommen eines Expression-Strings.
+  TRhsUse = record
+    Pass  : Boolean;         // Argument-Position/@Result -> potentieller Write
+    Reads : Boolean;         // echtes Lesen
   end;
 
 // Extrahiert den Return-Typ aus 'function:RetType[;direktive...]'
@@ -264,13 +277,12 @@ begin
   end;
 end;
 
-// True wenn der (literal-bereinigte, lowercased) Ausdruck Result oder den
-// Function-Namen als eigenstaendigen Identifier enthaelt.
-function ReadsResultIdent(const StrippedLow, FnNameLow: string): Boolean;
+// True wenn der (literal-bereinigte, lowercased) Ausdruck Result als
+// eigenstaendigen Identifier enthaelt. BEWUSST ohne Function-Name: der
+// nackte FnName ist im Ausdruckskontext ein Aufruf (s. ClassifyNeedle).
+function ReadsResultIdent(const StrippedLow: string): Boolean;
 begin
   Result := ContainsIdentifier(StrippedLow, RESULT_IDENT);
-  if (not Result) and (FnNameLow <> '') then
-    Result := ContainsIdentifier(StrippedLow, FnNameLow);
 end;
 
 // True wenn der Ausdruck '@Result' enthaelt (Adresse genommen -> der
@@ -303,103 +315,89 @@ end;
 //          ein Ident/')'/']'/'>' ist) oder '@Result' davor,
 //   Read = alles andere (echtes Lesen).
 procedure ClassifyOccurrence(const S: string; pIx: Integer;
-  var APass, ARead: Boolean);
+  var AUse: TRhsUse);
 var
   j, k : Integer;
 begin
   if (pIx > 1) and (S[pIx - 1] = '@') then
   begin
-    APass := True;
+    AUse.Pass := True;
     Exit;
   end;
   j := PrevNonSpace(S, pIx - 1);
   if j < 1 then
   begin
-    ARead := True;
+    AUse.Reads := True;
     Exit;
   end;
   case S[j] of
-    ',': APass := True;
+    ',': AUse.Pass := True;
     '(': begin
            // '(' aus einem CALL (Ident/')'/']'/'>' davor) = Argument;
            // '(' aus reiner Gruppierung '(Result = nil)' = Lesen.
            k := PrevNonSpace(S, j - 1);
            if (k >= 1) and (TDetectorUtils.IsIdentChar(S[k]) or
                             CharInSet(S[k], [')', ']', '>'])) then
-             APass := True
+             AUse.Pass := True
            else
-             ARead := True;
+             AUse.Reads := True;
          end;
   else
-    ARead := True;
+    AUse.Reads := True;
   end;
 end;
 
-const
-  INHERITED_KW = 'inherited';
-
-// True wenn das Wort unmittelbar VOR Position pIx (Whitespace uebersprungen)
-// exakt 'inherited' ist - dann ist das Vorkommen ein Parent-Aufruf
-// (`Result := inherited GetAsString;`), kein Result-Alias.
-function PrecededByInherited(const S: string; pIx: Integer): Boolean;
+// True wenn vor dem Vorkommen (ueber Whitespace hinweg) ein '.' steht:
+// 'obj.result' / 'FWebSession . SessionId' ist ein qualifizierter Zugriff
+// auf ein FREMDES Symbol, nie der Result-Alias. Der Parser rekonstruiert
+// Ausdruecke aus Tokens MIT Spaces um die Punkte - deshalb PrevNonSpace
+// statt Direktzeichen (2. Korpus-Messung 2026-08-07, Exit-FP-Klasse).
+function IsQualifiedAccess(const S: string; pIx: Integer): Boolean;
 var
-  j, w : Integer;
+  j : Integer;
 begin
-  Result := False;
   j := PrevNonSpace(S, pIx - 1);
-  if j < Length(INHERITED_KW) then Exit;
-  w := j;
-  while (w >= 1) and TDetectorUtils.IsIdentChar(S[w]) do Dec(w);
-  Result := Copy(S, w + 1, j - w) = INHERITED_KW;
+  Result := (j >= 1) and (S[j] = '.');
 end;
 
-// True wenn das word-bounded Needle-Vorkommen an pIx tatsaechlich der
-// Result-Alias sein KANN. FP-Sturm-Fix nach der ersten Korpus-Messung
-// (2026-08-07, 1985 von 2036 Funden der Hauptklasse waren FnName-FPs):
-// der Function-Name ist in Pascal NUR als NACKTER Bezeichner der
-// Result-Alias. Uebersprungen werden
-//   'x.needle'         - qualifizierter Zugriff auf ein FREMDES Symbol
-//                        ('obj.result' ist ein Feld, 'obj.prepare(..)' ein
-//                        Methoden-Aufruf eines anderen Objekts),
-//   'needle('          - Call (Rekursion/Overload-Delegation,
-//                        `Result := GetPlainText(A, B)`), nur FnName-Needle,
-//   'inherited needle' - Parent-Aufruf, nur FnName-Needle.
-function IsAliasOccurrence(const S: string; pIx: Integer;
-  const Needle: string): Boolean;
+// Wort-Grenzen-Pruefung: kein Identifier-Zeichen direkt vor/nach dem
+// Vorkommen der Laenge ALen an Position pIx.
+function IsWordBoundedAt(const S: string; pIx, ALen: Integer): Boolean;
 var
-  k : Integer;
-begin
-  Result := False;
-  if (pIx > 1) and (S[pIx - 1] = '.') then Exit;
-  if Needle <> RESULT_IDENT then                   // FnName-Needle
-  begin
-    k := pIx + Length(Needle);
-    while (k <= Length(S)) and (S[k] <= ' ') do Inc(k);
-    if (k <= Length(S)) and (S[k] = '(') then Exit;
-    if PrecededByInherited(S, pIx) then Exit;
-  end;
-  Result := True;
-end;
-
-// Alle word-bounded Vorkommen EINER Needle klassifizieren.
-procedure ClassifyNeedle(const StrippedLow, Needle: string;
-  var APass, ARead: Boolean);
-var
-  n, pIx        : Integer;
   Before, After : Char;
 begin
-  n := Length(StrippedLow);
-  pIx := Pos(Needle, StrippedLow);
+  if pIx = 1 then Before := ' ' else Before := S[pIx - 1];
+  if pIx + ALen > Length(S) then After := ' ' else After := S[pIx + ALen];
+  Result := (not TDetectorUtils.IsIdentChar(Before)) and
+            (not TDetectorUtils.IsIdentChar(After));
+end;
+
+// True wenn ab Position i (Whitespace uebersprungen) ein ':=' folgt.
+function FollowedByAssign(const S: string; i: Integer): Boolean;
+begin
+  while (i <= Length(S)) and (S[i] <= ' ') do Inc(i);
+  Result := (i < Length(S)) and (S[i] = ':') and (S[i + 1] = '=');
+end;
+
+// Alle word-bounded 'result'-Vorkommen klassifizieren.
+//
+// BEWUSST NUR die 'result'-Needle: der nackte FUNCTION-NAME ist in einem
+// Delphi-AUSDRUCK immer ein (rekursiver/parameterloser) AUFRUF, nie der
+// Result-Alias - der Alias existiert nur als ZUWEISUNGSZIEL links vom ':='
+// (2. Korpus-Messung 2026-08-07: `Result := Put;` /
+// `Result := GetCreateCode;` = Overload-Delegation, dazu Parameter, die
+// den Funktionsnamen verschatten - alles FPs der FnName-Needle).
+procedure ClassifyNeedle(const StrippedLow: string; var AUse: TRhsUse);
+var
+  pIx : Integer;
+begin
+  pIx := Pos(RESULT_IDENT, StrippedLow);
   while pIx > 0 do
   begin
-    if pIx = 1 then Before := ' ' else Before := StrippedLow[pIx - 1];
-    if pIx + Length(Needle) > n then After := ' '
-    else After := StrippedLow[pIx + Length(Needle)];
-    if (not TDetectorUtils.IsIdentChar(Before)) and
-       (not TDetectorUtils.IsIdentChar(After)) and
-       IsAliasOccurrence(StrippedLow, pIx, Needle) then
-      ClassifyOccurrence(StrippedLow, pIx, APass, ARead);
-    pIx := PosEx(Needle, StrippedLow, pIx + 1);
+    if IsWordBoundedAt(StrippedLow, pIx, Length(RESULT_IDENT)) and
+       (not IsQualifiedAccess(StrippedLow, pIx)) then
+      ClassifyOccurrence(StrippedLow, pIx, AUse);
+    pIx := PosEx(RESULT_IDENT, StrippedLow, pIx + 1);
   end;
 end;
 
@@ -414,14 +412,44 @@ end;
 // nkCall, vgl. uRoutineResultAssigned.ExprWritesOrPassesResult) - ohne
 // diese String-Ebene waere `if not Map.TryGetValue(Key, Result) then`
 // unsichtbar und die Folgezeile ein FP.
-procedure ClassifyResultUses(const StrippedLow, FnNameLow: string;
-  out APass, ARead: Boolean);
+procedure ClassifyResultUses(const StrippedLow: string;
+  out AUse: TRhsUse);
 begin
-  APass := False;
-  ARead := False;
-  ClassifyNeedle(StrippedLow, RESULT_IDENT, APass, ARead);
-  if (FnNameLow <> '') and (FnNameLow <> RESULT_IDENT) then
-    ClassifyNeedle(StrippedLow, FnNameLow, APass, ARead);
+  AUse.Pass  := False;
+  AUse.Reads := False;
+  ClassifyNeedle(StrippedLow, AUse);
+end;
+
+// IFDEF-Zwilling-Artefakt: behaelt der Parser beide Praeprozessor-Zweige
+// einer semikolonlosen Zuweisung (`{$IFDEF} Result := A {$ELSE}
+// Result := B {$ENDIF} else ...`), landet die ZWEITE Zuweisung als Text
+// in der RHS der ersten ('... result := ...'). Das ist ein Parse-
+// Artefakt, kein Lesen - die Zuweisungskette gilt als Write.
+// (2. Korpus-Messung: JvBDEReg/mormot HttpGet.)
+function ContainsAssignChainArtifact(const StrippedLow: string): Boolean;
+var
+  pIx : Integer;
+begin
+  Result := False;
+  pIx := Pos(RESULT_IDENT, StrippedLow);
+  while pIx > 0 do
+  begin
+    if IsWordBoundedAt(StrippedLow, pIx, Length(RESULT_IDENT)) and
+       FollowedByAssign(StrippedLow, pIx + Length(RESULT_IDENT)) then
+      Exit(True);
+    pIx := PosEx(RESULT_IDENT, StrippedLow, pIx + 1);
+  end;
+end;
+
+// True wenn der Expression-String eine EINGEBETTETE anonyme Methode
+// enthaelt (`function(...): Integer begin Result := ... end`) - deren
+// 'Result' gehoert der anonymen Function, nicht der umgebenden;
+// Lese-Wertung dieses Textes waere ein FP (2. Korpus-Messung:
+// TDelegatedComparer-Idiom in Swagger.Commons).
+function ContainsAnonymousMethod(const StrippedLow: string): Boolean;
+begin
+  Result := ContainsIdentifier(StrippedLow, 'function') or
+            ContainsIdentifier(StrippedLow, 'procedure');
 end;
 
 // Klassifiziert einen (NormalizeLhs-artigen) LHS-String:
@@ -469,36 +497,63 @@ begin
   St.ReadWhat := AWhat;
 end;
 
+// Fall `Result := ...`: Pass dominiert Read - bei `Result := F(Key,
+// Result)` kann F per var/out fuellen, kein Fund (FN-Richtung, nie FP).
+procedure MarkBareAssign(N: TAstNode; const Rhs: TRhsUse;
+  var St: TScanState);
+begin
+  if (not St.Written) and (not Rhs.Pass) and Rhs.Reads then
+    MarkRead(N, 'Result appears on the right-hand side of its own first assignment', St);
+  St.Written := True;
+end;
+
+// Fall `Result[i] / Result.X / Result^ := ...`: RPass = die RHS reicht
+// Result/@Result an einen Callee durch - `Result[0] := Char(Api(
+// @Result[1], N))` ist das API-Puffer-Fuell-Idiom, kein Lesen
+// (2. Korpus-Messung: JvFileUtil).
+procedure MarkAccessorAssign(N: TAstNode; const Rhs: TRhsUse;
+  var St: TScanState);
+begin
+  if (not St.Written) and (not St.IsShortString) and (not Rhs.Pass) then
+    MarkRead(N, 'element/member write into the not-yet-assigned Result', St);
+  St.Written := True;                              // danach gilt es als beschrieben
+end;
+
 procedure HandleAssign(N: TAstNode; var St: TScanState);
 var
   LhsNorm, RhsLow : string;
   HeadKind        : Integer;
-  RPass, RRead    : Boolean;
+  Rhs             : TRhsUse;
 begin
   LhsNorm := NormalizeLhs(N.Name);
   RhsLow  := StripStringLiterals(LowerCase(N.TypeRef));
-  ClassifyResultUses(RhsLow, St.FnNameLow, RPass, RRead);
+
+  // IFDEF-Zwilling: zweite Zuweisung als Text in der RHS = Parse-Artefakt,
+  // die Kette ist ein Write.
+  if ContainsAssignChainArtifact(RhsLow) then
+  begin
+    St.Written := True;
+    Exit;
+  end;
+
+  ClassifyResultUses(RhsLow, Rhs);
+  // Eingebettete anonyme Methode: deren 'Result' gehoert ihr selbst -
+  // Lese-Wertung unterdruecken (Pass-Richtung bleibt: @Result als
+  // weiteres Argument ist weiterhin ein Write).
+  if Rhs.Reads and ContainsAnonymousMethod(RhsLow) then
+    Rhs.Reads := False;
+
   HeadKind := LhsHead(LhsNorm, RESULT_IDENT);
   if (HeadKind = 0) and (St.FnNameLow <> '') then
     HeadKind := LhsHead(LhsNorm, St.FnNameLow);
 
   case HeadKind of
-    1: begin                                       // Result := ...
-         // Pass dominiert Read: bei `Result := F(Key, Result)` kann F
-         // per var/out fuellen - kein Fund (FN-Richtung, nie FP).
-         if (not St.Written) and (not RPass) and RRead then
-           MarkRead(N, 'Result appears on the right-hand side of its own first assignment', St);
-         St.Written := True;
-       end;
-    2: begin                                       // Result[i] / Result.X / Result^
-         if (not St.Written) and (not St.IsShortString) then
-           MarkRead(N, 'element/member write into the not-yet-assigned Result', St);
-         St.Written := True;                       // danach gilt es als beschrieben
-       end;
+    1: MarkBareAssign(N, Rhs, St);
+    2: MarkAccessorAssign(N, Rhs, St);
   else                                             // fremde LHS
-    if RPass then
+    if Rhs.Pass then
       St.Written := True                           // P := @Result / Arg-Position
-    else if (not St.Written) and RRead then
+    else if (not St.Written) and Rhs.Reads then
       MarkRead(N, 'Result is read on a right-hand side', St);
   end;
 end;
@@ -512,9 +567,9 @@ begin
   CLow := StripStringLiterals(NormalizeLhs(N.Name));
 
   // Methoden-/Index-Zugriff AUF Result: Result.Add(x), Result[0].Foo, ...
-  if (LhsHead(Copy(CLow, 1, 7), RESULT_IDENT) = 2) or
-     ((St.FnNameLow <> '') and
-      (LhsHead(Copy(CLow, 1, Length(St.FnNameLow) + 1), St.FnNameLow) = 2)) then
+  // Kein FnName-Pendant: `FnName.X` waere Member-Zugriff auf ein CALL-
+  // Ergebnis (s. ClassifyNeedle-Kommentar).
+  if LhsHead(Copy(CLow, 1, 7), RESULT_IDENT) = 2 then
   begin
     if (not St.Written) and (not St.IsShortString) then
       MarkRead(N, 'method/index access on the not-yet-assigned Result', St);
@@ -530,19 +585,21 @@ begin
   while (RParen > LParen) and (CLow[RParen] <> ')') do Dec(RParen);
   if RParen <= LParen + 1 then Exit;
   ArgsLow := Copy(CLow, LParen + 1, RParen - LParen - 1);
-  if ReadsResultIdent(ArgsLow, St.FnNameLow) or TakesResultAddress(ArgsLow) then
+  if ReadsResultIdent(ArgsLow) or TakesResultAddress(ArgsLow) then
     St.Written := True;
 end;
 
 procedure HandleExit(N: TAstNode; var St: TScanState);
 var
-  ArgLow       : string;
-  RPass, RRead : Boolean;
+  ArgLow : string;
+  Arg    : TRhsUse;
 begin
   if N.TypeRef = '' then Exit;                     // nacktes Exit
   ArgLow := StripStringLiterals(LowerCase(N.TypeRef));
-  ClassifyResultUses(ArgLow, St.FnNameLow, RPass, RRead);
-  if (not St.Written) and (not RPass) and RRead then
+  ClassifyResultUses(ArgLow, Arg);
+  if Arg.Reads and ContainsAnonymousMethod(ArgLow) then
+    Arg.Reads := False;
+  if (not St.Written) and (not Arg.Pass) and Arg.Reads then
     MarkRead(N, 'Result is read inside the Exit(...) argument', St);
   St.Written := True;                              // Exit(Wert) schreibt Result
 end;
@@ -555,15 +612,14 @@ end;
 // Grauzone gehoert in die CFG-Variante 1).
 procedure HandleExprText(N: TAstNode; var St: TScanState);
 var
-  SLow         : string;
-  RPass, RRead : Boolean;
+  SLow : string;
+  Use  : TRhsUse;
 begin
   if N.TypeRef = '' then Exit;
   SLow := StripStringLiterals(LowerCase(N.TypeRef));
-  if (Pos(RESULT_IDENT, SLow) = 0) and
-     ((St.FnNameLow = '') or (Pos(St.FnNameLow, SLow) = 0)) then Exit;
-  ClassifyResultUses(SLow, St.FnNameLow, RPass, RRead);
-  if RPass then
+  if Pos(RESULT_IDENT, SLow) = 0 then Exit;
+  ClassifyResultUses(SLow, Use);
+  if Use.Pass then
     St.Written := True;
 end;
 

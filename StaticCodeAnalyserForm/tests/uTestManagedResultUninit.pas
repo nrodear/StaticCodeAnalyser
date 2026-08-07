@@ -40,10 +40,16 @@ type
     [Test] procedure InheritedSameName_NotReported;
     [Test] procedure QualifiedSameNameCall_NotReported;
     [Test] procedure ForeignResultField_NotReported;
-    [Test] procedure BareFnNameAlias_Reported;
+    [Test] procedure BareFnNameOnRhs_IsRecursiveCall_NotReported;
     [Test] procedure ShortStringLengthByteIdiom_NotReported;
     [Test] procedure TDynArrayRecordInit_NotReported;
     [Test] procedure AllCapsPseudoInterface_NotReported;
+    // 2. Korpus-Messung (105 Funde, 10/15 FP) - Runde-2-Mechanismen:
+    [Test] procedure OverloadDelegation_NotReported;
+    [Test] procedure IfdefTwinAssign_NotReported;
+    [Test] procedure ApiBufferFillViaAddressOf_NotReported;
+    [Test] procedure AnonymousInnerResult_NotReported;
+    [Test] procedure QualifiedExitArgSameName_NotReported;
   end;
 
 implementation
@@ -366,9 +372,10 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestManagedResultUninitAlias.BareFnNameAlias_Reported;
-// Positiv-Gegenprobe: der NACKTE Function-Name bleibt Result-Alias
-// (klassischer Pascal-Stil) - Lesen vor Schreiben wird weiter gemeldet.
+procedure TTestManagedResultUninitAlias.BareFnNameOnRhs_IsRecursiveCall_NotReported;
+// Delphi-Semantik: der nackte Function-Name ist im AUSDRUCKSKONTEXT ein
+// (rekursiver) AUFRUF, nie der Result-Alias - der Alias existiert nur
+// als Zuweisungsziel links vom ':='. `Acc` auf der RHS ruft Acc auf.
 const SRC =
   'unit t; implementation'#13#10 +
   'function Acc(L: TStrings): string;'#13#10 +
@@ -378,7 +385,104 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkManagedResultUninit));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninitAlias.OverloadDelegation_NotReported;
+// 2. Korpus-Messung: `Result := Put;` ruft die parameterlose
+// Ueberladung auf (MVCFramework/HeidiSQL-Idiom) - reiner Write.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TClientX.Put(const aResource: string): IRestResponse;'#13#10 +
+  'begin'#13#10 +
+  '  AddBody(aResource);'#13#10 +
+  '  Result := Put;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninitAlias.IfdefTwinAssign_NotReported;
+// IFDEF-Zwilling ohne Semikolon: der Parser behaelt beide Zweige, die
+// zweite Zuweisung landet als Text in der RHS der ersten - Artefakt,
+// kein Lesen (JvBDEReg/mormot-HttpGet-Muster).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function GetValue: string;'#13#10 +
+  'begin'#13#10 +
+  '  if Cond then'#13#10 +
+  '{$IFDEF WIN32}'#13#10 +
+  '    Result := Format(''(%s)'', [A])'#13#10 +
+  '{$ELSE}'#13#10 +
+  '    Result := Format(''(%s)'', [B])'#13#10 +
+  '{$ENDIF}'#13#10 +
+  '  else'#13#10 +
+  '    Result := C;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninitAlias.ApiBufferFillViaAddressOf_NotReported;
+// `Result[0] := Char(Api(@Result[1], N))` - die API fuellt den Puffer
+// durch den Zeiger, das Laengen-Element begrenzt darauf (JvFileUtil).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function GetWindowsDir: string;'#13#10 +
+  'begin'#13#10 +
+  '  Result[0] := Char(GetWindowsDirectory(@Result[1], 254));'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninitAlias.AnonymousInnerResult_NotReported;
+// Das `Result` in einer EINGEBETTETEN anonymen Methode gehoert ihr
+// selbst (TDelegatedComparer-Idiom) - kein Lesen des aeusseren Result.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function BuildParams: TArray<string>;'#13#10 +
+  'begin'#13#10 +
+  '  lComparer := TDelegatedComparer<string>.Create('#13#10 +
+  '    function(const L, R: string): Integer'#13#10 +
+  '    begin'#13#10 +
+  '      Result := CompareText(L, R);'#13#10 +
+  '    end);'#13#10 +
+  '  SetLength(Result, 0);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninitAlias.QualifiedExitArgSameName_NotReported;
+// `Exit(FWebSession.SessionId)` in der Function SessionId: der Selektor
+// hinter dem Punkt (auch mit Token-Spaces 'x . y') gehoert dem fremden
+// Objekt - kein Result-Lesen (MVCFramework TWebContext.SessionId).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function SessionId: string;'#13#10 +
+  'begin'#13#10 +
+  '  if Assigned(FWebSession) then'#13#10 +
+  '    Exit(FWebSession.SessionId);'#13#10 +
+  '  Result := ExtractFromRequest(fRequest);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
   finally F.Free; end;
 end;
 
