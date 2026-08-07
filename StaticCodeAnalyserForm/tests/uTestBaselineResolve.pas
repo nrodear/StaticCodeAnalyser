@@ -31,6 +31,9 @@ uses
   System.SysUtils, System.Classes, System.IOUtils,
   uBaseline;
 
+const
+  PROJ_DPROJ = 'ProjA\ProjA.dproj';   // 3x gebraucht (DuplicateString)
+
 procedure TTestBaselineResolve.Setup;
 begin
   FTmp := TPath.Combine(TPath.GetTempPath,
@@ -70,7 +73,7 @@ var
 begin
   MakeFile('ProjA\.sca\ProjA.baseline.json');
   R := TBaseline.ResolveBaselinePath(
-    TPath.Combine(FTmp, 'ProjA\ProjA.dproj'), '');
+    TPath.Combine(FTmp, PROJ_DPROJ), '');
   Assert.AreEqual(
     TPath.Combine(FTmp, 'ProjA\.sca\ProjA.baseline.json'), R);
 end;
@@ -83,7 +86,7 @@ var
 begin
   MakeFile('.sca\ProjA.baseline.json');
   R := TBaseline.ResolveBaselinePath(
-    TPath.Combine(FTmp, 'ProjA\ProjA.dproj'), '');
+    TPath.Combine(FTmp, PROJ_DPROJ), '');
   Assert.AreEqual(
     TPath.Combine(FTmp, '.sca\ProjA.baseline.json'), R);
 end;
@@ -125,7 +128,7 @@ begin
   Probed := TStringList.Create;
   try
     R := TBaseline.ResolveBaselinePath(
-      TPath.Combine(FTmp, 'ProjA\ProjA.dproj'), '', Probed);
+      TPath.Combine(FTmp, PROJ_DPROJ), '', Probed);
     Assert.AreEqual('', R);
     Assert.AreEqual(2, Probed.Count,
       'dproj prueft Projekt- und Eltern-.sca');

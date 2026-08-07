@@ -63,6 +63,13 @@ type
     // Pfad > [Baseline] File= > diese Aufloesung.
     class function ResolveBaselinePath(const AProjectOrGroupFile,
       AScanRoot: string; AProbed: TStrings = nil): string; static;
+
+    // Standard-ZIEL fuer '--write-baseline auto' bzw. UI 'Write
+    // baseline': der jeweils ERSTE .sca-Kandidat der Aufloesung, OHNE
+    // Existenz-Pruefung ('' wenn weder Projekt/Gruppe noch Root
+    // bekannt). Den .sca-Ordner legt der Schreiber bei Bedarf an.
+    class function DefaultBaselineTarget(const AProjectOrGroupFile,
+      AScanRoot: string): string; static;
   end;
 
   // Non-destruktiver Baseline-Filter fuer Live-Consumer (IDE-Editor): laedt
@@ -387,11 +394,15 @@ begin
   Result := FFingerprints.Count;
 end;
 
+const
+  SCA_DIR      = '.sca';
+  BASELINE_EXT = '.baseline.json';
+
 // Kandidat pruefen + fuer die Fehlermeldung protokollieren.
 function ProbeBaselineCandidate(const Candidate: string;
   AProbed: TStrings): Boolean;
 begin
-  if AProbed <> nil then
+  if Assigned(AProbed) then
     AProbed.Add(Candidate);
   Result := FileExists(Candidate);
 end;
@@ -406,7 +417,7 @@ begin
   begin
     Dir      := ExtractFilePath(ExpandFileName(AProjectOrGroupFile));
     BaseName := ChangeFileExt(ExtractFileName(AProjectOrGroupFile), '');
-    Cand := Dir + '.sca' + PathDelim + BaseName + '.baseline.json';
+    Cand := Dir + SCA_DIR + PathDelim + BaseName + BASELINE_EXT;
     if ProbeBaselineCandidate(Cand, AProbed) then Exit(Cand);
     // Projekt-Fallback: zentrale Gruppen-.sca eine Ebene hoeher.
     if SameText(ExtractFileExt(AProjectOrGroupFile), '.dproj') then
@@ -420,9 +431,23 @@ begin
   if AScanRoot <> '' then
   begin
     Cand := IncludeTrailingPathDelimiter(ExpandFileName(AScanRoot)) +
-      '.sca' + PathDelim + 'sca.baseline.json';
+      SCA_DIR + PathDelim + 'sca' + BASELINE_EXT;
     if ProbeBaselineCandidate(Cand, AProbed) then Exit(Cand);
   end;
+end;
+
+class function TBaseline.DefaultBaselineTarget(const AProjectOrGroupFile,
+  AScanRoot: string): string;
+begin
+  Result := '';
+  if AProjectOrGroupFile <> '' then
+    Result := ExtractFilePath(ExpandFileName(AProjectOrGroupFile)) +
+      SCA_DIR + PathDelim +
+      ChangeFileExt(ExtractFileName(AProjectOrGroupFile), '') +
+      BASELINE_EXT
+  else if AScanRoot <> '' then
+    Result := IncludeTrailingPathDelimiter(ExpandFileName(AScanRoot)) +
+      SCA_DIR + PathDelim + 'sca' + BASELINE_EXT;
 end;
 
 end.

@@ -64,7 +64,8 @@ type
     MinSeverity   : string;         // --min-severity hint|warning|error
     // ---- Baseline / CI-Exit-Codes ----
     Baseline      : string;         // --baseline <file.json>     filter known findings
-    WriteBaseline : string;         // --write-baseline <file.json>  snapshot for future runs
+    WriteBaseline : string;         // --write-baseline <file.json|auto>  snapshot for future runs
+    BaselineScan  : string;         // --baseline-scan y|n  (.sca-Aufloesung + harter Fehler)
     FailOn        : string;         // --fail-on=error|warning|hint|none  (default: graded)
     // ---- Sonar-Integration (Phase A der todo-sonar.md Roadmap) ----
     SonarExport   : string;         // --sonar-export <out.json>  Generic Issue Format
@@ -262,6 +263,8 @@ begin
       GetValue(Result.Baseline, '--baseline')
     else if A = '--write-baseline' then
       GetValue(Result.WriteBaseline, '--write-baseline')
+    else if A = '--baseline-scan' then
+      GetValue(Result.BaselineScan, '--baseline-scan')
     else if A.StartsWith('--fail-on=') then
       Result.FailOn := LowerCase(A.Substring(Length('--fail-on=')))
     else if A = '--fail-on' then
@@ -484,6 +487,13 @@ begin
   WriteLn('                        entry in <file> (JSON, written by --write-baseline).');
   WriteLn('                        Only NEW findings remain in output / exit code.');
   WriteLn('  --write-baseline <f>  Write current findings to <f> for future --baseline.');
+  WriteLn('                        <f> = auto: write to the .sca default location');
+  WriteLn('                        (<dir-of-project>\.sca\<name>.baseline.json).');
+  WriteLn('  --baseline-scan y|n   y: resolve the baseline via --baseline, then');
+  WriteLn('                        [Baseline] File= (analyser.ini), then the .sca');
+  WriteLn('                        folder next to --project/--project-group (or');
+  WriteLn('                        <path>\.sca\sca.baseline.json). HARD error');
+  WriteLn('                        (exit 99) if requested and no file exists.');
   WriteLn('                        Idempotent; overwrites existing file.');
   WriteLn('  --fail-on <lvl>       Exit-code policy: error|warning|hint|none|graded.');
   WriteLn('                        Default (=graded): use the tiered exit codes below.');
@@ -848,6 +858,72 @@ begin
     var ProfileFromIni : string := Settings.Profile;
     if Args.Profile     <> '' then Settings.Profile     := Args.Profile;
     if Args.MinSeverity <> '' then Settings.MinSeverity := Args.MinSeverity;
+
+    // ---- Baseline-Scan-Aufloesung (Konzept_BaselineSca Inkrement 2) ----
+    // Praezedenz: --baseline <file> > [Baseline] File= > .sca-Standardort.
+    // FRUEH und HART: bei --baseline-scan y ohne existierende Datei bricht
+    // der Lauf VOR dem Scan mit cecToolError ab - in CI darf ein
+    // Tippfehler nicht lautlos 'alles ist neu' melden. (Der Anzeige-
+    // Filter TBaselineSet in EXE/Plugin bleibt bewusst fail-open.)
+    var EffBaseline      : string := Args.Baseline;
+    var EffWriteBaseline : string := Args.WriteBaseline;
+    var BlProjOrGroup    : string := Args.GroupFile;
+    if BlProjOrGroup = '' then BlProjOrGroup := Args.ProjectFile;
+    var WantBaselineScan : Boolean :=
+      SameText(Args.BaselineScan, 'y') or SameText(Args.BaselineScan, 'yes')
+      or (Args.BaselineScan = '1');
+    if (Args.BaselineScan <> '') and (not WantBaselineScan) and
+       not (SameText(Args.BaselineScan, 'n') or
+            SameText(Args.BaselineScan, 'no') or (Args.BaselineScan = '0')) then
+    begin
+      WriteLn(ErrOutput,
+        'Error: --baseline-scan erwartet y|n, bekommen: ', Args.BaselineScan);
+      Exit(Integer(cecToolError));
+    end;
+    if WantBaselineScan then
+    begin
+      var Probed := TStringList.Create;
+      try
+        if EffBaseline = '' then
+          EffBaseline := Settings.BaselineFile;
+        if EffBaseline = '' then
+          EffBaseline := TBaseline.ResolveBaselinePath(
+            BlProjOrGroup, Args.Path, Probed)
+        else
+          Probed.Add(EffBaseline);
+        if (EffBaseline = '') or not FileExists(EffBaseline) then
+        begin
+          WriteLn(ErrOutput, 'Error: baseline scan requested but no ' +
+            'baseline file found - looked for:');
+          for var ProbedLine in Probed do
+            WriteLn(ErrOutput, '  ', ProbedLine);
+          Exit(Integer(cecToolError));
+        end;
+        if not Args.Quiet then
+          WriteLn('Baseline: ', EffBaseline);
+      finally
+        Probed.Free;
+      end;
+    end
+    else if (EffBaseline <> '') and not FileExists(EffBaseline) then
+    begin
+      // Explizit angegebene, fehlende Baseline war frueher ein stiller
+      // No-op ('leer laden' -> 0 Drops) - jetzt harter Fehler.
+      WriteLn(ErrOutput, 'Error: --baseline file not found: ', EffBaseline);
+      Exit(Integer(cecToolError));
+    end;
+    // '--write-baseline auto' -> .sca-Standardziel des Scan-Ziels.
+    if SameText(EffWriteBaseline, 'auto') then
+    begin
+      EffWriteBaseline := TBaseline.DefaultBaselineTarget(
+        BlProjOrGroup, Args.Path);
+      if EffWriteBaseline = '' then
+      begin
+        WriteLn(ErrOutput, 'Error: --write-baseline auto braucht ' +
+          '--project/--project-group oder --path');
+        Exit(Integer(cecToolError));
+      end;
+    end;
     // ApplyDetectorThresholds (volle Config-Anwendung) macht jetzt
     // uEngineApi.Run via Req.ApplyRepoIni mit denselben Overrides; Settings
     // hier bleibt nur fuer Profile-Read (Fixture-Default + Message unten).
@@ -1099,13 +1175,13 @@ begin
     end;
 
     // ---- Baseline-Filter (vor Output / Exit-Code) ----
-    if Args.Baseline <> '' then
+    if EffBaseline <> '' then
     begin
       try
-        var Dropped := TBaseline.Apply(Findings, Args.Baseline);
+        var Dropped := TBaseline.Apply(Findings, EffBaseline);
         if (not Args.Quiet) and (Dropped > 0) then
           WriteLn(Format('Baseline filtered: %d known findings dropped (%s)',
-            [Dropped, Args.Baseline]));
+            [Dropped, EffBaseline]));
       except
         on E: Exception do
           WriteLn(ErrOutput, 'Baseline read warning: ', E.Message);
@@ -1114,13 +1190,14 @@ begin
     end;
 
     // ---- Snapshot fuer kuenftige Baseline ----
-    if Args.WriteBaseline <> '' then
+    if EffWriteBaseline <> '' then
     begin
       try
-        TBaseline.Write(Findings, Args.WriteBaseline);
+        ForceDirectories(ExtractFilePath(EffWriteBaseline));
+        TBaseline.Write(Findings, EffWriteBaseline);
         if not Args.Quiet then
           WriteLn(Format('Baseline written: %s (%d findings)',
-            [Args.WriteBaseline, Findings.Count]));
+            [EffWriteBaseline, Findings.Count]));
       except
         on E: Exception do
         begin
