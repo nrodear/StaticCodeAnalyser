@@ -1266,15 +1266,16 @@ begin
     //     2026-06-28): aus fcHigh auf fcMedium herabgestuft (bleiben im Default,
     //     aber nicht mehr "hochkonfident"; Rest-FP via CFG/Parser-Followup).
     fkRoutineResultUnassigned,   // SCA121 ~58% (absolute-Result, nested-scope, ifdef)
-    fkLockWithoutTryFinally      // SCA109 ~85% pre-guard (call-free-Getter/Setter)
-    : Result := fcMedium;
+    fkLockWithoutTryFinally,     // SCA109 ~85% pre-guard (call-free-Getter/Setter)
 
-    // SCA196 ManagedResultUninit: Start-Konfidenz fcLow bis zur ersten
-    // Korpus-Messung (User-Entscheid 2026-08-07: Messprogramm uebersprungen,
-    // direkt gebaut). Die Variante-2-Konstruktion ist nahezu FP-frei
-    // (Lese-vor-Schreib ist per Definition stale), aber ohne Real-World-
-    // Beleg noch keine Promotion.
-    fkManagedResultUninit: Result := fcLow;
+    // SCA196 ManagedResultUninit: Start war fcLow (User-Entscheid); nach
+    // 2 FP-Fix-Runden und Korpus-VOLLPRUEFUNG 2026-08-07 (51 Funde, 49
+    // unikate Stellen, ALLE adversarial als TP verifiziert, 0 FP) auf
+    // fcMedium promotet - sonst saehe kein Default-Nutzer die Regel.
+    // Nicht fcHigh: Variante 2 bleibt pfad-blind/heuristisch (CFG-
+    // Variante 1 steht aus).
+    fkManagedResultUninit
+    : Result := fcMedium;
 
   else
     Result := fcHigh;
