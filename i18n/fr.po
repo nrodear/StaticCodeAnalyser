@@ -1978,3 +1978,20 @@ msgstr "Le presse-papiers est verrouillé par un autre programme."
 
 msgid "Result of managed type is read before it is assigned"
 msgstr "Result de type managé est lu avant d'avoir été affecté"
+
+# --- 2026-08-09: Baseline-Inkrement 3 (EXE-Checkbox + .sca-Dialog) ---
+
+msgid "Only new (baseline)"
+msgstr "Nouveaux seulement (référence)"
+
+msgid "Baseline is enabled but no baseline file was found."
+msgstr "La référence est activée mais aucun fichier n'a été trouvé."
+
+msgid "Looked for:"
+msgstr "Recherché :"
+
+msgid "Write a new baseline with the current findings now?"
+msgstr "Écrire maintenant une nouvelle référence avec les résultats actuels ?"
+
+msgid "No scan target selected - pick a path or project first."
+msgstr "Aucune cible d'analyse sélectionnée - choisissez d'abord un chemin ou un projet."
