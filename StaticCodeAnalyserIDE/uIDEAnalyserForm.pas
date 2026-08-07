@@ -146,8 +146,11 @@ type
     //   FMIClearMarks     - nur aktiv wenn GHighlighter ueberhaupt Marker hat
     //   FMIResetAll       - Op-3 Hard-Reset: Marker + Hauptfenster-Grid +
     //                       Properties-Panel-Frame + Scan-Cache. Konzept_MarkerLoeschen.
+    //   FMIBaselineOnly   - Haken 'Show only new findings (baseline)';
+    //                       Checked-Sync aus der INI ([Baseline] OnlyNew)
     // Sync via HamburgerMenuPopup an FAnalyseProgress.Running / GHighlighter.HasMarks.
-    FMICancel, FMIAnalyseChanged, FMIClearMarks, FMIResetAll : TMenuItem;
+    FMICancel, FMIAnalyseChanged, FMIClearMarks, FMIResetAll,
+    FMIBaselineOnly : TMenuItem;
     FLblFilter, FLblType                           : TLabel;
     // Eine horizontale Tile-Reihe: 4 Severity-Tiles + 3 Type-Tiles + Score.
     // Layout pro Tile: Glyph-Icon links + Count rechts (Top-Row), Caption
@@ -345,8 +348,23 @@ type
     // Schreibt die aktuellen (ungefilterten) Funde als Baseline-JSON
     // (Format = CLI --write-baseline / HTML-Export).
     procedure WriteBaselineClick(Sender: TObject);
-    // Laedt/leert FBaselineSet anhand FRepoSettings.BaselineOnlyNew +
-    // BaselineFile. Vor jedem ApplyFilter-Rebuild nach einem Scan gerufen.
+    // Kern des Hamburger-Hakens 'Show only new findings (baseline)':
+    // .sca-Aufloesung + 'jetzt schreiben?'-Angebot (Konzept par.3) -
+    // Inkrement 4, Mechanik identisch zur Standalone.
+    procedure BaselineOnlyNewClick(Sender: TObject);
+    procedure ToggleBaselineOnlyNew(ANewVal: Boolean);
+    function  OfferWriteBaseline(const AProbedText: string): Boolean;
+    // Smart-Path: .dproj/.groupproj aus der Pfad-Combo, sonst das aktive
+    // IDE-Projekt bzw. die aktive Gruppe (ToolsAPI).
+    function  CurrentProjOrGroupFile: string;
+    // Verzeichnis des Scan-Ziels (bei Projektdatei: deren Ordner).
+    function  ScanRootDir: string;
+    // Praezedenz wie CLI: [Baseline] File= (relativ gegen FCurrentBaseDir)
+    // > .sca-Standardort. '' wenn nichts existiert.
+    function  ResolveUiBaselinePath(const AConfiguredFile: string;
+      AProbed: TStrings): string;
+    // Laedt/leert FBaselineSet: [Baseline] File= oder .sca-Standardort.
+    // Vor jedem ApplyFilter-Rebuild nach einem Scan gerufen.
     procedure RefreshBaselineSet;
     procedure BuildHamburgerMenu;
     // DPI-Scaling fuer Layout-Konstanten. Liest TControl.CurrentPPI - falls
@@ -545,6 +563,24 @@ begin
     then Exit;
   if ABaseDir <> '' then
     Result := IncludeTrailingPathDelimiter(ABaseDir) + Result;
+end;
+
+function ActiveIdeProjOrGroupFile: string;
+// Aktives Projekt (bevorzugt) bzw. aktive Gruppe der IDE via ToolsAPI -
+// Basis der .sca-Baseline-Aufloesung (Konzept par.3) fuer Dock UND
+// Silent-Mode. '' wenn keine Projektgruppe geladen ist.
+var
+  ModSvc : IOTAModuleServices;
+  PG     : IOTAProjectGroup;
+begin
+  Result := '';
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+  PG := ModSvc.MainProjectGroup;
+  if PG = nil then Exit;
+  if Assigned(PG.ActiveProject) and (PG.ActiveProject.FileName <> '') then
+    Result := PG.ActiveProject.FileName
+  else if PG.FileName <> '' then
+    Result := PG.FileName;
 end;
 
 const
@@ -2626,22 +2662,8 @@ function TAnalyserFrame.InitialScanDir: string;
 //   3. sonst der aktuelle Combo-Text (letzte User-Wahl)
 // SelectScanTarget nimmt auch einen DATEIpfad und nutzt dessen Verzeichnis -
 // wir koennen den .dproj/.groupproj-Pfad also direkt durchreichen.
-var
-  ModSvc : IOTAModuleServices;
-  PG     : IOTAProjectGroup;
 begin
-  Result := '';
-  if Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then
-  begin
-    PG := ModSvc.MainProjectGroup;
-    if PG <> nil then
-    begin
-      if Assigned(PG.ActiveProject) and (PG.ActiveProject.FileName <> '') then
-        Result := PG.ActiveProject.FileName
-      else if PG.FileName <> '' then
-        Result := PG.FileName;
-    end;
-  end;
+  Result := ActiveIdeProjOrGroupFile;
   if Result = '' then
     Result := Trim(FProjectPath.Text);
 end;
@@ -3107,6 +3129,12 @@ begin
   MI.OnClick := WriteBaselineClick;
   FHamburgerMenu.Items.Add(MI);
 
+  // ---- Baseline-Haken 'nur neue Funde' (Inkrement 4, wie Standalone) --
+  FMIBaselineOnly := TMenuItem.Create(FHamburgerMenu);
+  FMIBaselineOnly.Caption := _('Show only new findings (baseline)');
+  FMIBaselineOnly.OnClick := BaselineOnlyNewClick;
+  FHamburgerMenu.Items.Add(FMIBaselineOnly);
+
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := '-';
   FHamburgerMenu.Items.Add(MI);
@@ -3129,6 +3157,8 @@ procedure TAnalyserFrame.HamburgerMenuPopup(Sender: TObject);
 // Enabled-Sync VOR dem Oeffnen: Cancel ist nur waehrend laufender Analyse
 // aktiv; Branch-Changes ist waehrend Analyse deaktiviert;
 // Clear-Markers nur wenn ueberhaupt Marker im Highlighter liegen.
+var
+  S : TRepoSettings;
 begin
   if Assigned(FMICancel) then
     FMICancel.Enabled :=
@@ -3138,6 +3168,20 @@ begin
       (not Assigned(FAnalyseProgress)) or (not FAnalyseProgress.Running);
   if Assigned(FMIClearMarks) then
     FMIClearMarks.Enabled := Assigned(GHighlighter) and GHighlighter.HasMarks;
+  // Baseline-Haken aus der INI nachziehen (kann von aussen geaendert
+  // worden sein - Standalone und CLI schreiben denselben Schluessel).
+  // Frisches lokales Objekt statt FRepoSettings, um den Zustand eines
+  // ggf. laufenden Scans nicht anzufassen.
+  if Assigned(FMIBaselineOnly) then
+  begin
+    S := TRepoSettings.Create;
+    try
+      try S.Load; except end;
+      FMIBaselineOnly.Checked := S.BaselineOnlyNew;
+    finally
+      S.Free;
+    end;
+  end;
 end;
 
 procedure TAnalyserFrame.HamburgerClick(Sender: TObject);
@@ -3163,22 +3207,75 @@ begin
   FExportMenu.PopupAt(P.X, P.Y);
 end;
 
+function TAnalyserFrame.CurrentProjOrGroupFile: string;
+// Smart-Path wie in der Standalone: steht in der Pfad-Combo eine .dproj/
+// .groupproj-DATEI, ist SIE die Projekt-/Gruppen-Quelle fuer die .sca-
+// Aufloesung; sonst das aktive IDE-Projekt bzw. die aktive Gruppe
+// (Konzept par.3: ToolsAPI liefert beide).
+begin
+  Result := Trim(FProjectPath.Text);
+  if SameText(ExtractFileExt(Result), '.dproj') or
+     SameText(ExtractFileExt(Result), '.groupproj') then Exit;
+  Result := ActiveIdeProjOrGroupFile;
+end;
+
+function TAnalyserFrame.ScanRootDir: string;
+// Verzeichnis des Scan-Ziels: bei .dproj/.groupproj deren Ordner, sonst
+// der Combo-Pfad selbst (Smart-Path).
+begin
+  Result := Trim(FProjectPath.Text);
+  if SameText(ExtractFileExt(Result), '.dproj') or
+     SameText(ExtractFileExt(Result), '.groupproj') then
+    Result := ExcludeTrailingPathDelimiter(ExtractFilePath(Result));
+end;
+
+function TAnalyserFrame.ResolveUiBaselinePath(const AConfiguredFile: string;
+  AProbed: TStrings): string;
+// Praezedenz wie CLI/Standalone (Konzept par.1): [Baseline] File= (mit
+// Relativ-Aufloesung gegen das Projekt-Verzeichnis) > .sca-Standardort
+// neben Projekt/Gruppe bzw. unter dem Scan-Pfad. '' wenn nichts existiert.
+var
+  Path : string;
+begin
+  Result := '';
+  Path := Trim(AConfiguredFile);
+  if Path <> '' then
+  begin
+    Path := ResolveBaselinePath(Path, FCurrentBaseDir);
+    if Assigned(AProbed) then AProbed.Add(Path);
+    if FileExists(Path) then Exit(Path);
+    Exit;                    // explizit konfiguriert, aber fehlt -> kein .sca-Raten
+  end;
+  Result := TBaseline.ResolveBaselinePath(CurrentProjOrGroupFile,
+    ScanRootDir, AProbed);
+end;
+
 procedure TAnalyserFrame.RefreshBaselineSet;
-// Laedt (oder leert) das Baseline-Fingerprint-Set anhand der aktuellen
-// Settings. FAllFindings/Export bleiben unberuehrt - nur der Anzeige-Filter
-// in ApplyFilter nutzt das Set. Relative Pfade werden gegen FCurrentBaseDir
-// (Projekt-Verzeichnis) aufgeloest.
+// Laedt (oder leert) das Baseline-Fingerprint-Set. Quelle: [Baseline]
+// File= oder der .sca-Standardort (Inkrement 4). FAllFindings/Export
+// bleiben unberuehrt - nur der Anzeige-Filter in ApplyFilter nutzt das Set.
 var
   Path : string;
 begin
   if not Assigned(FBaselineSet) then Exit;
-  if (not Assigned(FRepoSettings)) or (not FRepoSettings.BaselineOnlyNew)
-     or (Trim(FRepoSettings.BaselineFile) = '') then
+  if (not Assigned(FRepoSettings)) or (not FRepoSettings.BaselineOnlyNew) then
   begin
     FBaselineSet.Clear;
     Exit;
   end;
-  Path := ResolveBaselinePath(FRepoSettings.BaselineFile, FCurrentBaseDir);
+  Path := ResolveUiBaselinePath(FRepoSettings.BaselineFile, nil);
+  if Path = '' then
+  begin
+    FBaselineSet.Clear;
+    Exit;
+  end;
+  // PathInFingerprint-Konsistenz: Modus + Root wie beim Schreiben der
+  // Datei setzen, sonst matchen die Fingerprints des Anzeige-Filters nicht.
+  uSCAConsts.BaselinePathFingerprint := FRepoSettings.BaselinePathInFingerprint;
+  if CurrentProjOrGroupFile <> '' then
+    uSCAConsts.BaselineFingerprintRoot := ExtractFilePath(CurrentProjOrGroupFile)
+  else
+    uSCAConsts.BaselineFingerprintRoot := ScanRootDir;
   try
     FBaselineSet.LoadFromFile(Path);
   except
@@ -3188,14 +3285,95 @@ begin
   end;
 end;
 
+function TAnalyserFrame.OfferWriteBaseline(const AProbedText: string): Boolean;
+// Dialog 'keine Baseline gefunden - jetzt schreiben?' inkl. Schreiben an
+// den .sca-Standardort. False = Nutzer hat abgebrochen oder es gibt
+// nichts zu schreiben (Aufrufer laesst den Haken aus).
+var
+  Target : string;
+begin
+  Result := False;
+  if MessageDlg(
+       _('Baseline is enabled but no baseline file was found.') + sLineBreak +
+       _('Looked for:') + sLineBreak + AProbedText + sLineBreak +
+       _('Write a new baseline with the current findings now?'),
+       mtConfirmation, [mbYes, mbNo], 0) <> mrYes then
+    Exit;
+  if (not Assigned(FAllFindings)) or (FAllFindings.Count = 0) then
+  begin
+    MessageDlg(_('No findings to write. Run an analysis first.'),
+      mtInformation, [mbOK], 0);
+    Exit;
+  end;
+  Target := TBaseline.DefaultBaselineTarget(CurrentProjOrGroupFile,
+    ScanRootDir);
+  if Target = '' then
+  begin
+    MessageDlg(_('No scan target selected - pick a path or project first.'),
+      mtInformation, [mbOK], 0);
+    Exit;
+  end;
+  try
+    ForceDirectories(ExtractFilePath(Target));
+    TBaseline.Write(FAllFindings, Target);
+    StatusMode(Format(_('Baseline written: %s (%d findings)'),
+      [ExtractFileName(Target), FAllFindings.Count]));
+    Result := True;
+  except
+    // noinspection ExceptionTooGeneral
+    // Fehlergrenze an der Action-Grenze: jeder Schreibfehler soll als
+    // Klartext beim Nutzer ankommen.
+    on E: Exception do
+      MessageDlg(Format(_('Could not write baseline: %s'), [E.Message]),
+        mtError, [mbOK], 0);
+  end;
+end;
+
+procedure TAnalyserFrame.ToggleBaselineOnlyNew(ANewVal: Boolean);
+// Kern des Hamburger-Hakens 'Show only new findings (baseline)'.
+// AKTIVIEREN ohne auffindbare Datei bietet an, sofort eine zu schreiben
+// (.sca-Standardort) - kein harter Abbruch wie in der CLI, aber auch
+// kein stilles Weiterlaufen (Konzept par.3/par.4).
+var
+  Probed : TStringList;
+begin
+  if not Assigned(FRepoSettings) then Exit;
+  if ANewVal then
+  begin
+    Probed := TStringList.Create;
+    try
+      if (ResolveUiBaselinePath(FRepoSettings.BaselineFile, Probed) = '') and
+         (not OfferWriteBaseline(Probed.Text)) then
+        Exit;              // Setting bleibt aus; Popup-Sync liest die INI
+    finally
+      Probed.Free;
+    end;
+  end;
+  FRepoSettings.BaselineOnlyNew := ANewVal;
+  try FRepoSettings.Save; except end;
+  RefreshBaselineSet;
+  ApplyFilter;
+end;
+
+procedure TAnalyserFrame.BaselineOnlyNewClick(Sender: TObject);
+// Haken umschalten - dieselbe Einstellung, die Standalone und CLI lesen
+// ([Baseline] OnlyNew in der geteilten analyser.ini). Vorher frisch
+// laden, damit ein von aussen geaenderter Wert korrekt invertiert wird.
+begin
+  if not Assigned(FRepoSettings) then Exit;
+  try FRepoSettings.Load; except end;
+  ToggleBaselineOnlyNew(not FRepoSettings.BaselineOnlyNew);
+end;
+
 procedure TAnalyserFrame.WriteBaselineClick(Sender: TObject);
 // Schreibt die aktuellen (UNgefilterten) Funde als Baseline-JSON. Format ist
 // identisch zu CLI --write-baseline + HTML-Export -> die Datei kann als "nur
 // neue Funde"-Baseline (Tools > Options) gesetzt oder in CI/HTML weiter-
 // verwendet werden.
 var
-  Dlg : TFileSaveDialog;
-  Fn  : string;
+  Dlg       : TFileSaveDialog;
+  Fn        : string;
+  DefTarget : string;
 begin
   if (not Assigned(FAllFindings)) or (FAllFindings.Count = 0) then
   begin
@@ -3212,9 +3390,22 @@ begin
       DisplayName := _('Baseline JSON');
       FileMask    := '*.json';
     end;
-    Dlg.FileName := 'sca.baseline.json';
-    if (FCurrentBaseDir <> '') and DirectoryExists(FCurrentBaseDir) then
-      Dlg.DefaultFolder := FCurrentBaseDir;
+    // .sca-Standardziel vorbelegen (Konzept par.3); Fallback wie bisher.
+    DefTarget := TBaseline.DefaultBaselineTarget(CurrentProjOrGroupFile,
+      ScanRootDir);
+    if DefTarget <> '' then
+    begin
+      try ForceDirectories(ExtractFilePath(DefTarget)); except end;
+      Dlg.DefaultFolder := ExcludeTrailingPathDelimiter(
+        ExtractFilePath(DefTarget));
+      Dlg.FileName := ExtractFileName(DefTarget);
+    end
+    else
+    begin
+      Dlg.FileName := 'sca.baseline.json';
+      if (FCurrentBaseDir <> '') and DirectoryExists(FCurrentBaseDir) then
+        Dlg.DefaultFolder := FCurrentBaseDir;
+    end;
     if Dlg.Execute then
       Fn := Dlg.FileName;
   finally
@@ -4090,13 +4281,24 @@ begin
     // OWNED, transiente Liste -> das destruktive TBaseline.Apply ist ok
     // (matchende Funde werden entfernt + freigegeben; uebrig bleibt "neu seit
     // Baseline"). Kein Toggle noetig, deshalb kein TBaselineSet wie im Dock.
-    if Settings.BaselineOnlyNew and (Trim(Settings.BaselineFile) <> '') then
-      try
-        TBaseline.Apply(Findings,
-          ResolveBaselinePath(Settings.BaselineFile, ExtractFilePath(AFileName)));
-      except
-        // Baseline-Fehler darf den Silent-Scan nicht kippen (fail-open).
-      end;
+    // Ohne [Baseline] File= greift der .sca-Standardort des aktiven
+    // IDE-Projekts (Inkrement 4); unveraenderte Funde matchen dort auch im
+    // PathInFingerprint-Modus ueber den contextHash.
+    if Settings.BaselineOnlyNew then
+    begin
+      var BlPath := Trim(Settings.BaselineFile);
+      if BlPath <> '' then
+        BlPath := ResolveBaselinePath(BlPath, ExtractFilePath(AFileName))
+      else
+        BlPath := TBaseline.ResolveBaselinePath(ActiveIdeProjOrGroupFile,
+          '', nil);
+      if BlPath <> '' then
+        try
+          TBaseline.Apply(Findings, BlPath);
+        except
+          // Baseline-Fehler darf den Silent-Scan nicht kippen (fail-open).
+        end;
+    end;
 
     Entries := BuildMarkEntries(Findings);
     // ReplaceMarksForFile statt SetAllFindings: Marker anderer Dateien
