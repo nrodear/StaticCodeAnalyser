@@ -6,7 +6,7 @@ Orientiert sich am Sonar-50er-Katalog plus eigene Bonus-Detektoren.
 
 Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 
-**Zusammenfassung (2026-07-22):** Alle **195 Regel-Kinds** des kanonischen Rosters [`rules/sca-rules.json`](rules/sca-rules.json) sind implementiert und in dieser Datei aufgeführt (geliefert von ~151 Pipeline-Detektor-Klassen; einige Klassen emittieren mehrere Kinds — z. B. `uVisibilityCheck` → 3 Visibility-Kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM-Kinds; **SCA194/SCA195 sind projekt-weit, nicht AST-basiert** — emittiert aus dem Projekt-/Gruppen-Scan-Dispatch, nicht der per-Datei-Detektor-Registry). 44 / 50 Sonar-Regel-Slots vollständig; die 4 offenen Slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) brauchen Typ-Inferenz / Cross-Unit-Auflösung und haben noch keine SCA-ID.
+**Zusammenfassung (2026-08-07):** Alle **196 Regel-Kinds** des kanonischen Rosters [`rules/sca-rules.json`](rules/sca-rules.json) sind implementiert und in dieser Datei aufgeführt (geliefert von ~152 Pipeline-Detektor-Klassen; einige Klassen emittieren mehrere Kinds — z. B. `uVisibilityCheck` → 3 Visibility-Kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM-Kinds; **SCA194/SCA195 sind projekt-weit, nicht AST-basiert** — emittiert aus dem Projekt-/Gruppen-Scan-Dispatch, nicht der per-Datei-Detektor-Registry). 44 / 50 Sonar-Regel-Slots vollständig; die 4 offenen Slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) brauchen Typ-Inferenz / Cross-Unit-Auflösung und haben noch keine SCA-ID.
 
 Verbleibende 4 offene Slots brauchen Typ-Inferenz / Flow-Analyse / Cross-Unit-Symbol-Resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** ist als konservativer MVP (`SCA166`) ausgeliefert — Full Path-Sensitivity bleibt fuer Phase 3 offen.
 
@@ -446,6 +446,14 @@ Kein AST-/per-Datei-Detektor: läuft nur bei `.dproj`/`.groupproj`-Scans (CLI `-
 |-----|-------|--------------|----------|-----|--------|------|
 | SCA194 | **NotIncludedInProject** | .pas/.dfm im Projektordner, aber nicht im Projekt (.dproj/.groupproj) referenziert - verwaiste / tote Quelldatei | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
 | SCA195 | **UsedButNotInProject** | .pas wird von Projekt-Units per uses gezogen (kompiliert ueber den Suchpfad), fehlt aber im .dproj - ins Projekt aufnehmen | Hint | Code Smell | ✅ | `uNotIncludedInProject` |
+
+## 🧪 Result-Initialisierung (SCA196) — 1 Regel
+
+Verwaltete Return-Typen (string-Familie, dynamische Arrays, `Variant`, Interfaces) geben ihr Ergebnis über einen versteckten **var**-Parameter zurück, der auf die Zielvariable des Aufrufers zeigt — inklusive deren ALTEM Inhalt. Result ist beim Eintritt also NICHT `''`/`nil`, und der Compiler-Hinweis W1035 schweigt für genau diese Typen. Wo SCA196 feuert, bleibt SCA121 für dieselbe Function stumm.
+
+| SCA | Regel | Beschreibung | Severity | Typ | Status | Unit |
+|-----|-------|--------------|----------|-----|--------|------|
+| SCA196 | **ManagedResultUninit** | Result eines verwalteten Return-Typs wird gelesen, bevor es zugewiesen wurde (`Result := Result + [x]`, `Result[i] := ...` ohne SetLength, `Result.Add(...)`) - verarbeitet die alten Daten des Aufrufers | Warning | Bug | ✅ | `uManagedResultUninit` |
 
 ## ⚙️ Konfiguration — SCA001 OwnershipSinks (MemoryLeak-Whitelist)
 

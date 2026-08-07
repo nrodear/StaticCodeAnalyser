@@ -3905,6 +3905,56 @@
       },
       "cleanCodeAttribute": "COMPLETE",
       "impacts": [{"softwareQuality": "MAINTAINABILITY", "severity": "LOW"}]
+    },
+    {
+      "id": "SCA196",
+      "kind": "ManagedResultUninit",
+      "name": "Result of managed type is read before it is assigned",
+      "shortDescription": "Result of a managed return type is read before the first assignment - Result aliases the caller's target variable and starts with its OLD value, not empty. Initialize Result first (nil / [] / '')",
+      "fullDescription": "For managed return types the compiler passes Result as a hidden var parameter that aliases the caller's target variable INCLUDING its previous content (System.Rtti UseResultPointer; the RTL itself guards against this, e.g. TStringBuilder.ToString starts with Result := '' 'to prevent copying of existing data'). Result is therefore NOT initialized to ''/nil/empty on entry. Reading it before the first assignment - Result := Result + [x], Result[i] := ... without a prior SetLength, Result.Add(...), Exit(Result + ...) - processes stale caller data: the classic symptom is a collector function whose second call appends to the results of the first. The compiler hint W1035 (return value undefined) stays SILENT for exactly these types, so nothing else warns here. Detection is purely source-order (variant 2, no path analysis): the first Result access in the body decides; anything that writes or may write Result (direct assignment, Exit(value), Result or @Result passed as a call argument such as SetLength(Result, n) or TryGetValue(key, Result)) counts as an assignment and ends the scan. Functions with an 'absolute Result' alias, assembler routines and bodyless declarations are skipped; string literals containing the word 'result' never count. Path-blind by design: a write in one branch followed by a read after the branch is NOT flagged (false negative, not false positive) - path-sensitive analysis is a planned follow-up. Where this rule fires, SCA121 stays silent for the same function.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": [
+        "function",
+        "uninitialized",
+        "memory"
+      ],
+      "detectorUnit": "uManagedResultUninit.pas",
+      "examples": {
+        "bad": "function CollectNames(const L: TStrings): TArray<string>;\nvar i: Integer;\nbegin\n  for i := 0 to L.Count - 1 do\n    Result := Result + [L[i]];  // reads the CALLER's old array on first iteration\nend;",
+        "good": "function CollectNames(const L: TStrings): TArray<string>;\nvar i: Integer;\nbegin\n  Result := [];  // or: Result := nil; / SetLength(Result, 0);\n  for i := 0 to L.Count - 1 do\n    Result := Result + [L[i]];\nend;"
+      },
+      "exceptions": [
+        {
+          "case": "Result or @Result passed as a call argument",
+          "why": "SetLength(Result, n), TryGetValue(key, Result), FillChar(Result, ...) and friends write through the var/out parameter - lexically we cannot tell read from write, so every argument pass counts as initialization (conservative, same direction as SCA121).",
+          "example": "SetLength(Result, Count);  // counts as the first write"
+        },
+        {
+          "case": "Local variable declared 'absolute Result'",
+          "why": "All writes go through the alias name; the walker would never see a Result write and would flag every alias-based initializer.",
+          "example": "var Bits: UInt32 absolute Result;"
+        },
+        {
+          "case": "assembler routines and bodyless declarations",
+          "why": "asm bodies set the result via registers; abstract/forward/external/dispid declarations have no body to scan."
+        },
+        {
+          "case": "Write in one branch, read after the branch",
+          "why": "Variant 2 is path-blind by design: the read is only flagged when NO write precedes it in source order - a branch-guarded miss is a false negative, never a false positive. Path-sensitive analysis (CFG) is a planned follow-up."
+        },
+        {
+          "case": "Record and class return types",
+          "why": "Record field writes are legitimate partial initialization, and for class-typed results the compiler hint W1035 already warns; both stay out of scope."
+        }
+      ],
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        {
+          "softwareQuality": "RELIABILITY",
+          "severity": "HIGH"
+        }
+      ]
     }
   ]
 }

@@ -133,7 +133,7 @@ uses
   uSynchronizeInDestructor, uLockWithoutTryFinally,
   uPerfHotspots, uConcurrencyExt, uRestHttpSecurity,
   uPublicMemberWithoutDoc, uNamingExt,  uRuleCatalog,
-  uRoutineResultAssigned, uReRaiseException, uCastAndFree, uMissingRaise,
+  uRoutineResultAssigned, uManagedResultUninit, uReRaiseException, uCastAndFree, uMissingRaise,
   uInstanceInvokedConstructor, uInheritedMethodEmpty, uNilComparison,
   uRaisingRawException, uDateFormatSettings, uUnicodeToAnsiCast,
   uCharToCharPointerCast, uIfThenShortCircuit,
@@ -455,6 +455,9 @@ begin
   AddD3('SelfAssignment',  fkSelfAssignment,  TSelfAssignmentDetector.AnalyzeUnit);
   AddD3('MissingRaise',    fkMissingRaise,    TMissingRaiseDetector.AnalyzeUnit);
   AddD3('RoutineResultUnassigned', fkRoutineResultUnassigned, TRoutineResultAssignedDetector.AnalyzeUnit);
+  // SCA196: kein Token-Praefilter - das Gate ist der Return-Typ, nicht ein
+  // Quelltext-Token ('result' stuende in praktisch jeder Datei).
+  AddD3('ManagedResultUninit', fkManagedResultUninit, TManagedResultUninitDetector.AnalyzeUnit);
   AddD3('ReRaiseException', fkReRaiseException, TReRaiseExceptionDetector.AnalyzeUnit);
   AddD3('CastAndFree',     fkCastAndFree,     TCastAndFreeDetector.AnalyzeUnit);
   // Track C Opt-in (Runde 3): AContext-fuehrend (record-value-type-Gegenprobe

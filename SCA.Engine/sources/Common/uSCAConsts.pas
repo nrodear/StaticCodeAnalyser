@@ -690,6 +690,14 @@ type
                                  //          aufnehmen. Abspaltung von SCA194 (2026-07-29):
                                  //          vorher wurden solche Dateien faelschlich als
                                  //          verwaist gemeldet. Gleicher Dispatch wie 194.
+    fkManagedResultUninit        // SCA196 - Result eines verwalteten Return-Typs
+                                 //          (string/TArray</Variant/Interface) wird
+                                 //          GELESEN bevor es zugewiesen wurde. Result
+                                 //          ist dort ein versteckter var-Parameter auf
+                                 //          AUFRUFER-Speicher inkl. dessen ALTEM Wert
+                                 //          (System.Rtti UseResultPointer) - W1035
+                                 //          schweigt fuer diese Typen. Variante 2
+                                 //          (reine Lese-vor-Schreib-Ordnung, kein CFG).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -970,7 +978,8 @@ const
     (Name: 'SourceInvisibleChar';        FindingType: ftVulnerability;DefaultSeverity: lsWarning), // fkSourceInvisibleChar
     (Name: 'SourceNonAsciiIdentifier';   FindingType: ftVulnerability;DefaultSeverity: lsWarning), // fkSourceNonAsciiIdentifier
     (Name: 'NotIncludedInProject';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkNotIncludedInProject
-    (Name: 'UsedButNotInProject';        FindingType: ftCodeSmell;    DefaultSeverity: lsHint)     // fkUsedButNotInProject
+    (Name: 'UsedButNotInProject';        FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUsedButNotInProject
+    (Name: 'ManagedResultUninit';        FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkManagedResultUninit
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
@@ -1259,6 +1268,13 @@ begin
     fkRoutineResultUnassigned,   // SCA121 ~58% (absolute-Result, nested-scope, ifdef)
     fkLockWithoutTryFinally      // SCA109 ~85% pre-guard (call-free-Getter/Setter)
     : Result := fcMedium;
+
+    // SCA196 ManagedResultUninit: Start-Konfidenz fcLow bis zur ersten
+    // Korpus-Messung (User-Entscheid 2026-08-07: Messprogramm uebersprungen,
+    // direkt gebaut). Die Variante-2-Konstruktion ist nahezu FP-frei
+    // (Lese-vor-Schreib ist per Definition stale), aber ohne Real-World-
+    // Beleg noch keine Promotion.
+    fkManagedResultUninit: Result := fcLow;
 
   else
     Result := fcHigh;

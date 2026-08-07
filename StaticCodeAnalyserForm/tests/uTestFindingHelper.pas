@@ -40,7 +40,7 @@ uses
   uSynchronizeInDestructor, uLockWithoutTryFinally,
   uPerfHotspots, uConcurrencyExt, uRestHttpSecurity,
   uPublicMemberWithoutDoc, uNamingExt,
-  uMissingRaise, uRoutineResultAssigned, uReRaiseException, uCastAndFree,
+  uMissingRaise, uRoutineResultAssigned, uManagedResultUninit, uReRaiseException, uCastAndFree,
   uInstanceInvokedConstructor, uInheritedMethodEmpty, uNilComparison,
   uRaisingRawException, uDateFormatSettings, uUnicodeToAnsiCast,
   uCharToCharPointerCast, uIfThenShortCircuit,
@@ -156,6 +156,7 @@ begin
       TSelfAssignmentDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
       TMissingRaiseDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
       TRoutineResultAssignedDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
+      TManagedResultUninitDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
       TReRaiseExceptionDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
       TCastAndFreeDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
       TInstanceInvokedConstructorDetector.AnalyzeUnit(Root, SAMPLE_FILENAME, Result);
