@@ -147,6 +147,8 @@ type
     // vollstaendig - der Filter wirkt nur auf die Anzeige, damit Export
     // und 'Baseline schreiben' weiter alles sehen (Plugin-Semantik).
     FBaselineSet    : TBaselineSet;
+    FBaselineCheck  : TCheckBox;   // Filter-Row 'Only new (baseline)'
+    FBaselineUiSync : Boolean;     // Guard: programmatisches Checked-Setzen
     FGridMenu       : TPopupMenu;
     // Zwischenablage ENTPRELLT (Vorbild Plugin-Fix 2026-08-03,
     // FClipCopyTimer in uIDEAnalyserForm): vorher schrieb JEDER
@@ -208,6 +210,14 @@ type
     procedure WriteBaselineClick(Sender: TObject);
     procedure BaselineOnlyNewClick(Sender: TObject);
     function  BaselineActive: Boolean;
+    // Baseline-Inkrement 3 (Konzept par.3): .sca-Aufloesung + Checkbox.
+    procedure BaselineCheckClick(Sender: TObject);
+    procedure ToggleBaselineOnlyNew(ANewVal: Boolean);
+    function  OfferWriteBaseline(const AProbedText: string): Boolean;
+    function  CurrentProjOrGroupFile: string;
+    function  ResolveUiBaselinePath(ASettings: TRepoSettings;
+      AProbed: TStrings): string;
+    procedure SyncBaselineCheckbox;
     // --- Kontextmenue am Grid ---
     procedure BuildGridMenu;
     procedure GridMenuPopup(Sender: TObject);
@@ -2440,6 +2450,22 @@ begin
   MI.OnClick := WriteBaselineClick;
   FHamburgerMenu.Items.Add(MI);
 
+  // Filter-Row-Checkbox (Inkrement 3) - einmalig erzeugen; der
+  // Hamburger wird bei Sprachwechsel neu gebaut, die Checkbox nicht.
+  if FBaselineCheck = nil then
+  begin
+    FBaselineCheck := TCheckBox.Create(Self);
+    FBaselineCheck.Parent := Panel3;
+    FBaselineCheck.AlignWithMargins := True;
+    FBaselineCheck.Align := alRight;
+    FBaselineCheck.Width := 160;
+    FBaselineCheck.Caption := _('Only new (baseline)');
+    FBaselineCheck.OnClick := BaselineCheckClick;
+    SyncBaselineCheckbox;
+  end
+  else
+    FBaselineCheck.Caption := _('Only new (baseline)');
+
   FMIBaseline := TMenuItem.Create(FHamburgerMenu);
   FMIBaseline.Caption := _('Show only new findings (baseline)');
   FMIBaseline.OnClick := BaselineOnlyNewClick;
@@ -2574,9 +2600,52 @@ begin
   Result := Assigned(FBaselineSet) and (not FBaselineSet.IsEmpty);
 end;
 
+function TForm2.CurrentProjOrGroupFile: string;
+// Smart-Path: steht in der Pfad-Combo eine .dproj/.groupproj-DATEI, ist
+// das die Projekt-/Gruppen-Quelle fuer die .sca-Aufloesung.
+begin
+  Result := Trim(Projectpath.Text);
+  if not (SameText(ExtractFileExt(Result), '.dproj') or
+          SameText(ExtractFileExt(Result), '.groupproj')) then
+    Result := '';
+end;
+
+// Absolute Pfade (Laufwerk, UNC, fuehrender Separator) erkennen -
+// Pruefung von Hand, wie im Plugin, damit hier kein TPath-Namensraum
+// noetig wird.
+function IsAbsolutePathStr(const Path: string): Boolean;
+begin
+  Result := ((Length(Path) >= 2) and (Path[2] = ':')) or
+            ((Length(Path) >= 2) and (Path[1] = '\') and (Path[2] = '\')) or
+            ((Length(Path) >= 1) and ((Path[1] = '\') or (Path[1] = '/')));
+end;
+
+function TForm2.ResolveUiBaselinePath(ASettings: TRepoSettings;
+  AProbed: TStrings): string;
+// Praezedenz wie CLI (Konzept par.1): [Baseline] File= (mit Relativ-
+// Aufloesung gegen das Scan-Verzeichnis) > .sca-Standardort neben der
+// Projektdatei bzw. unter dem Scan-Pfad. '' wenn nichts existiert.
+var
+  Path : string;
+begin
+  Result := '';
+  Path := Trim(ASettings.BaselineFile);
+  if Path <> '' then
+  begin
+    if (not IsAbsolutePathStr(Path)) and (FCurrentBaseDir <> '') then
+      Path := IncludeTrailingPathDelimiter(FCurrentBaseDir) + Path;
+    if Assigned(AProbed) then AProbed.Add(Path);
+    if FileExists(Path) then Exit(Path);
+    Exit;                    // explizit konfiguriert, aber fehlt -> kein .sca-Raten
+  end;
+  Result := TBaseline.ResolveBaselinePath(CurrentProjOrGroupFile,
+    DirOfProjectPath(Projectpath.Text), AProbed);
+end;
+
 procedure TForm2.RefreshBaselineSet;
-// Laedt (oder leert) das Fingerprint-Set aus [Baseline] File/OnlyNew.
-// Wird vor jedem Anzeige-Aufbau gerufen; FAllFindings bleibt unberuehrt.
+// Laedt (oder leert) das Fingerprint-Set. Quelle: [Baseline] File= oder
+// der .sca-Standardort (Inkrement 3). Wird vor jedem Anzeige-Aufbau
+// gerufen; FAllFindings bleibt unberuehrt.
 var
   Settings : TRepoSettings;
   Path     : string;
@@ -2585,20 +2654,24 @@ begin
   Settings := TRepoSettings.Create;
   try
     try Settings.Load; except end;
-    if (not Settings.BaselineOnlyNew) or (Trim(Settings.BaselineFile) = '') then
+    if not Settings.BaselineOnlyNew then
     begin
       FBaselineSet.Clear;
       Exit;
     end;
-    Path := Trim(Settings.BaselineFile);
-    // Relativen Pfad gegen das Scan-Verzeichnis aufloesen. Absolute Pfade
-    // (C:\, \server, /abs) bleiben unveraendert - Pruefung von Hand, wie
-    // im Plugin, damit hier kein TPath-Namensraum noetig wird.
-    if not (((Length(Path) >= 2) and (Path[2] = ':')) or
-            ((Length(Path) >= 2) and (Path[1] = '\') and (Path[2] = '\')) or
-            ((Length(Path) >= 1) and ((Path[1] = '\') or (Path[1] = '/')))) then
-      if FCurrentBaseDir <> '' then
-        Path := IncludeTrailingPathDelimiter(FCurrentBaseDir) + Path;
+    Path := ResolveUiBaselinePath(Settings, nil);
+    if Path = '' then
+    begin
+      FBaselineSet.Clear;
+      Exit;
+    end;
+    // PathInFingerprint-Konsistenz: Modus + Root wie beim Schreiben der
+    // Datei, sonst matchen die Fingerprints des Anzeige-Filters nicht.
+    uSCAConsts.BaselinePathFingerprint := Settings.BaselinePathInFingerprint;
+    if CurrentProjOrGroupFile <> '' then
+      uSCAConsts.BaselineFingerprintRoot := ExtractFilePath(CurrentProjOrGroupFile)
+    else
+      uSCAConsts.BaselineFingerprintRoot := DirOfProjectPath(Projectpath.Text);
     try
       FBaselineSet.LoadFromFile(Path);
     except
@@ -2608,6 +2681,110 @@ begin
   finally
     Settings.Free;
   end;
+end;
+
+procedure TForm2.SyncBaselineCheckbox;
+var
+  Settings : TRepoSettings;
+begin
+  if not Assigned(FBaselineCheck) then Exit;
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    FBaselineUiSync := True;
+    try
+      FBaselineCheck.Checked := Settings.BaselineOnlyNew;
+    finally
+      FBaselineUiSync := False;
+    end;
+  finally
+    Settings.Free;
+  end;
+end;
+
+procedure TForm2.BaselineCheckClick(Sender: TObject);
+begin
+  if FBaselineUiSync then Exit;                    // programmatisches Setzen
+  ToggleBaselineOnlyNew(FBaselineCheck.Checked);
+end;
+
+function TForm2.OfferWriteBaseline(const AProbedText: string): Boolean;
+// Dialog 'keine Baseline gefunden - jetzt schreiben?' inkl. Schreiben an
+// den .sca-Standardort. False = Nutzer hat abgebrochen oder es gibt
+// nichts zu schreiben (Aufrufer nimmt den Haken zurueck).
+var
+  Target : string;
+begin
+  Result := False;
+  if Application.MessageBox(PChar(Format(
+       _('Baseline is enabled but no baseline file was found.') + #13#10 +
+       _('Looked for:') + #13#10 + '%s' + #13#10 +
+       _('Write a new baseline with the current findings now?'),
+       [AProbedText])),
+     PChar(_('Write baseline')), MB_YESNO or MB_ICONQUESTION) <> IDYES then
+    Exit;
+  if (FAllFindings = nil) or (FAllFindings.Count = 0) then
+  begin
+    ShowMessage(_('No findings to write. Run an analysis first.'));
+    Exit;
+  end;
+  Target := TBaseline.DefaultBaselineTarget(CurrentProjOrGroupFile,
+    DirOfProjectPath(Projectpath.Text));
+  if Target = '' then
+  begin
+    ShowMessage(_('No scan target selected - pick a path or project first.'));
+    Exit;
+  end;
+  try
+    ForceDirectories(ExtractFilePath(Target));
+    TBaseline.Write(FAllFindings, Target);
+    StatusBar1.Panels[2].Text := Format(
+      _('Baseline written: %s (%d findings)'),
+      [ExtractFileName(Target), FAllFindings.Count]);
+    Result := True;
+  except
+    // noinspection ExceptionTooGeneral
+    // Fehlergrenze an der Action-Grenze (s. Dateikopf): jeder
+    // Schreibfehler soll als Klartext beim Nutzer ankommen.
+    on E: Exception do
+      ShowMessage(Format(_('Could not write baseline: %s'), [E.Message]));
+  end;
+end;
+
+procedure TForm2.ToggleBaselineOnlyNew(ANewVal: Boolean);
+// Gemeinsamer Kern von Hamburger-Haken und Filter-Row-Checkbox.
+// AKTIVIEREN ohne auffindbare Datei bietet an, sofort eine zu schreiben
+// (.sca-Standardort) - kein harter Abbruch wie in der CLI, aber auch
+// kein stilles Weiterlaufen (Konzept par.3/par.4).
+var
+  Settings : TRepoSettings;
+  Probed   : TStringList;
+begin
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    if ANewVal then
+    begin
+      Probed := TStringList.Create;
+      try
+        if (ResolveUiBaselinePath(Settings, Probed) = '') and
+           (not OfferWriteBaseline(Probed.Text)) then
+        begin
+          SyncBaselineCheckbox;                    // Haken zuruecknehmen
+          Exit;
+        end;
+      finally
+        Probed.Free;
+      end;
+    end;
+    Settings.BaselineOnlyNew := ANewVal;
+    try Settings.Save; except end;
+  finally
+    Settings.Free;
+  end;
+  SyncBaselineCheckbox;
+  RefreshBaselineSet;
+  ApplyFilter;
 end;
 
 procedure TForm2.WriteBaselineClick(Sender: TObject);
@@ -2627,9 +2804,21 @@ begin
     Dlg.Title      := _('Write baseline');
     Dlg.Filter     := _('Baseline JSON (*.json)|*.json');
     Dlg.DefaultExt := 'json';
-    Dlg.FileName   := 'sca.baseline.json';
-    if (FCurrentBaseDir <> '') and DirectoryExists(FCurrentBaseDir) then
-      Dlg.InitialDir := FCurrentBaseDir;
+    // .sca-Standardziel vorbelegen (Konzept par.3); Fallback wie bisher.
+    var DefTarget := TBaseline.DefaultBaselineTarget(CurrentProjOrGroupFile,
+      DirOfProjectPath(Projectpath.Text));
+    if DefTarget <> '' then
+    begin
+      try ForceDirectories(ExtractFilePath(DefTarget)); except end;
+      Dlg.InitialDir := ExcludeTrailingPathDelimiter(ExtractFilePath(DefTarget));
+      Dlg.FileName   := ExtractFileName(DefTarget);
+    end
+    else
+    begin
+      Dlg.FileName := 'sca.baseline.json';
+      if (FCurrentBaseDir <> '') and DirectoryExists(FCurrentBaseDir) then
+        Dlg.InitialDir := FCurrentBaseDir;
+    end;
     Dlg.Options := Dlg.Options + [ofOverwritePrompt];
     if not Dlg.Execute then Exit;
     try
@@ -2651,8 +2840,10 @@ begin
 end;
 
 procedure TForm2.BaselineOnlyNewClick(Sender: TObject);
-// Haken umschalten und in die INI schreiben - dieselbe Einstellung, die
-// Plugin und CLI lesen ([Baseline] OnlyNew).
+// Haken umschalten - dieselbe Einstellung, die Plugin und CLI lesen
+// ([Baseline] OnlyNew). Kern inkl. .sca-Aufloesung + Schreib-Angebot in
+// ToggleBaselineOnlyNew (Inkrement 3; vorher blockte der Toggle mit
+// einer Meldung, wenn [Baseline] File= nicht von Hand gesetzt war).
 var
   Settings : TRepoSettings;
   NewVal   : Boolean;
@@ -2661,19 +2852,10 @@ begin
   try
     try Settings.Load; except end;
     NewVal := not Settings.BaselineOnlyNew;
-    if NewVal and (Trim(Settings.BaselineFile) = '') then
-    begin
-      ShowMessage(_('No baseline file configured yet - write one first, ' +
-        'then set [Baseline] File in analyser.ini.'));
-      Exit;
-    end;
-    Settings.BaselineOnlyNew := NewVal;
-    try Settings.Save; except end;
   finally
     Settings.Free;
   end;
-  RefreshBaselineSet;
-  ApplyFilter;
+  ToggleBaselineOnlyNew(NewVal);
 end;
 
 procedure TForm2.BuildGridMenu;

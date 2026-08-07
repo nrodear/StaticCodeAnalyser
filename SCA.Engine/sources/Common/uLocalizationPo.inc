@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1968 Zeilen, 66186 Bytes
-  CPoLines_de: array[0..1967] of string = (
+  // i18n\de.po - 1985 Zeilen, 66775 Bytes
+  CPoLines_de: array[0..1984] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1982,11 +1982,28 @@ const
     '# --- 2026-08-08: SCA196 FixHint-Description ---',
     '',
     'msgid "Result of managed type is read before it is assigned"',
-    'msgstr "Result eines verwalteten Typs wird gelesen, bevor es zugewiesen wurde"'
+    'msgstr "Result eines verwalteten Typs wird gelesen, bevor es zugewiesen wurde"',
+    '',
+    '# --- 2026-08-09: Baseline-Inkrement 3 (EXE-Checkbox + .sca-Dialog) ---',
+    '',
+    'msgid "Only new (baseline)"',
+    'msgstr "Nur neue (Baseline)"',
+    '',
+    'msgid "Baseline is enabled but no baseline file was found."',
+    'msgstr "Baseline ist aktiv, aber es wurde keine Baseline-Datei gefunden."',
+    '',
+    'msgid "Looked for:"',
+    'msgstr "Gesucht wurde:"',
+    '',
+    'msgid "Write a new baseline with the current findings now?"',
+    'msgstr "Jetzt eine neue Baseline mit den aktuellen Befunden schreiben?"',
+    '',
+    'msgid "No scan target selected - pick a path or project first."',
+    'msgstr "Kein Scan-Ziel gew'#$00E4'hlt - erst einen Pfad oder ein Projekt ausw'#$00E4'hlen."'
   );
 
-  // i18n\en.po - 183 Zeilen, 4910 Bytes
-  CPoLines_en: array[0..182] of string = (
+  // i18n\en.po - 200 Zeilen, 5274 Bytes
+  CPoLines_en: array[0..199] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
     '# kept for consistency and as a "neutral" fallback baseline.',
@@ -2169,11 +2186,28 @@ const
     'msgstr "Apply quick fix"',
     '',
     'msgid "Clipboard is locked by another program."',
-    'msgstr "Clipboard is locked by another program."'
+    'msgstr "Clipboard is locked by another program."',
+    '',
+    '# --- 2026-08-09: Baseline-Inkrement 3 (EXE-Checkbox + .sca-Dialog) ---',
+    '',
+    'msgid "Only new (baseline)"',
+    'msgstr "Only new (baseline)"',
+    '',
+    'msgid "Baseline is enabled but no baseline file was found."',
+    'msgstr "Baseline is enabled but no baseline file was found."',
+    '',
+    'msgid "Looked for:"',
+    'msgstr "Looked for:"',
+    '',
+    'msgid "Write a new baseline with the current findings now?"',
+    'msgstr "Write a new baseline with the current findings now?"',
+    '',
+    'msgid "No scan target selected - pick a path or project first."',
+    'msgstr "No scan target selected - pick a path or project first."'
   );
 
-  // i18n\fr.po - 1980 Zeilen, 70710 Bytes
-  CPoLines_fr: array[0..1979] of string = (
+  // i18n\fr.po - 1997 Zeilen, 71334 Bytes
+  CPoLines_fr: array[0..1996] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4153,7 +4187,24 @@ const
     '# --- 2026-08-08: SCA196 FixHint-Description ---',
     '',
     'msgid "Result of managed type is read before it is assigned"',
-    'msgstr "Result de type manag'#$00E9' est lu avant d''avoir '#$00E9't'#$00E9' affect'#$00E9'"'
+    'msgstr "Result de type manag'#$00E9' est lu avant d''avoir '#$00E9't'#$00E9' affect'#$00E9'"',
+    '',
+    '# --- 2026-08-09: Baseline-Inkrement 3 (EXE-Checkbox + .sca-Dialog) ---',
+    '',
+    'msgid "Only new (baseline)"',
+    'msgstr "Nouveaux seulement (r'#$00E9'f'#$00E9'rence)"',
+    '',
+    'msgid "Baseline is enabled but no baseline file was found."',
+    'msgstr "La r'#$00E9'f'#$00E9'rence est activ'#$00E9'e mais aucun fichier n''a '#$00E9't'#$00E9' trouv'#$00E9'."',
+    '',
+    'msgid "Looked for:"',
+    'msgstr "Recherch'#$00E9' :"',
+    '',
+    'msgid "Write a new baseline with the current findings now?"',
+    'msgstr "'#$00C9'crire maintenant une nouvelle r'#$00E9'f'#$00E9'rence avec les r'#$00E9'sultats actuels ?"',
+    '',
+    'msgid "No scan target selected - pick a path or project first."',
+    'msgstr "Aucune cible d''analyse s'#$00E9'lectionn'#$00E9'e - choisissez d''abord un chemin ou un projet."'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

@@ -1966,3 +1966,20 @@ msgstr "Die Zwischenablage ist von einem anderen Programm gesperrt."
 
 msgid "Result of managed type is read before it is assigned"
 msgstr "Result eines verwalteten Typs wird gelesen, bevor es zugewiesen wurde"
+
+# --- 2026-08-09: Baseline-Inkrement 3 (EXE-Checkbox + .sca-Dialog) ---
+
+msgid "Only new (baseline)"
+msgstr "Nur neue (Baseline)"
+
+msgid "Baseline is enabled but no baseline file was found."
+msgstr "Baseline ist aktiv, aber es wurde keine Baseline-Datei gefunden."
+
+msgid "Looked for:"
+msgstr "Gesucht wurde:"
+
+msgid "Write a new baseline with the current findings now?"
+msgstr "Jetzt eine neue Baseline mit den aktuellen Befunden schreiben?"
+
+msgid "No scan target selected - pick a path or project first."
+msgstr "Kein Scan-Ziel gewählt - erst einen Pfad oder ein Projekt auswählen."

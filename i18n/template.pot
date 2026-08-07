@@ -2153,3 +2153,20 @@ msgstr ""
 
 msgid "Result of managed type is read before it is assigned"
 msgstr ""
+
+# --- 2026-08-09: Baseline-Inkrement 3 (EXE-Checkbox + .sca-Dialog) ---
+
+msgid "Only new (baseline)"
+msgstr ""
+
+msgid "Baseline is enabled but no baseline file was found."
+msgstr ""
+
+msgid "Looked for:"
+msgstr ""
+
+msgid "Write a new baseline with the current findings now?"
+msgstr ""
+
+msgid "No scan target selected - pick a path or project first."
+msgstr ""

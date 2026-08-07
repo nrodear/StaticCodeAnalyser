@@ -181,3 +181,20 @@ msgstr "Apply quick fix"
 
 msgid "Clipboard is locked by another program."
 msgstr "Clipboard is locked by another program."
+
+# --- 2026-08-09: Baseline-Inkrement 3 (EXE-Checkbox + .sca-Dialog) ---
+
+msgid "Only new (baseline)"
+msgstr "Only new (baseline)"
+
+msgid "Baseline is enabled but no baseline file was found."
+msgstr "Baseline is enabled but no baseline file was found."
+
+msgid "Looked for:"
+msgstr "Looked for:"
+
+msgid "Write a new baseline with the current findings now?"
+msgstr "Write a new baseline with the current findings now?"
+
+msgid "No scan target selected - pick a path or project first."
+msgstr "No scan target selected - pick a path or project first."
