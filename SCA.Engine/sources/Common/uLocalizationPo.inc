@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1963 Zeilen, 65995 Bytes
-  CPoLines_de: array[0..1962] of string = (
+  // i18n\de.po - 1968 Zeilen, 66186 Bytes
+  CPoLines_de: array[0..1967] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1977,10 +1977,15 @@ const
     'msgstr "Quick-Fix anwenden"',
     '',
     'msgid "Clipboard is locked by another program."',
-    'msgstr "Die Zwischenablage ist von einem anderen Programm gesperrt."'
+    'msgstr "Die Zwischenablage ist von einem anderen Programm gesperrt."',
+    '',
+    '# --- 2026-08-08: SCA196 FixHint-Description ---',
+    '',
+    'msgid "Result of managed type is read before it is assigned"',
+    'msgstr "Result eines verwalteten Typs wird gelesen, bevor es zugewiesen wurde"'
   );
 
-  // i18n\en.po - 183 Zeilen, 4727 Bytes
+  // i18n\en.po - 183 Zeilen, 4910 Bytes
   CPoLines_en: array[0..182] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
@@ -2167,8 +2172,8 @@ const
     'msgstr "Clipboard is locked by another program."'
   );
 
-  // i18n\fr.po - 1975 Zeilen, 70530 Bytes
-  CPoLines_fr: array[0..1974] of string = (
+  // i18n\fr.po - 1980 Zeilen, 70710 Bytes
+  CPoLines_fr: array[0..1979] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4143,7 +4148,12 @@ const
     'msgstr "Appliquer le correctif rapide"',
     '',
     'msgid "Clipboard is locked by another program."',
-    'msgstr "Le presse-papiers est verrouill'#$00E9' par un autre programme."'
+    'msgstr "Le presse-papiers est verrouill'#$00E9' par un autre programme."',
+    '',
+    '# --- 2026-08-08: SCA196 FixHint-Description ---',
+    '',
+    'msgid "Result of managed type is read before it is assigned"',
+    'msgstr "Result de type manag'#$00E9' est lu avant d''avoir '#$00E9't'#$00E9' affect'#$00E9'"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

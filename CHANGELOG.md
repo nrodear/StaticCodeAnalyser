@@ -10,6 +10,20 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **New rule SCA196 `ManagedResultUninit` (Warning, Bug).** For managed
+  return types (string family, dynamic arrays, `Variant`, interfaces)
+  `Result` is a hidden var parameter aliasing the caller's target
+  variable including its OLD content - the compiler hint W1035 stays
+  silent for exactly these types. SCA196 reports the first `Result`
+  READ before the first write (`Result := Result + [x]` collectors,
+  `Result[i] :=` without `SetLength`, `Result.Add(...)`,
+  `Exit(Result + ...)`). Corpus-validated across three measurement
+  rounds (2171 → 105 → 51 findings after two FP-fix rounds); all 49
+  unique corpus sites adversarially verified as real bugs (100%
+  precision), hence shipped at medium confidence (visible in the
+  default profile). Where SCA196 fires, SCA121 stays silent for the
+  same function. Localized fix hint with before/after example (en/de/fr).
+
 - **Light/dark theme for the standalone EXE.** Follows the Windows app
   theme by default (`[UI] Theme=system`), switchable in the hamburger
   menu under *Appearance* or via the INI key. The dark style ships
