@@ -46,6 +46,9 @@ implementation
 // Temp-Datei-Tests brauchen geschachtelte try/finally-Ketten und
 // Guard-Einzeiler - idiomatisches Testmuster dieser Unit.
 
+uses
+  System.JSON;
+
 const
   // Fixture-Pfade dynamisch (kein C:-Literal -> HardcodedPath still),
   // Detail-Text als Konstante (DuplicateString).
@@ -59,10 +62,6 @@ function FpRoot: string;
 begin
   Result := TPath.Combine(TPath.GetTempPath, 'sca_fp_root');
 end;
-
-
-uses
-  System.JSON;
 
 { Helpers }
 
