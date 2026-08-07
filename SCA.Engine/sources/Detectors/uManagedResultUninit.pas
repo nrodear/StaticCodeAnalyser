@@ -75,7 +75,9 @@ unit uManagedResultUninit;
 // stumm - uRoutineResultAssigned fragt dazu WouldReport() ab (nur der
 // Fall "Result wird NUR gelesen, nie geschrieben" ueberlappt).
 //
-// Schweregrad: lsWarning + fcLow (Start-Konfidenz bis zur Korpus-Messung).
+// Schweregrad: lsWarning + fcMedium (Start war fcLow; nach Korpus-
+// VOLLPRUEFUNG 2026-08-07 - 49 unikate Stellen, alle TP, 0 FP -
+// promotet, damit die Regel in der Default-Config sichtbar ist).
 
 interface
 
