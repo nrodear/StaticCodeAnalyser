@@ -1058,6 +1058,20 @@ var
   // davon ausgenommen (Diagnose-Befund, vgl. uConfidenceFilter).
   FindingMinConfidence : TFindingConfidence = DEF_FINDING_MIN_CONFIDENCE;
 
+  // [Baseline] PathInFingerprint=1 (Opt-in, Default AUS = Bestand):
+  // der Baseline-Fingerprint nutzt den normalisierten RELATIVpfad ab
+  // BaselineFingerprintRoot statt nur des Dateinamens - gleichnamige
+  // Dateien in verschiedenen Ordnern teilen sich dann KEINEN
+  // Namensraum mehr (Konzept_BaselineSca, Inkrement PathInFingerprint).
+  // TRADE-OFFS dokumentiert im Konzept: Ordner-Umzuege/anderer
+  // Scan-Zuschnitt invalidieren Fingerprints; byte-gleiche KOPIEN
+  // matchen weiter ueber den contextHash (bewusst).
+  BaselinePathFingerprint : Boolean = False;
+  // Wurzel fuer die Relativierung; setzt der CONSUMER vor Write/Apply
+  // (CLI: Projekt-/Gruppen-Verzeichnis bzw. --path). Leer oder Datei
+  // nicht unterhalb -> Fallback auf den blossen Dateinamen (sicher).
+  BaselineFingerprintRoot : string = '';
+
 // Setzt ALLE Scan-Konfigurations-Globals dieser Unit auf die dokumentierten
 // Engine-Defaults zurueck (2026-07-04, Audit Global-State):
 //   * skalare Detektor-Schwellen (DetectorMax*/DetectorMin*, DEF_*-Konstanten)

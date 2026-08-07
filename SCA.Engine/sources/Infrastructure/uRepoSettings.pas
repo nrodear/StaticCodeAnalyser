@@ -92,6 +92,7 @@ type
                                             // (Default False, Debug-Build-Tool)
     FSilentEnabled     : Boolean;     // [Silent] Enabled (Default: True)
     FBaselineFile      : string;      // [Baseline] File (Pfad zur Baseline-JSON)
+    FBaselinePathFp    : Boolean;     // [Baseline] PathInFingerprint (Opt-in)
     FBaselineOnlyNew   : Boolean;     // [Baseline] OnlyNew (nur neue Funde zeigen)
     // [UI] OverlayShowOnHover: kontrolliert ob das Annotation-Overlay
     // bereits beim Hover ueber die markierte Zeile erscheint. False (Default)
@@ -329,6 +330,12 @@ type
     // volle Findings-Liste + Export bleiben unberuehrt, nur die Anzeige filtert.
     property BaselineFile:            string      read FBaselineFile
                                                   write FBaselineFile;
+    // Opt-in: Relativpfad statt Dateiname im Baseline-Fingerprint.
+    // noinspection BooleanPropertyNaming
+    // Namensstil folgt dem [Baseline]-Bestand (BaselineOnlyNew, INI-Key
+    // PathInFingerprint) statt einem Is-Praefix.
+    property BaselinePathInFingerprint: Boolean    read FBaselinePathFp
+                                                  write FBaselinePathFp;
     property BaselineOnlyNew:         Boolean     read FBaselineOnlyNew
                                                   write FBaselineOnlyNew;
 
@@ -1341,6 +1348,7 @@ begin
     // File = Pfad zur Baseline-JSON (kompatibel mit CLI --write-baseline und
     // HTML-Export). OnlyNew=False (Default) -> Filter aus, alle Funde sichtbar.
     FBaselineFile    := Trim(Ini.ReadString('Baseline', 'File',    ''));
+    FBaselinePathFp  := Ini.ReadBool       ('Baseline', 'PathInFingerprint', False);
     FBaselineOnlyNew := Ini.ReadBool       ('Baseline', 'OnlyNew', DEF_BASELINE_ONLY_NEW);
 
     // [Hotkeys] Master-Toggle + Per-Feature-Toggle + Shortcut-Strings.
@@ -1427,6 +1435,7 @@ begin
     Ini.WriteBool  ('UI',     'OverlayShowOnHover',   FOverlayShowOnHover);
     Ini.WriteString('UI',     'EditorColorScheme',    FEditorColorScheme);
     Ini.WriteString('Baseline', 'File',              FBaselineFile);
+    Ini.WriteBool  ('Baseline', 'PathInFingerprint', FBaselinePathFp);
     Ini.WriteBool  ('Baseline', 'OnlyNew',           FBaselineOnlyNew);
     // [Detectors]-Toggles: jetzt UI-aenderbar via Tools > Options.
     Ini.WriteBool  ('Detectors', 'UsesCheck',           FUsesCheck);
@@ -1533,6 +1542,10 @@ begin
 
   // [Rules] MinConfidence -> globaler Konfidenz-Schwellwert (Post-Filter).
   uSCAConsts.FindingMinConfidence := uSCAConsts.ParseConfidence(FMinConfidence, fcMedium);
+
+  // [Baseline] PathInFingerprint -> globaler Fingerprint-Modus (die Root
+  // setzt der Consumer selbst, weil nur er den Scan-Zuschnitt kennt).
+  uSCAConsts.BaselinePathFingerprint := FBaselinePathFp;
 
   // [PathOverrides] -> uPathOverrides global. Wird im Analyzer-Pipeline
   // als Post-Filter nach uSuppression aufgerufen.
