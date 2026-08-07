@@ -2148,3 +2148,8 @@ msgstr ""
 
 msgid "Clipboard is locked by another program."
 msgstr ""
+
+# --- 2026-08-08: SCA196 FixHint-Description ---
+
+msgid "Result of managed type is read before it is assigned"
+msgstr ""

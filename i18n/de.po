@@ -1961,3 +1961,8 @@ msgstr "Quick-Fix anwenden"
 
 msgid "Clipboard is locked by another program."
 msgstr "Die Zwischenablage ist von einem anderen Programm gesperrt."
+
+# --- 2026-08-08: SCA196 FixHint-Description ---
+
+msgid "Result of managed type is read before it is assigned"
+msgstr "Result eines verwalteten Typs wird gelesen, bevor es zugewiesen wurde"

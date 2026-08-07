@@ -3060,6 +3060,26 @@ begin
         'end;';
     end;
 
+    fkManagedResultUninit:
+    begin
+      Result.Description := _('Result of managed type is read before it is assigned');
+      Result.Before :=
+        'function CollectNames(L: TStrings): TArray<string>;'#13#10 +
+        'var i: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  for i := 0 to L.Count - 1 do'#13#10 +
+        '    Result := Result + [L[i]];  // reads the CALLER''s old array'#13#10 +
+        'end;';
+      Result.After :=
+        'function CollectNames(L: TStrings): TArray<string>;'#13#10 +
+        'var i: Integer;'#13#10 +
+        'begin'#13#10 +
+        '  Result := [];  // or: Result := nil; / SetLength(Result, 0);'#13#10 +
+        '  for i := 0 to L.Count - 1 do'#13#10 +
+        '    Result := Result + [L[i]];'#13#10 +
+        'end;';
+    end;
+
     fkReRaiseException:
     begin
       Result.Description := _('Re-raise of bound variable loses the original stack trace');

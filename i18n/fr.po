@@ -1973,3 +1973,8 @@ msgstr "Appliquer le correctif rapide"
 
 msgid "Clipboard is locked by another program."
 msgstr "Le presse-papiers est verrouillé par un autre programme."
+
+# --- 2026-08-08: SCA196 FixHint-Description ---
+
+msgid "Result of managed type is read before it is assigned"
+msgstr "Result de type managé est lu avant d'avoir été affecté"
