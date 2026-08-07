@@ -682,7 +682,7 @@ type
                                  //          ssProject/ssProjectGroup-Scan (Projekt-
                                  //          Mitgliedschaft noetig); scan-uebergreifend
                                  //          im Engine-Dispatch emittiert, nicht per AST.
-    fkUsedButNotInProject        // SCA195 - .pas liegt im Projektordner, ist NICHT im
+    fkUsedButNotInProject,       // SCA195 - .pas liegt im Projektordner, ist NICHT im
                                  //          .dproj referenziert, wird aber von Projekt-
                                  //          Units (transitiv) per uses gezogen: die Unit
                                  //          kompiliert ueber den Suchpfad mit, fehlt aber
