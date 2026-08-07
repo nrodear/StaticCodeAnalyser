@@ -79,6 +79,9 @@ begin
   begin
     C := H[i];
     if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+      // Kurz-Akkumulator (<100 Zeichen) - Concat schlaegt hier den
+      // TStringBuilder-Objekt-Overhead (Review-HIGH-Nachlese 2026-08-08).
+      // noinspection StringConcatInLoop
       Acc := Acc + C
     else
       Break;

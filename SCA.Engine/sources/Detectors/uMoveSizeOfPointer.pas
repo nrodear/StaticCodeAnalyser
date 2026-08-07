@@ -74,6 +74,9 @@ begin
     Inc(i);
   while (i <= Length(Arg)) and CharInSet(Arg[i], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
   begin
+    // Kurz-Akkumulator (<100 Zeichen) - Concat schlaegt hier den
+    // TStringBuilder-Objekt-Overhead (Review-HIGH-Nachlese 2026-08-08).
+    // noinspection StringConcatInLoop
     Result := Result + Arg[i];
     Inc(i);
   end;

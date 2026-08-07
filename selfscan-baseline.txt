@@ -20,13 +20,12 @@ AvoidOut 14
 BeginEndRequired 308
 BooleanParam 7
 BooleanPropertyNaming 11
-# CaseStatementSize/StringConcatInLoop: je +1 TRANSIENT (2026-08-08,
-# Review-HIGH-Fixes): die ALTE Exe zaehlt Literal-CASE bzw. eine
-# verrutschte for-Range in den NEUEN Regressions-Fixtures von
-# uTestCaseStatementSize/uTestPerfHotspots - exakt die Bugs, die die
-# Fixes beheben. Nach dem naechsten Build fallen beide auf 8/37
-# zurueck (Gate erlaubt Besserung); dann Baseline wieder anziehen.
-CaseStatementSize 9
+# CaseStatementSize 4 (war 8): der Literal-Blank-Fix der Review-HIGH-
+# Runde entfernte 4 Phantom-cases aus SQL-Literalen im EIGENEN Code.
+# StringConcatInLoop 32 (war 37): +6 neue echte Funde der reparierten
+# Single-Statement-Ranges, alle als Kurz-Akkumulatoren mit Zeilen-
+# Markern begruendet; per Marker fielen auch 11 Bestands-Funde.
+CaseStatementSize 4
 ClassPerFile 519
 CognitiveComplexity 345
 CommentedOutCode 21
@@ -40,6 +39,12 @@ DeepNesting 38
 DefaultCaseInCaseStatement 81
 DfmActionMismatch 1
 DfmDataModuleSplitHint 1
+# DfmCrossFormCoupling 12: die Review-HIGH-Runde hat die Regel zum
+# LEBEN erweckt (war mit Binding=nil komplett tot, darum fehlte die
+# Zeile hier). Die 12 Funde in uIDEAnalyserForm.dfm sind die BEWUSSTE
+# Plugin-Singleton-Architektur (GWatchMode/GDockableForm) - die Regel
+# zielt auf Kunden-Formulare. Anker (.dfm statt .pas) im Review-Todo.
+DfmCrossFormCoupling 12
 DfmDbInUiForm 5
 DfmDefaultName 2
 DfmEmptyBoundEvent 1
@@ -81,7 +86,7 @@ PublicMemberWithoutDoc 39
 RedundantConditional 3
 SetLengthAppendInLoop 2
 SourceUtf8NoBom 9
-StringConcatInLoop 38
+StringConcatInLoop 32
 TodoComment 16
 UnusedLocalVar 2
 UnusedParameter 13

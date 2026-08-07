@@ -61,6 +61,9 @@ begin
   for i := 1 to Length(CallExpr) do
   begin
     if CharInSet(CallExpr[i], ['.', '(', '[', '^', ' ']) then Break;
+    // Kurz-Akkumulator (<100 Zeichen) - Concat schlaegt hier den
+    // TStringBuilder-Objekt-Overhead (Review-HIGH-Nachlese 2026-08-08).
+    // noinspection StringConcatInLoop
     Result := Result + CallExpr[i];
   end;
 end;

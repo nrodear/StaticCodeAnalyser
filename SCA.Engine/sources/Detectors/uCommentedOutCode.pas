@@ -387,6 +387,9 @@ begin
     while (p <= Length(T)) and
           CharInSet(T[p], ['a'..'z', '0'..'9', '_', '.']) do
     begin
+      // Kurz-Akkumulator (<100 Zeichen) - Concat schlaegt hier den
+      // TStringBuilder-Objekt-Overhead (Review-HIGH-Nachlese 2026-08-08).
+      // noinspection StringConcatInLoop
       Result := Result + T[p];
       Inc(p);
     end;

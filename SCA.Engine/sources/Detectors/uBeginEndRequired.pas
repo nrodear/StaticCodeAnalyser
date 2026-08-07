@@ -164,10 +164,17 @@ begin
       i := pClose + 2; Continue;
     end;
     // Wartender Branch aus einer frueheren Zeile: das ERSTE Code-Wort
-    // dieser Zeile entscheidet. Nicht-Ident-Erstzeichen (z.B. '(') ->
-    // Pending konservativ verwerfen (FN-Richtung, nie FP).
+    // dieser Zeile entscheidet. Einrueckungs-Whitespace davor wird
+    // uebersprungen (Erst-Fassung starb am ersten Leerzeichen - die
+    // beiden Reported-Tests blieben rot, TestInsight 2026-08-08).
+    // Nicht-Ident-Erstzeichen (z.B. '(') -> Pending konservativ
+    // verwerfen (FN-Richtung, nie FP).
     if (APending.Col > 0) and not PendChecked then
     begin
+      if c <= ' ' then
+      begin
+        Inc(i); Continue;                        // Einrueckung vor dem 1. Wort
+      end;
       PendChecked := True;
       if IsIdentStart(c) then
       begin

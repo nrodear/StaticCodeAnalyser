@@ -1095,6 +1095,9 @@ begin
     First := IniBlockFirst(Tpl, AHead, Idx);
     Last  := IniBlockLast(Tpl, Idx);
     for i := First to Last - 1 do
+      // Kurz-Akkumulator (<100 Zeichen) - Concat schlaegt hier den
+      // TStringBuilder-Objekt-Overhead (Review-HIGH-Nachlese 2026-08-08).
+      // noinspection StringConcatInLoop
       Result := Result + Tpl[i] + sLineBreak;
   finally
     Tpl.Free;
