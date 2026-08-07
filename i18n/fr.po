@@ -1981,9 +1981,6 @@ msgstr "Result de type managé est lu avant d'avoir été affecté"
 
 # --- 2026-08-09: Baseline-Inkrement 3 (EXE-Checkbox + .sca-Dialog) ---
 
-msgid "Only new (baseline)"
-msgstr "Nouveaux seulement (référence)"
-
 msgid "Baseline is enabled but no baseline file was found."
 msgstr "La référence est activée mais aucun fichier n'a été trouvé."
 

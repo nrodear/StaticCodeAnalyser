@@ -2156,9 +2156,6 @@ msgstr ""
 
 # --- 2026-08-09: Baseline-Inkrement 3 (EXE-Checkbox + .sca-Dialog) ---
 
-msgid "Only new (baseline)"
-msgstr ""
-
 msgid "Baseline is enabled but no baseline file was found."
 msgstr ""
 

@@ -147,8 +147,6 @@ type
     // vollstaendig - der Filter wirkt nur auf die Anzeige, damit Export
     // und 'Baseline schreiben' weiter alles sehen (Plugin-Semantik).
     FBaselineSet    : TBaselineSet;
-    FBaselineCheck  : TCheckBox;   // Filter-Row 'Only new (baseline)'
-    FBaselineUiSync : Boolean;     // Guard: programmatisches Checked-Setzen
     FGridMenu       : TPopupMenu;
     // Zwischenablage ENTPRELLT (Vorbild Plugin-Fix 2026-08-03,
     // FClipCopyTimer in uIDEAnalyserForm): vorher schrieb JEDER
@@ -211,13 +209,11 @@ type
     procedure BaselineOnlyNewClick(Sender: TObject);
     function  BaselineActive: Boolean;
     // Baseline-Inkrement 3 (Konzept par.3): .sca-Aufloesung + Checkbox.
-    procedure BaselineCheckClick(Sender: TObject);
     procedure ToggleBaselineOnlyNew(ANewVal: Boolean);
     function  OfferWriteBaseline(const AProbedText: string): Boolean;
     function  CurrentProjOrGroupFile: string;
     function  ResolveUiBaselinePath(ASettings: TRepoSettings;
       AProbed: TStrings): string;
-    procedure SyncBaselineCheckbox;
     // --- Kontextmenue am Grid ---
     procedure BuildGridMenu;
     procedure GridMenuPopup(Sender: TObject);
@@ -2450,22 +2446,6 @@ begin
   MI.OnClick := WriteBaselineClick;
   FHamburgerMenu.Items.Add(MI);
 
-  // Filter-Row-Checkbox (Inkrement 3) - einmalig erzeugen; der
-  // Hamburger wird bei Sprachwechsel neu gebaut, die Checkbox nicht.
-  if FBaselineCheck = nil then
-  begin
-    FBaselineCheck := TCheckBox.Create(Self);
-    FBaselineCheck.Parent := Panel3;
-    FBaselineCheck.AlignWithMargins := True;
-    FBaselineCheck.Align := alRight;
-    FBaselineCheck.Width := 160;
-    FBaselineCheck.Caption := _('Only new (baseline)');
-    FBaselineCheck.OnClick := BaselineCheckClick;
-    SyncBaselineCheckbox;
-  end
-  else
-    FBaselineCheck.Caption := _('Only new (baseline)');
-
   FMIBaseline := TMenuItem.Create(FHamburgerMenu);
   FMIBaseline.Caption := _('Show only new findings (baseline)');
   FMIBaseline.OnClick := BaselineOnlyNewClick;
@@ -2683,31 +2663,6 @@ begin
   end;
 end;
 
-procedure TForm2.SyncBaselineCheckbox;
-var
-  Settings : TRepoSettings;
-begin
-  if not Assigned(FBaselineCheck) then Exit;
-  Settings := TRepoSettings.Create;
-  try
-    try Settings.Load; except end;
-    FBaselineUiSync := True;
-    try
-      FBaselineCheck.Checked := Settings.BaselineOnlyNew;
-    finally
-      FBaselineUiSync := False;
-    end;
-  finally
-    Settings.Free;
-  end;
-end;
-
-procedure TForm2.BaselineCheckClick(Sender: TObject);
-begin
-  if FBaselineUiSync then Exit;                    // programmatisches Setzen
-  ToggleBaselineOnlyNew(FBaselineCheck.Checked);
-end;
-
 function TForm2.OfferWriteBaseline(const AProbedText: string): Boolean;
 // Dialog 'keine Baseline gefunden - jetzt schreiben?' inkl. Schreiben an
 // den .sca-Standardort. False = Nutzer hat abgebrochen oder es gibt
@@ -2752,7 +2707,7 @@ begin
 end;
 
 procedure TForm2.ToggleBaselineOnlyNew(ANewVal: Boolean);
-// Gemeinsamer Kern von Hamburger-Haken und Filter-Row-Checkbox.
+// Kern des Hamburger-Hakens 'Show only new findings (baseline)'.
 // AKTIVIEREN ohne auffindbare Datei bietet an, sofort eine zu schreiben
 // (.sca-Standardort) - kein harter Abbruch wie in der CLI, aber auch
 // kein stilles Weiterlaufen (Konzept par.3/par.4).
@@ -2769,10 +2724,7 @@ begin
       try
         if (ResolveUiBaselinePath(Settings, Probed) = '') and
            (not OfferWriteBaseline(Probed.Text)) then
-        begin
-          SyncBaselineCheckbox;                    // Haken zuruecknehmen
-          Exit;
-        end;
+          Exit;             // Setting bleibt aus; Popup-Sync liest die INI
       finally
         Probed.Free;
       end;
@@ -2782,7 +2734,6 @@ begin
   finally
     Settings.Free;
   end;
-  SyncBaselineCheckbox;
   RefreshBaselineSet;
   ApplyFilter;
 end;
