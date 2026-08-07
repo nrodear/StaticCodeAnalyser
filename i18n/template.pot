@@ -2119,3 +2119,32 @@ msgstr ""
 
 msgid "Nothing to export - no findings."
 msgstr ""
+
+# --- 2026-08-07: Baseline + Grid-Kontextmenue (EXE) ---
+
+msgid "Write baseline"
+msgstr ""
+
+msgid "Baseline JSON (*.json)|*.json"
+msgstr ""
+
+msgid "Show only new findings (baseline)"
+msgstr ""
+
+msgid "No baseline file configured yet - write one first, then set [Baseline] File in analyser.ini."
+msgstr ""
+
+msgid "Open finding"
+msgstr ""
+
+msgid "Copy AI prompt"
+msgstr ""
+
+msgid "Insert suppression marker"
+msgstr ""
+
+msgid "Apply quick fix"
+msgstr ""
+
+msgid "Clipboard is locked by another program."
+msgstr ""
