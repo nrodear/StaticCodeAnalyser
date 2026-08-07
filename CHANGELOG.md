@@ -10,6 +10,15 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Opt-in `[Baseline] PathInFingerprint=1`.** Baseline fingerprints
+  then include the normalized relative path instead of just the file
+  name, so same-named files in different folders no longer share
+  accepted findings. Costs: baselines must be rewritten once, folder
+  refactorings invalidate entries, and the scan scope must stay
+  constant; a `pathFingerprint` marker in the JSON makes mode
+  mismatches visible as a warning instead of silently matching
+  nothing. Byte-identical file copies still match via the
+  contextHash stage (by design).
 - **Baseline files in a `.sca` folder + `--baseline-scan y|n`.** The
   baseline now has a canonical home next to the project file:
   `<dir>/.sca/<ProjectName>.baseline.json` (group and projects can

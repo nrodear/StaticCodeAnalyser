@@ -41,8 +41,11 @@ type
     // deren Fingerprint in der Baseline ist (vorhandene "akzeptierte"
     // Befunde). Idempotent; fehlende/leere Datei = no-op.
     // Liefert die Anzahl der GEDROPPTEN Findings (fuer Reporting).
+    // AWarnings (optional) sammelt Diagnose-Meldungen (z.B. Fingerprint-
+    // Modus der Datei passt nicht zum aktiven [Baseline] PathInFingerprint
+    // - dann matcht die Legacy-Stufe nichts und NUR contextHash greift).
     class function Apply(Findings: TObjectList<TLeakFinding>;
-      const BaselineFile: string): Integer; static;
+      const BaselineFile: string; AWarnings: TStrings = nil): Integer; static;
 
     // Fingerprint einer einzelnen Finding-Instanz. Public weil Tests sie
     // mocken.
@@ -107,14 +110,31 @@ uses
   System.JSON, System.IOUtils,
   uFindingFingerprint;
 
-class function TBaseline.Fingerprint(const F: TLeakFinding): string;
+// Datei-Token fuer den Fingerprint. Default: nur der Dateiname
+// (checkout-tolerant). Mit [Baseline] PathInFingerprint=1: normalisierter
+// Relativpfad ab BaselineFingerprintRoot (lowercase, '/'), damit
+// gleichnamige Dateien in verschiedenen Ordnern getrennte Fingerprints
+// bekommen. Root leer oder Datei nicht unterhalb -> Fallback Dateiname.
+function FingerprintFileToken(const AFileName: string): string;
 var
-  Bare : string;
+  RootLow, FullLow : string;
 begin
-  // Pfad-Normalisierung: nur Dateiname (Backslash-zu-Slash, lowercase).
-  Bare := LowerCase(ExtractFileName(F.FileName));
+  Result := LowerCase(ExtractFileName(AFileName));
+  if not BaselinePathFingerprint then Exit;
+  if BaselineFingerprintRoot = '' then Exit;
+  RootLow := LowerCase(StringReplace(
+    IncludeTrailingPathDelimiter(ExpandFileName(BaselineFingerprintRoot)),
+    '\', '/', [rfReplaceAll]));
+  FullLow := LowerCase(StringReplace(
+    ExpandFileName(AFileName), '\', '/', [rfReplaceAll]));
+  if Copy(FullLow, 1, Length(RootLow)) = RootLow then
+    Result := Copy(FullLow, Length(RootLow) + 1, MaxInt);
+end;
+
+class function TBaseline.Fingerprint(const F: TLeakFinding): string;
+begin
   Result := THashSHA2.GetHashString(
-    Bare + '|' + KindName(F.Kind) + '|' +
+    FingerprintFileToken(F.FileName) + '|' + KindName(F.Kind) + '|' +
     F.MethodName + '|' + F.MissingVar);
 end;
 
@@ -140,7 +160,7 @@ begin
       begin
         if F.Kind = fkFileReadError then Continue; // I/O-Fehler nicht baseline'n
         Obj := TJSONObject.Create;
-        Obj.AddPair('file',        ExtractFileName(F.FileName));
+        Obj.AddPair('file',        FingerprintFileToken(F.FileName));
         Obj.AddPair('kind',        KindName(F.Kind));
         Obj.AddPair('method',      F.MethodName);
         Obj.AddPair('detail',      F.MissingVar);
@@ -159,6 +179,10 @@ begin
 
   Root := TJSONObject.Create;
   Root.AddPair('version',     '1');
+  // Format-Marker gegen STILLE Vollinvalidierung: liest ein Consumer im
+  // anderen Fingerprint-Modus, matcht sonst einfach nichts. Apply
+  // erkennt den Mismatch und meldet ihn (AWarnings).
+  Root.AddPair('pathFingerprint', TJSONBool.Create(BaselinePathFingerprint));
   Root.AddPair('createdAt',   FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Now));
   Root.AddPair('count',       TJSONNumber.Create(Arr.Count));
   Root.AddPair('findings',    Arr);
@@ -184,7 +208,7 @@ const
   MAX_FINGERPRINT_LEN  = 256;
 
 class function TBaseline.Apply(Findings: TObjectList<TLeakFinding>;
-  const BaselineFile: string): Integer;
+  const BaselineFile: string; AWarnings: TStrings): Integer;
 // Match-Strategie (C.2):
 //   1. Wenn Finding einen contextHash hat UND der in der Baseline ist
 //      -> Drop (stabilster Pfad, ueberlebt Line-Drift + Re-Indent).
@@ -218,6 +242,17 @@ begin
   try
     if Root is TJSONObject then
     begin
+      // Fingerprint-Modus-Marker pruefen: Datei im anderen Modus
+      // geschrieben -> die Legacy-Fingerprints koennen nicht matchen.
+      var MarkerVal := TJSONObject(Root).Values['pathFingerprint'];
+      if (MarkerVal is TJSONBool) and Assigned(AWarnings) and
+         (TJSONBool(MarkerVal).AsBoolean <> BaselinePathFingerprint) then
+        AWarnings.Add(Format(
+          'baseline fingerprint mode mismatch: file written with ' +
+          'PathInFingerprint=%s, current setting is %s - legacy ' +
+          'fingerprints will not match (only contextHash still applies)',
+          [BoolToStr(TJSONBool(MarkerVal).AsBoolean, True),
+           BoolToStr(BaselinePathFingerprint, True)]));
       // Weicher Cast: 'findings' kann fehlen (Values liefert nil) ODER falsch
       // typisiert sein (manuell editiert / Merge-Konflikt: "findings": {}).
       // Hartes 'as TJSONArray' wuerfe dann EInvalidCast und deaktivierte die

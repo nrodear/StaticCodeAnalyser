@@ -35,9 +35,31 @@ type
 
     [Test] procedure Baseline_MatchesViaContextHashAfterLineDrift;
     [Test] procedure Baseline_FallbackToLegacyFingerprintForOldBaseline;
+    [Test] procedure PathMode_DistinguishesSameFileNameInFolders;
+    [Test] procedure PathMode_EmptyRootFallsBackToFileName;
+    [Test] procedure PathMode_MarkerMismatch_Warns;
   end;
 
 implementation
+
+// noinspection-file BeginEndRequired, NestedTry
+// Temp-Datei-Tests brauchen geschachtelte try/finally-Ketten und
+// Guard-Einzeiler - idiomatisches Testmuster dieser Unit.
+
+const
+  // Fixture-Pfade dynamisch (kein C:-Literal -> HardcodedPath still),
+  // Detail-Text als Konstante (DuplicateString).
+  FP_DETAIL = 'detail';
+  BL_EXT    = '.baseline.json';  // 3x gebraucht (DuplicateString)
+  FP_SUB_A  = 'Alpha';
+  FP_SUB_B  = 'Beta';
+  FP_FILE   = 'uFoo.pas';
+
+function FpRoot: string;
+begin
+  Result := TPath.Combine(TPath.GetTempPath, 'sca_fp_root');
+end;
+
 
 uses
   System.JSON;
@@ -227,7 +249,7 @@ var
   F1, F2   : TLeakFinding;
 begin
   File1    := WriteTempPas(V1_BODY);
-  Baseline := File1 + '.baseline.json';
+  Baseline := File1 + BL_EXT;
   try
     // V1: Finding auf Zeile 8
     List := TObjectList<TLeakFinding>.Create(True);
@@ -276,7 +298,7 @@ var
   Dropped  : Integer;
 begin
   File1    := WriteTempPas('unit x;'#13#10'end.');
-  Baseline := File1 + '.baseline.json';
+  Baseline := File1 + BL_EXT;
   try
     // Hand-crafted ALTES Baseline-Format ohne contextHash
     F := MakeFinding(File1, 1);
@@ -310,6 +332,106 @@ begin
     end;
   finally
     if TFile.Exists(File1)    then TFile.Delete(File1);
+    if TFile.Exists(Baseline) then TFile.Delete(Baseline);
+  end;
+end;
+
+procedure TTestFindingFingerprint.PathMode_DistinguishesSameFileNameInFolders;
+// [Baseline] PathInFingerprint=1: gleichnamige Dateien in verschiedenen
+// Ordnern bekommen GETRENNTE Fingerprints (Default teilt den Namensraum).
+var
+  A, B : TLeakFinding;
+  FpA, FpB, FpA0, FpB0 : string;
+begin
+  A := TLeakFinding.New(TPath.Combine(TPath.Combine(FpRoot, FP_SUB_A), FP_FILE),
+    'M', 10, FP_DETAIL, fkEmptyBlock);
+  B := TLeakFinding.New(TPath.Combine(TPath.Combine(FpRoot, FP_SUB_B), FP_FILE),
+    'M', 10, FP_DETAIL, fkEmptyBlock);
+  try
+    FpA0 := TBaseline.Fingerprint(A);
+    FpB0 := TBaseline.Fingerprint(B);
+    Assert.AreEqual(FpA0, FpB0, 'Default: nur Dateiname -> identisch');
+    BaselinePathFingerprint := True;
+    BaselineFingerprintRoot := FpRoot;
+    try
+      FpA := TBaseline.Fingerprint(A);
+      FpB := TBaseline.Fingerprint(B);
+      Assert.AreNotEqual(FpA, FpB, 'PathMode: Relativpfade unterscheiden');
+    finally
+      BaselinePathFingerprint := False;
+      BaselineFingerprintRoot := '';
+    end;
+  finally
+    B.Free; A.Free;
+  end;
+end;
+
+procedure TTestFindingFingerprint.PathMode_EmptyRootFallsBackToFileName;
+// Ohne gesetzte Root (Consumer hat sie nicht geliefert) bleibt der
+// Fingerprint sicher beim blossen Dateinamen.
+var
+  A : TLeakFinding;
+  FpDefault, FpPathMode : string;
+begin
+  A := TLeakFinding.New(TPath.Combine(TPath.Combine(FpRoot, FP_SUB_A), FP_FILE),
+    'M', 10, FP_DETAIL, fkEmptyBlock);
+  try
+    FpDefault := TBaseline.Fingerprint(A);
+    BaselinePathFingerprint := True;
+    BaselineFingerprintRoot := '';
+    try
+      FpPathMode := TBaseline.Fingerprint(A);
+    finally
+      BaselinePathFingerprint := False;
+    end;
+    Assert.AreEqual(FpDefault, FpPathMode, 'Root leer -> Fallback Dateiname');
+  finally
+    A.Free;
+  end;
+end;
+
+procedure TTestFindingFingerprint.PathMode_MarkerMismatch_Warns;
+// Baseline im Pfad-Modus geschrieben, Apply im Default-Modus: der
+// pathFingerprint-Marker meldet den Mismatch statt still nichts zu
+// matchen (Schutz gegen stille Vollinvalidierung).
+var
+  List     : TObjectList<TLeakFinding>;
+  Baseline : string;
+  Warnings : TStringList;
+begin
+  Baseline := TPath.Combine(TPath.GetTempPath,
+    'sca_fpmode_' + TGuid.NewGuid.ToString + BL_EXT);
+  try
+    List := TObjectList<TLeakFinding>.Create(True);
+    try
+      List.Add(TLeakFinding.New(
+        TPath.Combine(TPath.Combine(FpRoot, FP_SUB_A), FP_FILE),
+        'M', 10, FP_DETAIL, fkEmptyBlock));
+      BaselinePathFingerprint := True;
+      BaselineFingerprintRoot := FpRoot;
+      try
+        TBaseline.Write(List, Baseline);
+      finally
+        BaselinePathFingerprint := False;
+        BaselineFingerprintRoot := '';
+      end;
+    finally
+      List.Free;
+    end;
+    List := TObjectList<TLeakFinding>.Create(True);
+    Warnings := TStringList.Create;
+    try
+      List.Add(TLeakFinding.New(
+        TPath.Combine(TPath.Combine(FpRoot, FP_SUB_A), FP_FILE),
+        'M', 10, FP_DETAIL, fkEmptyBlock));
+      TBaseline.Apply(List, Baseline, Warnings);
+      Assert.AreEqual(1, Warnings.Count, 'Mismatch-Warnung erwartet');
+      Assert.Contains(Warnings[0], 'mismatch');
+    finally
+      Warnings.Free;
+      List.Free;
+    end;
+  finally
     if TFile.Exists(Baseline) then TFile.Delete(Baseline);
   end;
 end;

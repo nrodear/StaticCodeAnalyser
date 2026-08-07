@@ -1178,7 +1178,22 @@ begin
     if EffBaseline <> '' then
     begin
       try
-        var Dropped := TBaseline.Apply(Findings, EffBaseline);
+        // PathInFingerprint-Modus: Relativierungs-Wurzel = Projekt-/
+        // Gruppen-Verzeichnis, sonst Scan-Pfad (nur der Consumer kennt
+        // den Zuschnitt; Root leer -> Fallback Dateiname in uBaseline).
+        if BlProjOrGroup <> '' then
+          uSCAConsts.BaselineFingerprintRoot := ExtractFilePath(BlProjOrGroup)
+        else
+          uSCAConsts.BaselineFingerprintRoot := Args.Path;
+        var BlWarnings := TStringList.Create;
+        var Dropped : Integer;
+        try
+          Dropped := TBaseline.Apply(Findings, EffBaseline, BlWarnings);
+          for var BlWarn in BlWarnings do
+            WriteLn(ErrOutput, 'Baseline warning: ', BlWarn);
+        finally
+          BlWarnings.Free;
+        end;
         if (not Args.Quiet) and (Dropped > 0) then
           WriteLn(Format('Baseline filtered: %d known findings dropped (%s)',
             [Dropped, EffBaseline]));
@@ -1193,6 +1208,10 @@ begin
     if EffWriteBaseline <> '' then
     begin
       try
+        if BlProjOrGroup <> '' then
+          uSCAConsts.BaselineFingerprintRoot := ExtractFilePath(BlProjOrGroup)
+        else
+          uSCAConsts.BaselineFingerprintRoot := Args.Path;
         ForceDirectories(ExtractFilePath(EffWriteBaseline));
         TBaseline.Write(Findings, EffWriteBaseline);
         if not Args.Quiet then
