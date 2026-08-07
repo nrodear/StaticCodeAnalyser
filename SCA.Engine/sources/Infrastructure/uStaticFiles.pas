@@ -54,10 +54,11 @@ implementation
 
 const
   MAX_DEPTH       = 32;   // Schutz vor Symlink-Endlosschleifen
-  EXCLUDED_DIRS  : array[0..6] of string = (
+  EXCLUDED_DIRS  : array[0..7] of string = (
     '.', '..',
     '__recovery', '__history',
-    '.git', '.svn', 'node_modules'
+    '.git', '.svn', 'node_modules',
+    '.sca'   // Baseline-/Artefakt-Ordner (Konzept_BaselineSca 2026-08-08)
   );
 
 class procedure TStaticFiles.ScanRec(const Path: string; List: TStringList;

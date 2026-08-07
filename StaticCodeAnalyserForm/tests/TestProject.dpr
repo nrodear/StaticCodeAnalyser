@@ -176,6 +176,7 @@ uses
   uTestBoolAlwaysTrue in 'uTestBoolAlwaysTrue.pas',
   uTestConstantReturn in 'uTestConstantReturn.pas',
   uTestManagedResultUninit in 'uTestManagedResultUninit.pas',
+  uTestBaselineResolve in 'uTestBaselineResolve.pas',
   uTestHardcodedString in 'uTestHardcodedString.pas',
   uTestUnpairedLock in 'uTestUnpairedLock.pas',
   uTestMoveSizeOfPointer in 'uTestMoveSizeOfPointer.pas',
