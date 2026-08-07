@@ -2,9 +2,6 @@ unit uTestUnusedParameter;
 
 // Tests fuer den TUnusedParameterDetector (fkUnusedParameter).
 //
-// noinspection-file ClassPerFile
-// Die zusaetzliche Klassendeklaration steht in einem STRING-LITERAL -
-// sie ist Pascal-Fixture fuer den Parser, keine Klasse dieser Unit.
 // Der Detektor arbeitet zeilenweise und kann das nicht unterscheiden.
 
 interface

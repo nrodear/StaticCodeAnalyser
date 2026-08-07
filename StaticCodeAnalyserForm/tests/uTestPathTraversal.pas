@@ -25,8 +25,6 @@ type
 
 implementation
 
-// noinspection-file PathTraversal
-// Die Fixture enthaelt den Traversal-Pfad absichtlich - Pruefgegenstand.
 
 uses
   System.SysUtils, System.Generics.Collections,
