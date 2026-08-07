@@ -1944,3 +1944,32 @@ msgstr "Échec de l'export SARIF : "
 
 msgid "Nothing to export - no findings."
 msgstr "Rien à exporter - aucun résultat."
+
+# --- 2026-08-07: Baseline + Grid-Kontextmenue (EXE) ---
+
+msgid "Write baseline"
+msgstr "Écrire la référence"
+
+msgid "Baseline JSON (*.json)|*.json"
+msgstr "JSON de référence (*.json)|*.json"
+
+msgid "Show only new findings (baseline)"
+msgstr "Afficher uniquement les nouveaux résultats (référence)"
+
+msgid "No baseline file configured yet - write one first, then set [Baseline] File in analyser.ini."
+msgstr "Aucun fichier de référence configuré - écrivez-en un d'abord, puis renseignez [Baseline] File dans analyser.ini."
+
+msgid "Open finding"
+msgstr "Ouvrir le résultat"
+
+msgid "Copy AI prompt"
+msgstr "Copier le prompt IA"
+
+msgid "Insert suppression marker"
+msgstr "Insérer le marqueur de suppression"
+
+msgid "Apply quick fix"
+msgstr "Appliquer le correctif rapide"
+
+msgid "Clipboard is locked by another program."
+msgstr "Le presse-papiers est verrouillé par un autre programme."

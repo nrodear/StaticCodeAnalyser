@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1934 Zeilen, 65152 Bytes
-  CPoLines_de: array[0..1933] of string = (
+  // i18n\de.po - 1963 Zeilen, 65995 Bytes
+  CPoLines_de: array[0..1962] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1948,11 +1948,40 @@ const
     'msgstr "SARIF-Export fehlgeschlagen: "',
     '',
     'msgid "Nothing to export - no findings."',
-    'msgstr "Nichts zu exportieren - keine Befunde."'
+    'msgstr "Nichts zu exportieren - keine Befunde."',
+    '',
+    '# --- 2026-08-07: Baseline + Grid-Kontextmenue (EXE) ---',
+    '',
+    'msgid "Write baseline"',
+    'msgstr "Baseline schreiben"',
+    '',
+    'msgid "Baseline JSON (*.json)|*.json"',
+    'msgstr "Baseline-JSON (*.json)|*.json"',
+    '',
+    'msgid "Show only new findings (baseline)"',
+    'msgstr "Nur neue Befunde zeigen (Baseline)"',
+    '',
+    'msgid "No baseline file configured yet - write one first, then set [Baseline] File in analyser.ini."',
+    'msgstr "Noch keine Baseline-Datei eingerichtet - erst eine schreiben, dann [Baseline] File in der analyser.ini setzen."',
+    '',
+    'msgid "Open finding"',
+    'msgstr "Befund '#$00F6'ffnen"',
+    '',
+    'msgid "Copy AI prompt"',
+    'msgstr "KI-Prompt kopieren"',
+    '',
+    'msgid "Insert suppression marker"',
+    'msgstr "Unterdr'#$00FC'ckungs-Marker einf'#$00FC'gen"',
+    '',
+    'msgid "Apply quick fix"',
+    'msgstr "Quick-Fix anwenden"',
+    '',
+    'msgid "Clipboard is locked by another program."',
+    'msgstr "Die Zwischenablage ist von einem anderen Programm gesperrt."'
   );
 
-  // i18n\en.po - 154 Zeilen, 3943 Bytes
-  CPoLines_en: array[0..153] of string = (
+  // i18n\en.po - 183 Zeilen, 4727 Bytes
+  CPoLines_en: array[0..182] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
     '# kept for consistency and as a "neutral" fallback baseline.',
@@ -2106,11 +2135,40 @@ const
     'msgstr "Duplicates"',
     '',
     'msgid "Quality"',
-    'msgstr "Quality"'
+    'msgstr "Quality"',
+    '',
+    '# --- 2026-08-07: Baseline + Grid-Kontextmenue (EXE) ---',
+    '',
+    'msgid "Write baseline"',
+    'msgstr "Write baseline"',
+    '',
+    'msgid "Baseline JSON (*.json)|*.json"',
+    'msgstr "Baseline JSON (*.json)|*.json"',
+    '',
+    'msgid "Show only new findings (baseline)"',
+    'msgstr "Show only new findings (baseline)"',
+    '',
+    'msgid "No baseline file configured yet - write one first, then set [Baseline] File in analyser.ini."',
+    'msgstr "No baseline file configured yet - write one first, then set [Baseline] File in analyser.ini."',
+    '',
+    'msgid "Open finding"',
+    'msgstr "Open finding"',
+    '',
+    'msgid "Copy AI prompt"',
+    'msgstr "Copy AI prompt"',
+    '',
+    'msgid "Insert suppression marker"',
+    'msgstr "Insert suppression marker"',
+    '',
+    'msgid "Apply quick fix"',
+    'msgstr "Apply quick fix"',
+    '',
+    'msgid "Clipboard is locked by another program."',
+    'msgstr "Clipboard is locked by another program."'
   );
 
-  // i18n\fr.po - 1946 Zeilen, 69630 Bytes
-  CPoLines_fr: array[0..1945] of string = (
+  // i18n\fr.po - 1975 Zeilen, 70530 Bytes
+  CPoLines_fr: array[0..1974] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4056,7 +4114,36 @@ const
     'msgstr "'#$00C9'chec de l''export SARIF : "',
     '',
     'msgid "Nothing to export - no findings."',
-    'msgstr "Rien '#$00E0' exporter - aucun r'#$00E9'sultat."'
+    'msgstr "Rien '#$00E0' exporter - aucun r'#$00E9'sultat."',
+    '',
+    '# --- 2026-08-07: Baseline + Grid-Kontextmenue (EXE) ---',
+    '',
+    'msgid "Write baseline"',
+    'msgstr "'#$00C9'crire la r'#$00E9'f'#$00E9'rence"',
+    '',
+    'msgid "Baseline JSON (*.json)|*.json"',
+    'msgstr "JSON de r'#$00E9'f'#$00E9'rence (*.json)|*.json"',
+    '',
+    'msgid "Show only new findings (baseline)"',
+    'msgstr "Afficher uniquement les nouveaux r'#$00E9'sultats (r'#$00E9'f'#$00E9'rence)"',
+    '',
+    'msgid "No baseline file configured yet - write one first, then set [Baseline] File in analyser.ini."',
+    'msgstr "Aucun fichier de r'#$00E9'f'#$00E9'rence configur'#$00E9' - '#$00E9'crivez-en un d''abord, puis renseignez [Baseline] File dans analyser.ini."',
+    '',
+    'msgid "Open finding"',
+    'msgstr "Ouvrir le r'#$00E9'sultat"',
+    '',
+    'msgid "Copy AI prompt"',
+    'msgstr "Copier le prompt IA"',
+    '',
+    'msgid "Insert suppression marker"',
+    'msgstr "Ins'#$00E9'rer le marqueur de suppression"',
+    '',
+    'msgid "Apply quick fix"',
+    'msgstr "Appliquer le correctif rapide"',
+    '',
+    'msgid "Clipboard is locked by another program."',
+    'msgstr "Le presse-papiers est verrouill'#$00E9' par un autre programme."'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

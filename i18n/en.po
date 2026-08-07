@@ -152,3 +152,32 @@ msgstr "Duplicates"
 
 msgid "Quality"
 msgstr "Quality"
+
+# --- 2026-08-07: Baseline + Grid-Kontextmenue (EXE) ---
+
+msgid "Write baseline"
+msgstr "Write baseline"
+
+msgid "Baseline JSON (*.json)|*.json"
+msgstr "Baseline JSON (*.json)|*.json"
+
+msgid "Show only new findings (baseline)"
+msgstr "Show only new findings (baseline)"
+
+msgid "No baseline file configured yet - write one first, then set [Baseline] File in analyser.ini."
+msgstr "No baseline file configured yet - write one first, then set [Baseline] File in analyser.ini."
+
+msgid "Open finding"
+msgstr "Open finding"
+
+msgid "Copy AI prompt"
+msgstr "Copy AI prompt"
+
+msgid "Insert suppression marker"
+msgstr "Insert suppression marker"
+
+msgid "Apply quick fix"
+msgstr "Apply quick fix"
+
+msgid "Clipboard is locked by another program."
+msgstr "Clipboard is locked by another program."

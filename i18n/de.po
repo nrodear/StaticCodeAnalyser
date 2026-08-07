@@ -1932,3 +1932,32 @@ msgstr "SARIF-Export fehlgeschlagen: "
 
 msgid "Nothing to export - no findings."
 msgstr "Nichts zu exportieren - keine Befunde."
+
+# --- 2026-08-07: Baseline + Grid-Kontextmenue (EXE) ---
+
+msgid "Write baseline"
+msgstr "Baseline schreiben"
+
+msgid "Baseline JSON (*.json)|*.json"
+msgstr "Baseline-JSON (*.json)|*.json"
+
+msgid "Show only new findings (baseline)"
+msgstr "Nur neue Befunde zeigen (Baseline)"
+
+msgid "No baseline file configured yet - write one first, then set [Baseline] File in analyser.ini."
+msgstr "Noch keine Baseline-Datei eingerichtet - erst eine schreiben, dann [Baseline] File in der analyser.ini setzen."
+
+msgid "Open finding"
+msgstr "Befund öffnen"
+
+msgid "Copy AI prompt"
+msgstr "KI-Prompt kopieren"
+
+msgid "Insert suppression marker"
+msgstr "Unterdrückungs-Marker einfügen"
+
+msgid "Apply quick fix"
+msgstr "Quick-Fix anwenden"
+
+msgid "Clipboard is locked by another program."
+msgstr "Die Zwischenablage ist von einem anderen Programm gesperrt."

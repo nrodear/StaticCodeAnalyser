@@ -141,6 +141,12 @@ type
     FMILanguage     : TMenuItem;
     FMIAppearance   : TMenuItem;   // Hell / Dunkel / Wie Windows
     FMIOpenWith     : TMenuItem;   // womit ein Befund geoeffnet wird
+    FMIBaseline     : TMenuItem;   // 'Nur neue Funde' (Haken)
+    // Fingerprints der akzeptierten Funde. FAllFindings bleibt IMMER
+    // vollstaendig - der Filter wirkt nur auf die Anzeige, damit Export
+    // und 'Baseline schreiben' weiter alles sehen (Plugin-Semantik).
+    FBaselineSet    : TBaselineSet;
+    FGridMenu       : TPopupMenu;
     // Zwischenablage ENTPRELLT (Vorbild Plugin-Fix 2026-08-03,
     // FClipCopyTimer in uIDEAnalyserForm): vorher schrieb JEDER
     // Auswahlwechsel - auch jeder Pfeiltasten-Schritt, die VCL feuert
@@ -196,6 +202,18 @@ type
     procedure RestoreWindowLayout;
     procedure StatusFindings(const T: string);
     procedure StatusProgress(const T: string);
+    // --- Baseline (Plugin-Paritaet) ---
+    procedure RefreshBaselineSet;
+    procedure WriteBaselineClick(Sender: TObject);
+    procedure BaselineOnlyNewClick(Sender: TObject);
+    function  BaselineActive: Boolean;
+    // --- Kontextmenue am Grid ---
+    procedure BuildGridMenu;
+    procedure GridMenuPopup(Sender: TObject);
+    procedure GridMenuOpenClick(Sender: TObject);
+    procedure GridMenuCopyClick(Sender: TObject);
+    procedure GridMenuSuppressClick(Sender: TObject);
+    procedure GridMenuQuickFixClick(Sender: TObject);
     procedure WireTiles;
     procedure TileClickSeverity(Sender: TObject);
     procedure TileClickType(Sender: TObject);
@@ -315,6 +333,7 @@ implementation
 uses
   clipbrd,
   System.IniFiles,                // TIniFile (PersistDfmTarget - kommentarschonend)
+  uBaseline,                      // TBaseline.Write + TBaselineSet (Plugin-Paritaet)
   uSourceLineEdit,                // Suppress/Quick-Fix schreiben in die Datei
   uQuickFix,                      // TQuickFix.ProposeFix (Ctrl+Alt+F)
   uAppTheme,                      // Hell/Dunkel der Standalone-EXE
@@ -393,6 +412,9 @@ begin
   ResultGrid.OnDblClick  := ResultGridDblClick;
   ResultGrid.OnMouseDown := ResultGridMouseDown;   // Header-Klick = sortieren
   ResultGrid.OnKeyDown   := ResultGridKeyDown;     // Enter = Befund oeffnen
+
+  FBaselineSet := TBaselineSet.Create;
+  BuildGridMenu;
 
   FClipTimer := TTimer.Create(Self);
   FClipTimer.Interval := 120;        // wie im Plugin: eine Kopie nach Idle
@@ -880,6 +902,7 @@ begin
   // ueberlebt wenn das Form zerstoert wird (relevant beim IDE-Plugin-Hosting).
   if TMethod(Application.OnShowHint).Data = Self then
     Application.OnShowHint := nil;
+  FreeAndNil(FBaselineSet);
   FreeAndNil(FRelPathCache);
   FreeAndNil(FDisplayedFindings);
   FreeAndNil(FAllFindings);
@@ -1491,6 +1514,9 @@ begin
   // weil der 0-Treffer-Pfad frueh aussteigt.
   FGridUpdating := True;
   try
+  // Baseline-Set frisch laden - eine von aussen geaenderte Baseline
+  // wirkt damit beim naechsten Filterwechsel, ohne Neustart.
+  RefreshBaselineSet;
   Criteria.Mode       := fmAll;
   Criteria.TypeFilter := tfAll;
   Criteria.SearchLow  := '';
@@ -1522,6 +1548,11 @@ begin
   for i := 0 to FAllFindings.Count - 1 do
   begin
     f := FAllFindings[i];
+    // Baseline zuerst: akzeptierte Funde ausblenden. FAllFindings bleibt
+    // vollstaendig - Export und 'Baseline schreiben' sehen weiter alles
+    // (Plugin-Semantik; fail-open bei fehlender/kaputter Datei).
+    if BaselineActive and FBaselineSet.Contains(f) then
+      Continue;
     if TFindingFilter.Matches(f, Criteria) then
       FDisplayedFindings.Add(f);
   end;
@@ -2401,6 +2432,21 @@ begin
   FHamburgerMenu.Items.Add(FMIAppearance);
   BuildAppearanceMenu(FMIAppearance);
 
+  // ---- Baseline (Plugin-Paritaet) ----
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Write baseline from current scan...');
+  MI.OnClick := WriteBaselineClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  FMIBaseline := TMenuItem.Create(FHamburgerMenu);
+  FMIBaseline.Caption := _('Show only new findings (baseline)');
+  FMIBaseline.OnClick := BaselineOnlyNewClick;
+  FHamburgerMenu.Items.Add(FMIBaseline);
+
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := '-';
+  FHamburgerMenu.Items.Add(MI);
+
   // ---- Oeffnen mit (Untermenue) ----
   FMIOpenWith := TMenuItem.Create(FHamburgerMenu);
   FMIOpenWith.Caption := _('Open findings with');
@@ -2516,6 +2562,204 @@ end;
 procedure TForm2.StatusProgress(const T: string);
 begin
   StatusBar1.Panels[1].Text := T;
+end;
+
+function TForm2.BaselineActive: Boolean;
+// FAIL-OPEN, wie im Plugin: fehlt oder bricht die Baseline-Datei, wird
+// NICHTS ausgeblendet. Funde zu verstecken, weil eine Datei fehlt, waere
+// die gefaehrlichere Richtung.
+begin
+  Result := Assigned(FBaselineSet) and (not FBaselineSet.IsEmpty);
+end;
+
+procedure TForm2.RefreshBaselineSet;
+// Laedt (oder leert) das Fingerprint-Set aus [Baseline] File/OnlyNew.
+// Wird vor jedem Anzeige-Aufbau gerufen; FAllFindings bleibt unberuehrt.
+var
+  Settings : TRepoSettings;
+  Path     : string;
+begin
+  if not Assigned(FBaselineSet) then Exit;
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    if (not Settings.BaselineOnlyNew) or (Trim(Settings.BaselineFile) = '') then
+    begin
+      FBaselineSet.Clear;
+      Exit;
+    end;
+    Path := Trim(Settings.BaselineFile);
+    // Relativen Pfad gegen das Scan-Verzeichnis aufloesen. Absolute Pfade
+    // (C:\, \server, /abs) bleiben unveraendert - Pruefung von Hand, wie
+    // im Plugin, damit hier kein TPath-Namensraum noetig wird.
+    if not (((Length(Path) >= 2) and (Path[2] = ':')) or
+            ((Length(Path) >= 2) and (Path[1] = '\') and (Path[2] = '\')) or
+            ((Length(Path) >= 1) and ((Path[1] = '\') or (Path[1] = '/')))) then
+      if FCurrentBaseDir <> '' then
+        Path := IncludeTrailingPathDelimiter(FCurrentBaseDir) + Path;
+    try
+      FBaselineSet.LoadFromFile(Path);
+    except
+      // Lesefehler darf die Anzeige nicht kippen - leeres Set = Filter aus.
+      FBaselineSet.Clear;
+    end;
+  finally
+    Settings.Free;
+  end;
+end;
+
+procedure TForm2.WriteBaselineClick(Sender: TObject);
+// Schreibt die UNGEFILTERTEN Funde als Baseline-JSON. Format identisch zu
+// CLI --write-baseline, Plugin und HTML-Export - die Datei ist zwischen
+// allen dreien austauschbar.
+var
+  Dlg : TSaveDialog;
+begin
+  if (FAllFindings = nil) or (FAllFindings.Count = 0) then
+  begin
+    ShowMessage(_('No findings to write. Run an analysis first.'));
+    Exit;
+  end;
+  Dlg := TSaveDialog.Create(nil);
+  try
+    Dlg.Title      := _('Write baseline');
+    Dlg.Filter     := _('Baseline JSON (*.json)|*.json');
+    Dlg.DefaultExt := 'json';
+    Dlg.FileName   := 'sca.baseline.json';
+    if (FCurrentBaseDir <> '') and DirectoryExists(FCurrentBaseDir) then
+      Dlg.InitialDir := FCurrentBaseDir;
+    Dlg.Options := Dlg.Options + [ofOverwritePrompt];
+    if not Dlg.Execute then Exit;
+    try
+      TBaseline.Write(FAllFindings, Dlg.FileName);
+      StatusBar1.Panels[2].Text := Format(
+        _('Baseline written: %s (%d findings)'),
+        [ExtractFileName(Dlg.FileName), FAllFindings.Count]);
+    except
+      // noinspection ExceptionTooGeneral
+      // Fehlergrenze an der Action-Grenze (s. Dateikopf): jeder
+      // Schreibfehler (Schreibschutz, Platte voll, ACL) soll als
+      // Klartext beim Nutzer ankommen statt die App zu sprengen.
+      on E: Exception do
+        ShowMessage(Format(_('Could not write baseline: %s'), [E.Message]));
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TForm2.BaselineOnlyNewClick(Sender: TObject);
+// Haken umschalten und in die INI schreiben - dieselbe Einstellung, die
+// Plugin und CLI lesen ([Baseline] OnlyNew).
+var
+  Settings : TRepoSettings;
+  NewVal   : Boolean;
+begin
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    NewVal := not Settings.BaselineOnlyNew;
+    if NewVal and (Trim(Settings.BaselineFile) = '') then
+    begin
+      ShowMessage(_('No baseline file configured yet - write one first, ' +
+        'then set [Baseline] File in analyser.ini.'));
+      Exit;
+    end;
+    Settings.BaselineOnlyNew := NewVal;
+    try Settings.Save; except end;
+  finally
+    Settings.Free;
+  end;
+  RefreshBaselineSet;
+  ApplyFilter;
+end;
+
+procedure TForm2.BuildGridMenu;
+// Rechtsklick am Grid. Das Plugin hat keines (es kompensiert mit
+// Shortcuts) - in der EXE ist es die entdeckbare Form derselben Aktionen.
+var
+  MI : TMenuItem;
+begin
+  FGridMenu := TPopupMenu.Create(Self);
+  FGridMenu.OnPopup := GridMenuPopup;
+
+  MI := TMenuItem.Create(FGridMenu);
+  MI.Caption := _('Open finding') + #9'Enter';
+  MI.OnClick := GridMenuOpenClick;
+  MI.Default := True;
+  FGridMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FGridMenu);
+  MI.Caption := _('Copy AI prompt');
+  MI.OnClick := GridMenuCopyClick;
+  FGridMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FGridMenu);
+  MI.Caption := '-';
+  FGridMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FGridMenu);
+  MI.Caption := _('Insert suppression marker') + #9'Ctrl+Alt+S';
+  MI.OnClick := GridMenuSuppressClick;
+  FGridMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FGridMenu);
+  MI.Caption := _('Apply quick fix') + #9'Ctrl+Alt+F';
+  MI.OnClick := GridMenuQuickFixClick;
+  FGridMenu.Items.Add(MI);
+
+  ResultGrid.PopupMenu := FGridMenu;
+end;
+
+procedure TForm2.GridMenuPopup(Sender: TObject);
+// Nur sinnvoll, wenn eine Datenzeile steht.
+var
+  HasRow : Boolean;
+  i      : Integer;
+begin
+  HasRow := Assigned(FDisplayedFindings) and (FDisplayedFindings.Count > 0)
+            and (ResultGrid.Row >= 1)
+            and (ResultGrid.Row <= FDisplayedFindings.Count);
+  for i := 0 to FGridMenu.Items.Count - 1 do
+    FGridMenu.Items[i].Enabled := HasRow;
+end;
+
+procedure TForm2.GridMenuOpenClick(Sender: TObject);
+begin
+  OpenSelectedFinding;
+end;
+
+procedure TForm2.GridMenuCopyClick(Sender: TObject);
+// Bewusst SOFORT statt ueber den Entprell-Timer: hier ist das Kopieren
+// die ausdrueckliche Absicht des Nutzers, nicht ein Nebeneffekt der
+// Navigation.
+var
+  idx : Integer;
+  F   : TLeakFinding;
+begin
+  if FDisplayedFindings = nil then Exit;
+  idx := ResultGrid.Row - 1;
+  if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
+  F := FDisplayedFindings[idx];
+  try
+    Clipboard.AsText := BuildClaudePrompt(F);
+  except
+    StatusBar1.Panels[2].Text := _('Clipboard is locked by another program.');
+    Exit;
+  end;
+  StatusBar1.Panels[2].Text := Format(
+    _('AI prompt copied to clipboard: %s, line %s (%s)'),
+    [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]);
+end;
+
+procedure TForm2.GridMenuSuppressClick(Sender: TObject);
+begin
+  SuppressSelectedFinding;
+end;
+
+procedure TForm2.GridMenuQuickFixClick(Sender: TObject);
+begin
+  QuickFixSelectedFinding;
 end;
 
 procedure TForm2.WireTiles;
@@ -2911,6 +3155,18 @@ procedure TForm2.HamburgerMenuPopup(Sender: TObject);
 begin
   if Assigned(FMICancel) then
     FMICancel.Enabled := Assigned(FBtnCancel) and FBtnCancel.Enabled;
+  // Baseline-Haken aus der INI nachziehen (kann von aussen geaendert
+  // worden sein - Plugin und CLI schreiben denselben Schluessel).
+  if Assigned(FMIBaseline) then
+  begin
+    var S := TRepoSettings.Create;
+    try
+      try S.Load; except end;
+      FMIBaseline.Checked := S.BaselineOnlyNew;
+    finally
+      S.Free;
+    end;
+  end;
 end;
 
 procedure TForm2.HamburgerClick(Sender: TObject);

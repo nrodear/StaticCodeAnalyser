@@ -29,7 +29,7 @@ object Form2: TForm2
         Width = 0
       end>
     ExplicitTop = 485
-    ExplicitWidth = 848
+    ExplicitWidth = 775
   end
   object PanelStats: TPanel
     Left = 0
@@ -39,16 +39,15 @@ object Form2: TForm2
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 3
-    ExplicitWidth = 848
+    ExplicitWidth = 775
   end
   object Panel4: TPanel
     Left = 0
     Top = 49
     Width = 777
-    Height = 140
+    Height = 120
     Align = alTop
     TabOrder = 1
-    ExplicitWidth = 848
     object Panel3: TPanel
       Left = 1
       Top = 79
@@ -57,7 +56,7 @@ object Form2: TForm2
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 0
-      ExplicitWidth = 846
+      ExplicitWidth = 773
       DesignSize = (
         775
         41)
@@ -76,14 +75,14 @@ object Form2: TForm2
         Caption = 'Type:'
       end
       object LblMinSev: TLabel
-        Left = 456
+        Left = 424
         Top = 9
         Width = 24
         Height = 15
         Caption = 'Min:'
       end
       object LblSearch: TLabel
-        Left = 580
+        Left = 548
         Top = 10
         Width = 38
         Height = 15
@@ -109,7 +108,7 @@ object Form2: TForm2
         OnChange = TypeFilterComboChange
       end
       object MinSevCombo: TComboBox
-        Left = 486
+        Left = 454
         Top = 6
         Width = 85
         Height = 23
@@ -118,14 +117,13 @@ object Form2: TForm2
         OnChange = MinSevComboChange
       end
       object SearchEdit: TEdit
-        Left = 624
+        Left = 592
         Top = 6
         Width = 96
         Height = 23
         Anchors = [akLeft, akTop, akRight]
         TabOrder = 3
         OnChange = SearchEditChange
-        ExplicitWidth = 167
       end
     end
     object PanelActions: TPanel
@@ -136,7 +134,7 @@ object Form2: TForm2
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 2
-      ExplicitWidth = 846
+      ExplicitWidth = 773
       object LblProfile: TLabel
         Left = 352
         Top = 9
@@ -191,7 +189,7 @@ object Form2: TForm2
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 1
-      ExplicitWidth = 846
+      ExplicitWidth = 773
       DesignSize = (
         775
         43)
@@ -210,7 +208,7 @@ object Form2: TForm2
         Anchors = [akLeft, akTop, akRight]
         TabOrder = 0
         Text = 'D:\git-demos\delphi\StaticCodeAnalyser\resources'
-        ExplicitWidth = 582
+        ExplicitWidth = 509
       end
       object Button2: TButton
         Left = 606
@@ -221,34 +219,35 @@ object Form2: TForm2
         Caption = '...'
         TabOrder = 1
         OnClick = Button2Click
-        ExplicitLeft = 677
+        ExplicitLeft = 604
       end
     end
   end
   object Panel2: TPanel
     Left = 0
-    Top = 189
+    Top = 169
     Width = 777
-    Height = 304
+    Height = 324
     Align = alClient
     BevelOuter = bvNone
     TabOrder = 2
-    ExplicitWidth = 848
+    ExplicitTop = 189
+    ExplicitWidth = 775
     ExplicitHeight = 296
     object ResultGrid: TStringGrid
       Left = 0
       Top = 0
       Width = 777
-      Height = 304
+      Height = 324
       Align = alClient
       DefaultColWidth = 100
       DefaultRowHeight = 20
       FixedCols = 0
       RowCount = 2
-      Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goColSizing, goRowSelect, goThumbTracking, goRangeSelect]
+      Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goRangeSelect, goColSizing, goRowSelect, goThumbTracking]
       TabOrder = 0
       OnClick = ResultGridClick
-      ExplicitWidth = 848
+      ExplicitWidth = 775
       ExplicitHeight = 296
       ColWidths = (
         176
