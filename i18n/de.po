@@ -1969,9 +1969,6 @@ msgstr "Result eines verwalteten Typs wird gelesen, bevor es zugewiesen wurde"
 
 # --- 2026-08-09: Baseline-Inkrement 3 (EXE-Checkbox + .sca-Dialog) ---
 
-msgid "Only new (baseline)"
-msgstr "Nur neue (Baseline)"
-
 msgid "Baseline is enabled but no baseline file was found."
 msgstr "Baseline ist aktiv, aber es wurde keine Baseline-Datei gefunden."
 
