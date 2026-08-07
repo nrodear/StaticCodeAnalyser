@@ -29,6 +29,9 @@ implementation
 // noinspection-file ConsecutiveSection, GroupedDeclaration, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uDetectorUtils;
+
 class function TMagicNumberDetector.IsTrivial(const NumStr: string): Boolean;
 // Trivial-Liste kommt aus uSCAConsts.DetectorMagicTrivials (analyser.ini ->
 // MagicNumberTrivials). Wenn die globale Liste nil ist, fallen wir auf die
@@ -145,7 +148,9 @@ begin
   try
     for IfN in Ifs do
     begin
-      CondLow := IfN.TypeRef.ToLower;
+      // Review-MEDIUM 2026-08-09: Literale blanken - Vergleichsoperator+Zahl
+      // INNERHALB eines String-Literals zaehlt nicht als Magic Number.
+      CondLow := TDetectorUtils.BlankStringLiterals(IfN.TypeRef.ToLower);
       if CondLow = '' then Continue;
 
       if ExtractMagicNumber(CondLow, NumStr) then

@@ -182,7 +182,7 @@ begin
     // Cross-Unit-Detektor: braucht zusaetzlich den Repo-Index; ohne ihn
     // (Single-File-Analyse) schweigt er selbst.
     TDfmCrossFormCouplingDetector.Analyze(Binding, RepoIdx,
-      DfmFileName, Results);
+      DfmFileName, PasFileName, Results);
     // Cross-Unit-Detektor (SCA184): unbenutzte DFM-Komponente. Braucht den
     // repo-weiten Symbol-Index; ohne ihn (Single-File) schweigt er selbst (S1).
     // AOwnUnitPath = PasFileName (Cross-Unit-Lookup + S3-Quelltext),

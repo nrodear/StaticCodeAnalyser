@@ -15,6 +15,7 @@ type
     [Test] procedure ElseIfChain_ScoresLinear;
     [Test] procedure ElseIfChain5_StaysUnderLimit;
     [Test] procedure NestedIfs_KeepNestingPenalty;
+    [Test] procedure BooleanWordsInStringLiteral_NotCounted;
   end;
 
 implementation
@@ -185,6 +186,30 @@ begin
     Assert.IsTrue(Pos('complexity 21 (limit', Hit.MissingVar) > 0,
       'Echte Verschachtelung behaelt den Nesting-Zuschlag (21) - ' +
       'gemeldet wurde: ' + Hit.MissingVar);
+  finally F.Free; end;
+end;
+
+procedure TTestCognitiveComplexity.BooleanWordsInStringLiteral_NotCounted;
+// Review-MEDIUM 2026-08-09: 'and'/'or' im String-Literal einer if-Bedingung
+// sind keine Boolean-Operatoren. 14 flache if = Score 14, unter dem Limit 15;
+// vorher hoben die Literal-Woerter '' and or '' den Score auf 16 (FP).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Qux;'#13#10 +
+  'var s: string;'#13#10 +
+  'begin'#13#10 +
+  '  if Pos('' and or '', s) > 0 then T1;'#13#10 +
+  '  if k2 then T2; if k3 then T3; if k4 then T4; if k5 then T5;'#13#10 +
+  '  if k6 then T6; if k7 then T7; if k8 then T8; if k9 then T9;'#13#10 +
+  '  if k10 then T10; if k11 then T11; if k12 then T12;'#13#10 +
+  '  if k13 then T13; if k14 then T14;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCognitiveComplexity),
+      'Literal-Woerter duerfen den Cognitive-Score nicht inflationieren');
   finally F.Free; end;
 end;
 

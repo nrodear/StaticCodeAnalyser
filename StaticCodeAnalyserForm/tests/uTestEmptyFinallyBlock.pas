@@ -13,6 +13,7 @@ type
     [Test] procedure EmptyFinally_Reported;
     [Test] procedure EmptyFinallyMultiline_Reported;
     [Test] procedure EmptyFinallyBlock_KindAndSeverity;
+    [Test] procedure LiteralFinallyEnd_NotReported;
   end;
 
 implementation
@@ -83,6 +84,24 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkEmptyFinallyBlock finding');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyFinallyBlock.LiteralFinallyEnd_NotReported;
+// Review-MEDIUM 2026-08-09: 'finally end' INNERHALB eines String-Literals
+// (Codegen/Doku-String) ist kein leerer finally-Block - vor dem Fix liess
+// der Wortgrenzen-Check das Quote-Zeichen durch und meldete FP.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure BuildCodegenLine;'#13#10 +
+  'begin'#13#10 +
+  '  OutBuffer.Append(''finally end'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyFinallyBlock),
+    '''finally end'' im String-Literal ist kein leerer finally-Block');
   finally F.Free; end;
 end;
 

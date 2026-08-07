@@ -45,7 +45,8 @@ type
 implementation
 
 uses
-  System.RegularExpressions;
+  System.RegularExpressions,
+  uDetectorUtils;
 
 const
   // Whitelist pure-Funktion-Namen die KEINEN Side-Effect haben.
@@ -145,6 +146,9 @@ begin
       ParenE := LastDelimiter(')', N.Name);
       if (ParenP <= 0) or (ParenE <= ParenP) then Continue;
       Arg := Copy(N.Name, ParenP + 1, ParenE - ParenP - 1);
+      // Review-MEDIUM 2026-08-09: Literale blanken - Call-Muster in String-
+      // Inhalten (z.B. ''update (see docs)'') zaehlen nie als Code.
+      Arg := TDetectorUtils.BlankStringLiterals(Arg);
 
       if not ArgContainsCall(Arg) then Continue;
 

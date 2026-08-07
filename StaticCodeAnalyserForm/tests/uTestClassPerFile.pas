@@ -14,6 +14,7 @@ type
     [Test] procedure ForwardDecl_NotCounted;
     [Test] procedure ClassOfReference_NotCounted;
     [Test] procedure ClassPerFile_KindAndSeverity;
+    [Test] procedure ClassKeywordInStringLiteral_NotCounted;
   end;
 
 implementation
@@ -109,6 +110,27 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkClassPerFile finding');
+  finally F.Free; end;
+end;
+
+procedure TTestClassPerFile.ClassKeywordInStringLiteral_NotCounted;
+// Review-MEDIUM 2026-08-09: Codegenerator-Template enthaelt eine Klassen-
+// Deklaration als STRING-INHALT - Literal-Inhalte zaehlen nie als Code,
+// die einzige echte Klasse darf keinen Second-class-Fund ausloesen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TGenHost = class'#13#10 +
+  '    procedure Emit;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'const GEN_TPL = ''TWidget = class(TObject)'';'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkClassPerFile));
   finally F.Free; end;
 end;
 

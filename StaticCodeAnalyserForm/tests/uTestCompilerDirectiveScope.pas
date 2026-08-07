@@ -13,6 +13,7 @@ type
     [Test] procedure WarningsOffAndOn_NotReported;
     [Test] procedure RangeChecksOffWithoutOn_Reported;
     [Test] procedure WarningsOffInsidePushPop_NotReported;
+    [Test] procedure DirectiveInStringLiteral_NotReported;
   end;
 
 implementation
@@ -84,6 +85,24 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCompilerDirectiveScope),
       '{$PUSH}/{$POP} restauriert den State - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestCompilerDirectiveScope.DirectiveInStringLiteral_NotReported;
+// Review-MEDIUM 2026-08-09: '{$WARNINGS OFF}' als String-INHALT ist keine
+// Direktive - vorher zaehlte das Literal als echtes OFF und erzeugte einen
+// falschen Unbalanced-Fund.
+const SRC =
+  'unit t; interface'#13#10 +
+  'implementation'#13#10 +
+  'const cDirSample = ''{$WARNINGS OFF}'';'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCompilerDirectiveScope),
+      'Direktive im String-Literal darf nicht als OFF zaehlen');
   finally F.Free; end;
 end;
 

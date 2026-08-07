@@ -26,9 +26,17 @@ type
 
     // --- Multi-Hit ---
     [Test] procedure Test_MultipleAccesses_AllReported;
+    [Test] procedure Test_LocalShadow_NotReported;
+    [Test] procedure Test_SameUnitVar_NotReported;
+    [Test] procedure Test_Anchor_IsPasFile;
   end;
 
 implementation
+
+// noinspection-file ClassPerFile
+// Die 'class('-Vorkommen sind FIXTURE-LITERALE (der Detektor strippt
+// keine Literale - bekannte MEDIUM-Klasse im Review-Todo); die Unit
+// selbst hat genau eine Klasse.
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.Generics.Collections,
@@ -99,7 +107,7 @@ begin
       end;
 
       TDfmCrossFormCouplingDetector.Analyze(Binding, Index,
-        ExtractFileName(MainFn), Result);
+        'test.dfm', ExtractFileName(MainFn), Result);
     finally
       Index.Free;
       Binding.Free;
@@ -360,6 +368,81 @@ begin
   F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
   try
     Assert.AreEqual<Integer>(2, Count(F, fkDfmCrossFormCoupling));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmCrossFormCoupling.Test_LocalShadow_NotReported;
+// Haertung 2026-08-09: eine LOKALE Variable, die zufaellig wie eine
+// Form-Var im Repo-Index heisst, bindet lokal - kein Kopplungs-Fund
+// (Stichproben-FP-Klasse 'List.Add' / ListExampleMain).
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TMain = class(TForm) end;'#13#10 +
+  'var Main: TMain;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TMain.Go;'#13#10 +
+  'var Form2: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  Form2.Add(''x'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+const DFM = 'object Main: TMain end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmCrossFormCoupling));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmCrossFormCoupling.Test_SameUnitVar_NotReported;
+// Eine in der EIGENEN Unit deklarierte Form-Var ist keine CROSS-Kopplung.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TMain = class(TForm) end;'#13#10 +
+  'type THelperForm = class(TForm) end;'#13#10 +
+  'var Main: TMain;'#13#10 +
+  'var HelperForm: THelperForm;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TMain.Go;'#13#10 +
+  'begin'#13#10 +
+  '  HelperForm.Refresh;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+const DFM = 'object Main: TMain end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmCrossFormCoupling));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmCrossFormCoupling.Test_Anchor_IsPasFile;
+// Haertung 2026-08-09: der Zugriff steht im CODE - Funde ankern auf der
+// .pas, nicht mehr auf der .dfm.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TMain = class(TForm) end;'#13#10 +
+  'var Main: TMain;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TMain.Go;'#13#10 +
+  'begin'#13#10 +
+  '  Form2.Refresh;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+const DFM = 'object Main: TMain end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmCrossFormCoupling));
+    Assert.IsTrue(F[0].FileName.EndsWith('.pas'),
+      'Fund muss auf der .pas ankern, nicht auf der .dfm');
   finally F.Free; end;
 end;
 

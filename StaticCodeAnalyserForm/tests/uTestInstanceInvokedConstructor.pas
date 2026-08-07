@@ -54,7 +54,17 @@ type
     [Test] procedure FieldShadowedByClassLocal_ViaPipeline_Reported;
   end;
 
+  // Literal-Stripping-Welle A (2026-08-09) - eigene Fixture, damit die Basisklasse unter der GodClass-Schwelle bleibt.
+  [TestFixture]
+  TTestInstanceInvokedConstructorLiterals = class
+  public
+    [Test] procedure CreateArgWithUnbalancedParenInLiteral_Reported;
+  end;
+
 implementation
+
+// noinspection-file ClassPerFile
+// Zwei thematisch getrennte Fixtures in einer Unit.
 
 uses
   System.SysUtils, System.Generics.Collections,
@@ -493,7 +503,25 @@ begin
   finally F.Free; end;
 end;
 
+procedure TTestInstanceInvokedConstructorLiterals.CreateArgWithUnbalancedParenInLiteral_Reported;
+// Review-MEDIUM 2026-08-09: eine unbalancierte '(' INNERHALB des String-
+// Arguments darf die Rueckwaerts-Klammerbalancierung nicht kippen - der
+// Instanz-Ctor-Fund muss trotzdem gemeldet werden.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Baz;'#13#10 +
+  'var conn: TDbLink;'#13#10 +
+  'begin conn.Create(''retry (2 of 3''); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInstanceInvokedConstructor),
+    'Klammer im Literal darf den Fund nicht verschlucken');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestInstanceInvokedConstructor);
+  TDUnitX.RegisterTestFixture(TTestInstanceInvokedConstructorLiterals);
 
 end.

@@ -47,6 +47,29 @@ type
     // Fingerprint einer einzelnen Finding-Instanz. Public weil Tests sie
     // mocken.
     class function Fingerprint(const F: TLeakFinding): string; static;
+
+    // Aufloesung des .sca-Standardorts (Konzept_BaselineSca 2026-08-08):
+    //   Gruppe (.groupproj): <GroupDir>\.sca\<Name>.baseline.json
+    //   Projekt (.dproj):    <ProjDir>\.sca\<Name>.baseline.json,
+    //                        Fallback <ProjDir>\..\.sca\<Name>.baseline.json
+    //                        (Projekt liegt typisch eine Ebene unter der
+    //                        Gruppe, Baseline zentral gepflegt)
+    //   Pfad-Scan:           <AScanRoot>\.sca\sca.baseline.json
+    // AProjectOrGroupFile leer -> Pfad-Modus ueber AScanRoot. Liefert ''
+    // wenn keiner der Kandidaten existiert; AProbed (optional) sammelt
+    // ALLE geprueften Pfade fuer die Fehlermeldung des Aufrufers
+    // (CLI-harter-Fehler bei --baseline-scan y ohne Datei).
+    // Praezedenz insgesamt regelt der AUFRUFER: expliziter --baseline-
+    // Pfad > [Baseline] File= > diese Aufloesung.
+    class function ResolveBaselinePath(const AProjectOrGroupFile,
+      AScanRoot: string; AProbed: TStrings = nil): string; static;
+
+    // Standard-ZIEL fuer '--write-baseline auto' bzw. UI 'Write
+    // baseline': der jeweils ERSTE .sca-Kandidat der Aufloesung, OHNE
+    // Existenz-Pruefung ('' wenn weder Projekt/Gruppe noch Root
+    // bekannt). Den .sca-Ordner legt der Schreiber bei Bedarf an.
+    class function DefaultBaselineTarget(const AProjectOrGroupFile,
+      AScanRoot: string): string; static;
   end;
 
   // Non-destruktiver Baseline-Filter fuer Live-Consumer (IDE-Editor): laedt
@@ -369,6 +392,62 @@ begin
     Root.Free;
   end;
   Result := FFingerprints.Count;
+end;
+
+const
+  SCA_DIR      = '.sca';
+  BASELINE_EXT = '.baseline.json';
+
+// Kandidat pruefen + fuer die Fehlermeldung protokollieren.
+function ProbeBaselineCandidate(const Candidate: string;
+  AProbed: TStrings): Boolean;
+begin
+  if Assigned(AProbed) then
+    AProbed.Add(Candidate);
+  Result := FileExists(Candidate);
+end;
+
+class function TBaseline.ResolveBaselinePath(const AProjectOrGroupFile,
+  AScanRoot: string; AProbed: TStrings): string;
+var
+  Dir, BaseName, Cand : string;
+begin
+  Result := '';
+  if AProjectOrGroupFile <> '' then
+  begin
+    Dir      := ExtractFilePath(ExpandFileName(AProjectOrGroupFile));
+    BaseName := ChangeFileExt(ExtractFileName(AProjectOrGroupFile), '');
+    Cand := Dir + SCA_DIR + PathDelim + BaseName + BASELINE_EXT;
+    if ProbeBaselineCandidate(Cand, AProbed) then Exit(Cand);
+    // Projekt-Fallback: zentrale Gruppen-.sca eine Ebene hoeher.
+    if SameText(ExtractFileExt(AProjectOrGroupFile), '.dproj') then
+    begin
+      Cand := ExpandFileName(Dir + '..' + PathDelim + '.sca' + PathDelim +
+        BaseName + '.baseline.json');
+      if ProbeBaselineCandidate(Cand, AProbed) then Exit(Cand);
+    end;
+    Exit;
+  end;
+  if AScanRoot <> '' then
+  begin
+    Cand := IncludeTrailingPathDelimiter(ExpandFileName(AScanRoot)) +
+      SCA_DIR + PathDelim + 'sca' + BASELINE_EXT;
+    if ProbeBaselineCandidate(Cand, AProbed) then Exit(Cand);
+  end;
+end;
+
+class function TBaseline.DefaultBaselineTarget(const AProjectOrGroupFile,
+  AScanRoot: string): string;
+begin
+  Result := '';
+  if AProjectOrGroupFile <> '' then
+    Result := ExtractFilePath(ExpandFileName(AProjectOrGroupFile)) +
+      SCA_DIR + PathDelim +
+      ChangeFileExt(ExtractFileName(AProjectOrGroupFile), '') +
+      BASELINE_EXT
+  else if AScanRoot <> '' then
+    Result := IncludeTrailingPathDelimiter(ExpandFileName(AScanRoot)) +
+      SCA_DIR + PathDelim + 'sca' + BASELINE_EXT;
 end;
 
 end.

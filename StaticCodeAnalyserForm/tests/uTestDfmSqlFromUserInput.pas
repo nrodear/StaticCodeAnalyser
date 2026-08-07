@@ -24,6 +24,9 @@ type
     [Test] procedure Test_NoUiInputField_NoFinding;
     [Test] procedure Test_AssignmentToOtherProperty_NoFinding;
     [Test] procedure Test_AssignmentWithoutConcat_NoFinding;
+    // Review-MEDIUM 2026-08-09: kurze Feldnamen brauchen linke Wortgrenze,
+    // Treffer in String-Literalen zaehlen nie als Code-Use.
+    [Test] procedure Test_SubstringFieldNames_NoFinding;
 
     // --- Robustheit ---
     [Test] procedure Test_NoFormClass_NoFinding;
@@ -301,6 +304,34 @@ begin
     // Diese Heuristik-Wahl ist konservativ: ohne '+' ist es zwar auch
     // riskant, aber haeufig legitim (eingebauter SQL-Editor). Wenn das
     // strenger gesetzt werden soll, ist das ein Tuning-Schritt.
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSqlFromUserInput));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmSqlFromUserInput.Test_SubstringFieldNames_NoFinding;
+// Review-MEDIUM 2026-08-09: (a) 'q'/'ed' duerfen NICHT ohne linke Wortgrenze
+// in 'myq.SQL' bzw. 'Fred.Text' matchen (fremde Locals, keine Form-Fields);
+// (b) 'ed.Text' INNERHALB eines String-Literals ist kein Code-Use.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object q: TADOQuery end'#13#10 +
+  '  object ed: TEdit end'#13#10 +
+  'end';
+const PAS =
+  'unit u; interface uses Vcl.Forms;'#13#10 +
+  'type TF = class(TForm) q: TADOQuery; ed: TEdit; end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TF.go;'#13#10 +
+  'var Fred: TEdit; myq: TADOQuery; Hint: string;'#13#10 +
+  'begin'#13#10 +
+  '  myq.SQL.Text := ''WHERE a='' + Fred.Text;'#13#10 +
+  '  q.SQL.Text := ''append ed.Text by hand'' + Hint;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM, PAS);
+  try
     Assert.AreEqual<Integer>(0, Count(F, fkDfmSqlFromUserInput));
   finally F.Free; end;
 end;

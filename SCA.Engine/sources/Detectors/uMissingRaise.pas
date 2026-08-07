@@ -59,6 +59,9 @@ implementation
 // noinspection-file CanBeStrictPrivate, CyclomaticComplexity, GroupedDeclaration, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uDetectorUtils;
+
 function IsUpperAsciiLetter(C: Char): Boolean; inline;
 begin
   Result := (C >= 'A') and (C <= 'Z');
@@ -90,9 +93,14 @@ var
   L, PosDot : Integer;
   Ch        : Char;
   i         : Integer;
+  Scan      : string;
 begin
   Result := '';
-  L := Length(CallName);
+  // Review-MEDIUM 2026-08-09: Literale blanken - '.Create' INNERHALB eines
+  // String-Literals (z.B. Log('EFoo.Create failed')) ist kein Aufruf;
+  // BlankStringLiterals ist laengenerhaltend, alle Indizes bleiben gueltig.
+  Scan := TDetectorUtils.BlankStringLiterals(CallName);
+  L := Length(Scan);
   if L < Length(DOT_CREATE) + 1 then Exit;
   // Index des Punkts vor 'Create'. Wir nehmen das LETZTE '.' im Namen
   // bis vor 'Create' - so faengt 'TFoo.Bar.Create()' nicht.
@@ -100,8 +108,8 @@ begin
   i := 1;
   while i <= L - Length(DOT_CREATE) do
   begin
-    if (CallName[i] = '.') and
-       SameText(Copy(CallName, i, Length(DOT_CREATE)), DOT_CREATE) then
+    if (Scan[i] = '.') and
+       SameText(Copy(Scan, i, Length(DOT_CREATE)), DOT_CREATE) then
     begin
       // Verify: hinter '.Create' folgt '(' oder Ende oder Whitespace.
       if i + Length(DOT_CREATE) > L then
@@ -109,7 +117,7 @@ begin
         PosDot := i;
         Break;
       end;
-      Ch := CallName[i + Length(DOT_CREATE)];
+      Ch := Scan[i + Length(DOT_CREATE)];
       if (Ch = '(') or (Ch = ' ') or (Ch = ';') then
       begin
         PosDot := i;
@@ -126,7 +134,7 @@ begin
   i := PosDot - 1;
   while i >= 1 do
   begin
-    Ch := CallName[i];
+    Ch := Scan[i];
     if (Ch = '_') or
        ((Ch >= 'A') and (Ch <= 'Z')) or
        ((Ch >= 'a') and (Ch <= 'z')) or
@@ -141,7 +149,7 @@ begin
   //               (Func(EFoo.Create(...))) - die Exception wird weitergereicht
   //               (Handler/Logger/raise-Helper), kein statement-level
   //               Missing-Raise. Real-World 2026-06-27 (praeventiv).
-  if (i >= 1) and CharInSet(CallName[i], ['.', '(', ',']) then Exit;
+  if (i >= 1) and CharInSet(Scan[i], ['.', '(', ',']) then Exit;
   // [Core-Audit 2026-07-17] 'raise <Exc>.Create(...)' im FLACHTEXT: ein raise
   // als STATEMENT legt der Parser als nkRaise ab (fuer SCA120 unsichtbar) -
   // ABER in einer anonymen Methode als Call-Argument
@@ -153,12 +161,12 @@ begin
   // melden. Daher: ist das Wort direkt vor dem Exception-Ident 'raise', wird
   // die Exception geraist -> kein Fund. (i zeigt auf das Zeichen VOR dem Ident.)
   var jr := i;
-  while (jr >= 1) and (CallName[jr] = ' ') do Dec(jr);
-  if (jr >= 5) and SameText(Copy(CallName, jr - 4, 5), 'raise') and
+  while (jr >= 1) and (Scan[jr] = ' ') do Dec(jr);
+  if (jr >= 5) and SameText(Copy(Scan, jr - 4, 5), 'raise') and
      ((jr - 5 < 1) or
-      not CharInSet(CallName[jr - 5], ['A'..'Z', 'a'..'z', '0'..'9', '_'])) then
+      not CharInSet(Scan[jr - 5], ['A'..'Z', 'a'..'z', '0'..'9', '_'])) then
     Exit;
-  Result := Copy(CallName, i + 1, PosDot - i - 1);
+  Result := Copy(Scan, i + 1, PosDot - i - 1);
 end;
 
 function IsCreateDefinitionSignature(const CallName: string): Boolean;

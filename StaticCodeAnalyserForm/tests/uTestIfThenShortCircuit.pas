@@ -25,6 +25,9 @@ type
     [Test] procedure IfThen_ConditionCallOnly_NoFinding;
     [Test] procedure IfThen_PureBuiltinInBranch_NoFinding;
     [Test] procedure IfThen_GroupingParenInBranch_NoFinding;
+    // Review-MEDIUM 2026-08-09: ')' im Literal-Arm darf die Klammer-Zaehlung
+    // nicht vorzeitig schliessen (sonst FN fuer den Seiteneffekt-Arm dahinter).
+    [Test] procedure IfThen_ParenInLiteralArm_SideEffectStillReported;
   end;
 
 implementation
@@ -186,6 +189,22 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkIfThenShortCircuit),
     'Grouping-Paren (a+1) ist kein Call -> kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestIfThenShortCircuit.IfThen_ParenInLiteralArm_SideEffectStillReported;
+// Review-MEDIUM 2026-08-09: das ')' im String-Literal '':-)''  schloss die
+// Args-Extraktion frueher vorzeitig - LoadCfg() fiel aus dem Args-Fenster und
+// der echte Fund entfiel (FN). Literale werden jetzt vor der Zaehlung geblankt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(b: Boolean);'#13#10 +
+  'begin s := IfThen(b, '':-)'', LoadCfg()); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkIfThenShortCircuit),
+    'Seiteneffekt-Call hinter Literal-Arm mit Klammer muss gemeldet werden');
   finally F.Free; end;
 end;
 

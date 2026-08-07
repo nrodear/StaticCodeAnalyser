@@ -83,15 +83,20 @@ end;
 function ExtractOuterArgs(const CallName: string): string;
 var
   Open, Close, Depth, i : Integer;
+  Blanked : string;
 begin
   Result := '';
-  Open := Pos('(', CallName);
+  // Review-MEDIUM 2026-08-09: Literale blanken - '('/')' in Stringliteralen
+  // duerfen die Klammertiefe nicht verschieben (laengenerhaltend, damit die
+  // Copy-Positionen weiter aufs Original passen).
+  Blanked := TDetectorUtils.BlankStringLiterals(CallName);
+  Open := Pos('(', Blanked);
   if Open <= 0 then Exit;
   Depth := 0;
   Close := 0;
-  for i := Open to Length(CallName) do
+  for i := Open to Length(Blanked) do
   begin
-    case CallName[i] of
+    case Blanked[i] of
       '(': Inc(Depth);
       ')': begin
              Dec(Depth);

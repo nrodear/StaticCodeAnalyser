@@ -17,6 +17,7 @@ type
     // --- Real-World-Audit 2026-07-31: Receiver-Vorspann ist keine Capture ---
     [Test] procedure LoopVarOnlyAsCallReceiver_NotReported;
     [Test] procedure LoopVarAsReceiverAndInClosureBody_Reported;
+    [Test] procedure ProcKeywordOnlyInStringLiteral_NotReported;
   end;
 
 implementation
@@ -169,6 +170,28 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkAnonMethodCaptureLoopVar) >= 1,
       'Loop-Var im Closure-Rumpf bleibt ein Capture-Bug');
+  finally F.Free; end;
+end;
+
+procedure TTestAnonMethodCaptureLoopVar.ProcKeywordOnlyInStringLiteral_NotReported;
+// Review-MEDIUM 2026-08-09: 'procedure(...)' steht nur als STRING-INHALT im
+// Call-Ausdruck, die Loop-Var folgt als echtes Argument dahinter - ohne
+// Literal-Blanking matchen ANON_RE + VarRE und melden eine anonyme Methode,
+// die es nicht gibt. Literal-Inhalte zaehlen nie als Code.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var k: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for k := 0 to 4 do'#13#10 +
+  '    Log(''callback procedure(x) failed'' + IntToStr(k));'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAnonMethodCaptureLoopVar),
+      'procedure-Keyword nur im String-Literal ist keine anonyme Methode');
   finally F.Free; end;
 end;
 

@@ -29,59 +29,97 @@ implementation
 // noinspection-file BeginEndRequired, NilComparison, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+type
+  // Pro Handler aggregierter Zustand. ClassRef/EventName kollabieren auf
+  // '' sobald eine zweite Klasse/ein zweiter Event-Typ auftaucht - das
+  // traegt das Homogenitaets-Gate (Haertung 2026-08-09, User-Entscheid;
+  // Stichprobe nach dem Erwecken: 5/6 FP durch parametrisierte
+  // Buendelung wie Tag-Farbmenue 26x / Klaviertasten 36x. Heterogene
+  // Bindungen bleiben Fund - SynUniDesigner: TEdit.OnChange +
+  // TCheckBox.OnClick mit 90-Zeilen-Kaskade war der einzige TP).
+  THandlerStat = record
+    Count     : Integer;
+    Sample    : string;   // Original-Case des Handler-Namens
+    FirstLine : Integer;
+    ClassRef  : string;   // '' = gemischte Komponenten-Klassen
+    EventName : string;   // '' = gemischte Event-Typen
+  end;
+  THandlerStats = TDictionary<string, THandlerStat>;
+
+procedure CollectHandlerStats(Binding: TFormBinding; Stats: THandlerStats);
+var
+  Ev      : TBoundEvent;
+  St      : THandlerStat;
+  Key     : string;
+  EvClass : string;
+begin
+  for Ev in Binding.Events do
+  begin
+      Key := LowerCase(Ev.HandlerName);
+      if Ev.Component <> nil then EvClass := Ev.Component.ClassRef
+      else EvClass := '?';
+      if Stats.TryGetValue(Key, St) then
+      begin
+        Inc(St.Count);
+        if not SameText(St.ClassRef, EvClass) then St.ClassRef := '';
+        if not SameText(St.EventName, Ev.EventName) then St.EventName := '';
+      end
+      else
+      begin
+        St.Count     := 1;
+        St.Sample    := Ev.HandlerName;
+        St.FirstLine := Ev.Line;
+        St.ClassRef  := EvClass;
+        St.EventName := Ev.EventName;
+      end;
+    Stats.AddOrSetValue(Key, St);
+  end;
+end;
+
+procedure ReportGodHandlers(Stats: THandlerStats; Threshold: Integer;
+  const FileName: string; Results: TObjectList<TLeakFinding>);
+var
+  Pair : TPair<string, THandlerStat>;
+  St   : THandlerStat;
+  F    : TLeakFinding;
+begin
+  for Pair in Stats do
+  begin
+    St := Pair.Value;
+    if St.Count < Threshold then Continue;
+    // Homogen (eine Klasse + ein Event-Typ) = parametrisierte
+    // Buendelung -> still.
+    if (St.ClassRef <> '') and (St.EventName <> '') then Continue;
+
+    F            := TLeakFinding.Create;
+    F.FileName   := FileName;
+    F.MethodName := '';
+    F.LineNumber := IntToStr(St.FirstLine);
+    F.MissingVar := Format(
+      '%s is wired to %d component events (>= %d) - consider splitting',
+      [St.Sample, St.Count, Threshold]);
+    F.SetKind(fkDfmGodHandler);
+    Results.Add(F);
+  end;
+end;
+
 class procedure TDfmGodHandlerDetector.Analyze(Binding: TFormBinding;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Counts    : TDictionary<string, Integer>;
-  Samples   : TDictionary<string, string>;  // Lower(Handler) -> Original-Case
-  FirstLine : TDictionary<string, Integer>;
-  Pair      : TPair<string, Integer>;
-  Ev        : TBoundEvent;
-  Key       : string;
-  Cnt       : Integer;
+  Stats     : THandlerStats;
   Threshold : Integer;
-  F         : TLeakFinding;
 begin
   if Binding = nil then Exit;
 
   Threshold := DetectorMaxGodHandlerEvents;
   if Threshold <= 1 then Threshold := 5;     // Sicherheitsnetz
 
-  Counts    := TDictionary<string, Integer>.Create;
-  Samples   := TDictionary<string, string>.Create;
-  FirstLine := TDictionary<string, Integer>.Create;
+  Stats := THandlerStats.Create;
   try
-    for Ev in Binding.Events do
-    begin
-      Key := LowerCase(Ev.HandlerName);
-      if not Counts.ContainsKey(Key) then
-      begin
-        Counts.Add(Key, 0);
-        Samples.Add(Key, Ev.HandlerName);
-        FirstLine.Add(Key, Ev.Line);
-      end;
-      Counts[Key] := Counts[Key] + 1;
-    end;
-
-    for Pair in Counts do
-    begin
-      Cnt := Pair.Value;
-      if Cnt < Threshold then Continue;
-
-      F            := TLeakFinding.Create;
-      F.FileName   := FileName;
-      F.MethodName := '';
-      F.LineNumber := IntToStr(FirstLine[Pair.Key]);
-      F.MissingVar := Format(
-        '%s is wired to %d component events (>= %d) - consider splitting',
-        [Samples[Pair.Key], Cnt, Threshold]);
-      F.SetKind(fkDfmGodHandler);
-      Results.Add(F);
-    end;
+    CollectHandlerStats(Binding, Stats);
+    ReportGodHandlers(Stats, Threshold, FileName, Results);
   finally
-    FirstLine.Free;
-    Samples.Free;
-    Counts.Free;
+    Stats.Free;
   end;
 end;
 

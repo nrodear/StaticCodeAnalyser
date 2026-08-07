@@ -36,12 +36,13 @@ type
   TDfmCrossFormCouplingDetector = class
   public
     class procedure Analyze(Binding: TFormBinding; Index: TDfmRepoIndex;
-      const FileName: string; Results: TObjectList<TLeakFinding>);
+      const FileName, PasFileName: string;
+      Results: TObjectList<TLeakFinding>);
   end;
 
 implementation
 
-// noinspection-file GroupedDeclaration, MultipleExit, NilComparison, StringConcatInLoop, TooLongLine, UnsortedUses
+// noinspection-file BeginEndRequired, GroupedDeclaration, MultipleExit, NestedTry, NilComparison, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
@@ -74,8 +75,41 @@ begin
 end;
 
 class procedure TDfmCrossFormCouplingDetector.Analyze(Binding: TFormBinding;
-  Index: TDfmRepoIndex; const FileName: string;
+  Index: TDfmRepoIndex; const FileName, PasFileName: string;
   Results: TObjectList<TLeakFinding>);
+var
+  Shadow : TDictionary<string, Boolean>;
+
+  // Haertung 2026-08-09 (Stichprobe nach dem Erwecken: 2/6 FP): der
+  // Repo-Index ist NAMENS-basiert - jede lokale Variable/jeder Parameter,
+  // der zufaellig wie irgendeine Form-Var im Korpus heisst ('List',
+  // 'Frm', ...), wurde als Kopplung gemeldet. Unit-weites Shadow-Set
+  // aus allen nkLocalVar/nkParam/nkField-Namen: was hier deklariert
+  // ist, bindet lokal und ist NIE die fremde Global-Instanz.
+  // (Konservativ Richtung Praezision: eine echte Cross-Form-Var, die
+  // gleichnamig zu irgendeiner Lokalen ist, faellt als FN weg.)
+  procedure CollectShadow(Kind: TNodeKind);
+  var
+    L : TList<TAstNode>;
+    N : TAstNode;
+    S : string;
+    P : Integer;
+  begin
+    L := Binding.UnitNode.FindAll(Kind);
+    try
+      for N in L do
+      begin
+        // nkParam.Name kann Modifier tragen ('out X', 'var X') -
+        // letztes Wort ist der Name.
+        S := Trim(N.Name);
+        P := LastDelimiter(' ', S);
+        if P > 0 then S := Copy(S, P + 1, MaxInt);
+        if S <> '' then Shadow.AddOrSetValue(LowerCase(S), True);
+      end;
+    finally
+      L.Free;
+    end;
+  end;
 
   function IsCurrentFormVar(const VarName: string): Boolean;
   // 'Form2' und 'TForm2' beide als 'aktuelle Form' werten, damit Self-
@@ -101,6 +135,8 @@ class procedure TDfmCrossFormCouplingDetector.Analyze(Binding: TFormBinding;
     Ident := FirstIdent(Expr);
     if Ident = '' then Exit;
     if IsCurrentFormVar(Ident) then Exit;
+    // Lokal deklarierte Namen binden lokal - nie die fremde Instanz.
+    if Shadow.ContainsKey(LowerCase(Ident)) then Exit;
 
     if not Index.TryGetVarType(Ident, Info) then Exit;
 
@@ -109,8 +145,18 @@ class procedure TDfmCrossFormCouplingDetector.Analyze(Binding: TFormBinding;
     if (Binding <> nil) and (Binding.FormClass <> nil)
        and SameText(Info.ClassRef, Binding.FormClass.Name) then Exit;
 
+    // In der EIGENEN Unit deklarierte Var (z.B. zweite Form-Instanz der
+    // selben Datei) ist keine CROSS-Form-Kopplung.
+    if (PasFileName <> '') and
+       SameText(ExtractFileName(Info.Unitname), ExtractFileName(PasFileName)) then Exit;
+
     F            := TLeakFinding.Create;
-    F.FileName   := FileName;
+    // Anker auf die .pas: der Zugriff steht im CODE, nicht in der DFM
+    // (Haertung 2026-08-09; vorher zeigten Funde auf DFM-Zeilennummern).
+    if PasFileName <> '' then
+      F.FileName := PasFileName
+    else
+      F.FileName := FileName;
     F.MethodName := '';
     F.LineNumber := IntToStr(Node.Line);
     F.MissingVar := Format(
@@ -128,26 +174,35 @@ begin
   if Binding.UnitNode = nil then Exit;
   if (Index = nil) or (Index.VarCount = 0) then Exit;
 
-  // nkAssign: LHS analysieren (z.B. 'Form2.Edit1.Text := X').
-  All := Binding.UnitNode.FindAll(nkAssign);
+  Shadow := TDictionary<string, Boolean>.Create;
   try
-    for Node in All do
-      // Cross-Form-Zugriff sieht typisch dotted aus. Reiner Ident-Assign
-      // ('X := 1') ist hier nicht relevant.
-      if Pos('.', Node.Name) > 0 then
-        CheckNode(Node, Node.Name);
-  finally
-    All.Free;
-  end;
+    CollectShadow(nkLocalVar);
+    CollectShadow(nkParam);
+    CollectShadow(nkField);
 
-  // nkCall: ganzen Call-Ausdruck analysieren (z.B. 'Form2.Refresh()').
-  All := Binding.UnitNode.FindAll(nkCall);
-  try
-    for Node in All do
-      if Pos('.', Node.Name) > 0 then
-        CheckNode(Node, Node.Name);
+    // nkAssign: LHS analysieren (z.B. 'Form2.Edit1.Text := X').
+    All := Binding.UnitNode.FindAll(nkAssign);
+    try
+      for Node in All do
+        // Cross-Form-Zugriff sieht typisch dotted aus. Reiner Ident-Assign
+        // ('X := 1') ist hier nicht relevant.
+        if Pos('.', Node.Name) > 0 then
+          CheckNode(Node, Node.Name);
+    finally
+      All.Free;
+    end;
+
+    // nkCall: ganzen Call-Ausdruck analysieren (z.B. 'Form2.Refresh()').
+    All := Binding.UnitNode.FindAll(nkCall);
+    try
+      for Node in All do
+        if Pos('.', Node.Name) > 0 then
+          CheckNode(Node, Node.Name);
+    finally
+      All.Free;
+    end;
   finally
-    All.Free;
+    Shadow.Free;
   end;
 end;
 

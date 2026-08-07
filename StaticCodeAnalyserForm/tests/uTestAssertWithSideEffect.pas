@@ -13,6 +13,7 @@ type
     [Test] procedure AssertPureExpression_NotReported;
     [Test] procedure AssertWithLengthCall_NotReported;
     [Test] procedure AssertWithConversionFunc_NotReported;
+    [Test] procedure AssertCallPatternInStringLiteral_NotReported;
   end;
 
 implementation
@@ -87,6 +88,26 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAssertWithSideEffect),
       'FloatToStr ist eine Conversion-Func, kein Side-Effect');
+  finally F.Free; end;
+end;
+
+procedure TTestAssertWithSideEffect.AssertCallPatternInStringLiteral_NotReported;
+// Review-MEDIUM 2026-08-09: das Call-Muster 'update (' steht nur im
+// STRING-INHALT des Vergleichs - ohne Literal-Blanking matcht CALL_RE den
+// Namen 'update' und passiert das SIDE_EFFECT_RE-Gate, obwohl kein Call
+// existiert. Literal-Inhalte zaehlen nie als Code.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(Msg: string);'#13#10 +
+  'begin'#13#10 +
+  '  Assert(Msg = ''update (see docs)'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAssertWithSideEffect),
+      'Call-Muster im String-Inhalt ist kein Side-Effect-Call');
   finally F.Free; end;
 end;
 

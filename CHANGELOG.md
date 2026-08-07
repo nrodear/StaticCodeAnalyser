@@ -10,6 +10,20 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Baseline files in a `.sca` folder + `--baseline-scan y|n`.** The
+  baseline now has a canonical home next to the project file:
+  `<dir>/.sca/<ProjectName>.baseline.json` (group and projects can
+  share one folder; a project falls back to the parent `.sca` of its
+  group). `--baseline-scan y` resolves the file via `--baseline` >
+  `[Baseline] File=` (analyser.ini) > the `.sca` default location and
+  FAILS HARD (exit 99) when no file exists - a typo in CI must not
+  silently report "everything is new". An explicitly given
+  `--baseline <file>` that is missing is now a hard error too
+  (previously a silent no-op). `--write-baseline auto` writes to the
+  `.sca` default location and creates the folder. The `.sca` folder
+  is excluded from directory scans. The in-app "show only new
+  findings" display filter stays fail-open by design.
+
 - **New rule SCA196 `ManagedResultUninit` (Warning, Bug).** For managed
   return types (string family, dynamic arrays, `Variant`, interfaces)
   `Result` is a hidden var parameter aliasing the caller's target

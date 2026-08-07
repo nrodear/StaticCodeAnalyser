@@ -51,7 +51,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.StrUtils;
+  System.StrUtils, uDetectorUtils;
 
 const
   // DB-Komponenten mit SQL-aehnlicher Property. Bewusst auf Connection-
@@ -96,13 +96,17 @@ class procedure TDfmSqlFromUserInputDetector.Analyze(Binding: TFormBinding;
   // Original-Field-Namen (case-empfindlich, weil der Code typisch im
   // Original-Casing geschrieben ist).
   var
-    Q, TP: string;
+    Q, TP, H: string;
   begin
     Result := False;
     HitName := '';
+    // Review-MEDIUM 2026-08-09: Literale blanken - Treffer in String-Literalen
+    // zaehlen nie als Code-Use; FindTokenBoundedLower erzwingt zudem die linke
+    // Wortgrenze ('ed' matcht nicht in 'Fred.Text', 'q' nicht in 'myq.SQL').
+    H := LowerCase(TDetectorUtils.BlankStringLiterals(Haystack));
     for Q in FieldList do
       for TP in Suffixes do
-        if ContainsText(Haystack, Q + TP) then
+        if TDetectorUtils.FindTokenBoundedLower(LowerCase(Q + TP), H) > 0 then
         begin
           HitName := Q;
           Exit(True);

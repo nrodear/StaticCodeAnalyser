@@ -71,6 +71,9 @@ begin
   if Lines = nil then Exit;
   try
     Code := TDetectorUtils.StripFileCommentsKeepStringsCached(Lines, LineFor, AContext, FileName);
+    // Review-MEDIUM 2026-08-09: Literale blanken - 'TFoo = class' als String-
+    // Inhalt zaehlt nie als Deklaration; laengenerhaltend, damit LineFor passt.
+    Code := TDetectorUtils.BlankStringLiterals(Code);
     Lwr := LowerCase(Code);
     p := 1;
     ClassCount := 0;
