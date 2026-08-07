@@ -35,7 +35,13 @@ CaseStatementSize 4
 ClassPerFile 519
 CognitiveComplexity 345
 CommentedOutCode 21
-CompilerDirectiveScope 1
+# CompilerDirectiveScope/EmptyBlock/EmptyFinallyBlock: je +1/+2/+2
+# TRANSIENT (2026-08-09, Literal-Stripping-Welle A): die ALTE Exe
+# feuert die soeben GEFIXTEN Literal-Bugs auf die neuen Regressions-
+# Fixtures ('{$WARNINGS OFF}'/'begin end'/'finally end' in Literalen).
+# Nach dem naechsten Build fallen sie auf 1/2/2 zurueck - dann
+# Baseline wieder anziehen.
+CompilerDirectiveScope 2
 ConcatToFormat 30
 ConstantReturn 1
 CyclomaticComplexity 123
@@ -61,9 +67,9 @@ DfmHardcodedCaption 15
 DfmRequiredFieldUnbound 4
 DuplicateBlock 223
 DuplicateString 228
-EmptyBlock 2
+EmptyBlock 4
 EmptyExcept 37
-EmptyFinallyBlock 2
+EmptyFinallyBlock 4
 EmptyInterface 6
 EmptyMethod 7
 EmptyOnHandler 3

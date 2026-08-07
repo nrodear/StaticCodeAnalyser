@@ -32,6 +32,8 @@ type
     // Definition (mORMot/JVCL) + Exception als Argument eines anderen Calls.
     [Test] procedure ConstructorDefinition_NoFinding;
     [Test] procedure ExceptionAsArgument_NoFinding;
+    // Review-MEDIUM 2026-08-09: '.Create' innerhalb eines String-Literals.
+    [Test] procedure CreateInsideStringLiteral_NoFinding;
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
@@ -248,6 +250,23 @@ begin
     Assert.IsNotNull(Hit, 'fkMissingRaise finding expected');
     Assert.AreEqual(fkMissingRaise, Hit.Kind);
     Assert.AreEqual(lsError,        Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestMissingRaise.CreateInsideStringLiteral_NoFinding;
+// Review-MEDIUM 2026-08-09: 'EFoo.Create' INNERHALB eines String-Literals
+// (Log-Meldung) ist kein Konstruktor-Aufruf. Der Parser legt Literale via
+// QuoteStrLit in den nkCall-Namen - vor dem Fix passierte das Quote-Zeichen
+// vor dem Ident den Guard und 'EParseFault' wurde als never-raised gemeldet.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure ReportParseFailure;'#13#10 +
+  'begin Diag.Warn(''EParseFault.Create failed here''); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingRaise),
+    '''.Create'' im String-Literal ist kein Missing-Raise');
   finally F.Free; end;
 end;
 

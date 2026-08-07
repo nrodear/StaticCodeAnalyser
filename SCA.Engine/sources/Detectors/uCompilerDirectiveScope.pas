@@ -100,6 +100,13 @@ begin
       c := Line[j];
       // //-Kommentar bis Zeilen-Ende
       if (c = '/') and (j < n) and (Line[j + 1] = '/') then Break;
+      // Review-MEDIUM 2026-08-09: '{$...}' im String-Literal skippen (''-Escape via Toggle).
+      if c = '''' then
+      begin
+        pClose := PosEx('''', Line, j + 1);
+        if pClose = 0 then Break;
+        j := pClose + 1; Continue;
+      end;
       // (*...*)-Block - immer Kommentar
       if (c = '(') and (j < n) and (Line[j + 1] = '*') then
       begin

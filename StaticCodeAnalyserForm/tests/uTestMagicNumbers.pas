@@ -17,6 +17,7 @@ type
     [Test] procedure TrivialOne_NotReported;
     [Test] procedure ConstAssignment_NotReported;
     [Test] procedure Finding_KindAndSeverity;
+    [Test] procedure ComparisonInsideLiteral_NotReported;
   end;
 
 implementation
@@ -108,6 +109,24 @@ begin
       if Fnd.Kind = fkMagicNumber then begin Hit := Fnd; Break; end;
     Assert.IsNotNull(Hit, 'fkMagicNumber finding expected');
     Assert.AreEqual(fkMagicNumber, Hit.Kind);
+  finally F.Free; end;
+end;
+
+procedure TTestMagicNumbers.ComparisonInsideLiteral_NotReported;
+// Review-MEDIUM 2026-08-09: '> 4711' steht INNERHALB eines String-Literals -
+// Literal-Inhalte zaehlen nie als Code, also kein Magic-Number-Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var Msg: string;'#13#10 +
+  'begin'#13#10 +
+  '  if Msg = ''items > 4711'' then Msg := '''';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMagicNumber),
+    'Vergleich+Zahl im String-Literal ist kein Code');
   finally F.Free; end;
 end;
 

@@ -91,6 +91,7 @@ type
     [Test] procedure Cyclomatic_Finding_KindAndSeverity;
     [Test] procedure Cyclomatic_Finding_MissingVarMentionsCcValue;
     [Test] procedure Cyclomatic_MultipleHitsInSameUnit_AllReported;
+    [Test] procedure Cyclomatic_BooleanWordsInStringLiteral_NotCounted;
   end;
 
 implementation
@@ -931,6 +932,27 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkCyclomaticComplexity));
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_BooleanWordsInStringLiteral_NotCounted;
+// Review-MEDIUM 2026-08-09: 'and'/'or' im String-Literal der Bedingung sind
+// keine Boolean-Operatoren. Base 1 + 9 if = 10, exakt an der Schwelle (kein
+// Fund); vorher hoben die Literal-Woerter '' and or '' den Wert auf 12 (FP).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TQry.CheckSql;'#13#10+
+  'begin'#13#10+
+  '  if Pos('' and or '', SqlText) > 0 then w1;'#13#10+
+  '  if q2 then w2; if q3 then w3; if q4 then w4;'#13#10+
+  '  if q5 then w5; if q6 then w6; if q7 then w7;'#13#10+
+  '  if q8 then w8; if q9 then w9;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCyclomaticComplexity),
+    'Literal-Woerter duerfen die Complexity nicht inflationieren');
   finally F.Free; end;
 end;
 

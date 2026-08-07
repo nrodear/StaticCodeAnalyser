@@ -101,7 +101,9 @@ var
   Ch       : Char;
 begin
   Result := '';
-  S := TrimRight(CallName);
+  // Review-MEDIUM 2026-08-09: Literale blanken - Klammern INNERHALB von
+  // String-Literal-Argumenten duerfen die Rueckwaerts-Balancierung nicht kippen.
+  S := TDetectorUtils.BlankStringLiterals(TrimRight(CallName));
   // Trailing ';' entfernen.
   while (S <> '') and (S[Length(S)] = ';') do
   begin

@@ -87,7 +87,9 @@ var
 
 begin
   Result := 0;
-  Lo := LowerCase(CondText);
+  // Review-MEDIUM 2026-08-09: Literale blanken - and/or/xor INNERHALB eines
+  // String-Literals (z.B. Pos(' and ', SQL)) sind keine Boolean-Operatoren.
+  Lo := LowerCase(TDetectorUtils.BlankStringLiterals(CondText));
   i  := 1;
   while i <= Length(Lo) do
   begin

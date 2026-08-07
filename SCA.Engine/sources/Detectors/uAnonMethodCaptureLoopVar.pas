@@ -53,7 +53,8 @@ type
 implementation
 
 uses
-  System.RegularExpressions;
+  System.RegularExpressions,
+  uDetectorUtils;
 
 class function TAnonMethodCaptureLoopVarDetector.ExtractLoopVar(
   ForNode: TAstNode): string;
@@ -163,10 +164,15 @@ var
   var
     AnonM : TMatch;
     Tail  : string;
+    Blank : string;
   begin
     if Expr = '' then Exit;
     if Reported.ContainsKey(N.Line) then Exit;
-    AnonM := TRegEx.Match(Expr, ANON_RE, [roIgnoreCase]);
+    // Review-MEDIUM 2026-08-09: Literale blanken - 'procedure(...)' als
+    // String-Inhalt zaehlt nie als Anon-Method-Code (laengenerhaltend,
+    // damit AnonM.Index fuer den Tail-Schnitt gueltig bleibt).
+    Blank := TDetectorUtils.BlankStringLiterals(Expr);
+    AnonM := TRegEx.Match(Blank, ANON_RE, [roIgnoreCase]);
     if not AnonM.Success then Exit;
     // FP-Gate (Real-World-Audit 2026-07-31, FP-Klasse 'loop-var-als-call-
     // receiver-ausserhalb-des-closure-bodys'): die Loop-Var-Referenz muss
@@ -178,7 +184,7 @@ var
     // moeglicher Rest-Text) - das haelt alle bisherigen TPs (Loop-Var im
     // Closure-Rumpf) und entfernt nur die Vorspann-Treffer. Monoton: der
     // Suchbereich wird ausschliesslich verkleinert.
-    Tail := Copy(Expr, AnonM.Index, MaxInt);
+    Tail := Copy(Blank, AnonM.Index, MaxInt);
     if not VarRE.IsMatch(Tail) then Exit;
     // Synchron ausgefuehrte Closure -> kein Deferred-Capture-Bug.
     if HasSyncMarker(Expr) then Exit;

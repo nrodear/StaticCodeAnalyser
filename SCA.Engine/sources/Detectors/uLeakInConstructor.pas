@@ -102,7 +102,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.StrUtils;
+  System.StrUtils, uDetectorUtils;
 
 const
   // [G2] Kuratierte RTL-Value-Type-Records mit 'Create'-Factory. Spiegelt die
@@ -355,7 +355,9 @@ begin
   if Nodes <> nil then
     for N in Nodes do
     begin
-      S := LowerCase(N.Name);
+      // Review-MEDIUM 2026-08-09: Literale blanken - 'free'/Feldname in einem
+      // String-Literal (z.B. Log('failed to free fconn')) ist keine Freigabe.
+      S := TDetectorUtils.BlankStringLiterals(LowerCase(N.Name));
       if LooksLikeFreeCall(S) and ContainsIdent(S, FieldLow) then Exit(True);
     end;
   // Interface-Felder werden per 'FFoo := nil' freigegeben (_Release).
@@ -478,7 +480,9 @@ begin
     // 90%-Variante: Identifier (optional Self.-Prefix) der mit 'f' beginnt.
     LhsLow := LhsWithoutSelf(N.Name);
     if (Length(LhsLow) < 2) or (LhsLow[1] <> 'f') then Continue;
-    RhsLow := LowerCase(N.TypeRef);
+    // Review-MEDIUM 2026-08-09: Literale blanken - '.create' INNERHALB eines
+    // String-Literals (z.B. Format('%s.Create failed',..)) ist keine Allokation.
+    RhsLow := TDetectorUtils.BlankStringLiterals(LowerCase(N.TypeRef));
     if Pos('.create', RhsLow) = 0 then Continue;
 
     FieldLow := BareIdentPrefix(LhsLow);

@@ -18,6 +18,9 @@ type
     // anonymer Methode) duerfen nicht cross-statement korrelieren.
     [Test] procedure CrossStatementBlob_NotReported;
     [Test] procedure InputInsideApiArgs_StillReported;
+    // Review-MEDIUM 2026-08-09: API-Name nur IM String-Literal einer
+    // Fehlermeldung - Literal-Inhalt zaehlt nie als Code.
+    [Test] procedure ApiNameInsideLiteral_NotReported;
   end;
 
 implementation
@@ -145,6 +148,25 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkPathTraversal),
       '.TEXT_HTML ist kein User-Input-Token (Wortgrenze)');
+  finally F.Free; end;
+end;
+
+procedure TTestPathTraversal.ApiNameInsideLiteral_NotReported;
+// Review-MEDIUM 2026-08-09: 'AssignFile' steht hier nur im Meldungs-Literal,
+// das '.Text' + '+' desselben Statements ist eine UI-Meldung, kein File-Open -
+// Literal-Inhalt darf keinen Error-Tier-Path-Traversal-FP erzeugen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  ShowMessage(''AssignFile failed: '' + edUser.Text);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkPathTraversal),
+      'API-Name im String-Literal ist kein File-Open-Call');
   finally F.Free; end;
 end;
 

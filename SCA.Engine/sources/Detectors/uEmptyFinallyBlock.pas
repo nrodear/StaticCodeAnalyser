@@ -67,6 +67,10 @@ begin
   if Lines = nil then Exit;
   try
     Code := TDetectorUtils.StripFileCommentsKeepStringsCached(Lines, LineFor, AContext, FileName);
+    // Review-MEDIUM 2026-08-09: Literale blanken - 'finally end' in einem
+    // String-Literal (Codegen/Doku-String) ist kein finally-Block;
+    // laengenerhaltend, damit LineFor-Positionen gueltig bleiben.
+    Code := TDetectorUtils.BlankStringLiterals(Code);
     Lwr := LowerCase(Code);
     p := 1;
     while True do

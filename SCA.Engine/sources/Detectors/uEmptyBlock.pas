@@ -117,6 +117,10 @@ begin
   if Lines = nil then Exit;
   try
     Code := TDetectorUtils.StripFileCommentsKeepStringsCached(Lines, LineFor, AContext, FileName);
+    // Review-MEDIUM 2026-08-09: Literale blanken - 'begin end' in einem
+    // String-Literal (SQL/Codegen-Template) ist kein Code-Block;
+    // laengenerhaltend, damit LineFor-Positionen gueltig bleiben.
+    Code := TDetectorUtils.BlankStringLiterals(Code);
     Lwr := LowerCase(Code);
     pBeg := 1;
     while True do

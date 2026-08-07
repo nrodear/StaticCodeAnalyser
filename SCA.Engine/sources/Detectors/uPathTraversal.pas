@@ -81,7 +81,9 @@ var
 begin
   Result := False;
   HitAPI := '';
-  Low := LowerCase(Expr);
+  // Review-MEDIUM 2026-08-09: Literale blanken - 'AssignFile' in einem
+  // Meldungs-Literal ist kein API-Call (laengenerhaltend, HitAPI-Copy gueltig).
+  Low := LowerCase(TDetectorUtils.BlankStringLiterals(Expr));
   for API in FILE_OPEN_APIS do
   begin
     P := TDetectorUtils.FindTokenBoundedLower(API, Low);
@@ -103,7 +105,9 @@ begin
   Result := False;
   HitInput := '';
   if Pos('+', Expr) = 0 then Exit;     // ohne Concat kein Pattern
-  Low := LowerCase(Expr);
+  // Review-MEDIUM 2026-08-09: Literale blanken - '.text' im Literal-Inhalt
+  // zaehlt nicht als User-Input-Token (laengenerhaltend, HitInput-Copy gueltig).
+  Low := LowerCase(TDetectorUtils.BlankStringLiterals(Expr));
   for Tok in USER_INPUT_TOKENS do
   begin
     // FindTokenBoundedLower statt Pos: '.text' darf NICHT in
@@ -138,8 +142,10 @@ var
   var
     P, i, Depth : Integer;
   begin
+    // Review-MEDIUM 2026-08-09: Literale blanken - das Fenster muss am
+    // CODE-Vorkommen der API ankern, nicht an einem Literal-Treffer davor.
     P := TDetectorUtils.FindTokenBoundedLower(LowerCase(API),
-      LowerCase(Expr));
+      LowerCase(TDetectorUtils.BlankStringLiterals(Expr)));
     if P <= 0 then Exit(Expr);
     i := P + Length(API);
     while (i <= Length(Expr)) and (Expr[i] = ' ') do Inc(i);

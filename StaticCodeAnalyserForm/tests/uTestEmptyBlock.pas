@@ -15,6 +15,7 @@ type
     [Test] procedure EmptyMethodBody_NotReported;
     [Test] procedure TopLevelInitEmpty_NotReported;
     [Test] procedure EmptyBlock_KindAndSeverity;
+    [Test] procedure LiteralBeginEnd_NotReported;
   end;
 
 implementation
@@ -118,6 +119,24 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkEmptyBlock finding');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyBlock.LiteralBeginEnd_NotReported;
+// Review-MEDIUM 2026-08-09: 'begin end' INNERHALB eines String-Literals
+// (SQL-Block/Codegen-Template) ist kein leerer Code-Block - vor dem Fix
+// liess der Wortgrenzen-Check das Quote-Zeichen durch und meldete FP.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure EmitSqlTemplate;'#13#10 +
+  'begin'#13#10 +
+  '  if TemplateActive then AppendSql(''begin end'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyBlock),
+    '''begin end'' im String-Literal ist kein leerer Block');
   finally F.Free; end;
 end;
 

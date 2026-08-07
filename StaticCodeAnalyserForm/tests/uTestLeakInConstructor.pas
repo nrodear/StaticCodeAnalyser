@@ -36,9 +36,22 @@ type
     // [G3] Static-Factory mit Create-Suffix
     [Test] procedure SuffixFactoryNeverFreed_NoFinding;
     [Test] procedure SuffixFactoryFreedInUnit_StillReported;
+
+    // ---- Review-MEDIUM 2026-08-09: String-Literale blanken ----------------
+  end;
+
+  // Literal-Stripping-Welle A (2026-08-09) - eigene Fixture, damit die Basisklasse unter der GodClass-Schwelle bleibt.
+  [TestFixture]
+  TTestLeakInConstructorLiterals = class
+  public
+    [Test] procedure LiteralDotCreateInAssign_NoFinding;
+    [Test] procedure LiteralFreeTextInDestructor_StillReported;
   end;
 
 implementation
+
+// noinspection-file ClassPerFile
+// Zwei thematisch getrennte Fixtures in einer Unit.
 
 uses
   System.SysUtils, System.Generics.Collections,
@@ -509,7 +522,52 @@ begin
   finally F.Free; end;
 end;
 
+procedure TTestLeakInConstructorLiterals.LiteralDotCreateInAssign_NoFinding;
+// Review-MEDIUM 2026-08-09: '.Create' steht nur INNERHALB eines String-
+// Literals - das ist keine Feld-Allokation, es darf kein Fund entstehen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor TWorker.Create;'#13#10 +
+  'begin'#13#10 +
+  '  FErrText := Format(''%s.Create failed'', [ClassName]);'#13#10 +
+  '  if Bad then'#13#10 +
+  '    raise EInvalidOp.Create(''nope'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLeakInConstructor),
+    '.Create im String-Literal ist keine Allokation');
+  finally F.Free; end;
+end;
+
+procedure TTestLeakInConstructorLiterals.LiteralFreeTextInDestructor_StillReported;
+// Review-MEDIUM 2026-08-09: Gegenprobe im Destruktor - Log(''..free fconn'')
+// ist nur ein String-Literal, KEINE Freigabe; [G1] darf nicht greifen,
+// der Fund muss bleiben.
+const SRC = HEAD_TFOO +
+  'constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  FConn := TDbConn.Create(Self);'#13#10 +
+  '  if Bad then'#13#10 +
+  '    raise EInvalidOp.Create(''bad'');'#13#10 +
+  'end;'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  Log(''failed to free fconn'');'#13#10 +
+  '  inherited;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkLeakInConstructor) >= 1,
+    'Literal-Text im Destruktor ist keine Freigabe - der Fund muss bleiben');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestLeakInConstructor);
+  TDUnitX.RegisterTestFixture(TTestLeakInConstructorLiterals);
 
 end.
