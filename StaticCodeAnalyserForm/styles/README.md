@@ -1,8 +1,15 @@
 # Eingebetteter VCL-Style
 
-`Windows10Dark.vsf` stammt aus `Redist\styles\vcl\` der Delphi-12-
+`Windows10SlateGray.vsf` stammt aus `Redist\styles\vcl\` der Delphi-12-
 Installation — der Redist-Ordner ist ausdrücklich zur Weitergabe mit
 eigenen Anwendungen bestimmt.
+
+Bis 2026-08-08 war hier `Windows10Dark.vsf` eingebettet; das nahezu
+schwarze Fenster wirkte erdrückend. Das Slate-Grau entspricht dem
+verbreiteten IDE-Dunkelgrau (RAD Studio, VS) — User-Auflage. Der
+Ressourcenname ist seither das neutrale `SCADARK`: der Name codiert die
+ROLLE (der dunkle Style der Anwendung), nicht die Datei — ein erneuter
+Tausch ändert dann nur noch `.rc` und `.vsf`.
 
 `sca_styles.RES` ist mit `brcc32` aus `sca_styles.rc` erzeugt und wird im
 `.dpr` über `{$R 'styles\sca_styles.RES'}` gelinkt; `uAppTheme` lädt den

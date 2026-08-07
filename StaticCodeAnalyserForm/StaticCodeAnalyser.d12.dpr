@@ -34,7 +34,7 @@ uses
   uAppTheme;
 
 {$R *.res}
-{$R 'styles\sca_styles.RES'}  // Windows10Dark.vsf (s. styles\README.md)
+{$R 'styles\sca_styles.RES'}  // Windows10SlateGray.vsf (s. styles\README.md)
 // App-Icon kommt via <Icon_MainIcon> im .dproj: Delphi auto-embeddet das
 // .ico als MAINICON in die StaticCodeAnalyser.d12.res (= das `*.res`
 // oben), Windows nutzt es fuer Shell-Icon + Taskbar + Application.Icon.
