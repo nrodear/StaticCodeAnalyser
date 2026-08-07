@@ -17,7 +17,13 @@
 # Escapes, 0 rohe im neuen Lauf).
 TIERS 0 651 2560
 AvoidOut 14
-BeginEndRequired 308
+# BeginEndRequired 915 (war 308): der Folgezeilen-Fix der Review-HIGH-
+# Runde (2026-08-08) macht die dominante Formatierung (`if Cond then`
+# + Statement auf der Folgezeile) erstmals sichtbar - der eigene
+# Codestil nutzt begin-lose Branches BEWUSST (Guard-Exits etc., viele
+# Units tragen File-Suppressions). Erwartete Detektor-Verbesserung,
+# im HIGH-6-Commit angekuendigt; strict-only (default: !BeginEnd...).
+BeginEndRequired 915
 BooleanParam 7
 BooleanPropertyNaming 11
 # CaseStatementSize 4 (war 8): der Literal-Blank-Fix der Review-HIGH-
@@ -44,6 +50,8 @@ DfmDataModuleSplitHint 1
 # Zeile hier). Die 12 Funde in uIDEAnalyserForm.dfm sind die BEWUSSTE
 # Plugin-Singleton-Architektur (GWatchMode/GDockableForm) - die Regel
 # zielt auf Kunden-Formulare. Anker (.dfm statt .pas) im Review-Todo.
+# 2026-08-09: Regel auf fcLow demotet (Stichprobe 2FP/6) - nach dem
+# naechsten Build verschwinden die 12 aus der medium-Sicht (besser).
 DfmCrossFormCoupling 12
 DfmDbInUiForm 5
 DfmDefaultName 2
