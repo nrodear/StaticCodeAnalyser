@@ -13,7 +13,7 @@ unit uAppTheme;
 // TStyleManager.ActiveStyle. Ein gesetzter Style wirkt damit automatisch
 // bis in SeverityBg und den Grid-Renderer durch.
 //
-// STYLE-VERFUEGBARKEIT: der dunkle Style liegt als Ressource WIN10DARK
+// STYLE-VERFUEGBARKEIT: der dunkle Style liegt als Ressource SCADARK
 // (Typ VCLSTYLE) IN der EXE - gelinkt ueber {$R 'styles\sca_styles.RES'}
 // im .dpr, Details in styles/README.md. Ein Projektoptionen-Haken ist
 // weder noetig noch erwuenscht (der schriebe IDE-spezifische .dproj-
@@ -52,7 +52,7 @@ type
     class var FOnChanged : TNotifyEvent;
     class var FApplying  : Boolean;
     // Der REGISTRY-NAME des dunklen Styles (der interne Name aus dem
-    // .vsf, nicht 'WIN10DARK'). Leer = noch nicht registriert.
+    // .vsf, nicht 'SCADARK'). Leer = noch nicht registriert.
     //
     // Warum ein Name und kein TStyleServicesHandle: das Handle ist der
     // rohe Zeiger auf den Ressourcen-TMemoryStream (Vcl.Themes.pas:1771
@@ -162,14 +162,17 @@ const
   // eine sichtbare Aenderung fuer alle, die gar keinen Dunkelmodus wollen.
   STYLE_LIGHT = 'Windows';
 
-  // Der dunkle Style liegt als RCDATA-Ressource in der EXE
+  // Der dunkle Style liegt als Ressource in der EXE
   // (styles\sca_styles.RES, gelinkt im .dpr). Aktiviert wird er ueber
   // das HANDLE aus TryLoadFromResource - der INTERNE Name eines .vsf ist
   // nicht garantiert gleich dem Dateinamen, und ein Namensraten waere
   // genau die stille Fehlerquelle, die die erste Fassung hatte: ohne
   // gelinkten Style lieferte TrySetStyle('Windows10Dark') False, und die
   // EXE startete auf dunklem Windows hell (Abnahme-Befund 2026-08-05).
-  DARK_RESOURCE = 'WIN10DARK';
+  // Inhaltlich seit 2026-08-08 'Windows10 SlateGray' statt 'Windows10
+  // Dark': das Schwarz wirkte erdrueckend; das Slate-Grau entspricht dem
+  // verbreiteten IDE-Dunkelgrau (RAD Studio, VS) - User-Auflage.
+  DARK_RESOURCE = 'SCADARK';
 
   // Der Ressourcen-TYP muss 'VCLSTYLE' sein, NICHT RT_RCDATA. Grund, am
   // 2026-08-05 durch eine Zugriffsverletzung gelernt:
@@ -264,7 +267,7 @@ class procedure TAppTheme.ApplyStyle;
   // Registrierungsliste (Vcl.Themes.pas 5777-5792): Systemstil plus
   // alles, was WIR geladen haben. Der einzige Nicht-Systemname IST der
   // dunkle Style; sein Registry-Schluessel ist der interne .vsf-Name
-  // (5594), nicht der Ressourcenname WIN10DARK.
+  // (5594), nicht der Ressourcenname SCADARK.
   function FirstNonSystemName: string;
   var
     S : string;
