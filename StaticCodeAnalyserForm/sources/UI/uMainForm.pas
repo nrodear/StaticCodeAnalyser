@@ -18,6 +18,7 @@ uses
   uExportMenu,                    // TFindingExportMenu (Class-Field-Reference)
   uFindingFilter,                 // TFilterComboItem (Snapshot-Felder)
   uFuzzyComboSearch,              // tippbare Severity-Combo mit Fuzzy-Suche
+  uBaseline,                      // TBaselineSet (class-Feld FBaselineSet) + TBaseline.Write
   Vcl.Controls
  ;
 
@@ -333,7 +334,8 @@ implementation
 uses
   clipbrd,
   System.IniFiles,                // TIniFile (PersistDfmTarget - kommentarschonend)
-  uBaseline,                      // TBaseline.Write + TBaselineSet (Plugin-Paritaet)
+  // uBaseline ist in interface uses (TBaselineSet-Feld) - hier nicht mehr
+  // listen, sonst E2004 Bezeichner redeklariert.
   uSourceLineEdit,                // Suppress/Quick-Fix schreiben in die Datei
   uQuickFix,                      // TQuickFix.ProposeFix (Ctrl+Alt+F)
   uAppTheme,                      // Hell/Dunkel der Standalone-EXE
