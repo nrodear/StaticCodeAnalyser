@@ -24,6 +24,8 @@ type
     [Test] procedure Test_DifferentEvents_SameHandler_StillCounts;
     [Test] procedure Test_TwoGodHandlers_TwoFindings;
     [Test] procedure Test_ThresholdZero_FallsBackToFive;
+    [Test] procedure Test_UniformClassAndEvent_Silent;
+    [Test] procedure Test_SameClassDifferentEvents_Reported;
   end;
 
 implementation
@@ -78,13 +80,15 @@ begin
 end;
 
 procedure TTestDfmGodHandler.Test_FiveBindings_Detected;
+  // Fixture heterogen (TCheckBox-Bindung): das Homogenitaets-Gate
+  // (2026-08-09) schweigt bei EINER Klasse + EINEM Event-Typ.
 const DFM =
   'object F: TF'#13#10 +
   '  object b1: TButton OnClick = MainClick end'#13#10 +
   '  object b2: TButton OnClick = MainClick end'#13#10 +
   '  object b3: TButton OnClick = MainClick end'#13#10 +
   '  object b4: TButton OnClick = MainClick end'#13#10 +
-  '  object b5: TButton OnClick = MainClick end'#13#10 +
+  '  object b5: TCheckBox OnClick = MainClick end'#13#10 +
   'end';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -118,7 +122,7 @@ const DFM =
   '  object b4: TButton OnClick = MainClick end'#13#10 +
   '  object b5: TButton OnClick = MainClick end'#13#10 +
   '  object b6: TButton OnClick = MainClick end'#13#10 +
-  '  object b7: TButton OnClick = MainClick end'#13#10 +
+  '  object b7: TCheckBox OnClick = MainClick end'#13#10 +
   'end';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -153,7 +157,7 @@ const DFM =
   '  object b2: TButton OnClick = mainclick end'#13#10 +
   '  object b3: TButton OnClick = MAINCLICK end'#13#10 +
   '  object b4: TButton OnClick = MainClick end'#13#10 +
-  '  object b5: TButton OnClick = MainClick end'#13#10 +
+  '  object b5: TCheckBox OnClick = MainClick end'#13#10 +
   'end';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -168,7 +172,7 @@ const DFM =
   'object F: TF'#13#10 +
   '  object b1: TButton OnClick = MainClick end'#13#10 +
   '  object b2: TButton OnClick = MainClick end'#13#10 +
-  '  object b3: TButton OnClick = MainClick end'#13#10 +
+  '  object b3: TCheckBox OnClick = MainClick end'#13#10 +
   'end';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -181,11 +185,11 @@ end;
 procedure TTestDfmGodHandler.Test_Finding_KindAndSeverity;
 const DFM =
   'object F: TF'#13#10 +
-  '  object b1: TButton OnClick = MainClick end'#13#10 +
-  '  object b2: TButton OnClick = MainClick end'#13#10 +
-  '  object b3: TButton OnClick = MainClick end'#13#10 +
-  '  object b4: TButton OnClick = MainClick end'#13#10 +
-  '  object b5: TButton OnClick = MainClick end'#13#10 +
+  '  object c1: TButton OnClick = MainClick end'#13#10 +
+  '  object c2: TButton OnClick = MainClick end'#13#10 +
+  '  object c3: TButton OnClick = MainClick end'#13#10 +
+  '  object c4: TButton OnClick = MainClick end'#13#10 +
+  '  object c5: TCheckBox OnClick = MainClick end'#13#10 +
   'end';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -224,12 +228,12 @@ const DFM =
   '  object a2: TButton OnClick = HandlerA end'#13#10 +
   '  object a3: TButton OnClick = HandlerA end'#13#10 +
   '  object a4: TButton OnClick = HandlerA end'#13#10 +
-  '  object a5: TButton OnClick = HandlerA end'#13#10 +
+  '  object a5: TCheckBox OnClick = HandlerA end'#13#10 +
   '  object b1: TButton OnClick = HandlerB end'#13#10 +
   '  object b2: TButton OnClick = HandlerB end'#13#10 +
   '  object b3: TButton OnClick = HandlerB end'#13#10 +
   '  object b4: TButton OnClick = HandlerB end'#13#10 +
-  '  object b5: TButton OnClick = HandlerB end'#13#10 +
+  '  object b5: TCheckBox OnClick = HandlerB end'#13#10 +
   'end';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -243,17 +247,56 @@ procedure TTestDfmGodHandler.Test_ThresholdZero_FallsBackToFive;
 // Net (uDfmGodHandler.pas:45 ergaenzt auf 5). Test fixiert das Verhalten.
 const DFM =
   'object F: TF'#13#10 +
-  '  object b1: TButton OnClick = MainClick end'#13#10 +
-  '  object b2: TButton OnClick = MainClick end'#13#10 +
-  '  object b3: TButton OnClick = MainClick end'#13#10 +
-  '  object b4: TButton OnClick = MainClick end'#13#10 +
-  '  object b5: TButton OnClick = MainClick end'#13#10 +
+  '  object d1: TButton OnClick = MainClick end'#13#10 +
+  '  object d2: TButton OnClick = MainClick end'#13#10 +
+  '  object d3: TButton OnClick = MainClick end'#13#10 +
+  '  object d4: TButton OnClick = MainClick end'#13#10 +
+  '  object d5: TCheckBox OnClick = MainClick end'#13#10 +
   'end';
 var F: TObjectList<TLeakFinding>;
 begin
   DetectorMaxGodHandlerEvents := 0;
   F := RunOn(DFM);
   try Assert.AreEqual<Integer>(1, Count(F, fkDfmGodHandler));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmGodHandler.Test_UniformClassAndEvent_Silent;
+// Homogenitaets-Gate (User-Entscheid 2026-08-09): EIN Handler an N
+// Instanzen DERSELBEN Klasse mit DEMSELBEN Event (Tag-Farbmenue,
+// Klaviertasten) ist parametrisierte Buendelung - kein God-Handler.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object m1: TMenuItem OnClick = ColorClick end'#13#10 +
+  '  object m2: TMenuItem OnClick = ColorClick end'#13#10 +
+  '  object m3: TMenuItem OnClick = ColorClick end'#13#10 +
+  '  object m4: TMenuItem OnClick = ColorClick end'#13#10 +
+  '  object m5: TMenuItem OnClick = ColorClick end'#13#10 +
+  '  object m6: TMenuItem OnClick = ColorClick end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmGodHandler),
+    'homogene Tag-Buendelung muss still bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmGodHandler.Test_SameClassDifferentEvents_Reported;
+// Gleiche Klasse, aber GEMISCHTE Event-Typen -> heterogen -> Fund.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object b1: TButton OnClick    = MainHandler end'#13#10 +
+  '  object b2: TButton OnClick    = MainHandler end'#13#10 +
+  '  object b3: TButton OnDblClick = MainHandler end'#13#10 +
+  '  object b4: TButton OnClick    = MainHandler end'#13#10 +
+  '  object b5: TButton OnClick    = MainHandler end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmGodHandler),
+    'gemischte Event-Typen bleiben ein God-Handler-Fund');
   finally F.Free; end;
 end;
 
