@@ -73,6 +73,15 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Every export entry now states its scope in the caption ("JSON (filtered
   view)", "SARIF (all findings)") — previously only HTML did, which made
   the count difference between two exports of the same run inexplicable.
+- **Baseline workflow in the standalone EXE** (plugin parity): *Write
+  baseline from current scan…* saves the unfiltered findings as a
+  baseline JSON — the same format the CLI (`--write-baseline`), the
+  plugin and the HTML report exchange — and *Show only new findings*
+  hides everything whose fingerprint is already in the configured
+  baseline. Fail-open: a missing or broken baseline file hides nothing.
+- **Right-click menu on the result grid**: Open, Copy AI prompt, Insert
+  suppression marker, Apply quick fix — the discoverable form of the
+  keyboard shortcuts.
 - **The window remembers itself**: size, position, maximised state and
   column widths survive a restart (clamped to a visible monitor, so an
   unplugged second screen cannot restore the window out of sight). The
