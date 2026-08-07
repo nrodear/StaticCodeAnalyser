@@ -300,7 +300,13 @@ begin
       if not PoExtractLiteral(Line, Lit) then
         Exit(False);
       case Section of
+        // Kurz-Akkumulator (<100 Zeichen) - Concat schlaegt hier den
+        // TStringBuilder-Objekt-Overhead (Review-HIGH-Nachlese 2026-08-08).
+        // noinspection StringConcatInLoop
         psId  : MsgId  := MsgId + Lit;
+        // Kurz-Akkumulator (<100 Zeichen) - Concat schlaegt hier den
+        // TStringBuilder-Objekt-Overhead (Review-HIGH-Nachlese 2026-08-08).
+        // noinspection StringConcatInLoop
         psStr : MsgStr := MsgStr + Lit;
         psCtx : ;                      // Kontext interessiert uns nicht
       end;

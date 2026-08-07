@@ -283,6 +283,9 @@ begin
     if (P > N) or (Code[P] <> '.') then Break;
     P := SkipBlanks(Code, P + 1);
     if (P > N) or not IsIdentStartCh(Code[P]) then Break;
+    // Kurz-Akkumulator (<100 Zeichen) - Concat schlaegt hier den
+    // TStringBuilder-Objekt-Overhead (Review-HIGH-Nachlese 2026-08-08).
+    // noinspection StringConcatInLoop
     Result := Result + '.' + CodeIdentAt(Code, P, NextPos);
     P := NextPos;
   end;

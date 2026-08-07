@@ -1366,6 +1366,9 @@ begin
       begin
         if (i < Length(RHS)) and (RHS[i + 1] = '''') then
         begin
+          // Kurz-Akkumulator (<100 Zeichen) - Concat schlaegt hier den
+          // TStringBuilder-Objekt-Overhead (Review-HIGH-Nachlese 2026-08-08).
+          // noinspection StringConcatInLoop
           Mask := Mask + '''';
           Inc(i, 2);
           Continue;
@@ -1560,6 +1563,9 @@ begin
     begin
       // ''-Escape toggelt zweimal - fuer das Scannen unschaedlich.
       if c = '''' then inStr := False;
+      // Kurz-Akkumulator (<100 Zeichen) - Concat schlaegt hier den
+      // TStringBuilder-Objekt-Overhead (Review-HIGH-Nachlese 2026-08-08).
+      // noinspection StringConcatInLoop
       if InArr then Elem := Elem + c;
       Inc(i);
       Continue;

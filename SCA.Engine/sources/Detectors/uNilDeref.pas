@@ -369,6 +369,9 @@ begin
   Result := '';
   for i := 1 to Length(S) do
     if not CharInSet(S[i], [' ', #9]) then
+      // Kurz-Akkumulator (<100 Zeichen) - Concat schlaegt hier den
+      // TStringBuilder-Objekt-Overhead (Review-HIGH-Nachlese 2026-08-08).
+      // noinspection StringConcatInLoop
       Result := Result + S[i];
   Result := LowerCase(Result);
 end;
@@ -400,6 +403,9 @@ begin
     Ch := ARaw[i];
     if CharInSet(Ch, [' ', #9]) then
     begin
+      // Kurz-Akkumulator (<100 Zeichen) - Concat schlaegt hier den
+      // TStringBuilder-Objekt-Overhead (Review-HIGH-Nachlese 2026-08-08).
+      // noinspection StringConcatInLoop
       if not PrevSpace then S1 := S1 + ' ';
       PrevSpace := True;
     end
