@@ -123,12 +123,11 @@ begin
     TDfmLayerViolationDetector.Analyze(Graph, DfmFileName, Results);
     TDfmActionMismatchDetector.Analyze(Graph, DfmFileName, Results);
     TDfmMasterDetailUnlinkedDetector.Analyze(Graph, DfmFileName, Results);
-    TDfmGodHandlerDetector.Analyze(Binding, DfmFileName, Results);
-
-    // Cross-Unit-Detektoren: brauchen den Repo-Index. Wenn er nicht
-    // befuellt ist (Single-File-Analyse), schweigen sie selbst.
-    TDfmCrossFormCouplingDetector.Analyze(Binding, RepoIdx,
-      DfmFileName, Results);
+    // GodHandler + CrossFormCoupling sind Binder-Konsumenten und stehen
+    // in Block 5 - hier standen sie mit Binding=nil und waren in
+    // Produktion KOMPLETT stumm (Review-HIGH 2026-08-08: SCA040/SCA042
+    // = 0 Funde im gesamten Korpus; nur die Unit-Tests bauten ein
+    // echtes Binding und blieben gruen).
 
     // 3) Pascal-AST der zugehoerigen .pas holen (Iteration 3). Fehler
     //    werden geschluckt - DFM-only Detektoren haben bereits gefeuert,
@@ -179,6 +178,11 @@ begin
     TDfmEmptyBoundEventDetector.Analyze(Binding, DfmFileName, Results);
     TDfmSchemaMismatchDetector.Analyze(Binding, DfmFileName, Results);
     TDfmSqlFromUserInputDetector.Analyze(Binding, DfmFileName, Results);
+    TDfmGodHandlerDetector.Analyze(Binding, DfmFileName, Results);
+    // Cross-Unit-Detektor: braucht zusaetzlich den Repo-Index; ohne ihn
+    // (Single-File-Analyse) schweigt er selbst.
+    TDfmCrossFormCouplingDetector.Analyze(Binding, RepoIdx,
+      DfmFileName, Results);
     // Cross-Unit-Detektor (SCA184): unbenutzte DFM-Komponente. Braucht den
     // repo-weiten Symbol-Index; ohne ihn (Single-File) schweigt er selbst (S1).
     // AOwnUnitPath = PasFileName (Cross-Unit-Lookup + S3-Quelltext),

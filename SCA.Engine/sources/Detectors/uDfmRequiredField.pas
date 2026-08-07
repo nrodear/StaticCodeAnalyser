@@ -27,7 +27,7 @@ unit uDfmRequiredField;
 interface
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.StrUtils, System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uComponentGraph, uDfmDbFieldAnalysis;
 
@@ -110,6 +110,16 @@ var
   AllInvis  : Boolean;
 begin
   if Graph = nil then Exit;
+  // Review-HIGH 2026-08-08: bei DataModule-Roots liegen die bindenden
+  // DB-Controls per Standard-Architektur in ANDEREN Dateien (den Forms) -
+  // jede Required-Pruefung auf Ein-Datei-Sicht meldet dort JEDES
+  // Required-Feld als unbound (FP-Schwarm). Gleiche Namens-Heuristik wie
+  // uDfmDbInUiForm.IsDataModuleRoot ('TMainDataModule' etc.); GRENZE:
+  // DataModules ohne '...DataModule'-Namenskonvention bleiben sichtbar -
+  // echte Cross-File-Bindung via RepoIdx ist ein eigenes Folge-Inkrement
+  // (Todo_Review_Detektoren_2026-08-08).
+  if (Graph.Roots.Count > 0) and
+     EndsText('DataModule', Graph.Roots[0].ClassRef) then Exit;
   All := Graph.EnumerateAll;
   try
     Bindings := BuildBindingIndex(All);

@@ -24,6 +24,7 @@ type
     // --- Finding-Inhalt ---
     [Test] procedure Test_Unbound_KindAndSeverity;
     [Test] procedure Test_NotVisible_KindAndSeverity;
+    [Test] procedure Test_DataModuleRoot_Skipped;
   end;
 
 implementation
@@ -263,6 +264,23 @@ begin
   try
     Assert.AreEqual(fkDfmRequiredFieldNotVisible, F[0].Kind);
     Assert.AreEqual(lsWarning, F[0].Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestDfmRequiredField.Test_DataModuleRoot_Skipped;
+// Review-HIGH 2026-08-08: DataModule-Roots werden komplett geskippt -
+// die bindenden DB-Controls liegen per Architektur in anderen Dateien,
+// jede Ein-Datei-Pruefung waere ein FP-Schwarm.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object DM: TMainDataModule'#13#10 +
+    '  object q: TADOQuery'#13#10 +
+    '    object qName: TStringField Required = True end'#13#10 +
+    '  end'#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(0, F.Count);
   finally F.Free; end;
 end;
 

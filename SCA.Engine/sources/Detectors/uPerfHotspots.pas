@@ -105,6 +105,39 @@ var
       Result := True;
   end;
 
+  // Position des zum for/while-Header gehoerenden 'do' (word-bounded,
+  // Klammertiefe 0), 0 wenn keins existiert.
+  function FindDoAfter(From: Integer): Integer;
+  var
+    p, Depth : Integer;
+  begin
+    Result := 0;
+    Depth  := 0;
+    p := From;
+    while p <= n do
+    begin
+      case L[p] of
+        '(', '[': Inc(Depth);
+        ')', ']': if Depth > 0 then Dec(Depth);
+        ';': Exit;                               // Header ohne do -> kaputt
+        'd': if (Depth = 0) and (p + 1 <= n) and (L[p + 1] = 'o') and
+                ((p = 1) or not IsIdent(L[p - 1])) and
+                ((p + 2 > n) or not IsIdent(L[p + 2])) then
+               Exit(p);
+      end;
+      Inc(p);
+    end;
+  end;
+
+  // True wenn das naechste Nicht-Whitespace-Wort nach From 'begin' ist;
+  // AfterWs = Position dieses Worts (auch bei False gesetzt).
+  function NextWordIsBegin(From: Integer; out AfterWs: Integer): Boolean;
+  begin
+    while (From <= n) and (L[From] <= ' ') do Inc(From);
+    AfterWs := From;
+    Result := MatchKeyword('begin', From);
+  end;
+
 begin
   L := LowerCase(Code);
   n := Length(L);
@@ -120,9 +153,32 @@ begin
       // dann die Body-Begin-End-Klammer.
       if MatchKeyword('for', i) or MatchKeyword('while', i) then
       begin
-        // Position des Loop-Headers merken
-        Stack.Push(i);
-        Inc(i, WordLen);
+        // Review-HIGH 2026-08-08: Header nur pushen, wenn dem 'do'
+        // tatsaechlich ein 'begin' folgt. Vorher blieb ein Single-
+        // Statement-Header fuer immer auf dem Stack und das NAECHSTE
+        // beliebige 'begin' im File (auch das Body-begin der naechsten
+        // Routine) wurde als Loop-Body-Range genommen - Concat/
+        // ParamByName ausserhalb jeder Schleife galten als in-Loop.
+        var KwLen := WordLen;                    // MatchKeyword('begin') ueberschreibt WordLen
+        var DoPos := FindDoAfter(i + KwLen);
+        if DoPos = 0 then begin Inc(i, KwLen); Continue; end;
+        var BodyStart: Integer;
+        if NextWordIsBegin(DoPos + 2, BodyStart) then
+          Stack.Push(i)                          // begin..end-Body wie gehabt
+        else
+        begin
+          // Single-Statement-Body: DAS ist der klassische String-Concat-
+          // Fall ('for i := ... do S := S + X[i];') - Range bis zum
+          // naechsten ';' (vereinfachtes MVP-Niveau dieser Unit).
+          KeywordEnd := PosEx(';', L, BodyStart);
+          if KeywordEnd > 0 then
+          begin
+            R.StartPos := BodyStart;
+            R.EndPos   := KeywordEnd;
+            RList.Add(R);
+          end;
+        end;
+        Inc(i, KwLen);
         Continue;
       end;
       if MatchKeyword('repeat', i) then

@@ -160,6 +160,12 @@ begin
   if Lines = nil then Exit;
   try
     Code := TDetectorUtils.StripFileCommentsKeepStringsCached(Lines, LineFor, AContext, FileName);
+    // Review-HIGH 2026-08-08: Literal-Inhalte laengenerhaltend blanken -
+    // sonst startet 'CASE WHEN x THEN 1 ELSE 0 END' in einem SQL-Literal
+    // einen Phantom-case, und dessen 'END' schliesst zusaetzlich ECHTE
+    // Pascal-case-Bloecke vorzeitig (LineFor-Indizes bleiben durch die
+    // Laengenerhaltung gueltig).
+    Code := TDetectorUtils.BlankStringLiterals(Code);
     Lwr := LowerCase(Code);
     pCase := 1;
     while True do

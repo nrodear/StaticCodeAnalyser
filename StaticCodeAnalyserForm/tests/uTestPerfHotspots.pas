@@ -40,6 +40,8 @@ type
     // FieldByNameInLoop
     [Test] procedure FieldByName_InWhileEofLoop_Reported;
     [Test] procedure FieldByName_OutsideLoop_NotReported;
+    [Test] procedure SingleStmtLoop_ConcatAfterLoop_NotReported;
+    [Test] procedure SingleStmtLoop_ConcatInBody_Reported;
   end;
 
 implementation
@@ -423,6 +425,50 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkStringConcatInLoop),
     'Integer(x).ToString (trailing .) ist String - N4 greift nicht - bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.SingleStmtLoop_ConcatAfterLoop_NotReported;
+// Review-HIGH 2026-08-08: ein for ohne begin blieb auf dem Header-Stack
+// und das begin der NAECHSTEN Routine wurde zur Loop-Range - Concat
+// ausserhalb jeder Schleife galt als in-Loop.
+const SRC =
+  'unit t; implementation'#13#10 +
+  // Namen bewusst anders als in den Bestands-Fixtures (DuplicateBlock).
+  'procedure A; var k: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for k := 0 to 9 do'#13#10 +
+  '    Ping(k);'#13#10 +
+  'end;'#13#10 +
+  'procedure B;'#13#10 +
+  'var txt: string;'#13#10 +
+  'begin'#13#10 +
+  '  txt := txt + ''tail'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkStringConcatInLoop));
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.SingleStmtLoop_ConcatInBody_Reported;
+// Der Klassiker des O(n^2)-Bugs ist gerade die begin-lose Form -
+// der Single-Statement-Body ist jetzt eine echte Loop-Range.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  // Namen bewusst ANDERS als in StringConcat_InFor_Reported - sonst
+  // meldet der Self-Scan die beiden Fixtures als DuplicateBlock.
+  'var acc: string; n: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for n := 0 to 7 do'#13#10 +
+  '    acc := acc + IntToStr(n);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkStringConcatInLoop));
   finally F.Free; end;
 end;
 
