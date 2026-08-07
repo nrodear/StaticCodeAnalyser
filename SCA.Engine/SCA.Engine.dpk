@@ -190,6 +190,7 @@ contains
   uRestHttpSecurity in 'sources\Detectors\uRestHttpSecurity.pas',
   uReversedForRange in 'sources\Detectors\uReversedForRange.pas',
   uRoutineResultAssigned in 'sources\Detectors\uRoutineResultAssigned.pas',
+  uManagedResultUninit in 'sources\Detectors\uManagedResultUninit.pas',
   uSelfAssignment in 'sources\Detectors\uSelfAssignment.pas',
   uSetLengthAppendInLoop in 'sources\Detectors\uSetLengthAppendInLoop.pas',
   uSqlDangerousStatement in 'sources\Detectors\uSqlDangerousStatement.pas',

@@ -258,6 +258,7 @@
         <DCCReference Include="uTestMissingOverride.pas"/>
         <DCCReference Include="uTestBoolAlwaysTrue.pas"/>
         <DCCReference Include="uTestConstantReturn.pas"/>
+        <DCCReference Include="uTestManagedResultUninit.pas"/>
         <DCCReference Include="uTestHardcodedString.pas"/>
         <DCCReference Include="uTestUnpairedLock.pas"/>
         <DCCReference Include="uTestMoveSizeOfPointer.pas"/>

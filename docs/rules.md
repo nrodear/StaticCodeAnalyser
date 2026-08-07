@@ -199,6 +199,7 @@ All 195 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA193](#sca193) | Non-ASCII character in identifier | Warning | Vulnerability | `uSourceEncoding.pas` |
 | [SCA194](#sca194) | Source file not part of the project | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA195](#sca195) | Unit used by the project but not included in it | Hint | Code Smell | `uNotIncludedInProject.pas` |
+| [SCA196](#sca196) | Result of managed type is read before it is assigned | Warning | Bug | `uManagedResultUninit.pas` |
 
 ---
 
@@ -5081,6 +5082,39 @@ MyProject.dproj references uMain - uMain uses uHelper, but uHelper.pas is not in
 Every unit reachable via uses from project units is listed as a DCCReference in the .dproj
 ```
 
+## SCA196
+**Result of managed type is read before it is assigned**
+
+> Result of a managed return type is read before the first assignment - Result aliases the caller's target variable and starts with its OLD value, not empty. Initialize Result first (nil / [] / '')
+
+| Field | Value |
+|---|---|
+| Severity | Warning | Type | Bug |
+| Tags | `function`, `uninitialized`, `memory` |
+| Detector | `uManagedResultUninit.pas` |
+| Scope | functions returning string family, dynamic arrays (`TArray<>`, `TBytes`, `*DynArray`), `Variant`/`OleVariant`, interfaces; records and classes stay out |
+
+For managed return types the compiler passes Result as a hidden **var** parameter that aliases the caller's target variable INCLUDING its previous content (`System.Rtti` `UseResultPointer`) - Result is NOT initialized to `''`/`nil` on entry. Reading it before the first assignment (`Result := Result + [x]`, `Result[i] := ...` without prior `SetLength`, `Result.Add(...)`, `Exit(Result + ...)`) processes stale caller data; the classic symptom is a collector function whose second call appends to the results of the first. The compiler hint W1035 stays SILENT for exactly these types. Detection is purely source-order (no path analysis): the first Result access decides, and anything that may write Result (assignment, `Exit(value)`, Result/@Result as call argument like `SetLength(Result, n)`) counts as the initialization. `absolute Result` aliases, asm bodies and bodyless declarations are skipped; a write in one branch followed by a read after it is deliberately NOT flagged (false negative, not false positive). Where SCA196 fires, SCA121 stays silent for the same function.
+
+```pascal
+// BAD
+function CollectNames(const L: TStrings): TArray<string>;
+var i: Integer;
+begin
+  for i := 0 to L.Count - 1 do
+    Result := Result + [L[i]];  // reads the CALLER's old array on first iteration
+end;
+
+// GOOD
+function CollectNames(const L: TStrings): TArray<string>;
+var i: Integer;
+begin
+  Result := [];  // or: Result := nil; / SetLength(Result, 0);
+  for i := 0 to L.Count - 1 do
+    Result := Result + [L[i]];
+end;
+```
+
 ---
 
-_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA195.md`._
+_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA196.md`._

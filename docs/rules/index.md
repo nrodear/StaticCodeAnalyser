@@ -1,6 +1,6 @@
 # StaticCodeAnalyser — Rule Catalog
 
-All 195 detector rules. Click an ID for full details.
+All 196 detector rules. Click an ID for full details.
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -199,6 +199,7 @@ All 195 detector rules. Click an ID for full details.
 | [SCA193](SCA193.md) | Non-ASCII character in identifier | Warning | Vulnerability | `uSourceEncoding.pas` |
 | [SCA194](SCA194.md) | Source file not part of the project | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA195](SCA195.md) | Unit used by the project but not included in it | Hint | Code Smell | `uNotIncludedInProject.pas` |
+| [SCA196](SCA196.md) | Result of managed type is read before it is assigned | Warning | Bug | `uManagedResultUninit.pas` |
 
 ---
 

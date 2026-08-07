@@ -256,6 +256,7 @@
         <DCCReference Include="sources\Detectors\uRestHttpSecurity.pas"/>
         <DCCReference Include="sources\Detectors\uReversedForRange.pas"/>
         <DCCReference Include="sources\Detectors\uRoutineResultAssigned.pas"/>
+        <DCCReference Include="sources\Detectors\uManagedResultUninit.pas"/>
         <DCCReference Include="sources\Detectors\uSelfAssignment.pas"/>
         <DCCReference Include="sources\Detectors\uSetLengthAppendInLoop.pas"/>
         <DCCReference Include="sources\Detectors\uSqlDangerousStatement.pas"/>

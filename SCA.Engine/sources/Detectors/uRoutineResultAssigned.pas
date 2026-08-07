@@ -75,8 +75,9 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.Classes,    // TStringList fuer die Quelltext-Gates (2026-07-31)
-  uFileTextCache;    // AcquireLines/ReleaseLines - Lazy-Load, nur bei Kandidaten
+  System.Classes,        // TStringList fuer die Quelltext-Gates (2026-07-31)
+  uFileTextCache,        // AcquireLines/ReleaseLines - Lazy-Load, nur bei Kandidaten
+  uManagedResultUninit;  // SCA196-Kollisionsregel (WouldReport, 2026-08-07)
 
 // Liefert True wenn TypeRef einen Return-Type enthaelt (Format
 // 'function:RetType[;direktive...]'). Procedures haben keinen ':' im
@@ -490,6 +491,14 @@ begin
   // 'absolute Result'-Alias: Schreibzugriffe laufen ueber den Alias-Namen,
   // nie ueber 'Result' -> sonst FP.
   if HasAbsoluteResultAlias(MethodNode) then Exit;
+
+  // Kollisionsregel SCA196 (User-Entscheid 2026-08-07): liest die Methode
+  // Result vor dem ersten Write (verwalteter Return-Typ), meldet
+  // uManagedResultUninit den praeziseren Befund - SCA121 bleibt fuer
+  // dieselbe Methode stumm. Ueberlappen kann nur der Fall "Result wird NUR
+  // gelesen, nie geschrieben" (z.B. Body besteht allein aus Result.Add(..));
+  // sobald irgendein Result-Write existiert, schweigt SCA121 ohnehin.
+  if TManagedResultUninitDetector.WouldReport(MethodNode) then Exit;
 
   // Body-Inhalt: jedes Exit oder Raise reicht als Skip-Grund.
   Exits := MethodNode.FindAll(nkExit);

@@ -13,7 +13,7 @@
 const
   // Index == Ord(TFindingKind) - die JSON ist positionsgleich zum Enum
   // (Test RuleIDMatchesOrdinal sichert das ab).
-  RULE_CATALOG_DATA : array[0..194] of TRuleFallbackData = (
+  RULE_CATALOG_DATA : array[0..195] of TRuleFallbackData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -1822,6 +1822,20 @@ const
       ShortDesc: 'A .pas file is referenced via uses by project units (it compiles through the search path) but is not listed in the project file (.dproj/.groupproj) - add it to the project';
       BadEx    : 'MyProject.dproj references uMain - uMain uses uHelper, but uHelper.pas is not in the .dproj -> flagged: add uHelper.pas to the project';
       GoodEx   : 'Every unit reachable via uses from project units is listed as a DCCReference in the .dproj'
+    ),
+    // SCA196
+    (
+      RuleID   : 'SCA196';
+      Name     : 'Result of managed type is read before it is assigned';
+      ShortDesc: 'Result of a managed return type is read before the first assignment - Result aliases the caller''s target variable and starts with its OLD value, not empty. Initialize Result first (nil / [] / '''')';
+      BadEx    : 'function CollectNames(const L: TStrings): TArray<string>;' + #13#10 + 'var i: Integer;' +
+        #13#10 + 'begin' + #13#10 + '  for i := 0 to L.Count - 1 do' + #13#10 +
+        '    Result := Result + [L[i]];  // reads the CALLER''s old array on first iteration' +
+        #13#10 + 'end;';
+      GoodEx   : 'function CollectNames(const L: TStrings): TArray<string>;' + #13#10 + 'var i: Integer;' +
+        #13#10 + 'begin' + #13#10 + '  Result := [];  // or: Result := nil; / SetLength(Result, 0);' +
+        #13#10 + '  for i := 0 to L.Count - 1 do' + #13#10 + '    Result := Result + [L[i]];' +
+        #13#10 + 'end;'
     )
   );
 
