@@ -1248,14 +1248,6 @@ begin
     fkUnusedParameter,           // legitim bei Interface-Impl
     fkUnusedPrivateMethod,       // RTTI/DFM-Konsumenten unsichtbar
 
-    // SCA040 DfmCrossFormCoupling: nach dem Erwecken der Regel (Review-
-    // HIGH 2026-08-08, war mit Binding=nil komplett tot) zeigte die
-    // Korpus-Stichprobe 3TP/2FP/1BL bei 5584 Warnings - FP-Klassen:
-    // lokale Variablen/Konstanten als "Kopplung" gewertet, Anker auf
-    // .dfm statt .pas. fcLow bis zum Haertungs-Inkrement (User-Entscheid
-    // 2026-08-09), danach Re-Messung + Promotion wie bei SCA196.
-    fkDfmCrossFormCoupling: Result := fcLow;
-
     // --- Schema-Heuristik (DFM ohne vollen Schema-Index) ---
     fkDfmDefaultName,
     fkDfmHardcodedCaption,
@@ -1284,6 +1276,16 @@ begin
     // Variante 1 steht aus).
     fkManagedResultUninit
     : Result := fcMedium;
+
+    // SCA040 DfmCrossFormCoupling: nach dem Erwecken der Regel (Review-
+    // HIGH 2026-08-08, war mit Binding=nil komplett tot) zeigte die
+    // Korpus-Stichprobe 3TP/2FP/1BL bei 5584 Warnings - fcLow bis zum
+    // Haertungs-Inkrement (User-Entscheid 2026-08-09), danach Re-Messung
+    // + Promotion wie bei SCA196. EIGENER Case-Zweig NACH der fcMedium-
+    // Aufzaehlung - die Erst-Fassung stand MITTEN in der Aufzaehlung und
+    // zog damit die halbe Pattern-/Metrik-/Style-Gruppe auf fcLow
+    // (4 rote Tests, TestInsight 2026-08-09).
+    fkDfmCrossFormCoupling: Result := fcLow;
 
   else
     Result := fcHigh;
