@@ -20,7 +20,13 @@ AvoidOut 14
 BeginEndRequired 308
 BooleanParam 7
 BooleanPropertyNaming 11
-CaseStatementSize 8
+# CaseStatementSize/StringConcatInLoop: je +1 TRANSIENT (2026-08-08,
+# Review-HIGH-Fixes): die ALTE Exe zaehlt Literal-CASE bzw. eine
+# verrutschte for-Range in den NEUEN Regressions-Fixtures von
+# uTestCaseStatementSize/uTestPerfHotspots - exakt die Bugs, die die
+# Fixes beheben. Nach dem naechsten Build fallen beide auf 8/37
+# zurueck (Gate erlaubt Besserung); dann Baseline wieder anziehen.
+CaseStatementSize 9
 ClassPerFile 519
 CognitiveComplexity 345
 CommentedOutCode 21
@@ -75,7 +81,7 @@ PublicMemberWithoutDoc 39
 RedundantConditional 3
 SetLengthAppendInLoop 2
 SourceUtf8NoBom 9
-StringConcatInLoop 37
+StringConcatInLoop 38
 TodoComment 16
 UnusedLocalVar 2
 UnusedParameter 13

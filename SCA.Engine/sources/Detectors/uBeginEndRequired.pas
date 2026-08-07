@@ -93,10 +93,17 @@ end;
 // entscheidet deren ERSTES Code-Wort. Vorher war die haeufigste
 // Formatierung (`if Cond then` + Statement auf der Folgezeile) fuer den
 // Detektor komplett unsichtbar.
+type
+  // Zeilenuebergreifender Branch-Zustand (ein Wert, per var durchgereicht).
+  TPendingBranch = record
+    Col         : Integer;  // Spalte eines wartenden then/else/do (0 = keins)
+    ViolatedCol : Integer;  // >0: Vorzeilen-Branch ohne Blockwort -> Fund
+    NewSet      : Boolean;  // diese Zeile endete mit offenem Branch
+  end;
+
 procedure CollectBareBranches(const Line: string; var InBlockComm: Boolean;
   var InParenStarComm: Boolean; Cols: TList<Integer>;
-  var APendingCol: Integer; out AViolatedCol: Integer;
-  out ANewPending: Boolean);
+  var APending: TPendingBranch);
 var
   i, n, j, k : Integer;
   InStr      : Boolean;
@@ -109,8 +116,8 @@ var
   Start      : Integer;
   PendChecked: Boolean;
 begin
-  AViolatedCol := 0;
-  ANewPending  := False;
+  APending.ViolatedCol := 0;
+  APending.NewSet      := False;
   PendChecked  := False;
   InStr := False;
   i := 1;
@@ -159,7 +166,7 @@ begin
     // Wartender Branch aus einer frueheren Zeile: das ERSTE Code-Wort
     // dieser Zeile entscheidet. Nicht-Ident-Erstzeichen (z.B. '(') ->
     // Pending konservativ verwerfen (FN-Richtung, nie FP).
-    if (APendingCol > 0) and not PendChecked then
+    if (APending.Col > 0) and not PendChecked then
     begin
       PendChecked := True;
       if IsIdentStart(c) then
@@ -167,9 +174,9 @@ begin
         k := i;
         while (k <= n) and IsIdent(Line[k]) do Inc(k);
         if not IsBlockishWord(LowerCase(Copy(Line, i, k - i))) then
-          AViolatedCol := APendingCol;
+          APending.ViolatedCol := APending.Col;
       end;
-      APendingCol := 0;                          // verbraucht
+      APending.Col := 0;                         // verbraucht
     end;
 
     // Match `then`/`else`/`do` an Wortgrenze
@@ -198,8 +205,8 @@ begin
     if j > n then
     begin
       // Keyword am Zeilenende: Body kommt auf der Folgezeile.
-      APendingCol := KwCol;
-      ANewPending := True;
+      APending.Col    := KwCol;
+      APending.NewSet := True;
       i := KwEnd; Continue;
     end;
     if not IsIdentStart(Line[j]) then
@@ -207,8 +214,8 @@ begin
       // `then // Kommentar` -> Body ebenfalls auf der Folgezeile.
       if (Line[j] = '/') and (j < n) and (Line[j + 1] = '/') then
       begin
-        APendingCol := KwCol;
-        ANewPending := True;
+        APending.Col    := KwCol;
+        APending.NewSet := True;
       end;
       i := KwEnd; Continue;
     end;
@@ -237,29 +244,26 @@ var
   Cols   : TList<Integer>;
   Col    : Integer;
   InBlk, InParen : Boolean;
-  PendCol  : Integer;
+  Pend     : TPendingBranch;
   PendLine : Integer;
-  ViolCol  : Integer;
-  NewPend  : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   Cols := TList<Integer>.Create;
   try
     InBlk := False; InParen := False;
-    PendCol := 0; PendLine := -1;
+    Pend.Col := 0; PendLine := -1;
     for i := 0 to Lines.Count - 1 do
     begin
       Cols.Clear;
-      CollectBareBranches(Lines[i], InBlk, InParen, Cols,
-        PendCol, ViolCol, NewPend);
-      if NewPend then
+      CollectBareBranches(Lines[i], InBlk, InParen, Cols, Pend);
+      if Pend.NewSet then
         PendLine := i;
-      if (ViolCol > 0) and (PendLine >= 0) then
+      if (Pend.ViolatedCol > 0) and (PendLine >= 0) then
         Results.Add(TLeakFinding.New(FileName, '', PendLine + 1,
           Format('Branch at column %d uses a single statement without ' +
                  '`begin..end` - explicit blocks survive future additions ' +
-                 'without re-indenting errors.', [ViolCol]),
+                 'without re-indenting errors.', [Pend.ViolatedCol]),
           fkBeginEndRequired));
       for Col in Cols do
         Results.Add(TLeakFinding.New(FileName, '', i + 1,

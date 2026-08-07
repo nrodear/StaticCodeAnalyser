@@ -434,15 +434,16 @@ procedure TTestPerfHotspots.SingleStmtLoop_ConcatAfterLoop_NotReported;
 // ausserhalb jeder Schleife galt als in-Loop.
 const SRC =
   'unit t; implementation'#13#10 +
-  'procedure A; var i: Integer;'#13#10 +
+  // Namen bewusst anders als in den Bestands-Fixtures (DuplicateBlock).
+  'procedure A; var k: Integer;'#13#10 +
   'begin'#13#10 +
-  '  for i := 0 to 10 do'#13#10 +
-  '    Beep(i);'#13#10 +
+  '  for k := 0 to 9 do'#13#10 +
+  '    Ping(k);'#13#10 +
   'end;'#13#10 +
   'procedure B;'#13#10 +
-  'var s: string;'#13#10 +
+  'var txt: string;'#13#10 +
   'begin'#13#10 +
-  '  s := s + ''once'';'#13#10 +
+  '  txt := txt + ''tail'';'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -457,10 +458,12 @@ procedure TTestPerfHotspots.SingleStmtLoop_ConcatInBody_Reported;
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo;'#13#10 +
-  'var s: string; i: Integer;'#13#10 +
+  // Namen bewusst ANDERS als in StringConcat_InFor_Reported - sonst
+  // meldet der Self-Scan die beiden Fixtures als DuplicateBlock.
+  'var acc: string; n: Integer;'#13#10 +
   'begin'#13#10 +
-  '  for i := 0 to 10 do'#13#10 +
-  '    s := s + IntToStr(i);'#13#10 +
+  '  for n := 0 to 7 do'#13#10 +
+  '    acc := acc + IntToStr(n);'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin

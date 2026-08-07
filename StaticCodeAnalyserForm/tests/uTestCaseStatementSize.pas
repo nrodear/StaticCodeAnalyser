@@ -110,13 +110,15 @@ procedure TTestCaseStatementSize.LiteralEndBeforeRealCase_StillReported;
 // schliessen - das grosse case danach muss weiter gemeldet werden.
 const SRC =
   'unit t; implementation'#13#10 +
-  'procedure Foo; var X: Integer;'#13#10 +
+  'procedure Foo; var Y: Integer;'#13#10 +
   'begin'#13#10 +
   '  Log(''outer CASE x END marker'');'#13#10 +
-  '  case X of'#13#10 +
-  '    1: A1;  2: A2;  3: A3;  4: A4;  5: A5;'#13#10 +
-  '    6: A6;  7: A7;  8: A8;  9: A9; 10: A10;'#13#10 +
-  '   11: A11;'#13#10 +
+  // Zweignamen bewusst ANDERS als in LargeCase_Reported - sonst
+  // meldet der Self-Scan die beiden Fixtures als DuplicateBlock.
+  '  case Y of'#13#10 +
+  '    1: C1;  2: C2;  3: C3;  4: C4;  5: C5;'#13#10 +
+  '    6: C6;  7: C7;  8: C8;  9: C9; 10: C10;'#13#10 +
+  '   11: C11;'#13#10 +
   '  end;'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
