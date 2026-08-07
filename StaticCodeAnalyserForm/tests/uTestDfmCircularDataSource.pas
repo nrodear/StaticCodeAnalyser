@@ -26,6 +26,7 @@ type
     [Test] procedure Test_Finding_SeverityIsError;
     [Test] procedure Test_Finding_KindIsCircularDataSource;
     [Test] procedure Test_Finding_MissingVarShowsCyclePath;
+    [Test] procedure Test_DuplicateComponentNames_NoCrash;
   end;
 
 implementation
@@ -261,6 +262,25 @@ begin
     Assert.Contains(F[0].MissingVar, 'ds');
     Assert.Contains(F[0].MissingVar, 'q');
     Assert.Contains(F[0].MissingVar, '->');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmCircularDataSource.Test_DuplicateComponentNames_NoCrash;
+// Review-HIGH 2026-08-08: doppelte Komponentennamen sind im Graph legal
+// (zwei inline-Frames derselben Frame-Klasse listen beide dieselben
+// 'inherited'-Kinder) - CollectEdges crashte mit EArgumentException in
+// TDictionary.Add. Jetzt: Kanten mergen, Zyklus wird weiter erkannt.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object Form: TForm'#13#10 +
+    '  object lblTitle: TLabel end'#13#10 +
+    '  object lblTitle: TLabel end'#13#10 +
+    '  object ds: TDataSource DataSet = q end'#13#10 +
+    '  object q: TADOQuery MasterSource = ds end'#13#10 +
+    'end');
+  try
+    Assert.IsTrue(F.Count >= 1, 'Zyklus muss trotz Duplikat-Namen gemeldet werden');
   finally F.Free; end;
 end;
 

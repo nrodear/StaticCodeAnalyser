@@ -62,11 +62,12 @@ class procedure TDfmCircularDataSourceDetector.Analyze(Graph: TComponentGraph;
 
   function CollectEdges(All: TList<TComponentNode>): TDictionary<string, TList<string>>;
   var
-    N    : TComponentNode;
-    P    : string;
-    V    : TPropValue;
-    K    : string;
-    List : TList<string>;
+    N        : TComponentNode;
+    P        : string;
+    V        : TPropValue;
+    K        : string;
+    List     : TList<string>;
+    Existing : TList<string>;
   begin
     Result := TObjectDictionary<string, TList<string>>.Create([doOwnsValues]);
     for N in All do
@@ -80,8 +81,17 @@ class procedure TDfmCircularDataSourceDetector.Analyze(Graph: TComponentGraph;
             K := Trim(V.RawValue);
             if K <> '' then List.Add(K);
           end;
-        Result.Add(LowerCase(N.Name), List);
-        List := nil;
+        // Duplikat-Namen sind im Graph legal (zwei inline-Frames derselben
+        // Frame-Klasse listen beide z.B. 'inherited lblTitle') - Add wuerfe
+        // EArgumentException und riss den ganzen Detektor-Lauf ab
+        // (Review-HIGH 2026-08-08). Kanten mergen statt crashen.
+        if Result.TryGetValue(LowerCase(N.Name), Existing) then
+          Existing.AddRange(List)
+        else
+        begin
+          Result.Add(LowerCase(N.Name), List);
+          List := nil;
+        end;
       finally
         List.Free;                              // nil wenn uebernommen
       end;
