@@ -33,10 +33,6 @@ type
 
 implementation
 
-// noinspection-file ClassPerFile
-// Die 'class('-Vorkommen sind FIXTURE-LITERALE (der Detektor strippt
-// keine Literale - bekannte MEDIUM-Klasse im Review-Todo); die Unit
-// selbst hat genau eine Klasse.
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.Generics.Collections,

@@ -1,4 +1,10 @@
 # Dogfooding-Baseline - Funde je Regel im EIGENEN Quelltext.
+# Stand 2026-08-09 nach Literal-Welle A + Case-Fix (frische Exe):
+# ClassPerFile 519->27 (Fixture-Literale zaehlen nicht mehr),
+# CompilerDirectiveScope/EmptyBlock/EmptyFinallyBlock -> 0
+# (Literal-Fixes; fruehere Transient-Bumps aufgeloest),
+# DfmCrossFormCoupling -> 0 sichtbar (fcLow bis zur Promotion).
+
 # Erzeugt von tools/selfscan_gate.py --update (Profil strict).
 # Das Gate schlaegt fehl, wenn eine Regel MEHR Funde hat als
 # hier. Weniger ist immer erlaubt.
@@ -32,8 +38,8 @@ BooleanPropertyNaming 11
 # Single-Statement-Ranges, alle als Kurz-Akkumulatoren mit Zeilen-
 # Markern begruendet; per Marker fielen auch 11 Bestands-Funde.
 CaseStatementSize 4
-ClassPerFile 519
-CognitiveComplexity 345
+ClassPerFile 27
+CognitiveComplexity 342
 CommentedOutCode 21
 # CompilerDirectiveScope/EmptyBlock/EmptyFinallyBlock: je +1/+2/+2
 # TRANSIENT (2026-08-09, Literal-Stripping-Welle A): die ALTE Exe
@@ -41,10 +47,10 @@ CommentedOutCode 21
 # Fixtures ('{$WARNINGS OFF}'/'begin end'/'finally end' in Literalen).
 # Nach dem naechsten Build fallen sie auf 1/2/2 zurueck - dann
 # Baseline wieder anziehen.
-CompilerDirectiveScope 2
+CompilerDirectiveScope 0
 ConcatToFormat 30
 ConstantReturn 1
-CyclomaticComplexity 123
+CyclomaticComplexity 121
 DateFormatSettings 2
 DebugOutput 20
 DeepNesting 38
@@ -58,18 +64,18 @@ DfmDataModuleSplitHint 1
 # zielt auf Kunden-Formulare. Anker (.dfm statt .pas) im Review-Todo.
 # 2026-08-09: Regel auf fcLow demotet (Stichprobe 2FP/6) - nach dem
 # naechsten Build verschwinden die 12 aus der medium-Sicht (besser).
-DfmCrossFormCoupling 12
+DfmCrossFormCoupling 0
 DfmDbInUiForm 5
 DfmDefaultName 2
 DfmEmptyBoundEvent 1
 DfmFieldTypeMismatch 2
 DfmHardcodedCaption 15
 DfmRequiredFieldUnbound 4
-DuplicateBlock 223
+DuplicateBlock 222
 DuplicateString 228
-EmptyBlock 4
+EmptyBlock 0
 EmptyExcept 37
-EmptyFinallyBlock 4
+EmptyFinallyBlock 0
 EmptyInterface 6
 EmptyMethod 7
 EmptyOnHandler 3
