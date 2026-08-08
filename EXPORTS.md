@@ -74,6 +74,15 @@ counts. Read errors and tool errors always stay non-zero.
 fails with *"Baseline write error: Verzeichnis kann nicht erstellt
 werden"* — verified on v0.9.14.
 
+**If the same unit name exists in several folders, add
+`--baseline-path-fingerprint y`.** By default a fingerprint identifies a
+finding by *file name*, not by path, so two `uSame.pas` in different
+folders share one identity. Measured consequence: a baseline written from
+one subfolder silently suppressed **every** finding in a sibling folder —
+including an SQL injection nobody had ever reviewed. With the switch the
+fingerprint carries the relative path. It changes fingerprints, so write a
+fresh baseline when you turn it on.
+
 **Do not refresh a baseline by combining the two switches.** The
 documented-looking `--baseline old --write-baseline new` writes only the
 findings that *survived* the filter — that is, the new ones. Measured on
@@ -175,7 +184,7 @@ Honest list, as of v0.9.14 — all reproduced:
 | CSV / JSON | GUI only, not scriptable |
 | JSON exports | UTF-8 **with** BOM |
 | HTML report | Stores base file names only; same-named units in different folders collide |
-| Baseline fingerprints | Same-named units in different folders share a namespace; the `PathInFingerprint` opt-in is INI-only, not reachable from the CLI |
+| Baseline fingerprints | Same-named units in different folders share a namespace by default — switch it off with `--baseline-path-fingerprint y` (see below) |
 | Unreadable source files | Counted differently in console, SARIF/Sonar/HTML and baseline |
 | `--parallel` | Not deterministic; do not use it for exports you compare |
 | `--sonar-insecure` | Does not accept self-signed certificates (it only enables TLS 1.1) |

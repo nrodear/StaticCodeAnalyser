@@ -66,6 +66,14 @@ type
     Baseline      : string;         // --baseline <file.json>     filter known findings
     WriteBaseline : string;         // --write-baseline <file.json|auto>  snapshot for future runs
     BaselineScan  : string;         // --baseline-scan y|n  (.sca-Aufloesung + harter Fehler)
+    // --baseline-path-fingerprint y|n: Relativpfad statt blossem Dateinamen
+    // im Fingerprint. Bis 2026-08-08 gab es das NUR in der analyser.ini und
+    // damit nicht in CI - obwohl genau dort der Schaden entsteht: eine
+    // Baseline aus einem Unterordner unterdrueckt gleichnamige Units in
+    // ALLEN anderen Ordnern mit (nachgemessen: 4-Eintrag-Baseline aus
+    // alpha\ verschluckte samtliche Funde in beta\, inklusive einer
+    // SQL-Injection, die nie jemand geprueft hatte).
+    BaselinePathFp : string;
     FailOn        : string;         // --fail-on=error|warning|hint|none  (default: graded)
     // ---- Sonar-Integration (Phase A der todo-sonar.md Roadmap) ----
     SonarExport   : string;         // --sonar-export <out.json>  Generic Issue Format
@@ -265,6 +273,8 @@ begin
       GetValue(Result.WriteBaseline, '--write-baseline')
     else if A = '--baseline-scan' then
       GetValue(Result.BaselineScan, '--baseline-scan')
+    else if A = '--baseline-path-fingerprint' then
+      GetValue(Result.BaselinePathFp, '--baseline-path-fingerprint')
     else if A.StartsWith('--fail-on=') then
       Result.FailOn := LowerCase(A.Substring(Length('--fail-on=')))
     else if A = '--fail-on' then
@@ -495,6 +505,16 @@ begin
   WriteLn('                        <path>\.sca\sca.baseline.json). HARD error');
   WriteLn('                        (exit 99) if requested and no file exists.');
   WriteLn('                        Idempotent; overwrites existing file.');
+  WriteLn('  --baseline-path-fingerprint y|n');
+  WriteLn('                        y: the fingerprint uses the file''s RELATIVE');
+  WriteLn('                        PATH instead of just its name. Default n');
+  WriteLn('                        (compatible). Use y when the same unit name');
+  WriteLn('                        exists in several folders - otherwise one');
+  WriteLn('                        accepted finding silently suppresses the');
+  WriteLn('                        same-named unit everywhere else. Changing');
+  WriteLn('                        this invalidates existing baselines: write');
+  WriteLn('                        a fresh one. Overrides [Baseline]');
+  WriteLn('                        PathInFingerprint in analyser.ini.');
   WriteLn('  --fail-on <lvl>       Exit-code policy: error|warning|hint|none|graded.');
   WriteLn('                        Default (=graded): use the tiered exit codes below.');
   WriteLn('                        ''none''  - exit 0 even with findings present.');
@@ -893,6 +913,31 @@ begin
       WriteLn(ErrOutput,
         'Error: --baseline-scan erwartet y|n, bekommen: ', Args.BaselineScan);
       Exit(Integer(cecToolError));
+    end;
+    // Fingerprint-Modus: CLI-Schalter gewinnt gegen [Baseline]
+    // PathInFingerprint aus der analyser.ini. Ohne Schalter bleibt es beim
+    // INI-/Default-Wert, den ApplyDetectorThresholds gesetzt hat.
+    if Args.BaselinePathFp <> '' then
+    begin
+      if SameText(Args.BaselinePathFp, 'y') or
+         SameText(Args.BaselinePathFp, 'yes') or
+         (Args.BaselinePathFp = '1') then
+      begin
+        uSCAConsts.BaselinePathFingerprint := True;
+      end
+      else if SameText(Args.BaselinePathFp, 'n') or
+              SameText(Args.BaselinePathFp, 'no') or
+              (Args.BaselinePathFp = '0') then
+      begin
+        uSCAConsts.BaselinePathFingerprint := False;
+      end
+      else
+      begin
+        WriteLn(ErrOutput,
+          'Error: --baseline-path-fingerprint erwartet y|n, bekommen: ',
+          Args.BaselinePathFp);
+        Exit(Integer(cecToolError));
+      end;
     end;
     if WantBaselineScan then
     begin

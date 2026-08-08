@@ -26,6 +26,19 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unreliable results. The clean repair — one `TRegEx` per call — is
   recorded in the README.
 
+### Added
+
+- **`--baseline-path-fingerprint y|n`** puts the file's relative path into
+  the baseline fingerprint instead of just its name. The opt-in existed,
+  but only in `analyser.ini` — that is, everywhere except CI, which is
+  exactly where the damage happens: by default two units with the same
+  name in different folders share one identity, so accepting a finding in
+  one folder silently accepts it in all the others. Measured on a
+  purpose-built corpus: a four-entry baseline written from `alpha\`
+  suppressed *every* finding in `beta\`, including an SQL injection nobody
+  had reviewed. Default stays `n` for compatibility; switching it on
+  changes fingerprints, so write a fresh baseline.
+
 ### Fixed
 
 - **`--custom-rules` loaded rules that never fired.** The run reported
