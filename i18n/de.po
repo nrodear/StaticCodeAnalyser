@@ -1980,3 +1980,8 @@ msgstr "Jetzt eine neue Baseline mit den aktuellen Befunden schreiben?"
 
 msgid "No scan target selected - pick a path or project first."
 msgstr "Kein Scan-Ziel gewählt - erst einen Pfad oder ein Projekt auswählen."
+
+# --- 2026-08-08: Goto-Line-Dialog-Guard (EXE-IDE-Navigation) ---
+
+msgid "Go-to-line dialog did not open - line jump skipped"
+msgstr "Gehe-zu-Zeile-Dialog ging nicht auf - Zeilensprung uebersprungen"

@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1982 Zeilen, 66717 Bytes
-  CPoLines_de: array[0..1981] of string = (
+  // i18n\de.po - 1987 Zeilen, 66918 Bytes
+  CPoLines_de: array[0..1986] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1996,11 +1996,16 @@ const
     'msgstr "Jetzt eine neue Baseline mit den aktuellen Befunden schreiben?"',
     '',
     'msgid "No scan target selected - pick a path or project first."',
-    'msgstr "Kein Scan-Ziel gew'#$00E4'hlt - erst einen Pfad oder ein Projekt ausw'#$00E4'hlen."'
+    'msgstr "Kein Scan-Ziel gew'#$00E4'hlt - erst einen Pfad oder ein Projekt ausw'#$00E4'hlen."',
+    '',
+    '# --- 2026-08-08: Goto-Line-Dialog-Guard (EXE-IDE-Navigation) ---',
+    '',
+    'msgid "Go-to-line dialog did not open - line jump skipped"',
+    'msgstr "Gehe-zu-Zeile-Dialog ging nicht auf - Zeilensprung uebersprungen"'
   );
 
-  // i18n\en.po - 197 Zeilen, 5216 Bytes
-  CPoLines_en: array[0..196] of string = (
+  // i18n\en.po - 202 Zeilen, 5403 Bytes
+  CPoLines_en: array[0..201] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
     '# kept for consistency and as a "neutral" fallback baseline.',
@@ -2197,11 +2202,16 @@ const
     'msgstr "Write a new baseline with the current findings now?"',
     '',
     'msgid "No scan target selected - pick a path or project first."',
-    'msgstr "No scan target selected - pick a path or project first."'
+    'msgstr "No scan target selected - pick a path or project first."',
+    '',
+    '# --- 2026-08-08: Goto-Line-Dialog-Guard (EXE-IDE-Navigation) ---',
+    '',
+    'msgid "Go-to-line dialog did not open - line jump skipped"',
+    'msgstr "Go-to-line dialog did not open - line jump skipped"'
   );
 
-  // i18n\fr.po - 1994 Zeilen, 71263 Bytes
-  CPoLines_fr: array[0..1993] of string = (
+  // i18n\fr.po - 1999 Zeilen, 71469 Bytes
+  CPoLines_fr: array[0..1998] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4195,7 +4205,12 @@ const
     'msgstr "'#$00C9'crire maintenant une nouvelle r'#$00E9'f'#$00E9'rence avec les r'#$00E9'sultats actuels ?"',
     '',
     'msgid "No scan target selected - pick a path or project first."',
-    'msgstr "Aucune cible d''analyse s'#$00E9'lectionn'#$00E9'e - choisissez d''abord un chemin ou un projet."'
+    'msgstr "Aucune cible d''analyse s'#$00E9'lectionn'#$00E9'e - choisissez d''abord un chemin ou un projet."',
+    '',
+    '# --- 2026-08-08: Goto-Line-Dialog-Guard (EXE-IDE-Navigation) ---',
+    '',
+    'msgid "Go-to-line dialog did not open - line jump skipped"',
+    'msgstr "La bo'#$00EE'te '#$00AB' Aller '#$00E0' la ligne '#$00BB' ne s''est pas ouverte - saut ignor'#$00E9'"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
