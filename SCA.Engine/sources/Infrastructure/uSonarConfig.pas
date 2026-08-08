@@ -636,6 +636,71 @@ begin
   Accepted := True;
 end;
 
+{ ---- Antwort-Auswertung ----
+  Die Stufen des Health-Checks haben ihre Antworten bis 2026-08-08 per
+  Pos() im ROHTEXT geprueft ('"valid":true'). Damit entschied die
+  Serialisierung ueber das Ergebnis: {"valid": true} mit einem Leerzeichen
+  - wie es jeder pretty-printende Proxy oder ein Gateway liefert -
+  scheiterte, {"valid":true} gelang. Semantisch identische Antworten,
+  entgegengesetztes Urteil. Deshalb hier echtes Parsen. }
+
+function JsonStrField(const Body, FieldName: string; out Value: string): Boolean;
+// Liest ein String-Feld der obersten Ebene. False = kein gueltiges JSON
+// oder Feld fehlt (der Aufrufer meldet dann den Rohtext als Detail).
+var
+  V : TJSONValue;
+begin
+  Result := False;
+  Value  := '';
+  V := TJSONObject.ParseJSONValue(Body);
+  if V = nil then Exit;
+  try
+    if V is TJSONObject then
+      Result := TJSONObject(V).TryGetValue<string>(FieldName, Value);
+  finally
+    V.Free;
+  end;
+end;
+
+function JsonBoolFieldIsTrue(const Body, FieldName: string): Boolean;
+var
+  V : TJSONValue;
+  B : Boolean;
+begin
+  Result := False;
+  V := TJSONObject.ParseJSONValue(Body);
+  if V = nil then Exit;
+  try
+    if (V is TJSONObject) and TJSONObject(V).TryGetValue<Boolean>(FieldName, B) then
+      Result := B;
+  finally
+    V.Free;
+  end;
+end;
+
+function JsonArrayHasKey(const Body, ArrayName, KeyValue: string): Boolean;
+// Sucht in <ArrayName>[] ein Objekt mit "key" = KeyValue.
+var
+  V   : TJSONValue;
+  Arr : TJSONArray;
+  El  : TJSONValue;
+  S   : string;
+begin
+  Result := False;
+  V := TJSONObject.ParseJSONValue(Body);
+  if V = nil then Exit;
+  try
+    if not (V is TJSONObject) then Exit;
+    if not TJSONObject(V).TryGetValue<TJSONArray>(ArrayName, Arr) then Exit;
+    for El in Arr do
+      if (El is TJSONObject) and TJSONObject(El).TryGetValue<string>('key', S)
+         and (S = KeyValue) then
+        Exit(True);
+  finally
+    V.Free;
+  end;
+end;
+
 function HttpGet(const Url, Token: string; Insecure: Boolean;
   out StatusCode: Integer; out Body: string): Boolean;
 // Einfacher HTTP-GET mit Bearer-Auth. Liefert True wenn der Request
@@ -746,12 +811,14 @@ begin
     Url := Cfg.HostUrl + '/api/system/status';
     Ok := HttpGet(Url, '', Cfg.Insecure, Status, Body);
     Sw.Stop;
-    if Ok and (Status = 200) and (Pos('"UP"', Body) > 0) then
+    var SrvStatus : string;
+    JsonStrField(Body, 'status', SrvStatus);
+    if Ok and (Status = 200) and SameText(SrvStatus, 'UP') then
     begin
       Stage := MakeStage('HTTP /api/system/status: UP',
         True, '', Sw.ElapsedMilliseconds);
     end
-    else if Ok and (Status = 200) and (Pos('"STARTING"', Body) > 0) then
+    else if Ok and (Status = 200) and SameText(SrvStatus, 'STARTING') then
     begin
       Stage := MakeStage('HTTP /api/system/status: STARTING',
         False, 'Server is starting up. Wait ~60s and retry.',
@@ -781,7 +848,7 @@ begin
     Url := Cfg.HostUrl + '/api/authentication/validate';
     Ok := HttpGet(Url, Cfg.Token, Cfg.Insecure, Status, Body);
     Sw.Stop;
-    if Ok and (Status = 200) and (Pos('"valid":true', Body) > 0) then
+    if Ok and (Status = 200) and JsonBoolFieldIsTrue(Body, 'valid') then
       Stage := MakeStage('Token validation: valid',
         True, '', Sw.ElapsedMilliseconds)
     else if Ok and (Status = 401) then
@@ -816,7 +883,8 @@ begin
            TNetEncoding.URL.Encode(Cfg.ProjectKey);
     Ok := HttpGet(Url, Cfg.Token, Cfg.Insecure, Status, Body);
     Sw.Stop;
-    if Ok and (Status = 200) and (Pos('"key":"' + Cfg.ProjectKey + '"', Body) > 0) then
+    if Ok and (Status = 200) and
+       JsonArrayHasKey(Body, 'components', Cfg.ProjectKey) then
       Stage := MakeStage('Project access: ' + Cfg.ProjectKey + ' (visible)',
         True, '', Sw.ElapsedMilliseconds)
     else if Ok and (Status = 200) then
@@ -844,11 +912,20 @@ begin
                  '/api/projects/create?project=' + Cfg.ProjectKey,
           Sw.ElapsedMilliseconds)
       else if ShowOk and (ShowStatus = 200) then
-        Stage := MakeStage('Project access: 403 Forbidden',
-          False, 'Project exists but token user lacks Browse permission. ' +
-                 'In Sonar: Project Settings > Permissions > grant Browse ' +
-                 'to your user/group.',
-          Sw.ElapsedMilliseconds)
+        // ERFOLG, nicht Fehler: components/show mit 200 BEWEIST, dass der
+        // Token das Projekt sehen darf. Die 403 davor kam von
+        // /api/projects/search, das 'Administer System' verlangt - ein
+        // ganz normaler projektgebundener Token bekommt sie immer.
+        //
+        // Bis 2026-08-08 meldete der Check hier trotzdem FAIL samt
+        // Exit 99 und schickte den Betreiber los, eine Browse-Berechtigung
+        // zu setzen, die nachweislich schon vorhanden war. Da
+        // docs/sonar-setup.md Exit 0 als CI-Gate bewirbt, scheiterte
+        // damit jede Pipeline, die sich korrekt an das
+        // Least-Privilege-Prinzip haelt.
+        Stage := MakeStage('Project access: ' + Cfg.ProjectKey +
+          ' (visible; projects/search benoetigt Admin-Rechte)',
+          True, '', Sw.ElapsedMilliseconds)
       else
         Stage := MakeStage('Project access: 403 Forbidden',
           False, 'Project ''' + Cfg.ProjectKey + ''' is not visible to ' +

@@ -28,6 +28,29 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`--baseline` accepted a SARIF report without a word and filtered
+  nothing.** The wrong file parses as JSON, carries no fingerprints, and
+  the gate then reports the whole backlog as new. The file is now checked
+  for baseline structure before the scan and rejected with a message that
+  names the likely mix-up.
+- **JSON exports no longer carry a UTF-8 BOM.** RFC 8259 §8.1 forbids the
+  preamble for JSON interchange, and it is exactly the consuming chain
+  that trips over it: Node's `JSON.parse` fails on the BOM, and
+  `github/codeql-action/upload-sarif` reads through Node. SARIF, the
+  Sonar report and the baseline are written without it; existing
+  baselines *with* a BOM stay readable.
+- **The Sonar health check failed a correct least-privilege token.**
+  Stage 5 calls `/api/projects/search`, which requires *Administer
+  System*; an ordinary project-scoped token gets 403. The fallback to
+  `/api/components/show` then returned 200 — proving the token *can* see
+  the project — and the check still reported failure with exit 99,
+  sending the operator to grant a permission that was already in place.
+  A successful `components/show` now counts as success.
+- **The health check judged responses by substring, not by JSON.**
+  `{"valid": true}` with one space failed where `{"valid":true}`
+  succeeded — semantically identical answers, opposite verdicts. Any
+  proxy that re-serialises the response flipped the result. All three
+  stages parse the JSON now.
 - **The Sonar export was rejected by SonarQube in the shipped state.**
   The release ZIP contained only the EXE. Without `rules/sca-rules.json`
   beside it the rule catalog falls back to a built-in stub, and that
