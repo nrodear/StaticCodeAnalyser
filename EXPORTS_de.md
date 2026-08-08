@@ -29,8 +29,8 @@ als CLI. „Nur in der GUI" heißt also nie „anderes Programm", sondern
 | **Sonar Generic Issue** | `--sonar-export <Datei>` | ✅ *Sonar: write Generic Issue report* | SonarQube-Dashboard (Einschränkung s. u.) |
 | **HTML-Report** | `--report-html <Datei>` | ✅ | Funde lesen und weitergeben, ohne Werkzeug beim Empfänger |
 | **Baseline-JSON** | `--write-baseline <Datei>` | ✅ *Write baseline* | CI-Gate: „nur bei **neuen** Funden scheitern" |
-| **CSV** | — | ✅ | Excel, Pivot, schnelles Auszählen |
-| **JSON** | — | ✅ | eigene Skripte, Ticket-Automatisierung |
+| **CSV** | `--report-csv <Datei>` | ✅ | Excel, Pivot, schnelles Auszählen |
+| **JSON** | `--report-json <Datei>` | ✅ | eigene Skripte, Ticket-Automatisierung |
 | **Jira-Wiki-Markup** | — | ✅ | Fund in ein Ticket einfügen |
 | **AI-Prompt (Zwischenablage)** | — | ✅ | einzelnen Fund samt Codekontext an einen Assistenten geben |
 | **Suppression-Telemetrie** | `--telemetry-csv <Datei>` | — | welche Regeln am häufigsten unterdrückt werden |
@@ -38,9 +38,10 @@ als CLI. „Nur in der GUI" heißt also nie „anderes Programm", sondern
 
 Zwei Asymmetrien sollte man kennen, bevor man etwas plant:
 
-- **CSV und JSON gibt es nur in der GUI.** Ausgerechnet die beiden
-  Formate, zu denen man in einem Skript greifen würde, sind die beiden,
-  die man nicht skripten kann.
+- **CSV und JSON exportieren die gefilterte Sicht der CLI.** Wie die
+  übrigen CLI-Exporte enthalten sie, was Test-Fixture- und
+  Baseline-Filter überlebt hat; die „all findings"-Einträge im GUI-Menü
+  filtern nicht.
 - **Der Scope hängt vom Frontend ab.** Aus der CLI enthalten Exporte die
   Funde *nach* Test-Fixture- und Baseline-Filter. Aus dem GUI-Menü
   exportieren die „all findings"-Einträge die **ungefilterte** Liste,
@@ -195,7 +196,6 @@ Ehrliche Liste, Stand v0.9.14 — alles reproduziert:
 | Sonar-Export aus dem Release-ZIP | wird von SonarQube verworfen; `rules/` neben die EXE legen |
 | Baseline-Auffrischen mit beiden Schaltern | kürzt die Baseline auf die neuen Funde |
 | `--write-baseline` mit bloßem Dateinamen | schreibt nicht |
-| CSV / JSON | nur GUI, nicht skriptbar |
 | JSON-Exporte | UTF-8 **mit** BOM |
 | HTML-Report | speichert nur Basisdateinamen; gleichnamige Units aus verschiedenen Ordnern kollidieren |
 | Baseline-Fingerprints | gleichnamige Units teilen sich standardmäßig einen Namensraum — mit `--baseline-path-fingerprint y` abschaltbar (s. u.) |

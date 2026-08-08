@@ -29,8 +29,8 @@ program" — it means *not reachable from a script*.
 | **Sonar Generic Issue** | `--sonar-export <file>` | ✅ *Sonar: write Generic Issue report* | SonarQube dashboard (see caveat below) |
 | **HTML report** | `--report-html <file>` | ✅ | Reading and sharing findings without any tooling |
 | **Baseline JSON** | `--write-baseline <file>` | ✅ *Write baseline* | CI gate: "fail only on **new** findings" |
-| **CSV** | — | ✅ | Excel, pivot tables, ad-hoc counting |
-| **JSON** | — | ✅ | Own scripts, ticket automation |
+| **CSV** | `--report-csv <file>` | ✅ | Excel, pivot tables, ad-hoc counting |
+| **JSON** | `--report-json <file>` | ✅ | Own scripts, ticket automation |
 | **Jira wiki markup** | — | ✅ | Pasting a finding into a ticket |
 | **AI prompt (clipboard)** | — | ✅ | Hand a single finding to an assistant, with code context |
 | **Suppression telemetry** | `--telemetry-csv <file>` | — | Which rules get suppressed most (noise ranking) |
@@ -38,8 +38,9 @@ program" — it means *not reachable from a script*.
 
 Two asymmetries are worth knowing before you plan anything:
 
-- **CSV and JSON exist only in the GUI.** The two formats you would
-  reach for in a script are the two you cannot script.
+- **CSV and JSON export the CLI's filtered view.** Like the other CLI
+  exports, they contain what survived the test-fixture and baseline
+  filters; the GUI's "all findings" entries do not filter.
 - **Scope differs by front-end.** From the CLI, exports contain the
   findings *after* test-fixture and baseline filtering. From the GUI
   menu, the "all findings" entries export the **unfiltered** list
@@ -187,7 +188,6 @@ Honest list, as of v0.9.14 — all reproduced:
 | Sonar export from the release ZIP | Rejected by SonarQube; ship `rules/` alongside the EXE |
 | Baseline refresh with both switches | Truncates the baseline to the new findings |
 | `--write-baseline` with a bare file name | Fails to write |
-| CSV / JSON | GUI only, not scriptable |
 | JSON exports | UTF-8 **with** BOM |
 | HTML report | Stores base file names only; same-named units in different folders collide |
 | Baseline fingerprints | Same-named units in different folders share a namespace by default — switch it off with `--baseline-path-fingerprint y` (see below) |

@@ -6,12 +6,14 @@ unit uExport;
 //   - Jira  (Wiki-Markup, fuer Tickets)
 //   - HTML  (Self-contained Code-Review-Report)
 //
-// CSV/JSON/HTML werden als UTF-8 mit BOM gespeichert. WICHTIG: in Delphi 12
-// ist die Singleton TEncoding.UTF8 mit FUseBOM=False konfiguriert -
-// SaveToFile mit dieser schreibt KEIN BOM. Wir verwenden deshalb den
-// SaveUtf8WithBom-Helper der ein TUTF8Encoding(UseBOM:=True) erzeugt.
-// BOM ist erforderlich damit deutsches Excel CSVs als UTF-8 erkennt
-// (sonst werden Umlaute/Sonderzeichen falsch dargestellt).
+// CSV und HTML werden als UTF-8 MIT BOM gespeichert, JSON seit
+// 2026-08-08 OHNE. Der Unterschied ist Absicht: deutsches Excel erkennt
+// eine CSV nur am BOM als UTF-8 (sonst zerfallen die Umlaute), waehrend
+// RFC 8259 par.8.1 die Praeambel fuer JSON-Austausch verbietet und Nodes
+// JSON.parse daran scheitert - dieselbe Linie wie bei SARIF, Sonar-Export
+// und Baseline. WICHTIG: in Delphi 12 ist die Singleton TEncoding.UTF8 mit
+// FUseBOM=False konfiguriert; das BOM steuert deshalb TStrings.WriteBOM
+// (SaveUtf8WithBom / SaveUtf8NoBom).
 
 interface
 
@@ -61,6 +63,10 @@ type
     // mit UseBOM=True, geben sie nach dem Save wieder frei.
     class procedure SaveUtf8WithBom(SL: TStringList;
       const FileName: string); static;
+    // Fuer JSON: RFC 8259 par.8.1 verbietet die BOM-Praeambel, und Nodes
+    // JSON.parse scheitert daran.
+    class procedure SaveUtf8NoBom(SL: TStringList;
+      const FileName: string); static;
     // Kanonischer Name eines Befund-Kinds (fuer CSV/JSON/Jira/HTML).
     class function KindToName(Kind: TFindingKind): string; static;
     // Vergleicht Datei-Pfade case-insensitiv und mit normalisierten
@@ -83,6 +89,16 @@ implementation
 
 uses
   uExportHtml;
+
+class procedure TExporter.SaveUtf8NoBom(SL: TStringList;
+  const FileName: string);
+begin
+  // JSON OHNE Praeambel (RFC 8259 par.8.1) - wie SARIF, Sonar-Export und
+  // Baseline seit 2026-08-08. Beim CSV bleibt das BOM dagegen bewusst
+  // stehen: Excel erkennt UTF-8 nur daran.
+  SL.WriteBOM := False;
+  SL.SaveToFile(FileName, TEncoding.UTF8);
+end;
 
 class procedure TExporter.SaveUtf8WithBom(SL: TStringList;
   const FileName: string);
@@ -239,7 +255,7 @@ begin
     SL := TStringList.Create;
     try
       SL.Text := SB.ToString;
-      SaveUtf8WithBom(SL, FileName);
+      SaveUtf8NoBom(SL, FileName);
     finally
       SL.Free;
     end;
