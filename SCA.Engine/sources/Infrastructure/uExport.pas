@@ -27,10 +27,15 @@ type
 
   TExporter = class
   public
+    // ABaseDir: Wurzel fuer die Pfad-ANZEIGE. Leer = absolute Pfade
+    // (bisheriges Verhalten, GUI-Aufrufer bleiben unveraendert). Die CLI
+    // reicht --base-dir durch, damit ein CI-Artefakt keine
+    // maschinenspezifischen Pfade enthaelt - so wie SARIF, Sonar und
+    // der HTML-Report es laengst tun.
     class procedure ExportCsv(Findings: TObjectList<TLeakFinding>;
-      const FileName: string); static;
+      const FileName: string; const ABaseDir: string = ''); static;
     class procedure ExportJson(Findings: TObjectList<TLeakFinding>;
-      const FileName: string); static;
+      const FileName: string; const ABaseDir: string = ''); static;
 
     // Jira-Wiki-Markup fuer Befunde einer einzelnen Datei. Severity-Auswahl
     // ueber Filter-Set (z.B. [lsError, lsWarning] fuer Fehler+Warnungen).
@@ -67,6 +72,10 @@ type
     // JSON.parse scheitert daran.
     class procedure SaveUtf8NoBom(SL: TStringList;
       const FileName: string); static;
+    // Anzeigepfad relativ zu ABaseDir (Forward Slashes). Leerer BaseDir
+    // oder Datei ausserhalb -> unveraendert.
+    class function RelativeDisplayPath(const AFileName,
+      ABaseDir: string): string; static;
     // Kanonischer Name eines Befund-Kinds (fuer CSV/JSON/Jira/HTML).
     class function KindToName(Kind: TFindingKind): string; static;
     // Vergleicht Datei-Pfade case-insensitiv und mit normalisierten
@@ -88,7 +97,22 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  System.IOUtils,          // TPath (RelativeDisplayPath)
   uExportHtml;
+
+class function TExporter.RelativeDisplayPath(const AFileName,
+  ABaseDir: string): string;
+var
+  Base, Full : string;
+begin
+  Result := AFileName;
+  if (ABaseDir = '') or (AFileName = '') then Exit;
+  Base := IncludeTrailingPathDelimiter(TPath.GetFullPath(ABaseDir));
+  Full := TPath.GetFullPath(AFileName);
+  if SameText(Copy(Full, 1, Length(Base)), Base) then
+    Result := StringReplace(Copy(Full, Length(Base) + 1, MaxInt),
+                            '', '/', [rfReplaceAll]);
+end;
 
 class procedure TExporter.SaveUtf8NoBom(SL: TStringList;
   const FileName: string);
@@ -189,7 +213,7 @@ begin
 end;
 
 class procedure TExporter.ExportCsv(Findings: TObjectList<TLeakFinding>;
-  const FileName: string);
+  const FileName: string; const ABaseDir: string);
 var
   SL : TStringList;
   F  : TLeakFinding;
@@ -203,7 +227,7 @@ begin
     if Assigned(Findings) then
       for F in Findings do
         SL.Add(
-          CsvEscape(F.FileName)         + ';' +
+          CsvEscape(RelativeDisplayPath(F.FileName, ABaseDir)) + ';' +
           CsvEscape(F.MethodName)       + ';' +
           CsvEscape(F.LineNumber)       + ';' +
           CsvEscape(KindToName(F.Kind)) + ';' +
@@ -216,7 +240,7 @@ begin
 end;
 
 class procedure TExporter.ExportJson(Findings: TObjectList<TLeakFinding>;
-  const FileName: string);
+  const FileName: string; const ABaseDir: string);
 var
   SB    : TStringBuilder;
   i     : Integer;
@@ -232,7 +256,7 @@ begin
       begin
         F := Findings[i];
         SB.Append('  {');
-        SB.Append('"file": "');     SB.Append(JsonEscape(F.FileName));         SB.Append('", ');
+        SB.Append('"file": "');     SB.Append(JsonEscape(RelativeDisplayPath(F.FileName, ABaseDir))); SB.Append('", ');
         SB.Append('"method": "');   SB.Append(JsonEscape(F.MethodName));       SB.Append('", ');
         SB.Append('"line": ');      SB.Append(StrToIntDef(F.LineNumber, 0));   SB.Append(', ');
         SB.Append('"kind": "');     SB.Append(JsonEscape(KindToName(F.Kind))); SB.Append('", ');
