@@ -40,15 +40,15 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | BeginEndRequiredCheck | J | uBeginEndRequired | – |
 | CaseStatementSizeCheck | J | uCaseStatementSize | – |
 | CastAndFreeCheck | J | uCastAndFree | – |
-| CatchingRawExceptionCheck | ~ | uExceptOnException | überschneidet sich mit Swallowed-Exception-Pfad |
+| CatchingRawExceptionCheck | J | uExceptionTooGeneral | AST-basiert; uExceptOnException ist der lexikalische Zwilling |
 | CharacterToCharacterPointerCastCheck | J | uCharToCharPointerCast | – |
 | ClassNameCheck | ~ | uTypeName | lokaler `uTypeName` deckt Class/Record/Enum gemeinsam ab |
 | ClassPerFileCheck | J | uClassPerFile | – |
 | CognitiveComplexityRoutineCheck | J | uCognitiveComplexity | eigener Detektor; SCA022 deckt Cyclomatic separat ab |
 | CommentRegularExpressionCheck | N | – | – |
 | CommentedOutCodeCheck | J | uCommentedOutCode | – |
-| CompilerHintsCheck | N | – | – |
-| CompilerWarningsCheck | N | – | – |
+| CompilerHintsCheck | ~ | uCompilerDirectiveScope | lokal nur unbalanciertes OFF ohne ON; upstream jedes Abschalten |
+| CompilerWarningsCheck | ~ | uCompilerDirectiveScope | lokal nur unbalanciertes OFF ohne ON; upstream jedes Abschalten |
 | ConsecutiveConstSectionCheck | J | uConsecutiveSection | lokal kombiniert const/var/type |
 | ConsecutiveTypeSectionCheck | J | uConsecutiveSection | – |
 | ConsecutiveVarSectionCheck | J | uConsecutiveSection | – |
@@ -71,7 +71,7 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | EmptyRoutineCheck | J | uEmptyMethod | – |
 | EmptyVisibilitySectionCheck | J | uEmptyVisibilitySection | – |
 | EnumNameCheck | ~ | uTypeName | siehe ClassNameCheck |
-| ExhaustiveEnumCaseCheck | N | – | – |
+| ExhaustiveEnumCaseCheck | ~ | uDefaultCaseInCaseStatement | lokal jedes case ohne else, ohne Enum-Vollstaendigkeitspruefung |
 | ExplicitBitwiseNotCheck | N | – | – |
 | ExplicitDefaultPropertyReferenceCheck | N | – | – |
 | ExplicitTObjectInheritanceCheck | J | uExplicitTObjectInheritance | – |
@@ -84,7 +84,7 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | ForbiddenPropertyCheck | N | – | – |
 | ForbiddenRoutineCheck | N | – | – |
 | ForbiddenTypeCheck | ~ | uDfmForbiddenClass | lokal nur DFM-Komponenten |
-| FormDfmCheck | J | uDfm* (Sammel) | 21 DFM-spezifische Detektoren |
+| FormDfmCheck | J | uDfm* (Sammel) | 22 DFM-spezifische Detektoren |
 | FormFmxCheck | N | – | FMX nicht abgedeckt |
 | FormatArgumentCountCheck | J | uFormatMismatch | – |
 | FormatArgumentTypeCheck | J | uFormatMismatch | – |
@@ -104,7 +104,7 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | InheritedTypeNameCheck | N | – | – |
 | InlineAssemblyCheck | J | uInlineAssembly | – |
 | InlineConstExplicitTypeCheck | N | – | – |
-| InlineDeclarationCapturedByAnonymousMethodCheck | N | – | – |
+| InlineDeclarationCapturedByAnonymousMethodCheck | ~ | uAnonMethodCaptureLoopVar | Schnittmenge `for var i` + Closure; lokal auch klassische Loop-Vars, upstream auch Nicht-Loop-Inline-Vars |
 | InlineLoopVarExplicitTypeCheck | N | – | – |
 | InlineVarExplicitTypeCheck | N | – | – |
 | InstanceInvokedConstructorCheck | J | uInstanceInvokedConstructor | – |
@@ -126,7 +126,7 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | ObjectPassedAsInterfaceCheck | N | – | – |
 | ObjectTypeCheck | N | – | – |
 | PascalStyleResultCheck | N | – | – |
-| PlatformDependentCastCheck | N | – | – |
+| PlatformDependentCastCheck | ~ | uPointerSubtraction | lokal nur die Cast-Subtraktions-Form, upstream jeder Cast |
 | PlatformDependentTruncationCheck | N | – | – |
 | PointerNameCheck | J | uPointerName | – |
 | ProjectFileRoutineCheck | N | – | – |
@@ -148,7 +148,7 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | StringListDuplicatesCheck | ~ | uDuplicateString | lokal allg. String-Duplikate, nicht spez. TStringList |
 | StringLiteralRegularExpressionCheck | N | – | – |
 | SuperfluousSemicolonCheck | J | uSuperfluousSemicolon | – |
-| SwallowedExceptionCheck | J | uExceptOnException | – |
+| SwallowedExceptionCheck | J | uEmptyOnHandler | leerer on-Handler; leerer except-Block via uCodeSmells2 |
 | TabulationCharacterCheck | J | uTabulationCharacter | – |
 | TooLargeRoutineCheck | J | uLongMethod | – |
 | TooLongLineCheck | J | uTooLongLine | – |
@@ -169,24 +169,24 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | UnusedImportCheck | J | uUnusedUses | – |
 | UnusedLocalVariableCheck | J | uUnusedLocal | – |
 | UnusedPropertyCheck | N | – | – |
-| UnusedRoutineCheck | J | uUnusedRoutine | SCA164; uDeadCode bleibt die allgemeine Dead-Code-Erkennung |
+| UnusedRoutineCheck | J | uUnusedRoutine + uUnusedPrivateMethod | SCA164 fuer Top-Level, private Klassenmethoden separat |
 | UnusedTypeCheck | N | – | – |
 | VariableInitializationCheck | J | uUninitVar | SCA166, pfadsensitiv |
 | VariableNameCheck | N | – | – |
 | VisibilityKeywordIndentationCheck | ~ | uVisibilityCheck | thematisch verwandt |
 | VisibilitySectionOrderCheck | ~ | uVisibilityCheck | thematisch verwandt |
-| WithStatementCheck | J | uWithStatement | – |
+| WithStatementCheck | J | uWithStatement + uWithMultipleTargets | Mehrfach-Targets als eigener Detektor |
 
 ## Zusammenfassung
 
 | Status | Anzahl |
 |---|---:|
 | Sonar-Checks insgesamt | 144 |
-| `J` (umgesetzt) | 70 |
-| `~` (teilweise) | 18 |
-| `N` (nicht umgesetzt) | 56 |
+| `J` (umgesetzt) | 71 |
+| `~` (teilweise) | 22 |
+| `N` (nicht umgesetzt) | 51 |
 
-Coverage (J + ~): **61 %** der Sonar-Checks haben ein lokales Pendant.
+Coverage (J + ~): **65 %** der Sonar-Checks haben ein lokales Pendant.
 
 Die Summenzeile muss der Zeilenzahl der Tabelle oben entsprechen
 (70 + 18 + 56 = 144); wer Zeilen ändert, zählt hier nach. Bis 2026-08-08
@@ -194,13 +194,22 @@ stand hier 138 bei 144 Tabellenzeilen, und fünfzehn Zeilen meldeten „nicht
 umgesetzt", obwohl die Detektor-Unit existierte — die veröffentlichte
 Quote war um 16 Prozentpunkte zu niedrig.
 
-> **Stand der Erhebung.** Die Sonar-Seite wurde am 2026-05-18 gezogen, die
-> lokale Seite gegen `SCA.Engine/sources/Detectors/` geprüft. Der lokale
-> Bestand ist seither auf 178 Detektor-Units gewachsen; die Abschnitte
-> unten listen noch nicht alle davon. Neu hinzugekommene Familien
-> (Encoding SCA185-193, Projekt-Zugehörigkeit SCA194/195) haben kein
-> Sonar-Pendant und ändern die Quote nicht — eine vollständige
-> Neuerhebung beider Seiten steht aber aus.
+> **Stand der Erhebung: 2026-08-09, beide Seiten geprüft.**
+>
+> *Sonar-Seite:* über die GitHub-API gegen den heutigen Stand von
+> `delphi-checks/.../checks` abgeglichen — 154 Dateien, davon 144
+> vergleichbare Checks nach Abzug von `Abstract*`, `CheckList` und
+> `ParsingErrorCheck`. Die Tabelle hat exakt diese 144: keine fehlt, keine
+> ist zu viel.
+>
+> *Lokale Seite:* alle 178 Units aus `SCA.Engine/sources/Detectors/`
+> kommen jetzt vor — entweder als Pendant in der Tabelle oder in den
+> Listen unten. Bis 2026-08-09 fehlten 53 davon; sechs Tabellenzeilen
+> standen dadurch zu niedrig (`CatchingRawExceptionCheck` hatte in
+> Wahrheit ein volles Pendant, fünf weitere ein teilweises).
+>
+> Wer die Quote neu ausrechnet: die Summe der drei Statuszahlen muss der
+> Zeilenzahl der Tabelle entsprechen (71 + 22 + 51 = 144).
 
 ## Lokale Detektoren ohne Sonar-Pendant
 
@@ -239,6 +248,9 @@ Erweiterungen (DFM-Audit, SQL-Sicherheit, Leak-Detection, Concurrency).
 - uSqlDangerousStatement
 - uRestHttpSecurity
 - uHardcodedSecret
+- uCommandInjection
+- uInsecureCryptoAlgorithm
+- uPathTraversal
 
 ### Leak- / Memory-Detection
 
@@ -247,6 +259,12 @@ Erweiterungen (DFM-Audit, SQL-Sicherheit, Leak-Detection, Concurrency).
 - uMissingFinally
 - uNilDeref
 - uDivByZero
+- uFreeWithoutNil
+- uGetMemWithoutFreeMem
+- uLeakInConstructor
+- uStringFromPointer
+- uTObjectListWithoutOwnership
+- uUseAfterFree
 
 ### Concurrency
 
@@ -254,6 +272,8 @@ Erweiterungen (DFM-Audit, SQL-Sicherheit, Leak-Detection, Concurrency).
 - uSynchronizeInDestructor
 - uConcurrencyExt
 - uVirtualCallInCtor
+- uThreadFreeOnTerminateWithRef
+- uUnpairedLock
 
 ### Code-Smells (Projekt-spezifisch)
 
@@ -272,6 +292,60 @@ Erweiterungen (DFM-Audit, SQL-Sicherheit, Leak-Detection, Concurrency).
 - uSelfAssignment
 - uTautologicalExpr
 - uTodoComment
+- uAssertWithSideEffect
+- uAvoidOut
+- uBoolAlwaysTrue
+- uBooleanParam
+- uBooleanPropertyNaming
+- uCanBeClassMethod
+- uConstStringParameter
+- uConstantReturn
+- uExceptInDestructor
+- uFloatEquality
+- uGodClass
+- uHardcodedString
+- uInsecureRandom
+- uLargeClass
+- uMissingUnitHeader
+- uMultipleExit
+- uSetLengthAppendInLoop
+- uUnsortedUses
+- uUnusedParameter
+- uVariantTypeMisuse
+
+### Attribute- & Test-Hygiene
+
+DUnitX- und RTTI-Attribute; im Sonar-Regelsatz gibt es dafuer nur AttributeNameCheck (Benennung), keine Semantikpruefung.
+
+- uAttributeCategoryWithoutString
+- uAttributeDuplicate
+- uAttributeIgnoreWithoutReason
+- uAttributeMisalignment
+- uAttributeTestFixtureWithoutTests
+
+### Pointer- & 64-Bit-Fallen
+
+Muster, die erst unter Win64 zu Datenverlust fuehren.
+
+- uIntegerOverflow
+- uMoveSizeOfPointer
+- uPointerArithmeticOnString
+
+### Korrektheit / Laufzeit
+
+Fehler, die zur Laufzeit zuschlagen, nicht beim Uebersetzen.
+
+- uAbstractNotImpl
+- uManagedResultUninit
+- uMissingOverride
+- uRaiseOutsideExcept
+
+### Datei- & Projekt-Ebene
+
+Befunde ueber die Datei als Ganzes bzw. ihre Projektzugehoerigkeit - ausserhalb dessen, was ein AST-Check sehen kann.
+
+- uSourceEncoding (Familie SCA185-193)
+- uNotIncludedInProject
 
 ### Bündel / Plumbing (kein eigener Check)
 
