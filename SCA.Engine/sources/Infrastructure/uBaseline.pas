@@ -47,6 +47,17 @@ type
     class function Apply(Findings: TObjectList<TLeakFinding>;
       const BaselineFile: string; AWarnings: TStrings = nil): Integer; static;
 
+    // Ist die Datei ueberhaupt eine Baseline? Apply ist bewusst
+    // fehlertolerant und liefert bei allem, was es nicht versteht,
+    // stillschweigend 0 - richtig fuer eine leere oder halb geschriebene
+    // Datei, FALSCH fuer eine verwechselte. Ein versehentlich
+    // uebergebener SARIF-Report filterte so nichts, und das Gate meldete
+    // den kompletten Bestand als neu (Audit 2026-08-08). Der Aufrufer
+    // kann damit hart abbrechen, statt ein falsch-gruenes Ergebnis zu
+    // liefern. AReason traegt eine Klartext-Begruendung.
+    class function IsBaselineFile(const FileName: string;
+      out AReason: string): Boolean; static;
+
     // Fingerprint einer einzelnen Finding-Instanz. Public weil Tests sie
     // mocken.
     class function Fingerprint(const F: TLeakFinding): string; static;
@@ -122,6 +133,23 @@ begin
   Dir := ExtractFilePath(AFileName);
   if (Dir <> '') and not DirectoryExists(Dir) then
     ForceDirectories(Dir);
+end;
+
+// UTF-8 OHNE BOM schreiben (2026-08-08, RFC 8259 par.8.1 verbietet die
+// Praeambel fuer JSON-Austausch). TStringList.SaveToFile mit
+// TEncoding.UTF8 haette sie geschrieben. Bestehende Baselines MIT BOM
+// bleiben lesbar - TFile.ReadAllText erkennt die Praeambel und
+// ueberspringt sie.
+procedure SaveTextNoBom(SL: TStringList; const DestFile: string);
+var
+  Enc : TEncoding;
+begin
+  Enc := TUTF8Encoding.Create(False);
+  try
+    SL.SaveToFile(DestFile, Enc);
+  finally
+    Enc.Free;
+  end;
 end;
 
 // Datei-Token fuer den Fingerprint. Default: nur der Dateiname
@@ -205,7 +233,7 @@ begin
   try
     SL.Text := Root.Format(2);
     EnsureTargetDir(DestFile);
-    SL.SaveToFile(DestFile, TEncoding.UTF8);
+    SaveTextNoBom(SL, DestFile);
   finally
     SL.Free;
     Root.Free; // -> Arr + Objs werden mit befreit
@@ -221,6 +249,95 @@ const
   // ignoriert + Warnung in ErrOutput.
   MAX_BASELINE_ENTRIES = 1_000_000;
   MAX_FINGERPRINT_LEN  = 256;
+
+function TryReadBaselineText(const FileName: string; var AText,
+  AReason: string): Boolean;
+// Datei einlesen oder den Grund benennen, warum es nicht geht.
+begin
+  Result  := False;
+  AText   := '';
+  AReason := '';
+  if FileName = '' then
+  begin
+    AReason := 'no file given';
+  end
+  else if not FileExists(FileName) then
+  begin
+    AReason := 'file not found';
+  end
+  else
+  begin
+    try
+      AText  := TFile.ReadAllText(FileName, TEncoding.UTF8);
+      Result := True;
+    except
+      // noinspection ExceptionTooGeneral
+      // Jede Lesefehlerart fuehrt zur selben Antwort ("keine Baseline");
+      // die konkrete Ursache steht im Klartext in AReason.
+      on E: Exception do
+      begin
+        AReason := 'unreadable: ' + E.Message;
+      end;
+    end;
+  end;
+end;
+
+class function TBaseline.IsBaselineFile(const FileName: string;
+  out AReason: string): Boolean;
+// Akzeptiert beide Formate, die Apply versteht: Objekt mit 'findings'-
+// Array oder das blosse Array (Alt-Format). Alles andere ist keine
+// Baseline - mit moeglichst konkreter Begruendung, damit der Nutzer die
+// Verwechslung sofort sieht.
+var
+  Raw  : string;
+  Root : TJSONValue;
+  Obj  : TJSONObject;
+begin
+  Result := False;
+  if not TryReadBaselineText(FileName, Raw, AReason) then
+  begin
+    Exit;
+  end;
+  Root := TJSONObject.ParseJSONValue(Raw);
+  if not Assigned(Root) then
+  begin
+    AReason := 'not valid JSON';
+    Exit;
+  end;
+  try
+    if Root is TJSONArray then
+    begin
+      Result := True;                    // Alt-Format: blosses Array
+    end
+    else if not (Root is TJSONObject) then
+    begin
+      AReason := 'JSON root is neither object nor array';
+    end
+    else
+    begin
+      Obj := TJSONObject(Root);
+      if Obj.Values['findings'] is TJSONArray then
+      begin
+        Result := True;
+      end
+      else if Assigned(Obj.Values['runs']) then
+      begin
+        // Haeufigste Verwechslung beim Namen nennen - ein SARIF-Report
+        // sieht einer Baseline auf den ersten Blick aehnlich genug.
+        AReason := 'this looks like a SARIF report, not a baseline ' +
+                   '(no "findings" array). Baselines are written by ' +
+                   '--write-baseline.';
+      end
+      else
+      begin
+        AReason := 'no "findings" array - not a baseline written by ' +
+                   '--write-baseline';
+      end;
+    end;
+  finally
+    Root.Free;
+  end;
+end;
 
 class function TBaseline.Apply(Findings: TObjectList<TLeakFinding>;
   const BaselineFile: string; AWarnings: TStrings): Integer;

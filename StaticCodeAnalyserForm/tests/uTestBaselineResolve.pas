@@ -23,6 +23,14 @@ type
     [Test] procedure PathMode_FoundUnderRoot;
     [Test] procedure NotFound_ReturnsEmpty_AndListsProbedPaths;
     [Test] procedure Project_ProbesTwoCandidates;
+
+    // IsBaselineFile - Formatpruefung vor dem Filtern (Audit 2026-08-08:
+    // ein verwechselter SARIF-Report filterte still nichts).
+    [Test] procedure IsBaseline_AcceptsObjectWithFindings;
+    [Test] procedure IsBaseline_AcceptsBareArray_LegacyFormat;
+    [Test] procedure IsBaseline_RejectsSarifReport_NamesIt;
+    [Test] procedure IsBaseline_RejectsNonJson;
+    [Test] procedure IsBaseline_RejectsMissingFile;
   end;
 
 implementation
@@ -135,6 +143,61 @@ begin
   finally
     Probed.Free;
   end;
+end;
+
+{ ---- IsBaselineFile ----
+  Apply ist bewusst fehlertolerant und liefert bei allem Unbekannten 0.
+  Fuer eine VERWECHSELTE Datei ist das falsch: ein versehentlich
+  uebergebener SARIF-Report filterte nichts, und das Gate meldete den
+  kompletten Bestand als neu (Audit 2026-08-08). }
+
+procedure TTestBaselineResolve.IsBaseline_AcceptsObjectWithFindings;
+var
+  Fn, Reason: string;
+begin
+  Fn := TPath.Combine(FTmp, 'ok.json');
+  TFile.WriteAllText(Fn, '{"version":"1","findings":[]}');
+  Assert.IsTrue(TBaseline.IsBaselineFile(Fn, Reason), Reason);
+end;
+
+procedure TTestBaselineResolve.IsBaseline_AcceptsBareArray_LegacyFormat;
+var
+  Fn, Reason: string;
+begin
+  Fn := TPath.Combine(FTmp, 'legacy.json');
+  TFile.WriteAllText(Fn, '["abc123"]');
+  Assert.IsTrue(TBaseline.IsBaselineFile(Fn, Reason), Reason);
+end;
+
+procedure TTestBaselineResolve.IsBaseline_RejectsSarifReport_NamesIt;
+var
+  Fn, Reason: string;
+begin
+  Fn := TPath.Combine(FTmp, 'report.sarif');
+  TFile.WriteAllText(Fn,
+    '{"version":"2.1.0","runs":[{"results":[]}]}');
+  Assert.IsFalse(TBaseline.IsBaselineFile(Fn, Reason));
+  Assert.Contains(Reason, 'SARIF',
+    'die Begruendung muss die Verwechslung beim Namen nennen');
+end;
+
+procedure TTestBaselineResolve.IsBaseline_RejectsNonJson;
+var
+  Fn, Reason: string;
+begin
+  Fn := TPath.Combine(FTmp, 'garbage.json');
+  TFile.WriteAllText(Fn, 'this is not json');
+  Assert.IsFalse(TBaseline.IsBaselineFile(Fn, Reason));
+  Assert.Contains(Reason, 'JSON');
+end;
+
+procedure TTestBaselineResolve.IsBaseline_RejectsMissingFile;
+var
+  Reason: string;
+begin
+  Assert.IsFalse(TBaseline.IsBaselineFile(
+    TPath.Combine(FTmp, 'gibtsnicht.json'), Reason));
+  Assert.Contains(Reason, 'not found');
 end;
 
 initialization

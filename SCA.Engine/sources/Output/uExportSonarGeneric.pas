@@ -334,9 +334,18 @@ end;
 class procedure TSonarGenericWriter.WriteFile(const AFileName: string;
   const AFindings: TObjectList<TLeakFinding>;
   const ABaseDir: string);
+var
+  Enc : TEncoding;
 begin
-  TFile.WriteAllText(AFileName, ToJsonString(AFindings, ABaseDir),
-    TEncoding.UTF8);
+  // UTF-8 OHNE BOM (2026-08-08): RFC 8259 par.8.1 verbietet die Praeambel
+  // fuer JSON-Austausch. TEncoding.UTF8 haette sie geschrieben -
+  // SonarQube verzeiht das, jedes jq/Node-Skript in der Kette nicht.
+  Enc := TUTF8Encoding.Create(False);
+  try
+    TFile.WriteAllText(AFileName, ToJsonString(AFindings, ABaseDir), Enc);
+  finally
+    Enc.Free;
+  end;
 end;
 
 end.

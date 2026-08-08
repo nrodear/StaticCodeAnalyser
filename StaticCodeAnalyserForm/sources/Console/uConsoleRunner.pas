@@ -926,6 +926,22 @@ begin
       WriteLn(ErrOutput, 'Error: --baseline file not found: ', EffBaseline);
       Exit(Integer(cecToolError));
     end;
+    // Format pruefen, BEVOR gescannt wird: eine verwechselte Datei (typisch
+    // ein SARIF-Report) parst zwar als JSON, traegt aber keine Fingerprints -
+    // Apply filterte daraufhin nichts und das Gate meldete den kompletten
+    // Bestand als neu. Ein falsch-gruenes bzw. falsch-rotes Gate ist der
+    // teuerste Zustand fuer ein CI-Werkzeug (Audit 2026-08-08).
+    if EffBaseline <> '' then
+    begin
+      var BlReason : string;
+      if not TBaseline.IsBaselineFile(EffBaseline, BlReason) then
+      begin
+        WriteLn(ErrOutput, 'Error: --baseline is not a baseline file: ',
+          EffBaseline);
+        WriteLn(ErrOutput, '       ', BlReason);
+        Exit(Integer(cecToolError));
+      end;
+    end;
     // '--write-baseline auto' -> .sca-Standardziel des Scan-Ziels.
     if SameText(EffWriteBaseline, 'auto') then
     begin

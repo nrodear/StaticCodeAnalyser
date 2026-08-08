@@ -575,7 +575,6 @@ class procedure TSARIFWriter.WriteFile(const AFileName: string;
 var
   FS       : TFileStream;
   E        : TSarifJsonEmitter;
-  Preamble : TBytes;
 begin
   // Perf (2026-07-05): P12-sarif-streaming - direkt in den FileStream
   // statt Gesamtstring + TFile.WriteAllText. Byte-identisch zum alten
@@ -600,9 +599,12 @@ begin
       raise EInOutError.Create(Ex.Message);
   end;
   try
-    Preamble := TEncoding.UTF8.GetPreamble;
-    if Length(Preamble) > 0 then
-      FS.WriteBuffer(Preamble, Length(Preamble));
+    // KEIN UTF-8-BOM (2026-08-08). RFC 8259 par.8.1 verbietet es fuer
+    // JSON-Austausch, und in der Praxis stolpert genau die Kette darueber,
+    // die diesen Report konsumiert: Nodes JSON.parse scheitert am BOM -
+    // und github/codeql-action/upload-sarif liest ueber Node. SonarQube
+    // und Pythons utf-8-sig vertragen es, aber "die meisten kommen damit
+    // klar" ist kein Grund, ein spezifikationswidriges Byte zu schreiben.
     E := TSarifJsonEmitter.Create(FS);
     try
       EmitSarifDocument(E, AFindings, ABaseDir, AToolVersion, AToolName);
