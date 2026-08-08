@@ -80,9 +80,15 @@ setzen.** Standardmäßig identifiziert ein Fingerprint einen Fund über den
 *Dateinamen*, nicht über den Pfad — zwei `uSame.pas` in verschiedenen
 Ordnern teilen sich also eine Identität. Gemessene Folge: Eine Baseline aus
 einem Unterordner unterdrückte **sämtliche** Funde im Nachbarordner,
-darunter eine SQL-Injection, die nie jemand geprüft hatte. Mit dem Schalter
-trägt der Fingerprint den Relativpfad. Er ändert die Fingerprints — beim
+darunter eine SQL-Injection, die nie jemand geprüft hatte; mit dem Schalter
+bleiben sie im selben Lauf erhalten. Er ändert die Fingerprints — beim
 Einschalten also eine frische Baseline schreiben.
+
+Ein Rest bleibt bewusst: Ein Fund, dessen umgebende Zeilen in beiden
+Dateien gleich sind, matcht weiterhin über die `contextHash`-Stufe. Genau
+das lässt eine Baseline Umzüge und Refactorings überleben — und ist der
+Grund, warum zwei byte-identische Kopien verbunden bleiben, unabhängig von
+diesem Schalter.
 
 **Eine Baseline NICHT durch Kombination der beiden Schalter
 auffrischen.** Das naheliegend wirkende `--baseline alt
