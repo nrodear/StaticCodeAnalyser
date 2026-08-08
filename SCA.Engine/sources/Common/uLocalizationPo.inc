@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1986 Zeilen, 66855 Bytes
-  CPoLines_de: array[0..1985] of string = (
+  // i18n\de.po - 1983 Zeilen, 66802 Bytes
+  CPoLines_de: array[0..1982] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1967,9 +1967,6 @@ const
     'msgid "Insert suppression marker"',
     'msgstr "Unterdr'#$00FC'ckungs-Marker einf'#$00FC'gen"',
     '',
-    'msgid "Apply quick fix"',
-    'msgstr "Quick-Fix anwenden"',
-    '',
     'msgid "Clipboard is locked by another program."',
     'msgstr "Die Zwischenablage ist von einem anderen Programm gesperrt."',
     '',
@@ -2003,8 +2000,8 @@ const
     'msgstr "Ge'#$00F6'ffnet: %s  Zeile: %d"'
   );
 
-  // i18n\en.po - 204 Zeilen, 5410 Bytes
-  CPoLines_en: array[0..203] of string = (
+  // i18n\en.po - 201 Zeilen, 5360 Bytes
+  CPoLines_en: array[0..200] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
     '# kept for consistency and as a "neutral" fallback baseline.',
@@ -2180,9 +2177,6 @@ const
     'msgid "Insert suppression marker"',
     'msgstr "Insert suppression marker"',
     '',
-    'msgid "Apply quick fix"',
-    'msgstr "Apply quick fix"',
-    '',
     'msgid "Clipboard is locked by another program."',
     'msgstr "Clipboard is locked by another program."',
     '',
@@ -2211,8 +2205,8 @@ const
     'msgstr "Opened: %s  Line: %d"'
   );
 
-  // i18n\fr.po - 1998 Zeilen, 71396 Bytes
-  CPoLines_fr: array[0..1997] of string = (
+  // i18n\fr.po - 1995 Zeilen, 71332 Bytes
+  CPoLines_fr: array[0..1994] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4176,9 +4170,6 @@ const
     '',
     'msgid "Insert suppression marker"',
     'msgstr "Ins'#$00E9'rer le marqueur de suppression"',
-    '',
-    'msgid "Apply quick fix"',
-    'msgstr "Appliquer le correctif rapide"',
     '',
     'msgid "Clipboard is locked by another program."',
     'msgstr "Le presse-papiers est verrouill'#$00E9' par un autre programme."',

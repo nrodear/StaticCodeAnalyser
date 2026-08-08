@@ -173,9 +173,6 @@ msgstr "Copy AI prompt"
 msgid "Insert suppression marker"
 msgstr "Insert suppression marker"
 
-msgid "Apply quick fix"
-msgstr "Apply quick fix"
-
 msgid "Clipboard is locked by another program."
 msgstr "Clipboard is locked by another program."
 

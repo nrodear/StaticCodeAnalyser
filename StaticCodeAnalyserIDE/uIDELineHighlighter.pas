@@ -301,12 +301,12 @@ type
     // (Insert/Delete oberhalb shifted die Line-Nummer in FMarksByFile).
     FLineTrackers    : TDictionary<string, TLineTrackerSlot>;
     FEditorEvents    : INTACodeEditorEvents;  // haelt Refcount am Leben
-    // noinspection MemoryLeak
-    // Falschmeldung der eigenen Regel: die Lebensdauer haengt an der
-    // Interface-Referenz FEditorEvents (INTACodeEditorEvents), die das
-    // Objekt refcounted haelt und freigibt. Ein eigenes Free waere ein
-    // Double-Free. Das Ownership-Gate fuer Interface-Uebergabe greift
-    // heute nur bei lokalen Variablen, nicht bei Feldern.
+    // Lebensdauer haengt an der Interface-Referenz FEditorEvents
+    // (INTACodeEditorEvents), die das Objekt refcounted haelt und
+    // freigibt - ein eigenes Free waere ein Double-Free. (Der frueher
+    // noetige noinspection-MemoryLeak-Marker entfiel 2026-08-08: das
+    // SCA001-Ownership-Gate erkennt die Interface-Uebergabe inzwischen
+    // auch bei Feldern.)
     FEditorEventsObj : TFindingEditorEvents;   // Refcount via FEditorEvents (siehe Create)
     FEditorEventsIdx : Integer;               // Index aus AddEditorEventsNotifier; -1 = nicht registriert
     function NormalizePath(const APath: string): string;

@@ -220,7 +220,6 @@ type
     procedure GridMenuOpenClick(Sender: TObject);
     procedure GridMenuCopyClick(Sender: TObject);
     procedure GridMenuSuppressClick(Sender: TObject);
-    procedure GridMenuQuickFixClick(Sender: TObject);
     procedure WireTiles;
     procedure TileClickSeverity(Sender: TObject);
     procedure TileClickType(Sender: TObject);
@@ -2752,14 +2751,11 @@ begin
   MI.Caption := '-';
   FGridMenu.Items.Add(MI);
 
+  // Quick-Fix steht bewusst NICHT im Menue (User-Entscheid 2026-08-08) -
+  // die Aktion bleibt als Ctrl+Alt+F erreichbar (Plugin-Paritaet).
   MI := TMenuItem.Create(FGridMenu);
   MI.Caption := _('Insert suppression marker') + #9'Ctrl+Alt+S';
   MI.OnClick := GridMenuSuppressClick;
-  FGridMenu.Items.Add(MI);
-
-  MI := TMenuItem.Create(FGridMenu);
-  MI.Caption := _('Apply quick fix') + #9'Ctrl+Alt+F';
-  MI.OnClick := GridMenuQuickFixClick;
   FGridMenu.Items.Add(MI);
 
   ResultGrid.PopupMenu := FGridMenu;
@@ -2809,11 +2805,6 @@ end;
 procedure TForm2.GridMenuSuppressClick(Sender: TObject);
 begin
   SuppressSelectedFinding;
-end;
-
-procedure TForm2.GridMenuQuickFixClick(Sender: TObject);
-begin
-  QuickFixSelectedFinding;
 end;
 
 procedure TForm2.WireTiles;
