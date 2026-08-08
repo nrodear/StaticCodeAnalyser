@@ -193,3 +193,7 @@ tools/perf_analyse.md
 # Tagging via Release-Script erzeugt und nach GitHub Releases hochgeladen,
 # nicht ins git tracking.
 /StaticCodeAnalyser-v*.zip
+# Standard-Ausgabeordner von tools/package-release.ps1 (-OutDir). Die
+# Regel darueber greift nur im Wurzelverzeichnis - v0.9.13 hinterliess
+# hier 17 MB untracked, die ein `git add -A` mitgenommen haette.
+/release-artifacts/
