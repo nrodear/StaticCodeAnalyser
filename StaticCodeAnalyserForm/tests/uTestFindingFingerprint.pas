@@ -51,20 +51,6 @@ type
 implementation
 
 // noinspection-file BeginEndRequired, NestedTry
-
-procedure TTestFindingFingerprint.Setup;
-begin
-  uSCAConsts.BaselinePathFingerprint := False;
-  uSCAConsts.BaselineFingerprintRoot := '';
-end;
-
-procedure TTestFindingFingerprint.TearDown;
-begin
-  // Auch nach einem abgebrochenen Test sauber verlassen - sonst traegt
-  // der naechste Fixture-Lauf den Pfad-Modus weiter.
-  uSCAConsts.BaselinePathFingerprint := False;
-  uSCAConsts.BaselineFingerprintRoot := '';
-end;
 // Temp-Datei-Tests brauchen geschachtelte try/finally-Ketten und
 // Guard-Einzeiler - idiomatisches Testmuster dieser Unit.
 
@@ -83,6 +69,22 @@ const
 function FpRoot: string;
 begin
   Result := TPath.Combine(TPath.GetTempPath, 'sca_fp_root');
+end;
+
+{ Fixture-Rahmen }
+
+procedure TTestFindingFingerprint.Setup;
+begin
+  uSCAConsts.BaselinePathFingerprint := False;
+  uSCAConsts.BaselineFingerprintRoot := '';
+end;
+
+procedure TTestFindingFingerprint.TearDown;
+begin
+  // Auch nach einem abgebrochenen Test sauber verlassen - sonst traegt
+  // der naechste Fixture-Lauf den Pfad-Modus weiter.
+  uSCAConsts.BaselinePathFingerprint := False;
+  uSCAConsts.BaselineFingerprintRoot := '';
 end;
 
 { Helpers }
