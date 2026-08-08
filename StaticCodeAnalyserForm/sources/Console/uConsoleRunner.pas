@@ -914,22 +914,32 @@ begin
         'Error: --baseline-scan erwartet y|n, bekommen: ', Args.BaselineScan);
       Exit(Integer(cecToolError));
     end;
-    // Fingerprint-Modus: CLI-Schalter gewinnt gegen [Baseline]
-    // PathInFingerprint aus der analyser.ini. Ohne Schalter bleibt es beim
-    // INI-/Default-Wert, den ApplyDetectorThresholds gesetzt hat.
-    if Args.BaselinePathFp <> '' then
+    // Fingerprint-Modus aus dem CLI-Schalter. NUR pruefen und merken -
+    // gesetzt wird er unmittelbar vor Write bzw. Apply (s. u.).
+    //
+    // Warum nicht hier: TAnalysisSession.ApplyConfig ruft
+    // ResetEngineConfigDefaults, und dort werden die beiden
+    // Baseline-Globals seit 2026-08-08 bewusst zurueckgesetzt (damit ein
+    // zweiter Scan im selben Prozess nichts erbt). Ein hier gesetzter
+    // Wert waere also beim Scan wieder weg - genau die Falle, in die
+    // schon --custom-rules gelaufen ist. Nachgemessen: die Baseline trug
+    // trotz '--baseline-path-fingerprint y' weiterhin
+    // "pathFingerprint": false.
+    var CliPathFp     : Boolean := False;
+    var HasCliPathFp  : Boolean := Args.BaselinePathFp <> '';
+    if HasCliPathFp then
     begin
       if SameText(Args.BaselinePathFp, 'y') or
          SameText(Args.BaselinePathFp, 'yes') or
          (Args.BaselinePathFp = '1') then
       begin
-        uSCAConsts.BaselinePathFingerprint := True;
+        CliPathFp := True;
       end
       else if SameText(Args.BaselinePathFp, 'n') or
               SameText(Args.BaselinePathFp, 'no') or
               (Args.BaselinePathFp = '0') then
       begin
-        uSCAConsts.BaselinePathFingerprint := False;
+        CliPathFp := False;
       end
       else
       begin
@@ -1291,6 +1301,8 @@ begin
     if EffWriteBaseline <> '' then
     begin
       try
+        if HasCliPathFp then
+          uSCAConsts.BaselinePathFingerprint := CliPathFp;
         if BlProjOrGroup <> '' then
           uSCAConsts.BaselineFingerprintRoot := ExtractFilePath(BlProjOrGroup)
         else
@@ -1322,6 +1334,8 @@ begin
         // PathInFingerprint-Modus: Relativierungs-Wurzel = Projekt-/
         // Gruppen-Verzeichnis, sonst Scan-Pfad (nur der Consumer kennt
         // den Zuschnitt; Root leer -> Fallback Dateiname in uBaseline).
+        if HasCliPathFp then
+          uSCAConsts.BaselinePathFingerprint := CliPathFp;
         if BlProjOrGroup <> '' then
           uSCAConsts.BaselineFingerprintRoot := ExtractFilePath(BlProjOrGroup)
         else
