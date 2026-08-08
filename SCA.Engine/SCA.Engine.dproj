@@ -307,7 +307,6 @@
         <DCCReference Include="sources\Infrastructure\uPathOverrides.pas"/>
         <DCCReference Include="sources\Infrastructure\uRepoSettings.pas"/>
         <DCCReference Include="sources\Infrastructure\uSonarConfig.pas"/>
-        <DCCReference Include="sources\Infrastructure\uSonarPull.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticAnalyzer2.pas"/>
         <DCCReference Include="sources\Infrastructure\uParallelScan.pas"/>
         <DCCReference Include="sources\Infrastructure\uProjectFiles.pas"/>
