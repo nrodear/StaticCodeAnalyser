@@ -1,6 +1,7 @@
 object Form2: TForm2
   Left = 0
   Top = 0
+  Anchors = [akTop, akRight]
   Caption = 'Static Code Analysis Tool for Delphi'
   ClientHeight = 512
   ClientWidth = 777
@@ -23,7 +24,7 @@ object Form2: TForm2
         Width = 160
       end
       item
-        Width = 220
+        Width = 170
       end
       item
         Width = 0
@@ -47,50 +48,45 @@ object Form2: TForm2
     Width = 777
     Height = 120
     Align = alTop
+    BevelOuter = bvNone
     TabOrder = 1
+    ExplicitWidth = 775
     object Panel3: TPanel
-      Left = 1
-      Top = 79
-      Width = 775
+      Left = 0
+      Top = 78
+      Width = 777
       Height = 41
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 0
-      ExplicitWidth = 773
+      ExplicitWidth = 775
       DesignSize = (
-        775
+        777
         41)
       object LblFilter: TLabel
-        Left = 16
-        Top = 9
+        Left = 168
+        Top = 8
         Width = 44
         Height = 15
         Caption = 'Severity:'
       end
       object LblType: TLabel
-        Left = 274
+        Left = 18
         Top = 10
         Width = 28
         Height = 15
         Caption = 'Type:'
       end
-      object LblMinSev: TLabel
-        Left = 424
-        Top = 9
-        Width = 24
-        Height = 15
-        Caption = 'Min:'
-      end
       object LblSearch: TLabel
-        Left = 548
+        Left = 428
         Top = 10
         Width = 38
         Height = 15
         Caption = 'Search:'
       end
       object SeverityFilterCombo: TComboBox
-        Left = 66
-        Top = 7
+        Left = 218
+        Top = 6
         Width = 200
         Height = 23
         Style = csDropDownList
@@ -99,7 +95,7 @@ object Form2: TForm2
         OnChange = SeverityFilterComboChange
       end
       object TypeFilterCombo: TComboBox
-        Left = 308
+        Left = 52
         Top = 6
         Width = 105
         Height = 23
@@ -107,45 +103,47 @@ object Form2: TForm2
         TabOrder = 1
         OnChange = TypeFilterComboChange
       end
-      object MinSevCombo: TComboBox
-        Left = 454
-        Top = 6
-        Width = 85
-        Height = 23
-        Style = csDropDownList
-        TabOrder = 2
-        OnChange = MinSevComboChange
-      end
       object SearchEdit: TEdit
-        Left = 592
+        Left = 472
         Top = 6
-        Width = 96
+        Width = 160
         Height = 23
         Anchors = [akLeft, akTop, akRight]
-        TabOrder = 3
+        TabOrder = 2
         OnChange = SearchEditChange
+        ExplicitWidth = 158
       end
     end
     object PanelActions: TPanel
-      Left = 1
-      Top = 1
-      Width = 775
+      Left = 0
+      Top = 0
+      Width = 777
       Height = 35
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 2
-      ExplicitWidth = 773
+      ExplicitTop = -6
+      DesignSize = (
+        777
+        35)
       object LblProfile: TLabel
-        Left = 352
-        Top = 9
+        Left = 281
+        Top = 8
         Width = 37
         Height = 15
         Caption = 'Profile:'
       end
+      object LblMinSev: TLabel
+        Left = 447
+        Top = 8
+        Width = 24
+        Height = 15
+        Caption = 'Min:'
+      end
       object Button7: TButton
-        Left = 152
+        Left = 127
         Top = 6
-        Width = 110
+        Width = 97
         Height = 25
         Caption = 'Analyse file'
         TabOrder = 0
@@ -154,15 +152,15 @@ object Form2: TForm2
       object Button6: TButton
         Left = 16
         Top = 6
-        Width = 130
+        Width = 105
         Height = 25
         Caption = 'Analyse directory'
         TabOrder = 1
         OnClick = Button6Click
       end
       object BtnBranch: TButton
-        Left = 268
-        Top = 5
+        Left = 230
+        Top = 6
         Width = 36
         Height = 25
         Caption = #9095
@@ -172,26 +170,46 @@ object Form2: TForm2
         OnClick = BtnBranchClick
       end
       object ProfileCombo: TComboBox
-        Left = 395
-        Top = 7
+        Left = 324
+        Top = 6
         Width = 110
         Height = 23
         Style = csDropDownList
         TabOrder = 3
         OnChange = ProfileComboChange
       end
+      object MinSevCombo: TComboBox
+        Left = 477
+        Top = 6
+        Width = 116
+        Height = 23
+        Style = csDropDownList
+        Anchors = [akLeft, akTop, akRight]
+        TabOrder = 4
+        OnChange = MinSevComboChange
+      end
+      object FBtnHamburger: TButton
+        Left = 608
+        Top = 6
+        Width = 24
+        Height = 23
+        Anchors = [akTop, akRight]
+        Caption = '...'
+        TabOrder = 5
+        OnClick = Button2Click
+      end
     end
     object Panel1: TPanel
-      Left = 1
-      Top = 36
-      Width = 775
+      Left = 0
+      Top = 35
+      Width = 777
       Height = 43
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 1
-      ExplicitWidth = 773
+      ExplicitWidth = 775
       DesignSize = (
-        775
+        777
         43)
       object Label1: TLabel
         Left = 16
@@ -203,15 +221,14 @@ object Form2: TForm2
       object Projectpath: TComboBox
         Left = 89
         Top = 14
-        Width = 511
+        Width = 504
         Height = 23
         Anchors = [akLeft, akTop, akRight]
         TabOrder = 0
         Text = 'D:\git-demos\delphi\StaticCodeAnalyser\resources'
-        ExplicitWidth = 509
       end
       object Button2: TButton
-        Left = 606
+        Left = 608
         Top = 14
         Width = 24
         Height = 23
@@ -219,7 +236,7 @@ object Form2: TForm2
         Caption = '...'
         TabOrder = 1
         OnClick = Button2Click
-        ExplicitLeft = 604
+        ExplicitLeft = 606
       end
     end
   end
@@ -231,9 +248,8 @@ object Form2: TForm2
     Align = alClient
     BevelOuter = bvNone
     TabOrder = 2
-    ExplicitTop = 189
     ExplicitWidth = 775
-    ExplicitHeight = 296
+    ExplicitHeight = 316
     object ResultGrid: TStringGrid
       Left = 0
       Top = 0
@@ -248,7 +264,7 @@ object Form2: TForm2
       TabOrder = 0
       OnClick = ResultGridClick
       ExplicitWidth = 775
-      ExplicitHeight = 296
+      ExplicitHeight = 316
       ColWidths = (
         176
         121
