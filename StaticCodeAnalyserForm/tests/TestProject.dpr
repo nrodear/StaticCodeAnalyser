@@ -86,6 +86,7 @@ uses
   // steht nicht in DCC_UnitSearchPath) - deshalb mit explizitem Pfad.
   uConsoleRunner in '..\sources\Console\uConsoleRunner.pas',
   uTestConsoleExitCode in 'uTestConsoleExitCode.pas',
+  uTestExportSarifDiagnostics in 'uTestExportSarifDiagnostics.pas',
   uTestYamlSubsetParser in 'uTestYamlSubsetParser.pas',
   uTestCustomRuleDetector in 'uTestCustomRuleDetector.pas',
   uTestConcatToFormat in 'uTestConcatToFormat.pas',

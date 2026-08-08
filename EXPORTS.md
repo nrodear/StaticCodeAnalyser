@@ -166,6 +166,16 @@ run the export with the same root the scanner uses. Files outside that
 root fall back to absolute paths, which Sonar silently discards as
 "unknown files".
 
+**Read errors are not in the Sonar report.** A file the analyser could
+not read is a statement about the completeness of the run, not about the
+source — as a dashboard issue it was noise nobody could act on. It stays
+visible everywhere it belongs: the console summary, exit code 4, the HTML
+report, and SARIF, which lists it both as a result and under
+`runs[].invocations[].toolExecutionNotifications`. A run that produced
+*only* read errors therefore exports `{"rules":[],"issues":[]}` — valid,
+and Sonar accepts it. Check the console line, not the dashboard, to see
+whether a scan was complete.
+
 ## Workflow 4 — GitHub / Azure code scanning
 
 ```bash

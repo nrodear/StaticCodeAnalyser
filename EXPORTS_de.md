@@ -174,6 +174,17 @@ den Export also mit derselben Wurzel fahren, die auch der Scanner
 benutzt. Dateien außerhalb dieser Wurzel fallen auf absolute Pfade
 zurück, die Sonar still als „unknown files" verwirft.
 
+**Lesefehler stehen nicht im Sonar-Report.** Eine Datei, die der Analyser
+nicht lesen konnte, sagt etwas über die Vollständigkeit des Laufs aus,
+nicht über den Quelltext — als Dashboard-Issue war sie Rauschen, an dem
+niemand etwas beheben kann. Sichtbar bleibt sie überall dort, wo sie
+hingehört: in der Konsolen-Zusammenfassung, im Exit-Code 4, im
+HTML-Report und in SARIF, das sie sowohl als `result` als auch unter
+`runs[].invocations[].toolExecutionNotifications` führt. Ein Lauf mit
+*ausschließlich* Lesefehlern exportiert entsprechend
+`{"rules":[],"issues":[]}` — gültig, und Sonar nimmt es an. Ob ein Scan
+vollständig war, steht in der Konsolenzeile, nicht im Dashboard.
+
 ## Workflow 4 — GitHub-/Azure-Code-Scanning
 
 ```bash

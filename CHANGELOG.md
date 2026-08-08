@@ -27,6 +27,21 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Read errors are no longer exported as Sonar issues, and SARIF now
+  reports them as run diagnostics.** A file the analyser could not read
+  says something about how *complete* the run was, not about the source —
+  but the Sonar export listed it as an INFO issue in the dashboard, where
+  nobody can act on it, and SARIF had it only as a result among the real
+  findings. The Sonar export now skips them entirely (issue *and* rule
+  entry, so no orphan rule is registered); SARIF keeps the result and
+  additionally emits `runs[].invocations[].toolExecutionNotifications`,
+  which is the place the specification provides. `executionSuccessful`
+  stays `true` — one unreadable file must not paint an entire Code
+  Scanning run as failed. Console output, HTML report, health score and
+  the traffic light are deliberately unchanged. Note for anyone diffing
+  reports: every SARIF file grows by the `invocations` block, so
+  byte-comparisons against stored baselines will differ from here on;
+  compare per rule instead.
 - **`--fail-on` no longer hides read errors.** This changes exit codes in
   CI. The tiers outrank each other (errors > warnings > hints > read
   errors), so exit 4 only ever appeared when a run found *nothing else* —
