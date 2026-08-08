@@ -10,8 +10,8 @@ knowing the internal units.
 > Runnable minimal example: [../SCA.CLI.Demo/](../SCA.CLI.Demo/).
 
 - **Package:** `SCA.Engine` (`requires rtl;` — no VCL/FMX dependency)
-- **Version:** 0.9.8 (`uSCAConsts.SCA_VERSION`)
-- **Scope:** ~175 detectors (rule IDs `SCA001`–`SCA184`)
+- **Version:** 0.9.14 (`uSCAConsts.SCA_VERSION`)
+- **Scope:** ~196 detectors (rule IDs `SCA001`–`SCA196`)
 
 ---
 

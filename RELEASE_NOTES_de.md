@@ -1,4 +1,35 @@
-# Release 0.9.13 — Die Baseline findet ihr Zuhause
+# Release 0.9.14 — Ein graues Dunkel und eine sichere IDE-Uebergabe
+
+🇬🇧 [English version](RELEASE_NOTES.md)
+
+Vollstaendige Release-Notes: [docs/releases/v0.9.14_de.md](docs/releases/v0.9.14_de.md)
+([english](docs/releases/v0.9.14.md)).
+
+Ein kleines Folge-Release zu 0.9.13, das aufraeumt, was jenes falsch
+gemacht hat.
+
+- **Der Dunkelmodus ist endlich grau.** Zwei Ursachen: die Palette war
+  eine Stufe zu dunkel (`#181818` liest sich als Schwarz) und - die
+  eigentliche - der Hintergrund kam gar nicht aus der Farbtabelle. Bei
+  aktivem VCL-Style wird der Formularhintergrund aus den BITMAPS des
+  Styles gemalt, und die tragen im Windows10-Dark-Original 109.171
+  opake `#000000`-Pixel; die Panels darueber behalten den Standard
+  `ParentBackground` und lassen es durch. Der Style-Generator hebt
+  jetzt jedes dieser Pixel auf den Chrome-Ton.
+- **Einen Befund zu oeffnen tippt nicht mehr in den Quelltext.** Die
+  IDE-Route drueckte Strg+G und tippte die Zeilennummer; eine
+  beschaeftigte IDE schluckt das Kuerzel, und die Ziffern landeten als
+  Text in Zeile 1 der Datei. Dieser Weg oeffnet jetzt nur noch -
+  sofort, und ohne eine Zeile zu behaupten, zu der er nicht gesprungen
+  ist. Der Sprung bleibt, wo er traegt: externer Editor (`%line%`),
+  `.dfm`-Betrachter und IDE-Plugin.
+- **"Apply quick fix" ist aus dem Rechtsklick-Menue des Grids
+  verschwunden**; die Aktion bleibt auf
+  <kbd>Strg</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd>.
+
+---
+
+# Vorher — Release 0.9.13 — Die Baseline findet ihr Zuhause
 
 🇬🇧 [English version](RELEASE_NOTES.md)
 
