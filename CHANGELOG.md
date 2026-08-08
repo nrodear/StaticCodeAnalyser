@@ -8,6 +8,24 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **`--parallel` is now documented as defective and warns when used.**
+  It was advertised — in `--help` and both READMEs — as producing output
+  byte-identical to a serial run. That claim was wrong and had never been
+  measured: the test behind it only covered the merge step, never a real
+  scan. Eleven detectors share unit-global `TRegEx` instances, and a
+  `TRegEx` wraps one shared engine object whose subject and offsets are
+  mutated per match. Measured: five serial runs gave one identical SARIF
+  hash, thirteen parallel runs gave thirteen different results — 40 real
+  findings lost, three error-severity findings invented.
+  `--parallel-workers 1` reproduces the serial output byte-for-byte,
+  which pins the cause on concurrency. There is nothing to trade off:
+  parallel is *slower* (24.3 s serial vs 27.7–41 s across 2…28 workers),
+  so the switch now prints a warning instead of quietly producing
+  unreliable results. The clean repair — one `TRegEx` per call — is
+  recorded in the README.
+
 ### Fixed
 
 - **The Sonar export was rejected by SonarQube in the shipped state.**

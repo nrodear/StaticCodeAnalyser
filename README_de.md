@@ -698,32 +698,35 @@ Exit-Code-Mapping (siehe [Headless CLI](#headless-cli-mode)):
 - 2 = Warnings → commit erlaubt (oder blockieren via Hook-Logik)
 - 3 = Errors → **commit blockiert**
 
-### Große Codebasen: `--parallel`
+### `--parallel` — defekt, nicht benutzen
 
-Per-File-Parallelisierung des Scans, **opt-in und standardmäßig aus**. Das
-Ergebnis ist byte-identisch zum seriellen Lauf — der Merge läuft strikt in
-Dateilisten-Reihenfolge, der Schalter ist also überall dort sicher, wo ein
-serieller Lauf es ist.
+> **Dieser Schalter ist seit dem 2026-08-08 als defekt bekannt.** Hier
+> stand zuvor, das Ergebnis sei byte-identisch zum seriellen Lauf. Diese
+> Zusage war falsch und war nie gemessen — der Test dahinter prüfte nur
+> den Merge-Schritt, nie einen echten Scan.
 
-Erwarte wenig davon. Am 12.8k-Dateien-Referenzkorpus gemessen brachte er
-rund **3 %** (5m16s gegen 5m26s) — weil der teure Teil nicht der ist, der
-parallelisiert wird: das Parsen aller Dateien in den AST-Cache und der
-Aufbau von Symbol- und Typindex laufen als *serielle Vor-Phase*, die Worker
-treffen danach überwiegend warme Caches. Er ist als korrekte, sichere
-Grundlage eingebaut, nicht als Beschleunigung.
+Elf Detektoren teilen sich unit-globale `TRegEx`-Instanzen. Ein `TRegEx`
+ist ein Record um **eine** geteilte Engine-Instanz, deren Subject und
+Offsets bei jedem Match verändert werden — zwei Worker im selben Detektor
+zerstören sich gegenseitig den Zustand. An einem echten Korpus gemessen:
+fünf serielle Läufe ergaben einen einzigen identischen SARIF-Hash,
+dreizehn parallele Läufe ergaben **dreizehn verschiedene Ergebnisse**, mit
+**40 verlorenen echten Funden** und drei *erfundenen* Befunden der Stufe
+Error. Mit `--parallel --parallel-workers 1` ist der Lauf byte-identisch
+zum seriellen — das belegt die Nebenläufigkeit als Ursache, nicht einen
+anderen Codepfad.
 
-In drei Fällen fällt er **absichtlich** auf seriell zurück, weil sich keiner
-davon deterministisch bzw. thread-sicher abbilden lässt:
-`AutoDiscoverClasses=1`, geladene `--custom-rules` und `--time-detectors`.
-Seit dem 2026-08-02 sagt der Lauf das auf stderr, statt still seriell zu
-laufen — ein Schalter, der wortlos nichts tut, ist schlimmer als einer, den
-es nicht gibt. Für die Auto-Discovery gibt es keinen CLI-Schalter; sie steht
-in der `analyser.ini` unter `[Detectors] AutoDiscoverClasses`.
+Dabei gibt es nichts abzuwägen, weil es keinen Geschwindigkeitsvorteil zu
+verlieren gibt: seriell 24,3 s gegen 27,7–41 s parallel über 2/4/8/16/28
+Worker — monoton schlechter. Die frühere Angabe „rund 3 % schneller" ist
+nicht reproduzierbar. Etwa die Hälfte der Wandzeit ist die *serielle
+Vor-Phase* (Parsen, Symbol- und Typindex), die der Schalter gar nicht
+berührt.
 
-```powershell
-analyser.exe --path . --full --parallel --report-sarif sca.sarif
-analyser.exe --path . --full --parallel --parallel-workers 8   # statt Auto
-```
+Wer ihn heute setzt, bekommt eine Warnung auf stderr. Die saubere
+Reparatur wäre, jedem Detektor seine eigene `TRegEx` pro Aufruf zu geben —
+das Projekt hat genau diese Fehlerklasse in `uRegExMatches` schon einmal
+gelöst und dabei diese elf Units übersehen.
 
 ---
 

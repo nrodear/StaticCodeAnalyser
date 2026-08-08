@@ -28,6 +28,8 @@ type
     [Test] procedure CliBeatsEnv;
     [Test] procedure EnvBeatsProjectProps;
     [Test] procedure ProjectPropsBeatsIni;
+    [Test] procedure HostFromProjectPropsIsIgnored;
+    [Test] procedure HostFromProjectPropsIgnoredWithoutOwnConfig;
     [Test] procedure EmptyCliFallsThrough;
     [Test] procedure MissingFieldsReportsAll;
 
@@ -134,6 +136,10 @@ begin
 end;
 
 procedure TTestSonarConfig.EnvBeatsProjectProps;
+// Anmerkung seit 2026-08-08: der Host kaeme aus der Repo-Datei ohnehin
+// nicht mehr durch (s. HostFromProjectPropsIsIgnored). Die eigentliche
+// Zusicherung dieses Tests ist deshalb die zweite: Env setzt den Host,
+// und die Repo-Datei fuellt die uebrigen Felder auf.
 var
   Cli : TSonarCliOverrides;
   Cfg : TSonarConfig;
@@ -155,16 +161,60 @@ begin
 end;
 
 procedure TTestSonarConfig.ProjectPropsBeatsIni;
+// Praezedenz fuer die Felder, die aus dem Repo kommen DUERFEN.
+// Bis 2026-08-08 stand hier sonar.host.url und die Zusicherung
+// 'project-props should beat INI' - genau das war die Luecke: eine
+// Properties-Datei IM GESCANNTEN REPO konnte den Host des Nutzers
+// ueberstimmen, waehrend der Token weiter aus dessen Env/INI kam. Der
+// Host wird dort jetzt ignoriert (s. HostFromProjectPropsIsIgnored);
+// fuer projectKey bleibt die Repo-Datei die naeherliegende Quelle.
 var
   Cli : TSonarCliOverrides;
   Cfg : TSonarConfig;
 begin
   Cli := Default(TSonarCliOverrides);
-  WriteProjectProps('sonar.host.url=https://from-props');
-  WriteIni(['[Sonar]', 'HostUrl=https://from-ini']);
+  WriteProjectProps('sonar.projectKey=key-from-props');
+  WriteIni(['[Sonar]', 'ProjectKey=key-from-ini']);
   Cfg := TSonarConfigResolver.Resolve(Cli, FTempIni, FTempProject);
-  Assert.AreEqual('https://from-props', Cfg.HostUrl,
-    'project-props should beat INI');
+  Assert.AreEqual('key-from-props', Cfg.ProjectKey,
+    'project-props should beat INI for projectKey');
+end;
+
+procedure TTestSonarConfig.HostFromProjectPropsIsIgnored;
+// SICHERHEIT: sonar.host.url aus dem gescannten Repo darf den Host des
+// Nutzers NICHT ueberstimmen - sonst geht dessen Token an einen
+// fremdbestimmten Server (2026-08-08 mit Mitschnitt reproduziert).
+// Dieselbe Begruendung, aus der sonar.token dort schon immer ignoriert
+// wird. Der Wert bleibt zur Diagnose sichtbar.
+var
+  Cli : TSonarCliOverrides;
+  Cfg : TSonarConfig;
+begin
+  Cli := Default(TSonarCliOverrides);
+  WriteProjectProps('sonar.host.url=https://evil-from-props');
+  WriteIni(['[Sonar]', 'HostUrl=https://trusted-from-ini']);
+  Cfg := TSonarConfigResolver.Resolve(Cli, FTempIni, FTempProject);
+  Assert.AreEqual('https://trusted-from-ini', Cfg.HostUrl,
+    'die eigene Konfiguration gewinnt gegen die Repo-Datei');
+  Assert.AreEqual('https://evil-from-props', Cfg.IgnoredRepoHost,
+    'der ignorierte Repo-Host bleibt zur Diagnose sichtbar');
+end;
+
+procedure TTestSonarConfig.HostFromProjectPropsIgnoredWithoutOwnConfig;
+// Auch ohne eigene Host-Konfiguration wird der Repo-Wert nicht
+// uebernommen - sonst genuegte ein Klon plus SONAR_TOKEN, damit der
+// Token an den vom Repo genannten Server geht.
+var
+  Cli : TSonarCliOverrides;
+  Cfg : TSonarConfig;
+begin
+  Cli := Default(TSonarCliOverrides);
+  WriteProjectProps('sonar.host.url=https://evil-from-props');
+  WriteIni(['[Sonar]', 'ProjectKey=some-proj']);
+  Cfg := TSonarConfigResolver.Resolve(Cli, FTempIni, FTempProject);
+  Assert.AreEqual('', Cfg.HostUrl,
+    'kein Host aus der Repo-Datei, auch wenn sonst keiner gesetzt ist');
+  Assert.AreEqual('https://evil-from-props', Cfg.IgnoredRepoHost);
 end;
 
 procedure TTestSonarConfig.EmptyCliFallsThrough;
@@ -217,6 +267,10 @@ begin
 end;
 
 procedure TTestSonarConfig.ProjectPropsIgnoresComments;
+// Prueft den PARSER (Kommentar- und Leerzeilen). Sonde ist projectKey -
+// frueher stand hier sonar.host.url, der aber bewusst nicht mehr aus
+// der Repo-Datei uebernommen wird und deshalb nichts mehr ueber den
+// Parser aussagen wuerde.
 var
   Cfg : TSonarConfig;
   Cli : TSonarCliOverrides;
@@ -226,23 +280,25 @@ begin
     '# this is a comment' + sLineBreak +
     '! also a comment' + sLineBreak +
     '   ' + sLineBreak +
-    'sonar.host.url=https://commented-url');
+    'sonar.projectKey=commented-key');
   Cfg := TSonarConfigResolver.Resolve(Cli, FTempIni, FTempProject);
-  Assert.AreEqual('https://commented-url', Cfg.HostUrl);
+  Assert.AreEqual('commented-key', Cfg.ProjectKey);
 end;
 
 procedure TTestSonarConfig.ProjectPropsBothEqualsAndColon;
+// Beide Trennzeichen der .properties-Syntax, ebenfalls an Feldern
+// gesondet, die aus dem Repo gelesen werden duerfen.
 var
   Cfg : TSonarConfig;
   Cli : TSonarCliOverrides;
 begin
   Cli := Default(TSonarCliOverrides);
   WriteProjectProps(
-    'sonar.host.url:https://colon-syntax' + sLineBreak +
-    'sonar.projectKey=mixed-syntax');
+    'sonar.projectKey:colon-syntax' + sLineBreak +
+    'sonar.organization=mixed-syntax');
   Cfg := TSonarConfigResolver.Resolve(Cli, FTempIni, FTempProject);
-  Assert.AreEqual('https://colon-syntax', Cfg.HostUrl);
-  Assert.AreEqual('mixed-syntax',         Cfg.ProjectKey);
+  Assert.AreEqual('colon-syntax',  Cfg.ProjectKey);
+  Assert.AreEqual('mixed-syntax',  Cfg.Organization);
 end;
 
 procedure TTestSonarConfig.ProjectPropsDoesNotReadToken;
