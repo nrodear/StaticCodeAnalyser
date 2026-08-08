@@ -92,10 +92,43 @@ foreach ($p in $platforms) {
     throw "$($p.Name): Stack-Reserve ist $mb MB, erwartet $StackMB MB. Abbruch."
   }
 
+  # 4. Der Regelkatalog MUSS mit ins Archiv. Ohne rules\sca-rules.json
+  #    neben der EXE faellt TRuleCatalog auf den einkompilierten Notbehelf
+  #    zurueck - und der Sonar-Export wird dann von SonarQube komplett
+  #    verworfen (2026-08-08 am v0.9.14-ZIP nachgewiesen: Lauf gruen,
+  #    Datei geschrieben, Dashboard leer). Der Katalog speist ausserdem
+  #    tool.driver.version im SARIF und die FixHints.
+  $rules = Join-Path $repo 'rules\sca-rules.json'
+  if (-not (Test-Path $rules)) { throw "Regelkatalog fehlt: $rules" }
+
   $zip = Join-Path $OutDir "StaticCodeAnalyser-v$Version-$($p.Name).zip"
   if (Test-Path $zip) { Remove-Item $zip -Force }
-  Compress-Archive -Path $exe -DestinationPath $zip -CompressionLevel Optimal
-  "{0,-6} {1} v{2}  Stack {3} MB  ->  {4}" -f `
+
+  # Archiv von Hand aufbauen statt per Compress-Archive: Windows
+  # PowerShell 5.1 schreibt BACKSLASHES in die Eintragsnamen
+  # ("rules\sca-rules.json"). Die ZIP-Spezifikation verlangt Forward
+  # Slashes; mit Backslash entsteht unter Linux/macOS eine DATEI dieses
+  # Namens statt eines Ordners, und die EXE findet ihren Katalog nicht.
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $za = [System.IO.Compression.ZipFile]::Open($zip, 'Create')
+  try {
+    $lvl = [System.IO.Compression.CompressionLevel]::Optimal
+    [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+      $za, $exe, (Split-Path $exe -Leaf), $lvl)
+    [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+      $za, $rules, 'rules/sca-rules.json', $lvl)
+  } finally {
+    $za.Dispose()
+  }
+
+  # 5. Gegenprobe am fertigen Archiv - Namen exakt, nicht "irgendwie drin".
+  $za = [System.IO.Compression.ZipFile]::OpenRead($zip)
+  try { $names = @($za.Entries | ForEach-Object { $_.FullName }) }
+  finally { $za.Dispose() }
+  if ($names -notcontains 'rules/sca-rules.json') {
+    throw "$($p.Name): rules/sca-rules.json fehlt im Archiv (gefunden: $($names -join ', ')). Abbruch."
+  }
+  "{0,-6} {1} v{2}  Stack {3} MB  + rules  ->  {4}" -f `
     $p.Name, (Split-Path $exe -Leaf), $Version, $mb, (Split-Path $zip -Leaf)
 }
 

@@ -134,22 +134,31 @@ begin
   end;
 end;
 
-function FindingTypeToSonarType(T: TFindingType): string;
-// Sonar Generic Issue Format legacy field: 'BUG' | 'VULNERABILITY' | 'CODE_SMELL'.
-// Wird als Fallback gesetzt wenn die Rule keine 'impacts' aus dem Catalog
-// mitbringt - Sonar 10+ verlangt mindestens einen der beiden Pfade,
-// sonst wird die JSON komplett abgelehnt.
-//
-// Hotspot ist im Generic Format nicht abbildbar - mappen auf VULNERABILITY
-// (Sonar trennt Hotspot vs Vulnerability nur fuer eigene Detektoren).
-// FileError + CodeDuplication mappen auf CODE_SMELL (kein eigener Sonar-Slot).
+function FallbackSoftwareQuality(T: TFindingType): string;
+// Software-Quality fuer den Fallback-Pfad (Catalog liefert keine impacts).
+// Hotspot mappt auf SECURITY - Sonar trennt Hotspot vs. Vulnerability nur
+// fuer eigene Detektoren; FileError/CodeDuplication auf MAINTAINABILITY.
 begin
   case T of
-    ftBug             : Result := 'BUG';
-    ftVulnerability   : Result := 'VULNERABILITY';
-    ftSecurityHotspot : Result := 'VULNERABILITY';
+    ftBug             : Result := 'RELIABILITY';
+    ftVulnerability   : Result := 'SECURITY';
+    ftSecurityHotspot : Result := 'SECURITY';
   else
-    Result := 'CODE_SMELL';
+    Result := 'MAINTAINABILITY';
+  end;
+end;
+
+function FallbackCleanCodeAttribute(T: TFindingType): string;
+// Clean-Code-Attribut fuer den Fallback-Pfad. Bewusst grob: die feine
+// Zuordnung steht im Katalog, hier geht es nur darum, ein GUELTIGES
+// Pflichtfeld zu liefern statt gar keins.
+begin
+  case T of
+    ftBug             : Result := 'LOGICAL';
+    ftVulnerability   : Result := 'TRUSTWORTHY';
+    ftSecurityHotspot : Result := 'TRUSTWORTHY';
+  else
+    Result := 'CONVENTIONAL';
   end;
 end;
 
@@ -194,11 +203,26 @@ begin
   end
   else
   begin
-    // Fallback: Catalog hat keinen Impact-Eintrag fuer diese Rule
-    // (typisch wenn rules/sca-rules.json beim Lauf nicht gefunden wurde
-    // und LoadFallback eingesprungen ist). Ohne mindestens einen der zwei
-    // Pfade (impacts ODER type) lehnt Sonar 10+ die JSON ab.
-    Result.AddPair('type', FindingTypeToSonarType(M.FindingType));
+    // Fallback: Catalog hat keinen Impact-Eintrag fuer diese Rule - typisch
+    // wenn rules/sca-rules.json beim Lauf nicht gefunden wurde und
+    // LoadFallback eingesprungen ist. GENAU DAS ist der Auslieferungs-
+    // zustand des Release-ZIPs (nur die EXE, kein rules/).
+    //
+    // Hier stand bis 2026-08-08 das Legacy-Feld 'type'. Das reicht NICHT:
+    // gegen die echten Scanner-Engine-Validatoren geprueft lehnt SonarQube
+    // den GESAMTEN Report ab - 10.7 mit "missing mandatory field
+    // 'cleanCodeAttribute'", 2025.x mit "missing mandatory field
+    // 'severity'". Von den getesteten Varianten validiert nur diese auf
+    // ALLEN Engine-Generationen: dieselben MQR-Felder wie im Normalpfad,
+    // nur aus FindingType/DefaultSeverity abgeleitet statt aus dem Katalog.
+    Result.AddPair('cleanCodeAttribute',
+      FallbackCleanCodeAttribute(M.FindingType));
+    Impacts := TJSONArray.Create;
+    IObj := TJSONObject.Create;
+    IObj.AddPair('softwareQuality', FallbackSoftwareQuality(M.FindingType));
+    IObj.AddPair('severity',        SeverityToSonarImpactSev(M.DefaultSeverity));
+    Impacts.AddElement(IObj);
+    Result.AddPair('impacts', Impacts);
   end;
 end;
 
