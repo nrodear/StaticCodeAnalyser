@@ -32,13 +32,25 @@ across line-drift; refactors that rename a method DO invalidate the entry
 
 1. **Checkout** with `fetch-depth: 50` so `--branch` can diff against
    `main` if you switch from `--full` to `--branch` later.
-2. **Run analyser** with `--fail-on=warning` — hints don't block, warnings
-   and errors do.
+2. **Run analyser** unfiltered, with `--base-dir .` so the paths in the
+   SARIF are relative to the repo root, and `--fail-on=none` so this step
+   itself stays green — the gate comes later.
 3. **Upload SARIF** via `github/codeql-action/upload-sarif@v3` — the
    findings appear under **Security > Code scanning alerts** on the repo
    page, with diff-annotation on the PR itself.
 4. **Archive SARIF** as a build artifact (30-day retention) so reviewers
    can download the full report when GitHub's UI summary isn't enough.
+5. **Gate** in a step of its own.
+
+**Why the upload is not baseline-filtered.** GitHub keeps the alert state
+itself: it knows what is new, what is fixed and what a reviewer
+dismissed. Feeding it a filtered report makes it close every alert the
+baseline removed — the entire accepted backlog turns into "fixed" in one
+run. So Code Scanning gets the complete picture, and the baseline is used
+only where GitHub is not involved: the exit-code gate. Since one run
+writes either the filtered or the unfiltered report, the baseline gate is
+a second run; the workflow ships the severity gate as the default and the
+baseline gate commented out next to it.
 
 ### Baseline workflow
 
@@ -48,12 +60,30 @@ analyser.d12.exe --path . --full --write-baseline sca.baseline.json
 git add sca.baseline.json
 git commit -m "ci: capture SCA baseline"
 
-# Future PRs: only NEW findings count. Fixed findings in the baseline
-# are automatically dropped on the next --write-baseline refresh.
+# Future PRs: only NEW findings count.
 ```
 
 Refresh the baseline periodically (monthly / per release) so the gap
-between baseline and current state doesn't grow unbounded.
+between baseline and current state doesn't grow unbounded — but refresh
+it in its **own** run:
+
+```bash
+analyser.d12.exe --path . --full --write-baseline sca.baseline.json
+```
+
+**Never combine `--baseline old --write-baseline new` in one run.** The
+filter removes the known findings first, so the snapshot would contain
+only what survived — i.e. it empties the baseline, and the next build
+reports the whole backlog as new.
+
+The path needs a directory part or must be absolute, and the file must
+exist when you pass `--baseline`: a missing baseline is a hard error
+(exit 99) on purpose, so that a typo in CI cannot silently report
+"everything is new".
+
+If several folders contain units with the same name, add
+`--baseline-path-fingerprint y` (and write a fresh baseline): otherwise
+one accepted finding suppresses the same-named unit everywhere else.
 
 ---
 

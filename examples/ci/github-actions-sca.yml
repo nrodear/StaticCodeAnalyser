@@ -1,14 +1,26 @@
 # Example GitHub Actions workflow for Static Code Analysis Tool for Delphi.
 #
-# Runs analyser.d12.exe on every push + pull request, uploads the SARIF
-# report to GitHub Code-Scanning (visible under Security > Code scanning
-# alerts), and uses a baseline file to gate ONLY on new findings.
+# Two things happen here, and they are deliberately kept apart:
+#
+#   1. Code Scanning gets the COMPLETE picture (no baseline filter).
+#      GitHub keeps the state itself - it knows which alerts are new,
+#      which are fixed, and which a reviewer dismissed. Uploading a
+#      baseline-filtered report instead makes GitHub close every alert
+#      the filter removed, i.e. the whole accepted backlog silently
+#      turns into "fixed".
+#
+#   2. The BUILD GATE uses the exit code. Which variant you want depends
+#      on whether you have a legacy backlog - see "Gate" below.
 #
 # Prerequisites:
-#   1. analyser.d12.exe + rules\sca-rules.json deployed under tools\sca\
-#      in the repo (or downloaded as a release artifact in the prep step).
-#   2. Optional: sca.baseline.json checked in at repo root. If missing,
-#      the first run with this workflow will write it.
+#   1. analyser.d12.exe AND rules\sca-rules.json under tools\sca\.
+#      The rules folder is not optional: without it the Sonar export is
+#      rejected outright and fix hints degrade.
+#   2. For the baseline variant: sca.baseline.json must EXIST. A missing
+#      file is a hard error (exit 99) on purpose - in CI a typo must not
+#      silently report "everything is new". Create it once locally:
+#        analyser.d12.exe --path . --full --write-baseline sca.baseline.json
+#      and commit it.
 #
 # Adapt the runner (windows-latest) and paths to your repo layout.
 
@@ -31,26 +43,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Need history for --branch diff if you use it.
+          # Needed for --branch / --diff if you switch to incremental runs.
           fetch-depth: 50
 
-      - name: Run analyser (full scan, --fail-on=warning)
-        # --fail-on=warning: Hints are reported but don't break the build.
-        #                    Warnings and Errors do.
-        # --baseline:        Drops known-accepted findings (legacy backlog).
-        # --write-baseline:  Snapshot only on the main branch (next-run cache).
+      # --------------------------------------------------------------
+      # Scan once, unfiltered. --base-dir . makes the paths in the SARIF
+      # relative to the repo root, which is what Code Scanning expects.
+      # --fail-on=none keeps this step green; the gate below decides.
+      # --------------------------------------------------------------
+      - name: Run analyser (full scan)
         run: |
           .\tools\sca\analyser.d12.exe `
             --path . `
             --full `
+            --base-dir . `
             --profile default `
-            --baseline sca.baseline.json `
             --report-sarif sca.sarif `
-            --fail-on=warning `
+            --fail-on=none `
             --quiet
 
       - name: Upload SARIF to GitHub Code-Scanning
-        if: always()           # upload even on non-zero exit so reviewers see the alerts
+        if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: sca.sarif
@@ -63,3 +76,38 @@ jobs:
           name: sca-sarif
           path: sca.sarif
           retention-days: 30
+
+      # --------------------------------------------------------------
+      # Gate. Pick ONE of the two.
+      #
+      # (a) No legacy backlog - fail on severity. Cheapest, no second
+      #     scan, no file to maintain. Delete the baseline step below.
+      #
+      # (b) Legacy backlog - fail only on findings that are not in the
+      #     baseline. This needs a second scan, because a single run
+      #     writes either the filtered or the unfiltered report, not
+      #     both, and Code Scanning must get the unfiltered one.
+      # --------------------------------------------------------------
+      - name: Gate (a) severity
+        run: |
+          .\tools\sca\analyser.d12.exe `
+            --path . `
+            --full `
+            --profile default `
+            --fail-on=warning `
+            --quiet
+
+      # - name: Gate (b) baseline - only new findings break the build
+      #   run: |
+      #     .\tools\sca\analyser.d12.exe `
+      #       --path . `
+      #       --full `
+      #       --profile default `
+      #       --baseline sca.baseline.json `
+      #       --fail-on=warning `
+      #       --quiet
+      #
+      # Refreshing the baseline is a SEPARATE run without --baseline:
+      #     analyser.d12.exe --path . --full --write-baseline sca.baseline.json
+      # Combining both switches would write only the findings that
+      # survived the filter - that is, it would empty the baseline.

@@ -290,7 +290,10 @@ end;
 
 procedure TScanResult.WriteHtml(const AFileName: string);
 begin
-  TExporterHtml.Run(FFindings, '', AFileName);
+  // FBaseDir mitgeben: sonst zeigt der Report nur Basisdateinamen und
+  // gleichnamige Units aus verschiedenen Ordnern sind nicht
+  // unterscheidbar (Audit 2026-08-08).
+  TExporterHtml.Run(FFindings, '', AFileName, FBaseDir);
 end;
 
 function TScanResult.CountSeverity(ASev: TLeakSeverity): Integer;
