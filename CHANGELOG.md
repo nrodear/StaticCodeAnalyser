@@ -1189,7 +1189,7 @@ them. File-wide `// noinspection-file` markers are unaffected.
 
 
 13 commits since v0.9.7 (released 2026-06-01). Phase 1 of
-[Konzept_ScannerQualitaet.md](Konzept_ScannerQualitaet.md) is complete
+`Konzept_ScannerQualitaet.md` is complete
 (6/6 quick-wins); Phase 4 has begun with the A.3-Minimal cross-unit
 visibility check. A subsequent multi-persona review hardened the code
 on Security, Performance, and API dimensions.
@@ -1217,7 +1217,7 @@ Full release notes: [docs/releases/v0.9.8.md](docs/releases/v0.9.8.md)
   write). Method-boundary scan + `_`-prefix + managed-type skip + hard
   caps against pathological methods. Full path-sensitivity (if-else
   sibling-write, CFG, symbol table) deferred to Phase 2-4 per
-  [`Konzept_SCA166_UninitVar.md`](Konzept_SCA166_UninitVar.md).
+  `Konzept_SCA166_UninitVar.md`.
   Closes the long-standing DETECTORS.md slot #16 (UninitVar) with a
   conservative MVP; slot stays `🟡 partial` until full flow analysis.
 - **Golden-corpus regression tests** in `tests/golden-corpus/fp-reproducers/`
@@ -1301,7 +1301,7 @@ Full release notes: [docs/releases/v0.9.8.md](docs/releases/v0.9.8.md)
 
 ### Documentation
 
-- New: [`Konzept_ScannerQualitaet.md`](Konzept_ScannerQualitaet.md) —
+- New: `Konzept_ScannerQualitaet.md` —
   4-axis quality roadmap (Precision / Recall / Tooling / Architecture)
   with 4 prioritised phases.
 - New: [`docs/ConfidenceAudit.md`](docs/ConfidenceAudit.md) — per-kind

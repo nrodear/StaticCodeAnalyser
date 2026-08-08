@@ -442,7 +442,11 @@ To get real translations:
    ```
 5. Place the `locale/` folder next to the BPL/EXE
 
-Full step-by-step instructions: [I18N.md](I18N.md).
+The translations themselves are the `.po` files under
+[i18n/](i18n/) — that is the single source. After editing one, run
+`python tools/gen_po_inc.py` to regenerate the compiled-in copy, then do a
+**Clean + Build**: the IDE does not track `.inc` dependencies reliably and
+would otherwise link the previous text.
 
 ---
 
@@ -1038,21 +1042,28 @@ Both share the analysis engine in `StaticCodeAnalyserForm/sources/`.
 
 ## Documentation
 
-The repository contains three Markdown documents per language. They
-complement each other, so each one stands on its own:
+**[docs/index.md](docs/index.md) is the full map** — every shipped
+document, grouped by what you are trying to do. The four you are most
+likely to need:
 
 | File | Content | When to consult |
 |------|---------|-----------------|
-| [README.md](README.md) | **Overview** — what the plugin does, how to use it, architecture, performance, suppression, theme integration | Default starting point for everything except the two specialised topics below |
-| [DETECTORS.md](DETECTORS.md) | **Canonical detector list** — all 50 Sonar rules plus 3 bonus detectors with status (✅ implemented / 🟡 partial / 🔲 open), description and the responsible unit | When you want to know which rule is implemented, what exactly it checks, or which detector is up next |
+| [README.md](README.md) | **Overview** — what the plugin does, how to use it, architecture, performance, suppression, theme integration | Default starting point |
+| [EXPORTS.md](EXPORTS.md) | **Every export format** — SARIF, Sonar, HTML, CSV, JSON, baseline — with the workflow each one serves and the CLI switches that drive it | When you want findings *out* of the tool: CI gate, code review, ticket system, spreadsheet |
+| [DETECTORS.md](DETECTORS.md) | **Canonical detector list** — every rule with status (✅ implemented / 🟡 partial / 🔲 open), description and the responsible unit | When you want to know which rule is implemented, what exactly it checks, or which detector is up next |
 | [BRANCH_CHANGES.md](BRANCH_CHANGES.md) | **VCS / Branch-Changes feature** — how the `Branch-Changes` button works, Git/SVN setup, Tortoise compatibility, `analyser.ini` configuration, troubleshooting for repo detection | When the Branch-Changes button isn't doing what you expect, or you want to fine-tune the VCS setup |
 
-Convention: `README.md` is broad; the other two are deep and focused on
-one aspect. Whenever a section in the README grows too large, it gets
-moved into its own dedicated file (which is exactly what happened with
-the Branch-Changes content).
+Per-rule pages (what a finding means and how to fix it) live under
+[docs/rules/](docs/rules/index.md); the catalogue with severities is
+[docs/rules.md](docs/rules.md).
 
-🇩🇪 German versions: [README_de.md](README_de.md), [DETECTORS_de.md](DETECTORS_de.md), [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md)
+Convention: `README.md` is broad, the specialised files are deep. Whenever
+a section in the README grows too large, it gets moved into its own file
+(which is exactly what happened with the Branch-Changes content).
+
+🇩🇪 German versions carry a `_de` suffix: [README_de.md](README_de.md),
+[EXPORTS_de.md](EXPORTS_de.md), [DETECTORS_de.md](DETECTORS_de.md),
+[BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md)
 
 ---
 

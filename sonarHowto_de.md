@@ -84,7 +84,9 @@ Bei Catalog-Updates im Repo: Copy nachziehen. (Siehe
 ## 1. Sonar-Konfiguration für die Standalone-EXE
 
 Du hast drei Wege, der EXE die Verbindungsdaten zu geben — wähle einen,
-nicht mischen:
+nicht mischen. A und B stehen für sich; C setzt voraus, dass die INI
+schon existiert (siehe dort) — ein wirklich plugin-freies Setup nimmt
+also A oder B.
 
 ### Variante A — CLI-Flags pro Lauf
 
@@ -112,26 +114,49 @@ Empfohlen für CI (Secret-Stores liefern die Variablen).
 
 ### Variante C — analyser.ini mit DPAPI-Token
 
-Persistent für den lokalen User, Token **DPAPI-verschlüsselt**:
+Die Standalone-EXE **liest** `%APPDATA%\StaticCodeAnalyser\analyser.ini`,
+schreibt dort aber nie ein Token hinein — es gibt keinen CLI-Schalter
+dafür. Die Datei muss vorher von woanders kommen:
+
+- **IDE-Plugin** — *Tools > Optionen > Static Code Analysis > Sonar*, Host
+  / Projekt / Token eintragen, Speichern. Das ist die einzige Stelle im
+  Produkt, die ein Token DPAPI-verschlüsselt ablegt. Bequem, wenn das
+  Plugin ohnehin installiert ist — auf einer plugin-freien Maschine
+  entfällt diese Variante damit.
+- **Von Hand** — die `[Sonar]`-Section selbst schreiben und den
+  `[SonarTokens]`-Eintrag mit PowerShell erzeugen:
 
 ```powershell
-analyser.exe --sonar-host    http://sonar.company.com:9000 `
-             --sonar-project my-delphi-project `
-             --sonar-token   squ_xxxxxxxxxx `
-             --sonar-test
+$ini = "$env:APPDATA\StaticCodeAnalyser\analyser.ini"
+Add-Type -AssemblyName System.Security
+$enc = [System.Security.Cryptography.ProtectedData]::Protect(
+  [Text.Encoding]::UTF8.GetBytes("squ_xxxxxxxxxx"), $null, "CurrentUser")
+$hex = ($enc | ForEach-Object { $_.ToString("x2") }) -join ""
+@"
+[Sonar]
+HostUrl=http://sonar.company.com:9000
+ProjectKey=my-delphi-project
+TokenRef=ide-default
+
+[SonarTokens]
+ide-default=$hex
+"@ | Set-Content $ini -Encoding utf8
 ```
 
-Beim ersten Aufruf legt der EXE — falls noch nicht vorhanden —
-`%APPDATA%\StaticCodeAnalyser\analyser.ini` an mit Section `[Sonar]` plus
-verschlüsseltem Token in `[SonarTokens]`. Nächster Lauf braucht keine
-Flags mehr:
+Danach braucht kein Lauf mehr Flags:
 
 ```powershell
 analyser.exe --sonar-test
 ```
 
-Token kann **nur** vom selben Windows-User auf demselben Rechner
-entschlüsselt werden.
+DPAPI bindet die Datei an dieses Windows-Konto — eine Kopie ist auf einem
+anderen Rechner oder unter einem anderen Benutzer wertlos. Ein Tresor ist
+es nicht: jedes Programm, das *als du* läuft, entschlüsselt genauso. Für
+CI nimm Variante B.
+
+Beginnt ein Eintrag mit `PT:`, ist er reines Base64 und nicht
+verschlüsselt (der Nicht-Windows-Fallback). Die EXE liest auch solche
+Einträge und warnt dann.
 
 ---
 
