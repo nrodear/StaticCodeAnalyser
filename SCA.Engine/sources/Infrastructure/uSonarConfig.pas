@@ -543,7 +543,13 @@ begin
   {$ELSE}
   // Non-Windows-Fallback: Plaintext + Marker. Sicherheits-Tradeoff dokumentiert
   // im Banner und in den Tests; CLI gibt eine WARNING aus.
-  Hex := 'PT:' + TNetEncoding.Base64.Encode(
+  //
+  // EncodeBytesToString, NICHT Encode: die TBytes-Ueberladung von Encode
+  // liefert wieder TBytes (System.NetEncoding:53) und nicht string. Bis
+  // 2026-08-08 stand hier Encode - der Zweig haette auf JEDER
+  // Nicht-Windows-Plattform mit E2010 gebrochen, gemerkt hat es niemand,
+  // weil ihn hier nie ein Compiler zu sehen bekommt.
+  Hex := 'PT:' + TNetEncoding.Base64.EncodeBytesToString(
     TEncoding.UTF8.GetBytes(PlainTextToken));
   {$ENDIF}
 
