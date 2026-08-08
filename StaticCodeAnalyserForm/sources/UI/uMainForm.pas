@@ -53,6 +53,7 @@ type
     MinSevCombo: TComboBox;
     // Branch-Changes Button (VCS-Diff)
     BtnBranch: TButton;
+    FBtnHamburger: TButton;
     procedure Button1Click(Sender: TObject);
     procedure ResultGridClick(Sender: TObject);
     procedure ResultGridDblClick(Sender: TObject);
@@ -131,7 +132,6 @@ type
     // Hamburger-Menue (analog IDE-Plugin): einziger Zugang zu
     // Branch-Changes / Cancel / Export / Settings / Ignore. Toolbar
     // bleibt schlank, Aktionen sind alle ueber dieses Menue erreichbar.
-    FBtnHamburger   : TButton;
     FHamburgerMenu  : TPopupMenu;
     // Dynamisch ge-Enable/Disable'd in HamburgerMenuPopup.
     FMICancel       : TMenuItem;
@@ -588,13 +588,8 @@ begin
   // (User-Wunsch - Branch-Analyse ist haeufig genug fuer einen direkten
   // Toolbar-Slot, Hamburger wuerde nur Klicks kosten).
   // Position: rechts neben BtnBranch (dort wo frueher FBtnExport sass).
-  FBtnHamburger := TButton.Create(Self);
-  FBtnHamburger.Parent  := PanelActions;
+  //FBtnHamburger := TButton.Create(Self);
   FBtnHamburger.Caption := #$2630;  // 'Trigram for Heaven' = Hamburger-Glyph
-  FBtnHamburger.Width   := 32;
-  FBtnHamburger.Height  := BtnBranch.Height;
-  FBtnHamburger.Top     := BtnBranch.Top;
-  FBtnHamburger.Left    := BtnBranch.Left + BtnBranch.Width + 12;
   FBtnHamburger.Hint    := _('Actions menu: Cancel, Export, Settings, Ignore');
   FBtnHamburger.ShowHint := True;
   FBtnHamburger.OnClick := HamburgerClick;
