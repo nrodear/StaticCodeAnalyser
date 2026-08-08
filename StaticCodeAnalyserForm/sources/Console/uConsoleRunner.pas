@@ -662,6 +662,16 @@ begin
     WriteLn('  token   = (', Length(Cfg.Token), ' chars from ', Cfg.SourceToken, ')')
   else
     WriteLn('  token   = (none)');
+  // Eine Repo-eigene sonar-project.properties darf den Host nicht
+  // bestimmen (sonst geht der Token des Nutzers an einen fremden
+  // Server). Der Wert wird ignoriert - aber sichtbar, damit eine
+  // legitime Repo-Konfiguration nicht raetselhaft wirkungslos bleibt.
+  if Cfg.IgnoredRepoHost <> '' then
+  begin
+    WriteLn('  Hinweis: sonar.host.url aus sonar-project.properties wird');
+    WriteLn('           ignoriert (', Cfg.IgnoredRepoHost, ').');
+    WriteLn('           Host per --sonar-host, SONAR_HOST_URL oder analyser.ini setzen.');
+  end;
   WriteLn('');
   R := TSonarHealthCheck.Run(Cfg);
   Write(TSonarHealthCheck.FormatChecklist(R));
@@ -1174,6 +1184,40 @@ begin
       end;
     end;
 
+    // ---- Snapshot fuer kuenftige Baseline ----
+    // MUSS vor dem Baseline-FILTER laufen: TBaseline.Apply veraendert die
+    // Findings-Liste destruktiv. Bis 2026-08-08 stand dieser Block
+    // dahinter, weshalb '--baseline alt --write-baseline neu' - das
+    // naheliegende Auffrischen, das sogar in der eigenen CI-Doku stand -
+    // nur die NEUEN Funde in die Baseline schrieb. Nachgemessen: aus 226
+    // Eintraegen wurden 0, und der naechste Build meldete den gesamten
+    // Altbestand erneut. Eine Baseline ist ein Abbild des IST-Zustands,
+    // nicht der Differenz.
+    if EffWriteBaseline <> '' then
+    begin
+      try
+        if BlProjOrGroup <> '' then
+          uSCAConsts.BaselineFingerprintRoot := ExtractFilePath(BlProjOrGroup)
+        else
+          uSCAConsts.BaselineFingerprintRoot := Args.Path;
+        // Kein ForceDirectories mehr hier: TBaseline.Write legt das
+        // Zielverzeichnis selbst an (und vertraegt anders als der
+        // Aufruf hier einen blossen Dateinamen ohne Verzeichnisanteil).
+        TBaseline.Write(Findings, EffWriteBaseline);
+        if not Args.Quiet then
+          WriteLn(Format('Baseline written: %s (%d findings)',
+            [EffWriteBaseline, Findings.Count]));
+      except
+        on E: Exception do
+        begin
+          // Ein nicht geschriebener Snapshot ist ein Werkzeugfehler: der
+          // naechste Lauf haette sonst still die falsche Vergleichsbasis.
+          WriteLn(ErrOutput, 'Baseline write error: ', E.Message);
+          Exit(Integer(cecToolError));
+        end;
+      end;
+    end;
+
     // ---- Baseline-Filter (vor Output / Exit-Code) ----
     if EffBaseline <> '' then
     begin
@@ -1201,28 +1245,6 @@ begin
         on E: Exception do
           WriteLn(ErrOutput, 'Baseline read warning: ', E.Message);
         // Baseline-Fehler ist nicht fatal - Lauf geht ohne Filter weiter
-      end;
-    end;
-
-    // ---- Snapshot fuer kuenftige Baseline ----
-    if EffWriteBaseline <> '' then
-    begin
-      try
-        if BlProjOrGroup <> '' then
-          uSCAConsts.BaselineFingerprintRoot := ExtractFilePath(BlProjOrGroup)
-        else
-          uSCAConsts.BaselineFingerprintRoot := Args.Path;
-        ForceDirectories(ExtractFilePath(EffWriteBaseline));
-        TBaseline.Write(Findings, EffWriteBaseline);
-        if not Args.Quiet then
-          WriteLn(Format('Baseline written: %s (%d findings)',
-            [EffWriteBaseline, Findings.Count]));
-      except
-        on E: Exception do
-        begin
-          WriteLn(ErrOutput, 'Baseline write error: ', E.Message);
-          Exit(Integer(cecToolError));
-        end;
       end;
     end;
 

@@ -8,7 +8,48 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- **The Sonar export was rejected by SonarQube in the shipped state.**
+  The release ZIP contained only the EXE. Without `rules/sca-rules.json`
+  beside it the rule catalog falls back to a built-in stub, and that
+  stub emitted the legacy `type` field instead of `cleanCodeAttribute`
+  + `impacts` — which makes SonarQube discard the **entire** report
+  (verified against the real scanner-engine validators: 10.7 reports
+  *missing mandatory field 'cleanCodeAttribute'*, 2025.x *missing
+  mandatory field 'severity'*). The run looked successful, the file was
+  written, and the dashboard stayed empty. Two changes: the fallback now
+  emits the same MQR fields as the normal path, derived from the rule's
+  finding type and default severity — and the release archive ships
+  `rules/sca-rules.json` next to the EXE, verified by the packaging
+  script itself.
+- **Refreshing a baseline destroyed it.** `--baseline old
+  --write-baseline new` wrote only the findings that had *survived* the
+  filter, because the filter mutates the list in place and the snapshot
+  ran afterwards. Measured: a 226-entry baseline became 0 entries, and
+  the next build reported the whole backlog as new. The snapshot is
+  taken before the filter now — a baseline is a picture of the current
+  state, not of the difference.
+- **`--write-baseline b.json` (a bare file name) failed to write.** The
+  caller called `ForceDirectories` on the empty directory part.
+- **`--sonar-insecure` did not accept self-signed certificates.** It only
+  set the TLS protocol list — which has nothing to do with certificate
+  trust — and in doing so re-enabled the deprecated TLS 1.1. It now
+  installs the certificate-validation callback it always promised, and
+  leaves protocol selection at the platform default.
+- **A `sonar-project.properties` inside the scanned repository could
+  redirect your token.** That file supplied `sonar.host.url` and
+  outranked the user's own configuration, so `--sonar-test` in a cloned
+  foreign repository sent the token — from the environment or the
+  encrypted INI — to whatever host the repository named. `sonar.token`
+  was already deliberately ignored there; the same reasoning now applies
+  to the host. A hint tells you when a repository-supplied host was
+  ignored.
+- **Release archives used non-conformant entry names.** PowerShell's
+  `Compress-Archive` writes backslashes into ZIP entries, so
+  `rules/sca-rules.json` would have unpacked as a single oddly-named
+  file on Linux and macOS. The archive is now built with explicit
+  forward-slash entry names.
 
 ## [v0.9.14] - 2026-08-08 - A grey dark mode, and a safer IDE hand-off
 

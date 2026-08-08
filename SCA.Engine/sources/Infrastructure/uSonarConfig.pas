@@ -6,7 +6,12 @@ unit uSonarConfig;
 //   1. CLI-Flags         (--sonar-host, --sonar-token, --sonar-project, ...)
 //   2. Environment-Vars  (SONAR_HOST_URL, SONAR_TOKEN, SONAR_PROJECT_KEY,
 //                         SONAR_ORGANIZATION, SONAR_BRANCH)
-//   3. Project-Config    (sonar-project.properties im Projekt-Root)
+//   3. Project-Config    (sonar-project.properties im Projekt-Root) -
+//                         liefert NUR projectKey/organization/branch/
+//                         sourceMapping. Weder sonar.token NOCH
+//                         sonar.host.url werden von hier uebernommen:
+//                         die Datei liegt im gescannten Repo und ist
+//                         damit fremdbestimmt (s. ReadFromProjectProps).
 //   4. User-INI          (analyser.ini Section [Sonar], Token in [SonarTokens]
 //                         per DPAPI verschluesselt)
 //
@@ -42,6 +47,13 @@ type
     SourceHostUrl    : string;
     SourceToken      : string;
     SourceProjectKey : string;
+
+    // Gesetzt, wenn eine sonar-project.properties im GESCANNTEN Repo eine
+    // sonar.host.url mitbringt: der Wert wird bewusst IGNORIERT (s.
+    // ReadFromProjectProps), der Consumer soll den Nutzer aber darauf
+    // hinweisen, damit eine legitime Repo-Konfiguration nicht raetselhaft
+    // wirkungslos bleibt.
+    IgnoredRepoHost  : string;
 
     // Validierung - was muss minimal gesetzt sein um Sonar zu kontaktieren?
     function IsValid: Boolean;
@@ -405,10 +417,19 @@ begin
       K := Trim(Copy(Stripped, 1, EqPos - 1));
       V := Trim(Copy(Stripped, EqPos + 1, MaxInt));
 
-      if (Cfg.HostUrl = '') and SameText(K, 'sonar.host.url') then
+      // sonar.host.url wird aus dieser Datei NICHT uebernommen. Sie liegt
+      // IM gescannten Repository und ist damit fremdbestimmt: ein
+      // geklontes Projekt konnte so den Host des Nutzers ueberstimmen,
+      // waehrend der Token weiterhin aus dessen Env/INI kam - der Token
+      // ging dann als 'Authorization: Bearer' an den vom Repo genannten
+      // Server (2026-08-08 mit Mitschnitt reproduziert). Genau aus diesem
+      // Grund wird sonar.token hier schon immer ignoriert; fuer den Host
+      // gilt dieselbe Begruendung. Der sonar-scanner liest die Datei
+      // ohnehin selbst - SCA braucht den Host nur fuer --sonar-test.
+      if SameText(K, 'sonar.host.url') then
       begin
-        Cfg.HostUrl := NormalizeHostUrl(V);
-        Cfg.SourceHostUrl := 'sonar-project.properties';
+        if (Cfg.HostUrl = '') and (Cfg.IgnoredRepoHost = '') then
+          Cfg.IgnoredRepoHost := V;
       end
       else if (Cfg.ProjectKey = '') and SameText(K, 'sonar.projectKey') then
       begin
@@ -599,22 +620,52 @@ begin
   Result := S;
 end;
 
+type
+  // Traeger fuer den Zertifikats-Callback. OnValidateServerCertificate ist
+  // ein 'of object'-Methodenzeiger - eine anonyme Methode laesst sich dort
+  // NICHT zuweisen, deshalb dieses Miniobjekt.
+  TInsecureCertAcceptor = class
+    procedure AcceptAny(const Sender: TObject; const ARequest: TURLRequest;
+      const Certificate: TCertificate; var Accepted: Boolean);
+  end;
+
+procedure TInsecureCertAcceptor.AcceptAny(const Sender: TObject;
+  const ARequest: TURLRequest; const Certificate: TCertificate;
+  var Accepted: Boolean);
+begin
+  Accepted := True;
+end;
+
 function HttpGet(const Url, Token: string; Insecure: Boolean;
   out StatusCode: Integer; out Body: string): Boolean;
 // Einfacher HTTP-GET mit Bearer-Auth. Liefert True wenn der Request
 // durchlief (auch bei 4xx/5xx); False bei Network-Layer-Fehler.
 var
-  Client : THTTPClient;
-  Req    : IHTTPRequest;
-  Resp   : IHTTPResponse;
+  Client   : THTTPClient;
+  Req      : IHTTPRequest;
+  Resp     : IHTTPResponse;
+  Acceptor : TInsecureCertAcceptor;
 begin
   Result := False;
   StatusCode := 0;
   Body := '';
+  Acceptor := nil;
   Client := THTTPClient.Create;
   try
     if Insecure then
-      Client.SecureProtocols := [THTTPSecureProtocol.TLS11, THTTPSecureProtocol.TLS12, THTTPSecureProtocol.TLS13];
+    begin
+      // Das ist der Zweck des Schalters: ein selbstsigniertes bzw. nicht
+      // vertrauenswuerdiges Serverzertifikat akzeptieren. Bis 2026-08-08
+      // stand hier NUR eine Protokoll-Liste (TLS11..TLS13) - die hat mit
+      // Zertifikatsvertrauen nichts zu tun, der Schalter war also ein
+      // No-op gegen selbstsignierte Server (gemessen: identische
+      // ENetHTTPCertificateException mit und ohne Flag) und schaltete
+      // nebenbei das abgekuendigte TLS 1.1 frei. Beides behoben: der
+      // Vertrauens-Callback macht die Ausnahme, die Protokoll-Wahl
+      // bleibt beim sicheren Plattform-Default.
+      Acceptor := TInsecureCertAcceptor.Create;
+      Client.OnValidateServerCertificate := Acceptor.AcceptAny;
+    end;
     Client.ConnectionTimeout := 5000;
     Client.ResponseTimeout   := 10000;
     Req := Client.GetRequest(sHTTPMethodGet, Url);
@@ -635,6 +686,7 @@ begin
     end;
   finally
     Client.Free;
+    Acceptor.Free;   // erst NACH dem Client - er haelt den Callback
   end;
 end;
 
