@@ -12,11 +12,11 @@
 # der Baseline-/Theme-Runde). Regeln mit 0 Funden stehen NICHT
 # mehr drin - fehlt eine Regel, gilt sie als 0, ein neuer Fund
 # schlaegt also weiter an (belegt am UnusedSuppression-Rotlauf).
-TIERS 0 638 2661
+TIERS 0 638 2659
 AvoidOut 14
 BeginEndRequired 913
 BooleanParam 7
-BooleanPropertyNaming 11
+BooleanPropertyNaming 10
 CaseStatementSize 4
 ClassPerFile 27
 CognitiveComplexity 342
@@ -27,7 +27,7 @@ CyclomaticComplexity 121
 DateFormatSettings 2
 DebugOutput 20
 DeepNesting 38
-DefaultCaseInCaseStatement 81
+DefaultCaseInCaseStatement 80
 DfmActionMismatch 1
 DfmDataModuleSplitHint 1
 DfmDbInUiForm 5
