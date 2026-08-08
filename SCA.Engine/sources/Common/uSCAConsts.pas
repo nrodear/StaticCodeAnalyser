@@ -33,6 +33,9 @@ const
   DEF_PARALLEL_SCAN             = False;
   // 0 = automatisch (TThread.ProcessorCount, gedeckelt auf die Dateianzahl).
   DEF_PARALLEL_WORKERS          = 0;
+  // Baseline-Fingerprint aus dem RELATIVpfad statt nur dem Dateinamen.
+  // Default AUS = Bestand (s. BaselinePathFingerprint weiter unten).
+  DEF_BASELINE_PATH_FINGERPRINT = False;
 
 var
   Flags: Byte;
@@ -1066,7 +1069,7 @@ var
   // TRADE-OFFS dokumentiert im Konzept: Ordner-Umzuege/anderer
   // Scan-Zuschnitt invalidieren Fingerprints; byte-gleiche KOPIEN
   // matchen weiter ueber den contextHash (bewusst).
-  BaselinePathFingerprint : Boolean = False;
+  BaselinePathFingerprint : Boolean = DEF_BASELINE_PATH_FINGERPRINT;
   // Wurzel fuer die Relativierung; setzt der CONSUMER vor Write/Apply
   // (CLI: Projekt-/Gruppen-Verzeichnis bzw. --path). Leer oder Datei
   // nicht unterhalb -> Fallback auf den blossen Dateinamen (sicher).
@@ -1077,6 +1080,8 @@ var
 //   * skalare Detektor-Schwellen (DetectorMax*/DetectorMin*, DEF_*-Konstanten)
 //   * Filter (DetectorEnabledKinds/DetectorMinSeverity/FindingMinConfidence)
 //   * Flags (AutoDiscoverCustomClasses, UIMaxDisplayedFindings)
+//   * Baseline-Fingerprint-Modus (BaselinePathFingerprint,
+//     BaselineFingerprintRoot) - sonst wirkt der Modus eines Vorlaufs nach
 //   * Konfigurations-Listen: Clear + Basisbefuellung (LeakyClasses,
 //     LeakyClassExcludes, DetectorMagicTrivials, DetectorFormatFunctions,
 //     DfmForbiddenClasses) - die Listen-OBJEKTE bleiben dabei stabil
@@ -1502,6 +1507,15 @@ begin
   // und darf nie still aus einem Vorlauf nachwirken.
   DetectorParallelScan      := DEF_PARALLEL_SCAN;
   DetectorParallelWorkers   := DEF_PARALLEL_WORKERS;
+  // Baseline-Fingerprint-Modus: ebenfalls strikt per-Lauf. Ohne diesen
+  // Riegel erbte ein zweiter Scan im selben Prozess Modus UND Wurzel des
+  // ersten - der Fingerprint waere damit keine reine Funktion des Fundes
+  // mehr, sondern haette an Prozess-Restzustand gehangen (Audit
+  // 2026-08-08). Die Consumer setzen beides unmittelbar vor jedem
+  // Write/Apply neu (CLI/EXE/Plugin), der Reset ist deshalb
+  // verhaltens-neutral.
+  BaselinePathFingerprint   := DEF_BASELINE_PATH_FINGERPRINT;
+  BaselineFingerprintRoot   := '';
 
   // Konfigurations-Listen: Clear + Basisbefuellung. Assigned-Guards, damit
   // der Aufruf auch vor CreateEngineConfigLists (bzw. nach finalization)

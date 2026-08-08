@@ -23,6 +23,14 @@ type
     function WriteTempPas(const Body: string): string;
     function MakeFinding(const FileName: string; LineNo: Integer): TLeakFinding;
   public
+    // Die PathMode-Tests setzen den Fingerprint-Modus um und raeumen ihn
+    // im eigenen finally wieder auf; die uebrigen Tests SETZEN den
+    // Default stillschweigend VORAUS. Setup/TearDown macht diese
+    // Voraussetzung explizit, statt sie von der Disziplin fremder
+    // Fixtures abhaengig zu machen (Audit 2026-08-08).
+    [Setup]    procedure Setup;
+    [TearDown] procedure TearDown;
+
     [Test] procedure Normalize_StripsLeadingAndTrailingWS;
     [Test] procedure Normalize_CollapsesWhitespaceRuns;
     [Test] procedure Normalize_DropsEmptyLines;
@@ -43,6 +51,20 @@ type
 implementation
 
 // noinspection-file BeginEndRequired, NestedTry
+
+procedure TTestFindingFingerprint.Setup;
+begin
+  uSCAConsts.BaselinePathFingerprint := False;
+  uSCAConsts.BaselineFingerprintRoot := '';
+end;
+
+procedure TTestFindingFingerprint.TearDown;
+begin
+  // Auch nach einem abgebrochenen Test sauber verlassen - sonst traegt
+  // der naechste Fixture-Lauf den Pfad-Modus weiter.
+  uSCAConsts.BaselinePathFingerprint := False;
+  uSCAConsts.BaselineFingerprintRoot := '';
+end;
 // Temp-Datei-Tests brauchen geschachtelte try/finally-Ketten und
 // Guard-Einzeiler - idiomatisches Testmuster dieser Unit.
 

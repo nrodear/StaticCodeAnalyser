@@ -110,6 +110,20 @@ uses
   System.JSON, System.IOUtils,
   uFindingFingerprint;
 
+// Zielverzeichnis einer zu schreibenden Datei bei Bedarf anlegen - so,
+// wie es der Kontrakt am Unit-Kopf fuer den .sca-Ordner zusagt. Bis
+// 2026-08-08 stand das nur im Kommentar: drei Aufrufer kompensierten es
+// mit eigenem ForceDirectories, der vierte (Plugin) waere in eine
+// EInOutError gelaufen.
+procedure EnsureTargetDir(const AFileName: string);
+var
+  Dir : string;
+begin
+  Dir := ExtractFilePath(AFileName);
+  if (Dir <> '') and not DirectoryExists(Dir) then
+    ForceDirectories(Dir);
+end;
+
 // Datei-Token fuer den Fingerprint. Default: nur der Dateiname
 // (checkout-tolerant). Mit [Baseline] PathInFingerprint=1: normalisierter
 // Relativpfad ab BaselineFingerprintRoot (lowercase, '/'), damit
@@ -190,6 +204,7 @@ begin
   SL := TStringList.Create;
   try
     SL.Text := Root.Format(2);
+    EnsureTargetDir(DestFile);
     SL.SaveToFile(DestFile, TEncoding.UTF8);
   finally
     SL.Free;
