@@ -107,6 +107,10 @@ var
 const
   TOKEN_REF_DEFAULT = 'ide-default';
   TOKEN_PLACEHOLDER = '(stored - leave empty to keep)';
+  // Marker, mit dem uSonarConfig.StoreToken einen unverschluesselten
+  // Base64-Token schreibt (Nicht-Windows-Fallback). Bewusst hier
+  // dupliziert statt aus der Engine geholt - Begruendung in LoadFromIni.
+  TOKEN_PLAINTEXT_PREFIX = 'PT:';
 
 { TSonarOptionsFrame }
 
@@ -277,10 +281,23 @@ begin
 end;
 
 procedure TSonarOptionsFrame.LoadFromIni(const IniPath: string);
+// Zur Klartext-Erkennung wird der ROHE [SonarTokens]-Wert gelesen und auf
+// das 'PT:'-Praefix geprueft, statt die LoadToken-Ueberladung mit
+// out-Parameter aus uSonarConfig zu rufen.
+//
+// Grund ist der Bauweg, nicht der Geschmack: dieses Package hat
+// `requires SCA.Engine` und uebersetzt uSonarConfig NICHT selbst - es
+// liest die Win32-DCP. Engine und Plugin werden getrennt und auf
+// verschiedenen Plattformen gebaut (die Engine steht auf Win64, das
+// Plugin KANN nur Win32), also sieht der Plugin-Build regelmaessig eine
+// aeltere Engine. Ein Aufruf frisch hinzugefuegter Engine-API bricht ihn
+// dann mit E2034, obwohl am Plugin nichts falsch ist - genau das ist am
+// 2026-08-08 passiert. Ueber den INI-Wert bleibt das Plugin gegen alte
+// UND neue Engine uebersetzbar.
 var
   Ini      : TMemIniFile;
   TokenRef : string;
-  IsPlain  : Boolean;
+  RawToken : string;
 begin
   FIniPath := IniPath;
   if not TFile.Exists(IniPath) then Exit;
@@ -292,14 +309,16 @@ begin
     edBranch.Text   := Ini.ReadString('Sonar', 'Branch',       '');
     chkInsecure.Checked := Ini.ReadBool('Sonar', 'Insecure',   False);
     TokenRef        := Ini.ReadString('Sonar', 'TokenRef',     '');
+    RawToken        := '';
+    if TokenRef <> '' then
+      RawToken := Trim(Ini.ReadString('SonarTokens', TokenRef, ''));
   finally
     Ini.Free;
   end;
 
   if TokenRef <> '' then
   begin
-    FOriginalToken := TSonarConfigResolver.LoadToken(IniPath, TokenRef,
-      IsPlain);
+    FOriginalToken := TSonarConfigResolver.LoadToken(IniPath, TokenRef);
     if FOriginalToken <> '' then
     begin
       edToken.Text := TOKEN_PLACEHOLDER;
@@ -307,7 +326,8 @@ begin
       // Ein 'PT:'-Eintrag (auf Nicht-Windows geschrieben, hier trotzdem
       // lesbar) ist Base64 - der DPAPI-Hinweis waere dann eine falsche
       // Zusicherung.
-      if IsPlain then
+      if SameText(Copy(RawToken, 1, Length(TOKEN_PLAINTEXT_PREFIX)),
+                  TOKEN_PLAINTEXT_PREFIX) then
         lblTokenInfo.Caption := _(
           'WARNING: this token is stored as PLAINTEXT in analyser.ini. ' +
           'Save it again here to DPAPI-encrypt it for your account.');
