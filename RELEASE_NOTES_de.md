@@ -1,4 +1,37 @@
-# Release 0.9.12 — Das Panel haelt Schritt
+# Release 0.9.13 — Die Baseline findet ihr Zuhause
+
+🇬🇧 [English version](RELEASE_NOTES.md)
+
+Vollstaendige Release-Notes: [docs/releases/v0.9.13_de.md](docs/releases/v0.9.13_de.md)
+([english](docs/releases/v0.9.13.md)).
+
+Ein grosses Release: Baselines, eine neue Regel, und die Standalone-EXE
+zieht gleich.
+
+- **Baselines wohnen jetzt im `.sca`-Ordner** neben Projekt/Gruppe, von
+  CLI, EXE und Plugin identisch aufgeloest; `--baseline-scan y` bricht
+  in der CI hart ab (Exit 99), wenn keine Baseline existiert. Der
+  Nur-neue-Funde-Haken sitzt in beiden Hamburger-Menues und bietet an,
+  eine fehlende Baseline sofort zu schreiben. Opt-in
+  `[Baseline] PathInFingerprint=1` trennt gleichnamige Dateien.
+- **Neue Regel SCA196 `ManagedResultUninit`**: `Result` gelesen vor dem
+  ersten Schreiben bei verwalteten Rueckgabetypen - die versteckte
+  var-Parameter-Falle, vor der W1035 nie warnt. 49/49 Korpus-Funde als
+  echte Bugs verifiziert.
+- **`SCA040`/`SCA042` waren in Produktion tot** (liefen vor dem
+  Event-Binding-Aufbau) - wiederbelebt und am Korpus gehaertet; dazu
+  eine Welle Detektor-FP-Fixes (Literal-Blanking in 16 Detektoren,
+  DataModule-Schwarm, Schleifen-Fehlzuordnung, `SCA101` sieht endlich
+  Folgezeilen-Zweige).
+- **Die EXE zieht mit dem Plugin gleich**: Tastatur-Triage mit
+  byte-treuem Datei-Editor, Kachel-Filter, ehrliche Sortierung,
+  Fenster-Persistenz, externe Editoren, Crash-Diagnostik.
+- **Der Dark Mode ist jetzt "SCA VSDark"** - die VS-Code-Dark-Modern-
+  Palette statt des pechschwarzen Windows10 Dark.
+
+---
+
+# Vorher — Release 0.9.12 — Das Panel haelt Schritt
 
 🇬🇧 [English version](RELEASE_NOTES.md)
 

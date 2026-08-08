@@ -8,6 +8,10 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [v0.9.13] - 2026-08-08 - The baseline finds its home
+
 ### Added
 
 - **Opt-in `[Baseline] PathInFingerprint=1`.** Baseline fingerprints
@@ -79,9 +83,6 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on how the extension is registered, and no route to a line number exists
   there — the built-in viewer stays available as `viewer` and is used
   automatically when no handler responds.
-
-### Added
-
 - **Keyboard triage in the standalone EXE**: <kbd>Enter</kbd> opens the
   finding, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd> inserts the
   `// noinspection` marker above the finding line and
@@ -116,6 +117,13 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   plugin and the HTML report exchange — and *Show only new findings*
   hides everything whose fingerprint is already in the configured
   baseline. Fail-open: a missing or broken baseline file hides nothing.
+  The toggle now resolves the `.sca` default location on its own — no
+  hand-written `[Baseline] File=` needed: enabling it without any
+  baseline offers to write one to the `.sca` standard path (probed
+  locations listed), *Write baseline* pre-fills that path, and the
+  IDE plugin got the same hamburger toggle wired to the ACTIVE
+  project/group; the plugin's silent mode (editor markers while
+  typing) honours the `.sca` baseline too.
 - **Right-click menu on the result grid**: Open, Copy AI prompt, Insert
   suppression marker, Apply quick fix — the discoverable form of the
   keyboard shortcuts.
@@ -127,6 +135,21 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The embedded dark style is now "SCA VSDark"** — the VS Code *Dark
+  Modern* palette (chrome `#181818`, content `#1F1F1F`, widgets
+  `#252526`, inputs `#313131`, text `#CCCCCC`) instead of the stock
+  *Windows10 Dark*, which literally sets `clBlack` for window, panel,
+  grid, edit and menu. The style is generated reproducibly from the
+  Redist original by `tools/make_scadark_style.py`; palette and file
+  format are documented in `styles/README.md`.
+- **`SCA040 DfmCrossFormCoupling` and `SCA042 DfmGodHandler` hardened
+  after their revival** (see Fixed): SCA040 no longer counts local
+  variables, parameters or fields that shadow a form name and anchors
+  its findings in the `.pas` (demoted to low confidence until the
+  next corpus round confirms precision); SCA042 stays silent when all
+  bindings of a handler share one component class and one event type —
+  a uniform, parameterised bundling is a pattern, not a god handler
+  (corpus: −71 %).
 - The status bar follows the plugin's three-channel scheme: the finding
   count is **persistent** in its own panel (it used to be wiped by the
   next event message), scan progress has its own, events keep the third.
@@ -139,6 +162,31 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Two DFM rules were dead in production.** `SCA040
+  DfmCrossFormCoupling` and `SCA042 DfmGodHandler` ran *before* the
+  event-binding repository was populated and had reported zero
+  findings on every real scan since their introduction; both moved
+  behind the binding build-up. Found by a systematic always-zero
+  audit across all detectors.
+- **`SCA032 DfmCircularDataSource` crashed on duplicate component
+  names** (`TDictionary.Add` on the second `DataSource1`); edges are
+  merged now.
+- **`SCA034/SCA035 DfmRequiredField` reported a false-positive swarm
+  on DataModules**: fields defined on a DataModule looked unbound from
+  every form that uses them (single-file view); DataModule roots are
+  skipped.
+- **`SCA091 CaseStatementSize` counted string literals**: an embedded
+  SQL `CASE … END` inside a Pascal string produced phantom branches.
+  Literals are blanked before matching — and the same
+  literal-stripping pass was rolled out to **15 further detectors**
+  (comments/strings can no longer fake code constructs for them;
+  self-scan alone dropped `ClassPerFile` from 519 to 27).
+- **`SCA110–112 PerfHotspots` mis-attributed single-statement loops**:
+  a `for … do stmt;` without `begin` swallowed the *following*
+  statement into the loop body.
+- **`SCA101 BeginEndRequired` missed the most common formatting**:
+  a branch on the line *after* `if cond then` was invisible to the
+  rule; continuation lines are checked now.
 - **Every arrow-key step overwrote the system clipboard** (~30 writes/s
   on a held key — the VCL fires the click event on keyboard navigation
   too), and a clipboard locked by another process threw an unhandled
