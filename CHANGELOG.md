@@ -41,6 +41,22 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The HTML report showed only base file names.** Two units called
+  `uSame.pas` in different folders appeared as the same entry, and the
+  folder names did not occur anywhere in the report — findings were
+  indistinguishable and the per-file ranking merged them. The report now
+  receives the scan root and shows paths relative to it, the same way
+  SARIF and the Sonar export already did.
+- **The example GitHub Actions workflow uploaded a baseline-filtered
+  SARIF to Code Scanning.** GitHub keeps the alert state itself, so a
+  filtered report makes it close every alert the baseline removed — the
+  whole accepted backlog turns into "fixed" in a single run. The
+  workflow now uploads the complete report and keeps the baseline for
+  the exit-code gate, in a step of its own. Two further errors in that
+  example are corrected: it claimed the first run would create the
+  baseline (it never passed `--write-baseline`, and a missing baseline is
+  a hard error since this release), and `--base-dir .` was missing, which
+  Code Scanning needs for repo-relative paths.
 - **The display filter in the EXE and the plugin could hide a read
   error.** "Show only new findings" matched read errors against the
   baseline, while the CLI has always refused to — an older or

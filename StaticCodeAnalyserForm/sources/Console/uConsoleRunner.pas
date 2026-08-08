@@ -1383,7 +1383,9 @@ begin
       try
         // SourceFile = leer -> kein Snippet-Embed, weil das vollstaendige
         // Repo gescannt wurde; Findings tragen pro Item ihren eigenen FileName.
-        TExporterHtml.Run(Findings, '', Args.ReportHtml);
+        // Args.BaseDir defaultet auf Args.Path (s. Arg-Parsing) - damit
+        // stehen im Report Relativpfade statt blosser Dateinamen.
+        TExporterHtml.Run(Findings, '', Args.ReportHtml, Args.BaseDir);
         if not Args.Quiet then
           WriteLn('HTML report written: ', Args.ReportHtml);
       except

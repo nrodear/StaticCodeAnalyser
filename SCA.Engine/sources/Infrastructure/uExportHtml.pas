@@ -26,8 +26,15 @@ uses
 type
   TExporterHtml = class
   public
+    // ABaseDir: Wurzel fuer die ANZEIGE der Dateipfade. Leer = nur der
+    // Basisdateiname (bisheriges Verhalten). Mit Wurzel steht der
+    // Relativpfad im Report - sonst sind gleichnamige Units aus
+    // verschiedenen Ordnern im Report nicht unterscheidbar (Audit
+    // 2026-08-08: zwei uSame.pas erschienen beide als 'uSame.pas', die
+    // Ordnernamen kamen im ganzen Report nicht vor).
     class procedure Run(Findings: TObjectList<TLeakFinding>;
-      const SourceFile: string; const FileName: string); static;
+      const SourceFile: string; const FileName: string;
+      const ABaseDir: string = ''); static;
     class function DefaultFileName(const SourceFile: string;
       const TargetDir: string): string; static;
   private
@@ -53,6 +60,7 @@ implementation
 // Findings-Liste ist klein (~100-500 Eintraege), kein Perf-Hot-Path.
 
 uses
+  System.IOUtils,          // TPath (Relativpfad-Anzeige, HtmlDisplayPath)
   uExport, uFixHint, uRuleCatalog, uQuickFix, uBaseline;
 
 type
@@ -215,8 +223,26 @@ begin
     Result := FormatDateTime(AFmt, Now);
 end;
 
+function HtmlDisplayPath(const AFileName, ABaseDir: string): string;
+// Anzeigepfad einer Fundstelle: relativ zur Wurzel (Forward Slashes,
+// wie in SARIF und Sonar), sonst der blosse Dateiname. Liegt die Datei
+// nicht unterhalb der Wurzel, faellt es ebenfalls auf den Dateinamen
+// zurueck - ein absoluter Pfad im Report brauchte niemand.
+var
+  Base, Full : string;
+begin
+  Result := ExtractFileName(AFileName);
+  if (ABaseDir = '') or (AFileName = '') then Exit;
+  Base := IncludeTrailingPathDelimiter(TPath.GetFullPath(ABaseDir));
+  Full := TPath.GetFullPath(AFileName);
+  if SameText(Copy(Full, 1, Length(Base)), Base) then
+    Result := StringReplace(Copy(Full, Length(Base) + 1, MaxInt),
+                            '\', '/', [rfReplaceAll]);
+end;
+
 class procedure TExporterHtml.Run(Findings: TObjectList<TLeakFinding>;
-  const SourceFile: string; const FileName: string);
+  const SourceFile: string; const FileName: string;
+  const ABaseDir: string);
 const
   SNIPPET_CONTEXT = 3;  // Zeilen vor und nach der Befund-Zeile
   TOP_DETECTORS_N = 10; // Anzahl Eintraege in der Top-Liste und im "Top10"-Filter
@@ -345,7 +371,7 @@ begin
         KindCount.AddOrSetValue(F.Kind, CurKindCnt + 1);
         if F.FileName <> '' then
         begin
-          fnDisp := ExtractFileName(F.FileName);
+          fnDisp := HtmlDisplayPath(F.FileName, ABaseDir);
           Files.Add(fnDisp);
           // Severity-Bit pro Datei akkumulieren.
           if not FilesSev.TryGetValue(fnDisp, SevMask) then SevMask := 0;
@@ -1234,7 +1260,7 @@ begin
                        (Meta.FullDescription <> '') or
                        (Meta.BadExample <> '') or (Meta.GoodExample <> '') or
                        HasCwe;
-        var FileShort := ExtractFileName(F.FileName);
+        var FileShort := HtmlDisplayPath(F.FileName, ABaseDir);
         // data-base = Basename ohne Extension. Dient dem Gruppen-Filter
         // ('base:uMainForm') im Datei-Dropdown, der .pas und .dfm mit
         // gleichem Basename gemeinsam ein-/ausblenden soll.
