@@ -27,6 +27,17 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`docs/sonar-coverage.md` understated the tool by 16 percentage
+  points.** The summary claimed 138 checks while its own table has 144
+  rows, and fifteen rows said "not implemented" (or "partial") for checks
+  that have had a dedicated detector for a while — `uCastAndFree`,
+  `uMissingRaise`, `uUninitVar`, `uCognitiveComplexity` and others. The
+  corrected figure is **61 %**, not "~45 %". Every pendant named in the
+  table was verified to exist. The file also now says in its first
+  paragraph what "coverage" means here — a comparison of *rule sets*
+  against the Sonar-Delphi plugin, not test coverage, which comes from
+  DelphiCodeCoverage and the plugin's own `sonar.delphi.coverage.*`
+  properties and is outside what a static analyser can produce.
 - **Read errors are no longer exported as Sonar issues, and SARIF now
   reports them as run diagnostics.** A file the analyser could not read
   says something about how *complete* the run was, not about the source —
