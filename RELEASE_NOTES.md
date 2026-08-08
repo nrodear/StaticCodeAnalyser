@@ -1,4 +1,32 @@
-# Release 0.9.13 — The baseline finds its home
+# Release 0.9.14 — A grey dark mode, and a safer IDE hand-off
+
+🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+
+Full release notes: [docs/releases/v0.9.14.md](docs/releases/v0.9.14.md)
+([deutsch](docs/releases/v0.9.14_de.md)).
+
+A small follow-up to 0.9.13, driven by what that release got wrong.
+
+- **The dark mode is finally grey.** Two causes: the palette was one
+  notch too dark (`#181818` reads as black), and — the real one — the
+  background never came from the colour table at all. Under an active
+  VCL style the form background is painted from the style's *bitmaps*,
+  and those carry 109,171 opaque `#000000` pixels in stock Windows10
+  Dark; the panels above keep the default `ParentBackground` and let
+  it through. The style generator now lifts every one of those pixels
+  to the chrome tone.
+- **Opening a finding no longer types into your code.** The IDE route
+  used to press Ctrl+G and type the line number; a busy IDE swallows
+  the shortcut, and the digits landed as text in line 1 of the file.
+  That path now only *opens* the file — instantly, and without
+  claiming a line it did not jump to. Line jumps stay where they work:
+  external editor (`%line%`), the `.dfm` viewer, and the IDE plugin.
+- **"Apply quick fix" left the grid's right-click menu**; the action
+  remains on <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd>.
+
+---
+
+# Previously — Release 0.9.13 — The baseline finds its home
 
 🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
 

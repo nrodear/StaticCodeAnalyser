@@ -10,8 +10,8 @@ komplette Analyse aufruft, ohne die internen Einheiten zu kennen.
 > Lauffähiges Minimal-Beispiel: [../SCA.CLI.Demo/](../SCA.CLI.Demo/).
 
 - **Package:** `SCA.Engine` (`requires rtl;` — keine VCL/FMX-Abhängigkeit)
-- **Version:** 0.9.8 (`uSCAConsts.SCA_VERSION`)
-- **Umfang:** ~175 Detektoren (Regel-IDs `SCA001`–`SCA184`)
+- **Version:** 0.9.14 (`uSCAConsts.SCA_VERSION`)
+- **Umfang:** ~196 Detektoren (Regel-IDs `SCA001`–`SCA196`)
 
 ---
 

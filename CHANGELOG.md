@@ -8,6 +8,10 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [v0.9.14] - 2026-08-08 - A grey dark mode, and a safer IDE hand-off
+
 ### Changed
 
 - **"Apply quick fix" left the result grid's right-click menu** (user
@@ -17,29 +21,32 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the black background fixed.** v0.9.13 shipped the literal VS Code
   values; chrome `#181818` reads as plain black on real monitors.
   Chrome is now `#252526`, widgets `#2D2D30`, borders `#3C3C3C`;
-  content stays `#1F1F1F`. More importantly, a systematic audit showed
-  the window background never came from the colour table at all: the
-  VCL form style hook paints the style's *bitmap-drawn* window-client
-  tile, which is pure `#000000` in Windows10 Dark — every panel above
-  it is transparent (`ParentBackground`), so the whole chrome area
-  stayed black regardless of any palette. The style generator now also
-  lifts every opaque black pixel in the style bitmaps (109,171 across
-  three bitmaps) to the chrome tone, and `cl3DDkShadow` (the grid
-  header separator) moves from black to the border tone.
+  content stays `#1F1F1F`. More importantly, a systematic audit traced
+  the black to the style's **bitmaps** rather than its colour table:
+  the form background is painted from bitmap data, and the stock
+  Windows10 Dark bitmaps carry 109,171 opaque `#000000` pixels. The
+  chrome panels sit on top of it with the VCL default
+  `ParentBackground`, so they never fill with their own colour and
+  that black showed through no matter which palette was configured.
+  The style generator therefore lifts every opaque black pixel in the
+  style bitmaps to the chrome tone (verified by counting them back to
+  zero), and `cl3DDkShadow` — the grid header separator — moves from
+  black to the border tone.
 
-### Fixed
+### Removed
 
-- **The EXE's Delphi-IDE line jump is gone — it could type the line
-  number into the code.** Opening a finding sent Ctrl+G and then the
-  digits after a fixed wait; a busy IDE (file still loading, LSP
-  indexing) swallows the shortcut, and "300" plus Enter arrived as
-  *text in line 1* of the just-opened file. The IDE offers no external
-  line switch and keystroke simulation cannot be made safe, so the IDE
-  path now only **opens** the file (instantly, no 1.2 s UI freeze) and
-  the status line honestly says "Opened in Delphi IDE" without
-  claiming a line. Line jumps remain where they actually work: the
-  external editor (`%line%` in `[Editor]`), the built-in `.dfm`
-  viewer — and the IDE plugin, whose ToolsAPI navigation is unaffected.
+- **The EXE's Delphi-IDE line jump — it could type the line number
+  into your code.** Opening a finding sent Ctrl+G and then the digits
+  after a fixed wait; a busy IDE (file still loading, LSP indexing)
+  swallows the shortcut, and "300" plus Enter arrived as *text in line
+  1 of the just-opened file*. The IDE offers no external line switch
+  and keystroke simulation cannot be made reliable against a busy IDE,
+  so the IDE path now only **opens** the file — instantly, without the
+  ~1.6 s UI freeze the keystroke chain needed — and the status line
+  says "Opened in Delphi IDE" without claiming a line it did not jump
+  to. Line jumps remain where they actually work: the external editor
+  (`%line%` in `[Editor]`), the built-in `.dfm` viewer — and the IDE
+  plugin, whose ToolsAPI navigation was never affected.
 
 ## [v0.9.13] - 2026-08-08 - The baseline finds its home
 
