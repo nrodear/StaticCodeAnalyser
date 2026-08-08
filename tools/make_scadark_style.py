@@ -26,6 +26,10 @@ BORDER  = '$003C3C3C'   # #3C3C3C Raender (auf #252526 noch sichtbar)
 TEXT    = '$00CCCCCC'   # #CCCCCC Standardtext
 
 STYLE_COLORS = {
+    # cl3DDkShadow zeichnet u.a. die 1px-Header-Trennlinie des Grids -
+    # der Style mappt es im Original auf clBlack (Workflow-Audit
+    # 2026-08-08), auf #252526-Chrome soll es der Rand-Ton sein.
+    'cl3DDkShadow': BORDER,
     'Border': BORDER,
     'CategoryButtons': CHROME,
     'CategoryPanelGroup': CHROME,
@@ -119,7 +123,60 @@ def font_sub(m):
 data = FONT_VAL.sub(font_sub, data)
 print('Font-Weiss ersetzt: %d' % count)
 
-# 3. Interner Style-Name (erster String im Strom).
+# 3. BITMAPS: der Form-Hintergrund kommt NICHT aus der Farbtabelle,
+#    sondern aus dem bitmap-gezeichneten Window-Client-Objekt der
+#    style.png - bei Windows10Dark reines Schwarz. Der Farb-Patch oben
+#    erreicht Bitmaps nicht (Workflow-Audit 2026-08-08: 'bg is black'
+#    trotz Palette v2). TseBitmap.SaveToStream (Vcl.StyleBitmap.pas)
+#    legt jedes Bitmap als [Name][W:Int32][H:Int32][W*H*4 BGRA roh] ab -
+#    wir heben in ALLEN Bitmaps jedes OPAKE Reinschwarz auf den
+#    Chrome-Ton (Titelleisten-Glyphen sind hell und bleiben unberuehrt;
+#    fast-schwarze Antialias-Kanten bleiben bewusst stehen).
+BLACK_PX  = b'\x00\x00\x00\xff'                  # BGRA opak #000000
+CHROME_PX = bytes((0x26, 0x25, 0x25, 0xff))      # BGRA opak #252526
+
+bm_count = 0
+px_total = 0
+scan = 0
+while True:
+    hit = data.find('.png'.encode('utf-16-le'), scan)
+    if hit < 0:
+        break
+    scan = hit + 2
+    # Rueckwaerts den String-Anfang suchen: [len:Int32][utf16-Name].
+    name_end = hit + len('.png'.encode('utf-16-le'))
+    found = False
+    for l in range(4, 65):
+        s = name_end - 2 * l
+        if s >= 4 and data[s - 4:s] == l.to_bytes(4, 'little'):
+            found = True
+            break
+    if not found:
+        continue
+    w = int.from_bytes(data[name_end:name_end + 4], 'little')
+    h = int.from_bytes(data[name_end + 4:name_end + 8], 'little')
+    if not (0 < w < 4096 and 0 < h < 4096):
+        continue
+    p0 = name_end + 8
+    p1 = p0 + w * h * 4
+    if p1 > len(data):
+        continue
+    pixels = bytearray(data[p0:p1])
+    n = 0
+    for i in range(0, len(pixels), 4):
+        if pixels[i:i + 4] == BLACK_PX:
+            pixels[i:i + 4] = CHROME_PX
+            n += 1
+    data = data[:p0] + bytes(pixels) + data[p1:]
+    bm_count += 1
+    px_total += n
+    print('Bitmap %dx%d: %d Schwarz-Pixel -> Chrome' % (w, h, n))
+    scan = p1
+assert bm_count >= 1, 'kein Style-Bitmap gefunden'
+assert px_total > 5000, 'verdaechtig wenige Schwarz-Pixel: %d' % px_total
+print('Bitmaps gesamt: %d, Pixel gehoben: %d' % (bm_count, px_total))
+
+# 4. Interner Style-Name (erster String im Strom).
 nlen = int.from_bytes(data[0:4], 'little')
 old_name = data[4:4 + 2 * nlen].decode('utf-16-le')
 print('Interner Name: %r -> %r' % (old_name, NEW_NAME))
