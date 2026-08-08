@@ -27,12 +27,19 @@ Chrome und Widgets eine Stufe an, die Hierarchie bleibt:
 
 **Entstehung:** das `.vsf`-Format ist `VCL_STYLE 2.0` + zlib; Farben
 liegen darin als Klartext-Tripel `Name ':' Wert` (`Vcl.StyleAPI.pas`,
-`TSeStyleColors.SaveToStream`). Das Patch-Skript ersetzt 43 Farbwerte,
-das Font-Weiß und den internen Namen und verifiziert per Roundtrip —
-bitmap-gezeichnete Elemente (Scrollbar-Daumen, Glyphen, Titelleisten-
-Knöpfe) behalten die dunklen Original-Bitmaps, was zum dunklen Chrome
-von VS Code passt. Skript: Session-Scratchpad `vsf_patch.py` 2026-08-08
-(bei Bedarf aus diesem README rekonstruierbar).
+`TSeStyleColors.SaveToStream`), Bitmaps als `[Name][W][H][W×H×4 BGRA
+roh]` (`Vcl.StyleBitmap.pas`, `TseBitmap.SaveToStream`). Das
+Patch-Skript `tools/make_scadark_style.py` ersetzt 44 Farbwerte, das
+Font-Weiß und den internen Namen — **und hebt in allen drei
+Style-Bitmaps jedes opake Reinschwarz auf den Chrome-Ton** (109 171
+Pixel). Letzteres ist entscheidend: der Fenster-Hintergrund kommt
+nicht aus der Farbtabelle, sondern aus dem bitmap-gezeichneten
+Window-Client-Tile (`TFormStyleHook.PaintBackground`), das im Original
+pures `#000000` ist — alle Panels darüber sind `ParentBackground`-
+transparent, deshalb blieb das Chrome trotz Palette v2 schwarz
+(Workflow-Audit 2026-08-08). Helle Glyphen bleiben unberührt;
+fast-schwarze Antialias-Kanten bleiben bewusst stehen. Alles per
+Roundtrip + Null-Schwarz-Nachzählung verifiziert.
 
 Der Ressourcenname ist das neutrale `SCADARK`: er codiert die ROLLE
 (der dunkle Style der Anwendung), nicht die Datei — ein erneuter Tausch

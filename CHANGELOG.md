@@ -10,10 +10,19 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **"SCA VSDark" palette v2 — one notch lighter.** v0.9.13 shipped the
-  literal VS Code values; chrome `#181818` reads as plain black on real
-  monitors. Chrome is now `#252526`, widgets `#2D2D30`, borders
-  `#3C3C3C`; content stays `#1F1F1F`, the hierarchy is unchanged.
+- **"SCA VSDark" palette v2 — one notch lighter, and the REAL cause of
+  the black background fixed.** v0.9.13 shipped the literal VS Code
+  values; chrome `#181818` reads as plain black on real monitors.
+  Chrome is now `#252526`, widgets `#2D2D30`, borders `#3C3C3C`;
+  content stays `#1F1F1F`. More importantly, a systematic audit showed
+  the window background never came from the colour table at all: the
+  VCL form style hook paints the style's *bitmap-drawn* window-client
+  tile, which is pure `#000000` in Windows10 Dark — every panel above
+  it is transparent (`ParentBackground`), so the whole chrome area
+  stayed black regardless of any palette. The style generator now also
+  lifts every opaque black pixel in the style bitmaps (109,171 across
+  three bitmaps) to the chrome tone, and `cl3DDkShadow` (the grid
+  header separator) moves from black to the border tone.
 
 ### Fixed
 
