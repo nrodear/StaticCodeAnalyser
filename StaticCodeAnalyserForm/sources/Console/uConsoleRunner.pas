@@ -803,7 +803,14 @@ var
   Cfg : TSonarConfig;
 begin
   if Args.Path <> '' then TargetDir := Args.Path else TargetDir := GetCurrentDir;
-  TargetDir := IncludeTrailingPathDelimiter(TargetDir);
+  // GetFullPath VOR dem Ableiten des Schluessels. Ohne das war ausgerechnet
+  // die dokumentierte Aufrufform kaputt: '--path .' liefert als Ordnername
+  // '.', was der Sanitizer zu '' abschleift - der Schluessel fiel auf
+  // 'delphi-project' zurueck, statt den Projektordner zu benennen. Und ein
+  // Pfad mit Schraegstrichen ('--path C:/repo') machte den GANZEN Pfad zum
+  // Schluessel, weil ExtractFileName unter Windows nur '\' trennt.
+  // Am Binary reproduziert 2026-08-08.
+  TargetDir := IncludeTrailingPathDelimiter(TPath.GetFullPath(TargetDir));
   // Branch/Organization aus CLI, Env und INI - sie landen im Template,
   // weil der sonar-scanner sie dort liest.
   Cfg       := BuildSonarConfig(Args);
