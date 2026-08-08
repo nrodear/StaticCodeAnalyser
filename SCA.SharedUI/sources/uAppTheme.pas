@@ -169,9 +169,11 @@ const
   // genau die stille Fehlerquelle, die die erste Fassung hatte: ohne
   // gelinkten Style lieferte TrySetStyle('Windows10Dark') False, und die
   // EXE startete auf dunklem Windows hell (Abnahme-Befund 2026-08-05).
-  // Inhaltlich seit 2026-08-08 'Windows10 SlateGray' statt 'Windows10
-  // Dark': das Schwarz wirkte erdrueckend; das Slate-Grau entspricht dem
-  // verbreiteten IDE-Dunkelgrau (RAD Studio, VS) - User-Auflage.
+  // Inhaltlich seit 2026-08-08 'SCA VSDark' (styles\SCADark.vsf): das
+  // Original Windows10Dark stand woertlich auf clBlack (Window, Panel,
+  // Grid, Edit, Menu) und wirkte erdrueckend - User-Auflage war das
+  // VS-Code-Dark-Modern-Grau. SCADark.vsf ist das per Skript umgefaerbte
+  // Windows10Dark (Palette + Entstehung: styles\README.md).
   DARK_RESOURCE = 'SCADARK';
 
   // Der Ressourcen-TYP muss 'VCLSTYLE' sein, NICHT RT_RCDATA. Grund, am
