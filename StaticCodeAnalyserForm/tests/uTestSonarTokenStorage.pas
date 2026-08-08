@@ -54,8 +54,12 @@ const
 function PlaintextEntry(const AToken: string): string;
 // Baut einen [SonarTokens]-Wert im Non-Windows-Format nach: 'PT:' +
 // Base64. Genau das, was StoreToken ohne DPAPI schreibt.
+//
+// EncodeBytesToString, NICHT Encode: die TBytes-Ueberladung von Encode
+// liefert wieder TBytes (System.NetEncoding:53), nicht string - das gibt
+// E2010 'Inkompatible Typen'. Nur diese hier baut den String.
 begin
-  Result := 'PT:' + TNetEncoding.Base64.Encode(
+  Result := 'PT:' + TNetEncoding.Base64.EncodeBytesToString(
     TEncoding.UTF8.GetBytes(AToken));
 end;
 
