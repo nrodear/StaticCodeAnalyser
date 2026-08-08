@@ -636,13 +636,18 @@ begin
   Accepted := True;
 end;
 
-{ ---- Antwort-Auswertung ----
-  Die Stufen des Health-Checks haben ihre Antworten bis 2026-08-08 per
-  Pos() im ROHTEXT geprueft ('"valid":true'). Damit entschied die
-  Serialisierung ueber das Ergebnis: {"valid": true} mit einem Leerzeichen
-  - wie es jeder pretty-printende Proxy oder ein Gateway liefert -
-  scheiterte, {"valid":true} gelang. Semantisch identische Antworten,
-  entgegengesetztes Urteil. Deshalb hier echtes Parsen. }
+// ---- Antwort-Auswertung ----
+// Die Stufen des Health-Checks haben ihre Antworten bis 2026-08-08 per
+// Pos() im ROHTEXT geprueft ('"valid":true'). Damit entschied die
+// Serialisierung ueber das Ergebnis: mit einem Leerzeichen hinter dem
+// Doppelpunkt - wie es jeder pretty-printende Proxy oder ein Gateway
+// liefert - scheiterte die Pruefung, ohne Leerzeichen gelang sie.
+// Semantisch identische Antworten, entgegengesetztes Urteil. Deshalb
+// hier echtes Parsen.
+//
+// (Zeilenkommentare mit Absicht: ein JSON-Beispiel im Text wuerde einen
+//  geschweiften Blockkommentar an seiner schliessenden Klammer vorzeitig
+//  beenden - Delphi schachtelt { } nicht.)
 
 function JsonStrField(const Body, FieldName: string; out Value: string): Boolean;
 // Liest ein String-Feld der obersten Ebene. False = kein gueltiges JSON
