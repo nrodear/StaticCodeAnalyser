@@ -33,6 +33,24 @@ _Nothing yet._
   zero), and `cl3DDkShadow` — the grid header separator — moves from
   black to the border tone.
 
+### Fixed
+
+- **`--report-sarif` into a not-yet-existing folder aborted the run.**
+  Writing `build/reports/sca.sarif` on a fresh CI checkout failed with
+  a tool error and no report, while the sibling `--write-baseline`
+  created the folder happily. Both writers create their target
+  directory now — the SARIF writer and `TBaseline.Write`, whose own
+  contract had promised to create the `.sca` folder while leaving the
+  work to its callers (three did it, the fourth would have crashed).
+- **A second scan in the same process could inherit the first one's
+  baseline fingerprint mode.** `ResetEngineConfigDefaults` promises to
+  reset every scan-configuration global, but the two added by the
+  `PathInFingerprint` opt-in were missing from it. A fingerprint is
+  supposed to be a pure function of the finding; via that gap it also
+  depended on process history, which could silently invalidate a whole
+  baseline. Both globals are reset now, and a regression test fails
+  if the next one gets forgotten.
+
 ### Removed
 
 - **The EXE's Delphi-IDE line jump — it could type the line number

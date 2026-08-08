@@ -43,6 +43,7 @@ type
     [Test] procedure WriteSarif_ProducesNonEmptyFile;
     [Test] procedure ReleaseFindings_TransfersOwnership;
     [Test] procedure Baseline_FiltersKnownFindings;
+    [Test] procedure ResetEngineConfigDefaults_ClearsBaselineFingerprintMode;
     [Test] procedure SkipConfig_RespectsPresetConfig;
     [Test] procedure IgnoreList_NilDefault_ScansAllProjectFiles;
     [Test] procedure IgnoreList_SkipsMatchingFile;
@@ -74,9 +75,13 @@ procedure TTestEngineApi.ResetEngineGlobals;
 begin
   // Globale Engine-Konfiguration auf Engine-Default zuruecksetzen, damit diese
   // Fixture keine anderen kontaminiert (Phase-0-Facade teilt den Prozess-State).
-  uSCAConsts.DetectorEnabledKinds := [];
-  uSCAConsts.DetectorMinSeverity  := lsHint;
-  uSCAConsts.FindingMinConfidence := fcMedium;
+  //
+  // Bewusst der ZENTRALE Riegel statt einer handgepflegten Auswahl: die
+  // Vorgaengerfassung listete drei Globals auf und verpasste dadurch die
+  // beiden Baseline-Globals, die spaeter dazukamen. Ueber
+  // ResetEngineConfigDefaults erbt die Fixture jedes kuenftige Global
+  // automatisch.
+  uSCAConsts.ResetEngineConfigDefaults;
 end;
 
 function TTestEngineApi.RunSingle(const ASrc, AProfile: string): TScanResult;
@@ -165,9 +170,16 @@ end;
 procedure TTestEngineApi.Setup;
 begin
   ResetEngineGlobals;
-  FDir := TPath.Combine(TPath.GetTempPath, 'sca_engineapi_test');
-  if TDirectory.Exists(FDir) then
-    TDirectory.Delete(FDir, True);
+  // Eigenes Verzeichnis JE LAUF (GUID), wie in den uebrigen acht Fixtures.
+  // Der frueher feste Name 'sca_engineapi_test' war prozess-GETEILT: ein
+  // zweiter oder haengengebliebener TestProject-Lauf (TestInsight ist
+  // resident, s. Unit-Kopf) loeschte ihn in seinem TearDown mitten in
+  // einen laufenden Test hinein. Folge waren zwei Phantom-Fehlschlaege
+  // (2026-08-08): WriteSarif fand das Verzeichnis nicht mehr, und
+  // Baseline_FiltersKnownFindings sah 4 statt 0 Funde, weil
+  // TBaseline.Apply bei fehlender Datei still 0 liefert (uBaseline:234).
+  FDir := TPath.Combine(TPath.GetTempPath,
+    'sca_engineapi_' + TGuid.NewGuid.ToString);
   TDirectory.CreateDirectory(FDir);
 end;
 
@@ -325,6 +337,22 @@ begin
   end;
 end;
 
+procedure TTestEngineApi.ResetEngineConfigDefaults_ClearsBaselineFingerprintMode;
+// Regressionsnetz fuer den Reset-VERTRAG: ResetEngineConfigDefaults sagt
+// zu, ALLE Scan-Konfigurations-Globals dieser Unit zurueckzusetzen. Die
+// beiden Baseline-Globals fehlten dort (2026-08-08) - der Fingerprint
+// haette sonst an Prozess-Restzustand gehangen. Faellt der naechste
+// vergessene Global auf, faellt zuerst dieser Test.
+begin
+  uSCAConsts.BaselinePathFingerprint := True;
+  uSCAConsts.BaselineFingerprintRoot := TPath.GetTempPath;   // irgendein Wert
+  uSCAConsts.ResetEngineConfigDefaults;
+  Assert.IsFalse(uSCAConsts.BaselinePathFingerprint,
+    'Pfad-Modus faellt auf den Default zurueck');
+  Assert.AreEqual<string>('', uSCAConsts.BaselineFingerprintRoot,
+    'Fingerprint-Wurzel wird geleert');
+end;
+
 procedure TTestEngineApi.Baseline_FiltersKnownFindings;
 // Phase-4-Vorbereitung: Run() filtert request-driven gegen eine Baseline
 // (BaselinePath) und kann eine neue schreiben (WriteBaselinePath). 1. Lauf
@@ -353,6 +381,12 @@ begin
   finally Ses.Free; end;
   Assert.IsTrue(CountFresh >= 1, 'Erst-Scan findet den Bug');
   Assert.IsTrue(TFile.Exists(BaseFn), 'Baseline-Datei wurde geschrieben');
+  // INHALT pruefen, nicht nur die Existenz: eine leere Baseline und ein
+  // Fingerprint-Mismatch sehen am Ende beide wie "0 gedroppt" aus. Ohne
+  // diese Zusicherung kostete die Unterscheidung 2026-08-08 eine ganze
+  // Diagnose-Runde.
+  Assert.Contains(TFile.ReadAllText(BaseFn, TEncoding.UTF8), '"fingerprint"',
+    'Baseline enthaelt Fingerprints (nicht leer geschrieben)');
 
   // 2) Scan mit Baseline -> bekannte Findings werden gefiltert
   Req := TScanRequest.Init;

@@ -585,6 +585,14 @@ begin
   // Exception-Kontrakt wie TFile.WriteAllText erhalten (Review 2026-07-05):
   // dort kam bei nicht schreibbarem Pfad EInOutError an, TFileStream wirft
   // roh EFCreateError - fuer Aufrufer-Kompat auf die alte Klasse mappen.
+  // Zielverzeichnis bei Bedarf anlegen. Ohne das brach ein
+  // `--report-sarif build\reports\sca.sarif` in einen frischen Ordner
+  // hart ab (Exit 99), waehrend der Schwesterpfad --write-baseline
+  // denselben Ordner anlegt - eine Asymmetrie, ueber die genau in CI
+  // gestolpert wird (Audit 2026-08-08, am Release-Binary reproduziert).
+  var Dir := ExtractFilePath(AFileName);
+  if (Dir <> '') and not DirectoryExists(Dir) then
+    ForceDirectories(Dir);
   try
     FS := TFileStream.Create(AFileName, fmCreate);
   except
