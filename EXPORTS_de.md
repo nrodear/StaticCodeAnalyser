@@ -75,6 +75,15 @@ Verzeichnisanteil verwenden.** Ein bloßer Dateiname
 (`--write-baseline b.json`) scheitert mit *„Baseline write error:
 Verzeichnis kann nicht erstellt werden"* — an v0.9.14 nachgemessen.
 
+**Gibt es denselben Unit-Namen in mehreren Ordnern, `--baseline-path-fingerprint y`
+setzen.** Standardmäßig identifiziert ein Fingerprint einen Fund über den
+*Dateinamen*, nicht über den Pfad — zwei `uSame.pas` in verschiedenen
+Ordnern teilen sich also eine Identität. Gemessene Folge: Eine Baseline aus
+einem Unterordner unterdrückte **sämtliche** Funde im Nachbarordner,
+darunter eine SQL-Injection, die nie jemand geprüft hatte. Mit dem Schalter
+trägt der Fingerprint den Relativpfad. Er ändert die Fingerprints — beim
+Einschalten also eine frische Baseline schreiben.
+
 **Eine Baseline NICHT durch Kombination der beiden Schalter
 auffrischen.** Das naheliegend wirkende `--baseline alt
 --write-baseline neu` schreibt nur die Funde, die den Filter
@@ -183,7 +192,7 @@ Ehrliche Liste, Stand v0.9.14 — alles reproduziert:
 | CSV / JSON | nur GUI, nicht skriptbar |
 | JSON-Exporte | UTF-8 **mit** BOM |
 | HTML-Report | speichert nur Basisdateinamen; gleichnamige Units aus verschiedenen Ordnern kollidieren |
-| Baseline-Fingerprints | gleichnamige Units teilen sich einen Namensraum; das Opt-in `PathInFingerprint` gibt es nur in der INI, nicht auf der CLI |
+| Baseline-Fingerprints | gleichnamige Units teilen sich standardmäßig einen Namensraum — mit `--baseline-path-fingerprint y` abschaltbar (s. u.) |
 | unlesbare Quelldateien | werden in Konsole, SARIF/Sonar/HTML und Baseline unterschiedlich gezählt |
 | `--parallel` | nicht deterministisch; nicht für Exporte verwenden, die man vergleicht |
 | `--sonar-insecure` | akzeptiert keine selbstsignierten Zertifikate (schaltet nur TLS 1.1 frei) |
