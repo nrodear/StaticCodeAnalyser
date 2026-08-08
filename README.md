@@ -691,31 +691,33 @@ Exit code mapping:
 - 2 = warnings → commit allowed (or block via hook logic)
 - 3 = errors → **commit blocked**
 
-### Large code bases: `--parallel`
+### `--parallel` — broken, do not use
 
-Per-file parallel scanning, **opt-in and off by default**. The output is
-byte-identical to a serial run — the merge is strictly in file-list order,
-so it is safe to use anywhere a serial run is.
+> **This switch is defective as of 2026-08-08.** It was previously
+> documented here as byte-identical to a serial run. That claim was
+> wrong, and it was never measured — the test behind it only checked the
+> merge step, never a real scan.
 
-Expect little from it. Measured on the 12.8k-file reference corpus it saved
-about **3 %** (5m16s vs 5m26s), because the expensive part is not the part
-that gets parallelised: parsing every file into the AST cache and building
-the symbol and type indexes runs as a *serial pre-phase*, and the workers
-then mostly hit warm caches. It is committed as a correct, safe foundation,
-not as a speed-up.
+Eleven detectors share unit-global `TRegEx` instances. A `TRegEx` is a
+record around **one** shared engine object whose subject and offsets are
+mutated on every match, so two workers hitting the same detector corrupt
+each other's state. Measured on a real corpus: five serial runs produced
+one identical SARIF hash; thirteen parallel runs produced **thirteen
+different results**, with **40 real findings lost** and three
+error-severity findings *invented*. Running `--parallel --parallel-workers 1`
+reproduces the serial result byte-for-byte, which pins the cause on
+concurrency rather than a different code path.
 
-It **declines silently by design** in three cases, because none of them can
-be made deterministic or thread-safe: `AutoDiscoverClasses=1`, loaded
-`--custom-rules`, and `--time-detectors`. Since 2026-08-02 the run says so
-on stderr instead of quietly going serial — a switch that does nothing
-without a word is worse than one that does not exist. There is no CLI
-override for auto-discovery; it is set in `analyser.ini` under
-`[Detectors] AutoDiscoverClasses`.
+There is nothing to trade off, because there is no speed-up to lose:
+serial 24.3 s versus 27.7–41 s parallel across 2/4/8/16/28 workers —
+monotonically worse. The earlier "saves about 3 %" figure is not
+reproducible. Roughly half the wall time is the *serial pre-phase*
+(parsing, symbol and type indexes), which the switch does not touch.
 
-```powershell
-analyser.exe --path . --full --parallel --report-sarif sca.sarif
-analyser.exe --path . --full --parallel --parallel-workers 8   # statt Auto
-```
+Using it now prints a warning on stderr. The clean repair is to give each
+detector its own `TRegEx` per call — the project already solved exactly
+this class of bug once, in `uRegExMatches`, and simply missed these eleven
+units.
 
 ---
 
