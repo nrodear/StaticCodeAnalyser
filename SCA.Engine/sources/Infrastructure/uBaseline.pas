@@ -514,6 +514,13 @@ end;
 
 function TBaselineSet.Contains(const F: TLeakFinding): Boolean;
 begin
+  // Lesefehler sind nie baseline-faehig - dieselbe Regel, die Write (:209)
+  // und Apply (:459) schon befolgen. Dem ANZEIGE-Filter in EXE und Plugin
+  // fehlte sie bis 2026-08-08: eine handgepflegte oder aeltere Baseline mit
+  // einem FileReadError-Fingerprint konnte dort einen unlesbaren Dateipfad
+  // ausblenden, waehrend die CLI ihn weiter meldete. Ein Lauf, der Dateien
+  // nicht lesen konnte, darf nirgends vollstaendig aussehen.
+  if F.Kind = fkFileReadError then Exit(False);
   // Count-Guard spart bei leerem Set (Filter aus / Datei fehlt) das SHA2-
   // Hashing pro Finding im heissen ApplyFilter-Loop.
   Result := (FFingerprints.Count > 0)
