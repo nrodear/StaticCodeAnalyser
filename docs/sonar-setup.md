@@ -260,7 +260,8 @@ Diese Implementierung deckt **todo-sonar.md Phase 0 + A + B + C + D**:
 - ✅ Project-Properties-Template (`--sonar-init`)
 - ✅ Tools>Options Sonar-Seite
 - ✅ Send-to-Sonar im Export-Menü (Bulk + per-Issue)
-- ⬜ Pull-Mode für IDE (`uSonarPull`) — Engine implementiert, **UI-Anbindung
-  verschoben**: die Unit hat keinen Aufrufer, im Plugin wird nichts angezeigt
-  (so auch in den Release-Notes zu v0.9.1 vermerkt)
+- ❌ Pull-Mode für IDE — **nicht Teil des Produkts**. Die Engine (`uSonarPull`)
+  war seit v0.9.1 implementiert, bekam nie eine UI-Anbindung und wurde 2026-08
+  entfernt; sie steckte als ausgehender HTTP-Client mit Bearer-Token in jeder
+  BPL, ohne Aufrufer. In der Git-Historie erhalten
 - ✅ MQR-Mapping pro Rule (cleanCodeAttribute + impacts)

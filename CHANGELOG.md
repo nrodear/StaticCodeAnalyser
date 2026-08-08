@@ -10,6 +10,16 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Removed
 
+- **`uSonarPull` is gone.** The pull-mode engine shipped with v0.9.1 as
+  "complete, UI binding deferred" and the binding never came — for a year
+  it had no caller anywhere, was never even linked into the CLI, and yet
+  was compiled into every released BPL as an outbound HTTP client that
+  sends a bearer token, without the TLS handling its sibling
+  `uSonarConfig` has. Dead code is one thing; a dead egress path in a
+  tool whose whole point is that your source never leaves the machine is
+  another. It stays in the git history for whoever picks the feature up,
+  and the roadmap in `docs/sonar-setup.md` no longer ticks it off as
+  shipped.
 - **`[Sonar] SourceMapping`** (and the invented `sonar.sourceMapping`
   property) is gone. It was read from two sources and consumed by
   nothing; path rewriting is what `--base-dir` does, and every export

@@ -1,7 +1,7 @@
 ﻿{
   "version": "1",
   "createdAt": "2026-06-25T21:30:23",
-  "count": 2586,
+  "count": 2583,
   "findings": [
     {
       "file": "uUnusedPrivateMethod_SCA147_Demo.pas",
@@ -6257,24 +6257,6 @@
       "line": "641",
       "fingerprint": "83f3e0f83827dd98cfd401c8945649dfbcc1e9f8b4c5914fe8d6bd8269b1fd10",
       "contextHash": "v1:a3cc9f4bbcad84916402b5ae37b6db2a1e78e9fe9f36fec1ff8e8aed5f3d76bf"
-    },
-    {
-      "file": "uSonarPull.pas",
-      "kind": "DefaultCaseInCaseStatement",
-      "method": "TSonarDedupMatcher.MatchesKnownSonarRule",
-      "detail": "case statement without else - unhandled values fall through silently. Add `else ;` (intentional no-op) or a default handler.",
-      "line": "255",
-      "fingerprint": "5af634963991806eb3855f6542ca1e10a16627258e4064ccf3372cd43c7e042f",
-      "contextHash": "v1:6861c2621f1fa1956d03dc9c234a89e98b479357f39c9c9f3f8d18a3a59c7063"
-    },
-    {
-      "file": "uSonarPull.pas",
-      "kind": "BooleanPropertyNaming",
-      "method": "InvalidateFile",
-      "detail": "Boolean property \"Offline\" should start with Is \/ Has \/ Can \/ Should (e.g. IsActive, HasItems) - reads naturally at the call site (if X.IsActive).",
-      "line": "66",
-      "fingerprint": "c6ff667ecc6936a79c511aabc1512b08671e164fef02428da46579954fecffe7",
-      "contextHash": "v1:e9dfa1f75636bc69e2f028dc112d11b38b6a169ed5f249482d355857975e3d16"
     },
     {
       "file": "uStaticAnalyzer2.pas",
@@ -23231,15 +23213,6 @@
       "line": "166",
       "fingerprint": "a68fc80db0629addf8e2ade868fc1c9c91b145e15c4a731aafc72a31f9c4a88c",
       "contextHash": "v1:015af226e245c11d384e22b17972d7af30819d09080c6a0038a32741f2b9599e"
-    },
-    {
-      "file": "uSonarPull.pas",
-      "kind": "UnusedSuppression",
-      "method": "",
-      "detail": "\/\/ noinspection-Marker suppresst nichts - Detektor wurde verbessert oder Target war falsch. Marker entfernen oder Target-Kind pruefen.",
-      "line": "171",
-      "fingerprint": "42578311aef21b4e1c5a1cbdaba9c00c404dc59ee05dca5b04c04b3745c6f94e",
-      "contextHash": "v1:d32c067d80c880b60e5e4c1ea6c75c626bc7b9381ab503298c76b941ee0f2852"
     },
     {
       "file": "uRuleCatalog.pas",

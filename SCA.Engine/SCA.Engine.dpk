@@ -241,7 +241,6 @@ contains
   uPathOverrides in 'sources\Infrastructure\uPathOverrides.pas',
   uRepoSettings in 'sources\Infrastructure\uRepoSettings.pas',
   uSonarConfig in 'sources\Infrastructure\uSonarConfig.pas',
-  uSonarPull in 'sources\Infrastructure\uSonarPull.pas',
   uStaticAnalyzer2 in 'sources\Infrastructure\uStaticAnalyzer2.pas',
   uParallelScan in 'sources\Infrastructure\uParallelScan.pas',
   uProjectFiles in 'sources\Infrastructure\uProjectFiles.pas',
