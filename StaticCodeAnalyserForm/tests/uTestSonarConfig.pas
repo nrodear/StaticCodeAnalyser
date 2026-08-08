@@ -35,19 +35,17 @@ type
 
     // ---- INI / Project-Properties Parsing ----
     [Test] procedure IniSonarSectionReadsAllFields;
+    [Test] procedure ConfigPathFromRecordIsUsedAsFallback;
     [Test] procedure ProjectPropsIgnoresComments;
     [Test] procedure ProjectPropsBothEqualsAndColon;
     [Test] procedure ProjectPropsDoesNotReadToken;
     [Test] procedure UrlSanitizationStripsTrailingSlash;
 
-    // ---- DPAPI Token-Roundtrip ----
-    {$IFDEF MSWINDOWS}
-    [Test] procedure DpapiTokenRoundtrip;
-    [Test] procedure LoadTokenMissingEntryReturnsEmpty;
-    {$ENDIF}
-
     // ---- Diagnose (SourceXxx-Felder) ----
     [Test] procedure SourceTrackingPopulated;
+    // Token-Speicherung (DPAPI, 'PT:'-Klartext) liegt in
+    // uTestSonarTokenStorage - diese Fixture stand sonst bei 23 Methoden
+    // im eigenen GodClass-Detektor.
   end;
 
 implementation
@@ -255,15 +253,29 @@ begin
     'HostUrl=https://full-ini',
     'ProjectKey=full-ini-proj',
     'Organization=acme',
-    'Branch=feature/x',
-    'SourceMapping=C:\src=>/work'
+    'Branch=feature/x'
   ]);
   Cfg := TSonarConfigResolver.Resolve(Cli, FTempIni, '');
   Assert.AreEqual('https://full-ini',   Cfg.HostUrl);
   Assert.AreEqual('full-ini-proj',      Cfg.ProjectKey);
   Assert.AreEqual('acme',               Cfg.Organization);
   Assert.AreEqual('feature/x',          Cfg.Branch);
-  Assert.AreEqual('C:\src=>/work',      Cfg.SourceMapping);
+end;
+
+procedure TTestSonarConfig.ConfigPathFromRecordIsUsedAsFallback;
+// CLI.ConfigPath war gesetzt-aber-nie-gelesen: --sonar-config wirkte
+// allein ueber den separaten Parameter. Ein Aufrufer, der nur den Record
+// fuellt, wurde wortlos ignoriert.
+var
+  Cfg : TSonarConfig;
+  Cli : TSonarCliOverrides;
+begin
+  Cli := Default(TSonarCliOverrides);
+  Cli.ConfigPath := FTempIni;
+  WriteIni(['[Sonar]', 'ProjectKey=from-record-path']);
+  // AnalyserIniPath bewusst leer - nur der Record traegt den Pfad.
+  Cfg := TSonarConfigResolver.Resolve(Cli, '', '');
+  Assert.AreEqual('from-record-path', Cfg.ProjectKey);
 end;
 
 procedure TTestSonarConfig.ProjectPropsIgnoresComments;
@@ -328,28 +340,6 @@ begin
   Cfg := TSonarConfigResolver.Resolve(Cli, FTempIni, '');
   Assert.AreEqual('https://x.example.com:9000', Cfg.HostUrl);
 end;
-
-{ ---- DPAPI Roundtrip ---- }
-
-{$IFDEF MSWINDOWS}
-procedure TTestSonarConfig.DpapiTokenRoundtrip;
-var
-  Loaded : string;
-begin
-  TSonarConfigResolver.StoreToken(FTempIni, 'test-key', 'super-secret-42');
-  Loaded := TSonarConfigResolver.LoadToken(FTempIni, 'test-key');
-  Assert.AreEqual('super-secret-42', Loaded);
-end;
-
-procedure TTestSonarConfig.LoadTokenMissingEntryReturnsEmpty;
-var
-  Loaded : string;
-begin
-  WriteIni(['[Sonar]', 'HostUrl=x']);
-  Loaded := TSonarConfigResolver.LoadToken(FTempIni, 'does-not-exist');
-  Assert.AreEqual('', Loaded);
-end;
-{$ENDIF}
 
 { ---- Source-Tracking ---- }
 

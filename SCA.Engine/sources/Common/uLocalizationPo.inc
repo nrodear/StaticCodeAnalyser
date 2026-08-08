@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1983 Zeilen, 66802 Bytes
-  CPoLines_de: array[0..1982] of string = (
+  // i18n\de.po - 1986 Zeilen, 69039 Bytes
+  CPoLines_de: array[0..1985] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1834,8 +1834,8 @@ const
     'msgid "Suppression marker has no matching finding - probably stale after fix"',
     'msgstr "Unterdr'#$00FC'ckungs-Marker hat keinen zugeh'#$00F6'rigen Fund - vermutlich nach einer Korrektur '#$00FC'brig geblieben"',
     '',
-    'msgid "Token is stored DPAPI-encrypted in analyser.ini [SonarTokens]. Only this Windows user on this machine can decrypt it."',
-    'msgstr "Das Token wird DPAPI-verschl'#$00FC'sselt in analyser.ini [SonarTokens] abgelegt. Nur dieser Windows-Benutzer auf diesem Rechner kann es entschl'#$00FC'sseln."',
+    'msgid "DPAPI-encrypted in analyser.ini [SonarTokens] - bound to this Windows account, so a copied file is useless elsewhere."',
+    'msgstr "DPAPI-verschl'#$00FC'sselt in analyser.ini [SonarTokens] - an dieses Windows-Konto gebunden, eine kopierte Datei ist anderswo wertlos."',
     '',
     'msgid "When OFF (default): overlay appears only when you click a marked line - undisturbed reading. When ON: overlay follows the mouse and pops up as soon as you hover a marked line."',
     'msgstr "AUS (Standard): die Einblendung erscheint nur beim Klick auf eine markierte Zeile - ungest'#$00F6'rtes Lesen. EIN: die Einblendung folgt der Maus und erscheint, sobald eine markierte Zeile '#$00FC'berfahren wird."',
@@ -1997,10 +1997,13 @@ const
     'msgstr "In der Delphi-IDE geoeffnet: %s"',
     '',
     'msgid "Opened: %s  Line: %d"',
-    'msgstr "Ge'#$00F6'ffnet: %s  Zeile: %d"'
+    'msgstr "Ge'#$00F6'ffnet: %s  Zeile: %d"',
+    '',
+    'msgid "WARNING: this token is stored as PLAINTEXT in analyser.ini. Save it again here to DPAPI-encrypt it for your account."',
+    'msgstr "WARNUNG: Dieses Token liegt im KLARTEXT in der analyser.ini. Hier erneut speichern, dann wird es f'#$00FC'r Ihr Konto DPAPI-verschl'#$00FC'sselt."'
   );
 
-  // i18n\en.po - 201 Zeilen, 5360 Bytes
+  // i18n\en.po - 201 Zeilen, 5561 Bytes
   CPoLines_en: array[0..200] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
@@ -2205,8 +2208,8 @@ const
     'msgstr "Opened: %s  Line: %d"'
   );
 
-  // i18n\fr.po - 1995 Zeilen, 71332 Bytes
-  CPoLines_fr: array[0..1994] of string = (
+  // i18n\fr.po - 1998 Zeilen, 73593 Bytes
+  CPoLines_fr: array[0..1997] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4038,8 +4041,8 @@ const
     'msgid "Suppression marker has no matching finding - probably stale after fix"',
     'msgstr "Le marqueur de suppression ne correspond '#$00E0' aucun r'#$00E9'sultat - probablement obsol'#$00E8'te apr'#$00E8's une correction"',
     '',
-    'msgid "Token is stored DPAPI-encrypted in analyser.ini [SonarTokens]. Only this Windows user on this machine can decrypt it."',
-    'msgstr "Le jeton est stock'#$00E9' chiffr'#$00E9' par DPAPI dans analyser.ini [SonarTokens]. Seul cet utilisateur Windows sur cette machine peut le d'#$00E9'chiffrer."',
+    'msgid "DPAPI-encrypted in analyser.ini [SonarTokens] - bound to this Windows account, so a copied file is useless elsewhere."',
+    'msgstr "Chiffr'#$00E9' par DPAPI dans analyser.ini [SonarTokens] - li'#$00E9' '#$00E0' ce compte Windows, une copie du fichier est inutilisable ailleurs."',
     '',
     'msgid "When OFF (default): overlay appears only when you click a marked line - undisturbed reading. When ON: overlay follows the mouse and pops up as soon as you hover a marked line."',
     'msgstr "D'#$00C9'SACTIV'#$00C9' (par d'#$00E9'faut) : la fen'#$00EA'tre n''appara'#$00EE't qu''au clic sur une ligne marqu'#$00E9'e - lecture sans g'#$00EA'ne. ACTIV'#$00C9' : la fen'#$00EA'tre suit la souris et s''affiche d'#$00E8's le survol d''une ligne marqu'#$00E9'e."',
@@ -4201,7 +4204,10 @@ const
     'msgstr "Ouvert dans l''IDE Delphi : %s"',
     '',
     'msgid "Opened: %s  Line: %d"',
-    'msgstr "Ouvert : %s  Ligne : %d"'
+    'msgstr "Ouvert : %s  Ligne : %d"',
+    '',
+    'msgid "WARNING: this token is stored as PLAINTEXT in analyser.ini. Save it again here to DPAPI-encrypt it for your account."',
+    'msgstr "AVERTISSEMENT : ce jeton est stock'#$00E9' EN CLAIR dans analyser.ini. Enregistrez-le '#$00E0' nouveau ici pour le chiffrer par DPAPI pour votre compte."'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

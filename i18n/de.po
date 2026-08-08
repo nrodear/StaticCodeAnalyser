@@ -1817,8 +1817,8 @@ msgstr "Statische Code-Analyse - Datei"
 msgid "Suppression marker has no matching finding - probably stale after fix"
 msgstr "Unterdrückungs-Marker hat keinen zugehörigen Fund - vermutlich nach einer Korrektur übrig geblieben"
 
-msgid "Token is stored DPAPI-encrypted in analyser.ini [SonarTokens]. Only this Windows user on this machine can decrypt it."
-msgstr "Das Token wird DPAPI-verschlüsselt in analyser.ini [SonarTokens] abgelegt. Nur dieser Windows-Benutzer auf diesem Rechner kann es entschlüsseln."
+msgid "DPAPI-encrypted in analyser.ini [SonarTokens] - bound to this Windows account, so a copied file is useless elsewhere."
+msgstr "DPAPI-verschlüsselt in analyser.ini [SonarTokens] - an dieses Windows-Konto gebunden, eine kopierte Datei ist anderswo wertlos."
 
 msgid "When OFF (default): overlay appears only when you click a marked line - undisturbed reading. When ON: overlay follows the mouse and pops up as soon as you hover a marked line."
 msgstr "AUS (Standard): die Einblendung erscheint nur beim Klick auf eine markierte Zeile - ungestörtes Lesen. EIN: die Einblendung folgt der Maus und erscheint, sobald eine markierte Zeile überfahren wird."
@@ -1981,3 +1981,6 @@ msgstr "In der Delphi-IDE geoeffnet: %s"
 
 msgid "Opened: %s  Line: %d"
 msgstr "Geöffnet: %s  Zeile: %d"
+
+msgid "WARNING: this token is stored as PLAINTEXT in analyser.ini. Save it again here to DPAPI-encrypt it for your account."
+msgstr "WARNUNG: Dieses Token liegt im KLARTEXT in der analyser.ini. Hier erneut speichern, dann wird es für Ihr Konto DPAPI-verschlüsselt."

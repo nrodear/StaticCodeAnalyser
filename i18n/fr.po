@@ -1829,8 +1829,8 @@ msgstr "Analyse statique du code - Fichier"
 msgid "Suppression marker has no matching finding - probably stale after fix"
 msgstr "Le marqueur de suppression ne correspond à aucun résultat - probablement obsolète après une correction"
 
-msgid "Token is stored DPAPI-encrypted in analyser.ini [SonarTokens]. Only this Windows user on this machine can decrypt it."
-msgstr "Le jeton est stocké chiffré par DPAPI dans analyser.ini [SonarTokens]. Seul cet utilisateur Windows sur cette machine peut le déchiffrer."
+msgid "DPAPI-encrypted in analyser.ini [SonarTokens] - bound to this Windows account, so a copied file is useless elsewhere."
+msgstr "Chiffré par DPAPI dans analyser.ini [SonarTokens] - lié à ce compte Windows, une copie du fichier est inutilisable ailleurs."
 
 msgid "When OFF (default): overlay appears only when you click a marked line - undisturbed reading. When ON: overlay follows the mouse and pops up as soon as you hover a marked line."
 msgstr "DÉSACTIVÉ (par défaut) : la fenêtre n'apparaît qu'au clic sur une ligne marquée - lecture sans gêne. ACTIVÉ : la fenêtre suit la souris et s'affiche dès le survol d'une ligne marquée."
@@ -1993,3 +1993,6 @@ msgstr "Ouvert dans l'IDE Delphi : %s"
 
 msgid "Opened: %s  Line: %d"
 msgstr "Ouvert : %s  Ligne : %d"
+
+msgid "WARNING: this token is stored as PLAINTEXT in analyser.ini. Save it again here to DPAPI-encrypt it for your account."
+msgstr "AVERTISSEMENT : ce jeton est stocké EN CLAIR dans analyser.ini. Enregistrez-le à nouveau ici pour le chiffrer par DPAPI pour votre compte."

@@ -6,10 +6,15 @@ Sonar-Integration. Schritt-für-Schritt-Setup siehe
 
 ## Auflösungs-Reihenfolge
 
-Beim Start jedes Sonar-Befehls (CLI: `--sonar-*`, IDE: Tools>Options Save,
-Export-Menü) ruft die Implementierung
+Der Resolver läuft bei `--sonar-test`, bei `--sonar-init` und beim
+*Test Connection*-Knopf der IDE-Optionsseite. **Nicht** bei `--sonar-export`
+und **nicht** im Export-Menü: die schreiben Dateien und brauchen keine
+Serververbindung. Wer dort eine Wirkung von `Branch` oder `Organization`
+erwartet, sucht an der falschen Stelle — der Export kennt beide Felder
+nicht.
+
 [`TSonarConfigResolver.Resolve`](../SCA.Engine/sources/Infrastructure/uSonarConfig.pas)
-in dieser Reihenfolge:
+mergt in dieser Reihenfolge:
 
 1. **CLI-Flags** — Werte aus `--sonar-host` / `--sonar-token` /
    `--sonar-project` / `--sonar-branch` / `--sonar-insecure` /
@@ -45,7 +50,21 @@ kann Env setzen, was Env nicht setzt kann Properties setzen, etc.
 | Organization | `Organization` | `SONAR_ORGANIZATION` | (nicht im CLI) | — |
 | Branch | `Branch` | `SONAR_BRANCH` | `--sonar-branch` | leer = main |
 | Insecure TLS | `Insecure` | — | `--sonar-insecure` | False |
-| SourceMapping | `SourceMapping` | — | — | — |
+
+Wo die beiden optionalen Felder tatsächlich wirken:
+
+- **Organization** — SonarCloud ist mandantenfähig und verlangt den Key am
+  Projekt-Endpunkt; `--sonar-test` hängt ihn an `/api/projects/search` an.
+  Zusätzlich wird er von `--sonar-init` als `sonar.organization` ins
+  Template geschrieben.
+- **Branch** — geht ausschließlich als `sonar.branch.name` ins
+  `--sonar-init`-Template. Das Generic Issue Format hat kein Branch-Feld;
+  den Branch liest der `sonar-scanner`, nicht dieses Werkzeug.
+
+`SourceMapping` gab es hier bis 2026-08-08 als vierte Zeile. Der Key wurde
+eingelesen und von niemandem benutzt — für Pfad-Umschreibung ist
+`--base-dir` zuständig, das alle Exporte beachten. Ein Alt-Eintrag in der
+INI schadet nicht, er wird schlicht ignoriert.
 
 **Pflichtfelder** für `IsValid`: `HostUrl`, `Token`, `ProjectKey`. Fehlt
 einer davon, schreibt `--sonar-test` `Configuration incomplete. Missing: ...`

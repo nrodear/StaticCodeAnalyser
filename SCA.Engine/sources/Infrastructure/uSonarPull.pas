@@ -1,5 +1,14 @@
 unit uSonarPull;
 
+// ACHTUNG - NICHT VERDRAHTET (Stand 2026-08-08). Diese Unit hat KEINEN
+// Aufrufer: weder das IDE-Plugin noch die CLI ziehen sie. Sie wird nur
+// deshalb uebersetzt, weil sie in SCA.Engine.dpk steht, und landet damit
+// als ausgehender HTTP-Client MIT Bearer-Token in jeder ausgelieferten
+// BPL - ohne Insecure-/Zertifikats-Behandlung, anders als uSonarConfig.
+// Aufgerufen wird sie nie, sie sendet also auch nichts.
+// Wer sie anbindet, braucht vorher: Insecure-Flag, Proxy, Cancellation
+// und Thread-Affinitaet zur IDE. Im internen Review als T14 erfasst.
+//
 // SonarLint-Lookalike: laed existierende OPEN-Issues fuer eine Datei aus
 // Sonar (Pull-Mode), parsed sie zu TLeakFinding-kompatiblen Eintraegen und
 // liefert sie an die UI. Wird vom IDE-Plugin beim Oeffnen einer .pas

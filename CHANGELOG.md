@@ -8,6 +8,13 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- **`[Sonar] SourceMapping`** (and the invented `sonar.sourceMapping`
+  property) is gone. It was read from two sources and consumed by
+  nothing; path rewriting is what `--base-dir` does, and every export
+  honours it. An existing INI entry is simply ignored.
+
 ### Changed
 
 - **`--parallel` is now documented as defective and warns when used.**
@@ -49,6 +56,42 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`--sonar-init` wrote a template that `sonar-scanner` refuses.** The
+  two placeholders `<your-project-key>` / `<your-project-name>` are not
+  valid Sonar keys, so the very first scanner run after the documented
+  setup failed. The key is now derived from the folder name and sanitised
+  to the characters Sonar accepts, the file carries a "CHECK THEM" note,
+  and it explains where the server URL and token belong (the environment,
+  not a file that ends up in the repository). Overwrite protection is
+  tightened as well: an existing `sonar-project.properties` already made
+  the tool write a `.sample`, but a hand-edited `.sample` was then
+  overwritten without a word. Identical content is now a no-op, differing
+  content aborts with exit 99.
+- **A plaintext token in `analyser.ini` was accepted silently.** Entries
+  written by the non-Windows fallback carry a `PT:` prefix and are plain
+  Base64; they are read on *every* platform, so bringing such an INI to a
+  Windows machine gave a working setup that looked DPAPI-protected and
+  was not. `--sonar-test` now warns on stderr, the source line reads
+  `PLAINTEXT`, and the IDE options page replaces its DPAPI hint with a
+  warning. The DPAPI wording was overstated everywhere and is corrected:
+  it binds the file to one Windows account, it does not protect against
+  programs running *as* that account.
+- **`SONAR_ORGANIZATION` was collected from three sources and used
+  nowhere.** SonarCloud is multi-tenant and needs the organization key at
+  the project endpoint; without it `--sonar-test` reported "project not
+  found" for a project that exists. The health check now passes it, and
+  `--sonar-init` writes it into the template.
+- **`--sonar-branch` had no effect at all.** It was parsed, validated,
+  resolved and documented as "override the branch name", but no consumer
+  ever read it — the Generic Issue Format has no branch field. Rather
+  than remove a switch that scripts may already pass (unknown switches
+  are a hard error, so removing it would break them), it now goes where
+  Sonar actually reads a branch: `sonar.branch.name` in the
+  `--sonar-init` template. The help text says so.
+- **`--sonar-config` worked by accident.** The path reached the resolver
+  through a parameter while the matching record field was never read, so
+  any future caller filling only the record would have been ignored
+  without a word. The field is now the documented fallback.
 - **The HTML report showed only base file names.** Two units called
   `uSame.pas` in different folders appeared as the same entry, and the
   folder names did not occur anywhere in the report — findings were

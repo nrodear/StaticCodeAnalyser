@@ -51,8 +51,16 @@ noch leer sind:
 | 4 | User-INI (`%APPDATA%\StaticCodeAnalyser\analyser.ini` `[Sonar]` + `[SonarTokens]`) | ✅ | ✅ |
 
 Token-Speicherung in der INI: **DPAPI-verschlüsselt** (Windows, Current-User-
-Scope). Nur derselbe Windows-User auf demselben Rechner kann es entschlüsseln.
-Auf Non-Windows (CI/Linux) ist nur der Env-Var-Pfad supported.
+Scope). Die Datei ist damit an dieses Windows-Konto gebunden — eine Kopie ist
+auf einem anderen Rechner wertlos. Das ist Schutz der *ruhenden Datei*, kein
+Tresor: jedes Programm, das unter demselben Konto läuft, kann ebenso
+entschlüsseln. Wer das nicht will, nimmt `SONAR_TOKEN` aus der Umgebung.
+
+Auf Non-Windows schreibt das Werkzeug den Token mit `PT:`-Präfix als
+Base64 — **unverschlüsselt**. Gelesen werden solche Einträge auf *jeder*
+Plattform, also auch unter Windows, wenn man eine INI mitbringt. In dem Fall
+warnt `--sonar-test` auf stderr und die Options-Seite der IDE tauscht ihren
+DPAPI-Hinweis gegen eine Warnung aus.
 
 ### Beispiel `analyser.ini` (Sonar-Section)
 
@@ -90,12 +98,12 @@ sonar.externalIssuesReportPaths=sca-findings.json
 | Flag | Zweck |
 |---|---|
 | `--sonar-export <file>` | Analyse-Output als Generic Issue JSON schreiben |
-| `--sonar-init` | `sonar-project.properties`-Template anlegen |
+| `--sonar-init` | `sonar-project.properties`-Template anlegen (überschreibt nie: weicht auf `.sample` aus und bricht ab, wenn auch die abweicht) |
 | `--sonar-test` | Connectivity-Health-Check (DNS → Status → Token → Project) |
 | `--sonar-host <url>` | Server-URL überschreiben |
 | `--sonar-token <tok>` | Bearer-Token überschreiben (Vorsicht: shell history) |
 | `--sonar-project <key>` | Project-Key überschreiben |
-| `--sonar-branch <name>` | Branch-Name überschreiben |
+| `--sonar-branch <name>` | Branch-Name für das `--sonar-init`-Template (`sonar.branch.name`). Der Findings-Export hat kein Branch-Feld — den Branch liest der `sonar-scanner` |
 | `--sonar-insecure` | Self-signed TLS-Cert akzeptieren |
 | `--sonar-config <ini>` | Alternativer `analyser.ini`-Pfad |
 
@@ -239,5 +247,7 @@ Diese Implementierung deckt **todo-sonar.md Phase 0 + A + B + C + D**:
 - ✅ Project-Properties-Template (`--sonar-init`)
 - ✅ Tools>Options Sonar-Seite
 - ✅ Send-to-Sonar im Export-Menü (Bulk + per-Issue)
-- ✅ Pull-Mode für IDE (`uSonarPull`) — Anzeige existierender Sonar-Issues
+- ⬜ Pull-Mode für IDE (`uSonarPull`) — Engine implementiert, **UI-Anbindung
+  verschoben**: die Unit hat keinen Aufrufer, im Plugin wird nichts angezeigt
+  (so auch in den Release-Notes zu v0.9.1 vermerkt)
 - ✅ MQR-Mapping pro Rule (cleanCodeAttribute + impacts)
