@@ -28,6 +28,18 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`--custom-rules` loaded rules that never fired.** The run reported
+  "Loaded N custom rule(s)" and then produced zero findings from them —
+  a project that maintains its own rules got a green gate with no check
+  behind it. The CLI loaded the YAML up front but left the path out of
+  the scan request; the configuration step that follows clears custom
+  rules whenever `analyser.ini` has no `[Detectors] CustomRulesFile`, so
+  the freshly loaded rules were deleted before the scan. The path now
+  travels with the request and is (re)loaded after the configuration
+  step. This also fixes the precedence: the explicit switch now wins over
+  the INI instead of losing to it. Reproduced with 2 rules × 4 matches =
+  8 expected findings; covered by a new end-to-end test — the existing
+  tests all called the detector directly and could never have seen it.
 - **`--baseline` accepted a SARIF report without a word and filtered
   nothing.** The wrong file parses as JSON, carries no fingerprints, and
   the gate then reports the whole backlog as new. The file is now checked

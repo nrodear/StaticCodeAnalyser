@@ -1054,7 +1054,20 @@ begin
       Req.ParallelWorkers := StrToIntDef(Args.ParallelWorkers, 0);
       if EffectiveIfdefAware and (EffectiveIfdefDefines <> '') then
         Req.IfdefDefines := EffectiveIfdefDefines.Split([',', ';']);
-      // Custom-Rules hat der CLI oben bereits geladen -> Req.CustomRulesPath leer.
+      // Custom-Rules: der Pfad MUSS in den Request. Der CLI laedt die YAML
+      // zwar schon oben (fuer die Frueh-Validierung und die Meldung
+      // "Loaded N custom rule(s)"), aber danach ruft
+      // TAnalysisSession.ApplyConfig ueber ApplyRepoIni die
+      // ApplyDetectorThresholds - und deren else-Zweig ruft ClearRules,
+      // sobald in der analyser.ini kein [Detectors] CustomRulesFile steht
+      // (uRepoSettings:1608). Bis 2026-08-08 blieb Req.CustomRulesPath
+      // deshalb leer, die frisch geladenen Regeln wurden geloescht, und
+      // der Lauf meldete "Loaded 2 custom rule(s)" bei null Funden -
+      // reproduziert mit 2 Regeln x 4 Treffern = 8 erwarteten Funden.
+      // Mit gesetztem Pfad laedt ApplyConfig sie NACH dem INI-Schritt neu
+      // (uEngineApi:419) - das repariert zugleich die Praezedenz: der
+      // explizite Schalter gewinnt jetzt gegen die INI, nicht umgekehrt.
+      Req.CustomRulesPath := Args.CustomRules;
 
       // Diff-Mode A<->B: nur zwischen Commits geaenderte Dateien (PR-Review).
       if Args.Diff <> '' then

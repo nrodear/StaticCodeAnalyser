@@ -11,7 +11,7 @@ uses
   DUnitX.TestFramework,
   System.SysUtils, System.IOUtils, System.Classes,
   System.RegularExpressions, System.Generics.Collections,
-  uMethodd12, uSCAConsts, uCustomRuleDetector;
+  uMethodd12, uSCAConsts, uCustomRuleDetector, uEngineApi;
 
 type
   [TestFixture]
@@ -37,6 +37,10 @@ type
     [Test] procedure FileInclude_OnlyScansIncludedFiles;
     [Test] procedure NoRules_NoFindings;
     [Test] procedure FullYamlRoundtrip_ViaTempFile;
+    // End-to-End ueber die Facade: die uebrigen Tests rufen den Detektor
+    // DIREKT auf und konnten deshalb nie bemerken, dass der
+    // Konfigurationsschritt die geladenen Regeln wieder loescht.
+    [Test] procedure PipelineWithRepoIni_RulesSurviveConfig;
   end;
 
 implementation
@@ -285,6 +289,98 @@ begin
     finally Findings.Free; end;
   finally
     TFile.Delete(TempFile);
+  end;
+end;
+
+function RunFacadeAndCountRule(const APasFile, AYamlFile, AConfigRoot,
+  ARuleID: string): Integer;
+// Faehrt einen Single-File-Scan ueber die Facade mit ApplyRepoIni=True und
+// explizitem CustomRulesPath - genau die Konstellation des CLI - und
+// zaehlt die Funde der angegebenen Regel.
+var
+  Req : TScanRequest;
+  Ses : TAnalysisSession;
+  Res : TScanResult;
+  i   : Integer;
+begin
+  Result := 0;
+  Req := TScanRequest.Init;
+  Req.Scope           := ssSingleFile;
+  Req.Path            := APasFile;
+  Req.CustomRulesPath := AYamlFile;
+  Req.ApplyRepoIni    := True;      // der Zustand, in dem die Regeln starben
+  Req.ConfigRoot      := AConfigRoot;
+  Ses := TAnalysisSession.Create;
+  try
+    Res := Ses.Run(Req);
+  finally
+    Ses.Free;
+  end;
+  try
+    for i := 0 to Res.FindingCount - 1 do
+    begin
+      if Res.Findings[i].RuleID = ARuleID then
+      begin
+        Inc(Result);
+      end;
+    end;
+  finally
+    Res.Free;
+  end;
+end;
+
+procedure TTestCustomRuleDetector.PipelineWithRepoIni_RulesSurviveConfig;
+// Regressionsnetz fuer den CLI-Weg (Audit 2026-08-08): der Lauf meldete
+// "Loaded N custom rule(s)" und erzeugte NULL Funde. Ursache war nicht
+// der Detektor, sondern die Reihenfolge - der CLI lud die YAML vorab,
+// liess Req.CustomRulesPath aber leer, und ApplyConfig ->
+// ApplyDetectorThresholds rief ClearRules, weil in der analyser.ini kein
+// [Detectors] CustomRulesFile stand (uRepoSettings:1608).
+//
+// Genau diese Kombination wird hier gefahren: ApplyRepoIni=True UND ein
+// expliziter CustomRulesPath. Alle anderen Tests dieser Unit rufen den
+// Detektor direkt und haetten den Defekt nie gesehen.
+const
+  RULE_YAML =
+    'rules:'#10 +
+    '  - id: PROJ777'#10 +
+    '    name: "kein Zebra"'#10 +
+    '    severity: error'#10 +
+    '    pattern: "Zebra"'#10 +
+    '    pattern-type: substring'#10 +
+    '    message: "Zebra ist verboten"'#10;
+  PAS_SRC =
+    'unit uZebra;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'begin'#13#10 +
+    '  Writeln(''Zebra'');'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  Dir    : string;
+  YamlFn : string;
+  PasFn  : string;
+  Hits   : Integer;
+begin
+  Dir := TPath.Combine(TPath.GetTempPath,
+    'sca_cr_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(Dir);
+  try
+    YamlFn := TPath.Combine(Dir, 'rules.yml');
+    PasFn  := TPath.Combine(Dir, 'uZebra.pas');
+    TFile.WriteAllText(YamlFn, RULE_YAML, TEncoding.UTF8);
+    TFile.WriteAllText(PasFn,  PAS_SRC,   TEncoding.UTF8);
+    Hits := RunFacadeAndCountRule(PasFn, YamlFn, Dir, 'PROJ777');
+    Assert.IsTrue(Hits >= 1,
+      'Custom-Rule muss den Konfigurationsschritt ueberleben und feuern');
+  finally
+    TCustomRuleDetector.ClearRules;
+    if TDirectory.Exists(Dir) then
+    begin
+      TDirectory.Delete(Dir, True);
+    end;
   end;
 end;
 
