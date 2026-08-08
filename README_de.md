@@ -588,6 +588,44 @@ analyser.d12.exe --path . --profile bugs-only --min-severity warning
 > Dateien; `--show-test-fixtures` behält sie, `--profile strict` schaltet
 > den Filter ganz ab.
 
+Der Filter ist bei `--profile default` und `selftest-quiet` automatisch
+an und bei jedem anderen Profil aus. Beide Schalter überstimmen das
+Profil: `--show-test-fixtures` behält Fixture-Funde auch unter `default`,
+`--hide-test-fixtures` wirft sie auch unter `strict` oder `security`
+weg. Weil der Filter vor der Exit-Code-Berechnung greift, betrifft er
+nicht nur die Anzeige, sondern auch CI.
+
+### Bedingte Kompilierung (`{$IFDEF}`)
+
+Standardmäßig liest der Analyser **jeden** `{$IFDEF}`-Zweig, also auch
+Code, der für deine Zielplattform nie übersetzt wird — eine häufige
+Quelle merkwürdiger Funde (Doppel-Deklarationen, tote Zweige). Drei
+Schalter ändern das:
+
+| Schalter | Wirkung |
+|---|---|
+| `--ifdef-aware` | Überspringt `{$IFDEF X}`-Zweige, deren `X` nicht im Define-Set steht. Bei `--profile selftest-quiet` automatisch an, sonst aus. |
+| `--define X[,Y,Z]` | Das Define-Set. Mehrfach angebbar, die Werte summieren sich. |
+| `--no-ifdef-aware` | Schaltet alle Zweige wieder ein. Gewinnt gegen `--ifdef-aware`, unabhängig von der Reihenfolge auf der Kommandozeile. |
+
+Sie ergeben nur zusammen Sinn: **`--ifdef-aware` ohne `--define` läuft
+mit leerem Define-Set**, wirft also fast jeden konditionalen Zweig weg —
+und der Fehlermodus ist keine Meldung, sondern stumm fehlende Funde. Gib
+ihm die Defines, die dein Build wirklich benutzt:
+
+```powershell
+analyser.d12.exe --path . --full --ifdef-aware `
+  --define MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS
+```
+
+### Vollständige Schalter-Referenz
+
+`analyser.d12.exe --help` (auch `-h`, `-?`, `/?`) druckt jeden Schalter
+mit Erklärung und endet mit 0, ist also aus einem Skript heraus
+gefahrlos. `--version` gibt nur die Version aus. Beide sind die
+maßgebliche Liste — diese README erklärt die Schalter im Kontext einer
+Aufgabe, der Hilfetext führt sie vollständig.
+
 `--profile <name>` akzeptiert jedes Profile aus `rules/sca-rules.json`
 (mitgeliefert: `default`, `strict`, `style`, `ide-fast`, `security`,
 `bugs-only`, `code-quality`, `dfm-only`). **`default` laesst bewusst sechs

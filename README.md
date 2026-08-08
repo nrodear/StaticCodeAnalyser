@@ -582,6 +582,43 @@ analyser.d12.exe --path . --profile bugs-only --min-severity warning
 > `--show-test-fixtures` keeps them, `--profile strict` disables the filter
 > entirely.
 
+The filter is on automatically for `--profile default` and
+`selftest-quiet`, and off for every other profile. Both switches override
+the profile: `--show-test-fixtures` keeps fixture findings even under
+`default`, `--hide-test-fixtures` drops them even under `strict` or
+`security`. Because the filter runs before the exit code is computed, it
+matters in CI, not just on screen.
+
+### Conditional compilation (`{$IFDEF}`)
+
+By default the analyser reads **every** `{$IFDEF}` branch, including code
+that never compiles for your target — a frequent source of odd findings
+(duplicate declarations, dead branches). Three switches change that:
+
+| Switch | Effect |
+|---|---|
+| `--ifdef-aware` | Skip `{$IFDEF X}` branches whose `X` is not in the define set. Automatically on for `--profile selftest-quiet`, off otherwise. |
+| `--define X[,Y,Z]` | The define set. Can be repeated; values accumulate. |
+| `--no-ifdef-aware` | Force all branches back on. Wins over `--ifdef-aware` regardless of the order on the command line. |
+
+They only make sense together: **`--ifdef-aware` without `--define` runs
+with an empty define set**, so nearly every conditional branch is thrown
+away — and the failure mode is not an error message, it is silently
+missing findings. Give it the defines your build actually uses:
+
+```powershell
+analyser.d12.exe --path . --full --ifdef-aware `
+  --define MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS
+```
+
+### Full switch reference
+
+`analyser.d12.exe --help` (also `-h`, `-?`, `/?`) prints every switch with
+its explanation and exits 0, so it is safe to call from a script.
+`--version` prints the version alone. Both are the authoritative list —
+this README covers the switches in the context of a task, the help text
+covers all of them.
+
 `--profile <name>` accepts any profile from `rules/sca-rules.json`
 (bundled: `default`, `strict`, `style`, `ide-fast`, `security`,
 `bugs-only`, `code-quality`, `dfm-only`). **`default` deliberately leaves out

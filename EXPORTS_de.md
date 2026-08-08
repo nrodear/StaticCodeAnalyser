@@ -34,7 +34,7 @@ als CLI. „Nur in der GUI" heißt also nie „anderes Programm", sondern
 | **Jira-Wiki-Markup** | — | ✅ | Fund in ein Ticket einfügen |
 | **AI-Prompt (Zwischenablage)** | — | ✅ | einzelnen Fund samt Codekontext an einen Assistenten geben |
 | **Suppression-Telemetrie** | `--telemetry-csv <Datei>` | — | welche Regeln am häufigsten unterdrückt werden |
-| **Detektor-Laufzeiten** | `--time-detectors-out <Datei>` | — | langsame Detektoren finden |
+| **Detektor-Laufzeiten** | `--time-detectors` (stdout) / `--time-detectors-out <Datei>` | — | langsame Detektoren finden |
 
 Zwei Asymmetrien sollte man kennen, bevor man etwas plant:
 
@@ -48,9 +48,15 @@ Zwei Asymmetrien sollte man kennen, bevor man etwas plant:
   unabhängig davon, was das Grid gerade zeigt. Die Menütexte sagen, was
   gilt — sie sind es wert, gelesen zu werden.
 
-Alle drei JSON-Formate werden **UTF-8 mit BOM** geschrieben. SonarQube
-verträgt das; `JSON.parse` in Node und `json.load(encoding='utf-8')` in
-Python nicht. BOM entfernen oder mit `utf-8-sig` lesen.
+**Kodierung.** Alle JSON-Formate (SARIF, Sonar, `--report-json`,
+Baseline) werden als **UTF-8 ohne BOM** geschrieben — RFC 8259 §8.1
+verbietet die Byte-Order-Mark für JSON-Austausch, und `JSON.parse` in
+Node scheitert daran; genau das benutzt GitHubs `upload-sarif`-Action.
+CSV ist die bewusste Ausnahme und behält sein BOM, weil Excel UTF-8 nur
+daran erkennt.
+
+Bis einschließlich **v0.9.14** trugen die JSON-Exporte ein BOM; auf
+diesem Stand also entfernen oder mit `utf-8-sig` lesen.
 
 ---
 
@@ -75,6 +81,27 @@ verengt, was zählt. Lese- und Werkzeugfehler bleiben immer ungleich null.
 Verzeichnisanteil verwenden.** Ein bloßer Dateiname
 (`--write-baseline b.json`) scheitert mit *„Baseline write error:
 Verzeichnis kann nicht erstellt werden"* — an v0.9.14 nachgemessen.
+
+**In CI besser `--baseline-scan y` als einen Dateinamen.** Der Schalter
+löst die Baseline dreistufig auf — `--baseline`, dann `[Baseline] File=`
+aus der `analyser.ini`, dann der `.sca`-Ordner neben `--project` /
+`--project-group` (bzw. `<pfad>\.sca\sca.baseline.json`) — und meldet,
+welche er genommen hat. Der Punkt ist das Verhalten im Fehlerfall: wer
+eine Baseline anfordert und keine findet, bekommt einen **Abbruch mit
+Exit 99** samt Liste aller geprüften Pfade, statt still den kompletten
+Rückstand als „neu" gemeldet zu bekommen. Genau diese stille Variante ist
+der klassische Weg, auf dem eine grüne Pipeline aufhört, etwas zu
+bedeuten. `--write-baseline auto` schreibt an dieselbe `.sca`-Stelle, das
+Paar kommt also ohne fest verdrahtete Pfade aus:
+
+```bash
+analyser.exe --path . --write-baseline auto        # einmalig
+analyser.exe --path . --baseline-scan y            # in jedem Build
+```
+
+`--baseline-scan n` ist das ausdrückliche Gegenteil: ohne Baseline
+laufen, auch wenn eine Datei herumliegt. Jeder andere Wert wird
+abgelehnt.
 
 **Gibt es denselben Unit-Namen in mehreren Ordnern, `--baseline-path-fingerprint y`
 setzen.** Standardmäßig identifiziert ein Fingerprint einen Fund über den
@@ -196,7 +223,7 @@ Ehrliche Liste, Stand v0.9.14 — alles reproduziert:
 | Sonar-Export aus dem Release-ZIP | wird von SonarQube verworfen; `rules/` neben die EXE legen |
 | Baseline-Auffrischen mit beiden Schaltern | kürzt die Baseline auf die neuen Funde |
 | `--write-baseline` mit bloßem Dateinamen | schreibt nicht |
-| JSON-Exporte | UTF-8 **mit** BOM |
+| JSON-Exporte | UTF-8 **mit** BOM — nach v0.9.14 behoben, jetzt BOM-frei |
 | HTML-Report | speichert nur Basisdateinamen; gleichnamige Units aus verschiedenen Ordnern kollidieren |
 | Baseline-Fingerprints | gleichnamige Units teilen sich standardmäßig einen Namensraum — mit `--baseline-path-fingerprint y` abschaltbar (s. u.) |
 | unlesbare Quelldateien | werden in Konsole, SARIF/Sonar/HTML und Baseline unterschiedlich gezählt |
