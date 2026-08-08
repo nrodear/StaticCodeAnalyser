@@ -11,15 +11,18 @@ erdrückend. Gewünscht war das VS-Code-„Dark Modern"-Grau; ein
 Redist-Kandidat mit genau dieser Palette existiert nicht
 (Zwischenschritt `Windows10SlateGray.vsf` war zu blaustichig).
 
-**Palette** (VS Code Dark Modern; TColor = `$00BBGGRR`):
+**Palette v2** (an VS Code Dark Modern angelehnt; TColor = `$00BBGGRR`).
+v1 nahm die Original-VS-Code-Werte mit Chrome `#181818` — das wirkte
+auf realen Monitoren schlicht schwarz (User-Abnahme v0.9.13); v2 hebt
+Chrome und Widgets eine Stufe an, die Hierarchie bleibt:
 
 | Rolle | Wert | verwendet für |
 |---|---|---|
-| Chrome | `#181818` | clBtnFace, Panel, Toolbar, Caption |
+| Chrome | `#252526` | clBtnFace, Panel, Toolbar, Caption |
 | Inhalt | `#1F1F1F` | clWindow, Grid, Listen, Menü |
-| Widget | `#252526` | Hints, Disabled, Alternating Rows |
+| Widget | `#2D2D30` | Hints, Disabled, Alternating Rows |
 | Eingabe | `#313131` | Edit, ComboBox, ButtonNormal |
-| Rand | `#2B2B2B` | Border, Splitter, ActiveBorder |
+| Rand | `#3C3C3C` | Border, Splitter, ActiveBorder |
 | Text | `#CCCCCC` | clWindowText/clBtnText + 71 Font-Einträge |
 
 **Entstehung:** das `.vsf`-Format ist `VCL_STYLE 2.0` + zlib; Farben
