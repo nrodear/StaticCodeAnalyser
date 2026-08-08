@@ -31,13 +31,15 @@ type
     [Test] procedure IsBaseline_RejectsSarifReport_NamesIt;
     [Test] procedure IsBaseline_RejectsNonJson;
     [Test] procedure IsBaseline_RejectsMissingFile;
+    [Test] procedure Write_ReturnsWrittenCount_ExcludingReadErrors;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes, System.IOUtils,
-  uBaseline;
+  System.Generics.Collections,
+  uMethodd12, uSCAConsts, uBaseline;
 
 const
   PROJ_DPROJ = 'ProjA\ProjA.dproj';   // 3x gebraucht (DuplicateString)
@@ -198,6 +200,48 @@ begin
   Assert.IsFalse(TBaseline.IsBaselineFile(
     TPath.Combine(FTmp, 'gibtsnicht.json'), Reason));
   Assert.Contains(Reason, 'not found');
+end;
+
+procedure TTestBaselineResolve.Write_ReturnsWrittenCount_ExcludingReadErrors;
+// Write ueberspringt Lesefehler (I/O-Fehler sind nicht baseline-faehig) -
+// meldet aber seit 2026-08-08 auch die TATSAECHLICH geschriebene Zahl.
+// Vorher gaben alle fuenf Aufrufer Findings.Count aus: "Baseline written:
+// ... (5 findings)" bei 4 Eintraegen in der Datei.
+var
+  List    : TObjectList<TLeakFinding>;
+  F       : TLeakFinding;
+  Fn      : string;
+  Written : Integer;
+begin
+  Fn := TPath.Combine(FTmp, 'w.json');
+  List := TObjectList<TLeakFinding>.Create(True);
+  try
+    F := TLeakFinding.Create;
+    F.Kind       := fkMemoryLeak;
+    F.Severity   := lsError;
+    F.FileName   := 'uEcht.pas';
+    F.MethodName := 'Run';
+    F.MissingVar := 'Obj';
+    F.LineNumber := '10';
+    List.Add(F);
+
+    F := TLeakFinding.Create;
+    F.Kind       := fkFileReadError;   // darf NICHT in die Baseline
+    F.Severity   := lsError;
+    F.FileName   := 'uKaputt.pas';
+    F.MethodName := '';
+    F.MissingVar := 'nicht lesbar';
+    F.LineNumber := '0';
+    List.Add(F);
+
+    Written := TBaseline.Write(List, Fn);
+    Assert.AreEqual<Integer>(1, Written,
+      'gemeldet wird, was geschrieben wurde - ohne den Lesefehler');
+    Assert.Contains(TFile.ReadAllText(Fn), '"count": 1',
+      'auch das count-Feld der Datei zaehlt ohne Lesefehler');
+  finally
+    List.Free;
+  end;
 end;
 
 initialization

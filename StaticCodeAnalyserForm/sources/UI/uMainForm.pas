@@ -2610,10 +2610,12 @@ begin
   end;
   try
     ForceDirectories(ExtractFilePath(Target));
-    TBaseline.Write(FAllFindings, Target);
+    // GESCHRIEBENE Anzahl melden, nicht FAllFindings.Count: Lesefehler
+    // sind nicht baseline-faehig und werden von Write uebersprungen.
+    var Written := TBaseline.Write(FAllFindings, Target);
     StatusBar1.Panels[2].Text := Format(
       _('Baseline written: %s (%d findings)'),
-      [ExtractFileName(Target), FAllFindings.Count]);
+      [ExtractFileName(Target), Written]);
     Result := True;
   except
     // noinspection ExceptionTooGeneral
@@ -2691,10 +2693,10 @@ begin
     Dlg.Options := Dlg.Options + [ofOverwritePrompt];
     if not Dlg.Execute then Exit;
     try
-      TBaseline.Write(FAllFindings, Dlg.FileName);
+      var Written := TBaseline.Write(FAllFindings, Dlg.FileName);
       StatusBar1.Panels[2].Text := Format(
         _('Baseline written: %s (%d findings)'),
-        [ExtractFileName(Dlg.FileName), FAllFindings.Count]);
+        [ExtractFileName(Dlg.FileName), Written]);
     except
       // noinspection ExceptionTooGeneral
       // Fehlergrenze an der Action-Grenze (s. Dateikopf): jeder

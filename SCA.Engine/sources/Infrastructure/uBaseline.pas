@@ -34,8 +34,13 @@ type
   public
     // Schreibt die aktuelle Findings-Liste als JSON in DestFile.
     // ueberschreibt eine vorhandene Datei.
-    class procedure Write(Findings: TObjectList<TLeakFinding>;
-      const DestFile: string); static;
+    // Liefert die Anzahl der TATSAECHLICH geschriebenen Eintraege. Die ist
+    // kleiner als Findings.Count, weil Lesefehler bewusst nicht
+    // baseline-faehig sind (s. Rumpf). Bis 2026-08-08 meldeten alle fuenf
+    // Aufrufer stattdessen Findings.Count - "Baseline written: ... (5
+    // findings)" bei 4 Eintraegen in der Datei.
+    class function Write(Findings: TObjectList<TLeakFinding>;
+      const DestFile: string): Integer; static;
 
     // Liest BaselineFile und filtert aus Findings alle Eintraege heraus
     // deren Fingerprint in der Baseline ist (vorhandene "akzeptierte"
@@ -180,18 +185,16 @@ begin
     F.MethodName + '|' + F.MissingVar);
 end;
 
-class procedure TBaseline.Write(Findings: TObjectList<TLeakFinding>;
-  const DestFile: string);
+function BuildBaselineArray(Findings: TObjectList<TLeakFinding>): TJSONArray;
+// Baut das findings[]-Array. Lesefehler bleiben BEWUSST draussen: ein
+// I/O-Fehler ist kein akzeptierbarer Befund, sondern eine Aussage ueber
+// die Vollstaendigkeit des Laufs - Apply filtert ihn symmetrisch ebenfalls.
 var
-  Arr     : TJSONArray;
   Obj     : TJSONObject;
   F       : TLeakFinding;
-  Root    : TJSONObject;
-  SL      : TStringList;
   CtxMemo : TDictionary<string, string>;
 begin
-  if DestFile = '' then Exit;
-  Arr := TJSONArray.Create;
+  Result := TJSONArray.Create;
   // Perf (2026-07-05): P3 ContextHash-Memo - caller-scoped Memo fuer diesen
   // Write-Lauf (kein Global): identische (Datei,Zeile) wird nur einmal
   // gelesen + gehasht. Hash-Werte bleiben identisch (deterministisch).
@@ -207,17 +210,32 @@ begin
         Obj.AddPair('method',      F.MethodName);
         Obj.AddPair('detail',      F.MissingVar);
         Obj.AddPair('line',        F.LineNumber);
-        Obj.AddPair('fingerprint', Fingerprint(F));
+        Obj.AddPair('fingerprint', TBaseline.Fingerprint(F));
         // C.2: zusaetzlich Code-Snippet-Hash. Leer wenn Datei nicht lesbar -
         // dann faellt Apply auf den legacy fingerprint zurueck.
         var Ctx := TFindingFingerprint.ContextHashMemo(F, CtxMemo);
         if Ctx <> '' then
           Obj.AddPair('contextHash', Ctx);
-        Arr.AddElement(Obj);
+        Result.AddElement(Obj);
       end;
   finally
     CtxMemo.Free;
   end;
+end;
+
+class function TBaseline.Write(Findings: TObjectList<TLeakFinding>;
+  const DestFile: string): Integer;
+var
+  Arr  : TJSONArray;
+  Root : TJSONObject;
+  SL   : TStringList;
+begin
+  Result := 0;
+  if DestFile = '' then Exit;
+  Arr := BuildBaselineArray(Findings);
+  // Was wirklich in der Datei landet - NICHT Findings.Count (die
+  // Lesefehler sind beim Aufbau uebersprungen worden).
+  Result := Arr.Count;
 
   Root := TJSONObject.Create;
   Root.AddPair('version',     '1');
