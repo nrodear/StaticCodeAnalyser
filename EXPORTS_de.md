@@ -1,0 +1,202 @@
+# Funde aus SCA herausbekommen — Formate und Workflows
+
+🇬🇧 [English version](EXPORTS.md)
+
+Diese Seite beantwortet eine Frage: **„Der Analyser ist gelaufen — wie
+kommen die Funde dorthin, wo ich sie brauche?"** Sie beschreibt jeden
+Export, welches der drei Frontends ihn erzeugen kann, und die sechs
+Workflows, die Teams tatsächlich fahren.
+
+Alles hier wurde gegen das gebaute Binary v0.9.14 geprüft. Wo ein Weg
+heute kaputt ist, steht es dabei — samt Umgehung.
+
+---
+
+## Das Wichtigste vorweg
+
+`analyser.exe` ist **ein Binary mit zwei Modi**. Ohne Argumente startet
+die GUI; sobald das erste Argument mit `-` beginnt, läuft es headless
+als CLI. „Nur in der GUI" heißt also nie „anderes Programm", sondern
+*aus einem Skript nicht erreichbar*.
+
+---
+
+## Format-Matrix
+
+| Format | CLI-Schalter | GUI-/Plugin-Menü | Wofür |
+|---|---|---|---|
+| **SARIF 2.1.0** | `--report-sarif <Datei>` | ✅ *SARIF (all findings)* | GitHub-/Azure-Code-Scanning, Archiv, Werkzeug-Austausch |
+| **Sonar Generic Issue** | `--sonar-export <Datei>` | ✅ *Sonar: write Generic Issue report* | SonarQube-Dashboard (Einschränkung s. u.) |
+| **HTML-Report** | `--report-html <Datei>` | ✅ | Funde lesen und weitergeben, ohne Werkzeug beim Empfänger |
+| **Baseline-JSON** | `--write-baseline <Datei>` | ✅ *Write baseline* | CI-Gate: „nur bei **neuen** Funden scheitern" |
+| **CSV** | — | ✅ | Excel, Pivot, schnelles Auszählen |
+| **JSON** | — | ✅ | eigene Skripte, Ticket-Automatisierung |
+| **Jira-Wiki-Markup** | — | ✅ | Fund in ein Ticket einfügen |
+| **AI-Prompt (Zwischenablage)** | — | ✅ | einzelnen Fund samt Codekontext an einen Assistenten geben |
+| **Suppression-Telemetrie** | `--telemetry-csv <Datei>` | — | welche Regeln am häufigsten unterdrückt werden |
+| **Detektor-Laufzeiten** | `--time-detectors-out <Datei>` | — | langsame Detektoren finden |
+
+Zwei Asymmetrien sollte man kennen, bevor man etwas plant:
+
+- **CSV und JSON gibt es nur in der GUI.** Ausgerechnet die beiden
+  Formate, zu denen man in einem Skript greifen würde, sind die beiden,
+  die man nicht skripten kann.
+- **Der Scope hängt vom Frontend ab.** Aus der CLI enthalten Exporte die
+  Funde *nach* Test-Fixture- und Baseline-Filter. Aus dem GUI-Menü
+  exportieren die „all findings"-Einträge die **ungefilterte** Liste,
+  unabhängig davon, was das Grid gerade zeigt. Die Menütexte sagen, was
+  gilt — sie sind es wert, gelesen zu werden.
+
+Alle drei JSON-Formate werden **UTF-8 mit BOM** geschrieben. SonarQube
+verträgt das; `JSON.parse` in Node und `json.load(encoding='utf-8')` in
+Python nicht. BOM entfernen oder mit `utf-8-sig` lesen.
+
+---
+
+## Workflow 1 — CI-Gate: Build scheitert bei neuen Funden
+
+Die Baseline ist der Mechanismus: Sie hält den heutigen Stand fest,
+damit der Build von morgen nur über Neues meckert.
+
+```bash
+# einmalig, um den Ist-Zustand festzuschreiben
+analyser.exe --path . --write-baseline .sca/sca.baseline.json
+
+# in jedem Build
+analyser.exe --path . --baseline .sca/sca.baseline.json --report-sarif build/sca.sarif
+```
+
+Die Exit-Codes sind gestuft: `0` sauber, ungleich null, wenn nach dem
+Baseline-Filter Funde bleiben. `--fail-on error|warning|hint|none`
+verengt, was zählt. Lese- und Werkzeugfehler bleiben immer ungleich null.
+
+**Für `--write-baseline` einen absoluten Pfad oder einen mit
+Verzeichnisanteil verwenden.** Ein bloßer Dateiname
+(`--write-baseline b.json`) scheitert mit *„Baseline write error:
+Verzeichnis kann nicht erstellt werden"* — an v0.9.14 nachgemessen.
+
+**Eine Baseline NICHT durch Kombination der beiden Schalter
+auffrischen.** Das naheliegend wirkende `--baseline alt
+--write-baseline neu` schreibt nur die Funde, die den Filter
+*überlebt* haben — also die neuen. An einem echten Repository gemessen:
+aus einer Baseline mit 226 Einträgen wurden **0**, und der nächste Build
+meldete den gesamten Altbestand erneut. Zum Auffrischen eine frische
+Baseline aus einem Lauf **ohne** `--baseline` schreiben.
+
+## Workflow 2 — Pull-Request-Review: nur das Geänderte
+
+```bash
+analyser.exe --path . --diff main...HEAD --report-html build/review.html
+```
+
+`--branch` nimmt die geänderten Dateien aus der Versionsverwaltung (Git
+und SVN werden erkannt), `--diff <range>` einen Git-Bereich inklusive
+`a...b` für den gemeinsamen Vorfahren. Beide schließen ungespeicherte
+Änderungen ein. Der HTML-Report ist self-contained — keine externen
+Dateien, er öffnet sich von einem Netzlaufwerk oder aus einem
+CI-Artefakt.
+
+## Workflow 3 — SonarQube-Dashboard
+
+SCA pusht **nicht** nach SonarQube, und das ist richtig so: Sonar hat
+keine öffentliche Schnittstelle, um externe Issues entgegenzunehmen. SCA
+schreibt die Datei, `sonar-scanner` trägt sie hinein.
+
+```bash
+analyser.exe --path . --base-dir . --sonar-export sca-findings.json
+sonar-scanner -Dsonar.externalIssuesReportPaths=sca-findings.json
+```
+
+> **⚠️ Im ausgelieferten ZIP kaputt — bitte vorher lesen.** Das
+> Release-Archiv enthält nur die EXE. Ohne `rules/sca-rules.json`
+> daneben fällt der Regelkatalog auf einen eingebauten Notbehelf zurück,
+> der `type` statt `cleanCodeAttribute` + `impacts` schreibt — und
+> **SonarQube verwirft daraufhin den gesamten Report** (gegen die echten
+> Scanner-Engine-Validatoren geprüft: 10.7 meldet *missing mandatory
+> field 'cleanCodeAttribute'*, 2025.x *missing mandatory field
+> 'severity'*). Der Lauf sieht erfolgreich aus, die Datei ist da — nur
+> das Dashboard bleibt leer.
+>
+> **Umgehung:** den `rules/`-Ordner aus dem Repository neben die EXE
+> legen. Mit vorhandenem Katalog validiert der Export auf allen
+> getesteten Engine-Generationen. Eine kaputte `rules/sca-rules.json`
+> führt in denselben Zustand, ebenfalls lautlos.
+
+Die Pfade im Report sind relativ zu `--base-dir` (Vorgabe: `--path`) —
+den Export also mit derselben Wurzel fahren, die auch der Scanner
+benutzt. Dateien außerhalb dieser Wurzel fallen auf absolute Pfade
+zurück, die Sonar still als „unknown files" verwirft.
+
+## Workflow 4 — GitHub-/Azure-Code-Scanning
+
+```bash
+analyser.exe --path . --base-dir . --report-sarif sca.sarif
+```
+
+Das SARIF trägt `partialFingerprints` (Zeilen-Hash + contextHash), damit
+Alerts ihre Identität über Zeilenverschiebungen behalten. Die Pfade sind
+relativ zu `--base-dir` — auf die Repository-Wurzel zeigen lassen, das
+erwartet Code-Scanning.
+
+Zwei Fallen: Das UTF-8-BOM kann Node-basierte Uploader stören, und ein
+**baseline-gefiltertes** SARIF arbeitet gegen den Alert-Lebenszyklus der
+Plattform (sie schließt alles, was der Filter entfernt hat). Für
+Code-Scanning den ungefilterten Report hochladen und die Plattform den
+Zustand führen lassen.
+
+## Workflow 5 — Entwickler am Schreibtisch
+
+GUI oder IDE-Plugin: laufen lassen, mit den Kacheln filtern, Fund
+anklicken, Vorher/Nachher-Hilfe lesen. `Strg+Alt+S` setzt einen
+Suppression-Marker, `Strg+Alt+F` wendet einen Quick-Fix an. Funde öffnen
+im Editor der Wahl über `[Editor]` in der `analyser.ini` (VS Code,
+Notepad++, Sublime, …) — dieser Weg springt auf die genaue Zeile. Die
+Delphi-IDE öffnet nur die Datei; einen Zeilen-Schalter bietet sie von
+außen nicht.
+
+Zum Weitergeben ist `--report-html` das Format, das beim Empfänger kein
+Werkzeug voraussetzt.
+
+> **Hinweis zum Weitergeben:** Der HTML-Report enthält
+> Quelltext-Ausschnitte. Behandle ihn wie Quelltext, wenn du ihn
+> verschickst.
+
+## Workflow 6 — Auswertung über die Zeit
+
+Einen eingebauten Trendspeicher gibt es nicht. Zwei praktikable Wege:
+das SARIF je Build archivieren und mit `jq` auszählen — oder SonarQube
+über Workflow 3 die Historie führen lassen. Die Regel-Zahlen aus der
+Konsolen-Zusammenfassung sind stabil genug, um sie zu plotten, wenn man
+sie mitschreibt.
+
+---
+
+## Bekannte Einschränkungen
+
+Ehrliche Liste, Stand v0.9.14 — alles reproduziert:
+
+| Bereich | Verhalten |
+|---|---|
+| Sonar-Export aus dem Release-ZIP | wird von SonarQube verworfen; `rules/` neben die EXE legen |
+| Baseline-Auffrischen mit beiden Schaltern | kürzt die Baseline auf die neuen Funde |
+| `--write-baseline` mit bloßem Dateinamen | schreibt nicht |
+| CSV / JSON | nur GUI, nicht skriptbar |
+| JSON-Exporte | UTF-8 **mit** BOM |
+| HTML-Report | speichert nur Basisdateinamen; gleichnamige Units aus verschiedenen Ordnern kollidieren |
+| Baseline-Fingerprints | gleichnamige Units teilen sich einen Namensraum; das Opt-in `PathInFingerprint` gibt es nur in der INI, nicht auf der CLI |
+| unlesbare Quelldateien | werden in Konsole, SARIF/Sonar/HTML und Baseline unterschiedlich gezählt |
+| `--parallel` | nicht deterministisch; nicht für Exporte verwenden, die man vergleicht |
+| `--sonar-insecure` | akzeptiert keine selbstsignierten Zertifikate (schaltet nur TLS 1.1 frei) |
+| `--sonar-test` in einem fremden Repo | eine `sonar-project.properties` im gescannten Repo überschreibt den eigenen Host — der Token geht dorthin |
+
+---
+
+## Welches Format wofür
+
+- **Ein Gate, das schlechte Merges blockiert** → Baseline + Exit-Code,
+  das SARIF als Beleg archivieren.
+- **Ein Dashboard, auf das das Team schaut** → Sonar-Export plus Scanner
+  (mit `rules/` neben der EXE).
+- **Ein Mensch, der es lesen muss** → HTML-Report.
+- **Eigene Werkzeuge** → SARIF; es ist das reichhaltigste und das
+  einzige mit Fingerprints, alles andere lässt sich daraus ableiten.
