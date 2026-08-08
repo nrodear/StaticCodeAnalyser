@@ -1962,9 +1962,6 @@ msgstr "Copier le prompt IA"
 msgid "Insert suppression marker"
 msgstr "Insérer le marqueur de suppression"
 
-msgid "Apply quick fix"
-msgstr "Appliquer le correctif rapide"
-
 msgid "Clipboard is locked by another program."
 msgstr "Le presse-papiers est verrouillé par un autre programme."
 

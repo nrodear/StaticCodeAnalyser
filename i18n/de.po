@@ -1950,9 +1950,6 @@ msgstr "KI-Prompt kopieren"
 msgid "Insert suppression marker"
 msgstr "Unterdrückungs-Marker einfügen"
 
-msgid "Apply quick fix"
-msgstr "Quick-Fix anwenden"
-
 msgid "Clipboard is locked by another program."
 msgstr "Die Zwischenablage ist von einem anderen Programm gesperrt."
 

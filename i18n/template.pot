@@ -2137,9 +2137,6 @@ msgstr ""
 msgid "Insert suppression marker"
 msgstr ""
 
-msgid "Apply quick fix"
-msgstr ""
-
 msgid "Clipboard is locked by another program."
 msgstr ""
 

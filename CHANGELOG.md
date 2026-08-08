@@ -10,6 +10,9 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **"Apply quick fix" left the result grid's right-click menu** (user
+  decision). The action itself stays available as
+  <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd>, matching the plugin.
 - **"SCA VSDark" palette v2 — one notch lighter, and the REAL cause of
   the black background fixed.** v0.9.13 shipped the literal VS Code
   values; chrome `#181818` reads as plain black on real monitors.
