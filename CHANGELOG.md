@@ -31,9 +31,11 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`--report-csv` and `--report-json`.** Both writers existed, but only
   the GUI could reach them — the two formats one reaches for in a script
   (Excel, ticket automation) were the only ones that could not be
-  scripted. The JSON export lost its UTF-8 BOM in the process, for the
-  same reason as the other JSON outputs; the CSV keeps it, because that
-  is how Excel recognises UTF-8.
+  scripted. They honour `--base-dir` like every other CLI export, so a CI
+  artifact does not carry machine-specific absolute paths. The JSON
+  export lost its UTF-8 BOM in the process, for the same reason as the
+  other JSON outputs; the CSV keeps it, because that is how Excel
+  recognises UTF-8.
 - **`--baseline-path-fingerprint y|n`** puts the file's relative path into
   the baseline fingerprint instead of just its name. The opt-in existed,
   but only in `analyser.ini` — that is, everywhere except CI, which is

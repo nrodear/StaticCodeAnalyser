@@ -1414,7 +1414,7 @@ begin
     if Args.ReportCsv <> '' then
     begin
       try
-        TExporter.ExportCsv(Findings, Args.ReportCsv);
+        TExporter.ExportCsv(Findings, Args.ReportCsv, Args.BaseDir);
         if not Args.Quiet then
           WriteLn('CSV report written: ', Args.ReportCsv);
       except
@@ -1430,7 +1430,7 @@ begin
     if Args.ReportJson <> '' then
     begin
       try
-        TExporter.ExportJson(Findings, Args.ReportJson);
+        TExporter.ExportJson(Findings, Args.ReportJson, Args.BaseDir);
         if not Args.Quiet then
           WriteLn('JSON report written: ', Args.ReportJson);
       except
