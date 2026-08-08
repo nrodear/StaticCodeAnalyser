@@ -1,6 +1,6 @@
 # Golden Corpus - FP-Regression-Tests
 
-Phase-1-Quick-Win C.1 aus [Konzept_ScannerQualitaet.md](../../Konzept_ScannerQualitaet.md).
+Phase-1-Quick-Win C.1 aus `Konzept_ScannerQualitaet.md`.
 
 ## Zweck
 
@@ -84,6 +84,12 @@ implementiert - `expected_findings` ist Reserve.
 
 ## Verwandte Dokumente
 
-- [Konzept_ScannerQualitaet.md](../../Konzept_ScannerQualitaet.md) §C.1
-- [Todo_FalsePositiveReduction.md](../../Todo_FalsePositiveReduction.md) §D - Historie aller bisher gefixten FP-Klassen
-- [HowTo_DetectorSelftest.md](../../HowTo_DetectorSelftest.md) - der breitere Dogfooding-Workflow
+Entwicklungsintern, nicht Teil des veröffentlichten Repositories:
+
+- `Konzept_ScannerQualitaet.md` §C.1
+- `Todo_FalsePositiveReduction.md` §D - Historie aller bisher gefixten FP-Klassen
+- `HowTo_DetectorSelftest.md` - der breitere Dogfooding-Workflow
+
+Öffentlich zugänglich sind stattdessen [HowTo_Tests.md](../../HowTo_Tests.md)
+(Testsuite und Dogfooding-Gate) und die Dokumentenkarte
+[docs/index.md](../../docs/index.md).

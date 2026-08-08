@@ -444,7 +444,11 @@ Um echte Übersetzungen zu bekommen:
    ```
 5. Den `locale/`-Ordner neben die BPL/EXE legen
 
-Komplette Schritt-für-Schritt-Anleitung: [I18N.md](I18N.md).
+Die Übersetzungen selbst sind die `.po`-Dateien unter [i18n/](i18n/) —
+das ist die einzige Quelle. Nach einer Änderung `python
+tools/gen_po_inc.py` laufen lassen, um die einkompilierte Kopie neu zu
+erzeugen, danach **Clean + Build**: die IDE verfolgt `.inc`-Abhängigkeiten
+nicht zuverlässig und würde sonst den alten Text linken.
 
 ---
 
@@ -1050,19 +1054,24 @@ Beide nutzen die gemeinsame Analyse-Engine in `StaticCodeAnalyserForm/sources/`.
 
 ## Dokumentation
 
-Das Repository enthält drei Markdown-Dokumente. Sie ergänzen sich
-inhaltlich, sodass jedes für sich gelesen werden kann:
+**[docs/index.md](docs/index.md) ist die vollständige Karte** — jedes
+ausgelieferte Dokument, gruppiert nach dem, was du gerade vorhast. Die
+vier, die du am ehesten brauchst:
 
 | Datei | Inhalt | Wann nachschlagen |
 |-------|--------|-------------------|
-| [README_de.md](README_de.md) | **Übersichts-Doku** — was das Plugin kann, wie es bedient wird, Architektur, Performance, Suppression, Theme-Integration | Erste Anlaufstelle für alle Themen außer den zwei Spezial-Bereichen unten |
-| [DETECTORS_de.md](DETECTORS_de.md) | **Kanonische Detektor-Liste** — alle 50 Sonar-Prüfregeln plus 3 Bonus-Detektoren mit Status (✅ implementiert / 🟡 teilweise / 🔲 offen), Beschreibung und zuständiger Unit | Wenn du wissen willst welche Regel implementiert ist, was sie genau prüft, oder welcher Detektor als nächstes drankommt |
+| [README_de.md](README_de.md) | **Übersichts-Doku** — was das Plugin kann, wie es bedient wird, Architektur, Performance, Suppression, Theme-Integration | Erste Anlaufstelle |
+| [EXPORTS_de.md](EXPORTS_de.md) | **Alle Export-Formate** — SARIF, Sonar, HTML, CSV, JSON, Baseline — mit dem Arbeitsablauf, den jedes bedient, und den zugehörigen CLI-Schaltern | Wenn die Funde *raus* sollen: CI-Gate, Code-Review, Ticketsystem, Tabelle |
+| [DETECTORS_de.md](DETECTORS_de.md) | **Kanonische Detektor-Liste** — jede Regel mit Status (✅ implementiert / 🟡 teilweise / 🔲 offen), Beschreibung und zuständiger Unit | Wenn du wissen willst welche Regel implementiert ist, was sie genau prüft, oder welcher Detektor als nächstes drankommt |
 | [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md) | **VCS-/Branch-Changes-Feature** — wie der `Branch-Changes`-Button funktioniert, Git/SVN-Setup, Tortoise-Kompatibilität, `analyser.ini`-Konfiguration, Troubleshooting für Repo-Erkennung | Wenn der Branch-Changes-Button nicht macht was er soll, oder du das VCS-Setup feinjustieren willst |
 
-Konvention: `README_de.md` ist breit, die anderen zwei sind tief und auf
-einen Aspekt fokussiert. Wenn du eine bestehende Section in `README_de.md`
-zu groß findest, wird sie typischerweise in eine eigene Spezial-Datei
-ausgelagert (so wie es mit dem Branch-Changes-Teil passiert ist).
+Je Regel eine Seite (was ein Fund bedeutet und wie man ihn behebt) unter
+[docs/rules/](docs/rules/index.md); der Katalog mit den Schweregraden ist
+[docs/rules.md](docs/rules.md).
+
+Konvention: `README_de.md` ist breit, die Spezial-Dateien sind tief. Wenn
+eine Section in `README_de.md` zu groß wird, wandert sie in eine eigene
+Datei (so wie es mit dem Branch-Changes-Teil passiert ist).
 
 ---
 

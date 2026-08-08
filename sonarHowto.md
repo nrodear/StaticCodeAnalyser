@@ -82,7 +82,8 @@ After catalog updates in the repo: re-copy. (See
 ## 1. Sonar configuration for the standalone EXE
 
 You have three ways to give the EXE the connection details — pick one,
-don't mix:
+don't mix. Options A and B are self-contained; option C needs the INI to
+exist already (see there), so a truly plugin-free setup uses A or B.
 
 ### Option A — CLI flags per run
 
@@ -109,25 +110,46 @@ Recommended for CI (secret stores supply the variables).
 
 ### Option C — analyser.ini with DPAPI-encrypted token
 
-Persistent per local Windows user, token **DPAPI-encrypted**:
+The standalone EXE **reads** `%APPDATA%\StaticCodeAnalyser\analyser.ini`,
+but it never writes a token there — no CLI flag stores one. Something else
+has to create the file first:
+
+- **IDE plugin** — *Tools > Options > Static Code Analysis > Sonar*, enter
+  host / project / token, Save. That is the only place in the product that
+  DPAPI-encrypts a token. Convenient if the plugin is installed anyway;
+  it does mean this option is not available on a plugin-free machine.
+- **By hand** — write the `[Sonar]` section yourself and produce the
+  `[SonarTokens]` entry with PowerShell:
 
 ```powershell
-analyser.exe --sonar-host    http://sonar.company.com:9000 `
-             --sonar-project my-delphi-project `
-             --sonar-token   squ_xxxxxxxxxx `
-             --sonar-test
+$ini = "$env:APPDATA\StaticCodeAnalyser\analyser.ini"
+Add-Type -AssemblyName System.Security
+$enc = [System.Security.Cryptography.ProtectedData]::Protect(
+  [Text.Encoding]::UTF8.GetBytes("squ_xxxxxxxxxx"), $null, "CurrentUser")
+$hex = ($enc | ForEach-Object { $_.ToString("x2") }) -join ""
+@"
+[Sonar]
+HostUrl=http://sonar.company.com:9000
+ProjectKey=my-delphi-project
+TokenRef=ide-default
+
+[SonarTokens]
+ide-default=$hex
+"@ | Set-Content $ini -Encoding utf8
 ```
 
-On first call — if the file doesn't exist yet — the EXE creates
-`%APPDATA%\StaticCodeAnalyser\analyser.ini` with the `[Sonar]` section plus
-the encrypted token under `[SonarTokens]`. Subsequent runs need no flags:
+Afterwards no flags are needed:
 
 ```powershell
 analyser.exe --sonar-test
 ```
 
-The token can **only** be decrypted by the same Windows user on the same
-machine.
+DPAPI ties the file to this Windows account — a copy is useless on another
+machine or under another user. It is not a vault: any program running *as
+you* can decrypt it just as well. For CI use Option B.
+
+If an entry starts with `PT:`, it is plain Base64, not encrypted (the
+non-Windows fallback). The EXE reads those too and warns about it.
 
 ---
 

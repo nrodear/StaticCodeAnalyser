@@ -214,7 +214,7 @@ sie jetzt ab.
 ## Frueherer Stand im 0.9.8-Zyklus
 
 13 Commits seit v0.9.7. Phase 1 aus
-[Konzept_ScannerQualitaet.md](Konzept_ScannerQualitaet.md) ist komplett
+`Konzept_ScannerQualitaet.md` ist komplett
 (6/6 Quick-Wins); Phase 4 hat mit dem A.3-Minimal-Schritt fuer den
 Cross-Unit-Sichtbarkeits-Check begonnen. Ein Multi-Persona-Review
 (Architektur + Security + Performance) hat den Code zusaetzlich

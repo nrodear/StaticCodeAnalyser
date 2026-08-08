@@ -199,7 +199,7 @@ shipped without release notes; the CHANGELOG now covers them.
 ## Earlier in 0.9.8 cycle
 
 13 commits since v0.9.7. Phase 1 of
-[Konzept_ScannerQualitaet.md](Konzept_ScannerQualitaet.md) is complete
+`Konzept_ScannerQualitaet.md` is complete
 (6/6 quick-wins); Phase 4 has begun with the A.3-Minimal cross-unit
 visibility check. A multi-persona review (Architecture + Security +
 Performance) hardened the code along the way.
