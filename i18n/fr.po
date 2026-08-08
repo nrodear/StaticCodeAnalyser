@@ -1992,3 +1992,8 @@ msgstr "Écrire maintenant une nouvelle référence avec les résultats actuels 
 
 msgid "No scan target selected - pick a path or project first."
 msgstr "Aucune cible d'analyse sélectionnée - choisissez d'abord un chemin ou un projet."
+
+# --- 2026-08-08: Goto-Line-Dialog-Guard (EXE-IDE-Navigation) ---
+
+msgid "Go-to-line dialog did not open - line jump skipped"
+msgstr "La boîte « Aller à la ligne » ne s'est pas ouverte - saut ignoré"

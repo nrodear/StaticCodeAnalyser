@@ -2019,12 +2019,31 @@ begin
       Format(_('Quick-Fix: could not write file: %s'), [Err]);
 end;
 
+// Eine Taste als virtuellen Keycode senden (down oder up). SendInput
+// liefert an das AKTUELLE Vordergrundfenster - der Aufrufer ist dafuer
+// verantwortlich, das Ziel vorher zu verifizieren.
+procedure SendVk(AVk: Word; AUp: Boolean);
+var
+  inp: TInput;
+begin
+  ZeroMemory(@inp, SizeOf(inp));
+  inp.Itype  := INPUT_KEYBOARD;
+  inp.ki.wVk := AVk;
+  if AUp then inp.ki.dwFlags := KEYEVENTF_KEYUP;
+  SendInput(1, inp, SizeOf(TInput));
+end;
+
 procedure TForm2.NavigateDelphiToLine(LineNo: Integer);
 var
-  BDSWnd: HWND;
-  lineStr: string;
-  i: Integer;
-  inp: TInput;
+  BDSWnd  : HWND;
+  Fg      : HWND;
+  BDSPid  : DWORD;
+  FgPid   : DWORD;
+  lineStr : string;
+  i       : Integer;
+  Attempt : Integer;
+  Waited  : Integer;
+  inp     : TInput;
 begin
   // Belt-and-suspenders: ohne Ziel-Zeile wuerde ein Ctrl+G Dialog leer
   // bestaetigt und die IDE haengt mit einem offenen Dialog herum.
@@ -2041,19 +2060,42 @@ begin
   // Programm, das der Nutzer stattdessen vor sich hat. In einem Editor
   // waere das eine Aenderung an fremdem Text.
   if GetForegroundWindow <> BDSWnd then Exit;
+  GetWindowThreadProcessId(BDSWnd, BDSPid);
 
-  // Ctrl+G = Search > Go to Line Number
-  ZeroMemory(@inp, SizeOf(inp));
-  inp.Itype := INPUT_KEYBOARD;
-  inp.ki.wVk := VK_CONTROL;
-  SendInput(1, inp, SizeOf(TInput));
-  inp.ki.wVk := Ord('G');
-  SendInput(1, inp, SizeOf(TInput));
-  inp.ki.dwFlags := KEYEVENTF_KEYUP;
-  SendInput(1, inp, SizeOf(TInput));
-  inp.ki.wVk := VK_CONTROL;
-  SendInput(1, inp, SizeOf(TInput));
-  Sleep(200);
+  // Ctrl+G = Search > Go to Line Number - und dann NACHSEHEN, ob der
+  // Dialog wirklich aufging (neues Vordergrundfenster). Eine noch
+  // beschaeftigte IDE (Datei laedt, LSP indiziert) schluckt den
+  // Shortcut, und die Ziffern samt Enter landeten dann als TEXT in
+  // Zeile 1 der gerade geoeffneten Datei (Fund 2026-08-08) - die feste
+  // 1200-ms-Wartezeit des Aufrufers ist dafuer keine Garantie. Deshalb
+  // bis zu 3 Anlaeufe mit Dialog-Probe; ohne Dialog wird NICHT getippt.
+  for Attempt := 1 to 3 do
+  begin
+    SendVk(VK_CONTROL, False);
+    SendVk(Ord('G'), False);
+    SendVk(Ord('G'), True);
+    SendVk(VK_CONTROL, True);
+    Waited := 0;
+    repeat
+      Sleep(50);
+      Inc(Waited, 50);
+    until (GetForegroundWindow <> BDSWnd) or (Waited >= 600);
+    if GetForegroundWindow <> BDSWnd then Break;
+  end;
+
+  Fg := GetForegroundWindow;
+  if Fg = BDSWnd then
+  begin
+    // Kein Dialog nach 3 Anlaeufen: die Datei ist offen, nur der Sprung
+    // unterbleibt - ehrlich melden statt blind zu tippen.
+    StatusBar1.Panels[2].Text :=
+      _('Go-to-line dialog did not open - line jump skipped');
+    Exit;
+  end;
+  // Der Dialog muss zur IDE gehoeren. Hat waehrenddessen ein FREMDES
+  // Programm den Vordergrund uebernommen, wird nie blind hineingetippt.
+  GetWindowThreadProcessId(Fg, FgPid);
+  if FgPid <> BDSPid then Exit;
   // Zeilennummer eintippen - als ZEICHEN, nicht als Taste.
   //
   // KEYEVENTF_UNICODE uebergibt das Zeichen selbst in wScan und laesst wVk

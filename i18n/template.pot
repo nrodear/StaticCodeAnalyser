@@ -2167,3 +2167,8 @@ msgstr ""
 
 msgid "No scan target selected - pick a path or project first."
 msgstr ""
+
+# --- 2026-08-08: Goto-Line-Dialog-Guard (EXE-IDE-Navigation) ---
+
+msgid "Go-to-line dialog did not open - line jump skipped"
+msgstr ""
