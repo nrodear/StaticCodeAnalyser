@@ -4,6 +4,20 @@ Vergleich der Checks im Sonar-Delphi-Projekt
 ([integrated-application-development/sonar-delphi](https://github.com/integrated-application-development/sonar-delphi/tree/master/delphi-checks/src/main/java/au/com/integradev/delphi/checks),
 Stand 2026-05-18) mit dem lokalen Static Code Analyser.
 
+> **Was hier „Coverage" heißt.** Dieses Dokument vergleicht **Regelsätze**:
+> welche Checks des Sonar-Delphi-Plugins ein Pendant unter den
+> SCA-Detektoren haben. Es geht **nicht** um Test-Coverage. Zeilenabdeckung
+> für Delphi entsteht aus einem Testlauf mit
+> [DelphiCodeCoverage](https://github.com/DelphiCodeCoverage/DelphiCodeCoverage)
+> (braucht detaillierte `.map`-Dateien) und wird über die plugin-eigene
+> Property `sonar.delphi.coverage.reportPaths` importiert, Testergebnisse
+> aus DUnitX über `sonar.delphi.nunit.reportPaths`. Beides setzt das
+> installierte Sonar-Delphi-Plugin voraus. SCA ist ein statischer
+> Analyser: er führt keine Tests aus, kann folglich keine Coverage
+> erzeugen und exportiert stattdessen das Generic **Issue** Format — das
+> gerade *ohne* dieses Plugin funktioniert. Die generische Property
+> `sonar.coverageReportPaths` ist hier ebenfalls nicht einschlägig.
+
 Spalten:
 
 - **Sonar-Check** — Klassenname (ohne `.java`)
@@ -25,12 +39,12 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | AttributeNameCheck | N | – | – |
 | BeginEndRequiredCheck | J | uBeginEndRequired | – |
 | CaseStatementSizeCheck | J | uCaseStatementSize | – |
-| CastAndFreeCheck | N | – | – |
+| CastAndFreeCheck | J | uCastAndFree | – |
 | CatchingRawExceptionCheck | ~ | uExceptOnException | überschneidet sich mit Swallowed-Exception-Pfad |
-| CharacterToCharacterPointerCastCheck | N | – | – |
+| CharacterToCharacterPointerCastCheck | J | uCharToCharPointerCast | – |
 | ClassNameCheck | ~ | uTypeName | lokaler `uTypeName` deckt Class/Record/Enum gemeinsam ab |
 | ClassPerFileCheck | J | uClassPerFile | – |
-| CognitiveComplexityRoutineCheck | ~ | uCyclomaticComplexity | lokal nur Cyclomatic, kein Cognitive |
+| CognitiveComplexityRoutineCheck | J | uCognitiveComplexity | eigener Detektor; SCA022 deckt Cyclomatic separat ab |
 | CommentRegularExpressionCheck | N | – | – |
 | CommentedOutCodeCheck | J | uCommentedOutCode | – |
 | CompilerHintsCheck | N | – | – |
@@ -43,7 +57,7 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | ConstructorNameCheck | ~ | uMethodName | lokaler `uMethodName` deckt Routinen generell ab |
 | ConstructorWithoutInheritedCheck | J | uConstructorWithoutInherited | – |
 | CyclomaticComplexityRoutineCheck | J | uCyclomaticComplexity | – |
-| DateFormatSettingsCheck | N | – | – |
+| DateFormatSettingsCheck | J | uDateFormatSettings | – |
 | DestructorNameCheck | ~ | uMethodName | siehe ConstructorNameCheck |
 | DestructorWithoutInheritedCheck | J | uDestructorWithoutInherited | – |
 | DigitGroupingCheck | J | uDigitGrouping | – |
@@ -82,18 +96,18 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | GroupedParameterDeclarationCheck | J | uGroupedDeclaration | – |
 | GroupedVariableDeclarationCheck | J | uGroupedDeclaration | – |
 | HelperNameCheck | N | – | – |
-| IfThenShortCircuitCheck | N | – | – |
+| IfThenShortCircuitCheck | J | uIfThenShortCircuit | – |
 | ImplicitDefaultEncodingCheck | N | – | – |
 | ImportSpecificityCheck | N | – | – |
 | IndexLastListElementCheck | N | – | – |
-| InheritedMethodWithNoCodeCheck | N | – | – |
+| InheritedMethodWithNoCodeCheck | J | uInheritedMethodEmpty | – |
 | InheritedTypeNameCheck | N | – | – |
 | InlineAssemblyCheck | J | uInlineAssembly | – |
 | InlineConstExplicitTypeCheck | N | – | – |
 | InlineDeclarationCapturedByAnonymousMethodCheck | N | – | – |
 | InlineLoopVarExplicitTypeCheck | N | – | – |
 | InlineVarExplicitTypeCheck | N | – | – |
-| InstanceInvokedConstructorCheck | N | – | – |
+| InstanceInvokedConstructorCheck | J | uInstanceInvokedConstructor | – |
 | InterfaceGuidCheck | N | – | – |
 | InterfaceNameCheck | J | uInterfaceName | – |
 | IterationPastHighBoundCheck | ~ | uLengthUnderflow | thematisch verwandt (Loop-Boundary-Bugs) |
@@ -102,10 +116,10 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | LowercaseKeywordCheck | J | uLowercaseKeyword | – |
 | MathFunctionSingleOverloadCheck | N | – | – |
 | MemberDeclarationOrderCheck | N | – | – |
-| MissingRaiseCheck | N | – | – |
+| MissingRaiseCheck | J | uMissingRaise | – |
 | MissingSemicolonCheck | N | – | – |
 | MixedNamesCheck | N | – | – |
-| NilComparisonCheck | ~ | uAssignedAndAssignedNil | überschneidet sich |
+| NilComparisonCheck | J | uNilComparison | uAssignedAndAssignedNil deckt zusätzlich Assigned-Misuse ab |
 | NoSonarCheck | J | uNoSonarMarker | – |
 | NonLinearCastCheck | N | – | – |
 | NoreturnContractCheck | N | – | – |
@@ -118,8 +132,8 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | ProjectFileRoutineCheck | N | – | – |
 | ProjectFileVariableCheck | N | – | – |
 | PublicFieldCheck | J | uPublicField | – |
-| RaisingRawExceptionCheck | N | – | – |
-| ReRaiseExceptionCheck | N | – | – |
+| RaisingRawExceptionCheck | J | uRaisingRawException | – |
+| ReRaiseExceptionCheck | J | uReRaiseException | – |
 | RecordNameCheck | ~ | uTypeName | siehe ClassNameCheck |
 | RedundantAssignmentCheck | ~ | uSelfAssignment | nur Self-Assignment, nicht jeder redundant assignment |
 | RedundantBooleanCheck | J | uRedundantBoolean | – |
@@ -129,7 +143,7 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | RedundantParenthesesCheck | J | uRedundantParentheses | – |
 | RoutineNameCheck | J | uMethodName | – |
 | RoutineNestingDepthCheck | ~ | uNestedRoutines | Sonar: Tiefe, lokal: Anzahl |
-| RoutineResultAssignedCheck | N | – | – |
+| RoutineResultAssignedCheck | J | uRoutineResultAssigned | – |
 | ShortIdentifierCheck | N | – | – |
 | StringListDuplicatesCheck | ~ | uDuplicateString | lokal allg. String-Duplikate, nicht spez. TStringList |
 | StringLiteralRegularExpressionCheck | N | – | – |
@@ -145,7 +159,7 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | TrailingCommaArgumentListCheck | J | uTrailingCommaArgList | – |
 | TrailingWhitespaceCheck | J | uTrailingWhitespace | – |
 | TypeAliasCheck | N | – | – |
-| UnicodeToAnsiCastCheck | N | – | – |
+| UnicodeToAnsiCastCheck | J | uUnicodeToAnsiCast | – |
 | UnitLevelKeywordIndentationCheck | J | uUnitLevelKeywordIndent | – |
 | UnitNameCheck | N | – | – |
 | UnspecifiedReturnTypeCheck | N | – | – |
@@ -155,9 +169,9 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | UnusedImportCheck | J | uUnusedUses | – |
 | UnusedLocalVariableCheck | J | uUnusedLocal | – |
 | UnusedPropertyCheck | N | – | – |
-| UnusedRoutineCheck | ~ | uDeadCode | überlappt mit allgemeiner Dead-Code-Erkennung |
+| UnusedRoutineCheck | J | uUnusedRoutine | SCA164; uDeadCode bleibt die allgemeine Dead-Code-Erkennung |
 | UnusedTypeCheck | N | – | – |
-| VariableInitializationCheck | N | – | – |
+| VariableInitializationCheck | J | uUninitVar | SCA166, pfadsensitiv |
 | VariableNameCheck | N | – | – |
 | VisibilityKeywordIndentationCheck | ~ | uVisibilityCheck | thematisch verwandt |
 | VisibilitySectionOrderCheck | ~ | uVisibilityCheck | thematisch verwandt |
@@ -167,22 +181,37 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 
 | Status | Anzahl |
 |---|---:|
-| Sonar-Checks insgesamt | 138 |
-| `J` (umgesetzt) | 43 |
-| `~` (teilweise) | 19 |
-| `N` (nicht umgesetzt) | 76 |
+| Sonar-Checks insgesamt | 144 |
+| `J` (umgesetzt) | 70 |
+| `~` (teilweise) | 18 |
+| `N` (nicht umgesetzt) | 56 |
 
-Coverage (J + ~): ~45 % der Sonar-Checks haben ein lokales Pendant.
+Coverage (J + ~): **61 %** der Sonar-Checks haben ein lokales Pendant.
+
+Die Summenzeile muss der Zeilenzahl der Tabelle oben entsprechen
+(70 + 18 + 56 = 144); wer Zeilen ändert, zählt hier nach. Bis 2026-08-08
+stand hier 138 bei 144 Tabellenzeilen, und fünfzehn Zeilen meldeten „nicht
+umgesetzt", obwohl die Detektor-Unit existierte — die veröffentlichte
+Quote war um 16 Prozentpunkte zu niedrig.
+
+> **Stand der Erhebung.** Die Sonar-Seite wurde am 2026-05-18 gezogen, die
+> lokale Seite gegen `SCA.Engine/sources/Detectors/` geprüft. Der lokale
+> Bestand ist seither auf 178 Detektor-Units gewachsen; die Abschnitte
+> unten listen noch nicht alle davon. Neu hinzugekommene Familien
+> (Encoding SCA185-193, Projekt-Zugehörigkeit SCA194/195) haben kein
+> Sonar-Pendant und ändern die Quote nicht — eine vollständige
+> Neuerhebung beider Seiten steht aber aus.
 
 ## Lokale Detektoren ohne Sonar-Pendant
 
 Diese Detektoren existieren nur im lokalen Projekt — meist projektspezifische
 Erweiterungen (DFM-Audit, SQL-Sicherheit, Leak-Detection, Concurrency).
 
-### DFM-Audit (Form-Datei-Analyse, 21 Detektoren)
+### DFM-Audit (Form-Datei-Analyse, 22 Detektoren)
 
 - uDfmActionMismatch
 - uDfmCircularDataSource
+- uDfmComponentUnused
 - uDfmCrossFormCoupling
 - uDfmDataModuleSplitHint
 - uDfmDbInUiForm
