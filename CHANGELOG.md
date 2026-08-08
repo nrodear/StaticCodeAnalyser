@@ -17,15 +17,17 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **The IDE line jump could type the line number into the code.** The
-  EXE's navigation sent Ctrl+G and then the digits after a fixed 1.2 s
-  wait — but a busy IDE (file still loading, LSP indexing) swallows
-  the shortcut, and "300" plus Enter arrived as *text in line 1* of
-  the just-opened file. The routine now verifies that the go-to-line
-  dialog actually opened (new foreground window of the same IDE
-  process), retries Ctrl+G up to three times, and without a dialog it
-  types nothing and says so in the status bar. If a foreign
-  application grabs the foreground mid-flight, nothing is typed either.
+- **The EXE's Delphi-IDE line jump is gone — it could type the line
+  number into the code.** Opening a finding sent Ctrl+G and then the
+  digits after a fixed wait; a busy IDE (file still loading, LSP
+  indexing) swallows the shortcut, and "300" plus Enter arrived as
+  *text in line 1* of the just-opened file. The IDE offers no external
+  line switch and keystroke simulation cannot be made safe, so the IDE
+  path now only **opens** the file (instantly, no 1.2 s UI freeze) and
+  the status line honestly says "Opened in Delphi IDE" without
+  claiming a line. Line jumps remain where they actually work: the
+  external editor (`%line%` in `[Editor]`), the built-in `.dfm`
+  viewer — and the IDE plugin, whose ToolsAPI navigation is unaffected.
 
 ## [v0.9.13] - 2026-08-08 - The baseline finds its home
 

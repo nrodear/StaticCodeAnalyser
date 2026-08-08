@@ -1237,9 +1237,6 @@ msgstr ""
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1330
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3267
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3293
-msgid "Opened: %s  Line: %d"
-msgstr ""
-
 #: SCA.Engine/sources/Output/uFixHint.pas:3132
 msgid "Override whose body is just \"inherited\" adds nothing"
 msgstr ""
@@ -2060,9 +2057,6 @@ msgstr ""
 
 # --- 2026-08-06: Triage-Quick-Wins (EXE) ---
 
-msgid "Opening in Delphi IDE..."
-msgstr ""
-
 msgid "Analysis cancelled."
 msgstr ""
 
@@ -2170,5 +2164,10 @@ msgstr ""
 
 # --- 2026-08-08: Goto-Line-Dialog-Guard (EXE-IDE-Navigation) ---
 
-msgid "Go-to-line dialog did not open - line jump skipped"
+# --- 2026-08-08: IDE-Open ohne Zeilensprung (User-Entscheid) ---
+
+msgid "Opened in Delphi IDE: %s"
+msgstr ""
+
+msgid "Opened: %s  Line: %d"
 msgstr ""

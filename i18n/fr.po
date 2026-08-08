@@ -1285,9 +1285,6 @@ msgstr "Ouvrir analyser.ini (BaseBranch, chemins git/svn, LeakyClasses personnal
 msgid "Open ignore list (which files are NOT analysed)"
 msgstr "Ouvrir la liste d'exclusions (quels fichiers ne sont PAS analysés)"
 
-msgid "Opened: %s  Line: %d"
-msgstr "Ouvert : %s  Ligne : %d"
-
 msgid "Pascal file (*.pas)|*.pas|All files|*.*"
 msgstr "Fichier Pascal (*.pas)|*.pas|Tous les fichiers|*.*"
 
@@ -1885,9 +1882,6 @@ msgstr "Impossible d'enregistrer le choix - analyser.ini n'est pas modifiable : 
 
 # --- 2026-08-06: Triage-Quick-Wins (EXE) ---
 
-msgid "Opening in Delphi IDE..."
-msgstr "Ouverture dans l'EDI Delphi..."
-
 msgid "Analysis cancelled."
 msgstr "Analyse annulée."
 
@@ -1995,5 +1989,10 @@ msgstr "Aucune cible d'analyse sélectionnée - choisissez d'abord un chemin ou 
 
 # --- 2026-08-08: Goto-Line-Dialog-Guard (EXE-IDE-Navigation) ---
 
-msgid "Go-to-line dialog did not open - line jump skipped"
-msgstr "La boîte « Aller à la ligne » ne s'est pas ouverte - saut ignoré"
+# --- 2026-08-08: IDE-Open ohne Zeilensprung (User-Entscheid) ---
+
+msgid "Opened in Delphi IDE: %s"
+msgstr "Ouvert dans l'IDE Delphi : %s"
+
+msgid "Opened: %s  Line: %d"
+msgstr "Ouvert : %s  Ligne : %d"

@@ -296,7 +296,7 @@ type
       out AError: string): Boolean;
     function  OpenViaExternalEditor(const ASpec: TEditorSpec;
       const AAbsPath: string; ALine: Integer; out AError: string): Boolean;
-    function  OpenViaDelphiIde(const AAbsPath: string; ALine: Integer;
+    function  OpenViaDelphiIde(const AAbsPath: string;
       out AError: string): Boolean;
     // Waehlt den Weg und liefert den Text fuer die Statuszeile.
     function  OpenFindingAt(const AAbsPath, ARelPath: string;
@@ -311,7 +311,6 @@ type
     procedure SaveRecentPath(const APath: string);
     function  AppPath: string;
     function  RecentIniPath: string;
-    procedure NavigateDelphiToLine(LineNo: Integer);
     // Cancel-Handler fuer den Standalone-Analyse-Lauf.
     procedure BtnCancelClick(Sender: TObject);
     // Worker-Callback aus AnalyzeLeaksRecursive / AnalyzeLeaksFromList.
@@ -1734,10 +1733,14 @@ begin
 end;
 
 function TForm2.OpenViaDelphiIde(const AAbsPath: string;
-  ALine: Integer; out AError: string): Boolean;
-// Der Windows-Standardhandler oeffnet die Datei; die Zeile wird danach
-// ueber die Tastatur angesprungen, weil die IDE von aussen keinen
-// Schalter fuer eine Zeilennummer anbietet.
+  out AError: string): Boolean;
+// Der Windows-Standardhandler oeffnet die Datei - NUR oeffnen, kein
+// Zeilensprung. Der fruehere Anlauf ueber simulierte Tastatur (Ctrl+G
+// + Ziffern) ist raus (User-Entscheid 2026-08-08): die IDE bietet von
+// aussen keinen Zeilen-Schalter, und der blinde Tipp-Versuch schrieb
+// die Zeilennummer als TEXT in die gerade geoeffnete Datei. Wer den
+// Sprung will, richtet einen externen Editor ein ([Editor] in der
+// analyser.ini - dort funktioniert %line%).
 begin
   AError := '';
   // ProcessMessages flushed Pending-Events (z.B. den Repaint nach Modal-
@@ -1747,29 +1750,11 @@ begin
   //
   // ProcessMessages fuehrt allerdings ALLES aus, was in der Schlange
   // steht - auch ein Schliessen des Fensters. Danach zeigen Self und
-  // StatusBar1 auf freigegebenen Speicher, deshalb hinter jedem Pumpen
-  // eine Pruefung.
+  // StatusBar1 auf freigegebenen Speicher, deshalb dahinter die
+  // Pruefung.
   Application.ProcessMessages;
   if csDestroying in ComponentState then Exit(False);
-  // Feedback VOR dem Start: der Weg blockiert den Hauptthread gleich
-  // ~1,6 s (Sleep-Kette bis zur Tastatursimulation), und die IDE nimmt
-  // den Fokus. Ohne Hinweis wirkt die App in dieser Zeit abgestuerzt.
-  StatusBar1.Panels[2].Text := _('Opening in Delphi IDE...');
-  StatusBar1.Update;                 // sichtbar machen, bevor es blockiert
-  Screen.Cursor := crAppStart;
-  try
-    Result := LaunchProcess(AAbsPath, '', AError);
-    if not Result then Exit;
-    if ALine > 0 then
-    begin
-      Sleep(1200); // Delphi IDE Zeit geben, die Datei zu oeffnen
-      Application.ProcessMessages;
-      if csDestroying in ComponentState then Exit;
-      NavigateDelphiToLine(ALine);
-    end;
-  finally
-    Screen.Cursor := crDefault;
-  end;
+  Result := LaunchProcess(AAbsPath, '', AError);
 end;
 
 function TForm2.OpenFindingAt(const AAbsPath, ARelPath: string;
@@ -1786,11 +1771,12 @@ function TForm2.OpenFindingAt(const AAbsPath, ARelPath: string;
 //   3. Nur fuer .dfm: der eingebaute Textbetrachter.
 //
 // Fuer .dfm entscheidet [Editor] DfmTarget zwischen 2 und 3, Vorgabe ist
-// die IDE. Eine ehrliche Einschraenkung dazu: die IDE oeffnet eine .dfm
-// je nach Registrierung im Formular-Entwurf, und dort geht kein Sprung
-// zur Zeile - der eingebaute Betrachter kann das zuverlaessig. Deshalb
-// bleibt er als Wahl bestehen und faengt ausserdem den Fall ab, dass gar
-// kein Handler antwortet.
+// die IDE. Ehrliche Einschraenkung: Weg 2 OEFFNET nur - die Delphi-IDE
+// bietet von aussen keinen Zeilensprung (User-Entscheid 2026-08-08,
+// vorher tippte eine Tastatur-Simulation die Zeilennummer in den Code).
+// Zur Zeile springen koennen nur Weg 1 (%line% im externen Editor) und
+// der eingebaute .dfm-Betrachter; der faengt ausserdem den Fall ab,
+// dass gar kein Handler antwortet.
 var
   spec  : TEditorSpec;
   isDfm : Boolean;
@@ -1817,11 +1803,13 @@ begin
   // ---- 2. Delphi-IDE ----
   if (not isDfm) or (spec.DfmTarget = dtIde) then
   begin
-    if OpenViaDelphiIde(AAbsPath, ALine, err) then
+    if OpenViaDelphiIde(AAbsPath, err) then
     begin
       // Dieser Weg pumpt Nachrichten - das Fenster kann inzwischen weg sein.
       if csDestroying in ComponentState then Exit('');
-      Result := Format(_('Opened: %s  Line: %d'), [ARelPath, ALine]);
+      // Ohne Zeilenangabe - die IDE springt nicht, das soll die
+      // Statuszeile auch nicht behaupten.
+      Result := Format(_('Opened in Delphi IDE: %s'), [ARelPath]);
       Exit;
     end;
     if csDestroying in ComponentState then Exit('');
@@ -2017,112 +2005,6 @@ begin
   else
     StatusBar1.Panels[2].Text :=
       Format(_('Quick-Fix: could not write file: %s'), [Err]);
-end;
-
-// Eine Taste als virtuellen Keycode senden (down oder up). SendInput
-// liefert an das AKTUELLE Vordergrundfenster - der Aufrufer ist dafuer
-// verantwortlich, das Ziel vorher zu verifizieren.
-procedure SendVk(AVk: Word; AUp: Boolean);
-var
-  inp: TInput;
-begin
-  ZeroMemory(@inp, SizeOf(inp));
-  inp.Itype  := INPUT_KEYBOARD;
-  inp.ki.wVk := AVk;
-  if AUp then inp.ki.dwFlags := KEYEVENTF_KEYUP;
-  SendInput(1, inp, SizeOf(TInput));
-end;
-
-procedure TForm2.NavigateDelphiToLine(LineNo: Integer);
-var
-  BDSWnd  : HWND;
-  Fg      : HWND;
-  BDSPid  : DWORD;
-  FgPid   : DWORD;
-  lineStr : string;
-  i       : Integer;
-  Attempt : Integer;
-  Waited  : Integer;
-  inp     : TInput;
-begin
-  // Belt-and-suspenders: ohne Ziel-Zeile wuerde ein Ctrl+G Dialog leer
-  // bestaetigt und die IDE haengt mit einem offenen Dialog herum.
-  if LineNo <= 0 then Exit;
-  BDSWnd := FindWindow('TAppBuilder', nil);
-  if BDSWnd = 0 then Exit;
-  SetForegroundWindow(BDSWnd);
-  Sleep(150);
-
-  // NACHSEHEN, ob der Wechsel geklappt hat. SendInput schickt die Tasten an
-  // das Fenster, das GERADE den Vordergrund hat - nicht an BDSWnd. Windows
-  // verweigert SetForegroundWindow aber regelmaessig (Foreground-Lock),
-  // und dann tippt diese Routine Ctrl+G und eine Zahl blind in das
-  // Programm, das der Nutzer stattdessen vor sich hat. In einem Editor
-  // waere das eine Aenderung an fremdem Text.
-  if GetForegroundWindow <> BDSWnd then Exit;
-  GetWindowThreadProcessId(BDSWnd, BDSPid);
-
-  // Ctrl+G = Search > Go to Line Number - und dann NACHSEHEN, ob der
-  // Dialog wirklich aufging (neues Vordergrundfenster). Eine noch
-  // beschaeftigte IDE (Datei laedt, LSP indiziert) schluckt den
-  // Shortcut, und die Ziffern samt Enter landeten dann als TEXT in
-  // Zeile 1 der gerade geoeffneten Datei (Fund 2026-08-08) - die feste
-  // 1200-ms-Wartezeit des Aufrufers ist dafuer keine Garantie. Deshalb
-  // bis zu 3 Anlaeufe mit Dialog-Probe; ohne Dialog wird NICHT getippt.
-  for Attempt := 1 to 3 do
-  begin
-    SendVk(VK_CONTROL, False);
-    SendVk(Ord('G'), False);
-    SendVk(Ord('G'), True);
-    SendVk(VK_CONTROL, True);
-    Waited := 0;
-    repeat
-      Sleep(50);
-      Inc(Waited, 50);
-    until (GetForegroundWindow <> BDSWnd) or (Waited >= 600);
-    if GetForegroundWindow <> BDSWnd then Break;
-  end;
-
-  Fg := GetForegroundWindow;
-  if Fg = BDSWnd then
-  begin
-    // Kein Dialog nach 3 Anlaeufen: die Datei ist offen, nur der Sprung
-    // unterbleibt - ehrlich melden statt blind zu tippen.
-    StatusBar1.Panels[2].Text :=
-      _('Go-to-line dialog did not open - line jump skipped');
-    Exit;
-  end;
-  // Der Dialog muss zur IDE gehoeren. Hat waehrenddessen ein FREMDES
-  // Programm den Vordergrund uebernommen, wird nie blind hineingetippt.
-  GetWindowThreadProcessId(Fg, FgPid);
-  if FgPid <> BDSPid then Exit;
-  // Zeilennummer eintippen - als ZEICHEN, nicht als Taste.
-  //
-  // KEYEVENTF_UNICODE uebergibt das Zeichen selbst in wScan und laesst wVk
-  // auf 0; Windows liefert es dann unabhaengig vom Tastaturlayout aus. Die
-  // Vorgaengerfassung nahm 'VkKeyScan(Ch) and $FF' - das verwirft das obere
-  // Byte, in dem der noetige Umschalt-Status steht. Auf einem AZERTY-Layout
-  // liegen die Ziffern auf der Umschaltebene, und aus der Zeile 42 wurde so
-  // die Eingabe "é'" im Gehe-zu-Zeile-Feld.
-  lineStr := IntToStr(LineNo);
-  for i := 1 to Length(lineStr) do
-  begin
-    ZeroMemory(@inp, SizeOf(inp));
-    inp.Itype      := INPUT_KEYBOARD;
-    inp.ki.wVk     := 0;
-    inp.ki.wScan   := Ord(lineStr[i]);
-    inp.ki.dwFlags := KEYEVENTF_UNICODE;
-    SendInput(1, inp, SizeOf(TInput));
-    inp.ki.dwFlags := KEYEVENTF_UNICODE or KEYEVENTF_KEYUP;
-    SendInput(1, inp, SizeOf(TInput));
-  end;
-  Sleep(50);
-  ZeroMemory(@inp, SizeOf(inp));
-  inp.Itype := INPUT_KEYBOARD;
-  inp.ki.wVk := VK_RETURN;
-  SendInput(1, inp, SizeOf(TInput));
-  inp.ki.dwFlags := KEYEVENTF_KEYUP;
-  SendInput(1, inp, SizeOf(TInput));
 end;
 
 procedure TForm2.ResultGridClick(Sender: TObject);

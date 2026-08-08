@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1987 Zeilen, 66918 Bytes
-  CPoLines_de: array[0..1986] of string = (
+  // i18n\de.po - 1986 Zeilen, 66855 Bytes
+  CPoLines_de: array[0..1985] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1294,9 +1294,6 @@ const
     'msgid "Open ignore list (which files are NOT analysed)"',
     'msgstr "Ignore-Liste '#$00F6'ffnen (welche Dateien NICHT analysiert werden)"',
     '',
-    'msgid "Opened: %s  Line: %d"',
-    'msgstr "Ge'#$00F6'ffnet: %s  Zeile: %d"',
-    '',
     'msgid "Pascal file (*.pas)|*.pas|All files|*.*"',
     'msgstr "Pascal-Datei (*.pas)|*.pas|Alle Dateien|*.*"',
     '',
@@ -1890,9 +1887,6 @@ const
     '',
     '# --- 2026-08-06: Triage-Quick-Wins (EXE) ---',
     '',
-    'msgid "Opening in Delphi IDE..."',
-    'msgstr "'#$00D6'ffne in der Delphi-IDE..."',
-    '',
     'msgid "Analysis cancelled."',
     'msgstr "Analyse abgebrochen."',
     '',
@@ -2000,12 +1994,17 @@ const
     '',
     '# --- 2026-08-08: Goto-Line-Dialog-Guard (EXE-IDE-Navigation) ---',
     '',
-    'msgid "Go-to-line dialog did not open - line jump skipped"',
-    'msgstr "Gehe-zu-Zeile-Dialog ging nicht auf - Zeilensprung uebersprungen"'
+    '# --- 2026-08-08: IDE-Open ohne Zeilensprung (User-Entscheid) ---',
+    '',
+    'msgid "Opened in Delphi IDE: %s"',
+    'msgstr "In der Delphi-IDE geoeffnet: %s"',
+    '',
+    'msgid "Opened: %s  Line: %d"',
+    'msgstr "Ge'#$00F6'ffnet: %s  Zeile: %d"'
   );
 
-  // i18n\en.po - 202 Zeilen, 5403 Bytes
-  CPoLines_en: array[0..201] of string = (
+  // i18n\en.po - 204 Zeilen, 5410 Bytes
+  CPoLines_en: array[0..203] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
     '# kept for consistency and as a "neutral" fallback baseline.',
@@ -2070,9 +2069,6 @@ const
     'msgstr "Could not save the choice - analyser.ini is not writable: %s"',
     '',
     '# --- 2026-08-06: Triage-Quick-Wins (EXE) ---',
-    '',
-    'msgid "Opening in Delphi IDE..."',
-    'msgstr "Opening in Delphi IDE..."',
     '',
     'msgid "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."',
     'msgstr "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."',
@@ -2206,12 +2202,17 @@ const
     '',
     '# --- 2026-08-08: Goto-Line-Dialog-Guard (EXE-IDE-Navigation) ---',
     '',
-    'msgid "Go-to-line dialog did not open - line jump skipped"',
-    'msgstr "Go-to-line dialog did not open - line jump skipped"'
+    '# --- 2026-08-08: IDE-Open ohne Zeilensprung (User-Entscheid) ---',
+    '',
+    'msgid "Opened in Delphi IDE: %s"',
+    'msgstr "Opened in Delphi IDE: %s"',
+    '',
+    'msgid "Opened: %s  Line: %d"',
+    'msgstr "Opened: %s  Line: %d"'
   );
 
-  // i18n\fr.po - 1999 Zeilen, 71469 Bytes
-  CPoLines_fr: array[0..1998] of string = (
+  // i18n\fr.po - 1998 Zeilen, 71396 Bytes
+  CPoLines_fr: array[0..1997] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -3499,9 +3500,6 @@ const
     'msgid "Open ignore list (which files are NOT analysed)"',
     'msgstr "Ouvrir la liste d''exclusions (quels fichiers ne sont PAS analys'#$00E9's)"',
     '',
-    'msgid "Opened: %s  Line: %d"',
-    'msgstr "Ouvert : %s  Ligne : %d"',
-    '',
     'msgid "Pascal file (*.pas)|*.pas|All files|*.*"',
     'msgstr "Fichier Pascal (*.pas)|*.pas|Tous les fichiers|*.*"',
     '',
@@ -4099,9 +4097,6 @@ const
     '',
     '# --- 2026-08-06: Triage-Quick-Wins (EXE) ---',
     '',
-    'msgid "Opening in Delphi IDE..."',
-    'msgstr "Ouverture dans l''EDI Delphi..."',
-    '',
     'msgid "Analysis cancelled."',
     'msgstr "Analyse annul'#$00E9'e."',
     '',
@@ -4209,8 +4204,13 @@ const
     '',
     '# --- 2026-08-08: Goto-Line-Dialog-Guard (EXE-IDE-Navigation) ---',
     '',
-    'msgid "Go-to-line dialog did not open - line jump skipped"',
-    'msgstr "La bo'#$00EE'te '#$00AB' Aller '#$00E0' la ligne '#$00BB' ne s''est pas ouverte - saut ignor'#$00E9'"'
+    '# --- 2026-08-08: IDE-Open ohne Zeilensprung (User-Entscheid) ---',
+    '',
+    'msgid "Opened in Delphi IDE: %s"',
+    'msgstr "Ouvert dans l''IDE Delphi : %s"',
+    '',
+    'msgid "Opened: %s  Line: %d"',
+    'msgstr "Ouvert : %s  Ligne : %d"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
