@@ -8,6 +8,13 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **"SCA VSDark" palette v2 — one notch lighter.** v0.9.13 shipped the
+  literal VS Code values; chrome `#181818` reads as plain black on real
+  monitors. Chrome is now `#252526`, widgets `#2D2D30`, borders
+  `#3C3C3C`; content stays `#1F1F1F`, the hierarchy is unchanged.
+
 ### Fixed
 
 - **The IDE line jump could type the line number into the code.** The

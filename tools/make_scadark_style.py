@@ -12,13 +12,17 @@ SRC = ('C:/Program Files (x86)/Embarcadero/Studio/23.0/Redist/styles/vcl/'
        'Windows10Dark.vsf')
 DST = 'd:/git-demos/delphi/StaticCodeAnalyser/StaticCodeAnalyserForm/styles/SCADark.vsf'
 
-# VS Code Dark Modern (RGB) -> Delphi-Hexstring ($00BBGGRR)
-CHROME  = '$00181818'   # #181818 Title/Side/Activity/Status/Tabs
-CONTENT = '$001F1F1F'   # #1F1F1F Editor/Listen/Grid
-WIDGET  = '$00262525'   # #252526 Hover/Hint/Widgets
+# An VS Code Dark Modern angelehnt (RGB) -> Delphi-Hexstring ($00BBGGRR).
+# Palette v2 (2026-08-08): Chrome von #181818 auf #252526 angehoben -
+# das Original-#181818 wirkte auf realen Monitoren schlicht schwarz
+# (User-Abnahme v0.9.13); die Hierarchie Chrome > Inhalt bleibt, nur
+# eine Stufe heller.
+CHROME  = '$00262525'   # #252526 Panels/Toolbar/Caption/BtnFace
+CONTENT = '$001F1F1F'   # #1F1F1F Grid/Listen/Menue
+WIDGET  = '$00302D2D'   # #2D2D30 Hover/Hint/Disabled/AltRows
 INPUT_  = '$00313131'   # #313131 Eingabefelder/Buttons
 HOT     = '$003C3C3C'   # #3C3C3C Hover auf Eingaben
-BORDER  = '$002B2B2B'   # #2B2B2B Raender
+BORDER  = '$003C3C3C'   # #3C3C3C Raender (auf #252526 noch sichtbar)
 TEXT    = '$00CCCCCC'   # #CCCCCC Standardtext
 
 STYLE_COLORS = {
