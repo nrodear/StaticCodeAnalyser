@@ -1,4 +1,35 @@
-# Release 0.9.12 — The panel keeps up
+# Release 0.9.13 — The baseline finds its home
+
+🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+
+Full release notes: [docs/releases/v0.9.13.md](docs/releases/v0.9.13.md)
+([deutsch](docs/releases/v0.9.13_de.md)).
+
+A big release: baselines, a new rule, and the standalone EXE catching up.
+
+- **Baselines live in a `.sca` folder now** next to the project/group,
+  resolved identically by CLI, EXE and plugin; `--baseline-scan y`
+  fails hard (exit 99) in CI when no baseline exists. The
+  show-only-new toggle sits in both hamburger menus and offers to
+  write a missing baseline on the spot. Opt-in
+  `[Baseline] PathInFingerprint=1` disambiguates same-named files.
+- **New rule SCA196 `ManagedResultUninit`**: `Result` read before
+  first write for managed return types — the hidden-var-parameter trap
+  W1035 never warns about. 49/49 corpus findings verified as real bugs.
+- **`SCA040`/`SCA042` were dead in production** (ran before the
+  event-binding build-up) — revived and corpus-hardened; a wave of
+  detector FP fixes alongside (literal blanking in 16 detectors,
+  DataModule false-swarm, loop mis-attribution, `SCA101` finally sees
+  next-line branches).
+- **The EXE catches up with the plugin**: keyboard triage with a
+  byte-faithful file editor, tile filters, honest sorting, window
+  persistence, external-editor support, crash diagnostics.
+- **Dark mode is "SCA VSDark" now** — the VS Code Dark Modern palette
+  instead of pitch-black Windows10 Dark.
+
+---
+
+# Previously — Release 0.9.12 — The panel keeps up
 
 🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
 
