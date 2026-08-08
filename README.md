@@ -45,7 +45,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 | 🤖 **Claude AI prompt** | Click a finding → a complete Markdown block with code context + before/after is copied to the clipboard |
 | 📊 **Sonar-style dashboard** | Stat tiles above the grid: Errors / Warnings / Hints / Bugs / Vulnerabilities / Code Quality score |
 | 🎯 **Filter & sort** | Severity dropdown, type dropdown, live search box, clickable column headers |
-| 📤 **Export** | CSV, JSON, self-contained HTML report, Jira wiki markup, plain-text clipboard with before/after |
+| 📤 **Export** | SARIF, Sonar Generic Issue, self-contained HTML report and baseline JSON from the CLI; CSV, JSON, Jira wiki markup and clipboard hand-off from the GUI — formats, workflows and limits in [EXPORTS.md](EXPORTS.md) |
 | 🔇 **Suppression** | `// noinspection MemoryLeak` per line, plus `ignore.txt` for whole files |
 | 🌓 **Theme aware** | Follows the active IDE theme automatically (Light / Dark / Mountain Mist / Carbon) |
 | 💡 **Before/after help** | Every detector has a paired "wrong way / right way" code example in the help panel |
@@ -113,10 +113,10 @@ different workflow. Pick by where you sit in the day:
 | **Analyse a project outside Delphi** (RAD not installed / batch machine) | — | ✅ pick a folder, click Start | ✅ `analyser.exe <folder>` |
 | **Run as a pre-commit hook** | — | — | ✅ `--min-severity error --quiet --fail-on error`, exit code reflects severity |
 | **Run in CI / GitHub Actions** | — | — | ✅ `--report-sarif sca.sarif`, SARIF upload step |
-| **Push findings to SonarQube / SonarCloud** | ✅ `Tools → Sonar Push` | ✅ Export → Sonar | ✅ `--sonar-export sca-findings.json --sonar-host <url> --sonar-token <t>` |
-| **Generate an HTML report** for stakeholders / Jira attachments | ✅ Export → HTML | ✅ Export → HTML | — |
+| **Get findings into SonarQube / SonarCloud** (SCA writes the file, `sonar-scanner` imports it) | ✅ Export → Sonar | ✅ Export → Sonar | ✅ `--sonar-export sca-findings.json` — see [EXPORTS.md](EXPORTS.md#workflow-3--sonarqube-dashboard) |
+| **Generate an HTML report** for stakeholders / Jira attachments | ✅ Export → HTML | ✅ Export → HTML | ✅ `--report-html <file>` |
 | **Generate a Claude review prompt** for the whole batch (Tech-Lead workflow) | ✅ Export → Claude prompt | row-click → clipboard | — |
-| **CSV / JSON / Jira export** of findings | ✅ Export menu | ✅ Export menu | ✅ (CSV/JSON via flags) |
+| **CSV / JSON / Jira export** of findings | ✅ Export menu | ✅ Export menu | — (GUI only) |
 | **Nightly full-repo scan** + diff-against-baseline | — | ✅ schedule via Task Scheduler | ✅ schedule via `cron` / `schtasks` |
 | **Auto-analyse on file save** (Live-Watch) | ✅ opt-in, see [Live-Watch](#live-watch-ide-plugin-only--%EF%B8%8F-risky) | — | — |
 | **Author / edit custom rules** (RegEx via `[CustomRules]` ini) | ✅ Tools → Options | ✅ Settings dialog | edit `analyser.ini` directly |

@@ -45,7 +45,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 | 🤖 **Claude-AI-Prompt** | Klick auf Befund → vollständiger Markdown-Block mit Code-Kontext + Vorher/Nachher in der Zwischenablage |
 | 📊 **Sonar-Style-Dashboard** | Stat-Tiles über dem Grid: Fehler / Warnungen / Hinweise / Bugs / Vulnerabilities / Codequalität-Score |
 | 🎯 **Filtern & Sortieren** | Severity-Combo, Type-Combo, Live-Such-Edit, klickbare Spalten-Header |
-| 📤 **Exportieren** | CSV, JSON, HTML-Report, Jira-Wiki-Markup, Clipboard mit Vorher/Nachher |
+| 📤 **Exportieren** | SARIF, Sonar Generic Issue, self-contained HTML-Report und Baseline-JSON aus der CLI; CSV, JSON, Jira-Wiki-Markup und Clipboard aus der GUI — Formate, Workflows und Grenzen in [EXPORTS_de.md](EXPORTS_de.md) |
 | 🔇 **Suppression** | `// noinspection MemoryLeak` pro Zeile + `ignore.txt` für ganze Dateien |
 | 🌓 **Theme-aware** | Folgt automatisch dem aktiven IDE-Theme (Light/Dark/Mountain Mist/Carbon) |
 | 💡 **Vorher/Nachher-Hilfe** | Pro Detektor ein Code-Beispiel "wie es falsch aussieht" + "wie es richtig aussieht" im Help-Panel |
@@ -112,10 +112,10 @@ anderen Workflow. Wahl nach Rolle / Tageszeit:
 | **Projekt außerhalb von Delphi analysieren** (kein RAD installiert / Batch-Maschine) | — | ✅ Ordner wählen, Start klicken | ✅ `analyser.exe <ordner>` |
 | **Als Pre-Commit-Hook ausführen** | — | — | ✅ `--min-severity error --quiet --fail-on error`, Exit-Code reflektiert Severity |
 | **In CI / GitHub Actions ausführen** | — | — | ✅ `--report-sarif sca.sarif`, SARIF-Upload-Step |
-| **Befunde an SonarQube / SonarCloud pushen** | ✅ `Tools → Sonar Push` | ✅ Export → Sonar | ✅ `--sonar-export sca-findings.json --sonar-host <url> --sonar-token <t>` |
-| **HTML-Report generieren** für Stakeholder / Jira-Anhang | ✅ Export → HTML | ✅ Export → HTML | — |
+| **Befunde nach SonarQube / SonarCloud bringen** (SCA schreibt die Datei, `sonar-scanner` trägt sie ein) | ✅ Export → Sonar | ✅ Export → Sonar | ✅ `--sonar-export sca-findings.json` — s. [EXPORTS_de.md](EXPORTS_de.md#workflow-3--sonarqube-dashboard) |
+| **HTML-Report generieren** für Stakeholder / Jira-Anhang | ✅ Export → HTML | ✅ Export → HTML | ✅ `--report-html <Datei>` |
 | **Claude-Review-Prompt** für gesamten Batch (Tech-Lead-Workflow) | ✅ Export → Claude-Prompt | Zeilen-Klick → Clipboard | — |
-| **CSV / JSON / Jira-Export** der Befunde | ✅ Export-Menü | ✅ Export-Menü | ✅ (CSV/JSON via Switches) |
+| **CSV / JSON / Jira-Export** der Befunde | ✅ Export-Menü | ✅ Export-Menü | — (nur GUI) |
 | **Nightly Full-Repo-Scan** + Diff gegen Baseline | — | ✅ Task Scheduler | ✅ `cron` / `schtasks` |
 | **Auto-Analyse beim Speichern** (Live-Watch) | ✅ opt-in, siehe [Live-Watch](#live-watch-nur-ide-plugin--%EF%B8%8F-riskant) | — | — |
 | **Custom-Rules editieren** (RegEx via `[CustomRules]`-ini) | ✅ Tools → Options | ✅ Einstellungsdialog | `analyser.ini` direkt editieren |
