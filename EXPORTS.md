@@ -79,9 +79,15 @@ werden"* — verified on v0.9.14.
 finding by *file name*, not by path, so two `uSame.pas` in different
 folders share one identity. Measured consequence: a baseline written from
 one subfolder silently suppressed **every** finding in a sibling folder —
-including an SQL injection nobody had ever reviewed. With the switch the
-fingerprint carries the relative path. It changes fingerprints, so write a
-fresh baseline when you turn it on.
+including an SQL injection nobody had ever reviewed; with the switch the
+same run keeps them. It changes fingerprints, so write a fresh baseline
+when you turn it on.
+
+One residue remains by design: a finding whose surrounding lines are
+identical in both files still matches through the `contextHash` stage.
+That is what lets a baseline survive moves and refactoring, and it is the
+reason two byte-identical copies stay linked no matter what this switch
+says.
 
 **Do not refresh a baseline by combining the two switches.** The
 documented-looking `--baseline old --write-baseline new` writes only the
