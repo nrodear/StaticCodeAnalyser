@@ -82,6 +82,10 @@ uses
   uTestExportHtml in 'uTestExportHtml.pas',
   uTestSonarConfig in 'uTestSonarConfig.pas',
   uTestSonarTokenStorage in 'uTestSonarTokenStorage.pas',
+  // Die CLI-Unit liegt ausserhalb des Test-Suchpfads (..\sources\Console
+  // steht nicht in DCC_UnitSearchPath) - deshalb mit explizitem Pfad.
+  uConsoleRunner in '..\sources\Console\uConsoleRunner.pas',
+  uTestConsoleExitCode in 'uTestConsoleExitCode.pas',
   uTestYamlSubsetParser in 'uTestYamlSubsetParser.pas',
   uTestCustomRuleDetector in 'uTestCustomRuleDetector.pas',
   uTestConcatToFormat in 'uTestConcatToFormat.pas',

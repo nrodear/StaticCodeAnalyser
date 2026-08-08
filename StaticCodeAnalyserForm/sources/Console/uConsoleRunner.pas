@@ -18,6 +18,13 @@ unit uConsoleRunner;
 //   4  = mindestens 1 Read-Error (Parser-/IO-Fehler)
 //   99 = Tool-Fehler (Args ungueltig, Pfad fehlt, ...)
 //
+// Die Rangleiter 1-3 gewinnt gegen 4: ein Lauf mit Errors UND Lesefehlern
+// meldet 3. --fail-on darf einen Lauf mit Lesefehlern aber nicht auf 0
+// druecken - herabgestuft wird dort auf 4 statt auf 0, sonst meldet die
+// Pipeline gruen fuer einen Scan, der Teile des Baums nie gesehen hat.
+// Einzige Ausnahme: --fail-on none bedeutet ausdruecklich "nie scheitern"
+// und bleibt 0 (Nutzerentscheid 2026-08-08).
+//
 // Ist der Aufrufer in einem reinen Console-Kontext entstanden (kein
 // Terminal angehaengt), schreibt der Runner trotzdem ueber WriteLn -
 // fuer Pipe-Redirection und Log-Files reicht das.
@@ -132,18 +139,33 @@ type
     // Hauptentry vom .dpr - kombiniert Parse + Run, fuer den haeufigen
     // Fall ohne Test-Mocks.
     class function RunFromCmdLine: Integer; static;
-  private
-    class procedure WriteHelp; static;
-    class procedure WriteVersion; static;
-    class procedure WriteSummary(const Findings: TObjectList<TLeakFinding>;
-      Quiet: Boolean); static;
+
+    // Die beiden folgenden sind public, damit Tests sie ohne einen
+    // kompletten Run mit echten Dateien pruefen koennen. Der Exit-Code
+    // ist die Schnittstelle zur CI - er gehoert unter Test.
     class function CalcExitCode(const Findings: TObjectList<TLeakFinding>): Integer; static;
     // Gemeinsame Severity-Klassifikation fuer WriteSummary + CalcExitCode
     // (2026-07-04 dedupliziert). fkFileReadError zaehlt IMMER als ReadError,
     // unabhaengig von seiner Severity - nie in Errors/Warnings/Hints.
     class procedure CountBySeverity(const Findings: TObjectList<TLeakFinding>;
       out Errors, Warnings, Hints, ReadErrors: Integer); static;
+  private
+    class procedure WriteHelp; static;
+    class procedure WriteVersion; static;
+    class procedure WriteSummary(const Findings: TObjectList<TLeakFinding>;
+      Quiet: Boolean); static;
   end;
+
+// Exit-Code-Politik von --fail-on. In der interface-Sektion, damit die
+// Tests sie ohne Run-Seiteneffekt aufrufen koennen.
+//   Raw        - der Code aus CalcExitCode (Rangleiter 0-4)
+//   FailOn     - der Wert von --fail-on
+//   ReadErrors - Anzahl der Dateien, die der Lauf nicht lesen konnte.
+//                Bewusst die Zahl und kein Boolean: am Aufrufer steht dann
+//                der Zaehler aus CountBySeverity statt eines nichtssagenden
+//                True/False.
+function ApplyFailOnPolicy(Raw: Integer; const FailOn: string;
+  ReadErrors: Integer): Integer;
 
 implementation
 
@@ -164,10 +186,6 @@ uses
   uBaseline,
   uSuppressionTelemetry,              // C.5 Telemetrie
   uLexer;                             // A.5 Phase 1b-Wiring: gLexerIfdefSkipEnabled etc.
-
-// Forward-Decl: ApplyFailOnPolicy wird von TConsoleRunner.Run gerufen,
-// die Definition steht weiter unten in dieser Unit.
-function ApplyFailOnPolicy(Raw: Integer; const FailOn: string): Integer; forward;
 
 const
   // Bis zu so vielen gefilterten Dateien werden die Namen genannt; darueber
@@ -530,11 +548,16 @@ begin
   WriteLn('                        PathInFingerprint in analyser.ini.');
   WriteLn('  --fail-on <lvl>       Exit-code policy: error|warning|hint|none|graded.');
   WriteLn('                        Default (=graded): use the tiered exit codes below.');
-  WriteLn('                        ''none''  - exit 0 even with findings present.');
-  WriteLn('                        ''hint''  - exit non-zero on any finding (= graded).');
+  WriteLn('                        ''none''    - exit 0 even with findings present.');
+  WriteLn('                        ''hint''    - exit non-zero on any finding (= graded).');
   WriteLn('                        ''warning'' - only warnings + errors fail the build.');
   WriteLn('                        ''error''   - only errors fail the build.');
-  WriteLn('                        Read-Errors and Tool-Errors always remain non-zero.');
+  WriteLn('                        A run that could not READ every file never');
+  WriteLn('                        reports success: where the policy would');
+  WriteLn('                        otherwise return 0, exit 4 is returned.');
+  WriteLn('                        Example, 1 read error + 2 hints: graded -> 1,');
+  WriteLn('                        warning -> 4, error -> 4, none -> 0.');
+  WriteLn('                        Only ''none'' silences a read error.');
   WriteLn('');
   WriteLn('Sonar integration (see docs/sonar-setup.md):');
   WriteLn('  --sonar-export <file> Write Sonar Generic Issue Format JSON');
@@ -612,8 +635,15 @@ begin
   WriteLn('   1 = hints only');
   WriteLn('   2 = warnings present');
   WriteLn('   3 = errors present');
-  WriteLn('   4 = read errors (parser/IO)');
+  WriteLn('   4 = read errors (parser/IO), no higher tier reached');
   WriteLn('  99 = tool error (bad args, missing path, ...)');
+  WriteLn('');
+  WriteLn('  The tiers outrank each other in that order: a run with errors AND');
+  WriteLn('  read errors exits 3, not 4. --fail-on lowers a suppressed tier to');
+  WriteLn('  0 - but a run that hit read errors lowers to 4 instead, so an');
+  WriteLn('  incomplete scan is never reported as success. --fail-on none is');
+  WriteLn('  the one exception and always exits 0. Tool errors (99) are decided');
+  WriteLn('  before --fail-on is consulted and cannot be lowered at all.');
   WriteLn('');
   WriteLn('Switch syntax: both "--key value" and "--key=value" are accepted.');
 end;
@@ -1641,8 +1671,14 @@ begin
       end;
     end;
     Result := CalcExitCode(Findings);
+    // Lesefehler-Flag NEBEN dem Raw-Code: ApplyFailOnPolicy sieht sonst nur
+    // die Spitze der Rangleiter (z.B. 1 = Hints) und wuerde den Lauf auf 0
+    // druecken, obwohl Dateien ungelesen blieben. Dieselbe Quelle wie die
+    // Summary-Zeile - Exit-Code und Ausgabe koennen nicht auseinanderlaufen.
+    var CntE, CntW, CntH, CntRe: Integer;
+    CountBySeverity(Findings, CntE, CntW, CntH, CntRe);
     // --fail-on User-Policy ggf. anwenden (Default: graded = Raw beibehalten)
-    Result := ApplyFailOnPolicy(Result, Args.FailOn);
+    Result := ApplyFailOnPolicy(Result, Args.FailOn, CntRe);
   finally
     FreeAndNil(gDetectorTimings);
     if Assigned(gSuppressionTelemetry) then
@@ -1731,7 +1767,8 @@ begin
   Result := Integer(cecClean);
 end;
 
-function ApplyFailOnPolicy(Raw: Integer; const FailOn: string): Integer;
+function ApplyFailOnPolicy(Raw: Integer; const FailOn: string;
+  ReadErrors: Integer): Integer;
 // Schliesst Exit-Codes auf 0 zurueck wenn die User-Policy die Severity
 // nicht eskalieren will. Werte (case-insensitive):
 //   ''/'graded' - Default-Verhalten (Raw uebernehmen)
@@ -1739,10 +1776,19 @@ function ApplyFailOnPolicy(Raw: Integer; const FailOn: string): Integer;
 //   'hint'      - >= cecHints exit non-zero (= aktuelles Default)
 //   'warning'   - nur >= cecWarnings exit non-zero
 //   'error'     - nur >= cecErrors  exit non-zero
-// Read-Errors (cecReadErrors=4) bleiben in jedem nicht-'none' Modus
-// non-zero, weil sie I/O-Probleme signalisieren die der CI sehen soll.
+//
+// ReadErrors > 0: mindestens eine Datei war nicht lesbar (fkFileReadError).
+// Eine Herabstufung darf daraus nicht 0 machen - sonst meldet die Pipeline
+// gruen fuer einen Scan, der Teile des Baums nie gesehen hat. Statt 0 kommt
+// dann cecReadErrors (4).
+// Warum das Flag ueberhaupt noetig ist: CalcExitCode kollabiert vier Zaehler
+// auf EINEN Rang. Ab da ist "es gab Lesefehler" nur noch am Raw-Code
+// erkennbar, wenn sonst gar nichts gefunden wurde - in jedem realen Repo
+// gewinnt ein Hint, und der Lesefehler war unsichtbar (2026-08-08 gemessen).
+// Ausnahme: 'none' heisst ausdruecklich "nie scheitern" und bleibt 0.
 var
-  L : string;
+  L          : string;
+  Suppressed : Integer;   // was ein herabgestufter Lauf zurueckgibt
 begin
   L := LowerCase(Trim(FailOn));
   if (L = '') or (L = 'graded') then Exit(Raw);
@@ -1752,20 +1798,23 @@ begin
   // Read-Errors muessen sichtbar bleiben (nicht-null) in allen Modi ausser 'none'
   if Raw = Integer(cecReadErrors) then Exit(Raw);
 
+  if ReadErrors > 0 then Suppressed := Integer(cecReadErrors)
+  else                   Suppressed := Integer(cecClean);
+
   if L = 'error' then
   begin
     if Raw = Integer(cecErrors) then Exit(Raw)
-    else                              Exit(0);
+    else                              Exit(Suppressed);
   end;
   if L = 'warning' then
   begin
     if Raw >= Integer(cecWarnings) then Exit(Raw)
-    else                                Exit(0);
+    else                                Exit(Suppressed);
   end;
   if L = 'hint' then
   begin
     if Raw >= Integer(cecHints) then Exit(Raw)
-    else                             Exit(0);
+    else                             Exit(Suppressed);
   end;
   // Unbekannter Wert -> Default
   Result := Raw;

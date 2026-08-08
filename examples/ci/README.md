@@ -18,7 +18,7 @@ All of these examples build on the new CLI flags. Cheat-sheet:
 
 | Flag | Purpose |
 |---|---|
-| `--fail-on=<level>` | Exit-code policy: `error` / `warning` / `hint` / `none` / `graded` (default). With `warning`, hints are reported but don't fail the build. |
+| `--fail-on=<level>` | Exit-code policy: `error` / `warning` / `hint` / `none` / `graded` (default). With `warning`, hints are reported but don't fail the build. A run that hit read errors never drops below exit 4 — only `--fail-on=none` returns 0 there. |
 | `--baseline <file>` | Drop findings whose fingerprint matches a known entry in `<file>`. Only NEW findings count. |
 | `--write-baseline <file>` | Write the current findings as the new baseline. Run on `main` after the team accepts the current state. |
 

@@ -27,6 +27,17 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`--fail-on` no longer hides read errors.** This changes exit codes in
+  CI. The tiers outrank each other (errors > warnings > hints > read
+  errors), so exit 4 only ever appeared when a run found *nothing else* —
+  in any real repository a single hint outranked the unreadable file, and
+  `--fail-on warning` then reduced that to 0. The result was a green
+  pipeline for a scan that never saw part of the tree. Where the policy
+  would now return 0 and the run hit read errors, it returns 4 instead.
+  `--fail-on none` still returns 0: it means "never fail" and is the one
+  documented way to opt out. Pipelines that scan a tree containing locked
+  or unreadable files can turn red where they were green — that is the
+  point. The exit-code path had no test at all until now; it has fifteen.
 - **`--parallel` is now documented as defective and warns when used.**
   It was advertised — in `--help` and both READMEs — as producing output
   byte-identical to a serial run. That claim was wrong and had never been
