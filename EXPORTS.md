@@ -73,7 +73,10 @@ analyser.exe --path . --baseline .sca/sca.baseline.json --report-sarif build/sca
 
 Exit codes are graded: `0` clean, non-zero when findings remain after
 the baseline filter. `--fail-on error|warning|hint|none` narrows what
-counts. Read errors and tool errors always stay non-zero.
+counts. Read errors keep a run non-zero in every mode but `none`: where
+the policy would otherwise return 0, the run exits 4 instead — an
+incomplete scan must never look like a clean one. Tool errors (99) are
+decided before `--fail-on` is consulted and cannot be lowered at all.
 
 **Use an absolute path or a path with a directory part for
 `--write-baseline`.** A bare file name (`--write-baseline b.json`)

@@ -75,7 +75,11 @@ analyser.exe --path . --baseline .sca/sca.baseline.json --report-sarif build/sca
 
 Die Exit-Codes sind gestuft: `0` sauber, ungleich null, wenn nach dem
 Baseline-Filter Funde bleiben. `--fail-on error|warning|hint|none`
-verengt, was zählt. Lese- und Werkzeugfehler bleiben immer ungleich null.
+verengt, was zählt. Lesefehler halten einen Lauf in jedem Modus außer
+`none` ungleich null: wo die Politik sonst 0 liefern würde, endet der Lauf
+mit 4 — ein unvollständiger Scan darf nie wie ein sauberer aussehen.
+Werkzeugfehler (99) werden vor `--fail-on` entschieden und lassen sich gar
+nicht herabstufen.
 
 **Für `--write-baseline` einen absoluten Pfad oder einen mit
 Verzeichnisanteil verwenden.** Ein bloßer Dateiname
