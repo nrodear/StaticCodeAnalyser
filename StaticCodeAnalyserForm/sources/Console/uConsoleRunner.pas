@@ -1298,10 +1298,12 @@ begin
         // Kein ForceDirectories mehr hier: TBaseline.Write legt das
         // Zielverzeichnis selbst an (und vertraegt anders als der
         // Aufruf hier einen blossen Dateinamen ohne Verzeichnisanteil).
-        TBaseline.Write(Findings, EffWriteBaseline);
+        // Die GESCHRIEBENE Anzahl melden, nicht Findings.Count: Lesefehler
+        // sind nicht baseline-faehig und werden von Write uebersprungen.
+        var BlWritten := TBaseline.Write(Findings, EffWriteBaseline);
         if not Args.Quiet then
           WriteLn(Format('Baseline written: %s (%d findings)',
-            [EffWriteBaseline, Findings.Count]));
+            [EffWriteBaseline, BlWritten]));
       except
         on E: Exception do
         begin

@@ -3315,9 +3315,11 @@ begin
   end;
   try
     ForceDirectories(ExtractFilePath(Target));
-    TBaseline.Write(FAllFindings, Target);
+    // GESCHRIEBENE Anzahl melden, nicht FAllFindings.Count: Lesefehler
+    // sind nicht baseline-faehig und werden von Write uebersprungen.
+    var Written := TBaseline.Write(FAllFindings, Target);
     StatusMode(Format(_('Baseline written: %s (%d findings)'),
-      [ExtractFileName(Target), FAllFindings.Count]));
+      [ExtractFileName(Target), Written]));
     Result := True;
   except
     // noinspection ExceptionTooGeneral
@@ -3413,9 +3415,9 @@ begin
   end;
   if Fn = '' then Exit;
   try
-    TBaseline.Write(FAllFindings, Fn);
+    var Written := TBaseline.Write(FAllFindings, Fn);
     StatusMode(Format(_('Baseline written: %s (%d findings)'),
-      [ExtractFileName(Fn), FAllFindings.Count]));
+      [ExtractFileName(Fn), Written]));
   except
     on E: Exception do
       MessageDlg(Format(_('Could not write baseline: %s'), [E.Message]),

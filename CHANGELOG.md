@@ -41,6 +41,13 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **"Baseline written: … (N findings)" reported the wrong number.** Read
+  errors are deliberately not baseline-able — an I/O failure is a
+  statement about the completeness of the run, not an acceptable finding
+  — so the writer skips them. All five call sites (CLI, EXE twice, IDE
+  plugin twice) nevertheless printed the *unfiltered* count: the message
+  claimed 5 where the file held 4. `TBaseline.Write` now returns what it
+  actually wrote and the callers report that.
 - **`--custom-rules` loaded rules that never fired.** The run reported
   "Loaded N custom rule(s)" and then produced zero findings from them —
   a project that maintains its own rules got a green gate with no check
