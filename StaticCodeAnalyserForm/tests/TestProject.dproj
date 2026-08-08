@@ -167,6 +167,7 @@
         <DCCReference Include="uTestSonarTokenStorage.pas"/>
         <DCCReference Include="..\sources\Console\uConsoleRunner.pas"/>
         <DCCReference Include="uTestConsoleExitCode.pas"/>
+        <DCCReference Include="uTestExportSarifDiagnostics.pas"/>
         <DCCReference Include="uTestYamlSubsetParser.pas"/>
         <DCCReference Include="uTestCustomRuleDetector.pas"/>
         <DCCReference Include="uTestConcatToFormat.pas"/>

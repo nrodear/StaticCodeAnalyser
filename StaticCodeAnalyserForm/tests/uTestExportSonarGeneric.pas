@@ -29,12 +29,27 @@ type
     [Test] procedure CustomRuleIdOverridesCatalog;
     [Test] procedure JsonParsesAsValidJson;
     [Test] procedure ControlCharInMessage_StillParses;
+    // ---- Lauf-Diagnosen gehoeren nicht in einen Issue-Report -----------
+    [Test] procedure FileReadError_ProducesNoIssueAndNoRule;
+    [Test] procedure RealFindingsSurviveAlongsideReadError;
+    [Test] procedure EncodingFindingsAreNotSkipped;
+    [Test] procedure OnlyReadErrors_ProducesValidEmptyReport;
   end;
 
 implementation
 
 uses
   uRuleCatalog;
+
+const
+  // Wiederholte Literale der Diagnose-Tests als Konstanten - sonst zaehlt
+  // sie der eigene DuplicateString-Detektor.
+  DIAG_FILE    = 'src\Kaputt.pas';
+  GOOD_FILE    = 'src\Gut.pas';
+  DIAG_MSG     = 'Datei nicht lesbar';
+  KEY_RULES    = 'rules';
+  KEY_ISSUES   = 'issues';
+  MSG_NOT_JSON = 'Report ist kein gueltiges JSON-Object';
 
 function TTestExportSonarGeneric.MakeFinding(Kind: TFindingKind;
   const Path: string; Line: Integer; const Msg: string): TLeakFinding;
@@ -326,6 +341,107 @@ begin
   end;
 end;
 
+
+{ ---- Lauf-Diagnosen ---- }
+
+procedure TTestExportSonarGeneric.FileReadError_ProducesNoIssueAndNoRule;
+// Beides zusammen ist der Punkt: ein rules[]-Eintrag ohne Issue waere eine
+// Rausch-Regel im Repository, ein Issue ohne rules[]-Eintrag kann Sonar
+// nicht koppeln. Der Test wird rot, sobald der Skip unter die
+// Rules-Sammlung rutscht.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+begin
+  Root     := nil;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkFileReadError, DIAG_FILE, 0, DIAG_MSG));
+    Root := TJSONObject.ParseJSONValue(
+      TSonarGenericWriter.ToJsonString(Findings, '')) as TJSONObject;
+    Assert.IsNotNull(Root, MSG_NOT_JSON);
+    Assert.AreEqual<Integer>(0, Root.GetValue<TJSONArray>(KEY_ISSUES).Count);
+    Assert.AreEqual<Integer>(0, Root.GetValue<TJSONArray>(KEY_RULES).Count);
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSonarGeneric.RealFindingsSurviveAlongsideReadError;
+// Der Skip darf keinen Zustand verschieben: die echten Funde muessen
+// vollstaendig durchkommen, die Diagnose-Regel nirgends auftauchen.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Json     : string;
+  Root     : TJSONObject;
+begin
+  Root     := nil;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkFileReadError, DIAG_FILE, 0, DIAG_MSG));
+    Findings.Add(MakeFinding(fkMemoryLeak, GOOD_FILE, 12, 'leak'));
+    Findings.Add(MakeFinding(fkFileReadError, 'src\Kaputt2.pas', 0, DIAG_MSG));
+    Findings.Add(MakeFinding(fkSQLInjection, GOOD_FILE, 7, 'sql'));
+    Json := TSonarGenericWriter.ToJsonString(Findings, '');
+    Root := TJSONObject.ParseJSONValue(Json) as TJSONObject;
+    Assert.IsNotNull(Root, MSG_NOT_JSON);
+    Assert.AreEqual<Integer>(2, Root.GetValue<TJSONArray>(KEY_ISSUES).Count);
+    Assert.AreEqual<Integer>(2, Root.GetValue<TJSONArray>(KEY_RULES).Count);
+    Assert.AreEqual<Integer>(0, Pos('SCA006', Json),
+      'SCA006 darf weder in issues noch in rules stehen');
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSonarGeneric.EncodingFindingsAreNotSkipped;
+// SCA186/187 tragen denselben FindingType (ftFileError) wie der Lesefehler,
+// sind aber echte Inhaltsbefunde. Ein Praedikat ueber FindingType statt
+// ueber den Kind wuerde sie hier aus dem Export werfen.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+begin
+  Root     := nil;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkSourceInvalidUtf8, GOOD_FILE, 3, 'utf8'));
+    Findings.Add(MakeFinding(fkSourceControlChar, DIAG_FILE, 4, 'ctrl'));
+    Root := TJSONObject.ParseJSONValue(
+      TSonarGenericWriter.ToJsonString(Findings, '')) as TJSONObject;
+    Assert.IsNotNull(Root, MSG_NOT_JSON);
+    Assert.AreEqual<Integer>(2, Root.GetValue<TJSONArray>(KEY_ISSUES).Count);
+    Assert.AreEqual<Integer>(2, Root.GetValue<TJSONArray>(KEY_RULES).Count);
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSonarGeneric.OnlyReadErrors_ProducesValidEmptyReport;
+// Sonar akzeptiert einen leeren Report - er muss aber gueltiges JSON
+// bleiben und darf nicht zum Leerstring werden.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Root     : TJSONObject;
+begin
+  Root     := nil;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkFileReadError, DIAG_FILE, 0, DIAG_MSG));
+    Findings.Add(MakeFinding(fkFileReadError, GOOD_FILE, 0, DIAG_MSG));
+    Root := TJSONObject.ParseJSONValue(
+      TSonarGenericWriter.ToJsonString(Findings, '')) as TJSONObject;
+    Assert.IsNotNull(Root, MSG_NOT_JSON);
+    Assert.AreEqual<Integer>(0, Root.GetValue<TJSONArray>(KEY_RULES).Count);
+    Assert.AreEqual<Integer>(0, Root.GetValue<TJSONArray>(KEY_ISSUES).Count);
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestExportSonarGeneric);

@@ -188,6 +188,10 @@ type
     procedure PairStr(const AName, AValue: string);
     // '"AName": 123' (wie TJSONNumber -> IntToStr).
     procedure PairInt(const AName: string; AValue: Integer);
+    // '"AName": true' - echtes JSON-Boolean. executionSuccessful ist im
+    // SARIF-Schema ein Boolean; PairStr wuerde "true" als String schreiben
+    // und das Pflichtfeld typwidrig fuellen.
+    procedure PairBool(const AName: string; AValue: Boolean);
     // String-Element in einem Array.
     procedure ArrStr(const AValue: string);
     // Datei-Modus: Puffer ab Schwelle (AForce: immer) UTF-8-kodiert in
@@ -341,6 +345,21 @@ begin
   FSb.Append(IntToStr(AValue));
 end;
 
+// noinspection BooleanParam
+// AValue IST der zu schreibende JSON-Wert, kein Verhaltensschalter - der
+// Parameter steuert nicht, WAS die Methode tut, sondern ist das Datum.
+// Schwester von PairStr/PairInt; ein PairTrue/PairFalse-Paar waere hier
+// Unsinn.
+procedure TSarifJsonEmitter.PairBool(const AName: string; AValue: Boolean);
+begin
+  ItemSeparator;
+  AppendEscaped(AName);
+  FSb.Append(': ');
+  // Kleinschreibung wie TJSONBool.Format - die Byte-Aequivalenz-Zusage im
+  // Unit-Kopf soll weiter tragen.
+  if AValue then FSb.Append('true') else FSb.Append('false');
+end;
+
 procedure TSarifJsonEmitter.ArrStr(const AValue: string);
 begin
   ItemSeparator;
@@ -367,6 +386,74 @@ begin
 end;
 
 { ---- Dokument-Emission ---- }
+
+procedure EmitRunDiagnostics(E: TSarifJsonEmitter;
+  const AFindings: TObjectList<TLeakFinding>; const ABaseDir: string);
+// runs[0].invocations[] - Lauf-Diagnosen als toolExecutionNotifications.
+//
+// Ein Lesefehler ist keine Eigenschaft des Quelltexts, sondern eine Aussage
+// darueber, wie VOLLSTAENDIG der Lauf war. SARIF hat dafuer einen eigenen
+// Ort; bisher stand er nur als result zwischen den echten Befunden. Das
+// result BLEIBT bewusst zusaetzlich bestehen (Entscheid 2026-08-08) -
+// GitHub zeigt dann beides, Alert und Run-Notification. Wer eines davon
+// "aufraeumt", faellt in uTestExportSarifDiagnostics auf.
+//
+// executionSuccessful ist IMMER True: der Writer laeuft erst, wenn der Scan
+// durch ist. False faerbt bei GitHub Code Scanning den kompletten Lauf als
+// fehlgeschlagen - eine einzelne unlesbare Datei rechtfertigt das nicht,
+// dafuer sind die Notifications da.
+//
+// Nur fkFileReadError, literaler Kind-Vergleich. KEIN Praedikat ueber
+// FindingType: ftFileError traegt auch SCA186/187/191 (Encoding), das sind
+// echte Inhaltsbefunde mit Position und wuerden hier faelschlich dupliziert.
+// Der Gegenpart steht in uExportSonarGeneric.
+//
+// Eigene Routine statt inline in EmitSarifDocument: die Schleife hat der
+// ohnehin grenzwertigen Zyklomatik dort einen Zweig zu viel gegeben.
+var
+  F       : TLeakFinding;
+  Msg     : string;
+  RelPath : string;
+begin
+  E.BeginArrPair('invocations');
+  E.BeginObjValue;
+  E.PairBool('executionSuccessful', True);
+  E.BeginArrPair('toolExecutionNotifications');
+  if Assigned(AFindings) then
+    for F in AFindings do
+    begin
+      if F.Kind <> fkFileReadError then Continue;
+      Msg := F.MissingVar;
+      if Msg = '' then
+        Msg := TRuleCatalog.GetRule(F.Kind).ShortDescription;
+      E.BeginObjValue;
+      E.PairStr('level', 'error');
+      E.BeginObjPair('message');
+      E.PairStr('text', Msg);
+      E.EndObj;                                        // message
+      // Keine region: alle Erzeuger setzen LineNumber '0', und SARIF
+      // erlaubt in region.startLine keine 0 - eine erfundene Zeile 1 waere
+      // schlechter als gar keine Angabe.
+      RelPath := MakeRelative(F.FileName, ABaseDir);
+      if RelPath <> '' then
+      begin
+        E.BeginArrPair('locations');
+        E.BeginObjValue;
+        E.BeginObjPair('physicalLocation');
+        E.BeginObjPair('artifactLocation');
+        E.PairStr('uri', RelPath);
+        E.EndObj;                                      // artifactLocation
+        E.EndObj;                                      // physicalLocation
+        E.EndObj;                                      // location
+        E.EndArr;                                      // locations
+      end;
+      E.EndObj;                                        // notification
+      E.FlushChunk(False);
+    end;
+  E.EndArr;                                            // toolExecutionNotifications
+  E.EndObj;                                            // invocation
+  E.EndArr;                                            // invocations
+end;
 
 procedure EmitSarifDocument(E: TSarifJsonEmitter;
   const AFindings: TObjectList<TLeakFinding>;
@@ -457,6 +544,8 @@ begin
   E.EndArr;                                            // rules
   E.EndObj;                                            // driver
   E.EndObj;                                            // tool
+
+  EmitRunDiagnostics(E, AFindings, ABaseDir);
 
   // runs[0].results[] - pro Finding direkt streamen, kein DOM.
   E.BeginArrPair('results');

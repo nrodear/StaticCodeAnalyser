@@ -17,6 +17,15 @@ unit uExportSonarGeneric;
 //   sonar.sarifReportPaths=sca-findings.sarif
 // gesetzt werden - Sonar dedupliziert die beiden NICHT, also genau eine
 // Quelle nutzen (uExportSARIF ODER diese Unit, nicht beide gleichzeitig).
+//
+// NICHT exportiert werden Lauf-Diagnosen (fkFileReadError): weder als
+// issue noch als rule. Sie sagen etwas ueber die Vollstaendigkeit des
+// Laufs, nicht ueber den Quelltext, und niemand kann sie im Dashboard
+// beheben - dort waren sie reines INFO-Rauschen. Unberuehrt bleiben
+// Konsolen-Ausgabe, Exit-Code 4, HTML-Report und Health-Score; SARIF
+// fuehrt sie zusaetzlich in invocations[].toolExecutionNotifications.
+// Ein Lauf, der NUR Lesefehler hat, ergibt {"rules":[],"issues":[]} -
+// gueltiges JSON, das Sonar akzeptiert.
 
 interface
 
@@ -284,6 +293,21 @@ begin
     // Issues + verwendete Rule-IDs sammeln
     for F in AFindings do
     begin
+      // Lauf-Diagnosen gehoeren nicht in einen Issue-Report. Ein Lesefehler
+      // ist keine Eigenschaft des Quelltexts, sondern eine Aussage darueber,
+      // wie vollstaendig der Lauf war - er landete hier als INFO-Rauschen im
+      // Dashboard, wo niemand ihn beheben kann (Entscheid 2026-08-08).
+      // Sichtbar bleibt er ueberall sonst: Konsole, Exit-Code 4, HTML und
+      // SARIF (dort zusaetzlich in invocations[].toolExecutionNotifications).
+      //
+      // Der Skip steht GANZ OBEN, damit Issue UND Rule gemeinsam entfallen:
+      // ein Issue ohne passenden rules[]-Eintrag kann Sonar nicht koppeln,
+      // und ein rules[]-Eintrag ohne Issue waere eine Rausch-Regel im
+      // Repository. Bewusst literaler Kind-Vergleich, KEIN Praedikat ueber
+      // FindingType - ftFileError traegt auch SCA186/187/191 (Encoding), und
+      // das sind echte Inhaltsbefunde mit Position.
+      if F.Kind = fkFileReadError then Continue;
+
       Meta := TRuleCatalog.GetRule(F.Kind);
       Issues.AddElement(BuildIssueObject(F, ABaseDir, Meta));
 
