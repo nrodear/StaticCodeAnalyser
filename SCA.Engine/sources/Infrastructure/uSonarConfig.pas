@@ -7,8 +7,8 @@ unit uSonarConfig;
 //   2. Environment-Vars  (SONAR_HOST_URL, SONAR_TOKEN, SONAR_PROJECT_KEY,
 //                         SONAR_ORGANIZATION, SONAR_BRANCH)
 //   3. Project-Config    (sonar-project.properties im Projekt-Root) -
-//                         liefert NUR projectKey/organization/branch/
-//                         sourceMapping. Weder sonar.token NOCH
+//                         liefert NUR projectKey/organization/branch.
+//                         Weder sonar.token NOCH
 //                         sonar.host.url werden von hier uebernommen:
 //                         die Datei liegt im gescannten Repo und ist
 //                         damit fremdbestimmt (s. ReadFromProjectProps).
@@ -19,12 +19,29 @@ unit uSonarConfig;
 // (uConsoleRunner, IDE-Plugin) rufen TSonarConfig.Resolve auf und greifen
 // auf das fertige Config-Record zu.
 //
-// Token-Speicherung (Windows): DPAPI per Current-User-Scope. Klartext-Token
-// wird via CryptProtectData verschluesselt und als Hex-String in der
-// [SonarTokens]-Section abgelegt. Nur der gleiche Windows-User auf demselben
-// Rechner kann es entschluesseln - kein Replay-Risiko in Multi-User-Repos.
-// Auf Non-Windows-Plattformen ist nur der Env-Var-Pfad supported (kein
-// Klartext-INI).
+// WER LIEST WAS - vor dem Anbauen weiterer Felder bitte lesen. Der Resolver
+// laeuft NICHT bei jedem Sonar-Befehl: --sonar-export schreibt nur eine
+// Datei und fasst dieses Record nie an. Konsumenten sind genau zwei:
+//   * TSonarHealthCheck.Run  (--sonar-test, IDE 'Test Connection') -
+//     benutzt HostUrl, Token, ProjectKey, Organization, Insecure.
+//   * das --sonar-init-Template in uConsoleRunner - schreibt ProjectKey,
+//     Organization und Branch in die sonar-project.properties.
+// Ein Feld ohne Platz in dieser Liste ist tot, egal wie sauber es
+// aufgeloest wird (2026-08-08 kostete das drei stille Attrappen).
+//
+// Token-Speicherung (Windows): DPAPI per Current-User-Scope. Der Token wird
+// via CryptProtectData verschluesselt und als Hex-String in der
+// [SonarTokens]-Section abgelegt. Nur derselbe Windows-User auf demselben
+// Rechner kann ihn entschluesseln - eine kopierte analyser.ini ist woanders
+// wertlos. Das ist Schutz DER RUHENDEN DATEI, kein Tresor: jeder Prozess,
+// der unter diesem Konto laeuft, kann genauso entschluesseln. Wer das nicht
+// will, nimmt SONAR_TOKEN aus der Umgebung.
+//
+// Non-Windows hat kein DPAPI; dort schreibt StoreToken einen mit 'PT:'
+// markierten Base64-Klartext. Gelesen wird 'PT:' auf ALLEN Plattformen
+// (eine mitgebrachte INI funktioniert also auch unter Windows) - deshalb
+// meldet der Resolver solche Eintraege ueber TokenIsPlaintext, und die
+// Konsumenten (CLI --sonar-test, IDE-Plugin) warnen sichtbar.
 
 interface
 
@@ -38,8 +55,7 @@ type
     Token         : string;   // Klartext nach Resolve() - NIE persistieren
     ProjectKey    : string;   // z.B. 'my-delphi-project'
     Organization  : string;   // optional, nur fuer SonarCloud
-    Branch        : string;   // optional, default = leer = main
-    SourceMapping : string;   // optional, Mapping Win-Pfade -> Container-Pfade
+    Branch        : string;   // optional, landet in --sonar-init-Template
     Insecure      : Boolean;  // True = TLS-Cert-Warnung ignorieren (--sonar-insecure)
 
     // Diagnose: aus welchen Quellen kam jedes Feld? Wird vom Health-Check
@@ -54,6 +70,12 @@ type
     // hinweisen, damit eine legitime Repo-Konfiguration nicht raetselhaft
     // wirkungslos bleibt.
     IgnoredRepoHost  : string;
+
+    // True, wenn der Token als 'PT:'-Klartext aus der INI kam (Non-Windows-
+    // Fallback, wird aber ueberall gelesen). Der Konsument MUSS das sichtbar
+    // machen - sonst haelt der Nutzer eine unverschluesselte Datei fuer
+    // DPAPI-geschuetzt.
+    TokenIsPlaintext : Boolean;
 
     // Validierung - was muss minimal gesetzt sein um Sonar zu kontaktieren?
     function IsValid: Boolean;
@@ -115,9 +137,13 @@ type
 
     // Liest ein Token aus [SonarTokens][TokenRef] und entschluesselt es.
     // Liefert '' bei fehlendem Eintrag oder Decrypt-Fehler.
+    // APlaintext meldet, dass der Eintrag ein 'PT:'-Klartext war.
     // Cross-project: vom IDE-Plugin (uIDESonarOptions) benutzt, daher public
     // belassen - der CanBePrivate-Detector sieht den Plugin-Code nicht.
-    class function LoadToken(const FileName, TokenRef: string): string; static;
+    class function LoadToken(const FileName, TokenRef: string): string;
+      overload; static;
+    class function LoadToken(const FileName, TokenRef: string;
+      out APlaintext: Boolean): string; overload; static;
 
     // Default-INI-Pfad: %APPDATA%\StaticCodeAnalyser\analyser.ini
     // Cross-project: vom IDE-Plugin benutzt, public belassen.
@@ -320,6 +346,7 @@ var
   Ini      : TMemIniFile;
   TokenRef : string;
   Plain    : string;
+  IsPlain  : Boolean;
 begin
   if (FileName = '') or not TFile.Exists(FileName) then Exit;
   // TMemIniFile statt TIniFile: liest UTF-8-BOM-Dateien (Notepad-Default
@@ -341,8 +368,10 @@ begin
       Cfg.Organization := Trim(Ini.ReadString('Sonar', 'Organization', ''));
     if Cfg.Branch = '' then
       Cfg.Branch := Trim(Ini.ReadString('Sonar', 'Branch', ''));
-    if Cfg.SourceMapping = '' then
-      Cfg.SourceMapping := Trim(Ini.ReadString('Sonar', 'SourceMapping', ''));
+    // [Sonar] SourceMapping wurde bis 2026-08-08 hier eingelesen und von
+    // niemandem gelesen - der Export schreibt Pfade relativ zu --base-dir,
+    // das ist der Hebel fuer Pfad-Umschreibung. Key ersatzlos entfernt;
+    // bestehende INIs stoeren sich nicht an unbekannten Eintraegen.
     // Insecure: any TRUE-source wins. CLI=True wird hier nicht ueberschrieben;
     // INI=True hebt einen Default=False auf.
     if not Cfg.Insecure then
@@ -352,11 +381,15 @@ begin
       TokenRef := Trim(Ini.ReadString('Sonar', 'TokenRef', ''));
       if TokenRef <> '' then
       begin
-        Plain := LoadToken(FileName, TokenRef);
+        Plain := LoadToken(FileName, TokenRef, IsPlain);
         if Plain <> '' then
         begin
           Cfg.Token := Plain;
-          Cfg.SourceToken := 'analyser.ini [SonarTokens]';
+          Cfg.TokenIsPlaintext := IsPlain;
+          if IsPlain then
+            Cfg.SourceToken := 'analyser.ini [SonarTokens], PLAINTEXT'
+          else
+            Cfg.SourceToken := 'analyser.ini [SonarTokens]';
         end;
       end;
     end;
@@ -439,9 +472,9 @@ begin
       else if (Cfg.Organization = '') and SameText(K, 'sonar.organization') then
         Cfg.Organization := V
       else if (Cfg.Branch = '') and SameText(K, 'sonar.branch.name') then
-        Cfg.Branch := V
-      else if (Cfg.SourceMapping = '') and SameText(K, 'sonar.sourceMapping') then
-        Cfg.SourceMapping := V;
+        Cfg.Branch := V;
+      // 'sonar.sourceMapping' war SCA-erfunden (kein echter Sonar-Key) und
+      // hatte keinen Konsumenten - 2026-08-08 entfernt.
       // sonar.token in sonar-project.properties wird NICHT gelesen -
       // Tokens gehoeren nicht ins Repo (kommt in VCS).
     end;
@@ -483,7 +516,13 @@ begin
   ReadFromProjectProps(ProjectDir, Result);
 
   // 4. User-INI
+  // CLI.ConfigPath ist der Fallback, damit der Record selbsttragend ist:
+  // bis 2026-08-08 setzte uConsoleRunner das Feld, Resolve las es nie, und
+  // --sonar-config wirkte allein ueber den Parameter. Ein kuenftiger
+  // Aufrufer, der nur den Record fuellt, waere wortlos ignoriert worden.
+  // Der explizite Parameter behaelt Vorrang.
   IniPath := AnalyserIniPath;
+  if IniPath = '' then IniPath := CLI.ConfigPath;
   if IniPath = '' then IniPath := DefaultIniPath;
   ReadFromIni(IniPath, Result);
 end;
@@ -525,11 +564,20 @@ end;
 class function TSonarConfigResolver.LoadToken(const FileName,
   TokenRef: string): string;
 var
+  Dummy : Boolean;
+begin
+  Result := LoadToken(FileName, TokenRef, Dummy);
+end;
+
+class function TSonarConfigResolver.LoadToken(const FileName,
+  TokenRef: string; out APlaintext: Boolean): string;
+var
   Ini : TMemIniFile;
   Hex : string;
   Cipher : TBytes;
 begin
   Result := '';
+  APlaintext := False;
   if (FileName = '') or (TokenRef = '') or not TFile.Exists(FileName) then Exit;
 
   Ini := TMemIniFile.Create(FileName, TEncoding.UTF8);
@@ -542,10 +590,12 @@ begin
 
   if StartsText('PT:', Hex) then
   begin
-    // Non-Windows-Plaintext-Fallback
+    // Non-Windows-Plaintext-Fallback. Auch unter Windows lesbar (kopierte
+    // INI), deshalb wird der Aufrufer ueber APlaintext informiert.
     try
       Result := TEncoding.UTF8.GetString(
         TNetEncoding.Base64.DecodeStringToBytes(Copy(Hex, 4, MaxInt)));
+      APlaintext := Result <> '';
     except
       Result := '';
     end;
@@ -886,6 +936,13 @@ begin
     Sw := TStopwatch.StartNew;
     Url := Cfg.HostUrl + '/api/projects/search?projects=' +
            TNetEncoding.URL.Encode(Cfg.ProjectKey);
+    // SonarCloud ist mandantenfaehig und verlangt den Organization-Key an
+    // diesem Endpunkt; ohne ihn antwortet es 400 und der Check meldete
+    // "Project not found" fuer ein existierendes Projekt. Bis 2026-08-08
+    // wurde Cfg.Organization ueberall eingesammelt und nirgends benutzt -
+    // das hier ist die einzige Stelle, an der er hingehoert.
+    if Cfg.Organization <> '' then
+      Url := Url + '&organization=' + TNetEncoding.URL.Encode(Cfg.Organization);
     Ok := HttpGet(Url, Cfg.Token, Cfg.Insecure, Status, Body);
     Sw.Stop;
     if Ok and (Status = 200) and

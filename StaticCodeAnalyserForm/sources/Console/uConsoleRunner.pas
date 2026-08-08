@@ -540,13 +540,18 @@ begin
   WriteLn('  --sonar-export <file> Write Sonar Generic Issue Format JSON');
   WriteLn('                        (consume via sonar.externalIssuesReportPaths)');
   WriteLn('  --sonar-init          Write sonar-project.properties template');
-  WriteLn('                        next to --path (or current dir)');
+  WriteLn('                        next to --path (or current dir). Never');
+  WriteLn('                        overwrites: falls back to .sample, and');
+  WriteLn('                        refuses if that differs too.');
   WriteLn('  --sonar-test          Run connectivity health-check (DNS, status,');
   WriteLn('                        token, project access). Exit 0 = healthy.');
   WriteLn('  --sonar-host <url>    Override Sonar host URL');
   WriteLn('  --sonar-token <tok>   Override Sonar bearer token');
   WriteLn('  --sonar-project <k>   Override Sonar projectKey');
-  WriteLn('  --sonar-branch <b>    Override Sonar branch name');
+  WriteLn('  --sonar-branch <b>    Branch name written into the --sonar-init');
+  WriteLn('                        template (sonar.branch.name). The findings');
+  WriteLn('                        export has no branch field - the branch is');
+  WriteLn('                        read by sonar-scanner, not by this tool.');
   WriteLn('  --sonar-insecure      Accept self-signed TLS certificates');
   WriteLn('  --sonar-config <ini>  Alternative analyser.ini path for Sonar lookup');
   WriteLn('');
@@ -620,41 +625,185 @@ end;
 
 { ---- Sonar Helpers ---- }
 
-const
-  SONAR_PROJECT_PROPERTIES_TEMPLATE =
-    '# SonarQube Generic Issue Import - Template fuer StaticCodeAnalyser' + sLineBreak +
-    '# Run: analyser.exe --path . --sonar-export sca-findings.json' + sLineBreak +
-    '# Then: sonar-scanner' + sLineBreak +
-    '' + sLineBreak +
-    'sonar.projectKey=<your-project-key>' + sLineBreak +
-    'sonar.projectName=<your-project-name>' + sLineBreak +
-    'sonar.sources=.' + sLineBreak +
-    'sonar.sourceEncoding=UTF-8' + sLineBreak +
-    'sonar.exclusions=**/*.dcu,**/*.bpl,**/lib/**,**/Win32/**,**/Win64/**' + sLineBreak +
-    '' + sLineBreak +
-    '# SCA findings as external issues (Generic Issue Format)' + sLineBreak +
-    'sonar.externalIssuesReportPaths=sca-findings.json' + sLineBreak +
-    '' + sLineBreak +
-    '# Alternative: SARIF (Sonar deduplicates neither - pick ONE)' + sLineBreak +
-    '# sonar.sarifReportPaths=sca-findings.sarif' + sLineBreak;
-
-function RunSonarInit(const Path: string): Integer;
-// --sonar-init: legt sonar-project.properties an. Wenn die Datei schon
-// existiert wird .sample geschrieben statt zu ueberschreiben.
+function SanitizeSonarKey(const S: string): string;
+// Sonar akzeptiert als projectKey nur Buchstaben, Ziffern und - _ . : ;
+// alles andere wird zu '-' zusammengezogen. Ein Key aus reinen Ziffern
+// wird serverseitig abgelehnt und bekommt deshalb ein Praefix.
 var
-  TargetDir, OutFile : string;
+  C, Prev  : Char;
+  HasAlpha : Boolean;
 begin
-  if Path <> '' then TargetDir := Path else TargetDir := GetCurrentDir;
-  OutFile := IncludeTrailingPathDelimiter(TargetDir) + 'sonar-project.properties';
+  Result   := '';
+  Prev     := #0;
+  HasAlpha := False;
+  for C in S do
+  begin
+    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '.', ':']) then
+    begin
+      Result := Result + C;
+      Prev   := C;
+      if not CharInSet(C, ['0'..'9']) then HasAlpha := True;
+    end
+    else if Prev <> '-' then
+    begin
+      Result := Result + '-';
+      Prev   := '-';
+    end;
+  end;
+  while (Result <> '') and CharInSet(Result[1], ['-', '.', ':']) do
+    Delete(Result, 1, 1);
+  while (Result <> '') and CharInSet(Result[Length(Result)], ['-', '.', ':']) do
+    Delete(Result, Length(Result), 1);
+  if (Result <> '') and not HasAlpha then Result := 'delphi-' + Result;
+end;
+
+const
+  // Kopf des Templates als Konstante: als Folge von L.Add-Zeilen war die
+  // erzeugende Routine ueber die LongMethod-Grenze gewachsen.
+  SONAR_TEMPLATE_HEADER : array[0..17] of string = (
+    '# SonarQube Generic Issue Import - written by StaticCodeAnalyser',
+    '# --sonar-init. projectKey/projectName are derived from the folder',
+    '# name - CHECK THEM: the key has to match the project in SonarQube.',
+    '#',
+    '#   analyser.exe --path . --sonar-export sca-findings.json',
+    '#   sonar-scanner',
+    '#',
+    '# Server URL and token are NOT in this file on purpose: it is',
+    '# committed, and a cloned repo must not be able to redirect your',
+    '# token to a foreign host. Pass them via the environment:',
+    '#',
+    '#   set SONAR_HOST_URL=https://sonarqube.example.com',
+    '#   set SONAR_TOKEN=<token>',
+    '#',
+    '# If your team keeps the URL in the repo, uncomment the next line.',
+    '# sonar-scanner reads it; StaticCodeAnalyser deliberately ignores it.',
+    '# sonar.host.url=https://sonarqube.example.com',
+    '');
+
+function BuildSonarPropertiesTemplate(const ADir, ABranch,
+  AOrg: string): string;
+// Das Template soll OHNE Nacharbeit laufen: der projectKey wird aus dem
+// Ordnernamen abgeleitet statt '<your-project-key>' zu schreiben - der
+// Platzhalter war als Key syntaktisch ungueltig, der sonar-scanner brach
+// darauf ab. Host und Token stehen bewusst NICHT drin (die Datei liegt im
+// Repo), sondern als kommentierte Env-Anleitung.
+//
+// ABranch/AOrg sind der einzige Ort, an dem --sonar-branch bzw.
+// SONAR_ORGANIZATION den Export ueberhaupt beeinflussen KOENNEN: das
+// Generic Issue Format kennt kein Branch-Feld, den Branch liest allein
+// der sonar-scanner - und zwar aus dieser Datei.
+var
+  Folder, Key, S : string;
+  L : TStringList;
+begin
+  Folder := ExtractFileName(ExcludeTrailingPathDelimiter(ADir));
+  Key    := SanitizeSonarKey(Folder);
+  if Key = '' then
+  begin
+    Folder := 'Delphi Project';
+    Key    := 'delphi-project';
+  end;
+
+  L := TStringList.Create;
+  try
+    for S in SONAR_TEMPLATE_HEADER do
+    begin
+      L.Add(S);
+    end;
+    L.Add('sonar.projectKey=' + Key);
+    L.Add('sonar.projectName=' + Folder);
+    if AOrg <> '' then
+    begin
+      L.Add('sonar.organization=' + AOrg);
+    end;
+    if ABranch <> '' then
+    begin
+      L.Add('sonar.branch.name=' + ABranch);
+    end;
+    L.Add('sonar.sources=.');
+    L.Add('sonar.sourceEncoding=UTF-8');
+    L.Add('sonar.exclusions=**/*.dcu,**/*.bpl,**/lib/**,**/Win32/**,**/Win64/**');
+    L.Add('');
+    L.Add('# SCA findings as external issues (Generic Issue Format)');
+    L.Add('sonar.externalIssuesReportPaths=sca-findings.json');
+    L.Add('');
+    L.Add('# Alternative: SARIF (Sonar deduplicates neither - pick ONE)');
+    L.Add('# sonar.sarifReportPaths=sca-findings.sarif');
+    Result := L.Text;
+  finally
+    L.Free;
+  end;
+end;
+
+procedure WriteTextNoBom(const AFile, AText: string);
+// Eigene Routine, damit RunSonarInit mit EINEM try auskommt: das
+// Encoding-Objekt braucht ein finally, der Schreibfehler ein except -
+// beides ineinander ist genau das, was NestedTry anmahnt.
+var
+  Enc : TEncoding;
+begin
+  // Ohne BOM: der sonar-scanner liest die Datei als Java-Properties,
+  // ein BOM landet sonst im ersten Schluessel.
+  Enc := TUTF8Encoding.Create(False);
+  try
+    TFile.WriteAllText(AFile, AText, Enc);
+  finally
+    Enc.Free;
+  end;
+end;
+
+function ReadTextOrEmpty(const AFile: string): string;
+begin
+  try
+    Result := TFile.ReadAllText(AFile, TEncoding.UTF8);
+  except
+    Result := '';
+  end;
+end;
+
+function BuildSonarConfig(const Args: TCliArgs): TSonarConfig; forward;
+
+function RunSonarInit(const Args: TCliArgs): Integer;
+// --sonar-init: legt sonar-project.properties an. Existiert die Datei,
+// wird auf .sample ausgewichen - und auch die wird NICHT ueberschrieben:
+// sie kann von Hand angepasst worden sein (frueher ging genau das
+// wortlos verloren). Gleicher Inhalt = No-Op, abweichender = Abbruch.
+var
+  TargetDir, OutFile, Tmpl : string;
+  Cfg : TSonarConfig;
+begin
+  if Args.Path <> '' then TargetDir := Args.Path else TargetDir := GetCurrentDir;
+  TargetDir := IncludeTrailingPathDelimiter(TargetDir);
+  // Branch/Organization aus CLI, Env und INI - sie landen im Template,
+  // weil der sonar-scanner sie dort liest.
+  Cfg       := BuildSonarConfig(Args);
+  Tmpl      := BuildSonarPropertiesTemplate(TargetDir, Cfg.Branch,
+                                            Cfg.Organization);
+  OutFile   := TargetDir + 'sonar-project.properties';
+
   if TFile.Exists(OutFile) then
   begin
     OutFile := OutFile + '.sample';
-    WriteLn('Existing file detected - writing .sample variant instead.');
+    WriteLn('Existing sonar-project.properties detected - writing ',
+            ExtractFileName(OutFile), ' instead.');
   end;
+
+  if TFile.Exists(OutFile) then
+  begin
+    if ReadTextOrEmpty(OutFile) = Tmpl then
+    begin
+      WriteLn(OutFile, ' is already up to date - nothing written.');
+      Exit(Integer(cecClean));
+    end;
+    WriteLn(ErrOutput, 'sonar-init aborted: ', OutFile, ' exists and differs.');
+    WriteLn(ErrOutput, 'Rename or delete it first - it may hold manual edits.');
+    Exit(Integer(cecToolError));
+  end;
+
   try
-    TFile.WriteAllText(OutFile, SONAR_PROJECT_PROPERTIES_TEMPLATE,
-      TEncoding.UTF8);
+    WriteTextNoBom(OutFile, Tmpl);
     WriteLn('Wrote ', OutFile);
+    WriteLn('Check sonar.projectKey before running sonar-scanner.');
     Result := Integer(cecClean);
   except
     on E: Exception do
@@ -695,10 +844,24 @@ begin
   WriteLn('Sonar config:');
   WriteLn('  host    = ', Cfg.HostUrl,   '   (', Cfg.SourceHostUrl, ')');
   WriteLn('  project = ', Cfg.ProjectKey,'   (', Cfg.SourceProjectKey, ')');
+  if Cfg.Organization <> '' then
+    WriteLn('  org     = ', Cfg.Organization, '   (SonarCloud)');
   if Cfg.Token <> '' then
     WriteLn('  token   = (', Length(Cfg.Token), ' chars from ', Cfg.SourceToken, ')')
   else
     WriteLn('  token   = (none)');
+  // Ein 'PT:'-Eintrag ist Base64, keine Verschluesselung. Er wird gelesen
+  // (auch unter Windows), darf den Nutzer aber nicht in dem Glauben lassen,
+  // die INI sei DPAPI-geschuetzt.
+  if Cfg.TokenIsPlaintext then
+  begin
+    WriteLn(ErrOutput, 'WARNING: the token in analyser.ini is stored as ' +
+                       'plaintext (PT: = Base64, not encrypted).');
+    WriteLn(ErrOutput, '         Anyone who can read the file has the token. ' +
+                       'Prefer SONAR_TOKEN from the environment,');
+    WriteLn(ErrOutput, '         or re-save it on Windows so it gets ' +
+                       'DPAPI-protected for your account.');
+  end;
   // Eine Repo-eigene sonar-project.properties darf den Host nicht
   // bestimmen (sonst geht der Token des Nutzers an einen fremden
   // Server). Der Wert wird ignoriert - aber sichtbar, damit eine
@@ -819,7 +982,7 @@ begin
   if Args.ShowVersion then begin WriteVersion; Exit(Integer(cecClean)); end;
 
   // Sonar standalone actions - kein Analyse-Run noetig
-  if Args.SonarInit then Exit(RunSonarInit(Args.Path));
+  if Args.SonarInit then Exit(RunSonarInit(Args));
   if Args.SonarTest then Exit(RunSonarTest(Args));
 
   // A.5 Phase 1b-Wiring: IFDEF-Awareness aus CLI-Args in den globalen

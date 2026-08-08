@@ -81,6 +81,7 @@ uses
   uTestExportSonarGeneric in 'uTestExportSonarGeneric.pas',
   uTestExportHtml in 'uTestExportHtml.pas',
   uTestSonarConfig in 'uTestSonarConfig.pas',
+  uTestSonarTokenStorage in 'uTestSonarTokenStorage.pas',
   uTestYamlSubsetParser in 'uTestYamlSubsetParser.pas',
   uTestCustomRuleDetector in 'uTestCustomRuleDetector.pas',
   uTestConcatToFormat in 'uTestConcatToFormat.pas',

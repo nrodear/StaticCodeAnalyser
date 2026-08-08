@@ -232,9 +232,12 @@ begin
   lblTokenInfo.Height := 40;
   lblTokenInfo.WordWrap := True;
   StyleAsHintLabel(lblTokenInfo);   // IDE_FG_DIM, 8pt, ParentFont aus
+  // Wortlaut bewusst ohne Tresor-Versprechen: DPAPI bindet die Datei an
+  // dieses Windows-Konto, schuetzt aber nicht gegen Programme, die unter
+  // eben diesem Konto laufen.
   lblTokenInfo.Caption := _(
-    'Token is stored DPAPI-encrypted in analyser.ini [SonarTokens]. ' +
-    'Only this Windows user on this machine can decrypt it.');
+    'DPAPI-encrypted in analyser.ini [SonarTokens] - bound to this Windows ' +
+    'account, so a copied file is useless elsewhere.');
 
   // ============== Actions ==============
   // Hoehe 200 statt 220 - die Standard-Tools>Options-Page hat ~520 px
@@ -277,6 +280,7 @@ procedure TSonarOptionsFrame.LoadFromIni(const IniPath: string);
 var
   Ini      : TMemIniFile;
   TokenRef : string;
+  IsPlain  : Boolean;
 begin
   FIniPath := IniPath;
   if not TFile.Exists(IniPath) then Exit;
@@ -294,11 +298,19 @@ begin
 
   if TokenRef <> '' then
   begin
-    FOriginalToken := TSonarConfigResolver.LoadToken(IniPath, TokenRef);
+    FOriginalToken := TSonarConfigResolver.LoadToken(IniPath, TokenRef,
+      IsPlain);
     if FOriginalToken <> '' then
     begin
       edToken.Text := TOKEN_PLACEHOLDER;
       edToken.PasswordChar := #0;  // Placeholder lesbar zeigen
+      // Ein 'PT:'-Eintrag (auf Nicht-Windows geschrieben, hier trotzdem
+      // lesbar) ist Base64 - der DPAPI-Hinweis waere dann eine falsche
+      // Zusicherung.
+      if IsPlain then
+        lblTokenInfo.Caption := _(
+          'WARNING: this token is stored as PLAINTEXT in analyser.ini. ' +
+          'Save it again here to DPAPI-encrypt it for your account.');
     end;
   end;
 end;
