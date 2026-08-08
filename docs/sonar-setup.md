@@ -171,11 +171,24 @@ wie das CLI `--sonar-test` und zeigt das Ergebnis als Checkliste.
 
 ![Sonar Integration Options-Page im IDE-Plugin](OptionsSonar.gif)
 
-### "Sonar: write Generic Issue report..." im Export-Menü
+### "Sonar: write Generic Issue report (all findings)..." im Export-Menü
 
-Schreibt alle aktuell **sichtbaren** Findings als eine `sca-findings.json`
-in einen vom User gewählten Pfad. Filter im Findings-Grid wirken — wer nur
-Errors exportieren will, filtert vorher.
+Dieser Menüeintrag ist zwischen IDE-Plugin und Standalone-EXE geteilt
+(`SCA.SharedUI`) — er verhält sich in beiden identisch.
+
+Schreibt **alle** Findings der Analyse als eine `sca-findings.json` in
+einen vom User gewählten Pfad. Die Filter im Findings-Grid
+(Severity-Combo, Typ-Combo, Suchfeld) und ein aktiver Baseline-Filter
+wirken **nicht** — der Report hat denselben Umfang wie das CLI
+`--sonar-export`. Wer nur eine Teilmenge nach Sonar geben will, nimmt
+„Sonar: send selected as external issue" (nächster Abschnitt); der
+Eintrag arbeitet selektionsbasiert.
+
+Dass der Report mehr Einträge hat als das Grid gerade zeigt, ist so
+gewollt: ein Sonar-Push soll den Projektzustand abbilden, nicht die
+Ansichtseinstellung des Bedieners. Bis Mai 2026 wurde die gefilterte
+Sicht exportiert — wer nach „Errors" gefiltert hatte, schickte
+stillschweigend nur die Errors nach Sonar.
 
 ### "Sonar: send selected as external issue"
 

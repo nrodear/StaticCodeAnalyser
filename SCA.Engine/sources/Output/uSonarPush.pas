@@ -3,9 +3,12 @@ unit uSonarPush;
 // Helper fuer den "Send to Sonar"-Workflow aus dem IDE-Plugin und der UI.
 //
 // Es gibt zwei Modi:
-//   1. Bulk-Export: alle aktuell sichtbaren Findings als EINE
+//   1. Bulk-Export: die uebergebene Findings-Liste als EINE
 //      Generic-Issue-JSON nach <out>/sca-findings.json (oder vom User
-//      gewaehlter Pfad). Dasselbe was --sonar-export im CLI macht.
+//      gewaehlter Pfad). Die UI reicht hier FAll durch, also den vollen
+//      Analyse-Output VOR Grid- und Baseline-Filter - dasselbe was
+//      --sonar-export im CLI macht. (Bis 03616dd war es die gefilterte
+//      Sicht; dieser Kommentar hinkte seither hinterher.)
 //   2. Per-Issue-Push: ausgewaehlte Findings einzeln in
 //      <project>\.sonar\external\<hash>.json schreiben. Sonar-Scanner
 //      sammelt alle .json-Files im Pfad automatisch ueber
@@ -34,7 +37,8 @@ type
       const BaseDir, OutFile: string): string; static;
 
     // Pro Finding eine kleine .json. ProjectDir bekommt
-    // .sonar\external\<rule>-<file>-<line>-<hash>.json. Verzeichnis wird
+    // .sonar\external\<severity>-<file>-L<line>-<hash>.json (der Stem
+    // kommt aus F.SeverityText, nicht aus der Regel). Verzeichnis wird
     // bei Bedarf angelegt. Liefert Anzahl der geschriebenen Files.
     class function WriteIndividual(const Findings: array of TLeakFinding;
       const BaseDir, ProjectDir: string): Integer; static;

@@ -34,7 +34,7 @@ program" — it means *not reachable from a script*.
 | **Jira wiki markup** | — | ✅ | Pasting a finding into a ticket |
 | **AI prompt (clipboard)** | — | ✅ | Hand a single finding to an assistant, with code context |
 | **Suppression telemetry** | `--telemetry-csv <file>` | — | Which rules get suppressed most (noise ranking) |
-| **Detector timings** | `--time-detectors-out <file>` | — | Finding slow detectors |
+| **Detector timings** | `--time-detectors` (stdout) / `--time-detectors-out <file>` | — | Finding slow detectors |
 
 Two asymmetries are worth knowing before you plan anything:
 
@@ -47,9 +47,14 @@ Two asymmetries are worth knowing before you plan anything:
   regardless of what the grid shows. The menu captions say which is
   which — read them.
 
-All three JSON formats are written **UTF-8 with BOM**. SonarQube
-tolerates it; `JSON.parse` in Node and `json.load(encoding='utf-8')` in
-Python do not. Strip it or read with `utf-8-sig`.
+**Encoding.** All JSON formats (SARIF, Sonar, `--report-json`, baseline)
+are written as **UTF-8 without BOM** — RFC 8259 §8.1 forbids the byte
+order mark for JSON interchange, and `JSON.parse` in Node chokes on it,
+which is what GitHub's `upload-sarif` action uses. CSV is the deliberate
+exception and keeps its BOM, because that is how Excel recognises UTF-8.
+
+Up to and including **v0.9.14** the JSON exports did carry a BOM; if you
+are on that build, strip it or read with `utf-8-sig`.
 
 ---
 
@@ -74,6 +79,25 @@ counts. Read errors and tool errors always stay non-zero.
 `--write-baseline`.** A bare file name (`--write-baseline b.json`)
 fails with *"Baseline write error: Verzeichnis kann nicht erstellt
 werden"* — verified on v0.9.14.
+
+**In CI, prefer `--baseline-scan y` over naming the file.** It resolves
+the baseline in three steps — `--baseline`, then `[Baseline] File=` from
+`analyser.ini`, then the `.sca` folder next to `--project` /
+`--project-group` (or `<path>\.sca\sca.baseline.json`) — and reports
+which one it took. The point is the failure behaviour: if you ask for a
+baseline and none is found, the run **aborts with exit 99** and lists
+every path it tried, instead of quietly reporting the whole backlog as
+new. That silent variant is the classic way a green pipeline stops
+meaning anything. `--write-baseline auto` writes to the same `.sca`
+location, so the pair needs no hard-coded paths:
+
+```bash
+analyser.exe --path . --write-baseline auto        # once
+analyser.exe --path . --baseline-scan y            # every build
+```
+
+`--baseline-scan n` is the explicit opposite: run without a baseline even
+if a file is lying around. Any other value is rejected outright.
 
 **If the same unit name exists in several folders, add
 `--baseline-path-fingerprint y`.** By default a fingerprint identifies a
@@ -188,7 +212,7 @@ Honest list, as of v0.9.14 — all reproduced:
 | Sonar export from the release ZIP | Rejected by SonarQube; ship `rules/` alongside the EXE |
 | Baseline refresh with both switches | Truncates the baseline to the new findings |
 | `--write-baseline` with a bare file name | Fails to write |
-| JSON exports | UTF-8 **with** BOM |
+| JSON exports | UTF-8 **with** BOM — fixed after v0.9.14, they are BOM-free now |
 | HTML report | Stores base file names only; same-named units in different folders collide |
 | Baseline fingerprints | Same-named units in different folders share a namespace by default — switch it off with `--baseline-path-fingerprint y` (see below) |
 | Unreadable source files | Counted differently in console, SARIF/Sonar/HTML and baseline |

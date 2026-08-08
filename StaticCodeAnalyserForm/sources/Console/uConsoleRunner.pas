@@ -517,7 +517,7 @@ begin
   WriteLn('                        folder next to --project/--project-group (or');
   WriteLn('                        <path>\.sca\sca.baseline.json). HARD error');
   WriteLn('                        (exit 99) if requested and no file exists.');
-  WriteLn('                        Idempotent; overwrites existing file.');
+  WriteLn('                        Resolves only - writes nothing.');
   WriteLn('  --baseline-path-fingerprint y|n');
   WriteLn('                        y: the fingerprint uses the file''s RELATIVE');
   WriteLn('                        PATH instead of just its name. Default n');
