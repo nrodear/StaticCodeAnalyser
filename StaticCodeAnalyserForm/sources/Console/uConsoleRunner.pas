@@ -56,6 +56,12 @@ type
     Diff          : string;         // --diff <sha1>..<sha2>  PR-Review-Mode
     ReportSarif   : string;         // --report-sarif <out.sarif>
     ReportHtml    : string;         // --report-html  <out.html>  Self-contained Code-Review-Report
+    // CSV und JSON gab es bis 2026-08-08 NUR im GUI-Exportmenue -
+    // ausgerechnet die zwei Formate, zu denen man in einem Skript
+    // greift (Excel, Ticket-Automatisierung), waren die einzigen, die
+    // man nicht skripten konnte. Die Writer existierten laengst.
+    ReportCsv     : string;         // --report-csv   <out.csv>
+    ReportJson    : string;         // --report-json  <out.json>
     Quiet         : Boolean;        // --quiet
     BaseDir       : string;         // --base-dir <dir>  (fuer relative Pfade
                                     //   im SARIF; default = Path)
@@ -151,7 +157,7 @@ uses
   System.IOUtils, System.Math,
   System.Generics.Defaults,           // TComparer fuer Detector-Timings-Sort
   uSCAConsts, uStaticAnalyzer2, uVcsChanges, uRepoSettings, uEngineApi,
-  uExportSARIF, uExportHtml, uCustomRuleDetector,
+  uExportSARIF, uExportHtml, uExport, uCustomRuleDetector,
   uExportSonarGeneric, uSonarConfig,
   uDetectorUtils,                     // TDetectorUtils.IsTestFixturePath
   uRuleCatalog,                       // TRuleCatalog.GetProfile fuer die Startzeile
@@ -258,6 +264,10 @@ begin
       GetValue(Result.ReportSarif, '--report-sarif')
     else if A = '--report-html' then
       GetValue(Result.ReportHtml, '--report-html')
+    else if A = '--report-csv' then
+      GetValue(Result.ReportCsv, '--report-csv')
+    else if A = '--report-json' then
+      GetValue(Result.ReportJson, '--report-json')
     else if A = '--base-dir' then
       GetValue(Result.BaseDir, '--base-dir')
     else if A = '--custom-rules' then
@@ -470,6 +480,9 @@ begin
   WriteLn('Output:');
   WriteLn('  --report-sarif <file> Write SARIF v2.1.0 report to <file>');
   WriteLn('  --report-html  <file> Write self-contained HTML Code-Review report');
+  WriteLn('  --report-csv   <file> Write findings as CSV (UTF-8 with BOM, so');
+  WriteLn('                        Excel reads it correctly)');
+  WriteLn('  --report-json  <file> Write findings as JSON array');
   WriteLn('                        (filter/sort/snippets, no external assets)');
   WriteLn('  --base-dir <dir>      Make file paths in report relative to <dir>');
   WriteLn('                        (default = --path)');
@@ -1392,6 +1405,38 @@ begin
         on E: Exception do
         begin
           WriteLn(ErrOutput, 'HTML write error: ', E.Message);
+          Exit(Integer(cecToolError));
+        end;
+      end;
+    end;
+
+    // CSV-Output (Excel, Pivot, schnelles Auszaehlen).
+    if Args.ReportCsv <> '' then
+    begin
+      try
+        TExporter.ExportCsv(Findings, Args.ReportCsv);
+        if not Args.Quiet then
+          WriteLn('CSV report written: ', Args.ReportCsv);
+      except
+        on E: Exception do
+        begin
+          WriteLn(ErrOutput, 'CSV write error: ', E.Message);
+          Exit(Integer(cecToolError));
+        end;
+      end;
+    end;
+
+    // JSON-Output (eigene Skripte, Ticket-Automatisierung).
+    if Args.ReportJson <> '' then
+    begin
+      try
+        TExporter.ExportJson(Findings, Args.ReportJson);
+        if not Args.Quiet then
+          WriteLn('JSON report written: ', Args.ReportJson);
+      except
+        on E: Exception do
+        begin
+          WriteLn(ErrOutput, 'JSON write error: ', E.Message);
           Exit(Integer(cecToolError));
         end;
       end;
