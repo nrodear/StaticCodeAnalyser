@@ -41,6 +41,12 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The display filter in the EXE and the plugin could hide a read
+  error.** "Show only new findings" matched read errors against the
+  baseline, while the CLI has always refused to — an older or
+  hand-edited baseline containing such a fingerprint therefore made an
+  unreadable file disappear from the grid. A run that could not read
+  files must never look complete.
 - **"Baseline written: … (N findings)" reported the wrong number.** Read
   errors are deliberately not baseline-able — an I/O failure is a
   statement about the completeness of the run, not an acceptable finding
