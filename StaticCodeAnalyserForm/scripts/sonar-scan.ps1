@@ -44,18 +44,32 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Locate the analyser EXE - prefer Release, fall back to Debug with a warning.
+# Locate the analyser EXE. Win64 Release first: the project builds to
+# ..\Output\<Platform> <Config>\ (DCC_ExeOutput), and a full-repo SARIF from
+# the 32-bit build truncates at 2 GB - so 64-bit is the one to prefer.
+#
+# Until 2026-08-08 this looked under StaticCodeAnalyserForm\Win32\Release\,
+# a path that does not exist in this repo: the script could never find the
+# EXE and always threw "analyser.exe not found".
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\')
-$release  = Join-Path $repoRoot 'StaticCodeAnalyserForm\Win32\Release\StaticCodeAnalyser.d12.exe'
-$debug    = Join-Path $repoRoot 'StaticCodeAnalyserForm\Win32\Debug\StaticCodeAnalyser.d12.exe'
+$candidates = @(
+  @{ Path = 'Output\Win64 Release'; Warn = $null }
+  @{ Path = 'Output\Win32 Release'; Warn = 'Using the 32-bit build. Fine for normal repos; a full scan of a very large tree can truncate its report at 2 GB.' }
+  @{ Path = 'Output\Win64 Debug';   Warn = 'Release EXE missing - falling back to Debug. Build Release for production scans.' }
+  @{ Path = 'Output\Win32 Debug';   Warn = 'Release EXE missing - falling back to 32-bit Debug. Build Win64 Release for production scans.' }
+)
 
-if (Test-Path $release) {
-  $exe = $release
-} elseif (Test-Path $debug) {
-  $exe = $debug
-  Write-Warning "Release EXE missing - falling back to Debug. Build Win32\Release for production scans."
-} else {
-  throw "analyser.exe not found. Build StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj first."
+$exe = $null
+foreach ($c in $candidates) {
+  $p = Join-Path $repoRoot (Join-Path $c.Path 'StaticCodeAnalyser.d12.exe')
+  if (Test-Path $p) {
+    $exe = $p
+    if ($c.Warn) { Write-Warning $c.Warn }
+    break
+  }
+}
+if (-not $exe) {
+  throw "analyser.exe not found under $repoRoot\Output\. Build StaticCodeAnalyserForm\StaticCodeAnalyser.d12.dproj first."
 }
 
 if (-not (Test-Path $ProjectPath)) {
@@ -93,7 +107,9 @@ Write-Host "Output:   $OutputPath" -ForegroundColor DarkGray
 Write-Host ''
 
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
-& $exe @flags
+# Ausgabe mitschneiden UND anzeigen: die Summary-Zeile ist die einzige
+# Stelle, an der Lesefehler noch auftauchen (s. u.).
+& $exe @flags | Tee-Object -Variable scanOut
 $rc = $LASTEXITCODE
 $sw.Stop()
 
@@ -116,6 +132,20 @@ Write-Host ("Scan finished in {0:N1}s -- $verdict" -f $sw.Elapsed.TotalSeconds)
 if ($rc -ge 99) {
   Write-Error "analyser.exe reported a tool error - JSON may be incomplete."
   exit $rc
+}
+
+# Lesefehler sichtbar machen. Seit 2026-08-08 exportiert der Sonar-Writer
+# Lauf-Diagnosen NICHT mehr - eine unlesbare Datei taucht im Dashboard also
+# gar nicht auf, und der Exit-Code verraet sie nur, wenn der Lauf sonst
+# nichts gefunden hat (die Stufen Error > Warning > Hint gewinnen gegen 4).
+# Die Summary-Zeile ist damit die einzige verbleibende Quelle.
+$summary = $scanOut | Where-Object { $_ -match '^Summary:' } | Select-Object -Last 1
+if ($summary -match '(\d+)\s+Read Error') {
+  $readErrors = [int]$Matches[1]
+  if ($readErrors -gt 0) {
+    Write-Warning ("$readErrors file(s) could not be read - the report covers LESS than the tree. " +
+                   "They are not in the Sonar JSON by design; see the console line above for which ones.")
+  }
 }
 
 if (Test-Path $OutputPath) {

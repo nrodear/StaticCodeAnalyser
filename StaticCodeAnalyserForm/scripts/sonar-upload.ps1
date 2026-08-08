@@ -18,9 +18,8 @@
   <ProjectPath>\sca-findings.json.
 
 .PARAMETER ScannerPath
-  Full path to sonar-scanner.bat. Default: looks for 'sonar-scanner' in
-  PATH; if missing, falls back to D:\git-demos\sonar-scanner-8.0.1\bin\
-  sonar-scanner.bat (the user's known install).
+  Full path to sonar-scanner.bat. Default: 'sonar-scanner' from PATH, then
+  %SONAR_SCANNER_HOME%\bin\sonar-scanner.bat, then a local fallback path.
 
 .PARAMETER Exclusions
   Comma-separated exclusion patterns. Default covers Delphi build output
@@ -69,20 +68,42 @@ if (-not (Test-Path $JsonPath)) {
 # Locate sonar-scanner: PATH first, then the user's known install.
 if (-not $ScannerPath) {
   $cmd = Get-Command sonar-scanner -ErrorAction SilentlyContinue
+  $fromEnv = if ($env:SONAR_SCANNER_HOME) {
+    Join-Path $env:SONAR_SCANNER_HOME 'bin\sonar-scanner.bat'
+  } else { $null }
   if ($cmd) {
     $ScannerPath = $cmd.Source
+  } elseif ($fromEnv -and (Test-Path $fromEnv)) {
+    $ScannerPath = $fromEnv
+    Write-Host "sonar-scanner from SONAR_SCANNER_HOME: $ScannerPath" -ForegroundColor DarkGray
   } elseif (Test-Path 'D:\git-demos\sonar-scanner-8.0.1\bin\sonar-scanner.bat') {
     $ScannerPath = 'D:\git-demos\sonar-scanner-8.0.1\bin\sonar-scanner.bat'
     Write-Host "sonar-scanner not in PATH - using fallback: $ScannerPath" -ForegroundColor DarkGray
   } else {
-    throw "sonar-scanner not found in PATH and no fallback - install per sonarHowto.md section 0.1."
+    throw "sonar-scanner not found. Put it in PATH, set SONAR_SCANNER_HOME, or pass -ScannerPath. Install instructions: sonarHowto.md section 0.1."
   }
 }
 
 # Load Sonar settings from analyser.ini
 $iniPath = Join-Path $env:APPDATA 'StaticCodeAnalyser\analyser.ini'
 if (-not (Test-Path $iniPath)) {
-  throw "analyser.ini not found at $iniPath -- run 'analyser.exe --sonar-host <url> --sonar-project <key> --sonar-token <tok>' once to populate it."
+  # KEIN CLI-Schalter schreibt diese Datei - StoreToken hat genau einen
+  # produktiven Aufrufer, und der sitzt im IDE-Plugin. Die frueher hier
+  # stehende Anweisung ("run analyser.exe --sonar-host ... once to populate
+  # it") war Fiktion; wer ihr folgte, bekam nie eine INI.
+  throw @"
+analyser.ini not found at $iniPath
+
+The standalone EXE only READS this file, it never writes a token to it.
+Create it one of two ways:
+  * IDE plugin: Tools > Options > Static Code Analysis > Sonar, fill in
+    host / project / token, Save. That is the only place in the product
+    that DPAPI-encrypts a token.
+  * By hand: see sonarHowto.md, section 1 "Option C" - it has a ready
+    PowerShell snippet that writes both sections.
+For CI, skip this script's INI path entirely and set SONAR_TOKEN plus
+SONAR_HOST_URL in the environment.
+"@
 }
 $ini = Get-Content $iniPath -Raw -Encoding UTF8
 
@@ -102,19 +123,39 @@ if (-not $hostUrl)    { throw "analyser.ini [Sonar] HostUrl missing." }
 if (-not $projectKey) { throw "analyser.ini [Sonar] ProjectKey missing." }
 if (-not $tokenHex)   { throw "analyser.ini [SonarTokens] $tokenRef missing." }
 
-# DPAPI-decrypt the token (Current-User scope -- only the same Windows user
-# on the same machine can read it).
+# Zwei Formate koennen in [SonarTokens] stehen:
+#   * DPAPI-Hex        - von Windows geschrieben, Current-User-Scope
+#   * 'PT:' + Base64   - der Nicht-Windows-Fallback, UNVERSCHLUESSELT.
+#     Er wird auf jeder Plattform gelesen, also auch hier.
+# Vor 2026-08-08 lief ein PT:-Eintrag in die Hex-Schleife und warf dort
+# eine rohe FormatException ("PT" ist kein Hex) - ausserhalb des try, also
+# ohne jede Erklaerung.
 Add-Type -AssemblyName System.Security
-$bytes = [byte[]]::new($tokenHex.Length / 2)
-for ($i = 0; $i -lt $tokenHex.Length; $i += 2) {
-  $bytes[$i / 2] = [Convert]::ToByte($tokenHex.Substring($i, 2), 16)
-}
-try {
-  $plain = [System.Security.Cryptography.ProtectedData]::Unprotect(
-            $bytes, $null, 'CurrentUser')
-  $token = [System.Text.Encoding]::UTF8.GetString($plain)
-} catch {
-  throw "DPAPI decrypt failed - the encrypted blob was created by a different Windows user or on a different machine. Re-run analyser.exe --sonar-token <tok> to re-encrypt."
+
+if ($tokenHex.StartsWith('PT:', [StringComparison]::OrdinalIgnoreCase)) {
+  Write-Warning ("The token in analyser.ini is stored as PLAINTEXT (PT: = Base64, not encrypted). " +
+                 "Anyone who can read the file has it. Re-save it via the IDE plugin on Windows to DPAPI-encrypt it.")
+  try {
+    $token = [System.Text.Encoding]::UTF8.GetString(
+               [Convert]::FromBase64String($tokenHex.Substring(3)))
+  } catch {
+    throw "The PT: entry in analyser.ini is not valid Base64 - the file looks damaged."
+  }
+} else {
+  if ($tokenHex.Length % 2 -ne 0 -or $tokenHex -notmatch '^[0-9A-Fa-f]+$') {
+    throw "The [SonarTokens] entry '$tokenRef' is neither DPAPI hex nor a PT: value. Re-save the token via the IDE plugin."
+  }
+  $bytes = [byte[]]::new($tokenHex.Length / 2)
+  for ($i = 0; $i -lt $tokenHex.Length; $i += 2) {
+    $bytes[$i / 2] = [Convert]::ToByte($tokenHex.Substring($i, 2), 16)
+  }
+  try {
+    $plain = [System.Security.Cryptography.ProtectedData]::Unprotect(
+              $bytes, $null, 'CurrentUser')
+    $token = [System.Text.Encoding]::UTF8.GetString($plain)
+  } catch {
+    throw "DPAPI decrypt failed - the blob was created by a different Windows user or on a different machine. Re-save the token via the IDE plugin (Tools > Options > Sonar)."
+  }
 }
 
 # Make JsonPath relative to ProjectPath so sonar-scanner picks it up
