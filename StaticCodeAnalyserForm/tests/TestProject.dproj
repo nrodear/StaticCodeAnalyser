@@ -5,7 +5,7 @@
         <FrameworkType>None</FrameworkType>
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Release</Config>
-        <Platform Condition="'$(Platform)'==''">Win32</Platform>
+        <Platform Condition="'$(Platform)'==''">Win64</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">TestProject</ProjectName>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Console</AppType>
@@ -169,6 +169,7 @@
         <DCCReference Include="uTestConsoleExitCode.pas"/>
         <DCCReference Include="uTestExportSarifDiagnostics.pas"/>
         <DCCReference Include="uTestExportSonarTextRange.pas"/>
+        <DCCReference Include="uTestSonarPush.pas"/>
         <DCCReference Include="uTestYamlSubsetParser.pas"/>
         <DCCReference Include="uTestCustomRuleDetector.pas"/>
         <DCCReference Include="uTestConcatToFormat.pas"/>
