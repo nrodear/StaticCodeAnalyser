@@ -43,9 +43,12 @@ type
     //   AFindings - die gefundenen Befunde (Caller behaelt Ownership)
     //   ABaseDir  - Wurzelverzeichnis fuer relative Datei-Pfade.
     //               Sonar erwartet RELATIVE Pfade vom sonar.sources-Root.
-    class procedure WriteFile(const AFileName: string;
+    // Liefert die Anzahl der Issues, deren Pfad ausserhalb von ABaseDir lag
+    // und deshalb absolut blieb - Sonar verwirft die still als "unknown
+    // files", der Aufrufer sollte das melden.
+    class function WriteFile(const AFileName: string;
       const AFindings: TObjectList<TLeakFinding>;
-      const ABaseDir: string); static;
+      const ABaseDir: string): Integer; static;
 
     // Variante die direkt einen JSON-String liefert (fuer Tests).
     class function ToJsonString(
@@ -63,6 +66,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  System.Classes,          // TStream/TFileStream/TStringStream fuer EmitReport
   System.IOUtils, System.JSON, System.StrUtils,
   uRuleCatalog;
 
@@ -235,8 +239,12 @@ begin
   end;
 end;
 
-function BuildIssueObject(const F: TLeakFinding; const ABaseDir: string;
+function BuildIssueObject(const F: TLeakFinding; const ARelPath: string;
   const M: TRuleMeta): TJSONObject;
+// ARelPath statt ABaseDir: der Aufrufer hat MakeRelative ohnehin schon
+// gerufen, um Pfade ausserhalb der Wurzel zu zaehlen. Zweimal relativieren
+// hiesse zweimal TPath.GetFullPath pro Fund - genau die Arbeit, die P4
+// aus dem Hot-Path entfernt hat.
 var
   Loc, Range : TJSONObject;
   RuleID : string;
@@ -262,113 +270,202 @@ begin
   // primaryLocation - Pflichtfeld
   Loc := TJSONObject.Create;
   Loc.AddPair('message',  Msg);
-  Loc.AddPair('filePath', MakeRelative(F.FileName, ABaseDir));
+  Loc.AddPair('filePath', ARelPath);
 
   Range := TJSONObject.Create;
   Range.AddPair('startLine', TJSONNumber.Create(LineNo));
+  // endLine nur, wenn der Fund wirklich mehrzeilig ist. Sonar erlaubt
+  // endLine < startLine nicht, und ein endLine = startLine waere reines
+  // Rauschen. Gleiche Bedingung wie im SARIF-Pfad - dort kam sie mit der
+  // Mehrzeilen-Welle, der Sonar-Report hatte sie nie und zeigte jeden
+  // mehrzeiligen Fund als Einzeiler.
+  if F.EndLine > LineNo then
+    Range.AddPair('endLine', TJSONNumber.Create(F.EndLine));
   Loc.AddPair('textRange', Range);
 
   Result.AddPair('primaryLocation', Loc);
 end;
 
+function PathLeftAbsolute(const ARelPath: string): Boolean;
+// True, wenn MakeRelative den Pfad NICHT relativieren konnte - die Datei
+// liegt ausserhalb von --base-dir. Sonar verwirft solche Issues still als
+// "unknown files"; der Fund ist dann weg, ohne dass irgendwo etwas steht.
+// MakeRelative liefert Vorwaerts-Schraegstriche, ein absoluter Windows-Pfad
+// beginnt also mit 'X:/' oder mit '//' (UNC).
+begin
+  Result := ((Length(ARelPath) >= 3) and (ARelPath[2] = ':')) or
+            StartsStr('//', ARelPath);
+end;
+
 { ---- TSonarGenericWriter ---- }
 
-class function TSonarGenericWriter.ToJsonString(
-  const AFindings: TObjectList<TLeakFinding>;
-  const ABaseDir: string): string;
+procedure WStr(AStream: TStream; const S: string);
+// Rohe UTF-8-Bytes in den Stream. Kein BOM, keine Praeambel.
 var
-  Root    : TJSONObject;
-  Rules   : TJSONArray;
-  Issues  : TJSONArray;
-  F       : TLeakFinding;
-  Meta    : TRuleMeta;
-  Seen    : TDictionary<string, Boolean>;
-  RuleID  : string;
+  B : TBytes;
 begin
-  Root   := TJSONObject.Create;
-  Rules  := TJSONArray.Create;
-  Issues := TJSONArray.Create;
-  Seen   := TDictionary<string, Boolean>.Create;
+  B := TEncoding.UTF8.GetBytes(S);
+  if Length(B) > 0 then AStream.WriteBuffer(B[0], Length(B));
+end;
+
+procedure WObj(AStream: TStream; AObj: TJSONObject);
+// Serialisiert EIN Element und gibt es sofort frei.
+//
+// NICHT Format(2) und NICHT ToJSON([]) (2026-08-05): Format ruft ToChars mit
+// LEEREN Options (System.JSON.pas:1609), und ToChars escaped Unicode-Escapes
+// nur, wenn EncodeBelow32 gesetzt ist (:2629). Ohne die Option gehen #0..#7,
+// #$B und #$E..#$1F ROH in die Datei - RFC 8259 verlangt fuer
+// U+0000..U+001F aber Escaping, und SonarQube bricht beim ERSTEN solchen
+// Zeichen ab. Nicht das eine Issue faellt dann weg, sondern der GESAMTE
+// Report.
+//
+// Belegt im Repo: ein Fund aus unserer eigenen Quelle trug als Meldung
+// "edToken.PasswordChar = '<U+0000>'" (aus 'edToken.PasswordChar := #0;').
+// Der Lexer loest Char-Literale in echte Zeichen auf (uLexer.pas:531),
+// uHardcodedSecret uebernimmt den Wert unveraendert. Ein einziges #0
+// irgendwo im Kundencode genuegt.
+begin
   try
-    // Issues + verwendete Rule-IDs sammeln
+    WStr(AStream, AObj.ToJSON([TJSONAncestor.TJSONOutputOption.EncodeBelow32]));
+  finally
+    AObj.Free;
+  end;
+end;
+
+procedure EmitRules(AStream: TStream;
+  const AFindings: TObjectList<TLeakFinding>);
+// rules[] in der Reihenfolge des ersten Auftretens - genau die Reihenfolge,
+// die der fruehere DOM-Aufbau erzeugte, weil der die Regeln waehrend der
+// Issue-Schleife einsammelte.
+var
+  Seen   : TDictionary<string, Boolean>;
+  F      : TLeakFinding;
+  Meta   : TRuleMeta;
+  RuleID : string;
+  First  : Boolean;
+begin
+  Seen  := TDictionary<string, Boolean>.Create;
+  First := True;
+  try
     for F in AFindings do
     begin
-      // Lauf-Diagnosen gehoeren nicht in einen Issue-Report. Ein Lesefehler
-      // ist keine Eigenschaft des Quelltexts, sondern eine Aussage darueber,
-      // wie vollstaendig der Lauf war - er landete hier als INFO-Rauschen im
-      // Dashboard, wo niemand ihn beheben kann (Entscheid 2026-08-08).
-      // Sichtbar bleibt er ueberall sonst: Konsole, Exit-Code 4, HTML und
-      // SARIF (dort zusaetzlich in invocations[].toolExecutionNotifications).
-      //
-      // Der Skip steht GANZ OBEN, damit Issue UND Rule gemeinsam entfallen:
-      // ein Issue ohne passenden rules[]-Eintrag kann Sonar nicht koppeln,
-      // und ein rules[]-Eintrag ohne Issue waere eine Rausch-Regel im
-      // Repository. Bewusst literaler Kind-Vergleich, KEIN Praedikat ueber
-      // FindingType - ftFileError traegt auch SCA186/187/191 (Encoding), und
-      // das sind echte Inhaltsbefunde mit Position.
       if F.Kind = fkFileReadError then Continue;
-
       Meta := TRuleCatalog.GetRule(F.Kind);
-      Issues.AddElement(BuildIssueObject(F, ABaseDir, Meta));
-
-      // Rule-Sammlung (deduped): bei Custom-Rules gewinnt F.RuleID
       if F.RuleID <> '' then RuleID := F.RuleID
       else RuleID := Meta.ID;
-      if (RuleID <> '') and not Seen.ContainsKey(RuleID) then
-      begin
-        Seen.Add(RuleID, True);
-        // Bei Custom-Rule (F.RuleID gesetzt, z.B. 'PROJ042') muss die
-        // Rules-Array-ID dazu passen, sonst kann Sonar das Issue nicht zur
-        // Rule koppeln. Override-ID nur weiterreichen wenn F.RuleID gesetzt
-        // war - sonst gewinnt die Catalog-ID.
-        if F.RuleID <> '' then
-          Rules.AddElement(BuildRuleObject(Meta, F.RuleID))
-        else
-          Rules.AddElement(BuildRuleObject(Meta, ''));
-      end;
+      if (RuleID = '') or Seen.ContainsKey(RuleID) then Continue;
+      Seen.Add(RuleID, True);
+      if not First then WStr(AStream, ',');
+      First := False;
+      // F.RuleID leer -> BuildRuleObject nimmt die Katalog-ID. Der frueher
+      // hier stehende if/else war zwei Wege zum selben Aufruf.
+      WObj(AStream, BuildRuleObject(Meta, F.RuleID));
     end;
-
-    Root.AddPair('rules',  Rules);
-    Root.AddPair('issues', Issues);
-    // NICHT Format(2) (2026-08-05): Format ruft ToChars mit LEEREN Options
-    // (System.JSON.pas:1609), und ToChars escaped \uXXXX nur, wenn
-    // EncodeBelow32 gesetzt ist (:2629). Ohne die Option gehen #0..#7, #$B
-    // und #$E..#$1F ROH in die Datei - RFC 8259 verlangt fuer U+0000..U+001F
-    // aber Escaping, und SonarQube bricht beim ERSTEN solchen Zeichen ab.
-    // Nicht das eine Issue faellt dann weg, sondern der GESAMTE Report.
-    //
-    // Belegt im Repo: sca-findings.json:990 enthaelt
-    //   "message": "edToken.PasswordChar = '<U+0000>'"
-    // - erzeugt aus unserer EIGENEN Quelle ('edToken.PasswordChar := #0;').
-    // Der Lexer loest Char-Literale in echte Zeichen auf (uLexer.pas:531),
-    // und uHardcodedSecret uebernimmt den Wert unveraendert in die Meldung.
-    // Ein einziges #0 oder #27 irgendwo im Kundencode genuegt.
-    //
-    // ToJSON([EncodeBelow32]) ueberlaesst das Escaping der RTL. Der Report
-    // verliert dadurch die Einrueckung - er ist ein Maschinenformat fuer
-    // Sonar, und bei 500k Funden war das Huebschdrucken ohnehin nur
-    // zusaetzlicher Speicher.
-    Result := Root.ToJSON([TJSONAncestor.TJSONOutputOption.EncodeBelow32]);
   finally
-    Root.Free;
     Seen.Free;
   end;
 end;
 
-class procedure TSonarGenericWriter.WriteFile(const AFileName: string;
+function EmitIssues(AStream: TStream;
   const AFindings: TObjectList<TLeakFinding>;
-  const ABaseDir: string);
+  const ABaseDir: string): Integer;
+// issues[]. Liefert die Anzahl der Pfade, die ausserhalb von ABaseDir lagen
+// und deshalb absolut blieben.
 var
-  Enc : TEncoding;
+  F       : TLeakFinding;
+  Meta    : TRuleMeta;
+  RelPath : string;
+  First   : Boolean;
 begin
-  // UTF-8 OHNE BOM (2026-08-08): RFC 8259 par.8.1 verbietet die Praeambel
-  // fuer JSON-Austausch. TEncoding.UTF8 haette sie geschrieben -
-  // SonarQube verzeiht das, jedes jq/Node-Skript in der Kette nicht.
-  Enc := TUTF8Encoding.Create(False);
+  Result := 0;
+  First  := True;
+  for F in AFindings do
+  begin
+    if F.Kind = fkFileReadError then Continue;
+    Meta    := TRuleCatalog.GetRule(F.Kind);
+    RelPath := MakeRelative(F.FileName, ABaseDir);
+    if PathLeftAbsolute(RelPath) then Inc(Result);
+    if not First then WStr(AStream, ',');
+    First := False;
+    WObj(AStream, BuildIssueObject(F, RelPath, Meta));
+  end;
+end;
+
+procedure EmitReport(AStream: TStream;
+  const AFindings: TObjectList<TLeakFinding>;
+  const ABaseDir: string; out AOutsideBase: Integer);
+// Schreibt den kompletten Report direkt in AStream, ohne ihn vorher als
+// Ganzes im Speicher zu halten.
+//
+// WARUM elementweise und nicht als eigener Emitter: die Escaping-Regeln der
+// RTL sind nicht nachbaubar - TJSONObject escaped unter anderem den
+// Schraegstrich (im Referenz-Report von 2026-08-09 nachgewiesen). Ein
+// handgeschriebener Serialisierer haette gueltiges, aber ANDERES JSON
+// erzeugt, und jeder Byte-Vergleich gegen aeltere Reports waere wertlos
+// geworden. Deshalb serialisiert weiterhin TJSONObject jedes einzelne
+// Element - im Speicher liegt nur noch EIN Issue statt aller. Das Geruest
+// ist trivial und byte-identisch zum frueheren Root.ToJSON.
+//
+// Zwei Durchlaeufe ueber die Findings: der erste schreibt die Regeln, der
+// zweite die Issues. Der Preis ist ein Enum-Vergleich und ein
+// Katalog-Lookup pro Fund - gemessen an einem kompletten zweiten Abbild im
+// Speicher ist das nichts.
+begin
+  WStr(AStream, '{"rules":[');
+  EmitRules(AStream, AFindings);
+  WStr(AStream, '],"issues":[');
+  AOutsideBase := EmitIssues(AStream, AFindings, ABaseDir);
+  WStr(AStream, ']}');
+end;
+
+class function TSonarGenericWriter.ToJsonString(
+  const AFindings: TObjectList<TLeakFinding>;
+  const ABaseDir: string): string;
+// String-Variante fuer Tests und GUI-Pfade. Hier liegt der Report
+// naturgemaess komplett im Speicher - das ist der Sinn eines Strings.
+// Entscheidend ist, dass beide Wege DENSELBEN Emitter benutzen: sonst
+// pruefen die Tests eine Ausgabe, die so nie in einer Datei landet.
+var
+  SS      : TStringStream;
+  Dummy   : Integer;
+begin
+  SS := TStringStream.Create('', TEncoding.UTF8);
   try
-    TFile.WriteAllText(AFileName, ToJsonString(AFindings, ABaseDir), Enc);
+    EmitReport(SS, AFindings, ABaseDir, Dummy);
+    Result := SS.DataString;
   finally
-    Enc.Free;
+    SS.Free;
+  end;
+end;
+
+class function TSonarGenericWriter.WriteFile(const AFileName: string;
+  const AFindings: TObjectList<TLeakFinding>;
+  const ABaseDir: string): Integer;
+// Liefert die Anzahl der Issues, deren Pfad NICHT relativiert werden konnte.
+var
+  FS  : TFileStream;
+  Dir : string;
+begin
+  // Zielverzeichnis bei Bedarf anlegen - dieselbe Asymmetrie, ueber die der
+  // SARIF-Pfad gestolpert ist: --sonar-export in einen frischen build/-Ordner
+  // brach sonst hart ab.
+  Dir := ExtractFilePath(AFileName);
+  if (Dir <> '') and not TDirectory.Exists(Dir) then
+    ForceDirectories(Dir);
+
+  // Direkt in den Stream statt ueber ToJsonString: der Report entsteht damit
+  // elementweise. Vorher lag er zweimal komplett im Speicher (einmal als
+  // TJSONObject-Baum, einmal als String) - bei einem grossen Korpus ist das
+  // genau die Klasse Problem, an der der 32-Bit-Build bei 2 GB abbricht.
+  //
+  // KEIN BOM (2026-08-08): RFC 8259 par.8.1 verbietet die Praeambel fuer
+  // JSON-Austausch. SonarQube verzeiht sie, jedes jq/Node-Skript in der
+  // Kette nicht. Wir schreiben rohe UTF-8-Bytes, also entsteht gar keine.
+  FS := TFileStream.Create(AFileName, fmCreate);
+  try
+    EmitReport(FS, AFindings, ABaseDir, Result);
+  finally
+    FS.Free;
   end;
 end;
 

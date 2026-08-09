@@ -1646,9 +1646,22 @@ begin
     if Args.SonarExport <> '' then
     begin
       try
-        TSonarGenericWriter.WriteFile(Args.SonarExport, Findings, Args.BaseDir);
+        var OutsideBase := TSonarGenericWriter.WriteFile(
+          Args.SonarExport, Findings, Args.BaseDir);
         if not Args.Quiet then
           WriteLn('Sonar Generic report written: ', Args.SonarExport);
+        // Pfade ausserhalb von --base-dir bleiben absolut, und Sonar wirft
+        // solche Issues still als "unknown files" weg. Ohne Hinweis sieht
+        // man im Dashboard nur, dass Funde fehlen - nicht warum.
+        if OutsideBase > 0 then
+        begin
+          WriteLn(ErrOutput, Format(
+            'WARNING: %d issue(s) point outside --base-dir and keep an ' +
+            'absolute path.', [OutsideBase]));
+          WriteLn(ErrOutput,
+            '         SonarQube discards those as "unknown files". Set ' +
+            '--base-dir to the same root the scanner uses.');
+        end;
       except
         on E: Exception do
         begin
