@@ -88,6 +88,7 @@ uses
   uTestConsoleExitCode in 'uTestConsoleExitCode.pas',
   uTestExportSarifDiagnostics in 'uTestExportSarifDiagnostics.pas',
   uTestExportSonarTextRange in 'uTestExportSonarTextRange.pas',
+  uTestSonarPush in 'uTestSonarPush.pas',
   uTestYamlSubsetParser in 'uTestYamlSubsetParser.pas',
   uTestCustomRuleDetector in 'uTestCustomRuleDetector.pas',
   uTestConcatToFormat in 'uTestConcatToFormat.pas',
