@@ -498,9 +498,13 @@ begin
   end;
 
   try
+    // Der Ordner wird von WriteIndividual geleert - das muss in der Meldung
+    // stehen, sonst wundert sich der Nutzer ueber verschwundene Dateien aus
+    // einem frueheren Push. Der Grund steht in uSonarPush.ClearExternalDir.
     Cnt := TSonarPush.WriteIndividual(Sel, BaseDir, BaseDir);
-    FOnStatus(Format(_('Sonar push: wrote %d issue file(s) to .sonar\external\'),
-      [Cnt]));
+    FOnStatus(Format(
+      _('Sonar push: .sonar\external\ now holds exactly these %d issue file(s) ' +
+        '- files from earlier pushes were removed.'), [Cnt]));
   except
     on E: Exception do
       FOnStatus(_('Sonar push failed: ') + E.Message);

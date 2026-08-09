@@ -46,6 +46,12 @@ type
     // Liefert den .sonar\external-Ordner unter ProjectDir und legt ihn
     // bei Bedarf an.
     class function EnsureExternalDir(const ProjectDir: string): string; static;
+
+    // Loescht die *.json im External-Ordner, liefert deren Anzahl.
+    // WriteIndividual ruft das selbst auf: der Ordner bildet den AKTUELLEN
+    // Push ab, nicht die Summe aller bisherigen - sonst holt der Scanner
+    // laengst behobene Funde wieder ins Dashboard.
+    class function ClearExternalDir(const ADir: string): Integer; static;
   end;
 
 implementation
@@ -91,6 +97,33 @@ begin
     Result := Copy(Result, 1, 80);
 end;
 
+class function TSonarPush.ClearExternalDir(const ADir: string): Integer;
+// Loescht die *.json aus dem External-Ordner und liefert deren Anzahl.
+//
+// WARUM: der sonar-scanner sammelt ueber
+// sonar.externalIssuesReportPaths=.sonar/external/ ALLE .json des Ordners
+// ein. Bleiben die Dateien des letzten Pushs liegen, taucht ein laengst
+// behobener Fund beim naechsten Lauf wieder im Dashboard auf - und zwar
+// wortlos, weil die Datei ja gueltig ist. Der Ordner muss deshalb den
+// AKTUELLEN Push abbilden, nicht die Summe aller bisherigen.
+// Nur *.json und nicht rekursiv: was ein Nutzer sonst dort ablegt, bleibt.
+var
+  Fn : string;
+begin
+  Result := 0;
+  if not TDirectory.Exists(ADir) then Exit;
+  for Fn in TDirectory.GetFiles(ADir, '*.json') do
+  begin
+    // System.SysUtils.DeleteFile statt TFile.Delete: liefert False, statt
+    // zu werfen. Eine gesperrte Datei darf den Push nicht verhindern - sie
+    // bleibt als Altlast liegen, und der Zaehler meldet entsprechend
+    // weniger. Ein try/except waere hier ein leerer Handler auf der
+    // Basisklasse gewesen, also genau das, was zwei eigene Detektoren
+    // anmahnen.
+    if DeleteFile(Fn) then Inc(Result);
+  end;
+end;
+
 class function TSonarPush.WriteIndividual(const Findings: array of TLeakFinding;
   const BaseDir, ProjectDir: string): Integer;
 var
@@ -102,6 +135,7 @@ var
 begin
   Cnt := 0;
   Dir := EnsureExternalDir(ProjectDir);
+  ClearExternalDir(Dir);
   for F in Findings do
   begin
     L := TObjectList<TLeakFinding>.Create(False); // borrowed refs
