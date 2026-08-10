@@ -4676,12 +4676,167 @@ begin
 end;
 
 procedure RegisterAnalyserDockableForm;
+// ACHTUNG, DER NAME SAGT NUR EIN SIEBTEL: diese Routine ist faktisch der
+// Startpunkt der gesamten Plugin-Oberflaeche. Sie registriert nicht nur
+// das Dockfenster, sondern in dieser Reihenfolge:
+//
+//   1. InstallSharedUiHooks     - StyleServices- und EditorBg-Hook nach
+//                                 SCA.SharedUI
+//   2. CreateAndRegisterDockForm- GDockableForm + RegisterDockableForm
+//   3. RegisterEditorLayer      - Highlighter, Overlay, Watch-Mode
+//   4. WarmUpCaches             - Regelkatalog + Editor-Farbschema
+//   5. AddViewMenuItem          - Eintrag im Ansicht-Menue
+//   6. RegisterEditorContextMenu- Rechtsklick-Hook im Editor
+//   7. RegisterOptionsPages     - beide Tools>Options-Seiten
+//
+// Sechs fremde RegisterXxx-Aufrufe stecken damit hier drin und nicht in
+// uIDEExpert.Register, wo man sie suchen wuerde. Das ist der Grund, warum
+// es im Plugin keine Stelle gibt, an der man sieht, woraus seine
+// Oberflaeche besteht (Konzept_UiArchitektur_IdePlugin_2026-08-10.md, §1.1).
+//
+// DIESER SCHRITT GLIEDERT NUR. Die Reihenfolge ist Zeile fuer Zeile
+// dieselbe wie vorher, kein Aufruf hat den Platz gewechselt. Das
+// Herausziehen nach uIDEExpert.Register ist Stufe A.3 des Todos und
+// haengt an Messung 0.5 - es WUERDE die Reihenfolge aendern, weil die
+// Schritte 2, 4 und 5 auf unit-lokale Globale zugreifen und hier bleiben
+// muessen.
 var
-  NTASvc   : INTAServices;
-  MainMenu : TMainMenu;
-  i        : Integer;
-  ViewMenu : TMenuItem;
-  Item     : TMenuItem;
+  NTASvc : INTAServices;
+
+  procedure InstallSharedUiHooks;
+  // Zwei Hooks derselben Bauart nach SCA.SharedUI. Beide muessen in
+  // UnregisterAnalyserDockableForm wieder auf nil - ihre Closures
+  // captured BorlandIDEServices und wuerden den BPL-Unload ueberleben.
+  begin
+    // Globaler Hook: ActiveStyleServices liefert ab jetzt die IDE-Theme-
+    // StyleServices statt der VCL-globalen. Damit folgen alle shared UI-
+    // Komponenten (uAnalyserTheme.SeverityBg, uIDEStatsTiles.TTilePanel.
+    // Paint, uIDEHelpPanel) dem IDE-Theme - kritisch wenn der User einen
+    // anderen VCL-Style aktiv hat als das IDE-Theme.
+    uAnalyserTheme.StyleServicesProvider :=
+      function: TCustomStyleServices
+      var
+        Theming: IOTAIDEThemingServices;
+      begin
+        Result := nil;
+        if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
+          Result := Theming.StyleServices;
+      end;
+
+    // Zweiter Hook derselben Bauart: die ECHTE Hintergrundfarbe des
+    // Code-Editors. Sie entscheidet, ob EditorAccent die Hell- oder die
+    // Dunkel-Variante der Marker-Paletten waehlt.
+    //
+    // Bis 2026-08-10 kam diese Antwort aus IsActiveThemeDark, das
+    // GetSystemColor(clWindow) misst - die Farbe des IDE-RAHMENS. Bei
+    // hellem Editor in dunkler IDE wurde damit die falsche Variante
+    // gewaehlt, also genau in dem Fall, fuer den TIDETheme.EditorBg
+    // existiert. Der Wert lag fertig da (TIDETheme liest ihn korrekt aus
+    // INTACodeEditorServices.Options.BackgroundColor[atWhiteSpace]) und
+    // hatte bis dahin keinen einzigen Verbraucher.
+    //
+    // Rueckgabe clNone ist erlaubt und heisst "unbekannt" - uAnalyserTheme
+    // faellt dann auf das alte Verhalten zurueck.
+    uAnalyserTheme.EditorBgProvider :=
+      function: TColor
+      begin
+        Result := TIDETheme.EditorBg;
+      end;
+  end;
+
+  procedure CreateAndRegisterDockForm;
+  begin
+    GDockableForm := TAnalyserDockableForm.Create;
+    // Dockable Form registrieren (fuer Desktop-State-Persistenz)
+    NTASvc.RegisterDockableForm(GDockableForm);
+  end;
+
+  procedure RegisterEditorLayer;
+  // Die drei Elemente, die im Editor sichtbar werden. Sie haengen NICHT
+  // am Dockfenster - nur ihre Anmeldung stand historisch hier.
+  begin
+    // Custom-Line-Highlighter: Manager + INTAEditServicesNotifier sofort
+    // registrieren. Per-View-Notifier werden ueber EditorViewActivated
+    // angehaengt; AV-sicher dank ref-counting (siehe uIDELineHighlighter).
+    RegisterLineHighlighter;
+    RegisterAnnotationOverlay;
+    // Watch-Mode: Manager-Singleton anlegen. KEINE ToolsAPI-Calls hier -
+    // der Module-Notifier wird erst beim Activate() aus PrepareAnalysis
+    // angehaengt (nur im "Aktuelle Datei"-Pfad, Single-File-Watch).
+    RegisterWatchMode;
+  end;
+
+  procedure WarmUpCaches;
+  begin
+    // RuleCatalog warm laden - sonst wuerde der erste Open der Tools-
+    // Options-Page das JSON synchron parsen (~20-50 ms). Hier ist der
+    // Aufruf im BPL-Load-Pfad versteckt und faellt nicht auf.
+    TRuleCatalog.ProfileNames;   // triggert EnsureLoaded
+
+    // Editor-Color-Scheme-Cache initial fuellen. Komplett defensiv - bei
+    // jedem Fehler bleibt der Cache auf den ecsDefault/False-Defaults und
+    // BuildMarkEntries laeuft ohne Crash durch.
+    //
+    // Muss NACH InstallSharedUiHooks laufen: RefreshEditorColorSchemeCache
+    // fragt seit 2026-08-10 ueber IsEditorBgDark den EditorBgProvider ab.
+    try
+      var S := TRepoSettings.Create;
+      try
+        try S.Load; except end;
+        RefreshEditorColorSchemeCache(S.EditorColorScheme);
+      finally
+        S.Free;
+      end;
+    except
+      // Wenn schon Create faellt: Cache bleibt auf Defaults, Plugin laeuft weiter.
+    end;
+  end;
+
+  procedure AddViewMenuItem;
+  var
+    MainMenu : TMainMenu;
+    i        : Integer;
+    ViewMenu : TMenuItem;
+    Item     : TMenuItem;
+  begin
+    // Eintrag im Ansicht-Menue hinzufuegen
+    MainMenu := NTASvc.GetMainMenu;
+    ViewMenu := nil;
+    for i := 0 to MainMenu.Items.Count - 1 do
+      if SameText(MainMenu.Items[i].Name, 'ViewsMenu') or
+         SameText(MainMenu.Items[i].Caption, 'Ansicht') or
+         SameText(MainMenu.Items[i].Caption, '&Ansicht') or
+         SameText(MainMenu.Items[i].Caption, 'View') or
+         SameText(MainMenu.Items[i].Caption, '&View') then
+      begin
+        ViewMenu := MainMenu.Items[i];
+        Break;
+      end;
+
+    if Assigned(ViewMenu) then
+    begin
+      // View-Menu: nur ein flacher Eintrag "Static Code Analysis" der das
+      // Dock-Fenster oeffnet. Silent-Mode (aktuelle Datei analysieren)
+      // wird ueber das Editor-Rechtsklick-Menue gestartet, nicht hier.
+      Item := TMenuItem.Create(nil);
+      Item.Caption := _('Static Code Analysis');
+      Item.OnClick := GDockableForm.ViewMenuClick;
+      ViewMenu.Add(Item);
+      GViewMenuItem := Item;
+    end;
+  end;
+
+  procedure RegisterOptionsPages;
+  begin
+    // Tools > Options > Third Party > Static Code Analyser
+    // (Checkbox um den Silent-Mode aus-/anzuschalten).
+    RegisterSCAAddInOptions;
+
+    // Tools > Options > Third Party > Sonar Integration
+    // (separate Page - Host/Token/ProjectKey + Test-Connection).
+    RegisterSonarAddInOptions;
+  end;
+
 begin
   // Defensive: Supports() statt as-Cast - schlaegt Cast fehl, brechen
   // wir den BPL-Load *vor* Erzeugen von GDockableForm ab. Sonst
@@ -4689,113 +4844,15 @@ begin
   // und der nachfolgende Unregister-Pfad doppel-frees riskieren.
   if not Supports(BorlandIDEServices, INTAServices, NTASvc) then Exit;
 
-  // Globaler Hook: ActiveStyleServices liefert ab jetzt die IDE-Theme-
-  // StyleServices statt der VCL-globalen. Damit folgen alle shared UI-
-  // Komponenten (uAnalyserTheme.SeverityBg, uIDEStatsTiles.TTilePanel.
-  // Paint, uIDEHelpPanel) dem IDE-Theme - kritisch wenn der User einen
-  // anderen VCL-Style aktiv hat als das IDE-Theme.
-  uAnalyserTheme.StyleServicesProvider :=
-    function: TCustomStyleServices
-    var
-      Theming: IOTAIDEThemingServices;
-    begin
-      Result := nil;
-      if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
-        Result := Theming.StyleServices;
-    end;
-
-  // Zweiter Hook derselben Bauart: die ECHTE Hintergrundfarbe des
-  // Code-Editors. Sie entscheidet, ob EditorAccent die Hell- oder die
-  // Dunkel-Variante der Marker-Paletten waehlt.
-  //
-  // Bis 2026-08-10 kam diese Antwort aus IsActiveThemeDark, das
-  // GetSystemColor(clWindow) misst - die Farbe des IDE-RAHMENS. Bei hellem
-  // Editor in dunkler IDE wurde damit die falsche Variante gewaehlt, also
-  // genau in dem Fall, fuer den TIDETheme.EditorBg existiert. Der Wert lag
-  // fertig da (TIDETheme liest ihn korrekt aus
-  // INTACodeEditorServices.Options.BackgroundColor[atWhiteSpace]) und
-  // hatte bis dahin keinen einzigen Verbraucher.
-  //
-  // Rueckgabe clNone ist erlaubt und heisst "unbekannt" - uAnalyserTheme
-  // faellt dann auf das alte Verhalten zurueck.
-  uAnalyserTheme.EditorBgProvider :=
-    function: TColor
-    begin
-      Result := TIDETheme.EditorBg;
-    end;
-
-  GDockableForm := TAnalyserDockableForm.Create;
-
-  // Dockable Form registrieren (fuer Desktop-State-Persistenz)
-  NTASvc.RegisterDockableForm(GDockableForm);
-
-  // Custom-Line-Highlighter: Manager + INTAEditServicesNotifier sofort
-  // registrieren. Per-View-Notifier werden ueber EditorViewActivated
-  // angehaengt; AV-sicher dank ref-counting (siehe uIDELineHighlighter).
-  RegisterLineHighlighter;
-  RegisterAnnotationOverlay;
-  // Watch-Mode: Manager-Singleton anlegen. KEINE ToolsAPI-Calls hier -
-  // der Module-Notifier wird erst beim Activate() aus PrepareAnalysis
-  // angehaengt (nur im "Aktuelle Datei"-Pfad, Single-File-Watch).
-  RegisterWatchMode;
-
-  // RuleCatalog warm laden - sonst wuerde der erste Open der Tools-
-  // Options-Page das JSON synchron parsen (~20-50 ms). Hier ist der
-  // Aufruf im BPL-Load-Pfad versteckt und faellt nicht auf.
-  TRuleCatalog.ProfileNames;   // triggert EnsureLoaded
-
-  // Editor-Color-Scheme-Cache initial fuellen. Komplett defensiv - bei
-  // jedem Fehler bleibt der Cache auf den ecsDefault/False-Defaults und
-  // BuildMarkEntries laeuft ohne Crash durch.
-  try
-    var S := TRepoSettings.Create;
-    try
-      try S.Load; except end;
-      RefreshEditorColorSchemeCache(S.EditorColorScheme);
-    finally
-      S.Free;
-    end;
-  except
-    // Wenn schon Create faellt: Cache bleibt auf Defaults, Plugin laeuft weiter.
-  end;
-
-  // Eintrag im Ansicht-Menue hinzufuegen
-  MainMenu := NTASvc.GetMainMenu;
-  ViewMenu := nil;
-  for i := 0 to MainMenu.Items.Count - 1 do
-    if SameText(MainMenu.Items[i].Name, 'ViewsMenu') or
-       SameText(MainMenu.Items[i].Caption, 'Ansicht') or
-       SameText(MainMenu.Items[i].Caption, '&Ansicht') or
-       SameText(MainMenu.Items[i].Caption, 'View') or
-       SameText(MainMenu.Items[i].Caption, '&View') then
-    begin
-      ViewMenu := MainMenu.Items[i];
-      Break;
-    end;
-
-  if Assigned(ViewMenu) then
-  begin
-    // View-Menu: nur ein flacher Eintrag "Static Code Analysis" der das
-    // Dock-Fenster oeffnet. Silent-Mode (aktuelle Datei analysieren)
-    // wird ueber das Editor-Rechtsklick-Menue gestartet, nicht hier.
-    Item := TMenuItem.Create(nil);
-    Item.Caption := _('Static Code Analysis');
-    Item.OnClick := GDockableForm.ViewMenuClick;
-    ViewMenu.Add(Item);
-    GViewMenuItem := Item;
-  end;
-
+  InstallSharedUiHooks;
+  CreateAndRegisterDockForm;
+  RegisterEditorLayer;
+  WarmUpCaches;
+  AddViewMenuItem;
   // Editor-Rechtsklick-Menue: dynamischer OnPopup-Hook fuer den
   // Silent-Mode-Eintrag. Triggert die Silent-Analyse via Klick.
   RegisterEditorContextMenuHook;
-
-  // Tools > Options > Third Party > Static Code Analyser
-  // (Checkbox um den Silent-Mode aus-/anzuschalten).
-  RegisterSCAAddInOptions;
-
-  // Tools > Options > Third Party > Sonar Integration
-  // (separate Page - Host/Token/ProjectKey + Test-Connection).
-  RegisterSonarAddInOptions;
+  RegisterOptionsPages;
 end;
 
 procedure ShowAnalyserDockableForm;
