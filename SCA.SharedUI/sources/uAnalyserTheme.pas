@@ -114,6 +114,27 @@ function SeverityBg(Severity: TFindingSeverity;
 // Loest System-Color-Indices vorher per ColorToRGB auf.
 function BlendColor(Base, Accent: TColor; Ratio: Single): TColor;
 
+/// <summary>
+///   True, wenn AColor als "hell" wirkt und schwarze Schrift darauf besser
+///   kontrastiert als weisse. Luminanz nach ITU-R BT.601, Schwelle 127.
+/// </summary>
+/// <remarks>
+///   Hier und nicht je Aufrufer: die Funktion lag wortgleich zweimal im
+///   Plugin (uIDELineHighlighter und uIDEAnnotationOverlay). Zwei Kopien
+///   einer Kontrastregel koennen auseinanderlaufen, ohne dass es auffaellt -
+///   das Ergebnis waere Schrift, die an einer Stelle lesbar ist und an der
+///   anderen nicht.
+///
+///   Bewusst NICHT mit IsActiveThemeDark zusammengelegt: das misst das
+///   THEME (eine Systemfarbe, arithmetisches Mittel), diese Funktion eine
+///   BELIEBIGE uebergebene Farbe. Gleiche Frage, andere Quelle und andere
+///   Formel - siehe Konzept_UiArchitektur_IdePlugin_2026-08-10.md.
+///
+///   System-Color-Indices werden per ColorToRGB aufgeloest, clNone liefert
+///   damit den Wert der aktuellen Systemfarbe und nicht $1FFFFFFF.
+/// </remarks>
+function IsLightColor(AColor: TColor): Boolean;
+
 implementation
 
 // noinspection-file EmptyArgumentList, GroupedDeclaration, TooLongLine, UnsortedUses, UnusedParameter
@@ -196,6 +217,29 @@ const
   // Mid-Point der 0..255-Luminanz-Skala. Dark-Themes haben typisch
   // ~30 (#1E1E1E), Light-Themes ~240 (#F0F0F0) - 128 trennt sicher.
   THEME_DARK_AVG_THRESHOLD = 128;
+  // Mitte derselben Skala fuer die gewichtete BT.601-Luminanz. Getrennte
+  // Konstante, weil die Frage eine andere ist: hier geht es um den
+  // Schriftkontrast auf einer beliebigen Flaeche, oben um die Einordnung
+  // des Themes anhand einer Systemfarbe.
+  CONTRAST_LUM_THRESHOLD = 127;
+
+function IsLightColor(AColor: TColor): Boolean;
+// Vertrag und Begruendung stehen an der Deklaration.
+var
+  rgb     : Cardinal;
+  R, G, B : Integer;
+  Lum     : Integer;
+begin
+  rgb := ColorToRGB(AColor);
+  R := GetRValue(rgb);
+  G := GetGValue(rgb);
+  B := GetBValue(rgb);
+  // ITU-R BT.601: Gruen wiegt am schwersten, Blau am leichtesten - das
+  // entspricht der Helligkeitswahrnehmung des Auges besser als ein
+  // arithmetisches Mittel.
+  Lum := (R * 299 + G * 587 + B * 114) div 1000;
+  Result := Lum > CONTRAST_LUM_THRESHOLD;
+end;
 
 function IsActiveThemeDark: Boolean;
 // Einfache RGB-Durchschnitts-Heuristik (statt gewichtetem Luminanz-

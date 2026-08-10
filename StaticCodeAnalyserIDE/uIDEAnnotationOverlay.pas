@@ -244,22 +244,9 @@ begin
   end;
 end;
 
-// True wenn Farbe "hell" wirkt (Luminanz > 50%). Fuer Auto-Kontrast-
-// Wahl der Textfarbe (clBlack auf hell, clWhite auf dunkel).
-function IsLightColor(AColor: TColor): Boolean;
-var
-  rgb : Cardinal;
-  R, G, B : Integer;
-  Lum : Integer;
-begin
-  rgb := ColorToRGB(AColor);
-  R := GetRValue(rgb);
-  G := GetGValue(rgb);
-  B := GetBValue(rgb);
-  // Perzeptuelle Luminanz: ITU-R BT.601 (gewichtetes Mittel).
-  Lum := (R * 299 + G * 587 + B * 114) div 1000;
-  Result := Lum > 127;
-end;
+// IsLightColor stand hier wortgleich ein zweites Mal (die andere Kopie in
+// uIDELineHighlighter) und kommt jetzt aus uAnalyserTheme, das diese Unit
+// ohnehin schon fuer BlendColor benutzt.
 
 constructor TAnnotationOverlay.Create(AOwner: TComponent);
 begin

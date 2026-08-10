@@ -169,6 +169,7 @@
         <DCCReference Include="uTestConsoleExitCode.pas"/>
         <DCCReference Include="uTestExportSarifDiagnostics.pas"/>
         <DCCReference Include="uTestExportSonarTextRange.pas"/>
+        <DCCReference Include="uTestContrastColor.pas"/>
         <DCCReference Include="uTestSonarPush.pas"/>
         <DCCReference Include="uTestYamlSubsetParser.pas"/>
         <DCCReference Include="uTestCustomRuleDetector.pas"/>
