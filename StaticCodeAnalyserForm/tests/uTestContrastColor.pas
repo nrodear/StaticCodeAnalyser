@@ -44,6 +44,8 @@ type
 implementation
 
 uses
+  Winapi.Windows,    // GetRValue/GetGValue/GetBValue - stehen NICHT in
+                     // Vcl.Graphics, das liefert nur ColorToRGB
   System.UITypes, Vcl.Graphics, uAnalyserTypes, uAnalyserTheme;
 
 function Lum601(C: TColor): Integer;
