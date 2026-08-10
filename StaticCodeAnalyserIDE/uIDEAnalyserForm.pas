@@ -4704,6 +4704,26 @@ begin
         Result := Theming.StyleServices;
     end;
 
+  // Zweiter Hook derselben Bauart: die ECHTE Hintergrundfarbe des
+  // Code-Editors. Sie entscheidet, ob EditorAccent die Hell- oder die
+  // Dunkel-Variante der Marker-Paletten waehlt.
+  //
+  // Bis 2026-08-10 kam diese Antwort aus IsActiveThemeDark, das
+  // GetSystemColor(clWindow) misst - die Farbe des IDE-RAHMENS. Bei hellem
+  // Editor in dunkler IDE wurde damit die falsche Variante gewaehlt, also
+  // genau in dem Fall, fuer den TIDETheme.EditorBg existiert. Der Wert lag
+  // fertig da (TIDETheme liest ihn korrekt aus
+  // INTACodeEditorServices.Options.BackgroundColor[atWhiteSpace]) und
+  // hatte bis dahin keinen einzigen Verbraucher.
+  //
+  // Rueckgabe clNone ist erlaubt und heisst "unbekannt" - uAnalyserTheme
+  // faellt dann auf das alte Verhalten zurueck.
+  uAnalyserTheme.EditorBgProvider :=
+    function: TColor
+    begin
+      Result := TIDETheme.EditorBg;
+    end;
+
   GDockableForm := TAnalyserDockableForm.Create;
 
   // Dockable Form registrieren (fuer Desktop-State-Persistenz)
@@ -4839,6 +4859,10 @@ begin
   // in uAnalyserTheme (SCA.SharedUI) ueber den BPL-Unload hinaus weiter
   // -> dangling Aufruf in unloaded Plugin-Code. nil = Fallback auf VCL-Default.
   uAnalyserTheme.StyleServicesProvider := nil;
+  // Derselbe Grund, derselbe Zeitpunkt: die EditorBg-Closure captured
+  // BorlandIDEServices ueber TIDETheme und wuerde sonst den BPL-Unload
+  // ueberleben. nil = Rueckfall auf IsActiveThemeDark.
+  uAnalyserTheme.EditorBgProvider := nil;
 end;
 
 end.
