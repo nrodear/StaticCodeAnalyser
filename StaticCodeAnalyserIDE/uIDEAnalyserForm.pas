@@ -4742,6 +4742,16 @@ var
       begin
         Result := TIDETheme.EditorBg;
       end;
+
+    // Theme-Singleton samt seiner beiden Notifier JETZT aufbauen, nicht
+    // erst beim ersten Farbzugriff. Gemessen am 2026-08-10 lag die
+    // Anmeldung sonst 43 Sekunden hinter dem Paketladen - jede
+    // Farbumstellung davor ging verloren.
+    //
+    // Muss NACH den beiden Providern stehen: Prime fuellt den
+    // Helligkeits-Cache gleich mit, und dafuer braucht es den
+    // EditorBgProvider.
+    TIDETheme.Prime;
   end;
 
   procedure CreateAndRegisterDockForm;

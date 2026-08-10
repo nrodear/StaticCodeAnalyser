@@ -94,6 +94,18 @@ function IsActiveThemeDark: Boolean;
 /// </summary>
 function IsEditorBgDark: Boolean;
 
+/// <summary>
+///   Frischt NUR GCachedEditorBgDark auf, ohne Einstellungen zu lesen.
+/// </summary>
+/// <remarks>
+///   Fuer Theme- und Editor-Farbschema-Wechsel: dabei aendert sich die
+///   Helligkeit des Untergrunds, nicht das eingestellte Marker-Schema.
+///   RefreshEditorColorSchemeCache waere dafuer zu grob - es braucht den
+///   Schema-String und damit einen INI-Zugriff, der hier nichts beitraegt.
+///   Faengt jeden Fehler ab; im Zweifel bleibt der Cache auf "hell".
+/// </remarks>
+procedure RefreshEditorBgDarkCache;
+
 // String <-> Enum Konvertierung fuer INI-Persistierung. Akzeptiert
 // 'default', 'gray', 'subtle' case-insensitiv. Unbekannt -> ecsDefault.
 function ParseEditorColorScheme(const S: string): TEditorColorScheme;
@@ -305,6 +317,19 @@ begin
   Result := not IsLightColor(Bg);
 end;
 
+procedure RefreshEditorBgDarkCache;
+// Vertrag steht an der Deklaration. IsEditorBgDark statt
+// IsActiveThemeDark (2026-08-10): der Cache steuert die Farbe der Marker
+// IM EDITOR, also muss er den Editor-Hintergrund messen und nicht den
+// IDE-Rahmen.
+begin
+  try
+    GCachedEditorBgDark := IsEditorBgDark;
+  except
+    GCachedEditorBgDark := False;
+  end;
+end;
+
 function IsActiveThemeDark: Boolean;
 // Einfache RGB-Durchschnitts-Heuristik (statt gewichtetem Luminanz-
 // Mittel Y = 0.299R + 0.587G + 0.114B) weil clWindow meist neutral-grau
@@ -363,15 +388,7 @@ begin
   except
     GCachedEditorScheme := ecsDefault;
   end;
-  try
-    // IsEditorBgDark statt IsActiveThemeDark (2026-08-10): der Cache
-    // steuert die Farbe der Marker IM EDITOR, also muss er den
-    // Editor-Hintergrund messen und nicht den IDE-Rahmen. Ohne gesetzten
-    // EditorBgProvider ist das Verhalten unveraendert.
-    GCachedEditorBgDark := IsEditorBgDark;
-  except
-    GCachedEditorBgDark := False;
-  end;
+  RefreshEditorBgDarkCache;
 end;
 
 function SchemeFromComboIndex(AIndex: Integer): TEditorColorScheme;
