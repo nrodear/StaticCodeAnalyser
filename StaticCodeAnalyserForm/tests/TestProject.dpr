@@ -89,6 +89,7 @@ uses
   uTestExportSarifDiagnostics in 'uTestExportSarifDiagnostics.pas',
   uTestExportSonarTextRange in 'uTestExportSonarTextRange.pas',
   uTestContrastColor in 'uTestContrastColor.pas',
+  uTestUiElementRegistry in 'uTestUiElementRegistry.pas',
   uTestSonarPush in 'uTestSonarPush.pas',
   uTestYamlSubsetParser in 'uTestYamlSubsetParser.pas',
   uTestCustomRuleDetector in 'uTestCustomRuleDetector.pas',
