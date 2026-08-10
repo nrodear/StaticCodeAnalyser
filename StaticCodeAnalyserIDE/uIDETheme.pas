@@ -104,6 +104,23 @@ type
     // spezifische Akzente einschalten ohne den genauen Style-Namen abzu-
     // fragen.
     class function IsDark: Boolean; static;
+
+    /// <summary>
+    ///   Baut den Theme-Singleton und meldet seine beiden Notifier an,
+    ///   ohne dass vorher jemand eine Farbe gelesen haben muss.
+    /// </summary>
+    /// <remarks>
+    ///   Ohne diesen Aufruf laeuft die Anmeldung LAZY - gemessen am
+    ///   2026-08-10 geschah sie 43 Sekunden nach dem Paketladen, naemlich
+    ///   beim ersten Theme-Zugriff. Jede Farbumstellung davor ginge
+    ///   verloren, und genau die frueheste Phase ist die, in der ein
+    ///   Anwender seine IDE einrichtet.
+    ///
+    ///   Aufzurufen beim Plugin-Start, direkt nachdem die Provider-Hooks
+    ///   nach SCA.SharedUI gesetzt sind - vorher wuesste der Cache den
+    ///   Editor-Hintergrund noch nicht. Idempotent.
+    /// </remarks>
+    class procedure Prime; static;
   end;
 
 implementation
@@ -117,6 +134,7 @@ uses
   Winapi.Windows,
   Vcl.Forms, Vcl.Themes, Vcl.Grids,
   ToolsAPI, ToolsAPI.Editor,
+  uAnalyserTheme,  // RefreshEditorBgDarkCache - geteilter Cache in SCA.SharedUI
   uIDEColors;   // IDE_BG_OPTIONS_FRAME (kuratierter Dark-Ton) fuer OptionsFrameBg
 
 type
@@ -147,6 +165,27 @@ type
     procedure Detach;
   end;
 
+  // Zweiter, UNABHAENGIGER Notifier: das EDITOR-FARBSCHEMA. Es kann sich
+  // ohne IDE-Theme-Wechsel aendern (Tools > Optionen > Editor > Farbe),
+  // und dann stimmen EditorBg und alle daraus abgeleiteten Markerfarben
+  // nicht mehr.
+  //
+  // GEMESSEN am 2026-08-10: RAD 12 bedient ihn, AddEditorColorNotifier
+  // liefert einen gueltigen Index, und er feuert BEIDE Faelle - sowohl
+  // beim Farbschema- als auch beim Theme-Wechsel. Deshalb genuegt dieser
+  // eine Notifier; ein zweiter Weg fuer den Theme-Fall waere doppelt.
+  //
+  // Erst ab Interface-Stufe 260 verfuegbar; Supports() klaert das.
+  TEditorColorNotifier = class(TNotifierObject, IOTAEditorColorSpeedSetting)
+  private
+    FOwner : TIDEThemeImpl;
+  public
+    constructor Create(AOwner: TIDEThemeImpl);
+    procedure EditorColorChanging;
+    procedure EditorColorChanged;
+    procedure Detach;
+  end;
+
   // Per-Control Snapshot der Original-System-Color-Identifier
   // (clBtnFace / clWindow / clWindowText / ...). Wird beim ersten
   // ResolveIDEColor pro Control eingefangen damit nachfolgende Theme-
@@ -164,6 +203,12 @@ type
     FNotifierIdx : Integer;
     FNotifierIfc : IInterface;
     FNotifierObj : TThemeNotifier;
+    // Zweiter Notifier, eigener Index-Raum: RemoveEditorColorNotifier ist
+    // nicht RemoveNotifier. Die Indizes zu verwechseln haette die IDE ein
+    // fremdes Abo abmelden lassen.
+    FColorNotifIdx : Integer;
+    FColorNotifIfc : IInterface;
+    FColorNotifObj : TEditorColorNotifier;
     // Color-Cache - nach Theme-Wechsel invalidiert, beim naechsten Read
     // lazy neu berechnet.
     FCacheValid  : Boolean;
@@ -250,15 +295,43 @@ begin
 end;
 
 // ---------------------------------------------------------------------------
+// TEditorColorNotifier
+// ---------------------------------------------------------------------------
+
+constructor TEditorColorNotifier.Create(AOwner: TIDEThemeImpl);
+begin
+  inherited Create;
+  FOwner := AOwner;
+end;
+
+procedure TEditorColorNotifier.EditorColorChanging;
+begin
+  // Wie bei ChangingTheme: das Ereignis kommt VOR der Umstellung, jetzt zu
+  // invalidieren waere verfrueht - der naechste Read holte die alten Farben.
+end;
+
+procedure TEditorColorNotifier.EditorColorChanged;
+begin
+  if Assigned(FOwner) then
+    FOwner.NotifyChanged;
+end;
+
+procedure TEditorColorNotifier.Detach;
+begin
+  FOwner := nil;
+end;
+
+// ---------------------------------------------------------------------------
 // TIDEThemeImpl
 // ---------------------------------------------------------------------------
 
 constructor TIDEThemeImpl.Create;
 begin
   inherited Create;
-  FSubs        := TList<TSubscription>.Create;
-  FNotifierIdx := -1;
-  FCacheValid  := False;
+  FSubs          := TList<TSubscription>.Create;
+  FNotifierIdx   := -1;
+  FColorNotifIdx := -1;
+  FCacheValid    := False;
   FOrigColors  := TDictionary<Pointer, TControlColors>.Create;
 end;
 
@@ -272,6 +345,9 @@ begin
   if Assigned(FNotifierObj) then
     FNotifierObj.Detach;
 
+  if Assigned(FColorNotifObj) then
+    FColorNotifObj.Detach;
+
   if FNotifierIdx <> -1 then
   begin
     if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
@@ -280,6 +356,25 @@ begin
   end;
   FNotifierIfc := nil;
   FNotifierObj := nil;
+
+  // Eigener Index-Raum, eigene Abmelde-Methode. Das Supports() wird
+  // bewusst ein zweites Mal gemacht statt das Ergebnis von oben zu
+  // benutzen: liefert der Dienst beim Herunterfahren schon nichts mehr,
+  // sollen beide Abmeldungen unabhaengig voneinander scheitern duerfen.
+  //
+  // GExperts hat seinen Theme-Notifier genau hier auskommentiert - das
+  // Freigeben waehrend des IDE-Endes warf eine Invalid-Pointer-Ausnahme,
+  // weil die Theming-Dienste vor dem Plugin zerstoert werden. Die
+  // Reihenfolge Detach-vor-Remove und das Supports() sind der Schutz
+  // dagegen; das Detach oben wirkt auch dann, wenn das Remove ausfaellt.
+  if FColorNotifIdx <> -1 then
+  begin
+    if Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then
+      Theming.RemoveEditorColorNotifier(FColorNotifIdx);
+    FColorNotifIdx := -1;
+  end;
+  FColorNotifIfc := nil;
+  FColorNotifObj := nil;
 
   // Die Subscriptions selbst NICHT freigeben - sie sind refcount-owned
   // vom Aufrufer. Nur unsere Liste.
@@ -305,8 +400,10 @@ end;
 
 procedure TIDEThemeImpl.EnsureNotifier;
 var
-  Theming  : IOTAIDEThemingServices;
-  Notifier : TThemeNotifier;
+  Theming    : IOTAIDEThemingServices;
+  Notifier   : TThemeNotifier;
+  ColorNotif : TEditorColorNotifier;
+  Idx        : Integer;
 begin
   if FNotifierIdx <> -1 then Exit;
   if not Supports(BorlandIDEServices, IOTAIDEThemingServices, Theming) then Exit;
@@ -316,6 +413,28 @@ begin
   FNotifierIfc := Notifier as INTAIDEThemingServicesNotifier;
   FNotifierIdx := Theming.AddNotifier(
     FNotifierIfc as INTAIDEThemingServicesNotifier);
+
+  // Zweiter Notifier fuer das Editor-Farbschema. Rueckgabe < 0 heisst
+  // Fehler (ToolsAPI.pas:10545) - dann NICHT merken, sonst meldete der
+  // Destruktor spaeter Index -1 ab.
+  if FColorNotifIdx = -1 then
+  begin
+    ColorNotif := TEditorColorNotifier.Create(Self);
+    FColorNotifObj := ColorNotif;
+    FColorNotifIfc := ColorNotif as IOTAEditorColorSpeedSetting;
+    Idx := Theming.AddEditorColorNotifier(
+      FColorNotifIfc as IOTAEditorColorSpeedSetting);
+    if Idx >= 0 then
+      FColorNotifIdx := Idx
+    else
+    begin
+      // Aeltere IDE ohne Stufe 260 oder Dienst verweigert: der
+      // Theme-Notifier allein bleibt, das Verhalten faellt auf den Stand
+      // vor 2026-08-10 zurueck.
+      FColorNotifIfc := nil;
+      FColorNotifObj := nil;
+    end;
+  end;
 end;
 
 procedure TIDEThemeImpl.RebuildCache;
@@ -353,6 +472,14 @@ var
   Snapshot : TArray<TSubscription>;
 begin
   FCacheValid := False;
+  // Den geteilten Cache in SCA.SharedUI mitziehen. Bis 2026-08-10 passierte
+  // das NIE: der Kommentar an GCachedEditorBgDark behauptete eine
+  // Auffrischung "nach jedem Settings-Save / Theme-Change", fuer den
+  // Theme-Fall gab es aber keinen einzigen Aufrufer. Die Editor-Marker
+  // behielten damit die Helligkeitsentscheidung vom Plugin-Start.
+  //
+  // VOR der Subscriber-Schleife: deren Callbacks lesen den Cache bereits.
+  uAnalyserTheme.RefreshEditorBgDarkCache;
   // Snapshot bevor wir iterieren - Subscriber-Callback koennte sich selbst
   // (oder andere) unsubscriben, was die Liste mutiert.
   Snapshot := FSubs.ToArray;
@@ -630,6 +757,20 @@ begin
   // ITU-R BT.601 perzeptuelles Mittel
   Luminance := (Red * 299 + Grn * 587 + Blu * 114) div 1000;
   Result := Luminance <= DARK_LUMINANCE_MAX;
+end;
+
+class procedure TIDETheme.Prime;
+// Vertrag und Begruendung stehen an der Deklaration.
+begin
+  EnsureImpl;
+  if Assigned(G) then
+  begin
+    G.EnsureNotifier;
+    // Cache gleich mit dem richtigen Wert fuellen. Ohne das haette
+    // GCachedEditorBgDark bis zum ersten Theme-Ereignis den Vorgabewert
+    // False, obwohl der EditorBgProvider zu diesem Zeitpunkt schon steht.
+    uAnalyserTheme.RefreshEditorBgDarkCache;
+  end;
 end;
 
 initialization
