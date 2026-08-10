@@ -433,6 +433,7 @@ implementation
 
 uses
   uAnalyserPalette,     // ACCENT_ERROR als zentrale Stripe-Default-Farbe
+  uAnalyserTheme,       // IsLightColor - Auto-Kontrast der Infobar-Schrift
   uPathNormalize,       // SPOT fuer Pfad-Normalisierung (Cache-Keys)
   uRepoSettings;        // OverlayPosition aus [UI]
 
@@ -456,23 +457,10 @@ const
   SPAN_CAP_WIDTH_PX = 9;
   SPAN_CAP_THICK_PX = 2;
 
-function IsLightColor(AColor: TColor): Boolean;
-// ITU-R BT.601 Luminanz - bei > 127 ist die Farbe "hell" und Schwarz
-// kontrastiert besser, sonst Weiss. Wird fuer Auto-Kontrast der Mini-
-// Infobar-Schrift gebraucht (Severity-Akzent kann hell sein wie clYellow
-// fuer Hint).
-var
-  RGB     : Cardinal;
-  R, G, B : Integer;
-  Lum     : Integer;
-begin
-  RGB := ColorToRGB(AColor);
-  R := GetRValue(RGB);
-  G := GetGValue(RGB);
-  B := GetBValue(RGB);
-  Lum := (R * 299 + G * 587 + B * 114) div 1000;
-  Result := Lum > 127;
-end;
+// IsLightColor lag hier wortgleich ein zweites Mal (die andere Kopie stand
+// in uIDEAnnotationOverlay) und kommt jetzt aus uAnalyserTheme - dort, wo
+// auch BlendColor und die Severity-Farben wohnen. Zwei Kopien einer
+// Kontrastregel koennen auseinanderlaufen, ohne dass es auffaellt.
 
 procedure DrawSpanCap(ACanvas: TCanvas; const ACodeRect: TRect;
   AEdge: TSpanCapEdge);

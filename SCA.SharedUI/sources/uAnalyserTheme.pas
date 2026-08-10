@@ -21,6 +21,8 @@ uses
 
 type
   TStyleServicesProvider = reference to function: TCustomStyleServices;
+  // Liefert eine Farbe aus einer Quelle, die diese Unit nicht kennen darf.
+  TStyleColorProvider = reference to function: TColor;
 
 var
   // Global Hook fuer Color-Auflösung. IDE-Plugin setzt das auf eine
@@ -28,6 +30,28 @@ var
   // Standalone laesst's nil — ActiveStyleServices faellt dann auf die
   // VCL-globale Vcl.Themes.StyleServices zurueck.
   StyleServicesProvider: TStyleServicesProvider = nil;
+
+  // Global Hook fuer die ECHTE Hintergrundfarbe des Code-Editors. Das
+  // IDE-Plugin setzt das auf eine Funktion, die
+  // INTACodeEditorServices.Options.BackgroundColor[atWhiteSpace] liefert
+  // (TIDETheme.EditorBg); ausserhalb der IDE bleibt es nil.
+  //
+  // WOFUER: GCachedEditorBgDark steuert, ob EditorAccent die Hell- oder die
+  // Dunkel-Variante der Gray/Subtle-Paletten waehlt - also die Farbe der
+  // Markierungen IM EDITOR. Bis 2026-08-10 kam die Antwort aus
+  // IsActiveThemeDark, das GetSystemColor(clWindow) misst: die Farbe des
+  // IDE-RAHMENS. Bei hellem Editor in dunkler IDE (und umgekehrt) wurde
+  // damit die falsche Variante gewaehlt - und zwar genau in dem Fall, fuer
+  // den TIDETheme.EditorBg ueberhaupt existiert. Der Kommentar in
+  // uAnalyserPalette hatte die richtige Regel schon beschrieben, der Code
+  // folgte ihr nur nicht.
+  //
+  // Als Hook und nicht als direkter Aufruf, weil diese Unit in
+  // SCA.SharedUI liegt und ToolsAPI nicht kennen darf - dieselbe
+  // Schichtgrenze und dasselbe Muster wie bei StyleServicesProvider
+  // daneben. Der Setzer muss ihn beim Entladen wieder auf nil setzen,
+  // sonst zeigt die Closure in entladenen Plugin-Code.
+  EditorBgProvider: TStyleColorProvider = nil;
 
 // Liefert die aktive TCustomStyleServices. Im IDE-Plugin-Kontext via
 // StyleServicesProvider die IDE-spezifische (folgt IDE-Theme).
@@ -59,7 +83,16 @@ function EditorAccent(Severity: TFindingSeverity;
 
 // Heuristisch: True wenn der aktive Theme einen dunklen Hintergrund hat.
 // Schwellwert: Luminanz von StyleServices.GetSystemColor(clWindow) < 128.
+// ACHTUNG: das ist der IDE-RAHMEN. Fuer alles, was IM EDITOR gezeichnet
+// wird, ist IsEditorBgDark die richtige Frage.
 function IsActiveThemeDark: Boolean;
+
+/// <summary>
+///   True, wenn der Hintergrund des CODE-EDITORS dunkel ist. Fuer die
+///   Farbwahl der Editor-Markierungen die richtige Frage; ohne gesetzten
+///   EditorBgProvider identisch zu IsActiveThemeDark.
+/// </summary>
+function IsEditorBgDark: Boolean;
 
 // String <-> Enum Konvertierung fuer INI-Persistierung. Akzeptiert
 // 'default', 'gray', 'subtle' case-insensitiv. Unbekannt -> ecsDefault.
@@ -113,6 +146,27 @@ function SeverityBg(Severity: TFindingSeverity;
 // Lineare Farbmischung. Ratio=0 -> Base, Ratio=1 -> Accent.
 // Loest System-Color-Indices vorher per ColorToRGB auf.
 function BlendColor(Base, Accent: TColor; Ratio: Single): TColor;
+
+/// <summary>
+///   True, wenn AColor als "hell" wirkt und schwarze Schrift darauf besser
+///   kontrastiert als weisse. Luminanz nach ITU-R BT.601, Schwelle 127.
+/// </summary>
+/// <remarks>
+///   Hier und nicht je Aufrufer: die Funktion lag wortgleich zweimal im
+///   Plugin (uIDELineHighlighter und uIDEAnnotationOverlay). Zwei Kopien
+///   einer Kontrastregel koennen auseinanderlaufen, ohne dass es auffaellt -
+///   das Ergebnis waere Schrift, die an einer Stelle lesbar ist und an der
+///   anderen nicht.
+///
+///   Bewusst NICHT mit IsActiveThemeDark zusammengelegt: das misst das
+///   THEME (eine Systemfarbe, arithmetisches Mittel), diese Funktion eine
+///   BELIEBIGE uebergebene Farbe. Gleiche Frage, andere Quelle und andere
+///   Formel - siehe Konzept_UiArchitektur_IdePlugin_2026-08-10.md.
+///
+///   System-Color-Indices werden per ColorToRGB aufgeloest, clNone liefert
+///   damit den Wert der aktuellen Systemfarbe und nicht $1FFFFFFF.
+/// </remarks>
+function IsLightColor(AColor: TColor): Boolean;
 
 implementation
 
@@ -196,6 +250,60 @@ const
   // Mid-Point der 0..255-Luminanz-Skala. Dark-Themes haben typisch
   // ~30 (#1E1E1E), Light-Themes ~240 (#F0F0F0) - 128 trennt sicher.
   THEME_DARK_AVG_THRESHOLD = 128;
+  // Mitte derselben Skala fuer die gewichtete BT.601-Luminanz. Getrennte
+  // Konstante, weil die Frage eine andere ist: hier geht es um den
+  // Schriftkontrast auf einer beliebigen Flaeche, oben um die Einordnung
+  // des Themes anhand einer Systemfarbe.
+  CONTRAST_LUM_THRESHOLD = 127;
+
+function IsLightColor(AColor: TColor): Boolean;
+// Vertrag und Begruendung stehen an der Deklaration.
+var
+  rgb     : Cardinal;
+  R, G, B : Integer;
+  Lum     : Integer;
+begin
+  rgb := ColorToRGB(AColor);
+  R := GetRValue(rgb);
+  G := GetGValue(rgb);
+  B := GetBValue(rgb);
+  // ITU-R BT.601: Gruen wiegt am schwersten, Blau am leichtesten - das
+  // entspricht der Helligkeitswahrnehmung des Auges besser als ein
+  // arithmetisches Mittel.
+  Lum := (R * 299 + G * 587 + B * 114) div 1000;
+  Result := Lum > CONTRAST_LUM_THRESHOLD;
+end;
+
+function IsEditorBgDark: Boolean;
+// Ist der Hintergrund des CODE-EDITORS dunkel? Das ist die Frage, die fuer
+// die Farbe der Editor-Markierungen zaehlt - nicht, ob das IDE-Theme
+// dunkel ist. Beides faellt oft zusammen, aber eben nicht immer.
+//
+// Ohne gesetzten EditorBgProvider (Standalone-EXE, Tests) faellt die
+// Funktion auf IsActiveThemeDark zurueck - dasselbe Verhalten wie vor dem
+// 2026-08-10, nur als bewusster Rueckfall statt als einziger Weg.
+//
+// Gerechnet wird mit IsLightColor, also BT.601 wie ueberall sonst beim
+// Kontrast; der Rueckfall behaelt seine eigene Formel, weil er eine
+// Systemfarbe misst (Begruendung an IsActiveThemeDark).
+var
+  Bg : TColor;
+begin
+  if not Assigned(EditorBgProvider) then
+    Exit(IsActiveThemeDark);
+  Bg := clNone;
+  try
+    Bg := EditorBgProvider();
+  // Provider zeigt ins Leere (Plugin halb entladen) oder die ToolsAPI
+  // liefert nicht - Bg bleibt clNone und die Zeile darunter faellt auf
+  // IsActiveThemeDark zurueck. Eine Farbfrage darf nichts abbrechen.
+  // noinspection EmptyExcept
+  except
+  end;
+  if Bg = clNone then
+    Exit(IsActiveThemeDark);
+  Result := not IsLightColor(Bg);
+end;
 
 function IsActiveThemeDark: Boolean;
 // Einfache RGB-Durchschnitts-Heuristik (statt gewichtetem Luminanz-
@@ -256,7 +364,11 @@ begin
     GCachedEditorScheme := ecsDefault;
   end;
   try
-    GCachedEditorBgDark := IsActiveThemeDark;
+    // IsEditorBgDark statt IsActiveThemeDark (2026-08-10): der Cache
+    // steuert die Farbe der Marker IM EDITOR, also muss er den
+    // Editor-Hintergrund messen und nicht den IDE-Rahmen. Ohne gesetzten
+    // EditorBgProvider ist das Verhalten unveraendert.
+    GCachedEditorBgDark := IsEditorBgDark;
   except
     GCachedEditorBgDark := False;
   end;

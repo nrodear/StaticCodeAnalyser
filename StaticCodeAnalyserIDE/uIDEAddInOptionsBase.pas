@@ -56,6 +56,7 @@ type
 implementation
 
 uses
+  Vcl.Controls,      // CM_STYLECHANGED + TControl.Perform - siehe OnThemeChanged
   uIDETheme;         // TIDETheme.Apply + Subscribe
 
 function TIDEAddInOptionsBase.GetArea: string;
@@ -82,9 +83,28 @@ begin
 end;
 
 procedure TIDEAddInOptionsBase.OnThemeChanged;
+// Zwei Schritte, weil TIDETheme.Apply allein nicht reicht.
+//
+// DER DEFEKT (behoben 2026-08-10): Der Options-Hintergrund
+// TIDETheme.OptionsFrameBg ist ein konkretes RGB OHNE gesetztes
+// clSystemColor-Bit. ResolveIDEColor laesst solche Werte absichtlich
+// unangetastet - Apply zieht ihn also NICHT nach. Nachgezogen wurde er
+// nur im CM_STYLECHANGED-Handler der beiden Frames. Wer das Theme
+// umstellte, waehrend die Options-Seite offen war, bekam ueber den
+// Notifier-Pfad einen Frame mit der Hintergrundfarbe des alten Themes.
+//
+// Statt die beiden Farbzuweisungen hier ein drittes Mal hinzuschreiben,
+// wird der vorhandene Handler angestossen: er macht bereits genau das
+// Richtige, und es gibt weiterhin nur EINE Stelle je Frame, die weiss,
+// welche Farben eine Options-Seite braucht.
+//
+// Ein Frame ohne eigenen CM_STYLECHANGED-Handler ist davon unberuehrt -
+// fuer den bleibt der Apply-Aufruf darueber der ganze Weg. Deshalb steht
+// Apply hier weiter und nicht nur im Handler.
 begin
-  if Assigned(FFrame) then
-    TIDETheme.Apply(FFrame);
+  if not Assigned(FFrame) then Exit;
+  TIDETheme.Apply(FFrame);
+  FFrame.Perform(CM_STYLECHANGED, 0, 0);
 end;
 
 procedure TIDEAddInOptionsBase.DialogClosed(Accepted: Boolean);
