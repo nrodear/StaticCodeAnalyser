@@ -41,7 +41,11 @@ unit uUiElementRegistry;
 interface
 
 uses
-  System.Classes, System.Generics.Collections, System.SysUtils;
+  System.Classes,
+  System.Generics.Collections,
+  System.Generics.Defaults,   // TComparer - steht NICHT in .Collections
+  System.Math,                // CompareValue - ueberlaufsicherer Vergleich
+  System.SysUtils;
 
 type
   /// <summary>
@@ -98,6 +102,11 @@ type
     FRegistered : TList<IIDEUiElement>;
     FOnLog      : TUiRegistryLogProc;
     procedure Log(const AText: string);
+    // Elemente aufsteigend nach SortKey. Eine Stelle, an der die
+    // Anmeldereihenfolge entsteht - RegisterAll und NamesInRegisterOrder
+    // muessen dieselbe liefern, sonst zeigt das Protokoll etwas anderes
+    // als der Code tut.
+    function SortedItems: TArray<IIDEUiElement>;
   public
     constructor Create;
     destructor Destroy; override;
@@ -227,21 +236,28 @@ begin
   FItems.Add(AElement);
 end;
 
-procedure TUiElementRegistry.RegisterAll;
+function TUiElementRegistry.SortedItems: TArray<IIDEUiElement>;
 // Vertrag steht an der Deklaration.
-var
-  Sorted : TArray<IIDEUiElement>;
-  E      : IIDEUiElement;
 begin
-  Sorted := FItems.ToArray;
-  TArray.Sort<IIDEUiElement>(Sorted,
+  Result := FItems.ToArray;
+  TArray.Sort<IIDEUiElement>(Result,
     TComparer<IIDEUiElement>.Construct(
       function(const A, B: IIDEUiElement): Integer
       begin
-        Result := A.SortKey - B.SortKey;
+        // CompareValue statt der naheliegenden Subtraktion: bei weit
+        // auseinander liegenden SortKeys kann die Differenz ueberlaufen,
+        // und ein Vergleichsergebnis mit falschem Vorzeichen bringt jede
+        // Sortierung durcheinander.
+        Result := CompareValue(A.SortKey, B.SortKey);
       end));
+end;
 
-  for E in Sorted do
+procedure TUiElementRegistry.RegisterAll;
+// Vertrag steht an der Deklaration.
+var
+  E : IIDEUiElement;
+begin
+  for E in SortedItems do
   begin
     if not E.IsEnabled then
     begin
@@ -308,13 +324,7 @@ var
   Sorted : TArray<IIDEUiElement>;
   i      : Integer;
 begin
-  Sorted := FItems.ToArray;
-  TArray.Sort<IIDEUiElement>(Sorted,
-    TComparer<IIDEUiElement>.Construct(
-      function(const A, B: IIDEUiElement): Integer
-      begin
-        Result := A.SortKey - B.SortKey;
-      end));
+  Sorted := SortedItems;
   SetLength(Result, Length(Sorted));
   for i := 0 to High(Sorted) do
   begin
