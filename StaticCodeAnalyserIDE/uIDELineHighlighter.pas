@@ -370,6 +370,30 @@ type
     // OnModuleDestroyed - deckt auch Pfade, in denen die per-File-
     // Destroyed-Callbacks bereits abgemeldet wurden.
     procedure HandleFileClosing(const AFileName: string);
+
+    /// <summary>
+    ///   Rechnet die Streifenfarbe ALLER vorhandenen Marken neu und loest
+    ///   einen Repaint aus. Wird beim Theme- und Farbschema-Wechsel gerufen.
+    /// </summary>
+    /// <remarks>
+    ///   TFindingMark.Color wird zur SCAN-Zeit eingefroren (uIDEAnalyserForm
+    ///   setzt Entry.Color := EditorAccent(DispSev, ...)). Ohne diesen
+    ///   Aufruf behalten bereits gesetzte Marken ihre alte Farbe bis zum
+    ///   naechsten Scan - man schaltet auf Dunkel um und die Marker bleiben
+    ///   auf der Helligkeit von vorhin.
+    ///
+    ///   Die Neuberechnung ist verlustfrei: Severity liegt an der Marke,
+    ///   und Entry.Color und Entry.Severity stammen an der Setzstelle aus
+    ///   demselben DispSev. Es wird also genau das gerechnet, was ein neuer
+    ///   Scan auch rechnen wuerde.
+    ///
+    ///   BEWUSST HIER und nicht im Zeichenpfad: eine einmalige Schleife beim
+    ///   Theme-Wechsel ist billiger als eine Farbaufloesung pro markierter
+    ///   Zeile pro Repaint - und PaintLine ist der Pfad, der diesem Projekt
+    ///   schon eine spuerbare Bremse eingebracht hat.
+    /// </remarks>
+    procedure RecolorAllMarks;
+
     constructor Create;
     destructor Destroy; override;
 
@@ -419,6 +443,9 @@ var
   // GHighlighter.HandleFileClosing; Setzen/Nilen uebernimmt
   // RegisterWatchMode/UnregisterWatchMode.
   GFileClosingSubscriber : TProc<string> = nil;
+  // Theme-Abo des Highlighters (Refcount-RAII). Auf nil setzen meldet ab -
+  // siehe RegisterLineHighlighter / UnregisterLineHighlighter.
+  GThemeSub : IInterface = nil;
 
 procedure RegisterLineHighlighter;
 procedure UnregisterLineHighlighter;
@@ -433,7 +460,8 @@ implementation
 
 uses
   uAnalyserPalette,     // ACCENT_ERROR als zentrale Stripe-Default-Farbe
-  uAnalyserTheme,       // IsLightColor - Auto-Kontrast der Infobar-Schrift
+  uAnalyserTheme,       // IsLightColor, EditorAccent, Farb-Cache
+  uIDETheme,            // Subscribe - Marken beim Theme-Wechsel neu faerben
   uPathNormalize,       // SPOT fuer Pfad-Normalisierung (Cache-Keys)
   uRepoSettings;        // OverlayPosition aus [UI]
 
@@ -996,6 +1024,35 @@ begin
   end;
   if Assigned(FSaveNotifiers) then
     FSaveNotifiers.Remove(AKey);  // IOTAModule/Notifier-Refs sinken
+end;
+
+procedure TFindingHighlighter.RecolorAllMarks;
+// Vertrag und Begruendung stehen an der Deklaration.
+var
+  Bucket : TFileMarks;
+  Line   : Integer;
+  Mark   : TFindingMark;
+  Keys   : TArray<Integer>;
+begin
+  if FMarksByFile.Count = 0 then Exit;
+  for Bucket in FMarksByFile.Values do
+  begin
+    // Schluessel-Schnappschuss: TFindingMark ist ein RECORD, TryGetValue
+    // liefert eine Kopie, und das Zurueckschreiben laeuft ueber
+    // AddOrSetValue. Ueber Keys statt ueber den Enumerator zu gehen haelt
+    // Lesen und Schreiben sauber getrennt.
+    Keys := Bucket.Keys.ToArray;
+    for Line in Keys do
+      if Bucket.TryGetValue(Line, Mark) then
+      begin
+        Mark.Color := EditorAccent(Mark.Severity,
+                        GCachedEditorScheme, GCachedEditorBgDark);
+        Bucket.AddOrSetValue(Line, Mark);
+      end;
+  end;
+  // Ein Aufruf fuer alles Sichtbare - siehe Kommentar an InvalidateAllLines,
+  // pro Zeile zu invalidieren war hier schon einmal die teurere Variante.
+  InvalidateAllLines;
 end;
 
 procedure TFindingHighlighter.HandleFileClosing(const AFileName: string);
@@ -2622,6 +2679,15 @@ var
 begin
   if Assigned(GHighlighter) then Exit;
   GHighlighter := TFindingHighlighter.Create;
+  // Theme-Wechsel: die Farbe bestehender Marken nachziehen. Refcount-RAII,
+  // kein OTA-Slot - TIDETheme haelt bereits genau EINEN Notifier fuer alle
+  // Abonnenten. Abgemeldet wird in UnregisterLineHighlighter, indem die
+  // Referenz auf nil geht.
+  //
+  // Reihenfolge stimmt: RegisterLineHighlighter laeuft in
+  // RegisterEditorLayer, also NACH InstallSharedUiHooks, wo TIDETheme.Prime
+  // den Singleton samt Notifiern bereits aufgebaut hat.
+  GThemeSub := TIDETheme.Subscribe(GHighlighter.RecolorAllMarks);
   try
     if Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then
       GHighlighter.FEditorEventsIdx :=
@@ -2642,6 +2708,10 @@ var
   IdeSvc : IOTAServices;
 begin
   if not Assigned(GHighlighter) then Exit;
+  // ZUERST das Theme-Abo loesen: die Callback-Methode gehoert GHighlighter,
+  // das unten freigegeben wird. Bliebe das Abo stehen, feuerte der naechste
+  // Theme-Wechsel in eine tote Instanz.
+  GThemeSub := nil;
   try
     if (GFileClosingIdx >= 0) and
        Supports(BorlandIDEServices, IOTAServices, IdeSvc) then
