@@ -41,7 +41,6 @@ unit uUiElementRegistry;
 interface
 
 uses
-  System.Classes,
   System.Generics.Collections,
   System.Generics.Defaults,   // TComparer - steht NICHT in .Collections
   System.Math,                // CompareValue - ueberlaufsicherer Vergleich

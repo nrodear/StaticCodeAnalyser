@@ -807,6 +807,26 @@ const
     'OverlayPosition=sameline'#13#10 +
     ';OverlayPosition=below'#13#10 +
     ''#13#10 +
+    '; Element.<Name> (bool 0/1, default: 1)'#13#10 +
+    '; NOT-AUS je UI-Element des IDE-Plugins: 0 legt genau dieses'#13#10 +
+    '; Element still, ohne Deinstallation - fuer den Fall, dass ein'#13#10 +
+    '; Element die IDE stoert. Wirkt erst nach IDE-Neustart; welche'#13#10 +
+    '; Elemente uebersprungen wurden, meldet das Plugin beim Laden per'#13#10 +
+    '; Debug-Ausgabe (DebugView, Praefix SCA-UI). Die Standalone-EXE'#13#10 +
+    '; liest diese Schluessel nicht.'#13#10 +
+    '; Gueltige Namen:'#13#10 +
+    ';   SharedUiHooks, DockForm, LineHighlighter, AnnotationOverlay,'#13#10 +
+    ';   WatchMode, WarmUpCaches, ViewMenuItem, EditorContextMenu,'#13#10 +
+    ';   OptionsPageSCA, OptionsPageSonar, FindingsProperties,'#13#10 +
+    ';   AboutBox, ToolsMenuItem'#13#10 +
+    '; PackageWizard ist bewusst NICHT abschaltbar - er traegt den'#13#10 +
+    '; Abbau aller uebrigen Elemente beim Entladen.'#13#10 +
+    '; Abhaengige Degradation: DockForm=0 entfernt auch den View-'#13#10 +
+    '; Menue-Eintrag; WatchMode=0 laesst das Properties-Panel ohne'#13#10 +
+    '; Live-Findings; SharedUiHooks=0 faellt farblich auf'#13#10 +
+    '; VCL-Defaults zurueck.'#13#10 +
+    ';Element.AnnotationOverlay=0'#13#10 +
+    ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ';  [Score] - Code-Quality-Letter-Grade-Schwellwerte'#13#10 +
