@@ -520,6 +520,20 @@ procedure AddUiElements(ARegistry: TUiElementRegistry);
 procedure UnregisterAnalyserDockableForm;
 procedure ShowAnalyserDockableForm;
 
+// Not-Aus (A.5): liefert die Enabled-Funktion eines Elements. Sie liest
+// [UI] Element.<Name> aus der analyser.ini (Vorgabe: an) - ein Element,
+// das die IDE stoert, laesst sich damit ohne Deinstallation stilllegen.
+//
+// Die Schluesselableitung wohnt getestet in SCA.SharedUI
+// (UiElementEnabledKey); das LESEN wohnt hier im Plugin, weil
+// TRepoSettings Engine ist und SharedUI die Engine nicht kennen darf
+// (Schichtgrenze "Theme-Layering", Doku_05).
+//
+// Gelesen wird genau EINMAL, wenn RegisterAll den Schalter abfragt -
+// beim Paketladen, nie im Zeichenpfad. Ein Umschalten wirkt deshalb erst
+// nach IDE-Neustart; das ist fuer einen Not-Aus die richtige Semantik.
+function UiElementEnabledFromIni(const AName: string): TUiElementEnabledFunc;
+
 // Konsistente Titel-Konstruktion fuer alle UI-Stellen (Hover-Overlay,
 // Plugin-Frame-Grid, Properties-Panel, IDE-Messages-View): kombiniert
 // F.MissingVar (oft nur ein Identifier wie "test") mit der Rule-
@@ -4698,6 +4712,29 @@ end;
 // uebersprungen wurde - AddViewMenuItem prueft deshalb GDockableForm.
 // ---------------------------------------------------------------------------
 
+function UiElementEnabledFromIni(const AName: string): TUiElementEnabledFunc;
+// Vertrag steht an der Deklaration.
+//
+// Die Closure captured nur den STRING - keinen IDE-Dienst, kein Objekt.
+// Sie darf deshalb beliebig lange leben (die Registry haelt sie bis zum
+// finalization-Free), ohne dass beim BPL-Unload etwas dangling wird.
+var
+  Key : string;
+begin
+  Key := UiElementEnabledKey(AName);
+  if Key = '' then
+  begin
+    // Kein ableitbarer Schluessel -> kein Schalter -> immer an. nil ist
+    // im Adapter genau dafuer definiert.
+    Exit(nil);
+  end;
+  Result :=
+    function: Boolean
+    begin
+      Result := TRepoSettings.QuickReadBool('UI', Key, True);
+    end;
+end;
+
 procedure InstallSharedUiHooks;
 // Zwei Hooks derselben Bauart nach SCA.SharedUI. Beide nimmt
 // RemoveSharedUiHooks wieder auf nil - ihre Closures captured
@@ -4899,41 +4936,52 @@ const
   SK_CTX_MENU       = 80;
   SK_OPTIONS_SCA    = 90;
   SK_OPTIONS_SONAR  = 100;
+  procedure AddEl(const AName: string; ASortKey: Integer;
+    const AReg, AUnreg: TUiElementProc);
+  // Buendelt Element und Not-Aus (A.5): der Name faellt nur EINMAL, und
+  // damit koennen Element-Eintrag und Schalter-Schluessel nicht
+  // auseinanderlaufen - die Fehlerklasse, die beim Nur-Text-Hint zwei
+  // Runden gekostet hat.
+  begin
+    ARegistry.Add(TDelegatedUiElement.Create(AName, ASortKey, AReg, AUnreg,
+      UiElementEnabledFromIni(AName)));
+  end;
+
 begin
   if not Assigned(ARegistry) then Exit;
 
-  ARegistry.Add(TDelegatedUiElement.Create('SharedUiHooks', SK_SHARED_HOOKS,
-    InstallSharedUiHooks, RemoveSharedUiHooks));
-  ARegistry.Add(TDelegatedUiElement.Create('DockForm', SK_DOCK_FORM,
-    CreateAndRegisterDockForm, TeardownDockForm));
+  AddEl('SharedUiHooks', SK_SHARED_HOOKS,
+    InstallSharedUiHooks, RemoveSharedUiHooks);
+  AddEl('DockForm', SK_DOCK_FORM,
+    CreateAndRegisterDockForm, TeardownDockForm);
   // Custom-Line-Highlighter: Manager + INTAEditServicesNotifier sofort
   // registrieren. Per-View-Notifier werden ueber EditorViewActivated
   // angehaengt; AV-sicher dank ref-counting (siehe uIDELineHighlighter).
-  ARegistry.Add(TDelegatedUiElement.Create('LineHighlighter', SK_LINE_HIGHLIGHT,
-    RegisterLineHighlighter, UnregisterLineHighlighter));
-  ARegistry.Add(TDelegatedUiElement.Create('AnnotationOverlay', SK_ANNOTATION,
-    RegisterAnnotationOverlay, UnregisterAnnotationOverlay));
+  AddEl('LineHighlighter', SK_LINE_HIGHLIGHT,
+    RegisterLineHighlighter, UnregisterLineHighlighter);
+  AddEl('AnnotationOverlay', SK_ANNOTATION,
+    RegisterAnnotationOverlay, UnregisterAnnotationOverlay);
   // Watch-Mode: Manager-Singleton anlegen. KEINE ToolsAPI-Calls hier -
   // der Module-Notifier wird erst beim Activate() aus PrepareAnalysis
   // angehaengt (nur im "Aktuelle Datei"-Pfad, Single-File-Watch).
-  ARegistry.Add(TDelegatedUiElement.Create('WatchMode', SK_WATCH_MODE,
-    RegisterWatchMode, UnregisterWatchMode));
-  ARegistry.Add(TDelegatedUiElement.Create('WarmUpCaches', SK_WARMUP,
-    WarmUpCaches, nil));
-  ARegistry.Add(TDelegatedUiElement.Create('ViewMenuItem', SK_VIEW_MENU,
-    AddViewMenuItem, RemoveViewMenuItem));
+  AddEl('WatchMode', SK_WATCH_MODE,
+    RegisterWatchMode, UnregisterWatchMode);
+  AddEl('WarmUpCaches', SK_WARMUP,
+    WarmUpCaches, nil);
+  AddEl('ViewMenuItem', SK_VIEW_MENU,
+    AddViewMenuItem, RemoveViewMenuItem);
   // Editor-Rechtsklick-Menue: dynamischer OnPopup-Hook fuer den
   // Silent-Mode-Eintrag. Triggert die Silent-Analyse via Klick.
-  ARegistry.Add(TDelegatedUiElement.Create('EditorContextMenu', SK_CTX_MENU,
-    RegisterEditorContextMenuHook, UnregisterEditorContextMenuHook));
+  AddEl('EditorContextMenu', SK_CTX_MENU,
+    RegisterEditorContextMenuHook, UnregisterEditorContextMenuHook);
   // Tools > Options > Third Party > Static Code Analyser
   // (Checkbox um den Silent-Mode aus-/anzuschalten).
-  ARegistry.Add(TDelegatedUiElement.Create('OptionsPageSCA', SK_OPTIONS_SCA,
-    RegisterSCAAddInOptions, UnregisterSCAAddInOptions));
+  AddEl('OptionsPageSCA', SK_OPTIONS_SCA,
+    RegisterSCAAddInOptions, UnregisterSCAAddInOptions);
   // Tools > Options > Third Party > Sonar Integration
   // (separate Page - Host/Token/ProjectKey + Test-Connection).
-  ARegistry.Add(TDelegatedUiElement.Create('OptionsPageSonar', SK_OPTIONS_SONAR,
-    RegisterSonarAddInOptions, UnregisterSonarAddInOptions));
+  AddEl('OptionsPageSonar', SK_OPTIONS_SONAR,
+    RegisterSonarAddInOptions, UnregisterSonarAddInOptions);
 end;
 
 procedure ShowAnalyserDockableForm;

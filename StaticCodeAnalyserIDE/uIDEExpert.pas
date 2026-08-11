@@ -305,30 +305,37 @@ const
   SK_PACKAGE_WIZARD = 120;
   SK_ABOUT_BOX      = 130;
   SK_TOOLS_MENU     = 140;
+
+  procedure AddEl(const AName: string; ASortKey: Integer;
+    const AReg, AUnreg: TUiElementProc);
+  // Wie in uIDEAnalyserForm.AddUiElements: Element und Not-Aus-Schalter
+  // (A.5) an EINEM Namen - beide koennen nicht auseinanderlaufen.
+  begin
+    ARegistry.Add(TDelegatedUiElement.Create(AName, ASortKey, AReg, AUnreg,
+      UiElementEnabledFromIni(AName)));
+  end;
+
 begin
   // Findings-Properties-Panel: registriert NACH dem WatchMode-Element
   // (SortKey 50), damit GWatchMode schon lebt - der Wrapper-FrameCreated
   // subscribed GWatchMode.SubscribeFindings beim ersten Dock-Open. Die
   // Abhaengigkeit stand frueher nur als Kommentar an einer Aufrufzeile;
   // jetzt haengt sie an der Position des Elements.
-  ARegistry.Add(TDelegatedUiElement.Create(
-    'FindingsProperties', SK_FINDINGS_PROPS,
+  AddEl('FindingsProperties', SK_FINDINGS_PROPS,
     RegisterFindingsPropertiesDockableForm,
-    UnregisterFindingsPropertiesDockableForm));
-  // Der Wizard ist BEWUSST nicht abschaltbar (keine Enabled-Funktion, und
-  // A.5 darf ihm keine geben): sein Destroy ist der Ausloeser des ganzen
-  // Abbaus. Ein abgeschalteter Wizard waere ein Leck aller anderen
+    UnregisterFindingsPropertiesDockableForm);
+  // Der Wizard ist BEWUSST nicht abschaltbar (keine Enabled-Funktion,
+  // absichtlich NICHT ueber AddEl): sein Destroy ist der Ausloeser des
+  // ganzen Abbaus. Ein abgeschalteter Wizard waere ein Leck aller anderen
   // Elemente.
   ARegistry.Add(TDelegatedUiElement.Create(
     'PackageWizard', SK_PACKAGE_WIZARD,
     RegisterWizardElement,
     nil));  // Abbau gehoert der IDE: sie gibt den Wizard frei
-  ARegistry.Add(TDelegatedUiElement.Create(
-    'AboutBox', SK_ABOUT_BOX,
-    RegisterAboutBox, UnregisterAboutBox));
-  ARegistry.Add(TDelegatedUiElement.Create(
-    'ToolsMenuItem', SK_TOOLS_MENU,
-    RegisterToolsMenuItem, UnregisterToolsMenuItem));
+  AddEl('AboutBox', SK_ABOUT_BOX,
+    RegisterAboutBox, UnregisterAboutBox);
+  AddEl('ToolsMenuItem', SK_TOOLS_MENU,
+    RegisterToolsMenuItem, UnregisterToolsMenuItem);
 end;
 
 procedure Register;
