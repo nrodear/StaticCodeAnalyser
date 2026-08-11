@@ -43,6 +43,25 @@ type
     // T.2 - Schluesselableitung fuer den Not-Aus.
     [Test] procedure EnabledKeyStripsEverythingButLettersAndDigits;
     [Test] procedure EnabledKeyIsEmptyWhenNothingUsableRemains;
+    // Ein kaputter Not-Aus-Schalter darf nichts stilllegen.
+    [Test] procedure ThrowingEnabledFuncCountsAsOnAndIsLogged;
+  end;
+
+  // A.3: der wiederverwendbare Adapter, mit dem die elf Plugin-Elemente
+  // ohne je eigene Klasse in die Registry kommen.
+  [TestFixture]
+  TTestDelegatedUiElement = class
+  public
+    // Der Adapter reicht wirklich an die uebergebenen Prozeduren durch.
+    [Test] procedure DelegatesRegisterAndUnregister;
+    // nil-Unregister ist ein gueltiger Zustand, kein Fehler.
+    [Test] procedure NilUnregisterIsANoOp;
+    // nil-EnabledFunc heisst immer an.
+    [Test] procedure NilEnabledFuncMeansOn;
+    // Eine False liefernde EnabledFunc laesst die Registry ueberspringen.
+    [Test] procedure EnabledFuncFalseSkipsTheElement;
+    // Ohne Register-Prozedur knallt es am Aufrufort, nicht spaeter still.
+    [Test] procedure NilRegisterProcRaisesAtCreation;
   end;
 
 implementation
@@ -301,7 +320,160 @@ begin
   Assert.AreEqual('', UiElementEnabledKey('-.:#'));
 end;
 
+type
+  // Attrappe mit werfendem Schalter - nur fuer den einen Test darunter.
+  TThrowingEnabledElement = class(TInterfacedObject, IIDEUiElement)
+  private
+    FLog : TStrings;
+  public
+    constructor Create(ALog: TStrings);
+    function Name: string;
+    function SortKey: Integer;
+    function IsEnabled: Boolean;
+    procedure RegisterElement;
+    procedure UnregisterElement;
+  end;
+
+constructor TThrowingEnabledElement.Create(ALog: TStrings);
+begin
+  inherited Create;
+  FLog := ALog;
+end;
+
+function TThrowingEnabledElement.Name: string;
+begin
+  Result := 'Wackelschalter';
+end;
+
+function TThrowingEnabledElement.SortKey: Integer;
+begin
+  Result := 10;
+end;
+
+function TThrowingEnabledElement.IsEnabled: Boolean;
+begin
+  raise EFakeElementFailure.Create('Schalter absichtlich kaputt');
+end;
+
+procedure TThrowingEnabledElement.RegisterElement;
+begin
+  FLog.Add('+Wackelschalter');
+end;
+
+procedure TThrowingEnabledElement.UnregisterElement;
+begin
+  FLog.Add('-Wackelschalter');
+end;
+
+procedure TTestUiElementRegistry.ThrowingEnabledFuncCountsAsOnAndIsLogged;
+var
+  L, Diag : TStringList;
+  R       : TUiElementRegistry;
+begin
+  L    := TStringList.Create;
+  Diag := TStringList.Create;
+  R    := TUiElementRegistry.Create;
+  try
+    R.OnLog := procedure(const M: string) begin Diag.Add(M); end;
+    R.Add(TThrowingEnabledElement.Create(L));
+    R.RegisterAll;
+    Assert.AreEqual('+Wackelschalter'#13#10, L.Text,
+      'Kaputter Schalter darf das Element nicht stilllegen');
+    Assert.IsTrue(Diag.Text.Contains('IsEnabled wirft'),
+      'Der Fehler muss im Protokoll stehen, nicht verschwinden');
+  finally
+    R.Free;
+    Diag.Free;
+    L.Free;
+  end;
+end;
+
+{ TTestDelegatedUiElement }
+
+procedure TTestDelegatedUiElement.DelegatesRegisterAndUnregister;
+var
+  L : TStringList;
+  R : TUiElementRegistry;
+begin
+  L := TStringList.Create;
+  R := TUiElementRegistry.Create;
+  try
+    R.Add(TDelegatedUiElement.Create('Ding', 10,
+      procedure begin L.Add('+Ding'); end,
+      procedure begin L.Add('-Ding'); end));
+    R.RegisterAll;
+    R.UnregisterAll;
+    Assert.AreEqual('+Ding'#13#10'-Ding'#13#10, L.Text);
+  finally
+    R.Free;
+    L.Free;
+  end;
+end;
+
+procedure TTestDelegatedUiElement.NilUnregisterIsANoOp;
+var
+  L : TStringList;
+  R : TUiElementRegistry;
+begin
+  L := TStringList.Create;
+  R := TUiElementRegistry.Create;
+  try
+    R.Add(TDelegatedUiElement.Create('NurAufbau', 10,
+      procedure begin L.Add('+NurAufbau'); end,
+      nil));
+    R.RegisterAll;
+    R.UnregisterAll;
+    Assert.AreEqual('+NurAufbau'#13#10, L.Text,
+      'nil-Unregister heisst "nichts abzubauen" und darf nicht knallen');
+  finally
+    R.Free;
+    L.Free;
+  end;
+end;
+
+procedure TTestDelegatedUiElement.NilEnabledFuncMeansOn;
+var
+  E : IIDEUiElement;
+begin
+  E := TDelegatedUiElement.Create('Immer', 10, procedure begin end, nil);
+  Assert.IsTrue(E.IsEnabled, 'nil-EnabledFunc muss "immer an" bedeuten');
+end;
+
+procedure TTestDelegatedUiElement.EnabledFuncFalseSkipsTheElement;
+var
+  L : TStringList;
+  R : TUiElementRegistry;
+begin
+  L := TStringList.Create;
+  R := TUiElementRegistry.Create;
+  try
+    R.Add(TDelegatedUiElement.Create('Aus', 10,
+      procedure begin L.Add('+Aus'); end,
+      procedure begin L.Add('-Aus'); end,
+      function: Boolean begin Result := False; end));
+    R.RegisterAll;
+    R.UnregisterAll;
+    Assert.AreEqual('', L.Text,
+      'Abgeschaltet heisst: weder an- noch abgemeldet');
+  finally
+    R.Free;
+    L.Free;
+  end;
+end;
+
+procedure TTestDelegatedUiElement.NilRegisterProcRaisesAtCreation;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      TDelegatedUiElement.Create('Tot', 10, nil, nil);
+    end,
+    EArgumentNilException,
+    'Ein Element ohne Register-Prozedur ist ein Fehler am Aufrufort');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestUiElementRegistry);
+  TDUnitX.RegisterTestFixture(TTestDelegatedUiElement);
 
 end.

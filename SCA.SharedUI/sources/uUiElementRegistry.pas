@@ -92,6 +92,59 @@ type
   /// </summary>
   TUiRegistryLogProc = reference to procedure(const AMessage: string);
 
+  /// <summary> An-/Abmelde-Schritt eines delegierten Elements. </summary>
+  TUiElementProc = reference to procedure;
+
+  /// <summary> Liefert, ob ein delegiertes Element aktiv ist. </summary>
+  TUiElementEnabledFunc = reference to function: Boolean;
+
+  /// <summary>
+  ///   Wiederverwendbarer Adapter: macht aus zwei vorhandenen Prozeduren
+  ///   ein IIDEUiElement, ohne dass je Element eine eigene Klasse
+  ///   entsteht.
+  /// </summary>
+  /// <remarks>
+  ///   Fuer den Umbau eines Bestands ist das die passende Form: die elf
+  ///   RegisterXxx/UnregisterXxx-Rumpfe des Plugins bleiben unangetastet,
+  ///   der Adapter traegt nur Name, Position und die beiden Verweise.
+  ///   Eine Klasse je Element (wie bei GExperts/CnWizards) lohnt erst,
+  ///   wenn Elemente eigenes Verhalten bekommen.
+  ///
+  ///   nil ist an zwei Stellen ein gueltiger Wert mit definierter
+  ///   Bedeutung: AUnregisterProc=nil heisst "nichts abzubauen" (z. B.
+  ///   ein reiner Warmlade-Schritt), AEnabledFunc=nil heisst "immer an"
+  ///   (z. B. der PackageWizard, an dem der Abbau aller anderen haengt).
+  ///   ARegisterProc=nil ergibt ein totes Element und wirft deshalb schon
+  ///   im Konstruktor - nicht erst still beim Anmelden.
+  ///
+  ///   Wirft die EnabledFunc, gilt das Element als AN: ein kaputter
+  ///   Not-Aus-Schalter darf ein UI-Element nicht stilllegen. Der Fehler
+  ///   wird nicht verschluckt, sondern von der Registry protokolliert.
+  /// </remarks>
+  TDelegatedUiElement = class(TInterfacedObject, IIDEUiElement)
+  private
+    FName           : string;
+    FSortKey        : Integer;
+    FRegisterProc   : TUiElementProc;
+    FUnregisterProc : TUiElementProc;
+    FEnabledFunc    : TUiElementEnabledFunc;
+  public
+    constructor Create(const AName: string; ASortKey: Integer;
+      const ARegisterProc: TUiElementProc;
+      const AUnregisterProc: TUiElementProc;
+      const AEnabledFunc: TUiElementEnabledFunc = nil);
+    /// <summary> Siehe IIDEUiElement. </summary>
+    function Name: string;
+    /// <summary> Siehe IIDEUiElement. </summary>
+    function SortKey: Integer;
+    /// <summary> nil-Funktion oder werfende Funktion = an. </summary>
+    function IsEnabled: Boolean;
+    /// <summary> Ruft die Register-Prozedur. </summary>
+    procedure RegisterElement;
+    /// <summary> Ruft die Unregister-Prozedur; nil = no-op. </summary>
+    procedure UnregisterElement;
+  end;
+
   /// <summary>
   ///   Geordnetes Verzeichnis der UI-Elemente. Nicht threadsicher - alle
   ///   Aufrufe laufen im VCL-Thread beim Laden und Entladen des Pakets.
@@ -176,6 +229,13 @@ function UiElementEnabledKey(const AName: string): string;
 
 implementation
 
+// noinspection-file ClassPerFile
+// Schnittstelle, Registry und ihr Standard-Adapter (TDelegatedUiElement)
+// bilden EIN Modul: der Adapter existiert nur, damit Elemente ohne eigene
+// Klasse in die Registry kommen - ihn in eine eigene Unit zu verbannen
+// wuerde jeden Verwender zwingen, zwei Units zu importieren, die nie
+// getrennt auftreten.
+
 function UiElementEnabledKey(const AName: string): string;
 // Vertrag steht an der Deklaration.
 var
@@ -255,11 +315,28 @@ end;
 procedure TUiElementRegistry.RegisterAll;
 // Vertrag steht an der Deklaration.
 var
-  E : IIDEUiElement;
+  E       : IIDEUiElement;
+  Enabled : Boolean;
 begin
   for E in SortedItems do
   begin
-    if not E.IsEnabled then
+    // Eigener Fang um den Schalter, getrennt vom Anmelden: ein werfender
+    // IsEnabled darf weder die Schleife toeten noch als "Anmelden
+    // fehlgeschlagen" im Protokoll stehen - das waere die falsche
+    // Diagnose. Kaputter Schalter = Element gilt als AN; ein Not-Aus,
+    // der kaputt ist, darf nichts stilllegen.
+    Enabled := True;
+    try
+      Enabled := E.IsEnabled;
+    except
+      // noinspection ExceptionTooGeneral
+      on Ex: Exception do
+      begin
+        Log(Format('IsEnabled wirft, Element gilt als an: %s (%s: %s)',
+                   [E.Name, Ex.ClassName, Ex.Message]));
+      end;
+    end;
+    if not Enabled then
     begin
       Log(Format('uebersprungen (abgeschaltet): %s', [E.Name]));
       Continue;
@@ -340,6 +417,70 @@ begin
   for i := 0 to FRegistered.Count - 1 do
   begin
     Result[i] := FRegistered[FRegistered.Count - 1 - i].Name;
+  end;
+end;
+
+{ TDelegatedUiElement }
+
+constructor TDelegatedUiElement.Create(const AName: string;
+  ASortKey: Integer; const ARegisterProc: TUiElementProc;
+  const AUnregisterProc: TUiElementProc;
+  const AEnabledFunc: TUiElementEnabledFunc);
+begin
+  inherited Create;
+  // Frueh und laut statt spaet und still: ein Element ohne
+  // Register-Prozedur kann nie etwas anmelden - der Fehler liegt am
+  // AUFRUFORT des Konstruktors, also soll er auch dort knallen und nicht
+  // erst als Protokollzeile beim Plugin-Start auftauchen.
+  if not Assigned(ARegisterProc) then
+  begin
+    raise EArgumentNilException.Create(
+      'TDelegatedUiElement.Create: ARegisterProc ist nil (' + AName + ')');
+  end;
+  FName           := AName;
+  FSortKey        := ASortKey;
+  FRegisterProc   := ARegisterProc;
+  FUnregisterProc := AUnregisterProc;
+  FEnabledFunc    := AEnabledFunc;
+end;
+
+function TDelegatedUiElement.Name: string;
+begin
+  Result := FName;
+end;
+
+function TDelegatedUiElement.SortKey: Integer;
+begin
+  Result := FSortKey;
+end;
+
+function TDelegatedUiElement.IsEnabled: Boolean;
+// nil = immer an. Wirft die Funktion, faengt das die REGISTRY (eigener
+// Fang um den Schalter in RegisterAll) und wertet es als an - hier nicht
+// doppelt fangen, sonst verschwaende der Fehler ohne Protokollzeile.
+begin
+  if Assigned(FEnabledFunc) then
+  begin
+    Result := FEnabledFunc;
+  end
+  else
+  begin
+    Result := True;
+  end;
+end;
+
+procedure TDelegatedUiElement.RegisterElement;
+begin
+  FRegisterProc;
+end;
+
+procedure TDelegatedUiElement.UnregisterElement;
+// nil = "nichts abzubauen" - ein gueltiger Zustand (z. B. reiner
+// Warmlade-Schritt), kein Fehler.
+begin
+  if Assigned(FUnregisterProc) then
+  begin
+    FUnregisterProc;
   end;
 end;
 
