@@ -272,9 +272,11 @@ type
     procedure SearchDebounceFire(Sender: TObject);
     // Reduziert SeverityFilterCombo + TypeFilterCombo auf Eintraege deren
     // Mode/Type mindestens einen Treffer in FAllFindings hat ('All' und
-    // 'Detector Review' bleiben immer). Aktuelle Auswahl wird via
-    // Items.Objects-Tag wiederhergestellt; gibt es den vorher gewaehlten
-    // Eintrag nach dem Scan nicht mehr, faellt der Combo auf 'All' zurueck.
+    // 'Detector Review' bleiben immer) und setzt BEIDE Combos danach auf
+    // 'All' zurueck. Nutzerentscheid 2026-08-12: nach einem Scan startet
+    // die Liste immer ungefiltert - vorher wurde die vorige Auswahl
+    // restauriert, und ein stehengebliebener Filter las sich wie
+    // "der Scan hat kaum etwas gefunden".
     procedure RebuildFilterCombos;
     // Inner helper: registriert eine bereits geladene Settings-Instanz und
     // setzt optional die Discovery-Listen zurueck. Wird vom Analyse-Pfad
@@ -1361,27 +1363,20 @@ procedure TForm2.RebuildFilterCombos;
 // Reduziert beide Combos auf Eintraege deren Mode/Type in FAllFindings
 // mindestens einen Treffer hat. 'All' und 'Detector Review' bleiben
 // immer drin (auch bei 0 Treffern - sind statisch nuetzliche Optionen).
-// Aktuelle Auswahl wird via Mode-Ord wiederhergestellt; war der Eintrag
-// vor dem Scan ausgewaehlt und ist jetzt weg, faellt der Combo auf
-// 'All' (Index 0) zurueck.
+//
+// NACH DEM NEUAUFBAU STEHEN BEIDE COMBOS AUF 'All' (Index 0 - der
+// fmAll/tfAll-Eintrag wird immer behalten und steht per Snapshot-Ordnung
+// vorn). Nutzerentscheid 2026-08-12: ein Scan startet immer mit
+// ungefilterter Liste. Die fruehere Restaurierung der vorigen Auswahl
+// ist damit entfallen - ein stehengebliebener Filter las sich nach dem
+// Scan wie "kaum Funde", obwohl nur der alte Filter noch griff. Der
+// einzige Aufrufer ist der Nach-Scan-Pfad (PopulateFindings); wer die
+// Routine je woanders ruft, uebernimmt damit auch den Reset.
 var
   Item : TFilterComboItem;
-  SavedSevMode, SavedTypeMode, NewIdx, i : Integer;
 begin
   if FAllFindings = nil then Exit;
   if Length(FAllSeverityItems) = 0 then Exit;
-
-  // Aktuelle Auswahl merken (Ord, nicht Index - Index verschiebt sich).
-  SavedSevMode := Ord(fmAll);
-  if (SeverityFilterCombo.ItemIndex >= 0)
-     and Assigned(SeverityFilterCombo.Items.Objects[SeverityFilterCombo.ItemIndex]) then
-    SavedSevMode := Integer(
-      SeverityFilterCombo.Items.Objects[SeverityFilterCombo.ItemIndex]);
-  SavedTypeMode := Ord(tfAll);
-  if (TypeFilterCombo.ItemIndex >= 0)
-     and Assigned(TypeFilterCombo.Items.Objects[TypeFilterCombo.ItemIndex]) then
-    SavedTypeMode := Integer(
-      TypeFilterCombo.Items.Objects[TypeFilterCombo.ItemIndex]);
 
   // ---- SeverityFilterCombo ----
   SeverityFilterCombo.Items.BeginUpdate;
@@ -1398,14 +1393,7 @@ begin
   finally
     SeverityFilterCombo.Items.EndUpdate;
   end;
-  NewIdx := 0;
-  for i := 0 to SeverityFilterCombo.Items.Count - 1 do
-    if Integer(SeverityFilterCombo.Items.Objects[i]) = SavedSevMode then
-    begin
-      NewIdx := i;
-      Break;
-    end;
-  SeverityFilterCombo.ItemIndex := NewIdx;
+  SeverityFilterCombo.ItemIndex := 0;
   // Der Helfer filtert gegen seinen eigenen Schnappschuss - nach jedem
   // Umbau der Items muss er ihn neu ziehen.
   if Assigned(FSeveritySearch) then FSeveritySearch.Resync;
@@ -1424,14 +1412,7 @@ begin
   finally
     TypeFilterCombo.Items.EndUpdate;
   end;
-  NewIdx := 0;
-  for i := 0 to TypeFilterCombo.Items.Count - 1 do
-    if Integer(TypeFilterCombo.Items.Objects[i]) = SavedTypeMode then
-    begin
-      NewIdx := i;
-      Break;
-    end;
-  TypeFilterCombo.ItemIndex := NewIdx;
+  TypeFilterCombo.ItemIndex := 0;
 end;
 
 procedure TForm2.UpdateStats;

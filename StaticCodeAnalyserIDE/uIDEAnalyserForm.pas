@@ -311,6 +311,9 @@ type
     // wieder entfernt wenn sie "leer" stehen (zwei Separatoren hintereinander
     // oder am Listen-Ende).
     procedure SnapshotFilterItems;
+    // Reduziert beide Filter-Combos auf Eintraege mit > 0 Treffern und
+    // setzt sie danach auf 'All' zurueck (Nutzerentscheid 2026-08-12:
+    // ein Scan startet immer ungefiltert; identisch in der EXE).
     procedure RebuildFilterCombos;
     // UI-Build-Helper: aus dem Constructor ausgelagert um die Setup-
     // Pfade lesbar zu halten. Reihenfolge im Constructor:
@@ -2101,24 +2104,24 @@ procedure TAnalyserFrame.RebuildFilterCombos;
 // vorlaufig behalten und im zweiten Pass weggeworfen wenn sie keinen
 // folgenden Detail-Eintrag mehr haben (vermeidet '--- Errors ---'-
 // Header ohne darunter liegende Items).
+//
+// NACH DEM NEUAUFBAU STEHEN BEIDE COMBOS AUF 'All' (Index 0 - der
+// fmAll/tfAll-Eintrag wird immer behalten und steht per Snapshot-Ordnung
+// vorn, Separatoren koennen nicht davor rutschen). Nutzerentscheid
+// 2026-08-12, identisch in der Standalone-EXE umgesetzt: ein Scan startet
+// immer mit ungefilterter Liste. Die fruehere Restaurierung der vorigen
+// Auswahl ist entfallen - ein stehengebliebener Filter las sich nach dem
+// Scan wie "kaum Funde", obwohl nur der alte Filter noch griff. Der
+// einzige Aufrufer ist der Nach-Scan-Pfad (PopulateFindings); wer die
+// Routine je woanders ruft, uebernimmt damit auch den Reset.
 var
   Item : TFilterComboItem;
-  SavedSevMode, SavedTypeMode, NewIdx, i : Integer;
+  i : Integer;
   Filtered : TArray<TFilterComboItem>;
   Tmp : TList<TFilterComboItem>;
 begin
   if FAllFindings = nil then Exit;
   if Length(FAllSeverityItems) = 0 then Exit;
-
-  // Aktuelle Auswahl merken (Mode-Ord, nicht Index).
-  SavedSevMode := Ord(fmAll);
-  if (FFilterCombo.ItemIndex >= 0)
-     and Assigned(FFilterCombo.Items.Objects[FFilterCombo.ItemIndex]) then
-    SavedSevMode := Integer(FFilterCombo.Items.Objects[FFilterCombo.ItemIndex]);
-  SavedTypeMode := Ord(tfAll);
-  if (FTypeCombo.ItemIndex >= 0)
-     and Assigned(FTypeCombo.Items.Objects[FTypeCombo.ItemIndex]) then
-    SavedTypeMode := Integer(FTypeCombo.Items.Objects[FTypeCombo.ItemIndex]);
 
   // ---- Severity-Filter: zwei-Pass-Filterung ----
   Tmp := TList<TFilterComboItem>.Create;
@@ -2158,15 +2161,7 @@ begin
   finally
     FFilterCombo.Items.EndUpdate;
   end;
-  NewIdx := 0;
-  for i := 0 to FFilterCombo.Items.Count - 1 do
-    if (Integer(FFilterCombo.Items.Objects[i]) = SavedSevMode)
-       and (Integer(FFilterCombo.Items.Objects[i]) <> -1) then
-    begin
-      NewIdx := i;
-      Break;
-    end;
-  FFilterCombo.ItemIndex := NewIdx;
+  FFilterCombo.ItemIndex := 0;
   // Der Helfer filtert gegen seinen eigenen Schnappschuss - nach jedem
   // Umbau der Items muss er ihn neu ziehen.
   if Assigned(FFilterSearch) then FFilterSearch.Resync;
@@ -2185,14 +2180,7 @@ begin
   finally
     FTypeCombo.Items.EndUpdate;
   end;
-  NewIdx := 0;
-  for i := 0 to FTypeCombo.Items.Count - 1 do
-    if Integer(FTypeCombo.Items.Objects[i]) = SavedTypeMode then
-    begin
-      NewIdx := i;
-      Break;
-    end;
-  FTypeCombo.ItemIndex := NewIdx;
+  FTypeCombo.ItemIndex := 0;
 end;
 
 procedure TAnalyserFrame.PopulateFindings(
