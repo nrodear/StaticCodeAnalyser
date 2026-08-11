@@ -517,7 +517,6 @@ var
 // Siebtel seiner Arbeit benannte: es war faktisch der versteckte
 // Startpunkt der gesamten Plugin-Oberflaeche.
 procedure AddUiElements(ARegistry: TUiElementRegistry);
-procedure UnregisterAnalyserDockableForm;
 procedure ShowAnalyserDockableForm;
 
 // Not-Aus (A.5): liefert die Enabled-Funktion eines Elements. Sie liest
@@ -4809,17 +4808,18 @@ begin
 end;
 
 procedure TeardownDockForm;
-// Gegenstueck zu CreateAndRegisterDockForm. Der Worker-Join gehoert MIT
-// in dieses Element: er muss laufen, BEVOR Frame und Package sterben, und
-// er stand im gemessenen Abbau (2026-08-10) direkt vor der Dock-Freigabe.
+// Gegenstueck zu CreateAndRegisterDockForm.
+//
+// A.4: Der Worker-Join steht NICHT mehr hier, sondern als Barriere VOR
+// dem gesamten UnregisterAll (uIDEExpert.TeardownUiElements). Grund:
+// WaitFor pumpt CheckSynchronize - waehrend des Joins laufen gequeuete
+// Worker-Closures noch aus, und die duerfen auf ALLES treffen
+// (Highlighter, Overlay, Frame). Im Rueckwaerts-Abbau waere der
+// Highlighter zu diesem Zeitpunkt aber schon weg. Der Join muss also
+// laufen, solange noch alles lebt - vor dem ersten Abbau-Schritt.
 var
   NTASvc : INTAServices;
 begin
-  // Welle 1b (2026-07-20): BPL-Unload - ALLE lebenden Bulk-Worker joinen
-  // (inkl. Dock-Close-Orphans), BEVOR Frame und Package sterben. Bewusst
-  // ueber die unit-globale Liste statt ueber GDockableForm.Frame - der
-  // Frame-Pointer kann nach einem Dock-Close dangling sein.
-  JoinAllBulkWorkers;
   if Assigned(GDockableForm) then
   begin
     // GDockableForm ist ein TInterfacedObject -> wird ueber den
@@ -5007,27 +5007,11 @@ begin
   end;
 end;
 
-procedure UnregisterAnalyserDockableForm;
-// A.3: nur noch der Taktgeber - die Stuecke sind dieselben Prozeduren,
-// die auch als Unregister-Seite der Adapter im Verzeichnis haengen.
-//
-// DIE REIHENFOLGE IST WOERTLICH DIE GEMESSENE VOM 2026-08-10 und bleibt
-// es in dieser Stufe bewusst: sie laeuft ueberwiegend VORWAERTS (SCA vor
-// Sonar, Highlighter vor Overlay vor Watch, Dock vor dem Editor-Layer),
-// also NICHT als Umkehrung der Anmeldung. Die Begradigung auf strikt
-// rueckwaerts (UnregisterAll der Registry) ist Stufe A.4 - ein eigener
-// Commit, denn sie ist die einzige echte Verhaltensaenderung des Umbaus
-// und verschiebt vier Elemente im Abbau.
-begin
-  RemoveViewMenuItem;
-  UnregisterEditorContextMenuHook;
-  UnregisterSCAAddInOptions;
-  UnregisterSonarAddInOptions;
-  TeardownDockForm;
-  UnregisterLineHighlighter;
-  UnregisterAnnotationOverlay;
-  UnregisterWatchMode;
-  RemoveSharedUiHooks;
-end;
+// A.4: Die Legacy-Abbausequenz (UnregisterAnalyserDockableForm) ist
+// ersatzlos entfallen. Der Abbau laeuft jetzt strikt RUECKWAERTS ueber
+// GUiRegistry.UnregisterAll (uIDEExpert.TeardownUiElements), mit dem
+// Worker-Join als Barriere davor. Die Stuecke sind dieselben Prozeduren
+// wie zuvor - sie haengen als Unregister-Seite der Adapter im
+// Verzeichnis; nur der Taktgeber ist weg.
 
 end.

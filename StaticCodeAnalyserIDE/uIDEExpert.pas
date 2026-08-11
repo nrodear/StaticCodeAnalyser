@@ -39,6 +39,7 @@ uses
   Winapi.Windows, System.SysUtils,
   Vcl.Graphics, Vcl.ImgList, Vcl.Controls, Vcl.Menus, Vcl.ActnList,
   uUiElementRegistry,   // das Verzeichnis der UI-Elemente (SCA.SharedUI)
+  uIDEAnalyseRunner,    // JoinAllBulkWorkers - Barriere vor dem Abbau (A.4)
   uIDEAnalyserForm,
   uIDEFindingsPropertiesForm;
 
@@ -80,16 +81,15 @@ var
   GToolsAction   : TAction   = nil;
   GToolsHandler  : TToolsMenuHandler = nil;
   // DAS Verzeichnis der UI-Elemente (A.3). Gebaut und gefuellt in
-  // Register, freigegeben in finalization. Sein RegisterAll ist seit A.3
-  // die EINE Stelle, an der die Oberflaeche des Plugins entsteht - die
-  // Liste der Elemente steht in uIDEAnalyserForm.AddUiElements (zehn) und
+  // Register, freigegeben in finalization. Sein RegisterAll ist die EINE
+  // Stelle, an der die Oberflaeche des Plugins entsteht - die Liste der
+  // Elemente steht in uIDEAnalyserForm.AddUiElements (zehn) und
   // AddExpertUiElements unten (vier).
   //
-  // Der ABBAU laeuft in dieser Stufe weiterhin ueber die Legacy-Sequenz
-  // (Wizard.Destroy -> UnregisterAnalyserDockableForm, finalization ->
-  // ToolsMenu/About) in der am 2026-08-10 gemessenen Reihenfolge.
-  // UnregisterAll zu rufen ist Stufe A.4 - die einzige echte
-  // Verhaltensaenderung, eigener Commit.
+  // Der ABBAU (A.4) laeuft ueber TeardownUiElements: Worker-Join als
+  // Barriere, dann UnregisterAll strikt RUECKWAERTS. Gerufen aus
+  // Wizard.Destroy und - idempotent, als Sicherheitsnetz - erneut aus
+  // finalization.
   GUiRegistry : TUiElementRegistry = nil;
 
 procedure TToolsMenuHandler.MenuClick(Sender: TObject);
@@ -289,6 +289,40 @@ begin
   OutputDebugString(PChar('SCA-UI ' + AMessage));
 end;
 
+procedure TeardownUiElements;
+// A.4: DER Abbau der Plugin-Oberflaeche - strikt rueckwaerts, aus der
+// Datenstruktur statt von Hand. Idempotent: der zweite Aufruf (aus
+// finalization, als Sicherheitsnetz falls die IDE den Wizard nie
+// freigibt) findet eine leere Abmeldeliste vor und tut nichts.
+//
+// DIE BARRIERE ZUERST, und zwar ausserhalb der Registry: WaitFor pumpt
+// CheckSynchronize, waehrend des Joins laufen gequeuete Worker-Closures
+// also noch aus - und die duerfen auf alles treffen (Highlighter,
+// Overlay, Frame). Der Join muss deshalb laufen, solange noch ALLES
+// lebt; erst danach darf rueckwaerts abgebaut werden. Vor A.4 hing der
+// Join mitten in der Abbausequenz - das ging nur gut, weil die damals
+// vorwaerts lief und der Highlighter zufaellig noch stand.
+//
+// Was sich gegenueber der gemessenen Legacy-Reihenfolge aendert
+// (Referenz: Protokoll 2026-08-10, Abnahme = Messung wiederholen):
+//   * ToolsMenuItem und AboutBox fallen jetzt ZUERST statt zuletzt in
+//     der finalization - zu einem Zeitpunkt, an dem die IDE-ActionList
+//     sicher noch lebt. GExperts musste seinen Menue-Manager in der
+//     finalization absichtlich LECKEN, weil die ActionList dort schon
+//     tot war; genau dieses Fenster verlassen wir.
+//   * FindingsProperties faellt weiterhin frueh (vor DockForm/Editor-
+//     Layer) - sein EditServices-Notifier ist weg, bevor der Frame
+//     stirbt, wie es der alte Wizard-Destruktor-Kommentar verlangte.
+//   * Der Editor-Layer faellt jetzt VOR dem DockForm (Umkehrung),
+//     WatchMode -> Overlay -> Highlighter. Nach der Barriere ist der
+//     Hintergrund still; die Unregister-Prozeduren sind einzeln
+//     idempotent und gegeneinander per Assigned-Waechter abgesichert.
+begin
+  if not Assigned(GUiRegistry) then Exit;
+  JoinAllBulkWorkers;
+  GUiRegistry.UnregisterAll;
+end;
+
 procedure RegisterWizardElement;
 // Adapter-Huelle: RegisterPackageWizard braucht die frische Instanz als
 // Argument, deshalb passt der Aufruf nicht direkt in eine TUiElementProc.
@@ -367,10 +401,9 @@ end;
 
 destructor TStaticCodeAnalyserExpert.Destroy;
 begin
-  // Properties-Panel zuerst loesen - sein EditServices-Notifier soll
-  // gehen bevor das Analyser-Form seine eigene Cleanup-Sequenz startet.
-  UnregisterFindingsPropertiesDockableForm;
-  UnregisterAnalyserDockableForm;
+  // A.4: ein Aufruf statt zweier Legacy-Sequenzen. Reihenfolge und
+  // Begruendung stehen an TeardownUiElements.
+  TeardownUiElements;
   inherited;
 end;
 
@@ -402,20 +435,22 @@ initialization
   RegisterSplashScreen;
 
 finalization
-  // Tools-Menue zuerst (haengt vom Action ab, das die IDE bei UnregisterAboutBox
-  // noch nicht beruehrt - aber Reihenfolge schadet nicht).
-  UnregisterToolsMenuItem;
-  UnregisterAboutBox;
-  // Branding-HBITMAP erst NACH Unregister freigeben - die IDE haelt das
-  // Handle waehrend des AboutBox/Splash-Lifecycle.
+  // A.4: Sicherheitsnetz. Im Normalfall hat Wizard.Destroy den Abbau
+  // laengst erledigt (gemessen: finalization folgt 2 ms darauf) und
+  // dieser Aufruf findet eine leere Abmeldeliste vor. Gibt die IDE den
+  // Wizard aber nie frei, ist das hier die letzte Gelegenheit, die
+  // Elemente abzumelden - spaeter waere Paket-Code weg.
+  TeardownUiElements;
+  // Branding-HBITMAP erst NACH dem Abbau freigeben - die IDE haelt das
+  // Handle waehrend des AboutBox/Splash-Lifecycle, und der Abbau meldet
+  // die AboutBox ab.
   if GBrandingHBmp <> 0 then
   begin
     DeleteObject(GBrandingHBmp);
     GBrandingHBmp := 0;
   end;
   // Das Verzeichnis zuletzt: sein Destroy meldet BEWUSST nichts ab
-  // (dokumentiert an TUiElementRegistry.Destroy) - der Abbau ist zu diesem
-  // Zeitpunkt ueber die Legacy-Sequenz bereits gelaufen. Ab A.4 steht hier
-  // stattdessen ein UnregisterAll als idempotentes Sicherheitsnetz.
+  // (dokumentiert an TUiElementRegistry.Destroy) - abgemeldet hat der
+  // TeardownUiElements-Aufruf oben.
   FreeAndNil(GUiRegistry);
 end.
