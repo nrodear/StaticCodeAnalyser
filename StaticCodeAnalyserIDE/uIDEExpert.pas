@@ -38,6 +38,7 @@ implementation
 uses
   Winapi.Windows, System.SysUtils,
   Vcl.Graphics, Vcl.ImgList, Vcl.Controls, Vcl.Menus, Vcl.ActnList,
+  uUiElementRegistry,   // das Verzeichnis der UI-Elemente (SCA.SharedUI)
   uIDEAnalyserForm,
   uIDEFindingsPropertiesForm;
 
@@ -78,6 +79,18 @@ var
   GToolsMenuItem : TMenuItem = nil;
   GToolsAction   : TAction   = nil;
   GToolsHandler  : TToolsMenuHandler = nil;
+  // DAS Verzeichnis der UI-Elemente (A.3). Gebaut und gefuellt in
+  // Register, freigegeben in finalization. Sein RegisterAll ist seit A.3
+  // die EINE Stelle, an der die Oberflaeche des Plugins entsteht - die
+  // Liste der Elemente steht in uIDEAnalyserForm.AddUiElements (zehn) und
+  // AddExpertUiElements unten (vier).
+  //
+  // Der ABBAU laeuft in dieser Stufe weiterhin ueber die Legacy-Sequenz
+  // (Wizard.Destroy -> UnregisterAnalyserDockableForm, finalization ->
+  // ToolsMenu/About) in der am 2026-08-10 gemessenen Reihenfolge.
+  // UnregisterAll zu rufen ist Stufe A.4 - die einzige echte
+  // Verhaltensaenderung, eigener Commit.
+  GUiRegistry : TUiElementRegistry = nil;
 
 procedure TToolsMenuHandler.MenuClick(Sender: TObject);
 // OnExecute-Methode der TAction - identisch zum vormaligen IOTAMenuWizard.
@@ -265,17 +278,82 @@ begin
   end;
 end;
 
-procedure Register;
+procedure UiRegistryLog(const AMessage: string);
+// Die EINE Ausgabestelle der Registry-Diagnose. Immer aktiv, nie hinter
+// {$IFDEF DEBUG} - bei CnWizards verschwindet im Release ein Element
+// spurlos, dessen Konstruktor scheitert (Fremdvergleich, Konzept §3.3).
+// OutputDebugString ist im Normalbetrieb ein No-op und kostet nichts,
+// solange kein Debugger mitliest.
 begin
-  RegisterAnalyserDockableForm;
-  // Findings-Properties-Panel (Phase 6 Integration): registriert NACH dem
-  // Analyser-Form, damit RegisterWatchMode darin schon gelaufen ist - der
-  // Wrapper-FrameCreated subscribed GWatchMode.SubscribeFindings beim
-  // ersten Dock-Open.
-  RegisterFindingsPropertiesDockableForm;
+  // noinspection DebugOutput
+  OutputDebugString(PChar('SCA-UI ' + AMessage));
+end;
+
+procedure RegisterWizardElement;
+// Adapter-Huelle: RegisterPackageWizard braucht die frische Instanz als
+// Argument, deshalb passt der Aufruf nicht direkt in eine TUiElementProc.
+begin
   RegisterPackageWizard(TStaticCodeAnalyserExpert.Create);
-  RegisterAboutBox;
-  RegisterToolsMenuItem;
+end;
+
+procedure AddExpertUiElements(ARegistry: TUiElementRegistry);
+// Die vier Elemente dieser Unit bzw. der Nachbar-Units, SortKeys in der
+// am 2026-08-10 gemessenen Reihenfolge hinter den zehn Elementen aus
+// uIDEAnalyserForm.AddUiElements (deren Schluessel enden bei 100).
+const
+  SK_FINDINGS_PROPS = 110;
+  SK_PACKAGE_WIZARD = 120;
+  SK_ABOUT_BOX      = 130;
+  SK_TOOLS_MENU     = 140;
+begin
+  // Findings-Properties-Panel: registriert NACH dem WatchMode-Element
+  // (SortKey 50), damit GWatchMode schon lebt - der Wrapper-FrameCreated
+  // subscribed GWatchMode.SubscribeFindings beim ersten Dock-Open. Die
+  // Abhaengigkeit stand frueher nur als Kommentar an einer Aufrufzeile;
+  // jetzt haengt sie an der Position des Elements.
+  ARegistry.Add(TDelegatedUiElement.Create(
+    'FindingsProperties', SK_FINDINGS_PROPS,
+    RegisterFindingsPropertiesDockableForm,
+    UnregisterFindingsPropertiesDockableForm));
+  // Der Wizard ist BEWUSST nicht abschaltbar (keine Enabled-Funktion, und
+  // A.5 darf ihm keine geben): sein Destroy ist der Ausloeser des ganzen
+  // Abbaus. Ein abgeschalteter Wizard waere ein Leck aller anderen
+  // Elemente.
+  ARegistry.Add(TDelegatedUiElement.Create(
+    'PackageWizard', SK_PACKAGE_WIZARD,
+    RegisterWizardElement,
+    nil));  // Abbau gehoert der IDE: sie gibt den Wizard frei
+  ARegistry.Add(TDelegatedUiElement.Create(
+    'AboutBox', SK_ABOUT_BOX,
+    RegisterAboutBox, UnregisterAboutBox));
+  ARegistry.Add(TDelegatedUiElement.Create(
+    'ToolsMenuItem', SK_TOOLS_MENU,
+    RegisterToolsMenuItem, UnregisterToolsMenuItem));
+end;
+
+procedure Register;
+// Seit A.3 die EINE Stelle, an der die Plugin-Oberflaeche entsteht:
+// vierzehn Elemente, sortiert nach SortKey, jedes einzeln gekapselt.
+// Die Reihenfolge ist die am 2026-08-10 gemessene (Messung 0.5).
+var
+  Order : string;
+begin
+  if not Assigned(GUiRegistry) then
+  begin
+    GUiRegistry := TUiElementRegistry.Create;
+  end;
+
+  GUiRegistry.OnLog := UiRegistryLog;
+
+  uIDEAnalyserForm.AddUiElements(GUiRegistry);
+  AddExpertUiElements(GUiRegistry);
+  GUiRegistry.RegisterAll;
+
+  // Die tatsaechliche Reihenfolge einmal ausgeben - dauerhafte Diagnose,
+  // kein Provisorium: damit ist ohne Sonde pruefbar, in welcher Folge die
+  // Elemente angemeldet wurden (Referenz: Protokoll vom 2026-08-10).
+  Order := string.Join(' -> ', GUiRegistry.NamesInRegisterOrder);
+  UiRegistryLog('Anmeldereihenfolge: ' + Order);
 end;
 
 { TStaticCodeAnalyserExpert }
@@ -328,4 +406,9 @@ finalization
     DeleteObject(GBrandingHBmp);
     GBrandingHBmp := 0;
   end;
+  // Das Verzeichnis zuletzt: sein Destroy meldet BEWUSST nichts ab
+  // (dokumentiert an TUiElementRegistry.Destroy) - der Abbau ist zu diesem
+  // Zeitpunkt ueber die Legacy-Sequenz bereits gelaufen. Ab A.4 steht hier
+  // stattdessen ein UnregisterAll als idempotentes Sicherheitsnetz.
+  FreeAndNil(GUiRegistry);
 end.

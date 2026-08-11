@@ -11,10 +11,11 @@ unit uIDEFindingsPropertiesForm;
 //                                            Subscribe + Watch-Mode-Subscribe
 //
 // Lifecycle:
-//   1. RegisterFindingsPropertiesDockableForm (in uIDEExpert.Register direkt
-//      nach RegisterAnalyserDockableForm - damit RegisterWatchMode darin schon
-//      gelaufen ist): erzeugt GFindingsPropsForm, registriert das DockableForm
-//      beim NTAServices. Kein Frame, keine Subscription.
+//   1. RegisterFindingsPropertiesDockableForm (seit A.3 als Element
+//      'FindingsProperties' im UI-Verzeichnis, SortKey NACH dem
+//      WatchMode-Element - damit GWatchMode schon lebt): erzeugt
+//      GFindingsPropsForm, registriert das DockableForm beim NTAServices.
+//      Kein Frame, keine Subscription.
 //   2. User klickt View > Findings Properties (oder per Editor-Context-Menu):
 //      NTASvc.CreateDockableForm -> IDE erzeugt TFindingsPropertiesFrame
 //      -> FrameCreated() wird gerufen:
@@ -928,8 +929,8 @@ begin
       GFindingsPropsEditNotifIfc := nil;
     end;
 
-  // View > "SCA Findings Properties" Menue-Eintrag (analog zu uIDEAnalyser-
-  // Form.RegisterAnalyserDockableForm). Erst View-Menu suchen.
+  // View > "SCA Findings Properties" Menue-Eintrag (analog zum Element
+  // 'ViewMenuItem' in uIDEAnalyserForm.AddUiElements). Erst View-Menu suchen.
   MainMenu := NTASvc.GetMainMenu;
   ViewMenu := nil;
   if Assigned(MainMenu) then
