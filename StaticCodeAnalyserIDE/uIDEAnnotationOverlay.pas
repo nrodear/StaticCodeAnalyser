@@ -753,8 +753,9 @@ end;
 procedure TAnnotationOverlay.CloseLblClick(Sender: TObject);
 // Entfernt die aktuell angezeigte Markierung aus GHighlighter und versteckt
 // das Overlay. Greift direkt auf den globalen Highlighter zu - der lebt
-// per Definition laenger als das Overlay (beide werden in
-// UnregisterAnalyserDockableForm aufgeraeumt). Frame-Grid bleibt unsynced
+// laenger als das Overlay: im Rueckwaerts-Abbau (A.4, UnregisterAll)
+// faellt das Overlay-Element (SortKey 40) VOR dem Highlighter-Element
+// (SortKey 30). Frame-Grid bleibt unsynced
 // (Befund ist dort noch in der Liste); das ist OK als MVP - User kann
 // "Analyse starten" klicken um die Liste zu refreshen.
 begin

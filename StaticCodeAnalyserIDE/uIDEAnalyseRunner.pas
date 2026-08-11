@@ -145,9 +145,12 @@ type
   end;
 
 // Welle 1b (2026-07-20): joint ALLE lebenden Bulk-Worker (auch beim
-// Dock-Close detachte "Orphans") - Pflichtaufruf im BPL-Unload-Pfad
-// (UnregisterAnalyserDockableForm), BEVOR die Package-Code-Pages entladen
-// werden. Main-Thread-only; WaitFor pumpt CheckSynchronize.
+// Dock-Close detachte "Orphans") - Pflichtaufruf im BPL-Unload-Pfad,
+// BEVOR die Package-Code-Pages entladen werden. Seit A.4 ist das die
+// BARRIERE am Anfang von uIDEExpert.TeardownUiElements: WaitFor pumpt
+// CheckSynchronize, gequeuete Worker-Closures laufen also noch aus und
+// duerfen auf alles treffen - deshalb muss der Join laufen, solange die
+// gesamte Oberflaeche noch lebt. Main-Thread-only.
 procedure JoinAllBulkWorkers;
 
 implementation
