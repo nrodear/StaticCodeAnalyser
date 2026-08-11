@@ -2162,6 +2162,14 @@ begin
     FFilterCombo.Items.EndUpdate;
   end;
   FFilterCombo.ItemIndex := 0;
+  // DEN CACHE MITZIEHEN, nicht nur die Anzeige: programmatisches
+  // ItemIndex feuert kein OnChange, und ApplyFilter liest NICHT die
+  // Combo, sondern FFilterMode (anders als die EXE, die direkt die Combo
+  // liest). Ohne diese Zeile zeigte die Combo 'All', waehrend der alte
+  // Filter weiter griff - Grid leer trotz vier Funden, Fehlerbild vom
+  // 2026-08-12. FFilterKind braucht keinen Reset: es wird nur bei
+  // fmSingleKind gelesen.
+  FFilterMode := fmAll;
   // Der Helfer filtert gegen seinen eigenen Schnappschuss - nach jedem
   // Umbau der Items muss er ihn neu ziehen.
   if Assigned(FFilterSearch) then FFilterSearch.Resync;
@@ -2181,6 +2189,9 @@ begin
     FTypeCombo.Items.EndUpdate;
   end;
   FTypeCombo.ItemIndex := 0;
+  // Gleicher Grund wie oben bei FFilterMode: der Typ-Filter wirkt ueber
+  // den Cache, nicht ueber die Combo.
+  FTypeFilter := tfAll;
 end;
 
 procedure TAnalyserFrame.PopulateFindings(
