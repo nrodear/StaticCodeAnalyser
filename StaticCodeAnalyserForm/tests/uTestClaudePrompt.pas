@@ -15,7 +15,7 @@ interface
 uses
   DUnitX.TestFramework,
   System.SysUtils, System.Classes, System.IOUtils,
-  uMethodd12, uFixHint, uClaudePrompt;
+  uSCAConsts, uMethodd12, uFixHint, uClaudePrompt;
 
 type
   [TestFixture]
