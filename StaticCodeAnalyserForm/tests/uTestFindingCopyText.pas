@@ -29,6 +29,7 @@ type
     [Test] procedure EmptyMethodAndHint_YieldDashButKeepFiveBullets;
     [Test] procedure MultilineMessage_IsFlattenedToOneLine;
     [Test] procedure OverlongMessage_IsCroppedWithEllipsis;
+    [Test] procedure CropAtSurrogatePair_DropsDanglingHighSurrogate;
     [Test] procedure MultilineFinding_ShowsLineRange;
     [Test] procedure ModeFromInt_MapsOneTwoThree_InvalidFallsToNone;
     [Test] procedure Dispatch_NoneEmpty_JiraStartsWithRule_ClaudeNonEmpty;
@@ -167,6 +168,31 @@ begin
       'Ueberlange Fakten werden mit ... gekuerzt');
     Assert.IsFalse(Text.Contains(StringOfChar('x', 200)),
       'Der Rohtext darf nicht in voller Laenge auftauchen');
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestFindingCopyText.CropAtSurrogatePair_DropsDanglingHighSurrogate;
+// Der Kuerzungs-Schnitt arbeitet auf UTF-16-Code-Units. Liegt an der
+// Schnittposition die erste Haelfte eines Surrogatpaars (Emoji im
+// Meldetext), darf kein halbes Zeichen vor dem '...' stehen bleiben -
+// es renderte in Jira als Ersatzzeichen.
+const
+  // Headline kuerzt auf 80: behalten werden 77 Zeichen. Das Emoji
+  // (2 Code-Units) beginnt an Position 77 - der naive Schnitt endete
+  // exakt auf seiner ersten Haelfte.
+  HIGH_SURROGATE = #$D83D;
+  EMOJI          = #$D83D#$DE00;
+var
+  F    : TLeakFinding;
+  Text : string;
+begin
+  F := MakeFinding(StringOfChar('x', 76) + EMOJI + StringOfChar('y', 30));
+  try
+    Text := JiraFor(F, PROBE_HINT);
+    Assert.IsFalse(Text.Contains(HIGH_SURROGATE + '...'),
+      'Vor der Ellipse darf kein halbes Surrogatpaar stehen');
   finally
     F.Free;
   end;

@@ -1970,6 +1970,21 @@ procedure TAnalyserFrame.GridMouseDown(Sender: TObject; Button: TMouseButton;
 var
   ACol, ARow: Integer;
 begin
+  // Rechtsklick: Selektion auf die ANGEKLICKTE Datenzeile nachziehen,
+  // BEVOR WM_CONTEXTMENU das Popup oeffnet - TCustomGrid bewegt die
+  // Current-Cell nur bei mbLeft, und "Copy AI prompt" liest die
+  // Selektion. Ohne das kopierte der Rechtsklick auf Zeile B den Prompt
+  // der noch selektierten Zeile A (Review 2026-08-12, Logik-Dimension).
+  // Der Row-Setter feuert OnSelectCell -> Hilfe-Panel folgt konsistent;
+  // Klick auf Header/Leerflaeche laesst die Selektion stehen.
+  if Button = mbRight then
+  begin
+    FResultGrid.MouseToCell(X, Y, ACol, ARow);
+    if (ARow >= 1) and Assigned(FDisplayedFindings)
+       and (ARow <= FDisplayedFindings.Count) then
+      FResultGrid.Row := ARow;
+    Exit;
+  end;
   if Button <> mbLeft then Exit;
   FResultGrid.MouseToCell(X, Y, ACol, ARow);
   if ARow <> 0 then Exit; // Nur Header-Zeile
@@ -2206,8 +2221,12 @@ begin
   // die Combo Eintraege an, deren Grid-Sicht leer war. Die Kacheln
   // zaehlen bewusst weiter die Gesamtmenge (Nutzerentscheid 2026-08-12);
   // die Statuszeile benennt die ausgeblendete Anzahl.
+  // try beginnt VOR dem Create (nil.Free ist ein No-op): die
+  // Befuellschleife allokiert (Fingerprint-Strings, Listen-Wachstum) -
+  // eine Ausnahme dort haette die Liste sonst geleakt.
   OwnedSrc := nil;
   CountSrc := FAllFindings;
+  try
   if BaselineFilterActive then
   begin
     OwnedSrc := TList<TLeakFinding>.Create;
@@ -2216,7 +2235,6 @@ begin
         OwnedSrc.Add(FAllFindings[i]);
     CountSrc := OwnedSrc;
   end;
-  try
 
   // ---- Severity-Filter: zwei-Pass-Filterung ----
   Tmp := TList<TFilterComboItem>.Create;
@@ -3654,6 +3672,10 @@ var
 begin
   if not Assigned(FFilterCombo) or not (Sender is TComponent) then Exit;
   Target := TFilterMode(TComponent(Sender).Tag);
+  // VOR der Zielsuche: eine offene Fuzzy-Reduktion tag-treu zuruecklegen,
+  // damit die Suche die VOLLE Liste sieht (sonst verfehlte der Klick
+  // sein Ziel, sobald der Nutzer gerade getippt hatte).
+  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   if Assigned(FTypeCombo) and (FTypeCombo.ItemIndex <> 0) then
     FTypeCombo.ItemIndex := 0;
   OrdT := Ord(Target);
@@ -3661,30 +3683,52 @@ begin
     if Integer(FFilterCombo.Items.Objects[i]) = OrdT then
     begin
       FFilterCombo.ItemIndex := i;
-      // Commit-Gedaechtnis des Fuzzy-Helfers nachziehen - programmatisches
-      // ItemIndex sieht der Helfer nicht, sein Tag-Gate wuerde sonst die
-      // naechste ECHTE Wieder-Auswahl verschlucken (Review 2026-08-12).
-      if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
-      // Erst Type-Filter-Change (Type wurde reset, damit der Severity-
-      // Filter sicher greift), dann Filter-Change (eigentlicher Klick-
-      // Effekt). Beide Handler rufen letztlich ApplyFilter -> Grid
-      // wird einmal redrawn (kein Doppel-Repaint, ApplyFilter selbst
-      // ist idempotent gegen denselben Stand).
-      TypeFilterChange(FTypeCombo);
-      FilterChange(FFilterCombo);
-      Exit;
+      Break;
     end;
+  // NACH dem Setzen, UNBEDINGT - auch im Miss-Fall (der Eintrag kann
+  // baseline-bereinigt fehlen, waehrend die Kachel die Gesamtmenge
+  // zaehlt): Commit-Gedaechtnis des Fuzzy-Helfers nachziehen
+  // (programmatisches ItemIndex sieht der Helfer nicht), dann BEIDE
+  // Change-Handler wie in der EXE. Vorher liefen sie nur im
+  // Treffer-Zweig - im Miss-Fall zeigte die Typ-Combo 'All', waehrend
+  // der Cache FTypeFilter den alten Wert behielt (Review 2026-08-12,
+  // Logik-Dimension). Erst Type-, dann Filter-Change; beide enden in
+  // ApplyFilter, das gegen denselben Stand idempotent ist.
+  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
+  TypeFilterChange(FTypeCombo);
+  FilterChange(FFilterCombo);
 end;
 
 procedure TAnalyserFrame.TileClickType(Sender: TObject);
 var
   Target : TTypeFilter;
+  i      : Integer;
+  Found  : Boolean;
 begin
   if not Assigned(FTypeCombo) or not (Sender is TComponent) then Exit;
   Target := TTypeFilter(TComponent(Sender).Tag);
+  // Offene Fuzzy-Reduktion zuruecklegen, Begruendung s. TileClickSeverity.
+  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   if Assigned(FFilterCombo) and (FFilterCombo.ItemIndex <> 0) then
     FFilterCombo.ItemIndex := 0;
-  FTypeCombo.ItemIndex := Ord(Target);
+  // TAG-Suche statt ItemIndex := Ord(Target): RebuildFilterCombos
+  // entfernt Typ-Eintraege ohne Treffer, danach gilt Index <> Ord -
+  // der Direktindex selektierte den FALSCHEN Typ (z.B. Hotspot statt
+  // Vulnerability) oder lief ins Leere (Review 2026-08-12,
+  // Logik-Dimension; die EXE suchte schon immer per Tag).
+  Found := False;
+  for i := 0 to FTypeCombo.Items.Count - 1 do
+    if Integer(FTypeCombo.Items.Objects[i]) = Ord(Target) then
+    begin
+      FTypeCombo.ItemIndex := i;
+      Found := True;
+      Break;
+    end;
+  // Eintrag wegreduziert (Kachel zaehlt die Gesamtmenge, die Combo die
+  // baseline-bereinigte): auf 'All' zurueckfallen statt still den alten
+  // Filter stehen zu lassen.
+  if not Found then
+    FTypeCombo.ItemIndex := 0;
   // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
   if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   // ItemIndex-Setter feuert KEIN OnChange - explizit triggern.
@@ -3696,6 +3740,10 @@ procedure TAnalyserFrame.TileClickClear(Sender: TObject);
 // Codequalitaet-Kachel: kein semantischer Filter (Score ist eine Aggregation).
 // Klick setzt beide Filter auf "Alle" zurueck - praktisch als Reset-Button.
 begin
+  // Offene Fuzzy-Reduktion ZUERST zuruecklegen: in einer reduzierten
+  // Liste ist Index 0 irgendein Treffer, nicht 'All' - erst nach dem
+  // Zuruecklegen ist Index 0 wieder der All-Eintrag.
+  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   if Assigned(FFilterCombo) then FFilterCombo.ItemIndex := 0;
   if Assigned(FTypeCombo)   then FTypeCombo.ItemIndex   := 0;
   // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.

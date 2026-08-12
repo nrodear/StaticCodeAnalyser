@@ -1412,8 +1412,12 @@ begin
   // die Combo Eintraege an, deren Grid-Sicht leer war. Die Kacheln
   // zaehlen bewusst weiter die Gesamtmenge (Nutzerentscheid 2026-08-12);
   // die Statuszeile benennt die ausgeblendete Anzahl.
+  // try beginnt VOR dem Create (nil.Free ist ein No-op): die
+  // Befuellschleife allokiert (Fingerprint-Strings, Listen-Wachstum) -
+  // eine Ausnahme dort haette die Liste sonst geleakt.
   OwnedSrc := nil;
   CountSrc := FAllFindings;
+  try
   if BaselineActive then
   begin
     OwnedSrc := TList<TLeakFinding>.Create;
@@ -1422,7 +1426,6 @@ begin
         OwnedSrc.Add(FAllFindings[i]);
     CountSrc := OwnedSrc;
   end;
-  try
 
   // ---- SeverityFilterCombo ----
   SeverityFilterCombo.Items.BeginUpdate;
@@ -2463,6 +2466,24 @@ procedure TForm2.ResultGridMouseDown(Sender: TObject; Button: TMouseButton;
 var
   ACol, ARow: Integer;
 begin
+  // Rechtsklick: Selektion auf die ANGEKLICKTE Datenzeile nachziehen,
+  // BEVOR WM_CONTEXTMENU das Popup oeffnet - TCustomGrid bewegt die
+  // Current-Cell nur bei mbLeft, und "Copy AI prompt" liest die
+  // Selektion (Review 2026-08-12, Logik-Dimension; Pendant im Plugin).
+  // ResultGridClick zieht danach Hint-Panel und Kopier-Weiche nach -
+  // dieselbe Wirkung wie ein Linksklick auf die Zeile.
+  if Button = mbRight then
+  begin
+    ResultGrid.MouseToCell(X, Y, ACol, ARow);
+    if (ARow >= 1) and Assigned(FDisplayedFindings)
+       and (ARow <= FDisplayedFindings.Count) then
+    begin
+      ResultGrid.Row := ARow;
+      FHeaderMousePress := False;   // etwaigen abgebrochenen Header-Druck verwerfen
+      ResultGridClick(ResultGrid);
+    end;
+    Exit;
+  end;
   if Button <> mbLeft then Exit;
   ResultGrid.MouseToCell(X, Y, ACol, ARow);
   // Merker fuer das nachfolgende OnClick (Review 2026-08-12): ein Druck
@@ -2952,6 +2973,10 @@ var
 begin
   if not (Sender is TComponent) then Exit;
   Target := TFilterMode(TComponent(Sender).Tag);
+  // VOR der Zielsuche: eine offene Fuzzy-Reduktion tag-treu zuruecklegen,
+  // damit die Suche die VOLLE Liste sieht (sonst verfehlte der Klick
+  // sein Ziel, sobald der Nutzer gerade getippt hatte).
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if TypeFilterCombo.ItemIndex <> 0 then
     TypeFilterCombo.ItemIndex := 0;
   OrdT := Ord(Target);
@@ -2978,6 +3003,8 @@ var
 begin
   if not (Sender is TComponent) then Exit;
   Want := TFindingFilter.KIND_TAG_BASE + TComponent(Sender).Tag;
+  // Offene Fuzzy-Reduktion zuruecklegen, Begruendung s. TileClickSeverity.
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if TypeFilterCombo.ItemIndex <> 0 then
     TypeFilterCombo.ItemIndex := 0;
   for i := 0 to SeverityFilterCombo.Items.Count - 1 do
@@ -2999,6 +3026,9 @@ var
 begin
   if not (Sender is TComponent) then Exit;
   Target := TTypeFilter(TComponent(Sender).Tag);
+  // Offene Fuzzy-Reduktion zuruecklegen: erst danach ist Index 0 der
+  // All-Eintrag (Begruendung s. TileClickSeverity).
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if SeverityFilterCombo.ItemIndex <> 0 then
     SeverityFilterCombo.ItemIndex := 0;
   for i := 0 to TypeFilterCombo.Items.Count - 1 do
@@ -3019,6 +3049,9 @@ procedure TForm2.TileClickClear(Sender: TObject);
 // mit dazu (das Plugin hat keines in dieser Form) - 'show everything'
 // soll wirklich alles zeigen.
 begin
+  // Offene Fuzzy-Reduktion ZUERST zuruecklegen: in einer reduzierten
+  // Liste ist Index 0 irgendein Treffer, nicht 'All'.
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   SeverityFilterCombo.ItemIndex := 0;
   TypeFilterCombo.ItemIndex     := 0;
   // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.

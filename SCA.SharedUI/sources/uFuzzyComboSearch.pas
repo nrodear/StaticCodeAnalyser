@@ -324,6 +324,13 @@ begin
       RestoreAll;
     end;
   end;
+  // Das Gedaechtnis folgt IMMER der Anzeige (Konvention wie in Resync):
+  // steht nach dem Zuruecklegen KEINE Auswahl (ItemIndex=-1, etwa weil
+  // der Host sein Ziel in einer reduzierten Liste nicht fand), faellt
+  // der Host auf seinen Default zurueck (Tag 0 = All) - bliebe hier der
+  // alte Tag stehen, verschluckte das Gate die naechste Wieder-Auswahl
+  // genau dieses Eintrags (Review 2026-08-12, Logik-Dimension).
+  FCommitted := 0;
   if SelectedTag(Tag) then
   begin
     FCommitted := Tag;

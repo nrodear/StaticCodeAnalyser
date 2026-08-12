@@ -121,10 +121,25 @@ function Crop(const S: string; AMax: Integer): string;
 // erst glaetten, dann messen.
 begin
   Result := OneLine(S);
-  if Length(Result) > AMax then
+  if Length(Result) <= AMax then Exit;
+  if AMax <= Length(ELLIPSIS) then
   begin
-    Result := Copy(Result, 1, AMax - Length(ELLIPSIS)) + ELLIPSIS;
+    // Zu klein fuer eine Ellipse: blanke harte Kuerzung. Heute
+    // unerreichbar (Aufrufer nutzen 80/160), aber die Zusicherung
+    // "Ergebnis <= AMax" soll auch kuenftige Aufrufer tragen.
+    Result := Copy(Result, 1, AMax);
+    Exit;
   end;
+  Result := Copy(Result, 1, AMax - Length(ELLIPSIS));
+  // Kein haengendes High-Surrogate vor der Ellipse zuruecklassen - der
+  // Schnitt arbeitet auf UTF-16-Code-Units und kann ein Emoji/non-BMP-
+  // Zeichen im Meldetext halbieren; die halbe Einheit renderte in Jira
+  // als Ersatzzeichen.
+  if (Result <> '') and Result[Length(Result)].IsHighSurrogate then
+  begin
+    SetLength(Result, Length(Result) - 1);
+  end;
+  Result := Result + ELLIPSIS;
 end;
 
 function FactOrDash(const S: string): string;
