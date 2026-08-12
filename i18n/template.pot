@@ -56,11 +56,11 @@ msgstr ""
 msgid "%d file(s) - running..."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDELineHighlighter.pas:1482
+#: StaticCodeAnalyserIDE/uIDELineHighlighter.pas:1525
 msgid "%d findings"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDELineHighlighter.pas:1477
+#: StaticCodeAnalyserIDE/uIDELineHighlighter.pas:1520
 msgid "%d findings on this line"
 msgstr ""
 
@@ -135,8 +135,8 @@ msgstr ""
 msgid "Actions menu: Cancel, Export, Settings, Ignore"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:499
-msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic."
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:503
+msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by clicking its text. Takes effect on save."
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnnotationOverlay.pas:425
@@ -158,7 +158,7 @@ msgid "All"
 msgstr ""
 
 #: SCA.SharedUI/sources/uScanTargetDialog.pas:53
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:646
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:654
 msgid "All files"
 msgstr ""
 
@@ -231,7 +231,7 @@ msgstr ""
 msgid "Analysis error: "
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:413
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:418
 msgid "Annotation overlay position:"
 msgstr ""
 
@@ -243,7 +243,7 @@ msgstr ""
 msgid "Appearance"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:557
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:565
 msgid "Applies to the plugin user interface only - detector messages, findings and exports are never translated. The list holds the built-in translations plus every i18n\\<code>.po file placed next to the plugin BPL. Captions already on screen switch after an IDE restart."
 msgstr ""
 
@@ -267,7 +267,7 @@ msgstr ""
 msgid "Authentication"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:381
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:386
 msgid "AutoDiscoverClasses - extend LeakyClasses with project-specific classes"
 msgstr ""
 
@@ -275,12 +275,12 @@ msgstr ""
 msgid "Bare raise; outside an except/on handler raises NIL - Access Violation"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:582
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:590
 msgid "Baseline (show only new findings)"
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3624
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:641
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:649
 msgid "Baseline JSON"
 msgstr ""
 
@@ -288,7 +288,7 @@ msgstr ""
 msgid "Baseline JSON (*.json)|*.json"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:596
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:604
 msgid "Baseline file:"
 msgstr ""
 
@@ -607,7 +607,7 @@ msgstr ""
 msgid "Could not write baseline: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:622
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:630
 msgid "Create a baseline from the current findings via the dock menu \"Write baseline from current scan...\", or with the CLI --write-baseline. The file is shared across CLI, IDE and HTML export. Takes effect on the next analysis."
 msgstr ""
 
@@ -695,7 +695,7 @@ msgstr ""
 msgid "Debug output left in production code"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:485
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:481
 msgid "Default (bright colors)"
 msgstr ""
 
@@ -721,7 +721,7 @@ msgstr ""
 msgid "Detector Review (1 per detector, random)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:358
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:363
 msgid "Detectors (analyser.ini [Detectors])"
 msgstr ""
 
@@ -729,7 +729,7 @@ msgstr ""
 msgid "Dismiss this finding (remove marker)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:405
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:410
 msgid "Display"
 msgstr ""
 
@@ -759,11 +759,11 @@ msgstr ""
 msgid "ERROR"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:476
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:472
 msgid "Editor marker color scheme:"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:280
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:285
 msgid "Editor right-click triggers a single-file analysis; findings appear as stripes + hover overlays in the editor (no dock)."
 msgstr ""
 
@@ -787,7 +787,7 @@ msgstr ""
 msgid "Empty visibility section in class - delete it"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:266
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:271
 msgid "Enable silent analysis (editor right-click menu)"
 msgstr ""
 
@@ -976,7 +976,7 @@ msgstr ""
 msgid "Grade scale: A=0, B<=%d, C<=%d, D<=%d, E>%d"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:486
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:482
 msgid "Gray (neutral)"
 msgstr ""
 
@@ -1041,7 +1041,7 @@ msgstr ""
 msgid "Host URL:"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:334
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:339
 msgid "IDE Profile:"
 msgstr ""
 
@@ -1066,7 +1066,7 @@ msgstr ""
 msgid "Ignore list..."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:374
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:379
 msgid "IncludeTests - analyse DUnit/DUnitX test units too"
 msgstr ""
 
@@ -1151,7 +1151,7 @@ msgstr ""
 msgid "Language"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:532
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:540
 msgid "Language (analyser.ini [UI])"
 msgstr ""
 
@@ -1287,7 +1287,7 @@ msgstr ""
 msgid "Methods with McCabe complexity > threshold (default 10)."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:319
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:324
 msgid "Min-Severity:"
 msgstr ""
 
@@ -1404,7 +1404,7 @@ msgstr ""
 msgid "Object created but never freed (memory leak)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:422
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:427
 msgid "One line below"
 msgstr ""
 
@@ -1511,7 +1511,7 @@ msgstr ""
 msgid "Profile \"%s\" - active on next analysis run"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:304
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:309
 msgid "Profile (CLI/Form):"
 msgstr ""
 
@@ -1688,7 +1688,7 @@ msgstr ""
 msgid "Rule description"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:295
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:300
 msgid "Rule-Set (analyser.ini [Rules])"
 msgstr ""
 
@@ -1736,7 +1736,7 @@ msgstr ""
 msgid "SVN call failed (exit code = %d)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:421
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:426
 msgid "Same line at end (default)"
 msgstr ""
 
@@ -1789,7 +1789,7 @@ msgstr ""
 msgid "Select a row to see the fix hint"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:638
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:646
 msgid "Select baseline file"
 msgstr ""
 
@@ -1842,11 +1842,11 @@ msgstr ""
 msgid "Show"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:455
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:451
 msgid "Show annotation overlay on hover (otherwise click marked line)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:590
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:598
 msgid "Show only findings new since the baseline (hide the legacy backlog)"
 msgstr ""
 
@@ -1860,7 +1860,7 @@ msgstr ""
 msgid "Showing first %d of %d findings - refine the filter to see more"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:257
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:262
 msgid "Silent Mode"
 msgstr ""
 
@@ -1934,7 +1934,7 @@ msgstr ""
 msgid "String literal repeated - extract to a constant or resourcestring"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:487
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:483
 msgid "Subtle (muted colors)"
 msgstr ""
 
@@ -1988,8 +1988,8 @@ msgstr ""
 msgid "Test Connection"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:427
-msgid "Text only, transparent (no window)"
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:491
+msgid "Text (one-line hint, no window)"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:458
@@ -2036,7 +2036,7 @@ msgstr ""
 msgid "Typed exception handler is empty - swallows a specific exception silently"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:539
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:547
 msgid "UI language:"
 msgstr ""
 
@@ -2088,7 +2088,7 @@ msgstr ""
 msgid "Uses entry may be unused - remove to reduce coupling"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:366
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:371
 msgid "UsesCheck - report unused entries in uses clause (may produce false positives)"
 msgstr ""
 
@@ -2170,12 +2170,12 @@ msgstr ""
 msgid "Weights: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:466
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:462
 msgid "When OFF (default): overlay appears only when you click a marked line - undisturbed reading. When ON: overlay follows the mouse and pops up as soon as you hover a marked line."
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDESCAOptions.pas:439
-msgid "Where the hover annotation overlay anchors relative to the finding line; position changes take effect after IDE restart. \"Text only\" instead draws a transparent one-line hint (badge + rule name) right of the code - no description or fix block (see the findings panel), long titles are shortened, dismiss a finding by clicking its text. Takes effect on save."
+msgid "Where the hover annotation overlay anchors relative to the finding line. Takes effect after IDE restart."
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2693
