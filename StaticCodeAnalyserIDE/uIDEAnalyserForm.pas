@@ -18,6 +18,7 @@ uses
   uStaticAnalyzer2, uEngineApi, uStaticFiles, uMethodd12, uSCAConsts, uExport,
   uBaseline,
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
+  uFindingCopyText,
   uQuickFix,
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uIDEColors, uLocalization,
   uRecentPaths, uScanTargetDialog,
@@ -68,6 +69,9 @@ type
     // die Zwischenablage des Nutzers (Review-Blocker 2026-08-12).
     // EXE-Pendant: TForm2.FGridUpdating.
     FGridUpdating   : Boolean;
+    // Grid-Kontextmenue mit der expliziten Kopier-Geste ("Copy AI
+    // prompt"). Owner = Frame, kein manuelles Free noetig.
+    FGridMenu       : TPopupMenu;
     FCurrentBaseDir : string;
     FFilterCombo       : TComboBox;
     // Fuzzy-Suche der Filter-Combo; gehoert dem Frame (Owner=Self).
@@ -421,7 +425,16 @@ type
     // Erzeugt einen vollstaendigen Markdown-Prompt fuer Claude AI: Befund-
     // Metadaten, FixHint (Vorher/Nachher) und Code-Auszug aus der Quelldatei.
     function  BuildClaudePrompt(F: TLeakFinding): string;
+    // KLICK-Pfad: was (und ob) kopiert wird, steuert [UI] ClipboardOnClick
+    // (Default: nichts). Dispatch auf CopyClaudePromptToClipboard bzw.
+    // das Jira-Mini-Issue aus uFindingCopyText.
     procedure CopyFindingToClipboard(F: TLeakFinding);
+    // Explizite Kopier-Geste (Grid-Kontextmenue "Copy AI prompt"): kopiert
+    // IMMER den Claude-Prompt samt Quick-Fix-Block, unabhaengig vom
+    // ini-Modus - wie das EXE-Pendant GridMenuCopyClick.
+    procedure CopyClaudePromptToClipboard(F: TLeakFinding);
+    procedure GridMenuCopyPromptClick(Sender: TObject);
+    procedure GridMenuPopup(Sender: TObject);
     // Wendet einen Quick-Fix DIREKT im IDE-Editor an (TIDEEditor.
     // ApplyLineReplacement). Trigger: F4 auf der Grid-Zeile. No-op
     // wenn der Befund-Kind keinen Quick-Fix-Provider hat oder der
@@ -1492,6 +1505,16 @@ begin
   // im TFindingGridTooltip-Helper gekapselt. Owner=Self -> Auto-Free
   // plus expliziter FreeAndNil im Destruktor (Restore-Reihenfolge).
   FGridTooltip := TFindingGridTooltip.Create(Self, FResultGrid, FDisplayedFindings);
+  // Grid-Kontextmenue: die EXPLIZITE Kopier-Geste. Noetig seit
+  // [UI] ClipboardOnClick=1 der Default ist - ohne sie haette das Plugin
+  // keinen Weg mehr zum AI-Prompt (die EXE hat den Eintrag laengst).
+  FGridMenu := TPopupMenu.Create(Self);
+  FGridMenu.OnPopup := GridMenuPopup;
+  var CopyItem := TMenuItem.Create(FGridMenu);
+  CopyItem.Caption := _('Copy AI prompt');
+  CopyItem.OnClick := GridMenuCopyPromptClick;
+  FGridMenu.Items.Add(CopyItem);
+  FResultGrid.PopupMenu := FGridMenu;
 end;
 
 procedure TAnalyserFrame.BuildStatsTiles(Parent: TPanel);
@@ -2570,6 +2593,84 @@ begin
 end;
 
 procedure TAnalyserFrame.CopyFindingToClipboard(F: TLeakFinding);
+// KLICK-Pfad hinter dem Kopier-Timer. Was (und ob) kopiert wird,
+// entscheidet [UI] ClipboardOnClick (Nutzerentscheid 2026-08-12):
+//   fcmNone (Default) - nichts: kein Write, keine Statusmeldung, kein
+//                       Datei-Load; die Zwischenablage gehoert dem Nutzer.
+//   fcmJiraMini       - Mini-Issue aus uFindingCopyText; der Quick-Fix-
+//                       Block bleibt bewusst weg (der Fix-hint-Fakt deckt
+//                       das ab und spart den LoadFromFile der kompletten
+//                       Quelldatei).
+//   fcmClaudePrompt   - das bisherige Verhalten (Claude-Prompt samt
+//                       Quick-Fix-Block), extrahiert nach
+//                       CopyClaudePromptToClipboard.
+var
+  Mode : TFindingCopyMode;
+  Text : string;
+begin
+  if not Assigned(F) then Exit;
+
+  Mode := fcmNone;
+  if Assigned(FRepoSettings) then
+    Mode := FindingCopyModeFromInt(FRepoSettings.ClipboardOnClick);
+
+  case Mode of
+    fcmJiraMini:
+    begin
+      Text := TFindingCopyText.Build(F, fcmJiraMini, FixHint(F));
+      try
+        Clipboard.AsText := Text;
+        if Assigned(FStatusBar) then
+          StatusMode(Format(
+            _('Jira mini issue copied to clipboard: %s, line %s (%s)'),
+            [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]));
+      // noinspection EmptyExcept
+      except
+        // Clipboard kann unter bestimmten IDE-Modi blockiert sein -
+        // silent skip, wie im Claude-Pfad.
+      end;
+    end;
+    fcmClaudePrompt:
+    begin
+      CopyClaudePromptToClipboard(F);
+    end;
+  else
+  begin
+    // fcmNone: bewusst gar nichts.
+    Exit;
+  end;
+  end;
+end;
+
+procedure TAnalyserFrame.GridMenuPopup(Sender: TObject);
+// Ohne gueltige Befund-Zeile ist die Kopier-Geste sinnlos - Eintraege
+// deaktivieren (Muster wie das EXE-Grid-Menue in GridMenuPopup).
+var
+  HasRow : Boolean;
+  i      : Integer;
+begin
+  HasRow := Assigned(FDisplayedFindings)
+        and (FResultGrid.Row >= 1)
+        and (FResultGrid.Row <= FDisplayedFindings.Count);
+  for i := 0 to FGridMenu.Items.Count - 1 do
+  begin
+    FGridMenu.Items[i].Enabled := HasRow;
+  end;
+end;
+
+procedure TAnalyserFrame.GridMenuCopyPromptClick(Sender: TObject);
+// Explizite Absicht - kopiert wie die EXE IMMER den Claude-Prompt,
+// unabhaengig von [UI] ClipboardOnClick (die Option regelt nur die
+// automatische Kopie beim Zeilen-Klick).
+var
+  idx : Integer;
+begin
+  idx := FResultGrid.Row - 1;
+  if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
+  CopyClaudePromptToClipboard(FDisplayedFindings[idx]);
+end;
+
+procedure TAnalyserFrame.CopyClaudePromptToClipboard(F: TLeakFinding);
 // Bei Findings mit Quick-Fix-Provider wird ein "Quick-Fix"-Markdown-
 // Block vorangestellt: Original-Zeile + Fixed-Zeile direkt zum Pasten.
 // Der Claude-Prompt-Block folgt darunter wie bisher.

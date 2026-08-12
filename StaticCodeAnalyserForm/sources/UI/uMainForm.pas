@@ -10,7 +10,8 @@ uses
    Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Grids, Vcl.Menus,   // Vcl.Menus: TPopupMenu/TMenuItem (Hamburger-Felder)
   uStaticAnalyzer2, uEngineApi,
-  uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
+  uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uFindingCopyText,
+  uLocalization,
   uAnalyserTypes,  // SeverityFromKindLevel, TFindingSeverity (Grid-Renderer-Callback)
   uRepoSettings, uRecentPaths, uScanTargetDialog, uFindingGridRenderer, uDfmTextViewer,
   uEditorCommand,                 // TEditorSpec (Parametertyp von OpenViaExternalEditor)
@@ -154,6 +155,11 @@ type
     // OnClick auch bei Tastatur-Navigation - sofort und ungeschuetzt die
     // systemweite Zwischenablage (~30x/s bei gehaltener Taste).
     FClipTimer      : TTimer;
+    // Was der KLICK-Pfad in die Zwischenablage legt ([UI] ClipboardOnClick,
+    // Default: nichts - fcmNone). Gelesen in FormCreate und je Lauf frisch
+    // in ApplyDetectorConfig; Aenderung wirkt beim naechsten Analyse-Lauf.
+    // Die explizite Kontextmenue-Geste kopiert unabhaengig davon.
+    FClipCopyMode   : TFindingCopyMode;
     // Programmatischer Grid-Umbau (ApplyFilter nach Sortier-/Filter-
     // wechsel) loest ueber die Zeilen-Klemmung OnClick aus - der zeigte
     // dann einen NIE angeklickten Fund im Panel und ueberschrieb die
@@ -392,6 +398,10 @@ begin
   try
     try Settings.Load; except end;
     SetLanguage(Settings.Language);
+    // Klick-Kopie-Modus initial lesen; je Analyse-Lauf zieht
+    // ApplyDetectorConfig ihn frisch nach (gleiche Semantik wie die
+    // uebrigen ini-Werte: Aenderung wirkt beim naechsten Lauf).
+    FClipCopyMode := FindingCopyModeFromInt(Settings.ClipboardOnClick);
 
     // ---- Profile-Combo befuellen aus TRuleCatalog.ProfileNames ----
     ProfileList := TRuleCatalog.ProfileNames;
@@ -1096,6 +1106,9 @@ begin
     // ProjectRoot durchreichen damit relative CustomRulesFile-Pfade
     // (z.B. 'analyser-rules.yml' im Projekt-Wurzelverzeichnis) gefunden werden.
     Settings.ApplyDetectorThresholds(DirOfProjectPath(Projectpath.Text));
+    // Klick-Kopie-Modus je Lauf frisch aus der INI - "wirkt beim
+    // naechsten Analyse-Lauf", wie in der ini-Vorlage dokumentiert.
+    FClipCopyMode := FindingCopyModeFromInt(Settings.ClipboardOnClick);
     AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
     if AClearDiscovery then
     begin
@@ -2096,12 +2109,16 @@ begin
   if Assigned(FClipTimer) then
     FClipTimer.Enabled := False;
   if csDestroying in ComponentState then Exit;
+  // [UI] ClipboardOnClick=1 (Default): die Zwischenablage gehoert dem
+  // Nutzer - nichts bauen, nichts schreiben. Die explizite Geste
+  // (Kontextmenue "Copy AI prompt") laeuft NICHT ueber diesen Pfad.
+  if FClipCopyMode = fcmNone then Exit;
   if FDisplayedFindings = nil then Exit;
   idx := ResultGrid.Row - 1;
   if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
   F := FDisplayedFindings[idx];
   try
-    Clipboard.AsText := BuildClaudePrompt(F);
+    Clipboard.AsText := TFindingCopyText.Build(F, FClipCopyMode);
   except
     // Zwischenablage gerade von einem anderen Prozess gesperrt (RDP,
     // Clipboard-Manager): still auslassen - der naechste Auswahlwechsel
@@ -2109,9 +2126,14 @@ begin
     // schlimmer als eine verpasste Kopie.
     Exit;
   end;
-  StatusBar1.Panels[2].Text := Format(
-    _('AI prompt copied to clipboard: %s, line %s (%s)'),
-    [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]);
+  if FClipCopyMode = fcmJiraMini then
+    StatusBar1.Panels[2].Text := Format(
+      _('Jira mini issue copied to clipboard: %s, line %s (%s)'),
+      [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText])
+  else
+    StatusBar1.Panels[2].Text := Format(
+      _('AI prompt copied to clipboard: %s, line %s (%s)'),
+      [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]);
 end;
 
 procedure TForm2.UpdateHintPanelToSelection;
@@ -2838,7 +2860,9 @@ end;
 procedure TForm2.GridMenuCopyClick(Sender: TObject);
 // Bewusst SOFORT statt ueber den Entprell-Timer: hier ist das Kopieren
 // die ausdrueckliche Absicht des Nutzers, nicht ein Nebeneffekt der
-// Navigation.
+// Navigation. Aus demselben Grund greift [UI] ClipboardOnClick hier
+// NICHT: die Option regelt nur die automatische Kopie beim Zeilen-Klick;
+// wer "Copy AI prompt" waehlt, bekommt den AI-Prompt - in jedem Modus.
 var
   idx : Integer;
   F   : TLeakFinding;
