@@ -249,18 +249,27 @@ def _preceded_by_routine_keyword(s: str, i: int) -> bool:
     return s[j + 1:end].lower() in ("function", "procedure")
 
 
-def collect_string_consts(text: str) -> dict[str, str]:
-    """Sammelt unit-lokale String-Konstanten (NAME = 'Text';).
+def collect_string_consts(text: str) -> tuple[dict[str, str],
+                                              dict[str, list[str]]]:
+    """Sammelt unit-lokale String-Konstanten (NAME = 'Text';) und
+    String-ARRAY-Konstanten (NAME : array[..] of string = ('a', 'b');).
 
     Noetig, weil einige Aufrufstellen ueber eine Konstante gehen:
         HEADER_METHOD = 'Method';
         ...
         FGrid.Cells[COL_METHOD, 0] := _(HEADER_METHOD);
     Ohne Aufloesung fielen genau diese UI-Strings aus der .pot heraus.
+
+    Die Array-Form kam 2026-08-12 dazu: _(CAPTIONS[M]) in
+    BuildAppearanceMenu/BuildOpenWithMenu galt als dynamisch, und die
+    Regeneration warf fuenf LEBENDE msgids ('Like Windows', 'Light',
+    'Dark', 'DFM findings: ...') aus der template.pot - msgmerge haette
+    deren Uebersetzungen als obsolet markiert.
     """
     sc = _Scanner(text)
     s, n = text, len(text)
     consts: dict[str, str] = {}
+    arrays: dict[str, list[str]] = {}
 
     i = 0
     while i < n:
@@ -301,12 +310,30 @@ def collect_string_consts(text: str) -> dict[str, str]:
                 continue
             j = sc.skip_trivia(i)
             # Optionale Typangabe: NAME: string = '...'
+            # bzw. NAME: array[..] of string = ('a', 'b', ...)
             if j < n and s[j] == ":":
                 k = sc.skip_trivia(j + 1)
                 t0 = k
                 while k < n and _is_ident_char(s[k]):
                     k += 1
                 if k > t0:
+                    if s[t0:k].lower() == "array":
+                        elems, after, ok = _read_string_array(sc, k)
+                        if ok and elems:
+                            # UNION statt first-wins: mehrere Routinen
+                            # derselben Unit duerfen GLEICHNAMIGE lokale
+                            # Arrays deklarieren (uMainForm hat zweimal
+                            # CAPTIONS). Der Aufrufort ist hier nicht
+                            # scopebar - also melden alle Deklarationen
+                            # ihre Elemente; ueberzaehlige msgids sind
+                            # fuer die Uebersetzung harmlos, fehlende
+                            # nicht.
+                            bucket = arrays.setdefault(name, [])
+                            for e in elems:
+                                if e not in bucket:
+                                    bucket.append(e)
+                        i = after if ok else k
+                        continue
                     j = sc.skip_trivia(k)
                 else:
                     j = n
@@ -322,20 +349,72 @@ def collect_string_consts(text: str) -> dict[str, str]:
 
         i += 1
 
-    return consts
+    return consts, arrays
 
 
-def scan_source(text: str, consts: dict[str, str] | None = None
+def _read_string_array(sc: _Scanner, i: int) -> tuple[list[str], int, bool]:
+    """Liest ab der Position HINTER dem Wort 'array' den Rest einer
+    String-Array-Konstante: [Index] of string = ('a', 'b'#13, ...).
+
+    Rueckgabe: (Elemente, Position hinter der schliessenden Klammer,
+    erkannt?). Nicht-String-Arrays und alles Unerwartete -> (,, False).
+    """
+    s, n = sc.s, sc.n
+    j = sc.skip_trivia(i)
+    if j >= n or s[j] != "[":
+        return [], i, False
+    depth = 1
+    j += 1
+    while j < n and depth:
+        if s[j] == "'":
+            _, j = sc.read_string(j)
+            continue
+        if s[j] == "[":
+            depth += 1
+        elif s[j] == "]":
+            depth -= 1
+        j += 1
+    j = sc.skip_trivia(j)
+    for expected in ("of", "string"):
+        start = j
+        while j < n and _is_ident_char(s[j]):
+            j += 1
+        if s[start:j].lower() != expected:
+            return [], i, False
+        j = sc.skip_trivia(j)
+    if j >= n or s[j] != "=":
+        return [], i, False
+    j = sc.skip_trivia(j + 1)
+    if j >= n or s[j] != "(":
+        return [], i, False
+    elems: list[str] = []
+    j += 1
+    while True:
+        value, after, ok = _read_literal_chain(sc, j, stops=(",", ")"))
+        if not ok:
+            return [], i, False
+        elems.append(value)
+        if s[after - 1] == ")":
+            return elems, after, True
+        j = after
+
+
+def scan_source(text: str, consts: dict[str, str] | None = None,
+                array_consts: dict[str, list[str]] | None = None
                 ) -> tuple[list[tuple[str, int]], list[int]]:
     """Findet alle _()-Aufrufe mit konstantem Text-Argument.
 
-    consts loest die Indirektion ueber unit-lokale String-Konstanten auf.
+    consts loest die Indirektion ueber unit-lokale String-Konstanten auf;
+    array_consts die ueber String-Array-Konstanten (_(CAPTIONS[M]) ->
+    ALLE Elemente werden msgids, der Index ist zur Uebersetzungszeit
+    unbekannt).
 
     Rueckgabe: (Liste (msgid, Zeile), Liste Zeilen dynamischer Aufrufe).
     """
     sc = _Scanner(text)
     s, n = text, len(text)
     consts = consts or {}
+    array_consts = array_consts or {}
     found: list[tuple[str, int]] = []
     dynamic: list[int] = []
 
@@ -382,6 +461,15 @@ def scan_source(text: str, consts: dict[str, str] | None = None
                         msgid, after, ok = _read_const_arg(sc, j + 1, consts)
                     if ok:
                         found.append((msgid, call_line))
+                        i = after
+                        continue
+                    # Dritter Versuch: _(ARRAY_CONST[Index]) - alle
+                    # Elemente sind moegliche msgids.
+                    msgids, after, ok = _read_array_const_arg(
+                        sc, j + 1, array_consts)
+                    if ok:
+                        for m in msgids:
+                            found.append((m, call_line))
                     else:
                         dynamic.append(call_line)
                     i = after
@@ -470,6 +558,41 @@ def _read_const_arg(sc: _Scanner, i: int,
     return "", i, False
 
 
+def _read_array_const_arg(sc: _Scanner, i: int,
+                          arrays: dict[str, list[str]]
+                          ) -> tuple[list[str], int, bool]:
+    """Behandelt _(NAME[<Index>]) bzw. _(NAME[<Index>], [...]) mit NAME =
+    unit-lokale String-Array-Konstante. Der Index ist zur Extraktionszeit
+    unbekannt - ALLE Elemente werden als msgids gemeldet (jedes kann zur
+    Laufzeit angezeigt werden)."""
+    s, n = sc.s, sc.n
+    j = sc.skip_trivia(i)
+    start = j
+    while j < n and _is_ident_char(s[j]):
+        j += 1
+    if j == start:
+        return [], i, False
+    name = s[start:j]
+    j = sc.skip_trivia(j)
+    if j >= n or s[j] != "[" or name not in arrays:
+        return [], i, False
+    depth = 1
+    j += 1
+    while j < n and depth:
+        if s[j] == "'":
+            _, j = sc.read_string(j)
+            continue
+        if s[j] == "[":
+            depth += 1
+        elif s[j] == "]":
+            depth -= 1
+        j += 1
+    j = sc.skip_trivia(j)
+    if j < n and s[j] in (")", ","):
+        return arrays[name], j + 1, True
+    return [], i, False
+
+
 # --------------------------------------------------------------------------
 # Quellbaum
 # --------------------------------------------------------------------------
@@ -516,7 +639,8 @@ def collect(root: Path) -> tuple[dict[str, list[str]], list[str]]:
             continue
         if "_(" not in text:
             continue
-        found, dynamic = scan_source(text, collect_string_consts(text))
+        consts, array_consts = collect_string_consts(text)
+        found, dynamic = scan_source(text, consts, array_consts)
         for msgid, line in found:
             if not msgid:
                 continue  # _('') ist die PO-Kopfzeile - nie als Eintrag

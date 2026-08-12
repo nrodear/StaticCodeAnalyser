@@ -326,7 +326,20 @@ begin
   // Standard: Fehler + Warnungen. Hinweise sind oft zu viel fuer ein Ticket.
   filterSet := [lsError, lsWarning];
   jiraText := TExporter.BuildJiraText(FAll, src, filterSet);
-  Clipboard.AsText := jiraText;
+  // Zwischenablage kann gerade von einem anderen Prozess gesperrt sein
+  // (RDP, Clipboard-Manager) - dann EClipboardException. Statusmeldung
+  // statt Dialog, wie der Datei-Kommentar es fuer alle Handler zusagt
+  // (die uebrigen Exporte waren laengst so gesichert, genau die zwei
+  // Clipboard-Handler nicht - Review 2026-08-12).
+  try
+    Clipboard.AsText := jiraText;
+  except
+    on E: Exception do
+    begin
+      FOnStatus(_('Jira export failed: ') + E.Message);
+      Exit;
+    end;
+  end;
   FOnStatus(Format(
     _('Jira wiki markup for %s copied to clipboard (errors+warnings).'),
     [ExtractFileName(src)]));
@@ -345,7 +358,17 @@ begin
     Exit;
   end;
   text := TExporter.BuildClipboardText(FAll, src, [lsError, lsWarning]);
-  Clipboard.AsText := text;
+  // Gesperrte Zwischenablage -> Statusmeldung statt Default-Dialog,
+  // Begruendung wie in DoExportJira.
+  try
+    Clipboard.AsText := text;
+  except
+    on E: Exception do
+    begin
+      FOnStatus(_('Clipboard copy failed: ') + E.Message);
+      Exit;
+    end;
+  end;
   FOnStatus(Format(
     _('Errors+warnings for %s copied to clipboard.'),
     [ExtractFileName(src)]));

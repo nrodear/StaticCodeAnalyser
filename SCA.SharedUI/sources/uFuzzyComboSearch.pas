@@ -35,6 +35,12 @@ type
     Tag     : NativeInt;
   end;
 
+  // noinspection LargeClass
+  // Ein Bauteil, eine Verantwortung: die Klasse kapselt den kompletten
+  // Ereignis-Vertrag einer tippbaren Combo (Schnappschuss, Entprellung,
+  // Commit-Gate) - eine Aufspaltung wuerde nur privaten Zustand ueber
+  // Units verteilen. Die Laenge kommt aus den Begruendungs-Kommentaren
+  // der Windows-Eigenheiten, nicht aus Logik-Masse.
   TFuzzyComboSearch = class(TComponent)
   private
     FCombo      : TComboBox;
@@ -79,8 +85,21 @@ type
     procedure Attach(ACombo: TComboBox);
     // Nach jedem Umbau der Items durch den Host aufrufen (z.B. nach
     // RebuildFilterCombos). Ohne das filtert der Helfer gegen einen
-    // veralteten Schnappschuss.
+    // veralteten Schnappschuss. Uebernimmt ausserdem die aktuelle
+    // Auswahl als Commit-Stand - das Tag-Gate in CommitSelection misst
+    // sonst gegen die Auswahl von VOR dem Umbau und verschluckt deren
+    // erste Wieder-Auswahl.
     procedure Resync;
+    // Nach jedem PROGRAMMATISCHEN ItemIndex-Setzen durch den Host rufen
+    // (Kachel-Klicks): uebernimmt die angezeigte Auswahl als Commit-Stand,
+    // ohne den Schnappschuss anzufassen. Sonst misst das Tag-Gate in
+    // CommitSelection gegen einen Stand, den der Host laengst ueberholt
+    // hat, und verschluckt die naechste Wieder-Auswahl (Review
+    // 2026-08-12, Kachel-Pfad). Resync waere hier FALSCH: steht gerade
+    // eine getippte Fuzzy-Reduktion offen, wuerde die REDUZIERTE Liste
+    // als Voll-Schnappschuss eingefroren - hier wird sie stattdessen
+    // tag-treu zurueckgelegt.
+    procedure NoteHostSelection;
     // Entprellung ueberspringen und sofort filtern. Fuer Tests - im
     // Betrieb macht das der Timer.
     procedure FilterNow;
@@ -276,15 +295,46 @@ begin
   ACombo.OnExit       := ComboExit;
   ACombo.OnKeyUp      := ComboKeyUp;
 
-  FCommitted  := 0;
-  FHasPending := False;
-  if (ACombo.Items.Count > 0) and (ACombo.ItemIndex >= 0)
-     and (ACombo.ItemIndex < ACombo.Items.Count) then
-  begin
-    FCommitted := NativeInt(ACombo.Items.Objects[ACombo.ItemIndex]);
-  end;
-
+  // Commit-Gedaechtnis und Schnappschuss zieht Resync aus dem
+  // Ist-Zustand der Combo - Attach ist nur der Sonderfall "erster Sync".
   Resync;
+end;
+
+procedure TFuzzyComboSearch.NoteHostSelection;
+var
+  Tag : NativeInt;
+begin
+  if not Assigned(FCombo) then Exit;
+  if Assigned(FTimer) then
+  begin
+    FTimer.Enabled := False;
+  end;
+  FPending    := '';
+  FHasPending := False;
+  // Offene Fuzzy-Reduktion erst tag-treu zuruecklegen - der Host hat
+  // seine Auswahl gegen die VOLLE Liste gesetzt.
+  if FIsFiltering then
+  begin
+    if SelectedTag(Tag) then
+    begin
+      RestoreAllAndSelect(Tag);
+    end
+    else
+    begin
+      RestoreAll;
+    end;
+  end;
+  // Das Gedaechtnis folgt IMMER der Anzeige (Konvention wie in Resync):
+  // steht nach dem Zuruecklegen KEINE Auswahl (ItemIndex=-1, etwa weil
+  // der Host sein Ziel in einer reduzierten Liste nicht fand), faellt
+  // der Host auf seinen Default zurueck (Tag 0 = All) - bliebe hier der
+  // alte Tag stehen, verschluckte das Gate die naechste Wieder-Auswahl
+  // genau dieses Eintrags (Review 2026-08-12, Logik-Dimension).
+  FCommitted := 0;
+  if SelectedTag(Tag) then
+  begin
+    FCommitted := Tag;
+  end;
 end;
 
 procedure TFuzzyComboSearch.FilterNow;
@@ -311,6 +361,22 @@ begin
     E.Display := FCombo.Items[i];
     E.Tag     := NativeInt(FCombo.Items.Objects[i]);
     FAll.Add(E);
+  end;
+  // Der Umbau durch den Host ist auch ein neuer AUSWAHL-Stand: das
+  // Commit-Gedaechtnis muss der Anzeige folgen, sonst verschluckt das
+  // Tag-Gate in CommitSelection die erste Wieder-Auswahl des zuletzt
+  // gemeldeten Eintrags. Genau so trat es auf (2026-08-12): der Scan
+  // setzt die Combo auf 'All' zurueck, der Nutzer waehlt seinen alten
+  // Filter erneut - Combo zeigt ihn an, der Host erfaehrt nichts, das
+  // Grid bleibt auf dem All-Stand. Eine vor dem Umbau gemerkte, noch
+  // nicht committete Auswahl zeigt auf die ALTE Liste und ist damit
+  // ebenfalls gegenstandslos.
+  FHasPending := False;
+  FCommitted  := 0;
+  if (FCombo.Items.Count > 0) and (FCombo.ItemIndex >= 0)
+     and (FCombo.ItemIndex < FCombo.Items.Count) then
+  begin
+    FCommitted := NativeInt(FCombo.Items.Objects[FCombo.ItemIndex]);
   end;
   FIsFiltering := False;
   FLastQuery := '';

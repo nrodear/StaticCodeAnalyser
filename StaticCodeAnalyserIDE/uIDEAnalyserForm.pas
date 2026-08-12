@@ -18,6 +18,7 @@ uses
   uStaticAnalyzer2, uEngineApi, uStaticFiles, uMethodd12, uSCAConsts, uExport,
   uBaseline,
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
+  uFindingCopyText,
   uQuickFix,
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uIDEColors, uLocalization,
   uRecentPaths, uScanTargetDialog,
@@ -61,6 +62,16 @@ type
     FLastNonSeparatorMode : Integer;
     FFilterMode     : TFilterMode;
     FFilterKind     : TFindingKind; // gueltig wenn FFilterMode = fmSingleKind
+    // True waehrend ApplyFilter das Grid programmatisch umbaut. Das
+    // RowCount-Setzen klemmt die Selektion (VCL MoveCurrent -> SelectCell)
+    // und feuert GridSelectCell fuer eine Zeile, die niemand angeklickt
+    // hat - ohne Waechter armierte das den Kopier-Timer und ueberschrieb
+    // die Zwischenablage des Nutzers (Review-Blocker 2026-08-12).
+    // EXE-Pendant: TForm2.FGridUpdating.
+    FGridUpdating   : Boolean;
+    // Grid-Kontextmenue mit der expliziten Kopier-Geste ("Copy AI
+    // prompt"). Owner = Frame, kein manuelles Free noetig.
+    FGridMenu       : TPopupMenu;
     FCurrentBaseDir : string;
     FFilterCombo       : TComboBox;
     // Fuzzy-Suche der Filter-Combo; gehoert dem Frame (Owner=Self).
@@ -311,6 +322,9 @@ type
     // wieder entfernt wenn sie "leer" stehen (zwei Separatoren hintereinander
     // oder am Listen-Ende).
     procedure SnapshotFilterItems;
+    // Reduziert beide Filter-Combos auf Eintraege mit > 0 Treffern und
+    // setzt sie danach auf 'All' zurueck (Nutzerentscheid 2026-08-12:
+    // ein Scan startet immer ungefiltert; identisch in der EXE).
     procedure RebuildFilterCombos;
     // UI-Build-Helper: aus dem Constructor ausgelagert um die Setup-
     // Pfade lesbar zu halten. Reihenfolge im Constructor:
@@ -395,16 +409,34 @@ type
       const BaseDir: string);
     procedure UpdateStats;
     procedure ApplyFilter;
+    // True wenn "nur neue Funde" wirken KANN: Haken gesetzt UND eine
+    // Baseline geladen (fail-open, siehe ApplyFilter). Die EINE Quelle
+    // fuer Grid-Filter und Combo-Reduktion - beide muessen dieselbe
+    // Menge sehen (Review-Blocker 2026-08-12).
+    function  BaselineFilterActive: Boolean;
     // Schreibt FDisplayedFindings ins Grid (6 Spalten pro Zeile). Bei
     // leerer Liste erscheint ein Platzhalter-Text in Zeile 1.
     procedure PopulateGridFromDisplayed;
-    // Statusbar-Update nach ApplyFilter: zeigt n/m findings + Filter-Text.
+    // Statusbar-Update nach ApplyFilter: zeigt n/m findings + Filter-Text;
+    // ABaselineHidden > 0 macht sichtbar, wie viele Funde der Baseline-
+    // Filter gerade ausblendet (sonst liest sich "0 / 4" wie ein Defekt).
     procedure UpdateFilterStatus(const Criteria: TFindingFilterCriteria;
-      TotalMatched: Integer = 0);
+      TotalMatched: Integer = 0; ABaselineHidden: Integer = 0);
     // Erzeugt einen vollstaendigen Markdown-Prompt fuer Claude AI: Befund-
     // Metadaten, FixHint (Vorher/Nachher) und Code-Auszug aus der Quelldatei.
     function  BuildClaudePrompt(F: TLeakFinding): string;
+    // KLICK-Pfad: was (und ob) kopiert wird, steuert [UI] ClipboardOnClick
+    // (Default: nichts). Dispatch auf CopyClaudePromptToClipboard bzw.
+    // das Jira-Mini-Issue aus uFindingCopyText.
     procedure CopyFindingToClipboard(F: TLeakFinding);
+    // Explizite Kopier-Geste (Grid-Kontextmenue "Copy AI prompt"): kopiert
+    // IMMER, unabhaengig vom ini-Modus - wie das EXE-Pendant
+    // GridMenuCopyClick. INHALT hier: Claude-Prompt samt vorangestelltem
+    // Quick-Fix-Block; die EXE kopiert den Prompt OHNE diesen Block
+    // (bewusste Alt-Divergenz, s. Review 2026-08-12).
+    procedure CopyClaudePromptToClipboard(F: TLeakFinding);
+    procedure GridMenuCopyPromptClick(Sender: TObject);
+    procedure GridMenuPopup(Sender: TObject);
     // Wendet einen Quick-Fix DIREKT im IDE-Editor an (TIDEEditor.
     // ApplyLineReplacement). Trigger: F4 auf der Grid-Zeile. No-op
     // wenn der Befund-Kind keinen Quick-Fix-Provider hat oder der
@@ -1475,6 +1507,16 @@ begin
   // im TFindingGridTooltip-Helper gekapselt. Owner=Self -> Auto-Free
   // plus expliziter FreeAndNil im Destruktor (Restore-Reihenfolge).
   FGridTooltip := TFindingGridTooltip.Create(Self, FResultGrid, FDisplayedFindings);
+  // Grid-Kontextmenue: die EXPLIZITE Kopier-Geste. Noetig seit
+  // [UI] ClipboardOnClick=1 der Default ist - ohne sie haette das Plugin
+  // keinen Weg mehr zum AI-Prompt (die EXE hat den Eintrag laengst).
+  FGridMenu := TPopupMenu.Create(Self);
+  FGridMenu.OnPopup := GridMenuPopup;
+  var CopyItem := TMenuItem.Create(FGridMenu);
+  CopyItem.Caption := _('Copy AI prompt');
+  CopyItem.OnClick := GridMenuCopyPromptClick;
+  FGridMenu.Items.Add(CopyItem);
+  FResultGrid.PopupMenu := FGridMenu;
 end;
 
 procedure TAnalyserFrame.BuildStatsTiles(Parent: TPanel);
@@ -1740,23 +1782,41 @@ begin
     // Placeholder-Zeile bleibt explizit in Cells (GetCellText liest sie
     // dann via Fallback aus).
     FResultGrid.Rows[1].Clear;
-    FResultGrid.Cells[0, 1] := 'Keine Eintraege fuer diesen Filter.';
+    FResultGrid.Cells[0, 1] := _('No entries for this filter.');
   end;
   FResultGrid.Invalidate;
 end;
 
-procedure TAnalyserFrame.UpdateFilterStatus(
-  const Criteria: TFindingFilterCriteria; TotalMatched: Integer);
+function TAnalyserFrame.BaselineFilterActive: Boolean;
+// Nur aktiv wenn eingeschaltet UND eine Baseline wirklich geladen wurde.
+// Fail-open - eine leere/kaputte Baseline blendet NICHTS aus (Funde zu
+// verstecken weil die Baseline-Datei fehlt waere gefaehrlich).
+// FBaselineSet wird in RefreshBaselineSet (pro Scan/Toggle) befuellt.
 begin
+  Result := Assigned(FRepoSettings) and FRepoSettings.BaselineOnlyNew
+            and Assigned(FBaselineSet) and (not FBaselineSet.IsEmpty);
+end;
+
+procedure TAnalyserFrame.UpdateFilterStatus(
+  const Criteria: TFindingFilterCriteria; TotalMatched, ABaselineHidden: Integer);
+var
+  HiddenSuffix : string;
+begin
+  // Transparenz fuer den Baseline-Filter: "0 / 4 findings" ohne diesen
+  // Zusatz liest sich wie ein kaputter Filter (Fehlerbild 2026-08-12,
+  // frisch geschriebene Baseline deckte alle Funde).
+  HiddenSuffix := '';
+  if ABaselineHidden > 0 then
+    HiddenSuffix := ' - ' + Format(_('%d hidden by baseline'), [ABaselineHidden]);
   // Wenn TotalMatched gesetzt ist und ueber dem angezeigten Count liegt,
   // wurde gecappt (UIMaxDisplayedFindings) - macht's transparent.
   if (TotalMatched > 0) and (TotalMatched > FDisplayedFindings.Count) then
     StatusFindings(Format(_(
       'Showing first %d of %d findings - refine the filter to see more'),
-      [FDisplayedFindings.Count, TotalMatched]))
+      [FDisplayedFindings.Count, TotalMatched]) + HiddenSuffix)
   else
     StatusFindings(Format(_('%d / %d findings'),
-      [FDisplayedFindings.Count, FAllFindings.Count]));
+      [FDisplayedFindings.Count, FAllFindings.Count]) + HiddenSuffix);
   StatusMode(Format(_('Filter: %s%s'), [FFilterCombo.Text,
     IfThen(Criteria.SearchLow <> '',
            ', ' + _('Search: ') + Criteria.SearchLow, '')]));
@@ -1775,19 +1835,25 @@ var
   SortCfg        : TFindingSortConfig;
   TotalMatched   : Integer;
   BaselineActive : Boolean;
+  BaselineHidden : Integer;
 begin
   Criteria.Mode       := FFilterMode;
   Criteria.SingleKind := FFilterKind;
   Criteria.TypeFilter := FTypeFilter;
   Criteria.SearchLow  := Trim(FSearchEdit.Text).ToLower;
 
-  // Baseline "nur neue Funde": nur aktiv wenn eingeschaltet UND eine Baseline
-  // wirklich geladen wurde. Fail-open - eine leere/kaputte Baseline blendet
-  // NICHTS aus (Funde zu verstecken weil die Baseline-Datei fehlt waere
-  // gefaehrlich). FBaselineSet wird in RefreshBaselineSet (pro Scan) befuellt.
-  BaselineActive := Assigned(FRepoSettings) and FRepoSettings.BaselineOnlyNew
-                    and Assigned(FBaselineSet) and (not FBaselineSet.IsEmpty);
+  BaselineActive := BaselineFilterActive;
+  BaselineHidden := 0;
 
+  // Kopier-Waechter (Review-Blocker 2026-08-12): waehrend des Umbaus
+  // feuert GridSelectCell durch die Zeilen-Klemmung - der Waechter
+  // unterdrueckt dessen Seiteneffekte. Ein bereits scharfer Kopier-Timer
+  // gehoert zur ALTEN Liste und wird entschaerft, sonst kopierte er nach
+  // dem Umbau, was zufaellig an der geklemmten Zeile steht
+  // (Debounce-Fenster-Race).
+  FGridUpdating := True;
+  if Assigned(FClipCopyTimer) then
+    FClipCopyTimer.Enabled := False;
   SendMessage(FResultGrid.Handle, WM_SETREDRAW, 0, 0);
   try
     FDisplayedFindings.Clear;
@@ -1799,7 +1865,10 @@ begin
       // FAllFindings bleibt vollstaendig (Export + "Baseline schreiben"
       // sehen weiter alle Funde).
       if BaselineActive and FBaselineSet.Contains(FAllFindings[i]) then
+      begin
+        Inc(BaselineHidden);
         Continue;
+      end;
       if TFindingFilter.Matches(FAllFindings[i], Criteria) then
         FDisplayedFindings.Add(FAllFindings[i]);
     end;
@@ -1854,9 +1923,18 @@ begin
   finally
     SendMessage(FResultGrid.Handle, WM_SETREDRAW, 1, 0);
     FResultGrid.Invalidate;
+    FGridUpdating := False;
+    // Hilfe-Panel der neuen Lage nachziehen (EXE-Pendant:
+    // UpdateHintPanelToSelection im ApplyFilter-finally). Der Waechter
+    // oben unterdrueckt den SelectCell-Pfad, der das frueher als
+    // Seiteneffekt der Zeilen-Klemmung erledigte - ohne diese Zeile
+    // zeigte das Panel einen inzwischen ausgefilterten Fund. UpdateHelp
+    // behandelt beide Lagen: gueltige Zeile -> Befund, leere/ungueltige
+    // -> Platzhalter. Bewusst OHNE Kopier-Seiteneffekt.
+    UpdateHelp(FResultGrid.Row);
   end;
 
-  UpdateFilterStatus(Criteria, TotalMatched);
+  UpdateFilterStatus(Criteria, TotalMatched, BaselineHidden);
 
   // Multi-File-Marker-Refresh: nach jedem Filter-Wechsel oder
   // Analyse-Lauf zeigt der Highlighter ab sofort Stripes + Hover-
@@ -1892,6 +1970,21 @@ procedure TAnalyserFrame.GridMouseDown(Sender: TObject; Button: TMouseButton;
 var
   ACol, ARow: Integer;
 begin
+  // Rechtsklick: Selektion auf die ANGEKLICKTE Datenzeile nachziehen,
+  // BEVOR WM_CONTEXTMENU das Popup oeffnet - TCustomGrid bewegt die
+  // Current-Cell nur bei mbLeft, und "Copy AI prompt" liest die
+  // Selektion. Ohne das kopierte der Rechtsklick auf Zeile B den Prompt
+  // der noch selektierten Zeile A (Review 2026-08-12, Logik-Dimension).
+  // Der Row-Setter feuert OnSelectCell -> Hilfe-Panel folgt konsistent;
+  // Klick auf Header/Leerflaeche laesst die Selektion stehen.
+  if Button = mbRight then
+  begin
+    FResultGrid.MouseToCell(X, Y, ACol, ARow);
+    if (ARow >= 1) and Assigned(FDisplayedFindings)
+       and (ARow <= FDisplayedFindings.Count) then
+      FResultGrid.Row := ARow;
+    Exit;
+  end;
   if Button <> mbLeft then Exit;
   FResultGrid.MouseToCell(X, Y, ACol, ARow);
   if ARow <> 0 then Exit; // Nur Header-Zeile
@@ -2101,24 +2194,47 @@ procedure TAnalyserFrame.RebuildFilterCombos;
 // vorlaufig behalten und im zweiten Pass weggeworfen wenn sie keinen
 // folgenden Detail-Eintrag mehr haben (vermeidet '--- Errors ---'-
 // Header ohne darunter liegende Items).
+//
+// NACH DEM NEUAUFBAU STEHEN BEIDE COMBOS AUF 'All' (Index 0 - der
+// fmAll/tfAll-Eintrag wird immer behalten und steht per Snapshot-Ordnung
+// vorn, Separatoren koennen nicht davor rutschen). Nutzerentscheid
+// 2026-08-12, identisch in der Standalone-EXE umgesetzt: ein Scan startet
+// immer mit ungefilterter Liste. Die fruehere Restaurierung der vorigen
+// Auswahl ist entfallen - ein stehengebliebener Filter las sich nach dem
+// Scan wie "kaum Funde", obwohl nur der alte Filter noch griff. Der
+// einzige Aufrufer ist der Nach-Scan-Pfad (PopulateFindings); wer die
+// Routine je woanders ruft, uebernimmt damit auch den Reset.
 var
   Item : TFilterComboItem;
-  SavedSevMode, SavedTypeMode, NewIdx, i : Integer;
+  i : Integer;
   Filtered : TArray<TFilterComboItem>;
   Tmp : TList<TFilterComboItem>;
+  CountSrc : TList<TLeakFinding>;
+  OwnedSrc : TList<TLeakFinding>;
 begin
   if FAllFindings = nil then Exit;
   if Length(FAllSeverityItems) = 0 then Exit;
 
-  // Aktuelle Auswahl merken (Mode-Ord, nicht Index).
-  SavedSevMode := Ord(fmAll);
-  if (FFilterCombo.ItemIndex >= 0)
-     and Assigned(FFilterCombo.Items.Objects[FFilterCombo.ItemIndex]) then
-    SavedSevMode := Integer(FFilterCombo.Items.Objects[FFilterCombo.ItemIndex]);
-  SavedTypeMode := Ord(tfAll);
-  if (FTypeCombo.ItemIndex >= 0)
-     and Assigned(FTypeCombo.Items.Objects[FTypeCombo.ItemIndex]) then
-    SavedTypeMode := Integer(FTypeCombo.Items.Objects[FTypeCombo.ItemIndex]);
+  // KONSISTENZ MIT DEM GRID (Review-Blocker 2026-08-12): gezaehlt wird
+  // auf derselben baseline-bereinigten Menge, die ApplyFilter anzeigt.
+  // Vorher zaehlte die Reduktion roh - bei aktivem "nur neue Funde" bot
+  // die Combo Eintraege an, deren Grid-Sicht leer war. Die Kacheln
+  // zaehlen bewusst weiter die Gesamtmenge (Nutzerentscheid 2026-08-12);
+  // die Statuszeile benennt die ausgeblendete Anzahl.
+  // try beginnt VOR dem Create (nil.Free ist ein No-op): die
+  // Befuellschleife allokiert (Fingerprint-Strings, Listen-Wachstum) -
+  // eine Ausnahme dort haette die Liste sonst geleakt.
+  OwnedSrc := nil;
+  CountSrc := FAllFindings;
+  try
+  if BaselineFilterActive then
+  begin
+    OwnedSrc := TList<TLeakFinding>.Create;
+    for i := 0 to FAllFindings.Count - 1 do
+      if not FBaselineSet.Contains(FAllFindings[i]) then
+        OwnedSrc.Add(FAllFindings[i]);
+    CountSrc := OwnedSrc;
+  end;
 
   // ---- Severity-Filter: zwei-Pass-Filterung ----
   Tmp := TList<TFilterComboItem>.Create;
@@ -2128,7 +2244,7 @@ begin
       if (Item.ModeOrd = -1)                    // Separator: vorlaeufig behalten
          or (Item.ModeOrd = Ord(fmAll))
          or (Item.ModeOrd = Ord(fmDetectorReview))
-         or (TFindingFilter.CountForTag(FAllFindings, Item.ModeOrd) > 0) then
+         or (TFindingFilter.CountForTag(CountSrc, Item.ModeOrd) > 0) then
         Tmp.Add(Item);
     end;
     // Pass 2: orphan separators entfernen (Separator gefolgt von Separator
@@ -2158,15 +2274,15 @@ begin
   finally
     FFilterCombo.Items.EndUpdate;
   end;
-  NewIdx := 0;
-  for i := 0 to FFilterCombo.Items.Count - 1 do
-    if (Integer(FFilterCombo.Items.Objects[i]) = SavedSevMode)
-       and (Integer(FFilterCombo.Items.Objects[i]) <> -1) then
-    begin
-      NewIdx := i;
-      Break;
-    end;
-  FFilterCombo.ItemIndex := NewIdx;
+  FFilterCombo.ItemIndex := 0;
+  // DEN CACHE MITZIEHEN, nicht nur die Anzeige: programmatisches
+  // ItemIndex feuert kein OnChange, und ApplyFilter liest NICHT die
+  // Combo, sondern FFilterMode (anders als die EXE, die direkt die Combo
+  // liest). Ohne diese Zeile zeigte die Combo 'All', waehrend der alte
+  // Filter weiter griff - Grid leer trotz vier Funden, Fehlerbild vom
+  // 2026-08-12. FFilterKind braucht keinen Reset: es wird nur bei
+  // fmSingleKind gelesen.
+  FFilterMode := fmAll;
   // Der Helfer filtert gegen seinen eigenen Schnappschuss - nach jedem
   // Umbau der Items muss er ihn neu ziehen.
   if Assigned(FFilterSearch) then FFilterSearch.Resync;
@@ -2178,21 +2294,21 @@ begin
     for Item in FAllTypeItems do
     begin
       if (Item.ModeOrd = Ord(tfAll))
-         or (TFindingFilter.CountForType(FAllFindings,
+         or (TFindingFilter.CountForType(CountSrc,
                                          TTypeFilter(Item.ModeOrd)) > 0) then
         FTypeCombo.Items.AddObject(Item.Display, TObject(Item.ModeOrd));
     end;
   finally
     FTypeCombo.Items.EndUpdate;
   end;
-  NewIdx := 0;
-  for i := 0 to FTypeCombo.Items.Count - 1 do
-    if Integer(FTypeCombo.Items.Objects[i]) = SavedTypeMode then
-    begin
-      NewIdx := i;
-      Break;
-    end;
-  FTypeCombo.ItemIndex := NewIdx;
+  FTypeCombo.ItemIndex := 0;
+  // Gleicher Grund wie oben bei FFilterMode: der Typ-Filter wirkt ueber
+  // den Cache, nicht ueber die Combo.
+  FTypeFilter := tfAll;
+
+  finally
+    OwnedSrc.Free;
+  end;
 end;
 
 procedure TAnalyserFrame.PopulateFindings(
@@ -2445,6 +2561,10 @@ var
   Finding : TLeakFinding;
 begin
   CanSelect := True;
+  // Programmatischer Umbau (ApplyFilter setzt RowCount, die VCL klemmt
+  // die Selektion): keine Seiteneffekte fuer eine Zeile, die niemand
+  // angeklickt hat - kein Highlight-Refresh, vor allem KEIN Kopier-Timer.
+  if FGridUpdating then Exit;
   UpdateHelp(ARow);
 
   idx := ARow - 1; // Zeile 0 = Header
@@ -2469,13 +2589,15 @@ begin
   // Re-Entrancy mitten in der Auswahl - der Sentinel- und Bounds-Recheck,
   // den es dafuer brauchte, entfaellt ersatzlos. Er wandert nicht mit,
   // sondern wird im Timer-Tick neu und sauber gemacht, wo er hingehoert.
+  // Kein Assigned-Fallback: der Timer entsteht in InitDebounceTimers VOR
+  // der Handler-Verdrahtung, ein "Notnagel ohne Timer" war toter Code -
+  // und haette ausgerechnet das un-entprellte Altverhalten reaktiviert
+  // (Review 2026-08-12).
   if Assigned(FClipCopyTimer) then
   begin
     FClipCopyTimer.Enabled := False;   // neu bewaffnen
     FClipCopyTimer.Enabled := True;
-  end
-  else
-    CopyFindingToClipboard(Finding);   // Notnagel ohne Timer
+  end;
 end;
 
 procedure TAnalyserFrame.ClipCopyFire(Sender: TObject);
@@ -2499,6 +2621,85 @@ begin
 end;
 
 procedure TAnalyserFrame.CopyFindingToClipboard(F: TLeakFinding);
+// KLICK-Pfad hinter dem Kopier-Timer. Was (und ob) kopiert wird,
+// entscheidet [UI] ClipboardOnClick (Nutzerentscheid 2026-08-12):
+//   fcmNone (Default) - nichts: kein Write, keine Statusmeldung, kein
+//                       Datei-Load; die Zwischenablage gehoert dem Nutzer.
+//   fcmJiraMini       - Mini-Issue aus uFindingCopyText; der Quick-Fix-
+//                       Block bleibt bewusst weg (der Fix-hint-Fakt deckt
+//                       das ab und spart den LoadFromFile der kompletten
+//                       Quelldatei).
+//   fcmClaudePrompt   - das bisherige Verhalten (Claude-Prompt samt
+//                       Quick-Fix-Block), extrahiert nach
+//                       CopyClaudePromptToClipboard.
+var
+  Mode : TFindingCopyMode;
+  Text : string;
+begin
+  if not Assigned(F) then Exit;
+
+  Mode := fcmNone;
+  if Assigned(FRepoSettings) then
+    Mode := FindingCopyModeFromInt(FRepoSettings.ClipboardOnClick);
+
+  case Mode of
+    fcmJiraMini:
+    begin
+      Text := TFindingCopyText.Build(F, fcmJiraMini, FixHint(F));
+      try
+        Clipboard.AsText := Text;
+        if Assigned(FStatusBar) then
+          StatusMode(Format(
+            _('Jira mini issue copied to clipboard: %s, line %s (%s)'),
+            [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]));
+      // noinspection EmptyExcept
+      except
+        // Clipboard kann unter bestimmten IDE-Modi blockiert sein -
+        // silent skip, wie im Claude-Pfad.
+      end;
+    end;
+    fcmClaudePrompt:
+    begin
+      CopyClaudePromptToClipboard(F);
+    end;
+  else
+  begin
+    // fcmNone: bewusst gar nichts.
+    Exit;
+  end;
+  end;
+end;
+
+procedure TAnalyserFrame.GridMenuPopup(Sender: TObject);
+// Ohne gueltige Befund-Zeile ist die Kopier-Geste sinnlos - Eintraege
+// deaktivieren (Muster wie das EXE-Grid-Menue in GridMenuPopup).
+var
+  HasRow : Boolean;
+  i      : Integer;
+begin
+  HasRow := Assigned(FDisplayedFindings)
+        and (FResultGrid.Row >= 1)
+        and (FResultGrid.Row <= FDisplayedFindings.Count);
+  for i := 0 to FGridMenu.Items.Count - 1 do
+  begin
+    FGridMenu.Items[i].Enabled := HasRow;
+  end;
+end;
+
+procedure TAnalyserFrame.GridMenuCopyPromptClick(Sender: TObject);
+// Explizite Absicht - kopiert wie die EXE IMMER, unabhaengig von
+// [UI] ClipboardOnClick (die Option regelt nur die automatische Kopie
+// beim Zeilen-Klick). Inhalt im Plugin samt Quick-Fix-Block; die EXE
+// kopiert den nackten Prompt (Alt-Divergenz).
+var
+  idx : Integer;
+begin
+  idx := FResultGrid.Row - 1;
+  if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
+  CopyClaudePromptToClipboard(FDisplayedFindings[idx]);
+end;
+
+procedure TAnalyserFrame.CopyClaudePromptToClipboard(F: TLeakFinding);
 // Bei Findings mit Quick-Fix-Provider wird ein "Quick-Fix"-Markdown-
 // Block vorangestellt: Original-Zeile + Fixed-Zeile direkt zum Pasten.
 // Der Claude-Prompt-Block folgt darunter wie bisher.
@@ -2535,12 +2736,16 @@ begin
           Fix := TQuickFix.ProposeFix(F, OrigLine);
           if Fix.Applied then
           begin
+            // Beschriftungen ueber _() wie der restliche Prompt (uClaudePrompt
+            // laeuft komplett ueber die .po) - vorher stand hier hartes
+            // Deutsch und ein EN-Nutzer bekam einen gemischt-sprachigen
+            // Prompt (Review 2026-08-12). '## Quick-Fix' ist sprachneutral.
             QuickFixHdr :=
               '## Quick-Fix' + sLineBreak +
               Fix.Description + sLineBreak + sLineBreak +
-              '**Vorher (Zeile ' + F.LineNumber + '):**' + sLineBreak +
+              Format(_('**Before (line %s):**'), [F.LineNumber]) + sLineBreak +
               '```pascal' + sLineBreak + Fix.Original + sLineBreak + '```' + sLineBreak + sLineBreak +
-              '**Nachher (direkt einfuegen):**' + sLineBreak +
+              _('**After (paste directly):**') + sLineBreak +
               '```pascal' + sLineBreak + Fix.Fixed + sLineBreak + '```' + sLineBreak + sLineBreak +
               '---' + sLineBreak + sLineBreak;
           end;
@@ -3377,6 +3582,10 @@ begin
   FRepoSettings.BaselineOnlyNew := ANewVal;
   try FRepoSettings.Save; except end;
   RefreshBaselineSet;
+  // Der Toggle aendert die sichtbare Menge im Ganzen - die Combos muessen
+  // ihr folgen (Konsistenz-Vertrag mit dem Grid), inklusive Reset auf
+  // 'All' wie nach einem Scan.
+  RebuildFilterCombos;
   ApplyFilter;
 end;
 
@@ -3463,6 +3672,10 @@ var
 begin
   if not Assigned(FFilterCombo) or not (Sender is TComponent) then Exit;
   Target := TFilterMode(TComponent(Sender).Tag);
+  // VOR der Zielsuche: eine offene Fuzzy-Reduktion tag-treu zuruecklegen,
+  // damit die Suche die VOLLE Liste sieht (sonst verfehlte der Klick
+  // sein Ziel, sobald der Nutzer gerade getippt hatte).
+  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   if Assigned(FTypeCombo) and (FTypeCombo.ItemIndex <> 0) then
     FTypeCombo.ItemIndex := 0;
   OrdT := Ord(Target);
@@ -3470,26 +3683,54 @@ begin
     if Integer(FFilterCombo.Items.Objects[i]) = OrdT then
     begin
       FFilterCombo.ItemIndex := i;
-      // Erst Type-Filter-Change (Type wurde reset, damit der Severity-
-      // Filter sicher greift), dann Filter-Change (eigentlicher Klick-
-      // Effekt). Beide Handler rufen letztlich ApplyFilter -> Grid
-      // wird einmal redrawn (kein Doppel-Repaint, ApplyFilter selbst
-      // ist idempotent gegen denselben Stand).
-      TypeFilterChange(FTypeCombo);
-      FilterChange(FFilterCombo);
-      Exit;
+      Break;
     end;
+  // NACH dem Setzen, UNBEDINGT - auch im Miss-Fall (der Eintrag kann
+  // baseline-bereinigt fehlen, waehrend die Kachel die Gesamtmenge
+  // zaehlt): Commit-Gedaechtnis des Fuzzy-Helfers nachziehen
+  // (programmatisches ItemIndex sieht der Helfer nicht), dann BEIDE
+  // Change-Handler wie in der EXE. Vorher liefen sie nur im
+  // Treffer-Zweig - im Miss-Fall zeigte die Typ-Combo 'All', waehrend
+  // der Cache FTypeFilter den alten Wert behielt (Review 2026-08-12,
+  // Logik-Dimension). Erst Type-, dann Filter-Change; beide enden in
+  // ApplyFilter, das gegen denselben Stand idempotent ist.
+  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
+  TypeFilterChange(FTypeCombo);
+  FilterChange(FFilterCombo);
 end;
 
 procedure TAnalyserFrame.TileClickType(Sender: TObject);
 var
   Target : TTypeFilter;
+  i      : Integer;
+  Found  : Boolean;
 begin
   if not Assigned(FTypeCombo) or not (Sender is TComponent) then Exit;
   Target := TTypeFilter(TComponent(Sender).Tag);
+  // Offene Fuzzy-Reduktion zuruecklegen, Begruendung s. TileClickSeverity.
+  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   if Assigned(FFilterCombo) and (FFilterCombo.ItemIndex <> 0) then
     FFilterCombo.ItemIndex := 0;
-  FTypeCombo.ItemIndex := Ord(Target);
+  // TAG-Suche statt ItemIndex := Ord(Target): RebuildFilterCombos
+  // entfernt Typ-Eintraege ohne Treffer, danach gilt Index <> Ord -
+  // der Direktindex selektierte den FALSCHEN Typ (z.B. Hotspot statt
+  // Vulnerability) oder lief ins Leere (Review 2026-08-12,
+  // Logik-Dimension; die EXE suchte schon immer per Tag).
+  Found := False;
+  for i := 0 to FTypeCombo.Items.Count - 1 do
+    if Integer(FTypeCombo.Items.Objects[i]) = Ord(Target) then
+    begin
+      FTypeCombo.ItemIndex := i;
+      Found := True;
+      Break;
+    end;
+  // Eintrag wegreduziert (Kachel zaehlt die Gesamtmenge, die Combo die
+  // baseline-bereinigte): auf 'All' zurueckfallen statt still den alten
+  // Filter stehen zu lassen.
+  if not Found then
+    FTypeCombo.ItemIndex := 0;
+  // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
+  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   // ItemIndex-Setter feuert KEIN OnChange - explizit triggern.
   FilterChange(FFilterCombo);
   TypeFilterChange(FTypeCombo);
@@ -3499,8 +3740,14 @@ procedure TAnalyserFrame.TileClickClear(Sender: TObject);
 // Codequalitaet-Kachel: kein semantischer Filter (Score ist eine Aggregation).
 // Klick setzt beide Filter auf "Alle" zurueck - praktisch als Reset-Button.
 begin
+  // Offene Fuzzy-Reduktion ZUERST zuruecklegen: in einer reduzierten
+  // Liste ist Index 0 irgendein Treffer, nicht 'All' - erst nach dem
+  // Zuruecklegen ist Index 0 wieder der All-Eintrag.
+  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   if Assigned(FFilterCombo) then FFilterCombo.ItemIndex := 0;
   if Assigned(FTypeCombo)   then FTypeCombo.ItemIndex   := 0;
+  // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
+  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   // ItemIndex-Setter feuert KEIN OnChange - explizit triggern.
   if Assigned(FFilterCombo) then FilterChange(FFilterCombo);
   if Assigned(FTypeCombo)   then TypeFilterChange(FTypeCombo);

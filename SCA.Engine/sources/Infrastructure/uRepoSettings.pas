@@ -55,6 +55,16 @@ const
   DEF_EDITOR_COLOR_SCHEME    = 'default';
   DEF_LANGUAGE               = 'en';
   DEF_OVERLAY_POSITION       = 'sameline';
+  // [UI] ClipboardOnClick: 1 = Zwischenablage nicht anfassen (Default),
+  // 2 = Jira-Mini-Issue, 3 = Claude-AI-Prompt (Verhalten vor 2026-08-12).
+  // Default BEWUSST 1: ein Zeilen-Klick, der ungefragt die systemweite
+  // Zwischenablage ueberschreibt (und via Clipboard-History/Cloud-Sync
+  // Quelltext in externe Senken spuelt), ist fuer ein Privacy-Produkt
+  // die falsche Voreinstellung - Nutzerentscheid 2026-08-12.
+  DEF_CLIPBOARD_ON_CLICK     = 1;
+  // Gueltiger Wertebereich des Modus - die Klemmung in Load haengt daran.
+  CLIPBOARD_ON_CLICK_MIN     = 1;
+  CLIPBOARD_ON_CLICK_MAX     = 3;
 
 type
   TRepoSettings = class
@@ -109,6 +119,7 @@ type
     FEditorColorScheme : string;
     FLanguage          : string;      // [UI] Language ('de', 'en', '')
     FOverlayPosition   : string;      // [UI] OverlayPosition ('sameline' | 'below')
+    FClipboardOnClick  : Integer;     // [UI] ClipboardOnClick (1..3, s. DEF_CLIPBOARD_ON_CLICK)
     // Code-Quality-Grade-Schwellwerte (alle aus [Score]).
     // Default-Skala: A=0, B<=50, C<=200, D<=500, E>500.
     FScoreThresholdB   : Integer;     // [Score] GradeBMax (50)
@@ -359,6 +370,21 @@ type
     // Aenderung erfordert IDE-Neustart (Wert wird in uIDELineHighlighter
     // einmalig zur ShowAt-Zeit gelesen).
     property OverlayPosition: string read FOverlayPosition write FOverlayPosition;
+
+    // Was der Klick auf eine Befund-Zeile in die Zwischenablage legt.
+    // Aus [UI] ClipboardOnClick gelesen, wirkt in EXE und IDE-Plugin:
+    //   1 (Default) - Zwischenablage NICHT anfassen
+    //   2           - Jira-Mini-Issue (Headline + 5 Fakten-Bullets)
+    //   3           - Claude-AI-Prompt (Verhalten vor 2026-08-12; das
+    //                 Plugin stellt bei Quick-Fix-faehigen Regeln einen
+    //                 Quick-Fix-Block voran, die EXE nicht - bewusste
+    //                 Alt-Divergenz)
+    // Ungueltige Werte werden beim Laden auf 1 geklemmt; die Mapping-
+    // Funktion in uFindingCopyText faellt zusaetzlich defensiv auf
+    // "nicht anfassen" zurueck. Die expliziten Kopier-Gesten (Kontext-
+    // menue "Copy AI prompt") kopieren unabhaengig davon immer.
+    property ClipboardOnClick: Integer read FClipboardOnClick
+                                       write FClipboardOnClick;
 
     // Schwellwerte fuer die Letter-Grade-Anzeige der Code-Quality-Kachel.
     // Roher Score wird auf A..E gemappt (siehe ScoreToGrade in uIDE-
@@ -807,6 +833,45 @@ const
     'OverlayPosition=sameline'#13#10 +
     ';OverlayPosition=below'#13#10 +
     ''#13#10 +
+    '; ClipboardOnClick (int 1..3, default: 1)'#13#10 +
+    '; Was der Klick auf eine Befund-Zeile in die Zwischenablage legt'#13#10 +
+    '; (Standalone-EXE UND IDE-Plugin):'#13#10 +
+    ';   1 = Zwischenablage NICHT anfassen (Default)'#13#10 +
+    ';   2 = Jira-Mini-Issue: 1 Headline + 5 Fakten-Bullets'#13#10 +
+    ';       (Rule, File:Line, Method, Message, Fix hint)'#13#10 +
+    ';   3 = Claude-AI-Prompt (das Verhalten vor 2026-08-12; im'#13#10 +
+    ';       IDE-Plugin zusaetzlich mit vorangestelltem Quick-Fix-'#13#10 +
+    ';       Block, wenn die Regel einen Quick-Fix-Provider hat -'#13#10 +
+    ';       die EXE kopiert den Prompt ohne diesen Block)'#13#10 +
+    '; Ungueltige Werte fallen auf 1 zurueck. Aenderung wirkt'#13#10 +
+    '; spaetestens beim naechsten Analyse-Lauf. Die expliziten'#13#10 +
+    '; Kopier-Gesten (Kontext-'#13#10 +
+    '; menue "Copy AI prompt") kopieren unabhaengig davon immer den'#13#10 +
+    '; AI-Prompt. Es gibt keinen automatischen AI-Zugriff - der Text'#13#10 +
+    '; landet ausschliesslich in der lokalen Zwischenablage.'#13#10 +
+    'ClipboardOnClick=1'#13#10 +
+    ';ClipboardOnClick=3'#13#10 +
+    ''#13#10 +
+    '; Element.<Name> (bool 0/1, default: 1)'#13#10 +
+    '; NOT-AUS je UI-Element des IDE-Plugins: 0 legt genau dieses'#13#10 +
+    '; Element still, ohne Deinstallation - fuer den Fall, dass ein'#13#10 +
+    '; Element die IDE stoert. Wirkt erst nach IDE-Neustart; welche'#13#10 +
+    '; Elemente uebersprungen wurden, meldet das Plugin beim Laden per'#13#10 +
+    '; Debug-Ausgabe (DebugView, Praefix SCA-UI). Die Standalone-EXE'#13#10 +
+    '; liest diese Schluessel nicht.'#13#10 +
+    '; Gueltige Namen:'#13#10 +
+    ';   SharedUiHooks, DockForm, LineHighlighter, AnnotationOverlay,'#13#10 +
+    ';   WatchMode, WarmUpCaches, ViewMenuItem, EditorContextMenu,'#13#10 +
+    ';   OptionsPageSCA, OptionsPageSonar, FindingsProperties,'#13#10 +
+    ';   AboutBox, ToolsMenuItem'#13#10 +
+    '; PackageWizard ist bewusst NICHT abschaltbar - er traegt den'#13#10 +
+    '; Abbau aller uebrigen Elemente beim Entladen.'#13#10 +
+    '; Abhaengige Degradation: DockForm=0 entfernt auch den View-'#13#10 +
+    '; Menue-Eintrag; WatchMode=0 laesst das Properties-Panel ohne'#13#10 +
+    '; Live-Findings; SharedUiHooks=0 faellt farblich auf'#13#10 +
+    '; VCL-Defaults zurueck.'#13#10 +
+    ';Element.AnnotationOverlay=0'#13#10 +
+    ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ';  [Score] - Code-Quality-Letter-Grade-Schwellwerte'#13#10 +
@@ -897,6 +962,7 @@ begin
   FEditorColorScheme      := DEF_EDITOR_COLOR_SCHEME;
   FLanguage               := DEF_LANGUAGE;
   FOverlayPosition        := DEF_OVERLAY_POSITION;
+  FClipboardOnClick       := DEF_CLIPBOARD_ON_CLICK;
 
   // [Score] Defaults: Skala fuer mittelgrosse Projekte. A=0, B<=50,
   // C<=200, D<=500, E>500. Anpassbar via analyser.ini fuer projekt-
@@ -1357,6 +1423,14 @@ begin
     if (FOverlayPosition <> 'sameline') and (FOverlayPosition <> 'below') then
       FOverlayPosition := 'sameline';  // unbekannter Wert -> Default
 
+    // [UI] ClipboardOnClick (1..3, s. Property-Doku). Validierung wie bei
+    // OverlayPosition: unbekannter Wert -> Default (= nicht anfassen).
+    FClipboardOnClick := Ini.ReadInteger('UI', 'ClipboardOnClick',
+      DEF_CLIPBOARD_ON_CLICK);
+    if (FClipboardOnClick < CLIPBOARD_ON_CLICK_MIN) or
+       (FClipboardOnClick > CLIPBOARD_ON_CLICK_MAX) then
+      FClipboardOnClick := DEF_CLIPBOARD_ON_CLICK;
+
     // [Score] Letter-Grade-Schwellwerte. Defaults bleiben gleich wenn
     // die Section fehlt - kein Verhaltens-Bruch fuer existierende INIs.
     FScoreThresholdB := Ini.ReadInteger('Score', 'GradeBMax',  50);
@@ -1443,6 +1517,7 @@ begin
     Ini.WriteBool  ('Detectors', 'AutoDiscoverClasses', FAutoDiscover);
     Ini.WriteString('UI',    'Language',           FLanguage);
     Ini.WriteString('UI',    'OverlayPosition',    FOverlayPosition);
+    Ini.WriteInteger('UI',   'ClipboardOnClick',   FClipboardOnClick);
     // Pflicht bei TMemIniFile: ohne UpdateFile bleiben alle Writes nur
     // im Speicher (TIniFile dagegen schreibt pro Write sofort).
     Ini.UpdateFile;

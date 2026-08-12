@@ -52,6 +52,9 @@ type
     [Test] procedure CloseUp_KeepsTagOfSelectedEntry;
     [Test] procedure NoHits_ListNeverEmpty;
     [Test] procedure NoHits_CommitDoesNotRaise;
+    [Test] procedure Resync_ReselectingPreviousEntry_NotifiesAgain;
+    [Test] procedure Resync_TakesCurrentSelectionAsCommitted;
+    [Test] procedure NoteHostSelection_AlignsCommitGateWithDisplay;
   end;
 
 implementation
@@ -286,6 +289,72 @@ begin
   FSearch.FilterNow;
   SendNotify(CBN_CLOSEUP);
   Assert.Pass('Commit ohne Treffer laeuft ohne Ausnahme durch');
+end;
+
+procedure TTestFuzzyComboEvents.Resync_ReselectingPreviousEntry_NotifiesAgain;
+// REGRESSION (2026-08-12): RebuildFilterCombos setzt die Combo nach dem
+// Scan auf 'All' zurueck und ruft Resync. Waehlt der Nutzer danach seinen
+// vorigen Filter ERNEUT, verglich das Tag-Gate in CommitSelection noch
+// gegen die Auswahl von VOR dem Umbau und schwieg - die Combo zeigte den
+// Filter an, der Host erfuhr nichts, das Grid blieb ungefiltert.
+begin
+  // Nutzer waehlt Eintrag 5 - Host wird gemeldet.
+  FCombo.ItemIndex := 5;
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(1, FChangeCount, 'Vorbedingung: erste Auswahl meldet');
+
+  // Host baut um wie RebuildFilterCombos: Reset auf 'All' + Resync.
+  FCombo.ItemIndex := 0;
+  FSearch.Resync;
+
+  // Dieselbe Auswahl wie vor dem Umbau - muss ERNEUT gemeldet werden.
+  FCombo.ItemIndex := 5;
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(2, FChangeCount,
+    'Nach Resync ist die alte Auswahl ein NEUER Wechsel und muss melden');
+end;
+
+procedure TTestFuzzyComboEvents.NoteHostSelection_AlignsCommitGateWithDisplay;
+// REGRESSION (Kachel-Pfad, Review 2026-08-12): Kachel-Klicks setzen
+// ItemIndex programmatisch und rufen die Host-Handler direkt - der
+// Helfer sieht davon nichts. Ohne NoteHostSelection mass das Tag-Gate
+// weiter gegen den alten Commit-Stand: Zuklappen auf der vom Host
+// gesetzten Auswahl meldete faelschlich (oder die Wieder-Auswahl des
+// alten Eintrags schwieg). NoteHostSelection zieht das Gate auf die
+// Anzeige nach.
+begin
+  // Host setzt die Auswahl programmatisch um (wie ein Kachel-Klick).
+  FCombo.ItemIndex := 5;
+  FSearch.NoteHostSelection;
+
+  // Zuklappen auf genau dieser Auswahl ist KEINE Aenderung.
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(0, FChangeCount,
+    'Zuklappen auf der vom Host gesetzten Auswahl meldet nicht');
+
+  // Ein ANDERER Eintrag ist eine echte Aenderung und muss melden.
+  FCombo.ItemIndex := 7;
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'Wechsel auf einen anderen Eintrag meldet genau einmal');
+end;
+
+procedure TTestFuzzyComboEvents.Resync_TakesCurrentSelectionAsCommitted;
+// Gegenprobe zum Regressionstest: Resync uebernimmt die AKTUELLE Anzeige
+// als Commit-Stand. Ein Zuklappen auf dem Eintrag, den die Combo nach dem
+// Umbau ohnehin zeigt, ist keine Aenderung und darf nicht melden.
+begin
+  FCombo.ItemIndex := 5;
+  FSearch.Resync;
+
+  SendNotify(CBN_SELCHANGE);   // Blaettern landet wieder auf Eintrag 5
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(0, FChangeCount,
+    'Zuklappen auf der nach dem Umbau angezeigten Auswahl meldet nicht');
 end;
 
 end.

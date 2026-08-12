@@ -384,6 +384,18 @@ begin
     GUiRegistry := TUiElementRegistry.Create;
   end;
 
+  // Waechter gegen doppeltes BEFUELLEN, nicht nur doppeltes Erzeugen: die
+  // IDE ruft Register vertragsgemaess genau einmal pro Paketladen, aber
+  // ein zweiter Aufruf wuerde alle vierzehn Elemente erneut adden und
+  // registrieren - doppeltes Dockfenster, doppelter Menuepunkt. Der
+  // Einzeiler macht aus der Annahme eine Zusicherung; der Protokolleintrag
+  // macht den Verstoss sichtbar statt ihn still zu schlucken.
+  if GUiRegistry.Count > 0 then
+  begin
+    UiRegistryLog('Register erneut gerufen - ignoriert, Elemente stehen schon');
+    Exit;
+  end;
+
   GUiRegistry.OnLog := UiRegistryLog;
 
   uIDEAnalyserForm.AddUiElements(GUiRegistry);

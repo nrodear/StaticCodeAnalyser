@@ -256,6 +256,7 @@ contains
   uExportSARIF in 'sources\Output\uExportSARIF.pas',
   uExportSonarGeneric in 'sources\Output\uExportSonarGeneric.pas',
   uFixHint in 'sources\Output\uFixHint.pas',
+  uFindingCopyText in 'sources\Output\uFindingCopyText.pas',
   uSonarPush in 'sources\Output\uSonarPush.pas',
   uAstNode in 'sources\Parsing\uAstNode.pas',
   uCFG in 'sources\Parsing\uCFG.pas',

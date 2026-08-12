@@ -10,7 +10,8 @@ uses
    Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls,
   Vcl.ComCtrls, Vcl.Grids, Vcl.Menus,   // Vcl.Menus: TPopupMenu/TMenuItem (Hamburger-Felder)
   uStaticAnalyzer2, uEngineApi,
-  uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uLocalization,
+  uMethodd12, uSCAConsts, uFixHint, uClaudePrompt, uFindingCopyText,
+  uLocalization,
   uAnalyserTypes,  // SeverityFromKindLevel, TFindingSeverity (Grid-Renderer-Callback)
   uRepoSettings, uRecentPaths, uScanTargetDialog, uFindingGridRenderer, uDfmTextViewer,
   uEditorCommand,                 // TEditorSpec (Parametertyp von OpenViaExternalEditor)
@@ -154,11 +155,23 @@ type
     // OnClick auch bei Tastatur-Navigation - sofort und ungeschuetzt die
     // systemweite Zwischenablage (~30x/s bei gehaltener Taste).
     FClipTimer      : TTimer;
+    // Was der KLICK-Pfad in die Zwischenablage legt ([UI] ClipboardOnClick,
+    // Default: nichts - fcmNone). Gelesen in FormCreate und je Lauf frisch
+    // in ApplyDetectorConfig; Aenderung wirkt beim naechsten Analyse-Lauf.
+    // Die explizite Kontextmenue-Geste kopiert unabhaengig davon.
+    FClipCopyMode   : TFindingCopyMode;
     // Programmatischer Grid-Umbau (ApplyFilter nach Sortier-/Filter-
     // wechsel) loest ueber die Zeilen-Klemmung OnClick aus - der zeigte
     // dann einen NIE angeklickten Fund im Panel und ueberschrieb die
     // Zwischenablage mit dessen Prompt.
     FGridUpdating   : Boolean;
+    // Der letzte linke Mausdruck traf die Kopfzeile (Sortier-Geste).
+    // ResultGridClick verbraucht den Merker und steigt aus: OnClick kann
+    // Maus- und Tastatur-Ausloesung nicht unterscheiden, und die
+    // Mausposition taugt dort nicht als Kriterium - OnClick feuert auch
+    // bei Pfeiltasten, waehrend der Zeiger zufaellig ueber der Kopfzeile
+    // stehen kann (Begruendung wie am Enter-Handler ResultGridKeyDown).
+    FHeaderMousePress : Boolean;
     // Warum der Lauf per Abort endete ('' = Nutzer-Cancel). Wird vom
     // ProgressCallback VOR dem Abort gesetzt und im EAbort-Zweig
     // angezeigt - der Status-Text alleine lag waehrend des Laufs unter
@@ -272,9 +285,11 @@ type
     procedure SearchDebounceFire(Sender: TObject);
     // Reduziert SeverityFilterCombo + TypeFilterCombo auf Eintraege deren
     // Mode/Type mindestens einen Treffer in FAllFindings hat ('All' und
-    // 'Detector Review' bleiben immer). Aktuelle Auswahl wird via
-    // Items.Objects-Tag wiederhergestellt; gibt es den vorher gewaehlten
-    // Eintrag nach dem Scan nicht mehr, faellt der Combo auf 'All' zurueck.
+    // 'Detector Review' bleiben immer) und setzt BEIDE Combos danach auf
+    // 'All' zurueck. Nutzerentscheid 2026-08-12: nach einem Scan startet
+    // die Liste immer ungefiltert - vorher wurde die vorige Auswahl
+    // restauriert, und ein stehengebliebener Filter las sich wie
+    // "der Scan hat kaum etwas gefunden".
     procedure RebuildFilterCombos;
     // Inner helper: registriert eine bereits geladene Settings-Instanz und
     // setzt optional die Discovery-Listen zurueck. Wird vom Analyse-Pfad
@@ -383,6 +398,10 @@ begin
   try
     try Settings.Load; except end;
     SetLanguage(Settings.Language);
+    // Klick-Kopie-Modus initial lesen; je Analyse-Lauf zieht
+    // ApplyDetectorConfig ihn frisch nach (gleiche Semantik wie die
+    // uebrigen ini-Werte: Aenderung wirkt beim naechsten Lauf).
+    FClipCopyMode := FindingCopyModeFromInt(Settings.ClipboardOnClick);
 
     // ---- Profile-Combo befuellen aus TRuleCatalog.ProfileNames ----
     ProfileList := TRuleCatalog.ProfileNames;
@@ -1087,6 +1106,9 @@ begin
     // ProjectRoot durchreichen damit relative CustomRulesFile-Pfade
     // (z.B. 'analyser-rules.yml' im Projekt-Wurzelverzeichnis) gefunden werden.
     Settings.ApplyDetectorThresholds(DirOfProjectPath(Projectpath.Text));
+    // Klick-Kopie-Modus je Lauf frisch aus der INI - "wirkt beim
+    // naechsten Analyse-Lauf", wie in der ini-Vorlage dokumentiert.
+    FClipCopyMode := FindingCopyModeFromInt(Settings.ClipboardOnClick);
     AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
     if AClearDiscovery then
     begin
@@ -1329,6 +1351,11 @@ begin
   // Stats spiegeln immer die GESAMTE Befund-Menge, nicht das gefilterte
   // Subset - User sieht "1 von 234 Bugs gefiltert" auf der Tile-Leiste.
   UpdateStats;
+  // Baseline-Set VOR dem Combo-Umbau frisch laden: die Reduktion zaehlt
+  // auf der baseline-bereinigten Menge (Konsistenz mit dem Grid) und
+  // braeuchte sonst den Stand des VORIGEN Laufs. ApplyFilter laedt zwar
+  // selbst nach, aber erst NACH dem Umbau.
+  RefreshBaselineSet;
   // Filter-Combos auf Eintraege mit > 0 Treffern reduzieren - muss VOR
   // ApplyFilter laufen damit die anschliessende Filter-Application schon
   // gegen die aktuelle Auswahl (ggf. zurueckgesetzt auf 'All') arbeitet.
@@ -1361,27 +1388,44 @@ procedure TForm2.RebuildFilterCombos;
 // Reduziert beide Combos auf Eintraege deren Mode/Type in FAllFindings
 // mindestens einen Treffer hat. 'All' und 'Detector Review' bleiben
 // immer drin (auch bei 0 Treffern - sind statisch nuetzliche Optionen).
-// Aktuelle Auswahl wird via Mode-Ord wiederhergestellt; war der Eintrag
-// vor dem Scan ausgewaehlt und ist jetzt weg, faellt der Combo auf
-// 'All' (Index 0) zurueck.
+//
+// NACH DEM NEUAUFBAU STEHEN BEIDE COMBOS AUF 'All' (Index 0 - der
+// fmAll/tfAll-Eintrag wird immer behalten und steht per Snapshot-Ordnung
+// vorn). Nutzerentscheid 2026-08-12: ein Scan startet immer mit
+// ungefilterter Liste. Die fruehere Restaurierung der vorigen Auswahl
+// ist damit entfallen - ein stehengebliebener Filter las sich nach dem
+// Scan wie "kaum Funde", obwohl nur der alte Filter noch griff. Der
+// einzige Aufrufer ist der Nach-Scan-Pfad (PopulateFindings); wer die
+// Routine je woanders ruft, uebernimmt damit auch den Reset.
 var
   Item : TFilterComboItem;
-  SavedSevMode, SavedTypeMode, NewIdx, i : Integer;
+  i : Integer;
+  CountSrc : TList<TLeakFinding>;
+  OwnedSrc : TList<TLeakFinding>;
 begin
   if FAllFindings = nil then Exit;
   if Length(FAllSeverityItems) = 0 then Exit;
 
-  // Aktuelle Auswahl merken (Ord, nicht Index - Index verschiebt sich).
-  SavedSevMode := Ord(fmAll);
-  if (SeverityFilterCombo.ItemIndex >= 0)
-     and Assigned(SeverityFilterCombo.Items.Objects[SeverityFilterCombo.ItemIndex]) then
-    SavedSevMode := Integer(
-      SeverityFilterCombo.Items.Objects[SeverityFilterCombo.ItemIndex]);
-  SavedTypeMode := Ord(tfAll);
-  if (TypeFilterCombo.ItemIndex >= 0)
-     and Assigned(TypeFilterCombo.Items.Objects[TypeFilterCombo.ItemIndex]) then
-    SavedTypeMode := Integer(
-      TypeFilterCombo.Items.Objects[TypeFilterCombo.ItemIndex]);
+  // KONSISTENZ MIT DEM GRID (Review-Blocker 2026-08-12): gezaehlt wird
+  // auf derselben baseline-bereinigten Menge, die ApplyFilter anzeigt.
+  // Vorher zaehlte die Reduktion roh - bei aktivem "nur neue Funde" bot
+  // die Combo Eintraege an, deren Grid-Sicht leer war. Die Kacheln
+  // zaehlen bewusst weiter die Gesamtmenge (Nutzerentscheid 2026-08-12);
+  // die Statuszeile benennt die ausgeblendete Anzahl.
+  // try beginnt VOR dem Create (nil.Free ist ein No-op): die
+  // Befuellschleife allokiert (Fingerprint-Strings, Listen-Wachstum) -
+  // eine Ausnahme dort haette die Liste sonst geleakt.
+  OwnedSrc := nil;
+  CountSrc := FAllFindings;
+  try
+  if BaselineActive then
+  begin
+    OwnedSrc := TList<TLeakFinding>.Create;
+    for i := 0 to FAllFindings.Count - 1 do
+      if not FBaselineSet.Contains(FAllFindings[i]) then
+        OwnedSrc.Add(FAllFindings[i]);
+    CountSrc := OwnedSrc;
+  end;
 
   // ---- SeverityFilterCombo ----
   SeverityFilterCombo.Items.BeginUpdate;
@@ -1391,21 +1435,14 @@ begin
     begin
       if (Item.ModeOrd = Ord(fmAll))
          or (Item.ModeOrd = Ord(fmDetectorReview))
-         or (TFindingFilter.CountForTag(FAllFindings, Item.ModeOrd) > 0) then
+         or (TFindingFilter.CountForTag(CountSrc, Item.ModeOrd) > 0) then
         SeverityFilterCombo.Items.AddObject(Item.Display,
                                             TObject(Item.ModeOrd));
     end;
   finally
     SeverityFilterCombo.Items.EndUpdate;
   end;
-  NewIdx := 0;
-  for i := 0 to SeverityFilterCombo.Items.Count - 1 do
-    if Integer(SeverityFilterCombo.Items.Objects[i]) = SavedSevMode then
-    begin
-      NewIdx := i;
-      Break;
-    end;
-  SeverityFilterCombo.ItemIndex := NewIdx;
+  SeverityFilterCombo.ItemIndex := 0;
   // Der Helfer filtert gegen seinen eigenen Schnappschuss - nach jedem
   // Umbau der Items muss er ihn neu ziehen.
   if Assigned(FSeveritySearch) then FSeveritySearch.Resync;
@@ -1417,21 +1454,18 @@ begin
     for Item in FAllTypeItems do
     begin
       if (Item.ModeOrd = Ord(tfAll))
-         or (TFindingFilter.CountForType(FAllFindings,
+         or (TFindingFilter.CountForType(CountSrc,
                                          TTypeFilter(Item.ModeOrd)) > 0) then
         TypeFilterCombo.Items.AddObject(Item.Display, TObject(Item.ModeOrd));
     end;
   finally
     TypeFilterCombo.Items.EndUpdate;
   end;
-  NewIdx := 0;
-  for i := 0 to TypeFilterCombo.Items.Count - 1 do
-    if Integer(TypeFilterCombo.Items.Objects[i]) = SavedTypeMode then
-    begin
-      NewIdx := i;
-      Break;
-    end;
-  TypeFilterCombo.ItemIndex := NewIdx;
+  TypeFilterCombo.ItemIndex := 0;
+
+  finally
+    OwnedSrc.Free;
+  end;
 end;
 
 procedure TForm2.UpdateStats;
@@ -1506,14 +1540,22 @@ procedure TForm2.ApplyFilter;
 // ResultGridClick mappt Grid-Row -> FDisplayedFindings[row-1] (nicht
 // FAllFindings!), siehe ResultGridClick.
 var
-  Criteria : TFindingFilterCriteria;
-  f        : TLeakFinding;
-  i        : Integer;
+  Criteria       : TFindingFilterCriteria;
+  f              : TLeakFinding;
+  i              : Integer;
+  BaselineHidden : Integer;
+  HiddenSuffix   : string;
 begin
   // Klick-Seiteneffekte unterdruecken: der Grid-Umbau unten loest ueber
   // die Zeilen-Klemmung OnClick aus (s. ResultGridClick). Try/finally,
   // weil der 0-Treffer-Pfad frueh aussteigt.
   FGridUpdating := True;
+  // Ein noch scharfer Kopier-Timer gehoert zur ALTEN Liste - entschaerfen,
+  // sonst kopierte er nach dem Umbau, was zufaellig an der geklemmten
+  // Zeile steht (Debounce-Fenster-Race, Review 2026-08-12; Pendant im
+  // Plugin-ApplyFilter).
+  if Assigned(FClipTimer) then
+    FClipTimer.Enabled := False;
   try
   // Baseline-Set frisch laden - eine von aussen geaenderte Baseline
   // wirkt damit beim naechsten Filterwechsel, ohne Neustart.
@@ -1546,6 +1588,7 @@ begin
     Criteria.SearchLow := LowerCase(Trim(SearchEdit.Text));
 
   FDisplayedFindings.Clear;
+  BaselineHidden := 0;
   for i := 0 to FAllFindings.Count - 1 do
   begin
     f := FAllFindings[i];
@@ -1553,10 +1596,19 @@ begin
     // vollstaendig - Export und 'Baseline schreiben' sehen weiter alles
     // (Plugin-Semantik; fail-open bei fehlender/kaputter Datei).
     if BaselineActive and FBaselineSet.Contains(f) then
+    begin
+      Inc(BaselineHidden);
       Continue;
+    end;
     if TFindingFilter.Matches(f, Criteria) then
       FDisplayedFindings.Add(f);
   end;
+  // Transparenz fuer den Baseline-Filter: "0 / 4 findings" ohne diesen
+  // Zusatz liest sich wie ein kaputter Filter (Fehlerbild 2026-08-12,
+  // frisch geschriebene Baseline deckte alle Funde).
+  HiddenSuffix := '';
+  if BaselineHidden > 0 then
+    HiddenSuffix := ' - ' + Format(_('%d hidden by baseline'), [BaselineHidden]);
 
   // DetectorReview-Stichprobe: pro Detector-Kind 1 zufaelligen Befund
   // behalten. Wird NACH dem normalen Filter-Loop ausgefuehrt, damit
@@ -1636,7 +1688,7 @@ begin
     begin
       ResultGrid.Cells[0, 1] := _('No matches.');
       StatusFindings(Format(_('%d / %d findings'),
-        [0, FAllFindings.Count]));
+        [0, FAllFindings.Count]) + HiddenSuffix);
     end;
     Exit;
   end;
@@ -1652,10 +1704,10 @@ begin
   if TotalMatched > FDisplayedFindings.Count then
     StatusFindings(Format(_(
       'Showing first %d of %d findings - refine the filter to see more'),
-      [FDisplayedFindings.Count, TotalMatched]))
+      [FDisplayedFindings.Count, TotalMatched]) + HiddenSuffix)
   else
     StatusFindings(Format(_('%d / %d findings'),
-      [TotalMatched, FAllFindings.Count]));
+      [TotalMatched, FAllFindings.Count]) + HiddenSuffix);
 
   finally
     FGridUpdating := False;
@@ -1855,6 +1907,11 @@ procedure TForm2.ResultGridKeyDown(Sender: TObject; var Key: Word;
 // des Doppelklicks: bei Tastatur-Ausloesung ist die Mausposition
 // bedeutungslos (sie koennte zufaellig ueber der Kopfzeile stehen).
 begin
+  // Ein auf der Kopfzeile begonnener, aber AUSSERHALB losgelassener
+  // Mausdruck hinterlaesst FHeaderMousePress=True (kein OnClick, das ihn
+  // verbraucht). Tastatur-Navigation raeumt den Merker hier ab, sonst
+  // wuerde ihr naechstes OnClick verschluckt (Review 2026-08-12).
+  FHeaderMousePress := False;
   if (Key = VK_RETURN) and (Shift = []) then
   begin
     Key := 0;                       // kein Grid-Beep/Standardverhalten
@@ -2028,6 +2085,15 @@ begin
   // angeklickt hat - Panel und Zwischenablage blieben sonst an einem
   // Zufallsfund haengen. Das Panel zieht ApplyFilter selbst nach.
   if FGridUpdating then Exit;
+  // Kopfzeilen-Klick (Sortier-Geste, in MouseDown markiert): verbrauchen
+  // und aussteigen. OnClick laeuft erst nach WM_LBUTTONUP, wenn
+  // FGridUpdating laengst wieder False ist - ResultGrid.Row steht dann
+  // auf einer Datenzeile, die niemand angeklickt hat.
+  if FHeaderMousePress then
+  begin
+    FHeaderMousePress := False;
+    Exit;
+  end;
 
   idx := ResultGrid.Row - 1; // 0-basiert: Zeile 0 ist Header
   if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
@@ -2051,12 +2117,16 @@ begin
   if Assigned(FClipTimer) then
     FClipTimer.Enabled := False;
   if csDestroying in ComponentState then Exit;
+  // [UI] ClipboardOnClick=1 (Default): die Zwischenablage gehoert dem
+  // Nutzer - nichts bauen, nichts schreiben. Die explizite Geste
+  // (Kontextmenue "Copy AI prompt") laeuft NICHT ueber diesen Pfad.
+  if FClipCopyMode = fcmNone then Exit;
   if FDisplayedFindings = nil then Exit;
   idx := ResultGrid.Row - 1;
   if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
   F := FDisplayedFindings[idx];
   try
-    Clipboard.AsText := BuildClaudePrompt(F);
+    Clipboard.AsText := TFindingCopyText.Build(F, FClipCopyMode);
   except
     // Zwischenablage gerade von einem anderen Prozess gesperrt (RDP,
     // Clipboard-Manager): still auslassen - der naechste Auswahlwechsel
@@ -2064,9 +2134,14 @@ begin
     // schlimmer als eine verpasste Kopie.
     Exit;
   end;
-  StatusBar1.Panels[2].Text := Format(
-    _('AI prompt copied to clipboard: %s, line %s (%s)'),
-    [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]);
+  if FClipCopyMode = fcmJiraMini then
+    StatusBar1.Panels[2].Text := Format(
+      _('Jira mini issue copied to clipboard: %s, line %s (%s)'),
+      [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText])
+  else
+    StatusBar1.Panels[2].Text := Format(
+      _('AI prompt copied to clipboard: %s, line %s (%s)'),
+      [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]);
 end;
 
 procedure TForm2.UpdateHintPanelToSelection;
@@ -2391,8 +2466,31 @@ procedure TForm2.ResultGridMouseDown(Sender: TObject; Button: TMouseButton;
 var
   ACol, ARow: Integer;
 begin
+  // Rechtsklick: Selektion auf die ANGEKLICKTE Datenzeile nachziehen,
+  // BEVOR WM_CONTEXTMENU das Popup oeffnet - TCustomGrid bewegt die
+  // Current-Cell nur bei mbLeft, und "Copy AI prompt" liest die
+  // Selektion (Review 2026-08-12, Logik-Dimension; Pendant im Plugin).
+  // ResultGridClick zieht danach Hint-Panel und Kopier-Weiche nach -
+  // dieselbe Wirkung wie ein Linksklick auf die Zeile.
+  if Button = mbRight then
+  begin
+    ResultGrid.MouseToCell(X, Y, ACol, ARow);
+    if (ARow >= 1) and Assigned(FDisplayedFindings)
+       and (ARow <= FDisplayedFindings.Count) then
+    begin
+      ResultGrid.Row := ARow;
+      FHeaderMousePress := False;   // etwaigen abgebrochenen Header-Druck verwerfen
+      ResultGridClick(ResultGrid);
+    end;
+    Exit;
+  end;
   if Button <> mbLeft then Exit;
   ResultGrid.MouseToCell(X, Y, ACol, ARow);
+  // Merker fuer das nachfolgende OnClick (Review 2026-08-12): ein Druck
+  // auf der Kopfzeile darf dort weder Hint-Panel noch Kopier-Timer
+  // anfassen - sonst landete 120 ms nach jedem Sortier-Klick der Prompt
+  // eines nie angeklickten Befunds in der Zwischenablage.
+  FHeaderMousePress := (ARow = 0);
   if ARow <> 0 then Exit;                       // nur die Header-Zeile
   if (ACol < 0) or (ACol > 4) then Exit;
 
@@ -2655,6 +2753,10 @@ begin
     Settings.Free;
   end;
   RefreshBaselineSet;
+  // Der Toggle aendert die sichtbare Menge im Ganzen - die Combos muessen
+  // ihr folgen (Konsistenz-Vertrag mit dem Grid), inklusive Reset auf
+  // 'All' wie nach einem Scan.
+  RebuildFilterCombos;
   ApplyFilter;
 end;
 
@@ -2730,8 +2832,10 @@ begin
 end;
 
 procedure TForm2.BuildGridMenu;
-// Rechtsklick am Grid. Das Plugin hat keines (es kompensiert mit
-// Shortcuts) - in der EXE ist es die entdeckbare Form derselben Aktionen.
+// Rechtsklick am Grid - die entdeckbare Form der Aktionen. Das Plugin
+// hat seit 2026-08-12 ein eigenes Grid-Menue, dort bewusst nur mit
+// "Copy AI prompt" (Oeffnen/Unterdruecken laufen im Dock ueber
+// Doppelklick bzw. Shortcuts).
 var
   MI : TMenuItem;
 begin
@@ -2784,7 +2888,9 @@ end;
 procedure TForm2.GridMenuCopyClick(Sender: TObject);
 // Bewusst SOFORT statt ueber den Entprell-Timer: hier ist das Kopieren
 // die ausdrueckliche Absicht des Nutzers, nicht ein Nebeneffekt der
-// Navigation.
+// Navigation. Aus demselben Grund greift [UI] ClipboardOnClick hier
+// NICHT: die Option regelt nur die automatische Kopie beim Zeilen-Klick;
+// wer "Copy AI prompt" waehlt, bekommt den AI-Prompt - in jedem Modus.
 var
   idx : Integer;
   F   : TLeakFinding;
@@ -2867,6 +2973,10 @@ var
 begin
   if not (Sender is TComponent) then Exit;
   Target := TFilterMode(TComponent(Sender).Tag);
+  // VOR der Zielsuche: eine offene Fuzzy-Reduktion tag-treu zuruecklegen,
+  // damit die Suche die VOLLE Liste sieht (sonst verfehlte der Klick
+  // sein Ziel, sobald der Nutzer gerade getippt hatte).
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if TypeFilterCombo.ItemIndex <> 0 then
     TypeFilterCombo.ItemIndex := 0;
   OrdT := Ord(Target);
@@ -2876,6 +2986,11 @@ begin
       SeverityFilterCombo.ItemIndex := i;
       Break;
     end;
+  // Commit-Gedaechtnis des Fuzzy-Helfers nachziehen - programmatisches
+  // ItemIndex sieht der Helfer nicht, und sein Tag-Gate wuerde sonst die
+  // naechste ECHTE Wieder-Auswahl in der Combo verschlucken (Review
+  // 2026-08-12, Kachel-Pfad).
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   TypeFilterComboChange(TypeFilterCombo);
   SeverityFilterComboChange(SeverityFilterCombo);
 end;
@@ -2888,6 +3003,8 @@ var
 begin
   if not (Sender is TComponent) then Exit;
   Want := TFindingFilter.KIND_TAG_BASE + TComponent(Sender).Tag;
+  // Offene Fuzzy-Reduktion zuruecklegen, Begruendung s. TileClickSeverity.
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if TypeFilterCombo.ItemIndex <> 0 then
     TypeFilterCombo.ItemIndex := 0;
   for i := 0 to SeverityFilterCombo.Items.Count - 1 do
@@ -2896,6 +3013,8 @@ begin
       SeverityFilterCombo.ItemIndex := i;
       Break;
     end;
+  // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   TypeFilterComboChange(TypeFilterCombo);
   SeverityFilterComboChange(SeverityFilterCombo);
 end;
@@ -2907,6 +3026,9 @@ var
 begin
   if not (Sender is TComponent) then Exit;
   Target := TTypeFilter(TComponent(Sender).Tag);
+  // Offene Fuzzy-Reduktion zuruecklegen: erst danach ist Index 0 der
+  // All-Eintrag (Begruendung s. TileClickSeverity).
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if SeverityFilterCombo.ItemIndex <> 0 then
     SeverityFilterCombo.ItemIndex := 0;
   for i := 0 to TypeFilterCombo.Items.Count - 1 do
@@ -2915,6 +3037,9 @@ begin
       TypeFilterCombo.ItemIndex := i;
       Break;
     end;
+  // Auch hier: die Severity-Combo wurde oben auf 0 gesetzt - Commit-
+  // Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   SeverityFilterComboChange(SeverityFilterCombo);
   TypeFilterComboChange(TypeFilterCombo);
 end;
@@ -2924,8 +3049,13 @@ procedure TForm2.TileClickClear(Sender: TObject);
 // mit dazu (das Plugin hat keines in dieser Form) - 'show everything'
 // soll wirklich alles zeigen.
 begin
+  // Offene Fuzzy-Reduktion ZUERST zuruecklegen: in einer reduzierten
+  // Liste ist Index 0 irgendein Treffer, nicht 'All'.
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   SeverityFilterCombo.ItemIndex := 0;
   TypeFilterCombo.ItemIndex     := 0;
+  // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if SearchEdit.Text <> '' then
     SearchEdit.Text := '';           // OnChange feuert (Setter am EDIT)
   SeverityFilterComboChange(SeverityFilterCombo);

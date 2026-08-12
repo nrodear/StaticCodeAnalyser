@@ -22,8 +22,8 @@ SQL built from `TEdit.Text`, cross-form coupling, and more. Sonar-style classifi
 with a Quality Score. Repo-wide form index for cross-unit analysis. VCS-diff mode
 treats `.dfm` changes as triggers for the companion `.pas`. HTML report with grouped
 `.pas`+`.dfm` filter. IDE plugin opens DFM findings as text directly in the Code
-Editor. One click on a finding copies an AI-ready Markdown fix prompt to the
-clipboard. Open source, MIT-licensed.
+Editor. Copy an AI-ready Markdown fix prompt for any finding to the clipboard
+(context menu; automatic copy-on-click is opt-in). Open source, MIT-licensed.
 
 🇩🇪 [Deutsche Version](README_de.md)
 
@@ -42,7 +42,7 @@ Sonar setup required, running inside the IDE, with a Claude AI hand-off.**
 | 🔐 **Security checks** | SQLInjection (score-based), HardcodedSecret, HardcodedPath; **Unicode safety** — Trojan Source / bidirectional-override (CVE-2021-42574), invisible / zero-width characters, BOM / UTF-8 encoding integrity |
 | 🧹 **Code smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Incremental analysis** | "Branch-Changes" button: only the files modified in the Git/SVN branch — 200 ms instead of 60 s |
-| 🤖 **Claude AI prompt** | Click a finding → a complete Markdown block with code context + before/after is copied to the clipboard |
+| 🤖 **Claude AI prompt** | Copy AI prompt (context menu) → a complete Markdown block with code context + before/after is copied to the clipboard; copy-on-click is opt-in via `[UI] ClipboardOnClick` |
 | 📊 **Sonar-style dashboard** | Stat tiles above the grid: Errors / Warnings / Hints / Bugs / Vulnerabilities / Code Quality score |
 | 🎯 **Filter & sort** | Severity dropdown, type dropdown, live search box, clickable column headers |
 | 📤 **Export** | SARIF, Sonar Generic Issue, self-contained HTML report and baseline JSON from the CLI; CSV, JSON, Jira wiki markup and clipboard hand-off from the GUI — formats, workflows and limits in [EXPORTS.md](EXPORTS.md) |
@@ -89,11 +89,18 @@ details in [BRANCH_CHANGES.md](BRANCH_CHANGES.md).
 
 ### 3. AI hand-off (Claude prompt with one click)
 
-Click a finding row in the grid and the clipboard is filled with a
-**ready-made Markdown prompt**: finding metadata, code context (±5
-lines, with a marker on the offending line), and the before/after fix.
-Paste it into Claude with **Ctrl+V** — the AI now has everything it
-needs to suggest a concrete patch.
+Right-click a finding row and choose **Copy AI prompt** — the clipboard
+is filled with a **ready-made Markdown prompt**: finding metadata, code
+context (±5 lines, with a marker on the offending line), and the
+before/after fix. Paste it into Claude with **Ctrl+V** — the AI now has
+everything it needs to suggest a concrete patch.
+
+The *automatic* copy on a plain row click is **off by default** and
+configurable via `[UI] ClipboardOnClick` in `analyser.ini`: `1` = leave
+the clipboard alone (default), `2` = a compact Jira mini issue
+(headline + 5 fact bullets), `3` = the full Claude prompt on every
+click. Nothing ever leaves your machine — the text only goes to the
+local clipboard.
 
 ---
 
@@ -108,7 +115,7 @@ different workflow. Pick by where you sit in the day:
 | **Quick-Fix the current line** — apply a patch suggestion in place | ✅ `Ctrl+Alt+F` | — | — |
 | **Navigate findings with the keyboard** | ✅ `Ctrl+Alt+↑/↓` between findings | grid + arrow keys | — |
 | **Suppress a false positive on this line** | ✅ `Ctrl+Alt+S` adds `// noinspection RuleName` | manual | manual |
-| **Hand a finding to Claude AI** — Markdown prompt with code context | ✅ row-click → clipboard | ✅ row-click → clipboard | — |
+| **Hand a finding to Claude AI** — Markdown prompt with code context | ✅ context menu → clipboard (or opt-in row-click) | ✅ context menu → clipboard (or opt-in row-click) | — |
 | **Branch-changes only** — analyse files touched since `main` / current SVN diff | ✅ branch-button | ✅ branch-button | ✅ `--branch` or `--diff <ref>` |
 | **Analyse a project outside Delphi** (RAD not installed / batch machine) | — | ✅ pick a folder, click Start | ✅ `analyser.exe <folder>` |
 | **Run as a pre-commit hook** | — | — | ✅ `--min-severity error --quiet --fail-on error`, exit code reflects severity |
@@ -232,8 +239,9 @@ Findings fall into one of **five Sonar categories**:
 | **Read error** | `FileReadError` (parser hang or oversized file) | Error |
 
 Every detector comes with a **before/after code example** in the help
-panel. Clicking a finding copies a **Markdown block ready for Claude AI**
-to the clipboard.
+panel. **Copy AI prompt** (context menu) copies a **Markdown block ready
+for Claude AI** to the clipboard; the automatic copy on row click is
+opt-in via `[UI] ClipboardOnClick` (off by default).
 
 For the **23 DFM-specific detectors** (DFM-DeadEventHandler,
 DFM-HardcodedDBCredentials, DFM-CircularMasterDetail,
@@ -336,7 +344,8 @@ Both rows are guaranteed to add up to the same total.
 
 | Action | Effect |
 |--------|--------|
-| **Click a row** | Finding is copied to the clipboard as a Markdown prompt for Claude AI. If a Quick-Fix provider exists for the rule (`RedundantBoolean`, `FreeAndNilHint`, `EmptyArgumentList`, `AssignedAndAssignedNil`), the fixed line is prepended to the clipboard as a paste-ready code block. If the file is open in the IDE, a 3 px stripe is painted on the left edge of the corresponding line in the editor. |
+| **Click a row** | Shows the finding in the help panel; if the file is open in the IDE, a 3 px stripe is painted on the left edge of the corresponding line in the editor. What lands in the clipboard is controlled by `[UI] ClipboardOnClick`: `1` = nothing (default), `2` = Jira mini issue, `3` = Markdown prompt for Claude AI — with mode 3, a Quick-Fix provider (`RedundantBoolean`, `FreeAndNilHint`, `EmptyArgumentList`, `AssignedAndAssignedNil`) prepends the fixed line as a paste-ready code block. |
+| **Right-click → Copy AI prompt** | Copies the Claude AI Markdown prompt (incl. Quick-Fix block) — always, regardless of `ClipboardOnClick`. |
 | **Double-click / Enter** | Open the file in the IDE, jump to the finding line, paint the line marker |
 | **Ctrl+Alt+F** | **Apply Quick-Fix in editor** (in-place replace via IOTAEditWriter, Ctrl+Z to undo). Only for rules with a registered provider. Status-bar reports the result. |
 | **Ctrl+Alt+S** | **Insert suppression marker** above the finding line: `// noinspection <RuleName>`. Next analysis run filters the finding. Ctrl+Z to revert. |
