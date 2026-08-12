@@ -1527,6 +1527,12 @@ begin
   // die Zeilen-Klemmung OnClick aus (s. ResultGridClick). Try/finally,
   // weil der 0-Treffer-Pfad frueh aussteigt.
   FGridUpdating := True;
+  // Ein noch scharfer Kopier-Timer gehoert zur ALTEN Liste - entschaerfen,
+  // sonst kopierte er nach dem Umbau, was zufaellig an der geklemmten
+  // Zeile steht (Debounce-Fenster-Race, Review 2026-08-12; Pendant im
+  // Plugin-ApplyFilter).
+  if Assigned(FClipTimer) then
+    FClipTimer.Enabled := False;
   try
   // Baseline-Set frisch laden - eine von aussen geaenderte Baseline
   // wirkt damit beim naechsten Filterwechsel, ohne Neustart.

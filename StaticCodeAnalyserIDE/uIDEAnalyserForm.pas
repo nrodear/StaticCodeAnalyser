@@ -61,6 +61,13 @@ type
     FLastNonSeparatorMode : Integer;
     FFilterMode     : TFilterMode;
     FFilterKind     : TFindingKind; // gueltig wenn FFilterMode = fmSingleKind
+    // True waehrend ApplyFilter das Grid programmatisch umbaut. Das
+    // RowCount-Setzen klemmt die Selektion (VCL MoveCurrent -> SelectCell)
+    // und feuert GridSelectCell fuer eine Zeile, die niemand angeklickt
+    // hat - ohne Waechter armierte das den Kopier-Timer und ueberschrieb
+    // die Zwischenablage des Nutzers (Review-Blocker 2026-08-12).
+    // EXE-Pendant: TForm2.FGridUpdating.
+    FGridUpdating   : Boolean;
     FCurrentBaseDir : string;
     FFilterCombo       : TComboBox;
     // Fuzzy-Suche der Filter-Combo; gehoert dem Frame (Owner=Self).
@@ -1813,6 +1820,15 @@ begin
   BaselineActive := BaselineFilterActive;
   BaselineHidden := 0;
 
+  // Kopier-Waechter (Review-Blocker 2026-08-12): waehrend des Umbaus
+  // feuert GridSelectCell durch die Zeilen-Klemmung - der Waechter
+  // unterdrueckt dessen Seiteneffekte. Ein bereits scharfer Kopier-Timer
+  // gehoert zur ALTEN Liste und wird entschaerft, sonst kopierte er nach
+  // dem Umbau, was zufaellig an der geklemmten Zeile steht
+  // (Debounce-Fenster-Race).
+  FGridUpdating := True;
+  if Assigned(FClipCopyTimer) then
+    FClipCopyTimer.Enabled := False;
   SendMessage(FResultGrid.Handle, WM_SETREDRAW, 0, 0);
   try
     FDisplayedFindings.Clear;
@@ -1882,6 +1898,7 @@ begin
   finally
     SendMessage(FResultGrid.Handle, WM_SETREDRAW, 1, 0);
     FResultGrid.Invalidate;
+    FGridUpdating := False;
   end;
 
   UpdateFilterStatus(Criteria, TotalMatched, BaselineHidden);
@@ -2493,6 +2510,10 @@ var
   Finding : TLeakFinding;
 begin
   CanSelect := True;
+  // Programmatischer Umbau (ApplyFilter setzt RowCount, die VCL klemmt
+  // die Selektion): keine Seiteneffekte fuer eine Zeile, die niemand
+  // angeklickt hat - kein Highlight-Refresh, vor allem KEIN Kopier-Timer.
+  if FGridUpdating then Exit;
   UpdateHelp(ARow);
 
   idx := ARow - 1; // Zeile 0 = Header
@@ -2517,13 +2538,15 @@ begin
   // Re-Entrancy mitten in der Auswahl - der Sentinel- und Bounds-Recheck,
   // den es dafuer brauchte, entfaellt ersatzlos. Er wandert nicht mit,
   // sondern wird im Timer-Tick neu und sauber gemacht, wo er hingehoert.
+  // Kein Assigned-Fallback: der Timer entsteht in InitDebounceTimers VOR
+  // der Handler-Verdrahtung, ein "Notnagel ohne Timer" war toter Code -
+  // und haette ausgerechnet das un-entprellte Altverhalten reaktiviert
+  // (Review 2026-08-12).
   if Assigned(FClipCopyTimer) then
   begin
     FClipCopyTimer.Enabled := False;   // neu bewaffnen
     FClipCopyTimer.Enabled := True;
-  end
-  else
-    CopyFindingToClipboard(Finding);   // Notnagel ohne Timer
+  end;
 end;
 
 procedure TAnalyserFrame.ClipCopyFire(Sender: TObject);
