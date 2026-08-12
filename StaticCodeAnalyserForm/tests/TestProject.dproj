@@ -318,6 +318,8 @@
         <DCCReference Include="uTestRoutineResultAssigned.pas"/>
         <DCCReference Include="uTestUnicodeToAnsiCast.pas"/>
         <DCCReference Include="uTestUseAfterFree.pas"/>
+        <DCCReference Include="uTestClaudePrompt.pas"/>
+        <DCCReference Include="uTestFindingCopyText.pas"/>
         <None Include="TestProject.dpr"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

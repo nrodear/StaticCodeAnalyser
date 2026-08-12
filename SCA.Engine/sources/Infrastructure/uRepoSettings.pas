@@ -375,7 +375,10 @@ type
     // Aus [UI] ClipboardOnClick gelesen, wirkt in EXE und IDE-Plugin:
     //   1 (Default) - Zwischenablage NICHT anfassen
     //   2           - Jira-Mini-Issue (Headline + 5 Fakten-Bullets)
-    //   3           - Claude-AI-Prompt (Verhalten vor 2026-08-12)
+    //   3           - Claude-AI-Prompt (Verhalten vor 2026-08-12; das
+    //                 Plugin stellt bei Quick-Fix-faehigen Regeln einen
+    //                 Quick-Fix-Block voran, die EXE nicht - bewusste
+    //                 Alt-Divergenz)
     // Ungueltige Werte werden beim Laden auf 1 geklemmt; die Mapping-
     // Funktion in uFindingCopyText faellt zusaetzlich defensiv auf
     // "nicht anfassen" zurueck. Die expliziten Kopier-Gesten (Kontext-
@@ -836,9 +839,13 @@ const
     ';   1 = Zwischenablage NICHT anfassen (Default)'#13#10 +
     ';   2 = Jira-Mini-Issue: 1 Headline + 5 Fakten-Bullets'#13#10 +
     ';       (Rule, File:Line, Method, Message, Fix hint)'#13#10 +
-    ';   3 = Claude-AI-Prompt (das Verhalten vor 2026-08-12)'#13#10 +
-    '; Ungueltige Werte fallen auf 1 zurueck. Aenderung wirkt beim'#13#10 +
-    '; naechsten Analyse-Lauf. Die expliziten Kopier-Gesten (Kontext-'#13#10 +
+    ';   3 = Claude-AI-Prompt (das Verhalten vor 2026-08-12; im'#13#10 +
+    ';       IDE-Plugin zusaetzlich mit vorangestelltem Quick-Fix-'#13#10 +
+    ';       Block, wenn die Regel einen Quick-Fix-Provider hat -'#13#10 +
+    ';       die EXE kopiert den Prompt ohne diesen Block)'#13#10 +
+    '; Ungueltige Werte fallen auf 1 zurueck. Aenderung wirkt'#13#10 +
+    '; spaetestens beim naechsten Analyse-Lauf. Die expliziten'#13#10 +
+    '; Kopier-Gesten (Kontext-'#13#10 +
     '; menue "Copy AI prompt") kopieren unabhaengig davon immer den'#13#10 +
     '; AI-Prompt. Es gibt keinen automatischen AI-Zugriff - der Text'#13#10 +
     '; landet ausschliesslich in der lokalen Zwischenablage.'#13#10 +

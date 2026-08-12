@@ -54,6 +54,7 @@ type
     [Test] procedure NoHits_CommitDoesNotRaise;
     [Test] procedure Resync_ReselectingPreviousEntry_NotifiesAgain;
     [Test] procedure Resync_TakesCurrentSelectionAsCommitted;
+    [Test] procedure NoteHostSelection_AlignsCommitGateWithDisplay;
   end;
 
 implementation
@@ -313,6 +314,33 @@ begin
   SendNotify(CBN_CLOSEUP);
   Assert.AreEqual<Integer>(2, FChangeCount,
     'Nach Resync ist die alte Auswahl ein NEUER Wechsel und muss melden');
+end;
+
+procedure TTestFuzzyComboEvents.NoteHostSelection_AlignsCommitGateWithDisplay;
+// REGRESSION (Kachel-Pfad, Review 2026-08-12): Kachel-Klicks setzen
+// ItemIndex programmatisch und rufen die Host-Handler direkt - der
+// Helfer sieht davon nichts. Ohne NoteHostSelection mass das Tag-Gate
+// weiter gegen den alten Commit-Stand: Zuklappen auf der vom Host
+// gesetzten Auswahl meldete faelschlich (oder die Wieder-Auswahl des
+// alten Eintrags schwieg). NoteHostSelection zieht das Gate auf die
+// Anzeige nach.
+begin
+  // Host setzt die Auswahl programmatisch um (wie ein Kachel-Klick).
+  FCombo.ItemIndex := 5;
+  FSearch.NoteHostSelection;
+
+  // Zuklappen auf genau dieser Auswahl ist KEINE Aenderung.
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(0, FChangeCount,
+    'Zuklappen auf der vom Host gesetzten Auswahl meldet nicht');
+
+  // Ein ANDERER Eintrag ist eine echte Aenderung und muss melden.
+  FCombo.ItemIndex := 7;
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'Wechsel auf einen anderen Eintrag meldet genau einmal');
 end;
 
 procedure TTestFuzzyComboEvents.Resync_TakesCurrentSelectionAsCommitted;

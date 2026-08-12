@@ -1904,6 +1904,11 @@ procedure TForm2.ResultGridKeyDown(Sender: TObject; var Key: Word;
 // des Doppelklicks: bei Tastatur-Ausloesung ist die Mausposition
 // bedeutungslos (sie koennte zufaellig ueber der Kopfzeile stehen).
 begin
+  // Ein auf der Kopfzeile begonnener, aber AUSSERHALB losgelassener
+  // Mausdruck hinterlaesst FHeaderMousePress=True (kein OnClick, das ihn
+  // verbraucht). Tastatur-Navigation raeumt den Merker hier ab, sonst
+  // wuerde ihr naechstes OnClick verschluckt (Review 2026-08-12).
+  FHeaderMousePress := False;
   if (Key = VK_RETURN) and (Shift = []) then
   begin
     Key := 0;                       // kein Grid-Beep/Standardverhalten
@@ -2806,8 +2811,10 @@ begin
 end;
 
 procedure TForm2.BuildGridMenu;
-// Rechtsklick am Grid. Das Plugin hat keines (es kompensiert mit
-// Shortcuts) - in der EXE ist es die entdeckbare Form derselben Aktionen.
+// Rechtsklick am Grid - die entdeckbare Form der Aktionen. Das Plugin
+// hat seit 2026-08-12 ein eigenes Grid-Menue, dort bewusst nur mit
+// "Copy AI prompt" (Oeffnen/Unterdruecken laufen im Dock ueber
+// Doppelklick bzw. Shortcuts).
 var
   MI : TMenuItem;
 begin
@@ -2954,6 +2961,11 @@ begin
       SeverityFilterCombo.ItemIndex := i;
       Break;
     end;
+  // Commit-Gedaechtnis des Fuzzy-Helfers nachziehen - programmatisches
+  // ItemIndex sieht der Helfer nicht, und sein Tag-Gate wuerde sonst die
+  // naechste ECHTE Wieder-Auswahl in der Combo verschlucken (Review
+  // 2026-08-12, Kachel-Pfad).
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   TypeFilterComboChange(TypeFilterCombo);
   SeverityFilterComboChange(SeverityFilterCombo);
 end;
@@ -2974,6 +2986,8 @@ begin
       SeverityFilterCombo.ItemIndex := i;
       Break;
     end;
+  // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   TypeFilterComboChange(TypeFilterCombo);
   SeverityFilterComboChange(SeverityFilterCombo);
 end;
@@ -2993,6 +3007,9 @@ begin
       TypeFilterCombo.ItemIndex := i;
       Break;
     end;
+  // Auch hier: die Severity-Combo wurde oben auf 0 gesetzt - Commit-
+  // Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   SeverityFilterComboChange(SeverityFilterCombo);
   TypeFilterComboChange(TypeFilterCombo);
 end;
@@ -3004,6 +3021,8 @@ procedure TForm2.TileClickClear(Sender: TObject);
 begin
   SeverityFilterCombo.ItemIndex := 0;
   TypeFilterCombo.ItemIndex     := 0;
+  // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
+  if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if SearchEdit.Text <> '' then
     SearchEdit.Text := '';           // OnChange feuert (Setter am EDIT)
   SeverityFilterComboChange(SeverityFilterCombo);

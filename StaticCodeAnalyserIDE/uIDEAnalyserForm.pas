@@ -430,8 +430,10 @@ type
     // das Jira-Mini-Issue aus uFindingCopyText.
     procedure CopyFindingToClipboard(F: TLeakFinding);
     // Explizite Kopier-Geste (Grid-Kontextmenue "Copy AI prompt"): kopiert
-    // IMMER den Claude-Prompt samt Quick-Fix-Block, unabhaengig vom
-    // ini-Modus - wie das EXE-Pendant GridMenuCopyClick.
+    // IMMER, unabhaengig vom ini-Modus - wie das EXE-Pendant
+    // GridMenuCopyClick. INHALT hier: Claude-Prompt samt vorangestelltem
+    // Quick-Fix-Block; die EXE kopiert den Prompt OHNE diesen Block
+    // (bewusste Alt-Divergenz, s. Review 2026-08-12).
     procedure CopyClaudePromptToClipboard(F: TLeakFinding);
     procedure GridMenuCopyPromptClick(Sender: TObject);
     procedure GridMenuPopup(Sender: TObject);
@@ -1922,6 +1924,14 @@ begin
     SendMessage(FResultGrid.Handle, WM_SETREDRAW, 1, 0);
     FResultGrid.Invalidate;
     FGridUpdating := False;
+    // Hilfe-Panel der neuen Lage nachziehen (EXE-Pendant:
+    // UpdateHintPanelToSelection im ApplyFilter-finally). Der Waechter
+    // oben unterdrueckt den SelectCell-Pfad, der das frueher als
+    // Seiteneffekt der Zeilen-Klemmung erledigte - ohne diese Zeile
+    // zeigte das Panel einen inzwischen ausgefilterten Fund. UpdateHelp
+    // behandelt beide Lagen: gueltige Zeile -> Befund, leere/ungueltige
+    // -> Platzhalter. Bewusst OHNE Kopier-Seiteneffekt.
+    UpdateHelp(FResultGrid.Row);
   end;
 
   UpdateFilterStatus(Criteria, TotalMatched, BaselineHidden);
@@ -2659,9 +2669,10 @@ begin
 end;
 
 procedure TAnalyserFrame.GridMenuCopyPromptClick(Sender: TObject);
-// Explizite Absicht - kopiert wie die EXE IMMER den Claude-Prompt,
-// unabhaengig von [UI] ClipboardOnClick (die Option regelt nur die
-// automatische Kopie beim Zeilen-Klick).
+// Explizite Absicht - kopiert wie die EXE IMMER, unabhaengig von
+// [UI] ClipboardOnClick (die Option regelt nur die automatische Kopie
+// beim Zeilen-Klick). Inhalt im Plugin samt Quick-Fix-Block; die EXE
+// kopiert den nackten Prompt (Alt-Divergenz).
 var
   idx : Integer;
 begin
@@ -3650,6 +3661,10 @@ begin
     if Integer(FFilterCombo.Items.Objects[i]) = OrdT then
     begin
       FFilterCombo.ItemIndex := i;
+      // Commit-Gedaechtnis des Fuzzy-Helfers nachziehen - programmatisches
+      // ItemIndex sieht der Helfer nicht, sein Tag-Gate wuerde sonst die
+      // naechste ECHTE Wieder-Auswahl verschlucken (Review 2026-08-12).
+      if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
       // Erst Type-Filter-Change (Type wurde reset, damit der Severity-
       // Filter sicher greift), dann Filter-Change (eigentlicher Klick-
       // Effekt). Beide Handler rufen letztlich ApplyFilter -> Grid
@@ -3670,6 +3685,8 @@ begin
   if Assigned(FFilterCombo) and (FFilterCombo.ItemIndex <> 0) then
     FFilterCombo.ItemIndex := 0;
   FTypeCombo.ItemIndex := Ord(Target);
+  // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
+  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   // ItemIndex-Setter feuert KEIN OnChange - explizit triggern.
   FilterChange(FFilterCombo);
   TypeFilterChange(FTypeCombo);
@@ -3681,6 +3698,8 @@ procedure TAnalyserFrame.TileClickClear(Sender: TObject);
 begin
   if Assigned(FFilterCombo) then FFilterCombo.ItemIndex := 0;
   if Assigned(FTypeCombo)   then FTypeCombo.ItemIndex   := 0;
+  // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
+  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   // ItemIndex-Setter feuert KEIN OnChange - explizit triggern.
   if Assigned(FFilterCombo) then FilterChange(FFilterCombo);
   if Assigned(FTypeCombo)   then TypeFilterChange(FTypeCombo);

@@ -155,6 +155,12 @@ end;
 class function TFindingCopyText.Build(F: TLeakFinding;
   AMode: TFindingCopyMode): string;
 begin
+  // Nil-Guard VOR der Hint-Aufloesung: TFixHintResolver.FixHint
+  // dereferenziert das Finding, und Delphi wertet Argumente vor dem
+  // Guard der Ziel-Ueberladung aus - beide Ueberladungen sollen fuer
+  // nil dasselbe zusichern ('').
+  Result := '';
+  if not Assigned(F) then Exit;
   Result := Build(F, AMode, TFixHintResolver.FixHint(F));
 end;
 

@@ -35,6 +35,12 @@ type
     Tag     : NativeInt;
   end;
 
+  // noinspection LargeClass
+  // Ein Bauteil, eine Verantwortung: die Klasse kapselt den kompletten
+  // Ereignis-Vertrag einer tippbaren Combo (Schnappschuss, Entprellung,
+  // Commit-Gate) - eine Aufspaltung wuerde nur privaten Zustand ueber
+  // Units verteilen. Die Laenge kommt aus den Begruendungs-Kommentaren
+  // der Windows-Eigenheiten, nicht aus Logik-Masse.
   TFuzzyComboSearch = class(TComponent)
   private
     FCombo      : TComboBox;
@@ -84,6 +90,16 @@ type
     // sonst gegen die Auswahl von VOR dem Umbau und verschluckt deren
     // erste Wieder-Auswahl.
     procedure Resync;
+    // Nach jedem PROGRAMMATISCHEN ItemIndex-Setzen durch den Host rufen
+    // (Kachel-Klicks): uebernimmt die angezeigte Auswahl als Commit-Stand,
+    // ohne den Schnappschuss anzufassen. Sonst misst das Tag-Gate in
+    // CommitSelection gegen einen Stand, den der Host laengst ueberholt
+    // hat, und verschluckt die naechste Wieder-Auswahl (Review
+    // 2026-08-12, Kachel-Pfad). Resync waere hier FALSCH: steht gerade
+    // eine getippte Fuzzy-Reduktion offen, wuerde die REDUZIERTE Liste
+    // als Voll-Schnappschuss eingefroren - hier wird sie stattdessen
+    // tag-treu zurueckgelegt.
+    procedure NoteHostSelection;
     // Entprellung ueberspringen und sofort filtern. Fuer Tests - im
     // Betrieb macht das der Timer.
     procedure FilterNow;
@@ -282,6 +298,36 @@ begin
   // Commit-Gedaechtnis und Schnappschuss zieht Resync aus dem
   // Ist-Zustand der Combo - Attach ist nur der Sonderfall "erster Sync".
   Resync;
+end;
+
+procedure TFuzzyComboSearch.NoteHostSelection;
+var
+  Tag : NativeInt;
+begin
+  if not Assigned(FCombo) then Exit;
+  if Assigned(FTimer) then
+  begin
+    FTimer.Enabled := False;
+  end;
+  FPending    := '';
+  FHasPending := False;
+  // Offene Fuzzy-Reduktion erst tag-treu zuruecklegen - der Host hat
+  // seine Auswahl gegen die VOLLE Liste gesetzt.
+  if FIsFiltering then
+  begin
+    if SelectedTag(Tag) then
+    begin
+      RestoreAllAndSelect(Tag);
+    end
+    else
+    begin
+      RestoreAll;
+    end;
+  end;
+  if SelectedTag(Tag) then
+  begin
+    FCommitted := Tag;
+  end;
 end;
 
 procedure TFuzzyComboSearch.FilterNow;
