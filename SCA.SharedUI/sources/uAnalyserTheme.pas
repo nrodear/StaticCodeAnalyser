@@ -180,6 +180,18 @@ function BlendColor(Base, Accent: TColor; Ratio: Single): TColor;
 /// </remarks>
 function IsLightColor(AColor: TColor): Boolean;
 
+/// <summary>
+///   Sichert den Akzent des Nur-Text-Hints gegen den Editor-Hintergrund:
+///   liegt seine BT.601-Luminanz zu nah an der typischen Hintergrund-
+///   Luminanz, wird er Richtung Weiss (dunkler Hintergrund) bzw. Schwarz
+///   (heller Hintergrund) aufgehellt/abgedunkelt, bis ein MINDESTABSTAND
+///   erreicht ist. Bewusst Abstand statt Seitenvergleich - die an
+///   ApplyStyleColors notierte Schwaeche (gleiche Seite reicht als
+///   Kriterium nicht, ein dunkles Rot auf dunklem Grau ist unlesbar,
+///   obwohl beide "dunkel" sind) wird hier nicht wiederholt.
+/// </summary>
+function EnsureHintContrast(AAccent: TColor; ABgIsDark: Boolean): TColor;
+
 implementation
 
 // noinspection-file EmptyArgumentList, GroupedDeclaration, TooLongLine, UnsortedUses, UnusedParameter
@@ -268,22 +280,64 @@ const
   // des Themes anhand einer Systemfarbe.
   CONTRAST_LUM_THRESHOLD = 127;
 
-function IsLightColor(AColor: TColor): Boolean;
-// Vertrag und Begruendung stehen an der Deklaration.
+function ColorLuma(AColor: TColor): Integer;
+// Gewichtete BT.601-Luminanz (0..255) einer aufgeloesten Farbe.
+// ITU-R BT.601: Gruen wiegt am schwersten, Blau am leichtesten - das
+// entspricht der Helligkeitswahrnehmung des Auges besser als ein
+// arithmetisches Mittel. Gemeinsamer Kern von IsLightColor und
+// EnsureHintContrast - zwei Kopien derselben Formel koennen
+// auseinanderlaufen, ohne dass es auffaellt.
 var
-  rgb     : Cardinal;
-  R, G, B : Integer;
-  Lum     : Integer;
+  rgb : Cardinal;
 begin
   rgb := ColorToRGB(AColor);
-  R := GetRValue(rgb);
-  G := GetGValue(rgb);
-  B := GetBValue(rgb);
-  // ITU-R BT.601: Gruen wiegt am schwersten, Blau am leichtesten - das
-  // entspricht der Helligkeitswahrnehmung des Auges besser als ein
-  // arithmetisches Mittel.
-  Lum := (R * 299 + G * 587 + B * 114) div 1000;
-  Result := Lum > CONTRAST_LUM_THRESHOLD;
+  Result := (Integer(GetRValue(rgb)) * 299
+           + Integer(GetGValue(rgb)) * 587
+           + Integer(GetBValue(rgb)) * 114) div 1000;
+end;
+
+function IsLightColor(AColor: TColor): Boolean;
+// Vertrag und Begruendung stehen an der Deklaration.
+begin
+  Result := ColorLuma(AColor) > CONTRAST_LUM_THRESHOLD;
+end;
+
+// noinspection BooleanParam
+// Das Flag kommt woertlich aus IsEditorBgDark und folgt dem Nachbarn
+// EditorAccent(BgIsDark) - ein Zwei-Wert-Enum waere Zeremonie fuer
+// dieselbe Information.
+function EnsureHintContrast(AAccent: TColor; ABgIsDark: Boolean): TColor;
+// Vertrag steht an der Deklaration. Der Hintergrund kommt als Flag
+// herein (IsEditorBgDark) - gerechnet wird gegen die TYPISCHE Luminanz
+// der jeweiligen Seite, nicht gegen eine konkrete Farbe: der Zeichenpfad
+// kennt nur das Flag, und die Schwelle soll fuer alle gaengigen Themes
+// tragen (Dark ~30 #1E1E1E, Light ~240 #F0F0F0).
+const
+  DARK_BG_LUM   = 30;
+  LIGHT_BG_LUM  = 240;
+  // Mindestabstand auf der 0..255-Skala. 90 liegt bewusst ueber der
+  // Wahrnehmungsschwelle - der Text hat keinen Hintergrundbalken mehr,
+  // der ihn traegt, die Farbe ist sein einziges Signal.
+  MIN_LUM_GAP   = 90;
+var
+  Cur, Target : Integer;
+begin
+  Result := ColorToRGB(AAccent);
+  Cur := ColorLuma(Result);
+  if ABgIsDark then
+  begin
+    Target := DARK_BG_LUM + MIN_LUM_GAP;
+    if Cur >= Target then Exit;
+    // Linear Richtung Weiss mischen: die Luminanz waechst linear mit der
+    // Ratio, also trifft genau dieser Anteil den Zielabstand.
+    Result := BlendColor(Result, clWhite, (Target - Cur) / (255 - Cur));
+  end
+  else
+  begin
+    Target := LIGHT_BG_LUM - MIN_LUM_GAP;
+    if Cur <= Target then Exit;
+    Result := BlendColor(Result, clBlack, (Cur - Target) / Cur);
+  end;
 end;
 
 function IsEditorBgDark: Boolean;

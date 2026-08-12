@@ -42,6 +42,7 @@ contains
   uFindingsPropertiesFrame in 'sources\uFindingsPropertiesFrame.pas',
   uFindingFilter in 'sources\uFindingFilter.pas',
   uFuzzyComboSearch in 'sources\uFuzzyComboSearch.pas',
+  uHintTextLayout in 'sources\uHintTextLayout.pas',
   uIDEStatsTiles in 'sources\uIDEStatsTiles.pas',
   uIDEHelpPanel in 'sources\uIDEHelpPanel.pas',
   uIDEToolbar in 'sources\uIDEToolbar.pas',
