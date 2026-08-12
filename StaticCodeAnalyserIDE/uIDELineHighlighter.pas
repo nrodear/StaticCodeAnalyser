@@ -417,6 +417,13 @@ type
     /// </remarks>
     procedure RecolorAllMarks;
 
+    // Setzt den Zustand des Editor-Event-Objekts zurueck (Hit-Test-
+    // Caches, Hover). Fuer den Moduswechsel der Nur-Text-Variante: die
+    // Caches des alten Modus duerfen den neuen nicht ueberleben
+    // (Klick-Geister). Duennes Public-Pendant zum internen ResetState,
+    // Muster HandleFileClosing.
+    procedure ResetEditorEventState;
+
     constructor Create;
     destructor Destroy; override;
 
@@ -773,9 +780,24 @@ begin
                                                DEF_OVERLAY_TEXT_ONLY);
 end;
 
+// noinspection BooleanParam
+// Der Wert IST die Information (der neue Modus) - er kommt woertlich aus
+// TRepoSettings.OverlayTextOnly; ein Zwei-Wert-Enum waere Zeremonie.
 procedure RefreshTextOnlyHintCache(AValue: Boolean);
 begin
+  // MODUSWECHSEL-HOOK (Review 2026-08-13): beim Umschalten darf weder ein
+  // sichtbares Fenster-Overlay stehen bleiben (Fenster->Text: niemand
+  // versteckte es mehr, der Textmodus kennt kein HideOverlay) noch duerfen
+  // die Klick-Rechtecke des Textmodus den Fenster-Modus ueberleben
+  // (Text->Fenster->Text: stale Rechtecke waeren sofort wieder scharfe
+  // Klick-Ziele). Der Gleichheits-Guard haelt Options-Saves OHNE
+  // Moduswechsel frei von Seiteneffekten.
+  if GTextOnlyHint = AValue then Exit;
   GTextOnlyHint := AValue;
+  if Assigned(GAnnotationOverlay) then
+    GAnnotationOverlay.HideOverlay;
+  if Assigned(GHighlighter) then
+    GHighlighter.ResetEditorEventState;
 end;
 
 function GetOverlayPositionSetting: string;
@@ -1208,6 +1230,12 @@ begin
   // Ein Aufruf fuer alles Sichtbare - siehe Kommentar an InvalidateAllLines,
   // pro Zeile zu invalidieren war hier schon einmal die teurere Variante.
   InvalidateAllLines;
+end;
+
+procedure TFindingHighlighter.ResetEditorEventState;
+begin
+  if Assigned(FEditorEventsObj) then
+    FEditorEventsObj.ResetState;
 end;
 
 procedure TFindingHighlighter.HandleFileClosing(const AFileName: string);
@@ -2133,6 +2161,8 @@ begin
     FRenderedRects.Clear;
   if Assigned(FRenderedTextEnds) then
     FRenderedTextEnds.Clear;
+  if Assigned(FRenderedHintRects) then
+    FRenderedHintRects.Clear;
   if Assigned(FHoverWatch) then
     FHoverWatch.Enabled := False;
 end;
@@ -2376,6 +2406,12 @@ begin
   if Editor <> FSavedEditor then Exit;
   FRenderedRects.Clear;
   FRenderedTextEnds.Clear;
+  // AUCH die Hint-Rechtecke (Review-Blocker 2026-08-13): sie zeigen nach
+  // dem Scrollen auf die alten Bildschirmpositionen, und ein Klick dort
+  // haette per DismissTextHintAt still den AUSGESCROLLTEN Fund verworfen
+  // (bei Bereichsmarken den ganzen Block). Der Settle-Repaint fuellt die
+  // Rechtecke sichtbarer Ankerzeilen ueber PaintAnchorBadge neu.
+  FRenderedHintRects.Clear;
   FHoveredLine := -1;
   if Assigned(GAnnotationOverlay) then
     GAnnotationOverlay.HideOverlay;
@@ -2425,6 +2461,10 @@ var
   HitLine       : Integer;
 begin
   // Hot path: erst die billigsten Bailouts, dann Hit-Test, dann Show/Hide.
+  // Nur-Text-Modus: es gibt kein Fenster zu zeigen oder zu verstecken -
+  // ohne diesen Ausstieg bewaffnete jeder Hover den 200ms-FHoverWatch,
+  // der nur ein nie gezeigtes Fenster verstecken kann (Review 2026-08-13).
+  if GTextOnlyHint then Exit;
   if not Assigned(GAnnotationOverlay) or not Assigned(GHighlighter) then Exit;
   if FRenderedRects.Count = 0 then Exit;       // Aktuell nichts gerendert
   if Editor <> FSavedEditor then               // Maus in anderem Editor
@@ -2443,6 +2483,7 @@ begin
     FHoveredLine := -1;
     FRenderedRects.Clear;
     FRenderedTextEnds.Clear;
+    FRenderedHintRects.Clear;
     FHoverWatch.Enabled := False;
     Exit;
   end;
@@ -2724,16 +2765,31 @@ end;
 procedure TFindingEditorEvents.DismissTextHintAt(X, Y: Integer);
 // Vertrag an der Deklaration. Klick NEBEN alle Texte: bewusst kein
 // Verhalten - der Klick setzt nur die Schreibmarke.
+//
+// ZWEIPHASIG (Review 2026-08-13): erst den Treffer suchen, DANN
+// RemoveMark - nie waehrend einer aktiven Dictionary-Enumeration
+// mutieren. RemoveMark raeumt ueber ResetState inzwischen auch
+// FRenderedHintRects; ein Aufruf im Schleifenrumpf leerte damit das
+// gerade enumerierte Dictionary (Delphis Enumerator wirft nicht, er
+// iteriert undefiniert weiter - im Krisenpfad dieses Plugins kein
+// Zustand, auf den man baut).
 var
   HintHit : TPair<Integer, TRect>;
+  HitKey  : Integer;
+  Found   : Boolean;
 begin
   if not Assigned(GHighlighter) then Exit;
+  Found  := False;
+  HitKey := 0;
   for HintHit in FRenderedHintRects do
     if PtInRect(HintHit.Value, Point(X, Y)) then
     begin
-      GHighlighter.RemoveMark(FLastPaintedFile, HintHit.Key);
-      Exit;
+      HitKey := HintHit.Key;
+      Found  := True;
+      Break;
     end;
+  if Found then
+    GHighlighter.RemoveMark(FLastPaintedFile, HitKey);
 end;
 
 procedure TFindingEditorEvents.PaintLine(const Rect: TRect;

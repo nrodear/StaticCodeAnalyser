@@ -25,6 +25,7 @@ type
     [Test] procedure Shorten_TooNarrow_YieldsEmpty;
     [Test] procedure Shorten_NoSpaceBeforeEllipsis;
     [Test] procedure Shorten_CutAtSurrogatePair_DropsHalfChar;
+    [Test] procedure Shorten_CutAtSurrogateAfterSpace_TrimsAgain;
   end;
 
 implementation
@@ -103,6 +104,22 @@ begin
   // ERSTE Haelfte des Emojis - sie darf nicht als halbes Zeichen vor
   // der Ellipse stehen bleiben.
   S := ShortenToWidth('ab' + EMOJI + 'cdef', 4 * PX_PER_CHAR, FixedMeasure);
+  Assert.AreEqual('ab' + HINT_ELLIPSIS, S);
+end;
+
+procedure TTestHintTextLayout.Shorten_CutAtSurrogateAfterSpace_TrimsAgain;
+// REGRESSION (Review 2026-08-13): TrimRight lief VOR dem Surrogat-Drop.
+// Endet der Schnitt auf Weissraum + High-Surrogate ('ab ' + halbes
+// Emoji), entfernte TrimRight nichts (das Surrogate schirmt ab), der
+// Drop legte das Leerzeichen frei - und vor der Ellipse stand genau der
+// Wortrest, den der Vertrag ausschliesst.
+const
+  EMOJI = #$D83D#$DC1E;
+var
+  S : string;
+begin
+  // 9 Einheiten, Budget 5: Praefix (4) + Ellipse = 'ab ' + High-Surrogate.
+  S := ShortenToWidth('ab ' + EMOJI + 'cdef', 5 * PX_PER_CHAR, FixedMeasure);
   Assert.AreEqual('ab' + HINT_ELLIPSIS, S);
 end;
 

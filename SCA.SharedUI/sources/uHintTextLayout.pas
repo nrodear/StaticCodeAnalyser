@@ -93,6 +93,10 @@ begin
   if (Result <> '') and Result[Length(Result)].IsHighSurrogate then
   begin
     SetLength(Result, Length(Result) - 1);
+    // Der Drop kann Weissraum freilegen ('AB ' + halbes Emoji): ohne
+    // zweites TrimRight stuende genau das Leerzeichen vor der Ellipse,
+    // das der Vertrag ausschliesst (Review 2026-08-13).
+    Result := TrimRight(Result);
   end;
   if Result = '' then Exit('');
   Result := Result + HINT_ELLIPSIS;
