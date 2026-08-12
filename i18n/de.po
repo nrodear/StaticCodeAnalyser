@@ -2014,3 +2014,11 @@ msgstr "Meldung"
 
 msgid "Fix hint"
 msgstr "Fix-Hinweis"
+
+# Nur-Text-Annotation-Hint 2026-08-13 ([UI] OverlayTextOnly).
+
+msgid "Text only, transparent (no window)"
+msgstr "Nur Text, transparent (kein Fenster)"
+
+msgid "Where the hover annotation overlay anchors relative to the finding line; position changes take effect after IDE restart. \"Text only\" instead draws a transparent one-line hint (badge + rule name) right of the code - no description or fix block (see the findings panel), long titles are shortened, dismiss a finding by clicking its text. Takes effect on save."
+msgstr "Wo das Hover-Annotation-Overlay relativ zur Fundzeile ansetzt; Positionswechsel wirken nach IDE-Neustart. \"Nur Text\" zeichnet stattdessen einen transparenten einzeiligen Hinweis (Badge + Regelname) rechts vom Code - ohne Beschreibung und Fix-Block (siehe Findings-Panel), lange Titel werden gekürzt, ein Fund lässt sich per Klick auf seinen Text verwerfen. Wirkt beim Speichern."

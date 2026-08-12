@@ -23,8 +23,8 @@ const
   // Zeichen als Codes statt Literale - die Quelltexte des Projekts sind
   // nicht durchgaengig UTF-8-markiert, ein rohes Literal koennte beim
   // Speichern in der IDE kippen.
-  HINT_ELLIPSIS = Char($2026);   // Horizontal Ellipsis
-  HINT_SEP      = Char($2014);   // Em Dash
+  HINT_ELLIPSIS = #$2026;   // Horizontal Ellipsis
+  HINT_SEP      = #$2014;   // Em Dash
 
 // Kurzform des Text-Hints: 'Badge <Em-Dash> Regelname'. Leere Teile
 // fallen weg (nur Badge bzw. nur Regelname), beide leer -> ''.

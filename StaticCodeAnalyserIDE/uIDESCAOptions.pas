@@ -109,6 +109,11 @@ type
     // Sammeltrigger fuer den uIDEColors.StyleAsHintLabel-Helper - listet
     // alle Info-Labels einmal nach BuildControls auf.
     procedure ApplyHintStyleToAllInfoLabels;
+    // Display-Sektion (Overlay-Combo inkl. Nur-Text-Variante, Hover,
+    // Editor-Schema) aus Load/Save gezogen - beide Routinen lagen sonst
+    // ueber den Komplexitaets-/Laengen-Schwellen des Self-Scans.
+    procedure LoadDisplaySection(ASettings: TRepoSettings);
+    procedure SaveDisplaySection(ASettings: TRepoSettings);
   public
     constructor Create(AOwner: TComponent); override;
     // Werte aus den Settings in die Controls schreiben (FrameCreated).
@@ -141,10 +146,11 @@ implementation
 {$R *.dfm}
 
 uses
-  uIDETheme,         // TIDETheme.Apply + Subscribe
-  uIDEToolbar,       // ApplySegoeUI - Font-Pin (High-DPI-Fix, wie Dock/uMainForm)
-  uIDEColors,        // IDE_FG_DIM - semantische Theme-Farbe (wie uIDESonarOptions)
-  uAnalyserTheme;    // TEditorColorScheme + Parse/ToStr
+  uIDETheme,           // TIDETheme.Apply + Subscribe
+  uIDEToolbar,         // ApplySegoeUI - Font-Pin (High-DPI-Fix, wie Dock/uMainForm)
+  uIDEColors,          // IDE_FG_DIM - semantische Theme-Farbe (wie uIDESonarOptions)
+  uIDELineHighlighter, // RefreshTextOnlyHintCache + Repaint nach dem Speichern
+  uAnalyserTheme;      // TEditorColorScheme + Parse/ToStr
 
 const
   // Sentinel-Text fuer "kein Profile-Override". Wird im Combo angezeigt
@@ -419,6 +425,11 @@ begin
   cboOverlayPos.Style     := csDropDownList;
   cboOverlayPos.Items.Add(_('Same line at end (default)'));
   cboOverlayPos.Items.Add(_('One line below'));
+  // Dritter Eintrag = Nur-Text-Variante ([UI] OverlayTextOnly=1). Sie ist
+  // KEINE Position, sondern ersetzt das Fenster-Overlay komplett - in
+  // einer Combo mit den Positionen, weil die drei Auspraegungen aus
+  // Nutzersicht dieselbe Frage beantworten: wie erscheint der Hint?
+  cboOverlayPos.Items.Add(_('Text only, transparent (no window)'));
   cboOverlayPos.ItemIndex := 0;
 
   lblOverlayPosInfo          := TLabel.Create(Self);
@@ -427,11 +438,15 @@ begin
   lblOverlayPosInfo.Left     := INNER_LEFT;
   lblOverlayPosInfo.Top      := cboOverlayPos.Top + cboOverlayPos.Height + 8;
   lblOverlayPosInfo.Width    := GROUP_W - 2 * INNER_LEFT;
-  lblOverlayPosInfo.Height   := 48;   // 28 + 20
+  lblOverlayPosInfo.Height   := 76;   // 3 Zeilen + Luft (laengerer Infotext)
   lblOverlayPosInfo.WordWrap := True;
   lblOverlayPosInfo.Caption  :=
     _('Where the hover annotation overlay anchors relative to the finding ' +
-      'line. Takes effect after IDE restart.');
+      'line; position changes take effect after IDE restart. "Text only" ' +
+      'instead draws a transparent one-line hint (badge + rule name) right ' +
+      'of the code - no description or fix block (see the findings panel), ' +
+      'long titles are shortened, dismiss a finding by clicking its text. ' +
+      'Takes effect on save.');
 
   // Die fruehere Checkbox "Auto-expand annotation overlay" ist entfallen
   // (UX-Entscheid 2026-07-05): das Overlay faltet jetzt IMMER automatisch
@@ -777,19 +792,7 @@ begin
   if Assigned(chkIncludeTests) then chkIncludeTests.Checked := ASettings.IncludeTests;
   if Assigned(chkAutoDiscover) then chkAutoDiscover.Checked := ASettings.AutoDiscoverClasses;
 
-  // Display: 'sameline' -> Index 0, 'below' -> Index 1, alles andere -> 0
-  if Assigned(cboOverlayPos) then
-  begin
-    if SameText(ASettings.OverlayPosition, 'below') then
-      cboOverlayPos.ItemIndex := 1
-    else
-      cboOverlayPos.ItemIndex := 0;
-  end;
-  if Assigned(chkOverlayShowOnHover) then
-    chkOverlayShowOnHover.Checked := ASettings.OverlayShowOnHover;
-  if Assigned(cboEditorColorScheme) then
-    cboEditorColorScheme.ItemIndex :=
-      ComboIndexFromScheme(ParseEditorColorScheme(ASettings.EditorColorScheme));
+  LoadDisplaySection(ASettings);
 
   // Sprache: unbekannter/leerer INI-Wert -> 'en' (identisch zur Laufzeit-
   // Semantik von uLocalization.SetLanguage, das genau dann auf Identity =
@@ -803,6 +806,61 @@ begin
     chkBaselineOnlyNew.Checked := ASettings.BaselineOnlyNew;
   if Assigned(edtBaselineFile) then
     edtBaselineFile.Text := ASettings.BaselineFile;
+end;
+
+procedure TSCAOptionsFrame.LoadDisplaySection(ASettings: TRepoSettings);
+// Display: OverlayTextOnly gewinnt (Index 2), sonst 'sameline' -> 0,
+// 'below' -> 1, alles andere -> 0. Die Position bleibt in der INI
+// erhalten, auch wenn der Nur-Text-Modus aktiv ist - beim Zurueckwechseln
+// gilt wieder die alte Position.
+begin
+  if Assigned(cboOverlayPos) then
+  begin
+    if ASettings.OverlayTextOnly then
+      cboOverlayPos.ItemIndex := 2
+    else if SameText(ASettings.OverlayPosition, 'below') then
+      cboOverlayPos.ItemIndex := 1
+    else
+      cboOverlayPos.ItemIndex := 0;
+  end;
+  if Assigned(chkOverlayShowOnHover) then
+    chkOverlayShowOnHover.Checked := ASettings.OverlayShowOnHover;
+  if Assigned(cboEditorColorScheme) then
+    cboEditorColorScheme.ItemIndex :=
+      ComboIndexFromScheme(ParseEditorColorScheme(ASettings.EditorColorScheme));
+end;
+
+procedure TSCAOptionsFrame.SaveDisplaySection(ASettings: TRepoSettings);
+// Display: Index 2 = Nur-Text (OverlayPosition bleibt unangetastet -
+// sie gilt nur fuer das Fenster-Overlay und soll den Zurueckwechsel
+// ueberleben); Index 1 = below, alles andere = sameline.
+begin
+  if Assigned(cboOverlayPos) then
+  begin
+    ASettings.OverlayTextOnly := (cboOverlayPos.ItemIndex = 2);
+    if cboOverlayPos.ItemIndex = 1 then
+      ASettings.OverlayPosition := 'below'
+    else if cboOverlayPos.ItemIndex = 0 then
+      ASettings.OverlayPosition := 'sameline';
+    // Modulcache sofort nachziehen + sichtbare Editoren neu zeichnen -
+    // die Variante soll beim Speichern wirken, nicht erst beim naechsten
+    // BPL-Load. WERT-Uebergabe statt INI-Read: SaveToSettings laeuft VOR
+    // dem Schreiben der INI (Muster RefreshEditorColorSchemeCache unten).
+    RefreshTextOnlyHintCache(ASettings.OverlayTextOnly);
+    if Assigned(GHighlighter) then
+      GHighlighter.InvalidateAllLines;
+  end;
+  if Assigned(chkOverlayShowOnHover) then
+    ASettings.OverlayShowOnHover := chkOverlayShowOnHover.Checked;
+  if Assigned(cboEditorColorScheme) then
+  begin
+    ASettings.EditorColorScheme := EditorColorSchemeToStr(
+      SchemeFromComboIndex(cboEditorColorScheme.ItemIndex));
+    // Cache sofort aktualisieren - sonst wirkt die Schema-Auswahl erst
+    // beim naechsten BPL-Load. RefreshEditorColorSchemeCache ist
+    // komplett defensiv.
+    RefreshEditorColorSchemeCache(ASettings.EditorColorScheme);
+  end;
 end;
 
 procedure TSCAOptionsFrame.SaveToSettings(ASettings: TRepoSettings);
@@ -832,25 +890,7 @@ begin
   if Assigned(chkIncludeTests) then ASettings.IncludeTests        := chkIncludeTests.Checked;
   if Assigned(chkAutoDiscover) then ASettings.AutoDiscoverClasses := chkAutoDiscover.Checked;
 
-  // Display: Index 1 = below, alles andere = sameline
-  if Assigned(cboOverlayPos) then
-  begin
-    if cboOverlayPos.ItemIndex = 1 then
-      ASettings.OverlayPosition := 'below'
-    else
-      ASettings.OverlayPosition := 'sameline';
-  end;
-  if Assigned(chkOverlayShowOnHover) then
-    ASettings.OverlayShowOnHover := chkOverlayShowOnHover.Checked;
-  if Assigned(cboEditorColorScheme) then
-  begin
-    ASettings.EditorColorScheme := EditorColorSchemeToStr(
-      SchemeFromComboIndex(cboEditorColorScheme.ItemIndex));
-    // Cache sofort aktualisieren - sonst wirkt die Schema-Auswahl erst
-    // beim naechsten BPL-Load. RefreshEditorColorSchemeCache ist
-    // komplett defensiv.
-    RefreshEditorColorSchemeCache(ASettings.EditorColorScheme);
-  end;
+  SaveDisplaySection(ASettings);
 
   // Sprache: Combo-Text ist bereits ein normalisiertes Kuerzel (kommt aus
   // AvailableLanguages). SetLanguage direkt hinterher, damit alles was ab
