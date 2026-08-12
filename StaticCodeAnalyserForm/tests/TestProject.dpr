@@ -236,7 +236,8 @@ uses
   uTestReRaiseException in 'uTestReRaiseException.pas',
   uTestRoutineResultAssigned in 'uTestRoutineResultAssigned.pas',
   uTestUnicodeToAnsiCast in 'uTestUnicodeToAnsiCast.pas',
-  uTestUseAfterFree in 'uTestUseAfterFree.pas';
+  uTestUseAfterFree in 'uTestUseAfterFree.pas',
+  uTestClaudePrompt in 'uTestClaudePrompt.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

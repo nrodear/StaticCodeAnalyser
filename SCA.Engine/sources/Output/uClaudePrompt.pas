@@ -38,8 +38,11 @@ type
 
 implementation
 
-// noinspection-file BeginEndRequired, CanBeStrictPrivate, DuplicateString, GroupedDeclaration, LongMethod, MultipleExit, NestedTry, NilComparison, RedundantJump, TooLongLine, UnsortedUses
+// noinspection-file BeginEndRequired, CanBeStrictPrivate, ClassPerFile, DuplicateString, GroupedDeclaration, LongMethod, MultipleExit, NestedTry, NilComparison, PublicField, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+// ClassPerFile/PublicField: TSnippetEntry ist ein implementation-lokaler
+// Cache-Slot (struct-artig, nie exportiert) - eine eigene Unit oder
+// Property-Huellen waeren Zeremonie ohne Schutzwirkung.
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
@@ -52,70 +55,143 @@ const
   // verschiedenen Modulen ab, ohne Memory nennenswert zu kosten.
   SNIPPET_CACHE_CAPACITY = 4;
 
+type
+  // Ein Cache-Slot des Modul-LRU: Zeilen plus Gueltigkeitsstempel der
+  // Quelldatei. Ein einziges Objekt je Slot statt der frueheren
+  // Parallel-Listen (Pfade/Daten) - die konnten bei einer Ausnahme
+  // zwischen den beiden Inserts dauerhaft auseinanderlaufen.
+  TSnippetEntry = class
+  public
+    Path  : string;       // LowerCase(ExpandFileName(...)) als Schluessel
+    Lines : TStringList;  // owned - Destroy gibt sie frei
+    Stamp : TDateTime;    // LastWriteTime der Datei beim Laden
+    Size  : Int64;        // Dateigroesse beim Laden
+    destructor Destroy; override;
+  end;
+
+destructor TSnippetEntry.Destroy;
+begin
+  Lines.Free;
+  inherited;
+end;
+
 var
   // Modul-LRU: MRU=Index 0, LRU=Index Count-1.
   // gFileTextCache aus uFileTextCache ist scan-scoped und nach dem Lauf nil -
   // dieser Cache lebt fuer die Form-Lebenszeit, damit aufeinanderfolgende
   // Klicks auf Befunde derselben Datei nicht jedes Mal LoadFromFile ausloesen.
-  FSnippetPaths : TStringList         = nil;     // gleiche Key-Reihenfolge wie FSnippetData
-  FSnippetData  : TObjectList<TStringList> = nil; // OwnsObjects = True
+  FSnippets : TObjectList<TSnippetEntry> = nil;   // OwnsObjects = True
+
+function FileStamp(const APath: string; var AStamp: TDateTime;
+  var ASize: Int64): Boolean;
+// Aenderungszeit UND Groesse in EINEM Plattenzugriff (FindFirst); False
+// wenn die Datei fehlt oder nicht erreichbar ist.
+var
+  SR : TSearchRec;
+begin
+  AStamp := 0;
+  ASize  := 0;
+  Result := FindFirst(APath, faAnyFile, SR) = 0;
+  if not Result then Exit;
+  try
+    AStamp := SR.TimeStamp;
+    ASize  := SR.Size;
+  finally
+    FindClose(SR);
+  end;
+end;
+
+procedure DropCachedEntry(const AKey: string);
+// Entfernt einen etwaigen Cache-Eintrag zu AKey - etwa weil die Datei
+// verschwunden ist und der Slot sonst Zeilen einer geloeschten Datei
+// lieferte.
+var
+  i : Integer;
+begin
+  for i := FSnippets.Count - 1 downto 0 do
+    if FSnippets[i].Path = AKey then
+      FSnippets.Delete(i);
+end;
+
+function CachedLines(const AKey: string; const AStamp: TDateTime;
+  ASize: Int64): TStringList;
+// Liefert den GUELTIGEN Cache-Treffer (und zieht ihn auf MRU) oder nil.
+//
+// GUELTIGKEIT (Review-Blocker 2026-08-12): der Cache lebt fuer die
+// Prozess-Lebenszeit. Ohne Stempelvergleich lieferte er nach "Befund
+// klicken -> Datei fixen -> neu scannen -> klicken" den ALTEN Code mit
+// falsch sitzendem >>>-Marker in den Prompt - genau das Artefakt, das
+// der Nutzer einer AI vorlegt. Ein veralteter Treffer wird entfernt,
+// der Aufrufer laedt dann frisch.
+var
+  i : Integer;
+begin
+  Result := nil;
+  for i := 0 to FSnippets.Count - 1 do
+  begin
+    if FSnippets[i].Path <> AKey then Continue;
+    if (FSnippets[i].Stamp = AStamp) and (FSnippets[i].Size = ASize) then
+    begin
+      Result := FSnippets[i].Lines;
+      if i > 0 then
+        FSnippets.Move(i, 0);   // Hit -> MRU; Move loescht nicht
+    end
+    else
+    begin
+      FSnippets.Delete(i);      // veraltet
+    end;
+    Exit;
+  end;
+end;
 
 function GetSnippetLines(const APath: string): TStringList;
 // Holt die Zeilen der Datei aus dem LRU-Cache; laed sie bei Bedarf nach.
 // Liefert nil wenn die Datei nicht lesbar ist. Caller MUSS die Liste NICHT
 // freigeben - der Cache besitzt sie.
 var
-  Key : string;
-  Idx : Integer;
-  SL  : TStringList;
+  Key   : string;
+  Stamp : TDateTime;
+  Size  : Int64;
+  E     : TSnippetEntry;
+  SL    : TStringList;
 begin
   Result := nil;
-  if FSnippetPaths = nil then
-  begin
-    FSnippetPaths := TStringList.Create;
-    FSnippetData  := TObjectList<TStringList>.Create(True);
-  end;
+  if FSnippets = nil then
+    FSnippets := TObjectList<TSnippetEntry>.Create(True);
 
-  Key := LowerCase(ExpandFileName(APath));
-  Idx := FSnippetPaths.IndexOf(Key);
-  if Idx >= 0 then
+  Key   := LowerCase(ExpandFileName(APath));
+  Stamp := 0;
+  Size  := 0;
+  if not FileStamp(APath, Stamp, Size) then
   begin
-    Result := FSnippetData[Idx];
-    // Hit -> auf Position 0 ziehen (MRU). Move loescht nicht (kein
-    // OwnsObjects-Trigger, nur Reorder).
-    if Idx > 0 then
-    begin
-      FSnippetPaths.Move(Idx, 0);
-      FSnippetData.Move(Idx, 0);
-    end;
+    DropCachedEntry(Key);
     Exit;
   end;
+
+  Result := CachedLines(Key, Stamp, Size);
+  if Result <> nil then Exit;
 
   // Miss -> laden. Encoding-Strategie identisch zum vorherigen Code
-  // (UTF-8, sonst System-Default).
-  if not FileExists(APath) then Exit;
+  // (UTF-8, sonst System-Default). Der Fallback faengt beide Fehlerwege;
+  // das fruehere AEUSSERE try/except um diesen Block war tot.
   SL := TStringList.Create;
   try
-    try
-      SL.LoadFromFile(APath, TEncoding.UTF8);
-    except
-      try SL.LoadFromFile(APath); except FreeAndNil(SL); Exit; end;
-    end;
+    SL.LoadFromFile(APath, TEncoding.UTF8);
   except
-    FreeAndNil(SL);
-    Exit;
+    try SL.LoadFromFile(APath); except FreeAndNil(SL); Exit; end;
   end;
 
-  FSnippetPaths.Insert(0, Key);
-  FSnippetData.Insert(0, SL);
+  E := TSnippetEntry.Create;
+  E.Path  := Key;
+  E.Lines := SL;
+  E.Stamp := Stamp;
+  E.Size  := Size;
+  FSnippets.Insert(0, E);
 
   // Tail verdraengen bis wir wieder unter der Capacity sind. OwnsObjects=True
-  // gibt die TStringList-Instanz mit der Delete-Operation frei.
-  while FSnippetPaths.Count > SNIPPET_CACHE_CAPACITY do
-  begin
-    FSnippetPaths.Delete(FSnippetPaths.Count - 1);
-    FSnippetData.Delete(FSnippetData.Count - 1);
-  end;
+  // gibt den Eintrag samt Zeilen mit der Delete-Operation frei.
+  while FSnippets.Count > SNIPPET_CACHE_CAPACITY do
+    FSnippets.Delete(FSnippets.Count - 1);
 
   Result := SL;
 end;
@@ -262,9 +338,8 @@ end;
 initialization
 
 finalization
-  // LRU sauber abbauen. OwnsObjects=True gibt die gecachten TStringList-
-  // Instanzen mit Free der TObjectList automatisch frei.
-  FreeAndNil(FSnippetData);
-  FreeAndNil(FSnippetPaths);
+  // LRU sauber abbauen. OwnsObjects=True gibt die Eintraege samt ihrer
+  // TStringList-Instanzen mit Free der TObjectList automatisch frei.
+  FreeAndNil(FSnippets);
 
 end.
