@@ -237,7 +237,8 @@ uses
   uTestRoutineResultAssigned in 'uTestRoutineResultAssigned.pas',
   uTestUnicodeToAnsiCast in 'uTestUnicodeToAnsiCast.pas',
   uTestUseAfterFree in 'uTestUseAfterFree.pas',
-  uTestClaudePrompt in 'uTestClaudePrompt.pas';
+  uTestClaudePrompt in 'uTestClaudePrompt.pas',
+  uTestFindingCopyText in 'uTestFindingCopyText.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}
