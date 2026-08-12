@@ -52,6 +52,11 @@ const
   // die Collapsed-Zwischenstufe mit Klick-zum-Auffalten ist entfallen).
   // Ein evtl. noch vorhandener INI-Eintrag wird ignoriert.
   DEF_OVERLAY_SHOW_ON_HOVER  = False;
+  // [UI] OverlayTextOnly: 1 = Annotation-Hint als reiner Text auf der
+  // Editor-Canvas, OHNE Hintergrundfarbe und ohne Fenster-Overlay
+  // (Konzept_AnnotationHint_NurText_2026-08-09, Weg B). 0 (Default) =
+  // Fenster-Overlay mit Aufklapp-Animation wie bisher.
+  DEF_OVERLAY_TEXT_ONLY      = False;
   DEF_EDITOR_COLOR_SCHEME    = 'default';
   DEF_LANGUAGE               = 'en';
   DEF_OVERLAY_POSITION       = 'sameline';
@@ -109,6 +114,9 @@ type
     // = erst beim KLICK auf die markierte Zeile zeigt sich das Overlay -
     // ungestoertes Lesen ist Default. True = altes Hover-Verhalten.
     FOverlayShowOnHover : Boolean;
+    // [UI] OverlayTextOnly: Nur-Text-Variante des Annotation-Hints
+    // (transparent auf der Editor-Canvas statt Fenster-Overlay).
+    FOverlayTextOnly    : Boolean;
     // [UI] EditorColorScheme: Farbschema NUR fuer Editor-Marker
     // (Stripe + Mini-Infobar + Overlay-Titlebar). Erlaubte Werte:
     //   'default' - Original-ACCENT_* Farben (Default)
@@ -331,6 +339,19 @@ type
                                                   write FSilentEnabled;
     property OverlayShowOnHover:      Boolean     read FOverlayShowOnHover
                                                   write FOverlayShowOnHover;
+    // Nur-Text-Variante des Annotation-Hints (Nutzerwunsch 2026-08-12,
+    // Konzept 2026-08-09): True = eine Zeile Text direkt auf der
+    // Editor-Canvas, OHNE Hintergrundfarbe (kein FillRect - der Editor-
+    // Hintergrund samt Auswahl bleibt sichtbar), permanent an jeder
+    // Ankerzeile statt der Mini-Infobar; kein Fenster, keine Stufe 2
+    // (Beschreibung/Fix bleiben im Findings-Panel), Verwerfen per Klick
+    // auf den Text. False (Default) = Fenster-Overlay wie bisher.
+    // Wirkt nach dem Speichern der Optionen (Modulcache im Highlighter).
+    // noinspection BooleanPropertyNaming
+    // Namensstil folgt dem INI-Key OverlayTextOnly und den Nachbarn
+    // (OverlayShowOnHover, BaselineOnlyNew) statt einem Is-Praefix.
+    property OverlayTextOnly:         Boolean     read FOverlayTextOnly
+                                                  write FOverlayTextOnly;
     property EditorColorScheme:       string      read FEditorColorScheme
                                                   write FEditorColorScheme;
 
@@ -833,6 +854,21 @@ const
     'OverlayPosition=sameline'#13#10 +
     ';OverlayPosition=below'#13#10 +
     ''#13#10 +
+    '; OverlayTextOnly (bool 0/1, default: 0)'#13#10 +
+    '; Nur-Text-Variante des Annotation-Hints im IDE-Editor:'#13#10 +
+    ';   0 = Fenster-Overlay mit Aufklapp-Animation (wie bisher)'#13#10 +
+    ';   1 = eine Zeile Text rechts vom Code, transparent (OHNE'#13#10 +
+    ';       Hintergrundfarbe - Auswahl/Zeilenfarbe bleiben sichtbar),'#13#10 +
+    ';       permanent an jeder Fundzeile statt der Mini-Infobar.'#13#10 +
+    ';       Kein Fenster: Beschreibung und Fix-Beispiel stehen im'#13#10 +
+    ';       Findings-Panel; Verwerfen per Klick auf den Text; lange'#13#10 +
+    ';       Titel erscheinen als Kurzform (Badge + Regelname).'#13#10 +
+    '; Auch konfigurierbar via Tools > Options > Third Party >'#13#10 +
+    '; Static Code Analyser. Wirkt nach dem Speichern der Optionen;'#13#10 +
+    '; OverlayPosition gilt nur fuer das Fenster-Overlay (Modus 0).'#13#10 +
+    'OverlayTextOnly=0'#13#10 +
+    ';OverlayTextOnly=1'#13#10 +
+    ''#13#10 +
     '; ClipboardOnClick (int 1..3, default: 1)'#13#10 +
     '; Was der Klick auf eine Befund-Zeile in die Zwischenablage legt'#13#10 +
     '; (Standalone-EXE UND IDE-Plugin):'#13#10 +
@@ -959,6 +995,7 @@ begin
   FDetectorReviewFilterEnabled := False; // internes Review-Tool, default aus
   FSilentEnabled          := DEF_SILENT_ENABLED;
   FOverlayShowOnHover     := DEF_OVERLAY_SHOW_ON_HOVER;
+  FOverlayTextOnly        := DEF_OVERLAY_TEXT_ONLY;
   FEditorColorScheme      := DEF_EDITOR_COLOR_SCHEME;
   FLanguage               := DEF_LANGUAGE;
   FOverlayPosition        := DEF_OVERLAY_POSITION;
@@ -1408,6 +1445,7 @@ begin
     // > Third Party > Static Code Analyser.
     FSilentEnabled        := Ini.ReadBool  ('Silent',  'Enabled',              DEF_SILENT_ENABLED);
     FOverlayShowOnHover   := Ini.ReadBool  ('UI',      'OverlayShowOnHover',   DEF_OVERLAY_SHOW_ON_HOVER);
+    FOverlayTextOnly      := Ini.ReadBool  ('UI',      'OverlayTextOnly',      DEF_OVERLAY_TEXT_ONLY);
     FEditorColorScheme    := Ini.ReadString('UI',      'EditorColorScheme',    DEF_EDITOR_COLOR_SCHEME);
 
     // [Baseline] - non-destruktiver "nur neue Funde"-Filter im IDE-Editor.
@@ -1507,6 +1545,7 @@ begin
     Ini.WriteBool  ('Rules', 'EnableDetectorReviewFilter', FDetectorReviewFilterEnabled);
     Ini.WriteBool  ('Silent', 'Enabled',           FSilentEnabled);
     Ini.WriteBool  ('UI',     'OverlayShowOnHover',   FOverlayShowOnHover);
+    Ini.WriteBool  ('UI',     'OverlayTextOnly',      FOverlayTextOnly);
     Ini.WriteString('UI',     'EditorColorScheme',    FEditorColorScheme);
     Ini.WriteString('Baseline', 'File',              FBaselineFile);
     Ini.WriteBool  ('Baseline', 'PathInFingerprint', FBaselinePathFp);
