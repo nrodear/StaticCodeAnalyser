@@ -79,7 +79,10 @@ type
     procedure Attach(ACombo: TComboBox);
     // Nach jedem Umbau der Items durch den Host aufrufen (z.B. nach
     // RebuildFilterCombos). Ohne das filtert der Helfer gegen einen
-    // veralteten Schnappschuss.
+    // veralteten Schnappschuss. Uebernimmt ausserdem die aktuelle
+    // Auswahl als Commit-Stand - das Tag-Gate in CommitSelection misst
+    // sonst gegen die Auswahl von VOR dem Umbau und verschluckt deren
+    // erste Wieder-Auswahl.
     procedure Resync;
     // Entprellung ueberspringen und sofort filtern. Fuer Tests - im
     // Betrieb macht das der Timer.
@@ -276,14 +279,8 @@ begin
   ACombo.OnExit       := ComboExit;
   ACombo.OnKeyUp      := ComboKeyUp;
 
-  FCommitted  := 0;
-  FHasPending := False;
-  if (ACombo.Items.Count > 0) and (ACombo.ItemIndex >= 0)
-     and (ACombo.ItemIndex < ACombo.Items.Count) then
-  begin
-    FCommitted := NativeInt(ACombo.Items.Objects[ACombo.ItemIndex]);
-  end;
-
+  // Commit-Gedaechtnis und Schnappschuss zieht Resync aus dem
+  // Ist-Zustand der Combo - Attach ist nur der Sonderfall "erster Sync".
   Resync;
 end;
 
@@ -311,6 +308,22 @@ begin
     E.Display := FCombo.Items[i];
     E.Tag     := NativeInt(FCombo.Items.Objects[i]);
     FAll.Add(E);
+  end;
+  // Der Umbau durch den Host ist auch ein neuer AUSWAHL-Stand: das
+  // Commit-Gedaechtnis muss der Anzeige folgen, sonst verschluckt das
+  // Tag-Gate in CommitSelection die erste Wieder-Auswahl des zuletzt
+  // gemeldeten Eintrags. Genau so trat es auf (2026-08-12): der Scan
+  // setzt die Combo auf 'All' zurueck, der Nutzer waehlt seinen alten
+  // Filter erneut - Combo zeigt ihn an, der Host erfaehrt nichts, das
+  // Grid bleibt auf dem All-Stand. Eine vor dem Umbau gemerkte, noch
+  // nicht committete Auswahl zeigt auf die ALTE Liste und ist damit
+  // ebenfalls gegenstandslos.
+  FHasPending := False;
+  FCommitted  := 0;
+  if (FCombo.Items.Count > 0) and (FCombo.ItemIndex >= 0)
+     and (FCombo.ItemIndex < FCombo.Items.Count) then
+  begin
+    FCommitted := NativeInt(FCombo.Items.Objects[FCombo.ItemIndex]);
   end;
   FIsFiltering := False;
   FLastQuery := '';
