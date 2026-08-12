@@ -159,6 +159,13 @@ type
     // dann einen NIE angeklickten Fund im Panel und ueberschrieb die
     // Zwischenablage mit dessen Prompt.
     FGridUpdating   : Boolean;
+    // Der letzte linke Mausdruck traf die Kopfzeile (Sortier-Geste).
+    // ResultGridClick verbraucht den Merker und steigt aus: OnClick kann
+    // Maus- und Tastatur-Ausloesung nicht unterscheiden, und die
+    // Mausposition taugt dort nicht als Kriterium - OnClick feuert auch
+    // bei Pfeiltasten, waehrend der Zeiger zufaellig ueber der Kopfzeile
+    // stehen kann (Begruendung wie am Enter-Handler ResultGridKeyDown).
+    FHeaderMousePress : Boolean;
     // Warum der Lauf per Abort endete ('' = Nutzer-Cancel). Wird vom
     // ProgressCallback VOR dem Abort gesetzt und im EAbort-Zweig
     // angezeigt - der Status-Text alleine lag waehrend des Laufs unter
@@ -2057,6 +2064,15 @@ begin
   // angeklickt hat - Panel und Zwischenablage blieben sonst an einem
   // Zufallsfund haengen. Das Panel zieht ApplyFilter selbst nach.
   if FGridUpdating then Exit;
+  // Kopfzeilen-Klick (Sortier-Geste, in MouseDown markiert): verbrauchen
+  // und aussteigen. OnClick laeuft erst nach WM_LBUTTONUP, wenn
+  // FGridUpdating laengst wieder False ist - ResultGrid.Row steht dann
+  // auf einer Datenzeile, die niemand angeklickt hat.
+  if FHeaderMousePress then
+  begin
+    FHeaderMousePress := False;
+    Exit;
+  end;
 
   idx := ResultGrid.Row - 1; // 0-basiert: Zeile 0 ist Header
   if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
@@ -2422,6 +2438,11 @@ var
 begin
   if Button <> mbLeft then Exit;
   ResultGrid.MouseToCell(X, Y, ACol, ARow);
+  // Merker fuer das nachfolgende OnClick (Review 2026-08-12): ein Druck
+  // auf der Kopfzeile darf dort weder Hint-Panel noch Kopier-Timer
+  // anfassen - sonst landete 120 ms nach jedem Sortier-Klick der Prompt
+  // eines nie angeklickten Befunds in der Zwischenablage.
+  FHeaderMousePress := (ARow = 0);
   if ARow <> 0 then Exit;                       // nur die Header-Zeile
   if (ACol < 0) or (ACol > 4) then Exit;
 

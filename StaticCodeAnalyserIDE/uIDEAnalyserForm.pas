@@ -1757,7 +1757,7 @@ begin
     // Placeholder-Zeile bleibt explizit in Cells (GetCellText liest sie
     // dann via Fallback aus).
     FResultGrid.Rows[1].Clear;
-    FResultGrid.Cells[0, 1] := 'Keine Eintraege fuer diesen Filter.';
+    FResultGrid.Cells[0, 1] := _('No entries for this filter.');
   end;
   FResultGrid.Invalidate;
 end;
@@ -2606,12 +2606,16 @@ begin
           Fix := TQuickFix.ProposeFix(F, OrigLine);
           if Fix.Applied then
           begin
+            // Beschriftungen ueber _() wie der restliche Prompt (uClaudePrompt
+            // laeuft komplett ueber die .po) - vorher stand hier hartes
+            // Deutsch und ein EN-Nutzer bekam einen gemischt-sprachigen
+            // Prompt (Review 2026-08-12). '## Quick-Fix' ist sprachneutral.
             QuickFixHdr :=
               '## Quick-Fix' + sLineBreak +
               Fix.Description + sLineBreak + sLineBreak +
-              '**Vorher (Zeile ' + F.LineNumber + '):**' + sLineBreak +
+              Format(_('**Before (line %s):**'), [F.LineNumber]) + sLineBreak +
               '```pascal' + sLineBreak + Fix.Original + sLineBreak + '```' + sLineBreak + sLineBreak +
-              '**Nachher (direkt einfuegen):**' + sLineBreak +
+              _('**After (paste directly):**') + sLineBreak +
               '```pascal' + sLineBreak + Fix.Fixed + sLineBreak + '```' + sLineBreak + sLineBreak +
               '---' + sLineBreak + sLineBreak;
           end;
