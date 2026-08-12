@@ -21,9 +21,9 @@ Required-Felder ohne UI-Bindung, SQL aus `TEdit.Text`, Cross-Form-Kopplung und m
 Sonar-Style-Klassifikation mit Quality Score. Repo-weiter Form-Index für Cross-Unit-
 Analyse. VCS-Diff-Modus behandelt `.dfm`-Änderungen als Trigger für die zugehörige
 `.pas`. HTML-Report mit gruppiertem `.pas`+`.dfm`-Filter. IDE-Plugin öffnet
-DFM-Befunde direkt als Text im Code-Editor. Ein Klick auf einen Befund kopiert
-einen AI-fertigen Markdown-Fix-Prompt in die Zwischenablage. Open Source,
-MIT-lizenziert.
+DFM-Befunde direkt als Text im Code-Editor. AI-fertiger Markdown-Fix-Prompt
+per Kontextmenü in die Zwischenablage (automatische Kopie beim Klick ist
+Opt-in). Open Source, MIT-lizenziert.
 
 🇬🇧 [English version](README.md)
 
@@ -42,7 +42,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 | 🔐 **Sicherheitslücken** | SQLInjection (Score-basiert), HardcodedSecret, HardcodedPath |
 | 🧹 **Code-Smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Inkrementell analysieren** | „Branch-Changes"-Button: nur die im Git-/SVN-Branch geänderten Dateien — 200 ms statt 60 s |
-| 🤖 **Claude-AI-Prompt** | Klick auf Befund → vollständiger Markdown-Block mit Code-Kontext + Vorher/Nachher in der Zwischenablage |
+| 🤖 **Claude-AI-Prompt** | Copy AI prompt (Kontextmenü) → vollständiger Markdown-Block mit Code-Kontext + Vorher/Nachher in der Zwischenablage; Kopie beim Zeilen-Klick ist Opt-in via `[UI] ClipboardOnClick` |
 | 📊 **Sonar-Style-Dashboard** | Stat-Tiles über dem Grid: Fehler / Warnungen / Hinweise / Bugs / Vulnerabilities / Codequalität-Score |
 | 🎯 **Filtern & Sortieren** | Severity-Combo, Type-Combo, Live-Such-Edit, klickbare Spalten-Header |
 | 📤 **Exportieren** | SARIF, Sonar Generic Issue, self-contained HTML-Report und Baseline-JSON aus der CLI; CSV, JSON, Jira-Wiki-Markup und Clipboard aus der GUI — Formate, Workflows und Grenzen in [EXPORTS_de.md](EXPORTS_de.md) |
@@ -88,11 +88,18 @@ Konfigurierbar via `analyser.ini`. Details: [BRANCH_CHANGES_de.md](BRANCH_CHANGE
 
 ### 3. AI-Integration (Claude-Prompt per Klick)
 
-Klick auf eine Befund-Zeile im Grid → ein **vollständiger Markdown-Prompt**
-landet in der Zwischenablage: Befund-Metadaten, Code-Kontext (±5 Zeilen
-mit Marker auf der Befund-Zeile), Vorher/Nachher-Lösung. **Strg+V im
-Claude-Chat** — und Claude bekommt genug Kontext um den Fix konkret
-vorzuschlagen.
+Rechtsklick auf eine Befund-Zeile → **Copy AI prompt**: ein
+**vollständiger Markdown-Prompt** landet in der Zwischenablage:
+Befund-Metadaten, Code-Kontext (±5 Zeilen mit Marker auf der
+Befund-Zeile), Vorher/Nachher-Lösung. **Strg+V im Claude-Chat** — und
+Claude bekommt genug Kontext um den Fix konkret vorzuschlagen.
+
+Die *automatische* Kopie beim einfachen Zeilen-Klick ist **ab Werk aus**
+und über `[UI] ClipboardOnClick` in der `analyser.ini` steuerbar:
+`1` = Zwischenablage nicht anfassen (Default), `2` = kompaktes
+Jira-Mini-Issue (Headline + 5 Fakten), `3` = der volle Claude-Prompt bei
+jedem Klick. Es verlässt nichts den Rechner — der Text landet
+ausschließlich in der lokalen Zwischenablage.
 
 ---
 
@@ -236,8 +243,9 @@ Alle Befunde landen in einer der **5 Sonar-Kategorien**:
 | **Lesefehler** | `FileReadError` (Parser hängt / Datei zu groß) | Fehler |
 
 Pro Detektor gibt es ein **Vorher/Nachher-Code-Beispiel** im Hilfe-Panel.
-Per Klick auf einen Befund landet ein **Markdown-Block für Claude AI** in
-der Zwischenablage.
+**Copy AI prompt** (Kontextmenü) legt einen **Markdown-Block für Claude
+AI** in die Zwischenablage; die automatische Kopie beim Zeilen-Klick ist
+Opt-in über `[UI] ClipboardOnClick` (ab Werk aus).
 
 Die **23 DFM-spezifischen Regeln** (DFM-DeadEventHandler,
 DFM-HardcodedDBCredentials, DFM-CircularMasterDetail,
@@ -341,7 +349,8 @@ Beide Totals stimmen mathematisch überein.
 
 | Aktion | Wirkung |
 |--------|---------|
-| **Klick auf Zeile** | Befund als Markdown-Prompt in Zwischenablage (für Claude AI) **und** — wenn die Datei in der IDE offen ist — wird ein 3-px-roter Streifen am linken Rand der zugehörigen Zeile im Editor gezeichnet |
+| **Klick auf Zeile** | Zeigt den Befund im Hilfe-Panel; wenn die Datei in der IDE offen ist, wird ein 3-px-roter Streifen am linken Rand der zugehörigen Zeile im Editor gezeichnet. Was in die Zwischenablage geht, steuert `[UI] ClipboardOnClick`: `1` = nichts (Default), `2` = Jira-Mini-Issue, `3` = Markdown-Prompt für Claude AI |
+| **Rechtsklick → Copy AI prompt** | Kopiert den Claude-AI-Prompt (inkl. Quick-Fix-Block) — immer, unabhängig von `ClipboardOnClick` |
 | **Doppelklick** | Datei in IDE öffnen, zur Befund-Zeile springen, Zeilen-Marker setzen |
 | **Hover (Datei-Spalte)** | Tooltip mit vollem Datei-Pfad (100 ms Delay) |
 | **Klick auf Spalten-Header** | Sortierung |

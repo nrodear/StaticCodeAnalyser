@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 1986 Zeilen, 69039 Bytes
-  CPoLines_de: array[0..1985] of string = (
+  // i18n\de.po - 2016 Zeilen, 69813 Bytes
+  CPoLines_de: array[0..2015] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2000,7 +2000,37 @@ const
     'msgstr "Ge'#$00F6'ffnet: %s  Zeile: %d"',
     '',
     'msgid "WARNING: this token is stored as PLAINTEXT in analyser.ini. Save it again here to DPAPI-encrypt it for your account."',
-    'msgstr "WARNUNG: Dieses Token liegt im KLARTEXT in der analyser.ini. Hier erneut speichern, dann wird es f'#$00FC'r Ihr Konto DPAPI-verschl'#$00FC'sselt."'
+    'msgstr "WARNUNG: Dieses Token liegt im KLARTEXT in der analyser.ini. Hier erneut speichern, dann wird es f'#$00FC'r Ihr Konto DPAPI-verschl'#$00FC'sselt."',
+    '',
+    '# Neue msgids 2026-08-12: Baseline-Statuszeile, Quick-Fix-Header,',
+    '# Jira-Mini-Issue ([UI] ClipboardOnClick), Grid-Platzhalter.',
+    '',
+    'msgid "%d hidden by baseline"',
+    'msgstr "%d durch Baseline ausgeblendet"',
+    '',
+    'msgid "**Before (line %s):**"',
+    'msgstr "**Vorher (Zeile %s):**"',
+    '',
+    'msgid "**After (paste directly):**"',
+    'msgstr "**Nachher (direkt einf'#$00FC'gen):**"',
+    '',
+    'msgid "No entries for this filter."',
+    'msgstr "Keine Eintr'#$00E4'ge f'#$00FC'r diesen Filter."',
+    '',
+    'msgid "Jira mini issue copied to clipboard: %s, line %s (%s)"',
+    'msgstr "Jira-Mini-Issue in Zwischenablage: %s, Zeile %s (%s)"',
+    '',
+    'msgid "Jira export failed: "',
+    'msgstr "Jira-Export fehlgeschlagen: "',
+    '',
+    'msgid "Clipboard copy failed: "',
+    'msgstr "Kopieren in Zwischenablage fehlgeschlagen: "',
+    '',
+    'msgid "Message"',
+    'msgstr "Meldung"',
+    '',
+    'msgid "Fix hint"',
+    'msgstr "Fix-Hinweis"'
   );
 
   // i18n\en.po - 201 Zeilen, 5561 Bytes
