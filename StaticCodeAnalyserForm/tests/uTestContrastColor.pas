@@ -53,6 +53,7 @@ implementation
 uses
   Winapi.Windows,    // GetRValue/GetGValue/GetBValue - stehen NICHT in
                      // Vcl.Graphics, das liefert nur ColorToRGB
+  System.SysUtils,   // Format in den Kontrast-Fehlermeldungen
   System.UITypes, Vcl.Graphics, uAnalyserTypes, uAnalyserTheme;
 
 function Lum601(C: TColor): Integer;
