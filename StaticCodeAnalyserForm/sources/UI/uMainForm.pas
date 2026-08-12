@@ -1331,6 +1331,11 @@ begin
   // Stats spiegeln immer die GESAMTE Befund-Menge, nicht das gefilterte
   // Subset - User sieht "1 von 234 Bugs gefiltert" auf der Tile-Leiste.
   UpdateStats;
+  // Baseline-Set VOR dem Combo-Umbau frisch laden: die Reduktion zaehlt
+  // auf der baseline-bereinigten Menge (Konsistenz mit dem Grid) und
+  // braeuchte sonst den Stand des VORIGEN Laufs. ApplyFilter laedt zwar
+  // selbst nach, aber erst NACH dem Umbau.
+  RefreshBaselineSet;
   // Filter-Combos auf Eintraege mit > 0 Treffern reduzieren - muss VOR
   // ApplyFilter laufen damit die anschliessende Filter-Application schon
   // gegen die aktuelle Auswahl (ggf. zurueckgesetzt auf 'All') arbeitet.
@@ -1374,9 +1379,30 @@ procedure TForm2.RebuildFilterCombos;
 // Routine je woanders ruft, uebernimmt damit auch den Reset.
 var
   Item : TFilterComboItem;
+  i : Integer;
+  CountSrc : TList<TLeakFinding>;
+  OwnedSrc : TList<TLeakFinding>;
 begin
   if FAllFindings = nil then Exit;
   if Length(FAllSeverityItems) = 0 then Exit;
+
+  // KONSISTENZ MIT DEM GRID (Review-Blocker 2026-08-12): gezaehlt wird
+  // auf derselben baseline-bereinigten Menge, die ApplyFilter anzeigt.
+  // Vorher zaehlte die Reduktion roh - bei aktivem "nur neue Funde" bot
+  // die Combo Eintraege an, deren Grid-Sicht leer war. Die Kacheln
+  // zaehlen bewusst weiter die Gesamtmenge (Nutzerentscheid 2026-08-12);
+  // die Statuszeile benennt die ausgeblendete Anzahl.
+  OwnedSrc := nil;
+  CountSrc := FAllFindings;
+  if BaselineActive then
+  begin
+    OwnedSrc := TList<TLeakFinding>.Create;
+    for i := 0 to FAllFindings.Count - 1 do
+      if not FBaselineSet.Contains(FAllFindings[i]) then
+        OwnedSrc.Add(FAllFindings[i]);
+    CountSrc := OwnedSrc;
+  end;
+  try
 
   // ---- SeverityFilterCombo ----
   SeverityFilterCombo.Items.BeginUpdate;
@@ -1386,7 +1412,7 @@ begin
     begin
       if (Item.ModeOrd = Ord(fmAll))
          or (Item.ModeOrd = Ord(fmDetectorReview))
-         or (TFindingFilter.CountForTag(FAllFindings, Item.ModeOrd) > 0) then
+         or (TFindingFilter.CountForTag(CountSrc, Item.ModeOrd) > 0) then
         SeverityFilterCombo.Items.AddObject(Item.Display,
                                             TObject(Item.ModeOrd));
     end;
@@ -1405,7 +1431,7 @@ begin
     for Item in FAllTypeItems do
     begin
       if (Item.ModeOrd = Ord(tfAll))
-         or (TFindingFilter.CountForType(FAllFindings,
+         or (TFindingFilter.CountForType(CountSrc,
                                          TTypeFilter(Item.ModeOrd)) > 0) then
         TypeFilterCombo.Items.AddObject(Item.Display, TObject(Item.ModeOrd));
     end;
@@ -1413,6 +1439,10 @@ begin
     TypeFilterCombo.Items.EndUpdate;
   end;
   TypeFilterCombo.ItemIndex := 0;
+
+  finally
+    OwnedSrc.Free;
+  end;
 end;
 
 procedure TForm2.UpdateStats;
@@ -1487,9 +1517,11 @@ procedure TForm2.ApplyFilter;
 // ResultGridClick mappt Grid-Row -> FDisplayedFindings[row-1] (nicht
 // FAllFindings!), siehe ResultGridClick.
 var
-  Criteria : TFindingFilterCriteria;
-  f        : TLeakFinding;
-  i        : Integer;
+  Criteria       : TFindingFilterCriteria;
+  f              : TLeakFinding;
+  i              : Integer;
+  BaselineHidden : Integer;
+  HiddenSuffix   : string;
 begin
   // Klick-Seiteneffekte unterdruecken: der Grid-Umbau unten loest ueber
   // die Zeilen-Klemmung OnClick aus (s. ResultGridClick). Try/finally,
@@ -1527,6 +1559,7 @@ begin
     Criteria.SearchLow := LowerCase(Trim(SearchEdit.Text));
 
   FDisplayedFindings.Clear;
+  BaselineHidden := 0;
   for i := 0 to FAllFindings.Count - 1 do
   begin
     f := FAllFindings[i];
@@ -1534,10 +1567,19 @@ begin
     // vollstaendig - Export und 'Baseline schreiben' sehen weiter alles
     // (Plugin-Semantik; fail-open bei fehlender/kaputter Datei).
     if BaselineActive and FBaselineSet.Contains(f) then
+    begin
+      Inc(BaselineHidden);
       Continue;
+    end;
     if TFindingFilter.Matches(f, Criteria) then
       FDisplayedFindings.Add(f);
   end;
+  // Transparenz fuer den Baseline-Filter: "0 / 4 findings" ohne diesen
+  // Zusatz liest sich wie ein kaputter Filter (Fehlerbild 2026-08-12,
+  // frisch geschriebene Baseline deckte alle Funde).
+  HiddenSuffix := '';
+  if BaselineHidden > 0 then
+    HiddenSuffix := ' - ' + Format(_('%d hidden by baseline'), [BaselineHidden]);
 
   // DetectorReview-Stichprobe: pro Detector-Kind 1 zufaelligen Befund
   // behalten. Wird NACH dem normalen Filter-Loop ausgefuehrt, damit
@@ -1617,7 +1659,7 @@ begin
     begin
       ResultGrid.Cells[0, 1] := _('No matches.');
       StatusFindings(Format(_('%d / %d findings'),
-        [0, FAllFindings.Count]));
+        [0, FAllFindings.Count]) + HiddenSuffix);
     end;
     Exit;
   end;
@@ -1633,10 +1675,10 @@ begin
   if TotalMatched > FDisplayedFindings.Count then
     StatusFindings(Format(_(
       'Showing first %d of %d findings - refine the filter to see more'),
-      [FDisplayedFindings.Count, TotalMatched]))
+      [FDisplayedFindings.Count, TotalMatched]) + HiddenSuffix)
   else
     StatusFindings(Format(_('%d / %d findings'),
-      [TotalMatched, FAllFindings.Count]));
+      [TotalMatched, FAllFindings.Count]) + HiddenSuffix);
 
   finally
     FGridUpdating := False;
@@ -2636,6 +2678,10 @@ begin
     Settings.Free;
   end;
   RefreshBaselineSet;
+  // Der Toggle aendert die sichtbare Menge im Ganzen - die Combos muessen
+  // ihr folgen (Konsistenz-Vertrag mit dem Grid), inklusive Reset auf
+  // 'All' wie nach einem Scan.
+  RebuildFilterCombos;
   ApplyFilter;
 end;
 

@@ -398,12 +398,19 @@ type
       const BaseDir: string);
     procedure UpdateStats;
     procedure ApplyFilter;
+    // True wenn "nur neue Funde" wirken KANN: Haken gesetzt UND eine
+    // Baseline geladen (fail-open, siehe ApplyFilter). Die EINE Quelle
+    // fuer Grid-Filter und Combo-Reduktion - beide muessen dieselbe
+    // Menge sehen (Review-Blocker 2026-08-12).
+    function  BaselineFilterActive: Boolean;
     // Schreibt FDisplayedFindings ins Grid (6 Spalten pro Zeile). Bei
     // leerer Liste erscheint ein Platzhalter-Text in Zeile 1.
     procedure PopulateGridFromDisplayed;
-    // Statusbar-Update nach ApplyFilter: zeigt n/m findings + Filter-Text.
+    // Statusbar-Update nach ApplyFilter: zeigt n/m findings + Filter-Text;
+    // ABaselineHidden > 0 macht sichtbar, wie viele Funde der Baseline-
+    // Filter gerade ausblendet (sonst liest sich "0 / 4" wie ein Defekt).
     procedure UpdateFilterStatus(const Criteria: TFindingFilterCriteria;
-      TotalMatched: Integer = 0);
+      TotalMatched: Integer = 0; ABaselineHidden: Integer = 0);
     // Erzeugt einen vollstaendigen Markdown-Prompt fuer Claude AI: Befund-
     // Metadaten, FixHint (Vorher/Nachher) und Code-Auszug aus der Quelldatei.
     function  BuildClaudePrompt(F: TLeakFinding): string;
@@ -1748,18 +1755,36 @@ begin
   FResultGrid.Invalidate;
 end;
 
-procedure TAnalyserFrame.UpdateFilterStatus(
-  const Criteria: TFindingFilterCriteria; TotalMatched: Integer);
+function TAnalyserFrame.BaselineFilterActive: Boolean;
+// Nur aktiv wenn eingeschaltet UND eine Baseline wirklich geladen wurde.
+// Fail-open - eine leere/kaputte Baseline blendet NICHTS aus (Funde zu
+// verstecken weil die Baseline-Datei fehlt waere gefaehrlich).
+// FBaselineSet wird in RefreshBaselineSet (pro Scan/Toggle) befuellt.
 begin
+  Result := Assigned(FRepoSettings) and FRepoSettings.BaselineOnlyNew
+            and Assigned(FBaselineSet) and (not FBaselineSet.IsEmpty);
+end;
+
+procedure TAnalyserFrame.UpdateFilterStatus(
+  const Criteria: TFindingFilterCriteria; TotalMatched, ABaselineHidden: Integer);
+var
+  HiddenSuffix : string;
+begin
+  // Transparenz fuer den Baseline-Filter: "0 / 4 findings" ohne diesen
+  // Zusatz liest sich wie ein kaputter Filter (Fehlerbild 2026-08-12,
+  // frisch geschriebene Baseline deckte alle Funde).
+  HiddenSuffix := '';
+  if ABaselineHidden > 0 then
+    HiddenSuffix := ' - ' + Format(_('%d hidden by baseline'), [ABaselineHidden]);
   // Wenn TotalMatched gesetzt ist und ueber dem angezeigten Count liegt,
   // wurde gecappt (UIMaxDisplayedFindings) - macht's transparent.
   if (TotalMatched > 0) and (TotalMatched > FDisplayedFindings.Count) then
     StatusFindings(Format(_(
       'Showing first %d of %d findings - refine the filter to see more'),
-      [FDisplayedFindings.Count, TotalMatched]))
+      [FDisplayedFindings.Count, TotalMatched]) + HiddenSuffix)
   else
     StatusFindings(Format(_('%d / %d findings'),
-      [FDisplayedFindings.Count, FAllFindings.Count]));
+      [FDisplayedFindings.Count, FAllFindings.Count]) + HiddenSuffix);
   StatusMode(Format(_('Filter: %s%s'), [FFilterCombo.Text,
     IfThen(Criteria.SearchLow <> '',
            ', ' + _('Search: ') + Criteria.SearchLow, '')]));
@@ -1778,18 +1803,15 @@ var
   SortCfg        : TFindingSortConfig;
   TotalMatched   : Integer;
   BaselineActive : Boolean;
+  BaselineHidden : Integer;
 begin
   Criteria.Mode       := FFilterMode;
   Criteria.SingleKind := FFilterKind;
   Criteria.TypeFilter := FTypeFilter;
   Criteria.SearchLow  := Trim(FSearchEdit.Text).ToLower;
 
-  // Baseline "nur neue Funde": nur aktiv wenn eingeschaltet UND eine Baseline
-  // wirklich geladen wurde. Fail-open - eine leere/kaputte Baseline blendet
-  // NICHTS aus (Funde zu verstecken weil die Baseline-Datei fehlt waere
-  // gefaehrlich). FBaselineSet wird in RefreshBaselineSet (pro Scan) befuellt.
-  BaselineActive := Assigned(FRepoSettings) and FRepoSettings.BaselineOnlyNew
-                    and Assigned(FBaselineSet) and (not FBaselineSet.IsEmpty);
+  BaselineActive := BaselineFilterActive;
+  BaselineHidden := 0;
 
   SendMessage(FResultGrid.Handle, WM_SETREDRAW, 0, 0);
   try
@@ -1802,7 +1824,10 @@ begin
       // FAllFindings bleibt vollstaendig (Export + "Baseline schreiben"
       // sehen weiter alle Funde).
       if BaselineActive and FBaselineSet.Contains(FAllFindings[i]) then
+      begin
+        Inc(BaselineHidden);
         Continue;
+      end;
       if TFindingFilter.Matches(FAllFindings[i], Criteria) then
         FDisplayedFindings.Add(FAllFindings[i]);
     end;
@@ -1859,7 +1884,7 @@ begin
     FResultGrid.Invalidate;
   end;
 
-  UpdateFilterStatus(Criteria, TotalMatched);
+  UpdateFilterStatus(Criteria, TotalMatched, BaselineHidden);
 
   // Multi-File-Marker-Refresh: nach jedem Filter-Wechsel oder
   // Analyse-Lauf zeigt der Highlighter ab sofort Stripes + Hover-
@@ -2119,9 +2144,29 @@ var
   i : Integer;
   Filtered : TArray<TFilterComboItem>;
   Tmp : TList<TFilterComboItem>;
+  CountSrc : TList<TLeakFinding>;
+  OwnedSrc : TList<TLeakFinding>;
 begin
   if FAllFindings = nil then Exit;
   if Length(FAllSeverityItems) = 0 then Exit;
+
+  // KONSISTENZ MIT DEM GRID (Review-Blocker 2026-08-12): gezaehlt wird
+  // auf derselben baseline-bereinigten Menge, die ApplyFilter anzeigt.
+  // Vorher zaehlte die Reduktion roh - bei aktivem "nur neue Funde" bot
+  // die Combo Eintraege an, deren Grid-Sicht leer war. Die Kacheln
+  // zaehlen bewusst weiter die Gesamtmenge (Nutzerentscheid 2026-08-12);
+  // die Statuszeile benennt die ausgeblendete Anzahl.
+  OwnedSrc := nil;
+  CountSrc := FAllFindings;
+  if BaselineFilterActive then
+  begin
+    OwnedSrc := TList<TLeakFinding>.Create;
+    for i := 0 to FAllFindings.Count - 1 do
+      if not FBaselineSet.Contains(FAllFindings[i]) then
+        OwnedSrc.Add(FAllFindings[i]);
+    CountSrc := OwnedSrc;
+  end;
+  try
 
   // ---- Severity-Filter: zwei-Pass-Filterung ----
   Tmp := TList<TFilterComboItem>.Create;
@@ -2131,7 +2176,7 @@ begin
       if (Item.ModeOrd = -1)                    // Separator: vorlaeufig behalten
          or (Item.ModeOrd = Ord(fmAll))
          or (Item.ModeOrd = Ord(fmDetectorReview))
-         or (TFindingFilter.CountForTag(FAllFindings, Item.ModeOrd) > 0) then
+         or (TFindingFilter.CountForTag(CountSrc, Item.ModeOrd) > 0) then
         Tmp.Add(Item);
     end;
     // Pass 2: orphan separators entfernen (Separator gefolgt von Separator
@@ -2181,7 +2226,7 @@ begin
     for Item in FAllTypeItems do
     begin
       if (Item.ModeOrd = Ord(tfAll))
-         or (TFindingFilter.CountForType(FAllFindings,
+         or (TFindingFilter.CountForType(CountSrc,
                                          TTypeFilter(Item.ModeOrd)) > 0) then
         FTypeCombo.Items.AddObject(Item.Display, TObject(Item.ModeOrd));
     end;
@@ -2192,6 +2237,10 @@ begin
   // Gleicher Grund wie oben bei FFilterMode: der Typ-Filter wirkt ueber
   // den Cache, nicht ueber die Combo.
   FTypeFilter := tfAll;
+
+  finally
+    OwnedSrc.Free;
+  end;
 end;
 
 procedure TAnalyserFrame.PopulateFindings(
@@ -3376,6 +3425,10 @@ begin
   FRepoSettings.BaselineOnlyNew := ANewVal;
   try FRepoSettings.Save; except end;
   RefreshBaselineSet;
+  // Der Toggle aendert die sichtbare Menge im Ganzen - die Combos muessen
+  // ihr folgen (Konsistenz-Vertrag mit dem Grid), inklusive Reset auf
+  // 'All' wie nach einem Scan.
+  RebuildFilterCombos;
   ApplyFilter;
 end;
 
