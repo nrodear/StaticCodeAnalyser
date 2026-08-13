@@ -103,6 +103,16 @@ type
     procedure HandleThemeChanged;
     procedure InitialPopulateFromActiveEditor;
     procedure TriggerAutoScan(const AFileName: string);
+    // Liefert in AScanFile die tatsaechlich zu scannende Datei - bei
+    // einer .dfm die Partner-.pas (die DFM-Detektoren analysieren die
+    // .pas und melden gegen die .dfm). False = Extension ohne
+    // Single-File-Analysemodell bzw. .dfm ohne Partner-Unit.
+    function  ResolveScanFile(const AFileName: string;
+      var AScanFile: string): Boolean;
+    // Skip-Entscheid fuer das .pas/.dfm-Paar: uebersprungen wird nur,
+    // wenn sich seit dem letzten Scan KEINE der beiden Dateien geaendert
+    // hat (Formular-Edit aendert oft nur die .dfm, Code-Edit nur die .pas).
+    function  ShouldSkipPair(const ARequested, AScanFile: string): Boolean;
     // Cache-Helper - lazy create. Schluessel ist NormalizePath(FileName).
     function  ShouldSkipScan(const AFileName: string): Boolean;
     procedure RecordScanTime(const AFileName: string);
@@ -515,27 +525,66 @@ procedure TFindingsPropertiesDockableForm.TriggerAutoScan(
 // Findings, kein Re-Dispatch. Loest den Tab-Spam-Lag, weil oft besuchte
 // Files nicht jedes Mal projektweit re-scanned werden.
 //
-// Nur fuer .pas / .dpr / .dpk - andere Extensions (.dfm-as-Text, .inc, ...)
-// hat der Detector kein sinnvolles Single-File-Analyse-Modell.
+// .pas / .dpr / .dpk werden direkt gescannt. Eine .DFM laeuft ueber ihre
+// PARTNER-.pas: die DFM-Detektoren sind ein Adapter, der die .pas
+// analysiert (TDfmAnalysisRunner.AnalyzePasFile) und seine Funde GEGEN
+// die .dfm meldet - der Frame ist dafuer laengst vorbereitet
+// (ArePasDfmRelated in SetFindings/SetActiveFile). Der fruehere
+// Fruehausstieg fuer .dfm stammt von vor der DFM-Detektor-Familie;
+// sichtbares Fehlbild: Panel-Titel zeigte die .dfm mit 'no findings',
+// waehrend der Voll-Scan im Dock Funde fuer genau diese Datei listete
+// (Nutzer-Fund 2026-08-13). Andere Extensions (.inc, ...) haben
+// weiterhin kein Single-File-Analysemodell.
 var
-  Ext: string;
+  ScanFile : string;
 begin
   if AFileName = '' then Exit;
-  Ext := LowerCase(ExtractFileExt(AFileName));
-  if not ((Ext = '.pas') or (Ext = '.dpr') or (Ext = '.dpk')) then Exit;
+  ScanFile := AFileName;
+  if not ResolveScanFile(AFileName, ScanFile) then Exit;
   if not FileExists(AFileName) then Exit;
-
-  if ShouldSkipScan(AFileName) then Exit;
+  if ShouldSkipPair(AFileName, ScanFile) then Exit;
 
   try
     // Welle 1b: Scan-Zeit nur bei ECHTEM Lauf stempeln - ein busy-Skip
     // (Engine-Lock belegt) darf den Cache nicht fuellen, sonst bleibt die
     // Datei bis zum naechsten Edit unanalysiert.
-    if RunSilentAnalysisForFile(AFileName, {ACenterOnFirstFinding=}False) then
-      RecordScanTime(AFileName);
+    if RunSilentAnalysisForFile(ScanFile, {ACenterOnFirstFinding=}False) then
+    begin
+      RecordScanTime(ScanFile);
+      if not SameText(ScanFile, AFileName) then
+        RecordScanTime(AFileName);
+    end;
   except
     // Detector-Crash darf den Tab-Wechsel-Hook nicht reissen.
   end;
+end;
+
+function TFindingsPropertiesDockableForm.ResolveScanFile(
+  const AFileName: string; var AScanFile: string): Boolean;
+// Vertrag an der Deklaration.
+var
+  Ext : string;
+begin
+  AScanFile := AFileName;
+  Ext := LowerCase(ExtractFileExt(AFileName));
+  if Ext = '.dfm' then
+  begin
+    AScanFile := ChangeFileExt(AFileName, '.pas');
+    // .dfm ohne Partner-Unit (freistehende Ressource): kein Analysemodell.
+    Result := FileExists(AScanFile);
+    Exit;
+  end;
+  Result := (Ext = '.pas') or (Ext = '.dpr') or (Ext = '.dpk');
+end;
+
+function TFindingsPropertiesDockableForm.ShouldSkipPair(
+  const ARequested, AScanFile: string): Boolean;
+// Vertrag an der Deklaration.
+begin
+  if SameText(ARequested, AScanFile) then
+    Result := ShouldSkipScan(ARequested)
+  else
+    Result := ShouldSkipScan(ARequested) and ShouldSkipScan(AScanFile);
 end;
 
 
