@@ -1,9 +1,9 @@
-# Release 0.9.15 — Eine stille Zwischenablage, ehrliche Filter und ein Nur-Text-Hinweis
+# Release 0.9.16 — Eine stille Zwischenablage, ehrliche Filter und ein Nur-Text-Hinweis
 
 🇬🇧 [English version](RELEASE_NOTES.md)
 
-Vollstaendige Release-Notes: [docs/releases/v0.9.15_de.md](docs/releases/v0.9.15_de.md)
-([english](docs/releases/v0.9.15.md)).
+Vollstaendige Release-Notes: [docs/releases/v0.9.16_de.md](docs/releases/v0.9.16_de.md)
+([english](docs/releases/v0.9.16.md)).
 
 - **Die Zwischenablage gehoert wieder dir.** Das Auswaehlen einer
   Befundzeile ueberschreibt sie nicht mehr von selbst.

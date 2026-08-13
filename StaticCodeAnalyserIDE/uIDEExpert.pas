@@ -47,7 +47,7 @@ const
   PLUGIN_TITLE   = 'Static Code Analysis';
   PLUGIN_DESC    = 'Static Code Analysis Tool for Delphi - findings, ' +
                    'metrics, leak detection, Sonar export.';
-  PLUGIN_VERSION = 'v0.9.15';
+  PLUGIN_VERSION = 'v0.9.16';
   PLUGIN_LICENSE = 'Freeware / Open Source';
 
   // Resource-Namen aus branding\sca_branding.rc (BITMAP-Type).

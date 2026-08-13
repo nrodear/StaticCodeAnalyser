@@ -6,7 +6,12 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [v0.9.15] - 2026-08-13 - A quiet clipboard, honest filters, and a text-only hint
+## [v0.9.16] - 2026-08-13 - A quiet clipboard, honest filters, and a text-only hint
+
+> Note: v0.9.15 was published for a few hours on the same day and then
+> withdrawn — its source archive still carried the platform mismatch
+> fixed below, so building the plugin from it failed by-the-book.
+> v0.9.16 is the same release with that fix included.
 
 ### Removed
 
@@ -143,6 +148,15 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Building the plugin from a fresh checkout failed with `F2613`.**
+  `SCA.Engine` was the only project of the BPL chain committed with a
+  Win64 platform default while `SCA.SharedUI` and the plugin are Win32:
+  following the build guide, the engine built Win64, no fresh Win32
+  `.dcp` ever appeared, and the plugin linked against a stale one from
+  the Studio `Dcp` folder. The committed default is Win32 now, matching
+  the package chain (the EXE and the tests compile the engine from
+  source and are unaffected), and `HowTo_Build` warns that every
+  project keeps its *own* active platform.
 - **The copied AI prompt could show stale code.** The snippet cache
   behind the prompt was keyed by path alone and lived for the whole
   process: click a finding, fix the file, rescan, click again — the

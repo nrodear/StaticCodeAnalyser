@@ -162,7 +162,7 @@ plugin must be 32-bit.
 > folder). Before step 5, check that **all three** packages —
 > `SCA.Engine`, `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12` — show
 > **Windows 32-bit** in bold under their Target Platforms. Since
-> v0.9.15 the committed defaults are aligned to Win32 for all three,
+> v0.9.16 the committed defaults are aligned to Win32 for all three,
 > but the IDE remembers your last selection per project.
 
 You now have three `.bpl` files in

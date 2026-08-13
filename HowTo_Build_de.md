@@ -166,7 +166,7 @@ Das Plugin muss also 32-bit sein.
 > Repos, im Studio-`Dcp`-Ordner). Vor Schritt 5 prüfen: **alle drei**
 > Packages — `SCA.Engine`, `SCA.SharedUI`,
 > `StaticCodeAnalyser.IDE.d12` — zeigen unter Target Platforms
-> **Windows 32-bit** fett. Seit v0.9.15 stehen die eingecheckten
+> **Windows 32-bit** fett. Seit v0.9.16 stehen die eingecheckten
 > Vorgaben aller drei auf Win32, aber die IDE merkt sich die letzte
 > Auswahl pro Projekt.
 

@@ -1,9 +1,9 @@
-# Release 0.9.15 — A quiet clipboard, honest filters, and a text-only hint
+# Release 0.9.16 — A quiet clipboard, honest filters, and a text-only hint
 
 🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
 
-Full release notes: [docs/releases/v0.9.15.md](docs/releases/v0.9.15.md)
-([deutsch](docs/releases/v0.9.15_de.md)).
+Full release notes: [docs/releases/v0.9.16.md](docs/releases/v0.9.16.md)
+([deutsch](docs/releases/v0.9.16_de.md)).
 
 - **The clipboard belongs to you again.** Selecting a finding row no
   longer overwrites your clipboard by default. `[UI] ClipboardOnClick`
