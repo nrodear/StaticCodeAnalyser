@@ -238,7 +238,8 @@ uses
   uTestUnicodeToAnsiCast in 'uTestUnicodeToAnsiCast.pas',
   uTestUseAfterFree in 'uTestUseAfterFree.pas',
   uTestClaudePrompt in 'uTestClaudePrompt.pas',
-  uTestFindingCopyText in 'uTestFindingCopyText.pas';
+  uTestFindingCopyText in 'uTestFindingCopyText.pas',
+  uTestHintTextLayout in 'uTestHintTextLayout.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

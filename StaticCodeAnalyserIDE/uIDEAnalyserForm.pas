@@ -3867,6 +3867,9 @@ begin
     Entries[Count].Title    := BuildFindingTitle(F, DescText);
     Entries[Count].Desc     := DescText;
     Entries[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
+    // Kurzer Regelname fuer die Kurzform des Nur-Text-Hints (der Titel
+    // passt laut Messung 0.3 mehrheitlich nicht in die Restbreite).
+    Entries[Count].RuleName := KindName(F.Kind);
     Entries[Count].Color    := EditorAccent(DispSev,
                                  GCachedEditorScheme, GCachedEditorBgDark);
     Entries[Count].Fix      := FH.After;
@@ -4441,6 +4444,8 @@ begin
     Result[Count].Title    := BuildFindingTitle(F, DescText);
     Result[Count].Desc     := DescText;
     Result[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
+    // Synchron zur Frame-Schleife: Kurzform-Quelle des Nur-Text-Hints.
+    Result[Count].RuleName := KindName(F.Kind);
     Result[Count].Color    := EditorAccent(DispSev,
                                 GCachedEditorScheme, GCachedEditorBgDark);
     Result[Count].Fix      := FH.After;
@@ -5105,6 +5110,9 @@ begin
     try
       try S.Load; except end;
       RefreshEditorColorSchemeCache(S.EditorColorScheme);
+      // [UI] OverlayTextOnly in den Modulcache des Highlighters - gleicher
+      // Grund wie beim Scheme-Cache: kein INI-Zugriff im Zeichenpfad.
+      RefreshTextOnlyHintCache;
     finally
       S.Free;
     end;

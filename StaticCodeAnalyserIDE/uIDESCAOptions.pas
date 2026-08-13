@@ -109,6 +109,11 @@ type
     // Sammeltrigger fuer den uIDEColors.StyleAsHintLabel-Helper - listet
     // alle Info-Labels einmal nach BuildControls auf.
     procedure ApplyHintStyleToAllInfoLabels;
+    // Display-Sektion (Overlay-Combo inkl. Nur-Text-Variante, Hover,
+    // Editor-Schema) aus Load/Save gezogen - beide Routinen lagen sonst
+    // ueber den Komplexitaets-/Laengen-Schwellen des Self-Scans.
+    procedure LoadDisplaySection(ASettings: TRepoSettings);
+    procedure SaveDisplaySection(ASettings: TRepoSettings);
   public
     constructor Create(AOwner: TComponent); override;
     // Werte aus den Settings in die Controls schreiben (FrameCreated).
@@ -141,10 +146,11 @@ implementation
 {$R *.dfm}
 
 uses
-  uIDETheme,         // TIDETheme.Apply + Subscribe
-  uIDEToolbar,       // ApplySegoeUI - Font-Pin (High-DPI-Fix, wie Dock/uMainForm)
-  uIDEColors,        // IDE_FG_DIM - semantische Theme-Farbe (wie uIDESonarOptions)
-  uAnalyserTheme;    // TEditorColorScheme + Parse/ToStr
+  uIDETheme,           // TIDETheme.Apply + Subscribe
+  uIDEToolbar,         // ApplySegoeUI - Font-Pin (High-DPI-Fix, wie Dock/uMainForm)
+  uIDEColors,          // IDE_FG_DIM - semantische Theme-Farbe (wie uIDESonarOptions)
+  uIDELineHighlighter, // RefreshTextOnlyHintCache + Repaint nach dem Speichern
+  uAnalyserTheme;      // TEditorColorScheme + Parse/ToStr
 
 const
   // Sentinel-Text fuer "kein Profile-Override". Wird im Combo angezeigt
@@ -475,6 +481,14 @@ begin
   cboEditorColorScheme.Items.Add(_('Default (bright colors)'));   // ecsDefault
   cboEditorColorScheme.Items.Add(_('Gray (neutral)'));            // ecsGray
   cboEditorColorScheme.Items.Add(_('Subtle (muted colors)'));     // ecsSubtle
+  // Vierter Eintrag = Nur-Text-Variante ([UI] OverlayTextOnly=1,
+  // Nutzerentscheid 2026-08-13): bright/gray/subtle behalten das
+  // Fenster-Overlay mit voller Hint-Ansicht (Stufe 2) wie bisher,
+  // 'Text' zeichnet nur die eine Zeile (Stufe 1) transparent auf die
+  // Canvas. Das Farbschema selbst bleibt bei 'Text' UNANGETASTET -
+  // die Streifen behalten ihre Farben, der Zurueckwechsel findet das
+  // alte Schema wieder.
+  cboEditorColorScheme.Items.Add(_('Text (one-line hint, no window)'));  // OverlayTextOnly
 
   lblEditorColorSchemeInfo          := TLabel.Create(Self);
   lblEditorColorSchemeInfo.Parent   := grpDisplay;
@@ -483,12 +497,16 @@ begin
   lblEditorColorSchemeInfo.Top      := cboEditorColorScheme.Top +
                                        cboEditorColorScheme.Height + 4;
   lblEditorColorSchemeInfo.Width    := GROUP_W - 2 * INNER_LEFT;
-  lblEditorColorSchemeInfo.Height   := 50;   // 30 + 20
+  lblEditorColorSchemeInfo.Height   := 76;   // laengerer Infotext (Text-Variante)
   lblEditorColorSchemeInfo.WordWrap := True;
   lblEditorColorSchemeInfo.Caption  :=
     _('Affects only the editor marker stripe, mini-infobar and hover ' +
       'overlay titlebar. Properties Panel + main grid remain at the ' +
-      'default severity colors. Light/Dark variants are automatic.');
+      'default severity colors. Light/Dark variants are automatic. ' +
+      '"Text" replaces the overlay window with a transparent one-line ' +
+      'hint (badge + rule name, no description/fix block - see the ' +
+      'findings panel); dismiss a finding by clicking its text. ' +
+      'Takes effect on save.');
 
   // GroupBox-Hoehe an die echten Children anpassen.
   // +112 statt +12 = User-Wunsch 100 px mehr Unter-Padding (rein optisch).
@@ -777,19 +795,7 @@ begin
   if Assigned(chkIncludeTests) then chkIncludeTests.Checked := ASettings.IncludeTests;
   if Assigned(chkAutoDiscover) then chkAutoDiscover.Checked := ASettings.AutoDiscoverClasses;
 
-  // Display: 'sameline' -> Index 0, 'below' -> Index 1, alles andere -> 0
-  if Assigned(cboOverlayPos) then
-  begin
-    if SameText(ASettings.OverlayPosition, 'below') then
-      cboOverlayPos.ItemIndex := 1
-    else
-      cboOverlayPos.ItemIndex := 0;
-  end;
-  if Assigned(chkOverlayShowOnHover) then
-    chkOverlayShowOnHover.Checked := ASettings.OverlayShowOnHover;
-  if Assigned(cboEditorColorScheme) then
-    cboEditorColorScheme.ItemIndex :=
-      ComboIndexFromScheme(ParseEditorColorScheme(ASettings.EditorColorScheme));
+  LoadDisplaySection(ASettings);
 
   // Sprache: unbekannter/leerer INI-Wert -> 'en' (identisch zur Laufzeit-
   // Semantik von uLocalization.SetLanguage, das genau dann auf Identity =
@@ -803,6 +809,81 @@ begin
     chkBaselineOnlyNew.Checked := ASettings.BaselineOnlyNew;
   if Assigned(edtBaselineFile) then
     edtBaselineFile.Text := ASettings.BaselineFile;
+end;
+
+procedure TSCAOptionsFrame.LoadDisplaySection(ASettings: TRepoSettings);
+// Display: die Position mappt nur sich selbst ('below' -> 1, sonst 0);
+// die DARSTELLUNG haengt an der Schema-Combo - OverlayTextOnly gewinnt
+// dort (Index 3 = 'Text'), sonst der Index des Farbschemas. Das Schema
+// bleibt in der INI erhalten, auch wenn 'Text' aktiv ist - beim
+// Zurueckwechseln gilt wieder das alte Schema (Nutzerentscheid
+// 2026-08-13: bright/gray/subtle = Fenster mit Stufe 2 wie bisher,
+// 'Text' = nur Stufe 1).
+const
+  SCHEME_IDX_TEXTONLY = 3;
+begin
+  if Assigned(cboOverlayPos) then
+  begin
+    if SameText(ASettings.OverlayPosition, 'below') then
+      cboOverlayPos.ItemIndex := 1
+    else
+      cboOverlayPos.ItemIndex := 0;
+  end;
+  if Assigned(chkOverlayShowOnHover) then
+    chkOverlayShowOnHover.Checked := ASettings.OverlayShowOnHover;
+  if Assigned(cboEditorColorScheme) then
+  begin
+    if ASettings.OverlayTextOnly then
+      cboEditorColorScheme.ItemIndex := SCHEME_IDX_TEXTONLY
+    else
+      cboEditorColorScheme.ItemIndex :=
+        ComboIndexFromScheme(ParseEditorColorScheme(ASettings.EditorColorScheme));
+  end;
+end;
+
+procedure TSCAOptionsFrame.SaveDisplaySection(ASettings: TRepoSettings);
+// Display: Position wie gehabt; Schema-Combo traegt die Darstellung -
+// Index 3 = 'Text' (OverlayTextOnly=1, Farbschema bleibt UNANGETASTET,
+// damit Streifen ihre Farben behalten und der Zurueckwechsel das alte
+// Schema wiederfindet), Index 0..2 = Fenster-Overlay + Farbschema.
+const
+  SCHEME_IDX_TEXTONLY = 3;
+begin
+  if Assigned(cboOverlayPos) then
+  begin
+    if cboOverlayPos.ItemIndex = 1 then
+      ASettings.OverlayPosition := 'below'
+    else
+      ASettings.OverlayPosition := 'sameline';
+  end;
+  if Assigned(chkOverlayShowOnHover) then
+    ASettings.OverlayShowOnHover := chkOverlayShowOnHover.Checked;
+  if Assigned(cboEditorColorScheme) then
+  begin
+    ASettings.OverlayTextOnly :=
+      (cboEditorColorScheme.ItemIndex = SCHEME_IDX_TEXTONLY);
+    // Modulcache per WERT (SaveToSettings laeuft VOR dem INI-Write);
+    // der Hook im Highlighter versteckt beim Umschalten ein sichtbares
+    // Overlay-Fenster und setzt die Klick-Caches zurueck (Review
+    // 2026-08-13). Ohne Moduswechsel ist der Aufruf ein No-op.
+    RefreshTextOnlyHintCache(ASettings.OverlayTextOnly);
+    if not ASettings.OverlayTextOnly then
+    begin
+      ASettings.EditorColorScheme := EditorColorSchemeToStr(
+        SchemeFromComboIndex(cboEditorColorScheme.ItemIndex));
+      // Cache sofort aktualisieren - sonst wirkt die Schema-Auswahl erst
+      // beim naechsten BPL-Load. RefreshEditorColorSchemeCache ist
+      // komplett defensiv.
+      RefreshEditorColorSchemeCache(ASettings.EditorColorScheme);
+    end;
+    // Bestehende Marken sofort umfaerben und neu zeichnen. Vorher wirkte
+    // ein Schema-Wechsel erst beim NAECHSTEN Scan - fuer den Nutzer sah
+    // das aus wie "bright/gray/subtle tun nichts" (Befund 2026-08-13).
+    // RecolorAllMarks zieht die Farben aus den frischen Caches und
+    // invalidiert selbst; es deckt damit auch den Moduswechsel ab.
+    if Assigned(GHighlighter) then
+      GHighlighter.RecolorAllMarks;
+  end;
 end;
 
 procedure TSCAOptionsFrame.SaveToSettings(ASettings: TRepoSettings);
@@ -832,25 +913,7 @@ begin
   if Assigned(chkIncludeTests) then ASettings.IncludeTests        := chkIncludeTests.Checked;
   if Assigned(chkAutoDiscover) then ASettings.AutoDiscoverClasses := chkAutoDiscover.Checked;
 
-  // Display: Index 1 = below, alles andere = sameline
-  if Assigned(cboOverlayPos) then
-  begin
-    if cboOverlayPos.ItemIndex = 1 then
-      ASettings.OverlayPosition := 'below'
-    else
-      ASettings.OverlayPosition := 'sameline';
-  end;
-  if Assigned(chkOverlayShowOnHover) then
-    ASettings.OverlayShowOnHover := chkOverlayShowOnHover.Checked;
-  if Assigned(cboEditorColorScheme) then
-  begin
-    ASettings.EditorColorScheme := EditorColorSchemeToStr(
-      SchemeFromComboIndex(cboEditorColorScheme.ItemIndex));
-    // Cache sofort aktualisieren - sonst wirkt die Schema-Auswahl erst
-    // beim naechsten BPL-Load. RefreshEditorColorSchemeCache ist
-    // komplett defensiv.
-    RefreshEditorColorSchemeCache(ASettings.EditorColorScheme);
-  end;
+  SaveDisplaySection(ASettings);
 
   // Sprache: Combo-Text ist bereits ein normalisiertes Kuerzel (kommt aus
   // AvailableLanguages). SetLanguage direkt hinterher, damit alles was ab

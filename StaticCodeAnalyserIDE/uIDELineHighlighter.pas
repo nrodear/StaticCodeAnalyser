@@ -89,6 +89,11 @@ type
     Title    : string;
     Desc     : string;
     Badge    : string;
+    // Kurzer Regelname (KindName) fuer die Kurzform des Nur-Text-Hints
+    // ('Badge <Em-Dash> Regelname'). Der TITEL passt laut Messung 0.3
+    // (2026-08-12) mehrheitlich nicht in die Restbreite rechts vom Code
+    // - er bleibt dem Findings-Panel ueberlassen.
+    RuleName : string;
     Color    : TColor;          // Stripe-Farbe (staerkste Severity)
     Fix      : string;          // After-Code (leer im Multi-Mode)
     Severity : TFindingSeverity;// fuer Stripe-Ranking
@@ -129,6 +134,8 @@ type
     Title    : string;
     Desc     : string;
     Badge    : string;
+    // Kurzer Regelname (KindName), s. TFindingMark.RuleName.
+    RuleName : string;
     Color    : TColor;
     Fix      : string;
     Severity : TFindingSeverity;
@@ -160,6 +167,13 @@ type
     // Title-Bar direkt rechts neben dem Code zu platzieren. Fuer Zeilen
     // ohne Eintrag faellt EditorMouseMove auf CodeRect.Left + Fallback zurueck.
     FRenderedTextEnds : TDictionary<Integer, Integer>;
+    // Pro Ankerzeile das Rechteck des zuletzt gezeichneten Nur-Text-Hints
+    // (Editor-Client-Koordinaten) - der Klick-Treffer fuer das Verwerfen
+    // (Konzept 2026-08-09, Entscheidung 3). Pflege exakt wie
+    // FRenderedTextEnds einschliesslich der Stale-Bereinigung in EndPaint,
+    // sonst sammeln sich Rechtecke ausgescrollter Zeilen an und ein Klick
+    // an der alten Bildschirmposition traefe einen Geist.
+    FRenderedHintRects : TDictionary<Integer, TRect>;
     // Hide-on-mouse-leave Timer: alle 200ms pruefen ob Cursor noch ueber
     // EINER der markierten Zeilen ist — sonst Overlay verbergen. Notwendig
     // weil EditorMouseMove nicht mehr feuert sobald die Maus den Editor
@@ -220,6 +234,15 @@ type
     procedure PaintMarkDecorations(
       const Context: INTACodeEditorPaintContext; const ACodeRect: TRect;
       ALine, ATextEndX: Integer);
+    // Weiche der Ankerzeilen-Annotation: Nur-Text-Hint (transparent,
+    // Rechteck-Cache fuer den Klick-Treffer) oder Mini-Infobar - aus
+    // PaintMarkDecorations gezogen (Komplexitaets-Schwelle).
+    procedure PaintAnchorBadge(
+      const Context: INTACodeEditorPaintContext; const AMark: TFindingMark;
+      AStripeCol: TColor; const ACodeRect: TRect; ALine, ATextEndX: Integer);
+    // Klick-Treffer gegen die gezeichneten Text-Hints: Treffer verwirft
+    // den Fund (RemoveMark loest Bereiche auf und invalidiert selbst).
+    procedure DismissTextHintAt(X, Y: Integer);
     procedure PaintLine(const Rect: TRect; const Stage: TPaintLineStage;
       const BeforeEvent: Boolean; var AllowDefaultPainting: Boolean;
       const Context: INTACodeEditorPaintContext);
@@ -394,6 +417,13 @@ type
     /// </remarks>
     procedure RecolorAllMarks;
 
+    // Setzt den Zustand des Editor-Event-Objekts zurueck (Hit-Test-
+    // Caches, Hover). Fuer den Moduswechsel der Nur-Text-Variante: die
+    // Caches des alten Modus duerfen den neuen nicht ueberleben
+    // (Klick-Geister). Duennes Public-Pendant zum internen ResetState,
+    // Muster HandleFileClosing.
+    procedure ResetEditorEventState;
+
     constructor Create;
     destructor Destroy; override;
 
@@ -450,6 +480,18 @@ var
 procedure RegisterLineHighlighter;
 procedure UnregisterLineHighlighter;
 
+// Modulcache fuer [UI] OverlayTextOnly. PaintLine ist der heisseste Pfad
+// des Plugins - ein INI-Zugriff pro Repaint verbietet sich (Muster
+// GCachedEditorScheme in uAnalyserTheme).
+//   * Ohne Parameter: frisch aus der analyser.ini lesen (Plugin-Start,
+//     WarmUpCaches-Element).
+//   * Mit Wert: direkt setzen - fuer die Options-Seite, deren
+//     SaveToSettings VOR dem Schreiben der INI laeuft (ein INI-Read dort
+//     laese den ALTEN Wert; gleiche Falle, gleiches Muster wie
+//     RefreshEditorColorSchemeCache mit Wert-Uebergabe).
+procedure RefreshTextOnlyHintCache; overload;
+procedure RefreshTextOnlyHintCache(AValue: Boolean); overload;
+
 implementation
 
 // noinspection-file BeginEndRequired, CanBeClassMethod, CanBeUnitPrivate, ClassPerFile, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DeepNesting, EmptyExcept, EmptyMethod, GodClass, GroupedDeclaration, LargeClass, LongMethod, LongParamList, MagicNumber, MultipleExit, NestedRoutine, NestedTry, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter, UnusedPublicMember
@@ -460,7 +502,8 @@ implementation
 
 uses
   uAnalyserPalette,     // ACCENT_ERROR als zentrale Stripe-Default-Farbe
-  uAnalyserTheme,       // IsLightColor, EditorAccent, Farb-Cache
+  uAnalyserTheme,       // IsLightColor, EnsureHintContrast, Farb-Cache
+  uHintTextLayout,      // Kurzform + Kuerzung des Nur-Text-Hints (testbar)
   uIDETheme,            // Subscribe - Marken beim Theme-Wechsel neu faerben
   uPathNormalize,       // SPOT fuer Pfad-Normalisierung (Cache-Keys)
   uRepoSettings;        // OverlayPosition aus [UI]
@@ -527,6 +570,42 @@ begin
     ACanvas.FillRect(SR);
 end;
 
+type
+  // Schnappschuss der Canvas-Attribute, die die Annotations-Zeichner
+  // anfassen. Der Editor malt nach uns weiter - Save/Restore ist Pflicht
+  // und lag als Kopie in DrawMiniInfoBar UND DrawTextHint; eine Kopie
+  // dieser Liste kann still unvollstaendig werden (neues Attribut nur an
+  // einer Stelle gesichert), deshalb EIN Record und zwei Helfer.
+  TCanvasTextState = record
+    BrushColor : TColor;
+    BrushStyle : TBrushStyle;
+    FontColor  : TColor;
+    FontName   : string;
+    FontSize   : Integer;
+    FontStyle  : TFontStyles;
+  end;
+
+function SaveCanvasTextState(ACanvas: TCanvas): TCanvasTextState;
+begin
+  Result.BrushColor := ACanvas.Brush.Color;
+  Result.BrushStyle := ACanvas.Brush.Style;
+  Result.FontColor  := ACanvas.Font.Color;
+  Result.FontName   := ACanvas.Font.Name;
+  Result.FontSize   := ACanvas.Font.Size;
+  Result.FontStyle  := ACanvas.Font.Style;
+end;
+
+procedure RestoreCanvasTextState(ACanvas: TCanvas;
+  const AState: TCanvasTextState);
+begin
+  ACanvas.Brush.Color := AState.BrushColor;
+  ACanvas.Brush.Style := AState.BrushStyle;
+  ACanvas.Font.Color  := AState.FontColor;
+  ACanvas.Font.Name   := AState.FontName;
+  ACanvas.Font.Size   := AState.FontSize;
+  ACanvas.Font.Style  := AState.FontStyle;
+end;
+
 procedure DrawMiniInfoBar(ACanvas: TCanvas; const AMark: TFindingMark;
   ABgColor: TColor; const ACodeRect: TRect; ATextEndX: Integer);
 // Permanente Mini-Inline-Badge rechts vom Code: "<- Type . Severity"
@@ -547,12 +626,7 @@ var
   BX, BY : Integer;
   BW, BH : Integer;
   R      : TRect;
-  OldBrushColor : TColor;
-  OldBrushStyle : TBrushStyle;
-  OldFontColor  : TColor;
-  OldFontName   : string;
-  OldFontSize   : Integer;
-  OldFontStyle  : TFontStyles;
+  Saved  : TCanvasTextState;
 begin
   // Type-Emoji + Badge: '🐞 Bug · Error'. Wenn TypeText unbekannt
   // bleibt der Icon-Prefix leer, dann nur Badge-Text.
@@ -567,12 +641,7 @@ begin
 
   // Canvas-State sichern (Editor zeichnet danach noch Text - wir
   // duerfen die Font-/Brush-Einstellungen nicht permanent veraendern).
-  OldBrushColor := ACanvas.Brush.Color;
-  OldBrushStyle := ACanvas.Brush.Style;
-  OldFontColor  := ACanvas.Font.Color;
-  OldFontName   := ACanvas.Font.Name;
-  OldFontSize   := ACanvas.Font.Size;
-  OldFontStyle  := ACanvas.Font.Style;
+  Saved := SaveCanvasTextState(ACanvas);
   try
     ACanvas.Font.Name  := 'Segoe UI';
     ACanvas.Font.Size  := 8;
@@ -608,12 +677,89 @@ begin
     ACanvas.Brush.Style := bsClear;   // transparent fuer Text
     ACanvas.TextOut(BX + PAD_H, BY + PAD_V, Text);
   finally
-    ACanvas.Brush.Color := OldBrushColor;
-    ACanvas.Brush.Style := OldBrushStyle;
-    ACanvas.Font.Color  := OldFontColor;
-    ACanvas.Font.Name   := OldFontName;
-    ACanvas.Font.Size   := OldFontSize;
-    ACanvas.Font.Style  := OldFontStyle;
+    RestoreCanvasTextState(ACanvas, Saved);
+  end;
+end;
+
+function DrawTextHint(ACanvas: TCanvas; const AMark: TFindingMark;
+  AAccent: TColor; const ACodeRect: TRect; ATextEndX: Integer;
+  out ADrawnRect: TRect): Boolean;
+// Nur-Text-Variante der Mini-Infobar (Konzept AnnotationHint_NurText
+// 2026-08-09, Weg B): EINE Zeile Text rechts vom Code - und KEIN
+// FillRect. Genau das macht den Hint echt transparent: der Editor-
+// Hintergrund samt Zeilenhervorhebung und Auswahl bleibt hinter dem
+// Text sichtbar (das Fenster-Overlay kann das konstruktionsbedingt
+// nicht, s. Konzept par.1.2).
+//
+// Gezeichnet wird die KURZFORM 'Badge <Em-Dash> Regelname' - laut
+// Messung 0.3 (2026-08-12, Median 96 Zeichen) passt der Titel
+// mehrheitlich nicht in die Restbreite; er bleibt dem Findings-Panel
+// ueberlassen. Farbe = Severity-Akzent mit Mindest-Luminanzabstand zum
+// Editor-Hintergrund (EnsureHintContrast) - ohne Balken ist die Farbe
+// das einzige Signal des Texts.
+//
+// True + Rechteck, wenn gezeichnet wurde: das Rechteck ist der
+// Klick-Treffer fuer das Verwerfen (Ersatz des Close-Glyphs,
+// Entscheidung 3). Bei zu wenig Platz (MIN_HINT_W, Muster MIN_BADGE_W)
+// wird gar nicht gezeichnet - nie ein abgeschnittener Rest.
+const
+  GAP_AFTER_CODE = 8;
+  MIN_HINT_W     = 60;
+var
+  Text  : string;
+  Icon  : string;
+  Sz    : TSize;
+  BX,BY : Integer;
+  Saved : TCanvasTextState;
+begin
+  Result     := False;
+  ADrawnRect := TRect.Empty;
+
+  Icon := BadgeIcon(AMark.Badge);
+  if Icon <> '' then
+    Icon := Icon + ' ';
+  Text := ComposeTextHint(Icon + AMark.Badge, AMark.RuleName);
+  if Text = '' then Exit;
+
+  BX := ATextEndX + GAP_AFTER_CODE;
+  if BX + MIN_HINT_W > ACodeRect.Right then Exit;
+
+  // Canvas-State sichern (Editor zeichnet danach noch Text - wir
+  // duerfen Font-/Brush-Einstellungen nicht permanent veraendern).
+  Saved := SaveCanvasTextState(ACanvas);
+  try
+    // Dieselbe Schrift wie die Mini-Infobar - die Variante soll die
+    // Stelle wechseln, nicht die Typografie.
+    ACanvas.Font.Name  := 'Segoe UI';
+    ACanvas.Font.Size  := 8;
+    ACanvas.Font.Style := [fsBold];
+
+    // Kuerzung ueber den testbaren Helfer. Die anonyme Messfunktion
+    // allokiert EINE Closure je gezeichnetem Hint und Repaint - bewusst
+    // in Kauf genommen: das ist eine Handvoll Allokationen pro Repaint
+    // (nur Ankerzeilen), in derselben Groessenordnung wie die String-
+    // Konkatenationen dieses Pfads; die Heap-Storm-Lehre betraf eine
+    // Closure JE ZELLE eines Grids.
+    Text := ShortenToWidth(Text, ACodeRect.Right - BX,
+      function(S: string): Integer
+      begin
+        Result := ACanvas.TextWidth(S);
+      end);
+    if Text = '' then Exit;
+
+    Sz := ACanvas.TextExtent(Text);
+    BY := ACodeRect.Top + (ACodeRect.Bottom - ACodeRect.Top - Sz.cy) div 2;
+    if BY < ACodeRect.Top then BY := ACodeRect.Top;
+
+    // KEIN FillRect - der Kern der Variante.
+    ACanvas.Brush.Style := bsClear;
+    ACanvas.Font.Color  := EnsureHintContrast(AAccent, GCachedEditorBgDark);
+    ACanvas.TextOut(BX, BY, Text);
+
+    ADrawnRect := Rect(BX, BY, BX + Sz.cx, BY + Sz.cy);
+    Result := True;
+  finally
+    RestoreCanvasTextState(ACanvas, Saved);
   end;
 end;
 
@@ -621,6 +767,37 @@ function TFindingEditorEvents.IsShowOnHoverEnabled: Boolean;
 begin
   Result := TRepoSettings.QuickReadBool('UI', 'OverlayShowOnHover',
                                         DEF_OVERLAY_SHOW_ON_HOVER);
+end;
+
+var
+  // [UI] OverlayTextOnly als Modulcache - Vertrag an der Deklaration von
+  // RefreshTextOnlyHintCache (interface).
+  GTextOnlyHint : Boolean = False;
+
+procedure RefreshTextOnlyHintCache;
+begin
+  GTextOnlyHint := TRepoSettings.QuickReadBool('UI', 'OverlayTextOnly',
+                                               DEF_OVERLAY_TEXT_ONLY);
+end;
+
+// noinspection BooleanParam
+// Der Wert IST die Information (der neue Modus) - er kommt woertlich aus
+// TRepoSettings.OverlayTextOnly; ein Zwei-Wert-Enum waere Zeremonie.
+procedure RefreshTextOnlyHintCache(AValue: Boolean);
+begin
+  // MODUSWECHSEL-HOOK (Review 2026-08-13): beim Umschalten darf weder ein
+  // sichtbares Fenster-Overlay stehen bleiben (Fenster->Text: niemand
+  // versteckte es mehr, der Textmodus kennt kein HideOverlay) noch duerfen
+  // die Klick-Rechtecke des Textmodus den Fenster-Modus ueberleben
+  // (Text->Fenster->Text: stale Rechtecke waeren sofort wieder scharfe
+  // Klick-Ziele). Der Gleichheits-Guard haelt Options-Saves OHNE
+  // Moduswechsel frei von Seiteneffekten.
+  if GTextOnlyHint = AValue then Exit;
+  GTextOnlyHint := AValue;
+  if Assigned(GAnnotationOverlay) then
+    GAnnotationOverlay.HideOverlay;
+  if Assigned(GHighlighter) then
+    GHighlighter.ResetEditorEventState;
 end;
 
 function GetOverlayPositionSetting: string;
@@ -1055,6 +1232,12 @@ begin
   InvalidateAllLines;
 end;
 
+procedure TFindingHighlighter.ResetEditorEventState;
+begin
+  if Assigned(FEditorEventsObj) then
+    FEditorEventsObj.ResetState;
+end;
+
 procedure TFindingHighlighter.HandleFileClosing(const AFileName: string);
 // BUGFIX 2026-07-20: siehe Interface-Kommentar. Anders als OnModuleDestroyed
 // laeuft dieser Hook VOR dem Modul-Teardown (ofnFileClosing) - der harte
@@ -1293,6 +1476,7 @@ begin
     Result.Title    := Strongest.Title;
     Result.Desc     := Strongest.Desc;
     Result.Badge    := Strongest.Badge;
+    Result.RuleName := Strongest.RuleName;
     Result.Color    := Strongest.Color;
     Result.Fix      := Strongest.Fix;
     Result.Severity := Strongest.Severity;
@@ -1338,6 +1522,10 @@ begin
   end;
   Result.Title    := Format(_('%d findings on this line'), [Group.Count]);
   Result.Badge    := Strongest.Badge;
+  // Kurzform des Nur-Text-Hints: statt eines einzelnen Regelnamens die
+  // Anzahl - mehrere Regeln auf einer Zeile lassen sich nicht in eine
+  // Restbreite quetschen, die Details stehen im Findings-Panel.
+  Result.RuleName := Format(_('%d findings'), [Group.Count]);
   Result.Color    := Strongest.Color;
   Result.Fix      := '';
   Result.Severity := Strongest.Severity;
@@ -1356,12 +1544,13 @@ function MakeContinuationMark(const AAnchor: TFindingMark;
 // Befund anzeigen. Der Hit-Test blendet diese Zeilen zusaetzlich aus
 // (Guertel und Hosentraeger), aber die Datenlage allein reicht schon.
 begin
-  Result         := AAnchor;
-  Result.Title   := '';
-  Result.Desc    := '';
-  Result.Badge   := '';
-  Result.Fix     := '';
-  Result.IsMulti := False;
+  Result          := AAnchor;
+  Result.Title    := '';
+  Result.Desc     := '';
+  Result.Badge    := '';
+  Result.RuleName := '';
+  Result.Fix      := '';
+  Result.IsMulti  := False;
   // NICHT vom Anker erben: der koennte selbst das Ende eines FREMDEN
   // Bereichs sein. Sonst traegt jede Fortsetzungszeile eine Schluss-Kappe.
   Result.SpanEndsHere := False;
@@ -1930,8 +2119,9 @@ end;
 constructor TFindingEditorEvents.Create;
 begin
   inherited;
-  FRenderedRects    := TDictionary<Integer, TRect>.Create;
-  FRenderedTextEnds := TDictionary<Integer, Integer>.Create;
+  FRenderedRects     := TDictionary<Integer, TRect>.Create;
+  FRenderedTextEnds  := TDictionary<Integer, Integer>.Create;
+  FRenderedHintRects := TDictionary<Integer, TRect>.Create;
   FHoverWatch := TTimer.Create(nil);
   FHoverWatch.Interval := 200;
   FHoverWatch.Enabled  := False;
@@ -1953,6 +2143,7 @@ begin
   FreeAndNil(FHoverWatch);
   FreeAndNil(FRenderedRects);
   FreeAndNil(FRenderedTextEnds);
+  FreeAndNil(FRenderedHintRects);
   inherited;
 end;
 
@@ -1970,6 +2161,8 @@ begin
     FRenderedRects.Clear;
   if Assigned(FRenderedTextEnds) then
     FRenderedTextEnds.Clear;
+  if Assigned(FRenderedHintRects) then
+    FRenderedHintRects.Clear;
   if Assigned(FHoverWatch) then
     FHoverWatch.Enabled := False;
 end;
@@ -2107,8 +2300,21 @@ var
   HitLine : Integer;
 begin
   if Button <> mbLeft then Exit;
-  if not Assigned(GAnnotationOverlay) then Exit;
   if Editor <> FSavedEditor then Exit;
+
+  // Nur-Text-Modus: Klick auf den gezeichneten Text-Hint VERWIRFT den
+  // Fund (Konzept 2026-08-09, Entscheidung 3 - Ersatz des Close-Glyphs).
+  // RemoveMark loest Mehrzeilen-Bereiche ueber SpanFirst/SpanLast komplett
+  // auf und invalidiert selbst; der naechste Zeichendurchgang malt ohne
+  // Markierung auch keinen Text mehr - es gibt nichts zu "verstecken".
+  // Kein Fenster-Pfad in diesem Modus.
+  if GTextOnlyHint then
+  begin
+    DismissTextHintAt(X, Y);
+    Exit;
+  end;
+
+  if not Assigned(GAnnotationOverlay) then Exit;
   if FRenderedRects.Count = 0 then Exit;
   if IsShowOnHoverEnabled then Exit;   // alter Pfad regelt das
 
@@ -2200,6 +2406,12 @@ begin
   if Editor <> FSavedEditor then Exit;
   FRenderedRects.Clear;
   FRenderedTextEnds.Clear;
+  // AUCH die Hint-Rechtecke (Review-Blocker 2026-08-13): sie zeigen nach
+  // dem Scrollen auf die alten Bildschirmpositionen, und ein Klick dort
+  // haette per DismissTextHintAt still den AUSGESCROLLTEN Fund verworfen
+  // (bei Bereichsmarken den ganzen Block). Der Settle-Repaint fuellt die
+  // Rechtecke sichtbarer Ankerzeilen ueber PaintAnchorBadge neu.
+  FRenderedHintRects.Clear;
   FHoveredLine := -1;
   if Assigned(GAnnotationOverlay) then
     GAnnotationOverlay.HideOverlay;
@@ -2249,6 +2461,10 @@ var
   HitLine       : Integer;
 begin
   // Hot path: erst die billigsten Bailouts, dann Hit-Test, dann Show/Hide.
+  // Nur-Text-Modus: es gibt kein Fenster zu zeigen oder zu verstecken -
+  // ohne diesen Ausstieg bewaffnete jeder Hover den 200ms-FHoverWatch,
+  // der nur ein nie gezeigtes Fenster verstecken kann (Review 2026-08-13).
+  if GTextOnlyHint then Exit;
   if not Assigned(GAnnotationOverlay) or not Assigned(GHighlighter) then Exit;
   if FRenderedRects.Count = 0 then Exit;       // Aktuell nichts gerendert
   if Editor <> FSavedEditor then               // Maus in anderem Editor
@@ -2267,6 +2483,7 @@ begin
     FHoveredLine := -1;
     FRenderedRects.Clear;
     FRenderedTextEnds.Clear;
+    FRenderedHintRects.Clear;
     FHoverWatch.Enabled := False;
     Exit;
   end;
@@ -2333,6 +2550,11 @@ var
   Mark          : TFindingMark;
   HitRect       : TRect;
 begin
+  // Nur-Text-Modus: der Hint steht permanent auf der Canvas - kein
+  // Fenster, kein Hover-Timer, keine Show/Hide-Logik (Konzept
+  // 2026-08-09, Entscheidung 1). Der Kurzschluss sitzt bewusst HIER,
+  // der einen Stelle, durch die Klick- UND Hover-Pfad laufen.
+  if GTextOnlyHint then Exit;
   if not Assigned(GAnnotationOverlay) or not Assigned(GHighlighter) then Exit;
   if AHitLine < 0 then Exit;
 
@@ -2421,6 +2643,7 @@ begin
   begin
     FRenderedRects.Clear;
     FRenderedTextEnds.Clear;
+    FRenderedHintRects.Clear;
   end;
 end;
 
@@ -2509,7 +2732,64 @@ begin
   // einen Befund.
   if HasMark and (Mark.Badge <> '') and (ATextEndX > 0)
      and not IsContinuation then
-    DrawMiniInfoBar(Context.Canvas, Mark, StripeCol, ACodeRect, ATextEndX);
+    PaintAnchorBadge(Context, Mark, StripeCol, ACodeRect, ALine, ATextEndX);
+end;
+
+procedure TFindingEditorEvents.PaintAnchorBadge(
+  const Context: INTACodeEditorPaintContext; const AMark: TFindingMark;
+  AStripeCol: TColor; const ACodeRect: TRect; ALine, ATextEndX: Integer);
+// Nur-Text-Variante (Konzept 2026-08-09): der transparente Text ersetzt
+// die Mini-Infobar DAUERHAFT an der Ankerzeile - kein Trigger, kein
+// Fenster (Entscheidung 1). Die Ankerzeilen-Regel (not IsContinuation)
+// prueft der Aufrufer - sonst zerfiele ein Mehrzeilen-Befund optisch in
+// mehrere. Das gezeichnete Rechteck wandert in den Klick-Cache; ein
+// Fehlschlag (kein Platz) raeumt den Eintrag, sonst traefe ein Klick
+// den Geist der letzten Position.
+var
+  HintR : TRect;
+begin
+  if GTextOnlyHint then
+  begin
+    if DrawTextHint(Context.Canvas, AMark, AStripeCol, ACodeRect,
+                    ATextEndX, HintR) then
+      FRenderedHintRects.AddOrSetValue(ALine, HintR)
+    else
+      FRenderedHintRects.Remove(ALine);
+  end
+  else
+  begin
+    DrawMiniInfoBar(Context.Canvas, AMark, AStripeCol, ACodeRect, ATextEndX);
+  end;
+end;
+
+procedure TFindingEditorEvents.DismissTextHintAt(X, Y: Integer);
+// Vertrag an der Deklaration. Klick NEBEN alle Texte: bewusst kein
+// Verhalten - der Klick setzt nur die Schreibmarke.
+//
+// ZWEIPHASIG (Review 2026-08-13): erst den Treffer suchen, DANN
+// RemoveMark - nie waehrend einer aktiven Dictionary-Enumeration
+// mutieren. RemoveMark raeumt ueber ResetState inzwischen auch
+// FRenderedHintRects; ein Aufruf im Schleifenrumpf leerte damit das
+// gerade enumerierte Dictionary (Delphis Enumerator wirft nicht, er
+// iteriert undefiniert weiter - im Krisenpfad dieses Plugins kein
+// Zustand, auf den man baut).
+var
+  HintHit : TPair<Integer, TRect>;
+  HitKey  : Integer;
+  Found   : Boolean;
+begin
+  if not Assigned(GHighlighter) then Exit;
+  Found  := False;
+  HitKey := 0;
+  for HintHit in FRenderedHintRects do
+    if PtInRect(HintHit.Value, Point(X, Y)) then
+    begin
+      HitKey := HintHit.Key;
+      Found  := True;
+      Break;
+    end;
+  if Found then
+    GHighlighter.RemoveMark(FLastPaintedFile, HitKey);
 end;
 
 procedure TFindingEditorEvents.PaintLine(const Rect: TRect;
@@ -2537,6 +2817,7 @@ begin
   begin
     FRenderedRects.Clear;
     FRenderedTextEnds.Clear;
+    FRenderedHintRects.Clear;
     FHoveredLine := -1;
     FLastPaintedFile := Context.FileName;
     if Assigned(GAnnotationOverlay) then
@@ -2607,6 +2888,7 @@ begin
       begin
         FRenderedRects.Remove(Line);
         FRenderedTextEnds.Remove(Line);
+        FRenderedHintRects.Remove(Line);
       end;
     finally
       ToRemove.Free;

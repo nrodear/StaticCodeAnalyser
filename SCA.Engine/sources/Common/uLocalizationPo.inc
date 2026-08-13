@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2016 Zeilen, 69813 Bytes
-  CPoLines_de: array[0..2015] of string = (
+  // i18n\de.po - 2032 Zeilen, 71731 Bytes
+  CPoLines_de: array[0..2031] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2030,7 +2030,23 @@ const
     'msgstr "Meldung"',
     '',
     'msgid "Fix hint"',
-    'msgstr "Fix-Hinweis"'
+    'msgstr "Fix-Hinweis"',
+    '',
+    '# Nur-Text-Annotation-Hint 2026-08-13 ([UI] OverlayTextOnly).',
+    '',
+    'msgid "Text only, transparent (no window)"',
+    'msgstr "Nur Text, transparent (kein Fenster)"',
+    '',
+    'msgid "Where the hover annotation overlay anchors relative to the finding line; position changes take effect after IDE restart. \"Text only\" instead draws a transparent one-line hint (badge + rule name) right of the code - no description or fix block (see the findings panel), long titles are shortened, dismiss a finding by clicking its text. Takes effect on save."',
+    'msgstr "Wo das Hover-Annotation-Overlay relativ zur Fundzeile ansetzt; Positionswechsel wirken nach IDE-Neustart. \"Nur Text\" zeichnet stattdessen einen transparenten einzeiligen Hinweis (Badge + Regelname) rechts vom Code - ohne Beschreibung und Fix-Block (siehe Findings-Panel), lange Titel werden gek'#$00FC'rzt, ein Fund l'#$00E4'sst sich per Klick auf seinen Text verwerfen. Wirkt beim Speichern."',
+    '',
+    '# Combo-Umbau Nur-Text-Variante 2026-08-13.',
+    '',
+    'msgid "Text (one-line hint, no window)"',
+    'msgstr "Text (einzeiliger Hinweis, kein Fenster)"',
+    '',
+    'msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by clicking its text. Takes effect on save."',
+    'msgstr "Wirkt nur auf Editor-Markierungsstreifen, Mini-Infobar und Titelleiste des Hover-Overlays. Properties-Panel und Haupt-Grid behalten die Standard-Severity-Farben. Hell/Dunkel-Varianten automatisch. \"Text\" ersetzt das Overlay-Fenster durch einen transparenten einzeiligen Hinweis (Badge + Regelname, ohne Beschreibung/Fix-Block - siehe Findings-Panel); ein Fund l'#$00E4'sst sich per Klick auf seinen Text verwerfen. Wirkt beim Speichern."'
   );
 
   // i18n\en.po - 201 Zeilen, 5561 Bytes
