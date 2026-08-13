@@ -154,6 +154,17 @@ plugin must be 32-bit.
 6. **Right-click** `SCA.SharedUI` → **Build**.
 7. **Right-click** `StaticCodeAnalyser.IDE.d12` → **Build**.
 
+> ⚠️ **Every project builds in its OWN active platform.** Steps 3–4
+> switch only the project you clicked. If `SCA.Engine` is still active
+> on Win64 while the plugin builds Win32, the plugin fails with
+> **`F2613 Unit '…' nicht gefunden`** — it links against a stale Win32
+> `SCA.Engine.dcp` (which lives outside the repo, in the Studio `Dcp`
+> folder). Before step 5, check that **all three** packages —
+> `SCA.Engine`, `SCA.SharedUI`, `StaticCodeAnalyser.IDE.d12` — show
+> **Windows 32-bit** in bold under their Target Platforms. Since
+> v0.9.15 the committed defaults are aligned to Win32 for all three,
+> but the IDE remembers your last selection per project.
+
 You now have three `.bpl` files in
 `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\`:
 
