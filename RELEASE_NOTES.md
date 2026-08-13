@@ -1,4 +1,36 @@
-# Release 0.9.14 — A grey dark mode, and a safer IDE hand-off
+# Release 0.9.15 — A quiet clipboard, honest filters, and a text-only hint
+
+🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+
+Full release notes: [docs/releases/v0.9.15.md](docs/releases/v0.9.15.md)
+([deutsch](docs/releases/v0.9.15_de.md)).
+
+- **The clipboard belongs to you again.** Selecting a finding row no
+  longer overwrites your clipboard by default. `[UI] ClipboardOnClick`
+  chooses: nothing (default), a compact Jira mini issue, or the full
+  Claude AI prompt as before. The deliberate gesture — *Copy AI prompt*
+  in the right-click menu, now also in the IDE dock — always works and
+  copies the row you clicked. The prompt's code snippet can no longer
+  be stale after you fixed the file.
+- **Filters tell the truth.** Scans start on "All"; the severity
+  dropdown only offers entries with visible hits; and when *show only
+  new findings* hides everything, the status line says
+  `4 hidden by baseline` instead of looking broken. Colour scheme
+  changes recolour existing marks immediately.
+- **New: the text-only annotation hint.** Fourth entry in the marker
+  colour scheme: one transparent line (badge + rule name, no background
+  fill — selection stays visible behind it) permanently at the finding
+  line, instead of the overlay window. Click the text to dismiss.
+  Bright/Gray/Subtle keep the full overlay, unchanged.
+- Plus the full export/Sonar audit: `--fail-on` no longer hides read
+  errors, `--custom-rules` actually fires, baseline refreshes no longer
+  destroy the baseline, JSON exports lost their BOM, and the release
+  ZIP ships `rules/sca-rules.json` so the Sonar export is valid as
+  shipped.
+
+---
+
+# Previously — Release 0.9.14 — A grey dark mode, and a safer IDE hand-off
 
 🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
 

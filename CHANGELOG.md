@@ -6,7 +6,7 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [v0.9.15] - 2026-08-13 - A quiet clipboard, honest filters, and a text-only hint
 
 ### Removed
 
@@ -27,6 +27,21 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The filter combos reset to "All" after every scan** (user
+  decision). A filter left over from the previous run read like "hardly
+  any findings" when in truth the old filter was still applied. The
+  reduction of both combos to entries with hits now also counts against
+  the baseline-visible set, so the dropdown never advertises a severity
+  whose grid view would be empty.
+- **The status line says when the baseline hides findings.** With *show
+  only new findings* active, "0 / 4 findings" looked like a broken
+  filter; it now reads "0 / 4 findings - 4 hidden by baseline". The
+  tiles keep counting the full set (user decision - the health score
+  stays comparable across runs).
+- **Marker colour scheme changes apply immediately.** Selecting
+  *Gray*/*Subtle*/*Default* recolours the existing editor marks on
+  saving the options; previously the choice only took effect at the
+  next scan and looked like a dead switch.
 - **`docs/sonar-coverage.md` understated the tool by 16 percentage
   points.** The summary claimed 138 checks while its own table has 144
   rows, and fifteen rows said "not implemented" (or "partial") for checks
@@ -82,6 +97,31 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Text-only annotation hint.** The editor marker colour scheme gets a
+  fourth entry, *Text (one-line hint, no window)*: instead of the
+  overlay window, one transparent line — badge + rule name, drawn with
+  no background fill, so selection and line highlight stay visible
+  behind it — sits permanently at every finding's anchor line, replacing
+  the mini-infobar. Click the text to dismiss the finding (the same
+  action the overlay's close glyph performs); description and fix
+  example remain in the findings panel. The window overlay stays the
+  default and is unchanged; the choice persists as
+  `[UI] OverlayTextOnly` and takes effect on saving the options. Long
+  titles are not truncated into fragments: measured on the self-scan
+  corpus (median title 96 characters), the majority would never fit, so
+  the hint deliberately shows the short form and leaves the full title
+  to the panel.
+- **What a click copies is now your choice — and the default is
+  nothing.** `[UI] ClipboardOnClick` controls what selecting a finding
+  row puts into the clipboard: `1` leaves the clipboard alone (the new
+  default), `2` copies a compact Jira mini issue (headline plus five
+  fact bullets), `3` copies the full Claude AI prompt as before. A tool
+  whose point is that your source never leaves the machine should not
+  push code excerpts into a clipboard that Windows history or cloud
+  sync may forward. The deliberate gesture stays: *Copy AI prompt* in
+  the grid context menu — new in the IDE dock, which previously had no
+  menu at all — always copies, in every mode, and right-clicking now
+  selects the row you actually clicked.
 - **`--report-csv` and `--report-json`.** Both writers existed, but only
   the GUI could reach them — the two formats one reaches for in a script
   (Excel, ticket automation) were the only ones that could not be
@@ -103,6 +143,30 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **The copied AI prompt could show stale code.** The snippet cache
+  behind the prompt was keyed by path alone and lived for the whole
+  process: click a finding, fix the file, rescan, click again — the
+  prompt still carried the old lines with the marker on the wrong one.
+  Every cache slot now validates the file's timestamp and size.
+- **Grid rebuilds and header clicks no longer touch the clipboard.**
+  Shrinking the result list clamped the selection and fired the copy
+  path for a row nobody clicked (IDE dock); in the EXE, a sort click on
+  the header armed the copy timer for the previously selected row. Both
+  paths are guarded, and a copy timer armed before a rebuild is
+  disarmed with it.
+- **Re-selecting the same filter after a scan did nothing.** The
+  searchable combo's commit memory still held the pre-scan selection,
+  so choosing it again was swallowed as "no change" — the combo showed
+  the filter, the grid ignored it. The memory now follows the display
+  through every programmatic change, including the stat-tile shortcuts.
+- **A locked clipboard (RDP, clipboard managers) threw an error dialog
+  from the two Jira/plain-text export handlers** — the only two not
+  wrapped like their siblings. They report to the status bar now.
+- **Five live translations fell out of the template.** The i18n
+  extractor could not see `_(CONST_ARRAY[i])` call sites, so
+  regenerating the template dropped msgids that are still on screen
+  (theme menu, DFM open-with menu). The extractor resolves string-array
+  constants now.
 - **`--sonar-init` wrote a template that `sonar-scanner` refuses.** The
   two placeholders `<your-project-key>` / `<your-project-name>` are not
   valid Sonar keys, so the very first scanner run after the documented

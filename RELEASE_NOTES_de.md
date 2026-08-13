@@ -1,4 +1,38 @@
-# Release 0.9.14 — Ein graues Dunkel und eine sichere IDE-Uebergabe
+# Release 0.9.15 — Eine stille Zwischenablage, ehrliche Filter und ein Nur-Text-Hinweis
+
+🇬🇧 [English version](RELEASE_NOTES.md)
+
+Vollstaendige Release-Notes: [docs/releases/v0.9.15_de.md](docs/releases/v0.9.15_de.md)
+([english](docs/releases/v0.9.15.md)).
+
+- **Die Zwischenablage gehoert wieder dir.** Das Auswaehlen einer
+  Befundzeile ueberschreibt sie nicht mehr von selbst.
+  `[UI] ClipboardOnClick` entscheidet: nichts (Default), ein kompaktes
+  Jira-Mini-Issue, oder der volle Claude-AI-Prompt wie bisher. Die
+  bewusste Geste - *Copy AI prompt* im Rechtsklick-Menue, jetzt auch im
+  IDE-Dock - funktioniert immer und kopiert die angeklickte Zeile. Der
+  Code-Auszug im Prompt kann nach einem Datei-Fix nicht mehr veraltet
+  sein.
+- **Filter sagen die Wahrheit.** Scans starten auf "All"; die
+  Severity-Liste bietet nur Eintraege mit sichtbaren Treffern; und wenn
+  "Nur neue Funde" alles ausblendet, sagt es die Statuszeile
+  (`4 hidden by baseline`) statt kaputt auszusehen. Farbschema-Wechsel
+  faerben bestehende Markierungen sofort um.
+- **Neu: der Nur-Text-Annotation-Hinweis.** Vierter Eintrag im
+  Farbschema der Markierungen: eine transparente Zeile (Badge +
+  Regelname, ohne Hintergrundfuellung - die Auswahl bleibt dahinter
+  sichtbar) dauerhaft an der Fundzeile, statt des Overlay-Fensters.
+  Klick auf den Text verwirft den Befund. Bright/Gray/Subtle behalten
+  das volle Overlay, unveraendert.
+- Dazu das komplette Export-/Sonar-Audit: `--fail-on` versteckt keine
+  Lesefehler mehr, `--custom-rules` feuert tatsaechlich, das
+  Auffrischen einer Baseline zerstoert sie nicht mehr, JSON-Exporte
+  ohne BOM, und das Release-ZIP liefert `rules/sca-rules.json` mit -
+  der Sonar-Export ist ab Werk gueltig.
+
+---
+
+# Vorher — Release 0.9.14 — Ein graues Dunkel und eine sichere IDE-Uebergabe
 
 🇬🇧 [English version](RELEASE_NOTES.md)
 
