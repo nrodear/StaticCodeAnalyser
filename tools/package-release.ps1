@@ -132,6 +132,66 @@ foreach ($p in $platforms) {
     $p.Name, (Split-Path $exe -Leaf), $Version, $mb, (Split-Path $zip -Leaf)
 }
 
+# ---- Doku + Skripte fuer EXE-Anwender --------------------------------------
+# Nutzerwunsch v0.9.15: ein eigenes Archiv mit allem, was man NEBEN der
+# nackten EXE braucht, um die dokumentierten Ablaeufe einzurichten -
+# Baseline, Sonar, CI-Gate, eigene Regeln - ohne dafuer das Source-Zip zu
+# durchwuehlen. NUR oeffentliche Doku: die internen Doku_/Todo_/Konzept_-
+# Dateien sind gitignoriert und gehoeren hier bewusst nicht hinein.
+$docItems = @(
+  'README.md', 'README_de.md',
+  'EXPORTS.md', 'EXPORTS_de.md',
+  'sonarHowto.md', 'sonarHowto_de.md',
+  'DETECTORS.md', 'DETECTORS_de.md',
+  'BRANCH_CHANGES.md', 'BRANCH_CHANGES_de.md',
+  'RELEASE_NOTES.md', 'RELEASE_NOTES_de.md',
+  'CHANGELOG.md',
+  'docs/sonar-setup.md', 'docs/sonar-config.md', 'docs/sonar-coverage.md',
+  'docs/rules.md'
+)
+foreach ($d in $docItems) {
+  if (-not (Test-Path (Join-Path $repo $d))) { throw "Doku fehlt: $d" }
+}
+# examples\ komplett: Analyse-Profile, Custom-Rules-Vorlage und die
+# CI-Skripte (GitHub-Actions-Workflow mit SARIF-Upload + Baseline-Gate,
+# pre-commit-Hook, PR-Kommentar-Bot, MSBuild-Target).
+$exampleRoot = Join-Path $repo 'examples'
+if (-not (Test-Path $exampleRoot)) { throw "examples\ fehlt" }
+
+$docZip = Join-Path $OutDir "StaticCodeAnalyser-v$Version-docs-scripts.zip"
+if (Test-Path $docZip) { Remove-Item $docZip -Force }
+$za = [System.IO.Compression.ZipFile]::Open($docZip, 'Create')
+try {
+  $lvl = [System.IO.Compression.CompressionLevel]::Optimal
+  foreach ($d in $docItems) {
+    # Eintragsname = Repo-relativer Pfad mit FORWARD Slashes (gleiche
+    # Begruendung wie beim EXE-Zip: Backslash-Eintraege entpacken unter
+    # Linux/macOS als eine seltsam benannte Datei).
+    [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+      $za, (Join-Path $repo $d), ($d -replace '\\', '/'), $lvl)
+  }
+  Get-ChildItem $exampleRoot -File -Recurse | ForEach-Object {
+    $rel = $_.FullName.Substring($repo.Length + 1) -replace '\\', '/'
+    [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+      $za, $_.FullName, $rel, $lvl)
+  }
+} finally {
+  $za.Dispose()
+}
+
+# Gegenprobe am fertigen Archiv - je ein Wachposten pro Inhaltsklasse.
+$za = [System.IO.Compression.ZipFile]::OpenRead($docZip)
+try { $names = @($za.Entries | ForEach-Object { $_.FullName }) }
+finally { $za.Dispose() }
+foreach ($sentinel in @('EXPORTS.md', 'docs/sonar-setup.md',
+                        'examples/ci/github-actions-sca.yml')) {
+  if ($names -notcontains $sentinel) {
+    throw "docs-scripts: $sentinel fehlt im Archiv. Abbruch."
+  }
+}
+"{0,-6} {1} Doku-Dateien + examples ({2} Eintraege)  ->  {3}" -f `
+  'docs', $docItems.Count, $names.Count, (Split-Path $docZip -Leaf)
+
 if (-not $SkipSource) {
   # Aus dem TAG, nicht aus dem Arbeitsbaum: so landet nichts Ungetaggtes
   # im Archiv, und gitignorierte interne Dokumente bleiben ohnehin draussen.
