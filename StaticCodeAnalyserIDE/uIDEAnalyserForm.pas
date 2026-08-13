@@ -1349,20 +1349,21 @@ begin
 end;
 
 procedure TAnalyserFrame.PopulateTypeCombo;
-// Sonar-Kategorien als Filter. Englische Identifiers fix - matchen die
-// Strings in den Befund-TypeText-Feldern (Bug/Code Smell/Vulnerability/
-// Security Hotspot/Code Duplication).
+// Sonar-Kategorien als Filter. Uebersetzbar (i18n-Paritaet 2026-08-13):
+// die Filterung laeuft ueber Ord(TTypeFilter) im Object, nie ueber den
+// Combo-Text (TFindingFilter.Matches vergleicht F.FindingType) - die
+// Grid-Spalte zeigt weiterhin das technische TypeText-Feld.
 begin
   // Items.Objects tragen Ord(TTypeFilter) damit RebuildFilterCombos die
   // aktuelle Auswahl nach dem Scan via Mode-Ord wiederherstellen kann -
   // ItemIndex-basiertes Mapping waere nach dem Reduzieren verschoben.
   // tfAll = 0 -> Object = nil (siehe TypeFilterChange-Lookup).
   FTypeCombo.Items.AddObject(_('All'),              TObject(Ord(tfAll)));
-  FTypeCombo.Items.AddObject('Bug',                 TObject(Ord(tfBug)));
-  FTypeCombo.Items.AddObject('Code Smell',          TObject(Ord(tfCodeSmell)));
-  FTypeCombo.Items.AddObject('Vulnerability',       TObject(Ord(tfVulnerability)));
-  FTypeCombo.Items.AddObject('Security Hotspot',    TObject(Ord(tfSecurityHotspot)));
-  FTypeCombo.Items.AddObject('Code Duplication',    TObject(Ord(tfCodeDuplication)));
+  FTypeCombo.Items.AddObject(_('Bug'),              TObject(Ord(tfBug)));
+  FTypeCombo.Items.AddObject(_('Code Smell'),       TObject(Ord(tfCodeSmell)));
+  FTypeCombo.Items.AddObject(_('Vulnerability'),    TObject(Ord(tfVulnerability)));
+  FTypeCombo.Items.AddObject(_('Security Hotspot'), TObject(Ord(tfSecurityHotspot)));
+  FTypeCombo.Items.AddObject(_('Code Duplication'), TObject(Ord(tfCodeDuplication)));
   FTypeCombo.ItemIndex := 0;
 end;
 

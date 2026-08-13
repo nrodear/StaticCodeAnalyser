@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2032 Zeilen, 71731 Bytes
-  CPoLines_de: array[0..2031] of string = (
+  // i18n\de.po - 2053 Zeilen, 70435 Bytes
+  CPoLines_de: array[0..2052] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2046,7 +2046,28 @@ const
     'msgstr "Text (einzeiliger Hinweis, kein Fenster)"',
     '',
     'msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by clicking its text. Takes effect on save."',
-    'msgstr "Wirkt nur auf Editor-Markierungsstreifen, Mini-Infobar und Titelleiste des Hover-Overlays. Properties-Panel und Haupt-Grid behalten die Standard-Severity-Farben. Hell/Dunkel-Varianten automatisch. \"Text\" ersetzt das Overlay-Fenster durch einen transparenten einzeiligen Hinweis (Badge + Regelname, ohne Beschreibung/Fix-Block - siehe Findings-Panel); ein Fund l'#$00E4'sst sich per Klick auf seinen Text verwerfen. Wirkt beim Speichern."'
+    'msgstr "Wirkt nur auf Editor-Markierungsstreifen, Mini-Infobar und Titelleiste des Hover-Overlays. Properties-Panel und Haupt-Grid behalten die Standard-Severity-Farben. Hell/Dunkel-Varianten automatisch. \"Text\" ersetzt das Overlay-Fenster durch einen transparenten einzeiligen Hinweis (Badge + Regelname, ohne Beschreibung/Fix-Block - siehe Findings-Panel); ein Fund l'#$00E4'sst sich per Klick auf seinen Text verwerfen. Wirkt beim Speichern."',
+    '',
+    '# i18n-Paritaet EXE-UI 2026-08-13: Typ-Combo-Separatoren, DFM-Viewer-',
+    '# Dialogtitel und zwei bislang unuebersetzte CLI-Meldungen.',
+    '',
+    'msgid "--- Errors (A-Z) ---"',
+    'msgstr "--- Fehler (A-Z) ---"',
+    '',
+    'msgid "--- Warnings (A-Z) ---"',
+    'msgstr "--- Warnungen (A-Z) ---"',
+    '',
+    'msgid "--- Hints (A-Z) ---"',
+    'msgstr "--- Hinweise (A-Z) ---"',
+    '',
+    'msgid "DFM Viewer"',
+    'msgstr "DFM-Viewer"',
+    '',
+    'msgid "More than %d files found - scan cancelled."',
+    'msgstr "Mehr als %d Dateien gefunden - Scan abgebrochen."',
+    '',
+    'msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."',
+    'msgstr "Sonar-Push: .sonar\\external\\ enth'#$00E4'lt jetzt genau diese %d Issue-Datei(en) - Dateien fr'#$00FC'herer Pushes wurden entfernt."'
   );
 
   // i18n\en.po - 201 Zeilen, 5561 Bytes

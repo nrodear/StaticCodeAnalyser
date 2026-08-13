@@ -215,7 +215,8 @@ implementation
 
 uses
   System.SysUtils, System.Character, System.Generics.Defaults,
-  uAnalyserTypes;    // SeverityFromText, TFindingSeverity
+  uAnalyserTypes,    // SeverityFromText, TFindingSeverity
+  uLocalization;     // _() fuer die Separator-Captions der Filter-Combo
 
 // Such-Schluesselworte pro Kind. Enthaelt sowohl die englische als auch
 // die deutsche Bezeichnung damit der User unabhaengig von der UI-Sprache
@@ -810,9 +811,10 @@ end;
 class procedure TFindingFilter.AppendKindFilterItems(Items: TStrings);
 // Generierte Einzel-Detektor-Sektionen: pro Severity-Stufe ein
 // Separator ('--- Errors (A-Z) ---', Tag -1) + alle Kinds dieser
-// DefaultSeverity, sortiert nach SCA-ID. Labels 'SCAxxx  KindName'
-// (KindName = KIND_META.Name = noinspection-Name, bewusst technisch
-// und unlokalisiert). Quelle ist KIND_META + Regel-Katalog - damit
+// DefaultSeverity, sortiert nach SCA-ID. Die Separatoren laufen durch
+// _() - gefahrlos, weil beide Hosts sie ueber Tag -1 erkennen, nie
+// ueber den Text. Labels 'SCAxxx  KindName' (KindName = KIND_META.Name
+// = noinspection-Name, bewusst technisch und unlokalisiert). Quelle ist KIND_META + Regel-Katalog - damit
 // ist die Liste IMMER vollstaendig und die Severity-Zuordnung kann
 // nicht mehr von Demote-Wellen abgehaengt werden (Audit 2026-07-24:
 // 20/20 der juengsten Detektoren fehlten, 4 Alt-Eintraege standen
@@ -847,7 +849,7 @@ begin
         Sorted.AddObject(Lbl, TObject(KIND_TAG_BASE + Ord(K)));
       end;
       if Sorted.Count = 0 then Continue;
-      Items.AddObject(SECTION_CAPTION[Sev], TObject(-1));
+      Items.AddObject(_(SECTION_CAPTION[Sev]), TObject(-1));
       for i := 0 to Sorted.Count - 1 do
         Items.AddObject(Sorted[i], Sorted.Objects[i]);
     finally

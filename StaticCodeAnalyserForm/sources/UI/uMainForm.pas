@@ -405,19 +405,27 @@ begin
 
     // ---- Profile-Combo befuellen aus TRuleCatalog.ProfileNames ----
     ProfileList := TRuleCatalog.ProfileNames;
+    // _('default') wie im IDE-Plugin (PopulateProfileCombo). VERTRAG an
+    // die .po-Dateien: 'default' MUSS Passthrough bleiben (msgstr =
+    // msgid), denn der Combo-Text wird als [Rules] Profile in die INI
+    // zurueckgeschrieben und dort wieder per IndexOf gesucht.
     if Length(ProfileList) = 0 then
-      ProfileCombo.Items.Add('default')
+      ProfileCombo.Items.Add(_('default'))
     else
       for Name in ProfileList do ProfileCombo.Items.Add(Name);
     // Default-Selektion = [Rules] Profile aus INI (leer = default).
     if Settings.Profile <> '' then
       Idx := ProfileCombo.Items.IndexOf(Settings.Profile)
     else
-      Idx := ProfileCombo.Items.IndexOf('default');
+      Idx := ProfileCombo.Items.IndexOf(_('default'));
     if Idx < 0 then Idx := 0;
     ProfileCombo.ItemIndex := Idx;
 
     // ---- Min-Severity-Combo befuellen: 3 fixe Stufen ----
+    // BEWUSST unlokalisiert: die Texte sind zugleich die INI-Werte
+    // ([Rules] MinSeverity, Rueckschreiben in MinSevComboChange). Eine
+    // Uebersetzung braeuchte eine Display/Value-Trennung - das IDE-Plugin
+    // (uIDESCAOptions) haelt sie genauso roh; gemeinsamer Backlog.
     MinSevCombo.Items.Add('hint');
     MinSevCombo.Items.Add('warning');
     MinSevCombo.Items.Add('error');
@@ -503,12 +511,16 @@ begin
   // RebuildFilterCombos die aktuelle Auswahl nach einem Scan
   // wiederherstellen kann (ItemIndex-Mapping waere nach dem Filtern
   // verschoben). tfAll = 0 -> Object = nil (siehe ApplyFilter-Lookup).
+  // Uebersetzbar, weil die Filterung ueber Ord(TTypeFilter) im Object
+  // laeuft (TFindingFilter.Matches vergleicht F.FindingType, nie den
+  // Combo-Text) - die Grid-Spalte zeigt weiterhin das technische
+  // TypeText-Feld, wie im IDE-Plugin.
   TypeFilterCombo.Items.AddObject(_('All'),              TObject(Ord(tfAll)));
-  TypeFilterCombo.Items.AddObject('Bug',                 TObject(Ord(tfBug)));
-  TypeFilterCombo.Items.AddObject('Code Smell',          TObject(Ord(tfCodeSmell)));
-  TypeFilterCombo.Items.AddObject('Vulnerability',       TObject(Ord(tfVulnerability)));
-  TypeFilterCombo.Items.AddObject('Security Hotspot',    TObject(Ord(tfSecurityHotspot)));
-  TypeFilterCombo.Items.AddObject('Code Duplication',    TObject(Ord(tfCodeDuplication)));
+  TypeFilterCombo.Items.AddObject(_('Bug'),              TObject(Ord(tfBug)));
+  TypeFilterCombo.Items.AddObject(_('Code Smell'),       TObject(Ord(tfCodeSmell)));
+  TypeFilterCombo.Items.AddObject(_('Vulnerability'),    TObject(Ord(tfVulnerability)));
+  TypeFilterCombo.Items.AddObject(_('Security Hotspot'), TObject(Ord(tfSecurityHotspot)));
+  TypeFilterCombo.Items.AddObject(_('Code Duplication'), TObject(Ord(tfCodeDuplication)));
   TypeFilterCombo.ItemIndex := 0;
 
   // Snapshot der frisch populierten Combo-Items - RebuildFilterCombos
@@ -2374,6 +2386,9 @@ begin
   // Filterzeile + Pfadzeile: die DFM-Captions wurden nie durch _()
   // ersetzt - ein deutscher Nutzer sah dauerhaft eine gemischt-
   // sprachige Toolbar (Button6 daneben war laengst uebersetzt).
+  // Fenstertitel: der DFM-Wert bliebe sonst fix englisch. de laesst den
+  // Produktnamen bewusst unuebersetzt (Passthrough), fr uebersetzt ihn.
+  Caption := _('Static Code Analysis Tool for Delphi');
   LblFilter.Caption  := _('Severity:');
   LblType.Caption    := _('Type:');
   LblMinSev.Caption  := _('Min:');
