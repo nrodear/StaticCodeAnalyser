@@ -83,6 +83,17 @@ foreach ($p in $platforms) {
     throw "$($p.Name): Exe meldet '$reported', erwartet wurde $Version. Nicht gebaut?"
   }
 
+  # 1b. AUCH die Windows-VERSIONINFO pruefen (Datei-Eigenschaften im
+  #     Explorer). Sie kommt aus den VerInfo_*-Feldern der dproj, nicht
+  #     aus SCA_VERSION - v0.9.16 ging beinahe mit --version=0.9.16,
+  #     aber FileVersion=0.9.14.0 raus, weil der Versions-Bump die dproj
+  #     nie mitzog. Zwei Quellen, zwei Pruefungen.
+  $fileVer = (Get-Item $exe).VersionInfo.FileVersion
+  if ($fileVer -notmatch ('^' + [regex]::Escape($Version))) {
+    throw ("$($p.Name): VERSIONINFO ist '$fileVer', erwartet $Version.*. " +
+           'VerInfo_Release/VerInfo_Keys in der dproj nachziehen + neu bauen.')
+  }
+
   # 2. Patchen (idempotent).
   & (Join-Path $PSScriptRoot 'patch-stack-size.ps1') $exe -SizeMB $StackMB | Out-Null
 
