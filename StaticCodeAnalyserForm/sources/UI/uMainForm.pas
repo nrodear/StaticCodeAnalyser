@@ -1162,14 +1162,19 @@ begin
 end;
 
 procedure TForm2.ProjectpathChangedScope(Sender: TObject);
-// Sichtbarer Modus-Indikator (Review-Auflage Konzept par.4.3): der Analyse-
-// Button sagt, was er tun wird.
+// Caption-Paritaet 2026-08-14: Caption statisch wie im IDE-Plugin
+// ('▶ Analyse'). Der sichtbare Modus-Indikator (Review-Auflage Konzept
+// par.4.3) wandert in den Hint - die Information bleibt erhalten, nur
+// nicht mehr als abweichender Button-Text.
 begin
+  Button6.Caption := _('▶ Analyse');
+  Button6.ParentShowHint := False;
+  Button6.ShowHint := True;
   case ScopeForPath(Projectpath.Text) of
-    ssProject:      Button6.Caption := _('Analyse project');
-    ssProjectGroup: Button6.Caption := _('Analyse group');
+    ssProject:      Button6.Hint := _('Analyse project');
+    ssProjectGroup: Button6.Hint := _('Analyse group');
   else
-    Button6.Caption := _('Analyse directory');
+    Button6.Hint := _('Analyse directory');
   end;
 end;
 
@@ -1480,10 +1485,17 @@ begin
   end;
 end;
 
+// Implementierung weiter unten (bei WireTiles); UpdateStats braucht sie
+// schon hier fuer den Quality-Tooltip-Refresh.
+procedure TileWire(CountLbl: TLabel; const AHint: string; ATag: Integer;
+  AHandler: TNotifyEvent); forward;
+
 procedure TForm2.UpdateStats;
 // Befuellt die 9 Stats-Tiles aus FAllFindings. Quality-Score = gewichtete
 // Summe (niedriger = besser); Gewichte 1:1 vom IDE-Plugin uebernommen
 // damit die Werte zwischen Standalone und Plugin vergleichbar sind.
+// Quality-Kachel zeigt seit der Caption-Paritaet 2026-08-14 wie das
+// Plugin den Letter-Grade A..E (Rohzahl + Breakdown im Tooltip).
 const
   W_VULN     = 10;
   W_ERROR    = 7;
@@ -1497,6 +1509,9 @@ var
   nBug, nVuln, nHot, nDup      : Integer;
   nCyclo                       : Integer;
   score                        : Integer;
+  grade                        : string;
+  Settings                     : TRepoSettings;
+  Counters                     : TScoreCounters;
 begin
   if not Assigned(FTileError) then Exit;
 
@@ -1541,7 +1556,34 @@ begin
   FTileVuln.Caption       := IntToStr(nVuln);
   FTileDup.Caption        := IntToStr(nDup);
   FTileCyclomatic.Caption := IntToStr(nCyclo);
-  FTileScore.Caption      := IntToStr(score);
+
+  // Letter-Grade + Detail-Tooltip aus der geteilten Quelle
+  // (uIDEStatsTiles) - Anzeige und Wortlaut identisch mit dem Plugin.
+  // Schwellwerte aus analyser.ini [Score]; frische TRepoSettings wie
+  // ueberall in der EXE (Edits an der ini greifen ohne Neustart).
+  Counters.Score      := score;
+  Counters.Errors     := nErr;
+  Counters.Warnings   := nWarn;
+  Counters.Hints      := nHint;
+  Counters.Vulns      := nVuln;
+  Counters.Hotspots   := nHot;
+  Counters.FileErrors := nFileErr;
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    Counters.GradeBMax := Settings.ScoreThresholdB;
+    Counters.GradeCMax := Settings.ScoreThresholdC;
+    Counters.GradeDMax := Settings.ScoreThresholdD;
+  finally
+    Settings.Free;
+  end;
+  grade := TStatsTilesBuilder.ScoreToGrade(score,
+    Counters.GradeBMax, Counters.GradeCMax, Counters.GradeDMax);
+  FTileScore.Caption := grade;
+  // TileWire setzt den Hint rekursiv auf alle Sub-Labels der Kachel;
+  // Tag/OnClick werden idempotent erneut gesetzt.
+  TileWire(FTileScore, TStatsTilesBuilder.BuildScoreHint(grade, Counters),
+    0, TileClickClear);
 end;
 
 procedure TForm2.ApplyFilter;
@@ -2394,8 +2436,13 @@ begin
   LblMinSev.Caption  := _('Min:');
   LblSearch.Caption  := _('Search:');
   LblProfile.Caption := _('Profile:');
-  Label1.Caption     := _('Project path:');
-  Button7.Caption    := _('Analyse file');
+  // Caption-Paritaet 2026-08-14: Wortlaute wie im IDE-Plugin
+  // (uIDEAnalyserForm CreateUI): 'Path:' statt 'Project path:',
+  // Datei-Button mit Glyph, Suchfeld mit demselben Placeholder.
+  // Das 'Search:'-Label bleibt (EXE-Layout); das Plugin hat keins.
+  Label1.Caption     := _('Path:');
+  Button7.Caption    := _('📄 File');
+  SearchEdit.TextHint := _('Filter file / method / finding...');
   // Button6-Caption setzt ProjectpathChangedScope (Smart-Path) selbst.
 
   ResultGrid.Cells[0, 0] := _('File');
@@ -2955,12 +3002,14 @@ begin
     Ord(fkFileReadError), TileClickKind);
   TileWire(FTileCyclomatic, _('Cyclomatic Complexity') + sLineBreak +
     _('Methods with McCabe complexity > threshold (default 10).')
+    + sLineBreak + _('Hard to test - refactor into smaller methods.')
     + sLineBreak + _('Click: filter grid to Cyclomatic'),
     Ord(fkCyclomaticComplexity), TileClickKind);
 
   // Typ-Kacheln -> Typ-Combo
   TileWire(FTileBug, _('Bugs') + sLineBreak +
     _('Findings of type Bug (wrong behaviour, crash, wrong result).')
+    + sLineBreak + _('Crosses severities - Bugs can be Errors OR Warnings.')
     + sLineBreak + _('Click: filter grid to Bug type'),
     Ord(tfBug), TileClickType);
   TileWire(FTileVuln, _('Security') + sLineBreak +
@@ -2973,8 +3022,11 @@ begin
     Ord(tfCodeDuplication), TileClickType);
 
   // Quality-Kachel = Reset (Score ist eine Aggregation, kein Filter).
+  // Statischer Start-Hint wie im Plugin; UpdateStats ersetzt ihn nach
+  // jedem Lauf durch den Detail-Tooltip (BuildScoreHint).
   TileWire(FTileScore, _('Quality') + sLineBreak +
     _('Weighted quality score (lower = better).')
+    + sLineBreak + _('Weights: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2.')
     + sLineBreak + _('Click: reset filters (show everything)'),
     0, TileClickClear);
 end;

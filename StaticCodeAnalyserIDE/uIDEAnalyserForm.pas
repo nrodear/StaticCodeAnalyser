@@ -2340,36 +2340,9 @@ begin
   //  siehe Kommentar am Ende von ApplyFilter.)
 end;
 
-// Liefert den Sonar-Style-Letter-Grade A..E aus dem rohen gewichteten
-// Score. Schwellwerte aus analyser.ini [Score]:
-//   * A  = perfekt (0 Findings)
-//   * B  = 1..ABMax    (Default 50)
-//   * C  = ABMax+1..BCMax (Default 200)
-//   * D  = BCMax+1..CDMax (Default 500)
-//   * E  = > CDMax
-//
-// Vorteil gegenueber der reinen Zahl: skaliert wahrnehmungs-konstant -
-// 12.847 ist nicht "viel schlimmer als 5.420", in beiden Faellen wirft
-// die Kachel "E" raus und der Reader weiss sofort "rot". Detail-Zahl
-// landet im Tooltip.
-function ScoreToGrade(AScore, ABMax, BCMax, CDMax: Integer): string;
-begin
-  if AScore <= 0     then Exit('A');
-  if AScore <= ABMax then Exit('B');
-  if AScore <= BCMax then Exit('C');
-  if AScore <= CDMax then Exit('D');
-  Result := 'E';
-end;
-
-// Liefert eine 1-Zeilen-Erklaerung zum Grade fuer den Tooltip.
-function GradeMeaning(const AGrade: string): string;
-begin
-  if AGrade = 'A' then Exit(_('No findings - clean baseline'));
-  if AGrade = 'B' then Exit(_('Clean - minor smells only'));
-  if AGrade = 'C' then Exit(_('Visible tech debt, no critical bugs'));
-  if AGrade = 'D' then Exit(_('Multiple errors/vulnerabilities - refactor advised'));
-  Result := _('Refactor needed - many critical findings');
-end;
+// ScoreToGrade/GradeMeaning/BuildScoreHint leben seit der Caption-
+// Paritaet 2026-08-14 in uIDEStatsTiles (TStatsTilesBuilder) - EXE und
+// Plugin teilen Skala UND Tooltip-Wortlaut aus einer Quelle.
 
 // Setzt Hint-Property rekursiv auf C und seine TWinControl-Children.
 // Notwendig weil der Tile aus mehreren ueberlagerten Labels besteht und
@@ -2398,7 +2371,7 @@ procedure TAnalyserFrame.UpdateStats;
 //   Vulnerability=10, Error=7, Hotspot=5, Warning=3, Hint=1, FileErr=2
 //
 // Anzeige seit 2026-05: roher Score wird auf Letter-Grade A..E gemappt
-// (siehe ScoreToGrade). Die Kachel zeigt nur noch den Buchstaben, die
+// (TStatsTilesBuilder.ScoreToGrade). Die Kachel zeigt nur den Buchstaben, die
 // Rohzahl + Severity-Breakdown landen im Tooltip - skaliert besser bei
 // grossen Projekten und macht die Aussage wahrnehmungs-konstant.
 const
@@ -2496,20 +2469,23 @@ begin
     bcMax := 200;
     cdMax := 500;
   end;
-  grade := ScoreToGrade(score, abMax, bcMax, cdMax);
+  grade := TStatsTilesBuilder.ScoreToGrade(score, abMax, bcMax, cdMax);
   FTileScore.Caption := grade;
 
-  scoreHint :=
-    _('Code Quality') + ': ' + grade + ' - ' + GradeMeaning(grade) + sLineBreak +
-    Format(_('Raw score: %d'), [score]) + sLineBreak +
-    Format(_('Errors: %d, Warnings: %d, Hints: %d'),
-      [nErr, nWarn, nHint]) + sLineBreak +
-    Format(_('Vulnerabilities: %d, Hotspots: %d, File errors: %d'),
-      [nVuln, nHot, nFileErr]) + sLineBreak +
-    Format(_('Grade scale: A=0, B<=%d, C<=%d, D<=%d, E>%d'),
-      [abMax, bcMax, cdMax, cdMax]) + sLineBreak +
-    _('Weights: Vuln 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2') + sLineBreak +
-    _('Click: reset filters (show everything)');
+  // Tooltip-Wortlaut kommt aus der geteilten Quelle (uIDEStatsTiles) -
+  // identisch mit der EXE (Caption-Paritaet 2026-08-14).
+  var Counters: TScoreCounters;
+  Counters.Score      := score;
+  Counters.Errors     := nErr;
+  Counters.Warnings   := nWarn;
+  Counters.Hints      := nHint;
+  Counters.Vulns      := nVuln;
+  Counters.Hotspots   := nHot;
+  Counters.FileErrors := nFileErr;
+  Counters.GradeBMax  := abMax;
+  Counters.GradeCMax  := bcMax;
+  Counters.GradeDMax  := cdMax;
+  scoreHint := TStatsTilesBuilder.BuildScoreHint(grade, Counters);
 
   // Hint rekursiv setzen: Tile-Container + alle Subcontrols (TopRow,
   // IconLbl, CountLbl, CapLbl) - sonst wuerde Hover auf Glyph oder
