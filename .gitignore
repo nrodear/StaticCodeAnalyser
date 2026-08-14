@@ -197,3 +197,13 @@ tools/perf_analyse.md
 # Regel darueber greift nur im Wurzelverzeichnis - v0.9.13 hinterliess
 # hier 17 MB untracked, die ein `git add -A` mitgenommen haette.
 /release-artifacts/
+
+# ---- Baseline-Ausgaben der Konsumenten (IDE 'Write baseline' / EXE) ----
+# Die Repo-Baseline .sca/sca.baseline.json ist bewusst getrackt. Alles
+# Weitere unter .sca/ sind lokale Artefakte aus Baseline-Tests je
+# Projekt (08-08-Nacht) - bleiben untracked, sonst muellt jedes
+# 'Write baseline' den git status zu. Absichtlich tracken: git add -f.
+/.sca/*
+!/.sca/sca.baseline.json
+/StaticCodeAnalyserForm/tests/.sca/
+/StaticCodeAnalyserIDE/.sca/
