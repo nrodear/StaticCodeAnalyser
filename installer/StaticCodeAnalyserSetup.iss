@@ -36,6 +36,16 @@
 #define SCAAppName      "Static Code Analyser for Delphi (IDE-Plugin)"
 #define SCAPublisher    "StaticCodeAnalyser"
 
+; --- Community-Buttons unten links im Wizard (Vorbild: Inno-Setup-eigener
+; Installer). Klick oeffnet den STANDARD-BROWSER - rein nutzerinitiiert,
+; das Privacy-Gate (kein automatischer Netzzugriff des Setups) bleibt
+; unberuehrt. SCADonateUrl leer = Donate-Button erscheint nicht (die
+; PayPal-Adresse ist ein User-Entscheid; per /DSCADonateUrl=... setzbar).
+#ifndef SCADonateUrl
+  #define SCADonateUrl ""
+#endif
+#define SCAGitHubUrl    "https://github.com/nrodear/StaticCodeAnalyser"
+
 ; --- Quell-BPLs ---------------------------------------------------------------
 ; RELEASE-ZIEL laut Konzept P1: Monolith-BPL "StaticCodeAnalyser.Plugin.d12.bpl"
 ; (requires nur rtl/vcl/vclwinx/designide/xmlrtl). Diese dpk existiert im Repo
@@ -100,6 +110,10 @@ UninstallDisplayName={#SCAAppName}
 UninstallDisplayIcon={app}\bpl\d12\{#SCAPluginBpl}
 ; Kein Neustart noetig; IDE-Prozess-Check passiert im [Code]-Teil:
 CloseApplications=no
+; Sprachauswahl IMMER anbieten (Nutzer-Feedback 2026-08-15: bei englischer
+; Windows-Anzeigesprache kam der Wizard stumm englisch; deutsche Nutzer mit
+; en-Windows sind in der Delphi-Welt haeufig - fragen statt raten):
+ShowLanguageDialog=yes
 
 [Languages]
 ; de + en laut Konzept P3 (P1 liefert das Geruest schon mit):
@@ -114,6 +128,10 @@ de.IdeRunning=Die Delphi-12-IDE (bds.exe, BDS 23.0) scheint zu laufen. Bitte all
 en.IdeRunning=The Delphi 12 IDE (bds.exe, BDS 23.0) appears to be running. Please close all Delphi 12 instances and restart setup.
 de.DevBplWarn=In "Known Packages" (BDS 23.0) ist bereits eine Entwickler-Registrierung des Plugins mit anderem Pfad eingetragen:%n%n%1%n%nDer Eintrag wird durch die Installations-Registrierung ersetzt (Koexistenz-Schutz, verhindert Doppel-Laden).
 en.DevBplWarn=A developer registration of the plugin with a different path already exists in "Known Packages" (BDS 23.0):%n%n%1%n%nIt will be replaced by the installed registration (coexistence guard, prevents double loading).
+de.DonateBtn=PayPal-Spende
+en.DonateBtn=PayPal Donate
+de.StarBtn=Stern auf GitHub
+en.StarBtn=Star on GitHub
 
 [Messages]
 ; Privacy-Hinweis auf der Willkommensseite ergaenzen:
@@ -239,6 +257,60 @@ begin
     MsgBox(CustomMessage('IdeRunning'), mbError, MB_OK);
     Result := False;
   end;
+end;
+
+// ---------------------------------------------------------------------------
+// Community-Buttons unten links (Vorbild: Inno-Setup-eigener Installer).
+// ShellExecAsOriginalUser: oeffnet den Browser im Nutzerkontext - reiner
+// Klick-Link, das Setup selbst baut weiterhin keine Verbindung auf.
+// ---------------------------------------------------------------------------
+
+procedure OpenCommunityUrl(const Url: string);
+var
+  ErrCode: Integer;
+begin
+  ShellExecAsOriginalUser('open', Url, '', '', SW_SHOWNORMAL, ewNoWait, ErrCode);
+end;
+
+procedure StarButtonClick(Sender: TObject);
+begin
+  OpenCommunityUrl('{#SCAGitHubUrl}');
+end;
+
+#if SCADonateUrl != ""
+procedure DonateButtonClick(Sender: TObject);
+begin
+  OpenCommunityUrl('{#SCADonateUrl}');
+end;
+#endif
+
+procedure InitializeWizard;
+var
+  Btn: TNewButton;
+  NextLeft: Integer;
+begin
+  NextLeft := ScaleX(12);
+
+#if SCADonateUrl != ""
+  Btn := TNewButton.Create(WizardForm);
+  Btn.Parent  := WizardForm;
+  Btn.Left    := NextLeft;
+  Btn.Top     := WizardForm.CancelButton.Top;
+  Btn.Width   := ScaleX(100);
+  Btn.Height  := WizardForm.CancelButton.Height;
+  Btn.Caption := CustomMessage('DonateBtn');
+  Btn.OnClick := @DonateButtonClick;
+  NextLeft := Btn.Left + Btn.Width + ScaleX(8);
+#endif
+
+  Btn := TNewButton.Create(WizardForm);
+  Btn.Parent  := WizardForm;
+  Btn.Left    := NextLeft;
+  Btn.Top     := WizardForm.CancelButton.Top;
+  Btn.Width   := ScaleX(110);
+  Btn.Height  := WizardForm.CancelButton.Height;
+  Btn.Caption := CustomMessage('StarBtn');
+  Btn.OnClick := @StarButtonClick;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
