@@ -43,7 +43,6 @@ type
     SeverityFilterCombo: TComboBox;
     LblType: TLabel;
     TypeFilterCombo: TComboBox;
-    LblSearch: TLabel;
     SearchEdit: TEdit;
     // ---- Rule-Set-Filter (Profile + Min-Severity) ----
     // Combos schreiben transient in TRepoSettings.Profile/MinSeverity
@@ -2434,12 +2433,12 @@ begin
   LblFilter.Caption  := _('Severity:');
   LblType.Caption    := _('Type:');
   LblMinSev.Caption  := _('Min:');
-  LblSearch.Caption  := _('Search:');
   LblProfile.Caption := _('Profile:');
   // Caption-Paritaet 2026-08-14: Wortlaute wie im IDE-Plugin
   // (uIDEAnalyserForm CreateUI): 'Path:' statt 'Project path:',
   // Datei-Button mit Glyph, Suchfeld mit demselben Placeholder.
-  // Das 'Search:'-Label bleibt (EXE-Layout); das Plugin hat keins.
+  // Das fruehere 'Search:'-Label ist wie im Plugin entfernt (User-Edit
+  // im Designer) - der Placeholder uebernimmt die Beschriftung.
   Label1.Caption     := _('Path:');
   Button7.Caption    := _('📄 File');
   SearchEdit.TextHint := _('Filter file / method / finding...');
