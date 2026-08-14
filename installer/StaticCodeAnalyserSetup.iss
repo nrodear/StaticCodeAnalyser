@@ -149,6 +149,11 @@ de.DonateBtn=PayPal-Spende
 en.DonateBtn=PayPal Donate
 de.StarBtn=Stern auf GitHub
 en.StarBtn=Star on GitHub
+; Versions-Uebersicht auf der "Ready to Install"-Seite (Nutzerwunsch
+; 2026-08-15). Bewusst dieselben Aussagen wie die Matrix in
+; README_Installer.md par.0 - bei Aenderungen BEIDE Stellen pflegen.
+de.ReadyVersionInfo=Unterstuetzte Delphi-Versionen:%n%n      Delphi 12.0 - 12.3 (32-bit-IDE)%n            JA - dieses Setup%n      Delphi 12.3 (64-bit-IDE)%n            noch nicht (vorbereitet, braucht eigene Win64-BPL)%n      Delphi 13 "Florence"%n            noch nicht%n      Delphi 11 und aelter%n            nicht unterstuetzt%n%nHinweis: Fuer andere Delphi-IDE-Versionen bestehen derzeit keine Testmoeglichkeiten. Alternative: das Projekt von GitHub laden und die Packages selbst in der IDE bauen und installieren - Anleitung (HowTo_Build.md) im Repository:%n      {#SCAGitHubUrl}
+en.ReadyVersionInfo=Supported Delphi versions:%n%n      Delphi 12.0 - 12.3 (32-bit IDE)%n            YES - this setup%n      Delphi 12.3 (64-bit IDE)%n            not yet (prepared, needs its own Win64 BPL)%n      Delphi 13 "Florence"%n            not yet%n      Delphi 11 and older%n            not supported%n%nNote: there is currently no way for us to test on other Delphi IDE versions. Alternative: download the project from GitHub and build/install the packages yourself in the IDE - instructions (HowTo_Build.md) in the repository:%n      {#SCAGitHubUrl}
 
 [Messages]
 ; Privacy-Hinweis auf der Willkommensseite ergaenzen:
@@ -342,6 +347,19 @@ begin
   OpenCommunityUrl('{#SCADonateUrl}');
 end;
 #endif
+
+// "Ready to Install"-Seite: Versions-Uebersicht + Selbstbau-Hinweis VOR den
+// Standard-Infos (Zielordner). Die Seite zeigt sonst nur "Click Install..." -
+// genau hier trifft der Nutzer die Entscheidung, also gehoert die
+// Unterstuetzungs-Auskunft hierhin (Nutzerwunsch 2026-08-15).
+function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
+  MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo,
+  MemoTasksInfo: String): String;
+begin
+  Result := CustomMessage('ReadyVersionInfo') + NewLine + NewLine;
+  if MemoDirInfo <> '' then
+    Result := Result + MemoDirInfo + NewLine;
+end;
 
 procedure InitializeWizard;
 var
