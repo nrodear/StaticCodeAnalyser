@@ -1,5 +1,33 @@
 # Installer P1 — Bauanleitung (D12-Schiene)
 
+## 0. Community-Buttons + unterstützte Delphi-Versionen
+
+**Buttons unten links im Wizard** (Vorbild: Inno-Setup-eigener Installer;
+Klick öffnet den Standard-Browser, das Setup selbst bleibt netzfrei):
+
+- **PayPal Donate** → `https://paypal.me/nrodear` (User-Festlegung
+  2026-08-15; Default im `.iss` als `SCADonateUrl`, per
+  `/DSCADonateUrl=...` überschreibbar, leer = Button ausgeblendet)
+- **Star on GitHub** → `https://github.com/nrodear/StaticCodeAnalyser`
+
+**Unterstützungs-Matrix Delphi-IDE-Versionen** (Stand 2026-08-15;
+BPLs sind compiler-versionsgebunden — eine D12-BPL lädt NUR in BDS 23.0):
+
+| Delphi | BDS | IDE-Bitness | Plugin-BPL | Registry-Schlüssel (HKCU) | Setup-Stand |
+|---|---|---|---|---|---|
+| ≤ 11 Alexandria | ≤ 22.0 | 32-bit | — | — | **NICHT unterstützt** (bewusste Entscheidung: Editor-Integration nutzt die RAD-Studio-12-ToolsAPI; D11 im Konzept 2026-07-23 abgelehnt) |
+| 12.0–12.2 Athens | 23.0 | 32-bit | `StaticCodeAnalyser.Plugin.d12.bpl` (Win32) | `...\BDS\23.0\Known Packages` | **UNTERSTÜTZT — aktueller Release-Weg** |
+| 12.3 Athens | 23.0 | 32-bit-IDE | dieselbe Win32-BPL | wie oben | **UNTERSTÜTZT** (die 32-bit-IDE von 12.3 ist identisch registriert) |
+| 12.3 Athens | 23.0 | **64-bit-IDE** | Win64-Design-BPL nötig (32-bit-BPL lädt NIE in der 64-bit-IDE) | `...\BDS\23.0\Known Packages x64` (VOR Aktivierung am Zielsystem verifizieren) | **VORBEREITET, AUS**: `.iss`-Zweig hinter `/DSCA_D12_X64`; blockiert bis eine Win64-BPL gebaut ist (Plugin-dproj um Win64 ergänzen, braucht die 64-bit-Designzeit-Pakete aus 12.3) |
+| 13 Florence | **37.0** (Nummernsprung!) | 32- **und** 64-bit | eigene d13/d13x64-BPLs (VER370, Suffix 370) | `...\BDS\37.0\Known Packages` bzw. `Known Packages x64`; 64-bit-Erkennung via Wert `App x64` | **GEBLOCKT** (kein D13 auf der Build-Maschine); Platzhalter im `.iss` auskommentiert |
+
+Warum keine älteren Versionen: neben der ToolsAPI-Grenze ist jede BPL an
+ihre Compiler-Version gebunden — Unterstützung einer weiteren Delphi-
+Version heißt immer: eigener Projektsatz, eigener Build, eigene
+Registry-Schiene. Ungetestete Schienen werden nicht ins Setup
+aufgenommen (lieber ehrlich „nicht unterstützt" als still kaputt).
+
+
 > Referenz: Welle 1, 2026-07-25 | Grundlage: Doku_05_IDE_Plugin.md (Installer-Abschnitt),
 > Konzept_IdePluginInstaller_2026-07-23 | D13 (BDS 37.0) ist GEBLOCKT — nur als
 > auskommentierter Platzhalter im .iss enthalten.

@@ -39,10 +39,10 @@
 ; --- Community-Buttons unten links im Wizard (Vorbild: Inno-Setup-eigener
 ; Installer). Klick oeffnet den STANDARD-BROWSER - rein nutzerinitiiert,
 ; das Privacy-Gate (kein automatischer Netzzugriff des Setups) bleibt
-; unberuehrt. SCADonateUrl leer = Donate-Button erscheint nicht (die
-; PayPal-Adresse ist ein User-Entscheid; per /DSCADonateUrl=... setzbar).
+; unberuehrt. SCADonateUrl leer = Donate-Button erscheint nicht.
+; PayPal-Adresse vom User festgelegt 2026-08-15 (siehe README_Installer).
 #ifndef SCADonateUrl
-  #define SCADonateUrl ""
+  #define SCADonateUrl "https://paypal.me/nrodear"
 #endif
 #define SCAGitHubUrl    "https://github.com/nrodear/StaticCodeAnalyser"
 
@@ -87,6 +87,21 @@
 #define BDS23Key        "Software\Embarcadero\BDS\23.0"
 #define KnownPackages23 BDS23Key + "\Known Packages"
 #define DisabledPkgs23  BDS23Key + "\Disabled Packages"
+
+; --- D12.3 64-bit-IDE (VORBEREITET, standardmaessig AUS) ---------------------
+; Aktivieren mit ISCC /DSCA_D12_X64, sobald (a) eine Win64-DESIGN-BPL des
+; Plugins gebaut ist (Plugin-dproj um die Win64-Plattform ergaenzen; braucht
+; die 64-bit-Designzeit-Pakete aus D12.3) und (b) der Registry-Schluessel am
+; Zielsystem VERIFIZIERT wurde. Merksaetze aus der D13-Recherche, die hier
+; analog gelten: 32-bit-BPL laedt NIE in der 64-bit-IDE; Registrierung der
+; 64-bit-IDE laeuft ueber "Known Packages x64"; Erkennung via Wert "App x64".
+#ifdef SCA_D12_X64
+  #define KnownPackages23x64 BDS23Key + "\Known Packages x64"
+  #define DisabledPkgs23x64  BDS23Key + "\Disabled Packages x64"
+  #ifndef SCABplSourceDirX64
+    #define SCABplSourceDirX64 "C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\Win64"
+  #endif
+#endif
 
 [Setup]
 AppId={{7C1B3A52-9E44-4B7D-A0F3-5D2C8E6F1B90}
@@ -159,6 +174,12 @@ Source: "{#SCABplSourceDir}\SCA.SharedUI.bpl"; DestDir: "{app}\bpl\d12"; Flags: 
 Source: "{#SCABplSourceDir}\{#SCAPluginBpl}";  DestDir: "{app}\bpl\d12"; Flags: ignoreversion
 #endif
 
+#ifdef SCA_D12_X64
+; D12.3-64-bit-IDE: eigene Win64-BPL in eigenen Ordner (gleicher Dateiname,
+; anderer Build - Quellordner ist der Win64-BPL-Standardordner).
+Source: "{#SCABplSourceDirX64}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d12x64"; Flags: ignoreversion
+#endif
+
 ; --- Regelkatalog -------------------------------------------------------------
 ; Doku Punkt 10: FindJsonFile-Pfad 3 (Install-Verzeichnis) gewinnt vor Pfad 4
 ; (APPDATA); der Installer ueberschreibt rules\sca-rules.json bei Updates.
@@ -181,6 +202,11 @@ Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
 Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
   ValueName: "{app}\bpl\d12\{#SCAPluginBpl}"; \
   ValueData: "Static Code Analyser for Delphi (IDE-Plugin)"; Flags: uninsdeletevalue
+#ifdef SCA_D12_X64
+Root: HKCU; Subkey: "{#KnownPackages23x64}"; ValueType: string; \
+  ValueName: "{app}\bpl\d12x64\{#SCAPluginBpl}"; \
+  ValueData: "Static Code Analyser for Delphi (IDE-Plugin, 64-bit IDE)"; Flags: uninsdeletevalue
+#endif
 
 ; =============================================================================
 ; --- D13-PLATZHALTER (GEBLOCKT: kein Delphi 13 auf der Build-Maschine) --------
@@ -370,6 +396,12 @@ begin
     InstalledPath := ExpandConstant('{app}\bpl\d12\') + PLUGIN_BPL_NAME;
     RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_23, InstalledPath);
     RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PACKAGES_23, InstalledPath);
+#ifdef SCA_D12_X64
+    RegDeleteValue(HKEY_CURRENT_USER, '{#KnownPackages23x64}',
+      ExpandConstant('{app}\bpl\d12x64\') + PLUGIN_BPL_NAME);
+    RegDeleteValue(HKEY_CURRENT_USER, '{#DisabledPkgs23x64}',
+      ExpandConstant('{app}\bpl\d12x64\') + PLUGIN_BPL_NAME);
+#endif
 #ifndef SCA_MONOLITH
     RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_23,
       ExpandConstant('{app}\bpl\d12\SCA.Engine.bpl'));
