@@ -40,7 +40,7 @@ begin
   if not TFile.Exists(FileName) then
   begin
     Application.MessageBox(PChar(_('File not found: ') + #13#10 + FileName),
-                           'DFM Viewer', 0);
+                           PChar(_('DFM Viewer')), 0);
     Exit;
   end;
 

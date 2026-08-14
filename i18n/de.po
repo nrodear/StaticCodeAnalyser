@@ -1602,8 +1602,8 @@ msgstr "Betrifft nur die Oberfläche des Plugins - Detektor-Meldungen, Befunde u
 msgid "Language"
 msgstr "Sprache"
 
-msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."
-msgstr "UI-Sprache: %s - übrige Beschriftungen (Kacheln, Hilfe-Panel) wechseln nach einem Neustart."
+msgid "UI language: %s - remaining captions (tiles, filter lists, help panel) switch after a restart."
+msgstr "UI-Sprache: %s - übrige Beschriftungen (Kacheln, Filterlisten, Hilfe-Panel) wechseln nach einem Neustart."
 
 # --- Nachtrag 2026-08-02: Baseline-Integration, Sonar- und
 # Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still
@@ -2030,3 +2030,24 @@ msgstr "Text (einzeiliger Hinweis, kein Fenster)"
 
 msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by clicking its text. Takes effect on save."
 msgstr "Wirkt nur auf Editor-Markierungsstreifen, Mini-Infobar und Titelleiste des Hover-Overlays. Properties-Panel und Haupt-Grid behalten die Standard-Severity-Farben. Hell/Dunkel-Varianten automatisch. \"Text\" ersetzt das Overlay-Fenster durch einen transparenten einzeiligen Hinweis (Badge + Regelname, ohne Beschreibung/Fix-Block - siehe Findings-Panel); ein Fund lässt sich per Klick auf seinen Text verwerfen. Wirkt beim Speichern."
+
+# i18n-Paritaet EXE-UI 2026-08-13: Typ-Combo-Separatoren, DFM-Viewer-
+# Dialogtitel und zwei bislang unuebersetzte CLI-Meldungen.
+
+msgid "--- Errors (A-Z) ---"
+msgstr "--- Fehler (A-Z) ---"
+
+msgid "--- Warnings (A-Z) ---"
+msgstr "--- Warnungen (A-Z) ---"
+
+msgid "--- Hints (A-Z) ---"
+msgstr "--- Hinweise (A-Z) ---"
+
+msgid "DFM Viewer"
+msgstr "DFM-Viewer"
+
+msgid "More than %d files found - scan cancelled."
+msgstr "Mehr als %d Dateien gefunden - Scan abgebrochen."
+
+msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."
+msgstr "Sonar-Push: .sonar\\external\\ enthält jetzt genau diese %d Issue-Datei(en) - Dateien früherer Pushes wurden entfernt."

@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2032 Zeilen, 71731 Bytes
-  CPoLines_de: array[0..2031] of string = (
+  // i18n\de.po - 2053 Zeilen, 70463 Bytes
+  CPoLines_de: array[0..2052] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1619,8 +1619,8 @@ const
     'msgid "Language"',
     'msgstr "Sprache"',
     '',
-    'msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."',
-    'msgstr "UI-Sprache: %s - '#$00FC'brige Beschriftungen (Kacheln, Hilfe-Panel) wechseln nach einem Neustart."',
+    'msgid "UI language: %s - remaining captions (tiles, filter lists, help panel) switch after a restart."',
+    'msgstr "UI-Sprache: %s - '#$00FC'brige Beschriftungen (Kacheln, Filterlisten, Hilfe-Panel) wechseln nach einem Neustart."',
     '',
     '# --- Nachtrag 2026-08-02: Baseline-Integration, Sonar- und',
     '# Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still',
@@ -2046,7 +2046,28 @@ const
     'msgstr "Text (einzeiliger Hinweis, kein Fenster)"',
     '',
     'msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by clicking its text. Takes effect on save."',
-    'msgstr "Wirkt nur auf Editor-Markierungsstreifen, Mini-Infobar und Titelleiste des Hover-Overlays. Properties-Panel und Haupt-Grid behalten die Standard-Severity-Farben. Hell/Dunkel-Varianten automatisch. \"Text\" ersetzt das Overlay-Fenster durch einen transparenten einzeiligen Hinweis (Badge + Regelname, ohne Beschreibung/Fix-Block - siehe Findings-Panel); ein Fund l'#$00E4'sst sich per Klick auf seinen Text verwerfen. Wirkt beim Speichern."'
+    'msgstr "Wirkt nur auf Editor-Markierungsstreifen, Mini-Infobar und Titelleiste des Hover-Overlays. Properties-Panel und Haupt-Grid behalten die Standard-Severity-Farben. Hell/Dunkel-Varianten automatisch. \"Text\" ersetzt das Overlay-Fenster durch einen transparenten einzeiligen Hinweis (Badge + Regelname, ohne Beschreibung/Fix-Block - siehe Findings-Panel); ein Fund l'#$00E4'sst sich per Klick auf seinen Text verwerfen. Wirkt beim Speichern."',
+    '',
+    '# i18n-Paritaet EXE-UI 2026-08-13: Typ-Combo-Separatoren, DFM-Viewer-',
+    '# Dialogtitel und zwei bislang unuebersetzte CLI-Meldungen.',
+    '',
+    'msgid "--- Errors (A-Z) ---"',
+    'msgstr "--- Fehler (A-Z) ---"',
+    '',
+    'msgid "--- Warnings (A-Z) ---"',
+    'msgstr "--- Warnungen (A-Z) ---"',
+    '',
+    'msgid "--- Hints (A-Z) ---"',
+    'msgstr "--- Hinweise (A-Z) ---"',
+    '',
+    'msgid "DFM Viewer"',
+    'msgstr "DFM-Viewer"',
+    '',
+    'msgid "More than %d files found - scan cancelled."',
+    'msgstr "Mehr als %d Dateien gefunden - Scan abgebrochen."',
+    '',
+    'msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."',
+    'msgstr "Sonar-Push: .sonar\\external\\ enth'#$00E4'lt jetzt genau diese %d Issue-Datei(en) - Dateien fr'#$00FC'herer Pushes wurden entfernt."'
   );
 
   // i18n\en.po - 201 Zeilen, 5561 Bytes
@@ -2254,7 +2275,7 @@ const
     'msgstr "Opened: %s  Line: %d"'
   );
 
-  // i18n\fr.po - 1998 Zeilen, 73593 Bytes
+  // i18n\fr.po - 1998 Zeilen, 73626 Bytes
   CPoLines_fr: array[0..1997] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -3872,8 +3893,8 @@ const
     'msgid "Language"',
     'msgstr "Langue"',
     '',
-    'msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."',
-    'msgstr "Langue de l''interface : %s - les libell'#$00E9's restants (tuiles, panneau d''aide) changeront apr'#$00E8's un red'#$00E9'marrage."',
+    'msgid "UI language: %s - remaining captions (tiles, filter lists, help panel) switch after a restart."',
+    'msgstr "Langue de l''interface : %s - les libell'#$00E9's restants (tuiles, listes de filtres, panneau d''aide) changeront apr'#$00E8's un red'#$00E9'marrage."',
     '',
     '# --- Nachtrag 2026-08-02: Baseline-Integration, Sonar- und',
     '# Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still',

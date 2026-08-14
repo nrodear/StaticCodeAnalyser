@@ -69,6 +69,22 @@ type
       AWidth, AHeight: Integer); static;
   end;
 
+  // Rohzahlen fuer den Quality-Tooltip - ein Parameterpaket, damit EXE
+  // und Plugin denselben BuildScoreHint-Aufruf nutzen (Caption-Paritaet
+  // 2026-08-14: Wortlaut beider UIs kommt aus EINER Quelle).
+  TScoreCounters = record
+    Score      : Integer;   // gewichtete Summe (niedriger = besser)
+    Errors     : Integer;
+    Warnings   : Integer;
+    Hints      : Integer;
+    Vulns      : Integer;
+    Hotspots   : Integer;
+    FileErrors : Integer;
+    GradeBMax  : Integer;   // analyser.ini [Score] GradeBMax (50)
+    GradeCMax  : Integer;   // [Score] GradeCMax (200)
+    GradeDMax  : Integer;   // [Score] GradeDMax (500)
+  end;
+
   TStatsTilesBuilder = class
   public
     // Erzeugt einen einzelnen Tile (Icon-Glyph + Count + Caption) im
@@ -84,6 +100,21 @@ type
     class procedure Build(AOwner: TComponent; Parent: TPanel;
       out TileError, TileWarn, TileHint, TileFileSev: TLabel;
       out TileBug, TileVuln, TileDup, TileCyclomatic, TileScore: TLabel); static;
+
+    // Sonar-Style-Letter-Grade A..E aus dem rohen gewichteten Score.
+    //   A = perfekt (0) / B = 1..ABMax / C = ..BCMax / D = ..CDMax / E > CDMax
+    // Vorteil gegenueber der reinen Zahl: skaliert wahrnehmungs-konstant -
+    // Detail-Zahl landet im Tooltip (BuildScoreHint).
+    class function ScoreToGrade(AScore, ABMax, BCMax,
+      CDMax: Integer): string; static;
+
+    // 1-Zeilen-Erklaerung zum Grade fuer den Quality-Tooltip.
+    class function GradeMeaning(const AGrade: string): string; static;
+
+    // Kompletter Tooltip der Quality-Kachel (Grade + Roh-Score +
+    // Breakdown + Skala + Gewichte + Klick-Aktion).
+    class function BuildScoreHint(const AGrade: string;
+      const C: TScoreCounters): string; static;
   end;
 
   // 3-Stufen-Responsive-Layout: Stage haengt von der ClientWidth des Root-
@@ -153,7 +184,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  Winapi.Windows, uAnalyserPalette, uAnalyserTheme, uIDEColors, uLocalization;
+  Winapi.Windows, System.SysUtils, uAnalyserPalette, uAnalyserTheme,
+  uIDEColors, uLocalization;
 
 type
   // Access-Class zum Lesen/Schreiben von TControl.OnResize (protected).
@@ -393,6 +425,45 @@ begin
   TileDup        := MakeTile(AOwner, Parent, _('Duplicates'),   GLYPH_DUP,     ICON_DUP,     TILE_W);
   TileCyclomatic := MakeTile(AOwner, Parent, _('Cyclomatic'),   GLYPH_CYCLO,   ICON_SMELL,   TILE_W_CYCLO);
   TileScore      := MakeTile(AOwner, Parent, _('Quality'),      GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE);
+end;
+
+class function TStatsTilesBuilder.ScoreToGrade(AScore, ABMax, BCMax,
+  CDMax: Integer): string;
+// Vertrag an der Deklaration. Hierher gezogen aus uIDEAnalyserForm
+// (Caption-Paritaet 2026-08-14) - EXE und Plugin teilen die Skala.
+begin
+  if AScore <= 0     then Exit('A');
+  if AScore <= ABMax then Exit('B');
+  if AScore <= BCMax then Exit('C');
+  if AScore <= CDMax then Exit('D');
+  Result := 'E';
+end;
+
+class function TStatsTilesBuilder.GradeMeaning(const AGrade: string): string;
+// Vertrag an der Deklaration.
+begin
+  if AGrade = 'A' then Exit(_('No findings - clean baseline'));
+  if AGrade = 'B' then Exit(_('Clean - minor smells only'));
+  if AGrade = 'C' then Exit(_('Visible tech debt, no critical bugs'));
+  if AGrade = 'D' then Exit(_('Multiple errors/vulnerabilities - refactor advised'));
+  Result := _('Refactor needed - many critical findings');
+end;
+
+class function TStatsTilesBuilder.BuildScoreHint(const AGrade: string;
+  const C: TScoreCounters): string;
+// Vertrag an der Deklaration. Wortlaut = bisheriger Plugin-Tooltip.
+begin
+  Result :=
+    _('Code Quality') + ': ' + AGrade + ' - ' + GradeMeaning(AGrade) + sLineBreak +
+    Format(_('Raw score: %d'), [C.Score]) + sLineBreak +
+    Format(_('Errors: %d, Warnings: %d, Hints: %d'),
+      [C.Errors, C.Warnings, C.Hints]) + sLineBreak +
+    Format(_('Vulnerabilities: %d, Hotspots: %d, File errors: %d'),
+      [C.Vulns, C.Hotspots, C.FileErrors]) + sLineBreak +
+    Format(_('Grade scale: A=0, B<=%d, C<=%d, D<=%d, E>%d'),
+      [C.GradeBMax, C.GradeCMax, C.GradeDMax, C.GradeDMax]) + sLineBreak +
+    _('Weights: Vuln 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2') + sLineBreak +
+    _('Click: reset filters (show everything)');
 end;
 
 { TResponsiveLayoutController }

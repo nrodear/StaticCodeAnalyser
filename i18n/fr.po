@@ -1614,8 +1614,8 @@ msgstr "Ne concerne que l'interface du plugin - les messages des détecteurs, le
 msgid "Language"
 msgstr "Langue"
 
-msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."
-msgstr "Langue de l'interface : %s - les libellés restants (tuiles, panneau d'aide) changeront après un redémarrage."
+msgid "UI language: %s - remaining captions (tiles, filter lists, help panel) switch after a restart."
+msgstr "Langue de l'interface : %s - les libellés restants (tuiles, listes de filtres, panneau d'aide) changeront après un redémarrage."
 
 # --- Nachtrag 2026-08-02: Baseline-Integration, Sonar- und
 # Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still

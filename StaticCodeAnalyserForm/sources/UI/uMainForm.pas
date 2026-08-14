@@ -43,7 +43,6 @@ type
     SeverityFilterCombo: TComboBox;
     LblType: TLabel;
     TypeFilterCombo: TComboBox;
-    LblSearch: TLabel;
     SearchEdit: TEdit;
     // ---- Rule-Set-Filter (Profile + Min-Severity) ----
     // Combos schreiben transient in TRepoSettings.Profile/MinSeverity
@@ -405,19 +404,27 @@ begin
 
     // ---- Profile-Combo befuellen aus TRuleCatalog.ProfileNames ----
     ProfileList := TRuleCatalog.ProfileNames;
+    // _('default') wie im IDE-Plugin (PopulateProfileCombo). VERTRAG an
+    // die .po-Dateien: 'default' MUSS Passthrough bleiben (msgstr =
+    // msgid), denn der Combo-Text wird als [Rules] Profile in die INI
+    // zurueckgeschrieben und dort wieder per IndexOf gesucht.
     if Length(ProfileList) = 0 then
-      ProfileCombo.Items.Add('default')
+      ProfileCombo.Items.Add(_('default'))
     else
       for Name in ProfileList do ProfileCombo.Items.Add(Name);
     // Default-Selektion = [Rules] Profile aus INI (leer = default).
     if Settings.Profile <> '' then
       Idx := ProfileCombo.Items.IndexOf(Settings.Profile)
     else
-      Idx := ProfileCombo.Items.IndexOf('default');
+      Idx := ProfileCombo.Items.IndexOf(_('default'));
     if Idx < 0 then Idx := 0;
     ProfileCombo.ItemIndex := Idx;
 
     // ---- Min-Severity-Combo befuellen: 3 fixe Stufen ----
+    // BEWUSST unlokalisiert: die Texte sind zugleich die INI-Werte
+    // ([Rules] MinSeverity, Rueckschreiben in MinSevComboChange). Eine
+    // Uebersetzung braeuchte eine Display/Value-Trennung - das IDE-Plugin
+    // (uIDESCAOptions) haelt sie genauso roh; gemeinsamer Backlog.
     MinSevCombo.Items.Add('hint');
     MinSevCombo.Items.Add('warning');
     MinSevCombo.Items.Add('error');
@@ -503,12 +510,16 @@ begin
   // RebuildFilterCombos die aktuelle Auswahl nach einem Scan
   // wiederherstellen kann (ItemIndex-Mapping waere nach dem Filtern
   // verschoben). tfAll = 0 -> Object = nil (siehe ApplyFilter-Lookup).
+  // Uebersetzbar, weil die Filterung ueber Ord(TTypeFilter) im Object
+  // laeuft (TFindingFilter.Matches vergleicht F.FindingType, nie den
+  // Combo-Text) - die Grid-Spalte zeigt weiterhin das technische
+  // TypeText-Feld, wie im IDE-Plugin.
   TypeFilterCombo.Items.AddObject(_('All'),              TObject(Ord(tfAll)));
-  TypeFilterCombo.Items.AddObject('Bug',                 TObject(Ord(tfBug)));
-  TypeFilterCombo.Items.AddObject('Code Smell',          TObject(Ord(tfCodeSmell)));
-  TypeFilterCombo.Items.AddObject('Vulnerability',       TObject(Ord(tfVulnerability)));
-  TypeFilterCombo.Items.AddObject('Security Hotspot',    TObject(Ord(tfSecurityHotspot)));
-  TypeFilterCombo.Items.AddObject('Code Duplication',    TObject(Ord(tfCodeDuplication)));
+  TypeFilterCombo.Items.AddObject(_('Bug'),              TObject(Ord(tfBug)));
+  TypeFilterCombo.Items.AddObject(_('Code Smell'),       TObject(Ord(tfCodeSmell)));
+  TypeFilterCombo.Items.AddObject(_('Vulnerability'),    TObject(Ord(tfVulnerability)));
+  TypeFilterCombo.Items.AddObject(_('Security Hotspot'), TObject(Ord(tfSecurityHotspot)));
+  TypeFilterCombo.Items.AddObject(_('Code Duplication'), TObject(Ord(tfCodeDuplication)));
   TypeFilterCombo.ItemIndex := 0;
 
   // Snapshot der frisch populierten Combo-Items - RebuildFilterCombos
@@ -1150,14 +1161,19 @@ begin
 end;
 
 procedure TForm2.ProjectpathChangedScope(Sender: TObject);
-// Sichtbarer Modus-Indikator (Review-Auflage Konzept par.4.3): der Analyse-
-// Button sagt, was er tun wird.
+// Caption-Paritaet 2026-08-14: Caption statisch wie im IDE-Plugin
+// ('▶ Analyse'). Der sichtbare Modus-Indikator (Review-Auflage Konzept
+// par.4.3) wandert in den Hint - die Information bleibt erhalten, nur
+// nicht mehr als abweichender Button-Text.
 begin
+  Button6.Caption := _('▶ Analyse');
+  Button6.ParentShowHint := False;
+  Button6.ShowHint := True;
   case ScopeForPath(Projectpath.Text) of
-    ssProject:      Button6.Caption := _('Analyse project');
-    ssProjectGroup: Button6.Caption := _('Analyse group');
+    ssProject:      Button6.Hint := _('Analyse project');
+    ssProjectGroup: Button6.Hint := _('Analyse group');
   else
-    Button6.Caption := _('Analyse directory');
+    Button6.Hint := _('Analyse directory');
   end;
 end;
 
@@ -1468,10 +1484,17 @@ begin
   end;
 end;
 
+// Implementierung weiter unten (bei WireTiles); UpdateStats braucht sie
+// schon hier fuer den Quality-Tooltip-Refresh.
+procedure TileWire(CountLbl: TLabel; const AHint: string; ATag: Integer;
+  AHandler: TNotifyEvent); forward;
+
 procedure TForm2.UpdateStats;
 // Befuellt die 9 Stats-Tiles aus FAllFindings. Quality-Score = gewichtete
 // Summe (niedriger = besser); Gewichte 1:1 vom IDE-Plugin uebernommen
 // damit die Werte zwischen Standalone und Plugin vergleichbar sind.
+// Quality-Kachel zeigt seit der Caption-Paritaet 2026-08-14 wie das
+// Plugin den Letter-Grade A..E (Rohzahl + Breakdown im Tooltip).
 const
   W_VULN     = 10;
   W_ERROR    = 7;
@@ -1485,6 +1508,9 @@ var
   nBug, nVuln, nHot, nDup      : Integer;
   nCyclo                       : Integer;
   score                        : Integer;
+  grade                        : string;
+  Settings                     : TRepoSettings;
+  Counters                     : TScoreCounters;
 begin
   if not Assigned(FTileError) then Exit;
 
@@ -1529,7 +1555,34 @@ begin
   FTileVuln.Caption       := IntToStr(nVuln);
   FTileDup.Caption        := IntToStr(nDup);
   FTileCyclomatic.Caption := IntToStr(nCyclo);
-  FTileScore.Caption      := IntToStr(score);
+
+  // Letter-Grade + Detail-Tooltip aus der geteilten Quelle
+  // (uIDEStatsTiles) - Anzeige und Wortlaut identisch mit dem Plugin.
+  // Schwellwerte aus analyser.ini [Score]; frische TRepoSettings wie
+  // ueberall in der EXE (Edits an der ini greifen ohne Neustart).
+  Counters.Score      := score;
+  Counters.Errors     := nErr;
+  Counters.Warnings   := nWarn;
+  Counters.Hints      := nHint;
+  Counters.Vulns      := nVuln;
+  Counters.Hotspots   := nHot;
+  Counters.FileErrors := nFileErr;
+  Settings := TRepoSettings.Create;
+  try
+    try Settings.Load; except end;
+    Counters.GradeBMax := Settings.ScoreThresholdB;
+    Counters.GradeCMax := Settings.ScoreThresholdC;
+    Counters.GradeDMax := Settings.ScoreThresholdD;
+  finally
+    Settings.Free;
+  end;
+  grade := TStatsTilesBuilder.ScoreToGrade(score,
+    Counters.GradeBMax, Counters.GradeCMax, Counters.GradeDMax);
+  FTileScore.Caption := grade;
+  // TileWire setzt den Hint rekursiv auf alle Sub-Labels der Kachel;
+  // Tag/OnClick werden idempotent erneut gesetzt.
+  TileWire(FTileScore, TStatsTilesBuilder.BuildScoreHint(grade, Counters),
+    0, TileClickClear);
 end;
 
 procedure TForm2.ApplyFilter;
@@ -2374,13 +2427,21 @@ begin
   // Filterzeile + Pfadzeile: die DFM-Captions wurden nie durch _()
   // ersetzt - ein deutscher Nutzer sah dauerhaft eine gemischt-
   // sprachige Toolbar (Button6 daneben war laengst uebersetzt).
+  // Fenstertitel: der DFM-Wert bliebe sonst fix englisch. de laesst den
+  // Produktnamen bewusst unuebersetzt (Passthrough), fr uebersetzt ihn.
+  Caption := _('Static Code Analysis Tool for Delphi');
   LblFilter.Caption  := _('Severity:');
   LblType.Caption    := _('Type:');
   LblMinSev.Caption  := _('Min:');
-  LblSearch.Caption  := _('Search:');
   LblProfile.Caption := _('Profile:');
-  Label1.Caption     := _('Project path:');
-  Button7.Caption    := _('Analyse file');
+  // Caption-Paritaet 2026-08-14: Wortlaute wie im IDE-Plugin
+  // (uIDEAnalyserForm CreateUI): 'Path:' statt 'Project path:',
+  // Datei-Button mit Glyph, Suchfeld mit demselben Placeholder.
+  // Das fruehere 'Search:'-Label ist wie im Plugin entfernt (User-Edit
+  // im Designer) - der Placeholder uebernimmt die Beschriftung.
+  Label1.Caption     := _('Path:');
+  Button7.Caption    := _('📄 File');
+  SearchEdit.TextHint := _('Filter file / method / finding...');
   // Button6-Caption setzt ProjectpathChangedScope (Smart-Path) selbst.
 
   ResultGrid.Cells[0, 0] := _('File');
@@ -2940,12 +3001,14 @@ begin
     Ord(fkFileReadError), TileClickKind);
   TileWire(FTileCyclomatic, _('Cyclomatic Complexity') + sLineBreak +
     _('Methods with McCabe complexity > threshold (default 10).')
+    + sLineBreak + _('Hard to test - refactor into smaller methods.')
     + sLineBreak + _('Click: filter grid to Cyclomatic'),
     Ord(fkCyclomaticComplexity), TileClickKind);
 
   // Typ-Kacheln -> Typ-Combo
   TileWire(FTileBug, _('Bugs') + sLineBreak +
     _('Findings of type Bug (wrong behaviour, crash, wrong result).')
+    + sLineBreak + _('Crosses severities - Bugs can be Errors OR Warnings.')
     + sLineBreak + _('Click: filter grid to Bug type'),
     Ord(tfBug), TileClickType);
   TileWire(FTileVuln, _('Security') + sLineBreak +
@@ -2958,8 +3021,11 @@ begin
     Ord(tfCodeDuplication), TileClickType);
 
   // Quality-Kachel = Reset (Score ist eine Aggregation, kein Filter).
+  // Statischer Start-Hint wie im Plugin; UpdateStats ersetzt ihn nach
+  // jedem Lauf durch den Detail-Tooltip (BuildScoreHint).
   TileWire(FTileScore, _('Quality') + sLineBreak +
     _('Weighted quality score (lower = better).')
+    + sLineBreak + _('Weights: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2.')
     + sLineBreak + _('Click: reset filters (show everything)'),
     0, TileClickClear);
 end;
@@ -3308,7 +3374,7 @@ begin
   ApplyUiCaptions;
   ProjectpathChangedScope(nil);
   StatusBar1.Panels[2].Text := Format(
-    _('UI language: %s - remaining captions (tiles, help panel) switch after a restart.'),
+    _('UI language: %s - remaining captions (tiles, filter lists, help panel) switch after a restart.'),
     [Code]);
   // Das Hamburger-Menue traegt seine Captions seit dem einmaligen Aufbau
   // in FormCreate - der Kommentar hier versprach frueher einen 'naechsten
