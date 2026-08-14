@@ -150,10 +150,22 @@ en.DonateBtn=PayPal Donate
 de.StarBtn=Stern auf GitHub
 en.StarBtn=Star on GitHub
 ; Versions-Uebersicht auf der "Ready to Install"-Seite (Nutzerwunsch
-; 2026-08-15). Bewusst dieselben Aussagen wie die Matrix in
-; README_Installer.md par.0 - bei Aenderungen BEIDE Stellen pflegen.
-de.ReadyVersionInfo=Unterstuetzte Delphi-Versionen:%n%n      Delphi 12.0 - 12.3 (32-bit-IDE)%n            JA - dieses Setup%n      Delphi 12.3 (64-bit-IDE)%n            noch nicht (vorbereitet, braucht eigene Win64-BPL)%n      Delphi 13 "Florence"%n            noch nicht%n      Delphi 11 und aelter%n            nicht unterstuetzt%n%nHinweis: Fuer andere Delphi-IDE-Versionen bestehen derzeit keine Testmoeglichkeiten. Alternative: das Projekt von GitHub laden und die Packages selbst in der IDE bauen und installieren - Anleitung (HowTo_Build.md) im Repository:%n      {#SCAGitHubUrl}
-en.ReadyVersionInfo=Supported Delphi versions:%n%n      Delphi 12.0 - 12.3 (32-bit IDE)%n            YES - this setup%n      Delphi 12.3 (64-bit IDE)%n            not yet (prepared, needs its own Win64 BPL)%n      Delphi 13 "Florence"%n            not yet%n      Delphi 11 and older%n            not supported%n%nNote: there is currently no way for us to test on other Delphi IDE versions. Alternative: download the project from GitHub and build/install the packages yourself in the IDE - instructions (HowTo_Build.md) in the repository:%n      {#SCAGitHubUrl}
+; 2026-08-15; installierbare Version FETT via TRichEditViewer). Bewusst
+; dieselben Aussagen wie die Matrix in README_Installer.md par.0 - bei
+; Aenderungen BEIDE Stellen pflegen. Einzeilige Bausteine, der [Code]-Teil
+; setzt sie zu RTF (fett) bzw. Plain-Text (Fallback-Memo) zusammen.
+de.ReadyHead=Unterstuetzte Delphi-Versionen:
+en.ReadyHead=Supported Delphi versions:
+de.ReadyYes=Delphi 12.0 - 12.3 (32-bit-IDE)  -  JA, dieses Setup
+en.ReadyYes=Delphi 12.0 - 12.3 (32-bit IDE)  -  YES, this setup
+de.ReadyNo1=Delphi 12.3 (64-bit-IDE)  -  noch nicht (vorbereitet, braucht eigene Win64-BPL)
+en.ReadyNo1=Delphi 12.3 (64-bit IDE)  -  not yet (prepared, needs its own Win64 BPL)
+de.ReadyNo2=Delphi 13 "Florence"  -  noch nicht
+en.ReadyNo2=Delphi 13 "Florence"  -  not yet
+de.ReadyNo3=Delphi 11 und aelter  -  nicht unterstuetzt
+en.ReadyNo3=Delphi 11 and older  -  not supported
+de.ReadyNote=Hinweis: Fuer andere Delphi-IDE-Versionen bestehen derzeit keine Testmoeglichkeiten. Alternative: das Projekt von GitHub laden und die Packages selbst in der IDE bauen und installieren - Anleitung (HowTo_Build.md) im Repository:
+en.ReadyNote=Note: there is currently no way for us to test on other Delphi IDE versions. Alternative: download the project from GitHub and build/install the packages yourself in the IDE - instructions (HowTo_Build.md) in the repository:
 
 [Messages]
 ; Privacy-Hinweis auf der Willkommensseite ergaenzen:
@@ -352,13 +364,78 @@ end;
 // Standard-Infos (Zielordner). Die Seite zeigt sonst nur "Click Install..." -
 // genau hier trifft der Nutzer die Entscheidung, also gehoert die
 // Unterstuetzungs-Auskunft hierhin (Nutzerwunsch 2026-08-15).
+// Darstellung: TRichEditViewer ueber dem ReadyMemo, damit die
+// INSTALLIERBARE Version FETT stehen kann (Memo kann kein Bold);
+// das Plain-Memo bleibt als Datenquelle/Fallback gefuellt.
+var
+  GReadyRich   : TRichEditViewer;
+  GMemoDirInfo : string;
+
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
   MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo,
   MemoTasksInfo: String): String;
 begin
-  Result := CustomMessage('ReadyVersionInfo') + NewLine + NewLine;
+  // Zielordner-Block fuer den RTF-Aufbau in CurPageChanged merken.
+  GMemoDirInfo := MemoDirInfo;
+  Result := CustomMessage('ReadyHead') + NewLine + NewLine
+          + CustomMessage('ReadyYes') + NewLine
+          + CustomMessage('ReadyNo1') + NewLine
+          + CustomMessage('ReadyNo2') + NewLine
+          + CustomMessage('ReadyNo3') + NewLine + NewLine
+          + CustomMessage('ReadyNote') + NewLine
+          + '{#SCAGitHubUrl}' + NewLine;
   if MemoDirInfo <> '' then
-    Result := Result + MemoDirInfo + NewLine;
+    Result := Result + NewLine + MemoDirInfo + NewLine;
+end;
+
+// RTF-Sonderzeichen entschaerfen (Backslash/geschweifte Klammern - der
+// Zielordner-Block enthaelt Windows-Pfade).
+function RtfEscape(const S: string): string;
+begin
+  Result := S;
+  StringChangeEx(Result, '\', '\\', True);
+  StringChangeEx(Result, '{', '\{', True);
+  StringChangeEx(Result, '}', '\}', True);
+end;
+
+// Zeilenumbrueche des Memo-Texts (#13#10) in RTF-\par wandeln.
+function RtfPar(const S: string): string;
+begin
+  Result := RtfEscape(S);
+  StringChangeEx(Result, #13#10, '\par ', True);
+  StringChangeEx(Result, #13, '\par ', True);
+  StringChangeEx(Result, #10, '\par ', True);
+end;
+
+function BuildReadyRtf: string;
+begin
+  // \ansicpg1252: der Zielordner-Block kommt aus der Sprachdatei und darf
+  // Umlaute enthalten; Segoe UI \fs18 = 9pt wie die Wizard-Schrift.
+  Result :=
+    '{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0 Segoe UI;}}\f0\fs18 '
+    + RtfPar(CustomMessage('ReadyHead')) + '\par \par '
+    + '{\b ' + RtfPar(CustomMessage('ReadyYes')) + '}\par '
+    + RtfPar(CustomMessage('ReadyNo1')) + '\par '
+    + RtfPar(CustomMessage('ReadyNo2')) + '\par '
+    + RtfPar(CustomMessage('ReadyNo3')) + '\par \par '
+    + RtfPar(CustomMessage('ReadyNote')) + '\par '
+    + RtfPar('{#SCAGitHubUrl}') + '\par ';
+  if GMemoDirInfo <> '' then
+    Result := Result + '\par ' + RtfPar(GMemoDirInfo) + '\par ';
+  Result := Result + '}';
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if GReadyRich = nil then Exit;
+  if CurPageID = wpReady then
+  begin
+    GReadyRich.RTFText := BuildReadyRtf;
+    GReadyRich.Visible := True;
+    WizardForm.ReadyMemo.Visible := False;
+  end
+  else
+    GReadyRich.Visible := False;
 end;
 
 procedure InitializeWizard;
@@ -368,9 +445,22 @@ var
 begin
   // Ready-Memo: Inno-Default ist WordWrap AUS + horizontaler Scrollbalken -
   // die Hinweis-Saetze der Versions-Uebersicht liefen damit aus dem Bild
-  // (Nutzer-Feedback 2026-08-15). Umbruch an, nur vertikal scrollen.
+  // (Nutzer-Feedback 2026-08-15). Umbruch an, nur vertikal scrollen
+  // (gilt fuer das Fallback-Memo; die Anzeige uebernimmt der RichViewer).
   WizardForm.ReadyMemo.WordWrap   := True;
   WizardForm.ReadyMemo.ScrollBars := ssVertical;
+
+  // RichEdit-Viewer deckungsgleich ueber dem ReadyMemo - traegt die
+  // RTF-Fassung mit FETTER installierbarer Version (CurPageChanged).
+  GReadyRich := TRichEditViewer.Create(WizardForm);
+  GReadyRich.Parent := WizardForm.ReadyMemo.Parent;
+  GReadyRich.SetBounds(WizardForm.ReadyMemo.Left, WizardForm.ReadyMemo.Top,
+    WizardForm.ReadyMemo.Width, WizardForm.ReadyMemo.Height);
+  GReadyRich.Anchors    := WizardForm.ReadyMemo.Anchors;
+  GReadyRich.ReadOnly   := True;
+  GReadyRich.ScrollBars := ssVertical;
+  GReadyRich.UseRichEdit := True;
+  GReadyRich.Visible    := False;
 
   NextLeft := ScaleX(12);
 
