@@ -1,0 +1,39 @@
+{
+  "Id": "StaticCodeAnalyserD12",
+  "Name": "Static Code Analyser for Delphi",
+  "Version": "0.9.16",
+  "Description": "Offline static code analysis for Delphi: 190+ detectors (bugs, leaks, security, code smells, DFM checks), IDE dock window with live editor markers, quick fixes, baselines, SARIF/Sonar/HTML export. 100% offline - no telemetry, no network access, ever.",
+  "Vendor": "StaticCodeAnalyser",
+  "VendorUrl": "https://github.com/nrodear/StaticCodeAnalyser",
+  "ProjectUrl": "https://github.com/nrodear/StaticCodeAnalyser",
+  "Image": "sca_logo_128.png",
+  "LicenseName": "Freeware",
+  "License": "EULA.txt",
+  "Url": "https://github.com/nrodear/StaticCodeAnalyser/releases/download/v0.9.16/StaticCodeAnalyser-v0.9.16-plugin-getit.zip",
+  "Modified": "2026-08-14 12:00:00",
+  "RequireElevation": 0,
+  "AllUsers": 0,
+  "Actions": [
+    {
+      "Id": 1,
+      "ActionId": 17,
+      "Type": 3,
+      "RequireElevation": 0,
+      "Parameter": [
+        "$(BDSCatalogRepository)\\StaticCodeAnalyserD12\\StaticCodeAnalyser.Plugin.d12.bpl",
+        "Delphi.Personality"
+      ],
+      "Active": 1
+    },
+    {
+      "Id": 2,
+      "ActionId": 18,
+      "Type": 5,
+      "RequireElevation": 0,
+      "Parameter": [
+        "$(BDSCatalogRepository)\\StaticCodeAnalyserD12\\StaticCodeAnalyser.Plugin.d12.bpl"
+      ],
+      "Active": 1
+    }
+  ]
+}

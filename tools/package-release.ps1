@@ -19,9 +19,10 @@
 #   .\tools\package-release.ps1 -Version 0.9.10
 #   .\tools\package-release.ps1 -Version 0.9.10 -OutDir C:\temp\rel
 #   .\tools\package-release.ps1 -Version 0.9.10 -SkipSource
+#   .\tools\package-release.ps1 -Version 0.9.10 -SkipInstaller   (ohne Setup-EXE)
 #
 # Danach:
-#   gh release create v<Version> --title ... --notes-file ... <OutDir>\*.zip
+#   gh release create v<Version> --title ... --notes-file ... <OutDir>\*.zip <OutDir>\*.exe
 
 param(
   [Parameter(Mandatory=$true)]
@@ -31,7 +32,13 @@ param(
 
   [int]$StackMB = 32,
 
-  [switch]$SkipSource
+  [switch]$SkipSource,
+
+  # Laesst den Inno-Setup-Schritt aus (z.B. solange die Monolith-BPL auf
+  # dieser Maschine nicht gebaut ist). Default ist STRIKT: fehlende
+  # Voraussetzungen brechen ab statt still ein Release ohne Installer zu
+  # erzeugen - gleiche Philosophie wie die Versions-/Stack-Wachposten.
+  [switch]$SkipInstaller
 )
 
 $ErrorActionPreference = 'Stop'
@@ -64,6 +71,8 @@ if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Force $OutDir | Ou
 # Assets an das NEUE Release gehaengt: exakt die Fehlerklasse (falsches
 # Artefakt ausgeliefert), gegen die dieses Skript gebaut wurde.
 Get-ChildItem -Path $OutDir -Filter 'StaticCodeAnalyser-v*.zip' -ErrorAction SilentlyContinue |
+  Remove-Item -Force
+Get-ChildItem -Path $OutDir -Filter 'StaticCodeAnalyserSetup-*.exe' -ErrorAction SilentlyContinue |
   Remove-Item -Force
 
 $platforms = @(
@@ -202,6 +211,47 @@ foreach ($sentinel in @('EXPORTS.md', 'docs/sonar-setup.md',
 }
 "{0,-6} {1} Doku-Dateien + examples ({2} Eintraege)  ->  {3}" -f `
   'docs', $docItems.Count, $names.Count, (Split-Path $docZip -Leaf)
+
+# ---- IDE-Plugin-Installer (Inno Setup, Monolith-BPL) -----------------------
+# Installer P2 (2026-08-14): das Setup registriert die Monolith-BPL per-user
+# in der D12-IDE (HKCU Known Packages) - Details in installer\README_Installer.md.
+# Wachposten wie bei den EXEs: BPL-VERSIONINFO muss zur Release-Version
+# passen (faengt "vergessen zu bauen" ab), und die Setup-EXE muss danach
+# wirklich existieren.
+if (-not $SkipInstaller) {
+  $isccCmd = Get-Command iscc.exe -ErrorAction SilentlyContinue
+  if ($isccCmd) {
+    $iscc = $isccCmd.Source
+  } else {
+    $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+    if (-not (Test-Path $iscc)) {
+      throw ('ISCC.exe nicht gefunden (PATH + Standardpfad). ' +
+             'Inno Setup 6 installieren oder -SkipInstaller verwenden.')
+    }
+  }
+
+  $bpl = 'C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyser.Plugin.d12.bpl'
+  if (-not (Test-Path $bpl)) {
+    throw ("Monolith-BPL fehlt: $bpl - StaticCodeAnalyser.Plugin.d12.dproj " +
+           'in der IDE bauen (Release/Win32) oder -SkipInstaller verwenden.')
+  }
+  $bplVer = (Get-Item $bpl).VersionInfo.FileVersion
+  if ($bplVer -notmatch ('^' + [regex]::Escape($Version))) {
+    throw ("Plugin-BPL VERSIONINFO ist '$bplVer', erwartet $Version.*. " +
+           'VerInfo der Plugin-dproj nachziehen + neu bauen.')
+  }
+
+  $iss = Join-Path $repo 'installer\StaticCodeAnalyserSetup.iss'
+  & $iscc ('/DSCAVersion=' + $Version + '.0') ('/O' + $OutDir) $iss | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "ISCC fehlgeschlagen (Exit $LASTEXITCODE)." }
+
+  $setupExe = Join-Path $OutDir "StaticCodeAnalyserSetup-$Version.0.exe"
+  if (-not (Test-Path $setupExe)) {
+    throw "Setup-EXE fehlt nach ISCC: $setupExe. Abbruch."
+  }
+  "{0,-6} Plugin-BPL v{1}  ->  {2}" -f `
+    'setup', $bplVer, (Split-Path $setupExe -Leaf)
+}
 
 if (-not $SkipSource) {
   # Aus dem TAG, nicht aus dem Arbeitsbaum: so landet nichts Ungetaggtes

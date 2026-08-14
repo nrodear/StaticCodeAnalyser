@@ -8,13 +8,17 @@
 
 Ziel-IDE: **Delphi 12 (BDS 23.0), Plattform Win32, Konfiguration Release**.
 
-### Variante A — Release-Ziel (Konzept P1, noch offen)
+### Variante A — Release-Ziel (Default seit 2026-08-14)
 
-Monolith-Package `StaticCodeAnalyser.Plugin.d12.dpk` (requires nur
-`rtl, vcl, vclwinx, designide, xmlrtl`). **Diese dpk existiert im Repo noch
-nicht** — sie ist das eigentliche P1-Arbeitspaket auf IDE-Seite. Sobald sie
-gebaut ist: im `.iss` den Define `#define SCA_MONOLITH` aktivieren
-(Kommentarzeichen entfernen), fertig.
+Monolith-Package `StaticCodeAnalyserIDE\StaticCodeAnalyser.Plugin.d12.dpk`
+(+ .dproj; requires nur `rtl, vcl, vclwinx, designide, xmlrtl`; enthaelt
+ALLE 268 Units von Engine + SharedUI + IDE). In der IDE als
+**Release/Win32** bauen — die BPL landet im D12-Standard-BPL-Ordner.
+`SCA_MONOLITH` ist im `.iss` seit 2026-08-14 AKTIV (Release-Default).
+WICHTIG: Die Monolith-BPL nie zusammen mit dem Dev-3-Package-Satz in
+derselben IDE registrieren (gleiche Units doppelt) — auf der Dev-Maschine
+bleibt der 3er-Satz, die Monolith-BPL wird nur GEBAUT, nicht registriert;
+der Installer-Koexistenz-Check schuetzt Endanwender-Maschinen.
 
 Warum Monolith: der Windows-Loader loest `requires` per Modulname ueber
 bds.exe-Verzeichnis → System32 → PATH auf, **nicht** im BPL-Verzeichnis.
@@ -54,6 +58,14 @@ alphabetisch: `SCA.*` vor `StaticCodeAnalyser.*`). Das ist eine dokumentierte
 ## 2. Inno-Compile-Schritt
 
 Voraussetzung: **Inno Setup 6.x** (ISCC.exe im PATH oder voller Pfad).
+
+**Regelweg seit 2026-08-14: `tools\package-release.ps1` baut das Setup
+mit** (Schritt "setup": prueft die BPL-VERSIONINFO gegen die Release-
+Version, ruft ISCC mit `/DSCAVersion=<Version>.0` und legt
+`StaticCodeAnalyserSetup-<Version>.0.exe` zu den uebrigen Assets in
+`release-artifacts\`; Opt-out per `-SkipInstaller`).
+
+Hand-Compile weiterhin moeglich:
 
 ```bat
 cd /d d:\git-demos\delphi\StaticCodeAnalyser\installer

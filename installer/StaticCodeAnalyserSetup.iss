@@ -28,7 +28,11 @@
 ; seit 0.9.4 auf 0/9/4, waehrend der String etwas anderes behauptete),
 ; und seit 0.9.11 ist auch PLUGIN_VERSION nachgezogen - die stand zwei
 ; Releases zurueck.
-#define SCAVersion      "0.9.14.0"
+; Ueberschreibbar per ISCC /DSCAVersion=x.y.z.0 - package-release.ps1 setzt
+; die Version zentral, der Default hier dient nur dem Hand-Compile.
+#ifndef SCAVersion
+  #define SCAVersion    "0.9.16.0"
+#endif
 #define SCAAppName      "Static Code Analyser for Delphi (IDE-Plugin)"
 #define SCAPublisher    "StaticCodeAnalyser"
 
@@ -45,10 +49,12 @@
 ; Die dproj setzt KEIN DCC_BplOutput -> BPLs landen im D12-Standard-BPL-Ordner
 ; (C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl).
 ;
-; Umschalter: solange die Monolith-dpk fehlt, installiert dieses Skript den
-; Dev-3-BPL-Satz (SCA_MONOLITH undefiniert lassen). Sobald die Monolith-BPL
-; gebaut ist, SCA_MONOLITH definieren — dann wird NUR die eine BPL installiert.
-;#define SCA_MONOLITH
+; Umschalter: seit 2026-08-14 existiert die Monolith-dpk im Repo
+; (StaticCodeAnalyserIDE\StaticCodeAnalyser.Plugin.d12.dpk) - SCA_MONOLITH
+; ist damit der Release-Default: es wird NUR die eine BPL installiert.
+; Fuer die Dev-3-BPL-Uebergangsvariante per ISCC-Kommandozeile ohne dieses
+; Define bauen (Zeile auskommentieren).
+#define SCA_MONOLITH
 
 ; Quellordner der gebauten BPLs (Build-Maschine; per ISCC /D ueberschreibbar):
 ;   iscc /DSCABplSourceDir="D:\pfad\zu\bpls" StaticCodeAnalyserSetup.iss
