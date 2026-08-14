@@ -141,6 +141,8 @@ de.PrivacyNote=Dieses Setup und das Plugin bauen niemals Netzwerkverbindungen au
 en.PrivacyNote=This setup and the plugin never open network connections: no update check, no telemetry, no AI/LLM egress.
 de.IdeRunning=Die Delphi-12-IDE (bds.exe, BDS 23.0) scheint zu laufen. Bitte alle Delphi-12-Instanzen schliessen und das Setup erneut starten.
 en.IdeRunning=The Delphi 12 IDE (bds.exe, BDS 23.0) appears to be running. Please close all Delphi 12 instances and restart setup.
+de.NoDelphi12=Delphi 12 (BDS 23.0) wurde auf diesem System nicht gefunden. Das Plugin unterstuetzt Delphi 12.0-12.3 (32-bit-IDE); aeltere Versionen werden nicht unterstuetzt, Delphi 13 noch nicht. Das Setup wird beendet, es wird nichts installiert.
+en.NoDelphi12=Delphi 12 (BDS 23.0) was not found on this system. The plugin supports Delphi 12.0-12.3 (32-bit IDE); older versions are not supported, Delphi 13 not yet. Setup will close without installing anything.
 de.DevBplWarn=In "Known Packages" (BDS 23.0) ist bereits eine Entwickler-Registrierung des Plugins mit anderem Pfad eingetragen:%n%n%1%n%nDer Eintrag wird durch die Installations-Registrierung ersetzt (Koexistenz-Schutz, verhindert Doppel-Laden).
 en.DevBplWarn=A developer registration of the plugin with a different path already exists in "Known Packages" (BDS 23.0):%n%n%1%n%nIt will be replaced by the installed registration (coexistence guard, prevents double loading).
 de.DonateBtn=PayPal-Spende
@@ -255,6 +257,29 @@ begin
   Result := FindWindowByClassName('TAppBuilder') <> 0;
 end;
 
+// Ist die UNTERSTUETZTE IDE (Delphi 12 = BDS 23.0) ueberhaupt installiert?
+// Ohne diesen Check wuerde das Setup auf einer Maschine ohne D12 stumm
+// Dateien + HKCU-Werte in eine tote BDS-Schiene schreiben (Nutzerfrage
+// 2026-08-15). Suchreihenfolge:
+//   1. HKCU\Software\Embarcadero\BDS\23.0\RootDir - existiert, sobald die
+//      IDE fuer diesen Benutzer einmal gestartet wurde.
+//   2. HKLM\Software\Embarcadero\BDS\23.0\RootDir - der Installationseintrag
+//      (32-bit-Setup-Prozess -> WOW6432Node-Sicht passt zur 32-bit-IDE).
+// Zusaetzlich muss bin\bds.exe unter RootDir real existieren - ein
+// Registry-Leichnam nach Deinstallation zaehlt nicht.
+function IsDelphi12Installed: Boolean;
+var
+  RootDir: string;
+begin
+  Result := False;
+  if not RegQueryStringValue(HKEY_CURRENT_USER,
+       'Software\Embarcadero\BDS\23.0', 'RootDir', RootDir) then
+    if not RegQueryStringValue(HKEY_LOCAL_MACHINE,
+         'Software\Embarcadero\BDS\23.0', 'RootDir', RootDir) then
+      Exit;
+  Result := FileExists(AddBackslash(RootDir) + 'bin\bds.exe');
+end;
+
 // Sammelt alle "Known Packages"-Wertnamen (= volle BPL-Pfade), die auf eine
 // unserer BPL-Dateinamen enden, aber NICHT auf den Installationspfad zeigen.
 // Das sind Dev-Registrierungen (Public-Documents-Bpl der Build-Maschine) —
@@ -278,6 +303,14 @@ end;
 function InitializeSetup: Boolean;
 begin
   Result := True;
+  // Reihenfolge: erst "ist die unterstuetzte IDE da?", dann "laeuft sie?" -
+  // die Nicht-installiert-Meldung ist die praezisere von beiden.
+  if not IsDelphi12Installed then
+  begin
+    MsgBox(CustomMessage('NoDelphi12'), mbError, MB_OK);
+    Result := False;
+    Exit;
+  end;
   if IsDelphiIdeRunning then
   begin
     MsgBox(CustomMessage('IdeRunning'), mbError, MB_OK);

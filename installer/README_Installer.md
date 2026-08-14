@@ -141,6 +141,7 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
 | 1 | Frische VM, D12 installiert, Non-Admin-Konto | Setup laeuft ohne UAC-Prompt durch; BPL unter `%LOCALAPPDATA%\Programs\StaticCodeAnalyser\bpl\d12\`; `Known Packages`-Wert vorhanden, Wertdaten nicht leer |
 | 2 | IDE-Start nach Install | Plugin laedt (Splash/About-Branding sichtbar, Tools-Menue-Eintrag da); kein "Can't load package" |
 | 3 | Setup starten, waehrend bds.exe laeuft | Setup bricht mit klarer Meldung ab (kein Teil-Install) |
+| 3b | Maschine OHNE Delphi 12 (kein BDS 23.0 bzw. RootDir ohne bin\bds.exe) | Setup bricht VOR der Installation mit "Delphi 12 wurde nicht gefunden" ab; keine Dateien, keine Registry-Werte |
 | 4 | Dev-Maschine mit manuell registrierter Dev-BPL (Public-Documents-Bpl) | Koexistenz-Hinweis erscheint; nach Install existiert nur noch der Install-Pfad-Eintrag; IDE laedt das Plugin genau einmal |
 | 5 | Vorher per "Can't load package → Nein" deaktiviert (Disabled Packages) | Setup raeumt den Disabled-Eintrag; Plugin laedt nach Neustart wieder |
 | 6 | Update ueber Bestand (aeltere Version installiert) | BPL + `rules\sca-rules.json` ueberschrieben; genau ein Registry-Eintrag; keine Duplikate |
