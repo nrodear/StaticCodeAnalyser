@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2053 Zeilen, 70435 Bytes
+  // i18n\de.po - 2053 Zeilen, 70463 Bytes
   CPoLines_de: array[0..2052] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -1619,8 +1619,8 @@ const
     'msgid "Language"',
     'msgstr "Sprache"',
     '',
-    'msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."',
-    'msgstr "UI-Sprache: %s - '#$00FC'brige Beschriftungen (Kacheln, Hilfe-Panel) wechseln nach einem Neustart."',
+    'msgid "UI language: %s - remaining captions (tiles, filter lists, help panel) switch after a restart."',
+    'msgstr "UI-Sprache: %s - '#$00FC'brige Beschriftungen (Kacheln, Filterlisten, Hilfe-Panel) wechseln nach einem Neustart."',
     '',
     '# --- Nachtrag 2026-08-02: Baseline-Integration, Sonar- und',
     '# Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still',
@@ -2275,7 +2275,7 @@ const
     'msgstr "Opened: %s  Line: %d"'
   );
 
-  // i18n\fr.po - 1998 Zeilen, 73593 Bytes
+  // i18n\fr.po - 1998 Zeilen, 73626 Bytes
   CPoLines_fr: array[0..1997] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -3893,8 +3893,8 @@ const
     'msgid "Language"',
     'msgstr "Langue"',
     '',
-    'msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."',
-    'msgstr "Langue de l''interface : %s - les libell'#$00E9's restants (tuiles, panneau d''aide) changeront apr'#$00E8's un red'#$00E9'marrage."',
+    'msgid "UI language: %s - remaining captions (tiles, filter lists, help panel) switch after a restart."',
+    'msgstr "Langue de l''interface : %s - les libell'#$00E9's restants (tuiles, listes de filtres, panneau d''aide) changeront apr'#$00E8's un red'#$00E9'marrage."',
     '',
     '# --- Nachtrag 2026-08-02: Baseline-Integration, Sonar- und',
     '# Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still',

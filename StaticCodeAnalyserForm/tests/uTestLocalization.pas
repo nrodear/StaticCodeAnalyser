@@ -27,6 +27,12 @@ type
     [Test] procedure AvailableLanguages_SortedAndFreeOfDuplicates;
     [Test] procedure SetLanguage_UnknownIniValue_FallsBackToEnglish;
     [Test] procedure SetLanguage_RegionalIniValue_LoadsBaseLanguage;
+    // 'default' ist zugleich INI-Wert ([Rules] Profile): beide UIs
+    // schreiben den Combo-Text zurueck und suchen ihn per IndexOf wieder.
+    // Die .po MUSS ihn deshalb als Passthrough halten (msgstr = msgid) -
+    // dieser Test macht den Kommentar-Vertrag an den Combo-Populates
+    // (uMainForm/uIDEAnalyserForm) maschinell pruefbar.
+    [Test] procedure AllLanguages_KeepDefaultAsPassthrough;
   end;
 
 implementation
@@ -242,6 +248,28 @@ begin
     SetLanguage('DE_at');
     Assert.IsTrue(TranslationCount > 100,
       'Gross-/Kleinschreibung und Unterstrich muessen egal sein');
+  finally
+    SetLanguage(Old);
+  end;
+end;
+
+procedure TTestLocalization.AllLanguages_KeepDefaultAsPassthrough;
+// Vertrag an der Deklaration. Laeuft ueber ALLE auswaehlbaren Sprachen
+// (eingebettete + extern neben dem Modul liegende .po) - genau die
+// Menge, die ein Nutzer in den Optionen einstellen kann.
+var
+  Old  : string;
+  Lang : string;
+begin
+  Old := CurrentLanguage;
+  try
+    for Lang in AvailableLanguages do
+    begin
+      SetLanguage(Lang);
+      Assert.AreEqual('default', _('default'),
+        Format('Sprache "%s" uebersetzt den INI-Wert ''default'' - '
+             + 'bricht den Profile-Rundlauf (IndexOf) beider UIs', [Lang]));
+    end;
   finally
     SetLanguage(Old);
   end;

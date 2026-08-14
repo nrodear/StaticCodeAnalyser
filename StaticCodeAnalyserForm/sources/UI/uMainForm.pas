@@ -3374,7 +3374,7 @@ begin
   ApplyUiCaptions;
   ProjectpathChangedScope(nil);
   StatusBar1.Panels[2].Text := Format(
-    _('UI language: %s - remaining captions (tiles, help panel) switch after a restart.'),
+    _('UI language: %s - remaining captions (tiles, filter lists, help panel) switch after a restart.'),
     [Code]);
   // Das Hamburger-Menue traegt seine Captions seit dem einmaligen Aufbau
   // in FormCreate - der Kommentar hier versprach frueher einen 'naechsten

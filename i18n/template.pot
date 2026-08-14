@@ -2061,7 +2061,7 @@ msgid "UI language:"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3377
-msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."
+msgid "UI language: %s - remaining captions (tiles, filter lists, help panel) switch after a restart."
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:1322

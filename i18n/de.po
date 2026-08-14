@@ -1602,8 +1602,8 @@ msgstr "Betrifft nur die Oberfläche des Plugins - Detektor-Meldungen, Befunde u
 msgid "Language"
 msgstr "Sprache"
 
-msgid "UI language: %s - remaining captions (tiles, help panel) switch after a restart."
-msgstr "UI-Sprache: %s - übrige Beschriftungen (Kacheln, Hilfe-Panel) wechseln nach einem Neustart."
+msgid "UI language: %s - remaining captions (tiles, filter lists, help panel) switch after a restart."
+msgstr "UI-Sprache: %s - übrige Beschriftungen (Kacheln, Filterlisten, Hilfe-Panel) wechseln nach einem Neustart."
 
 # --- Nachtrag 2026-08-02: Baseline-Integration, Sonar- und
 # Options-Frames. Ohne Eintrag fiel die Oberflaeche hier still
