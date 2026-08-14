@@ -366,6 +366,12 @@ var
   Btn: TNewButton;
   NextLeft: Integer;
 begin
+  // Ready-Memo: Inno-Default ist WordWrap AUS + horizontaler Scrollbalken -
+  // die Hinweis-Saetze der Versions-Uebersicht liefen damit aus dem Bild
+  // (Nutzer-Feedback 2026-08-15). Umbruch an, nur vertikal scrollen.
+  WizardForm.ReadyMemo.WordWrap   := True;
+  WizardForm.ReadyMemo.ScrollBars := ssVertical;
+
   NextLeft := ScaleX(12);
 
 #if SCADonateUrl != ""
