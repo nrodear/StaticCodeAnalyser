@@ -321,8 +321,8 @@
         <DCCReference Include="sources\Output\uClaudePrompt.pas"/>
         <DCCReference Include="sources\Output\uExportSARIF.pas"/>
         <DCCReference Include="sources\Output\uExportSonarGeneric.pas"/>
-        <DCCReference Include="sources\Output\uFindingCopyText.pas"/>
         <DCCReference Include="sources\Output\uFixHint.pas"/>
+        <DCCReference Include="sources\Output\uFindingCopyText.pas"/>
         <DCCReference Include="sources\Output\uSonarPush.pas"/>
         <DCCReference Include="sources\Parsing\uAstNode.pas"/>
         <DCCReference Include="sources\Parsing\uCFG.pas"/>

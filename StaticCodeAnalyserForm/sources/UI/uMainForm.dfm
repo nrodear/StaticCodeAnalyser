@@ -77,12 +77,12 @@ object Form2: TForm2
         Height = 15
         Caption = 'Type:'
       end
-      object LblSearch: TLabel
-        Left = 428
-        Top = 10
-        Width = 38
+      object LblMinSev: TLabel
+        Left = 447
+        Top = 8
+        Width = 24
         Height = 15
-        Caption = 'Search:'
+        Caption = 'Min:'
       end
       object SeverityFilterCombo: TComboBox
         Left = 218
@@ -103,15 +103,27 @@ object Form2: TForm2
         TabOrder = 1
         OnChange = TypeFilterComboChange
       end
-      object SearchEdit: TEdit
-        Left = 472
+      object FBtnHamburger: TButton
+        Left = 608
         Top = 6
-        Width = 160
+        Width = 24
         Height = 23
-        Anchors = [akLeft, akTop, akRight]
+        Anchors = [akTop, akRight]
+        Caption = '...'
         TabOrder = 2
-        OnChange = SearchEditChange
-        ExplicitWidth = 158
+        OnClick = Button2Click
+        ExplicitLeft = 606
+      end
+      object MinSevCombo: TComboBox
+        Left = 477
+        Top = 6
+        Width = 116
+        Height = 23
+        Style = csDropDownList
+        Anchors = [akLeft, akTop, akRight]
+        TabOrder = 3
+        OnChange = MinSevComboChange
+        ExplicitWidth = 114
       end
     end
     object PanelActions: TPanel
@@ -122,23 +134,16 @@ object Form2: TForm2
       Align = alTop
       BevelOuter = bvNone
       TabOrder = 2
-      ExplicitTop = -6
+      ExplicitWidth = 775
       DesignSize = (
         777
         35)
       object LblProfile: TLabel
         Left = 281
-        Top = 8
+        Top = 10
         Width = 37
         Height = 15
         Caption = 'Profile:'
-      end
-      object LblMinSev: TLabel
-        Left = 447
-        Top = 8
-        Width = 24
-        Height = 15
-        Caption = 'Min:'
       end
       object Button7: TButton
         Left = 127
@@ -171,32 +176,21 @@ object Form2: TForm2
       end
       object ProfileCombo: TComboBox
         Left = 324
-        Top = 6
+        Top = 7
         Width = 110
         Height = 23
         Style = csDropDownList
         TabOrder = 3
         OnChange = ProfileComboChange
       end
-      object MinSevCombo: TComboBox
-        Left = 477
-        Top = 6
-        Width = 116
-        Height = 23
-        Style = csDropDownList
-        Anchors = [akLeft, akTop, akRight]
-        TabOrder = 4
-        OnChange = MinSevComboChange
-      end
-      object FBtnHamburger: TButton
-        Left = 608
-        Top = 6
-        Width = 24
+      object SearchEdit: TEdit
+        Left = 464
+        Top = 7
+        Width = 168
         Height = 23
         Anchors = [akTop, akRight]
-        Caption = '...'
-        TabOrder = 5
-        OnClick = Button2Click
+        TabOrder = 4
+        OnChange = SearchEditChange
       end
     end
     object Panel1: TPanel
@@ -226,6 +220,7 @@ object Form2: TForm2
         Anchors = [akLeft, akTop, akRight]
         TabOrder = 0
         Text = 'D:\git-demos\delphi\StaticCodeAnalyser\resources'
+        ExplicitWidth = 502
       end
       object Button2: TButton
         Left = 608
