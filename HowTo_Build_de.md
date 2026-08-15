@@ -8,6 +8,11 @@ Am Ende hast du:
 - die **Standalone-Windows-App** (`StaticCodeAnalyser.d12.exe`)
 - das **IDE-Plugin** (laedt beim Start von Delphi 12)
 
+> **Bauen ist optional.** Die GitHub-Releases liefern fertige EXE-Zips
+> (Win32/Win64), eine Setup-EXE fuers IDE-Plugin und ein GetIt-Paket —
+> siehe Quick-Start im README. Dieses Dokument ist fuer Leute, die
+> selbst aus den Quellen bauen wollen.
+
 🇬🇧 [English version](HowTo_Build.md)
 
 ---
@@ -24,8 +29,11 @@ Am Ende hast du:
 
 ## 1. Delphi 12 installieren (RAD Studio)
 
-Du brauchst **Delphi 12 Athens** (auch RAD Studio 12 genannt). Die
-**kostenlose Community Edition** reicht.
+Du brauchst **Delphi 12 Athens** (auch RAD Studio 12 genannt) — eine
+der Versionen 12.0–12.3. Das Plugin laeuft in der 32-bit-IDE (die
+64-bit-IDE von 12.3 wird noch nicht unterstuetzt); Delphi 13 ist
+geplant, aber noch nicht unterstuetzt, Delphi 11 und aelter werden
+nicht unterstuetzt. Die **kostenlose Community Edition** reicht.
 
 1. Geh auf https://www.embarcadero.com/products/delphi/starter.
 2. Klick auf **"Download Free Trial"** oder **"Community Edition"**.
@@ -143,10 +151,18 @@ Nach **jedem frischen Build** wiederholen.
 Das Plugin ist ein `.bpl` (Borland Package Library), das Delphi beim
 Start ladet.
 
+> **Abkuerzung:** wer das Plugin nur *benutzen* will, braucht diesen
+> Abschnitt nicht — die Releases liefern eine **Setup-EXE**
+> (`StaticCodeAnalyserSetup-<Version>.exe`) und ein **GetIt Local
+> Package**; beide installieren das Release-Monolith-Package
+> (`StaticCodeAnalyser.Plugin.d12.dpk`, ein einziges `.bpl`, keine
+> separaten Engine-Packages). Die Schritte unten bauen den Dev-Satz
+> aus drei Packages aus den Quellen.
+
 ### 5.1 Das Plugin bauen
 
-Das Plugin laeuft **innerhalb der Delphi-IDE**, die 32-bit ist.
-Das Plugin muss also 32-bit sein.
+Das Plugin laeuft in der **32-bit-IDE** (die 64-bit-IDE von 12.3 wird
+noch nicht unterstuetzt). Das Plugin muss also 32-bit sein.
 
 1. Im Project Manager `StaticCodeAnalyser.IDE.d12` aufklappen.
 2. **Target Platforms** aufklappen.

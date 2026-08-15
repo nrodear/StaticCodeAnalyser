@@ -48,10 +48,13 @@ zugleich die Bewerbungsmappe fuer die Einreichung bei Embarcadero
   (geplant: Erzeugung in tools\package-release.ps1, Todo P3.3).
 - `AllUsers=0` + `RequireElevation=0`: per-User, kein Admin - passt zum
   HKCU-Modell des Plugins.
-- Actions: 17 = InstallIDEPackage (registriert + laedt die BPL live),
-  18 = UninstallIDEPackage; Type 3 = Before Install, 5 = Before
-  Uninstall. Pfad-Wurzel ist `$(BDSCatalogRepository)\<Id>\...` - dort
-  entpackt GetIt das ZIP.
+- Actions: 7 = InstallPackage (registriert + laedt die Design-BPL,
+  ruft `Register`), 8 = UninstallPackage; Type 3 = Before Install,
+  5 = Before Uninstall. Die frueher verwendeten 17/18
+  (Install/UninstallIDEPackage) sind VERWORFEN - siehe Lehre Nr. 6:
+  IDE-Packages laufen ohne `Register`, das Menue fehlt. Pfad-Wurzel
+  ist der entpackte Paketordner (Action 7 mit NUR dem BPL-Dateinamen,
+  relativ dazu).
 
 ## Offene Punkte vor dem ersten Test (Todo P3)
 
@@ -68,6 +71,10 @@ zugleich die Bewerbungsmappe fuer die Einreichung bei Embarcadero
      (fuer Einreichung/Endnutzer; Asset muss am Release haengen)
    - `StaticCodeAnalyser-D12.local.getit.json` - Url = lokaler
      ZIP-Pfad (fuer den Lokaltest VOR dem Upload)
+   Dazu als drittes Artefakt
+   `StaticCodeAnalyser-v<V>-getit-manifest.zip` (JSON + LICENSE +
+   Logo) - fuers Verteilen bzw. "Load Local Package" auf fremden
+   Maschinen.
    Diese Datei hier bleibt die VORLAGE - Version/Modified/Url werden
    pro Release ersetzt, Aenderungen an Actions/Texten nur hier.
 3b. **Migrations-Voraussetzung** (Zweit-PC-Befund 2026-08-15): Auf

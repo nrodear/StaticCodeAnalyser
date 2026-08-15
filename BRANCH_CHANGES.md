@@ -16,8 +16,8 @@ The repository ships two components:
 
 ## Features at a glance
 
-- **~165 finding kinds across ~156 detector classes** — see [`DETECTORS.md`](DETECTORS.md) and [`rules/sca-rules.json`](rules/sca-rules.json) for the canonical roster (Sonar + SonarDelphi-migration + DFM + bonus)
-- **Sonar-style stat tiles** above the grid: Errors / Warnings / Hints / Bugs / Code duplications / Code Quality score
+- **195 rules (172 Pascal + 23 DFM)** — see [`DETECTORS.md`](DETECTORS.md) and [`rules/sca-rules.json`](rules/sca-rules.json) for the canonical roster (Sonar + SonarDelphi-migration + DFM + bonus)
+- **Sonar-style stat tiles** above the grid: Errors / Warnings / Hints / Bugs / Code duplications / Code Quality as a letter grade **A–E** (raw score + breakdown in the tooltip)
 - **Severity filter** + **type filter** (Bug, Code Smell, Vulnerability, Security Hotspot, Code Duplication)
 - **Help panel on the right** with paired "before/after" code examples per finding
 - **Claude AI prompt generator** — clicking a row copies a ready-made Markdown block to the clipboard
@@ -47,7 +47,7 @@ Build:
 Open analyser.d12.dproj in Delphi 12  →  Project  →  Build
 ```
 
-### 2. IDE plugin — `StaticCodeAnalyserIDE.dpk`
+### 2. IDE plugin — `StaticCodeAnalyser.IDE.d12.dpk`
 
 Designtime package providing the dockable tool window. Launched via
 **Tools / Static Code Analysis Tool for Delphi** or **View / Static Code
@@ -55,16 +55,19 @@ Analysis Tool for Delphi**.
 
 Functions on top of the standalone:
 
-- **Current file** — analyses the source file currently open in the IDE
+- **📄 File** — analyses the source file currently open in the IDE
 - **Branch-Changes** — analyses only files changed in the branch
 - **Direct navigation** through IDE editor services (no WinAPI hack)
 - Stat tile row with live counters
 - Help panel with before/after snippets
 
-Install:
+Install — easiest first: the release **setup EXE**
+(`StaticCodeAnalyserSetup-<Version>.exe`) or the **GetIt local package**
+(`StaticCodeAnalyser-v<V>-getit-manifest.zip` → **Load Local Package**
+in the GetIt Package Manager). To build from source instead:
 
 ```
-Open StaticCodeAnalyserIDE.dproj  →  Project  →  Install
+Open StaticCodeAnalyser.IDE.d12.dproj  →  Project  →  Install
 ```
 
 ---
@@ -74,7 +77,7 @@ Open StaticCodeAnalyserIDE.dproj  →  Project  →  Install
 The full list with status (✅ implemented · 🟡 partial · 🔲 open) lives
 in [`DETECTORS.md`](DETECTORS.md).
 
-Current state (v0.9.8): **~165 finding kinds** across ~156 detector classes — Sonar 50-rule catalogue + 32 SonarDelphi-migration (SCA120-152) + 22 DFM detectors + ~60 naming/formatting checks (SCA060-119) + bonus.
+Current state (v0.9.16): **195 rules (172 Pascal + 23 DFM)** — Sonar catalogue + SonarDelphi-migration (SCA120-152) + DFM detectors + naming/formatting checks (SCA060-119) + bonus.
 
 Highlights by severity:
 
@@ -182,7 +185,7 @@ close and re-open the window after switching themes.
 
 ## Settings — `analyser.ini`
 
-Click the **`Repo...`** button to open:
+Click the **`Settings...`** button to open:
 
 ```
 %APPDATA%\StaticCodeAnalyser\analyser.ini
@@ -253,8 +256,8 @@ Your repository has no default branch under the usual names. Set
   are not yet covered (extension is straightforward).
 - **Submodules**: `git status` does not capture submodule-internal
   changes — scan the submodule folder separately.
-- **Test filter**: tests are excluded by default. Tick the **`Include
-  tests`** checkbox to include them.
+- **Test filter**: tests are excluded by default. Set
+  `[Detectors] IncludeTests=1` in `analyser.ini` to include them.
 - **Ignore list**: check `%APPDATA%\StaticCodeAnalyser\ignore.txt`.
 
 ### Paths with non-ASCII characters
@@ -278,10 +281,11 @@ sequences.
 | Target | Step |
 |--------|------|
 | Standalone EXE | Open `analyser.d12.dproj` → Project → Build |
-| IDE plugin | Open `StaticCodeAnalyserIDE.dproj` → Project → Install |
+| IDE plugin (recommended) | Run the release setup `StaticCodeAnalyserSetup-<Version>.exe`, or load the GetIt local package (`StaticCodeAnalyser-v<V>-getit-manifest.zip`) |
+| IDE plugin (from source) | Open `StaticCodeAnalyser.IDE.d12.dproj` → Project → Install |
 
-Platform: **Win32** — designtime packages currently only run in the
-32-bit IDE variant.
+Platform: **Win32** — the plugin runs in the 32-bit IDE of Delphi
+12.0–12.3 (the 64-bit IDE of 12.3 is not yet supported).
 
 ---
 
@@ -294,10 +298,15 @@ StaticCodeAnalyser/
 │   ├── resources/                  # Pascal test files used by detector tests
 │   ├── tests/                      # Unit tests
 │   └── analyser.d12.dproj          # Standalone project
+├── SCA.Engine/
+│   └── SCA.Engine.dpk              # Engine package (dev set)
+├── SCA.SharedUI/
+│   └── SCA.SharedUI.dpk            # Shared-UI package (dev set)
 ├── StaticCodeAnalyserIDE/          # IDE plugin (dockable)
 │   ├── uIDEExpert.pas              # Tools menu wizard
 │   ├── uIDEAnalyserForm.pas        # Frame + dockable form wrapper
-│   └── StaticCodeAnalyserIDE.dpk   # Designtime package
+│   ├── StaticCodeAnalyser.IDE.d12.dpk       # Designtime package (dev set)
+│   └── StaticCodeAnalyser.Plugin.d12.dpk    # Release monolith package
 ├── docs/                           # Mockups, sketches, screenshots
 └── DETECTORS.md                    # Full detector catalogue with status
 ```

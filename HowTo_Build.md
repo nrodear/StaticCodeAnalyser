@@ -8,6 +8,11 @@ You will end up with:
 - the **standalone Windows app** (`StaticCodeAnalyser.d12.exe`)
 - the **IDE plugin** (loaded into Delphi 12 every time you open it)
 
+> **Building is optional.** The GitHub releases ship ready-made EXE
+> zips (Win32/Win64), a setup EXE for the IDE plugin and a GetIt
+> package — see the README quick start. This document is for people
+> who want to build from source.
+
 ---
 
 ## 0. What you need
@@ -22,7 +27,10 @@ You will end up with:
 
 ## 1. Install Delphi 12 (RAD Studio)
 
-You need **Delphi 12 Athens** (also called RAD Studio 12). The
+You need **Delphi 12 Athens** (also called RAD Studio 12) — any of
+versions 12.0–12.3. The plugin runs in the 32-bit IDE (the 64-bit IDE
+of 12.3 is not yet supported); Delphi 13 is planned but not yet
+supported, Delphi 11 and older are not supported. The
 **free Community Edition** is enough.
 
 1. Go to https://www.embarcadero.com/products/delphi/starter.
@@ -139,10 +147,18 @@ You must rerun this **after every fresh build**.
 The plugin is a `.bpl` (Borland Package Library) that Delphi loads at
 startup.
 
+> **Shortcut:** if you just want to *use* the plugin, you do not need
+> this section — the releases ship a **setup EXE**
+> (`StaticCodeAnalyserSetup-<Version>.exe`) and a **GetIt local
+> package**; both install the release monolith package
+> (`StaticCodeAnalyser.Plugin.d12.dpk`, one `.bpl`, no separate engine
+> packages). The steps below build the dev set of three packages from
+> source.
+
 ### 5.1 Build the plugin
 
-The plugin runs **inside the Delphi IDE**, which is 32-bit. So the
-plugin must be 32-bit.
+The plugin runs in the **32-bit IDE** (the 64-bit IDE of 12.3 is not
+yet supported). So the plugin must be 32-bit.
 
 1. In the Project Manager, expand `StaticCodeAnalyser.IDE.d12`.
 2. Expand **Target Platforms**.

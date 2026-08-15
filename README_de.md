@@ -43,7 +43,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 | 🧹 **Code-Smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Inkrementell analysieren** | „Branch-Changes"-Button: nur die im Git-/SVN-Branch geänderten Dateien — 200 ms statt 60 s |
 | 🤖 **Claude-AI-Prompt** | Copy AI prompt (Kontextmenü) → vollständiger Markdown-Block mit Code-Kontext + Vorher/Nachher in der Zwischenablage; Kopie beim Zeilen-Klick ist Opt-in via `[UI] ClipboardOnClick` |
-| 📊 **Sonar-Style-Dashboard** | Stat-Tiles über dem Grid: Fehler / Warnungen / Hinweise / Bugs / Vulnerabilities / Codequalität-Score |
+| 📊 **Sonar-Style-Dashboard** | Stat-Tiles über dem Grid: Fehler / Warnungen / Hinweise / Bugs / Vulnerabilities / Codequalität als Letter-Grade **A–E** (Sonar-Stil; Rohscore + Breakdown im Tooltip) |
 | 🎯 **Filtern & Sortieren** | Severity-Combo, Type-Combo, Live-Such-Edit, klickbare Spalten-Header |
 | 📤 **Exportieren** | SARIF, Sonar Generic Issue, self-contained HTML-Report und Baseline-JSON aus der CLI; CSV, JSON, Jira-Wiki-Markup und Clipboard aus der GUI — Formate, Workflows und Grenzen in [EXPORTS_de.md](EXPORTS_de.md) |
 | 🔇 **Suppression** | `// noinspection MemoryLeak` pro Zeile + `ignore.txt` für ganze Dateien |
@@ -116,7 +116,7 @@ anderen Workflow. Wahl nach Rolle / Tageszeit:
 | **False-Positive auf dieser Zeile unterdrücken** | ✅ `Strg+Alt+S` fügt `// noinspection RuleName` ein | manuell | manuell |
 | **Befund an Claude AI übergeben** — Markdown-Prompt mit Code-Kontext | ✅ Zeilen-Klick → Clipboard | ✅ Zeilen-Klick → Clipboard | — |
 | **Nur Branch-Changes** — Dateien seit `main` / aktuellem SVN-Diff | ✅ Branch-Button | ✅ Branch-Button | ✅ `--branch` oder `--diff <ref>` |
-| **Projekt außerhalb von Delphi analysieren** (kein RAD installiert / Batch-Maschine) | — | ✅ Ordner wählen, Start klicken | ✅ `analyser.exe <ordner>` |
+| **Projekt außerhalb von Delphi analysieren** (kein RAD installiert / Batch-Maschine) | — | ✅ Ordner wählen, **▶ Analyse** klicken | ✅ `analyser.exe <ordner>` |
 | **Als Pre-Commit-Hook ausführen** | — | — | ✅ `--min-severity error --quiet --fail-on error`, Exit-Code reflektiert Severity |
 | **In CI / GitHub Actions ausführen** | — | — | ✅ `--report-sarif sca.sarif`, SARIF-Upload-Step |
 | **Befunde nach SonarQube / SonarCloud bringen** (SCA schreibt die Datei, `sonar-scanner` trägt sie ein) | ✅ Export → Sonar | ✅ Export → Sonar | ✅ `--sonar-export sca-findings.json` — s. [EXPORTS_de.md](EXPORTS_de.md#workflow-3--sonarqube-dashboard) |
@@ -165,13 +165,26 @@ kostenlos — ein im IDE unterdrückter Befund bleibt auch in CI unterdrückt.
 
 ## Quick-Start
 
-1. Plugin bauen **und installieren**: `StaticCodeAnalyserIDE\StaticCodeAnalyserIDE.dpk`
-   öffnen → **Build** → anschließend **Install** (Rechtsklick auf das Paket
-   im Project Manager → **Install**, oder Menü **Component → Install Packages**
-   → Paket auswählen). Ohne den Install-Schritt bleibt das Plugin nur
-   kompiliert, taucht aber nicht im Menü der IDE auf.
+1. Plugin **installieren** — drei Wege, in empfohlener Reihenfolge:
+   - **Setup-EXE** (empfohlen): `StaticCodeAnalyserSetup-<Version>.exe`
+     von den GitHub-Releases herunterladen und ausführen. Per-User-Installation,
+     keine Adminrechte nötig; das Setup prüft, dass Delphi 12 installiert und
+     geschlossen ist, räumt Alt-Registrierungen auf, bietet Sprachauswahl
+     Deutsch/Englisch, zeigt die MIT-Lizenzseite und legt einen
+     Startmenü-Eintrag zum Deinstallieren an.
+   - **GetIt Local Package**: Release-Asset
+     `StaticCodeAnalyser-v<V>-getit-manifest.zip` herunterladen, entpacken,
+     dann im GetIt Package Manager unten **Load Local Package** wählen
+     (braucht eine aktive Update Subscription). Die Payload
+     `...-plugin-getit.zip` lädt GetIt selbst.
+   - **Selbstbau**: `StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dpk`
+     öffnen → **Build** → anschließend **Install** (Rechtsklick auf das Paket
+     im Project Manager → **Install**, oder Menü **Component → Install Packages**
+     → Paket auswählen). Ohne den Install-Schritt bleibt das Plugin nur
+     kompiliert, taucht aber nicht im Menü der IDE auf. Vollständige
+     Anleitung in [HowTo_Build_de.md](HowTo_Build_de.md).
 2. In Delphi: **Ansicht → Static Code Analysis Tool for Delphi** → dockbares Fenster erscheint
-3. Projektpfad wählen → **Analyse starten**
+3. Projektpfad wählen → **▶ Analyse** klicken
 
 Für inkrementelle Analyse nur der im Branch geänderten Dateien siehe
 [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md).
@@ -265,8 +278,8 @@ Vollständiger Status der 50-Sonar-Pruefregeln: siehe [DETECTORS_de.md](DETECTOR
 | **Verzeichnis-Auswahl** (`...`) | Projektordner wählen |
 | **Einstellungen...** | `analyser.ini` öffnen — VCS-Settings, Custom-LeakyClasses (siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md)) |
 | **Ignore...** | `ignore.txt` öffnen — Datei-/Verzeichnis-Filter |
-| **Analyse starten** | Rekursiver Verzeichnis-Scan |
-| **Aktuelle Datei** | Nur die im Editor offene `.pas` |
+| **▶ Analyse** | Rekursiver Scan — was analysiert wird (Ordner / Projekt / Gruppe), zeigt der Button-Hint |
+| **📄 File** | Nur die im Editor offene `.pas` |
 | **Branch-Changes** | Nur via Git/SVN geänderte Dateien (siehe [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md)) |
 | **Abbrechen** | Bricht laufende Analyse ab |
 
@@ -319,7 +332,7 @@ Antwortet gar kein Handler, wird ohnehin der Betrachter benutzt.
 In der Toolbar gibt es keine Toggle-Checkboxen mehr — alles optionale
 Detektor-Verhalten wird über `analyser.ini` konfiguriert (siehe
 _Konfigurations-Dateien_ unten). Datei via **Einstellungen…**-Button
-öffnen, anpassen, speichern, **Analyse starten** klicken. Settings
+öffnen, anpassen, speichern, **▶ Analyse** klicken. Settings
 werden bei jedem Lauf neu geladen, kein IDE-Neustart nötig.
 
 ### Stat-Cards
@@ -330,6 +343,10 @@ Zwei Cards oben zeigen die Verteilung der Befunde:
 - **Probleme nach Typ**: Code Smell / Bug / Vulnerability / Security Hotspot / Code Duplication / Lesefehler
 
 Beide Totals stimmen mathematisch überein.
+
+Eine **Quality-Score-Kachel** daneben zeigt die Codequalität als
+Letter-Grade **A–E** (Sonar-Stil); Rohscore und Breakdown stehen im
+Tooltip der Kachel.
 
 ### Filter
 
@@ -822,11 +839,11 @@ wählbar, was bequemer ist. Alle in `%APPDATA%\StaticCodeAnalyser\`:
 
 ### Live-Watch (nur IDE-Plugin) — ⚠️ RISKY
 
-Klick auf **Aktuelle Datei** im IDE-Plugin aktiviert einen Single-File-Live-Watch
+Klick auf **📄 File** im IDE-Plugin aktiviert einen Single-File-Live-Watch
 auf genau diese Datei: bei jedem Save (300 ms debounced) und Edit (1000 ms
 debounced) laeuft die Analyse fuer DIESE Datei automatisch im Hintergrund-Thread.
 Tab-Wechsel auf eine andere Datei aendert nichts; erneuter Klick auf
-**Aktuelle Datei** haengt den Watch um. Bulk-Pfade (**Analyse starten**,
+**📄 File** haengt den Watch um. Bulk-Pfade (**▶ Analyse**,
 **Branch-Changes**) deaktivieren den Watch explizit. Es gibt kein INI-Flag dafuer.
 
 > ⚠️ **Risiko Endlosschleife.** Es existiert heute **kein Re-Entrancy-Guard**
@@ -905,7 +922,11 @@ Standard-TComponent-Owner-Pattern als kein-Leak:
 ## Architektur
 
 ```
-StaticCodeAnalyserIDE/                 IDE-Expert Paket (.dpk)
+StaticCodeAnalyserIDE/                 IDE-Expert-Pakete: Dev-Satz
+                                       (SCA.Engine.dpk + SCA.SharedUI.dpk +
+                                       StaticCodeAnalyser.IDE.d12.dpk) und
+                                       Release-Monolith
+                                       (StaticCodeAnalyser.Plugin.d12.dpk)
   uIDEExpert.pas                       Wizard-Registrierung (IOTAMenuWizard)
   uIDEAnalyserForm.pas                 Dockbares Fenster (TFrame) - Hauptshell:
                                        Filter, Stats-Grid, Sort, Export,
@@ -1067,7 +1088,10 @@ wirklich sieht.
 
 ## Voraussetzungen
 
-- Delphi 12 (Athens)
+- Delphi 12 (Athens), Versionen 12.0–12.3 (32-Bit-IDE, BDS 23.0).
+  Die 64-Bit-IDE von 12.3 wird **noch nicht** unterstuetzt (vorbereitet).
+  Delphi 13 ist geplant, aber noch nicht unterstuetzt; Delphi 11 und
+  aelter werden nicht unterstuetzt.
 - DUnitX (nur fuer die Testsuite, nicht fuer das Plugin selbst)
 - Optional: Git for Windows oder TortoiseSVN **mit** CLI-Tools fuer das
   Branch-Changes-Feature
@@ -1076,7 +1100,7 @@ wirklich sieht.
 
 | Ziel | Win32 | Win64 |
 |------|-------|-------|
-| **IDE-Plugin** (`StaticCodeAnalyserIDE.dpk`) | ✅ Pflicht | ❌ — muss 32-Bit bleiben, weil die RAD-Studio-12-IDE selbst 32-Bit ist und Plugins die Bitness erben |
+| **IDE-Plugin** (`StaticCodeAnalyser.IDE.d12.dpk`) | ✅ Pflicht | ❌ — muss 32-Bit bleiben, weil das Plugin in der 32-Bit-IDE laeuft (die 64-Bit-IDE von 12.3 wird noch nicht unterstuetzt) und Plugins die Bitness erben |
 | **Standalone-EXE / CLI** (`analyser.d12.dproj`) | ✅ | ✅ |
 | **Test-Suite** (`TestProject.dproj`) | ✅ | _Plattform bei Bedarf hinzufuegen_ |
 
@@ -1093,7 +1117,7 @@ Multi-GB-Scans).
 | Komponente | Pfad | Zweck |
 |------------|------|-------|
 | **Standalone-EXE** | `StaticCodeAnalyserForm/analyser.d12.dproj` | Verzeichnis-/Datei-Scan außerhalb der IDE |
-| **IDE-Plugin** | `StaticCodeAnalyserIDE/StaticCodeAnalyserIDE.dpk` | Hauptfeature: dockbares Tool-Fenster mit allen Funktionen |
+| **IDE-Plugin** | `StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.dpk` (Dev-Satz mit `SCA.Engine.dpk` + `SCA.SharedUI.dpk`; Releases liefern den Monolith `StaticCodeAnalyser.Plugin.d12.dpk`) | Hauptfeature: dockbares Tool-Fenster mit allen Funktionen |
 
 Beide nutzen die gemeinsame Analyse-Engine in `StaticCodeAnalyserForm/sources/`.
 

@@ -53,7 +53,7 @@ bds.exe-Verzeichnis → System32 → PATH auf, **nicht** im BPL-Verzeichnis.
 Drei separate BPLs in einem privaten Installationsordner sind daher nicht
 direkt ladbar.
 
-### Variante B — aktueller Repo-Stand (Default des .iss)
+### Variante B — Dev-3-BPL-Satz (nur noch per Kommandozeile ohne SCA_MONOLITH)
 
 Der Dev-3-Package-Satz, in dieser Reihenfolge in der IDE bauen (Release/Win32):
 
@@ -76,8 +76,9 @@ alphabetisch: `SCA.*` vor `StaticCodeAnalyser.*`). Das ist eine dokumentierte
 ### Vor dem Release (Checkliste aus der Doku)
 
 - **Versions-Sync** (Doku Punkt 3): `uSCAConsts.SCA_VERSION`,
-  `uIDEExpert.PLUGIN_VERSION`, dproj-`VerInfo` (aktuell 0/9/4 vs. 0.9.8.0
-  Drift!) synchronisieren; danach `#define SCAVersion` im `.iss` nachziehen.
+  `uIDEExpert.PLUGIN_VERSION`, dproj-`VerInfo` synchronisieren (der
+  fruehere 0/9/4-vs-0.9.8.0-Drift ist historisch, seit 0.9.10 behoben);
+  danach `#define SCAVersion` im `.iss` nachziehen.
 - Verwaisten `SCA.Refactor.bpl`-Eintrag in der Dev-Registry bereinigen
   (Doku Punkt 4) — der Koexistenz-Check des Setups fasst nur Plugin-BPL-Namen an.
 - Frischeste-Binaries-Check: User wechselt Win32/Win64 — sicherstellen, dass
@@ -133,6 +134,14 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
   (`uninsdeletevalue` + expliziter `usUninstall`-Handler).
 - **Privacy-Gate**: keinerlei Netzwerk-Code; Zusicherung steht sichtbar auf
   der Willkommensseite (de/en).
+- **Sprachauswahl** Deutsch/Englisch beim Setup-Start.
+- **MIT-Lizenzseite**: das Setup zeigt die Lizenz (`LICENSE` im Repo-Root)
+  als Lizenzseite an.
+- **PayPal-/GitHub-Buttons** im Setup (Spenden- bzw. Projektlink).
+- **Startmenue-Eintrag fuer den Deinstaller** (unins000.exe war sonst
+  unauffindbar).
+- **Ready-Seite** mit Versions-Matrix; die installierbare Version ist
+  fett hervorgehoben (TRichEditViewer + RTF, Memo als Fallback).
 
 ## 4. Testmatrix (D12-Teilmenge von Konzept §9; D13-Zeilen entfallen bis P2)
 
@@ -160,4 +169,5 @@ Plugin-Interaktion ist nicht headless verifizierbar).
   auskommentiert. 32-bit-BPL laedt nie in der 64-bit-IDE → eigene Win64-BPL.
 - **D12.3-64-bit-IDE ist in v1 bewusst ausgeschlossen** (Doku Punkt 12).
 - Notfall-/Diagnose-Skripte (`sca-disable-plugin.cmd`) sind P3-Umfang, nicht P1.
-- Signing/EULA haengen an der offenen Lizenzmodell-Entscheidung (Doku Punkt 9).
+- Lizenz: MIT (entschieden 2026-08-15); Code-Signing weiterhin offen
+  (Zertifikatsfrage).

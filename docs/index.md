@@ -13,7 +13,7 @@ carries the `_de` suffix (`README_de.md`, `EXPORTS_de.md`, …).
 | Document | What it answers |
 |---|---|
 | [../README.md](../README.md) | What the tool does, how to run it, architecture, performance, suppression, theming. Start here if you have not used it before. |
-| [../HowTo_Build.md](../HowTo_Build.md) | How to build the EXE, the IDE plugin and the test project from source. |
+| [../HowTo_Build.md](../HowTo_Build.md) | How to build the EXE, the IDE plugin and the test project from source (building is optional - releases ship a setup and a GetIt package). |
 | [../HowTo_Tests.md](../HowTo_Tests.md) | How to run the DUnitX suite and the dogfooding gate. |
 | [../CHANGELOG.md](../CHANGELOG.md) | What changed, release by release, with the reasoning. |
 
@@ -44,11 +44,16 @@ carries the `_de` suffix (`README_de.md`, `EXPORTS_de.md`, …).
 
 ## IDE plugin
 
+End users install the plugin one of two ways: the release **setup EXE**
+(`StaticCodeAnalyserSetup-<Version>.exe`) or the **GetIt local package**
+from the release assets.
+
 | Document | What it answers |
 |---|---|
 | [../README.md](../README.md#usage) | Plugin usage: buttons, the docked findings window, hover overlays, the options pages. |
 | [../BRANCH_CHANGES.md](../BRANCH_CHANGES.md) | The Branch-Changes feature: Git/SVN detection, Tortoise compatibility, configuration, troubleshooting. |
 | [../installer/README_Installer.md](../installer/README_Installer.md) | Building and running the plugin installer. |
+| [../getit/README_GetIt.md](../getit/README_GetIt.md) | GetIt local package - manifest contracts and lessons. |
 
 ## Embedding the engine
 
