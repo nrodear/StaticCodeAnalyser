@@ -450,12 +450,17 @@ begin
   WizardForm.ReadyMemo.WordWrap   := True;
   WizardForm.ReadyMemo.ScrollBars := ssVertical;
 
-  // RichEdit-Viewer deckungsgleich ueber dem ReadyMemo - traegt die
-  // RTF-Fassung mit FETTER installierbarer Version (CurPageChanged).
+  // RichEdit-Viewer anstelle des ReadyMemo - traegt die RTF-Fassung mit
+  // FETTER installierbarer Version (CurPageChanged). Bewusst NICHT
+  // deckungsgleich (Nutzer-Feedback 2026-08-15): etwas nach unten
+  // geschoben (das zweizeilige "Click Install..."-Label wurde sonst
+  // angeschnitten) und unten verkuerzt (die Box wirkte zu gross).
   GReadyRich := TRichEditViewer.Create(WizardForm);
   GReadyRich.Parent := WizardForm.ReadyMemo.Parent;
-  GReadyRich.SetBounds(WizardForm.ReadyMemo.Left, WizardForm.ReadyMemo.Top,
-    WizardForm.ReadyMemo.Width, WizardForm.ReadyMemo.Height);
+  GReadyRich.SetBounds(WizardForm.ReadyMemo.Left,
+    WizardForm.ReadyMemo.Top + ScaleY(16),
+    WizardForm.ReadyMemo.Width,
+    WizardForm.ReadyMemo.Height - ScaleY(48));
   GReadyRich.Anchors    := WizardForm.ReadyMemo.Anchors;
   GReadyRich.ReadOnly   := True;
   GReadyRich.ScrollBars := ssVertical;
