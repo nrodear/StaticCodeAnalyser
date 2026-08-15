@@ -308,10 +308,27 @@ begin
   Result := FileExists(AddBackslash(RootDir) + 'bin\bds.exe');
 end;
 
+// Gehoert der BPL-Dateiname zur SCA-Familie? Im Monolith-Modus zaehlen
+// auch die ALT-Registrierungen des Dev-3-Package-Satzes dazu: die
+// Monolith-BPL enthaelt dieselben Units — bleibt ein alter
+// SCA.Engine-/SCA.SharedUI-/IDE.d12-Eintrag stehen, wirft die IDE beim
+// Start "enthaelt die Unit ..., die auch im Package ... enthalten ist"
+// (2026-08-15 auf dem Zweit-PC real passiert, via GetIt-Install).
+function IsScaFamilyBpl(const FileName: string): Boolean;
+begin
+  Result := (CompareText(FileName, PLUGIN_BPL_NAME) = 0)
+#ifdef SCA_MONOLITH
+    or (CompareText(FileName, 'StaticCodeAnalyser.IDE.d12.bpl') = 0)
+    or (CompareText(FileName, 'SCA.Engine.bpl') = 0)
+    or (CompareText(FileName, 'SCA.SharedUI.bpl') = 0)
+#endif
+  ;
+end;
+
 // Sammelt alle "Known Packages"-Wertnamen (= volle BPL-Pfade), die auf eine
 // unserer BPL-Dateinamen enden, aber NICHT auf den Installationspfad zeigen.
-// Das sind Dev-Registrierungen (Public-Documents-Bpl der Build-Maschine) —
-// Koexistenz-Gefahr: dieselbe Package-Ident darf nicht doppelt laden.
+// Das sind Dev-/Alt-Registrierungen (z.B. Public-Documents-Bpl) —
+// Koexistenz-Gefahr: dieselbe Unit darf nicht doppelt laden.
 procedure CollectForeignPluginEntries(const InstalledPath: string; Entries: TStringList);
 var
   Names: TArrayOfString;
@@ -322,7 +339,7 @@ begin
     for I := 0 to GetArrayLength(Names) - 1 do
     begin
       N := Names[I];
-      if (CompareText(ExtractFileName(N), PLUGIN_BPL_NAME) = 0) and
+      if IsScaFamilyBpl(ExtractFileName(N)) and
          (CompareText(N, InstalledPath) <> 0) then
         Entries.Add(N);
     end;

@@ -64,6 +64,20 @@ zugleich die Bewerbungsmappe fuer die Einreichung bei Embarcadero
      ZIP-Pfad (fuer den Lokaltest VOR dem Upload)
    Diese Datei hier bleibt die VORLAGE - Version/Modified/Url werden
    pro Release ersetzt, Aenderungen an Actions/Texten nur hier.
+3b. **Migrations-Voraussetzung** (Zweit-PC-Befund 2026-08-15): Auf
+   Maschinen mit einer ALTEN manuellen 3-BPL-Installation (SCA.Engine/
+   SCA.SharedUI/StaticCodeAnalyser.IDE.d12 in Known Packages) MUSS
+   diese vor dem GetIt-Install entfernt werden - die Monolith-BPL
+   enthaelt dieselben Units, die IDE meldet sonst beim Start
+   "enthaelt die Unit uParser2, die auch im Package ... enthalten
+   ist". Entfernen: IDE -> Component -> Install Packages -> die drei
+   SCA-Eintraege abwaehlen/entfernen, oder die Wertnamen unter
+   HKCU\Software\Embarcadero\BDS\23.0\Known Packages loeschen.
+   (Der Inno-Installer raeumt diese Alt-Eintraege seit 2026-08-15
+   selbst; ins GetIt-Manifest gehoeren KEINE blinden Registry-
+   Loesch-Actions - ein Fehlschlag bei fehlendem Wert koennte den
+   Install abbrechen, Verhalten undokumentiert.)
+
 4. Lokaltest (P3.5): D12-IDE -> GetIt-Dialog -> "Load Local Package" ->
    `release-artifacts\StaticCodeAnalyser-D12.local.getit.json` waehlen;
    Install / Uninstall / Doppel-Install pruefen. Braucht eine aktive
