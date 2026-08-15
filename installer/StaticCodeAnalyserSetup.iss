@@ -129,6 +129,9 @@ CloseApplications=no
 ; Windows-Anzeigesprache kam der Wizard stumm englisch; deutsche Nutzer mit
 ; en-Windows sind in der Delphi-Welt haeufig - fragen statt raten):
 ShowLanguageDialog=yes
+; Lizenz-Seite: MIT (User-Entscheid 2026-08-15) - dieselbe Datei speist
+; auch das GetIt-Paket (getit\...json, Feld License).
+LicenseFile={#SCARepoRoot}LICENSE
 
 [Languages]
 ; de + en laut Konzept P3 (P1 liefert das Geruest schon mit):

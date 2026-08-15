@@ -23,13 +23,15 @@ zugleich die Bewerbungsmappe fuer die Einreichung bei Embarcadero
 
 ## Offene Punkte vor dem ersten Test (Todo P3)
 
-1. `License`/`EULA.txt`: Freeware-EULA fehlt noch - **Lizenzmodell ist
-   User-Entscheid** (P3.1).
-2. `Image`/`sca_logo_128.png`: 128px-PNG fehlt (P3.2); Quelle koennte
-   branding\sca.png sein.
+1. ERLEDIGT 2026-08-15: Lizenz = **MIT** (User-Entscheid); `License`
+   zeigt auf die Repo-LICENSE, `LicenseName` = MIT. Dieselbe Datei
+   speist die Lizenz-Seite des Inno-Setups.
+2. ERLEDIGT 2026-08-15: `sca_logo_128.png` aus branding\sca.png
+   abgeleitet (500x500 -> 128x128, Lanczos).
 3. `Url`: zeigt auf ein noch nicht existierendes Release-Asset
-   `...-plugin-getit.zip` (ZIP mit der Monolith-BPL im Wurzelverzeichnis);
-   Erzeugung in package-release.ps1 ergaenzen (P3.3/P3.4).
+   `...-plugin-getit.zip` (ZIP mit Monolith-BPL + LICENSE + Logo im
+   Wurzelverzeichnis); Erzeugung in package-release.ps1 ergaenzen
+   (P3.3/P3.4).
 4. Test via "Load Local Package" braucht eine aktive Update Subscription
    (P3.5).
 
