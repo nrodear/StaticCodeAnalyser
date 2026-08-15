@@ -23,13 +23,19 @@ zugleich die Bewerbungsmappe fuer die Einreichung bei Embarcadero
    Millisekunden/Zeitzone) - im GetIt-Binary hartkodiert.
 5. Feld-Reihenfolge und PascalCase-Namen des offiziellen Samples
    beibehalten (alter Mapper-Code, Toleranz unbekannt).
-6. **AllUsers="1" + $(BDSCatalogRepositoryAllUsers) sind PFLICHT fuer
-   IDE-Plugins** (Neustart-Crash-Analyse 2026-08-15): GetIt schreibt
-   den Known-Packages-Wert RE-TOKENISIERT als %Makro%; beim IDE-Start
-   ist nur BDSCatalogRepositoryAllUsers aufloesbar (GetIt legt es
-   selbst in HKCU\...\Environment Variables ab), das einfache
-   BDSCatalogRepository NICHT -> EPackageError mit rohem Makro.
-   Gleiche Loesung wie DRipGrepper (erprobt, ActionId 17/18).
+6. **Action 7/8 (Install/UninstallPackage) fuer DESIGN-Packages, NICHT
+   17/18 (Install/UninstallIDEPackage)** - Lehre der Testreihe
+   2026-08-15 auf dem Zweit-PC: 17 registriert als IDE-Package
+   ("Known IDE Packages"); dort ruft die IDE beim Laden nur
+   initialization, NIE `procedure Register` - unsere gesamte UI
+   entsteht aber in Register -> BPL laedt fehlerfrei, aber KEIN
+   Menue. Das offizielle Abbrevia-Sample registriert sein
+   Design-Package genauso ueber Action 7 mit NUR dem BPL-Dateinamen
+   (relativ zum entpackten Paketordner). Zusatzlehre aus dem
+   17er-Irrweg: GetIt schreibt Registry-Pfade RE-TOKENISIERT als
+   %Makro%; beim IDE-Start ist nur BDSCatalogRepositoryAllUsers
+   aufloesbar (steht in HKCU\...\Environment Variables), das einfache
+   BDSCatalogRepository nicht -> deshalb bleibt AllUsers="1".
    Fallback, falls je noetig: Actions 24/25 (Add/DeleteValueFromRegistry,
    Parameter 5="True" expandiert Makros VOR dem Schreiben) nach Type 4,
    um einen expandierten Absolutpfad zu persistieren.

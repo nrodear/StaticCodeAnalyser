@@ -18,26 +18,24 @@
 	"Actions": [
 		{
 			"Id": "1",
-			"ActionId": "17",
+			"ActionId": "7",
 			"Type": "3",
 			"RequireElevation": "0",
 			"Parameter": [
-				{ "Parameter": "$(BDSCatalogRepositoryAllUsers)\\StaticCodeAnalyserD12\\StaticCodeAnalyser.Plugin.d12.bpl" },
-				{ "Parameter": "Delphi.Personality" }
+				{ "Parameter": "StaticCodeAnalyser.Plugin.d12.bpl" }
 			],
-			"ActionName": "InstallIDEPackage",
+			"ActionName": "InstallPackage",
 			"Description": "Install StaticCodeAnalyser.Plugin.d12.bpl"
 		},
 		{
 			"Id": "2",
-			"ActionId": "18",
+			"ActionId": "8",
 			"Type": "5",
 			"RequireElevation": "0",
 			"Parameter": [
-				{ "Parameter": "$(BDSCatalogRepositoryAllUsers)\\StaticCodeAnalyserD12\\StaticCodeAnalyser.Plugin.d12.bpl" },
-				{ "Parameter": "Delphi.Personality" }
+				{ "Parameter": "StaticCodeAnalyser.Plugin.d12.bpl" }
 			],
-			"ActionName": "UninstallIDEPackage",
+			"ActionName": "UninstallPackage",
 			"Description": "Uninstall StaticCodeAnalyser.Plugin.d12.bpl"
 		}
 	]
