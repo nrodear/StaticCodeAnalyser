@@ -204,6 +204,14 @@ Source: "{#SCABplSourceDirX64}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d12x64"; Fl
 ; (APPDATA); der Installer ueberschreibt rules\sca-rules.json bei Updates.
 Source: "{#SCARepoRoot}rules\sca-rules.json"; DestDir: "{app}\rules"; Flags: ignoreversion
 
+[Icons]
+; Sichtbarer Weg zum Deinstaller (Nutzerfrage 2026-08-15): den unins000.exe
+; erzeugt Inno automatisch (+ Eintrag in Windows "Apps & Features"), aber ein
+; IDE-Plugin hat keine startbare EXE und damit keinen natuerlichen Fundort -
+; deshalb ein Startmenue-Eintrag. {userprograms}: per-user, kein Admin.
+Name: "{userprograms}\Static Code Analyser for Delphi\Uninstall Static Code Analyser (IDE-Plugin)"; \
+  Filename: "{uninstallexe}"
+
 [Registry]
 ; HKCU-Registrierung fuer die D12-IDE (BDS 23.0, Win32).
 ; Wertname = voller BPL-Pfad, Wertdaten = Beschreibung (NIE leer!).
