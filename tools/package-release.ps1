@@ -343,7 +343,42 @@ if (-not $SkipGetIt) {
   if ($locParsed.Url -ne $getitZip) {
     throw "getit-json: lokale Url '$($locParsed.Url)' != '$getitZip' (Escaping?)"
   }
-  "{0,-6} BPL + LICENSE + Logo  ->  {1} (+ 2 Manifeste)" -f `
+
+  # License/Image im Manifest sind DATEIEN NEBEN DER JSON (wie im
+  # offiziellen Sample) - GetIt laedt sie beim Oeffnen des Pakets.
+  # (a) Fuer den Lokaltest direkt aus $OutDir: beide daneben legen.
+  # (b) Fuer fremde Maschinen: Manifest-Bundle-ZIP (JSON + LICENSE +
+  #     Logo) - eine nackte JSON bricht sonst mit "EULA kann nicht
+  #     geladen werden" ab (2026-08-15 auf dem Zweit-PC bewiesen).
+  Copy-Item $license (Join-Path $OutDir 'LICENSE') -Force
+  Copy-Item $logo    (Join-Path $OutDir 'sca_logo_128.png') -Force
+
+  $bundleZip = Join-Path $OutDir "StaticCodeAnalyser-v$Version-getit-manifest.zip"
+  if (Test-Path $bundleZip) { Remove-Item $bundleZip -Force }
+  $za = [System.IO.Compression.ZipFile]::Open($bundleZip, 'Create')
+  try {
+    $lvl = [System.IO.Compression.CompressionLevel]::Optimal
+    foreach ($pair in @(
+      @{ Src = $jsonRelease; Name = 'StaticCodeAnalyser-D12.getit.json' },
+      @{ Src = $license;     Name = 'LICENSE' },
+      @{ Src = $logo;        Name = 'sca_logo_128.png' })) {
+      [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+        $za, $pair.Src, $pair.Name, $lvl)
+    }
+  } finally {
+    $za.Dispose()
+  }
+  $za = [System.IO.Compression.ZipFile]::OpenRead($bundleZip)
+  try { $names = @($za.Entries | ForEach-Object { $_.FullName }) }
+  finally { $za.Dispose() }
+  foreach ($sentinel in @('StaticCodeAnalyser-D12.getit.json', 'LICENSE',
+                          'sca_logo_128.png')) {
+    if ($names -notcontains $sentinel) {
+      throw "getit-manifest-zip: $sentinel fehlt im Archiv. Abbruch."
+    }
+  }
+
+  "{0,-6} BPL + LICENSE + Logo  ->  {1} (+ 2 Manifeste + Manifest-Bundle)" -f `
     'getit', (Split-Path $getitZip -Leaf)
 }
 
