@@ -23,6 +23,16 @@ zugleich die Bewerbungsmappe fuer die Einreichung bei Embarcadero
    Millisekunden/Zeitzone) - im GetIt-Binary hartkodiert.
 5. Feld-Reihenfolge und PascalCase-Namen des offiziellen Samples
    beibehalten (alter Mapper-Code, Toleranz unbekannt).
+6. **AllUsers="1" + $(BDSCatalogRepositoryAllUsers) sind PFLICHT fuer
+   IDE-Plugins** (Neustart-Crash-Analyse 2026-08-15): GetIt schreibt
+   den Known-Packages-Wert RE-TOKENISIERT als %Makro%; beim IDE-Start
+   ist nur BDSCatalogRepositoryAllUsers aufloesbar (GetIt legt es
+   selbst in HKCU\...\Environment Variables ab), das einfache
+   BDSCatalogRepository NICHT -> EPackageError mit rohem Makro.
+   Gleiche Loesung wie DRipGrepper (erprobt, ActionId 17/18).
+   Fallback, falls je noetig: Actions 24/25 (Add/DeleteValueFromRegistry,
+   Parameter 5="True" expandiert Makros VOR dem Schreiben) nach Type 4,
+   um einen expandierten Absolutpfad zu persistieren.
 
 - `Id` ist STABIL zu halten (steuert den Registry-Schluessel unter
   `HKCU\...\CatalogRepository\Elements`); neue Id = koexistierendes

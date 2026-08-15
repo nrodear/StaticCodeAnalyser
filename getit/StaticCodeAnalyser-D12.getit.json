@@ -14,7 +14,7 @@
 	"LicenseName": "MIT",
 	"TargetPath": "",
 	"RequireElevation": "0",
-	"AllUsers": "0",
+	"AllUsers": "1",
 	"Actions": [
 		{
 			"Id": "1",
@@ -22,11 +22,11 @@
 			"Type": "3",
 			"RequireElevation": "0",
 			"Parameter": [
-				{ "Parameter": "$(BDSCatalogRepository)\\StaticCodeAnalyserD12\\StaticCodeAnalyser.Plugin.d12.bpl" },
+				{ "Parameter": "$(BDSCatalogRepositoryAllUsers)\\StaticCodeAnalyserD12\\StaticCodeAnalyser.Plugin.d12.bpl" },
 				{ "Parameter": "Delphi.Personality" }
 			],
 			"ActionName": "InstallIDEPackage",
-			"Description": "Register and load the IDE plugin BPL"
+			"Description": "Install StaticCodeAnalyser.Plugin.d12.bpl"
 		},
 		{
 			"Id": "2",
@@ -34,10 +34,11 @@
 			"Type": "5",
 			"RequireElevation": "0",
 			"Parameter": [
-				{ "Parameter": "$(BDSCatalogRepository)\\StaticCodeAnalyserD12\\StaticCodeAnalyser.Plugin.d12.bpl" }
+				{ "Parameter": "$(BDSCatalogRepositoryAllUsers)\\StaticCodeAnalyserD12\\StaticCodeAnalyser.Plugin.d12.bpl" },
+				{ "Parameter": "Delphi.Personality" }
 			],
 			"ActionName": "UninstallIDEPackage",
-			"Description": "Unregister the IDE plugin BPL"
+			"Description": "Uninstall StaticCodeAnalyser.Plugin.d12.bpl"
 		}
 	]
 }
