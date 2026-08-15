@@ -32,6 +32,7 @@ SCA.SharedUI/SCA.SharedUI.res
 StaticCodeAnalyserForm/StaticCodeAnalyser.d12.res
 StaticCodeAnalyserForm/tests/TestProject.res
 StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.res
+StaticCodeAnalyserIDE/StaticCodeAnalyser.Plugin.d12.res
 
 # ---- Build-Output-Verzeichnisse ----
 # Delphi schreibt kompilierte Artefakte (DCU/BPL/EXE/DLL) typisch

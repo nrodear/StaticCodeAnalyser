@@ -28,9 +28,23 @@
 ; seit 0.9.4 auf 0/9/4, waehrend der String etwas anderes behauptete),
 ; und seit 0.9.11 ist auch PLUGIN_VERSION nachgezogen - die stand zwei
 ; Releases zurueck.
-#define SCAVersion      "0.9.14.0"
+; Ueberschreibbar per ISCC /DSCAVersion=x.y.z.0 - package-release.ps1 setzt
+; die Version zentral, der Default hier dient nur dem Hand-Compile.
+#ifndef SCAVersion
+  #define SCAVersion    "0.9.16.0"
+#endif
 #define SCAAppName      "Static Code Analyser for Delphi (IDE-Plugin)"
 #define SCAPublisher    "StaticCodeAnalyser"
+
+; --- Community-Buttons unten links im Wizard (Vorbild: Inno-Setup-eigener
+; Installer). Klick oeffnet den STANDARD-BROWSER - rein nutzerinitiiert,
+; das Privacy-Gate (kein automatischer Netzzugriff des Setups) bleibt
+; unberuehrt. SCADonateUrl leer = Donate-Button erscheint nicht.
+; PayPal-Adresse vom User festgelegt 2026-08-15 (siehe README_Installer).
+#ifndef SCADonateUrl
+  #define SCADonateUrl "https://paypal.me/nrodear"
+#endif
+#define SCAGitHubUrl    "https://github.com/nrodear/StaticCodeAnalyser"
 
 ; --- Quell-BPLs ---------------------------------------------------------------
 ; RELEASE-ZIEL laut Konzept P1: Monolith-BPL "StaticCodeAnalyser.Plugin.d12.bpl"
@@ -45,10 +59,12 @@
 ; Die dproj setzt KEIN DCC_BplOutput -> BPLs landen im D12-Standard-BPL-Ordner
 ; (C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl).
 ;
-; Umschalter: solange die Monolith-dpk fehlt, installiert dieses Skript den
-; Dev-3-BPL-Satz (SCA_MONOLITH undefiniert lassen). Sobald die Monolith-BPL
-; gebaut ist, SCA_MONOLITH definieren — dann wird NUR die eine BPL installiert.
-;#define SCA_MONOLITH
+; Umschalter: seit 2026-08-14 existiert die Monolith-dpk im Repo
+; (StaticCodeAnalyserIDE\StaticCodeAnalyser.Plugin.d12.dpk) - SCA_MONOLITH
+; ist damit der Release-Default: es wird NUR die eine BPL installiert.
+; Fuer die Dev-3-BPL-Uebergangsvariante per ISCC-Kommandozeile ohne dieses
+; Define bauen (Zeile auskommentieren).
+#define SCA_MONOLITH
 
 ; Quellordner der gebauten BPLs (Build-Maschine; per ISCC /D ueberschreibbar):
 ;   iscc /DSCABplSourceDir="D:\pfad\zu\bpls" StaticCodeAnalyserSetup.iss
@@ -72,6 +88,21 @@
 #define KnownPackages23 BDS23Key + "\Known Packages"
 #define DisabledPkgs23  BDS23Key + "\Disabled Packages"
 
+; --- D12.3 64-bit-IDE (VORBEREITET, standardmaessig AUS) ---------------------
+; Aktivieren mit ISCC /DSCA_D12_X64, sobald (a) eine Win64-DESIGN-BPL des
+; Plugins gebaut ist (Plugin-dproj um die Win64-Plattform ergaenzen; braucht
+; die 64-bit-Designzeit-Pakete aus D12.3) und (b) der Registry-Schluessel am
+; Zielsystem VERIFIZIERT wurde. Merksaetze aus der D13-Recherche, die hier
+; analog gelten: 32-bit-BPL laedt NIE in der 64-bit-IDE; Registrierung der
+; 64-bit-IDE laeuft ueber "Known Packages x64"; Erkennung via Wert "App x64".
+#ifdef SCA_D12_X64
+  #define KnownPackages23x64 BDS23Key + "\Known Packages x64"
+  #define DisabledPkgs23x64  BDS23Key + "\Disabled Packages x64"
+  #ifndef SCABplSourceDirX64
+    #define SCABplSourceDirX64 "C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\Win64"
+  #endif
+#endif
+
 [Setup]
 AppId={{7C1B3A52-9E44-4B7D-A0F3-5D2C8E6F1B90}
 AppName={#SCAAppName}
@@ -94,6 +125,13 @@ UninstallDisplayName={#SCAAppName}
 UninstallDisplayIcon={app}\bpl\d12\{#SCAPluginBpl}
 ; Kein Neustart noetig; IDE-Prozess-Check passiert im [Code]-Teil:
 CloseApplications=no
+; Sprachauswahl IMMER anbieten (Nutzer-Feedback 2026-08-15: bei englischer
+; Windows-Anzeigesprache kam der Wizard stumm englisch; deutsche Nutzer mit
+; en-Windows sind in der Delphi-Welt haeufig - fragen statt raten):
+ShowLanguageDialog=yes
+; Lizenz-Seite: MIT (User-Entscheid 2026-08-15) - dieselbe Datei speist
+; auch das GetIt-Paket (getit\...json, Feld License).
+LicenseFile={#SCARepoRoot}LICENSE
 
 [Languages]
 ; de + en laut Konzept P3 (P1 liefert das Geruest schon mit):
@@ -106,8 +144,31 @@ de.PrivacyNote=Dieses Setup und das Plugin bauen niemals Netzwerkverbindungen au
 en.PrivacyNote=This setup and the plugin never open network connections: no update check, no telemetry, no AI/LLM egress.
 de.IdeRunning=Die Delphi-12-IDE (bds.exe, BDS 23.0) scheint zu laufen. Bitte alle Delphi-12-Instanzen schliessen und das Setup erneut starten.
 en.IdeRunning=The Delphi 12 IDE (bds.exe, BDS 23.0) appears to be running. Please close all Delphi 12 instances and restart setup.
+de.NoDelphi12=Delphi 12 (BDS 23.0) wurde auf diesem System nicht gefunden. Das Plugin unterstuetzt Delphi 12.0-12.3 (32-bit-IDE); aeltere Versionen werden nicht unterstuetzt, Delphi 13 noch nicht. Das Setup wird beendet, es wird nichts installiert.
+en.NoDelphi12=Delphi 12 (BDS 23.0) was not found on this system. The plugin supports Delphi 12.0-12.3 (32-bit IDE); older versions are not supported, Delphi 13 not yet. Setup will close without installing anything.
 de.DevBplWarn=In "Known Packages" (BDS 23.0) ist bereits eine Entwickler-Registrierung des Plugins mit anderem Pfad eingetragen:%n%n%1%n%nDer Eintrag wird durch die Installations-Registrierung ersetzt (Koexistenz-Schutz, verhindert Doppel-Laden).
 en.DevBplWarn=A developer registration of the plugin with a different path already exists in "Known Packages" (BDS 23.0):%n%n%1%n%nIt will be replaced by the installed registration (coexistence guard, prevents double loading).
+de.DonateBtn=PayPal-Spende
+en.DonateBtn=PayPal Donate
+de.StarBtn=Stern auf GitHub
+en.StarBtn=Star on GitHub
+; Versions-Uebersicht auf der "Ready to Install"-Seite (Nutzerwunsch
+; 2026-08-15; installierbare Version FETT via TRichEditViewer). Bewusst
+; dieselben Aussagen wie die Matrix in README_Installer.md par.0 - bei
+; Aenderungen BEIDE Stellen pflegen. Einzeilige Bausteine, der [Code]-Teil
+; setzt sie zu RTF (fett) bzw. Plain-Text (Fallback-Memo) zusammen.
+de.ReadyHead=Unterstuetzte Delphi-Versionen:
+en.ReadyHead=Supported Delphi versions:
+de.ReadyYes=Delphi 12.0 - 12.3 (32-bit-IDE)  -  JA, dieses Setup
+en.ReadyYes=Delphi 12.0 - 12.3 (32-bit IDE)  -  YES, this setup
+de.ReadyNo1=Delphi 12.3 (64-bit-IDE)  -  noch nicht (vorbereitet, braucht eigene Win64-BPL)
+en.ReadyNo1=Delphi 12.3 (64-bit IDE)  -  not yet (prepared, needs its own Win64 BPL)
+de.ReadyNo2=Delphi 13 "Florence"  -  noch nicht
+en.ReadyNo2=Delphi 13 "Florence"  -  not yet
+de.ReadyNo3=Delphi 11 und aelter  -  nicht unterstuetzt
+en.ReadyNo3=Delphi 11 and older  -  not supported
+de.ReadyNote=Hinweis: Fuer andere Delphi-IDE-Versionen bestehen derzeit keine Testmoeglichkeiten. Alternative: das Projekt von GitHub laden und die Packages selbst in der IDE bauen und installieren - Anleitung (HowTo_Build.md) im Repository:
+en.ReadyNote=Note: there is currently no way for us to test on other Delphi IDE versions. Alternative: download the project from GitHub and build/install the packages yourself in the IDE - instructions (HowTo_Build.md) in the repository:
 
 [Messages]
 ; Privacy-Hinweis auf der Willkommensseite ergaenzen:
@@ -135,10 +196,24 @@ Source: "{#SCABplSourceDir}\SCA.SharedUI.bpl"; DestDir: "{app}\bpl\d12"; Flags: 
 Source: "{#SCABplSourceDir}\{#SCAPluginBpl}";  DestDir: "{app}\bpl\d12"; Flags: ignoreversion
 #endif
 
+#ifdef SCA_D12_X64
+; D12.3-64-bit-IDE: eigene Win64-BPL in eigenen Ordner (gleicher Dateiname,
+; anderer Build - Quellordner ist der Win64-BPL-Standardordner).
+Source: "{#SCABplSourceDirX64}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d12x64"; Flags: ignoreversion
+#endif
+
 ; --- Regelkatalog -------------------------------------------------------------
 ; Doku Punkt 10: FindJsonFile-Pfad 3 (Install-Verzeichnis) gewinnt vor Pfad 4
 ; (APPDATA); der Installer ueberschreibt rules\sca-rules.json bei Updates.
 Source: "{#SCARepoRoot}rules\sca-rules.json"; DestDir: "{app}\rules"; Flags: ignoreversion
+
+[Icons]
+; Sichtbarer Weg zum Deinstaller (Nutzerfrage 2026-08-15): den unins000.exe
+; erzeugt Inno automatisch (+ Eintrag in Windows "Apps & Features"), aber ein
+; IDE-Plugin hat keine startbare EXE und damit keinen natuerlichen Fundort -
+; deshalb ein Startmenue-Eintrag. {userprograms}: per-user, kein Admin.
+Name: "{userprograms}\Static Code Analyser for Delphi\Uninstall Static Code Analyser (IDE-Plugin)"; \
+  Filename: "{uninstallexe}"
 
 [Registry]
 ; HKCU-Registrierung fuer die D12-IDE (BDS 23.0, Win32).
@@ -157,6 +232,11 @@ Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
 Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
   ValueName: "{app}\bpl\d12\{#SCAPluginBpl}"; \
   ValueData: "Static Code Analyser for Delphi (IDE-Plugin)"; Flags: uninsdeletevalue
+#ifdef SCA_D12_X64
+Root: HKCU; Subkey: "{#KnownPackages23x64}"; ValueType: string; \
+  ValueName: "{app}\bpl\d12x64\{#SCAPluginBpl}"; \
+  ValueData: "Static Code Analyser for Delphi (IDE-Plugin, 64-bit IDE)"; Flags: uninsdeletevalue
+#endif
 
 ; =============================================================================
 ; --- D13-PLATZHALTER (GEBLOCKT: kein Delphi 13 auf der Build-Maschine) --------
@@ -205,10 +285,50 @@ begin
   Result := FindWindowByClassName('TAppBuilder') <> 0;
 end;
 
+// Ist die UNTERSTUETZTE IDE (Delphi 12 = BDS 23.0) ueberhaupt installiert?
+// Ohne diesen Check wuerde das Setup auf einer Maschine ohne D12 stumm
+// Dateien + HKCU-Werte in eine tote BDS-Schiene schreiben (Nutzerfrage
+// 2026-08-15). Suchreihenfolge:
+//   1. HKCU\Software\Embarcadero\BDS\23.0\RootDir - existiert, sobald die
+//      IDE fuer diesen Benutzer einmal gestartet wurde.
+//   2. HKLM\Software\Embarcadero\BDS\23.0\RootDir - der Installationseintrag
+//      (32-bit-Setup-Prozess -> WOW6432Node-Sicht passt zur 32-bit-IDE).
+// Zusaetzlich muss bin\bds.exe unter RootDir real existieren - ein
+// Registry-Leichnam nach Deinstallation zaehlt nicht.
+function IsDelphi12Installed: Boolean;
+var
+  RootDir: string;
+begin
+  Result := False;
+  if not RegQueryStringValue(HKEY_CURRENT_USER,
+       'Software\Embarcadero\BDS\23.0', 'RootDir', RootDir) then
+    if not RegQueryStringValue(HKEY_LOCAL_MACHINE,
+         'Software\Embarcadero\BDS\23.0', 'RootDir', RootDir) then
+      Exit;
+  Result := FileExists(AddBackslash(RootDir) + 'bin\bds.exe');
+end;
+
+// Gehoert der BPL-Dateiname zur SCA-Familie? Im Monolith-Modus zaehlen
+// auch die ALT-Registrierungen des Dev-3-Package-Satzes dazu: die
+// Monolith-BPL enthaelt dieselben Units — bleibt ein alter
+// SCA.Engine-/SCA.SharedUI-/IDE.d12-Eintrag stehen, wirft die IDE beim
+// Start "enthaelt die Unit ..., die auch im Package ... enthalten ist"
+// (2026-08-15 auf dem Zweit-PC real passiert, via GetIt-Install).
+function IsScaFamilyBpl(const FileName: string): Boolean;
+begin
+  Result := (CompareText(FileName, PLUGIN_BPL_NAME) = 0)
+#ifdef SCA_MONOLITH
+    or (CompareText(FileName, 'StaticCodeAnalyser.IDE.d12.bpl') = 0)
+    or (CompareText(FileName, 'SCA.Engine.bpl') = 0)
+    or (CompareText(FileName, 'SCA.SharedUI.bpl') = 0)
+#endif
+  ;
+end;
+
 // Sammelt alle "Known Packages"-Wertnamen (= volle BPL-Pfade), die auf eine
 // unserer BPL-Dateinamen enden, aber NICHT auf den Installationspfad zeigen.
-// Das sind Dev-Registrierungen (Public-Documents-Bpl der Build-Maschine) —
-// Koexistenz-Gefahr: dieselbe Package-Ident darf nicht doppelt laden.
+// Das sind Dev-/Alt-Registrierungen (z.B. Public-Documents-Bpl) —
+// Koexistenz-Gefahr: dieselbe Unit darf nicht doppelt laden.
 procedure CollectForeignPluginEntries(const InstalledPath: string; Entries: TStringList);
 var
   Names: TArrayOfString;
@@ -219,7 +339,7 @@ begin
     for I := 0 to GetArrayLength(Names) - 1 do
     begin
       N := Names[I];
-      if (CompareText(ExtractFileName(N), PLUGIN_BPL_NAME) = 0) and
+      if IsScaFamilyBpl(ExtractFileName(N)) and
          (CompareText(N, InstalledPath) <> 0) then
         Entries.Add(N);
     end;
@@ -228,11 +348,175 @@ end;
 function InitializeSetup: Boolean;
 begin
   Result := True;
+  // Reihenfolge: erst "ist die unterstuetzte IDE da?", dann "laeuft sie?" -
+  // die Nicht-installiert-Meldung ist die praezisere von beiden.
+  if not IsDelphi12Installed then
+  begin
+    MsgBox(CustomMessage('NoDelphi12'), mbError, MB_OK);
+    Result := False;
+    Exit;
+  end;
   if IsDelphiIdeRunning then
   begin
     MsgBox(CustomMessage('IdeRunning'), mbError, MB_OK);
     Result := False;
   end;
+end;
+
+// ---------------------------------------------------------------------------
+// Community-Buttons unten links (Vorbild: Inno-Setup-eigener Installer).
+// ShellExecAsOriginalUser: oeffnet den Browser im Nutzerkontext - reiner
+// Klick-Link, das Setup selbst baut weiterhin keine Verbindung auf.
+// ---------------------------------------------------------------------------
+
+procedure OpenCommunityUrl(const Url: string);
+var
+  ErrCode: Integer;
+begin
+  ShellExecAsOriginalUser('open', Url, '', '', SW_SHOWNORMAL, ewNoWait, ErrCode);
+end;
+
+procedure StarButtonClick(Sender: TObject);
+begin
+  OpenCommunityUrl('{#SCAGitHubUrl}');
+end;
+
+#if SCADonateUrl != ""
+procedure DonateButtonClick(Sender: TObject);
+begin
+  OpenCommunityUrl('{#SCADonateUrl}');
+end;
+#endif
+
+// "Ready to Install"-Seite: Versions-Uebersicht + Selbstbau-Hinweis VOR den
+// Standard-Infos (Zielordner). Die Seite zeigt sonst nur "Click Install..." -
+// genau hier trifft der Nutzer die Entscheidung, also gehoert die
+// Unterstuetzungs-Auskunft hierhin (Nutzerwunsch 2026-08-15).
+// Darstellung: TRichEditViewer ueber dem ReadyMemo, damit die
+// INSTALLIERBARE Version FETT stehen kann (Memo kann kein Bold);
+// das Plain-Memo bleibt als Datenquelle/Fallback gefuellt.
+var
+  GReadyRich   : TRichEditViewer;
+  GMemoDirInfo : string;
+
+function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
+  MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo,
+  MemoTasksInfo: String): String;
+begin
+  // Zielordner-Block fuer den RTF-Aufbau in CurPageChanged merken.
+  GMemoDirInfo := MemoDirInfo;
+  Result := CustomMessage('ReadyHead') + NewLine + NewLine
+          + CustomMessage('ReadyYes') + NewLine
+          + CustomMessage('ReadyNo1') + NewLine
+          + CustomMessage('ReadyNo2') + NewLine
+          + CustomMessage('ReadyNo3') + NewLine + NewLine
+          + CustomMessage('ReadyNote') + NewLine
+          + '{#SCAGitHubUrl}' + NewLine;
+  if MemoDirInfo <> '' then
+    Result := Result + NewLine + MemoDirInfo + NewLine;
+end;
+
+// RTF-Sonderzeichen entschaerfen (Backslash/geschweifte Klammern - der
+// Zielordner-Block enthaelt Windows-Pfade).
+function RtfEscape(const S: string): string;
+begin
+  Result := S;
+  StringChangeEx(Result, '\', '\\', True);
+  StringChangeEx(Result, '{', '\{', True);
+  StringChangeEx(Result, '}', '\}', True);
+end;
+
+// Zeilenumbrueche des Memo-Texts (#13#10) in RTF-\par wandeln.
+function RtfPar(const S: string): string;
+begin
+  Result := RtfEscape(S);
+  StringChangeEx(Result, #13#10, '\par ', True);
+  StringChangeEx(Result, #13, '\par ', True);
+  StringChangeEx(Result, #10, '\par ', True);
+end;
+
+function BuildReadyRtf: string;
+begin
+  // \ansicpg1252: der Zielordner-Block kommt aus der Sprachdatei und darf
+  // Umlaute enthalten; Segoe UI \fs18 = 9pt wie die Wizard-Schrift.
+  Result :=
+    '{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0 Segoe UI;}}\f0\fs18 '
+    + RtfPar(CustomMessage('ReadyHead')) + '\par \par '
+    + '{\b ' + RtfPar(CustomMessage('ReadyYes')) + '}\par '
+    + RtfPar(CustomMessage('ReadyNo1')) + '\par '
+    + RtfPar(CustomMessage('ReadyNo2')) + '\par '
+    + RtfPar(CustomMessage('ReadyNo3')) + '\par \par '
+    + RtfPar(CustomMessage('ReadyNote')) + '\par '
+    + RtfPar('{#SCAGitHubUrl}') + '\par ';
+  if GMemoDirInfo <> '' then
+    Result := Result + '\par ' + RtfPar(GMemoDirInfo) + '\par ';
+  Result := Result + '}';
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if GReadyRich = nil then Exit;
+  if CurPageID = wpReady then
+  begin
+    GReadyRich.RTFText := BuildReadyRtf;
+    GReadyRich.Visible := True;
+    WizardForm.ReadyMemo.Visible := False;
+  end
+  else
+    GReadyRich.Visible := False;
+end;
+
+procedure InitializeWizard;
+var
+  Btn: TNewButton;
+  NextLeft: Integer;
+begin
+  // Ready-Memo: Inno-Default ist WordWrap AUS + horizontaler Scrollbalken -
+  // die Hinweis-Saetze der Versions-Uebersicht liefen damit aus dem Bild
+  // (Nutzer-Feedback 2026-08-15). Umbruch an, nur vertikal scrollen
+  // (gilt fuer das Fallback-Memo; die Anzeige uebernimmt der RichViewer).
+  WizardForm.ReadyMemo.WordWrap   := True;
+  WizardForm.ReadyMemo.ScrollBars := ssVertical;
+
+  // RichEdit-Viewer anstelle des ReadyMemo - traegt die RTF-Fassung mit
+  // FETTER installierbarer Version (CurPageChanged). Bewusst NICHT
+  // deckungsgleich (Nutzer-Feedback 2026-08-15): etwas nach unten
+  // geschoben (das zweizeilige "Click Install..."-Label wurde sonst
+  // angeschnitten) und unten verkuerzt (die Box wirkte zu gross).
+  GReadyRich := TRichEditViewer.Create(WizardForm);
+  GReadyRich.Parent := WizardForm.ReadyMemo.Parent;
+  GReadyRich.SetBounds(WizardForm.ReadyMemo.Left,
+    WizardForm.ReadyMemo.Top + ScaleY(16),
+    WizardForm.ReadyMemo.Width,
+    WizardForm.ReadyMemo.Height - ScaleY(48));
+  GReadyRich.Anchors    := WizardForm.ReadyMemo.Anchors;
+  GReadyRich.ReadOnly   := True;
+  GReadyRich.ScrollBars := ssVertical;
+  GReadyRich.UseRichEdit := True;
+  GReadyRich.Visible    := False;
+
+  NextLeft := ScaleX(12);
+
+#if SCADonateUrl != ""
+  Btn := TNewButton.Create(WizardForm);
+  Btn.Parent  := WizardForm;
+  Btn.Left    := NextLeft;
+  Btn.Top     := WizardForm.CancelButton.Top;
+  Btn.Width   := ScaleX(100);
+  Btn.Height  := WizardForm.CancelButton.Height;
+  Btn.Caption := CustomMessage('DonateBtn');
+  Btn.OnClick := @DonateButtonClick;
+  NextLeft := Btn.Left + Btn.Width + ScaleX(8);
+#endif
+
+  Btn := TNewButton.Create(WizardForm);
+  Btn.Parent  := WizardForm;
+  Btn.Left    := NextLeft;
+  Btn.Top     := WizardForm.CancelButton.Top;
+  Btn.Width   := ScaleX(110);
+  Btn.Height  := WizardForm.CancelButton.Height;
+  Btn.Caption := CustomMessage('StarBtn');
+  Btn.OnClick := @StarButtonClick;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -292,6 +576,12 @@ begin
     InstalledPath := ExpandConstant('{app}\bpl\d12\') + PLUGIN_BPL_NAME;
     RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_23, InstalledPath);
     RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PACKAGES_23, InstalledPath);
+#ifdef SCA_D12_X64
+    RegDeleteValue(HKEY_CURRENT_USER, '{#KnownPackages23x64}',
+      ExpandConstant('{app}\bpl\d12x64\') + PLUGIN_BPL_NAME);
+    RegDeleteValue(HKEY_CURRENT_USER, '{#DisabledPkgs23x64}',
+      ExpandConstant('{app}\bpl\d12x64\') + PLUGIN_BPL_NAME);
+#endif
 #ifndef SCA_MONOLITH
     RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_23,
       ExpandConstant('{app}\bpl\d12\SCA.Engine.bpl'));

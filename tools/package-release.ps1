@@ -19,9 +19,10 @@
 #   .\tools\package-release.ps1 -Version 0.9.10
 #   .\tools\package-release.ps1 -Version 0.9.10 -OutDir C:\temp\rel
 #   .\tools\package-release.ps1 -Version 0.9.10 -SkipSource
+#   .\tools\package-release.ps1 -Version 0.9.10 -SkipInstaller   (ohne Setup-EXE)
 #
 # Danach:
-#   gh release create v<Version> --title ... --notes-file ... <OutDir>\*.zip
+#   gh release create v<Version> --title ... --notes-file ... <OutDir>\*.zip <OutDir>\*.exe
 
 param(
   [Parameter(Mandatory=$true)]
@@ -31,7 +32,17 @@ param(
 
   [int]$StackMB = 32,
 
-  [switch]$SkipSource
+  [switch]$SkipSource,
+
+  # Laesst den Inno-Setup-Schritt aus (z.B. solange die Monolith-BPL auf
+  # dieser Maschine nicht gebaut ist). Default ist STRIKT: fehlende
+  # Voraussetzungen brechen ab statt still ein Release ohne Installer zu
+  # erzeugen - gleiche Philosophie wie die Versions-/Stack-Wachposten.
+  [switch]$SkipInstaller,
+
+  # Laesst die GetIt-Artefakte aus (plugin-getit.zip + finalisierte
+  # .getit.json). Braucht wie der Installer die gebaute Monolith-BPL.
+  [switch]$SkipGetIt
 )
 
 $ErrorActionPreference = 'Stop'
@@ -64,6 +75,10 @@ if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Force $OutDir | Ou
 # Assets an das NEUE Release gehaengt: exakt die Fehlerklasse (falsches
 # Artefakt ausgeliefert), gegen die dieses Skript gebaut wurde.
 Get-ChildItem -Path $OutDir -Filter 'StaticCodeAnalyser-v*.zip' -ErrorAction SilentlyContinue |
+  Remove-Item -Force
+Get-ChildItem -Path $OutDir -Filter 'StaticCodeAnalyserSetup-*.exe' -ErrorAction SilentlyContinue |
+  Remove-Item -Force
+Get-ChildItem -Path $OutDir -Filter 'StaticCodeAnalyser-D12*.getit.json' -ErrorAction SilentlyContinue |
   Remove-Item -Force
 
 $platforms = @(
@@ -202,6 +217,170 @@ foreach ($sentinel in @('EXPORTS.md', 'docs/sonar-setup.md',
 }
 "{0,-6} {1} Doku-Dateien + examples ({2} Eintraege)  ->  {3}" -f `
   'docs', $docItems.Count, $names.Count, (Split-Path $docZip -Leaf)
+
+# ---- Gemeinsame Voraussetzung Installer + GetIt: die Monolith-BPL ----------
+# Wachposten wie bei den EXEs: BPL-VERSIONINFO muss zur Release-Version
+# passen (faengt "vergessen zu bauen" ab).
+$bpl = 'C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyser.Plugin.d12.bpl'
+if ((-not $SkipInstaller) -or (-not $SkipGetIt)) {
+  if (-not (Test-Path $bpl)) {
+    throw ("Monolith-BPL fehlt: $bpl - StaticCodeAnalyser.Plugin.d12.dproj " +
+           'in der IDE bauen (Release/Win32) oder -SkipInstaller -SkipGetIt verwenden.')
+  }
+  $bplVer = (Get-Item $bpl).VersionInfo.FileVersion
+  if ($bplVer -notmatch ('^' + [regex]::Escape($Version))) {
+    throw ("Plugin-BPL VERSIONINFO ist '$bplVer', erwartet $Version.*. " +
+           'VerInfo der Plugin-dproj nachziehen + neu bauen.')
+  }
+}
+
+# ---- IDE-Plugin-Installer (Inno Setup, Monolith-BPL) -----------------------
+# Installer P2 (2026-08-14): das Setup registriert die Monolith-BPL per-user
+# in der D12-IDE (HKCU Known Packages) - Details in installer\README_Installer.md.
+if (-not $SkipInstaller) {
+  $isccCmd = Get-Command iscc.exe -ErrorAction SilentlyContinue
+  if ($isccCmd) {
+    $iscc = $isccCmd.Source
+  } else {
+    $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+    if (-not (Test-Path $iscc)) {
+      throw ('ISCC.exe nicht gefunden (PATH + Standardpfad). ' +
+             'Inno Setup 6 installieren oder -SkipInstaller verwenden.')
+    }
+  }
+
+  $iss = Join-Path $repo 'installer\StaticCodeAnalyserSetup.iss'
+  & $iscc ('/DSCAVersion=' + $Version + '.0') ('/O' + $OutDir) $iss | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "ISCC fehlgeschlagen (Exit $LASTEXITCODE)." }
+
+  $setupExe = Join-Path $OutDir "StaticCodeAnalyserSetup-$Version.0.exe"
+  if (-not (Test-Path $setupExe)) {
+    throw "Setup-EXE fehlt nach ISCC: $setupExe. Abbruch."
+  }
+  "{0,-6} Plugin-BPL v{1}  ->  {2}" -f `
+    'setup', $bplVer, (Split-Path $setupExe -Leaf)
+}
+
+# ---- GetIt-Artefakte (P3.3/3.4, 2026-08-15) --------------------------------
+# Erzeugt (a) das Payload-ZIP fuer den GetIt-Paketmanager (Monolith-BPL +
+# LICENSE + Logo im WURZELVERZEICHNIS - exakt das Layout, das die
+# InstallIDEPackage-Action im Manifest referenziert) und (b) zwei
+# finalisierte Manifeste aus der Vorlage getit\StaticCodeAnalyser-D12.getit.json:
+#   *.getit.json       - Url = GitHub-Release-Asset (fuer Einreichung/Nutzer)
+#   *.local.getit.json - Url = lokaler ZIP-Pfad (fuer "Load Local Package"-
+#                        Tests VOR dem Release-Upload)
+# WICHTIG: "Modified" steuert die GetIt-Update-Erkennung (nicht "Version") -
+# es wird hier auf die Paketier-Zeit gesetzt.
+if (-not $SkipGetIt) {
+  $getitTpl = Join-Path $repo 'getit\StaticCodeAnalyser-D12.getit.json'
+  $license  = Join-Path $repo 'LICENSE'
+  $logo     = Join-Path $repo 'getit\sca_logo_128.png'
+  foreach ($f in @($getitTpl, $license, $logo)) {
+    if (-not (Test-Path $f)) { throw "GetIt-Zutat fehlt: $f" }
+  }
+
+  $getitZip = Join-Path $OutDir "StaticCodeAnalyser-v$Version-plugin-getit.zip"
+  if (Test-Path $getitZip) { Remove-Item $getitZip -Force }
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $za = [System.IO.Compression.ZipFile]::Open($getitZip, 'Create')
+  try {
+    $lvl = [System.IO.Compression.CompressionLevel]::Optimal
+    foreach ($pair in @(
+      @{ Src = $bpl;     Name = 'StaticCodeAnalyser.Plugin.d12.bpl' },
+      @{ Src = $license; Name = 'LICENSE' },
+      @{ Src = $logo;    Name = 'sca_logo_128.png' })) {
+      [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+        $za, $pair.Src, $pair.Name, $lvl)
+    }
+  } finally {
+    $za.Dispose()
+  }
+
+  # Gegenprobe am fertigen Archiv.
+  $za = [System.IO.Compression.ZipFile]::OpenRead($getitZip)
+  try { $names = @($za.Entries | ForEach-Object { $_.FullName }) }
+  finally { $za.Dispose() }
+  foreach ($sentinel in @('StaticCodeAnalyser.Plugin.d12.bpl', 'LICENSE',
+                          'sca_logo_128.png')) {
+    if ($names -notcontains $sentinel) {
+      throw "getit-zip: $sentinel fehlt im Archiv. Abbruch."
+    }
+  }
+
+  # Manifeste aus der Vorlage: Version/Modified/Url ersetzen. Die Vorlage
+  # gehoert uns - gezielte Zeilen-Regexe sind hier robust genug, und die
+  # ConvertFrom-Json-Gegenprobe unten faengt jeden Formfehler.
+  $tpl = Get-Content $getitTpl -Raw -Encoding UTF8
+  $now = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+  $releaseUrl = "https://github.com/nrodear/StaticCodeAnalyser/releases/download/v$Version/StaticCodeAnalyser-v$Version-plugin-getit.zip"
+  $tpl = $tpl -replace '("Version"\s*:\s*)"[^"]*"',  ('$1"' + $Version + '"')
+  $tpl = $tpl -replace '("Modified"\s*:\s*)"[^"]*"', ('$1"' + $now + '"')
+
+  $jsonRelease = Join-Path $OutDir 'StaticCodeAnalyser-D12.getit.json'
+  $jsonLocal   = Join-Path $OutDir 'StaticCodeAnalyser-D12.local.getit.json'
+  # GetIt-Konvention (offizielles Abbrevia-Sample): Schraegstriche in URLs
+  # werden als \/ escaped.
+  $relText = $tpl -replace '("Url"\s*:\s*)"[^"]*"', ('$1"' + ($releaseUrl -replace '/', '\/') + '"')
+  # JSON-Escaping: je Backslash im Windows-Pfad genau EIN \\ im JSON-Text.
+  # (Replacement-Strings von -replace behandeln Backslashes literal -
+  # '\\\\' haette hier vier erzeugt, der erste Lauf bewies es.)
+  $locText = $tpl -replace '("Url"\s*:\s*)"[^"]*"', ('$1"' + ($getitZip -replace '\\', '\\') + '"')
+  [System.IO.File]::WriteAllText($jsonRelease, $relText,
+    (New-Object System.Text.UTF8Encoding($false)))
+  [System.IO.File]::WriteAllText($jsonLocal, $locText,
+    (New-Object System.Text.UTF8Encoding($false)))
+
+  # Gegenprobe: beide Manifeste muessen parsen und die ersetzten Werte
+  # tragen; die LOKALE Url muss nach dem JSON-Roundtrip als Datei
+  # existieren (faengt Escaping-Fehler wie doppelte Backslashes).
+  foreach ($j in @($jsonRelease, $jsonLocal)) {
+    $parsed = Get-Content $j -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($parsed.Version -ne $Version) { throw "getit-json: Version nicht ersetzt in $j" }
+    if ($parsed.Modified -ne $now)    { throw "getit-json: Modified nicht ersetzt in $j" }
+    if (-not $parsed.Url)             { throw "getit-json: Url leer in $j" }
+  }
+  $locParsed = Get-Content $jsonLocal -Raw -Encoding UTF8 | ConvertFrom-Json
+  if ($locParsed.Url -ne $getitZip) {
+    throw "getit-json: lokale Url '$($locParsed.Url)' != '$getitZip' (Escaping?)"
+  }
+
+  # License/Image im Manifest sind DATEIEN NEBEN DER JSON (wie im
+  # offiziellen Sample) - GetIt laedt sie beim Oeffnen des Pakets.
+  # (a) Fuer den Lokaltest direkt aus $OutDir: beide daneben legen.
+  # (b) Fuer fremde Maschinen: Manifest-Bundle-ZIP (JSON + LICENSE +
+  #     Logo) - eine nackte JSON bricht sonst mit "EULA kann nicht
+  #     geladen werden" ab (2026-08-15 auf dem Zweit-PC bewiesen).
+  Copy-Item $license (Join-Path $OutDir 'LICENSE') -Force
+  Copy-Item $logo    (Join-Path $OutDir 'sca_logo_128.png') -Force
+
+  $bundleZip = Join-Path $OutDir "StaticCodeAnalyser-v$Version-getit-manifest.zip"
+  if (Test-Path $bundleZip) { Remove-Item $bundleZip -Force }
+  $za = [System.IO.Compression.ZipFile]::Open($bundleZip, 'Create')
+  try {
+    $lvl = [System.IO.Compression.CompressionLevel]::Optimal
+    foreach ($pair in @(
+      @{ Src = $jsonRelease; Name = 'StaticCodeAnalyser-D12.getit.json' },
+      @{ Src = $license;     Name = 'LICENSE' },
+      @{ Src = $logo;        Name = 'sca_logo_128.png' })) {
+      [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+        $za, $pair.Src, $pair.Name, $lvl)
+    }
+  } finally {
+    $za.Dispose()
+  }
+  $za = [System.IO.Compression.ZipFile]::OpenRead($bundleZip)
+  try { $names = @($za.Entries | ForEach-Object { $_.FullName }) }
+  finally { $za.Dispose() }
+  foreach ($sentinel in @('StaticCodeAnalyser-D12.getit.json', 'LICENSE',
+                          'sca_logo_128.png')) {
+    if ($names -notcontains $sentinel) {
+      throw "getit-manifest-zip: $sentinel fehlt im Archiv. Abbruch."
+    }
+  }
+
+  "{0,-6} BPL + LICENSE + Logo  ->  {1} (+ 2 Manifeste + Manifest-Bundle)" -f `
+    'getit', (Split-Path $getitZip -Leaf)
+}
 
 if (-not $SkipSource) {
   # Aus dem TAG, nicht aus dem Arbeitsbaum: so landet nichts Ungetaggtes
