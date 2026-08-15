@@ -38,7 +38,11 @@ param(
   # dieser Maschine nicht gebaut ist). Default ist STRIKT: fehlende
   # Voraussetzungen brechen ab statt still ein Release ohne Installer zu
   # erzeugen - gleiche Philosophie wie die Versions-/Stack-Wachposten.
-  [switch]$SkipInstaller
+  [switch]$SkipInstaller,
+
+  # Laesst die GetIt-Artefakte aus (plugin-getit.zip + finalisierte
+  # .getit.json). Braucht wie der Installer die gebaute Monolith-BPL.
+  [switch]$SkipGetIt
 )
 
 $ErrorActionPreference = 'Stop'
@@ -73,6 +77,8 @@ if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Force $OutDir | Ou
 Get-ChildItem -Path $OutDir -Filter 'StaticCodeAnalyser-v*.zip' -ErrorAction SilentlyContinue |
   Remove-Item -Force
 Get-ChildItem -Path $OutDir -Filter 'StaticCodeAnalyserSetup-*.exe' -ErrorAction SilentlyContinue |
+  Remove-Item -Force
+Get-ChildItem -Path $OutDir -Filter 'StaticCodeAnalyser-D12*.getit.json' -ErrorAction SilentlyContinue |
   Remove-Item -Force
 
 $platforms = @(
@@ -212,12 +218,25 @@ foreach ($sentinel in @('EXPORTS.md', 'docs/sonar-setup.md',
 "{0,-6} {1} Doku-Dateien + examples ({2} Eintraege)  ->  {3}" -f `
   'docs', $docItems.Count, $names.Count, (Split-Path $docZip -Leaf)
 
+# ---- Gemeinsame Voraussetzung Installer + GetIt: die Monolith-BPL ----------
+# Wachposten wie bei den EXEs: BPL-VERSIONINFO muss zur Release-Version
+# passen (faengt "vergessen zu bauen" ab).
+$bpl = 'C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyser.Plugin.d12.bpl'
+if ((-not $SkipInstaller) -or (-not $SkipGetIt)) {
+  if (-not (Test-Path $bpl)) {
+    throw ("Monolith-BPL fehlt: $bpl - StaticCodeAnalyser.Plugin.d12.dproj " +
+           'in der IDE bauen (Release/Win32) oder -SkipInstaller -SkipGetIt verwenden.')
+  }
+  $bplVer = (Get-Item $bpl).VersionInfo.FileVersion
+  if ($bplVer -notmatch ('^' + [regex]::Escape($Version))) {
+    throw ("Plugin-BPL VERSIONINFO ist '$bplVer', erwartet $Version.*. " +
+           'VerInfo der Plugin-dproj nachziehen + neu bauen.')
+  }
+}
+
 # ---- IDE-Plugin-Installer (Inno Setup, Monolith-BPL) -----------------------
 # Installer P2 (2026-08-14): das Setup registriert die Monolith-BPL per-user
 # in der D12-IDE (HKCU Known Packages) - Details in installer\README_Installer.md.
-# Wachposten wie bei den EXEs: BPL-VERSIONINFO muss zur Release-Version
-# passen (faengt "vergessen zu bauen" ab), und die Setup-EXE muss danach
-# wirklich existieren.
 if (-not $SkipInstaller) {
   $isccCmd = Get-Command iscc.exe -ErrorAction SilentlyContinue
   if ($isccCmd) {
@@ -230,17 +249,6 @@ if (-not $SkipInstaller) {
     }
   }
 
-  $bpl = 'C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyser.Plugin.d12.bpl'
-  if (-not (Test-Path $bpl)) {
-    throw ("Monolith-BPL fehlt: $bpl - StaticCodeAnalyser.Plugin.d12.dproj " +
-           'in der IDE bauen (Release/Win32) oder -SkipInstaller verwenden.')
-  }
-  $bplVer = (Get-Item $bpl).VersionInfo.FileVersion
-  if ($bplVer -notmatch ('^' + [regex]::Escape($Version))) {
-    throw ("Plugin-BPL VERSIONINFO ist '$bplVer', erwartet $Version.*. " +
-           'VerInfo der Plugin-dproj nachziehen + neu bauen.')
-  }
-
   $iss = Join-Path $repo 'installer\StaticCodeAnalyserSetup.iss'
   & $iscc ('/DSCAVersion=' + $Version + '.0') ('/O' + $OutDir) $iss | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "ISCC fehlgeschlagen (Exit $LASTEXITCODE)." }
@@ -251,6 +259,90 @@ if (-not $SkipInstaller) {
   }
   "{0,-6} Plugin-BPL v{1}  ->  {2}" -f `
     'setup', $bplVer, (Split-Path $setupExe -Leaf)
+}
+
+# ---- GetIt-Artefakte (P3.3/3.4, 2026-08-15) --------------------------------
+# Erzeugt (a) das Payload-ZIP fuer den GetIt-Paketmanager (Monolith-BPL +
+# LICENSE + Logo im WURZELVERZEICHNIS - exakt das Layout, das die
+# InstallIDEPackage-Action im Manifest referenziert) und (b) zwei
+# finalisierte Manifeste aus der Vorlage getit\StaticCodeAnalyser-D12.getit.json:
+#   *.getit.json       - Url = GitHub-Release-Asset (fuer Einreichung/Nutzer)
+#   *.local.getit.json - Url = lokaler ZIP-Pfad (fuer "Load Local Package"-
+#                        Tests VOR dem Release-Upload)
+# WICHTIG: "Modified" steuert die GetIt-Update-Erkennung (nicht "Version") -
+# es wird hier auf die Paketier-Zeit gesetzt.
+if (-not $SkipGetIt) {
+  $getitTpl = Join-Path $repo 'getit\StaticCodeAnalyser-D12.getit.json'
+  $license  = Join-Path $repo 'LICENSE'
+  $logo     = Join-Path $repo 'getit\sca_logo_128.png'
+  foreach ($f in @($getitTpl, $license, $logo)) {
+    if (-not (Test-Path $f)) { throw "GetIt-Zutat fehlt: $f" }
+  }
+
+  $getitZip = Join-Path $OutDir "StaticCodeAnalyser-v$Version-plugin-getit.zip"
+  if (Test-Path $getitZip) { Remove-Item $getitZip -Force }
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $za = [System.IO.Compression.ZipFile]::Open($getitZip, 'Create')
+  try {
+    $lvl = [System.IO.Compression.CompressionLevel]::Optimal
+    foreach ($pair in @(
+      @{ Src = $bpl;     Name = 'StaticCodeAnalyser.Plugin.d12.bpl' },
+      @{ Src = $license; Name = 'LICENSE' },
+      @{ Src = $logo;    Name = 'sca_logo_128.png' })) {
+      [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+        $za, $pair.Src, $pair.Name, $lvl)
+    }
+  } finally {
+    $za.Dispose()
+  }
+
+  # Gegenprobe am fertigen Archiv.
+  $za = [System.IO.Compression.ZipFile]::OpenRead($getitZip)
+  try { $names = @($za.Entries | ForEach-Object { $_.FullName }) }
+  finally { $za.Dispose() }
+  foreach ($sentinel in @('StaticCodeAnalyser.Plugin.d12.bpl', 'LICENSE',
+                          'sca_logo_128.png')) {
+    if ($names -notcontains $sentinel) {
+      throw "getit-zip: $sentinel fehlt im Archiv. Abbruch."
+    }
+  }
+
+  # Manifeste aus der Vorlage: Version/Modified/Url ersetzen. Die Vorlage
+  # gehoert uns - gezielte Zeilen-Regexe sind hier robust genug, und die
+  # ConvertFrom-Json-Gegenprobe unten faengt jeden Formfehler.
+  $tpl = Get-Content $getitTpl -Raw -Encoding UTF8
+  $now = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+  $releaseUrl = "https://github.com/nrodear/StaticCodeAnalyser/releases/download/v$Version/StaticCodeAnalyser-v$Version-plugin-getit.zip"
+  $tpl = $tpl -replace '("Version"\s*:\s*)"[^"]*"',  ('$1"' + $Version + '"')
+  $tpl = $tpl -replace '("Modified"\s*:\s*)"[^"]*"', ('$1"' + $now + '"')
+
+  $jsonRelease = Join-Path $OutDir 'StaticCodeAnalyser-D12.getit.json'
+  $jsonLocal   = Join-Path $OutDir 'StaticCodeAnalyser-D12.local.getit.json'
+  $relText = $tpl -replace '("Url"\s*:\s*)"[^"]*"', ('$1"' + $releaseUrl + '"')
+  # JSON-Escaping: je Backslash im Windows-Pfad genau EIN \\ im JSON-Text.
+  # (Replacement-Strings von -replace behandeln Backslashes literal -
+  # '\\\\' haette hier vier erzeugt, der erste Lauf bewies es.)
+  $locText = $tpl -replace '("Url"\s*:\s*)"[^"]*"', ('$1"' + ($getitZip -replace '\\', '\\') + '"')
+  [System.IO.File]::WriteAllText($jsonRelease, $relText,
+    (New-Object System.Text.UTF8Encoding($false)))
+  [System.IO.File]::WriteAllText($jsonLocal, $locText,
+    (New-Object System.Text.UTF8Encoding($false)))
+
+  # Gegenprobe: beide Manifeste muessen parsen und die ersetzten Werte
+  # tragen; die LOKALE Url muss nach dem JSON-Roundtrip als Datei
+  # existieren (faengt Escaping-Fehler wie doppelte Backslashes).
+  foreach ($j in @($jsonRelease, $jsonLocal)) {
+    $parsed = Get-Content $j -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($parsed.Version -ne $Version) { throw "getit-json: Version nicht ersetzt in $j" }
+    if ($parsed.Modified -ne $now)    { throw "getit-json: Modified nicht ersetzt in $j" }
+    if (-not $parsed.Url)             { throw "getit-json: Url leer in $j" }
+  }
+  $locParsed = Get-Content $jsonLocal -Raw -Encoding UTF8 | ConvertFrom-Json
+  if ($locParsed.Url -ne $getitZip) {
+    throw "getit-json: lokale Url '$($locParsed.Url)' != '$getitZip' (Escaping?)"
+  }
+  "{0,-6} BPL + LICENSE + Logo  ->  {1} (+ 2 Manifeste)" -f `
+    'getit', (Split-Path $getitZip -Leaf)
 }
 
 if (-not $SkipSource) {

@@ -28,12 +28,22 @@ zugleich die Bewerbungsmappe fuer die Einreichung bei Embarcadero
    speist die Lizenz-Seite des Inno-Setups.
 2. ERLEDIGT 2026-08-15: `sca_logo_128.png` aus branding\sca.png
    abgeleitet (500x500 -> 128x128, Lanczos).
-3. `Url`: zeigt auf ein noch nicht existierendes Release-Asset
-   `...-plugin-getit.zip` (ZIP mit Monolith-BPL + LICENSE + Logo im
-   Wurzelverzeichnis); Erzeugung in package-release.ps1 ergaenzen
-   (P3.3/P3.4).
-4. Test via "Load Local Package" braucht eine aktive Update Subscription
-   (P3.5).
+3. ERLEDIGT 2026-08-15: package-release.ps1 erzeugt die Artefakte
+   (Opt-out -SkipGetIt): `StaticCodeAnalyser-v<V>-plugin-getit.zip`
+   (BPL + LICENSE + Logo im Wurzelverzeichnis) + ZWEI finalisierte
+   Manifeste mit Modified=Paketier-Zeit:
+   - `StaticCodeAnalyser-D12.getit.json` - Url = GitHub-Release-Asset
+     (fuer Einreichung/Endnutzer; Asset muss am Release haengen)
+   - `StaticCodeAnalyser-D12.local.getit.json` - Url = lokaler
+     ZIP-Pfad (fuer den Lokaltest VOR dem Upload)
+   Diese Datei hier bleibt die VORLAGE - Version/Modified/Url werden
+   pro Release ersetzt, Aenderungen an Actions/Texten nur hier.
+4. Lokaltest (P3.5): D12-IDE -> GetIt-Dialog -> "Load Local Package" ->
+   `release-artifacts\StaticCodeAnalyser-D12.local.getit.json` waehlen;
+   Install / Uninstall / Doppel-Install pruefen. Braucht eine aktive
+   Update Subscription. VORHER sicherstellen, dass das Plugin nicht
+   schon anders registriert ist (Setup deinstallieren bzw.
+   Dev-Registrierung raus - sonst laedt dieselbe Unit doppelt).
 
 Privacy-Leitplanke: das Paket enthaelt KEINEN Netzcode - GetIt laedt das
 ZIP, nicht das Plugin.
