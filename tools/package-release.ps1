@@ -318,7 +318,9 @@ if (-not $SkipGetIt) {
 
   $jsonRelease = Join-Path $OutDir 'StaticCodeAnalyser-D12.getit.json'
   $jsonLocal   = Join-Path $OutDir 'StaticCodeAnalyser-D12.local.getit.json'
-  $relText = $tpl -replace '("Url"\s*:\s*)"[^"]*"', ('$1"' + $releaseUrl + '"')
+  # GetIt-Konvention (offizielles Abbrevia-Sample): Schraegstriche in URLs
+  # werden als \/ escaped.
+  $relText = $tpl -replace '("Url"\s*:\s*)"[^"]*"', ('$1"' + ($releaseUrl -replace '/', '\/') + '"')
   # JSON-Escaping: je Backslash im Windows-Pfad genau EIN \\ im JSON-Text.
   # (Replacement-Strings von -replace behandeln Backslashes literal -
   # '\\\\' haette hier vier erzeugt, der erste Lauf bewies es.)

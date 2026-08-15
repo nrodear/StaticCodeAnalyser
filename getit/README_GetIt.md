@@ -8,6 +8,22 @@ zugleich die Bewerbungsmappe fuer die Einreichung bei Embarcadero
 
 ## Feld-Vertraege
 
+**HARTE Format-Fallen des Local-Parsers** (GetItMapper, Exception-Analyse
+2026-08-15 gegen das offizielle Abbrevia-Sample + Doku-PDF verifiziert):
+
+1. ALLE Skalarwerte sind JSON-STRINGS - auch numerische:
+   `"RequireElevation": "0"`, `"AllUsers": "0"`, Action-`"Id"`,
+   `"ActionId"`, `"Type"`. Zahlen (TJSONNumber) crashen den Mapper
+   (MapCatalog -> ScanTimeRegular-Stack).
+2. `Parameter` ist ein ARRAY VON OBJEKTEN: `[{ "Parameter": "..." }]` -
+   ein String-Array gibt "Ungueltige Typumwandlung" (DP-Thread 216209).
+3. Schraegstriche in URLs escapen (`https:\/\/...`) - Url, VendorUrl,
+   ProjectUrl; das Release-Skript escaped beim Ersetzen.
+4. `Modified`-Format ist `yyyy-mm-dd hh:nn:ss` (String, 24h, ohne
+   Millisekunden/Zeitzone) - im GetIt-Binary hartkodiert.
+5. Feld-Reihenfolge und PascalCase-Namen des offiziellen Samples
+   beibehalten (alter Mapper-Code, Toleranz unbekannt).
+
 - `Id` ist STABIL zu halten (steuert den Registry-Schluessel unter
   `HKCU\...\CatalogRepository\Elements`); neue Id = koexistierendes
   Paket statt Update.
