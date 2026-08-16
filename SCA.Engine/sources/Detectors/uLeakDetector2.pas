@@ -184,6 +184,13 @@ implementation
 // noinspection-file AvoidOut, BeginEndRequired, CanBeStrictPrivate, ConsecutiveSection, ConsecutiveVisibility, GroupedDeclaration, MultipleExit, RedundantJump, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uAstSpans;   // Stufe B/I3: Teilbaum-Maximum, vormals lokal als SubtreeMaxLine
+    // Bewusst implementation-seitig: das Primitiv wird nur im Rumpf von
+    // FreeInFinallyRegionBySource gebraucht, die interface-Huelle dieser Unit
+    // muss dafuer nicht wachsen. uAstSpans haengt nur an uAstNode, das die
+    // interface-uses hier ohnehin schon fuehrt - kein Zyklus.
+
 // Forward auf die FP-Gates vom 2026-07-31 (Definitionen weiter unten, direkt
 // vor der oeffentlichen API). HasFunctionCallAssign braucht den Sink-Matcher
 // bereits hier oben fuer das Factory-Gate. AScope = Routine, in der der
@@ -1864,7 +1871,7 @@ class function TLeakDetector2.FreeInFinallyRegionBySource(MethodNode: TAstNode;
 // 1192, CnSrcEditorBlockTools:1485) ein No-Op. Der Source-Anker ist von der
 // AST-Attachierung unabhaengig. Region-Ende per Vorwaerts-Balancierung ab der
 // finally-Zeile (TryEndLine unveraendert), auf die Methodenspanne geklammert
-// (SubtreeMaxLine). Monoton (nur zusaetzliche Suppression); TP-safe: greift nur
+// (TAstSpans.SubtreeMaxLine). Monoton (nur zusaetzliche Suppression); TP-safe: greift nur
 // bei bewiesenem VarName-Free innerhalb einer balancierten finally..end-Region
 // INNERHALB der Methode. StrippedLines: Index k-1 == Quellzeile k.
 var
@@ -2060,38 +2067,18 @@ var
     end;
   end;
 
-  // Groesste Quellzeile im Method-Subtree (iterative DFS, Hardening-v4-Stil).
-  // Obergrenze der Scan-Spanne - verhindert, dass finally-Regionen NACH der
-  // Methode (naechste Routine) mitgescannt werden.
-  function SubtreeMaxLine(Root: TAstNode): Integer;
-  var
-    Stack : TList<TAstNode>;
-    N, C : TAstNode;
-  begin
-    Result := 0;
-    if Root = nil then Exit;
-    Stack := TList<TAstNode>.Create;
-    try
-      Stack.Add(Root);
-      while Stack.Count > 0 do
-      begin
-        N := Stack[Stack.Count - 1];
-        Stack.Delete(Stack.Count - 1);
-        if N.Line > Result then Result := N.Line;
-        for C in N.Children do Stack.Add(C);
-      end;
-    finally
-      Stack.Free;
-    end;
-  end;
-
 begin
   Result := False;
   if (MethodNode = nil) or (Length(StrippedLines) = 0) then Exit;
 
   MethStart := MethodNode.Line;
   if MethStart < 1 then MethStart := 1;
-  MethEnd := SubtreeMaxLine(MethodNode);
+  // Obergrenze der Scan-Spanne - verhindert, dass finally-Regionen NACH der
+  // Methode (naechste Routine) mitgescannt werden. Die lokale Fassung
+  // SubtreeMaxLine war zeichengleich zum Primitiv (Start bei 0, nil -> 0,
+  // iterativer nicht-besitzender Stapel, Wurzel mitgezaehlt) - der Tausch
+  // ist wertgleich, nicht nur ergebnisgleich.
+  MethEnd := TAstSpans.SubtreeMaxLine(MethodNode);
   if MethEnd > Length(StrippedLines) then MethEnd := Length(StrippedLines);
   if MethEnd < MethStart then Exit;
 

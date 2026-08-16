@@ -27,6 +27,7 @@ uses
   uTestCFG in 'uTestCFG.pas',
   uTestParallelScan in 'uTestParallelScan.pas',
   uTestTAstNode in 'uTestTAstNode.pas',
+  uTestAstSpans in 'uTestAstSpans.pas',
   uTestSourceLineEdit in 'uTestSourceLineEdit.pas',
   uTestEditorCommand in 'uTestEditorCommand.pas',
   uTestDfmLexer in 'uTestDfmLexer.pas',

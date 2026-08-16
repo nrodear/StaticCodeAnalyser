@@ -99,6 +99,7 @@
         <DCCReference Include="rtl.dcp"/>
         <DCCReference Include="xmlrtl.dcp"/>
         <DCCReference Include="sources\Common\uAnalyserTypes.pas"/>
+        <DCCReference Include="sources\Common\uAstSpans.pas"/>
         <DCCReference Include="sources\Common\uCollectValues.pas"/>
         <DCCReference Include="sources\Common\uCompatSet.pas"/>
         <DCCReference Include="sources\Common\uCrashDiag.pas"/>

@@ -82,6 +82,7 @@
         <DCCReference Include="designide.dcp"/>
         <DCCReference Include="xmlrtl.dcp"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uAnalyserTypes.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uAstSpans.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uCollectValues.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uCompatSet.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uCrashDiag.pas"/>

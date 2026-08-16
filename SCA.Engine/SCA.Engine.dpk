@@ -33,6 +33,7 @@ requires
 
 contains
   uAnalyserTypes in 'sources\Common\uAnalyserTypes.pas',
+  uAstSpans in 'sources\Common\uAstSpans.pas',
   uCollectValues in 'sources\Common\uCollectValues.pas',
   uCompatSet in 'sources\Common\uCompatSet.pas',
   uCrashDiag in 'sources\Common\uCrashDiag.pas',
