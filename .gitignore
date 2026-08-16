@@ -208,3 +208,6 @@ tools/perf_analyse.md
 !/.sca/sca.baseline.json
 /StaticCodeAnalyserForm/tests/.sca/
 /StaticCodeAnalyserIDE/.sca/
+
+# Stichproben-Artefakte der Real-World-Audits (HowTo_RealWorldAudit.md).
+/.audit/
