@@ -59,13 +59,14 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TExceptionTooGeneralDetector = class
   public
-    class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+    class procedure AnalyzeUnit(UnitNode: TAstNode;
+      const FileName: string; Results: TObjectList<TLeakFinding>;
+      AContext: TAnalyzeContext = nil);
     // ADeclAbi: Aufrufkonventionen aus den Klassen-DEKLARATIONEN der Unit
     // (Key 'klasse.methode' lower -> TypeRef der Deklaration). Optional; ohne
     // die Map faellt der ABI-Guard auf den Implementierungs-Kopf zurueck, wie
@@ -78,6 +79,13 @@ type
 implementation
 
 // noinspection-file BeginEndRequired, CanBeStrictPrivate, CyclomaticComplexity, TooLongLine, UnsortedUses
+// noinspection-file UnusedParameter
+// AContext ist der Kontext-Parameter aus der AddD-Registrierung (B10, 2026-08-16).
+// Er wird HIER bewusst noch nicht gelesen: die Umstellung ist ein eigener,
+// verhaltensneutraler Schritt VOR der Regelaenderung, die ihn braucht - so
+// verlangt es die Fix-Spezifikation, damit im A/B trennbar bleibt, was die
+// Zahlen bewegt hat. Die Datei hatte vorher NULL UnusedParameter-Funde,
+// der Marker schaltet also nichts Bestehendes mit stumm.
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
@@ -447,7 +455,8 @@ begin
 end;
 
 class procedure TExceptionTooGeneralDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;

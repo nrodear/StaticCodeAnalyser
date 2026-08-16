@@ -467,10 +467,10 @@ begin
   AddD3('NilComparison',   fkNilComparison,   TNilComparisonDetector.AnalyzeUnit);
   AddD3('RaisingRawException', fkRaisingRawException, TRaisingRawExceptionDetector.AnalyzeUnit);
   AddD3('DateFormatSettings', fkDateFormatSettings, TDateFormatSettingsDetector.AnalyzeUnit);
-  AddD3('UnicodeToAnsiCast', fkUnicodeToAnsiCast, TUnicodeToAnsiCastDetector.AnalyzeUnit);
+  AddD('UnicodeToAnsiCast', fkUnicodeToAnsiCast, TUnicodeToAnsiCastDetector.AnalyzeUnit);
   AddD3('CharToCharPointerCast', fkCharToCharPointerCast, TCharToCharPointerCastDetector.AnalyzeUnit);
   AddD3('IfThenShortCircuit', fkIfThenShortCircuit, TIfThenShortCircuitDetector.AnalyzeUnit);
-  AddD3('ExceptionTooGeneral', fkExceptionTooGeneral, TExceptionTooGeneralDetector.AnalyzeUnit);
+  AddD('ExceptionTooGeneral', fkExceptionTooGeneral, TExceptionTooGeneralDetector.AnalyzeUnit);
   AddD3('RaiseOutsideExcept', fkRaiseOutsideExcept, TRaiseOutsideExceptDetector.AnalyzeUnit);
   AddD('UseAfterFree', fkUseAfterFree, TUseAfterFreeDetector.AnalyzeUnit, ['.free', 'freeandnil']);
   AddD3('AbstractNotImpl', fkAbstractNotImpl, TAbstractNotImplDetector.AnalyzeUnit);
@@ -589,7 +589,7 @@ begin
   AddD('LongParamList',   fkLongParamList,   TLongParamListDetector.AnalyzeUnit);
   AddD3('MagicNumber',     fkMagicNumber,     TMagicNumberDetector.AnalyzeUnit);
   AddD3('DuplicateString', fkDuplicateString, TDuplicateStringDetector.AnalyzeUnit);
-  AddD3('HardcodedPath',   fkHardcodedPath,   THardcodedPathDetector.AnalyzeUnit);
+  AddD('HardcodedPath',   fkHardcodedPath,   THardcodedPathDetector.AnalyzeUnit);
   AddD3('DebugOutput',     fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);
   AddD('DeepNesting',     fkDeepNesting,     TDeepNestingDetector.AnalyzeUnit);   // TD-1: AContext-fuehrend
   AddD('TodoComment',     fkTodoComment,     TTodoCommentDetector.AnalyzeUnit, ['todo', 'fixme', 'hack', 'xxx']);
