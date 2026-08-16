@@ -2069,10 +2069,82 @@ begin
         Eat(tkSemicolon);
       end;
 
-    tkKwBreak:
-      begin Parent.Add(nkBreak,    'break',    T.Line, T.Col); Next; Eat(tkSemicolon); end;
-    tkKwContinue:
-      begin Parent.Add(nkContinue, 'continue', T.Line, T.Col); Next; Eat(tkSemicolon); end;
+    // 'Break'/'Continue' sind in Delphi keine reservierten Woerter, sondern
+    // Standardroutinen - ein Bezeichner darf so heissen. Real-World-Fall:
+    // 'procedure NextButtonClick(var Continue: Boolean)' mit
+    // 'Continue := False;' im Schleifenrumpf. Bis 2026-08-16 legte der Parser
+    // dort bedingungslos einen nkContinue an; der kompensierende Guard in
+    // uDeadCode wirkt nur ausserhalb von Schleifen und war im Rumpf inert
+    // (SCA011-FP-Klasse F). Der Lexer hat nur 1-Token-Peek - mehr braucht es
+    // nicht: nach einem echten 'Break;'/'Continue;' folgt nie ':=', '.' oder '['.
+    tkKwBreak, tkKwContinue:
+      begin
+        Next;                                  // Schluesselwort konsumieren
+        if Tok.Kind = tkAssign then
+        begin
+          // Zuweisung an einen so benannten Bezeichner: als nkAssign ablegen,
+          // damit der Schreibzugriff fuer die Parameter-/Variablen-Detektoren
+          // sichtbar bleibt. Bewusst einfacher Scan (kein Nesting-Zaehler wie
+          // in ParseCallOrAssign) - fuer 'Continue := False' reicht er, und
+          // eine anonyme Methode auf der rechten Seite eines so benannten
+          // Bezeichners gibt es nicht.
+          Next;                                // ':='
+          var RhsTxt := '';
+          while not (Tok.Kind in [tkSemicolon, tkKwEnd, tkKwElse, tkKwUntil,
+                                  tkKwExcept, tkKwFinally, tkEof]) do
+          begin
+            if Tok.Kind = tkStrLit then
+              JoinTokInto(RhsTxt, QuoteStrLit(Tok.Value))
+            else
+              JoinTokInto(RhsTxt, Tok.Value);
+            Next;
+          end;
+          Parent.Add(nkAssign, T.Value, T.Line, T.Col).TypeRef := RhsTxt;
+        end
+        else if Tok.Kind in [tkDot, tkLBracket] then
+        begin
+          // Member-/Index-Zugriff auf einen so benannten Bezeichner: wie eine
+          // gewoehnliche Aufruf-Anweisung ablegen, KEIN Terminator.
+          Parent.Add(nkCall, T.Value, T.Line, T.Col);
+          SkipToSemicolon;
+        end
+        else if T.Kind = tkKwBreak then
+          Parent.Add(nkBreak,    'break',    T.Line, T.Col)
+        else
+          Parent.Add(nkContinue, 'continue', T.Line, T.Col);
+        Eat(tkSemicolon);
+      end;
+
+    tkKwGoto:
+      // 'goto <Label>;' hatte bis 2026-08-16 KEINEN eigenen Zweig: der
+      // else-Pfad konsumierte nur das 'goto', und der naechste
+      // ParseStatement-Durchlauf sah das Label-Ident. Heisst das Label wie
+      // ein Terminator - mORMot deklariert in Hot-Paths 'label Ret, Exit;' -
+      // dispatchte tkKwExit und legte einen ECHTEN nkExit an, und zwar auf
+      // BLOCK-Ebene, weil ParseStatement fuer den then-Zweig schon
+      // zurueckgekehrt war. Damit galt jede Zeile nach einem bedingten
+      // 'goto Exit;' als tot (SCA011-FP-Klasse D-a).
+      //
+      // Der Knoten ist AST-identisch zum bisherigen Zufallsergebnis (genau
+      // EIN nkCall an derselben Position) - er MUSS bleiben: die belegten
+      // TP FastCodeCharPos.pas:636 / FastCodeCharPosUnit.pas:678 sind selbst
+      // 'goto <Label>;'-Anweisungen nach einem 'exit;' und werden nur
+      // gemeldet, WEIL dort ein Knoten steht.
+      begin
+        Next;                                  // 'goto'
+        if Tok.Kind = tkIntLit then
+        begin
+          Next;                                // numerisches Label: kein Knoten
+        end
+        else if not (Tok.Kind in [tkSemicolon, tkEof]) then
+        begin
+          // BEWUSST jeder Token, nicht nur tkIdent: genau der Fall 'label Exit'
+          // ist das Problem - der Lexer liefert dort tkKwExit, nicht tkIdent.
+          Parent.Add(nkCall, Tok.Value, Tok.Line, Tok.Col);
+          Next;
+        end;
+        Eat(tkSemicolon);
+      end;
 
     tkKwInherited:
       begin

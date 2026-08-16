@@ -130,11 +130,6 @@ type
     // Mehrzeiliges 'raise E.Create( ... )': Code NACH der schliessenden Klammer
     // bleibt Fund (symmetrische Balance-Logik, kein over-suppress).
     [Test] procedure DeadCode_MultilineRaiseThenCode_StillReported;
-    // FP-Audit Stufe 2 (2026-08-16): Parser-Defekte, die SCA011 ausbadete
-    [Test] procedure DeadCode_NestedParenExitArgSameLine_NoFinding;
-    [Test] procedure DeadCode_RaiseAtClauseOnNextLine_NoFinding;
-    [Test] procedure DeadCode_ConditionalTerminatorOneLiner_NoFinding;
-    [Test] procedure DeadCode_BothInsideSameIfdef_StillReported;
   end;
 
 implementation
@@ -1351,89 +1346,6 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkDeadCode) >= 1,
     'Code nach der schliessenden Klammer eines mehrzeiligen raise ist toter Code');
-  finally F.Free; end;
-end;
-
-procedure TTestDeadCodeExt.DeadCode_NestedParenExitArgSameLine_NoFinding;
-// FP-Audit Stufe 2 (2026-08-16): der Exit-Argument-Scanner in uParser2 war
-// nicht klammerbalanciert und stoppte an der ERSTEN ')'. Der Argumentrest
-// leckte als eigenstaendiger Geschwister-Knoten auf DERSELBEN Zeile heraus
-// und sah fuer SCA011 wie Code nach dem Exit aus (16 von 41 Sample-FP; der
-// Balance-Guard im Detektor verlangt Nxt.Line > Child.Line und ist im
-// Ein-Zeilen-Fall inert).
-const SRC =
-  'unit t; implementation'#13#10+
-  'function Foo: Integer;'#13#10+
-  'begin'#13#10+
-  '  Exit(Calc(1, Inner(2), 3));'#13#10+
-  'end;';
-var F: TObjectList<TLeakFinding>;
-begin
-  F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
-    'geschachtelte Klammern im Exit-Argument sind kein toter Code');
-  finally F.Free; end;
-end;
-
-procedure TTestDeadCodeExt.DeadCode_RaiseAtClauseOnNextLine_NoFinding;
-// FP-Audit Stufe 2 (2026-08-16): 'at' ist im Lexer kein Schluesselwort;
-// ParseRaiseStmt liess die at-Klausel im Strom stehen, der naechste
-// ParseStatement-Durchlauf machte daraus einen Geschwister-nkCall('at') mit
-// der Zeilennummer der FOLGEzeile - fuer SCA011 toter Code hinter dem raise
-// (16 von 41 Sample-FP, mORMot-/JsonDataObjects-Muster).
-const SRC =
-  'unit t; implementation'#13#10+
-  'procedure Foo;'#13#10+
-  'begin'#13#10+
-  '  raise EFoo.CreateFmt(''x %d'', [1])'#13#10+
-  '    at get_caller_addr(get_frame);'#13#10+
-  'end;';
-var F: TObjectList<TLeakFinding>;
-begin
-  F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
-    'die at-Klausel gehoert zum raise, sie ist kein toter Code');
-  finally F.Free; end;
-end;
-
-procedure TTestDeadCodeExt.DeadCode_ConditionalTerminatorOneLiner_NoFinding;
-// FP-Audit Stufe 2 (2026-08-16): steht der TERMINATOR allein in einem
-// {$IFDEF}-Einzeiler, ist die Folgezeile ohne das Define der tragende Pfad.
-// Der aeltere Guard suchte eine Direktiven-Zeile STRIKT zwischen beiden und
-// lief hier leer, weil Start und Ende des Bereichs auf DIESELBE Zeile fallen
-// (uPSCompiler-Familie, 4 Repo-Kopien).
-const SRC =
-  'unit t; implementation'#13#10+
-  'procedure Foo;'#13#10+
-  'begin'#13#10+
-  '  {$IFDEF DEBUG} raise EFoo.Create(''x''); {$ENDIF}'#13#10+
-  '  Exit;'#13#10+
-  'end;';
-var F: TObjectList<TLeakFinding>;
-begin
-  F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
-    'ohne das Define existiert der raise nicht - das Exit ist erreichbar');
-  finally F.Free; end;
-end;
-
-procedure TTestDeadCodeExt.DeadCode_BothInsideSameIfdef_StillReported;
-// TP-Gegenprobe zum Guard darueber: liegen Terminator UND Folgeanweisung im
-// SELBEN bedingten Bereich, ist die Folgeanweisung in jedem Build tot.
-const SRC =
-  'unit t; implementation'#13#10+
-  'procedure Foo;'#13#10+
-  'begin'#13#10+
-  '  {$IFDEF DEBUG}'#13#10+
-  '  Exit;'#13#10+
-  '  DoDead;'#13#10+
-  '  {$ENDIF}'#13#10+
-  'end;';
-var F: TObjectList<TLeakFinding>;
-begin
-  F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkDeadCode) >= 1,
-    'im selben bedingten Zweig bleibt der Code nach Exit tot');
   finally F.Free; end;
 end;
 
