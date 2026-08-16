@@ -404,8 +404,8 @@ const
       RuleID   : 'SCA047';
       Name     : 'x := x';
       ShortDesc: 'Self-assignment - no-op or copy-paste typo';
-      BadEx    : 'Customer.Name := Customer.Name;';
-      GoodEx   : 'Customer.Name := NewName;'
+      BadEx    : 'FCount := FCount;';
+      GoodEx   : 'FCount := ACount;'
     ),
     // SCA048
     (
@@ -1002,8 +1002,8 @@ const
       RuleID   : 'SCA115';
       Name     : 'Plaintext HTTP URL';
       ShortDesc: '`''http://...''` literal for a remote endpoint - MITM-vulnerable';
-      BadEx    : 'Url := ''http://api.example.com/v1/users'';';
-      GoodEx   : 'Url := ''https://api.example.com/v1/users'';'
+      BadEx    : 'Url := ''http://api.contoso-shop.de/v1/users'';';
+      GoodEx   : 'Url := ''https://api.contoso-shop.de/v1/users'';'
     ),
     // SCA116
     (
@@ -1143,7 +1143,7 @@ const
     (
       RuleID   : 'SCA129';
       Name     : 'Cast from string to 8-bit string type without explicit encoding';
-      ShortDesc: '`AnsiString(s)` / `UTF8String(s)` / `RawByteString(s)` silently drops characters outside the active code page';
+      ShortDesc: '`AnsiString(s)` / `RawByteString(s)` / `ShortString(s)` silently drops characters outside the active code page';
       BadEx    : 'var u: UnicodeString;' + #13#10 + 'u := ''Smiley: '' + #$1F600;' + #13#10 +
         'logStream.WriteString(AnsiString(u));   // smiley becomes ''?''';
       GoodEx   : 'var u: UnicodeString;' + #13#10 + 'u := ''Smiley: '' + #$1F600;' + #13#10 +

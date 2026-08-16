@@ -46,6 +46,11 @@ unit uExceptionTooGeneral;
 //     Heuristik: Body enthaelt einen Log-Call (WriteLn/Write/Log/Output*)
 //     UND einen Exit/Halt - dann ist es kein Swallow, sondern saubere
 //     Crash-Translation.
+//   * Catch-all an einer ABI-Grenze (cdecl/stdcall/safecall/winapi), der E
+//     an einen Konverter durchreicht. Die Aufrufkonvention wird dabei an
+//     der DEKLARATION gelesen, nicht nur am Implementierungs-Kopf: Delphi
+//     verlangt die Direktive nur dort, generierte Wrapper (python4delphi)
+//     schreiben sie ausschliesslich dort.
 //
 // Sonar-Pendant: ExceptionTooGeneral / "java:S2221" (Java)
 //                S110 Pattern bezogen auf Delphi-Hierarchie.
@@ -54,21 +59,37 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TExceptionTooGeneralDetector = class
   public
-    class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
-    class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+    class procedure AnalyzeUnit(UnitNode: TAstNode;
+      const FileName: string; Results: TObjectList<TLeakFinding>;
+      AContext: TAnalyzeContext = nil);
+    // ADeclAbi: Aufrufkonventionen aus den Klassen-DEKLARATIONEN der Unit
+    // (Key 'klasse.methode' lower -> TypeRef der Deklaration). Optional; ohne
+    // die Map faellt der ABI-Guard auf den Implementierungs-Kopf zurueck, wie
+    // bis 2026-08-16. AnalyzeUnit baut sie einmal je Unit.
+    class procedure AnalyzeMethod(MethodNode: TAstNode;
+      const FileName: string; Results: TObjectList<TLeakFinding>;
+      ADeclAbi: TDictionary<string, string> = nil);
   end;
 
 implementation
 
 // noinspection-file BeginEndRequired, CanBeStrictPrivate, CyclomaticComplexity, TooLongLine, UnsortedUses
+// noinspection-file UnusedParameter
+// AContext ist der Kontext-Parameter aus der AddD-Registrierung (B10, 2026-08-16).
+// Er wird HIER bewusst noch nicht gelesen: die Umstellung ist ein eigener,
+// verhaltensneutraler Schritt VOR der Regelaenderung, die ihn braucht - so
+// verlangt es die Fix-Spezifikation, damit im A/B trennbar bleibt, was die
+// Zahlen bewegt hat. Die Datei hatte vorher NULL UnusedParameter-Funde,
+// der Marker schaltet also nichts Bestehendes mit stumm.
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
+uses
+  System.Classes, uDetectorUtils;
 
 function CallIdLooksLikeLogger(const NameLow: string): Boolean;
 // True wenn der Callee-Identifier (der Teil VOR der Klammer) auf 'log'
@@ -310,8 +331,37 @@ begin
   end;
 end;
 
+// Aufrufkonvention aus der DEKLARATION der Methode (nil-Map: '').
+// Delphi verlangt cdecl/stdcall/safecall nur an der Deklaration; python4delphi
+// & Co. schreiben sie ausschliesslich dort, der Implementierungs-Kopf traegt
+// sie dann nicht. Ohne diesen Nachschlag lief das ABI-Gate bei genau diesen
+// generierten Wrappern leer (FP-Audit Stufe 2, 2026-08-16).
+function DeclTypeRefOf(ADeclAbi: TDictionary<string, string>;
+  const AMethodName: string): string;
+var
+  Owner, Unq, Ref : string;
+begin
+  Result := '';
+  if not Assigned(ADeclAbi) or (AMethodName = '') then Exit;
+  Owner := TDetectorUtils.OwnerTypeNameLower(AMethodName);
+  Unq   := TDetectorUtils.UnqualifiedNameLastLower(AMethodName);
+  if Unq = '' then Exit;
+  if (Owner <> '') and ADeclAbi.TryGetValue(Owner + '.' + Unq, Ref) then
+  begin
+    Result := Ref;
+    Exit;
+  end;
+  // Fallback nur ueber den blossen Methodennamen - und nur, wenn er in der
+  // ganzen Unit eindeutig deklariert ist (der Aufbau in AnalyzeUnit legt
+  // mehrdeutige Namen gar nicht erst ab). Faengt nested types, deren innerer
+  // Typ keinen eigenen AST-Knoten hat.
+  if ADeclAbi.TryGetValue('.' + Unq, Ref) then
+    Result := Ref;
+end;
+
 class procedure TExceptionTooGeneralDetector.AnalyzeMethod(MethodNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  ADeclAbi: TDictionary<string, string>);
 var
   Handlers : TList<TAstNode>;
   N        : TAstNode;
@@ -319,7 +369,8 @@ var
   ForeignAbi : Boolean;
 begin
   Handlers := MethodNode.FindAll(nkOnHandler);
-  ForeignAbi := RoutineHasForeignAbi(MethodNode.TypeRef);
+  ForeignAbi := RoutineHasForeignAbi(MethodNode.TypeRef) or
+                RoutineHasForeignAbi(DeclTypeRefOf(ADeclAbi, MethodNode.Name));
   try
     for N in Handlers do
     begin
@@ -338,18 +389,89 @@ begin
   end;
 end;
 
+procedure CollectDeclAbiOfClass(ClassNode: TAstNode;
+  AMap: TDictionary<string, string>; ASeenNames: TStringList);
+// Traegt die Methoden-Deklarationen EINER Klasse in die Map ein.
+var
+  Decls    : TList<TAstNode>;
+  D        : TAstNode;
+  Unq      : string;
+begin
+  Decls := ClassNode.FindAll(nkMethod);
+  try
+    for D in Decls do
+    begin
+      // Ein Punkt im Namen waere ein Implementierungsknoten - der traegt die
+      // Direktiven gerade NICHT und hat hier nichts zu suchen.
+      if Pos('.', D.Name) > 0 then Continue;
+      Unq := LowerCase(Trim(D.Name));
+      if Unq = '' then Continue;
+      AMap.AddOrSetValue(LowerCase(Trim(ClassNode.Name)) + '.' + Unq, D.TypeRef);
+      // Bare-Fallback nur bei Eindeutigkeit: der zweite Traeger desselben
+      // Namens loescht den Eintrag wieder, statt eine fremde Konvention zu
+      // vererben.
+      if ASeenNames.IndexOf(Unq) >= 0 then
+        AMap.Remove('.' + Unq)
+      else
+      begin
+        ASeenNames.Add(Unq);
+        AMap.AddOrSetValue('.' + Unq, D.TypeRef);
+      end;
+    end;
+  finally
+    Decls.Free;
+  end;
+end;
+
+function BuildDeclAbiMap(UnitNode: TAstNode): TDictionary<string, string>;
+// Key 'klasse.methode' (lower) -> TypeRef der DEKLARATION, plus '.methode'
+// fuer Namen, die in der Unit nur EINMAL deklariert sind.
+//
+// Bewusst method-lokal: NICHT auf 'die Klasse hat irgendeine cdecl-Methode'
+// erweitern - genau diese Ausweitung wurde fuer SCA106 schon gemessen und
+// verworfen.
+var
+  Classes   : TList<TAstNode>;
+  SeenNames : TStringList;
+  C         : TAstNode;
+begin
+  Result := TDictionary<string, string>.Create;
+  // nil-Init vor dem try: wirft die zweite Allokation, gibt das finally die
+  // erste sauber frei (uDuplicateString-/uMissingOverride-Muster).
+  Classes   := nil;
+  SeenNames := nil;
+  try
+    SeenNames := TStringList.Create;
+    SeenNames.CaseSensitive := False;
+    SeenNames.Sorted        := True;
+    SeenNames.Duplicates    := dupIgnore;
+    Classes := UnitNode.FindAll(nkClass);
+    for C in Classes do
+      CollectDeclAbiOfClass(C, Result, SeenNames);
+  finally
+    Classes.Free;
+    SeenNames.Free;
+  end;
+end;
+
 class procedure TExceptionTooGeneralDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;
+  DeclAbi : TDictionary<string, string>;
 begin
-  Methods := UnitNode.FindAll(nkMethod);
+  Methods := nil;
+  DeclAbi := nil;
   try
+    DeclAbi := BuildDeclAbiMap(UnitNode);
+    Methods := UnitNode.FindAll(nkMethod);
     for M in Methods do
-      AnalyzeMethod(M, FileName, Results);
+      AnalyzeMethod(M, FileName, Results, DeclAbi);
   finally
     Methods.Free;
+    DeclAbi.Free;
   end;
 end;
 

@@ -453,6 +453,8 @@ if count <> 0 then result := total / count;
 
 Anything after an unconditional terminator (`Exit`, `raise`, `Halt`, `Continue`, `Break`) in the same block is never executed. Usually leftover code from refactoring.
 
+Not reported when the terminator itself sits inside a conditional-compilation range and the following statement does not (`{$IFDEF DEBUG} raise ...; {$ENDIF}` followed by `Exit;`): without the define the terminator does not exist and the next statement is the live path. **This guard is define-dependent** — for a build that always sets the define, the suppressed finding would be factually correct. The analyser cannot decide it without the project defines, and decides in favour of 'reachable'.
+
 ```pascal
 // BAD
 Exit;
@@ -1132,7 +1134,7 @@ for i := 10 downto 1 do DoStuff(i);
 | Tags | `typo`, `no-op` |
 | Detector | `uSelfAssignment.pas` |
 
-A bare `x := x` is almost always a typo where one side should be a different variable. The detector does not special-case property setters; the rare legitimate cases (a setter with side effects, or `Result := Result;` to silence a compiler hint) must be suppressed with a `// noinspection` comment directly above the line.
+Reported only when the target is provably a storage slot: a local variable, a parameter, `Result`, an assignment to the function name, or a field declared in the same unit. Property targets, member paths (`a.b`, `p^.f`, `a[i]`) and names that cannot be resolved inside the unit stay silent - writing to a property runs its setter, which may clamp, re-apply or reformat the value (`TopLine := TopLine` clamps against the resized window, `Text := Text` re-parses the whole text). The trade-off is deliberate: unknown forms become false negatives, never false positives. `Result := Result;` to silence a compiler hint is still reported and can be suppressed with a `// noinspection` comment directly above the line.
 
 ---
 
@@ -2823,7 +2825,7 @@ FreeAndNil(FWorker);
 | OWASP | A02:2021-Cryptographic Failures |
 | Detector | `uRestHttpSecurity.pas` |
 
-A string literal starting with `http://` for any non-localhost endpoint transmits its payload unencrypted. Credentials, session tokens, and PII travel in plaintext and can be sniffed or modified by any active network actor. The fix is virtually free: change the scheme to `https://` (almost every modern service supports both). Detector skips localhost / 127.x.x.x / [::1] / 0.0.0.0 / host.docker.internal (dev workflows are legitimate) and XML-namespace URIs (`xmlns=`, `schemas`, `w3.org`, ...) which are identities, not network targets.
+A string literal starting with `http://` for any non-localhost endpoint transmits its payload unencrypted. Credentials, session tokens, and PII travel in plaintext and can be sniffed or modified by any active network actor. The fix is virtually free: change the scheme to `https://` (almost every modern service supports both). The detector parses the host out of the literal (userinfo, port and IPv6 brackets removed) and stays silent when that host cannot be a reachable endpoint: loopback and local IPC (`localhost`, `127.x.x.x`, `[::1]`, `0.0.0.0`, `host.docker.internal`, mORMot's `http://unix:` socket layout) plus the ranges reserved for documentation and tests (RFC 2606 `example.com/.net/.org`, `.example`, `.test`, `.invalid`; RFC 5737 `192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`; RFC 3849 `2001:db8::/32`; and the link-local ranges `169.254.0.0/16` and `fe80::/10`, which are not documentation ranges but only ever appear as parser fixtures or diagnostic examples in source literals - a real deployment against `fe80::` needs a zone index, and `169.254.x` only appears when DHCP failed). Private LAN ranges (RFC 1918) are deliberately NOT skipped - a `http://192.168.x.y` REST call is a real plaintext endpoint. XML-namespace URIs (`xmlns=`, `schemas`, `w3.org`, ...) are identities, not network targets, and are skipped as well.
 
 ```pascal
 // BAD
@@ -3211,7 +3213,7 @@ WriteLn(DateToStr(Now, FS));
 ## SCA129
 **Cast from string to 8-bit string type without explicit encoding**
 
-> `AnsiString(s)` / `UTF8String(s)` / `RawByteString(s)` silently drops characters outside the active code page
+> `AnsiString(s)` / `RawByteString(s)` / `ShortString(s)` silently drops characters outside the active code page
 
 | Field | Value |
 |---|---|
@@ -3219,7 +3221,7 @@ WriteLn(DateToStr(Now, FS));
 | Tags | `encoding`, `unicode`, `data-loss`, `sonardelphi` |
 | Detector | `uUnicodeToAnsiCast.pas` |
 
-Casting a `UnicodeString` (or any string typed expression - Delphi `string` is `UnicodeString` since XE) to one of the 8-bit string families (`AnsiString`, `UTF8String`, `RawByteString`, `ShortString`) goes through the implicit `DefaultSystemCodePage` conversion. Every codepoint outside the active code page is silently replaced with `?`. Emoji, non-Latin scripts, and even some Western accented letters disappear, but the assignment compiles cleanly and runs without exception - so the bug surfaces only when the data round-trips back through a Unicode aware consumer (a different DB, an HTTP API, an Excel export). Use a deliberate encoding helper (`UTF8Encode`, `TEncoding.UTF8.GetBytes`, `WideStringToUTF8` ...) instead. Detector walks `nkCall` nodes whose name starts (case-insensitive) with `AnsiString(`, `UTF8String(`, `RawByteString(` or `ShortString(`. Empty string-literal arguments (`AnsiString('')`) are not flagged. Casts to `string` (= `UnicodeString` in modern Delphi) are also not flagged. Accepts the false-positive that the input might already be the same 8-bit type (redundant cast, still suspicious as a smell). Maps to Sonar-Delphi `UnicodeToAnsiCastCheck`.
+Casting a `UnicodeString` (or any string typed expression - Delphi `string` is `UnicodeString` since XE) to one of the lossy 8-bit string families (`AnsiString`, `RawByteString`, `ShortString`) goes through the implicit `DefaultSystemCodePage` conversion. Every codepoint outside the active code page is silently replaced with `?`. Emoji, non-Latin scripts, and even some Western accented letters disappear, but the assignment compiles cleanly and runs without exception - so the bug surfaces only when the data round-trips back through a Unicode aware consumer (a different DB, an HTTP API, an Excel export). Use a deliberate encoding helper (`UTF8Encode`, `TEncoding.UTF8.GetBytes`, `WideStringToUTF8` ...) instead. Detector walks `nkCall` nodes whose name starts (case-insensitive) with `AnsiString(`, `RawByteString(` or `ShortString(`. `UTF8String(...)` is deliberately NOT flagged: `UTF8String` is `type AnsiString(CP_UTF8)`, so the cast emits exactly the same code as the recommended `UTF8Encode` and is lossless regardless of the system code page. The one remaining lossy sub-case, `UTF8String(<already 8-bit>)`, is an accepted false negative (zero occurrences across the reference corpus). Empty string-literal arguments (`AnsiString('')`) are not flagged. Casts to `string` (= `UnicodeString` in modern Delphi) are also not flagged. Accepts the false-positive that the input might already be the same 8-bit type (redundant cast, still suspicious as a smell). Empty string-literal arguments (`AnsiString('')`) are not flagged. Casts to `string` (= `UnicodeString` in modern Delphi) are also not flagged. Accepts the false-positive that the input might already be the same 8-bit type (redundant cast, still suspicious as a smell). Maps to Sonar-Delphi `UnicodeToAnsiCastCheck`.
 
 ```pascal
 // BAD
@@ -3969,7 +3971,7 @@ ShowMessage(SSavedMsg);
 | Tags | `concurrency`, `mormot`, `exception-safety`, `sonar50` |
 | Detector | `uUnpairedLock.pas` |
 
-Scans each source line lexically (comments + strings stripped) for the acquire token `<ident>.Lock`, `Acquire`, `EnterCriticalSection`, or bare `EnterCriticalSection(...)`. A 200-character lookahead window then searches for the matching release token (`UnLock`, `LeaveCriticalSection`, `Release`). When BOTH are present in the window but no `try` keyword precedes the release, the pair is reported - acquiring a lock and then raising before the release causes a deadlock for every subsequent waiter. mORMot-tuned: matches TSynLocker, TRWLock, TLightLock, and the bare-Windows EnterCriticalSection/LeaveCriticalSection pair. Patterns where the release is missing entirely are skipped (likely a lock-helper RAII style with the release in a destructor).
+Scans each source line lexically (comments + strings stripped) for the acquire token `<ident>.Lock`, `Acquire`, `EnterCriticalSection`, or bare `EnterCriticalSection(...)`. A lookahead window of at most 200 characters - truncated at the start of the next routine - then searches for the matching release token (`UnLock`, `LeaveCriticalSection`, `Release`); a release that belongs to a neighbouring method (Lock/UnLock facade, Begin/End pair, constructor/destructor scope guard) no longer counts. When BOTH are present in the window but no `try` keyword precedes the release, the pair is reported - acquiring a lock and then raising before the release causes a deadlock for every subsequent waiter. mORMot-tuned: matches TSynLocker, TRWLock, TLightLock, and the bare-Windows EnterCriticalSection/LeaveCriticalSection pair. Patterns where the release is missing entirely are skipped (likely a lock-helper RAII style with the release in a destructor).
 
 ```pascal
 // BAD

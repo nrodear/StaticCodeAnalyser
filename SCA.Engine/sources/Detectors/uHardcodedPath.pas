@@ -17,13 +17,14 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   THardcodedPathDetector = class
   public
-    class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+    class procedure AnalyzeUnit(UnitNode: TAstNode;
+      const FileName: string; Results: TObjectList<TLeakFinding>;
+      AContext: TAnalyzeContext = nil);
   private
     class function LooksLikePath(const S: string): Boolean; static;
     class procedure ExtractStrings(const Text: string; Lst: TStringList); static;
@@ -31,6 +32,14 @@ type
   end;
 
 implementation
+
+// noinspection-file UnusedParameter
+// AContext ist der Kontext-Parameter aus der AddD-Registrierung (B10, 2026-08-16).
+// Er wird HIER bewusst noch nicht gelesen: die Umstellung ist ein eigener,
+// verhaltensneutraler Schritt VOR der Regelaenderung, die ihn braucht - so
+// verlangt es die Fix-Spezifikation, damit im A/B trennbar bleibt, was die
+// Zahlen bewegt hat. Die Datei hatte vorher NULL UnusedParameter-Funde,
+// der Marker schaltet also nichts Bestehendes mit stumm.
 
 // noinspection-file BeginEndRequired, ConcatToFormat, CyclomaticComplexity, MagicNumber, MultipleExit, NestedTry, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
@@ -145,7 +154,8 @@ begin
 end;
 
 class procedure THardcodedPathDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   AllNodes : TList<TAstNode>;
   N        : TAstNode;

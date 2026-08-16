@@ -151,6 +151,7 @@
         <DCCReference Include="uTestTodoComment.pas"/>
         <DCCReference Include="uTestCodeMetrics.pas"/>
         <DCCReference Include="uTestSafetyChecks.pas"/>
+        <DCCReference Include="uTestDeadCodeParser.pas"/>
         <DCCReference Include="uTestComboChecks.pas"/>
         <DCCReference Include="uTestParserRobustness.pas"/>
         <DCCReference Include="uTestGoldenCorpus.pas"/>

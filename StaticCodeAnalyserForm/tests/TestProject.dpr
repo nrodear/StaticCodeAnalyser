@@ -68,6 +68,7 @@ uses
   uTestTodoComment in 'uTestTodoComment.pas',
   uTestCodeMetrics in 'uTestCodeMetrics.pas',
   uTestSafetyChecks in 'uTestSafetyChecks.pas',
+  uTestDeadCodeParser in 'uTestDeadCodeParser.pas',
   uTestComboChecks in 'uTestComboChecks.pas',
   uTestParserRobustness in 'uTestParserRobustness.pas',
   uTestGoldenCorpus in 'uTestGoldenCorpus.pas',

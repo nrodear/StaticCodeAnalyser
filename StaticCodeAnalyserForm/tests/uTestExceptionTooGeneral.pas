@@ -29,6 +29,11 @@ type
     [Test] procedure SafecallDispatcherForwardingExc_NotReported;
     [Test] procedure CdeclHandlerWithoutForwarding_StillReported;
     [Test] procedure PascalHandlerForwardingExc_StillReported;
+    // FP-Audit Stufe 2 (2026-08-16): die Aufrufkonvention steht nur an der
+    // DEKLARATION - der Implementierungs-Kopf traegt sie nicht.
+    [Test] procedure AbiFromClassDeclaration_NotReported;
+    [Test] procedure DeclWithoutAbiForwardingExc_StillReported;
+    [Test] procedure AmbiguousMethodNameAcrossClasses_StillReported;
   end;
 
 implementation
@@ -331,6 +336,99 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkExceptionTooGeneral),
     'Ohne ABI-Grenze bleibt das Durchreichen ein gewoehnlicher Handler');
+  finally F.Free; end;
+end;
+
+// ============================================================
+// FP-Audit Stufe 2 (2026-08-16): Delphi verlangt cdecl/stdcall/safecall nur
+// an der DEKLARATION. python4delphi & Co. schreiben sie ausschliesslich dort,
+// der Implementierungs-Kopf traegt sie nicht - das ABI-Gate lief dort leer.
+// ============================================================
+
+procedure TTestExceptionTooGeneral.AbiFromClassDeclaration_NotReported;
+// cdecl steht in der Klassen-Deklaration, der Impl-Kopf hat sie nicht.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TWrapper = class'#13#10 +
+  '  public'#13#10 +
+  '    function Do_FieldByName(args: PPyObject): PPyObject; cdecl;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'function TWrapper.Do_FieldByName(args: PPyObject): PPyObject;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Result := Fetch(args);'#13#10 +
+  '  except'#13#10 +
+  '    on E: Exception do RaiseDBError(E);'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkExceptionTooGeneral),
+    'cdecl an der Deklaration ist dieselbe ABI-Grenze wie am Impl-Kopf');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptionTooGeneral.DeclWithoutAbiForwardingExc_StillReported;
+// WAECHTER: ohne Direktive an der Deklaration bleibt es eine gewoehnliche
+// Methode - das Durchreichen von E allein oeffnet kein Tor.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TPlainDataset = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoUnPrepare(Cmd: TObject);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TPlainDataset.DoUnPrepare(Cmd: TObject);'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Cmd.Close;'#13#10 +
+  '  except'#13#10 +
+  '    on E: Exception do RaiseDBError(E);'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkExceptionTooGeneral),
+    'ohne Aufrufkonvention bleibt der Handler ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptionTooGeneral.AmbiguousMethodNameAcrossClasses_StillReported;
+// Der Bare-Name-Fallback darf NICHT ueber Klassengrenzen wirken: zwei Klassen
+// mit gleichnamiger Methode, nur eine davon cdecl - die andere bleibt Fund.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TAbi = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure Handle; cdecl;'#13#10 +
+  '  end;'#13#10 +
+  '  TPlain = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure Handle;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TPlain.Handle;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Step;'#13#10 +
+  '  except'#13#10 +
+  '    on E: Exception do Translate(E);'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkExceptionTooGeneral),
+    'gleichnamige Methode einer anderen Klasse vererbt keine Aufrufkonvention');
   finally F.Free; end;
 end;
 

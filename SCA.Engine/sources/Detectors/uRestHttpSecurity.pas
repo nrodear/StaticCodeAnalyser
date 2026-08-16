@@ -73,23 +73,93 @@ begin
   CachedReInit      := True;
 end;
 
-function IsLocalhost(const Url: string): Boolean;
-// True wenn die URL klar auf den localhost-Stack ODER lokales IPC zeigt - dann
-// ist HTTP legitim (Dev-Workflow bzw. kein Netz -> keine MITM-Flaeche), kein Befund.
+function ExtractHost(const Url: string): string;
+// Host einer 'http://[userinfo@]host[:port]/pfad'-URL: lowercase, ohne Port,
+// IPv6-Literal ohne die eckigen Klammern. Ersetzt die frueheren
+// Pos()-Substring-Pruefungen, die 'http://localhost.evil.com' als localhost
+// durchgehen liessen (FP-Audit Stufe 2, 2026-08-16).
 var
   L : string;
+  p : Integer;
 begin
   L := LowerCase(Url);
+  if L.StartsWith('http://') then
+    L := Copy(L, Length('http://') + 1, MaxInt);
+  // Pfad / Query / Fragment abschneiden
+  for p := 1 to Length(L) do
+    if CharInSet(L[p], ['/', '?', '#']) then
+    begin
+      L := Copy(L, 1, p - 1);
+      Break;
+    end;
+  // userinfo abschneiden
+  p := LastDelimiter('@', L);
+  if p > 0 then L := Copy(L, p + 1, MaxInt);
+  // IPv6-Literal: alles zwischen den Klammern ist der Host
+  if L.StartsWith('[') then
+  begin
+    p := Pos(']', L);
+    if p > 1 then
+      Result := Copy(L, 2, p - 2)
+    else
+      Result := Copy(L, 2, MaxInt);
+    Exit;
+  end;
+  // Port abschneiden
+  p := Pos(':', L);
+  if p > 0 then L := Copy(L, 1, p - 1);
+  Result := L;
+end;
+
+function IsNonRoutableOrReservedHost(const Url: string): Boolean;
+// True wenn der Host gar kein erreichbarer Remote-Endpunkt sein KANN:
+// Loopback/lokales IPC, oder eine der fuer Doku und Tests reservierten
+// Adressen. In beiden Faellen gibt es keine MITM-Flaeche - eine
+// https-Empfehlung waere sinnlos.
+//
+// Die Doku-/Test-Bereiche kamen 2026-08-16 dazu: 11 von 47 Sample-FP waren
+// Parser-Fixturen und Assertion-Erwartungswerte mit example.com (RFC 2606),
+// 192.0.2.x (RFC 5737) oder [2001:db8::1] (RFC 3849).
+//
+// RFC1918 (10/8, 172.16/12, 192.168/16) steht BEWUSST NICHT hier: im Korpus
+// belegt 'http://192.168.1.153:3000/api' echte REST-Aufrufe (TP).
+var
+  H : string;
+begin
+  H := ExtractHost(Url);
   Result :=
-    (Pos('http://localhost',  L) > 0) or
-    (Pos('http://127.',       L) > 0) or
-    (Pos('http://[::1]',      L) > 0) or
-    (Pos('http://0.0.0.0',    L) > 0) or
-    (Pos('http://host.docker.internal', L) > 0) or
-    // Real-World-FP-Audit 2026-07-10: mORMot's synthetisches 'http://unix:'-
-    // Layout bezeichnet einen UNIX-Domain-Socket (lokales IPC), keinen Remote-
-    // Endpunkt - kein Plaintext-Netzwerk-Transport.
-    (Pos('http://unix:',      L) > 0);
+    // --- Loopback / lokales IPC ---
+    (H = 'localhost') or H.EndsWith('.localhost') or
+    H.StartsWith('127.') or
+    (H = '::1') or
+    (H = '0.0.0.0') or
+    (H = 'host.docker.internal') or
+    // mORMot's synthetisches 'http://unix:/pfad' bezeichnet einen
+    // UNIX-Domain-Socket (lokales IPC), keinen Remote-Endpunkt.
+    (H = 'unix') or
+    // --- fuer Doku und Tests reserviert ---
+    // RFC 2606: example.com/.net/.org samt Subdomains, TLDs .example/
+    // .test/.invalid
+    (H = 'example.com') or (H = 'example.net') or (H = 'example.org') or
+    H.EndsWith('.example.com') or H.EndsWith('.example.net') or
+    H.EndsWith('.example.org') or
+    H.EndsWith('.example') or H.EndsWith('.test') or H.EndsWith('.invalid') or
+    // RFC 5737: TEST-NET-1/2/3
+    H.StartsWith('192.0.2.') or H.StartsWith('198.51.100.') or
+    H.StartsWith('203.0.113.') or
+    // RFC 3849: IPv6-Dokumentationspraefix
+    H.StartsWith('2001:db8:') or
+    // link-local (RFC 3927 / RFC 4291). ACHTUNG - die Begruendung ist
+    // NICHT 'nicht routbar': auf dem lokalen Segment ist eine
+    // link-local-Adresse sehr wohl erreichbar und damit MITM-faehig.
+    // Genau dieses Argument wurde fuer RFC1918 bewusst VERWORFEN, weil
+    // 'http://192.168.1.153:3000/api' im Korpus ein belegter echter
+    // Endpunkt ist. Hier gilt ein anderer Grund: eine link-local-Adresse
+    // in einem QUELLTEXT-LITERAL ist eine Parser-Fixture oder ein
+    // Diagnose-Beispiel - ein Deployment gegen fe80:: braucht einen
+    // Zonenindex und 169.254 entsteht nur bei fehlgeschlagenem DHCP.
+    // Restrisiko benannt: wer doch so deployt, verliert den Fund.
+    H.StartsWith('169.254.') or H.StartsWith('fe80:');
 end;
 
 class procedure TRestHttpSecurityDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -144,8 +214,8 @@ begin
     for M in Matches do
     begin
       Url := M.Groups[1].Value;
-      // Localhost-Whitelist
-      if IsLocalhost(Url) then Continue;
+      // Loopback-, IPC- und Doku-/Test-Adressen: kein erreichbarer Endpunkt
+      if IsNonRoutableOrReservedHost(Url) then Continue;
       // XML-Namespace-Whitelist (URL ist eine Identitaet, kein Call)
       if (Pos('xmlns', LowerCase(Url)) > 0) or
          (Pos('schemas',     LowerCase(Url)) > 0) or

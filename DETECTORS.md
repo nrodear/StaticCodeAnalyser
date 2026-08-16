@@ -244,7 +244,7 @@ in the help panel and a DUnitX test fixture.
 | SCA126 | **NilComparison** | Use `Assigned(x)` / `not Assigned(x)` instead of `x = nil` / `x <> nil` — Pascal convention | Hint | Code Smell | `uNilComparison` |
 | SCA127 | **RaisingRawException** | `raise Exception.Create('...')` — base class carries no semantic information, callers cannot filter selectively | Warning | Code Smell | `uRaisingRawException` |
 | SCA128 | **DateFormatSettings** | `StrToDate(s)`, `FormatFloat(...)` etc. without TFormatSettings depend on the system locale — breaks across machines / users | Warning | Bug | `uDateFormatSettings` |
-| SCA129 | **UnicodeToAnsiCast** | `AnsiString(s)` / `UTF8String(s)` / `RawByteString(s)` silently drops characters outside the active code page | Warning | Bug | `uUnicodeToAnsiCast` |
+| SCA129 | **UnicodeToAnsiCast** | `AnsiString(s)` / `RawByteString(s)` / `ShortString(s)` silently drops characters outside the active code page | Warning | Bug | `uUnicodeToAnsiCast` |
 | SCA130 | **CharToCharPointerCast** | `PChar('A')` is not `PChar("A")` — the cast treats the 16-bit codepoint as a raw memory address | Error | Bug | `uCharToCharPointerCast` |
 | SCA131 | **IfThenShortCircuit** | `Math.IfThen` / `StrUtils.IfThen` evaluate both branches — no short-circuit semantics, use `if/then/else` instead | Warning | Bug | `uIfThenShortCircuit` |
 

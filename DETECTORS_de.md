@@ -244,7 +244,7 @@ Fix-Hints im Hilfe-Panel und eine DUnitX-Test-Fixture mit.
 | SCA126 | **NilComparison** | `Assigned(x)` / `not Assigned(x)` statt `x = nil` / `x <> nil` — Pascal-Konvention | Hint | Code Smell | `uNilComparison` |
 | SCA127 | **RaisingRawException** | `raise Exception.Create('...')` — die Basisklasse trägt keine Semantik, Aufrufer können nicht selektiv filtern | Warning | Code Smell | `uRaisingRawException` |
 | SCA128 | **DateFormatSettings** | `StrToDate(s)`, `FormatFloat(...)` etc. ohne TFormatSettings hängen vom System-Locale ab — bricht über Maschinen / User hinweg | Warning | Bug | `uDateFormatSettings` |
-| SCA129 | **UnicodeToAnsiCast** | `AnsiString(s)` / `UTF8String(s)` / `RawByteString(s)` verliert stillschweigend Zeichen außerhalb der aktiven Codepage | Warning | Bug | `uUnicodeToAnsiCast` |
+| SCA129 | **UnicodeToAnsiCast** | `AnsiString(s)` / `RawByteString(s)` / `ShortString(s)` verliert stillschweigend Zeichen außerhalb der aktiven Codepage | Warning | Bug | `uUnicodeToAnsiCast` |
 | SCA130 | **CharToCharPointerCast** | `PChar('A')` ist nicht `PChar("A")` — der Cast interpretiert den 16-Bit-Codepoint als rohe Speicheradresse | Error | Bug | `uCharToCharPointerCast` |
 | SCA131 | **IfThenShortCircuit** | `Math.IfThen` / `StrUtils.IfThen` evaluiert beide Arme — kein Short-Circuit, stattdessen `if/then/else` benutzen | Warning | Bug | `uIfThenShortCircuit` |
 

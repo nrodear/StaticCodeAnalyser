@@ -1,25 +1,38 @@
 unit uSelfAssignment;
 
-// Detektor: `x := x;` - LHS textuell identisch zur RHS.
+// Detektor: `x := x;` - LHS textuell identisch zur RHS, und das Ziel ist
+// beweisbar ein SPEICHER-SLOT.
 //
-// In ~95 % aller Faelle ein Copy-Paste-Bug. Die seltenen legitimen
-// Faelle sind:
-//   * Property-Setter mit Side-Effects (z.B. `Visible := Visible;`
-//     erzwingt Repaint in einer Buggy-VCL-Komponente)
-//   * Compiler-Hint-Suppression (`Result := Result;` in pseudoabstrakten
-//     Methoden, um "Result kann undefiniert sein" zu schweigen)
+// Die frueher hier behauptete Quote ('in ~95 % aller Faelle ein
+// Copy-Paste-Bug') ist am Realworld-Korpus widerlegt: der reine
+// Textvergleich lag bei 73 % FP (Audit Stufe 2, 2026-08-16). Ursache war
+// immer dieselbe - eine Zuweisung an eine PROPERTY ist kein No-op, sondern
+// ein Setter-Aufruf mit Wirkung:
+//   * Clamp-/Re-Apply-Setter (`TopLine := TopLine` klemmt gegen die
+//     inzwischen veraenderte Fensterhoehe und speichert einen ANDEREN Wert)
+//   * Setter, der abhaengigen Zustand nachzieht oder in einen zweiten
+//     Speicher schreibt (`inherited FilterIndex := Value`)
+//   * Parse-/Format-Roundtrip (`Text := Text` laeuft ueber SetTextStr:
+//     Clear + Neu-Parsen)
 //
-// Beide Faelle koennen mit `// noinspection` direkt vor der Zeile
-// unterdrueckt werden.
+// Erkennung: nkAssign mit `Normalize(Name) = Normalize(TypeRef)` UND
+// aufgeloestem Ziel. Gemeldet wird nur:
+//   * lokale Variable, Parameter, `Result`, Zuweisung an den Funktionsnamen
+//   * ein in DERSELBEN Unit deklariertes Feld
+// Geschwiegen wird bei Property-Zielen, bei Member-Pfaden (`a.b`, `p^.f`,
+// `a[i]`) und bei Namen, die in dieser Unit nicht aufloesbar sind - dort
+// ist 'kein No-op' ohne projektweites Wissen nicht widerlegbar. Der Preis
+// sind bewusste False Negatives (geerbte Properties mit trivialem Setter,
+// Record-Felder hinter einem Member-Pfad); die Fehlrichtung ist die
+// harmlose.
 //
-// Erkennung: nkAssign mit `Trim(LowerCase(Name)) = Trim(LowerCase(TypeRef))`.
 // Der Parser legt LHS in Name, RHS-Tokens als flachen String in TypeRef
 // ab (uParser2.ParseCallOrAssign).
 
 interface
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.Classes, System.SysUtils, System.Generics.Collections,
   uAstNode, uSCAConsts, uMethodd12,
   uDetectorUtils;   // H2445: inline-Expansion braucht iface-Sichtbarkeit
 
@@ -28,8 +41,13 @@ type
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
-    class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+    // AUnitProps/AUnitFields: die in DIESER Unit deklarierten Property- bzw.
+    // Feldnamen (lowercase, sortiert). Ohne sie bleibt nur die Aufloesung im
+    // Routinen-Scope - der Rest wird dann konservativ verschwiegen. AnalyzeUnit
+    // baut beide Mengen einmal je Unit.
+    class procedure AnalyzeMethod(MethodNode: TAstNode;
+      const FileName: string; Results: TObjectList<TLeakFinding>;
+      AUnitProps: TStringList = nil; AUnitFields: TStringList = nil);
   end;
 
 implementation
@@ -89,21 +107,133 @@ begin
   end;
 end;
 
+// --- Zielaufloesung (FP-Audit Stufe 2, 2026-08-16) --------------------------
+// Bis hierher war der Textvergleich die EINZIGE Bedingung des Detektors -
+// daran haengen alle drei belegten FP-Klassen. Die folgenden Helfer
+// beantworten die eine Frage, die der Vergleich nicht stellt: bezeichnet die
+// linke Seite einen Speicher-Slot oder einen Setter-Aufruf?
+
+function StripSelfPrefix(const ANormLhs: string): string;
+// 'Self.BkColor' ist derselbe Zugriff wie 'BkColor' - das Praefix darf die
+// Klassifikation nicht in den Member-Pfad-Zweig kippen.
+begin
+  Result := ANormLhs;
+  if Result.StartsWith('self.') then
+  begin
+    Result := Copy(Result, Length('self.') + 1, MaxInt);
+  end;
+end;
+
+function HasMemberPath(const ANormLhs: string): Boolean;
+// '.', '^' oder '[' im Ziel: der eigentliche Schreibzugriff ist das LETZTE
+// Pfadsegment, und ob das ein Feld oder eine Property ist, haengt am Typ des
+// Praefixes - ohne Cross-Unit-Typaufloesung nicht bestimmbar. Bewusst
+// pauschal: der Preis sind Record-Feld-No-ops (Pt.Y, R.Bottom), der Ertrag
+// sind die Property-Retrigger (FCalcPanel.DisplayValue, Item.Visible).
+begin
+  Result := (Pos('.', ANormLhs) > 0) or (Pos('^', ANormLhs) > 0) or
+            (Pos('[', ANormLhs) > 0);
+end;
+
+procedure CollectRoutineScope(MethodNode: TAstNode; ATarget: TStringList);
+// Alles, was in dieser Routine beweisbar ein Slot ist: Locals (inklusive
+// Inline-var und for-in-Laufvariable), Parameter, Result und der
+// Funktionsname (klassische Ergebniszuweisung).
+var
+  N     : TAstNode;
+  Nm    : string;
+  p     : Integer;
+begin
+  ATarget.Add('result');
+  Nm := TDetectorUtils.UnqualifiedNameLastLower(MethodNode.Name);
+  if Nm <> '' then
+  begin
+    ATarget.Add(Nm);
+  end;
+  // FindAllRef: rein lesende Iteration ueber die Cache-Liste, kein Copy und
+  // KEIN Free (Kontrakt siehe uAstNode).
+  for N in MethodNode.FindAllRef(nkLocalVar) do
+  begin
+    ATarget.Add(LowerCase(Trim(N.Name)));
+  end;
+  for N in MethodNode.FindAllRef(nkParam) do
+  begin
+    // Der Parser praefigiert den Modifier ('const X', 'var Y', 'out Z').
+    Nm := LowerCase(Trim(N.Name));
+    p  := LastDelimiter(' ', Nm);
+    if p > 0 then
+    begin
+      Nm := Copy(Nm, p + 1, MaxInt);
+    end;
+    if Nm <> '' then
+    begin
+      ATarget.Add(Nm);
+    end;
+  end;
+end;
+
+function TargetIsProvableSlot(const ANormLhs: string;
+  AScope, AUnitProps, AUnitFields: TStringList): Boolean;
+var
+  Nm : string;
+begin
+  Nm := StripSelfPrefix(ANormLhs);
+  if HasMemberPath(Nm) then Exit(False);
+  if Assigned(AScope) and (AScope.IndexOf(Nm) >= 0) then Exit(True);
+  // Property gewinnt bei Namensgleichheit mit einem Feld einer anderen
+  // Klasse - bewusst konservativ, jede Property-Zuweisung kann einen Setter
+  // fahren.
+  if Assigned(AUnitProps) and (AUnitProps.IndexOf(Nm) >= 0) then Exit(False);
+  if Assigned(AUnitFields) and (AUnitFields.IndexOf(Nm) >= 0) then Exit(True);
+  // In dieser Unit nicht deklariert: geerbtes oder fremdes Member. Ohne
+  // Cross-Unit-Wissen ist 'kein No-op' nicht widerlegbar -> schweigen.
+  Result := False;
+end;
+
+function CollectUnitMemberNames(UnitNode: TAstNode;
+  AKind: TNodeKind): TStringList;
+begin
+  Result := TStringList.Create;
+  Result.CaseSensitive := False;
+  Result.Sorted        := True;
+  Result.Duplicates    := dupIgnore;
+  for var N in UnitNode.FindAllRef(AKind) do   // non-owning, kein Free
+  begin
+    Result.Add(LowerCase(Trim(N.Name)));
+  end;
+end;
+
 class procedure TSelfAssignmentDetector.AnalyzeMethod(MethodNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AUnitProps: TStringList; AUnitFields: TStringList);
 var
   Assigns : TList<TAstNode>;
+  Scope   : TStringList;
   N       : TAstNode;
   Lhs, Rhs: string;
 begin
-  Assigns := MethodNode.FindAll(nkAssign);
+  Assigns := nil;
+  Scope   := nil;
   try
+    Assigns := MethodNode.FindAll(nkAssign);
     for N in Assigns do
     begin
       Lhs := Normalize(N.Name);
       Rhs := Normalize(N.TypeRef);
       if (Lhs = '') or (Rhs = '') then Continue;
       if Lhs <> Rhs then Continue;
+      // Scope erst JETZT aufbauen: Selbstzuweisungen sind selten, die zwei
+      // zusaetzlichen Teilbaum-Laeufe je Routine waeren sonst reine Last.
+      if not Assigned(Scope) then
+      begin
+        Scope := TStringList.Create;
+        Scope.CaseSensitive := False;
+        Scope.Sorted        := True;
+        Scope.Duplicates    := dupIgnore;
+        CollectRoutineScope(MethodNode, Scope);
+      end;
+      if not TargetIsProvableSlot(Lhs, Scope, AUnitProps, AUnitFields) then
+        Continue;
 
       Results.Add(TLeakFinding.New(FileName, MethodNode.Name, N.Line,
         Format('Self-assignment: %s := %s (no-op or copy-paste)',
@@ -112,6 +242,7 @@ begin
     end;
   finally
     Assigns.Free;
+    Scope.Free;
   end;
 end;
 
@@ -119,14 +250,25 @@ class procedure TSelfAssignmentDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
   Methods : TList<TAstNode>;
+  Props   : TStringList;
+  Fields  : TStringList;
   M       : TAstNode;
 begin
-  Methods := UnitNode.FindAll(nkMethod);
+  Methods := nil;
+  Props   := nil;
+  Fields  := nil;
   try
+    Props   := CollectUnitMemberNames(UnitNode, nkProperty);
+    Fields  := CollectUnitMemberNames(UnitNode, nkField);
+    Methods := UnitNode.FindAll(nkMethod);
     for M in Methods do
-      AnalyzeMethod(M, FileName, Results);
+    begin
+      AnalyzeMethod(M, FileName, Results, Props, Fields);
+    end;
   finally
     Methods.Free;
+    Fields.Free;
+    Props.Free;
   end;
 end;
 
