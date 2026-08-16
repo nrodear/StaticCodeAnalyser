@@ -24,19 +24,30 @@ uses
   uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
+  // Ein {$IF...}-Bereich als PAAR (1-basierte Quellzeilen, beide inklusive).
+  // Frueher wurden Start und Ende in EIN flaches Zeilen-Array abgeflacht -
+  // damit war 'der Terminator selbst steht in einem bedingten Bereich' gar
+  // nicht formulierbar (FP-Audit Stufe 2, 2026-08-16). Der Lexer liefert je
+  // Zweig einen Bereich (RecordDbgRange feuert bei {$ELSE} UND bei {$ENDIF});
+  // beim Einzeiler '{$IFDEF X} raise ...; {$ENDIF}' ist S = E.
+  TCondRange = record
+    S : Integer;
+    E : Integer;
+  end;
+
   TDeadCodeDetector = class
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>; const ADirLines: TArray<Integer>;
+      Results: TObjectList<TLeakFinding>; const ADirRanges: TArray<TCondRange>;
       const ALabelLines: TArray<Integer>;
       const AStrippedLines: TArray<string>);
     class procedure CheckBlock(BlockNode: TAstNode;
       const MethodName, FileName: string;
       Results: TObjectList<TLeakFinding>;
-      const ADirLines: TArray<Integer>;
+      const ADirRanges: TArray<TCondRange>;
       const ALabelLines: TArray<Integer>;
       const AStrippedLines: TArray<string>); static;
   end;
@@ -49,14 +60,40 @@ implementation
 uses
   System.Classes, uDetectorUtils, uFileTextCache;
 
-function DirLineBetween(const Lines: TArray<Integer>; A, B: Integer): Boolean;
+function DirLineBetween(const Ranges: TArray<TCondRange>; A, B: Integer): Boolean;
 // Welle 3: True wenn eine {$IFDEF}-Direktiven-Zeile strikt zwischen A und B liegt.
 // Dann stehen Terminator (A) und Folgeanweisung (B) in verschiedenen bedingten
 // Kompilierungs-Zweigen -> die Folgeanweisung ist NICHT unbedingt tot (FP).
-var d: Integer;
+// Semantisch unveraendert: geprueft werden dieselben Zeilen wie frueher
+// (Start UND Ende jedes Bereichs), nur liegen sie jetzt gepaart vor.
+var R: TCondRange;
 begin
-  for d in Lines do
-    if (d > A) and (d < B) then Exit(True);
+  for R in Ranges do
+    if ((R.S > A) and (R.S < B)) or ((R.E > A) and (R.E < B)) then Exit(True);
+  Result := False;
+end;
+
+function TerminatorConditional(const Ranges: TArray<TCondRange>;
+  ATermLine, ANextLine: Integer): Boolean;
+// FP-Guard (FP-Audit Stufe 2, 2026-08-16): der TERMINATOR selbst steht in
+// einem bedingten Bereich, die Folgeanweisung nicht. Ohne das Define
+// existiert der Terminator gar nicht und die Folgeanweisung ist der tragende
+// Pfad:
+//   {$IFDEF DEBUG} raise EFoo.CreateFmt(...); {$ENDIF}
+//   Exit;                                     <- NICHT tot
+// Der aeltere Guard verlangte eine Direktiven-Zeile STRIKT zwischen beiden
+// und lief beim Einzeiler leer (S = E = Terminatorzeile).
+//
+// TP-sicher, weil die Folgeanweisung AUSSERHALB desselben Bereichs liegen
+// muss: '{$IFDEF X} Exit; DoDead; {$ENDIF}' bleibt ein Fund.
+// Bewusste Nebenwirkung: setzt der Anwender das Define immer, ist die
+// unterdrueckte Meldung fuer SEINEN Build wahr - ohne Projekt-Defines nicht
+// entscheidbar.
+var R: TCondRange;
+begin
+  for R in Ranges do
+    if (ATermLine >= R.S) and (ATermLine <= R.E) and
+       ((ANextLine < R.S) or (ANextLine > R.E)) then Exit(True);
   Result := False;
 end;
 
@@ -102,7 +139,7 @@ end;
 
 class procedure TDeadCodeDetector.CheckBlock(BlockNode: TAstNode;
   const MethodName, FileName: string; Results: TObjectList<TLeakFinding>;
-  const ADirLines: TArray<Integer>; const ALabelLines: TArray<Integer>;
+  const ADirRanges: TArray<TCondRange>; const ALabelLines: TArray<Integer>;
   const AStrippedLines: TArray<string>);
 // Iterativ via Work-Stack - analog zu uAstNode.CollectAll. Vorher
 // rekursiver Descent (Detectors/uDeadCode.pas alte Form) konnte bei
@@ -209,7 +246,16 @@ begin
             // Direktiven-Grenze zwischen Terminator und Folgeanweisung, stehen
             // beide in verschiedenen bedingten Kompilierungs-Zweigen -> die
             // Folgeanweisung ist NICHT unbedingt tot (preprocessor-branch-FP).
-            if DirLineBetween(ADirLines, Child.Line, Nxt.Line) then
+            if DirLineBetween(ADirRanges, Child.Line, Nxt.Line) then
+            begin
+              Inc(i); Continue;
+            end;
+
+            // FP-Guard (FP-Audit Stufe 2, 2026-08-16): der Terminator selbst
+            // ist bedingt kompiliert, die Folgeanweisung nicht - siehe
+            // TerminatorConditional. Deckt den {$IFDEF}-EINZEILER ab, an dem
+            // der Guard darueber (Direktive STRIKT dazwischen) leer laeuft.
+            if TerminatorConditional(ADirRanges, Child.Line, Nxt.Line) then
             begin
               Inc(i); Continue;
             end;
@@ -265,7 +311,7 @@ end;
 
 class procedure TDeadCodeDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
-  const ADirLines: TArray<Integer>; const ALabelLines: TArray<Integer>;
+  const ADirRanges: TArray<TCondRange>; const ALabelLines: TArray<Integer>;
   const AStrippedLines: TArray<string>);
 var
   i : Integer;
@@ -281,7 +327,7 @@ begin
   for i := 0 to MethodNode.Children.Count - 1 do
     if MethodNode.Children[i].Kind = nkBlock then
       CheckBlock(MethodNode.Children[i], MethodNode.Name, FileName, Results,
-                 ADirLines, ALabelLines, AStrippedLines);
+                 ADirRanges, ALabelLines, AStrippedLines);
 end;
 
 class procedure TDeadCodeDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -291,7 +337,7 @@ var
   Methods    : TList<TAstNode>;
   M          : TAstNode;
   CondR      : TList<TAstNode>;
-  DirLines   : TArray<Integer>;
+  DirRanges  : TArray<TCondRange>;
   LblN       : TList<TAstNode>;
   LabelLines : TArray<Integer>;
   R          : TAstNode;
@@ -319,17 +365,20 @@ begin
     ReleaseLines(Lines, Cached);
   end;
 
-  // Welle 3: {$IFDEF}-Direktiven-Zeilen aus den nkConditionalRange-Markern
-  // sammeln (Start=Node.Line, Ende=TypeRef). Preprocessor-branch-Guard fuer
-  // 'Code nach Exit/Raise steht in einem anderen bedingten Zweig'.
+  // Welle 3: {$IFDEF}-Bereiche aus den nkConditionalRange-Markern sammeln
+  // (Start=Node.Line, Ende=TypeRef). Preprocessor-branch-Guard fuer 'Code nach
+  // Exit/Raise steht in einem anderen bedingten Zweig'. Seit 2026-08-16 als
+  // PAAR statt als flaches Zeilen-Array - erst damit ist 'der Terminator
+  // selbst ist bedingt kompiliert' formulierbar.
   CondR := UnitNode.FindAll(nkConditionalRange);
   try
     n := 0;
-    SetLength(DirLines, CondR.Count * 2);
+    SetLength(DirRanges, CondR.Count);
     for R in CondR do
     begin
-      DirLines[n] := R.Line; Inc(n);
-      DirLines[n] := StrToIntDef(R.TypeRef, R.Line); Inc(n);
+      DirRanges[n].S := R.Line;
+      DirRanges[n].E := StrToIntDef(R.TypeRef, R.Line);
+      Inc(n);
     end;
   finally
     CondR.Free;
@@ -353,7 +402,7 @@ begin
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      AnalyzeMethod(M, FileName, Results, DirLines, LabelLines, StripLines);
+      AnalyzeMethod(M, FileName, Results, DirRanges, LabelLines, StripLines);
   finally
     Methods.Free;
   end;

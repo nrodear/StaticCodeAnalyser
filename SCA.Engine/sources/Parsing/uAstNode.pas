@@ -77,9 +77,11 @@ type
                                     // KEINEN Body - nur die Quell-Range, damit Detektoren
                                     // (SCA166) Reads in nested procs exakt skippen koennen.
     nkConditionalRange,             // Welle 2: Marker fuer {$IFDEF}-Range am Unit-Node.
-                                    // Name=Direktiven-Body (z.B. 'IFDEF DEBUG'),
-                                    // Line=Start, TypeRef='EndLine|DebugFlag' (1=DEBUG-
-                                    // guarded). Additiv - nur opt-in-Detektoren lesen es.
+                                    // Line=Start, TypeRef=IntToStr(EndLine),
+                                    // Name='DEBUG' wenn DEBUG-guarded, sonst leer
+                                    // (uParser2 ParseWithLexer). Additiv - nur
+                                    // opt-in-Detektoren lesen es: SCA017 filtert auf
+                                    // Name='DEBUG', SCA011 nutzt alle Bereiche.
     nkLabelMark,                    // SCA011-Goto-Guard: Marker am Unit-Node. Line =
                                     // Quellzeile einer 'lbl:'-markierten Anweisung
                                     // (goto-Sprungziel). Rein additiv - nur SCA011

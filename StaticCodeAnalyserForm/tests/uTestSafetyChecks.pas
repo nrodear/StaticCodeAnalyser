@@ -133,6 +133,8 @@ type
     // FP-Audit Stufe 2 (2026-08-16): Parser-Defekte, die SCA011 ausbadete
     [Test] procedure DeadCode_NestedParenExitArgSameLine_NoFinding;
     [Test] procedure DeadCode_RaiseAtClauseOnNextLine_NoFinding;
+    [Test] procedure DeadCode_ConditionalTerminatorOneLiner_NoFinding;
+    [Test] procedure DeadCode_BothInsideSameIfdef_StillReported;
   end;
 
 implementation
@@ -1391,6 +1393,47 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
     'die at-Klausel gehoert zum raise, sie ist kein toter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_ConditionalTerminatorOneLiner_NoFinding;
+// FP-Audit Stufe 2 (2026-08-16): steht der TERMINATOR allein in einem
+// {$IFDEF}-Einzeiler, ist die Folgezeile ohne das Define der tragende Pfad.
+// Der aeltere Guard suchte eine Direktiven-Zeile STRIKT zwischen beiden und
+// lief hier leer, weil Start und Ende des Bereichs auf DIESELBE Zeile fallen
+// (uPSCompiler-Familie, 4 Repo-Kopien).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  {$IFDEF DEBUG} raise EFoo.Create(''x''); {$ENDIF}'#13#10+
+  '  Exit;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeadCode),
+    'ohne das Define existiert der raise nicht - das Exit ist erreichbar');
+  finally F.Free; end;
+end;
+
+procedure TTestDeadCodeExt.DeadCode_BothInsideSameIfdef_StillReported;
+// TP-Gegenprobe zum Guard darueber: liegen Terminator UND Folgeanweisung im
+// SELBEN bedingten Bereich, ist die Folgeanweisung in jedem Build tot.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  {$IFDEF DEBUG}'#13#10+
+  '  Exit;'#13#10+
+  '  DoDead;'#13#10+
+  '  {$ENDIF}'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkDeadCode) >= 1,
+    'im selben bedingten Zweig bleibt der Code nach Exit tot');
   finally F.Free; end;
 end;
 
