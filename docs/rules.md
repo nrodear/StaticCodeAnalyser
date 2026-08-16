@@ -1132,7 +1132,7 @@ for i := 10 downto 1 do DoStuff(i);
 | Tags | `typo`, `no-op` |
 | Detector | `uSelfAssignment.pas` |
 
-A bare `x := x` is almost always a typo where one side should be a different variable. The detector does not special-case property setters; the rare legitimate cases (a setter with side effects, or `Result := Result;` to silence a compiler hint) must be suppressed with a `// noinspection` comment directly above the line.
+Reported only when the target is provably a storage slot: a local variable, a parameter, `Result`, an assignment to the function name, or a field declared in the same unit. Property targets, member paths (`a.b`, `p^.f`, `a[i]`) and names that cannot be resolved inside the unit stay silent - writing to a property runs its setter, which may clamp, re-apply or reformat the value (`TopLine := TopLine` clamps against the resized window, `Text := Text` re-parses the whole text). The trade-off is deliberate: unknown forms become false negatives, never false positives. `Result := Result;` to silence a compiler hint is still reported and can be suppressed with a `// noinspection` comment directly above the line.
 
 ---
 
