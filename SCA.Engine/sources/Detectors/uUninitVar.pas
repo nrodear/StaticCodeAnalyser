@@ -58,7 +58,7 @@ implementation
 
 uses
   System.StrUtils,
-  uFileTextCache;
+  uFileTextCache, uAstSpans;
 
 // Hard-Caps werden zur Laufzeit aus uSCAConsts.DetectorMaxLocalVars /
 // DetectorMaxChildrenRecursive gelesen (konfigurierbar via analyser.ini
@@ -3303,32 +3303,6 @@ var
     end;
   end;
 
-  function CalcMethodEndLine(Node: TAstNode): Integer;
-  // Method-Body-Ende = max(Line) ueber alle Descendants. Iterativer
-  // Walk, Stack-safe auch fuer tiefe ASTs.
-  var
-    Stack : TStack<TAstNode>;
-    Cur   : TAstNode;
-    i     : Integer;
-  begin
-    Result := 0;
-    if Node = nil then Exit;
-    Result := Node.Line;
-    Stack := TStack<TAstNode>.Create;
-    try
-      Stack.Push(Node);
-      while Stack.Count > 0 do
-      begin
-        Cur := Stack.Pop;
-        if Cur.Line > Result then Result := Cur.Line;
-        for i := 0 to Cur.Children.Count - 1 do
-          Stack.Push(Cur.Children[i]);
-      end;
-    finally
-      Stack.Free;
-    end;
-  end;
-
   function TryRegisterWriteMonotone(P: PVarInfo; Line: Integer;
     MethodStartLine, MethodEndLine: Integer): Boolean;
   // GEMEINSAMES MONOTONIE-GATE fuer alle NEUEN Write-Quellen dieses
@@ -4184,7 +4158,7 @@ begin
       // Perf (2026-07-05): P7-uninitvar - CalcMethodEndLine nur EINMAL
       // walken (vorher hier + nochmal in PhaseC); Stripped-Cache-Flag
       // initialisieren (lazy Build in PhaseC).
-      MethodEndL    := CalcMethodEndLine(MethodNode);
+      MethodEndL    := TAstSpans.SubtreeMaxLine(MethodNode);
       StrippedBuilt := False;
       // asm-Body-Skip (2026-07-13): eine Methode mit EINGEBETTETEM asm-Block
       // schreibt ihre Locals oft per Register/Memory-Ref (unsichtbar fuer den
