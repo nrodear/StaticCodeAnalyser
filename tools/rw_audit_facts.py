@@ -50,6 +50,10 @@ def main():
     ap.add_argument('--date', required=True, help='Datum im Dateinamen, z.B. 2026-08-16')
     ap.add_argument('--sarif', default='')
     ap.add_argument('--compare', default='', help='Glob eines Vor-Audits')
+    ap.add_argument('--stage2', default='',
+                    help='Glob der Stufe-2-Protokolle. Die Stichproben beider '
+                         'Stufen sind zufaellig und disjunkt, ihre Verdikte '
+                         'werden daher schlicht addiert.')
     ap.add_argument('--out', default='')
     args = ap.parse_args()
 
@@ -58,6 +62,7 @@ def main():
                              encoding='utf-8'))}
     neu = verdicts(args.protocols)
     alt = verdicts(args.compare) if args.compare else {}
+    s2 = verdicts(args.stage2) if args.stage2 else {}
 
     rows = []
     for rid, (tp, fp, un) in neu.items():
@@ -72,10 +77,16 @@ def main():
         aq = None
         if rid in alt and sum(alt[rid][:2]):
             aq = 100.0 * alt[rid][1] / (alt[rid][0] + alt[rid][1])
+        t2, f2, u2 = s2.get(rid, (0, 0, 0))
+        ges_tp, ges_fp = tp + t2, fp + f2
+        gq = 100.0 * ges_fp / (ges_fp + ges_tp) if (ges_fp + ges_tp) else 0.0
         rows.append(dict(rule=rid, name=m.get('name', '?'), tier=tier,
                          total=m['total'], drawn=sample.get('drawn', 0),
                          pruef=tp + fp + un, tp=tp, fp=fp, un=un, q=q, alt=aq,
-                         masse=q / 100.0 * m['total']))
+                         s2pruef=t2 + f2 + u2, s2fp=f2,
+                         s2q=(100.0 * f2 / (f2 + t2)) if (f2 + t2) else None,
+                         gesq=gq, gespruef=tp + fp + un + t2 + f2 + u2,
+                         masse=gq / 100.0 * m['total']))
 
     rows.sort(key=lambda r: -r['total'])
     T = sum(r['total'] for r in rows)
@@ -85,6 +96,10 @@ def main():
     UN = sum(r['un'] for r in rows)
     D = sum(r['drawn'] for r in rows)
     masse = sum(r['masse'] for r in rows)
+    S2P = sum(r['s2pruef'] for r in rows)
+    S2F = sum(r['s2fp'] for r in rows)
+    GTP = sum(r['tp'] for r in rows) + sum(r['s2pruef'] - r['s2fp'] for r in rows)
+    GFP = FP + S2F
 
     L = ['# Todo FactsDetector - Fundzahlen und FP-Quoten je Detektor (%s)' % args.date, '']
     if args.sarif:
@@ -99,9 +114,14 @@ def main():
           '| Stichprobe gezogen | %s |' % de(D),
           '| Im Detail geprueft | %d |' % P,
           '| davon TP / FP / unsicher | %d / %d / %d |' % (TP, FP, UN),
-          '| **FP-Quote (geprueft)** | **%.1f %%** |' % (100.0 * FP / (FP + TP)),
+          '| **FP-Quote Stufe 1 (geprueft)** | **%.1f %%** |' % (100.0 * FP / (FP + TP)),
           '| FP-Quote auf den Korpus hochgerechnet | %.1f %% (~%s von %s) |'
           % (100.0 * masse / T, de(int(masse)), de(T)), '']
+    if S2P:
+        L[-1:-1] = ['| Stufe 2: zusaetzlich geprueft | %d (in %d Detektoren) |'
+                    % (S2P, sum(1 for r in rows if r['s2pruef'])),
+                    '| **FP-Quote Stufe 1 + 2 zusammen** | **%.1f %%** (%d FP / %d) |'
+                    % (100.0 * GFP / (GFP + GTP), GFP, GFP + GTP)]
     for t in ('Error', 'Warning', 'Note'):
         sub = [r for r in rows if r['tier'] == t]
         f = sum(r['fp'] for r in sub)
@@ -122,6 +142,16 @@ def main():
         nv = nf + sum(r['tp'] for r in gem)
         L.append('* **Gleiche Regelbasis wie Vor-Audit** (%d Regeln): %.1f %% -> %.1f %%'
                  % (len(gem), 100.0 * af / av, 100.0 * nf / nv))
+
+    if S2P:
+        L += ['', '## Stufe 2 - die vertieften Detektoren', '',
+              '| Regel | Detektor | Tier | Funde | S1 geprueft | S1-Quote | S2 geprueft | S2-Quote | zusammen | Gesamt-Quote |',
+              '|---|---|---|---:|---:|---:|---:|---:|---:|---:|']
+        for r in sorted([x for x in rows if x['s2pruef']], key=lambda x: -x['gesq']):
+            L.append('| %s | %s | %s | %s | %d | %.0f %% | %d | %.0f %% | %d | **%.0f %%** |'
+                     % (r['rule'], r['name'], r['tier'], de(r['total']), r['pruef'],
+                        r['q'], r['s2pruef'], r['s2q'] if r['s2q'] is not None else 0,
+                        r['gespruef'], r['gesq']))
 
     L += ['', '## Alle Detektoren, nach Fundzahl', '',
           '| Regel | Detektor | Tier | Funde | gezogen | geprueft | TP | FP | unsicher | FP-Quote | Vor-Audit |',
