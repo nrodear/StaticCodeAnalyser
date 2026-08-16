@@ -59,7 +59,8 @@ implementation
 
 uses
   System.Classes,                // TStringList fuer das FFI-Typ-Set
-  uDetectorUtils;                // FFI-Binding-Gate (Shared Service, Hebel A)
+  uDetectorUtils,                // FFI-Binding-Gate (Shared Service, Hebel A)
+  uAstSpans;                     // Teilbaum-Maximum (B1, vormals DeepMaxLine)
 
 const
   MAX_LINES = 500;
@@ -74,23 +75,6 @@ begin
     Result := Copy(MethodName, 1, Dot - 1)
   else
     Result := '';
-end;
-
-function DeepMaxLine(N: TAstNode): Integer;
-// Recursive max Line ueber ALLE Descendants. TAstNode hat nur Start-Line,
-// kein EndLine - der Method-Body ist als Children-Tree gespeichert, die
-// letzte Statement-Line approximiert das Method-End. Notwendig damit
-// 600-Zeilen-Methoden auch wirklich als 600 Zeilen erkannt werden.
-var
-  Child : TAstNode;
-  Sub   : Integer;
-begin
-  Result := N.Line;
-  for Child in N.Children do
-  begin
-    Sub := DeepMaxLine(Child);
-    if Sub > Result then Result := Sub;
-  end;
 end;
 
 class procedure TLargeClassDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -131,7 +115,7 @@ begin
       //      "hunderte Zeilen". Korrekt (und im Header so dokumentiert) ist die
       //      SUMME aus Deklarations-Span + je Methoden-Body-Span. Summe ist stets
       //      <= altem max-min -> reduziert nur, erzeugt keinen neuen Fund.
-      DeclMax := DeepMaxLine(C);
+      DeclMax := TAstSpans.SubtreeMaxLine(C);
       NextClassLine := MaxInt;
       for C2 in Classes do
         if (C2 <> C) and (C2.Line > C.Line) and (C2.Line < NextClassLine) then
@@ -148,7 +132,7 @@ begin
       for M in AllMeths do
         if SameText(ClassPrefix(M.Name), ClassName) then
         begin
-          MethSpan := DeepMaxLine(M) - M.Line + 1;
+          MethSpan := TAstSpans.SubtreeMaxLine(M) - M.Line + 1;
           if MethSpan < 1 then MethSpan := 1;
           Inc(Span, MethSpan);
         end;
