@@ -38,7 +38,9 @@ unit uUnpairedLock;
 //     stattdessen file-weite Suche):
 //     - Finde alle Vorkommen von `<id>.Lock;` oder `<id>.Acquire;` oder
 //       `EnterCriticalSection(<id>)` oder `RTLeventWaitFor(<id>)`.
-//     - In den 200 Bytes danach: erwarte `try` (case-insensitive).
+//     - In den hoechstens 200 Bytes danach: erwarte `try` (case-insensitive).
+//       Das Fenster wird am Beginn der NAECHSTEN Routine abgeschnitten - ein
+//       Release in einer Nachbarmethode gehoert nicht zu diesem Acquire.
 //     - Fehlt das `try` UND es kommt vor `end;` ein `UnLock`/`Leave*`,
 //       war es ein bare-Lock - Finding.
 //   * Nur dann flaggen wenn der UnLock-Aufruf NICHT direkt vor `end;`
@@ -46,6 +48,10 @@ unit uUnpairedLock;
 //
 // Limitierungen:
 //   * Single-File-lexisch. Keine AST-Analyse von Try-Finally-Schachtelung.
+//   * Das Fenster ist routinen-lokal: ueber eine Lock/UnLock-Fassade
+//     (`procedure T.Lock; begin FCS.Enter; end;` + Gegenstueck) behauptet der
+//     Detektor bewusst nichts mehr - ob der AUFRUFER sein try/finally
+//     schreibt, ist eine unit-uebergreifende Frage.
 //   * Re-Entrant locks die bewusst ohne try/finally arbeiten (Performance-
 //     Pfad) muessen via `// noinspection UnpairedLock` suppressed werden.
 //
@@ -115,6 +121,86 @@ begin
             S.StartsWith('operator ')          or S.StartsWith('property ');
 end;
 
+function IsRoutineImplHeaderLine(Lines: TStringList; LineNo: Integer): Boolean;
+// True nur fuer BENANNTE Routinen-Koepfe, die in SPALTE 1 beginnen:
+// 'procedure TFoo.Lock;', 'function Bar: Integer;', 'class procedure T.X;'.
+// Bewusst enger als IsMethodDeclOrHeaderLine (das bleibt unveraendert und
+// traegt weiter den Decl-Guard weiter unten - nie ein neues Gate in einen
+// bereits geteilten Helfer): eingerueckte Zeilen sind Klassen-Deklarationen
+// oder anonyme Methoden, die duerfen das Lookahead-Fenster NICHT kappen.
+const
+  ROUTINE_KEYWORDS: array[0..5] of string =
+    ('procedure ', 'function ', 'constructor ', 'destructor ', 'operator ',
+     'property ');
+var
+  Raw, S : string;
+  i, P   : Integer;
+begin
+  Result := False;
+  if (Lines = nil) or (LineNo <= 0) or (LineNo > Lines.Count) then Exit;
+  Raw := Lines[LineNo - 1];
+  if (Raw = '') or CharInSet(Raw[1], [#9, ' ']) then Exit;
+  S := LowerCase(Raw);
+  if S.StartsWith('class ') then
+    S := TrimLeft(Copy(S, Length('class ') + 1, MaxInt));
+  for i := Low(ROUTINE_KEYWORDS) to High(ROUTINE_KEYWORDS) do
+    if S.StartsWith(ROUTINE_KEYWORDS[i]) then
+    begin
+      // Hinter dem Schluesselwort muss ein NAME stehen - 'procedure (' ist
+      // eine anonyme Methode, 'procedure;' ein Typ-Verweis.
+      P := Length(ROUTINE_KEYWORDS[i]) + 1;
+      while (P <= Length(S)) and (S[P] = ' ') do Inc(P);
+      Result := (P <= Length(S)) and CharInSet(S[P], ['a'..'z', '_']);
+      Exit;
+    end;
+end;
+
+function CollectRoutineHeaderStarts(Lines: TStringList;
+  const LineFor: TArray<Integer>): TArray<Integer>;
+// Aufsteigende 1-basierte Zeichen-Offsets im Strip-Text, an denen eine
+// Routine beginnt. LineFor ist monoton (ein Eintrag je Zeichen, Wert =
+// 0-basierte Quellzeile), ein Wechsel markiert also einen Zeilenanfang.
+var
+  k, Cnt, Cur : Integer;
+begin
+  Cnt := 0;
+  Cur := -1;
+  SetLength(Result, Lines.Count);   // Obergrenze: hoechstens ein Kopf je Zeile
+  for k := 0 to High(LineFor) do
+    if LineFor[k] <> Cur then
+    begin
+      Cur := LineFor[k];
+      if IsRoutineImplHeaderLine(Lines, Cur + 1) and (Cnt <= High(Result)) then
+      begin
+        Result[Cnt] := k + 1;
+        Inc(Cnt);
+      end;
+    end;
+  SetLength(Result, Cnt);
+end;
+
+function FirstHeaderAfter(const Headers: TArray<Integer>; APos: Integer): Integer;
+// Kleinster Kopf-Offset echt hinter APos, 0 wenn keiner folgt (Binaersuche -
+// die Liste ist per Konstruktion aufsteigend).
+var
+  Lo, Hi, Mid : Integer;
+begin
+  Result := 0;
+  Lo := 0;
+  Hi := High(Headers);
+  while Lo <= Hi do
+  begin
+    Mid := (Lo + Hi) div 2;
+    if Headers[Mid] > APos then
+    begin
+      Result := Headers[Mid];
+      Hi := Mid - 1;
+    end
+    else
+      Lo := Mid + 1;
+  end;
+end;
+
 class procedure TUnpairedLockDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 const
@@ -126,9 +212,12 @@ var
   Code     : string;
   CodeLow  : string;
   LineFor  : TArray<Integer>;
+  Headers  : TArray<Integer>;
   RE       : TRegEx;
   M        : TMatch;
   AfterPos : Integer;
+  NextHdr  : Integer;
+  WinLen   : Integer;
   Snippet  : string;
   LineNo   : Integer;
   F        : TLeakFinding;
@@ -141,6 +230,7 @@ begin
     Code := TDetectorUtils.StripStringsAndCommentsCached(
       Lines, LineFor, AContext, FileName, ' ');
     CodeLow := LowerCase(Code);
+    Headers := CollectRoutineHeaderStarts(Lines, LineFor);
 
     // Pattern: `<id>.Lock;` oder `<id>.Acquire;` oder `EnterCriticalSection(`
     // oder mORMot's `RTLeventWaitFor(` - jeweils mit folgendem try-fehlt-Check.
@@ -152,7 +242,20 @@ begin
       if AfterPos > Length(Code) then Continue;
 
       // Snippet nach dem Lock-Aufruf (max 200 Zeichen) lowercased.
-      Snippet := Copy(CodeLow, AfterPos, LOOK_AHEAD);
+      // FP-Guard (FP-Audit Stufe 2, 2026-08-16): das Fenster endet spaetestens
+      // am Beginn der naechsten Routine. Delphi-Lock-Fassaden sind 3-5 Zeilen
+      // lang und stehen direkt vor ihrem Gegenstueck (`procedure T.Lock; begin
+      // FCS.Enter; end;` / `procedure T.UnLock; ...`) - zusammen deutlich unter
+      // 200 Zeichen. Ohne den Schnitt sieht der Detektor das Release der
+      // NACHBARmethode und meldet eine Routine, die selbst gar keines enthaelt.
+      // Dominante FP-Klasse (21 von 23 im 74er-Sample), deckt zugleich den
+      // RAII-Fall Ctor/Dtor ab. Der Schnitt ist monoton: ein kleineres Fenster
+      // kann Funde nur entfernen (UnlockPos = 0 -> Continue).
+      WinLen  := LOOK_AHEAD;
+      NextHdr := FirstHeaderAfter(Headers, AfterPos);
+      if (NextHdr > 0) and (NextHdr - AfterPos < WinLen) then
+        WinLen := NextHdr - AfterPos;
+      Snippet := Copy(CodeLow, AfterPos, WinLen);
       // Wenn `try` direkt folgt (mit beliebigen Whitespace + ';' / EOL
       // dazwischen), ist es korrekt. Wir wollen NUR Pattern wo bis zum
       // naechsten `unlock`/`leavecriticalsection` kein `try` kommt.

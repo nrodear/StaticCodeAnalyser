@@ -21,6 +21,10 @@ type
     [Test] procedure InterfaceForwardDecl_NotReported;
     [Test] procedure AcquireFunctionDeclaration_NotReported;
     [Test] procedure MethodNamedLockWithRealAcquire_StillReported;
+    // FP-Audit Stufe 2 2026-08-16: Fenster endet an der Routinengrenze
+    [Test] procedure LockFacadeReleaseInSiblingMethod_NotReported;
+    [Test] procedure RaiiCtorDtorPair_NotReported;
+    [Test] procedure AcquireReleaseSameRoutineWithSiblingBelow_StillReported;
   end;
 
 implementation
@@ -241,6 +245,78 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkUnpairedLock) >= 1,
     'echter bare FInner.Lock im Rumpf bleibt SCA153');
+  finally F.Free; end;
+end;
+
+// ============================================================
+// FP-Audit Stufe 2 (2026-08-16): das Lookahead-Fenster lief ueber die
+// Routinengrenze und fand das Release der symmetrischen NACHBARmethode.
+// 21 von 23 Sample-FP hatten diese Ursache.
+// ============================================================
+
+procedure TTestUnpairedLock.LockFacadeReleaseInSiblingMethod_NotReported;
+// Lock/UnLock-Fassade: die gemeldete Routine enthaelt selbst gar kein
+// Release - der Lock wird bewusst an den Aufrufer weitergereicht.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Lock;'#13#10 +
+  'begin'#13#10 +
+  '  FCS.Acquire;'#13#10 +
+  'end;'#13#10 +
+  'procedure TFoo.UnLock;'#13#10 +
+  'begin'#13#10 +
+  '  FCS.Release;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnpairedLock),
+    'Release der Nachbarmethode gehoert nicht zu diesem Acquire');
+  finally F.Free; end;
+end;
+
+procedure TTestUnpairedLock.RaiiCtorDtorPair_NotReported;
+// Scope-Guard: Acquire im Konstruktor, Release im Destruktor - genau der
+// Fall, den der Detektor-Vertrag ueberspringen will (mORMot TAutoLock).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'constructor TAutoLock.Create(aLock: PSynLocker);'#13#10 +
+  'begin'#13#10 +
+  '  fLock := aLock;'#13#10 +
+  '  fLock^.Lock;'#13#10 +
+  'end;'#13#10 +
+  'destructor TAutoLock.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  fLock^.UnLock;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnpairedLock),
+    'Ctor/Dtor-Scope-Guard ist kein bare-Lock');
+  finally F.Free; end;
+end;
+
+procedure TTestUnpairedLock.AcquireReleaseSameRoutineWithSiblingBelow_StillReported;
+// Gegenprobe gegen Ueber-Kappung: Acquire UND Release liegen in derselben
+// Routine, darunter folgt eine weitere - der Fund muss bleiben.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  FCS.Acquire;'#13#10 +
+  '  DoStuff;'#13#10 +
+  '  FCS.Release;'#13#10 +
+  'end;'#13#10 +
+  'procedure Q;'#13#10 +
+  'begin'#13#10 +
+  '  DoOther;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkUnpairedLock) >= 1,
+    'Acquire/Release in EINER Routine bleibt ein Fund');
   finally F.Free; end;
 end;
 
