@@ -330,6 +330,16 @@ type
     // noetige noinspection-MemoryLeak-Marker entfiel 2026-08-08: das
     // SCA001-Ownership-Gate erkennt die Interface-Uebergabe inzwischen
     // auch bei Feldern.)
+    //
+    // 2026-08-16 WIEDER NOETIG: nach den zwei Parser-Fixes der Stufe A
+    // (Exit-Argument klammerbalanciert, goto-Zweig) meldet SCA001 hier
+    // erneut. Der Code ist unveraendert richtig - freigegeben wird ueber
+    // 'FEditorEvents := nil' in Destroy -, aber das 2026-08-08 gebaute
+    // Ownership-Gate greift in dieser Unit nicht mehr. Warum es blind
+    // geworden ist, ist NICHT geklaert: der Marker ist hier die
+    // Absicherung, nicht die Erklaerung. Offener Punkt in
+    // Konzept_StufeB_Bausteine_2026-08-16.md.
+    // noinspection MemoryLeak
     FEditorEventsObj : TFindingEditorEvents;   // Refcount via FEditorEvents (siehe Create)
     FEditorEventsIdx : Integer;               // Index aus AddEditorEventsNotifier; -1 = nicht registriert
     function NormalizePath(const APath: string): string;

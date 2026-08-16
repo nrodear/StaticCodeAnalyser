@@ -232,14 +232,24 @@ var
   Ctx : TAnalyzeContext;
   Ftc : TFileTextCache;
 begin
-  Ftc := TFileTextCache.Create;                          // separat besessen
-  Ctx := TAnalyzeContext.Create;
-  Ctx.AstFileCache   := TAstFileCache.Create;            // owned -> Destroy frees
-  Ctx.SymbolRefIndex := TSymbolReferenceIndex.Create;    // owned -> Destroy frees
-  Ctx.FileTextCache  := Ftc;                             // nur referenziert
-  Ctx.Free;            // darf nicht crashen; gibt nur die besessenen frei
-  Ftc.Free;            // kein Double-Free -> Ctx hat Ftc nicht angefasst
-  Assert.Pass('Context-Destroy gibt nur besessene Instanzen frei');
+  // try/finally nachgezogen 2026-08-16: der Parser sieht diese Routine erst
+  // seit dem Exit-/goto-Fix vollstaendig, und SCA002 hatte recht - warf eine
+  // der Zuweisungen, leckten beide Objekte.
+  Ftc := nil;
+  Ctx := nil;
+  try
+    Ftc := TFileTextCache.Create;                        // separat besessen
+    Ctx := TAnalyzeContext.Create;
+    Ctx.AstFileCache   := TAstFileCache.Create;          // owned -> Destroy frees
+    Ctx.SymbolRefIndex := TSymbolReferenceIndex.Create;  // owned -> Destroy frees
+    Ctx.FileTextCache  := Ftc;                           // nur referenziert
+    FreeAndNil(Ctx);     // Kern des Tests: darf nicht crashen, gibt nur die
+                         // besessenen frei - und muss VOR Ftc.Free laufen
+    Assert.Pass('Context-Destroy gibt nur besessene Instanzen frei');
+  finally
+    Ctx.Free;            // nur belegt, wenn eine Zuweisung oben warf
+    Ftc.Free;            // kein Double-Free -> Ctx hat Ftc nicht angefasst
+  end;
 end;
 
 procedure TTestEngineApi.AnalyzeSource_FindsBugInMemory;
