@@ -91,7 +91,7 @@ implementation
 
 uses
   System.StrUtils,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils, uAstSpans;
 
 const
   // Routinen-Namen die per Konvention implizit gerufen werden.
@@ -232,32 +232,6 @@ var
   IFNode      : TAstNode;
   Fwd         : TAstNode;
 
-  function MaxLineOf(N: TAstNode): Integer;
-  // Tiefste Quell-Zeile irgendwo im Subtree von N. Approximiert das
-  // Routinen-Ende (closing 'end;'-Zeile waere noch grosszuegiger, aber
-  // alle gelisteten Tokens muessen davor sitzen).
-  var
-    Stack : TList<TAstNode>;
-    Cur   : TAstNode;
-    j     : Integer;
-  begin
-    Result := N.Line;
-    Stack := TList<TAstNode>.Create;
-    try
-      Stack.Add(N);
-      while Stack.Count > 0 do
-      begin
-        Cur := Stack[Stack.Count - 1];
-        Stack.Delete(Stack.Count - 1);
-        if Cur.Line > Result then Result := Cur.Line;
-        for j := 0 to Cur.Children.Count - 1 do
-          Stack.Add(Cur.Children[j]);
-      end;
-    finally
-      Stack.Free;
-    end;
-  end;
-
   function HasExternalCaller(const MethName: string;
     const OwnStart, OwnEnd: Integer): Boolean;
   // Perf P1: Lookup im per-File-Wort-Index statt '\b'+Name+'\b'-Regex ueber
@@ -364,7 +338,7 @@ begin
           // PLUS eine kleine Toleranz fuer das 'end;'-Closing. KEIN Fallback
           // auf NextStartAfter mehr - der schloss Caller in zwischenliegenden
           // Helper-Routinen faelschlich als 'self-call' aus (SCA164 FP).
-          RoutineEnd := MaxLineOf(Mth) + 2;
+          RoutineEnd := TAstSpans.SubtreeMaxLine(Mth) + 2;
           if HasExternalCaller(MethName, Mth.Line, RoutineEnd) then Continue;
 
           F            := TLeakFinding.Create;
