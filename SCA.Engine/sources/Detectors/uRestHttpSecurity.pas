@@ -149,7 +149,16 @@ begin
     H.StartsWith('203.0.113.') or
     // RFC 3849: IPv6-Dokumentationspraefix
     H.StartsWith('2001:db8:') or
-    // link-local (RFC 3927 / RFC 4291) - nie routbar
+    // link-local (RFC 3927 / RFC 4291). ACHTUNG - die Begruendung ist
+    // NICHT 'nicht routbar': auf dem lokalen Segment ist eine
+    // link-local-Adresse sehr wohl erreichbar und damit MITM-faehig.
+    // Genau dieses Argument wurde fuer RFC1918 bewusst VERWORFEN, weil
+    // 'http://192.168.1.153:3000/api' im Korpus ein belegter echter
+    // Endpunkt ist. Hier gilt ein anderer Grund: eine link-local-Adresse
+    // in einem QUELLTEXT-LITERAL ist eine Parser-Fixture oder ein
+    // Diagnose-Beispiel - ein Deployment gegen fe80:: braucht einen
+    // Zonenindex und 169.254 entsteht nur bei fehlgeschlagenem DHCP.
+    // Restrisiko benannt: wer doch so deployt, verliert den Fund.
     H.StartsWith('169.254.') or H.StartsWith('fe80:');
 end;
 
