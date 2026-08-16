@@ -2029,9 +2029,36 @@ begin
           // Exit(value) -> Argument-String in TypeRef ablegen.
           // Brauchen Detektoren wie TLeakDetector2.IsReturnedAsResult
           // um 'Exit(list)' als Ownership-Transfer-Return zu erkennen.
+          //
+          // KLAMMERBALANCIERT (FP-Audit Stufe 2, 2026-08-16): der Scanner
+          // stoppte an der ERSTEN ')'. Bei
+          //   Exit(GetIcon(..., GetSystemColor(clBtnText), ...))
+          // brach er also mitten im Argument ab, Eat(tkRParen) frass die
+          // innere Klammer, und der Zeilenrest wurde zu einem eigenstaendigen
+          // nkCall-GESCHWISTER auf derselben Zeile - fuer SCA011 sah das aus
+          // wie Code nach einem Exit (16 von 41 Sample-FP).
+          //
+          // tkSemicolon/tkEof und die Blockschluessel bleiben UNBEDINGTE
+          // Notbremsen: ein direktiven-asymmetrisches '(' (der Lexer liefert
+          // beide {$ifdef}-Zweige) wuerde sonst den Rest der Datei fressen -
+          // dieselbe Begruendung wie beim tkLt-Scanner weiter unten.
+          // Bewusste Grenze: 'Exit(procedure ... end)' bleibt an der
+          // tkKwEnd-Notbremse haengen - heute ebenso, also keine
+          // Verschlechterung.
           var ExitArg := '';
-          while not (Tok.Kind in [tkRParen, tkSemicolon, tkEof]) do
+          var Depth   := 0;
+          while not (Tok.Kind in [tkSemicolon, tkEof, tkKwEnd, tkKwElse,
+                                  tkKwUntil, tkKwExcept, tkKwFinally]) and
+                not ((Tok.Kind = tkRParen) and (Depth = 0)) do
           begin
+            if Tok.Kind = tkLParen then
+            begin
+              Inc(Depth);
+            end
+            else if Tok.Kind = tkRParen then
+            begin
+              Dec(Depth);
+            end;
             if ExitArg <> '' then ExitArg := ExitArg + ' ';
             ExitArg := ExitArg + Tok.Value;
             Next;
@@ -2518,6 +2545,30 @@ begin
   RaiseNode := Parent.Add(nkRaise, 'raise', T.Line, T.Col);
   if not (Tok.Kind in [tkSemicolon, tkKwEnd, tkKwElse, tkEof]) then
     RaiseNode.Name := ParsePrimary;
+  // 'raise E at <Adresse>' (FP-Audit Stufe 2, 2026-08-16): 'at' ist im Lexer
+  // kein Schluesselwort, sondern tkIdent. ParsePrimary liest nur den Ausdruck
+  // und liess die Klausel im Strom stehen; der naechste ParseStatement-
+  // Durchlauf machte daraus einen Geschwister-nkCall('at') - mit der
+  // Zeilennummer der FOLGEZEILE, wenn die Klausel dort steht. Fuer SCA011 sah
+  // das aus wie Code hinter dem raise (16 von 41 Sample-FP, mORMot-Muster).
+  //
+  // Das Gate ist exakt: nach einem raise-Ausdruck ohne ';' ist 'at' die
+  // einzige legale Fortsetzung. Der Text wird NICHT weggeworfen, sondern in
+  // TypeRef abgelegt (heute immer leer) - er traegt die Ident-Evidenz
+  // (get_caller_addr, get_frame, ReturnAddress), die uUnusedUses & Co. lesen.
+  if (Tok.Kind = tkIdent) and SameText(Tok.Value, 'at') then
+  begin
+    Next;                       // 'at'
+    var AtExpr := '';
+    while not (Tok.Kind in [tkSemicolon, tkKwEnd, tkKwElse, tkKwUntil,
+                            tkKwExcept, tkKwFinally, tkEof]) do
+    begin
+      if AtExpr <> '' then AtExpr := AtExpr + ' ';
+      AtExpr := AtExpr + Tok.Value;
+      Next;
+    end;
+    RaiseNode.TypeRef := Trim(AtExpr);
+  end;
   Eat(tkSemicolon);
 end;
 
