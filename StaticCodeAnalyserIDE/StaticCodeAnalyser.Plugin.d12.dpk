@@ -48,6 +48,7 @@ requires
 
 contains
   uAnalyserTypes in '..\SCA.Engine\sources\Common\uAnalyserTypes.pas',
+  uAstSpans in '..\SCA.Engine\sources\Common\uAstSpans.pas',
   uCollectValues in '..\SCA.Engine\sources\Common\uCollectValues.pas',
   uCompatSet in '..\SCA.Engine\sources\Common\uCompatSet.pas',
   uCrashDiag in '..\SCA.Engine\sources\Common\uCrashDiag.pas',
