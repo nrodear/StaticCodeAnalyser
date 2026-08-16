@@ -18,23 +18,24 @@ unit uUnicodeToAnsiCast;
 //                                   //   ASCII durchgeleitet wird
 //
 // Folge: Bei jeder Stelle wo `UnicodeString`-Inhalt in `AnsiString`,
-// `UTF8String`, `RawByteString` oder `ShortString` gecastet wird, fuehrt
-// die Default-Locale-Conversion zu Datenverlust fuer alle Zeichen ausser-
-// halb der jeweiligen Codepage. Klassischer Datenbank-Migration-Bug:
-// Umlaute kommen als '?' raus, Smileys verschwinden, Excel/CSV werden
-// korrupt.
+// `RawByteString` oder `ShortString` gecastet wird, fuehrt die
+// Default-Locale-Conversion zu Datenverlust fuer alle Zeichen ausserhalb
+// der jeweiligen Codepage. Klassischer Datenbank-Migration-Bug: Umlaute
+// kommen als '?' raus, Smileys verschwinden, Excel/CSV werden korrupt.
+//
+// NICHT gemeldet wird `UTF8String(...)`: UTF8String ist
+// `type AnsiString(CP_UTF8)`, der Cast erzeugt exakt denselben Code wie
+// UTF8Encode und ist verlustfrei (FP-Audit Stufe 2, 2026-08-16).
 //
 // Erkennung (AST-basiert, heuristisch):
 //   * Walker iteriert nkCall-Knoten
 //   * Match wenn Call-Name mit einem der String-Typ-Casts beginnt
-//     (case-insensitive): `AnsiString(`, `UTF8String(`, `RawByteString(`,
-//     `ShortString(`
+//     (case-insensitive): `AnsiString(`, `RawByteString(`, `ShortString(`
 //   * Skip-Heuristik: Argument ist leerer String-Literal ('')
 //
 // Bewusste False-Positives (akzeptabel):
 //   * `AnsiString(<expr>)` wenn <expr> bereits AnsiString ist (redundanter
 //     Cast) - signalisiert Verwirrung oder Konversion zwischen Code-Pages.
-//   * `UTF8String(<utf8expr>)` ditto.
 //
 // Sonar-Pendant: UnicodeToAnsiCastCheck
 // https://github.com/integrated-application-development/sonar-delphi/blob/
@@ -60,9 +61,26 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 const
-  // Bekannte 8-bit-String-Cast-Praefixe mit oeffnender Klammer.
+  // Bekannte VERLUSTBEHAFTETE 8-bit-String-Cast-Praefixe mit oeffnender
+  // Klammer.
+  //
+  // 'utf8string(' stand hier bis 2026-08-16 (FP-Audit Stufe 2) und war
+  // schlicht falsch: UTF8String ist 'type AnsiString(CP_UTF8)', der Compiler
+  // erzeugt fuer UTF8String(u) exakt System._UStrToLStr(dest, src, CP_UTF8) -
+  // denselben Code wie das von der Meldung geforderte UTF8Encode.
+  // DefaultSystemCodePage spielt keine Rolle, es geht kein Zeichen verloren.
+  // 47 der 523 Korpus-Funde waren utf8string-Casts, keiner davon mit
+  // 8-bit-Operand.
+  //
+  // 'rawbytestring(' bleibt (CP_NONE - die Konversion laeuft ueber
+  // DefaultSystemCodePage), 'shortstring(' ebenso (zusaetzlich
+  // 255-Byte-Trunkierung).
+  //
+  // Bewusst als Falschnegativ akzeptiert: UTF8String(<bereits 8-bit>) nimmt
+  // den Umweg ueber die ACP und KANN Zeichen verlieren - im Korpus 0 Treffer,
+  // eine zweite Typpruefung dafuer waere teurer als der Nutzen.
   CAST_PREFIXES: array of string = [
-    'ansistring(', 'utf8string(', 'rawbytestring(', 'shortstring('
+    'ansistring(', 'rawbytestring(', 'shortstring('
   ];
 
   // Real-World-FP-Audit 2026-07-10: Operand-Praefixe bei denen KEIN

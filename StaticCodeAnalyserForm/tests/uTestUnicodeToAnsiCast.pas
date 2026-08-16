@@ -12,7 +12,7 @@ type
   TTestUnicodeToAnsiCast = class
   public
     [Test] procedure AnsiStringCast_Reported;
-    [Test] procedure UTF8StringCast_Reported;
+    [Test] procedure UTF8StringCast_NotReported;
     [Test] procedure RawByteStringCast_Reported;
     [Test] procedure ShortStringCast_Reported;
     [Test] procedure CaseInsensitive_Reported;
@@ -47,7 +47,13 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestUnicodeToAnsiCast.UTF8StringCast_Reported;
+procedure TTestUnicodeToAnsiCast.UTF8StringCast_NotReported;
+// FP-Audit Stufe 2 (2026-08-16): UTF8String ist 'type AnsiString(CP_UTF8)'.
+// Der Compiler erzeugt fuer UTF8String(u) exakt
+// System._UStrToLStr(dest, src, CP_UTF8) - denselben Code wie das von der
+// Meldung geforderte UTF8Encode. Es geht kein Zeichen verloren, die
+// Behauptung der Regel traf hier nie zu (9 von 26 Sample-FP; korpusweit
+// 47 Funde, keiner mit 8-bit-Operand).
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo(u: UnicodeString);'#13#10 +
@@ -56,7 +62,8 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnicodeToAnsiCast));
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnicodeToAnsiCast),
+    'UTF8String(u) ist verlustfrei - identischer Code wie UTF8Encode(u)');
   finally F.Free; end;
 end;
 
