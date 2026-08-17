@@ -315,6 +315,9 @@ type
     // Owner-Gate 2026-08-17: der Owner darf ueber einen PFAD kommen.
     [Test] procedure Field_OwnerViaPath_NoFinding;
     [Test] procedure Field_OwnerLookalikeIdent_StillReported;
+    // Property-Alias 2026-08-18: Freigabe ueber den oeffentlichen Namen.
+    [Test] procedure Field_FreedViaPropertyAlias_NoFinding;
+    [Test] procedure Field_FreedViaForeignName_StillReported;
   end;
 
 implementation
@@ -5560,6 +5563,78 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
     'ein Bezeichner, der nur mit owner anfaengt, ist kein Owner');
+  finally F.Free; end;
+end;
+
+
+
+procedure TTestFieldLeak.Field_FreedViaPropertyAlias_NoFinding;
+// 'Items.Free' gibt dasselbe Objekt frei wie 'FItems.Free' - nur ueber den
+// oeffentlichen Namen. SearchFree sucht den Feldnamen und findet nichts.
+// Belegt im Korpus (JvExplorerBar und Verwandte).
+//
+// Das Gate haengt an drei Bedingungen: F-Konvention, die Klasse deklariert
+// die Property WIRKLICH, und der Destruktor gibt genau diesen Namen frei.
+// Der read-Spezifizierer ist nicht pruefbar - der Parser verwirft ihn.
+//
+// Vor der Aenderung gegen die gebaute Engine gemessen: meldet (Error).
+const SRC =
+  'unit t; interface'#13#10+
+  'type TFoo = class'#13#10+
+  'private'#13#10+
+  '  FItems: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  '  property Items: TStringList read FItems write FItems;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TFoo.Create;'#13#10+
+  'begin'#13#10+
+  '  FItems := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'destructor TFoo.Destroy;'#13#10+
+  'begin'#13#10+
+  '  Items.Free;'#13#10+
+  '  inherited;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Items.Free gibt FItems frei - dieselbe Instanz, anderer Name');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_FreedViaForeignName_StillReported;
+// WAECHTER: irgendein anderer Name im Destruktor darf NICHT als Freigabe
+// durchgehen. Die Klasse deklariert hier keine Property 'Cache', also
+// greift Bedingung 2 des Gates nicht - der Leak bleibt ein Fund.
+// Vor der Aenderung gemessen: meldet (Error), und das muss so bleiben.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TWidget = class'#13#10+
+  'private'#13#10+
+  '  FCache: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TWidget.Create;'#13#10+
+  'begin'#13#10+
+  '  FCache := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'destructor TWidget.Destroy;'#13#10+
+  'begin'#13#10+
+  '  FetchAll.Free;'#13#10+
+  '  inherited;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'ein fremder Name ist keine Freigabe des Feldes');
   finally F.Free; end;
 end;
 

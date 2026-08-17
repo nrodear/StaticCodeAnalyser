@@ -334,6 +334,56 @@ begin
   end;
 end;
 
+function IsFreedViaPropertyAlias(Dtor, ClassNode: TAstNode;
+  const FieldNameLow: string): Boolean;
+// Erkennt die Freigabe ueber den PROPERTY-Alias:
+//   property BlueElements: TList read FBlueElements write SetBlueElements;
+//   destructor ... begin BlueElements.Free; end;
+// Dieselbe Instanz, nur ueber den oeffentlichen Namen angesprochen -
+// SearchFree sucht aber nach 'FBlueElements.Free' und findet nichts.
+// Belegt im Korpus (JvExplorerBar und Verwandte), 8 Funde derselben Bauart.
+//
+// Warum ueber die NAMENSKONVENTION und nicht ueber den read-Spezifizierer:
+// der Parser verwirft die read/write-Klausel (uParser2 ParseProperty ruft
+// SkipToSemicolon), nkProperty traegt nur den Namen. Die Zuordnung
+// 'FFoo' <-> 'Foo' ist damit die einzige verfuegbare - sie ist in Delphi
+// aber so fest, dass die RTL selbst darauf aufbaut.
+//
+// Eng gehalten, es ist eine Unterdrueckung im Error-Tier - ALLE DREI
+// Bedingungen muessen zutreffen:
+//   1. der Feldname beginnt mit 'F' (sonst kein Alias-Kandidat),
+//   2. die Klasse deklariert wirklich eine Property mit exakt dem
+//      Restnamen - geraten wird nichts,
+//   3. der Destruktor gibt genau diesen Namen frei.
+// Restrisiko, bewusst getragen: eine Property 'Foo', die NICHT 'FFoo'
+// liest, waehrend 'FFoo' leckt und der Destruktor 'Foo.Free' ruft. Dafuer
+// muesste jemand die Konvention brechen UND den falschen Namen freigeben.
+var
+  PropLow : string;
+  Props   : TList<TAstNode>;
+  Pr      : TAstNode;
+  Dummy   : Boolean;
+begin
+  Result := False;
+  if (Dtor = nil) or (ClassNode = nil) then Exit;
+  if (Length(FieldNameLow) < 2) or (FieldNameLow[1] <> 'f') then Exit;
+  PropLow := Copy(FieldNameLow, 2, MaxInt);
+
+  Props := ClassNode.FindAll(nkProperty);
+  try
+    for Pr in Props do
+    begin
+      if LowerCase(Trim(Pr.Name)) = PropLow then
+      begin
+        Result := TLeakDetector2.SearchFree(Dtor, PropLow, False, Dummy);
+        Exit;
+      end;
+    end;
+  finally
+    Props.Free;
+  end;
+end;
+
 { ---- FP-Gates 30%-Real-World-Audit 2026-07-31 (FP-Klasse 3) ---------------- }
 //
 // "Ctor/Dtor-Paarung uebersieht indirekte Freigabe" (2/24 im Sample). Beide
@@ -834,8 +884,19 @@ begin
           // Alias-Free-Idiom (L := FField; FField := nil; L.Free) erkennen.
           if not FreeFound then
             FreeFound := IsFreedViaAlias(Dtor, FieldNameLow);
+          // Zweiter Alias-Weg: die Freigabe laeuft ueber den
+          // Property-Namen statt ueber das Feld.
+          if not FreeFound then
+          begin
+            FreeFound := IsFreedViaPropertyAlias(Dtor, ClassNode, FieldNameLow);
+          end;
           if not FreeFound then
             FreeFound := IsFreedViaAlias(Cleanup, FieldNameLow);
+          if not FreeFound and (Cleanup <> nil) then
+          begin
+            FreeFound := IsFreedViaPropertyAlias(Cleanup, ClassNode,
+                                                 FieldNameLow);
+          end;
 
           // FP-Gate (2026-07-31, FP-Klasse 3b): Free steckt in einer vom
           // Destroy gerufenen Helper-Methode DERSELBEN Klasse (FreeBlockList).
