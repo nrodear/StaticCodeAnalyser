@@ -331,15 +331,14 @@ type
     // SCA001-Ownership-Gate erkennt die Interface-Uebergabe inzwischen
     // auch bei Feldern.)
     //
-    // 2026-08-16 WIEDER NOETIG: nach den zwei Parser-Fixes der Stufe A
-    // (Exit-Argument klammerbalanciert, goto-Zweig) meldet SCA001 hier
-    // erneut. Der Code ist unveraendert richtig - freigegeben wird ueber
-    // 'FEditorEvents := nil' in Destroy -, aber das 2026-08-08 gebaute
-    // Ownership-Gate greift in dieser Unit nicht mehr. Warum es blind
-    // geworden ist, ist NICHT geklaert: der Marker ist hier die
-    // Absicherung, nicht die Erklaerung. Offener Punkt in
-    // Konzept_StufeB_Bausteine_2026-08-16.md.
-    // noinspection MemoryLeak
+    // 2026-08-16 meldete SCA001 hier erneut, 2026-08-17 geklaert und
+    // behoben - die erste Vermutung war falsch. Das Ownership-Gate ist NICHT
+    // blind geworden: gemeldet hat hier nie uLeakDetector2, sondern
+    // uFieldLeak (beide liegen unter fkMemoryLeak). uFieldLeak hatte das
+    // Interface-Refcount-Praedikat schlicht nie gerufen; die Klasse war fuer
+    // FELDER seit jeher offen und wurde erst sichtbar, als die Parser-Fixes
+    // der Stufe A den Konstruktor vollstaendig parsbar machten. uFieldLeak
+    // ruft das Praedikat jetzt - ein Marker ist hier nicht mehr noetig.
     FEditorEventsObj : TFindingEditorEvents;   // Refcount via FEditorEvents (siehe Create)
     FEditorEventsIdx : Integer;               // Index aus AddEditorEventsNotifier; -1 = nicht registriert
     function NormalizePath(const APath: string): string;

@@ -838,6 +838,24 @@ begin
              IsOwnedByComponentChain(UnitNode, Ctor, FieldNameLow,
                                      AContext) then Continue;
 
+          // FP-Gate (2026-08-17): das Feld wird im Konstruktor an ein
+          // INTERFACE uebergeben - 'FIntf := FObj as IFoo;' oder
+          // 'FIntf := IFoo(FObj);'. Dann traegt der Refcount die Ownership;
+          // freigegeben wird ueber das Nil-Setzen des Interface-Feldes im
+          // Destruktor, und ein zusaetzlicher Free waere ein DOUBLE-FREE.
+          //
+          // Das Praedikat ist seit 2026-07-19 fuer lokale Variablen erprobt
+          // (TLeakDetector2.IsHandedToInterface, dort zwei Aufrufstellen);
+          // uFieldLeak hat es nie gerufen, deshalb war die Klasse fuer FELDER
+          // bis heute offen. Kein zweiter Nachbau: die Unit haengt ohnehin
+          // schon an TLeakDetector2 (IsIdentChar, :259/:461).
+          //
+          // Eng gehalten wie das Original: der Cast muss im KONSTRUKTOR
+          // stehen, und der Interface-Ident muss der 'I'+Grossbuchstabe-
+          // Konvention folgen (schliesst 'IntToStr(FFoo)' aus).
+          if not FreeFound and
+             TLeakDetector2.IsHandedToInterface(Ctor, FieldNameLow) then Continue;
+
           if not FreeFound then
           begin
             F            := TLeakFinding.Create;
