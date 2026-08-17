@@ -25,6 +25,14 @@ type
     // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
     [Test] procedure AsciiStringLiteralCast_NotReported;
     [Test] procedure MemberTextCast_Reported;
+    // --- Waechter VOR dem B2-Umbau (2026-08-17) ---
+    // Alle Tests darueber benutzen einen RHS aus GENAU EINEM Cast, der auf
+    // ')' endet. Damit koennen sie nicht sehen, ob ein kuenftiger
+    // Cast-Zerleger den Operanden nur dann findet, wenn der Cast den ganzen
+    // Ausdruck ausmacht. Die drei hier haben Trailing-Tokens.
+    [Test] procedure CastWithTrailingConcat_NotReported;
+    [Test] procedure TwoCastsConcatenated_NotReported;
+    [Test] procedure LiteralCastWithTrailingConcat_NotReported;
   end;
 
 implementation
@@ -210,6 +218,73 @@ begin
     'Unicode member (.Text) -> AnsiString is a genuine lossy cast - must still fire');
   finally F.Free; end;
 end;
+// ============================================================
+// Waechter VOR dem B2-Umbau (2026-08-17)
+//
+// Der Detektor laeuft ueber nkAssign.TypeRef, und TypeRef ist der GESAMTE
+// rechte Ausdruck inklusive '+'-Verkettungen (uParser2.pas:2909). Der
+// Bestands-Zerleger ExtractCastOperand nimmt deshalb die ERSTE '(' bis zu
+// ihrem balancierten Partner und ignoriert, was dahinter steht
+// (uUnicodeToAnsiCast.pas:158, :189).
+//
+// Ein Zerleger, der stattdessen verlangt, dass der Cast den GANZEN Ausdruck
+// ausmacht ('letztes Zeichen ist )'), liefert hier einen leeren Operanden -
+// und ein leerer Operand passiert weder IsAsciiStringLiteral (:204) noch
+// OperandIsAsciiSafe (:221). Die Regel wuerde also FUNDE GEWINNEN.
+//
+// Die sieben Cast-Tests darueber koennen das nicht sehen: sie benutzen alle
+// einen RHS aus genau einem Cast, der auf ')' endet. Diese drei hier sind
+// der fehlende Waechter. Am gebauten Stand vom 17.08. gemessen: 0 Funde.
+// ============================================================
+
+procedure TTestUnicodeToAnsiCast.CastWithTrailingConcat_NotReported;
+// Protokoll-/Logging-Idiom (Indy, Alcinoe, mORMot): Cast mit ASCII-sicherem
+// Operanden, danach folgt noch etwas im Ausdruck.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(N: Integer);'#13#10 +
+  'var a: AnsiString;'#13#10 +
+  'begin a := AnsiString(IntToStr(N)) + '';''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnicodeToAnsiCast),
+    'IntToStr ist ASCII-sicher - ein Trailing-Ausdruck aendert daran nichts');
+  finally F.Free; end;
+end;
+
+procedure TTestUnicodeToAnsiCast.TwoCastsConcatenated_NotReported;
+// Haerter: die LETZTE ')' des Ausdrucks schliesst nicht die ERSTE '('.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(A, B: Integer);'#13#10 +
+  'var s: AnsiString;'#13#10 +
+  'begin s := AnsiString(IntToStr(A)) + AnsiString(IntToStr(B)); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnicodeToAnsiCast),
+    'beide Operanden sind ASCII-sicher - die Klammerbilanz des Gesamtausdrucks' +
+    ' darf keine Rolle spielen');
+  finally F.Free; end;
+end;
+
+procedure TTestUnicodeToAnsiCast.LiteralCastWithTrailingConcat_NotReported;
+// Dieselbe Falle fuer den Literal-Pfad: die Apostrophe des Operanden
+// muessen erhalten bleiben, sonst faellt IsAsciiStringLiteral durch.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var a: AnsiString;'#13#10 +
+  'begin a := AnsiString(''literal'') + '';''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnicodeToAnsiCast),
+    'ASCII-Literal bleibt ASCII-Literal, auch mit Trailing-Ausdruck');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestUnicodeToAnsiCast);
 
