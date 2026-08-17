@@ -308,6 +308,10 @@ type
     [Test] procedure Field_OwnerChainReachesSelf_NoFinding;
     [Test] procedure Field_OwnerChainEndsAtNil_StillReported;         // TP-Gegenprobe
     [Test] procedure Field_OwnerChainOnPlainObjectClass_StillReported; // TP-Gegenprobe
+    // FP-Gate 2026-08-17: Feld an ein Interface uebergeben = Refcount traegt
+    // die Ownership; ein Free im Destroy waere ein Double-Free.
+    [Test] procedure FieldHandedToInterface_NotReported;
+    [Test] procedure FieldNotHandedToInterface_StillReported;
   end;
 
 implementation
@@ -5410,6 +5414,82 @@ begin
     // die er steht.
     Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkMemoryLeak),
       'Member-Zugriff im Ctor-Argument ist kein Ownership-Transfer');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.FieldHandedToInterface_NotReported;
+// Der Konstruktor gibt das Objekt an die Refcount ab; freigegeben wird ueber
+// das Nil-Setzen des Interface-Feldes. Ein Free im Destroy waere ein
+// Double-Free - der Fund waere also nicht nur unnoetig, sondern seine
+// Befolgung schaedlich.
+//
+// Bis 2026-08-17 war diese Klasse fuer FELDER offen: das Praedikat
+// TLeakDetector2.IsHandedToInterface existiert seit 2026-07-19, wurde aber
+// nur auf den Pfaden fuer lokale Variablen gerufen.
+//
+// Zur Fixture: der Feldtyp ist TStringList, weil der Detektor nur Klassen
+// meldet, die er als leck-faehig kennt - mit einer erfundenen Klasse waere
+// dieser Test gruen, OHNE das Gate zu beruehren. Der Interface-Cast ist
+// entsprechend rein textuell (der Detektor typprueft nicht); den Beweis,
+// dass die Fixture ueberhaupt meldefaehig ist, fuehrt der Waechter darunter
+// mit derselben Klasse.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TFoo = class'#13#10+
+  '  FList: TStringList;'#13#10+
+  '  FIntf: IFoo;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TFoo.Create;'#13#10+
+  'begin'#13#10+
+  '  FList := TStringList.Create;'#13#10+
+  '  FIntf := FList as IFoo;'#13#10+
+  'end;'#13#10+
+  'destructor TFoo.Destroy;'#13#10+
+  'begin'#13#10+
+  '  FIntf := nil;'#13#10+
+  '  inherited;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Feld an Interface uebergeben - der Refcount gibt frei, kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.FieldNotHandedToInterface_StillReported;
+// WAECHTER, und zugleich der Beleg, dass die Fixture oben ueberhaupt
+// meldefaehig ist: derselbe AUFBAU (Namen variiert, sonst waere es ein
+// DuplicateBlock-Fund) - nur ohne den Interface-Cast, und schon meldet er.
+// Damit ist die 0 im Test darueber dem Gate zuzuschreiben, nicht der Fixture.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TBar = class'#13#10+
+  '  FItems: TStringList;'#13#10+
+  '  FHandle: IFoo;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TBar.Create;'#13#10+
+  'begin'#13#10+
+  '  FItems := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'destructor TBar.Destroy;'#13#10+
+  'begin'#13#10+
+  '  FHandle := nil;'#13#10+
+  '  inherited;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'ohne Interface-Uebergabe bleibt das Feld ein Leak');
   finally F.Free; end;
 end;
 
