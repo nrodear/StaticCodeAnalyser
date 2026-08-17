@@ -77,6 +77,13 @@ function ReduceToBareTypeLow(const TypeRef: string): string;
 
 implementation
 
+// B1 (2026-08-16): das Teilbaum-Maximum liegt zentral in uAstSpans.
+// Die hier abgeloeste lokale DeepMaxLine war REKURSIV und ohne
+// nil-Pruefung; das Primitiv ist iterativ und liefert denselben Wert,
+// solange keine Zeile negativ ist (Beleg im Kopf von uAstSpans).
+uses
+  uAstSpans;
+
 const
   // Gleitkomma - fuer diese gilt Float-Equality-Unsicherheit (SCA144).
   FLOAT_TYPES : array[0..9] of string = (
@@ -159,17 +166,6 @@ begin
   Result := LowerCase(Result);
 end;
 
-function DeepMaxLine(N: TAstNode): Integer;
-var Child: TAstNode; Sub: Integer;
-begin
-  Result := N.Line;
-  for Child in N.Children do
-  begin
-    Sub := DeepMaxLine(Child);
-    if Sub > Result then Result := Sub;
-  end;
-end;
-
 { TTypeResolver.TMethodScope }
 
 constructor TTypeResolver.TMethodScope.Create;
@@ -230,7 +226,7 @@ var
 begin
   Sc := TMethodScope.Create;
   Sc.LineStart := M.Line;
-  Sc.LineEnd   := DeepMaxLine(M);
+  Sc.LineEnd   := TAstSpans.SubtreeMaxLine(M);
 
   // Params + lokale Vars des Method-Subtrees. FindAll ist rekursiv - bei nested
   // routines landen deren Locals ebenfalls hier; das ist harmlos, weil der
