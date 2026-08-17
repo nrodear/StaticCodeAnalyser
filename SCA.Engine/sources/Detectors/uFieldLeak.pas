@@ -145,21 +145,55 @@ end;
 
 class function TFieldLeakDetector.IsCreatedWithComponentOwner(
   MethodNode: TAstNode; const FieldNameLow: string): Boolean;
-// Sucht im Konstruktor 'FField := X.Create(Self|AOwner|Owner[, ...])'.
-// Whitespace-tolerant - der Lexer normalisiert ohnehin Whitespace, aber
-// die Pattern-Pruefung schaut auf das exakte Token nach '.create('.
-const
-  OWNER_PATS : array[0..5] of string = (
-    '.create(self)',   '.create(self,',
-    '.create(aowner)', '.create(aowner,',
-    '.create(owner)',  '.create(owner,'
-  );
+// Sucht im Konstruktor 'FField := X.Create(<Owner-Ausdruck>[, ...])' und
+// prueft, ob das ERSTE Argument im Component-Tree wurzelt.
+//
+// Bis 2026-08-17 stand hier eine Liste aus sechs festen Mustern
+// ('.create(self)', '.create(aowner,' ...). Sie traf nur den nackten
+// Bezeichner und liess jede PFADFORM durch, obwohl sie denselben Baum
+// bezeichnet - kanonisch 'TPopupMenu.Create(AOwner.Owner)'. Ein Owner ist
+// ein Owner, egal ueber wieviele Punkte man ihn erreicht: der Empfaenger
+// traegt das Kind in seine Components-Liste ein und gibt es in seinem
+// Destruktor frei.
+//
+// Geprueft wird deshalb der WURZELBEZEICHNER des ersten Arguments, nicht
+// der ganze Text. Die sechs Altmuster sind darin exakt enthalten (bei
+// '(self)' ist die Wurzel 'self'); neu dazu kommen nur Pfade.
+//
+// Bewusst ENG gehalten - das ist eine Unterdrueckung im Error-Tier:
+//   * nur die drei Wurzeln self/aowner/owner, keine Namensheuristik auf
+//     '*owner*' (sonst faengt 'ownerless' oder 'FOwnerForm' mit),
+//   * nur das ERSTE Argument (das ist die Owner-Position von
+//     TComponent.Create),
+//   * Feldwurzeln wie 'TTimer.Create(FPanel)' bleiben ausdruecklich
+//     DRAUSSEN - ob FPanel selbst freigegeben wird, entscheidet
+//     IsOwnedByFreedSiblingField bzw. IsOwnedByComponentChain, und diese
+//     Frage gehoert nicht hierher.
 var
   Assigns : TList<TAstNode>;
   A       : TAstNode;
   LHSLow  : string;
   TypeLow : string;
-  i       : Integer;
+  RootLow : string;
+
+  function FirstArgRootLow(const RhsLow: string): string;
+  // Wurzelbezeichner des ersten Arguments von '.create(' - also alles bis
+  // zum ersten '.', '[', '^', ',' oder ')'. Leer, wenn es kein '.create('
+  // gibt oder die Klammer sofort schliesst (parameterloser Ctor).
+  var
+    p, i : Integer;
+  begin
+    Result := '';
+    p := Pos('.create(', RhsLow);
+    if p = 0 then Exit;
+    i := p + Length('.create(');
+    while (i <= Length(RhsLow)) and (RhsLow[i] = ' ') do Inc(i);
+    p := i;
+    while (i <= Length(RhsLow)) and
+          (TLeakDetector2.IsIdentChar(RhsLow[i])) do Inc(i);
+    Result := Copy(RhsLow, p, i - p);
+  end;
+
 begin
   Result := False;
   Assigns := MethodNode.FindAll(nkAssign);
@@ -170,9 +204,9 @@ begin
       if (LHSLow <> FieldNameLow) and
          (LHSLow <> 'self.' + FieldNameLow) then Continue;
       TypeLow := A.TypeRef.ToLower;
-      for i := Low(OWNER_PATS) to High(OWNER_PATS) do
-        if Pos(OWNER_PATS[i], TypeLow) > 0 then
-          Exit(True);
+      RootLow := FirstArgRootLow(TypeLow);
+      if (RootLow = 'self') or (RootLow = 'aowner') or (RootLow = 'owner') then
+        Exit(True);
     end;
   finally
     Assigns.Free;

@@ -312,6 +312,9 @@ type
     // die Ownership; ein Free im Destroy waere ein Double-Free.
     [Test] procedure FieldHandedToInterface_NotReported;
     [Test] procedure FieldNotHandedToInterface_StillReported;
+    // Owner-Gate 2026-08-17: der Owner darf ueber einen PFAD kommen.
+    [Test] procedure Field_OwnerViaPath_NoFinding;
+    [Test] procedure Field_OwnerLookalikeIdent_StillReported;
   end;
 
 implementation
@@ -5492,5 +5495,73 @@ begin
     'ohne Interface-Uebergabe bleibt das Feld ein Leak');
   finally F.Free; end;
 end;
+
+
+procedure TTestFieldLeak.Field_OwnerViaPath_NoFinding;
+// Bis 2026-08-17 kannte das Gate nur sechs feste Muster und traf damit nur
+// den nackten Bezeichner: 'Create(AOwner)' ja, 'Create(AOwner.Owner)' nein.
+// Ein Owner ist aber ein Owner, egal ueber wieviele Punkte man ihn
+// erreicht - der Empfaenger traegt das Kind in seine Components-Liste ein
+// und gibt es in seinem Destruktor frei. Kanonische Form aus dem Korpus:
+// TPopupMenu.Create(AOwner.Owner) - hier mit TStringList nachgebaut,
+// weil der Detektor nur Klassen meldet, die er als leck-faehig kennt;
+// mit TPopupMenu waere dieser Test gruen, OHNE das Gate zu beruehren.
+// Gegen die gebaute Engine gemessen: diese Fixture meldet HEUTE (Error),
+// die Variante mit nacktem Create(AOwner) meldet nicht.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TFoo = class'#13#10+
+  '  FStuff: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create(AOwner: TComponent);'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TFoo.Create(AOwner: TComponent);'#13#10+
+  'begin'#13#10+
+  '  FStuff := TStringList.Create(AOwner.Owner);'#13#10+
+  'end;'#13#10+
+  'destructor TFoo.Destroy;'#13#10+
+  'begin'#13#10+
+  '  inherited;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Owner ueber einen Pfad ist derselbe Component-Tree');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_OwnerLookalikeIdent_StillReported;
+// WAECHTER gegen eine Namensheuristik: geprueft wird der WURZELBEZEICHNER
+// als GANZES, nicht ein Teilstring. 'ownerless' faengt mit 'owner' an und
+// ist trotzdem kein Owner - haette das Gate hier ein Pos() benutzt, waere
+// dieser Leak stumm.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TBaz = class'#13#10+
+  '  FStuff: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create(ownerless: TComponent);'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TBaz.Create(ownerless: TComponent);'#13#10+
+  'begin'#13#10+
+  '  FStuff := TStringList.Create(ownerless);'#13#10+
+  'end;'#13#10+
+  'destructor TBaz.Destroy;'#13#10+
+  'begin'#13#10+
+  '  inherited;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'ein Bezeichner, der nur mit owner anfaengt, ist kein Owner');
+  finally F.Free; end;
+end;
+
 
 end.
