@@ -6,6 +6,102 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased] - A false-positive pass over the real-world corpus
+
+The first full false-positive audit of the rule set (all 142 active rules,
+3162 verdicts read at source across a 24-repository corpus) turned into a
+round of fixes. Eight rules report less now, and none of them because a
+threshold was loosened -- each one was making a claim it could not support.
+Corpus effect: 801,270 findings to 800,909. That net figure hides the real
+movement: 522 findings removed, 161 added, because several parser fixes
+recovered routine bodies the parser had been dropping.
+
+Numbers below are per-rule counts on that corpus, not projections.
+
+### Changed -- rules that stopped claiming what they could not prove
+
+- **SCA047 `SelfAssignment` compares storage locations instead of text**
+  (134 to 22 findings). It used to flag any assignment whose two sides
+  spelled the same, which made every `Foo := Foo` a finding regardless of
+  what the names resolved to -- a property with a setter, a parameter
+  shadowing a field, two different instances. It now resolves the
+  assignment target and reports only when it can prove both sides name the
+  same slot; when it cannot, it stays silent. All 54 sampled findings that
+  the audit had rated false are gone.
+- **SCA011 `DeadCode` understands a conditionally compiled terminator**
+  (132 to 59). Code after `Exit` is unreachable -- unless the `Exit` sits
+  inside `{$IFDEF}` and the build that matters does not compile it. The
+  detector now tracks conditional ranges and does not call the following
+  statements dead when the terminator itself is conditional.
+- **SCA153 `UnpairedLock` stops its lookahead at the routine boundary**
+  (255 to 189). The window that searched for the matching release ran past
+  the `end;` of the routine and found the release of the *symmetric
+  neighbour* -- `TOSLock.Lock` was paired with `TOSLock.UnLock`, and the
+  wrapper pair was reported as an unprotected lock. The window is now
+  clamped at the next routine header.
+- **SCA132 `ExceptionTooGeneral` reads the calling convention from the
+  declaration** (1275 to 1170). A routine exported with a foreign ABI
+  (`stdcall`/`cdecl` callbacks) *must* catch broadly -- letting a Delphi
+  exception cross a foreign frame is undefined behaviour. The detector
+  already exempted those, but only when the convention appeared on the
+  implementation header; when it was declared on the class member and
+  omitted at the implementation, the exemption was missed.
+- **SCA129 `UnicodeToAnsiCast` no longer flags `UTF8String(...)`**
+  (523 to 480). The rule is about casts that silently drop characters
+  outside the active code page. `UTF8String` encodes the full Unicode
+  range -- the cast is lossless, so there is nothing to warn about.
+- **SCA115 `HttpInsteadOfHttps` parses the host and exempts reserved
+  documentation addresses** (193 to 169). Host extraction used to be
+  prefix matching, so a URL whose *path* contained a second scheme
+  confused it; and `example.com`, `example.org` and the RFC-reserved
+  documentation ranges are not endpoints anyone can be attacked through.
+  Private RFC1918 addresses are still reported -- a plaintext endpoint on
+  the local network is a real exposure.
+- **SCA001 `MemoryLeak` recognises three more ways a field is released**
+  (788 to 742). A field handed to an interface-typed sink is released by
+  reference counting; a field created with an owner reached through an
+  expression (`Create(Self.Owner)`, not just the six literal spellings the
+  old check knew) is freed by that owner; and a field released through its
+  property alias (`property Items read FItems` plus `Items.Free`) is
+  released, even though the destructor never spells the field name. Each
+  of the 38 findings the last gate removed was verified at source.
+- **SCA121 `RoutineResultUnassigned` gained accuracy without being touched**
+  (126 to 101). It benefits from the parser fixes below: routines whose
+  bodies were being dropped are now parsed, so the assignment to `Result`
+  is visible. `SCA054 UnusedParameter` improved the same way (13,974 to
+  13,952).
+
+### Fixed -- parser
+
+- **`Exit(...)` arguments are scanned bracket-balanced.** An `Exit` whose
+  argument contained a `;` inside brackets ended the scan early and the
+  parser lost the rest of the routine.
+- **`raise ... at <address>` is consumed as part of the raise.** The `at`
+  clause used to be left behind as a statement of its own.
+- **`goto` and labels no longer derail the statement parser**, including
+  the case where a label is named after a keyword (`label Exit;` lexes as
+  the `Exit` token, not an identifier).
+- **`Break` and `Continue` are accepted as identifiers** where the code
+  uses them as names rather than as statements.
+
+Together these recovered routine bodies the parser had been discarding.
+That is where the 161 added findings come from -- rules whose metrics are
+computed from the body see the whole body again: `SCA014 MagicNumber` +52,
+`SCA012 LongMethod` +28, `SCA018 DeepNesting` +21, `SCA176
+CognitiveComplexity` +16, `SCA022 CyclomaticComplexity` +15. Every added
+finding was checked against recomputable metrics (line counts, nesting
+depth, complexity) and matched.
+
+### Internal
+
+- **`uAstSpans`** collects the "greatest line number in this subtree"
+  computation that had been copied into seven detectors; five of them now
+  call the shared primitive. The AST walk is iterative rather than
+  recursive, so deeply nested files no longer risk the stack. Findings are
+  byte-identical across the corpus before and after.
+
+---
+
 ## [v0.9.16] - 2026-08-13 - A quiet clipboard, honest filters, and a text-only hint
 
 > Note: v0.9.15 was published for a few hours on the same day and then

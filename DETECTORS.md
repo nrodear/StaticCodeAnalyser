@@ -480,3 +480,44 @@ Recommended opt-in sets by framework (add only what your project uses):
 | SwagDoc builders | `AddParameter,AddType,AddLocalVariable` (parent node owns the child) | `OwnershipSinks=AddParameter,AddType,AddLocalVariable` |
 
 Rule of thumb: if you cannot point at the line in the callee that frees the argument, do **not** list it.
+
+## 🧷 SCA001 — when a *field* counts as released
+
+The whitelist above is about objects in a local variable. A field is judged
+differently: SCA001 pairs the constructor against the destructor, and reports
+a field that the constructor creates and the destructor does not release.
+"Release" is deliberately broader than a literal `FField.Free`, because
+Delphi offers several idiomatic ways to hand an object's lifetime elsewhere.
+The detector stays silent when it can establish one of these:
+
+| Path | Shape | Why it is not a leak |
+|---|---|---|
+| Direct | `FField.Free` / `FreeAndNil(FField)` / `FField.Destroy` | the obvious one |
+| Owner | `TFoo.Create(Self)`, `Create(AOwner)`, `Create(Self.Owner)` | a `TComponent` owner frees its children; the first constructor argument is resolved as an expression, so an owner reached through a path counts too |
+| Interface | the field is passed to an interface-typed sink | reference counting releases it; an object-typed field never does, so the distinction matters |
+| Local alias | `L := FField; FField := nil; L.Free` | the same instance, released through a local |
+| Property alias | `property Items read FItems` plus `Items.Free` in the destructor | the same instance, released through its public name |
+| Cleanup routine | the destructor delegates to a `Clear`/`Cleanup`-style method that releases the field | the release is one call away |
+
+Two of these are conventions rather than proofs, and it is worth knowing
+which:
+
+- The **property alias** is matched by name — a field `FItems` and a
+  property `Items` declared on the same class. The parser discards the
+  `read`/`write` specifier, so the detector cannot verify that `Items`
+  really reads `FItems`. It requires all three of: the field starts with
+  `F`, the class genuinely declares a property with the remaining name, and
+  the destructor releases exactly that name. A property that breaks the
+  convention *and* is released under the wrong name would be missed. All 38
+  findings this path removed from the audit corpus were checked at source
+  and every one was a genuine false positive.
+- The **owner** path trusts that the first constructor argument is an owner
+  when it resolves to `Self`, `AOwner` or `Owner`. It does not verify that
+  the constructed class is a `TComponent` descendant.
+
+If a field of yours is reported and you believe it is released, the fastest
+answer is usually that the release happens somewhere the detector cannot
+follow — in a method called by the destructor through an interface, or in a
+different unit. Suppress it at the site with `// noinspection MemoryLeak`
+rather than widening `OwnershipSinks`, which is scoped to whole routine
+names.

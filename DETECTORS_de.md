@@ -480,3 +480,44 @@ Empfohlene Opt-in-Sätze nach Framework (nur ergänzen, was das Projekt nutzt):
 | SwagDoc-Builder | `AddParameter,AddType,AddLocalVariable` (Elternknoten besitzt das Kind) | `OwnershipSinks=AddParameter,AddType,AddLocalVariable` |
 
 Faustregel: Wenn du nicht die Zeile im Aufgerufenen zeigen kannst, die das Argument freigibt, dann liste es **nicht**.
+
+## 🧷 SCA001 — wann ein *Feld* als freigegeben gilt
+
+Die Whitelist oben betrifft Objekte in einer lokalen Variablen. Ein Feld wird
+anders beurteilt: SCA001 paart Konstruktor und Destruktor und meldet ein Feld,
+das der Konstruktor erzeugt und der Destruktor nicht freigibt. "Freigeben" ist
+dabei bewusst weiter gefasst als ein woertliches `FField.Free`, weil Delphi
+mehrere idiomatische Wege kennt, die Lebensdauer eines Objekts abzugeben. Der
+Detektor schweigt, wenn er einen davon nachweisen kann:
+
+| Weg | Gestalt | Warum es kein Leck ist |
+|---|---|---|
+| Direkt | `FField.Free` / `FreeAndNil(FField)` / `FField.Destroy` | der offensichtliche Fall |
+| Owner | `TFoo.Create(Self)`, `Create(AOwner)`, `Create(Self.Owner)` | ein `TComponent`-Owner gibt seine Kinder frei; das erste Konstruktor-Argument wird als Ausdruck aufgeloest, ein ueber einen Pfad erreichter Owner zaehlt also mit |
+| Interface | das Feld wird an eine interface-typisierte Senke uebergeben | die Referenzzaehlung gibt es frei; ein objekt-typisiertes Feld tut das nie, deshalb ist die Unterscheidung wichtig |
+| Lokaler Alias | `L := FField; FField := nil; L.Free` | dieselbe Instanz, freigegeben ueber eine Lokale |
+| Property-Alias | `property Items read FItems` plus `Items.Free` im Destruktor | dieselbe Instanz, freigegeben ueber ihren oeffentlichen Namen |
+| Aufraeum-Routine | der Destruktor delegiert an eine `Clear`/`Cleanup`-Methode, die das Feld freigibt | die Freigabe ist einen Aufruf entfernt |
+
+Zwei davon sind Konventionen und keine Beweise; es lohnt zu wissen, welche:
+
+- Der **Property-Alias** wird ueber den Namen zugeordnet — ein Feld `FItems`
+  und eine Property `Items` derselben Klasse. Der Parser verwirft die
+  `read`/`write`-Klausel, der Detektor kann also nicht pruefen, ob `Items`
+  wirklich `FItems` liest. Er verlangt deshalb alle drei Bedingungen: das
+  Feld beginnt mit `F`, die Klasse deklariert die Property mit dem Restnamen
+  wirklich, und der Destruktor gibt genau diesen Namen frei. Eine Property,
+  die die Konvention bricht *und* unter dem falschen Namen freigegeben wird,
+  wuerde uebersehen. Alle 38 Funde, die dieser Weg im Audit-Korpus entfernt
+  hat, wurden am Quelltext geprueft — jeder einzelne war ein echter
+  Fehlalarm.
+- Der **Owner**-Weg vertraut darauf, dass das erste Konstruktor-Argument ein
+  Owner ist, wenn es zu `Self`, `AOwner` oder `Owner` aufloest. Er prueft
+  nicht, ob die erzeugte Klasse von `TComponent` abstammt.
+
+Wird ein Feld gemeldet, das du fuer freigegeben haeltst, liegt es meist daran,
+dass die Freigabe an einer Stelle passiert, der der Detektor nicht folgen kann
+— in einer vom Destruktor ueber ein Interface gerufenen Methode oder in einer
+anderen Unit. Unterdruecke sie dann an der Fundstelle mit
+`// noinspection MemoryLeak` statt `OwnershipSinks` zu erweitern; das wirkt
+auf ganze Routinennamen.
