@@ -357,6 +357,7 @@ Special-case finding (no code defect): the file could not be loaded or the lexer
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `dead-code`, `uses-cleanup` |
+| Config | `[Detectors] UsesCheck` |
 | Detector | `uUnusedUses.pas` |
 
 Heuristic: scans for any identifier from the used unit. False positives possible for units that only register classes / initialize global state via initialization sections.
@@ -475,7 +476,7 @@ WriteLn('never reached');
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `maintainability`, `complexity` |
-| Config | `[Detectors] LongMethodMax` |
+| Config | `[Detectors] LongMethodMaxBodyLines, LongMethodMaxStatements` |
 | Detector | `uLongMethod.pas` |
 
 Long methods are hard to test and understand. Threshold configurable; consider extracting helper methods or splitting responsibilities.
@@ -491,7 +492,7 @@ Long methods are hard to test and understand. Threshold configurable; consider e
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `api-design` |
-| Config | `[Detectors] LongParamMax` |
+| Config | `[Detectors] LongParamListMaxParams` |
 | Detector | `uLongParamList.pas` |
 
 High parameter counts indicate the method is doing too much. Consider grouping related parameters into a record or class.
@@ -515,6 +516,7 @@ procedure SaveOrder(const Order: TOrder);
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `maintainability` |
+| Config | `[Detectors] MagicNumberTrivials` |
 | Detector | `uMagicNumbers.pas` |
 
 Numeric literals in business logic are unexplained. Use named constants for readability and single-point-of-change.
@@ -539,7 +541,6 @@ if RetryCount > MAX_RETRIES then ...
 |---|---|
 | Severity | Hint | Type | Code Duplication |
 | Tags | `maintainability` |
-| Config | `[Detectors] DuplicateStringMin` |
 | Detector | `uDuplicateString.pas` |
 
 Repeated strings are change-coupling hazards (typo in one place silently diverges from the others). Extract to a const, especially for user-facing messages.
@@ -593,7 +594,7 @@ LogFile := TPath.Combine(GetEnvironmentVariable('LOGDIR'), 'app.log');
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `complexity` |
-| Config | `[Detectors] DeepNestingMax` |
+| Config | `[Detectors] DeepNestingMaxDepth` |
 | Detector | `uDeepNesting.pas` |
 
 Deep nesting hurts readability and indicates the method is doing too much. Use guard clauses (early `Exit`) or extract inner blocks into helper methods.
@@ -700,7 +701,7 @@ McCabe complexity counts decision points (1 base + `if` + `case`-arm + `for`/`wh
 |---|---|
 | Severity | Warning | Type | Code Smell |
 | Tags | `custom`, `user-defined` |
-| Config | `analyser-rules.yml` |
+| Config | `[Detectors] CustomRulesFile` |
 | Detector | `uCustomRuleDetector.pas` |
 
 Generic kind for user-defined regex / AST rules loaded at runtime from `analyser-rules.yml`. Specific rule ID, message, and severity come from the YAML entry; this catalog entry is a placeholder so the dispatcher and SARIF exporter have stable metadata.
@@ -961,7 +962,6 @@ VCL serialisation tolerates duplicate `TabOrder` but tab navigation becomes orde
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `dfm`, `style-guide` |
-| Config | `[Components] ForbiddenClasses` |
 | Detector | `uDfmForbiddenClass.pas` |
 
 Style-guide enforcement for project-specific class bans (`TQuery`, `TLabel` if you have a `TStyledLabel`, ...). Detector stays silent unless the project sets `[Components] ForbiddenClasses=...` in `analyser.ini`.
@@ -1030,7 +1030,6 @@ Layered layout (Form > Panel > Group > Controls) makes resizing, DPI-scaling, an
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `dfm`, `design` |
-| Config | `[Detectors] DfmGodHandlerMaxEvents` |
 | Detector | `uDfmGodHandler.pas` |
 
 Spaghetti indicator: one handler dispatching dozens of events is hard to read, hard to change, and almost always has cohesion problems. Split by responsibility.
@@ -1305,7 +1304,6 @@ VCL silently performs a Cartesian product instead of the intended Master-Detail 
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `dfm`, `architecture` |
-| Config | `[Detectors] DfmDataModuleSplitMin` |
 | Detector | `uDfmDataModuleSplitHint.pas` |
 
 Aggregate of multiple [SCA039](#sca039) (`DfmDbInUiForm`) findings on the same form - emitted as a single refactor hint instead of N individual findings.
@@ -1424,6 +1422,7 @@ end;
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `formatting`, `style` |
+| Config | `[Detectors] MaxLineLength` |
 | Detector | `uTooLongLine.pas` |
 
 Lines over 120 chars don't fit in a standard side-by-side code review (2*120+gutter) and overflow 16:9 monitor thirds. SonarDelphi default and Sun/Java style guides agree on 120. Threshold currently hardcoded; planned config key '[Detectors] MaxLineLength'.
@@ -2165,6 +2164,7 @@ ProtectedDoStuff;  // helper wraps the inner try
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `complexity`, `open-closed` |
+| Config | `[Detectors] MaxCaseBranches` |
 | Detector | `uCaseStatementSize.pas` |
 
 A `case` with many branches usually hides a polymorphism or strategy pattern. The code would be more open/closed (new behavior = new class, not new branch) and the file shorter when each branch becomes its own class method or a `TDictionary<Key, TProc>` entry. Matches SonarDelphi communitydelphi:CaseStatementSize. Threshold currently hardcoded; `[Detectors] MaxCaseBranches` is planned.
@@ -4311,7 +4311,6 @@ WriteLn('hello');
 |---|---|
 | Severity | **Error** | Type | Bug |
 | Tags | `reliability`, `memory-safety`, `uninit` |
-| Config | `[Detectors] UninitVarEnabled` |
 | Detector | `uUninitVar.pas` |
 
 Local variables of non-managed types (Integer, Boolean, Pointer, record, class instance) start with undefined contents. Reading them before assignment yields garbage values or an access violation - a classic crash bug. The detector walks each method's statements in source order, tracks first-write vs first-read per local variable, and flags reads that precede any write. A conservative branch model treats writes inside if/case/try-blocks as 'conditional' (fcMedium confidence; the FP rate vs full path-sensitivity is the documented trade-off, see Konzept_SCA166_UninitVar.md §5.C). Known writers from the RTL (Read, ReadLn, FillChar, Move, ZeroMemory, Initialize, New, GetMem) are detected via allowlist; other var/out-parameter calls are treated pessimistically as Reads (false-negatives but no false-positives). Pascal's auto-initialised managed types (string, dynamic array, interface) are skipped unless opted-in via INI. Methods larger than configurable caps (200 local vars / 5000 statements, default) skip analysis to avoid pathological worst-case cost.
@@ -4348,7 +4347,6 @@ end;
 |---|---|
 | Severity | Warning | Type | Bug |
 | Tags | `reliability`, `randomness`, `seed` |
-| Config | `[Detectors] InsecureRandomEnabled` |
 | Detector | `uInsecureRandom.pas` |
 
 Delphi's Random function uses an internal seed that defaults to 0 at program start. Until Randomize is called once (typically at the start of program execution), Random returns the same sequence of values every time the program is launched. The detector walks the AST for all calls and skips the entire unit if any Randomize invocation is present anywhere. Otherwise every Random / RandomRange / RandomFrom call is flagged. Note: Randomize calls in other units (e.g. in a use'd unit's initialization block) are not detected; suppress with `// noinspection InsecureRandom` if applicable. For cryptographic use cases (token generation, salts, password reset codes) Random is unsuitable regardless of Randomize - use TBytes from a CSPRNG (e.g. CryptGenRandom on Windows, /dev/urandom on POSIX).
@@ -4382,7 +4380,6 @@ end;
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `control-flow`, `default-case` |
-| Config | `[Detectors] DefaultCaseInCaseStatementEnabled` |
 | Detector | `uDefaultCaseInCaseStatement.pas` |
 
 A case statement without an else branch silently ignores all values that are not explicitly listed. When the case expression takes one of these unhandled values, no action is taken and no error is raised, which can mask logic bugs (especially when new enum values are added later and the case statements are not updated). Add `else ;` for an intentional no-op (which documents the decision) or a default handler that raises an exception / logs / asserts.
@@ -4413,7 +4410,6 @@ end;
 |---|---|
 | Severity | Warning | Type | Bug |
 | Tags | `reliability`, `assert`, `side-effect` |
-| Config | `[Detectors] AssertWithSideEffectEnabled` |
 | Detector | `uAssertWithSideEffect.pas` |
 
 The Delphi compiler removes Assert calls entirely from Release builds (unless DCC_Assertions is on). If the asserted expression contains a function call with side effects (allocation, state mutation, I/O, counter increment), the side effect disappears too - the Release-only behavior diverges from Debug. The detector flags Assert calls whose argument contains a function-call pattern, after excluding a whitelist of known-pure RTL helpers (Length, Assigned, SizeOf, IntToStr, ...). Move the call out of the Assert and assert on the result instead.
@@ -4437,7 +4433,6 @@ Assert(Ok, 'subsystem init failed');
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `performance`, `string`, `refcount` |
-| Config | `[Detectors] ConstStringParameterEnabled` |
 | Detector | `uConstStringParameter.pas` |
 
 Delphi increments the string's reference count on every call when the parameter is declared without `const`. With `const`, the compiler passes a pure reference and skips the refcount roundtrip. The compiler also forbids assignment to a `const` parameter, which makes the no-mutation contract explicit. For non-mutating string parameters (the overwhelming majority), prefer `const`. The detector flags parameters whose type is `string`/`AnsiString`/`UnicodeString`/`WideString`/`RawByteString`/`ShortString` without `const`/`var`/`out`.
@@ -4460,7 +4455,6 @@ function Hash(const s: string): Integer;
 |---|---|
 | Severity | Warning | Type | Code Smell |
 | Tags | `compiler-directive`, `scope`, `switch` |
-| Config | `[Detectors] CompilerDirectiveScopeEnabled` |
 | Detector | `uCompilerDirectiveScope.pas` |
 
 Delphi compiler-state directives like {$WARNINGS OFF}, {$HINTS OFF}, {$RANGECHECKS OFF}, {$BOOLEVAL OFF}, {$OVERFLOWCHECKS OFF} change the compiler state for everything compiled after them. If the OFF is not paired with a closing ON in the same file, the switch leaks into all subsequent compilation units in the same build, suppressing warnings/hints/checks far outside the intended scope. The detector counts OFF and ON per directive name in the file and reports any directive whose OFF outnumbers ON at end-of-file.
@@ -4490,7 +4484,6 @@ end;
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `naming`, `convention`, `boolean` |
-| Config | `[Detectors] BooleanPropertyNamingEnabled` |
 | Detector | `uBooleanPropertyNaming.pas` |
 
 A Boolean property named like a noun reads ambiguously at call sites (`if X.Active then` vs. `if X.IsActive then`). Prefer a verb-style prefix (`Is`/`Has`/`Can`/`Should`/`Will`) which makes the call site read naturally as a question. The detector flags Boolean properties whose name does not start with one of these prefixes, with a built-in whitelist of established VCL conventions (Enabled, Visible, Active, Checked, Modified, ReadOnly, Selected, Focused, Loaded, Modified, Dirty, ...).
@@ -4513,7 +4506,6 @@ property IsReady: Boolean;
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `performance`, `variant`, `com` |
-| Config | `[Detectors] VariantTypeMisuseEnabled` |
 | Detector | `uVariantTypeMisuse.pas` |
 
 Variant operations route through the COM VarType dispatcher (VarAdd, VarCmp, VarCast, ...) which adds a typing-system roundtrip on every read, write, comparison and conversion. Inside a hot loop this multiplies the cost by the iteration count and can dominate the method's runtime. The detector flags every Variant / OleVariant local variable and parameter in methods that contain at least one for/while/repeat loop. Accepted use cases (COM/OLE bridges, JSON-Variant adapters, Excel automation) are reachable via suppression marker `// noinspection VariantTypeMisuse`.
@@ -4545,7 +4537,6 @@ end;
 |---|---|
 | Severity | Warning | Type | Bug |
 | Tags | `memory-safety`, `leak`, `container` |
-| Config | `[Detectors] TObjectListWithoutOwnershipEnabled` |
 | Detector | `uTObjectListWithoutOwnership.pas` |
 
 TList<T> is a typed container that does NOT own its items - freeing the list does not free the items it holds. When the items are class instances allocated with .Create, they leak on every list-free unless the caller manually iterates and frees each one. The correct container is TObjectList<T> from Generics.Collections, which has OwnsObjects=True by default and frees its items on destruction. The detector walks each method, collects all `TList<T>.Create` assignments (where T is a class-looking identifier), then looks for `<varname>.Add(<T>.Create)` patterns in the same method. Cross-method ownership (Add in a different method than Create) is not tracked.
@@ -4572,7 +4563,6 @@ L.Free; // item freed
 |---|---|
 | Severity | **Error** | Type | Bug |
 | Tags | `concurrency`, `closure`, `loop`, `capture` |
-| Config | `[Detectors] AnonMethodCaptureLoopVarEnabled` |
 | Detector | `uAnonMethodCaptureLoopVar.pas` |
 
 Delphi captures variables by reference in anonymous methods. When the anonymous method is created inside a for-loop and references the loop variable, every closure shares the same reference - by the time the closures run, the loop variable has reached its terminal value and all of them observe that final value. The classic symptom is N parallel threads created in a loop all logging the final iteration number instead of 0..N-1. The detector walks for-statements, extracts the loop variable name (classic `for i :=` or inline `for var i :=`) and scans nkCall / nkAssign descendants for the combination of an `procedure`-keyword (anonymous method start) and a reference to the loop variable. Fix: copy the loop variable to a local immediately before the anonymous method body.
@@ -4637,7 +4627,6 @@ end;
 |---|---|
 | Severity | **Error** | Type | Bug |
 | Tags | `concurrency`, `lifetime`, `thread` |
-| Config | `[Detectors] ThreadFreeOnTerminateWithRefEnabled` |
 | Detector | `uThreadFreeOnTerminateWithRef.pas` |
 
 TThread.FreeOnTerminate := True transfers ownership of the thread instance to itself - the thread frees its own memory in its Execute-then-Destroy lifecycle. The caller MUST drop all references to it immediately (typically by setting the local variable to nil) because there is no synchronization between the caller's next statement and the thread's self-destruction. The detector walks each method, collects every `<var>.FreeOnTerminate := True` assignment with its source line, then finds any subsequent `<var>.<member>` access (call OR assign) in the same method. Per-method scope: cross-method references (Field-held thread accessed in another method) are not tracked.
@@ -4666,7 +4655,6 @@ T := nil;   // drop reference
 |---|---|
 | Severity | **Error** | Type | Vulnerability |
 | Tags | `security`, `owasp-a01`, `cwe-22`, `path-traversal` |
-| Config | `[Detectors] PathTraversalEnabled` |
 | Detector | `uPathTraversal.pas` |
 
 Classical path-traversal vulnerability: user-controlled input flows into a file-system API. An attacker can submit `../../../etc/passwd` or similar to escape the intended directory and read/write arbitrary files. The detector flags expressions that contain both a file-open API token (TFileStream.Create, TFile.OpenRead/WriteText, AssignFile, FileOpen, FileCreate) AND a user-input source token (.Text, .Lines.Text, .Caption, .Value, Request.Params, Sender.Text, ParamStr) AND a `+` operator (string concatenation). The detector is heuristic - no taint tracking - so wrapped sanitizers (e.g. `Sanitize(edPath.Text)`) trigger false positives; suppress via marker if the sanitizer is trusted.
@@ -4690,7 +4678,6 @@ Stream := TFileStream.Create(SafePath, fmOpenRead);
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `test`, `dunitx`, `documentation` |
-| Config | `[Detectors] AttributeIgnoreWithoutReasonEnabled` |
 | Detector | `uAttributeIgnoreWithoutReason.pas` |
 
 DUnitX accepts [Ignore] both as a marker attribute and as [Ignore('reason')]. The marker form skips the test without surfacing WHY it was disabled - the test then drifts unmaintained, often forgotten. Always add a reason string referencing a ticket / external dependency / known limitation so the disable can be triaged.
@@ -4715,7 +4702,6 @@ procedure SomeTest;
 |---|---|
 | Severity | Warning | Type | Code Smell |
 | Tags | `attribute`, `duplication` |
-| Config | `[Detectors] AttributeDuplicateEnabled` |
 | Detector | `uAttributeDuplicate.pas` |
 
 Delphi's attribute model accepts repeated attributes (some, like [TestCase], are intentionally multi-applied with different args). Duplicates with IDENTICAL args are not — they are usually copy-paste leftovers from refactoring. The detector compares (attribute-name, argument-text) pairs and flags identical occurrences in the same attribute group (lines max. 2 apart). Multi-applied attributes with different args (different [TestCase('A','1')] / [TestCase('B','2')]) are correctly NOT flagged.
@@ -4741,7 +4727,6 @@ procedure Foo;
 |---|---|
 | Severity | **Error** | Type | Bug |
 | Tags | `test`, `dunitx`, `compile-error` |
-| Config | `[Detectors] AttributeCategoryWithoutStringEnabled` |
 | Detector | `uAttributeCategoryWithoutString.pas` |
 
 DUnitX's [Category] attribute requires a string argument that is used to group tests for selective execution. Without the argument, the compiler raises a missing-parameter error. Always pass an explicit category name (e.g. 'Slow', 'CI-only', 'Integration').
@@ -4766,7 +4751,6 @@ procedure Foo;
 |---|---|
 | Severity | Warning | Type | Code Smell |
 | Tags | `test`, `dunitx`, `dead-code` |
-| Config | `[Detectors] AttributeTestFixtureWithoutTestsEnabled` |
 | Detector | `uAttributeTestFixtureWithoutTests.pas` |
 
 DUnitX discovers test classes by scanning for [TestFixture] attributes. A fixture without any [Test] method appears in the test tree but contributes zero executable tests - typically a leftover from refactoring (tests deleted, fixture not). The detector walks file text with a simple state machine: enters fixture-window on [TestFixture] line, watches for [Test] inside, exits on the next top-level `end;`. If no [Test] was seen, the [TestFixture] line is flagged. [SetupFixture]-only fixtures (used to prepare shared state for other fixtures) are a known false-positive case - suppress with `// noinspection AttributeTestFixtureWithoutTests`.
@@ -4795,7 +4779,6 @@ end;
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `attribute`, `readability` |
-| Config | `[Detectors] AttributeMisalignmentEnabled` |
 | Detector | `uAttributeMisalignment.pas` |
 
 The Delphi compiler attaches an attribute to the syntactically next member regardless of intervening blank lines. Visually however, an attribute separated from its member by a blank line is easy to overlook - the reader may not realize the attribute applies to the member below. This is also a frequent symptom of refactoring where a member was moved/deleted but the attribute was left behind. The detector flags attribute lines whose next non-blank line is more than one line away.
