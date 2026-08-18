@@ -56,8 +56,20 @@ BOLD_SEVERITIES = ('Error',)
 
 
 def kern(s):
-    """Prosa-Kern: ohne Backticks, mit normalisiertem Leerraum."""
-    return re.sub(r'\s+', ' ', s.replace(BT, '')).strip()
+    """Prosa-Kern: nur der Wortlaut, ohne Markdown-Auszeichnung.
+
+    Entfernt wird alles, was die Doku-Seite an Typografie DARF und der
+    Katalog nicht kann, weil sein Text unveraendert nach SARIF und Sonar
+    geht: Backticks, Fettdruck, der Abschnittstrenner am Ende, und
+    Halbgeviert-/Geviertstriche werden auf den einfachen Bindestrich
+    normalisiert. Ohne diese Normalisierung meldet das Gate Drift, wo nur
+    ein Gedankenstrich schoener gesetzt ist - und solche Phantome sind
+    genau der Grund, warum Gates ungelesen bleiben.
+    """
+    s = s.replace(BT, '').replace('**', '')
+    s = s.replace(chr(0x2014), '-').replace(chr(0x2013), '-')
+    s = re.sub(r'\s*-{3,}\s*$', ' ', s)
+    return re.sub(r'\s+', ' ', s).strip()
 
 
 def sev_md(sev):

@@ -271,7 +271,7 @@ try DoStuff except on E: Exception do LogError(E.Message); end;
 | OWASP | A03:2021-Injection |
 | Detector | `uSQLInjection.pas` |
 
-Building SQL via `'WHERE x=' + user_input` enables SQL injection if the input is untrusted. Use parameterized queries instead.
+Building SQL via `'WHERE x=' + user_input` enables SQL injection if the input is untrusted. Use parameterized queries (Params.ParamByName(...).Value := ...) instead.
 
 ```pascal
 // BAD
@@ -452,9 +452,7 @@ if count <> 0 then result := total / count;
 | CWE | [CWE-561](https://cwe.mitre.org/data/definitions/561.html) |
 | Detector | `uDeadCode.pas` |
 
-Anything after an unconditional terminator (`Exit`, `raise`, `Halt`, `Continue`, `Break`) in the same block is never executed. Usually leftover code from refactoring.
-
-Not reported when the terminator itself sits inside a conditional-compilation range and the following statement does not (`{$IFDEF DEBUG} raise ...; {$ENDIF}` followed by `Exit;`): without the define the terminator does not exist and the next statement is the live path. **This guard is define-dependent** — for a build that always sets the define, the suppressed finding would be factually correct. The analyser cannot decide it without the project defines, and decides in favour of 'reachable'.
+Anything after an unconditional terminator (`Exit`, `raise`, `Halt`, `Continue`, `Break`) in the same block is never executed. Usually leftover code from refactoring. Not reported when the terminator itself sits inside a conditional-compilation range and the following statement does not (`{$IFDEF DEBUG} raise ...; {$ENDIF}` followed by `Exit;`): without the define the terminator does not exist and the next statement is the live path. This guard is DEFINE-DEPENDENT - for a build that always sets the define, the suppressed finding would be factually correct. The analyser cannot decide it without the project defines, and decides in favour of 'reachable'.
 
 ```pascal
 // BAD
@@ -479,7 +477,7 @@ WriteLn('never reached');
 | Config | `[Detectors] LongMethodMaxBodyLines, LongMethodMaxStatements` |
 | Detector | `uLongMethod.pas` |
 
-Long methods are hard to test and understand. Threshold configurable; consider extracting helper methods or splitting responsibilities.
+Methods over ~80 statements are correlated with high defect density (Robert C. Martin, McConnell): the reader keeps context in working memory and once the method spills past one screen, that context overflows. Long methods also resist unit testing - test setup ends up duplicating internal state. Refactor: pull cohesive blocks into private helpers (ParseInput/Validate/Persist), or split per responsibility (data fetch vs. transform vs. emit). Threshold is configurable via [Detectors] LongMethodMaxBodyLines and LongMethodMaxStatements; lines are counted between the routine's `begin` and matching `end;`, comments and blank lines included. Compound-statement detection ignores nested anonymous methods so a method body that only contains a closure is not falsely reported.
 
 ---
 
@@ -495,7 +493,7 @@ Long methods are hard to test and understand. Threshold configurable; consider e
 | Config | `[Detectors] LongParamListMaxParams` |
 | Detector | `uLongParamList.pas` |
 
-High parameter counts indicate the method is doing too much. Consider grouping related parameters into a record or class.
+High parameter counts are a leading indicator of an SRP violation: the routine is juggling concerns that should be split. Long lists also bring positional confusion (the third Integer is which one again?) and force callers to fill defaults that may not apply. Refactor: group cohesive parameters into a record (TOrderInput), promote configuration to a builder pattern (FluentQuery.Where(...).OrderBy(...)), or split the method by axis (SaveOrder + SaveOrderItems). Threshold via [Detectors] LongParamListMaxParams (default 5). out/var parameters count just like value parameters; the implicit Self for class methods does not count.
 
 ```pascal
 // BAD
@@ -519,7 +517,7 @@ procedure SaveOrder(const Order: TOrder);
 | Config | `[Detectors] MagicNumberTrivials` |
 | Detector | `uMagicNumbers.pas` |
 
-Numeric literals in business logic are unexplained. Use named constants for readability and single-point-of-change.
+Numeric literals embedded directly in business logic carry no meaning: `if RetryCount > 3` forces every reader to guess what 3 represents and forces every maintenance change to find every occurrence by hand. Extract a named constant so the value has a documented purpose and exactly one source of truth. The detector skips trivials (0, 1, 2, -1, common power-of-2 sizes, indexing into known-tiny collections) - see [Detectors] MagicNumberTrivials for the active list. Loop bounds against `Length(arr)` and array index 0 are also ignored. Use the global config to add project-specific trivials (e.g. a fixed PageSize).
 
 ```pascal
 // BAD
@@ -581,7 +579,7 @@ LogFile := TPath.Combine(GetEnvironmentVariable('LOGDIR'), 'app.log');
 | Tags | `debug-code` |
 | Detector | `uDebugOutput.pas` |
 
-`WriteLn` / `ShowMessage` / `OutputDebugString` usually indicate forgotten debug code. Use a proper logging framework with configurable levels.
+`WriteLn` / `ShowMessage` / `OutputDebugString` / OutputDebugStringA in non-test code is almost always leftover debugging: ShowMessage in particular blocks the UI thread and is unfit for any production code path. Replace with a structured logger (TLogger, mORMot TSynLog, log4d) so the call site captures severity, category, and source location, and ops can dial verbosity at runtime. The detector skips units under `*\tests\*`, `*\test\*` and units flagged by the project as test/cli (`*Console*`, `*TestProject*`). A `// noinspection DebugOutput` marker suppresses individual lines (e.g. interactive CLI banners).
 
 ---
 
@@ -626,7 +624,7 @@ if d then DoStuff;
 | Tags | `work-tracking` |
 | Detector | `uTodoComment.pas` |
 
-Tracks open work items embedded in source. CI can enforce zero TODOs in release branches.
+Open work markers (TODO, FIXME, HACK, XXX, BUG, NOTE) live as a parallel work tracker inside the source. The pattern fails by accretion: markers added years apart never get triaged together, the original author leaves, and the next reader cannot tell whether the TODO is still relevant or has been silently shipped. SCA surfaces every such marker so CI gates can enforce a zero-TODO release branch or PR-time triage. Recognised forms: `// TODO`, `{ TODO ... }`, `(* TODO *)`, case-insensitive, with optional jira-id suffix (`// TODO PROJ-123: ...`). Marker tokens are configurable; the default set matches SonarDelphi.
 
 ---
 
@@ -672,7 +670,7 @@ end;
 | Config | `[Detectors] DuplicateBlockMinLines` |
 | Detector | `uDuplicateBlock.pas` |
 
-Detects copy-paste blocks with at least N consecutive identical lines. Extract into a helper method or shared constant.
+Detects N+ consecutive identical lines that appear in two or more places in the codebase (default minimum: 8 lines). The DRY violation creates change-coupling: a bugfix on one copy silently diverges from the others, and reviewers cannot easily tell that a behaviour-fix only addressed one of N call sites. Refactor: extract into a helper method or a shared constant. Tokens are normalised (whitespace collapsed, identifiers lowered) so cosmetic differences do not mask a true duplicate. Trivial duplicates (uses lists, type alias declarations) are skipped. Threshold via [Detectors] DuplicateBlockMinLines.
 
 ---
 
@@ -840,7 +838,7 @@ An empty handler with a live DFM binding is almost always a stub forgotten after
 ## SCA031
 **DFM component without published field**
 
-> Component in DFM has no matching published field in the form class
+> Component in DFM has no matching published field in the form class - stale DFM entry (schema drift)
 
 | Field | Value |
 |---|---|
@@ -880,7 +878,7 @@ A cycle in the master-detail graph causes infinite recursion during `BeforeOpen`
 | OWASP | A03:2021-Injection |
 | Detector | `uDfmSqlFromUserInput.pas` |
 
-SQL string built from form field values is SQL injection via the UI. Use parameterised queries.
+A DB-query SQL property (TADOQuery / TFDQuery / TUniQuery / TZQuery / TKSQLQuery.SQL.Text) is assembled by concatenating the Text / Caption / Hint / EditText / ItemText property of a UI input control (TEdit, TComboBox, TMaskEdit, ...) - classic SQL injection through the form. A user typing `' OR ''1''=''1' --` into the search field reads any row; `'; DROP TABLE Users; --` is destructive. Refactor: bind named parameters and assign via ParamByName, never concatenate. This detector is the DFM/UI-path companion to SCA003 (lexical SQL injection) and SCA058 (dangerous SQL statement).
 
 ```pascal
 // BAD
@@ -904,7 +902,7 @@ FDQuery1.ParamByName('n').AsString := EdName.Text;
 | Tags | `dfm`, `ux`, `required-field` |
 | Detector | `uDfmRequiredField.pas` |
 
-A required field that the user cannot reach makes every insert fail with *"Field X must have a value"*. Either bind a control or drop `Required=True`.
+A required field that the user cannot reach makes every insert fail with 'Field X must have a value'. Either bind a control or drop the `Required=True`.
 
 ---
 
@@ -919,7 +917,7 @@ A required field that the user cannot reach makes every insert fail with *"Field
 | Tags | `dfm`, `ux`, `required-field` |
 | Detector | `uDfmRequiredField.pas` |
 
-Control exists but the user cannot see or interact with it - inserts fail every time. Make at least one bound control visible or drop `Required=True`.
+Control exists but the user cannot see or interact with it - inserts fail every time. Make at least one bound control visible or drop the `Required=True`.
 
 ---
 
@@ -1062,6 +1060,8 @@ When a `TAction` is assigned, VCL routes events through the action object and th
 | Tags | `maintainability`, `string-formatting` |
 | Detector | `uConcatToFormat.pas` |
 
+Chains of `'a' + Var + 'b' + IntToStr(N)` (three or more concatenations involving non-literal segments) are harder to scan and harder to translate than `Format('a%sb%d', [Var, N])`: every IntToStr / FloatToStr / FormatDateTime in the middle of a string is one more place where a `resourcestring` cannot capture the message template. The detector triggers from 3 segments / 2 non-literal pieces upward, ignores trivial cases (`'<' + Name + '>'`) and skips lines under an active `// noinspection ConcatToFormat`. The flagged form may be intentional in performance-critical inner loops where Format's varargs box; the suppression marker is for that case.
+
 ```pascal
 // BAD
 Msg := 'User ' + Name + ' has ' + IntToStr(N) + ' open tickets';
@@ -1110,7 +1110,7 @@ C.Name := SomeName;
 | Tags | `loop`, `typo` |
 | Detector | `uReversedForRange.pas` |
 
-Classic typo: `to` instead of `downto` when iterating from high to low. The loop runs zero times. Detector flags constant `From > To`.
+`for i := 10 `to` 1 do` is a `downto`-vs-to typo: in Pascal a `to`-loop with start > end iterates zero times, so the body silently never runs and the bug shows up as missing side-effects with no compiler warning. The detector evaluates compile-time integer expressions on both sides (literals, simple negations, and `Length(arr)-1` for constant-length declarations) so `for i := Length(L)-1 to 0` is flagged. Variable-bounded loops are excluded - they may legitimately do nothing depending on runtime data. To iterate descending, write `downto`; to express 'maybe empty' explicitly, guard with an `if From <= To`.
 
 ```pascal
 // BAD
@@ -1185,7 +1185,7 @@ end;
 ## SCA050
 **Public member could be unit-private**
 
-> Public/protected member referenced only inside its own unit
+> Public member is referenced only within the current unit - Delphi-classic `private` (unit-scope) suffices
 
 | Field | Value |
 |---|---|
@@ -1193,7 +1193,7 @@ end;
 | Tags | `encapsulation`, `visibility` |
 | Detector | `uVisibilityCheck.pas` |
 
-Cross-unit reference analysis: no outside caller, so tightening to `private` has no external impact. Reduces public API surface.
+Single-file analysis: the `public` member is referenced from somewhere in the same unit (other classes, top-level procedures, ...), but NOT exclusively from the declaring class itself. Tightening to Delphi-classic `private` (which is unit-scope, not class-scope) is safe: every legal caller within the unit keeps working. This detector intentionally runs single-file ONLY - the previous cross-unit/cross-project scan produced too many false positives (RTTI/DFM streaming, sibling .dpk/.dproj consumers, generic instantiations, plugin APIs). The hint is a recommendation; if a foreign unit consumes the member, the compiler will catch the broken visibility with E2361 once the change is applied. Skips: published, virtual/abstract/override/dynamic, class constructors/destructors, RTTI-driven base classes (TForm/TFrame/TDataModule/TComponent), pure-class-method utility classes. Suppress per-line with `// noinspection CanBeUnitPrivate` for intentional public surface (library API, plugin entry point).
 
 ---
 
@@ -1208,7 +1208,7 @@ Cross-unit reference analysis: no outside caller, so tightening to `private` has
 | Tags | `encapsulation`, `visibility` |
 | Detector | `uVisibilityCheck.pas` |
 
-Cross-unit reference analysis: all external callers live in subclasses, so `protected` is sufficient and keeps the API narrower.
+Single-file analysis: every visible caller of the public member is itself a method of a class deriving from the declaring class. `protected` is the minimum visibility that satisfies all current call sites and signals the design intent ('this is an extension hook, not part of the consumer API'). Same single-file caveat as CanBeUnitPrivate / CanBeStrictPrivate: cross-unit consumers are invisible to the detector; the compiler verifies the refactor via E2361 if a foreign caller exists. Skips: published / RTTI-exposed members, virtual/override roots that are part of the documented hierarchy. Tighten with confidence inside the declaring project; for shipped library APIs verify external callers manually first.
 
 ---
 
@@ -1238,7 +1238,7 @@ No internal use AND no external use found - dead API surface. Either remove or d
 | Tags | `dead-code`, `locals` |
 | Detector | `uUnusedLocal.pas` |
 
-Mirrors Delphi compiler hint `H2164` but emitted as an SCA finding so it can be filtered, suppressed, and tracked uniformly with the other rules.
+A `var X: T;` in a method body is declared but never read or written in the same body. Mirrors Delphi compiler hint `H2164` but emitted as an SCA finding so it can be filtered, suppressed, prioritized and tracked uniformly with the other rules - useful when H2164 is muted project-wide. The body scan recognises `with`-rebound identifiers and ignores variables whose names match an existing field/property (the `with` would rebind them implicitly). Inline-vars introduced by `var X: T := ...` are treated identically. Suppress with `// noinspection UnusedLocalVar` when the variable is intentionally kept (declarative documentation, or required-by-API record initialization).
 
 ---
 
@@ -1253,7 +1253,7 @@ Mirrors Delphi compiler hint `H2164` but emitted as an SCA finding so it can be 
 | Tags | `dead-code`, `api-design` |
 | Detector | `uUnusedParameter.pas` |
 
-Detector skips overrides, event handlers (`Sender: TObject`) and interface implementations because those signatures are externally constrained.
+A formal parameter is declared but never read in the method body. The parameter clutters the call site (every caller passes a value that has no effect) and obscures the method's true dependencies. Refactor: drop the parameter, or move the call site to a different overload that doesn't take it. The detector intentionally skips externally constrained signatures: `override` (parent signature is fixed), `; virtual; abstract` placeholder bodies, interface implementations (signature dictated by interface), event handlers (`Sender: TObject` and the rest of the event tuple), and methods registered as DFM event handlers. Suppress per-method with `// noinspection UnusedParameter` for stable-shape callbacks (RTTI/streaming).
 
 ---
 
@@ -1268,7 +1268,7 @@ Detector skips overrides, event handlers (`Sender: TObject`) and interface imple
 | Tags | `typo`, `copy-paste` |
 | Detector | `uTautologicalExpr.pas` |
 
-Classic copy-paste bug. Either one side is wrong (the typical case - a typo) or the expression is genuinely tautological and should be removed.
+A binary operator has the textually identical operand on both sides: `x = x`, `a and a`, `(p <> p)`. The expression evaluates to a constant (True or False) at compile time and almost always indicates a typo - the operand was meant to be a similarly named identifier (`a = b`, `p1 <> p2`). The detector tracks: equality / inequality / ordering (`=`, `<>`, `<`, `>`, `<=`, `>=`) and boolean ops (`and`, `or`, `xor`). Arithmetic operators (`+`, `-`, `*`) are intentionally exempt: `x + x` and `a * a` are legitimate idioms. Operand normalisation lowers case and strips redundant whitespace but preserves string-literal content so `'foo' = 'foo'` is correctly flagged. Detector requires identifier-equality across the operator - a function call with side-effects (`Next = Next`) is also flagged because two calls produce the bug regardless.
 
 ```pascal
 // BAD
@@ -1306,7 +1306,7 @@ VCL silently performs a Cartesian product instead of the intended Master-Detail 
 | Tags | `dfm`, `architecture` |
 | Detector | `uDfmDataModuleSplitHint.pas` |
 
-Aggregate of multiple [SCA039](#sca039) (`DfmDbInUiForm`) findings on the same form - emitted as a single refactor hint instead of N individual findings.
+Aggregate of multiple `DfmDbInUiForm` findings on the same form - once the count reaches the configured threshold (default 3), SCA replaces the N individual findings with a single 'extract a TDataModule' hint to avoid noise and to surface the architectural fix instead of pointing at one component at a time. Moving DB access to a TDataModule cleanly separates data plumbing from UI: the same TFDConnection and queries can be shared by multiple forms, the DB layer is testable without instantiating a TForm, and DesignForm vs RuntimeForm setup stays clean. Threshold is 3 and currently hardcoded - kept low because once you see 3 DB components on a form, the pattern is already wrong.
 
 ---
 
@@ -3084,7 +3084,7 @@ end;
 | Tags | `constructor`, `memory`, `lifecycle`, `sonardelphi` |
 | Detector | `uInstanceInvokedConstructor.pas` |
 
-Delphi allows a constructor to be invoked on an instance, e.g. `obj.Create;`, but the result is almost never what was intended. When called as a class-method (`TFoo.Create`), the runtime first allocates a fresh memory block via `TObject.NewInstance`, sets up the VMT pointer, and then runs the constructor body. When called on an existing instance, the allocation path is skipped entirely - only the constructor body runs, which re-initialises fields (`FList := TList.Create;` overwrites the previous `FList` without freeing it, managed-type refs get stomped, default values clobber whatever the caller had set). The result is at best a logic bug, at worst memory corruption. Detector heuristic (no type-resolver available): match `nkCall.Name` against `<Ident>.Create[(<args>)][;]` where `<Ident>` starts with a lowercase letter (clearly a variable by Delphi convention, since types use the `T<Upper>` / `I<Upper>` prefix). Skips `Self`, `Result`, `Inherited`, multi-dot paths (`A.B.Create` - ambiguous), cast forms (`T(x).Create`) and class names. Accepts a small known false-positive risk for `TClass`-typed lowercase variables (rare in practice). Maps to Sonar-Delphi `InstanceInvokedConstructorCheck`.
+Delphi allows a constructor to be invoked on an instance, e.g. `obj.Create;`, but the result is almost never what was intended. When called as a class-method (`TFoo.Create`), the runtime first allocates a fresh memory block via `TObject.NewInstance`, sets up the VMT pointer, and then runs the constructor body. When called on an existing instance, the allocation path is skipped entirely - only the constructor body runs, which re-initialises fields (`FList := TList.Create;` overwrites the previous `FList` without freeing it, managed-type refs get stomped, default values clobber whatever the caller had set). The result is at best a logic bug, at worst memory corruption. Detector heuristic (no type-resolver available): match `nkCall.Name` against `<Ident>.Create[(<args>)][;]` where `<Ident>` starts with a lowercase letter (clearly a variable by Delphi convention, since types use the `T<Upper>` / `I<Upper>` prefix). Skips `Self`, `Result`, `Inherited`, multi-dot paths (`A.B.Create` - ambiguous), cast forms (`T(x).Create`), class names and receivers following the metaclass naming convention (identifier suffix `Class`, e.g. `itemClass: TFooClass`). Accepts a small known false-positive risk for otherwise-named `TClass`-typed lowercase variables (rare in practice). Interim severity demotion Error -> Warning (2026-07-25): full-corpus audit measured 100 % false positives at Error tier; stays Warning until structural type-resolution guards land. Maps to Sonar-Delphi `InstanceInvokedConstructorCheck`.
 
 ```pascal
 // BAD
@@ -3794,6 +3794,8 @@ Private methods can only be called from inside the same unit (Delphi-classic) or
 | `class constructor` / `class destructor` | Run by the RTL at unit init/finalization. An ordinary private `class procedure`/`class function` stays reportable. |
 | `override` | Reached through the VMT from the ancestor. Deliberately *not* extended to `virtual`/`dynamic` without `override` — a new private virtual nobody calls is a real finding. |
 | Member of a class implementing an interface | Interface dispatch, usually cross-unit. If every implemented interface is declared locally, only the matching members are exempt; if one comes from another unit (the normal case) the whole class stays silent — a deliberate false-negative trade for precision. |
+
+Private methods can only be called from inside the same unit (Delphi-classic) or class (strict private). If no other method references them, they cannot be called at all - they are dead code, often the residue of an incomplete refactoring. The detector walks `nkClass` nodes, finds `nkVisibilitySection` children with name `private` or `strict private`, collects their `nkMethod` names, and then text-scans the (string-and-comment-stripped) file body for word-boundary matches. Two matches per method are tolerated (declaration line + implementation header); more indicate at least one call. Because that scan only ever sees calls *by name*, every dispatch mechanism that reaches a method without naming it is gated out before reporting - message handlers, method-resolution clauses, class constructors/destructors, `override`s and interface implementations; see 'Not reported' below. DFM event handlers are resolved through the paired `.dfm`. Remaining blind spot: invocation purely through RTTI (`TypeInfo`, attribute-driven registries) - use `// noinspection UnusedPrivateMethod` there. Maps to Sonar-50 rule #37.
 
 ```pascal
 // BAD
@@ -5057,7 +5059,7 @@ Remove uOldHelper.pas or move it out of the project folder
 | Detector | `uNotIncludedInProject.pas` |
 | Scope | only `.dproj`/`.groupproj` scans; split off SCA194 - the uses-reference (transitive, comments/strings never count) decides used-but-unlisted vs. orphaned |
 
-Split off SCA194: a file that IS pulled in via uses - directly, transitively through other such units, or from the program's own .dpr/.dpk uses clause - is not dead code. It compiles through the search path, but stays invisible to project management: no IDE project navigation, easy to miss in reviews, deployments and version pinning, and a rename/move breaks the build only at the next full compile. Comments and string literals never count as a uses reference; both branches of an {$IFDEF} count (which one is active depends on defines). Fix: add the file to the project.
+Runs only for project- and project-group scans (--project / --project-group, or picking a .dproj/.groupproj via the '...' dialog). Split off SCA194 (which flags truly orphaned files): a file that IS pulled in via uses - directly or transitively through other such units - is not dead code. It compiles through the search path, but stays invisible to project management: no IDE project navigation, easy to miss in reviews, deployments and version pinning, and a rename/move breaks the build only at the next full compile. The fix is to add the file to the project. Comments and string literals never count as a uses reference; the match is the file name without extension against the (possibly dotted) unit names in uses clauses.
 
 ```pascal
 // BAD
@@ -5079,7 +5081,7 @@ Every unit reachable via uses from project units is listed as a DCCReference in 
 | Detector | `uManagedResultUninit.pas` |
 | Scope | functions returning string family, dynamic arrays (`TArray<>`, `TBytes`, `*DynArray`), `Variant`/`OleVariant`, interfaces; records and classes stay out |
 
-For managed return types the compiler passes Result as a hidden **var** parameter that aliases the caller's target variable INCLUDING its previous content (`System.Rtti` `UseResultPointer`) - Result is NOT initialized to `''`/`nil` on entry. Reading it before the first assignment (`Result := Result + [x]`, `Result[i] := ...` without prior `SetLength`, `Result.Add(...)`, `Exit(Result + ...)`) processes stale caller data; the classic symptom is a collector function whose second call appends to the results of the first. The compiler hint W1035 stays SILENT for exactly these types. Detection is purely source-order (no path analysis): the first Result access decides, and anything that may write Result (assignment, `Exit(value)`, Result/@Result as call argument like `SetLength(Result, n)`) counts as the initialization. `absolute Result` aliases, asm bodies and bodyless declarations are skipped; a write in one branch followed by a read after it is deliberately NOT flagged (false negative, not false positive). The function-name result alias counts only as a **bare** identifier - `Result := GetText(A, B)` (recursion/overload delegation), `Result := Obj.GetTitle` and `Result := inherited GetAsString` are calls, not Result reads, and `Obj.Result` is a foreign field. For `ShortString` results `Result[0] := #len` is the length-byte initialization idiom; mormot's `TDynArray` (a record wrapper) and ALL-CAPS `I*` Windows-API records are excluded from the type gate. Where SCA196 fires, SCA121 stays silent for the same function.
+For managed return types the compiler passes Result as a hidden var parameter that aliases the caller's target variable INCLUDING its previous content (`System.Rtti` `UseResultPointer`; the RTL itself guards against this, e.g. TStringBuilder.ToString starts with Result := `''` 'to prevent copying of existing data'). Result is therefore NOT initialized to ''/`nil`/empty on entry. Reading it before the first assignment - `Result := Result + [x]`, `Result[i] := ...` without a prior `SetLength`, `Result.Add(...)`, `Exit(Result + ...)` - processes stale caller data: the classic symptom is a collector function whose second call appends to the results of the first. The compiler hint W1035 (return value undefined) stays SILENT for exactly these types, so nothing else warns here. Detection is purely source-order (variant 2, no path analysis): the first Result access in the body decides; anything that writes or may write Result (direct assignment, `Exit(value)`, Result or @Result passed as a call argument such as `SetLength(Result, n)` or TryGetValue(key, Result)) counts as an assignment and ends the scan. Functions with an '`absolute Result`' alias, assembler routines and bodyless declarations are skipped; string literals containing the word 'result' never count. Path-blind by design: a write in one branch followed by a read after the branch is NOT flagged (false negative, not false positive) - path-sensitive analysis is a planned follow-up. The function-name result alias counts ONLY as an assignment target: in expression context a bare function name is always a (recursive/parameterless) CALL - 'Result := Put;' invokes the parameterless overload and never reads Result; '`Obj.Result`' is a foreign field. IFDEF-twin assignments, embedded anonymous methods (whose Result belongs to the anonymous function) and 'Result[0] := Char(Api(@Result[1], N))' buffer-fill idioms are treated as writes, not reads. For `ShortString` results, '`Result[0] := #len`' is the length-byte initialization idiom and counts as the first write. Where this rule fires, SCA121 stays silent for the same function.
 
 ```pascal
 // BAD
