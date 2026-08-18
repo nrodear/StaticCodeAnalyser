@@ -4861,8 +4861,14 @@ begin
   begin
     // Original-Handler zurueckgeben, sofern unser Hook noch draufsitzt -
     // sonst wuerde ein fremder, spaeter installierter Handler entfernt.
+    // Vergleich ueber TMethod (Code UND Data = exakt DIESER Handler DIESER
+    // Instanz); der Klammer-Zwang ist Delphi-Praezedenz: 'and' bindet
+    // staerker als '=', ohne Klammern parst der Ausdruck als
+    // '(Assigned(..) and ..Code) = ..' und ergibt E2015.
+    var Ours: TNotifyEvent := OnPopupHandler;
     if Assigned(Alt.Popup) and
-       TMethod(Alt.Popup.OnPopup).Code = @TEditorContextMenuHook.OnPopupHandler then
+       (TMethod(Alt.Popup.OnPopup).Code = TMethod(Ours).Code) and
+       (TMethod(Alt.Popup.OnPopup).Data = TMethod(Ours).Data) then
       Alt.Popup.OnPopup := Alt.OrigOnPopup;
     FSlots.Remove(Alt.Popup);   // doOwnsValues -> Slot wird gefreut
   end;
