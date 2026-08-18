@@ -387,6 +387,66 @@ begin
   EditView.Paint;
 end;
 
+function TryGetEditPosition(const AbsPath: string;
+  out AEditPos: IOTAEditPosition): Boolean;
+// Loest einen Dateipfad zur Cursor-API des IDE-Editors auf:
+//   Modul finden (oder oeffnen) -> Source-Editor -> EditView -> Buffer
+//   -> EditPosition
+//
+// Diese 28 Zeilen standen bis 2026-08-18 ZWEIMAL byte-gleich in dieser
+// Unit (ApplyLineReplacement und InsertLineAbove). Ein Fix an einer der
+// beiden Kopien - etwa der aktive View statt EditViews[0], oder ein
+// MarkModified - haette Quick-Fix und Auto-Suppress fuer dieselbe Datei
+// auseinanderlaufen lassen.
+//
+// Der Source-Editor wird ueber die ModuleFileEditors gesucht und nicht
+// ueber Index 0: ein Form-Modul liefert dort auch den DFM-Editor, und
+// nur der erste IOTASourceEditor ist der Pascal-Quelltext.
+//
+// Bekannte Enge, bewusst uebernommen statt hier still geaendert:
+// EditViews[0] ist nicht zwingend der AKTIVE View. Bei geteiltem Fenster
+// editiert der Nutzer moeglicherweise in einem anderen. Das war in beiden
+// Kopien so; es zu aendern ist eine Verhaltensfrage und gehoert in einen
+// eigenen Schritt - jetzt aber an EINER Stelle.
+var
+  ModSvc     : IOTAModuleServices;
+  Module     : IOTAModule;
+  SourceEdit : IOTASourceEditor;
+  EditView   : IOTAEditView;
+  EditBuffer : IOTAEditBuffer;
+  i          : Integer;
+begin
+  Result   := False;
+  AEditPos := nil;
+  if AbsPath = '' then Exit;
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+
+  Module := ModSvc.FindModule(AbsPath);
+  if Module = nil then
+  begin
+    try
+      Module := ModSvc.OpenModule(AbsPath);
+    except
+      Exit;   // Open fehlgeschlagen - Aufrufer meldet in der Statuszeile
+    end;
+  end;
+  if Module = nil then Exit;
+
+  SourceEdit := nil;
+  for i := 0 to Module.ModuleFileCount - 1 do
+    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, SourceEdit) then
+      Break;
+  if SourceEdit = nil then Exit;
+  if SourceEdit.EditViewCount = 0 then Exit;
+
+  EditView := SourceEdit.EditViews[0];
+  if EditView = nil then Exit;
+  EditBuffer := EditView.Buffer;
+  if EditBuffer = nil then Exit;
+  AEditPos := EditBuffer.EditPosition;
+  Result := AEditPos <> nil;
+end;
+
 class function TIDEEditor.ApplyLineReplacement(const AbsPath: string;
   LineNumber: Integer; const NewLine: string): Boolean;
 // Strategie (echte API - keine Byte-Offset-Arithmetik):
@@ -406,46 +466,14 @@ class function TIDEEditor.ApplyLineReplacement(const AbsPath: string;
 // koennen 2 Undo-Steps werden - akzeptabel, kostet einen zusaetzlichen
 // Ctrl+Z bei Bedarf.
 var
-  ModSvc      : IOTAModuleServices;
-  Module      : IOTAModule;
-  SourceEdit  : IOTASourceEditor;
-  EditView    : IOTAEditView;
-  EditBuffer  : IOTAEditBuffer;
   EditPos     : IOTAEditPosition;
   LineEndCol  : Integer;
-  i           : Integer;
 begin
   Result := False;
   if (LineNumber <= 0) or (AbsPath = '') or (NewLine = '') then Exit;
-  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
-
-  // 1) Modul finden (oder oeffnen wenn noch nicht in der IDE).
-  Module := ModSvc.FindModule(AbsPath);
-  if Module = nil then
-  begin
-    try
-      Module := ModSvc.OpenModule(AbsPath);
-    except
-      Exit; // Open fehlgeschlagen - Caller meldet im Status-Bar
-    end;
-  end;
-  if Module = nil then Exit;
-
-  // 2) SourceEditor finden (Pascal-Source, nicht z.B. DFM-Editor).
-  SourceEdit := nil;
-  for i := 0 to Module.ModuleFileCount - 1 do
-    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, SourceEdit) then
-      Break;
-  if SourceEdit = nil then Exit;
-  if SourceEdit.EditViewCount = 0 then Exit;
-
-  // 3) EditView -> Buffer -> EditPosition (Navigations-Cursor).
-  EditView := SourceEdit.EditViews[0];
-  if EditView = nil then Exit;
-  EditBuffer := EditView.Buffer;
-  if EditBuffer = nil then Exit;
-  EditPos := EditBuffer.EditPosition;
-  if EditPos = nil then Exit;
+  // Schritte 1-3 (Modul -> Source-Editor -> EditPosition) im geteilten
+  // Helfer, s. TryGetEditPosition.
+  if not TryGetEditPosition(AbsPath, EditPos) then Exit;
 
   try
     // 4) Zielzeile positionieren + Zeilen-Laenge ermitteln.
@@ -479,44 +507,15 @@ class function TIDEEditor.InsertLineAbove(const AbsPath: string;
 const
   MAX_INDENT_LEN = 32; // 32 Leerzeichen Einrueckung sind schon viel.
 var
-  ModSvc      : IOTAModuleServices;
-  Module      : IOTAModule;
-  SourceEdit  : IOTASourceEditor;
-  EditView    : IOTAEditView;
-  EditBuffer  : IOTAEditBuffer;
   EditPos     : IOTAEditPosition;
-  i, j        : Integer;
+  j           : Integer;
   LineHead    : string;
   Indent      : string;
 begin
   Result := False;
   if (LineNumber <= 0) or (AbsPath = '') or (NewLine = '') then Exit;
-  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
-
-  Module := ModSvc.FindModule(AbsPath);
-  if Module = nil then
-  begin
-    try
-      Module := ModSvc.OpenModule(AbsPath);
-    except
-      Exit;
-    end;
-  end;
-  if Module = nil then Exit;
-
-  SourceEdit := nil;
-  for i := 0 to Module.ModuleFileCount - 1 do
-    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, SourceEdit) then
-      Break;
-  if SourceEdit = nil then Exit;
-  if SourceEdit.EditViewCount = 0 then Exit;
-
-  EditView := SourceEdit.EditViews[0];
-  if EditView = nil then Exit;
-  EditBuffer := EditView.Buffer;
-  if EditBuffer = nil then Exit;
-  EditPos := EditBuffer.EditPosition;
-  if EditPos = nil then Exit;
+  // Schritt 1 der Strategie oben - geteilt mit ApplyLineReplacement.
+  if not TryGetEditPosition(AbsPath, EditPos) then Exit;
 
   try
     // Einrueckung der Befund-Zeile auslesen.
