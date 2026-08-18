@@ -2766,10 +2766,10 @@ begin
     // PathInFingerprint-Konsistenz: Modus + Root wie beim Schreiben der
     // Datei, sonst matchen die Fingerprints des Anzeige-Filters nicht.
     uSCAConsts.BaselinePathFingerprint := Settings.BaselinePathInFingerprint;
-    if CurrentProjOrGroupFile <> '' then
-      uSCAConsts.BaselineFingerprintRoot := ExtractFilePath(CurrentProjOrGroupFile)
-    else
-      uSCAConsts.BaselineFingerprintRoot := DirOfProjectPath(Projectpath.Text);
+    // Wurzel-Regel aus TBaselineScope - hier stand sie bis 2026-08-19
+    // als eine von vier wortgleichen Kopien.
+    uSCAConsts.BaselineFingerprintRoot := TBaselineScope.RootForProject(
+      CurrentProjOrGroupFile, DirOfProjectPath(Projectpath.Text));
     try
       FBaselineSet.LoadFromFile(Path);
     except

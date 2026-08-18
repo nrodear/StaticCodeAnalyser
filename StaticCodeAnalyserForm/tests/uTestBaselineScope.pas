@@ -52,6 +52,9 @@ type
     [Test] procedure ByPathEmptyRoot_NotEffective;
     [Test] procedure ForProject_RootIsProjectDir;
     [Test] procedure ForProjectWithoutProject_RootIsScanRoot;
+    // Review-Nachtrag 2026-08-19.
+    [Test] procedure ByPathFileOutsideRoot_FallsBackToFileName;
+    [Test] procedure RawDeclaration_BehavesLikeByFileName;
   end;
 
 implementation
@@ -68,17 +71,32 @@ const
   DIR_SUB = 'sub';
   DIR_SCAN = 'scan';
   FILE_UNIT = 'Unit1.pas';
+  // Erwarteter Token im Dateiname-Modus: FileToken normalisiert auf
+  // Kleinschreibung. Als Konstante, weil ihn inzwischen vier Tests
+  // erwarten und DuplicateString sonst im Selbstscan anschlaegt.
+  TOKEN_UNIT = 'unit1.pas';
+
+function DriveRoot: string;
+// 'C:' ALLEIN ist laufwerks-relativ: TPath.Combine('C:', 'proj') liefert
+// 'C:proj', und ExpandFileName loest das gegen das aktuelle Verzeichnis
+// von Laufwerk C auf. Die Tests haetten damit an der CWD des Testlaufs
+// gehangen statt an ihrer Eingabe - gruen oder rot je nachdem, wo der
+// Runner gerade steht (Review-Minor 2026-08-19). Der Trenner wird aus
+// PathDelim zusammengesetzt, damit kein Pfad-Literal im Quelltext steht.
+begin
+  Result := DRIVE + PathDelim;
+end;
 
 function ProjDir: string;
 begin
-  Result := TPath.Combine(DRIVE, DIR_PROJ);
+  Result := TPath.Combine(DriveRoot, DIR_PROJ);
 end;
 
 procedure TTestBaselineScope.ByFileName_TokenIsFileNameOnly;
 // Bestandsverhalten - checkout-tolerant: derselbe Fund in einem anders
 // ausgecheckten Baum behaelt seinen Fingerprint.
 begin
-  Assert.AreEqual('unit1.pas',
+  Assert.AreEqual(TOKEN_UNIT,
     TBaselineScope.ByFileName.FileToken(TPath.Combine(ProjDir, FILE_UNIT)),
     'ohne Pfad-Modus zaehlt nur der Dateiname');
 end;
@@ -106,7 +124,7 @@ begin
   Scope := TBaselineScope.ByPath('');
   Assert.IsTrue(Scope.IsPathMode, 'der Modus ist angefragt');
   Assert.IsFalse(Scope.Effective, 'ohne Wurzel wirkt er nicht');
-  Assert.AreEqual('unit1.pas',
+  Assert.AreEqual(TOKEN_UNIT,
     Scope.FileToken(TPath.Combine(ProjDir, FILE_UNIT)),
     'und der Token faellt auf den Dateinamen zurueck');
 end;
@@ -130,6 +148,41 @@ begin
   Assert.AreEqual(ScanRoot,
     TBaselineScope.ForProject('', ScanRoot).Root,
     'ohne Projektdatei zaehlt die Scan-Wurzel');
+end;
+
+procedure TTestBaselineScope.ByPathFileOutsideRoot_FallsBackToFileName;
+// Der dokumentierte Rueckfall "Datei nicht unterhalb der Wurzel" war der
+// einzige Zweig von FileToken ohne Test. Er ist kein Randfall: sobald ein
+// Scan Dateien ausserhalb der Projektwurzel einsammelt (Bibliothekspfade,
+// Symlinks, ein zweites Laufwerk), entscheidet er ueber den Fingerprint.
+// Faellt er still auf den Dateinamen zurueck, kollidieren gleichnamige
+// Units aus verschiedenen Baeumen - genau das, was der Pfad-Modus
+// verhindern soll.
+var
+  Scope : TBaselineScope;
+begin
+  Scope := TBaselineScope.ByPath(ProjDir);
+  Assert.IsTrue(Scope.Effective, 'Modus und Wurzel sind gesetzt');
+  Assert.AreEqual(TOKEN_UNIT,
+    Scope.FileToken(TPath.Combine(TPath.Combine(DriveRoot, DIR_SCAN),
+                                  FILE_UNIT)),
+    'ausserhalb der Wurzel bleibt nur der Dateiname');
+end;
+
+procedure TTestBaselineScope.RawDeclaration_BehavesLikeByFileName;
+// Ein roh deklarierter Record ohne Fabrik-Aufruf. Ohne class operator
+// Initialize waere FPathMode uninitialisierter Stack-Inhalt - der
+// Zuschnitt haette zufaellig auf Pfad-Modus stehen koennen, und zwar
+// genau in der halb gesetzten Form (Modus ja, Wurzel leer), gegen die es
+// diesen Typ ueberhaupt gibt.
+var
+  Scope : TBaselineScope;
+begin
+  Assert.IsFalse(Scope.IsPathMode, 'Ausgangszustand ist Dateiname-Modus');
+  Assert.IsFalse(Scope.Effective, 'und wirkt entsprechend nicht');
+  Assert.AreEqual(TOKEN_UNIT,
+    Scope.FileToken(TPath.Combine(ProjDir, FILE_UNIT)),
+    'Token ist der blosse Dateiname');
 end;
 
 initialization

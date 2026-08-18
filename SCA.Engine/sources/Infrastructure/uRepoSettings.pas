@@ -1840,8 +1840,19 @@ begin
     // Warum der UI-Thread hier gefahrlos warten darf: ein Worker, der das
     // Lock haelt, blockiert NIE auf dem UI-Thread. Fortschritt geht ueber
     // TThread.Queue (asynchron), und Synchronize(DeliverResults) laeuft
-    // erst NACH der Lock-Freigabe (uIDEAnalyseRunner). Die Wartezeit ist
-    // damit hoechstens die eines laufenden Watch-Scans (eine Datei).
+    // erst NACH der Lock-Freigabe (uIDEAnalyseRunner). Es gibt also keinen
+    // Zyklus, in dem beide aufeinander warten.
+    //
+    // WIE LANGE es dauern kann, ist damit aber nicht gesagt - der
+    // Kommentar behauptete bis 2026-08-19 "hoechstens ein Watch-Scan (eine
+    // Datei)". Das untertreibt: das Lock deckt auch den Aufbau des
+    // Vorab-Index, und mehrere Watch-Worker koennen hintereinander
+    // anstehen. Im ungluecklichen Fall haelt das den UI-Thread Sekunden.
+    // Blockierungsfrei waere ein TryAcquire mit Rueckfall auf "diesmal
+    // nicht persistieren" - Discovery-Treffer sind Beiwerk, kein
+    // Nutzerauftrag. Bewusst offen gelassen, weil es das Verhalten des
+    // Speicherns aendert und nicht in einen Kommentar-Nachtrag gehoert.
+    //
     // TCriticalSection ist reentrant - ein Aufrufer, der das Lock schon
     // haelt, laeuft durch.
     TAnalysisSession.AcquireEngineLock;
