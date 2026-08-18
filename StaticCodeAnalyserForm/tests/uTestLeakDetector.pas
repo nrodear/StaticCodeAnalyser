@@ -5326,10 +5326,17 @@ end;
 
 procedure TTestMemoryLeakAdvanced.Leak_IndexedSelfProperty_OwnershipRecognized;
 // Fall (b): KEIN Punkt, die Wurzel ist eine indizierte Property von
-// Self (implizites Self). Belegt durch JVCL JvSALHashList:
-//   Items[HashVal] := HashStrings
-// Entscheidend ist, dass die Wurzel NICHT als Lokale oder Parameter
-// deklariert ist - genau das trennt sie vom Waechter unten.
+// Self (implizites Self). Entscheidend ist, dass die Wurzel NICHT als
+// Lokale oder Parameter deklariert ist - genau das trennt sie vom
+// Waechter unten.
+//
+// Der urspruenglich hier zitierte Beleg (JVCL JvSALHashList,
+// 'Items[HashVal] := HashStrings') taugt seit dem Empfaenger-Veto NICHT
+// mehr: 'Items' ist ein kanonisch nicht-besitzender Zugang und liegt jetzt
+// bewusst auf der anderen Seite der Grenze - festgehalten in
+// Leak_IndexedUnqualifiedNonOwning_StillReported. Das Fixture hier nutzt
+// deshalb 'Slots', einen Namen ohne Veto; getestet wird die FORM, nicht
+// der Name.
 const SRC =
   'unit t;'#13#10+
   'interface'#13#10+

@@ -1343,6 +1343,14 @@ var
 
     // 3. Punktkette/Cast: das Ziel liegt hinter einer Dereferenzierung -
     // fremder Speicher, egal ob die Wurzel Lokale, Parameter oder Feld ist.
+    //
+    // GRENZE (Review 2026-08-18, bewusst offen): fuer eine lokale RECORD-
+    // Wurzel stimmt das nicht - 'LRec.Slots[i] := Obj' schreibt in den
+    // eigenen Stack-Frame, der Punkt ist hier kein Zeiger-Sprung. Der Fall
+    // maskiert also ein echtes Leck. Er bleibt stehen, weil ihn nur
+    // Typwissen von einer Objekt-Wurzel unterscheidet (W1 TTypeResolver);
+    // am Korpus ist er nicht belegt, waehrend die Objekt-Wurzel der
+    // Normalfall ist.
     if Pos('.', Prefix) > 0 then Exit(True);
     if Pos('(', Prefix) > 0 then Exit(True);
 
@@ -2636,7 +2644,11 @@ begin
     // strikte RTL-Whitelist zustaendig.
     if ScopeDeclaresIdent(AScope, Seg) then Exit;
   end;
-  Result := MatchStr(Seg, NONOWNING_ACCESSORS);
+  // Listentest ueber die gemeinsame Funktion statt eines zweiten
+  // MatchStr-Aufrufs (Review-Minor 2026-08-18): die Liste hat jetzt genau
+  // einen Leser, und der Unterschied zwischen den beiden Pfaden liegt
+  // sichtbar in den Vorbedingungen darueber, nicht im Test selbst.
+  Result := IsNonOwningAccessorSeg(Seg);
 end;
 
 // Receiver-Veto fuer die Sink-Familien.
