@@ -1,0 +1,46 @@
+# GitHub Actions workflow: haelt docs/rules.md und rules/sca-rules.json
+# deckungsgleich.
+#
+# docs/rules.md sagt in Zeile 3 "Single source of truth:
+# rules/sca-rules.json", wird aber von Hand gepflegt. Beim ersten Nachmessen
+# (2026-08-19) waren 85 Abweichungen in 74 der 196 Regeln aufgelaufen -
+# darunter 21 Konfigurationsschluessel, die es im Code gar nicht gibt, und
+# 23 Regeln, deren Doku-Prosa ein alter Stumpf des laengst ausgebauten
+# Katalogtexts war. Wer den Katalog aendert, aendert SARIF, Sonar und die
+# Oberflaeche; die Doku-Seite blieb stehen, ohne dass es jemand sah.
+#
+# Verglichen wird der Prosa-KERN, nicht zeichengleich: die Doku darf
+# Inline-Code, Fettdruck und Halbgeviertstriche setzen, wo der Katalog
+# blanken Text fuehrt (dessen Text geht unveraendert nach SARIF und Sonar).
+#
+# Lokal vorab pruefen: `python tools/rules_doc_gate.py`
+#                      `python tools/rules_doc_gate.py --full`
+
+name: Rules Doc
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  rules-doc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run rules doc gate
+        run: python3 tools/rules_doc_gate.py
+
+      - name: Hinweis bei Abweichung
+        if: failure()
+        run: |
+          echo "Der Katalog ist die Quelle: docs/rules.md zieht nach."
+          echo "Ausnahme - die Doku-Fassung ist nachweislich die"
+          echo "vollstaendigere; dann wandert sie in rules/sca-rules.json,"
+          echo "und zwar als BLANKER Text ohne Markdown-Auszeichnung."
+          echo ""
+          echo "Nach jeder Katalog-Aenderung ausserdem:"
+          echo "  python tools/gen-rules-docs.py"
+          echo "  python tools/gen-rules-inc.py"
