@@ -46,6 +46,10 @@ type
       AProgress: TProgressBar; ABtnCancel: TButton;
       const ABtnsRun: array of TButton); reintroduce;
 
+    // Gibt den Warte-Cursor zurueck, falls der Controller mitten im Lauf
+    // stirbt. Details in der Implementierung.
+    destructor Destroy; override;
+
     // Setzt UI in den "Analyse-laeuft"-Modus. ATotal=0 bedeutet
     // "Anzahl noch unbekannt" (Progressbar Max=100, Position pulst
     // ueber Current mod 100 vom Worker-Callback).
@@ -87,6 +91,30 @@ begin
   SetLength(FBtnsRun, Length(ABtnsRun));
   for i := 0 to High(ABtnsRun) do
     FBtnsRun[i] := ABtnsRun[i];
+end;
+
+destructor TAnalyseProgressController.Destroy;
+// Screen.Cursor ist der einzige Zustand, den BeginRun AUSSERHALB dieses
+// Frames setzt - er gehoert der IDE. Bisher war EndRun der einzige
+// Rueckweg, und der haengt am OnRunDone-Callback des Runners; genau den
+// kappt der Detach im Runner-Destruktor. Wer das Dock-Fenster waehrend
+// einer laufenden Analyse schliesst, hinterlaesst der GANZEN IDE den
+// Warte-Cursor, bis irgendein fremder Schreiber ihn zuruecksetzt.
+// Am Lebenszyklus haengt der Rueckweg jetzt unabhaengig vom Callback und
+// deckt damit auch kuenftige Abbaupfade.
+//
+// BEWUSST NICHT das volle EndRun: die Button- und Progressbar-Referenzen
+// sind Fremdbesitz ohne FreeNotification (der Frame erzeugt sie, der
+// Controller haelt nur Zeiger). Beim Owner-Abbau koennen sie zu diesem
+// Zeitpunkt schon freigegeben sein - Assigned() wuerde das nicht merken.
+// Ihr Zustand stirbt ohnehin mit ihnen; nur der Cursor ueberlebt.
+begin
+  if FRunning then
+  begin
+    FRunning := False;
+    Screen.Cursor := crDefault;
+  end;
+  inherited;
 end;
 
 procedure TAnalyseProgressController.BeginRun(ATotal: Integer);

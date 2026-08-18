@@ -111,6 +111,7 @@
         <DCCReference Include="uTestParallelScan.pas"/>
         <DCCReference Include="uTestTAstNode.pas"/>
         <DCCReference Include="uTestAstSpans.pas"/>
+        <DCCReference Include="uTestBaselineScope.pas"/>
         <DCCReference Include="uTestSourceLineEdit.pas"/>
         <DCCReference Include="uTestEditorCommand.pas"/>
         <DCCReference Include="uTestDfmLexer.pas"/>

@@ -71,6 +71,26 @@ Numbers below are per-rule counts on that corpus, not projections.
   is visible. `SCA054 UnusedParameter` improved the same way (13,974 to
   13,952).
 
+### Removed
+
+- **`ofmDfmFallbackPas` is gone -- it described a code path that never
+  existed.** The enum value, a comparison against it, an unreachable
+  `case` branch and two maintained translations all served a fallback
+  that `OpenFileAtLine` never took: the routine only ever returns
+  `ofmRegular` or `ofmDfmAsText`. The v0.9.1 entry below promises that a
+  modified companion `.pas` "falls back to opening the `.pas` with a
+  status-bar hint"; that is not what the code does and never was.
+
+  What actually happens, stated plainly because users should know:
+  double-clicking a `.dfm` finding closes the companion `.pas` through
+  `CloseModule(True)` -- **save-if-dirty**. A modified `.pas` is therefore
+  saved without asking and its tab closed. No data is lost, but a
+  half-finished edit lands on disk. That behaviour stays: an explicit
+  `Modified` check is unreliable under Delphi 12 (reasoning sits at
+  `SafeCloseModule`), and the fallback that was supposed to cover the case
+  was never written. It is now documented at the declaration instead of
+  contradicted.
+
 ### Fixed -- parser
 
 - **`Exit(...)` arguments are scanned bracket-balanced.** An `Exit` whose

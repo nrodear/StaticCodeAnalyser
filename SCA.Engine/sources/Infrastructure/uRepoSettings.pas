@@ -462,7 +462,11 @@ implementation
 uses
   Winapi.Windows, System.IOUtils,
   uIgnoreList, uSCAConsts, uCustomRuleDetector, uRuleCatalog,
-  uPathOverrides;
+  uPathOverrides,
+  uEngineApi;   // TAnalysisSession.Acquire/ReleaseEngineLock - Schnappschuss
+                // der Discovery-Globals in PersistDiscoveredClasses. Zirkel
+                // ueber die implementation-uses ist zulaessig: uEngineApi
+                // fuehrt uRepoSettings ebenfalls nur in der implementation.
 
 const
   DEFAULT_INI_CONTENT =
@@ -1807,24 +1811,55 @@ const
 var
   LogPath           : string;
   Inst, Stat        : TStringList;   // finale Listen (gemerged)
+  SnapInst, SnapStat: TStringList;   // Schnappschuss der Globals (unter Lock)
   Raw               : TStringList;
   i                 : Integer;
   Output            : TStringList;
   ChangedInst       : Boolean;
   ChangedStat       : Boolean;
 begin
-  // Wenn beide Discovery-Listen leer sind: nichts zu tun
-  if (not Assigned(uSCAConsts.DiscoveredClasses) or
-      (uSCAConsts.DiscoveredClasses.Count = 0)) and
-     (not Assigned(uSCAConsts.DiscoveredStaticClasses) or
-      (uSCAConsts.DiscoveredStaticClasses.Count = 0)) then Exit;
-
-  EnsureConfigExists;
-  LogPath := ExtractFilePath(ConfigFilePath) + LOG_FILE;
-
-  Inst := TStringList.Create;
-  Stat := TStringList.Create;
+  Inst     := TStringList.Create;
+  Stat     := TStringList.Create;
+  SnapInst := TStringList.Create;
+  SnapStat := TStringList.Create;
   try
+    // Die prozessglobalen Discovery-Listen werden in uStaticAnalyzer2
+    // (DiscoveredClasses.Add) IMMER unter dem Engine-Lock beschrieben -
+    // gelesen wurden sie hier bisher ohne. Einseitige Serialisierung ist
+    // keine: Aufrufer ist der UI-Thread (TAnalyserFrame.FinishAnalysis bzw.
+    // uMainForm), und ein parallel gestarteter Watch-Worker schreibt
+    // waehrenddessen. Beide Listen sind Sorted, jedes Add ist damit ein
+    // InsertItem mit moeglichem Realloc + Move; der Leser saehe einen
+    // veralteten Count, verschobene Elemente oder freigegebene
+    // String-Pointer.
+    //
+    // Deshalb: KOPIEREN unter dem Lock, verarbeiten und schreiben
+    // ausserhalb. Das Lock haelt nur fuer die beiden Assign-Aufrufe, das
+    // Datei-I/O bleibt draussen.
+    //
+    // Warum der UI-Thread hier gefahrlos warten darf: ein Worker, der das
+    // Lock haelt, blockiert NIE auf dem UI-Thread. Fortschritt geht ueber
+    // TThread.Queue (asynchron), und Synchronize(DeliverResults) laeuft
+    // erst NACH der Lock-Freigabe (uIDEAnalyseRunner). Die Wartezeit ist
+    // damit hoechstens die eines laufenden Watch-Scans (eine Datei).
+    // TCriticalSection ist reentrant - ein Aufrufer, der das Lock schon
+    // haelt, laeuft durch.
+    TAnalysisSession.AcquireEngineLock;
+    try
+      if Assigned(uSCAConsts.DiscoveredClasses) then
+        SnapInst.Assign(uSCAConsts.DiscoveredClasses);
+      if Assigned(uSCAConsts.DiscoveredStaticClasses) then
+        SnapStat.Assign(uSCAConsts.DiscoveredStaticClasses);
+    finally
+      TAnalysisSession.ReleaseEngineLock;
+    end;
+
+    // Wenn beide Discovery-Listen leer waren: nichts zu tun
+    if (SnapInst.Count = 0) and (SnapStat.Count = 0) then Exit;
+
+    EnsureConfigExists;
+    LogPath := ExtractFilePath(ConfigFilePath) + LOG_FILE;
+
     Inst.CaseSensitive := False;
     Inst.Sorted        := True;
     Inst.Duplicates    := dupIgnore;
@@ -1845,9 +1880,10 @@ begin
       end;
     end;
 
-    // 2) neue Treffer mergen, Excludes ueberspringen
-    MergeNewHits(uSCAConsts.DiscoveredClasses,       Inst, FExcludeLeaky, ChangedInst);
-    MergeNewHits(uSCAConsts.DiscoveredStaticClasses, Stat, FExcludeLeaky, ChangedStat);
+    // 2) neue Treffer mergen, Excludes ueberspringen - aus dem
+    //    Schnappschuss, nicht aus den lebenden Globals.
+    MergeNewHits(SnapInst, Inst, FExcludeLeaky, ChangedInst);
+    MergeNewHits(SnapStat, Stat, FExcludeLeaky, ChangedStat);
 
     if not (ChangedInst or ChangedStat) then Exit;
 
@@ -1871,6 +1907,8 @@ begin
   finally
     Inst.Free;
     Stat.Free;
+    SnapInst.Free;
+    SnapStat.Free;
   end;
 end;
 

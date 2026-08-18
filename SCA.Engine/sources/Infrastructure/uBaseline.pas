@@ -30,6 +30,55 @@ uses
   uSCAConsts, uMethodd12;
 
 type
+  // Zuschnitt des Baseline-Fingerprints: Modus UND Wurzel als EIN Wert.
+  //
+  // WARUM ES DEN TYP GIBT (Review 2026-08-18, Befund A): beides lag bisher
+  // in zwei unabhaengig setzbaren Prozess-Globals
+  // (uSCAConsts.BaselinePathFingerprint / BaselineFingerprintRoot). Genau
+  // diese Trennung war der Fehler - ApplyDetectorThresholds setzte den
+  // MODUS, die WURZEL setzte nur RefreshBaselineSet, und die steigt aus,
+  // solange "nur neue Funde" aus ist. Beim Schreiben einer Baseline stand
+  // die Wurzel damit auf Leerstring, der Token fiel still auf den
+  // Dateinamen zurueck - gelesen wurde danach mit Relativpfad-Tokens. Das
+  // Feature meldete Erfolg und filterte nichts.
+  //
+  // Ein Wert kann nicht halb gesetzt sein. Wer ihn uebergibt, uebergibt
+  // beides.
+  TBaselineScope = record
+  strict private
+    FPathMode : Boolean;
+    FRoot     : string;
+  public
+    // Bestandsverhalten: nur der Dateiname, checkout-tolerant.
+    class function ByFileName: TBaselineScope; static;
+    // Relativpfad ab ARoot. Leeres ARoot ist zulaessig und verhaelt sich
+    // wie ByFileName - Effective meldet dann False.
+    class function ByPath(const ARoot: string): TBaselineScope; static;
+    // Pfad-Modus mit der WURZEL-REGEL: Verzeichnis der Projekt-/
+    // Gruppendatei, sonst die Scan-Wurzel. Genau diese Regel stand bis
+    // 2026-08-18 viermal kopiert in CLI, EXE und Plugin.
+    //
+    // Kein Boolean-Parameter fuer "Pfad-Modus ja/nein": das waere eine
+    // verdeckte Strategie-Wahl am Aufrufer (SCA146). Wer den Schalter aus
+    // der INI liest, schreibt die zwei Zeilen selbst - die Regel, um die
+    // es ging, ist trotzdem nur hier.
+    class function ForProject(const AProjectOrGroupFile,
+      AScanRoot: string): TBaselineScope; static;
+    // UEBERGANG: liest die beiden Globals. Nur solange es Aufrufer ohne
+    // Zuschnitt-Parameter gibt - faellt mit dem letzten von ihnen weg.
+    class function FromGlobals: TBaselineScope; static;
+
+    // Datei-Token fuer den Fingerprint.
+    function FileToken(const AFileName: string): string;
+    // Wirkt der Pfad-Modus TATSAECHLICH? Nur wenn Modus UND Wurzel gesetzt
+    // sind. Der Unterschied zu IsPathMode ist der Kern von Befund A: der
+    // blosse Wunsch nach Pfad-Modus aendert ohne Wurzel gar nichts.
+    function Effective: Boolean;
+
+    property IsPathMode : Boolean read FPathMode;
+    property Root       : string  read FRoot;
+  end;
+
   TBaseline = class
   public
     // Schreibt die aktuelle Findings-Liste als JSON in DestFile.
@@ -65,7 +114,11 @@ type
 
     // Fingerprint einer einzelnen Finding-Instanz. Public weil Tests sie
     // mocken.
-    class function Fingerprint(const F: TLeakFinding): string; static;
+    class function Fingerprint(const F: TLeakFinding): string; overload; static;
+    // Gleiche Berechnung, aber mit explizitem Zuschnitt statt aus den
+    // Globals. Die parameterlose Fassung delegiert hierher.
+    class function Fingerprint(const F: TLeakFinding;
+      const AScope: TBaselineScope): string; overload; static;
 
     // Aufloesung des .sca-Standardorts (Konzept_BaselineSca 2026-08-08):
     //   Gruppe (.groupproj): <GroupDir>\.sca\<Name>.baseline.json
@@ -157,20 +210,62 @@ begin
   end;
 end;
 
-// Datei-Token fuer den Fingerprint. Default: nur der Dateiname
-// (checkout-tolerant). Mit [Baseline] PathInFingerprint=1: normalisierter
-// Relativpfad ab BaselineFingerprintRoot (lowercase, '/'), damit
-// gleichnamige Dateien in verschiedenen Ordnern getrennte Fingerprints
-// bekommen. Root leer oder Datei nicht unterhalb -> Fallback Dateiname.
-function FingerprintFileToken(const AFileName: string): string;
+{ ---- TBaselineScope ---- }
+
+class function TBaselineScope.ByFileName: TBaselineScope;
+begin
+  Result.FPathMode := False;
+  Result.FRoot     := '';
+end;
+
+class function TBaselineScope.ByPath(const ARoot: string): TBaselineScope;
+begin
+  Result.FPathMode := True;
+  Result.FRoot     := ARoot;
+end;
+
+class function TBaselineScope.ForProject(const AProjectOrGroupFile,
+  AScanRoot: string): TBaselineScope;
+// Wurzel-Regel, woertlich wie in den bisherigen vier Kopien:
+// Verzeichnis der Projekt-/Gruppendatei, sonst die Scan-Wurzel.
+begin
+  if AProjectOrGroupFile <> '' then
+  begin
+    Result := ByPath(ExtractFilePath(AProjectOrGroupFile));
+  end
+  else
+  begin
+    Result := ByPath(AScanRoot);
+  end;
+end;
+
+class function TBaselineScope.FromGlobals: TBaselineScope;
+begin
+  Result.FPathMode := BaselinePathFingerprint;
+  Result.FRoot     := BaselineFingerprintRoot;
+end;
+
+function TBaselineScope.Effective: Boolean;
+begin
+  Result := FPathMode and (FRoot <> '');
+end;
+
+function TBaselineScope.FileToken(const AFileName: string): string;
+// Default: nur der Dateiname (checkout-tolerant). Im Pfad-Modus mit
+// gesetzter Wurzel: normalisierter Relativpfad ab der Wurzel
+// (lowercase, '/'), damit gleichnamige Dateien in verschiedenen
+// Ordnern getrennte Fingerprints bekommen. Wurzel leer oder Datei
+// nicht unterhalb -> Fallback Dateiname.
 var
   RootLow, FullLow : string;
 begin
   Result := LowerCase(ExtractFileName(AFileName));
-  if not BaselinePathFingerprint then Exit;
-  if BaselineFingerprintRoot = '' then Exit;
+  if not Effective then
+  begin
+    Exit;
+  end;
   RootLow := LowerCase(StringReplace(
-    IncludeTrailingPathDelimiter(ExpandFileName(BaselineFingerprintRoot)),
+    IncludeTrailingPathDelimiter(ExpandFileName(FRoot)),
     '\', '/', [rfReplaceAll]));
   FullLow := LowerCase(StringReplace(
     ExpandFileName(AFileName), '\', '/', [rfReplaceAll]));
@@ -178,10 +273,23 @@ begin
     Result := Copy(FullLow, Length(RootLow) + 1, MaxInt);
 end;
 
+// Uebergangs-Wrapper fuer unit-interne Aufrufer, die noch keinen
+// Zuschnitt durchreichen. Faellt mit ihnen weg.
+function FingerprintFileToken(const AFileName: string): string;
+begin
+  Result := TBaselineScope.FromGlobals.FileToken(AFileName);
+end;
+
 class function TBaseline.Fingerprint(const F: TLeakFinding): string;
 begin
+  Result := Fingerprint(F, TBaselineScope.FromGlobals);
+end;
+
+class function TBaseline.Fingerprint(const F: TLeakFinding;
+  const AScope: TBaselineScope): string;
+begin
   Result := THashSHA2.GetHashString(
-    FingerprintFileToken(F.FileName) + '|' + KindName(F.Kind) + '|' +
+    AScope.FileToken(F.FileName) + '|' + KindName(F.Kind) + '|' +
     F.MethodName + '|' + F.MissingVar);
 end;
 

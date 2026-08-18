@@ -35,12 +35,16 @@ type
   // den richtigen Hinweis zeigen kann.
   TOpenFileMode = (
     ofmRegular,         // .pas oder DFM-im-Code-Editor: alles normal
-    ofmDfmAsText,       // .dfm-Befund: .pas geschlossen, DFM jetzt als
+    ofmDfmAsText        // .dfm-Befund: .pas geschlossen, DFM jetzt als
                         // Text im Code-Editor sichtbar (Close-and-Reopen)
-    ofmDfmFallbackPas   // .dfm-Befund: zugehoerige .pas war modifiziert,
-                        // wir konnten sie nicht schliessen und haben sie
-                        // stattdessen geoeffnet. Aufrufer zeigt Hint
-                        // "Alt+F12 to view DFM as text".
+    // Ein dritter Wert ofmDfmFallbackPas ("Companion-.pas war modifiziert,
+    // deshalb nur die .pas geoeffnet") stand hier bis 2026-08-18. Er wurde
+    // NIE zugewiesen: OpenFileAtLine setzt ausschliesslich ofmRegular und
+    // ofmDfmAsText, weil SafeCloseModule bewusst CloseModule(True)
+    // (save-if-dirty) benutzt statt eines Modified-Checks. Der Wert hat
+    // damit einen Fall beschrieben, den es im Code nicht gibt - samt
+    // totem Vergleich, unerreichbarem case-Zweig beim Aufrufer und zwei
+    // gepflegten Uebersetzungen.
   );
 
   TIDEEditor = class
@@ -62,12 +66,18 @@ type
     // bereits offen) und positioniert den Cursor auf LineNumber.
     // No-op bei nicht-verfuegbaren Services oder LineNumber <= 0.
     //
-    // Bei einer .dfm-Datei wird die Close-and-Reopen-Strategie versucht:
-    // wenn die zugehoerige .pas offen aber nicht modifiziert ist, wird
-    // sie geschlossen und die .dfm direkt geoeffnet - landet als Text
-    // im Code-Editor (siehe DFMCheck/GExperts-Pattern). Bei modifizierter
-    // .pas fallback auf .pas oeffnen + Hint, weil Close den User-Stand
-    // zerstoeren wuerde.
+    // Bei einer .dfm-Datei laeuft die Close-and-Reopen-Strategie: die
+    // zugehoerige .pas wird geschlossen und die .dfm direkt geoeffnet -
+    // sie landet als Text im Code-Editor (siehe DFMCheck/GExperts-Pattern).
+    //
+    // ACHTUNG, Nebenwirkung: geschlossen wird ueber SafeCloseModule, und
+    // das ruft CloseModule(True) - save-if-dirty. Eine modifizierte
+    // Companion-.pas wird also UNGEFRAGT GESPEICHERT und ihr Tab
+    // geschlossen. Kein Datenverlust, aber ein halbfertiger Stand landet
+    // auf der Platte. Das ist Absicht: ein expliziter Modified-Check ist
+    // unter Delphi 12 unzuverlaessig (Begruendung an SafeCloseModule),
+    // und ein Fallback-Pfad dafuer existierte nie - der Enum-Wert, der
+    // ihn versprach, war toter Code.
     class function OpenFileAtLine(const AbsPath: string;
                                   LineNumber: Integer): TOpenFileMode; static;
 
@@ -283,14 +293,6 @@ begin
   // geoeffnet war und nur ein anderer Tab aktiv ist).
   SrcEditor.Show;
 
-  // CursorPos setzen, aber NICHT bei ofmDfmFallbackPas: dort ist die
-  // .pas modifiziert und der User editiert gerade darin. Wuerden wir den
-  // Cursor verstellen, ginge sein Caret-State verloren. Wir bringen
-  // stattdessen nur den Tab nach vorne (SrcEditor.Show oben) und lassen
-  // den Aufrufer per Status-Bar darauf hinweisen, dass die DFM-Befund-
-  // Zeile via Alt+F12 erreichbar ist.
-  if Result = ofmDfmFallbackPas then Exit;
-
   EditView := SrcEditor.GetEditView(0);
   if Assigned(EditView) then
   begin
@@ -385,6 +387,66 @@ begin
   EditView.Paint;
 end;
 
+function TryGetEditPosition(const AbsPath: string;
+  out AEditPos: IOTAEditPosition): Boolean;
+// Loest einen Dateipfad zur Cursor-API des IDE-Editors auf:
+//   Modul finden (oder oeffnen) -> Source-Editor -> EditView -> Buffer
+//   -> EditPosition
+//
+// Diese 28 Zeilen standen bis 2026-08-18 ZWEIMAL byte-gleich in dieser
+// Unit (ApplyLineReplacement und InsertLineAbove). Ein Fix an einer der
+// beiden Kopien - etwa der aktive View statt EditViews[0], oder ein
+// MarkModified - haette Quick-Fix und Auto-Suppress fuer dieselbe Datei
+// auseinanderlaufen lassen.
+//
+// Der Source-Editor wird ueber die ModuleFileEditors gesucht und nicht
+// ueber Index 0: ein Form-Modul liefert dort auch den DFM-Editor, und
+// nur der erste IOTASourceEditor ist der Pascal-Quelltext.
+//
+// Bekannte Enge, bewusst uebernommen statt hier still geaendert:
+// EditViews[0] ist nicht zwingend der AKTIVE View. Bei geteiltem Fenster
+// editiert der Nutzer moeglicherweise in einem anderen. Das war in beiden
+// Kopien so; es zu aendern ist eine Verhaltensfrage und gehoert in einen
+// eigenen Schritt - jetzt aber an EINER Stelle.
+var
+  ModSvc     : IOTAModuleServices;
+  Module     : IOTAModule;
+  SourceEdit : IOTASourceEditor;
+  EditView   : IOTAEditView;
+  EditBuffer : IOTAEditBuffer;
+  i          : Integer;
+begin
+  Result   := False;
+  AEditPos := nil;
+  if AbsPath = '' then Exit;
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+
+  Module := ModSvc.FindModule(AbsPath);
+  if Module = nil then
+  begin
+    try
+      Module := ModSvc.OpenModule(AbsPath);
+    except
+      Exit;   // Open fehlgeschlagen - Aufrufer meldet in der Statuszeile
+    end;
+  end;
+  if Module = nil then Exit;
+
+  SourceEdit := nil;
+  for i := 0 to Module.ModuleFileCount - 1 do
+    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, SourceEdit) then
+      Break;
+  if SourceEdit = nil then Exit;
+  if SourceEdit.EditViewCount = 0 then Exit;
+
+  EditView := SourceEdit.EditViews[0];
+  if EditView = nil then Exit;
+  EditBuffer := EditView.Buffer;
+  if EditBuffer = nil then Exit;
+  AEditPos := EditBuffer.EditPosition;
+  Result := AEditPos <> nil;
+end;
+
 class function TIDEEditor.ApplyLineReplacement(const AbsPath: string;
   LineNumber: Integer; const NewLine: string): Boolean;
 // Strategie (echte API - keine Byte-Offset-Arithmetik):
@@ -404,46 +466,14 @@ class function TIDEEditor.ApplyLineReplacement(const AbsPath: string;
 // koennen 2 Undo-Steps werden - akzeptabel, kostet einen zusaetzlichen
 // Ctrl+Z bei Bedarf.
 var
-  ModSvc      : IOTAModuleServices;
-  Module      : IOTAModule;
-  SourceEdit  : IOTASourceEditor;
-  EditView    : IOTAEditView;
-  EditBuffer  : IOTAEditBuffer;
   EditPos     : IOTAEditPosition;
   LineEndCol  : Integer;
-  i           : Integer;
 begin
   Result := False;
   if (LineNumber <= 0) or (AbsPath = '') or (NewLine = '') then Exit;
-  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
-
-  // 1) Modul finden (oder oeffnen wenn noch nicht in der IDE).
-  Module := ModSvc.FindModule(AbsPath);
-  if Module = nil then
-  begin
-    try
-      Module := ModSvc.OpenModule(AbsPath);
-    except
-      Exit; // Open fehlgeschlagen - Caller meldet im Status-Bar
-    end;
-  end;
-  if Module = nil then Exit;
-
-  // 2) SourceEditor finden (Pascal-Source, nicht z.B. DFM-Editor).
-  SourceEdit := nil;
-  for i := 0 to Module.ModuleFileCount - 1 do
-    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, SourceEdit) then
-      Break;
-  if SourceEdit = nil then Exit;
-  if SourceEdit.EditViewCount = 0 then Exit;
-
-  // 3) EditView -> Buffer -> EditPosition (Navigations-Cursor).
-  EditView := SourceEdit.EditViews[0];
-  if EditView = nil then Exit;
-  EditBuffer := EditView.Buffer;
-  if EditBuffer = nil then Exit;
-  EditPos := EditBuffer.EditPosition;
-  if EditPos = nil then Exit;
+  // Schritte 1-3 (Modul -> Source-Editor -> EditPosition) im geteilten
+  // Helfer, s. TryGetEditPosition.
+  if not TryGetEditPosition(AbsPath, EditPos) then Exit;
 
   try
     // 4) Zielzeile positionieren + Zeilen-Laenge ermitteln.
@@ -477,44 +507,15 @@ class function TIDEEditor.InsertLineAbove(const AbsPath: string;
 const
   MAX_INDENT_LEN = 32; // 32 Leerzeichen Einrueckung sind schon viel.
 var
-  ModSvc      : IOTAModuleServices;
-  Module      : IOTAModule;
-  SourceEdit  : IOTASourceEditor;
-  EditView    : IOTAEditView;
-  EditBuffer  : IOTAEditBuffer;
   EditPos     : IOTAEditPosition;
-  i, j        : Integer;
+  j           : Integer;
   LineHead    : string;
   Indent      : string;
 begin
   Result := False;
   if (LineNumber <= 0) or (AbsPath = '') or (NewLine = '') then Exit;
-  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
-
-  Module := ModSvc.FindModule(AbsPath);
-  if Module = nil then
-  begin
-    try
-      Module := ModSvc.OpenModule(AbsPath);
-    except
-      Exit;
-    end;
-  end;
-  if Module = nil then Exit;
-
-  SourceEdit := nil;
-  for i := 0 to Module.ModuleFileCount - 1 do
-    if Supports(Module.ModuleFileEditors[i], IOTASourceEditor, SourceEdit) then
-      Break;
-  if SourceEdit = nil then Exit;
-  if SourceEdit.EditViewCount = 0 then Exit;
-
-  EditView := SourceEdit.EditViews[0];
-  if EditView = nil then Exit;
-  EditBuffer := EditView.Buffer;
-  if EditBuffer = nil then Exit;
-  EditPos := EditBuffer.EditPosition;
-  if EditPos = nil then Exit;
+  // Schritt 1 der Strategie oben - geteilt mit ApplyLineReplacement.
+  if not TryGetEditPosition(AbsPath, EditPos) then Exit;
 
   try
     // Einrueckung der Befund-Zeile auslesen.
