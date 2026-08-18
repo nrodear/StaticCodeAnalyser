@@ -24,12 +24,19 @@ unit uIDEAnalyseRunner;
 //   * Cancel: FProgress.Cancelled wird im UI-Tick gepollt -> Worker.
 //     Terminate; die Engine-Progress-Closure prueft CheckTerminated und
 //     wirft EAbort im Worker-Kontext (Engine raeumt auf wie bisher).
+//     GILT NUR FUER DIE BULK-SCOPES (bkAll/bkChanged). Bei bkCurrent
+//     (ssSingleFile) reicht TAnalysisSession.Run den Req.Progress NICHT
+//     weiter - beide AnalyzeLeaks-Ueberladungen haben keinen
+//     Progress-Parameter. Die Closure laeuft dort nie, der Scan geht bis
+//     zum natuerlichen Ende. Siehe StartWorker.
 //   * Lifecycle: FRunner-Rueckreferenz im Worker wird AUSSCHLIESSLICH auf
 //     dem UI-Thread gelesen (Queue-/Synchronize-Closures) und geschrieben
 //     (Runner-Destructor detacht: FRunner := nil + Terminate +
 //     RemoveQueuedEvents). Ein detachter Worker scannt zu Ende bzw. bricht
-//     am naechsten Tick ab, liefert nichts aus und gibt sich selbst frei
-//     (FreeOnTerminate). KEIN Pointer-Sentinel, KEIN WaitFor noetig.
+//     am naechsten Tick ab (nur Bulk, s.o.) und liefert nichts aus.
+//     Freigegeben wird er NICHT selbst - FreeOnTerminate ist seit Welle 1b
+//     aus, GBulkWorkers besitzt ihn und Reap/Join raeumt. KEIN
+//     Pointer-Sentinel, KEIN WaitFor noetig.
 //
 // Frame-Click-Handler shrinken auf Validierung + PrepareAnalysis +
 // Runner.RunX; FinishAnalysis haengt am OnRunDone-Callback (feuert nach
@@ -64,8 +71,10 @@ type
   // die Projekt-/Gruppen-Datei liefert).
   TBulkScanKind = (bkAll, bkCurrent, bkChanged);
 
-  // Worker-Thread fuer genau einen Scan-Request. Selbstfreigebend
-  // (FreeOnTerminate); nach Detach durch den Runner laeuft er ins Leere.
+  // Worker-Thread fuer genau einen Scan-Request. NICHT selbstfreigebend -
+  // FreeOnTerminate ist aus (Welle 1b), Eigentuemer ist GBulkWorkers;
+  // ReapBulkWorkers/JoinAllBulkWorkers geben ihn frei. Nach Detach durch
+  // den Runner laeuft er ins Leere.
   TBulkScanWorker = class(TThread)
   private
     // NUR auf dem UI-Thread lesen/schreiben (Queue-/Synchronize-Closures
@@ -137,8 +146,12 @@ type
     procedure RunChanged(const AStartPath: string);
 
     // Direkter Abbruch (zusaetzlich zum FProgress.Cancelled-Poll):
-    // terminiert den Worker sofort - die Engine bricht am naechsten
-    // Progress-Tick ab.
+    // terminiert den Worker sofort. Die Engine bricht am naechsten
+    // Progress-Tick ab - ABER NUR bei den Bulk-Laeufen (RunAll/RunChanged).
+    // Fuer RunCurrent ist der Aufruf folgenlos: der ssSingleFile-Pfad der
+    // Engine kennt keinen Progress-Callback, der Scan laeuft zu Ende.
+    // Ein echter Abbruch dort braucht ein Cancel-Token in der
+    // Engine-Facade, das die Pre-Index-Schleifen mitpruefen.
     procedure CancelRun;
 
     function IsBusy: Boolean;
@@ -300,10 +313,23 @@ begin
         ; // alle TBulkScanKind-Werte oben abgedeckt
       end;
 
-      // Progress fuer die Lang-Laeufer; Single-File (bkCurrent) bekommt
-      // eine Minimal-Closure, damit Terminate/Join den Lauf am naechsten
-      // Engine-Tick abbrechen kann (Welle 1b - vorher lief bkCurrent trotz
-      // Terminate immer komplett durch).
+      // Progress fuer die Lang-Laeufer.
+      //
+      // ACHTUNG, die Minimal-Closure fuer bkCurrent ist WIRKUNGSLOS: sie
+      // war als Terminate-Responsivitaet gedacht, aber
+      // TAnalysisSession.Run reicht Req.Progress im ssSingleFile-Zweig
+      // nicht weiter (beide TStaticAnalyzer2.AnalyzeLeaks-Ueberladungen
+      // haben keinen Progress-Parameter, nur AnalyzeLeaksRecursive und
+      // AnalyzeLeaksFromList haben einen). bkCurrent laeuft trotz
+      // Terminate weiterhin komplett durch - der Zustand, den Welle 1b
+      // beheben wollte, besteht fort.
+      //
+      // Sie bleibt stehen, weil sie sofort greift, sobald die Engine den
+      // Callback durchreicht. Das allein genuegt allerdings nicht:
+      // SafeProgress feuert einmal je Datei, bei ssSingleFile also genau
+      // einmal - und zwar NACH den Pre-Index-Builds, die den Grossteil der
+      // Zeit kosten. Ein wirksamer Abbruch braucht ein Cancel-Token in der
+      // Engine-Facade.
       if FKind = bkCurrent then
         Req.Progress :=
           procedure(Current, Total: Integer)
@@ -360,8 +386,10 @@ begin
     // Ergebnis auf den UI-Thread. Engine-Lock ist hier bereits frei
     // (Run zurueckgekehrt) -> deadlock-frei. FIFO der Sync-Queue
     // garantiert: alle vorher gequeueten Progress-Ticks laufen VOR
-    // DeliverResults; danach endet Execute -> FreeOnTerminate. Es kann
-    // also kein Queue-Eintrag einen toten Worker referenzieren.
+    // DeliverResults; danach endet Execute. Freigegeben wird der Worker
+    // nicht hier, sondern durch GBulkWorkers (Reap/Join) - FreeOnTerminate
+    // ist aus. Es kann also kein Queue-Eintrag einen toten Worker
+    // referenzieren.
     Synchronize(DeliverResults);
   finally
     // Wenn DeliverResults nicht uebernommen hat (Detach), hier freigeben.
@@ -409,7 +437,9 @@ begin
   // Deep-Copy, Bool, Strings) - er darf den Frame-Teardown ueberleben.
   // FRunner := nil (UI-Thread) macht alle kuenftigen Queue-/Synchronize-
   // Closures zu No-ops; RemoveQueuedEvents droppt bereits gequeuete
-  // Progress-Ticks; Terminate laesst die Engine am naechsten Tick abbrechen.
+  // Progress-Ticks; Terminate laesst die Engine am naechsten Tick
+  // abbrechen - bei bkCurrent NICHT, dort laeuft der Scan zu Ende (die
+  // Engine reicht den Progress im ssSingleFile-Pfad nicht durch).
   if Assigned(FWorker) then
   begin
     FWorker.FRunner := nil;

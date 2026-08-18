@@ -558,9 +558,22 @@ begin
       Req.Path                  := FFileName;
       Req.SingleFileProjectRoot := TStaticFiles.FindProjectRoot(FFileName);
       Req.UsesCheck             := FUsesCheck;
-      // Welle 1b (2026-07-20): Minimal-Progress NUR fuer Terminate-
-      // Responsivitaet - JoinAllWorkers (BPL-Unload) bricht den Lauf damit
-      // am naechsten Engine-Tick ab, statt die volle Analyse abzuwarten.
+      // Welle 1b (2026-07-20): Minimal-Progress war als Terminate-
+      // Responsivitaet gedacht - JoinAllWorkers (BPL-Unload) sollte den
+      // Lauf am naechsten Engine-Tick abbrechen statt die volle Analyse
+      // abzuwarten.
+      //
+      // SIE WIRKT NICHT: TAnalysisSession.Run reicht Req.Progress im
+      // ssSingleFile-Zweig nicht weiter - dort laufen die beiden
+      // TStaticAnalyzer2.AnalyzeLeaks-Ueberladungen, und keine hat einen
+      // Progress-Parameter (nur AnalyzeLeaksRecursive/AnalyzeLeaksFromList
+      // haben einen). JoinAllWorkers blockiert also bis zum natuerlichen
+      // Laufende. Die Closure bleibt stehen, weil sie sofort greift,
+      // sobald die Engine den Callback durchreicht - ein wirksamer
+      // Abbruch braucht aber ein Cancel-Token in der Engine-Facade, das
+      // auch die Pre-Index-Schleifen mitprueft (SafeProgress feuert je
+      // Datei, bei ssSingleFile also genau einmal und erst NACH dem
+      // Index-Aufbau).
       Req.Progress :=
         procedure(Current, Total: Integer)
         begin
