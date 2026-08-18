@@ -729,6 +729,31 @@ begin
     SB.AppendLine('    :root[data-theme="dark"] .kbd-help h3 { color: #6cb0ff; }');
     SB.AppendLine('    :root[data-theme="dark"] .kbd-help kbd { background: #3a3a3a; color: #ddd; border-color: #666; }');
     SB.AppendLine('    :root[data-theme="dark"] .kbd-help-close { color: #bbb; }');
+    // #9c Dark-Mode Kontrast-Nachtrag 2 (Review 2026-08-18): die vier vom
+    // Review belegten Reste von #9b - Kinder von Containern, die im Dark-
+    // Block dunkel werden, deren eigene Hell-Farben aber stehen blieben.
+    // Der Dark-Mode greift via prefers-color-scheme AUTOMATISCH, die
+    // Luecken trafen also jeden OS-Dark-Nutzer ohne Zutun.
+    // (a) Die FUND-Zeile des Quell-Snippets: #fff5dc-Highlight behielt im
+    //     Dark-Mode die helle Flaeche, der Text erbte Dark-#d6d6d6 -
+    //     Kontrast ~1,34:1, die wichtigste Zeile des Reports war unlesbar
+    //     (Nutzer-Screenshot 2026-08-19). Dunkles Bernstein statt Hellgelb;
+    //     Zeilennummer/Balken in den Dark-Warn-Ton.
+    SB.AppendLine('    :root[data-theme="dark"] .src-line-active { background: #3a3218; }');
+    SB.AppendLine('    :root[data-theme="dark"] .src-line-active .src-line-num,');
+    SB.AppendLine('      :root[data-theme="dark"] .src-line-active .src-line-bar { color: #e6b45a; }');
+    // (b) Err/Warn/Hint-Zaehler im Top-10-Panel: dieselben Werte wie die
+    //     Tabellen-Severities im Dark-Block - EINE Farbwelt, kein Sonderweg.
+    SB.AppendLine('    :root[data-theme="dark"] .top-files .tf-e { color: #ff7373; }');
+    SB.AppendLine('    :root[data-theme="dark"] .top-files .tf-w { color: #e6b45a; }');
+    SB.AppendLine('    :root[data-theme="dark"] .top-files .tf-h { color: #a8d878; }');
+    // (c) Kernbotschaft des Audience-Banners: Dunkelblau auf #262626 war
+    //     1,35:1 - dieselbe Blau-Stufe wie die Dark-Links.
+    SB.AppendLine('    :root[data-theme="dark"] .audience-hint b { color: #6cb0ff; }');
+    // (d) Vorher/Nachher-Ueberschriften: rot/gruen in die Dark-Familien
+    //     der zugehoerigen pre-Bloecke.
+    SB.AppendLine('    :root[data-theme="dark"] .code-before h5 { color: #ff8080; }');
+    SB.AppendLine('    :root[data-theme="dark"] .code-after  h5 { color: #a8d878; }');
     SB.AppendLine('  </style>');
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');
