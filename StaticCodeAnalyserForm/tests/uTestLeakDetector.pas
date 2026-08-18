@@ -280,6 +280,10 @@ type
     [Test] procedure Leak_IndexedElementProperty_StillReported;
     [Test] procedure Leak_IndexedElementNonOwning_StillReported;
     [Test] procedure Leak_IndexedUnqualifiedNonOwning_StillReported;
+    // Feld-Transfer-Zweig (Review-Major 2026-08-19): das F-Praefix darf
+    // die indizierte Kette nicht mehr am Veto vorbeischleusen.
+    [Test] procedure Leak_FieldRootedIndexedNonOwning_StillReported;
+    [Test] procedure Leak_BareFieldAssignment_StillExempt;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -5518,6 +5522,78 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
     'das Veto gilt auch fuer die unqualifizierte Wurzel');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_FieldRootedIndexedNonOwning_StillReported;
+// WAECHTER zum Feld-Transfer-Zweig: die Kette WURZELT in einem Feld
+// (FCombo), endet aber in einem kanonisch nicht-besitzenden Zugang
+// (Objects). Bis 2026-08-19 verliess der Zweig die Funktion beim
+// F-Praefix mit True, bevor das Empfaenger-Veto ueberhaupt lief - das
+// F sagt nur, wo die Kette ANFAENGT, die Ownership entscheidet sich am
+// ENDE. Damit maskierte das Praefix ein echtes Leck auf Error-Tier.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  '  TRoster = class(TObject)'#13#10+
+  '  private'#13#10+
+  '    FPanel: TObject;'#13#10+
+  '  public'#13#10+
+  '    procedure Attach(const AKey: string; Idx: Integer);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure TRoster.Attach(const AKey: string; Idx: Integer);'#13#10+
+  'var'#13#10+
+  '  LBadge: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LBadge := TSynObjectList.Create;'#13#10+
+  '  LBadge.Tag := Length(AKey);'#13#10+
+  '  FPanel.Items.Objects[Idx] := LBadge;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'Feld-Wurzel darf das Empfaenger-Veto nicht aushebeln');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_BareFieldAssignment_StillExempt;
+// GEGENSTUECK: die BLANKE Feld-Zuweisung bleibt eine Abgabe. Ein Fix,
+// der den Zweig zu weit einschraenkt, wuerde hier still einen Fund
+// erzeugen - und der FieldLeakDetector meldet dieselbe Stelle dann
+// doppelt. Die Grenze ist die eckige Klammer, nicht das Feld.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  '  TVault = class(TObject)'#13#10+
+  '  strict private'#13#10+
+  '    FDepot: TSynObjectList;'#13#10+
+  '  public'#13#10+
+  '    procedure Seal(ACount: Integer);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure TVault.Seal(ACount: Integer);'#13#10+
+  'var'#13#10+
+  '  LBundle: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LBundle := TSynObjectList.Create;'#13#10+
+  '  LBundle.Capacity := ACount;'#13#10+
+  '  FDepot := LBundle;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'blanke Feld-Zuweisung bleibt Ownership-Transfer');
   finally F.Free; end;
 end;
 

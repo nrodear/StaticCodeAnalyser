@@ -1546,11 +1546,30 @@ begin
     if IsTransferShape then
     begin
       var LHSOrig := N.Name;
-      if SameText(Copy(LHSOrig, 1, 5), 'self.') then
-        Exit(True);
-      if (Length(LHSOrig) >= 2) and (LHSOrig[1] = 'F') and
-         (LHSOrig[2] >= 'A') and (LHSOrig[2] <= 'Z') then
-        Exit(True);
+      var IsFieldShape :=
+        SameText(Copy(LHSOrig, 1, 5), 'self.') or
+        ((Length(LHSOrig) >= 2) and (LHSOrig[1] = 'F') and
+         (LHSOrig[2] >= 'A') and (LHSOrig[2] <= 'Z'));
+      if IsFieldShape then
+      begin
+        // BLANKE Feld-Form ('FField := Var', 'Self.FField := Var'): die
+        // Ownership verlaesst den Methoden-Scope, der FieldLeakDetector
+        // uebernimmt. Unveraendert.
+        //
+        // INDIZIERTE Feld-Form ('FCombo.Items.Objects[i] := Var') ist etwas
+        // anderes und faellt seit 2026-08-19 durch zum Index-Gate, damit das
+        // Empfaenger-Veto sie sieht (Review-Major): das F-Praefix bezeichnet
+        // nur die WURZEL der Kette - ob der Container am ENDE die Ownership
+        // uebernimmt, entscheidet sein letztes Segment. Bei
+        // Items/Objects/Lines/Strings/Data/Nodes tut er es nicht, und der
+        // frueher Exit(True) maskierte dort echte Lecks.
+        //
+        // NUR fuer SCA001. Bei AUnitNode = nil (SCA009) bleibt der alte
+        // Weg, sonst bewegt sich die zweite Regel - derselbe Vertrag, an
+        // dem das Index-Gate schon einmal gescheitert ist.
+        if (not Assigned(AUnitNode)) or (Pos('[', LHSOrig) = 0) then
+          Exit(True);
+      end;
       // BEWUSST NICHT erweitert auf beliebige Zuweisungsziele (Versuch vom
       // 2026-08-05, nach zwei roten Bestandstests zurueckgenommen):
       // 'LOther := LItem' sieht wie eine Weitergabe aus, ist aber keine -
