@@ -5171,6 +5171,10 @@ begin
       // [UI] OverlayTextOnly in den Modulcache des Highlighters - gleicher
       // Grund wie beim Scheme-Cache: kein INI-Zugriff im Zeichenpfad.
       RefreshTextOnlyHintCache;
+      // [UI] OverlayShowOnHover ebenso - der Wert wurde bis 2026-08-18 bei
+      // JEDER Mausbewegung ueber einer Ankerzeile frisch aus der INI
+      // gelesen.
+      RefreshShowOnHoverCache;
     finally
       S.Free;
     end;

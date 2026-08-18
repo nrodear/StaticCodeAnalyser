@@ -867,6 +867,10 @@ begin
     // Overlay-Fenster und setzt die Klick-Caches zurueck (Review
     // 2026-08-13). Ohne Moduswechsel ist der Aufruf ein No-op.
     RefreshTextOnlyHintCache(ASettings.OverlayTextOnly);
+    // OverlayShowOnHover hat keine eigene Oberflaeche, wird beim Speichern
+    // aber mitgeschrieben - der Modulcache muss dem folgen, sonst haelt er
+    // bis zum naechsten Plugin-Start einen ueberholten Wert.
+    RefreshShowOnHoverCache(ASettings.OverlayShowOnHover);
     if not ASettings.OverlayTextOnly then
     begin
       ASettings.EditorColorScheme := EditorColorSchemeToStr(

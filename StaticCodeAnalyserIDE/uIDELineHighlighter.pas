@@ -501,6 +501,22 @@ procedure UnregisterLineHighlighter;
 procedure RefreshTextOnlyHintCache; overload;
 procedure RefreshTextOnlyHintCache(AValue: Boolean); overload;
 
+// Modulcache fuer [UI] OverlayShowOnHover - gleicher Grund, gleiches
+// Muster. IsShowOnHoverEnabled las den Wert bis 2026-08-18 bei JEDER
+// Mausbewegung ueber einer Ankerzeile frisch aus der INI
+// (QuickReadBool -> ResolvedConfigPath + TMemIniFile.Create, also eine
+// vollstaendige Ladung der ~20-KB-Datei pro Nachricht; bei umgeleitetem
+// APPDATA mit Netz-Roundtrip). QuickReadBool warnt im eigenen Kopf genau
+// davor.
+//
+// Die Option hat KEINE Options-Seite - sie steht nur in der INI. Deshalb
+// wird der Cache beim Plugin-Start gefuellt und beim Speichern der
+// Options-Seite nachgezogen; eine Hand-Aenderung an der INI wirkt ab dem
+// naechsten Start. Das ist derselbe Handel, den der TextOnly-Cache
+// eingeht.
+procedure RefreshShowOnHoverCache; overload;
+procedure RefreshShowOnHoverCache(AValue: Boolean); overload;
+
 implementation
 
 // noinspection-file BeginEndRequired, CanBeClassMethod, CanBeUnitPrivate, ClassPerFile, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DeepNesting, EmptyExcept, EmptyMethod, GodClass, GroupedDeclaration, LargeClass, LongMethod, LongParamList, MagicNumber, MultipleExit, NestedRoutine, NestedTry, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter, UnusedPublicMember
@@ -772,16 +788,47 @@ begin
   end;
 end;
 
+var
+  // [UI] OverlayShowOnHover als Modulcache - Vertrag an der Deklaration von
+  // RefreshShowOnHoverCache (interface). Steht BEWUSST hier oben und nicht
+  // beim Zwilling GTextOnlyHint weiter unten: IsShowOnHoverEnabled liest ihn
+  // direkt darunter, und Delphi verlangt die Deklaration vor der Verwendung.
+  // Vorbelegung = derselbe Default, den QuickReadBool bisher benutzt hat,
+  // damit ein Aufruf VOR dem ersten Refresh sich unveraendert verhaelt.
+  GShowOnHover : Boolean = DEF_OVERLAY_SHOW_ON_HOVER;
+
 function TFindingEditorEvents.IsShowOnHoverEnabled: Boolean;
 begin
-  Result := TRepoSettings.QuickReadBool('UI', 'OverlayShowOnHover',
-                                        DEF_OVERLAY_SHOW_ON_HOVER);
+  // Modulcache statt INI-Read - Begruendung an RefreshShowOnHoverCache.
+  // Diese Funktion sitzt im MouseMove-Pfad (EditorMouseMove) und wird pro
+  // Maus-Nachricht ueber einer Ankerzeile gefragt.
+  Result := GShowOnHover;
 end;
 
 var
   // [UI] OverlayTextOnly als Modulcache - Vertrag an der Deklaration von
   // RefreshTextOnlyHintCache (interface).
   GTextOnlyHint : Boolean = False;
+
+procedure RefreshShowOnHoverCache;
+begin
+  GShowOnHover := TRepoSettings.QuickReadBool('UI', 'OverlayShowOnHover',
+                                              DEF_OVERLAY_SHOW_ON_HOVER);
+end;
+
+// Wie beim TextOnly-Zwilling: der Wert IST die Information - ein
+// Zwei-Wert-Enum waere Zeremonie. Anders als dort steht hier KEIN
+// '// noinspection BooleanParam': mit Marker meldete der Selbstscan
+// UnusedSuppression, ohne ihn meldet er nichts - der Detektor greift an
+// dieser Stelle also gar nicht. Ein Marker, der nichts unterdrueckt, ist
+// selbst ein Fund.
+procedure RefreshShowOnHoverCache(AValue: Boolean);
+// Ohne Seiteneffekte - anders als der TextOnly-Zwilling, der beim
+// Moduswechsel Overlay und Klick-Rechtecke aufraeumen muss. Hier wechselt
+// nur, WANN das Overlay erscheint; ein bereits sichtbares bleibt gueltig.
+begin
+  GShowOnHover := AValue;
+end;
 
 procedure RefreshTextOnlyHintCache;
 begin
