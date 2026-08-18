@@ -1,5 +1,7 @@
 # Konfigurationsreferenz (`analyser.ini`)
 
+🇬🇧 [English version](configuration.md) · 🇫🇷 [Version française](configuration_fr.md)
+
 Alle Schluessel, die das Werkzeug aus `analyser.ini` liest, an einer Stelle.
 Die Datei liegt unter
 
@@ -146,6 +148,8 @@ generated\=off
 
 ---
 
-_Schluessel ausgelesen aus `SCA.Engine/sources/Infrastructure/uRepoSettings.pas`
-und `SCA.SharedUI/sources/uAppTheme.pas`. Wer dort einen Schluessel ergaenzt,
+_Schluessel erhoben durch einen Scan ueber **alle** INI-Leser des Baums
+(`uRepoSettings`, `uAppTheme`, `uEditorCommand`, `uCognitiveComplexity`,
+`uUiElementRegistry`, …). Die erste Fassung dieser Seite wertete nur zwei
+davon aus und uebersah 22 Schluessel. Wer einen Schluessel ergaenzt,
 ergaenzt ihn bitte hier - fuer diese Seite gibt es noch keinen Generator._

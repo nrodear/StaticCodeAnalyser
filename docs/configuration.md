@@ -1,5 +1,7 @@
 # Configuration reference (`analyser.ini`)
 
+🇩🇪 [Deutsche Fassung](configuration_de.md) · 🇫🇷 [Version française](configuration_fr.md)
+
 Every key the tool reads from `analyser.ini`, in one place. The file lives in
 
 ```
@@ -145,6 +147,8 @@ generated\=off
 
 ---
 
-_Keys extracted from `SCA.Engine/sources/Infrastructure/uRepoSettings.pas`
-and `SCA.SharedUI/sources/uAppTheme.pas`. If you add a key there, add it
-here - there is no generator for this page yet._
+_Keys collected by scanning **every** INI reader in the tree
+(`uRepoSettings`, `uAppTheme`, `uEditorCommand`, `uCognitiveComplexity`,
+`uUiElementRegistry`, …). The first version of this page listed only two of
+them and missed 22 keys. If you add a key, add it here - there is no
+generator for this page yet._
