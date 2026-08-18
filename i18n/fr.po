@@ -1111,9 +1111,6 @@ msgstr "Complexité"
 msgid "DFM as text: %s  Line: %d"
 msgstr "DFM en texte : %s  Ligne : %d"
 
-msgid "DFM finding at line %d - .pas is modified, press Alt+F12 to view DFM as text"
-msgstr "Résultat DFM à la ligne %d - le .pas a été modifié, Alt+F12 affiche le DFM en texte"
-
 msgid "DFM viewer: %s  Line: %d"
 msgstr "Visionneuse DFM : %s  Ligne : %d"
 

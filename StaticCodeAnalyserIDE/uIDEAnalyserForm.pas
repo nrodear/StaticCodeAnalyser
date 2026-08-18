@@ -3837,9 +3837,9 @@ begin
   //   ofmRegular         -> normal
   //   ofmDfmAsText       -> .pas war zu/unmodifiziert -> DFM als Text geoeffnet,
   //                         CursorPos zeigt auf die Befund-Zeile.
-  //   ofmDfmFallbackPas  -> .pas war modifiziert; statt sie zu zerstoeren
-  //                         oeffnen wir die .pas, Cursor auf Zeile 1. User
-  //                         schaltet via Alt+F12 zur DFM-Text-Sicht.
+  // Einen dritten Modus gab es nur auf dem Papier - s. TOpenFileMode.
+  // Wer die .dfm doppelklickt, dessen modifizierte Companion-.pas wird
+  // dabei still gespeichert und geschlossen.
   var Mode: TOpenFileMode := OpenFileAtLine(absPath, lineNo);
   // Editor-Line-Highlights setzen — Datei ist jetzt offen, alle Befunde
   // der Datei werden mit Stripe markiert (Multi-Marker-Modell).
@@ -3848,10 +3848,6 @@ begin
     ofmDfmAsText:
       StatusMode(Format(_('DFM as text: %s  Line: %d'),
         [ExtractFileName(absPath), lineNo]));
-    ofmDfmFallbackPas:
-      StatusMode(Format(
-        _('DFM finding at line %d - .pas is modified, press Alt+F12 to view DFM as text'),
-        [lineNo]));
   else
     StatusMode(Format(_('Opened: %s  Line: %d'),
       [ExtractFileName(absPath), lineNo]));

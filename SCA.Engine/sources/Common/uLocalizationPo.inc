@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2053 Zeilen, 70463 Bytes
-  CPoLines_de: array[0..2052] of string = (
+  // i18n\de.po - 2050 Zeilen, 72340 Bytes
+  CPoLines_de: array[0..2049] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1119,9 +1119,6 @@ const
     '',
     'msgid "DFM as text: %s  Line: %d"',
     'msgstr "DFM als Text: %s  Zeile: %d"',
-    '',
-    'msgid "DFM finding at line %d - .pas is modified, press Alt+F12 to view DFM as text"',
-    'msgstr "DFM-Befund in Zeile %d - .pas wurde ge'#$00E4'ndert, Alt+F12 zeigt die DFM als Text"',
     '',
     'msgid "DFM viewer: %s  Line: %d"',
     'msgstr "DFM-Viewer: %s  Zeile: %d"',
@@ -2275,8 +2272,8 @@ const
     'msgstr "Opened: %s  Line: %d"'
   );
 
-  // i18n\fr.po - 1998 Zeilen, 73626 Bytes
-  CPoLines_fr: array[0..1997] of string = (
+  // i18n\fr.po - 1995 Zeilen, 73439 Bytes
+  CPoLines_fr: array[0..1994] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -3389,9 +3386,6 @@ const
     '',
     'msgid "DFM as text: %s  Line: %d"',
     'msgstr "DFM en texte : %s  Ligne : %d"',
-    '',
-    'msgid "DFM finding at line %d - .pas is modified, press Alt+F12 to view DFM as text"',
-    'msgstr "R'#$00E9'sultat DFM '#$00E0' la ligne %d - le .pas a '#$00E9't'#$00E9' modifi'#$00E9', Alt+F12 affiche le DFM en texte"',
     '',
     'msgid "DFM viewer: %s  Line: %d"',
     'msgstr "Visionneuse DFM : %s  Ligne : %d"',

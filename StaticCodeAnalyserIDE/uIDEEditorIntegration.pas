@@ -35,12 +35,16 @@ type
   // den richtigen Hinweis zeigen kann.
   TOpenFileMode = (
     ofmRegular,         // .pas oder DFM-im-Code-Editor: alles normal
-    ofmDfmAsText,       // .dfm-Befund: .pas geschlossen, DFM jetzt als
+    ofmDfmAsText        // .dfm-Befund: .pas geschlossen, DFM jetzt als
                         // Text im Code-Editor sichtbar (Close-and-Reopen)
-    ofmDfmFallbackPas   // .dfm-Befund: zugehoerige .pas war modifiziert,
-                        // wir konnten sie nicht schliessen und haben sie
-                        // stattdessen geoeffnet. Aufrufer zeigt Hint
-                        // "Alt+F12 to view DFM as text".
+    // Ein dritter Wert ofmDfmFallbackPas ("Companion-.pas war modifiziert,
+    // deshalb nur die .pas geoeffnet") stand hier bis 2026-08-18. Er wurde
+    // NIE zugewiesen: OpenFileAtLine setzt ausschliesslich ofmRegular und
+    // ofmDfmAsText, weil SafeCloseModule bewusst CloseModule(True)
+    // (save-if-dirty) benutzt statt eines Modified-Checks. Der Wert hat
+    // damit einen Fall beschrieben, den es im Code nicht gibt - samt
+    // totem Vergleich, unerreichbarem case-Zweig beim Aufrufer und zwei
+    // gepflegten Uebersetzungen.
   );
 
   TIDEEditor = class
@@ -62,12 +66,18 @@ type
     // bereits offen) und positioniert den Cursor auf LineNumber.
     // No-op bei nicht-verfuegbaren Services oder LineNumber <= 0.
     //
-    // Bei einer .dfm-Datei wird die Close-and-Reopen-Strategie versucht:
-    // wenn die zugehoerige .pas offen aber nicht modifiziert ist, wird
-    // sie geschlossen und die .dfm direkt geoeffnet - landet als Text
-    // im Code-Editor (siehe DFMCheck/GExperts-Pattern). Bei modifizierter
-    // .pas fallback auf .pas oeffnen + Hint, weil Close den User-Stand
-    // zerstoeren wuerde.
+    // Bei einer .dfm-Datei laeuft die Close-and-Reopen-Strategie: die
+    // zugehoerige .pas wird geschlossen und die .dfm direkt geoeffnet -
+    // sie landet als Text im Code-Editor (siehe DFMCheck/GExperts-Pattern).
+    //
+    // ACHTUNG, Nebenwirkung: geschlossen wird ueber SafeCloseModule, und
+    // das ruft CloseModule(True) - save-if-dirty. Eine modifizierte
+    // Companion-.pas wird also UNGEFRAGT GESPEICHERT und ihr Tab
+    // geschlossen. Kein Datenverlust, aber ein halbfertiger Stand landet
+    // auf der Platte. Das ist Absicht: ein expliziter Modified-Check ist
+    // unter Delphi 12 unzuverlaessig (Begruendung an SafeCloseModule),
+    // und ein Fallback-Pfad dafuer existierte nie - der Enum-Wert, der
+    // ihn versprach, war toter Code.
     class function OpenFileAtLine(const AbsPath: string;
                                   LineNumber: Integer): TOpenFileMode; static;
 
@@ -282,14 +292,6 @@ begin
   // Editor-Tab in den Vordergrund bringen (wichtig wenn Datei bereits
   // geoeffnet war und nur ein anderer Tab aktiv ist).
   SrcEditor.Show;
-
-  // CursorPos setzen, aber NICHT bei ofmDfmFallbackPas: dort ist die
-  // .pas modifiziert und der User editiert gerade darin. Wuerden wir den
-  // Cursor verstellen, ginge sein Caret-State verloren. Wir bringen
-  // stattdessen nur den Tab nach vorne (SrcEditor.Show oben) und lassen
-  // den Aufrufer per Status-Bar darauf hinweisen, dass die DFM-Befund-
-  // Zeile via Alt+F12 erreichbar ist.
-  if Result = ofmDfmFallbackPas then Exit;
 
   EditView := SrcEditor.GetEditView(0);
   if Assigned(EditView) then
