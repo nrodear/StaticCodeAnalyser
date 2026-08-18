@@ -671,10 +671,6 @@ msgstr ""
 msgid "DFM declares a component but the form class has no published field for it"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3794
-msgid "DFM finding at line %d - .pas is modified, press Alt+F12 to view DFM as text"
-msgstr ""
-
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2588
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3153
 msgid "DFM findings: Delphi IDE"

@@ -28,6 +28,7 @@ uses
   uTestParallelScan in 'uTestParallelScan.pas',
   uTestTAstNode in 'uTestTAstNode.pas',
   uTestAstSpans in 'uTestAstSpans.pas',
+  uTestBaselineScope in 'uTestBaselineScope.pas',
   uTestSourceLineEdit in 'uTestSourceLineEdit.pas',
   uTestEditorCommand in 'uTestEditorCommand.pas',
   uTestDfmLexer in 'uTestDfmLexer.pas',

@@ -338,9 +338,11 @@ type
     procedure StatusProgress(const T: string);
     procedure StatusMode(const T: string);
     procedure TypeFilterChange(Sender: TObject);
-    // Profile-Combo OnChange: aktualisiert FRepoSettings.IdeProfile in-memory.
-    // Wirkt beim naechsten Klick auf Analyse / Aktuelle Datei / Branch-Changes,
-    // weil PrepareAnalysis dann UseIdeRuleSet + ApplyDetectorThresholds ruft.
+    // Profile-Combo OnChange: schreibt die Auswahl nach [Rules] IdeProfile
+    // (frisches Load davor, siehe Implementierung - sonst verschleppt der
+    // Save den transienten UseIdeRuleSet-Zustand nach [Rules] Profile).
+    // Auf den naechsten Lauf wirkt die Combo ohnehin direkt: PrepareAnalysis
+    // reicht die Selektion als expliziten Override an SetupForRun.
     procedure ProfileChange(Sender: TObject);
     procedure CancelAnalyseClick(Sender: TObject);
     // Loescht ALLE Hover-Annotation-Marker (Stripes + sichtbares Overlay)
@@ -1069,9 +1071,9 @@ begin
   // Profile (rule-set scope): steuert welches Rule-Set die NAECHSTE
   // Analyse benutzt (ide-fast / default / strict / ...). Items kommen
   // aus rules/sca-rules.json (TRuleCatalog.ProfileNames); Default-
-  // Selektion = FRepoSettings.IdeProfile. Transient (kein INI-Save);
-  // wirkt beim naechsten Analyse-Klick ueber PrepareAnalysis ->
-  // UseIdeRuleSet + ApplyDetectorThresholds.
+  // Selektion = FRepoSettings.IdeProfile. Die Auswahl wird nach
+  // [Rules] IdeProfile PERSISTIERT (ProfileChange) und wirkt beim
+  // naechsten Analyse-Klick als expliziter Override in SetupForRun.
   FProfileCombo := TIDEToolbar.CreateLabelCombo(Self, PanelSearch,
     _('Profile:'), ScaleW(LBL_W_PROFILE), ScaleW(CMB_W_PROFILE), FLblProfile);
   FProfileCombo.OnChange := ProfileChange;
@@ -1691,6 +1693,15 @@ begin
       finally
         FFilterCombo.OnChange := OldOnChange;
       end;
+      // Der Fuzzy-Helfer MUSS von einer programmatischen Auswahl erfahren -
+      // sonst misst sein Tag-Gate in CommitSelection gegen einen
+      // ueberholten Schnappschuss und verschluckt die naechste
+      // Wieder-Auswahl. Genau das passierte hier: nach dem ersten
+      // Separator-Klick klemmte jeder weitere, die Combo zeigte die nicht
+      // waehlbare Trennzeile und das Grid blieb auf dem alten Filter.
+      // Die sechs Kachel-Handler rufen das seit dem Review vom 12.08.,
+      // dieser Pfad war uebersehen worden.
+      if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
       if TFindingFilter.KindFromTag(tag, FFilterKind) then
         FFilterMode := fmSingleKind
       else
@@ -1716,6 +1727,12 @@ begin
     finally
       FFilterCombo.OnChange := OldOnChange;
     end;
+    // Wie im Vorwaerts-Zweig: programmatische Auswahl dem Fuzzy-Helfer
+    // melden. Dieser Zweig ist nur ueber einen Separator am LISTENENDE
+    // erreichbar und damit praktisch tot - der Aufruf schadet dort nicht
+    // und haelt die beiden Haelften gleich, damit der naechste Umbau nicht
+    // wieder nur eine anfasst.
+    if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
     Exit;
   end;
   if TFindingFilter.KindFromTag(tag, FFilterKind) then
@@ -1763,6 +1780,21 @@ begin
 
   if Assigned(FRepoSettings) then
   try
+    // ERST frisch laden, DANN schreiben - beides gehoert zusammen.
+    // Ohne das Load traegt FRepoSettings nach einem Analyse-Lauf noch den
+    // TRANSIENTEN Zustand aus TIDEAnalysisPrep.SetupForRun Schritt 3:
+    // UseIdeRuleSet spiegelt IdeProfile/IdeMinSeverity in die normalen
+    // Felder Profile/MinSeverity. Save schreibt das ganze Objekt zurueck,
+    // also auch [Rules] Profile - den Schluessel, den CLI und Standalone
+    // lesen. Ein CLI-Lauf ohne --profile faehrt danach still das
+    // IDE-Regelset (ide-fast); in einem CI-Gate sind das lautlose
+    // False Negatives. Das Load holt zugleich Aenderungen ab, die
+    // zwischenzeitlich ueber Tools>Options oder den INI-Editor kamen.
+    // Gleiches Muster wie BaselineOnlyNewClick.
+    //
+    // Save liegt bewusst IM selben try: schlaegt das Load fehl, wird gar
+    // nicht geschrieben - sonst landete der kontaminierte Stand in der INI.
+    FRepoSettings.Load;
     FRepoSettings.IdeProfile := Selected;
     FRepoSettings.Save;
   except
@@ -3073,6 +3105,19 @@ procedure TAnalyserFrame.ClearAllFindings;
 // Leert das Plugin-Hauptfenster-Grid komplett. Wird von Op-3
 // (Hard-Reset, Menuepunkt "Reset All Findings") gerufen, plus
 // kuenftig potentiell von anderen UI-Sync-Pfaden.
+//
+// Die Konsistenz-Wiederherstellung steht BEWUSST hier und nicht im
+// Aufrufer: die Routine verspricht "leert komplett", und das muss fuer
+// jeden kuenftigen Aufrufer gelten. Bis 2026-08-18 leerte sie nur Listen
+// und Grid - Kacheln zeigten weiter die Zahlen des geloeschten Scans, die
+// Statuszeile "160 / 160 findings", und die Filter-Combos die Regeln, die
+// es nicht mehr gab. Das heilte auch nicht durch Filter-Interaktion,
+// sondern erst beim naechsten vollen Scan.
+//
+// Reihenfolge wie im uebrigen File (PopulateFindings Z.2179,
+// ToggleBaselineOnlyNew): Stats, dann Combos, dann Filter. ApplyFilter
+// zeichnet das Grid ohnehin neu - das explizite Invalidate bleibt fuer
+// den Fall, dass die Combos gar nicht existieren.
 begin
   if Assigned(FAllFindings) then FAllFindings.Clear;
   if Assigned(FDisplayedFindings) then FDisplayedFindings.Clear;
@@ -3081,6 +3126,9 @@ begin
     FResultGrid.RowCount := 2;   // FixedRows=1, RowCount>=FixedRows+1
     FResultGrid.Invalidate;
   end;
+  UpdateStats;
+  RebuildFilterCombos;
+  ApplyFilter;
 end;
 
 procedure TAnalyserFrame.ResetAllFindingsClick(Sender: TObject);
@@ -3646,6 +3694,7 @@ procedure TAnalyserFrame.TileClickSeverity(Sender: TObject);
 var
   Target  : TFilterMode;
   i, OrdT : Integer;
+  Found   : Boolean;
 begin
   if not Assigned(FFilterCombo) or not (Sender is TComponent) then Exit;
   Target := TFilterMode(TComponent(Sender).Tag);
@@ -3656,12 +3705,22 @@ begin
   if Assigned(FTypeCombo) and (FTypeCombo.ItemIndex <> 0) then
     FTypeCombo.ItemIndex := 0;
   OrdT := Ord(Target);
+  Found := False;
   for i := 0 to FFilterCombo.Items.Count - 1 do
     if Integer(FFilterCombo.Items.Objects[i]) = OrdT then
     begin
       FFilterCombo.ItemIndex := i;
+      Found := True;
       Break;
     end;
+  // Eintrag wegreduziert - derselbe Rueckfall, den der Zwilling
+  // TileClickType hat. Die Kachel zaehlt die GESAMTmenge, die Combo ist
+  // baseline-bereinigt; findet die Tag-Suche nichts, blieb bisher still
+  // der alte Severity-Filter stehen, waehrend der Klick den Typ-Filter
+  // schon zurueckgesetzt hatte. Der Nutzer sah dann eine Auswahl, die er
+  // nie getroffen hat.
+  if not Found then
+    FFilterCombo.ItemIndex := 0;
   // NACH dem Setzen, UNBEDINGT - auch im Miss-Fall (der Eintrag kann
   // baseline-bereinigt fehlen, waehrend die Kachel die Gesamtmenge
   // zaehlt): Commit-Gedaechtnis des Fuzzy-Helfers nachziehen
@@ -3778,9 +3837,9 @@ begin
   //   ofmRegular         -> normal
   //   ofmDfmAsText       -> .pas war zu/unmodifiziert -> DFM als Text geoeffnet,
   //                         CursorPos zeigt auf die Befund-Zeile.
-  //   ofmDfmFallbackPas  -> .pas war modifiziert; statt sie zu zerstoeren
-  //                         oeffnen wir die .pas, Cursor auf Zeile 1. User
-  //                         schaltet via Alt+F12 zur DFM-Text-Sicht.
+  // Einen dritten Modus gab es nur auf dem Papier - s. TOpenFileMode.
+  // Wer die .dfm doppelklickt, dessen modifizierte Companion-.pas wird
+  // dabei still gespeichert und geschlossen.
   var Mode: TOpenFileMode := OpenFileAtLine(absPath, lineNo);
   // Editor-Line-Highlights setzen — Datei ist jetzt offen, alle Befunde
   // der Datei werden mit Stripe markiert (Multi-Marker-Modell).
@@ -3789,10 +3848,6 @@ begin
     ofmDfmAsText:
       StatusMode(Format(_('DFM as text: %s  Line: %d'),
         [ExtractFileName(absPath), lineNo]));
-    ofmDfmFallbackPas:
-      StatusMode(Format(
-        _('DFM finding at line %d - .pas is modified, press Alt+F12 to view DFM as text'),
-        [lineNo]));
   else
     StatusMode(Format(_('Opened: %s  Line: %d'),
       [ExtractFileName(absPath), lineNo]));
@@ -4650,7 +4705,15 @@ type
     Popup       : TPopupMenu;
     OrigOnPopup : TNotifyEvent;
     OurItem     : TMenuItem;     // aktuelles Item; nil zwischen Popup-Shows
-    constructor Create(APopup: TPopupMenu; AOrig: TNotifyEvent);
+    // Die Editor-Form, aus der dieser Popup stammt. Beim Hooken gemerkt,
+    // damit der Abbau (WindowNotification/opRemove) den Slot ueber
+    // IDENTITAET findet statt ihn ueber FindEditorPopup neu zu erraten -
+    // die Heuristik dort sieht zum Schliess-Zeitpunkt eine andere
+    // Item-Zahl als beim Hooken und liefert dann den falschen oder gar
+    // keinen Popup.
+    Form        : TCustomForm;
+    constructor Create(APopup: TPopupMenu; AOrig: TNotifyEvent;
+      AForm: TCustomForm);
   end;
 
   TEditorContextMenuHook = class(TNotifierObject, INTAEditServicesNotifier)
@@ -4693,12 +4756,14 @@ var
 
 { TPopupHookSlot }
 
-constructor TPopupHookSlot.Create(APopup: TPopupMenu; AOrig: TNotifyEvent);
+constructor TPopupHookSlot.Create(APopup: TPopupMenu; AOrig: TNotifyEvent;
+  AForm: TCustomForm);
 begin
   inherited Create;
   Popup       := APopup;
   OrigOnPopup := AOrig;
   OurItem     := nil;
+  Form        := AForm;
 end;
 
 { TEditorContextMenuHook }
@@ -4772,7 +4837,7 @@ begin
   if not Assigned(Popup) then Exit;
   if FSlots.ContainsKey(Popup) then Exit;   // bereits gehookt
 
-  Slot := TPopupHookSlot.Create(Popup, Popup.OnPopup);
+  Slot := TPopupHookSlot.Create(Popup, Popup.OnPopup, AForm);
   FSlots.Add(Popup, Slot);
   Popup.OnPopup := OnPopupHandler;
 end;
@@ -4876,10 +4941,26 @@ var
 begin
   // Editor-Window wird zerstoert -> Slot-Eintrag entfernen damit Destroy
   // nicht auf einen freigegebenen Popup zugreift.
+  //
+  // Der Slot wird ueber die gemerkte FORM gesucht, nicht ueber
+  // FindEditorPopup. Jene Funktion waehlt unter mehreren TPopupMenu-
+  // Komponenten das mit den MEISTEN Items - eine Heuristik, die zum
+  // Hook-Zeitpunkt (vor dem ersten Rechtsklick) und zum Schliess-Zeitpunkt
+  // (nach IDE-Rebuilds im OnPopupHandler) verschiedene Ergebnisse liefern
+  // kann. Traf sie daneben, wurde GAR KEIN Slot entfernt und der
+  // Dictionary-Eintrag behielt Zeiger auf gleich freigegebene TPopupMenu-
+  // und TMenuItem-Objekte. Die Form ist dagegen identisch - sie ist der
+  // Schluessel, den das Ereignis selbst mitbringt.
   if (Operation = opRemove) and Assigned(EditWindow) then
   begin
-    Popup := FindEditorPopup(EditWindow.Form);
-    if Assigned(Popup) and FSlots.ContainsKey(Popup) then
+    Popup := nil;
+    for var Slot in FSlots.Values do
+      if Slot.Form = EditWindow.Form then
+      begin
+        Popup := Slot.Popup;
+        Break;
+      end;
+    if Assigned(Popup) then
       FSlots.Remove(Popup);   // doOwnsValues -> Slot wird gefreut
   end;
 end;
@@ -5090,6 +5171,10 @@ begin
       // [UI] OverlayTextOnly in den Modulcache des Highlighters - gleicher
       // Grund wie beim Scheme-Cache: kein INI-Zugriff im Zeichenpfad.
       RefreshTextOnlyHintCache;
+      // [UI] OverlayShowOnHover ebenso - der Wert wurde bis 2026-08-18 bei
+      // JEDER Mausbewegung ueber einer Ankerzeile frisch aus der INI
+      // gelesen.
+      RefreshShowOnHoverCache;
     finally
       S.Free;
     end;

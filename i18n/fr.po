@@ -1111,9 +1111,6 @@ msgstr "Complexité"
 msgid "DFM as text: %s  Line: %d"
 msgstr "DFM en texte : %s  Ligne : %d"
 
-msgid "DFM finding at line %d - .pas is modified, press Alt+F12 to view DFM as text"
-msgstr "Résultat DFM à la ligne %d - le .pas a été modifié, Alt+F12 affiche le DFM en texte"
-
 msgid "DFM viewer: %s  Line: %d"
 msgstr "Visionneuse DFM : %s  Ligne : %d"
 
@@ -1996,3 +1993,54 @@ msgstr "Ouvert : %s  Ligne : %d"
 
 msgid "WARNING: this token is stored as PLAINTEXT in analyser.ini. Save it again here to DPAPI-encrypt it for your account."
 msgstr "AVERTISSEMENT : ce jeton est stocké EN CLAIR dans analyser.ini. Enregistrez-le à nouveau ici pour le chiffrer par DPAPI pour votre compte."
+
+msgid "%d hidden by baseline"
+msgstr "%d masqués par la base"
+
+msgid "**Before (line %s):**"
+msgstr "**Avant (ligne %s) :**"
+
+msgid "**After (paste directly):**"
+msgstr "**Après (coller directement) :**"
+
+msgid "No entries for this filter."
+msgstr "Aucune entrée pour ce filtre."
+
+msgid "Jira mini issue copied to clipboard: %s, line %s (%s)"
+msgstr "Mini-ticket Jira copié dans le presse-papiers : %s, ligne %s (%s)"
+
+msgid "Jira export failed: "
+msgstr "Échec de l'export Jira : "
+
+msgid "Clipboard copy failed: "
+msgstr "Échec de la copie dans le presse-papiers : "
+
+msgid "Message"
+msgstr "Message"
+
+msgid "Fix hint"
+msgstr "Astuce de correction"
+
+msgid "Text (one-line hint, no window)"
+msgstr "Texte (conseil sur une ligne, sans fenêtre)"
+
+msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by clicking its text. Takes effect on save."
+msgstr "N'affecte que la bande de marqueurs de l'éditeur, la mini-barre d'information et la barre de titre de la surimpression au survol. Le panneau Propriétés et la grille principale conservent les couleurs de sévérité par défaut. Les variantes claire/sombre sont automatiques. \"Texte\" remplace la fenêtre de surimpression par un conseil transparent sur une ligne (badge + nom de la règle, sans bloc description/correction - voir le panneau des résultats) ; pour écarter un résultat, cliquez sur son texte. Prend effet à l'enregistrement."
+
+msgid "--- Errors (A-Z) ---"
+msgstr "--- Erreurs (A-Z) ---"
+
+msgid "--- Warnings (A-Z) ---"
+msgstr "--- Avertissements (A-Z) ---"
+
+msgid "--- Hints (A-Z) ---"
+msgstr "--- Conseils (A-Z) ---"
+
+msgid "DFM Viewer"
+msgstr "Visionneuse DFM"
+
+msgid "More than %d files found - scan cancelled."
+msgstr "Plus de %d fichiers trouvés - analyse annulée."
+
+msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."
+msgstr "Envoi Sonar : .sonar\\external\\ contient désormais exactement ces %d fichier(s) de problèmes - les fichiers des envois précédents ont été supprimés."

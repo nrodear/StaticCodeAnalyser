@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# i18n_audit.sh - Vergleicht alle _()-Strings im Source-Tree gegen die
-# msgids JEDER ausgelieferten i18n/<code>.po. Liefert je Sprache die Liste
-# fehlender und toter Eintraege.
+# i18n_audit.sh - Vergleicht die Quell-Strings aus i18n/template.pot gegen
+# die msgids JEDER ausgelieferten i18n/<code>.po. Liefert je Sprache die
+# Liste fehlender und toter Eintraege.
+#
+# template.pot ist die massgebliche Quell-String-Liste; erzeugt wird sie von
+# tools/i18n_extract.py. Dieses Skript extrahiert NICHT selbst - siehe die
+# Begruendung an der Lese-Stelle weiter unten.
 #
 # Nutzung:
 #   tools/i18n_audit.sh                  # Zusammenfassung, alle Sprachen
@@ -22,17 +26,40 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
-src_dir1="$repo_root/StaticCodeAnalyserForm/sources"
-src_dir2="$repo_root/StaticCodeAnalyserIDE"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
-# 1. Source-Strings: alle _('...')-Aufrufe extrahieren.
-#    Beschraenkung: Strings ohne eingebettete Apostrophen ('' Escape im
-#    Source) - das deckt >99% der echten UI-Strings ab.
-grep -rohE "_\('[^']*'\)" "$src_dir1" "$src_dir2" 2>/dev/null \
-  | sed -E "s/^_\('(.*)'\)$/\1/" | sort -u > "$tmp_dir/src.txt"
+# 1. Source-Strings kommen aus i18n/template.pot - NICHT mehr aus einer
+#    eigenen grep-Extraktion.
+#
+#    WARUM (2026-08-18): die alte Zeile lief mit `grep -roh` ueber
+#    StaticCodeAnalyserForm/sources und StaticCodeAnalyserIDE, und zwar
+#    OHNE Dateityp-Filter. Damit las sie Delphis __history/-Sicherungen
+#    und .bak2/.bak3-Dateien mit. Von 329 gemeldeten Quell-Strings waren
+#    111 Phantome aus alten Fassungen - 34 %. Das Gate meldete Strings,
+#    die es im Quelltext gar nicht mehr gibt, stand deshalb dauerhaft auf
+#    Exit 1 und wurde folgerichtig ignoriert. Zugleich sah es NUR diese
+#    zwei Verzeichnisse und verpasste die _()-Strings aus SCA.Engine und
+#    SCA.SharedUI.
+#
+#    tools/i18n_extract.py macht beides richtig (SOURCE_SUFFIXES auf
+#    .pas/.dpr/.dpk/.inc, EXCLUDED_DIRS mit __history) und schreibt das
+#    Ergebnis nach i18n/template.pot. Diese Datei IST die Liste der
+#    Quell-Strings. Sie hier ein zweites Mal nachzubauen war die Ursache
+#    der Drift - zwei Extraktionen, die auseinanderlaufen koennen.
+#
+#    VORAUSSETZUNG: template.pot ist aktuell. Nach Aenderungen an
+#    _()-Strings zuerst `python tools/i18n_extract.py` laufen lassen.
+pot_file="$repo_root/i18n/template.pot"
+if [ ! -f "$pot_file" ]; then
+  echo "i18n/template.pot fehlt - erst 'python tools/i18n_extract.py' laufen lassen." >&2
+  exit 2
+fi
+grep -E '^msgid "' "$pot_file" \
+  | sed -E 's/^msgid "(.*)"$/\1/' \
+  | sed 's/\\"/"/g; s/\\\\/\\/g' \
+  | grep -v '^$' | sort -u > "$tmp_dir/src.txt"
 src_count=$(wc -l < "$tmp_dir/src.txt")
 
 # 2. msgids je Sprache. po-Format escaped Quotes als `\"`; nach dem
