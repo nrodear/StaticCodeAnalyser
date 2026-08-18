@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2053 Zeilen, 70463 Bytes
+  // i18n\de.po - 2053 Zeilen, 72516 Bytes
   CPoLines_de: array[0..2052] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -2275,8 +2275,8 @@ const
     'msgstr "Opened: %s  Line: %d"'
   );
 
-  // i18n\fr.po - 1998 Zeilen, 73626 Bytes
-  CPoLines_fr: array[0..1997] of string = (
+  // i18n\fr.po - 2049 Zeilen, 76018 Bytes
+  CPoLines_fr: array[0..2048] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4274,7 +4274,58 @@ const
     'msgstr "Ouvert : %s  Ligne : %d"',
     '',
     'msgid "WARNING: this token is stored as PLAINTEXT in analyser.ini. Save it again here to DPAPI-encrypt it for your account."',
-    'msgstr "AVERTISSEMENT : ce jeton est stock'#$00E9' EN CLAIR dans analyser.ini. Enregistrez-le '#$00E0' nouveau ici pour le chiffrer par DPAPI pour votre compte."'
+    'msgstr "AVERTISSEMENT : ce jeton est stock'#$00E9' EN CLAIR dans analyser.ini. Enregistrez-le '#$00E0' nouveau ici pour le chiffrer par DPAPI pour votre compte."',
+    '',
+    'msgid "%d hidden by baseline"',
+    'msgstr "%d masqu'#$00E9's par la base"',
+    '',
+    'msgid "**Before (line %s):**"',
+    'msgstr "**Avant (ligne %s) :**"',
+    '',
+    'msgid "**After (paste directly):**"',
+    'msgstr "**Apr'#$00E8's (coller directement) :**"',
+    '',
+    'msgid "No entries for this filter."',
+    'msgstr "Aucune entr'#$00E9'e pour ce filtre."',
+    '',
+    'msgid "Jira mini issue copied to clipboard: %s, line %s (%s)"',
+    'msgstr "Mini-ticket Jira copi'#$00E9' dans le presse-papiers : %s, ligne %s (%s)"',
+    '',
+    'msgid "Jira export failed: "',
+    'msgstr "'#$00C9'chec de l''export Jira : "',
+    '',
+    'msgid "Clipboard copy failed: "',
+    'msgstr "'#$00C9'chec de la copie dans le presse-papiers : "',
+    '',
+    'msgid "Message"',
+    'msgstr "Message"',
+    '',
+    'msgid "Fix hint"',
+    'msgstr "Astuce de correction"',
+    '',
+    'msgid "Text (one-line hint, no window)"',
+    'msgstr "Texte (conseil sur une ligne, sans fen'#$00EA'tre)"',
+    '',
+    'msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by clicking its text. Takes effect on save."',
+    'msgstr "N''affecte que la bande de marqueurs de l'''#$00E9'diteur, la mini-barre d''information et la barre de titre de la surimpression au survol. Le panneau Propri'#$00E9't'#$00E9's et la grille principale conservent les couleurs de s'#$00E9'v'#$00E9'rit'#$00E9' par d'#$00E9'faut. Les variantes claire/sombre sont automatiques. \"Texte\" remplace la fen'#$00EA'tre de surimpression par un conseil transparent sur une ligne (badge + nom de la r'#$00E8'gle, sans bloc description/correction - voir le panneau des r'#$00E9'sultats) ; pour '#$00E9'carter un r'#$00E9'sultat, cliquez sur son texte. Prend effet '#$00E0' l''enregistrement."',
+    '',
+    'msgid "--- Errors (A-Z) ---"',
+    'msgstr "--- Erreurs (A-Z) ---"',
+    '',
+    'msgid "--- Warnings (A-Z) ---"',
+    'msgstr "--- Avertissements (A-Z) ---"',
+    '',
+    'msgid "--- Hints (A-Z) ---"',
+    'msgstr "--- Conseils (A-Z) ---"',
+    '',
+    'msgid "DFM Viewer"',
+    'msgstr "Visionneuse DFM"',
+    '',
+    'msgid "More than %d files found - scan cancelled."',
+    'msgstr "Plus de %d fichiers trouv'#$00E9's - analyse annul'#$00E9'e."',
+    '',
+    'msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."',
+    'msgstr "Envoi Sonar : .sonar\\external\\ contient d'#$00E9'sormais exactement ces %d fichier(s) de probl'#$00E8'mes - les fichiers des envois pr'#$00E9'c'#$00E9'dents ont '#$00E9't'#$00E9' supprim'#$00E9's."'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
