@@ -57,17 +57,28 @@ if [ ! -f "$pot_file" ]; then
   echo "i18n/template.pot fehlt - erst 'python tools/i18n_extract.py' laufen lassen." >&2
   exit 2
 fi
+# EINE Extraktionskette fuer beide Seiten. Sie stand hier zweimal, und
+# die zwei Kopien MUESSEN zeichengleich bleiben: weicht eine sed-Stufe
+# ab, meldet comm die Differenz als fehlende Uebersetzungen. Genau so
+# wurde das Gate 2026-08-18 wertlos - 531 Phantom-Missing je Sprache in
+# CI, waehrend es lokal gruen war.
+#
 # tr -d CR ZUERST: auf ubuntu-Runnern checkt .gitattributes die .po mit
-# CRLF aus, die .pot ohne - mit \r im Zeilenrest matcht weder das
-# sed-Muster noch spaeter comm, und das Gate stand in CI dauerhaft auf
-# Exit 1 (531 Phantom-Missing je Sprache), waehrend es lokal unter
-# Git-Bash gruen war. sed '/^$/d' statt 'grep -v': grep liefert rc 1,
-# wenn es nichts auswaehlt, und risse unter pipefail das ganze Skript.
-grep -E '^msgid "' "$pot_file" \
-  | tr -d '\r' \
-  | sed -E 's/^msgid "(.*)"$/\1/' \
-  | sed 's/\\"/"/g; s/\\\\/\\/g' \
-  | sed '/^$/d' | sort -u > "$tmp_dir/src.txt"
+# CRLF aus, die .pot ohne - mit CR im Zeilenrest matcht weder das
+# sed-Muster noch spaeter comm. sed '/^$/d' statt 'grep -v': grep
+# liefert rc 1, wenn es nichts auswaehlt, und risse unter pipefail das
+# ganze Skript. Das '|| true' deckt denselben Fall fuer eine LEERE
+# Datei ab - ohne es starb das Skript wortlos mit Exit 1, und der
+# Aufrufer las das als "Uebersetzungen fehlen" statt "Datei kaputt".
+extract_msgids() {
+  { grep -E '^msgid "' "$1" || true; } \
+    | tr -d '\r' \
+    | sed -E 's/^msgid "(.*)"$/\1/' \
+    | sed 's/\\"/"/g; s/\\\\/\\/g' \
+    | sed '/^$/d' | sort -u
+}
+
+extract_msgids "$pot_file" > "$tmp_dir/src.txt"
 src_count=$(wc -l < "$tmp_dir/src.txt")
 if [ "$src_count" -eq 0 ]; then
   echo "template.pot enthaelt keine msgids - erst 'python tools/i18n_extract.py' laufen lassen." >&2
@@ -83,11 +94,11 @@ langs=()
 for po in "$repo_root"/i18n/*.po; do
   code="$(basename "$po" .po)"
   [ "$code" = "en" ] && continue
-  grep -E '^msgid "' "$po" \
-    | tr -d '\r' \
-    | sed -E 's/^msgid "(.*)"$/\1/' \
-    | sed 's/\\"/"/g; s/\\\\/\\/g' \
-    | sed '/^$/d' | sort -u > "$tmp_dir/$code.txt"
+  extract_msgids "$po" > "$tmp_dir/$code.txt"
+  if [ ! -s "$tmp_dir/$code.txt" ]; then
+    echo "i18n/$code.po enthaelt keine msgids - Datei leer oder nur Header." >&2
+    exit 2
+  fi
   langs+=("$code")
 done
 
