@@ -318,6 +318,15 @@ type
     // Property-Alias 2026-08-18: Freigabe ueber den oeffentlichen Namen.
     [Test] procedure Field_FreedViaPropertyAlias_NoFinding;
     [Test] procedure Field_FreedViaForeignName_StillReported;
+    // Fixture-Gate 2026-08-18: der Feld-Pfad hatte keins.
+    [Test] procedure Field_InFixturePath_NotReported;
+    [Test] procedure Field_InProductionPath_StillReported;
+  private
+    // Parst ASrc und laesst NUR den Feld-Detektor mit dem
+    // angegebenen Dateinamen darueber laufen. Eigener Helfer,
+    // weil der Dateiname hier die Testvariable ist -
+    // TFindingHelper.FindingsOf gibt ihn nicht frei.
+    function FieldLeakCount(const ASrc, AFileName: string): Integer;
   end;
 
 implementation
@@ -329,7 +338,8 @@ uses
   // uTypeIndex (2026-07-31): das TComponent-Owner-Gate Stufe 1 braucht einen
   // gefuellten Cross-Unit-Typindex - der ist nur ueber einen echten
   // TAnalyzeContext testbar (FindingsOf ruft mit AContext=nil).
-  uParser2, uAstNode, uAnalyzeContext, uLeakDetector2, uTypeIndex;
+  uParser2, uAstNode, uAnalyzeContext, uLeakDetector2, uTypeIndex,
+  uFieldLeak;   // Direktaufruf mit kontrolliertem Dateinamen (Fixture-Gate)
 
 { ---- MemoryLeak ---- }
 
@@ -5638,5 +5648,96 @@ begin
   finally F.Free; end;
 end;
 
+
+
+function TTestFieldLeak.FieldLeakCount(const ASrc,
+  AFileName: string): Integer;
+// EIN try/finally mit nil-Vorbelegung statt drei geschachtelter
+// Bloecke - geschachtelte try-Ebenen sind im Selbstscan ein Fund, und
+// hier bringen sie nichts: keiner der drei Aufraeumschritte haengt vom
+// Gelingen eines anderen ab.
+var
+  Prs  : TParser2;
+  Root : TAstNode;
+  Res  : TObjectList<TLeakFinding>;
+begin
+  Prs  := nil;
+  Root := nil;
+  Res  := nil;
+  try
+    Prs  := TParser2.Create;
+    Root := Prs.ParseSource(ASrc);
+    Res  := TObjectList<TLeakFinding>.Create(True);
+    TFieldLeakDetector.AnalyzeUnit(Root, AFileName, Res);
+    Result := TFindingHelper.Count(Res, fkMemoryLeak);
+  finally
+    Res.Free;
+    Root.Free;
+    Prs.Free;
+  end;
+end;
+
+procedure TTestFieldLeak.Field_InFixturePath_NotReported;
+// Der Feld-Pfad besass bis zum 18.08. KEIN Fixture-Gate, obwohl der
+// Lokal-Pfad (TLeakDetector2.AnalyzeUnit) seit dem Restschulden-Audit
+// eines fuehrt und beide unter SCA001 melden. Am Korpus gemessen lagen
+// dadurch 67 von 114 Feld-Funden in Testverzeichnissen - 59 Prozent.
+//
+// AContext bleibt nil: CtxScanRoot liefert dann einen Leerstring, es
+// gilt also das dokumentierte unverankerte Alt-Verhalten, bei dem
+// allein das Pfad-Segment entscheidet.
+//
+// Die Fixture erzeugt ein TStringList-Feld im Konstruktor und hat
+// KEINEN Destruktor - dieselbe Form, die
+// Field_NoDestructor_ReportsError als meldend festhaelt. Ohne den
+// Gate stuende hier also ein Fund.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TFoo = class'#13#10+
+  'private'#13#10+
+  '  FItems: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TFoo.Create;'#13#10+
+  'begin'#13#10+
+  '  FItems := TStringList.Create;'#13#10+
+  'end;';
+begin
+  // Pfad zur LAUFZEIT zusammensetzen: ein Literal der Form
+  // C:\proj\tests\Foo.pas waere im Selbstscan selbst ein
+  // HardcodedPath-Fund.
+  Assert.AreEqual<Integer>(0,
+    FieldLeakCount(SRC, 'C:' + PathDelim + 'proj' + PathDelim +
+                        'tests' + PathDelim + 'Foo.pas'),
+    'Feld-Funde aus einem tests-Verzeichnis gehoeren nicht in den Bericht');
+end;
+
+procedure TTestFieldLeak.Field_InProductionPath_StillReported;
+// WAECHTER: derselbe Helfer, aber ein normaler Quellpfad. Haelt fest,
+// dass der Gate NUR an Testverzeichnissen greift und nicht
+// stillschweigend den ganzen Feld-Pfad abschaltet. Klassen- und
+// Feldname variiert, damit die beiden Fixturen nicht als Duplikat
+// zaehlen.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TWidget = class'#13#10+
+  'private'#13#10+
+  '  FCache: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TWidget.Create;'#13#10+
+  'begin'#13#10+
+  '  FCache := TStringList.Create;'#13#10+
+  'end;';
+begin
+  Assert.IsTrue(
+    FieldLeakCount(SRC, 'C:' + PathDelim + 'proj' + PathDelim +
+                        'source' + PathDelim + 'Bar.pas') >= 1,
+    'ausserhalb von Testverzeichnissen muss der Feld-Pfad weiter melden');
+end;
 
 end.
