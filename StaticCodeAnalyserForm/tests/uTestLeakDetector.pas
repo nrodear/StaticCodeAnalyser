@@ -275,6 +275,11 @@ type
     [Test] procedure Leak_IndexedLocalArray_StillReported;
     // Empfaenger-Veto: Objects/Items/Lines besitzen NICHT.
     [Test] procedure Leak_IndexedNonOwningAccessor_StillReported;
+    // Form-Verankerung (Review-Blocker 2026-08-18): drei Formen, die
+    // die erste Gate-Fassung faelschlich schluckte.
+    [Test] procedure Leak_IndexedElementProperty_StillReported;
+    [Test] procedure Leak_IndexedElementNonOwning_StillReported;
+    [Test] procedure Leak_IndexedUnqualifiedNonOwning_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -5412,6 +5417,107 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
     'Objects[] uebernimmt keine Ownership - der Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_IndexedElementProperty_StillReported;
+// WAECHTER Form-Verankerung, Teil 1: die Zuweisung geht an eine PROPERTY
+// eines indizierten Elements, nicht in die Klammergruppe selbst -
+// 'Slots[I].Item := LNode' endet nicht auf ']'. Eine Property-Zuweisung
+// ist kein Container-Transfer; die erste Gate-Fassung nahm die ERSTE
+// Klammer und schluckte genau diese Form (Muster: Pages[i].PopupMenu).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  '  TSlot = class'#13#10+
+  '  public'#13#10+
+  '    Item: TSynObjectList;'#13#10+
+  '  end;'#13#10+
+  '  TRack = class'#13#10+
+  '  public'#13#10+
+  '    Slots: array[0..3] of TSlot;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure Fill(ARack: TRack; I: Integer);'#13#10+
+  'var'#13#10+
+  '  LNode: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LNode := TSynObjectList.Create;'#13#10+
+  '  ARack.Slots[I].Item := LNode;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'Property eines indizierten Elements ist kein Transfer');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_IndexedElementNonOwning_StillReported;
+// WAECHTER Form-Verankerung, Teil 2: bei einer KETTE entscheidet der
+// Empfaenger der LETZTEN Klammergruppe - hier 'Objects', der
+// kanonisch nicht-besitzende Zugang. Die erste Fassung prueft das
+// Segment vor der ERSTEN Klammer ('Rows') und sah das Veto nie -
+// ausgerechnet auf dem Kanal, ueber den laut A/B-Messung ALLE 14
+// Korpus-Rueckkehrer liefen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure Fill(AGrid: TObject; I, J: Integer);'#13#10+
+  'var'#13#10+
+  '  LNode: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LNode := TSynObjectList.Create;'#13#10+
+  '  AGrid.Rows[I].Objects[J] := LNode;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'das Veto muss den Empfaenger der letzten Gruppe sehen');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_IndexedUnqualifiedNonOwning_StillReported;
+// WAECHTER, den das Review als fehlend benannt hat: die UNQUALIFIZIERTE
+// Veto-Wurzel. 'Objects[K] := LNode' (implizites Self) muss gemeldet
+// bleiben - eine Fehlimplementierung, die das Veto nur im Punkt-Zweig
+// prueft, liesse alle gepunkteten Tests gruen, waehrend genau der als
+// bewusster Preis dokumentierte Fall still von gemeldet auf exempt
+// kippte.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  '  TKeeper = class'#13#10+
+  '  public'#13#10+
+  '    procedure Stash(N: Integer);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure TKeeper.Stash(N: Integer);'#13#10+
+  'var'#13#10+
+  '  LEntry: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LEntry := TSynObjectList.Create;'#13#10+
+  '  Objects[N] := LEntry;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'das Veto gilt auch fuer die unqualifizierte Wurzel');
   finally F.Free; end;
 end;
 

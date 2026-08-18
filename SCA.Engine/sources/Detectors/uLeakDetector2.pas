@@ -1268,60 +1268,92 @@ var
   end;
 
   function IsForeignIndexedTarget(const ALhsOrig: string): Boolean;
-  // Ist die linke Seite 'X[..]' ein Ziel, das den eigenen Stack-Frame
-  // VERLAESST? Nur dann ist eine Index-Zuweisung eine Ownership-Abgabe.
+  // Ist die linke Seite EXAKT die Form 'X[..]' - ein indiziertes Ziel, das
+  // den eigenen Stack-Frame verlaesst? Nur dann ist die Index-Zuweisung
+  // eine Ownership-Abgabe.
   //
-  // Zwei Faelle, beide belegt im Korpus:
-  //   (a) mit Punkt vor der Klammer - 'ADest.FBuckets[I]',
-  //       'fComponentsSchemas.O[AName]', 'DataList.Objects[I]'. Das Ziel
-  //       liegt in einem ANDEREN Objekt, egal ob die Wurzel eine Lokale,
-  //       ein Parameter oder ein Feld ist: dereferenziert wird immer.
-  //   (b) ohne Punkt - 'Items[HashVal]'. Das ist eine Property oder ein
-  //       Feld von Self (implizites Self), ABER nur dann, wenn die Wurzel
-  //       nicht als Lokale/Parameter deklariert ist. Sonst waere es ein
-  //       lokales Array ('arr[i] := Obj'), und dort leckt das Objekt
-  //       weiterhin - der Frame stirbt mitsamt dem Array.
+  // VERANKERT an der LETZTEN Klammergruppe und am ']'-Ende (Review-Blocker
+  // 2026-08-18): die erste Fassung nahm die ERSTE Klammer und verlangte
+  // kein ']' am Schluss. Damit unterdrueckte sie auch
+  //   'Pages[i].PopupMenu := pm'        (Property-Zuweisung an ein
+  //                                      indiziertes Element - kein Transfer)
+  // und sah bei
+  //   'Grid.Rows[i].Objects[j] := Obj'  (echter Empfaenger: Objects)
+  // nie das Veto-Segment der letzten Gruppe - ausgerechnet den Kanal, ueber
+  // den laut A/B-Messung ALLE 14 Korpus-Rueckkehrer liefen. Beides
+  // maskierte Error-Tier-Lecks.
   //
-  // Fall (b) ist der Grund, warum diese Pruefung ScopeDeclaresIdent
-  // braucht und nicht rein textuell arbeiten kann.
+  // Entscheidung jetzt in vier Schritten:
+  //   1. Form: endet auf ']', letzte Gruppe rueckwaerts balanciert.
+  //   2. Veto: das letzte Punkt-Segment VOR dieser Gruppe (ohne Cast-/
+  //      Klammeranteile) darf kein kanonisch nicht-besitzender Zugang sein
+  //      (Items/Objects/Lines/Strings/Data/Nodes).
+  //   3. Punktkette oder Cast im Praefix -> dereferenziert -> fremd.
+  //   4. Blanke Wurzel: 'Var[i] := Var' und lokale Arrays (auch
+  //      'arr[i][j]') bleiben Funde - der Frame stirbt mitsamt Array.
   var
-    Br      : Integer;
-    RootLow : string;
+    S       : string;
+    Prefix  : string;
     SegLow  : string;
+    RootLow : string;
+    Depth   : Integer;
+    OpenPos : Integer;
+    i, p    : Integer;
   begin
     Result := False;
-    Br := Pos('[', ALhsOrig);
-    if Br < 2 then Exit;              // kein Index bzw. kein Wurzelname
-    RootLow := LowerCase(Copy(ALhsOrig, 1, Br - 1));
+    // Token-Abstaende normalisieren (Review-Verdacht: JoinTokInto kann
+    // Leerraum zwischen Tokens einfuegen; 'arr [0]' ist dieselbe Form).
+    S := LowerCase(Trim(ALhsOrig));
+    S := StringReplace(S, ' [', '[', [rfReplaceAll]);
+    S := StringReplace(S, '[ ', '[', [rfReplaceAll]);
+    S := StringReplace(S, ' ]', ']', [rfReplaceAll]);
+    S := StringReplace(S, ' .', '.', [rfReplaceAll]);
+    S := StringReplace(S, '. ', '.', [rfReplaceAll]);
 
-    // EMPFAENGER-VETO, nachgezogen 2026-08-18 nach der A/B-Messung.
-    // Das Segment unmittelbar vor der Klammer entscheidet mit: bei den
-    // kanonisch NICHT besitzenden Zugaengen (Items/Objects/Lines/Strings/
-    // Data/Nodes) uebernimmt der Container KEINE Ownership.
-    // 'X.Objects[i] := Obj' ist der Lehrbuchfall - TStrings speichert nur
-    // die Referenz und gibt sie in Destroy nie frei; genau deshalb sieht
-    // man ueberall die 'for i := 0 to Count-1 do Objects[i].Free'-Schleifen.
-    //
-    // Der Aufruf-Pfad hat dieses Veto seit dem Review vom 2026-07-31
-    // (ReceiverVetoesSink); mein Zuweisungs-Pfad umging es zunaechst und
-    // haette damit dieselbe Luecke wieder aufgerissen, die damals sieben
-    // echte Error-Tier-Lecks stillgelegt hatte. Am Korpus gemessen betrifft
-    // es 14 Funde (9 SCA001, 5 SCA009), ausnahmslos ueber 'objects['.
-    //
-    // Preis, bewusst getragen: 'Items[HashVal] := HashStrings' der
-    // JVCL-Hash-Liste ist ein echter Ownership-Transfer und wird
-    // mitgesperrt. Im Error-Tier ist ein verpasster FP-Fix billiger als ein
-    // verschlucktes Leck.
-    SegLow := RootLow;
-    var DotPos := LastDelimiter('.', SegLow);
-    if DotPos > 0 then
-      SegLow := Copy(SegLow, DotPos + 1, MaxInt);
+    // 1. Form: 'X[..]' - mindestens 'a[x]', und die Zuweisung geht IN die
+    // Klammergruppe, nicht an eine Property dahinter.
+    if (Length(S) < 4) or (S[Length(S)] <> ']') then Exit;
+    Depth := 0;
+    OpenPos := 0;
+    for i := Length(S) downto 1 do
+      case S[i] of
+        ']': Inc(Depth);
+        '[': begin
+               Dec(Depth);
+               if Depth = 0 then
+               begin
+                 OpenPos := i;
+                 Break;
+               end;
+             end;
+      end;
+    if OpenPos < 2 then Exit;         // unbalanciert oder kein Wurzelname
+    Prefix := Copy(S, 1, OpenPos - 1);
+
+    // 2. Veto auf dem Empfaenger der LETZTEN Gruppe.
+    SegLow := Prefix;
+    p := LastDelimiter('.', SegLow);
+    if p > 0 then SegLow := Copy(SegLow, p + 1, MaxInt);
+    p := Pos('[', SegLow);
+    if p > 0 then SegLow := Copy(SegLow, 1, p - 1);
+    p := Pos('(', SegLow);
+    if p > 0 then SegLow := Copy(SegLow, 1, p - 1);
+    if SegLow = '' then Exit;
     if IsNonOwningAccessorSeg(SegLow) then Exit;
 
-    if Pos('.', RootLow) > 0 then     // (a) Member eines anderen Objekts
-      Exit(True);
+    // 3. Punktkette/Cast: das Ziel liegt hinter einer Dereferenzierung -
+    // fremder Speicher, egal ob die Wurzel Lokale, Parameter oder Feld ist.
+    if Pos('.', Prefix) > 0 then Exit(True);
+    if Pos('(', Prefix) > 0 then Exit(True);
+
+    // 4. Blanke (ggf. selbst indizierte) Wurzel: 'items[hashval]' oder
+    // 'arr[i][j]'. Nur wenn die Wurzel KEINE Lokale/Parameter ist, ist es
+    // eine Property bzw. ein Feld von Self (implizites Self).
+    RootLow := Prefix;
+    p := Pos('[', RootLow);
+    if p > 0 then RootLow := Copy(RootLow, 1, p - 1);
+    if RootLow = '' then Exit;
     if RootLow = VarNameLow then Exit;  // 'Var[i] := Var' - keine Abgabe
-    // (b) unqualifiziert: nur wenn die Wurzel KEINE Lokale/Parameter ist.
     Result := not ScopeDeclaresIdent(MethodNode, RootLow);
   end;
 
@@ -1533,23 +1565,29 @@ begin
       // damit offen.
       //
       // ---- INDIZIERTES Ziel in FREMDEM Speicher (2026-08-18) -------------
-      // Das ist NICHT die oben verworfene Erweiterung. Verworfen wurde
-      // "beliebiges Zuweisungsziel", also auch die blanke Nachbar-Lokale.
-      // Hier geht es ausschliesslich um die Form 'X[..] := Var', und auch
-      // die nur, wenn das Ziel den Stack-Frame verlaesst. Genau daran
-      // scheitert 'LOther := LItem' weiterhin: kein Index, kein Match.
+      // Das ist NICHT die oben verworfene Erweiterung: verworfen wurde
+      // "beliebiges Zuweisungsziel" (die blanke Nachbar-Lokale). Hier zaehlt
+      // ausschliesslich die Form 'X[..] := Var', und nur wenn das Ziel den
+      // Stack-Frame verlaesst - Details und Veto in IsForeignIndexedTarget.
       //
-      // Grundlage sind die beiden FP-Audits: die groesste Einzelklasse von
-      // SCA001 ist "Ownership-Uebergabe an einen besitzenden Container",
-      // und die haeufigste Schreibweise ist die Index-Zuweisung statt des
-      // Add-Aufrufs, den das Senken-Gate bereits kennt:
-      //   Items[HashVal] := HashStrings          (JVCL JvSALHashList)
+      // NUR fuer SCA001: der Vertrag an der Deklaration dieser Funktion
+      // (AUnitNode, s.o.) sagt ausdruecklich, dass sich SCA009
+      // (TMissingFinallyDetector, ruft mit Default nil) NICHT bewegen darf.
+      // Die erste Fassung stand vor dieser Klammer und bewegte SCA009 mit -
+      // und zwar auch dort, wo ein lokales 'L.Free' die Transfer-Annahme
+      // gerade widerlegt (Free vorhanden, nur ungeschuetzt: exakt der
+      // SCA009-Fund). Der Ctor-RHS-Zweig weiter oben respektiert dieselbe
+      // Klammer aus demselben Grund (Review-Fund 2026-08-05).
+      //
+      // Belegte Korpus-Faelle, die das Gate unterdrueckt:
       //   ADest.FBuckets[I] := NewBucket         (JCL HashMaps/HashSets, 4x)
       //   fComponentsSchemas.O[AName] := lSchema (DMVC OpenAPI3)
       //   TJSONObject(aJSON).O[Name] := o        (TES5Edit)
-      //   DataList.Objects[I] := Info            (Stufe 2)
-      // In allen Faellen raeumt der Container im eigenen Clear/Destroy ab.
-      if IsForeignIndexedTarget(LHSOrig) then
+      // NICHT unterdrueckt, weil das Empfaenger-Veto greift (bewusster
+      // Preis, s. IsForeignIndexedTarget):
+      //   Items[HashVal] := HashStrings          (JVCL JvSALHashList)
+      //   DataList.Objects[I] := Info
+      if Assigned(AUnitNode) and IsForeignIndexedTarget(LHSOrig) then
         Exit(True);
     end;
   end;

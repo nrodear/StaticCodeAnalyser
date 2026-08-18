@@ -13,7 +13,8 @@
 #   tools/i18n_audit.sh --dead    [de]   # nur tote Eintraege
 #   tools/i18n_audit.sh --json           # maschinenlesbar, alle Sprachen
 #
-# EXIT-CODE: 0 wenn in KEINER Sprache ein Quell-String fehlt, sonst 1.
+# EXIT-CODE: 0 wenn in KEINER Sprache ein Quell-String fehlt; 1 bei
+# fehlenden Strings; 2 bei Aufruffehlern (template.pot fehlt oder leer).
 # Tote Eintraege werden berichtet, schlagen aber NICHT fehl. Grund: ein
 # fehlender String ist ein sichtbarer Mangel - die Oberflaeche faellt still
 # auf Englisch zurueck. Ein toter Eintrag kostet nur ein paar Byte. Solange
@@ -56,11 +57,22 @@ if [ ! -f "$pot_file" ]; then
   echo "i18n/template.pot fehlt - erst 'python tools/i18n_extract.py' laufen lassen." >&2
   exit 2
 fi
+# tr -d CR ZUERST: auf ubuntu-Runnern checkt .gitattributes die .po mit
+# CRLF aus, die .pot ohne - mit \r im Zeilenrest matcht weder das
+# sed-Muster noch spaeter comm, und das Gate stand in CI dauerhaft auf
+# Exit 1 (531 Phantom-Missing je Sprache), waehrend es lokal unter
+# Git-Bash gruen war. sed '/^$/d' statt 'grep -v': grep liefert rc 1,
+# wenn es nichts auswaehlt, und risse unter pipefail das ganze Skript.
 grep -E '^msgid "' "$pot_file" \
+  | tr -d '\r' \
   | sed -E 's/^msgid "(.*)"$/\1/' \
   | sed 's/\\"/"/g; s/\\\\/\\/g' \
-  | grep -v '^$' | sort -u > "$tmp_dir/src.txt"
+  | sed '/^$/d' | sort -u > "$tmp_dir/src.txt"
 src_count=$(wc -l < "$tmp_dir/src.txt")
+if [ "$src_count" -eq 0 ]; then
+  echo "template.pot enthaelt keine msgids - erst 'python tools/i18n_extract.py' laufen lassen." >&2
+  exit 2
+fi
 
 # 2. msgids je Sprache. po-Format escaped Quotes als `\"`; nach dem
 #    Strippen der aeusseren Quotes wird `\"` zurueck zu `"` normalisiert,
@@ -72,9 +84,10 @@ for po in "$repo_root"/i18n/*.po; do
   code="$(basename "$po" .po)"
   [ "$code" = "en" ] && continue
   grep -E '^msgid "' "$po" \
+    | tr -d '\r' \
     | sed -E 's/^msgid "(.*)"$/\1/' \
     | sed 's/\\"/"/g; s/\\\\/\\/g' \
-    | grep -v '^$' | sort -u > "$tmp_dir/$code.txt"
+    | sed '/^$/d' | sort -u > "$tmp_dir/$code.txt"
   langs+=("$code")
 done
 

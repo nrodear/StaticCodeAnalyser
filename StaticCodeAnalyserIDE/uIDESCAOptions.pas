@@ -858,6 +858,12 @@ begin
   end;
   if Assigned(chkOverlayShowOnHover) then
     ASettings.OverlayShowOnHover := chkOverlayShowOnHover.Checked;
+  // Modulcache des Highlighters sofort nachziehen - per WERT, weil
+  // SaveToSettings VOR dem INI-Write laeuft. Der Aufruf steht BEI der
+  // Checkbox und nicht im cboEditorColorScheme-Block darunter: dort hing
+  // er am Guard eines FREMDEN Controls und waere still entfallen, wenn
+  // nur das Combo fehlt (Review 2026-08-18).
+  RefreshShowOnHoverCache(ASettings.OverlayShowOnHover);
   if Assigned(cboEditorColorScheme) then
   begin
     ASettings.OverlayTextOnly :=
@@ -867,10 +873,6 @@ begin
     // Overlay-Fenster und setzt die Klick-Caches zurueck (Review
     // 2026-08-13). Ohne Moduswechsel ist der Aufruf ein No-op.
     RefreshTextOnlyHintCache(ASettings.OverlayTextOnly);
-    // OverlayShowOnHover hat keine eigene Oberflaeche, wird beim Speichern
-    // aber mitgeschrieben - der Modulcache muss dem folgen, sonst haelt er
-    // bis zum naechsten Plugin-Start einen ueberholten Wert.
-    RefreshShowOnHoverCache(ASettings.OverlayShowOnHover);
     if not ASettings.OverlayTextOnly then
     begin
       ASettings.EditorColorScheme := EditorColorSchemeToStr(
