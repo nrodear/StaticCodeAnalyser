@@ -198,6 +198,13 @@ uses
 function SinkCallPassesVar(AScope: TAstNode;
   const ATextOrig, VarNameLow: string): Boolean; forward;
 
+// Ebenfalls weiter unten definiert: prueft, ob NameLow in AScope als lokale
+// Variable oder Parameter DEKLARIERT ist. IsPassedToOwner braucht das fuer
+// das Zuweisungs-Senken-Gate (Fremdspeicher gegen eigenen Stack-Frame),
+// steht aber ueber der Definition.
+function ScopeDeclaresIdent(AScope: TAstNode;
+  const NameLow: string): Boolean; forward;
+
 { ---- Wortgrenz-Hilfsfunktionen ---- }
 
 class function TLeakDetector2.IsIdentChar(C: Char): Boolean;
@@ -1255,6 +1262,38 @@ var
     end;
   end;
 
+  function IsForeignIndexedTarget(const ALhsOrig: string): Boolean;
+  // Ist die linke Seite 'X[..]' ein Ziel, das den eigenen Stack-Frame
+  // VERLAESST? Nur dann ist eine Index-Zuweisung eine Ownership-Abgabe.
+  //
+  // Zwei Faelle, beide belegt im Korpus:
+  //   (a) mit Punkt vor der Klammer - 'ADest.FBuckets[I]',
+  //       'fComponentsSchemas.O[AName]', 'DataList.Objects[I]'. Das Ziel
+  //       liegt in einem ANDEREN Objekt, egal ob die Wurzel eine Lokale,
+  //       ein Parameter oder ein Feld ist: dereferenziert wird immer.
+  //   (b) ohne Punkt - 'Items[HashVal]'. Das ist eine Property oder ein
+  //       Feld von Self (implizites Self), ABER nur dann, wenn die Wurzel
+  //       nicht als Lokale/Parameter deklariert ist. Sonst waere es ein
+  //       lokales Array ('arr[i] := Obj'), und dort leckt das Objekt
+  //       weiterhin - der Frame stirbt mitsamt dem Array.
+  //
+  // Fall (b) ist der Grund, warum diese Pruefung ScopeDeclaresIdent
+  // braucht und nicht rein textuell arbeiten kann.
+  var
+    Br      : Integer;
+    RootLow : string;
+  begin
+    Result := False;
+    Br := Pos('[', ALhsOrig);
+    if Br < 2 then Exit;              // kein Index bzw. kein Wurzelname
+    RootLow := LowerCase(Copy(ALhsOrig, 1, Br - 1));
+    if Pos('.', RootLow) > 0 then     // (a) Member eines anderen Objekts
+      Exit(True);
+    if RootLow = VarNameLow then Exit;  // 'Var[i] := Var' - keine Abgabe
+    // (b) unqualifiziert: nur wenn die Wurzel KEINE Lokale/Parameter ist.
+    Result := not ScopeDeclaresIdent(MethodNode, RootLow);
+  end;
+
   function VarItselfInArgs(const CallName: string; AfterPos: Integer): Boolean;
   // Wie VarInArgs, aber die Variable muss SELBST uebergeben werden - nicht
   // ein Member von ihr. Belegt am Korpus (after141):
@@ -1461,6 +1500,26 @@ begin
       // (mormot 'CurrDict := v', jcl 'Stream := SA') brauchen Typwissen -
       // Schleifen-/Interface-Variable statt Nachbar-Local - und bleiben
       // damit offen.
+      //
+      // ---- INDIZIERTES Ziel in FREMDEM Speicher (2026-08-18) -------------
+      // Das ist NICHT die oben verworfene Erweiterung. Verworfen wurde
+      // "beliebiges Zuweisungsziel", also auch die blanke Nachbar-Lokale.
+      // Hier geht es ausschliesslich um die Form 'X[..] := Var', und auch
+      // die nur, wenn das Ziel den Stack-Frame verlaesst. Genau daran
+      // scheitert 'LOther := LItem' weiterhin: kein Index, kein Match.
+      //
+      // Grundlage sind die beiden FP-Audits: die groesste Einzelklasse von
+      // SCA001 ist "Ownership-Uebergabe an einen besitzenden Container",
+      // und die haeufigste Schreibweise ist die Index-Zuweisung statt des
+      // Add-Aufrufs, den das Senken-Gate bereits kennt:
+      //   Items[HashVal] := HashStrings          (JVCL JvSALHashList)
+      //   ADest.FBuckets[I] := NewBucket         (JCL HashMaps/HashSets, 4x)
+      //   fComponentsSchemas.O[AName] := lSchema (DMVC OpenAPI3)
+      //   TJSONObject(aJSON).O[Name] := o        (TES5Edit)
+      //   DataList.Objects[I] := Info            (Stufe 2)
+      // In allen Faellen raeumt der Container im eigenen Clear/Destroy ab.
+      if IsForeignIndexedTarget(LHSOrig) then
+        Exit(True);
     end;
   end;
 

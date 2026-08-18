@@ -268,6 +268,11 @@ type
     [Test] procedure Leak_VarParamIndexedReturn_NoFinding;
     [Test] procedure Leak_ConstParamAssign_StillReported;
     [Test] procedure Leak_PlainLocalAssign_StillReported;
+    // Indiziertes Ziel in fremdem Speicher (2026-08-18):
+    // groesste FP-Klasse von SCA001 laut beiden Audits.
+    [Test] procedure Leak_IndexedForeignField_OwnershipRecognized;
+    [Test] procedure Leak_IndexedSelfProperty_OwnershipRecognized;
+    [Test] procedure Leak_IndexedLocalArray_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -5272,6 +5277,102 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
     'Zuweisung an eine lokale Variable ist kein Rueckgabeweg');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_IndexedForeignField_OwnershipRecognized;
+// Fall (a) des Gates: die linke Seite traegt einen Punkt VOR der
+// Klammer, das Ziel liegt also in einem ANDEREN Objekt. Belegt im
+// Korpus durch die JCL-Hashmaps (4x dieselbe Form):
+//   ADest.FBuckets[I] := NewBucket
+// TJclIntegerHashMap.Clear/Destroy gibt die Buckets frei - der
+// Aufrufer darf und soll hier NICHT freigeben.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  '  TDest = class'#13#10+
+  '    FBuckets: array[0..3] of TSynObjectList;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure Build(ADest: TDest; I: Integer);'#13#10+
+  'var'#13#10+
+  '  LItem: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LItem := TSynObjectList.Create;'#13#10+
+  '  ADest.FBuckets[I] := LItem;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Index-Zuweisung in ein fremdes Objekt ist eine Ownership-Abgabe');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_IndexedSelfProperty_OwnershipRecognized;
+// Fall (b): KEIN Punkt, die Wurzel ist eine indizierte Property von
+// Self (implizites Self). Belegt durch JVCL JvSALHashList:
+//   Items[HashVal] := HashStrings
+// Entscheidend ist, dass die Wurzel NICHT als Lokale oder Parameter
+// deklariert ist - genau das trennt sie vom Waechter unten.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  '  THolder = class'#13#10+
+  '  public'#13#10+
+  '    property Slots[I: Integer]: TSynObjectList;'#13#10+
+  '    procedure Fill(K: Integer);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure THolder.Fill(K: Integer);'#13#10+
+  'var'#13#10+
+  '  LNode: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LNode := TSynObjectList.Create;'#13#10+
+  '  Slots[K] := LNode;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Index-Zuweisung in eine Property von Self ist eine Ownership-Abgabe');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_IndexedLocalArray_StillReported;
+// WAECHTER, und der wichtigste der drei: ein LOKALES Array ist kein
+// fremder Speicher. Der Frame stirbt mitsamt dem Array, das Objekt
+// leckt. Ohne diesen Test wuerde die naechste Verallgemeinerung des
+// Gates ("Index reicht") genau hier echte Lecks verschlucken.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure Collect;'#13#10+
+  'var'#13#10+
+  '  LBag: array[0..2] of TSynObjectList;'#13#10+
+  '  LEntry: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LEntry := TSynObjectList.Create;'#13#10+
+  '  LBag[0] := LEntry;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'ein lokales Array uebernimmt keine Ownership');
   finally F.Free; end;
 end;
 
