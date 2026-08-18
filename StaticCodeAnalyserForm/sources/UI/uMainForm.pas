@@ -377,6 +377,37 @@ const
 
 {$R *.dfm}
 
+function LoadBeforeWrite(ASettings: TRepoSettings): Boolean;
+// Load vor Save - und NUR nach erfolgreichem Load darf geschrieben werden.
+//
+// TRepoSettings.Save schreibt rund 30 Schluessel aus den Objektfeldern in
+// die INI zurueck: Profil, MinSeverity, MinConfidence, Sprache,
+// Baseline-Pfad und -Modus, Editor-Farbschema, die Overlay-Optionen und die
+// [Detectors]-Schalter. Faellt das vorherige Load aus (INI gesperrt, keine
+// Rechte, defekte Datei), stehen genau diese Felder auf den
+// Konstruktor-Defaults - und Save ueberschreibt die komplette Konfiguration
+// des Nutzers mit Werkseinstellungen. Nicht nur die eine Einstellung, die
+// der Klick aendern wollte.
+//
+// Der Kommentar an LanguageMenuClick beschreibt diese Falle seit jeher
+// ("sonst wuerde Save die uebrigen Sections mit den Constructor-Defaults
+// ueberschreiben") - eingehalten wurde sie nicht, weil das Load in einem
+// stillen 'try ... except end' hing und der Ablauf danach unbeirrt weiter
+// zum Save lief. Review-Fund 2026-08-19, dieselbe Klasse wie 3ff1b80 im
+// Plugin.
+//
+// Der Fehler bleibt still (kein Modal-Dialog in einem OnChange), aber
+// folgenlos ist er nicht mehr: der Aufrufer schreibt nicht und sagt es in
+// der Statuszeile.
+begin
+  Result := True;
+  try
+    ASettings.Load;
+  except
+    Result := False;
+  end;
+end;
+
 procedure TForm2.FormCreate(Sender: TObject);
 var
   Settings    : TRepoSettings;
@@ -2277,8 +2308,14 @@ begin
   if (ProfileCombo = nil) or (ProfileCombo.ItemIndex < 0) then Exit;
   Settings := TRepoSettings.Create;
   try
-    try Settings.Load; except end;
+    if not LoadBeforeWrite(Settings) then
+    begin
+      StatusBar1.Panels[2].Text := _('Settings could not be reloaded - nothing was saved.');
+      Exit;
+    end;
     Settings.Profile := ProfileCombo.Items[ProfileCombo.ItemIndex];
+    // Save-Fehler bleiben still: eine schreibgeschuetzte INI soll den Lauf
+    // nicht abbrechen, und die Auswahl wirkt fuer diese Sitzung ohnehin.
     try Settings.Save; except end;
   finally
     Settings.Free;
@@ -2296,9 +2333,13 @@ begin
   if (MinSevCombo = nil) or (MinSevCombo.ItemIndex < 0) then Exit;
   Settings := TRepoSettings.Create;
   try
-    try Settings.Load; except end;
+    if not LoadBeforeWrite(Settings) then
+    begin
+      StatusBar1.Panels[2].Text := _('Settings could not be reloaded - nothing was saved.');
+      Exit;
+    end;
     Settings.MinSeverity := MinSevCombo.Items[MinSevCombo.ItemIndex];
-    try Settings.Save; except end;
+    try Settings.Save; except end;   // s. ProfileComboChange
   finally
     Settings.Free;
   end;
@@ -2796,7 +2837,11 @@ var
 begin
   Settings := TRepoSettings.Create;
   try
-    try Settings.Load; except end;
+    if not LoadBeforeWrite(Settings) then
+    begin
+      StatusBar1.Panels[2].Text := _('Settings could not be reloaded - nothing was saved.');
+      Exit;
+    end;
     if ANewVal then
     begin
       Probed := TStringList.Create;
@@ -3355,10 +3400,16 @@ begin
   try
     // Load vor Save: sonst wuerde Save die uebrigen Sections mit den
     // Constructor-Defaults ueberschreiben (gleiches Muster wie die
-    // Options-Page des IDE-Plugins).
-    try Settings.Load; except end;
+    // Options-Page des IDE-Plugins). Genau das erzwingt LoadBeforeWrite -
+    // vorher stand hier ein stilles 'except end', das den Ablauf trotzdem
+    // zum Save durchliess.
+    if not LoadBeforeWrite(Settings) then
+    begin
+      StatusBar1.Panels[2].Text := _('Settings could not be reloaded - nothing was saved.');
+      Exit;
+    end;
     Settings.Language := Code;
-    try Settings.Save; except end;
+    try Settings.Save; except end;   // s. ProfileComboChange
   finally
     Settings.Free;
   end;

@@ -2051,3 +2051,6 @@ msgstr "Sonar-Push: .sonar\\external\\ enthält jetzt genau diese %d Issue-Datei
 
 msgid "Settings could not be reloaded - baseline filter unchanged."
 msgstr "Einstellungen konnten nicht neu geladen werden - Baseline-Filter unverändert."
+
+msgid "Settings could not be reloaded - nothing was saved."
+msgstr "Einstellungen konnten nicht neu geladen werden - es wurde nichts gespeichert."

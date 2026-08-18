@@ -2047,3 +2047,6 @@ msgstr "Envoi Sonar : .sonar\\external\\ contient désormais exactement ces %d f
 
 msgid "Settings could not be reloaded - baseline filter unchanged."
 msgstr "Impossible de recharger les paramètres - filtre de référence inchangé."
+
+msgid "Settings could not be reloaded - nothing was saved."
+msgstr "Impossible de recharger les paramètres - rien n’a été enregistré."
