@@ -23,6 +23,9 @@ type
     [Test] procedure OwnerParamCreate_NoFinding;
     // TP-Gegenprobe: Create(nil) = caller owns -> Befund bleibt
     [Test] procedure CreateNilOwnerNoFinally_StillReported;
+    // Vertrag an TLeakDetector2.IsPassedToOwner (AUnitNode-Doku):
+    // SCA009 darf sich durch SCA001-Gates NICHT bewegen.
+    [Test] procedure IndexedHandoffThenFree_StillReported;
     // --- Auto-Runde 2026-07-19: Source-Anker fuer FreeInFinallyRegionBySource ---
     // Direkt-Tests gegen die Routine (manuelle ASTs simulieren den Parser-
     // Mis-Attach; der FindingsOf-Harness kann das nicht scharf).
@@ -51,6 +54,14 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12, uAstNode, uLeakDetector2,
   uTestFindingHelper;
+
+// noinspection-file GodClass
+// Eine DUnitX-Fixture-Klasse mit fokussierten Einzeltests ist idiomatisch,
+// auch jenseits der 20-Methoden-Schwelle - dasselbe begruendete Muster wie
+// in uTestDuplicate/uTestDfmDeadEvent. Der 21. Test (IndexedHandoffThen-
+// Free, Vertrags-Waechter zum SCA001-Index-Gate) hat die Schwelle exakt
+// erreicht; ein Split der Klasse wuerde zusammengehoerige SCA009-Faelle
+// auseinanderreissen.
 
 procedure TTestMissingFinally.CreateWithoutTryFinally_Reported;
 const SRC =
@@ -581,6 +592,37 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMissingFinally) >= 1,
     'Exit im try-Teil umgeht den Free -> C2-Gate greift nicht, Fund bleibt');
+  finally F.Free; end;
+end;
+
+
+procedure TTestMissingFinally.IndexedHandoffThenFree_StillReported;
+// VERTRAGS-WAECHTER (Review-Blocker 2026-08-18): das SCA001-Index-Gate
+// in TLeakDetector2.IsPassedToOwner steht hinter der AUnitNode-Klammer,
+// und SCA009 ruft mit Default nil - der Doku-Vertrag an der Deklaration
+// sagt woertlich, dass sich SCA009 NICHT bewegen darf. Die erste
+// Gate-Fassung stand vor der Klammer und unterdrueckte diesen Fund,
+// obwohl das lokale L.Free die Transfer-Annahme gerade widerlegt:
+// vorhanden, nur ungeschuetzt - exakt der SCA009-Befund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(ADest: TObject; I: Integer);'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  ADest.FBuckets[I] := L;'#13#10 +
+  '  try'#13#10 +
+  '    L.Clear;'#13#10 +
+  '  except'#13#10 +
+  '    Log(0);'#13#10 +
+  '  end;'#13#10 +
+  '  L.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMissingFinally) >= 1,
+    'Index-Handoff darf den ungeschuetzten Free nicht verdecken');
   finally F.Free; end;
 end;
 
