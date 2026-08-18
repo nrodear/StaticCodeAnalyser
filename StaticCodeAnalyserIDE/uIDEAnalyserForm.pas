@@ -1693,6 +1693,15 @@ begin
       finally
         FFilterCombo.OnChange := OldOnChange;
       end;
+      // Der Fuzzy-Helfer MUSS von einer programmatischen Auswahl erfahren -
+      // sonst misst sein Tag-Gate in CommitSelection gegen einen
+      // ueberholten Schnappschuss und verschluckt die naechste
+      // Wieder-Auswahl. Genau das passierte hier: nach dem ersten
+      // Separator-Klick klemmte jeder weitere, die Combo zeigte die nicht
+      // waehlbare Trennzeile und das Grid blieb auf dem alten Filter.
+      // Die sechs Kachel-Handler rufen das seit dem Review vom 12.08.,
+      // dieser Pfad war uebersehen worden.
+      if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
       if TFindingFilter.KindFromTag(tag, FFilterKind) then
         FFilterMode := fmSingleKind
       else
@@ -1718,6 +1727,12 @@ begin
     finally
       FFilterCombo.OnChange := OldOnChange;
     end;
+    // Wie im Vorwaerts-Zweig: programmatische Auswahl dem Fuzzy-Helfer
+    // melden. Dieser Zweig ist nur ueber einen Separator am LISTENENDE
+    // erreichbar und damit praktisch tot - der Aufruf schadet dort nicht
+    // und haelt die beiden Haelften gleich, damit der naechste Umbau nicht
+    // wieder nur eine anfasst.
+    if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
     Exit;
   end;
   if TFindingFilter.KindFromTag(tag, FFilterKind) then
@@ -3090,6 +3105,19 @@ procedure TAnalyserFrame.ClearAllFindings;
 // Leert das Plugin-Hauptfenster-Grid komplett. Wird von Op-3
 // (Hard-Reset, Menuepunkt "Reset All Findings") gerufen, plus
 // kuenftig potentiell von anderen UI-Sync-Pfaden.
+//
+// Die Konsistenz-Wiederherstellung steht BEWUSST hier und nicht im
+// Aufrufer: die Routine verspricht "leert komplett", und das muss fuer
+// jeden kuenftigen Aufrufer gelten. Bis 2026-08-18 leerte sie nur Listen
+// und Grid - Kacheln zeigten weiter die Zahlen des geloeschten Scans, die
+// Statuszeile "160 / 160 findings", und die Filter-Combos die Regeln, die
+// es nicht mehr gab. Das heilte auch nicht durch Filter-Interaktion,
+// sondern erst beim naechsten vollen Scan.
+//
+// Reihenfolge wie im uebrigen File (PopulateFindings Z.2179,
+// ToggleBaselineOnlyNew): Stats, dann Combos, dann Filter. ApplyFilter
+// zeichnet das Grid ohnehin neu - das explizite Invalidate bleibt fuer
+// den Fall, dass die Combos gar nicht existieren.
 begin
   if Assigned(FAllFindings) then FAllFindings.Clear;
   if Assigned(FDisplayedFindings) then FDisplayedFindings.Clear;
@@ -3098,6 +3126,9 @@ begin
     FResultGrid.RowCount := 2;   // FixedRows=1, RowCount>=FixedRows+1
     FResultGrid.Invalidate;
   end;
+  UpdateStats;
+  RebuildFilterCombos;
+  ApplyFilter;
 end;
 
 procedure TAnalyserFrame.ResetAllFindingsClick(Sender: TObject);
@@ -3663,6 +3694,7 @@ procedure TAnalyserFrame.TileClickSeverity(Sender: TObject);
 var
   Target  : TFilterMode;
   i, OrdT : Integer;
+  Found   : Boolean;
 begin
   if not Assigned(FFilterCombo) or not (Sender is TComponent) then Exit;
   Target := TFilterMode(TComponent(Sender).Tag);
@@ -3673,12 +3705,22 @@ begin
   if Assigned(FTypeCombo) and (FTypeCombo.ItemIndex <> 0) then
     FTypeCombo.ItemIndex := 0;
   OrdT := Ord(Target);
+  Found := False;
   for i := 0 to FFilterCombo.Items.Count - 1 do
     if Integer(FFilterCombo.Items.Objects[i]) = OrdT then
     begin
       FFilterCombo.ItemIndex := i;
+      Found := True;
       Break;
     end;
+  // Eintrag wegreduziert - derselbe Rueckfall, den der Zwilling
+  // TileClickType hat. Die Kachel zaehlt die GESAMTmenge, die Combo ist
+  // baseline-bereinigt; findet die Tag-Suche nichts, blieb bisher still
+  // der alte Severity-Filter stehen, waehrend der Klick den Typ-Filter
+  // schon zurueckgesetzt hatte. Der Nutzer sah dann eine Auswahl, die er
+  // nie getroffen hat.
+  if not Found then
+    FFilterCombo.ItemIndex := 0;
   // NACH dem Setzen, UNBEDINGT - auch im Miss-Fall (der Eintrag kann
   // baseline-bereinigt fehlen, waehrend die Kachel die Gesamtmenge
   // zaehlt): Commit-Gedaechtnis des Fuzzy-Helfers nachziehen
