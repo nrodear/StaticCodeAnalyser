@@ -50,6 +50,7 @@ Lauf, in dem sie angegeben werden.
 | `LongParamListMaxParams` | Integer | `5` | Schwelle SCA013: Parameter. |
 | `DeepNestingMaxDepth` | Integer | `4` | Schwelle SCA018: Verschachtelungstiefe. |
 | `CyclomaticMax` | Integer | `10` | Schwelle SCA022: McCabe-Komplexitaet. |
+| `CognitiveLimit` | Integer | `15` | Schwelle SCA176: kognitive Komplexitaet (Verschachtelung zaehlt staerker als bei McCabe). |
 | `MaxCaseBranches` | Integer | `10` | Schwelle SCA091: case-Zweige. |
 | `MaxLineLength` | Integer | `120` | Schwelle fuer die Zeilenlaengen-Regel. |
 | `DuplicateBlockMinLines` | Integer | `8` | Mindestlaenge eines Blocks, bevor Duplikate gemeldet werden. |
@@ -76,6 +77,7 @@ Lauf, in dem sie angegeben werden.
 |---|---|---|---|
 | `Language` | String | `en` | Oberflaechensprache: `de`, `en`, `fr`. Leer = Systemgebietsschema. |
 | `Theme` | String | `system` | Design der EXE: `system` (Windows folgen), `light`, `dark`. |
+| `Element.<Name>` | Bool | `True` | **Not-Aus je UI-Element des IDE-Plugins.** `0` legt genau dieses Element still, ohne Deinstallation - fuer den Fall, dass eines die IDE stoert. Wirkt erst nach IDE-Neustart; uebersprungene Elemente meldet das Plugin per Debug-Ausgabe (Praefix `SCA-UI`). Gueltige Namen: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `OptionsPageSCA`, `OptionsPageSonar`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` ist bewusst NICHT abschaltbar - er traegt den Abbau aller uebrigen. Die eigenstaendige EXE liest diese Schluessel nicht. |
 | `ClipboardOnClick` | Integer | `1` | Was ein Zeilenklick kopiert: `1` nichts, `2` Jira-Mini-Ticket, `3` Markdown-Prompt. |
 | `EditorColorScheme` | String | `default` | Farbschema von Editor-Markerstreifen und Overlay-Titelleiste. |
 | `OverlayPosition` | String | `sameline` | Wo sich das Hover-Overlay relativ zur Fundzeile verankert. |
@@ -102,6 +104,33 @@ Lauf, in dem sie angegeben werden.
 | `GitExe` | String | _(leer)_ | Pfad zu `git.exe`. Leer = Suche im `PATH`. |
 | `SvnExe` | String | _(leer)_ | Pfad zu `svn.exe`. Leer = Suche im `PATH`. |
 
+
+## `[Editor]` — womit ein Befund geoeffnet wird (nur EXE)
+
+Das IDE-Plugin springt ueber die ToolsAPI direkt an die Stelle und liest
+diesen Abschnitt nicht.
+
+| Schluessel | Typ | Standard | Bedeutung |
+|---|---|---|---|
+| `ExternalEditor` | String | _(leer)_ | Voller Pfad zu einem Editor. Ist er gesetzt, uebernimmt er **alle** Dateiarten - auch `.dfm` - und die Delphi-IDE wird nicht mehr angesprochen. |
+| `ExternalEditorArgs` | String | `-g "%file%:%line%"` | Argumente. Platzhalter: `%file%`, `%line%`, `%col%`, `%dir%`, `%%`. Der Standard passt zu Visual Studio Code. |
+| `DfmTarget` | String | `ide` | Was ein `.dfm`-Befund oeffnet, wenn kein externer Editor gesetzt ist: `ide` oder `viewer` (eingebauter Textbetrachter, der zuverlaessig zur Zeile springt). |
+
+## `[Sonar]`
+
+Beschrieben in [sonar-config.md](sonar-config.md) - hier nur genannt, damit
+diese Seite vollstaendig bleibt: `HostUrl`, `ProjectKey`, `Organization`,
+`Branch`, `TokenRef`, `Insecure`.
+
+## Automatisch geschrieben - nicht von Hand aendern
+
+Diese Abschnitte pflegt die Anwendung selbst. Eine Handaenderung haelt nicht;
+das naechste Schliessen des Fensters ueberschreibt sie.
+
+| Abschnitt | Schluessel | Geschrieben von |
+|---|---|---|
+| `[Window]` | `Left`, `Top`, `Width`, `Height`, `Maximized` | EXE, beim Schliessen |
+| `[FindingsPropertiesPanel]` | `Left`, `Top`, `Width`, `Height` | IDE-Plugin, beim Schliessen |
 
 ## `[PathOverrides]`
 
