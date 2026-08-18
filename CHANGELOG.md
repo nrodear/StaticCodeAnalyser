@@ -13,8 +13,8 @@ The first full false-positive audit of the rule set (all 142 active rules,
 round of fixes. Eight rules report less now, and none of them because a
 threshold was loosened -- each one was making a claim it could not support.
 Corpus effect: 801,270 findings to 800,909. That net figure hides the real
-movement: 522 findings removed, 161 added, because several parser fixes
-recovered routine bodies the parser had been dropping.
+movement: 516 findings removed across 9 rules, 155 added across 11, because
+several parser fixes recovered routine bodies the parser had been dropping.
 
 Numbers below are per-rule counts on that corpus, not projections.
 
@@ -85,7 +85,7 @@ Numbers below are per-rule counts on that corpus, not projections.
   uses them as names rather than as statements.
 
 Together these recovered routine bodies the parser had been discarding.
-That is where the 161 added findings come from -- rules whose metrics are
+That is where the 155 added findings come from -- rules whose metrics are
 computed from the body see the whole body again: `SCA014 MagicNumber` +52,
 `SCA012 LongMethod` +28, `SCA018 DeepNesting` +21, `SCA176
 CognitiveComplexity` +16, `SCA022 CyclomaticComplexity` +15. Every added
