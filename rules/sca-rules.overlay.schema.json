@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/nrodear/StaticCodeAnalyser/rules/sca-rules.overlay.schema.json",
+  "title": "StaticCodeAnalyser Rule Catalog - Language Overlay",
+  "description": "Translated rule texts for one language. The English catalog (sca-rules.json) stays canonical and complete; an overlay only carries the fields it translates, keyed by rule ID. A missing rule or a missing field falls back to English - that is a supported state, not an error, so translation can proceed rule by rule. Machine interfaces (SARIF, Sonar) always read the canonical catalog and never an overlay: their rule texts must stay stable for GitHub Code Scanning and SonarQube.",
+  "type": "object",
+  "required": ["language", "basedOn", "rules"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "language": {
+      "description": "ISO 639-1 code. Must match the code used by uLocalization.SetLanguage and the i18n/*.po file names.",
+      "type": "string",
+      "pattern": "^[a-z]{2}$"
+    },
+    "basedOn": {
+      "description": "version field of the canonical catalog this overlay was translated against. Lets a check spot translations that predate a catalog revision.",
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+$"
+    },
+    "rules": {
+      "description": "Rule ID -> translated fields. Only fields that are actually translated; anything absent falls back to English.",
+      "type": "object",
+      "propertyNames": { "pattern": "^SCA\\d{3}$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "name": {
+            "description": "Short rule title as shown in filter lists, the HTML report and the IDE panel.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "shortDescription": {
+            "description": "One-line summary. Same 200-character ceiling as the canonical catalog.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "fullDescription": {
+            "description": "Full prose. Deliberately NOT translated in the first pass: it is roughly ten times the volume of name+shortDescription and ages fastest. English fallback is the documented behaviour.",
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}
