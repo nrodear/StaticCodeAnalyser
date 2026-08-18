@@ -828,6 +828,24 @@ var
   FreeInFin    : Boolean;
   F            : TLeakFinding;
 begin
+  // Testfixtures ausnehmen - dasselbe Gate, das TLeakDetector2.AnalyzeUnit
+  // seit dem Restschulden-Audit fuehrt. Es fehlte hier schlicht, obwohl beide
+  // Pfade unter SCA001 melden.
+  //
+  // Gemessen am Korpus (2026-08-18): von 742 SCA001-Funden kommen 114 aus
+  // diesem Feld-Pfad, und 67 davon liegen in Fixture-Verzeichnissen - 59 %
+  // der Feld-Funde. Der Lokal-Pfad hat im selben Lauf NULL solche Funde, das
+  // Gate dort arbeitet also korrekt; die Luecke war allein hier.
+  //
+  // Stufe tplFixtureDir = NUR Verzeichnis-Segmente, keine Dateinamen, und
+  // verankert an der Scanwurzel: nur Segmente UNTERHALB zaehlen. Beides ist
+  // Absicht und teuer gelernt - Basename-Regeln legten den Test-Harness
+  // komplett still (der uebergibt 'sample.pas' ohne Pfad), unverankerte
+  // Segmente trafen den Checkout-Pfad selbst (C:/Users/test/...). Ohne
+  // Kontext (Tests, Direktaufrufe) gilt wie dort das Alt-Verhalten.
+  if TDetectorUtils.IsTestFixturePath(FileName,
+       CtxScanRoot(AContext), tplFixtureDir) then Exit;
+
   Classes := UnitNode.FindAll(nkClass);
   try
     for ClassNode in Classes do

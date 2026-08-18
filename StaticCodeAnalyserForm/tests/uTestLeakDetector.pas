@@ -268,6 +268,13 @@ type
     [Test] procedure Leak_VarParamIndexedReturn_NoFinding;
     [Test] procedure Leak_ConstParamAssign_StillReported;
     [Test] procedure Leak_PlainLocalAssign_StillReported;
+    // Indiziertes Ziel in fremdem Speicher (2026-08-18):
+    // groesste FP-Klasse von SCA001 laut beiden Audits.
+    [Test] procedure Leak_IndexedForeignField_OwnershipRecognized;
+    [Test] procedure Leak_IndexedSelfProperty_OwnershipRecognized;
+    [Test] procedure Leak_IndexedLocalArray_StillReported;
+    // Empfaenger-Veto: Objects/Items/Lines besitzen NICHT.
+    [Test] procedure Leak_IndexedNonOwningAccessor_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -318,6 +325,15 @@ type
     // Property-Alias 2026-08-18: Freigabe ueber den oeffentlichen Namen.
     [Test] procedure Field_FreedViaPropertyAlias_NoFinding;
     [Test] procedure Field_FreedViaForeignName_StillReported;
+    // Fixture-Gate 2026-08-18: der Feld-Pfad hatte keins.
+    [Test] procedure Field_InFixturePath_NotReported;
+    [Test] procedure Field_InProductionPath_StillReported;
+  private
+    // Parst ASrc und laesst NUR den Feld-Detektor mit dem
+    // angegebenen Dateinamen darueber laufen. Eigener Helfer,
+    // weil der Dateiname hier die Testvariable ist -
+    // TFindingHelper.FindingsOf gibt ihn nicht frei.
+    function FieldLeakCount(const ASrc, AFileName: string): Integer;
   end;
 
 implementation
@@ -329,7 +345,8 @@ uses
   // uTypeIndex (2026-07-31): das TComponent-Owner-Gate Stufe 1 braucht einen
   // gefuellten Cross-Unit-Typindex - der ist nur ueber einen echten
   // TAnalyzeContext testbar (FindingsOf ruft mit AContext=nil).
-  uParser2, uAstNode, uAnalyzeContext, uLeakDetector2, uTypeIndex;
+  uParser2, uAstNode, uAnalyzeContext, uLeakDetector2, uTypeIndex,
+  uFieldLeak;   // Direktaufruf mit kontrolliertem Dateinamen (Fixture-Gate)
 
 { ---- MemoryLeak ---- }
 
@@ -5265,6 +5282,139 @@ begin
   finally F.Free; end;
 end;
 
+procedure TTestMemoryLeakAdvanced.Leak_IndexedForeignField_OwnershipRecognized;
+// Fall (a) des Gates: die linke Seite traegt einen Punkt VOR der
+// Klammer, das Ziel liegt also in einem ANDEREN Objekt. Belegt im
+// Korpus durch die JCL-Hashmaps (4x dieselbe Form):
+//   ADest.FBuckets[I] := NewBucket
+// TJclIntegerHashMap.Clear/Destroy gibt die Buckets frei - der
+// Aufrufer darf und soll hier NICHT freigeben.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  '  TDest = class'#13#10+
+  '    FBuckets: array[0..3] of TSynObjectList;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure Build(ADest: TDest; I: Integer);'#13#10+
+  'var'#13#10+
+  '  LItem: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LItem := TSynObjectList.Create;'#13#10+
+  '  ADest.FBuckets[I] := LItem;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Index-Zuweisung in ein fremdes Objekt ist eine Ownership-Abgabe');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_IndexedSelfProperty_OwnershipRecognized;
+// Fall (b): KEIN Punkt, die Wurzel ist eine indizierte Property von
+// Self (implizites Self). Belegt durch JVCL JvSALHashList:
+//   Items[HashVal] := HashStrings
+// Entscheidend ist, dass die Wurzel NICHT als Lokale oder Parameter
+// deklariert ist - genau das trennt sie vom Waechter unten.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  '  THolder = class'#13#10+
+  '  public'#13#10+
+  '    property Slots[I: Integer]: TSynObjectList;'#13#10+
+  '    procedure Fill(K: Integer);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure THolder.Fill(K: Integer);'#13#10+
+  'var'#13#10+
+  '  LNode: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LNode := TSynObjectList.Create;'#13#10+
+  '  Slots[K] := LNode;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Index-Zuweisung in eine Property von Self ist eine Ownership-Abgabe');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_IndexedLocalArray_StillReported;
+// WAECHTER, und der wichtigste der drei: ein LOKALES Array ist kein
+// fremder Speicher. Der Frame stirbt mitsamt dem Array, das Objekt
+// leckt. Ohne diesen Test wuerde die naechste Verallgemeinerung des
+// Gates ("Index reicht") genau hier echte Lecks verschlucken.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure Collect;'#13#10+
+  'var'#13#10+
+  '  LBag: array[0..2] of TSynObjectList;'#13#10+
+  '  LEntry: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LEntry := TSynObjectList.Create;'#13#10+
+  '  LBag[0] := LEntry;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'ein lokales Array uebernimmt keine Ownership');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_IndexedNonOwningAccessor_StillReported;
+// WAECHTER zum Empfaenger-Veto (2026-08-18): eine Index-Zuweisung in
+// Objects/Items/Lines/Strings/Data/Nodes ist KEIN Ownership-Transfer.
+// TStrings.Objects[] speichert nur die Referenz und gibt sie in Destroy
+// nie frei - daher die verbreiteten
+// "for i := 0 to Count-1 do Objects[i].Free"-Schleifen.
+//
+// Der Aufruf-Pfad hat dieses Veto seit dem Review vom 2026-07-31; der
+// Zuweisungs-Pfad umging es zunaechst. Am Korpus waren 14 Funde
+// betroffen, ausnahmslos ueber "objects[".
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  '  TBox = class'#13#10+
+  '  public'#13#10+
+  '    Objects: array[0..3] of TSynObjectList;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure Fill(ABox: TBox; I: Integer);'#13#10+
+  'var'#13#10+
+  '  LNode: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LNode := TSynObjectList.Create;'#13#10+
+  '  ABox.Objects[I] := LNode;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'Objects[] uebernimmt keine Ownership - der Fund muss bleiben');
+  finally F.Free; end;
+end;
+
 procedure TTestMemoryLeakAdvanced.Leak_CtorArgInAssignRhs_OwnershipRecognized;
 // Der Konstruktor-Zweig von IsPassedToOwner lief nur ueber nkCall-Knoten.
 // Aufrufe in einer Zuweisungs-RHS legt der Parser aber als Flachtext in
@@ -5638,5 +5788,96 @@ begin
   finally F.Free; end;
 end;
 
+
+
+function TTestFieldLeak.FieldLeakCount(const ASrc,
+  AFileName: string): Integer;
+// EIN try/finally mit nil-Vorbelegung statt drei geschachtelter
+// Bloecke - geschachtelte try-Ebenen sind im Selbstscan ein Fund, und
+// hier bringen sie nichts: keiner der drei Aufraeumschritte haengt vom
+// Gelingen eines anderen ab.
+var
+  Prs  : TParser2;
+  Root : TAstNode;
+  Res  : TObjectList<TLeakFinding>;
+begin
+  Prs  := nil;
+  Root := nil;
+  Res  := nil;
+  try
+    Prs  := TParser2.Create;
+    Root := Prs.ParseSource(ASrc);
+    Res  := TObjectList<TLeakFinding>.Create(True);
+    TFieldLeakDetector.AnalyzeUnit(Root, AFileName, Res);
+    Result := TFindingHelper.Count(Res, fkMemoryLeak);
+  finally
+    Res.Free;
+    Root.Free;
+    Prs.Free;
+  end;
+end;
+
+procedure TTestFieldLeak.Field_InFixturePath_NotReported;
+// Der Feld-Pfad besass bis zum 18.08. KEIN Fixture-Gate, obwohl der
+// Lokal-Pfad (TLeakDetector2.AnalyzeUnit) seit dem Restschulden-Audit
+// eines fuehrt und beide unter SCA001 melden. Am Korpus gemessen lagen
+// dadurch 67 von 114 Feld-Funden in Testverzeichnissen - 59 Prozent.
+//
+// AContext bleibt nil: CtxScanRoot liefert dann einen Leerstring, es
+// gilt also das dokumentierte unverankerte Alt-Verhalten, bei dem
+// allein das Pfad-Segment entscheidet.
+//
+// Die Fixture erzeugt ein TStringList-Feld im Konstruktor und hat
+// KEINEN Destruktor - dieselbe Form, die
+// Field_NoDestructor_ReportsError als meldend festhaelt. Ohne den
+// Gate stuende hier also ein Fund.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TFoo = class'#13#10+
+  'private'#13#10+
+  '  FItems: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TFoo.Create;'#13#10+
+  'begin'#13#10+
+  '  FItems := TStringList.Create;'#13#10+
+  'end;';
+begin
+  // Pfad zur LAUFZEIT zusammensetzen: ein Literal der Form
+  // C:\proj\tests\Foo.pas waere im Selbstscan selbst ein
+  // HardcodedPath-Fund.
+  Assert.AreEqual<Integer>(0,
+    FieldLeakCount(SRC, 'C:' + PathDelim + 'proj' + PathDelim +
+                        'tests' + PathDelim + 'Foo.pas'),
+    'Feld-Funde aus einem tests-Verzeichnis gehoeren nicht in den Bericht');
+end;
+
+procedure TTestFieldLeak.Field_InProductionPath_StillReported;
+// WAECHTER: derselbe Helfer, aber ein normaler Quellpfad. Haelt fest,
+// dass der Gate NUR an Testverzeichnissen greift und nicht
+// stillschweigend den ganzen Feld-Pfad abschaltet. Klassen- und
+// Feldname variiert, damit die beiden Fixturen nicht als Duplikat
+// zaehlen.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TWidget = class'#13#10+
+  'private'#13#10+
+  '  FCache: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TWidget.Create;'#13#10+
+  'begin'#13#10+
+  '  FCache := TStringList.Create;'#13#10+
+  'end;';
+begin
+  Assert.IsTrue(
+    FieldLeakCount(SRC, 'C:' + PathDelim + 'proj' + PathDelim +
+                        'source' + PathDelim + 'Bar.pas') >= 1,
+    'ausserhalb von Testverzeichnissen muss der Feld-Pfad weiter melden');
+end;
 
 end.
