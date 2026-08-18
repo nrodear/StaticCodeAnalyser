@@ -3692,9 +3692,7 @@ procedure TAnalyserFrame.TileClickSeverity(Sender: TObject);
 // Interaktion tut das). Wir muessen FilterChange/TypeFilterChange explizit
 // aufrufen, sonst aktualisiert sich das Grid nicht.
 var
-  Target  : TFilterMode;
-  i, OrdT : Integer;
-  Found   : Boolean;
+  Target : TFilterMode;
 begin
   if not Assigned(FFilterCombo) or not (Sender is TComponent) then Exit;
   Target := TFilterMode(TComponent(Sender).Tag);
@@ -3704,23 +3702,12 @@ begin
   if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   if Assigned(FTypeCombo) and (FTypeCombo.ItemIndex <> 0) then
     FTypeCombo.ItemIndex := 0;
-  OrdT := Ord(Target);
-  Found := False;
-  for i := 0 to FFilterCombo.Items.Count - 1 do
-    if Integer(FFilterCombo.Items.Objects[i]) = OrdT then
-    begin
-      FFilterCombo.ItemIndex := i;
-      Found := True;
-      Break;
-    end;
-  // Eintrag wegreduziert - derselbe Rueckfall, den der Zwilling
-  // TileClickType hat. Die Kachel zaehlt die GESAMTmenge, die Combo ist
-  // baseline-bereinigt; findet die Tag-Suche nichts, blieb bisher still
-  // der alte Severity-Filter stehen, waehrend der Klick den Typ-Filter
-  // schon zurueckgesetzt hatte. Der Nutzer sah dann eine Auswahl, die er
-  // nie getroffen hat.
-  if not Found then
-    FFilterCombo.ItemIndex := 0;
+  // Tag-Suche mit Miss-Rueckfall auf 'All'. Seit 2026-08-19 im geteilten
+  // TTileFilterSelect.SelectByTag - dort steht auch die Begruendung des
+  // Rueckfalls. Vorher stand die Schleife fuenfmal (hier, TileClickType,
+  // und dreimal in der EXE), und der Rueckfall nur in den zwei
+  // Plugin-Kopien.
+  TTileFilterSelect.SelectByTag(FFilterCombo, Ord(Target));
   // NACH dem Setzen, UNBEDINGT - auch im Miss-Fall (der Eintrag kann
   // baseline-bereinigt fehlen, waehrend die Kachel die Gesamtmenge
   // zaehlt): Commit-Gedaechtnis des Fuzzy-Helfers nachziehen
@@ -3738,8 +3725,6 @@ end;
 procedure TAnalyserFrame.TileClickType(Sender: TObject);
 var
   Target : TTypeFilter;
-  i      : Integer;
-  Found  : Boolean;
 begin
   if not Assigned(FTypeCombo) or not (Sender is TComponent) then Exit;
   Target := TTypeFilter(TComponent(Sender).Tag);
@@ -3752,19 +3737,8 @@ begin
   // der Direktindex selektierte den FALSCHEN Typ (z.B. Hotspot statt
   // Vulnerability) oder lief ins Leere (Review 2026-08-12,
   // Logik-Dimension; die EXE suchte schon immer per Tag).
-  Found := False;
-  for i := 0 to FTypeCombo.Items.Count - 1 do
-    if Integer(FTypeCombo.Items.Objects[i]) = Ord(Target) then
-    begin
-      FTypeCombo.ItemIndex := i;
-      Found := True;
-      Break;
-    end;
-  // Eintrag wegreduziert (Kachel zaehlt die Gesamtmenge, die Combo die
-  // baseline-bereinigte): auf 'All' zurueckfallen statt still den alten
-  // Filter stehen zu lassen.
-  if not Found then
-    FTypeCombo.ItemIndex := 0;
+  // Suche samt Miss-Rueckfall s. TileClickSeverity.
+  TTileFilterSelect.SelectByTag(FTypeCombo, Ord(Target));
   // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
   if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   // ItemIndex-Setter feuert KEIN OnChange - explizit triggern.

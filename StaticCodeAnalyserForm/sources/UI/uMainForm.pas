@@ -3034,8 +3034,7 @@ procedure TForm2.TileClickSeverity(Sender: TObject);
 // WICHTIG (Plugin-Erkenntnis): der ItemIndex-Setter feuert KEIN
 // OnChange - die Change-Handler muessen explizit gerufen werden.
 var
-  Target  : TFilterMode;
-  i, OrdT : Integer;
+  Target : TFilterMode;
 begin
   if not (Sender is TComponent) then Exit;
   Target := TFilterMode(TComponent(Sender).Tag);
@@ -3045,13 +3044,12 @@ begin
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if TypeFilterCombo.ItemIndex <> 0 then
     TypeFilterCombo.ItemIndex := 0;
-  OrdT := Ord(Target);
-  for i := 0 to SeverityFilterCombo.Items.Count - 1 do
-    if Integer(SeverityFilterCombo.Items.Objects[i]) = OrdT then
-    begin
-      SeverityFilterCombo.ItemIndex := i;
-      Break;
-    end;
+  // Tag-Suche mit Miss-Rueckfall auf 'All' - geteilt mit dem Plugin,
+  // Vertrag und Begruendung an TTileFilterSelect.SelectByTag. Bis
+  // 2026-08-19 brach die Suche hier wortlos ab: bei aktiver Baseline
+  // konnte der Eintrag fehlen, dann blieb der alte Severity-Filter stehen,
+  // obwohl der Typ-Filter oben schon zurueckgesetzt war.
+  TTileFilterSelect.SelectByTag(SeverityFilterCombo, Ord(Target));
   // Commit-Gedaechtnis des Fuzzy-Helfers nachziehen - programmatisches
   // ItemIndex sieht der Helfer nicht, und sein Tag-Gate wuerde sonst die
   // naechste ECHTE Wieder-Auswahl in der Combo verschlucken (Review
@@ -3065,7 +3063,7 @@ procedure TForm2.TileClickKind(Sender: TObject);
 // Kacheln, deren Ziel kein fm-Modus ist, sondern der generierte
 // Regel-Eintrag der Severity-Combo (Objects = KIND_TAG_BASE+Ord(Kind)).
 var
-  i, Want : Integer;
+  Want : Integer;
 begin
   if not (Sender is TComponent) then Exit;
   Want := TFindingFilter.KIND_TAG_BASE + TComponent(Sender).Tag;
@@ -3073,12 +3071,8 @@ begin
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if TypeFilterCombo.ItemIndex <> 0 then
     TypeFilterCombo.ItemIndex := 0;
-  for i := 0 to SeverityFilterCombo.Items.Count - 1 do
-    if Integer(SeverityFilterCombo.Items.Objects[i]) = Want then
-    begin
-      SeverityFilterCombo.ItemIndex := i;
-      Break;
-    end;
+  // Tag-Suche mit Miss-Rueckfall, s. TileClickSeverity.
+  TTileFilterSelect.SelectByTag(SeverityFilterCombo, Want);
   // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   TypeFilterComboChange(TypeFilterCombo);
@@ -3088,7 +3082,6 @@ end;
 procedure TForm2.TileClickType(Sender: TObject);
 var
   Target : TTypeFilter;
-  i      : Integer;
 begin
   if not (Sender is TComponent) then Exit;
   Target := TTypeFilter(TComponent(Sender).Tag);
@@ -3097,12 +3090,8 @@ begin
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if SeverityFilterCombo.ItemIndex <> 0 then
     SeverityFilterCombo.ItemIndex := 0;
-  for i := 0 to TypeFilterCombo.Items.Count - 1 do
-    if Integer(TypeFilterCombo.Items.Objects[i]) = Ord(Target) then
-    begin
-      TypeFilterCombo.ItemIndex := i;
-      Break;
-    end;
+  // Tag-Suche mit Miss-Rueckfall, s. TileClickSeverity.
+  TTileFilterSelect.SelectByTag(TypeFilterCombo, Ord(Target));
   // Auch hier: die Severity-Combo wurde oben auf 0 gesetzt - Commit-
   // Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
