@@ -231,6 +231,47 @@ def pruefe(rules, md, voll):
     return funde, len(sec)
 
 
+def pruefe_overlays(rules, katalog_version):
+    """Sprach-Overlays gegen den Katalog.
+
+    FEHLER ist nur, was nachweislich kaputt ist: eine Regel-ID, die es im
+    Katalog nicht (mehr) gibt, und ein basedOn, das nicht zur
+    Katalogversion passt - dann wurde gegen einen aelteren Stand
+    uebersetzt, und niemand haette es gemerkt.
+
+    Eine LUECKE ist ausdruecklich kein Fehler: fehlende Regeln und
+    fehlende Felder fallen laut Schema auf Englisch zurueck, damit
+    Uebersetzung regelweise voranschreiten kann. Die Abdeckung wird
+    berichtet, nicht erzwungen - sonst waere jede neue Regel sofort ein
+    roter Build in drei Sprachen.
+    """
+    ids = {r['id'] for r in rules}
+    funde = []
+    zeilen = []
+    for pfad in sorted((REPO / 'rules').glob('sca-rules.*.json')):
+        if pfad.name.endswith('.schema.json'):
+            continue
+        lang = pfad.name.split('.')[1]
+        try:
+            ov = json.load(io.open(pfad, encoding='utf-8-sig'))
+        except ValueError as e:
+            funde.append((lang, 'kein gueltiges JSON: %s' % e, '-', '-'))
+            continue
+        if ov.get('basedOn') != katalog_version:
+            funde.append((lang, 'basedOn passt nicht zur Katalogversion',
+                          ov.get('basedOn'), katalog_version))
+        fremd = sorted(set(ov.get('rules', {})) - ids)
+        if fremd:
+            funde.append((lang, 'Regel-IDs ohne Entsprechung im Katalog',
+                          ' '.join(fremd[:8]), '-'))
+        n = len(ov.get('rules', {}))
+        felder = sum(len(v) for v in ov.get('rules', {}).values())
+        zeilen.append('   %s: %d/%d Regeln, %d uebersetzte Felder (%.0f %%)'
+                      % (lang, n, len(ids), felder,
+                         100.0 * n / len(ids) if ids else 0))
+    return funde, zeilen
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--full', action='store_true',
@@ -238,7 +279,10 @@ def main():
     args = ap.parse_args()
 
     rules, md = lade()
+    kat_version = json.load(
+        io.open(RULES_JSON, encoding='utf-8-sig')).get('version')
     funde, n_sec = pruefe(rules, md, args.full)
+    ov_funde, ov_zeilen = pruefe_overlays(rules, kat_version)
 
     grenze = 100000 if args.full else 110
     letzte = None
@@ -253,10 +297,27 @@ def main():
         if soll != '-':
             print('      json : %s' % str(soll)[:grenze])
 
+    for lang, was, ist, soll in ov_funde:
+        print()
+        print('rules/sca-rules.%s.json' % lang)
+        print('   %s' % was)
+        if ist != '-':
+            print('      ist  : %s' % ist)
+        if soll != '-':
+            print('      soll : %s' % soll)
+
     print()
     print('Regeln im Katalog: %d   Abschnitte in docs/rules.md: %d'
           % (len(rules), n_sec))
+    if ov_zeilen:
+        print('Sprach-Overlays (Luecken sind erlaubt, Rueckfall auf '
+              'Englisch):')
+        for z in ov_zeilen:
+            print(z)
     betroffen = len({f[0] for f in funde})
+    if ov_funde and not funde:
+        print('ABWEICHUNGEN: %d in den Sprach-Overlays.' % len(ov_funde))
+        return 1
     if funde:
         print('ABWEICHUNGEN: %d in %d Regeln.' % (len(funde), betroffen))
         print('Der Katalog ist die Quelle - docs/rules.md zieht nach, '
