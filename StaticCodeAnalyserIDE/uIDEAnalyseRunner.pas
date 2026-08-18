@@ -470,6 +470,13 @@ begin
     ReapBulkWorkers;
     FWorker := TBulkScanWorker.Create(Self, AKind, APath, AFiles,
       Assigned(FRepoSettings) and FRepoSettings.UsesCheck, IgnoreCopy);
+    // Ab hier gehoert die Kopie dem Worker (FIgnore, FreeAndNil im
+    // Worker-Destruktor). Die lokale Referenz MUSS weg, sonst gibt der
+    // except-Zweig unten sie ein zweites Mal frei, wenn das folgende Add
+    // wirft - der Worker laeuft dann bereits mit einer toten IgnoreList.
+    // Der Kommentar oben beschrieb diesen Uebergang schon, der Code
+    // vollzog ihn nicht.
+    IgnoreCopy := nil;
     GBulkWorkers.Add(FWorker);
   except
     IgnoreCopy.Free;

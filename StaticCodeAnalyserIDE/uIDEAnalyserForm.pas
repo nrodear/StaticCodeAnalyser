@@ -4667,7 +4667,15 @@ type
     Popup       : TPopupMenu;
     OrigOnPopup : TNotifyEvent;
     OurItem     : TMenuItem;     // aktuelles Item; nil zwischen Popup-Shows
-    constructor Create(APopup: TPopupMenu; AOrig: TNotifyEvent);
+    // Die Editor-Form, aus der dieser Popup stammt. Beim Hooken gemerkt,
+    // damit der Abbau (WindowNotification/opRemove) den Slot ueber
+    // IDENTITAET findet statt ihn ueber FindEditorPopup neu zu erraten -
+    // die Heuristik dort sieht zum Schliess-Zeitpunkt eine andere
+    // Item-Zahl als beim Hooken und liefert dann den falschen oder gar
+    // keinen Popup.
+    Form        : TCustomForm;
+    constructor Create(APopup: TPopupMenu; AOrig: TNotifyEvent;
+      AForm: TCustomForm);
   end;
 
   TEditorContextMenuHook = class(TNotifierObject, INTAEditServicesNotifier)
@@ -4710,12 +4718,14 @@ var
 
 { TPopupHookSlot }
 
-constructor TPopupHookSlot.Create(APopup: TPopupMenu; AOrig: TNotifyEvent);
+constructor TPopupHookSlot.Create(APopup: TPopupMenu; AOrig: TNotifyEvent;
+  AForm: TCustomForm);
 begin
   inherited Create;
   Popup       := APopup;
   OrigOnPopup := AOrig;
   OurItem     := nil;
+  Form        := AForm;
 end;
 
 { TEditorContextMenuHook }
@@ -4789,7 +4799,7 @@ begin
   if not Assigned(Popup) then Exit;
   if FSlots.ContainsKey(Popup) then Exit;   // bereits gehookt
 
-  Slot := TPopupHookSlot.Create(Popup, Popup.OnPopup);
+  Slot := TPopupHookSlot.Create(Popup, Popup.OnPopup, AForm);
   FSlots.Add(Popup, Slot);
   Popup.OnPopup := OnPopupHandler;
 end;
@@ -4893,10 +4903,26 @@ var
 begin
   // Editor-Window wird zerstoert -> Slot-Eintrag entfernen damit Destroy
   // nicht auf einen freigegebenen Popup zugreift.
+  //
+  // Der Slot wird ueber die gemerkte FORM gesucht, nicht ueber
+  // FindEditorPopup. Jene Funktion waehlt unter mehreren TPopupMenu-
+  // Komponenten das mit den MEISTEN Items - eine Heuristik, die zum
+  // Hook-Zeitpunkt (vor dem ersten Rechtsklick) und zum Schliess-Zeitpunkt
+  // (nach IDE-Rebuilds im OnPopupHandler) verschiedene Ergebnisse liefern
+  // kann. Traf sie daneben, wurde GAR KEIN Slot entfernt und der
+  // Dictionary-Eintrag behielt Zeiger auf gleich freigegebene TPopupMenu-
+  // und TMenuItem-Objekte. Die Form ist dagegen identisch - sie ist der
+  // Schluessel, den das Ereignis selbst mitbringt.
   if (Operation = opRemove) and Assigned(EditWindow) then
   begin
-    Popup := FindEditorPopup(EditWindow.Form);
-    if Assigned(Popup) and FSlots.ContainsKey(Popup) then
+    Popup := nil;
+    for var Slot in FSlots.Values do
+      if Slot.Form = EditWindow.Form then
+      begin
+        Popup := Slot.Popup;
+        Break;
+      end;
+    if Assigned(Popup) then
       FSlots.Remove(Popup);   // doOwnsValues -> Slot wird gefreut
   end;
 end;

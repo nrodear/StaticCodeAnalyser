@@ -666,14 +666,32 @@ begin
   UnregisterEditServicesNotifier;
   JoinAllWorkers;           // Welle 1: kein Worker ueberlebt den Manager
   FreeAndNil(FLiveWorkers);
-  // Subscriber-Liste vor allen Timern freed - falls noch Subscriptions
-  // leben, ihre Destroy-Pfade rufen RemoveSubscriber zurueck. Wir setzen
-  // die Liste auf nil VOR Free, damit RemoveSubscriber den nil-Guard
-  // greift und nicht in den freed-Speicher reinpoked.
+  // Subscriber-Liste vor allen Timern freed. Die Liste haelt bewusst nur
+  // schwache Referenzen - die Subscriptions selbst gehoeren ihren
+  // IInterface-Haltern und koennen den Manager UEBERLEBEN (offenes
+  // Properties-Panel beim IDE-Ende).
+  //
+  // Zwei Dinge sind deshalb noetig, bisher passierte nur das erste:
+  //   1. FSubscribers auf nil VOR dem Free, damit ein RemoveSubscriber
+  //      aus einem Subscription-Destruktor am nil-Guard abprallt statt in
+  //      freigegebenen Speicher zu fassen.
+  //   2. Den ueberlebenden Subscriptions den Manager-Zeiger nehmen.
+  //      TWatchFindingsSubscription.FManager ist ein ROHER Zeiger, dessen
+  //      einzige Zuweisung im Konstruktor steht - nichts invalidierte ihn.
+  //      Ihr Destruktor ruft FManager.RemoveSubscriber, also eine Methode
+  //      auf einem laengst freigegebenen Objekt.
+  // Punkt 1 allein traegt nicht: waehrend DIESES Destruktors stirbt keine
+  // Subscription (die Liste haelt ja keine Referenz), der Rueckruf kommt
+  // spaeter. Das Vorbild TIDETheme hat die zweite Haelfte - dort prueft
+  // TSubscription.Destroy den globalen Singleton, den die finalization
+  // vorher nilt.
   if Assigned(FSubscribers) then
   begin
     var L := FSubscribers;
     FSubscribers := nil;
+    for var i := 0 to L.Count - 1 do
+      if Assigned(L[i]) then
+        TWatchFindingsSubscription(L[i]).FManager := nil;
     L.Free;
   end;
   FreeAndNil(FEditDebounceTimer);
