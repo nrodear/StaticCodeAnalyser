@@ -1,6 +1,6 @@
 # StaticCodeAnalyser — Rule Catalog
 
-All 195 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
+All 196 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
