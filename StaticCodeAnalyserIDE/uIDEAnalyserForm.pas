@@ -4828,14 +4828,44 @@ end;
 
 procedure TEditorContextMenuHook.HookEditorForm(AForm: TCustomForm);
 // Sucht Popup im Form. Wenn noch nicht gehookt: OnPopup aufheben + eigenes
-// installieren. Idempotent (zweiter Aufruf auf gleichem Popup = no-op).
+// installieren.
+//
+// IDEMPOTENT JE FORM, nicht je Popup (Review-Blocker 2026-08-18): die
+// Popup-Wahl von FindEditorPopup ist eine Item-Zahl-Heuristik, und die
+// kann zwischen zwei Aufrufen kippen (die IDE baut das Menue in
+// OnPopupHandler neu auf; gerufen wird hier mehrfach je Form -
+// WindowShow, WindowActivated, jeder Tab-Wechsel). Mit Popup-Idempotenz
+// entstanden dann ZWEI Slots fuer dieselbe Form, der Abbau entfernte nur
+// einen, und der Rest-Slot trug Zeiger auf freigegebene Objekte - bei
+// Adress-Recycling frass er sogar das opRemove des NAECHSTEN Fensters.
+// Existiert schon ein Slot dieser Form mit ANDEREM Popup, wird er erst
+// sauber zurueckgebaut (Original-Handler restaurieren), dann neu gehookt.
 var
   Popup : TPopupMenu;
   Slot  : TPopupHookSlot;
+  Alt   : TPopupHookSlot;
 begin
   Popup := FindEditorPopup(AForm);
   if not Assigned(Popup) then Exit;
-  if FSlots.ContainsKey(Popup) then Exit;   // bereits gehookt
+  if FSlots.ContainsKey(Popup) then Exit;   // exakt dieser Hook sitzt schon
+
+  // Alten Slot derselben Form abloesen, bevor ein zweiter entsteht.
+  Alt := nil;
+  for var S in FSlots.Values do
+    if S.Form = AForm then
+    begin
+      Alt := S;
+      Break;
+    end;
+  if Assigned(Alt) then
+  begin
+    // Original-Handler zurueckgeben, sofern unser Hook noch draufsitzt -
+    // sonst wuerde ein fremder, spaeter installierter Handler entfernt.
+    if Assigned(Alt.Popup) and
+       TMethod(Alt.Popup.OnPopup).Code = @TEditorContextMenuHook.OnPopupHandler then
+      Alt.Popup.OnPopup := Alt.OrigOnPopup;
+    FSlots.Remove(Alt.Popup);   // doOwnsValues -> Slot wird gefreut
+  end;
 
   Slot := TPopupHookSlot.Create(Popup, Popup.OnPopup, AForm);
   FSlots.Add(Popup, Slot);
@@ -4951,17 +4981,22 @@ begin
   // Dictionary-Eintrag behielt Zeiger auf gleich freigegebene TPopupMenu-
   // und TMenuItem-Objekte. Die Form ist dagegen identisch - sie ist der
   // Schluessel, den das Ereignis selbst mitbringt.
+  // ALLE Slots der Form, nicht nur der erste (Review-Blocker 2026-08-18):
+  // die Einfuegeseite konnte durch die kippende Popup-Heuristik mehrere
+  // Slots je Form anlegen. Erst sammeln, dann entfernen - Remove waehrend
+  // der Values-Iteration invalidiert den Enumerator.
   if (Operation = opRemove) and Assigned(EditWindow) then
   begin
-    Popup := nil;
-    for var Slot in FSlots.Values do
-      if Slot.Form = EditWindow.Form then
-      begin
-        Popup := Slot.Popup;
-        Break;
-      end;
-    if Assigned(Popup) then
-      FSlots.Remove(Popup);   // doOwnsValues -> Slot wird gefreut
+    var Opfer := TList<TPopupMenu>.Create;
+    try
+      for var Slot in FSlots.Values do
+        if Slot.Form = EditWindow.Form then
+          Opfer.Add(Slot.Popup);
+      for Popup in Opfer do
+        FSlots.Remove(Popup);   // doOwnsValues -> Slot wird gefreut
+    finally
+      Opfer.Free;
+    end;
   end;
 end;
 
