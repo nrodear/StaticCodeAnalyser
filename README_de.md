@@ -11,7 +11,7 @@
 
 **Statisches Code-Analyse-Tool** und **Linter** für **Delphi 12 / RAD Studio (Athens)** —
 als **IDE-Plugin** mit dockbarem Tool-Fenster plus **eigenständige Windows-Anwendung**.
-AST-basierte Analyse mit **195 Regeln**: 172 Pascal-Checks für
+AST-basierte Analyse mit **196 Regeln**: 173 Pascal-Checks für
 Speicherlecks, SQL-Injection, Code-Smells, Sicherheitslücken und Code-Duplikate
 (inklusive einer **Sonar-Delphi-kompatiblen** Teilmenge SCA060+),
 **plus ein dedizierter DFM-Scanner mit 22 Checks** auf Basis eines eigenen DFM-Lexers
@@ -38,7 +38,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 | Fähigkeit | Wie genutzt |
 |-----------|-------------|
-| 🐛 **Bugs finden** | 172 Pascal-Regeln laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM-Regeln über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, unbenutzte Komponenten, …) — **insgesamt 195**, ausgeliefert von 155 Pipeline-Detektoren |
+| 🐛 **Bugs finden** | 173 Pascal-Regeln laufen über jede `.pas`-Datei (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 DFM-Regeln über jede `.dfm` (tote Event-Handler, Klartext-DB-Credentials, zirkuläre Master-Detail-Verkettung, unbenutzte Komponenten, …) — **insgesamt 196**, ausgeliefert von 156 Pipeline-Registrierungen |
 | 🔐 **Sicherheitslücken** | SQLInjection (Score-basiert), HardcodedSecret, HardcodedPath |
 | 🧹 **Code-Smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Inkrementell analysieren** | „Branch-Changes"-Button: nur die im Git-/SVN-Branch geänderten Dateien — 200 ms statt 60 s |
@@ -54,7 +54,7 @@ direkt in der IDE, mit Claude-AI-Anbindung.**
 
 ## Hauptfeatures
 
-### 1. Statische Code-Analyse (195 Regeln — 172 Pascal + 23 DFM, Sonar-Taxonomie)
+### 1. Statische Code-Analyse (196 Regeln — 173 Pascal + 23 DFM, Sonar-Taxonomie)
 
 **Pascal-AST-Checks (~130)**: **Bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -228,7 +228,7 @@ Volles Setup: [docs/sonar-setup.md](docs/sonar-setup.md). Quick-Reference:
 
 ---
 
-## Was wird erkannt (195 Regeln — 172 Pascal + 23 DFM)
+## Was wird erkannt (196 Regeln — 173 Pascal + 23 DFM)
 
 Alle Befunde landen in einer der **5 Sonar-Kategorien**:
 
