@@ -16,6 +16,7 @@ carries the `_de` suffix (`README_de.md`, `EXPORTS_de.md`, …).
 | [../HowTo_Build.md](../HowTo_Build.md) | How to build the EXE, the IDE plugin and the test project from source (building is optional - releases ship a setup and a GetIt package). |
 | [../HowTo_Tests.md](../HowTo_Tests.md) | How to run the DUnitX suite and the dogfooding gate. |
 | [../CHANGELOG.md](../CHANGELOG.md) | What changed, release by release, with the reasoning. |
+| [configuration.md](configuration.md) | **Every `analyser.ini` key** with its default and meaning - thresholds, profiles, baseline, UI. |
 
 ## Rules and findings
 
