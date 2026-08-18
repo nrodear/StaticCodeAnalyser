@@ -49,6 +49,7 @@ given in.
 | `LongParamListMaxParams` | Integer | `5` | SCA013 threshold: parameters. |
 | `DeepNestingMaxDepth` | Integer | `4` | SCA018 threshold: nesting depth. |
 | `CyclomaticMax` | Integer | `10` | SCA022 threshold: McCabe complexity. |
+| `CognitiveLimit` | Integer | `15` | SCA176 threshold: cognitive complexity (nesting weighs heavier than in McCabe). |
 | `MaxCaseBranches` | Integer | `10` | SCA091 threshold: case branches. |
 | `MaxLineLength` | Integer | `120` | Threshold for the line-length rule. |
 | `DuplicateBlockMinLines` | Integer | `8` | Minimum block length before duplication is reported. |
@@ -75,6 +76,7 @@ given in.
 |---|---|---|---|
 | `Language` | String | `en` | UI language: `de`, `en`, `fr`. Empty = system locale. |
 | `Theme` | String | `system` | Standalone theme: `system` (follow Windows), `light`, `dark`. |
+| `Element.<Name>` | Bool | `True` | **Kill switch per UI element of the IDE plugin.** `0` disables exactly that element without uninstalling - for when one of them disturbs the IDE. Takes effect after an IDE restart; skipped elements are reported via debug output (prefix `SCA-UI`). Valid names: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `OptionsPageSCA`, `OptionsPageSonar`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` is deliberately not switchable - it carries the teardown of all the others. The standalone EXE ignores these keys. |
 | `ClipboardOnClick` | Integer | `1` | What a row click copies: `1` nothing, `2` Jira mini issue, `3` Markdown prompt. |
 | `EditorColorScheme` | String | `default` | Colour scheme of the editor marker stripe and overlay title bar. |
 | `OverlayPosition` | String | `sameline` | Where the hover overlay anchors relative to the finding line. |
@@ -101,6 +103,33 @@ given in.
 | `GitExe` | String | _(empty)_ | Path to `git.exe`. Empty = search `PATH`. |
 | `SvnExe` | String | _(empty)_ | Path to `svn.exe`. Empty = search `PATH`. |
 
+
+## `[Editor]` — how a finding opens (standalone EXE only)
+
+The IDE plugin jumps to the location through the ToolsAPI and ignores this
+section.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `ExternalEditor` | String | _(empty)_ | Full path to an editor. If set, it opens **every** file type - including `.dfm` - and the Delphi IDE is no longer used. |
+| `ExternalEditorArgs` | String | `-g "%file%:%line%"` | Arguments. Placeholders: `%file%`, `%line%`, `%col%`, `%dir%`, `%%`. The default matches Visual Studio Code. |
+| `DfmTarget` | String | `ide` | What a `.dfm` finding opens when no external editor is set: `ide` or `viewer` (built-in text viewer, which can jump to the line). |
+
+## `[Sonar]`
+
+Documented in [sonar-config.md](sonar-config.md) - listed here only so this
+page stays complete: `HostUrl`, `ProjectKey`, `Organization`, `Branch`,
+`TokenRef`, `Insecure`.
+
+## Written automatically - do not edit
+
+These sections are maintained by the application. Editing them by hand has
+no lasting effect; the next window close overwrites them.
+
+| Section | Keys | Written by |
+|---|---|---|
+| `[Window]` | `Left`, `Top`, `Width`, `Height`, `Maximized` | standalone EXE, on close |
+| `[FindingsPropertiesPanel]` | `Left`, `Top`, `Width`, `Height` | IDE plugin, on close |
 
 ## `[PathOverrides]`
 
