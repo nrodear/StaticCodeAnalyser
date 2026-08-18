@@ -1,0 +1,35 @@
+# GitHub Actions workflow: haelt die Sprachfassungen der Dokumentation
+# strukturell im Gleichschritt (en/de/fr).
+#
+# Prueft ueber tools/doc_parity.py, dass jede _de-/_fr-Fassung dieselbe
+# Ueberschriften-Ebenenfolge traegt wie ihre englische Basis und das
+# Zeilenverhaeltnis im Band bleibt. Die Invariante galt bisher nur durch
+# Disziplin; mit der dritten Sprache (2026-08-18) verdreifacht sich die
+# Drift-Flaeche, deshalb das Gate.
+#
+# Lokal vorab pruefen: `python tools/doc_parity.py`
+
+name: Doc Parity
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run doc parity gate
+        run: python3 tools/doc_parity.py
+
+      - name: Show groups (on failure)
+        if: failure()
+        run: |
+          python3 tools/doc_parity.py --list || true
+          echo ""
+          echo "Regel: Ueberschriften-STRUKTUR muss je Sprache identisch sein;"
+          echo "Inhalte duerfen (behutsam) unterschiedlich dicht sein."
