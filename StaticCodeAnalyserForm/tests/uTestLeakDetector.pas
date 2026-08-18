@@ -273,6 +273,8 @@ type
     [Test] procedure Leak_IndexedForeignField_OwnershipRecognized;
     [Test] procedure Leak_IndexedSelfProperty_OwnershipRecognized;
     [Test] procedure Leak_IndexedLocalArray_StillReported;
+    // Empfaenger-Veto: Objects/Items/Lines besitzen NICHT.
+    [Test] procedure Leak_IndexedNonOwningAccessor_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -5373,6 +5375,43 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
     'ein lokales Array uebernimmt keine Ownership');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_IndexedNonOwningAccessor_StillReported;
+// WAECHTER zum Empfaenger-Veto (2026-08-18): eine Index-Zuweisung in
+// Objects/Items/Lines/Strings/Data/Nodes ist KEIN Ownership-Transfer.
+// TStrings.Objects[] speichert nur die Referenz und gibt sie in Destroy
+// nie frei - daher die verbreiteten
+// "for i := 0 to Count-1 do Objects[i].Free"-Schleifen.
+//
+// Der Aufruf-Pfad hat dieses Veto seit dem Review vom 2026-07-31; der
+// Zuweisungs-Pfad umging es zunaechst. Am Korpus waren 14 Funde
+// betroffen, ausnahmslos ueber "objects[".
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TSynObjectList = class'#13#10+
+  '  end;'#13#10+
+  '  TBox = class'#13#10+
+  '  public'#13#10+
+  '    Objects: array[0..3] of TSynObjectList;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure Fill(ABox: TBox; I: Integer);'#13#10+
+  'var'#13#10+
+  '  LNode: TSynObjectList;'#13#10+
+  'begin'#13#10+
+  '  LNode := TSynObjectList.Create;'#13#10+
+  '  ABox.Objects[I] := LNode;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'Objects[] uebernimmt keine Ownership - der Fund muss bleiben');
   finally F.Free; end;
 end;
 
