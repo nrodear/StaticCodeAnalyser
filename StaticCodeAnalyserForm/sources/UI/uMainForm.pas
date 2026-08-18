@@ -3055,8 +3055,14 @@ begin
   // naechste ECHTE Wieder-Auswahl in der Combo verschlucken (Review
   // 2026-08-12, Kachel-Pfad).
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
-  TypeFilterComboChange(TypeFilterCombo);
-  SeverityFilterComboChange(SeverityFilterCombo);
+  // EINMAL filtern, nicht zweimal (Review-Minor 2026-08-19): der
+  // ItemIndex-Setter feuert kein OnChange, also muss der Klick den Filter
+  // selbst anstossen - aber beide Change-Handler bestehen nur aus
+  // 'ApplyFilter', und der lief damit zweimal ueber die gesamte
+  // Befundliste. Das Plugin braucht dafuer einen Unterdrueckungs-Zaehler,
+  // weil seine Handler noch Combo-Zustand parsen; hier reicht der direkte
+  // Aufruf.
+  ApplyFilter;
 end;
 
 procedure TForm2.TileClickKind(Sender: TObject);
@@ -3075,8 +3081,8 @@ begin
   TTileFilterSelect.SelectByTag(SeverityFilterCombo, Want);
   // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
-  TypeFilterComboChange(TypeFilterCombo);
-  SeverityFilterComboChange(SeverityFilterCombo);
+  // Einmal filtern, s. TileClickSeverity.
+  ApplyFilter;
 end;
 
 procedure TForm2.TileClickType(Sender: TObject);
@@ -3095,8 +3101,8 @@ begin
   // Auch hier: die Severity-Combo wurde oben auf 0 gesetzt - Commit-
   // Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
-  SeverityFilterComboChange(SeverityFilterCombo);
-  TypeFilterComboChange(TypeFilterCombo);
+  // Einmal filtern, s. TileClickSeverity.
+  ApplyFilter;
 end;
 
 procedure TForm2.TileClickClear(Sender: TObject);
@@ -3113,8 +3119,8 @@ begin
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if SearchEdit.Text <> '' then
     SearchEdit.Text := '';           // OnChange feuert (Setter am EDIT)
-  SeverityFilterComboChange(SeverityFilterCombo);
-  TypeFilterComboChange(TypeFilterCombo);
+  // Einmal filtern, s. TileClickSeverity.
+  ApplyFilter;
 end;
 
 procedure TForm2.BuildOpenWithMenu(AParent: TMenuItem);

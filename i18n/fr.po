@@ -2044,3 +2044,6 @@ msgstr "Plus de %d fichiers trouvés - analyse annulée."
 
 msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."
 msgstr "Envoi Sonar : .sonar\\external\\ contient désormais exactement ces %d fichier(s) de problèmes - les fichiers des envois précédents ont été supprimés."
+
+msgid "Settings could not be reloaded - baseline filter unchanged."
+msgstr "Impossible de recharger les paramètres - filtre de référence inchangé."
