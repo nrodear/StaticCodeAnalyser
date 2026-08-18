@@ -338,9 +338,11 @@ type
     procedure StatusProgress(const T: string);
     procedure StatusMode(const T: string);
     procedure TypeFilterChange(Sender: TObject);
-    // Profile-Combo OnChange: aktualisiert FRepoSettings.IdeProfile in-memory.
-    // Wirkt beim naechsten Klick auf Analyse / Aktuelle Datei / Branch-Changes,
-    // weil PrepareAnalysis dann UseIdeRuleSet + ApplyDetectorThresholds ruft.
+    // Profile-Combo OnChange: schreibt die Auswahl nach [Rules] IdeProfile
+    // (frisches Load davor, siehe Implementierung - sonst verschleppt der
+    // Save den transienten UseIdeRuleSet-Zustand nach [Rules] Profile).
+    // Auf den naechsten Lauf wirkt die Combo ohnehin direkt: PrepareAnalysis
+    // reicht die Selektion als expliziten Override an SetupForRun.
     procedure ProfileChange(Sender: TObject);
     procedure CancelAnalyseClick(Sender: TObject);
     // Loescht ALLE Hover-Annotation-Marker (Stripes + sichtbares Overlay)
@@ -1069,9 +1071,9 @@ begin
   // Profile (rule-set scope): steuert welches Rule-Set die NAECHSTE
   // Analyse benutzt (ide-fast / default / strict / ...). Items kommen
   // aus rules/sca-rules.json (TRuleCatalog.ProfileNames); Default-
-  // Selektion = FRepoSettings.IdeProfile. Transient (kein INI-Save);
-  // wirkt beim naechsten Analyse-Klick ueber PrepareAnalysis ->
-  // UseIdeRuleSet + ApplyDetectorThresholds.
+  // Selektion = FRepoSettings.IdeProfile. Die Auswahl wird nach
+  // [Rules] IdeProfile PERSISTIERT (ProfileChange) und wirkt beim
+  // naechsten Analyse-Klick als expliziter Override in SetupForRun.
   FProfileCombo := TIDEToolbar.CreateLabelCombo(Self, PanelSearch,
     _('Profile:'), ScaleW(LBL_W_PROFILE), ScaleW(CMB_W_PROFILE), FLblProfile);
   FProfileCombo.OnChange := ProfileChange;
@@ -1763,6 +1765,21 @@ begin
 
   if Assigned(FRepoSettings) then
   try
+    // ERST frisch laden, DANN schreiben - beides gehoert zusammen.
+    // Ohne das Load traegt FRepoSettings nach einem Analyse-Lauf noch den
+    // TRANSIENTEN Zustand aus TIDEAnalysisPrep.SetupForRun Schritt 3:
+    // UseIdeRuleSet spiegelt IdeProfile/IdeMinSeverity in die normalen
+    // Felder Profile/MinSeverity. Save schreibt das ganze Objekt zurueck,
+    // also auch [Rules] Profile - den Schluessel, den CLI und Standalone
+    // lesen. Ein CLI-Lauf ohne --profile faehrt danach still das
+    // IDE-Regelset (ide-fast); in einem CI-Gate sind das lautlose
+    // False Negatives. Das Load holt zugleich Aenderungen ab, die
+    // zwischenzeitlich ueber Tools>Options oder den INI-Editor kamen.
+    // Gleiches Muster wie BaselineOnlyNewClick.
+    //
+    // Save liegt bewusst IM selben try: schlaegt das Load fehl, wird gar
+    // nicht geschrieben - sonst landete der kontaminierte Stand in der INI.
+    FRepoSettings.Load;
     FRepoSettings.IdeProfile := Selected;
     FRepoSettings.Save;
   except
