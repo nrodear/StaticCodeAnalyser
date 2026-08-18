@@ -509,11 +509,11 @@ procedure RefreshTextOnlyHintCache(AValue: Boolean); overload;
 // APPDATA mit Netz-Roundtrip). QuickReadBool warnt im eigenen Kopf genau
 // davor.
 //
-// Die Option hat KEINE Options-Seite - sie steht nur in der INI. Deshalb
-// wird der Cache beim Plugin-Start gefuellt und beim Speichern der
-// Options-Seite nachgezogen; eine Hand-Aenderung an der INI wirkt ab dem
-// naechsten Start. Das ist derselbe Handel, den der TextOnly-Cache
-// eingeht.
+// Der Cache wird beim Plugin-Start gefuellt und beim Speichern der
+// Options-Seite nachgezogen (Checkbox chkOverlayShowOnHover in
+// uIDESCAOptions - die erste Fassung dieses Kommentars bestritt deren
+// Existenz; Review 2026-08-18). Eine Hand-Aenderung an der INI wirkt ab
+// dem naechsten Start - derselbe Handel, den der TextOnly-Cache eingeht.
 procedure RefreshShowOnHoverCache; overload;
 procedure RefreshShowOnHoverCache(AValue: Boolean); overload;
 

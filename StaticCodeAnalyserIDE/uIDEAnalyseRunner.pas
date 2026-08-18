@@ -498,6 +498,14 @@ begin
         IgnoreCopy.SkipTests := not FRepoSettings.IncludeTests;
     end;
     ReapBulkWorkers;
+    // Kapazitaet VOR dem Thread-Start reservieren (Review 2026-08-18):
+    // Create(False) startet den Worker sofort. Wuerde das Add danach
+    // werfen (Realloc unter Speicherdruck), liefe ein Thread ausserhalb
+    // jeder Besitzstruktur - Reap gaebe ihn nie frei, JoinAllBulkWorkers
+    // kennte ihn nicht, und beim BPL-Unload exekutierte er entladene
+    // Code-Pages. Mit reservierter Kapazitaet ist das folgende Add nur
+    // noch Slot-Zuweisung plus Zaehler und kann nicht mehr werfen.
+    GBulkWorkers.Capacity := GBulkWorkers.Count + 1;
     FWorker := TBulkScanWorker.Create(Self, AKind, APath, AFiles,
       Assigned(FRepoSettings) and FRepoSettings.UsesCheck, IgnoreCopy);
     // Ab hier gehoert die Kopie dem Worker (FIgnore, FreeAndNil im
