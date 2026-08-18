@@ -492,6 +492,10 @@ Die EXE folgt standardmäßig dem **Windows-App-Thema** und lässt sich
 Theme=system
 ```
 
+Alle Schluessel von `analyser.ini` - Schwellwerte, Profile, Baseline,
+Oberflaeche - stehen mit ihrem Standardwert in der
+[Konfigurationsreferenz](docs/configuration_de.md).
+
 Der dunkle Style ist in die EXE eingebettet — kein VCL-Style-Haken in
 den Projektoptionen beteiligt. Im Modus `system` wirkt ein
 Windows-Themenwechsel sofort (die EXE hört auf den Broadcast), ohne

@@ -491,6 +491,10 @@ via the hamburger menu under **Appearance** (*Like Windows* / *Light* /
 Theme=system
 ```
 
+Every key of `analyser.ini` - thresholds, profiles, baseline, UI - is
+listed with its default in the
+[configuration reference](docs/configuration.md).
+
 The dark style ships embedded in the EXE — no VCL-style project option
 involved. In `system` mode a Windows theme switch takes effect
 immediately (the EXE listens for the broadcast); no restart needed. The
