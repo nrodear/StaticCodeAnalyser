@@ -56,7 +56,7 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils, uRegExMatches;
 
 const
   // Regex matched Enter/Acquire/BeginWrite-Stellen:
@@ -65,20 +65,13 @@ const
   //   <identifier>.BeginWrite
   //   EnterCriticalSection(
   // Capture-Gruppe 1 = der Lock-Identifier (zur Diagnose).
+  // Thread-Fix (2026-08-19): die fruehere unit-var (CachedLockRe + Init-Flag)
+  // teilte EINE kompilierte TPerlRegEx-Instanz ueber alle Threads; ein
+  // paralleles Match mutierte deren Subject/Offsets. Das Pattern kommt
+  // jetzt pro Thread aus TRegExMatches.CachedEx; [roNotEmpty] entspricht
+  // exakt dem Default des alten Ein-Arg-TRegEx.Create.
   LOCK_ENTER_PATTERN =
     '(?i)\b(?:(\w+)\.(Enter|Acquire|BeginWrite)\b|EnterCriticalSection\s*\()';
-
-var
-  // Lazy-Cache: Pattern ist konstant, kein Grund pro File neu zu kompilieren.
-  CachedLockRe : TRegEx;
-  CachedReInit : Boolean = False;
-
-procedure EnsureRegexCacheBuilt;
-begin
-  if CachedReInit then Exit;
-  CachedLockRe := TRegEx.Create(LOCK_ENTER_PATTERN);
-  CachedReInit := True;
-end;
 
 function FindNextNonSpacePos(const Code: string; Start: Integer): Integer;
 // Skipt Whitespace + Newlines ab Start. Liefert die Position des
@@ -654,8 +647,9 @@ var
   F         : TLeakFinding;
   LineNo    : Integer;
   LockIdent : string;
+  LockRe    : TRegEx;
 begin
-  EnsureRegexCacheBuilt;
+  LockRe := TRegExMatches.CachedEx(LOCK_ENTER_PATTERN, [roNotEmpty]);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
@@ -678,7 +672,7 @@ begin
     Code := TDetectorUtils.StripStringsAndCommentsCached(
       Lines, LineFor, AContext, FileName, ' ');
 
-    Matches := CachedLockRe.Matches(Code);
+    Matches := LockRe.Matches(Code);
 
     for i := 0 to Matches.Count - 1 do
     begin

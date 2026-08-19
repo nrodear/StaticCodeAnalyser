@@ -44,24 +44,17 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache, uTypeResolver;
+  uFileTextCache, uTypeResolver, uRegExMatches;
 
-var
-  // Lazy-Cache fuer die drei Module-konstanten Regex-Patterns. Spart 3x
-  // TRegEx.Create pro File pro Scan (Round-9 Code-Review / Perf).
-  CachedReConcat : TRegEx;
-  CachedReParam  : TRegEx;
-  CachedReField  : TRegEx;
-  CachedReInit   : Boolean = False;
-
-procedure EnsureRegexCacheBuilt;
-begin
-  if CachedReInit then Exit;
-  CachedReConcat := TRegEx.Create('(?i)\b([A-Za-z_][A-Za-z0-9_]*)\s*:=\s*\1\s*\+');
-  CachedReParam  := TRegEx.Create('(?i)\b\w+\.ParamByName\s*\(');
-  CachedReField  := TRegEx.Create('(?i)\b\w+\.FieldByName\s*\(');
-  CachedReInit   := True;
-end;
+const
+  // Thread-Fix (2026-08-19): die frueheren unit-vars (CachedReX + Init-Flag)
+  // teilten EINE kompilierte TPerlRegEx-Instanz ueber alle Threads; ein
+  // paralleles Match mutierte deren Subject/Offsets. Die Patterns kommen
+  // jetzt pro Thread aus TRegExMatches.CachedEx; [roNotEmpty] entspricht
+  // exakt dem Default des alten Ein-Arg-TRegEx.Create.
+  RE_SELF_CONCAT = '(?i)\b([A-Za-z_][A-Za-z0-9_]*)\s*:=\s*\1\s*\+';
+  RE_PARAM_BY_NAME = '(?i)\b\w+\.ParamByName\s*\(';
+  RE_FIELD_BY_NAME = '(?i)\b\w+\.FieldByName\s*\(';
 
 function IsIdent(c: Char): Boolean; inline;
 begin
@@ -382,6 +375,9 @@ var
   LineNo   : Integer;
   F        : TLeakFinding;
   TR       : TTypeResolver;   // Welle 1: additive AST-Typ-Aufloesung (SCA110-Opt-in)
+  ReConcat : TRegEx;
+  ReParam  : TRegEx;
+  ReField  : TRegEx;
 
   procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer);
   begin
@@ -397,7 +393,9 @@ var
   end;
 
 begin
-  EnsureRegexCacheBuilt;
+  ReConcat := TRegExMatches.CachedEx(RE_SELF_CONCAT, [roNotEmpty]);
+  ReParam  := TRegExMatches.CachedEx(RE_PARAM_BY_NAME, [roNotEmpty]);
+  ReField  := TRegExMatches.CachedEx(RE_FIELD_BY_NAME, [roNotEmpty]);
   TR := nil;
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
@@ -413,7 +411,7 @@ begin
 
     // 1) String-Concat in Loop:  <var> := <var> + <expr>
     //    Wortgrenzen, Variable beidseitig identisch (case-insensitiv).
-    Matches := CachedReConcat.Matches(Code);
+    Matches := ReConcat.Matches(Code);
     for M in Matches do
       if PosInRanges(M.Index, Ranges)
          and not LhsDeclaredNumeric(Code, M.Groups[1].Value, M.Index)
@@ -431,7 +429,7 @@ begin
           M.Index);
 
     // 2) ParamByName in Loop:   <obj>.ParamByName('...')
-    Matches := CachedReParam.Matches(Code);
+    Matches := ReParam.Matches(Code);
     for M in Matches do
       if PosInRanges(M.Index, Ranges) then
         Emit(fkParamByNameInLoop,
@@ -441,7 +439,7 @@ begin
           M.Index);
 
     // 3) FieldByName in Loop:   <obj>.FieldByName('...')
-    Matches := CachedReField.Matches(Code);
+    Matches := ReField.Matches(Code);
     for M in Matches do
       if PosInRanges(M.Index, Ranges) then
         Emit(fkFieldByNameInLoop,

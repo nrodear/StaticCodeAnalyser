@@ -59,23 +59,18 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache;
+  uFileTextCache, uRegExMatches;
 
-var
-  // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
-  CachedRePropertyAssign : TRegEx;
-  CachedReDialogCall     : TRegEx;
-  CachedReInit           : Boolean = False;
-
-procedure EnsureRegexCacheBuilt;
-begin
-  if CachedReInit then Exit;
-  CachedRePropertyAssign := TRegEx.Create(
-    '(?i)\.\s*(?:Caption|Hint|Text)\s*:=\s*''([^'']*(?:''''[^'']*)*)''');
-  CachedReDialogCall     := TRegEx.Create(
-    '(?i)\b(?:ShowMessage|MessageDlg)\s*\(\s*''([^'']*(?:''''[^'']*)*)''');
-  CachedReInit := True;
-end;
+const
+  // Thread-Fix (2026-08-19): die frueheren unit-vars (CachedReX + Init-Flag)
+  // teilten EINE kompilierte TPerlRegEx-Instanz ueber alle Threads; ein
+  // paralleles Match mutierte deren Subject/Offsets. Die Patterns kommen
+  // jetzt pro Thread aus TRegExMatches.CachedEx; [roNotEmpty] entspricht
+  // exakt dem Default des alten Ein-Arg-TRegEx.Create.
+  RE_PROPERTY_ASSIGN =
+    '(?i)\.\s*(?:Caption|Hint|Text)\s*:=\s*''([^'']*(?:''''[^'']*)*)''';
+  RE_DIALOG_CALL =
+    '(?i)\b(?:ShowMessage|MessageDlg)\s*\(\s*''([^'']*(?:''''[^'']*)*)''';
 
 function ContainsLetter(const S: string): Boolean;
 var
@@ -131,8 +126,11 @@ var
   M        : TMatch;
   Lit      : string;
   F        : TLeakFinding;
+  RePropertyAssign : TRegEx;
+  ReDialogCall     : TRegEx;
 begin
-  EnsureRegexCacheBuilt;
+  RePropertyAssign := TRegExMatches.CachedEx(RE_PROPERTY_ASSIGN, [roNotEmpty]);
+  ReDialogCall     := TRegExMatches.CachedEx(RE_DIALOG_CALL, [roNotEmpty]);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
@@ -142,7 +140,7 @@ begin
       // Comment-Skip: einfache Zeilen-Kommentare ueberspringen wir grob.
       if Trim(Line).StartsWith('//') then Continue;
 
-      for M in CachedRePropertyAssign.Matches(Line) do
+      for M in RePropertyAssign.Matches(Line) do
       begin
         Lit := M.Groups[1].Value;
         if not ShouldReport(Lit) then Continue;
@@ -156,7 +154,7 @@ begin
         F.SetKind(fkHardcodedString);
         Results.Add(F);
       end;
-      for M in CachedReDialogCall.Matches(Line) do
+      for M in ReDialogCall.Matches(Line) do
       begin
         Lit := M.Groups[1].Value;
         if not ShouldReport(Lit) then Continue;

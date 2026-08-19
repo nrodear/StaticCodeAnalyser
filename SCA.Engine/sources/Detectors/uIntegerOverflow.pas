@@ -61,32 +61,23 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils, uRegExMatches;
 
 const
   INT64_TYPES : array[0..2] of string = ('int64', 'uint64', 'qword');
 
-var
-  // Lazy-Cache (Round 11): Patterns sind konstant. Spart 2 Compilations
-  // pro File pro Scan.
-  CachedReVarDecl : TRegEx;
-  CachedReAssign  : TRegEx;
+  // Thread-Fix (2026-08-19): die frueheren unit-vars (CachedReX + Init-Flag)
+  // teilten EINE kompilierte TPerlRegEx-Instanz ueber alle Threads; ein
+  // paralleles Match mutierte deren Subject/Offsets. Die Patterns kommen
+  // jetzt pro Thread aus TRegExMatches.CachedEx; [roNotEmpty] entspricht
+  // exakt dem Default des alten Ein-Arg-TRegEx.Create.
+  RE_INT64_VAR_DECL = '(?im)\b(\w+)\s*:\s*(Int64|UInt64|QWord)\b';
+  RE_PRODUCT_ASSIGN = '(?im)\b(\w+)\s*:=\s*(\w+)\s*\*\s*(\w+)\s*;';
   // Real-World-FP-Audit 2026-07-12 (FP-Klasse 'scope-blinde file-globale
   // Var-Sammlung'): fuer die per-Method-Scope-Aufteilung der Ziel-Erkennung.
-  CachedReImpl    : TRegEx;   // Interface/Implementation-Grenze
-  CachedReHeader  : TRegEx;   // Routinen-Header (Region-Start)
-  CachedReInit    : Boolean = False;
-
-procedure EnsureRegexCacheBuilt;
-begin
-  if CachedReInit then Exit;
-  CachedReVarDecl := TRegEx.Create('(?im)\b(\w+)\s*:\s*(Int64|UInt64|QWord)\b');
-  CachedReAssign  := TRegEx.Create('(?im)\b(\w+)\s*:=\s*(\w+)\s*\*\s*(\w+)\s*;');
-  CachedReImpl    := TRegEx.Create('(?im)\bimplementation\b');
-  CachedReHeader  := TRegEx.Create(
-    '(?im)^[ \t]*(?:class[ \t]+)?(?:procedure|function|constructor|destructor|operator)\b');
-  CachedReInit    := True;
-end;
+  RE_IMPL_BOUNDARY = '(?im)\bimplementation\b';      // Interface/Impl-Grenze
+  RE_ROUTINE_HEADER =                                // Region-Start
+    '(?im)^[ \t]*(?:class[ \t]+)?(?:procedure|function|constructor|destructor|operator)\b';
 
 // True wenn TypeText eines der Int64-Familien-Typen ist.
 function IsInt64Type(const TypeText: string): Boolean;
@@ -135,9 +126,13 @@ end;
 // Sammelt alle Int64/UInt64/QWord-Variablennamen (lowercase) aus AText in ADest.
 procedure CollectInt64VarsInto(const AText: string; ADest: TStringList);
 var
-  M : TMatch;
+  M  : TMatch;
+  Re : TRegEx;
 begin
-  for M in CachedReVarDecl.Matches(AText) do
+  // Eigener CachedEx-Bezug statt Parameter-Durchreiche: der Dictionary-Hit
+  // ist billig und die Signatur bleibt stabil (2x pro File aufgerufen).
+  Re := TRegExMatches.CachedEx(RE_INT64_VAR_DECL, [roNotEmpty]);
+  for M in Re.Matches(AText) do
     if IsInt64Type(M.Groups[2].Value) then
       ADest.Add(LowerCase(M.Groups[1].Value));
 end;
@@ -159,6 +154,10 @@ var
   F  : TLeakFinding;
   LineNo : Integer;
   ImplPos, FirstHeaderPos, P, NextBound, RegionCursor, LastBuilt : Integer;
+  ReVarDecl : TRegEx;
+  ReAssign  : TRegEx;
+  ReImpl    : TRegEx;
+  ReHeader  : TRegEx;
 
   // Ziel-Klassifikation (LHS) ist PER-METHOD-SCOPE: gueltig sind nur
   // Felder/Globals (FileLevelVars) plus die Deklarationen der Routine, die
@@ -170,7 +169,10 @@ var
   end;
 
 begin
-  EnsureRegexCacheBuilt;
+  ReVarDecl := TRegExMatches.CachedEx(RE_INT64_VAR_DECL, [roNotEmpty]);
+  ReAssign  := TRegExMatches.CachedEx(RE_PRODUCT_ASSIGN, [roNotEmpty]);
+  ReImpl    := TRegExMatches.CachedEx(RE_IMPL_BOUNDARY, [roNotEmpty]);
+  ReHeader  := TRegExMatches.CachedEx(RE_ROUTINE_HEADER, [roNotEmpty]);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
@@ -180,7 +182,7 @@ begin
 
     // Fast-Reject: ohne irgendeine Int64/UInt64/QWord-Deklaration kein Befund
     // moeglich - spart die Segmentierung unten fuer die grosse Mehrheit.
-    if not CachedReVarDecl.IsMatch(Code) then Exit;
+    if not ReVarDecl.IsMatch(Code) then Exit;
 
     Int64Vars     := TStringList.Create;
     FileLevelVars := TStringList.Create;
@@ -216,13 +218,13 @@ begin
       // Parameter-Deklarationen fremder Routinen NICHT einflieszen. Felder
       // stehen nie in Klammern und bleiben daher erhalten (z.B.
       // 'fEngineExpireTimeOutTix: Int64;' - echter TP, muss Fund bleiben).
-      MImpl := CachedReImpl.Match(Code);
+      MImpl := ReImpl.Match(Code);
       if MImpl.Success then ImplPos := MImpl.Index else ImplPos := 1;
 
       // Routinen-Header AB der implementation-Grenze sammeln (Interface-
       // Methoden-Deklarationen zaehlen NICHT als Region - deren Felder sollen
       // file-level bleiben).
-      for M in CachedReHeader.Matches(Code) do
+      for M in ReHeader.Matches(Code) do
         if M.Index >= ImplPos then HeaderPos.Add(M.Index);
 
       if HeaderPos.Count > 0 then FirstHeaderPos := HeaderPos[0]
@@ -236,7 +238,7 @@ begin
       // simple Identifier ohne Cast.
       RegionCursor := -1;
       LastBuilt    := -2;
-      for M in CachedReAssign.Matches(Code) do
+      for M in ReAssign.Matches(Code) do
       begin
         Lhs := M.Groups[1].Value;
         A   := M.Groups[2].Value;

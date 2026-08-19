@@ -57,22 +57,17 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils, uRegExMatches;
 
-var
-  // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
-  CachedLoopRE : TRegEx;
-  CachedGrowRE : TRegEx;
-  CachedReInit : Boolean = False;
-
-procedure EnsureRegexCacheBuilt;
-begin
-  if CachedReInit then Exit;
-  CachedLoopRE := TRegEx.Create('(?i)\b(for|while|repeat)\b');
-  CachedGrowRE := TRegEx.Create(
-    '(?i)\bSetLength\s*\(\s*(\w+)\s*,\s*Length\s*\(\s*(\w+)\s*\)\s*\+');
-  CachedReInit := True;
-end;
+const
+  // Thread-Fix (2026-08-19): die frueheren unit-vars (CachedXxxRE + Init-
+  // Flag) teilten EINE kompilierte TPerlRegEx-Instanz ueber alle Threads;
+  // ein paralleles Match mutierte deren Subject/Offsets. Die Patterns
+  // kommen jetzt pro Thread aus TRegExMatches.CachedEx; [roNotEmpty]
+  // entspricht exakt dem Default des alten Ein-Arg-TRegEx.Create.
+  RE_LOOP_KEYWORD = '(?i)\b(for|while|repeat)\b';
+  RE_GROW_CALL =
+    '(?i)\bSetLength\s*\(\s*(\w+)\s*,\s*Length\s*\(\s*(\w+)\s*\)\s*\+';
 
 // Liefert das erste \w+-Token (Bezeichner ODER Zahl) in S, '' wenn keins.
 function FirstWordToken(const S: string): string;
@@ -183,8 +178,11 @@ var
   F            : TLeakFinding;
   Detail       : string;
   AbsolutePos  : Integer;
+  LoopRE       : TRegEx;
+  GrowRE       : TRegEx;
 begin
-  EnsureRegexCacheBuilt;
+  LoopRE := TRegExMatches.CachedEx(RE_LOOP_KEYWORD, [roNotEmpty]);
+  GrowRE := TRegExMatches.CachedEx(RE_GROW_CALL, [roNotEmpty]);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
@@ -192,13 +190,13 @@ begin
     Code := TDetectorUtils.StripStringsAndCommentsCached(
       Lines, LineFor, AContext, FileName, ' ');
 
-    for LoopM in CachedLoopRE.Matches(Code) do
+    for LoopM in LoopRE.Matches(Code) do
     begin
       AbsolutePos := LoopM.Index + LoopM.Length;
       if AbsolutePos > Length(Code) then Continue;
       Snippet := Copy(Code, AbsolutePos, LOOK_AHEAD);
 
-      for GrowM in CachedGrowRE.Matches(Snippet) do
+      for GrowM in GrowRE.Matches(Snippet) do
       begin
         ArrayName := GrowM.Groups[1].Value;
         GrowName  := GrowM.Groups[2].Value;

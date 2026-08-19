@@ -835,8 +835,8 @@ procedure TTestFloatEquality.CommaListDecl_KnownFnNotReported;
 // akzeptiertes False Negative. Der FN-Close (Welle 1) erzeugte +222
 // Korpus-Funde mit 0/16 Hart-TP-Sample und 69% Klassik-FP (Kette after88
 // 440 -> after89 662 -> after90 654, die Zusatz-Gates holten nur -8) und
-// wurde deshalb zurueckgebaut; Begruendung am Decl-Regex in
-// uFloatEquality.EnsureRegexCacheBuilt. Der Test pinnt den Entscheid:
+// wurde deshalb zurueckgebaut; Begruendung am Decl-Pattern RE_FLOAT_DECL
+// in uFloatEquality. Der Test pinnt den Entscheid:
 // schlaegt er fehl, wurde die FN-Klasse ohne die geforderte Wertedomaenen-
 // Analyse re-geoeffnet.
 const SRC =

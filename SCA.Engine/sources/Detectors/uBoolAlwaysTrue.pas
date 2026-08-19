@@ -48,21 +48,16 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils;
+  uFileTextCache, uDetectorUtils, uRegExMatches;
 
-var
-  // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
-  CachedReLenGeZero : TRegEx;
-  CachedReZeroLeLen : TRegEx;
-  CachedReInit      : Boolean = False;
-
-procedure EnsureRegexCacheBuilt;
-begin
-  if CachedReInit then Exit;
-  CachedReLenGeZero := TRegEx.Create('(?i)\bLength\s*\([^()]*\)\s*(>=|<)\s*0\b');
-  CachedReZeroLeLen := TRegEx.Create('(?i)\b0\s*(<=|>)\s*Length\s*\([^()]*\)');
-  CachedReInit      := True;
-end;
+const
+  // Thread-Fix (2026-08-19): die frueheren unit-vars (CachedReX + Init-Flag)
+  // teilten EINE kompilierte TPerlRegEx-Instanz ueber alle Threads; ein
+  // paralleles Match mutierte deren Subject/Offsets. Die Patterns kommen
+  // jetzt pro Thread aus TRegExMatches.CachedEx; [roNotEmpty] entspricht
+  // exakt dem Default des alten Ein-Arg-TRegEx.Create.
+  RE_LEN_GE_ZERO = '(?i)\bLength\s*\([^()]*\)\s*(>=|<)\s*0\b';
+  RE_ZERO_LE_LEN = '(?i)\b0\s*(<=|>)\s*Length\s*\([^()]*\)';
 
 class procedure TBoolAlwaysTrueDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
@@ -76,8 +71,11 @@ var
   AlwaysTrue : Boolean;
   LineNo   : Integer;
   F        : TLeakFinding;
+  ReLenGeZero : TRegEx;
+  ReZeroLeLen : TRegEx;
 begin
-  EnsureRegexCacheBuilt;
+  ReLenGeZero := TRegExMatches.CachedEx(RE_LEN_GE_ZERO, [roNotEmpty]);
+  ReZeroLeLen := TRegExMatches.CachedEx(RE_ZERO_LE_LEN, [roNotEmpty]);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
@@ -87,7 +85,7 @@ begin
 
     // Pattern: Length(...) >= 0 | Length(...) < 0
     // (?: handles nested parens via [^()]* | recursive simplistic).
-    for M in CachedReLenGeZero.Matches(Code) do
+    for M in ReLenGeZero.Matches(Code) do
     begin
       Op := M.Groups[1].Value;
       AlwaysTrue := Op = '>=';
@@ -107,7 +105,7 @@ begin
     end;
 
     // Spiegel-Variante: 0 <= Length(...) bzw. 0 > Length(...)
-    for M in CachedReZeroLeLen.Matches(Code) do
+    for M in ReZeroLeLen.Matches(Code) do
     begin
       Op := M.Groups[1].Value;
       AlwaysTrue := Op = '<=';

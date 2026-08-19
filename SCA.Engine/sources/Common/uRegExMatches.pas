@@ -20,6 +20,13 @@ type
       out foundMatch: string): boolean; static;
     class function GetCodeOnly(const line: string): string;
 
+    // Thread-sicherer Regex-Bezug fuer Detektoren mit EXPLIZITEN Optionen:
+    // wie Cached, aber die TRegExOptions wandern mit in den Cache-Key und
+    // in TRegEx.Create. Public, weil die Detector-Units ihre frueheren
+    // unit-var-Caches hierher verlagert haben (2026-08-19, s. Cache-Kommentar).
+    class function CachedEx(const pattern: string;
+      AOptions: TRegExOptions): TRegEx; static;
+
   private
     class var FCache: TDictionary<string, TRegEx>;
     class function Cached(const pattern: string): TRegEx; static;
@@ -58,28 +65,57 @@ implementation
 // einmalig und unmessbar gegenueber dem Scan. Eine Eviction einzelner
 // Threads waere nur mit einer Liste lebender Thread-IDs korrekt - deutlich
 // mehr Mechanik fuer denselben Effekt.
+// CachedEx (2026-08-19): 11 Detector-Units hielten ihre kompilierten TRegEx
+// in unit-vars (CachedReX + Init-Flag) - EINE geteilte TPerlRegEx-Instanz
+// ueber alle Threads. Ein paralleles Match() zweier Threads mutierte deren
+// Subject/Offsets (Beleg: 13 parallele Laeufe = 13 verschiedene SARIF-
+// Hashes). Diese Units beziehen ihre Patterns jetzt hier ueber CachedEx;
+// die TRegExOptions gehen mit in den Cache-Key, weil dasselbe Pattern mit
+// anderen Optionen eine ANDERS kompilierte Engine ist.
 // ---------------------------------------------------------------------------
 const
-  // ~20 Patterns x ~25 gleichzeitig gehaltene Thread-Generationen.
-  CMaxCachedRegex = 512;
+  // ~50 Patterns (inkl. der 2026-08-19 zugezogenen Detector-Patterns)
+  // x ~25 gleichzeitig gehaltene Thread-Generationen.
+  CMaxCachedRegex = 1280;
 
-class function TRegExMatches.Cached(const pattern: string): TRegEx;
+class function TRegExMatches.CachedEx(const pattern: string;
+  AOptions: TRegExOptions): TRegEx;
 var
   CacheKey: string;
+  Opt: TRegExOption;
+  OptMask: Integer;
 begin
-  CacheKey := IntToStr(TThread.Current.ThreadID) + '|' + pattern;
+  // Optionen als Ordinal-Bitmaske in den Key: '2|' = [roIgnoreCase],
+  // '128|' = [roNotEmpty] (Default des Ein-Arg-TRegEx.Create), usw.
+  OptMask := 0;
+  for Opt := Low(TRegExOption) to High(TRegExOption) do
+  begin
+    if Opt in AOptions then
+    begin
+      OptMask := OptMask or (1 shl Ord(Opt));
+    end;
+  end;
+  CacheKey := IntToStr(TThread.Current.ThreadID) + '|' + IntToStr(OptMask) +
+    '|' + pattern;
   TMonitor.Enter(FCache);
   try
     if not FCache.TryGetValue(CacheKey, Result) then
     begin
       if FCache.Count >= CMaxCachedRegex then
         FCache.Clear;
-      Result := TRegEx.Create(pattern, [roIgnoreCase]);
+      Result := TRegEx.Create(pattern, AOptions);
       FCache.Add(CacheKey, Result);
     end;
   finally
     TMonitor.Exit(FCache);
   end;
+end;
+
+class function TRegExMatches.Cached(const pattern: string): TRegEx;
+begin
+  // Historisches Verhalten der Helfer dieser Unit: [roIgnoreCase] ohne
+  // roNotEmpty - unveraendert beibehalten (Byte-Identitaet der Matches).
+  Result := CachedEx(pattern, [roIgnoreCase]);
 end;
 
 class function TRegExMatches.IsCommentOf(const line: string;
