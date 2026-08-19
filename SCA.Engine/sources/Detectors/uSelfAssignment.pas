@@ -405,13 +405,37 @@ begin
   Result := True;
 end;
 
+procedure SammleRecordMember(ASec: TAstNode; const ARecNm: string;
+  var ACtx: TMemberCtx);
+// EINE Sichtbarkeits-Sektion eines Records: Felder in die Member-
+// Tabelle (mit Feldtyp fuer Rec-in-Rec-Hops), Properties in die
+// Property-Menge. Methoden/Operatoren/nested Types tragen nichts bei.
+var
+  C : TAstNode;
+begin
+  for C in ASec.Children do
+  begin
+    if C.Kind = nkField then
+    begin
+      ACtx.RecMembers.AddOrSetValue(
+        ARecNm + '.' + LowerCase(Trim(C.Name)),
+        ReduceToBareTypeLow(C.TypeRef));
+    end
+    else if C.Kind = nkProperty then
+    begin
+      ACtx.RecProps.AddOrSetValue(
+        ARecNm + '.' + LowerCase(Trim(C.Name)), 0);
+    end;
+  end;
+end;
+
 procedure BuildMemberCtx(UnitNode: TAstNode; var ACtx: TMemberCtx);
 // Einmal je Unit: Records mit Feld-/Property-Mengen und '^'-Aliase aus
 // dem AST. Feldtyp wird mitgefuehrt, damit Rec-in-Rec-Pfade hoppen.
 var
-  RN, C : TAstNode;
-  RecNm : string;
-  Tr    : string;
+  RN, Sec : TAstNode;
+  RecNm   : string;
+  Tr      : string;
 begin
   ACtx.Resolver   := TTypeResolver.Create(UnitNode);
   ACtx.RecMembers := TDictionary<string, string>.Create;
@@ -423,20 +447,17 @@ begin
     RecNm := LowerCase(Trim(RN.Name));
     if RecNm = '' then Continue;
     ACtx.RecNames.AddOrSetValue(RecNm, 0);
-    // Methoden/Operatoren/nested Types tragen nichts zur
-    // Feld-/Property-Unterscheidung bei - nur die zwei Arten zaehlen.
-    for C in RN.Children do
+    // Felder/Properties haengen NICHT direkt am Record-Knoten: der
+    // Parser legt sie unter nkVisibilitySection ab (uParser2:1283,
+    // VisNode.Add nkField:1432 / nkProperty:1377) - eine Ebene tiefer
+    // laufen. Bewusst KEIN FindAllRef auf dem Record: das saehe auch
+    // die Felder NESTED deklarierter Typen und schriebe sie dem
+    // aeusseren Record zu (falsche TP-Richtung).
+    for Sec in RN.Children do
     begin
-      if C.Kind = nkField then
+      if Sec.Kind = nkVisibilitySection then
       begin
-        ACtx.RecMembers.AddOrSetValue(
-          RecNm + '.' + LowerCase(Trim(C.Name)),
-          ReduceToBareTypeLow(C.TypeRef));
-      end
-      else if C.Kind = nkProperty then
-      begin
-        ACtx.RecProps.AddOrSetValue(
-          RecNm + '.' + LowerCase(Trim(C.Name)), 0);
+        SammleRecordMember(Sec, RecNm, ACtx);
       end;
     end;
   end;
