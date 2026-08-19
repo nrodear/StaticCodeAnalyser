@@ -641,10 +641,10 @@ const
     '; OwnershipSinks (comma-separated, default: empty)'#13#10 +
     '; Routine names that take ownership of an object passed to them. SCA001'#13#10 +
     '; then treats such a call as a handover and stays silent.'#13#10 +
-    '; Only the standalone EXE and the IDE plugin apply this - the CLI reads'#13#10 +
-    '; the file but never registers the list. Adding a name takes effect on'#13#10 +
-    '; the next scan; REMOVING one needs a process restart, because the list'#13#10 +
-    '; is only ever added to.'#13#10 +
+    '; Applied by all three consumers (EXE, IDE plugin, CLI). Adding a name'#13#10 +
+    '; takes effect on the next scan; REMOVING one needs a process restart'#13#10 +
+    '; in the EXE/IDE (the list is only ever added to) - the CLI starts a'#13#10 +
+    '; fresh process per run, so removals apply immediately there.'#13#10 +
     ';OwnershipSinks=TakeOwnership,AdoptObject'#13#10 +
     ''#13#10 +
     '; MagicNumberTrivials: comma-separated numbers that are NOT reported'#13#10 +
