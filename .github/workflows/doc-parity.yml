@@ -31,5 +31,11 @@ jobs:
         run: |
           python3 tools/doc_parity.py --list || true
           echo ""
-          echo "Regel: Ueberschriften-STRUKTUR muss je Sprache identisch sein;"
-          echo "Inhalte duerfen (behutsam) unterschiedlich dicht sein."
+          echo "Regel 1: Ueberschriften-STRUKTUR muss je Sprache identisch"
+          echo "sein; Inhalte duerfen (behutsam) unterschiedlich dicht sein."
+          echo ""
+          echo "Regel 2: jeder relative Markdown-Link braucht ein Ziel im"
+          echo "GIT-INDEX. Eine nur lokal vorhandene Datei - etwa ein"
+          echo "gitignoretes internes Dokument - ist fuer jeden anderen"
+          echo "Leser ein 404. Entweder das Ziel ausliefern oder den"
+          echo "Verweis auf eine ausgelieferte Quelle umbiegen."
