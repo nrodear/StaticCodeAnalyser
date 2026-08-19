@@ -265,7 +265,7 @@ begin
         // RuleID: Custom-Rule-ID gewinnt; sonst Catalog-Lookup via Kind.
         var Rid: string;
         if F.RuleID <> '' then Rid := F.RuleID
-        else Rid := TRuleCatalog.GetRule(F.Kind).ID;
+        else Rid := TRuleCatalog.GetRuleCanonical(F.Kind).ID;
         SB.Append('"ruleID": "');   SB.Append(JsonEscape(Rid));                SB.Append('", ');
         SB.Append('"detail": "');   SB.Append(JsonEscape(F.MissingVar));       SB.Append('"');
         if i < Findings.Count - 1 then

@@ -134,7 +134,7 @@ var
 begin
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    Meta := TRuleCatalog.GetRule(K);
+    Meta := TRuleCatalog.GetRuleCanonical(K);
     Assert.IsNotEmpty(Meta.ID,
       Format('Kind %s hat keine Rule-ID im Catalog', [KindName(K)]));
     Assert.AreEqual(K, Meta.Kind,
@@ -154,7 +154,7 @@ var
 begin
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    Meta := TRuleCatalog.GetRule(K);
+    Meta := TRuleCatalog.GetRuleCanonical(K);
     Assert.IsNotEmpty(Meta.Name,
       Format('Kind %s hat keinen Catalog-Eintrag mit Name (Fallback aktiv?)',
         [KindName(K)]));
@@ -179,7 +179,7 @@ var
 begin
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    Meta := TRuleCatalog.GetRule(K);
+    Meta := TRuleCatalog.GetRuleCanonical(K);
     Assert.AreEqual<TLeakSeverity>(
       Meta.DefaultSeverity,
       KindDefaultSeverity(K),
@@ -204,7 +204,7 @@ var
 begin
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    Meta := TRuleCatalog.GetRule(K);
+    Meta := TRuleCatalog.GetRuleCanonical(K);
     Assert.AreEqual<TFindingType>(
       Meta.FindingType,
       KindFindingType(K),
@@ -236,7 +236,7 @@ var
 begin
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    Meta := TRuleCatalog.GetRule(K);
+    Meta := TRuleCatalog.GetRuleCanonical(K);
 
     Assert.IsNotEmpty(Meta.CleanCodeAttribute,
       Format('Kind %s hat kein cleanCodeAttribute in rules/sca-rules.json',
@@ -304,7 +304,7 @@ var
 begin
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    Meta := TRuleCatalog.GetRule(K);
+    Meta := TRuleCatalog.GetRuleCanonical(K);
 
     Assert.IsNotEmpty(Meta.BadExample,
       Format('Kind %s (%s) hat kein examples.bad in rules/sca-rules.json - ' +
@@ -342,7 +342,7 @@ var
 begin
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    Meta     := TRuleCatalog.GetRule(K);
+    Meta     := TRuleCatalog.GetRuleCanonical(K);
     Expected := Format('SCA%.3d', [Ord(K) + 1]);
     Assert.AreEqual(Expected, Meta.ID,
       Format('Kind %s (Ordinal %d) hat ID "%s", erwartet "%s" - neuer ' +
@@ -361,7 +361,7 @@ begin
   Rx := TRegEx.Create('^SCA\d{3}$');
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    Meta := TRuleCatalog.GetRule(K);
+    Meta := TRuleCatalog.GetRuleCanonical(K);
     Assert.IsTrue(Rx.IsMatch(Meta.ID),
       Format('Rule-ID "%s" matcht nicht SCAxxx-Konvention', [Meta.ID]));
   end;
@@ -377,7 +377,7 @@ begin
   try
     for K := Low(TFindingKind) to High(TFindingKind) do
     begin
-      Meta := TRuleCatalog.GetRule(K);
+      Meta := TRuleCatalog.GetRuleCanonical(K);
       Assert.IsFalse(Seen.ContainsKey(Meta.ID),
         Format('Doppelte Rule-ID: %s', [Meta.ID]));
       Seen.Add(Meta.ID, True);
@@ -405,7 +405,7 @@ begin
   try
     for K := Low(TFindingKind) to High(TFindingKind) do
     begin
-      Meta := TRuleCatalog.GetRule(K);
+      Meta := TRuleCatalog.GetRuleCanonical(K);
       if Seen.TryGetValue(LowerCase(Trim(Meta.Name)), Owner) then
         Assert.Fail(
           Format('Doppelter Rule-Name "%s": %s und %s - ' +
@@ -445,7 +445,7 @@ begin
   try
     for K := Low(TFindingKind) to High(TFindingKind) do
     begin
-      Meta := TRuleCatalog.GetRule(K);
+      Meta := TRuleCatalog.GetRuleCanonical(K);
       if Seen.TryGetValue(LowerCase(Trim(Meta.ShortDescription)), Owner) then
         Assert.Fail(
           Format('Doppelte shortDescription "%s": %s und %s - ' +
@@ -477,7 +477,7 @@ var
 begin
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    Meta := TRuleCatalog.GetRule(K);
+    Meta := TRuleCatalog.GetRuleCanonical(K);
     // Meta.Kind muss bereits korrekt zum Lookup-K passen
     Assert.AreEqual(K, Meta.Kind,
       Format('Catalog-Kind %s sollte %s sein',
@@ -502,8 +502,8 @@ var
 begin
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    M1 := TRuleCatalog.GetRule(K);
-    Found := TRuleCatalog.GetRuleByID(M1.ID, M2);
+    M1 := TRuleCatalog.GetRuleCanonical(K);
+    Found := TRuleCatalog.GetRuleByIDCanonical(M1.ID, M2);
     Assert.IsTrue(Found,
       Format('GetRuleByID("%s") nicht gefunden', [M1.ID]));
     Assert.AreEqual(M1.Kind, M2.Kind,
@@ -761,7 +761,7 @@ begin
     TRuleCatalog.Reload;
 
     // Stellvertretend der gemeldete Fall - und danach ALLE Kinds.
-    Meta := TRuleCatalog.GetRule(fkCognitiveComplexity);
+    Meta := TRuleCatalog.GetRuleCanonical(fkCognitiveComplexity);
     Assert.IsNotEmpty(Meta.BadExample,
       'SCA176: BadExample fehlt im Fallback - im IDE-Plugin sieht der User dann keinen Vorher-Block');
     Assert.IsNotEmpty(Meta.GoodExample,
@@ -772,7 +772,7 @@ begin
     Leer := 0;
     for K := Low(TFindingKind) to High(TFindingKind) do
     begin
-      Meta := TRuleCatalog.GetRule(K);
+      Meta := TRuleCatalog.GetRuleCanonical(K);
       if (Meta.BadExample = '') or (Meta.GoodExample = '') then Inc(Leer);
     end;
     Assert.AreEqual<Integer>(0, Leer,

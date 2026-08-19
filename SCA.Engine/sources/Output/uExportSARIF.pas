@@ -425,7 +425,10 @@ begin
       if F.Kind <> fkFileReadError then Continue;
       Msg := F.MissingVar;
       if Msg = '' then
-        Msg := TRuleCatalog.GetRule(F.Kind).ShortDescription;
+        // KANONISCH, niemals lokalisiert: dieser Text geht in message.text
+        // UND in den partialFingerprints-Hash - ein uebersetzter Text
+        // liesse GitHub Code Scanning jeden Alert als neu melden.
+        Msg := TRuleCatalog.GetRuleCanonical(F.Kind).ShortDescription;
       E.BeginObjValue;
       E.PairStr('level', 'error');
       E.BeginObjPair('message');
@@ -561,7 +564,7 @@ begin
     if Assigned(AFindings) then
       for F in AFindings do
       begin
-        Meta    := TRuleCatalog.GetRule(F.Kind);
+        Meta    := TRuleCatalog.GetRuleCanonical(F.Kind);  // s. Fingerprint-Hinweis oben
         if not RelMemo.TryGetValue(F.FileName, RelPath) then
         begin
           RelPath := MakeRelative(F.FileName, ABaseDir);

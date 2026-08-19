@@ -160,6 +160,7 @@
         <DCCReference Include="uTestLexerConditionals.pas"/>
         <DCCReference Include="uTestPerformance.pas"/>
         <DCCReference Include="uTestRuleCatalog.pas"/>
+        <DCCReference Include="uTestRuleOverlay.pas"/>
         <DCCReference Include="uTestFixHint.pas"/>
         <DCCReference Include="uTestLocalization.pas"/>
         <DCCReference Include="uTestExportSARIF.pas"/>

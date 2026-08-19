@@ -77,6 +77,7 @@ uses
   uTestLexerConditionals in 'uTestLexerConditionals.pas',
   uTestPerformance in 'uTestPerformance.pas',
   uTestRuleCatalog in 'uTestRuleCatalog.pas',
+  uTestRuleOverlay in 'uTestRuleOverlay.pas',
   uTestFixHint in 'uTestFixHint.pas',
   uTestLocalization in 'uTestLocalization.pas',
   uTestExportSARIF in 'uTestExportSARIF.pas',

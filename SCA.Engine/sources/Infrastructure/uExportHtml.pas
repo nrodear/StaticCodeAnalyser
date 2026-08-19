@@ -61,7 +61,8 @@ implementation
 
 uses
   System.IOUtils,          // TPath (Relativpfad-Anzeige, HtmlDisplayPath)
-  uExport, uFixHint, uRuleCatalog, uQuickFix, uBaseline;
+  uExport, uFixHint, uRuleCatalog, uQuickFix, uBaseline,
+  uLocalization;           // CurrentLanguage - Regeltexte folgen der App-Sprache
 
 type
   // Per-Datei-Aggregat fuer das Top-Dateien-Risiko-Ranking (#11).
@@ -447,7 +448,7 @@ begin
     if Assigned(KindPairs) then
       for KindEntry in KindPairs do
       begin
-        var SM := TRuleCatalog.GetRule(KindEntry.Key);
+        var SM := TRuleCatalog.GetRuleCanonical(KindEntry.Key);  // zaehlt nur CWE/OWASP
         if (Length(SM.CWE) > 0) or (Length(SM.OWASP) > 0) then
           Inc(SecCount, KindEntry.Value);
       end;
@@ -1489,7 +1490,12 @@ begin
         // kanonisches bad/good-Beispiel + CWE/OWASP aus dem RuleCatalog, falls
         // der per-Finding-FixHint nichts liefert. GetRule liefert nie nil
         // (MakeFallbackMeta), leere Felder werden unten einfach uebersprungen.
-        var Meta := TRuleCatalog.GetRule(F.Kind);
+        // LOKALISIERT: der Report wird in der Sprache der erzeugenden
+        // Anwendung gebacken (CurrentLanguage). Der Sprachumschalter im
+        // Report selbst wechselt nur die UI-Labels (I18N-Woerterbuch) -
+        // die Regeltexte sind serverseitig fest. data-rule und der
+        // Such-Blob bleiben Token (s. SearchBlob unten).
+        var Meta := TRuleCatalog.GetRule(F.Kind, CurrentLanguage);
         var HasCwe := (Length(Meta.CWE) > 0) or (Length(Meta.OWASP) > 0);
         var HasHint := (Hint.Description <> '') or
                        (Hint.Before <> '') or (Hint.After <> '') or
@@ -1508,13 +1514,13 @@ begin
         // im JS prueft (PROFILES[<name>].kinds[rule]).
         // data-search = lowercased Methode/Datei/Detail/Regel - wird vom JS
         // searchInput.value gegen substring-gematcht. Lowercase einmal hier
-        // statt N-mal pro Tastendruck.
+        // statt N-mal pro Tastendruck. Meta.Name gehoert dazu, seit die
+        // Regel-Spalte den lokalisierten Klarnamen ZEIGT: was der Nutzer
+        // sieht, muss das Suchfeld finden - der Token bleibt daneben
+        // suchbar (data-rule-Filter und Exporte sprechen weiter Token).
         var KindNm := KindName(F.Kind);
-        var SearchBlob :=
-              LowerCase(F.MethodName) + ' ' +
-              LowerCase(FileShort)    + ' ' +
-              LowerCase(F.MissingVar) + ' ' +
-              LowerCase(KindNm);
+        var SearchBlob := LowerCase(Format('%s %s %s %s %s',
+          [F.MethodName, FileShort, F.MissingVar, KindNm, Meta.Name]));
         // #7 Baseline-Fingerprint: JETZT der GETEILTE Engine-Fingerprint
         // (TBaseline.Fingerprint = SHA2 aus datei|kind|methode|detail, ohne
         // Zeilennummer) statt eines eigenen Ad-hoc-Strings. Damit ist eine im
@@ -1578,7 +1584,16 @@ begin
         SB.Append(HtmlEscape(F.LineNumber));
         SB.Append('</td>');
         SB.Append('<td>'); SB.Append(HtmlEscape(F.MethodName)); SB.Append('</td>');
-        SB.Append('<td>'); SB.Append(HtmlEscape(TExporter.KindToName(F.Kind))); SB.Append('</td>');
+        // Sichtbare Regel-Spalte: der lokalisierte Klarname statt des
+        // CamelCase-Tokens - ohne das waere von der Uebersetzung im
+        // Report praktisch nichts zu sehen (Bauplan-Empfehlung). Das
+        // title-Attribut traegt den Token fuer die Zuordnung zu
+        // noinspection/SARIF; data-rule (Filter) blieb ohnehin Token.
+        SB.Append('<td title="');
+        SB.Append(HtmlEscape(TExporter.KindToName(F.Kind)));
+        SB.Append('">');
+        SB.Append(HtmlEscape(Meta.Name));
+        SB.Append('</td>');
         SB.Append('<td>'); SB.Append(HtmlEscape(F.MissingVar)); SB.Append('</td>');
         SB.AppendLine('</tr>');
 

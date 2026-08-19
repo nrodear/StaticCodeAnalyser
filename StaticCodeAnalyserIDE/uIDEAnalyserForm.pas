@@ -808,7 +808,8 @@ begin
   ADescText := FH.Description;
   if ADescText = '' then
   begin
-    Meta := TRuleCatalog.GetRule(F.Kind);
+    // Anzeige-Publikum -> lokalisiert (Overlay; englischer Rueckfall).
+    Meta := TRuleCatalog.GetRule(F.Kind, CurrentLanguage);
     if Meta.ShortDescription <> '' then
       ADescText := Meta.ShortDescription
     else if Meta.FullDescription <> '' then

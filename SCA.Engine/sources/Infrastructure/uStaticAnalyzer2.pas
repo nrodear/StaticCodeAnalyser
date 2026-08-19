@@ -309,8 +309,8 @@ begin
     var ek : TFindingKind;
     for ek := Low(TFindingKind) to High(TFindingKind) do
       if (ek in D.ExtraKinds) and
-         (Ord(TRuleCatalog.GetRule(ek).DefaultSeverity) < SevOrd) then
-        SevOrd := Ord(TRuleCatalog.GetRule(ek).DefaultSeverity);
+         (Ord(TRuleCatalog.GetRuleCanonical(ek).DefaultSeverity) < SevOrd) then
+        SevOrd := Ord(TRuleCatalog.GetRuleCanonical(ek).DefaultSeverity);
   end;
   if SevOrd > Ord(CfgMinSeverity(AContext)) then Exit(False);
 
@@ -342,7 +342,7 @@ var
     gDetectors[Count].Kind            := AKind;
     gDetectors[Count].ExtraKinds      := [];   // [23]: Default Single-Kind (Multi-Kind opt-in nach dem AddD-Aufruf)
     gDetectors[Count].Run             := ARun;
-    gDetectors[Count].DefaultSeverity := TRuleCatalog.GetRule(AKind).DefaultSeverity;
+    gDetectors[Count].DefaultSeverity := TRuleCatalog.GetRuleCanonical(AKind).DefaultSeverity;
     SetLength(gDetectors[Count].RequiredTokensLow, 0);
     Inc(Count);
   end;
