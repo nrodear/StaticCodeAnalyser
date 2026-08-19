@@ -150,6 +150,8 @@ I18N.md
 !HowTo_Tests_de.md
 !HowTo_Build.md
 !HowTo_Build_de.md
+!HowTo_Tests_fr.md
+!HowTo_Build_fr.md
 
 # Spezifische internal docs/-Files (kein Pattern, exact match)
 docs/ConfidenceAudit.md
