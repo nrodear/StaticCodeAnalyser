@@ -182,45 +182,6 @@ begin
   end;
 end;
 
-function TargetIsProvableSlot(const ANormLhs: string; ALine: Integer;
-  const ACtx: TMemberCtx): Boolean;
-var
-  Nm : string;
-begin
-  Nm := StripSelfPrefix(ANormLhs);
-  if HasMemberPath(Nm) then
-  begin
-    // W2-Schaerfung: nicht mehr pauschal aus - wenn der ganze Pfad
-    // beweisbar aus Wurzel-Slot + blanken Record-Feldern besteht, ist
-    // die Zuweisung ein echtes No-op. Ohne Resolver (Kompat-Einstieg
-    // AnalyzeMethod) bleibt das Verhalten von vor 2026-08-19.
-    if not Assigned(ACtx.Resolver) then Exit(False);
-    Exit(MemberPathIsPlainRecordFields(Nm, ALine, ACtx));
-  end;
-  if Assigned(ACtx.Scope) and (ACtx.Scope.IndexOf(Nm) >= 0) then Exit(True);
-  // Property gewinnt bei Namensgleichheit mit einem Feld einer anderen
-  // Klasse - bewusst konservativ, jede Property-Zuweisung kann einen Setter
-  // fahren.
-  if Assigned(ACtx.UnitProps) and (ACtx.UnitProps.IndexOf(Nm) >= 0) then Exit(False);
-  if Assigned(ACtx.UnitFields) and (ACtx.UnitFields.IndexOf(Nm) >= 0) then Exit(True);
-  // In dieser Unit nicht deklariert: geerbtes oder fremdes Member. Ohne
-  // Cross-Unit-Wissen ist 'kein No-op' nicht widerlegbar -> schweigen.
-  Result := False;
-end;
-
-function CollectUnitMemberNames(UnitNode: TAstNode;
-  AKind: TNodeKind): TStringList;
-begin
-  Result := TStringList.Create;
-  Result.CaseSensitive := False;
-  Result.Sorted        := True;
-  Result.Duplicates    := dupIgnore;
-  for var N in UnitNode.FindAllRef(AKind) do   // non-owning, kein Free
-  begin
-    Result.Add(LowerCase(Trim(N.Name)));
-  end;
-end;
-
 // --- W2-Schaerfung: member-genaue Pfad-Aufloesung (2026-08-19) --------------
 // Der Audit-Vorschlag woertlich: Member-Pfad nicht pauschal verwerfen,
 // wenn die Wurzel im Routinen-Scope oder in den Unit-Feldern aufloesbar
@@ -497,6 +458,45 @@ begin
   ACtx.RecProps.Free;
   ACtx.RecNames.Free;
   ACtx.PtrAlias.Free;
+end;
+
+function TargetIsProvableSlot(const ANormLhs: string; ALine: Integer;
+  const ACtx: TMemberCtx): Boolean;
+var
+  Nm : string;
+begin
+  Nm := StripSelfPrefix(ANormLhs);
+  if HasMemberPath(Nm) then
+  begin
+    // W2-Schaerfung: nicht mehr pauschal aus - wenn der ganze Pfad
+    // beweisbar aus Wurzel-Slot + blanken Record-Feldern besteht, ist
+    // die Zuweisung ein echtes No-op. Ohne Resolver (Kompat-Einstieg
+    // AnalyzeMethod) bleibt das Verhalten von vor 2026-08-19.
+    if not Assigned(ACtx.Resolver) then Exit(False);
+    Exit(MemberPathIsPlainRecordFields(Nm, ALine, ACtx));
+  end;
+  if Assigned(ACtx.Scope) and (ACtx.Scope.IndexOf(Nm) >= 0) then Exit(True);
+  // Property gewinnt bei Namensgleichheit mit einem Feld einer anderen
+  // Klasse - bewusst konservativ, jede Property-Zuweisung kann einen Setter
+  // fahren.
+  if Assigned(ACtx.UnitProps) and (ACtx.UnitProps.IndexOf(Nm) >= 0) then Exit(False);
+  if Assigned(ACtx.UnitFields) and (ACtx.UnitFields.IndexOf(Nm) >= 0) then Exit(True);
+  // In dieser Unit nicht deklariert: geerbtes oder fremdes Member. Ohne
+  // Cross-Unit-Wissen ist 'kein No-op' nicht widerlegbar -> schweigen.
+  Result := False;
+end;
+
+function CollectUnitMemberNames(UnitNode: TAstNode;
+  AKind: TNodeKind): TStringList;
+begin
+  Result := TStringList.Create;
+  Result.CaseSensitive := False;
+  Result.Sorted        := True;
+  Result.Duplicates    := dupIgnore;
+  for var N in UnitNode.FindAllRef(AKind) do   // non-owning, kein Free
+  begin
+    Result.Add(LowerCase(Trim(N.Name)));
+  end;
 end;
 
 procedure DoAnalyzeMethod(MethodNode: TAstNode;
