@@ -33,6 +33,19 @@ jobs:
       - name: Run rules doc gate
         run: python3 tools/rules_doc_gate.py
 
+      # Die 196 Einzelseiten unter docs/rules/ und der
+      # .inc-Rueckfall werden ERZEUGT. Beide Generatoren haben seit
+      # jeher einen --check-Modus fuer genau diesen Zweck, aber es
+      # rief ihn niemand: wer sca-rules.json aendert und das
+      # Regenerieren vergisst, laesst die Seiten still veralten - und
+      # der SARIF-helpUri jedes ausgelieferten Berichts zeigt genau
+      # dorthin.
+      - name: Rule pages in sync
+        run: python3 tools/gen-rules-docs.py --check
+
+      - name: Fallback .inc in sync
+        run: python3 tools/gen-rules-inc.py --check
+
       - name: Hinweis bei Abweichung
         if: failure()
         run: |
