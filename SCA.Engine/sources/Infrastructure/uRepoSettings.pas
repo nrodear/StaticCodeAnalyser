@@ -97,6 +97,7 @@ type
     FMaxCaseBranches   : Integer;     // MaxCaseBranches (10 Default) - uCaseStatementSize
     FMagicTrivials     : TStringList; // MagicNumberTrivials (CSV)
     FFormatFunctions   : TStringList; // FormatFunctions (CSV)
+    FDfmForbiddenClasses : TStringList; // [Components] ForbiddenClasses (CSV)
     FCustomRulesFile   : string;      // CustomRulesFile (Pfad zur YAML)
     FProfile           : string;      // [Rules] Profile = ide-fast|default|strict
     FMinSeverity       : string;      // [Rules] MinSeverity = error|warning|hint
@@ -275,6 +276,13 @@ type
     // behandelt werden (gleiche %-Platzhalter-Semantik). Defaults: Format,
     // FormatUtf8, FormatString. Aus [Detectors] FormatFunctions=... als CSV.
     property FormatFunctions:         TStringList read FFormatFunctions;
+
+    // uDfmForbiddenClass (SCA038): Komponentenklassen, die in keiner
+    // DFM vorkommen duerfen. Aus [Components] ForbiddenClasses=... als
+    // CSV; leer (Default) = Detektor bleibt stumm. Gespiegelt wird in
+    // ApplyDetectorThresholds - NICHT in RegisterToLeakyClasses, damit
+    // auch die CLI die Liste bekommt (s. OwnershipSinks-Hinweis oben).
+    property DfmForbiddenClasses:     TStringList read FDfmForbiddenClasses;
 
     // uCustomRuleDetector: Pfad zur YAML-Datei mit projekt-spezifischen
     // Regeln (siehe examples/analyser-rules.yml). Leer = keine Custom-
@@ -671,6 +679,20 @@ const
     ';CustomRulesFile=analyser-rules.yml'#13#10 +
     ';CustomRulesFile=profile-strict.yml'#13#10 +
     ';CustomRulesFile=C:\Team\shared-sca-rules.yml'#13#10 +
+    ''#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';  [Components] - DFM component bans (SCA038)'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ''#13#10 +
+    '[Components]'#13#10 +
+    ''#13#10 +
+    '; ForbiddenClasses (string CSV, default: empty = SCA038 stays silent)'#13#10 +
+    '; Component classes that must not appear in any DFM of the project.'#13#10 +
+    '; Every use is reported as SCA038 (DfmForbiddenClass); matching is'#13#10 +
+    '; case-insensitive. Typical use: ban legacy or replaced components.'#13#10 +
+    ';ForbiddenClasses='#13#10 +
+    ';ForbiddenClasses=TLabel,TQuery'#13#10 +
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
@@ -1127,6 +1149,8 @@ begin
   FOwnershipSinks.CaseSensitive := False;
   FExcludeLeaky       := TStringList.Create;
   FExcludeLeaky.CaseSensitive := False;
+  FDfmForbiddenClasses := TStringList.Create;
+  FDfmForbiddenClasses.CaseSensitive := False;
   FAutoDiscover       := False;
   FUsesCheck          := False;
   FIncludeTests       := False;
@@ -1182,6 +1206,7 @@ begin
   FExcludeLeaky.Free;
   FMagicTrivials.Free;
   FFormatFunctions.Free;
+  FDfmForbiddenClasses.Free;
   inherited;
 end;
 
@@ -1488,6 +1513,12 @@ var
   Trimmed   : string;
 begin
   EnsureConfigExists;
+  // Bestands-INIs kennen [Components] noch nicht (Sektion kam mit der
+  // SCA038-Belebung): den dokumentierten Vorlagenblock anhaengen, damit
+  // der Schluessel auffindbar ist. No-op, sobald die Sektion existiert;
+  // fehlt die Datei ganz, hat EnsureConfigExists sie eben mit Vorlage
+  // inklusive [Components] geschrieben.
+  EnsureSection('Components');
   Ini := TMemIniFile.Create(ConfigFilePath);
   try
     FBaseBranch         := Trim(Ini.ReadString('Repo',  'BaseBranch',         ''));
@@ -1585,6 +1616,21 @@ begin
       begin
         Trimmed := Trim(Item);
         if Trimmed <> '' then FFormatFunctions.Add(Trimmed);
+      end;
+    end;
+
+    // [Components] ForbiddenClasses=TLabel,TQuery (CSV) -> SCA038.
+    // Immer erst leeren: anders als bei FormatFunctions gibt es keine
+    // Constructor-Defaults zu bewahren - leer heisst Detektor stumm.
+    FDfmForbiddenClasses.Clear;
+    RawList := Trim(Ini.ReadString('Components', 'ForbiddenClasses', ''));
+    if RawList <> '' then
+    begin
+      Items := RawList.Split([',', ';']);
+      for Item in Items do
+      begin
+        Trimmed := Trim(Item);
+        if Trimmed <> '' then FDfmForbiddenClasses.Add(Trimmed);
       end;
     end;
 
@@ -1844,6 +1890,18 @@ begin
     uSCAConsts.DetectorFormatFunctions.Clear;
     for i := 0 to FFormatFunctions.Count - 1 do
       uSCAConsts.DetectorFormatFunctions.Add(FFormatFunctions[i]);
+  end;
+
+  // SCA038: verbotene Komponentenklassen spiegeln. BEWUSST hier und
+  // nicht in RegisterToLeakyClasses: das rufen nur EXE und IDE-Plugin,
+  // die CLI bekaeme die Liste nie (der bei OwnershipSinks dokumentierte
+  // Defekt wuerde sich wiederholen). Die Globale ist sorted+dupIgnore,
+  // Duplikate aus der INI kollabieren dort von selbst.
+  if Assigned(uSCAConsts.DfmForbiddenClasses) then
+  begin
+    uSCAConsts.DfmForbiddenClasses.Clear;
+    for i := 0 to FDfmForbiddenClasses.Count - 1 do
+      uSCAConsts.DfmForbiddenClasses.Add(FDfmForbiddenClasses[i]);
   end;
 
   // Custom-Rules: YAML laden wenn Pfad gesetzt. Path-Resolver probiert

@@ -821,7 +821,7 @@
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["dfm", "style-guide"],
-      "configKey": "",
+      "configKey": "[Components] ForbiddenClasses",
       "detectorUnit": "uDfmForbiddenClass.pas",
       "examples": {
         "bad":  "object Query1: TQuery   // ForbiddenClasses=TQuery",

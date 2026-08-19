@@ -195,7 +195,7 @@ Fix-Hints im Hilfe-Panel und haben DUnitX-Tests.
 | D10 | SCA039 | **DfmDbInUiForm** | DB-Komponente (`TADOConnection`, `TFDQuery`, `TClientDataSet`, …) sitzt direkt auf einem UI-Form statt in einem Data-Modul | Code Smell | `uDfmDbInUiForm` |
 | D11 | SCA040 | **DfmCrossFormCoupling** | Code in `Form1` greift via globaler Form-Variable auf `Form2.<field>` zu | Bug | `uDfmCrossFormCoupling` |
 | D12 | SCA041 | **DfmLayerViolation** | Eingabe-Control sitzt direkt auf `TForm` statt in Panel / `TFrame` / `TGroupBox` | Code Smell | `uDfmLayerViolation` |
-| D13 | SCA038 | **DfmForbiddenClass** | Komponente nutzt eine via `[Components] ForbiddenClasses=` gesperrte Klasse. **Derzeit ohne Wirkung:** kein ausgelieferter Code liest den Schluessel bislang - die Liste ist nur programmatisch fuellbar | Code Smell | `uDfmForbiddenClass` |
+| D13 | SCA038 | **DfmForbiddenClass** | Komponente nutzt eine via `[Components] ForbiddenClasses=` (analyser.ini) gesperrte Klasse. Die Liste ist per Default leer - dann bleibt die Regel stumm | Code Smell | `uDfmForbiddenClass` |
 
 ### Cluster UI/UX (4) — Interaktions-Smells in der Form-Definition
 

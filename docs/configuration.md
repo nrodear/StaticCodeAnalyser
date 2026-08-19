@@ -56,6 +56,12 @@ given in.
 | `MaxLineLength` | Integer | `120` | Threshold for the line-length rule. |
 | `DuplicateBlockMinLines` | Integer | `8` | Minimum block length before duplication is reported. |
 
+## `[Components]`
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `ForbiddenClasses` | String | _(empty)_ | Component classes that must not appear in any DFM; every use is reported as SCA038. Comma-separated, case-insensitive. Empty keeps the rule silent. |
+
 ## `[Baseline]`
 
 | Key | Type | Default | Meaning |

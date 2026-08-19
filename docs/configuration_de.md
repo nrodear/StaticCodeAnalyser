@@ -57,6 +57,12 @@ Lauf, in dem sie angegeben werden.
 | `MaxLineLength` | Integer | `120` | Schwelle fuer die Zeilenlaengen-Regel. |
 | `DuplicateBlockMinLines` | Integer | `8` | Mindestlaenge eines Blocks, bevor Duplikate gemeldet werden. |
 
+## `[Components]`
+
+| Schluessel | Typ | Default | Bedeutung |
+|---|---|---|---|
+| `ForbiddenClasses` | String | _(leer)_ | Komponentenklassen, die in keiner DFM vorkommen duerfen; jede Verwendung wird als SCA038 gemeldet. Kommagetrennt, unabhaengig von Gross-/Kleinschreibung. Leer laesst die Regel stumm. |
+
 ## `[Baseline]`
 
 | Schluessel | Typ | Standard | Bedeutung |
