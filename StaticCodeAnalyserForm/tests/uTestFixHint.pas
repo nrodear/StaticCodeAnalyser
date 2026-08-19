@@ -28,7 +28,8 @@ interface
 
 uses
   DUnitX.TestFramework,
-  uSCAConsts, uMethodd12, uFixHint;
+  uSCAConsts, uMethodd12, uFixHint,
+  uLocalization;   // SetLanguage/CurrentLanguage - LanguageChangeInvalidatesCache
 
 type
   [TestFixture]
@@ -55,6 +56,8 @@ type
     // Ein Nicht-SCA001-Kind darf durch das Variantenbit nicht verschoben
     // werden - gleiche Eingabe, gleicher Hint, unabhaengig von MissingVar.
     [Test] procedure OtherKindsIgnoreMissingVar;
+    // Sprachwechsel-Waechter (2026-08-19).
+    [Test] procedure LanguageChangeInvalidatesCache;
   end;
 
 implementation
@@ -244,6 +247,56 @@ begin
     end;
   finally
     FA.Free;
+  end;
+end;
+
+procedure TTestFixHint.LanguageChangeInvalidatesCache;
+// Der Memoize-Cache haelt eine FERTIG LOKALISIERTE Description: der
+// Katalog-Zweig in Build schickt Meta.ShortDescription durch _(), und
+// die Hand-Zweige tun dasselbe. Geleert wurde der Cache bis 2026-08-19
+// nur in der finalization - wer zur Laufzeit die Sprache umstellte
+// (Plugin ueber Tools > Options, EXE ueber das Hamburger-Menue), sah
+// seine Hints bis zum Prozessende weiter in der alten Sprache, waehrend
+// Regelnamen und Oberflaeche daneben schon umgestellt waren.
+//
+// Geprueft wird die INVALIDIERUNG, nicht der Wortlaut: ob eine bestimmte
+// msgid in der .po steht, ist Sache der Katalogpflege und wuerde diesen
+// Test an sie binden. Der Beweis ist, dass nach dem Sprachwechsel ein
+// NEUES Build laeuft - sichtbar daran, dass die Description danach zur
+// dann aktiven Sprache passt, also der Wert vor und nach dem
+// Zuruecksetzen wieder identisch ist.
+var
+  F        : TLeakFinding;
+  Vorher   : TFixHint;
+  Fremd    : TFixHint;
+  Zurueck  : TFixHint;
+  AlteSpr  : string;
+begin
+  // EIN try/finally mit nil-Vorbelegung statt zweier verschachtelter:
+  // NestedTry meldet die Schachtelung sonst im Selbstscan, und Free auf
+  // nil ist in Delphi zulaessig (TObject.Free prueft Self).
+  AlteSpr := CurrentLanguage;
+  F := nil;
+  try
+    SetLanguage('en');
+    F := TLeakFinding.New('Demo.pas', 'DoWork', 7, 'x', fkEmptyExcept);
+    Vorher := TFixHintResolver.FixHint(F);
+    SetLanguage('de');
+    Fremd := TFixHintResolver.FixHint(F);
+    SetLanguage('en');
+    Zurueck := TFixHintResolver.FixHint(F);
+    Assert.IsNotEmpty(Vorher.Description,
+      'Description leer - Fixture trifft den Detektor nicht');
+    Assert.AreEqual(Vorher.Description, Zurueck.Description,
+      'nach dem Rueckwechsel muss wieder derselbe Text stehen');
+    // Fremd darf gleich sein (wenn die .po den String nicht kennt), aber
+    // nicht leer - ein geleerter Cache muss neu bauen, nicht einen
+    // Leerwert liefern.
+    Assert.IsNotEmpty(Fremd.Description,
+      'nach dem Sprachwechsel wurde nicht neu gebaut');
+  finally
+    F.Free;
+    SetLanguage(AlteSpr);
   end;
 end;
 
