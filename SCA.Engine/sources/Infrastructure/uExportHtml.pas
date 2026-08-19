@@ -267,6 +267,8 @@ var
   // Schleife unten, ausgewertet beim <option data-sev="...">-Emit, sodass
   // der JS-Severity-Filter passende Files im Dropdown verstecken kann.
   FilesSev  : TDictionary<string, Cardinal>;
+  // Abgeleiteter Dark-Block fuer prefers-color-scheme, s. #9d weiter unten.
+  DarkAuto  : TStringList;
   SevMask   : Cardinal;
   DataSev   : string;
   SourceCache : TObjectDictionary<string, TStringList>;
@@ -632,7 +634,11 @@ begin
     SB.AppendLine('       font-weight: 600; }');
     SB.AppendLine('    .conf-high   { background: #e8f0d8; color: #305018; }');
     SB.AppendLine('    .conf-medium { background: #fff5d0; color: #704000; }');
-    SB.AppendLine('    .conf-low    { background: #eee; color: #777; }');
+    // #777 auf #eee waren 3,86:1 - unter AA (4,5:1) fuer normalen Text, und
+    // die Badges sind klein. Die beiden Geschwister lagen mit 7,8 bzw. 7,9
+    // deutlich darueber; nur diese eine Stufe fiel durch (Review 2026-08-19).
+    // #5f5f5f: 5,50:1, gleiche Grau-Familie, kein Farbwechsel.
+    SB.AppendLine('    .conf-low    { background: #eee; color: #5f5f5f; }');
     SB.AppendLine('    .controls .conf-toggle { display: inline-flex; align-items: center;');
     SB.AppendLine('       gap: 4px; color: #555; cursor: pointer; }');
     SB.AppendLine('    /* Header-Actions: Sprint-Export, Shortcuts-Help neben Titel */');
@@ -754,6 +760,67 @@ begin
     //     der zugehoerigen pre-Bloecke.
     SB.AppendLine('    :root[data-theme="dark"] .code-before h5 { color: #ff8080; }');
     SB.AppendLine('    :root[data-theme="dark"] .code-after  h5 { color: #a8d878; }');
+    // (e) Konfidenz-Badges: bis 2026-08-19 die einzigen Flaechen der
+    //     Befund-Tabelle ohne Dark-Regel - drei helle Inseln (#eee/#e8f0d8/
+    //     #fff5d0) mitten in einer dunklen Zeile. Farbfamilie wie die
+    //     Severity-Spalte, damit die Tabelle EINE Sprache spricht:
+    //     8,5 / 7,2 / 5,7:1.
+    SB.AppendLine('    :root[data-theme="dark"] .conf-high   { background: #1e301e; color: #a8d878; }');
+    SB.AppendLine('    :root[data-theme="dark"] .conf-medium { background: #322d1c; color: #e6b45a; }');
+    SB.AppendLine('    :root[data-theme="dark"] .conf-low    { background: #2c2c2c; color: #a5a5a5; }');
+
+    // ---- #9d Dark-Mode auch OHNE JavaScript (Review 2026-08-19) ---------
+    // Bis hierher haengt der gesamte Dark-Block an data-theme, und gesetzt
+    // wird das Attribut erst vom Script am Ende des <body>. Fuer einen
+    // Nutzer mit OS-Dunkelmodus heisst das: der Report baut sich WEISS auf
+    // und kippt erst am Schluss um (bei grossen Berichten sichtbar als
+    // Blitz) - und ohne JavaScript bleibt er dauerhaft hell, obwohl die
+    // Regeln alle da sind.
+    //
+    // Der Kommentar an #9 begruendete das mit "keine @media-Duplikation".
+    // Das Ziel bleibt richtig, der Schluss war falsch: es gibt hier keine
+    // zweite Pflegestelle. Der Block unten wird AUS DEM SOEBEN ERZEUGTEN
+    // CSS abgeleitet - jede Zeile, die den Dark-Selektor traegt, kommt mit
+    // ausgetauschtem Wurzel-Guard noch einmal. Wer oben eine Dark-Regel
+    // ergaenzt, hat sie hier automatisch mit.
+    //
+    // Der Guard ist ':root:not([data-theme="light"])': er greift, solange
+    // der Nutzer NICHT ausdruecklich hell gewaehlt hat. Gleiche
+    // Spezifitaet wie die data-theme-Regeln, aber spaeter im Stylesheet -
+    // damit gewinnt bei OS-Dunkel der Media-Block, und eine explizite
+    // Hell-Wahl im Toggle sticht ihn wieder aus.
+    //
+    // Ableitbar ist das nur, weil JEDE Dark-Zeile ihren Selektor selbst
+    // traegt, auch die Fortsetzungszeilen mehrteiliger Selektorlisten.
+    // Wer eine Dark-Regel ueber zwei Zeilen bricht, MUSS den Selektor in
+    // beiden wiederholen - sonst faellt die Fortsetzung hier heraus und
+    // die Regel wird im Media-Block syntaktisch kaputt.
+    DarkAuto := TStringList.Create;
+    try
+      DarkAuto.Text := SB.ToString;   // bis hier nur <head> und CSS
+      for i := DarkAuto.Count - 1 downto 0 do
+      begin
+        if Pos(':root[data-theme="dark"]', DarkAuto[i]) = 0 then
+        begin
+          DarkAuto.Delete(i);
+        end
+        else
+        begin
+          DarkAuto[i] := StringReplace(DarkAuto[i],
+            ':root[data-theme="dark"]', ':root:not([data-theme="light"])',
+            [rfReplaceAll]);
+        end;
+      end;
+      if DarkAuto.Count > 0 then
+      begin
+        SB.AppendLine('    @media (prefers-color-scheme: dark) {');
+        SB.Append(DarkAuto.Text);
+        SB.AppendLine('    }');
+      end;
+    finally
+      DarkAuto.Free;
+    end;
+
     SB.AppendLine('  </style>');
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');

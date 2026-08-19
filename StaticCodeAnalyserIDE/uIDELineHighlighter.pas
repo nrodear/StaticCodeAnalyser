@@ -210,8 +210,13 @@ type
     // (EditorMouseDown, immer wenn der User auf eine markierte Zeile
     // klickt) genutzt. Setzt FHoveredLine + FHoverWatch-Timer.
     procedure ShowOverlayForLine(AHitLine: Integer);
-    // Settings frisch lesen - damit wirkt ein Toggle in Tools > Options
-    // sofort, ohne Plugin-Reload.
+    // Liest den Modulcache GShowOnHover, NICHT die INI - die Funktion
+    // sitzt im MouseMove-Pfad und wird pro Maus-Nachricht ueber einer
+    // Ankerzeile gefragt. Ein Toggle in Tools > Options wirkt trotzdem
+    // sofort: die Options-Seite schiebt den neuen Wert ueber
+    // RefreshShowOnHoverCache nach (per WERT, weil SaveToSettings vor dem
+    // INI-Write laeuft). Hier stand bis 2026-08-19 noch "Settings frisch
+    // lesen" aus der Zeit vor dem Cache.
     function IsShowOnHoverEnabled: Boolean;
     // True wenn der Cursor (Screen-Koordinaten) gerade ueber dem
     // GAnnotationOverlay-Fenster steht. Wird vor jedem HideOverlay-Aufruf
@@ -808,6 +813,10 @@ end;
 var
   // [UI] OverlayTextOnly als Modulcache - Vertrag an der Deklaration von
   // RefreshTextOnlyHintCache (interface).
+  // ZWEITE Kopie des Musters "Boolean-INI-Wert als Modulcache, per WERT von
+  // der Options-Seite nachgeschoben" - Zwilling ist GShowOnHover weiter
+  // oben. Bleibt bewusst dupliziert (Rule of Three); wer eine DRITTE Kopie
+  // anlegt, extrahiert stattdessen einen gemeinsamen Halter.
   GTextOnlyHint : Boolean = False;
 
 procedure RefreshShowOnHoverCache;

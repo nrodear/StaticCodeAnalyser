@@ -36,3 +36,9 @@
 *.jpg    binary
 *.jpeg   binary
 *.res    binary
+
+# Uebersetzungs-Vorlage: generiert von tools/i18n_extract.py, gelesen von
+# tools/i18n_audit.sh und i18n_merge. Kein RAD-Studio-Konsument, deshalb LF
+# wie bei den Skripten - ohne diese Zeile normalisiert core.autocrlf sie bei
+# jedem Checkout um und der naechste Extract-Lauf erzeugt eine Voll-Diff.
+*.pot    text eol=lf

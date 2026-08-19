@@ -392,7 +392,13 @@ begin
     // referenzieren.
     Synchronize(DeliverResults);
   finally
-    // Wenn DeliverResults nicht uebernommen hat (Detach), hier freigeben.
+    // Netz fuer den Fall, dass Synchronize(DeliverResults) GAR NICHT lief -
+    // etwa weil oben eine Exception vor dem Aufruf flog oder der Thread
+    // vorher endete. Der Kommentar nannte hier bis 2026-08-19 den
+    // Detach-Fall; den gibt es nicht: DeliverResults setzt FFindings
+    // bedingungslos auf nil und gibt die Liste in seinem eigenen finally
+    // frei, auch wenn FRunner schon detacht ist. Nach einem gelaufenen
+    // DeliverResults ist FFindings immer nil und dieser Aufruf folgenlos.
     FreeAndNil(FFindings);
   end;
 end;
@@ -425,6 +431,16 @@ begin
   FRepoSettings     := ARepoSettings;
   FIgnoreList       := AIgnoreList;
   FProgressBar      := AProgressBar;
+  // CALLBACK-VERTRAG (Review-Minor 2026-08-19, der Assigned-Schutz sah
+  // uneinheitlich aus): FOnStatusMode, FOnStatusProgress und FOnFindings
+  // sind PFLICHT - sie werden ohne Assigned-Pruefung gerufen, weil ein
+  // Runner ohne Statusausgabe und ohne Ergebnis-Senke sinnlos waere und
+  // ein stiller Ausfall schlimmer als ein sofortiger AV im Aufbau.
+  // FOnRunDone ist OPTIONAL (Aufraeum-Haken der Frame) und wird deshalb
+  // geprueft. Die Asymmetrie ist gewollt, nicht vergessen.
+  Assert(Assigned(AOnStatusMode) and Assigned(AOnStatusProgress) and
+         Assigned(AOnFindings),
+         'TAnalyseRunner: Pflicht-Callbacks fehlen');
   FOnStatusMode     := AOnStatusMode;
   FOnStatusProgress := AOnStatusProgress;
   FOnFindings       := AOnFindings;
@@ -573,7 +589,19 @@ begin
     else
     begin
       if Assigned(AFindings) then
+      try
         FOnFindings(AFindings, AWorker.FBaseDir);  // BORROWED - Worker gibt frei
+      except
+        // HandleScanDone laeuft ueber Synchronize IM WORKER-Kontext: eine
+        // Exception von hier wird von Synchronize im Worker-Thread neu
+        // erhoben, landet in TThread.FatalException und wird nie wieder
+        // gelesen (FreeOnTerminate ist aus, GBulkWorkers reapt nur). Der
+        // Nutzer saehe einen Scan, der einfach nichts tut. Deshalb hier
+        // fangen und melden - der finally-Block darunter faehrt die UI
+        // trotzdem in den Ruhezustand zurueck.
+        on E: Exception do
+          FOnStatusMode(_('Analysis error: ') + E.Message);
+      end;
       if AWorker.FTooMany then
         FOnStatusMode(Format(
           _('More than %d files found - scan cancelled.'), [MAX_SCAN_FILES]))

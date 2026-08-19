@@ -1516,10 +1516,10 @@ begin
       try
         if HasCliPathFp then
           uSCAConsts.BaselinePathFingerprint := CliPathFp;
-        if BlProjOrGroup <> '' then
-          uSCAConsts.BaselineFingerprintRoot := ExtractFilePath(BlProjOrGroup)
-        else
-          uSCAConsts.BaselineFingerprintRoot := Args.Path;
+        // Wurzel-Regel aus TBaselineScope - hier stand sie bis 2026-08-19
+        // als eine von vier wortgleichen Kopien.
+        uSCAConsts.BaselineFingerprintRoot :=
+          TBaselineScope.RootForProject(BlProjOrGroup, Args.Path);
         // Kein ForceDirectories mehr hier: TBaseline.Write legt das
         // Zielverzeichnis selbst an (und vertraegt anders als der
         // Aufruf hier einen blossen Dateinamen ohne Verzeichnisanteil).
@@ -1549,10 +1549,9 @@ begin
         // den Zuschnitt; Root leer -> Fallback Dateiname in uBaseline).
         if HasCliPathFp then
           uSCAConsts.BaselinePathFingerprint := CliPathFp;
-        if BlProjOrGroup <> '' then
-          uSCAConsts.BaselineFingerprintRoot := ExtractFilePath(BlProjOrGroup)
-        else
-          uSCAConsts.BaselineFingerprintRoot := Args.Path;
+        // Wurzel-Regel aus TBaselineScope, s.o.
+        uSCAConsts.BaselineFingerprintRoot :=
+          TBaselineScope.RootForProject(BlProjOrGroup, Args.Path);
         var BlWarnings := TStringList.Create;
         var Dropped : Integer;
         try

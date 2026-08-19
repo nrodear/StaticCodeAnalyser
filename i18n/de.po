@@ -2048,3 +2048,9 @@ msgstr "Mehr als %d Dateien gefunden - Scan abgebrochen."
 
 msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."
 msgstr "Sonar-Push: .sonar\\external\\ enthält jetzt genau diese %d Issue-Datei(en) - Dateien früherer Pushes wurden entfernt."
+
+msgid "Settings could not be reloaded - baseline filter unchanged."
+msgstr "Einstellungen konnten nicht neu geladen werden - Baseline-Filter unverändert."
+
+msgid "Settings could not be reloaded - nothing was saved."
+msgstr "Einstellungen konnten nicht neu geladen werden - es wurde nichts gespeichert."

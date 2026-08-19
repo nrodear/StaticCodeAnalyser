@@ -377,6 +377,37 @@ const
 
 {$R *.dfm}
 
+function LoadBeforeWrite(ASettings: TRepoSettings): Boolean;
+// Load vor Save - und NUR nach erfolgreichem Load darf geschrieben werden.
+//
+// TRepoSettings.Save schreibt rund 30 Schluessel aus den Objektfeldern in
+// die INI zurueck: Profil, MinSeverity, MinConfidence, Sprache,
+// Baseline-Pfad und -Modus, Editor-Farbschema, die Overlay-Optionen und die
+// [Detectors]-Schalter. Faellt das vorherige Load aus (INI gesperrt, keine
+// Rechte, defekte Datei), stehen genau diese Felder auf den
+// Konstruktor-Defaults - und Save ueberschreibt die komplette Konfiguration
+// des Nutzers mit Werkseinstellungen. Nicht nur die eine Einstellung, die
+// der Klick aendern wollte.
+//
+// Der Kommentar an LanguageMenuClick beschreibt diese Falle seit jeher
+// ("sonst wuerde Save die uebrigen Sections mit den Constructor-Defaults
+// ueberschreiben") - eingehalten wurde sie nicht, weil das Load in einem
+// stillen 'try ... except end' hing und der Ablauf danach unbeirrt weiter
+// zum Save lief. Review-Fund 2026-08-19, dieselbe Klasse wie 3ff1b80 im
+// Plugin.
+//
+// Der Fehler bleibt still (kein Modal-Dialog in einem OnChange), aber
+// folgenlos ist er nicht mehr: der Aufrufer schreibt nicht und sagt es in
+// der Statuszeile.
+begin
+  Result := True;
+  try
+    ASettings.Load;
+  except
+    Result := False;
+  end;
+end;
+
 procedure TForm2.FormCreate(Sender: TObject);
 var
   Settings    : TRepoSettings;
@@ -2277,8 +2308,14 @@ begin
   if (ProfileCombo = nil) or (ProfileCombo.ItemIndex < 0) then Exit;
   Settings := TRepoSettings.Create;
   try
-    try Settings.Load; except end;
+    if not LoadBeforeWrite(Settings) then
+    begin
+      StatusBar1.Panels[2].Text := _('Settings could not be reloaded - nothing was saved.');
+      Exit;
+    end;
     Settings.Profile := ProfileCombo.Items[ProfileCombo.ItemIndex];
+    // Save-Fehler bleiben still: eine schreibgeschuetzte INI soll den Lauf
+    // nicht abbrechen, und die Auswahl wirkt fuer diese Sitzung ohnehin.
     try Settings.Save; except end;
   finally
     Settings.Free;
@@ -2296,9 +2333,13 @@ begin
   if (MinSevCombo = nil) or (MinSevCombo.ItemIndex < 0) then Exit;
   Settings := TRepoSettings.Create;
   try
-    try Settings.Load; except end;
+    if not LoadBeforeWrite(Settings) then
+    begin
+      StatusBar1.Panels[2].Text := _('Settings could not be reloaded - nothing was saved.');
+      Exit;
+    end;
     Settings.MinSeverity := MinSevCombo.Items[MinSevCombo.ItemIndex];
-    try Settings.Save; except end;
+    try Settings.Save; except end;   // s. ProfileComboChange
   finally
     Settings.Free;
   end;
@@ -2725,10 +2766,10 @@ begin
     // PathInFingerprint-Konsistenz: Modus + Root wie beim Schreiben der
     // Datei, sonst matchen die Fingerprints des Anzeige-Filters nicht.
     uSCAConsts.BaselinePathFingerprint := Settings.BaselinePathInFingerprint;
-    if CurrentProjOrGroupFile <> '' then
-      uSCAConsts.BaselineFingerprintRoot := ExtractFilePath(CurrentProjOrGroupFile)
-    else
-      uSCAConsts.BaselineFingerprintRoot := DirOfProjectPath(Projectpath.Text);
+    // Wurzel-Regel aus TBaselineScope - hier stand sie bis 2026-08-19
+    // als eine von vier wortgleichen Kopien.
+    uSCAConsts.BaselineFingerprintRoot := TBaselineScope.RootForProject(
+      CurrentProjOrGroupFile, DirOfProjectPath(Projectpath.Text));
     try
       FBaselineSet.LoadFromFile(Path);
     except
@@ -2796,7 +2837,11 @@ var
 begin
   Settings := TRepoSettings.Create;
   try
-    try Settings.Load; except end;
+    if not LoadBeforeWrite(Settings) then
+    begin
+      StatusBar1.Panels[2].Text := _('Settings could not be reloaded - nothing was saved.');
+      Exit;
+    end;
     if ANewVal then
     begin
       Probed := TStringList.Create;
@@ -3034,8 +3079,7 @@ procedure TForm2.TileClickSeverity(Sender: TObject);
 // WICHTIG (Plugin-Erkenntnis): der ItemIndex-Setter feuert KEIN
 // OnChange - die Change-Handler muessen explizit gerufen werden.
 var
-  Target  : TFilterMode;
-  i, OrdT : Integer;
+  Target : TFilterMode;
 begin
   if not (Sender is TComponent) then Exit;
   Target := TFilterMode(TComponent(Sender).Tag);
@@ -3045,27 +3089,32 @@ begin
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if TypeFilterCombo.ItemIndex <> 0 then
     TypeFilterCombo.ItemIndex := 0;
-  OrdT := Ord(Target);
-  for i := 0 to SeverityFilterCombo.Items.Count - 1 do
-    if Integer(SeverityFilterCombo.Items.Objects[i]) = OrdT then
-    begin
-      SeverityFilterCombo.ItemIndex := i;
-      Break;
-    end;
+  // Tag-Suche mit Miss-Rueckfall auf 'All' - geteilt mit dem Plugin,
+  // Vertrag und Begruendung an TTileFilterSelect.SelectByTag. Bis
+  // 2026-08-19 brach die Suche hier wortlos ab: bei aktiver Baseline
+  // konnte der Eintrag fehlen, dann blieb der alte Severity-Filter stehen,
+  // obwohl der Typ-Filter oben schon zurueckgesetzt war.
+  TTileFilterSelect.SelectByTag(SeverityFilterCombo, Ord(Target));
   // Commit-Gedaechtnis des Fuzzy-Helfers nachziehen - programmatisches
   // ItemIndex sieht der Helfer nicht, und sein Tag-Gate wuerde sonst die
   // naechste ECHTE Wieder-Auswahl in der Combo verschlucken (Review
   // 2026-08-12, Kachel-Pfad).
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
-  TypeFilterComboChange(TypeFilterCombo);
-  SeverityFilterComboChange(SeverityFilterCombo);
+  // EINMAL filtern, nicht zweimal (Review-Minor 2026-08-19): der
+  // ItemIndex-Setter feuert kein OnChange, also muss der Klick den Filter
+  // selbst anstossen - aber beide Change-Handler bestehen nur aus
+  // 'ApplyFilter', und der lief damit zweimal ueber die gesamte
+  // Befundliste. Das Plugin braucht dafuer einen Unterdrueckungs-Zaehler,
+  // weil seine Handler noch Combo-Zustand parsen; hier reicht der direkte
+  // Aufruf.
+  ApplyFilter;
 end;
 
 procedure TForm2.TileClickKind(Sender: TObject);
 // Kacheln, deren Ziel kein fm-Modus ist, sondern der generierte
 // Regel-Eintrag der Severity-Combo (Objects = KIND_TAG_BASE+Ord(Kind)).
 var
-  i, Want : Integer;
+  Want : Integer;
 begin
   if not (Sender is TComponent) then Exit;
   Want := TFindingFilter.KIND_TAG_BASE + TComponent(Sender).Tag;
@@ -3073,22 +3122,17 @@ begin
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if TypeFilterCombo.ItemIndex <> 0 then
     TypeFilterCombo.ItemIndex := 0;
-  for i := 0 to SeverityFilterCombo.Items.Count - 1 do
-    if Integer(SeverityFilterCombo.Items.Objects[i]) = Want then
-    begin
-      SeverityFilterCombo.ItemIndex := i;
-      Break;
-    end;
+  // Tag-Suche mit Miss-Rueckfall, s. TileClickSeverity.
+  TTileFilterSelect.SelectByTag(SeverityFilterCombo, Want);
   // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
-  TypeFilterComboChange(TypeFilterCombo);
-  SeverityFilterComboChange(SeverityFilterCombo);
+  // Einmal filtern, s. TileClickSeverity.
+  ApplyFilter;
 end;
 
 procedure TForm2.TileClickType(Sender: TObject);
 var
   Target : TTypeFilter;
-  i      : Integer;
 begin
   if not (Sender is TComponent) then Exit;
   Target := TTypeFilter(TComponent(Sender).Tag);
@@ -3097,17 +3141,13 @@ begin
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if SeverityFilterCombo.ItemIndex <> 0 then
     SeverityFilterCombo.ItemIndex := 0;
-  for i := 0 to TypeFilterCombo.Items.Count - 1 do
-    if Integer(TypeFilterCombo.Items.Objects[i]) = Ord(Target) then
-    begin
-      TypeFilterCombo.ItemIndex := i;
-      Break;
-    end;
+  // Tag-Suche mit Miss-Rueckfall, s. TileClickSeverity.
+  TTileFilterSelect.SelectByTag(TypeFilterCombo, Ord(Target));
   // Auch hier: die Severity-Combo wurde oben auf 0 gesetzt - Commit-
   // Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
-  SeverityFilterComboChange(SeverityFilterCombo);
-  TypeFilterComboChange(TypeFilterCombo);
+  // Einmal filtern, s. TileClickSeverity.
+  ApplyFilter;
 end;
 
 procedure TForm2.TileClickClear(Sender: TObject);
@@ -3124,8 +3164,8 @@ begin
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if SearchEdit.Text <> '' then
     SearchEdit.Text := '';           // OnChange feuert (Setter am EDIT)
-  SeverityFilterComboChange(SeverityFilterCombo);
-  TypeFilterComboChange(TypeFilterCombo);
+  // Einmal filtern, s. TileClickSeverity.
+  ApplyFilter;
 end;
 
 procedure TForm2.BuildOpenWithMenu(AParent: TMenuItem);
@@ -3360,10 +3400,16 @@ begin
   try
     // Load vor Save: sonst wuerde Save die uebrigen Sections mit den
     // Constructor-Defaults ueberschreiben (gleiches Muster wie die
-    // Options-Page des IDE-Plugins).
-    try Settings.Load; except end;
+    // Options-Page des IDE-Plugins). Genau das erzwingt LoadBeforeWrite -
+    // vorher stand hier ein stilles 'except end', das den Ablauf trotzdem
+    // zum Save durchliess.
+    if not LoadBeforeWrite(Settings) then
+    begin
+      StatusBar1.Panels[2].Text := _('Settings could not be reloaded - nothing was saved.');
+      Exit;
+    end;
     Settings.Language := Code;
-    try Settings.Save; except end;
+    try Settings.Save; except end;   // s. ProfileComboChange
   finally
     Settings.Free;
   end;

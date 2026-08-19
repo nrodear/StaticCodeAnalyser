@@ -120,9 +120,31 @@ cette section.
 
 ## `[Sonar]`
 
-Décrit dans [sonar-config.md](sonar-config.md) — mentionné ici uniquement
-pour que cette page reste complète : `HostUrl`, `ProjectKey`,
-`Organization`, `Branch`, `TokenRef`, `Insecure`.
+Paramètres de connexion pour le test (`--sonar-test`, « Test Connection »
+dans l'EDI) et pour `--sonar-init`. **Aucune de ces clés n'influence
+l'analyse ni un détecteur.** Détail complet dans [sonar-config.md](sonar-config.md).
+
+**Cette section a la priorité la plus basse des quatre sources.** Une
+option de ligne de commande, une variable d'environnement (`SONAR_HOST_URL`,
+`SONAR_TOKEN`, `SONAR_PROJECT_KEY`, `SONAR_ORGANIZATION`, `SONAR_BRANCH`) et
+- pour la clé de projet, l'organisation et la branche - un
+`sonar-project.properties` dans le dépôt ANALYSÉ l'emportent sur elle.
+`--sonar-test` indique quelle source a fourni chaque valeur.
+
+**Le jeton n'est pas ici.** Il réside chiffré dans `[SonarTokens]`, écrit
+par la page d'options ou par `--sonar-token`. Sous Windows il est lié à
+l'utilisateur et à la machine : un `analyser.ini` copié est inutilisable
+ailleurs, et un jeton saisi à la main ne se déchiffre pas. Utilisez
+`SONAR_TOKEN` s'il ne doit pas toucher le disque.
+
+| Clé | Type | Défaut | Signification |
+| --- | --- | --- | --- |
+| `HostUrl` | String | _(vide)_ | URL de base du serveur. Le test y envoie le jeton en en-tête bearer : un hôte erroné reçoit donc le secret. C'est pourquoi un `sonar.host.url` trouvé dans le dépôt analysé est délibérément ignoré. |
+| `ProjectKey` | String | _(vide)_ | Le projet que le test interroge. |
+| `Organization` | String | _(vide)_ | Clé de locataire SonarCloud. Sans elle SonarCloud répond 400 et le test signale « projet introuvable » alors que le projet existe. |
+| `Branch` | String | _(vide)_ | Nom de branche pour la recherche et pour `--sonar-init`. |
+| `Insecure` | Bool | `0` | `1` ignore la vérification du certificat TLS du test. Cela affaiblit précisément le transport qui porte le jeton. |
+| `TokenRef` | String | _(vide)_ | Nom de l'entrée dans `[SonarTokens]` qui contient le jeton chiffré - un même INI peut ainsi en porter plusieurs. |
 
 ## Écrit automatiquement — ne pas modifier
 

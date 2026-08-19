@@ -1475,7 +1475,8 @@ Full release notes: [docs/releases/v0.9.8.md](docs/releases/v0.9.8.md)
   metric-based / DFM-schema kinds tagged as `fcMedium`. `TLeakFinding.SetKind`
   applies the default automatically. `--min-confidence high` now blends
   out heuristic findings without losing structural-bug coverage.
-  Audit table: [docs/ConfidenceAudit.md](docs/ConfidenceAudit.md).
+  Audit table: the live map is `KindDefaultConfidence` in
+  [`SCA.Engine/sources/Common/uSCAConsts.pas`](SCA.Engine/sources/Common/uSCAConsts.pas).
 - **`TLeakFinding.SetKind(K, AConfidence)`** overload — explicit
   Confidence-passing instead of the order-fragile post-`SetKind` overwrite.
   `uCommandInjection` migrated.
@@ -1545,8 +1546,10 @@ Full release notes: [docs/releases/v0.9.8.md](docs/releases/v0.9.8.md)
 - New: `Konzept_ScannerQualitaet.md` —
   4-axis quality roadmap (Precision / Recall / Tooling / Architecture)
   with 4 prioritised phases.
-- New: [`docs/ConfidenceAudit.md`](docs/ConfidenceAudit.md) — per-kind
-  default-confidence table with justifications.
+- New: `docs/ConfidenceAudit.md` (internal, not shipped) — per-kind
+  default-confidence table with justifications. The values themselves
+  live in `KindDefaultConfidence` in
+  [`SCA.Engine/sources/Common/uSCAConsts.pas`](SCA.Engine/sources/Common/uSCAConsts.pas).
 - New: [`tests/golden-corpus/README.md`](tests/golden-corpus/README.md) —
   FP-regression-test workflow + how to add new reproducers.
 - Updated: A.3 entry in `Konzept_ScannerQualitaet.md` marks the minimal

@@ -272,7 +272,8 @@ gehaertet.
 - **Confidence-Audit (35 Kinds → `fcMedium`)** — heuristische /
   metrik-basierte / Style- / DFM-Schema- / no-data-flow-Security-Kinds
   getaggt. Per-Kind-Begruendungen in
-  [`docs/ConfidenceAudit.md`](docs/ConfidenceAudit.md).
+  `KindDefaultConfidence`,
+  [`SCA.Engine/sources/Common/uSCAConsts.pas`](SCA.Engine/sources/Common/uSCAConsts.pas).
 - **A.3-Minimal: SCA052 Cross-Unit reaktiviert** — `gSymbolRefIndex`
   wird jetzt fuer `fkUnusedPublicMember` konsultiert. Spot-Check zeigt
   44 % der Cross-Unit-Methoden korrekt erkannt; 56 % als Follow-Up im

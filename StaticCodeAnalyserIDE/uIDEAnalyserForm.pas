@@ -60,6 +60,15 @@ type
     // Default 0 = Ord(fmAll); FilterChange aktualisiert bei jedem
     // gueltigen Klick.
     FLastNonSeparatorMode : Integer;
+    // Unterdrueckungs-Zaehler fuer ApplyFilter. Ein Kachel-Klick setzt BEIDE
+    // Combos und muss danach BEIDE Change-Handler rufen (der ItemIndex-Setter
+    // feuert kein OnChange) - jeder von ihnen endet in ApplyFilter, also lief
+    // der volle Filter- und Grid-Aufbau zweimal pro Klick ueber die gesamte
+    // Befundliste. Waehrend der Zaehler > 0 ist, kehrt ApplyFilter sofort
+    // zurueck; der Kachel-Pfad ruft ihn danach genau einmal.
+    // Immer ueber try/finally fuehren - bliebe er stehen, waere die UI
+    // dauerhaft eingefroren.
+    FApplyFilterDepth : Integer;
     FFilterMode     : TFilterMode;
     FFilterKind     : TFindingKind; // gueltig wenn FFilterMode = fmSingleKind
     // True waehrend ApplyFilter das Grid programmatisch umbaut. Das
@@ -132,9 +141,14 @@ type
     FPanelSev          : TPanel;
     FPanelType         : TPanel;
     // Drittes Filter-Sub-Panel: Profile-Combo (ide-fast / default / strict).
-    // Schreibt transient in FRepoSettings.IdeProfile (kein INI-Save) - wirkt
-    // beim NAECHSTEN Analyse-Klick. Items werden aus TRuleCatalog.ProfileNames
-    // gefuellt; unbekannte JSON-Profile sind automatisch dabei.
+    // Schreibt FRepoSettings.IdeProfile und PERSISTIERT nach [Rules]
+    // IdeProfile - wirkt beim NAECHSTEN Analyse-Klick. Der Kommentar sagte
+    // bis 2026-08-19 "kein INI-Save": das galt vor 3ff1b80, das die Auswahl
+    // aus [Rules] Profile herausnahm und in den IDE-eigenen Schluessel legte,
+    // damit das Plugin CLI und Standalone nicht mehr umkonfiguriert. Seither
+    // wird gespeichert - nur eben woanders. Items kommen aus
+    // TRuleCatalog.ProfileNames; unbekannte JSON-Profile sind automatisch
+    // dabei.
     FPanelProfile      : TPanel;
     FLblProfile        : TLabel;
     FProfileCombo      : TComboBox;
@@ -504,10 +518,16 @@ type
     // ruft das so dass eine im Dock geaenderte Profile-Wahl auch ohne
     // INI-Save fuer Silent-Runs gilt (analog Dock-PrepareAnalysis).
     function CurrentProfileOverride: string;
-    // Cross-UI-Sync: vom Properties-Panel-Wrapper gerufen wenn dort
-    // ein Clear-Button geklickt wird. Public weil Cross-Unit-Caller
-    // (uIDEFindingsPropertiesForm) drauf zugreifen muss.
+    // Leert das Hauptfenster-Grid samt Kacheln, Combos und Filter.
     // 2026-06-18 (User-Wunsch "die beide Liste sync werden").
+    //
+    // Public, aber der einzige Aufrufer ist heute ResetAllFindingsClick in
+    // dieser Unit. Die Deklaration nannte bis 2026-08-19 einen Cross-Unit-
+    // Aufrufer in uIDEFindingsPropertiesForm als Grund fuer public - den
+    // gibt es nicht (und uIDEFindingsPropertiesForm ruft nichts hier).
+    // Sichtbarkeit bleibt trotzdem public: der Cross-UI-Sync ist der Zweck
+    // der Routine, und der Vertrag "leert komplett" ist auf fremde Aufrufer
+    // ausgelegt (s. Implementierung).
     procedure ClearAllFindings;
   end;
 
@@ -1870,6 +1890,9 @@ var
   BaselineActive : Boolean;
   BaselineHidden : Integer;
 begin
+  // Sammel-Aufrufer (Kachel-Klick) setzen beide Combos und rufen danach
+  // einmal - s. FApplyFilterDepth.
+  if FApplyFilterDepth > 0 then Exit;
   Criteria.Mode       := FFilterMode;
   Criteria.SingleKind := FFilterKind;
   Criteria.TypeFilter := FTypeFilter;
@@ -2234,9 +2257,13 @@ procedure TAnalyserFrame.RebuildFilterCombos;
 // 2026-08-12, identisch in der Standalone-EXE umgesetzt: ein Scan startet
 // immer mit ungefilterter Liste. Die fruehere Restaurierung der vorigen
 // Auswahl ist entfallen - ein stehengebliebener Filter las sich nach dem
-// Scan wie "kaum Funde", obwohl nur der alte Filter noch griff. Der
-// einzige Aufrufer ist der Nach-Scan-Pfad (PopulateFindings); wer die
-// Routine je woanders ruft, uebernimmt damit auch den Reset.
+// Scan wie "kaum Funde", obwohl nur der alte Filter noch griff.
+//
+// WER DAS AUFRUFT, UEBERNIMMT DEN RESET AUF 'All'. Inzwischen sind das
+// drei Stellen: PopulateFindings (Nach-Scan), ClearAllFindings
+// (Hard-Reset) und ToggleBaselineOnlyNew. Bei allen dreien ist der Reset
+// gewollt - die Befundmenge wechselt jedes Mal komplett. Der Kommentar
+// nannte bis 2026-08-19 noch einen einzigen Aufrufer.
 var
   Item : TFilterComboItem;
   i : Integer;
@@ -3114,10 +3141,16 @@ procedure TAnalyserFrame.ClearAllFindings;
 // es nicht mehr gab. Das heilte auch nicht durch Filter-Interaktion,
 // sondern erst beim naechsten vollen Scan.
 //
-// Reihenfolge wie im uebrigen File (PopulateFindings Z.2179,
-// ToggleBaselineOnlyNew): Stats, dann Combos, dann Filter. ApplyFilter
-// zeichnet das Grid ohnehin neu - das explizite Invalidate bleibt fuer
-// den Fall, dass die Combos gar nicht existieren.
+// Reihenfolge wie bei den beiden anderen RebuildFilterCombos-Aufrufern
+// (PopulateFindings, ToggleBaselineOnlyNew): Stats, dann Combos, dann
+// Filter. ApplyFilter zeichnet das Grid ohnehin neu; das explizite
+// Invalidate steht davor, damit das geleerte Grid schon sichtbar ist,
+// bevor ApplyFilter seine Arbeit tut.
+//
+// NICHT nil-tolerant, anders als es hier bis 2026-08-19 stand: ApplyFilter
+// dereferenziert FSearchEdit ungeguardet. Diese Routine darf also erst
+// laufen, wenn der Frame aufgebaut ist - was fuer alle heutigen Aufrufer
+// gilt, weil sie an Menuepunkten haengen.
 begin
   if Assigned(FAllFindings) then FAllFindings.Clear;
   if Assigned(FDisplayedFindings) then FDisplayedFindings.Clear;
@@ -3525,10 +3558,10 @@ begin
   // PathInFingerprint-Konsistenz: Modus + Root wie beim Schreiben der
   // Datei setzen, sonst matchen die Fingerprints des Anzeige-Filters nicht.
   uSCAConsts.BaselinePathFingerprint := FRepoSettings.BaselinePathInFingerprint;
-  if CurrentProjOrGroupFile <> '' then
-    uSCAConsts.BaselineFingerprintRoot := ExtractFilePath(CurrentProjOrGroupFile)
-  else
-    uSCAConsts.BaselineFingerprintRoot := ScanRootDir;
+  // Wurzel-Regel aus TBaselineScope - hier stand sie bis 2026-08-19 als
+  // eine von vier wortgleichen Kopien.
+  uSCAConsts.BaselineFingerprintRoot :=
+    TBaselineScope.RootForProject(CurrentProjOrGroupFile, ScanRootDir);
   try
     FBaselineSet.LoadFromFile(Path);
   except
@@ -3620,7 +3653,25 @@ procedure TAnalyserFrame.BaselineOnlyNewClick(Sender: TObject);
 // laden, damit ein von aussen geaenderter Wert korrekt invertiert wird.
 begin
   if not Assigned(FRepoSettings) then Exit;
-  try FRepoSettings.Load; except end;
+  // Schlaegt das Load fehl, wird NICHT umgeschaltet - denn
+  // ToggleBaselineOnlyNew ruft Save, und Save schreibt das GANZE Objekt
+  // zurueck. Nach einem Analyse-Lauf traegt FRepoSettings noch den
+  // transienten Stand aus TIDEAnalysisPrep.SetupForRun (UseIdeRuleSet
+  // spiegelt IdeProfile/IdeMinSeverity in Profile/MinSeverity); ohne
+  // frisches Load landet genau das in [Rules] Profile - dem Schluessel, den
+  // CLI und Standalone lesen. Das ist derselbe Fehler, den 3ff1b80 fuer
+  // ProfileChange behoben hat, und der Kommentar dort zitiert diese
+  // Routine als "gleiches Muster" - bis 2026-08-19 zu Unrecht: hier stand
+  // 'try Load except end' und danach unbedingt geschrieben.
+  try
+    FRepoSettings.Load;
+  except
+    // Keine Modal-Dialoge im Klick-Pfad (s. ProfileChange) - aber auch
+    // nicht wortlos nichts tun: der Haken bleibt sichtbar stehen, wo er
+    // war, und die Statuszeile sagt warum.
+    StatusMode(_('Settings could not be reloaded - baseline filter unchanged.'));
+    Exit;
+  end;
   ToggleBaselineOnlyNew(not FRepoSettings.BaselineOnlyNew);
 end;
 
@@ -3692,9 +3743,7 @@ procedure TAnalyserFrame.TileClickSeverity(Sender: TObject);
 // Interaktion tut das). Wir muessen FilterChange/TypeFilterChange explizit
 // aufrufen, sonst aktualisiert sich das Grid nicht.
 var
-  Target  : TFilterMode;
-  i, OrdT : Integer;
-  Found   : Boolean;
+  Target : TFilterMode;
 begin
   if not Assigned(FFilterCombo) or not (Sender is TComponent) then Exit;
   Target := TFilterMode(TComponent(Sender).Tag);
@@ -3704,23 +3753,12 @@ begin
   if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   if Assigned(FTypeCombo) and (FTypeCombo.ItemIndex <> 0) then
     FTypeCombo.ItemIndex := 0;
-  OrdT := Ord(Target);
-  Found := False;
-  for i := 0 to FFilterCombo.Items.Count - 1 do
-    if Integer(FFilterCombo.Items.Objects[i]) = OrdT then
-    begin
-      FFilterCombo.ItemIndex := i;
-      Found := True;
-      Break;
-    end;
-  // Eintrag wegreduziert - derselbe Rueckfall, den der Zwilling
-  // TileClickType hat. Die Kachel zaehlt die GESAMTmenge, die Combo ist
-  // baseline-bereinigt; findet die Tag-Suche nichts, blieb bisher still
-  // der alte Severity-Filter stehen, waehrend der Klick den Typ-Filter
-  // schon zurueckgesetzt hatte. Der Nutzer sah dann eine Auswahl, die er
-  // nie getroffen hat.
-  if not Found then
-    FFilterCombo.ItemIndex := 0;
+  // Tag-Suche mit Miss-Rueckfall auf 'All'. Seit 2026-08-19 im geteilten
+  // TTileFilterSelect.SelectByTag - dort steht auch die Begruendung des
+  // Rueckfalls. Vorher stand die Schleife fuenfmal (hier, TileClickType,
+  // und dreimal in der EXE), und der Rueckfall nur in den zwei
+  // Plugin-Kopien.
+  TTileFilterSelect.SelectByTag(FFilterCombo, Ord(Target));
   // NACH dem Setzen, UNBEDINGT - auch im Miss-Fall (der Eintrag kann
   // baseline-bereinigt fehlen, waehrend die Kachel die Gesamtmenge
   // zaehlt): Commit-Gedaechtnis des Fuzzy-Helfers nachziehen
@@ -3731,15 +3769,19 @@ begin
   // Logik-Dimension). Erst Type-, dann Filter-Change; beide enden in
   // ApplyFilter, das gegen denselben Stand idempotent ist.
   if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
-  TypeFilterChange(FTypeCombo);
-  FilterChange(FFilterCombo);
+  Inc(FApplyFilterDepth);
+  try
+    TypeFilterChange(FTypeCombo);
+    FilterChange(FFilterCombo);
+  finally
+    Dec(FApplyFilterDepth);
+  end;
+  ApplyFilter;
 end;
 
 procedure TAnalyserFrame.TileClickType(Sender: TObject);
 var
   Target : TTypeFilter;
-  i      : Integer;
-  Found  : Boolean;
 begin
   if not Assigned(FTypeCombo) or not (Sender is TComponent) then Exit;
   Target := TTypeFilter(TComponent(Sender).Tag);
@@ -3752,24 +3794,20 @@ begin
   // der Direktindex selektierte den FALSCHEN Typ (z.B. Hotspot statt
   // Vulnerability) oder lief ins Leere (Review 2026-08-12,
   // Logik-Dimension; die EXE suchte schon immer per Tag).
-  Found := False;
-  for i := 0 to FTypeCombo.Items.Count - 1 do
-    if Integer(FTypeCombo.Items.Objects[i]) = Ord(Target) then
-    begin
-      FTypeCombo.ItemIndex := i;
-      Found := True;
-      Break;
-    end;
-  // Eintrag wegreduziert (Kachel zaehlt die Gesamtmenge, die Combo die
-  // baseline-bereinigte): auf 'All' zurueckfallen statt still den alten
-  // Filter stehen zu lassen.
-  if not Found then
-    FTypeCombo.ItemIndex := 0;
+  // Suche samt Miss-Rueckfall s. TileClickSeverity.
+  TTileFilterSelect.SelectByTag(FTypeCombo, Ord(Target));
   // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
   if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
-  // ItemIndex-Setter feuert KEIN OnChange - explizit triggern.
-  FilterChange(FFilterCombo);
-  TypeFilterChange(FTypeCombo);
+  // ItemIndex-Setter feuert KEIN OnChange - explizit triggern; ApplyFilter
+  // erst danach einmal, s. FApplyFilterDepth.
+  Inc(FApplyFilterDepth);
+  try
+    FilterChange(FFilterCombo);
+    TypeFilterChange(FTypeCombo);
+  finally
+    Dec(FApplyFilterDepth);
+  end;
+  ApplyFilter;
 end;
 
 procedure TAnalyserFrame.TileClickClear(Sender: TObject);
@@ -3784,9 +3822,16 @@ begin
   if Assigned(FTypeCombo)   then FTypeCombo.ItemIndex   := 0;
   // Commit-Gedaechtnis nachziehen, Begruendung s. TileClickSeverity.
   if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
-  // ItemIndex-Setter feuert KEIN OnChange - explizit triggern.
-  if Assigned(FFilterCombo) then FilterChange(FFilterCombo);
-  if Assigned(FTypeCombo)   then TypeFilterChange(FTypeCombo);
+  // ItemIndex-Setter feuert KEIN OnChange - explizit triggern; ApplyFilter
+  // erst danach einmal, s. FApplyFilterDepth.
+  Inc(FApplyFilterDepth);
+  try
+    if Assigned(FFilterCombo) then FilterChange(FFilterCombo);
+    if Assigned(FTypeCombo)   then TypeFilterChange(FTypeCombo);
+  finally
+    Dec(FApplyFilterDepth);
+  end;
+  ApplyFilter;
 end;
 
 // ---------------------------------------------------------------------------

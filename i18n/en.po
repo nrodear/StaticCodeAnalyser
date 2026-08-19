@@ -199,3 +199,9 @@ msgstr "Opened in Delphi IDE: %s"
 
 msgid "Opened: %s  Line: %d"
 msgstr "Opened: %s  Line: %d"
+
+msgid "Settings could not be reloaded - baseline filter unchanged."
+msgstr "Settings could not be reloaded - baseline filter unchanged."
+
+msgid "Settings could not be reloaded - nothing was saved."
+msgstr "Settings could not be reloaded - nothing was saved."

@@ -1,0 +1,791 @@
+﻿{
+  "$schema": "./sca-rules.overlay.schema.json",
+  "language": "fr",
+  "basedOn": "1.5",
+  "rules": {
+    "SCA001": {
+      "name": "Objet créé sans try/finally",
+      "shortDescription": "Objet créé mais jamais libéré (fuite mémoire possible)"
+    },
+    "SCA002": {
+      "name": "Bloc except vide",
+      "shortDescription": "Un bloc except vide avale silencieusement toutes les exceptions"
+    },
+    "SCA003": {
+      "name": "Chaîne SQL construite par concaténation",
+      "shortDescription": "Chaîne SQL concaténée avec '+' à partir d'une saisie contrôlable (risque d'injection)"
+    },
+    "SCA004": {
+      "name": "Identifiant / jeton d'API en dur",
+      "shortDescription": "Mot de passe, clé d'API ou jeton sous forme de littéral chaîne dans le code source"
+    },
+    "SCA005": {
+      "name": "Format() : nombre de marqueurs incohérent",
+      "shortDescription": "Le nombre de marqueurs de Format() / FormatUtf8() ne correspond pas au nombre d'arguments"
+    },
+    "SCA006": {
+      "name": "Le fichier n'a pas pu être lu ou analysé",
+      "shortDescription": "Erreur d'analyse ou d'E/S - fichier source illisible ou syntaxiquement cassé"
+    },
+    "SCA007": {
+      "name": "Unit inutilisée dans la clause uses",
+      "shortDescription": "Entrée uses probablement inutilisée (aucun identifiant qui en provienne n'est référencé)"
+    },
+    "SCA008": {
+      "name": "Déréférencement nil possible",
+      "shortDescription": "Accès a une variable qui peut valoir nil a cet endroit"
+    },
+    "SCA009": {
+      "name": "Objet créé sans try/finally protecteur",
+      "shortDescription": "Appel .Create sans try/finally englobant - risque de fuite en cas d'exception"
+    },
+    "SCA010": {
+      "name": "Division par zéro possible",
+      "shortDescription": "Division par une variable ou une expression pouvant valoir zéro"
+    },
+    "SCA011": {
+      "name": "Le code après Exit/Raise est inatteignable",
+      "shortDescription": "L'instruction qui suit Exit, raise ou Halt est du code mort"
+    },
+    "SCA012": {
+      "name": "La méthode dépasse le seuil de lignes",
+      "shortDescription": "Méthode plus longue que le maximum configuré (80 lignes par défaut)"
+    },
+    "SCA013": {
+      "name": "Trop de paramètres",
+      "shortDescription": "La méthode a plus de paramètres que le maximum configuré (7 par défaut)"
+    },
+    "SCA014": {
+      "name": "Littéral numérique sans constante nommée",
+      "shortDescription": "Littéral numérique dans une expression - extraire vers une constante nommée"
+    },
+    "SCA015": {
+      "name": "Littéral chaîne répété a plusieurs endroits",
+      "shortDescription": "Le même littéral chaîne apparaît N fois ou plus - extraire vers une constante"
+    },
+    "SCA016": {
+      "name": "Chemin de fichier en littéral chaîne",
+      "shortDescription": "Chemin C:\\, UNC ou Linux écrit en dur dans le source"
+    },
+    "SCA017": {
+      "name": "WriteLn/ShowMessage en code de production",
+      "shortDescription": "Instruction de sortie de débogage trouvée dans une unit de production"
+    },
+    "SCA018": {
+      "name": "L'imbrication de blocs dépasse le seuil",
+      "shortDescription": "Profondeur d'imbrication if/for/while supérieure au maximum configuré (4 par défaut)"
+    },
+    "SCA019": {
+      "name": "Marqueur TODO/FIXME en commentaire",
+      "shortDescription": "Marqueur TODO, FIXME, HACK ou XXX ouvert - a traiter avant la livraison"
+    },
+    "SCA020": {
+      "name": "Corps de méthode vide",
+      "shortDescription": "Le corps de la méthode ne contient aucune instruction"
+    },
+    "SCA021": {
+      "name": "Bloc de code dupliqué",
+      "shortDescription": "Plusieurs blocs de code identiques (à partir du nombre minimal de lignes configuré)"
+    },
+    "SCA022": {
+      "name": "La méthode dépasse le seuil de complexité de McCabe",
+      "shortDescription": "Complexité cyclomatique supérieure au seuil configuré (10 par défaut)"
+    },
+    "SCA023": {
+      "name": "Règle personnalisée",
+      "shortDescription": "Motif détecté par une règle chargée depuis analyser-rules.yml"
+    },
+    "SCA024": {
+      "name": "Composant au nom par défaut",
+      "shortDescription": "Le composant porte encore le nom par défaut de l'assistant (Button1, Edit3, Panel2 ...)"
+    },
+    "SCA025": {
+      "name": "Texte d'interface en dur dans le DFM",
+      "shortDescription": "Caption, Hint ou Text sous forme de littéral dans le DFM, sans passer par la couche i18n"
+    },
+    "SCA026": {
+      "name": "Identifiants de base de données en dur dans le DFM",
+      "shortDescription": "Password en clair ou ConnectionString avec Pwd= sur un composant de base de données"
+    },
+    "SCA027": {
+      "name": "Liaison (DataSource, DataField) en double",
+      "shortDescription": "Deux contrôles ou plus lient le même couple DataSource / DataField"
+    },
+    "SCA028": {
+      "name": "Le gestionnaire d'événement DFM pointe vers une méthode absente",
+      "shortDescription": "OnClick / On... renvoie a une méthode qui n'existe pas dans la classe de la fiche"
+    },
+    "SCA029": {
+      "name": "Gestionnaire d'événement orphelin",
+      "shortDescription": "Méthode published de forme TNotifyEvent sans liaison DFM"
+    },
+    "SCA030": {
+      "name": "Gestionnaire d'événement lié mais vide",
+      "shortDescription": "L'événement est câblé dans le DFM, la méthode existe, le corps est vide"
+    },
+    "SCA031": {
+      "name": "Composant DFM sans champ published",
+      "shortDescription": "Le composant du DFM n'a pas de champ published correspondant dans la classe de la fiche - entrée DFM périmée (dérive de schéma)"
+    },
+    "SCA032": {
+      "name": "Boucle DataSource / maître-detail circulaire",
+      "shortDescription": "Cycle dans les arêtes DataSource.DataSet / DataSet.MasterSource"
+    },
+    "SCA033": {
+      "name": "Propriété SQL construite depuis une saisie d'interface",
+      "shortDescription": "Query.SQL assemblée à partir des propriétés Text ou Caption de contrôles de fiche"
+    },
+    "SCA034": {
+      "name": "Champ obligatoire sans liaison d'interface",
+      "shortDescription": "Un TField avec Required=True n'a aucun contrôle de saisie lié"
+    },
+    "SCA035": {
+      "name": "Champ obligatoire lié uniquement a des contrôles cachés",
+      "shortDescription": "Un TField avec Required=True n'est lié qu'a des contrôles ayant Visible=False"
+    },
+    "SCA036": {
+      "name": "Type de contrôle incompatible avec le TField",
+      "shortDescription": "La classe du contrôle de données ne correspond pas a TField.DataType (TDBEdit pour un TBooleanField)"
+    },
+    "SCA037": {
+      "name": "TabOrder en double entre frères",
+      "shortDescription": "Deux contrôles frères du même parent partagent la même valeur TabOrder"
+    },
+    "SCA038": {
+      "name": "Le composant utilise une classe interdite",
+      "shortDescription": "La classe du composant figure dans la liste ForbiddenClasses du projet"
+    },
+    "SCA039": {
+      "name": "Composant de base de données sur une fiche d'interface",
+      "shortDescription": "TFDQuery / TFDConnection directement sur un TForm ou TFrame au lieu d'un DataModule"
+    },
+    "SCA040": {
+      "name": "Accès a un champ d'une autre fiche",
+      "shortDescription": "Du code dans Form1 lit ou écrit directement Form2.<champ_published>"
+    },
+    "SCA041": {
+      "name": "Contrôle de saisie directement sur le TForm",
+      "shortDescription": "Le contrôle de saisie est posé sur la fiche au lieu d'être placé dans un TPanel ou un TGroupBox"
+    },
+    "SCA042": {
+      "name": "Gestionnaire d'événement surcharge",
+      "shortDescription": "Une seule méthode est câblée sur N événements de composants ou plus (N=5 par défaut)"
+    },
+    "SCA043": {
+      "name": "Le composant a Action et OnClick",
+      "shortDescription": "Action et OnClick sont tous deux définis - Action l'emporte, OnClick est du code mort"
+    },
+    "SCA044": {
+      "name": "Longue concaténation - préférer Format()",
+      "shortDescription": "Concaténation de chaîne en plusieurs segments - a transformer en appel a Format()"
+    },
+    "SCA045": {
+      "name": "with X do ...",
+      "shortDescription": "Instruction with - piège de masquage de portée contre lequel le compilateur n'avertit pas"
+    },
+    "SCA046": {
+      "name": "for i := High to Low - downto manquant",
+      "shortDescription": "for i := 10 to 1 do - le corps de boucle ne s'exécute jamais"
+    },
+    "SCA047": {
+      "name": "x := x",
+      "shortDescription": "Auto-affectation - sans effet, ou faute de copier-coller"
+    },
+    "SCA048": {
+      "name": "Appel virtuel dans le constructeur",
+      "shortDescription": "Méthode virtuelle appelée depuis le constructeur - la classe dérivée voit un Self à moitié initialisé"
+    },
+    "SCA049": {
+      "name": "Length(s) - N sans garde",
+      "shortDescription": "Length ou .Count avec soustraction - dépassement par le bas du type non signe quand c'est vide"
+    },
+    "SCA050": {
+      "name": "Le membre public pourrait être privé a l'unit",
+      "shortDescription": "Ce membre public n'est référencé que dans l'unit courante - le `private` classique de Delphi (portée unit) suffit"
+    },
+    "SCA051": {
+      "name": "Le membre public pourrait être protected",
+      "shortDescription": "Membre public référencé uniquement depuis des classes dérivées, jamais de l'extérieur"
+    },
+    "SCA052": {
+      "name": "Membre public inutilisé (API morte)",
+      "shortDescription": "Le membre public n'est référencé par aucune classe dérivée ni par aucun chemin inter-unit"
+    },
+    "SCA053": {
+      "name": "Variable locale inutilisée",
+      "shortDescription": "Variable locale déclarée mais jamais référencée dans le corps de la méthode"
+    },
+    "SCA054": {
+      "name": "Paramètre de méthode inutilisé",
+      "shortDescription": "Le paramètre de la méthode n'est jamais utilise dans le corps"
+    },
+    "SCA055": {
+      "name": "Expression booléenne tautologique",
+      "shortDescription": "Opérateur binaire avec membres gauche et droit identiques : x = x, a and a, (p <> p)"
+    },
+    "SCA056": {
+      "name": "Maître-detail sans MasterFields",
+      "shortDescription": "Le TDataSet a MasterSource mais ni MasterFields ni IndexFieldNames"
+    },
+    "SCA057": {
+      "name": "Fiche chargée de composants de données - extraire un DataModule",
+      "shortDescription": "Indication agrégée : la fiche porte N composants de base de données ou plus"
+    },
+    "SCA058": {
+      "name": "UPDATE / DELETE / TRUNCATE sans WHERE",
+      "shortDescription": "L'instruction SQL modifie toutes les lignes - clause WHERE manquante"
+    },
+    "SCA059": {
+      "name": "Format flottant dans Format() sans TFormatSettings",
+      "shortDescription": "%.2f / %.3f sans TFormatSettings explicite - le piège du séparateur décimal virgule ou point"
+    },
+    "SCA060": {
+      "name": "Instruction goto",
+      "shortDescription": "`goto` affaiblit le flot de contrôle structure"
+    },
+    "SCA061": {
+      "name": "Tabulation dans le source",
+      "shortDescription": "Les tabulations s'affichent différemment selon l'éditeur - utiliser des espaces"
+    },
+    "SCA062": {
+      "name": "Ligne de source trop longue",
+      "shortDescription": "La ligne dépasse 120 caractères - couper ou extraire une sous-expression"
+    },
+    "SCA063": {
+      "name": "Espaces en fin de ligne",
+      "shortDescription": "La ligne se termine par une espace ou une tabulation - hygiène pour les diffs"
+    },
+    "SCA064": {
+      "name": "Mot-clé Pascal pas en minuscules",
+      "shortDescription": "Les mots-clés Pascal (`begin`/`end`/`procedure`/...) doivent être en minuscules"
+    },
+    "SCA065": {
+      "name": "Marqueur de suppression NOSONAR",
+      "shortDescription": "`// NOSONAR` ne devrait pas faire taire des résultats - vérifier l'usage"
+    },
+    "SCA066": {
+      "name": "Liste d'arguments vide",
+      "shortDescription": "`Foo()` devrait s'écrire `Foo;` - supprimer les parenthèses vides"
+    },
+    "SCA067": {
+      "name": "Bloc assembleur en ligne",
+      "shortDescription": "Bloc `asm...end` - préférer Pascal et les intrinsèques du compilateur"
+    },
+    "SCA068": {
+      "name": "Virgule finale dans la liste d'arguments",
+      "shortDescription": "`Foo(A, B,)` - supprimer la virgule ou ajouter l'argument manquant"
+    },
+    "SCA069": {
+      "name": "Littéral entier sans séparateur de milliers",
+      "shortDescription": "Les grands littéraux entiers devraient utiliser le séparateur `_`"
+    },
+    "SCA070": {
+      "name": "Code en commentaire",
+      "shortDescription": "Le commentaire ressemble a du code Pascal - supprimer ou justifier"
+    },
+    "SCA071": {
+      "name": "Mot-clé de section d'unit qui n'est pas en colonne 1",
+      "shortDescription": "`unit`/`interface`/`implementation`/`initialization`/`finalization` doivent commencer en colonne 1"
+    },
+    "SCA072": {
+      "name": "Comparaison booléenne redondante",
+      "shortDescription": "`X = True` devrait s'écrire `X` (et `X <> False` de même)"
+    },
+    "SCA073": {
+      "name": "Déclaration d'interface vide",
+      "shortDescription": "Une interface sans méthode ni propriété ne porte aucun contrat"
+    },
+    "SCA074": {
+      "name": "Assert sans message",
+      "shortDescription": "`Assert(cond);` - ajouter un message `'pourquoi'` pour le diagnostic"
+    },
+    "SCA075": {
+      "name": "Héritage explicite de TObject",
+      "shortDescription": "`class(TObject)` est redondant - supprimer les parenthèses"
+    },
+    "SCA076": {
+      "name": "Déclaration groupée de variables, champs ou paramètres",
+      "shortDescription": "Séparer `A, B: Type` en une déclaration par ligne"
+    },
+    "SCA077": {
+      "name": "Bloc begin..end vide",
+      "shortDescription": "`begin..end` vide - le supprimer ou écrire l'instruction"
+    },
+    "SCA078": {
+      "name": "Capture générale sur la classe racine Exception",
+      "shortDescription": "`on E: Exception do` avale tout, y compris les violations d'accès et l'épuisement mémoire"
+    },
+    "SCA079": {
+      "name": "Sections const/type/var consécutives",
+      "shortDescription": "Deux blocs `const`, `type` ou `var` qui se suivent devraient être fusionnés"
+    },
+    "SCA080": {
+      "name": "Exit/Continue redondant avant end",
+      "shortDescription": "`Exit;` / `Continue;` juste avant `end` est sans effet"
+    },
+    "SCA081": {
+      "name": "Plusieurs déclarations de classe dans un fichier",
+      "shortDescription": "Une classe par unit facilite le remaniement"
+    },
+    "SCA082": {
+      "name": "Point-virgule double",
+      "shortDescription": "`;;` - supprimer le point-virgule superflu"
+    },
+    "SCA083": {
+      "name": "Bloc finally vide",
+      "shortDescription": "`try ... finally end;` ne libéré rien - compléter ou supprimer le finally"
+    },
+    "SCA084": {
+      "name": "Test Assigned + nil redondant",
+      "shortDescription": "`Assigned(X) and (X <> nil)` - supprimer le test nil"
+    },
+    "SCA085": {
+      "name": "X.Free; X := nil; devrait être FreeAndNil(X)",
+      "shortDescription": "Utiliser `FreeAndNil(X)` au lieu de `X.Free; X := nil;`"
+    },
+    "SCA086": {
+      "name": "Éviter le modificateur out",
+      "shortDescription": "Préférer `var` a `out` (out a une sémantique surprenante)"
+    },
+    "SCA087": {
+      "name": "Section de visibilité vide dans la classe",
+      "shortDescription": "En-tête de section `public`/`private`/... sans aucun membre"
+    },
+    "SCA088": {
+      "name": "Initialisation d'unit à l'ancienne begin..end.",
+      "shortDescription": "Utiliser `initialization..end.` plutôt que l'ancien `begin..end.`"
+    },
+    "SCA089": {
+      "name": "Champ public dans la classe",
+      "shortDescription": "Un champ public rompt l'encapsulation - utiliser une propriété"
+    },
+    "SCA090": {
+      "name": "Bloc try imbriqué",
+      "shortDescription": "`try..end` imbriqué - extraire le try interne dans une méthode"
+    },
+    "SCA091": {
+      "name": "Instruction case volumineuse",
+      "shortDescription": "`case` avec 10 branches ou plus - envisager le polymorphisme ou une table de dispatch"
+    },
+    "SCA092": {
+      "name": "Unit sans aucune déclaration",
+      "shortDescription": "L'unit n'a ni type, ni const, ni var, ni procédure/function - supprimer ou compléter"
+    },
+    "SCA093": {
+      "name": "Plusieurs appels inherited dans une méthode",
+      "shortDescription": "Deux `inherited;` ou plus dans la même méthode - les effets de bord du parent s'exécutent deux fois"
+    },
+    "SCA094": {
+      "name": "Doubles parenthèses redondantes",
+      "shortDescription": "`((Ident))` - supprimer les parenthèses extérieures"
+    },
+    "SCA095": {
+      "name": "Section de visibilité répétée",
+      "shortDescription": "La même section `public`/`private`/... apparaît deux fois dans une classe"
+    },
+    "SCA096": {
+      "name": "Constructeur sans appel a inherited",
+      "shortDescription": "Il manque `inherited Create` au constructeur - le parent reste non initialisé"
+    },
+    "SCA097": {
+      "name": "Destructeur sans appel a inherited",
+      "shortDescription": "Il manque `inherited Destroy` au destructeur - le nettoyage du parent est sauté (risque de fuite)"
+    },
+    "SCA098": {
+      "name": "Affectation conditionnelle redondante",
+      "shortDescription": "`if Cond then X := True else X := False` devrait s'écrire `X := Cond`"
+    },
+    "SCA099": {
+      "name": "begin/end asymétrique dans if/else",
+      "shortDescription": "La branche then utilise `begin..end` mais la branche else est une instruction unique"
+    },
+    "SCA100": {
+      "name": "Alias de type pointeur sans préfixe P",
+      "shortDescription": "`Foo = ^Bar` devrait s'écrire `PBar = ^Bar` (convention du préfixe P)"
+    },
+    "SCA101": {
+      "name": "Branche sans bloc begin..end",
+      "shortDescription": "`then`/`else`/`do <instruction>` - préférer un `begin..end` explicite"
+    },
+    "SCA102": {
+      "name": "Routine imbriquée dans une méthode",
+      "shortDescription": "Procédure ou fonction locale imbriquée - a extraire au niveau de l'unit"
+    },
+    "SCA103": {
+      "name": "Champ de classe sans préfixe F",
+      "shortDescription": "Les champs de classe doivent suivre la convention `F<Nom>`"
+    },
+    "SCA104": {
+      "name": "Type classe ou record sans préfixe T",
+      "shortDescription": "Les alias de type classe et record doivent commencer par `T`"
+    },
+    "SCA105": {
+      "name": "Type interface sans préfixe I",
+      "shortDescription": "Les alias d'interface doivent commencer par `I` (`IFoo = interface`)"
+    },
+    "SCA106": {
+      "name": "Méthode pas en PascalCase",
+      "shortDescription": "Les méthodes doivent commencer par une majuscule (PascalCase)"
+    },
+    "SCA107": {
+      "name": "Le membre public pourrait être strict private",
+      "shortDescription": "Le membre public n'est référencé QUE par des méthodes de sa propre classe - `strict private` atteint l'encapsulation la plus forte"
+    },
+    "SCA108": {
+      "name": "TThread.Synchronize depuis le destructeur",
+      "shortDescription": "Synchronize() appelé depuis le destructeur Destroy - l'interblocage classique entre le thread de travail et celui de l'interface"
+    },
+    "SCA109": {
+      "name": "Verrou pris sans libération par try/finally",
+      "shortDescription": "TCriticalSection, Monitor ou verrou WinAPI pris sans try..finally englobant - une exception laisse le verrou posé"
+    },
+    "SCA110": {
+      "name": "Concaténation de chaîne dans une boucle",
+      "shortDescription": "`s := s + x` dans for/while/repeat - réallocations quadratiques"
+    },
+    "SCA111": {
+      "name": "ParamByName(...) appelé dans une boucle",
+      "shortDescription": "`Query.ParamByName('x').AsXxx := ...` dans une boucle - recherche linéaire à chaque itération"
+    },
+    "SCA112": {
+      "name": "FieldByName(...) appelé dans une boucle",
+      "shortDescription": "`DataSet.FieldByName('x').AsXxx` dans une boucle - recherche linéaire à chaque enregistrement"
+    },
+    "SCA113": {
+      "name": "TThread.Resume est obsolète",
+      "shortDescription": "`MyThread.Resume` - utiliser `MyThread.Start` (depuis Delphi 2010)"
+    },
+    "SCA114": {
+      "name": "TThread libéré sans Terminate+WaitFor",
+      "shortDescription": "`FreeAndNil(MyThread)` sans `Terminate; WaitFor` préalable - le thread de travail tourne peut-être encore"
+    },
+    "SCA115": {
+      "name": "URL HTTP en clair",
+      "shortDescription": "Littéral `'http://...'` pour un point d'accès distant - vulnérable a l'interception"
+    },
+    "SCA116": {
+      "name": "Vérification TLS désactivée",
+      "shortDescription": "`SecureProtocols` vide, `IgnoreCertificateErrors := True` ou `OnVerifyPeer := nil`"
+    },
+    "SCA117": {
+      "name": "Membre public sans commentaire de documentation",
+      "shortDescription": "Méthode ou propriété publique dans la section `interface` sans commentaire de documentation juste au-dessus"
+    },
+    "SCA118": {
+      "name": "Classe d'exception sans préfixe `E`",
+      "shortDescription": "Un descendant de `class(Exception)` doit suivre la convention `E<Nom>` de la RTL Delphi"
+    },
+    "SCA119": {
+      "name": "Constante locale pas en UPPER_SNAKE_CASE",
+      "shortDescription": "`const X = 42;` dans une méthode - préférer UPPER_SNAKE_CASE pour les constantes numériques"
+    },
+    "SCA120": {
+      "name": "Exception construite mais jamais levée",
+      "shortDescription": "`EFoo.Create('msg');` alloue un objet exception sans `raise` - le chemin d'erreur est sauté silencieusement"
+    },
+    "SCA121": {
+      "name": "La fonction n'affecte jamais Result",
+      "shortDescription": "Le corps de la fonction se termine sans écrire `Result` (ni `<NomFonction> := ...`) - la valeur de retour est indéfinie"
+    },
+    "SCA122": {
+      "name": "Relevée de la variable d'exception liée",
+      "shortDescription": "`on E: T do ... raise E;` perd la pile d'appels d'origine - le `raise;` nu la conserve"
+    },
+    "SCA123": {
+      "name": "Transtypage juste avant Free / Destroy",
+      "shortDescription": "`TFoo(x).Free` - le transtypage ne change pas quel Destroy s'exécute (Destroy est virtuel)"
+    },
+    "SCA124": {
+      "name": "Constructeur appelé sur une instance au lieu de la classe",
+      "shortDescription": "`obj.Create` - appelle le constructeur comme méthode sur une instance existante, saute l'allocation et réinitialise les champs par-dessus des données vivantes"
+    },
+    "SCA125": {
+      "name": "Redéfinition dont le corps se réduit a `inherited;`",
+      "shortDescription": "Une redéfinition qui ne fait que transmettre au parent ne sert à rien - la supprimer"
+    },
+    "SCA126": {
+      "name": "Utiliser Assigned() plutôt que `= nil` / `<> nil`",
+      "shortDescription": "Convention Pascal : `Assigned(x)` et `not Assigned(x)` sont les tests nil canoniques"
+    },
+    "SCA127": {
+      "name": "Levée de la classe de base `Exception` au lieu d'une sous-classe",
+      "shortDescription": "`raise Exception.Create('...')` - la classe de base ne porte aucune information sémantique, les appelants ne peuvent pas filtrer sélectivement"
+    },
+    "SCA128": {
+      "name": "Appel de formatage dépendant de la locale sans TFormatSettings",
+      "shortDescription": "`StrToDate(s)`, `FormatFloat(...)` et consorts sans TFormatSettings dépendent de la locale système - le résultat change d'une machine ou d'un utilisateur à l'autre"
+    },
+    "SCA129": {
+      "name": "Transtypage de chaîne vers un type 8 bits sans encodage explicite",
+      "shortDescription": "`AnsiString(s)` / `RawByteString(s)` / `ShortString(s)` supprime silencieusement les caractères hors de la page de codes active"
+    },
+    "SCA130": {
+      "name": "Transtypage d'un Char en PChar : le point de code devient une adresse",
+      "shortDescription": "`PChar('A')` n'est pas `PChar(\"A\")` - le transtypage traite le point de code 16 bits comme une adresse mémoire brute"
+    },
+    "SCA131": {
+      "name": "IfThen() évalue les deux branches - pas de court-circuit",
+      "shortDescription": "`Math.IfThen(cond, A(), B())` et `StrUtils.IfThen` sont des fonctions ordinaires - les deux bras s'exécutent avant l'appel"
+    },
+    "SCA132": {
+      "name": "except on E: Exception attrape toutes les erreurs",
+      "shortDescription": "`on E: Exception do ...` attrape la classe de base et donc tous ses descendants, y compris les exceptions système qui ne doivent pas être étouffées (EOutOfMemory, EAccessViolation, EAbort)"
+    },
+    "SCA133": {
+      "name": "raise nu hors d'un gestionnaire except/on",
+      "shortDescription": "`raise;` sans expression ne fonctionne qu'a l'Intérieur d'un gestionnaire except (relevée) - a l'extérieur il lève NIL et provoque une violation d'accès"
+    },
+    "SCA134": {
+      "name": "Variable utilisee après Free / FreeAndNil",
+      "shortDescription": "Déréférencer une variable après `Free` ou `FreeAndNil` lit un pointeur pendant et provoque une violation d'accès"
+    },
+    "SCA135": {
+      "name": "Classe concrète héritant d'une méthode abstraite sans override",
+      "shortDescription": "La classe dérive d'une base ayant une méthode `abstract` mais ne la redéfinit pas - l'appel sur l'instance lève EAbstractError à l'exécution"
+    },
+    "SCA136": {
+      "name": "Constructeur qui alloue des champs et lève sans try/except",
+      "shortDescription": "Le constructeur affecte des champs par `<Classe>.Create` puis lève - les champs partiellement initialisés fuient sur le chemin d'exception"
+    },
+    "SCA137": {
+      "name": "Cible Int64 recevant le produit de deux opérandes 32 bits",
+      "shortDescription": "`<var-Int64> := <a> * <b>` évalue la multiplication en 32 bits avant l'élargissement - un dépassement tronque silencieusement"
+    },
+    "SCA138": {
+      "name": "La classe a trop de méthodes ou de champs",
+      "shortDescription": "Une classe de plus de 20 méthodes ou de plus de 15 champs d'instance concentre trop de responsabilités - difficile à tester, à faire évoluer et à relire"
+    },
+    "SCA139": {
+      "name": "Free sans mise à nil ensuite",
+      "shortDescription": "`obj.Free;` sans `obj := nil;` (ni FreeAndNil) laisse un pointeur pendant - toute utilisation ultérieure est un Use-After-Free"
+    },
+    "SCA140": {
+      "name": "La méthode a trop d'instructions Exit",
+      "shortDescription": "Une méthode avec plus de 3 appels a Exit a trop de chemins de sortie - difficile à lire, difficile à tester, facile d'en oublier un"
+    },
+    "SCA141": {
+      "name": "L'implementation de la classe dépasse 500 lignes",
+      "shortDescription": "Une classe dont la déclaration et les méthodes d'implementation totalisent plus de 500 lignes a trop de responsabilités"
+    },
+    "SCA142": {
+      "name": "La clause uses n'est pas dans l'ordre alphabétique",
+      "shortDescription": "Les entrées d'une clause `uses` ne sont pas dans l'ordre alphabétique - les fusions deviennent non déterministes et la relecture plus difficile"
+    },
+    "SCA143": {
+      "name": "L'unit n'a pas de commentaire d'en-tête descriptif",
+      "shortDescription": "L'unit commence directement par `interface`, sans bloc de commentaire explicatif entre `unit ...;` et `interface`"
+    },
+    "SCA144": {
+      "name": "Comparaison d'égalité ou d'inégalité entre flottants",
+      "shortDescription": "`a = b` ou `a <> b` entre Single/Double/Extended n'est pas fiable a cause de l'arrondi IEEE-754 - utiliser SameValue ou Math.IsZero"
+    },
+    "SCA145": {
+      "name": "raise dans un destructeur sans try/except",
+      "shortDescription": "Un `raise` non protégé dans un destructeur interrompt la chaîne de nettoyage - inherited Destroy et les FreeAndNil suivants sont sautés, l'état reste incohérent"
+    },
+    "SCA146": {
+      "name": "Paramètre booléen servant d'aiguillage interne",
+      "shortDescription": "Un paramètre booléen dont la valeur choisit entre deux chemins de code complètement différents est une stratégie déguisée - préférer deux méthodes aux noms parlants"
+    },
+    "SCA147": {
+      "name": "Méthode privée sans appelant dans l'unit",
+      "shortDescription": "Une méthode privée que nulle autre méthode de la même unit ne référence est du code mort - la supprimer ou la brancher"
+    },
+    "SCA148": {
+      "name": "Méthode d'instance n'accédant jamais a Self - pourrait être de classe",
+      "shortDescription": "Une méthode qui n'utilise que ses paramètres (ni Self, ni champs d'instance, ni chaîne virtuelle) est fonctionnellement une méthode de classe - la déclarer comme telle"
+    },
+    "SCA149": {
+      "name": "La méthode masque une méthode virtuelle parente sans `override`",
+      "shortDescription": "Une méthode redéclarée dans une classe dérivée avec le même nom qu'une méthode parente virtuelle ou dynamique, mais sans `override`, casse le polymorphisme - le compilateur émet W1010"
+    },
+    "SCA150": {
+      "name": "La comparaison booléenne est toujours vraie / toujours fausse",
+      "shortDescription": "Des comparaisons comme `Length(s) >= 0` sont des tautologies - le résultat de Length n'est jamais négatif, la condition ne peut donc jamais être fausse"
+    },
+    "SCA151": {
+      "name": "La fonction renvoie toujours le même littéral",
+      "shortDescription": "Tous les chemins de la fonction affectent le même littéral a Result - la logique conditionnelle ne change rien au comportement, remplacer la fonction par une constante"
+    },
+    "SCA152": {
+      "name": "Texte visible par l'utilisateur affecté en littéral",
+      "shortDescription": "Les affectations a Caption/Hint/Text et les appels a ShowMessage/MessageDlg avec du texte littéral contournent resourcestring et i18n - la chaîne n'est pas traduisible"
+    },
+    "SCA153": {
+      "name": "Paire Lock/Unlock sans try/finally",
+      "shortDescription": "Lock / EnterCriticalSection / TMonitor.Enter avec sa libération dans la même routine mais sans try/finally - le chemin d'exception laisse le verrou posé et bloque l'appelant suivant"
+    },
+    "SCA154": {
+      "name": "Move/FillChar avec SizeOf d'un type pointeur",
+      "shortDescription": "Move, FillChar, CopyMemory ou ZeroMemory appelé avec SizeOf(PXxx) ou PXxx est un type pointeur - ne copie que 4 ou 8 octets (la taille du pointeur) au lieu du tampon visé"
+    },
+    "SCA155": {
+      "name": "Instruction with sur plusieurs cibles",
+      "shortDescription": "`with A, B do` (deux receveurs ou plus séparés par des virgules) rend la resolution des membres ambiguë - ajouter une méthode à A ou à B change silencieusement le sens du corps"
+    },
+    "SCA156": {
+      "name": "GetMem / AllocMem sans try/finally",
+      "shortDescription": "GetMem / AllocMem / ReallocMem suivi du FreeMem correspondant dans la même routine mais sans try/finally englobant - le chemin d'exception perd le tampon définitivement"
+    },
+    "SCA157": {
+      "name": "SetLength(arr, Length(arr) + N) dans une boucle",
+      "shortDescription": "Agrandir un tableau dynamique d'un élément (ou de N) dans une boucle for/while/repeat coûte quadratiquement - agrandir une fois avant la boucle ou procéder par blocs"
+    },
+    "SCA158": {
+      "name": "PChar(s) +/- décalage sans test de chaîne vide",
+      "shortDescription": "`PChar(s) + n` et variantes sans test préalable de `s` vide - PChar('') est optimisé en NIL, l'arithmétique dessus est une violation d'accès latente"
+    },
+    "SCA159": {
+      "name": "Gestionnaire d'exception typée au corps vide",
+      "shortDescription": "`on E: SomeException do ;` avale silencieusement une classe d'exception précise - pire qu'un `except end` nu, car l'annotation typée a l'air délibérée"
+    },
+    "SCA160": {
+      "name": "Transtypage en chaîne depuis un pointeur brut",
+      "shortDescription": "`string(P)` et variantes depuis un pointeur préfixe P supposent un terminateur nul qui peut ne pas exister - lecture au-delà du tas"
+    },
+    "SCA161": {
+      "name": "Soustraction de pointeurs via un transtypage 32 bits",
+      "shortDescription": "`Cardinal(P1) - Cardinal(P2)` (ou Integer/LongWord/LongInt) tronque les 32 bits de poids fort d'un pointeur 64 bits sous Win64 - la différence est parfois fausse"
+    },
+    "SCA162": {
+      "name": "Utilisation d'un algorithme cryptographique faible ou obsolète",
+      "shortDescription": "Nom d'algorithme ('MD5', 'SHA1', 'DES', 'RC4', 'TLS1.0', 'SSLv3') ou classe d'encapsulation (THashMD5, TIdHashSHA1, ...) référencée - vulnérable aux collisions et aux attaques a texte clair connu"
+    },
+    "SCA163": {
+      "name": "API shell appelée avec concaténation dans les arguments",
+      "shortDescription": "ShellExecute / CreateProcess / WinExec avec `+` dans les arguments - si un opérande est contrôlable, cela devient un vecteur d'injection de commande"
+    },
+    "SCA164": {
+      "name": "Routine de premier niveau jamais appelée",
+      "shortDescription": "Une procédure ou fonction autonome de la section implementation n'est appelée nulle part dans l'unit et n'est pas exportée par la section interface - code mort"
+    },
+    "SCA165": {
+      "name": "Marqueur noinspection inutilisé",
+      "shortDescription": "Un `// noinspection X` ne supprime aucun résultat sur sa ligne cible - soit le détecteur s'est amélioré, soit la cible était mauvaise"
+    },
+    "SCA166": {
+      "name": "Variable locale non initialisée",
+      "shortDescription": "Variable locale lue avant d'avoir été affectée sur tous les chemins traversant la méthode"
+    },
+    "SCA167": {
+      "name": "Appel a Random sans Randomize préalable",
+      "shortDescription": "Random / RandomRange / RandomFrom sans Randomize - un germe a 0 produit la même suite à chaque exécution"
+    },
+    "SCA168": {
+      "name": "Instruction case sans branche else",
+      "shortDescription": "L'instruction case n'a pas de branche else - les valeurs non traitées passent silencieusement"
+    },
+    "SCA169": {
+      "name": "L'argument d'Assert contient un appel a effet de bord",
+      "shortDescription": "Assert(SomeCall) - l'appel disparaît en build Release et son effet de bord est perdu silencieusement"
+    },
+    "SCA170": {
+      "name": "Paramètre string sans const",
+      "shortDescription": "Paramètre string déclaré sans const - provoque une incrémentation du compteur de références à chaque appel"
+    },
+    "SCA171": {
+      "name": "Directive de compilation OFF sans ON correspondant dans le fichier",
+      "shortDescription": "{$WARNINGS OFF} (ou HINTS/RANGECHECKS/...) sans ON de fermeture - déborde sur les units suivantes"
+    },
+    "SCA172": {
+      "name": "Propriété booléenne sans préfixe Is / Has / Can / Should",
+      "shortDescription": "Le nom de la propriété booléenne se lit comme un substantif - préférer un préfixe verbal qui se lit comme une question"
+    },
+    "SCA173": {
+      "name": "Variant dans une méthode sensible aux performances (avec boucle)",
+      "shortDescription": "Variable Variant dans une méthode contenant une boucle - chaque opération Variant paie un surcoût de dispatch COM de 10 à 100 fois"
+    },
+    "SCA174": {
+      "name": "TList<T> rempli de T.Create - les éléments fuient a la libération",
+      "shortDescription": "TList<TFoo>.Create plus Add(TFoo.Create) - la liste ne possède pas ses éléments, chaque instance TFoo fuit"
+    },
+    "SCA175": {
+      "name": "Méthode anonyme capturant la variable de boucle par référence",
+      "shortDescription": "Une méthode anonyme dans `for i := ... do` référence i - toutes les closures voient la même valeur finale"
+    },
+    "SCA176": {
+      "name": "Méthode a forte complexité cognitive (flot de contrôle imbriqué)",
+      "shortDescription": "La complexité cognitive (style Sonar) dépasse 15 - les if/for/while/case imbriqués sont difficiles à suivre mentalement"
+    },
+    "SCA177": {
+      "name": "Variable de thread utilisee après FreeOnTerminate := True",
+      "shortDescription": "Après T.FreeOnTerminate := True, tout accès ultérieur à T.Field/T.Method risque une Access Violation si le thread s'est déjà auto-détruit"
+    },
+    "SCA178": {
+      "name": "API d'ouverture de fichier recevant une saisie utilisateur concaténée",
+      "shortDescription": "Ouverture de fichier (TFileStream.Create, AssignFile, ...) avec un chemin construit à partir d'une saisie utilisateur (Edit.Text, Request.Params, ...) - risque de path traversal"
+    },
+    "SCA179": {
+      "name": "Attribut DUnitX [Ignore] sans argument de justification",
+      "shortDescription": "[Ignore] sans argument chaîne ignore le test silencieusement - ajouter un message expliquant pourquoi il est désactivé"
+    },
+    "SCA180": {
+      "name": "Le même attribut applique deux fois au même membre",
+      "shortDescription": "Deux attributs [X] identiques sur le même membre - reste de copier-coller, sans effet"
+    },
+    "SCA181": {
+      "name": "Attribut DUnitX [Category] sans nom de catégorie",
+      "shortDescription": "[Category] sans argument est une erreur de compilation dans DUnitX - toujours passer un nom de catégorie"
+    },
+    "SCA182": {
+      "name": "Classe [TestFixture] sans aucune méthode [Test]",
+      "shortDescription": "La classe est marquée [TestFixture] mais ne contient aucune méthode [Test] - fixture zombie, visible dans TestInsight mais qui n'exécute rien"
+    },
+    "SCA183": {
+      "name": "Attribut suivi d'une ligne vide avant le membre cible",
+      "shortDescription": "Ligne d'attribut suivie d'une ligne vide - visuellement détachée, souvent un reste de refactoring"
+    },
+    "SCA184": {
+      "name": "Composant DFM inutilisé",
+      "shortDescription": "Le composant DFM n'est référencé ni dans le code, ni dans d'autres units, ni dans le DFM lui-même - probablement un reste de refactoring"
+    },
+    "SCA185": {
+      "name": "Fichier source UTF-8 sans BOM",
+      "shortDescription": "Fichier UTF-8 sans BOM contenant du non-ASCII - le compilateur le lit comme de l'ANSI (mojibake)"
+    },
+    "SCA186": {
+      "name": "Séquence UTF-8 invalide dans le fichier source",
+      "shortDescription": "UTF-8 mal forme (surlong, substitut ou hors plage) sous un BOM UTF-8"
+    },
+    "SCA187": {
+      "name": "Octet NUL ou de contrôle dans le fichier source",
+      "shortDescription": "NUL ou octet de contrôle interdit - fichier binaire ou encodage mal détecté"
+    },
+    "SCA188": {
+      "name": "Caractère de contrôle bidirectionnel (Trojan Source)",
+      "shortDescription": "Caractère de contrôle bidi override ou isolate - le source se lit autrement qu'il ne compile"
+    },
+    "SCA189": {
+      "name": "Fichier source ANSI avec du contenu non-ASCII",
+      "shortDescription": "Source 8 bits (sans BOM, pas de l'UTF-8 valide) - dépendant de la page de codes, non portable"
+    },
+    "SCA190": {
+      "name": "Fichier source UTF-16",
+      "shortDescription": "Source UTF-16 - compile, mais inhabituel et peu commode pour les outils texte"
+    },
+    "SCA191": {
+      "name": "Fichier source UTF-32 / UCS-4",
+      "shortDescription": "Source UTF-32 - le compilateur Delphi le rejette avec l'erreur fatale F2438"
+    },
+    "SCA192": {
+      "name": "Caractère invisible ou de largeur nulle dans le source",
+      "shortDescription": "Caractère Unicode invisible ou de largeur nulle - vecteur de texte caché et d'abus par homoglyphes"
+    },
+    "SCA193": {
+      "name": "Caractère non-ASCII dans un identifiant",
+      "shortDescription": "L'identifiant contient une lettre non-ASCII - risque d'homoglyphes et de caractères confondables"
+    },
+    "SCA194": {
+      "name": "Fichier source hors du projet",
+      "shortDescription": "Un fichier .pas/.dfm se trouve dans le dossier du projet mais n'est pas référencé par le projet (.dproj/.groupproj) - probablement un fichier source orphelin"
+    },
+    "SCA195": {
+      "name": "Unit utilisee par le projet mais non incluse dedans",
+      "shortDescription": "Un fichier .pas est tiré par les units du projet via uses (il compile grâce au chemin de recherche) mais n'est pas liste dans le fichier projet (.dproj/.groupproj) - l'ajouter au projet"
+    },
+    "SCA196": {
+      "name": "Result de type managé est lu avant d'avoir été affecté",
+      "shortDescription": "Le Result d'un type de retour managé est lu avant la première affectation - il est un alias de la variable cible de l'appelant et porte son ANCIENNE valeur. L'initialiser d'abord (nil / [] / '')"
+    }
+  }
+}

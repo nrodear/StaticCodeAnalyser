@@ -117,6 +117,40 @@ type
       const C: TScoreCounters): string; static;
   end;
 
+  // Kachel-Klick -> Filter-Combo. Eine Stat-Kachel stellt beim Klick die
+  // zugehoerige Combo auf einen Eintrag, der ueber sein Objects[]-TAG
+  // identifiziert wird, nicht ueber den Index: die Combos werden
+  // baseline-bereinigt neu aufgebaut, danach gilt Index <> Tag (die EXE
+  // sucht deshalb seit jeher per Tag, das Plugin holte es 2026-08-12 nach).
+  //
+  // WARUM GETEILT (2026-08-19): dieselbe Schleife stand fuenfmal - dreimal
+  // in TForm2 (Severity/Kind/Type), zweimal in TAnalyserFrame. Der
+  // Miss-Rueckfall wurde nur im Plugin nachgezogen (b846eb4), die drei
+  // EXE-Zwillinge blieben zurueck. Genau diese Drift ist der Grund fuer den
+  // Helfer; EXE-/Plugin-UI-Paritaet ist erklaertes Projektziel, und eine
+  // vierte Kopie haette sie erneut nur verschoben.
+  TTileFilterSelect = class
+  public
+    /// <summary>Stellt ACombo auf den Eintrag mit Objects[i] = ATag.</summary>
+    /// <remarks>
+    /// Fehlt der Eintrag, faellt die Auswahl auf Index 0 ('All') zurueck.
+    /// Das ist kein Schoenheitsfehler: die Kachel zaehlt die GESAMTmenge,
+    /// die Combo ist baseline-bereinigt - bei aktiver Baseline kann das
+    /// Ziel also fehlen. Ohne Rueckfall blieb still der alte Filter stehen,
+    /// waehrend der Klick die andere Combo schon zurueckgesetzt hatte: ein
+    /// halb ausgefuehrter Klick, nach dem der Nutzer eine Auswahl sieht,
+    /// die er nie getroffen hat.
+    /// Nil-tolerant - im Plugin koennen die Combos vor dem Aufbau der
+    /// Toolbar noch nicht existieren.
+    /// Der Aufrufer muss den Change-Handler danach SELBST rufen: der
+    /// ItemIndex-Setter feuert OnChange nicht, und die Reihenfolge der
+    /// beiden Handler unterscheidet sich je Kachel-Art.
+    /// </remarks>
+    /// <returns>True, wenn das Ziel gefunden wurde; False nach Rueckfall.</returns>
+    class function SelectByTag(ACombo: TCustomComboBox;
+      ATag: Integer): Boolean; static;
+  end;
+
   // 3-Stufen-Responsive-Layout: Stage haengt von der ClientWidth des Root-
   // Containers (typisch: Frame) ab. Jede Stufe zeigt eine Untermenge von
   // Controls; Stage-Wechsel toggled Visible an allen registrierten Controls.
@@ -464,6 +498,25 @@ begin
       [C.GradeBMax, C.GradeCMax, C.GradeDMax, C.GradeDMax]) + sLineBreak +
     _('Weights: Vuln 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2') + sLineBreak +
     _('Click: reset filters (show everything)');
+end;
+
+{ TTileFilterSelect }
+
+class function TTileFilterSelect.SelectByTag(ACombo: TCustomComboBox;
+  ATag: Integer): Boolean;
+var
+  i: Integer;
+begin
+  Result := False;
+  if not Assigned(ACombo) then Exit;
+  for i := 0 to ACombo.Items.Count - 1 do
+    if Integer(ACombo.Items.Objects[i]) = ATag then
+    begin
+      ACombo.ItemIndex := i;
+      Exit(True);
+    end;
+  // Ziel weggefallen - s. Vertrag an der Deklaration.
+  ACombo.ItemIndex := 0;
 end;
 
 { TResponsiveLayoutController }

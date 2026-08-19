@@ -99,6 +99,58 @@ def groups():
     return out
 
 
+LINK = re.compile(r'\]\(([^)\s#]+)(#[^)]*)?\)')
+
+
+def tote_links():
+    """Relative Markdown-Links, deren Ziel es nicht gibt.
+
+    WARUM HIER UND NICHT ALS EIGENES WERKZEUG: Sprachfassungen verweisen
+    massiv aufeinander ('Version française', 'Deutsche Fassung'), und eine
+    umbenannte oder noch nicht uebersetzte Datei erzeugt genau hier den
+    Schaden - der Leser klickt auf seine Sprache und landet im Nichts.
+    Struktur-Gleichschritt und erreichbare Ziele sind dieselbe Frage.
+
+    Geprueft wird gegen den GIT-INDEX, nicht gegen das Dateisystem: eine
+    Datei, die nur lokal existiert und nicht eingecheckt ist, ist fuer
+    jeden anderen Leser ein toter Link. Genau so entstehen die
+    Verweise auf interne Doku, die das Projekt bewusst nicht ausliefert.
+
+    Externe Links (http, mailto) und reine Anker (#abschnitt) bleiben
+    aussen vor - die eine brauchen Netz, die andere eine
+    Ueberschriften-Aufloesung, und beides waere ein anderes Gate.
+    """
+    idx = subprocess.run(['git', 'ls-files'], cwd=REPO,
+                         capture_output=True, text=True)
+    bekannt = {f for f in idx.stdout.split() if f}
+    tot = []
+    geprueft = 0
+    for md in sorted(f for f in bekannt if f.endswith('.md')):
+        try:
+            t = io.open(os.path.join(REPO, md), encoding='utf-8-sig',
+                        errors='replace').read()
+        except OSError:
+            continue
+        heim = os.path.dirname(md)
+        for m in LINK.finditer(t):
+            ziel = m.group(1)
+            if ziel.startswith(('http://', 'https://', 'mailto:', '#')):
+                continue
+            geprueft += 1
+            p = os.path.normpath(os.path.join(heim, ziel)).replace(
+                os.sep, '/')
+            if p in bekannt:
+                continue
+            # Verzeichnis-Link: der Index fuehrt nur Dateien, ein Ordner
+            # gilt als vorhanden, sobald etwas darin liegt. Ohne diesen
+            # Zweig meldet das Gate jeden Verweis auf einen Quellordner
+            # als tot - der haeufigste Link in der Detektor-Doku.
+            if any(f.startswith(p + '/') for f in bekannt):
+                continue
+            tot.append((md, ziel))
+    return tot, geprueft
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--list', action='store_true',
@@ -145,10 +197,16 @@ def main():
             else:
                 ok += 1
 
+    tot, geprueft = tote_links()
+    for md, ziel in tot:
+        print('TOTER LINK  %s -> %s' % (md, ziel))
+
     print()
     print('Gruppen: %d   Fassungen im Gleichschritt: %d   Drift: %d'
           % (len(grps), ok, fehler))
-    return 1 if fehler else 0
+    print('Relative Links: %d geprueft, %d ohne Ziel im Git-Index'
+          % (geprueft, len(tot)))
+    return 1 if (fehler or tot) else 0
 
 
 if __name__ == '__main__':

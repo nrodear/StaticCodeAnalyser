@@ -64,7 +64,12 @@ type
 
     // Oeffnet eine Datei im IDE-Editor (oder bringt sie nach vorne wenn
     // bereits offen) und positioniert den Cursor auf LineNumber.
-    // No-op bei nicht-verfuegbaren Services oder LineNumber <= 0.
+    // No-op bei nicht-verfuegbaren Services.
+    //
+    // LineNumber <= 0 ist KEIN No-op, anders als es hier bis 2026-08-19
+    // stand: die Companion-Behandlung unten laeuft davor, die Datei wird
+    // also geoeffnet (und die Companion-.pas ggf. geschlossen und
+    // gespeichert, s.u.) - nur der Cursor wird nicht gesetzt.
     //
     // Bei einer .dfm-Datei laeuft die Close-and-Reopen-Strategie: die
     // zugehoerige .pas wird geschlossen und die .dfm direkt geoeffnet -
@@ -237,8 +242,12 @@ var
   AsPas      : string;
   AsDfm      : string;
   IsDfm      : Boolean;
+  // Gemerkt statt sofort nach Result geschrieben - gemeldet wird der Modus
+  // erst, wenn das Modul wirklich offen ist.
+  DfmAsText  : Boolean;
 begin
   Result     := ofmRegular;
+  DfmAsText  := False;
   IsDfm      := EndsText('.dfm', AbsPath);
   TargetPath := AbsPath;
 
@@ -261,7 +270,11 @@ begin
     AsPas := TPath.ChangeExtension(AbsPath, '.pas');
     if TFile.Exists(AsPas) then
       SafeCloseModule(ModuleSvc, AsPas);
-    Result := ofmDfmAsText;
+    // Result erst NACH dem erfolgreichen Oeffnen setzen (Review-Minor
+    // 2026-08-19): hier stand 'Result := ofmDfmAsText', und der Wert
+    // ueberlebte auch den Exit bei nicht gefundenem Modul. Die Statuszeile
+    // meldete dann "als Text geoeffnet", obwohl gar nichts offen war.
+    DfmAsText := True;
   end
   else
   begin
@@ -280,6 +293,10 @@ begin
   end;
 
   if not Assigned(Module) then Exit;
+  // Ab hier ist das Modul offen - erst jetzt darf der DFM-als-Text-Modus
+  // nach aussen gemeldet werden.
+  if DfmAsText then
+    Result := ofmDfmAsText;
   if LineNumber <= 0 then Exit;
 
   // IOTASourceEditor aus dem Modul holen.

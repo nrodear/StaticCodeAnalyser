@@ -120,9 +120,32 @@ diesen Abschnitt nicht.
 
 ## `[Sonar]`
 
-Beschrieben in [sonar-config.md](sonar-config.md) - hier nur genannt, damit
-diese Seite vollstaendig bleibt: `HostUrl`, `ProjectKey`, `Organization`,
-`Branch`, `TokenRef`, `Insecure`.
+Verbindungsdaten fuer den Test (`--sonar-test`, "Test Connection" in der
+IDE) und fuer `--sonar-init`. **Keiner dieser Schluessel beeinflusst die
+Analyse oder irgendeinen Detektor.** Ausfuehrlich in [sonar-config.md](sonar-config.md).
+
+**Dieser Abschnitt hat die niedrigste Prioritaet der vier Quellen.** Ein
+CLI-Schalter, eine Umgebungsvariable (`SONAR_HOST_URL`, `SONAR_TOKEN`,
+`SONAR_PROJECT_KEY`, `SONAR_ORGANIZATION`, `SONAR_BRANCH`) und - fuer
+Projektschluessel, Organisation und Branch - eine `sonar-project.properties`
+im GESCANNTEN Repository stechen ihn aus. `--sonar-test` zeigt an, welche
+Quelle den Wert geliefert hat.
+
+**Der Token steht nicht hier.** Er liegt verschluesselt in `[SonarTokens]`,
+geschrieben von der Options-Seite oder `--sonar-token`. Unter Windows ist
+er an Benutzer und Rechner gebunden - eine kopierte `analyser.ini` ist
+anderswo wertlos, und ein von Hand eingetragener Token laesst sich nicht
+entschluesseln. Wer ihn gar nicht auf der Platte haben will, nimmt
+`SONAR_TOKEN`.
+
+| Schluessel | Typ | Default | Bedeutung |
+| --- | --- | --- | --- |
+| `HostUrl` | String | _(leer)_ | Basis-URL des Servers. Der Test schickt den Token als Bearer-Header genau dorthin - ein falscher Host bekommt das Geheimnis. Deshalb wird eine `sonar.host.url` aus dem gescannten Repository bewusst ignoriert. |
+| `ProjectKey` | String | _(leer)_ | Das Projekt, das der Test nachschlaegt. |
+| `Organization` | String | _(leer)_ | SonarCloud-Mandantenschluessel. Ohne ihn antwortet SonarCloud mit 400 und der Test meldet "Projekt nicht gefunden", obwohl es das Projekt gibt. |
+| `Branch` | String | _(leer)_ | Branch-Name fuer den Lookup und fuer `--sonar-init`. |
+| `Insecure` | Bool | `0` | `1` ueberspringt die TLS-Zertifikatspruefung des Tests. Das schwaecht genau den Transportweg, der den Token traegt. |
+| `TokenRef` | String | _(leer)_ | Name des Eintrags in `[SonarTokens]`, der den verschluesselten Token haelt - so kann eine INI mehrere fuehren. |
 
 ## Automatisch geschrieben - nicht von Hand aendern
 

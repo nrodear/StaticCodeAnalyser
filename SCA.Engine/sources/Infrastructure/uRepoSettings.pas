@@ -474,172 +474,199 @@ const
     ';  Static Code Analysis Tool for Delphi - analyser.ini'#13#10 +
     '; ============================================================'#13#10 +
     ';'#13#10 +
-    '; Diese Datei listet ALLE verfuegbaren Optionen mit Default-Werten.'#13#10 +
-    '; Format pro Option:'#13#10 +
-    ';   Kommentar erklaert was die Option macht.'#13#10 +
-    ';   OPTION=<default>           <- aktiv mit Default-Wert'#13#10 +
-    ';   ;OPTION=<beispiel>         <- auskommentierte Beispiel-Variante'#13#10 +
+    '; This file lists ALL available options with their default values.'#13#10 +
+    '; Layout per option:'#13#10 +
+    ';   A comment explains what the option does.'#13#10 +
+    ';   OPTION=<default>           <- active, set to its default'#13#10 +
+    ';   ;OPTION=<example>          <- commented-out example variant'#13#10 +
     ';'#13#10 +
-    '; Aenderungen wirken beim naechsten Klick auf "Analyse starten" /'#13#10 +
-    '; "Branch-Changes" / "Aktuelle Datei". Kein Plugin-Reload noetig.'#13#10 +
+    '; Changes take effect on the next click of "Run analysis" /'#13#10 +
+    '; "Branch changes" / "Current file". No plugin reload needed.'#13#10 +
     ';'#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
-    ';  [Repo] - VCS-Settings fuer den "Branch-Changes"-Button'#13#10 +
+    ';  [Repo] - VCS settings for the "Branch changes" button'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
     '[Repo]'#13#10 +
     ''#13#10 +
-    '; BaseBranch (string, default: leer = auto-detect)'#13#10 +
-    '; Vergleichs-Branch fuer "git diff <base>...HEAD".'#13#10 +
-    '; Leer = Auto-Detect: origin/HEAD -> main -> master.'#13#10 +
+    '; BaseBranch (string, default: empty = auto-detect)'#13#10 +
+    '; Branch to compare against for "git diff <base>...HEAD".'#13#10 +
+    '; Empty = auto-detect: origin/HEAD -> main -> master.'#13#10 +
     'BaseBranch='#13#10 +
     ';BaseBranch=develop'#13#10 +
     ';BaseBranch=release/2024.1'#13#10 +
     ';BaseBranch=origin/main'#13#10 +
     ''#13#10 +
     '; IncludeWorkingTree (bool, default: 1)'#13#10 +
-    '; Uncommitted Aenderungen mit einbeziehen?'#13#10 +
-    ';   1 = ja  (Default - typisch fuer Pre-Commit-Check)'#13#10 +
-    ';   0 = nein (nur committed Branch-Diff)'#13#10 +
+    '; Include uncommitted changes?'#13#10 +
+    ';   1 = yes (default - the usual choice for a pre-commit check)'#13#10 +
+    ';   0 = no  (committed branch diff only)'#13#10 +
     'IncludeWorkingTree=1'#13#10 +
     ';IncludeWorkingTree=0'#13#10 +
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
-    ';  [Paths] - Tool-Pfade (falls nicht in PATH gefunden)'#13#10 +
+    ';  [Paths] - tool paths (when they are not found on PATH)'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
     '[Paths]'#13#10 +
     ''#13#10 +
-    '; GitExe (string, default: leer = auto via PATH+Tortoise)'#13#10 +
-    '; Voller Pfad zu git.exe wenn weder PATH noch typische'#13#10 +
-    '; Tortoise-Installation greifen.'#13#10 +
+    '; GitExe (string, default: empty = auto via PATH + Tortoise)'#13#10 +
+    '; Full path to git.exe when neither PATH nor a typical Tortoise'#13#10 +
+    '; installation resolves it.'#13#10 +
     'GitExe='#13#10 +
     ';GitExe=C:\Program Files\Git\bin\git.exe'#13#10 +
     ';GitExe=C:\Program Files\TortoiseGit\bin\git.exe'#13#10 +
     ''#13#10 +
-    '; SvnExe (string, default: leer = auto via PATH+Tortoise)'#13#10 +
+    '; SvnExe (string, default: empty = auto via PATH + Tortoise)'#13#10 +
     'SvnExe='#13#10 +
     ';SvnExe=C:\Program Files\TortoiseSVN\bin\svn.exe'#13#10 +
     ';SvnExe=C:\Program Files\Subversion\bin\svn.exe'#13#10 +
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
-    ';  [Detectors] - Detektor-spezifische Tuning-Optionen'#13#10 +
+    ';  [Detectors] - per-detector tuning options'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
     '[Detectors]'#13#10 +
     ''#13#10 +
-    '; LeakyClasses (kommagetrennt, default: leer)'#13#10 +
-    '; Zusaetzliche Klassen die der MemoryLeak-Detektor tracken soll.'#13#10 +
-    '; Werden zu den 30 Default-Klassen (TStringList, TList, TDictionary,'#13#10 +
-    '; TFileStream, TBitmap, ...) hinzugefuegt.'#13#10 +
+    '; LeakyClasses (comma-separated, default: empty)'#13#10 +
+    '; Additional classes the memory-leak detector should track.'#13#10 +
+    '; Added to the 30 built-in classes (TStringList, TList, TDictionary,'#13#10 +
+    '; TFileStream, TBitmap, ...).'#13#10 +
     'LeakyClasses='#13#10 +
     ';LeakyClasses=TFDQuery,TIBQuery,TZipMaster'#13#10 +
     ';LeakyClasses=TIdHTTP,TIdSMTP,TIdFTP'#13#10 +
     ''#13#10 +
-    '; ExcludeLeakyClasses (kommagetrennt, default: leer)'#13#10 +
-    '; Klassen die aus der Default-Liste ENTFERNT werden.'#13#10 +
-    '; Sinnvoll wenn dein Projekt konsequent auf Owner-Pattern setzt -'#13#10 +
-    '; z.B. TComponent wird normalerweise vom Parent-Owner freigegeben.'#13#10 +
+    '; ExcludeLeakyClasses (comma-separated, default: empty)'#13#10 +
+    '; Classes REMOVED from the built-in list.'#13#10 +
+    '; Useful when your project applies the owner pattern consistently -'#13#10 +
+    '; TComponent, for instance, is normally freed by its parent owner.'#13#10 +
     'ExcludeLeakyClasses='#13#10 +
     ';ExcludeLeakyClasses=TComponent'#13#10 +
     ';ExcludeLeakyClasses=TComponent,TThread'#13#10 +
     ''#13#10 +
     '; AutoDiscoverClasses (bool, default: 0)'#13#10 +
-    '; Wenn 1: scannt das Projekt nach Klassen-Deklarationen und'#13#10 +
-    '; ergaenzt LeakyClasses um alle Custom-Klassen die NICHT von'#13#10 +
-    '; TForm/TFrame/TComponent/TInterfacedObject erben.'#13#10 +
-    '; Mehr Befunde, ggf. mehr False-Positives -> per ExcludeLeakyClasses'#13#10 +
-    '; gezielt ausschliessen.'#13#10 +
+    '; When 1: scans the project for class declarations and extends'#13#10 +
+    '; LeakyClasses by every custom class that does NOT descend from'#13#10 +
+    '; TForm / TFrame / TComponent / TInterfacedObject.'#13#10 +
+    '; More findings, possibly more false positives - narrow them down'#13#10 +
+    '; with ExcludeLeakyClasses.'#13#10 +
     'AutoDiscoverClasses=0'#13#10 +
     ';AutoDiscoverClasses=1'#13#10 +
     ''#13#10 +
     '; UsesCheck (bool, default: 0)'#13#10 +
-    '; Wenn 1: zusaetzlicher Detektor meldet ungenutzte Eintraege in der'#13#10 +
-    '; uses-Klausel. Standardmaessig aus, weil bei Property/Operator-/'#13#10 +
-    '; Generics-Code False-Positives auftreten koennen.'#13#10 +
+    '; When 1: an extra detector reports unused entries in the uses'#13#10 +
+    '; clause. Off by default, because property, operator and generics'#13#10 +
+    '; code can produce false positives.'#13#10 +
     'UsesCheck=0'#13#10 +
     ';UsesCheck=1'#13#10 +
     ''#13#10 +
     '; IncludeTests (bool, default: 0)'#13#10 +
-    '; Wenn 1: DUnit/DUnitX-Tests (uTest*.pas, *_Tests.pas, /tests/-Ordner,'#13#10 +
-    '; TestProject*.dpr) werden mit-analysiert. Default aus, weil Test-Code'#13#10 +
-    '; ueberproportional viele Code-Smell-Befunde produziert (LongMethod,'#13#10 +
-    '; MagicNumber) die den eigentlichen Hauptbefund ueberlagern.'#13#10 +
+    '; When 1: DUnit/DUnitX tests (uTest*.pas, *_Tests.pas, /tests/'#13#10 +
+    '; folders, TestProject*.dpr) are analysed too. Off by default,'#13#10 +
+    '; because test code produces a disproportionate number of code-smell'#13#10 +
+    '; findings (LongMethod, MagicNumber) that bury the real ones.'#13#10 +
     'IncludeTests=0'#13#10 +
     ';IncludeTests=1'#13#10 +
     ''#13#10 +
-    '; Live-Analyse: nur IDE-Plugin, nicht konfigurierbar.'#13#10 +
-    '; Beim Klick auf "Aktuelle Datei" haengt das Plugin einen'#13#10 +
-    '; IOTAModuleNotifier an genau diese Datei und scannt sie bei'#13#10 +
-    '; jedem Save (Debounce 300 ms) und jedem Edit (Debounce 1000 ms)'#13#10 +
-    '; im Hintergrund-Thread. "Analyse starten" und "Branch-Changes"'#13#10 +
-    '; sind reine One-Shot-Laeufe ohne Live-Mode.'#13#10 +
+    '; Live analysis: IDE plugin only, not configurable.'#13#10 +
+    '; Clicking "Current file" attaches an IOTAModuleNotifier to exactly'#13#10 +
+    '; that file and rescans it on every save (300 ms debounce) and every'#13#10 +
+    '; edit (1000 ms debounce) on a background thread. "Run analysis" and'#13#10 +
+    '; "Branch changes" are plain one-shot runs with no live mode.'#13#10 +
+    ';'#13#10 +
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
-    ';  Detektor-Schwellwerte. Werte spiegeln die Defaults wider -'#13#10 +
-    ';  einfach raus-kommentieren oder anpassen wenn Du es anders'#13#10 +
-    ';  brauchst.'#13#10 +
+    ';  Detector thresholds. The values mirror the defaults - comment'#13#10 +
+    ';  them back in and adjust when you need something else.'#13#10 +
+    ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
-    '; LongMethod: Methode wird gemeldet wenn beide Schwellen ueber-'#13#10 +
-    '; schritten sind (Body-Zeilen UND Statements). So entgehen wir'#13#10 +
-    '; FPs bei lang-aber-flachen Massendaten-Initialisierungen.'#13#10 +
+    '; LongMethod: a method is reported when BOTH thresholds are'#13#10 +
+    '; exceeded (body lines AND statements). That way long-but-flat bulk'#13#10 +
+    '; data initialisation does not trigger a false positive.'#13#10 +
     ';LongMethodMaxBodyLines=50'#13#10 +
     ';LongMethodMaxStatements=30'#13#10 +
     ''#13#10 +
-    '; LongParamList: > MaxParams Parameter -> Refactoring-Hinweis.'#13#10 +
+    '; LongParamList: more than MaxParams parameters -> refactoring hint.'#13#10 +
     ';LongParamListMaxParams=5'#13#10 +
     ''#13#10 +
-    '; DeepNesting: > MaxDepth verschachtelte Ebenen (if/while/for/'#13#10 +
-    '; case/try) -> Refactoring-Hinweis.'#13#10 +
+    '; DeepNesting: more than MaxDepth nested levels (if/while/for/'#13#10 +
+    '; case/try) -> refactoring hint.'#13#10 +
     ';DeepNestingMaxDepth=4'#13#10 +
     ''#13#10 +
-    '; CyclomaticComplexity (McCabe): > Schwelle -> Refactoring-Hinweis.'#13#10 +
-    '; Zaehlt: 1 base + if + case-arm + for/while/repeat + on-handler +'#13#10 +
-    '; and/or/xor BinaryOps. else zaehlt nicht (binary branch).'#13#10 +
-    '; Industry-Standard 10 (Sonar/Checkstyle/PMD).'#13#10 +
+    '; CyclomaticComplexity (McCabe): above the threshold -> refactoring hint.'#13#10 +
+    '; Counted: 1 base + if + case arm + for/while/repeat + on handler +'#13#10 +
+    '; and/or/xor binary operators. else does not count (binary branch).'#13#10 +
+    '; Industry standard is 10 (Sonar / Checkstyle / PMD).'#13#10 +
     ';CyclomaticMax=10'#13#10 +
     ''#13#10 +
-    '; DuplicateBlock: minimale Blockgroesse fuer Duplikat-Erkennung.'#13#10 +
-    '; Hoeher = weniger FPs (Boilerplate), niedriger = mehr Treffer.'#13#10 +
+    '; DuplicateBlock: minimum block size for duplicate detection.'#13#10 +
+    '; Higher = fewer false positives (boilerplate), lower = more hits.'#13#10 +
     ';DuplicateBlockMinLines=8'#13#10 +
     ''#13#10 +
-    '; MaxFileMB: Dateien groesser als das werden uebersprungen'#13#10 +
-    '; (Schutz vor OOM bei generiertem Code, .dfm-Dumps etc.).'#13#10 +
+    '; MaxFileMB: files larger than this are skipped (protects against'#13#10 +
+    '; running out of memory on generated code, .dfm dumps and the like).'#13#10 +
     ';MaxFileMB=5'#13#10 +
+    '; CognitiveLimit (int, default: 15)'#13#10 +
+    '; Threshold for SCA176 (cognitive complexity). A method is reported when'#13#10 +
+    '; its Sonar-style score is STRICTLY greater than this value; the value'#13#10 +
+    '; itself appears in the message text.'#13#10 +
+    '; A value of 0 or less reports practically every method that has any'#13#10 +
+    '; control flow at all. A non-numeric value falls back to 15 silently.'#13#10 +
+    ';CognitiveLimit=15'#13#10 +
     ''#13#10 +
-    '; MagicNumberTrivials: kommagetrennt, Zahlen die nicht als'#13#10 +
-    '; Magic-Number gemeldet werden (Defaults: 0,1,2,-1,10,100).'#13#10 +
+    '; MaxCaseBranches (int, default: 10)'#13#10 +
+    '; Threshold for SCA091. A `case` fires AT this branch count already, not'#13#10 +
+    '; above it. 0 or a negative value does NOT switch the detector off - it'#13#10 +
+    '; silently resets to 10; use the profile or rule filter for that.'#13#10 +
+    ';MaxCaseBranches=10'#13#10 +
+    ''#13#10 +
+    '; MaxLineLength (int, default: 120)'#13#10 +
+    '; Threshold for SCA062. A plain line scan without string or comment'#13#10 +
+    '; awareness, so long comment and literal lines count too.'#13#10 +
+    ';MaxLineLength=120'#13#10 +
+    ''#13#10 +
+    '; OwnershipSinks (comma-separated, default: empty)'#13#10 +
+    '; Routine names that take ownership of an object passed to them. SCA001'#13#10 +
+    '; then treats such a call as a handover and stays silent.'#13#10 +
+    '; Only the standalone EXE and the IDE plugin apply this - the CLI reads'#13#10 +
+    '; the file but never registers the list. Adding a name takes effect on'#13#10 +
+    '; the next scan; REMOVING one needs a process restart, because the list'#13#10 +
+    '; is only ever added to.'#13#10 +
+    ';OwnershipSinks=TakeOwnership,AdoptObject'#13#10 +
+    ''#13#10 +
+    '; MagicNumberTrivials: comma-separated numbers that are NOT reported'#13#10 +
+    '; as magic numbers (defaults: 0,1,2,-1,10,100).'#13#10 +
     ';MagicNumberTrivials=0,1,2,-1,10,100'#13#10 +
     ';MagicNumberTrivials=0,1,2,-1,10,100,1000,1024'#13#10 +
     ''#13#10 +
-    '; FormatFunctions: kommagetrennt, Funktionsnamen mit Format()-'#13#10 +
-    '; aequivalenter %-Platzhalter-Semantik. Defaults: Format,'#13#10 +
-    '; FormatUtf8, FormatString. Erweiterbar um projekt-spezifische'#13#10 +
-    '; Helper (z.B. _fmt, FmtUtf8) - der Detektor zaehlt Platzhalter'#13#10 +
-    '; vs. Argumente fuer alle gelisteten Funktionen.'#13#10 +
+    '; FormatFunctions: comma-separated function names with Format()-'#13#10 +
+    '; equivalent %-placeholder semantics. Defaults: Format, FormatUtf8,'#13#10 +
+    '; FormatString. Extend with project-specific helpers (_fmt, FmtUtf8) -'#13#10 +
+    '; the detector counts placeholders against arguments for every listed'#13#10 +
+    '; function.'#13#10 +
     ';FormatFunctions=Format,FormatUtf8,FormatString'#13#10 +
     ';FormatFunctions=Format,FormatUtf8,FormatString,_fmt'#13#10 +
     ''#13#10 +
-    '; CustomRulesFile: Pfad zur YAML-Datei mit projekt-spezifischen'#13#10 +
-    '; Regeln (siehe examples/analyser-rules.yml + examples/profile-*.yml).'#13#10 +
-    '; Pattern-Typen: substring | regex | word, mit optionalen file-include'#13#10 +
-    '; und file-exclude Glob-Filtern. Findings erscheinen mit der Custom-'#13#10 +
-    '; Rule-ID (z.B. PROJ001) im Grid und in SARIF.'#13#10 +
+    '; CustomRulesFile: path to the YAML file holding project-specific'#13#10 +
+    '; rules (see examples/analyser-rules.yml + examples/profile-*.yml).'#13#10 +
+    '; Pattern types: substring | regex | word, with optional file-include'#13#10 +
+    '; and file-exclude glob filters. Findings appear with the custom rule'#13#10 +
+    '; ID (PROJ001, say) in the grid and in SARIF.'#13#10 +
     ';'#13#10 +
-    '; Pfad-Aufloesung (in Reihenfolge):'#13#10 +
-    ';   1. Absoluter Pfad     -> direkt verwenden'#13#10 +
-    ';   2. Relativ + Projekt   -> <Projekt-Root>\<wert>     <- typisch'#13#10 +
-    ';   3. Relativ + AppData   -> %APPDATA%\StaticCodeAnalyser\<wert>'#13#10 +
-    ';   4. Relativ + ExeDir    -> <Tool-Verz.>\<wert>'#13#10 +
+    '; Path resolution, in this order:'#13#10 +
+    ';   1. Absolute path      -> used as is'#13#10 +
+    ';   2. Relative + project -> <project root>\<value>      <- the usual case'#13#10 +
+    ';   3. Relative + AppData -> %APPDATA%\StaticCodeAnalyser\<value>'#13#10 +
+    ';   4. Relative + ExeDir  -> <tool directory>\<value>'#13#10 +
     ';'#13#10 +
-    '; Empfohlen: Datei "analyser-rules.yml" ins Projekt-Root legen und'#13#10 +
-    '; nur den Dateinamen (ohne Pfad) hier eintragen. So pflegt jedes'#13#10 +
-    '; Projekt sein eigenes Ruleset im Repo (Team-shared, versioniert).'#13#10 +
+    '; Recommended: put a file named "analyser-rules.yml" in the project'#13#10 +
+    '; root and enter only the file name here. Each project then keeps its'#13#10 +
+    '; own rule set in its repository - shared with the team, versioned.'#13#10 +
     ';CustomRulesFile='#13#10 +
     ';CustomRulesFile=analyser-rules.yml'#13#10 +
     ';CustomRulesFile=profile-strict.yml'#13#10 +
@@ -647,24 +674,24 @@ const
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
-    ';  [Rules] - Rule-Set-Filter (Profile + Severity-Threshold)'#13#10 +
+    ';  [Rules] - rule-set filter (profile + severity threshold)'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
     '[Rules]'#13#10 +
     ''#13#10 +
-    '; Profile (string, default: default / im IDE-Plugin: ide-fast)'#13#10 +
-    '; Vordefinierte Rule-Auswahl aus rules/sca-rules.json -> "profiles".'#13#10 +
-    '; Werkseitig vorhanden:'#13#10 +
-    ';   ide-fast      - schnelle Live-Analyse, nur Bugs+Vulnerabilities'#13#10 +
-    ';                   (Speicherleck, SQL-Injection, NilDeref, ...)'#13#10 +
-    ';   default       - alle Regeln aktiv (Standalone-Default)'#13#10 +
-    ';   strict        - alle + opt-in (UsesCheck)'#13#10 +
-    ';   security      - nur Vulnerabilities + Security Hotspots'#13#10 +
-    ';                   (Pre-Merge-Security-Review)'#13#10 +
-    ';   bugs-only     - nur "falsches Verhalten"-Detektoren (CI-Gate)'#13#10 +
-    ';   code-quality  - nur Code Smells + Duplikate (Refactoring)'#13#10 +
-    ';   dfm-only      - nur DFM-Detektoren (Form-/UI-Reviews)'#13#10 +
-    '; Eigene Profile kannst Du in sca-rules.json unter "profiles" pflegen.'#13#10 +
+    '; Profile (string, default: default / in the IDE plugin: ide-fast)'#13#10 +
+    '; Predefined rule selection from rules/sca-rules.json -> "profiles".'#13#10 +
+    '; Shipped with the tool:'#13#10 +
+    ';   ide-fast      - fast live analysis, bugs and vulnerabilities only'#13#10 +
+    ';                   (memory leak, SQL injection, nil deref, ...)'#13#10 +
+    ';   default       - every rule active (standalone default)'#13#10 +
+    ';   strict        - every rule plus opt-in ones (UsesCheck)'#13#10 +
+    ';   security      - vulnerabilities and security hotspots only'#13#10 +
+    ';                   (pre-merge security review)'#13#10 +
+    ';   bugs-only     - only detectors for "behaves wrongly" (CI gate)'#13#10 +
+    ';   code-quality  - code smells and duplicates only (refactoring)'#13#10 +
+    ';   dfm-only      - DFM detectors only (form / UI reviews)'#13#10 +
+    '; You can maintain your own profiles under "profiles" in sca-rules.json.'#13#10 +
     'Profile=default'#13#10 +
     ';Profile=ide-fast'#13#10 +
     ';Profile=strict'#13#10 +
@@ -674,20 +701,29 @@ const
     ';Profile=dfm-only'#13#10 +
     ''#13#10 +
     '; MinSeverity (string, default: hint)'#13#10 +
-    '; Skippt alle Detektoren mit Default-Severity unterhalb dieser Schwelle.'#13#10 +
-    ';   hint    - alles laeuft (Default)'#13#10 +
-    ';   warning - nur Warning + Error, Hints (Long Method, MagicNumber, ...) raus'#13#10 +
-    ';   error   - nur sichere Bugs / Vulnerabilities'#13#10 +
-    '; Wirkt orthogonal zu Profile: beide Filter werden geODERt.'#13#10 +
+    '; Skips every detector whose default severity is below this threshold.'#13#10 +
+    ';   hint    - everything runs (default)'#13#10 +
+    ';   warning - Warning and Error only; hints (LongMethod, MagicNumber, ...) drop out'#13#10 +
+    ';   error   - certain bugs and vulnerabilities only'#13#10 +
+    '; Orthogonal to Profile: the two filters are ORed.'#13#10 +
     'MinSeverity=hint'#13#10 +
     ';MinSeverity=warning'#13#10 +
     ';MinSeverity=error'#13#10 +
+    '; MinConfidence (string, default: medium)'#13#10 +
+    '; Confidence floor. Findings below it are dropped by the post-filter:'#13#10 +
+    ';   low    - no filtering, everything a detector produced'#13#10 +
+    ';   medium - the shipped default'#13#10 +
+    ';   high   - only findings the detector is certain about'#13#10 +
+    '; An unknown value falls back to medium.'#13#10 +
+    'MinConfidence=medium'#13#10 +
+    ';MinConfidence=low'#13#10 +
+    ';MinConfidence=high'#13#10 +
     ''#13#10 +
-    '; IdeProfile / IdeMinSeverity (Default: ide-fast / hint)'#13#10 +
-    '; Wie Profile / MinSeverity, aber nur fuer das IDE-Plugin (Live-Mode).'#13#10 +
-    '; Standalone (Form, CLI) nutzt Profile / MinSeverity. So kann die'#13#10 +
-    '; Live-Analyse im IDE ein schlankes Subset fahren, waehrend der Full-'#13#10 +
-    '; Run im Standalone das komplette Rule-Set anwendet.'#13#10 +
+    '; IdeProfile / IdeMinSeverity (defaults: ide-fast / hint)'#13#10 +
+    '; Like Profile / MinSeverity, but for the IDE plugin only (live mode).'#13#10 +
+    '; Standalone (form, CLI) uses Profile / MinSeverity. This lets the'#13#10 +
+    '; live analysis in the IDE run a lean subset while the full run in the'#13#10 +
+    '; standalone applies the complete rule set.'#13#10 +
     'IdeProfile=ide-fast'#13#10 +
     ';IdeProfile=default'#13#10 +
     ';IdeProfile=strict'#13#10 +
@@ -695,33 +731,79 @@ const
     ';IdeMinSeverity=warning'#13#10 +
     ''#13#10 +
     '; EnableDetectorReviewFilter (bool, default: False)'#13#10 +
-    '; Internes Review-Tool: blendet einen Severity-Combo-Eintrag'#13#10 +
-    '; "Detector Review (1 per detector, random)" ein. Greift NUR wenn der'#13#10 +
-    '; Build mit {$DEFINE DEBUG} compiliert wurde - Release-Builds zeigen'#13#10 +
-    '; den Eintrag nie, egal wie diese Einstellung steht. Default off.'#13#10 +
+    '; Internal review tool: adds a severity-combo entry'#13#10 +
+    '; "Detector Review (1 per detector, random)". Takes effect ONLY when'#13#10 +
+    '; the build was compiled with {$DEFINE DEBUG} - release builds never'#13#10 +
+    '; show the entry, whatever this setting says. Off by default.'#13#10 +
     ';EnableDetectorReviewFilter=true'#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';  [Baseline] - hide findings that already existed'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';'#13#10 +
+    '; A baseline is a JSON file of finding fingerprints, written with'#13#10 +
+    '; `--write-baseline`. Anything whose fingerprint is in it counts as'#13#10 +
+    '; "old" and disappears from the view - what is left is "new since the'#13#10 +
+    '; baseline". Nothing is deleted: the export and "write baseline" always'#13#10 +
+    '; see the full list.'#13#10 +
+    ''#13#10 +
+    '[Baseline]'#13#10 +
+    ''#13#10 +
+    '; File (string, default: empty = the .sca standard location)'#13#10 +
+    '; Path to the baseline JSON. Empty does not mean off - the consumers fall'#13#10 +
+    '; back to <project>\.sca\<name>.baseline.json.'#13#10 +
+    '; Use an ABSOLUTE path: a relative one resolves against different bases'#13#10 +
+    '; depending on which part of the tool asks, so the same entry can point'#13#10 +
+    '; at different files.'#13#10 +
+    '; If the configured file is MISSING, the EXE and the plugin fail open -'#13#10 +
+    '; the filter is silently inactive and every finding shows. The CLI aborts'#13#10 +
+    '; instead. A typo in the path therefore does not show up in the IDE.'#13#10 +
+    'File='#13#10 +
+    ';File=C:\repo\.sca\project.baseline.json'#13#10 +
+    ''#13#10 +
+    '; OnlyNew (bool, default: 0)'#13#10 +
+    '; Turns the "only new findings" view filter on. Needs a baseline file to'#13#10 +
+    '; be findable, otherwise it does nothing (fail-open).'#13#10 +
+    '; The value must be NUMERIC. `OnlyNew=True` does not parse and falls back'#13#10 +
+    '; to 0 without a word.'#13#10 +
+    '; Read by the standalone EXE and the IDE plugin only - the CLI uses'#13#10 +
+    '; --baseline / --baseline-scan instead.'#13#10 +
+    'OnlyNew=0'#13#10 +
+    ';OnlyNew=1'#13#10 +
+    ''#13#10 +
+    '; PathInFingerprint (bool, default: 0)'#13#10 +
+    '; What identifies a file inside the fingerprint:'#13#10 +
+    ';   0 = the file name alone, tolerant of a different checkout location'#13#10 +
+    ';   1 = the relative path from the scan root, so same-named units in'#13#10 +
+    ';       different folders stop sharing one fingerprint namespace'#13#10 +
+    '; SWITCHING THIS INVALIDATES AN EXISTING BASELINE. The mode is stamped'#13#10 +
+    '; into the JSON; after a switch the file has to be written again, or only'#13#10 +
+    '; the weaker context-hash stage still matches.'#13#10 +
+    '; In the CLI, --baseline-path-fingerprint overrides this key.'#13#10 +
+    'PathInFingerprint=0'#13#10 +
+    ';PathInFingerprint=1'#13#10 +
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
-    ';  [PathOverrides] - Pfad-basierte Severity-/Drop-Filter'#13#10 +
+    ';  [PathOverrides] - path-based severity and drop filters'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ';'#13#10 +
-    '; Loest "Test-Code-Noise" ohne Profile-Schwund: ein Profile bleibt'#13#10 +
-    '; scharf, aber Findings auf Test-/Demo-/Generated-Pfaden werden'#13#10 +
-    '; gedroppt oder runtergestuft.'#13#10 +
+    '; Solves test-code noise without weakening the profile: the profile'#13#10 +
+    '; stays sharp, but findings on test, demo or generated paths are'#13#10 +
+    '; dropped or downgraded.'#13#10 +
     ';'#13#10 +
     '; Format:   <glob> = <action>'#13#10 +
     ';'#13#10 +
-    '; Glob:     Forward- oder Backslashes; case-insensitive; ** = beliebige Tiefe'#13#10 +
-    '; Aktion:   drop:*                    - alle Findings droppen'#13#10 +
-    ';           drop:KindA,KindB,...      - nur diese Kinds droppen'#13#10 +
-    ';           severity:hint:<KindList>  - Severity downgrade'#13#10 +
+    '; Glob:     forward or backslashes; case-insensitive; ** = any depth'#13#10 +
+    '; Action:   drop:*                    - drop every finding'#13#10 +
+    ';           drop:KindA,KindB,...      - drop only these kinds'#13#10 +
+    ';           severity:hint:<KindList>  - downgrade severity'#13#10 +
     ';           severity:warn:<KindList>  -      "'#13#10 +
-    ';           severity:error:<KindList> -      " (Eskalation)'#13#10 +
+    ';           severity:error:<KindList> -      " (escalation)'#13#10 +
     ';'#13#10 +
-    '; Erste passende Rule gewinnt - Reihenfolge wichtig.'#13#10 +
+    '; The first matching rule wins - order matters.'#13#10 +
     ';'#13#10 +
-    '; Beispiele (auskommentiert):'#13#10 +
+    '; Examples (commented out):'#13#10 +
     '[PathOverrides]'#13#10 +
     ';tests\**.pas        = drop:*'#13#10 +
     ';**\test_*.pas       = drop:MissingFinally,MagicNumber'#13#10 +
@@ -730,66 +812,66 @@ const
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
-    ';  [Silent] - Silent-Mode Editor-Kontextmenu'#13#10 +
+    ';  [Silent] - silent-mode editor context menu'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
     '[Silent]'#13#10 +
     ''#13#10 +
     '; Enabled (bool, default: 1)'#13#10 +
-    '; Schaltet den "Analyse current file (silent)"-Eintrag im Editor-'#13#10 +
-    '; Rechtsklick-Menue an/aus.'#13#10 +
-    '; Auch konfigurierbar via Tools > Options > Third Party >'#13#10 +
+    '; Turns the "Analyse current file (silent)" entry in the editor'#13#10 +
+    '; right-click menu on or off.'#13#10 +
+    '; Also configurable via Tools > Options > Third Party >'#13#10 +
     '; Static Code Analyser.'#13#10 +
     'Enabled=1'#13#10 +
     ';Enabled=0'#13#10 +
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
-    ';  [Editor] - womit ein Befund geoeffnet wird (Doppelklick)'#13#10 +
+    ';  [Editor] - what a finding opens with (double-click)'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ';'#13#10 +
-    '; Betrifft NUR die Standalone-EXE. Das IDE-Plugin springt ueber die'#13#10 +
-    '; ToolsAPI direkt an die Stelle und braucht nichts davon.'#13#10 +
+    '; Affects the standalone EXE ONLY. The IDE plugin jumps straight to'#13#10 +
+    '; the spot through the ToolsAPI and needs none of this.'#13#10 +
     ''#13#10 +
     '[Editor]'#13#10 +
     ''#13#10 +
-    '; ExternalEditor (string, default: leer = aus)'#13#10 +
-    '; Voller Pfad zu einem Editor. Ist er gesetzt, uebernimmt er das'#13#10 +
-    '; Oeffnen fuer ALLE Dateiarten - auch fuer .dfm - und die Delphi-IDE'#13#10 +
-    '; wird nicht mehr angesprochen.'#13#10 +
-    '; Warum das oft besser ist: die EXE kann der IDE von aussen keine'#13#10 +
-    '; Zeilennummer uebergeben (dafuer gibt es keinen Schalter), sie muss'#13#10 +
-    '; Strg+G und die Ziffern simulieren. Ein Editor, der die Zeile auf'#13#10 +
-    '; der Kommandozeile annimmt, trifft dagegen immer.'#13#10 +
+    '; ExternalEditor (string, default: empty = off)'#13#10 +
+    '; Full path to an editor. Once set, it takes over opening for EVERY'#13#10 +
+    '; kind of file - including .dfm - and the Delphi IDE is no longer'#13#10 +
+    '; involved.'#13#10 +
+    '; Why that is often the better choice: from the outside the EXE'#13#10 +
+    '; cannot hand the IDE a line number (there is no switch for it), so'#13#10 +
+    '; it has to simulate Ctrl+G and the digits. An editor that accepts'#13#10 +
+    '; the line on its command line hits the mark every time.'#13#10 +
     'ExternalEditor='#13#10 +
     ';ExternalEditor=C:\Program Files\Microsoft VS Code\Code.exe'#13#10 +
     ';ExternalEditor=C:\Program Files\Notepad++\notepad++.exe'#13#10 +
     ';ExternalEditor=C:\Program Files\Sublime Text\subl.exe'#13#10 +
     ''#13#10 +
     '; ExternalEditorArgs (string, default: -g "%file%:%line%")'#13#10 +
-    '; Argumente fuer den Editor. Platzhalter (Gross/Klein egal):'#13#10 +
-    ';   %file%  voller Pfad der Datei'#13#10 +
-    ';   %line%  Zeilennummer (mindestens 1)'#13#10 +
-    ';   %col%   Spalte - liefert derzeit IMMER 1, weil Befunde noch'#13#10 +
-    ';           keine Spalte mitfuehren; nur fuer Editoren gedacht, die'#13#10 +
-    ';           ohne Spaltenangabe gar nicht springen'#13#10 +
-    ';   %dir%   Verzeichnis der Datei, ohne abschliessenden Trenner'#13#10 +
-    ';   %%      ein woertliches Prozentzeichen'#13#10 +
-    '; Unbekanntes zwischen Prozentzeichen bleibt unveraendert stehen.'#13#10 +
-    '; Enthaelt ein Wert ein Leerzeichen und steht der Platzhalter nicht'#13#10 +
-    '; ohnehin in Anfuehrungszeichen, werden welche gesetzt - die Vorlage'#13#10 +
-    '; darf also auch ohne auskommen.'#13#10 +
-    '; ZWEI FALLEN BEIM ABSCHREIBEN:'#13#10 +
-    '; 1. Ein Kommentar HINTER dem Wert wird nicht abgeschnitten, er wuerde'#13#10 +
-    ';    Teil der Argumente. Die Editornamen stehen deshalb jeweils in'#13#10 +
-    ';    der Zeile darueber.'#13#10 +
-    '; 2. Steht der GANZE Wert in Anfuehrungszeichen, entfernt Windows'#13#10 +
-    ';    dieses aeussere Paar beim Lesen wieder (so arbeitet die'#13#10 +
-    ';    Profil-Schnittstelle, auf der INI-Dateien aufsetzen). Die'#13#10 +
-    ';    Vorlagen unten fangen deshalb nie mit " an und hoeren nie mit "'#13#10 +
-    ';    auf - noetig ist das ohnehin nicht, weil Werte mit Leerzeichen'#13#10 +
-    ';    automatisch eingefasst werden.'#13#10 +
-    '; Visual Studio Code (Default):'#13#10 +
+    '; Arguments for the editor. Placeholders (case does not matter):'#13#10 +
+    ';   %file%  full path of the file'#13#10 +
+    ';   %line%  line number (at least 1)'#13#10 +
+    ';   %col%   column - currently ALWAYS 1, because findings do not'#13#10 +
+    ';           carry a column yet; meant only for editors that refuse'#13#10 +
+    ';           to jump without one'#13#10 +
+    ';   %dir%   directory of the file, without a trailing separator'#13#10 +
+    ';   %%      a literal percent sign'#13#10 +
+    '; Anything unknown between percent signs is left as it stands.'#13#10 +
+    '; When a value contains a space and the placeholder is not already'#13#10 +
+    '; quoted, quotes are added automatically - so the template does not'#13#10 +
+    '; have to carry them.'#13#10 +
+    '; TWO TRAPS WHEN COPYING A LINE:'#13#10 +
+    '; 1. A comment AFTER the value is not stripped; it would become part'#13#10 +
+    ';    of the arguments. That is why each editor name sits on the line'#13#10 +
+    ';    above its template.'#13#10 +
+    '; 2. If the WHOLE value is quoted, Windows strips that outer pair'#13#10 +
+    ';    again while reading (that is how the profile API underneath INI'#13#10 +
+    ';    files works). The templates below therefore never begin or end'#13#10 +
+    ';    with a quote - and they do not need to, because values'#13#10 +
+    ';    containing spaces are quoted automatically.'#13#10 +
+    ';'#13#10 +
+    '; Visual Studio Code (default):'#13#10 +
     'ExternalEditorArgs=-g "%file%:%line%"'#13#10 +
     '; Notepad++:'#13#10 +
     ';ExternalEditorArgs=-n%line% "%file%"'#13#10 +
@@ -801,156 +883,235 @@ const
     ';ExternalEditorArgs=--line %line% "%file%"'#13#10 +
     ''#13#10 +
     '; DfmTarget (string, default: ide)'#13#10 +
-    '; Was ein Doppelklick auf einen .dfm-Befund oeffnet, WENN oben kein'#13#10 +
-    '; externer Editor eingetragen ist:'#13#10 +
-    ';   ide    = Delphi-IDE'#13#10 +
-    ';   viewer = eingebauter Textbetrachter'#13#10 +
-    '; Ehrlicher Hinweis zur Wahl: die IDE oeffnet eine .dfm je nach'#13#10 +
-    '; Registrierung im Formular-Entwurf, und dort fuehrt kein Weg zu'#13#10 +
-    '; einer Zeilennummer. Der eingebaute Betrachter zeigt die Datei als'#13#10 +
-    '; Text und springt zuverlaessig zur Zeile - er kann dafuer nichts'#13#10 +
-    '; aendern. Antwortet gar kein Handler, wird ohnehin auf ihn'#13#10 +
+    '; What a double-click on a .dfm finding opens WHEN no external editor'#13#10 +
+    '; is configured above:'#13#10 +
+    ';   ide    = Delphi IDE'#13#10 +
+    ';   viewer = built-in text viewer'#13#10 +
+    '; An honest note on the choice: depending on registration the IDE'#13#10 +
+    '; opens a .dfm in the form designer, and from there no path leads to'#13#10 +
+    '; a line number. The built-in viewer shows the file as text and jumps'#13#10 +
+    '; to the line reliably - but it cannot change anything. If no handler'#13#10 +
+    '; answers at all, the viewer is used anyway.'#13#10 +
     '; zurueckgefallen.'#13#10 +
     'DfmTarget=ide'#13#10 +
     ';DfmTarget=viewer'#13#10 +
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
-    ';  [UI] - Oberflaechen-Einstellungen'#13#10 +
+    ';  [UI] - user-interface settings'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
     '[UI]'#13#10 +
     ''#13#10 +
     '; Language (string, default: en)'#13#10 +
-    '; UI-Sprache als ISO-639-1-Kuerzel. Gueltig ist jedes Kuerzel, zu'#13#10 +
-    '; dem eine Uebersetzung vorliegt:'#13#10 +
-    ';   en = English (Default - Source-Sprache, kein Lookup noetig)'#13#10 +
-    ';   eingebettete .po (aktuell de, fr) - siehe i18n\ im Repo'#13#10 +
-    ';   eigene i18n\<code>.po neben der EXE bzw. der Plugin-BPL'#13#10 +
-    ';   '''' (leer) oder unbekanntes Kuerzel = wie ''en'''#13#10 +
-    '; Betrifft NUR die Oberflaeche - Detektor-Meldungen, Befunde und'#13#10 +
-    '; Exporte sind nie uebersetzt.'#13#10 +
-    '; Auch waehlbar via Tools > Options > Third Party > Static Code'#13#10 +
-    '; Analyser (IDE) bzw. Hamburger-Menue > Language (Form).'#13#10 +
+    '; UI language as an ISO 639-1 code. Any code is valid for which a'#13#10 +
+    '; translation exists:'#13#10 +
+    ';   en = English (default - the source language, no lookup needed)'#13#10 +
+    ';   embedded .po files (currently de, fr) - see i18n\ in the repository'#13#10 +
+    ';   your own i18n\<code>.po next to the EXE or the plugin BPL'#13#10 +
+    ';   '''' (empty) or an unknown code behaves like ''en'''#13#10 +
+    '; Affects the user interface ONLY - detector messages, findings and'#13#10 +
+    '; exports are never translated.'#13#10 +
+    '; Also selectable via Tools > Options > Third Party > Static Code'#13#10 +
+    '; Analyser (IDE) or the hamburger menu > Language (form).'#13#10 +
     'Language=en'#13#10 +
     ';Language=de'#13#10 +
     ''#13#10 +
     '; Theme (string, default: system)'#13#10 +
-    '; Hell/Dunkel der Standalone-EXE. Das IDE-Plugin folgt immer dem'#13#10 +
-    '; Thema der IDE und liest diesen Schluessel nicht.'#13#10 +
-    ';   system = dem Windows-App-Thema folgen (Auslieferwert); ein'#13#10 +
-    ';            Themenwechsel in Windows wirkt sofort, ohne Neustart'#13#10 +
-    ';   light  = fest hell'#13#10 +
-    ';   dark   = fest dunkel'#13#10 +
-    '; Auch waehlbar im Hamburger-Menue unter "Appearance" - der'#13#10 +
-    '; Menuepunkt schreibt genau diesen Schluessel.'#13#10 +
+    '; Light or dark for the standalone EXE. The IDE plugin always follows'#13#10 +
+    '; the theme of the IDE and does not read this key.'#13#10 +
+    ';   system = follow the Windows app theme (as shipped); a theme'#13#10 +
+    ';            change in Windows takes effect at once, no restart'#13#10 +
+    ';   light  = always light'#13#10 +
+    ';   dark   = always dark'#13#10 +
+    '; Also selectable in the hamburger menu under "Appearance" - that'#13#10 +
+    '; menu item writes exactly this key.'#13#10 +
     'Theme=system'#13#10 +
     ';Theme=dark'#13#10 +
     ''#13#10 +
     '; OverlayPosition (string, default: sameline)'#13#10 +
-    '; Position des Hover-Annotation-Overlays im Editor:'#13#10 +
-    ';   sameline = Overlay startet AUF der Finding-Zeile (Title-Bar'#13#10 +
-    ';              ueberlagert die Zeile; faltet nach unten auf)'#13#10 +
-    ';   below    = Overlay startet eine Zeile UNTER der Finding-Zeile'#13#10 +
-    ';              (alte Default - Befund-Zeile bleibt sichtbar)'#13#10 +
-    '; Auch konfigurierbar via Tools > Options > Third Party >'#13#10 +
-    '; Static Code Analyser. Aenderung erfordert IDE-Neustart.'#13#10 +
+    '; Position of the hover annotation overlay in the editor:'#13#10 +
+    ';   sameline = the overlay starts ON the finding line (the title bar'#13#10 +
+    ';              covers the line; it unfolds downwards)'#13#10 +
+    ';   below    = the overlay starts one line BELOW the finding line'#13#10 +
+    ';              (the former default - the finding line stays visible)'#13#10 +
+    '; Also configurable via Tools > Options > Third Party >'#13#10 +
+    '; Static Code Analyser. A change requires an IDE restart.'#13#10 +
     'OverlayPosition=sameline'#13#10 +
     ';OverlayPosition=below'#13#10 +
     ''#13#10 +
     '; OverlayTextOnly (bool 0/1, default: 0)'#13#10 +
-    '; Nur-Text-Variante des Annotation-Hints im IDE-Editor:'#13#10 +
-    ';   0 = Fenster-Overlay mit Aufklapp-Animation (wie bisher)'#13#10 +
-    ';   1 = eine Zeile Text rechts vom Code, transparent (OHNE'#13#10 +
-    ';       Hintergrundfarbe - Auswahl/Zeilenfarbe bleiben sichtbar),'#13#10 +
-    ';       permanent an jeder Fundzeile statt der Mini-Infobar.'#13#10 +
-    ';       Kein Fenster: Beschreibung und Fix-Beispiel stehen im'#13#10 +
-    ';       Findings-Panel; Verwerfen per Klick auf den Text; lange'#13#10 +
-    ';       Titel erscheinen als Kurzform (Badge + Regelname).'#13#10 +
-    '; Auch konfigurierbar via Tools > Options > Third Party >'#13#10 +
-    '; Static Code Analyser. Wirkt nach dem Speichern der Optionen;'#13#10 +
-    '; OverlayPosition gilt nur fuer das Fenster-Overlay (Modus 0).'#13#10 +
+    '; Text-only variant of the annotation hint in the IDE editor:'#13#10 +
+    ';   0 = window overlay with an unfold animation (as before)'#13#10 +
+    ';   1 = a single line of text right of the code, transparent (NO'#13#10 +
+    ';       background colour - selection and line colour stay visible),'#13#10 +
+    ';       shown permanently on every finding line instead of the mini'#13#10 +
+    ';       info bar. No window: description and fix example live in the'#13#10 +
+    ';       findings panel; dismiss by clicking the text; long titles'#13#10 +
+    ';       appear in short form (badge + rule name).'#13#10 +
+    '; Also configurable via Tools > Options > Third Party >'#13#10 +
+    '; Static Code Analyser. Takes effect once the options are saved;'#13#10 +
+    '; OverlayPosition applies to the window overlay (mode 0) only.'#13#10 +
     'OverlayTextOnly=0'#13#10 +
     ';OverlayTextOnly=1'#13#10 +
+    '; EditorColorScheme (string, default: default)'#13#10 +
+    '; Colour palette of the finding markers in the IDE code editor:'#13#10 +
+    ';   default | gray | subtle'#13#10 +
+    '; A typo (`grey`, say) falls back to `default` silently. IDE plugin only;'#13#10 +
+    '; the standalone EXE ignores it. Takes effect after an IDE restart when'#13#10 +
+    '; edited by hand - the options page applies it at once.'#13#10 +
+    'EditorColorScheme=default'#13#10 +
+    ';EditorColorScheme=gray'#13#10 +
+    ';EditorColorScheme=subtle'#13#10 +
+    ''#13#10 +
+    '; OverlayShowOnHover (bool 0/1, default: 0)'#13#10 +
+    '; When the annotation overlay opens in the IDE editor:'#13#10 +
+    ';   0 = on a left click on a marked line (default)'#13#10 +
+    ';   1 = on hover as well'#13#10 +
+    '; Edited by hand it takes effect after an IDE restart; set through'#13#10 +
+    '; Tools > Options it applies immediately.'#13#10 +
+    'OverlayShowOnHover=0'#13#10 +
+    ';OverlayShowOnHover=1'#13#10 +
     ''#13#10 +
     '; ClipboardOnClick (int 1..3, default: 1)'#13#10 +
-    '; Was der Klick auf eine Befund-Zeile in die Zwischenablage legt'#13#10 +
-    '; (Standalone-EXE UND IDE-Plugin):'#13#10 +
-    ';   1 = Zwischenablage NICHT anfassen (Default)'#13#10 +
-    ';   2 = Jira-Mini-Issue: 1 Headline + 5 Fakten-Bullets'#13#10 +
-    ';       (Rule, File:Line, Method, Message, Fix hint)'#13#10 +
-    ';   3 = Claude-AI-Prompt (das Verhalten vor 2026-08-12; im'#13#10 +
-    ';       IDE-Plugin zusaetzlich mit vorangestelltem Quick-Fix-'#13#10 +
-    ';       Block, wenn die Regel einen Quick-Fix-Provider hat -'#13#10 +
-    ';       die EXE kopiert den Prompt ohne diesen Block)'#13#10 +
-    '; Ungueltige Werte fallen auf 1 zurueck. Aenderung wirkt'#13#10 +
-    '; spaetestens beim naechsten Analyse-Lauf. Die expliziten'#13#10 +
-    '; Kopier-Gesten (Kontext-'#13#10 +
-    '; menue "Copy AI prompt") kopieren unabhaengig davon immer den'#13#10 +
-    '; AI-Prompt. Es gibt keinen automatischen AI-Zugriff - der Text'#13#10 +
-    '; landet ausschliesslich in der lokalen Zwischenablage.'#13#10 +
+    '; What clicking a finding line puts on the clipboard (standalone EXE'#13#10 +
+    '; AND IDE plugin):'#13#10 +
+    ';   1 = leave the clipboard alone (default)'#13#10 +
+    ';   2 = Jira mini issue: one headline plus five fact bullets'#13#10 +
+    ';       (rule, file:line, method, message, fix hint)'#13#10 +
+    ';   3 = Claude AI prompt (the behaviour before 2026-08-12; in the'#13#10 +
+    ';       IDE plugin with a quick-fix block prepended when the rule'#13#10 +
+    ';       has a quick-fix provider - the EXE copies the prompt'#13#10 +
+    ';       without that block)'#13#10 +
+    '; Invalid values fall back to 1. A change takes effect on the next'#13#10 +
+    '; analysis run at the latest. The explicit copy gestures (context'#13#10 +
+    '; menu "Copy AI prompt") always copy the AI prompt regardless of this'#13#10 +
+    '; setting. There is no automatic AI access of any kind - the text'#13#10 +
+    '; only ever reaches the local clipboard.'#13#10 +
+    ';'#13#10 +
     'ClipboardOnClick=1'#13#10 +
     ';ClipboardOnClick=3'#13#10 +
     ''#13#10 +
     '; Element.<Name> (bool 0/1, default: 1)'#13#10 +
-    '; NOT-AUS je UI-Element des IDE-Plugins: 0 legt genau dieses'#13#10 +
-    '; Element still, ohne Deinstallation - fuer den Fall, dass ein'#13#10 +
-    '; Element die IDE stoert. Wirkt erst nach IDE-Neustart; welche'#13#10 +
-    '; Elemente uebersprungen wurden, meldet das Plugin beim Laden per'#13#10 +
-    '; Debug-Ausgabe (DebugView, Praefix SCA-UI). Die Standalone-EXE'#13#10 +
-    '; liest diese Schluessel nicht.'#13#10 +
-    '; Gueltige Namen:'#13#10 +
+    '; Kill switch per UI element of the IDE plugin: 0 silences exactly'#13#10 +
+    '; that element without uninstalling anything - for the case where an'#13#10 +
+    '; element disturbs the IDE. Takes effect after an IDE restart; the'#13#10 +
+    '; plugin reports which elements were skipped at load time via debug'#13#10 +
+    '; output (DebugView, prefix SCA-UI). The standalone EXE does not read'#13#10 +
+    '; these keys.'#13#10 +
+    '; Valid names:'#13#10 +
     ';   SharedUiHooks, DockForm, LineHighlighter, AnnotationOverlay,'#13#10 +
     ';   WatchMode, WarmUpCaches, ViewMenuItem, EditorContextMenu,'#13#10 +
     ';   OptionsPageSCA, OptionsPageSonar, FindingsProperties,'#13#10 +
     ';   AboutBox, ToolsMenuItem'#13#10 +
-    '; PackageWizard ist bewusst NICHT abschaltbar - er traegt den'#13#10 +
-    '; Abbau aller uebrigen Elemente beim Entladen.'#13#10 +
-    '; Abhaengige Degradation: DockForm=0 entfernt auch den View-'#13#10 +
-    '; Menue-Eintrag; WatchMode=0 laesst das Properties-Panel ohne'#13#10 +
-    '; Live-Findings; SharedUiHooks=0 faellt farblich auf'#13#10 +
-    '; VCL-Defaults zurueck.'#13#10 +
+    '; PackageWizard is deliberately NOT switchable - it carries the'#13#10 +
+    '; teardown of every other element on unload.'#13#10 +
+    '; Dependent degradation: DockForm=0 also removes the View menu entry;'#13#10 +
+    '; WatchMode=0 leaves the properties panel without live findings;'#13#10 +
+    '; SharedUiHooks=0 falls back to VCL default colours.'#13#10 +
+    ';'#13#10 +
     ';Element.AnnotationOverlay=0'#13#10 +
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
-    ';  [Score] - Code-Quality-Letter-Grade-Schwellwerte'#13#10 +
+    ';  [Score] - thresholds for the code-quality letter grade'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ';'#13#10 +
-    '; Die Code-Quality-Kachel zeigt den gewichteten Befund-Score als'#13#10 +
-    '; Letter-Grade A..E statt als rohe Zahl. Mapping (roher Score):'#13#10 +
+    '; The code-quality tile shows the weighted finding score as a letter'#13#10 +
+    '; grade A..E instead of a raw number. Mapping (raw score):'#13#10 +
     ';   A : 0'#13#10 +
     ';   B : 1..GradeBMax'#13#10 +
     ';   C : GradeBMax+1 .. GradeCMax'#13#10 +
     ';   D : GradeCMax+1 .. GradeDMax'#13#10 +
     ';   E : > GradeDMax'#13#10 +
     ';'#13#10 +
-    '; Rohwerte landen im Tooltip. Defaults passen fuer Projekte um'#13#10 +
-    '; 5..50k LOC; kleinere Projekte ggf. strengere Schwellwerte,'#13#10 +
-    '; Legacy-Repos toleranter.'#13#10 +
+    '; Raw values appear in the tooltip. The defaults suit projects around'#13#10 +
+    '; 5..50k lines of code; smaller projects may want stricter thresholds,'#13#10 +
+    '; legacy repositories more tolerant ones.'#13#10 +
     ';'#13#10 +
-    '; Gewichte (hardcoded, NICHT konfigurierbar): Vuln=10, Error=7,'#13#10 +
+    '; Weights (hardcoded, NOT configurable): Vuln=10, Error=7,'#13#10 +
     '; Hotspot=5, Warning=3, Hint=1, FileErr=2.'#13#10 +
     ''#13#10 +
     '[Score]'#13#10 +
     ''#13#10 +
     '; GradeBMax (int, default: 50)'#13#10 +
-    '; Roher Score bis einschliesslich dieses Werts gibt Grade B.'#13#10 +
+    '; A raw score up to and including this value earns grade B.'#13#10 +
     'GradeBMax=50'#13#10 +
-    ';GradeBMax=20      ; strikter (kleines Projekt)'#13#10 +
-    ';GradeBMax=100     ; nachsichtiger (Legacy-Repo)'#13#10 +
+    ';GradeBMax=20      ; stricter (small project)'#13#10 +
+    ';GradeBMax=100     ; more tolerant (legacy repository)'#13#10 +
     ''#13#10 +
     '; GradeCMax (int, default: 200)'#13#10 +
-    '; Obergrenze fuer Grade C; danach Grade D.'#13#10 +
+    '; Upper bound for grade C; above it, grade D.'#13#10 +
     'GradeCMax=200'#13#10 +
     ';GradeCMax=80'#13#10 +
     ';GradeCMax=400'#13#10 +
     ''#13#10 +
     '; GradeDMax (int, default: 500)'#13#10 +
-    '; Obergrenze fuer Grade D; alles darueber faellt auf Grade E.'#13#10 +
+    '; Upper bound for grade D; anything above falls to grade E.'#13#10 +
     'GradeDMax=500'#13#10 +
     ';GradeDMax=200'#13#10 +
-    ';GradeDMax=1000'#13#10;
+    ';GradeDMax=1000'#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';  [Sonar] - SonarQube / SonarCloud connection'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';'#13#10 +
+    '; Used by the connection check only (`--sonar-test`, "Test Connection" in'#13#10 +
+    '; the IDE) and by `--sonar-init`, which writes a sonar-project.properties'#13#10 +
+    '; from these values. None of it influences the analysis or any detector.'#13#10 +
+    ';'#13#10 +
+    '; THIS SECTION HAS THE LOWEST PRIORITY of the four configuration sources.'#13#10 +
+    '; A CLI flag, an environment variable (SONAR_HOST_URL, SONAR_TOKEN,'#13#10 +
+    '; SONAR_PROJECT_KEY, SONAR_ORGANIZATION, SONAR_BRANCH) and - for the'#13#10 +
+    '; project key, organisation and branch - a sonar-project.properties in the'#13#10 +
+    '; scanned repository all win over it. `--sonar-test` prints which source'#13#10 +
+    '; supplied each value.'#13#10 +
+    ';'#13#10 +
+    '; THE TOKEN IS NOT IN THIS SECTION. It lives encrypted in [SonarTokens]'#13#10 +
+    '; and is written by the options page or `--sonar-token`; on Windows it is'#13#10 +
+    '; protected per user and machine, so a copied analyser.ini is useless'#13#10 +
+    '; elsewhere. Write it by hand and it will not decrypt. Prefer the'#13#10 +
+    '; SONAR_TOKEN environment variable when you do not want it on disk at all.'#13#10 +
+    ''#13#10 +
+    '[Sonar]'#13#10 +
+    ''#13#10 +
+    '; HostUrl (string, default: empty)'#13#10 +
+    '; Base URL of the server. The connection check sends the token to exactly'#13#10 +
+    '; this host as a bearer header - point it somewhere wrong and the secret'#13#10 +
+    '; goes there. That is why a sonar.host.url found in the scanned'#13#10 +
+    '; repository is deliberately ignored.'#13#10 +
+    'HostUrl='#13#10 +
+    ';HostUrl=https://sonarcloud.io'#13#10 +
+    ';HostUrl=https://sonar.example.internal'#13#10 +
+    ''#13#10 +
+    '; ProjectKey (string, default: empty)'#13#10 +
+    '; The project on the server that the check looks up.'#13#10 +
+    'ProjectKey='#13#10 +
+    ';ProjectKey=my-org_my-project'#13#10 +
+    ''#13#10 +
+    '; Organization (string, default: empty)'#13#10 +
+    '; SonarCloud tenant key. Without it SonarCloud answers 400 and the check'#13#10 +
+    '; reports "project not found" although the project exists.'#13#10 +
+    'Organization='#13#10 +
+    ';Organization=my-org'#13#10 +
+    ''#13#10 +
+    '; Branch (string, default: empty)'#13#10 +
+    '; Branch name for the project lookup and for --sonar-init.'#13#10 +
+    'Branch='#13#10 +
+    ';Branch=main'#13#10 +
+    ''#13#10 +
+    '; Insecure (bool 0/1, default: 0)'#13#10 +
+    '; 1 skips TLS certificate validation for the connection check. For a'#13#10 +
+    '; server with a self-signed certificate - it weakens exactly the'#13#10 +
+    '; transport that carries the token, so leave it at 0 unless you know why.'#13#10 +
+    'Insecure=0'#13#10 +
+    ';Insecure=1'#13#10 +
+    ''#13#10 +
+    '; TokenRef (string, default: empty)'#13#10 +
+    '; Name of the entry in [SonarTokens] that holds the encrypted token.'#13#10 +
+    '; Lets one INI carry several tokens.'#13#10 +
+    'TokenRef='#13#10 +
+    ';TokenRef=sonarcloud'#13#10;
 
 constructor TRepoSettings.Create;
 begin
@@ -1840,8 +2001,19 @@ begin
     // Warum der UI-Thread hier gefahrlos warten darf: ein Worker, der das
     // Lock haelt, blockiert NIE auf dem UI-Thread. Fortschritt geht ueber
     // TThread.Queue (asynchron), und Synchronize(DeliverResults) laeuft
-    // erst NACH der Lock-Freigabe (uIDEAnalyseRunner). Die Wartezeit ist
-    // damit hoechstens die eines laufenden Watch-Scans (eine Datei).
+    // erst NACH der Lock-Freigabe (uIDEAnalyseRunner). Es gibt also keinen
+    // Zyklus, in dem beide aufeinander warten.
+    //
+    // WIE LANGE es dauern kann, ist damit aber nicht gesagt - der
+    // Kommentar behauptete bis 2026-08-19 "hoechstens ein Watch-Scan (eine
+    // Datei)". Das untertreibt: das Lock deckt auch den Aufbau des
+    // Vorab-Index, und mehrere Watch-Worker koennen hintereinander
+    // anstehen. Im ungluecklichen Fall haelt das den UI-Thread Sekunden.
+    // Blockierungsfrei waere ein TryAcquire mit Rueckfall auf "diesmal
+    // nicht persistieren" - Discovery-Treffer sind Beiwerk, kein
+    // Nutzerauftrag. Bewusst offen gelassen, weil es das Verhalten des
+    // Speicherns aendert und nicht in einen Kommentar-Nachtrag gehoert.
+    //
     // TCriticalSection ist reentrant - ein Aufrufer, der das Lock schon
     // haelt, laeuft durch.
     TAnalysisSession.AcquireEngineLock;

@@ -119,9 +119,31 @@ section.
 
 ## `[Sonar]`
 
-Documented in [sonar-config.md](sonar-config.md) - listed here only so this
-page stays complete: `HostUrl`, `ProjectKey`, `Organization`, `Branch`,
-`TokenRef`, `Insecure`.
+Connection settings for the check (`--sonar-test`, "Test Connection" in the
+IDE) and for `--sonar-init`. **None of these influence the analysis or any
+detector.** Full walkthrough in [sonar-config.md](sonar-config.md).
+
+**This section has the lowest priority of the four sources.** A CLI flag, an
+environment variable (`SONAR_HOST_URL`, `SONAR_TOKEN`, `SONAR_PROJECT_KEY`,
+`SONAR_ORGANIZATION`, `SONAR_BRANCH`) and - for the project key,
+organisation and branch - a `sonar-project.properties` in the scanned
+repository all win over it. `--sonar-test` prints which source supplied
+each value.
+
+**The token is not here.** It sits encrypted in `[SonarTokens]`, written by
+the options page or `--sonar-token`. On Windows it is protected per user and
+machine, so a copied `analyser.ini` is useless elsewhere - and a
+hand-written token will not decrypt. Use `SONAR_TOKEN` when it should not
+touch the disk at all.
+
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `HostUrl` | String | _(empty)_ | Base URL of the server. The check sends the token here as a bearer header, so a wrong host receives the secret - which is why a `sonar.host.url` found in the scanned repository is deliberately ignored. |
+| `ProjectKey` | String | _(empty)_ | The project the check looks up. |
+| `Organization` | String | _(empty)_ | SonarCloud tenant key. Without it SonarCloud answers 400 and the check reports "project not found" although the project exists. |
+| `Branch` | String | _(empty)_ | Branch name for the lookup and for `--sonar-init`. |
+| `Insecure` | Bool | `0` | `1` skips TLS certificate validation for the check. It weakens exactly the transport that carries the token. |
+| `TokenRef` | String | _(empty)_ | Name of the entry in `[SonarTokens]` holding the encrypted token - lets one INI carry several. |
 
 ## Written automatically - do not edit
 

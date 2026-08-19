@@ -46,24 +46,46 @@ type
   // beides.
   TBaselineScope = record
   strict private
+    // Rohe Stack-Deklaration ('var S: TBaselineScope;') laesst FPathMode
+    // UNINITIALISIERT - Delphi nullt Records nur, wenn sie verwaltete
+    // Felder haben und der Compiler sie anfasst. Deshalb setzt jede der
+    // vier Fabriken BEIDE Felder, und Initialize legt den sicheren
+    // Ausgangszustand fest: Dateiname-Modus, also das Bestandsverhalten.
+    // Ein halb gesetzter Zuschnitt ist genau der Fehler, gegen den es
+    // diesen Typ gibt.
     FPathMode : Boolean;
     FRoot     : string;
   public
+    // noinspection AvoidOut
+    // 'out' ist hier nicht gewaehlt, sondern vorgeschrieben: die Signatur
+    // von class operator Initialize gibt der Compiler vor. Der Detektor
+    // meint aufrufer-sichtbare out-Parameter, die einen Rueckgabewert
+    // verstecken - hier ruft niemand auf.
+    class operator Initialize(out Dest: TBaselineScope);
     // Bestandsverhalten: nur der Dateiname, checkout-tolerant.
     class function ByFileName: TBaselineScope; static;
     // Relativpfad ab ARoot. Leeres ARoot ist zulaessig und verhaelt sich
     // wie ByFileName - Effective meldet dann False.
     class function ByPath(const ARoot: string): TBaselineScope; static;
     // Pfad-Modus mit der WURZEL-REGEL: Verzeichnis der Projekt-/
-    // Gruppendatei, sonst die Scan-Wurzel. Genau diese Regel stand bis
-    // 2026-08-18 viermal kopiert in CLI, EXE und Plugin.
+    // Gruppendatei, sonst die Scan-Wurzel.
     //
     // Kein Boolean-Parameter fuer "Pfad-Modus ja/nein": das waere eine
     // verdeckte Strategie-Wahl am Aufrufer (SCA146). Wer den Schalter aus
     // der INI liest, schreibt die zwei Zeilen selbst - die Regel, um die
     // es ging, ist trotzdem nur hier.
+    //
+    // STAND: noch ohne Produktionsaufrufer. CLI, EXE und Plugin setzen die
+    // beiden Prozess-Globals weiterhin direkt; sie holen sich seit
+    // 2026-08-19 aber wenigstens die WURZEL aus RootForProject, damit die
+    // Regel waehrend des Uebergangs nicht wieder auseinanderlaeuft.
     class function ForProject(const AProjectOrGroupFile,
       AScanRoot: string): TBaselineScope; static;
+    // Nur die Wurzel derselben Regel, als String - fuer die Aufrufer, die
+    // (noch) uSCAConsts.BaselineFingerprintRoot direkt beschreiben.
+    // Bewusst kein zweiter Regel-Ort: ForProject ruft dieselbe Funktion.
+    class function RootForProject(const AProjectOrGroupFile,
+      AScanRoot: string): string; static;
     // UEBERGANG: liest die beiden Globals. Nur solange es Aufrufer ohne
     // Zuschnitt-Parameter gibt - faellt mit dem letzten von ihnen weg.
     class function FromGlobals: TBaselineScope; static;
@@ -224,19 +246,35 @@ begin
   Result.FRoot     := ARoot;
 end;
 
-class function TBaselineScope.ForProject(const AProjectOrGroupFile,
-  AScanRoot: string): TBaselineScope;
-// Wurzel-Regel, woertlich wie in den bisherigen vier Kopien:
-// Verzeichnis der Projekt-/Gruppendatei, sonst die Scan-Wurzel.
+// noinspection AvoidOut
+// Signatur vom Compiler vorgegeben, s. Deklaration.
+class operator TBaselineScope.Initialize(out Dest: TBaselineScope);
+// Sicherer Ausgangszustand fuer rohe Deklarationen, s. Feld-Kommentar.
+begin
+  Dest.FPathMode := False;
+  Dest.FRoot     := '';
+end;
+
+class function TBaselineScope.RootForProject(const AProjectOrGroupFile,
+  AScanRoot: string): string;
+// DIE Wurzel-Regel: Verzeichnis der Projekt-/Gruppendatei, sonst die
+// Scan-Wurzel. Stand bis 2026-08-19 viermal kopiert in CLI (zweimal), EXE
+// und Plugin - alle vier rufen jetzt hierher.
 begin
   if AProjectOrGroupFile <> '' then
   begin
-    Result := ByPath(ExtractFilePath(AProjectOrGroupFile));
+    Result := ExtractFilePath(AProjectOrGroupFile);
   end
   else
   begin
-    Result := ByPath(AScanRoot);
+    Result := AScanRoot;
   end;
+end;
+
+class function TBaselineScope.ForProject(const AProjectOrGroupFile,
+  AScanRoot: string): TBaselineScope;
+begin
+  Result := ByPath(RootForProject(AProjectOrGroupFile, AScanRoot));
 end;
 
 class function TBaselineScope.FromGlobals: TBaselineScope;

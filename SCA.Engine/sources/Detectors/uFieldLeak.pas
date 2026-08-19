@@ -26,9 +26,16 @@ unit uFieldLeak;
 // Begrenzungen:
 //   - Nur direkt im Konstruktor erzeugte Felder werden geprueft
 //   - "Freigeben" akzeptiert: FField.Free, FField.Destroy, FreeAndNil(FField)
-//   - Wird das Feld an einen ObjectList-Owner uebergeben, koennen wir das
-//     nicht erkennen (-> potenziell False-Positive). Per // noinspection
-//     unterdrueckbar.
+//   - Wird das Feld an einen Call UEBERGEBEN, gilt das seit der
+//     Recall-Messung 2026-07-15 als moeglicher Ownership-Transfer und
+//     unterdrueckt den Fund (IsHandedToOwner). Der Kopf fuehrte das
+//     jahrelang weiter als "koennen wir nicht erkennen" - das stimmt seit
+//     dem Gate nicht mehr, und die Kommentare an IsHandedToOwner zitieren
+//     den Satz noch als aktuelle Begrenzung.
+//     Der Handel ist jetzt umgekehrt: statt FPs auf uebergebenen Feldern
+//     nehmen wir FNs in Kauf, wenn ein wirklich leckendes Feld zufaellig
+//     irgendwo als Argument auftaucht (precision-first, wie im ganzen
+//     Detektor). Per // noinspection laesst sich der Rest unterdruecken.
 //
 // Ownership-Transfer (kein Befund):
 //   FField := X.Create(Self|AOwner|Owner)
@@ -78,9 +85,8 @@ type
     // wird ('AddAttribute(FField)', 'FList.Add(FField)', 'Register(FField)').
     // Der Empfaenger kann die Ownership uebernehmen und das Feld in SEINEM
     // Destruktor freigeben - ein fehlendes Free im eigenen Destroy ist dann
-    // kein Leck. Genau die im Unit-Kopf dokumentierte FP-Quelle
-    // ("Wird das Feld an einen ObjectList-Owner uebergeben, koennen wir das
-    // nicht erkennen").
+    // kein Leck. Dieses Gate ist der Grund, warum der Unit-Kopf die
+    // Uebergabe NICHT mehr als unerkennbar fuehrt.
     class function IsHandedToOwner(MethodNode: TAstNode;
       const FieldNameLow: string): Boolean; static;
   end;
@@ -217,9 +223,9 @@ class function TFieldLeakDetector.IsHandedToOwner(
   MethodNode: TAstNode; const FieldNameLow: string): Boolean;
 // Ownership-Transfer im Konstruktor. Wird das erzeugte Feld an einen Call
 // UEBERGEBEN, kann der Empfaenger die Ownership nehmen und es selbst freigeben;
-// dann ist ein fehlendes Free im eigenen Destruktor KEIN Leak. Der Unit-Kopf
-// fuehrt genau das als bekannte FP-Quelle ("an einen ObjectList-Owner
-// uebergeben ... koennen wir nicht erkennen") - bislang unvermeidbar.
+// dann ist ein fehlendes Free im eigenen Destruktor KEIN Leak. Bis zu diesem
+// Gate galt die Uebergabe als unerkennbar und war die groesste FP-Quelle des
+// Detektors; der Unit-Kopf beschreibt den heutigen Stand.
 //
 // Real-World-Beleg (Recall-Messung 2026-07-15, tools/recall_mutate.py): mit
 // aktiver Custom-Class-Discovery ([Detectors]/AutoDiscoverClasses=1) explodierte
