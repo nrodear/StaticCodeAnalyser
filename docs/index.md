@@ -24,6 +24,7 @@ carries the `_de` suffix (`README_de.md`, `EXPORTS_de.md`, …).
 |---|---|
 | [rules.md](rules.md) | The rule catalogue: every `SCA###` with severity, default profile membership and a one-line description. |
 | [rules/index.md](rules/index.md) | One page per rule — what it flags, why it matters, how to fix it, and how to suppress it when the finding is intentional. |
+| [rules/de/index.md](rules/de/index.md) · [rules/fr/index.md](rules/fr/index.md) | The same per-rule pages with German and French rule names and one-line descriptions. Full descriptions and examples stay English — the pages say so where that begins. |
 | [../DETECTORS.md](../DETECTORS.md) | Implementation status per detector and which unit is responsible. Useful when contributing a detector. |
 
 ## Getting findings out of the tool

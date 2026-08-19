@@ -90,8 +90,105 @@ TYPE_BADGE = {
 }
 
 
-def render_rule(rule: dict[str, Any]) -> str:
-    """Render a single rule as a Markdown page."""
+# Ueberschriften und feste Saetze je Sprache. Die englischen Werte MUESSEN
+# zeichengleich mit der bisherigen Ausgabe bleiben: die englischen Seiten
+# sind das Ziel des SARIF-helpUri jedes bereits ausgelieferten Berichts.
+LABELS = {
+    "en": {
+        "meta": "Metadata", "field": "Field", "value": "Value",
+        "ruleid": "Rule ID", "kind": "Kind",
+        "severity": "Default severity", "type": "Type",
+        "unit": "Detector unit", "config": "Config key",
+        "tags": "Tags", "desc": "Description", "examples": "Examples",
+        "bad": "Bad (triggers the rule)", "good": "Good (idiomatic fix)",
+        "notrep": "Not reported (by design)",
+        "notrep_intro": (
+            "The detector deliberately stays silent on the constructs "
+            "below. Each is a false-positive class that was measured on "
+            "the real-world corpus, not a guess."),
+        "index_title": "StaticCodeAnalyser — Rule Catalog",
+        "index_lead": "All {n} detector rules. Click an ID for full details.",
+        "col_id": "ID", "col_name": "Name", "col_sev": "Severity",
+        "col_type": "Type", "col_det": "Detector",
+        "untranslated": "",
+    },
+    "de": {
+        "meta": "Metadaten", "field": "Feld", "value": "Wert",
+        "ruleid": "Regel-ID", "kind": "Kind",
+        "severity": "Standard-Schweregrad", "type": "Typ",
+        "unit": "Detektor-Unit", "config": "Konfigurationsschlüssel",
+        "tags": "Schlagworte", "desc": "Beschreibung",
+        "examples": "Beispiele",
+        "bad": "Schlecht (löst die Regel aus)",
+        "good": "Gut (idiomatische Korrektur)",
+        "notrep": "Absichtlich nicht gemeldet",
+        "notrep_intro": (
+            "Bei den folgenden Konstrukten schweigt der Detektor "
+            "absichtlich. Jedes davon ist eine False-Positive-Klasse, die "
+            "am Realwelt-Korpus gemessen wurde — keine Vermutung."),
+        "index_title": "StaticCodeAnalyser — Regelkatalog",
+        "index_lead": ("Alle {n} Detektor-Regeln. Eine ID anklicken führt "
+                       "zur vollständigen Beschreibung."),
+        "col_id": "ID", "col_name": "Name", "col_sev": "Schweregrad",
+        "col_type": "Typ", "col_det": "Detektor",
+        "untranslated": ("> Dieser Abschnitt liegt nur auf Englisch vor. "
+                         "Übersetzt sind Name und Kurzbeschreibung; die "
+                         "Volltexte folgen der englischen Fassung."),
+    },
+    "fr": {
+        "meta": "Métadonnées", "field": "Champ", "value": "Valeur",
+        "ruleid": "Identifiant de règle", "kind": "Kind",
+        "severity": "Sévérité par défaut", "type": "Type",
+        "unit": "Unité du détecteur", "config": "Clé de configuration",
+        "tags": "Étiquettes", "desc": "Description",
+        "examples": "Exemples",
+        "bad": "Mauvais (déclenche la règle)",
+        "good": "Bon (correction idiomatique)",
+        "notrep": "Volontairement non signalé",
+        "notrep_intro": (
+            "Le détecteur garde volontairement le silence sur les "
+            "constructions ci-dessous. Chacune est une classe de faux "
+            "positifs mesurée sur le corpus réel — ce n'est pas une "
+            "supposition."),
+        "index_title": "StaticCodeAnalyser — Catalogue de règles",
+        "index_lead": ("Les {n} règles de détection. Cliquez sur un "
+                       "identifiant pour le détail complet."),
+        "col_id": "ID", "col_name": "Nom", "col_sev": "Sévérité",
+        "col_type": "Type", "col_det": "Détecteur",
+        "untranslated": ("> Cette section n'existe qu'en anglais. Le nom et "
+                         "la description courte sont traduits ; les textes "
+                         "complets suivent la version anglaise."),
+    },
+}
+
+
+def load_overlay(lang: str, rules_json: Path) -> dict[str, dict[str, str]]:
+    """Rule ID -> uebersetzte Felder, aus rules/sca-rules.<lang>.json.
+
+    Fehlt die Datei oder eine Regel darin, bleibt Englisch stehen. Das ist
+    der dokumentierte Rueckfall des Overlay-Schemas, kein Fehler - sonst
+    koennte eine Uebersetzung nicht regelweise entstehen.
+    """
+    if lang == "en":
+        return {}
+    p = rules_json.with_suffix("")
+    p = p.parent / (p.name + f".{lang}.json")
+    if not p.exists():
+        return {}
+    with p.open(encoding="utf-8-sig") as f:
+        return json.load(f).get("rules", {})
+
+
+def render_rule(rule: dict[str, Any], lang: str = "en",
+                depth: str = "../..") -> str:
+    """Render a single rule as a Markdown page.
+
+    lang steuert nur Ueberschriften und feste Saetze; die Regeltexte
+    selbst kommen bereits uebersetzt herein (der Aufrufer legt das Overlay
+    darueber). depth ist der relative Weg zur Repo-Wurzel - eine
+    Sprachfassung liegt eine Ebene tiefer als die englische.
+    """
+    L = LABELS.get(lang, LABELS["en"])
     parts: list[str] = []
 
     parts.append(f"# {rule['id']} — {rule['name']}")
@@ -112,19 +209,19 @@ def render_rule(rule: dict[str, Any]) -> str:
     parts.append("")
 
     # Metadata table
-    parts.append("## Metadata")
+    parts.append(f"## {L['meta']}")
     parts.append("")
-    parts.append("| Field | Value |")
+    parts.append(f"| {L['field']} | {L['value']} |")
     parts.append("|---|---|")
-    parts.append(f"| **Rule ID** | `{rule['id']}` |")
-    parts.append(f"| **Kind** | `{rule['kind']}` |")
-    parts.append(f"| **Default severity** | {rule['defaultSeverity']} |")
-    parts.append(f"| **Type** | {rule['type']} |")
-    parts.append(f"| **Detector unit** | `{rule['detectorUnit']}` |")
+    parts.append(f"| **{L['ruleid']}** | `{rule['id']}` |")
+    parts.append(f"| **{L['kind']}** | `{rule['kind']}` |")
+    parts.append(f"| **{L['severity']}** | {rule['defaultSeverity']} |")
+    parts.append(f"| **{L['type']}** | {rule['type']} |")
+    parts.append(f"| **{L['unit']}** | `{rule['detectorUnit']}` |")
     if rule.get("configKey"):
-        parts.append(f"| **Config key** | `{rule['configKey']}` |")
+        parts.append(f"| **{L['config']}** | `{rule['configKey']}` |")
     if rule.get("tags"):
-        parts.append(f"| **Tags** | {', '.join(f'`{t}`' for t in rule['tags'])} |")
+        parts.append(f"| **{L['tags']}** | {', '.join(f'`{t}`' for t in rule['tags'])} |")
     if rule.get("cwe"):
         cwes = ", ".join(
             f"[{c}](https://cwe.mitre.org/data/definitions/{c.split('-')[-1]}.html)"
@@ -137,22 +234,28 @@ def render_rule(rule: dict[str, Any]) -> str:
 
     # Full description
     if rule.get("fullDescription"):
-        parts.append("## Description")
+        parts.append(f"## {L['desc']}")
         parts.append("")
+        # Volltexte sind bewusst nicht uebersetzt (Umfang, Alterung).
+        # Das steht sichtbar da, statt den Leser raten zu lassen,
+        # warum mitten in seiner Sprache Englisch beginnt.
+        if L["untranslated"]:
+            parts.append(L["untranslated"])
+            parts.append("")
         parts.append(rule["fullDescription"])
         parts.append("")
 
     # Examples
     if rule.get("examples"):
-        parts.append("## Examples")
+        parts.append(f"## {L['examples']}")
         parts.append("")
-        parts.append("### Bad (triggers the rule)")
+        parts.append(f"### {L['bad']}")
         parts.append("")
         parts.append("```pascal")
         parts.append(rule["examples"]["bad"])
         parts.append("```")
         parts.append("")
-        parts.append("### Good (idiomatic fix)")
+        parts.append(f"### {L['good']}")
         parts.append("")
         parts.append("```pascal")
         parts.append(rule["examples"]["good"])
@@ -164,13 +267,9 @@ def render_rule(rule: dict[str, Any]) -> str:
     # "the rule has a gate for exactly this case", which is the single most
     # common support question after an FP campaign.
     if rule.get("exceptions"):
-        parts.append("## Not reported (by design)")
+        parts.append(f"## {L['notrep']}")
         parts.append("")
-        parts.append(
-            "The detector deliberately stays silent on the constructs below. "
-            "Each is a false-positive class that was measured on the "
-            "real-world corpus, not a guess."
-        )
+        parts.append(L["notrep_intro"])
         parts.append("")
         for exc in rule["exceptions"]:
             parts.append(f"### {exc['case']}")
@@ -187,24 +286,27 @@ def render_rule(rule: dict[str, Any]) -> str:
     parts.append("---")
     parts.append("")
     parts.append(
-        "_Generated from "
-        "[`rules/sca-rules.json`](../../rules/sca-rules.json) by "
-        "[`tools/gen-rules-docs.py`](../../tools/gen-rules-docs.py). "
-        "Do not edit by hand — re-run the generator instead._"
+        f"_Generated from "
+        f"[`rules/sca-rules.json`]({depth}/rules/sca-rules.json) by "
+        f"[`tools/gen-rules-docs.py`]({depth}/tools/gen-rules-docs.py). "
+        f"Do not edit by hand — re-run the generator instead._"
     )
     parts.append("")
 
     return "\n".join(parts)
 
 
-def render_index(rules: list[dict[str, Any]]) -> str:
+def render_index(rules: list[dict[str, Any]], lang: str = "en",
+                 depth: str = "../..") -> str:
     """Render the overview index page."""
+    L = LABELS.get(lang, LABELS["en"])
     parts: list[str] = []
-    parts.append("# StaticCodeAnalyser — Rule Catalog")
+    parts.append(f"# {L['index_title']}")
     parts.append("")
-    parts.append(f"All {len(rules)} detector rules. Click an ID for full details.")
+    parts.append(L["index_lead"].format(n=len(rules)))
     parts.append("")
-    parts.append("| ID | Name | Severity | Type | Detector |")
+    parts.append(f"| {L['col_id']} | {L['col_name']} | {L['col_sev']} | "
+                 f"{L['col_type']} | {L['col_det']} |")
     parts.append("|---|---|---|---|---|")
     for r in rules:
         parts.append(
@@ -216,9 +318,9 @@ def render_index(rules: list[dict[str, Any]]) -> str:
     parts.append("---")
     parts.append("")
     parts.append(
-        "_Generated from "
-        "[`rules/sca-rules.json`](../../rules/sca-rules.json) by "
-        "[`tools/gen-rules-docs.py`](../../tools/gen-rules-docs.py)._"
+        f"_Generated from "
+        f"[`rules/sca-rules.json`]({depth}/rules/sca-rules.json) by "
+        f"[`tools/gen-rules-docs.py`]({depth}/tools/gen-rules-docs.py)._"
     )
     parts.append("")
     return "\n".join(parts)
@@ -247,6 +349,10 @@ def main() -> int:
         "--no-schema-check", action="store_true",
         help="Skip validating the catalog against its schema."
     )
+    ap.add_argument(
+        "--no-langs", action="store_true",
+        help="English only - ignore the rules/sca-rules.<lang>.json overlays."
+    )
     args = ap.parse_args()
 
     if not args.rules.exists():
@@ -265,32 +371,54 @@ def main() -> int:
         if validate_against_schema(catalog, args.schema) > 0:
             return 2
 
-    args.out.mkdir(parents=True, exist_ok=True)
+    # Sprachen: Englisch immer, dazu jedes vorhandene Overlay. Die
+    # ENGLISCHEN Ausgabepfade bleiben unveraendert (docs/rules/SCA###.md) -
+    # daran haengt der SARIF-helpUri jedes bereits ausgelieferten Berichts.
+    # Uebersetzungen liegen eine Ebene tiefer unter docs/rules/<lang>/.
+    langs = ["en"]
+    if not args.no_langs:
+        for cand in sorted(LABELS):
+            if cand != "en" and load_overlay(cand, args.rules):
+                langs.append(cand)
 
     diff_count = 0
+    erzeugt = []
 
-    # Per-rule pages
-    for r in rules:
-        out_file = args.out / f"{r['id']}.md"
-        new_content = render_rule(r)
+    for lang in langs:
+        ziel = args.out if lang == "en" else args.out / lang
+        depth = "../.." if lang == "en" else "../../.."
+        overlay = load_overlay(lang, args.rules)
+        ziel.mkdir(parents=True, exist_ok=True)
+
+        # Overlay ueber die kanonische Regel legen. Was das Overlay nicht
+        # fuehrt, bleibt englisch - der dokumentierte Rueckfall.
+        lokal = [{**r, **overlay.get(r["id"], {})} for r in rules]
+
+        for r in lokal:
+            out_file = ziel / f"{r['id']}.md"
+            new_content = render_rule(r, lang, depth)
+            if args.check:
+                existing = (out_file.read_text(encoding="utf-8")
+                            if out_file.exists() else "")
+                if existing != new_content:
+                    print(f"DIFF: {out_file.relative_to(REPO_ROOT)}",
+                          file=sys.stderr)
+                    diff_count += 1
+            else:
+                out_file.write_text(new_content, encoding="utf-8")
+
+        index_file = ziel / "index.md"
+        new_index = render_index(lokal, lang, depth)
         if args.check:
-            existing = out_file.read_text(encoding="utf-8") if out_file.exists() else ""
-            if existing != new_content:
-                print(f"DIFF: {out_file.relative_to(REPO_ROOT)}", file=sys.stderr)
+            existing = (index_file.read_text(encoding="utf-8")
+                        if index_file.exists() else "")
+            if existing != new_index:
+                print(f"DIFF: {index_file.relative_to(REPO_ROOT)}",
+                      file=sys.stderr)
                 diff_count += 1
         else:
-            out_file.write_text(new_content, encoding="utf-8")
-
-    # Index page
-    index_file = args.out / "index.md"
-    new_index = render_index(rules)
-    if args.check:
-        existing = index_file.read_text(encoding="utf-8") if index_file.exists() else ""
-        if existing != new_index:
-            print(f"DIFF: {index_file.relative_to(REPO_ROOT)}", file=sys.stderr)
-            diff_count += 1
-    else:
-        index_file.write_text(new_index, encoding="utf-8")
+            index_file.write_text(new_index, encoding="utf-8")
+        erzeugt.append(lang)
 
     if args.check:
         if diff_count > 0:
@@ -300,10 +428,12 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        print(f"OK: all {len(rules)} rule docs + index in sync.")
+        print(f"OK: all {len(rules)} rule docs + index in sync "
+              f"({', '.join(erzeugt)}).")
         return 0
 
-    print(f"Generated {len(rules)} rule pages + index.md in {args.out}")
+    print(f"Generated {len(rules)} rule pages + index.md per language "
+          f"({', '.join(erzeugt)}) in {args.out}")
     return 0
 
 
