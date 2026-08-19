@@ -394,6 +394,10 @@ type
     // > .sca-Standardort. '' wenn nichts existiert.
     function  ResolveUiBaselinePath(const AConfiguredFile: string;
       AProbed: TStrings): string;
+    // Zuschnitt des Baseline-Fingerprints des aktuellen Scan-Ziels - EINE
+    // Quelle fuer Schreiben (Write) und Anzeige-Filter (LoadFromFile),
+    // damit deren Fingerprints nicht auseinanderlaufen koennen (Befund A).
+    function  CurrentBaselineScope: TBaselineScope;
     // Laedt/leert FBaselineSet: [Baseline] File= oder .sca-Standardort.
     // Vor jedem ApplyFilter-Rebuild nach einem Scan gerufen.
     procedure RefreshBaselineSet;
@@ -3537,6 +3541,24 @@ begin
     ScanRootDir, AProbed);
 end;
 
+function TAnalyserFrame.CurrentBaselineScope: TBaselineScope;
+// Modus aus den Frame-Settings ([Baseline] PathInFingerprint), Wurzel
+// nach der Regel in ForProject. Vorher hingen die zwei Write-Stellen an
+// den Prozess-Globals, deren Wurzel nur RefreshBaselineSet setzte - mit
+// "nur neue Funde" aus blieb sie leer, der Snapshot fiel still auf
+// Dateinamen-Tokens zurueck und der naechste Filter matchte nichts
+// (Review 2026-08-18, Befund A).
+begin
+  if Assigned(FRepoSettings) and FRepoSettings.BaselinePathInFingerprint then
+  begin
+    Result := TBaselineScope.ForProject(CurrentProjOrGroupFile, ScanRootDir);
+  end
+  else
+  begin
+    Result := TBaselineScope.ByFileName;
+  end;
+end;
+
 procedure TAnalyserFrame.RefreshBaselineSet;
 // Laedt (oder leert) das Baseline-Fingerprint-Set. Quelle: [Baseline]
 // File= oder der .sca-Standardort (Inkrement 4). FAllFindings/Export
@@ -3556,15 +3578,17 @@ begin
     FBaselineSet.Clear;
     Exit;
   end;
-  // PathInFingerprint-Konsistenz: Modus + Root wie beim Schreiben der
-  // Datei setzen, sonst matchen die Fingerprints des Anzeige-Filters nicht.
+  // GRENZE (TBaselineScope Schritt-6-Teilumfang): die Globals werden
+  // weiter gespiegelt, weil der HTML-Export seinen Fingerprint noch ueber
+  // die parameterlose TBaseline.Fingerprint-Fassung (FromGlobals) zieht.
+  // Der Anzeige-Filter selbst haengt seit Schritten 2-6 am Zuschnitt, den
+  // LoadFromFile speichert - nicht mehr am Prozess-Zustand zum
+  // Abfragezeitpunkt.
   uSCAConsts.BaselinePathFingerprint := FRepoSettings.BaselinePathInFingerprint;
-  // Wurzel-Regel aus TBaselineScope - hier stand sie bis 2026-08-19 als
-  // eine von vier wortgleichen Kopien.
   uSCAConsts.BaselineFingerprintRoot :=
     TBaselineScope.RootForProject(CurrentProjOrGroupFile, ScanRootDir);
   try
-    FBaselineSet.LoadFromFile(Path);
+    FBaselineSet.LoadFromFile(Path, CurrentBaselineScope);
   except
     // Defensiv: ein Baseline-Lesefehler darf die Anzeige nicht kippen ->
     // leeres Set = Filter wirkungslos (fail-open, alle Funde sichtbar).
@@ -3604,7 +3628,8 @@ begin
     ForceDirectories(ExtractFilePath(Target));
     // GESCHRIEBENE Anzahl melden, nicht FAllFindings.Count: Lesefehler
     // sind nicht baseline-faehig und werden von Write uebersprungen.
-    var Written := TBaseline.Write(FAllFindings, Target);
+    var Written := TBaseline.Write(FAllFindings, Target,
+      CurrentBaselineScope);
     StatusMode(Format(_('Baseline written: %s (%d findings)'),
       [ExtractFileName(Target), Written]));
     Result := True;
@@ -3724,7 +3749,7 @@ begin
   end;
   if Fn = '' then Exit;
   try
-    var Written := TBaseline.Write(FAllFindings, Fn);
+    var Written := TBaseline.Write(FAllFindings, Fn, CurrentBaselineScope);
     StatusMode(Format(_('Baseline written: %s (%d findings)'),
       [ExtractFileName(Fn), Written]));
   except
@@ -4648,11 +4673,25 @@ begin
         BlPath := TBaseline.ResolveBaselinePath(ActiveIdeProjOrGroupFile,
           '', nil);
       if BlPath <> '' then
+      begin
+        // Zuschnitt explizit (Schritte 2-6): Modus aus den frisch
+        // geladenen Settings, Wurzel nach der ForProject-Regel. Der
+        // Silent-Pfad kennt keine Scan-Wurzel - ohne aktives Projekt ist
+        // der Zuschnitt nicht effektiv und der Token faellt sicher auf
+        // den Dateinamen zurueck (unveraenderte Funde matchen weiter
+        // ueber den contextHash). Vorher hing die Wurzel am Zufall, ob
+        // das Dock-Fenster RefreshBaselineSet schon gerufen hatte.
+        var BlScope := TBaselineScope.ByFileName;
+        if Settings.BaselinePathInFingerprint then
+        begin
+          BlScope := TBaselineScope.ForProject(ActiveIdeProjOrGroupFile, '');
+        end;
         try
-          TBaseline.Apply(Findings, BlPath);
+          TBaseline.Apply(Findings, BlPath, BlScope);
         except
           // Baseline-Fehler darf den Silent-Scan nicht kippen (fail-open).
         end;
+      end;
     end;
 
     Entries := BuildMarkEntries(Findings);

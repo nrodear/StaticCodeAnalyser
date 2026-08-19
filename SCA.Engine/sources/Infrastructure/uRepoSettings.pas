@@ -1868,8 +1868,14 @@ begin
   // [Rules] MinConfidence -> globaler Konfidenz-Schwellwert (Post-Filter).
   uSCAConsts.FindingMinConfidence := uSCAConsts.ParseConfidence(FMinConfidence, fcMedium);
 
-  // [Baseline] PathInFingerprint -> globaler Fingerprint-Modus (die Root
-  // setzt der Consumer selbst, weil nur er den Scan-Zuschnitt kennt).
+  // [Baseline] PathInFingerprint -> globaler Fingerprint-Modus. GRENZE
+  // (TBaselineScope Schritte 2-6): die Baseline-Operationen selbst nehmen
+  // den Zuschnitt inzwischen als expliziten Parameter; diese Globale
+  // bleibt fuer die verbliebenen FromGlobals-Leser (parameterlose
+  // TBaseline.Fingerprint im HTML-Export, uEngineApi-Facade) und als
+  // Modus-Quelle der CLI (die kein Settings-Objekt an der Baseline-
+  // Stelle hat). Die Root setzt weiterhin der Consumer, weil nur er den
+  // Scan-Zuschnitt kennt.
   uSCAConsts.BaselinePathFingerprint := FBaselinePathFp;
 
   // [PathOverrides] -> uPathOverrides global. Wird im Analyzer-Pipeline

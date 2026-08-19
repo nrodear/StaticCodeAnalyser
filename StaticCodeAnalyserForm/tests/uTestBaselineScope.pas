@@ -37,16 +37,35 @@ unit uTestBaselineScope;
 // genau daran ist der Vertrag damals durchgerutscht: sie setzen die
 // Globals selbst, unmittelbar vor dem Aufruf, und lassen die
 // Consumer-Seite ("wer setzt die Wurzel, und wann") unbelegt.
+//
+// NACHTRAG SCHRITTE 2-6 (2026-08-19): Write, Apply und
+// TBaselineSet.LoadFromFile nehmen den Zuschnitt seither als expliziten
+// Parameter. Drei Vertraege sind damit NEU und werden unten festgehalten:
+//   5. Write/Apply rechnen mit dem UEBERGEBENEN Zuschnitt - die
+//      Prozess-Globals bleiben in diesen Tests unangetastet auf Default.
+//   6. Der pathFingerprint-Marker der Datei meldet die WIRKUNG
+//      (Effective), nicht den Wunsch (IsPathMode) - beim halb gesetzten
+//      Zuschnitt stand bisher eine Luege in der Datei.
+//   7. TBaselineSet speichert den Zuschnitt beim Laden; Contains haengt
+//      nicht mehr am Prozess-Zustand zum Abfragezeitpunkt.
 
 interface
 
 uses
-  DUnitX.TestFramework;
+  DUnitX.TestFramework,
+  uMethodd12;
 
 type
   [TestFixture]
   TTestBaselineScope = class
+  strict private
+    // Zieldatei des laufenden Tests - TearDown raeumt sie weg. Das haelt
+    // die Testruempfe frei von try-in-try-Aufraeumketten.
+    FTempFile : string;
+    function TempBaselineFile: string;
+    function NewFinding(const ARoot: string): TLeakFinding;
   public
+    [TearDown] procedure TearDown;
     [Test] procedure ByFileName_TokenIsFileNameOnly;
     [Test] procedure ByPath_TokenIsRelativePath;
     [Test] procedure ByPathEmptyRoot_NotEffective;
@@ -55,13 +74,18 @@ type
     // Review-Nachtrag 2026-08-19.
     [Test] procedure ByPathFileOutsideRoot_FallsBackToFileName;
     [Test] procedure RawDeclaration_BehavesLikeByFileName;
+    // Schritte 2-6: Vertraege der scope-expliziten Operationen.
+    [Test] procedure WriteApply_RoundTripWithExplicitScope;
+    [Test] procedure HalfSetScope_MarkerSaysNotEffective;
+    [Test] procedure BaselineSet_ContainsUsesLoadedScope;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.IOUtils,
-  uBaseline;
+  System.SysUtils, System.Classes, System.IOUtils,
+  System.Generics.Collections,
+  uSCAConsts, uBaseline;
 
 const
   // Pfade zur Laufzeit zusammensetzen: ein Literal wie 'C:\proj\Unit1.pas'
@@ -71,6 +95,11 @@ const
   DIR_SUB = 'sub';
   DIR_SCAN = 'scan';
   FILE_UNIT = 'Unit1.pas';
+  // Fixtures der Roundtrip-Tests (Schritte 2-6): Wurzel unterhalb von
+  // TempPath, Methoden-/Detail-Konstanten gegen DuplicateString.
+  DIR_SCOPE_ROOT = 'sca_scope_root';
+  METHOD_NAME    = 'M';
+  DETAIL_TXT     = 'detail';
   // Erwarteter Token im Dateiname-Modus: FileToken normalisiert auf
   // Kleinschreibung. Als Konstante, weil ihn inzwischen vier Tests
   // erwarten und DuplicateString sonst im Selbstscan anschlaegt.
@@ -183,6 +212,147 @@ begin
   Assert.AreEqual(TOKEN_UNIT,
     Scope.FileToken(TPath.Combine(ProjDir, FILE_UNIT)),
     'Token ist der blosse Dateiname');
+end;
+
+procedure TTestBaselineScope.TearDown;
+// Zieldatei des Tests wegzuraeumen ist Rahmen-Arbeit: hier statt in
+// jedem Test ein eigenes finally (das waere in jedem Rumpf eine
+// try-in-try-Kette nur fuers Aufraeumen).
+begin
+  if (FTempFile <> '') and TFile.Exists(FTempFile) then
+  begin
+    TFile.Delete(FTempFile);
+  end;
+  FTempFile := '';
+end;
+
+function TTestBaselineScope.TempBaselineFile: string;
+// Eindeutiger Zielpfad pro Testlauf - gemerkt in FTempFile, damit
+// TearDown die Datei nach dem Test wegraeumt.
+begin
+  Result := TPath.Combine(TPath.GetTempPath,
+    'sca_scope_' + TGuid.NewGuid.ToString + '.baseline.json');
+  FTempFile := Result;
+end;
+
+function TTestBaselineScope.NewFinding(const ARoot: string): TLeakFinding;
+// Fund unterhalb von ARoot\sub. Die Quelldatei existiert BEWUSST nicht:
+// ohne lesbare Datei entsteht kein contextHash, und die Tests belegen die
+// Legacy-Fingerprint-Strecke - genau die haengt am Zuschnitt.
+begin
+  Result := TLeakFinding.New(
+    TPath.Combine(TPath.Combine(ARoot, DIR_SUB), FILE_UNIT),
+    METHOD_NAME, 10, DETAIL_TXT, fkEmptyBlock);
+end;
+
+procedure TTestBaselineScope.WriteApply_RoundTripWithExplicitScope;
+// NEUER VERTRAG (Schritte 2-6): Write und Apply rechnen mit dem
+// UEBERGEBENEN Zuschnitt. Die Prozess-Globals stehen waehrend des ganzen
+// Tests auf Default (Dateiname-Modus) - vorher waere dieser Pfad-Modus-
+// Roundtrip deshalb still im Dateinamen-Modus gelaufen.
+var
+  Fn      : string;
+  Root    : string;
+  List    : TObjectList<TLeakFinding>;
+  Dropped : Integer;
+begin
+  Root := TPath.Combine(TPath.GetTempPath, DIR_SCOPE_ROOT);
+  Fn   := TempBaselineFile;
+  List := TObjectList<TLeakFinding>.Create(True);
+  try
+    List.Add(NewFinding(Root));
+    Assert.AreEqual<Integer>(1,
+      TBaseline.Write(List, Fn, TBaselineScope.ByPath(Root)),
+      'ein Eintrag geschrieben');
+  finally
+    List.Free;
+  end;
+  Assert.Contains(TFile.ReadAllText(Fn), '"pathFingerprint": true',
+    'der Marker kommt aus dem Zuschnitt, nicht aus den Globals');
+  List := TObjectList<TLeakFinding>.Create(True);
+  try
+    List.Add(NewFinding(Root));
+    Dropped := TBaseline.Apply(List, Fn, TBaselineScope.ByPath(Root));
+    Assert.AreEqual<Integer>(1, Dropped,
+      'gleicher Zuschnitt beim Lesen - der Fund matcht');
+  finally
+    List.Free;
+  end;
+end;
+
+procedure TTestBaselineScope.HalfSetScope_MarkerSaysNotEffective;
+// NEUER VERTRAG (Schritte 2-6): der pathFingerprint-Marker meldet die
+// WIRKUNG (Effective), nicht den Wunsch (IsPathMode). Der halb gesetzte
+// Zuschnitt schreibt Dateinamen-Tokens - genau das muss die Datei auch
+// behaupten. Bisher stand der Wunsch im Marker: ein Dateiname-Leser
+// bekam die Mismatch-Warnung NICHT und die Tokens matchten trotzdem -
+// die stille Form von Befund A.
+var
+  Fn       : string;
+  List     : TObjectList<TLeakFinding>;
+  Warnings : TStringList;
+  Dropped  : Integer;
+begin
+  Fn := TempBaselineFile;
+  List := TObjectList<TLeakFinding>.Create(True);
+  try
+    List.Add(NewFinding(TPath.Combine(TPath.GetTempPath, DIR_SCOPE_ROOT)));
+    TBaseline.Write(List, Fn, TBaselineScope.ByPath(''));
+  finally
+    List.Free;
+  end;
+  Assert.Contains(TFile.ReadAllText(Fn), '"pathFingerprint": false',
+    'halb gesetzter Zuschnitt wirkt nicht - der Marker sagt das');
+  List := TObjectList<TLeakFinding>.Create(True);
+  Warnings := TStringList.Create;
+  try
+    List.Add(NewFinding(TPath.Combine(TPath.GetTempPath, DIR_SCOPE_ROOT)));
+    Dropped := TBaseline.Apply(List, Fn, TBaselineScope.ByFileName,
+      Warnings);
+    Assert.AreEqual(0, Warnings.Count,
+      'Dateiname-Tokens und Dateiname-Leser passen - keine Warnung');
+    Assert.AreEqual<Integer>(1, Dropped,
+      'und der Fund matcht ueber den Dateinamen-Token');
+  finally
+    Warnings.Free;
+    List.Free;
+  end;
+end;
+
+procedure TTestBaselineScope.BaselineSet_ContainsUsesLoadedScope;
+// NEUER VERTRAG (Schritte 2-6): LoadFromFile speichert den Zuschnitt,
+// Contains rechnet damit. Der im Pfad-Modus geschriebene und mit Pfad-
+// Zuschnitt geladene Fund muss unter Default-Globals matchen - vorher
+// hing Contains am Prozess-Zustand zum Abfragezeitpunkt, und ein
+// zwischenzeitlicher Lauf konnte den Anzeige-Filter still entwerten.
+var
+  Fn   : string;
+  Root : string;
+  List : TObjectList<TLeakFinding>;
+  BSet : TBaselineSet;
+  F    : TLeakFinding;
+begin
+  Root := TPath.Combine(TPath.GetTempPath, DIR_SCOPE_ROOT);
+  Fn   := TempBaselineFile;
+  List := TObjectList<TLeakFinding>.Create(True);
+  try
+    List.Add(NewFinding(Root));
+    TBaseline.Write(List, Fn, TBaselineScope.ByPath(Root));
+  finally
+    List.Free;
+  end;
+  F    := NewFinding(Root);
+  BSet := TBaselineSet.Create;
+  try
+    Assert.AreEqual<Integer>(1,
+      BSet.LoadFromFile(Fn, TBaselineScope.ByPath(Root)),
+      'ein Fingerprint geladen');
+    Assert.IsTrue(BSet.Contains(F),
+      'Contains rechnet mit dem Lade-Zuschnitt, nicht mit den Globals');
+  finally
+    BSet.Free;
+    F.Free;
+  end;
 end;
 
 initialization

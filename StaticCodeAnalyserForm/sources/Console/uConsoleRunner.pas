@@ -1502,6 +1502,31 @@ begin
       end;
     end;
 
+    // ---- Zuschnitt des Baseline-Fingerprints (TBaselineScope) ----
+    // EINMAL gebaut, fuer Snapshot UND Filter: Modus aus der INI
+    // ([Baseline] PathInFingerprint, via ApplyDetectorThresholds in der
+    // Globalen) bzw. aus dem CLI-Override, Wurzel nach der Regel in
+    // ForProject. Ein halb gesetzter Zuschnitt (Modus ja, Wurzel leer -
+    // Befund A) ist hier damit nicht mehr konstruierbar.
+    var BlScope := TBaselineScope.ByFileName;
+    if (EffWriteBaseline <> '') or (EffBaseline <> '') then
+    begin
+      if HasCliPathFp then
+      begin
+        uSCAConsts.BaselinePathFingerprint := CliPathFp;
+      end;
+      if uSCAConsts.BaselinePathFingerprint then
+      begin
+        BlScope := TBaselineScope.ForProject(BlProjOrGroup, Args.Path);
+      end;
+      // GRENZE (Schritt-6-Teilumfang): die Globale Wurzel wird weiter
+      // gesetzt, weil der HTML-Export unten seinen Fingerprint noch ueber
+      // die parameterlose TBaseline.Fingerprint-Fassung (FromGlobals)
+      // zieht. Faellt, sobald TExporterHtml.Run einen Zuschnitt traegt.
+      uSCAConsts.BaselineFingerprintRoot :=
+        TBaselineScope.RootForProject(BlProjOrGroup, Args.Path);
+    end;
+
     // ---- Snapshot fuer kuenftige Baseline ----
     // MUSS vor dem Baseline-FILTER laufen: TBaseline.Apply veraendert die
     // Findings-Liste destruktiv. Bis 2026-08-08 stand dieser Block
@@ -1514,18 +1539,12 @@ begin
     if EffWriteBaseline <> '' then
     begin
       try
-        if HasCliPathFp then
-          uSCAConsts.BaselinePathFingerprint := CliPathFp;
-        // Wurzel-Regel aus TBaselineScope - hier stand sie bis 2026-08-19
-        // als eine von vier wortgleichen Kopien.
-        uSCAConsts.BaselineFingerprintRoot :=
-          TBaselineScope.RootForProject(BlProjOrGroup, Args.Path);
         // Kein ForceDirectories mehr hier: TBaseline.Write legt das
         // Zielverzeichnis selbst an (und vertraegt anders als der
         // Aufruf hier einen blossen Dateinamen ohne Verzeichnisanteil).
         // Die GESCHRIEBENE Anzahl melden, nicht Findings.Count: Lesefehler
         // sind nicht baseline-faehig und werden von Write uebersprungen.
-        var BlWritten := TBaseline.Write(Findings, EffWriteBaseline);
+        var BlWritten := TBaseline.Write(Findings, EffWriteBaseline, BlScope);
         if not Args.Quiet then
           WriteLn(Format('Baseline written: %s (%d findings)',
             [EffWriteBaseline, BlWritten]));
@@ -1544,18 +1563,13 @@ begin
     if EffBaseline <> '' then
     begin
       try
-        // PathInFingerprint-Modus: Relativierungs-Wurzel = Projekt-/
-        // Gruppen-Verzeichnis, sonst Scan-Pfad (nur der Consumer kennt
-        // den Zuschnitt; Root leer -> Fallback Dateiname in uBaseline).
-        if HasCliPathFp then
-          uSCAConsts.BaselinePathFingerprint := CliPathFp;
-        // Wurzel-Regel aus TBaselineScope, s.o.
-        uSCAConsts.BaselineFingerprintRoot :=
-          TBaselineScope.RootForProject(BlProjOrGroup, Args.Path);
+        // Zuschnitt BlScope, s.o. - derselbe Wert wie beim Snapshot,
+        // damit Schreiben und Lesen nicht auseinanderlaufen koennen.
         var BlWarnings := TStringList.Create;
         var Dropped : Integer;
         try
-          Dropped := TBaseline.Apply(Findings, EffBaseline, BlWarnings);
+          Dropped := TBaseline.Apply(Findings, EffBaseline, BlScope,
+            BlWarnings);
           for var BlWarn in BlWarnings do
             WriteLn(ErrOutput, 'Baseline warning: ', BlWarn);
         finally

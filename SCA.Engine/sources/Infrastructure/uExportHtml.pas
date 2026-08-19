@@ -1526,6 +1526,11 @@ begin
         // Zeilennummer) statt eines eigenen Ad-hoc-Strings. Damit ist eine im
         // HTML gespeicherte Baseline mit dem CLI --baseline kompatibel und
         // umgekehrt - EIN Fingerprint ueber CLI/HTML/(IDE).
+        // GRENZE (TBaselineScope Schritt-6-Teilumfang): dies ist der letzte
+        // Produktionsaufrufer der parameterlosen Fassung - der Zuschnitt
+        // kommt hier noch aus den Prozess-Globals, die die Consumer vor dem
+        // Export spiegeln. Faellt, sobald Run einen Zuschnitt-Parameter
+        // traegt.
         var Fpid := TBaseline.Fingerprint(F);
         // Konfidenz (#1): Name ('high'/'medium'/'low') als data-conf (Filter)
         // + Rang als data-sort der Konfidenz-Spalte (0=high oben). data-qf

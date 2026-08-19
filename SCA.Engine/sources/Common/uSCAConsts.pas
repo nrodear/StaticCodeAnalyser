@@ -1069,6 +1069,15 @@ var
   // TRADE-OFFS dokumentiert im Konzept: Ordner-Umzuege/anderer
   // Scan-Zuschnitt invalidieren Fingerprints; byte-gleiche KOPIEN
   // matchen weiter ueber den contextHash (bewusst).
+  //
+  // GRENZE (TBaselineScope Schritte 2-6, 2026-08-19): die Baseline-
+  // Operationen (TBaseline.Write/Apply, TBaselineSet.LoadFromFile) nehmen
+  // den Zuschnitt seither als expliziten TBaselineScope-Parameter und
+  // lesen diese beiden Globals NICHT mehr. Die Globals bleiben fuer die
+  // verbliebenen FromGlobals-Leser: die parameterlose
+  // TBaseline.Fingerprint-Fassung (HTML-Export) und die uEngineApi-
+  // Facade. Sie fallen, sobald TExporterHtml.Run und TScanRequest einen
+  // Zuschnitt tragen.
   BaselinePathFingerprint : Boolean = DEF_BASELINE_PATH_FINGERPRINT;
   // Wurzel fuer die Relativierung; setzt der CONSUMER vor Write/Apply
   // (CLI: Projekt-/Gruppen-Verzeichnis bzw. --path). Leer oder Datei

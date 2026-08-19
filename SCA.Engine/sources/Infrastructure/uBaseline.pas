@@ -75,10 +75,10 @@ type
     // der INI liest, schreibt die zwei Zeilen selbst - die Regel, um die
     // es ging, ist trotzdem nur hier.
     //
-    // STAND: noch ohne Produktionsaufrufer. CLI, EXE und Plugin setzen die
-    // beiden Prozess-Globals weiterhin direkt; sie holen sich seit
-    // 2026-08-19 aber wenigstens die WURZEL aus RootForProject, damit die
-    // Regel waehrend des Uebergangs nicht wieder auseinanderlaeuft.
+    // STAND (Schritte 2-6, 2026-08-19): CLI, EXE und Plugin bauen den
+    // Zuschnitt hierueber und reichen ihn an Write/Apply/LoadFromFile
+    // durch. Die Prozess-Globals existieren nur noch als Grenze fuer die
+    // verbliebenen FromGlobals-Leser (s. dort).
     class function ForProject(const AProjectOrGroupFile,
       AScanRoot: string): TBaselineScope; static;
     // Nur die Wurzel derselben Regel, als String - fuer die Aufrufer, die
@@ -86,8 +86,12 @@ type
     // Bewusst kein zweiter Regel-Ort: ForProject ruft dieselbe Funktion.
     class function RootForProject(const AProjectOrGroupFile,
       AScanRoot: string): string; static;
-    // UEBERGANG: liest die beiden Globals. Nur solange es Aufrufer ohne
-    // Zuschnitt-Parameter gibt - faellt mit dem letzten von ihnen weg.
+    // UEBERGANG: liest die beiden Globals. Verbliebene Aufrufer (Stand
+    // Schritte 2-6, 2026-08-19): die parameterlose Fingerprint-Fassung
+    // (der HTML-Export zieht seinen Fingerprint noch aus dem Prozess-
+    // Zustand, bis TExporterHtml.Run einen Zuschnitt-Parameter traegt)
+    // und die uEngineApi-Facade (bis TScanRequest einen traegt). Faellt
+    // mit dem letzten von ihnen weg.
     class function FromGlobals: TBaselineScope; static;
 
     // Datei-Token fuer den Fingerprint.
@@ -110,18 +114,28 @@ type
     // baseline-faehig sind (s. Rumpf). Bis 2026-08-08 meldeten alle fuenf
     // Aufrufer stattdessen Findings.Count - "Baseline written: ... (5
     // findings)" bei 4 Eintraegen in der Datei.
+    // AScope bestimmt die Datei-Tokens UND den pathFingerprint-Marker
+    // (Schritte 2-6, 2026-08-19): der Zuschnitt kommt als EIN Wert vom
+    // Aufrufer statt aus zwei unabhaengig setzbaren Prozess-Globals -
+    // genau deren Halb-Zustand war Befund A. Der Marker meldet die
+    // WIRKUNG (Effective), nicht den Wunsch (IsPathMode): bisher schrieb
+    // er den blossen Wunsch, weshalb die Mismatch-Warnung beim Lesen im
+    // halb gesetzten Fall schwieg.
     class function Write(Findings: TObjectList<TLeakFinding>;
-      const DestFile: string): Integer; static;
+      const DestFile: string; const AScope: TBaselineScope): Integer; static;
 
     // Liest BaselineFile und filtert aus Findings alle Eintraege heraus
     // deren Fingerprint in der Baseline ist (vorhandene "akzeptierte"
     // Befunde). Idempotent; fehlende/leere Datei = no-op.
     // Liefert die Anzahl der GEDROPPTEN Findings (fuer Reporting).
+    // AScope ist der Zuschnitt DIESES Lesers - er muss zum Zuschnitt des
+    // Schreibers passen, sonst matcht die Legacy-Stufe nichts.
     // AWarnings (optional) sammelt Diagnose-Meldungen (z.B. Fingerprint-
-    // Modus der Datei passt nicht zum aktiven [Baseline] PathInFingerprint
-    // - dann matcht die Legacy-Stufe nichts und NUR contextHash greift).
+    // Modus der Datei passt nicht zum uebergebenen Zuschnitt - dann
+    // greift NUR noch contextHash).
     class function Apply(Findings: TObjectList<TLeakFinding>;
-      const BaselineFile: string; AWarnings: TStrings = nil): Integer; static;
+      const BaselineFile: string; const AScope: TBaselineScope;
+      AWarnings: TStrings = nil): Integer; static;
 
     // Ist die Datei ueberhaupt eine Baseline? Apply ist bewusst
     // fehlertolerant und liefert bei allem, was es nicht versteht,
@@ -134,8 +148,11 @@ type
     class function IsBaselineFile(const FileName: string;
       out AReason: string): Boolean; static;
 
-    // Fingerprint einer einzelnen Finding-Instanz. Public weil Tests sie
-    // mocken.
+    // Fingerprint einer einzelnen Finding-Instanz mit dem Zuschnitt aus
+    // den Prozess-Globals (FromGlobals). GRENZE der Schritte 2-6: bleibt,
+    // solange der HTML-Export (uExportHtml) keinen Zuschnitt-Parameter
+    // durchgereicht bekommt - er ist der letzte Produktions-Aufrufer.
+    // Alle Baseline-Operationen dieser Unit nehmen den Zuschnitt explizit.
     class function Fingerprint(const F: TLeakFinding): string; overload; static;
     // Gleiche Berechnung, aber mit explizitem Zuschnitt statt aus den
     // Globals. Die parameterlose Fassung delegiert hierher.
@@ -177,6 +194,11 @@ type
   TBaselineSet = class
   private
     FFingerprints: TDictionary<string, Boolean>;
+    // Zuschnitt, mit dem geladen wurde (Schritte 2-6): Contains rechnet
+    // die Anfrage-Fingerprints mit DIESEM Wert statt mit den Prozess-
+    // Globals - der Anzeige-Filter haengt damit nicht mehr am globalen
+    // Zustand zum Abfragezeitpunkt.
+    FScope        : TBaselineScope;
   public
     constructor Create;
     destructor Destroy; override;
@@ -185,7 +207,10 @@ type
     // Array) - exakt das was TBaseline.Write / CLI --write-baseline schreibt
     // und der HTML-Export liest. Fehlende/leere/kaputte Datei -> leeres Set
     // (Result 0), kein Fehler. Liefert die Anzahl geladener Fingerprints.
-    function LoadFromFile(const BaselineFile: string): Integer;
+    // AScope wird gespeichert und gilt fuer alle folgenden Contains-
+    // Abfragen - er muss zum Zuschnitt des Schreibers der Datei passen.
+    function LoadFromFile(const BaselineFile: string;
+      const AScope: TBaselineScope): Integer;
     procedure Clear;
     function IsEmpty: Boolean;
     // True wenn F bereits in der Baseline steht (= KEIN neuer Fund).
@@ -311,14 +336,9 @@ begin
     Result := Copy(FullLow, Length(RootLow) + 1, MaxInt);
 end;
 
-// Uebergangs-Wrapper fuer unit-interne Aufrufer, die noch keinen
-// Zuschnitt durchreichen. Faellt mit ihnen weg.
-function FingerprintFileToken(const AFileName: string): string;
-begin
-  Result := TBaselineScope.FromGlobals.FileToken(AFileName);
-end;
-
 class function TBaseline.Fingerprint(const F: TLeakFinding): string;
+// GRENZE (Schritte 2-6): letzter FromGlobals-Pfad neben der Facade,
+// s. Deklaration.
 begin
   Result := Fingerprint(F, TBaselineScope.FromGlobals);
 end;
@@ -331,7 +351,8 @@ begin
     F.MethodName + '|' + F.MissingVar);
 end;
 
-function BuildBaselineArray(Findings: TObjectList<TLeakFinding>): TJSONArray;
+function BuildBaselineArray(Findings: TObjectList<TLeakFinding>;
+  const AScope: TBaselineScope): TJSONArray;
 // Baut das findings[]-Array. Lesefehler bleiben BEWUSST draussen: ein
 // I/O-Fehler ist kein akzeptierbarer Befund, sondern eine Aussage ueber
 // die Vollstaendigkeit des Laufs - Apply filtert ihn symmetrisch ebenfalls.
@@ -351,12 +372,12 @@ begin
       begin
         if F.Kind = fkFileReadError then Continue; // I/O-Fehler nicht baseline'n
         Obj := TJSONObject.Create;
-        Obj.AddPair('file',        FingerprintFileToken(F.FileName));
+        Obj.AddPair('file',        AScope.FileToken(F.FileName));
         Obj.AddPair('kind',        KindName(F.Kind));
         Obj.AddPair('method',      F.MethodName);
         Obj.AddPair('detail',      F.MissingVar);
         Obj.AddPair('line',        F.LineNumber);
-        Obj.AddPair('fingerprint', TBaseline.Fingerprint(F));
+        Obj.AddPair('fingerprint', TBaseline.Fingerprint(F, AScope));
         // C.2: zusaetzlich Code-Snippet-Hash. Leer wenn Datei nicht lesbar -
         // dann faellt Apply auf den legacy fingerprint zurueck.
         var Ctx := TFindingFingerprint.ContextHashMemo(F, CtxMemo);
@@ -370,7 +391,7 @@ begin
 end;
 
 class function TBaseline.Write(Findings: TObjectList<TLeakFinding>;
-  const DestFile: string): Integer;
+  const DestFile: string; const AScope: TBaselineScope): Integer;
 var
   Arr  : TJSONArray;
   Root : TJSONObject;
@@ -378,7 +399,7 @@ var
 begin
   Result := 0;
   if DestFile = '' then Exit;
-  Arr := BuildBaselineArray(Findings);
+  Arr := BuildBaselineArray(Findings, AScope);
   // Was wirklich in der Datei landet - NICHT Findings.Count (die
   // Lesefehler sind beim Aufbau uebersprungen worden).
   Result := Arr.Count;
@@ -387,8 +408,11 @@ begin
   Root.AddPair('version',     '1');
   // Format-Marker gegen STILLE Vollinvalidierung: liest ein Consumer im
   // anderen Fingerprint-Modus, matcht sonst einfach nichts. Apply
-  // erkennt den Mismatch und meldet ihn (AWarnings).
-  Root.AddPair('pathFingerprint', TJSONBool.Create(BaselinePathFingerprint));
+  // erkennt den Mismatch und meldet ihn (AWarnings). Der Marker meldet
+  // die WIRKUNG (Effective), nicht den Wunsch (IsPathMode) - bisher
+  // stand hier das Modus-Global, und im halb gesetzten Fall (Modus ja,
+  // Wurzel leer, Tokens = Dateinamen) log die Datei ueber sich selbst.
+  Root.AddPair('pathFingerprint', TJSONBool.Create(AScope.Effective));
   Root.AddPair('createdAt',   FormatDateTime('yyyy-mm-dd"T"hh:nn:ss', Now));
   Root.AddPair('count',       TJSONNumber.Create(Arr.Count));
   Root.AddPair('findings',    Arr);
@@ -504,7 +528,8 @@ begin
 end;
 
 class function TBaseline.Apply(Findings: TObjectList<TLeakFinding>;
-  const BaselineFile: string; AWarnings: TStrings): Integer;
+  const BaselineFile: string; const AScope: TBaselineScope;
+  AWarnings: TStrings): Integer;
 // Match-Strategie (C.2):
 //   1. Wenn Finding einen contextHash hat UND der in der Baseline ist
 //      -> Drop (stabilster Pfad, ueberlebt Line-Drift + Re-Indent).
@@ -540,15 +565,17 @@ begin
     begin
       // Fingerprint-Modus-Marker pruefen: Datei im anderen Modus
       // geschrieben -> die Legacy-Fingerprints koennen nicht matchen.
+      // Verglichen wird mit der WIRKUNG des uebergebenen Zuschnitts
+      // (Effective), symmetrisch zu dem, was Write in den Marker stellt.
       var MarkerVal := TJSONObject(Root).Values['pathFingerprint'];
       if (MarkerVal is TJSONBool) and Assigned(AWarnings) and
-         (TJSONBool(MarkerVal).AsBoolean <> BaselinePathFingerprint) then
+         (TJSONBool(MarkerVal).AsBoolean <> AScope.Effective) then
         AWarnings.Add(Format(
           'baseline fingerprint mode mismatch: file written with ' +
           'PathInFingerprint=%s, current setting is %s - legacy ' +
           'fingerprints will not match (only contextHash still applies)',
           [BoolToStr(TJSONBool(MarkerVal).AsBoolean, True),
-           BoolToStr(BaselinePathFingerprint, True)]));
+           BoolToStr(AScope.Effective, True)]));
       // Weicher Cast: 'findings' kann fehlen (Values liefert nil) ODER falsch
       // typisiert sein (manuell editiert / Merge-Konflikt: "findings": {}).
       // Hartes 'as TJSONArray' wuerfe dann EInvalidCast und deaktivierte die
@@ -620,7 +647,7 @@ begin
       else
         FCtx := '';
       if ((FCtx <> '') and CtxSet.ContainsKey(FCtx))
-         or FpSet.ContainsKey(Fingerprint(F)) then
+         or FpSet.ContainsKey(Fingerprint(F, AScope)) then
       begin
         Findings.Delete(i);     // owns - F wird freigegeben
         Inc(Result);
@@ -669,11 +696,15 @@ begin
   if F.Kind = fkFileReadError then Exit(False);
   // Count-Guard spart bei leerem Set (Filter aus / Datei fehlt) das SHA2-
   // Hashing pro Finding im heissen ApplyFilter-Loop.
+  // Fingerprint mit dem in LoadFromFile gespeicherten Zuschnitt - nicht
+  // mit den Prozess-Globals: die Abfrage muss zum LADEZEITPUNKT passen,
+  // egal was ein spaeterer Lauf an den Globals gedreht hat.
   Result := (FFingerprints.Count > 0)
-            and FFingerprints.ContainsKey(TBaseline.Fingerprint(F));
+            and FFingerprints.ContainsKey(TBaseline.Fingerprint(F, FScope));
 end;
 
-function TBaselineSet.LoadFromFile(const BaselineFile: string): Integer;
+function TBaselineSet.LoadFromFile(const BaselineFile: string;
+  const AScope: TBaselineScope): Integer;
 // Parst dieselbe Struktur wie TBaseline.Apply (Objekt-mit-'findings' ODER bare
 // Array) + dieselben Hardening-Caps, aber non-destruktiv: sammelt nur die
 // Fingerprints. Bewusst als eigener Parse gehalten statt Apply umzubauen -
@@ -687,6 +718,10 @@ var
   Loaded : Integer;
 begin
   FFingerprints.Clear;
+  // Zuschnitt VOR den Ausstiegen speichern: auch ein leeres Set (Datei
+  // fehlt/kaputt) antwortet danach konsistent mit dem Zuschnitt dieses
+  // Ladeversuchs statt mit dem eines frueheren.
+  FScope := AScope;
   Result := 0;
   if BaselineFile = '' then Exit;
   if not FileExists(BaselineFile) then Exit;

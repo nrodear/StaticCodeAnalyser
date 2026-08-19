@@ -706,10 +706,19 @@ begin
 
   // Baseline (wie der CLI: nach dem Scan, vor Result/Export; Fehler nicht
   // fatal - ein kaputtes Baseline-File soll den Lauf nicht stoppen).
-  if Req.BaselinePath <> '' then
-    try TBaseline.Apply(Findings, Req.BaselinePath); except end;
-  if Req.WriteBaselinePath <> '' then
-    try TBaseline.Write(Findings, Req.WriteBaselinePath); except end;
+  // UEBERGANG (TBaselineScope Schritt-6-Teilumfang): die Facade kennt
+  // weder Projektdatei noch Settings-Objekt, der Zuschnitt kommt deshalb
+  // aus den Globals - Modus via ApplyRepoIni/ApplyDetectorThresholds,
+  // Wurzel setzt der Host wie bisher. Faellt, sobald TScanRequest einen
+  // expliziten Zuschnitt traegt.
+  if (Req.BaselinePath <> '') or (Req.WriteBaselinePath <> '') then
+  begin
+    var BlScope := TBaselineScope.FromGlobals;
+    if Req.BaselinePath <> '' then
+      try TBaseline.Apply(Findings, Req.BaselinePath, BlScope); except end;
+    if Req.WriteBaselinePath <> '' then
+      try TBaseline.Write(Findings, Req.WriteBaselinePath, BlScope); except end;
+  end;
 
   Result := TScanResult.Create(Findings, BaseDir);
   finally
