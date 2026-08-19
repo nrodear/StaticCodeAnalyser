@@ -143,6 +143,15 @@ foreach ($p in $platforms) {
       $za, $exe, (Split-Path $exe -Leaf), $lvl)
     [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
       $za, $rules, 'rules/sca-rules.json', $lvl)
+    # Sprach-Overlays (2026-08-19): ohne sie faellt die lokalisierte
+    # Regelanzeige beim Kunden auf die einkompilierte Tabelle zurueck -
+    # funktioniert, aber lose Dateien sind der Update-Weg ohne Rebuild.
+    foreach ($lang in @('de', 'fr')) {
+      $ov = Join-Path (Split-Path $rules -Parent) "sca-rules.$lang.json"
+      if (-not (Test-Path $ov)) { throw "Overlay fehlt: $ov. Abbruch." }
+      [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+        $za, $ov, "rules/sca-rules.$lang.json", $lvl)
+    }
   } finally {
     $za.Dispose()
   }
@@ -151,8 +160,11 @@ foreach ($p in $platforms) {
   $za = [System.IO.Compression.ZipFile]::OpenRead($zip)
   try { $names = @($za.Entries | ForEach-Object { $_.FullName }) }
   finally { $za.Dispose() }
-  if ($names -notcontains 'rules/sca-rules.json') {
-    throw "$($p.Name): rules/sca-rules.json fehlt im Archiv (gefunden: $($names -join ', ')). Abbruch."
+  foreach ($muss in @('rules/sca-rules.json', 'rules/sca-rules.de.json',
+                      'rules/sca-rules.fr.json')) {
+    if ($names -notcontains $muss) {
+      throw "$($p.Name): $muss fehlt im Archiv (gefunden: $($names -join ', ')). Abbruch."
+    }
   }
   "{0,-6} {1} v{2}  Stack {3} MB  + rules  ->  {4}" -f `
     $p.Name, (Split-Path $exe -Leaf), $Version, $mb, (Split-Path $zip -Leaf)

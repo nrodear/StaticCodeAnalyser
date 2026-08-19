@@ -206,6 +206,11 @@ Source: "{#SCABplSourceDirX64}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d12x64"; Fl
 ; Doku Punkt 10: FindJsonFile-Pfad 3 (Install-Verzeichnis) gewinnt vor Pfad 4
 ; (APPDATA); der Installer ueberschreibt rules\sca-rules.json bei Updates.
 Source: "{#SCARepoRoot}rules\sca-rules.json"; DestDir: "{app}\rules"; Flags: ignoreversion
+; Sprach-Overlays: uebersetzte Regelnamen/-kurzbeschreibungen (de/fr).
+; Fehlen sie, faellt die Anzeige still auf Englisch zurueck - deshalb
+; installieren, nicht dem Zufall ueberlassen.
+Source: "{#SCARepoRoot}rules\sca-rules.de.json"; DestDir: "{app}\rules"; Flags: ignoreversion
+Source: "{#SCARepoRoot}rules\sca-rules.fr.json"; DestDir: "{app}\rules"; Flags: ignoreversion
 
 [Icons]
 ; Sichtbarer Weg zum Deinstaller (Nutzerfrage 2026-08-15): den unins000.exe
