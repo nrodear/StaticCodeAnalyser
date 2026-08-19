@@ -960,6 +960,7 @@ VCL serialisation tolerates duplicate `TabOrder` but tab navigation becomes orde
 |---|---|
 | Severity | Hint | Type | Code Smell |
 | Tags | `dfm`, `style-guide` |
+| Config | `[Components] ForbiddenClasses` |
 | Detector | `uDfmForbiddenClass.pas` |
 
 Style-guide enforcement for project-specific class bans (`TQuery`, `TLabel` if you have a `TStyledLabel`, ...). Detector stays silent unless the project sets `[Components] ForbiddenClasses=...` in `analyser.ini`.

@@ -1,6 +1,6 @@
 # Funde aus SCA herausbekommen — Formate und Workflows
 
-🇬🇧 [English version](EXPORTS.md)
+🇬🇧 [English version](EXPORTS.md) · 🇫🇷 [Version française](EXPORTS_fr.md)
 
 Diese Seite beantwortet eine Frage: **„Der Analyser ist gelaufen — wie
 kommen die Funde dorthin, wo ich sie brauche?"** Sie beschreibt jeden

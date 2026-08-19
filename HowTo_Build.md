@@ -327,4 +327,4 @@ code example: how the problem looks, and how the fix looks.
 - **Embarcadero docs (for general Delphi questions):**
   https://docwiki.embarcadero.com/RADStudio/en/Main_Page
 
-🇩🇪 [Deutsche Version](HowTo_Build_de.md)
+🇩🇪 [Deutsche Version](HowTo_Build_de.md) · 🇫🇷 [Version française](HowTo_Build_fr.md)

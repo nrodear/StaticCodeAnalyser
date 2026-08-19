@@ -57,6 +57,12 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 | `MaxLineLength` | Integer | `120` | Seuil de la règle sur la longueur de ligne. |
 | `DuplicateBlockMinLines` | Integer | `8` | Taille minimale d'un bloc avant qu'une duplication soit signalée. |
 
+## `[Components]`
+
+| Clé | Type | Défaut | Signification |
+|---|---|---|---|
+| `ForbiddenClasses` | String | _(vide)_ | Classes de composants interdites dans toute DFM ; chaque utilisation est signalée comme SCA038. Séparées par des virgules, insensibles à la casse. Vide laisse la règle silencieuse. |
+
 ## `[Baseline]`
 
 | Clé | Type | Défaut | Signification |

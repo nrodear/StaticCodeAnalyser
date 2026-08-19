@@ -13,7 +13,7 @@ Am Ende hast du:
 > siehe Quick-Start im README. Dieses Dokument ist fuer Leute, die
 > selbst aus den Quellen bauen wollen.
 
-🇬🇧 [English version](HowTo_Build.md)
+🇬🇧 [English version](HowTo_Build.md) · 🇫🇷 [Version française](HowTo_Build_fr.md)
 
 ---
 

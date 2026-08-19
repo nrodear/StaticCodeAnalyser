@@ -1,6 +1,6 @@
 # Sonar push scripts
 
-🇩🇪 [Deutsche Version](README_de.md)
+🇩🇪 [Deutsche Version](README_de.md) · 🇫🇷 [Version française](README_fr.md)
 
 Two PowerShell helpers around the standalone EXE + `sonar-scanner`.
 Splitting scan from upload lets you re-run the upload without re-scanning,

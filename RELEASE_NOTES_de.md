@@ -1,6 +1,6 @@
 # Release 0.9.16 — Eine stille Zwischenablage, ehrliche Filter und ein Nur-Text-Hinweis
 
-🇬🇧 [English version](RELEASE_NOTES.md)
+🇬🇧 [English version](RELEASE_NOTES.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Vollstaendige Release-Notes: [docs/releases/v0.9.16_de.md](docs/releases/v0.9.16_de.md)
 ([english](docs/releases/v0.9.16.md)).
@@ -34,7 +34,7 @@ Vollstaendige Release-Notes: [docs/releases/v0.9.16_de.md](docs/releases/v0.9.16
 
 # Vorher — Release 0.9.14 — Ein graues Dunkel und eine sichere IDE-Uebergabe
 
-🇬🇧 [English version](RELEASE_NOTES.md)
+🇬🇧 [English version](RELEASE_NOTES.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Vollstaendige Release-Notes: [docs/releases/v0.9.14_de.md](docs/releases/v0.9.14_de.md)
 ([english](docs/releases/v0.9.14.md)).
@@ -65,7 +65,7 @@ gemacht hat.
 
 # Vorher — Release 0.9.13 — Die Baseline findet ihr Zuhause
 
-🇬🇧 [English version](RELEASE_NOTES.md)
+🇬🇧 [English version](RELEASE_NOTES.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Vollstaendige Release-Notes: [docs/releases/v0.9.13_de.md](docs/releases/v0.9.13_de.md)
 ([english](docs/releases/v0.9.13.md)).
@@ -98,7 +98,7 @@ zieht gleich.
 
 # Vorher — Release 0.9.12 — Das Panel haelt Schritt
 
-🇬🇧 [English version](RELEASE_NOTES.md)
+🇬🇧 [English version](RELEASE_NOTES.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Vollstaendige Release-Notes: [docs/releases/v0.9.12_de.md](docs/releases/v0.9.12_de.md)
 ([english](docs/releases/v0.9.12.md)).
@@ -121,7 +121,7 @@ Ein kleines Release, einen Tag nach 0.9.11.
 
 # Vorher — Release 0.9.11 — Reparaturen
 
-🇬🇧 [English version](RELEASE_NOTES.md)
+🇬🇧 [English version](RELEASE_NOTES.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Vollstaendige Release-Notes: [docs/releases/v0.9.11_de.md](docs/releases/v0.9.11_de.md)
 ([english](docs/releases/v0.9.11.md)).
@@ -155,7 +155,7 @@ Versionsnummer, die still aufgehoert hatte zu stimmen.
 
 # Vorher — Release 0.9.10 — Ein Befund je Block, ein leiserer Default
 
-🇬🇧 [English version](RELEASE_NOTES.md)
+🇬🇧 [English version](RELEASE_NOTES.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Vollstaendige Release-Notes: [docs/releases/v0.9.10_de.md](docs/releases/v0.9.10_de.md)
 ([english](docs/releases/v0.9.10.md)).
@@ -189,7 +189,7 @@ gemeldet werden.
 
 # Vorher — Release 0.9.9 — Weniger Falschmeldungen, zwei Projekt-Regeln
 
-🇬🇧 [English version](RELEASE_NOTES.md)
+🇬🇧 [English version](RELEASE_NOTES.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Vollstaendige Release-Notes: [docs/releases/v0.9.9_de.md](docs/releases/v0.9.9_de.md)
 ([english](docs/releases/v0.9.9.md)).

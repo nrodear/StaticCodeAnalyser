@@ -21,7 +21,7 @@ correctness checks that SonarDelphi ships and we ported. The SCA060-119 naming /
 in their own section below (added 2026-07-19); [`rules/sca-rules.json`](rules/sca-rules.json)
 remains the canonical machine-readable roster.
 
-🇩🇪 [Deutsche Version](DETECTORS_de.md)
+🇩🇪 [Deutsche Version](DETECTORS_de.md) · 🇫🇷 [Version française](DETECTORS_fr.md)
 
 ---
 
@@ -195,7 +195,7 @@ help panel and DUnitX tests.
 | D10 | SCA039 | **DfmDbInUiForm** | DB component (`TADOConnection`, `TFDQuery`, `TClientDataSet`, …) sits directly on a UI form instead of a data-module | Code Smell | `uDfmDbInUiForm` |
 | D11 | SCA040 | **DfmCrossFormCoupling** | Code in `Form1` reaches into `Form2.<field>` via the global form variable | Bug | `uDfmCrossFormCoupling` |
 | D12 | SCA041 | **DfmLayerViolation** | Input control sits directly on `TForm` instead of a Panel / `TFrame` / `TGroupBox` container | Code Smell | `uDfmLayerViolation` |
-| D13 | SCA038 | **DfmForbiddenClass** | Component class listed in `[Components] ForbiddenClasses=` is used in a DFM. **Currently inert:** no shipped code reads that key yet - the list can only be filled programmatically | Code Smell | `uDfmForbiddenClass` |
+| D13 | SCA038 | **DfmForbiddenClass** | Component class listed in `[Components] ForbiddenClasses=` (analyser.ini) is used in a DFM. The list is empty by default, which keeps the rule silent | Code Smell | `uDfmForbiddenClass` |
 
 ### UI/UX cluster (4) — interaction smells in the form definition
 

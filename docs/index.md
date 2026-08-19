@@ -3,8 +3,9 @@
 Everything the project ships as documentation, in one place. The README is
 the front door; this page is the map behind it.
 
-🇩🇪 Most documents exist in both languages — the German version always
-carries the `_de` suffix (`README_de.md`, `EXPORTS_de.md`, …).
+🇩🇪 🇫🇷 Most documents exist in all three languages — the German
+version carries the `_de` suffix, the French version the `_fr` suffix
+(`README_de.md`, `README_fr.md`, …).
 
 ---
 

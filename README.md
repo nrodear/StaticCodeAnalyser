@@ -25,7 +25,7 @@ treats `.dfm` changes as triggers for the companion `.pas`. HTML report with gro
 Editor. Copy an AI-ready Markdown fix prompt for any finding to the clipboard
 (context menu; automatic copy-on-click is opt-in). Open source, MIT-licensed.
 
-🇩🇪 [Deutsche Version](README_de.md)
+🇩🇪 [Deutsche Version](README_de.md) · 🇫🇷 [Version française](README_fr.md)
 
 ![SCA in action — analysis, findings, hover-overlays inside the Delphi IDE](docs/sca-demo.gif)
 
@@ -1139,6 +1139,10 @@ a section in the README grows too large, it gets moved into its own file
 🇩🇪 German versions carry a `_de` suffix: [README_de.md](README_de.md),
 [EXPORTS_de.md](EXPORTS_de.md), [DETECTORS_de.md](DETECTORS_de.md),
 [BRANCH_CHANGES_de.md](BRANCH_CHANGES_de.md)
+
+🇫🇷 French versions carry a `_fr` suffix: [README_fr.md](README_fr.md),
+[EXPORTS_fr.md](EXPORTS_fr.md), [DETECTORS_fr.md](DETECTORS_fr.md),
+[BRANCH_CHANGES_fr.md](BRANCH_CHANGES_fr.md)
 
 ---
 
