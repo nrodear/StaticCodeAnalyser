@@ -42,6 +42,15 @@ type
     // seinen Hint an alle weiteren SCA001-Treffer derselben Severity
     // vererben (Memoize-Bug, Fix 2026-07-26).
     class var FCache : TDictionary<Integer, TFixHint>;
+    // Sprache, in der der Cache gefuellt wurde. Ohne sie ueberlebt ein
+    // Hint seinen Sprachwechsel: Build() schickt die Beschreibung durch
+    // _() (s. Katalog-Zweig unten), der Cache haelt das Ergebnis, und
+    // geleert wird er nur in der finalization. Wer im IDE-Plugin ueber
+    // Tools > Options oder in der EXE ueber das Hamburger-Menue die
+    // Sprache umstellt, bekommt seine Hints bis zum Prozessende weiter
+    // in der alten Sprache - waehrend Regelname und Oberflaeche daneben
+    // schon umgestellt sind.
+    class var FCacheLang : string;
     class function Build(const Finding: TLeakFinding): TFixHint; static;
     class function HintVariant(const Finding: TLeakFinding): Integer; static;
   public
@@ -95,6 +104,15 @@ var
 begin
   if FCache = nil then
     FCache := TDictionary<Integer, TFixHint>.Create;
+  // Sprachwechsel entwertet den Cache komplett - s. FCacheLang. Der
+  // Vergleich kostet einen String-Vergleich je Fund und steht damit im
+  // selben Groessenbereich wie der Dictionary-Lookup darunter; das Bauen
+  // eines Hints, das er verhindert, ist um Groessenordnungen teurer.
+  if FCacheLang <> CurrentLanguage then
+  begin
+    FCache.Clear;
+    FCacheLang := CurrentLanguage;
+  end;
   // Kind shl 9 laesst 9 Bit frei: 8 Bit Severity (Ord <= 2) plus 1 Bit
   // Variante. Bewusst KEIN Ausklammern von fkMemoryLeak aus dem Memoize:
   // SCA001 ist der volumenstaerkste Detektor, ein Build()-Aufruf pro Fund

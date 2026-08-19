@@ -769,6 +769,126 @@ begin
     SB.AppendLine('    :root[data-theme="dark"] .conf-medium { background: #322d1c; color: #e6b45a; }');
     SB.AppendLine('    :root[data-theme="dark"] .conf-low    { background: #2c2c2c; color: #a5a5a5; }');
 
+    // Nacharbeit der Sepia-Pruefung (2026-08-19), auf Dark angewandt:
+    // die klickbaren Top-10-Zeilen hatten im Hover 2,72:1 (#06c auf
+    // #262626), die Quick-Wins-Option 3,39:1 - beide jetzt >= 6:1. Die
+    // qf-Zeile TRAEGT die ID, weil die Basisregel (#ruleFilter ...) mit
+    // 1,1,1 jeden ID-losen Theme-Override schlaegt. Der Trennbalken der
+    // Snippet-Zeilen stand mangels Override ungewollt KRAEFTIG da
+    // (9,42:1, Basis-Absicht ist dezent ~1,5:1) - jetzt 1,76:1.
+    // th-/Button-Hover waren von den flaechigen Theme-Regeln
+    // plattgedrueckt; die vier Summary-Badges waren die letzten hellen
+    // Inseln der Befund-Tabelle (dieselbe Klasse wie die conf-Badges am
+    // 2026-08-19 vormittags).
+    SB.AppendLine('    :root[data-theme="dark"] .top-detectors li:hover, :root[data-theme="dark"] .top-files li:hover { color: #6cb0ff; }');
+    SB.AppendLine('    :root[data-theme="dark"] #ruleFilter option[value="qf"] { color: #4db8d4; }');
+    SB.AppendLine('    :root[data-theme="dark"] .src-line-bar { color: #4c4c4c; }');
+    SB.AppendLine('    :root[data-theme="dark"] th.sortable:hover { background: #383838; }');
+    SB.AppendLine('    :root[data-theme="dark"] .tl-btn:hover { background: #3a3a3a; }');
+    SB.AppendLine('    :root[data-theme="dark"] .b-err  { background: #3a2424; color: #ff9d9d; }');
+    SB.AppendLine('    :root[data-theme="dark"] .b-warn { background: #38301c; color: #e6c47c; }');
+    SB.AppendLine('    :root[data-theme="dark"] .b-hint { background: #243320; color: #b5dc8c; }');
+    SB.AppendLine('    :root[data-theme="dark"] .b-tot  { background: #333333; color: #d0d0d0; }');
+
+    // ---- #9e Drittes Theme: Sepia (2026-08-19) --------------------------
+    // Warmes Lese-Theme als dritte Wahl neben Hell und Dunkel - der
+    // Report ist langes Lesematerial, und die Wahl haengt wie bisher am
+    // data-theme-Attribut (Toggle-Zyklus light -> dark -> sepia).
+    // Abdeckung deckungsgleich zum Dark-Block: dieselben Flaechen,
+    // dieselbe Auflage, dass JEDE Zeile ihren Selektor selbst traegt.
+    // Alle TEXT-Farbpaare sind vorab nach WCAG gerechnet (>= 4,5:1;
+    // schwaechstes Paar die aktive Zeilennummer mit 4,88:1), der
+    // Fokus-Ring gegen alle drei Sepia-Flaechen >= 3:1. Bewusst darunter
+    // liegt nur der dekorative Zeilen-Trennbalken (1,46:1) - die Basis
+    // haelt ihn mit 1,54:1 genauso dezent, das ist Absicht, kein Verstoss.
+    // Die #9d-Ableitung darunter filtert auf den DARK-Selektor und
+    // kopiert diese Zeilen deshalb nicht in den @media-Block.
+    // GRENZEN, beide bewusst: (1) ohne JavaScript ist Sepia nicht
+    // erreichbar - der Zustand ohne Attribut kennt nur Basis-Hell und
+    // den @media-Dark-Block; Sepia ist eine reine Opt-in-Wahl ueber den
+    // Button, und der ist ohne JS ohnehin tot. (2) Der localStorage-
+    // Schluessel ist mit ALT-Reports derselben Herkunft geteilt
+    // (file://-Seiten teilen sich unter Chromium einen Origin): ein
+    // Alt-Report der Zwei-Themes-Fassung kennt 'sepia' nicht, rendert
+    // damit bei OS-Dunkel dunkel, und sein Toggle ueberschreibt den
+    // Wert mit 'dark'. Selbstheilend, kein Crash - der Preis dafuer,
+    // dass die Wahl ueber Reports hinweg erhalten bleibt.
+    SB.AppendLine('    :root[data-theme="sepia"] body { background: #f4ead2; color: #3d2e1a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] a { color: #8a4a00; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .meta { color: #6b5942; }');
+    SB.AppendLine('    :root[data-theme="sepia"] th, :root[data-theme="sepia"] td { border-bottom-color: #d8c7a4; }');
+    SB.AppendLine('    :root[data-theme="sepia"] th { background: #eadcba; }');
+    SB.AppendLine('    :root[data-theme="sepia"] tr.err  { background: #f2d9cb; }');
+    SB.AppendLine('    :root[data-theme="sepia"] tr.warn { background: #f0e2bd; }');
+    SB.AppendLine('    :root[data-theme="sepia"] tr.hint { background: #e5e6c6; }');
+    SB.AppendLine('    :root[data-theme="sepia"] tr.err  td.sev { color: #a81c00; }');
+    SB.AppendLine('    :root[data-theme="sepia"] tr.warn td.sev { color: #7d5200; }');
+    SB.AppendLine('    :root[data-theme="sepia"] tr.hint td.sev { color: #47661a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] tr.finding:hover { filter: brightness(0.96); }');
+    SB.AppendLine('    :root[data-theme="sepia"] tr.finding-hint > td { background: #eee2c4; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .code-block pre { background: #ece0bf; color: #33270f; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .code-before pre { background: #f0d5c6; color: #7a2810; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .code-after  pre { background: #e0e4bf; color: #324c10; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .src-snippet { background: #ece0bf; border-color: #c9b78d; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .chart-box, :root[data-theme="sepia"] .top-detectors, :root[data-theme="sepia"] .top-files, :root[data-theme="sepia"] .audience-hint { background: #eee2c2; border-color: #c9b78d; color: #3d2e1a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .chart-box h3, :root[data-theme="sepia"] .top-detectors h2, :root[data-theme="sepia"] .top-files h2 { color: #5a4527; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .cbar-track { background: #d8c7a4; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .hint-desc { color: #5f4d33; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .donut-total { fill: #3d2e1a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] input, :root[data-theme="sepia"] select, :root[data-theme="sepia"] .tl-btn { background: #ece0bf; color: #3d2e1a; border-color: #b6a27a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .num { color: #55432a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] tr.finding td.toggle { color: #6b5942; }');
+    SB.AppendLine('    :root[data-theme="sepia"] tr.finding.open td.toggle { color: #3d2e1a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .controls label { color: #55432a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .controls .hint { color: #6b5942; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .controls .row-count { color: #3d2e1a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] th.sortable .sort-ind { color: #6b5942; }');
+    SB.AppendLine('    :root[data-theme="sepia"] th.sortable.sort-asc .sort-ind::before, :root[data-theme="sepia"] th.sortable.sort-desc .sort-ind::before { color: #3d2e1a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .top-detectors .td-count { color: #6b5942; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .top-detectors .td-qf { color: #8a4a00; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .cbar-num { color: #6b5942; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .src-line-num { color: #6b5942; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .src-snippet-hdr { color: #6b5942; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .rule-example-note { color: #6b5942; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .top-files .tf-score { color: #3d2e1a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .kbd-help { background: #eee2c2; color: #3d2e1a; border-color: #b6a27a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .kbd-help h3 { color: #8a4a00; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .kbd-help kbd { background: #e0d2ac; color: #3d2e1a; border-color: #a08a5e; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .kbd-help-close { color: #55432a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .src-line-active { background: #ecd9a2; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .src-line-active .src-line-num, :root[data-theme="sepia"] .src-line-active .src-line-bar { color: #7d5200; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .top-files .tf-e { color: #a81c00; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .top-files .tf-w { color: #7d5200; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .top-files .tf-h { color: #47661a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .audience-hint b { color: #8a4a00; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .code-before h5 { color: #8b2513; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .code-after  h5 { color: #3c5a10; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .sec-panel { background: #f2d9cb; border-color: #b0472a; color: #5c281a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .sec-panel b { color: #8a2f16; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .base-summary { color: #6b5942; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .conf-high   { background: #e0e4bf; color: #324c10; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .conf-medium { background: #f0e2bd; color: #6e4a00; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .conf-low    { background: #e7dcc0; color: #55452e; }');
+
+    // Nacharbeit der adversarischen Pruefung (4 Majors): der globale
+    // Fokus-Ring #4a90e2 fiel auf den warmen Flaechen unter 3:1
+    // (2,51-2,75) - Sepia ist das einzige Theme, das ihn umfaerben muss.
+    // li:hover 4,32->5,32; qf-Option mit ID-Spezifitaet 3,13->5,51;
+    // Trennbalken von unsichtbar (1,22) auf Basis-Dezenz 1,46; die
+    // cbar-Fuellung stand mit 1,65:1 auf dem abgedunkelten Track
+    // (jetzt 3,12); Hover-Stufen und Badges wie im Dark-Block.
+    SB.AppendLine('    :root[data-theme="sepia"] *:focus-visible { outline-color: #8a4a00; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .top-detectors li:hover, :root[data-theme="sepia"] .top-files li:hover { color: #8a4a00; }');
+    SB.AppendLine('    :root[data-theme="sepia"] #ruleFilter option[value="qf"] { color: #00606e; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .src-line-bar { color: #cdb98e; }');
+    SB.AppendLine('    :root[data-theme="sepia"] th.sortable:hover { background: #e2d2a8; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .tl-btn:hover { background: #e4d6ae; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .cbar-fill { background: #4a7096; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .b-err  { background: #f2d9cb; color: #8b2513; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .b-warn { background: #f0e2bd; color: #6e4a00; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .b-hint { background: #e0e4bf; color: #324c10; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .b-tot  { background: #e7dcc0; color: #3d2e1a; }');
+
     // ---- #9d Dark-Mode auch OHNE JavaScript (Review 2026-08-19) ---------
     // Bis hierher haengt der gesamte Dark-Block an data-theme, und gesetzt
     // wird das Attribut erst vom Script am Ende des <body>. Fuer einen
@@ -784,11 +904,17 @@ begin
     // ausgetauschtem Wurzel-Guard noch einmal. Wer oben eine Dark-Regel
     // ergaenzt, hat sie hier automatisch mit.
     //
-    // Der Guard ist ':root:not([data-theme="light"])': er greift, solange
-    // der Nutzer NICHT ausdruecklich hell gewaehlt hat. Gleiche
-    // Spezifitaet wie die data-theme-Regeln, aber spaeter im Stylesheet -
-    // damit gewinnt bei OS-Dunkel der Media-Block, und eine explizite
-    // Hell-Wahl im Toggle sticht ihn wieder aus.
+    // Der Guard ist ':root:not([data-theme="light"]):not([data-theme="sepia"])':
+    // er greift, solange der Nutzer NICHT ausdruecklich ein helles
+    // Theme (light oder sepia) gewaehlt hat. Mit ZWEI :not() hat der
+    // Guard die Spezifitaet 0,3,0 (jedes :not zaehlt sein Argument mit)
+    // gegen 0,2,0 der data-theme-Regeln - er gewinnt bei OS-Dunkel also
+    // per SPEZIFITAET, nicht per Reihenfolge; harmlos, weil sein Inhalt
+    // die Byte-Kopie der Dark-Regeln ist und explizite Wahlen per
+    // Matching ausgeschlossen sind. Wer das vierte Theme anlegt, hebt
+    // die Spezifitaet mit dem naechsten :not() weiter an - eine kuenftige
+    // 0,2,0-Regel, die der Guard NICHT ausschliesst, verliert bei
+    // OS-Dunkel unabhaengig von ihrer Position.
     //
     // Ableitbar ist das nur, weil JEDE Dark-Zeile ihren Selektor selbst
     // traegt, auch die Fortsetzungszeilen mehrteiliger Selektorlisten.
@@ -806,8 +932,15 @@ begin
         end
         else
         begin
+          // Seit dem Sepia-Theme schliesst der Guard JEDE explizite
+          // Nicht-Dark-Wahl aus, nicht nur 'light': sonst wuerde ein
+          // OS im Dunkelmodus die ausdrueckliche Sepia-Wahl mit den
+          // Dark-Regeln ueberschreiben - dieselbe Fehlerklasse, gegen
+          // die der Guard gebaut wurde. Wer ein VIERTES Theme anlegt,
+          // MUSS hier ein weiteres :not() ergaenzen.
           DarkAuto[i] := StringReplace(DarkAuto[i],
-            ':root[data-theme="dark"]', ':root:not([data-theme="light"])',
+            ':root[data-theme="dark"]',
+            ':root:not([data-theme="light"]):not([data-theme="sepia"])',
             [rfReplaceAll]);
         end;
       end;
@@ -822,6 +955,18 @@ begin
     end;
 
     SB.AppendLine('  </style>');
+    // Anti-Blitz (Pruefung 2026-08-19): die gespeicherte Theme-Wahl muss
+    // VOR dem ersten Paint am <html>-Element stehen. Das grosse Skript am
+    // Body-Ende reicht nicht - bis dahin hat der abgeleitete @media-Block
+    // laengst gemalt: Light-/Sepia-Waehler auf Dunkel-OS sahen den Report
+    // erst dunkel aufbauen und umkippen, Dark-Waehler auf Hell-OS
+    // umgekehrt weiss. Whitelist statt Blindanwendung, damit ein
+    // korrupter localStorage-Wert nicht als Attribut-Muell endet.
+    // Absichtlich winzig und try/catch-gekapselt: scheitert es, gilt
+    // wieder der bisherige Weg (Body-Skript + @media).
+    SB.AppendLine('  <script>try{var t=localStorage.getItem("sca-html-theme");');
+    SB.AppendLine('  if(["light","dark","sepia"].indexOf(t)>=0)');
+    SB.AppendLine('    document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>');
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');
     SB.Append    ('  <h1>'); SB.Append(HtmlEscape(Title)); SB.AppendLine('</h1>');
@@ -1038,7 +1183,7 @@ begin
                   'data-i18n="btn-kbd" data-i18n-title="ttl-kbd" ' +
                   'title="Tastatur-Shortcuts anzeigen (?)">&#9000; Shortcuts</button>');
     SB.AppendLine('    <button class="tl-btn secondary" id="btnTheme" ' +
-                  'title="Hell/Dunkel umschalten" aria-label="Theme">&#9681; Theme</button>');
+                  'title="Theme wechseln: Hell / Dunkel / Sepia" aria-label="Theme">&#9681; Theme</button>');
     SB.AppendLine('    <button class="tl-btn secondary" id="btnBaseSave" ' +
                   'title="Aktuelle Funde als Baseline-JSON speichern (Download)">&#128190; Baseline speichern</button>');
     SB.AppendLine('    <label class="tl-btn secondary" id="btnBaseLoad" ' +
@@ -2511,11 +2656,18 @@ begin
     SB.AppendLine('      var KEY = "sca-html-theme";');
     SB.AppendLine('      function apply(t){ document.documentElement.setAttribute("data-theme", t); }');
     SB.AppendLine('      var stored = null; try { stored = localStorage.getItem(KEY); } catch(e){}');
+    SB.AppendLine('      // Whitelist: ein fremder/korrupter Wert soll weder als Attribut-');
+    SB.AppendLine('      // Muell enden noch den ersten Toggle-Klick verwirren.');
+    SB.AppendLine('      if (["light", "dark", "sepia"].indexOf(stored) < 0) stored = null;');
     SB.AppendLine('      apply(stored || ((window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light"));');
     SB.AppendLine('      var bt = document.getElementById("btnTheme");');
     SB.AppendLine('      if (bt) bt.addEventListener("click", function(){');
-    SB.AppendLine('        var cur = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";');
-    SB.AppendLine('        apply(cur); try { localStorage.setItem(KEY, cur); } catch(e){}');
+    SB.AppendLine('        // Drei-Wege-Zyklus statt Flip. Ein unbekannter oder fehlender');
+    SB.AppendLine('        // gespeicherter Wert landet auf light (indexOf -1 + 1 = 0).');
+    SB.AppendLine('        var THEMES = ["light", "dark", "sepia"];');
+    SB.AppendLine('        var cur = document.documentElement.getAttribute("data-theme");');
+    SB.AppendLine('        var nxt = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];');
+    SB.AppendLine('        apply(nxt); try { localStorage.setItem(KEY, nxt); } catch(e){}');
     SB.AppendLine('      });');
     SB.AppendLine('    })();');
     // #8 A11y: Custom-Controls fokussierbar + Tastatur (Enter/Space) + aria-live.
