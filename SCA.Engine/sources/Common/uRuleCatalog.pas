@@ -134,8 +134,6 @@ type
     class function FindOverlayFile(const ANorm: string): string; static;
     class function EnsureOverlay(const ANorm: string): TOverlayMap; static;
     class function LoadOverlayFile(const AFileName: string): TOverlayMap; static;
-    class function OverlayFromJson(Root: TJSONObject;
-      const AFileName: string): TOverlayMap; static;
     class function EmbeddedOverlay(const ANorm: string): TOverlayMap; static;
     class procedure ApplyOverlayTo(var Meta: TRuleMeta; const ALang: string); static;
   public
@@ -901,48 +899,18 @@ begin
   Result := FindRulesFile('rules\sca-rules.' + ANorm + '.json');
 end;
 
-class function TRuleCatalog.LoadOverlayFile(const AFileName: string): TOverlayMap;
-// nil bei JEDEM Problem - der Aufrufer faellt auf die einkompilierte
-// Tabelle zurueck. Explizit TEncoding.UTF8: ReadAllText ohne Encoding
-// nimmt bei fehlendem BOM ANSI an - Mojibake in genau den Umlauten und
-// Akzenten, die der Sinn des Features sind. Groessendeckel wie bei den
-// externen .po-Dateien: die Overlays sind ~40 KB, alles jenseits von
-// 4 MB ist keine Uebersetzung.
-const
-  MAX_OVERLAY_BYTES = 4 * 1024 * 1024;
-var
-  Json : TJSONValue;
-begin
-  Result := nil;
-  if (AFileName = '') or not TFile.Exists(AFileName) then Exit;
-  Json := nil;
-  try
-    if TFile.GetSize(AFileName) > MAX_OVERLAY_BYTES then Exit;
-    Json := TJSONObject.ParseJSONValue(
-      TFile.ReadAllText(AFileName, TEncoding.UTF8));
-    if Json is TJSONObject then
-      Result := OverlayFromJson(TJSONObject(Json), AFileName);
-  except
-    // Breiter Fang mit Absicht: die lose Datei ist der dokumentierte
-    // Editierweg fuer Uebersetzer - neben Lese- und Parse-Fehlern
-    // werfen auch TYPfehler ("name": null, Objekt statt String) erst
-    // in OverlayFromJson. Der Vertrag oben heisst "nil bei JEDEM
-    // Problem": zurueck auf die einkompilierte Tabelle, statt den
-    // Fehler in den Anzeigepfad durchzureichen. (Die halbe Map raeumt
-    // OverlayFromJson vor dem re-raise selbst ab.)
-    Result := nil;
-  end;
-  Json.Free;   // Exit oben laeuft nur VOR der Zuweisung (Json = nil)
-end;
-
-class function TRuleCatalog.OverlayFromJson(Root: TJSONObject;
-  const AFileName: string): TOverlayMap;
+function OverlayFromJson(Root: TJSONObject;
+  const AFileName, ACatalogVersion: string): TOverlayMap;
 // Feld-Extraktion aus dem geparsten Overlay; nil, wenn die Struktur
 // nicht passt. Typfehler (GetValue<string> wirft) verlassen die
 // Funktion per Exception - dann raeumt das except die halbe Map ab und
 // re-raist; LoadOverlayFile uebersetzt jede Exception in nil.
 // Eigene Funktion statt zweitem try in LoadOverlayFile: eine
 // Schachtelung faellt unter die NestedTry-Regel des Self-Scans.
+// UNIT-Funktion statt Klassenmethode: die Signatur braucht
+// TJSONObject, und eine Deklaration in der Klasse zoege System.JSON
+// in die interface-uses (E2003-Falle) - die Katalogversion kommt
+// deshalb als Parameter, strict private ist hier unsichtbar.
 var
   RulesO  : TJSONObject;
   RObj    : TJSONObject;
@@ -958,19 +926,19 @@ begin
   // sitzt im CI (tools/rules_doc_gate.py prueft basedOn gegen die
   // Katalogversion und Fremd-IDs als Fehler). Bewusste Luecke: die
   // Warnung braucht BEIDE Versionen - laeuft der Katalog im
-  // Fallback (FCatalogVersion leer), wird ein beliebig altes
+  // Fallback (Katalogversion leer), wird ein beliebig altes
   // Overlay stumm genutzt. Auch dann gilt: veralteter Text
   // schlaegt keinen Text.
   BasedOn := Root.GetValue<string>('basedOn', '');
-  if (BasedOn <> '') and (FCatalogVersion <> '') and
-     (BasedOn <> FCatalogVersion) then
+  if (BasedOn <> '') and (ACatalogVersion <> '') and
+     (BasedOn <> ACatalogVersion) then
     // noinspection DebugOutput
     // Diagnose-Kanal wie bei der Profil-Warnung in GetProfile:
     // die Engine hat keine UI, und ein veraltetes Overlay soll
     // sichtbar sein, ohne den Lauf zu stoeren.
     OutputDebugString(PChar(Format(
       'TRuleCatalog: Overlay %s basedOn=%s, Katalog=%s - Texte evtl. veraltet',
-      [ExtractFileName(AFileName), BasedOn, FCatalogVersion])));
+      [ExtractFileName(AFileName), BasedOn, ACatalogVersion])));
   V := Root.FindValue('rules');
   if not (V is TJSONObject) then Exit;
   RulesO := TJSONObject(V);
@@ -992,6 +960,40 @@ begin
     FreeAndNil(Result);
     raise;
   end;
+end;
+
+class function TRuleCatalog.LoadOverlayFile(const AFileName: string): TOverlayMap;
+// nil bei JEDEM Problem - der Aufrufer faellt auf die einkompilierte
+// Tabelle zurueck. Explizit TEncoding.UTF8: ReadAllText ohne Encoding
+// nimmt bei fehlendem BOM ANSI an - Mojibake in genau den Umlauten und
+// Akzenten, die der Sinn des Features sind. Groessendeckel wie bei den
+// externen .po-Dateien: die Overlays sind ~40 KB, alles jenseits von
+// 4 MB ist keine Uebersetzung.
+const
+  MAX_OVERLAY_BYTES = 4 * 1024 * 1024;
+var
+  Json : TJSONValue;
+begin
+  Result := nil;
+  if (AFileName = '') or not TFile.Exists(AFileName) then Exit;
+  Json := nil;
+  try
+    if TFile.GetSize(AFileName) > MAX_OVERLAY_BYTES then Exit;
+    Json := TJSONObject.ParseJSONValue(
+      TFile.ReadAllText(AFileName, TEncoding.UTF8));
+    if Json is TJSONObject then
+      Result := OverlayFromJson(TJSONObject(Json), AFileName, FCatalogVersion);
+  except
+    // Breiter Fang mit Absicht: die lose Datei ist der dokumentierte
+    // Editierweg fuer Uebersetzer - neben Lese- und Parse-Fehlern
+    // werfen auch TYPfehler ("name": null, Objekt statt String) erst
+    // in OverlayFromJson. Der Vertrag oben heisst "nil bei JEDEM
+    // Problem": zurueck auf die einkompilierte Tabelle, statt den
+    // Fehler in den Anzeigepfad durchzureichen. (Die halbe Map raeumt
+    // OverlayFromJson vor dem re-raise selbst ab.)
+    Result := nil;
+  end;
+  Json.Free;   // Exit oben laeuft nur VOR der Zuweisung (Json = nil)
 end;
 
 class function TRuleCatalog.EmbeddedOverlay(const ANorm: string): TOverlayMap;
