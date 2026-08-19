@@ -43,8 +43,9 @@ type
     // vererben (Memoize-Bug, Fix 2026-07-26).
     class var FCache : TDictionary<Integer, TFixHint>;
     // Sprache, in der der Cache gefuellt wurde. Ohne sie ueberlebt ein
-    // Hint seinen Sprachwechsel: Build() schickt die Beschreibung durch
-    // _() (s. Katalog-Zweig unten), der Cache haelt das Ergebnis, und
+    // Hint seinen Sprachwechsel: Build() lokalisiert die Beschreibung
+    // (Hand-Zweige via _(), der Katalog-Zweig via Sprach-Overlay -
+    // s. unten), der Cache haelt das Ergebnis, und
     // geleert wird er nur in der finalization. Wer im IDE-Plugin ueber
     // Tools > Options oder in der EXE ueber das Hamburger-Menue die
     // Sprache umstellt, bekommt seine Hints bis zum Prozessende weiter
@@ -4345,8 +4346,14 @@ begin
   // Hand-Branch bleibt fuer kuratierte Hints jederzeit moeglich.
   if Result.Description = '' then
   begin
-    var Meta := TRuleCatalog.GetRule(Finding.Kind);
-    Result.Description := _(Meta.ShortDescription);
+    // LOKALISIERT ueber das Sprach-Overlay. Das fruehere _() um die
+    // ShortDescription entfaellt: zwei Uebersetzungskanaele auf
+    // demselben String hiessen, ein bereits deutsches Wort liefe ein
+    // zweites Mal durch gettext - das ging nur zufaellig gut, weil _()
+    // unbekannte msgids durchreicht. RANGFOLGE der Beschreibungen:
+    // Hand-Zweig (.po, oben im case) > Overlay > Englisch.
+    var Meta := TRuleCatalog.GetRule(Finding.Kind, CurrentLanguage);
+    Result.Description := Meta.ShortDescription;
     Result.Before      := Meta.BadExample;
     Result.After       := Meta.GoodExample;
   end;

@@ -841,11 +841,20 @@ begin
       for K := Low(TFindingKind) to High(TFindingKind) do
       begin
         if KIND_META[K].DefaultSeverity <> Sev then Continue;
-        Meta := TRuleCatalog.GetRule(K);
-        if Meta.ID <> '' then
-          Lbl := Meta.ID + '  ' + KIND_META[K].Name
+        Meta := TRuleCatalog.GetRule(K, CurrentLanguage);
+        // Label ERWEITERN, nicht ersetzen: der Kind-Token bleibt Teil
+        // des Eintrags, weil uFuzzyComboSearch gegen genau ihn tippt
+        // (und weil der Token die stabile Suchsprache aller Exporte
+        // ist). Der lokalisierte Klarname haengt dahinter - nur wenn
+        // er wirklich etwas sagt, das der Token nicht sagt.
+        if Meta.ID = '' then
+          Lbl := KIND_META[K].Name    // Katalog-Fallback ohne ID
+        else if (Meta.Name <> '') and
+                not SameText(Meta.Name, KIND_META[K].Name) then
+          Lbl := Format('%s  %s - %s',
+            [Meta.ID, KIND_META[K].Name, Meta.Name])
         else
-          Lbl := KIND_META[K].Name;   // Katalog-Fallback ohne ID
+          Lbl := Meta.ID + '  ' + KIND_META[K].Name;
         Sorted.AddObject(Lbl, TObject(KIND_TAG_BASE + Ord(K)));
       end;
       if Sorted.Count = 0 then Continue;

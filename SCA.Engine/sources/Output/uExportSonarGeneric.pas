@@ -350,7 +350,8 @@ begin
     for F in AFindings do
     begin
       if F.Kind = fkFileReadError then Continue;
-      Meta := TRuleCatalog.GetRule(F.Kind);
+      // KANONISCH: SonarQube braucht stabile Regeltexte (MQR-Abgleich).
+      Meta := TRuleCatalog.GetRuleCanonical(F.Kind);
       if F.RuleID <> '' then RuleID := F.RuleID
       else RuleID := Meta.ID;
       if (RuleID = '') or Seen.ContainsKey(RuleID) then Continue;
@@ -382,7 +383,7 @@ begin
   for F in AFindings do
   begin
     if F.Kind = fkFileReadError then Continue;
-    Meta    := TRuleCatalog.GetRule(F.Kind);
+    Meta    := TRuleCatalog.GetRuleCanonical(F.Kind);  // kanonisch, s.o.
     RelPath := MakeRelative(F.FileName, ABaseDir);
     if PathLeftAbsolute(RelPath) then Inc(Result);
     if not First then WStr(AStream, ',');

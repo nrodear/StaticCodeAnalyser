@@ -85,6 +85,14 @@ function TranslationCount: Integer;
 // Oeffentlich fuer Tests und Tooling - der Normalpfad ist SetLanguage.
 function ParsePo(const APoText: string; ADict: TDictionary<string, string>): Boolean;
 
+// 'de-DE' / ' DE ' / 'de_AT' -> 'de'. Liefert '' fuer alles, was kein
+// reines Sprachkuerzel ist - das schuetzt zugleich Dateipfade gegen
+// Fremdeingaben aus den Settings (kein '..', kein Backslash).
+// Oeffentlich seit dem Regel-Overlay (2026-08-19): TRuleCatalog
+// normalisiert Sprachcodes HIERMIT statt mit einer eigenen Kopie - eine
+// zweite Normalisierung wuerde gegen SetLanguage driften.
+function NormalizeLangCode(const ALang: string): string;
+
 implementation
 
 // noinspection-file BeginEndRequired, IfElseBegin, LongMethod, MultipleExit, NestedRoutines, RedundantConditional, TooLongLine, UnsortedUses

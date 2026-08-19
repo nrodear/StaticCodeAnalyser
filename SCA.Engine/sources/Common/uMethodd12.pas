@@ -92,7 +92,7 @@ type
     function SpanLineCount: Integer;
     // Aufgeloeste SCAxxx-Regel-ID: das explizite RuleID-Feld falls gesetzt
     // (Custom-Rule), sonst der Catalog-Lookup ueber Kind. Damit muss der
-    // Consumer nicht selbst TRuleCatalog.GetRule(Kind).ID aufrufen.
+    // Consumer nicht selbst TRuleCatalog.GetRuleCanonical(Kind).ID aufrufen.
     function ResolvedRuleId: string;
 
     // Convenience-Constructor: kapselt das 7-Zeilen-Boilerplate-Pattern
@@ -308,7 +308,9 @@ begin
   if RuleID <> '' then
     Result := RuleID                       // explizite Custom-Rule-ID gewinnt
   else
-    Result := TRuleCatalog.GetRule(Kind).ID;  // Built-in: Catalog-Lookup ueber Kind
+    // KANONISCH: die Rule-ID ist ein Token (SARIF, Baseline, Sonar) und
+    // in keiner Sprache - Overlay-Texte haben hier nichts zu suchen.
+    Result := TRuleCatalog.GetRuleCanonical(Kind).ID;
 end;
 
 end.
