@@ -253,7 +253,8 @@ Performance) hardened the code along the way.
   Backward-compatible with legacy baselines.
 - **Confidence audit (35 kinds → `fcMedium`)** — heuristic / metric /
   style / DFM-schema / no-data-flow-security kinds tagged. Per-kind
-  justifications in [`docs/ConfidenceAudit.md`](docs/ConfidenceAudit.md).
+  justifications alongside the values in `KindDefaultConfidence`,
+  [`SCA.Engine/sources/Common/uSCAConsts.pas`](SCA.Engine/sources/Common/uSCAConsts.pas).
 - **A.3-Minimal: SCA052 cross-unit reactivated** — `gSymbolRefIndex`
   is now consulted for `fkUnusedPublicMember`. Spot-check shows 44 %
   of cross-unit methods correctly recognised; 56 % follow-up scope
