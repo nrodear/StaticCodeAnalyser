@@ -611,6 +611,33 @@ const
     '; MaxFileMB: files larger than this are skipped (protects against'#13#10 +
     '; running out of memory on generated code, .dfm dumps and the like).'#13#10 +
     ';MaxFileMB=5'#13#10 +
+    '; CognitiveLimit (int, default: 15)'#13#10 +
+    '; Threshold for SCA176 (cognitive complexity). A method is reported when'#13#10 +
+    '; its Sonar-style score is STRICTLY greater than this value; the value'#13#10 +
+    '; itself appears in the message text.'#13#10 +
+    '; A value of 0 or less reports practically every method that has any'#13#10 +
+    '; control flow at all. A non-numeric value falls back to 15 silently.'#13#10 +
+    ';CognitiveLimit=15'#13#10 +
+    ''#13#10 +
+    '; MaxCaseBranches (int, default: 10)'#13#10 +
+    '; Threshold for SCA091. A `case` fires AT this branch count already, not'#13#10 +
+    '; above it. 0 or a negative value does NOT switch the detector off - it'#13#10 +
+    '; silently resets to 10; use the profile or rule filter for that.'#13#10 +
+    ';MaxCaseBranches=10'#13#10 +
+    ''#13#10 +
+    '; MaxLineLength (int, default: 120)'#13#10 +
+    '; Threshold for SCA062. A plain line scan without string or comment'#13#10 +
+    '; awareness, so long comment and literal lines count too.'#13#10 +
+    ';MaxLineLength=120'#13#10 +
+    ''#13#10 +
+    '; OwnershipSinks (comma-separated, default: empty)'#13#10 +
+    '; Routine names that take ownership of an object passed to them. SCA001'#13#10 +
+    '; then treats such a call as a handover and stays silent.'#13#10 +
+    '; Only the standalone EXE and the IDE plugin apply this - the CLI reads'#13#10 +
+    '; the file but never registers the list. Adding a name takes effect on'#13#10 +
+    '; the next scan; REMOVING one needs a process restart, because the list'#13#10 +
+    '; is only ever added to.'#13#10 +
+    ';OwnershipSinks=TakeOwnership,AdoptObject'#13#10 +
     ''#13#10 +
     '; MagicNumberTrivials: comma-separated numbers that are NOT reported'#13#10 +
     '; as magic numbers (defaults: 0,1,2,-1,10,100).'#13#10 +
@@ -682,6 +709,15 @@ const
     'MinSeverity=hint'#13#10 +
     ';MinSeverity=warning'#13#10 +
     ';MinSeverity=error'#13#10 +
+    '; MinConfidence (string, default: medium)'#13#10 +
+    '; Confidence floor. Findings below it are dropped by the post-filter:'#13#10 +
+    ';   low    - no filtering, everything a detector produced'#13#10 +
+    ';   medium - the shipped default'#13#10 +
+    ';   high   - only findings the detector is certain about'#13#10 +
+    '; An unknown value falls back to medium.'#13#10 +
+    'MinConfidence=medium'#13#10 +
+    ';MinConfidence=low'#13#10 +
+    ';MinConfidence=high'#13#10 +
     ''#13#10 +
     '; IdeProfile / IdeMinSeverity (defaults: ide-fast / hint)'#13#10 +
     '; Like Profile / MinSeverity, but for the IDE plugin only (live mode).'#13#10 +
@@ -700,6 +736,52 @@ const
     '; the build was compiled with {$DEFINE DEBUG} - release builds never'#13#10 +
     '; show the entry, whatever this setting says. Off by default.'#13#10 +
     ';EnableDetectorReviewFilter=true'#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';  [Baseline] - hide findings that already existed'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';'#13#10 +
+    '; A baseline is a JSON file of finding fingerprints, written with'#13#10 +
+    '; `--write-baseline`. Anything whose fingerprint is in it counts as'#13#10 +
+    '; "old" and disappears from the view - what is left is "new since the'#13#10 +
+    '; baseline". Nothing is deleted: the export and "write baseline" always'#13#10 +
+    '; see the full list.'#13#10 +
+    ''#13#10 +
+    '[Baseline]'#13#10 +
+    ''#13#10 +
+    '; File (string, default: empty = the .sca standard location)'#13#10 +
+    '; Path to the baseline JSON. Empty does not mean off - the consumers fall'#13#10 +
+    '; back to <project>\.sca\<name>.baseline.json.'#13#10 +
+    '; Use an ABSOLUTE path: a relative one resolves against different bases'#13#10 +
+    '; depending on which part of the tool asks, so the same entry can point'#13#10 +
+    '; at different files.'#13#10 +
+    '; If the configured file is MISSING, the EXE and the plugin fail open -'#13#10 +
+    '; the filter is silently inactive and every finding shows. The CLI aborts'#13#10 +
+    '; instead. A typo in the path therefore does not show up in the IDE.'#13#10 +
+    'File='#13#10 +
+    ';File=C:\repo\.sca\project.baseline.json'#13#10 +
+    ''#13#10 +
+    '; OnlyNew (bool, default: 0)'#13#10 +
+    '; Turns the "only new findings" view filter on. Needs a baseline file to'#13#10 +
+    '; be findable, otherwise it does nothing (fail-open).'#13#10 +
+    '; The value must be NUMERIC. `OnlyNew=True` does not parse and falls back'#13#10 +
+    '; to 0 without a word.'#13#10 +
+    '; Read by the standalone EXE and the IDE plugin only - the CLI uses'#13#10 +
+    '; --baseline / --baseline-scan instead.'#13#10 +
+    'OnlyNew=0'#13#10 +
+    ';OnlyNew=1'#13#10 +
+    ''#13#10 +
+    '; PathInFingerprint (bool, default: 0)'#13#10 +
+    '; What identifies a file inside the fingerprint:'#13#10 +
+    ';   0 = the file name alone, tolerant of a different checkout location'#13#10 +
+    ';   1 = the relative path from the scan root, so same-named units in'#13#10 +
+    ';       different folders stop sharing one fingerprint namespace'#13#10 +
+    '; SWITCHING THIS INVALIDATES AN EXISTING BASELINE. The mode is stamped'#13#10 +
+    '; into the JSON; after a switch the file has to be written again, or only'#13#10 +
+    '; the weaker context-hash stage still matches.'#13#10 +
+    '; In the CLI, --baseline-path-fingerprint overrides this key.'#13#10 +
+    'PathInFingerprint=0'#13#10 +
+    ';PathInFingerprint=1'#13#10 +
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
@@ -872,6 +954,24 @@ const
     '; OverlayPosition applies to the window overlay (mode 0) only.'#13#10 +
     'OverlayTextOnly=0'#13#10 +
     ';OverlayTextOnly=1'#13#10 +
+    '; EditorColorScheme (string, default: default)'#13#10 +
+    '; Colour palette of the finding markers in the IDE code editor:'#13#10 +
+    ';   default | gray | subtle'#13#10 +
+    '; A typo (`grey`, say) falls back to `default` silently. IDE plugin only;'#13#10 +
+    '; the standalone EXE ignores it. Takes effect after an IDE restart when'#13#10 +
+    '; edited by hand - the options page applies it at once.'#13#10 +
+    'EditorColorScheme=default'#13#10 +
+    ';EditorColorScheme=gray'#13#10 +
+    ';EditorColorScheme=subtle'#13#10 +
+    ''#13#10 +
+    '; OverlayShowOnHover (bool 0/1, default: 0)'#13#10 +
+    '; When the annotation overlay opens in the IDE editor:'#13#10 +
+    ';   0 = on a left click on a marked line (default)'#13#10 +
+    ';   1 = on hover as well'#13#10 +
+    '; Edited by hand it takes effect after an IDE restart; set through'#13#10 +
+    '; Tools > Options it applies immediately.'#13#10 +
+    'OverlayShowOnHover=0'#13#10 +
+    ';OverlayShowOnHover=1'#13#10 +
     ''#13#10 +
     '; ClipboardOnClick (int 1..3, default: 1)'#13#10 +
     '; What clicking a finding line puts on the clipboard (standalone EXE'#13#10 +
@@ -950,7 +1050,68 @@ const
     '; Upper bound for grade D; anything above falls to grade E.'#13#10 +
     'GradeDMax=500'#13#10 +
     ';GradeDMax=200'#13#10 +
-    ';GradeDMax=1000'#13#10;
+    ';GradeDMax=1000'#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';  [Sonar] - SonarQube / SonarCloud connection'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ';'#13#10 +
+    '; Used by the connection check only (`--sonar-test`, "Test Connection" in'#13#10 +
+    '; the IDE) and by `--sonar-init`, which writes a sonar-project.properties'#13#10 +
+    '; from these values. None of it influences the analysis or any detector.'#13#10 +
+    ';'#13#10 +
+    '; THIS SECTION HAS THE LOWEST PRIORITY of the four configuration sources.'#13#10 +
+    '; A CLI flag, an environment variable (SONAR_HOST_URL, SONAR_TOKEN,'#13#10 +
+    '; SONAR_PROJECT_KEY, SONAR_ORGANIZATION, SONAR_BRANCH) and - for the'#13#10 +
+    '; project key, organisation and branch - a sonar-project.properties in the'#13#10 +
+    '; scanned repository all win over it. `--sonar-test` prints which source'#13#10 +
+    '; supplied each value.'#13#10 +
+    ';'#13#10 +
+    '; THE TOKEN IS NOT IN THIS SECTION. It lives encrypted in [SonarTokens]'#13#10 +
+    '; and is written by the options page or `--sonar-token`; on Windows it is'#13#10 +
+    '; protected per user and machine, so a copied analyser.ini is useless'#13#10 +
+    '; elsewhere. Write it by hand and it will not decrypt. Prefer the'#13#10 +
+    '; SONAR_TOKEN environment variable when you do not want it on disk at all.'#13#10 +
+    ''#13#10 +
+    '[Sonar]'#13#10 +
+    ''#13#10 +
+    '; HostUrl (string, default: empty)'#13#10 +
+    '; Base URL of the server. The connection check sends the token to exactly'#13#10 +
+    '; this host as a bearer header - point it somewhere wrong and the secret'#13#10 +
+    '; goes there. That is why a sonar.host.url found in the scanned'#13#10 +
+    '; repository is deliberately ignored.'#13#10 +
+    'HostUrl='#13#10 +
+    ';HostUrl=https://sonarcloud.io'#13#10 +
+    ';HostUrl=https://sonar.example.internal'#13#10 +
+    ''#13#10 +
+    '; ProjectKey (string, default: empty)'#13#10 +
+    '; The project on the server that the check looks up.'#13#10 +
+    'ProjectKey='#13#10 +
+    ';ProjectKey=my-org_my-project'#13#10 +
+    ''#13#10 +
+    '; Organization (string, default: empty)'#13#10 +
+    '; SonarCloud tenant key. Without it SonarCloud answers 400 and the check'#13#10 +
+    '; reports "project not found" although the project exists.'#13#10 +
+    'Organization='#13#10 +
+    ';Organization=my-org'#13#10 +
+    ''#13#10 +
+    '; Branch (string, default: empty)'#13#10 +
+    '; Branch name for the project lookup and for --sonar-init.'#13#10 +
+    'Branch='#13#10 +
+    ';Branch=main'#13#10 +
+    ''#13#10 +
+    '; Insecure (bool 0/1, default: 0)'#13#10 +
+    '; 1 skips TLS certificate validation for the connection check. For a'#13#10 +
+    '; server with a self-signed certificate - it weakens exactly the'#13#10 +
+    '; transport that carries the token, so leave it at 0 unless you know why.'#13#10 +
+    'Insecure=0'#13#10 +
+    ';Insecure=1'#13#10 +
+    ''#13#10 +
+    '; TokenRef (string, default: empty)'#13#10 +
+    '; Name of the entry in [SonarTokens] that holds the encrypted token.'#13#10 +
+    '; Lets one INI carry several tokens.'#13#10 +
+    'TokenRef='#13#10 +
+    ';TokenRef=sonarcloud'#13#10;
 
 constructor TRepoSettings.Create;
 begin

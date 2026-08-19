@@ -1,0 +1,47 @@
+# GitHub Actions workflow: haelt Code, INI-Vorlage und Konfigurations-Doku
+# deckungsgleich.
+#
+# Die Konfiguration hat drei unabhaengig gepflegte Beschreibungen desselben
+# Gegenstands - den Code (Ini.ReadXxx / QuickReadXxx), die Vorlage
+# DEFAULT_INI_CONTENT und docs/configuration.md. Beim ersten Nachmessen
+# (2026-08-19) klafften 22 Luecken: die komplette [Sonar]-Sektion fehlte in
+# Vorlage UND Doku, obwohl uSonarConfig die INI ausdruecklich als vierte
+# Konfigurationsquelle fuehrt, und zehn gelesene Schluessel standen zwar in
+# der Doku, aber nicht in der Datei, die der Nutzer beim ersten Start
+# bekommt.
+#
+# Der Code ist die Wahrheit: was er nicht liest, gehoert weder in die
+# Vorlage noch in die Doku; was er liest, gehoert in beide.
+#
+# Lokal vorab pruefen: `python tools/config_doc_gate.py`
+#                      `python tools/config_doc_gate.py --list`
+
+name: Config Doc
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  config-doc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run config doc gate
+        run: python3 tools/config_doc_gate.py
+
+      - name: Hinweis bei Abweichung
+        if: failure()
+        run: |
+          python3 tools/config_doc_gate.py --list || true
+          echo ""
+          echo "Ein neuer Schluessel gehoert an DREI Stellen:"
+          echo "  1. der Leser im Code (Ini.ReadXxx / QuickReadXxx)"
+          echo "  2. DEFAULT_INI_CONTENT in uRepoSettings.pas"
+          echo "  3. docs/configuration.md und die _de/_fr-Fassungen"
+          echo ""
+          echo "Ausnahme: reiner Sitzungszustand (Fenstergeometrie) steht"
+          echo "in der Ausnahmeliste des Gates, nicht in Vorlage und Doku."
