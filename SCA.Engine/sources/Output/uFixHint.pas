@@ -7,8 +7,11 @@ unit uFixHint;
 // (Jira / Clipboard / HTML) verwendet, daher in eigener Unit.
 //
 // Sprache:
-//   * Description ist mit _() lokalisiert (dxgettext) — wird im IDE-Hover-
-//     Overlay und Hilfe-Panel in der UI-Sprache angezeigt.
+//   * Description ist lokalisiert - RANGFOLGE der Quellen: Hand-Zweig
+//     im case (via _()/dxgettext) > Sprach-Overlay des Regelkatalogs
+//     (TRuleCatalog.GetRule(Kind, Sprache), seit 2026-08-19) >
+//     englischer Katalogtext. Angezeigt im IDE-Hover-Overlay und
+//     Hilfe-Panel in der UI-Sprache.
 //   * Before / After (Code-Beispiele) bleiben grundsaetzlich Englisch:
 //     Code-Reviews, Jira-Tickets und Claude-AI-Prompts sind in der Praxis
 //     englisch, eine Lokalisierung wuerde nur das Mischmasch zwischen

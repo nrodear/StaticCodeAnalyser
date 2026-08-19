@@ -226,6 +226,10 @@ type
     function  CurrentProjOrGroupFile: string;
     function  ResolveUiBaselinePath(ASettings: TRepoSettings;
       AProbed: TStrings): string;
+    // Zuschnitt des Baseline-Fingerprints der aktuellen Auswahl - EINE
+    // Quelle fuer Schreiben (Write) und Anzeige-Filter (LoadFromFile),
+    // damit deren Fingerprints nicht auseinanderlaufen koennen (Befund A).
+    function  CurrentBaselineScope: TBaselineScope;
     // --- Kontextmenue am Grid ---
     procedure BuildGridMenu;
     procedure GridMenuPopup(Sender: TObject);
@@ -2740,6 +2744,27 @@ begin
     DirOfProjectPath(Projectpath.Text), AProbed);
 end;
 
+function TForm2.CurrentBaselineScope: TBaselineScope;
+// Modus aus der Globalen (die spiegelt [Baseline] PathInFingerprint seit
+// dem letzten ApplyDetectorThresholds bzw. RefreshBaselineSet - beide
+// Write-Stellen laufen nur nach einem Scan, der sie gesetzt hat), Wurzel
+// nach der Regel in ForProject. Vorher hingen die zwei Write-Stellen an
+// den Prozess-Globals, deren Wurzel nur RefreshBaselineSet setzte - mit
+// "nur neue Funde" aus blieb sie leer, der Snapshot fiel still auf
+// Dateinamen-Tokens zurueck und der naechste Filter matchte nichts
+// (Review 2026-08-18, Befund A).
+begin
+  if uSCAConsts.BaselinePathFingerprint then
+  begin
+    Result := TBaselineScope.ForProject(CurrentProjOrGroupFile,
+      DirOfProjectPath(Projectpath.Text));
+  end
+  else
+  begin
+    Result := TBaselineScope.ByFileName;
+  end;
+end;
+
 procedure TForm2.RefreshBaselineSet;
 // Laedt (oder leert) das Fingerprint-Set. Quelle: [Baseline] File= oder
 // der .sca-Standardort (Inkrement 3). Wird vor jedem Anzeige-Aufbau
@@ -2763,15 +2788,18 @@ begin
       FBaselineSet.Clear;
       Exit;
     end;
-    // PathInFingerprint-Konsistenz: Modus + Root wie beim Schreiben der
-    // Datei, sonst matchen die Fingerprints des Anzeige-Filters nicht.
+    // GRENZE (TBaselineScope Schritt-6-Teilumfang): die Globals werden
+    // weiter gespiegelt, weil der HTML-Export seinen Fingerprint noch
+    // ueber die parameterlose TBaseline.Fingerprint-Fassung (FromGlobals)
+    // zieht. Der Anzeige-Filter selbst haengt seit Schritten 2-6 am
+    // Zuschnitt, den LoadFromFile speichert - nicht mehr am Prozess-
+    // Zustand zum Abfragezeitpunkt. Modus VOR CurrentBaselineScope
+    // spiegeln, damit der Zuschnitt die frisch geladene INI sieht.
     uSCAConsts.BaselinePathFingerprint := Settings.BaselinePathInFingerprint;
-    // Wurzel-Regel aus TBaselineScope - hier stand sie bis 2026-08-19
-    // als eine von vier wortgleichen Kopien.
     uSCAConsts.BaselineFingerprintRoot := TBaselineScope.RootForProject(
       CurrentProjOrGroupFile, DirOfProjectPath(Projectpath.Text));
     try
-      FBaselineSet.LoadFromFile(Path);
+      FBaselineSet.LoadFromFile(Path, CurrentBaselineScope);
     except
       // Lesefehler darf die Anzeige nicht kippen - leeres Set = Filter aus.
       FBaselineSet.Clear;
@@ -2812,7 +2840,8 @@ begin
     ForceDirectories(ExtractFilePath(Target));
     // GESCHRIEBENE Anzahl melden, nicht FAllFindings.Count: Lesefehler
     // sind nicht baseline-faehig und werden von Write uebersprungen.
-    var Written := TBaseline.Write(FAllFindings, Target);
+    var Written := TBaseline.Write(FAllFindings, Target,
+      CurrentBaselineScope);
     StatusBar1.Panels[2].Text := Format(
       _('Baseline written: %s (%d findings)'),
       [ExtractFileName(Target), Written]);
@@ -2901,7 +2930,8 @@ begin
     Dlg.Options := Dlg.Options + [ofOverwritePrompt];
     if not Dlg.Execute then Exit;
     try
-      var Written := TBaseline.Write(FAllFindings, Dlg.FileName);
+      var Written := TBaseline.Write(FAllFindings, Dlg.FileName,
+        CurrentBaselineScope);
       StatusBar1.Panels[2].Text := Format(
         _('Baseline written: %s (%d findings)'),
         [ExtractFileName(Dlg.FileName), Written]);

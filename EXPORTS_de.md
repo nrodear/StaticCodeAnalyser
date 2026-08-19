@@ -242,7 +242,7 @@ Ehrliche Liste, Stand v0.9.14 — alles reproduziert:
 | HTML-Report | speichert nur Basisdateinamen; gleichnamige Units aus verschiedenen Ordnern kollidieren |
 | Baseline-Fingerprints | gleichnamige Units teilen sich standardmäßig einen Namensraum — mit `--baseline-path-fingerprint y` abschaltbar (s. u.) |
 | unlesbare Quelldateien | werden in Konsole, SARIF/Sonar/HTML und Baseline unterschiedlich gezählt |
-| `--parallel` | nicht deterministisch; nicht für Exporte verwenden, die man vergleicht |
+| `--parallel` | seit 2026-08-20 deterministisch (byte-identisch zum seriellen Lauf), aber ohne Tempogewinn - die serielle Vorphase dominiert |
 | `--sonar-insecure` | akzeptiert keine selbstsignierten Zertifikate (schaltet nur TLS 1.1 frei) |
 | `--sonar-test` in einem fremden Repo | eine `sonar-project.properties` im gescannten Repo überschreibt den eigenen Host — der Token geht dorthin |
 

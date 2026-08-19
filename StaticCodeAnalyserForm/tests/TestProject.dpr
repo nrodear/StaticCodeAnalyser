@@ -106,6 +106,7 @@ uses
   uTestTrailingWhitespace in 'uTestTrailingWhitespace.pas',
   uTestReversedForRange in 'uTestReversedForRange.pas',
   uTestSelfAssignment in 'uTestSelfAssignment.pas',
+  uTestSelfAssignMemberPath in 'uTestSelfAssignMemberPath.pas',
   uTestVirtualCallInCtor in 'uTestVirtualCallInCtor.pas',
   uTestLengthUnderflow in 'uTestLengthUnderflow.pas',
   uTestSourceEncoding in 'uTestSourceEncoding.pas',

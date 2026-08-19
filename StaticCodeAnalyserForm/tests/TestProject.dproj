@@ -187,6 +187,7 @@
         <DCCReference Include="uTestTrailingWhitespace.pas"/>
         <DCCReference Include="uTestReversedForRange.pas"/>
         <DCCReference Include="uTestSelfAssignment.pas"/>
+        <DCCReference Include="uTestSelfAssignMemberPath.pas"/>
         <DCCReference Include="uTestVirtualCallInCtor.pas"/>
         <DCCReference Include="uTestLengthUnderflow.pas"/>
         <DCCReference Include="uTestSourceEncoding.pas"/>

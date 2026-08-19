@@ -280,7 +280,7 @@ begin
       F1 := MakeFinding(File1, 8);
       F1.MethodName := 'P';
       List.Add(F1);
-      TBaseline.Write(List, Baseline);
+      TBaseline.Write(List, Baseline, TBaselineScope.ByFileName);
     finally
       List.Free;
     end;
@@ -293,7 +293,7 @@ begin
       F2.MethodName := 'Q';    // <- legacy fingerprint matched NICHT mehr
       List.Add(F2);
 
-      Dropped := TBaseline.Apply(List, Baseline);
+      Dropped := TBaseline.Apply(List, Baseline, TBaselineScope.ByFileName);
       Assert.AreEqual<Integer>(1, Dropped,
         'contextHash sollte Finding trotz Line-Drift + Method-Rename matchen');
       Assert.AreEqual<Integer>(0, List.Count);
@@ -347,7 +347,7 @@ begin
     List := TObjectList<TLeakFinding>.Create(True);
     try
       List.Add(MakeFinding(File1, 1));
-      Dropped := TBaseline.Apply(List, Baseline);
+      Dropped := TBaseline.Apply(List, Baseline, TBaselineScope.ByFileName);
       Assert.AreEqual<Integer>(1, Dropped,
         'altes Baseline-Format muss weiter funktionieren (backward-compat)');
     finally
@@ -416,7 +416,9 @@ end;
 procedure TTestFindingFingerprint.PathMode_MarkerMismatch_Warns;
 // Baseline im Pfad-Modus geschrieben, Apply im Default-Modus: der
 // pathFingerprint-Marker meldet den Mismatch statt still nichts zu
-// matchen (Schutz gegen stille Vollinvalidierung).
+// matchen (Schutz gegen stille Vollinvalidierung). Seit Schritten 2-6
+// kommt der Zuschnitt als expliziter Parameter statt aus den Globals -
+// der Vertrag (Warnung bei Modus-Differenz) ist derselbe.
 var
   List     : TObjectList<TLeakFinding>;
   Baseline : string;
@@ -430,14 +432,7 @@ begin
       List.Add(TLeakFinding.New(
         TPath.Combine(TPath.Combine(FpRoot, FP_SUB_A), FP_FILE),
         'M', 10, FP_DETAIL, fkEmptyBlock));
-      BaselinePathFingerprint := True;
-      BaselineFingerprintRoot := FpRoot;
-      try
-        TBaseline.Write(List, Baseline);
-      finally
-        BaselinePathFingerprint := False;
-        BaselineFingerprintRoot := '';
-      end;
+      TBaseline.Write(List, Baseline, TBaselineScope.ByPath(FpRoot));
     finally
       List.Free;
     end;
@@ -447,7 +442,7 @@ begin
       List.Add(TLeakFinding.New(
         TPath.Combine(TPath.Combine(FpRoot, FP_SUB_A), FP_FILE),
         'M', 10, FP_DETAIL, fkEmptyBlock));
-      TBaseline.Apply(List, Baseline, Warnings);
+      TBaseline.Apply(List, Baseline, TBaselineScope.ByFileName, Warnings);
       Assert.AreEqual(1, Warnings.Count, 'Mismatch-Warnung erwartet');
       Assert.Contains(Warnings[0], 'mismatch');
     finally

@@ -22,11 +22,13 @@ type
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
     class function FindBodyBlock(MethodNode: TAstNode): TAstNode; static;
-    class function FindLastLine(Node: TAstNode): Integer; static;
     class function CountStatements(Node: TAstNode): Integer; static;
   end;
 
 implementation
+
+uses
+  uAstSpans;   // SubtreeMaxLine - ersetzt die lokale FindLastLine-Kopie
 
 // noinspection-file BeginEndRequired, NilComparison, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
@@ -42,20 +44,6 @@ begin
   for Child in MethodNode.Children do
     if Child.Kind = nkBlock then
       Exit(Child);
-end;
-
-class function TLongMethodDetector.FindLastLine(Node: TAstNode): Integer;
-var
-  Child     : TAstNode;
-  ChildLast : Integer;
-begin
-  Result := Node.Line;
-  for Child in Node.Children do
-  begin
-    if Child.Line > Result then Result := Child.Line;
-    ChildLast := FindLastLine(Child);
-    if ChildLast > Result then Result := ChildLast;
-  end;
 end;
 
 class function TLongMethodDetector.CountStatements(Node: TAstNode): Integer;
@@ -98,7 +86,7 @@ begin
       Block := FindBodyBlock(M);
       if Block = nil then Continue; // Forward-Decl / Interface-Decl ohne Body
 
-      Lines := FindLastLine(Block) - Block.Line + 1;
+      Lines := TAstSpans.SubtreeMaxLine(Block) - Block.Line + 1;
       Stmts := CountStatements(Block);
 
       // Nur melden wenn BEIDE Schwellen ueberschritten:

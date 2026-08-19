@@ -368,6 +368,20 @@ begin
       // Kein Vereinheitlichen der 3 Config-Pfade: nur diese eine dokumentierte
       // Einstellung wirkt jetzt dort, wo sie laut Doku wirken soll.
       uSCAConsts.AutoDiscoverCustomClasses := Settings.AutoDiscoverClasses;
+      // BUGFIX 2026-08-19: [Detectors] LeakyClasses/ExcludeLeakyClasses/
+      // OwnershipSinks aus der INI anwenden. Vorher rief den Spiegel
+      // (RegisterToLeakyClasses) nur die EXE und das IDE-Plugin - die
+      // CLI las die Datei und liess die Listen wirkungslos; der
+      // Vorlagentext in uRepoSettings gab das sogar offen zu. Dabei ist
+      // die CLI laut Drift-Doku der autoritative Voll-Scan (CI): genau
+      // dort MUESSEN die dokumentierten Listen gelten. Wie beim
+      // AutoDiscover-Fix oben gilt: kein Vereinheitlichen der drei
+      // Config-Pfade, nur dokumentierte Schluessel wirksam machen.
+      // Reihenfolge: nach ResetEngineConfigDefaults (leert die Sinks,
+      // setzt die Default-Leaky-Liste), vor den Schwellen - identisch
+      // zur EXE-Kette Load -> Register -> Apply. Idempotent (Sorted+
+      // dupIgnore bzw. Clear+Add), leere INI-Schluessel = No-op.
+      Settings.RegisterToLeakyClasses;
       if Req.ConfigRoot <> '' then
         Settings.ApplyDetectorThresholds(Req.ConfigRoot)
       else
@@ -692,10 +706,19 @@ begin
 
   // Baseline (wie der CLI: nach dem Scan, vor Result/Export; Fehler nicht
   // fatal - ein kaputtes Baseline-File soll den Lauf nicht stoppen).
-  if Req.BaselinePath <> '' then
-    try TBaseline.Apply(Findings, Req.BaselinePath); except end;
-  if Req.WriteBaselinePath <> '' then
-    try TBaseline.Write(Findings, Req.WriteBaselinePath); except end;
+  // UEBERGANG (TBaselineScope Schritt-6-Teilumfang): die Facade kennt
+  // weder Projektdatei noch Settings-Objekt, der Zuschnitt kommt deshalb
+  // aus den Globals - Modus via ApplyRepoIni/ApplyDetectorThresholds,
+  // Wurzel setzt der Host wie bisher. Faellt, sobald TScanRequest einen
+  // expliziten Zuschnitt traegt.
+  if (Req.BaselinePath <> '') or (Req.WriteBaselinePath <> '') then
+  begin
+    var BlScope := TBaselineScope.FromGlobals;
+    if Req.BaselinePath <> '' then
+      try TBaseline.Apply(Findings, Req.BaselinePath, BlScope); except end;
+    if Req.WriteBaselinePath <> '' then
+      try TBaseline.Write(Findings, Req.WriteBaselinePath, BlScope); except end;
+  end;
 
   Result := TScanResult.Create(Findings, BaseDir);
   finally

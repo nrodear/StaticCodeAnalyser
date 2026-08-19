@@ -43,21 +43,17 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache;
+  uFileTextCache, uRegExMatches;
 
-var
-  // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
-  CachedReMethod   : TRegEx;
-  CachedReProperty : TRegEx;
-  CachedReInit     : Boolean = False;
-
-procedure EnsureRegexCacheBuilt;
-begin
-  if CachedReInit then Exit;
-  CachedReMethod   := TRegEx.Create('(?i)^\s*(procedure|function|constructor|destructor)\s+([A-Za-z_][A-Za-z0-9_]*)');
-  CachedReProperty := TRegEx.Create('(?i)^\s*property\s+([A-Za-z_][A-Za-z0-9_]*)');
-  CachedReInit     := True;
-end;
+const
+  // Thread-Fix (2026-08-19): die frueheren unit-vars (CachedReX + Init-Flag)
+  // teilten EINE kompilierte TPerlRegEx-Instanz ueber alle Threads; ein
+  // paralleles Match mutierte deren Subject/Offsets. Die Patterns kommen
+  // jetzt pro Thread aus TRegExMatches.CachedEx; [roNotEmpty] entspricht
+  // exakt dem Default des alten Ein-Arg-TRegEx.Create.
+  RE_MEMBER_METHOD =
+    '(?i)^\s*(procedure|function|constructor|destructor)\s+([A-Za-z_][A-Za-z0-9_]*)';
+  RE_MEMBER_PROPERTY = '(?i)^\s*property\s+([A-Za-z_][A-Za-z0-9_]*)';
 
 function TrimL(const S: string): string;
 begin
@@ -135,8 +131,11 @@ var
   Name        : string;
   F           : TLeakFinding;
   IsPublicSection : Boolean;
+  ReMethod    : TRegEx;
+  ReProperty  : TRegEx;
 begin
-  EnsureRegexCacheBuilt;
+  ReMethod   := TRegExMatches.CachedEx(RE_MEMBER_METHOD, [roNotEmpty]);
+  ReProperty := TRegExMatches.CachedEx(RE_MEMBER_PROPERTY, [roNotEmpty]);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
@@ -176,9 +175,9 @@ begin
       if not InClass then Continue;
 
       // Methode / Property?
-      M := CachedReMethod.Match(Line);
+      M := ReMethod.Match(Line);
       if not M.Success then
-        M := CachedReProperty.Match(Line);
+        M := ReProperty.Match(Line);
       if not M.Success then Continue;
 
       Name := M.Groups[M.Groups.Count - 1].Value;

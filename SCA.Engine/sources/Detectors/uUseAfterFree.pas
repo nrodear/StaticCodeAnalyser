@@ -77,20 +77,16 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils, System.IOUtils,
-  uFileTextCache,
+  uFileTextCache, uRegExMatches,
   uCFG;
 
-var
-  // Lazy-Cache: beide Patterns sind konstant. ReEndOfMethod war besonders
-  // teuer weil er PRO Free-Match (= pro identifier-Free im File) neu
-  // kompiliert wurde - in Files mit vielen Free-Aufrufen Faktor 10+ Compiles.
-  CachedReFree        : TRegEx;
-  CachedReEndOfMethod : TRegEx;
-  CachedReInit        : Boolean = False;
-
-procedure EnsureRegexCacheBuilt;
-begin
-  if CachedReInit then Exit;
+const
+  // Thread-Fix (2026-08-19): die frueheren unit-vars (CachedReX + Init-Flag)
+  // teilten EINE kompilierte TPerlRegEx-Instanz ueber alle Threads; ein
+  // paralleles Match mutierte deren Subject/Offsets. Die Patterns kommen
+  // jetzt pro Thread aus TRegExMatches.CachedEx; [roNotEmpty] entspricht
+  // exakt dem Default des alten Ein-Arg-TRegEx.Create.
+  //
   // Free-Regex mit zwei Look-Aheads gegen typische FPs (mORMot/Firebird-Audit):
   //   (?!\s*:=)         vermeidet 'vTable.free := @ptr' (Function-Pointer-
   //                     Assignment auf ein Field das zufaellig 'free' heisst -
@@ -106,15 +102,13 @@ begin
   // DisposeOf = NEXTGEN-Pendant fuer ARC-Mode.
   // Patterns sind unwahrscheinlicher als .Free aber kommen in
   // mORMot/Indy/Legacy-Code vor.
-  CachedReFree        := TRegEx.Create(
+  RE_FREE_CALL =
     '(?i)(?:\bFreeAndNil\s*\(\s*(\w+)\s*\)' +
     '|\b(\w+)\s*\.\s*Free\b(?!\s*(?::=|\(\s*\w))' +
     '|\b(\w+)\s*\.\s*Destroy\b(?!\s*(?::=|\(\s*\w))' +
-    '|\b(\w+)\s*\.\s*DisposeOf\b(?!\s*(?::=|\(\s*\w)))');
-  CachedReEndOfMethod := TRegEx.Create(
-    '(?im)^\s*end\s*;|\b(procedure|function|constructor|destructor|class\s+(?:procedure|function|constructor|destructor))\b');
-  CachedReInit := True;
-end;
+    '|\b(\w+)\s*\.\s*DisposeOf\b(?!\s*(?::=|\(\s*\w)))';
+  RE_END_OF_METHOD =
+    '(?im)^\s*end\s*;|\b(procedure|function|constructor|destructor|class\s+(?:procedure|function|constructor|destructor))\b';
 
 
 
@@ -169,13 +163,15 @@ var
   CFGMap   : TObjectDictionary<TAstNode, TCFG>;
   // Perf (2026-07-05): P10 - per-File-Caches, lazy beim ersten Bedarf:
   //   (a) BoundaryPositions = sortierte Start-Positionen aller Matches
-  //       von CachedReEndOfMethod ueber den GANZEN Code (statt pro
+  //       von ReEndOfMethod ueber den GANZEN Code (statt pro
   //       Free-Match Copy(Code, StartPos, Rest) + Regex auf der Kopie).
   //   (b) MethodSpans = sortierte Method-Ranges fuer FindMethodForLine.
   BoundaryPositions : TArray<Integer>;
   BoundariesBuilt   : Boolean;
   MethodSpans       : TArray<TMethodSpan>;
   MethodSpansBuilt  : Boolean;
+  ReFree        : TRegEx;
+  ReEndOfMethod : TRegEx;
 
   function CalcMethodEndLine(N: TAstNode): Integer;
   var Stack : TStack<TAstNode>; Cur : TAstNode; Ch : TAstNode;
@@ -318,7 +314,7 @@ var
 
   procedure EnsureBoundariesBuilt;
   // Perf (2026-07-05): P10 (a) - Methoden-Boundaries EINMAL pro Datei
-  // via CachedReEndOfMethod.Matches(Code) in ein sortiertes Positions-
+  // via ReEndOfMethod.Matches(Code) in ein sortiertes Positions-
   // Array, statt pro Free-Match Copy(Code, StartPos, Rest) + Regex auf
   // der Kopie (O(K x N)-Churn bei vielen Free-Aufrufen im File).
   // Match.Index ist 1-basiert im Volltext; Matches liefert aufsteigend.
@@ -328,7 +324,7 @@ var
   begin
     if BoundariesBuilt then Exit;
     BoundariesBuilt := True;
-    Coll := CachedReEndOfMethod.Matches(Code);
+    Coll := ReEndOfMethod.Matches(Code);
     SetLength(BoundaryPositions, Coll.Count);
     for i := 0 to Coll.Count - 1 do
       BoundaryPositions[i] := Coll[i].Index;
@@ -357,7 +353,7 @@ var
 
   function SnippetStartEndMatch(APos: Integer): Boolean;
   // Perf (2026-07-05): P10 (a) - repliziert den '^'-Anker-Sonderfall:
-  // frueher lief CachedReEndOfMethod auf einer Kopie ab StartPos; dort
+  // frueher lief ReEndOfMethod auf einer Kopie ab StartPos; dort
   // matchte '(?im)^\s*end\s*;' auch am Kopie-ANFANG, selbst wenn APos
   // im Volltext mitten in einer Zeile liegt (z.B. 'finally X.Free end;').
   // Das Volltext-Matches-Array enthaelt diese Position nicht, deshalb
@@ -466,7 +462,8 @@ var
   end;
 
 begin
-  EnsureRegexCacheBuilt;
+  ReFree        := TRegExMatches.CachedEx(RE_FREE_CALL, [roNotEmpty]);
+  ReEndOfMethod := TRegExMatches.CachedEx(RE_END_OF_METHOD, [roNotEmpty]);
   // Perf (2026-07-05): P10 - lokale Booleans sind NICHT auto-initialisiert
   // (anders als die managed Arrays): Lazy-Flags explizit zuruecksetzen.
   BoundariesBuilt  := False;
@@ -492,7 +489,7 @@ begin
     end;
 
     // FreeAndNil(<id>) oder <id>.Free / .Destroy / .DisposeOf als Free-Punkt.
-    Matches := CachedReFree.Matches(Code);
+    Matches := ReFree.Matches(Code);
     for M in Matches do
     begin
       // Gruppe 1 = Ident in FreeAndNil(...)

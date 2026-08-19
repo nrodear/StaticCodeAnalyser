@@ -24,7 +24,7 @@ unit uFloatEquality;
 //   * Phase 1: sammle Float-Variablen aus Deklarationen.
 //     Pattern: `<ident>: Single|Double|Extended|Real|Currency;`
 //     (nur der kolon-adjazente Ident; Komma-Listen sind bewusste FN-Klasse,
-//     Entscheid 2026-07-25 - Begruendung an EnsureRegexCacheBuilt).
+//     Entscheid 2026-07-25 - Begruendung am Pattern RE_FLOAT_DECL).
 //   * Phase 2: scanne nach ` <ident> = <expr> ` oder ` <expr> = <ident> `
 //     in if-/while-/until-Kontexten, wo <ident> aus der Float-Var-Liste
 //     stammt. Operator-Match auch fuer `<>`.
@@ -71,7 +71,7 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uDetectorUtils, uTypeResolver;
+  uFileTextCache, uDetectorUtils, uTypeResolver, uRegExMatches;
 
 const
   FLOAT_TYPES : array[0..4] of string =
@@ -112,15 +112,13 @@ const
     'shortint', 'longint', 'longword', 'nativeint', 'nativeuint', 'int8',
     'int16', 'int32', 'uint8', 'uint16', 'uint32', 'dword');
 
-var
-  // Lazy-Cache (Round 11): konstante Patterns einmalig kompilieren.
-  CachedReDecl  : TRegEx;
-  CachedReEqual : TRegEx;
-  CachedReInit  : Boolean = False;
-
-procedure EnsureRegexCacheBuilt;
-begin
-  if CachedReInit then Exit;
+const
+  // Thread-Fix (2026-08-19): die frueheren unit-vars (CachedReX + Init-Flag)
+  // teilten EINE kompilierte TPerlRegEx-Instanz ueber alle Threads; ein
+  // paralleles Match mutierte deren Subject/Offsets. Die Patterns kommen
+  // jetzt pro Thread aus TRegExMatches.CachedEx; [roNotEmpty] entspricht
+  // exakt dem Default des alten Ein-Arg-TRegEx.Create.
+  //
   // Bewusste FN-Klasse (Entscheid 2026-07-25): Komma-Listen-Decls werden
   // NICHT erfasst - Gruppe 1 faengt nur den kolon-adjazenten Ident ('var
   // Best, Seed: Double;' liefert nur 'Seed'). Der FN-Close (Capture der
@@ -129,10 +127,8 @@ begin
   // verschlechterte die Praezision messbar (Kette after88 440 -> after89 662
   // -> after90 654, Gates holten nur -8). Re-Oeffnung nur mit Wertedomaenen-
   // Analyse, die die ADD-Population auf Bestands-TP-Niveau hebt.
-  CachedReDecl  := TRegEx.Create('(?im)\b(\w+)\s*:\s*(Single|Double|Extended|Real|Currency)\b');
-  CachedReEqual := TRegEx.Create('(?i)\b(\w+(?:\.\w+)?)\s*(=|<>)\s*([\w.]+)');
-  CachedReInit  := True;
-end;
+  RE_FLOAT_DECL = '(?im)\b(\w+)\s*:\s*(Single|Double|Extended|Real|Currency)\b';
+  RE_FLOAT_EQUAL = '(?i)\b(\w+(?:\.\w+)?)\s*(=|<>)\s*([\w.]+)';
 
 function IsFloatType(const TypeText: string): Boolean;
 var
@@ -1009,8 +1005,11 @@ var
   LineNo    : Integer;
   F         : TLeakFinding;
   TR        : TTypeResolver;   // Welle 1: scope-genaue Typ-Aufloesung (SCA144-Opt-in)
+  ReDecl    : TRegEx;
+  ReEqual   : TRegEx;
 begin
-  EnsureRegexCacheBuilt;
+  ReDecl  := TRegExMatches.CachedEx(RE_FLOAT_DECL, [roNotEmpty]);
+  ReEqual := TRegExMatches.CachedEx(RE_FLOAT_EQUAL, [roNotEmpty]);
   TR := nil;
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
@@ -1022,13 +1021,13 @@ begin
     // Phase 1: Float-Variablen sammeln. Single-Ident pro Deklaration -
     // eine Komma-Liste `A, B: Double` faengt nur den kolon-adjazenten
     // Ident. Bewusste FN-Klasse (Entscheid 2026-07-25), Begruendung am
-    // Decl-Regex in EnsureRegexCacheBuilt.
+    // Decl-Pattern RE_FLOAT_DECL.
     FloatVars := TStringList.Create;
     try
       FloatVars.CaseSensitive := False;
       FloatVars.Sorted := True;
       FloatVars.Duplicates := dupIgnore;
-      for M in CachedReDecl.Matches(Code) do
+      for M in ReDecl.Matches(Code) do
         if IsFloatType(M.Groups[2].Value) then
           FloatVars.Add(LowerCase(M.Groups[1].Value));
       if FloatVars.Count = 0 then Exit;
@@ -1042,7 +1041,7 @@ begin
 
       // Phase 2: scanne nach `<ident> = <token>` oder `<token> = <ident>`
       // sowie `<>`-Variante. Beide Operanden simple Identifier oder Zahlen.
-      for M in CachedReEqual.Matches(Code) do
+      for M in ReEqual.Matches(Code) do
       begin
         Lhs := M.Groups[1].Value;
         Op  := M.Groups[2].Value;

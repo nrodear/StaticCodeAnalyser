@@ -6,14 +6,20 @@ unit uAstSpans;
 //
 // WARUM ES DIESE UNIT GIBT
 //
-// Die Frage ist im Kernpaket SIEBENFACH beantwortet, jedes Mal neu:
-//   uParser2.pas:1624          MaxSubtreeLine    (iterativ, bleibt bestehen)
-//   uUseAfterFree.pas:180      CalcMethodEndLine (iterativ)
-//   uUninitVar.pas:3306        CalcMethodEndLine (iterativ)
-//   uUnusedRoutine.pas:235     MaxLineOf         (iterativ, ohne nil-Pruefung)
-//   uLeakDetector2.pas:2066    SubtreeMaxLine    (iterativ) - ABGELOEST
-//   uTypeResolver.pas:162      DeepMaxLine       (REKURSIV, ohne nil-Pruefung)
-//   uLargeClass.pas:79         DeepMaxLine       (REKURSIV, ohne nil-Pruefung)
+// Die Frage war im Kernpaket ACHTFACH beantwortet, jedes Mal neu.
+// Stand 2026-08-19 - sechs Kopien abgeloest, zwei bleiben mit Grund:
+//   uLeakDetector2.pas         SubtreeMaxLine    - ABGELOEST
+//   uUninitVar.pas             CalcMethodEndLine - ABGELOEST
+//   uUnusedRoutine.pas         MaxLineOf         - ABGELOEST
+//   uTypeResolver.pas          DeepMaxLine       - ABGELOEST
+//   uLargeClass.pas            DeepMaxLine       - ABGELOEST (2 Stellen)
+//   uLongMethod.pas            FindLastLine      - ABGELOEST 2026-08-19
+//     (die achte Kopie; fehlte in dieser Liste, weil sie erst beim
+//     Backlog-Sweep auffiel - rekursiv, jetzt der iterative Walk hier)
+//   uParser2.pas:1624          MaxSubtreeLine    - BLEIBT: Hot-Path des
+//     Parsers, iterativ, bewusst ohne Unit-Abhaengigkeit nach aussen
+//   uUseAfterFree.pas:180      CalcMethodEndLine - BLEIBT: traegt eine
+//     Degenerationsheuristik (Z.227-232), ist also KEINE reine Kopie
 //
 // Nach Normalisierung bleiben davon zwei Algorithmen uebrig, und die beiden
 // rekursiven Fassungen sind zeichengleich zueinander. Das ist - anders als

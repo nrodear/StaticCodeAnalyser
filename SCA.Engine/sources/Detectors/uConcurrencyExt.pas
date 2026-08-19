@@ -43,27 +43,22 @@ implementation
 
 uses
   System.RegularExpressions, System.StrUtils,
-  uFileTextCache, uDetectorUtils, uTypeIndex;
+  uFileTextCache, uDetectorUtils, uTypeIndex, uRegExMatches;
 
-var
-  // Lazy-Cache (Round 11): die 3 KONSTANTEN Patterns einmalig kompilieren.
-  // Die 2 dynamischen (mit Ident im Pattern) bleiben per-Call compile - das
-  // sind ggf. Round-12-Kandidaten via Capture-Group + Filter-Algorithmus.
-  CachedReFuncHeader : TRegEx;
-  CachedReResume     : TRegEx;
-  CachedReFreeNil    : TRegEx;
-  CachedReInit       : Boolean = False;
-
-procedure EnsureRegexCacheBuilt;
-begin
-  if CachedReInit then Exit;
-  CachedReFuncHeader := TRegEx.Create(
+const
+  // Thread-Fix (2026-08-19): die frueheren unit-vars (CachedReX + Init-Flag)
+  // teilten EINE kompilierte TPerlRegEx-Instanz ueber alle Threads; ein
+  // paralleles Match mutierte deren Subject/Offsets. Die 3 KONSTANTEN
+  // Patterns kommen jetzt pro Thread aus TRegExMatches.CachedEx;
+  // [roNotEmpty] entspricht exakt dem Default des alten Ein-Arg-
+  // TRegEx.Create. Die dynamischen Patterns (mit Ident-Anteil) bleiben
+  // per-Call-Compile in LOKALEN TRegEx-Variablen - lokal ist thread-sicher,
+  // nur GETEILTE Instanzen waren das Problem.
+  RE_FUNC_HEADER =
     '(?is)\bfunction\s+[\w.]+\s*(?:\([^()]*(?:\([^()]*\)[^()]*)*\))?\s*:\s*' +
-    '([A-Za-z0-9_<>,\s.]+?)\s*;');
-  CachedReResume  := TRegEx.Create('(?i)\b(\w+)\.Resume\b(?!\s*\:=)');
-  CachedReFreeNil := TRegEx.Create('(?i)\bFreeAndNil\s*\(\s*(\w+)\s*\)');
-  CachedReInit    := True;
-end;
+    '([A-Za-z0-9_<>,\s.]+?)\s*;';
+  RE_RESUME_CALL = '(?i)\b(\w+)\.Resume\b(?!\s*\:=)';
+  RE_FREE_AND_NIL = '(?i)\bFreeAndNil\s*\(\s*(\w+)\s*\)';
 
 // Vorheriger lokaler StripFileComments hat Kommentare gestrippt, String-
 // Literale aber 1:1 erhalten - das war die FP-Quelle (TDestroyWithoutTerminate
@@ -91,6 +86,9 @@ var
   DeclaredType : string;
   Recv         : string;
   RecvType     : string;
+  ReFuncHeader : TRegEx;
+  ReResume     : TRegEx;
+  ReFreeNil    : TRegEx;
 
   function StripGenerics(const S: string): string;
   // 'TDictionary<TThreadID, TThreadContextInfo>' -> 'TDictionary'. Ohne das
@@ -217,7 +215,7 @@ var
     // nicht), aber fuer Method-Header reicht zwei Verschachtelungsebenen.
     // Letzter Match im Snippet = naechstgelegener Header.
     Hit := '';
-    for M in CachedReFuncHeader.Matches(Snippet) do
+    for M in ReFuncHeader.Matches(Snippet) do
       Hit := M.Groups[1].Value;
     Result := Hit;
   end;
@@ -400,7 +398,9 @@ var
   end;
 
 begin
-  EnsureRegexCacheBuilt;
+  ReFuncHeader := TRegExMatches.CachedEx(RE_FUNC_HEADER, [roNotEmpty]);
+  ReResume     := TRegExMatches.CachedEx(RE_RESUME_CALL, [roNotEmpty]);
+  ReFreeNil    := TRegExMatches.CachedEx(RE_FREE_AND_NIL, [roNotEmpty]);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
@@ -413,7 +413,7 @@ begin
     //    konservativ alles und verlassen uns auf den User-Suppress
     //    wenn das ein FP ist - der Compiler markiert echte TThread.Resume
     //    sowieso schon als deprecated.
-    Matches := CachedReResume.Matches(Code);
+    Matches := ReResume.Matches(Code);
     for M in Matches do
     begin
       Recv := M.Groups[1].Value;
@@ -441,7 +441,7 @@ begin
     //    KEIN <ident>.Terminate (in den letzten ~10 Zeilen).
     //    LookBack-Window in Bytes (gestripte Code-Laenge); ~500 chars
     //    deckt ~10 Code-Zeilen ab.
-    Matches := CachedReFreeNil.Matches(Code);
+    Matches := ReFreeNil.Matches(Code);
     for M in Matches do
     begin
       Ident := M.Groups[1].Value;

@@ -234,7 +234,7 @@ begin
     F.LineNumber := '0';
     List.Add(F);
 
-    Written := TBaseline.Write(List, Fn);
+    Written := TBaseline.Write(List, Fn, TBaselineScope.ByFileName);
     Assert.AreEqual<Integer>(1, Written,
       'gemeldet wird, was geschrieben wurde - ohne den Lesefehler');
     Assert.Contains(TFile.ReadAllText(Fn), '"count": 1',
