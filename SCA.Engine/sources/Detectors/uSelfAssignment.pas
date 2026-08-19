@@ -193,7 +193,7 @@ type
     RecMembers : TDictionary<string, string>;    // 'rec.feld' -> Feldtyp (bare, lower; '' = Skalar)
     RecProps   : TDictionary<string, Byte>;      // 'rec.prop' existiert
     RecNames   : TDictionary<string, Byte>;      // Records DIESER Unit
-    PtrAlias   : TDictionary<string, string>;    // 'palias' -> Zieltyp ('^'-Aliase)
+    PtrAlias   : TDictionary<string, string>;    // Alias -> Zielname (fuer '^'-Hops; s. BuildMemberCtx)
     // Aufloesungs-Umgebung, gebuendelt statt als Parameter-Schwanz
     // (LongParamList-Regel): Unit-Mengen einmal je Unit, Scope wird je
     // Methode von DoAnalyzeMethod gesetzt (Ctx ist ein Stack-Record der
@@ -461,13 +461,21 @@ begin
       end;
     end;
   end;
+  // Alias-Tabelle fuer '^'-Hops. Der Parser sammelt im Alias-TypeRef
+  // NUR Ident-Tokens (uParser2 Alias-Zweig: 'if Tok.Kind = tkIdent') -
+  // aus 'PVec = ^TVec' wird TypeRef 'TVec', das Dach ist WEG. Deshalb
+  // landet hier JEDER Alias: das ist sicher, weil erst das '^' im
+  // ZUWEISUNGSZIEL den Hop ausloest (ein Nicht-Pointer-Alias mit
+  // 'A^.X' kompilierte gar nicht), die Tabelle liefert nur den
+  // Zielnamen. Proc-/Set-/Array-Aliase ergeben harmlosen Muell
+  // ('sender' o.ae.), der in keiner Record-Tabelle existiert -
+  // die Kette stirbt dann konservativ still.
   for RN in UnitNode.FindAllRef(nkTypeAlias) do
   begin
-    Tr := Trim(RN.TypeRef);
-    if (Tr <> '') and (Tr[1] = '^') then
+    Tr := ReduceToBareTypeLow(RN.TypeRef);
+    if Tr <> '' then
     begin
-      ACtx.PtrAlias.AddOrSetValue(LowerCase(Trim(RN.Name)),
-        ReduceToBareTypeLow(Copy(Tr, 2, MaxInt)));
+      ACtx.PtrAlias.AddOrSetValue(LowerCase(Trim(RN.Name)), Tr);
     end;
   end;
 end;
