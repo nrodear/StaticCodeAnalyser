@@ -1,6 +1,6 @@
 # Release 0.9.16 — A quiet clipboard, honest filters, and a text-only hint
 
-🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Full release notes: [docs/releases/v0.9.16.md](docs/releases/v0.9.16.md)
 ([deutsch](docs/releases/v0.9.16_de.md)).
@@ -32,7 +32,7 @@ Full release notes: [docs/releases/v0.9.16.md](docs/releases/v0.9.16.md)
 
 # Previously — Release 0.9.14 — A grey dark mode, and a safer IDE hand-off
 
-🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Full release notes: [docs/releases/v0.9.14.md](docs/releases/v0.9.14.md)
 ([deutsch](docs/releases/v0.9.14_de.md)).
@@ -60,7 +60,7 @@ A small follow-up to 0.9.13, driven by what that release got wrong.
 
 # Previously — Release 0.9.13 — The baseline finds its home
 
-🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Full release notes: [docs/releases/v0.9.13.md](docs/releases/v0.9.13.md)
 ([deutsch](docs/releases/v0.9.13_de.md)).
@@ -91,7 +91,7 @@ A big release: baselines, a new rule, and the standalone EXE catching up.
 
 # Previously — Release 0.9.12 — The panel keeps up
 
-🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Full release notes: [docs/releases/v0.9.12.md](docs/releases/v0.9.12.md)
 ([deutsch](docs/releases/v0.9.12_de.md)).
@@ -114,7 +114,7 @@ A small release, one day after 0.9.11.
 
 # Previously — Release 0.9.11 — Repairs
 
-🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Full release notes: [docs/releases/v0.9.11.md](docs/releases/v0.9.11.md)
 ([deutsch](docs/releases/v0.9.11_de.md)).
@@ -148,7 +148,7 @@ stopped being true.
 
 # Previously — Release 0.9.10 — One finding per block, a quieter default
 
-🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Full release notes: [docs/releases/v0.9.10.md](docs/releases/v0.9.10.md)
 ([deutsch](docs/releases/v0.9.10_de.md)).
@@ -180,7 +180,7 @@ changed is *how* findings are reported.
 
 # Previously — Release 0.9.9 — Fewer false positives, two project-scope rules
 
-🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md)
+🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
 Full release notes: [docs/releases/v0.9.9.md](docs/releases/v0.9.9.md)
 ([deutsch](docs/releases/v0.9.9_de.md)).

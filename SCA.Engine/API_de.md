@@ -1,5 +1,5 @@
 # SCA.Engine — Engine & API
-*🇩🇪 Deutsch — 🇬🇧 [English](API.md)*
+*🇩🇪 Deutsch — 🇬🇧 [English](API.md) — 🇫🇷 [Français](API_fr.md)*
 
 Statische Code-Analyse für Delphi/Object Pascal als wiederverwendbares
 Laufzeit-Package. Dieses Dokument beschreibt die **Engine** (Architektur,

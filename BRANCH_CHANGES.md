@@ -3,7 +3,7 @@
 Sonar-inspired static code analyser for Delphi / Object Pascal. Catches
 memory leaks, code smells, security gaps and maintainability issues.
 
-🇬🇧 English page · 🇩🇪 [Deutsche Version](BRANCH_CHANGES_de.md)
+🇬🇧 English page · 🇩🇪 [Deutsche Version](BRANCH_CHANGES_de.md) · 🇫🇷 [Version française](BRANCH_CHANGES_fr.md)
 
 The repository ships two components:
 

@@ -21,7 +21,7 @@ wir portiert haben. Die SCA060-119 Naming-/Formatting-Checks sind seit 2026-07-1
 einer eigenen Sektion unten enumeriert; [`rules/sca-rules.json`](rules/sca-rules.json)
 bleibt die kanonische maschinenlesbare Liste.
 
-🇬🇧 [English version](DETECTORS.md)
+🇬🇧 [English version](DETECTORS.md) · 🇫🇷 [Version française](DETECTORS_fr.md)
 
 ---
 

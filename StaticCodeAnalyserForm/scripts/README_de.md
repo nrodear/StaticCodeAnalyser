@@ -1,6 +1,6 @@
 # Sonar-Push-Scripts
 
-🇬🇧 [English version](README.md)
+🇬🇧 [English version](README.md) · 🇫🇷 [Version française](README_fr.md)
 
 Zwei PowerShell-Helfer um die Standalone-EXE + `sonar-scanner`. Scan und
 Upload getrennt zu halten erlaubt einen Upload-Retry ohne Re-Scan,

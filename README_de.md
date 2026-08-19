@@ -25,7 +25,7 @@ DFM-Befunde direkt als Text im Code-Editor. AI-fertiger Markdown-Fix-Prompt
 per Kontextmenü in die Zwischenablage (automatische Kopie beim Klick ist
 Opt-in). Open Source, MIT-lizenziert.
 
-🇬🇧 [English version](README.md)
+🇬🇧 [English version](README.md) · 🇫🇷 [Version française](README_fr.md)
 
 ![SCA in Aktion — Analyse, Befunde und Hover-Overlays direkt in der Delphi-IDE](docs/sca-demo.gif)
 

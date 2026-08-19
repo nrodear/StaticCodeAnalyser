@@ -1,6 +1,6 @@
 # Getting findings out of SCA — formats and workflows
 
-🇩🇪 [Deutsche Version](EXPORTS_de.md)
+🇩🇪 [Deutsche Version](EXPORTS_de.md) · 🇫🇷 [Version française](EXPORTS_fr.md)
 
 This page answers one question: **"I ran the analyser — how do I get the
 findings where I need them?"** It covers every export the tool can

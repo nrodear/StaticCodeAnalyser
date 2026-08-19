@@ -21,7 +21,7 @@ correctness checks that SonarDelphi ships and we ported. The SCA060-119 naming /
 in their own section below (added 2026-07-19); [`rules/sca-rules.json`](rules/sca-rules.json)
 remains the canonical machine-readable roster.
 
-🇩🇪 [Deutsche Version](DETECTORS_de.md)
+🇩🇪 [Deutsche Version](DETECTORS_de.md) · 🇫🇷 [Version française](DETECTORS_fr.md)
 
 ---
 

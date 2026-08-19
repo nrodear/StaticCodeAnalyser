@@ -1,6 +1,6 @@
 # HowTo: Build and run the tests
 
-*🇬🇧 English — 🇩🇪 [Deutsch](HowTo_Tests_de.md)*
+*🇬🇧 English — 🇩🇪 [Deutsch](HowTo_Tests_de.md) — 🇫🇷 [Français](HowTo_Tests_fr.md)*
 
 The DUnitX test suite (`StaticCodeAnalyserForm\tests\TestProject.dproj`) needs
 **two external components**. Without them "Build all projects" fails with

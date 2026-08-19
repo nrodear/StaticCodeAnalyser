@@ -1,6 +1,6 @@
 # SCA.CLI.Demo
 
-*🇩🇪 Deutsch — 🇬🇧 [English](README.md) — Vollständige Engine-/API-Referenz: [../SCA.Engine/API_de.md](../SCA.Engine/API_de.md)*
+*🇩🇪 Deutsch — 🇬🇧 [English](README.md) — 🇫🇷 [Français](README_fr.md) — Vollständige Engine-/API-Referenz: [../SCA.Engine/API_de.md](../SCA.Engine/API_de.md)*
 
 Minimaler Beispiel-Consumer der **SCA-Engine-API** (`uEngineApi`).
 

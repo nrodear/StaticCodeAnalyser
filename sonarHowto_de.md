@@ -1,6 +1,6 @@
 # Sonar-HowTo (Standalone-EXE)
 
-🇬🇧 [English version](sonarHowto.md)
+🇬🇧 [English version](sonarHowto.md) · 🇫🇷 [Version française](sonarHowto_fr.md)
 
 Schritt-für-Schritt-Anleitung um SCA-Findings per **Standalone-EXE** in eine
 SonarQube-Instanz zu pushen. Kein IDE-Plugin nötig.

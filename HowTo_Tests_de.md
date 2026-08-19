@@ -1,5 +1,5 @@
 # HowTo: Tests bauen und laufen
-*🇩🇪 Deutsch — 🇬🇧 [English](HowTo_Tests.md)*
+*🇩🇪 Deutsch — 🇬🇧 [English](HowTo_Tests.md) — 🇫🇷 [Français](HowTo_Tests_fr.md)*
 
 Die DUnitX-Test-Suite (`StaticCodeAnalyserForm\tests\TestProject.dproj`)
 braucht **zwei externe Komponenten**. Ohne sie scheitert "Alle Projekte
