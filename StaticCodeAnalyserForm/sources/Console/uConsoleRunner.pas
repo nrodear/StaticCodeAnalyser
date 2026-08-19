@@ -579,16 +579,15 @@ begin
   WriteLn('  --sonar-config <ini>  Alternative analyser.ini path for Sonar lookup');
   WriteLn('');
   WriteLn('Performance:');
-  WriteLn('  --parallel            DEFEKT - NICHT BENUTZEN. Per-File-Parallel-');
-  WriteLn('                        scan. Elf Detektoren teilen sich unit-globale');
-  WriteLn('                        TRegEx-Instanzen; unter Last verlieren sie');
-  WriteLn('                        ECHTE Funde und erfinden Fehler-Records.');
-  WriteLn('                        Gemessen: 13 Laeufe = 13 verschiedene');
-  WriteLn('                        Ergebnisse, 40 verlorene Funde. Und es ist');
-  WriteLn('                        nicht einmal schneller (seriell 24s, parallel');
-  WriteLn('                        28-41s). Mit --parallel-workers 1 ist der Lauf');
-  WriteLn('                        byte-identisch zum seriellen - das belegt die');
-  WriteLn('                        Nebenlaeufigkeit als Ursache.');
+  WriteLn('  --parallel            Per-File-Parallelscan. Seit 2026-08-20 thread-');
+  WriteLn('                        sicher und DETERMINISTISCH: die elf Detektoren');
+  WriteLn('                        mit unit-globalen TRegEx-Instanzen nutzen den');
+  WriteLn('                        Thread-ID-Cache; Beweis 5 serielle + 5 parallele');
+  WriteLn('                        Laeufe = EIN SARIF-Hash (vorher: 13 Laeufe =');
+  WriteLn('                        13 Ergebnisse). ABER: kein Tempogewinn, die');
+  WriteLn('                        serielle Vorphase (Parsen, Indizes) dominiert');
+  WriteLn('                        (gemessen 5,9s vs 5,9s). Opt-in fuer Perf-');
+  WriteLn('                        Experimente; fuer normale Laeufe unnoetig.');
   WriteLn('  --parallel-workers <n>');
   WriteLn('                        Worker-Anzahl fuer --parallel (0/weggelassen =');
   WriteLn('                        automatisch: CPU-Kerne, gedeckelt auf Dateianzahl).');
@@ -1305,17 +1304,17 @@ begin
       // 2026-08-08: Der Modus ist DEFEKT (s. Hilfetext). Wer ihn trotzdem
       // setzt, bekommt eine unuebersehbare Warnung auf stderr - still
       // falsche Ergebnisse sind fuer ein CI-Werkzeug der teuerste
-      // denkbare Zustand, und die frueher zugesagte Byte-Identitaet ist
-      // nachweislich falsch.
+      // Seit 2026-08-20 ist der Modus thread-sicher und deterministisch
+      // (Thread-ID-Regex-Cache in den elf betroffenen Detektoren; Beweis:
+      // 5 serielle + 5 parallele Laeufe = EIN SARIF-Hash). Der fruehere
+      // DEFEKT-Warnblock ist damit Geschichte - was bleibt, ist der
+      // fehlende Tempogewinn, und DEN sagt der Hinweis ehrlich an.
       if Args.Parallel then
       begin
         WriteLn(ErrOutput, '');
-        WriteLn(ErrOutput, 'WARNUNG: --parallel ist DEFEKT und liefert nicht reproduzierbare');
-        WriteLn(ErrOutput, '         Ergebnisse. Elf Detektoren teilen sich unit-globale');
-        WriteLn(ErrOutput, '         TRegEx-Instanzen; unter Last gehen ECHTE Funde verloren');
-        WriteLn(ErrOutput, '         und es entstehen erfundene Fehler-Records.');
-        WriteLn(ErrOutput, '         Der Modus ist ausserdem LANGSAMER als der serielle Lauf.');
-        WriteLn(ErrOutput, '         Fuer belastbare Ergebnisse: --parallel weglassen.');
+        WriteLn(ErrOutput, 'Hinweis: --parallel ist seit 2026-08-20 deterministisch (Ergebnis');
+        WriteLn(ErrOutput, '         byte-identisch zum seriellen Lauf), bringt aber KEINEN');
+        WriteLn(ErrOutput, '         Tempogewinn - die serielle Vorphase dominiert die Wandzeit.');
         WriteLn(ErrOutput, '');
       end;
       Req.Parallel        := Args.Parallel;

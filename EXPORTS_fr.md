@@ -253,7 +253,7 @@ Liste honnête, état v0.9.14 — tout a été reproduit :
 | Rapport HTML | ne stocke que les noms de fichiers de base ; des unités homonymes dans des dossiers différents entrent en collision |
 | Empreintes de référence | les unités homonymes de dossiers différents partagent par défaut un même espace de noms — désactivable avec `--baseline-path-fingerprint y` (voir ci-dessous) |
 | Fichiers source illisibles | comptés différemment dans la console, SARIF/Sonar/HTML et la référence |
-| `--parallel` | non déterministe ; à éviter pour les exports que l'on compare |
+| `--parallel` | déterministe depuis le 2026-08-20 (identique octet pour octet aux exécutions sérielles), mais sans gain de vitesse - la phase préalable sérielle domine |
 | `--sonar-insecure` | n'accepte pas les certificats auto-signés (il n'active que TLS 1.1) |
 | `--sonar-test` dans un dépôt étranger | un `sonar-project.properties` dans le dépôt scanné remplace votre hôte — votre jeton part là-bas |
 

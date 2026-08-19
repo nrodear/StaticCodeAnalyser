@@ -229,7 +229,7 @@ Honest list, as of v0.9.14 — all reproduced:
 | HTML report | Stores base file names only; same-named units in different folders collide |
 | Baseline fingerprints | Same-named units in different folders share a namespace by default — switch it off with `--baseline-path-fingerprint y` (see below) |
 | Unreadable source files | Counted differently in console, SARIF/Sonar/HTML and baseline |
-| `--parallel` | Not deterministic; do not use it for exports you compare |
+| `--parallel` | Deterministic since 2026-08-20 (byte-identical to serial runs), but no speedup yet - the serial pre-phase dominates |
 | `--sonar-insecure` | Does not accept self-signed certificates (it only enables TLS 1.1) |
 | `--sonar-test` inside a foreign repo | A `sonar-project.properties` in the scanned repo overrides your host — your token is sent there |
 
