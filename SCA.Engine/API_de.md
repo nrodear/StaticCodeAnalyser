@@ -29,7 +29,7 @@ Scans:
                               ┌────────────────────┤
                               ▼                    ▼
                       AST-Detektoren        Zeilen-/Token-Detektoren
-                      (~174 Regeln, je eine uXxx.pas)
+                      (~178 Regeln, je eine uXxx.pas)
                               │
                               ▼
                      TLeakFinding-Liste

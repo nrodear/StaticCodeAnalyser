@@ -28,7 +28,7 @@ The engine is a pure analysis library with no UI. Data flow of a scan:
                               ┌────────────────────┤
                               ▼                    ▼
                        AST detectors        Line/token detectors
-                       (~174 rules, one uXxx.pas each)
+                       (~178 rules, one uXxx.pas each)
                               │
                               ▼
                      TLeakFinding list

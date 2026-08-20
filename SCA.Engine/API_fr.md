@@ -28,7 +28,7 @@ données d'une analyse :
                               ┌────────────────────┤
                               ▼                    ▼
                       Détecteurs AST        Détecteurs ligne/token
-                      (~174 règles, une uXxx.pas chacune)
+                      (~178 règles, une uXxx.pas chacune)
                               │
                               ▼
                      Liste TLeakFinding
