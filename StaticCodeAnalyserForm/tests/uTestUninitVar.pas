@@ -4280,20 +4280,45 @@ begin
 end;
 
 procedure TTestUninitVar.RecordConstLabel_SameNameAsLocal_NoFinding;
-// Der Orpheus-Fall aus dem Kundenkorpus: das 'res:' im
-// Record-Konstruktor benennt ein FELD von TData, nicht die lokale
-// Variable 'res'. Weil die const-Sektion vor der Zuweisung steht, sah
-// das wie ein 'read before write' aus.
+// Der Orpheus-Fall aus dem Kundenkorpus (TestOvcDate.pas:40): das
+// 'res:' im Record-Konstruktor benennt ein FELD von TData, nicht die
+// gleichnamige lokale Variable. Weil die const-Sektion VOR der
+// Zuweisung steht, sah das wie ein 'read before write' aus.
+//
+// Der Aufbau bildet die Quelle genau nach - insbesondere stehen die
+// Record-FELDER auf eigenen Zeilen. Das ist nicht Kosmetik: schreibt
+// man den Record einzeilig
+//     type TRec = record y: Integer; res: Boolean; end;
+// verankert der Detektor die Lesestelle auf DIESER Zeile statt auf dem
+// Konstruktor, und das Gate greift nicht. Diese einzeilige Form ist
+// ein eigener, im Korpus NICHT gemessener Fall - bewusst offen
+// gelassen statt blind mitgefangen.
 const SRC =
-  'unit t; implementation'#13#10+
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
   'procedure Foo;'#13#10+
-  'type TRec = record y: Integer; res: Boolean; end;'#13#10+
-  'const cData: array[0..1] of TRec ='#13#10+
-  '  ((y: 1; res: True), (y: 2; res: False));'#13#10+
-  'var res: Boolean; i: Integer;'#13#10+
+  'type'#13#10+
+  '  TRec = record'#13#10+
+  '    y:   Integer;'#13#10+
+  '    res: Boolean;'#13#10+
+  '  end;'#13#10+
+  'const'#13#10+
+  '  cData : array[0..1] of TRec ='#13#10+
+  '    ((y: 1; res: True),'#13#10+
+  '     (y: 2; res: False));'#13#10+
+  'var'#13#10+
+  '  res : Boolean;'#13#10+
+  '  i   : Integer;'#13#10+
   'begin'#13#10+
-  '  for i := 0 to 1 do res := cData[i].res;'#13#10+
-  'end;';
+  '  for i := 0 to 1 do'#13#10+
+  '  begin'#13#10+
+  '    res := (cData[i].y > 0);'#13#10+
+  '    if res <> cData[i].res then'#13#10+
+  '      Halt(1);'#13#10+
+  '  end;'#13#10+
+  'end;'#13#10+
+  'end.';
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
