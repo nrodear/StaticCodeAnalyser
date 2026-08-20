@@ -1,4 +1,4 @@
-unit uInstanceInvokedConstructor;
+﻿unit uInstanceInvokedConstructor;
 
 // Detektor: `<instance>.Create(...)` - Constructor auf einer Instance statt
 // auf der Klasse.
@@ -66,6 +66,17 @@ type
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
+    // ACHTUNG, SCHWAECHERE ZUSAGE ALS AnalyzeUnit: dieser Einstieg
+    // analysiert EINE Methode ohne den unit-weiten Kontext, den
+    // AnalyzeUnit vorher aufbaut. Konkret geht verloren:
+    //   AFieldTypes - die Feld-zu-Typ-Abbildung der Unit. Ohne
+    //   sie ist bei einem Aufruf ueber ein Feld nicht
+    //   entscheidbar, ob der Bezeichner eine Instanz oder ein
+    //   Klassenname ist.
+    // Der Parameter hat einen nil-Default - wer ihn weglaesst,
+    // bekommt also stillschweigend das schwaechere Ergebnis. Der
+    // Regelbetrieb laeuft ueber AnalyzeUnit; dieser Einstieg ist
+    // fuer Tests und punktuelle Aufrufe gedacht.
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil;
       AFieldTypes: TDictionary<string, string> = nil);

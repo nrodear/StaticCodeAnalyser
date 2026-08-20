@@ -1,4 +1,4 @@
-unit uExportHtml;
+﻿unit uExportHtml;
 
 // Self-contained HTML-Code-Review-Report. Aus uExport ausgelagert weil
 // die HTML-Generierung mit eingebettetem CSS + JavaScript der mit Abstand
@@ -32,11 +32,25 @@ type
     // verschiedenen Ordnern im Report nicht unterscheidbar (Audit
     // 2026-08-08: zwei uSame.pas erschienen beide als 'uSame.pas', die
     // Ordnernamen kamen im ganzen Report nicht vor).
+    // AMaxRows: Obergrenze fuer die in die Tabelle gerenderten Zeilen.
+    //   -1 = Voreinstellung (HTML_MAX_ROWS_DEFAULT), 0 = unbegrenzt.
+    // Ohne Grenze ist der Bericht eines grossen Korpus ein OOM: der
+    // Umfang waechst linear mit der Fundzahl, und niemand liest 560.000
+    // Tabellenzeilen. Wird gekuerzt, sagt das ein Banner im Bericht -
+    // stillschweigend zu kuerzen waere schlimmer als der Absturz, weil
+    // der Leser die Luecke nicht sieht.
     class procedure Run(Findings: TObjectList<TLeakFinding>;
       const SourceFile: string; const FileName: string;
-      const ABaseDir: string = ''); static;
+      const ABaseDir: string = ''; AMaxRows: Integer = -1); static;
     class function DefaultFileName(const SourceFile: string;
       const TargetDir: string): string; static;
+    // Schreibt den Inhalt eines TStringBuilder als UTF-8 mit BOM,
+    // OHNE ihn vorher zu einem String und einer TStringList zu
+    // verdoppeln. Fuer grosse Berichte ist das der Unterschied
+    // zwischen 'laeuft' und 'out of memory'. Public allein fuer den
+    // Waechtertest der Stueckgrenze - Aufrufer ist nur Run.
+    class procedure SaveBuilderUtf8WithBom(ABuilder: TStringBuilder;
+      const FileName: string); static;
   private
     class function JsonForScript(const S: string): string; static;
     class function HtmlEscape(const S: string): string; static;
@@ -241,9 +255,64 @@ begin
                             '\', '/', [rfReplaceAll]);
 end;
 
+class procedure TExporterHtml.SaveBuilderUtf8WithBom(
+  ABuilder: TStringBuilder; const FileName: string);
+// T1 des HTML-Reviews (2026-08-05): der bisherige Weg ueber
+//   SL.Text := SB.ToString;  TExporter.SaveUtf8WithBom(SL, ...)
+// legte VOR dem ersten Byte auf Platte drei volle Kopien an - den
+// Builder, den ToString-String und die in Zeilen zerlegte
+// TStringList. Beim Korpus-Bericht (gemessen 2.673 Zeichen je Fund,
+// bei 560.077 Funden rund 1,43 GB HTML) ergab das eine Spitze von
+// etwa 8,4 GB - ein OOM, der zusaetzlich Exit-Code UND
+// Zusammenfassung eines ansonsten erfolgreichen Scans verwarf.
+//
+// Hier wird der Builder stueckweise abgeholt und sofort kodiert
+// weggeschrieben. Die Spitze ist der Builder plus ein Fenster von
+// wenigen Megabyte; zwei der drei Kopien entfallen ersatzlos.
+//
+// SURROGATE: eine Stueckgrenze darf kein Surrogatpaar zerschneiden,
+// sonst schreibt GetBytes jede Haelfte fuer sich und die Datei ist
+// dort still kaputt. Liegt die letzte Stelle eines Stuecks auf einer
+// HOHEN Haelfte ($D800..$DBFF), wandert die Grenze um ein Zeichen
+// zurueck. Der Ordinalvergleich steht hier bewusst statt
+// TCharacter.IsHighSurrogate - er braucht keine weitere Unit.
+const
+  CHUNK = 1024 * 1024;   // Zeichen, nicht Bytes
+var
+  Stream            : TFileStream;
+  Preamble, Bytes   : TBytes;
+  Start, Len, Total : Integer;
+  Part              : string;
+begin
+  Total  := ABuilder.Length;
+  Stream := TFileStream.Create(FileName, fmCreate);
+  try
+    Preamble := TEncoding.UTF8.GetPreamble;
+    if Length(Preamble) > 0 then
+      Stream.WriteBuffer(Preamble[0], Length(Preamble));
+    Start := 0;
+    while Start < Total do
+    begin
+      Len := CHUNK;
+      if Start + Len >= Total then
+        Len := Total - Start
+      else if (Ord(ABuilder.Chars[Start + Len - 1]) >= $D800) and
+              (Ord(ABuilder.Chars[Start + Len - 1]) <= $DBFF) then
+        Dec(Len);
+      Part  := ABuilder.ToString(Start, Len);
+      Bytes := TEncoding.UTF8.GetBytes(Part);
+      if Length(Bytes) > 0 then
+        Stream.WriteBuffer(Bytes[0], Length(Bytes));
+      Inc(Start, Len);
+    end;
+  finally
+    Stream.Free;
+  end;
+end;
+
 class procedure TExporterHtml.Run(Findings: TObjectList<TLeakFinding>;
   const SourceFile: string; const FileName: string;
-  const ABaseDir: string);
+  const ABaseDir: string; AMaxRows: Integer);
 const
   SNIPPET_CONTEXT = 3;  // Zeilen vor und nach der Befund-Zeile
   TOP_DETECTORS_N = 10; // Anzahl Eintraege in der Top-Liste und im "Top10"-Filter
@@ -254,6 +323,9 @@ const
   //   gruen  : Score <=  49  (keine Fehler, hoechstens ein paar Warnungen)
   //   gelb   : Score 50..499 (mind. 1 Fehler oder viele Warnungen)
   //   rot    : Score >= 500  (>= 5 Fehler-Aequivalente)
+  // Voreingestellte Obergrenze der Tabellenzeilen (T1). 20.000 Zeilen
+  // sind rund 55 MB HTML - gross, aber von Browsern beherrschbar.
+  HTML_MAX_ROWS_DEFAULT = 20000;
   HEALTH_W_ERR      = 100;
   HEALTH_W_WARN     = 10;
   HEALTH_W_HINT     = 1;
@@ -262,7 +334,12 @@ const
 var
   SB        : TStringBuilder;
   F         : TLeakFinding;
-  SL        : TStringList;
+  // T1: Zeilenbudget. RowsDropped steht VOR der Tabelle fest, damit
+  // der Banner oberhalb stehen kann - nTotal zaehlt bereits genau die
+  // Funde, die die Tabelle betreffen (SourceFile-Filter inklusive).
+  MaxRows     : Integer;
+  RowsEmitted : Integer;
+  RowsDropped : Integer;
   Files     : TStringList;
   // Bitmask je Datei: 1=Error, 2=Warning, 4=Hint. Gefuettert in der ersten
   // Schleife unten, ausgewertet beim <option data-sev="...">-Emit, sodass
@@ -453,6 +530,14 @@ begin
           Inc(SecCount, KindEntry.Value);
       end;
 
+  MaxRows := AMaxRows;
+  if MaxRows < 0 then
+    MaxRows := HTML_MAX_ROWS_DEFAULT;
+  RowsEmitted := 0;
+  RowsDropped := 0;
+  if (MaxRows > 0) and (nTotal > MaxRows) then
+    RowsDropped := nTotal - MaxRows;
+
   SB := TStringBuilder.Create;
   try
     SB.AppendLine('<!DOCTYPE html>');
@@ -536,6 +621,8 @@ begin
     SB.AppendLine('       border: 1px solid #ccc; border-radius: 3px; min-width: 200px; }');
     SB.AppendLine('    .controls .hint { color: #888; font-style: italic; }');
     SB.AppendLine('    .controls .row-count { color: #444; font-weight: 600; }');
+    SB.AppendLine('    .trunc-banner { margin: 8px 0; padding: 8px 12px; border-radius: 4px;');
+    SB.AppendLine('      background: #fff4e5; border: 1px solid #d98600; color: #6b4200; font-weight: 600; }');
     SB.AppendLine('    /* Sortierbare Header */');
     SB.AppendLine('    th.sortable { cursor: pointer; user-select: none; }');
     SB.AppendLine('    th.sortable:hover { background: #ebebeb; }');
@@ -722,6 +809,7 @@ begin
     SB.AppendLine('    :root[data-theme="dark"] .controls label { color: #bbb; }');
     SB.AppendLine('    :root[data-theme="dark"] .controls .hint { color: #999; }');
     SB.AppendLine('    :root[data-theme="dark"] .controls .row-count { color: #e0e0e0; }');
+    SB.AppendLine('    :root[data-theme="dark"] .trunc-banner { background: #3a2c12; border-color: #d98600; color: #ffd28a; }');
     SB.AppendLine('    :root[data-theme="dark"] th.sortable .sort-ind { color: #888; }');
     SB.AppendLine('    :root[data-theme="dark"] th.sortable.sort-asc .sort-ind::before,');
     SB.AppendLine('      :root[data-theme="dark"] th.sortable.sort-desc .sort-ind::before { color: #e0e0e0; }');
@@ -843,6 +931,7 @@ begin
     SB.AppendLine('    :root[data-theme="sepia"] .controls label { color: #55432a; }');
     SB.AppendLine('    :root[data-theme="sepia"] .controls .hint { color: #6b5942; }');
     SB.AppendLine('    :root[data-theme="sepia"] .controls .row-count { color: #3d2e1a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .trunc-banner { background: #f2e4c9; border-color: #a5732a; color: #4a3413; }');
     SB.AppendLine('    :root[data-theme="sepia"] th.sortable .sort-ind { color: #6b5942; }');
     SB.AppendLine('    :root[data-theme="sepia"] th.sortable.sort-asc .sort-ind::before, :root[data-theme="sepia"] th.sortable.sort-desc .sort-ind::before { color: #3d2e1a; }');
     SB.AppendLine('    :root[data-theme="sepia"] .top-detectors .td-count { color: #6b5942; }');
@@ -1432,6 +1521,20 @@ begin
     SB.AppendLine('    <span class="hint" data-i18n="hint-bar">Spalte sortieren &middot; Zeile zeigt Hinweis &middot; <kbd>?</kbd> Shortcuts</span>');
     SB.AppendLine('  </div>');
 
+    // T1: die Kuerzung MUSS sichtbar sein, und zwar ohne JavaScript -
+    // der Text steht im DOM, data-i18n tauscht ihn nur aus.
+    if RowsDropped > 0 then
+    begin
+      SB.Append    ('  <div class="trunc-banner" role="status" data-i18n="trunc-banner" data-hidden="');
+      SB.Append    (IntToStr(RowsDropped));
+      SB.Append    ('">');
+      SB.Append    (IntToStr(RowsDropped));
+      SB.Append    (' weitere Befunde sind nicht in diesem Bericht. ');
+      SB.Append    ('Filter, Suche und Sortierung arbeiten nur auf den ');
+      SB.Append    ('angezeigten Zeilen; die Zusammenfassung zaehlt alle Befunde.');
+      SB.AppendLine('</div>');
+    end;
+
     SB.AppendLine('  <table id="findingsTable">');
     SB.AppendLine('    <thead><tr>');
     SB.AppendLine('      <th></th>'); // Toggle-Spalte (nicht sortierbar)
@@ -1454,6 +1557,12 @@ begin
       begin
         if (SourceFile <> '') and not TExporter.SameSourceFile(F.FileName, SourceFile) then
           Continue;
+        // T1: Budget erschoepft. Break statt Continue - die restlichen
+        // Funde koennen nichts mehr beitragen, und der Banner oben nennt
+        // ihre Zahl bereits.
+        if (MaxRows > 0) and (RowsEmitted >= MaxRows) then
+          Break;
+        Inc(RowsEmitted);
 
         case F.Severity of
           lsError   : SevCl := 'err';
@@ -1722,6 +1831,7 @@ begin
     SB.AppendLine('        "opt-all": "All",');
     SB.AppendLine('        "opt-all-files": "All ({0} files)",');
     SB.AppendLine('        "row-count": "{0} findings",');
+    SB.AppendLine('        "trunc-banner": "{0} further findings are not in this report. Filters, search and sorting only apply to the rows shown; the summary counts all findings.",');
     SB.AppendLine('        "hint-bar": "Click column to sort &middot; row toggles hint &middot; <kbd>?</kbd> shortcuts",');
     SB.AppendLine('        "th-file": "File",');
     SB.AppendLine('        "th-sev": "Severity",');
@@ -1780,6 +1890,7 @@ begin
     SB.AppendLine('        "opt-all": "Alle",');
     SB.AppendLine('        "opt-all-files": "Alle ({0} Dateien)",');
     SB.AppendLine('        "row-count": "{0} Befunde",');
+    SB.AppendLine('        "trunc-banner": "{0} weitere Befunde sind nicht in diesem Bericht. Filter, Suche und Sortierung arbeiten nur auf den angezeigten Zeilen; die Zusammenfassung zaehlt alle Befunde.",');
     SB.AppendLine('        "hint-bar": "Spalte sortieren &middot; Zeile zeigt Hinweis &middot; <kbd>?</kbd> Shortcuts",');
     SB.AppendLine('        "th-file": "Datei",');
     SB.AppendLine('        "th-sev": "Severity",');
@@ -1846,6 +1957,7 @@ begin
     SB.AppendLine('        "opt-all": "Tous",');
     SB.AppendLine('        "opt-all-files": "Tous ({0} fichiers)",');
     SB.AppendLine('        "row-count": "{0} d\u00e9tections",');
+    SB.AppendLine('        "trunc-banner": "{0} d\u00e9tections suppl\u00e9mentaires ne figurent pas dans ce rapport. Les filtres, la recherche et le tri ne s''appliquent qu''aux lignes affich\u00e9es ; le r\u00e9sum\u00e9 compte toutes les d\u00e9tections.",');
     SB.AppendLine('        "hint-bar": "Cliquez sur une colonne pour trier &middot; ligne ouvre l\u2019indice &middot; <kbd>?</kbd> raccourcis",');
     SB.AppendLine('        "th-file": "Fichier",');
     SB.AppendLine('        "th-sev": "S\u00e9v\u00e9rit\u00e9",');
@@ -1921,6 +2033,7 @@ begin
     SB.AppendLine('        var key = el.getAttribute("data-i18n");');
     SB.AppendLine('        // Dynamische Counter-Strings: data-count / data-top-n / data-top-total');
     SB.AppendLine('        if (key === "row-count")        el.innerHTML = T(key, el.dataset.count || "0");');
+    SB.AppendLine('        else if (key === "trunc-banner") el.innerHTML = T(key, el.dataset.hidden || "0");');
     SB.AppendLine('        else if (key === "opt-all-files") el.textContent = T(key, el.dataset.count || "0");');
     SB.AppendLine('        else if (key === "hdr-top-detectors") el.textContent = T(key, el.dataset.topN || "0", el.dataset.topTotal || "0");');
     SB.AppendLine('        // meta-Zeile: Datum/Datei stehen in data-when / data-file');
@@ -2752,13 +2865,9 @@ begin
     SB.AppendLine('</body>');
     SB.AppendLine('</html>');
 
-    SL := TStringList.Create;
-    try
-      SL.Text := SB.ToString;
-      TExporter.SaveUtf8WithBom(SL, FileName);
-    finally
-      SL.Free;
-    end;
+    // T1: stueckweise schreiben statt ToString + TStringList. Das war
+    // der eigentliche OOM - drei Vollkopien vor dem ersten Byte.
+    SaveBuilderUtf8WithBom(SB, FileName);
   finally
     SB.Free;
   end;

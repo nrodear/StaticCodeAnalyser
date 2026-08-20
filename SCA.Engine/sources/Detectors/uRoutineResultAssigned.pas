@@ -1,4 +1,4 @@
-unit uRoutineResultAssigned;
+﻿unit uRoutineResultAssigned;
 
 // Detektor: Function-Body endet ohne dass `Result` (oder der Function-Name)
 // jemals geschrieben wurde.
@@ -64,6 +64,17 @@ type
     // eine solche Routine ist semantisch ein `raise` - die Funktion kehrt nie
     // regulaer zurueck, ein fehlendes `Result :=` ist dann KEIN Bug. AnalyzeUnit
     // fuellt das Set; nil => Guard inaktiv (Verhalten wie vorher).
+    // ACHTUNG, SCHWAECHERE ZUSAGE ALS AnalyzeUnit: dieser Einstieg
+    // analysiert EINE Methode ohne den unit-weiten Kontext, den
+    // AnalyzeUnit vorher aufbaut. Konkret geht verloren:
+    //   ANoReturnLow - die Tabelle der Routinen, die nie
+    //   zurueckkehren (raise/Halt/Abort). Ohne sie meldet der
+    //   Detektor ein nicht zugewiesenes Result auch auf Pfaden,
+    //   die in einem solchen Aufruf enden.
+    // Der Parameter hat einen nil-Default - wer ihn weglaesst,
+    // bekommt also stillschweigend das schwaechere Ergebnis. Der
+    // Regelbetrieb laeuft ueber AnalyzeUnit; dieser Einstieg ist
+    // fuer Tests und punktuelle Aufrufe gedacht.
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>;
       ANoReturnLow: TDictionary<string, Boolean> = nil);

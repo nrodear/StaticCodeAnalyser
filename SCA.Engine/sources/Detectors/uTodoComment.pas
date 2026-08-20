@@ -1,4 +1,4 @@
-unit uTodoComment;
+﻿unit uTodoComment;
 
 // Detektor fuer TODO / FIXME / HACK / XXX-Marker in Kommentaren.
 //
@@ -38,6 +38,27 @@ uses
 
 const
   MARKERS : array[0..3] of string = ('TODO', 'FIXME', 'HACK', 'XXX');
+
+  // Marker, die NUR in Grossschreibung zaehlen.
+  //
+  // 'XXX' ist der einzige der vier, der kein englisches Wort ist,
+  // sondern ein reines Zeichenmuster - und genau deshalb ueberall als
+  // PLATZHALTER benutzt: id="xxx", multipart/xxx, /xxx/, 'c:xxx'.
+  // TODO/FIXME/HACK schreibt man dagegen auch klein als echten Marker
+  // ('todo: aufraeumen'), die bleiben case-insensitiv.
+  //
+  // MESSUNG (Real-World-Korpus, 2026-08-20): von 248 Funden der
+  // XXX-Familie waren 192 klein- oder gemischt geschrieben - und KEIN
+  // einziger davon ein Marker (alle Platzhalter in HTML-Attributen,
+  // MIME-Typen, Pfad- und URL-Beispielen). Handgepruefte Gegenprobe
+  // ueber alle 192.
+  //
+  // VERWORFENE Alternative: 'Marker innerhalb eines Zeichenketten-
+  // Literals im Kommentar ignorieren' haette nur 38 Funde geholt UND
+  // sich am englischen Genitiv verschluckt - "OmniXML's ... hack"
+  // oeffnet fuer eine Apostroph-Paarung ein Phantom-Literal, echte
+  // Marker dahinter waeren still verschwunden.
+  NUR_GROSS : array[0..0] of string = ('XXX');
 
 // IsIdentChar siehe uDetectorUtils.TDetectorUtils.IsIdentChar - lokal entfernt
 // (Duplikat). Aufrufer unten verwenden den Klassen-Helfer direkt.
@@ -104,6 +125,36 @@ begin
   end;
 end;
 
+function IstNurGross(const AMarker: string): Boolean;
+// True, wenn dieser Marker nur in exakter Grossschreibung zaehlt.
+var
+  G : string;
+begin
+  for G in NUR_GROSS do
+  begin
+    if SameText(G, AMarker) then Exit(True);
+  end;
+  Result := False;
+end;
+
+function MarkerPasst(const Line: string; APos: Integer;
+  const AMarker: string): Boolean;
+// Vergleich an der Fundstelle: normalerweise ohne Ruecksicht auf
+// Gross-/Kleinschreibung, fuer NUR_GROSS-Marker exakt.
+var
+  Stueck : string;
+begin
+  Stueck := Copy(Line, APos, Length(AMarker));
+  if IstNurGross(AMarker) then
+  begin
+    Result := Stueck = AMarker;
+  end
+  else
+  begin
+    Result := SameText(Stueck, AMarker);
+  end;
+end;
+
 function FindMarkerInComment(const Line: string;
   CommentStart: Integer; out Marker: string;
   out MarkerPos: Integer): Boolean;
@@ -124,7 +175,9 @@ begin
     p := CommentStart;
     while p <= Length(Line) - Length(M) + 1 do
     begin
-      if SameText(Copy(Line, p, Length(M)), M) then
+      // Marker aus NUR_GROSS zaehlen nur in exakter Schreibweise,
+      // s. Begruendung an der Tabelle.
+      if MarkerPasst(Line, p, M) then
       begin
         // Wortgrenze links
         if (p > 1) and TDetectorUtils.IsIdentChar(Line[p - 1]) then

@@ -1,4 +1,4 @@
-unit uTestTodoComment;
+﻿unit uTestTodoComment;
 
 // Tests fuer den TTodoCommentDetector (filebasiert).
 
@@ -26,6 +26,11 @@ type
     [Test] procedure Todo_TodoAsIdentifier_NoFinding;
     [Test] procedure Todo_LowercaseMarker_StillReported;
     [Test] procedure Todo_NoMarker_NoFinding;
+    // 'XXX' zaehlt nur in Grossschreibung (Korpus-Messung 2026-08-20:
+    // 192 klein/gemischt geschriebene Funde, KEIN einziger ein Marker).
+    [Test] procedure Xxx_LowercasePlaceholder_NoFinding;
+    [Test] procedure Xxx_MixedCase_NoFinding;
+    [Test] procedure Xxx_Uppercase_StillReported;
   end;
 
 implementation
@@ -156,6 +161,50 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTodoComment));
+  finally F.Free; end;
+end;
+
+procedure TTestTodoComment.Xxx_LowercasePlaceholder_NoFinding;
+// Der haeufigste Fall im Korpus: 'xxx' als Platzhalter in einem
+// HTML-Attribut, MIME-Typ oder Pfad - nie ein Marker.
+const SRC =
+  'unit t; implementation'#13#10+
+  '// <span id="xxx" width="xxx"> multipart/xxx'#13#10+
+  'procedure Foo; begin end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTodoComment),
+    'kleingeschriebenes xxx ist ein Platzhalter, kein Marker');
+  finally F.Free; end;
+end;
+
+procedure TTestTodoComment.Xxx_MixedCase_NoFinding;
+// 'Xxx' ist ebenfalls keine Marker-Schreibweise - die Konvention ist
+// durchgaengig gross.
+const SRC =
+  'unit t; implementation'#13#10+
+  '// siehe Xxx im Beispiel'#13#10+
+  'procedure Foo; begin end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTodoComment));
+  finally F.Free; end;
+end;
+
+procedure TTestTodoComment.Xxx_Uppercase_StillReported;
+// Die Gegenprobe: der ECHTE Marker bleibt ein Fund. Ohne diesen Test
+// koennte die Schreibweisen-Regel die Regel stillschweigend abschalten.
+const SRC =
+  'unit t; implementation'#13#10+
+  '// XXX: das hier ist wirklich kaputt'#13#10+
+  'procedure Foo; begin end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTodoComment),
+    'grossgeschriebenes XXX muss weiterhin melden');
   finally F.Free; end;
 end;
 
