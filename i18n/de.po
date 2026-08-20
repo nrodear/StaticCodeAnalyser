@@ -1944,6 +1944,9 @@ msgstr "Befund öffnen"
 msgid "Copy AI prompt"
 msgstr "KI-Prompt kopieren"
 
+msgid "Copy Jira issue"
+msgstr "Jira-Vorgang kopieren"
+
 msgid "Insert suppression marker"
 msgstr "Unterdrückungs-Marker einfügen"
 

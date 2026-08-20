@@ -455,7 +455,12 @@ type
     // Quick-Fix-Block; die EXE kopiert den Prompt OHNE diesen Block
     // (bewusste Alt-Divergenz, s. Review 2026-08-12).
     procedure CopyClaudePromptToClipboard(F: TLeakFinding);
+    // Zwilling fuer das Jira-Mini-Issue. Geteilt von der KLICK-Kopie
+    // ([UI] ClipboardOnClick=2) und dem Grid-Menue 'Copy Jira issue' -
+    // dieselbe Rollenteilung wie beim Claude-Prompt darueber.
+    procedure CopyJiraIssueToClipboard(F: TLeakFinding);
     procedure GridMenuCopyPromptClick(Sender: TObject);
+    procedure GridMenuCopyJiraClick(Sender: TObject);
     procedure GridMenuPopup(Sender: TObject);
     // Wendet einen Quick-Fix DIREKT im IDE-Editor an (TIDEEditor.
     // ApplyLineReplacement). Trigger: F4 auf der Grid-Zeile. No-op
@@ -1544,6 +1549,10 @@ begin
   CopyItem.Caption := _('Copy AI prompt');
   CopyItem.OnClick := GridMenuCopyPromptClick;
   FGridMenu.Items.Add(CopyItem);
+  var JiraItem := TMenuItem.Create(FGridMenu);
+  JiraItem.Caption := _('Copy Jira issue');
+  JiraItem.OnClick := GridMenuCopyJiraClick;
+  FGridMenu.Items.Add(JiraItem);
   FResultGrid.PopupMenu := FGridMenu;
 end;
 
@@ -2675,7 +2684,6 @@ procedure TAnalyserFrame.CopyFindingToClipboard(F: TLeakFinding);
 //                       CopyClaudePromptToClipboard.
 var
   Mode : TFindingCopyMode;
-  Text : string;
 begin
   if not Assigned(F) then Exit;
 
@@ -2686,18 +2694,7 @@ begin
   case Mode of
     fcmJiraMini:
     begin
-      Text := TFindingCopyText.Build(F, fcmJiraMini, FixHint(F));
-      try
-        Clipboard.AsText := Text;
-        if Assigned(FStatusBar) then
-          StatusMode(Format(
-            _('Jira mini issue copied to clipboard: %s, line %s (%s)'),
-            [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]));
-      // noinspection EmptyExcept
-      except
-        // Clipboard kann unter bestimmten IDE-Modi blockiert sein -
-        // silent skip, wie im Claude-Pfad.
-      end;
+      CopyJiraIssueToClipboard(F);
     end;
     fcmClaudePrompt:
     begin
@@ -2738,6 +2735,41 @@ begin
   idx := FResultGrid.Row - 1;
   if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
   CopyClaudePromptToClipboard(FDisplayedFindings[idx]);
+end;
+
+procedure TAnalyserFrame.GridMenuCopyJiraClick(Sender: TObject);
+// Geschwister von GridMenuCopyPromptClick fuer das Jira-Mini-Issue.
+// Kopiert wie dort IMMER, unabhaengig von [UI] ClipboardOnClick.
+var
+  idx : Integer;
+begin
+  idx := FResultGrid.Row - 1;
+  if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
+  CopyJiraIssueToClipboard(FDisplayedFindings[idx]);
+end;
+
+procedure TAnalyserFrame.CopyJiraIssueToClipboard(F: TLeakFinding);
+// KEIN Quick-Fix-Block - dieselbe Begruendung wie im Klick-Pfad: der
+// Fix-hint-Fakt deckt das ab und spart den LoadFromFile der kompletten
+// Quelldatei. Der Textbau steht bewusst VOR dem try (wie im Claude-
+// Zwilling): der stille except gehoert dem Clipboard-Write, ein
+// Fehler beim Bauen soll nicht lautlos verschwinden.
+var
+  Text : string;
+begin
+  if not Assigned(F) then Exit;
+  Text := TFindingCopyText.Build(F, fcmJiraMini, FixHint(F));
+  try
+    Clipboard.AsText := Text;
+    if Assigned(FStatusBar) then
+      StatusMode(Format(
+        _('Jira mini issue copied to clipboard: %s, line %s (%s)'),
+        [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]));
+  except
+    // Clipboard kann unter bestimmten IDE-Modi blockiert sein -
+    // silent skip, wie im Claude-Pfad. EmptyExcept steht datei-weit
+    // in der noinspection-Liste.
+  end;
 end;
 
 procedure TAnalyserFrame.CopyClaudePromptToClipboard(F: TLeakFinding);
