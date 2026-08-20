@@ -1,4 +1,4 @@
-unit uRecentPaths;
+﻿unit uRecentPaths;
 
 // Gemeinsame MRU-Pfad-Liste fuer den Project-Path-ComboBox.
 //

@@ -1,4 +1,4 @@
-unit uTestRuleOverlay;
+﻿unit uTestRuleOverlay;
 
 // Waechter fuer den Sprach-Overlay-Loader in TRuleCatalog (2026-08-19).
 //

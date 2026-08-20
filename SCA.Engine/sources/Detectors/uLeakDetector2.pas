@@ -1,4 +1,4 @@
-unit uLeakDetector2;
+﻿unit uLeakDetector2;
 
 // AST-basierter Speicherleck-Detektor (Sonar-Regel #1).
 //

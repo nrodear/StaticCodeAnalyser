@@ -1,4 +1,4 @@
-unit uExceptInDestructor;
+﻿unit uExceptInDestructor;
 
 // Detektor: Destructor enthaelt `raise` ausserhalb eines schuetzenden
 // try/except.

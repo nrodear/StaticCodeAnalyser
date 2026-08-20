@@ -1,4 +1,4 @@
-# Static Code Analysis Tool for Delphi
+﻿# Static Code Analysis Tool for Delphi
 
 [![Buy me a coffee](https://img.shields.io/badge/%E2%98%95_Buy_me_a_coffee-paypal.me%2Fnrodear-0070BA?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/nrodear)
 

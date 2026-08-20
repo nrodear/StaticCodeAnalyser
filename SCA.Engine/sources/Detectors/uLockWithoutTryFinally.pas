@@ -1,4 +1,4 @@
-unit uLockWithoutTryFinally;
+﻿unit uLockWithoutTryFinally;
 
 // Detektor fuer Lock-Acquire ohne umschliessendes try/finally-Release.
 //

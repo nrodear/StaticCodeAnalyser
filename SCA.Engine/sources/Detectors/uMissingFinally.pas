@@ -1,4 +1,4 @@
-unit uMissingFinally;
+﻿unit uMissingFinally;
 
 // Detektor fuer fehlenden try/finally-Schutz (Sonar-Regel #8).
 //

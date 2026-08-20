@@ -1,4 +1,4 @@
-unit uFindingGridRenderer;
+﻿unit uFindingGridRenderer;
 
 // Gemeinsame TStringGrid-OnDrawCell-Logik fuer das Befund-Grid in IDE-Plugin
 // und Standalone. Aus uIDEAnalyserForm.GridDrawCell + uMainForm.ResultGridDrawCell

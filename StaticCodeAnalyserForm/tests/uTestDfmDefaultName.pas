@@ -1,4 +1,4 @@
-unit uTestDfmDefaultName;
+﻿unit uTestDfmDefaultName;
 
 // Smoke-Tests für TDfmDefaultNameDetector - End-to-End-Validierung der
 // Phase-1-Pipeline: TDfmParser -> TComponentGraph -> Detektor -> Findings.

@@ -1,4 +1,4 @@
-unit uHardcodedSecret;
+﻿unit uHardcodedSecret;
 
 // AST-basierter Detektor für hartcodierte Passwörter/Tokens (Sonar-Regel #5).
 //

@@ -1,4 +1,4 @@
-# Détecteurs — catalogue de règles Sonar du Static Code Analysis Tool for Delphi
+﻿# Détecteurs — catalogue de règles Sonar du Static Code Analysis Tool for Delphi
 
 Liste canonique de toutes les règles d'analyse prises en charge et
 planifiées, classées par sévérité (Blocker → Critical → Major → Minor →

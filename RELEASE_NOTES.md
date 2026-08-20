@@ -1,4 +1,4 @@
-# Release 0.9.16 — A quiet clipboard, honest filters, and a text-only hint
+﻿# Release 0.9.16 — A quiet clipboard, honest filters, and a text-only hint
 
 🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 

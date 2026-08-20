@@ -1,4 +1,4 @@
-# ResultProbe — was passiert mit einem nicht zugewiesenen Funktionsergebnis?
+﻿# ResultProbe — was passiert mit einem nicht zugewiesenen Funktionsergebnis?
 
 Diagnose-Programm für die geplante Regel **SCA196
 `ManagedResultNotInitialized`**. Es beantwortet zwei Fragen, die sich am

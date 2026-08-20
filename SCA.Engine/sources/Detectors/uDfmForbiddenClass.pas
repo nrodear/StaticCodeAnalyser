@@ -1,4 +1,4 @@
-unit uDfmForbiddenClass;
+﻿unit uDfmForbiddenClass;
 
 // Detektor: Komponente nutzt eine via analyser.ini verbotene Klasse.
 //

@@ -1,4 +1,4 @@
-unit uTestProjectFiles;
+﻿unit uTestProjectFiles;
 
 // Tests fuer TProjectFiles (uProjectFiles): .dproj-/.groupproj-Aufloesung
 // des Scan-Scope-Konzepts (Konzept_ScanScope_2026-07-20).

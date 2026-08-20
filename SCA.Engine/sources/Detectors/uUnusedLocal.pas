@@ -1,4 +1,4 @@
-unit uUnusedLocal;
+﻿unit uUnusedLocal;
 
 // Detector: lokale `var X: T;` die im Methoden-Body nie referenziert wird.
 //

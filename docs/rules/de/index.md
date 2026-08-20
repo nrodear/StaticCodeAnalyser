@@ -1,4 +1,4 @@
-# StaticCodeAnalyser — Regelkatalog
+﻿# StaticCodeAnalyser — Regelkatalog
 
 Alle 196 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibung.
 

@@ -1,4 +1,4 @@
-unit uUnusedUses;
+﻿unit uUnusedUses;
 
 // AST-basierter Detektor fuer moeglicherweise ungenutzte uses-Eintraege.
 //

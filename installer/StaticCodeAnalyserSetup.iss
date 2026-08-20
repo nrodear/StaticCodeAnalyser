@@ -1,4 +1,4 @@
-; =============================================================================
+﻿; =============================================================================
 ; StaticCodeAnalyserSetup.iss  —  Inno Setup 6.x, Installer P1 (nur D12-Schiene)
 ; Referenz: Welle 1, 2026-07-25
 ; Grundlage: Doku_05_IDE_Plugin.md (Installer-Abschnitt) + Konzept_IdePluginInstaller_2026-07-23

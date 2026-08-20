@@ -1,4 +1,4 @@
-# HowTo: Build and run the tests
+﻿# HowTo: Build and run the tests
 
 *🇬🇧 English — 🇩🇪 [Deutsch](HowTo_Tests_de.md) — 🇫🇷 [Français](HowTo_Tests_fr.md)*
 

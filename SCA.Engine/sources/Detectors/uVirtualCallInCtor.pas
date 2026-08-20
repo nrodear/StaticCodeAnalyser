@@ -1,4 +1,4 @@
-unit uVirtualCallInCtor;
+﻿unit uVirtualCallInCtor;
 
 // Detektor: Aufruf einer `virtual`-Methode im Constructor.
 //

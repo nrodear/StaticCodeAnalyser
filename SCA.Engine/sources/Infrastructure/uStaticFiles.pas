@@ -1,4 +1,4 @@
-unit uStaticFiles;
+﻿unit uStaticFiles;
 
 interface
 

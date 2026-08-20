@@ -1,4 +1,4 @@
-unit uParser2;
+﻿unit uParser2;
 
 // Rekursiver Abstiegs-Parser für Delphi-Quelltexte.
 // Erzeugt einen TAstNode-Baum (uAstNode) aus einem Token-Stream (uLexer).

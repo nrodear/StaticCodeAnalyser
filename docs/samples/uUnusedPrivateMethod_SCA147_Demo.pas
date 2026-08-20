@@ -1,4 +1,4 @@
-unit uUnusedPrivateMethod_SCA147_Demo;
+﻿unit uUnusedPrivateMethod_SCA147_Demo;
 
 // noinspection-file All
 // Sample-/Demo-Datei: demonstriert Detektor-Patterns - alle Findings sind Absicht.

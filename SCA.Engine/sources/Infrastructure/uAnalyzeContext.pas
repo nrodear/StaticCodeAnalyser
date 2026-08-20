@@ -1,4 +1,4 @@
-unit uAnalyzeContext;
+﻿unit uAnalyzeContext;
 
 // ============================================================================
 //  Phase 3 / Konzept_D2 — Singleton-Entkopplung (Foundation D.2.1)

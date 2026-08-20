@@ -1,4 +1,4 @@
-# SonarQube Integration — Setup Guide
+﻿# SonarQube Integration — Setup Guide
 
 StaticCodeAnalyser kann seine Findings als **external issues** an SonarQube /
 SonarCloud liefern. Wir konkurrieren nicht mit

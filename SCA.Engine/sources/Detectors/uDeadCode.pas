@@ -1,4 +1,4 @@
-unit uDeadCode;
+﻿unit uDeadCode;
 
 // Detektor fuer toten Code (Sonar-Regel #10).
 //

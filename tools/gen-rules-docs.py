@@ -326,6 +326,15 @@ def render_index(rules: list[dict[str, Any]], lang: str = "en",
     return "\n".join(parts)
 
 
+def schreibe_md(pfad, inhalt: str) -> None:
+    """Repo-Konvention (2026-08-20): eine Datei mit Nicht-ASCII bekommt ein
+    BOM, damit Delphi und ANSI-Editoren die Akzente der de-/fr-Seiten nicht
+    als Mojibake lesen. Reines ASCII bleibt BOM-frei - dort ist UTF-8 mit
+    ANSI byte-gleich, ein BOM waere nur Rauschen im Diff."""
+    kodierung = "utf-8-sig" if any(ord(c) > 127 for c in inhalt) else "utf-8"
+    pfad.write_text(inhalt, encoding=kodierung)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument(
@@ -398,26 +407,26 @@ def main() -> int:
             out_file = ziel / f"{r['id']}.md"
             new_content = render_rule(r, lang, depth)
             if args.check:
-                existing = (out_file.read_text(encoding="utf-8")
+                existing = (out_file.read_text(encoding="utf-8-sig")
                             if out_file.exists() else "")
                 if existing != new_content:
                     print(f"DIFF: {out_file.relative_to(REPO_ROOT)}",
                           file=sys.stderr)
                     diff_count += 1
             else:
-                out_file.write_text(new_content, encoding="utf-8")
+                schreibe_md(out_file, new_content)
 
         index_file = ziel / "index.md"
         new_index = render_index(lokal, lang, depth)
         if args.check:
-            existing = (index_file.read_text(encoding="utf-8")
+            existing = (index_file.read_text(encoding="utf-8-sig")
                         if index_file.exists() else "")
             if existing != new_index:
                 print(f"DIFF: {index_file.relative_to(REPO_ROOT)}",
                       file=sys.stderr)
                 diff_count += 1
         else:
-            index_file.write_text(new_index, encoding="utf-8")
+            schreibe_md(index_file, new_index)
         erzeugt.append(lang)
 
     if args.check:

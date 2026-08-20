@@ -1,4 +1,4 @@
-# Configuration reference (`analyser.ini`)
+﻿# Configuration reference (`analyser.ini`)
 
 🇩🇪 [Deutsche Fassung](configuration_de.md) · 🇫🇷 [Version française](configuration_fr.md)
 

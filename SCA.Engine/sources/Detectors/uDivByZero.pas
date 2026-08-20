@@ -1,4 +1,4 @@
-unit uDivByZero;
+﻿unit uDivByZero;
 
 // Detektor fuer potentielle Division-durch-Null (Sonar-Regel #6).
 //

@@ -1,4 +1,4 @@
-# HowTo : compiler et installer (guide du débutant)
+﻿# HowTo : compiler et installer (guide du débutant)
 
 Ce guide vous accompagne sur tout le chemin, de « je n'ai rien » à
 « l'analyseur tourne sur mon code ». Il est écrit pour les personnes

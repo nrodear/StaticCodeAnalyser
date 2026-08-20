@@ -1,4 +1,4 @@
-# Getting findings out of SCA — formats and workflows
+﻿# Getting findings out of SCA — formats and workflows
 
 🇩🇪 [Deutsche Version](EXPORTS_de.md) · 🇫🇷 [Version française](EXPORTS_fr.md)
 

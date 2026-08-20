@@ -1,4 +1,4 @@
-unit uDfmParser;
+﻿unit uDfmParser;
 
 // DFM-Parser - Phase 1 (Walking Skeleton).
 //

@@ -1,4 +1,4 @@
-# HowTo : compiler et lancer les tests
+﻿# HowTo : compiler et lancer les tests
 🇬🇧 [English version](HowTo_Tests.md) · 🇩🇪 [Deutsche Fassung](HowTo_Tests_de.md)
 
 La suite de tests DUnitX (`StaticCodeAnalyserForm\tests\TestProject.dproj`)

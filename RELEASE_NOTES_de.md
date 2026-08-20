@@ -1,4 +1,4 @@
-# Release 0.9.16 — Eine stille Zwischenablage, ehrliche Filter und ein Nur-Text-Hinweis
+﻿# Release 0.9.16 — Eine stille Zwischenablage, ehrliche Filter und ein Nur-Text-Hinweis
 
 🇬🇧 [English version](RELEASE_NOTES.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 

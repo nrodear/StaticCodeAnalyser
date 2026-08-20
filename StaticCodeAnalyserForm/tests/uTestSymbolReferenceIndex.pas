@@ -1,4 +1,4 @@
-unit uTestSymbolReferenceIndex;
+﻿unit uTestSymbolReferenceIndex;
 
 // Tests fuer TSymbolReferenceIndex - der Cross-Unit-Reference-Index.
 // HINWEIS: seit dem Visibility-Detektor-Refactor liest uVisibilityCheck

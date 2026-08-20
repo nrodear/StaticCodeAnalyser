@@ -1,4 +1,4 @@
-# HowTo: Build and Install (Beginner Guide)
+﻿# HowTo: Build and Install (Beginner Guide)
 
 This guide walks you through the full path from "I have nothing"
 to "the analyzer runs on my code". It is written for people who are

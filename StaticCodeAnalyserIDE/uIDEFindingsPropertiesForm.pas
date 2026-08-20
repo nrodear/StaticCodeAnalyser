@@ -1,4 +1,4 @@
-unit uIDEFindingsPropertiesForm;
+﻿unit uIDEFindingsPropertiesForm;
 
 // OTAPI-Wrapper fuer das Findings-Properties-Panel (Konzept_FindingsPropertiesPanel
 // Phase 3). Spiegelt das Pattern von uIDEAnalyserForm/TAnalyserDockableForm,

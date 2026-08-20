@@ -1,4 +1,4 @@
-unit uComponentGraph;
+﻿unit uComponentGraph;
 
 // Komponentengraph aus dem DFM-Parsing - Phase 1 (Walking Skeleton).
 //

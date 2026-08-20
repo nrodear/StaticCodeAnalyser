@@ -1,4 +1,4 @@
-unit uUninitVar;
+﻿unit uUninitVar;
 
 // Detector: SCA166 fkUninitVar — lokale Variable wird auf einem Pfad
 // gelesen bevor sie auf demselben Pfad geschrieben wurde.

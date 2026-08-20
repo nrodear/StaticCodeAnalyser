@@ -1,4 +1,4 @@
-unit uLexer;
+﻿unit uLexer;
 
 // Delphi-Lexer: zerlegt Quelltext in Token-Stream.
 // Schlüsselwörter werden case-insensitiv erkannt.

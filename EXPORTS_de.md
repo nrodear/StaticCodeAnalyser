@@ -1,4 +1,4 @@
-# Funde aus SCA herausbekommen — Formate und Workflows
+﻿# Funde aus SCA herausbekommen — Formate und Workflows
 
 🇬🇧 [English version](EXPORTS.md) · 🇫🇷 [Version française](EXPORTS_fr.md)
 

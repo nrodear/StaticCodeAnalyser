@@ -1,4 +1,4 @@
-# Sonar-Konfiguration — Resolver-Pfade
+﻿# Sonar-Konfiguration — Resolver-Pfade
 
 Konzentrierte Referenz aller vier Konfigurations-Quellen für die
 Sonar-Integration. Schritt-für-Schritt-Setup siehe

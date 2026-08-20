@@ -1,4 +1,4 @@
-unit uSymbolReferenceIndex;
+﻿unit uSymbolReferenceIndex;
 
 // Repo-weiter Index ueber Cross-Unit-Referenzen auf Klassen-Member.
 // Wird von Visibility-Detektor `uVisibilityCheck` konsultiert (siehe

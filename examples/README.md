@@ -1,4 +1,4 @@
-# Custom Rule Profiles
+﻿# Custom Rule Profiles
 
 YAML-Profile für die Custom-Rule-Engine (`uCustomRuleDetector`).
 Werden über `[Detectors] CustomRulesFile=...` in `analyser.ini`

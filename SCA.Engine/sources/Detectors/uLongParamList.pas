@@ -1,4 +1,4 @@
-unit uLongParamList;
+﻿unit uLongParamList;
 
 // Detektor fuer Methoden mit zu vielen Parametern.
 // Mehr als MAX_PARAMS Parameter deuten auf einen Refactoring-Bedarf hin

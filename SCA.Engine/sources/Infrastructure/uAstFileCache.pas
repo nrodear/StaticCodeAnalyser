@@ -1,4 +1,4 @@
-unit uAstFileCache;
+﻿unit uAstFileCache;
 
 // Repo-Scan-weiter Cache fuer geparste TAstNode-Trees.
 //
