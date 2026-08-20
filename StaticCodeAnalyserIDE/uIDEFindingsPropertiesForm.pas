@@ -446,6 +446,10 @@ begin
   Result.Kind       := F.Kind;
   Result.Confidence := F.Confidence;
   Result.RuleID     := F.RuleID;
+  // Neue Felder MUESSEN hier mitwandern - der Klon geht in den
+  // Properties-Cache und ueberlebt den Tab-Wechsel; was hier fehlt,
+  // ist danach weg (derselbe Fehlermodus wie bei EndLine oben).
+  Result.RelatedLines := F.RelatedLines;
 end;
 
 procedure TFindingsPropertiesDockableForm.HandleFindingClick(Sender: TObject;

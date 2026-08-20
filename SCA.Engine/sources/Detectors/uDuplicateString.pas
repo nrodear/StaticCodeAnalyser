@@ -1,4 +1,4 @@
-unit uDuplicateString;
+﻿unit uDuplicateString;
 
 // Detektor fuer mehrfach vorkommende String-Literale.
 // Strings die >= MIN_OCCURRENCES Mal im Quelltext auftauchen, sollten
@@ -8,7 +8,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12,
+  uDetectorUtils;   // JoinSitesExceptAnchor - geteiltes RelatedLines-Format
 
 type
   TDuplicateStringDetector = class
@@ -90,6 +91,9 @@ class procedure TDuplicateStringDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   Counts    : TDictionary<string, Integer>;
   FirstLine : TDictionary<string, Integer>;
+  // Alle Zeilen je Literal - fuer RelatedLines. Gedeckelt, s. MAX_SITES.
+  Sites     : TObjectDictionary<string, TList<Integer>>;
+  SiteList  : TList<Integer>;
   AllNodes  : TList<TAstNode>;
   N         : TAstNode;
   Lst       : TStringList;
@@ -101,10 +105,13 @@ var
 begin
   Counts    := nil;
   FirstLine := nil;
+  Sites     := nil;
   Lst       := nil;
   try
     Counts    := TDictionary<string, Integer>.Create;
     FirstLine := TDictionary<string, Integer>.Create;
+    Sites     := TObjectDictionary<string, TList<Integer>>.Create(
+                   [doOwnsValues]);
     Lst       := TStringList.Create;
     // Alle Knoten-Texte sammeln und Strings extrahieren
     for var Kind in [nkAssign, nkCall] do
@@ -127,6 +134,19 @@ begin
             begin
               Counts.Add(S, 1);
               FirstLine.Add(S, N.Line);
+            end;
+            // Fundstellen mitschreiben. Der Deckel haelt Speicher und
+            // Meldungslaenge in Grenzen - ein Literal mit 200
+            // Vorkommen braucht keine 200 Zeilennummern, die Anzeige
+            // zeigt ohnehin nur die ersten paar.
+            if not Sites.TryGetValue(S, SiteList) then
+            begin
+              SiteList := TList<Integer>.Create;
+              Sites.Add(S, SiteList);
+            end;
+            if SiteList.Count < TDetectorUtils.MAX_RELATED_SITES then
+            begin
+              SiteList.Add(N.Line);
             end;
           end;
         end;
@@ -151,12 +171,18 @@ begin
       F.LineNumber := IntToStr(FirstLine[Pair.Key]);
       F.MissingVar := Format('"%s" %dx - extract as a constant',
                              [Display, Cnt]);
+      if Sites.TryGetValue(Pair.Key, SiteList) then
+      begin
+        F.RelatedLines := TDetectorUtils.JoinSitesExceptAnchor(SiteList,
+                            FirstLine[Pair.Key]);
+      end;
       F.SetKind(fkDuplicateString);
       Results.Add(F);
     end;
   finally
     Counts.Free;
     FirstLine.Free;
+    Sites.Free;   // doOwnsValues: gibt alle TList<Integer> mit frei
     Lst.Free;
   end;
 end;

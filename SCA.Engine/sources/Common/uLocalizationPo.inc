@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2059 Zeilen, 72710 Bytes
-  CPoLines_de: array[0..2058] of string = (
+  // i18n\de.po - 2062 Zeilen, 72772 Bytes
+  CPoLines_de: array[0..2061] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1964,6 +1964,9 @@ const
     'msgid "Copy Jira issue"',
     'msgstr "Jira-Vorgang kopieren"',
     '',
+    'msgid "Also at line(s): %s"',
+    'msgstr "Auch in Zeile(n): %s"',
+    '',
     'msgid "Insert suppression marker"',
     'msgstr "Unterdr'#$00FC'ckungs-Marker einf'#$00FC'gen"',
     '',
@@ -2076,8 +2079,8 @@ const
     'msgstr "Einstellungen konnten nicht neu geladen werden - es wurde nichts gespeichert."'
   );
 
-  // i18n\en.po - 210 Zeilen, 5880 Bytes
-  CPoLines_en: array[0..209] of string = (
+  // i18n\en.po - 213 Zeilen, 5941 Bytes
+  CPoLines_en: array[0..212] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
     '# kept for consistency and as a "neutral" fallback baseline.',
@@ -2253,6 +2256,9 @@ const
     'msgid "Copy Jira issue"',
     'msgstr "Copy Jira issue"',
     '',
+    'msgid "Also at line(s): %s"',
+    'msgstr "Also at line(s): %s"',
+    '',
     'msgid "Insert suppression marker"',
     'msgstr "Insert suppression marker"',
     '',
@@ -2290,8 +2296,8 @@ const
     'msgstr "Settings could not be reloaded - nothing was saved."'
   );
 
-  // i18n\fr.po - 2055 Zeilen, 76191 Bytes
-  CPoLines_fr: array[0..2054] of string = (
+  // i18n\fr.po - 2058 Zeilen, 76254 Bytes
+  CPoLines_fr: array[0..2057] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4252,6 +4258,9 @@ const
     '',
     'msgid "Copy Jira issue"',
     'msgstr "Copier le ticket Jira"',
+    '',
+    'msgid "Also at line(s): %s"',
+    'msgstr "Aussi aux lignes : %s"',
     '',
     'msgid "Insert suppression marker"',
     'msgstr "Ins'#$00E9'rer le marqueur de suppression"',

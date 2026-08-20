@@ -1959,6 +1959,9 @@ msgstr "Copier le prompt IA"
 msgid "Copy Jira issue"
 msgstr "Copier le ticket Jira"
 
+msgid "Also at line(s): %s"
+msgstr "Aussi aux lignes : %s"
+
 msgid "Insert suppression marker"
 msgstr "Insérer le marqueur de suppression"
 

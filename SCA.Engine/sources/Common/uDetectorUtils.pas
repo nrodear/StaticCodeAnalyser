@@ -175,6 +175,20 @@ type
     //   Positionen zaehlen (Spalten/Offsets)            -> BlankStringLiterals
     class function StripStringLiterals(const S: string): string; static;
 
+    // --- Weitere Fundstellen EINER Duplikat-Gruppe (SCA015/SCA021) ----
+    // Baut den Inhalt von TLeakFinding.RelatedLines: aufsteigende,
+    // komma-getrennte Zeilennummern OHNE die Ankerzeile (die steht schon
+    // in LineNumber) und ohne Wiederholungen. Genau EIN Formatierer fuer
+    // beide Detektoren, damit die Anzeige nur ein Format kennen muss.
+    class function JoinSitesExceptAnchor(ASites: TList<Integer>;
+      AAnchor: Integer): string; static;
+
+    // Deckel fuer RelatedLines - GEMEINSAM fuer SCA015 und SCA021,
+    // damit beide dasselbe Versprechen geben. Die Anzeige zeigt nur
+    // die ersten paar Nummern; die exakte Gesamtzahl steht im
+    // Meldetext ('26x' bzw. 'appears 3x').
+    const MAX_RELATED_SITES = 50;
+
     // POSITIONSERHALTENDE Schwester von StripStringLiterals: ersetzt jedes
     // Zeichen ZWISCHEN einfachen Anfuehrungszeichen durch ein Leerzeichen
     // (inkl. ''-Escape-Handling), laesst die Quotes selbst stehen. Laenge
@@ -468,6 +482,7 @@ implementation
 uses
   System.Masks,                  // MatchesMask fuer Test-Fixture-Patterns
   System.StrUtils,               // PosEx
+  System.Generics.Defaults,      // Default-Comparer fuer TArray.Sort<Integer>
   System.RegularExpressions;     // TRegEx fuer IsLikelyAttributePosition
 
 type
@@ -726,6 +741,37 @@ begin
 
     Inc(Start);
     if Start > HLen - NLen + 1 then Exit;
+  end;
+end;
+
+class function TDetectorUtils.JoinSitesExceptAnchor(ASites: TList<Integer>;
+  AAnchor: Integer): string;
+var
+  Sortiert : TArray<Integer>;
+  SB       : TStringBuilder;
+  i        : Integer;
+  Vorher   : Integer;
+begin
+  Result := '';
+  if not Assigned(ASites) or (ASites.Count = 0) then Exit;
+  Sortiert := ASites.ToArray;
+  TArray.Sort<Integer>(Sortiert);
+  SB := TStringBuilder.Create;
+  try
+    Vorher := -1;
+    for i := Low(Sortiert) to High(Sortiert) do
+    begin
+      // Anker und Dubletten ueberspringen: dieselbe Zeile kann mehrfach
+      // im Vorkommensstrom stehen (zwei Treffer in einer Zeile), fuer die
+      // Anzeige ist sie EINE Stelle.
+      if (Sortiert[i] = AAnchor) or (Sortiert[i] = Vorher) then Continue;
+      if SB.Length > 0 then SB.Append(',');
+      SB.Append(Sortiert[i]);
+      Vorher := Sortiert[i];
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
   end;
 end;
 

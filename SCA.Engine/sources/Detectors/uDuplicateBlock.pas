@@ -1,4 +1,4 @@
-unit uDuplicateBlock;
+﻿unit uDuplicateBlock;
 
 // Detektor fuer duplizierte Code-Bloecke innerhalb einer Datei.
 //
@@ -38,7 +38,8 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   System.Generics.Defaults,          // TComparer fuer die Kandidaten-Sortierung
-  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext,
+  uDetectorUtils;   // JoinSitesExceptAnchor - geteiltes RelatedLines-Format
 
 type
   TDuplicateBlockDetector = class
@@ -81,6 +82,12 @@ type
     // fuer alle Fenster DESSELBEN duplizierten Blocks, verschieden fuer
     // andere Duplikat-Gruppen - siehe Pass 3a.
     Sig       : string;
+    // Quelltext-Zeilen der WEITEREN Vorkommen (ohne FirstLine), komma-
+    // getrennt - Traeger fuer TLeakFinding.RelatedLines. Beim
+    // Verschmelzen (Pass 3c) gilt der Wert des Ankers fuer den ganzen
+    // Lauf: alle Fenster einer Gruppe haben per Konstruktion dieselben
+    // Vorkommen, nur um t verschoben.
+    Sites     : string;
   end;
 
 const
@@ -392,6 +399,7 @@ begin
     var AccEnd   := Cands[i].EndLine;
     var AccSig   := Cands[i].Sig;
     var AccOccurs := Cands[i].Occurs;
+    var AccSites  := Cands[i].Sites;
     k := i + 1;
     while (k < Cands.Count) and (Cands[k].Sig = AccSig)
           and (Cands[k].FirstLine <= AccEnd) do
@@ -405,6 +413,12 @@ begin
     R.EndLine   := AccEnd;
     R.Occurs    := AccOccurs;
     R.Sig       := '';
+    // Fundstellen des ANKERS uebernehmen. Alle Fenster eines Laufs
+    // haben per Konstruktion dieselben Vorkommen (gleiche Signatur,
+    // nur verschoben) - und AccFirst ist die Ankerzeile, gegen die
+    // sie gefiltert wurden. Ohne diese Zeile bliebe RelatedLines fuer
+    // SCA021 immer leer.
+    R.Sites     := AccSites;
     Runs.Add(R);
 
     i := k;
@@ -428,6 +442,9 @@ var
   i, NCount   : Integer;
   Window      : string;
   Indices     : TList<Integer>;
+  // Quelltext-Zeilen der Vorkommen EINER Gruppe (wiederverwendeter
+  // Puffer, je Kandidat geleert) - Traeger fuer RelatedLines.
+  SiteLines   : TList<Integer>;
   Pair        : TPair<string, TList<Integer>>;
   F           : TLeakFinding;
   FirstLine   : Integer;
@@ -440,7 +457,8 @@ begin
   MinBlk := CfgMinBlockLines(AContext);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
-  Hashes   := TObjectDictionary<string, TList<Integer>>.Create([doOwnsValues]);
+  Hashes    := TObjectDictionary<string, TList<Integer>>.Create([doOwnsValues]);
+  SiteLines := TList<Integer>.Create;
   Cands    := TList<TDupCandidate>.Create;
   Runs     := TList<TDupCandidate>.Create;
   try
@@ -512,6 +530,18 @@ begin
       // gilt - alle Mitglieder eines Laufs haben per Konstruktion dieselbe
       // Vorkommenszahl.
       C.Sig := DupGroupSignature(Pair.Value);
+      // Partnerstellen in Quelltext-Zeilen uebersetzen: Pair.Value sind
+      // Indizes im NORMALISIERTEN Strom (Leerzeilen/Kommentare raus),
+      // LineIndex bildet sie auf die echte Zeile ab.
+      SiteLines.Clear;
+      for var s := 0 to Pair.Value.Count - 1 do
+      begin
+        // Gedeckelt wie in uDuplicateString: die Anzeige zeigt ohnehin
+        // nur die ersten paar, und die genaue Zahl steht im Meldetext.
+        if SiteLines.Count >= TDetectorUtils.MAX_RELATED_SITES then Break;
+        SiteLines.Add(LineIndex[Pair.Value[s]]);
+      end;
+      C.Sites := TDetectorUtils.JoinSitesExceptAnchor(SiteLines, FirstLine);
       Cands.Add(C);
     end;
 
@@ -599,10 +629,12 @@ begin
         'Code block (lines %d-%d, %d matched lines) appears %dx in file - ' +
         'consider extracting a method',
         [Runs[i].FirstLine, Runs[i].EndLine, MinBlk, Runs[i].Occurs]);
+      F.RelatedLines := Runs[i].Sites;
       F.SetKind(fkDuplicateBlock);
       Results.Add(F);
     end;
   finally
+    SiteLines.Free;
     Hashes.Free;     // doOwnsValues: gibt alle TList<Integer> mit frei
     Cands.Free;
     Runs.Free;

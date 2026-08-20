@@ -798,6 +798,56 @@ begin
     GradientFill(Canvas.Handle, @tv, 2, @gr, 1, GRADIENT_FILL_RECT_H);
 end;
 
+function RelatedLinesHint(const ARelated: string): string;
+// Haengt die weiteren Fundstellen an den Hint-Text - bis zu MAX_SHOWN
+// Zeilennummern, der Rest als Zaehler. Nur SCA015/SCA021 fuellen
+// RelatedLines; fuer alle anderen Regeln liefert das hier ''.
+//
+// NUR fuer den Hint-Text (TFindingMarkEntry.Desc), NICHT fuer den Titel:
+// BuildFindingTitle setzt seinen Rueckgabewert aus ADescText zusammen,
+// und der Titel geht einzeilig ins IDE-Meldungsfenster, in die
+// Grid-Zelle und in ein Label ohne WordWrap - ein Zeilenumbruch dort
+// erscheint als Kaestchen und stuende zusaetzlich doppelt im Hint.
+//
+// Warum ueberhaupt: beide Regeln melden EINEN Fund je Duplikat-Gruppe,
+// verankert am ersten Vorkommen. Wo dasselbe sonst noch steht, stand
+// bisher nirgends - nur die Anzahl ('appears 3x'). Der Hint ist die
+// Stelle, an der man es beim Lesen des Codes braucht.
+const
+  MAX_SHOWN = 4;
+var
+  Teile : TArray<string>;
+  Zeig  : Integer;
+  i     : Integer;
+  SB    : TStringBuilder;
+begin
+  Result := '';
+  if Trim(ARelated) = '' then Exit;
+  Teile := ARelated.Split([',']);
+  if Length(Teile) = 0 then Exit;
+  Zeig := Length(Teile);
+  if Zeig > MAX_SHOWN then Zeig := MAX_SHOWN;
+  SB := TStringBuilder.Create;
+  try
+    for i := 0 to Zeig - 1 do
+    begin
+      if SB.Length > 0 then SB.Append(', ');
+      SB.Append(Trim(Teile[i]));
+    end;
+    if Length(Teile) > Zeig then
+    begin
+      // Bewusst eine Ellipse statt einer Zahl: RelatedLines ist im
+      // Detektor gedeckelt (MAX_RELATED_SITES), ein Zaehler daraus
+      // wuerde dem '26x' im Meldetext widersprechen. Die exakte Zahl
+      // steht dort - hier zaehlt nur, dass es weitere gibt.
+      SB.Append(' ...');
+    end;
+    Result := sLineBreak + Format(_('Also at line(s): %s'), [SB.ToString]);
+  finally
+    SB.Free;
+  end;
+end;
+
 function BuildFindingTitle(F: TLeakFinding; out ADescText: string): string;
 var
   FH          : TFixHint;
@@ -4000,7 +4050,8 @@ begin
     Entries[Count].Line     := LineNo;
     var DescText : string;
     Entries[Count].Title    := BuildFindingTitle(F, DescText);
-    Entries[Count].Desc     := DescText;
+    Entries[Count].Desc     := DescText
+                               + RelatedLinesHint(F.RelatedLines);
     Entries[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
     // Kurzer Regelname fuer die Kurzform des Nur-Text-Hints (der Titel
     // passt laut Messung 0.3 mehrheitlich nicht in die Restbreite).
@@ -4577,7 +4628,8 @@ begin
     Result[Count].Line     := LineNo;
     var DescText : string;
     Result[Count].Title    := BuildFindingTitle(F, DescText);
-    Result[Count].Desc     := DescText;
+    Result[Count].Desc     := DescText
+                              + RelatedLinesHint(F.RelatedLines);
     Result[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
     // Synchron zur Frame-Schleife: Kurzform-Quelle des Nur-Text-Hints.
     Result[Count].RuleName := KindName(F.Kind);

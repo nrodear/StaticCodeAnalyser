@@ -1947,6 +1947,9 @@ msgstr "KI-Prompt kopieren"
 msgid "Copy Jira issue"
 msgstr "Jira-Vorgang kopieren"
 
+msgid "Also at line(s): %s"
+msgstr "Auch in Zeile(n): %s"
+
 msgid "Insert suppression marker"
 msgstr "Unterdrückungs-Marker einfügen"
 

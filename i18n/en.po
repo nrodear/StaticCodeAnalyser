@@ -173,6 +173,9 @@ msgstr "Copy AI prompt"
 msgid "Copy Jira issue"
 msgstr "Copy Jira issue"
 
+msgid "Also at line(s): %s"
+msgstr "Also at line(s): %s"
+
 msgid "Insert suppression marker"
 msgstr "Insert suppression marker"
 

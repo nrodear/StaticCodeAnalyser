@@ -52,6 +52,17 @@ type
     // gelassen - SARIF-Export holt dann die ID aus TRuleCatalog via Kind.
     // Wenn gesetzt, gewinnt RuleID gegen den Catalog-Lookup.
     RuleID:     string;
+    // Weitere Zeilen DERSELBEN Sache - heute nur SCA015/SCA021, die
+    // einen Fund je Duplikat-GRUPPE melden und deren Partnerstellen
+    // sonst nirgends stehen. Komma-getrennte 1-basierte Zeilennummern,
+    // aufsteigend, OHNE die Ankerzeile; leer bei allen anderen Regeln.
+    //
+    // Bewusst NICHT im Meldetext: der SARIF-Fingerprint hasht RuleID +
+    // Pfad + Zeile + Meldung, der Baseline-Fingerprint zusaetzlich
+    // MissingVar - eine Textaenderung liesse bestehende Baselines
+    // einmalig alle Funde als 'neu' sehen. Ein eigenes Feld nicht.
+    // Die Anzeige entscheidet, WIE VIELE davon sie zeigt.
+    RelatedLines: string;
     // Setzt Confidence := fcHigh (Default). Bestehende Detektoren erzeugen
     // Befunde binaer und gelten damit als hochkonfident.
     constructor Create;
