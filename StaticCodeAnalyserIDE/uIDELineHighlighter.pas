@@ -94,6 +94,10 @@ type
     // (2026-08-12) mehrheitlich nicht in die Restbreite rechts vom Code
     // - er bleibt dem Findings-Panel ueberlassen.
     RuleName : string;
+    // Weitere Fundstellen (SCA015/SCA021), Rohwert aus
+    // TLeakFinding.RelatedLines - der Nur-Text-Hint zeigt sie in seiner
+    // laengsten Stufe, s. DrawTextHint.
+    RelatedLines : string;
     Color    : TColor;          // Stripe-Farbe (staerkste Severity)
     Fix      : string;          // After-Code (leer im Multi-Mode)
     Severity : TFindingSeverity;// fuer Stripe-Ranking
@@ -136,6 +140,8 @@ type
     Badge    : string;
     // Kurzer Regelname (KindName), s. TFindingMark.RuleName.
     RuleName : string;
+    // s. TFindingMark.RelatedLines.
+    RelatedLines : string;
     Color    : TColor;
     Fix      : string;
     Severity : TFindingSeverity;
@@ -748,6 +754,9 @@ begin
   Icon := BadgeIcon(AMark.Badge);
   if Icon <> '' then
     Icon := Icon + ' ';
+  // Stufe 1 traegt die Fundstellen, Stufe 2 ist die bisherige Kurzform -
+  // FitStagedHint nimmt die erste, die in die Restbreite passt, und
+  // kuerzt sonst die kuerzeste per Ellipse (bisheriges Verhalten).
   Text := ComposeTextHint(Icon + AMark.Badge, AMark.RuleName);
   if Text = '' then Exit;
 
@@ -770,7 +779,11 @@ begin
     // (nur Ankerzeilen), in derselben Groessenordnung wie die String-
     // Konkatenationen dieses Pfads; die Heap-Storm-Lehre betraf eine
     // Closure JE ZELLE eines Grids.
-    Text := ShortenToWidth(Text, ACodeRect.Right - BX,
+    Text := FitStagedHint(
+      [ComposeTextHint(Icon + AMark.Badge, AMark.RuleName,
+                       FormatRelatedLines(AMark.RelatedLines)),
+       Text],
+      ACodeRect.Right - BX,
       function(S: string): Integer
       begin
         Result := ACanvas.TextWidth(S);
@@ -1541,6 +1554,7 @@ begin
     Result.Title    := Strongest.Title;
     Result.Desc     := Strongest.Desc;
     Result.Badge    := Strongest.Badge;
+    Result.RelatedLines := Strongest.RelatedLines;
     Result.RuleName := Strongest.RuleName;
     Result.Color    := Strongest.Color;
     Result.Fix      := Strongest.Fix;

@@ -620,7 +620,8 @@ function RunSilentAnalysisForFile(const AFileName: string;
 implementation
 
 uses
-  uIDEFindingsPropertiesForm;   // Cross-UI-Sync (GFindingsPropsForm.ResetAllStateForSync)
+  uIDEFindingsPropertiesForm,   // Cross-UI-Sync (GFindingsPropsForm.ResetAllStateForSync)
+  uHintTextLayout;              // FormatRelatedLines - geteilt mit dem Nur-Text-Hint
 
 // noinspection-file BeginEndRequired, BooleanParam, ClassPerFile, ConsecutiveSection, EmptyExcept, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember, UnusedRoutine
 // Plugin-Form: catch-all an Action-Click-Handlern (Resize, ItemPaint etc.).
@@ -796,6 +797,28 @@ begin
     GradientFill(Canvas.Handle, @tv, 2, @gr, 1, GRADIENT_FILL_RECT_V)
   else
     GradientFill(Canvas.Handle, @tv, 2, @gr, 1, GRADIENT_FILL_RECT_H);
+end;
+
+function RelatedLinesHint(const ARelated: string): string;
+// Die weiteren Fundstellen als eigene Zeile unter der Beschreibung des
+// Fenster-Overlays. Formatiert wird in uHintTextLayout - dieselbe Regel,
+// die der Nur-Text-Hint benutzt (bis zu HINT_MAX_SITES Nummern, danach
+// eine Ellipse); zwei Kopien wuerden sonst auseinanderlaufen.
+//
+// NUR fuer den Hint-Text (TFindingMarkEntry.Desc), NICHT fuer den Titel:
+// BuildFindingTitle setzt seinen Rueckgabewert aus ADescText zusammen,
+// und der Titel geht einzeilig ins IDE-Meldungsfenster, in die
+// Grid-Zelle und in ein Label ohne WordWrap - ein Zeilenumbruch dort
+// erscheint als Kaestchen und stuende zusaetzlich doppelt im Hint.
+var
+  Zeilen : string;
+begin
+  Result := '';
+  Zeilen := FormatRelatedLines(ARelated);
+  if Zeilen <> '' then
+  begin
+    Result := sLineBreak + Zeilen;
+  end;
 end;
 
 function BuildFindingTitle(F: TLeakFinding; out ADescText: string): string;
@@ -4000,11 +4023,13 @@ begin
     Entries[Count].Line     := LineNo;
     var DescText : string;
     Entries[Count].Title    := BuildFindingTitle(F, DescText);
-    Entries[Count].Desc     := DescText;
+    Entries[Count].Desc     := DescText
+                               + RelatedLinesHint(F.RelatedLines);
     Entries[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
     // Kurzer Regelname fuer die Kurzform des Nur-Text-Hints (der Titel
     // passt laut Messung 0.3 mehrheitlich nicht in die Restbreite).
     Entries[Count].RuleName := KindName(F.Kind);
+    Entries[Count].RelatedLines := F.RelatedLines;
     Entries[Count].Color    := EditorAccent(DispSev,
                                  GCachedEditorScheme, GCachedEditorBgDark);
     Entries[Count].Fix      := FH.After;
@@ -4577,10 +4602,12 @@ begin
     Result[Count].Line     := LineNo;
     var DescText : string;
     Result[Count].Title    := BuildFindingTitle(F, DescText);
-    Result[Count].Desc     := DescText;
+    Result[Count].Desc     := DescText
+                              + RelatedLinesHint(F.RelatedLines);
     Result[Count].Badge    := F.TypeText + _(' · ') + F.SeverityText;
     // Synchron zur Frame-Schleife: Kurzform-Quelle des Nur-Text-Hints.
     Result[Count].RuleName := KindName(F.Kind);
+    Result[Count].RelatedLines := F.RelatedLines;
     Result[Count].Color    := EditorAccent(DispSev,
                                 GCachedEditorScheme, GCachedEditorBgDark);
     Result[Count].Fix      := FH.After;

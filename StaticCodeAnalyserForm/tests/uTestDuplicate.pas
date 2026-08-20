@@ -1,4 +1,4 @@
-unit uTestDuplicate;
+﻿unit uTestDuplicate;
 
 // Tests fuer DuplicateString- und DuplicateBlock-Detektoren.
 
@@ -26,6 +26,10 @@ type
     [Test] procedure Dup_StringInAssignment_Counted;
     [Test] procedure Dup_StringInCall_Counted;
     [Test] procedure Dup_TrueFalseTrivial_NoFinding;
+    // RelatedLines (2026-08-20): die weiteren Fundstellen derselben
+    // Gruppe - Traeger fuer die Zeilenliste im Annotation-Hint.
+    [Test] procedure Dup_RelatedLines_ListsOtherSites;
+    [Test] procedure Dup_RelatedLines_ExcludesAnchorLine;
   end;
 
   // ---- DuplicateBlock (TDuplicateBlockDetector) - filebasiert -----------------------
@@ -58,6 +62,7 @@ type
     [Test] procedure TwoSeparateBlocks_StayTwoFindings;
     [Test] procedure TwoOverlappingDistinctGroups_StayTwoFindings;
     [Test] procedure MergedFinding_KeepsAnchorMessage;
+    [Test] procedure Block_RelatedLines_PointsToSecondOccurrence;
   end;
 
 implementation
@@ -1098,6 +1103,102 @@ begin
       'consider extracting a method',
       Fd.MissingVar,
       'Meldetext des Ankers ist fingerprint-relevant und wird hier fixiert');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateString.Dup_RelatedLines_ListsOtherSites;
+// Drei Vorkommen -> EIN Fund an Zeile 5, und RelatedLines nennt die
+// beiden anderen Zeilen. Ohne das steht im Bericht nur 'x3', aber
+// nirgends, WO die anderen stehen.
+const SRC =
+  'unit t; implementation'#13#10+      // 1
+  'procedure Foo;'#13#10+              // 2
+  'var s: string;'#13#10+              // 3
+  'begin'#13#10+                       // 4
+  '  s := ''wichtig'';'#13#10+         // 5 - Anker
+  '  s := ''wichtig'';'#13#10+         // 6
+  '  s := ''wichtig'';'#13#10+         // 7
+  'end;';
+var
+  F : TObjectList<TLeakFinding>;
+  D : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    D := TFindingHelper.FirstOf(F, fkDuplicateString);
+    Assert.IsNotNull(D, 'kein DuplicateString-Fund');
+    Assert.AreEqual('6,7', D.RelatedLines,
+      'RelatedLines muss die beiden anderen Fundstellen nennen');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateString.Dup_RelatedLines_ExcludesAnchorLine;
+// Die Ankerzeile steht bereits in LineNumber - sie darf in RelatedLines
+// NICHT noch einmal auftauchen, sonst zeigt der Hint auf sich selbst.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := ''wichtig'';'#13#10+         // 5 - Anker
+  '  s := ''wichtig'';'#13#10+         // 6
+  '  s := ''wichtig'';'#13#10+         // 7
+  'end;';
+var
+  F : TObjectList<TLeakFinding>;
+  D : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    D := TFindingHelper.FirstOf(F, fkDuplicateString);
+    Assert.IsNotNull(D, 'kein DuplicateString-Fund');
+    // Exakt gegen die Eintraege pruefen, NICHT per Contains: der Anker
+    // '1' waere als Substring auch in '10,11' enthalten.
+    for var Teil in D.RelatedLines.Split([',']) do
+    begin
+      Assert.AreNotEqual(D.LineNumber, Trim(Teil),
+        'die Ankerzeile darf nicht in RelatedLines stehen');
+    end;
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateBlock.Block_RelatedLines_PointsToSecondOccurrence;
+// Der Fund haengt am Erst-Vorkommen (Zeile 3); das Zweit-Vorkommen
+// (Zeile 13) steht sonst NIRGENDS im Bericht - genau dafuer ist
+// RelatedLines da.
+const SRC =
+  'unit t; implementation'#13#10+      // 1
+  'procedure TFoo.A; begin'#13#10+     // 2
+  '  X := 1;'#13#10+                   // 3 - Anker
+  '  Y := 2;'#13#10+                   // 4
+  '  Z := 3;'#13#10+                   // 5
+  '  W := 4;'#13#10+                   // 6
+  '  V := 5;'#13#10+                   // 7
+  '  U := 6;'#13#10+                   // 8
+  '  T := 7;'#13#10+                   // 9
+  '  S := 8;'#13#10+                   // 10
+  'end;'#13#10+                        // 11
+  'procedure TFoo.B; begin'#13#10+     // 12
+  '  X := 1;'#13#10+                   // 13 - Zweit-Vorkommen
+  '  Y := 2;'#13#10+
+  '  Z := 3;'#13#10+
+  '  W := 4;'#13#10+
+  '  V := 5;'#13#10+
+  '  U := 6;'#13#10+
+  '  T := 7;'#13#10+
+  '  S := 8;'#13#10+
+  'end;';
+var
+  F : TObjectList<TLeakFinding>;
+  D : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    D := TFindingHelper.FirstOf(F, fkDuplicateBlock);
+    Assert.IsNotNull(D, 'kein DuplicateBlock-Fund');
+    Assert.AreEqual('3', D.LineNumber, 'Anker muss das Erst-Vorkommen sein');
+    Assert.AreEqual('13', D.RelatedLines,
+      'RelatedLines muss auf das Zweit-Vorkommen zeigen');
   finally F.Free; end;
 end;
 
