@@ -1,4 +1,4 @@
-unit uTestHintTextLayout;
+﻿unit uTestHintTextLayout;
 
 // Tests fuer uHintTextLayout (SCA.SharedUI) - die Kuerzungs- und
 // Kompositionsregeln des Nur-Text-Annotation-Hints.
@@ -26,6 +26,13 @@ type
     [Test] procedure Shorten_NoSpaceBeforeEllipsis;
     [Test] procedure Shorten_CutAtSurrogatePair_DropsHalfChar;
     [Test] procedure Shorten_CutAtSurrogateAfterSpace_TrimsAgain;
+    // Fundstellen im Nur-Text-Hint (2026-08-20, SCA015/SCA021)
+    [Test] procedure Sites_UpToFourNumbers_ThenEllipsis;
+    [Test] procedure Sites_EmptyOrBlank_YieldsNothing;
+    [Test] procedure Sites_StripsBlanksAndEmptyParts;
+    [Test] procedure Staged_LongestStageWins_WhenItFits;
+    [Test] procedure Staged_FallsBackToShorterStage_WhenTooNarrow;
+    [Test] procedure Staged_NoStageFits_ShortensTheLastOne;
   end;
 
 implementation
@@ -121,6 +128,78 @@ begin
   // 9 Einheiten, Budget 5: Praefix (4) + Ellipse = 'ab ' + High-Surrogate.
   S := ShortenToWidth('ab ' + EMOJI + 'cdef', 5 * PX_PER_CHAR, FixedMeasure);
   Assert.AreEqual('ab' + HINT_ELLIPSIS, S);
+end;
+
+procedure TTestHintTextLayout.Sites_UpToFourNumbers_ThenEllipsis;
+// Nutzervorgabe: hoechstens VIER Nummern; der Rest wird zur Ellipse,
+// BEWUSST keine Zahl - RelatedLines ist im Detektor gedeckelt, ein
+// Zaehler daraus wuerde dem '26x' im Meldetext widersprechen.
+var
+  S : string;
+begin
+  S := FormatRelatedLines('6,7,12,45,99,120');
+  Assert.IsTrue(S.Contains('6, 7, 12, 45'),
+    'die ersten vier Nummern muessen erscheinen: ' + S);
+  Assert.IsFalse(S.Contains('99'),
+    'die fuenfte Nummer darf NICHT erscheinen: ' + S);
+  Assert.IsTrue(S.Contains(HINT_ELLIPSIS),
+    'bei mehr als vier muss eine Ellipse folgen: ' + S);
+end;
+
+procedure TTestHintTextLayout.Sites_EmptyOrBlank_YieldsNothing;
+// Alle anderen Regeln liefern ein leeres RelatedLines - dann darf der
+// Hint keine leere Beschriftung tragen.
+begin
+  Assert.AreEqual('', FormatRelatedLines(''));
+  Assert.AreEqual('', FormatRelatedLines('   '));
+  Assert.AreEqual('', FormatRelatedLines(',,'));
+end;
+
+procedure TTestHintTextLayout.Sites_StripsBlanksAndEmptyParts;
+// Leere Stuecke ('6,,7') und Endkommata duerfen keine Luecken oder
+// haengenden Trenner erzeugen.
+var
+  S : string;
+begin
+  S := FormatRelatedLines(' 6 , ,7, ');
+  Assert.IsTrue(S.Contains('6, 7'), 'erwartet 6, 7 - war: ' + S);
+  Assert.IsFalse(S.Contains(HINT_ELLIPSIS),
+    'zwei Nummern brauchen keine Ellipse: ' + S);
+end;
+
+procedure TTestHintTextLayout.Staged_LongestStageWins_WhenItFits;
+// Stufe 1 traegt die Fundstellen und gewinnt, solange sie passt.
+const
+  STUFE1 = 'Hint mit Stellen';
+  STUFE2 = 'Hint';
+begin
+  Assert.AreEqual(STUFE1,
+    FitStagedHint([STUFE1, STUFE2], 40 * PX_PER_CHAR, FixedMeasure));
+end;
+
+procedure TTestHintTextLayout.Staged_FallsBackToShorterStage_WhenTooNarrow;
+// Zu schmal fuer Stufe 1: die naechste Stufe kommt UNGEKUERZT - genau
+// dafuer gibt es die Leiter. Stumpfes Kuerzen haette stattdessen die
+// Ellipse in den Regelnamen geschoben.
+const
+  STUFE1 = 'viel zu lang fuer das Budget';
+  STUFE2 = 'passt';
+begin
+  Assert.AreEqual(STUFE2,
+    FitStagedHint([STUFE1, STUFE2], 6 * PX_PER_CHAR, FixedMeasure));
+end;
+
+procedure TTestHintTextLayout.Staged_NoStageFits_ShortensTheLastOne;
+// Passt keine Stufe, wird die KUERZESTE per Ellipse gekuerzt -
+// bisheriges Verhalten, nur eine Stufe tiefer.
+var
+  S : string;
+begin
+  S := FitStagedHint([StringOfChar('a', 40), StringOfChar('b', 20)],
+                     10 * PX_PER_CHAR, FixedMeasure);
+  Assert.AreEqual(StringOfChar('b', 9) + HINT_ELLIPSIS, S);
+  Assert.IsTrue(FixedMeasure(S) <= 10 * PX_PER_CHAR,
+    'auch die Rueckfall-Kuerzung muss ins Budget passen');
 end;
 
 initialization

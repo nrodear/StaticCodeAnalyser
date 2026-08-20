@@ -1,4 +1,4 @@
-unit uHintTextLayout;
+﻿unit uHintTextLayout;
 
 // Reine Text-Layout-Logik des Nur-Text-Annotation-Hints
 // (Konzept_AnnotationHint_NurText_2026-08-09, Weg B). Bewusst OHNE
@@ -29,6 +29,20 @@ const
 // Kurzform des Text-Hints: 'Badge <Em-Dash> Regelname'. Leere Teile
 // fallen weg (nur Badge bzw. nur Regelname), beide leer -> ''.
 function ComposeTextHint(const ABadge, ARuleName: string): string;
+  overload;
+
+// Dreiteilige Fassung mit den weiteren Fundstellen (SCA015/SCA021).
+// Leeres ASites faellt weg - dann identisch zur zweiteiligen Form.
+function ComposeTextHint(const ABadge, ARuleName,
+  ASites: string): string; overload;
+
+// 'Auch in Zeile(n): 6, 7, 12, 45 ...' aus dem Rohwert von
+// TLeakFinding.RelatedLines (komma-getrennte Zeilennummern).
+// Zeigt hoechstens HINT_MAX_SITES Nummern; gibt es mehr, folgt eine
+// Ellipse statt einer Zahl - RelatedLines ist im Detektor gedeckelt,
+// ein Zaehler daraus wuerde dem '26x' im Meldetext widersprechen.
+// Leerer oder unbrauchbarer Eingabewert -> ''.
+function FormatRelatedLines(const ARelated: string): string;
 
 // Kuerzt AText so, dass AMeasure(Ergebnis) <= AMaxWidthPx bleibt.
 // Passt der Text ganz, kommt er unveraendert zurueck; sonst wird auf
@@ -41,10 +55,28 @@ function ComposeTextHint(const ABadge, ARuleName: string): string;
 function ShortenToWidth(const AText: string; AMaxWidthPx: Integer;
   const AMeasure: TFunc<string, Integer>): string;
 
+// Nimmt die Fassungen von der laengsten zur kuerzesten und liefert die
+// ERSTE, die in AMaxWidthPx passt. Passt keine, wird die LETZTE
+// (kuerzeste) wie bisher per Ellipse gekuerzt.
+//
+// Warum gestuft statt einfach kuerzen: haengt man die Fundstellen an
+// und kuerzt dann stumpf, frisst die Ellipse zuerst die Zeilennummern
+// und danach den REGELNAMEN - der Hint zeigte dann 'Code Smell - Dupli...'
+// statt der vollstaendigen Kurzform. Die Stufen geben die unwichtigere
+// Information zuerst auf.
+function FitStagedHint(const AStufen: array of string;
+  AMaxWidthPx: Integer; const AMeasure: TFunc<string, Integer>): string;
+
+const
+  // Hoechstens so viele Zeilennummern im Hint - Nutzervorgabe
+  // 2026-08-20. Der Rest wird zur Ellipse.
+  HINT_MAX_SITES = 4;
+
 implementation
 
 uses
-  System.Character;
+  System.Character,
+  uLocalization;   // _() fuer die Zeilen-Beschriftung
 
 function ComposeTextHint(const ABadge, ARuleName: string): string;
 var
@@ -55,6 +87,80 @@ begin
   if Rule = '' then Exit(Badge);
   if Badge = '' then Exit(Rule);
   Result := Badge + ' ' + HINT_SEP + ' ' + Rule;
+end;
+
+function ComposeTextHint(const ABadge, ARuleName,
+  ASites: string): string;
+var
+  Kurz, Sites : string;
+begin
+  Kurz  := ComposeTextHint(ABadge, ARuleName);
+  Sites := Trim(ASites);
+  if Sites = '' then Exit(Kurz);
+  if Kurz  = '' then Exit(Sites);
+  Result := Format('%s %s %s', [Kurz, HINT_SEP, Sites]);
+end;
+
+function FormatRelatedLines(const ARelated: string): string;
+var
+  Teile : TArray<string>;
+  Zeig  : Integer;
+  i     : Integer;
+  SB    : TStringBuilder;
+  Teil  : string;
+begin
+  Result := '';
+  if Trim(ARelated) = '' then Exit;
+  Teile := Trim(ARelated).Split([',']);
+  SB := TStringBuilder.Create;
+  try
+    Zeig := 0;
+    for i := Low(Teile) to High(Teile) do
+    begin
+      Teil := Trim(Teile[i]);
+      // '6,,7' oder Endkomma - leere Stuecke sind keine Fundstelle.
+      if Teil = '' then
+      begin
+        Continue;
+      end;
+      if Zeig >= HINT_MAX_SITES then
+      begin
+        SB.Append(' ').Append(HINT_ELLIPSIS);
+        Break;
+      end;
+      if Zeig > 0 then
+      begin
+        SB.Append(', ');
+      end;
+      SB.Append(Teil);
+      Inc(Zeig);
+    end;
+    if Zeig = 0 then Exit('');
+    Result := Format(_('Also at line(s): %s'), [SB.ToString]);
+  finally
+    SB.Free;
+  end;
+end;
+
+function FitStagedHint(const AStufen: array of string;
+  AMaxWidthPx: Integer; const AMeasure: TFunc<string, Integer>): string;
+var
+  i      : Integer;
+  Kand   : string;
+  Letzte : string;
+begin
+  Letzte := '';
+  for i := Low(AStufen) to High(AStufen) do
+  begin
+    Kand := Trim(AStufen[i]);
+    if Kand = '' then Continue;
+    Letzte := Kand;
+    // Ohne Messfunktion ist keine Aussage moeglich - dann die laengste
+    // Fassung liefern, wie ShortenToWidth es auch haelt.
+    if not Assigned(AMeasure) then Exit(Kand);
+    if AMeasure(Kand) <= AMaxWidthPx then Exit(Kand);
+  end;
+  Result := ShortenToWidth(Letzte, AMaxWidthPx, AMeasure);
 end;
 
 function ShortenToWidth(const AText: string; AMaxWidthPx: Integer;
