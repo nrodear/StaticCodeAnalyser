@@ -200,7 +200,7 @@ def main() -> int:
     for dst, text in ((DST, build()), (DST_OV, build_overlay())):
         old = ''
         if os.path.exists(dst):
-            with io.open(dst, encoding='utf-8', newline='') as f:
+            with io.open(dst, encoding='utf-8-sig', newline='') as f:
                 old = f.read()
         if check:
             if old.replace('\r\n', '\n') == text:
@@ -212,7 +212,13 @@ def main() -> int:
                       % os.path.basename(dst))
                 rc = 1
             continue
-        with io.open(dst, 'w', encoding='utf-8', newline='\r\n') as f:
+        # BOM genau dann, wenn die Tabelle Nicht-ASCII traegt - dieselbe
+        # Repo-Regel wie in gen-rules-docs.py und tools/encoding_gate.py.
+        # Heute schreibt der Generator Umlaute als #$xx und bleibt damit
+        # ASCII-only; die Regel steht hier, damit Generator und Gate sich
+        # nicht widersprechen, falls sich das je aendert.
+        kod = 'utf-8-sig' if any(ord(c) > 127 for c in text) else 'utf-8'
+        with io.open(dst, 'w', encoding=kod, newline='\r\n') as f:
             f.write(text)
         print('Generated %s (%d Regel-Eintraege, %d Zeichen).'
               % (os.path.basename(dst), text.count('    // SCA'), len(text)))

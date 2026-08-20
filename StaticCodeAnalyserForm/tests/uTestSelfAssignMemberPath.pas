@@ -1,4 +1,4 @@
-unit uTestSelfAssignMemberPath;
+﻿unit uTestSelfAssignMemberPath;
 
 // W2-Schaerfung SCA047 (2026-08-19): member-genaue Record-Pfade.
 // Eigene Unit - fokussiert auf die Pfad-Aufloesung (Wurzel-Slot +
@@ -20,6 +20,7 @@ type
     [Test] procedure Self_RecordFieldPath_RtlPoint_Reported;
     [Test] procedure Self_RecordFieldPath_UnitRecord_Reported;
     [Test] procedure Self_PtrDerefRecordField_Reported;
+    [Test] procedure Self_RtlPtrAliasDeref_Reported;
     [Test] procedure Self_RecordPropertyPath_NotReported;
     [Test] procedure Self_RectFHeight_NotReported;
     [Test] procedure Self_IndexedPath_NotReported;
@@ -140,6 +141,25 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSelfAssignment),
     'indizierter Pfad muss still bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestSelfAssignMemberPath.Self_RtlPtrAliasDeref_Reported;
+// W2: '^'-Hop ueber die RTL-Aliastabelle (RTL_PTR_ALIAS), NICHT ueber
+// einen in der Unit deklarierten Alias. Genau daran haengt der gemessene
+// Korpus-Fund mormot.ui.pdf.pas:11155 'R^.iType := R^.iType': weder
+// PEnhMetaRecord noch tagENHMETARECORD sind hier deklariert, die Kette
+// loest allein ueber die kuratierten Tabellen auf. Ohne diesen Test
+// koennte ein Eintrag aus RTL_PTR_ALIAS fallen, ohne dass es auffaellt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(R: PEnhMetaRecord);'#13#10 +
+  'begin R^.iType := R^.iType; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSelfAssignment),
+    'RTL-Pointer-Alias-Hop muss melden (mormot-Fall)');
   finally F.Free; end;
 end;
 

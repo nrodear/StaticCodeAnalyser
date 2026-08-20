@@ -22,7 +22,9 @@ ueber ALLE Textarten.
 REINES ASCII bleibt bewusst BOM-frei: dort sind UTF-8 und ANSI
 byte-gleich, ein BOM waere nur Rauschen im Diff.
 
-AUSNAHMEN (jede mit Grund, s. AUSNAHMEN unten).
+AUSNAHMEN: die Tabelle AUSNAHMEN unten nennt jede mit Grund; das Gate
+gibt sie bei einem Fehlschlag mit aus, damit die Begruendung dort steht,
+wo jemand sie braucht.
 
 Exit 0 = gruen, 1 = Verstoss. Lokal: `python tools/encoding_gate.py`
 """
@@ -113,6 +115,18 @@ def main():
     print('Beheben: UTF-8-BOM voranstellen (Inhalt NICHT anfassen), oder')
     print('die Zeichen ASCII-transkribieren, wo das Projekt es ohnehin')
     print('vorsieht (Quelltext-Kommentare: ue/oe/ae/ss).')
+    if any(r.lower().endswith(('.dfm', '.fmx')) for r, _n, _c in verstoesse):
+        print('')
+        print('Fuer .dfm/.fmx gilt ein ANDERER Weg: Delphi schreibt Text-')
+        print('Formulare selbst ASCII-only und maskiert Sonderzeichen als')
+        print('#NNN. Dort also NICHT das BOM setzen (ob die IDE es beim')
+        print('Speichern erhaelt, ist ungeprueft), sondern die Zeichen')
+        print('maskieren - am einfachsten, indem die IDE das Formular')
+        print('einmal speichert.')
+    print('')
+    print('NICHT geprueft werden (je mit Grund):')
+    for ext in sorted(AUSNAHMEN):
+        print('  %-6s %s' % (ext, AUSNAHMEN[ext]))
     return 1
 
 
