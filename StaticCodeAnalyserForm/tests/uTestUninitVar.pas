@@ -236,6 +236,10 @@ type
     [Test] procedure CtorOnInstanceAfterRead_KeepsDeclAnchor;
     // Blocker 2: Decay-Adressnahme auf 'dwTypeData' NACH einem Read
     [Test] procedure DecayFieldAfterRead_KeepsDeclAnchor;
+    // Kundenkorpus-FP-Runde K5 (2026-08-20): Feld-Labels typisierter
+    // Konstanten sind keine Lesestellen.
+    [Test] procedure RecordConstLabel_SameNameAsLocal_NoFinding;
+    [Test] procedure RealReadBeforeWrite_StillReported;
   end;
 
 implementation
@@ -4272,6 +4276,49 @@ begin
     Assert.AreEqual(fcHigh,
       TFindingHelper.FirstOf(F, fkUninitVar).Confidence,
       'Confidence bleibt fcHigh - kein Kippen in den fcMedium-Zweig');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.RecordConstLabel_SameNameAsLocal_NoFinding;
+// Der Orpheus-Fall aus dem Kundenkorpus: das 'res:' im
+// Record-Konstruktor benennt ein FELD von TData, nicht die lokale
+// Variable 'res'. Weil die const-Sektion vor der Zuweisung steht, sah
+// das wie ein 'read before write' aus.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'type TRec = record y: Integer; res: Boolean; end;'#13#10+
+  'const cData: array[0..1] of TRec ='#13#10+
+  '  ((y: 1; res: True), (y: 2; res: False));'#13#10+
+  'var res: Boolean; i: Integer;'#13#10+
+  'begin'#13#10+
+  '  for i := 0 to 1 do res := cData[i].res;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUninitVar),
+    'ein Feld-Label im Record-Konstruktor ist kein Lesezugriff');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.RealReadBeforeWrite_StillReported;
+// Gegenprobe: derselbe Aufbau, aber die Variable wird WIRKLICH vor der
+// Zuweisung gelesen. Ohne diesen Test koennte das neue Gate die Regel
+// stillschweigend abschalten.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var res: Boolean; i: Integer;'#13#10+
+  'begin'#13#10+
+  '  if res then i := 1;'#13#10+
+  '  res := False;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkUninitVar) >= 1,
+    'ein echtes read-before-write muss weiterhin melden');
   finally F.Free; end;
 end;
 

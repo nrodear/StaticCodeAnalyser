@@ -370,6 +370,91 @@ begin
   end;
 end;
 
+function IsWholeWordAt(const S: string; AStart: Integer;
+  const NameLow: string): Boolean;
+// Steht NameLow an AStart als ganzes Wort? (sonst traefe 'residual'
+// auf 'res')
+var
+  j : Integer;
+begin
+  Result := False;
+  if Copy(S, AStart, Length(NameLow)) <> NameLow then Exit;
+  if (AStart > 1) and TDetectorUtils.IsIdentChar(S[AStart - 1]) then Exit;
+  j := AStart + Length(NameLow);
+  if (j <= Length(S)) and TDetectorUtils.IsIdentChar(S[j]) then Exit;
+  Result := True;
+end;
+
+function IsLabelAt(const S: string; AStart, AAfter, ATiefe: Integer): Boolean;
+// Ein einzelnes Vorkommen: rechts ':' (aber kein ':='), links '(' ';'
+// oder ',', und innerhalb von Klammern. Ausgelagert, damit die
+// Scan-Schleife flach bleibt.
+var
+  j, Vor, n : Integer;
+begin
+  Result := False;
+  if ATiefe = 0 then Exit;
+  n := Length(S);
+  j := AAfter;
+  while (j <= n) and (S[j] = ' ') do Inc(j);
+  if (j > n) or (S[j] <> ':') then Exit;
+  if (j < n) and (S[j + 1] = '=') then Exit;
+  Vor := AStart - 1;
+  while (Vor >= 1) and (S[Vor] = ' ') do Dec(Vor);
+  if (Vor < 1) or not CharInSet(S[Vor], ['(', ';', ',']) then Exit;
+  Result := True;
+end;
+
+function ParenDepthAt(const S: string; APos: Integer): Integer;
+// Klammertiefe unmittelbar VOR Position APos. Zeilen sind kurz, die
+// Neuberechnung je Treffer kostet nichts und haelt den Scanner flach.
+var
+  i : Integer;
+begin
+  Result := 0;
+  for i := 1 to APos - 1 do
+  begin
+    if S[i] = '(' then Inc(Result)
+    else if (S[i] = ')') and (Result > 0) then Dec(Result);
+  end;
+end;
+
+function AllOccurrencesAreRecordLabels(const Line, NameLow: string): Boolean;
+// True, wenn JEDES Vorkommen von NameLow in dieser Zeile ein Feld-LABEL
+// eines Record-Konstruktors ist - '(y: 1; res: True)' in einer
+// typisierten Konstanten. Solche Labels benennen ein FELD des
+// Record-Typs, nie die gleichnamige lokale Variable.
+//
+// ALLE Vorkommen muessen Labels sein: steht auf derselben Zeile auch ein
+// echter Lesezugriff, bleibt der Fund.
+var
+  S      : string;
+  n, L   : Integer;
+  Start  : Integer;
+  Anzahl : Integer;
+begin
+  Result := False;
+  S := LowerCase(StripCommentsAndStrings(Line));
+  n := Length(S);
+  L := Length(NameLow);
+  if (n = 0) or (L = 0) then Exit;
+  Anzahl := 0;
+  Start  := 1;
+  while Start + L - 1 <= n do
+  begin
+    if not IsWholeWordAt(S, Start, NameLow) then
+    begin
+      Inc(Start);
+      Continue;
+    end;
+    Inc(Anzahl);
+    if not IsLabelAt(S, Start, Start + L, ParenDepthAt(S, Start)) then
+      Exit(False);
+    Inc(Start, L);
+  end;
+  Result := Anzahl > 0;
+end;
+
 function BaseTypeLow(const TypeLow: string): string;
 // Reduziert einen (bereits gelowerten) TypeRef auf den nackten Typnamen:
 // Generic-Parameter (< ... >) und Qualifier (unit.T) werden abgeschnitten.
@@ -4103,6 +4188,20 @@ var
         // kein echter Local. Der Scan laeuft ueber die ganze Datei,
         // deshalb steht er so spaet wie moeglich.
         if IsFileDeclaredTypeName(Lines, P.NameLow) then
+          Continue;
+
+        // Kundenkorpus-FP-Runde K5 (2026-08-20): die gemeldete
+        // Lesestelle ist in Wahrheit ein Feld-LABEL eines
+        // Record-Konstruktors in einer typisierten Konstanten
+        // ('(y: 1; res: True)'), nicht die gleichnamige lokale
+        // Variable. Weil die const-Sektion VOR der Zuweisung steht,
+        // sah das wie ein 'read before write' aus. Gemessen: 38 von
+        // 73 Funden dieser Meldungsform in beiden Korpora - und alle
+        // in Error-Schwere. TP-sicher: nur Suppression, und nur wenn
+        // JEDES Vorkommen auf der Zeile ein Label ist.
+        if (P.FirstReadLine >= 1) and (P.FirstReadLine <= Lines.Count) and
+           AllOccurrencesAreRecordLabels(Lines[P.FirstReadLine - 1],
+                                         P.NameLow) then
           Continue;
 
         // Read vor Write - konservativ fcMedium (Phase 2.1 Sibling-
