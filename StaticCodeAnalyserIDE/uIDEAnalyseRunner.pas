@@ -1,4 +1,4 @@
-unit uIDEAnalyseRunner;
+﻿unit uIDEAnalyseRunner;
 
 // Drei Analyse-Pipelines des Frame-Plugins - seit dem Plugin-Audit (Stufe 3)
 // ASYNCHRON in einem Worker-Thread (Muster: TWatchAnalyzer):

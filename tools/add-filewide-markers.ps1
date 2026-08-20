@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # add-filewide-markers.ps1
 #
 # Bulk-Add der File-Wide-Suppression-Marker basierend auf /tmp/file-kinds-agg.tsv.

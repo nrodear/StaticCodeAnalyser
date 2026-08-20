@@ -1,4 +1,4 @@
-unit uIDEEditorIntegration;
+﻿unit uIDEEditorIntegration;
 
 // Stateless wrappers around RAD Studio's ToolsAPI for everything the
 // Analyser-Frame needs from the IDE-Editor:

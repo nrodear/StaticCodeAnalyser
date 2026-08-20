@@ -1,4 +1,4 @@
-unit uFileTextCache;
+﻿unit uFileTextCache;
 
 // Datei-Text-Cache fuer File-Scan-Detektoren (uTodoComment, uWithStatement,
 // uReversedForRange, uLengthUnderflow, uTautologicalExpr, uDuplicateBlock,

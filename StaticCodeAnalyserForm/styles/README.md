@@ -1,4 +1,4 @@
-# Eingebetteter VCL-Style
+﻿# Eingebetteter VCL-Style
 
 `SCADark.vsf` (interner Name `SCA VSDark`) ist ein per Skript
 umgefärbtes `Windows10Dark.vsf` aus `Redist\styles\vcl\` der Delphi-12-

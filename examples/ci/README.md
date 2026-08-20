@@ -1,4 +1,4 @@
-# CI Integration Examples
+﻿# CI Integration Examples
 
 Reference setups for plugging the Static Code Analyser into common CI/CD
 pipelines. Pick the one that matches your stack — they're independent.

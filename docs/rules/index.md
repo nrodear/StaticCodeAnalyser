@@ -1,4 +1,4 @@
-# StaticCodeAnalyser — Rule Catalog
+﻿# StaticCodeAnalyser — Rule Catalog
 
 All 196 detector rules. Click an ID for full details.
 

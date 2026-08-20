@@ -1,4 +1,4 @@
-unit uCodeSmells2;
+﻿unit uCodeSmells2;
 
 // AST-basierter Code-Smell-Detektor (Sonar-Regel #2).
 //

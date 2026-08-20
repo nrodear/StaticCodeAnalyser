@@ -1,4 +1,4 @@
-unit uTestInsecureCryptoAlgorithm;
+﻿unit uTestInsecureCryptoAlgorithm;
 
 // Tests fuer TInsecureCryptoAlgorithmDetector (SCA162).
 

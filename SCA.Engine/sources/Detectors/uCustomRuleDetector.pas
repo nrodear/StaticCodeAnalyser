@@ -1,4 +1,4 @@
-unit uCustomRuleDetector;
+﻿unit uCustomRuleDetector;
 
 // Custom-Rule-Engine: liest team-/projekt-spezifische Regeln aus
 // analyser-rules.yml und matcht sie als Pattern (Regex/Substring/Word)

@@ -1,4 +1,4 @@
-unit uTestUninitVar;
+﻿unit uTestUninitVar;
 
 // Tests fuer TUninitVarDetector (SCA166 fkUninitVar).
 // Siehe Konzept_SCA166_UninitVar.md §12 fuer die Test-Strategie.

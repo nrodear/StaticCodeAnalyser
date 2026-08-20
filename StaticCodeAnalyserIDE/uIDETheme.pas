@@ -1,4 +1,4 @@
-unit uIDETheme;
+﻿unit uIDETheme;
 
 // Zentraler IDE-Theme-Manager fuer das Analyser-Plugin.
 //

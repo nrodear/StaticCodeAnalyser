@@ -1,4 +1,4 @@
-# Branding-Assets
+﻿# Branding-Assets
 
 Single source of truth fuer App-Icon und IDE-Plugin-Bitmap. Folgt der
 **canonical Embarcadero**-Konvention — siehe

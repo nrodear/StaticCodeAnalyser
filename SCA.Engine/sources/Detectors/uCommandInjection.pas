@@ -1,4 +1,4 @@
-unit uCommandInjection;
+﻿unit uCommandInjection;
 
 // Detektor: ShellExecute/CreateProcess/WinExec mit String-Konkatenation
 // im Command-Argument (SCA163).

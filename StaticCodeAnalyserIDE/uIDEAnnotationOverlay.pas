@@ -1,4 +1,4 @@
-unit uIDEAnnotationOverlay;
+﻿unit uIDEAnnotationOverlay;
 
 // Overlay-Fenster: zeigt Befund-Titel + Badge + Beschreibung als Block
 // direkt unter der betroffenen Editor-Zeile.

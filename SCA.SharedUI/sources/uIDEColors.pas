@@ -1,4 +1,4 @@
-unit uIDEColors;
+﻿unit uIDEColors;
 
 // Semantische IDE-Theme-Palette fuer den Plugin-Frame, die Hilfe-Spalte,
 // die Sonar-Tiles, die Options-Pages.

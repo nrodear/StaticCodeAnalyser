@@ -1,4 +1,4 @@
-unit uVisibilityCheck;
+﻿unit uVisibilityCheck;
 
 // Detektoren: fkCanBeUnitPrivate / fkCanBeStrictPrivate / fkCanBeProtected /
 //             fkUnusedPublicMember.

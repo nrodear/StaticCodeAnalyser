@@ -1,4 +1,4 @@
-# SCA.CLI.Demo
+﻿# SCA.CLI.Demo
 
 🇬🇧 [English version](README.md) · 🇩🇪 [Deutsche Fassung](README_de.md) · Référence complète du moteur/API : [../SCA.Engine/API_fr.md](../SCA.Engine/API_fr.md)
 

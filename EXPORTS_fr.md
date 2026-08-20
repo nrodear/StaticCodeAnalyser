@@ -1,4 +1,4 @@
-# Sortir les résultats de SCA — formats et workflows
+﻿# Sortir les résultats de SCA — formats et workflows
 
 🇬🇧 [English version](EXPORTS.md) · 🇩🇪 [Deutsche Fassung](EXPORTS_de.md)
 

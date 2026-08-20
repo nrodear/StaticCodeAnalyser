@@ -1,4 +1,4 @@
-unit uIDEStatusBar;
+﻿unit uIDEStatusBar;
 
 // Drei-Panel-Statusleiste am unteren Rand des Analyser-Frames:
 //   * Panel 0 (links,  fix 160 px) - Befund-Counter ("X / Y findings")

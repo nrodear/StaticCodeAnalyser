@@ -1,4 +1,4 @@
-# HowTo: Bauen und installieren (Anfaenger-Anleitung)
+﻿# HowTo: Bauen und installieren (Anfaenger-Anleitung)
 
 Diese Anleitung fuehrt dich vom Stand "ich habe nichts" bis zu
 "der Analyzer laeuft auf meinem Code". Sie ist fuer Leute geschrieben,

@@ -1,4 +1,4 @@
-unit uDfmRepoIndex;
+﻿unit uDfmRepoIndex;
 
 // Repo-weiter Index fuer Cross-Unit-Auflosung. Notwendig fuer Detektoren,
 // die auf Form-Variablen aus einer fremden Unit verweisen

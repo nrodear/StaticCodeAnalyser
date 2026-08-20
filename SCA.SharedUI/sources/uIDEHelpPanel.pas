@@ -1,4 +1,4 @@
-unit uIDEHelpPanel;
+﻿unit uIDEHelpPanel;
 
 // Rechtsseitiges Hilfe-Panel des Analyser-Frame-Plugins:
 // zeigt pro selektiertem Befund die Beschreibung + Vorher/Nachher-Code-

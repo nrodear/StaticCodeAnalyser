@@ -1,4 +1,4 @@
-unit uIDEToolbar;
+﻿unit uIDEToolbar;
 
 // Builder-Helper fuer die Toolbar-Zeilen des Analyser-Frames.
 //

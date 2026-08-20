@@ -1,4 +1,4 @@
-unit uProjectFiles;
+﻿unit uProjectFiles;
 
 // Scan-Scope-Variation (Konzept_ScanScope_2026-07-20): loest .dproj- und
 // .groupproj-Dateien in die Liste der zu scannenden .pas-Dateien auf.

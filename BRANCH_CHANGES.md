@@ -1,4 +1,4 @@
-# Static Code Analysis Tool for Delphi
+﻿# Static Code Analysis Tool for Delphi
 
 Sonar-inspired static code analyser for Delphi / Object Pascal. Catches
 memory leaks, code smells, security gaps and maintainability issues.

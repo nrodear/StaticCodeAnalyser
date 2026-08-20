@@ -1,4 +1,4 @@
-unit uDeepNesting;
+﻿unit uDeepNesting;
 
 // Detektor fuer zu tiefe Verschachtelung von Kontrollstrukturen.
 //

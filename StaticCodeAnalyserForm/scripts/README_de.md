@@ -1,4 +1,4 @@
-# Sonar-Push-Scripts
+﻿# Sonar-Push-Scripts
 
 🇬🇧 [English version](README.md) · 🇫🇷 [Version française](README_fr.md)
 

@@ -1,4 +1,4 @@
-# HowTo Sonar (EXE autonome)
+﻿# HowTo Sonar (EXE autonome)
 
 🇬🇧 [English version](sonarHowto.md) · 🇩🇪 [Deutsche Fassung](sonarHowto_de.md)
 

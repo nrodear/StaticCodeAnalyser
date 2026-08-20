@@ -1,4 +1,4 @@
-# StaticCodeAnalyser — Catalogue de règles
+﻿# StaticCodeAnalyser — Catalogue de règles
 
 Les 196 règles de détection. Cliquez sur un identifiant pour le détail complet.
 

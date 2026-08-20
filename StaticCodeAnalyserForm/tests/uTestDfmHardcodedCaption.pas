@@ -1,4 +1,4 @@
-unit uTestDfmHardcodedCaption;
+﻿unit uTestDfmHardcodedCaption;
 
 // Smoke-Tests für TDfmHardcodedCaptionDetector.
 // Validiert die Property-Capture-Pipeline aus Iteration 2:

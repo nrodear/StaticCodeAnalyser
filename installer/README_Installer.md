@@ -1,4 +1,4 @@
-# Installer P1 — Bauanleitung (D12-Schiene)
+﻿# Installer P1 — Bauanleitung (D12-Schiene)
 
 ## 0. Community-Buttons + unterstützte Delphi-Versionen
 

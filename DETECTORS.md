@@ -1,4 +1,4 @@
-# Detectors — Sonar rule catalogue for the Static Code Analysis Tool for Delphi
+﻿# Detectors — Sonar rule catalogue for the Static Code Analysis Tool for Delphi
 
 Canonical list of all supported and planned analysis rules, ordered by
 severity (Blocker → Critical → Major → Minor → Info). The catalogue

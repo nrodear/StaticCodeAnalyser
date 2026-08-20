@@ -1,4 +1,4 @@
-# Golden Corpus - FP-Regression-Tests
+﻿# Golden Corpus - FP-Regression-Tests
 
 Phase-1-Quick-Win C.1 aus `Konzept_ScannerQualitaet.md`.
 

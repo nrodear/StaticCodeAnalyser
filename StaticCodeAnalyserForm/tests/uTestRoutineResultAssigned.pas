@@ -1,4 +1,4 @@
-unit uTestRoutineResultAssigned;
+﻿unit uTestRoutineResultAssigned;
 
 // Tests fuer den TRoutineResultAssignedDetector.
 

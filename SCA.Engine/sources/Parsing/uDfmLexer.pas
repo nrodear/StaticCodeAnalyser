@@ -1,4 +1,4 @@
-unit uDfmLexer;
+﻿unit uDfmLexer;
 
 // DFM-Lexer: zerlegt einen Text-DFM-Quelltext in einen Token-Stream.
 // Aufbau parallel zu uLexer (Pascal-Lexer): 1-basierte Position, Line/Col-

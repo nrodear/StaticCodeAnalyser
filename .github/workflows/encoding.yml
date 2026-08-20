@@ -1,0 +1,41 @@
+# GitHub Actions workflow: haelt jede Textdatei mit Nicht-ASCII-Zeichen
+# selbstbeschreibend (UTF-8-BOM).
+#
+# Hintergrund (Befund 2026-08-20): 749 Dateien trugen Umlaute, Akzente und
+# Kastengrafik als gueltiges UTF-8, aber ohne BOM. Delphi (Compiler UND
+# IDE-Editor), Inno Setup und PowerShell 5.1 lesen solche Dateien in der
+# ANSI-Codepage - aus 'ue' wird 'Ã¼'. Speichert die IDE danach, ist die
+# Verstuemmelung dauerhaft.
+#
+# Lokal vorab pruefen: `python tools/encoding_gate.py`
+
+name: Encoding
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  encoding:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run encoding gate
+        run: python3 tools/encoding_gate.py
+
+      - name: Erklaerung (bei Fehlschlag)
+        if: failure()
+        run: |
+          echo "Regel: eine Datei mit Nicht-ASCII muss sagen, dass sie"
+          echo "UTF-8 ist - sonst raet der Leser, und Delphi raet ANSI."
+          echo ""
+          echo "Zwei zulaessige Wege:"
+          echo "  1. UTF-8-BOM voranstellen, Inhalt NICHT anfassen."
+          echo "  2. ASCII transkribieren (ue/oe/ae/ss) - so sieht es die"
+          echo "     Projektkonvention fuer Quelltext-KOMMENTARE ohnehin vor."
+          echo ""
+          echo "Reines ASCII bleibt bewusst BOM-frei: dort sind UTF-8 und"
+          echo "ANSI byte-gleich, ein BOM waere nur Diff-Rauschen."

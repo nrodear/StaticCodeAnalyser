@@ -1,4 +1,4 @@
-unit uIDEAddInOptionsBase;
+﻿unit uIDEAddInOptionsBase;
 
 // Gemeinsame Basis fuer Tools>Options-Pages des Plugins.
 //

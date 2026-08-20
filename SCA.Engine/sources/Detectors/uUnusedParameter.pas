@@ -1,4 +1,4 @@
-unit uUnusedParameter;
+﻿unit uUnusedParameter;
 
 // Detector: Method-Parameter, der im Body nirgendwo referenziert wird.
 //

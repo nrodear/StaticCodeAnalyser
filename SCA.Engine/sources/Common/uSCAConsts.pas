@@ -1,4 +1,4 @@
-unit uSCAConsts;
+﻿unit uSCAConsts;
 
 interface
 

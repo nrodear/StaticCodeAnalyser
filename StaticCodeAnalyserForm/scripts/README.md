@@ -1,4 +1,4 @@
-# Sonar push scripts
+﻿# Sonar push scripts
 
 🇩🇪 [Deutsche Version](README_de.md) · 🇫🇷 [Version française](README_fr.md)
 

@@ -1,4 +1,4 @@
-unit uFindingsPropertiesFrame;
+﻿unit uFindingsPropertiesFrame;
 
 // Schmaler, dockbarer Findings-View fuer EINE Datei (Properties-Stil).
 //

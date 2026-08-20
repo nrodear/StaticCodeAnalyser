@@ -1,4 +1,4 @@
-unit uFormatMismatch;
+﻿unit uFormatMismatch;
 
 // AST-basierter Detektor für Format()-Argument-Fehler (Sonar-Regel #9).
 //

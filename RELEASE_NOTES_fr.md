@@ -1,4 +1,4 @@
-# Release 0.9.16 — Un presse-papiers silencieux, des filtres honnêtes et un conseil en texte seul
+﻿# Release 0.9.16 — Un presse-papiers silencieux, des filtres honnêtes et un conseil en texte seul
 
 🇬🇧 [English version](RELEASE_NOTES.md) · 🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md)
 

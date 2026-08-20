@@ -1,4 +1,4 @@
-# SCA.Engine — Engine & API
+﻿# SCA.Engine — Engine & API
 
 *🇬🇧 English — 🇩🇪 [Deutsch](API_de.md) — 🇫🇷 [Français](API_fr.md)*
 

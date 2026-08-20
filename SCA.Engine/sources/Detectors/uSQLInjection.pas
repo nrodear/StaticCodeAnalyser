@@ -1,4 +1,4 @@
-unit uSQLInjection;
+﻿unit uSQLInjection;
 
 // AST-basierter SQL-Injection-Detektor (Sonar-Regel #4).
 //

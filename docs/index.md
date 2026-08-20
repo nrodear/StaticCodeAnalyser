@@ -1,4 +1,4 @@
-# Documentation index
+﻿# Documentation index
 
 Everything the project ships as documentation, in one place. The README is
 the front door; this page is the map behind it.

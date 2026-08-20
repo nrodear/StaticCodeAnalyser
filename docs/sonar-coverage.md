@@ -1,4 +1,4 @@
-# Sonar-Delphi-Check-Coverage
+﻿# Sonar-Delphi-Check-Coverage
 
 Vergleich der Checks im Sonar-Delphi-Projekt
 ([integrated-application-development/sonar-delphi](https://github.com/integrated-application-development/sonar-delphi/tree/master/delphi-checks/src/main/java/au/com/integradev/delphi/checks),

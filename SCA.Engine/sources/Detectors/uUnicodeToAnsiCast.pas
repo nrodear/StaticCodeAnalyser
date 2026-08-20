@@ -1,4 +1,4 @@
-unit uUnicodeToAnsiCast;
+﻿unit uUnicodeToAnsiCast;
 
 // Detektor: Cast auf einen 8-bit-String-Typ ohne expliziten Encoding-Aufruf.
 //

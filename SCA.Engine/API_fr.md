@@ -1,4 +1,4 @@
-# SCA.Engine — Engine & API
+﻿# SCA.Engine — Engine & API
 🇬🇧 [English version](API.md) · 🇩🇪 [Deutsche Fassung](API_de.md)
 
 Analyse statique de code pour Delphi/Object Pascal sous forme de package

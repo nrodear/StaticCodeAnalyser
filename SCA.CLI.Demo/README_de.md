@@ -1,4 +1,4 @@
-# SCA.CLI.Demo
+﻿# SCA.CLI.Demo
 
 *🇩🇪 Deutsch — 🇬🇧 [English](README.md) — 🇫🇷 [Français](README_fr.md) — Vollständige Engine-/API-Referenz: [../SCA.Engine/API_de.md](../SCA.Engine/API_de.md)*
 

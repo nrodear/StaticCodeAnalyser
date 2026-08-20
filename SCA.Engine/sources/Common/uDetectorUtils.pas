@@ -1,4 +1,4 @@
-unit uDetectorUtils;
+﻿unit uDetectorUtils;
 
 // Gemeinsame Helfer fuer Detektoren. Vor allem Pattern-Matching mit echten
 // Wortgrenzen statt naivem Pos() - mehrere Detektoren hatten False-Positives

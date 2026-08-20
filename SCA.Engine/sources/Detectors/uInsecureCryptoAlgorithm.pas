@@ -1,4 +1,4 @@
-unit uInsecureCryptoAlgorithm;
+﻿unit uInsecureCryptoAlgorithm;
 
 // Detektor: Verwendung schwacher / veralteter Krypto-Verfahren (SCA162).
 //

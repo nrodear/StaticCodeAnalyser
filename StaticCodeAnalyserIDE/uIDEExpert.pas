@@ -1,4 +1,4 @@
-unit uIDEExpert;
+﻿unit uIDEExpert;
 
 // Delphi IDE Expert: registriert "Static Code Analysis Tool for Delphi"
 //   * Tools-Menu-Eintrag mit Icon (via INTAServices.AddImages + TAction)
