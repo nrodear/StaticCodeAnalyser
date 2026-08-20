@@ -40,6 +40,18 @@ type
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
+    // ACHTUNG, SCHWAECHERE ZUSAGE ALS AnalyzeUnit: dieser Einstieg
+    // analysiert EINE Methode ohne den unit-weiten Kontext, den
+    // AnalyzeUnit vorher aufbaut. Konkret geht verloren:
+    //   ARecordTypes - welche Typen Records sind (ein Record
+    //   gilt als initialisiert, sobald ein Feld geschrieben ist),
+    //   ADirLines - die Zeilen der Compiler-Direktiven, und den
+    //   Signaturindex derselben Datei. Ohne sie steigt die
+    //   FP-Rate auf Records und in IFDEF-Zweigen.
+    // Der Parameter hat einen nil-Default - wer ihn weglaesst,
+    // bekommt also stillschweigend das schwaechere Ergebnis. Der
+    // Regelbetrieb laeuft ueber AnalyzeUnit; dieser Einstieg ist
+    // fuer Tests und punktuelle Aufrufe gedacht.
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil;
       ARecordTypes: TDictionary<string, Boolean> = nil;

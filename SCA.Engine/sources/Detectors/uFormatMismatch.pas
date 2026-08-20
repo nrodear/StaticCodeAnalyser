@@ -48,6 +48,17 @@ type
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
+    // ACHTUNG, SCHWAECHERE ZUSAGE ALS AnalyzeUnit: dieser Einstieg
+    // analysiert EINE Methode ohne den unit-weiten Kontext, den
+    // AnalyzeUnit vorher aufbaut. Konkret geht verloren:
+    //   ConstTable - die Konstanten der Unit. Der Parameter hat
+    //   hier KEINEN Default, ist also Pflicht; eine leere Tabelle
+    //   ist aber erlaubt und laesst jeden Format-String
+    //   unaufgeloest, der ueber eine Konstante kommt.
+    // Der Parameter hat einen nil-Default - wer ihn weglaesst,
+    // bekommt also stillschweigend das schwaechere Ergebnis. Der
+    // Regelbetrieb laeuft ueber AnalyzeUnit; dieser Einstieg ist
+    // fuer Tests und punktuelle Aufrufe gedacht.
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>;
       ConstTable: TDictionary<string, string>);

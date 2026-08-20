@@ -43,6 +43,11 @@ implementation
 uses
   System.IOUtils;
 
+// Der Pfad steht in drei Fixtures - einmal benannt statt dreimal
+// getippt (sonst meldet der Selfscan DuplicateString).
+const
+  FIXTURE_PAS = 'src\Foo.pas';
+
 function NeueTempDatei(const APrefix, AExt: string): string;
 begin
   Result := TPath.Combine(TPath.GetTempPath,
@@ -65,7 +70,7 @@ begin
     begin
       Fnd := TLeakFinding.Create;
       Fnd.SetKind(fkMemoryLeak);
-      Fnd.FileName   := 'src\Foo.pas';
+      Fnd.FileName   := FIXTURE_PAS;
       Fnd.LineNumber := IntToStr(i);
       Fnd.MissingVar := 'list' + IntToStr(i) + ' not freed';
       Fnd.MethodName := 'TestMethod';
@@ -119,11 +124,11 @@ var
 begin
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
-    Findings.Add(MakeFinding(fkMemoryLeak, 'src\Foo.pas', 42, 'list1 not freed'));
+    Findings.Add(MakeFinding(fkMemoryLeak, FIXTURE_PAS, 42, 'list1 not freed'));
     Fn := TPath.Combine(TPath.GetTempPath,
       'sca-test-html-' + TGUID.NewGuid.ToString + '.html');
     try
-      TExporterHtml.Run(Findings, 'src\Foo.pas', Fn);
+      TExporterHtml.Run(Findings, FIXTURE_PAS, Fn);
       Result := TFile.ReadAllText(Fn, TEncoding.UTF8);
     finally
       if TFile.Exists(Fn) then

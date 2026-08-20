@@ -56,6 +56,17 @@ type
     // in uStaticAnalyzer2 reicht den Scan-Ctx an AnalyzeUnit durch.
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
+    // ACHTUNG, SCHWAECHERE ZUSAGE ALS AnalyzeUnit: dieser Einstieg
+    // analysiert EINE Methode ohne den unit-weiten Kontext, den
+    // AnalyzeUnit vorher aufbaut. Konkret geht verloren:
+    //   UnitNode wird zwar mit uebergeben, AContext aber nicht -
+    //   damit fehlen Konfiguration, Post-Filter und die Liste der
+    //   leaky classes aus der INI. Der Detektor faellt auf seine
+    //   eingebauten Voreinstellungen zurueck.
+    // Der Parameter hat einen nil-Default - wer ihn weglaesst,
+    // bekommt also stillschweigend das schwaechere Ergebnis. Der
+    // Regelbetrieb laeuft ueber AnalyzeUnit; dieser Einstieg ist
+    // fuer Tests und punktuelle Aufrufe gedacht.
     class procedure AnalyzeMethod(UnitNode, MethodNode: TAstNode;
       const FileName: string; Results: TObjectList<TLeakFinding>;
       AContext: TAnalyzeContext = nil);

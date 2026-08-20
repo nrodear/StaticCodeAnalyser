@@ -1,4 +1,4 @@
-unit uExceptionTooGeneral;
+﻿unit uExceptionTooGeneral;
 
 // Detektor: `except on E: Exception do ...` mit Basisklasse Exception.
 //
@@ -71,6 +71,17 @@ type
     // (Key 'klasse.methode' lower -> TypeRef der Deklaration). Optional; ohne
     // die Map faellt der ABI-Guard auf den Implementierungs-Kopf zurueck, wie
     // bis 2026-08-16. AnalyzeUnit baut sie einmal je Unit.
+    // ACHTUNG, SCHWAECHERE ZUSAGE ALS AnalyzeUnit: dieser Einstieg
+    // analysiert EINE Methode ohne den unit-weiten Kontext, den
+    // AnalyzeUnit vorher aufbaut. Konkret geht verloren:
+    //   ADeclAbi - die Aufrufkonventionen aus den Klassen-
+    //   DEKLARATIONEN. Ohne sie greift das ABI-Gate nicht, und
+    //   der Catch-all in einem generierten cdecl-Wrapper wird
+    //   gemeldet, obwohl er dort Pflicht ist.
+    // Der Parameter hat einen nil-Default - wer ihn weglaesst,
+    // bekommt also stillschweigend das schwaechere Ergebnis. Der
+    // Regelbetrieb laeuft ueber AnalyzeUnit; dieser Einstieg ist
+    // fuer Tests und punktuelle Aufrufe gedacht.
     class procedure AnalyzeMethod(MethodNode: TAstNode;
       const FileName: string; Results: TObjectList<TLeakFinding>;
       ADeclAbi: TDictionary<string, string> = nil);
