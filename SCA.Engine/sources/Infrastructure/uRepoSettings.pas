@@ -280,8 +280,8 @@ type
     // uDfmForbiddenClass (SCA038): Komponentenklassen, die in keiner
     // DFM vorkommen duerfen. Aus [Components] ForbiddenClasses=... als
     // CSV; leer (Default) = Detektor bleibt stumm. Gespiegelt wird in
-    // ApplyDetectorThresholds - NICHT in RegisterToLeakyClasses, damit
-    // auch die CLI die Liste bekommt (s. OwnershipSinks-Hinweis oben).
+    // ApplyDetectorThresholds - dem einen Pfad, den ALLE drei Konsumenten
+    // nehmen (EXE, IDE-Plugin, CLI).
     property DfmForbiddenClasses:     TStringList read FDfmForbiddenClasses;
 
     // uCustomRuleDetector: Pfad zur YAML-Datei mit projekt-spezifischen
@@ -1898,10 +1898,13 @@ begin
       uSCAConsts.DetectorFormatFunctions.Add(FFormatFunctions[i]);
   end;
 
-  // SCA038: verbotene Komponentenklassen spiegeln. BEWUSST hier und
-  // nicht in RegisterToLeakyClasses: das rufen nur EXE und IDE-Plugin,
-  // die CLI bekaeme die Liste nie (der bei OwnershipSinks dokumentierte
-  // Defekt wuerde sich wiederholen). Die Globale ist sorted+dupIgnore,
+  // SCA038: verbotene Komponentenklassen spiegeln. BEWUSST hier:
+  // ApplyDetectorThresholds ist der Pfad, den alle drei Konsumenten
+  // nehmen. Als der Schluessel 2026-08-19 eingebaut wurde, war
+  // RegisterToLeakyClasses die schlechtere Wahl, weil die CLI es NICHT
+  // rief - dieser Defekt ist seit ac5aaa1 behoben (uEngineApi ruft es
+  // jetzt auch), die Platzierung hier bleibt trotzdem richtig: sie
+  // braucht keine zweite Kette. Die Globale ist sorted+dupIgnore,
   // Duplikate aus der INI kollabieren dort von selbst.
   if Assigned(uSCAConsts.DfmForbiddenClasses) then
   begin

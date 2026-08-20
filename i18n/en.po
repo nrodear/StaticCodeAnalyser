@@ -170,6 +170,9 @@ msgstr "Open finding"
 msgid "Copy AI prompt"
 msgstr "Copy AI prompt"
 
+msgid "Copy Jira issue"
+msgstr "Copy Jira issue"
+
 msgid "Insert suppression marker"
 msgstr "Insert suppression marker"
 

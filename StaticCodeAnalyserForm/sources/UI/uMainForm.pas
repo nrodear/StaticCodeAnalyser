@@ -235,6 +235,7 @@ type
     procedure GridMenuPopup(Sender: TObject);
     procedure GridMenuOpenClick(Sender: TObject);
     procedure GridMenuCopyClick(Sender: TObject);
+    procedure GridMenuCopyJiraClick(Sender: TObject);
     procedure GridMenuSuppressClick(Sender: TObject);
     procedure WireTiles;
     procedure TileClickSeverity(Sender: TObject);
@@ -2990,6 +2991,11 @@ begin
   FGridMenu.Items.Add(MI);
 
   MI := TMenuItem.Create(FGridMenu);
+  MI.Caption := _('Copy Jira issue');
+  MI.OnClick := GridMenuCopyJiraClick;
+  FGridMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FGridMenu);
   MI.Caption := '-';
   FGridMenu.Items.Add(MI);
 
@@ -3043,6 +3049,33 @@ begin
   end;
   StatusBar1.Panels[2].Text := Format(
     _('AI prompt copied to clipboard: %s, line %s (%s)'),
+    [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]);
+end;
+
+procedure TForm2.GridMenuCopyJiraClick(Sender: TObject);
+// Geschwister von GridMenuCopyClick fuer das Jira-Mini-Issue: gleiche
+// Regeln, gleiche Begruendungen - sofort statt ueber den Entprell-
+// Timer, und [UI] ClipboardOnClick greift NICHT (die Option regelt nur
+// die automatische Kopie beim Zeilen-Klick). Bis 2026-08-20 war das
+// Jira-Format ausschliesslich ueber ClipboardOnClick=2 erreichbar -
+// wer den Default 1 faehrt (Zwischenablage nicht anfassen), kam gar
+// nicht daran.
+var
+  idx : Integer;
+  F   : TLeakFinding;
+begin
+  if FDisplayedFindings = nil then Exit;
+  idx := ResultGrid.Row - 1;
+  if (idx < 0) or (idx >= FDisplayedFindings.Count) then Exit;
+  F := FDisplayedFindings[idx];
+  try
+    Clipboard.AsText := TFindingCopyText.Build(F, fcmJiraMini);
+  except
+    StatusBar1.Panels[2].Text := _('Clipboard is locked by another program.');
+    Exit;
+  end;
+  StatusBar1.Panels[2].Text := Format(
+    _('Jira mini issue copied to clipboard: %s, line %s (%s)'),
     [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]);
 end;
 

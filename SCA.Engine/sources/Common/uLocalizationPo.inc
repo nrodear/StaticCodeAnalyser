@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2050 Zeilen, 72340 Bytes
-  CPoLines_de: array[0..2049] of string = (
+  // i18n\de.po - 2059 Zeilen, 72710 Bytes
+  CPoLines_de: array[0..2058] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1961,6 +1961,9 @@ const
     'msgid "Copy AI prompt"',
     'msgstr "KI-Prompt kopieren"',
     '',
+    'msgid "Copy Jira issue"',
+    'msgstr "Jira-Vorgang kopieren"',
+    '',
     'msgid "Insert suppression marker"',
     'msgstr "Unterdr'#$00FC'ckungs-Marker einf'#$00FC'gen"',
     '',
@@ -2064,11 +2067,17 @@ const
     'msgstr "Mehr als %d Dateien gefunden - Scan abgebrochen."',
     '',
     'msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."',
-    'msgstr "Sonar-Push: .sonar\\external\\ enth'#$00E4'lt jetzt genau diese %d Issue-Datei(en) - Dateien fr'#$00FC'herer Pushes wurden entfernt."'
+    'msgstr "Sonar-Push: .sonar\\external\\ enth'#$00E4'lt jetzt genau diese %d Issue-Datei(en) - Dateien fr'#$00FC'herer Pushes wurden entfernt."',
+    '',
+    'msgid "Settings could not be reloaded - baseline filter unchanged."',
+    'msgstr "Einstellungen konnten nicht neu geladen werden - Baseline-Filter unver'#$00E4'ndert."',
+    '',
+    'msgid "Settings could not be reloaded - nothing was saved."',
+    'msgstr "Einstellungen konnten nicht neu geladen werden - es wurde nichts gespeichert."'
   );
 
-  // i18n\en.po - 201 Zeilen, 5561 Bytes
-  CPoLines_en: array[0..200] of string = (
+  // i18n\en.po - 210 Zeilen, 5880 Bytes
+  CPoLines_en: array[0..209] of string = (
     '# English translation (source language identity) for Static Code Analysis Tool for Delphi.',
     '# This file is mostly redundant since the source strings are already in English -',
     '# kept for consistency and as a "neutral" fallback baseline.',
@@ -2241,6 +2250,9 @@ const
     'msgid "Copy AI prompt"',
     'msgstr "Copy AI prompt"',
     '',
+    'msgid "Copy Jira issue"',
+    'msgstr "Copy Jira issue"',
+    '',
     'msgid "Insert suppression marker"',
     'msgstr "Insert suppression marker"',
     '',
@@ -2269,11 +2281,17 @@ const
     'msgstr "Opened in Delphi IDE: %s"',
     '',
     'msgid "Opened: %s  Line: %d"',
-    'msgstr "Opened: %s  Line: %d"'
+    'msgstr "Opened: %s  Line: %d"',
+    '',
+    'msgid "Settings could not be reloaded - baseline filter unchanged."',
+    'msgstr "Settings could not be reloaded - baseline filter unchanged."',
+    '',
+    'msgid "Settings could not be reloaded - nothing was saved."',
+    'msgstr "Settings could not be reloaded - nothing was saved."'
   );
 
-  // i18n\fr.po - 2046 Zeilen, 75831 Bytes
-  CPoLines_fr: array[0..2045] of string = (
+  // i18n\fr.po - 2055 Zeilen, 76191 Bytes
+  CPoLines_fr: array[0..2054] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4232,6 +4250,9 @@ const
     'msgid "Copy AI prompt"',
     'msgstr "Copier le prompt IA"',
     '',
+    'msgid "Copy Jira issue"',
+    'msgstr "Copier le ticket Jira"',
+    '',
     'msgid "Insert suppression marker"',
     'msgstr "Ins'#$00E9'rer le marqueur de suppression"',
     '',
@@ -4319,7 +4340,13 @@ const
     'msgstr "Plus de %d fichiers trouv'#$00E9's - analyse annul'#$00E9'e."',
     '',
     'msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."',
-    'msgstr "Envoi Sonar : .sonar\\external\\ contient d'#$00E9'sormais exactement ces %d fichier(s) de probl'#$00E8'mes - les fichiers des envois pr'#$00E9'c'#$00E9'dents ont '#$00E9't'#$00E9' supprim'#$00E9's."'
+    'msgstr "Envoi Sonar : .sonar\\external\\ contient d'#$00E9'sormais exactement ces %d fichier(s) de probl'#$00E8'mes - les fichiers des envois pr'#$00E9'c'#$00E9'dents ont '#$00E9't'#$00E9' supprim'#$00E9's."',
+    '',
+    'msgid "Settings could not be reloaded - baseline filter unchanged."',
+    'msgstr "Impossible de recharger les param'#$00E8'tres - filtre de r'#$00E9'f'#$00E9'rence inchang'#$00E9'."',
+    '',
+    'msgid "Settings could not be reloaded - nothing was saved."',
+    'msgstr "Impossible de recharger les param'#$00E8'tres - rien n'#$2019'a '#$00E9't'#$00E9' enregistr'#$00E9'."'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

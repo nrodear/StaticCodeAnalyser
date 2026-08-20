@@ -149,9 +149,9 @@ Sonar-50 catalogue
 📐 DFM detectors:                  23 (all complete)
 🛡 SonarDelphi-migration:          12 (SCA120-131, all complete)
 🏛 mORMot-cluster:                  9 (SCA153-161, all complete)
-🧩 SonarDelphi naming/formatting:  59 (SCA060-119, section below)
+🧩 SonarDelphi naming/formatting:  60 (SCA060-119, section below)
 
-🎯 Grand total: 162 detector kinds (~130 pipeline classes).
+🎯 Grand total: 196 detector kinds (178 detector units).
 ```
 
 ---
@@ -320,12 +320,13 @@ Checks from the original build-out that predate the Sonar-slot tables above; mos
 
 ---
 
-## 🔤 Naming, Formatting & Convention — SonarDelphi-compatible cluster (59 rules, SCA060–SCA119)
+## 🔤 Naming, Formatting & Convention — SonarDelphi-compatible cluster (60 rules, SCA060–SCA119)
 
 Formerly only referenced via [`rules/sca-rules.json`](rules/sca-rules.json); now enumerated. Multi-kind classes: `uVisibilityCheck` (SCA050/051/107), `uPerfHotspots` (SCA110–112), `uRestHttpSecurity` (SCA115/116), `uConcurrencyExt` (SCA113/114).
 
 | SCA | Rule | Description | Severity | Type | Status | Unit |
 |-----|------|-------------|----------|------|--------|------|
+| SCA060 | **GotoStatement** | `goto` weakens structured control flow - restructure with loops, `Break`/`Continue` or an extracted routine | Warning | Code Smell | ✅ | `uGotoStatement` |
 | SCA061 | **TabulationCharacter** | Tab characters render inconsistently across editors - use spaces | Hint | Code Smell | ✅ | `uTabulationCharacter` |
 | SCA062 | **TooLongLine** | Line exceeds 120 characters - wrap or extract subexpression | Hint | Code Smell | ✅ | `uTooLongLine` |
 | SCA063 | **TrailingWhitespace** | Line ends with space or tab - hygiene for diffs | Hint | Code Smell | ✅ | `uTrailingWhitespace` |
@@ -388,7 +389,7 @@ Formerly only referenced via [`rules/sca-rules.json`](rules/sca-rules.json); now
 
 ---
 
-## 🚀 Post-1.0 additions (22 rules — SCA133, SCA147, SCA162–SCA183)
+## 🚀 Post-1.0 additions (23 rules — SCA133, SCA147, SCA162–SCA183)
 
 Later waves: security/injection, suppression machinery, the unused-code family and the attribute cluster (SCA180–183).
 

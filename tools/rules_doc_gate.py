@@ -272,6 +272,59 @@ def pruefe_overlays(rules, katalog_version):
     return funde, zeilen
 
 
+def pruefe_detectors_md(rules):
+    """DETECTORS.md/_de/_fr sind laut README die "kanonische
+    Detektor-Liste". Das Gate hielt bisher nur docs/rules.md nach -
+    diese drei Dateien sind handgepflegt und drifteten still: Stand
+    2026-08-20 fehlte SCA060 in ALLEN drei Fassungen (die Tabelle
+    begann bei SCA061, obwohl die Ueberschrift 'SCA060-SCA119'
+    versprach), und sechs Abschnitts-Zaehlungen waren falsch - teils
+    widersprachen sich die Sprachfassungen sogar gegenseitig
+    (162 vs. ~166 'detector kinds').
+
+    Zwei Zusagen werden geprueft:
+      1. jede Katalog-Regel kommt in einer Tabellenzeile vor;
+      2. jede Ueberschrift, die '(N Regeln)' behauptet, listet auch N.
+    Kombinierte Zellen ('| SCA034/SCA035 |') zaehlen fuer beide IDs -
+    ein Detektor mit zwei Rule-IDs ist eine legitime Doku-Form.
+    """
+    ids = {r.get('id', '') for r in rules}
+    zahl = re.compile(r'\((?:~)?(\d+)\s*(?:rules?|Regeln?|r[\u00e8e]gles?)\b')
+    funde = []
+    for name in ('DETECTORS.md', 'DETECTORS_de.md', 'DETECTORS_fr.md'):
+        pfad = REPO / name
+        if not pfad.exists():
+            continue
+        zeilen = pfad.read_text(encoding='utf-8-sig',
+                                errors='replace').split(chr(10))
+        gelistet = set()
+        for z in zeilen:
+            if z.startswith('|'):
+                gelistet |= set(re.findall(r'SCA\d{3}', z))
+        fehlt = sorted(ids - gelistet)
+        if fehlt:
+            funde.append((name, 'Regeln fehlen in der Tabelle',
+                          ', '.join(fehlt)))
+        grenzen = [i for i, z in enumerate(zeilen)
+                   if z.startswith('## ')]
+        grenzen.append(len(zeilen))
+        for k in range(len(grenzen) - 1):
+            von, bis = grenzen[k], grenzen[k + 1]
+            m = zahl.search(zeilen[von])
+            if not m:
+                continue
+            drin = set()
+            for z in zeilen[von:bis]:
+                if z.startswith('|'):
+                    drin |= set(re.findall(r'SCA\d{3}', z))
+            if int(m.group(1)) != len(drin):
+                funde.append((name,
+                              'Abschnitt behauptet %s, listet %d'
+                              % (m.group(1), len(drin)),
+                              zeilen[von].strip()[:70]))
+    return funde
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--full', action='store_true',
@@ -324,7 +377,16 @@ def main():
               'ausser die Doku-Fassung ist nachweislich die bessere; dann '
               'wandert sie in die JSON.')
         return 1
-    print('GATE GRUEN: docs/rules.md deckt sich mit dem Katalog.')
+    det_funde = pruefe_detectors_md(rules)
+    if det_funde:
+        print('ABWEICHUNGEN in der kanonischen Detektor-Liste '
+              '(DETECTORS.md/_de/_fr): %d' % len(det_funde))
+        for datei, was, detail in det_funde:
+            print('   %-18s %s' % (datei, was))
+            print('      %s' % detail)
+        return 1
+    print('GATE GRUEN: docs/rules.md und DETECTORS.md/_de/_fr decken '
+          'sich mit dem Katalog.')
     return 0
 
 

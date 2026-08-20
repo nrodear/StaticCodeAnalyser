@@ -150,9 +150,9 @@ Catalogue Sonar-50
 📐 Détecteurs DFM :                 23 (tous complets)
 🛡 Migration SonarDelphi :          12 (SCA120-131, toutes complètes)
 🏛 Cluster mORMot :                  9 (SCA153-161, tous complets)
-🧩 Nommage/formatage SonarDelphi : 59 (SCA060-119, section ci-dessous)
+🧩 Nommage/formatage SonarDelphi : 60 (SCA060-119, section ci-dessous)
 
-🎯 Total général : 162 kinds de détecteurs (~130 classes de pipeline).
+🎯 Total général : 196 kinds de détecteurs (178 unités de détecteur).
 ```
 
 ---
@@ -324,12 +324,13 @@ Vérifications issues de la construction d'origine, antérieures aux tables de s
 
 ---
 
-## 🔤 Nommage, formatage et conventions — cluster compatible SonarDelphi (59 règles, SCA060–SCA119)
+## 🔤 Nommage, formatage et conventions — cluster compatible SonarDelphi (60 règles, SCA060–SCA119)
 
 Autrefois référencées uniquement via [`rules/sca-rules.json`](rules/sca-rules.json) ; désormais énumérées. Classes multi-kinds : `uVisibilityCheck` (SCA050/051/107), `uPerfHotspots` (SCA110–112), `uRestHttpSecurity` (SCA115/116), `uConcurrencyExt` (SCA113/114).
 
 | SCA | Règle | Description | Sévérité | Type | Statut | Unit |
 |-----|-------|-------------|----------|------|--------|------|
+| SCA060 | **GotoStatement** | `goto` affaiblit le flot de contrôle structuré - restructurer avec des boucles, `Break`/`Continue` ou une routine extraite | Warning | Code Smell | ✅ | `uGotoStatement` |
 | SCA061 | **TabulationCharacter** | Les tabulations s'affichent différemment selon l'éditeur - utiliser des espaces | Hint | Code Smell | ✅ | `uTabulationCharacter` |
 | SCA062 | **TooLongLine** | Ligne de plus de 120 caractères - couper ou extraire une sous-expression | Hint | Code Smell | ✅ | `uTooLongLine` |
 | SCA063 | **TrailingWhitespace** | La ligne se termine par une espace ou une tabulation - hygiène des diffs | Hint | Code Smell | ✅ | `uTrailingWhitespace` |
@@ -392,7 +393,7 @@ Autrefois référencées uniquement via [`rules/sca-rules.json`](rules/sca-rules
 
 ---
 
-## 🚀 Ajouts post-1.0 (22 règles — SCA133, SCA147, SCA162–SCA183)
+## 🚀 Ajouts post-1.0 (23 règles — SCA133, SCA147, SCA162–SCA183)
 
 Vagues ultérieures : sécurité/injection, machinerie de suppression, la famille du code inutilisé et le cluster des attributs (SCA180–183).
 

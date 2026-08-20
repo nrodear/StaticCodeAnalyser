@@ -52,6 +52,13 @@ type
     // Feldnamen (lowercase, sortiert). Ohne sie bleibt nur die Aufloesung im
     // Routinen-Scope - der Rest wird dann konservativ verschwiegen. AnalyzeUnit
     // baut beide Mengen einmal je Unit.
+    //
+    // ACHTUNG, SCHWAECHERE ZUSAGE ALS AnalyzeUnit: dieser Einstieg hat
+    // keinen Member-Kontext (kein TTypeResolver, keine Record-Tabellen),
+    // deshalb bleiben MEMBER-PFADE hier pauschal still - der Stand vor der
+    // W2-Schaerfung 2026-08-19. Wer die member-genaue Aufloesung braucht,
+    // nimmt AnalyzeUnit; das ist auch der Weg, ueber den der Detektor
+    // produktiv registriert ist (uStaticAnalyzer2).
     class procedure AnalyzeMethod(MethodNode: TAstNode;
       const FileName: string; Results: TObjectList<TLeakFinding>;
       AUnitProps: TStringList = nil; AUnitFields: TStringList = nil);
@@ -64,9 +71,6 @@ uses
 
 // noinspection-file CanBeStrictPrivate, GroupedDeclaration, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
-
-const
-  EMIT_SEVERITY = lsWarning;
 
 function IsWordCh(const C: Char): Boolean; inline;
 begin
@@ -202,7 +206,6 @@ type
     UnitFields : TStringList;
     Scope      : TStringList;
   end;
-  PMemberCtx = ^TMemberCtx;
 
 const
   // Kuratierte RTL-/Winapi-Records, deren gelistete Member BLANKE Felder

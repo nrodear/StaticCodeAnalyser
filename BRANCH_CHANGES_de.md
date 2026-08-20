@@ -16,7 +16,7 @@ Das Repository enthaelt zwei Komponenten:
 
 ## Features auf einen Blick
 
-- **195 Regeln (172 Pascal + 23 DFM)** — siehe [`DETECTORS_de.md`](DETECTORS_de.md) und [`rules/sca-rules.json`](rules/sca-rules.json) fuer den kanonischen Stand (Sonar + SonarDelphi-Migration + DFM + Bonus)
+- **196 Regeln (173 Pascal + 23 DFM)** — siehe [`DETECTORS_de.md`](DETECTORS_de.md) und [`rules/sca-rules.json`](rules/sca-rules.json) fuer den kanonischen Stand (Sonar + SonarDelphi-Migration + DFM + Bonus)
 - **Sonar-Style Stat-Tiles** ueber dem Grid: Fehler / Warnungen / Hinweise / Bugs / Code-Duplikate / Code-Quality als Letter-Grade **A–E** (Rohscore + Breakdown im Tooltip)
 - **Severity-Filter** + **Typ-Filter** (Bug, Code Smell, Vulnerability, Security Hotspot, Code Duplication)
 - **Help-Panel rechts** mit "Vorher/Nachher"-Code-Beispielen je Befund
@@ -74,7 +74,7 @@ Open StaticCodeAnalyser.IDE.d12.dproj -> Project -> Install
 Vollstaendige Liste mit Status (✅ implementiert / 🟡 teilweise / 🔲 offen)
 in [`DETECTORS_de.md`](DETECTORS_de.md).
 
-Aktueller Stand (v0.9.16): **195 Regeln (172 Pascal + 23 DFM)** — Sonar-Katalog + SonarDelphi-Migration (SCA120-152) + DFM-Detektoren + Naming/Formatting (SCA060-119) + Bonus.
+Aktueller Stand (v0.9.16): **196 Regeln (173 Pascal + 23 DFM)** — Sonar-Katalog + SonarDelphi-Migration (SCA120-152) + DFM-Detektoren + Naming/Formatting (SCA060-119) + Bonus.
 
 Schwerpunkte:
 

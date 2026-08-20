@@ -149,9 +149,9 @@ Sonar-50-Katalog
 📐 DFM-Detektoren:                  23 (alle vollständig)
 🛡 SonarDelphi-Migration:           12 (SCA120-131, alle vollständig)
 🏛 mORMot-Cluster:                   9 (SCA153-161, alle vollständig)
-🧩 SonarDelphi Naming/Formatting:  59 (SCA060-119, Sektion unten)
+🧩 SonarDelphi Naming/Formatting:  60 (SCA060-119, Sektion unten)
 
-🎯 Gesamt: ~166 Detektor-Kinds (~158 Pipeline-Klassen).
+🎯 Gesamt: 196 Detektor-Kinds (178 Detektor-Units).
 ```
 
 ---
@@ -320,12 +320,13 @@ Checks aus dem ursprünglichen Aufbau, die vor den Sonar-Slot-Tabellen oben ents
 
 ---
 
-## 🔤 Naming, Formatierung & Konvention — SonarDelphi-kompatibler Cluster (59 Regeln, SCA060–SCA119)
+## 🔤 Naming, Formatierung & Konvention — SonarDelphi-kompatibler Cluster (60 Regeln, SCA060–SCA119)
 
 Bisher nur über [`rules/sca-rules.json`](rules/sca-rules.json) referenziert; jetzt aufgeführt. Multi-Kind-Klassen: `uVisibilityCheck` (SCA050/051/107), `uPerfHotspots` (SCA110–112), `uRestHttpSecurity` (SCA115/116), `uConcurrencyExt` (SCA113/114).
 
 | SCA | Regel | Beschreibung | Severity | Typ | Status | Unit |
 |-----|-------|--------------|----------|-----|--------|------|
+| SCA060 | **GotoStatement** | `goto` schwächt den strukturierten Kontrollfluss - mit Schleifen, `Break`/`Continue` oder einer ausgelagerten Routine umbauen | Warning | Code Smell | ✅ | `uGotoStatement` |
 | SCA061 | **TabulationCharacter** | Tab-Zeichen rendern editorabhängig unterschiedlich - Spaces verwenden | Hint | Code Smell | ✅ | `uTabulationCharacter` |
 | SCA062 | **TooLongLine** | Zeile länger als 120 Zeichen - umbrechen oder Teilausdruck extrahieren | Hint | Code Smell | ✅ | `uTooLongLine` |
 | SCA063 | **TrailingWhitespace** | Zeile endet mit Space oder Tab - Diff-Hygiene | Hint | Code Smell | ✅ | `uTrailingWhitespace` |
