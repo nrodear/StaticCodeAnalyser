@@ -114,6 +114,21 @@ type
     // bleibt ein zerfledderter Rest stehen.
     SpanFirst: Integer;
     SpanLast : Integer;
+    // Identitaet des Bereichs, vergeben beim Aufloesen in Einzelzeilen
+    // (ApplySpanCoverage) und von OnLineMoved NIE angefasst.
+    //
+    // WOZU, wo es doch SpanFirst/SpanLast gibt: RemoveSpanSiblings hat die
+    // Geschwister frueher ueber die exakte Gleichheit dieser beiden
+    // Zeilennummern gesucht - und OnLineMoved verschiebt sie PRO MARKE um
+    // das Delta der jeweiligen Zeile. Nach einem Enter MITTEN im Block
+    // tragen die Zeilen davor (100,140), die danach (101,141): dieselbe
+    // Gruppe, zwei Kennungen. Ein Klick oder eine Textaenderung raeumte
+    // dann nur die halbe Markierung ab, und an den Rest kam der Nutzer
+    // nicht mehr heran (Fortsetzungszeilen sind nicht anklickbar).
+    // Eine Kennung, die der Editor nicht verschiebt, ueberlebt das.
+    //
+    // 0 = gehoert zu keinem Bereich.
+    SpanId   : Integer;
     // True, wenn auf DIESER Zeile ein Bereich ENDET, die Zeile aber einen
     // EIGENEN Befund traegt und deshalb keine Fortsetzungsmarke bekommen
     // hat. Traegt allein die schliessende Klammer-Kappe.
@@ -282,6 +297,9 @@ type
     // sonst als zu komplex (zerlegt statt unterdrueckt, wie schon bei
     // PaintMarkDecorations).
     procedure SweepEditedLines;
+    // Wirft die Zeilentext-Schnappschuesse der aktuellen Datei weg. Vertrag
+    // und Begruendung am Rumpf.
+    procedure ForgetSnapshotsAround(ALine: Integer);
     procedure PaintLine(const Rect: TRect; const Stage: TPaintLineStage;
       const BeforeEvent: Boolean; var AllowDefaultPainting: Boolean;
       const Context: INTACodeEditorPaintContext);
@@ -536,6 +554,12 @@ type
     // zu loeschen.
     function NoteLineText(const AFile: string; ALine: Integer;
       const AText: string): Boolean;
+
+    // Wirft die Zeilentext-Schnappschuesse EINER Datei weg. Der naechste
+    // Zeichendurchgang nimmt sie neu. Gerufen, wenn sich der Faltzustand
+    // aendert - dann sagt ein alter Schnappschuss nichts mehr ueber eine
+    // Bearbeitung aus.
+    procedure ForgetLineSnapshots(const AFile: string);
     // Liefert die Annotation-Texte fuer eine markierte Zeile in einer
     // bestimmten Datei. False wenn die Datei keine Marks hat oder die
     // Zeile nicht markiert ist.
@@ -1603,6 +1627,18 @@ var
   Strongest : TFindingMarkEntry;
   DescSB    : TStringBuilder;
 begin
+  // Result vollstaendig nullen, BEVOR irgendein Feld gesetzt wird.
+  //
+  // Delphi initialisiert von einem Funktions-Result nur die VERWALTETEN
+  // Felder (Strings); Integer, Boolean und Enums starten mit dem, was
+  // gerade auf dem Stack lag. Die Routine setzt danach nicht jedes Feld
+  // in jedem Zweig - RelatedLines etwa nur, wenn der staerkste Eintrag
+  // welche hat. Ohne dieses Nullen trug eine Marke gelegentlich Werte des
+  // vorigen Aufrufs (Review 2026-08-21). Mit SpanId kaeme ein Feld dazu,
+  // dessen Muellwert Marken FALSCHEN Bereichen zuordnen wuerde - deshalb
+  // hier und nicht an den einzelnen Zuweisungen.
+  Result := Default(TFindingMark);
+
   // Duplikate zusammenfassen. Key = Title + Severity (Title allein wuerde
   // zwei Findings mit gleichem Variablen-Namen aber unterschiedlichem
   // Severity faelschlich zusammenfassen).
@@ -1730,7 +1766,19 @@ begin
   Result.Badge    := '';
   Result.RuleName := '';
   Result.Fix      := '';
+  // Das letzte Fund-Inhaltsfeld: die weiteren Fundstellen gehoeren der
+  // Ankerzeile. Eine Fortsetzungszeile ist kein Fund und darf sie nicht
+  // fuehren (Review 2026-08-21).
+  Result.RelatedLines := '';
   Result.IsMulti  := False;
+  // Ebenfalls NICHT erben: der Zeilentext-Schnappschuss von Ziel 2 gehoert
+  // der ANKERZEILE. Eine Fortsetzungszeile mit fremdem Schnappschuss
+  // meldete sich beim ersten Anblick sofort als "bearbeitet" und loeschte
+  // den ganzen Bereich. Heute traegt der Anker hier ohnehin nichts (die
+  // Marken kommen frisch vom Scan), aber das ist eine Eigenschaft der
+  // Aufrufreihenfolge und keine Zusicherung - also explizit (Review
+  // 2026-08-21).
+  Result.SrcText  := '';
   // NICHT vom Anker erben: der koennte selbst das Ende eines FREMDEN
   // Bereichs sein. Sonst traegt jede Fortsetzungszeile eine Schluss-Kappe.
   Result.SpanEndsHere := False;
@@ -1893,11 +1941,21 @@ begin
   // sich ueberschneidende fallen raus, sonst ueberlagern sich die Balken.
   DemoteOverlappingSpans(Bucket, Anchors);
 
+  // Fortlaufend je Bereich, nur innerhalb dieses Buckets eindeutig - mehr
+  // braucht RemoveSpanSiblings nicht, das arbeitet immer auf EINEM Bucket.
+  var NextSpanId : Integer := 0;
+
   for Line in Anchors do
   begin
     if not Bucket.TryGetValue(Line, Anchor) then Continue;
     if Anchor.SpanRole <> srFirst then Continue;
     if Anchor.SpanLast <= Anchor.SpanFirst then Continue;
+
+    // Kennung VOR dem Auflegen setzen und am Anker zurueckschreiben: die
+    // Fortsetzungsmarken kopieren den Anker und erben sie dadurch.
+    Inc(NextSpanId);
+    Anchor.SpanId := NextSpanId;
+    Bucket.AddOrSetValue(Line, Anchor);
 
     // SpanLast ist bereits in BuildMarkForLineGroup auf MAX_SPAN_LINES
     // gekappt - hier wird bewusst NICHT ein zweites Mal geklemmt, damit es
@@ -2180,8 +2238,43 @@ begin
     FEditorEventsObj.ResetState;
 end;
 
+procedure RemoveBySpanIds(Bucket: TFileMarks; ASpanIds: TList<Integer>);
+// Raeumt ALLE Marken der genannten Bereiche ab - unabhaengig davon, wo im
+// Bucket sie liegen.
+//
+// WARUM NICHT ueber SpanFirst..SpanLast des Opfers: genau diese beiden
+// Zahlen verschiebt OnLineMoved PRO MARKE um das Delta der jeweiligen
+// Zeile. Nach einem Enter mitten in einem Block 100..140 tragen die Zeilen
+// davor (100,140), die dahinter (101,141) - die Gruppe driftet
+// auseinander. Eine Schleife ueber das Zahlenfenster des Opfers besucht
+// die abgedrifteten Geschwister dann gar nicht erst, und es bleibt ein
+// Rest stehen, an den der Nutzer nicht mehr herankommt: Fortsetzungszeilen
+// sind nicht anklickbar. Die Kennung ueberlebt das Verschieben, also wird
+// ueber sie gesucht (Review 2026-08-21 - die erste Fassung tauschte nur
+// das Vergleichspraedikat aus und liess die Schleifengrenzen stehen, was
+// den Fehler unberuehrt liess).
+//
+// Schluessel-Schnappschuss, weil in derselben Schleife entfernt wird.
+var
+  L     : Integer;
+  Other : TFindingMark;
+begin
+  for L in Bucket.Keys.ToArray do
+    if Bucket.TryGetValue(L, Other) then
+      if (Other.SpanId <> 0) and (ASpanIds.IndexOf(Other.SpanId) >= 0) then
+        Bucket.Remove(L);
+end;
+
 procedure RemoveSpanSiblings(Bucket: TFileMarks; const AVictim: TFindingMark);
-// Loescht die uebrigen Zeilen DESSELBEN Bereichs.
+// Loescht die uebrigen Zeilen DESSELBEN Bereichs - der Weg fuer Marken
+// OHNE Kennung (SpanId = 0).
+//
+// Das ist KEIN Altlastenpfad, sondern ein dauerhaft lebender: eine
+// Kennung vergibt ApplySpanCoverage nur an Anker mit SpanRole = srFirst.
+// Was DemoteOverlappingSpans vorher zurueckgestuft hat, steht auf
+// srSingle, behaelt aber SpanLast > SpanFirst und landet hier. Marken MIT
+// Kennung nimmt RemoveBySpanIds, das den ganzen Bucket durchsieht statt
+// nur das - verschiebbare - Zahlenfenster.
 //
 // Der [x]-Klick trifft irgendeine Zeile des Bereichs, gemeint ist aber
 // immer der ganze Befund. Wuerde nur die angeklickte Zeile fliegen, bliebe
@@ -2197,6 +2290,7 @@ var
 begin
   if (AVictim.SpanLast <= AVictim.SpanFirst) or (AVictim.SpanFirst <= 0) then
     Exit;
+
   // Bewusst verschachtelt statt als ein and-Ausdruck: bei aktivem
   // {$BOOLEVAL ON} wuerde die zweite Bedingung auch dann ausgewertet, wenn
   // TryGetValue False lieferte - Other traegt dann den Wert der vorigen
@@ -2222,6 +2316,56 @@ begin
   RemoveMarks(AFileName, [ALineNo]);
 end;
 
+function TakeVictims(Bucket: TFileMarks; const ALines: TArray<Integer>;
+  ASpanIds: TList<Integer>): Boolean;
+// Nimmt die genannten Zeilen aus dem Bucket und sammelt dabei ein, welche
+// BEREICHE mit abzuraeumen sind. Liefert True, wenn ueberhaupt etwas
+// entfernt wurde - nur dann lohnen die teuren Seiteneffekte beim Aufrufer.
+//
+// Bereiche MIT Kennung werden nur vorgemerkt: sie koennen ueberall im
+// Bucket liegen, und ein Durchlauf am Ende ist billiger als einer je
+// Zeile. Bereiche OHNE Kennung raeumt der Zahlenweg sofort ab.
+//
+// Aus RemoveMarks gezogen - zusammen war die Routine dem eigenen Detektor
+// zu komplex.
+var
+  Line   : Integer;
+  Victim : TFindingMark;
+begin
+  Result := False;
+  for Line in ALines do
+  begin
+    if Line <= 0 then Continue;
+    if not Bucket.TryGetValue(Line, Victim) then Continue;
+    Bucket.Remove(Line);
+    if Victim.SpanId <> 0 then
+    begin
+      if ASpanIds.IndexOf(Victim.SpanId) < 0 then
+        ASpanIds.Add(Victim.SpanId);
+    end
+    else
+    begin
+      RemoveSpanSiblings(Bucket, Victim);
+    end;
+    Result := True;
+  end;
+end;
+
+procedure TFindingHighlighter.ForgetLineSnapshots(const AFile: string);
+// Vertrag an der Deklaration.
+//
+// Nutzt DropSnapshotsOf - dieselbe Arbeit, die AttachLineTracker fuer
+// einzelne Zeilen braucht, hier fuer alle Schluessel des Buckets. Der
+// Schluessel-Schnappschuss (ToArray) ist Pflicht: DropSnapshotsOf schreibt
+// in dasselbe Dictionary zurueck.
+var
+  Bucket : TFileMarks;
+begin
+  if AFile = '' then Exit;
+  if not FMarksByFile.TryGetValue(NormalizePath(AFile), Bucket) then Exit;
+  DropSnapshotsOf(Bucket, Bucket.Keys.ToArray);
+end;
+
 procedure TFindingHighlighter.RemoveMarks(const AFileName: string;
   const ALines: TArray<Integer>);
 // Vertrag an der Deklaration.
@@ -2234,22 +2378,23 @@ procedure TFindingHighlighter.RemoveMarks(const AFileName: string;
 var
   Key     : string;
   Bucket  : TFileMarks;
-  Line    : Integer;
-  Victim  : TFindingMark;
   Removed : Boolean;
+  SpanIds : TList<Integer>;
 begin
   if (AFileName = '') or (Length(ALines) = 0) then Exit;
   Key := NormalizePath(AFileName);
   if not FMarksByFile.TryGetValue(Key, Bucket) then Exit;
 
-  Removed := False;
-  for Line in ALines do
-  begin
-    if Line <= 0 then Continue;
-    if not Bucket.TryGetValue(Line, Victim) then Continue;
-    Bucket.Remove(Line);
-    RemoveSpanSiblings(Bucket, Victim);
-    Removed := True;
+  // Bereichs-Kennungen erst sammeln und GANZ AM ENDE einmal abraeumen.
+  // RemoveBySpanIds sieht den kompletten Bucket durch; je Opferzeile
+  // gerufen waere das O(Zeilen x Bucket), einmal gerufen ist es O(Bucket).
+  SpanIds := TList<Integer>.Create;
+  try
+    Removed := TakeVictims(Bucket, ALines, SpanIds);
+    if SpanIds.Count > 0 then
+      RemoveBySpanIds(Bucket, SpanIds);
+  finally
+    SpanIds.Free;
   end;
   if not Removed then Exit;
 
@@ -2511,8 +2656,39 @@ end;
 
 // No-ops fuer nicht subskribierte Events
 procedure TFindingEditorEvents.EditorResized(const Editor: TWinControl); begin end;
-procedure TFindingEditorEvents.EditorElided(const Editor: TWinControl; const LogicalLineNum: Integer); begin end;
-procedure TFindingEditorEvents.EditorUnElided(const Editor: TWinControl; const LogicalLineNum: Integer); begin end;
+procedure TFindingEditorEvents.EditorElided(const Editor: TWinControl;
+  const LogicalLineNum: Integer);
+begin
+  ForgetSnapshotsAround(LogicalLineNum);
+end;
+
+procedure TFindingEditorEvents.EditorUnElided(const Editor: TWinControl;
+  const LogicalLineNum: Integer);
+begin
+  ForgetSnapshotsAround(LogicalLineNum);
+end;
+
+procedure TFindingEditorEvents.ForgetSnapshotsAround(ALine: Integer);
+// Faltung auf- oder zugeklappt: den Zeilentext-Schnappschuss der Marken
+// dieser Datei wegwerfen, damit Ziel 2 den Faltungswechsel nicht fuer eine
+// Bearbeitung haelt (Review 2026-08-21).
+//
+// WARUM HIER und nicht als Guard im Zeichenpfad: ein 'wenn gefaltet, dann
+// nicht vergleichen' in PaintLine haette ein Loch gerissen - NoteLineText
+// ist die EINZIGE Stelle, die den Schnappschuss ueberhaupt anlegt. Eine
+// Zeile, die erstmals im zugeklappten Zustand gemalt wird, haette dann gar
+// keinen bekommen und waere bis zum naechsten Scan blind fuer echte
+// Bearbeitungen gewesen. Hier faellt nur der ALTE Schnappschuss; den neuen
+// nimmt der naechste Zeichendurchgang im nun gueltigen Zustand.
+//
+// Bewusst die GANZE Datei und nicht nur ALine: der Editor meldet die
+// Kopfzeile der Faltung, die verborgenen Zeilen darunter nennt er nicht.
+// Ein Schnappschuss weniger kostet nichts - er wird sofort neu genommen.
+begin
+  if not Assigned(GHighlighter) then Exit;
+  if FLastPaintedFile = '' then Exit;
+  GHighlighter.ForgetLineSnapshots(FLastPaintedFile);
+end;
 procedure TFindingEditorEvents.EditorMouseDown(const Editor: TWinControl;
   Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 // Click-Trigger fuer das Annotation-Overlay wenn die User-Option
@@ -3150,15 +3326,14 @@ begin
   // in ein lokales Array umgehaengt, sonst iterierte die Schleife ueber
   // eine Liste, die ihr unter den Fuessen geleert wird.
   //
-  // Mehrzeilige Befunde loest RemoveMarks ueber SpanFirst/SpanLast auf:
-  // eine Aenderung in der MITTLEREN Zeile nimmt den ganzen Bereich mit -
-  // SOLANGE die Span-Felder der Geschwister noch uebereinstimmen. Nach
-  // einem zeilenzahl-AENDERNDEN Edit im Block (Enter mittendrin) hat
-  // OnLineMoved die Felder pro Marke um das jeweilige Delta verschoben;
-  // dann faellt nur die Teilgruppe des Opfers, der obere Rest bleibt bis
-  // zum naechsten Scan stehen. Das ist heute so - RemoveSpanSiblings
-  // vergleicht Zeilennummern, die der Edit auseinandertreibt (Review
-  // 2026-08-21; sauber waere eine SpanId, die den Edit ueberlebt).
+  // Mehrzeilige Befunde nimmt RemoveMarks als GANZES mit - eine Aenderung
+  // in der mittleren Zeile raeumt den kompletten Bereich ab. Gesucht wird
+  // ueber die Bereichskennung im ganzen Bucket, nicht ueber das
+  // Zahlenfenster SpanFirst..SpanLast: das verschiebt OnLineMoved pro
+  // Marke um unterschiedliche Deltas, und nach einem Enter mitten im Block
+  // lagen die abgedrifteten Geschwister ausserhalb des Fensters.
+  // Ausnahme sind Bereiche OHNE Kennung (von DemoteOverlappingSpans
+  // zurueckgestuft) - fuer die gilt weiter das Zahlenfenster.
   //
   // Das Overlay versteckt RemoveMarks selbst - im Textmodus gibt es
   // nichts zu verstecken, ohne Marke zeichnet der naechste Durchgang
