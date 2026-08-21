@@ -1,4 +1,4 @@
-unit uSonarConfig;
+﻿unit uSonarConfig;
 
 // SonarQube / SonarCloud Integrations-Konfiguration.
 //
@@ -177,8 +177,8 @@ uses
   System.IOUtils, System.NetEncoding, System.Net.HttpClient,
   System.Net.URLClient, System.JSON, System.Diagnostics, System.StrUtils,
   System.Generics.Collections
-  {$IFDEF MSWINDOWS}, Winapi.Windows, Winapi.WinSock2{$ENDIF}
-  ;
+  {$IFDEF MSWINDOWS}, Winapi.Windows, Winapi.WinSock2{$ENDIF},
+  uRepoSettings;   // TCommentPreservingIni - Kommentare der analyser.ini erhalten
 
 { ---- DPAPI Helpers (Windows only) ---- }
 
@@ -558,7 +558,14 @@ begin
   // hat Win-Default-Encoding (typisch UTF-16 LE auf Win10+), kollidiert
   // dann mit unserem TMemIniFile-Reader. Beides UTF-8 ohne BOM via
   // TMemIniFile haelt die Datei konsistent.
-  Ini := TMemIniFile.Create(FileName, TEncoding.UTF8);
+  // TCommentPreservingIni statt TMemIniFile (2026-08-21): FileName ist in
+  // aller Regel die analyser.ini, und die traegt zu jedem Schluessel einen
+  // Erklaerblock. TMemIniFile.UpdateFile schreibt die Datei aus seinem
+  // Speichermodell neu und kennt darin keine Kommentare - ein einziges
+  // Token-Speichern haette die ganze Dokumentation geloescht. Das
+  // Encoding-Argument von oben gilt unveraendert: UTF-8 ohne BOM, jetzt
+  // vom Schreiber fest gesetzt.
+  Ini := TCommentPreservingIni.Create(FileName);
   try
     Ini.WriteString('SonarTokens', TokenRef, Hex);
     Ini.UpdateFile;
