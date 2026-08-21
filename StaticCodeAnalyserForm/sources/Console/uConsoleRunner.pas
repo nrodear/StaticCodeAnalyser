@@ -1,4 +1,4 @@
-unit uConsoleRunner;
+﻿unit uConsoleRunner;
 
 // Headless CLI-Mode fuer analyser.d12.exe. Nicht-interaktiv, fuer
 // CI/CD-Pipelines (GitHub Actions, GitLab CI, Jenkins, lokale
@@ -97,6 +97,11 @@ type
     SonarProject  : string;         // --sonar-project <key>
     SonarBranch   : string;         // --sonar-branch <name>
     SonarInsecure : Boolean;        // --sonar-insecure           accept self-signed TLS
+    // --sonar-keep-downgraded: herabgestufte Funde trotzdem exportieren.
+    // Voreinstellung False - Begruendung im Kopf von uExportSonarGeneric,
+    // kurz: Sonar kennt keine Severity je Fund, ein herabgestufter Fund
+    // kaeme dort in voller Katalog-Schwere an und risse das Quality Gate.
+    SonarKeepDowngraded : Boolean;
     SonarConfig   : string;         // --sonar-config <path>      alternative INI
     // ---- Perf Stufe 2 (2026-07-25) ----
     Parallel      : Boolean;        // --parallel                 Per-File-Parallelisierung (opt-in;
@@ -322,6 +327,8 @@ begin
       GetValue(Result.SonarProject, '--sonar-project')
     else if A = '--sonar-branch' then
       GetValue(Result.SonarBranch, '--sonar-branch')
+    else if A = '--sonar-keep-downgraded' then
+      Result.SonarKeepDowngraded := True
     else if A = '--sonar-insecure' then
       Result.SonarInsecure := True
     else if A = '--sonar-config' then
@@ -572,6 +579,11 @@ begin
   WriteLn('  --sonar-token <tok>   Override Sonar bearer token');
   WriteLn('  --sonar-project <k>   Override Sonar projectKey');
   WriteLn('  --sonar-branch <b>    Branch name written into the --sonar-init');
+  WriteLn('  --sonar-keep-downgraded  Also export findings whose severity was');
+  WriteLn('                        downgraded at runtime (path override or');
+  WriteLn('                        confidence). Off by default: Sonar has no');
+  WriteLn('                        per-finding severity, so they would arrive');
+  WriteLn('                        at full catalog severity and break the gate.');
   WriteLn('                        template (sonar.branch.name). The findings');
   WriteLn('                        export has no branch field - the branch is');
   WriteLn('                        read by sonar-scanner, not by this tool.');
@@ -1659,7 +1671,8 @@ begin
     begin
       try
         var OutsideBase := TSonarGenericWriter.WriteFile(
-          Args.SonarExport, Findings, Args.BaseDir);
+          Args.SonarExport, Findings, Args.BaseDir,
+          Args.SonarKeepDowngraded);
         if not Args.Quiet then
           WriteLn('Sonar Generic report written: ', Args.SonarExport);
         // Pfade ausserhalb von --base-dir bleiben absolut, und Sonar wirft

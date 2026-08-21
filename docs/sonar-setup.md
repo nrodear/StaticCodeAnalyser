@@ -105,10 +105,31 @@ sonar.externalIssuesReportPaths=sca-findings.json
 | `--sonar-project <key>` | Project-Key überschreiben |
 | `--sonar-branch <name>` | Branch-Name für das `--sonar-init`-Template (`sonar.branch.name`). Der Findings-Export hat kein Branch-Feld — den Branch liest der `sonar-scanner` |
 | `--sonar-insecure` | Self-signed TLS-Cert akzeptieren |
+| `--sonar-keep-downgraded` | Auch Funde exportieren, deren Severity zur Laufzeit **herabgestuft** wurde (Pfad-Überschreibung, Konfidenz). Standard: aus — siehe Kasten unten |
 | `--sonar-config <ini>` | Alternativer `analyser.ini`-Pfad |
 
 `--sonar-test` und `--sonar-init` sind **Standalone-Aktionen** und brauchen
 weder `--path` noch `--file`.
+
+### Herabgestufte Funde und Sonar
+
+Das Generic Issue Format kennt eine Severity nur **je Regel**, nicht je Fund.
+Wer also per Pfad-Überschreibung festlegt „in generiertem Code ist das nur
+ein Hinweis", bekommt diesen Fund in Sonar trotzdem in voller
+Katalog-Schwere zu sehen — und das Quality Gate reißt.
+
+Deshalb exportiert der Analyser herabgestufte Funde standardmäßig **gar
+nicht**: lieber nicht melden als falsch melden. In SARIF, HTML, CSV, JSON und
+in der Konsolenausgabe bleiben sie vollständig erhalten.
+
+**Hoch**gestufte Funde sind nie betroffen — sie gehen immer in den Report
+(mit der Katalog-Schwere, mehr gibt das Format nicht her).
+
+Mit `--sonar-keep-downgraded` lässt sich das umstellen. Zu bedenken: was
+einmal im Report stand und künftig fehlt, zählt SonarQube als *behoben*, und
+umgekehrt zählt Neuauftauchendes als *neuer* Fund mit heutigem Datum — das
+trifft die New-Code-Periode. Der Schalter sollte also einmal gesetzt und
+dann nicht mehr gewechselt werden.
 
 ### Beispiel Health-Check-Output
 

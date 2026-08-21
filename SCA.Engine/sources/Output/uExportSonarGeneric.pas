@@ -24,6 +24,19 @@
 // beheben - dort waren sie reines INFO-Rauschen. Unberuehrt bleiben
 // Konsolen-Ausgabe, Exit-Code 4, HTML-Report und Health-Score; SARIF
 // fuehrt sie zusaetzlich in invocations[].toolExecutionNotifications.
+//
+// EBENFALLS NICHT exportiert werden HERABGESTUFTE Funde (Voreinstellung;
+// AKeepDowngraded schaltet es ab). Wurde die Severity eines Fundes zur
+// Laufzeit abgeschwaecht - per Pfad-Ueberschreibung ("generierter Code
+// zaehlt nur als Hinweis") oder konfidenzabhaengig -, dann kommt davon in
+// Sonar nichts an: das Generic-Format kennt Severity nur je REGEL, nicht
+// je Fund (Details und Belege an BuildIssueObject). Der Fund wuerde dort
+// also in voller Katalog-Schwere erscheinen und das Quality Gate reissen -
+// das Gegenteil dessen, was die Herabstufung ausdruecken sollte. Lieber
+// gar nicht melden als falsch melden; in SARIF, HTML, CSV, JSON und
+// Konsole bleibt er vollstaendig erhalten.
+// HOCHgestufte Funde sind davon NIE betroffen - sie gehen unveraendert
+// durch (mit der Katalog-Severity, mehr gibt das Format nicht her).
 // Ein Lauf, der NUR Lesefehler hat, ergibt {"rules":[],"issues":[]} -
 // gueltiges JSON, das Sonar akzeptiert.
 
@@ -46,14 +59,23 @@ type
     // Liefert die Anzahl der Issues, deren Pfad ausserhalb von ABaseDir lag
     // und deshalb absolut blieb - Sonar verwirft die still als "unknown
     // files", der Aufrufer sollte das melden.
+    //   AKeepDowngraded - True exportiert auch Funde, deren Severity zur
+    //               Laufzeit HERABgestuft wurde (Pfad-Ueberschreibung,
+    //               Konfidenz). Voreinstellung False: sie bleiben draussen.
+    //               Grund steht im Kopf der Unit; kurz: Sonar kann keine
+    //               Severity je Fund, ein herabgestufter Fund wuerde dort
+    //               in voller Schwere ankommen und das Quality Gate
+    //               reissen. Hochgestufte sind NIE betroffen.
     class function WriteFile(const AFileName: string;
       const AFindings: TObjectList<TLeakFinding>;
-      const ABaseDir: string): Integer; static;
+      const ABaseDir: string;
+      AKeepDowngraded: Boolean = False): Integer; static;
 
     // Variante die direkt einen JSON-String liefert (fuer Tests).
     class function ToJsonString(
       const AFindings: TObjectList<TLeakFinding>;
-      const ABaseDir: string): string; static;
+      const ABaseDir: string;
+      AKeepDowngraded: Boolean = False): string; static;
   end;
 
   // Helpers (public fuer Tests).
@@ -378,8 +400,31 @@ begin
   end;
 end;
 
+function IsDowngraded(const F: TLeakFinding; const M: TRuleMeta): Boolean;
+// True, wenn die Laufzeit-Severity dieses Fundes SCHWAECHER ist als die des
+// Regelkatalogs - der Fund wurde also herabgestuft, per Pfad-Ueberschreibung
+// ("generierter Code zaehlt nur als Hinweis", uPathOverrides) oder durch
+// eine konfidenzabhaengige Abstufung.
+//
+// TLeakSeverity ist ABSTEIGEND nach Schwere deklariert (lsError = 0,
+// lsWarning = 1, lsHint = 2). Ein groesserer Ord-Wert heisst also
+// schwaecher.
+//
+// BEWUSST NUR DIESE EINE RICHTUNG: poaSeverityError stuft HOCH, und ein
+// hochgestufter Fund gehoert selbstverstaendlich in den Report. Ein
+// blosser Ungleichheitsvergleich haette ihn mitverschluckt - genau der
+// Fehler, den diese Funktion verhindert.
+begin
+  Result := Ord(F.Severity) > Ord(M.DefaultSeverity);
+end;
+
+// noinspection BooleanParam
+// Zwei Methoden mit sprechenden Namen waeren hier keine Verbesserung: der
+// Wert wird nur DURCHGEREICHT (WriteFile -> EmitReport -> EmitRules) und
+// entscheidet an genau einer Stelle eine Zeile. Ein Methodenpaar muesste
+// durch dieselben drei Ebenen dupliziert werden.
 procedure EmitRules(AStream: TStream;
-  const AFindings: TObjectList<TLeakFinding>);
+  const AFindings: TObjectList<TLeakFinding>; AKeepDowngraded: Boolean);
 // rules[] in der Reihenfolge des ersten Auftretens - genau die Reihenfolge,
 // die der fruehere DOM-Aufbau erzeugte, weil der die Regeln waehrend der
 // Issue-Schleife einsammelte.
@@ -398,6 +443,10 @@ begin
       if F.Kind = fkFileReadError then Continue;
       // KANONISCH: SonarQube braucht stabile Regeltexte (MQR-Abgleich).
       Meta := TRuleCatalog.GetRuleCanonical(F.Kind);
+      // Herabgestufte Funde bleiben draussen - Begruendung an IsDowngraded
+      // und im Kopf der Unit. Auch hier, nicht nur bei den Issues: eine
+      // Regel ohne Fund waere ein toter Eintrag im rules-Array.
+      if not AKeepDowngraded and IsDowngraded(F, Meta) then Continue;
       if F.RuleID <> '' then RuleID := F.RuleID
       else RuleID := Meta.ID;
       if (RuleID = '') or Seen.ContainsKey(RuleID) then Continue;
@@ -430,6 +479,10 @@ begin
   begin
     if F.Kind = fkFileReadError then Continue;
     Meta    := TRuleCatalog.GetRuleCanonical(F.Kind);  // kanonisch, s.o.
+    // s. EmitRules - beide Schleifen muessen dieselbe Menge sehen, sonst
+    // zeigt der Report Regeln ohne Funde oder Funde ohne Regel (letzteres
+    // lehnt der Validator ab: checkRuleExistsInReport).
+    if not AKeepDowngraded and IsDowngraded(F, Meta) then Continue;
     RelPath := MakeRelative(F.FileName, ABaseDir);
     if PathLeftAbsolute(RelPath) then Inc(Result);
     if not First then WStr(AStream, ',');
@@ -440,7 +493,8 @@ end;
 
 procedure EmitReport(AStream: TStream;
   const AFindings: TObjectList<TLeakFinding>;
-  const ABaseDir: string; out AOutsideBase: Integer);
+  const ABaseDir: string; AKeepDowngraded: Boolean;
+  out AOutsideBase: Integer);
 // Schreibt den kompletten Report direkt in AStream, ohne ihn vorher als
 // Ganzes im Speicher zu halten.
 //
@@ -459,7 +513,7 @@ procedure EmitReport(AStream: TStream;
 // Speicher ist das nichts.
 begin
   WStr(AStream, '{"rules":[');
-  EmitRules(AStream, AFindings);
+  EmitRules(AStream, AFindings, AKeepDowngraded);
   WStr(AStream, '],"issues":[');
   AOutsideBase := EmitIssues(AStream, AFindings, ABaseDir);
   WStr(AStream, ']}');
@@ -467,7 +521,7 @@ end;
 
 class function TSonarGenericWriter.ToJsonString(
   const AFindings: TObjectList<TLeakFinding>;
-  const ABaseDir: string): string;
+  const ABaseDir: string; AKeepDowngraded: Boolean): string;
 // String-Variante fuer Tests und GUI-Pfade. Hier liegt der Report
 // naturgemaess komplett im Speicher - das ist der Sinn eines Strings.
 // Entscheidend ist, dass beide Wege DENSELBEN Emitter benutzen: sonst
@@ -478,7 +532,7 @@ var
 begin
   SS := TStringStream.Create('', TEncoding.UTF8);
   try
-    EmitReport(SS, AFindings, ABaseDir, Dummy);
+    EmitReport(SS, AFindings, ABaseDir, AKeepDowngraded, Dummy);
     Result := SS.DataString;
   finally
     SS.Free;
@@ -487,7 +541,7 @@ end;
 
 class function TSonarGenericWriter.WriteFile(const AFileName: string;
   const AFindings: TObjectList<TLeakFinding>;
-  const ABaseDir: string): Integer;
+  const ABaseDir: string; AKeepDowngraded: Boolean): Integer;
 // Liefert die Anzahl der Issues, deren Pfad NICHT relativiert werden konnte.
 var
   FS  : TFileStream;
@@ -510,7 +564,7 @@ begin
   // Kette nicht. Wir schreiben rohe UTF-8-Bytes, also entsteht gar keine.
   FS := TFileStream.Create(AFileName, fmCreate);
   try
-    EmitReport(FS, AFindings, ABaseDir, Result);
+    EmitReport(FS, AFindings, ABaseDir, AKeepDowngraded, Result);
   finally
     FS.Free;
   end;

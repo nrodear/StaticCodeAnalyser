@@ -32,6 +32,10 @@ type
     // ---- Lauf-Diagnosen gehoeren nicht in einen Issue-Report -----------
     [Test] procedure FileReadError_ProducesNoIssueAndNoRule;
     [Test] procedure RealFindingsSurviveAlongsideReadError;
+    // Herabgestufte Funde (Pfad-Ueberschreibung / Konfidenz), 2026-08-22
+    [Test] procedure DowngradedFinding_IsNotExported;
+    [Test] procedure UpgradedFinding_StaysExported;
+    [Test] procedure DowngradedFinding_KeptWhenAsked;
     [Test] procedure EncodingFindingsAreNotSkipped;
     [Test] procedure OnlyReadErrors_ProducesValidEmptyReport;
   end;
@@ -445,5 +449,88 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestExportSonarGeneric);
+
+procedure TTestExportSonarGeneric.DowngradedFinding_IsNotExported;
+// Der Kern der Entscheidung von 2026-08-22: Sonar kann keine Severity je
+// Fund. Ein herabgestufter Fund kaeme dort in voller Katalog-Schwere an und
+// wuerde das Quality Gate reissen - das Gegenteil dessen, was die
+// Herabstufung ausdruecken sollte. Also gar nicht erst exportieren.
+// Wie beim Lesefehler gilt: WEDER Issue NOCH Regel, sonst bleibt ein toter
+// rules[]-Eintrag stehen.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fnd      : TLeakFinding;
+  Root     : TJSONObject;
+begin
+  Root     := nil;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Fnd := MakeFinding(fkMemoryLeak, 'src\Gen.pas', 12, 'list not freed');
+    Fnd.Severity := lsHint;          // herabgestuft, Katalog sagt Error
+    Findings.Add(Fnd);
+    Root := TJSONObject.ParseJSONValue(
+      TSonarGenericWriter.ToJsonString(Findings, '')) as TJSONObject;
+    Assert.IsNotNull(Root, MSG_NOT_JSON);
+    Assert.AreEqual<Integer>(0, Root.GetValue<TJSONArray>(KEY_ISSUES).Count,
+      'herabgestufter Fund darf kein Issue erzeugen');
+    Assert.AreEqual<Integer>(0, Root.GetValue<TJSONArray>(KEY_RULES).Count,
+      'und auch keine Regel - sonst steht sie ohne Fund im Report');
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSonarGeneric.UpgradedFinding_StaysExported;
+// Die Gegenrichtung, und der eigentliche Grund fuer den Rangfolge-Vergleich:
+// poaSeverityError stuft HOCH. Ein blosser Ungleichheitsvergleich haette
+// solche Funde mitverschluckt - genau das darf nicht passieren.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fnd      : TLeakFinding;
+  Root     : TJSONObject;
+begin
+  Root     := nil;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Fnd := MakeFinding(fkDebugOutput, 'src\Foo.pas', 7, 'OutputDebugString');
+    Fnd.Severity := lsError;         // hochgestuft, Katalog sagt Hint
+    Findings.Add(Fnd);
+    Root := TJSONObject.ParseJSONValue(
+      TSonarGenericWriter.ToJsonString(Findings, '')) as TJSONObject;
+    Assert.IsNotNull(Root, MSG_NOT_JSON);
+    Assert.AreEqual<Integer>(1, Root.GetValue<TJSONArray>(KEY_ISSUES).Count,
+      'hochgestufter Fund gehoert in den Report');
+    Assert.AreEqual<Integer>(1, Root.GetValue<TJSONArray>(KEY_RULES).Count);
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSonarGeneric.DowngradedFinding_KeptWhenAsked;
+// Der Schalter: wer die Herabstufung trotzdem im Report haben will, bekommt
+// sie - dann eben mit der Katalog-Schwere, mehr gibt das Format nicht her.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fnd      : TLeakFinding;
+  Root     : TJSONObject;
+begin
+  Root     := nil;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Fnd := MakeFinding(fkMemoryLeak, 'src\Gen.pas', 12, 'list not freed');
+    Fnd.Severity := lsHint;
+    Findings.Add(Fnd);
+    Root := TJSONObject.ParseJSONValue(
+      TSonarGenericWriter.ToJsonString(Findings, '', True)) as TJSONObject;
+    Assert.IsNotNull(Root, MSG_NOT_JSON);
+    Assert.AreEqual<Integer>(1, Root.GetValue<TJSONArray>(KEY_ISSUES).Count,
+      'mit AKeepDowngraded muss der Fund drin sein');
+  finally
+    Root.Free;
+    Findings.Free;
+  end;
+end;
 
 end.
