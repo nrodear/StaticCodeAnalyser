@@ -530,7 +530,7 @@ end;
 class procedure TSonarConfigResolver.StoreToken(const FileName, TokenRef,
   PlainTextToken: string);
 var
-  Ini    : TMemIniFile;
+  Ini    : TCommentPreservingIni;
   Cipher : TBytes;
   Hex    : string;
 begin
