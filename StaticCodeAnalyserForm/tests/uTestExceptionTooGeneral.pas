@@ -1,4 +1,4 @@
-unit uTestExceptionTooGeneral;
+﻿unit uTestExceptionTooGeneral;
 
 // Tests fuer den TExceptionTooGeneralDetector.
 
@@ -27,7 +27,8 @@ type
     // schaerfen. Catch-all an einer ABI-Grenze ist Pflicht, kein Smell.
     [Test] procedure CdeclDispatcherForwardingExc_NotReported;
     [Test] procedure SafecallDispatcherForwardingExc_NotReported;
-    [Test] procedure CdeclHandlerWithoutForwarding_StillReported;
+    [Test] procedure CdeclHandlerThatActs_NotReported;
+    [Test] procedure CdeclHandlerThatIsEmpty_StillReported;
     [Test] procedure PascalHandlerForwardingExc_StillReported;
     // FP-Audit Stufe 2 (2026-08-16): die Aufrufkonvention steht nur an der
     // DEKLARATION - der Implementierungs-Kopf traegt sie nicht.
@@ -296,9 +297,17 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestExceptionTooGeneral.CdeclHandlerWithoutForwarding_StillReported;
-// WAECHTER: die Aufrufkonvention ALLEIN reicht nicht. Eine cdecl-Routine,
-// die nur loggt und weitermacht, verschluckt weiterhin alles.
+procedure TTestExceptionTooGeneral.CdeclHandlerThatActs_NotReported;
+// UMGEDREHT am 2026-08-21. Vorher hielt dieser Test fest, die
+// Aufrufkonvention allein reiche nicht - der Handler muesse E an einen
+// Konverter durchreichen. Das widersprach dem Kommentar an
+// RoutineHasForeignAbi, der den Catch-all an einer fremden Konvention
+// seit jeher "Pflicht" nennt: eine Delphi-Exception darf nicht in
+// fremden Code propagieren.
+//
+// Aufgeloest zugunsten des Kommentars. Wer an dieser Grenze faengt und
+// ETWAS TUT - hier einen Zaehler fuehren -, erfuellt seine Pflicht.
+// Die Gegenprobe steht direkt darunter.
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Callback(this: Pointer); cdecl;'#13#10 +
@@ -312,8 +321,30 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkExceptionTooGeneral),
-    'cdecl ohne Durchreichen von E bleibt ein Swallow');
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkExceptionTooGeneral),
+    'an der ABI-Grenze ist der breite Fang Pflicht, sobald der Handler handelt');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptionTooGeneral.CdeclHandlerThatIsEmpty_StillReported;
+// DIE LINIE. Wer faengt und NICHTS tut, verschluckt - auch an der
+// ABI-Grenze. Ohne diesen Test waere die Lockerung oben ein Freibrief
+// fuer jeden cdecl-Handler.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Callback(this: Pointer); cdecl;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    DoWork;'#13#10 +
+  '  except'#13#10 +
+  '    on E: Exception do ;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkExceptionTooGeneral) >= 1,
+    'ein leerer Handler bleibt ein Swallow, auch an der ABI-Grenze');
   finally F.Free; end;
 end;
 

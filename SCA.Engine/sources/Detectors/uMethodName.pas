@@ -1,4 +1,4 @@
-unit uMethodName;
+﻿unit uMethodName;
 
 // Detektor fuer Methoden-Namen, die nicht der PascalCase-Konvention
 // (UpperCamel) entsprechen.
@@ -148,6 +148,112 @@ begin
   end;
 end;
 
+procedure CountMethodNameStyle(TypeNode: TAstNode;
+  out ALower, AUpper: Integer);
+// Zaehlt die im Typ-RUMPF deklarierten Methoden nach Anfangsbuchstabe.
+//
+// Eigene Routine, damit CollectConsistentCamelTypes ohne ein zweites,
+// geschachteltes try auskommt - der Selfscan meldet solche Bloecke, und
+// er hat recht: die Schleife ist fuer sich verstaendlich.
+//
+// Operatoren und magic methods (fuehrender Unterstrich) bleiben aussen
+// vor. Sie sind auch beim MELDEN ausgenommen; wuerde man sie hier
+// mitzaehlen, verschoeben sie die Quote fuer eine Regel, die sie gar
+// nicht betrifft.
+var
+  Meths : TList<TAstNode>;
+  M     : TAstNode;
+  Nm    : string;
+begin
+  ALower := 0;
+  AUpper := 0;
+  Meths  := TypeNode.FindAll(nkMethod);
+  try
+    for M in Meths do
+    begin
+      Nm := LocalName(Trim(M.Name));
+      if (Nm = '') or (Nm[1] = '_') or
+         not CharInSet(Nm[1], ['A'..'Z', 'a'..'z']) then
+      begin
+        Continue;
+      end;
+      if CharInSet(Nm[1], ['a'..'z']) then
+      begin
+        Inc(ALower);
+      end
+      else
+      begin
+        Inc(AUpper);
+      end;
+    end;
+  finally
+    Meths.Free;
+  end;
+end;
+
+function CollectConsistentCamelTypes(UnitNode: TAstNode): TStringList;
+// Liefert die Typnamen, deren Methoden AUSNAHMSLOS camelCase heissen -
+// bei mindestens MIN_METHODS Stueck. Aufbau im Muster von
+// BuildMethodOwnerMap; Caller besitzt das Ergebnis (Free).
+//
+// WARUM 100 % UND NICHT 80 %: beide Schwellen wurden gemessen.
+//
+//   Schwelle                  Kunde   Referenz   zusammen
+//   >=80 %, min 3 Methoden     1834       1692       3526
+//   100 %,  min 3 Methoden      781        997       1778
+//   100 %,  min 5 Methoden      575        775       1350
+//   100 %,  min 8 Methoden      385        542        927
+//
+// Die 80-%-Variante braechte das Doppelte, begnadigt aber einen Typ mit
+// drei schlampig benannten Methoden genauso wie eine echte Bindung. Bei
+// 100 % hebt ein EINZIGER PascalCase-Name die Ausnahme auf: ein Typ, der
+// sie erhaelt, hat sich auf eine Konvention festgelegt. Die Mindestzahl
+// verhindert, dass zwei zufaellig gleich benannte Methoden reichen.
+//
+// Nur DEKLARATIONEN zaehlen. Eine Implementierung traegt denselben
+// Bezeichner ein zweites Mal - sie wuerde die Quote nicht aendern, aber
+// die Mindestzahl unterlaufen ('min 5' waere faktisch 'min 3'). Der
+// Subtree-Walk je Typknoten liefert genau die Deklarationen.
+const
+  MIN_METHODS = 5;
+  OWNER_KINDS : array[0..1] of TNodeKind = (nkClass, nkRecord);
+var
+  Types : TList<TAstNode>;
+  T     : TAstNode;
+  ki    : Integer;
+  Klein : Integer;
+  Gross : Integer;
+begin
+  Result := TStringList.Create;
+  Result.CaseSensitive := False;
+  Result.Sorted        := True;
+  Result.Duplicates    := dupIgnore;
+  if not Assigned(UnitNode) then
+  begin
+    Exit;
+  end;
+  for ki := Low(OWNER_KINDS) to High(OWNER_KINDS) do
+  begin
+    Types := UnitNode.FindAll(OWNER_KINDS[ki]);
+    try
+      for T in Types do
+      begin
+        if T.Name = '' then
+        begin
+          Continue;
+        end;
+        CountMethodNameStyle(T, Klein, Gross);
+        if (Gross = 0) and (Klein >= MIN_METHODS) then
+        begin
+          Result.Add(T.Name);
+        end;
+      end;
+    finally
+      Types.Free;
+    end;
+  end;
+end;
+
 class procedure TMethodNameDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext);
@@ -162,6 +268,9 @@ var
   // Hebel A - beide LAZY, erst ab dem ersten Kandidaten gebaut. Der
   // Normalfall (Datei ohne kleingeschriebene Methode) zahlt nichts.
   FfiTypes   : TStringList;
+  // Gate 6, ebenfalls LAZY (s. Hebel A): Typen, die durchgehend
+  // camelCase benennen.
+  CamelTypes : TStringList;
   OwnerMap   : TDictionary<TAstNode, string>;
   // Eine Meldung je Methode: Schluessel ist '<besitzertyp>.<name>',
   // beides lowercase. Wird erst beim ersten Kandidaten gebaut.
@@ -198,8 +307,9 @@ begin
   // Verankert an der Scanwurzel - Begruendung s. uLeakDetector2 (Gate).
   if TDetectorUtils.IsTestFixturePath(FileName,
        CtxScanRoot(AContext), tplFixtureDir) then Exit;
-  FfiTypes := nil;
-  OwnerMap := nil;
+  FfiTypes   := nil;
+  CamelTypes := nil;
+  OwnerMap   := nil;
   Seen     := nil;
   Methods  := UnitNode.FindAll(nkMethod);
   try
@@ -248,6 +358,22 @@ begin
           FfiTypes := TDetectorUtils.CollectFfiBindingTypes(UnitNode);
         if TDetectorUtils.IsFfiBindingTypeName(FfiTypes, OwnerName) then
           Continue;
+        // Gate 6 (2026-08-21, Nutzerentscheid): der Typ benennt
+        // AUSNAHMSLOS camelCase, bei mindestens fuenf Methoden. Das ist
+        // keine Nachlaessigkeit mehr, sondern eine Festlegung - in aller
+        // Regel der Spiegel einer fremden API (Firebird-OO, libxmlsec).
+        // Ein einziger PascalCase-Name im Typ hebt die Ausnahme auf;
+        // damit faellt der schlampig benannte Typ heraus, den eine
+        // 80-%-Schwelle mitbegnadigt haette.
+        // GEMESSEN: 575 (Kunde) + 775 (Referenz) = 1.350 Funde.
+        if not Assigned(CamelTypes) then
+        begin
+          CamelTypes := CollectConsistentCamelTypes(UnitNode);
+        end;
+        if CamelTypes.IndexOf(OwnerName) >= 0 then
+        begin
+          Continue;
+        end;
       end;
 
       // Deklaration und Implementierung derselben Methode sind EIN Befund.
@@ -273,6 +399,7 @@ begin
     Seen.Free;
     OwnerMap.Free;
     FfiTypes.Free;
+    CamelTypes.Free;
     Methods.Free;
   end;
 end;

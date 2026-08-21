@@ -35,6 +35,10 @@ type
     [Test] procedure MaxRows_Zero_RendersEverything;
     [Test] procedure MaxRows_BelowLimit_ShowsNoBanner;
     [Test] procedure ChunkedWrite_SplitsBetweenSurrogates_Intact;
+    // T6 (HTML-Review 2026-08-05): ein zerlegter Teilen-Link darf die
+    // Initialisierung nicht kippen.
+    [Test] procedure UrlHash_NoValueInsideSelector;
+    [Test] procedure UrlHash_BlockCatchesExceptions;
   end;
 
 
@@ -241,6 +245,45 @@ begin
   finally
     SB.Free;
   end;
+end;
+
+procedure TTestExportHtml.UrlHash_NoValueInsideSelector;
+// params.rule und params.file kommen aus dem URL-Hash und sind
+// beliebig. Wer sie in einen querySelector einsetzt, laesst sich
+// injizieren - '#rule="]' reicht. Die Option wird deshalb ueber die
+// options-Liste gesucht, nicht ueber einen zusammengebauten Selektor.
+var
+  Html : string;
+begin
+  Html := RenderReport;
+  Assert.IsFalse(Html.Contains('params.rule + '),
+    'params.rule darf in keinen Selektor einmontiert werden');
+  Assert.IsFalse(Html.Contains('params.file.replace'),
+    'auch der Ersatz von Anfuehrungszeichen ist kein Schutz - '  +
+    'Dateinamen unter Windows sind voll von Backslashes');
+  Assert.IsTrue(Html.Contains('ruleSel.options[oi].value === params.rule'),
+    'die Option muss ueber einen Wertvergleich gefunden werden');
+end;
+
+procedure TTestExportHtml.UrlHash_BlockCatchesExceptions;
+// Der Block hatte nur finally. Eine Ausnahme verliess damit
+// loadFromUrlHash() und riss Sprache, Theme, Tastaturbedienung und
+// Baseline mit - die Seite stand still auf Deutsch und hell da.
+// Schlimmstenfalls darf ein unbrauchbarer Link bedeuten, dass KEIN
+// Filter gesetzt wird.
+var
+  Html : string;
+  P    : Integer;
+begin
+  Html := RenderReport;
+  P := Pos('function loadFromUrlHash()', Html);
+  Assert.IsTrue(P > 0, 'loadFromUrlHash nicht im Bericht gefunden');
+  // Der catch-Zweig muss VOR dem finally desselben Blocks stehen.
+  Assert.IsTrue(Pos('} catch(e) {', Html, P) > 0,
+    'der URL-Hash-Block braucht einen catch-Zweig');
+  Assert.IsTrue(Pos('} catch(e) {', Html, P) <
+                Pos('suspendHashSync = false;', Html, P + 1),
+    'der catch muss vor dem finally des Hash-Blocks liegen');
 end;
 
 initialization

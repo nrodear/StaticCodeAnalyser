@@ -46,8 +46,11 @@
 //     Heuristik: Body enthaelt einen Log-Call (WriteLn/Write/Log/Output*)
 //     UND einen Exit/Halt - dann ist es kein Swallow, sondern saubere
 //     Crash-Translation.
-//   * Catch-all an einer ABI-Grenze (cdecl/stdcall/safecall/winapi), der E
-//     an einen Konverter durchreicht. Die Aufrufkonvention wird dabei an
+//   * Catch-all an einer ABI-Grenze (cdecl/stdcall/safecall/winapi), der
+//     ueberhaupt etwas tut - dort ist der breite Fang Pflicht, weil eine
+//     Delphi-Exception nicht in fremden Code propagieren darf. Nur der
+//     LEERE Handler bleibt ein Fund (und ist fkEmptyExcept-Sache).
+//     Die Aufrufkonvention wird dabei an
 //     der DEKLARATION gelesen, nicht nur am Implementierungs-Kopf: Delphi
 //     verlangt die Direktive nur dort, generierte Wrapper (python4delphi)
 //     schreiben sie ausschliesslich dort.
@@ -228,33 +231,6 @@ end;
 // genau in ihnen waere der Rat "prefer a specific subclass" ein Bug.
 // ===========================================================================
 
-function IsIdentCh(C: Char): Boolean; inline;
-begin
-  Result := CharInSet(C, ['a'..'z', 'A'..'Z', '0'..'9', '_']);
-end;
-
-function MentionsWord(const AHayLow, ANeedleLow: string): Boolean;
-var
-  P, NL, HL     : Integer;
-  Before, After : Char;
-begin
-  Result := False;
-  NL := Length(ANeedleLow);
-  HL := Length(AHayLow);
-  if (NL = 0) or (HL < NL) then Exit;
-  P := 1;
-  repeat
-    P := Pos(ANeedleLow, AHayLow, P);
-    if P = 0 then Exit;
-    Before := #0;
-    if P > 1 then Before := AHayLow[P - 1];
-    After := #0;
-    if P + NL - 1 < HL then After := AHayLow[P + NL];
-    if not IsIdentCh(Before) and not IsIdentCh(After) then Exit(True);
-    P := P + NL;
-  until False;
-end;
-
 // FP-KLASSE 2 des Audits (Wrap-und-Re-Raise, 'raise EFoo.Create(E.Message)')
 // wurde BEWUSST NICHT gegatet. Sie kollidiert frontal mit einer frueheren,
 // belegten Entscheidung: uTestExceptionTooGeneral.
@@ -266,6 +242,39 @@ end;
 // Stichproben. Zwei belegte Positionen, die aeltere und breitere gewinnt.
 // Das nackte 'raise;' (echtes Weitergeben) bleibt wie bisher ueber
 // IsLegitTopLevelHandler ausgenommen.
+
+function HandlerDoesSomething(OnNode: TAstNode): Boolean;
+// True, wenn der Handler-Rumpf mindestens eine echte Anweisung
+// enthaelt. Bewusst ueber die KNOTENARTEN und nicht ueber die blosse
+// Kinderzahl: Name und TypeRef des on-Handlers sind Felder, aber ein
+// leeres "on E: Exception do ;" kann durchaus einen Huellknoten
+// tragen. Gezaehlt wird nur, was etwas bewirkt.
+const
+  ANWEISUNGEN = [nkAssign, nkCall, nkIfStmt, nkCaseStmt, nkForStmt,
+                 nkWhileStmt, nkRepeatStmt, nkTryExcept, nkTryFinally,
+                 nkRaise, nkExit, nkBreak, nkContinue, nkInherited];
+var
+  Stack : TList<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  Result := False;
+  Stack  := TList<TAstNode>.Create;
+  try
+    for i := 0 to OnNode.Children.Count - 1 do
+      Stack.Add(OnNode.Children[i]);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if Cur.Kind in ANWEISUNGEN then Exit(True);
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Add(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
 
 function RoutineHasForeignAbi(const ATypeRef: string): Boolean;
 // Fremde Aufrufkonvention = die Routine ist ein Callback/Dispatcher an einer
@@ -281,65 +290,6 @@ begin
             (Pos(';stdcall',  Low) > 0) or
             (Pos(';safecall', Low) > 0) or
             (Pos(';winapi',   Low) > 0);
-end;
-
-function ExprPassesWordInParens(const AExprLow, AWordLow: string): Boolean;
-// True, wenn AWordLow im Ausdruck INNERHALB einer Klammer vorkommt. Nur die
-// Argumente zaehlen - ein Callee oder eine linke Seite, die zufaellig 'e'
-// heisst, ist kein Durchreichen.
-var
-  p : Integer;
-begin
-  p := Pos('(', AExprLow);
-  Result := (p > 0) and MentionsWord(Copy(AExprLow, p, MaxInt), AWordLow);
-end;
-
-function HandlerForwardsExcToCall(OnNode: TAstNode;
-  const AExcVarLow: string): Boolean;
-// FP-KLASSE 1, zweite Haelfte: der Rumpf reicht E an eine Konverter-Routine
-// durch ('FbException.catchException(nil, e)'). Zusammen mit der fremden
-// Aufrufkonvention ist das der generierte ABI-Dispatcher - im Korpus
-// stammten 14 von 16 Sample-FPs aus EINER generierten Datei (Firebird.pas),
-// die 4-6x vendored vorliegt.
-//
-// Beide Bedingungen zusammen, nicht einzeln: eine cdecl-Routine, die nur
-// loggt und weitermacht, verschluckt weiterhin - und bleibt ein Fund.
-//
-// ZWEI ABLAGEFORMEN, beide noetig (Testfund 2026-08-01,
-// SafecallDispatcherForwardingExc_NotReported war rot):
-//   * nkCall  - der Aufruf steht als ANWEISUNG da, Name traegt den ganzen
-//               Aufruf inklusive Argumenten.
-//   * nkAssign - der Aufruf steht RECHTS von ':=' ('Result := ToHResult(E)').
-//               Der Parser legt die rechte Seite in TypeRef ab (uParser2
-//               Z. 2720 f.), Name traegt nur das Ziel. Genau die Form
-//               benutzt jeder safecall-Dispatcher, der einen HResult
-//               zurueckgibt - ohne diesen Zweig lief das Gate dort ins Leere.
-var
-  Stack : TList<TAstNode>;
-  Cur   : TAstNode;
-  i     : Integer;
-begin
-  Result := False;
-  if AExcVarLow = '' then Exit;
-  Stack := TList<TAstNode>.Create;
-  try
-    Stack.Add(OnNode);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      if (Cur.Kind = nkCall) and
-         ExprPassesWordInParens(LowerCase(Cur.Name), AExcVarLow) then
-        Exit(True);
-      if (Cur.Kind = nkAssign) and
-         ExprPassesWordInParens(LowerCase(Cur.TypeRef), AExcVarLow) then
-        Exit(True);
-      for i := 0 to Cur.Children.Count - 1 do
-        Stack.Add(Cur.Children[i]);
-    end;
-  finally
-    Stack.Free;
-  end;
 end;
 
 // Aufrufkonvention aus der DEKLARATION der Methode (nil-Map: '').
@@ -376,7 +326,6 @@ class procedure TExceptionTooGeneralDetector.AnalyzeMethod(MethodNode: TAstNode;
 var
   Handlers : TList<TAstNode>;
   N        : TAstNode;
-  ExcVar   : string;
   ForeignAbi : Boolean;
 begin
   Handlers := MethodNode.FindAll(nkOnHandler);
@@ -387,10 +336,21 @@ begin
     begin
       if not SameText(N.TypeRef, 'Exception') then Continue;
       if IsLegitTopLevelHandler(N) then Continue;
-      ExcVar := LowerCase(Trim(N.Name));
-      // Semantik-Schaerfung 2026-08-01, reine Unterdrueckung: Catch-all an
-      // einer ABI-Grenze, der E an einen Konverter durchreicht.
-      if ForeignAbi and HandlerForwardsExcToCall(N, ExcVar) then Continue;
+      // ABI-Grenze (2026-08-21, aufgeloester Selbstwiderspruch): eine
+      // Delphi-Exception darf nicht in fremden Code propagieren, der
+      // Catch-all ist dort PFLICHT - so stand es seit jeher im Kommentar
+      // an RoutineHasForeignAbi. Das Gate verlangte trotzdem, dass E an
+      // einen Konverter durchgereicht wird; beides zugleich kann nicht
+      // stimmen.
+      //
+      // Die Linie liegt jetzt beim LEEREN Handler: wer faengt und nichts
+      // tut, verschluckt - und genau das meldet fkEmptyExcept. Wer
+      // faengt und etwas tut (loggen, Fehlercode setzen, konvertieren),
+      // erfuellt an dieser Grenze seine Pflicht.
+      //
+      // GEMESSEN vorab: 780 von 3.464 Funden stehen in einer Routine mit
+      // fremder Konvention.
+      if ForeignAbi and HandlerDoesSomething(N) then Continue;
       Results.Add(TLeakFinding.New(FileName, MethodNode.Name, N.Line,
         'except on E: Exception catches every error - prefer a specific subclass',
         fkExceptionTooGeneral));
