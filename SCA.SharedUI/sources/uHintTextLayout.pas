@@ -72,6 +72,48 @@ const
   // 2026-08-20. Der Rest wird zur Ellipse.
   HINT_MAX_SITES = 4;
 
+// ---------------------------------------------------------------------
+// "Die Fundzeile wurde bearbeitet" - Ziel 2 des Konzepts
+// ---------------------------------------------------------------------
+// Der Zeichenpfad nimmt beim ERSTEN Anblick einer markierten Zeile einen
+// Schnappschuss ihres Textes und vergleicht ihn bei jedem weiteren
+// Repaint. Weicht er ab, wurde die Zeile bearbeitet - der Fund ist bis
+// zum naechsten Scan nicht mehr belegt und die Markierung faellt.
+//
+// Warum das hier liegt und nicht im Zeichenpfad: es ist die einzige
+// ENTSCHEIDUNG des Merkmals, und ohne Canvas und ohne IDE pruefbar.
+// uIDELineHighlighter bleibt untestbar; was dort ankommt, soll so duenn
+// wie moeglich sein - dieselbe Begruendung wie fuer die Kuerzungsregeln
+// oben.
+//
+// Warum ueberhaupt eine Kodierung: der Schnappschuss liegt an der Marke
+// (TFindingMark.SrcText), und '' muss "noch nie gesehen" bedeuten. Eine
+// echte LEERE Zeile waere davon sonst nicht zu unterscheiden - in einem
+// Mehrzeilen-Befund traegt jede Zeile eine eigene Marke, Leerzeilen
+// eingeschlossen; sie wuerde nie als bearbeitet erkannt. Ein zweites
+// Feld "HasSnapshot: Boolean" waere die naheliegende Alternative und die
+// gefaehrlichere: von einem Record initialisiert Delphi nur die
+// VERWALTETEN Felder (Strings) verlaesslich, ein Boolean kann mit Muell
+// starten - und haette dann Marken beim allerersten Repaint geloescht.
+//
+// Der Vergleich ist ROH (Entscheidung 2 des Konzepts): eine geaenderte
+// Einrueckung ist eine Aenderung. Ein Formatierer ueber die ganze Datei
+// raeumt damit alle Marken ab - bewusst in Kauf genommen, der naechste
+// Scan stellt sie wieder her.
+const
+  // Praefix, das einen genommenen Schnappschuss von "keiner" trennt.
+  // #1 kann in einer Quelltextzeile nicht vorkommen.
+  SNAPSHOT_MARK = #1;
+
+// Kodiert einen Zeilentext zum Schnappschuss. Ergebnis ist nie leer.
+function EncodeLineSnapshot(const ALineText: string): string;
+
+// True, wenn ASnapshot einen Schnappschuss traegt UND ACurrentText davon
+// abweicht. Ohne Schnappschuss ('') immer False: eine Zeile, die noch nie
+// gemalt wurde, kann nicht als bearbeitet gelten.
+function LineWasEdited(const ASnapshot, ACurrentText: string): Boolean;
+
+
 implementation
 
 uses
@@ -206,6 +248,17 @@ begin
   end;
   if Result = '' then Exit('');
   Result := Result + HINT_ELLIPSIS;
+end;
+
+function EncodeLineSnapshot(const ALineText: string): string;
+begin
+  Result := SNAPSHOT_MARK + ALineText;
+end;
+
+function LineWasEdited(const ASnapshot, ACurrentText: string): Boolean;
+begin
+  Result := (ASnapshot <> '')
+        and (ASnapshot <> EncodeLineSnapshot(ACurrentText));
 end;
 
 end.
