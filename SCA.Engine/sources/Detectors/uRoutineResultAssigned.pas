@@ -30,7 +30,16 @@
 //   * Nur Functions: MNode.TypeRef enthaelt ':' (= Return-Type vorhanden).
 //   * Skip wenn Body abstract/forward/external/virtual+abstract (kein Body).
 //   * Skip wenn IRGENDWO im Body:
-//       - nkExit  - koennte Exit(value) sein (Argument vom Parser verworfen).
+//       - nkExit  - koennte Exit(value) sein.
+//         RICHTIGSTELLUNG 2026-08-22: hier stand "Argument vom Parser
+//         verworfen". Das galt vor dem klammerbalancierten Exit-Scanner;
+//         seither legt uParser2 das Argument in nkExit.TypeRef ab. Der
+//         Skip ist damit GROBER als noetig - ein blankes 'Exit;' beendet
+//         die Funktion ohne Result-Zuweisung und ist genau der Fall, den
+//         die Regel sucht. Praeziser waere: nur skippen, wenn TypeRef
+//         nicht leer ist. Das ADDIERT Funde und gehoert deshalb hinter
+//         einen Korpuslauf mit vorher festgelegter Erwartung, nicht in
+//         eine Doku-Korrektur.
 //       - nkRaise - Method wirft, kein Return-Pfad noetig.
 //       - nkAssign mit LHS = 'result' (case-insensitive) - hier kommt
 //         die Result-Zuweisung.
