@@ -226,12 +226,12 @@ begin
   Result := TDetectorUtils.IsIdentChar(C);
 end;
 
-type
-  // State fuer Zeilen-uebergreifende Block-Kommentar-Verfolgung.
-  // String-Literale ('...') koennen in klassischem Delphi nicht ueber
-  // Zeilengrenzen hinweg gehen - daher kein InString-State.
-  // Delphi-12-Multi-Line-Strings ('''...''') werden bewusst NICHT
-  // getrackt - rare Edge-Case, FN akzeptabel.
+// TBlankScanState (State fuer Zeilen-uebergreifende Block-Kommentar-
+// Verfolgung) lebt in uDetectorUtils - hier stand frueher eine lokale
+// Kopie. Beim Umzug blieb das nackte 'type' stehen: ein leerer
+// Typabschnitt, den dcc erst beim NEUUEBERSETZEN der Unit als E2029
+// meldet. Die Win64-DCUs waren warm, der Win32-Build hat es
+// aufgedeckt. Entfernt 2026-08-01.
 function StripCommentsAndStrings(const Line: string): string;
 // Stateless single-line convenience-Wrapper (Alt-API).
 // Multi-Line-Block-Comments werden in dieser Variante NICHT erkannt.
