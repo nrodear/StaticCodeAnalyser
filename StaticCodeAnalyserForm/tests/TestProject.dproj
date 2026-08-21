@@ -326,6 +326,7 @@
         <DCCReference Include="uTestClaudePrompt.pas"/>
         <DCCReference Include="uTestFindingCopyText.pas"/>
         <DCCReference Include="uTestHintTextLayout.pas"/>
+        <DCCReference Include="uTestIniComments.pas"/>
         <None Include="TestProject.dpr"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

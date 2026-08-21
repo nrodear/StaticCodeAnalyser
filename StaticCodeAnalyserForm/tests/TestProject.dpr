@@ -1,4 +1,4 @@
-program TestProject;
+﻿program TestProject;
 
 // CLI-Lauf: Console-Subsystem (DUnitX-Console-Logger braucht stdout).
 // TestInsight-Lauf: GUI-Subsystem (sonst flackert beim Start ein cmd-Fenster
@@ -244,7 +244,8 @@ uses
   uTestUseAfterFree in 'uTestUseAfterFree.pas',
   uTestClaudePrompt in 'uTestClaudePrompt.pas',
   uTestFindingCopyText in 'uTestFindingCopyText.pas',
-  uTestHintTextLayout in 'uTestHintTextLayout.pas';
+  uTestHintTextLayout in 'uTestHintTextLayout.pas',
+  uTestIniComments in 'uTestIniComments.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}
