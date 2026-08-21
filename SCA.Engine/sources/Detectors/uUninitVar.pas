@@ -2367,7 +2367,12 @@ var
     P.MonoWriteLines[Ins] := Line;
   end;
 
-  function VarIndexFor(const NameLow: string): Integer;
+  function VarIndexFor(const NameLow: string; ADepth: Integer = 0): Integer;
+  const
+    // Eine 'absolute'-Kette ist in echtem Code hoechstens ein, zwei Glieder
+    // lang. Alles darueber ist entweder ein Zyklus oder ein Datenfehler -
+    // in beiden Faellen ist Aufgeben richtig.
+    MAX_ALIAS_DEPTH = 16;
   var
     Tmp : Integer;
     Tgt : string;
@@ -2377,9 +2382,19 @@ var
     // ihre Writes ('ta[j] := ...', var-Arg-Uebergabe) MUESSEN aber dem
     // ZIEL zugutekommen (isaac tl/ta, IdStackVCLPosix LAddrStore/LAddr).
     // Ein-Punkt-Fix: alle Registrierungs-Pfade laufen ueber VarIndexFor.
-    if (AbsAliases <> nil) and AbsAliases.TryGetValue(NameLow, Tgt) then
+    //
+    // TIEFENZAEHLER (2026-08-22): die Aufloesung ist rekursiv, und bis hier
+    // hielt sie NICHTS an. Ein Selbstbezug ('x: T absolute x') oder ein
+    // Alias-Paar (a auf b, b auf a) - exotisch, aber in fremdem oder
+    // fehlerhaftem Code moeglich - liess die Rekursion endlos laufen und
+    // riss den ganzen Scan mit einem Stapelueberlauf ab. Der Zaehler
+    // kostet nichts und deckt Zyklus wie Selbstbezug ab; ein Besuchs-Set
+    // waere genauer, aber pro Aufruf eine Allokation in einem Pfad, der
+    // je Variable und Schreibzugriff laeuft.
+    if (AbsAliases <> nil) and (ADepth < MAX_ALIAS_DEPTH)
+       and AbsAliases.TryGetValue(NameLow, Tgt) then
     begin
-      Result := VarIndexFor(Tgt);
+      Result := VarIndexFor(Tgt, ADepth + 1);
       Exit;
     end;
     if VarMap.TryGetValue(NameLow, Tmp) then Result := Tmp else Result := -1;

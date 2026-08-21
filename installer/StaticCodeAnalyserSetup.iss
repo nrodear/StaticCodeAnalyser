@@ -244,11 +244,27 @@ Root: HKCU; Subkey: "{#KnownPackages23x64}"; ValueType: string; \
 #endif
 
 ; =============================================================================
-; --- D13-PLATZHALTER (GEBLOCKT: kein Delphi 13 auf der Build-Maschine) --------
+; --- D13-PLATZHALTER (wartet auf den Projektsatz, NICHT auf die IDE) ---------
 ; D13 "Florence" = BDS 37.0 (Nummernsprung 23.0 -> 37.0 ist real, NIE rechnen),
 ; Package-Suffix 370, Win32 + Win64-IDE. Fuer die 64-bit-IDE gilt:
 ;   * 32-bit-BPL laedt NIE in der 64-bit-IDE -> eigene Win64-BPL noetig.
 ;   * Registrierung unter "Known Packages x64" (64-bit-Erkennung via "App x64").
+; RICHTIGSTELLUNG 2026-08-22: hier stand "kein Delphi 13 auf der
+; Build-Maschine". Das ist falsch und war es vermutlich schon eine Weile -
+; die Registry fuehrt HKCU\SOFTWARE\Embarcadero\BDS.0 mit RootDir
+; Studio.0, Edition "Starter", "App x64" = bin64ds.exe und den
+; Schluesseln "Known Packages" UND "Known Packages x64"; der Dev-BPL-Satz
+; ist dort bereits fuer Win32 und Win64 gebaut. Der Blocker war ein
+; Phantom, und drei weitere Dokumente haben ihre eigenen Blocker daraus
+; abgeleitet.
+; Was WIRKLICH fehlt, bevor dieser Block scharf gestellt wird: der
+; Projektsatz-Entscheid (LIBSUFFIX AUTO gegen Versionssuffix im
+; Dateinamen - heute traegt KEIN einziges dpk/dproj eine
+; LIBSUFFIX-Direktive) und eine Win64-faehige Plugin-Projektdatei; das
+; ausgelieferte Monolith-Paket steht auf TargetedPlatforms=1.
+; Offen bleibt fuer den GetIt-Local-Package-Test allein die Edition
+; "Starter" - ob die dafuer reicht, ist ungeprueft.
+;
 ; Aktivierung erst nach P2 (.d13-Projektsatz VER370, Win32+Win64-Builds,
 ; Pflicht-Smoke uIDEAnnotationOverlay + Tools-Menue-Suche).
 ;

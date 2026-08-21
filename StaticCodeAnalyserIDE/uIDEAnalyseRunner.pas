@@ -179,6 +179,7 @@ uses
   System.SysUtils, System.IOUtils, System.Math,
   Winapi.Windows,                    // GetTickCount
   uVcsChanges, uStaticFiles, uEngineApi,
+  uCrashDiag,                        // EStackExhausted - nie verschlucken
   uLocalization;                     // _() Macro
 
 const
@@ -379,6 +380,16 @@ begin
     except
       on EAbort do
         FCancelled := True;   // Cancel ODER Datei-Limit (FTooMany unterscheidet)
+      // Ein erschoepfter Stapel wird NIE verschluckt - dieselbe Regel, die
+      // die Engine an jeder ihrer Verschluck-Stellen einhaelt (Vorbild
+      // uStaticAnalyzer2.pas: 'on EStackExhausted do raise'). Windows
+      // stellt die Schutzseite nach einem Ueberlauf nicht wieder her;
+      // weiterlaufen heisst, mit einem Prozess zu arbeiten, der still
+      // Speicher korrumpiert. Genau dieses Schadensbild hat die AV-Jagd
+      // vom 2026-08-04 gekostet. Bis 2026-08-22 fing dieser Sammelfang
+      // ihn mit ab (Inventur: der Bezeichner kam im ganzen Plugin nicht
+      // ein einziges Mal vor).
+      on EStackExhausted do raise;
       on E: Exception do
         FErrorMsg := E.Message;
     end;
@@ -599,6 +610,10 @@ begin
         // Nutzer saehe einen Scan, der einfach nichts tut. Deshalb hier
         // fangen und melden - der finally-Block darunter faehrt die UI
         // trotzdem in den Ruhezustand zurueck.
+        // Auch hier gilt: Stapelueberlauf niemals verschlucken, s. den
+        // ausfuehrlichen Vermerk im Worker-Execute weiter oben. Lieber ein
+        // sichtbarer Absturz als ein Prozess, der stumm weiterrechnet.
+        on EStackExhausted do raise;
         on E: Exception do
           FOnStatusMode(_('Analysis error: ') + E.Message);
       end;

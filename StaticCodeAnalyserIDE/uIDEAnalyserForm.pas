@@ -621,6 +621,7 @@ implementation
 
 uses
   uIDEFindingsPropertiesForm,   // Cross-UI-Sync (GFindingsPropsForm.ResetAllStateForSync)
+  uCrashDiag,                   // EStackExhausted - nie verschlucken
   uHintTextLayout;              // FormatRelatedLines - geteilt mit dem Nur-Text-Hint
 
 // noinspection-file BeginEndRequired, BooleanParam, ClassPerFile, ConsecutiveSection, EmptyExcept, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember, UnusedRoutine
@@ -4707,6 +4708,14 @@ begin
         Ses.Free;
       end;
     except
+      // Der zweite Scan-Pfad des Plugins (Silent-Scan). Ein erschoepfter
+      // Stapel wird auch hier durchgereicht - dieselbe Regel wie in der
+      // Engine und im Bulk-Runner: Windows stellt die Schutzseite nicht
+      // wieder her, ein weiterlaufender Prozess korrumpiert still
+      // Speicher (AV-Jagd 2026-08-04). Die uebrigen Sammelfaenge dieser
+      // Unit bleiben bewusst wie sie sind - Baseline-Schreiben und
+      // CreateDockableForm sind kein Analysepfad.
+      on EStackExhausted do raise;
       on E: Exception do
       begin
         OutputDebugString(PChar(Format(

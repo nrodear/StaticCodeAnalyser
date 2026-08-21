@@ -164,9 +164,17 @@ Plugin-Interaktion ist nicht headless verifizierbar).
 
 ## 5. Bekannte Grenzen / Ausblick
 
-- **D13 (BDS 37.0, Suffix 370, `Known Packages x64`)**: komplett geblockt bis
-  zur D13-Beschaffung; Platzhalter-Sektion im `.iss` ist vorbereitet und
-  auskommentiert. 32-bit-BPL laedt nie in der 64-bit-IDE → eigene Win64-BPL.
+- **D13 (BDS 37.0, Suffix 370, `Known Packages x64`)**: Platzhalter-Sektion im
+  `.iss` ist vorbereitet und auskommentiert. 32-bit-BPL laedt nie in der
+  64-bit-IDE → eigene Win64-BPL.
+  *Korrektur 2026-08-22:* hier stand „komplett geblockt bis zur
+  D13-Beschaffung". Delphi 13 **ist** installiert (Registry `BDS.0`,
+  Edition „Starter", `Known Packages x64` vorhanden, Dev-BPLs dort bereits
+  für Win32 und Win64 gebaut). Offen sind stattdessen der
+  Projektsatz-Entscheid (`LIBSUFFIX` — heute in keinem `.dpk`/`.dproj`
+  gesetzt) und eine Win64-fähige Plugin-Projektdatei
+  (`TargetedPlatforms=1`). Für den GetIt-Lokaltest ist ungeprüft, ob die
+  Edition „Starter" genügt.
 - **D12.3-64-bit-IDE ist in v1 bewusst ausgeschlossen** (Doku Punkt 12).
 - Notfall-/Diagnose-Skripte (`sca-disable-plugin.cmd`) sind P3-Umfang, nicht P1.
 - Lizenz: MIT (entschieden 2026-08-15); Code-Signing weiterhin offen

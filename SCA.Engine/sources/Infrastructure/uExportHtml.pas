@@ -441,11 +441,23 @@ begin
         if (SourceFile <> '') and not TExporter.SameSourceFile(F.FileName, SourceFile) then
           Continue;
         Inc(nTotal);
-        case F.Severity of
-          lsError   : Inc(nErr);
-          lsWarning : Inc(nWarn);
-          lsHint    : Inc(nHint);
-        end;
+        // fkFileReadError ist KEIN Fehler im geprueften Quelltext, sondern
+        // eine Diagnose ueber den Lauf selbst ("Datei nicht lesbar"). Er
+        // traegt zwar lsError, darf aber weder die Fehlerzahl noch den
+        // Health-Score und damit die Ampel bewegen - sonst meldet der
+        // Bericht einen roten Fehler fuer eine gesperrte Datei.
+        // Konsole, Exit-Code, SARIF (toolExecutionNotifications) und der
+        // Sonar-Export trennen das laengst; der HTML-Bericht war der
+        // letzte, der es nicht tat (Export-Audit A3, behoben 2026-08-22).
+        // In nTotal und in der Fundtabelle bleibt er sichtbar - dort ist
+        // er die Information, die der Nutzer braucht (Sortierrang 3, s.
+        // SevRank weiter unten).
+        if F.Kind <> fkFileReadError then
+          case F.Severity of
+            lsError   : Inc(nErr);
+            lsWarning : Inc(nWarn);
+            lsHint    : Inc(nHint);
+          end;
         // Detektor-Counter fuer Top-N-Liste.
         if not KindCount.TryGetValue(F.Kind, CurKindCnt) then CurKindCnt := 0;
         KindCount.AddOrSetValue(F.Kind, CurKindCnt + 1);
