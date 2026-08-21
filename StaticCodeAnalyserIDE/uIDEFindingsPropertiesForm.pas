@@ -884,7 +884,7 @@ procedure TFindingsPropertiesDockableForm.WriteIniState;
 // innerhalb der selben IDE-Session restored werden kann.
 var
   Host: TCustomForm;
-  Ini: TMemIniFile;
+  Ini: TCommentPreservingIni;
 begin
   if not Assigned(FFrame) then Exit;
   Host := GetParentForm(FFrame);
@@ -892,7 +892,10 @@ begin
   // Nur sinnvolle Geometrien persistieren.
   if (Host.Width <= 0) or (Host.Height <= 0) then Exit;
   try
-    Ini := TMemIniFile.Create(IniFilePath);
+    // TCommentPreservingIni statt TMemIniFile (2026-08-21): schreibt in
+    // dieselbe analyser.ini wie die Einstellungen. Jedes Verschieben des
+    // Fensters haette sonst die Erklaerbloecke der Datei geloescht.
+    Ini := TCommentPreservingIni.Create(IniFilePath);
     try
       Ini.WriteInteger(INI_SECTION, 'Left',   Host.Left);
       Ini.WriteInteger(INI_SECTION, 'Top',    Host.Top);

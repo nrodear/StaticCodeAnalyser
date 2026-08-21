@@ -72,6 +72,63 @@ const
   // 2026-08-20. Der Rest wird zur Ellipse.
   HINT_MAX_SITES = 4;
 
+// ---------------------------------------------------------------------
+// "Die Fundzeile wurde bearbeitet" - Ziel 2 des Konzepts
+// ---------------------------------------------------------------------
+// Der Zeichenpfad nimmt beim ERSTEN Anblick einer markierten Zeile einen
+// Schnappschuss ihres Textes und vergleicht ihn bei jedem weiteren
+// Repaint. Weicht er ab, wurde die Zeile bearbeitet - der Fund ist bis
+// zum naechsten Scan nicht mehr belegt und die Markierung faellt.
+//
+// Warum das hier liegt und nicht im Zeichenpfad: es ist die einzige
+// ENTSCHEIDUNG des Merkmals, und ohne Canvas und ohne IDE pruefbar.
+// uIDELineHighlighter bleibt untestbar; was dort ankommt, soll so duenn
+// wie moeglich sein - dieselbe Begruendung wie fuer die Kuerzungsregeln
+// oben.
+//
+// Warum ueberhaupt eine Kodierung: der Schnappschuss liegt an der Marke
+// (TFindingMark.SrcText), und '' muss "noch nie gesehen" bedeuten. Eine
+// echte LEERE Zeile waere davon sonst nicht zu unterscheiden - in einem
+// Mehrzeilen-Befund traegt jede Zeile eine eigene Marke, Leerzeilen
+// eingeschlossen; sie wuerde nie als bearbeitet erkannt. Ein zweites
+// Feld "HasSnapshot: Boolean" waere die naheliegende Alternative und die
+// gefaehrlichere: von einem Record initialisiert Delphi nur die
+// VERWALTETEN Felder (Strings) verlaesslich, ein Boolean kann mit Muell
+// starten - und haette dann Marken beim allerersten Repaint geloescht.
+//
+// Der Vergleich ist ROH (Entscheidung 2 des Konzepts): eine geaenderte
+// Einrueckung ist eine Aenderung. Ein Formatierer ueber die ganze Datei
+// raeumt damit alle Marken ab - bewusst in Kauf genommen, der naechste
+// Scan stellt sie wieder her.
+const
+  // Praefix, das einen genommenen Schnappschuss von "keiner" trennt.
+  //
+  // Die tragende Eigenschaft ist NICHT "#1 kommt in Quelltext nicht vor" -
+  // das waere fuer einen Editor-PUFFER auch gar nicht garantiert, der
+  // haelt jedes eingefuegte Steuerzeichen. Sie ist: EncodeLineSnapshot
+  // haengt das Praefix BEDINGUNGSLOS an, ist damit injektiv und liefert
+  // nie ''. Encode(#1 + 'x') = #1#1'x' bleibt also von Encode('x')
+  // unterscheidbar, und '' bleibt eindeutig "noch nie gesehen" - auch
+  // fuer eine Zeile, die selbst mit #1 beginnt (Review 2026-08-21; die
+  // erste Fassung begruendete es mit der staerkeren, unnoetigen und
+  // fuer den Puffer falschen Annahme).
+  SNAPSHOT_MARK = #1;
+
+// Kodiert einen Zeilentext zum Schnappschuss. Ergebnis ist nie leer.
+function EncodeLineSnapshot(const ALineText: string): string;
+
+// True, wenn ASnapshot einen Schnappschuss traegt UND ACurrentText davon
+// abweicht. Ohne Schnappschuss ('') immer False: eine Zeile, die noch nie
+// gemalt wurde, kann nicht als bearbeitet gelten.
+//
+// VERTRAG: ASnapshot ist entweder '' oder eine Ausgabe von
+// EncodeLineSnapshot - NIE roher Zeilentext. Roh hereingereicht meldet die
+// Funktion "bearbeitet", auch wenn beide Texte gleich sind (das Praefix
+// fehlt dann auf einer Seite). Der einzige Aufrufer haelt das ein
+// (TFindingHighlighter.NoteLineText), ein Test pinnt es.
+function LineWasEdited(const ASnapshot, ACurrentText: string): Boolean;
+
+
 implementation
 
 uses
@@ -206,6 +263,26 @@ begin
   end;
   if Result = '' then Exit('');
   Result := Result + HINT_ELLIPSIS;
+end;
+
+function EncodeLineSnapshot(const ALineText: string): string;
+begin
+  Result := SNAPSHOT_MARK + ALineText;
+end;
+
+function LineWasEdited(const ASnapshot, ACurrentText: string): Boolean;
+// Ohne Allokation: die naheliegende Fassung
+// 'ASnapshot <> EncodeLineSnapshot(ACurrentText)' baut pro Aufruf einen
+// neuen String (Praefix + Vollkopie der Zeile), der sofort wieder stirbt.
+// Diese Funktion laeuft im Zeichenpfad je markierter Zeile und Repaint -
+// dort ist der Muell nicht noetig (Review 2026-08-21). Geprueft wird
+// stattdessen direkt gegen ASnapshot: Laenge muss um genau das Praefix
+// groesser sein, der Rest zeichenweise gleich.
+begin
+  if ASnapshot = '' then Exit(False);
+  Result := not ((Length(ASnapshot) = Length(ACurrentText) + 1)
+             and CompareMem(PChar(ASnapshot) + 1, PChar(ACurrentText),
+                            Length(ACurrentText) * SizeOf(Char)));
 end;
 
 end.

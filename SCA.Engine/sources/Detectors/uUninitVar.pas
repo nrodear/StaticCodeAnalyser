@@ -232,122 +232,15 @@ type
   // Zeilengrenzen hinweg gehen - daher kein InString-State.
   // Delphi-12-Multi-Line-Strings ('''...''') werden bewusst NICHT
   // getrackt - rare Edge-Case, FN akzeptabel.
-  TLineStripState = record
-    InBrace : Boolean;   // True wenn vorige Zeile mit offenem '{' endete
-    InParen : Boolean;   // True wenn vorige Zeile mit offenem '(*' endete
-  end;
-
-function StripLineEx(const Line: string; var State: TLineStripState): string;
-// Stripper mit Zeilen-uebergreifendem State - State.InBrace/InParen
-// werden VOR der Zeile aus dem Caller-State gelesen und NACH der Zeile
-// zurueckgeschrieben. So funktionieren auch Multi-Line-Comments wie
-//   { Foo bar
-//     baz }
-// als Stripping ueber alle drei Zeilen.
-var
-  Buf : array of Char;
-  i, L : Integer;
-  InString : Boolean;
-  C, Next : Char;
-begin
-  L := Length(Line);
-  if L = 0 then Exit('');
-  SetLength(Buf, L);
-  InString := False;       // Strings koennen sich nicht ueber Zeilen ziehen
-  i := 1;
-  while i <= L do
-  begin
-    C := Line[i];
-    if i < L then Next := Line[i + 1] else Next := #0;
-
-    if State.InBrace then
-    begin
-      Buf[i - 1] := ' ';
-      if C = '}' then State.InBrace := False;
-      Inc(i);
-    end
-    else if State.InParen then
-    begin
-      Buf[i - 1] := ' ';
-      if (C = '*') and (Next = ')') then
-      begin
-        Buf[i] := ' ';
-        Inc(i, 2);
-        State.InParen := False;
-      end
-      else
-        Inc(i);
-    end
-    else if InString then
-    begin
-      Buf[i - 1] := ' ';
-      if C = '''' then
-      begin
-        if Next = '''' then    // '' Escape innerhalb String
-        begin
-          Buf[i] := ' ';
-          Inc(i, 2);
-        end
-        else
-        begin
-          InString := False;
-          Inc(i);
-        end;
-      end
-      else
-        Inc(i);
-    end
-    else
-    begin
-      if (C = '/') and (Next = '/') then
-      begin
-        // Line-Comment: Rest der Zeile zu Spaces.
-        while i <= L do
-        begin
-          Buf[i - 1] := ' ';
-          Inc(i);
-        end;
-        Break;
-      end
-      else if C = '{' then
-      begin
-        Buf[i - 1] := ' ';
-        State.InBrace := True;
-        Inc(i);
-      end
-      else if (C = '(') and (Next = '*') then
-      begin
-        Buf[i - 1] := ' ';
-        Buf[i]     := ' ';
-        Inc(i, 2);
-        State.InParen := True;
-      end
-      else if C = '''' then
-      begin
-        Buf[i - 1] := ' ';
-        InString := True;
-        Inc(i);
-      end
-      else
-      begin
-        Buf[i - 1] := C;
-        Inc(i);
-      end;
-    end;
-  end;
-  SetString(Result, PChar(Buf), L);
-end;
-
 function StripCommentsAndStrings(const Line: string): string;
 // Stateless single-line convenience-Wrapper (Alt-API).
 // Multi-Line-Block-Comments werden in dieser Variante NICHT erkannt.
 // Verwendung nur fuer Stellen ohne Zeilen-iterierenden Scan.
 var
-  State : TLineStripState;
+  State : TBlankScanState;
 begin
-  State.InBrace := False;
-  State.InParen := False;
-  Result := StripLineEx(Line, State);
+  State := Default(TBlankScanState);
+  Result := TDetectorUtils.BlankNonCode(Line, State);
 end;
 
 function CountWholeWordOccurrences(const NeedleLow, HaystackLow: string;
@@ -727,7 +620,7 @@ function MethodHasAsmBlock(Lines: TStringList; StartLine, EndLine: Integer): Boo
 // GANZE asm-Methode) nicht erfasst: der Parser skippt tkKwAsm ohne Knoten, die im
 // asm per Register/Memory-Ref geschriebenen Locals sind unsichtbar -> read-vor-
 // write-FP (Real-World: CnWizFeedbackFrm GetCPUSpeed RDTSC 'mov TimerLo, eax').
-// Kommentare (// UND {..}/(*..*) cross-line via StripLineEx) + String-Literale
+// Kommentare (// UND {..}/(*..*) cross-line via BlankNonCode) + String-Literale
 // werden geblankt -> ein AUSKOMMENTIERTER 'asm'-Block matcht NICHT (wichtig, da
 // SCA166 error-level ist - ein Fehl-Skip wuerde einen echten uninit maskieren).
 // 'asm' ist reserviert -> eine sonst leere gestrippte Zeile mit 'asm' ist immer
@@ -735,15 +628,15 @@ function MethodHasAsmBlock(Lines: TStringList; StartLine, EndLine: Integer): Boo
 var
   i     : Integer;
   T     : string;
-  State : TLineStripState;
+  State : TBlankScanState;
 begin
   Result := False;
   if Lines = nil then Exit;
-  State := Default(TLineStripState);
+  State := Default(TBlankScanState);
   for i := StartLine to EndLine do
   begin
     if (i < 1) or (i > Lines.Count) then Continue;
-    T := LowerCase(Trim(StripLineEx(Lines[i - 1], State)));
+    T := LowerCase(Trim(TDetectorUtils.BlankNonCode(Lines[i - 1], State)));
     if (T = 'asm') or T.StartsWith('asm ') or T.StartsWith('asm;') then Exit(True);
   end;
 end;
@@ -1423,7 +1316,7 @@ begin
   Result := False;
   // B2 Hook 2 (Triage 2026-07-25): Whitespace-tolerant. 'SizeOf (Buf)' /
   // 'SizeOf( nfo )' / 'SizeOf {n} (x)' fielen durch die Null-Abstand-
-  // Pruefung - StripLineEx blankt Kommentar-/String-Inhalt zu SPACES und
+  // Pruefung - BlankNonCode blankt Kommentar-/String-Inhalt zu SPACES und
   // erzeugt solche Luecken sogar selbst. Rueckwaerts Spaces vor dem Namen
   // skippen, dann '(' verlangen, davor erneut Spaces skippen, dann der
   // Keyword-Walk wie bisher. Reine Read-Suppression (FirstReadLine kann
@@ -1636,7 +1529,7 @@ end;
 function BuildSameFileVarOutIndex(Lines: TStringList)
   : TDictionary<string, TArray<Boolean>>;
 // Scannt die GESTRIPPTE Quelle (Interface + Implementation, Multi-Line-
-// Kommentare via StripLineEx-State) nach Routinen-Headern und baut
+// Kommentare via BlankNonCode-State) nach Routinen-Headern und baut
 // Name -> var/out-Flag je Parameterposition. Key = letztes Namenssegment
 // ('TFoo.Bar' -> 'bar', so wie der Call im Body lautet); Generics im
 // Namen ('TFoo<T>.Bar') werden uebersprungen. Mehrzeilige Parameterlisten
@@ -1645,7 +1538,7 @@ const
   KWS : array[0..3] of string =
     ('procedure ', 'function ', 'constructor ', 'destructor ');
 var
-  State : TLineStripState;
+  State : TBlankScanState;
   i, k, p, e, Depth, Guard : Integer;
   S, T, Name, Params : string;
   Flags, Old, Merged : TArray<Boolean>;
@@ -1675,11 +1568,11 @@ var
 begin
   Result := TDictionary<string, TArray<Boolean>>.Create;
   if Lines = nil then Exit;
-  State := Default(TLineStripState);
+  State := Default(TBlankScanState);
   i := 0;
   while i < Lines.Count do
   begin
-    S := LowerCase(StripLineEx(Lines[i], State));
+    S := LowerCase(TDetectorUtils.BlankNonCode(Lines[i], State));
     Inc(i);
     T := TrimLeft(S);
     if T.StartsWith('class ') then T := TrimLeft(Copy(T, 7, MaxInt));
@@ -1749,7 +1642,7 @@ begin
       if Depth > 0 then
       begin
         if (i >= Lines.Count) or (Guard >= 40) then Break;
-        T := LowerCase(StripLineEx(Lines[i], State));
+        T := LowerCase(TDetectorUtils.BlankNonCode(Lines[i], State));
         Inc(i);
         Inc(Guard);
         Params := Params + ' ';
@@ -2172,7 +2065,7 @@ procedure CollectWithRangesFromStripped(const AStripped: TArray<string>;
 // weniger). AStripped ist kommentarfrei -> auskommentierte with-Zeilen
 // matchen nie. Cap 500 Zeilen pro Block.
 // KORREKTUR Pre-Build-Review 2026-07-31 (Fund 'with-Poisoning', Z.2113):
-//   (1) Das Blockende wird auf der VOLL getrimmten Zeile bestimmt. StripLineEx
+//   (1) Das Blockende wird auf der VOLL getrimmten Zeile bestimmt. BlankNonCode
 //       blankt Kommentare/Stringliterale zu SPACES und behaelt die
 //       Original-Laenge - 'Left := 1;   // set left' endete gestrippt also auf
 //       Leerzeichen, EndsWith(';') schlug fehl und der Range lief ueber den
@@ -2407,7 +2300,7 @@ var
   // 2x kompletter AST-Walk: Orchestrator + PhaseC) und gestripptes,
   // gelowertes Zeilen-Array fuer den Methodenbereich einmal fuellen
   // (vorher strippten FindFirstSourceWriteLine + FindFirstReadLine pro
-  // Variable JEDE Zeile neu = 2xVxL statt L StripLineEx-Durchlaeufe).
+  // Variable JEDE Zeile neu = 2xVxL statt L BlankNonCode-Durchlaeufe).
   MethodEndL       : Integer;
   StrippedLow      : TArray<string>;
   StrippedFrom0    : Integer;   // 0-basierter Lines-Index von StrippedLow[0]
@@ -3104,7 +2997,7 @@ var
   end;
 
   procedure BuildStrippedLowCache(MethodStartLine, MethodEndLine: Integer);
-  // Perf (2026-07-05): P7-uninitvar - EIN StripLineEx-Durchlauf ueber den
+  // Perf (2026-07-05): P7-uninitvar - EIN BlankNonCode-Durchlauf ueber den
   // Methodenbereich [From0..To0], Ergebnis gelowert in StrippedLow.
   // FindFirstSourceWriteLine/FindFirstReadLine lesen nur noch aus dem
   // Array; beide starteten bisher identisch mit frischem StripState bei
@@ -3115,7 +3008,7 @@ var
   // MethodStartLine ist kein Block-Comment offen.
   var
     i, From0, To0 : Integer;
-    StripState : TLineStripState;
+    StripState : TBlankScanState;
   begin
     StrippedLow   := nil;
     StrippedFrom0 := 0;
@@ -3131,7 +3024,7 @@ var
     StripState.InBrace := False;
     StripState.InParen := False;
     for i := From0 to To0 do
-      StrippedLow[i - From0] := LowerCase(StripLineEx(Lines[i], StripState));
+      StrippedLow[i - From0] := LowerCase(TDetectorUtils.BlankNonCode(Lines[i], StripState));
   end;
 
   function FindFirstSourceWriteLine(const NameLow: string;
@@ -3161,7 +3054,7 @@ var
     begin
       // Perf (2026-07-05): P7-uninitvar - vorberechnetes StrippedLow-Array
       // (BuildStrippedLowCache, identische Bounds via PhaseC) statt
-      // StripLineEx pro Variable.
+      // BlankNonCode pro Variable.
       L := StrippedLow[i - StrippedFrom0];
       if i + 1 = DeclLine then Continue;
       if IsLineInRanges(i + 1, NestedRanges) then Continue;
@@ -3251,7 +3144,7 @@ var
     begin
       // Perf (2026-07-05): P7-uninitvar - vorberechnetes StrippedLow-Array
       // (BuildStrippedLowCache, identische Bounds via PhaseC) statt
-      // StripLineEx pro Variable. Multi-Line-Comment-State ist dort
+      // BlankNonCode pro Variable. Multi-Line-Comment-State ist dort
       // bereits ueber alle Zeilen mitgelaufen (FP-Fix-Semantik unveraendert).
       L := StrippedLow[i - StrippedFrom0];
       if (i + 1 = DeclLine) or (i + 1 = FirstWriteLine) then Continue;
@@ -3350,7 +3243,7 @@ var
                 // FP-Gate 2026-07-31, FP-Klasse 'LHS-Punktpfad' (Real-World-
                 // Audit: doublecmd synapse blcksock:3706
                 // 'Multicast6.ipv6mr_multiaddr.{$IFDEF POSIX}s6_addr{$ELSE}
-                // u6_addr8{$ENDIF}[n] := Ip6[n]'). StripLineEx blankt die
+                // u6_addr8{$ENDIF}[n] := Ip6[n]'). BlankNonCode blankt die
                 // {$IFDEF}-Direktive zu SPACES und reisst damit ein Loch in
                 // die Qualifier-Kette - der Walk brach ab und der partielle
                 // WRITE galt als Read. Luecke nur ueberspringen, wenn im

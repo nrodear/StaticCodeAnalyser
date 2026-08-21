@@ -124,6 +124,22 @@ type
     // damit unsichtbar. Die Rolle gehoert dem eigenen Befund, die Kappe dem
     // fremden Bereich; das sind zwei Aussagen und brauchen zwei Felder.
     SpanEndsHere : Boolean;
+    // ---- "Zeile wurde bearbeitet" (Konzept 2026-08-09, Ziel 2) ------
+    // Schnappschuss des Zeilentextes, genommen beim ERSTEN Anblick im
+    // Zeichenpfad und dort bei jedem Repaint verglichen; Kodierung und
+    // Vergleich liegen testbar in uHintTextLayout (EncodeLineSnapshot /
+    // LineWasEdited), '' heisst "noch nie gesehen".
+    //
+    // Das Feld gehoert an die MARKE und nicht in einen Render-Cache
+    // neben FRenderedRects: die Caches werden bei jedem Full-Repaint und
+    // bei jedem Tab-Wechsel geleert, der Schnappschuss waere danach neu
+    // - und eine Bearbeitung ueber so ein Ereignis hinweg unsichtbar. An
+    // der Marke lebt er genau so lange wie der Fund und startet nach
+    // jedem Scan leer, weil die Marken neu gebaut werden.
+    //
+    // Es fuellt es NIEMAND beim Setzen der Marken: der Wert kommt aus dem
+    // Editor, nicht aus dem Analysator.
+    SrcText  : string;
   end;
   // Eintrag fuer SetAllFindings — die FileName-Property machte den
   // vorher impliziten "alle Eintraege gehoeren zur gleichen Datei"-
@@ -180,6 +196,13 @@ type
     // sonst sammeln sich Rechtecke ausgescrollter Zeilen an und ein Klick
     // an der alten Bildschirmposition traefe einen Geist.
     FRenderedHintRects : TDictionary<Integer, TRect>;
+    // Zeilen, deren Text sich seit dem ersten Anblick geaendert hat -
+    // eingesammelt in PaintLine, abgeraeumt in EndPaint (Konzept
+    // 2026-08-09, Ziel 2). Die Trennung ist Pflicht und kein Stil:
+    // RemoveMark veraendert das Dictionary, aus dem PaintLine gerade
+    // malt. Immer nur Zeilen von FLastPaintedFile - der Dateiwechsel in
+    // PaintLine leert die Liste mit den Render-Caches zusammen.
+    FStaleLines      : TList<Integer>;
     // Hide-on-mouse-leave Timer: alle 200ms pruefen ob Cursor noch ueber
     // EINER der markierten Zeilen ist — sonst Overlay verbergen. Notwendig
     // weil EditorMouseMove nicht mehr feuert sobald die Maus den Editor
@@ -254,6 +277,11 @@ type
     // Klick-Treffer gegen die gezeichneten Text-Hints: Treffer verwirft
     // den Fund (RemoveMark loest Bereiche auf und invalidiert selbst).
     procedure DismissTextHintAt(X, Y: Integer);
+    // Raeumt die in PaintLine eingesammelten bearbeiteten Fundzeilen ab.
+    // Aus EndPaint gezogen - der eigene Detektor meldete die Routine
+    // sonst als zu komplex (zerlegt statt unterdrueckt, wie schon bei
+    // PaintMarkDecorations).
+    procedure SweepEditedLines;
     procedure PaintLine(const Rect: TRect; const Stage: TPaintLineStage;
       const BeforeEvent: Boolean; var AllowDefaultPainting: Boolean;
       const Context: INTACodeEditorPaintContext);
@@ -472,12 +500,42 @@ type
     // Idempotent; unbekannte Datei/Zeile = no-op. Triggert Repaint.
     procedure RemoveMark(const AFileName: string; ALineNo: Integer);
 
+    // Mengen-Variante fuer den Sweep bearbeiteter Fundzeilen (Review
+    // 2026-08-21). Sie ist NICHT nur Bequemlichkeit: RemoveMark zahlt je
+    // Aufruf einen kompletten Neuaufbau des IOTAEditLineTracker der Datei
+    // (RebuildLineTracker = Detach + Attach, also Modul-Scan ueber
+    // ModuleFileEditors, RemoveNotifier, N x Tracker.Delete, AddNotifier,
+    // N x Tracker.AddLine) plus ein InvalidateAllLines und ein ResetState.
+    // Ein Mehrzeilen-Befund liefert dem Sweep aber leicht mehrere stale
+    // Zeilen auf einmal - das waere N-mal dieselbe schwere OTA-Chirurgie
+    // im selben Zeichendurchgang. Hier faellt sie genau EINMAL an,
+    // nachdem alle Zeilen aus dem Bucket sind.
+    //
+    // Zeilen, die es nicht (mehr) gibt, werden still uebergangen; ist am
+    // Ende nichts entfernt worden, unterbleiben auch Invalidate, Overlay-
+    // Hide und ResetState.
+    procedure RemoveMarks(const AFileName: string;
+      const ALines: TArray<Integer>);
+
     // True wenn IRGENDEINE Datei Marker hat.
     function HasMarks: Boolean;
     // True wenn die spezifische Datei (normalisierter Pfad-Vergleich)
     // mindestens einen Marker hat.
     function HasMarksForFile(const AFileName: string): Boolean;
     function ShouldHighlight(const AFilePath: string; ALine: Integer): Boolean;
+    // PUBLIC fuer TFindingEditorEvents.PaintLine (Konzept 2026-08-09,
+    // Ziel 2). Nimmt beim ERSTEN Anblick einer markierten Zeile den
+    // Schnappschuss ihres Textes und meldet ab dann jede Abweichung -
+    // True heisst "bearbeitet, Marke abraeumen". Der Aufrufer raeumt in
+    // EndPaint ab, nicht sofort: RemoveMark waehrend des Malens
+    // veraendert das Dictionary, aus dem gemalt wird.
+    //
+    // Unbekannte Datei oder unmarkierte Zeile liefern False - der
+    // Zeichenpfad fragt nur fuer markierte Zeilen, ein Fehlschlag ist
+    // also ein Wettlauf mit einem neuen Scan und kein Grund, irgendetwas
+    // zu loeschen.
+    function NoteLineText(const AFile: string; ALine: Integer;
+      const AText: string): Boolean;
     // Liefert die Annotation-Texte fuer eine markierte Zeile in einer
     // bestimmten Datei. False wenn die Datei keine Marks hat oder die
     // Zeile nicht markiert ist.
@@ -1145,6 +1203,27 @@ begin
   for K in Keys do DetachSaveNotifier(K);
 end;
 
+procedure DropSnapshotsOf(Bucket: TFileMarks; const ALines: TArray<Integer>);
+// Nimmt den genannten Marken ihren Zeilentext-Schnappschuss (Ziel 2,
+// Konzept 2026-08-09). Ohne SrcText gilt eine Marke wieder als "noch nie
+// gesehen" und wird beim naechsten Anblick frisch aufgenommen, statt
+// gegen den Text einer FREMDEN Zeile verglichen und geloescht zu werden.
+//
+// Freie Routine und keine Methode: sie braucht nichts vom Highlighter
+// ausser dem Bucket, und TFindingHighlighter steht bereits an der
+// GodClass-Schwelle.
+var
+  Ln    : Integer;
+  Stale : TFindingMark;
+begin
+  for Ln in ALines do
+    if Bucket.TryGetValue(Ln, Stale) and (Stale.SrcText <> '') then
+    begin
+      Stale.SrcText := '';
+      Bucket.AddOrSetValue(Ln, Stale);
+    end;
+end;
+
 procedure TFindingHighlighter.AttachLineTracker(const AKey: string);
 // Holt den IOTAEditLineTracker des EditBuffers fuer AKey, registriert
 // pro markierter Zeile einen Tracker-Eintrag plus einen LineNotifier.
@@ -1163,6 +1242,11 @@ var
   i        : Integer;
   ModFile  : string;
   Ln       : Integer;
+  // Zeilen, deren Tracker.AddLine geworfen hat - erst NACH der
+  // Bucket-Enumeration behandelbar, Begruendung an der Fangstelle.
+  // Dynamisches Array und keine TList: die Routine hat sechs
+  // Fruehausstiege, ein Objekt braeuchte try/finally um alles.
+  Untracked : TArray<Integer>;
 begin
   if FLineTrackers.ContainsKey(AKey) then DetachLineTracker(AKey);
   if not FMarksByFile.TryGetValue(AKey, Bucket) or (Bucket.Count = 0) then Exit;
@@ -1208,8 +1292,25 @@ begin
       // Zeile 500 aber Datei wurde inzwischen auf 200 Zeilen verkleinert).
       // Skippen statt crashen; die zugehoerige Marker bleibt im Dict, wird
       // beim naechsten Scan korrigiert.
+      //
+      // Diese Marke wandert jetzt NICHT mehr mit, waehrend alle anderen es
+      // tun - ihre Zeilennummer zeigt nach dem naechsten Einfuegen
+      // oberhalb auf fremden Text. Fuer Ziel 2 (Konzept 2026-08-09) ist
+      // das der einzige Weg, auf dem der Schnappschuss-Vergleich gegen
+      // eine FREMDE Zeile laufen und einen unberuehrten Fund loeschen
+      // koennte. Die Zeile wird deshalb vorgemerkt und NACH der
+      // Enumeration entschaerft - hier laeuft gerade Bucket.Keys, und in
+      // dieser Unit wird waehrend einer Enumeration nichts mutiert
+      // (Review 2026-08-21).
+      Untracked := Untracked + [Ln];
     end;
   end;
+
+  // Jetzt ist die Enumeration vorbei: den Marken, deren AddLine geworfen
+  // hat, den Schnappschuss nehmen. Ohne SrcText gilt die Marke als "noch
+  // nie gesehen" und wird beim naechsten Anblick frisch aufgenommen,
+  // statt gegen fremden Text verglichen und geloescht zu werden.
+  DropSnapshotsOf(Bucket, Untracked);
 
   FLineTrackers.Add(AKey, Slot);
 end;
@@ -2109,46 +2210,53 @@ end;
 
 procedure TFindingHighlighter.RemoveMark(const AFileName: string;
   ALineNo: Integer);
-// Loescht EINEN Marker. Wenn das die letzte Markierung der Datei war,
-// wird auch der Save-Notifier abgemeldet (via ClearFile-Fallback).
-var
-  Key    : string;
-  Bucket : TFileMarks;
+// Einzelzeilen-Fassung von RemoveMarks - der [x]-Klick im Overlay und der
+// Klick auf den Nur-Text-Hint kommen hier herein.
+//
+// Bis zum Review 2026-08-21 stand hier eine zweite, fast wortgleiche
+// Kopie der Abraeum-Logik. Sie ist aufgegangen: RemoveMarks tut fuer eine
+// einelementige Menge exakt dasselbe, und zwei Kopien derselben
+// Bucket-, Span- und Notifier-Behandlung waeren genau die Sorte
+// Duplikat, die in dieser Unit schon einmal auseinandergelaufen ist.
 begin
-  if (AFileName = '') or (ALineNo <= 0) then Exit;
-  Key := NormalizePath(AFileName);
+  RemoveMarks(AFileName, [ALineNo]);
+end;
 
+procedure TFindingHighlighter.RemoveMarks(const AFileName: string;
+  const ALines: TArray<Integer>);
+// Vertrag an der Deklaration.
+//
+// Reihenfolge ist Absicht: ERST alle Bucket-Mutationen, DANACH die
+// teuren Seiteneffekte genau einmal. RemoveSpanSiblings kann Zeilen
+// mitnehmen, die weiter hinten in ALines noch einmal auftauchen - der
+// TryGetValue-Test faengt das ab, ein zweiter Durchlauf ueber dieselbe
+// Zeile ist damit ein stiller No-op und kein doppelter Rebuild.
+var
+  Key     : string;
+  Bucket  : TFileMarks;
+  Line    : Integer;
+  Victim  : TFindingMark;
+  Removed : Boolean;
+begin
+  if (AFileName = '') or (Length(ALines) = 0) then Exit;
+  Key := NormalizePath(AFileName);
   if not FMarksByFile.TryGetValue(Key, Bucket) then Exit;
-  var Victim : TFindingMark;
-  if not Bucket.TryGetValue(ALineNo, Victim) then Exit;
+
+  Removed := False;
+  for Line in ALines do
+  begin
+    if Line <= 0 then Continue;
+    if not Bucket.TryGetValue(Line, Victim) then Continue;
+    Bucket.Remove(Line);
+    RemoveSpanSiblings(Bucket, Victim);
+    Removed := True;
+  end;
+  if not Removed then Exit;
 
   if Assigned(GAnnotationOverlay) then
     GAnnotationOverlay.HideOverlay;
-
   InvalidateAllLines;
 
-  // Mehrzeilen-Befund: der [x]-Klick trifft irgendeine Zeile des Bereichs,
-  // gemeint ist aber IMMER der ganze Befund. Wuerde nur die angeklickte
-  // Zeile fliegen, bliebe ein zerfledderter Rest des Blocks markiert -
-  // und der Nutzer haette keinen Weg mehr, den Rest loszuwerden.
-  //
-  // Entfernt werden nur Zeilen, die zu DIESEM Bereich gehoeren. Eine
-  // Fortsetzungszeile, auf der ein eigener Befund liegt, hat einen anderen
-  // SpanFirst und bleibt deshalb stehen - genau richtig.
-  // Die ANGEKLICKTE Zeile fliegt IMMER - bedingungslos und zuerst.
-  //
-  // Vorher stand das in einem else-Zweig und lief nur bei einzeiligen
-  // Befunden. Sobald der Schluessel einer Bereichsmarke ausserhalb ihres
-  // eigenen SpanFirst..SpanLast lag - was nach jedem Edit oberhalb des
-  // Blocks passieren konnte - traf die Bereichsschleife die angeklickte
-  // Zeile nicht, und das [x] war ein stilles No-Op. Der Nutzer kam an den
-  // Marker dann gar nicht mehr heran: Fortsetzungszeilen sind nicht
-  // anklickbar, blieb nur "alle Marker loeschen" oder ein neuer Scan.
-  Bucket.Remove(ALineNo);
-
-  RemoveSpanSiblings(Bucket, Victim);
-
-  // Letzte Markierung der Datei? Dann Bucket + Notifier komplett weg.
   if Bucket.Count = 0 then
   begin
     FMarksByFile.Remove(Key);
@@ -2156,7 +2264,7 @@ begin
     DetachLineTracker(Key);
   end
   else
-    RebuildLineTracker(Key);   // Marker-Set hat sich reduziert
+    RebuildLineTracker(Key);
 
   if Assigned(FEditorEventsObj) then
     FEditorEventsObj.ResetState;
@@ -2193,6 +2301,37 @@ begin
         and Bucket.TryGetValue(ALine, AMark);
 end;
 
+function TFindingHighlighter.NoteLineText(const AFile: string;
+  ALine: Integer; const AText: string): Boolean;
+// Vertrag an der Deklaration.
+//
+// Der Rueckschreib-Weg (TryGetValue -> Feld setzen -> AddOrSetValue) ist
+// noetig, weil TFindingMark ein RECORD ist: TryGetMark liefert eine
+// Kopie, ein Schreiben daran ginge ins Leere. AddOrSetValue auf einen
+// BEREITS vorhandenen Schluessel tauscht nur den Wert - es waechst
+// nichts, es wird nicht neu gehasht, und es laeuft hier ausserhalb jeder
+// Enumeration dieses Buckets (PaintLine malt EINE Zeile).
+//
+// Geschrieben wird genau einmal je Marke, beim ersten Anblick. Danach
+// ist der Pfad ein Vergleich zweier Strings.
+var
+  Bucket : TFileMarks;
+  Mark   : TFindingMark;
+begin
+  Result := False;
+  if not FMarksByFile.TryGetValue(NormalizePath(AFile), Bucket) then Exit;
+  if not Bucket.TryGetValue(ALine, Mark) then Exit;
+
+  if Mark.SrcText = '' then
+  begin
+    Mark.SrcText := EncodeLineSnapshot(AText);
+    Bucket.AddOrSetValue(ALine, Mark);
+    Exit;
+  end;
+
+  Result := LineWasEdited(Mark.SrcText, AText);
+end;
+
 { ---- TFindingEditorEvents ---- }
 
 constructor TFindingEditorEvents.Create;
@@ -2201,6 +2340,7 @@ begin
   FRenderedRects     := TDictionary<Integer, TRect>.Create;
   FRenderedTextEnds  := TDictionary<Integer, Integer>.Create;
   FRenderedHintRects := TDictionary<Integer, TRect>.Create;
+  FStaleLines        := TList<Integer>.Create;
   FHoverWatch := TTimer.Create(nil);
   FHoverWatch.Interval := 200;
   FHoverWatch.Enabled  := False;
@@ -2223,6 +2363,7 @@ begin
   FreeAndNil(FRenderedRects);
   FreeAndNil(FRenderedTextEnds);
   FreeAndNil(FRenderedHintRects);
+  FreeAndNil(FStaleLines);
   inherited;
 end;
 
@@ -2242,6 +2383,11 @@ begin
     FRenderedTextEnds.Clear;
   if Assigned(FRenderedHintRects) then
     FRenderedHintRects.Clear;
+  // Die Stale-Liste gehoert zu FLastPaintedFile, das hier geleert wird -
+  // sie darf den Reset nicht ueberleben, sonst raeumte der naechste
+  // EndPaint Zeilennummern in einer anderen Datei ab.
+  if Assigned(FStaleLines) then
+    FStaleLines.Clear;
   if Assigned(FHoverWatch) then
     FHoverWatch.Enabled := False;
 end;
@@ -2897,6 +3043,10 @@ begin
     FRenderedRects.Clear;
     FRenderedTextEnds.Clear;
     FRenderedHintRects.Clear;
+    // Eingesammelte Stale-Zeilen gehoeren zur ALTEN Datei. Bleiben sie
+    // liegen, raeumt EndPaint sie gegen die NEUE ab - dieselbe
+    // Zeilennummer, ein fremder Fund.
+    FStaleLines.Clear;
     FHoveredLine := -1;
     FLastPaintedFile := Context.FileName;
     if Assigned(GAnnotationOverlay) then
@@ -2936,7 +3086,106 @@ begin
     // CodeRect.Left zurueck.
   end;
 
+  // Ziel 2 des Konzepts 2026-08-09: hat sich der Text dieser Zeile seit
+  // dem ersten Anblick geaendert, ist der Fund bis zum naechsten Scan
+  // nicht mehr belegt - die MARKIERUNG faellt, nicht nur der Hint (nur
+  // verstecken hiesse: Streifen bleibt, naechste Mausbewegung holt den
+  // Hint zurueck, fuer den Nutzer "passiert nichts").
+  //
+  // Hier wird nur EINGESAMMELT. Das Abraeumen macht EndPaint.
+  //
+  // Zwei Dinge sind an diesem Weg ungemessen geblieben und stehen im
+  // Todo (Punkte 0.1 und 0.2), weil hier niemand laufen lassen kann:
+  //   * ob PaintLine beim Tippen ueberhaupt feuert und LineState.Text
+  //     dann schon den neuen Text traegt. Faellt das negativ aus, wirkt
+  //     die Loeschung erst beim naechsten Repaint (Scrollen, Fokus) -
+  //     spaeter, nie falsch.
+  //   * was der Text-Zugriff im Repaint kostet. Er ist der einzige
+  //     Zusatzaufwand dieses Merkmals; wird das Scrollen zaeh, ist das
+  //     die Stelle (Konzept 4.4 schlaegt dann einen 32-Bit-Hash statt
+  //     des Strings vor - der String muss trotzdem geholt werden).
+  //
+  // Der Vergleich laeuft gegen den eigenen frueheren Schnappschuss aus
+  // derselben Quelle: liefert LineState.Text dauerhaft Unsinn, ist es
+  // derselbe Unsinn, und es passiert nichts.
+  //
+  // Das gilt aber nur, SOLANGE die Marke synchron mit ihrer Zeile
+  // wandert (Review 2026-08-21 - die erste Fassung behauptete hier
+  // pauschal "kann NICHT falsch ausloesen", und das ist zu viel). Zwei
+  // Bestandspfade brechen die Kopplung, danach vergleicht der Test den
+  // Schnappschuss von Zeile A gegen den Text von Zeile B:
+  //   * AttachLineTracker ueberspringt eine Zeile still, wenn
+  //     Tracker.AddLine wirft (Marke jenseits des Dateiendes). Diese
+  //     Marke wandert bei einem Einfuegen OBERHALB nicht mit, alle
+  //     anderen schon.
+  //   * OnLineMoved laesst zwei Marken auf derselben Zeile kollidieren
+  //     (zusammengefuegte Zeilen), AddOrSetValue behaelt eine davon.
+  // Pfad 1 ist unten in AttachLineTracker entschaerft (uebersprungene
+  // Zeilen verlieren ihren Schnappschuss und gelten wieder als "nie
+  // gesehen"); bei Pfad 2 ist die Loeschung inhaltlich vertretbar.
+  try
+    if GHighlighter.NoteLineText(Context.FileName, Line,
+                                 Context.LineState.Text)
+       and (FStaleLines.IndexOf(Line) < 0) then
+      FStaleLines.Add(Line);
+  except
+    // Wie oben: LineState kann in Randfaellen werfen. Ein Fund, der
+    // deshalb stehen bleibt, ist der harmlose Ausgang.
+  end;
+
   PaintMarkDecorations(Context, CodeRect, Line, TextEndX);
+end;
+
+procedure TFindingEditorEvents.SweepEditedLines;
+// Vertrag an der Deklaration.
+begin
+  // ---- Ziel 2 (Konzept 2026-08-09): bearbeitete Fundzeilen fallen ----
+  // Eingesammelt hat PaintLine. Abgeraeumt wird HIER, weil RemoveMark
+  // das Dictionary veraendert, aus dem waehrend des Malens gelesen wird.
+  //
+  // Zwei Fallen, beide von RemoveMark selbst gestellt: es ruft am Ende
+  // ResetState, und das leert FLastPaintedFile UND FStaleLines. Deshalb
+  // wird der Dateiname vorher gesichert - sonst bekaeme der ZWEITE
+  // Aufruf einen leeren Namen und traefe nichts - und die Liste vorher
+  // in ein lokales Array umgehaengt, sonst iterierte die Schleife ueber
+  // eine Liste, die ihr unter den Fuessen geleert wird.
+  //
+  // Mehrzeilige Befunde loest RemoveMarks ueber SpanFirst/SpanLast auf:
+  // eine Aenderung in der MITTLEREN Zeile nimmt den ganzen Bereich mit -
+  // SOLANGE die Span-Felder der Geschwister noch uebereinstimmen. Nach
+  // einem zeilenzahl-AENDERNDEN Edit im Block (Enter mittendrin) hat
+  // OnLineMoved die Felder pro Marke um das jeweilige Delta verschoben;
+  // dann faellt nur die Teilgruppe des Opfers, der obere Rest bleibt bis
+  // zum naechsten Scan stehen. Das ist heute so - RemoveSpanSiblings
+  // vergleicht Zeilennummern, die der Edit auseinandertreibt (Review
+  // 2026-08-21; sauber waere eine SpanId, die den Edit ueberlebt).
+  //
+  // Das Overlay versteckt RemoveMarks selbst - im Textmodus gibt es
+  // nichts zu verstecken, ohne Marke zeichnet der naechste Durchgang
+  // nichts.
+  //
+  // EIN Aufruf fuer ALLE stale Zeilen, nicht einer pro Zeile: jeder
+  // kostet einen kompletten Neuaufbau des IOTAEditLineTracker plus
+  // Invalidate plus ResetState. Bei einem Mehrzeilen-Befund waere das
+  // N-mal dieselbe OTA-Chirurgie in EINEM Zeichendurchgang.
+  //
+  // try/except ist der Hausstandard dieser Unit an jeder OTA-Beruehrung
+  // (TFileClosingNotifier, InvalidateAllLines, OnLineMoved, beide
+  // Detach-Routinen): eine Exception aus dem Tracker-Umbau darf den
+  // EndPaint-Callback der IDE nicht verlassen. Genau diese Klasse hat
+  // dem Plugin schon zwei Abstuerze gekostet.
+  if FStaleLines.Count > 0 then
+  begin
+    var StaleFile : string := FLastPaintedFile;
+    var Stale : TArray<Integer> := FStaleLines.ToArray;
+    FStaleLines.Clear;
+    if Assigned(GHighlighter) and (StaleFile <> '') then
+      try
+        GHighlighter.RemoveMarks(StaleFile, Stale);
+      except
+        // Bewusst still: siehe file-weiten EmptyExcept-Vermerk oben.
+      end;
+  end;
 end;
 
 procedure TFindingEditorEvents.EndPaint(const Editor: TWinControl);
@@ -2946,6 +3195,8 @@ var
   ToRemove : TList<Integer>;
 begin
   if Editor <> FSavedEditor then Exit;
+
+  SweepEditedLines;
 
   // Stale-Cache-Cleanup: FRenderedRects/FRenderedTextEnds bekommen pro
   // PaintLine Eintraege fuer SICHTBARE markierte Zeilen dazu. Wenn der

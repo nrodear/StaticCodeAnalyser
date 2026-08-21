@@ -1,4 +1,4 @@
-unit uRepoSettings;
+﻿unit uRepoSettings;
 
 // Persistente Settings fuer das Static Code Analysis Tool.
 //
@@ -72,6 +72,82 @@ const
   CLIPBOARD_ON_CLICK_MAX     = 3;
 
 type
+  /// <summary>
+  ///   INI-Schreiber, der KOMMENTARE UND REIHENFOLGE der Datei erhaelt.
+  /// </summary>
+  /// <remarks>
+  ///   WOZU: die analyser.ini wird beim ersten Start aus einem Template
+  ///   erzeugt, das jeden Schluessel ausfuehrlich erklaert und
+  ///   auskommentierte Beispiele mitliefert (DEFAULT_INI_CONTENT). Genau
+  ///   diese Erklaerungen sind der Grund, warum die Datei von Hand
+  ///   bedienbar ist.
+  ///
+  ///   TMemIniFile kann sie nicht erhalten: es laedt ausschliesslich
+  ///   Sektionen, Schluessel und Werte in den Speicher, und UpdateFile
+  ///   schreibt die Datei aus diesem Modell KOMPLETT neu. Alles, was kein
+  ///   Schluessel ist - Kommentare, Leerzeilen, auskommentierte Beispiele,
+  ///   die Reihenfolge - ist danach weg. Ein einziges Speichern der
+  ///   Options-Seite (Tools > Optionen > Fremdhersteller > SCA) hat so die
+  ///   ganze Dokumentation der Datei geloescht.
+  ///
+  ///   TIniFile waere kommentarerhaltend, ist hier aber ausgeschlossen: es
+  ///   geht ueber die Windows-Profil-API, die zwischenspeichert und bei
+  ///   umgeleitetem APPDATA Werte verlieren kann - der Grund steht
+  ///   ausfuehrlich an TRepoSettings.Load.
+  ///
+  ///   Deshalb dieser Weg: die Datei wird als TEXT geladen, und je
+  ///   geschriebenem Schluessel wird GENAU DIE EINE Wertzeile ersetzt.
+  ///   Jede andere Zeile bleibt Byte fuer Byte stehen. Ein Schluessel, den
+  ///   es noch nicht gibt, wird ans Ende seiner Sektion gehaengt; eine
+  ///   Sektion, die es noch nicht gibt, ans Dateiende.
+  ///
+  ///   Bewusst NICHT unterstuetzt: Loeschen von Schluesseln und Sektionen.
+  ///   Der einzige Aufrufer (TRepoSettings.Save) schreibt eine feste Liste
+  ///   von Schluesseln und loescht nie.
+  /// </remarks>
+  /// <summary>
+  ///   Wo in der Datei ein Schluessel steht - bzw. wo er hingehoerte.
+  ///   Rueckgabewert statt drei out-Parametern.
+  /// </summary>
+  TIniKeyPos = record
+    /// <summary>Zeile des Schluessels, -1 wenn nicht vorhanden.</summary>
+    KeyLine  : Integer;
+    /// <summary>Zeile hinter dem letzten echten Eintrag der Sektion.</summary>
+    InsertAt : Integer;
+    /// <summary>Zeile der '[Sektion]'-Kopfzeile, -1 wenn nicht vorhanden.</summary>
+    HeaderAt : Integer;
+  end;
+
+  TCommentPreservingIni = class
+  private
+    FPath    : string;
+    FLines   : TStringList;
+    FChanged : Boolean;
+    /// <summary>Sektionsname einer '[...]'-Zeile, sonst ''.</summary>
+    class function SectionOf(const ALine: string): string; static;
+    /// <summary>
+    ///   Schluesselname einer 'Key=Value'-Zeile, sonst ''. Eine Zeile, die
+    ///   mit ';' oder '#' beginnt, ist ein KOMMENTAR und liefert '' - sonst
+    ///   wuerde das auskommentierte Beispiel ';Language=de' als Schluessel
+    ///   'Language' gelesen und beim Schreiben scharf geschaltet.
+    /// </summary>
+    class function KeyOf(const ALine: string): string; static;
+    /// <summary>
+    ///   Ein Durchlauf durch die Datei, der alles einsammelt, was das
+    ///   Schreiben braucht. Aus WriteString gezogen - zusammen war die
+    ///   Routine dem eigenen Detektor zu komplex.
+    /// </summary>
+    function ScanFor(const ASection, AKey: string): TIniKeyPos;
+  public
+    constructor Create(const APath: string);
+    destructor Destroy; override;
+    procedure WriteString(const ASection, AKey, AValue: string);
+    procedure WriteBool(const ASection, AKey: string; AValue: Boolean);
+    procedure WriteInteger(const ASection, AKey: string; AValue: Integer);
+    /// <summary>Schreibt nur, wenn sich wirklich ein Wert geaendert hat.</summary>
+    procedure UpdateFile;
+  end;
+
   TRepoSettings = class
   private
     FBaseBranch        : string;
@@ -463,7 +539,12 @@ type
 
 implementation
 
-// noinspection-file BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CaseStatementSize, CyclomaticComplexity, DuplicateString, EmptyExcept, ExceptOnException, FreeWithoutNil, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPublicMember
+// noinspection-file BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CaseStatementSize, ClassPerFile, CyclomaticComplexity, DuplicateString, EmptyExcept, ExceptOnException, FreeWithoutNil, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicMemberWithoutDoc, TooLongLine, UnsortedUses, UnusedPublicMember
+// ClassPerFile (2026-08-21): TCommentPreservingIni steht bewusst hier und
+// nicht in einer eigenen Unit. Sie hat genau einen Aufrufer - TRepoSettings.Save
+// -, existiert nur wegen dessen Kommentarproblem, und eine eigene Unit haette
+// Eintraege in vier Projektdateien verlangt (Engine- und Plugin-dpk/dproj).
+// Wird sie je woanders gebraucht, ist das Herausziehen der richtige Moment.
 // Destructor-Pattern: Free im Destruktor ohne nil-out (Object wird sofort
 // danach freigegeben).
 
@@ -1731,14 +1812,192 @@ begin
   end;
 end;
 
-procedure TRepoSettings.Save;
-// TMemIniFile: alle Writes batch'en in den Speicher, EIN UpdateFile am Ende
-// schreibt das ganze File raus. Vorher 11 Open/Write/Close-Zyklen.
+{ TCommentPreservingIni }
+
+class function TCommentPreservingIni.SectionOf(const ALine: string): string;
 var
-  Ini: TMemIniFile;
+  T : string;
+begin
+  Result := '';
+  T := Trim(ALine);
+  if (Length(T) >= 2) and (T[1] = '[') and (T[Length(T)] = ']') then
+    Result := Trim(Copy(T, 2, Length(T) - 2));
+end;
+
+class function TCommentPreservingIni.KeyOf(const ALine: string): string;
+var
+  T : string;
+  P : Integer;
+begin
+  Result := '';
+  T := Trim(ALine);
+  if T = '' then Exit;
+  // Kommentarzeile - insbesondere die auskommentierten Beispiele des
+  // Templates (';Language=de'). Sie duerfen NIE als Schluessel gelten.
+  if CharInSet(T[1], [';', '#']) then Exit;
+  P := Pos('=', T);
+  if P <= 1 then Exit;
+  Result := Trim(Copy(T, 1, P - 1));
+end;
+
+constructor TCommentPreservingIni.Create(const APath: string);
+begin
+  inherited Create;
+  FPath  := APath;
+  FLines := TStringList.Create;
+  // Keine Sortierung, keine Dubletten-Behandlung: die Datei soll exakt so
+  // bleiben, wie sie ist.
+  FLines.Sorted := False;
+  if FileExists(FPath) then
+    try
+      FLines.LoadFromFile(FPath, TEncoding.UTF8);
+    except
+      // Unlesbar (gesperrt, kaputt): dann bleibt FLines leer und UpdateFile
+      // legt die Datei aus den geschriebenen Werten neu an. Das ist
+      // dasselbe Verhalten, das TMemIniFile hier zeigen wuerde.
+    end;
+end;
+
+destructor TCommentPreservingIni.Destroy;
+begin
+  FLines.Free;
+  inherited;
+end;
+
+function TCommentPreservingIni.ScanFor(const ASection,
+  AKey: string): TIniKeyPos;
+// Vertrag an der Deklaration.
+var
+  i        : Integer;
+  Cur, Sec : string;
+  InTarget : Boolean;
+begin
+  Result.KeyLine  := -1;
+  Result.InsertAt := -1;
+  Result.HeaderAt := -1;
+  InTarget := False;
+  for i := 0 to FLines.Count - 1 do
+  begin
+    Sec := SectionOf(FLines[i]);
+    if Sec <> '' then
+    begin
+      // Die Zielsektion ist zu Ende - der Einfuegepunkt steht fest.
+      if InTarget then Exit;
+      InTarget := SameText(Sec, ASection);
+      if InTarget then Result.HeaderAt := i;
+      Continue;
+    end;
+    if not InTarget then Continue;
+
+    Cur := KeyOf(FLines[i]);
+    if SameText(Cur, AKey) then
+    begin
+      Result.KeyLine := i;
+      Exit;
+    end;
+    // Leerzeilen und Kommentare am Sektionsende nicht mitzaehlen: ein
+    // neuer Schluessel gehoert hinter den letzten ECHTEN Eintrag, nicht
+    // vor den Kommentarblock, der ihn erklaert.
+    if Trim(FLines[i]) <> '' then
+      Result.InsertAt := i + 1;
+  end;
+end;
+
+procedure TCommentPreservingIni.WriteString(const ASection, AKey,
+  AValue: string);
+// Ersetzt GENAU die eine Wertzeile und laesst jede andere unangetastet.
+var
+  Pos  : TIniKeyPos;
+  Line : string;
+begin
+  Pos  := ScanFor(ASection, AKey);
+  Line := AKey + '=' + AValue;
+
+  if Pos.KeyLine >= 0 then
+  begin
+    if FLines[Pos.KeyLine] <> Line then
+    begin
+      FLines[Pos.KeyLine] := Line;
+      FChanged := True;
+    end;
+    Exit;
+  end;
+
+  if Pos.InsertAt >= 0 then
+  begin
+    FLines.Insert(Pos.InsertAt, Line);
+  end
+  else if Pos.HeaderAt >= 0 then
+  begin
+    // Sektion vorhanden, aber ohne einen einzigen Schluessel: direkt hinter
+    // die Kopfzeile. NICHT ans Dateiende - dort landete der Schluessel in
+    // einer fremden Sektion.
+    FLines.Insert(Pos.HeaderAt + 1, Line);
+  end
+  else
+  begin
+    // Sektion gibt es gar nicht.
+    if (FLines.Count > 0) and (Trim(FLines[FLines.Count - 1]) <> '') then
+      FLines.Add('');
+    FLines.Add('[' + ASection + ']');
+    FLines.Add(Line);
+  end;
+  FChanged := True;
+end;
+
+// noinspection BooleanParam
+// Der Wert IST die Information, und die Signatur ist bewusst deckungsgleich
+// mit TMemIniFile.WriteBool - diese Klasse ersetzt sie an der Aufrufstelle
+// eins zu eins. Zwei Methoden mit sprechenden Namen waeren hier kein
+// Gewinn, sondern eine Abweichung vom Vertrag, den der Aufrufer kennt.
+procedure TCommentPreservingIni.WriteBool(const ASection, AKey: string;
+  AValue: Boolean);
+// '1'/'0' wie TMemIniFile.WriteBool - die Datei soll nach dem Umstieg
+// zeichengleich aussehen.
+begin
+  if AValue then
+    WriteString(ASection, AKey, '1')
+  else
+    WriteString(ASection, AKey, '0');
+end;
+
+procedure TCommentPreservingIni.WriteInteger(const ASection, AKey: string;
+  AValue: Integer);
+begin
+  WriteString(ASection, AKey, IntToStr(AValue));
+end;
+
+procedure TCommentPreservingIni.UpdateFile;
+// Nur schreiben, wenn sich etwas geaendert hat: ein Options-Dialog, der
+// ohne Aenderung geschlossen wird, soll die Datei nicht anfassen (und
+// damit auch keinen Zeitstempel bewegen).
+begin
+  if not FChanged then Exit;
+  try
+    FLines.SaveToFile(FPath, TEncoding.UTF8);
+    FChanged := False;
+  except
+    // Schreibfehler (Datei gesperrt, Rechte): still. Dasselbe tat der
+    // bisherige Pfad - UpdateFile von TMemIniFile schluckt ebenfalls.
+  end;
+end;
+
+procedure TRepoSettings.Save;
+// TCommentPreservingIni statt TMemIniFile (2026-08-21): die Datei traegt
+// seit dem Template-Generator zu jedem Schluessel einen Erklaerungsblock
+// und auskommentierte Beispiele. TMemIniFile.UpdateFile schreibt die Datei
+// aus seinem Speichermodell KOMPLETT neu und kennt darin nur Sektionen,
+// Schluessel und Werte - ein einziges Speichern der Options-Seite loeschte
+// damit die gesamte Dokumentation der Datei. Der Ersatz ersetzt je
+// Schluessel genau eine Zeile und laesst alles andere stehen.
+//
+// Der Aufrufcode darunter ist unveraendert: gleiche Methodennamen, gleiche
+// Semantik, EIN UpdateFile am Ende.
+var
+  Ini: TCommentPreservingIni;
 begin
   EnsureConfigExists;
-  Ini := TMemIniFile.Create(ConfigFilePath);
+  Ini := TCommentPreservingIni.Create(ConfigFilePath);
   try
     Ini.WriteString('Repo',  'BaseBranch',         FBaseBranch);
     Ini.WriteBool  ('Repo',  'IncludeWorkingTree', FIncludeWorkingTree);
@@ -1768,8 +2027,7 @@ begin
     Ini.WriteString('UI',    'Language',           FLanguage);
     Ini.WriteString('UI',    'OverlayPosition',    FOverlayPosition);
     Ini.WriteInteger('UI',   'ClipboardOnClick',   FClipboardOnClick);
-    // Pflicht bei TMemIniFile: ohne UpdateFile bleiben alle Writes nur
-    // im Speicher (TIniFile dagegen schreibt pro Write sofort).
+    // Wie zuvor: alle Writes sammeln, EIN Schreibvorgang am Ende.
     Ini.UpdateFile;
   finally
     Ini.Free;

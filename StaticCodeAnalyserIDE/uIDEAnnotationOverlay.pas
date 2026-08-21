@@ -516,6 +516,39 @@ begin
   FCurrentParent := AEditorHandle;
 end;
 
+// ---------------------------------------------------------------------
+// CARET-REGEL fuer alle Fenster-Operationen dieser Unit (2026-08-21)
+// ---------------------------------------------------------------------
+// Dieses Overlay ist ein WS_CHILD IM EditControl - also im selben Fenster,
+// dem der Text-Caret gehoert. Ein Win32-Caret hat KEINEN Backing-Store:
+// das System zeichnet und loescht ihn durch Invertieren derselben Pixel
+// (MSDN "About Carets"). Wer Pixel unter einem SICHTBAREN Caret aendert,
+// bei dem invertiert der naechste Blink-Tick fremde Pixel und laesst einen
+// stehenden Strich zurueck - der Nutzer sieht einen DOPPELTEN Caret, und
+// weil der Geist nicht mitblinkt, wirkt der echte Caret traege.
+//
+// Innerhalb der WM_PAINT-Behandlung des Editors ist das gefahrlos: dort
+// versteckt BeginPaint den Caret automatisch, und zwar am HWND - auch fuer
+// Fremdcode im selben Malzyklus. AUSSERHALB davon ist es die dokumentierte
+// Fehlerquelle (MSDN "Using Carets": wer ausserhalb von WM_PAINT neu malt,
+// MUSS den Caret unsichtbar machen). Win32 haelt sich selbst daran -
+// ScrollWindow versteckt den Caret intern.
+//
+// Genau das taten die Aufrufe hier: MoveWindow(..., bRepaint=True) plus
+// RedrawWindow(..., RDW_UPDATENOW) erzwingen einen SYNCHRONEN Malzyklus,
+// zwei davon aus einem Timer-Tick - also ausserhalb jedes WM_PAINT.
+// Am 2026-08-21 hat der Nutzer das nachgewiesen: mit abgeschaltetem
+// Overlay ([UI] Element.AnnotationOverlay=0), aber weiterhin gemaltem
+// Badge, ist das Caret-Verhalten fehlerfrei.
+//
+// Deshalb: NICHT synchron malen. bRepaint=False plus asynchrones
+// Invalidieren - Windows malt im naechsten reglaeren WM_PAINT, und dort
+// ist der Caret geschuetzt. Kein Fremdprojekt im Delphi-Umfeld benutzt
+// RedrawWindow/RDW_UPDATENOW am Editor (Vergleich 4:0, Fremdvergleich
+// 2026-08-21); alle invalidieren nur.
+//
+// WER HIER RDW_UPDATENOW ODER bRepaint=True WIEDER EINFUEHRT, holt den
+// doppelten Caret zurueck.
 procedure TAnnotationOverlay.ShowAt(AEditor: TWinControl;
   AClientX, AClientY, AWidth, ALineH: Integer;
   const ATitle, ADesc, ABadge: string;
@@ -711,13 +744,15 @@ begin
   // Editor-Client-Koordinaten gehen direkt in MoveWindow.
   if AStartWidth > 0 then
   begin
-    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AStartWidth, TitleH, True);
+    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AStartWidth, TitleH, False);
+    Winapi.Windows.InvalidateRect(Handle, nil, True);
     FExpandStage := 0;             // erster Tick wird W-grow machen
     FExpandTimer.Interval := 80;
   end
   else
   begin
-    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AWidth, TitleH, True);
+    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AWidth, TitleH, False);
+    Winapi.Windows.InvalidateRect(Handle, nil, True);
     FExpandStage := 1;             // erster Tick wird H-grow machen
     FExpandTimer.Interval := 250;
   end;
@@ -728,7 +763,7 @@ begin
     Visible := True
   else
     RedrawWindow(Handle, nil, 0,
-      RDW_INVALIDATE or RDW_ALLCHILDREN or RDW_UPDATENOW or RDW_ERASE);
+      RDW_INVALIDATE or RDW_ALLCHILDREN or RDW_ERASE);
 
   // Timer (re)starten - Enabled:=False vor True erzwingt Countdown-Reset.
   FExpandTimer.Enabled := False;
@@ -791,9 +826,9 @@ begin
     begin
       // Stage 0 -> 1: W waechst von FStartWidth auf FLastW (volle Breite).
       // Position + H bleiben.
-      Winapi.Windows.MoveWindow(Handle, FLastX, FLastY, FLastW, FCollapsedHeight, True);
+      Winapi.Windows.MoveWindow(Handle, FLastX, FLastY, FLastW, FCollapsedHeight, False);
       RedrawWindow(Handle, nil, 0,
-        RDW_INVALIDATE or RDW_ALLCHILDREN or RDW_UPDATENOW);
+        RDW_INVALIDATE or RDW_ALLCHILDREN);
       // Naechste Stufe nach 170ms = 250ms gesamt seit Show. Immer weiter
       // bis zur vollen Hint-Ansicht (UX-Entscheid 2026-07-05, keine
       // Collapsed-Zwischenstufe mehr).
@@ -808,9 +843,9 @@ begin
       // Stage 1 -> 2: H waechst von FCollapsedHeight auf FExpandedHeight.
       if FExpandedHeight > FCollapsedHeight then
       begin
-        Winapi.Windows.MoveWindow(Handle, FLastX, FLastY, FLastW, FExpandedHeight, True);
+        Winapi.Windows.MoveWindow(Handle, FLastX, FLastY, FLastW, FExpandedHeight, False);
         RedrawWindow(Handle, nil, 0,
-          RDW_INVALIDATE or RDW_ALLCHILDREN or RDW_UPDATENOW);
+          RDW_INVALIDATE or RDW_ALLCHILDREN);
       end;
       FExpandStage := 2;
     end;

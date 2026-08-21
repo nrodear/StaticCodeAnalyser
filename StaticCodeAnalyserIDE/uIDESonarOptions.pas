@@ -1,4 +1,4 @@
-unit uIDESonarOptions;
+﻿unit uIDESonarOptions;
 
 // Tools > Options > Third Party > "Sonar Integration"
 //
@@ -31,7 +31,8 @@ uses
   ToolsAPI,
   uIDEAddInOptionsBase,    // gemeinsame Basis fuer INTAAddInOptions-Adapter
   uLocalization,           // _() i18n-Wrapper (analog uIDESCAOptions)
-  uSonarConfig;
+  uSonarConfig,
+  uRepoSettings;   // TCommentPreservingIni - Kommentare der analyser.ini erhalten
 
 type
   TSonarOptionsFrame = class(TFrame)
@@ -337,13 +338,18 @@ end;
 
 procedure TSonarOptionsFrame.SaveToIni(const IniPath: string);
 var
-  Ini      : TMemIniFile;
+  Ini      : TCommentPreservingIni;
   NewToken : string;
 begin
   if IniPath = '' then Exit;
   ForceDirectories(ExtractFilePath(IniPath));
 
-  Ini := TMemIniFile.Create(IniPath, TEncoding.UTF8);
+  // TCommentPreservingIni statt TMemIniFile (2026-08-21): IniPath ist
+  // DIESELBE analyser.ini, die TRepoSettings schreibt - und sie traegt zu
+  // jedem Schluessel einen Erklaerblock. TMemIniFile.UpdateFile haette sie
+  // hier wieder plattgeschrieben, egal wie sorgfaeltig TRepoSettings.Save
+  // sie schont: beim OK im Optionsdialog speichern ALLE Seiten.
+  Ini := TCommentPreservingIni.Create(IniPath);
   try
     Ini.WriteString('Sonar', 'HostUrl',    Trim(edHost.Text));
     Ini.WriteString('Sonar', 'ProjectKey', Trim(edProject.Text));

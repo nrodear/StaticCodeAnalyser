@@ -1,0 +1,54 @@
+# GitHub Actions workflow: haelt Delphi-Projektdateien frei von stillem
+# IDE-Drift.
+#
+# Hintergrund: Delphi schreibt .dproj bei jedem Oeffnen zurueck. Zwei der
+# Aenderungen sind nicht kosmetisch:
+#
+#   <ProjectVersion>     D12 setzt 20.1, D13 setzt 20.3. Wer zwischen
+#                        beiden IDEs wechselt, erzeugt bei jedem Oeffnen
+#                        einen Diff - dauerhaft, weil die jeweils andere
+#                        IDE ihn zurueckdreht.
+#
+#   <Platform Condition> Die Standard-Plattform. Kippt sie unbemerkt,
+#                        baut die IDE etwas anderes als erwartet. Genau
+#                        das hat in diesem Repo wiederholt zu F2613 und
+#                        zu Stale-Build-Fehldiagnosen gefuehrt.
+#
+# Das Gate entscheidet nichts - es macht den Drift sichtbar. Wer eine
+# Aenderung WILL, zieht die Erwartung mit `--update` nach; dann steht sie
+# als eigener Diff im Commit statt sich unter einer Funktionsaenderung zu
+# verstecken.
+#
+# Lokal vorab pruefen: `python tools/dproj_gate.py`
+
+name: Dproj
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  dproj:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run dproj gate
+        run: python3 tools/dproj_gate.py
+
+      - name: Erklaerung (bei Fehlschlag)
+        if: failure()
+        run: |
+          echo "Eine IDE hat eine Projektdatei geschrieben, kein Mensch."
+          echo ""
+          echo "Zwei zulaessige Wege:"
+          echo "  1. Die Aenderung zuruecknehmen:"
+          echo "       git checkout -- <pfad zur .dproj>"
+          echo "  2. Sie ist gewollt - dann die Erwartung nachziehen:"
+          echo "       python tools/dproj_gate.py --update"
+          echo "     und tools/dproj_baseline.json MIT committen."
+          echo ""
+          echo "Der zweite Weg ist ausdruecklich in Ordnung. Der Punkt ist"
+          echo "nur, dass die Entscheidung im Diff steht."
