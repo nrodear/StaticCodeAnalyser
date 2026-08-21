@@ -37,6 +37,16 @@ type
   // und `//`-Zeilenkommentare beginnen/enden IMMER innerhalb einer Zeile -
   // nur `{ ... }` und `(* ... *)` koennen ueber Zeilengrenzen laufen, daher
   // wird nur deren Zustand zwischen ScanCodeLine-Aufrufen getragen.
+  // Zeilen-uebergreifender Zustand fuer BlankNonCode: ein '{' oder '(*'
+  // kann ueber Zeilengrenzen offen bleiben.
+  //
+  // Delphi-12-Multi-Line-Strings ('''...''') werden bewusst NICHT
+  // getrackt - rare Edge-Case, FN akzeptabel.
+  TBlankScanState = record
+    InBrace : Boolean;   // True wenn vorige Zeile mit offenem '{' endete
+    InParen : Boolean;   // True wenn vorige Zeile mit offenem '(*' endete
+  end;
+
   TCommentScanState = record
     InBraceComment : Boolean;   // innerhalb { ... }
     InParenComment : Boolean;   // innerhalb (* ... *)
@@ -216,6 +226,26 @@ type
     //     LineCommentCol auf die 1-basierte Spalte des ersten `/` gesetzt wird
     //     (0 wenn kein Zeilenkommentar).
     // State traegt offene `{`/`(*`-Bloecke ueber Zeilengrenzen.
+    // Ersetzt JEDES Nicht-Code-Zeichen einer Zeile durch ein LEERZEICHEN -
+    // Kommentarinhalte ('//', '{..}', '(*..*)') ebenso wie String-Literale
+    // samt ihrer Apostrophe. Die Zeilenlaenge bleibt dabei erhalten, jede
+    // Spalte zeigt weiterhin auf dieselbe Quellspalte.
+    //
+    // Unterschied zu ScanCodeLine: die ENTFERNT Klammerkommentare und
+    // schneidet Zeilenkommentare ab, verschiebt also Positionen. Wer nach
+    // dem Strippen noch mit Spalten rechnet - Klammertiefe, Wortgrenzen,
+    // Label-Erkennung - braucht diese Variante.
+    //
+    // 2026-08-21 aus uUninitVar hierher gezogen (Code-Review-Rest 12).
+    // Der Posten verlangte woertlich eine Erweiterung von ScanCodeLine um
+    // einen Fuell-Modus; das haette eine Verzweigung in deren Zeilen-
+    // schleife bedeutet, die pro Quellzeile pro Strip laeuft und einen
+    // eigenen Perf-Kommentar traegt. Der Ortswechsel erreicht dasselbe
+    // Ziel - eine Implementierung statt mehrerer - ohne den Hot-Path
+    // anzufassen und ohne ein A/B zu brauchen.
+    class function BlankNonCode(const Line: string;
+      var State: TBlankScanState): string; static;
+
     class function ScanCodeLine(const Line: string; var State: TCommentScanState;
       out LineCommentCol: Integer; FillCh: Char = '~'): string; static;
 
@@ -830,6 +860,108 @@ begin
       Result[i] := ' ';
     Inc(i);
   end;
+end;
+
+class function TDetectorUtils.BlankNonCode(const Line: string;
+  var State: TBlankScanState): string;
+// Stripper mit Zeilen-uebergreifendem State - State.InBrace/InParen
+// werden VOR der Zeile aus dem Caller-State gelesen und NACH der Zeile
+// zurueckgeschrieben. So funktionieren auch Multi-Line-Comments wie
+//   { Foo bar
+//     baz }
+// als Stripping ueber alle drei Zeilen.
+var
+  Buf : array of Char;
+  i, L : Integer;
+  InString : Boolean;
+  C, Next : Char;
+begin
+  L := Length(Line);
+  if L = 0 then Exit('');
+  SetLength(Buf, L);
+  InString := False;       // Strings koennen sich nicht ueber Zeilen ziehen
+  i := 1;
+  while i <= L do
+  begin
+    C := Line[i];
+    if i < L then Next := Line[i + 1] else Next := #0;
+
+    if State.InBrace then
+    begin
+      Buf[i - 1] := ' ';
+      if C = '}' then State.InBrace := False;
+      Inc(i);
+    end
+    else if State.InParen then
+    begin
+      Buf[i - 1] := ' ';
+      if (C = '*') and (Next = ')') then
+      begin
+        Buf[i] := ' ';
+        Inc(i, 2);
+        State.InParen := False;
+      end
+      else
+        Inc(i);
+    end
+    else if InString then
+    begin
+      Buf[i - 1] := ' ';
+      if C = '''' then
+      begin
+        if Next = '''' then    // '' Escape innerhalb String
+        begin
+          Buf[i] := ' ';
+          Inc(i, 2);
+        end
+        else
+        begin
+          InString := False;
+          Inc(i);
+        end;
+      end
+      else
+        Inc(i);
+    end
+    else
+    begin
+      if (C = '/') and (Next = '/') then
+      begin
+        // Line-Comment: Rest der Zeile zu Spaces.
+        while i <= L do
+        begin
+          Buf[i - 1] := ' ';
+          Inc(i);
+        end;
+        Break;
+      end
+      else if C = '{' then
+      begin
+        Buf[i - 1] := ' ';
+        State.InBrace := True;
+        Inc(i);
+      end
+      else if (C = '(') and (Next = '*') then
+      begin
+        Buf[i - 1] := ' ';
+        Buf[i]     := ' ';
+        Inc(i, 2);
+        State.InParen := True;
+      end
+      else if C = '''' then
+      begin
+        Buf[i - 1] := ' ';
+        InString := True;
+        Inc(i);
+      end
+      else
+      begin
+        Buf[i - 1] := C;
+        Inc(i);
+      end;
+    end;
+  end;
+  SetString(Result, PChar(Buf), L);
 end;
 
 class function TDetectorUtils.ScanCodeLine(const Line: string;
