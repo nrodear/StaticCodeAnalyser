@@ -2872,47 +2872,6 @@ begin
   end;
 end;
 
-function EditorCaretRect(AEditorWnd: HWND): TRect;
-// Das Caret-Rechteck des Editors, in DESSEN Client-Koordinaten - also in
-// genau dem System, in dem auch Context.Canvas malt.
-//
-// WOZU (Nutzermessung 2026-08-21): ein Win32-Caret hat keinen
-// Backing-Store, das System zeichnet und loescht ihn durch Invertieren
-// derselben Pixel (MSDN "About Carets"). Wer die Pixel unter ihm
-// veraendert, hinterlaesst beim naechsten Blink einen stehenden,
-// GEGENPHASIG flackernden Schatten. Genau das hat der Nutzer beobachtet -
-// und zwar wandernd: links am Zeilenanfang, wo der Streifen sitzt, und am
-// Zeilenende, wo das Badge sitzt. Der Schatten folgt dem Caret, weil wir
-// dort malen, wo er steht.
-//
-// Wir malen naemlich flaechig in Context.LineState.CodeRect, und das ist
-// laut ToolsAPI.Editor.pas woertlich die "Editable area, where code text
-// is displayed" - der Bereich, in dem der Caret lebt. Der Fremdvergleich
-// vom selben Tag hat dieselbe Regel bei vier anderen Projekten gefunden:
-// auf der Caret-Zeile nicht flaechig fuellen.
-//
-// GetGUIThreadInfo statt GetCaretPos: es liefert das ganze RECHTECK und
-// sagt zugleich, WELCHES Fenster den Caret besitzt. Gehoert er nicht
-// unserem Editor, sparen wir nichts aus - dann malt hier auch nichts
-// ueber einen fremden Caret.
-//
-// LEERES Rechteck heisst "kein Caret zu schuetzen" - bewusst als
-// Rueckgabewert und nicht als out-Parameter mit Boolean daneben: ein
-// leeres TRect traegt dieselbe Aussage ohne zweiten Kanal.
-var
-  GTI : TGUIThreadInfo;
-begin
-  Result := TRect.Empty;
-  if AEditorWnd = 0 then Exit;
-  FillChar(GTI, SizeOf(GTI), 0);
-  GTI.cbSize := SizeOf(GTI);
-  if not GetGUIThreadInfo(GetCurrentThreadId, GTI) then Exit;
-  if GTI.hwndCaret <> AEditorWnd then Exit;
-  if (GTI.rcCaret.Right > GTI.rcCaret.Left)
-     and (GTI.rcCaret.Bottom > GTI.rcCaret.Top) then
-    Result := GTI.rcCaret;
-end;
-
 procedure TFindingEditorEvents.PaintMarkDecorations(
   const Context: INTACodeEditorPaintContext; const ACodeRect: TRect;
   ALine, ATextEndX: Integer);
@@ -3174,32 +3133,7 @@ begin
     // deshalb stehen bleibt, ist der harmlose Ausgang.
   end;
 
-  // Unsere Dekorationen duerfen die Caret-Zelle NICHT beruehren - sonst
-  // bleibt beim naechsten Blink ein gegenphasiger Schatten stehen
-  // (Begruendung an EditorCaretRect). Ausgespart wird per Clipping
-  // statt durch Rechteck-Arithmetik, weil es ALLE Maler dieses Pfades auf
-  // einmal deckt: den 3-px-Streifen, die Span-Klammern und das Badge.
-  //
-  // SaveDC/RestoreDC und nicht SelectClipRgn(DC, 0): die IDE hat auf
-  // diesem DC bereits ihre eigene Update-Region gesetzt. Sie
-  // wegzuraeumen hiesse, dem Editor das Malen ueber seine Grenzen hinaus
-  // zu erlauben. SaveDC stellt sie unversehrt wieder her.
-  //
-  // Canvas.Refresh nach RestoreDC ist Pflicht: TCanvas cached seine
-  // selektierten GDI-Objekte, RestoreDC setzt den DC aber hinter seinem
-  // Ruecken zurueck. Ohne das Verwerfen des Cache malt der naechste
-  // Zugriff mit einem Handle, das im DC nicht mehr selektiert ist.
-  var DCSaved : Integer := SaveDC(Context.Canvas.Handle);
-  try
-    var CaretR : TRect := EditorCaretRect(FSavedEditorWnd);
-    if not CaretR.IsEmpty then
-      ExcludeClipRect(Context.Canvas.Handle,
-                      CaretR.Left, CaretR.Top, CaretR.Right, CaretR.Bottom);
-    PaintMarkDecorations(Context, CodeRect, Line, TextEndX);
-  finally
-    RestoreDC(Context.Canvas.Handle, DCSaved);
-    Context.Canvas.Refresh;
-  end;
+  PaintMarkDecorations(Context, CodeRect, Line, TextEndX);
 end;
 
 procedure TFindingEditorEvents.SweepEditedLines;
