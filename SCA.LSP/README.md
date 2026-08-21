@@ -1,4 +1,4 @@
-# SCA.LSP — LSP-Server, Inkrement 0 (Diagnostics-only)
+﻿# SCA.LSP — LSP-Server, Inkrement 0 (Diagnostics-only)
 
 Minimaler Language-Server-Protocol-Server als **vierter Consumer** der
 SCA-Engine-Facade `uEngineApi` (neben IDE-Plugin, CLI und Form-GUI).

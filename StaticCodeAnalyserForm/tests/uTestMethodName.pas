@@ -1,4 +1,4 @@
-unit uTestMethodName;
+﻿unit uTestMethodName;
 
 interface
 
@@ -31,6 +31,9 @@ type
     [Test] procedure MethodName_TestDirSegment_Suppressed;
     [Test] procedure MethodName_ProductionPath_StillReported;
     [Test] procedure MethodName_BareFileName_StillReported;
+    // Gate 6 (2026-08-21): ein Typ, der AUSNAHMSLOS camelCase benennt,
+    // spiegelt eine fremde API - dort ist der Name ein ABI-Schluessel.
+    [Test] procedure CamelTypeAmnesty_AndItsTwoBoundaries;
   end;
 
 implementation
@@ -466,6 +469,89 @@ begin
   finally F.Free; end;
 end;
 
+
+procedure TTestMethodName.CamelTypeAmnesty_AndItsTwoBoundaries;
+// Gate 6 und seine BEIDEN Grenzen in einem Vertrag.
+//
+// Warum in EINEM Test statt in dreien: TTestMethodName steht bei 20
+// Methoden, der Selfscan meldet ab 21 eine God-Klasse. Drei einzelne
+// Tests haetten die Fixture ueber die Grenze gehoben, und ein eigenes
+// Testmodul haette die Projektdateien angefasst - das war es nicht
+// wert. Die drei Faelle gehoeren ohnehin zusammen: die Ausnahme und
+// genau das, was sie begrenzt.
+var
+  F : TObjectList<TLeakFinding>;
+const
+  // 1) Der Firebird-OO-Fall: fuenf Methoden, alle camelCase. Wer hier
+  //    umbenennt, zerbricht die Bindung.
+  SRC_AMNESTIE =
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'type'#13#10+
+    '  IStatus = interface'#13#10+
+    '    procedure addRef;'#13#10+
+    '    procedure release;'#13#10+
+    '    function getInfo: Integer;'#13#10+
+    '    function getPerf: Integer;'#13#10+
+    '    procedure setOwner;'#13#10+
+    '  end;'#13#10+
+    'implementation'#13#10+
+    'end.';
+  // 2) Erste Grenze - und der Grund fuer 100 %% statt 80 %%: ein
+  //    EINZIGER PascalCase-Name zeigt, dass der Typ sich eben NICHT
+  //    festgelegt hat. Dann sind die kleinen Namen Nachlaessigkeit,
+  //    keine Bindung, und alle fuenf bleiben Funde.
+  SRC_EIN_PASCAL =
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'type'#13#10+
+    '  TSchlampig = class'#13#10+
+    '    procedure addRef;'#13#10+
+    '    procedure release;'#13#10+
+    '    function getInfo: Integer;'#13#10+
+    '    function getPerf: Integer;'#13#10+
+    '    procedure setOwner;'#13#10+
+    '    procedure DoWork;'#13#10+
+    '  end;'#13#10+
+    'implementation'#13#10+
+    'end.';
+  // 3) Zweite Grenze: unter fuenf Methoden ist camelCase noch keine
+  //    erkennbare Konvention, sondern koennte Zufall sein.
+  SRC_ZU_KLEIN =
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'type'#13#10+
+    '  TKlein = class'#13#10+
+    '    procedure addRef;'#13#10+
+    '    procedure release;'#13#10+
+    '  end;'#13#10+
+    'implementation'#13#10+
+    'end.';
+begin
+  F := TFindingHelper.FindingsOfFile(SRC_AMNESTIE);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMethodName),
+      'ein durchgehend camelCase benannter Typ ist eine Festlegung');
+  finally
+    F.Free;
+  end;
+
+  F := TFindingHelper.FindingsOfFile(SRC_EIN_PASCAL);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkMethodName) >= 5,
+      'ein einziger PascalCase-Name hebt die Amnestie auf');
+  finally
+    F.Free;
+  end;
+
+  F := TFindingHelper.FindingsOfFile(SRC_ZU_KLEIN);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkMethodName) >= 2,
+      'zwei camelCase-Methoden sind noch keine Konvention');
+  finally
+    F.Free;
+  end;
+end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestMethodName);
