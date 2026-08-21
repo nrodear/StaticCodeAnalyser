@@ -1,4 +1,4 @@
-unit uExportSonarGeneric;
+﻿unit uExportSonarGeneric;
 
 // SonarQube Generic Issue Format Writer.
 //
@@ -241,6 +241,48 @@ end;
 
 function BuildIssueObject(const F: TLeakFinding; const ARelPath: string;
   const M: TRuleMeta): TJSONObject;
+// WARUM HIER KEINE SEVERITY DES EINZELNEN FUNDES STEHT (Recherche
+// 2026-08-22, Engine-Quelltext geprueft) - bitte nicht "nachruesten":
+//
+// Ein Review hat zu Recht bemerkt, dass F.Severity hier nirgends gelesen
+// wird und die Laufzeit-Severity damit verlorengeht: Pfad-Ueberschreibungen
+// ("generierter Code zaehlt nur als Hinweis", uPathOverrides) und
+// konfidenzabhaengige Herabstufungen kommen in Sonar nicht an. Der
+// naheliegende Fix ist aber genau der eine, der alles kaputt macht:
+//
+//   * 'severity' und 'type' auf ISSUE-Ebene gibt es nur im deprecateten
+//     Alt-Format (das per Definition KEIN rules[] haben darf). Sobald ein
+//     rules[]-Array vorhanden ist - wie hier - ruft der Validator
+//     checkNoField() und wirft "Deprecated 'severity' field found in the
+//     following report". Das ist keine Warnung: der GESAMTE Report wird
+//     verworfen.
+//   * Einen 'impacts'-Block je Issue gibt es in KEINER Formatgeneration;
+//     das Datenmodell ExternalIssueReport.Issue kennt kein solches Feld.
+//   * Ein frei erfundenes Feld waere folgenlos: der Parser benutzt ein
+//     nacktes 'new Gson()' ohne Strict-Mode und ueberliest Unbekanntes -
+//     ungefaehrlich und wirkungslos.
+//   * ExternalIssueImporter.importIssue baut das Issue ausschliesslich aus
+//     dem REGEL-Objekt (severity/type/engineId von dort); aus dem Issue
+//     kommen nur effortMinutes und die Locations. Es gibt also gar keinen
+//     Pfad, ueber den eine Per-Fund-Severity ankommen koennte.
+//
+// Und der naheliegende Ausweg traegt ebenfalls nicht: SARIF verliert sie
+// beim Import genauso. RulesSeverityDetector sammelt die Ergebnisse zu
+// einer Map ruleId -> level mit "der Letzte gewinnt"; im MQR-Modus werden
+// die Per-Result-Level vollstaendig ignoriert. Die gesamte
+// External-Issue-Aufnahme von SonarQube ist regelbasiert.
+//
+// Wer die Herabstufung in Sonar wirklich sichtbar machen will, hat zwei
+// gangbare Wege, beide eine PRODUKTENTSCHEIDUNG und keine Fehlerbehebung:
+// entweder herabgestufte Funde gar nicht erst exportieren (einzeilig,
+// analog zum fkFileReadError-Ausschluss weiter unten - der Fund bleibt in
+// SARIF und HTML), oder je Severity-Auspraegung eine eigene ruleId
+// emittieren (regelkonform, externe Regeln stehen ohnehin in keinem
+// Quality Profile - aber der Fund wechselt dabei die Regel und Sonar
+// zaehlt ihn als geschlossen plus neu eroeffnet, was die New-Code-Periode
+// trifft; nur fuer STABILE Kriterien wie eine Pfadeigenschaft vertretbar,
+// nie fuer einen Konfidenzwert nahe der Schwelle).
+//
 // ARelPath statt ABaseDir: der Aufrufer hat MakeRelative ohnehin schon
 // gerufen, um Pfade ausserhalb der Wurzel zu zaehlen. Zweimal relativieren
 // hiesse zweimal TPath.GetFullPath pro Fund - genau die Arbeit, die P4
@@ -260,6 +302,10 @@ begin
   if Msg = '' then Msg := M.ShortDescription;
 
   Result := TJSONObject.Create;
+  // engineId je Issue ist im neuen Format erlaubt, aber WIRKUNGSLOS - der
+  // Importer nimmt rule.engineId. Bleibt stehen, weil es das Alt-Format
+  // verlangte und ein Entfernen die Ausgabe aendern wuerde, ohne etwas zu
+  // gewinnen.
   Result.AddPair('engineId', SONAR_ENGINE_ID);
   Result.AddPair('ruleId',   RuleID);
 
