@@ -2073,7 +2073,9 @@ begin
     begin
       if i > 0 then SB.Append(',');
       SB.Append(' "');
-      SB.Append(HtmlEscape(Top10Set[i])); // KindNames sind ASCII-Identifier, defensiv escapen
+      // T2: JS-Kontext, also JS-Escaping. KindNames sind ASCII, aber
+      // der Escaper richtet sich nach dem ZIEL, nicht nach der Quelle.
+      SB.Append(JsonForScript(Top10Set[i]));
       SB.Append('": 1');
     end;
     SB.AppendLine(' };');
@@ -2088,7 +2090,7 @@ begin
         var QfFlag : Integer;
         if TQuickFix.HasProviderFor(KindPairs[i].Key) then QfFlag := 1 else QfFlag := 0;
         SB.Append('      {n:"');
-        SB.Append(HtmlEscape(KindNm));
+        SB.Append(JsonForScript(KindNm));   // T2: JS-Kontext
         SB.Append('", c:');
         SB.Append(IntToStr(KindPairs[i].Value));
         SB.Append(', qf:');
@@ -2118,7 +2120,10 @@ begin
       for var K := Low(TFindingKind) to High(TFindingKind) do
         if not (K in PSet) then begin IsAll := False; Break; end;
       SB.Append('      "');
-      SB.Append(HtmlEscape(PName));
+      // T2: HIER war der scharfe Fall. Profilnamen kommen aus
+      // rules/sca-rules.json; HtmlEscape laesst den Backslash durch,
+      // und ein Profil 'win32\' beendete das Literal nicht mehr.
+      SB.Append(JsonForScript(PName));
       SB.Append('": {all:');
       if IsAll then SB.Append('true,') else SB.Append('false,');
       SB.Append(' kinds:{');
@@ -2130,7 +2135,7 @@ begin
           begin
             if not First then SB.Append(',');
             SB.Append('"');
-            SB.Append(HtmlEscape(KindName(K)));
+            SB.Append(JsonForScript(KindName(K)));   // T2: JS-Kontext
             SB.Append('":1');
             First := False;
           end;
@@ -2602,7 +2607,13 @@ begin
     SB.AppendLine('        }');
     SB.AppendLine('        if (params.rule && ruleSel) {');
     SB.AppendLine('          // Falls die Option noch nicht existiert (kind:X), erstellen.');
-    SB.AppendLine('          var opt = ruleSel.querySelector(''option[value="'' + params.rule + ''"]'');');
+    SB.AppendLine('          // T6: KEIN querySelector mit eingesetztem Wert - der Wert');
+    SB.AppendLine('          // kommt aus dem URL-Hash und ist beliebig. Ueber die options');
+    SB.AppendLine('          // laufen und value vergleichen laesst sich nicht injizieren.');
+    SB.AppendLine('          var opt = null;');
+    SB.AppendLine('          for (var oi = 0; oi < ruleSel.options.length; oi++)');
+    SB.AppendLine('            if (ruleSel.options[oi].value === params.rule)');
+    SB.AppendLine('              { opt = ruleSel.options[oi]; break; }');
     SB.AppendLine('          if (!opt && params.rule.indexOf(''kind:'') === 0) {');
     SB.AppendLine('            opt = document.createElement(''option'');');
     SB.AppendLine('            opt.value = params.rule;');
@@ -2612,11 +2623,23 @@ begin
     SB.AppendLine('          if (opt) ruleSel.value = params.rule;');
     SB.AppendLine('        }');
     SB.AppendLine('        if (params.file && fileSel) {');
-    SB.AppendLine('          var fopt = fileSel.querySelector(''option[value="'' + params.file.replace(/"/g, ''\\"'') + ''"]'');');
+    SB.AppendLine('          // T6: derselbe Weg wie bei params.rule. Der bisherige');
+    SB.AppendLine('          // Ersatz von '''' half gegen Anfuehrungszeichen, nicht gegen');
+    SB.AppendLine('          // Backslashes - Dateinamen unter Windows sind voll davon.');
+    SB.AppendLine('          var fopt = null;');
+    SB.AppendLine('          for (var fi = 0; fi < fileSel.options.length; fi++)');
+    SB.AppendLine('            if (fileSel.options[fi].value === params.file)');
+    SB.AppendLine('              { fopt = fileSel.options[fi]; break; }');
     SB.AppendLine('          if (fopt) fileSel.value = params.file;');
     SB.AppendLine('        }');
     SB.AppendLine('        if (params.q && searchInput) searchInput.value = params.q;');
     SB.AppendLine('        if (params.conf === ''1'' && confFilter) confFilter.checked = true; // #1');
+    SB.AppendLine('      } catch(e) {');
+    SB.AppendLine('        // T6: ein unbrauchbarer Teilen-Link darf hoechstens');
+    SB.AppendLine('        // bedeuten, dass KEIN Filter gesetzt wird. Vorher verliess');
+    SB.AppendLine('        // die Ausnahme loadFromUrlHash() und riss Sprache, Theme,');
+    SB.AppendLine('        // Tastaturbedienung und Baseline mit - die Seite stand still');
+    SB.AppendLine('        // auf Deutsch und hell da, ohne dass etwas darauf hinwies.');
     SB.AppendLine('      } finally {');
     SB.AppendLine('        suspendHashSync = false;');
     SB.AppendLine('      }');

@@ -86,7 +86,12 @@ __recovery/
 *.tvsconfig
 *.stat
 *.skincfg
+# ACHTUNG: "*.lsp" trifft auch VERZEICHNISNAMEN. Das Muster hat das
+# ganze Projekt SCA.LSP/ verschluckt - 6 Quelldateien, von git nie
+# gesehen. Die Ausnahme darunter holt das Verzeichnis zurueck;
+# echte .lsp-DATEIEN darin bleiben ignoriert.
 *.lsp
+!SCA.LSP/
 *.~bdsproj
 *.delphi.lsp.json
 *.delphilsp.json
