@@ -1,4 +1,4 @@
-unit uFindingFilter;
+﻿unit uFindingFilter;
 
 // Filter- und Sortier-Logik fuer die Befund-Liste der Analyser-UI.
 //
@@ -842,17 +842,22 @@ begin
       begin
         if KIND_META[K].DefaultSeverity <> Sev then Continue;
         Meta := TRuleCatalog.GetRule(K, CurrentLanguage);
-        // Label ERWEITERN, nicht ersetzen: der Kind-Token bleibt Teil
-        // des Eintrags, weil uFuzzyComboSearch gegen genau ihn tippt
-        // (und weil der Token die stabile Suchsprache aller Exporte
-        // ist). Der lokalisierte Klarname haengt dahinter - nur wenn
-        // er wirklich etwas sagt, das der Token nicht sagt.
+        // NUR Regel-ID und Kind-Token, kein beschreibender Text
+        // (Nutzerwunsch 2026-08-22): 'SCA056  DfmMasterDetailUnlinked'.
+        //
+        // Bis dahin haengte hier der lokalisierte Klarname des Katalogs
+        // hinterher ('... - Master-Detail without MasterFields'). Das
+        // blaeht jeden Eintrag der Liste auf eine Zeilenlaenge auf, die
+        // in eine Auswahlliste nicht passt, und der Zusatz sagt beim
+        // Ueberfliegen wenig: wer die Regel sucht, sucht nach ihrer
+        // Nummer oder ihrem Token. Die Volltexte stehen im Regelkatalog
+        // und im Hilfe-Panel, wo Platz dafuer ist.
+        //
+        // Der Kind-Token bleibt Pflichtbestandteil: uFuzzyComboSearch
+        // tippt gegen genau ihn, und er ist die stabile Suchsprache
+        // aller Exporte.
         if Meta.ID = '' then
           Lbl := KIND_META[K].Name    // Katalog-Fallback ohne ID
-        else if (Meta.Name <> '') and
-                not SameText(Meta.Name, KIND_META[K].Name) then
-          Lbl := Format('%s  %s - %s',
-            [Meta.ID, KIND_META[K].Name, Meta.Name])
         else
           Lbl := Meta.ID + '  ' + KIND_META[K].Name;
         Sorted.AddObject(Lbl, TObject(KIND_TAG_BASE + Ord(K)));
