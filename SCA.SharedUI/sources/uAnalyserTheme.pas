@@ -222,52 +222,47 @@ begin
   end;
 end;
 
+const
+  // Die Farbwahl IST eine Tabelle - also steht sie auch als eine da.
+  // Indizes: [Schema, Hintergrund dunkel, Severity].
+  //
+  // Vorher waren das ein aeusseres case ueber das Schema, zwei
+  // if BgIsDark und vier innere case ueber die Severity - 45 Zeilen
+  // Kontrollfluss fuer 16 Farbwerte. Der eigene Detektor hat das als
+  // CaseStatementSize gemeldet, zu Recht.
+  //
+  // Der eigentliche Gewinn ist aber nicht die Kuerze: der Compiler
+  // erzwingt jetzt VOLLSTAENDIGKEIT. Wer TFindingSeverity oder
+  // TEditorColorScheme erweitert, bekommt E2072 und muss eine Farbe
+  // waehlen. Die alte Fassung liess einen neuen Enum-Wert ueber ihr
+  // 'else' stillschweigend auf clNone laufen - unsichtbar, bis jemand
+  // den fehlenden Marker im Editor bemerkt.
+  //
+  // ecsDefault steht bewusst NICHT in der Tabelle: es ist
+  // theme-unabhaengig und delegiert an SeverityAccent.
+  // fsUnknown ist clNone - dieselbe Wahl wie im frueheren else-Zweig,
+  // hier nur sichtbar statt versteckt.
+  EDITOR_ACCENT : array[ecsGray..ecsSubtle, Boolean, TFindingSeverity] of TColor =
+  (
+    // ecsGray
+    ( { hell   } (clNone, GRAY_LIGHT_ERROR,   GRAY_LIGHT_WARNING,
+                  GRAY_LIGHT_HINT,   GRAY_LIGHT_FILEERROR),
+      { dunkel } (clNone, GRAY_DARK_ERROR,    GRAY_DARK_WARNING,
+                  GRAY_DARK_HINT,    GRAY_DARK_FILEERROR) ),
+    // ecsSubtle
+    ( { hell   } (clNone, SUBTLE_LIGHT_ERROR, SUBTLE_LIGHT_WARNING,
+                  SUBTLE_LIGHT_HINT, SUBTLE_LIGHT_FILEERROR),
+      { dunkel } (clNone, SUBTLE_DARK_ERROR,  SUBTLE_DARK_WARNING,
+                  SUBTLE_DARK_HINT,  SUBTLE_DARK_FILEERROR) )
+  );
+
 function EditorAccent(Severity: TFindingSeverity;
   Scheme: TEditorColorScheme; BgIsDark: Boolean): TColor;
 begin
-  case Scheme of
-    ecsGray:
-      if BgIsDark then
-        case Severity of
-          fsError:     Result := GRAY_DARK_ERROR;
-          fsWarning:   Result := GRAY_DARK_WARNING;
-          fsHint:      Result := GRAY_DARK_HINT;
-          fsFileError: Result := GRAY_DARK_FILEERROR;
-        else
-          Result := clNone;
-        end
-      else
-        case Severity of
-          fsError:     Result := GRAY_LIGHT_ERROR;
-          fsWarning:   Result := GRAY_LIGHT_WARNING;
-          fsHint:      Result := GRAY_LIGHT_HINT;
-          fsFileError: Result := GRAY_LIGHT_FILEERROR;
-        else
-          Result := clNone;
-        end;
-    ecsSubtle:
-      if BgIsDark then
-        case Severity of
-          fsError:     Result := SUBTLE_DARK_ERROR;
-          fsWarning:   Result := SUBTLE_DARK_WARNING;
-          fsHint:      Result := SUBTLE_DARK_HINT;
-          fsFileError: Result := SUBTLE_DARK_FILEERROR;
-        else
-          Result := clNone;
-        end
-      else
-        case Severity of
-          fsError:     Result := SUBTLE_LIGHT_ERROR;
-          fsWarning:   Result := SUBTLE_LIGHT_WARNING;
-          fsHint:      Result := SUBTLE_LIGHT_HINT;
-          fsFileError: Result := SUBTLE_LIGHT_FILEERROR;
-        else
-          Result := clNone;
-        end;
+  if Scheme = ecsDefault then
+    Result := SeverityAccent(Severity)   // theme-unabhaengig, s.o.
   else
-    // ecsDefault - Originalverhalten, theme-unabhaengig.
-    Result := SeverityAccent(Severity);
-  end;
+    Result := EDITOR_ACCENT[Scheme, BgIsDark, Severity];
 end;
 
 const
