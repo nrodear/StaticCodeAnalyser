@@ -13,6 +13,7 @@ Die Meldung des Compilers zeigt dabei immer auf den FALSCHEN Ort: auf
 die Aufrufstelle, nicht auf das veraltete Artefakt.
 
     python tools/stale_artifacts_check.py
+    python tools/stale_artifacts_check.py --clean-commands
 
 EXIT  0 alles aktueller als die Quelle | 1 veraltete Artefakte | 2 Fehler
 """
@@ -98,6 +99,44 @@ def main():
     if not stale:
         print('\nGRUEN: jedes DCP ist juenger als seine Quelle.')
         return 0
+
+    if '--clean-commands' in sys.argv:
+        # Zeigt die Loeschbefehle nur AN. Dieses Werkzeug fasst nichts
+        # an, was es nicht selbst gebaut hat - die Artefakte liegen in
+        # der Delphi-Installation des Nutzers.
+        print()
+        print('Veraltete Artefakte wegraeumen'
+              ' (nur angezeigt, nicht ausgefuehrt).')
+        print('Danach meldet der Compiler ein FEHLENDES Paket statt'
+              ' eines irrefuehrenden E2003:')
+        print()
+        by_label = dict((b, a) for a, b in STUDIOS)
+        seen, any_line = set(), False
+        # Nach IDE gruppiert: die D12-Zeilen betreffen eine LAUFENDE
+        # Installation. Wer sie mitloescht, legt sein installiertes
+        # D12-Plugin lahm, bis es neu gebaut ist.
+        for want in [lbl for _v, lbl in STUDIOS]:
+            block = []
+            for label, plat, name, art, src, who, bad in rows:
+                if not bad or label != want:
+                    continue
+                sub = '' if plat.startswith('(') else plat
+                for kind, exts in (('Dcp', ('.dcp', '.bpi', '.lib', '.a')),
+                                   ('Bpl', ('.bpl',))):
+                    for e in exts:
+                        f = os.path.join(PUBLIC, by_label[label], kind,
+                                         sub, name + e)
+                        if os.path.isfile(f) and f not in seen:
+                            seen.add(f)
+                            block.append('  del "%s"' % f)
+            if block:
+                any_line = True
+                print('  --- %s (Studio %s) ---'
+                      % (want, by_label[want]))
+                print(chr(10).join(block))
+                print()
+        if not any_line:
+            print('  (nichts gefunden)')
 
     print('\nROT: %d Artefakt(e) sind aelter als ihre Quelle.' % stale)
     print('Ein Paket, das darauf "requires", compiliert gegen den ALTEN')
