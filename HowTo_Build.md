@@ -335,6 +335,7 @@ code example: how the problem looks, and how the fix looks.
 | **Standalone crashes after a few seconds on a large project** | Stack-size patch not applied. Re-run `tools\patch-stack-size.ps1`. |
 | **EXE complains "file not found" on launch** | You moved the EXE out of its `Output\…` folder. Either put it back, or copy the `.dcu`/`.bpl` files with it. |
 | **"Cannot find SCA.Engine.bpl"** when the plugin loads | The plugin sees `SCA.Engine.bpl` via the Delphi-search path. Build `SCA.Engine` for the same platform (Win32) and configuration (Release). |
+| **Undeclared identifier for something that clearly exists in the source** | A package pulls that unit out of another package's **DCP**, not out of the source. If that DCP is older than the source, you compile against the old state and the compiler points at the call site, not at the stale file. Run `python tools\stale_artifacts_check.py`, then rebuild in the order `SCA.Engine` -> `SCA.SharedUI` -> plugin. |
 
 ---
 
