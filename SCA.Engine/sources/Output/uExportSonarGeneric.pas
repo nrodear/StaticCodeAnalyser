@@ -462,9 +462,11 @@ begin
   end;
 end;
 
+// noinspection BooleanParam
+// Durchgereichter Schalter, gleiche Begruendung wie an EmitRules.
 function EmitIssues(AStream: TStream;
   const AFindings: TObjectList<TLeakFinding>;
-  const ABaseDir: string): Integer;
+  const ABaseDir: string; AKeepDowngraded: Boolean): Integer;
 // issues[]. Liefert die Anzahl der Pfade, die ausserhalb von ABaseDir lagen
 // und deshalb absolut blieben.
 var
@@ -515,7 +517,8 @@ begin
   WStr(AStream, '{"rules":[');
   EmitRules(AStream, AFindings, AKeepDowngraded);
   WStr(AStream, '],"issues":[');
-  AOutsideBase := EmitIssues(AStream, AFindings, ABaseDir);
+  AOutsideBase := EmitIssues(AStream, AFindings, ABaseDir,
+                             AKeepDowngraded);
   WStr(AStream, ']}');
 end;
 
