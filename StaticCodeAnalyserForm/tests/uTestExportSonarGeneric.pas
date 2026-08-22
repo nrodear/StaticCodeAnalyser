@@ -447,9 +447,6 @@ begin
   end;
 end;
 
-initialization
-  TDUnitX.RegisterTestFixture(TTestExportSonarGeneric);
-
 procedure TTestExportSonarGeneric.DowngradedFinding_IsNotExported;
 // Der Kern der Entscheidung von 2026-08-22: Sonar kann keine Severity je
 // Fund. Ein herabgestufter Fund kaeme dort in voller Katalog-Schwere an und
@@ -532,5 +529,8 @@ begin
     Findings.Free;
   end;
 end;
+
+initialization
+  TDUnitX.RegisterTestFixture(TTestExportSonarGeneric);
 
 end.
