@@ -46,6 +46,58 @@ PACKAGES = (
 )
 
 
+def dproj_of(dpk_rel, gen):
+    """Die .dproj, die dieses Paket in der Generation gen baut."""
+    base = dpk_rel[:-4]
+    # Die IDE-/Plugin-Pakete tragen '.d12' im Dateinamen; das D13-Projekt
+    # heisst '...IDE.d13.dproj', nicht '...IDE.d12.d13.dproj'.
+    stamm = base[:-4] if base.endswith('.d12') else base
+    cands = ([stamm + '.d13.dproj'] if gen == 'D13'
+             else [base + '.dproj', stamm + '.d12.dproj'])
+    for c in cands:
+        if os.path.isfile(os.path.join(REPO, c)):
+            return c
+    return None
+
+
+def erwartete_plattformen(dpk_rel, gen):
+    """Welche Plattformen dieses Paket in dieser Generation bauen SOLL.
+
+    Ohne das zeigt die Tabelle nur, was da ist - und ein Paket, das nie
+    gebaut wurde, faellt einfach aus der Liste. Genau daran ist am
+    2026-08-22 eine ganze Abendrunde vorbeigelaufen.
+    """
+    d = dproj_of(dpk_rel, gen)
+    if not d:
+        return []
+    t = io.open(os.path.join(REPO, d), encoding='utf-8-sig').read()
+    out = []
+    for plat in ('Win32', 'Win64'):
+        m = re.search(r'<Platform value="%s">(\w+)</Platform>' % plat, t)
+        if m and m.group(1).lower() == 'true':
+            out.append(plat)
+    return out
+
+
+def pfad_kollision():
+    """Stehen Bpl-Ordner BEIDER Generationen im PATH?
+
+    dcc faellt bei der Aufloesung von 'requires' auf den PATH zurueck. Am
+    2026-08-22 hat ein D13-Bau darueber ein D12-Artefakt gegriffen und
+    F2141 'Falsches Dateiformat' gemeldet - mit einem Pfad, der in keiner
+    Suchpfad-Option des Compileraufrufs stand.
+    """
+    teile = [x for x in os.environ.get('PATH', '').split(os.pathsep)
+             if 'embarcadero' in x.lower() and x.lower().rstrip(os.sep)
+             .endswith(('bpl', 'win64', 'win32'))]
+    gefunden = {}
+    for ver, label in STUDIOS:
+        for t in teile:
+            if (os.sep + ver + os.sep) in t + os.sep:
+                gefunden.setdefault(label, []).append(t)
+    return gefunden
+
+
 def when(ts):
     return time.strftime('%Y-%m-%d %H:%M', time.localtime(ts))
 
@@ -66,7 +118,7 @@ def newest_source(dpk_rel):
 
 
 def main():
-    rows, stale = [], 0
+    rows, stale, fehlend = [], 0, 0
     for name, dpk in PACKAGES:
         if not os.path.isfile(os.path.join(REPO, dpk)):
             continue
@@ -75,15 +127,33 @@ def main():
             root = os.path.join(PUBLIC, ver)
             if not os.path.isdir(root):
                 continue
-            for plat in ('', 'Win32', 'Win64'):
-                dcp = os.path.join(root, 'Dcp', plat, name + '.dcp')
+            for plat in erwartete_plattformen(dpk, label):
+                sub = '' if plat == 'Win32' else plat
+                dcp = os.path.join(root, 'Dcp', sub, name + '.dcp')
                 if not os.path.isfile(dcp):
+                    # FEHLT ist eine eigene Kategorie. Wer nur zeigt, was
+                    # da ist, verschweigt genau das, wonach gesucht wird.
+                    fehlend += 1
+                    rows.append((label, plat, name, None, src_ts, src_who,
+                                 True))
                     continue
                 art = os.path.getmtime(dcp)
                 bad = art < src_ts
                 stale += bad
-                rows.append((label, plat or '(Win32-alt)', name, art,
-                             src_ts, src_who, bad))
+                rows.append((label, plat, name, art, src_ts, src_who, bad))
+
+    kol = pfad_kollision()
+    if len(kol) > 1:
+        print('WARNUNG: Bpl-Ordner BEIDER Generationen stehen im PATH.')
+        for label in sorted(kol):
+            for t in kol[label]:
+                print('   %-4s %s' % (label, t))
+        print('   dcc faellt bei der Aufloesung von "requires" auf den')
+        print('   PATH zurueck. Fehlt das DCP der eigenen Generation,')
+        print('   greift es das der anderen - Meldung dann F2141')
+        print('   "Falsches Dateiformat", mit einem Pfad, der in keiner')
+        print('   Suchpfad-Option des Compileraufrufs steht.')
+        print()
 
     if not rows:
         print('Keine gebauten Paket-Artefakte gefunden - nichts zu pruefen.')
@@ -92,11 +162,12 @@ def main():
     print('%-4s %-11s %-30s %-16s %-16s' %
           ('IDE', 'Plattform', 'Paket', 'DCP gebaut', 'Quelle zuletzt'))
     for label, plat, name, art, src, who, bad in rows:
+        zustand = 'FEHLT' if art is None else ('VERALTET' if bad else 'ok')
         print('%-4s %-11s %-30s %-16s %-16s %s'
-              % (label, plat, name, when(art), when(src),
-                 'VERALTET' if bad else 'ok'))
+              % (label, plat, name, '-' if art is None else when(art),
+                 when(src), zustand))
 
-    if not stale:
+    if not stale and not fehlend:
         print('\nGRUEN: jedes DCP ist juenger als seine Quelle.')
         return 0
 
@@ -138,7 +209,9 @@ def main():
         if not any_line:
             print('  (nichts gefunden)')
 
-    print('\nROT: %d Artefakt(e) sind aelter als ihre Quelle.' % stale)
+    print()
+    print('ROT: %d Artefakt(e) FEHLEN, %d sind aelter als die Quelle.'
+          % (fehlend, stale))
     print('Ein Paket, das darauf "requires", compiliert gegen den ALTEN')
     print('Stand - der Compiler meldet dann Fehler an der Aufrufstelle,')
     print('nicht am veralteten DCP. Betroffene Pakete neu bauen, in der')
