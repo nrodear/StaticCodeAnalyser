@@ -7,25 +7,25 @@
             <Dependencies/>
         </Projects>
         <Projects Include="SCA.SharedUI\SCA.SharedUI.d13.dproj">
-            <Dependencies/>
+            <Dependencies>SCA.Engine\SCA.Engine.d13.dproj</Dependencies>
         </Projects>
         <Projects Include="SCA.LSP\SCA.LSP.d13.dproj">
-            <Dependencies/>
+            <Dependencies>SCA.Engine\SCA.Engine.d13.dproj</Dependencies>
         </Projects>
         <Projects Include="SCA.CLI.Demo\SCA.CLI.Demo.d13.dproj">
-            <Dependencies/>
+            <Dependencies>SCA.Engine\SCA.Engine.d13.dproj</Dependencies>
         </Projects>
         <Projects Include="StaticCodeAnalyserForm\StaticCodeAnalyser.d13.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d13.dproj">
-            <Dependencies/>
+            <Dependencies>SCA.Engine\SCA.Engine.d13.dproj;SCA.SharedUI\SCA.SharedUI.d13.dproj</Dependencies>
         </Projects>
         <Projects Include="StaticCodeAnalyserIDE\StaticCodeAnalyser.Plugin.d13.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="StaticCodeAnalyserForm\tests\TestProject.d13.dproj">
-            <Dependencies/>
+            <Dependencies>SCA.Engine\SCA.Engine.d13.dproj;SCA.SharedUI\SCA.SharedUI.d13.dproj</Dependencies>
         </Projects>
     </ItemGroup>
     <ProjectExtensions>

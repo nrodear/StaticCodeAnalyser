@@ -118,6 +118,42 @@ def outputs(text):
     return set(re.findall(r'<DCC_(?:Exe|Dcu|Dcp|Bpl)Output>([^<]*)<', text))
 
 
+def declared_deps(group_text, proj):
+    """<Dependencies> eines Projekts in der Gruppe, als Menge von Pfaden."""
+    m = re.search(r'<Projects Include="%s">\s*<Dependencies(?:\s*/>|>(.*?)'
+                  r'</Dependencies>)' % re.escape(proj.replace(os.sep, BS)),
+                  group_text, re.S)
+    if not m or not m.group(1):
+        return set()
+    return {d.strip().replace(BS, os.sep)
+            for d in m.group(1).split(';') if d.strip()}
+
+
+def needed_deps(proj, text, by_name):
+    """Welche Schwesterprojekte dieses Projekt zum Bauen braucht.
+
+    Quelle sind die requires-Klausel der .dpk bzw. DCC_UsePackage, wenn
+    das Projekt Laufzeitpakete benutzt - also das, was der Compiler
+    tatsaechlich als DCP zieht.
+    """
+    need = set()
+    main = values(text, 'MainSource')
+    src = os.path.join(os.path.dirname(proj), main[0]) if main else None
+    words = set()
+    if src and os.path.isfile(os.path.join(REPO, src)):
+        body = read(src)
+        m = re.search(r'^requires(.*?);', body, re.S | re.M | re.I)
+        if m:
+            words |= {w.strip() for w in re.split(r'[,\s]+', m.group(1))}
+    if 'true' in [v.lower() for v in values(text, 'UsePackages')]:
+        for v in values(text, 'DCC_UsePackage'):
+            words |= {w.strip() for w in v.split(';')}
+    for w in words:
+        if w in by_name and by_name[w] != proj:
+            need.add(by_name[w])
+    return need
+
+
 def main():
     out = []
     dprojs = all_dprojs()
@@ -196,6 +232,27 @@ def main():
             if not os.path.isfile(os.path.join(REPO, p)):
                 out.append('%s nennt %s - die Datei gibt es nicht.'
                            % (GROUP13, p))
+        # 7 Bauordnung: was der Compiler als DCP zieht, muss als
+        #   Abhaengigkeit dranstehen. Ohne das baut die IDE ein Projekt
+        #   gegen ein VERALTETES DCP des Schwesterprojekts - am
+        #   2026-08-22 genau so passiert (E2003 auf zwei Funktionen, die
+        #   es in der Quelle laengst gab, im DCP von 11 Stunden vorher).
+        by_name = {}
+        for q in d13:
+            # <ProjectName> traegt eine Condition als Attribut - ein
+            # Muster ohne Attribut trifft nichts, und die Pruefung
+            # laeuft dann still ins Leere (beim ersten Versuch genau so).
+            n = re.findall(r'<ProjectName[^>]*>([^<]+)</ProjectName>',
+                           read(q))
+            if n:
+                by_name[n[0]] = q
+        for q in sorted(d13):
+            t = read(q)
+            missing = needed_deps(q, t, by_name) - declared_deps(g, q)
+            for miss in sorted(missing):
+                out.append('%s braucht %s, aber %s nennt es nicht unter '
+                           '<Dependencies> - die IDE baut dann gegen ein '
+                           'veraltetes DCP.' % (q, miss, GROUP13))
     else:
         out.append('%s fehlt.' % GROUP13)
 
