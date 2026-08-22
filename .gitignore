@@ -33,6 +33,13 @@ StaticCodeAnalyserForm/StaticCodeAnalyser.d12.res
 StaticCodeAnalyserForm/tests/TestProject.res
 StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.res
 StaticCodeAnalyserIDE/StaticCodeAnalyser.Plugin.d12.res
+SCA.LSP/SCA.LSP.res
+# Der D13-Projektsatz erzeugt dieselben .res noch einmal unter
+# eigenem Namen. Die Einzelaufzaehlung hat den Nachteil, dass jedes
+# neue Projekt sie erweitern muss - 2026-08-22 lagen deshalb zwei
+# generierte .res untracked im Baum. Deshalb ab hier ein Muster;
+# eingecheckt ist ohnehin keine einzige .res (git ls-files '*.res').
+*.d13.res
 
 # ---- Build-Output-Verzeichnisse ----
 # Delphi schreibt kompilierte Artefakte (DCU/BPL/EXE/DLL) typisch
@@ -221,3 +228,10 @@ tools/perf_analyse.md
 
 # Ausrangierte Arbeitsdateien (lokal, nie committen)
 _notneeded/
+
+# ---- Python-Bytecode der Gates (2026-08-22) ----
+# tools/*.py werden bei jedem Gate-Lauf importiert; der Cache gehoert
+# nicht ins Repo.
+tools/__pycache__/
+__pycache__/
+*.pyc
