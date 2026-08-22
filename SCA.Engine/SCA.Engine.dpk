@@ -1,5 +1,26 @@
 package SCA.Engine;
 
+// ---------------------------------------------------------------------
+// Paketsuffix fuer die Delphi-13-Schiene (2026-08-22)
+//
+// OHNE Suffix hiessen die BPLs beider IDE-Generationen gleich. Das faellt
+// im Dateisystem nicht auf, weil die Bpl-Ordner versionsspezifisch sind -
+// wohl aber beim Registrieren ("Known Packages") und beim Ausliefern: bis
+// heute lag im 37.0-Ordner eine Datei mit d12 im Namen.
+//
+// BEDINGT und NICHT '{$LIBSUFFIX AUTO}': AUTO haenge auch D12 einen Suffix
+// an, und daran haengen Installer, Registry-Eintraege und die
+// Entwicklerinstallation. D12 baut deshalb unveraendert weiter, nur D13
+// bekommt '370'.
+//
+// Die Bedingung prueft RTLVersion statt VERxxx: RTLVersion = 37.00 ist in
+// System.pas der D13-Installation nachgelesen, das Symbol VER370 dagegen
+// waere geraten gewesen - die installierte Edition (Starter) laesst kein
+// Kommandozeilen-Compilieren zu, mit dem man es haette pruefen koennen.
+{$IF RTLVersion >= 37}
+  {$LIBSUFFIX '370'}
+{$IFEND}
+
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}

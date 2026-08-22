@@ -91,6 +91,37 @@ You will switch the active project as needed below.
 
 ---
 
+### 3.1 Building with Delphi 13 instead of Delphi 12
+
+Delphi 13 has its own set of project files. Everything else on this page
+stays the same - only the file you open in step 3 changes:
+
+|                | Delphi 12                          | Delphi 13                          |
+|----------------|------------------------------------|------------------------------------|
+| Project group  | `StaticCodeAnalyser.d12.groupproj` | `StaticCodeAnalyser.d13.groupproj` |
+| Sub-projects   | `*.dproj`                          | `*.d13.dproj`                      |
+| Package name   | `SCA.Engine.bpl`                   | `SCA.Engine370.bpl`                |
+| Build output   | `Output\...`                       | `Output\d13\...`                   |
+
+Three things worth knowing:
+
+- **The source is shared.** Both groups compile the same `.dpk`/`.dpr`
+  files, so a unit you add appears in both. Only the compiler settings
+  exist twice, and `tools/dproj_d13_gate.py` checks that they stay
+  identical.
+- **The `370` suffix** is Delphi 13's own numbering - its own
+  `designide370.bpl` works the same way. It keeps the two generations
+  apart in "Known Packages" and in the BPL folder. Delphi 12 keeps
+  building without a suffix, so nothing about the D12 installation
+  changes.
+- **Delphi 13 ships two IDEs**: 32-bit (`binds.exe`) and 64-bit
+  (`bin64ds.exe`). A 64-bit IDE can only load a **Win64** package, so
+  the D13 projects default to Win64 and register under **Known Packages
+  x64**. For the 32-bit IDE, switch the platform to Win32 in the Project
+  Manager before building and use **Known Packages**.
+
+---
+
 ## 4. Build the standalone EXE
 
 The standalone is a plain `.exe`. You run it from the command line or

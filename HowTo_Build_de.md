@@ -94,6 +94,38 @@ Wir wechseln das aktive Projekt unten je nach Bedarf.
 
 ---
 
+### 3.1 Mit Delphi 13 statt Delphi 12 bauen
+
+Delphi 13 hat einen eigenen Satz Projektdateien. Alles andere auf dieser
+Seite bleibt gleich - nur die Datei aus Schritt 3 ist eine andere:
+
+|                | Delphi 12                          | Delphi 13                          |
+|----------------|------------------------------------|------------------------------------|
+| Projektgruppe  | `StaticCodeAnalyser.d12.groupproj` | `StaticCodeAnalyser.d13.groupproj` |
+| Teilprojekte   | `*.dproj`                          | `*.d13.dproj`                      |
+| Paketname      | `SCA.Engine.bpl`                   | `SCA.Engine370.bpl`                |
+| Ausgabe        | `Output\...`                       | `Output\d13\...`                   |
+
+Drei Dinge, die man wissen sollte:
+
+- **Der Quelltext ist geteilt.** Beide Gruppen compilieren dieselben
+  `.dpk`/`.dpr`-Dateien; eine neue Unit taucht also in beiden auf.
+  Doppelt vorhanden sind nur die Compilereinstellungen, und
+  `tools/dproj_d13_gate.py` prueft, dass die gleich bleiben.
+- **Das Suffix `370`** ist Delphi 13s eigene Nummerierung - dessen
+  `designide370.bpl` macht es genauso. Es haelt die beiden Generationen
+  in den "Known Packages" und im BPL-Ordner auseinander. Delphi 12 baut
+  weiterhin ohne Suffix, an der D12-Installation aendert sich also
+  nichts.
+- **Delphi 13 bringt zwei IDEs mit**: eine 32-Bit- (`binds.exe`) und
+  eine 64-Bit-IDE (`bin64ds.exe`). Eine 64-Bit-IDE kann nur ein
+  **Win64**-Paket laden; die D13-Projekte stehen deshalb auf Win64 und
+  werden unter **Known Packages x64** eingetragen. Fuer die 32-Bit-IDE
+  vor dem Bauen im Project Manager auf Win32 umstellen und **Known
+  Packages** benutzen.
+
+---
+
 ## 4. Die Standalone-EXE bauen
 
 Die Standalone ist eine einfache `.exe`. Du startest sie per
