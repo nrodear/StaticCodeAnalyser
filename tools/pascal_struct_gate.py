@@ -14,6 +14,8 @@ haben - nur mit Struktur:
            blind vor 'end.' angehaengt wurde.
   * E2065  [Test]-Methode deklariert, aber nicht implementiert (oder
            umgekehrt).
+  * E2026  {$IF RTLVersion >= NN} in einer .dpk - RTLVersion ist eine
+           Gleitkommakonstante und dort kein Konstantenausdruck.
 
 Hier kann nicht compiliert werden (nur der Nutzer baut, in der IDE). Dieses
 Skript ist der Ersatz fuer den Compiler bei genau diesen Klassen - es liest
@@ -166,7 +168,7 @@ def check_param_consistency(path, lines, out):
         # gilt als bekannt.
         known = set(re.findall(r'(\w+)\s*[:=]', sig))
         known |= set(re.findall(r'^\s*(\w+)\s*:', body, re.M))
-        for ident in sorted(set(re.findall(r'A[A-Z][a-z]\w*', body))):
+        for ident in sorted(set(re.findall(r'A[A-Z][a-z]\w*', body))):
             if ident in known:
                 continue
             out.append((path, head + 1,
@@ -208,6 +210,32 @@ def check_test_decl_impl(path, lines, out):
                                  'implementiert (E2065)' % m.group(1)))
 
 
+IF_VERSION = re.compile(r'\{\$IF[^}]*(RTLVersion|CompilerVersion)[^}]*\}',
+                        re.I)
+
+
+def check_dpk_version_if(path, lines, out):
+    """E2026: {$IF RTLVersion >= NN} in einer .dpk.
+
+    In einer .dpk bricht das ab - dcc64 meldet erst W1023 und dann
+    E2026 "Konstantenausdruck erwartet", weil RTLVersion eine
+    Gleitkommakonstante ist. Hier am 2026-08-22 gemessen, nicht
+    vermutet. Was traegt, ist das Versions-Symbol: {$IFDEF VER370}
+    (belegt in source/Indy10/System/IdCompilerDefines.inc der
+    D13-Installation, Ueberschrift "Delphi & CBuilder 13.0 Florence").
+    """
+    for i, line in enumerate(lines):
+        # Nur echten Code ansehen. Der Erklaerblock in genau diesen .dpk
+        # NENNT die falsche Form ("NICHT {$IF RTLVersion...}") - wer die
+        # ganze Zeile prueft, meldet den eigenen Warnhinweis als Fehler.
+        m = IF_VERSION.search(line.split('//')[0])
+        if m:
+            out.append((path, i + 1,
+                        '%s in einer Package-Datei: dcc meldet darauf E2026 '
+                        '"Konstantenausdruck erwartet" - stattdessen '
+                        '{$IFDEF VERxxx} benutzen.' % m.group(0)))
+
+
 def changed_files():
     try:
         o = subprocess.run(['git', 'diff', '--name-only', 'HEAD'], cwd=ROOT,
@@ -217,7 +245,8 @@ def changed_files():
     except Exception:
         return []
     names = (o.stdout + u.stdout).splitlines()
-    return [os.path.join(ROOT, n) for n in names if n.lower().endswith('.pas')]
+    return [os.path.join(ROOT, n) for n in names
+            if n.lower().endswith(('.pas', '.dpk', '.dpr'))]
 
 
 def main():
@@ -238,6 +267,9 @@ def main():
         except ValueError:
             # anderes Laufwerk (Windows) - dann eben der volle Pfad
             rel = path
+        if path.lower().endswith(('.dpk', '.dpr')):
+            check_dpk_version_if(rel, lines, out)
+            continue
         check_bodies_before_initialization(rel, lines, out)
         check_param_consistency(rel, lines, out)
         check_var_type_matches_create(rel, lines, out)
