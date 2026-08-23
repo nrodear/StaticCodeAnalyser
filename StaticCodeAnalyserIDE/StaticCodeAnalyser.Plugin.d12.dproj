@@ -64,10 +64,6 @@
     <PropertyGroup Condition="'$(Base_Win64)'!=''">
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;$(DCC_Namespace)</DCC_Namespace>
         <BT_BuildType>Debug</BT_BuildType>
-        <!-- Dieselbe Versionsinfo wie Win32. Die IDE legt den Block
-             mit FileVersion=1.0.0.0 an; eine so gebaute BPL weist
-             package-release.ps1 zu Recht zurueck, weil die
-             VERSIONINFO nicht zur Release-Version passt. -->
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_MajorVer>0</VerInfo_MajorVer>
         <VerInfo_MinorVer>9</VerInfo_MinorVer>
