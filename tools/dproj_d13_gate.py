@@ -236,6 +236,22 @@ def main():
                        'nach.' % p12)
 
         # 10 zentrale Ablage
+        # 10b Die Tiefe von $(SCARoot) muss zum Ablageort passen.
+        #     Ein relativer Pfad ist noetig, weil die Delphi-IDE
+        #     $(MSBuildThisFileDirectory) NICHT setzt - dort bricht
+        #     [MSBuild]::GetDirectoryNameOfFileAbove mit leerem Pfad ab.
+        #     Auf der Kommandozeile funktioniert die Funktion; gemessen
+        #     wurde zuerst nur dort, also im falschen Wirt (2026-08-23).
+        root = values(t13, 'SCARoot')
+        if root:
+            tiefe = p13.replace(os.sep, '/').count('/')
+            soll = BS.join(['..'] * tiefe) if tiefe else '.'
+            if root[0] != soll:
+                out.append('%s: <SCARoot> ist "%s", bei dieser Tiefe '
+                           'muss es "%s" sein - sonst landet die Ausgabe '
+                           'neben dem Repo statt darin.'
+                           % (p13, root[0], soll))
+
         for tag in ('SCAGen', 'SCARoot', 'SCAOut'):
             if not values(t13, tag):
                 out.append('%s definiert $(%s) nicht.' % (p13, tag))

@@ -21,7 +21,13 @@
         <SCAGen Condition="Exists('$(BDS)\bin\dcc32370.dll')">d13</SCAGen>
         <SCAGen Condition="Exists('$(BDS)\bin\dcc32290.dll')">d12</SCAGen>
         <SCAGen Condition="'$(SCAGen)'==''">UNBEKANNT-BDS</SCAGen>
-        <SCARoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)', 'SCA.repo-root'))</SCARoot>
+        <!-- Relativ, NICHT ueber [MSBuild]::GetDirectoryNameOfFileAbove:
+             die Delphi-IDE setzt $(MSBuildThisFileDirectory) nicht, die
+             Funktion bekommt dort einen leeren Pfad und bricht ab. Auf der
+             Kommandozeile funktioniert sie - gemessen wurde am 2026-08-23
+             zuerst nur dort, also im falschen Wirt. Die Tiefe prueft
+             tools/dproj_d13_gate.py gegen den Ablageort. -->
+        <SCARoot>..\..</SCARoot>
         <SCAOut>$(SCARoot)\lib\$(SCAGen)\$(Platform)\$(Config)</SCAOut>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
