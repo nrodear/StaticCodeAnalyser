@@ -244,6 +244,28 @@ if ((-not $SkipInstaller) -or (-not $SkipGetIt)) {
     throw ("Plugin-BPL VERSIONINFO ist '$bplVer', erwartet $Version.*. " +
            'VerInfo der Plugin-dproj nachziehen + neu bauen.')
   }
+
+  # Seit 2026-08-23 packt das Setup auch die Delphi-13-Schiene (BDS 37.0),
+  # Win32 und Win64 getrennt - die 64-bit-IDE laedt NIE eine 32-bit-BPL.
+  # Ohne diese Pruefung braeche erst ISCC ab, und zwar mit einer Meldung
+  # ueber einen fehlenden Quellpfad statt ueber ein nicht gebautes Projekt.
+  $bpl37 = 'C:\Users\Public\Documents\Embarcadero\Studio\37.0\Bpl'
+  $bplD13 = [ordered]@{
+    'D13 Win32' = Join-Path $bpl37 'StaticCodeAnalyser.Plugin.d12.bpl'
+    'D13 Win64' = Join-Path $bpl37 'Win64\StaticCodeAnalyser.Plugin.d12.bpl'
+  }
+  foreach ($k in $bplD13.Keys) {
+    $f = $bplD13[$k]
+    if (-not (Test-Path $f)) {
+      throw ("Monolith-BPL fuer $k fehlt: $f - " +
+             'StaticCodeAnalyser.Plugin.d12.dproj in Delphi 13 bauen ' +
+             '(Release, Win32 UND Win64).')
+    }
+    $v = (Get-Item $f).VersionInfo.FileVersion
+    if ($v -notmatch ('^' + [regex]::Escape($Version))) {
+      throw ("Plugin-BPL $k hat VERSIONINFO '$v', erwartet $Version.*.")
+    }
+  }
 }
 
 # ---- IDE-Plugin-Installer (Inno Setup, Monolith-BPL) -----------------------

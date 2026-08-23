@@ -103,6 +103,43 @@
   #endif
 #endif
 
+; --- Delphi 13 "Florence" = BDS 37.0 ------------------------------------------
+; Der Nummernsprung 23.0 -> 37.0 ist real, NIE ausrechnen.
+;
+; D13 bringt ZWEI IDEs mit, und das ist der Grund fuer die zweite Schiene:
+;   bin\bds.exe     32-bit  -> laedt nur Win32-BPLs, "Known Packages"
+;   bin64\bds.exe   64-bit  -> laedt nur Win64-BPLs, "Known Packages x64"
+; Am 2026-08-23 an der Installation gemessen: bin64\bds.exe vorhanden,
+; 5 designide-Dateien in bin64, 48 dcl*-BPLs, designide.dcp fuer win64.
+;
+; ZUM VERGLEICH, damit niemand denselben Irrtum wiederholt: Delphi 12 hat
+; KEINE 64-bit-IDE. Gleiche Messung unter 23.0: kein bin64\bds.exe, kein
+; designide in bin64, kein designide.dcp fuer win64, null dcl*-BPLs. Der
+; SCA_D12_X64-Block oben ist deshalb eine Vorwegnahme und bleibt
+; ausgeschaltet - er laesst sich hier weder bauen noch pruefen.
+#define SCA_D13
+#define SCA_D13_X64
+
+#ifdef SCA_D13
+  #define BDS37Key        "Software\Embarcadero\BDS\37.0"
+  #define KnownPackages37 BDS37Key + "\Known Packages"
+  #define DisabledPkgs37  BDS37Key + "\Disabled Packages"
+  ; Quellordner der D13-BPLs. Ein Projektsatz baut beide Generationen; die
+  ; Generation steckt im Zielordner der IDE, nicht im Dateinamen - deshalb
+  ; heisst die Monolith-BPL hier wie unter D12.
+  #ifndef SCABplSourceDirD13
+    #define SCABplSourceDirD13 "C:\Users\Public\Documents\Embarcadero\Studio\37.0\Bpl"
+  #endif
+#endif
+
+#ifdef SCA_D13_X64
+  #define KnownPackages37x64 BDS37Key + "\Known Packages x64"
+  #define DisabledPkgs37x64  BDS37Key + "\Disabled Packages x64"
+  #ifndef SCABplSourceDirD13X64
+    #define SCABplSourceDirD13X64 "C:\Users\Public\Documents\Embarcadero\Studio\37.0\Bpl\Win64"
+  #endif
+#endif
+
 [Setup]
 AppId={{7C1B3A52-9E44-4B7D-A0F3-5D2C8E6F1B90}
 AppName={#SCAAppName}
@@ -144,8 +181,8 @@ de.PrivacyNote=Dieses Setup und das Plugin bauen niemals Netzwerkverbindungen au
 en.PrivacyNote=This setup and the plugin never open network connections: no update check, no telemetry, no AI/LLM egress.
 de.IdeRunning=Die Delphi-12-IDE (bds.exe, BDS 23.0) scheint zu laufen. Bitte alle Delphi-12-Instanzen schliessen und das Setup erneut starten.
 en.IdeRunning=The Delphi 12 IDE (bds.exe, BDS 23.0) appears to be running. Please close all Delphi 12 instances and restart setup.
-de.NoDelphi12=Delphi 12 (BDS 23.0) wurde auf diesem System nicht gefunden. Das Plugin unterstuetzt Delphi 12.0-12.3 (32-bit-IDE); aeltere Versionen werden nicht unterstuetzt, Delphi 13 noch nicht. Das Setup wird beendet, es wird nichts installiert.
-en.NoDelphi12=Delphi 12 (BDS 23.0) was not found on this system. The plugin supports Delphi 12.0-12.3 (32-bit IDE); older versions are not supported, Delphi 13 not yet. Setup will close without installing anything.
+de.NoDelphi12=Es wurde weder Delphi 12 (BDS 23.0) noch Delphi 13 (BDS 37.0) auf diesem System gefunden. Das Plugin unterstuetzt Delphi 12.0-12.3 (32-bit-IDE) sowie Delphi 13 (32- und 64-bit-IDE); aeltere Versionen werden nicht unterstuetzt. Das Setup wird beendet, es wird nichts installiert.
+en.NoDelphi12=Neither Delphi 12 (BDS 23.0) nor Delphi 13 (BDS 37.0) was found on this system. The plugin supports Delphi 12.0-12.3 (32-bit IDE) and Delphi 13 (32-bit and 64-bit IDE); older versions are not supported. Setup will close without installing anything.
 de.DevBplWarn=In "Known Packages" (BDS 23.0) ist bereits eine Entwickler-Registrierung des Plugins mit anderem Pfad eingetragen:%n%n%1%n%nDer Eintrag wird durch die Installations-Registrierung ersetzt (Koexistenz-Schutz, verhindert Doppel-Laden).
 en.DevBplWarn=A developer registration of the plugin with a different path already exists in "Known Packages" (BDS 23.0):%n%n%1%n%nIt will be replaced by the installed registration (coexistence guard, prevents double loading).
 de.DonateBtn=PayPal-Spende
@@ -181,7 +218,8 @@ en.WelcomeLabel2=%nThis will install [name/ver] on your computer (current user o
 ; Release-Variante: EINE Monolith-BPL — loest laut Doku PATH-, Kollisions-,
 ; Koexistenz- und Portable-Problem gleichzeitig (requires nur IDE-eigene Pakete,
 ; die der Loader im bds.exe-Verzeichnis findet).
-Source: "{#SCABplSourceDir}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d12"; Flags: ignoreversion
+Source: "{#SCABplSourceDir}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d12"; \
+  Flags: ignoreversion; Check: IsDelphi12Installed
 #else
 ; Dev-3-BPL-Variante (aktueller Repo-Stand). WICHTIG (Doku-Lehre): der Windows-
 ; Loader loest requires per Modulname ueber bds.exe-Dir -> System32 -> PATH,
@@ -200,6 +238,21 @@ Source: "{#SCABplSourceDir}\{#SCAPluginBpl}";  DestDir: "{app}\bpl\d12"; Flags: 
 ; D12.3-64-bit-IDE: eigene Win64-BPL in eigenen Ordner (gleicher Dateiname,
 ; anderer Build - Quellordner ist der Win64-BPL-Standardordner).
 Source: "{#SCABplSourceDirX64}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d12x64"; Flags: ignoreversion
+#endif
+
+; --- D13-BPLs -----------------------------------------------------------------
+; Check: nur schreiben, wenn die jeweilige IDE wirklich da ist. Ohne das
+; landen Dateien und HKCU-Werte in einer toten BDS-Schiene - dieselbe
+; Ueberlegung wie bei IsDelphi12Installed.
+#ifdef SCA_D13
+Source: "{#SCABplSourceDirD13}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d13"; \
+  Flags: ignoreversion; Check: IsDelphi13Installed
+#endif
+#ifdef SCA_D13_X64
+; Die 64-bit-IDE laedt NIE eine 32-bit-BPL. Eigener Build, eigener Ordner,
+; gleicher Dateiname - unterschieden wird ueber den Pfad in der Registry.
+Source: "{#SCABplSourceDirD13X64}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d13x64"; \
+  Flags: ignoreversion; Check: IsDelphi13X64Available
 #endif
 
 ; --- Regelkatalog -------------------------------------------------------------
@@ -236,11 +289,26 @@ Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
 #endif
 Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
   ValueName: "{app}\bpl\d12\{#SCAPluginBpl}"; \
-  ValueData: "Static Code Analyser for Delphi (IDE-Plugin)"; Flags: uninsdeletevalue
+  ValueData: "Static Code Analyser for Delphi (IDE-Plugin)"; \
+  Flags: uninsdeletevalue; Check: IsDelphi12Installed
 #ifdef SCA_D12_X64
 Root: HKCU; Subkey: "{#KnownPackages23x64}"; ValueType: string; \
   ValueName: "{app}\bpl\d12x64\{#SCAPluginBpl}"; \
   ValueData: "Static Code Analyser for Delphi (IDE-Plugin, 64-bit IDE)"; Flags: uninsdeletevalue
+#endif
+
+; --- D13 (BDS 37.0) -----------------------------------------------------------
+#ifdef SCA_D13
+Root: HKCU; Subkey: "{#KnownPackages37}"; ValueType: string; \
+  ValueName: "{app}\bpl\d13\{#SCAPluginBpl}"; \
+  ValueData: "Static Code Analyser for Delphi (IDE-Plugin)"; \
+  Flags: uninsdeletevalue; Check: IsDelphi13Installed
+#endif
+#ifdef SCA_D13_X64
+Root: HKCU; Subkey: "{#KnownPackages37x64}"; ValueType: string; \
+  ValueName: "{app}\bpl\d13x64\{#SCAPluginBpl}"; \
+  ValueData: "Static Code Analyser for Delphi (IDE-Plugin, 64-bit IDE)"; \
+  Flags: uninsdeletevalue; Check: IsDelphi13X64Available
 #endif
 
 ; =============================================================================
@@ -295,6 +363,10 @@ Root: HKCU; Subkey: "{#KnownPackages23x64}"; ValueType: string; \
 const
   KNOWN_PACKAGES_23    = 'Software\Embarcadero\BDS\23.0\Known Packages';
   DISABLED_PACKAGES_23 = 'Software\Embarcadero\BDS\23.0\Disabled Packages';
+  KNOWN_PACKAGES_37    = 'Software\Embarcadero\BDS\37.0\Known Packages';
+  DISABLED_PACKAGES_37 = 'Software\Embarcadero\BDS\37.0\Disabled Packages';
+  KNOWN_PACKAGES_37X64 = 'Software\Embarcadero\BDS\37.0\Known Packages x64';
+  DISABLED_PKGS_37X64  = 'Software\Embarcadero\BDS\37.0\Disabled Packages x64';
   PLUGIN_BPL_NAME      = '{#SCAPluginBpl}';
 
 // Laeuft die Delphi-12-IDE? Erkennung ueber das IDE-Hauptfenster (Klasse
@@ -327,6 +399,49 @@ begin
          'Software\Embarcadero\BDS\23.0', 'RootDir', RootDir) then
       Exit;
   Result := FileExists(AddBackslash(RootDir) + 'bin\bds.exe');
+end;
+
+// Wurzelverzeichnis einer BDS-Generation, oder '' wenn sie nicht da ist.
+// Gleiche Suchreihenfolge und gleiche Begruendung wie oben.
+function BdsRootDir(const Version: string): string;
+begin
+  if not RegQueryStringValue(HKEY_CURRENT_USER,
+       'Software\Embarcadero\BDS\' + Version, 'RootDir', Result) then
+    if not RegQueryStringValue(HKEY_LOCAL_MACHINE,
+         'Software\Embarcadero\BDS\' + Version, 'RootDir', Result) then
+      Result := '';
+end;
+
+// Ist Delphi 13 (BDS 37.0) installiert? Wie bei D12 zaehlt nur eine real
+// vorhandene bin\bds.exe, nicht ein Registry-Leichnam.
+function IsDelphi13Installed: Boolean;
+var
+  RootDir: string;
+begin
+  RootDir := BdsRootDir('37.0');
+  Result := (RootDir <> '')
+        and FileExists(AddBackslash(RootDir) + 'bin\bds.exe');
+end;
+
+// Hat diese Delphi-13-Installation auch die 64-bit-IDE?
+// Sie ist eine eigene Datei (bin64\bds.exe) und kann fehlen - dann darf
+// keine Win64-BPL registriert werden, sonst scheitert jeder IDE-Start an
+// einem Paket, das niemand laden kann.
+// Delphi 12 hat diese Datei GAR NICHT; darum gibt es hier bewusst kein
+// Gegenstueck fuer 23.0 (2026-08-23 an beiden Installationen gemessen).
+function IsDelphi13X64Available: Boolean;
+var
+  RootDir: string;
+begin
+  RootDir := BdsRootDir('37.0');
+  Result := (RootDir <> '')
+        and FileExists(AddBackslash(RootDir) + 'bin64\bds.exe');
+end;
+
+// Mindestens eine unterstuetzte IDE?
+function IsAnySupportedIdeInstalled: Boolean;
+begin
+  Result := IsDelphi12Installed or IsDelphi13Installed;
 end;
 
 // Gehoert der BPL-Dateiname zur SCA-Familie? Im Monolith-Modus zaehlen
@@ -369,9 +484,11 @@ end;
 function InitializeSetup: Boolean;
 begin
   Result := True;
-  // Reihenfolge: erst "ist die unterstuetzte IDE da?", dann "laeuft sie?" -
+  // Reihenfolge: erst "ist eine unterstuetzte IDE da?", dann "laeuft sie?" -
   // die Nicht-installiert-Meldung ist die praezisere von beiden.
-  if not IsDelphi12Installed then
+  // Seit 2026-08-23 reicht D12 ODER D13; welche Schienen tatsaechlich
+  // beschrieben werden, entscheiden die Check:-Ausdruecke je Eintrag.
+  if not IsAnySupportedIdeInstalled then
   begin
     MsgBox(CustomMessage('NoDelphi12'), mbError, MB_OK);
     Result := False;
@@ -587,6 +704,7 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   InstalledPath: string;
+  InstalledPathD13: string;
 begin
   // usUninstall feuert VOR dem Loeschen der Dateien -> hier raeumen wir die
   // Registry-Werte explizit (Doku-Grundsatz "Registry vor Dateien"), auch wenn
@@ -597,6 +715,14 @@ begin
     InstalledPath := ExpandConstant('{app}\bpl\d12\') + PLUGIN_BPL_NAME;
     RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_23, InstalledPath);
     RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PACKAGES_23, InstalledPath);
+    // D13, beide IDE-Bitness-Schienen. Gurt und Hosentraeger neben
+    // uninsdeletevalue - loeschen, was nicht existiert, ist folgenlos.
+    InstalledPathD13 := ExpandConstant('{app}\bpl\d13\') + PLUGIN_BPL_NAME;
+    RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_37, InstalledPathD13);
+    RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PACKAGES_37, InstalledPathD13);
+    InstalledPathD13 := ExpandConstant('{app}\bpl\d13x64\') + PLUGIN_BPL_NAME;
+    RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_37X64, InstalledPathD13);
+    RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PKGS_37X64, InstalledPathD13);
 #ifdef SCA_D12_X64
     RegDeleteValue(HKEY_CURRENT_USER, '{#KnownPackages23x64}',
       ExpandConstant('{app}\bpl\d12x64\') + PLUGIN_BPL_NAME);
