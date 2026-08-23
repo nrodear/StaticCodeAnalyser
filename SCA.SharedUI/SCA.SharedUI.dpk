@@ -1,5 +1,32 @@
 package SCA.SharedUI;
 
+// ---------------------------------------------------------------------
+// Paketsuffix fuer die Delphi-13-Schiene (2026-08-22)
+//
+// OHNE Suffix hiessen die BPLs beider IDE-Generationen gleich. Das faellt
+// im Dateisystem nicht auf, weil die Bpl-Ordner versionsspezifisch sind -
+// wohl aber beim Registrieren ("Known Packages") und beim Ausliefern: bis
+// heute lag im 37.0-Ordner eine Datei mit d12 im Namen.
+//
+// BEDINGT und NICHT '{$LIBSUFFIX AUTO}': AUTO gaebe auch D12 einen Suffix,
+// und daran haengen Installer, Registry-Eintraege und die
+// Entwicklerinstallation. D12 baut deshalb unveraendert weiter, nur D13
+// bekommt '370'.
+//
+// NICHT '{$IF RTLVersion >= 37}': das faellt in einer .dpk auf die Nase -
+// dcc64 meldet W1023 und dann E2026 "Konstantenausdruck erwartet", weil
+// RTLVersion eine Gleitkommakonstante ist. Hier gemessen, nicht vermutet.
+//
+// VER370 ist belegt: das mit Delphi 13 ausgelieferte Indy prueft in
+// source/Indy10/System/IdCompilerDefines.inc darauf, unter der Ueberschrift
+// "Delphi & CBuilder 13.0 Florence".
+//
+// ACHTUNG bei der naechsten Delphi-Version: {$IFDEF} trifft genau eine.
+// Eine kuenftige D14 (VER380) bekaeme keinen Suffix und liefe damit gegen
+// die suffixlose D12-BPL. Dann hier eine Zeile ergaenzen.
+{$IFDEF VER370}
+  {$LIBSUFFIX '370'}
+{$ENDIF}
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}

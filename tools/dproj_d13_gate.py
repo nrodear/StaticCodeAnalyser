@@ -124,6 +124,23 @@ def outputs(text):
                           text))
 
 
+def ohne_kommentare(text):
+    """Zeilen- und Blockkommentare ausblenden.
+
+    Der Erklaerblock in genau diesen .dpk NENNT das Wort LIBSUFFIX -
+    wer den rohen Text prueft, haelt den Warnhinweis fuer die
+    Direktive. Dieselbe Falle wie im pascal_struct_gate, und ich bin
+    am 2026-08-23 ein zweites Mal hineingelaufen.
+    """
+    zeilen = []
+    for zeile in text.split(chr(10)):
+        code = zeile.split('//')[0]
+        # {$...} ist eine Direktive, { ... } ein Kommentar.
+        code = re.sub(r'\{(?!\$)[^}]*\}', ' ', code)
+        zeilen.append(code)
+    return chr(10).join(zeilen)
+
+
 def ist_package(text):
     return 'Package' in values(text, 'AppType')
 
@@ -222,6 +239,27 @@ def main():
         elif n13 and not n13[0].endswith('.d13'):
             out.append('%s: <ProjectName> "%s" endet nicht auf ".d13".'
                        % (p13, n13[0]))
+
+        # 8b Der Ausgabename muss zur Quelldatei passen, nicht zum
+        #    Dateinamen der .dproj. CodeGear.Delphi.Targets:95 setzt
+        #    OutputName standardmaessig auf $(MSBuildProjectName) - das
+        #    endet hier auf .d13, waehrend der Compiler nach der .dpk/.dpr
+        #    benennt. Am 2026-08-23 gemessen: die IDE suchte
+        #    SCA.Engine.d13370.bpl, dcc hatte SCA.Engine.bpl erzeugt.
+        soll_name = os.path.splitext(m13[0])[0] if m13 else None
+        ist_name = values(t13, 'OutputName')
+        if soll_name and (not ist_name or ist_name[0] != soll_name):
+            out.append('%s: <OutputName> muss "%s" sein (Basisname von %s), ist aber %s - sonst sucht die IDE eine Datei, die der Compiler nie erzeugt.' % (p13, soll_name, m13[0], ist_name or 'nicht gesetzt'))
+
+        # 9b Der Suffix entsteht NUR durch {$LIBSUFFIX} in der .dpk.
+        #    <DllSuffix> sagt MSBuild lediglich, welchen Namen es
+        #    erwarten soll. Fehlt eines von beiden, laufen Erwartung und
+        #    Wirklichkeit auseinander.
+        if ist_package(t13) and m13:
+            src = os.path.join(os.path.dirname(p13), m13[0])
+            if (os.path.isfile(os.path.join(REPO, src))
+                    and 'LIBSUFFIX' not in ohne_kommentare(read(src)).upper()):
+                out.append('%s erwartet einen Suffix ueber <DllSuffix>, aber %s traegt kein {$LIBSUFFIX} - der Compiler erzeugt dann eine BPL ohne Suffix.' % (p13, src))
 
         # 9 DllSuffix
         if ist_package(t13):

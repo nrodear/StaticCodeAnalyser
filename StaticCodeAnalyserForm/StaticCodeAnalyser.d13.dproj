@@ -78,6 +78,11 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
+        <!-- Ohne das waere der Ausgabename $(MSBuildProjectName),
+             also der DATEINAME dieser .dproj (…d13). Der Compiler
+             benennt aber nach der Quelldatei (StaticCodeAnalyser.d12.dpr). Die IDE suchte
+             danach eine BPL, die es nie gab. -->
+        <OutputName>StaticCodeAnalyser.d12</OutputName>
         <DCC_DcuOutput>$(SCAOut)\dcu\$(MSBuildProjectName)</DCC_DcuOutput>
         <DCC_ExeOutput>$(SCAOut)\bin</DCC_ExeOutput>
         <DCC_UnitSearchPath>sources;sources\Console;sources\UI;resources;..\SCA.SharedUI\sources;..\SCA.Engine\sources\Common;..\SCA.Engine\sources\Detectors;..\SCA.Engine\sources\Infrastructure;..\SCA.Engine\sources\Output;..\SCA.Engine\sources\Parsing;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>

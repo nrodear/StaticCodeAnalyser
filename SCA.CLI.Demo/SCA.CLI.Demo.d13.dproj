@@ -54,6 +54,11 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
+        <!-- Ohne das waere der Ausgabename $(MSBuildProjectName),
+             also der DATEINAME dieser .dproj (…d13). Der Compiler
+             benennt aber nach der Quelldatei (SCA.CLI.Demo.dpr). Die IDE suchte
+             danach eine BPL, die es nie gab. -->
+        <OutputName>SCA.CLI.Demo</OutputName>
         <DCC_UnitSearchPath>$(SCAOut)\dcp;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_DcuOutput>$(SCAOut)\dcu\$(MSBuildProjectName)</DCC_DcuOutput>
         <DCC_ExeOutput>$(SCAOut)\bin</DCC_ExeOutput>
