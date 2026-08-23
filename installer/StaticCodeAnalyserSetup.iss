@@ -298,6 +298,16 @@ Source: "{#SCARepoRoot}rules\sca-rules.json"; DestDir: "{app}\rules"; Flags: ign
 Source: "{#SCARepoRoot}rules\sca-rules.de.json"; DestDir: "{app}\rules"; Flags: ignoreversion
 Source: "{#SCARepoRoot}rules\sca-rules.fr.json"; DestDir: "{app}\rules"; Flags: ignoreversion
 
+[UninstallDelete]
+; Inno entfernt die installierten Dateien selbst. Die drei bpl-Ordner
+; koennen aber Reste tragen - etwa eine BPL aus einem frueheren Lauf, die
+; in diesem Lauf nicht mehr installiert wurde. Ohne diese Zeilen bliebe
+; {app} nach der Deinstallation als Geruest stehen.
+Type: filesandordirs; Name: "{app}\bpl\d12"
+Type: filesandordirs; Name: "{app}\bpl\d13"
+Type: filesandordirs; Name: "{app}\bpl\d13x64"
+Type: dirifempty;     Name: "{app}\bpl"
+
 [Icons]
 ; Sichtbarer Weg zum Deinstaller (Nutzerfrage 2026-08-15): den unins000.exe
 ; erzeugt Inno automatisch (+ Eintrag in Windows "Apps & Features"), aber ein
@@ -713,6 +723,41 @@ begin
   Btn.OnClick := @StarButtonClick;
 end;
 
+// Eine Variante restlos entfernen: Registrierung, Datei, Ordner.
+//
+// WOZU: Inno installiert eine abgewaehlte Komponente nicht - es entfernt
+// sie aber auch NICHT, wenn sie aus einem frueheren Lauf noch daliegt.
+// Wer das Setup erneut startet und eine Delphi-Version aushakt, haette
+// sonst weiterhin BPL und Registry-Eintrag: abgewaehlt waere nicht
+// deinstalliert, und die IDE wuerde das Plugin weiter laden.
+procedure EntferneVariante(const AOrdner, AKnownKey, ADisabledKey: string);
+var
+  Datei, Ordner: string;
+begin
+  Ordner := ExpandConstant('{app}\bpl\') + AOrdner;
+  Datei  := AddBackslash(Ordner) + PLUGIN_BPL_NAME;
+  // Registry zuerst, Datei danach - dieselbe Reihenfolge wie bei der
+  // Deinstallation. Eine registrierte, aber fehlende BPL laesst die IDE
+  // bei jedem Start scheitern.
+  RegDeleteValue(HKEY_CURRENT_USER, AKnownKey, Datei);
+  RegDeleteValue(HKEY_CURRENT_USER, ADisabledKey, Datei);
+  if FileExists(Datei) then
+    DeleteFile(Datei);
+  RemoveDir(Ordner);       // wirkt nur, wenn leer - genau so gewollt
+end;
+
+// Einen Disabled-Eintrag abraeumen. Hatte der Nutzer das Plugin frueher
+// per "Can't load package -> Nein" deaktiviert, blockiert der Eintrag
+// eine frische Installation stumm.
+procedure LoeseBlockade(const AOrdner, ADisabledKey: string);
+var
+  Datei: string;
+begin
+  Datei := ExpandConstant('{app}\bpl\' + AOrdner + '\') + PLUGIN_BPL_NAME;
+  if RegValueExists(HKEY_CURRENT_USER, ADisabledKey, Datei) then
+    RegDeleteValue(HKEY_CURRENT_USER, ADisabledKey, Datei);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   InstalledPath, N: string;
@@ -721,6 +766,14 @@ var
 begin
   if CurStep = ssPostInstall then
   begin
+    // 0) Abgewaehlte Varianten entfernen - siehe EntferneVariante.
+    if not WizardIsComponentSelected('d12') then
+      EntferneVariante('d12', KNOWN_PACKAGES_23, DISABLED_PACKAGES_23);
+    if not WizardIsComponentSelected('d13') then
+      EntferneVariante('d13', KNOWN_PACKAGES_37, DISABLED_PACKAGES_37);
+    if not WizardIsComponentSelected('d13x64') then
+      EntferneVariante('d13x64', KNOWN_PACKAGES_37X64, DISABLED_PKGS_37X64);
+
     InstalledPath := ExpandConstant('{app}\bpl\d12\') + PLUGIN_BPL_NAME;
 
     // 1) Koexistenz-Check: fremde (Dev-)Registrierungen derselben Plugin-BPL
@@ -744,6 +797,12 @@ begin
     //    stumm blockieren.
     if RegValueExists(HKEY_CURRENT_USER, DISABLED_PACKAGES_23, InstalledPath) then
       RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PACKAGES_23, InstalledPath);
+    // Dasselbe fuer die beiden D13-Schienen - bisher gab es das nur fuer
+    // D12, obwohl die IDE dort genauso deaktiviert.
+    if WizardIsComponentSelected('d13') then
+      LoeseBlockade('d13', DISABLED_PACKAGES_37);
+    if WizardIsComponentSelected('d13x64') then
+      LoeseBlockade('d13x64', DISABLED_PKGS_37X64);
   end;
 end;
 
