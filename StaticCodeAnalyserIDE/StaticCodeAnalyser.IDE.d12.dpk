@@ -1,5 +1,20 @@
 package StaticCodeAnalyser.IDE.d12;
 
+// ---------------------------------------------------------------------
+// Pakettyp (2026-08-23): das ist das Plugin des Dev-Satzes - es gehoert in die IDE.
+//
+// Ohne {$RUNONLY} bzw. {$DESIGNONLY} haelt die IDE ein Paket fuer
+// BEIDES und installiert es nach jedem Bau in sich selbst. Genau
+// daran ist Delphi 13 heute gescheitert: SCA.Engine und
+// SCA.SharedUI standen aus einem IDE-Bau in den Known Packages,
+// der Monolith kam per Setup daneben, und die IDE meldete
+// "enthaelt die Unit 'uLocalization', die auch im Package
+// 'SCA.Engine' enthalten ist".
+//
+// Die Angabe in der .dproj (<RuntimeOnlyPackage>) reicht NICHT -
+// sie ist nur der MSBuild-Spiegel. Massgeblich ist diese
+// Direktive. So machen es auch JCL und die GetIt-Plugins.
+{$DESIGNONLY}
 {$R *.res}
 // Branding-Resource (sca.png als RCDATA fuer Splash + About-Box):
 //   * <RcCompile Include="..\branding\sca_branding.rc"/> im .dproj triggert

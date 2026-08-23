@@ -507,13 +507,22 @@ end;
 // unserer BPL-Dateinamen enden, aber NICHT auf den Installationspfad zeigen.
 // Das sind Dev-/Alt-Registrierungen (z.B. Public-Documents-Bpl) —
 // Koexistenz-Gefahr: dieselbe Unit darf nicht doppelt laden.
-procedure CollectForeignPluginEntries(const InstalledPath: string; Entries: TStringList);
+// Fremde Registrierungen der SCA-Familie in EINEM Registry-Zweig sammeln.
+//
+// Der Zweig ist jetzt ein Parameter. Vorher stand hier fest
+// KNOWN_PACKAGES_23 - der Check sah also nur die D12-Schiene. Am
+// 2026-08-23 war die Folge: unter 37.0 waren SCA.Engine und SCA.SharedUI
+// aus einem IDE-Bau registriert, das Setup legte den Monolithen daneben,
+// und Delphi 13 verweigerte den Dienst mit "enthaelt die Unit
+// 'uLocalization', die auch im Package 'SCA.Engine' enthalten ist".
+procedure CollectForeignPluginEntries(const AKey, InstalledPath: string;
+  Entries: TStringList);
 var
   Names: TArrayOfString;
   I: Integer;
   N: string;
 begin
-  if RegGetValueNames(HKEY_CURRENT_USER, KNOWN_PACKAGES_23, Names) then
+  if RegGetValueNames(HKEY_CURRENT_USER, AKey, Names) then
     for I := 0 to GetArrayLength(Names) - 1 do
     begin
       N := Names[I];
@@ -727,6 +736,29 @@ begin
   Btn.OnClick := @StarButtonClick;
 end;
 
+// Fremde SCA-Registrierungen eines Zweigs entfernen und den Nutzer
+// darueber unterrichten. Stillschweigend loeschen waere hier falsch: es
+// ist SEINE Dev-Registrierung, die verschwindet.
+procedure RaeumeFremdeRegistrierungen(const AKey, AInstalledPath: string);
+var
+  Foreign: TStringList;
+  I: Integer;
+  N: string;
+begin
+  Foreign := TStringList.Create;
+  try
+    CollectForeignPluginEntries(AKey, AInstalledPath, Foreign);
+    for I := 0 to Foreign.Count - 1 do
+    begin
+      N := Foreign[I];
+      MsgBox(FmtMessage(CustomMessage('DevBplWarn'), [N]), mbInformation, MB_OK);
+      RegDeleteValue(HKEY_CURRENT_USER, AKey, N);
+    end;
+  finally
+    Foreign.Free;
+  end;
+end;
+
 // Eine Variante restlos entfernen: Registrierung, Datei, Ordner.
 //
 // WOZU: Inno installiert eine abgewaehlte Komponente nicht - es entfernt
@@ -780,20 +812,18 @@ begin
 
     InstalledPath := ExpandConstant('{app}\bpl\d12\') + PLUGIN_BPL_NAME;
 
-    // 1) Koexistenz-Check: fremde (Dev-)Registrierungen derselben Plugin-BPL
-    //    entfernen, damit die IDE die Package-Ident nicht doppelt laedt.
-    Foreign := TStringList.Create;
-    try
-      CollectForeignPluginEntries(InstalledPath, Foreign);
-      for I := 0 to Foreign.Count - 1 do
-      begin
-        N := Foreign[I];
-        MsgBox(FmtMessage(CustomMessage('DevBplWarn'), [N]), mbInformation, MB_OK);
-        RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_23, N);
-      end;
-    finally
-      Foreign.Free;
-    end;
+    // 1) Koexistenz-Check je Schiene, aber NUR fuer angehakte Komponenten.
+    //    Einen Registry-Zweig, den wir gar nicht bespielen, fasst das Setup
+    //    nicht an - dort darf der Nutzer seinen Dev-Satz behalten.
+    if WizardIsComponentSelected('d12') then
+      RaeumeFremdeRegistrierungen(KNOWN_PACKAGES_23,
+        ExpandConstant('{app}\bpl\d12\') + PLUGIN_BPL_NAME);
+    if WizardIsComponentSelected('d13') then
+      RaeumeFremdeRegistrierungen(KNOWN_PACKAGES_37,
+        ExpandConstant('{app}\bpl\d13\') + PLUGIN_BPL_NAME);
+    if WizardIsComponentSelected('d13x64') then
+      RaeumeFremdeRegistrierungen(KNOWN_PACKAGES_37X64,
+        ExpandConstant('{app}\bpl\d13x64\') + PLUGIN_BPL_NAME);
 
     // 2) Disabled-Packages-Bereinigung: hatte der User das Plugin frueher per
     //    "Can't load package -> Nein" deaktiviert (IDE-Selbstheilung), bliebe

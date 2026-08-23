@@ -1,5 +1,20 @@
 package SCA.SharedUI;
 
+// ---------------------------------------------------------------------
+// Pakettyp (2026-08-23): Laufzeitpaket: wird vom Plugin ueber requires geladen, registriert nichts.
+//
+// Ohne {$RUNONLY} bzw. {$DESIGNONLY} haelt die IDE ein Paket fuer
+// BEIDES und installiert es nach jedem Bau in sich selbst. Genau
+// daran ist Delphi 13 heute gescheitert: SCA.Engine und
+// SCA.SharedUI standen aus einem IDE-Bau in den Known Packages,
+// der Monolith kam per Setup daneben, und die IDE meldete
+// "enthaelt die Unit 'uLocalization', die auch im Package
+// 'SCA.Engine' enthalten ist".
+//
+// Die Angabe in der .dproj (<RuntimeOnlyPackage>) reicht NICHT -
+// sie ist nur der MSBuild-Spiegel. Massgeblich ist diese
+// Direktive. So machen es auch JCL und die GetIt-Plugins.
+{$RUNONLY}
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
