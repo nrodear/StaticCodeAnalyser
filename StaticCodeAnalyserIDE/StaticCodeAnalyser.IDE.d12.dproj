@@ -67,9 +67,9 @@
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_MajorVer>0</VerInfo_MajorVer>
         <VerInfo_MinorVer>9</VerInfo_MinorVer>
-        <VerInfo_Release>16</VerInfo_Release>
+        <VerInfo_Release>17</VerInfo_Release>
         <VerInfo_Build>0</VerInfo_Build>
-        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (IDE Plugin);FileVersion=0.9.16.0;InternalName=StaticCodeAnalyser.IDE;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.IDE.d12.bpl;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.16.0;Comments=Release 0.9.16 (2026-08-13)</VerInfo_Keys>
+        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (IDE Plugin);FileVersion=0.9.17.0;InternalName=StaticCodeAnalyser.IDE;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.IDE.d12.bpl;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.17.0;Comments=Release 0.9.17 (2026-08-23)</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <DCC_UsePackage>SCA.SharedUI;SCA.Engine;vcl;rtl;vclwinx;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>

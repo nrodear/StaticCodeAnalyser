@@ -31,7 +31,7 @@
 ; Ueberschreibbar per ISCC /DSCAVersion=x.y.z.0 - package-release.ps1 setzt
 ; die Version zentral, der Default hier dient nur dem Hand-Compile.
 #ifndef SCAVersion
-  #define SCAVersion    "0.9.16.0"
+  #define SCAVersion    "0.9.17.0"
 #endif
 #define SCAAppName      "Static Code Analyser for Delphi (IDE-Plugin)"
 #define SCAPublisher    "StaticCodeAnalyser"

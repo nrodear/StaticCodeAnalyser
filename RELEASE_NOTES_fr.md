@@ -1,4 +1,37 @@
-﻿# Release 0.9.16 — Un presse-papiers silencieux, des filtres honnêtes et un conseil en texte seul
+﻿# Release 0.9.17 — Delphi 13, un rapport qui s'affiche à nouveau, et un INI qui garde ses commentaires
+
+🇬🇧 [English version](RELEASE_NOTES.md) · 🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md)
+
+Notes de version complètes : [docs/releases/v0.9.17.md](docs/releases/v0.9.17.md)
+([deutsch](docs/releases/v0.9.17_de.md)).
+
+- **Delphi 13 est pris en charge**, IDE 32 et 64 bits. Delphi 13 est la
+  première version livrée avec un IDE 64 bits, et celui-ci ne charge
+  jamais un BPL 32 bits — il reçoit sa propre compilation dans son
+  propre dossier, enregistrée sous *Known Packages x64*. Rien n'est
+  écrit qui ne puisse être chargé : chaque entrée vérifie d'abord que
+  l'IDE est réellement installé. Delphi 12 reste en 32 bits — il n'a pas
+  d'IDE 64 bits et ne fournit `designide` qu'en Win32.
+- **Le rapport HTML s'affiche à nouveau sur les gros dépôts.** Il
+  demandait 8,4 Go sur le corpus de référence et échouait faute de
+  mémoire ; il en demande désormais 62 Mo. Deux autres défaillances
+  silencieuses de la même page sont corrigées avec.
+- **`analyser.ini` garde ses commentaires.** Un enregistrement dans la
+  boîte d'options effaçait jusqu'ici toute la documentation du fichier.
+  Quatre écrivains touchent ce fichier, pas un seul ; les quatre ont été
+  repris.
+- **Une ligne de résultat modifiée perd son marquage** — il n'est plus
+  posé sur un texte auquel il ne correspond plus. Un défaut d'affichage
+  de moins également : l'overlay dessinait dans l'éditeur depuis un
+  minuteur et produisait un second caret, à contresens.
+- **Export Sonar :** les résultats rétrogradés peuvent rester hors du
+  rapport.
+- **Encodage :** 743 fichiers portaient de l'UTF-8 sans BOM et étaient
+  lus comme de l'ANSI. Tous ont désormais un BOM, et un gate y veille.
+
+---
+
+# Vorher — Release 0.9.16 — Un presse-papiers silencieux, des filtres honnêtes et un conseil en texte seul
 
 🇬🇧 [English version](RELEASE_NOTES.md) · 🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md)
 

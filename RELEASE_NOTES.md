@@ -1,4 +1,34 @@
-﻿# Release 0.9.16 — A quiet clipboard, honest filters, and a text-only hint
+﻿# Release 0.9.17 — Delphi 13, a report that renders again, and an INI that keeps its comments
+
+🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
+
+Full release notes: [docs/releases/v0.9.17.md](docs/releases/v0.9.17.md)
+([deutsch](docs/releases/v0.9.17_de.md)).
+
+- **Delphi 13 is supported**, 32-bit and 64-bit IDE. Delphi 13 is the
+  first version to ship a 64-bit IDE, and it will never load a 32-bit
+  BPL - it gets its own build in its own folder, registered under
+  *Known Packages x64*. Nothing is written that cannot be loaded: every
+  entry checks first whether that IDE is really installed. Delphi 12
+  stays 32-bit - it has no 64-bit IDE and ships `designide` for Win32
+  only.
+- **The HTML report renders again on large code bases.** It needed
+  8.4 GB on the reference corpus and ran out of memory; it now needs
+  62 MB. Two further silent failures of the same page are fixed with it.
+- **`analyser.ini` keeps its comments.** Saving the options dialog used
+  to erase the file's entire documentation. Four writers touch that
+  file, not one; all four were changed.
+- **An edited finding line drops its marker** - it is no longer painted
+  over text it no longer matches. One display defect less, too: the
+  overlay drew into the editor from a timer and produced a second,
+  counter-moving caret.
+- **Sonar export:** downgraded findings can be kept out of the report.
+- **Encoding:** 743 files carried UTF-8 without a BOM and were read as
+  ANSI. All of them have a BOM now, and a gate keeps it that way.
+
+---
+
+# Vorher — Release 0.9.16 — A quiet clipboard, honest filters, and a text-only hint
 
 🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 

@@ -6,6 +6,37 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [0.9.17] - Delphi 13
+
+### Added
+- Delphi 13 support in the installer: three targets - `bpl\d12`
+  (Delphi 12, 32-bit), `bpl\d13` (Delphi 13, 32-bit) and `bpl\d13x64`
+  (Delphi 13, 64-bit IDE, registered under *Known Packages x64*).
+  Every file and registry entry is guarded by a check for that IDE, so
+  nothing is written into a branch that cannot load it.
+- Sonar export can keep downgraded findings out of the report.
+
+### Fixed
+- The HTML report needed 8.4 GB on the reference corpus and ran out of
+  memory; it now needs 62 MB. Two further silent failures of the same
+  page are fixed with it.
+- `analyser.ini` keeps its comments, ordering and commented-out
+  examples. Four writers touch that file; all four were changed.
+- Editing the line a finding sits on removes the marker instead of
+  leaving it over text it no longer matches.
+- The annotation overlay no longer paints from a timer, which was
+  producing a second, counter-moving caret.
+- 743 source and documentation files carried UTF-8 without a BOM and
+  were read as ANSI by the compiler, the IDE editor and PowerShell.
+- Rule selection in the UI shows rule ID and token only.
+
+### Notes
+- Delphi 12 remains 32-bit. It has no 64-bit IDE and ships `designide`
+  for Win32 only; a Win64 build of the plugin is not possible there and
+  now fails with a readable message instead of `E2202`.
+
+---
+
 ## [Unreleased] - A false-positive pass over the real-world corpus
 
 The first full false-positive audit of the rule set (all 142 active rules,

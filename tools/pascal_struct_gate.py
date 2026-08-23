@@ -5,9 +5,6 @@ WOZU: In dieser Sitzung sind drei Baufehler beim Nutzer gelandet, die alle
 maschinell erkennbar gewesen waeren, weil sie NICHTS mit Semantik zu tun
 haben - nur mit Struktur:
 
-  * E2003  Aufrufstelle auf einen neuen Parameter umgestellt, die
-           Signatur der Routine aber nicht (uSonarConfig.StoreToken,
-           uExportSonarGeneric.EmitIssues).
   * E2010  Create-Aufruf auf einen neuen Typ umgestellt, die
            Variablendeklaration darueber nicht.
   * E2070/E2029  Methodenrumpf hinter 'initialization' eingehaengt, weil
@@ -149,52 +146,106 @@ def routine_spans(lines, start, stop):
                ROUTINE_HEAD.match(lines[i]).group(1))
 
 
-def check_param_consistency(path, lines, out):
-    """E2003: Bezeichner im Rumpf benutzt, den die Signatur nicht kennt.
+# Auch ANONYME Methoden: 'procedure(const AFileName: string)' hat
+# keinen Namen, ihre Parameter sind im umgebenden Rumpf aber gueltig.
+# ---------------------------------------------------------------------
+# ENTFERNT am 2026-08-23: check_param_consistency
+#
+# Die Pruefung sollte E2003 abfangen ("Aufrufstelle auf einen neuen
+# Parameter umgestellt, Signatur nicht"). Sie suchte Bezeichner im
+# Projektstil A<GrossKlein>, die im Rumpf stehen, aber nicht in der
+# Signatur.
+#
+# Gemessen auf dem eigenen Repo: 121 Befunde in Quelltext, der
+# nachweislich uebersetzt - 91 in der Engine, 25 im IDE-Paket, 5 in
+# SharedUI. Zwei Ursachen liessen sich noch schliessen (fehlende
+# Wortgrenze, sodass "IOTAAboutBoxServices" als "AAboutBoxServices"
+# gelesen wurde; verschachtelte und anonyme Routinen, deren Parameter im
+# umgebenden Rumpf gueltig sind). Danach blieben immer noch 121 - Pascal
+# hat zu viele Wege, einen Bezeichner gueltig zu machen (with-Bloecke,
+# Methoden von Klassen im implementation-Teil, Record-Felder,
+# Unit-Variablen), als dass Textsuche das entscheiden koennte.
+#
+# Der Kopf dieser Datei sagt es selbst: ein Gate mit Fehlalarmen wird
+# ignoriert und ist damit schlechter als keins. Die drei verbleibenden
+# Pruefungen sind praezise und bleiben.
+#
+# Wer es neu versucht, braucht einen Parser, keinen regulaeren Ausdruck.
+# ---------------------------------------------------------------------
 
-    Sucht nur Bezeichner im Projektstil A<GrossKlein> - so heissen hier
-    Parameter. Arbeitet auf ENTRAUSCHTEM Text: ohne das meldet jedes
-    deutsche Grossbuchstabenwort aus einem Kommentar ("ALLEN", "ANDERES")
-    einen vergessenen Parameter. Beim ersten Versuch genau so passiert, und
-    ein Gate mit Fehlalarmen wird ignoriert - also schlechter als keins.
+
+KLASSENKOPF = re.compile(r'^\s*(T\w+)\s*=\s*class\s*\(\s*(T\w+)',
+                         re.M | re.I)
+_VORFAHREN = {}
+
+
+def vorfahren_index():
+    """{Klasse: Basisklasse} aus allen .pas des Repos.
+
+    Ohne Vererbung meldet die E2010-Pruefung jede Polymorphie als Fehler:
+    'Enc: TEncoding := TUTF8Encoding.Create' ist voellig richtig. Am
+    2026-08-23 waren genau solche Faelle die letzten zwei Fehlalarme.
     """
-    clean = strip_noise(NL.join(lines)).split(NL)
-    impl, init, fin = section_bounds(clean)
-    if impl < 0:
-        return
-    stop = init if init > 0 else (fin if fin > 0 else len(clean))
-    for head, sig, body, name in routine_spans(clean, impl, stop):
-        # Alles, was die Routine selbst deklariert (var/const/Parameter),
-        # gilt als bekannt.
-        known = set(re.findall(r'(\w+)\s*[:=]', sig))
-        known |= set(re.findall(r'^\s*(\w+)\s*:', body, re.M))
-        for ident in sorted(set(re.findall(r'A[A-Z][a-z]\w*', body))):
-            if ident in known:
+    if _VORFAHREN:
+        return _VORFAHREN
+    for base, _dirs, files in os.walk(ROOT):
+        if any(t in base.lower() for t in ('\\.git', '\\__history',
+                                           '\\output', '\\lib')):
+            continue
+        for f in files:
+            if not f.lower().endswith('.pas'):
                 continue
-            out.append((path, head + 1,
-                        '%s benutzt "%s", aber die Signatur kennt es nicht - '
-                        'Parameter beim Umstellen vergessen? (E2003)'
-                        % (name, ident)))
+            t = read(os.path.join(base, f))
+            if t:
+                for kind, ancestor in KLASSENKOPF.findall(t):
+                    _VORFAHREN.setdefault(kind, ancestor)
+    return _VORFAHREN
+
+
+def ist_nachfahre(kind, moeglicher_vorfahre):
+    """Kann ich BEWEISEN, dass kind von moeglicher_vorfahre abstammt?
+
+    Rueckgabe None heisst "unbekannt" - dann schweigt die Pruefung.
+    Klassen aus RTL/VCL stehen nicht im Repo und sind damit unbekannt;
+    lieber kein Befund als ein falscher.
+    """
+    idx = vorfahren_index()
+    if kind not in idx:
+        return None
+    gesehen = set()
+    while kind in idx and kind not in gesehen:
+        gesehen.add(kind)
+        kind = idx[kind]
+        if kind == moeglicher_vorfahre:
+            return True
+    return False
 
 
 def check_var_type_matches_create(path, lines, out):
-    """E2010: 'X := TFoo.Create' obwohl 'X : TBar' deklariert ist."""
-    text = '\n'.join(lines)
+    """E2010: 'X := TFoo.Create' obwohl 'X : TBar' deklariert ist.
+
+    Meldet nur, wenn die Ableitung im Repo AUFLOESBAR ist und TFoo
+    nachweislich kein TBar ist. Ist die Klasse unbekannt (RTL, VCL,
+    Fremdbibliothek), bleibt die Pruefung still.
+    """
     impl, init, fin = section_bounds(lines)
     if impl < 0:
         return
     stop = init if init > 0 else (fin if fin > 0 else len(lines))
     for head, sig, body, name in routine_spans(lines, impl, stop):
         decls = dict(re.findall(r'^\s*(\w+)\s*:\s*([\w<>., ]+?)\s*;',
-                                sig + '\n' + body, re.M))
+                                sig + NL + body, re.M))
         for var, typ in re.findall(r'^\s*(\w+)\s*:=\s*(T\w+)\.Create',
                                    body, re.M):
-            declared = decls.get(var)
-            if declared and declared.strip() != typ:
-                out.append((path, head + 1,
-                            '%s: "%s" ist als %s deklariert, bekommt aber '
-                            '%s.Create (E2010)'
-                            % (name, var, declared.strip(), typ)))
+            declared = (decls.get(var) or '').strip()
+            if not declared or declared == typ:
+                continue
+            if ist_nachfahre(typ, declared) is not False:
+                continue          # abgeleitet oder unbekannt -> schweigen
+            out.append((path, head + 1,
+                        '%s: "%s" ist als %s deklariert, bekommt aber '
+                        '%s.Create - und %s stammt nicht davon ab (E2010)'
+                        % (name, var, declared, typ, typ)))
 
 
 def check_test_decl_impl(path, lines, out):
@@ -271,7 +322,6 @@ def main():
             check_dpk_version_if(rel, lines, out)
             continue
         check_bodies_before_initialization(rel, lines, out)
-        check_param_consistency(rel, lines, out)
         check_var_type_matches_create(rel, lines, out)
         check_test_decl_impl(rel, lines, out)
 

@@ -1,4 +1,37 @@
-﻿# Release 0.9.16 — Eine stille Zwischenablage, ehrliche Filter und ein Nur-Text-Hinweis
+﻿# Release 0.9.17 — Delphi 13, ein Bericht der wieder aufgeht, und eine INI, die ihre Kommentare behält
+
+🇬🇧 [English version](RELEASE_NOTES.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
+
+Vollstaendige Release-Notes: [docs/releases/v0.9.17_de.md](docs/releases/v0.9.17_de.md)
+([english](docs/releases/v0.9.17.md)).
+
+- **Delphi 13 wird unterstuetzt**, 32- und 64-Bit-IDE. Delphi 13 bringt
+  erstmals eine 64-Bit-IDE mit, und die laedt grundsaetzlich keine
+  32-Bit-BPL - sie bekommt einen eigenen Build in einem eigenen Ordner,
+  registriert unter *Known Packages x64*. Geschrieben wird nur, was auch
+  geladen werden kann: jeder Eintrag prueft vorher, ob die IDE wirklich
+  installiert ist. Delphi 12 bleibt bei 32 Bit - es hat keine
+  64-Bit-IDE und liefert `designide` nur fuer Win32.
+- **Der HTML-Bericht geht auf grossen Bestaenden wieder auf.** Er
+  brauchte auf dem Referenzkorpus 8,4 GB und scheiterte am Speicher;
+  jetzt sind es 62 MB. Zwei weitere stille Totalausfaelle derselben
+  Seite sind mit behoben.
+- **`analyser.ini` behaelt ihre Kommentare.** Ein Speichern im
+  Options-Dialog loeschte bisher die komplette Dokumentation der Datei.
+  Betroffen waren vier Schreiber, nicht einer; alle vier sind
+  umgestellt.
+- **Eine bearbeitete Fundzeile verliert ihre Markierung** - sie wird
+  nicht mehr ueber Text gelegt, zu dem sie nicht mehr passt. Dazu ein
+  Darstellungsfehler weniger: das Overlay zeichnete aus einem Timer in
+  den Editor und erzeugte ein zweites, gegenlaeufiges Caret.
+- **Sonar-Export:** herabgestufte Funde bleiben auf Wunsch aus dem
+  Report.
+- **Kodierung:** 743 Dateien trugen UTF-8 ohne BOM und wurden als ANSI
+  gelesen. Alle haben jetzt ein BOM, ein Gate haelt das fest.
+
+---
+
+# Vorher — Release 0.9.16 — Eine stille Zwischenablage, ehrliche Filter und ein Nur-Text-Hinweis
 
 🇬🇧 [English version](RELEASE_NOTES.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 

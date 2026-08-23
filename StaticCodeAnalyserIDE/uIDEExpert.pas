@@ -38,6 +38,7 @@ implementation
 uses
   Winapi.Windows, System.SysUtils,
   Vcl.Graphics, Vcl.ImgList, Vcl.Controls, Vcl.Menus, Vcl.ActnList,
+  uSCAConsts,           // SCA_VERSION - eine Quelle fuer die Versionsnummer
   uUiElementRegistry,   // das Verzeichnis der UI-Elemente (SCA.SharedUI)
   uIDEAnalyseRunner,    // JoinAllBulkWorkers - Barriere vor dem Abbau (A.4)
   uIDEAnalyserForm,
@@ -47,7 +48,10 @@ const
   PLUGIN_TITLE   = 'Static Code Analysis';
   PLUGIN_DESC    = 'Static Code Analysis Tool for Delphi - findings, ' +
                    'metrics, leak detection, Sonar export.';
-  PLUGIN_VERSION = 'v0.9.16';
+  // Aus SCA_VERSION abgeleitet. Bis 2026-08-23 stand hier eine
+  // zweite, von Hand gepflegte Nummer - beim Release 0.9.17 war sie
+  // prompt die einzige Stelle, die haengengeblieben ist.
+  PLUGIN_VERSION = 'v' + SCA_VERSION;
   PLUGIN_LICENSE = 'Freeware / Open Source';
 
   // Resource-Namen aus branding\sca_branding.rc (BITMAP-Type).
