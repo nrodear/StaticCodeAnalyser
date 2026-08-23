@@ -75,6 +75,11 @@
         <DCC_DcpOutput>$(SCAOut)\dcp</DCC_DcpOutput>
         <DCC_HppOutput>$(SCAOut)\hpp</DCC_HppOutput>
         <DllSuffix>$(Auto)</DllSuffix>
+        <!-- requires nur rtl und xmlrtl - kein designide, registriert nichts in der IDE.
+             Ohne diese Angabe gilt das Paket als "design UND
+             runtime", und die IDE laedt es nach jedem Bau in
+             sich selbst. -->
+        <RuntimeOnlyPackage>true</RuntimeOnlyPackage>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
         <DCC_S>false</DCC_S>

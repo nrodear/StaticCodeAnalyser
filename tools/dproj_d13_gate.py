@@ -273,6 +273,24 @@ def main():
                        'Installer, Registry und Entwicklerinstallation '
                        'nach.' % p12)
 
+        # 9c Pakettyp deklarieren. Ohne <RuntimeOnlyPackage> oder
+        #    <DesignOnlyPackage> gilt ein Paket als 'design UND runtime',
+        #    und die IDE installiert es nach jedem Bau in sich selbst.
+        #    Bei einem reinen Laufzeitpaket ist das unnoetig, bei einer
+        #    Win64-BPL in der 32-Bit-IDE unmoeglich - Meldung dann
+        #    'Package X kann nicht geladen werden' NACH erfolgreichem
+        #    Compilerlauf (2026-08-23). Leitlinie von Uwe Raabe.
+        if ist_package(t13):
+            typen = [t for t in ('RuntimeOnlyPackage', 'DesignOnlyPackage')
+                     if 'true' in [v.lower() for v in values(t13, t)]]
+            if not typen:
+                out.append('%s deklariert weder <RuntimeOnlyPackage> noch '
+                           '<DesignOnlyPackage> - die IDE haelt es dann fuer '
+                           'beides und versucht, es nach dem Bauen zu laden.'
+                           % p13)
+            elif len(typen) > 1:
+                out.append('%s deklariert BEIDE Pakettypen.' % p13)
+
         # 10 zentrale Ablage
         # 10b Die Tiefe von $(SCARoot) muss zum Ablageort passen.
         #     Ein relativer Pfad ist noetig, weil die Delphi-IDE

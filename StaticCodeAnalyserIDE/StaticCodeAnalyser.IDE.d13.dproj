@@ -76,6 +76,11 @@
         <DCC_DcpOutput>$(SCAOut)\dcp</DCC_DcpOutput>
         <DCC_HppOutput>$(SCAOut)\hpp</DCC_HppOutput>
         <DllSuffix>$(Auto)</DllSuffix>
+        <!-- das ist das Plugin - es GEHOERT in die IDE.
+             Ohne diese Angabe gilt das Paket als "design UND
+             runtime", und die IDE laedt es nach jedem Bau in
+             sich selbst. -->
+        <DesignOnlyPackage>true</DesignOnlyPackage>
         <DCC_UnitSearchPath>$(SCAOut)\dcp;..\SCA.SharedUI\sources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>
