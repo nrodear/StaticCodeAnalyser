@@ -49,7 +49,12 @@ requires
   rtl,
   vcl,
   vclwinx,
-  designide,
+  // designide stand hier ohne Grund: keine der Units dieses Pakets
+  // benutzt eine designide-Unit (2026-08-23 geprueft, alle
+  // ToolsAPI-Erwaehnungen sind Kommentare, die das ausdruecklich
+  // ausschliessen). Die Zeile machte SCA.SharedUI zum Mischling aus
+  // Laufzeit- und Entwurfszeitpaket und verhinderte jeden
+  // Win64-Bau - designide gibt es unter D12 nur fuer Win32.
   SCA.Engine;
 
 contains

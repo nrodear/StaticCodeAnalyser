@@ -66,7 +66,7 @@
         <DCC_CBuilderOutput>All</DCC_CBuilderOutput>
         <SanitizedProjectName>SCA_SharedUI</SanitizedProjectName>
         <DCC_UnitSearchPath>sources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
-        <DCC_UsePackage>SCA.Engine;rtl;vcl;vclwinx;designide;$(DCC_UsePackage)</DCC_UsePackage>
+        <DCC_UsePackage>SCA.Engine;rtl;vcl;vclwinx;$(DCC_UsePackage)</DCC_UsePackage>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win32)'!=''">
         <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
