@@ -88,20 +88,23 @@
 #define KnownPackages23 BDS23Key + "\Known Packages"
 #define DisabledPkgs23  BDS23Key + "\Disabled Packages"
 
-; --- D12.3 64-bit-IDE (VORBEREITET, standardmaessig AUS) ---------------------
-; Aktivieren mit ISCC /DSCA_D12_X64, sobald (a) eine Win64-DESIGN-BPL des
-; Plugins gebaut ist (Plugin-dproj um die Win64-Plattform ergaenzen; braucht
-; die 64-bit-Designzeit-Pakete aus D12.3) und (b) der Registry-Schluessel am
-; Zielsystem VERIFIZIERT wurde. Merksaetze aus der D13-Recherche, die hier
-; analog gelten: 32-bit-BPL laedt NIE in der 64-bit-IDE; Registrierung der
-; 64-bit-IDE laeuft ueber "Known Packages x64"; Erkennung via Wert "App x64".
-#ifdef SCA_D12_X64
-  #define KnownPackages23x64 BDS23Key + "\Known Packages x64"
-  #define DisabledPkgs23x64  BDS23Key + "\Disabled Packages x64"
-  #ifndef SCABplSourceDirX64
-    #define SCABplSourceDirX64 "C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\Win64"
-  #endif
-#endif
+; --- KEINE 64-bit-Schiene fuer Delphi 12 -------------------------------------
+; Hier stand ein vorbereiteter SCA_D12_X64-Zweig. Er ist am 2026-08-23
+; entfernt worden, weil er nie funktionieren kann:
+;
+;   * Delphi 12 hat KEINE 64-bit-IDE. 23.0\bin64\bds.exe existiert nicht,
+;     in bin64 liegt keine einzige dcl*-BPL.
+;   * Ein Win64-Entwurfszeitpaket laesst sich dort auch nicht BAUEN:
+;     designide gibt es nur als 23.0\bin\designide290.bpl und
+;     23.0\lib\win32\{debug,release}\designide.dcp. Der Ordner
+;     23.0\lib\win64\release existiert und traegt 96 DCPs - designide ist
+;     keines davon, ToolsAPI.dcu fehlt ebenfalls.
+;
+; Der Versuch endet mit "E2202 Package 'designide' wird benoetigt, konnte
+; aber nicht gefunden werden". Die Plugin-dpk faengt das inzwischen mit
+; einer verstaendlichen {$MESSAGE FATAL}-Zeile ab.
+;
+; Fuer Delphi 13 gilt das Gegenteil - siehe den Block direkt darunter.
 
 ; --- Delphi 13 "Florence" = BDS 37.0 ------------------------------------------
 ; Der Nummernsprung 23.0 -> 37.0 ist real, NIE ausrechnen.
@@ -114,9 +117,9 @@
 ;
 ; ZUM VERGLEICH, damit niemand denselben Irrtum wiederholt: Delphi 12 hat
 ; KEINE 64-bit-IDE. Gleiche Messung unter 23.0: kein bin64\bds.exe, kein
-; designide in bin64, kein designide.dcp fuer win64, null dcl*-BPLs. Der
-; SCA_D12_X64-Block oben ist deshalb eine Vorwegnahme und bleibt
-; ausgeschaltet - er laesst sich hier weder bauen noch pruefen.
+; designide in bin64, kein designide.dcp fuer win64, null dcl*-BPLs.
+; Ein Gegenstueck fuer D12 gibt es deshalb nicht - der frueher
+; vorbereitete Zweig ist am selben Tag entfernt worden, siehe oben.
 #define SCA_D13
 #define SCA_D13_X64
 
@@ -234,11 +237,6 @@ Source: "{#SCABplSourceDir}\SCA.SharedUI.bpl"; DestDir: "{app}\bpl\d12"; Flags: 
 Source: "{#SCABplSourceDir}\{#SCAPluginBpl}";  DestDir: "{app}\bpl\d12"; Flags: ignoreversion
 #endif
 
-#ifdef SCA_D12_X64
-; D12.3-64-bit-IDE: eigene Win64-BPL in eigenen Ordner (gleicher Dateiname,
-; anderer Build - Quellordner ist der Win64-BPL-Standardordner).
-Source: "{#SCABplSourceDirX64}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d12x64"; Flags: ignoreversion
-#endif
 
 ; --- D13-BPLs -----------------------------------------------------------------
 ; Check: nur schreiben, wenn die jeweilige IDE wirklich da ist. Ohne das
@@ -291,11 +289,6 @@ Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
   ValueName: "{app}\bpl\d12\{#SCAPluginBpl}"; \
   ValueData: "Static Code Analyser for Delphi (IDE-Plugin)"; \
   Flags: uninsdeletevalue; Check: IsDelphi12Installed
-#ifdef SCA_D12_X64
-Root: HKCU; Subkey: "{#KnownPackages23x64}"; ValueType: string; \
-  ValueName: "{app}\bpl\d12x64\{#SCAPluginBpl}"; \
-  ValueData: "Static Code Analyser for Delphi (IDE-Plugin, 64-bit IDE)"; Flags: uninsdeletevalue
-#endif
 
 ; --- D13 (BDS 37.0) -----------------------------------------------------------
 #ifdef SCA_D13
@@ -723,12 +716,6 @@ begin
     InstalledPathD13 := ExpandConstant('{app}\bpl\d13x64\') + PLUGIN_BPL_NAME;
     RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_37X64, InstalledPathD13);
     RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PKGS_37X64, InstalledPathD13);
-#ifdef SCA_D12_X64
-    RegDeleteValue(HKEY_CURRENT_USER, '{#KnownPackages23x64}',
-      ExpandConstant('{app}\bpl\d12x64\') + PLUGIN_BPL_NAME);
-    RegDeleteValue(HKEY_CURRENT_USER, '{#DisabledPkgs23x64}',
-      ExpandConstant('{app}\bpl\d12x64\') + PLUGIN_BPL_NAME);
-#endif
 #ifndef SCA_MONOLITH
     RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_23,
       ExpandConstant('{app}\bpl\d12\SCA.Engine.bpl'));

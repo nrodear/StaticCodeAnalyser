@@ -1,5 +1,27 @@
 package StaticCodeAnalyser.Plugin.d12;
 
+// ---------------------------------------------------------------------
+// Win64 gibt es fuer dieses Paket erst ab Delphi 13.
+//
+// Delphi 12 liefert designide NUR fuer Win32 - am 2026-08-23 erschoepfend
+// gesucht: 23.0\bin\designide290.bpl und 23.0\lib\win32\{debug,release}\
+// designide.dcp, sonst nichts. Der Ordner 23.0\lib\win64\release
+// existiert und traegt 96 DCPs, designide ist keines davon; ToolsAPI.dcu
+// fehlt dort ebenfalls. Delphi 12 hat auch keine 64-Bit-IDE, die eine
+// solche BPL laden koennte (kein 23.0\bin64\bds.exe).
+//
+// Ohne diese Zeile meldet der Compiler "E2202 Package 'designide' wird
+// benoetigt, konnte aber nicht gefunden werden" - eine Meldung, die nicht
+// sagt, dass die Plattform das Problem ist.
+//
+// VER360 ist Delphi 12 (belegt in der Indy-Quelle der 23.0-Installation,
+// IdCompilerDefines.inc: "//Delphi & CBuilder 12" ueber {$IFDEF VER360}).
+// Bewusst NUR gegen VER360 geprueft, nicht gegen "alles ausser VER370":
+// eine kuenftige Delphi-Version soll nicht mit abgewiesen werden.
+{$IF Defined(WIN64) and Defined(VER360)}
+  {$MESSAGE FATAL 'Win64 gibt es fuer dieses Paket erst ab Delphi 13 - Delphi 12 liefert kein designide fuer Win64. Unter D12 bitte Win32 bauen.'}
+{$IFEND}
+
 {$R *.res}
 // Monolith-Release-Package (Installer P1 / GetIt, Konzept 2026-07-23 +
 // 2026-08-14): enthaelt ALLE Units von SCA.Engine + SCA.SharedUI +
