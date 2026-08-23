@@ -245,7 +245,7 @@ moteur :
 
 - `.dproj` : `UsePackages=true` et `DCC_UsePackage` contient `SCA.Engine;rtl`.
 - **Aucun** répertoire de sources du moteur dans `DCC_UnitSearchPath`.
-- À l'exécution, `SCA.Engine290.bpl` doit être trouvable (répertoire BPL
+- À l'exécution, `SCA.Engine.bpl` doit être trouvable (répertoire BPL
   global ou à côté de l'`.exe`).
 - `uses uEngineApi;` (+ `uMethodd12`, `uSCAConsts` pour l'accès au détail)
   — le tout depuis le package.

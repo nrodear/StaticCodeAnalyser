@@ -31,13 +31,13 @@ export) there is `TScanRequest.Init` + `TAnalysisSession.Run` and
 Order matters — the package must exist before the demo:
 
 1. Build `SCA.Engine.dproj` for the target platform (produces `SCA.Engine.dcp` +
-   `SCA.Engine290.bpl` in the global DCP/BPL directory).
+   `SCA.Engine.bpl` in the global DCP/BPL directory).
 2. Open and build `SCA.CLI.Demo.dproj` (console EXE, Win32 or Win64).
 
 Easiest: put both projects in one project group. The package linkage is via
 `DCC_UsePackage SCA.Engine` (no source paths).
 
-> At runtime `SCA.Engine290.bpl` must be findable (the global BPL directory is on
+> At runtime `SCA.Engine.bpl` must be findable (the global BPL directory is on
 > the path with RAD Studio installed; for standalone deployment ship the `.bpl`
 > next to the `.exe`).
 

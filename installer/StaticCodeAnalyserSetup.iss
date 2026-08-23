@@ -47,15 +47,15 @@
 #define SCAGitHubUrl    "https://github.com/nrodear/StaticCodeAnalyser"
 
 ; --- Quell-BPLs ---------------------------------------------------------------
-; RELEASE-ZIEL laut Konzept P1: Monolith-BPL "StaticCodeAnalyser.Plugin.d12290.bpl"
-; (requires nur rtl/vcl/vclwinx/designide/xmlrtl). Diese dpk EXISTIERT,
-; daneben gibt es den Dev-3-Package-Satz:
+; RELEASE-ZIEL laut Konzept P1: Monolith-BPL "StaticCodeAnalyser.Plugin.d12.bpl"
+; (requires nur rtl/vcl/vclwinx/designide/xmlrtl). Diese dpk existiert im Repo
+; NOCH NICHT — im Repo existiert aktuell nur der Dev-3-Package-Satz:
 ;   StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj
 ;     -> MainSource StaticCodeAnalyser.IDE.d12.dpk
-;     -> BPL:  StaticCodeAnalyser.IDE.d12290.bpl
+;     -> BPL:  StaticCodeAnalyser.IDE.d12.bpl
 ;     -> requires: rtl, vcl, vclwinx, designide, SCA.Engine, SCA.SharedUI
-;   SCA.Engine\SCA.Engine.dpk          -> SCA.Engine290.bpl
-;   SCA.SharedUI\SCA.SharedUI.dpk      -> SCA.SharedUI290.bpl
+;   SCA.Engine\SCA.Engine.dpk          -> SCA.Engine.bpl
+;   SCA.SharedUI\SCA.SharedUI.dpk      -> SCA.SharedUI.bpl
 ; Die dproj setzt KEIN DCC_BplOutput -> BPLs landen im D12-Standard-BPL-Ordner
 ; (C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl).
 ;
@@ -78,9 +78,9 @@
 #endif
 
 #ifdef SCA_MONOLITH
-  #define SCAPluginBpl "StaticCodeAnalyser.Plugin.d12290.bpl"
+  #define SCAPluginBpl "StaticCodeAnalyser.Plugin.d12.bpl"
 #else
-  #define SCAPluginBpl "StaticCodeAnalyser.IDE.d12290.bpl"
+  #define SCAPluginBpl "StaticCodeAnalyser.IDE.d12.bpl"
 #endif
 
 ; BDS-Registry-Schluessel D12 (HKCU):
@@ -191,8 +191,8 @@ Source: "{#SCABplSourceDir}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d12"; Flags: i
 ; Registry-Enumeration liefert die Werte pfad-alphabetisch, "...\SCA.*" kommt
 ; vor "...\StaticCodeAnalyser.*" — die Abhaengigkeiten sind also zuerst da.
 ; Das ist eine dokumentierte Uebergangsloesung bis zur Monolith-BPL (P1-Ziel).
-Source: "{#SCABplSourceDir}\SCA.Engine290.bpl";   DestDir: "{app}\bpl\d12"; Flags: ignoreversion
-Source: "{#SCABplSourceDir}\SCA.SharedUI290.bpl"; DestDir: "{app}\bpl\d12"; Flags: ignoreversion
+Source: "{#SCABplSourceDir}\SCA.Engine.bpl";   DestDir: "{app}\bpl\d12"; Flags: ignoreversion
+Source: "{#SCABplSourceDir}\SCA.SharedUI.bpl"; DestDir: "{app}\bpl\d12"; Flags: ignoreversion
 Source: "{#SCABplSourceDir}\{#SCAPluginBpl}";  DestDir: "{app}\bpl\d12"; Flags: ignoreversion
 #endif
 
@@ -228,10 +228,10 @@ Name: "{userprograms}\Static Code Analyser for Delphi\Uninstall Static Code Anal
 ; zusaetzlich raeumt CurUninstallStepChanged (usUninstall) als Gurt+Hosentraeger.
 #ifndef SCA_MONOLITH
 Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
-  ValueName: "{app}\bpl\d12\SCA.Engine290.bpl"; \
+  ValueName: "{app}\bpl\d12\SCA.Engine.bpl"; \
   ValueData: "Static Code Analyser - Engine"; Flags: uninsdeletevalue
 Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
-  ValueName: "{app}\bpl\d12\SCA.SharedUI290.bpl"; \
+  ValueName: "{app}\bpl\d12\SCA.SharedUI.bpl"; \
   ValueData: "Static Code Analyser - Shared UI"; Flags: uninsdeletevalue
 #endif
 Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
@@ -339,9 +339,9 @@ function IsScaFamilyBpl(const FileName: string): Boolean;
 begin
   Result := (CompareText(FileName, PLUGIN_BPL_NAME) = 0)
 #ifdef SCA_MONOLITH
-    or (CompareText(FileName, 'StaticCodeAnalyser.IDE.d12290.bpl') = 0)
-    or (CompareText(FileName, 'SCA.Engine290.bpl') = 0)
-    or (CompareText(FileName, 'SCA.SharedUI290.bpl') = 0)
+    or (CompareText(FileName, 'StaticCodeAnalyser.IDE.d12.bpl') = 0)
+    or (CompareText(FileName, 'SCA.Engine.bpl') = 0)
+    or (CompareText(FileName, 'SCA.SharedUI.bpl') = 0)
 #endif
   ;
 end;
@@ -605,13 +605,13 @@ begin
 #endif
 #ifndef SCA_MONOLITH
     RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_23,
-      ExpandConstant('{app}\bpl\d12\SCA.Engine290.bpl'));
+      ExpandConstant('{app}\bpl\d12\SCA.Engine.bpl'));
     RegDeleteValue(HKEY_CURRENT_USER, KNOWN_PACKAGES_23,
-      ExpandConstant('{app}\bpl\d12\SCA.SharedUI290.bpl'));
+      ExpandConstant('{app}\bpl\d12\SCA.SharedUI.bpl'));
     RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PACKAGES_23,
-      ExpandConstant('{app}\bpl\d12\SCA.Engine290.bpl'));
+      ExpandConstant('{app}\bpl\d12\SCA.Engine.bpl'));
     RegDeleteValue(HKEY_CURRENT_USER, DISABLED_PACKAGES_23,
-      ExpandConstant('{app}\bpl\d12\SCA.SharedUI290.bpl'));
+      ExpandConstant('{app}\bpl\d12\SCA.SharedUI.bpl'));
 #endif
   end;
 end;

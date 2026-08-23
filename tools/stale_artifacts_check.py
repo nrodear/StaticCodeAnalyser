@@ -47,16 +47,14 @@ PACKAGES = (
 
 
 def dproj_of(dpk_rel, gen):
-    """Die .dproj dieses Pakets.
-
-    Seit 2026-08-23 gibt es nur noch EINEN Projektsatz - er traegt
-    beide Generationen ueber {$LIBSUFFIX AUTO} und $(SCAGen). Der
-    Parameter gen bleibt in der Signatur, weil die Aufrufstelle je
-    Generation durchlaeuft; die Datei ist fuer beide dieselbe.
-    """
-    del gen
+    """Die .dproj, die dieses Paket in der Generation gen baut."""
     base = dpk_rel[:-4]
-    for c in (base + '.dproj', base + '.d12.dproj'):
+    # Die IDE-/Plugin-Pakete tragen '.d12' im Dateinamen; das D13-Projekt
+    # heisst '...IDE.d13.dproj', nicht '...IDE.d12.d13.dproj'.
+    stamm = base[:-4] if base.endswith('.d12') else base
+    cands = ([stamm + '.d13.dproj'] if gen == 'D13'
+             else [base + '.dproj', stamm + '.d12.dproj'])
+    for c in cands:
         if os.path.isfile(os.path.join(REPO, c)):
             return c
     return None

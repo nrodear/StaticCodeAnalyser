@@ -233,7 +233,7 @@ foreach ($sentinel in @('EXPORTS.md', 'docs/sonar-setup.md',
 # ---- Gemeinsame Voraussetzung Installer + GetIt: die Monolith-BPL ----------
 # Wachposten wie bei den EXEs: BPL-VERSIONINFO muss zur Release-Version
 # passen (faengt "vergessen zu bauen" ab).
-$bpl = 'C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyser.Plugin.d12290.bpl'
+$bpl = 'C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\StaticCodeAnalyser.Plugin.d12.bpl'
 if ((-not $SkipInstaller) -or (-not $SkipGetIt)) {
   if (-not (Test-Path $bpl)) {
     throw ("Monolith-BPL fehlt: $bpl - StaticCodeAnalyser.Plugin.d12.dproj " +
@@ -298,7 +298,7 @@ if (-not $SkipGetIt) {
   try {
     $lvl = [System.IO.Compression.CompressionLevel]::Optimal
     foreach ($pair in @(
-      @{ Src = $bpl;     Name = 'StaticCodeAnalyser.Plugin.d12290.bpl' },
+      @{ Src = $bpl;     Name = 'StaticCodeAnalyser.Plugin.d12.bpl' },
       @{ Src = $license; Name = 'LICENSE' },
       @{ Src = $logo;    Name = 'sca_logo_128.png' })) {
       [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
@@ -312,7 +312,7 @@ if (-not $SkipGetIt) {
   $za = [System.IO.Compression.ZipFile]::OpenRead($getitZip)
   try { $names = @($za.Entries | ForEach-Object { $_.FullName }) }
   finally { $za.Dispose() }
-  foreach ($sentinel in @('StaticCodeAnalyser.Plugin.d12290.bpl', 'LICENSE',
+  foreach ($sentinel in @('StaticCodeAnalyser.Plugin.d12.bpl', 'LICENSE',
                           'sca_logo_128.png')) {
     if ($names -notcontains $sentinel) {
       throw "getit-zip: $sentinel fehlt im Archiv. Abbruch."

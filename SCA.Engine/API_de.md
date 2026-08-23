@@ -240,7 +240,7 @@ Ein Fremd-Consumer braucht **nur das Package**, keine Engine-Quelltexte:
 
 - `.dproj`: `UsePackages=true` und `DCC_UsePackage` enthält `SCA.Engine;rtl`.
 - **Kein** Engine-Source-Verzeichnis im `DCC_UnitSearchPath`.
-- Zur Laufzeit muss `SCA.Engine290.bpl` auffindbar sein (globales BPL-Verzeichnis
+- Zur Laufzeit muss `SCA.Engine.bpl` auffindbar sein (globales BPL-Verzeichnis
   oder neben der `.exe`).
 - `uses uEngineApi;` (+ bei Detailzugriff `uMethodd12`, `uSCAConsts`) — alles aus
   dem Package.

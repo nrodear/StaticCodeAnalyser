@@ -1,23 +1,5 @@
 package SCA.SharedUI;
 
-// ---------------------------------------------------------------------
-// Paketsuffix und Pakettyp (2026-08-23)
-//
-// {$LIBSUFFIX AUTO} setzt die Paketversion der bauenden IDE ein:
-// 290 unter Delphi 12, 370 unter Delphi 13. Damit traegt EIN
-// Projektsatz beide Generationen - es gibt keinen zweiten
-// Dateisatz, keinen Namensunterschied zwischen .dproj und .dpk und
-// keine Fallunterscheidung im Quelltext.
-// Die .dproj spiegelt das mit <DllSuffix>$(Auto)</DllSuffix>; nur
-// dann erwartet die IDE denselben Namen, den der Compiler schreibt.
-//
-// Laufzeitpaket: wird vom IDE-Paket ueber requires geladen.
-// Ohne {$RUNONLY} bzw. {$DESIGNONLY} haelt die IDE ein Paket fuer
-// BEIDES und installiert es nach jedem Bau in sich selbst. Die
-// Angabe in der .dproj allein reicht nicht - am 2026-08-23
-// gemessen. So machen es auch JCL und die GetIt-Plugins.
-{$LIBSUFFIX AUTO}
-{$RUNONLY}
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
@@ -49,12 +31,7 @@ requires
   rtl,
   vcl,
   vclwinx,
-  // designide stand hier ohne Grund: keine der Units dieses Pakets
-  // benutzt eine designide-Unit (2026-08-23 geprueft, alle
-  // ToolsAPI-Erwaehnungen sind Kommentare, die das ausdruecklich
-  // ausschliessen). Die Zeile machte SCA.SharedUI zum Mischling aus
-  // Laufzeit- und Entwurfszeitpaket und verhinderte jeden
-  // Win64-Bau - designide gibt es unter D12 nur fuer Win32.
+  designide,
   SCA.Engine;
 
 contains

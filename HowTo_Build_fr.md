@@ -98,41 +98,6 @@ changerez de projet actif au fil des étapes ci-dessous.
 
 ---
 
-### 3.1 Compiler avec Delphi 13
-
-Il n'y a pas de second jeu de fichiers projet. Les mêmes projets se
-compilent sous Delphi 12 et Delphi 13 — **c'est l'IDE que vous lancez
-qui décide**, rien d'autre :
-
-|                  | Delphi 12                | Delphi 13                |
-|------------------|--------------------------|--------------------------|
-| Nom du paquet    | `SCA.Engine290.bpl`      | `SCA.Engine370.bpl`      |
-| Sortie DCU       | `lib\d12\<plat>\<config>` | `lib\d13\<plat>\<config>` |
-| DCP et BPL       | `…\Studio\23.0\…`        | `…\Studio\37.0\…`        |
-| Registre         | *Known Packages*         | *Known Packages x64* pour l'IDE 64 bits |
-
-Trois points à connaître :
-
-- **Le suffixe vient de `{$LIBSUFFIX AUTO}`** dans le `.dpk`. Delphi y
-  place sa propre version de paquet — `290` ou `370`. Le `.dproj` le
-  reflète avec `<DllSuffix>$(Auto)</DllSuffix>` afin que l'IDE attende
-  le nom que le compilateur écrit. Les deux sont nécessaires ; l'un
-  sans l'autre casse la compilation avec *« Package … ne peut pas être
-  chargé »*.
-- **Les DCU sont séparés par génération** via `$(SCAGen)`, déduit du
-  backend du compilateur de l'IDE en cours. Vous pouvez compiler le
-  même projet dans les deux IDE sans rien écraser.
-  `git clean -xfd lib` efface le tout.
-- **Delphi 13 fournit deux IDE** : 32 bits (`bin\bds.exe`) et 64 bits
-  (`bin64\bds.exe`). Un paquet de conception doit correspondre à la
-  bitness de l'IDE — Win32 pour l'IDE 32 bits, Win64 pour l'IDE 64 bits.
-
-L'ordre de compilation est impératif et n'est pas imposé par l'IDE :
-`SCA.Engine`, puis `SCA.SharedUI`, puis le plugin.
-`python tools\stale_artifacts_check.py` indique ce qui manque.
-
----
-
 ## 4. Compiler l'EXE autonome
 
 L'autonome est un simple `.exe`. Vous le lancez depuis la ligne de
@@ -232,9 +197,9 @@ pas encore pris en charge). Le plugin doit donc être en 32 bits.
 Vous avez maintenant trois fichiers `.bpl` dans
 `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\` :
 
-- `SCA.Engine290.bpl`
-- `SCA.SharedUI290.bpl`
-- `StaticCodeAnalyser.IDE.d12290.bpl`
+- `SCA.Engine.bpl`
+- `SCA.SharedUI.bpl`
+- `StaticCodeAnalyser.IDE.d12.bpl`
 
 ### 5.2 Dire à l'IDE de charger le plugin
 
@@ -243,7 +208,7 @@ Vous avez maintenant trois fichiers `.bpl` dans
 3. Cliquez sur **Add…**.
 4. Naviguez vers
    `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\`,
-   choisissez `StaticCodeAnalyser.IDE.d12290.bpl`, cliquez sur **Open**.
+   choisissez `StaticCodeAnalyser.IDE.d12.bpl`, cliquez sur **Open**.
 5. Assurez-vous que la case à côté est **cochée**.
 6. Cliquez sur **OK**.
 7. **Fermez et redémarrez Delphi.**
@@ -364,7 +329,7 @@ quoi ressemble la correction.
 | **L'entrée de menu du plugin manque après le redémarrage** | Mauvaise plateforme (vous avez compilé Win64 au lieu de Win32) ou mauvais chemin dans `Tools → Options → Packages`. |
 | **L'autonome plante après quelques secondes sur un gros projet** | Patch de taille de pile non appliqué. Relancez `tools\patch-stack-size.ps1`. |
 | **L'EXE se plaint « file not found » au lancement** | Vous avez déplacé l'EXE hors de son dossier `Output\…`. Remettez-le en place, ou copiez les fichiers `.dcu`/`.bpl` avec lui. |
-| **« Cannot find SCA.Engine290.bpl »** au chargement du plugin | Le plugin voit `SCA.Engine290.bpl` via le chemin de recherche Delphi. Compilez `SCA.Engine` pour la même plateforme (Win32) et la même configuration (Release). |
+| **« Cannot find SCA.Engine.bpl »** au chargement du plugin | Le plugin voit `SCA.Engine.bpl` via le chemin de recherche Delphi. Compilez `SCA.Engine` pour la même plateforme (Win32) et la même configuration (Release). |
 | **Identificateur non déclaré alors qu'il figure bien dans les sources** | Un paquet prend cette unité dans le **DCP** d'un autre paquet, pas dans les sources. Si ce DCP est plus ancien que les sources, vous compilez contre l'ancien état — et le compilateur désigne l'appel, pas le fichier périmé. Lancez `python tools\stale_artifacts_check.py`, puis recompilez dans l'ordre `SCA.Engine` -> `SCA.SharedUI` -> plugin. |
 
 ---

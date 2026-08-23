@@ -52,8 +52,8 @@ Win32-Library-Path adden.
 
 | Build-Target | Plattform | Voraussetzung |
 |---|---|---|
-| SCA.Engine290.bpl | Win32 + Win64 | rtl, nichts extern |
-| SCA.SharedUI290.bpl | **nur Win32** | rtl, vcl, designide (IDE-only) |
+| SCA.Engine.bpl | Win32 + Win64 | rtl, nichts extern |
+| SCA.SharedUI.bpl | **nur Win32** | rtl, vcl, designide (IDE-only) |
 | StaticCodeAnalyser.exe (Standalone) | Win32 + Win64 | nichts extern |
 | StaticCodeAnalyser.IDE.bpl | **nur Win32** | rtl, vcl, designide |
 | **TestProject.exe** | Win32 + Win64 | **DUnitX** + (Win32: TestInsight) |

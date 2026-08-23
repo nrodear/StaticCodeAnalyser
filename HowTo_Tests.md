@@ -51,8 +51,8 @@ If the GetIt entry is missing: search GitHub/Bitbucket for
 
 | Build target | Platform | Prerequisite |
 |---|---|---|
-| SCA.Engine290.bpl | Win32 + Win64 | rtl, nothing external |
-| SCA.SharedUI290.bpl | **Win32 only** | rtl, vcl, designide (IDE-only) |
+| SCA.Engine.bpl | Win32 + Win64 | rtl, nothing external |
+| SCA.SharedUI.bpl | **Win32 only** | rtl, vcl, designide (IDE-only) |
 | StaticCodeAnalyser.exe (standalone) | Win32 + Win64 | nothing external |
 | StaticCodeAnalyser.IDE.bpl | **Win32 only** | rtl, vcl, designide |
 | **TestProject.exe** | Win32 + Win64 | **DUnitX** + (Win32: TestInsight) |

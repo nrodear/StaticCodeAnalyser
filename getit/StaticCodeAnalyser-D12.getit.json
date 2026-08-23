@@ -22,10 +22,10 @@
 			"Type": "3",
 			"RequireElevation": "0",
 			"Parameter": [
-				{ "Parameter": "StaticCodeAnalyser.Plugin.d12290.bpl" }
+				{ "Parameter": "StaticCodeAnalyser.Plugin.d12.bpl" }
 			],
 			"ActionName": "InstallPackage",
-			"Description": "Install StaticCodeAnalyser.Plugin.d12290.bpl"
+			"Description": "Install StaticCodeAnalyser.Plugin.d12.bpl"
 		},
 		{
 			"Id": "2",
@@ -33,10 +33,10 @@
 			"Type": "5",
 			"RequireElevation": "0",
 			"Parameter": [
-				{ "Parameter": "StaticCodeAnalyser.Plugin.d12290.bpl" }
+				{ "Parameter": "StaticCodeAnalyser.Plugin.d12.bpl" }
 			],
 			"ActionName": "UninstallPackage",
-			"Description": "Uninstall StaticCodeAnalyser.Plugin.d12290.bpl"
+			"Description": "Uninstall StaticCodeAnalyser.Plugin.d12.bpl"
 		}
 	]
 }

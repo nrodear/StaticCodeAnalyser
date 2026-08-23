@@ -1,23 +1,5 @@
 package SCA.Engine;
 
-// ---------------------------------------------------------------------
-// Paketsuffix und Pakettyp (2026-08-23)
-//
-// {$LIBSUFFIX AUTO} setzt die Paketversion der bauenden IDE ein:
-// 290 unter Delphi 12, 370 unter Delphi 13. Damit traegt EIN
-// Projektsatz beide Generationen - es gibt keinen zweiten
-// Dateisatz, keinen Namensunterschied zwischen .dproj und .dpk und
-// keine Fallunterscheidung im Quelltext.
-// Die .dproj spiegelt das mit <DllSuffix>$(Auto)</DllSuffix>; nur
-// dann erwartet die IDE denselben Namen, den der Compiler schreibt.
-//
-// Laufzeitpaket: requires nur rtl und xmlrtl, registriert nichts in der IDE.
-// Ohne {$RUNONLY} bzw. {$DESIGNONLY} haelt die IDE ein Paket fuer
-// BEIDES und installiert es nach jedem Bau in sich selbst. Die
-// Angabe in der .dproj allein reicht nicht - am 2026-08-23
-// gemessen. So machen es auch JCL und die GetIt-Plugins.
-{$LIBSUFFIX AUTO}
-{$RUNONLY}
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}

@@ -11,21 +11,6 @@
         <AppType>Console</AppType>
         <MainSource>TestProject.dpr</MainSource>
     </PropertyGroup>
-    <PropertyGroup>
-        <!-- Generation aus dem Compiler-Backend der AKTIVEN IDE ableiten.
-             Nicht $(ProductVersion): die wird erst ueber
-             CodeGear.Delphi.Targets gesetzt, und das importiert diese Datei
-             ganz am Ende - lange nach den Ausgabepfaden.
-             Nicht [MSBuild]::GetDirectoryNameOfFileAbove: die Delphi-IDE
-             setzt $(MSBuildThisFileDirectory) nicht, dort bricht die
-             Funktion mit leerem Pfad ab. Beides am 2026-08-23 gemessen.
-             UNBEKANNT-BDS ist Absicht - ein unbrauchbares $(BDS) erzeugt
-             einen sichtbar falschen Ordner statt stiller Vermischung. -->
-        <SCAGen Condition="Exists('$(BDS)\bin\dcc32370.dll')">d13</SCAGen>
-        <SCAGen Condition="Exists('$(BDS)\bin\dcc32290.dll')">d12</SCAGen>
-        <SCAGen Condition="'$(SCAGen)'==''">UNBEKANNT-BDS</SCAGen>
-        <SCARoot>..\..</SCARoot>
-    </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
     </PropertyGroup>
@@ -56,7 +41,7 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_DcuOutput>$(SCARoot)\lib\$(SCAGen)\$(Platform)\$(Config)\dcu\$(MSBuildProjectName)</DCC_DcuOutput>
+        <DCC_DcuOutput>..\..\Output\Tests\$(Platform) $(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>..\..\Output\Tests\$(Platform) $(Config)</DCC_ExeOutput>
         <DCC_E>false</DCC_E>
         <DCC_N>false</DCC_N>

@@ -16,7 +16,7 @@ BPLs sind compiler-versionsgebunden — eine D12-BPL lädt NUR in BDS 23.0):
 | Delphi | BDS | IDE-Bitness | Plugin-BPL | Registry-Schlüssel (HKCU) | Setup-Stand |
 |---|---|---|---|---|---|
 | ≤ 11 Alexandria | ≤ 22.0 | 32-bit | — | — | **NICHT unterstützt** (bewusste Entscheidung: Editor-Integration nutzt die RAD-Studio-12-ToolsAPI; D11 im Konzept 2026-07-23 abgelehnt) |
-| 12.0–12.2 Athens | 23.0 | 32-bit | `StaticCodeAnalyser.Plugin.d12290.bpl` (Win32) | `...\BDS\23.0\Known Packages` | **UNTERSTÜTZT — aktueller Release-Weg** |
+| 12.0–12.2 Athens | 23.0 | 32-bit | `StaticCodeAnalyser.Plugin.d12.bpl` (Win32) | `...\BDS\23.0\Known Packages` | **UNTERSTÜTZT — aktueller Release-Weg** |
 | 12.3 Athens | 23.0 | 32-bit-IDE | dieselbe Win32-BPL | wie oben | **UNTERSTÜTZT** (die 32-bit-IDE von 12.3 ist identisch registriert) |
 | 12.3 Athens | 23.0 | **64-bit-IDE** | Win64-Design-BPL nötig (32-bit-BPL lädt NIE in der 64-bit-IDE) | `...\BDS\23.0\Known Packages x64` (VOR Aktivierung am Zielsystem verifizieren) | **VORBEREITET, AUS**: `.iss`-Zweig hinter `/DSCA_D12_X64`; blockiert bis eine Win64-BPL gebaut ist (Plugin-dproj um Win64 ergänzen, braucht die 64-bit-Designzeit-Pakete aus 12.3) |
 | 13 Florence | **37.0** (Nummernsprung!) | 32- **und** 64-bit | eigene d13/d13x64-BPLs (VER370, Suffix 370) | `...\BDS\37.0\Known Packages` bzw. `Known Packages x64`; 64-bit-Erkennung via Wert `App x64` | **GEBLOCKT** (kein D13 auf der Build-Maschine); Platzhalter im `.iss` auskommentiert |
@@ -59,9 +59,9 @@ Der Dev-3-Package-Satz, in dieser Reihenfolge in der IDE bauen (Release/Win32):
 
 | # | Projekt | dpk | erzeugte BPL |
 |---|---------|-----|--------------|
-| 1 | `SCA.Engine\SCA.Engine.dproj` | `SCA.Engine.dpk` | `SCA.Engine290.bpl` |
-| 2 | `SCA.SharedUI\SCA.SharedUI.dpk` | `SCA.SharedUI.dpk` | `SCA.SharedUI290.bpl` |
-| 3 | `StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj` | `StaticCodeAnalyser.IDE.d12.dpk` | `StaticCodeAnalyser.IDE.d12290.bpl` |
+| 1 | `SCA.Engine\SCA.Engine.dproj` | `SCA.Engine.dpk` | `SCA.Engine.bpl` |
+| 2 | `SCA.SharedUI\SCA.SharedUI.dpk` | `SCA.SharedUI.dpk` | `SCA.SharedUI.bpl` |
+| 3 | `StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj` | `StaticCodeAnalyser.IDE.d12.dpk` | `StaticCodeAnalyser.IDE.d12.bpl` |
 
 BPL-Ausgabeort: die dproj setzt **kein** `DCC_BplOutput` → die BPLs landen im
 D12-Standardordner `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl`
@@ -107,7 +107,7 @@ Optionen:
 :: abweichender BPL-Quellordner (z. B. dedizierter Release-Staging-Ordner):
 iscc /DSCABplSourceDir="D:\release\bpl" StaticCodeAnalyserSetup.iss
 
-:: Monolith-Variante, sobald StaticCodeAnalyser.Plugin.d12290.bpl existiert:
+:: Monolith-Variante, sobald StaticCodeAnalyser.Plugin.d12.bpl existiert:
 iscc /DSCA_MONOLITH StaticCodeAnalyserSetup.iss
 ```
 
@@ -157,7 +157,7 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
 | 7 | Silent-Install `StaticCodeAnalyserSetup-*.exe /VERYSILENT /NORESTART` | identisches Ergebnis wie #1; Exit-Code 0 |
 | 8 | Deinstallation (IDE zu) | Registry-Werte weg (Known + Disabled Packages), danach Dateien weg; IDE startet sauber ohne Fehlermeldung |
 | 9 | **Privacy-Netzwerk-Gate**: Install + IDE-Session unter Netzwerk-Monitor (z. B. lokale Firewall-Logs) | 0 ausgehende Verbindungen von Setup und Plugin |
-| 10 | Variante B: Registry-Ladereihenfolge | `SCA.Engine290.bpl`/`SCA.SharedUI290.bpl`-Eintraege vorhanden; IDE-Start ohne "Modul nicht gefunden"; falls doch: Monolith-Variante vorziehen (bekannte Grenze der Uebergangsloesung) |
+| 10 | Variante B: Registry-Ladereihenfolge | `SCA.Engine.bpl`/`SCA.SharedUI.bpl`-Eintraege vorhanden; IDE-Start ohne "Modul nicht gefunden"; falls doch: Monolith-Variante vorziehen (bekannte Grenze der Uebergangsloesung) |
 
 Manuelle Verifikation gehoert dem User am gebauten Plugin (Doku-Leitplanke:
 Plugin-Interaktion ist nicht headless verifizierbar).
