@@ -193,9 +193,13 @@ supprimé dans l'IDE reste supprimé en CI.
      propose un choix de langue allemand/anglais, affiche la page de
      licence MIT et crée une entrée de désinstallation dans le menu
      Démarrer.
-   - **Paquet local GetIt** : préparé mais **non fourni avec 0.9.17** — le
-     manifeste se trouve dans `getit/`, le paquet n'est pas attaché à la
-     release.
+   - **Paquet local GetIt** : télécharger l'asset de release
+     `StaticCodeAnalyser-v<V>-getit-manifest.zip`, le décompresser, puis dans
+     le GetIt Package Manager choisir **Load Local Package** (en bas de la
+     boîte de dialogue ; nécessite une Update Subscription active). La
+     charge utile `...-plugin-getit.zip` est récupérée par GetIt lui-même
+     via l'URL du manifeste — les deux sont attachés à la release. Cette
+     voie installe le plugin Delphi 12.
    - **Compilation maison** : ouvrir
      `StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dpk`,
      lancer **Build**, puis **Install** (clic droit sur le paquet dans le

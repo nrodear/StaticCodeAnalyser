@@ -191,8 +191,13 @@ kostenlos — ein im IDE unterdrückter Befund bleibt auch in CI unterdrückt.
      → Paket auswählen). Ohne den Install-Schritt bleibt das Plugin nur
      kompiliert, taucht aber nicht im Menü der IDE auf. Vollständige
      Anleitung in [HowTo_Build_de.md](HowTo_Build_de.md).
-   - **GetIt Local Package**: vorbereitet, aber **nicht Teil von 0.9.17** —
-     das Manifest liegt in `getit/`, das Paket hängt nicht am Release.
+   - **GetIt Local Package**: Release-Asset
+     `StaticCodeAnalyser-v<V>-getit-manifest.zip` herunterladen, entpacken,
+     dann im GetIt Package Manager unten **Load Local Package** wählen
+     (braucht eine aktive Update Subscription). Die Payload
+     `...-plugin-getit.zip` lädt GetIt selbst über die URL im Manifest —
+     beide hängen am Release. Dieser Weg installiert das
+     Delphi-12-Plugin.
 2. In Delphi: **Ansicht → Static Code Analysis Tool for Delphi** → dockbares Fenster erscheint
 3. Projektpfad wählen → **▶ Analyse** klicken
 
