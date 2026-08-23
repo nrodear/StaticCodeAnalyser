@@ -98,37 +98,6 @@ changerez de projet actif au fil des étapes ci-dessous.
 
 ---
 
-### 3.1 Compiler avec Delphi 13 au lieu de Delphi 12
-
-Delphi 13 possède son propre jeu de fichiers projet. Tout le reste de
-cette page est identique — seul le fichier ouvert à l'étape 3 change :
-
-|                | Delphi 12                          | Delphi 13                          |
-|----------------|------------------------------------|------------------------------------|
-| Groupe         | `StaticCodeAnalyser.d12.groupproj` | `StaticCodeAnalyser.d13.groupproj` |
-| Sous-projets   | `*.dproj`                          | `*.d13.dproj`                      |
-| Nom du paquet  | `SCA.Engine.bpl`                   | `SCA.Engine370.bpl`                |
-| Sortie         | `Output\...`                       | `Output\d13\...`                   |
-
-Trois points à connaître :
-
-- **Les sources sont partagées.** Les deux groupes compilent les mêmes
-  fichiers `.dpk`/`.dpr` : une unité ajoutée apparaît dans les deux.
-  Seuls les réglages du compilateur existent en double, et
-  `tools/dproj_d13_gate.py` vérifie qu'ils restent identiques.
-- **Le suffixe `370`** est la numérotation propre à Delphi 13 — son
-  `designide370.bpl` procède de même. Il sépare les deux générations
-  dans « Known Packages » et dans le dossier BPL. Delphi 12 continue de
-  compiler sans suffixe : rien ne change pour l'installation D12.
-- **Delphi 13 fournit deux IDE** : 32 bits (`binds.exe`) et 64 bits
-  (`bin64ds.exe`). Un IDE 64 bits ne peut charger qu'un paquet
-  **Win64** ; les projets D13 sont donc en Win64 et s'enregistrent sous
-  **Known Packages x64**. Pour l'IDE 32 bits, passez la plate-forme à
-  Win32 dans le Project Manager avant de compiler et utilisez **Known
-  Packages**.
-
----
-
 ## 4. Compiler l'EXE autonome
 
 L'autonome est un simple `.exe`. Vous le lancez depuis la ligne de

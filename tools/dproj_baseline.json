@@ -1,31 +1,15 @@
 {
-  "SCA.CLI.Demo/SCA.CLI.Demo.d13.dproj": {
-    "platform": "Win64",
-    "projectVersion": "20.3"
-  },
   "SCA.CLI.Demo/SCA.CLI.Demo.dproj": {
     "platform": "Win32",
     "projectVersion": "20.1"
-  },
-  "SCA.Engine/SCA.Engine.d13.dproj": {
-    "platform": "Win64",
-    "projectVersion": "20.3"
   },
   "SCA.Engine/SCA.Engine.dproj": {
     "platform": "Win32",
     "projectVersion": "20.1"
   },
-  "SCA.LSP/SCA.LSP.d13.dproj": {
-    "platform": "Win64",
-    "projectVersion": "20.3"
-  },
   "SCA.LSP/SCA.LSP.dproj": {
     "platform": "Win64",
     "projectVersion": "20.1"
-  },
-  "SCA.SharedUI/SCA.SharedUI.d13.dproj": {
-    "platform": "Win64",
-    "projectVersion": "20.3"
   },
   "SCA.SharedUI/SCA.SharedUI.dproj": {
     "platform": "Win32",
@@ -35,14 +19,6 @@
     "platform": "Win32",
     "projectVersion": "20.1"
   },
-  "StaticCodeAnalyserForm/StaticCodeAnalyser.d13.dproj": {
-    "platform": "Win64",
-    "projectVersion": "20.3"
-  },
-  "StaticCodeAnalyserForm/tests/TestProject.d13.dproj": {
-    "platform": "Win64",
-    "projectVersion": "20.3"
-  },
   "StaticCodeAnalyserForm/tests/TestProject.dproj": {
     "platform": "Win32",
     "projectVersion": "20.3"
@@ -51,16 +27,8 @@
     "platform": "Win32",
     "projectVersion": "20.1"
   },
-  "StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d13.dproj": {
-    "platform": "Win64",
-    "projectVersion": "20.3"
-  },
   "StaticCodeAnalyserIDE/StaticCodeAnalyser.Plugin.d12.dproj": {
     "platform": "Win32",
     "projectVersion": "20.1"
-  },
-  "StaticCodeAnalyserIDE/StaticCodeAnalyser.Plugin.d13.dproj": {
-    "platform": "Win64",
-    "projectVersion": "20.3"
   }
 }
