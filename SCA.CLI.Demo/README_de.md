@@ -17,13 +17,13 @@ Das Programm scannt ein Verzeichnis rekursiv und gibt nur eine
 Reihenfolge wichtig — das Package muss vor dem Demo vorliegen:
 
 1. `SCA.Engine.dproj` für die Zielplattform bauen (erzeugt `SCA.Engine.dcp`
-   + `SCA.Engine.bpl` im globalen DCP/BPL-Verzeichnis).
+   + `SCA.Engine290.bpl` im globalen DCP/BPL-Verzeichnis).
 2. `SCA.CLI.Demo.dproj` öffnen und bauen (Konsolen-EXE, Win32 oder Win64).
 
 Am einfachsten beide Projekte in eine Projektgruppe legen — die
 `DCCReference SCA.Engine.dcp` sorgt für die richtige Build-Reihenfolge.
 
-> Zur Laufzeit muss `SCA.Engine.bpl` auffindbar sein (globales BPL-Verzeichnis
+> Zur Laufzeit muss `SCA.Engine290.bpl` auffindbar sein (globales BPL-Verzeichnis
 > liegt bei installiertem RAD Studio auf dem Pfad; für eine eigenständige
 > Auslieferung die `.bpl` neben die `.exe` legen).
 

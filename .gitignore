@@ -36,7 +36,6 @@ StaticCodeAnalyserIDE/StaticCodeAnalyser.Plugin.d12.res
 SCA.LSP/SCA.LSP.res
 # Der D13-Satz erzeugt dieselben .res noch einmal. Muster statt
 # Einzelaufzaehlung - sonst muss jedes neue Projekt sie erweitern.
-*.d13.res
 SCA.LSP/SCA.LSP.res
 
 # ---- Zentrale Ablage des D13-Satzes (2026-08-23) ----

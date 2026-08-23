@@ -1,4 +1,4 @@
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
         <ProjectGuid>{8A4E4F0B-2D6C-4E0A-9B7A-1C5D3E2F6A11}</ProjectGuid>
         <MainSource>StaticCodeAnalyser.Plugin.d12.dpk</MainSource>
@@ -8,8 +8,23 @@
         <Config Condition="'$(Config)'==''">Release</Config>
         <Platform Condition="'$(Platform)'==''">Win32</Platform>
         <ProjectName Condition="'$(ProjectName)'==''">StaticCodeAnalyser.Plugin.d12</ProjectName>
-        <TargetedPlatforms>1</TargetedPlatforms>
+        <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Package</AppType>
+    </PropertyGroup>
+    <PropertyGroup>
+        <!-- Generation aus dem Compiler-Backend der AKTIVEN IDE ableiten.
+             Nicht $(ProductVersion): die wird erst ueber
+             CodeGear.Delphi.Targets gesetzt, und das importiert diese Datei
+             ganz am Ende - lange nach den Ausgabepfaden.
+             Nicht [MSBuild]::GetDirectoryNameOfFileAbove: die Delphi-IDE
+             setzt $(MSBuildThisFileDirectory) nicht, dort bricht die
+             Funktion mit leerem Pfad ab. Beides am 2026-08-23 gemessen.
+             UNBEKANNT-BDS ist Absicht - ein unbrauchbares $(BDS) erzeugt
+             einen sichtbar falschen Ordner statt stiller Vermischung. -->
+        <SCAGen Condition="Exists('$(BDS)\bin\dcc32370.dll')">d13</SCAGen>
+        <SCAGen Condition="Exists('$(BDS)\bin\dcc32290.dll')">d12</SCAGen>
+        <SCAGen Condition="'$(SCAGen)'==''">UNBEKANNT-BDS</SCAGen>
+        <SCARoot>..</SCARoot>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
         <Base>true</Base>
@@ -30,7 +45,9 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
-        <DCC_DcuOutput>..\Output\Plugin\$(Platform) $(Config)</DCC_DcuOutput>
+        <DllSuffix>$(Auto)</DllSuffix>
+        <DesignOnlyPackage>true</DesignOnlyPackage>
+        <DCC_DcuOutput>$(SCARoot)\lib\$(SCAGen)\$(Platform)\$(Config)\dcu\$(MSBuildProjectName)</DCC_DcuOutput>
         <DCC_ExeOutput>..\Output\Plugin\$(Platform) $(Config)</DCC_ExeOutput>
         <DCC_UnitSearchPath>..\SCA.Engine\sources\Common;..\SCA.Engine\sources\Detectors;..\SCA.Engine\sources\Infrastructure;..\SCA.Engine\sources\Output;..\SCA.Engine\sources\Parsing;..\SCA.SharedUI\sources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
         <DCC_E>false</DCC_E>
@@ -380,7 +397,7 @@
             </Delphi.Personality>
             <Platforms>
                 <Platform value="Win32">True</Platform>
-                <Platform value="Win64">False</Platform>
+                <Platform value="Win64">True</Platform>
                 <Platform value="Win64x">False</Platform>
             </Platforms>
             <ModelSupport>False</ModelSupport>

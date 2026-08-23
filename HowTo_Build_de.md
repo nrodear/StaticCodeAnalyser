@@ -94,46 +94,38 @@ Wir wechseln das aktive Projekt unten je nach Bedarf.
 
 ---
 
-### 3.1 Mit Delphi 13 statt Delphi 12 bauen
+### 3.1 Mit Delphi 13 bauen
 
-Delphi 13 hat einen eigenen Satz Projektdateien. Alles andere auf dieser
-Seite bleibt gleich - nur die Datei aus Schritt 3 ist eine andere:
+Es gibt keinen zweiten Satz Projektdateien. Dieselben Projekte bauen
+unter Delphi 12 und Delphi 13 - **welche Generation herauskommt,
+entscheidet allein die IDE, die du startest**:
 
-|                 | Delphi 12                          | Delphi 13                          |
-|-----------------|------------------------------------|------------------------------------|
-| Projektgruppe   | `StaticCodeAnalyser.d12.groupproj` | `StaticCodeAnalyser.d13.groupproj` |
-| Teilprojekte    | `*.dproj`                          | `*.d13.dproj`                      |
-| Angezeigt als   | `SCA.Engine`                       | `SCA.Engine.d13`                   |
-| Paketname       | `SCA.Engine.bpl`                   | `SCA.Engine370.bpl`                |
-| Ausgabe         | verstreut, teils ausserhalb        | `lib\d13\<plattform>\<konfig>\`    |
+|                  | Delphi 12                | Delphi 13                |
+|------------------|--------------------------|--------------------------|
+| Paketname        | `SCA.Engine290.bpl`      | `SCA.Engine370.bpl`      |
+| DCU-Ausgabe      | `lib\d12\<plat>\<konfig>` | `lib\d13\<plat>\<konfig>` |
+| DCP und BPL      | `…\Studio\23.0\…`        | `…\Studio\37.0\…`        |
+| Registry         | *Known Packages*         | *Known Packages x64* fuer die 64-Bit-IDE |
 
-Vier Dinge, die man wissen sollte:
+Drei Dinge, die man wissen sollte:
 
-- **Der Quelltext ist geteilt.** Beide Gruppen compilieren dieselben
-  `.dpk`/`.dpr`-Dateien; eine neue Unit taucht also in beiden auf.
-  Doppelt sind nur die Compilereinstellungen, und
-  `tools/dproj_d13_gate.py` prueft, dass die im Gleichschritt bleiben.
-- **Fuer Delphi 12 aendert sich nichts.** Der Versionssuffix steht in der
-  `.dproj` (`<DllSuffix>$(Auto)</DllSuffix>`), nicht in der geteilten
-  `.dpk`. Delphi setzt fuer D13 `370` ein und wuerde fuer D12 `290`
-  einsetzen - die D12-Projekte tragen die Eigenschaft aber bewusst
-  nicht, ihre Paketnamen bleiben also exakt wie bisher.
-- **Die Compilerausgabe landet im Repository**, unter
-  `lib\<generation>\<plattform>\<konfiguration>\`. `git clean -xfd lib`
-  raeumt jedes Bauartefakt ab. Der Generationsordner wird automatisch aus
-  der bauenden IDE abgeleitet - wer eine D13-Datei versehentlich in D12
-  oeffnet, kann die D13-Zelle also nicht verderben. Einzige Ausnahme ist
-  die `.bpl`: sie bleibt dort, wo die IDE sie zum Laden sucht.
-- **Delphi 13 bringt zwei IDEs mit**: eine 32-Bit- (`bin\bds.exe`) und
-  eine 64-Bit-IDE (`bin64\bds.exe`). Eine 64-Bit-IDE kann nur ein
-  **Win64**-Paket laden; die D13-Projekte stehen deshalb auf Win64 und
-  werden unter **Known Packages x64** eingetragen. Fuer die 32-Bit-IDE
-  vor dem Bauen auf Win32 umstellen und **Known Packages** benutzen.
+- **Der Suffix kommt aus `{$LIBSUFFIX AUTO}`** in der `.dpk`. Delphi
+  setzt seine eigene Paketversion ein - `290` oder `370`. Die `.dproj`
+  spiegelt das mit `<DllSuffix>$(Auto)</DllSuffix>`, damit die IDE
+  denselben Namen erwartet, den der Compiler schreibt. Es braucht
+  beides; eines allein bricht den Bau mit *"Package … kann nicht
+  geladen werden"*.
+- **Die DCUs sind pro Generation getrennt** ueber `$(SCAGen)`,
+  abgeleitet aus dem Compiler-Backend der laufenden IDE. Du kannst
+  dasselbe Projekt in beiden IDEs bauen, ohne dass sich etwas
+  ueberschreibt. `git clean -xfd lib` raeumt alles ab.
+- **Delphi 13 bringt zwei IDEs mit**: 32-Bit (`bin\bds.exe`) und 64-Bit
+  (`bin64\bds.exe`). Ein Entwurfszeitpaket muss zur Bitness der IDE
+  passen - fuer die 32-Bit-IDE Win32 bauen, fuer die 64-Bit-IDE Win64.
 
 Die Baureihenfolge ist bindend und wird von der IDE nicht erzwungen:
 erst `SCA.Engine`, dann `SCA.SharedUI`, dann das Plugin.
-`python tools\stale_artifacts_check.py` sagt, was noch fehlt oder
-veraltet ist.
+`python tools\stale_artifacts_check.py` zeigt, was fehlt oder veraltet ist.
 
 ---
 
@@ -232,9 +224,9 @@ noch nicht unterstuetzt). Das Plugin muss also 32-bit sein.
 Du hast jetzt drei `.bpl`-Dateien in
 `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\`:
 
-- `SCA.Engine.bpl`
-- `SCA.SharedUI.bpl`
-- `StaticCodeAnalyser.IDE.d12.bpl`
+- `SCA.Engine290.bpl`
+- `SCA.SharedUI290.bpl`
+- `StaticCodeAnalyser.IDE.d12290.bpl`
 
 ### 5.2 Der IDE sagen, dass sie das Plugin laden soll
 
@@ -242,7 +234,7 @@ Du hast jetzt drei `.bpl`-Dateien in
 2. Links: **IDE → Packages → Design Packages**.
 3. **Add…** klicken.
 4. Zu `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\` gehen,
-   `StaticCodeAnalyser.IDE.d12.bpl` waehlen, **Open** klicken.
+   `StaticCodeAnalyser.IDE.d12290.bpl` waehlen, **Open** klicken.
 5. Sicherstellen, dass die Checkbox daneben **an** ist.
 6. **OK** klicken.
 7. **Delphi schliessen und neu starten.**
@@ -356,7 +348,7 @@ der Fix aussieht.
 | **Plugin-Menue fehlt nach Neustart** | Falsche Plattform (Win64 statt Win32 gebaut) oder falscher Pfad in `Tools → Options → Packages`. |
 | **Standalone crasht nach ein paar Sekunden bei grossem Projekt** | Stack-Patch nicht angewendet. `tools\patch-stack-size.ps1` neu ausfuehren. |
 | **EXE meldet "file not found" beim Start** | Du hast die EXE aus ihrem `Output\…`-Ordner verschoben. Entweder zurueck, oder die `.dcu`/`.bpl`-Files mit kopieren. |
-| **"Cannot find SCA.Engine.bpl"** beim Plugin-Laden | Plugin findet `SCA.Engine.bpl` ueber den Delphi-Search-Path. Engine fuer dieselbe Plattform (Win32) und Konfiguration (Release) bauen. |
+| **"Cannot find SCA.Engine290.bpl"** beim Plugin-Laden | Plugin findet `SCA.Engine290.bpl` ueber den Delphi-Search-Path. Engine fuer dieselbe Plattform (Win32) und Konfiguration (Release) bauen. |
 | **Undeklarierter Bezeichner, obwohl er sichtbar in der Quelle steht** | Ein Paket zieht die Unit aus dem **DCP** eines anderen Pakets, nicht aus der Quelle. Ist das DCP aelter als die Quelle, compilierst du gegen den alten Stand - und der Compiler zeigt auf die Aufrufstelle, nicht auf das veraltete Artefakt. `python tools\stale_artifacts_check.py` laufen lassen, dann in der Reihenfolge `SCA.Engine` -> `SCA.SharedUI` -> Plugin neu bauen. |
 
 ---

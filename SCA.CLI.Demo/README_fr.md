@@ -33,14 +33,14 @@ d'exclusions, export SARIF/Sonar/HTML), il existe `TScanRequest.Init` +
 L'ordre compte — le package doit exister avant la démo :
 
 1. Compiler `SCA.Engine.dproj` pour la plateforme cible (produit
-   `SCA.Engine.dcp` + `SCA.Engine.bpl` dans le répertoire DCP/BPL global).
+   `SCA.Engine.dcp` + `SCA.Engine290.bpl` dans le répertoire DCP/BPL global).
 2. Ouvrir et compiler `SCA.CLI.Demo.dproj` (EXE console, Win32 ou Win64).
 
 Le plus simple : placer les deux projets dans un même groupe de projets.
 La liaison du package passe par `DCC_UsePackage SCA.Engine` (aucun
 chemin de sources).
 
-> À l'exécution, `SCA.Engine.bpl` doit être localisable (le répertoire
+> À l'exécution, `SCA.Engine290.bpl` doit être localisable (le répertoire
 > BPL global est sur le chemin quand RAD Studio est installé ; pour un
 > déploiement autonome, livrer la `.bpl` à côté de l'`.exe`).
 

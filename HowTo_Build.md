@@ -91,45 +91,37 @@ You will switch the active project as needed below.
 
 ---
 
-### 3.1 Building with Delphi 13 instead of Delphi 12
+### 3.1 Building with Delphi 13
 
-Delphi 13 has its own set of project files. Everything else on this page
-stays the same - only the file you open in step 3 changes:
+There is no second set of project files. The same projects build under
+both Delphi 12 and Delphi 13 - **which one you get is decided by the IDE
+you start**, nothing else:
 
-|                 | Delphi 12                          | Delphi 13                          |
-|-----------------|------------------------------------|------------------------------------|
-| Project group   | `StaticCodeAnalyser.d12.groupproj` | `StaticCodeAnalyser.d13.groupproj` |
-| Sub-projects    | `*.dproj`                          | `*.d13.dproj`                      |
-| Shown as        | `SCA.Engine`                       | `SCA.Engine.d13`                   |
-| Package name    | `SCA.Engine.bpl`                   | `SCA.Engine370.bpl`                |
-| Build output    | scattered, partly outside the repo | `lib\d13\<platform>\<config>\`     |
+|                  | Delphi 12                | Delphi 13                |
+|------------------|--------------------------|--------------------------|
+| Package name     | `SCA.Engine290.bpl`      | `SCA.Engine370.bpl`      |
+| DCU output       | `lib\d12\<plat>\<config>` | `lib\d13\<plat>\<config>` |
+| DCP and BPL      | `…\Studio\23.0\…`        | `…\Studio\37.0\…`        |
+| Registry key     | *Known Packages*         | *Known Packages x64* for the 64-bit IDE |
 
-Four things worth knowing:
+Three things worth knowing:
 
-- **The source is shared.** Both groups compile the same `.dpk`/`.dpr`
-  files, so a unit you add appears in both. Only the compiler settings
-  exist twice, and `tools/dproj_d13_gate.py` checks that they stay in
-  step.
-- **Nothing changes for Delphi 12.** The version suffix lives in the
-  `.dproj` (`<DllSuffix>$(Auto)</DllSuffix>`), not in the shared `.dpk`.
-  Delphi supplies `370` for D13 and would supply `290` for D12 - but the
-  D12 projects deliberately do not carry the property, so their package
-  names stay exactly as they were.
-- **Compiler output goes into the repository**, under
-  `lib\<generation>\<platform>\<config>\`. `git clean -xfd lib` wipes
-  every build artifact. The generation folder is derived automatically
-  from the IDE you build with, so opening a D13 project in D12 by
-  accident cannot corrupt the D13 cell. The `.bpl` is the one exception -
-  it stays where the IDE looks for it when loading a package.
+- **The suffix comes from `{$LIBSUFFIX AUTO}`** in the `.dpk`. Delphi
+  substitutes its own package version - `290` or `370`. The `.dproj`
+  mirrors it with `<DllSuffix>$(Auto)</DllSuffix>` so the IDE expects
+  the same name the compiler writes. Both are needed; one alone breaks
+  the build with *"Package … cannot be loaded"*.
+- **DCUs are separated per generation** via `$(SCAGen)`, derived from
+  the compiler backend of the running IDE. Build the same project in
+  both IDEs and nothing overwrites anything. `git clean -xfd lib` wipes
+  all of it.
 - **Delphi 13 ships two IDEs**: 32-bit (`bin\bds.exe`) and 64-bit
-  (`bin64\bds.exe`). A 64-bit IDE can only load a **Win64** package, so
-  the D13 projects default to Win64 and register under **Known Packages
-  x64**. For the 32-bit IDE, switch the platform to Win32 before
-  building and use **Known Packages**.
+  (`bin64\bds.exe`). A design-time package must match the IDE's
+  bitness - build Win32 for the 32-bit IDE, Win64 for the 64-bit one.
 
-Build order matters and is not enforced by the IDE: `SCA.Engine` first,
-then `SCA.SharedUI`, then the plugin. `python tools\stale_artifacts_check.py`
-tells you what is still missing or out of date.
+Build order is binding and the IDE does not enforce it: `SCA.Engine`
+first, then `SCA.SharedUI`, then the plugin.
+`python tools\stale_artifacts_check.py` shows what is missing or stale.
 
 ---
 
@@ -226,9 +218,9 @@ yet supported). So the plugin must be 32-bit.
 You now have three `.bpl` files in
 `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\`:
 
-- `SCA.Engine.bpl`
-- `SCA.SharedUI.bpl`
-- `StaticCodeAnalyser.IDE.d12.bpl`
+- `SCA.Engine290.bpl`
+- `SCA.SharedUI290.bpl`
+- `StaticCodeAnalyser.IDE.d12290.bpl`
 
 ### 5.2 Tell the IDE to load the plugin
 
@@ -237,7 +229,7 @@ You now have three `.bpl` files in
 3. Click **Add…**.
 4. Browse to
    `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\`,
-   pick `StaticCodeAnalyser.IDE.d12.bpl`, click **Open**.
+   pick `StaticCodeAnalyser.IDE.d12290.bpl`, click **Open**.
 5. Make sure the checkbox next to it is **on**.
 6. Click **OK**.
 7. **Close and restart Delphi.**
@@ -345,7 +337,7 @@ code example: how the problem looks, and how the fix looks.
 | **Plugin menu entry is missing after restart** | Wrong platform (you built Win64 instead of Win32) or wrong path in `Tools → Options → Packages`. |
 | **Standalone crashes after a few seconds on a large project** | Stack-size patch not applied. Re-run `tools\patch-stack-size.ps1`. |
 | **EXE complains "file not found" on launch** | You moved the EXE out of its `Output\…` folder. Either put it back, or copy the `.dcu`/`.bpl` files with it. |
-| **"Cannot find SCA.Engine.bpl"** when the plugin loads | The plugin sees `SCA.Engine.bpl` via the Delphi-search path. Build `SCA.Engine` for the same platform (Win32) and configuration (Release). |
+| **"Cannot find SCA.Engine290.bpl"** when the plugin loads | The plugin sees `SCA.Engine290.bpl` via the Delphi-search path. Build `SCA.Engine` for the same platform (Win32) and configuration (Release). |
 | **Undeclared identifier for something that clearly exists in the source** | A package pulls that unit out of another package's **DCP**, not out of the source. If that DCP is older than the source, you compile against the old state and the compiler points at the call site, not at the stale file. Run `python tools\stale_artifacts_check.py`, then rebuild in the order `SCA.Engine` -> `SCA.SharedUI` -> plugin. |
 
 ---
