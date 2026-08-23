@@ -197,6 +197,23 @@ en.StarBtn=Star on GitHub
 ; dieselben Aussagen wie die Matrix in README_Installer.md par.0 - bei
 ; Aenderungen BEIDE Stellen pflegen. Einzeilige Bausteine, der [Code]-Teil
 ; setzt sie zu RTF (fett) bzw. Plain-Text (Fallback-Memo) zusammen.
+; --- Auswahlliste der Ziel-IDEs (2026-08-23) ---------------------------------
+; Angezeigt wird nur, was auf diesem Rechner wirklich gefunden wurde - die
+; Check:-Ausdruecke der [Components] blenden den Rest aus. Installiert wird
+; nur, was angehakt ist.
+de.TypeFull=Alle gefundenen Delphi-Versionen
+en.TypeFull=All Delphi versions found
+de.TypeCustom=Benutzerdefiniert
+en.TypeCustom=Custom
+de.CompD12=Delphi 12 Athens (32-bit-IDE)
+en.CompD12=Delphi 12 Athens (32-bit IDE)
+de.CompD13=Delphi 13 Florence (32-bit-IDE)
+en.CompD13=Delphi 13 Florence (32-bit IDE)
+de.CompD13X64=Delphi 13 Florence (64-bit-IDE)
+en.CompD13X64=Delphi 13 Florence (64-bit IDE)
+de.NoComponent=Bitte mindestens eine Delphi-Version auswaehlen - sonst wird kein Plugin installiert.
+en.NoComponent=Please select at least one Delphi version - otherwise no plugin is installed.
+
 de.ReadyHead=Unterstuetzte Delphi-Versionen:
 en.ReadyHead=Supported Delphi versions:
 de.ReadyYes1=Delphi 12.0 - 12.3 (32-bit-IDE)  -  JA, dieses Setup
@@ -217,6 +234,22 @@ en.ReadyNote=Note: there is currently no way for us to test on other Delphi IDE 
 de.WelcomeLabel2=%n[name/ver] wird auf Ihrem Computer installiert (nur fuer den aktuellen Benutzer, ohne Administratorrechte).%n%nDieses Setup und das Plugin bauen niemals Netzwerkverbindungen auf: kein Update-Check, keine Telemetrie, kein AI/LLM-Egress.
 en.WelcomeLabel2=%nThis will install [name/ver] on your computer (current user only, no administrator rights).%n%nThis setup and the plugin never open network connections: no update check, no telemetry, no AI/LLM egress.
 
+[Types]
+Name: "full";   Description: "{cm:TypeFull}"
+Name: "custom"; Description: "{cm:TypeCustom}"; Flags: iscustom
+
+[Components]
+; Check: entscheidet, ob der Eintrag ueberhaupt ERSCHEINT. Eine nicht
+; installierte IDE steht damit gar nicht erst zur Auswahl - besser als ein
+; Haken, der ins Leere fuehrt.
+; Types: full -> in der Voreinstellung sind alle gefundenen angehakt.
+Name: "d12";    Description: "{cm:CompD12}";    Types: full custom; \
+  Check: IsDelphi12Installed
+Name: "d13";    Description: "{cm:CompD13}";    Types: full custom; \
+  Check: IsDelphi13Installed
+Name: "d13x64"; Description: "{cm:CompD13X64}"; Types: full custom; \
+  Check: IsDelphi13X64Available
+
 [Files]
 ; --- D12-BPL(s) ---------------------------------------------------------------
 #ifdef SCA_MONOLITH
@@ -224,7 +257,7 @@ en.WelcomeLabel2=%nThis will install [name/ver] on your computer (current user o
 ; Koexistenz- und Portable-Problem gleichzeitig (requires nur IDE-eigene Pakete,
 ; die der Loader im bds.exe-Verzeichnis findet).
 Source: "{#SCABplSourceDir}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d12"; \
-  Flags: ignoreversion; Check: IsDelphi12Installed
+  Flags: ignoreversion; Components: d12
 #else
 ; Dev-3-BPL-Variante (aktueller Repo-Stand). WICHTIG (Doku-Lehre): der Windows-
 ; Loader loest requires per Modulname ueber bds.exe-Dir -> System32 -> PATH,
@@ -246,13 +279,13 @@ Source: "{#SCABplSourceDir}\{#SCAPluginBpl}";  DestDir: "{app}\bpl\d12"; Flags: 
 ; Ueberlegung wie bei IsDelphi12Installed.
 #ifdef SCA_D13
 Source: "{#SCABplSourceDirD13}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d13"; \
-  Flags: ignoreversion; Check: IsDelphi13Installed
+  Flags: ignoreversion; Components: d13
 #endif
 #ifdef SCA_D13_X64
 ; Die 64-bit-IDE laedt NIE eine 32-bit-BPL. Eigener Build, eigener Ordner,
 ; gleicher Dateiname - unterschieden wird ueber den Pfad in der Registry.
 Source: "{#SCABplSourceDirD13X64}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d13x64"; \
-  Flags: ignoreversion; Check: IsDelphi13X64Available
+  Flags: ignoreversion; Components: d13x64
 #endif
 
 ; --- Regelkatalog -------------------------------------------------------------
@@ -290,20 +323,20 @@ Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
 Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
   ValueName: "{app}\bpl\d12\{#SCAPluginBpl}"; \
   ValueData: "Static Code Analyser for Delphi (IDE-Plugin)"; \
-  Flags: uninsdeletevalue; Check: IsDelphi12Installed
+  Flags: uninsdeletevalue; Components: d12
 
 ; --- D13 (BDS 37.0) -----------------------------------------------------------
 #ifdef SCA_D13
 Root: HKCU; Subkey: "{#KnownPackages37}"; ValueType: string; \
   ValueName: "{app}\bpl\d13\{#SCAPluginBpl}"; \
   ValueData: "Static Code Analyser for Delphi (IDE-Plugin)"; \
-  Flags: uninsdeletevalue; Check: IsDelphi13Installed
+  Flags: uninsdeletevalue; Components: d13
 #endif
 #ifdef SCA_D13_X64
 Root: HKCU; Subkey: "{#KnownPackages37x64}"; ValueType: string; \
   ValueName: "{app}\bpl\d13x64\{#SCAPluginBpl}"; \
   ValueData: "Static Code Analyser for Delphi (IDE-Plugin, 64-bit IDE)"; \
-  Flags: uninsdeletevalue; Check: IsDelphi13X64Available
+  Flags: uninsdeletevalue; Components: d13x64
 #endif
 
 ; =============================================================================
@@ -530,14 +563,19 @@ end;
 // das Plain-Memo bleibt als Datenquelle/Fallback gefuellt.
 var
   GReadyRich   : TRichEditViewer;
-  GMemoDirInfo : string;
+  GMemoDirInfo  : string;
+  GMemoCompInfo : string;
 
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
   MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo,
   MemoTasksInfo: String): String;
 begin
-  // Zielordner-Block fuer den RTF-Aufbau in CurPageChanged merken.
-  GMemoDirInfo := MemoDirInfo;
+  // Zielordner- und Auswahlblock fuer den RTF-Aufbau in CurPageChanged
+  // merken. Ohne den Auswahlblock zeigt die Zusammenfassung nicht, welche
+  // Delphi-Versionen der Nutzer gerade angehakt hat - die Seite haette
+  // ihren Zweck verfehlt.
+  GMemoDirInfo  := MemoDirInfo;
+  GMemoCompInfo := MemoComponentsInfo;
   Result := CustomMessage('ReadyHead') + NewLine + NewLine
           + CustomMessage('ReadyYes1') + NewLine
           + CustomMessage('ReadyYes2') + NewLine
@@ -546,6 +584,8 @@ begin
           + CustomMessage('ReadyNo2') + NewLine + NewLine
           + CustomMessage('ReadyNote') + NewLine
           + '{#SCAGitHubUrl}' + NewLine;
+  if MemoComponentsInfo <> '' then
+    Result := Result + NewLine + MemoComponentsInfo + NewLine;
   if MemoDirInfo <> '' then
     Result := Result + NewLine + MemoDirInfo + NewLine;
 end;
@@ -583,9 +623,28 @@ begin
     + RtfPar(CustomMessage('ReadyNo2')) + '\par \par '
     + RtfPar(CustomMessage('ReadyNote')) + '\par '
     + RtfPar('{#SCAGitHubUrl}') + '\par ';
+  if GMemoCompInfo <> '' then
+    Result := Result + '\par ' + RtfPar(GMemoCompInfo) + '\par ';
   if GMemoDirInfo <> '' then
     Result := Result + '\par ' + RtfPar(GMemoDirInfo) + '\par ';
   Result := Result + '}';
+end;
+
+// Auf der Komponentenseite nicht weiterlassen, wenn nichts angehakt ist.
+// Ohne das laeuft das Setup durch, legt den Ordner und den Regelkatalog an
+// und installiert kein einziges Plugin - ein Erfolg, der keiner ist.
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if CurPageID <> wpSelectComponents then
+    Exit;
+  if not (WizardIsComponentSelected('d12')
+       or WizardIsComponentSelected('d13')
+       or WizardIsComponentSelected('d13x64')) then
+  begin
+    MsgBox(CustomMessage('NoComponent'), mbError, MB_OK);
+    Result := False;
+  end;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
