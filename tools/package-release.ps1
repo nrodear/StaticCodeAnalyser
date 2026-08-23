@@ -176,16 +176,22 @@ foreach ($p in $platforms) {
 # Baseline, Sonar, CI-Gate, eigene Regeln - ohne dafuer das Source-Zip zu
 # durchwuehlen. NUR oeffentliche Doku: die internen Doku_/Todo_/Konzept_-
 # Dateien sind gitignoriert und gehoeren hier bewusst nicht hinein.
+# Alle drei Sprachfassungen: das Projekt pflegt de/en/fr durchgehend,
+# das Doku-Archiv lieferte bisher aber nur de/en aus. Dazu HowTo_Build -
+# wer die Packages selbst bauen will, braucht genau diese Anleitung, und
+# das Setup verweist im Wizard darauf.
 $docItems = @(
-  'README.md', 'README_de.md',
-  'EXPORTS.md', 'EXPORTS_de.md',
-  'sonarHowto.md', 'sonarHowto_de.md',
-  'DETECTORS.md', 'DETECTORS_de.md',
-  'BRANCH_CHANGES.md', 'BRANCH_CHANGES_de.md',
-  'RELEASE_NOTES.md', 'RELEASE_NOTES_de.md',
+  'README.md', 'README_de.md', 'README_fr.md',
+  'EXPORTS.md', 'EXPORTS_de.md', 'EXPORTS_fr.md',
+  'sonarHowto.md', 'sonarHowto_de.md', 'sonarHowto_fr.md',
+  'DETECTORS.md', 'DETECTORS_de.md', 'DETECTORS_fr.md',
+  'BRANCH_CHANGES.md', 'BRANCH_CHANGES_de.md', 'BRANCH_CHANGES_fr.md',
+  'RELEASE_NOTES.md', 'RELEASE_NOTES_de.md', 'RELEASE_NOTES_fr.md',
+  'HowTo_Build.md', 'HowTo_Build_de.md', 'HowTo_Build_fr.md',
   'CHANGELOG.md',
   'docs/sonar-setup.md', 'docs/sonar-config.md', 'docs/sonar-coverage.md',
-  'docs/rules.md'
+  'docs/rules.md',
+  'docs/releases/v0.9.17.md', 'docs/releases/v0.9.17_de.md'
 )
 foreach ($d in $docItems) {
   if (-not (Test-Path (Join-Path $repo $d))) { throw "Doku fehlt: $d" }

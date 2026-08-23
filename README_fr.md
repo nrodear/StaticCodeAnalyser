@@ -1112,9 +1112,11 @@ suppression et de confiance — c'est ce qu'un utilisateur voit réellement.
 
 ## Prérequis
 
-- Delphi 12 (Athens), versions 12.0–12.3 (IDE 32 bits, BDS 23.0).
-  L'IDE 64 bits de 12.3 n'est **pas encore** pris en charge (préparé).
-  Delphi 13 est prévu mais pas encore pris en charge ; Delphi 11 et plus
+- Delphi 12 (Athens), versions 12.0–12.3 (IDE 32 bits, BDS 23.0), et
+  Delphi 13 (Florence, BDS 37.0) avec ses **deux** IDE, 32 et 64 bits.
+  Delphi 12 n'a pas d'IDE 64 bits — il ne fournit `designide` qu'en
+  Win32, un paquet de conception 64 bits n'y est donc même pas
+  compilable. Delphi 11 et plus
   anciens ne sont pas pris en charge.
 - DUnitX (uniquement pour la suite de tests, pas pour le plugin lui-même)
 - Optionnel : Git for Windows ou TortoiseSVN **avec** les outils CLI pour
@@ -1124,7 +1126,7 @@ suppression et de confiance — c'est ce qu'un utilisateur voit réellement.
 
 | Cible | Win32 | Win64 |
 |-------|-------|-------|
-| **Plugin IDE** (`StaticCodeAnalyser.IDE.d12.dpk`) | ✅ requis | ❌ — doit rester 32 bits parce que le plugin tourne dans l'IDE 32 bits (l'IDE 64 bits de 12.3 n'est pas encore pris en charge) et que les plugins héritent |
+| **Plugin IDE** (`StaticCodeAnalyser.IDE.d12.dpk`) | ✅ requis | ✅ **sous Delphi 13 uniquement** — un paquet de conception hérite de la bitness de son IDE, et seul Delphi 13 en possède un en 64 bits. Sous Delphi 12, une compilation Win64 échoue sur `designide` manquant ; le `.dpk` l'intercepte avec un message lisible |
 | **EXE autonome / CLI** (`analyser.d12.dproj`) | ✅ | ✅ |
 | **Suite de tests** (`TestProject.dproj`) | ✅ | _ajouter la plateforme si besoin_ |
 
