@@ -24,8 +24,22 @@ package StaticCodeAnalyser.Plugin.d12;
 // ACHTUNG bei der naechsten Delphi-Version: {$IFDEF} trifft genau eine.
 // Eine kuenftige D14 (VER380) bekaeme keinen Suffix und liefe damit gegen
 // die suffixlose D12-BPL. Dann hier eine Zeile ergaenzen.
+// PAKETTYP, ebenfalls nur fuer D13: der Monolith, dieselbe Rolle.
+// Ohne {$RUNONLY} bzw. {$DESIGNONLY} haelt die IDE ein Paket fuer
+// BEIDES und installiert es nach jedem Bau in sich selbst - bei
+// einem Laufzeitpaket unnoetig, bei einer Win64-BPL in der
+// 32-Bit-IDE unmoeglich. Am 2026-08-23 gemessen: die Angabe in
+// der .dproj (<RuntimeOnlyPackage>) reicht NICHT, sie ist nur der
+// MSBuild-Spiegel. Massgeblich ist diese Direktive - so machen es
+// auch JCL ({$RUNONLY} in Jcl.dpk) und die GetIt-Plugins.
+//
+// BEDINGT, damit D12 sich nicht aendert: dort sind SCA.Engine und
+// SCA.SharedUI heute als Entwurfszeitpakete REGISTRIERT. Ein
+// unbedingtes {$RUNONLY} wuerde diese Registrierungen brechen,
+// bis jemand sie entfernt.
 {$IFDEF VER370}
   {$LIBSUFFIX '370'}
+  {$DESIGNONLY}
 {$ENDIF}
 {$R *.res}
 // Monolith-Release-Package (Installer P1 / GetIt, Konzept 2026-07-23 +

@@ -291,6 +291,24 @@ def main():
             elif len(typen) > 1:
                 out.append('%s deklariert BEIDE Pakettypen.' % p13)
 
+        # 9d Die .dproj-Angabe ist nur der MSBuild-Spiegel. Massgeblich
+        #    ist {$RUNONLY}/{$DESIGNONLY} in der .dpk - ohne die laedt
+        #    die IDE das Paket trotzdem (2026-08-23 gemessen: mit
+        #    <RuntimeOnlyPackage>true, aber ohne {$RUNONLY}, versuchte
+        #    die IDE weiterhin zu laden).
+        if ist_package(t13) and m13:
+            src = os.path.join(os.path.dirname(p13), m13[0])
+            if os.path.isfile(os.path.join(REPO, src)):
+                code = ohne_kommentare(read(src)).upper()
+                paare = (('RuntimeOnlyPackage', 'RUNONLY'),
+                         ('DesignOnlyPackage', 'DESIGNONLY'))
+                for prop, direktive in paare:
+                    gesetzt = 'true' in [v.lower()
+                                         for v in values(t13, prop)]
+                    if gesetzt and ('{$' + direktive) not in code:
+                        out.append('%s setzt <%s>, aber %s traegt kein {$%s} - nur die Direktive haelt die IDE davon ab, das Paket zu laden.'
+                                   % (p13, prop, src, direktive))
+
         # 10 zentrale Ablage
         # 10b Die Tiefe von $(SCARoot) muss zum Ablageort passen.
         #     Ein relativer Pfad ist noetig, weil die Delphi-IDE
