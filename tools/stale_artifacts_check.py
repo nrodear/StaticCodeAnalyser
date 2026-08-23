@@ -47,17 +47,54 @@ PACKAGES = (
 
 
 def dproj_of(dpk_rel, gen):
-    """Die .dproj, die dieses Paket in der Generation gen baut."""
+    """Die .dproj dieses Pakets.
+
+    Es gibt nur EINEN Projektsatz; er traegt beide Generationen. Der
+    Parameter gen bleibt in der Signatur, weil die Aufrufstelle je
+    Generation durchlaeuft - die Datei ist fuer beide dieselbe.
+
+    Bis 2026-08-23 stand hier die Suche nach '*.d13.dproj'. Nachdem der
+    zweite Projektsatz zurueckgerollt war, fand sie nichts mehr und der
+    Pruefer war fuer die gesamte D13-Seite BLIND - er meldete gruen,
+    wo er nichts geprueft hatte.
+    """
+    del gen
     base = dpk_rel[:-4]
-    # Die IDE-/Plugin-Pakete tragen '.d12' im Dateinamen; das D13-Projekt
-    # heisst '...IDE.d13.dproj', nicht '...IDE.d12.d13.dproj'.
-    stamm = base[:-4] if base.endswith('.d12') else base
-    cands = ([stamm + '.d13.dproj'] if gen == 'D13'
-             else [base + '.dproj', stamm + '.d12.dproj'])
-    for c in cands:
+    for c in (base + '.dproj', base + '.d12.dproj'):
         if os.path.isfile(os.path.join(REPO, c)):
             return c
     return None
+
+
+STUDIO_PROGRAMM = {
+    'D12': r'C:\Program Files (x86)\Embarcadero\Studio\23.0',
+    'D13': r'C:\Program Files (x86)\Embarcadero\Studio\37.0',
+}
+
+
+def braucht_designide(dpk_rel):
+    """Steht designide in der requires-Klausel dieses Pakets?"""
+    f = os.path.join(REPO, dpk_rel)
+    if not os.path.isfile(f):
+        return False
+    t = io.open(f, encoding='utf-8-sig', errors='replace').read()
+    m = re.search(r'^requires(.*?);', t, re.S | re.M | re.I)
+    return bool(m) and 'designide' in m.group(1).lower()
+
+
+def designide_da(gen, plat):
+    """Liefert diese Delphi-Installation designide fuer diese Plattform?
+
+    Gemessen statt angenommen. Delphi 12 hat designide NUR fuer Win32 -
+    kein 23.0/lib/win64/release/designide.dcp. Ein Entwurfszeitpaket kann
+    dort also gar keinen Win64-Bau haben, und ein Pruefer, der einen
+    erwartet, meldet dauerhaft ein FEHLT, das niemand beheben kann.
+    """
+    root = STUDIO_PROGRAMM.get(gen)
+    if not root or not os.path.isdir(root):
+        return True          # unbekannt -> nicht ausschliessen
+    return os.path.isfile(os.path.join(root, 'lib', plat.lower(), 'release',
+                                       'designide.dcp'))
 
 
 def erwartete_plattformen(dpk_rel, gen):
@@ -72,10 +109,14 @@ def erwartete_plattformen(dpk_rel, gen):
         return []
     t = io.open(os.path.join(REPO, d), encoding='utf-8-sig').read()
     out = []
+    braucht = braucht_designide(dpk_rel)
     for plat in ('Win32', 'Win64'):
         m = re.search(r'<Platform value="%s">(\w+)</Platform>' % plat, t)
-        if m and m.group(1).lower() == 'true':
-            out.append(plat)
+        if not (m and m.group(1).lower() == 'true'):
+            continue
+        if braucht and not designide_da(gen, plat):
+            continue         # kann es in dieser Generation nicht geben
+        out.append(plat)
     return out
 
 
