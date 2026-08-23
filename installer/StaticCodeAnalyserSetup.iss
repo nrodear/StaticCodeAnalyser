@@ -147,6 +147,10 @@
 AppId={{7C1B3A52-9E44-4B7D-A0F3-5D2C8E6F1B90}
 AppName={#SCAAppName}
 AppVersion={#SCAVersion}
+; Ohne VersionInfoVersion bleibt die FileVersion der Setup-Exe LEER -
+; Inno leitet nur die ProductVersion aus AppVersion ab. Explorer und
+; jedes Werkzeug, das nach der Dateiversion fragt, sehen dann nichts.
+VersionInfoVersion={#SCAVersion}
 AppPublisher={#SCAPublisher}
 ; Per-User laut Konzept: %LOCALAPPDATA%\Programs\StaticCodeAnalyser
 ; (ANNAHME Welle 1, 2026-07-25: Konzept-Layout {localappdata}\Programs gewinnt
