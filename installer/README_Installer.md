@@ -10,7 +10,7 @@ Klick öffnet den Standard-Browser, das Setup selbst bleibt netzfrei):
   `/DSCADonateUrl=...` überschreibbar, leer = Button ausgeblendet)
 - **Star on GitHub** → `https://github.com/nrodear/StaticCodeAnalyser`
 
-**Unterstützungs-Matrix Delphi-IDE-Versionen** (Stand 2026-08-15;
+**Unterstützungs-Matrix Delphi-IDE-Versionen** (Stand 2026-08-23;
 BPLs sind compiler-versionsgebunden — eine D12-BPL lädt NUR in BDS 23.0):
 
 | Delphi | BDS | IDE-Bitness | Plugin-BPL | Registry-Schlüssel (HKCU) | Setup-Stand |
@@ -18,8 +18,9 @@ BPLs sind compiler-versionsgebunden — eine D12-BPL lädt NUR in BDS 23.0):
 | ≤ 11 Alexandria | ≤ 22.0 | 32-bit | — | — | **NICHT unterstützt** (bewusste Entscheidung: Editor-Integration nutzt die RAD-Studio-12-ToolsAPI; D11 im Konzept 2026-07-23 abgelehnt) |
 | 12.0–12.2 Athens | 23.0 | 32-bit | `StaticCodeAnalyser.Plugin.d12.bpl` (Win32) | `...\BDS\23.0\Known Packages` | **UNTERSTÜTZT — aktueller Release-Weg** |
 | 12.3 Athens | 23.0 | 32-bit-IDE | dieselbe Win32-BPL | wie oben | **UNTERSTÜTZT** (die 32-bit-IDE von 12.3 ist identisch registriert) |
-| 12.3 Athens | 23.0 | **64-bit-IDE** | Win64-Design-BPL nötig (32-bit-BPL lädt NIE in der 64-bit-IDE) | `...\BDS\23.0\Known Packages x64` (VOR Aktivierung am Zielsystem verifizieren) | **VORBEREITET, AUS**: `.iss`-Zweig hinter `/DSCA_D12_X64`; blockiert bis eine Win64-BPL gebaut ist (Plugin-dproj um Win64 ergänzen, braucht die 64-bit-Designzeit-Pakete aus 12.3) |
-| 13 Florence | **37.0** (Nummernsprung!) | 32- **und** 64-bit | eigene d13/d13x64-BPLs (VER370, Suffix 370) | `...\BDS\37.0\Known Packages` bzw. `Known Packages x64`; 64-bit-Erkennung via Wert `App x64` | **GEBLOCKT** (kein D13 auf der Build-Maschine); Platzhalter im `.iss` auskommentiert |
+| 12.x Athens | 23.0 | **64-bit-IDE** | — | — | **GIBT ES NICHT.** Delphi 12 bringt keine 64-bit-IDE mit: kein `23.0\bin64\bds.exe`, keine `dcl*`-BPL in `bin64`, und `designide` existiert nur für Win32 (`23.0\lib\win64\release` hat 96 DCPs, designide ist keines davon). Ein Win64-Entwurfszeitpaket lässt sich dort nicht einmal bauen. Der frühere `/DSCA_D12_X64`-Zweig ist am 2026-08-23 entfernt worden |
+| 13 Florence | **37.0** (Nummernsprung!) | 32-bit | `StaticCodeAnalyser.Plugin.d12.bpl` (Win32), Ziel `{app}\bpl\d13` | `...\BDS\37.0\Known Packages` | **UNTERSTÜTZT** seit 0.9.17 |
+| 13 Florence | 37.0 | **64-bit-IDE** | dieselbe .dpk, Win64 gebaut, Ziel `{app}\bpl\d13x64` | `...\BDS\37.0\Known Packages x64` | **UNTERSTÜTZT** seit 0.9.17. Unterschieden wird über den Zielordner, nicht über den Dateinamen — EIN Projektsatz baut beide Generationen |
 
 Warum keine älteren Versionen: neben der ToolsAPI-Grenze ist jede BPL an
 ihre Compiler-Version gebunden — Unterstützung einer weiteren Delphi-

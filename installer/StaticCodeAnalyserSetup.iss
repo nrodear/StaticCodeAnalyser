@@ -199,14 +199,16 @@ en.StarBtn=Star on GitHub
 ; setzt sie zu RTF (fett) bzw. Plain-Text (Fallback-Memo) zusammen.
 de.ReadyHead=Unterstuetzte Delphi-Versionen:
 en.ReadyHead=Supported Delphi versions:
-de.ReadyYes=Delphi 12.0 - 12.3 (32-bit-IDE)  -  JA, dieses Setup
-en.ReadyYes=Delphi 12.0 - 12.3 (32-bit IDE)  -  YES, this setup
-de.ReadyNo1=Delphi 12.3 (64-bit-IDE)  -  noch nicht (vorbereitet, braucht eigene Win64-BPL)
-en.ReadyNo1=Delphi 12.3 (64-bit IDE)  -  not yet (prepared, needs its own Win64 BPL)
-de.ReadyNo2=Delphi 13 "Florence"  -  noch nicht
-en.ReadyNo2=Delphi 13 "Florence"  -  not yet
-de.ReadyNo3=Delphi 11 und aelter  -  nicht unterstuetzt
-en.ReadyNo3=Delphi 11 and older  -  not supported
+de.ReadyYes1=Delphi 12.0 - 12.3 (32-bit-IDE)  -  JA, dieses Setup
+en.ReadyYes1=Delphi 12.0 - 12.3 (32-bit IDE)  -  YES, this setup
+de.ReadyYes2=Delphi 13 "Florence" (32-bit-IDE)  -  JA, dieses Setup
+en.ReadyYes2=Delphi 13 "Florence" (32-bit IDE)  -  YES, this setup
+de.ReadyYes3=Delphi 13 "Florence" (64-bit-IDE)  -  JA, dieses Setup
+en.ReadyYes3=Delphi 13 "Florence" (64-bit IDE)  -  YES, this setup
+de.ReadyNo1=Delphi 12 (64-bit-IDE)  -  gibt es nicht: Delphi 12 bringt keine 64-bit-IDE mit
+en.ReadyNo1=Delphi 12 (64-bit IDE)  -  does not exist: Delphi 12 ships no 64-bit IDE
+de.ReadyNo2=Delphi 11 und aelter  -  nicht unterstuetzt
+en.ReadyNo2=Delphi 11 and older  -  not supported
 de.ReadyNote=Hinweis: Fuer andere Delphi-IDE-Versionen bestehen derzeit keine Testmoeglichkeiten. Alternative: das Projekt von GitHub laden und die Packages selbst in der IDE bauen und installieren - Anleitung (HowTo_Build.md) im Repository:
 en.ReadyNote=Note: there is currently no way for us to test on other Delphi IDE versions. Alternative: download the project from GitHub and build/install the packages yourself in the IDE - instructions (HowTo_Build.md) in the repository:
 
@@ -537,10 +539,11 @@ begin
   // Zielordner-Block fuer den RTF-Aufbau in CurPageChanged merken.
   GMemoDirInfo := MemoDirInfo;
   Result := CustomMessage('ReadyHead') + NewLine + NewLine
-          + CustomMessage('ReadyYes') + NewLine
+          + CustomMessage('ReadyYes1') + NewLine
+          + CustomMessage('ReadyYes2') + NewLine
+          + CustomMessage('ReadyYes3') + NewLine
           + CustomMessage('ReadyNo1') + NewLine
-          + CustomMessage('ReadyNo2') + NewLine
-          + CustomMessage('ReadyNo3') + NewLine + NewLine
+          + CustomMessage('ReadyNo2') + NewLine + NewLine
           + CustomMessage('ReadyNote') + NewLine
           + '{#SCAGitHubUrl}' + NewLine;
   if MemoDirInfo <> '' then
@@ -573,10 +576,11 @@ begin
   Result :=
     '{\rtf1\ansi\ansicpg1252\deff0{\fonttbl{\f0 Segoe UI;}}\f0\fs18 '
     + RtfPar(CustomMessage('ReadyHead')) + '\par \par '
-    + '{\b ' + RtfPar(CustomMessage('ReadyYes')) + '}\par '
+    + '{\b ' + RtfPar(CustomMessage('ReadyYes1')) + '}\par '
+    + '{\b ' + RtfPar(CustomMessage('ReadyYes2')) + '}\par '
+    + '{\b ' + RtfPar(CustomMessage('ReadyYes3')) + '}\par '
     + RtfPar(CustomMessage('ReadyNo1')) + '\par '
-    + RtfPar(CustomMessage('ReadyNo2')) + '\par '
-    + RtfPar(CustomMessage('ReadyNo3')) + '\par \par '
+    + RtfPar(CustomMessage('ReadyNo2')) + '\par \par '
     + RtfPar(CustomMessage('ReadyNote')) + '\par '
     + RtfPar('{#SCAGitHubUrl}') + '\par ';
   if GMemoDirInfo <> '' then
