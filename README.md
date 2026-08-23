@@ -9,8 +9,11 @@
 
 ---
 
-**Delphi static code analysis tool** and **linter** for **RAD Studio 12 (Athens)** —
-ships as an **IDE plugin** with a dockable tool window plus a **standalone Windows app**.
+**Delphi static code analysis tool** and **linter** for **RAD Studio 12 (Athens)**
+and **13 (Florence)** — ships as an **IDE plugin** with a dockable tool window plus a
+**standalone Windows app**. The installer serves the 32-bit IDE of Delphi 12 and
+**both** IDEs of Delphi 13, 32- and 64-bit; the standalone app ships as a 32-bit and
+a 64-bit build.
 AST-based analysis with **196 rules**: 173 Pascal checks for memory leaks,
 SQL injection, code smells, security vulnerabilities, file-encoding & Unicode safety
 (Trojan Source), and code duplication
@@ -1206,7 +1209,7 @@ If you are evaluating this project, you may also be looking at:
 ## Keywords
 
 Delphi static code analysis, Object Pascal linter, RAD Studio plugin,
-Delphi 12 Athens, Delphi IDE plugin, ToolsAPI, DFM analyzer, form file
+Delphi 12 Athens, Delphi 13 Florence, Delphi IDE plugin, ToolsAPI, DFM analyzer, form file
 linter, Pascal AST, SonarQube alternative for Delphi, FixInsight
 alternative, Pascal Analyzer alternative, Delphi memory-leak detector,
 SQL injection detector for Delphi, hardcoded secret scanner, Delphi

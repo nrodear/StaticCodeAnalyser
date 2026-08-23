@@ -9,8 +9,11 @@
 
 ---
 
-**Statisches Code-Analyse-Tool** und **Linter** für **Delphi 12 / RAD Studio (Athens)** —
-als **IDE-Plugin** mit dockbarem Tool-Fenster plus **eigenständige Windows-Anwendung**.
+**Statisches Code-Analyse-Tool** und **Linter** für **Delphi 12 (Athens)** und
+**13 (Florence)** — als **IDE-Plugin** mit dockbarem Tool-Fenster plus
+**eigenständige Windows-Anwendung**. Der Installer bedient die 32-Bit-IDE von
+Delphi 12 und **beide** IDEs von Delphi 13, 32- und 64-Bit; die eigenständige
+Anwendung gibt es als 32- und als 64-Bit-Build.
 AST-basierte Analyse mit **196 Regeln**: 173 Pascal-Checks für
 Speicherlecks, SQL-Injection, Code-Smells, Sicherheitslücken und Code-Duplikate
 (inklusive einer **Sonar-Delphi-kompatiblen** Teilmenge SCA060+),
@@ -1213,7 +1216,7 @@ Wer dieses Projekt evaluiert, schaut häufig parallel auf:
 ## Schlagwörter
 
 Delphi statische Code-Analyse, Object Pascal Linter, RAD-Studio-Plugin,
-Delphi 12 Athens, Delphi-IDE-Plugin, ToolsAPI, DFM-Analyzer,
+Delphi 12 Athens, Delphi 13 Florence, Delphi-IDE-Plugin, ToolsAPI, DFM-Analyzer,
 Formular-Datei-Linter, Pascal AST, SonarQube-Alternative für Delphi,
 FixInsight-Alternative, Pascal-Analyzer-Alternative, Delphi
 Speicherleck-Detektor, SQL-Injection-Detektor für Delphi, Hardcoded-

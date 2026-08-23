@@ -9,9 +9,12 @@
 
 ---
 
-**Outil d'analyse statique de code Delphi** et **linter** pour **RAD Studio 12 (Athens)** —
-livré comme **plugin IDE** avec une fenêtre d'outil ancrable plus une **application
-Windows autonome**. Analyse basée sur l'AST avec **196 règles** : 173 contrôles
+**Outil d'analyse statique de code Delphi** et **linter** pour **RAD Studio 12
+(Athens)** et **13 (Florence)** — livré comme **plugin IDE** avec une fenêtre d'outil
+ancrable plus une **application Windows autonome**. L'installateur dessert l'IDE
+32 bits de Delphi 12 et les **deux** IDE de Delphi 13, 32 et 64 bits ; l'application
+autonome existe en version 32 bits et 64 bits.
+Analyse basée sur l'AST avec **196 règles** : 173 contrôles
 Pascal pour les fuites mémoire, l'injection SQL, les code smells, les
 vulnérabilités de sécurité, l'encodage des fichiers et la sûreté Unicode
 (Trojan Source) et la duplication de code
@@ -1238,7 +1241,7 @@ Si vous évaluez ce projet, vous regardez peut-être aussi :
 ## Mots-clés
 
 Analyse statique de code Delphi, linter Object Pascal, plugin RAD Studio,
-Delphi 12 Athens, plugin IDE Delphi, ToolsAPI, analyseur DFM, linter de
+Delphi 12 Athens, Delphi 13 Florence, plugin IDE Delphi, ToolsAPI, analyseur DFM, linter de
 fichiers de fiche, AST Pascal, alternative SonarQube pour Delphi,
 alternative FixInsight, alternative Pascal Analyzer, détecteur de fuites
 mémoire Delphi, détecteur d'injection SQL pour Delphi, scanner de secrets
