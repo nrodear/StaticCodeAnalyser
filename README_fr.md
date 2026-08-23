@@ -175,15 +175,27 @@ supprimé dans l'IDE reste supprimé en CI.
    - **EXE d'installation** (recommandé) : télécharger
      `StaticCodeAnalyserSetup-<Version>.exe` depuis les releases GitHub et
      l'exécuter. Installation par utilisateur, aucun droit administrateur
-     requis ; le setup vérifie que Delphi 12 est installé et fermé, nettoie
-     les anciens enregistrements, propose un choix de langue
-     allemand/anglais, affiche la page de licence MIT et crée une entrée de
-     désinstallation dans le menu Démarrer.
-   - **Paquet local GetIt** : télécharger l'asset de release
-     `StaticCodeAnalyser-v<V>-getit-manifest.zip`, le décompresser, puis dans
-     le GetIt Package Manager choisir **Load Local Package** (en bas de la
-     boîte de dialogue ; nécessite une Update Subscription active). La
-     charge utile `...-plugin-getit.zip` est récupérée par GetIt lui-même.
+     requis.
+
+     Le setup demande **dans quels IDE** installer et n'affiche que ceux
+     qu'il trouve réellement sur la machine :
+
+     | | installe dans | enregistre sous |
+     |---|---|---|
+     | Delphi 12 (IDE 32 bits) | `bpl\d12` | `BDS\23.0\Known Packages` |
+     | Delphi 13 (IDE 32 bits) | `bpl\d13` | `BDS\37.0\Known Packages` |
+     | Delphi 13 (IDE 64 bits) | `bpl\d13x64` | `BDS\37.0\Known Packages x64` |
+
+     Seules les cases cochées sont installées, et décocher une version
+     déjà installée la supprime — fichier et enregistrement. Le setup
+     vérifie aussi qu'aucun IDE Delphi ne tourne, nettoie les
+     enregistrements conflictuels du jeu de paquets de développement,
+     propose un choix de langue allemand/anglais, affiche la page de
+     licence MIT et crée une entrée de désinstallation dans le menu
+     Démarrer.
+   - **Paquet local GetIt** : préparé mais **non fourni avec 0.9.17** — le
+     manifeste se trouve dans `getit/`, le paquet n'est pas attaché à la
+     release.
    - **Compilation maison** : ouvrir
      `StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dpk`,
      lancer **Build**, puis **Install** (clic droit sur le paquet dans le
@@ -197,6 +209,24 @@ supprimé dans l'IDE reste supprimé en CI.
 
 Pour des scans incrémentaux limités aux fichiers modifiés dans la branche,
 voir [BRANCH_CHANGES_fr.md](BRANCH_CHANGES_fr.md).
+
+---
+
+## Ce que contient une release
+
+Chaque release sur la [page des releases](https://github.com/nrodear/StaticCodeAnalyser/releases)
+fournit cinq artefacts :
+
+| Artefact | De quoi il s'agit |
+|---|---|
+| `StaticCodeAnalyserSetup-<V>.exe` | **Installateur du plugin IDE.** Par utilisateur, sans droits administrateur. Choisit les IDE cibles parmi ceux qu'il détecte — Delphi 12 (32 bits) ainsi que Delphi 13 (32 et 64 bits). |
+| `StaticCodeAnalyser-v<V>-Win32.zip` | **EXE autonome, 32 bits**, avec le catalogue de règles. Réserve de pile portée à 32 Mo — nécessaire pour les arbres syntaxiques profonds des gros dépôts. |
+| `StaticCodeAnalyser-v<V>-Win64.zip` | **EXE autonome, 64 bits.** Le bon choix pour les gros corpus ; l'espace d'adressage y est la limite déterminante. |
+| `StaticCodeAnalyser-v<V>-source.zip` | **Sources** à l'état du tag de release. |
+| `StaticCodeAnalyser-v<V>-docs-scripts.zip` | **Documentation et exemples CI** — tous les guides en français, anglais et allemand, plus `examples/` (workflow GitHub Actions avec envoi SARIF, hook pre-commit, bot de commentaires PR, cible MSBuild, profils d'analyse). |
+
+Le plugin et l'EXE autonome partagent le même moteur et le même
+catalogue de règles ; seule la façon de les piloter diffère.
 
 ---
 
