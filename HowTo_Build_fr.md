@@ -98,6 +98,49 @@ changerez de projet actif au fil des étapes ci-dessous.
 
 ---
 
+### 3.1 Compiler avec Delphi 13 au lieu de Delphi 12
+
+Delphi 13 possède son propre jeu de fichiers projet. Tout le reste de
+cette page est identique — seul le fichier ouvert à l'étape 3 change :
+
+|                 | Delphi 12                          | Delphi 13                          |
+|-----------------|------------------------------------|------------------------------------|
+| Groupe          | `StaticCodeAnalyser.d12.groupproj` | `StaticCodeAnalyser.d13.groupproj` |
+| Sous-projets    | `*.dproj`                          | `*.d13.dproj`                      |
+| Affiché comme   | `SCA.Engine`                       | `SCA.Engine.d13`                   |
+| Nom du paquet   | `SCA.Engine.bpl`                   | `SCA.Engine370.bpl`                |
+| Sortie          | dispersée, en partie hors dépôt    | `lib\d13\<plateforme>\<config>\`   |
+
+Quatre points à connaître :
+
+- **Les sources sont partagées.** Les deux groupes compilent les mêmes
+  fichiers `.dpk`/`.dpr` : une unité ajoutée apparaît dans les deux.
+  Seuls les réglages du compilateur existent en double, et
+  `tools/dproj_d13_gate.py` vérifie qu'ils restent alignés.
+- **Rien ne change pour Delphi 12.** Le suffixe de version réside dans le
+  `.dproj` (`<DllSuffix>$(Auto)</DllSuffix>`), pas dans le `.dpk`
+  partagé. Delphi fournit `370` pour D13 et fournirait `290` pour D12 —
+  mais les projets D12 ne portent délibérément pas cette propriété :
+  leurs noms de paquets restent inchangés.
+- **La sortie du compilateur va dans le dépôt**, sous
+  `lib\<génération>\<plateforme>\<config>\`. `git clean -xfd lib`
+  efface tous les artefacts. Le dossier de génération est déduit
+  automatiquement de l'IDE utilisé : ouvrir par erreur un projet D13
+  dans D12 ne peut donc pas corrompre la cellule D13. Seule exception,
+  le `.bpl` reste là où l'IDE le cherche pour le charger.
+- **Delphi 13 fournit deux IDE** : 32 bits (`bin\bds.exe`) et 64 bits
+  (`bin64\bds.exe`). Un IDE 64 bits ne peut charger qu'un paquet
+  **Win64** ; les projets D13 sont donc en Win64 et s'enregistrent sous
+  **Known Packages x64**. Pour l'IDE 32 bits, passez en Win32 avant de
+  compiler et utilisez **Known Packages**.
+
+L'ordre de compilation est impératif et n'est pas imposé par l'IDE :
+`SCA.Engine`, puis `SCA.SharedUI`, puis le plugin.
+`python tools\stale_artifacts_check.py` indique ce qui manque ou est
+périmé.
+
+---
+
 ## 4. Compiler l'EXE autonome
 
 L'autonome est un simple `.exe`. Vous le lancez depuis la ligne de

@@ -94,6 +94,49 @@ Wir wechseln das aktive Projekt unten je nach Bedarf.
 
 ---
 
+### 3.1 Mit Delphi 13 statt Delphi 12 bauen
+
+Delphi 13 hat einen eigenen Satz Projektdateien. Alles andere auf dieser
+Seite bleibt gleich - nur die Datei aus Schritt 3 ist eine andere:
+
+|                 | Delphi 12                          | Delphi 13                          |
+|-----------------|------------------------------------|------------------------------------|
+| Projektgruppe   | `StaticCodeAnalyser.d12.groupproj` | `StaticCodeAnalyser.d13.groupproj` |
+| Teilprojekte    | `*.dproj`                          | `*.d13.dproj`                      |
+| Angezeigt als   | `SCA.Engine`                       | `SCA.Engine.d13`                   |
+| Paketname       | `SCA.Engine.bpl`                   | `SCA.Engine370.bpl`                |
+| Ausgabe         | verstreut, teils ausserhalb        | `lib\d13\<plattform>\<konfig>\`    |
+
+Vier Dinge, die man wissen sollte:
+
+- **Der Quelltext ist geteilt.** Beide Gruppen compilieren dieselben
+  `.dpk`/`.dpr`-Dateien; eine neue Unit taucht also in beiden auf.
+  Doppelt sind nur die Compilereinstellungen, und
+  `tools/dproj_d13_gate.py` prueft, dass die im Gleichschritt bleiben.
+- **Fuer Delphi 12 aendert sich nichts.** Der Versionssuffix steht in der
+  `.dproj` (`<DllSuffix>$(Auto)</DllSuffix>`), nicht in der geteilten
+  `.dpk`. Delphi setzt fuer D13 `370` ein und wuerde fuer D12 `290`
+  einsetzen - die D12-Projekte tragen die Eigenschaft aber bewusst
+  nicht, ihre Paketnamen bleiben also exakt wie bisher.
+- **Die Compilerausgabe landet im Repository**, unter
+  `lib\<generation>\<plattform>\<konfiguration>\`. `git clean -xfd lib`
+  raeumt jedes Bauartefakt ab. Der Generationsordner wird automatisch aus
+  der bauenden IDE abgeleitet - wer eine D13-Datei versehentlich in D12
+  oeffnet, kann die D13-Zelle also nicht verderben. Einzige Ausnahme ist
+  die `.bpl`: sie bleibt dort, wo die IDE sie zum Laden sucht.
+- **Delphi 13 bringt zwei IDEs mit**: eine 32-Bit- (`bin\bds.exe`) und
+  eine 64-Bit-IDE (`bin64\bds.exe`). Eine 64-Bit-IDE kann nur ein
+  **Win64**-Paket laden; die D13-Projekte stehen deshalb auf Win64 und
+  werden unter **Known Packages x64** eingetragen. Fuer die 32-Bit-IDE
+  vor dem Bauen auf Win32 umstellen und **Known Packages** benutzen.
+
+Die Baureihenfolge ist bindend und wird von der IDE nicht erzwungen:
+erst `SCA.Engine`, dann `SCA.SharedUI`, dann das Plugin.
+`python tools\stale_artifacts_check.py` sagt, was noch fehlt oder
+veraltet ist.
+
+---
+
 ## 4. Die Standalone-EXE bauen
 
 Die Standalone ist eine einfache `.exe`. Du startest sie per

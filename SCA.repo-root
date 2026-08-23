@@ -1,0 +1,5 @@
+Marker fuer die Repo-Wurzel.
+
+Die D13-Projektdateien leiten ihren Ausgabepfad ueber
+$([MSBuild]::GetDirectoryNameOfFileAbove(..., 'SCA.repo-root')) ab, damit er
+unabhaengig von der Projekttiefe stimmt. Nicht loeschen, nicht verschieben.

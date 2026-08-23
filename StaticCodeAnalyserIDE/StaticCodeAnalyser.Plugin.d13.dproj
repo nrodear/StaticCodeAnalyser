@@ -1,0 +1,421 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{A34ED6F2-BC08-5E68-8C97-E8738861D345}</ProjectGuid>
+        <MainSource>StaticCodeAnalyser.Plugin.d12.dpk</MainSource>
+        <ProjectVersion>20.3</ProjectVersion>
+        <FrameworkType>None</FrameworkType>
+        <Base>True</Base>
+        <Config Condition="'$(Config)'==''">Release</Config>
+        <Platform Condition="'$(Platform)'==''">Win64</Platform>
+        <ProjectName Condition="'$(ProjectName)'==''">StaticCodeAnalyser.Plugin.d13</ProjectName>
+        <TargetedPlatforms>3</TargetedPlatforms>
+        <AppType>Package</AppType>
+    </PropertyGroup>
+    <PropertyGroup>
+        <!-- Generation aus dem Compiler-Backend der AKTIVEN IDE ableiten.
+             Nicht $(ProductVersion): die wird erst ueber CodeGear.Delphi.Targets
+             gesetzt, und das importiert diese Datei ganz am Ende - lange nach
+             den Ausgabepfaden. Gemessen am 2026-08-23.
+             Der Fall UNBEKANNT-BDS ist Absicht: ein unbrauchbares $(BDS)
+             erzeugt einen sichtbar falschen Ordner statt stiller Vermischung. -->
+        <SCAGen Condition="Exists('$(BDS)\bin\dcc32370.dll')">d13</SCAGen>
+        <SCAGen Condition="Exists('$(BDS)\bin\dcc32290.dll')">d12</SCAGen>
+        <SCAGen Condition="'$(SCAGen)'==''">UNBEKANNT-BDS</SCAGen>
+        <SCARoot>$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)', 'SCA.repo-root'))</SCARoot>
+        <SCAOut>$(SCARoot)\lib\$(SCAGen)\$(Platform)\$(Config)</SCAOut>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Base)'=='true') or '$(Base_Win32)'!=''">
+        <Base_Win32>true</Base_Win32>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win64' and '$(Base)'=='true') or '$(Base_Win64)'!=''">
+        <Base_Win64>true</Base_Win64>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Debug' or '$(Cfg_1)'!=''">
+        <Cfg_1>true</Cfg_1>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Release' or '$(Cfg_2)'!=''">
+        <Cfg_2>true</Cfg_2>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base)'!=''">
+        <DCC_DcuOutput>$(SCAOut)\dcu\$(MSBuildProjectName)</DCC_DcuOutput>
+        <DCC_ExeOutput>$(SCAOut)\bin</DCC_ExeOutput>
+        <DCC_DcpOutput>$(SCAOut)\dcp</DCC_DcpOutput>
+        <DCC_HppOutput>$(SCAOut)\hpp</DCC_HppOutput>
+        <DllSuffix>$(Auto)</DllSuffix>
+        <DCC_UnitSearchPath>..\SCA.Engine\sources\Common;..\SCA.Engine\sources\Detectors;..\SCA.Engine\sources\Infrastructure;..\SCA.Engine\sources\Output;..\SCA.Engine\sources\Parsing;..\SCA.SharedUI\sources;$(DCC_UnitSearchPath)</DCC_UnitSearchPath>
+        <DCC_E>false</DCC_E>
+        <DCC_N>false</DCC_N>
+        <DCC_S>false</DCC_S>
+        <DCC_F>false</DCC_F>
+        <DCC_K>false</DCC_K>
+        <GenDll>true</GenDll>
+        <GenPackage>true</GenPackage>
+        <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;$(DCC_Namespace)</DCC_Namespace>
+        <DCC_CBuilderOutput>All</DCC_CBuilderOutput>
+        <SanitizedProjectName>StaticCodeAnalyser_Plugin_d12</SanitizedProjectName>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_Win32)'!=''">
+        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
+        <BT_BuildType>Debug</BT_BuildType>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
+        <VerInfo_MajorVer>0</VerInfo_MajorVer>
+        <VerInfo_MinorVer>9</VerInfo_MinorVer>
+        <VerInfo_Release>16</VerInfo_Release>
+        <VerInfo_Build>0</VerInfo_Build>
+        <VerInfo_Keys>CompanyName=;FileDescription=Static Code Analysis Tool for Delphi (IDE Plugin, Monolith);FileVersion=0.9.16.0;InternalName=StaticCodeAnalyser.Plugin;LegalCopyright=;LegalTrademarks=;OriginalFilename=StaticCodeAnalyser.Plugin.d12.bpl;ProductName=Static Code Analysis Tool for Delphi;ProductVersion=0.9.16.0;Comments=Release 0.9.16 (2026-08-13)</VerInfo_Keys>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <DCC_UsePackage>vcl;rtl;vclwinx;$(DCC_UsePackage)</DCC_UsePackage>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_Win64)'!=''">
+        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;$(DCC_Namespace)</DCC_Namespace>
+        <DCC_UsePackage>vcl;rtl;vclwinx;$(DCC_UsePackage)</DCC_UsePackage>
+        <BT_BuildType>Debug</BT_BuildType>
+        <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_1)'!=''">
+        <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
+        <DCC_DebugDCUs>true</DCC_DebugDCUs>
+        <DCC_Optimize>false</DCC_Optimize>
+        <DCC_GenerateStackFrames>true</DCC_GenerateStackFrames>
+        <DCC_DebugInfoInExe>true</DCC_DebugInfoInExe>
+        <DCC_IntegerOverflowCheck>true</DCC_IntegerOverflowCheck>
+        <DCC_RangeChecking>true</DCC_RangeChecking>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_2)'!=''">
+        <DCC_LocalDebugSymbols>false</DCC_LocalDebugSymbols>
+        <DCC_Define>RELEASE;$(DCC_Define)</DCC_Define>
+        <DCC_SymbolReferenceInfo>0</DCC_SymbolReferenceInfo>
+        <DCC_DebugInformation>0</DCC_DebugInformation>
+    </PropertyGroup>
+    <ItemGroup>
+        <DelphiCompile Include="$(MainSource)">
+            <MainSource>MainSource</MainSource>
+        </DelphiCompile>
+        <DCCReference Include="sca_branding.res"/>
+        <DCCReference Include="rtl.dcp"/>
+        <DCCReference Include="vcl.dcp"/>
+        <DCCReference Include="vclwinx.dcp"/>
+        <DCCReference Include="designide.dcp"/>
+        <DCCReference Include="xmlrtl.dcp"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uAnalyserTypes.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uAstSpans.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uCollectValues.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uCompatSet.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uCrashDiag.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uDetectorUtils.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uLocalization.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uMethodd12.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uQuickFix.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uRegExMatches.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uRuleCatalog.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uSCAConsts.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uSourceLineEdit.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uYamlSubsetParser.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAbstractNotImpl.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAssertMessage.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAssignedAndAssignedNil.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAvoidOut.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uBeginEndRequired.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uBoolAlwaysTrue.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uBooleanParam.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCanBeClassMethod.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCaseStatementSize.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCastAndFree.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCharToCharPointerCast.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uClassPerFile.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCodeSmells2.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCommandInjection.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCommentedOutCode.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uConcatToFormat.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uConcurrencyExt.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uConsecutiveSection.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uConsecutiveVisibility.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uConstantReturn.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uConstructorWithoutInherited.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCustomClassDiscovery.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCustomRuleDetector.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCyclomaticComplexity.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDateFormatSettings.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDeadCode.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDebugOutput.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDeepNesting.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDestructorWithoutInherited.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmActionMismatch.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmCircularDataSource.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmComponentUnused.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmCrossFormCoupling.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmDataModuleSplitHint.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmDbInUiForm.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmDeadEvent.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmDefaultName.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmDuplicateBinding.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmEmptyBoundEvent.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmFieldTypeMismatch.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmForbiddenClass.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmGodHandler.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmHardcodedCaption.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmHardcodedDbCreds.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmLayerViolation.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmMasterDetailUnlinked.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmOrphanHandler.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmRequiredField.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmSchemaMismatch.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmSqlFromUserInput.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDfmTabOrderConflict.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDigitGrouping.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDivByZero.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDuplicateBlock.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDuplicateString.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyArgumentList.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyBlock.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyFile.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSourceEncoding.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyFinallyBlock.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyInterface.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyMethod.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyOnHandler.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyVisibilitySection.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uExceptInDestructor.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uExceptionTooGeneral.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uExceptOnException.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uExplicitTObjectInheritance.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFieldLeak.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFieldName.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFloatEquality.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFormatMismatch.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFreeAndNilHint.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uFreeWithoutNil.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uGetMemWithoutFreeMem.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uGodClass.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uGotoStatement.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uGroupedDeclaration.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedPath.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedSecret.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedString.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uIfElseBegin.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uIfThenShortCircuit.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uInheritedMethodEmpty.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uInlineAssembly.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uInsecureCryptoAlgorithm.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uInsecureRandom.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uDefaultCaseInCaseStatement.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAssertWithSideEffect.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uConstStringParameter.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCompilerDirectiveScope.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uBooleanPropertyNaming.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uVariantTypeMisuse.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTObjectListWithoutOwnership.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAnonMethodCaptureLoopVar.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uCognitiveComplexity.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uThreadFreeOnTerminateWithRef.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uPathTraversal.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAttributeIgnoreWithoutReason.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAttributeDuplicate.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAttributeCategoryWithoutString.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAttributeTestFixtureWithoutTests.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uAttributeMisalignment.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uInstanceInvokedConstructor.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uIntegerOverflow.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uInterfaceName.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLargeClass.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLeakDetector2.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLeakInConstructor.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLegacyInitializationSection.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLengthUnderflow.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLockWithoutTryFinally.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLongMethod.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLongParamList.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uLowercaseKeyword.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMagicNumbers.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMethodName.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMissingFinally.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMissingOverride.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMissingRaise.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMissingUnitHeader.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMoveSizeOfPointer.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uMultipleExit.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uNamingExt.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uNestedRoutines.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uNestedTry.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uNilComparison.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uNilDeref.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uNoSonarMarker.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uPerfHotspots.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uPointerArithmeticOnString.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uPointerName.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uPointerSubtraction.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uPublicField.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uPublicMemberWithoutDoc.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRaiseOutsideExcept.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRaisingRawException.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRedundantBoolean.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRedundantConditional.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRedundantJump.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRedundantParentheses.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uReRaiseException.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRestHttpSecurity.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uReversedForRange.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uRoutineResultAssigned.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uManagedResultUninit.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSelfAssignment.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSetLengthAppendInLoop.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSqlDangerousStatement.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSQLInjection.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSQLInjectionScore.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uStringFromPointer.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSuperfluousSemicolon.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uSynchronizeInDestructor.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTabulationCharacter.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTautologicalExpr.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTodoComment.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTooLongLine.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTrailingCommaArgList.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTrailingWhitespace.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTwiceInheritedCalls.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uTypeName.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnicodeToAnsiCast.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUninitVar.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnitLevelKeywordIndent.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnpairedLock.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnsortedUses.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnusedLocal.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnusedParameter.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnusedPrivateMethod.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnusedRoutine.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUnusedUses.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uUseAfterFree.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uVirtualCallInCtor.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uVisibilityCheck.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uWithMultipleTargets.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uWithStatement.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uAstFileCache.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uBaseline.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uConfidenceFilter.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uDfmAnalysisRunner.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uDfmFrameResolver.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uAnalyzeContext.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uDfmRepoIndex.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uEngineApi.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uExport.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uExportHtml.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uFileTextCache.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uFindingFingerprint.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uEditorCommand.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uFormBinder.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uIgnoreList.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uPathOverrides.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uRepoSettings.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSonarConfig.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uStaticAnalyzer2.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uParallelScan.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uProjectFiles.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uNotIncludedInProject.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uStaticFiles.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSuppression.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSuppressionTelemetry.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSymbolReferenceIndex.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uTypeIndex.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uTypeResolver.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uVcsChanges.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Output\uClaudePrompt.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Output\uExportSARIF.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Output\uExportSonarGeneric.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Output\uFixHint.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Output\uFindingCopyText.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Output\uSonarPush.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Parsing\uAstNode.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Parsing\uCFG.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Parsing\uComponentGraph.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Parsing\uDfmBinaryReader.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Parsing\uDfmLexer.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Parsing\uDfmParser.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Parsing\uLexer.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Parsing\uParser2.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uAnalyserPalette.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uAnalyserTheme.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uAppTheme.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uFindingGridRenderer.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uFindingsPropertiesFrame.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uFindingFilter.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uFuzzyComboSearch.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uHintTextLayout.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uIDEStatsTiles.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uIDEHelpPanel.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uIDEToolbar.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uExportMenu.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uIDEColors.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uUiElementRegistry.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uPathNormalize.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uRecentPaths.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uScanTargetDialog.pas"/>
+        <DCCReference Include="uIDEExpert.pas"/>
+        <DCCReference Include="uIDEAnalyserForm.pas"/>
+        <DCCReference Include="uIDEFindingsPropertiesForm.pas"/>
+        <DCCReference Include="uIDELineHighlighter.pas"/>
+        <DCCReference Include="uIDEAnnotationOverlay.pas"/>
+        <DCCReference Include="uIDEMessages.pas"/>
+        <DCCReference Include="uIDEWatchMode.pas"/>
+        <DCCReference Include="uIDEEditorIntegration.pas"/>
+        <DCCReference Include="uIDEStatusBar.pas"/>
+        <DCCReference Include="uIDETheme.pas"/>
+        <DCCReference Include="uIDEAnalyseProgress.pas"/>
+        <DCCReference Include="uIDEGridTooltip.pas"/>
+        <DCCReference Include="uIDELifecycle.pas"/>
+        <DCCReference Include="uIDEAddInOptionsBase.pas"/>
+        <DCCReference Include="uIDESCAOptions.pas">
+            <Form>SCAOptionsFrame</Form>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
+        <DCCReference Include="uIDESonarOptions.pas">
+            <Form>SonarOptionsFrame</Form>
+            <DesignClass>TFrame</DesignClass>
+        </DCCReference>
+        <DCCReference Include="uIDEAnalyseRunner.pas"/>
+        <RcCompile Include="..\branding\sca_branding.rc"/>
+        <BuildConfiguration Include="Base">
+            <Key>Base</Key>
+        </BuildConfiguration>
+        <BuildConfiguration Include="Debug">
+            <Key>Cfg_1</Key>
+            <CfgParent>Base</CfgParent>
+        </BuildConfiguration>
+        <BuildConfiguration Include="Release">
+            <Key>Cfg_2</Key>
+            <CfgParent>Base</CfgParent>
+        </BuildConfiguration>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Delphi.Personality.12</Borland.Personality>
+        <Borland.ProjectType>Package</Borland.ProjectType>
+        <BorlandProject>
+            <Delphi.Personality>
+                <Source>
+                    <Source Name="MainSource">StaticCodeAnalyser.Plugin.d12.dpk</Source>
+                </Source>
+            </Delphi.Personality>
+            <Platforms>
+                <Platform value="Win32">True</Platform>
+                <Platform value="Win64">True</Platform>
+                <Platform value="Win64x">False</Platform>
+            </Platforms>
+            <ModelSupport>False</ModelSupport>
+        </BorlandProject>
+        <ProjectFileVersion>12</ProjectFileVersion>
+    </ProjectExtensions>
+    <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>
+    <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>
+    <Import Project="$(MSBuildProjectName).deployproj" Condition="Exists('$(MSBuildProjectName).deployproj')"/>
+</Project>

@@ -35,6 +35,13 @@ StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.res
 StaticCodeAnalyserIDE/StaticCodeAnalyser.Plugin.d12.res
 SCA.LSP/SCA.LSP.res
 
+# ---- Zentrale Ablage des D13-Satzes (2026-08-23) ----
+# lib/<generation>/<plattform>/<konfiguration>/{dcu,dcp,hpp,bin}
+# Muster von JCL uebernommen: Artefakte IM Repo, damit
+# "git clean -xfd lib" alles abraeumt und ein liegengebliebenes DCP
+# der anderen Delphi-Generation gar nicht erst entstehen kann.
+/lib/
+
 # ---- Build-Output-Verzeichnisse ----
 # Delphi schreibt kompilierte Artefakte (DCU/BPL/EXE/DLL) typisch
 # nach <Plattform>/<Konfiguration>/. Komplett ignorieren.
