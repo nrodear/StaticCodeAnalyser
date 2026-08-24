@@ -1177,6 +1177,7 @@ class procedure TRuleCatalog.LoadUserProfiles;
 // hindern, sie kostet nur die eigenen Profile.
 var
   FileName : string;
+  Text     : string;
   Root     : TJSONValue;
   Obj      : TJSONObject;
   Profiles : TJSONObject;
@@ -1189,7 +1190,15 @@ begin
 
   Root := nil;
   try
-    Root := TJSONObject.ParseJSONValue(TFile.ReadAllText(FileName, TEncoding.UTF8));
+    Text := TFile.ReadAllText(FileName, TEncoding.UTF8);
+    // TFile.WriteAllText stellt der Datei mit TEncoding.UTF8 eine BOM
+    // voran. Ob der Leser sie schluckt, haengt am Verhalten von
+    // TStreamReader; bleibt sie stehen, liefert ParseJSONValue nil - und
+    // die eigenen Profile waeren still weg, ohne Fehler, ohne Hinweis.
+    // Ein Zeichen abschneiden kostet nichts und nimmt die Frage raus.
+    if (Text <> '') and (Text[1] = #$FEFF) then
+      Delete(Text, 1, 1);
+    Root := TJSONObject.ParseJSONValue(Text);
   except
     on E: Exception do
       OutputDebugString(PChar(Format(
