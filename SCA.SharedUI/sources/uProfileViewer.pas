@@ -90,17 +90,6 @@ const
   ALL_KINDS = [Low(TFindingKind) .. High(TFindingKind)];
 
 type
-  // Fenster, das sein Theme beim Anzeigen NOCH EINMAL anfordert.
-  //
-  // Warum nicht nur einmal nach dem Aufbau: im IDE-Plugin laeuft im Hook
-  // TIDETheme.Apply, und dessen Pipeline setzt je Control StyleName. Das
-  // kann das Fensterhandle neu erzeugen - ein am alten Handle gesetztes
-  // DWM-Attribut (dunkle Titelzeile) ist dann verloren. In der Standalone
-  // faellt das nicht auf, dort greift der Aufruf im Konstruktor.
-  //
-  // OnShow ist der letzte Zeitpunkt, an dem das Handle endgueltig steht
-  // und das Fenster noch nicht sichtbar ist. Der Aufruf ist idempotent,
-  // ein zweites Mal kostet nichts.
   TProfileViewerForm = class(TForm)
   strict private
     FLstProfiles : TListBox;
@@ -256,6 +245,7 @@ begin
   try
     Dlg.Caption      := _('Add rules');
     Dlg.Position     := poMainFormCenter;
+    Dlg.PopupMode    := pmAuto;   // s. Begruendung im Hauptfenster
     // Gleiche Bauart wie das Profil-Fenster: feste Groesse, kein
     // Sizing-Rahmen. Die Spaltenbreiten stehen fest, also auch die
     // sinnvolle Fensterbreite.
@@ -389,6 +379,16 @@ var
 begin
   Caption      := _('Rule-set profiles');
   Position     := poMainFormCenter;
+  // PopupMode NICHT auf pmNone lassen. ShowModal macht sonst
+  //   if (PopupMode = pmNone) and (Application.ModalPopupMode <> pmNone)
+  //     then RecreateWnd
+  // (Vcl.Forms.pas:9792). Das Fensterhandle waere danach ein anderes als
+  // das, an dem der Konstruktor die dunkle Titelzeile gesetzt hat - das
+  // DWM-Attribut haengt am Handle. Ob die IDE ModalPopupMode setzt, ist
+  // von aussen nicht feststellbar; pmAuto nimmt die Frage weg und ist im
+  // Plugin ohnehin richtig, weil das Fenster damit dem aktiven Fenster
+  // gehoert statt dem Application-Handle.
+  PopupMode    := pmAuto;
   // bsDialog: kein Sizing-Rahmen, kein Maximieren-Knopf. Die Breite
   // ergibt sich aus den Spalten (80+190+360+90+130) plus Profilliste.
   BorderStyle  := bsDialog;

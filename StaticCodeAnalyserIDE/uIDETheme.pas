@@ -213,6 +213,13 @@ type
     // Color-Cache - nach Theme-Wechsel invalidiert, beim naechsten Read
     // lazy neu berechnet.
     FCacheValid  : Boolean;
+    // Eigenes Flag, weil FEditorBg aus einer ANDEREN Quelle kommt
+    // (INTACodeEditorServices) und zu einer anderen Zeit bereit ist.
+    // Beim IDE-Start ohne offene Datei faellt genau dieser Dienst aus,
+    // waehrend das Theming laengst steht - ein gemeinsames Flag haette
+    // das clNone dann zusammen mit den richtigen Rahmenfarben
+    // eingefroren.
+    FEditorBgValid : Boolean;
     FFrameBg     : TColor;
     FFrameFg     : TColor;
     FEditorBg    : TColor;
@@ -333,6 +340,7 @@ begin
   FNotifierIdx   := -1;
   FColorNotifIdx := -1;
   FCacheValid    := False;
+  FEditorBgValid := False;
   FOrigColors  := TDictionary<Pointer, TControlColors>.Create;
 end;
 
@@ -452,16 +460,30 @@ begin
     Style := Theming.StyleServices
   else
     Style := nil;
-  AusIde := Assigned(Style);
+  // NICHT nur "Dienst da?", sondern "Theme steht?". Waehrend des
+  // Paketladens antwortet Supports() bereits erfolgreich, das Theme ist
+  // aber noch nicht angewandt - dann liefert StyleServices die hellen
+  // Vorgabefarben, und ein blosses Assigned() haette sie als gueltig
+  // festgeschrieben. ActiveTheme ist erst dann nicht leer, wenn die IDE
+  // ihr Theme gesetzt hat.
+  //
+  // Bewusst ActiveTheme und NICHT IDEThemingEnabled: ein absichtlich
+  // abgeschaltetes Theming ist ein gueltiger Dauerzustand und wuerde den
+  // Cache sonst nie gueltig werden lassen.
+  AusIde := Assigned(Style) and Assigned(Theming) and (Theming.ActiveTheme <> '');
   if not Assigned(Style) then
     Style := StyleServices;
 
   FFrameBg := Style.GetSystemColor(clWindow);
   FFrameFg := Style.GetSystemColor(clWindowText);
   FEditorBg := clNone;
+  FEditorBgValid := False;
   try
     if Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then
+    begin
       FEditorBg := Svc.Options.BackgroundColor[atWhiteSpace];
+      FEditorBgValid := FEditorBg <> clNone;
+    end;
   except
     // Editor-Service kann waehrend Plugin-Init noch nicht initialisiert
     // sein. clNone als Fallback signalisiert "frag StyleServices.clWindow".
@@ -491,7 +513,8 @@ var
   i        : Integer;
   Snapshot : TArray<TSubscription>;
 begin
-  FCacheValid := False;
+  FCacheValid    := False;
+  FEditorBgValid := False;
   // Den geteilten Cache in SCA.SharedUI mitziehen. Bis 2026-08-10 passierte
   // das NIE: der Kommentar an GCachedEditorBgDark behauptete eine
   // Auffrischung "nach jedem Settings-Save / Theme-Change", fuer den
@@ -675,6 +698,8 @@ class procedure TIDETheme.Apply(AControl: TWinControl);
 var
   Theming : IOTAIDEThemingServices;
   TopForm : TCustomForm;
+  TitelBg : TColor;
+  TitelFg : TColor;
 begin
   if AControl = nil then Exit;
 
@@ -726,8 +751,41 @@ begin
   //     ueber GetParentForm ermittelt, faerbte ein gedockter Frame die
   //     Titelzeile der IDE selbst um. Das steht uns nicht zu.
   if AControl is TCustomForm then
-    TAppTheme.ApplyTitleBarTheme(TCustomForm(AControl), IsDark,
-                                 FrameBg, FrameFg);
+  begin
+    // Farben aus der LEBENDEN Quelle, nicht aus dem Cache.
+    //
+    // Das ist das Muster, das dieses Projekt ohnehin ueberall verfolgt:
+    // ApplyRecursive dreissig Zeilen weiter oben liest
+    // ATheming.StyleServices direkt, ebenso die Stat-Tiles, das
+    // Hilfe-Panel und das Properties-Frame. Nur die Titelzeile hat
+    // bisher FrameBg/FrameFg genommen - also den Cache - und damit in
+    // EINER Funktion aus zwei Quellen gelesen.
+    //
+    // Das ist keine Stilfrage. Der Cache wird beim Paketladen gefuellt
+    // (Prime -> RefreshEditorBgDarkCache -> EditorBgProvider ->
+    // EditorBg -> RebuildCache), also waehrend des Splashs, wenn das
+    // IDE-Theme noch nicht steht. Gemessen: erstes Oeffnen des
+    // Profil-Fensters dark=0 caption=$FFFFFF, 25 Sekunden spaeter
+    // dasselbe Fenster dark=1 caption=$322F2D.
+    //
+    // Aus der lebenden Quelle gelesen ist jedes geoeffnete Fenster
+    // selbstkorrigierend - unabhaengig davon, was im Cache steht und ob
+    // je ein Notifier gefeuert hat.
+    if Assigned(Theming) and Assigned(Theming.StyleServices) then
+    begin
+      TitelBg := Theming.StyleServices.GetSystemColor(clWindow);
+      TitelFg := Theming.StyleServices.GetSystemColor(clWindowText);
+    end
+    else
+    begin
+      // Kein Theming-Dienst: dann ist der Cache die einzige Auskunft,
+      // die es gibt.
+      TitelBg := FrameBg;
+      TitelFg := FrameFg;
+    end;
+    TAppTheme.ApplyTitleBarTheme(TCustomForm(AControl), IstDunkel(TitelBg),
+                                 TitelBg, TitelFg);
+  end;
 end;
 
 class function TIDETheme.Subscribe(ACallback: TThemeChangedProc): IInterface;
@@ -768,29 +826,36 @@ end;
 class function TIDETheme.EditorBg: TColor;
 begin
   EnsureImpl;
-  if not G.FCacheValid then G.RebuildCache;
+  // Auch neu holen, wenn NUR der Editor-Wert fehlt. Beim IDE-Start ohne
+  // offene Datei antwortet INTACodeEditorServices nicht, das Theming
+  // aber schon - mit dem gemeinsamen Flag blieb das clNone dann stehen,
+  // bis irgendein Notifier feuerte.
+  if not (G.FCacheValid and G.FEditorBgValid) then G.RebuildCache;
   Result := G.FEditorBg;
 end;
 
-class function TIDETheme.IsDark: Boolean;
+// Wirkt diese Farbe perzeptuell dunkel? Aus TIDETheme.IsDark
+// herausgezogen, weil Apply die Frage seit 2026-08-24 fuer eine Farbe
+// beantworten muss, die NICHT aus dem Cache stammt.
+function IstDunkel(AColor: TColor): Boolean;
 const
   // 50 % von 255, perzeptuelle Mitte. Unter dieser Luminanz behandeln
   // Subscriber das Theme als "dunkel" und schalten Dark-Mode-Akzente ein.
   DARK_LUMINANCE_MAX = 127;
 var
   Rgb       : Cardinal;
-  Red       : Integer;
-  Grn       : Integer;
-  Blu       : Integer;
   Luminance : Integer;
 begin
-  Rgb := ColorToRGB(TIDETheme.FrameBg);
-  Red := GetRValue(Rgb);
-  Grn := GetGValue(Rgb);
-  Blu := GetBValue(Rgb);
+  Rgb := ColorToRGB(AColor);
   // ITU-R BT.601 perzeptuelles Mittel
-  Luminance := (Red * 299 + Grn * 587 + Blu * 114) div 1000;
+  Luminance := (GetRValue(Rgb) * 299 + GetGValue(Rgb) * 587 +
+                GetBValue(Rgb) * 114) div 1000;
   Result := Luminance <= DARK_LUMINANCE_MAX;
+end;
+
+class function TIDETheme.IsDark: Boolean;
+begin
+  Result := IstDunkel(TIDETheme.FrameBg);
 end;
 
 class procedure TIDETheme.Prime;
@@ -804,6 +869,23 @@ begin
     // GCachedEditorBgDark bis zum ersten Theme-Ereignis den Vorgabewert
     // False, obwohl der EditorBgProvider zu diesem Zeitpunkt schon steht.
     uAnalyserTheme.RefreshEditorBgDarkCache;
+
+    // ...und den Farb-Cache danach WIEDER verwerfen.
+    //
+    // Der Aufruf darueber ist nicht harmlos: er laeuft ueber
+    // IsEditorBgDark -> EditorBgProvider -> TIDETheme.EditorBg in ein
+    // RebuildCache hinein. Prime kommt aber aus InstallSharedUiHooks,
+    // also aus dem Paketlade-Pfad waehrend des Splashs - genau dann ist
+    // das IDE-Theme noch nicht angewandt.
+    //
+    // Ohne diese Zeile war Prime der Grund, aus dem der Cache die
+    // Splash-Farben trug: gefuellt wurde er hier, verworfen nur von
+    // NotifyChanged, und die beiden Notifier melden ausschliesslich
+    // AENDERUNGEN. Die IDE setzt ihr Theme lange vor unserem Register -
+    // es feuert also nichts, und der falsche Wert stand die ganze
+    // Sitzung.
+    G.FCacheValid    := False;
+    G.FEditorBgValid := False;
   end;
 end;
 
