@@ -11,9 +11,18 @@ package SCA.Engine;
 // "enthaelt die Unit 'uLocalization', die auch im Package
 // 'SCA.Engine' enthalten ist".
 //
-// Die Angabe in der .dproj (<RuntimeOnlyPackage>) reicht NICHT -
-// sie ist nur der MSBuild-Spiegel. Massgeblich ist diese
+// Die Angabe in der .dproj (<RuntimeOnlyPackage> bzw.
+// <DesignOnlyPackage>) reicht NICHT - sie ist nur der
+// MSBuild-Spiegel. Massgeblich fuer die gebaute BPL ist diese
 // Direktive. So machen es auch JCL und die GetIt-Plugins.
+//
+// Sie gehoert aber TROTZDEM in die .dproj, und das ist am
+// 2026-08-24 klar geworden: ohne sie weiss die IDE vor dem
+// Compilieren nichts von der Rolle des Pakets, bietet im Project
+// Manager "Install" auch fuer ein Laufzeitpaket an und meldet erst
+// beim Laden "kann nicht installiert werden, da es kein
+// Entwurfszeit-Package ist". Mit dem Eintrag ist der Menuepunkt
+// gar nicht erst da.
 {$RUNONLY}
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
