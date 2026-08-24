@@ -2490,81 +2490,78 @@ begin
 end;
 
 procedure TForm2.BuildHamburgerMenu;
-var
-  MI : TMenuItem;
+// GRUPPIERUNG = die des IDE-Plugins (Paritaet 2026-08-24). Beide Menues
+// fuehren dieselben Punkte in derselben Reihenfolge und denselben
+// Gruppen:
+//
+//   Aktionen            Cancel Analysis
+//   ---
+//   Export/Baseline     Export, Baseline schreiben, nur neue Funde
+//   ---
+//   Konfiguration       Settings, Ignore-Liste, Regelsatz-Profile
+//   ---
+//   Darstellung         Erscheinungsbild, Oeffnen mit, Sprache
+//
+// Vorher stand hier eine gewachsene Reihenfolge: Export mitten im
+// Konfig-Block, "Erscheinungsbild" zwischen den beiden
+// Baseline-Punkten. Die letzte Gruppe gibt es nur in der EXE - in der
+// IDE liefert der Wirt Theme, Editor und Sprache.
+//
+// Was das Plugin zusaetzlich fuehrt, fehlt hier mit Grund: Branch-
+// Changes ist in der EXE ein eigenstaendiger Top-Level-Button, und
+// Editor-Marker gibt es ohne Editor nicht.
+  procedure Trenner;
+  var
+    MI : TMenuItem;
+  begin
+    MI := TMenuItem.Create(FHamburgerMenu);
+    MI.Caption := '-';
+    FHamburgerMenu.Items.Add(MI);
+  end;
+
+  function Punkt(const ACaption: string; AHandler: TNotifyEvent): TMenuItem;
+  begin
+    Result := TMenuItem.Create(FHamburgerMenu);
+    Result.Caption := ACaption;
+    Result.OnClick := AHandler;
+    FHamburgerMenu.Items.Add(Result);
+  end;
+
 begin
   FHamburgerMenu := TPopupMenu.Create(Self);
   FHamburgerMenu.OnPopup := HamburgerMenuPopup;
 
-  // (Branch-Changes ist NICHT mehr im Menue - BtnBranch ist eigenstaendiger
-  // Top-Level-Button.)
+  // ---- Aktionen ----
+  // Enabled wird in HamburgerMenuPopup gesynct.
+  FMICancel := Punkt(_('Cancel Analysis'), BtnCancelClick);
 
-  // ---- Cancel (Enabled wird in HamburgerMenuPopup gesynct) ----
-  FMICancel := TMenuItem.Create(FHamburgerMenu);
-  FMICancel.Caption := _('Cancel Analysis');
-  FMICancel.OnClick := BtnCancelClick;          // existierender Handler
-  FHamburgerMenu.Items.Add(FMICancel);
+  Trenner;
 
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := '-';
-  FHamburgerMenu.Items.Add(MI);
+  // ---- Export und Baseline ----
+  Punkt(_('Export') + '...', HamburgerExportClick);
+  Punkt(_('Write baseline from current scan...'), WriteBaselineClick);
+  FMIBaseline := Punkt(_('Show only new findings (baseline)'),
+                       BaselineOnlyNewClick);
 
-  // ---- Export ----
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := _('Export') + '...';
-  MI.OnClick := HamburgerExportClick;
-  FHamburgerMenu.Items.Add(MI);
+  Trenner;
 
-  // ---- Konfig-Block: Settings + Ignore ----
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := _('Settings...');
-  MI.OnClick := HamburgerSettingsClick;
-  FHamburgerMenu.Items.Add(MI);
+  // ---- Konfiguration ----
+  // Profile gehoeren hierher: sie entscheiden, WELCHE Regeln ueberhaupt
+  // laufen - dieselbe Klasse Entscheidung wie Settings und Ignore-Liste.
+  Punkt(_('Settings...'),           HamburgerSettingsClick);
+  Punkt(_('Ignore list...'),        HamburgerIgnoreListClick);
+  Punkt(_('Rule-set profiles...'),  HamburgerProfilesClick);
 
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := _('Ignore list...');
-  MI.OnClick := HamburgerIgnoreListClick;
-  FHamburgerMenu.Items.Add(MI);
+  Trenner;
 
-  // Profile gehoeren in den Konfig-Block: sie entscheiden, WELCHE Regeln
-  // ueberhaupt laufen - dieselbe Klasse Entscheidung wie Settings und
-  // Ignore-Liste, nur bisher ohne eigene Ansicht.
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := _('Rule-set profiles...');
-  MI.OnClick := HamburgerProfilesClick;
-  FHamburgerMenu.Items.Add(MI);
-
-  // ---- Erscheinungsbild (Hell / Dunkel / Wie Windows) ----
-  FMIAppearance := TMenuItem.Create(FHamburgerMenu);
-  FMIAppearance.Caption := _('Appearance');
-  FHamburgerMenu.Items.Add(FMIAppearance);
+  // ---- Darstellung (nur EXE) ----
+  FMIAppearance := Punkt(_('Appearance'), nil);
   BuildAppearanceMenu(FMIAppearance);
 
-  // ---- Baseline (Plugin-Paritaet) ----
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := _('Write baseline from current scan...');
-  MI.OnClick := WriteBaselineClick;
-  FHamburgerMenu.Items.Add(MI);
-
-  FMIBaseline := TMenuItem.Create(FHamburgerMenu);
-  FMIBaseline.Caption := _('Show only new findings (baseline)');
-  FMIBaseline.OnClick := BaselineOnlyNewClick;
-  FHamburgerMenu.Items.Add(FMIBaseline);
-
-  MI := TMenuItem.Create(FHamburgerMenu);
-  MI.Caption := '-';
-  FHamburgerMenu.Items.Add(MI);
-
-  // ---- Oeffnen mit (Untermenue) ----
-  FMIOpenWith := TMenuItem.Create(FHamburgerMenu);
-  FMIOpenWith.Caption := _('Open findings with');
-  FHamburgerMenu.Items.Add(FMIOpenWith);
+  FMIOpenWith := Punkt(_('Open findings with'), nil);
   BuildOpenWithMenu(FMIOpenWith);
 
-  // ---- Sprache (Untermenue, Werte aus AvailableLanguages) ----
-  FMILanguage := TMenuItem.Create(FHamburgerMenu);
-  FMILanguage.Caption := _('Language');
-  FHamburgerMenu.Items.Add(FMILanguage);
+  FMILanguage := Punkt(_('Language'), nil);
   BuildLanguageMenu(FMILanguage);
 end;
 
