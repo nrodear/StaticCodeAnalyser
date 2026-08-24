@@ -90,9 +90,14 @@ type
     // Erzeugt einen einzelnen Tile (Icon-Glyph + Count + Caption) im
     // Parent-Container. Liefert das Count-Label zurueck - der Aufrufer
     // schreibt spaeter in Caption (z.B. '5' fuer 5 Errors).
+    //
+    // AInitial ist der Wert, der VOR der ersten Analyse dort steht. Fuer
+    // Zaehl-Kacheln ist '0' richtig, fuer die Quality-Kachel nicht: die
+    // traegt einen Buchstaben, und '0' bei leerer Befundliste ist schlicht
+    // falsch - der Grade waere 'A'.
     class function MakeTile(AOwner: TComponent; Parent: TWinControl;
       const Caption, Glyph: string; IconColor: TColor;
-      AWidth: Integer): TLabel; static;
+      AWidth: Integer; const AInitial: string = '0'): TLabel; static;
 
     // Erzeugt die komplette 9-Kachel-Reihe. Reihenfolge bei alLeft:
     // das zuerst erstellte landet ganz links. OUT-Params bekommen die
@@ -321,7 +326,7 @@ end;
 
 class function TStatsTilesBuilder.MakeTile(AOwner: TComponent;
   Parent: TWinControl; const Caption, Glyph: string;
-  IconColor: TColor; AWidth: Integer): TLabel;
+  IconColor: TColor; AWidth: Integer; const AInitial: string): TLabel;
 // Tile-Farben sind komplett ueber System-Color-Konstanten gefuehrt - der
 // VCL-Style mappt sie zur Paint-Zeit auf das aktive IDE-Theme:
 //   clBtnFace    = Tile-Hintergrund (Chrome)
@@ -385,7 +390,7 @@ begin
   CountLbl := TLabel.Create(AOwner);
   CountLbl.Parent      := TopRow;
   CountLbl.Align       := alClient;
-  CountLbl.Caption     := '0';
+  CountLbl.Caption     := AInitial;
   CountLbl.Alignment   := taLeftJustify;
   CountLbl.Layout      := tlCenter;
   CountLbl.Transparent := True;
@@ -458,7 +463,16 @@ begin
   TileVuln       := MakeTile(AOwner, Parent, _('Security'),     GLYPH_VULN,    ICON_VULN,    TILE_W);
   TileDup        := MakeTile(AOwner, Parent, _('Duplicates'),   GLYPH_DUP,     ICON_DUP,     TILE_W);
   TileCyclomatic := MakeTile(AOwner, Parent, _('Cyclomatic'),   GLYPH_CYCLO,   ICON_SMELL,   TILE_W_CYCLO);
-  TileScore      := MakeTile(AOwner, Parent, _('Quality'),      GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE);
+  // Die Quality-Kachel traegt einen Buchstaben, keine Zahl. Anfangswert
+  // ist deshalb der Grade fuer eine leere Befundliste, nicht '0'.
+  //
+  // Bis zum 2026-08-24 stand hier die Vorgabe '0'. Das Plugin hat das
+  // kompensiert, indem es beim Frame-Open einmal UpdateStats rief (der
+  // Kommentar dort sagt genau das); die EXE ruft UpdateStats erst nach
+  // einem Scan - und zeigte bis dahin eine Null, wo ein 'A' hingehoert.
+  // An der Wurzel behoben statt in jedem Wirt einzeln.
+  TileScore      := MakeTile(AOwner, Parent, _('Quality'),      GLYPH_SCORE,   ICON_SCORE,   TILE_W_SCORE,
+                             ScoreToGrade(0, 0, 0, 0));
 end;
 
 class function TStatsTilesBuilder.ScoreToGrade(AScore, ABMax, BCMax,
