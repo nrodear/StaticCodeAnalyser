@@ -103,7 +103,11 @@ type
   public
     constructor CreateNew(AOwner: TComponent; Dummy: Integer = 0); override;
     destructor Destroy; override;
-    property Changed: Boolean read FChanged;
+    // NICHT 'Changed': TControl fuehrt bereits einen Member dieses
+    // Namens, und ihn zu verdecken bringt W1009 - berechtigt, denn wer
+    // spaeter TControl.Changed aufrufen will, greift versehentlich hier
+    // hinein.
+    property ProfilesChanged: Boolean read FChanged;
   end;
 
 // ---------------------------------------------------------------------
@@ -700,7 +704,7 @@ begin
   Dlg := TProfileViewerForm.CreateNew(nil);
   try
     Dlg.ShowModal;
-    Result := Dlg.Changed;
+    Result := Dlg.ProfilesChanged;
   finally
     Dlg.Free;
   end;
