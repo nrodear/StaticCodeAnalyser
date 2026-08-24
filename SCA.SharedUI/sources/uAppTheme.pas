@@ -136,6 +136,15 @@ type
     /// </remarks>
     class procedure ResolveSystemColors(ARoot: TWinControl); static;
 
+    /// <summary>Faerbt die FENSTERRAHMEN-Leiste (Titelzeile) hell oder
+    /// dunkel. Das ist nichts, was ein VCL-Style oder das IDE-Theming
+    /// erledigt: die Titelzeile malt Windows selbst, und sie folgt nur
+    /// dem DWM-Attribut. Ohne diesen Aufruf steht ein sonst dunkles
+    /// Fenster mit heller Leiste da.</summary>
+    /// <remarks>Fehlschlaege sind bewusst folgenlos - dann bleibt die
+    /// Leiste hell und das Fenster funktioniert trotzdem.</remarks>
+    class procedure ApplyDarkTitleBar(AHandle: HWND; ADark: Boolean); static;
+
     class property Mode: TAppThemeMode read FMode;
 
     /// <summary>
@@ -152,6 +161,7 @@ implementation
 uses
   System.SysUtils, System.Win.Registry, System.IniFiles,
   Winapi.Windows,
+  Winapi.Dwmapi,  // DwmSetWindowAttribute - Titelzeile hell/dunkel
   Vcl.Styles,
   uRepoSettings;
 
@@ -338,6 +348,26 @@ type
   // Color/Font/StyleElements sind auf TControl protected - der Zugriff
   // laeuft ueber einen Class-Cracker, wie im Plugin (uIDETheme).
   TControlAccess = class(TControl);
+
+class procedure TAppTheme.ApplyDarkTitleBar(AHandle: HWND; ADark: Boolean);
+var
+  Wert : BOOL;
+begin
+  if AHandle = 0 then Exit;
+  Wert := ADark;
+  try
+    // Attribut 20 gibt es seit Windows 10 2004. Davor trug dieselbe
+    // Bedeutung die 19; dort schlaegt 20 fehl und wir versuchen 19.
+    if DwmSetWindowAttribute(AHandle, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                             @Wert, SizeOf(Wert)) <> S_OK then
+      DwmSetWindowAttribute(AHandle, 19, @Wert, SizeOf(Wert));
+  except
+    // dwmapi.dll wird verzoegert geladen. Fehlt sie oder ist die
+    // Desktop-Komposition aus, ist eine helle Titelzeile das kleinere
+    // Uebel gegenueber einer Ausnahme beim Oeffnen eines Fensters.
+    on E: Exception do ;
+  end;
+end;
 
 class procedure TAppTheme.ResolveSystemColors(ARoot: TWinControl);
 

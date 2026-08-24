@@ -3616,6 +3616,10 @@ begin
     procedure(AControl: TWinControl)
     begin
       TAppTheme.ResolveSystemColors(AControl);
+      // Die Titelzeile malt Windows, nicht der VCL-Style - sie braucht
+      // ihr eigenes Signal, sonst steht ein dunkles Fenster mit heller
+      // Leiste da.
+      TAppTheme.ApplyDarkTitleBar(AControl.Handle, TAppTheme.EffectiveDark);
     end;
   try
     if ShowProfileViewer then
