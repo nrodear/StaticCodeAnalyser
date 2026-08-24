@@ -720,6 +720,7 @@ var
   TitelBg : TColor;
   TitelFg : TColor;
   Quelle  : string;
+  Fenster : TCustomForm;
 begin
   if AControl = nil then Exit;
 
@@ -806,19 +807,69 @@ begin
       Quelle  := 'cache';
     end;
 
-    // Selbstauskunft. Die Diagnosedatei zeigte am 2026-08-24 drei
-    // Oeffnungen binnen 32 Sekunden, davon eine mit weisser Titelzeile -
-    // und das mit dem Code, der bereits LIVE liest. Damit ist die Frage
-    // nicht mehr "Cache oder nicht", sondern: welches Fenster war es, und
-    // was hat die IDE zu diesem Zeitpunkt ueber ihr eigenes Theme gesagt.
+    Fenster := TCustomForm(AControl);
+
+    // WER MALT DIE TITELZEILE? Vcl.Forms.TFormStyleHook.IsStyleBorder
+    // entscheidet das aus genau drei Werten:
+    //
+    //   (TStyleManager.FormBorderStyle = fbsCurrentStyle)
+    //   and (seBorder in Form.StyleElements)
+    //   and (Form.CustomTitleBar.Enabled = False)
+    //
+    // Sind alle drei erfuellt, setzt der Hook-Konstruktor
+    // OverridePaintNC := True (Vcl.Forms.pas:18324) und beantwortet
+    // WM_NCPAINT selbst. Dann faerbt ein DWM-Attribut eine Flaeche, die
+    // niemand mehr zeigt - und genau so sieht die Messung aus:
+    // caption=$322F2D mit hr=S_OK, Leiste trotzdem weiss.
+    //
+    // Die drei Werte stehen deshalb ab jetzt im Protokoll. Sie trennen
+    // die beiden verbliebenen Erklaerungen, die sich widersprechen:
+    // entweder der Hook hat die Leiste (dann muessen alle drei auf 1
+    // stehen), oder er ist gar nicht aktiv und die Ursache liegt
+    // woanders.
     if Assigned(Theming) then
-      TAppTheme.LogLine(Format('IDE-Apply: %s "%s" quelle=%s theme="%s" enabled=%d',
-        [AControl.ClassName, TCustomForm(AControl).Caption, Quelle,
-         Theming.ActiveTheme, Ord(Theming.IDEThemingEnabled)]))
+      TAppTheme.LogLine(Format(
+        'IDE-Apply: %s "%s" quelle=%s theme="%s" enabled=%d | ' +
+        'fbsCurrentStyle=%d seBorder=%d customtitlebar=%d',
+        [Fenster.ClassName, Fenster.Caption, Quelle,
+         Theming.ActiveTheme, Ord(Theming.IDEThemingEnabled),
+         Ord(TStyleManager.FormBorderStyle = fbsCurrentStyle),
+         Ord(seBorder in Fenster.StyleElements),
+         Ord(Fenster.CustomTitleBar.Enabled)]))
     else
-      TAppTheme.LogLine(Format('IDE-Apply: %s "%s" quelle=%s KEIN Theming-Dienst',
-        [AControl.ClassName, TCustomForm(AControl).Caption, Quelle]));
-    TAppTheme.ApplyTitleBarTheme(TCustomForm(AControl), IstDunkel(TitelBg),
+      TAppTheme.LogLine(Format(
+        'IDE-Apply: %s "%s" quelle=%s KEIN Theming-Dienst | ' +
+        'fbsCurrentStyle=%d seBorder=%d customtitlebar=%d',
+        [Fenster.ClassName, Fenster.Caption, Quelle,
+         Ord(TStyleManager.FormBorderStyle = fbsCurrentStyle),
+         Ord(seBorder in Fenster.StyleElements),
+         Ord(Fenster.CustomTitleBar.Enabled)]));
+
+    // seBorder herausnehmen - der Rahmen gehoert Windows, nicht dem Style.
+    //
+    // Das ist die einzige der drei Bedingungen, die uns gehoert:
+    // FormBorderStyle ist prozessglobal (die IDE stellt ihn, wir nicht),
+    // CustomTitleBar zu aktivieren zoege GlassFrame und eine verschobene
+    // Client-Geometrie nach sich - bei einem bsDialog mit alClient- und
+    // alBottom-Kindern eine sichtbare Layout-Aenderung. Bezeichnend:
+    // TCustomForm.CustomTitleBar.SetEnabled nimmt intern SELBST seBorder
+    // heraus (Vcl.Forms.pas:15223). Wir tun also die untere Haelfte
+    // dessen, was die VCL an dieser Stelle ohnehin taete - ohne die obere.
+    //
+    // Nur seBorder, NICHT seClient oder seFont: die Client-Flaeche und
+    // die Schrift bleiben gethemt, es geht ausschliesslich um den Rahmen.
+    //
+    // Der Preis ist bekannt und gewollt: das Fenster bekommt den
+    // Windows-11-Rahmen statt des vom Style nachgebauten. Mit
+    // DWMWA_CAPTION_COLOR in $322F2D liegt es damit naeher am IDE-Ton als
+    // ein Windows-Standarddunkel.
+    Fenster.StyleElements := Fenster.StyleElements - [seBorder];
+
+    // Erst JETZT die Farben setzen. Die Zeile darueber verwirft das
+    // Fensterhandle (StyleElements -> UpdateStyleElements -> RecreateWnd);
+    // der Zugriff auf .Handle in ApplyTitleBarTheme legt ein neues an,
+    // und dessen Style-Hook entsteht dann bereits OHNE OverridePaintNC.
+    TAppTheme.ApplyTitleBarTheme(Fenster, IstDunkel(TitelBg),
                                  TitelBg, TitelFg);
   end;
 end;
