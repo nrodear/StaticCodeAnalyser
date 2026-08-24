@@ -86,7 +86,25 @@ const
   ALL_KINDS = [Low(TFindingKind) .. High(TFindingKind)];
 
 type
-  TProfileViewerForm = class(TForm)
+  // Fenster, das sein Theme beim Anzeigen NOCH EINMAL anfordert.
+  //
+  // Warum nicht nur einmal nach dem Aufbau: im IDE-Plugin laeuft im Hook
+  // TIDETheme.Apply, und dessen Pipeline setzt je Control StyleName. Das
+  // kann das Fensterhandle neu erzeugen - ein am alten Handle gesetztes
+  // DWM-Attribut (dunkle Titelzeile) ist dann verloren. In der Standalone
+  // faellt das nicht auf, dort greift der Aufruf im Konstruktor.
+  //
+  // OnShow ist der letzte Zeitpunkt, an dem das Handle endgueltig steht
+  // und das Fenster noch nicht sichtbar ist. Der Aufruf ist idempotent,
+  // ein zweites Mal kostet nichts.
+  TThemedForm = class(TForm)
+  strict private
+    procedure ThemeOnShow(Sender: TObject);
+  public
+    constructor CreateNew(AOwner: TComponent; Dummy: Integer = 0); override;
+  end;
+
+  TProfileViewerForm = class(TThemedForm)
   strict private
     FLstProfiles : TListBox;
     FLvRules     : TListView;
@@ -213,7 +231,7 @@ end;
 function PickRules(const ACandidates: TFindingKinds;
   out APicked: TFindingKinds): Boolean;
 var
-  Dlg    : TForm;
+  Dlg    : TThemedForm;
   Lv     : TListView;
   Bottom : TPanel;
   BtnOk  : TButton;
@@ -237,7 +255,7 @@ begin
 
   Rules := TList<TRuleMeta>.Create;
   Kinds := TList<TFindingKind>.Create;
-  Dlg   := TForm.CreateNew(nil);
+  Dlg   := TThemedForm.CreateNew(nil);
   try
     Dlg.Caption      := _('Add rules');
     Dlg.Position     := poMainFormCenter;
@@ -308,9 +326,8 @@ begin
       Lv.Items.EndUpdate;
     end;
 
-    if Assigned(ProfileViewerTheme) then
-      ProfileViewerTheme(Dlg);
-
+    // Kein Vorab-Aufruf mehr: TThemedForm.OnShow macht es, und zwar
+    // nach der letzten moeglichen Handle-Neuerzeugung.
     if Dlg.ShowModal = mrOk then
     begin
       for i := 0 to Lv.Items.Count - 1 do
@@ -325,6 +342,20 @@ begin
   end;
 end;
 
+{ TThemedForm }
+
+constructor TThemedForm.CreateNew(AOwner: TComponent; Dummy: Integer);
+begin
+  inherited CreateNew(AOwner, Dummy);
+  OnShow := ThemeOnShow;
+end;
+
+procedure TThemedForm.ThemeOnShow(Sender: TObject);
+begin
+  if Assigned(ProfileViewerTheme) then
+    ProfileViewerTheme(Self);
+end;
+
 { TProfileViewerForm }
 
 constructor TProfileViewerForm.CreateNew(AOwner: TComponent; Dummy: Integer);
@@ -334,10 +365,8 @@ begin
   FRowKinds := TList<TFindingKind>.Create;
   BuildUi;
   LoadProfiles('');
-  // Erst jetzt: das Theme muss ueber FERTIGE Controls laufen, sonst
-  // faerbt es die noch nicht erzeugten nicht ein.
-  if Assigned(ProfileViewerTheme) then
-    ProfileViewerTheme(Self);
+  // Das Theme wendet TThemedForm in OnShow an - dann sind die Controls
+  // fertig UND das Handle endgueltig.
 end;
 
 destructor TProfileViewerForm.Destroy;
