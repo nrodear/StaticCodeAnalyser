@@ -55,22 +55,11 @@ type
   TProfileViewerThemeProc = reference to procedure(AControl: TWinControl);
 
 var
-  // BEIM BAUEN, vor dem Anzeigen. Hier darf das Theming schwer sein und
-  // das Fensterhandle neu erzeugen - nichts ist sichtbar.
+  // Wird auf das fertig gebaute Fenster angewandt, bevor es sichtbar
+  // wird. Die Titelzeile ist KEIN Sonderfall mehr: beide Wirte faerben
+  // sie in ihrer Theme-Anwendung mit, sobald ein Fenster uebergeben wird
+  // (TAppTheme.ResolveSystemColors bzw. TIDETheme.Apply).
   ProfileViewerTheme: TProfileViewerThemeProc = nil;
-
-  // BEIM ANZEIGEN. Nur fuer Dinge, die am HANDLE haengen und deshalb
-  // dessen letzte Neuerzeugung ueberleben muessen - konkret das
-  // DWM-Attribut fuer die dunkle Titelzeile.
-  //
-  // Warum getrennt und nicht derselbe Hook zweimal: das IDE-Theming
-  // setzt je Control StyleName, das loest RecreateWnd aus, und eine
-  // Handle-Neuerzeugung aus OnShow heraus laesst die VCL mit
-  // EInvalidOperation abbrechen ("Visible kann in OnShow oder OnHide
-  // nicht geaendert werden", Vcl.Forms.pas:9304). Am 2026-08-24 an einem
-  // Aufrufstapel aus der IDE gemessen. Was hier steht, muss billig sein
-  // und darf keinen VCL-Zustand aendern.
-  ProfileViewerTitleBar: TProfileViewerThemeProc = nil;
 
 // Zeigt das Fenster modal. Ergebnis True, wenn Profile angelegt oder
 // geloescht wurden - der Aufrufer muss dann sein Profil-Combo neu
@@ -91,7 +80,6 @@ uses
   Vcl.Forms, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls,
   Vcl.Dialogs,
   Winapi.Windows,
-  uAppTheme,        // LogLine - Diagnose der Titelzeilenfarbe
   uSCAConsts,       // TFindingKind, TFindingKinds, KindName
   uRuleCatalog,     // Profile lesen UND eigene schreiben
   uLocalization;    // _() und CurrentLanguage
@@ -113,21 +101,7 @@ type
   // OnShow ist der letzte Zeitpunkt, an dem das Handle endgueltig steht
   // und das Fenster noch nicht sichtbar ist. Der Aufruf ist idempotent,
   // ein zweites Mal kostet nichts.
-  // Fenster, das sein Theme beim Bauen anfordert und die Titelzeile
-  // beim Anzeigen - die Begruendung fuer die Trennung steht oben an
-  // ProfileViewerTitleBar.
-  TThemedForm = class(TForm)
-  strict private
-    procedure TitleBarOnShow(Sender: TObject);
-  public
-    constructor CreateNew(AOwner: TComponent; Dummy: Integer = 0); override;
-    // Vom Erzeuger aufzurufen, wenn die Controls stehen. Nicht im
-    // Konstruktor der Basis: die weiss nicht, wann der Abkoemmling mit
-    // dem Aufbau fertig ist.
-    procedure ApplyThemeNow;
-  end;
-
-  TProfileViewerForm = class(TThemedForm)
+  TProfileViewerForm = class(TForm)
   strict private
     FLstProfiles : TListBox;
     FLvRules     : TListView;
@@ -254,7 +228,7 @@ end;
 function PickRules(const ACandidates: TFindingKinds;
   out APicked: TFindingKinds): Boolean;
 var
-  Dlg    : TThemedForm;
+  Dlg    : TForm;
   Lv     : TListView;
   Bottom : TPanel;
   BtnOk  : TButton;
@@ -278,7 +252,7 @@ begin
 
   Rules := TList<TRuleMeta>.Create;
   Kinds := TList<TFindingKind>.Create;
-  Dlg   := TThemedForm.CreateNew(nil);
+  Dlg   := TForm.CreateNew(nil);
   try
     Dlg.Caption      := _('Add rules');
     Dlg.Position     := poMainFormCenter;
@@ -349,8 +323,10 @@ begin
       Lv.Items.EndUpdate;
     end;
 
-    // Vor dem Anzeigen, aus demselben Grund wie beim Hauptfenster.
-    Dlg.ApplyThemeNow;
+    // Vor dem Anzeigen: das Theming darf hier das Handle neu erzeugen,
+    // sichtbar ist noch nichts. Die Titelzeile kommt mit.
+    if Assigned(ProfileViewerTheme) then
+      ProfileViewerTheme(Dlg);
 
     if Dlg.ShowModal = mrOk then
     begin
@@ -366,34 +342,6 @@ begin
   end;
 end;
 
-{ TThemedForm }
-
-constructor TThemedForm.CreateNew(AOwner: TComponent; Dummy: Integer);
-begin
-  inherited CreateNew(AOwner, Dummy);
-  OnShow := TitleBarOnShow;
-end;
-
-procedure TThemedForm.ApplyThemeNow;
-begin
-  if Assigned(ProfileViewerTheme) then
-    ProfileViewerTheme(Self);
-end;
-
-procedure TThemedForm.TitleBarOnShow(Sender: TObject);
-// Absichtlich nur die Titelzeile. Alles, was Controls anfasst oder
-// StyleName setzt, gehoert in ApplyThemeNow - aus OnShow heraus wuerde
-// eine Handle-Neuerzeugung die VCL mit EInvalidOperation abbrechen.
-begin
-  // Auch wenn kein Hook gesetzt ist protokollieren: sonst sieht eine
-  // fehlende Zeile genauso aus wie ein nie erreichter Handler, und
-  // genau diese beiden Faelle sind gerade auseinanderzuhalten.
-  TAppTheme.LogLine(Format('TitleBarOnShow: %s, hook=%s',
-    [ClassName, BoolToStr(Assigned(ProfileViewerTitleBar), True)]));
-  if Assigned(ProfileViewerTitleBar) then
-    ProfileViewerTitleBar(Self);
-end;
-
 { TProfileViewerForm }
 
 constructor TProfileViewerForm.CreateNew(AOwner: TComponent; Dummy: Integer);
@@ -404,8 +352,10 @@ begin
   BuildUi;
   LoadProfiles('');
   // Jetzt stehen die Controls. Das Theming darf hier das Handle neu
-  // erzeugen - das Fenster ist noch nicht sichtbar.
-  ApplyThemeNow;
+  // erzeugen - das Fenster ist noch nicht sichtbar - und faerbt die
+  // Titelzeile gleich mit.
+  if Assigned(ProfileViewerTheme) then
+    ProfileViewerTheme(Self);
 end;
 
 destructor TProfileViewerForm.Destroy;

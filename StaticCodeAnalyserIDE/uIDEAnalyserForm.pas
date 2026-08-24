@@ -3286,28 +3286,13 @@ begin
     begin
       TIDETheme.Apply(AControl);
     end;
-  // Muss getrennt bleiben: TIDETheme.Apply setzt je Control StyleName und
-  // erzeugt damit das Fensterhandle neu. Aus OnShow heraus bricht die VCL
-  // das mit EInvalidOperation ab - deshalb laeuft das Theming beim Bauen
-  // und nur das handle-gebundene DWM-Attribut beim Anzeigen. Hell/Dunkel
-  // kommt hier aus der IDE, nicht aus den App-Einstellungen.
-  ProfileViewerTitleBar :=
-    procedure(AControl: TWinControl)
-    begin
-      // Farben aus der IDE, nicht aus dem VCL-Style der Anwendung:
-      // FrameBg/FrameFg sind genau die Toene, in denen die IDE ihre
-      // eigenen Rahmen zeichnet.
-      TAppTheme.ApplyTitleBarTheme(AControl, TIDETheme.IsDark,
-                                   TIDETheme.FrameBg, TIDETheme.FrameFg);
-    end;
   try
     if ShowProfileViewer then
       // Angelegt oder geloescht: das Combo kennt den Namen sonst erst
       // nach einem IDE-Neustart.
       PopulateProfileCombo;
   finally
-    ProfileViewerTheme    := nil;
-    ProfileViewerTitleBar := nil;
+    ProfileViewerTheme := nil;
   end;
 end;
 

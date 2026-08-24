@@ -135,6 +135,7 @@ uses
   Vcl.Forms, Vcl.Themes, Vcl.Grids,
   ToolsAPI, ToolsAPI.Editor,
   uAnalyserTheme,  // RefreshEditorBgDarkCache - geteilter Cache in SCA.SharedUI
+  uAppTheme,       // ApplyTitleBarTheme - die Titelzeile folgt nur DWM
   uIDEColors;   // IDE_BG_OPTIONS_FRAME (kuratierter Dark-Ton) fuer OptionsFrameBg
 
 type
@@ -694,6 +695,20 @@ begin
   // selber durch die Frame-Hierarchie, unabhaengig davon ob TopForm
   // (Float = TOTADockForm) oder die IDE-Main-Form (Docked) ist.
   ApplyRecursive(Theming, AControl);
+
+  // Die Titelzeile zum Schluss, und NUR wenn ein Fenster uebergeben
+  // wurde. Zwei Gruende fuer diese Reihenfolge und diese Bedingung:
+  //
+  //   * ApplyRecursive setzt je Control StyleName, und das erzeugt das
+  //     Fensterhandle neu (nachgewiesen an einem Aufrufstapel am
+  //     2026-08-24). Das DWM-Attribut haengt am Handle - vorher gesetzt
+  //     waere es verloren.
+  //   * Alle heutigen Aufrufer uebergeben FRAMES. Wuerde die Titelzeile
+  //     ueber GetParentForm ermittelt, faerbte ein gedockter Frame die
+  //     Titelzeile der IDE selbst um. Das steht uns nicht zu.
+  if AControl is TCustomForm then
+    TAppTheme.ApplyTitleBarTheme(TCustomForm(AControl), IsDark,
+                                 FrameBg, FrameFg);
 end;
 
 class function TIDETheme.Subscribe(ACallback: TThemeChangedProc): IInterface;

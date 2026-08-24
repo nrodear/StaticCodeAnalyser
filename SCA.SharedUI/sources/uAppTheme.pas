@@ -189,6 +189,7 @@ uses
   System.SysUtils, System.Win.Registry, System.IniFiles,
   Winapi.Windows,
   Winapi.Dwmapi,  // DwmSetWindowAttribute - Titelzeile hell/dunkel
+  Vcl.Forms,      // TCustomForm - Titelzeile nur fuer echte Fenster
   Vcl.Styles,
   uIgnoreList,    // ConfigDir - gemeinsame Ablage der Diagnosedatei
   uRepoSettings;
@@ -529,6 +530,14 @@ begin
   if not Assigned(FOrigColors) then
     FOrigColors := TDictionary<Pointer, TAppThemeColors>.Create;
   Walk(ARoot);
+
+  // Die Titelzeile gehoert dazu. Sie folgt weder dem VCL-Style noch den
+  // Control-Farben, sondern nur den DWM-Attributen - deshalb war sie
+  // bisher ueberall vergessen. Wer hier ein FENSTER uebergibt, bekommt
+  // sie ab jetzt mit; bei Frames und einzelnen Controls passiert nichts.
+  if ARoot is TCustomForm then
+    ApplyTitleBarTheme(TCustomForm(ARoot), EffectiveDark,
+                       StyleChromeBg, StyleChromeFg);
 end;
 
 class procedure TAppTheme.Initialize;
