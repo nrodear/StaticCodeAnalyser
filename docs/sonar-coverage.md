@@ -84,7 +84,7 @@ Nicht aufgeführt sind reine Plumbing-Klassen (`Abstract*`, `CheckList`,
 | ForbiddenPropertyCheck | N | – | – |
 | ForbiddenRoutineCheck | N | – | – |
 | ForbiddenTypeCheck | ~ | uDfmForbiddenClass | lokal nur DFM-Komponenten |
-| FormDfmCheck | J | uDfm* (Sammel) | 22 DFM-spezifische Detektoren |
+| FormDfmCheck | J | uDfm* (Sammel) | 23 DFM-spezifische Detektoren |
 | FormFmxCheck | N | – | FMX nicht abgedeckt |
 | FormatArgumentCountCheck | J | uFormatMismatch | – |
 | FormatArgumentTypeCheck | J | uFormatMismatch | – |

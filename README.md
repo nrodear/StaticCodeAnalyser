@@ -18,7 +18,7 @@ AST-based analysis with **196 rules**: 173 Pascal checks for memory leaks,
 SQL injection, code smells, security vulnerabilities, file-encoding & Unicode safety
 (Trojan Source), and code duplication
 (including a **Sonar-Delphi-compatible** subset SCA060+), **plus a
-dedicated DFM scanner with 22 checks** built on its own DFM lexer + parser + component
+dedicated DFM scanner with 23 checks** built on its own DFM lexer + parser + component
 graph paired with the Pascal AST — dead event handlers, hard-coded DB credentials in
 form files, circular master-detail wiring, required dataset fields without UI binding,
 SQL built from `TEdit.Text`, cross-form coupling, and more. Sonar-style classification
@@ -71,7 +71,7 @@ CastAndFree, NilComparison, InheritedMethodEmpty, RaisingRawException,
 ~60 SonarDelphi-compatible naming/formatting checks SCA060-SCA131, …),
 and **code duplication** (DuplicateString, DuplicateBlock).
 
-**DFM checks (22)** on the dedicated form-file lexer + parser +
+**DFM checks (23)** on the dedicated form-file lexer + parser +
 component graph, paired with the Pascal AST via the FormBinder: dead
 event handlers, hard-coded DB credentials in form files, circular
 master-detail wiring, required dataset fields without UI binding, SQL

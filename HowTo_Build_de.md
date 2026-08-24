@@ -186,6 +186,16 @@ noch nicht unterstuetzt). Das Plugin muss also 32-bit sein.
 > Vorgaben aller drei auf Win32, aber die IDE merkt sich die letzte
 > Auswahl pro Projekt.
 
+> ⚠️ **Auf `SCA.Engine` und `SCA.SharedUI` niemals „Install".** Beide sind
+> Laufzeitpakete und tragen seit 2026-08-23 `{$RUNONLY}` in der `.dpk`.
+> Ohne diese Direktive haelt die IDE ein Paket fuer Laufzeit UND
+> Entwurfszeit und installiert es nach jedem Bau in sich selbst. Steht
+> dann zusaetzlich der per Setup installierte Monolith in den Known
+> Packages, verweigert Delphi 13 das Plugin mit der Meldung „enthaelt die
+> Unit 'uLocalization', die auch im Package 'SCA.Engine' enthalten ist".
+> Installiert wird genau EIN Paket: `StaticCodeAnalyser.IDE.d12` aus
+> diesem Satz — oder der Monolith aus dem Setup, nie beides zugleich.
+
 Du hast jetzt drei `.bpl`-Dateien in
 `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\`:
 

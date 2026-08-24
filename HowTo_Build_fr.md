@@ -194,6 +194,17 @@ pas encore pris en charge). Le plugin doit donc être en 32 bits.
 > alignées sur Win32, mais l'IDE mémorise votre dernière sélection par
 > projet.
 
+> ⚠️ **Ne jamais faire « Install » sur `SCA.Engine` ni `SCA.SharedUI`.**
+> Ce sont des paquets d'exécution ; depuis le 2026-08-23 leur `.dpk` porte
+> `{$RUNONLY}`. Sans cette directive, l'IDE considère un paquet comme
+> paquet d'exécution ET de conception et l'installe en lui-même après
+> chaque compilation. Si le monolithe posé par le setup est enregistré en
+> plus, Delphi 13 refuse le plugin avec « contient l'unité
+> 'uLocalization', qui est également contenue dans le paquet
+> 'SCA.Engine' ». Un SEUL paquet s'installe :
+> `StaticCodeAnalyser.IDE.d12` de ce jeu — ou le monolithe du setup,
+> jamais les deux à la fois.
+
 Vous avez maintenant trois fichiers `.bpl` dans
 `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\` :
 

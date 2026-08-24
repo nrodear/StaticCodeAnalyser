@@ -19,7 +19,7 @@ Pascal pour les fuites mémoire, l'injection SQL, les code smells, les
 vulnérabilités de sécurité, l'encodage des fichiers et la sûreté Unicode
 (Trojan Source) et la duplication de code
 (dont un sous-ensemble **compatible Sonar-Delphi** SCA060+), **plus un
-scanner DFM dédié avec 22 contrôles** bâti sur ses propres lexeur + parseur DFM +
+scanner DFM dédié avec 23 contrôles** bâti sur ses propres lexeur + parseur DFM +
 graphe de composants, appariés à l'AST Pascal — gestionnaires d'événements morts,
 identifiants de base de données en clair dans les fichiers de fiche, câblage
 maître-détail circulaire, champs obligatoires de dataset sans liaison UI, SQL
@@ -75,7 +75,7 @@ CastAndFree, NilComparison, InheritedMethodEmpty, RaisingRawException,
 ~60 contrôles de nommage/formatage compatibles SonarDelphi SCA060-SCA131, …)
 et **duplication de code** (DuplicateString, DuplicateBlock).
 
-**Contrôles DFM (22)** sur le lexeur + parseur de fichiers de fiche dédié +
+**Contrôles DFM (23)** sur le lexeur + parseur de fichiers de fiche dédié +
 graphe de composants, appariés à l'AST Pascal via le FormBinder :
 gestionnaires d'événements morts, identifiants de base de données en clair
 dans les fichiers de fiche, câblage maître-détail circulaire, champs

@@ -1,4 +1,4 @@
-﻿# Installer P1 — Bauanleitung (D12-Schiene)
+﻿# Installer - Bauanleitung (D12- und D13-Schiene)
 
 ## 0. Community-Buttons + unterstützte Delphi-Versionen
 
@@ -30,8 +30,9 @@ aufgenommen (lieber ehrlich „nicht unterstützt" als still kaputt).
 
 
 > Referenz: Welle 1, 2026-07-25 | Grundlage: Doku_05_IDE_Plugin.md (Installer-Abschnitt),
-> Konzept_IdePluginInstaller_2026-07-23 | D13 (BDS 37.0) ist GEBLOCKT — nur als
-> auskommentierter Platzhalter im .iss enthalten.
+> Konzept_IdePluginInstaller_2026-07-23. *Hier stand bis 2026-08-24, D13 sei
+> GEBLOCKT und nur ein auskommentierter Platzhalter - das widersprach der
+> Tabelle direkt darueber. Seit 0.9.17 ist die D13-Schiene ausgeliefert.*
 
 ## 1. Was zu bauen ist (in der IDE — kein msbuild/dcc32, kein RemoteDelphi)
 
@@ -123,16 +124,38 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
 ## 3. Was der Installer tut
 
 - **Per-User, nie elevated** (`PrivilegesRequired=lowest`): Dateien nach
-  `%LOCALAPPDATA%\Programs\StaticCodeAnalyser\bpl\d12\`, Registrierung unter
-  `HKCU\Software\Embarcadero\BDS\23.0\Known Packages`
-  (Wertname = voller BPL-Pfad, Wertdaten nie leer).
+  `%LOCALAPPDATA%\Programs\StaticCodeAnalyser\bpl\<variante>\`, Registrierung
+  unter `HKCU\Software\Embarcadero\BDS\<gen>\Known Packages` (Wertname =
+  voller BPL-Pfad, Wertdaten nie leer). Drei Ziele seit 0.9.17:
+
+  | Variante | Datei nach | Registry-Zweig |
+  |---|---|---|
+  | Delphi 12, 32-Bit-IDE | `bpl\d12` | `BDS\23.0\Known Packages` |
+  | Delphi 13, 32-Bit-IDE | `bpl\d13` | `BDS\37.0\Known Packages` |
+  | Delphi 13, 64-Bit-IDE | `bpl\d13x64` | `BDS\37.0\Known Packages x64` |
+
+- **Versionsauswahl auf einer eigenen Wizard-Seite**: Das Setup listet nur
+  die Varianten, deren IDE es auf dem Rechner tatsaechlich findet - jeder
+  `[Components]`-Eintrag traegt eine `Check:`-Bedingung. Installiert wird
+  ausschliesslich das Angehakte. Wer eine zuvor installierte Variante
+  aushakt, wird sie los: Registrierung, Datei, Ordner - in dieser
+  Reihenfolge. Eine leere Auswahl blockt `NextButtonClick` mit Meldung ab,
+  statt ein Setup ohne Wirkung durchlaufen zu lassen.
 - **IDE-Prozess-Check** vor Install und Uninstall (TAppBuilder-Fenster).
-- **Koexistenz-Check**: vorhandene Dev-Registrierung derselben Plugin-BPL
-  unter anderem Pfad wird gemeldet und entfernt (verhindert Doppel-Laden).
+- **Koexistenz-Check, je Registry-Zweig einzeln**: eine vorhandene
+  Dev-Registrierung derselben Plugin-BPL unter anderem Pfad wird gemeldet
+  und entfernt (verhindert Doppel-Laden). Geprueft wird nur in den Zweigen
+  angehakter Varianten - einen Zweig, den das Setup gar nicht bespielt,
+  fasst es auch nicht an. *Bis 2026-08-23 lief dieser Check fest gegen
+  `BDS\23.0` und sah die D13-Schiene deshalb nicht; genau daran ist das
+  Plugin unter Delphi 13 gescheitert.*
 - **Disabled-Packages-Bereinigung**: ein frueherer "Can't load package →
   Nein"-Eintrag wuerde die frische Installation sonst stumm blockieren.
 - **Deinstallation**: Registry-Werte werden VOR den Dateien entfernt
-  (`uninsdeletevalue` + expliziter `usUninstall`-Handler).
+  (`uninsdeletevalue` + expliziter `usUninstall`-Handler), und zwar in
+  allen drei Zweigen - unabhaengig davon, was diese Installation gesetzt
+  hat. `[UninstallDelete]` raeumt danach `bpl\d12`, `bpl\d13`,
+  `bpl\d13x64` und den dann leeren `bpl`-Ordner ab.
 - **Privacy-Gate**: keinerlei Netzwerk-Code; Zusicherung steht sichtbar auf
   der Willkommensseite (de/en).
 - **Sprachauswahl** Deutsch/Englisch beim Setup-Start.
@@ -144,7 +167,7 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
 - **Ready-Seite** mit Versions-Matrix; die installierbare Version ist
   fett hervorgehoben (TRichEditViewer + RTF, Memo als Fallback).
 
-## 4. Testmatrix (D12-Teilmenge von Konzept §9; D13-Zeilen entfallen bis P2)
+## 4. Testmatrix (aus Konzept §9)
 
 | # | Umgebung / Szenario | Erwartung |
 |---|---------------------|-----------|
@@ -160,23 +183,31 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
 | 9 | **Privacy-Netzwerk-Gate**: Install + IDE-Session unter Netzwerk-Monitor (z. B. lokale Firewall-Logs) | 0 ausgehende Verbindungen von Setup und Plugin |
 | 10 | Variante B: Registry-Ladereihenfolge | `SCA.Engine.bpl`/`SCA.SharedUI.bpl`-Eintraege vorhanden; IDE-Start ohne "Modul nicht gefunden"; falls doch: Monolith-Variante vorziehen (bekannte Grenze der Uebergangsloesung) |
 
+Die Tabelle ist an der D12-Schiene entstanden; zwischen den Varianten
+unterscheiden sich Registry-Zweig und Zielordner, der Ablauf nicht. Am
+2026-08-23 hat der User alle drei Varianten von Hand durchgespielt,
+Installation und Deinstallation je sauber.
+
 Manuelle Verifikation gehoert dem User am gebauten Plugin (Doku-Leitplanke:
 Plugin-Interaktion ist nicht headless verifizierbar).
 
 ## 5. Bekannte Grenzen / Ausblick
 
-- **D13 (BDS 37.0, Suffix 370, `Known Packages x64`)**: Platzhalter-Sektion im
-  `.iss` ist vorbereitet und auskommentiert. 32-bit-BPL laedt nie in der
-  64-bit-IDE → eigene Win64-BPL.
-  *Korrektur 2026-08-22:* hier stand „komplett geblockt bis zur
-  D13-Beschaffung". Delphi 13 **ist** installiert (Registry `BDS.0`,
-  Edition „Starter", `Known Packages x64` vorhanden, Dev-BPLs dort bereits
-  für Win32 und Win64 gebaut). Offen sind stattdessen der
-  Projektsatz-Entscheid (`LIBSUFFIX` — heute in keinem `.dpk`/`.dproj`
-  gesetzt) und eine Win64-fähige Plugin-Projektdatei
-  (`TargetedPlatforms=1`). Für den GetIt-Lokaltest ist ungeprüft, ob die
-  Edition „Starter" genügt.
-- **D12.3-64-bit-IDE ist in v1 bewusst ausgeschlossen** (Doku Punkt 12).
+- **D13 (BDS 37.0) ist seit 0.9.17 ausgeliefert**, 32- und 64-Bit.
+  *Hier standen bis 2026-08-24 eine "auskommentierte Platzhalter-Sektion"
+  und zwei offene Punkte. Beide sind entschieden:* der Projektsatz bleibt
+  **einer** - kein `LIBSUFFIX`, unterschieden wird ueber den Zielordner
+  (`bpl\d12` / `bpl\d13` / `bpl\d13x64`), nicht ueber den Dateinamen; und
+  `StaticCodeAnalyser.Plugin.d12.dproj` steht auf `TargetedPlatforms=3`,
+  baut also Win32 und Win64 aus derselben Projektdatei. Ungeprueft bleibt
+  allein, ob die Edition "Starter" fuer den GetIt-Lokaltest genuegt.
+- **Eine 64-Bit-IDE von Delphi 12 gibt es nicht.** Gemessen, nicht
+  vermutet: unter `Studio\23.0` fehlt `bin64\bds.exe`, dort liegen 0
+  `dcl*`-BPLs, und `designide` existiert fuer Win64 ueberhaupt nicht (96
+  DCPs im Win64-Ordner, `designide` nicht darunter). Ein 64-Bit-Plugin ist
+  unter D12 also nicht "in v1 ausgeschlossen", wie es hier vorher hiess,
+  sondern nicht baubar - die `.dpk` faengt den Versuch mit
+  `{$MESSAGE FATAL}` und lesbarem Text ab.
 - Notfall-/Diagnose-Skripte (`sca-disable-plugin.cmd`) sind P3-Umfang, nicht P1.
 - Lizenz: MIT (entschieden 2026-08-15); Code-Signing weiterhin offen
   (Zertifikatsfrage).

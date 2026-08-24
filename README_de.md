@@ -17,7 +17,7 @@ Anwendung gibt es als 32- und als 64-Bit-Build.
 AST-basierte Analyse mit **196 Regeln**: 173 Pascal-Checks für
 Speicherlecks, SQL-Injection, Code-Smells, Sicherheitslücken und Code-Duplikate
 (inklusive einer **Sonar-Delphi-kompatiblen** Teilmenge SCA060+),
-**plus ein dedizierter DFM-Scanner mit 22 Checks** auf Basis eines eigenen DFM-Lexers
+**plus ein dedizierter DFM-Scanner mit 23 Checks** auf Basis eines eigenen DFM-Lexers
 + Parsers + Komponentengraph, verheiratet mit dem Pascal-AST — tote Event-Handler,
 Klartext-DB-Credentials in Form-Dateien, zirkuläre Master-Detail-Verkettung,
 Required-Felder ohne UI-Bindung, SQL aus `TEdit.Text`, Cross-Form-Kopplung und mehr.
@@ -71,7 +71,7 @@ CastAndFree, NilComparison, InheritedMethodEmpty, RaisingRawException,
 ~60 SonarDelphi-kompatible Naming-/Formatting-Checks SCA060-SCA131, …)
 und **Code Duplication** (DuplicateString, DuplicateBlock).
 
-**DFM-Checks (22)** auf Basis eines eigenen Form-Datei-Lexers +
+**DFM-Checks (23)** auf Basis eines eigenen Form-Datei-Lexers +
 Parsers + Komponentengraph, gekoppelt mit dem Pascal-AST via FormBinder:
 tote Event-Handler, Klartext-DB-Credentials in Form-Dateien, zirkuläre
 Master-Detail-Verkettung, Required-Felder ohne UI-Bindung, SQL aus
