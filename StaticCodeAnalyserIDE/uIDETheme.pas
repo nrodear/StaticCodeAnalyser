@@ -443,6 +443,7 @@ var
   Svc     : INTACodeEditorServices;
   Theming : IOTAIDEThemingServices;
   Style   : TCustomStyleServices;
+  AusIde  : Boolean;
 begin
   // Bevorzugt die IDE-Style-Quelle. Vcl.Themes.StyleServices (global) ist
   // im Docked-Modus haeufig stale - dann liefern FrameBg/FrameFg Farben
@@ -451,6 +452,7 @@ begin
     Style := Theming.StyleServices
   else
     Style := nil;
+  AusIde := Assigned(Style);
   if not Assigned(Style) then
     Style := StyleServices;
 
@@ -464,7 +466,24 @@ begin
     // Editor-Service kann waehrend Plugin-Init noch nicht initialisiert
     // sein. clNone als Fallback signalisiert "frag StyleServices.clWindow".
   end;
-  FCacheValid := True;
+  // NUR cachen, wenn die Farben aus der IDE-Quelle stammen.
+  //
+  // Bis zum 2026-08-24 stand hier ein unbedingtes True. Kam der Fallback
+  // zum Zug - das ToolsAPI-Service ist waehrend des Plugin-Starts eine
+  // Weile nicht da -, dann wurden die Farben der globalen
+  // Vcl.Themes.StyleServices als gueltig festgeschrieben. Das ist im
+  // bds.exe-Prozess der VCL-Vorgabestyle, also HELL, und es blieb so bis
+  // zum naechsten Theme-Ereignis.
+  //
+  // Gemessen an der Diagnosedatei des Profil-Fensters: erster Aufruf
+  // dark=0 caption=$FFFFFF, 25 Sekunden spaeter dasselbe Fenster dark=1
+  // caption=$322F2D. Zwischen beiden lag nichts als ein Theme-Ereignis,
+  // das den Cache verwarf.
+  //
+  // Ungueltig lassen heisst: der naechste Zugriff fragt erneut. Das
+  // kostet einen Supports-Aufruf, solange das Service fehlt - und liefert
+  // richtige Farben, sobald es da ist.
+  FCacheValid := AusIde;
 end;
 
 procedure TIDEThemeImpl.NotifyChanged;
