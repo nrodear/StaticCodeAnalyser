@@ -135,7 +135,7 @@ uses
   Vcl.Forms, Vcl.Themes, Vcl.Grids,
   ToolsAPI, ToolsAPI.Editor,
   uAnalyserTheme,  // RefreshEditorBgDarkCache - geteilter Cache in SCA.SharedUI
-  uAppTheme,       // ApplyTitleBarTheme - die Titelzeile folgt nur DWM
+  uWindowFrame,    // ApplyTitleBarTheme - die Titelzeile folgt nur DWM
   uIDEColors;   // IDE_BG_OPTIONS_FRAME (kuratierter Dark-Ton) fuer OptionsFrameBg
 
 type
@@ -249,25 +249,6 @@ var
   // damit Plugin-Init nicht zur Falle wird wenn BorlandIDEServices noch
   // nicht da ist.
   G: TIDEThemeImpl;
-
-// Wirkt diese Farbe perzeptuell dunkel? Aus TIDETheme.IsDark
-// herausgezogen, weil Apply die Frage seit 2026-08-24 fuer eine Farbe
-// beantworten muss, die NICHT aus dem Cache stammt.
-function IstDunkel(AColor: TColor): Boolean;
-const
-  // 50 % von 255, perzeptuelle Mitte. Unter dieser Luminanz behandeln
-  // Subscriber das Theme als "dunkel" und schalten Dark-Mode-Akzente ein.
-  DARK_LUMINANCE_MAX = 127;
-var
-  Rgb       : Cardinal;
-  Luminance : Integer;
-begin
-  Rgb := ColorToRGB(AColor);
-  // ITU-R BT.601 perzeptuelles Mittel
-  Luminance := (GetRValue(Rgb) * 299 + GetGValue(Rgb) * 587 +
-                GetBValue(Rgb) * 114) div 1000;
-  Result := Luminance <= DARK_LUMINANCE_MAX;
-end;
 
 procedure EnsureImpl;
 begin
@@ -719,8 +700,7 @@ var
   TopForm : TCustomForm;
   TitelBg : TColor;
   TitelFg : TColor;
-  Quelle  : string;
-  Fenster : TCustomForm;
+  Kontext : string;
 begin
   if AControl = nil then Exit;
 
@@ -796,7 +776,6 @@ begin
     begin
       TitelBg := Theming.StyleServices.GetSystemColor(clWindow);
       TitelFg := Theming.StyleServices.GetSystemColor(clWindowText);
-      Quelle  := 'live';
     end
     else
     begin
@@ -804,73 +783,29 @@ begin
       // die es gibt.
       TitelBg := FrameBg;
       TitelFg := FrameFg;
-      Quelle  := 'cache';
     end;
 
-    Fenster := TCustomForm(AControl);
-
-    // WER MALT DIE TITELZEILE? Vcl.Forms.TFormStyleHook.IsStyleBorder
-    // entscheidet das aus genau drei Werten:
+    // Die Titelzeile folgt weder dem VCL-Style noch dem IDE-Theming,
+    // nur den DWM-Attributen - deshalb hier und nicht in ApplyRecursive.
     //
-    //   (TStyleManager.FormBorderStyle = fbsCurrentStyle)
-    //   and (seBorder in Form.StyleElements)
-    //   and (Form.CustomTitleBar.Enabled = False)
-    //
-    // Sind alle drei erfuellt, setzt der Hook-Konstruktor
-    // OverridePaintNC := True (Vcl.Forms.pas:18324) und beantwortet
-    // WM_NCPAINT selbst. Dann faerbt ein DWM-Attribut eine Flaeche, die
-    // niemand mehr zeigt - und genau so sieht die Messung aus:
-    // caption=$322F2D mit hr=S_OK, Leiste trotzdem weiss.
-    //
-    // Die drei Werte stehen deshalb ab jetzt im Protokoll. Sie trennen
-    // die beiden verbliebenen Erklaerungen, die sich widersprechen:
-    // entweder der Hook hat die Leiste (dann muessen alle drei auf 1
-    // stehen), oder er ist gar nicht aktiv und die Ursache liegt
-    // woanders.
+    // WER sie am Ende malt, entscheidet
+    // Vcl.Forms.TFormStyleHook.IsStyleBorder aus drei Werten
+    // (FormBorderStyle, seBorder in StyleElements, CustomTitleBar).
+    // Uebernimmt der Hook, bleibt ein DWM-Attribut folgenlos - auch mit
+    // S_OK. Das ist Sache des jeweiligen Fensters: uProfileViewer nimmt
+    // sich seBorder in BuildUi selbst heraus. Hier wird KEIN fremdes
+    // Fenster umkonfiguriert.
+    // Der Kontext landet nur in der Diagnose, wenn sie eingeschaltet
+    // ist - was die IDE gerade ueber ihr eigenes Theme sagt, ist beim
+    // Suchen die zweitwichtigste Angabe nach "wer malt".
     if Assigned(Theming) then
-      TAppTheme.LogLine(Format(
-        'IDE-Apply: %s "%s" quelle=%s theme="%s" enabled=%d | ' +
-        'fbsCurrentStyle=%d seBorder=%d customtitlebar=%d',
-        [Fenster.ClassName, Fenster.Caption, Quelle,
-         Theming.ActiveTheme, Ord(Theming.IDEThemingEnabled),
-         Ord(TStyleManager.FormBorderStyle = fbsCurrentStyle),
-         Ord(seBorder in Fenster.StyleElements),
-         Ord(Fenster.CustomTitleBar.Enabled)]))
+      Kontext := Format('ide-theme="%s" enabled=%d',
+                        [Theming.ActiveTheme, Ord(Theming.IDEThemingEnabled)])
     else
-      TAppTheme.LogLine(Format(
-        'IDE-Apply: %s "%s" quelle=%s KEIN Theming-Dienst | ' +
-        'fbsCurrentStyle=%d seBorder=%d customtitlebar=%d',
-        [Fenster.ClassName, Fenster.Caption, Quelle,
-         Ord(TStyleManager.FormBorderStyle = fbsCurrentStyle),
-         Ord(seBorder in Fenster.StyleElements),
-         Ord(Fenster.CustomTitleBar.Enabled)]));
+      Kontext := 'KEIN Theming-Dienst';
 
-    // seBorder herausnehmen - der Rahmen gehoert Windows, nicht dem Style.
-    //
-    // Das ist die einzige der drei Bedingungen, die uns gehoert:
-    // FormBorderStyle ist prozessglobal (die IDE stellt ihn, wir nicht),
-    // CustomTitleBar zu aktivieren zoege GlassFrame und eine verschobene
-    // Client-Geometrie nach sich - bei einem bsDialog mit alClient- und
-    // alBottom-Kindern eine sichtbare Layout-Aenderung. Bezeichnend:
-    // TCustomForm.CustomTitleBar.SetEnabled nimmt intern SELBST seBorder
-    // heraus (Vcl.Forms.pas:15223). Wir tun also die untere Haelfte
-    // dessen, was die VCL an dieser Stelle ohnehin taete - ohne die obere.
-    //
-    // Nur seBorder, NICHT seClient oder seFont: die Client-Flaeche und
-    // die Schrift bleiben gethemt, es geht ausschliesslich um den Rahmen.
-    //
-    // Der Preis ist bekannt und gewollt: das Fenster bekommt den
-    // Windows-11-Rahmen statt des vom Style nachgebauten. Mit
-    // DWMWA_CAPTION_COLOR in $322F2D liegt es damit naeher am IDE-Ton als
-    // ein Windows-Standarddunkel.
-    Fenster.StyleElements := Fenster.StyleElements - [seBorder];
-
-    // Erst JETZT die Farben setzen. Die Zeile darueber verwirft das
-    // Fensterhandle (StyleElements -> UpdateStyleElements -> RecreateWnd);
-    // der Zugriff auf .Handle in ApplyTitleBarTheme legt ein neues an,
-    // und dessen Style-Hook entsteht dann bereits OHNE OverridePaintNC.
-    TAppTheme.ApplyTitleBarTheme(Fenster, IstDunkel(TitelBg),
-                                 TitelBg, TitelFg);
+    ApplyTitleBarTheme(TCustomForm(AControl), not IsLightColor(TitelBg),
+                       TitelBg, TitelFg, Kontext);
   end;
 end;
 
@@ -921,8 +856,17 @@ begin
 end;
 
 class function TIDETheme.IsDark: Boolean;
+// Bewusst uAnalyserTheme.IsLightColor negiert statt einer eigenen
+// Rechnung: dieselbe BT.601-Formel mit derselben Schwelle 127 stand hier
+// bis zum 2026-08-24 ein zweites Mal. Der Nachbau fiel erst beim Review
+// auf. Die geteilte Fassung ist ausserdem getestet
+// (uTestContrastColor.ThresholdIsExclusiveAt127).
+//
+// NICHT mit IsActiveThemeDark verwechseln - das rechnet mit dem
+// arithmetischen Mittel und Schwelle 128; die Warnung steht im Kopf von
+// uTestContrastColor.
 begin
-  Result := IstDunkel(TIDETheme.FrameBg);
+  Result := not IsLightColor(TIDETheme.FrameBg);
 end;
 
 class procedure TIDETheme.Prime;

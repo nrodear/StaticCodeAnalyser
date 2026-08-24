@@ -89,6 +89,7 @@ contains
   uPathNormalize in 'sources\uPathNormalize.pas',
   uRecentPaths in 'sources\uRecentPaths.pas',
   uScanTargetDialog in 'sources\uScanTargetDialog.pas',
-  uProfileViewer in 'sources\uProfileViewer.pas';
+  uProfileViewer in 'sources\uProfileViewer.pas',
+  uWindowFrame in 'sources\uWindowFrame.pas';
 
 end.

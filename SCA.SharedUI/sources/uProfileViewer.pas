@@ -44,7 +44,7 @@ type
   // SCA.SharedUI und darf ToolsAPI nicht kennen - das IDE-Theming laeuft
   // aber genau darueber (TIDETheme.Apply -> IOTAIDEThemingServices).
   // Und die Standalone braucht etwas anderes als die IDE:
-  // TAppTheme.ResolveSystemColors gegen den aktiven VCL-Style. Dieselbe
+  // TAppTheme.ApplyToForm gegen den aktiven VCL-Style. Dieselbe
   // Schichtgrenze und dasselbe Muster wie StyleServicesProvider und
   // EditorBgProvider in uAnalyserTheme.
   //
@@ -52,13 +52,21 @@ type
   // danach zurueck. So kann die Closure nicht in entladenen Plugin-Code
   // zeigen - die Falle, vor der uAnalyserTheme bei seinen Providern
   // ausdruecklich warnt.
+  //
+  // VERTRAG, der daran haengt: das traegt nur, solange die Fenster
+  // dieser Unit MODAL sind. Der Hook wird beim Anlegen des Fensters
+  // gerufen und danach sofort auf nil gesetzt; ein spaeter feuernder
+  // Callback - etwa aus einem Theme-Wechsel bei offenem Fenster - traefe
+  // ins Leere. Wird eines der Fenster nicht-modal, braucht es statt
+  // dieses Einmal-Hooks ein Abonnement, und der Wirt darf ihn dann nicht
+  // mehr zuruecknehmen.
   TProfileViewerThemeProc = reference to procedure(AControl: TWinControl);
 
 var
   // Wird auf das fertig gebaute Fenster angewandt, bevor es sichtbar
   // wird. Die Titelzeile ist KEIN Sonderfall mehr: beide Wirte faerben
   // sie in ihrer Theme-Anwendung mit, sobald ein Fenster uebergeben wird
-  // (TAppTheme.ResolveSystemColors bzw. TIDETheme.Apply).
+  // (TAppTheme.ApplyToForm bzw. TIDETheme.Apply).
   ProfileViewerTheme: TProfileViewerThemeProc = nil;
 
 // Zeigt das Fenster modal. Ergebnis True, wenn Profile angelegt oder
@@ -250,6 +258,9 @@ begin
     // Sizing-Rahmen. Die Spaltenbreiten stehen fest, also auch die
     // sinnvolle Fensterbreite.
     Dlg.BorderStyle  := bsDialog;
+    // s. Begruendung im Hauptfenster - ohne das malt der VCL-Style die
+    // Titelzeile selbst und die DWM-Farbe bleibt unsichtbar.
+    Dlg.StyleElements := Dlg.StyleElements - [seBorder];
     Dlg.ClientWidth  := 900;
     Dlg.ClientHeight := 600;
 
@@ -392,6 +403,32 @@ begin
   // bsDialog: kein Sizing-Rahmen, kein Maximieren-Knopf. Die Breite
   // ergibt sich aus den Spalten (80+190+360+90+130) plus Profilliste.
   BorderStyle  := bsDialog;
+  // seBorder heraus - der Rahmen gehoert Windows, nicht dem VCL-Style.
+  //
+  // Vcl.Forms.TFormStyleHook.IsStyleBorder entscheidet aus drei Werten,
+  // ob der Style die Nicht-Client-Flaeche uebernimmt:
+  //   (TStyleManager.FormBorderStyle = fbsCurrentStyle)
+  //   and (seBorder in StyleElements)
+  //   and (CustomTitleBar.Enabled = False)
+  // Uebernimmt er sie, malt er die Titelzeile selbst - und ein
+  // DWM-Attribut bleibt folgenlos, auch wenn Windows es mit S_OK
+  // quittiert. Genau so sah die Messung am 2026-08-24 aus.
+  //
+  // seBorder ist die einzige der drei Bedingungen, die diesem Fenster
+  // gehoert: FormBorderStyle ist prozessglobal, und CustomTitleBar zu
+  // aktivieren zoege GlassFrame und eine verschobene Client-Geometrie
+  // nach sich - bei alClient- und alBottom-Kindern eine sichtbare
+  // Layout-Aenderung. Bezeichnend: CustomTitleBar.SetEnabled nimmt
+  // intern SELBST seBorder heraus (Vcl.Forms.pas:15223).
+  //
+  // Nur seBorder: seClient und seFont bleiben, Inhalt und Schrift
+  // bleiben also gethemt. Der Preis ist der Windows-11-Rahmen statt des
+  // vom Style nachgebauten.
+  //
+  // Steht hier und nicht in TIDETheme.Apply: dort traefe es jedes
+  // Fenster, das je durch die Methode geht, und eine Theme-Anwendung
+  // soll die Rahmen-Konfiguration fremder Fenster nicht umschreiben.
+  StyleElements := StyleElements - [seBorder];
   ClientWidth  := 1120;
   ClientHeight := 640;
   KeyPreview   := True;

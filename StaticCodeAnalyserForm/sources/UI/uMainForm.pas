@@ -693,7 +693,7 @@ begin
   // Dunkelmodus nicht mitaendert. Ohne diesen Aufruf waeren sie beim
   // START hell - der Wechsel ueber das Menue haette sie dagegen
   // eingefaerbt, was den Fehler beim Pruefen leicht verdeckt.
-  TAppTheme.ResolveSystemColors(Self);
+  TAppTheme.ApplyToForm(Self);
 end;
 
 procedure TForm2.BtnCancelClick(Sender: TObject);
@@ -3370,7 +3370,7 @@ begin
   // abgeschaltet haben, malen mit ihrer eigenen Color - und die zeigt auf
   // eine SYSTEMFARBE, die Windows im Dunkelmodus NICHT mitaendert. Ohne
   // diesen Aufruf bleiben sie hell, waehrend der Rest dunkel ist.
-  TAppTheme.ResolveSystemColors(Self);
+  TAppTheme.ApplyToForm(Self);
   if Assigned(ResultGrid) then
     ResultGrid.Invalidate;
   Invalidate;
@@ -3615,7 +3615,7 @@ begin
   ProfileViewerTheme :=
     procedure(AControl: TWinControl)
     begin
-      TAppTheme.ResolveSystemColors(AControl);
+      TAppTheme.ApplyToForm(AControl);
     end;
   try
     if ShowProfileViewer then

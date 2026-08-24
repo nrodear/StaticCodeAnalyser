@@ -343,6 +343,7 @@
         <DCCReference Include="..\SCA.SharedUI\sources\uHintTextLayout.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uIDEStatsTiles.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uProfileViewer.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uWindowFrame.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uIDEHelpPanel.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uIDEToolbar.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uExportMenu.pas"/>
