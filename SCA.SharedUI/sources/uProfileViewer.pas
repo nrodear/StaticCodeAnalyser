@@ -17,9 +17,19 @@ unit uProfileViewer;
 // selbst gebautes Profil auch mit `--profile <name>` in der CI greift und
 // im IDE-Plugin im Combo steht.
 //
-// Bewusst ohne .dfm, wie uDfmTextViewer daneben: beide Fenster werden zur
-// Laufzeit komponiert. So aendert sich am Projekt-Layout nichts ausser
-// einem uses-Eintrag.
+// Bewusst ohne .dfm: beide Fenster werden zur Laufzeit komponiert. So
+// aendert sich am Projekt-Layout nichts ausser einem uses-Eintrag.
+//
+// Liegt in SCA.SharedUI, weil BEIDE Oberflaechen es zeigen: die
+// Standalone ueber ihr Burger-Menue, das IDE-Plugin ueber seines. Die
+// EXE zieht die Unit ueber den Suchpfad, das Plugin ueber das Paket -
+// derselbe Weg, den uAppTheme und uIDEStatsTiles schon nehmen.
+//
+// Feste Groesse, nicht veraenderbar (bsDialog): das Fenster zeigt eine
+// Liste bekannter Breite: fuenf Spalten mit festen Werten. Es gibt
+// nichts, was von mehr Platz profitierte, und in der IDE soll es sich
+// wie ein Eigenschaften-Dialog anfuehlen, nicht wie ein zweites
+// Hauptfenster.
 
 interface
 
@@ -199,11 +209,14 @@ begin
   Kinds := TList<TFindingKind>.Create;
   Dlg   := TForm.CreateNew(nil);
   try
-    Dlg.Caption     := _('Add rules');
-    Dlg.Position    := poMainFormCenter;
-    Dlg.BorderStyle := bsSizeable;
-    Dlg.Width       := 880;
-    Dlg.Height      := 620;
+    Dlg.Caption      := _('Add rules');
+    Dlg.Position     := poMainFormCenter;
+    // Gleiche Bauart wie das Profil-Fenster: feste Groesse, kein
+    // Sizing-Rahmen. Die Spaltenbreiten stehen fest, also auch die
+    // sinnvolle Fensterbreite.
+    Dlg.BorderStyle  := bsDialog;
+    Dlg.ClientWidth  := 900;
+    Dlg.ClientHeight := 600;
 
     Bottom := TPanel.Create(Dlg);
     Bottom.Parent     := Dlg;
@@ -219,7 +232,7 @@ begin
     BtnNo.Width       := 110;
     BtnNo.Height      := 28;
     BtnNo.Top         := 8;
-    BtnNo.Left        := Bottom.Width - 122;
+    BtnNo.Left        := Dlg.ClientWidth - 122;
     BtnNo.Anchors     := [akTop, akRight];
 
     BtnOk := TButton.Create(Dlg);
@@ -301,7 +314,6 @@ procedure TProfileViewerForm.BuildUi;
 var
   Bottom : TPanel;
   Col    : TListColumn;
-  Split  : TSplitter;
   X      : Integer;
 
   function MkButton(const ACaption: string; AOnClick: TNotifyEvent): TButton;
@@ -322,11 +334,11 @@ var
 begin
   Caption      := _('Rule-set profiles');
   Position     := poMainFormCenter;
-  BorderStyle  := bsSizeable;
-  Width        := 1060;
-  Height       := 660;
-  Constraints.MinWidth  := 820;
-  Constraints.MinHeight := 420;
+  // bsDialog: kein Sizing-Rahmen, kein Maximieren-Knopf. Die Breite
+  // ergibt sich aus den Spalten (80+190+360+90+130) plus Profilliste.
+  BorderStyle  := bsDialog;
+  ClientWidth  := 1120;
+  ClientHeight := 640;
   KeyPreview   := True;
   OnKeyDown    := FormKeyDown;
   OnCloseQuery := FormCloseQuery;
@@ -361,13 +373,6 @@ begin
   FLstProfiles.Align   := alLeft;
   FLstProfiles.Width   := 250;
   FLstProfiles.OnClick := ProfileSelected;
-
-  Split := TSplitter.Create(Self);
-  Split.Parent  := Self;
-  Split.Align   := alLeft;
-  Split.Left    := FLstProfiles.Width + 1;
-  Split.Width   := 5;
-  Split.MinSize := 150;
 
   // ---- rechts die Regeln des gewaehlten Profils ----
   FLvRules := TListView.Create(Self);

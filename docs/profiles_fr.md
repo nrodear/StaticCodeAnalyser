@@ -30,10 +30,11 @@ Les nombres correspondent à la version 0.9.17, mesurés sur le catalogue.
 | CLI | `--profile <nom>` |
 | `analyser.ini` | `[Rules] Profile=<nom>` |
 
-L'application autonome montre aussi ce qu'il y a *dans* un profil :
-**menu burger -> Profils de jeu de règles ...** liste chaque règle du
-profil choisi avec son ID, son jeton de type, sa sévérité, son type et
-son unité de détecteur.
+Les deux interfaces montrent aussi ce qu'il y a *dans* un profil :
+**menu burger -> Profils de jeu de règles ...** liste, dans l'application
+autonome comme dans le plugin IDE, chaque règle du profil choisi avec son
+ID, son jeton de type, sa sévérité et son type. C'est la même fenêtre :
+elle vit dans `SCA.SharedUI`, les deux ne peuvent donc pas diverger.
 
 ## Où les profils sont définis
 
@@ -75,7 +76,8 @@ Les profils intégrés ne peuvent pas être modifiés : ils viennent du
 catalogue livré et sont réécrits à chaque mise à jour. Votre profil vit
 donc dans un fichier à lui, et l'on y arrive en copiant :
 
-1. **Menu burger -> Profils de jeu de règles ...**
+1. **Menu burger -> Profils de jeu de règles ...** (application
+   autonome ou plugin IDE, au choix)
 2. Choisir le profil le plus proche, appuyer sur **Copier ...** et lui
    donner un nom (lettres, chiffres, `-`, `_`, `.`).
 3. L'ajuster avec **Ajouter des règles ...** et **Retirer des règles**,

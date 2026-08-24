@@ -103,17 +103,6 @@ object Form2: TForm2
         TabOrder = 1
         OnChange = TypeFilterComboChange
       end
-      object FBtnHamburger: TButton
-        Left = 608
-        Top = 6
-        Width = 24
-        Height = 23
-        Anchors = [akTop, akRight]
-        Caption = '...'
-        TabOrder = 2
-        OnClick = Button2Click
-        ExplicitLeft = 606
-      end
       object MinSevCombo: TComboBox
         Left = 477
         Top = 6
@@ -121,7 +110,7 @@ object Form2: TForm2
         Height = 23
         Style = csDropDownList
         Anchors = [akLeft, akTop, akRight]
-        TabOrder = 3
+        TabOrder = 2
         OnChange = MinSevComboChange
         ExplicitWidth = 114
       end
@@ -186,11 +175,21 @@ object Form2: TForm2
       object SearchEdit: TEdit
         Left = 464
         Top = 7
-        Width = 168
+        Width = 129
         Height = 23
-        Anchors = [akTop, akRight]
+        Anchors = [akLeft, akTop, akRight]
         TabOrder = 4
         OnChange = SearchEditChange
+      end
+      object FBtnHamburger: TButton
+        Left = 608
+        Top = 6
+        Width = 24
+        Height = 23
+        Anchors = [akTop, akRight]
+        Caption = '...'
+        TabOrder = 5
+        OnClick = Button2Click
       end
     end
     object Panel1: TPanel

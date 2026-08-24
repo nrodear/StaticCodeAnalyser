@@ -337,6 +337,7 @@ contains
   uFuzzyComboSearch in '..\SCA.SharedUI\sources\uFuzzyComboSearch.pas',
   uHintTextLayout in '..\SCA.SharedUI\sources\uHintTextLayout.pas',
   uIDEStatsTiles in '..\SCA.SharedUI\sources\uIDEStatsTiles.pas',
+  uProfileViewer in '..\SCA.SharedUI\sources\uProfileViewer.pas',
   uIDEHelpPanel in '..\SCA.SharedUI\sources\uIDEHelpPanel.pas',
   uIDEToolbar in '..\SCA.SharedUI\sources\uIDEToolbar.pas',
   uExportMenu in '..\SCA.SharedUI\sources\uExportMenu.pas',

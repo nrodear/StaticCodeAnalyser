@@ -30,9 +30,11 @@ Die Zahlen sind der Stand von 0.9.17, am Katalog gemessen.
 | CLI | `--profile <name>` |
 | `analyser.ini` | `[Rules] Profile=<name>` |
 
-Die Standalone-Anwendung zeigt auch, was *in* einem Profil steckt:
-**Burger-Menü -> Regelsatz-Profile ...** listet jede Regel des gewählten
-Profils mit ID, Kind-Token, Severity, Typ und Detektor-Unit.
+Beide Oberflächen zeigen auch, was *in* einem Profil steckt:
+**Burger-Menü -> Regelsatz-Profile ...** listet in der Standalone wie im
+IDE-Plugin jede Regel des gewählten Profils mit ID, Kind-Token, Severity
+und Typ. Es ist dasselbe Fenster - es liegt in `SCA.SharedUI`, damit die
+beiden nicht auseinanderlaufen können.
 
 ## Wo Profile definiert sind
 
@@ -75,7 +77,8 @@ ausgelieferten Katalog und werden bei jedem Update überschrieben. Ein
 eigenes Profil liegt deshalb in einer eigenen Datei, und der Weg dorthin
 führt über das Kopieren:
 
-1. **Burger-Menü -> Regelsatz-Profile ...**
+1. **Burger-Menü -> Regelsatz-Profile ...** (Standalone oder
+   IDE-Plugin, beides geht)
 2. Das Profil auswählen, das am nächsten kommt, **Kopieren ...** drücken
    und einen Namen vergeben (Buchstaben, Ziffern, `-`, `_`, `.`).
 3. Mit **Regeln aufnehmen ...** und **Regeln entfernen** zuschneiden,

@@ -30,7 +30,6 @@ uses
   MainController in 'sources\MainController.pas',
   uMainForm in 'sources\UI\uMainForm.pas' {Form2},
   uDfmTextViewer in 'sources\UI\uDfmTextViewer.pas',
-  uProfileViewer in 'sources\UI\uProfileViewer.pas',
   uConsoleRunner in 'sources\Console\uConsoleRunner.pas',
   uAppTheme;
 

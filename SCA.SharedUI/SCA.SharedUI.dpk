@@ -75,6 +75,7 @@ contains
   uUiElementRegistry in 'sources\uUiElementRegistry.pas',
   uPathNormalize in 'sources\uPathNormalize.pas',
   uRecentPaths in 'sources\uRecentPaths.pas',
-  uScanTargetDialog in 'sources\uScanTargetDialog.pas';
+  uScanTargetDialog in 'sources\uScanTargetDialog.pas',
+  uProfileViewer in 'sources\uProfileViewer.pas';
 
 end.

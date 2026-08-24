@@ -329,6 +329,10 @@ type
     procedure PopulateFilterCombo;
     procedure PopulateTypeCombo;
     procedure PopulateProfileCombo;
+    // Regelsatz-Profile ansehen und eigene anlegen. Dasselbe Fenster wie
+    // in der Standalone - es liegt in SCA.SharedUI, damit beide
+    // Oberflaechen es zeigen und nicht zwei Fassungen auseinanderlaufen.
+    procedure ShowProfilesClick(Sender: TObject);
     // Snapshot der initial-populierten Filter-Combo-Items - wird in
     // RebuildFilterCombos genutzt um nach jedem Scan auf Eintraege mit
     // > 0 Treffern zu reduzieren. Separator-Items (ModeOrd = -1) bleiben
@@ -622,7 +626,8 @@ implementation
 uses
   uIDEFindingsPropertiesForm,   // Cross-UI-Sync (GFindingsPropsForm.ResetAllStateForSync)
   uCrashDiag,                   // EStackExhausted - nie verschlucken
-  uHintTextLayout;              // FormatRelatedLines - geteilt mit dem Nur-Text-Hint
+  uHintTextLayout,              // FormatRelatedLines - geteilt mit dem Nur-Text-Hint
+  uProfileViewer;               // ShowProfileViewer - Hamburger-Item
 
 // noinspection-file BeginEndRequired, BooleanParam, ClassPerFile, ConsecutiveSection, EmptyExcept, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember, UnusedRoutine
 // Plugin-Form: catch-all an Action-Click-Handlern (Resize, ItemPaint etc.).
@@ -1431,7 +1436,18 @@ var
   ProfileList : TArray<string>;
   ProfileName : string;
   Idx         : Integer;
+var
+  Vorher : string;
 begin
+  // Bisherige Auswahl merken: die Methode laeuft seit 2026-08-24 auch
+  // NACH dem Profil-Fenster, und dann darf der Anwender nicht auf einem
+  // anderen Profil landen als vorher. Beim ersten Aufbau ist sie leer.
+  Vorher := FProfileCombo.Text;
+
+  // Clear war frueher nicht noetig - die Methode lief genau einmal.
+  // Ohne sie stuenden die Profile nach dem zweiten Aufruf doppelt da.
+  FProfileCombo.Items.Clear;
+
   ProfileList := TRuleCatalog.ProfileNames;
   if Length(ProfileList) = 0 then
     FProfileCombo.Items.Add(_('default'))
@@ -1439,7 +1455,9 @@ begin
     for ProfileName in ProfileList do
       FProfileCombo.Items.Add(ProfileName);
 
-  Idx := FProfileCombo.Items.IndexOf(FRepoSettings.IdeProfile);
+  Idx := -1;
+  if Vorher <> '' then Idx := FProfileCombo.Items.IndexOf(Vorher);
+  if Idx < 0 then Idx := FProfileCombo.Items.IndexOf(FRepoSettings.IdeProfile);
   if Idx < 0 then Idx := FProfileCombo.Items.IndexOf('ide-fast');
   if Idx < 0 then Idx := 0;
   FProfileCombo.ItemIndex := Idx;
@@ -3244,6 +3262,21 @@ begin
   StatusMode(_('All findings reset.'));
 end;
 
+procedure TAnalyserFrame.ShowProfilesClick(Sender: TObject);
+// Zeigt, welche Detektoren zu welchem Profil gehoeren, und laesst eigene
+// anlegen. Die eingebauten bleiben unveraenderlich - sie stammen aus dem
+// ausgelieferten Katalog und werden bei jedem Update ueberschrieben.
+//
+// Eigene Profile landen in profiles.json neben analyser.ini und werden
+// von der Engine geladen. Sie gelten damit auch hier, nicht nur in der
+// Standalone - und ebenso fuer `--profile <name>` in der CI.
+begin
+  if ShowProfileViewer then
+    // Angelegt oder geloescht: das Combo kennt den Namen sonst erst nach
+    // einem IDE-Neustart.
+    PopulateProfileCombo;
+end;
+
 procedure TAnalyserFrame.EditIgnoreListClick(Sender: TObject);
 // Oeffnet die Ignore-Liste mit dem System-Default-Editor (Notepad).
 // Nach Schliessen muss der User die Analyse neu starten - die Datei wird
@@ -3495,6 +3528,14 @@ begin
   MI := TMenuItem.Create(FHamburgerMenu);
   MI.Caption := _('Ignore list...');
   MI.OnClick := EditIgnoreListClick;
+  FHamburgerMenu.Items.Add(MI);
+
+  // Profile gehoeren in denselben Block: sie entscheiden, WELCHE Regeln
+  // ueberhaupt laufen - dieselbe Klasse Entscheidung wie Settings und
+  // Ignore-Liste. Position und Beschriftung wie in der Standalone.
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Rule-set profiles...');
+  MI.OnClick := ShowProfilesClick;
   FHamburgerMenu.Items.Add(MI);
 
   FBtnHamburger.PopupMenu := FHamburgerMenu;

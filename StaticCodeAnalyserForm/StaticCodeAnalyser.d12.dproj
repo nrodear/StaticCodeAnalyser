@@ -148,7 +148,6 @@
             <FormType>dfm</FormType>
         </DCCReference>
         <DCCReference Include="sources\UI\uDfmTextViewer.pas"/>
-        <DCCReference Include="sources\UI\uProfileViewer.pas"/>
         <DCCReference Include="sources\Console\uConsoleRunner.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

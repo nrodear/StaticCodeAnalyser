@@ -30,9 +30,11 @@ Counts are as shipped in 0.9.17, measured against the catalogue.
 | CLI | `--profile <name>` |
 | `analyser.ini` | `[Rules] Profile=<name>` |
 
-The standalone app can also show you what is *inside* a profile:
-**burger menu -> Rule-set profiles...** lists every rule of the selected
-profile with its ID, kind token, severity, type and detector unit.
+Both surfaces can also show you what is *inside* a profile:
+**burger menu -> Rule-set profiles...**, in the standalone app and in the
+IDE plugin alike, lists every rule of the selected profile with its ID,
+kind token, severity and type. It is the same window - it lives in
+`SCA.SharedUI`, so the two cannot drift apart.
 
 ## Where profiles are defined
 
@@ -72,7 +74,8 @@ Built-in profiles cannot be changed - they come from the shipped
 catalogue and are overwritten on every update. Your own profile therefore
 lives in a file of its own, and the way to make one is to copy:
 
-1. **Burger menu -> Rule-set profiles...**
+1. **Burger menu -> Rule-set profiles...** (standalone app or IDE
+   plugin - either will do)
 2. Select the profile that comes closest, press **Copy...** and give it a
    name (letters, digits, `-`, `_`, `.`).
 3. Shape it with **Add rules...** and **Remove rules**, then **Save**.
