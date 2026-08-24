@@ -75,6 +75,20 @@ function ThemeDiagActive: Boolean;
 /// ist.</summary>
 function ThemeDiagPath: string;
 
+/// <summary>Die Farben, mit denen ein Style eine TITELZEILE malen
+/// wuerde - Fuellung und Text des Elements twCaptionActive.</summary>
+/// <remarks>Das ist die Quelle, die auch Vcl.Forms.TFormStyleHook.PaintNC
+/// benutzt. Wer stattdessen clWindow nimmt, bekommt die INHALTSfarbe:
+/// dunkel zwar, aber ein anderer Ton als die Titelzeilen ringsum. Genau
+/// daran ist der erste Anlauf am 2026-08-24 gescheitert.</remarks>
+/// <param name="AStyle">Die zu befragende Style-Quelle. Im IDE-Plugin
+/// IOTAIDEThemingServices.StyleServices, in der Standalone die
+/// globale.</param>
+/// <returns>False, wenn der Style keine Auskunft gibt - dann muss der
+/// Aufrufer bei seinem bisherigen Wert bleiben.</returns>
+function StyleCaptionColors(AStyle: TObject;
+  out ABg, AFg: TColor): Boolean;
+
 implementation
 
 uses
@@ -132,6 +146,34 @@ end;
 function ThemeDiagActive: Boolean;
 begin
   Result := ThemeDiagPath <> '';
+end;
+
+function StyleCaptionColors(AStyle: TObject; out ABg, AFg: TColor): Boolean;
+// AStyle ist als TObject deklariert, damit die Schnittstelle dieser Unit
+// ohne Vcl.Themes auskommt - der Aufrufer reicht seine
+// TCustomStyleServices herein, hier wird geprueft und gecastet.
+var
+  Svc : TCustomStyleServices;
+begin
+  Result := False;
+  ABg    := clNone;
+  AFg    := clNone;
+  if not (AStyle is TCustomStyleServices) then Exit;
+  Svc := TCustomStyleServices(AStyle);
+  try
+    // Dieselben zwei Abfragen, die TFormStyleHook.PaintNC vor dem Malen
+    // macht (Vcl.Forms.pas ~19456/19485).
+    Result := Svc.GetElementColor(Svc.GetElementDetails(twCaptionActive),
+                                  ecFillColor, ABg)
+          and Svc.GetElementColor(Svc.GetElementDetails(twCaptionActive),
+                                  ecTextColor, AFg)
+          and (ABg <> clNone) and (AFg <> clNone);
+  except
+    // Ein Style, der die Elemente nicht kennt, ist kein Fehlerfall - der
+    // Aufrufer bleibt dann bei seiner bisherigen Farbe.
+    on E: Exception do
+      Result := False;
+  end;
 end;
 
 // Farbe fuer die Diagnosezeile: 'clNone' oder $00BBGGRR.

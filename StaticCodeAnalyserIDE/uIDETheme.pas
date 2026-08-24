@@ -774,8 +774,21 @@ begin
     // je ein Notifier gefeuert hat.
     if Assigned(Theming) and Assigned(Theming.StyleServices) then
     begin
-      TitelBg := Theming.StyleServices.GetSystemColor(clWindow);
-      TitelFg := Theming.StyleServices.GetSystemColor(clWindowText);
+      // ZUERST die echte Titelzeilenfarbe des Styles - das Element
+      // twCaptionActive, dieselbe Quelle, aus der TFormStyleHook.PaintNC
+      // malt. Nur so trifft unser Fenster den Ton, den die IDE fuer ihre
+      // eigenen Titelzeilen benutzt.
+      //
+      // Der erste Anlauf nahm hier clWindow. Das ist die INHALTSfarbe:
+      // dunkel zwar, aber sichtbar ein anderer Ton als die Leisten
+      // ringsum - genau der gemeldete Fehler.
+      if not StyleCaptionColors(Theming.StyleServices, TitelBg, TitelFg) then
+      begin
+        // Style ohne Caption-Elemente: dann wenigstens hell/dunkel
+        // richtig treffen.
+        TitelBg := Theming.StyleServices.GetSystemColor(clWindow);
+        TitelFg := Theming.StyleServices.GetSystemColor(clWindowText);
+      end;
     end
     else
     begin

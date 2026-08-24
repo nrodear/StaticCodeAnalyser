@@ -365,6 +365,9 @@ begin
 end;
 
 class procedure TAppTheme.ApplyToForm(ARoot: TWinControl);
+var
+  TitelBg : TColor;
+  TitelFg : TColor;
 
   procedure Walk(AC: TControl);
   var
@@ -414,8 +417,20 @@ begin
   // bisher ueberall vergessen. Wer hier ein FENSTER uebergibt, bekommt
   // sie ab jetzt mit; bei Frames und einzelnen Controls passiert nichts.
   if ARoot is TCustomForm then
+  begin
+    // Die echte Titelzeilenfarbe des aktiven Styles, damit ein zur
+    // Laufzeit gebautes Fenster denselben Ton traegt wie die vom Style
+    // gemalten Leisten des Hauptfensters. StyleChromeBg/Fg (clBtnFace)
+    // ist nur der Rueckfall - das ist die Chrome-, nicht die
+    // Titelzeilenfarbe.
+    if not StyleCaptionColors(StyleServices, TitelBg, TitelFg) then
+    begin
+      TitelBg := StyleChromeBg;
+      TitelFg := StyleChromeFg;
+    end;
     uWindowFrame.ApplyTitleBarTheme(TCustomForm(ARoot), EffectiveDark,
-                                    StyleChromeBg, StyleChromeFg);
+                                    TitelBg, TitelFg);
+  end;
 end;
 
 class procedure TAppTheme.Initialize;
