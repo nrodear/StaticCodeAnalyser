@@ -627,7 +627,7 @@ uses
   uIDEFindingsPropertiesForm,   // Cross-UI-Sync (GFindingsPropsForm.ResetAllStateForSync)
   uCrashDiag,                   // EStackExhausted - nie verschlucken
   uHintTextLayout,              // FormatRelatedLines - geteilt mit dem Nur-Text-Hint
-  uAppTheme,                    // ApplyDarkTitleBar - Titelzeile des Profil-Fensters
+  uAppTheme,                    // ApplyTitleBarTheme - Titelzeile des Profil-Fensters
   uProfileViewer;               // ShowProfileViewer - Hamburger-Item
 
 // noinspection-file BeginEndRequired, BooleanParam, ClassPerFile, ConsecutiveSection, EmptyExcept, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember, UnusedRoutine
@@ -3294,7 +3294,11 @@ begin
   ProfileViewerTitleBar :=
     procedure(AControl: TWinControl)
     begin
-      TAppTheme.ApplyDarkTitleBar(AControl, TIDETheme.IsDark);
+      // Farben aus der IDE, nicht aus dem VCL-Style der Anwendung:
+      // FrameBg/FrameFg sind genau die Toene, in denen die IDE ihre
+      // eigenen Rahmen zeichnet.
+      TAppTheme.ApplyTitleBarTheme(AControl, TIDETheme.IsDark,
+                                   TIDETheme.FrameBg, TIDETheme.FrameFg);
     end;
   try
     if ShowProfileViewer then

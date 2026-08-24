@@ -3624,7 +3624,9 @@ begin
   ProfileViewerTitleBar :=
     procedure(AControl: TWinControl)
     begin
-      TAppTheme.ApplyDarkTitleBar(AControl, TAppTheme.EffectiveDark);
+      TAppTheme.ApplyTitleBarTheme(AControl, TAppTheme.EffectiveDark,
+                                   TAppTheme.StyleChromeBg,
+                                   TAppTheme.StyleChromeFg);
     end;
   try
     if ShowProfileViewer then

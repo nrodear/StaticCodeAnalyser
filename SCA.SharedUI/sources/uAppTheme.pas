@@ -136,19 +136,30 @@ type
     /// </remarks>
     class procedure ResolveSystemColors(ARoot: TWinControl); static;
 
-    /// <summary>Faerbt die FENSTERRAHMEN-Leiste (Titelzeile) hell oder
-    /// dunkel. Das ist nichts, was ein VCL-Style oder das IDE-Theming
-    /// erledigt: die Titelzeile malt Windows selbst, und sie folgt nur
-    /// dem DWM-Attribut. Ohne diesen Aufruf steht ein sonst dunkles
-    /// Fenster mit heller Leiste da.</summary>
+    /// <summary>Faerbt die FENSTERRAHMEN-Leiste (Titelzeile). Das
+    /// erledigt weder ein VCL-Style noch das IDE-Theming: die Titelzeile
+    /// malt Windows selbst und folgt nur den DWM-Attributen.</summary>
+    /// <param name="ADark">Hell/Dunkel-Schalter. Auf Windows 10 ist das
+    /// alles, was geht - die Leiste wird dann Windows-schwarz.</param>
+    /// <param name="ACaption">Exakte Farbe der Leiste, clNone = keine
+    /// Vorgabe. Wirkt erst ab Windows 11 (Build 22000); davor faellt es
+    /// still auf ADark zurueck.</param>
+    /// <param name="AText">Exakte Farbe des Titeltexts, sonst wie
+    /// ACaption.</param>
     /// <remarks>Fehlschlaege sind bewusst folgenlos - dann bleibt die
-    /// Leiste hell und das Fenster funktioniert trotzdem.</remarks>
-    /// <remarks>Nimmt das Control, nicht das Fensterhandle: HWND
-    /// stammt aus Winapi.Windows, das erst im implementation-uses steht -
-    /// in der Deklaration gaebe es E2003. TWinControl ist ohnehin schon
-    /// sichtbar, und der Aufrufer muss sich so nicht um Handle-Erzeugung
-    /// kuemmern.</remarks>
-    class procedure ApplyDarkTitleBar(AControl: TWinControl; ADark: Boolean); static;
+    /// Leiste, wie Windows sie malt, und das Fenster funktioniert.</remarks>
+    /// <remarks>Nimmt das Control, nicht das Fensterhandle: HWND stammt
+    /// aus Winapi.Windows, das erst im implementation-uses steht - in der
+    /// Deklaration gaebe es E2003. TWinControl ist ohnehin sichtbar, und
+    /// der Aufrufer muss sich nicht um die Handle-Erzeugung kuemmern.</remarks>
+    class procedure ApplyTitleBarTheme(AControl: TWinControl; ADark: Boolean;
+      ACaption: TColor = clNone; AText: TColor = clNone); static;
+
+    /// <summary>Chrome-Farben des AKTIVEN VCL-Styles, aufgeloest. Fuer
+    /// die Standalone die passende Vorgabe an ApplyTitleBarTheme - das
+    /// IDE-Plugin nimmt stattdessen TIDETheme.FrameBg/FrameFg.</summary>
+    class function StyleChromeBg: TColor; static;
+    class function StyleChromeFg: TColor; static;
 
     class property Mode: TAppThemeMode read FMode;
 
@@ -354,28 +365,56 @@ type
   // laeuft ueber einen Class-Cracker, wie im Plugin (uIDETheme).
   TControlAccess = class(TControl);
 
-class procedure TAppTheme.ApplyDarkTitleBar(AControl: TWinControl; ADark: Boolean);
+class function TAppTheme.StyleChromeBg: TColor;
+begin
+  Result := StyleServices.GetSystemColor(clBtnFace);
+end;
+
+class function TAppTheme.StyleChromeFg: TColor;
+begin
+  Result := StyleServices.GetSystemColor(clBtnText);
+end;
+
+class procedure TAppTheme.ApplyTitleBarTheme(AControl: TWinControl;
+  ADark: Boolean; ACaption, AText: TColor);
 var
   H    : HWND;
-  Wert : BOOL;
+  Flag : BOOL;
+  Farb : COLORREF;
 begin
   if not Assigned(AControl) then Exit;
   // Handle lesen erzeugt es, falls noetig - das Fenster darf hier noch
-  // unsichtbar sein, das Attribut gilt ab dem ersten Anzeigen.
+  // unsichtbar sein, die Attribute gelten ab dem ersten Anzeigen.
   H := AControl.Handle;
-  Wert := ADark;
+  Flag := ADark;
   try
-    // Attribut 20 gibt es seit Windows 10 2004. Davor trug dieselbe
-    // Bedeutung die 19; dort schlaegt 20 fehl und wir versuchen 19.
-    // Failed() statt "<> S_OK": HResult ist vorzeichenbehaftet, ein
-    // Vergleich gegen eine blanke Konstante brachte W1023.
+    // 1) Hell/Dunkel. Attribut 20 gibt es seit Windows 10 2004, davor
+    //    trug dieselbe Bedeutung die 19. Failed() statt "<> S_OK":
+    //    HResult ist vorzeichenbehaftet, der blanke Vergleich brachte
+    //    W1023.
     if Failed(DwmSetWindowAttribute(H, DWMWA_USE_IMMERSIVE_DARK_MODE,
-                                    @Wert, SizeOf(Wert))) then
-      DwmSetWindowAttribute(H, 19, @Wert, SizeOf(Wert));
+                                    @Flag, SizeOf(Flag))) then
+      DwmSetWindowAttribute(H, 19, @Flag, SizeOf(Flag));
+
+    // 2) Die EXAKTEN Farben. Erst ab Windows 11 (Build 22000); davor
+    //    schlagen die Aufrufe fehl und es bleibt bei 1) - also dunkel
+    //    statt themenfarben. Genau der Unterschied, den man sieht.
+    //    TColor und COLORREF haben beide das Format $00BBGGRR, deshalb
+    //    genuegt ColorToRGB.
+    if ACaption <> clNone then
+    begin
+      Farb := ColorToRGB(ACaption);
+      DwmSetWindowAttribute(H, DWMWA_CAPTION_COLOR, @Farb, SizeOf(Farb));
+    end;
+    if AText <> clNone then
+    begin
+      Farb := ColorToRGB(AText);
+      DwmSetWindowAttribute(H, DWMWA_TEXT_COLOR, @Farb, SizeOf(Farb));
+    end;
   except
     // dwmapi.dll wird verzoegert geladen. Fehlt sie oder ist die
-    // Desktop-Komposition aus, ist eine helle Titelzeile das kleinere
-    // Uebel gegenueber einer Ausnahme beim Oeffnen eines Fensters.
+    // Desktop-Komposition aus, ist eine unpassende Titelzeile das
+    // kleinere Uebel gegenueber einer Ausnahme beim Oeffnen.
     on E: Exception do ;
   end;
 end;
