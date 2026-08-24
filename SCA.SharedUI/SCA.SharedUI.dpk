@@ -55,7 +55,20 @@ requires
   rtl,
   vcl,
   vclwinx,
-  designide,
+  // designide steht hier NICHT: keine Unit dieses Pakets benutzt eine
+  // designide-Unit. Am 2026-08-23 geprueft, am 2026-08-24 erneut - alle
+  // ToolsAPI-Erwaehnungen in den Quellen sind Kommentare, die eine
+  // Verwendung ausdruecklich ausschliessen.
+  //
+  // Die Zeile machte SCA.SharedUI zum Mischling aus Laufzeit- und
+  // Entwurfszeitpaket - was seit {$RUNONLY} ein Widerspruch in sich ist -
+  // und verhinderte jeden Win64-Bau, denn designide gibt es unter
+  // Delphi 12 nur fuer Win32.
+  //
+  // ZWEITES MAL entfernt: abcb8d6 hatte es schon herausgenommen, der
+  // Revert 90261a1 (Ruecknahme des D13-Ein-Satz-Versuchs) hat es
+  // ungewollt wieder hereingezogen und diesen Kommentar geloescht. Wer
+  // hier kuenftig revertiert, pruefe diese Zeile eigens.
   SCA.Engine;
 
 contains
