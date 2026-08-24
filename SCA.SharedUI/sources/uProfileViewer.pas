@@ -99,6 +99,10 @@ type
   // ein zweites Mal kostet nichts.
   TThemedForm = class(TForm)
   strict private
+    // Wiedereintritts-Sperre. Ohne sie ruft sich ThemeOnShow selbst auf,
+    // siehe den Kommentar dort - gemessen an einem Aufrufstapel aus der
+    // Delphi-12-IDE am 2026-08-24.
+    FThemeBusy : Boolean;
     procedure ThemeOnShow(Sender: TObject);
   public
     constructor CreateNew(AOwner: TComponent; Dummy: Integer = 0); override;
@@ -351,9 +355,31 @@ begin
 end;
 
 procedure TThemedForm.ThemeOnShow(Sender: TObject);
+// WIEDEREINTRITT IST HIER DER NORMALFALL, nicht die Ausnahme. Gemessen
+// an einem Aufrufstapel aus der Delphi-12-IDE:
+//
+//   ThemeOnShow -> TIDETheme.Apply -> IDEServices.ApplyTheme
+//     -> SetStyleName -> CMStyleElementsChanged -> UpdateStyleElements
+//     -> RecreateWnd -> UpdateShowing -> CMShowingChanged -> DoShow
+//     -> ThemeOnShow ...
+//
+// Das IDE-Theming erzeugt beim Setzen von StyleName das Fensterhandle
+// neu, und weil das mitten im Anzeigen passiert, laeuft DoShow ein
+// zweites Mal. Ohne Sperre laeuft das bis zum Absturz.
+//
+// Genau diese Handle-Neuerzeugung ist auch der Grund, warum der Aufruf
+// ueberhaupt hier steht und nicht im Konstruktor: das DWM-Attribut fuer
+// die dunkle Titelzeile haengt am Handle und waere sonst verloren. Der
+// aeussere Durchlauf setzt es nach der Neuerzeugung - also richtig.
 begin
-  if Assigned(ProfileViewerTheme) then
+  if FThemeBusy then Exit;
+  if not Assigned(ProfileViewerTheme) then Exit;
+  FThemeBusy := True;
+  try
     ProfileViewerTheme(Self);
+  finally
+    FThemeBusy := False;
+  end;
 end;
 
 { TProfileViewerForm }
