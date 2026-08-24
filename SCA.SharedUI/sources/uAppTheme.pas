@@ -143,7 +143,12 @@ type
     /// Fenster mit heller Leiste da.</summary>
     /// <remarks>Fehlschlaege sind bewusst folgenlos - dann bleibt die
     /// Leiste hell und das Fenster funktioniert trotzdem.</remarks>
-    class procedure ApplyDarkTitleBar(AHandle: HWND; ADark: Boolean); static;
+    /// <remarks>Nimmt das Control, nicht das Fensterhandle: HWND
+    /// stammt aus Winapi.Windows, das erst im implementation-uses steht -
+    /// in der Deklaration gaebe es E2003. TWinControl ist ohnehin schon
+    /// sichtbar, und der Aufrufer muss sich so nicht um Handle-Erzeugung
+    /// kuemmern.</remarks>
+    class procedure ApplyDarkTitleBar(AControl: TWinControl; ADark: Boolean); static;
 
     class property Mode: TAppThemeMode read FMode;
 
@@ -349,18 +354,24 @@ type
   // laeuft ueber einen Class-Cracker, wie im Plugin (uIDETheme).
   TControlAccess = class(TControl);
 
-class procedure TAppTheme.ApplyDarkTitleBar(AHandle: HWND; ADark: Boolean);
+class procedure TAppTheme.ApplyDarkTitleBar(AControl: TWinControl; ADark: Boolean);
 var
+  H    : HWND;
   Wert : BOOL;
 begin
-  if AHandle = 0 then Exit;
+  if not Assigned(AControl) then Exit;
+  // Handle lesen erzeugt es, falls noetig - das Fenster darf hier noch
+  // unsichtbar sein, das Attribut gilt ab dem ersten Anzeigen.
+  H := AControl.Handle;
   Wert := ADark;
   try
     // Attribut 20 gibt es seit Windows 10 2004. Davor trug dieselbe
     // Bedeutung die 19; dort schlaegt 20 fehl und wir versuchen 19.
-    if DwmSetWindowAttribute(AHandle, DWMWA_USE_IMMERSIVE_DARK_MODE,
-                             @Wert, SizeOf(Wert)) <> S_OK then
-      DwmSetWindowAttribute(AHandle, 19, @Wert, SizeOf(Wert));
+    // Failed() statt "<> S_OK": HResult ist vorzeichenbehaftet, ein
+    // Vergleich gegen eine blanke Konstante brachte W1023.
+    if Failed(DwmSetWindowAttribute(H, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                                    @Wert, SizeOf(Wert))) then
+      DwmSetWindowAttribute(H, 19, @Wert, SizeOf(Wert));
   except
     // dwmapi.dll wird verzoegert geladen. Fehlt sie oder ist die
     // Desktop-Komposition aus, ist eine helle Titelzeile das kleinere

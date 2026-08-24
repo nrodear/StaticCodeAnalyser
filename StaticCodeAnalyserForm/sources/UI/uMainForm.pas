@@ -3619,7 +3619,7 @@ begin
       // Die Titelzeile malt Windows, nicht der VCL-Style - sie braucht
       // ihr eigenes Signal, sonst steht ein dunkles Fenster mit heller
       // Leiste da.
-      TAppTheme.ApplyDarkTitleBar(AControl.Handle, TAppTheme.EffectiveDark);
+      TAppTheme.ApplyDarkTitleBar(AControl, TAppTheme.EffectiveDark);
     end;
   try
     if ShowProfileViewer then

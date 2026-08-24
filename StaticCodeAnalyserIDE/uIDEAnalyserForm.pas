@@ -3288,7 +3288,7 @@ begin
       // Dasselbe wie in der Standalone: die Titelzeile folgt weder dem
       // VCL-Style noch dem IDE-Theming, nur dem DWM-Attribut. Hell/Dunkel
       // kommt hier aus der IDE, nicht aus den App-Einstellungen.
-      TAppTheme.ApplyDarkTitleBar(AControl.Handle, TIDETheme.IsDark);
+      TAppTheme.ApplyDarkTitleBar(AControl, TIDETheme.IsDark);
     end;
   try
     if ShowProfileViewer then
