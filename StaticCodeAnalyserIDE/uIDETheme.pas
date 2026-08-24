@@ -250,6 +250,25 @@ var
   // nicht da ist.
   G: TIDEThemeImpl;
 
+// Wirkt diese Farbe perzeptuell dunkel? Aus TIDETheme.IsDark
+// herausgezogen, weil Apply die Frage seit 2026-08-24 fuer eine Farbe
+// beantworten muss, die NICHT aus dem Cache stammt.
+function IstDunkel(AColor: TColor): Boolean;
+const
+  // 50 % von 255, perzeptuelle Mitte. Unter dieser Luminanz behandeln
+  // Subscriber das Theme als "dunkel" und schalten Dark-Mode-Akzente ein.
+  DARK_LUMINANCE_MAX = 127;
+var
+  Rgb       : Cardinal;
+  Luminance : Integer;
+begin
+  Rgb := ColorToRGB(AColor);
+  // ITU-R BT.601 perzeptuelles Mittel
+  Luminance := (GetRValue(Rgb) * 299 + GetGValue(Rgb) * 587 +
+                GetBValue(Rgb) * 114) div 1000;
+  Result := Luminance <= DARK_LUMINANCE_MAX;
+end;
+
 procedure EnsureImpl;
 begin
   if G = nil then
@@ -832,25 +851,6 @@ begin
   // bis irgendein Notifier feuerte.
   if not (G.FCacheValid and G.FEditorBgValid) then G.RebuildCache;
   Result := G.FEditorBg;
-end;
-
-// Wirkt diese Farbe perzeptuell dunkel? Aus TIDETheme.IsDark
-// herausgezogen, weil Apply die Frage seit 2026-08-24 fuer eine Farbe
-// beantworten muss, die NICHT aus dem Cache stammt.
-function IstDunkel(AColor: TColor): Boolean;
-const
-  // 50 % von 255, perzeptuelle Mitte. Unter dieser Luminanz behandeln
-  // Subscriber das Theme als "dunkel" und schalten Dark-Mode-Akzente ein.
-  DARK_LUMINANCE_MAX = 127;
-var
-  Rgb       : Cardinal;
-  Luminance : Integer;
-begin
-  Rgb := ColorToRGB(AColor);
-  // ITU-R BT.601 perzeptuelles Mittel
-  Luminance := (GetRValue(Rgb) * 299 + GetGValue(Rgb) * 587 +
-                GetBValue(Rgb) * 114) div 1000;
-  Result := Luminance <= DARK_LUMINANCE_MAX;
 end;
 
 class function TIDETheme.IsDark: Boolean;
