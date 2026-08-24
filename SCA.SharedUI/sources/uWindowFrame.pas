@@ -161,13 +161,33 @@ begin
   if not (AStyle is TCustomStyleServices) then Exit;
   Svc := TCustomStyleServices(AStyle);
   try
-    // Dieselben zwei Abfragen, die TFormStyleHook.PaintNC vor dem Malen
-    // macht (Vcl.Forms.pas ~19456/19485).
-    Result := Svc.GetElementColor(Svc.GetElementDetails(twCaptionActive),
-                                  ecFillColor, ABg)
-          and Svc.GetElementColor(Svc.GetElementDetails(twCaptionActive),
-                                  ecTextColor, AFg)
-          and (ABg <> clNone) and (AFg <> clNone);
+    // ZUERST die vom Style DEKLARIERTEN Titelzeilenfarben. Am
+    // 2026-08-24 aus den .vsf ausgelesen, damit hier keine Vermutung
+    // steht:
+    //   Win10IDE_Dark   clActiveCaption $00A36215 (#1562A3, blau)
+    //                   clCaptionText   clWhite
+    //   Win10IDE_Light  clActiveCaption $00A16217 (#1762A1, blau)
+    //   SCADark (EXE)   clActiveCaption $00262525 (#252526, grau)
+    //                   clCaptionText   $00CCCCCC
+    //
+    // Das Blau der IDE-Titelzeilen ist also das THEME, nicht der
+    // Windows-Akzent - eine Zeitlang die naheliegende Fehlannahme.
+    // clWindow des IDE-Themes ist $00322F2D; genau diesen Wert hat der
+    // erste Anlauf geschickt, und deshalb sah die Leiste zwar dunkel,
+    // aber falsch aus.
+    ABg := Svc.GetSystemColor(clActiveCaption);
+    AFg := Svc.GetSystemColor(clCaptionText);
+    Result := (ABg <> clNone) and (AFg <> clNone);
+
+    // Rueckfall auf das gezeichnete Element - das ist die Quelle, aus
+    // der TFormStyleHook.PaintNC malt (Vcl.Forms.pas ~19456/19485). Ein
+    // Style, der clActiveCaption nicht setzt, kann sie trotzdem haben.
+    if not Result then
+      Result := Svc.GetElementColor(Svc.GetElementDetails(twCaptionActive),
+                                    ecFillColor, ABg)
+            and Svc.GetElementColor(Svc.GetElementDetails(twCaptionActive),
+                                    ecTextColor, AFg)
+            and (ABg <> clNone) and (AFg <> clNone);
   except
     // Ein Style, der die Elemente nicht kennt, ist kein Fehlerfall - der
     // Aufrufer bleibt dann bei seiner bisherigen Farbe.
