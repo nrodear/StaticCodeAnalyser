@@ -719,6 +719,7 @@ var
   TopForm : TCustomForm;
   TitelBg : TColor;
   TitelFg : TColor;
+  Quelle  : string;
 begin
   if AControl = nil then Exit;
 
@@ -794,6 +795,7 @@ begin
     begin
       TitelBg := Theming.StyleServices.GetSystemColor(clWindow);
       TitelFg := Theming.StyleServices.GetSystemColor(clWindowText);
+      Quelle  := 'live';
     end
     else
     begin
@@ -801,7 +803,21 @@ begin
       // die es gibt.
       TitelBg := FrameBg;
       TitelFg := FrameFg;
+      Quelle  := 'cache';
     end;
+
+    // Selbstauskunft. Die Diagnosedatei zeigte am 2026-08-24 drei
+    // Oeffnungen binnen 32 Sekunden, davon eine mit weisser Titelzeile -
+    // und das mit dem Code, der bereits LIVE liest. Damit ist die Frage
+    // nicht mehr "Cache oder nicht", sondern: welches Fenster war es, und
+    // was hat die IDE zu diesem Zeitpunkt ueber ihr eigenes Theme gesagt.
+    if Assigned(Theming) then
+      TAppTheme.LogLine(Format('IDE-Apply: %s "%s" quelle=%s theme="%s" enabled=%d',
+        [AControl.ClassName, TCustomForm(AControl).Caption, Quelle,
+         Theming.ActiveTheme, Ord(Theming.IDEThemingEnabled)]))
+    else
+      TAppTheme.LogLine(Format('IDE-Apply: %s "%s" quelle=%s KEIN Theming-Dienst',
+        [AControl.ClassName, TCustomForm(AControl).Caption, Quelle]));
     TAppTheme.ApplyTitleBarTheme(TCustomForm(AControl), IstDunkel(TitelBg),
                                  TitelBg, TitelFg);
   end;
