@@ -3271,10 +3271,28 @@ procedure TAnalyserFrame.ShowProfilesClick(Sender: TObject);
 // von der Engine geladen. Sie gelten damit auch hier, nicht nur in der
 // Standalone - und ebenso fuer `--profile <name>` in der CI.
 begin
-  if ShowProfileViewer then
-    // Angelegt oder geloescht: das Combo kennt den Namen sonst erst nach
-    // einem IDE-Neustart.
-    PopulateProfileCombo;
+  // Das IDE-Theming laeuft ueber ToolsAPI, das die Unit in SCA.SharedUI
+  // nicht kennen darf. TIDETheme.Apply macht den vorgesehenen Weg:
+  // RegisterFormClass + ApplyTheme auf dem Top-Level-Form, danach
+  // per-Descendant - ohne den globalen Style-Broadcast, der die IDE
+  // sekundenlang blockieren wuerde.
+  //
+  // Nur fuer die Dauer des Aufrufs gesetzt und danach zurueckgenommen:
+  // eine Closure, die nach dem Entladen des Plugins stehen bleibt, zeigt
+  // in toten Code. Genau davor warnt uAnalyserTheme bei seinen Providern.
+  ProfileViewerTheme :=
+    procedure(AControl: TWinControl)
+    begin
+      TIDETheme.Apply(AControl);
+    end;
+  try
+    if ShowProfileViewer then
+      // Angelegt oder geloescht: das Combo kennt den Namen sonst erst
+      // nach einem IDE-Neustart.
+      PopulateProfileCombo;
+  finally
+    ProfileViewerTheme := nil;
+  end;
 end;
 
 procedure TAnalyserFrame.EditIgnoreListClick(Sender: TObject);

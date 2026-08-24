@@ -3604,10 +3604,27 @@ var
   Chosen : string;
 begin
   Chosen := ProfileCombo.Text;
-  if ShowProfileViewer then
-    // Es wurde eines angelegt oder geloescht: die bisherige Auswahl
-    // wiederherstellen, falls es sie noch gibt.
-    PopulateProfileCombo(Chosen);
+  // Dasselbe, was das Hauptfenster nach seinem Aufbau tut (FormCreate
+  // und ThemeChanged rufen es ebenfalls). Ohne diesen Aufruf bleibt das
+  // Profil-Fenster in den Systemfarben stehen, waehrend der Rest der
+  // Anwendung dunkel ist.
+  //
+  // Nur fuer die Dauer des Aufrufs gesetzt: ein globaler Hook, der
+  // laenger steht als noetig, ist die Sorte Zeiger, die spaeter ins
+  // Leere zeigt.
+  ProfileViewerTheme :=
+    procedure(AControl: TWinControl)
+    begin
+      TAppTheme.ResolveSystemColors(AControl);
+    end;
+  try
+    if ShowProfileViewer then
+      // Es wurde eines angelegt oder geloescht: die bisherige Auswahl
+      // wiederherstellen, falls es sie noch gibt.
+      PopulateProfileCombo(Chosen);
+  finally
+    ProfileViewerTheme := nil;
+  end;
 end;
 
 procedure TForm2.HamburgerIgnoreListClick(Sender: TObject);

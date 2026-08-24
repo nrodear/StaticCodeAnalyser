@@ -33,6 +33,30 @@ unit uProfileViewer;
 
 interface
 
+uses
+  Vcl.Controls;   // TWinControl - Parametertyp des Theme-Hooks
+
+type
+  // Wird auf jedes frisch gebaute Fenster dieser Unit angewandt, bevor
+  // es sichtbar wird.
+  //
+  // Warum ein Hook und kein direkter Aufruf: die Unit liegt in
+  // SCA.SharedUI und darf ToolsAPI nicht kennen - das IDE-Theming laeuft
+  // aber genau darueber (TIDETheme.Apply -> IOTAIDEThemingServices).
+  // Und die Standalone braucht etwas anderes als die IDE:
+  // TAppTheme.ResolveSystemColors gegen den aktiven VCL-Style. Dieselbe
+  // Schichtgrenze und dasselbe Muster wie StyleServicesProvider und
+  // EditorBgProvider in uAnalyserTheme.
+  //
+  // Der Wirt setzt ihn nur fuer die Dauer des Aufrufs und nimmt ihn
+  // danach zurueck. So kann die Closure nicht in entladenen Plugin-Code
+  // zeigen - die Falle, vor der uAnalyserTheme bei seinen Providern
+  // ausdruecklich warnt.
+  TProfileViewerThemeProc = reference to procedure(AControl: TWinControl);
+
+var
+  ProfileViewerTheme: TProfileViewerThemeProc = nil;
+
 // Zeigt das Fenster modal. Ergebnis True, wenn Profile angelegt oder
 // geloescht wurden - der Aufrufer muss dann sein Profil-Combo neu
 // befuellen, sonst kennt es den neuen Namen erst nach einem Neustart.
@@ -47,7 +71,9 @@ implementation
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   System.Generics.Defaults,
-  Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls,
+  // Vcl.Controls steht bereits im interface-uses (TWinControl im
+  // Hook-Typ) - hier nicht noch einmal, sonst E2004.
+  Vcl.Forms, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls,
   Vcl.Dialogs,
   Winapi.Windows,
   uSCAConsts,       // TFindingKind, TFindingKinds, KindName
@@ -282,6 +308,9 @@ begin
       Lv.Items.EndUpdate;
     end;
 
+    if Assigned(ProfileViewerTheme) then
+      ProfileViewerTheme(Dlg);
+
     if Dlg.ShowModal = mrOk then
     begin
       for i := 0 to Lv.Items.Count - 1 do
@@ -305,6 +334,10 @@ begin
   FRowKinds := TList<TFindingKind>.Create;
   BuildUi;
   LoadProfiles('');
+  // Erst jetzt: das Theme muss ueber FERTIGE Controls laufen, sonst
+  // faerbt es die noch nicht erzeugten nicht ein.
+  if Assigned(ProfileViewerTheme) then
+    ProfileViewerTheme(Self);
 end;
 
 destructor TProfileViewerForm.Destroy;
