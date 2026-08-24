@@ -3285,9 +3285,15 @@ begin
     procedure(AControl: TWinControl)
     begin
       TIDETheme.Apply(AControl);
-      // Dasselbe wie in der Standalone: die Titelzeile folgt weder dem
-      // VCL-Style noch dem IDE-Theming, nur dem DWM-Attribut. Hell/Dunkel
-      // kommt hier aus der IDE, nicht aus den App-Einstellungen.
+    end;
+  // Muss getrennt bleiben: TIDETheme.Apply setzt je Control StyleName und
+  // erzeugt damit das Fensterhandle neu. Aus OnShow heraus bricht die VCL
+  // das mit EInvalidOperation ab - deshalb laeuft das Theming beim Bauen
+  // und nur das handle-gebundene DWM-Attribut beim Anzeigen. Hell/Dunkel
+  // kommt hier aus der IDE, nicht aus den App-Einstellungen.
+  ProfileViewerTitleBar :=
+    procedure(AControl: TWinControl)
+    begin
       TAppTheme.ApplyDarkTitleBar(AControl, TIDETheme.IsDark);
     end;
   try
@@ -3296,7 +3302,8 @@ begin
       // nach einem IDE-Neustart.
       PopulateProfileCombo;
   finally
-    ProfileViewerTheme := nil;
+    ProfileViewerTheme    := nil;
+    ProfileViewerTitleBar := nil;
   end;
 end;
 

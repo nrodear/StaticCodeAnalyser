@@ -55,7 +55,22 @@ type
   TProfileViewerThemeProc = reference to procedure(AControl: TWinControl);
 
 var
+  // BEIM BAUEN, vor dem Anzeigen. Hier darf das Theming schwer sein und
+  // das Fensterhandle neu erzeugen - nichts ist sichtbar.
   ProfileViewerTheme: TProfileViewerThemeProc = nil;
+
+  // BEIM ANZEIGEN. Nur fuer Dinge, die am HANDLE haengen und deshalb
+  // dessen letzte Neuerzeugung ueberleben muessen - konkret das
+  // DWM-Attribut fuer die dunkle Titelzeile.
+  //
+  // Warum getrennt und nicht derselbe Hook zweimal: das IDE-Theming
+  // setzt je Control StyleName, das loest RecreateWnd aus, und eine
+  // Handle-Neuerzeugung aus OnShow heraus laesst die VCL mit
+  // EInvalidOperation abbrechen ("Visible kann in OnShow oder OnHide
+  // nicht geaendert werden", Vcl.Forms.pas:9304). Am 2026-08-24 an einem
+  // Aufrufstapel aus der IDE gemessen. Was hier steht, muss billig sein
+  // und darf keinen VCL-Zustand aendern.
+  ProfileViewerTitleBar: TProfileViewerThemeProc = nil;
 
 // Zeigt das Fenster modal. Ergebnis True, wenn Profile angelegt oder
 // geloescht wurden - der Aufrufer muss dann sein Profil-Combo neu
@@ -97,15 +112,18 @@ type
   // OnShow ist der letzte Zeitpunkt, an dem das Handle endgueltig steht
   // und das Fenster noch nicht sichtbar ist. Der Aufruf ist idempotent,
   // ein zweites Mal kostet nichts.
+  // Fenster, das sein Theme beim Bauen anfordert und die Titelzeile
+  // beim Anzeigen - die Begruendung fuer die Trennung steht oben an
+  // ProfileViewerTitleBar.
   TThemedForm = class(TForm)
   strict private
-    // Wiedereintritts-Sperre. Ohne sie ruft sich ThemeOnShow selbst auf,
-    // siehe den Kommentar dort - gemessen an einem Aufrufstapel aus der
-    // Delphi-12-IDE am 2026-08-24.
-    FThemeBusy : Boolean;
-    procedure ThemeOnShow(Sender: TObject);
+    procedure TitleBarOnShow(Sender: TObject);
   public
     constructor CreateNew(AOwner: TComponent; Dummy: Integer = 0); override;
+    // Vom Erzeuger aufzurufen, wenn die Controls stehen. Nicht im
+    // Konstruktor der Basis: die weiss nicht, wann der Abkoemmling mit
+    // dem Aufbau fertig ist.
+    procedure ApplyThemeNow;
   end;
 
   TProfileViewerForm = class(TThemedForm)
@@ -330,8 +348,9 @@ begin
       Lv.Items.EndUpdate;
     end;
 
-    // Kein Vorab-Aufruf mehr: TThemedForm.OnShow macht es, und zwar
-    // nach der letzten moeglichen Handle-Neuerzeugung.
+    // Vor dem Anzeigen, aus demselben Grund wie beim Hauptfenster.
+    Dlg.ApplyThemeNow;
+
     if Dlg.ShowModal = mrOk then
     begin
       for i := 0 to Lv.Items.Count - 1 do
@@ -351,35 +370,22 @@ end;
 constructor TThemedForm.CreateNew(AOwner: TComponent; Dummy: Integer);
 begin
   inherited CreateNew(AOwner, Dummy);
-  OnShow := ThemeOnShow;
+  OnShow := TitleBarOnShow;
 end;
 
-procedure TThemedForm.ThemeOnShow(Sender: TObject);
-// WIEDEREINTRITT IST HIER DER NORMALFALL, nicht die Ausnahme. Gemessen
-// an einem Aufrufstapel aus der Delphi-12-IDE:
-//
-//   ThemeOnShow -> TIDETheme.Apply -> IDEServices.ApplyTheme
-//     -> SetStyleName -> CMStyleElementsChanged -> UpdateStyleElements
-//     -> RecreateWnd -> UpdateShowing -> CMShowingChanged -> DoShow
-//     -> ThemeOnShow ...
-//
-// Das IDE-Theming erzeugt beim Setzen von StyleName das Fensterhandle
-// neu, und weil das mitten im Anzeigen passiert, laeuft DoShow ein
-// zweites Mal. Ohne Sperre laeuft das bis zum Absturz.
-//
-// Genau diese Handle-Neuerzeugung ist auch der Grund, warum der Aufruf
-// ueberhaupt hier steht und nicht im Konstruktor: das DWM-Attribut fuer
-// die dunkle Titelzeile haengt am Handle und waere sonst verloren. Der
-// aeussere Durchlauf setzt es nach der Neuerzeugung - also richtig.
+procedure TThemedForm.ApplyThemeNow;
 begin
-  if FThemeBusy then Exit;
-  if not Assigned(ProfileViewerTheme) then Exit;
-  FThemeBusy := True;
-  try
+  if Assigned(ProfileViewerTheme) then
     ProfileViewerTheme(Self);
-  finally
-    FThemeBusy := False;
-  end;
+end;
+
+procedure TThemedForm.TitleBarOnShow(Sender: TObject);
+// Absichtlich nur die Titelzeile. Alles, was Controls anfasst oder
+// StyleName setzt, gehoert in ApplyThemeNow - aus OnShow heraus wuerde
+// eine Handle-Neuerzeugung die VCL mit EInvalidOperation abbrechen.
+begin
+  if Assigned(ProfileViewerTitleBar) then
+    ProfileViewerTitleBar(Self);
 end;
 
 { TProfileViewerForm }
@@ -391,8 +397,9 @@ begin
   FRowKinds := TList<TFindingKind>.Create;
   BuildUi;
   LoadProfiles('');
-  // Das Theme wendet TThemedForm in OnShow an - dann sind die Controls
-  // fertig UND das Handle endgueltig.
+  // Jetzt stehen die Controls. Das Theming darf hier das Handle neu
+  // erzeugen - das Fenster ist noch nicht sichtbar.
+  ApplyThemeNow;
 end;
 
 destructor TProfileViewerForm.Destroy;

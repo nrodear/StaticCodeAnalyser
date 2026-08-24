@@ -3616,9 +3616,14 @@ begin
     procedure(AControl: TWinControl)
     begin
       TAppTheme.ResolveSystemColors(AControl);
-      // Die Titelzeile malt Windows, nicht der VCL-Style - sie braucht
-      // ihr eigenes Signal, sonst steht ein dunkles Fenster mit heller
-      // Leiste da.
+    end;
+  // Getrennt, weil es erst beim Anzeigen greifen darf: das DWM-Attribut
+  // haengt am Fensterhandle. Die Titelzeile malt Windows, nicht der
+  // VCL-Style - ohne dieses Signal stuende ein dunkles Fenster mit
+  // heller Leiste da.
+  ProfileViewerTitleBar :=
+    procedure(AControl: TWinControl)
+    begin
       TAppTheme.ApplyDarkTitleBar(AControl, TAppTheme.EffectiveDark);
     end;
   try
@@ -3627,7 +3632,8 @@ begin
       // wiederherstellen, falls es sie noch gibt.
       PopulateProfileCombo(Chosen);
   finally
-    ProfileViewerTheme := nil;
+    ProfileViewerTheme    := nil;
+    ProfileViewerTitleBar := nil;
   end;
 end;
 
