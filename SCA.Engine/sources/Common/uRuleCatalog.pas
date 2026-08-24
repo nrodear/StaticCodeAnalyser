@@ -657,7 +657,20 @@ begin
   Result.ID              := Format('SCA%.3d', [Ord(K) + 1]);
   Result.Kind            := K;
   Result.Name            := KindName(K);
-  Result.DefaultSeverity := lsWarning;
+  // BEIDE aus KIND_META, nicht nur der Typ.
+  //
+  // Hier stand bis zum 2026-08-24 ein pauschales lsWarning, waehrend die
+  // Zeile darunter den Typ laengst korrekt aus KIND_META zog - eine von
+  // zwei Angaben war verdrahtet, die andere nicht. Im IDE-Plugin ist der
+  // Fallback der NORMALFALL (die BPL liegt im Embarcadero-Verzeichnis,
+  // die JSON wird nie gefunden - s. Kommentar oben), also zeigte das
+  // Profil-Fenster dort bei JEDER Regel "Warning", waehrend die
+  // Standalone Error/Warning/Hint auseinanderhielt. Aufgefallen an genau
+  // diesem Unterschied zwischen den beiden Oberflaechen.
+  //
+  // Betrifft nicht nur die Anzeige: die Katalog-Severity speist die
+  // SARIF-Level und den Sonar-Export.
+  Result.DefaultSeverity := KindDefaultSeverity(K);
   Result.FindingType     := KindFindingType(K);
 
   Idx := Ord(K);

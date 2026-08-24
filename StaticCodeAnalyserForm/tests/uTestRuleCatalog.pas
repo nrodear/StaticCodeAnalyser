@@ -1,4 +1,4 @@
-unit uTestRuleCatalog;
+﻿unit uTestRuleCatalog;
 
 // Tests fuer TRuleCatalog (rules/sca-rules.json).
 // Konsistenz-Suite: stellt sicher dass jeder TFindingKind einen Catalog-
@@ -56,6 +56,9 @@ type
     // Regressions-Anker 2026-07-26: Katalog-Fallback muss INHALTLICH
     // vollstaendig sein (IDE-Plugin findet die JSON oft nicht).
     [Test] procedure FallbackStillProvidesExamples;
+    // Regressions-Anker 2026-08-24: der Fallback muss auch die
+    // SEVERITY tragen, nicht pauschal lsWarning.
+    [Test] procedure FallbackKeepsSeverityFromKindMeta;
     // Kind-Name in JSON muss zu KindName(K) matchen.
     [Test] procedure KindNameMatchesCatalog;
     // Tool-Info muss gesetzt sein (fuer SARIF tool.driver-Block).
@@ -777,6 +780,73 @@ begin
     end;
     Assert.AreEqual<Integer>(0, Leer,
       'Kinds ohne Beispiel im Fallback (erwartet 0) - uRuleCatalogData.inc regenerieren');
+  finally
+    TRuleCatalog.JsonFilePath := OldPath;
+    TRuleCatalog.Reload;   // echten Katalog fuer die Folgetests wiederherstellen
+    if TFile.Exists(TmpFile) then TFile.Delete(TmpFile);
+  end;
+end;
+
+procedure TTestRuleCatalog.FallbackKeepsSeverityFromKindMeta;
+// ROOT-CAUSE-ANKER (2026-08-24): MakeFallbackMeta setzte
+// DefaultSeverity pauschal auf lsWarning, waehrend es den FindingType
+// eine Zeile weiter korrekt aus KIND_META zog. Im IDE-Plugin ist der
+// Fallback der Normalfall (BPL im Embarcadero-Verzeichnis, JSON
+// unerreichbar), also zeigte das Profil-Fenster dort bei JEDER Regel
+// "Warning" - die Standalone dagegen Error/Warning/Hint. Aufgefallen
+// ist es am Vergleich der beiden Oberflaechen.
+//
+// Der Fallback wird wie im Test darueber erzwungen: eine KAPUTTE JSON
+// unterschieben, damit die Pfadsuche sie nimmt und der Parser scheitert.
+var
+  TmpFile : string;
+  OldPath : string;
+  Meta    : TRuleMeta;
+  K       : TFindingKind;
+  Falsch  : Integer;
+  Nur1    : Boolean;
+  Erste   : TLeakSeverity;
+begin
+  OldPath := TRuleCatalog.JsonFilePath;
+  TmpFile := TPath.Combine(TPath.GetTempPath,
+    'sca_broken_sev_' + TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '') + '.json');
+  TFile.WriteAllText(TmpFile, '{ das ist kein gueltiger Regelkatalog');
+  try
+    TRuleCatalog.JsonFilePath := TmpFile;
+    TRuleCatalog.Reload;
+
+    // Stellvertretend der Fall, an dem es aufgefallen ist: SCA001
+    // MemoryLeak ist in KIND_META lsError, nicht lsWarning.
+    Meta := TRuleCatalog.GetRuleCanonical(fkMemoryLeak);
+    Assert.AreEqual<TLeakSeverity>(KindDefaultSeverity(fkMemoryLeak),
+      Meta.DefaultSeverity,
+      'SCA001: Fallback-Severity weicht von KIND_META ab');
+
+    // Und ueber ALLE Kinds: keine einzige Abweichung.
+    Falsch := 0;
+    for K := Low(TFindingKind) to High(TFindingKind) do
+    begin
+      Meta := TRuleCatalog.GetRuleCanonical(K);
+      if Meta.DefaultSeverity <> KindDefaultSeverity(K) then Inc(Falsch);
+    end;
+    Assert.AreEqual<Integer>(0, Falsch,
+      'Kinds mit falscher Severity im Fallback (erwartet 0)');
+
+    // Gegenprobe gegen einen Test, der nichts prueft: waeren alle Kinds
+    // in KIND_META gleich schwer, wuerde die Schleife oben auch bei
+    // einem pauschalen Wert gruen. Sie sind es nicht - und genau das
+    // sichert diese Zusicherung ab.
+    Erste := KindDefaultSeverity(Low(TFindingKind));
+    Nur1  := True;
+    for K := Low(TFindingKind) to High(TFindingKind) do
+      if KindDefaultSeverity(K) <> Erste then
+      begin
+        Nur1 := False;
+        Break;
+      end;
+    Assert.IsFalse(Nur1,
+      'KIND_META fuehrt nur noch EINE Severity - dieser Test kann den ' +
+      'Fehler dann nicht mehr entdecken');
   finally
     TRuleCatalog.JsonFilePath := OldPath;
     TRuleCatalog.Reload;   // echten Katalog fuer die Folgetests wiederherstellen
