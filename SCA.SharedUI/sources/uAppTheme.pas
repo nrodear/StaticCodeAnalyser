@@ -365,6 +365,15 @@ type
   // laeuft ueber einen Class-Cracker, wie im Plugin (uIDETheme).
   TControlAccess = class(TControl);
 
+// Farbe fuer die Diagnosezeile: 'clNone' oder $00BBGGRR.
+function IfThenColor(C: TColor): string;
+begin
+  if C = clNone then
+    Result := 'clNone'
+  else
+    Result := Format('$%.6x', [ColorToRGB(C) and $00FFFFFF]);
+end;
+
 class function TAppTheme.StyleChromeBg: TColor;
 begin
   Result := StyleServices.GetSystemColor(clBtnFace);
@@ -378,23 +387,30 @@ end;
 class procedure TAppTheme.ApplyTitleBarTheme(AControl: TWinControl;
   ADark: Boolean; ACaption, AText: TColor);
 var
-  H    : HWND;
-  Flag : BOOL;
-  Farb : COLORREF;
+  H      : HWND;
+  Flag   : BOOL;
+  Farb   : COLORREF;
+  HrDark : HResult;
+  HrCap  : HResult;
+  HrTxt  : HResult;
 begin
   if not Assigned(AControl) then Exit;
   // Handle lesen erzeugt es, falls noetig - das Fenster darf hier noch
   // unsichtbar sein, die Attribute gelten ab dem ersten Anzeigen.
   H := AControl.Handle;
   Flag := ADark;
+  HrDark := S_FALSE;
+  HrCap  := S_FALSE;
+  HrTxt  := S_FALSE;
   try
     // 1) Hell/Dunkel. Attribut 20 gibt es seit Windows 10 2004, davor
     //    trug dieselbe Bedeutung die 19. Failed() statt "<> S_OK":
     //    HResult ist vorzeichenbehaftet, der blanke Vergleich brachte
     //    W1023.
-    if Failed(DwmSetWindowAttribute(H, DWMWA_USE_IMMERSIVE_DARK_MODE,
-                                    @Flag, SizeOf(Flag))) then
-      DwmSetWindowAttribute(H, 19, @Flag, SizeOf(Flag));
+    HrDark := DwmSetWindowAttribute(H, DWMWA_USE_IMMERSIVE_DARK_MODE,
+                                    @Flag, SizeOf(Flag));
+    if Failed(HrDark) then
+      HrDark := DwmSetWindowAttribute(H, 19, @Flag, SizeOf(Flag));
 
     // 2) Die EXAKTEN Farben. Erst ab Windows 11 (Build 22000); davor
     //    schlagen die Aufrufe fehl und es bleibt bei 1) - also dunkel
@@ -404,12 +420,12 @@ begin
     if ACaption <> clNone then
     begin
       Farb := ColorToRGB(ACaption);
-      DwmSetWindowAttribute(H, DWMWA_CAPTION_COLOR, @Farb, SizeOf(Farb));
+      HrCap := DwmSetWindowAttribute(H, DWMWA_CAPTION_COLOR, @Farb, SizeOf(Farb));
     end;
     if AText <> clNone then
     begin
       Farb := ColorToRGB(AText);
-      DwmSetWindowAttribute(H, DWMWA_TEXT_COLOR, @Farb, SizeOf(Farb));
+      HrTxt := DwmSetWindowAttribute(H, DWMWA_TEXT_COLOR, @Farb, SizeOf(Farb));
     end;
   except
     // dwmapi.dll wird verzoegert geladen. Fehlt sie oder ist die
@@ -417,6 +433,18 @@ begin
     // kleinere Uebel gegenueber einer Ausnahme beim Oeffnen.
     on E: Exception do ;
   end;
+
+  // Selbstauskunft. Die Titelzeile laesst sich nicht von aussen messen -
+  // ob eine Farbe ankam, sagt sonst niemand. Sichtbar in DebugView oder
+  // im Ereignisprotokoll der IDE; ohne Zuhoerer kostet es nichts.
+  // Dieselbe Begruendung wie bei den OutputDebugString-Meldungen in
+  // TRuleCatalog.
+  OutputDebugString(PChar(Format(
+    'SCA TitleBar: dark=%d caption=%s(hr=%.8x) text=%s(hr=%.8x) darkhr=%.8x',
+    [Ord(ADark),
+     IfThenColor(ACaption), HrCap,
+     IfThenColor(AText),    HrTxt,
+     HrDark])));
 end;
 
 class procedure TAppTheme.ResolveSystemColors(ARoot: TWinControl);
