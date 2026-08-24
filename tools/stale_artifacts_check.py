@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """Welche Paket-Artefakte sind aelter als ihre Quelle?
 
 WOZU: Ein Paket, das ein anderes 'requires', zieht dessen Units aus dem
@@ -139,6 +139,55 @@ def pfad_kollision():
     return gefunden
 
 
+def bpl_gewinner():
+    """Welche gleichnamige BPL findet der Loader zuerst?
+
+    Die PATH-Warnung darunter galt bisher nur dem Compiler. Am 2026-08-24
+    hat dieselbe Reihenfolge den IDE-LOADER getroffen: das D12-Plugin
+    fordert per requires "SCA.Engine.bpl" an, im PATH stand aber
+    37.0\Bpl VOR 23.0\Bpl - die IDE lud die Delphi-13-Fassung und
+    stuerzte mit einer Zugriffsverletzung in bds.exe ab.
+
+    Vorher fiel das nie auf, weil alle drei Dev-BPLs mit ABSOLUTEM Pfad
+    in den Known Packages standen; da gibt es keine PATH-Suche. Erst
+    {$RUNONLY} (2026-08-23) hat diese Registrierung unmoeglich gemacht
+    und damit die Aufloesung an den PATH abgegeben.
+
+    Liefert je Dateiname die Liste der Fundorte in PATH-Reihenfolge -
+    der erste gewinnt.
+    """
+    teile = [x for x in os.environ.get('PATH', '').split(os.pathsep)
+             if x and 'embarcadero' in x.lower()]
+    treffer = {}
+    for t in teile:
+        try:
+            namen = os.listdir(t)
+        except OSError:
+            continue
+        for n in namen:
+            if not n.lower().endswith('.bpl'):
+                continue
+            if not (n.startswith('SCA.') or n.startswith('StaticCodeAnalyser')):
+                continue
+            treffer.setdefault(n, []).append(os.path.join(t, n))
+    # NUR generationsuebergreifende Doppel melden. Derselbe Name in
+    # 23.0\Bpl und 23.0\Bpl\Win64 ist Absicht - dort trennt die
+    # Bitbreite, und die 32-Bit-IDE findet den Win32-Ordner zuerst. Ein
+    # Doppel zwischen 23.0 und 37.0 ist dagegen immer ein Fehler.
+    def gen(p):
+        low = p.lower()
+        for ver, label in STUDIOS:
+            if (os.sep + ver.lower() + os.sep) in low:
+                return label
+        return '?'
+
+    echt = {}
+    for n, v in treffer.items():
+        if len({gen(p) for p in v}) > 1:
+            echt[n] = v
+    return echt
+
+
 def when(ts):
     return time.strftime('%Y-%m-%d %H:%M', time.localtime(ts))
 
@@ -189,11 +238,28 @@ def main():
         for label in sorted(kol):
             for t in kol[label]:
                 print('   %-4s %s' % (label, t))
-        print('   dcc faellt bei der Aufloesung von "requires" auf den')
-        print('   PATH zurueck. Fehlt das DCP der eigenen Generation,')
-        print('   greift es das der anderen - Meldung dann F2141')
-        print('   "Falsches Dateiformat", mit einem Pfad, der in keiner')
-        print('   Suchpfad-Option des Compileraufrufs steht.')
+        print('   Das trifft ZWEI Werkzeuge:')
+        print('   * dcc faellt bei der Aufloesung von "requires" auf den')
+        print('     PATH zurueck. Fehlt das DCP der eigenen Generation,')
+        print('     greift es das der anderen - Meldung dann F2141')
+        print('     "Falsches Dateiformat", mit einem Pfad, der in keiner')
+        print('     Suchpfad-Option des Compileraufrufs steht.')
+        print('   * der IDE-LOADER tut dasselbe mit den BPLs, sobald ein')
+        print('     Paket nicht mit absolutem Pfad in den Known Packages')
+        print('     steht. Ein Laufzeitpaket ({$RUNONLY}) kann dort gar')
+        print('     nicht stehen - dann entscheidet allein der PATH.')
+        print()
+
+    doppelt = bpl_gewinner()
+    if doppelt:
+        print('ROT: %d BPL-Name(n) liegen MEHRFACH im PATH.' % len(doppelt))
+        print('Der Loader nimmt den ersten Treffer - die anderen sind tot:')
+        for n in sorted(doppelt):
+            for i, p in enumerate(doppelt[n]):
+                mark = '  <== wird geladen' if i == 0 else ''
+                print('   %-30s %s%s' % (n if i == 0 else '', p, mark))
+        print('   Gehoeren die Fundorte zu verschiedenen Delphi-')
+        print('   Generationen, laedt die IDE die falsche und stuerzt ab.')
         print()
 
     if not rows:
