@@ -1,4 +1,4 @@
-unit uRuleCatalog;
+﻿unit uRuleCatalog;
 
 // Single Source of Truth fuer alle Detector-Rule-Metadaten. Liest
 // rules/sca-rules.json beim ersten Zugriff (lazy) und stellt typisierte
@@ -105,6 +105,13 @@ type
     class var FRules        : TDictionary<TFindingKind, TRuleMeta>;
     class var FRulesByID    : TDictionary<string, TRuleMeta>;
     class var FProfiles     : TDictionary<string, TFindingKinds>;
+    // Merkliste der EINGEBAUTEN Profilnamen, gefuellt direkt nach dem
+    // Laden des ausgelieferten Katalogs. Alles, was danach dazukommt,
+    // ist ein eigenes Profil des Anwenders. Diese Unterscheidung
+    // entscheidet zweierlei: was das Profil-Fenster schreibgeschuetzt
+    // zeigt, und was in profiles.json geschrieben wird.
+    class var FBuiltIn      : TDictionary<string, Boolean>;
+    class var FUserProfPath : string;
     class var FLoaded       : Boolean;
     class var FJsonFilePath : string;
     class var FToolName     : string;
@@ -130,6 +137,9 @@ type
     class function ParseImpactSeverity(const S: string): TSonarImpactSeverity; static;
     class function AllKinds: TFindingKinds; static;
     class function MakeFallbackMeta(K: TFindingKind): TRuleMeta; static;
+    class function ParseProfileTokens(const ATokens: TArray<string>): TFindingKinds; static;
+    class procedure LoadUserProfiles; static;
+    class function WriteUserProfiles(out AError: string): Boolean; static;
     class function FindRulesFile(const ARelName: string): string; static;
     class function FindOverlayFile(const ANorm: string): string; static;
     class function EnsureOverlay(const ANorm: string): TOverlayMap; static;
@@ -184,7 +194,27 @@ type
     class function GetProfile(const Name: string): TFindingKinds; static;
 
     // Liste aller bekannten Profile-Namen (fuer UI-Dropdowns, Tests).
+    // Enthaelt eingebaute UND eigene Profile - ein selbst angelegtes
+    // Profil soll im Combo stehen und mit --profile funktionieren.
     class function ProfileNames: TArray<string>; static;
+
+    // ---- Eigene Profile (2026-08-24) ------------------------------------
+    // Die eingebauten stammen aus rules/sca-rules.json und werden bei
+    // jedem Update ueberschrieben - deshalb sind sie unveraenderlich.
+    // Eigene liegen daneben in profiles.json im Konfigverzeichnis und
+    // ueberleben ein Update.
+    class function IsBuiltInProfile(const AName: string): Boolean; static;
+    class function UserProfilesFilePath: string; static;
+    // Legt an oder ueberschreibt ein EIGENES Profil. Verweigert jeden
+    // Namen, den der ausgelieferte Katalog schon fuehrt. False + AError
+    // bei ungueltigem Namen oder Schreibfehler.
+    class function SaveUserProfile(const AName: string;
+      const AKinds: TFindingKinds; out AError: string): Boolean; static;
+    class function DeleteUserProfile(const AName: string;
+      out AError: string): Boolean; static;
+    // Nur fuer Tests: Ablageort umbiegen. Vor dem ersten Zugriff setzen.
+    class property UserProfilesPath: string
+      read FUserProfPath write FUserProfPath;
 
     // Manuell triggern (z.B. nach JsonFilePath-Aenderung). Ueblicherweise
     // nicht noetig - der erste GetRule-Call laed lazy.
@@ -243,6 +273,7 @@ begin
   FRules     := TDictionary<TFindingKind, TRuleMeta>.Create;
   FRulesByID := TDictionary<string, TRuleMeta>.Create;
   FProfiles  := TDictionary<string, TFindingKinds>.Create;
+  FBuiltIn   := TDictionary<string, Boolean>.Create;
   FOverlays  := TObjectDictionary<string, TOverlayMap>.Create([doOwnsValues]);
   FLoaded    := False;
 end;
@@ -252,6 +283,7 @@ begin
   FreeAndNil(FRules);
   FreeAndNil(FRulesByID);
   FreeAndNil(FProfiles);
+  FreeAndNil(FBuiltIn);
   FreeAndNil(FOverlays);
 end;
 
@@ -260,6 +292,7 @@ begin
   if Assigned(FRules)     then FRules.Clear;
   if Assigned(FRulesByID) then FRulesByID.Clear;
   if Assigned(FProfiles)  then FProfiles.Clear;
+  if Assigned(FBuiltIn)   then FBuiltIn.Clear;
   // Overlays mitleeren - sonst schleppt ein Test (Setup ruft Reload) die
   // Sprach-Map des vorigen mit, und ein JsonFilePath-Wechsel wuerde
   // Katalog und Uebersetzung aus zwei Staenden mischen. UNTER dem
@@ -402,6 +435,16 @@ begin
     LoadFromJsonFile(Path)
   else
     LoadFallback;
+
+  // Ab hier steht fest, was "eingebaut" heisst: alles, was der
+  // ausgelieferte Katalog mitbringt. Erst DANACH duerfen eigene Profile
+  // dazukommen - sonst waere nach einem Reload nicht mehr zu
+  // unterscheiden, was aus welcher Quelle stammt.
+  FBuiltIn.Clear;
+  for var BuiltInName in FProfiles.Keys do
+    FBuiltIn.AddOrSetValue(BuiltInName, True);
+  LoadUserProfiles;
+
   FLoaded := True;
 end;
 
@@ -443,9 +486,7 @@ var
   Profiles : TJSONObject;
   ProfPair : TJSONPair;
   ProfArr  : TJSONArray;
-  ProfSet  : TFindingKinds;
-  KK       : TFindingKind;
-  Token    : string;
+  Toks     : TArray<string>;
 begin
   Json := TJSONObject.ParseJSONValue(TFile.ReadAllText(FileName));
   if not (Json is TJSONObject) then
@@ -567,21 +608,11 @@ begin
         ProfPair := Profiles.Pairs[i];
         if not (ProfPair.JsonValue is TJSONArray) then Continue;
         ProfArr := ProfPair.JsonValue as TJSONArray;
-        ProfSet := [];
+        SetLength(Toks, ProfArr.Count);
         for var j := 0 to ProfArr.Count - 1 do
-        begin
-          Token := ProfArr.Items[j].Value;
-          if Token = '*' then
-            ProfSet := ProfSet + AllKinds
-          else if (Length(Token) >= 2) and ((Token[1] = '!') or (Token[1] = '-')) and
-                  KindFromName(Copy(Token, 2, MaxInt), KK) then
-            Exclude(ProfSet, KK)
-          else if KindFromName(Token, KK) then
-            Include(ProfSet, KK);
-          // unbekannte Tokens: still ignorieren - JSON kann Detector-Namen
-          // enthalten die in einer aelteren Tool-Version noch fehlen.
-        end;
-        FProfiles.AddOrSetValue(ProfPair.JsonString.Value, ProfSet);
+          Toks[j] := ProfArr.Items[j].Value;
+        FProfiles.AddOrSetValue(ProfPair.JsonString.Value,
+                                ParseProfileTokens(Toks));
       end;
     end;
     // 'default' garantieren - falls die JSON ihn nicht hat, immer AllKinds.
@@ -1072,6 +1103,235 @@ begin
       [Lookup])));
     Result := AllKinds;
   end;
+end;
+
+class function TRuleCatalog.ParseProfileTokens(const ATokens: TArray<string>): TFindingKinds;
+// Token-Semantik EINES Profil-Arrays, von links nach rechts:
+//   '*'                  alle Kinds
+//   'Kind'               aufnehmen
+//   '!Kind' bzw. '-Kind' entfernen
+// Unbekannte Tokens werden still ignoriert - eine neuere JSON darf
+// Detektornamen fuehren, die dieses Binary noch nicht kennt.
+//
+// Nimmt Strings, nicht das TJSONArray: die Klasse steht im
+// interface-Abschnitt, System.JSON aber erst im implementation-uses -
+// ein JSON-Typ in der Deklaration zoege eine E2003-Kaskade nach sich.
+//
+// Stand 2026-08-24 aus LoadFromJsonFile herausgezogen: die eigenen
+// Profile brauchen exakt dieselbe Semantik, und zwei Kopien davon
+// waeren genau die Art Drift, die man erst bemerkt, wenn ein Profil in
+// der Oberflaeche anders wirkt als in der CLI.
+var
+  i     : Integer;
+  Token : string;
+  KK    : TFindingKind;
+begin
+  Result := [];
+  for i := 0 to High(ATokens) do
+  begin
+    Token := ATokens[i];
+    if Token = '*' then
+      Result := Result + AllKinds
+    else if (Length(Token) >= 2) and ((Token[1] = '!') or (Token[1] = '-')) and
+            KindFromName(Copy(Token, 2, MaxInt), KK) then
+      Exclude(Result, KK)
+    else if KindFromName(Token, KK) then
+      Include(Result, KK);
+  end;
+end;
+
+class function TRuleCatalog.UserProfilesFilePath: string;
+// ZWILLING von TIgnoreList.ConfigDir (uIgnoreList, Infrastructure):
+// dasselbe Verzeichnis, hier absichtlich nachgebildet statt importiert -
+// uRuleCatalog liegt in Common und darf nicht nach Infrastructure
+// greifen. Wer die Ablage verschiebt, muss BEIDE Stellen anfassen.
+var
+  AppData : string;
+begin
+  if FUserProfPath <> '' then Exit(FUserProfPath);
+  AppData := GetEnvironmentVariable('APPDATA');
+  if AppData = '' then
+    AppData := TPath.GetTempPath;
+  Result := IncludeTrailingPathDelimiter(AppData) + 'StaticCodeAnalyser' +
+            PathDelim + 'profiles.json';
+end;
+
+class function TRuleCatalog.IsBuiltInProfile(const AName: string): Boolean;
+begin
+  EnsureLoaded;
+  Result := FBuiltIn.ContainsKey(Trim(AName));
+end;
+
+class procedure TRuleCatalog.LoadUserProfiles;
+// Liest profiles.json, falls vorhanden. Fehler sind hier NIE fatal: eine
+// kaputte oder halb geschriebene Datei darf das Werkzeug nicht am Start
+// hindern, sie kostet nur die eigenen Profile.
+var
+  FileName : string;
+  Root     : TJSONValue;
+  Obj      : TJSONObject;
+  Profiles : TJSONObject;
+  Pair     : TJSONPair;
+  i        : Integer;
+  Name     : string;
+begin
+  FileName := UserProfilesFilePath;
+  if not TFile.Exists(FileName) then Exit;
+
+  Root := nil;
+  try
+    Root := TJSONObject.ParseJSONValue(TFile.ReadAllText(FileName, TEncoding.UTF8));
+  except
+    on E: Exception do
+      OutputDebugString(PChar(Format(
+        'TRuleCatalog: profiles.json nicht lesbar (%s) - eigene Profile fehlen',
+        [E.Message])));
+  end;
+  if not (Root is TJSONObject) then
+  begin
+    Root.Free;
+    Exit;
+  end;
+
+  Obj := TJSONObject(Root);
+  try
+    // FindObject ist eine in LoadFromJsonFile geschachtelte Funktion und
+    // hier nicht sichtbar - deshalb direkt ueber FindValue.
+    Profiles := nil;
+    if Obj.FindValue('profiles') is TJSONObject then
+      Profiles := TJSONObject(Obj.FindValue('profiles'));
+    if Profiles = nil then Exit;
+    for i := 0 to Profiles.Count - 1 do
+    begin
+      Pair := Profiles.Pairs[i];
+      if not (Pair.JsonValue is TJSONArray) then Continue;
+      Name := Trim(Pair.JsonString.Value);
+      // Ein eigenes Profil darf ein eingebautes NICHT verdecken. Sonst
+      // haette derselbe Name je nach Rechner eine andere Bedeutung, und
+      // ein SARIF-Vergleich zweier Maschinen waere wertlos.
+      if (Name = '') or FBuiltIn.ContainsKey(Name) then Continue;
+      FProfiles.AddOrSetValue(Name, ParseProfileTokens(Pair.JsonValue as TJSONArray));
+    end;
+  finally
+    Root.Free;
+  end;
+end;
+
+class function TRuleCatalog.WriteUserProfiles(out AError: string): Boolean;
+// Schreibt ALLE eigenen Profile neu - die Datei ist klein, und ein
+// Voll-Schreiben kann nicht halb misslingen wie ein Teil-Update.
+var
+  FileName : string;
+  Root     : TJSONObject;
+  Profs    : TJSONObject;
+  Arr      : TJSONArray;
+  K        : TFindingKind;
+  Kinds    : TFindingKinds;
+  Name     : string;
+begin
+  Result   := False;
+  AError   := '';
+  FileName := UserProfilesFilePath;
+  Root     := TJSONObject.Create;
+  try
+    Profs := TJSONObject.Create;
+    Root.AddPair('version', TJSONNumber.Create(1));
+    Root.AddPair('profiles', Profs);
+    for Name in FProfiles.Keys do
+    begin
+      if FBuiltIn.ContainsKey(Name) then Continue;
+      Kinds := FProfiles[Name];
+      Arr := TJSONArray.Create;
+      // Ausgeschriebene Kind-Liste, kein '*' mit Ausnahmen: was die
+      // Oberflaeche zeigt, steht dann Wort fuer Wort in der Datei.
+      for K := Low(TFindingKind) to High(TFindingKind) do
+        if K in Kinds then
+          Arr.Add(KindName(K));
+      Profs.AddPair(Name, Arr);
+    end;
+    try
+      ForceDirectories(ExtractFilePath(FileName));
+      TFile.WriteAllText(FileName, Root.Format(2), TEncoding.UTF8);
+      Result := True;
+    except
+      on E: Exception do
+        AError := E.Message;
+    end;
+  finally
+    Root.Free;
+  end;
+end;
+
+class function TRuleCatalog.SaveUserProfile(const AName: string;
+  const AKinds: TFindingKinds; out AError: string): Boolean;
+var
+  Name : string;
+  i    : Integer;
+begin
+  EnsureLoaded;
+  Result := False;
+  Name   := Trim(AName);
+
+  if Name = '' then
+  begin
+    AError := _('The profile name must not be empty.');
+    Exit;
+  end;
+  if FBuiltIn.ContainsKey(Name) then
+  begin
+    AError := Format(_('"%s" is a built-in profile and cannot be changed.'),
+                     [Name]);
+    Exit;
+  end;
+  // Der Name landet als JSON-Schluessel, als INI-Wert ([Rules] Profile)
+  // und als CLI-Argument. Deshalb eng halten statt spaeter drei
+  // Escaping-Fragen zu haben.
+  for i := 1 to Length(Name) do
+    if not CharInSet(Name[i], ['a'..'z', 'A'..'Z', '0'..'9', '-', '_', '.']) then
+    begin
+      AError := _('Allowed characters: letters, digits, hyphen, underscore and dot.');
+      Exit;
+    end;
+  if AKinds = [] then
+  begin
+    AError := _('A profile without rules would find nothing.');
+    Exit;
+  end;
+
+  FProfiles.AddOrSetValue(Name, AKinds);
+  Result := WriteUserProfiles(AError);
+  if not Result then
+    // Die Datei ist die Wahrheit. Konnte sie nicht geschrieben werden,
+    // darf der Speicher nicht so tun, als sei gespeichert worden.
+    FProfiles.Remove(Name);
+end;
+
+class function TRuleCatalog.DeleteUserProfile(const AName: string;
+  out AError: string): Boolean;
+var
+  Name  : string;
+  Saved : TFindingKinds;
+begin
+  EnsureLoaded;
+  Result := False;
+  AError := '';
+  Name   := Trim(AName);
+
+  if FBuiltIn.ContainsKey(Name) then
+  begin
+    AError := Format(_('"%s" is a built-in profile.'), [Name]);
+    Exit;
+  end;
+  if not FProfiles.TryGetValue(Name, Saved) then
+  begin
+    AError := Format(_('There is no profile "%s".'), [Name]);
+    Exit;
+  end;
+
+  FProfiles.Remove(Name);
+  Result := WriteUserProfiles(AError);
+  if not Result then
+    FProfiles.AddOrSetValue(Name, Saved);
 end;
 
 class function TRuleCatalog.ProfileNames: TArray<string>;

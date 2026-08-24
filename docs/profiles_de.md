@@ -70,23 +70,46 @@ ob die Regelzahl die gemeinte ist.
 
 ## Ein eigenes Profil schreiben
 
-Es gibt heute einen Weg, und einen Vorbehalt, den man vorher kennen
-sollte:
+Eingebaute Profile lassen sich nicht ändern - sie stammen aus dem
+ausgelieferten Katalog und werden bei jedem Update überschrieben. Ein
+eigenes Profil liegt deshalb in einer eigenen Datei, und der Weg dorthin
+führt über das Kopieren:
 
-1. `rules/sca-rules.json` neben der ausführbaren Datei öffnen.
-2. Einen Eintrag im Block `profiles` ergänzen.
-3. Anwendung neu starten. Der Name erscheint im Profil-Combo und im
-   Profil-Fenster.
+1. **Burger-Menü -> Regelsatz-Profile ...**
+2. Das Profil auswählen, das am nächsten kommt, **Kopieren ...** drücken
+   und einen Namen vergeben (Buchstaben, Ziffern, `-`, `_`, `.`).
+3. Mit **Regeln aufnehmen ...** und **Regeln entfernen** zuschneiden,
+   dann **Speichern**.
 
-**Der Vorbehalt:** `rules/sca-rules.json` wird mitgeliefert und bei jedem
-Update überschrieben. Das eigene Profil gehört zusätzlich in eine Kopie
-außerhalb. Ein zweiter Weg - eigene Profile in einer eigenen Datei neben
-`analyser.ini`, updatefest - ist als zweite Stufe des Profil-Fensters
-vorgesehen. Die eingebauten Profile bleiben dabei schreibgeschützt.
+Das Profil landet in `profiles.json` neben `analyser.ini`, also in
+`%APPDATA%\StaticCodeAnalyser\`. Diese Datei rührt kein Update an.
 
-Ist die Katalogdatei gar nicht lesbar, fällt die Engine auf eine
-einkompilierte Liste zurück. Die trägt nur die eingebauten Profile - ein
-eigenes Profil verschwindet also, bis die Datei wieder lesbar ist.
+Gelesen wird sie von der **Engine**, nicht nur von der Anwendung: ein
+hier gebautes Profil greift auch mit `--profile <name>` auf der
+Kommandozeile und steht im Profil-Combo des IDE-Plugins.
+
+Ein Name, den bereits ein eingebautes Profil trägt, wird abgelehnt. Sonst
+bedeutete derselbe Name auf zwei Rechnern Verschiedenes, und ein
+Vergleich zweier SARIF-Läufe wäre wertlos.
+
+### Diese Datei von Hand bearbeiten
+
+`profiles.json` benutzt dieselbe Token-Syntax wie der Katalog:
+
+```json
+{
+  "version": 1,
+  "profiles": {
+    "my-team": ["MemoryLeak", "SQLInjection", "NilDeref"]
+  }
+}
+```
+
+Das Fenster schreibt die Kind-Liste ausgeschrieben statt als `*` mit
+Ausnahmen - was die Liste zeigt, steht also Wort für Wort in der Datei.
+Ist die Datei nicht lesbar, behält die Engine die eingebauten Profile und
+sagt nichts dazu; die eigenen sind dann schlicht weg, bis sie wieder
+gelesen werden kann.
 
 ## Nicht dasselbe: `examples/profile-*.yml`
 

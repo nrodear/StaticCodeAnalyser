@@ -68,23 +68,43 @@ open the profile window and check that the rule count is what you meant.
 
 ## Writing your own profile
 
-There is one route today, and one caveat worth knowing before you start:
+Built-in profiles cannot be changed - they come from the shipped
+catalogue and are overwritten on every update. Your own profile therefore
+lives in a file of its own, and the way to make one is to copy:
 
-1. Open `rules/sca-rules.json` next to the executable.
-2. Add an entry to the `profiles` block.
-3. Restart the app. The name appears in the profile combo and in the
-   profile window.
+1. **Burger menu -> Rule-set profiles...**
+2. Select the profile that comes closest, press **Copy...** and give it a
+   name (letters, digits, `-`, `_`, `.`).
+3. Shape it with **Add rules...** and **Remove rules**, then **Save**.
 
-**The caveat:** `rules/sca-rules.json` ships with the product and is
-overwritten on every update. Keep your profile in a copy outside it. A
-second route - own profiles in a file of their own, next to
-`analyser.ini` and safe from updates - is planned as the second stage of
-the profile window. Built-in profiles will stay read-only.
+Your profile is stored in `profiles.json` next to `analyser.ini`, in
+`%APPDATA%\StaticCodeAnalyser\`. No update touches that file.
 
-If the catalogue file cannot be read at all, the engine falls back to a
-list compiled into the binary. That fallback carries the built-in
-profiles only, so a custom profile disappears until the file is readable
-again.
+The **engine** reads it, not just the app: a profile you build here also
+works with `--profile <name>` on the command line and shows up in the IDE
+plugin's profile combo.
+
+A name already used by a built-in profile is refused. Otherwise the same
+name would mean different things on different machines, and comparing two
+SARIF runs would be worthless.
+
+### Editing that file by hand
+
+`profiles.json` uses the same token syntax as the catalogue:
+
+```json
+{
+  "version": 1,
+  "profiles": {
+    "my-team": ["MemoryLeak", "SQLInjection", "NilDeref"]
+  }
+}
+```
+
+The window writes the kind list out in full instead of using `*` with
+exceptions, so what the list shows is what stands in the file. If the
+file cannot be parsed, the engine keeps the built-in profiles and says
+nothing - your own are simply gone until it reads again.
 
 ## Not the same thing: `examples/profile-*.yml`
 

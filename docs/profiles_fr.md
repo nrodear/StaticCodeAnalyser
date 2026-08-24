@@ -71,25 +71,46 @@ que le nombre de règles est bien celui voulu.
 
 ## Écrire son propre profil
 
-Il existe aujourd'hui une voie, et une réserve à connaître avant de
-commencer :
+Les profils intégrés ne peuvent pas être modifiés : ils viennent du
+catalogue livré et sont réécrits à chaque mise à jour. Votre profil vit
+donc dans un fichier à lui, et l'on y arrive en copiant :
 
-1. Ouvrir `rules/sca-rules.json` à côté de l'exécutable.
-2. Ajouter une entrée au bloc `profiles`.
-3. Redémarrer l'application. Le nom apparaît dans la liste déroulante et
-   dans la fenêtre des profils.
+1. **Menu burger -> Profils de jeu de règles ...**
+2. Choisir le profil le plus proche, appuyer sur **Copier ...** et lui
+   donner un nom (lettres, chiffres, `-`, `_`, `.`).
+3. L'ajuster avec **Ajouter des règles ...** et **Retirer des règles**,
+   puis **Enregistrer**.
 
-**La réserve :** `rules/sca-rules.json` est livré avec le produit et
-réécrit à chaque mise à jour. Gardez votre profil dans une copie à part.
-Une seconde voie - des profils propres dans un fichier dédié, à côté
-d'`analyser.ini` et à l'abri des mises à jour - est prévue comme
-deuxième étape de la fenêtre des profils. Les profils intégrés y
-resteront en lecture seule.
+Votre profil est enregistré dans `profiles.json`, à côté
+d'`analyser.ini`, dans `%APPDATA%\StaticCodeAnalyser\`. Aucune mise à
+jour ne touche ce fichier.
 
-Si le fichier de catalogue est illisible, le moteur se rabat sur une
-liste compilée dans le binaire. Celle-ci ne porte que les profils
-intégrés : un profil personnel disparaît donc jusqu'à ce que le fichier
-redevienne lisible.
+C'est le **moteur** qui le lit, pas seulement l'application : un profil
+construit ici fonctionne aussi avec `--profile <nom>` en ligne de
+commande et apparaît dans la liste déroulante du plugin IDE.
+
+Un nom déjà porté par un profil intégré est refusé. Sinon le même nom
+signifierait des choses différentes selon la machine, et comparer deux
+exécutions SARIF n'aurait plus de valeur.
+
+### Modifier ce fichier à la main
+
+`profiles.json` utilise la même syntaxe de jetons que le catalogue :
+
+```json
+{
+  "version": 1,
+  "profiles": {
+    "my-team": ["MemoryLeak", "SQLInjection", "NilDeref"]
+  }
+}
+```
+
+La fenêtre écrit la liste des types en toutes lettres plutôt qu'un `*`
+avec des exceptions : ce que la liste affiche est donc mot pour mot ce
+que contient le fichier. Si le fichier ne peut pas être analysé, le
+moteur conserve les profils intégrés sans rien dire ; les vôtres
+disparaissent simplement jusqu'à la prochaine lecture réussie.
 
 ## À ne pas confondre : `examples/profile-*.yml`
 

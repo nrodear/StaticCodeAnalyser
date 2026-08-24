@@ -271,6 +271,10 @@ type
     // Profilname im Filter-Combo das einzige, was ein Anwender ueber ein
     // Profil zu sehen bekam.
     procedure HamburgerProfilesClick(Sender: TObject);
+    // Befuellt das Profil-Combo aus dem Katalog. Zweimal gebraucht: beim
+    // Start und nachdem im Profil-Fenster eines angelegt oder geloescht
+    // wurde - sonst kennt das Combo den Namen erst nach einem Neustart.
+    procedure PopulateProfileCombo(const APreferred: string);
     // Getter / Callback fuer den FExportMenu-Konstruktor.
     function  GetResultGrid: TStringGrid;
     function  GetCurrentBaseDir: string;
@@ -421,8 +425,6 @@ end;
 procedure TForm2.FormCreate(Sender: TObject);
 var
   Settings    : TRepoSettings;
-  ProfileList : TArray<string>;
-  Name        : string;
   Idx         : Integer;
 begin
   // Nach jedem wirksamen Hell/Dunkel-Wechsel neu zeichnen. Muss VOR dem
@@ -444,22 +446,7 @@ begin
     FClipCopyMode := FindingCopyModeFromInt(Settings.ClipboardOnClick);
 
     // ---- Profile-Combo befuellen aus TRuleCatalog.ProfileNames ----
-    ProfileList := TRuleCatalog.ProfileNames;
-    // _('default') wie im IDE-Plugin (PopulateProfileCombo). VERTRAG an
-    // die .po-Dateien: 'default' MUSS Passthrough bleiben (msgstr =
-    // msgid), denn der Combo-Text wird als [Rules] Profile in die INI
-    // zurueckgeschrieben und dort wieder per IndexOf gesucht.
-    if Length(ProfileList) = 0 then
-      ProfileCombo.Items.Add(_('default'))
-    else
-      for Name in ProfileList do ProfileCombo.Items.Add(Name);
-    // Default-Selektion = [Rules] Profile aus INI (leer = default).
-    if Settings.Profile <> '' then
-      Idx := ProfileCombo.Items.IndexOf(Settings.Profile)
-    else
-      Idx := ProfileCombo.Items.IndexOf(_('default'));
-    if Idx < 0 then Idx := 0;
-    ProfileCombo.ItemIndex := Idx;
+    PopulateProfileCombo(Settings.Profile);
 
     // ---- Min-Severity-Combo befuellen: 3 fixe Stufen ----
     // BEWUSST unlokalisiert: die Texte sind zugleich die INI-Werte
@@ -3578,12 +3565,49 @@ begin
     [Path]);
 end;
 
-procedure TForm2.HamburgerProfilesClick(Sender: TObject);
-// Zeigt modal, welche Detektoren zu welchem Profil gehoeren. Reines
-// Lesen - die eingebauten Profile kommen aus dem ausgelieferten Katalog
-// und werden bei jedem Update ueberschrieben.
+procedure TForm2.PopulateProfileCombo(const APreferred: string);
+// _('default') wie im IDE-Plugin. VERTRAG an die .po-Dateien: 'default'
+// MUSS Passthrough bleiben (msgstr = msgid), denn der Combo-Text wird
+// als [Rules] Profile in die INI zurueckgeschrieben und dort wieder per
+// IndexOf gesucht.
+var
+  ProfileList : TArray<string>;
+  Name        : string;
+  Idx         : Integer;
 begin
-  ShowProfileViewer;
+  ProfileCombo.Items.BeginUpdate;
+  try
+    ProfileCombo.Items.Clear;
+    ProfileList := TRuleCatalog.ProfileNames;
+    if Length(ProfileList) = 0 then
+      ProfileCombo.Items.Add(_('default'))
+    else
+      for Name in ProfileList do ProfileCombo.Items.Add(Name);
+  finally
+    ProfileCombo.Items.EndUpdate;
+  end;
+
+  Idx := -1;
+  if APreferred <> '' then
+    Idx := ProfileCombo.Items.IndexOf(APreferred);
+  if Idx < 0 then Idx := ProfileCombo.Items.IndexOf(_('default'));
+  if Idx < 0 then Idx := 0;
+  ProfileCombo.ItemIndex := Idx;
+end;
+
+procedure TForm2.HamburgerProfilesClick(Sender: TObject);
+// Zeigt, welche Detektoren zu welchem Profil gehoeren, und laesst eigene
+// Profile anlegen. Die eingebauten bleiben unveraenderlich - sie kommen
+// aus dem ausgelieferten Katalog und werden bei jedem Update
+// ueberschrieben.
+var
+  Chosen : string;
+begin
+  Chosen := ProfileCombo.Text;
+  if ShowProfileViewer then
+    // Es wurde eines angelegt oder geloescht: die bisherige Auswahl
+    // wiederherstellen, falls es sie noch gibt.
+    PopulateProfileCombo(Chosen);
 end;
 
 procedure TForm2.HamburgerIgnoreListClick(Sender: TObject);

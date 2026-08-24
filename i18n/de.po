@@ -2076,13 +2076,77 @@ msgid "Detector unit"
 msgstr "Detektor-Unit"
 
 msgid "Close"
-msgstr "Schliessen"
+msgstr "Schließen"
 
 msgid "No rule catalogue found - profiles unavailable."
-msgstr "Kein Regelkatalog gefunden - Profile nicht verfuegbar."
-
-msgid "Profile \"%s\": %d of %d rules active. Built-in profiles come from rules/sca-rules.json and are read-only."
-msgstr "Profil \"%s\": %d von %d Regeln aktiv. Eingebaute Profile stammen aus rules/sca-rules.json und sind schreibgeschuetzt."
-
+msgstr "Kein Regelkatalog gefunden - Profile nicht verfügbar."
 msgid "Kind (profile token)"
 msgstr "Kind (Profil-Token)"
+
+# --- 2026-08-24: Profil-Fenster Stufe 2 (eigene Profile) ---
+
+msgid "- own"
+msgstr "- eigenes"
+
+msgid "A profile without rules would find nothing."
+msgstr "Ein Profil ohne Regeln würde nichts finden."
+
+msgid "Add"
+msgstr "Aufnehmen"
+
+msgid "Add rules"
+msgstr "Regeln aufnehmen"
+
+msgid "Add rules..."
+msgstr "Regeln aufnehmen ..."
+
+msgid "Allowed characters: letters, digits, hyphen, underscore and dot."
+msgstr "Erlaubt sind Buchstaben, Ziffern, Bindestrich, Unterstrich und Punkt."
+
+msgid "Copy profile"
+msgstr "Profil kopieren"
+
+msgid "Copy..."
+msgstr "Kopieren ..."
+
+msgid "Delete profile"
+msgstr "Profil löschen"
+
+msgid "Delete profile \"%s\"?"
+msgstr "Profil \"%s\" löschen?"
+
+msgid "Name of the new profile:"
+msgstr "Name des neuen Profils:"
+
+msgid "Profile \"%s\": %d of %d rules. Built-in and read-only - use \"Copy...\" for your own."
+msgstr "Profil \"%s\": %d von %d Regeln. Eingebaut und schreibgeschützt - mit \"Kopieren ...\" ein eigenes anlegen."
+
+msgid "Profile \"%s\": %d of %d rules. Your own profile, stored in %s"
+msgstr "Profil \"%s\": %d von %d Regeln. Eigenes Profil, abgelegt in %s"
+
+msgid "Remove rules"
+msgstr "Regeln entfernen"
+
+msgid "Save"
+msgstr "Speichern"
+
+msgid "Save the changes to profile \"%s\"?"
+msgstr "Änderungen am Profil \"%s\" speichern?"
+
+msgid "Select the rules to remove first."
+msgstr "Erst die zu entfernenden Regeln auswählen."
+
+msgid "The profile name must not be empty."
+msgstr "Der Profilname darf nicht leer sein."
+
+msgid "There is no profile \"%s\"."
+msgstr "Das Profil \"%s\" gibt es nicht."
+
+msgid "This profile already contains every rule."
+msgstr "Dieses Profil enthält bereits jede Regel."
+
+msgid "\"%s\" is a built-in profile and cannot be changed."
+msgstr "\"%s\" ist ein eingebautes Profil und kann nicht geändert werden."
+
+msgid "\"%s\" is a built-in profile."
+msgstr "\"%s\" ist ein eingebautes Profil."
