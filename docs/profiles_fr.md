@@ -114,6 +114,13 @@ que contient le fichier. Si le fichier ne peut pas être analysé, le
 moteur conserve les profils intégrés sans rien dire ; les vôtres
 disparaissent simplement jusqu'à la prochaine lecture réussie.
 
+**Le fichier est lu une fois par démarrage du programme.** Un profil
+ajouté ou modifié à la main n'apparaît donc pas tout seul. Appuyez sur
+**Recharger** dans la fenêtre des profils : il est relu, sans
+redémarrer l'application ni l'IDE. Les profils créés *dans* la fenêtre
+sont actifs immédiatement ; Recharger ne sert qu'aux modifications
+faites à l'extérieur.
+
 ## À ne pas confondre : `examples/profile-*.yml`
 
 `examples/profile-security.yml` et ses semblables sont des **fichiers de

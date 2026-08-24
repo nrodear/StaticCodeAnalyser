@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2152 Zeilen, 73056 Bytes
-  CPoLines_de: array[0..2151] of string = (
+  // i18n\de.po - 2160 Zeilen, 73380 Bytes
+  CPoLines_de: array[0..2159] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2166,7 +2166,15 @@ const
     'msgstr "\"%s\" ist ein eingebautes Profil und kann nicht ge'#$00E4'ndert werden."',
     '',
     'msgid "\"%s\" is a built-in profile."',
-    'msgstr "\"%s\" ist ein eingebautes Profil."'
+    'msgstr "\"%s\" ist ein eingebautes Profil."',
+    '',
+    '# --- 2026-08-24: profiles.json neu laden ---',
+    '',
+    'msgid "Reload"',
+    'msgstr "Neu laden"',
+    '',
+    'msgid "Profile \"%s\": %d of %d rules. Built-in and read-only - use \"Copy...\" for your own (stored in %s)."',
+    'msgstr "Profil \"%s\": %d von %d Regeln. Eingebaut und schreibgesch'#$00FC'tzt - mit \"Kopieren ...\" ein eigenes anlegen (Ablage: %s)."'
   );
 
   // i18n\en.po - 213 Zeilen, 5941 Bytes
@@ -2386,8 +2394,8 @@ const
     'msgstr "Settings could not be reloaded - nothing was saved."'
   );
 
-  // i18n\fr.po - 2148 Zeilen, 76615 Bytes
-  CPoLines_fr: array[0..2147] of string = (
+  // i18n\fr.po - 2156 Zeilen, 76943 Bytes
+  CPoLines_fr: array[0..2155] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4535,7 +4543,15 @@ const
     'msgstr "\"%s\" est un profil int'#$00E9'gr'#$00E9' et ne peut pas '#$00EA'tre modifi'#$00E9'."',
     '',
     'msgid "\"%s\" is a built-in profile."',
-    'msgstr "\"%s\" est un profil int'#$00E9'gr'#$00E9'."'
+    'msgstr "\"%s\" est un profil int'#$00E9'gr'#$00E9'."',
+    '',
+    '# --- 2026-08-24: profiles.json neu laden ---',
+    '',
+    'msgid "Reload"',
+    'msgstr "Recharger"',
+    '',
+    'msgid "Profile \"%s\": %d of %d rules. Built-in and read-only - use \"Copy...\" for your own (stored in %s)."',
+    'msgstr "Profil \"%s\" : %d r'#$00E8'gles sur %d. Int'#$00E9'gr'#$00E9' et en lecture seule - utilisez \"Copier ...\" pour le v'#$00F4'tre (emplacement : %s)."'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

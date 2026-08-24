@@ -109,6 +109,12 @@ exceptions, so what the list shows is what stands in the file. If the
 file cannot be parsed, the engine keeps the built-in profiles and says
 nothing - your own are simply gone until it reads again.
 
+**The file is read once per program start.** A profile you add or edit
+by hand therefore does not show up on its own. Press **Reload** in the
+profile window and it is read again - no restart of the application or
+of the IDE. Profiles you create *in* the window are active immediately;
+Reload is only for edits made outside it.
+
 ## Not the same thing: `examples/profile-*.yml`
 
 `examples/profile-security.yml` and its siblings are **custom rule files**

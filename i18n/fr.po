@@ -2146,3 +2146,11 @@ msgstr "\"%s\" est un profil intégré et ne peut pas être modifié."
 
 msgid "\"%s\" is a built-in profile."
 msgstr "\"%s\" est un profil intégré."
+
+# --- 2026-08-24: profiles.json neu laden ---
+
+msgid "Reload"
+msgstr "Recharger"
+
+msgid "Profile \"%s\": %d of %d rules. Built-in and read-only - use \"Copy...\" for your own (stored in %s)."
+msgstr "Profil \"%s\" : %d règles sur %d. Intégré et en lecture seule - utilisez \"Copier ...\" pour le vôtre (emplacement : %s)."

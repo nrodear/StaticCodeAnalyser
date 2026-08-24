@@ -114,6 +114,12 @@ Ist die Datei nicht lesbar, behält die Engine die eingebauten Profile und
 sagt nichts dazu; die eigenen sind dann schlicht weg, bis sie wieder
 gelesen werden kann.
 
+**Gelesen wird die Datei einmal je Programmstart.** Ein von Hand
+angelegtes oder bearbeitetes Profil erscheint deshalb nicht von selbst.
+Im Profil-Fenster **Neu laden** drücken, dann wird sie erneut gelesen -
+ohne Neustart der Anwendung oder der IDE. Profile, die *im* Fenster
+entstehen, gelten sofort; „Neu laden" ist nur für Änderungen von außen.
+
 ## Nicht dasselbe: `examples/profile-*.yml`
 
 `examples/profile-security.yml` und seine Geschwister sind **Custom-Rule-

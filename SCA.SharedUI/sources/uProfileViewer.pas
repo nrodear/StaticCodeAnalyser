@@ -108,6 +108,7 @@ type
     FBtnRemove   : TButton;
     FBtnDelete   : TButton;
     FBtnSave     : TButton;
+    FBtnReload   : TButton;
     // Rohe Profilnamen, index-gleich zu FLstProfiles.Items: die Anzeige
     // haengt Regelzahl und Herkunft an, der Katalog-Zugriff braucht den
     // unveraenderten Namen.
@@ -135,6 +136,11 @@ type
     procedure RemoveClick(Sender: TObject);
     procedure DeleteClick(Sender: TObject);
     procedure SaveClick(Sender: TObject);
+    // Liest profiles.json neu ein. Braucht es, weil TRuleCatalog die
+    // Datei sonst nur EINMAL je Prozess liest - wer sie von Hand
+    // anlegt oder bearbeitet, saehe seine Profile sonst erst nach
+    // einem Neustart der Anwendung bzw. der IDE.
+    procedure ReloadClick(Sender: TObject);
     procedure CloseClick(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
@@ -451,6 +457,7 @@ begin
   FBtnRemove := MkButton(_('Remove rules'),   RemoveClick);
   FBtnAdd    := MkButton(_('Add rules...'),   AddClick);
   FBtnCopy   := MkButton(_('Copy...'),        CopyClick);
+  FBtnReload := MkButton(_('Reload'),         ReloadClick);
 
   FLblInfo := TLabel.Create(Self);
   FLblInfo.Parent  := Bottom;
@@ -596,8 +603,9 @@ begin
          TRuleCatalog.UserProfilesFilePath])
     else
       FLblInfo.Caption := Format(
-        _('Profile "%s": %d of %d rules. Built-in and read-only - use "Copy..." for your own.'),
-        [FCurrent, Rules.Count, TRuleCatalog.Count]);
+        _('Profile "%s": %d of %d rules. Built-in and read-only - use "Copy..." for your own (stored in %s).'),
+        [FCurrent, Rules.Count, TRuleCatalog.Count,
+         TRuleCatalog.UserProfilesFilePath]);
   finally
     Rules.Free;
   end;
@@ -609,6 +617,9 @@ var
   Has : Boolean;
 begin
   Has := FLstProfiles.Items.Count > 0;
+  // Neu laden geht immer - auch wenn die Liste leer ist, denn genau
+  // dann will man es (Katalog war nicht da, Datei nachgelegt).
+  FBtnReload.Enabled := True;
   FBtnCopy.Enabled   := Has;
   FBtnAdd.Enabled    := Has and FIsOwn;
   FBtnRemove.Enabled := Has and FIsOwn;
@@ -763,6 +774,23 @@ begin
   if FIsOwn and FDirty and SaveCurrent then
     // Die Regelzahl in der linken Liste stimmt jetzt nicht mehr.
     LoadProfiles(FCurrent);
+end;
+
+procedure TProfileViewerForm.ReloadClick(Sender: TObject);
+// Verwirft den Katalog-Cache und liest alles neu, einschliesslich
+// profiles.json. Danach steht in der Liste, was auf der Platte liegt.
+//
+// FChanged wird gesetzt, weil der Wirt sein Profil-Combo danach neu
+// befuellen muss: die Datei kann Profile mitbringen, die es beim
+// Oeffnen des Fensters noch nicht gab.
+var
+  Vorher : string;
+begin
+  if not AskSaveIfDirty then Exit;
+  Vorher := FCurrent;
+  TRuleCatalog.Reload;
+  FChanged := True;
+  LoadProfiles(Vorher);
 end;
 
 procedure TProfileViewerForm.CloseClick(Sender: TObject);
