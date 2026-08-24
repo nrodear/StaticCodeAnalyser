@@ -161,6 +161,17 @@ type
     class function StyleChromeBg: TColor; static;
     class function StyleChromeFg: TColor; static;
 
+    /// <summary>Haengt eine Diagnosezeile an
+    /// %APPDATA%\StaticCodeAnalyser\StaticCodeAnalyser_theme.log und
+    /// schickt sie zusaetzlich an OutputDebugString.</summary>
+    /// <remarks>Warum eine Datei: aus bds.exe kommt bei DebugView nichts
+    /// an, aus der Standalone schon. Ohne gemeinsame Ablage laesst sich
+    /// "der Code laeuft nicht" nicht von "die Ausgabe kommt nicht an"
+    /// unterscheiden - und genau daran haengt die Suche nach der
+    /// Titelzeilenfarbe im Plugin (2026-08-24). Fehler beim Schreiben
+    /// werden geschluckt: eine Diagnose darf nichts kaputt machen.</remarks>
+    class procedure LogLine(const AText: string); static;
+
     class property Mode: TAppThemeMode read FMode;
 
     /// <summary>
@@ -179,6 +190,7 @@ uses
   Winapi.Windows,
   Winapi.Dwmapi,  // DwmSetWindowAttribute - Titelzeile hell/dunkel
   Vcl.Styles,
+  uIgnoreList,    // ConfigDir - gemeinsame Ablage der Diagnosedatei
   uRepoSettings;
 
 const
@@ -365,6 +377,32 @@ type
   // laeuft ueber einen Class-Cracker, wie im Plugin (uIDETheme).
   TControlAccess = class(TControl);
 
+class procedure TAppTheme.LogLine(const AText: string);
+var
+  Zeile : string;
+  Datei : string;
+  F     : TextFile;
+begin
+  Zeile := Format('%s  %-28s %s',
+    [FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now),
+     ExtractFileName(ParamStr(0)), AText]);
+  OutputDebugString(PChar('SCA ' + AText));
+  try
+    Datei := TIgnoreList.ConfigDir + 'StaticCodeAnalyser_theme.log';
+    ForceDirectories(ExtractFilePath(Datei));
+    AssignFile(F, Datei);
+    if FileExists(Datei) then Append(F) else Rewrite(F);
+    try
+      Writeln(F, Zeile);
+    finally
+      CloseFile(F);
+    end;
+  except
+    // Eine Diagnose darf nichts kaputtmachen.
+    on E: Exception do ;
+  end;
+end;
+
 // Farbe fuer die Diagnosezeile: 'clNone' oder $00BBGGRR.
 function IfThenColor(C: TColor): string;
 begin
@@ -439,12 +477,12 @@ begin
   // im Ereignisprotokoll der IDE; ohne Zuhoerer kostet es nichts.
   // Dieselbe Begruendung wie bei den OutputDebugString-Meldungen in
   // TRuleCatalog.
-  OutputDebugString(PChar(Format(
-    'SCA TitleBar: dark=%d caption=%s(hr=%.8x) text=%s(hr=%.8x) darkhr=%.8x',
+  LogLine(Format(
+    'TitleBar: dark=%d caption=%s(hr=%.8x) text=%s(hr=%.8x) darkhr=%.8x',
     [Ord(ADark),
      IfThenColor(ACaption), HrCap,
      IfThenColor(AText),    HrTxt,
-     HrDark])));
+     HrDark]));
 end;
 
 class procedure TAppTheme.ResolveSystemColors(ARoot: TWinControl);

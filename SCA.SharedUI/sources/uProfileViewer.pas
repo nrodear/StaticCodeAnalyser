@@ -91,6 +91,7 @@ uses
   Vcl.Forms, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls,
   Vcl.Dialogs,
   Winapi.Windows,
+  uAppTheme,        // LogLine - Diagnose der Titelzeilenfarbe
   uSCAConsts,       // TFindingKind, TFindingKinds, KindName
   uRuleCatalog,     // Profile lesen UND eigene schreiben
   uLocalization;    // _() und CurrentLanguage
@@ -384,6 +385,11 @@ procedure TThemedForm.TitleBarOnShow(Sender: TObject);
 // StyleName setzt, gehoert in ApplyThemeNow - aus OnShow heraus wuerde
 // eine Handle-Neuerzeugung die VCL mit EInvalidOperation abbrechen.
 begin
+  // Auch wenn kein Hook gesetzt ist protokollieren: sonst sieht eine
+  // fehlende Zeile genauso aus wie ein nie erreichter Handler, und
+  // genau diese beiden Faelle sind gerade auseinanderzuhalten.
+  TAppTheme.LogLine(Format('TitleBarOnShow: %s, hook=%s',
+    [ClassName, BoolToStr(Assigned(ProfileViewerTitleBar), True)]));
   if Assigned(ProfileViewerTitleBar) then
     ProfileViewerTitleBar(Self);
 end;
