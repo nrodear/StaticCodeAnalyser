@@ -236,6 +236,19 @@ uses
   uLocalization;                   // NormalizeLangCode - EINE Normalisierung
                                    // fuer SetLanguage und Overlay-Lookup
 
+// Werte eines JSON-Arrays als Strings. Zwei Aufrufer: der ausgelieferte
+// Katalog und profiles.json - beide muessen ParseProfileTokens mit
+// derselben Eingabe fuettern. Steht hier oben, weil eine Datei-Funktion
+// vor ihrer ersten Verwendung deklariert sein muss.
+function JsonArrayToStrings(AArr: TJSONArray): TArray<string>;
+var
+  i : Integer;
+begin
+  SetLength(Result, AArr.Count);
+  for i := 0 to AArr.Count - 1 do
+    Result[i] := AArr.Items[i].Value;
+end;
+
 const
   // 'name' liest der Tool-Block, jede Regel UND jedes Overlay -
   // drei Stellen, eine Konstante (DuplicateString-Schwelle).
@@ -486,7 +499,6 @@ var
   Profiles : TJSONObject;
   ProfPair : TJSONPair;
   ProfArr  : TJSONArray;
-  Toks     : TArray<string>;
 begin
   Json := TJSONObject.ParseJSONValue(TFile.ReadAllText(FileName));
   if not (Json is TJSONObject) then
@@ -608,11 +620,8 @@ begin
         ProfPair := Profiles.Pairs[i];
         if not (ProfPair.JsonValue is TJSONArray) then Continue;
         ProfArr := ProfPair.JsonValue as TJSONArray;
-        SetLength(Toks, ProfArr.Count);
-        for var j := 0 to ProfArr.Count - 1 do
-          Toks[j] := ProfArr.Items[j].Value;
         FProfiles.AddOrSetValue(ProfPair.JsonString.Value,
-                                ParseProfileTokens(Toks));
+                                ParseProfileTokens(JsonArrayToStrings(ProfArr)));
       end;
     end;
     // 'default' garantieren - falls die JSON ihn nicht hat, immer AllKinds.
@@ -1210,7 +1219,8 @@ begin
       // haette derselbe Name je nach Rechner eine andere Bedeutung, und
       // ein SARIF-Vergleich zweier Maschinen waere wertlos.
       if (Name = '') or FBuiltIn.ContainsKey(Name) then Continue;
-      FProfiles.AddOrSetValue(Name, ParseProfileTokens(Pair.JsonValue as TJSONArray));
+      FProfiles.AddOrSetValue(Name,
+        ParseProfileTokens(JsonArrayToStrings(Pair.JsonValue as TJSONArray)));
     end;
   finally
     Root.Free;
@@ -1265,11 +1275,14 @@ end;
 class function TRuleCatalog.SaveUserProfile(const AName: string;
   const AKinds: TFindingKinds; out AError: string): Boolean;
 var
-  Name : string;
-  i    : Integer;
+  Name  : string;
+  i     : Integer;
+  Vorher: TFindingKinds;
+  Gab    : Boolean;
 begin
   EnsureLoaded;
   Result := False;
+  AError := '';
   Name   := Trim(AName);
 
   if Name = '' then
@@ -1298,12 +1311,22 @@ begin
     Exit;
   end;
 
+  // Vorstand merken: diese Funktion legt NEU AN und AENDERT. Beim
+  // Aendern waere ein blindes Remove nach einem Schreibfehler schlimmer
+  // als der Fehler - es haette das zuvor gespeicherte Profil aus dem
+  // Speicher geworfen, obwohl es in der Datei noch steht.
+  Gab    := FProfiles.TryGetValue(Name, Vorher);
   FProfiles.AddOrSetValue(Name, AKinds);
   Result := WriteUserProfiles(AError);
   if not Result then
+  begin
     // Die Datei ist die Wahrheit. Konnte sie nicht geschrieben werden,
     // darf der Speicher nicht so tun, als sei gespeichert worden.
-    FProfiles.Remove(Name);
+    if Gab then
+      FProfiles.AddOrSetValue(Name, Vorher)
+    else
+      FProfiles.Remove(Name);
+  end;
 end;
 
 class function TRuleCatalog.DeleteUserProfile(const AName: string;
