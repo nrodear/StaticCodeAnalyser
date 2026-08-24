@@ -1,4 +1,4 @@
-# German translation for Static Code Analysis Tool for Delphi.
+﻿# German translation for Static Code Analysis Tool for Delphi.
 #
 # SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem
 # hartcodierten Dictionary uebernommen (uLocalization.pas @ HEAD), damit
@@ -2060,3 +2060,29 @@ msgstr "Einstellungen konnten nicht neu geladen werden - Baseline-Filter unverä
 
 msgid "Settings could not be reloaded - nothing was saved."
 msgstr "Einstellungen konnten nicht neu geladen werden - es wurde nichts gespeichert."
+
+# --- 2026-08-24: Profil-Betrachter (Burger-Menue der Standalone) ---
+
+msgid "Rule-set profiles"
+msgstr "Regelsatz-Profile"
+
+msgid "Rule-set profiles..."
+msgstr "Regelsatz-Profile ..."
+
+msgid "ID"
+msgstr "ID"
+
+msgid "Detector unit"
+msgstr "Detektor-Unit"
+
+msgid "Close"
+msgstr "Schliessen"
+
+msgid "No rule catalogue found - profiles unavailable."
+msgstr "Kein Regelkatalog gefunden - Profile nicht verfuegbar."
+
+msgid "Profile \"%s\": %d of %d rules active. Built-in profiles come from rules/sca-rules.json and are read-only."
+msgstr "Profil \"%s\": %d von %d Regeln aktiv. Eingebaute Profile stammen aus rules/sca-rules.json und sind schreibgeschuetzt."
+
+msgid "Kind (profile token)"
+msgstr "Kind (Profil-Token)"

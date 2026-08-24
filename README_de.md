@@ -530,7 +530,9 @@ Theme=system
 
 Alle Schluessel von `analyser.ini` - Schwellwerte, Profile, Baseline,
 Oberflaeche - stehen mit ihrem Standardwert in der
-[Konfigurationsreferenz](docs/configuration_de.md).
+[Konfigurationsreferenz](docs/configuration_de.md). Welche Regeln in
+einem Profil stecken - und wie man ein eigenes schreibt - steht in der
+[Scan-Profil-Anleitung](docs/profiles_de.md).
 
 Der dunkle Style ist in die EXE eingebettet — kein VCL-Style-Haken in
 den Projektoptionen beteiligt. Im Modus `system` wirkt ein

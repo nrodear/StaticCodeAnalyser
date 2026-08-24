@@ -1,4 +1,4 @@
-program StaticCodeAnalyser.d12;
+﻿program StaticCodeAnalyser.d12;
 
 // GUI-AppType (kein {$APPTYPE CONSOLE}): Windows allokiert KEINE Konsole
 // beim Start. Damit kein schwarzes cmd-Fenster beim Doppelklick.
@@ -30,6 +30,7 @@ uses
   MainController in 'sources\MainController.pas',
   uMainForm in 'sources\UI\uMainForm.pas' {Form2},
   uDfmTextViewer in 'sources\UI\uDfmTextViewer.pas',
+  uProfileViewer in 'sources\UI\uProfileViewer.pas',
   uConsoleRunner in 'sources\Console\uConsoleRunner.pas',
   uAppTheme;
 

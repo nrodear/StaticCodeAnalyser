@@ -529,7 +529,9 @@ Theme=system
 
 Every key of `analyser.ini` - thresholds, profiles, baseline, UI - is
 listed with its default in the
-[configuration reference](docs/configuration.md).
+[configuration reference](docs/configuration.md). Which rules a
+profile actually contains - and how to write your own - is in the
+[scan-profile guide](docs/profiles.md).
 
 The dark style ships embedded in the EXE — no VCL-style project option
 involved. In `system` mode a Windows theme switch takes effect

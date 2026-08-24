@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2062 Zeilen, 72772 Bytes
-  CPoLines_de: array[0..2061] of string = (
+  // i18n\de.po - 2088 Zeilen, 71425 Bytes
+  CPoLines_de: array[0..2087] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2076,7 +2076,33 @@ const
     'msgstr "Einstellungen konnten nicht neu geladen werden - Baseline-Filter unver'#$00E4'ndert."',
     '',
     'msgid "Settings could not be reloaded - nothing was saved."',
-    'msgstr "Einstellungen konnten nicht neu geladen werden - es wurde nichts gespeichert."'
+    'msgstr "Einstellungen konnten nicht neu geladen werden - es wurde nichts gespeichert."',
+    '',
+    '# --- 2026-08-24: Profil-Betrachter (Burger-Menue der Standalone) ---',
+    '',
+    'msgid "Rule-set profiles"',
+    'msgstr "Regelsatz-Profile"',
+    '',
+    'msgid "Rule-set profiles..."',
+    'msgstr "Regelsatz-Profile ..."',
+    '',
+    'msgid "ID"',
+    'msgstr "ID"',
+    '',
+    'msgid "Detector unit"',
+    'msgstr "Detektor-Unit"',
+    '',
+    'msgid "Close"',
+    'msgstr "Schliessen"',
+    '',
+    'msgid "No rule catalogue found - profiles unavailable."',
+    'msgstr "Kein Regelkatalog gefunden - Profile nicht verfuegbar."',
+    '',
+    'msgid "Profile \"%s\": %d of %d rules active. Built-in profiles come from rules/sca-rules.json and are read-only."',
+    'msgstr "Profil \"%s\": %d von %d Regeln aktiv. Eingebaute Profile stammen aus rules/sca-rules.json und sind schreibgeschuetzt."',
+    '',
+    'msgid "Kind (profile token)"',
+    'msgstr "Kind (Profil-Token)"'
   );
 
   // i18n\en.po - 213 Zeilen, 5941 Bytes
@@ -2296,8 +2322,8 @@ const
     'msgstr "Settings could not be reloaded - nothing was saved."'
   );
 
-  // i18n\fr.po - 2058 Zeilen, 76254 Bytes
-  CPoLines_fr: array[0..2057] of string = (
+  // i18n\fr.po - 2084 Zeilen, 74957 Bytes
+  CPoLines_fr: array[0..2083] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4355,7 +4381,33 @@ const
     'msgstr "Impossible de recharger les param'#$00E8'tres - filtre de r'#$00E9'f'#$00E9'rence inchang'#$00E9'."',
     '',
     'msgid "Settings could not be reloaded - nothing was saved."',
-    'msgstr "Impossible de recharger les param'#$00E8'tres - rien n'#$2019'a '#$00E9't'#$00E9' enregistr'#$00E9'."'
+    'msgstr "Impossible de recharger les param'#$00E8'tres - rien n'#$2019'a '#$00E9't'#$00E9' enregistr'#$00E9'."',
+    '',
+    '# --- 2026-08-24: Profil-Betrachter (Burger-Menue der Standalone) ---',
+    '',
+    'msgid "Rule-set profiles"',
+    'msgstr "Profils de jeu de r'#$00E8'gles"',
+    '',
+    'msgid "Rule-set profiles..."',
+    'msgstr "Profils de jeu de r'#$00E8'gles ..."',
+    '',
+    'msgid "ID"',
+    'msgstr "ID"',
+    '',
+    'msgid "Detector unit"',
+    'msgstr "Unit'#$00E9' de d'#$00E9'tecteur"',
+    '',
+    'msgid "Close"',
+    'msgstr "Fermer"',
+    '',
+    'msgid "No rule catalogue found - profiles unavailable."',
+    'msgstr "Aucun catalogue de r'#$00E8'gles trouv'#$00E9' - profils indisponibles."',
+    '',
+    'msgid "Profile \"%s\": %d of %d rules active. Built-in profiles come from rules/sca-rules.json and are read-only."',
+    'msgstr "Profil \"%s\" : %d r'#$00E8'gles actives sur %d. Les profils int'#$00E9'gr'#$00E9's proviennent de rules/sca-rules.json et sont en lecture seule."',
+    '',
+    'msgid "Kind (profile token)"',
+    'msgstr "Type de r'#$00E8'gle (jeton de profil)"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

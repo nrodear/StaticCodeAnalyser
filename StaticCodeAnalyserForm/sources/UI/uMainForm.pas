@@ -267,6 +267,10 @@ type
     procedure HamburgerExportClick(Sender: TObject);
     procedure HamburgerSettingsClick(Sender: TObject);
     procedure HamburgerIgnoreListClick(Sender: TObject);
+    // Regelsatz-Profile ansehen (Stufe 1: nur lesen). Bis dahin war der
+    // Profilname im Filter-Combo das einzige, was ein Anwender ueber ein
+    // Profil zu sehen bekam.
+    procedure HamburgerProfilesClick(Sender: TObject);
     // Getter / Callback fuer den FExportMenu-Konstruktor.
     function  GetResultGrid: TStringGrid;
     function  GetCurrentBaseDir: string;
@@ -370,7 +374,8 @@ uses
   uIDEStatsTiles,                 // TStatsTilesBuilder.Build (Sonar-Style Tiles)
   uIDEToolbar,                    // TIDEToolbar.ApplySegoeUI - UI-Aligning mit IDE-Plugin
   uIDEColors,                     // IDE_BG_CHROME - Chrome-Panel-Hintergrund analog IDE
-  uIgnoreList;                    // TIgnoreList.ConfigFilePath - Hamburger-Item
+  uIgnoreList,                    // TIgnoreList.ConfigFilePath - Hamburger-Item
+  uProfileViewer;                 // ShowProfileViewer - Hamburger-Item
   // ShellAPI + uLocalization sind bereits im interface-uses (E2004-Schutz).
   // uIDEHelpPanel ist im interface-uses (TFindingHintPanel ist class-Feld)
 
@@ -2534,6 +2539,14 @@ begin
   MI.OnClick := HamburgerIgnoreListClick;
   FHamburgerMenu.Items.Add(MI);
 
+  // Profile gehoeren in den Konfig-Block: sie entscheiden, WELCHE Regeln
+  // ueberhaupt laufen - dieselbe Klasse Entscheidung wie Settings und
+  // Ignore-Liste, nur bisher ohne eigene Ansicht.
+  MI := TMenuItem.Create(FHamburgerMenu);
+  MI.Caption := _('Rule-set profiles...');
+  MI.OnClick := HamburgerProfilesClick;
+  FHamburgerMenu.Items.Add(MI);
+
   // ---- Erscheinungsbild (Hell / Dunkel / Wie Windows) ----
   FMIAppearance := TMenuItem.Create(FHamburgerMenu);
   FMIAppearance.Caption := _('Appearance');
@@ -3563,6 +3576,14 @@ begin
   end;
   StatusBar1.Panels[2].Text := Format(_('Settings: %s - changes take effect on the next analysis run.'),
     [Path]);
+end;
+
+procedure TForm2.HamburgerProfilesClick(Sender: TObject);
+// Zeigt modal, welche Detektoren zu welchem Profil gehoeren. Reines
+// Lesen - die eingebauten Profile kommen aus dem ausgelieferten Katalog
+// und werden bei jedem Update ueberschrieben.
+begin
+  ShowProfileViewer;
 end;
 
 procedure TForm2.HamburgerIgnoreListClick(Sender: TObject);

@@ -1,4 +1,4 @@
-# French translation for Static Code Analysis Tool for Delphi.
+﻿# French translation for Static Code Analysis Tool for Delphi.
 #
 msgid ""
 msgstr ""
@@ -2056,3 +2056,29 @@ msgstr "Impossible de recharger les paramètres - filtre de référence inchang�
 
 msgid "Settings could not be reloaded - nothing was saved."
 msgstr "Impossible de recharger les paramètres - rien n’a été enregistré."
+
+# --- 2026-08-24: Profil-Betrachter (Burger-Menue der Standalone) ---
+
+msgid "Rule-set profiles"
+msgstr "Profils de jeu de règles"
+
+msgid "Rule-set profiles..."
+msgstr "Profils de jeu de règles ..."
+
+msgid "ID"
+msgstr "ID"
+
+msgid "Detector unit"
+msgstr "Unité de détecteur"
+
+msgid "Close"
+msgstr "Fermer"
+
+msgid "No rule catalogue found - profiles unavailable."
+msgstr "Aucun catalogue de règles trouvé - profils indisponibles."
+
+msgid "Profile \"%s\": %d of %d rules active. Built-in profiles come from rules/sca-rules.json and are read-only."
+msgstr "Profil \"%s\" : %d règles actives sur %d. Les profils intégrés proviennent de rules/sca-rules.json et sont en lecture seule."
+
+msgid "Kind (profile token)"
+msgstr "Type de règle (jeton de profil)"

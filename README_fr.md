@@ -545,7 +545,9 @@ Theme=system
 
 Chaque clé de `analyser.ini` - seuils, profils, référence, interface - est
 listée avec sa valeur par défaut dans la
-[référence de configuration](docs/configuration_fr.md).
+[référence de configuration](docs/configuration_fr.md). Les règles que
+contient réellement un profil - et comment écrire le sien - sont dans le
+[guide des profils d'analyse](docs/profiles_fr.md).
 
 Le style sombre est embarqué dans l'EXE — aucune option de projet VCL-Style
 impliquée. En mode `system`, un changement de thème Windows prend effet
