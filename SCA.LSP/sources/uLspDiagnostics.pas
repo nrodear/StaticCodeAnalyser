@@ -142,7 +142,13 @@ var
   EPos  : TJSONObject;
   L     : Integer;
 begin
-  Result := TJSONArray.Create;
+  // Result erst NACH gelungenem Engine-Lauf anlegen: wirft Ses.Run
+  // (z.B. volles %TEMP% beim ssSource-Tempfile), propagiert die
+  // Exception - ein hier schon erzeugtes Array waere verwaist. Der
+  // LSP-Server ist der einzige Consumer, der wochenlang im selben
+  // Prozess lebt, und der Server faengt und loggt nur: das Leck kaeme
+  // PRO TASTENDRUCK wieder (G7-4).
+  Result := nil;
 
   Req := TScanRequest.Init;
   Req.Scope   := ssSource;
@@ -153,6 +159,7 @@ begin
   Ses := TAnalysisSession.Create;
   try
     Res := Ses.Run(Req);
+    Result := TJSONArray.Create;   // ab hier besitzt der Aufrufer
     try
       for F in Res.Findings do
       begin

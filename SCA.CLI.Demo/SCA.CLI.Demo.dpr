@@ -17,7 +17,12 @@ program SCA.CLI.Demo;
 //             default, strict, ide-fast, security, bugs-only,
 //             code-quality, dfm-only
 //
-// Exit-Code (wie der CLI): 0 = sauber, 3 = Funde vorhanden, 1/2 = Fehler.
+// Exit-Code: EIGENE, vereinfachte Konvention - NICHT der CLI-Vertrag!
+//   0 = sauber, 3 = irgendein Fund, 2 = Pfad fehlt, 1 = Exception.
+// Der echte CLI (uConsoleRunner) staffelt: 1 Hints, 2 Warnings,
+// 3 Errors, 4 Read-Errors, 99 Tool-Fehler. Die Vorfassung dieses
+// Kommentars behauptete Gleichheit (G7-5) - wer die Demo als Vorlage
+// fuer ein CI-Gate nahm, las Exit 2 als "Warnings" statt "Pfad fehlt".
 // =============================================================================
 
 uses

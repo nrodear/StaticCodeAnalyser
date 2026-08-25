@@ -2029,13 +2029,23 @@ begin
   ARelPath := ExtractRelativePath(baseDir, AFinding.FileName);
   if ARelPath = '' then Exit;
   ALineNo := StrToIntDef(AFinding.LineNumber, 0);
-  // DirOfProjectPath, nicht Projectpath.Text: bei einem Projekt-Scan
-  // steht im Feld eine .dproj/.groupproj-DATEI. Ohne die Umrechnung
-  // entstand hier ein Pfad wie ...\Mein.dproj\sources\u.pas, und der
-  // Doppelklick meldete fuer JEDEN Befund eines Projekt-Scans
-  // "File not found".
-  AAbsPath := IncludeTrailingPathDelimiter(DirOfProjectPath(Projectpath.Text))
-              + ARelPath;
+  // Der Fund TRAEGT seinen absoluten Pfad - der ist die Wahrheit des
+  // Scans. Das fruehere Rebase gegen den AKTUELLEN Combo-Text war ein
+  // Schreibrisiko: Scan auf Checkout A, dann per MRU-Dropdown Checkout B
+  // waehlen (die Fundliste bleibt stehen!), Ctrl+Alt+S - und der
+  // noinspection-Marker landete in der Datei von Checkout B, an der
+  // Zeilennummer von A. FileExists bestand, beide Checkouts haben
+  // dieselbe Struktur (G7-2). Suppress und QuickFix SCHREIBEN - die
+  // duerfen nur die gescannte Datei treffen.
+  if TPath.IsPathRooted(AFinding.FileName) then
+    AAbsPath := AFinding.FileName
+  else
+    // Rueckfall fuer relative Fundpfade (aeltere Bestaende): dann wie
+    // bisher gegen den Projektpfad aufloesen. DirOfProjectPath, nicht
+    // Projectpath.Text roh - bei einem Projekt-Scan steht im Feld eine
+    // .dproj/.groupproj-DATEI.
+    AAbsPath := IncludeTrailingPathDelimiter(DirOfProjectPath(Projectpath.Text))
+                + ARelPath;
   if not FileExists(AAbsPath) then
   begin
     StatusBar1.Panels[2].Text := _('File not found: ') + AAbsPath;

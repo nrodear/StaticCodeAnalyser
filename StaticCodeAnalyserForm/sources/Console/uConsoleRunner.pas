@@ -1110,7 +1110,20 @@ begin
     // sie ueberschreiben koennen. Vor V0.9.0 lief CLI komplett ohne
     // INI-Anwendung - daher liefen immer alle Detektoren.
     Settings := TRepoSettings.Create;
-    try Settings.Load; except end;
+    try
+      Settings.Load;
+    except
+      // NICHT stumm weiterfahren: eine gesperrte oder beschaedigte
+      // analyser.ini hiess vorher Werksdefaults ohne jeden Hinweis -
+      // "Rule-set: Profile= (Default)" statt des konfigurierten
+      // strict-Profils, und ein voellig anderer Exit-Code als gestern
+      // (G7-3). Der Lauf faehrt weiter (CLI-Schalter koennen die INI
+      // ersetzen), aber der Grund steht auf stderr.
+      on E: Exception do
+        WriteLn(ErrOutput,
+          'WARNING: analyser.ini konnte nicht gelesen werden - ' +
+          'Defaults aktiv: ', E.Message);
+    end;
     // Herkunft merken, BEVOR die CLI-Argumente drueberschreiben - nur so
     // laesst sich unten sagen, woher das Profil wirklich kommt.
     var ProfileFromIni : string := Settings.Profile;
@@ -1127,6 +1140,20 @@ begin
     var EffWriteBaseline : string := Args.WriteBaseline;
     var BlProjOrGroup    : string := Args.GroupFile;
     if BlProjOrGroup = '' then BlProjOrGroup := Args.ProjectFile;
+    // --fail-on: unbekannter Wert wird ABGELEHNT statt wortlos auf
+    // 'graded' zu fallen - dieselbe Haerte wie --baseline-scan darunter.
+    // Ein CI-Autor, der '--fail-on=warnings' (Plural!) tippt, bekam
+    // vorher kommentarlos das Default-Verhalten und wunderte sich ueber
+    // Exit-Codes (G7-6). Der Hilfetext nennt genau diese fuenf Werte.
+    if (Args.FailOn <> '') and (Args.FailOn <> 'graded') and
+       (Args.FailOn <> 'none') and (Args.FailOn <> 'error') and
+       (Args.FailOn <> 'warning') and (Args.FailOn <> 'hint') then
+    begin
+      WriteLn(ErrOutput,
+        'Error: --fail-on erwartet error|warning|hint|none|graded, ',
+        'bekommen: ', Args.FailOn);
+      Exit(Integer(cecToolError));
+    end;
     var WantBaselineScan : Boolean :=
       SameText(Args.BaselineScan, 'y') or SameText(Args.BaselineScan, 'yes')
       or (Args.BaselineScan = '1');
