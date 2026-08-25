@@ -1062,7 +1062,10 @@ begin
     except
       // IDE evtl. schon im Teardown
     end;
-  GFindingsPropsForm := nil;  // TInterfacedObject-Refcount setzt frei
+  // Objekt-Referenz, kein Refcount: das Objekt starb bereits im
+  // UnregisterDockableForm-Aufruf darueber - das nil macht nur die
+  // dangling Globale unschaedlich (G6-3, Zwilling im AnalyserForm).
+  GFindingsPropsForm := nil;
 end;
 
 end.

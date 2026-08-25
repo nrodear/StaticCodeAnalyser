@@ -5386,10 +5386,14 @@ var
 begin
   if Assigned(GDockableForm) then
   begin
-    // GDockableForm ist ein TInterfacedObject -> wird ueber den
-    // Refcount der globalen Variable freigegeben (Setzen auf nil
-    // released die Reference). Der UnregisterDockableForm-Call
-    // gibt zusaetzlich die IDE-interne Reference frei.
+    // GDockableForm ist eine OBJEKT-Referenz (var ...: TAnalyser-
+    // DockableForm) - sie haelt KEINEN Refcount, und "auf nil setzen"
+    // released nichts. Die Interface-Referenzen haelt die IDE; mit
+    // UnregisterDockableForm gibt sie die letzte frei, DORT stirbt das
+    // Objekt, und die Globale ist ab diesem Moment dangling, bis das
+    // nil sie unschaedlich macht. Die Vorfassung dieses Kommentars
+    // erzaehlte die Refcount-Geschichte andersherum (G6-3) - wer ihr
+    // glaubte, haette nach Unregister noch auf GDockableForm zugegriffen.
     // Falls Supports() fehlschlaegt: nur die globale Reference auf
     // nil setzen reicht - die IDE haelt dann die letzte und gibt
     // beim Plugin-Unload selbst frei. Nichts wird hier geleakt.

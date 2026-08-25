@@ -501,7 +501,27 @@ begin
 
     // 5) Komplette Zeile loeschen + Replacement einfuegen.
     if LineEndCol > 1 then
+    begin
+      // WACHE (G6-2, 2026-08-25): Column ist eine ANZEIGE-Spalte (Tabs
+      // expandiert), Delete(n) loescht n ZEICHEN. Auf einer Tab-Zeile
+      // ist Column-1 groesser als die Zeichenzahl - Delete fraesse ueber
+      // den Zeilenumbruch in die Folgezeile, InsertText schriebe davor:
+      // korrupter Code im Editor des Anwenders.
+      //
+      // Die Probe: Read(Column-1) liefert ZEICHEN ab Zeilenanfang. Auf
+      // einer tab-freien Zeile ist das exakt der Zeileninhalt; taucht
+      // ein Tab ODER ein Zeilenumbruch im Gelesenen auf, luegt die
+      // Spaltenarithmetik und der Fix wird VERWEIGERT statt zu
+      // zerstoeren. Die saubere Loesung (EditView-Konvertierung
+      // TOTAEditPos -> TOTACharPos) steht im G6-Todo als Folgearbeit;
+      // sie braucht einen Lauf in der IDE zur Abnahme.
+      var Probe := EditPos.Read(LineEndCol - 1);
+      if (Pos(#9, Probe) > 0) or (Pos(#10, Probe) > 0) or
+         (Pos(#13, Probe) > 0) then
+        Exit;   // Result bleibt False - Aufrufer meldet "nicht angewandt"
+      EditPos.MoveBOL;   // Read hat den Cursor ans Leseende bewegt
       EditPos.Delete(LineEndCol - 1);
+    end;
     EditPos.InsertText(NewLine);
   except
     Exit; // Out-of-range Line oder API-Edge-Case
