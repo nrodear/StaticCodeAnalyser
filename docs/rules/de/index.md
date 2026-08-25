@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Regelkatalog
 
-Alle 196 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibung.
+Alle 198 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibung.
 
 | ID | Name | Schweregrad | Typ | Detektor |
 |---|---|---|---|---|
@@ -200,6 +200,8 @@ Alle 196 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA194](SCA194.md) | Quelldatei gehört nicht zum Projekt | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA195](SCA195.md) | Unit wird vom Projekt genutzt, ist aber nicht darin enthalten | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA196](SCA196.md) | Result eines verwalteten Typs wird gelesen, bevor es zugewiesen wurde | Warning | Bug | `uManagedResultUninit.pas` |
+| [SCA197](SCA197.md) | Interface ohne GUID deklariert | Warning | Code Smell | `uInterfaceGuid.pas` |
+| [SCA198](SCA198.md) | Zwei Interfaces teilen sich dieselbe GUID | Warning | Bug | `uInterfaceGuid.pas` |
 
 ---
 

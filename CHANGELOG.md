@@ -37,6 +37,95 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased] - Rule-set profiles you can shape, and two rules about interface GUIDs
+
+### Added
+
+- **Two rules about interface GUIDs.** `SCA197 InterfaceWithoutGuid`
+  flags an interface declared without one: without a GUID the type
+  exists only at compile time, and neither `Supports()` nor
+  `QueryInterface()` can ask for it. `SCA198 DuplicateInterfaceGuid`
+  catches the more expensive case - the same GUID on two interfaces,
+  which is what happens when a new interface is written by copying the
+  previous one. That code compiles cleanly and then hands back the
+  wrong interface at run time, with nothing in the toolchain warning
+  about it.
+
+  SCA198 needs to see more than one file, so it is backed by a
+  scan-wide index built from the same file list that is analysed - the
+  scope follows the selection, whether that is a directory, a `.dproj`
+  or a `.groupproj`. The message names the other declarations with file
+  and line, because finding the twin is the actual work. In single-file
+  mode the comparison is limited to that file: "unique in the project"
+  is not a claim one file can support.
+
+  Both are lexical, not AST-based. The parser discards the GUID - it
+  runs through the same branch that skips member attributes - so there
+  is no trace of it in the tree.
+
+  SCA198 does not report two sites that declare the interface under the
+  SAME name: that is one declaration reached twice through the tree - a
+  vendored library, a submodule, a backup folder - and telling anyone to
+  regenerate the GUID there would make the two copies incompatible. On a
+  27-project, 13,268-file corpus that shape accounted for 1,505 of 1,705
+  raw findings. Of what remains, roughly a third are real copy-paste
+  mistakes (`IDirect3DTexture8` and `IDirect3DVolumeTexture8` share a
+  GUID in one DirectX port) and the rest are libraries that renamed an
+  interface and kept its GUID on purpose (JCL's `IList` / `IJclList`,
+  JVCL's Filler family, ToolsAPI's `IOTAModule50`). That ratio is why
+  SCA198 ships as a Warning and not an Error, and both cases are written
+  down in the rule's `exceptions`.
+
+- **A window for rule-set profiles**, in the standalone app and in the
+  IDE plugin, from the burger menu. It lists the rules of each profile
+  with their kind token, severity and type, and it lets you build your
+  own: copy a built-in profile, add and remove rules, save. Built-in
+  profiles stay read-only, and a name already used by one is refused -
+  otherwise the same profile name would mean different things on
+  different machines.
+
+  Your profiles live in `profiles.json` next to `analyser.ini`. The
+  **engine** reads that file, so a profile built in the window also
+  works with `--profile <name>` on the command line and appears in the
+  plugin.
+
+- **Both rule lists sort and search.** Click a column header to sort by
+  it, click again to reverse; the ID is always the secondary key, so
+  the order is the same between two runs over the same content. The
+  search field narrows the list across all five columns at once. In the
+  rule picker the ticks survive the filter - search, tick, search
+  again, and the footer counts all of them.
+
+- **Import...** takes over a `profiles.json` from anywhere - a
+  colleague, a project directory, a share - without copying it into
+  `%APPDATA%` first. It reads both shapes (the full file and the bare
+  map), shows what would happen before writing anything, and skips
+  names that belong to built-in profiles.
+
+- **Reload** re-reads `profiles.json` during the session. The file used
+  to be read once per program start, so a profile written by hand only
+  appeared after a restart of the application or the IDE.
+
+### Fixed
+
+- The fallback rule catalogue reported every rule as `Warning`. It read
+  the finding type from `KIND_META` but hard-coded the severity, and in
+  the IDE plugin the fallback is the normal path - so the plugin showed
+  a different severity than the standalone for the same rule.
+
+- The quality tile in the standalone started at `0` and only turned
+  into a grade after the first scan, while the plugin showed the grade
+  from the start.
+
+- The `EDITOR_ACCENT` colour table only enforced completeness on one of
+  its two axes. It was declared over the subrange `ecsGray..ecsSubtle`,
+  so adding a colour scheme left the declaration valid and the lookup
+  read past the end of the table - silently, without range checking. It
+  now indexes the whole enum, at the price of one dead row. Reported
+  from a downstream fork; thank you.
+
+---
+
 ## [Unreleased] - A false-positive pass over the real-world corpus
 
 The first full false-positive audit of the rule set (all 142 active rules,

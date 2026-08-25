@@ -224,6 +224,8 @@
         <DCCReference Include="uTestUnitLevelKeywordIndent.pas"/>
         <DCCReference Include="uTestRedundantBoolean.pas"/>
         <DCCReference Include="uTestEmptyInterface.pas"/>
+        <DCCReference Include="uTestInterfaceGuid.pas"/>
+        <DCCReference Include="uTestRuleListBox.pas"/>
         <DCCReference Include="uTestAssertMessage.pas"/>
         <DCCReference Include="uTestExplicitTObjectInheritance.pas"/>
         <DCCReference Include="uTestGroupedDeclaration.pas"/>

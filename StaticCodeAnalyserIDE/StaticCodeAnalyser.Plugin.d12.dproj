@@ -173,6 +173,7 @@
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uSourceEncoding.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyFinallyBlock.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyInterface.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uInterfaceGuid.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyMethod.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyOnHandler.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyVisibilitySection.pas"/>
@@ -317,6 +318,7 @@
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSuppressionTelemetry.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSymbolReferenceIndex.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uTypeIndex.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uInterfaceGuidIndex.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uTypeResolver.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uVcsChanges.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Output\uClaudePrompt.pas"/>
@@ -343,6 +345,7 @@
         <DCCReference Include="..\SCA.SharedUI\sources\uHintTextLayout.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uIDEStatsTiles.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uProfileViewer.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uRuleListBox.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uWindowFrame.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uIDEHelpPanel.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uIDEToolbar.pas"/>

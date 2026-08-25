@@ -6,7 +6,7 @@ Orientiert sich am Sonar-50er-Katalog plus eigene Bonus-Detektoren.
 
 Status: ✅ implementiert | 🟡 teilweise | 🔲 offen
 
-**Zusammenfassung (2026-08-07):** Alle **196 Regel-Kinds** des kanonischen Rosters [`rules/sca-rules.json`](rules/sca-rules.json) sind implementiert und in dieser Datei aufgeführt (geliefert von **156 Pipeline-Registrierungen**; einige Klassen emittieren mehrere Kinds — z. B. `uVisibilityCheck` → 3 Visibility-Kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM-Kinds; **SCA194/SCA195 sind projekt-weit, nicht AST-basiert** — emittiert aus dem Projekt-/Gruppen-Scan-Dispatch, nicht der per-Datei-Detektor-Registry). 44 / 50 Sonar-Regel-Slots vollständig; die 4 offenen Slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) brauchen Typ-Inferenz / Cross-Unit-Auflösung und haben noch keine SCA-ID.
+**Zusammenfassung (2026-08-07):** Alle **198 Regel-Kinds** des kanonischen Rosters [`rules/sca-rules.json`](rules/sca-rules.json) sind implementiert und in dieser Datei aufgeführt (geliefert von **157 Pipeline-Registrierungen**; einige Klassen emittieren mehrere Kinds — z. B. `uVisibilityCheck` → 3 Visibility-Kinds, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 DFM-Kinds; **SCA194/SCA195 sind projekt-weit, nicht AST-basiert** — emittiert aus dem Projekt-/Gruppen-Scan-Dispatch, nicht der per-Datei-Detektor-Registry). 44 / 50 Sonar-Regel-Slots vollständig; die 4 offenen Slots (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) brauchen Typ-Inferenz / Cross-Unit-Auflösung und haben noch keine SCA-ID.
 
 Verbleibende 4 offene Slots brauchen Typ-Inferenz / Flow-Analyse / Cross-Unit-Symbol-Resolution: #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** ist als konservativer MVP (`SCA166`) ausgeliefert — Full Path-Sensitivity bleibt fuer Phase 3 offen.
 
@@ -151,7 +151,7 @@ Sonar-50-Katalog
 🏛 mORMot-Cluster:                   9 (SCA153-161, alle vollständig)
 🧩 SonarDelphi Naming/Formatting:  60 (SCA060-119, Sektion unten)
 
-🎯 Gesamt: 196 Detektor-Kinds (178 Detektor-Units).
+🎯 Gesamt: 198 Detektor-Kinds (179 Detektor-Units).
 ```
 
 ---
@@ -455,6 +455,8 @@ Verwaltete Return-Typen (string-Familie, dynamische Arrays, `Variant`, Interface
 | SCA | Regel | Beschreibung | Severity | Typ | Status | Unit |
 |-----|-------|--------------|----------|-----|--------|------|
 | SCA196 | **ManagedResultUninit** | Result eines verwalteten Return-Typs wird gelesen, bevor es zugewiesen wurde (`Result := Result + [x]`, `Result[i] := ...` ohne SetLength, `Result.Add(...)`) - verarbeitet die alten Daten des Aufrufers | Warning | Bug | ✅ | `uManagedResultUninit` |
+| SCA197 | **InterfaceWithoutGuid** | Interface ohne GUID deklariert - Supports()/QueryInterface() können zur Laufzeit nicht danach fragen | Warning | Code Smell | ✅ | `uInterfaceGuid` |
+| SCA198 | **DuplicateInterfaceGuid** | Dieselbe GUID an zwei Interfaces - Supports() liefert das erste, ohne Compilerfehler | Warning | Bug | ✅ | `uInterfaceGuid` |
 
 ## ⚙️ Konfiguration — SCA001 OwnershipSinks (MemoryLeak-Whitelist)
 

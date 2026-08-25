@@ -103,7 +103,7 @@ uses
   uLowercaseKeyword, uNoSonarMarker, uEmptyArgumentList,
   uInlineAssembly, uTrailingCommaArgList, uDigitGrouping,
   uCommentedOutCode, uUnitLevelKeywordIndent, uRedundantBoolean,
-  uEmptyInterface, uAssertMessage, uExplicitTObjectInheritance,
+  uEmptyInterface, uInterfaceGuid, uAssertMessage, uExplicitTObjectInheritance,
   uGroupedDeclaration, uEmptyBlock, uExceptOnException,
   uConsecutiveSection, uRedundantJump, uClassPerFile,
   uSuperfluousSemicolon, uEmptyFinallyBlock, uAssignedAndAssignedNil,
@@ -126,6 +126,7 @@ uses
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uTypeIndex, uAstFileCache,
+  uInterfaceGuidIndex,       // SCA198 - scan-weite GUID-Eindeutigkeit
   uCrashDiag,        // auswertbarer Fehlertext statt roher RTL-Meldung
   uDetectorUtils,    // CommonDirOf (ScanRootDir-Anker der tplFixtureDir-Gates)
   uFileTextCache, uAnalyzeContext,
@@ -414,6 +415,14 @@ begin
   AddD('UnitLevelKeywordIndent',fkUnitLevelKeywordIndent,TUnitLevelKeywordIndentDetector.AnalyzeUnit);
   AddD('RedundantBoolean',fkRedundantBoolean,TRedundantBooleanDetector.AnalyzeUnit);
   AddD('EmptyInterface',  fkEmptyInterface,  TEmptyInterfaceDetector.AnalyzeUnit);
+  // SCA197 + SCA198: eine Unit, zwei Kinds. Der Anker ist SCA197; ohne
+  // ExtraKinds wuerde ein Profil, das NUR SCA198 fuehrt, den Detektor am
+  // Anker vorbei ueberspringen (s. Kommentar bei PerfHotspots).
+  // Kein Token-Prefilter: 'interface' steht in JEDER .pas (Unit-Sektion),
+  // der Filter wuerde also nie filtern und nur kosten.
+  AddD('InterfaceGuid',   fkInterfaceWithoutGuid,
+       TInterfaceGuidDetector.AnalyzeUnit);
+  gDetectors[Count - 1].ExtraKinds := [fkDuplicateInterfaceGuid];
   AddD('AssertMessage',   fkAssertMessage,   TAssertMessageDetector.AnalyzeUnit);
   AddD('ExplicitTObjectInheritance',fkExplicitTObjectInheritance,TExplicitTObjectInheritanceDetector.AnalyzeUnit);
   AddD('GroupedDeclaration',fkGroupedDeclaration,TGroupedDeclarationDetector.AnalyzeUnit);
@@ -1211,6 +1220,7 @@ begin
             WCtx.SymbolRefIndex  := MasterCtx.SymbolRefIndex;
             WCtx.DfmRepoIndex    := MasterCtx.DfmRepoIndex;
             WCtx.TypeIndex       := MasterCtx.TypeIndex;
+            WCtx.InterfaceGuidIndex := MasterCtx.InterfaceGuidIndex;
             WCtx.FileTextCache   := MasterCtx.FileTextCache;
             WCtx.ScanRootDir     := MasterCtx.ScanRootDir;
             WCtx.DetectorTimings := nil;   // G3: keine Timings im Parallel-Modus
@@ -1254,6 +1264,7 @@ begin
             WCtx.SymbolRefIndex  := nil;
             WCtx.DfmRepoIndex    := nil;
             WCtx.TypeIndex       := nil;
+            WCtx.InterfaceGuidIndex := nil;
             WCtx.FileTextCache   := nil;
             WCtx.Free;
           end;
@@ -1607,6 +1618,19 @@ begin
       Ctx.TypeIndex.Build(IndexFiles, Ctx.AstFileCache);
     except
       FreeAndNil(Ctx.TypeIndex);          // ggf. nil (Build-Fehler) - ok
+    end;
+
+    // SCA198 DuplicateInterfaceGuid: GUID -> Fundstellen, ueber ALLE
+    // Index-Dateien. Baut aus dem FileTextCache (lexikalisch - der Parser
+    // fuehrt die GUID nicht, s. uInterfaceGuidIndex), also unabhaengig vom
+    // AstFileCache. Faellt der Build aus, meldet SCA197 weiter (fehlende
+    // GUIDs sind je Datei entscheidbar) und SCA198 schweigt.
+    LastPhase := 'Pre-Index: InterfaceGuidIndex.Build';
+    Ctx.InterfaceGuidIndex := TInterfaceGuidIndex.Create;
+    try
+      Ctx.InterfaceGuidIndex.Build(IndexFiles);
+    except
+      FreeAndNil(Ctx.InterfaceGuidIndex);
     end;
 
     Ctx.DetectorTimings := gDetectorTimings;    // nur referenziert (Caller-owned)

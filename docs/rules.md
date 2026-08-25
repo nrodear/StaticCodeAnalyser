@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 196 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
+All 198 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -200,6 +200,8 @@ All 196 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA194](#sca194) | Source file not part of the project | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA195](#sca195) | Unit used by the project but not included in it | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA196](#sca196) | Result of managed type is read before it is assigned | Warning | Bug | `uManagedResultUninit.pas` |
+| [SCA197](#sca197) | Interface declared without a GUID | Warning | Code Smell | `uInterfaceGuid.pas` |
+| [SCA198](#sca198) | Two interfaces share the same GUID | Warning | Bug | `uInterfaceGuid.pas` |
 
 ---
 
@@ -460,7 +462,12 @@ Exit;
 WriteLn('never reached');
 
 // GOOD
-(remove the unreachable line)
+if Failed then
+begin
+  WriteLn('failed');
+  Exit;
+end;
+WriteLn('reached');
 ```
 
 ---
@@ -4817,7 +4824,11 @@ object btnOld: TButton  // removed from code, left in the DFM
 end
 
 // GOOD
-(remove the leftover component from the .dfm)
+// remove the object block from the .dfm and the field from the
+// published section:
+TForm1 = class(TForm)
+  btnSave: TButton;
+end;
 ```
 
 ---
@@ -5105,4 +5116,85 @@ end;
 
 ---
 
-_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA196.md`._
+## SCA197
+**Interface declared without a GUID**
+
+> Interface has no GUID - Supports() and QueryInterface() cannot ask for it at run time. Add one with Ctrl+Shift+G
+
+| Field | Value |
+|---|---|
+| Severity | Warning | Type | Code Smell |
+| Tags | `interface`, `guid`, `rtti` |
+| Detector | `uInterfaceGuid.pas` |
+| Scope | `IFoo = interface` declarations; forward declarations and `dispinterface` stay out |
+
+An interface without a GUID exists only at compile time. Both Supports(Obj, IFoo, X) and Obj.QueryInterface(IFoo, X) resolve the interface through its GUID, so neither compiles against a GUID-less interface - and the error surfaces at the call site, often in a different unit and long after the interface was written. Delphi generates a fresh GUID with Ctrl+Shift+G while the cursor sits inside the interface declaration. Detection is lexical: the declaration `IFoo = interface` (optionally with an ancestor list) is followed by the optional GUID in square brackets. Forward declarations (`IFoo = interface;`) are skipped because they may not carry a GUID at all, and dispinterface types are outside this rule.
+
+```pascal
+// BAD
+type
+  IReportWriter = interface
+    procedure Write(const AText: string);
+  end;
+
+// elsewhere - does not compile:
+if Supports(Obj, IReportWriter, W) then
+
+// GOOD
+type
+  IReportWriter = interface
+    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']
+    procedure Write(const AText: string);
+  end;
+```
+
+---
+
+## SCA198
+**Two interfaces share the same GUID**
+
+> The same GUID is on more than one interface - Supports() returns whichever was registered first, with no compiler error. Generate a new GUID with Ctrl+Shift+G
+
+| Field | Value |
+|---|---|
+| Severity | Warning | Type | Bug |
+| Tags | `interface`, `guid`, `copy-paste`, `rtti` |
+| Detector | `uInterfaceGuid.pas` |
+| Scope | the whole scan - directory, project (`.dproj`) or project group (`.groupproj`) |
+
+Interface GUIDs identify the interface at run time and must be unique across the program. Declaring a new interface by copying the previous one and forgetting to regenerate the GUID produces code that compiles cleanly and misbehaves silently: Supports(Obj, ISecond, X) succeeds and hands back the FIRST interface, so calls land on the wrong methods or a cast appears to work where it should not. Nothing in the toolchain warns about this. The check needs the whole scan, not one file: the index is built from the same file list that is analysed, so the scope follows the selection - directory, project (.dproj) or project group (.groupproj). The message names the other declarations with file and line, because finding the twin is the actual work. In single-file mode the comparison is limited to that file - 'unique' is not a claim one file can support.
+
+```pascal
+// BAD
+type
+  IReader = interface
+    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']
+    function Read: string;
+  end;
+
+  IWriter = interface
+    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']  // copied, not regenerated
+    procedure Write(const S: string);
+  end;
+
+// succeeds and yields an IReader:
+if Supports(Obj, IWriter, W) then W.Write('x');
+
+// GOOD
+type
+  IWriter = interface
+    ['{9B7E30C4-2D18-4A55-8F61-70E5C2A4193D}']  // Ctrl+Shift+G
+    procedure Write(const S: string);
+  end;
+```
+
+What the message looks like:
+
+```
+Interface "IWriter" shares its GUID {4F2C1A80-...} with IReader (uReader.pas:12) -
+Supports() returns whichever was registered first.
+```
+
+---
+
+_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA198.md`._

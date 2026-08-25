@@ -786,6 +786,14 @@
     "SCA196": {
       "name": "Result de type managé est lu avant d'avoir été affecté",
       "shortDescription": "Le Result d'un type de retour managé est lu avant la première affectation - il est un alias de la variable cible de l'appelant et porte son ANCIENNE valeur. L'initialiser d'abord (nil / [] / '')"
+    },
+    "SCA197": {
+      "name": "Interface déclarée sans GUID",
+      "shortDescription": "L'interface n'a pas de GUID - Supports() et QueryInterface() ne peuvent pas la demander à l'exécution. En générer un avec Ctrl+Maj+G"
+    },
+    "SCA198": {
+      "name": "Deux interfaces partagent le même GUID",
+      "shortDescription": "Le même GUID figure sur plusieurs interfaces - Supports() renvoie celle enregistrée en premier, sans erreur de compilation. En générer un nouveau avec Ctrl+Maj+G"
     }
   }
 }

@@ -20,7 +20,7 @@ uses
   uLowercaseKeyword, uNoSonarMarker, uEmptyArgumentList,
   uInlineAssembly, uTrailingCommaArgList, uDigitGrouping,
   uCommentedOutCode, uUnitLevelKeywordIndent, uRedundantBoolean,
-  uEmptyInterface, uAssertMessage, uExplicitTObjectInheritance,
+  uEmptyInterface, uInterfaceGuid, uAssertMessage, uExplicitTObjectInheritance,
   uGroupedDeclaration, uEmptyBlock, uExceptOnException,
   uConsecutiveSection, uRedundantJump, uClassPerFile,
   uSuperfluousSemicolon, uEmptyFinallyBlock, uAssignedAndAssignedNil,
@@ -269,6 +269,10 @@ begin
         TUnitLevelKeywordIndentDetector.AnalyzeUnit(Root, TempPath, Result);
         TRedundantBooleanDetector.AnalyzeUnit(Root, TempPath, Result);
         TEmptyInterfaceDetector.AnalyzeUnit(Root, TempPath, Result);
+        // SCA197/198: file-scannend (der Parser fuehrt die GUID nicht).
+        // Ohne Scan-Index vergleicht der Detektor nur innerhalb der Datei -
+        // genau das, was ein Einzeldatei-Test pruefen kann.
+        TInterfaceGuidDetector.AnalyzeUnit(Root, TempPath, Result);
         TAssertMessageDetector.AnalyzeUnit(Root, TempPath, Result);
         TExplicitTObjectInheritanceDetector.AnalyzeUnit(Root, TempPath, Result);
         TGroupedDeclarationDetector.AnalyzeUnit(Root, TempPath, Result);

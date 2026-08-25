@@ -16,7 +16,7 @@ The repository ships two components:
 
 ## Features at a glance
 
-- **196 rules (173 Pascal + 23 DFM)** — see [`DETECTORS.md`](DETECTORS.md) and [`rules/sca-rules.json`](rules/sca-rules.json) for the canonical roster (Sonar + SonarDelphi-migration + DFM + bonus)
+- **198 rules (175 Pascal + 23 DFM)** — see [`DETECTORS.md`](DETECTORS.md) and [`rules/sca-rules.json`](rules/sca-rules.json) for the canonical roster (Sonar + SonarDelphi-migration + DFM + bonus)
 - **Sonar-style stat tiles** above the grid: Errors / Warnings / Hints / Bugs / Code duplications / Code Quality as a letter grade **A–E** (raw score + breakdown in the tooltip)
 - **Severity filter** + **type filter** (Bug, Code Smell, Vulnerability, Security Hotspot, Code Duplication)
 - **Help panel on the right** with paired "before/after" code examples per finding
@@ -77,7 +77,7 @@ Open StaticCodeAnalyser.IDE.d12.dproj  →  Project  →  Install
 The full list with status (✅ implemented · 🟡 partial · 🔲 open) lives
 in [`DETECTORS.md`](DETECTORS.md).
 
-Current state (v0.9.16): **196 rules (173 Pascal + 23 DFM)** — Sonar catalogue + SonarDelphi-migration (SCA120-152) + DFM detectors + naming/formatting checks (SCA060-119) + bonus.
+Current state (v0.9.16): **198 rules (175 Pascal + 23 DFM)** — Sonar catalogue + SonarDelphi-migration (SCA120-152) + DFM detectors + naming/formatting checks (SCA060-119) + bonus.
 
 Highlights by severity:
 

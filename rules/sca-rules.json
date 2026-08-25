@@ -27,7 +27,7 @@
       "DfmDuplicateBinding", "DfmDeadEvent", "DfmSchemaMismatch",
       "DfmCircularDataSource", "DfmRequiredFieldUnbound",
       "DfmRequiredFieldNotVisible", "DfmCrossFormCoupling",
-      "DfmActionMismatch"
+      "DfmActionMismatch", "DuplicateInterfaceGuid"
     ],
     "code-quality": [
       "EmptyExcept", "UnusedUses", "MissingFinally", "DeadCode",
@@ -213,7 +213,7 @@
       "detectorUnit": "uUnusedUses.pas",
       "examples": {
         "bad":  "uses ..., MyUnusedHelper, ...;",
-        "good": "(remove if truly unused; otherwise add a comment why it stays)"
+        "good": "uses\n  System.SysUtils, Vcl.Forms;\n\n// Or, if it must stay (initialization side effect, class registration):\nuses\n  System.SysUtils, Vcl.Forms,\n  MyUnusedHelper;   // registers its classes in its initialization section"
       },
       "cleanCodeAttribute": "FOCUSED",
       "impacts": [
@@ -292,7 +292,7 @@
       "detectorUnit": "uDeadCode.pas",
       "examples": {
         "bad":  "Exit;\nWriteLn('never reached');",
-        "good": "(remove the unreachable line)"
+        "good": "if Failed then\nbegin\n  WriteLn('failed');\n  Exit;\nend;\nWriteLn('reached');"
       },
       "cleanCodeAttribute": "FOCUSED",
       "impacts": [
@@ -449,7 +449,7 @@
       "detectorUnit": "uTodoComment.pas",
       "examples": {
         "bad":  "// TODO: handle the case where input is empty",
-        "good": "(implement the case OR file an issue and reference it)"
+        "good": "if Input = '' then\n  raise EArgumentException.Create('Input must not be empty');\nResult := Parse(Input);\n\n// Or, if it is not this change's job:\n// TODO(#4711): handle empty input - see issue 4711"
       },
       "cleanCodeAttribute": "COMPLETE",
       "impacts": [
@@ -613,7 +613,7 @@
       "detectorUnit": "uDfmDuplicateBinding.pas",
       "examples": {
         "bad":  "DBEdit1.DataField = 'NAME'\nDBEdit2.DataField = 'NAME'   // same DataSource",
-        "good": "(bind 'NAME' to exactly one control)"
+        "good": "DBEdit1.DataField = 'NAME'\nDBEdit2.DataField = 'FIRSTNAME'"
       },
       "cleanCodeAttribute": "LOGICAL",
       "impacts": [
@@ -632,7 +632,7 @@
       "detectorUnit": "uDfmDeadEvent.pas",
       "examples": {
         "bad":  "object btnSave: TButton\n  OnClick = btnSaveClick   // method removed in .pas\nend",
-        "good": "(restore the method or clear OnClick in the designer)"
+        "good": "object btnSave: TButton\n  OnClick = btnSaveClick\nend\n\n// and in the .pas, published:\nprocedure btnSaveClick(Sender: TObject);"
       },
       "cleanCodeAttribute": "COMPLETE",
       "impacts": [
@@ -651,7 +651,7 @@
       "detectorUnit": "uDfmOrphanHandler.pas",
       "examples": {
         "bad":  "procedure TForm1.btnOldClick(Sender: TObject);  // nothing binds this\nbegin\n  ...\nend;",
-        "good": "(remove the method or bind it from a control)"
+        "good": "object btnOld: TButton\n  OnClick = btnOldClick\nend\n\n// or delete the method - an unbound handler is never called"
       },
       "cleanCodeAttribute": "FOCUSED",
       "impacts": [
@@ -670,7 +670,7 @@
       "detectorUnit": "uDfmEmptyBoundEvent.pas",
       "examples": {
         "bad":  "procedure TForm1.btnSaveClick(Sender: TObject);\nbegin\nend;",
-        "good": "(implement the handler or clear OnClick in the designer)"
+        "good": "procedure TForm1.btnSaveClick(Sender: TObject);\nbegin\n  SaveDocument;\nend;\n\n// or clear OnClick in the designer and delete the method"
       },
       "cleanCodeAttribute": "COMPLETE",
       "impacts": [
@@ -689,7 +689,7 @@
       "detectorUnit": "uDfmSchemaMismatch.pas",
       "examples": {
         "bad":  "// .dfm contains object btnSave: TButton, but TForm1 has no btnSave: TButton field",
-        "good": "(add the field to the published section of TForm1, or remove the stale component from the .dfm)"
+        "good": "TForm1 = class(TForm)\n  edtName: TEdit;\n  btnSave: TButton;   // the .dfm creates it - the field must exist\nend;"
       },
       "cleanCodeAttribute": "COMPLETE",
       "impacts": [
@@ -708,7 +708,7 @@
       "detectorUnit": "uDfmCircularDataSource.pas",
       "examples": {
         "bad":  "QA.MasterSource = dsB   QB.MasterSource = dsA   // cycle",
-        "good": "(make one query the parent, the other the detail)"
+        "good": "QB.MasterSource = dsA   // A is the parent, B the detail\n// QA has no MasterSource"
       },
       "cleanCodeAttribute": "LOGICAL",
       "impacts": [
@@ -748,7 +748,7 @@
       "detectorUnit": "uDfmRequiredField.pas",
       "examples": {
         "bad":  "FieldDefs: Email Required=True   // no DBEdit / DBLookup bound to it",
-        "good": "(bind a DBEdit to the Email field)"
+        "good": "object edtEmail: TDBEdit\n  DataSource = dsPerson\n  DataField = 'Email'\nend"
       },
       "cleanCodeAttribute": "COMPLETE",
       "impacts": [
@@ -767,7 +767,7 @@
       "detectorUnit": "uDfmRequiredField.pas",
       "examples": {
         "bad":  "DBEdit1.DataField = 'Email'   DBEdit1.Visible = False",
-        "good": "(make the control visible or remove Required=True)"
+        "good": "object DBEdit1: TDBEdit\n  DataField = 'Email'\n  Visible = True\nend\n\n// or drop Required = True if the field really is optional"
       },
       "cleanCodeAttribute": "COMPLETE",
       "impacts": [
@@ -902,7 +902,7 @@
       "detectorUnit": "uDfmGodHandler.pas",
       "examples": {
         "bad":  "btn1.OnClick = HandleEverything\nbtn2.OnClick = HandleEverything\nbtn3.OnClick = HandleEverything\nbtn4.OnClick = HandleEverything\nbtn5.OnClick = HandleEverything",
-        "good": "(one handler per logical action)"
+        "good": "btnNew.OnClick    = btnNewClick\nbtnOpen.OnClick   = btnOpenClick\nbtnSave.OnClick   = btnSaveClick\nbtnPrint.OnClick  = btnPrintClick\nbtnClose.OnClick  = btnCloseClick"
       },
       "cleanCodeAttribute": "FOCUSED",
       "impacts": [
@@ -921,7 +921,7 @@
       "detectorUnit": "uDfmActionMismatch.pas",
       "examples": {
         "bad":  "object btnSave: TButton\n  Action = actSave\n  OnClick = btnSaveClick   // never fires\nend",
-        "good": "(remove OnClick or remove Action)"
+        "good": "object btnSave: TButton\n  Action = actSave   // the action carries the handler\nend\n\n// or drop Action and keep OnClick - but not both"
       },
       "cleanCodeAttribute": "LOGICAL",
       "impacts": [
@@ -1093,7 +1093,7 @@
       "detectorUnit": "uVisibilityCheck.pas",
       "examples": {
         "bad":  "public\n  procedure NeverCalled;",
-        "good": "(remove or document why it stays)"
+        "good": "type\n  TParser = class\n  public\n    procedure Parse(const AText: string);\n  end;\n\n// Or say why it stays - a public API is used from outside the scan:\n//   procedure NeverCalled;   // part of the published plugin API"
       },
       "cleanCodeAttribute": "FOCUSED",
       "impacts": [
@@ -1112,7 +1112,7 @@
       "detectorUnit": "uUnusedLocal.pas",
       "examples": {
         "bad":  "var\n  Tmp: Integer;   // never used\nbegin\n  DoStuff;\nend;",
-        "good": "(remove the variable)"
+        "good": "begin\n  DoStuff;\nend;"
       },
       "cleanCodeAttribute": "FOCUSED",
       "impacts": [
@@ -3689,7 +3689,7 @@
       "detectorUnit": "uDfmComponentUnused.pas",
       "examples": {
         "bad":  "object btnOld: TButton  // removed from code, left in the DFM\nend",
-        "good": "(remove the leftover component from the .dfm)"
+        "good": "// remove the object block from the .dfm and the field from the\n// published section:\nTForm1 = class(TForm)\n  btnSave: TButton;\nend;"
       },
       "cleanCodeAttribute": "FOCUSED",
       "impacts": [
@@ -3975,6 +3975,103 @@
         {
           "softwareQuality": "RELIABILITY",
           "severity": "HIGH"
+        }
+      ]
+    },
+    {
+      "id": "SCA197",
+      "kind": "InterfaceWithoutGuid",
+      "name": "Interface declared without a GUID",
+      "shortDescription": "Interface has no GUID - Supports() and QueryInterface() cannot ask for it at run time. Add one with Ctrl+Shift+G",
+      "fullDescription": "An interface without a GUID exists only at compile time. Both Supports(Obj, IFoo, X) and Obj.QueryInterface(IFoo, X) resolve the interface through its GUID, so neither compiles against a GUID-less interface - and the error surfaces at the call site, often in a different unit and long after the interface was written. Delphi generates a fresh GUID with Ctrl+Shift+G while the cursor sits inside the interface declaration. Detection is lexical: the declaration `IFoo = interface` (optionally with an ancestor list) is followed by the optional GUID in square brackets. Forward declarations (`IFoo = interface;`) are skipped because they may not carry a GUID at all, and dispinterface types are outside this rule.",
+      "defaultSeverity": "Warning",
+      "type": "Code Smell",
+      "tags": [
+        "interface",
+        "guid",
+        "rtti"
+      ],
+      "detectorUnit": "uInterfaceGuid.pas",
+      "examples": {
+        "bad": "type\n  IReportWriter = interface\n    procedure Write(const AText: string);\n  end;\n\n// elsewhere - does not compile:\nif Supports(Obj, IReportWriter, W) then",
+        "good": "type\n  IReportWriter = interface\n    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']\n    procedure Write(const AText: string);\n  end;"
+      },
+      "exceptions": [
+        {
+          "case": "Forward declaration",
+          "why": "`IFoo = interface;` announces the name so a later declaration can reference it. The compiler REFUSES a GUID here, so demanding one would be asking for code that does not build.",
+          "example": "IFoo = interface;   // not reported"
+        },
+        {
+          "case": "dispinterface",
+          "why": "An OLE automation interface is dispatched by DISPID, not by GUID lookup through QueryInterface. Different mechanism, different rules.",
+          "example": "IFoo = dispinterface   // not reported"
+        },
+        {
+          "case": "Square brackets that do not contain a GUID",
+          "why": "If the bracket holds something other than the 8-4-4-4-12 form - a constant, a macro, a typo - neither 'missing' nor 'duplicate' is decidable. The rule stays silent rather than guess.",
+          "example": "IFoo = interface [SOME_GUID_CONST]   // not reported"
+        }
+      ],
+      "cleanCodeAttribute": "CLEAR",
+      "impacts": [
+        {
+          "softwareQuality": "MAINTAINABILITY",
+          "severity": "MEDIUM"
+        }
+      ]
+    },
+    {
+      "id": "SCA198",
+      "kind": "DuplicateInterfaceGuid",
+      "name": "Two interfaces share the same GUID",
+      "shortDescription": "The same GUID is on more than one interface - Supports() returns whichever was registered first, with no compiler error. Generate a new GUID with Ctrl+Shift+G",
+      "fullDescription": "Interface GUIDs identify the interface at run time and must be unique across the program. Declaring a new interface by copying the previous one and forgetting to regenerate the GUID produces code that compiles cleanly and misbehaves silently: Supports(Obj, ISecond, X) succeeds and hands back the FIRST interface, so calls land on the wrong methods or a cast appears to work where it should not. Nothing in the toolchain warns about this. The check needs the whole scan, not one file: the index is built from the same file list that is analysed, so the scope follows the selection - directory, project (.dproj) or project group (.groupproj). The message names the other declarations with file and line, because finding the twin is the actual work. In single-file mode the comparison is limited to that file - 'unique' is not a claim one file can support.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": [
+        "interface",
+        "guid",
+        "copy-paste",
+        "rtti"
+      ],
+      "detectorUnit": "uInterfaceGuid.pas",
+      "examples": {
+        "bad": "type\n  IReader = interface\n    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']\n    function Read: string;\n  end;\n\n  IWriter = interface\n    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']  // copied, not regenerated\n    procedure Write(const S: string);\n  end;\n\n// succeeds and yields an IReader:\nif Supports(Obj, IWriter, W) then W.Write('x');",
+        "good": "type\n  IReader = interface\n    ['{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}']\n    function Read: string;\n  end;\n\n  IWriter = interface\n    ['{9B7E30C4-2D18-4A55-8F61-70E5C2A4193D}']  // Ctrl+Shift+G\n    procedure Write(const S: string);\n  end;"
+      },
+      "exceptions": [
+        {
+          "case": "Same declaration seen twice",
+          "why": "A file that reaches the index more than once must not report itself. Sites are compared by file AND line, so the declaration under inspection is never its own twin.",
+          "example": "-"
+        },
+        {
+          "case": "The same interface name at both sites",
+          "why": "Then it is not a second interface with a stolen GUID but the SAME declaration twice in the tree - a vendored library, a submodule, a backup folder. Reporting it would be actively harmful: 'generate a new GUID' is the wrong move for a duplicated unit, it would make the two copies incompatible. Measured on a 27-project corpus: 1505 of 1705 raw findings were of this shape. The duplicated unit itself is a different question and needs its own rule.",
+          "example": "JLifecycleOwner in two copies of the same JNI bridge - not reported"
+        },
+        {
+          "case": "A renamed interface that deliberately keeps its GUID",
+          "why": "Libraries that rename an interface and keep the GUID stay binary compatible on purpose: existing Supports() calls keep working. JCL did it (IList -> IJclList), JVCL did it (IFillerItem -> IJvDataItem), and ToolsAPI carries IOTAModule50 next to IOTAModule. These ARE reported - the names differ and no heuristic separates them from a real mistake - and they are the main reason this rule is a Warning rather than an Error. Suppress them per unit where the aliasing is intended.",
+          "example": "IJclList and IList share a GUID by design - reported, suppress locally"
+        },
+        {
+          "case": "Single-file scan",
+          "why": "Without a scan-wide index the rule compares only within the current file. A duplicate in another unit stays unreported - a false negative on purpose, because the opposite claim would not be covered by what was read.",
+          "example": "-"
+        },
+        {
+          "case": "More than four sites",
+          "why": "The message lists three other locations and then '+N more'. A message carrying twenty paths is unreadable and breaks the layout of SARIF viewers; three are enough to start the search.",
+          "example": "-"
+        }
+      ],
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        {
+          "softwareQuality": "RELIABILITY",
+          "severity": "MEDIUM"
         }
       ]
     }

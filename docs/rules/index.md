@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 196 detector rules. Click an ID for full details.
+All 198 detector rules. Click an ID for full details.
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -200,6 +200,8 @@ All 196 detector rules. Click an ID for full details.
 | [SCA194](SCA194.md) | Source file not part of the project | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA195](SCA195.md) | Unit used by the project but not included in it | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA196](SCA196.md) | Result of managed type is read before it is assigned | Warning | Bug | `uManagedResultUninit.pas` |
+| [SCA197](SCA197.md) | Interface declared without a GUID | Warning | Code Smell | `uInterfaceGuid.pas` |
+| [SCA198](SCA198.md) | Two interfaces share the same GUID | Warning | Bug | `uInterfaceGuid.pas` |
 
 ---
 

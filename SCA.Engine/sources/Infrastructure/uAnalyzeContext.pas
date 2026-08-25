@@ -33,7 +33,7 @@ uses
   System.Generics.Collections, System.Generics.Defaults,
   uSCAConsts,        // TSuppressionMarker (UnusedSuppression-Collection, 2026-07-05)
   uAstFileCache, uFileTextCache, uSymbolReferenceIndex, uDfmRepoIndex,
-  uTypeIndex;
+  uTypeIndex, uInterfaceGuidIndex;
 
 type
   // ==========================================================================
@@ -131,6 +131,11 @@ type
     // (nil-Fallback via CtxTypeIndex). Wie SymbolRefIndex vom Context BESESSEN
     // -> in Destroy freigegeben (Indizes vor dem AstFileCache, den sie nutzen).
     TypeIndex       : TTypeIndex;
+    // SCA198: GUID -> alle Interfaces, die sie tragen. Ohne diesen Index
+    // kann kein Detektor "einmalig im Projekt" beantworten, denn er sieht
+    // immer nur seine eine Datei. Wie die anderen Indizes vom Context
+    // BESESSEN und vor dem AstFileCache freigegeben.
+    InterfaceGuidIndex : TInterfaceGuidIndex;
     // TD-1 Inkrement 2c (2026-07-06): per-Scan-Kopie der scan-zeit-MUTIERTEN
     // Config-Liste LeakyClasses (uSCAConsts-Global). AutoDiscovery haengt die
     // waehrend des Scans entdeckten Klassen an DIESE Instanz statt an den
@@ -198,6 +203,9 @@ function CtxAstFileCache(AContext: TAnalyzeContext): TAstFileCache;
 // Track C: Cross-Unit-Typ-Index. nil -> Detektor faellt auf Single-Unit-
 // Verhalten zurueck (kein Cross-Unit-Typ-Wissen), exakt wie heute.
 function CtxTypeIndex(AContext: TAnalyzeContext): TTypeIndex;
+// SCA198: nil -> der Detektor vergleicht nur innerhalb der eigenen Datei.
+// Eine Aussage ueber das Projekt waere ohne Projekt nicht gedeckt.
+function CtxInterfaceGuidIndex(AContext: TAnalyzeContext): TInterfaceGuidIndex;
 
 // TD-1 Inkrement 2c (2026-07-06): LeakyClasses-Leser mit Context-oder-Global-
 // Fallback. ABWEICHEND von den Ctx*-Index-Helfern oben faellt dieser NICHT auf
@@ -276,6 +284,14 @@ function CtxTypeIndex(AContext: TAnalyzeContext): TTypeIndex;
 begin
   if AContext <> nil then
     Result := AContext.TypeIndex
+  else
+    Result := nil;
+end;
+
+function CtxInterfaceGuidIndex(AContext: TAnalyzeContext): TInterfaceGuidIndex;
+begin
+  if AContext <> nil then
+    Result := AContext.InterfaceGuidIndex
   else
     Result := nil;
 end;
@@ -526,6 +542,9 @@ begin
   FreeAndNil(SymbolRefIndex);
   // Track C: TypeIndex vor dem AstFileCache freigeben (nutzt ihn in Build).
   FreeAndNil(TypeIndex);
+  // SCA198: liest im Build ueber den FileTextCache, nicht ueber den AST -
+  // die Reihenfolge ist hier unkritisch, bleibt aber bei den Indizes.
+  FreeAndNil(InterfaceGuidIndex);
   FreeAndNil(AstFileCache);
   inherited;
 end;

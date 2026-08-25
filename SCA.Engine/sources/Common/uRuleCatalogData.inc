@@ -13,7 +13,7 @@
 const
   // Index == Ord(TFindingKind) - die JSON ist positionsgleich zum Enum
   // (Test RuleIDMatchesOrdinal sichert das ab).
-  RULE_CATALOG_DATA : array[0..195] of TRuleFallbackData = (
+  RULE_CATALOG_DATA : array[0..197] of TRuleFallbackData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -70,7 +70,10 @@ const
       Name     : 'Unused unit in uses clause';
       ShortDesc: 'Uses-entry possibly unused (no identifier from it referenced)';
       BadEx    : 'uses ..., MyUnusedHelper, ...;';
-      GoodEx   : '(remove if truly unused; otherwise add a comment why it stays)'
+      GoodEx   : 'uses' + #13#10 + '  System.SysUtils, Vcl.Forms;' + #13#10 + #13#10 +
+        '// Or, if it must stay (initialization side effect, class registration):' + #13#10 + 'uses' +
+        #13#10 + '  System.SysUtils, Vcl.Forms,' + #13#10 +
+        '  MyUnusedHelper;   // registers its classes in its initialization section'
     ),
     // SCA008
     (
@@ -102,7 +105,8 @@ const
       Name     : 'Code after Exit/Raise is unreachable';
       ShortDesc: 'Statement after Exit, raise, or Halt is dead code';
       BadEx    : 'Exit;' + #13#10 + 'WriteLn(''never reached'');';
-      GoodEx   : '(remove the unreachable line)'
+      GoodEx   : 'if Failed then' + #13#10 + 'begin' + #13#10 + '  WriteLn(''failed'');' + #13#10 + '  Exit;' +
+        #13#10 + 'end;' + #13#10 + 'WriteLn(''reached'');'
     ),
     // SCA012
     (
@@ -170,7 +174,10 @@ const
       Name     : 'TODO/FIXME marker in comment';
       ShortDesc: 'Open TODO / FIXME / HACK / XXX marker - resolve before release';
       BadEx    : '// TODO: handle the case where input is empty';
-      GoodEx   : '(implement the case OR file an issue and reference it)'
+      GoodEx   : 'if Input = '''' then' + #13#10 +
+        '  raise EArgumentException.Create(''Input must not be empty'');' + #13#10 +
+        'Result := Parse(Input);' + #13#10 + #13#10 + '// Or, if it is not this change''s job:' +
+        #13#10 + '// TODO(#4711): handle empty input - see issue 4711'
     ),
     // SCA020
     (
@@ -237,7 +244,7 @@ const
       ShortDesc: 'Two or more controls bind the same (DataSource, DataField) pair';
       BadEx    : 'DBEdit1.DataField = ''NAME''' + #13#10 +
         'DBEdit2.DataField = ''NAME''   // same DataSource';
-      GoodEx   : '(bind ''NAME'' to exactly one control)'
+      GoodEx   : 'DBEdit1.DataField = ''NAME''' + #13#10 + 'DBEdit2.DataField = ''FIRSTNAME'''
     ),
     // SCA028
     (
@@ -246,7 +253,9 @@ const
       ShortDesc: 'OnClick / On... points to a method that does not exist in the form class';
       BadEx    : 'object btnSave: TButton' + #13#10 + '  OnClick = btnSaveClick   // method removed in .pas' +
         #13#10 + 'end';
-      GoodEx   : '(restore the method or clear OnClick in the designer)'
+      GoodEx   : 'object btnSave: TButton' + #13#10 + '  OnClick = btnSaveClick' + #13#10 + 'end' + #13#10 +
+        #13#10 + '// and in the .pas, published:' + #13#10 +
+        'procedure btnSaveClick(Sender: TObject);'
     ),
     // SCA029
     (
@@ -255,7 +264,8 @@ const
       ShortDesc: 'Published TNotifyEvent-shaped method has no DFM binding';
       BadEx    : 'procedure TForm1.btnOldClick(Sender: TObject);  // nothing binds this' + #13#10 + 'begin' +
         #13#10 + '  ...' + #13#10 + 'end;';
-      GoodEx   : '(remove the method or bind it from a control)'
+      GoodEx   : 'object btnOld: TButton' + #13#10 + '  OnClick = btnOldClick' + #13#10 + 'end' + #13#10 +
+        #13#10 + '// or delete the method - an unbound handler is never called'
     ),
     // SCA030
     (
@@ -263,7 +273,9 @@ const
       Name     : 'Empty bound event handler';
       ShortDesc: 'Event is wired in DFM, method exists, body is empty';
       BadEx    : 'procedure TForm1.btnSaveClick(Sender: TObject);' + #13#10 + 'begin' + #13#10 + 'end;';
-      GoodEx   : '(implement the handler or clear OnClick in the designer)'
+      GoodEx   : 'procedure TForm1.btnSaveClick(Sender: TObject);' + #13#10 + 'begin' + #13#10 +
+        '  SaveDocument;' + #13#10 + 'end;' + #13#10 + #13#10 +
+        '// or clear OnClick in the designer and delete the method'
     ),
     // SCA031
     (
@@ -271,7 +283,8 @@ const
       Name     : 'DFM component without published field';
       ShortDesc: 'Component in DFM has no matching published field in the form class - stale DFM entry (schema drift)';
       BadEx    : '// .dfm contains object btnSave: TButton, but TForm1 has no btnSave: TButton field';
-      GoodEx   : '(add the field to the published section of TForm1, or remove the stale component from the .dfm)'
+      GoodEx   : 'TForm1 = class(TForm)' + #13#10 + '  edtName: TEdit;' + #13#10 +
+        '  btnSave: TButton;   // the .dfm creates it - the field must exist' + #13#10 + 'end;'
     ),
     // SCA032
     (
@@ -279,7 +292,8 @@ const
       Name     : 'Circular DataSource / Master-Detail loop';
       ShortDesc: 'Cycle in DataSource.DataSet / DataSet.MasterSource edges';
       BadEx    : 'QA.MasterSource = dsB   QB.MasterSource = dsA   // cycle';
-      GoodEx   : '(make one query the parent, the other the detail)'
+      GoodEx   : 'QB.MasterSource = dsA   // A is the parent, B the detail' + #13#10 +
+        '// QA has no MasterSource'
     ),
     // SCA033
     (
@@ -296,7 +310,8 @@ const
       Name     : 'Required field has no UI binding';
       ShortDesc: 'TField with Required=True has no bound input control';
       BadEx    : 'FieldDefs: Email Required=True   // no DBEdit / DBLookup bound to it';
-      GoodEx   : '(bind a DBEdit to the Email field)'
+      GoodEx   : 'object edtEmail: TDBEdit' + #13#10 + '  DataSource = dsPerson' + #13#10 +
+        '  DataField = ''Email''' + #13#10 + 'end'
     ),
     // SCA035
     (
@@ -304,7 +319,9 @@ const
       Name     : 'Required field only on hidden controls';
       ShortDesc: 'TField with Required=True is bound only to Visible=False controls';
       BadEx    : 'DBEdit1.DataField = ''Email''   DBEdit1.Visible = False';
-      GoodEx   : '(make the control visible or remove Required=True)'
+      GoodEx   : 'object DBEdit1: TDBEdit' + #13#10 + '  DataField = ''Email''' + #13#10 + '  Visible = True' +
+        #13#10 + 'end' + #13#10 + #13#10 +
+        '// or drop Required = True if the field really is optional'
     ),
     // SCA036
     (
@@ -363,7 +380,9 @@ const
       BadEx    : 'btn1.OnClick = HandleEverything' + #13#10 + 'btn2.OnClick = HandleEverything' + #13#10 +
         'btn3.OnClick = HandleEverything' + #13#10 + 'btn4.OnClick = HandleEverything' + #13#10 +
         'btn5.OnClick = HandleEverything';
-      GoodEx   : '(one handler per logical action)'
+      GoodEx   : 'btnNew.OnClick    = btnNewClick' + #13#10 + 'btnOpen.OnClick   = btnOpenClick' + #13#10 +
+        'btnSave.OnClick   = btnSaveClick' + #13#10 + 'btnPrint.OnClick  = btnPrintClick' + #13#10 +
+        'btnClose.OnClick  = btnCloseClick'
     ),
     // SCA043
     (
@@ -372,7 +391,9 @@ const
       ShortDesc: 'Action and OnClick both set - Action wins, OnClick is dead code';
       BadEx    : 'object btnSave: TButton' + #13#10 + '  Action = actSave' + #13#10 +
         '  OnClick = btnSaveClick   // never fires' + #13#10 + 'end';
-      GoodEx   : '(remove OnClick or remove Action)'
+      GoodEx   : 'object btnSave: TButton' + #13#10 +
+        '  Action = actSave   // the action carries the handler' + #13#10 + 'end' + #13#10 + #13#10 +
+        '// or drop Action and keep OnClick - but not both'
     ),
     // SCA044
     (
@@ -452,7 +473,10 @@ const
       Name     : 'Unused public member (dead API)';
       ShortDesc: 'Public member is never referenced from any subclass or cross-unit path';
       BadEx    : 'public' + #13#10 + '  procedure NeverCalled;';
-      GoodEx   : '(remove or document why it stays)'
+      GoodEx   : 'type' + #13#10 + '  TParser = class' + #13#10 + '  public' + #13#10 +
+        '    procedure Parse(const AText: string);' + #13#10 + '  end;' + #13#10 + #13#10 +
+        '// Or say why it stays - a public API is used from outside the scan:' + #13#10 +
+        '//   procedure NeverCalled;   // part of the published plugin API'
     ),
     // SCA053
     (
@@ -461,7 +485,7 @@ const
       ShortDesc: 'Local var declared but never referenced in method body';
       BadEx    : 'var' + #13#10 + '  Tmp: Integer;   // never used' + #13#10 + 'begin' + #13#10 +
         '  DoStuff;' + #13#10 + 'end;';
-      GoodEx   : '(remove the variable)'
+      GoodEx   : 'begin' + #13#10 + '  DoStuff;' + #13#10 + 'end;'
     ),
     // SCA054
     (
@@ -1731,7 +1755,9 @@ const
       Name     : 'Unused DFM component';
       ShortDesc: 'DFM component is never referenced in code, other units, or the DFM itself - possibly a refactoring leftover';
       BadEx    : 'object btnOld: TButton  // removed from code, left in the DFM' + #13#10 + 'end';
-      GoodEx   : '(remove the leftover component from the .dfm)'
+      GoodEx   : '// remove the object block from the .dfm and the field from the' + #13#10 +
+        '// published section:' + #13#10 + 'TForm1 = class(TForm)' + #13#10 + '  btnSave: TButton;' +
+        #13#10 + 'end;'
     ),
     // SCA185
     (
@@ -1836,6 +1862,36 @@ const
         #13#10 + 'begin' + #13#10 + '  Result := [];  // or: Result := nil; / SetLength(Result, 0);' +
         #13#10 + '  for i := 0 to L.Count - 1 do' + #13#10 + '    Result := Result + [L[i]];' +
         #13#10 + 'end;'
+    ),
+    // SCA197
+    (
+      RuleID   : 'SCA197';
+      Name     : 'Interface declared without a GUID';
+      ShortDesc: 'Interface has no GUID - Supports() and QueryInterface() cannot ask for it at run time. Add one with Ctrl+Shift+G';
+      BadEx    : 'type' + #13#10 + '  IReportWriter = interface' + #13#10 +
+        '    procedure Write(const AText: string);' + #13#10 + '  end;' + #13#10 + #13#10 +
+        '// elsewhere - does not compile:' + #13#10 + 'if Supports(Obj, IReportWriter, W) then';
+      GoodEx   : 'type' + #13#10 + '  IReportWriter = interface' + #13#10 +
+        '    [''{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}'']' + #13#10 +
+        '    procedure Write(const AText: string);' + #13#10 + '  end;'
+    ),
+    // SCA198
+    (
+      RuleID   : 'SCA198';
+      Name     : 'Two interfaces share the same GUID';
+      ShortDesc: 'The same GUID is on more than one interface - Supports() returns whichever was registered first, with no compiler error. Generate a new GUID with Ctrl+Shift+G';
+      BadEx    : 'type' + #13#10 + '  IReader = interface' + #13#10 +
+        '    [''{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}'']' + #13#10 + '    function Read: string;' +
+        #13#10 + '  end;' + #13#10 + #13#10 + '  IWriter = interface' + #13#10 +
+        '    [''{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}'']  // copied, not regenerated' + #13#10 +
+        '    procedure Write(const S: string);' + #13#10 + '  end;' + #13#10 + #13#10 +
+        '// succeeds and yields an IReader:' + #13#10 +
+        'if Supports(Obj, IWriter, W) then W.Write(''x'');';
+      GoodEx   : 'type' + #13#10 + '  IReader = interface' + #13#10 +
+        '    [''{4F2C1A80-91D3-4E7B-B0A6-6C3E1D9F2B54}'']' + #13#10 + '    function Read: string;' +
+        #13#10 + '  end;' + #13#10 + #13#10 + '  IWriter = interface' + #13#10 +
+        '    [''{9B7E30C4-2D18-4A55-8F61-70E5C2A4193D}'']  // Ctrl+Shift+G' + #13#10 +
+        '    procedure Write(const S: string);' + #13#10 + '  end;'
     )
   );
 

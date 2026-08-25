@@ -143,6 +143,8 @@ uses
   uTestUnitLevelKeywordIndent in 'uTestUnitLevelKeywordIndent.pas',
   uTestRedundantBoolean in 'uTestRedundantBoolean.pas',
   uTestEmptyInterface in 'uTestEmptyInterface.pas',
+  uTestInterfaceGuid in 'uTestInterfaceGuid.pas',
+  uTestRuleListBox in 'uTestRuleListBox.pas',
   uTestAssertMessage in 'uTestAssertMessage.pas',
   uTestExplicitTObjectInheritance in 'uTestExplicitTObjectInheritance.pas',
   uTestGroupedDeclaration in 'uTestGroupedDeclaration.pas',

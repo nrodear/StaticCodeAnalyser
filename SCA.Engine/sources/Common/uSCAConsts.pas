@@ -693,7 +693,7 @@ type
                                  //          aufnehmen. Abspaltung von SCA194 (2026-07-29):
                                  //          vorher wurden solche Dateien faelschlich als
                                  //          verwaist gemeldet. Gleicher Dispatch wie 194.
-    fkManagedResultUninit        // SCA196 - Result eines verwalteten Return-Typs
+    fkManagedResultUninit,       // SCA196 - Result eines verwalteten Return-Typs
                                  //          (string/TArray</Variant/Interface) wird
                                  //          GELESEN bevor es zugewiesen wurde. Result
                                  //          ist dort ein versteckter var-Parameter auf
@@ -701,6 +701,23 @@ type
                                  //          (System.Rtti UseResultPointer) - W1035
                                  //          schweigt fuer diese Typen. Variante 2
                                  //          (reine Lese-vor-Schreib-Ordnung, kein CFG).
+    fkInterfaceWithoutGuid,      // SCA197 - Interface-Deklaration ohne GUID. Ohne sie
+                                 //          ist der Typ nur zur Uebersetzungszeit da:
+                                 //          Supports() und QueryInterface() brauchen
+                                 //          beide die GUID. Vorwaertsdeklarationen
+                                 //          (`IFoo = interface;`) sind ausgenommen -
+                                 //          sie DUERFEN keine tragen.
+    fkDuplicateInterfaceGuid     // SCA198 - dieselbe GUID an zwei VERSCHIEDEN benannten
+                                 //          Interfaces. Warning, nicht Error: die
+                                 //          Korpusmessung 2026-08-25 zeigte auf 76 Faellen
+                                 //          rund ein Drittel echte Copy-Paste-Fehler, der
+                                 //          Rest sind bewusste Alias-Paare (JCL/JVCL haben
+                                 //          umbenannt und die GUID behalten).
+                                 //          Folge: Supports(Obj, IZweites, X) liefert
+                                 //          das ERSTE - ohne Compilerfehler, ohne
+                                 //          Laufzeitfehler. Braucht den scan-weiten
+                                 //          uInterfaceGuidIndex; die Meldung nennt die
+                                 //          anderen Fundstellen mit Datei und Zeile.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
@@ -982,7 +999,9 @@ const
     (Name: 'SourceNonAsciiIdentifier';   FindingType: ftVulnerability;DefaultSeverity: lsWarning), // fkSourceNonAsciiIdentifier
     (Name: 'NotIncludedInProject';       FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkNotIncludedInProject
     (Name: 'UsedButNotInProject';        FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUsedButNotInProject
-    (Name: 'ManagedResultUninit';        FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkManagedResultUninit
+    (Name: 'ManagedResultUninit';        FindingType: ftBug;          DefaultSeverity: lsWarning), // fkManagedResultUninit
+    (Name: 'InterfaceWithoutGuid';       FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkInterfaceWithoutGuid
+    (Name: 'DuplicateInterfaceGuid';     FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkDuplicateInterfaceGuid
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.

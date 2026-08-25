@@ -14,7 +14,7 @@
 ancrable plus une **application Windows autonome**. L'installateur dessert l'IDE
 32 bits de Delphi 12 et les **deux** IDE de Delphi 13, 32 et 64 bits ; l'application
 autonome existe en version 32 bits et 64 bits.
-Analyse basée sur l'AST avec **196 règles** : 173 contrôles
+Analyse basée sur l'AST avec **198 règles** : 175 contrôles
 Pascal pour les fuites mémoire, l'injection SQL, les code smells, les
 vulnérabilités de sécurité, l'encodage des fichiers et la sûreté Unicode
 (Trojan Source) et la duplication de code
@@ -45,7 +45,7 @@ aucune installation Sonar, directement dans l'IDE, avec passage de relais à Cla
 
 | Capacité | Détails |
 |----------|---------|
-| 🐛 **Détection de bugs** | 173 règles Pascal exécutées sur chaque fichier `.pas` (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 règles DFM sur chaque `.dfm` (gestionnaires d'événements morts, identifiants de base de données en clair, maître-détail circulaire, composants inutilisés, …) — **196 au total**, portées par 156 enregistrements de pipeline |
+| 🐛 **Détection de bugs** | 175 règles Pascal exécutées sur chaque fichier `.pas` (MemoryLeak, NilDeref, DivByZero, FormatMismatch, MissingRaise, RoutineResultUnassigned, CharToCharPointerCast, UnpairedLock, GetMemWithoutFreeMem, PointerArithmeticOnString, …) plus 23 règles DFM sur chaque `.dfm` (gestionnaires d'événements morts, identifiants de base de données en clair, maître-détail circulaire, composants inutilisés, …) — **198 au total**, portées par 157 enregistrements de pipeline |
 | 🔐 **Contrôles de sécurité** | SQLInjection (basé sur un score), HardcodedSecret, HardcodedPath ; **sûreté Unicode** — Trojan Source / bidirectional override (CVE-2021-42574), caractères invisibles / à chasse nulle, intégrité BOM / encodage UTF-8 |
 | 🧹 **Code smells** | LongMethod, MagicNumber, EmptyExcept, MissingFinally, DeadCode, DuplicateString/Block |
 | ⚡ **Analyse incrémentale** | Bouton « Branch-Changes » : uniquement les fichiers modifiés dans la branche Git/SVN — 200 ms au lieu de 60 s |
@@ -61,7 +61,7 @@ aucune installation Sonar, directement dans l'IDE, avec passage de relais à Cla
 
 ## Fonctions principales
 
-### 1. Analyse statique de code (196 règles — 173 Pascal + 23 DFM, taxonomie Sonar)
+### 1. Analyse statique de code (198 règles — 175 Pascal + 23 DFM, taxonomie Sonar)
 
 **Contrôles AST Pascal (~130)** : **bugs** (MemoryLeak, NilDeref, DivByZero,
 FormatMismatch, ReversedForRange, SelfAssignment, VirtualCallInCtor,
@@ -273,7 +273,7 @@ Référence du résolveur de configuration : [docs/sonar-config.md](docs/sonar-c
 
 ---
 
-## Ce qui est détecté (196 règles — 173 Pascal + 23 DFM)
+## Ce qui est détecté (198 règles — 175 Pascal + 23 DFM)
 
 Chaque résultat tombe dans l'une des **cinq catégories Sonar** :
 

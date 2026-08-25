@@ -103,6 +103,14 @@ type
     [Test] procedure ProfileCodeQualityExcludesBugs;
     // dfm-only enthaelt ausschliesslich Dfm*-Kinds.
     [Test] procedure ProfileDfmOnlyContainsOnlyDfmKinds;
+
+    // Der Leser hinter "Importieren ..." im Profil-Fenster. Er liest
+    // FREMDE Dateien - also alles, was jemand weitergibt, und nicht nur
+    // das, was wir selbst schreiben.
+    [Test] procedure ReadProfilesFileAcceptsFullShape;
+    [Test] procedure ReadProfilesFileAcceptsBareMap;
+    [Test] procedure ReadProfilesFileSkipsNonArrayValues;
+    [Test] procedure ReadProfilesFileReportsMissingFile;
   end;
 
 implementation
@@ -853,5 +861,106 @@ begin
     if TFile.Exists(TmpFile) then TFile.Delete(TmpFile);
   end;
 end;
+
+{ ---- TRuleCatalog.ReadProfilesFile ---------------------------------- }
+
+function SchreibeTempJson(const AInhalt: string): string;
+// Eigener Dateiname je Aufruf: die Tests duerfen in beliebiger
+// Reihenfolge und parallel laufen.
+begin
+  Result := TPath.Combine(TPath.GetTempPath, 'sca_profiles_' +
+    TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '') + '.json');
+  TFile.WriteAllText(Result, AInhalt, TEncoding.UTF8);
+end;
+
+procedure TTestRuleCatalog.ReadProfilesFileAcceptsFullShape;
+// Die Form, die das Profil-Fenster selbst schreibt.
+var
+  Datei  : string;
+  Ziel   : TDictionary<string, TFindingKinds>;
+  Fehler : string;
+begin
+  Datei := SchreibeTempJson(
+    '{ "version": 1, "profiles": { "team-a": ["MemoryLeak", "SQLInjection"] } }');
+  Ziel := TDictionary<string, TFindingKinds>.Create;
+  try
+    Assert.IsTrue(TRuleCatalog.ReadProfilesFile(Datei, Ziel, Fehler),
+      'Vollform nicht gelesen: ' + Fehler);
+    Assert.AreEqual<Integer>(1, Ziel.Count, 'genau ein Profil erwartet');
+    Assert.IsTrue(Ziel.ContainsKey('team-a'), 'Profilname fehlt');
+    Assert.IsTrue(fkMemoryLeak in Ziel['team-a'], 'MemoryLeak fehlt');
+    Assert.IsTrue(fkSQLInjection in Ziel['team-a'], 'SQLInjection fehlt');
+  finally
+    Ziel.Free;
+    if TFile.Exists(Datei) then TFile.Delete(Datei);
+  end;
+end;
+
+procedure TTestRuleCatalog.ReadProfilesFileAcceptsBareMap;
+// Die Form, in der ein Regelwerk oft von Hand weitergereicht wird: nur
+// die Abbildung, ohne den "profiles"-Rahmen. Wer sie ablehnt, zwingt den
+// Anwender, eine Datei zu reparieren, die er nicht geschrieben hat.
+var
+  Datei  : string;
+  Ziel   : TDictionary<string, TFindingKinds>;
+  Fehler : string;
+begin
+  Datei := SchreibeTempJson('{ "nur-lecks": ["MemoryLeak"] }');
+  Ziel := TDictionary<string, TFindingKinds>.Create;
+  try
+    Assert.IsTrue(TRuleCatalog.ReadProfilesFile(Datei, Ziel, Fehler),
+      'blosse Abbildung nicht gelesen: ' + Fehler);
+    Assert.AreEqual<Integer>(1, Ziel.Count, 'genau ein Profil erwartet');
+    Assert.IsTrue(fkMemoryLeak in Ziel['nur-lecks'], 'MemoryLeak fehlt');
+  finally
+    Ziel.Free;
+    if TFile.Exists(Datei) then TFile.Delete(Datei);
+  end;
+end;
+
+procedure TTestRuleCatalog.ReadProfilesFileSkipsNonArrayValues;
+// Schuetzt vor der wahrscheinlichsten Fehlbedienung: im Dateidialog
+// sca-rules.json statt profiles.json erwischt. Dessen Wurzel hat
+// Schluessel wie "version" und "rules" - keiner davon ist eine
+// Token-Liste. Erwartet wird "nichts gefunden", nicht "Unsinn geladen".
+var
+  Datei  : string;
+  Ziel   : TDictionary<string, TFindingKinds>;
+  Fehler : string;
+begin
+  Datei := SchreibeTempJson(
+    '{ "version": 1, "tool": "sca", "rules": [ { "id": "SCA001" } ] }');
+  Ziel := TDictionary<string, TFindingKinds>.Create;
+  try
+    Assert.IsTrue(TRuleCatalog.ReadProfilesFile(Datei, Ziel, Fehler),
+      'gueltiges JSON darf keinen Fehler geben: ' + Fehler);
+    Assert.AreEqual<Integer>(0, Ziel.Count,
+      'aus einem Regelkatalog darf kein Profil entstehen');
+  finally
+    Ziel.Free;
+    if TFile.Exists(Datei) then TFile.Delete(Datei);
+  end;
+end;
+
+procedure TTestRuleCatalog.ReadProfilesFileReportsMissingFile;
+// Der Unterschied zu LoadUserProfiles: dort ist eine fehlende Datei der
+// Normalfall und schweigt. Hier hat jemand aktiv eine Datei ausgewaehlt -
+// dann muss ein Fehlschlag auch einen Text mitbringen, sonst steht der
+// Anwender vor einem Fenster, das nichts sagt und nichts tut.
+var
+  Ziel   : TDictionary<string, TFindingKinds>;
+  Fehler : string;
+begin
+  Ziel := TDictionary<string, TFindingKinds>.Create;
+  try
+    Assert.IsFalse(TRuleCatalog.ReadProfilesFile(
+      TPath.Combine(TPath.GetTempPath, 'sca_gibt_es_nicht_4711.json'),
+      Ziel, Fehler), 'fehlende Datei muss False liefern');
+    Assert.IsNotEmpty(Fehler, 'ohne Fehlertext kann die Oberflaeche nichts melden');
+  finally
+    Ziel.Free;
+  end;
+end;
+
 
 end.

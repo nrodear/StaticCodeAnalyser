@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Catalogue de règles
 
-Les 196 règles de détection. Cliquez sur un identifiant pour le détail complet.
+Les 198 règles de détection. Cliquez sur un identifiant pour le détail complet.
 
 | ID | Nom | Sévérité | Type | Détecteur |
 |---|---|---|---|---|
@@ -200,6 +200,8 @@ Les 196 règles de détection. Cliquez sur un identifiant pour le détail comple
 | [SCA194](SCA194.md) | Fichier source hors du projet | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA195](SCA195.md) | Unit utilisee par le projet mais non incluse dedans | Hint | Code Smell | `uNotIncludedInProject.pas` |
 | [SCA196](SCA196.md) | Result de type managé est lu avant d'avoir été affecté | Warning | Bug | `uManagedResultUninit.pas` |
+| [SCA197](SCA197.md) | Interface déclarée sans GUID | Warning | Code Smell | `uInterfaceGuid.pas` |
+| [SCA198](SCA198.md) | Deux interfaces partagent le même GUID | Warning | Bug | `uInterfaceGuid.pas` |
 
 ---
 

@@ -11,7 +11,7 @@
 const
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_DE : array[0..195] of TRuleOverlayData = (
+  RULE_OVERLAY_DE : array[0..197] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -1270,12 +1270,25 @@ const
       ShortDesc: 'Result eines verwalteten R' + #$FC +
         'ckgabetyps wird vor der ersten Zuweisung gelesen - es ist ein Alias der Zielvariablen des Aufrufers und tr' +
         #$E4 + 'gt deren ALTEN Wert. Zuerst initialisieren (nil / [] / '''')'
+    ),
+    // SCA197
+    (
+      RuleID   : 'SCA197';
+      Name     : 'Interface ohne GUID deklariert';
+      ShortDesc: 'Interface hat keine GUID - Supports() und QueryInterface() k' + #$F6 +
+        'nnen zur Laufzeit nicht danach fragen. Mit Strg+Umschalt+G eine erzeugen'
+    ),
+    // SCA198
+    (
+      RuleID   : 'SCA198';
+      Name     : 'Zwei Interfaces teilen sich dieselbe GUID';
+      ShortDesc: 'Dieselbe GUID steht an mehr als einem Interface - Supports() liefert das zuerst registrierte, ohne Compilerfehler. Mit Strg+Umschalt+G eine neue erzeugen'
     )
   );
 
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_FR : array[0..195] of TRuleOverlayData = (
+  RULE_OVERLAY_FR : array[0..197] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2632,6 +2645,22 @@ const
         #$E9;
       ShortDesc: 'Le Result d''un type de retour manag' + #$E9 + ' est lu avant la premi' + #$E8 +
         're affectation - il est un alias de la variable cible de l''appelant et porte son ANCIENNE valeur. L''initialiser d''abord (nil / [] / '''')'
+    ),
+    // SCA197
+    (
+      RuleID   : 'SCA197';
+      Name     : 'Interface d' + #$E9 + 'clar' + #$E9 + 'e sans GUID';
+      ShortDesc: 'L''interface n''a pas de GUID - Supports() et QueryInterface() ne peuvent pas la demander ' +
+        #$E0 + ' l''ex' + #$E9 + 'cution. En g' + #$E9 + 'n' + #$E9 + 'rer un avec Ctrl+Maj+G'
+    ),
+    // SCA198
+    (
+      RuleID   : 'SCA198';
+      Name     : 'Deux interfaces partagent le m' + #$EA + 'me GUID';
+      ShortDesc: 'Le m' + #$EA +
+        'me GUID figure sur plusieurs interfaces - Supports() renvoie celle enregistr' + #$E9 +
+        'e en premier, sans erreur de compilation. En g' + #$E9 + 'n' + #$E9 +
+        'rer un nouveau avec Ctrl+Maj+G'
     )
   );
 

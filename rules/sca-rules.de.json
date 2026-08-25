@@ -786,6 +786,14 @@
     "SCA196": {
       "name": "Result eines verwalteten Typs wird gelesen, bevor es zugewiesen wurde",
       "shortDescription": "Result eines verwalteten Rückgabetyps wird vor der ersten Zuweisung gelesen - es ist ein Alias der Zielvariablen des Aufrufers und trägt deren ALTEN Wert. Zuerst initialisieren (nil / [] / '')"
+    },
+    "SCA197": {
+      "name": "Interface ohne GUID deklariert",
+      "shortDescription": "Interface hat keine GUID - Supports() und QueryInterface() können zur Laufzeit nicht danach fragen. Mit Strg+Umschalt+G eine erzeugen"
+    },
+    "SCA198": {
+      "name": "Zwei Interfaces teilen sich dieselbe GUID",
+      "shortDescription": "Dieselbe GUID steht an mehr als einem Interface - Supports() liefert das zuerst registrierte, ohne Compilerfehler. Mit Strg+Umschalt+G eine neue erzeugen"
     }
   }
 }
