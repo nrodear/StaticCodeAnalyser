@@ -59,7 +59,8 @@ uses
   uDfmGodHandler,
   uDfmActionMismatch,
   uDfmMasterDetailUnlinked,
-  uDfmDataModuleSplitHint;
+  uDfmDataModuleSplitHint,
+  uCrashDiag;  // EStackExhausted - Kontrakt 2026-08-04
 
 class procedure TDfmAnalysisRunner.AnalyzePasFile(const PasFileName: string;
   Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
@@ -92,7 +93,12 @@ begin
     // keine DFM-Befunde.
     Source := TDfmBinaryReader.ReadFile(DfmFileName);
   except
-    Exit;
+    // Stapelueberlauf und Abbruch NIE verschlucken (Kontrakt 2026-08-04
+    // bzw. Cancel-Weg) - RunAllDetectors reicht beide bewusst durch,
+    // dieser Fang liegt DAVOR und darf sie ihm nicht wegnehmen.
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    else Exit;
   end;
 
   UnitNode := nil;
@@ -192,6 +198,11 @@ begin
   except
     // Parser-/Lookup-Crash bei degenerierten Eingaben nicht propagieren.
     // Der Pascal-Detektor-Lauf laeuft danach sauber weiter.
+    // AUSSER Stapelueberlauf und Abbruch (Kontrakt 2026-08-04): dieser
+    // Sammelfang machte den Durchreich-Schutz in RunAllDetectors fuer
+    // die komplette DFM-Familie wirkungslos.
+    on EStackExhausted do raise;
+    on EAbort do raise;
   end;
 
   Binding.Free;

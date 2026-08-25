@@ -139,7 +139,8 @@ implementation
 
 uses
   System.IOUtils, System.StrUtils,
-  uDfmParser, uDfmBinaryReader, uParser2;
+  uDfmParser, uDfmBinaryReader, uParser2,
+  uCrashDiag;  // EStackExhausted - Kontrakt 2026-08-04
 
 function IsEventPropertyName(const PropName: string): Boolean;
 begin
@@ -453,7 +454,13 @@ class function TFormBinder.BindWithParents(Graph: TComponentGraph;
         PasParser.Free;
       end;
     except
-      ParentUnitNode := nil;
+      // Stapelueberlauf NIE verschlucken (Kontrakt 2026-08-04, Muster in
+      // uStaticAnalyzer2.RunAllDetectors): Windows stellt die Schutzseite
+      // nicht wieder her, Weiterlaufen korrumpiert still. Der Parent-
+      // Parse rekursiert in dieselbe Parser-Tiefe wie der Hauptparse -
+      // genau der Pfad, fuer den der Kontrakt geschrieben wurde.
+      on EStackExhausted do raise;
+      else ParentUnitNode := nil;
     end;
     if ParentUnitNode = nil then Exit;
 
@@ -477,7 +484,8 @@ class function TFormBinder.BindWithParents(Graph: TComponentGraph;
           end;
         end;
       except
-        ParentGraph := nil;
+        on EStackExhausted do raise;   // s. Vermerk am Parent-Parse oben
+        else ParentGraph := nil;
       end;
     end;
 

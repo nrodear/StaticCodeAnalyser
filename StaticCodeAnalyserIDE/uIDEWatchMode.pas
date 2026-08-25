@@ -328,6 +328,7 @@ implementation
 
 uses
   System.StrUtils, Vcl.Forms, uStaticAnalyzer2, uEngineApi, uStaticFiles, uLocalization,
+  uCrashDiag,       // EStackExhausted - Kontrakt 2026-08-04, s. Worker-except
   uPathNormalize,   // SPOT fuer Pfad-Normalisierung
   uIDELineHighlighter;  // GFileClosingSubscriber (zentraler ofnFileClosing-Hook)
 
@@ -590,10 +591,21 @@ begin
         Ses.Free;
       end;
     except
-      // Detector-Crash darf das Plugin nicht reissen. Liste leer lassen
-      // damit DeliverResults sauber durchlaeuft.
-      FreeAndNil(FResults);
-      FResults := TObjectList<TLeakFinding>.Create(True);
+      // Ein erschoepfter Stapel wird NIE verschluckt - dieselbe Regel wie
+      // in den beiden Schwester-Pfaden (uIDEAnalyseRunner.Execute und
+      // HandleScanDone): Windows stellt die Schutzseite nach einem
+      // Ueberlauf nicht wieder her; weiterlaufen heisst, mit einem
+      // Prozess zu arbeiten, der still Speicher korrumpiert. Lieber ein
+      // sichtbarer Absturz. Dieser dritte Scan-Pfad wurde bei der
+      // Inventur 2026-08-22 uebersehen.
+      on EStackExhausted do raise;
+      // Sonstiger Detector-Crash darf das Plugin nicht reissen. Liste
+      // leer lassen, damit DeliverResults sauber durchlaeuft.
+      else
+      begin
+        FreeAndNil(FResults);
+        FResults := TObjectList<TLeakFinding>.Create(True);
+      end;
     end;
 
     // Ergebnis muss auf dem UI-Thread an den Frame.

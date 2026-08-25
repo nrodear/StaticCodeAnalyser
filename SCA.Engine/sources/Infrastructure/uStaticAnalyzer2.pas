@@ -1590,6 +1590,12 @@ begin
     try
       Ctx.DfmRepoIndex.Build(IndexFiles, Ctx.AstFileCache);
     except
+      // Acquire re-raist EStackExhausted ausdruecklich - dieser Wrapper
+      // darf ihn nicht eine Ebene hoeher wieder einfangen (Kontrakt
+      // 2026-08-04, Regel unten in RunAllDetectors: gilt fuer ALLE
+      // Verschluck-Stellen, auch kuenftige).
+      on EStackExhausted do raise;
+      else
       FreeAndNil(Ctx.DfmRepoIndex);   // ggf. nil (Build-Fehler) - ok
     end;
 
@@ -1604,6 +1610,12 @@ begin
     try
       Ctx.SymbolRefIndex.Build(IndexFiles, Ctx.AstFileCache);
     except
+      // Acquire re-raist EStackExhausted ausdruecklich - dieser Wrapper
+      // darf ihn nicht eine Ebene hoeher wieder einfangen (Kontrakt
+      // 2026-08-04, Regel unten in RunAllDetectors: gilt fuer ALLE
+      // Verschluck-Stellen, auch kuenftige).
+      on EStackExhausted do raise;
+      else
       FreeAndNil(Ctx.SymbolRefIndex);     // ggf. nil (Build-Fehler) - ok
     end;
 
@@ -1617,6 +1629,12 @@ begin
     try
       Ctx.TypeIndex.Build(IndexFiles, Ctx.AstFileCache);
     except
+      // Acquire re-raist EStackExhausted ausdruecklich - dieser Wrapper
+      // darf ihn nicht eine Ebene hoeher wieder einfangen (Kontrakt
+      // 2026-08-04, Regel unten in RunAllDetectors: gilt fuer ALLE
+      // Verschluck-Stellen, auch kuenftige).
+      on EStackExhausted do raise;
+      else
       FreeAndNil(Ctx.TypeIndex);          // ggf. nil (Build-Fehler) - ok
     end;
 
@@ -1630,6 +1648,12 @@ begin
     try
       Ctx.InterfaceGuidIndex.Build(IndexFiles);
     except
+      // Acquire re-raist EStackExhausted ausdruecklich - dieser Wrapper
+      // darf ihn nicht eine Ebene hoeher wieder einfangen (Kontrakt
+      // 2026-08-04, Regel unten in RunAllDetectors: gilt fuer ALLE
+      // Verschluck-Stellen, auch kuenftige).
+      on EStackExhausted do raise;
+      else
       FreeAndNil(Ctx.InterfaceGuidIndex);
     end;
 
