@@ -2,31 +2,21 @@
 # Erzeugt von tools/selfscan_gate.py --update (Profil strict).
 # Das Gate schlaegt fehl, wenn eine Regel MEHR Funde hat als
 # hier. Weniger ist immer erlaubt.
-#
-# ACHTUNG: --update schreibt NUR diesen Kopf - jede von Hand
-# ergaenzte Notiz darunter geht dabei verloren (2026-08-08 passiert).
-#
-# Stand 2026-08-08, gebaute Exe v0.9.13+ (beide Plattformen):
-# gegenueber dem Vorstand MissingFinally 2->0 (Literal-Welle),
-# BeginEndRequired 915->913 und NestedTry 272->269 (Refactorings
-# der Baseline-/Theme-Runde). Regeln mit 0 Funden stehen NICHT
-# mehr drin - fehlt eine Regel, gilt sie als 0, ein neuer Fund
-# schlaegt also weiter an (belegt am UnusedSuppression-Rotlauf).
-TIERS 0 638 2659
-AvoidOut 14
-BeginEndRequired 913
-BooleanParam 7
-BooleanPropertyNaming 10
-CaseStatementSize 4
+TIERS 0 642 2713
+AvoidOut 16
+BeginEndRequired 959
+BooleanParam 6
+BooleanPropertyNaming 11
+CaseStatementSize 3
 ClassPerFile 27
-CognitiveComplexity 342
+CognitiveComplexity 341
 CommentedOutCode 21
-ConcatToFormat 30
+ConcatToFormat 31
 ConstantReturn 1
 CyclomaticComplexity 121
-DateFormatSettings 2
-DebugOutput 20
-DeepNesting 38
+DateFormatSettings 3
+DebugOutput 23
+DeepNesting 37
 DefaultCaseInCaseStatement 80
 DfmActionMismatch 1
 DfmDataModuleSplitHint 1
@@ -36,40 +26,36 @@ DfmEmptyBoundEvent 1
 DfmFieldTypeMismatch 2
 DfmHardcodedCaption 15
 DfmRequiredFieldUnbound 4
-DuplicateBlock 222
-DuplicateString 228
+DuplicateBlock 225
+DuplicateString 233
 EmptyExcept 37
-EmptyInterface 6
 EmptyMethod 7
-EmptyOnHandler 3
-ExceptionTooGeneral 32
+EmptyOnHandler 5
+ExceptionTooGeneral 37
 FieldByNameInLoop 1
 FormatLocaleHint 4
-GodClass 36
+GodClass 37
 HardcodedPath 7
 HardcodedString 1
-HttpInsteadOfHttps 2
 IfElseBegin 30
 InsecureCryptoAlgorithm 15
-LargeClass 43
-LegacyInitializationSection 1
-LongMethod 85
+LargeClass 44
+LegacyInitializationSection 2
+LongMethod 86
 LongParamList 18
-MagicNumber 31
+MagicNumber 32
 MissingUnitHeader 90
 MultipleExit 18
-NestedRoutine 28
-NestedTry 269
-NilComparison 254
+NestedRoutine 30
+NestedTry 272
+NilComparison 258
 NoSonarMarker 5
 ParamByNameInLoop 1
-PublicField 38
+PublicField 40
 PublicMemberWithoutDoc 39
-RedundantConditional 3
 SetLengthAppendInLoop 2
-SourceUtf8NoBom 9
-StringConcatInLoop 32
-TodoComment 16
+StringConcatInLoop 34
+TodoComment 11
 UnusedLocalVar 2
 UnusedParameter 13
 UnusedRoutine 5

@@ -161,20 +161,6 @@ type
     // per Mail oder aus einem Projektverzeichnis bekommt, will es nicht
     // erst von Hand dorthin kopieren muessen.
     procedure ImportClick(Sender: TObject);
-    /// <summary>Teilt die gelesenen Profilnamen in "neu", "wird
-    /// ueberschrieben" und "uebersprungen, Name eines eingebauten
-    /// Profils". Eigene Funktion, damit die Entscheidung nachlesbar ist,
-    /// ohne den ganzen Dialogablauf zu lesen.</summary>
-    procedure SplitImportNames(ANames, ANew, AReplaced, AFixed: TStringList);
-    /// <summary>Der Bestaetigungstext zu dieser Dreiteilung. Liefert
-    /// Leerstring, wenn es nichts zu uebernehmen gibt - dann hat der
-    /// Aufrufer nichts zu fragen.</summary>
-    function ImportPrompt(ANew, AReplaced, AFixed: TStringList): string;
-    /// <summary>Schreibt die uebernehmbaren Profile. Liefert den Namen des
-    /// zuletzt geschriebenen (leer = keines) und meldet den ERSTEN Fehler
-    /// - die weiteren haben meist dieselbe Ursache.</summary>
-    function WriteImported(ANames: TStringList;
-      AMap: TDictionary<string, TFindingKinds>): string;
     procedure CloseClick(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
@@ -733,8 +719,17 @@ begin
   LoadProfiles(Vorher);
 end;
 
-procedure TProfileViewerForm.SplitImportNames(ANames, ANew, AReplaced,
+{ Import-Ablauf - Unit-Ebene, nicht Teil des Fensters }
+// Aus TProfileViewerForm herausgezogen (Selbstscan: die Klasse lag bei
+// 596 Zeilen, Grenze 500). Die drei Schritte brauchen vom Fenster nichts
+// ausser der Liste der bekannten Namen, und einzeln sind sie lesbar,
+// ohne den ganzen Dialogablauf mitzudenken.
+
+procedure SplitImportNames(ANames, AVorhanden, ANew, AReplaced,
   AFixed: TStringList);
+// Teilt die gelesenen Profilnamen in "neu", "wird ueberschrieben" und
+// "uebersprungen, Name eines eingebauten Profils". AVorhanden sind die
+// heute bekannten Profile.
 var
   Name : string;
 begin
@@ -743,14 +738,15 @@ begin
       // Ein eingebauter Name ist unantastbar: derselbe Name haette sonst
       // je nach Rechner eine andere Bedeutung.
       AFixed.Add(Name)
-    else if FNames.IndexOf(Name) >= 0 then
+    else if AVorhanden.IndexOf(Name) >= 0 then
       AReplaced.Add(Name)
     else
       ANew.Add(Name);
 end;
 
-function TProfileViewerForm.ImportPrompt(ANew, AReplaced,
-  AFixed: TStringList): string;
+function ImportPrompt(ANew, AReplaced, AFixed: TStringList): string;
+// Der Bestaetigungstext zur Dreiteilung. Leerstring, wenn es nichts zu
+// uebernehmen gibt - dann hat der Aufrufer nichts zu fragen.
 begin
   if (ANew.Count = 0) and (AReplaced.Count = 0) then Exit('');
   Result := '';
@@ -765,7 +761,7 @@ begin
   Result := Result + sLineBreak + _('Import now?');
 end;
 
-function TProfileViewerForm.WriteImported(ANames: TStringList;
+function WriteImported(ANames: TStringList;
   AMap: TDictionary<string, TFindingKinds>): string;
 // Jedes Profil einzeln ueber SaveUserProfile: dort sitzt die Namens- und
 // Inhaltspruefung, und dort wird zurueckgerollt, wenn das Schreiben
@@ -847,7 +843,7 @@ begin
     for Eintrag in Gelesen do
       Namen.Add(Eintrag.Key);
     Namen.Sort;
-    SplitImportNames(Namen, Neu, Ersetzt, Fest);
+    SplitImportNames(Namen, FNames, Neu, Ersetzt, Fest);
 
     Text := ImportPrompt(Neu, Ersetzt, Fest);
     if Text = '' then

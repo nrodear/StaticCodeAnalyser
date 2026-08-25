@@ -103,6 +103,42 @@ begin
   Result := SameText(A.Name, B.Name);
 end;
 
+function AndereOrte(const ADecl: TInterfaceDecl;
+  const AStellen: TArray<TInterfaceDecl>): string;
+// Der Meldungsteil "... with IBar (uOther.pas:42), IBaz (uX.pas:7)".
+// Leerstring, wenn es keine andere Stelle gibt - dann hat der Aufrufer
+// nichts zu melden.
+//
+// Sortiert, damit zwei Laeufe ueber denselben Quelltext denselben Text
+// liefern: die Reihenfolge im Index haengt sonst an der Datei-Reihenfolge
+// des Scans, und ein Fund, dessen Text sich ohne Quelltextaenderung
+// aendert, bricht jede Baseline.
+var
+  Andere : TInterfaceDecl;
+  Namen  : TStringList;
+begin
+  Result := '';
+  Namen := TStringList.Create;
+  try
+    for Andere in AStellen do
+    begin
+      if Andere.Guid <> ADecl.Guid then Continue;
+      if SelbeStelle(Andere, ADecl) then Continue;
+      if SelbeDeklaration(Andere, ADecl) then Continue;
+      Namen.Add(OrtText(Andere));
+    end;
+    if Namen.Count = 0 then Exit;
+    Namen.Sort;
+    if Namen.Count <= MAX_ORTE then
+      Result := string.Join(', ', Namen.ToStringArray)
+    else
+      Result := string.Join(', ', Copy(Namen.ToStringArray, 0, MAX_ORTE)) +
+                Format(', +%d more', [Namen.Count - MAX_ORTE]);
+  finally
+    Namen.Free;
+  end;
+end;
+
 class procedure TInterfaceGuidDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext);
@@ -114,9 +150,7 @@ var
   Decls   : TArray<TInterfaceDecl>;
   Index   : TInterfaceGuidIndex;
   Decl    : TInterfaceDecl;
-  Andere  : TInterfaceDecl;
   Stellen : TArray<TInterfaceDecl>;
-  Namen   : TStringList;
   Text    : string;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
@@ -156,37 +190,15 @@ begin
     else
       Stellen := Decls;
 
-    Namen := TStringList.Create;
-    try
-      for Andere in Stellen do
-      begin
-        if Andere.Guid <> Decl.Guid then Continue;
-        if SelbeStelle(Andere, Decl) then Continue;
-        if SelbeDeklaration(Andere, Decl) then Continue;
-        Namen.Add(OrtText(Andere));
-      end;
-      if Namen.Count = 0 then Continue;
+    Text := AndereOrte(Decl, Stellen);
+    if Text = '' then Continue;
 
-      // Sortiert, damit zwei Laeufe ueber denselben Quelltext denselben
-      // Text liefern - die Reihenfolge im Index haengt sonst an der
-      // Datei-Reihenfolge des Scans.
-      Namen.Sort;
-      if Namen.Count <= MAX_ORTE then
-        Text := string.Join(', ', Namen.ToStringArray)
-      else
-        Text := string.Join(', ',
-                  Copy(Namen.ToStringArray, 0, MAX_ORTE)) +
-                Format(', +%d more', [Namen.Count - MAX_ORTE]);
-
-      Results.Add(TLeakFinding.New(FileName, '', Decl.Line,
-        Format('Interface "%s" shares its GUID {%s} with %s - Supports() ' +
-               'returns whichever was registered first. Generate a new GUID ' +
-               'with Ctrl+Shift+G.',
-               [Decl.Name, Decl.Guid, Text]),
-        fkDuplicateInterfaceGuid));
-    finally
-      Namen.Free;
-    end;
+    Results.Add(TLeakFinding.New(FileName, '', Decl.Line,
+      Format('Interface "%s" shares its GUID {%s} with %s - Supports() ' +
+             'returns whichever was registered first. Generate a new GUID ' +
+             'with Ctrl+Shift+G.',
+             [Decl.Name, Decl.Guid, Text]),
+      fkDuplicateInterfaceGuid));
   end;
 end;
 
