@@ -6,6 +6,34 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Changed
+- **Evidence tiering ("error = proven")**: finding severity is now
+  capped by the detector's confidence in that specific finding - only
+  high-confidence findings appear at `error` level, medium-confidence
+  findings appear at `warning` at most, low-confidence at `hint`. On
+  the reference corpus this cuts the error-tier false-positive rate
+  from ~32 % to ~4 %. Explicit per-path severity overrides
+  (`[PathOverrides]` with `severity:error`) still win over the cap.
+  **Breaking for CI gates** that count on the old error totals
+  (`--fail-on error` no longer fails on capped findings - that is the
+  point); opt out with `[Rules] EvidenceTiering=0` in `analyser.ini`
+  to restore the previous behaviour. Note that the Sonar export drops
+  downgraded findings by default (`--sonar-keep-downgraded` keeps
+  them).
+- **SCA001 (MemoryLeak) demoted to medium confidence**: the 2026-08-15
+  full-corpus audit measured a 62-78 % false-positive rate; under the
+  evidence tiering policy SCA001 therefore reports as `warning` until
+  per-evidence-path re-promotion lands. The findings themselves are
+  unchanged and still visible in the default profile.
+- SARIF results now carry `properties.confidence` (`low`/`medium`/
+  `high`) while evidence tiering is active, so CI consumers can see
+  why a catalog-error rule reports at `warning`. With
+  `EvidenceTiering=0` the SARIF output is byte-identical to before.
+
+---
+
 ## [0.9.17] - Delphi 13
 
 ### Added
