@@ -519,13 +519,32 @@ begin
       // VERWEIGERT (Tab -> Exit); jetzt wird sie zum Werkzeug und der
       // Fix greift auch auf Tab-Zeilen. Abnahme: F4 auf einer
       // Tab-eingerueckten Zeile ersetzt exakt diese Zeile.
-      var Probe := EditPos.Read(LineEndCol - 1);
+      // BEWUSST einen Buchstaben MEHR lesen als die Anzeige-Spalten:
+      // so endet auch eine tab-freie Zeile sichtbar mit ihrem Umbruch
+      // in der Probe. Fehlt der Umbruch trotzdem UND ist die Probe voll,
+      // dann ist die Zeile LAENGER als ihre Anzeige-Spalten - das gibt
+      // es (Surrogatpaare: ein Emoji ist 1 Spalte, 2 Zeichen), und dann
+      // ist keine Laengen-Aussage moeglich: verweigern statt
+      // verstuemmeln (Gegenpruefung V4).
+      var Probe := EditPos.Read(LineEndCol + 1);
       var WahreLaenge := Pos(#13, Probe) - 1;
       if WahreLaenge < 0 then
         WahreLaenge := Pos(#10, Probe) - 1;   // reine LF-Puffer
       if WahreLaenge < 0 then
+      begin
+        if Length(Probe) > LineEndCol then
+          Exit;   // Zeile laenger als ihre Spalten (Surrogate) - Finger weg
         WahreLaenge := Length(Probe);         // letzte Zeile ohne Umbruch
-      EditPos.MoveBOL;   // Read hat den Cursor ans Leseende bewegt
+      end;
+      // NEU POSITIONIEREN, nicht bloss MoveBOL: Read hat den Cursor ans
+      // LESEENDE bewegt, und das liegt auf Tab-Zeilen absichtlich in der
+      // FOLGEZEILE. Ein blankes MoveBOL stuende dann am Anfang von N+1,
+      // und Delete/InsertText zerstoerten exakt die Zeile, die der Fix
+      // schuetzen soll - die Gegenpruefung hat es gefangen (V1), bevor
+      // es je in einer IDE lief. InsertLineAbove macht es seit jeher so
+      // ("zurueck nach Read").
+      EditPos.GotoLine(LineNumber);
+      EditPos.MoveBOL;
       if WahreLaenge > 0 then
         EditPos.Delete(WahreLaenge);
     end;

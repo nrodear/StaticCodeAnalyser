@@ -739,7 +739,25 @@ end;
 
 class procedure TAnalysisSession.ReleaseTransientCaches;
 begin
-  uFileTextCache.ReleaseTransientCaches;
+  // NUR unter dem Engine-Lock: Clear zerstoert die TStringLists des
+  // Caches (doOwnsValues), und ein parallel LAUFENDER Scan haelt rohe
+  // Zeiger darauf (AcquireLines mit OwnedByCache=True) - ein Clear
+  // mittendrin waere Use-after-free, exakt die Gefahr, vor der der
+  // RemoveFile-Kommentar in uFileTextCache warnt (Gegenpruefung V2).
+  // Run haelt den Lock ueber den GANZEN Scan, also kann das Clear unter
+  // dem Lock nie einen laufenden Scan treffen.
+  //
+  // TRY statt blockierendem Acquire: die Aufrufstellen liegen teils auf
+  // dem UI-Thread ("Reset all findings" waehrend ein Worker scannt!).
+  // Ist der Lock besetzt, wird das Release uebersprungen - verlustfrei:
+  // der laufende Scan hat den Cache an seinem START ohnehin geleert,
+  // und SEIN Abschluss ruft den Hook erneut.
+  if TryAcquireEngineLock then
+  try
+    uFileTextCache.ReleaseTransientCaches;
+  finally
+    ReleaseEngineLock;
+  end;
 end;
 
 class procedure TAnalysisSession.AcquireEngineLock;

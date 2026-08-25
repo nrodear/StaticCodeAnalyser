@@ -513,24 +513,34 @@ begin
 end;
 
 procedure TTestEngineApi.ReleaseTransientCaches_EmptiesTextCache;
-// Ein Lauf ueber eine echte Temp-Datei fuellt den Cache (Suppression-
-// Phase liest die Quelle); der Hook muss ihn nachweisbar leeren.
+// KEIN ssRecursive: der Unit-Kopf verbietet den rekursiven Pfad im
+// residenten TestInsight-Prozess ausdruecklich (IDE-Hang, 2026-06-26
+// reproduziert) - die Gegenpruefung hat den Verstoss gefangen (V3).
+// Stattdessen ssSingleFile (der stabile Pfad dieser Datei), und der
+// Cache wird DETERMINISTISCH ueber AcquireLines gefuellt statt ueber
+// die Suppression-Phase, die nur bei Funden liest.
 var
-  Dir  : string;
-  Ses  : TAnalysisSession;
-  Req  : TScanRequest;
-  Res  : TScanResult;
+  Dir    : string;
+  Datei  : string;
+  Ses    : TAnalysisSession;
+  Req    : TScanRequest;
+  Res    : TScanResult;
+  Lines  : TStringList;
+  Cached : Boolean;
 begin
   Dir := TPath.Combine(TPath.GetTempPath, 'sca_hook_' +
     TGuid.NewGuid.ToString.Replace('{', '').Replace('}', ''));
   TDirectory.CreateDirectory(Dir);
   try
-    TFile.WriteAllText(TPath.Combine(Dir, 'u.pas'),
+    Datei := TPath.Combine(Dir, 'u.pas');
+    TFile.WriteAllText(Datei,
       'unit u;'#13#10'interface'#13#10'implementation'#13#10 +
       'procedure P; begin end;'#13#10'end.');
+    // Ein Single-File-Lauf stellt sicher, dass die Engine ihren
+    // prozessweiten Cache angelegt hat (Scan-Start erzeugt ihn).
     Req := TScanRequest.Init;
-    Req.Scope := ssRecursive;
-    Req.Path  := Dir;
+    Req.Scope := ssSingleFile;
+    Req.Path  := Datei;
     Ses := TAnalysisSession.Create;
     try
       Res := Ses.Run(Req);
@@ -538,9 +548,15 @@ begin
     finally
       Ses.Free;
     end;
-    Assert.IsTrue(TransientCacheCount > 0,
-      'Vorbedingung: der Lauf muss den Text-Cache gefuellt haben - ' +
-      'sonst prueft der Test nichts');
+    // Cache nachweisbar fuellen: Acquire ueber den GLOBALEN Cache
+    // (ACache=nil). OwnedByCache=True heisst, der Eintrag liegt drin.
+    Lines := AcquireLines(Datei, Cached, nil);
+    Assert.IsNotNull(Lines, 'Temp-Datei muss lesbar sein');
+    ReleaseLines(Lines, Cached);
+    Assert.IsTrue(Cached,
+      'Vorbedingung: der Eintrag muss im PROZESSWEITEN Cache liegen - ' +
+      'liegt er nicht, prueft der Test nichts (gFileTextCache fehlt?)');
+    Assert.IsTrue(TransientCacheCount > 0, 'Vorbedingung: Cache gefuellt');
     TAnalysisSession.ReleaseTransientCaches;
     Assert.AreEqual<Integer>(0, TransientCacheCount,
       'der Hook muss den Cache leeren (G2-5)');
