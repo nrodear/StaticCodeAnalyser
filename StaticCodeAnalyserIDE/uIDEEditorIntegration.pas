@@ -502,25 +502,32 @@ begin
     // 5) Komplette Zeile loeschen + Replacement einfuegen.
     if LineEndCol > 1 then
     begin
-      // WACHE (G6-2, 2026-08-25): Column ist eine ANZEIGE-Spalte (Tabs
-      // expandiert), Delete(n) loescht n ZEICHEN. Auf einer Tab-Zeile
-      // ist Column-1 groesser als die Zeichenzahl - Delete fraesse ueber
-      // den Zeilenumbruch in die Folgezeile, InsertText schriebe davor:
-      // korrupter Code im Editor des Anwenders.
+      // ZEICHENLAENGE statt Anzeige-Spalte (G6-2, Vollausbau 2026-08-26):
+      // Column ist eine ANZEIGE-Spalte (Tabs expandiert), Delete(n)
+      // loescht n ZEICHEN - auf Tab-Zeilen fraesse Delete(Column-1) ueber
+      // den Zeilenumbruch in die Folgezeile.
       //
-      // Die Probe: Read(Column-1) liefert ZEICHEN ab Zeilenanfang. Auf
-      // einer tab-freien Zeile ist das exakt der Zeileninhalt; taucht
-      // ein Tab ODER ein Zeilenumbruch im Gelesenen auf, luegt die
-      // Spaltenarithmetik und der Fix wird VERWEIGERT statt zu
-      // zerstoeren. Die saubere Loesung (EditView-Konvertierung
-      // TOTAEditPos -> TOTACharPos) steht im G6-Todo als Folgearbeit;
-      // sie braucht einen Lauf in der IDE zur Abnahme.
+      // Der Weg zur wahren Laenge braucht keine EditView-Konvertierung:
+      // Read(Column-1) liefert ZEICHEN ab Zeilenanfang, und weil die
+      // Anzeige-Spalte nie KLEINER ist als die Zeichenzahl (ein Tab
+      // expandiert auf >= 1 Spalte, alles andere ist 1:1), enthaelt das
+      // Gelesene immer die komplette Zeile - auf Tab-Zeilen dazu den
+      // Zeilenumbruch und den Anfang der Folgezeile. Der Anteil VOR dem
+      // ersten Umbruch IST die Zeichenlaenge der Zeile.
+      //
+      // Die Zwischenfassung vom 2026-08-25 hat mit derselben Probe nur
+      // VERWEIGERT (Tab -> Exit); jetzt wird sie zum Werkzeug und der
+      // Fix greift auch auf Tab-Zeilen. Abnahme: F4 auf einer
+      // Tab-eingerueckten Zeile ersetzt exakt diese Zeile.
       var Probe := EditPos.Read(LineEndCol - 1);
-      if (Pos(#9, Probe) > 0) or (Pos(#10, Probe) > 0) or
-         (Pos(#13, Probe) > 0) then
-        Exit;   // Result bleibt False - Aufrufer meldet "nicht angewandt"
+      var WahreLaenge := Pos(#13, Probe) - 1;
+      if WahreLaenge < 0 then
+        WahreLaenge := Pos(#10, Probe) - 1;   // reine LF-Puffer
+      if WahreLaenge < 0 then
+        WahreLaenge := Length(Probe);         // letzte Zeile ohne Umbruch
       EditPos.MoveBOL;   // Read hat den Cursor ans Leseende bewegt
-      EditPos.Delete(LineEndCol - 1);
+      if WahreLaenge > 0 then
+        EditPos.Delete(WahreLaenge);
     end;
     EditPos.InsertText(NewLine);
   except
