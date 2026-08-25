@@ -232,18 +232,35 @@ const
   // CaseStatementSize gemeldet, zu Recht.
   //
   // Der eigentliche Gewinn ist aber nicht die Kuerze: der Compiler
-  // erzwingt jetzt VOLLSTAENDIGKEIT. Wer TFindingSeverity oder
-  // TEditorColorScheme erweitert, bekommt E2072 und muss eine Farbe
-  // waehlen. Die alte Fassung liess einen neuen Enum-Wert ueber ihr
+  // erzwingt jetzt VOLLSTAENDIGKEIT auf BEIDEN Achsen. Wer
+  // TFindingSeverity oder TEditorColorScheme erweitert, bekommt E2072 und
+  // muss eine Farbe waehlen. Die alte Fassung liess einen neuen Enum-Wert ueber ihr
   // 'else' stillschweigend auf clNone laufen - unsichtbar, bis jemand
   // den fehlenden Marker im Editor bemerkt.
   //
-  // ecsDefault steht bewusst NICHT in der Tabelle: es ist
-  // theme-unabhaengig und delegiert an SeverityAccent.
   // fsUnknown ist clNone - dieselbe Wahl wie im frueheren else-Zweig,
   // hier nur sichtbar statt versteckt.
-  EDITOR_ACCENT : array[ecsGray..ecsSubtle, Boolean, TFindingSeverity] of TColor =
+  //
+  // WARUM ecsDefault MITGEFUEHRT WIRD, obwohl es nie gelesen wird
+  // (Fremdbericht 2026-08-23, Befund 2):
+  //   Die Tabelle stand bis dahin ueber dem TEILBEREICH ecsGray..ecsSubtle,
+  //   weil ecsDefault theme-unabhaengig ist und an SeverityAccent
+  //   delegiert. Damit galt die oben behauptete Vollstaendigkeit aber nur
+  //   fuer EINE der beiden Achsen: ein Teilbereich bleibt gueltig, wenn
+  //   das Enum waechst. Ein vierter Wert haette die Tabelle KLAGLOS
+  //   uebersetzt und danach EDITOR_ACCENT[Scheme, ...] an ihr vorbei
+  //   gelesen - ohne Bereichspruefung ein stiller Fehlgriff, kein Fehler.
+  //
+  //   Der Preis ist eine tote Zeile. Dafuer loest jetzt beides E2072 aus:
+  //   eine neue Severity verkuerzt jede Zeile, ein neues Schema laesst
+  //   eine ganze fehlen.
+  EDITOR_ACCENT : array[TEditorColorScheme, Boolean, TFindingSeverity] of TColor =
   (
+    // ecsDefault - NIE gelesen: EditorAccent beantwortet es vorher ueber
+    // SeverityAccent. Steht nur da, damit das Enum vollstaendig indiziert
+    // ist; wer hier Farben eintraegt, aendert nichts.
+    ( { hell   } (clNone, clNone, clNone, clNone, clNone),
+      { dunkel } (clNone, clNone, clNone, clNone, clNone) ),
     // ecsGray
     ( { hell   } (clNone, GRAY_LIGHT_ERROR,   GRAY_LIGHT_WARNING,
                   GRAY_LIGHT_HINT,   GRAY_LIGHT_FILEERROR),

@@ -37,6 +37,13 @@ type
     [Test] procedure ThresholdIsExclusiveAt127;
     // Die Akzentfarben, fuer die es die Funktion ueberhaupt gibt.
     [Test] procedure SeverityAccentsGetReadableText;
+    // ecsDefault steht seit 2026-08-25 als TOTE Zeile in EDITOR_ACCENT -
+    // nur damit die Tabelle das ganze Enum indiziert und ein viertes
+    // Schema E2072 ausloest (Fremdbericht, Befund 2). Die Zeile enthaelt
+    // clNone. Wer den ecsDefault-Zweig in EditorAccent entfernt oder die
+    // Zeile fuer echte Farben haelt, faerbt die Marker unsichtbar - das
+    // faellt sonst erst im Editor auf.
+    [Test] procedure DefaultSchemeDelegatesAndDoesNotReadTheTable;
     // System-Color-Indices muessen aufgeloest werden, nicht durchrutschen.
     [Test] procedure SystemColorIndexIsResolved;
     // EnsureHintContrast (Nur-Text-Hint 2026-08-12): der Akzent haelt
@@ -172,7 +179,31 @@ begin
   Assert.IsTrue(Lum601(EnsureHintContrast(clWhite, False)) <= EXPECT_LIGHT_TARGET);
 end;
 
+procedure TTestContrastColor.DefaultSchemeDelegatesAndDoesNotReadTheTable;
+var
+  Sev : TFindingSeverity;
+begin
+  for Sev := Low(TFindingSeverity) to High(TFindingSeverity) do
+  begin
+    // Beide Untergruende: der Default ist theme-unabhaengig, deshalb muss
+    // hell und dunkel dieselbe Farbe liefern wie SeverityAccent.
+    Assert.AreEqual<TColor>(SeverityAccent(Sev),
+      EditorAccent(Sev, ecsDefault, False),
+      'ecsDefault (hell) liest die tote Tabellenzeile statt SeverityAccent');
+    Assert.AreEqual<TColor>(SeverityAccent(Sev),
+      EditorAccent(Sev, ecsDefault, True),
+      'ecsDefault (dunkel) liest die tote Tabellenzeile statt SeverityAccent');
+  end;
+
+  // Gegenprobe: die echten Schemata liefern etwas ANDERES als der
+  // Default - sonst pruefte der Test oben nur, dass alles clNone ist.
+  Assert.AreNotEqual<TColor>(EditorAccent(fsError, ecsDefault, False),
+    EditorAccent(fsError, ecsGray, False),
+    'ecsGray muss sich vom Default unterscheiden');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestContrastColor);
+
 
 end.
