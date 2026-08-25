@@ -1146,15 +1146,16 @@ begin
     // vorher kommentarlos das Default-Verhalten und wunderte sich ueber
     // Exit-Codes (G7-6). Der Hilfetext nennt genau diese fuenf Werte.
     //
-    // VOR der Pruefung dieselbe Normalisierung wie ApplyFailOnPolicy
-    // seit jeher anwendet (LowerCase+Trim): '--fail-on Error' war immer
+    // Mit derselben Normalisierung pruefen, die ApplyFailOnPolicy seit
+    // jeher anwendet (LowerCase+Trim): '--fail-on Error' war immer
     // gueltig und muss es bleiben - die Leerzeichen-Form laeuft roh
-    // durch den Parser, der LowerCase-Zweig dort greift nur fuer die
-    // '='-Form (finales Review, R2).
-    Args.FailOn := LowerCase(Trim(Args.FailOn));
-    if (Args.FailOn <> '') and (Args.FailOn <> 'graded') and
-       (Args.FailOn <> 'none') and (Args.FailOn <> 'error') and
-       (Args.FailOn <> 'warning') and (Args.FailOn <> 'hint') then
+    // durch den Parser (finales Review, R2). LOKAL normalisiert, nicht
+    // ins Feld zurueck: Args ist ein const-Parameter (E2064), und die
+    // Policy normalisiert ihre Eingabe ohnehin selbst noch einmal.
+    var FailOnNorm := LowerCase(Trim(Args.FailOn));
+    if (FailOnNorm <> '') and (FailOnNorm <> 'graded') and
+       (FailOnNorm <> 'none') and (FailOnNorm <> 'error') and
+       (FailOnNorm <> 'warning') and (FailOnNorm <> 'hint') then
     begin
       WriteLn(ErrOutput,
         'Error: --fail-on erwartet error|warning|hint|none|graded, ',
