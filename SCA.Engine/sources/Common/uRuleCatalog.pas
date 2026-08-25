@@ -534,6 +534,11 @@ begin
   Json := TJSONObject.ParseJSONValue(TFile.ReadAllText(FileName));
   if not (Json is TJSONObject) then
   begin
+    // Gueltiges JSON, aber kein Objekt (Array/Skalar - z.B. versehentlich
+    // eine Token-Liste gespeichert): ParseJSONValue lieferte dann ein
+    // non-nil Geflecht, und der fruehe Exit lag VOR dem try/finally -
+    // das komplette geparste Objekt leakte (G1-3). Free ist nil-sicher.
+    Json.Free;
     LoadFallback;
     Exit;
   end;

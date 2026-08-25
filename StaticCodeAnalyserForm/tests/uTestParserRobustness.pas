@@ -113,6 +113,11 @@ type
     // Gate-Nachtrag: MEMBER-Attribute erzeugten Phantom-Felder
     // (275 der 792 neuen GodClass-Funde feuerten nur deswegen).
     [Test] procedure Parser_MemberAttribute_NoPhantomField;
+    // G1-2 (Review 2026-08-25): typisierte Record-Konstante in einer
+    // const-SEKTION. Die flache Wert-Schleife stoppte am ';' INNERHALB
+    // der Klammer - abgeschnittener Wert plus ein Phantom-nkField je
+    // weiterem Record-Element.
+    [Test] procedure Parser_TypedRecordConst_NoPhantomFields;
   end;
 
 implementation
@@ -2654,6 +2659,62 @@ begin
         'Unbalanciertes Attribut darf die Folge-Routine nicht verschlucken');
     finally Root.Free; end;
   finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_TypedRecordConst_NoPhantomFields;
+// 'P: TPoint = (X: 1; Y: 2);' ist EIN Feld. Die Vorfassung lieferte
+// zwei ('P' mit abgeschnittenem Wert, Phantom 'Y' mit TypeRef '2)').
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'const'#13#10+
+  '  P: TPoint = (X: 1; Y: 2);'#13#10+
+  '  N = 7;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Secs   : TList<TAstNode>;
+  FeldP  : TAstNode;
+  FeldY  : TAstNode;
+  FeldN  : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Secs := Root.FindAll(nkConstSection);
+      try
+        Assert.IsTrue(Secs.Count >= 1, 'const-Sektion fehlt im AST');
+        FeldP := nil; FeldY := nil; FeldN := nil;
+        for var S in Secs do
+          for var C in S.Children do
+            if C.Kind = nkField then
+            begin
+              if SameText(C.Name, 'P') then FeldP := C;
+              if SameText(C.Name, 'Y') then FeldY := C;
+              if SameText(C.Name, 'N') then FeldN := C;
+            end;
+        Assert.IsNotNull(FeldP, 'nkField P erwartet');
+        Assert.IsNull(FeldY,
+          'Phantom-Feld Y - der Wert-Scan ist am inneren '';'' gestorben');
+        Assert.IsTrue(Pos('Y', FeldP.TypeRef) > 0,
+          'der Wert von P muss VOLLSTAENDIG in TypeRef stehen, ist: ' +
+          FeldP.TypeRef);
+        // Und die Sektion laeuft nach der Record-Konstante normal weiter.
+        Assert.IsNotNull(FeldN, 'die Folge-Konstante N fehlt - Token-Desync');
+        Assert.IsTrue(Pos('7', FeldN.TypeRef) > 0,
+          'Wert von N fehlt, TypeRef: ' + FeldN.TypeRef);
+      finally
+        Secs.Free;
+      end;
+    finally
+      Root.Free;
+    end;
+  finally
+    Parser.Free;
+  end;
 end;
 
 end.

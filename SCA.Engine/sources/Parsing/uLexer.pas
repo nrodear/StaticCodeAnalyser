@@ -81,6 +81,15 @@ type
   TConditionalState = record
     Active        : Boolean;  // True = Token-Emit aktiv (Phase 1a: immer True)
     InElse        : Boolean;  // True wenn aktuell im else-Branch
+    // Hat in DIESER IF-Kette schon irgendein Branch aktiviert? Ohne das
+    // Gedaechtnis hatte ELSE nur den naiven Toggle - und der machte nach
+    // einem genommenen IF und einem uebersprungenen ELSEIF den
+    // ELSE-Branch wieder AN: {$IF True} a {$ELSEIF X} b {$ELSE} c
+    // {$ENDIF} emittierte a UND c (doppelte Deklarationen im
+    // Token-Strom). ELSEIF wiederum konnte ueberhaupt nie aktivieren,
+    // weil es den Parent INKLUSIVE des eigenen (inaktiven) Top-Frames
+    // pruefte. Beides Review G1-1, 2026-08-25.
+    AnyBranchTaken: Boolean;
     DirectiveLine : Integer;  // Zeile des oeffnenden {$IFDEF
   end;
 
@@ -151,6 +160,11 @@ type
     // A.5 Phase 1b: Defines-Auswertung + Skip-Helpers.
     function IsDefined(const AName: string): Boolean;
     function CurrentlyActive: Boolean;
+    // Wie CurrentlyActive, aber OHNE den Top-Frame: der Parent-Kontext
+    // einer ELSEIF/ELSE-Entscheidung. Der Top-Frame ist dort gerade
+    // Gegenstand der Entscheidung - ihn mitzupruefen hiesse, den
+    // inaktiven IF-Zweig als "Parent verbietet es" zu lesen.
+    function ParentActiveExclTop: Boolean;
     function ParseDirectiveIdent(const ABody: string;
       var Pos: Integer): string;
 
@@ -819,6 +833,15 @@ begin
   Result := FDefines.IndexOf(AName) >= 0;
 end;
 
+function TLexer.ParentActiveExclTop: Boolean;
+var
+  i : Integer;
+begin
+  for i := 0 to Length(FConditionalStack) - 2 do
+    if not FConditionalStack[i].Active then Exit(False);
+  Result := True;
+end;
+
 function TLexer.CurrentlyActive: Boolean;
 // True wenn ALLE Stack-Frames Active sind. Sobald irgendwo im Stack
 // ein inaktives Frame ist (= wir sind in einem geskippten Branch),
@@ -873,20 +896,23 @@ begin
   end
   else if Verb = 'ELSEIF' then
   begin
-    // A.5 Phase 2.1: ELSEIF mit Expression. Wenn der bisherige Branch
-    // (inkl. urspruengliches IF und etwaige vorhergehende ELSEIFs) NIE
-    // aktiv war, kann ELSEIF aktivieren. Sonst bleibt der ELSEIF-
-    // Branch geskippt.
-    // Pragmatisch in Phase 2.1: wenn Top aktuell False -> evaluiere
-    // ELSEIF und setze Active wenn True. Wenn Top True -> setze Active
-    // auf False (ELSEIF nach erfolgreichem IF: skip).
+    // ELSEIF aktiviert genau dann, wenn in dieser Kette noch KEIN
+    // Branch genommen wurde, der Parent (OHNE den Top-Frame!) aktiv ist
+    // und die Expression zutrifft. Die Vorfassung prueften den Parent
+    // INKLUSIVE Top - im inaktiven IF-Zweig ist Top.Active aber False,
+    // also konnte "ParentActive and Eval" nie True werden: der
+    // ELSEIF-Branch war fuer alle 198 Regeln unsichtbar (G1-1).
     if Length(FConditionalStack) > 0 then
     begin
-      if FConditionalStack[High(FConditionalStack)].Active then
+      if FConditionalStack[High(FConditionalStack)].AnyBranchTaken then
         FConditionalStack[High(FConditionalStack)].Active := False
       else
+      begin
         FConditionalStack[High(FConditionalStack)].Active :=
-          ParentActive and EvalIfExpression(ABody, i);
+          ParentActiveExclTop and EvalIfExpression(ABody, i);
+        FConditionalStack[High(FConditionalStack)].AnyBranchTaken :=
+          FConditionalStack[High(FConditionalStack)].Active;
+      end;
       FConditionalStack[High(FConditionalStack)].InElse := True;
     end;
   end
@@ -996,6 +1022,10 @@ var
 begin
   Frame.Active        := AActive;
   Frame.InElse        := False;
+  // AActive ist bereits parent-gegated: nur ein Branch, der wirklich
+  // emittiert, zaehlt als "genommen". Im inaktiven Parent bleibt alles
+  // False - dort kann und darf nie ein Branch aktivieren.
+  Frame.AnyBranchTaken := AActive;
   Frame.DirectiveLine := ALine;
   L := Length(FConditionalStack);
   SetLength(FConditionalStack, L + 1);
@@ -1017,9 +1047,14 @@ begin
 end;
 
 procedure TLexer.ToggleConditionalToElse;
-// A.5 Phase 1b: naive Toggle Top.Active. Korrekt, weil CurrentlyActive
-// den GESAMTEN Stack prueft - wenn ein Parent-Frame inaktiv ist,
-// bleibt der else-Branch trotzdem inaktiv (parent dominiert).
+// ELSE aktiviert genau dann, wenn in dieser Kette noch kein Branch
+// genommen wurde und der Parent (ohne Top) aktiv ist.
+//
+// Der fruehere naive Toggle ("Active := not Active") war fuer reines
+// IF/ELSE korrekt, kannte aber die Kette nicht: nach {$IF True} a
+// {$ELSEIF X} setzte ELSEIF Active auf False, und ELSE toggelte es
+// wieder auf True - a UND c wurden emittiert (G1-1, Fall B). Mit
+// AnyBranchTaken bleibt ELSE aus, sobald irgendein Branch dran war.
 var
   L : Integer;
 begin
@@ -1027,7 +1062,14 @@ begin
   if L > 0 then
   begin
     FConditionalStack[L - 1].InElse := True;
-    FConditionalStack[L - 1].Active := not FConditionalStack[L - 1].Active;
+    if FConditionalStack[L - 1].AnyBranchTaken then
+      FConditionalStack[L - 1].Active := False
+    else
+    begin
+      FConditionalStack[L - 1].Active := ParentActiveExclTop;
+      FConditionalStack[L - 1].AnyBranchTaken :=
+        FConditionalStack[L - 1].Active;
+    end;
   end;
 end;
 

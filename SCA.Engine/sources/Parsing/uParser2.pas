@@ -986,8 +986,27 @@ begin
       ConstValue := '';
       if (AKind = nkConstSection) and Eat(tkEq) then
       begin
-        while not (Tok.Kind in [tkSemicolon, tkKwEnd, tkEof]) do
+        // Gleicher Depth-Scanner wie im Zwilling ParseInlineConstStmt:
+        // ein ';' INNERHALB einer typisierten Record-/Array-Konstante
+        // ('P: TPoint = (X: 1; Y: 2);') beendet den Wert nicht. Die
+        // flache Vorfassung stoppte am ersten inneren ';' - der Wert war
+        // abgeschnitten, und die Aussenschleife legte fuer jedes weitere
+        // Record-Element ein Phantom-nkField an ('Y' mit TypeRef '2)').
+        // Jeder nkConstSection-Konsument (uFormatMismatch loest
+        // Konstanten ueber den '='-Split auf, uNamingExt bewertet die
+        // Feldnamen) arbeitete auf falschen Fakten (G1-2, 2026-08-25).
+        var NestDepth := 0;
+        while not FLex.AtEnd do
         begin
+          case Tok.Kind of
+            tkLParen, tkLBracket, tkKwBegin,
+            tkKwCase, tkKwTry, tkKwAsm      : Inc(NestDepth);
+            tkRParen, tkRBracket            : if NestDepth > 0 then Dec(NestDepth);
+            tkKwEnd:
+              if NestDepth > 0 then Dec(NestDepth) else Break;
+            tkSemicolon:
+              if NestDepth = 0 then Break;
+          end;
           if Tok.Kind = tkStrLit then
             JoinTokInto(ConstValue, QuoteStrLit(Tok.Value))
           else

@@ -112,10 +112,14 @@ var
   // Leser also entweder die alte oder die neue Tabelle sehen - beide gueltig.
   GActiveMap   : TDictionary<string, string> = nil;
 
-  // lang -> Tabelle. Auch ergebnislose Sprachen landen als LEERE Tabelle im
-  // Cache, damit ein wiederholtes SetLanguage weder erneut parst noch erneut
-  // auf die Platte greift (und damit hier nie ein nil liegt, das doOwnsValues
-  // freigeben muesste). Eine leere Tabelle verhaelt sich wie Identity.
+  // lang -> Tabelle. Auch ergebnislose Sprachen werden gecacht, damit ein
+  // wiederholtes SetLanguage weder erneut parst noch erneut auf die Platte
+  // greift - und zwar als NIL-Wert (SetLanguage: "auch nil cachen").
+  // WER DIE WERTE ITERIERT, MUSS NIL PRUEFEN. Die Vorfassung dieses
+  // Kommentars behauptete das Gegenteil ("nie ein nil"); ein Konsument,
+  // der ihr glaubte und Pair.Value dereferenzierte, waere auf der ersten
+  // unbekannten Sprache mit AV gestorben (Review G1-5). nil verhaelt
+  // sich fuer die Uebersetzung wie Identity, doOwnsValues vertraegt es.
   // Besitzt die Tabellen; dient gleichzeitig als Sperrobjekt (TMonitor).
   GLangCache   : TObjectDictionary<string, TDictionary<string, string>> = nil;
 

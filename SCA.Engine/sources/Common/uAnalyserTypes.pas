@@ -42,9 +42,6 @@ function SeverityFromKindLevel(Kind: TFindingKind;
 // benutzen.
 function SeverityFromText(const S: string): TFindingSeverity;
 
-// Rueckweg fuer UI-Filter und Default-Anzeige.
-function SeverityToText(S: TFindingSeverity): string;
-
 implementation
 
 // noinspection-file BeginEndRequired, TooLongLine, UnusedParameter
@@ -76,18 +73,6 @@ begin
   else if SameText(S, 'Hinweis')    or SameText(S, 'Hint')       then Result := fsHint
   else if SameText(S, 'Lesefehler') or SameText(S, 'Read Error') then Result := fsFileError
   else                                                                Result := fsUnknown;
-end;
-
-function SeverityToText(S: TFindingSeverity): string;
-begin
-  case S of
-    fsError:     Result := 'Fehler';
-    fsWarning:   Result := 'Warnung';
-    fsHint:      Result := 'Hinweis';
-    fsFileError: Result := 'Lesefehler';
-  else
-    Result := '';
-  end;
 end;
 
 end.

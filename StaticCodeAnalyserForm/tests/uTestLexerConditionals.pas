@@ -46,6 +46,19 @@ type
     [Test] procedure Phase2_DefineMidSource_ActivatesIfdef;
     [Test] procedure Phase2_UndefMidSource_DeactivatesIfdef;
     [Test] procedure Phase2_DefineInSkippedBranch_NotApplied;
+
+    // --- G1-1 (Review 2026-08-25): ELSEIF/ELSE-Kette --------------------
+    // Vorher existierte im ganzen Modul KEIN ELSEIF-Fall - und beide
+    // Fehler waren genau dort: (A) ELSEIF konnte nie aktivieren, weil der
+    // Parent-Check den eigenen inaktiven Top-Frame mitlas; (B) ELSE nach
+    // genommenem Branch toggelte wieder AN, sodass IF- UND ELSE-Branch
+    // im Token-Strom landeten.
+    [Test] procedure Elseif_SecondBranchActivates;
+    [Test] procedure Elseif_AfterTakenIf_StaysOff;
+    [Test] procedure Elseif_ElseAfterTakenIf_StaysOff;
+    [Test] procedure Elseif_NoneTaken_ElseActivates;
+    [Test] procedure Elseif_ChainTakesFirstTrueOnly;
+    [Test] procedure Elseif_InInactiveParent_AllBranchesOff;
   end;
 
 implementation
@@ -491,6 +504,112 @@ begin
       'DEFINE im skip-branch darf NICHT spaeter aktivieren');
     Assert.IsTrue(Idents.IndexOf('good') >= 0,
       'Aussen-IFDEF skipped -> else aktiv');
+  finally
+    Idents.Free;
+  end;
+end;
+
+procedure TTestLexerConditionals.Elseif_SecondBranchActivates;
+// Fall A der Vorfassung: dieser Branch war fuer alle Regeln unsichtbar.
+var
+  Idents : TStringList;
+begin
+  Idents := CollectIdents(
+    '{$IF Defined(A)} abranch {$ELSEIF Defined(B)} bbranch {$IFEND}',
+    ['B'], True);
+  try
+    Assert.IsTrue(Idents.IndexOf('abranch') < 0, 'A undefiniert -> IF-Zweig aus');
+    Assert.IsTrue(Idents.IndexOf('bbranch') >= 0,
+      'B definiert -> der ELSEIF-Zweig MUSS emittieren (Vorfassung: nie)');
+  finally
+    Idents.Free;
+  end;
+end;
+
+procedure TTestLexerConditionals.Elseif_AfterTakenIf_StaysOff;
+var
+  Idents : TStringList;
+begin
+  Idents := CollectIdents(
+    '{$IF True} abranch {$ELSEIF True} bbranch {$IFEND}',
+    [], True);
+  try
+    Assert.IsTrue(Idents.IndexOf('abranch') >= 0, 'IF True -> Zweig an');
+    Assert.IsTrue(Idents.IndexOf('bbranch') < 0,
+      'Branch schon genommen -> ELSEIF bleibt aus, auch mit wahrer Expression');
+  finally
+    Idents.Free;
+  end;
+end;
+
+procedure TTestLexerConditionals.Elseif_ElseAfterTakenIf_StaysOff;
+// Fall B der Vorfassung: a UND c wurden emittiert - doppelte
+// Deklarationen im Token-Strom.
+var
+  Idents : TStringList;
+begin
+  Idents := CollectIdents(
+    '{$IF True} abranch {$ELSEIF Defined(X)} bbranch {$ELSE} cbranch {$IFEND}',
+    [], True);
+  try
+    Assert.IsTrue(Idents.IndexOf('abranch') >= 0, 'IF True -> Zweig an');
+    Assert.IsTrue(Idents.IndexOf('bbranch') < 0, 'ELSEIF nach genommenem IF aus');
+    Assert.IsTrue(Idents.IndexOf('cbranch') < 0,
+      'ELSE nach genommenem IF MUSS aus bleiben (Vorfassung: wieder an)');
+  finally
+    Idents.Free;
+  end;
+end;
+
+procedure TTestLexerConditionals.Elseif_NoneTaken_ElseActivates;
+var
+  Idents : TStringList;
+begin
+  Idents := CollectIdents(
+    '{$IF False} abranch {$ELSEIF False} bbranch {$ELSE} cbranch {$IFEND}',
+    [], True);
+  try
+    Assert.IsTrue(Idents.IndexOf('abranch') < 0, 'IF False');
+    Assert.IsTrue(Idents.IndexOf('bbranch') < 0, 'ELSEIF False');
+    Assert.IsTrue(Idents.IndexOf('cbranch') >= 0,
+      'kein Branch genommen -> ELSE emittiert');
+  finally
+    Idents.Free;
+  end;
+end;
+
+procedure TTestLexerConditionals.Elseif_ChainTakesFirstTrueOnly;
+var
+  Idents : TStringList;
+begin
+  Idents := CollectIdents(
+    '{$IF False} a1 {$ELSEIF True} b2 {$ELSEIF True} c3 {$ELSE} d4 {$IFEND}',
+    [], True);
+  try
+    Assert.IsTrue(Idents.IndexOf('a1') < 0);
+    Assert.IsTrue(Idents.IndexOf('b2') >= 0, 'erster wahrer Zweig der Kette');
+    Assert.IsTrue(Idents.IndexOf('c3') < 0,
+      'zweiter wahrer Zweig bleibt aus - AnyBranchTaken');
+    Assert.IsTrue(Idents.IndexOf('d4') < 0, 'ELSE bleibt aus');
+  finally
+    Idents.Free;
+  end;
+end;
+
+procedure TTestLexerConditionals.Elseif_InInactiveParent_AllBranchesOff;
+// Der Parent dominiert: im geskippten Aussenzweig darf auch ein wahres
+// ELSEIF nichts emittieren.
+var
+  Idents : TStringList;
+begin
+  Idents := CollectIdents(
+    '{$IFDEF NOT_SET} {$IF True} x1 {$ELSEIF True} y2 {$ELSE} z3 {$IFEND} w4 {$ENDIF}',
+    [], True);
+  try
+    Assert.IsTrue(Idents.IndexOf('x1') < 0, 'inaktiver Parent');
+    Assert.IsTrue(Idents.IndexOf('y2') < 0, 'inaktiver Parent - ELSEIF');
+    Assert.IsTrue(Idents.IndexOf('z3') < 0, 'inaktiver Parent - ELSE');
+    Assert.IsTrue(Idents.IndexOf('w4') < 0, 'inaktiver Parent - hinter IFEND');
   finally
     Idents.Free;
   end;

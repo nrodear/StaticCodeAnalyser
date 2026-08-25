@@ -720,8 +720,14 @@ type
                                  //          anderen Fundstellen mit Datei und Zeile.
   );
 
-  // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Mit 43 Werten
-  // weit unter dem 256-Element-Limit eines Delphi-Sets.
+  // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Delphi-Sets
+  // tragen hoechstens 256 Elemente - aktuell sind 198 belegt (SCA198),
+  // die Reserve ist also endlich: die Encoding-Familie allein brachte
+  // 9 Kinds, die Attribut-Familie 5. Wer sich der Grenze naehert, muss
+  // TFindingKinds, PFindingKinds und die Ord(K)+1-basierte SCA-ID-
+  // Ableitung (MakeFallbackMeta) GEMEINSAM abloesen. (Die Vorfassung
+  // dieses Kommentars sagte "43 Werte" - sie war seit Monaten stale und
+  // suggerierte Luft, die es nicht gibt; Review G1-4.)
   TFindingKinds = set of TFindingKind;
   // TD-1 Inkrement 2b (2026-07-06): optionaler Set-Zeiger fuer die Post-Scan-
   // Filter. nil = Global-Fallback (uSCAConsts.DetectorEnabledKinds, Test-/
