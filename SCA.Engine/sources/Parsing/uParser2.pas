@@ -995,15 +995,24 @@ begin
         // Jeder nkConstSection-Konsument (uFormatMismatch loest
         // Konstanten ueber den '='-Split auf, uNamingExt bewertet die
         // Feldnamen) arbeitete auf falschen Fakten (G1-2, 2026-08-25).
+        // NUR Klammern zaehlen: in einem SEKTIONS-Konstantenwert kommt
+        // kein begin/case/try/asm vor - das waren Statement-Kontext-
+        // Tokens des Zwillings. Und RETTUNGSLEINEN unabhaengig von der
+        // Tiefe: bei einer UNVOLLSTAENDIGEN Klammer (Live-Editieren im
+        // Watch-Mode: 'const A = (1, 2;' - die schliessende Klammer ist
+        // noch nicht getippt) darf der Scanner nicht den Rest der Unit
+        // samt implementation fressen; ohne die Leinen verschwanden
+        // ALLE Funde der Datei lautlos (finales Review, R5).
         var NestDepth := 0;
         while not FLex.AtEnd do
         begin
+          if Tok.Kind in [tkKwImplementation, tkKwType, tkKwVar,
+                          tkKwConst, tkKwProcedure, tkKwFunction,
+                          tkKwBegin, tkKwEnd] then
+            Break;
           case Tok.Kind of
-            tkLParen, tkLBracket, tkKwBegin,
-            tkKwCase, tkKwTry, tkKwAsm      : Inc(NestDepth);
-            tkRParen, tkRBracket            : if NestDepth > 0 then Dec(NestDepth);
-            tkKwEnd:
-              if NestDepth > 0 then Dec(NestDepth) else Break;
+            tkLParen, tkLBracket : Inc(NestDepth);
+            tkRParen, tkRBracket : if NestDepth > 0 then Dec(NestDepth);
             tkSemicolon:
               if NestDepth = 0 then Break;
           end;

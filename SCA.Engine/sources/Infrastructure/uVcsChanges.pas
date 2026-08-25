@@ -403,6 +403,20 @@ begin
       finally
         SL.Free;
       end;
+    end
+    else
+    begin
+      // Base gefunden, aber der Diff scheitert (Shallow-Clone ohne
+      // gefetchte Base - der GitHub-Actions-Default!): das ist ein
+      // FEHLER, keine leere Aenderungsmenge. Die Vorfassung lief hier
+      // kommentarlos weiter, AInfo trug sogar den Erfolgstext - und im
+      // CI (Working Tree sauber) hiess das: leere Liste, Exit 0, gruen
+      // ohne Scan. Exakt das Loch, das G7-1 fuer --diff geschlossen
+      // hat; fuer --branch blieb es offen (finales Review, R3).
+      AInfo := Format('git diff %s...HEAD failed (exit %d)',
+                      [Base, ExitCode]);
+      FreeAndNil(Result);   // nil = Fehler, s. Interface-Vertrag
+      Exit;
     end;
     AInfo := _('Git: branch vs ') + Base;
   end
@@ -415,7 +429,14 @@ begin
     IncludeWT := ASettings.IncludeWorkingTree;
   if not IncludeWT then Exit;
 
-  if RunCmd(GitExe, 'status --porcelain', ARepoRoot, Output, ExitCode) then
+  if not RunCmd(GitExe, 'status --porcelain', ARepoRoot, Output, ExitCode) then
+  begin
+    // Gleiche Regel wie beim Branch-Diff: ein gescheiterter git-Aufruf
+    // ist ein Fehler, kein leeres Ergebnis (R3).
+    AInfo := Format('git status --porcelain failed (exit %d)', [ExitCode]);
+    FreeAndNil(Result);
+    Exit;
+  end;
   begin
     SL := TStringList.Create;
     try

@@ -139,7 +139,14 @@ analyser.exe --path . --diff main...HEAD --report-html build/review.html
 `--branch` nimmt die geänderten Dateien aus der Versionsverwaltung (Git
 und SVN werden erkannt), `--diff <range>` einen Git-Bereich inklusive
 `a...b` für den gemeinsamen Vorfahren. Beide schließen ungespeicherte
-Änderungen ein. Der HTML-Report ist self-contained — keine externen
+Änderungen ein (`--diff` vergleicht nur committete Stände).
+
+Seit dem 2026-08-25 beendet ein **gescheiterter VCS-Aufruf den Lauf mit
+Exit 99** und dem Grund auf stderr — ein Shallow-Clone, dessen
+Basis-Commit nie gefetcht wurde (GitHub-Actions-Default
+`fetch-depth: 1`), macht die Pipeline nicht mehr grün, ohne eine einzige
+Datei zu scannen. Exit 0 gibt es nur für einen ehrlich leeren Diff. Vor
+dem Scan die Basis holen, z. B. `git fetch origin main`. Der HTML-Report ist self-contained — keine externen
 Dateien, er öffnet sich von einem Netzlaufwerk oder aus einem
 CI-Artefakt.
 

@@ -146,7 +146,15 @@ analyser.exe --path . --diff main...HEAD --report-html build/review.html
 `--branch` utilise l'ensemble des fichiers modifiés selon le
 gestionnaire de versions (Git et SVN détectés automatiquement),
 `--diff <plage>` une plage Git, y compris la forme `a...b` de
-l'ancêtre commun. Les deux incluent les modifications non validées. Le
+l'ancêtre commun. Les deux incluent les modifications non validées
+(`--diff` ne compare que des états committés).
+
+Depuis le 2026-08-25, un **appel VCS échoué termine avec le code 99** et
+la raison sur stderr — un clone superficiel dont le commit de base n'a
+jamais été récupéré (le défaut GitHub Actions `fetch-depth: 1`) ne rend
+plus le pipeline vert sans avoir analysé un seul fichier. Le code 0 est
+réservé à un diff réellement vide. Récupérez la base avant l'analyse,
+p. ex. `git fetch origin main`. Le
 rapport HTML est autonome — aucune ressource externe, il s'ouvre depuis
 un partage de fichiers ou un artefact CI.
 

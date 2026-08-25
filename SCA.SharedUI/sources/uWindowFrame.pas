@@ -99,6 +99,10 @@ uses
   Vcl.Themes;      // TStyleManager.FormBorderStyle / IsCustomStyleActive
 
 const
+  // Dokumentierter Reset-Wert fuer DWMWA_CAPTION_COLOR/TEXT_COLOR:
+  // "specify DWMWA_COLOR_DEFAULT to reset to the system default".
+  DWMWA_COLOR_DEFAULT = COLORREF($FFFFFFFF);
+
   DIAG_ENV    = 'SCA_THEME_LOG';
   DIAG_MARKER = 'theme-debug.on';
   DIAG_LOG    = 'theme-debug.log';
@@ -308,16 +312,24 @@ begin
     //    schlagen die Aufrufe fehl und es bleibt bei 1) - also dunkel
     //    statt themenfarben. TColor und COLORREF haben beide das Format
     //    $00BBGGRR, deshalb genuegt ColorToRGB.
+    // clNone heisst RESET AUF WINDOWS-STANDARD, nicht "Aufruf
+    // ueberspringen": DWMWA_CAPTION_COLOR ist ein PERSISTENTES
+    // Fensterattribut. Wer nach einem dunklen Theme auf hell wechselt,
+    // behielte sonst die explizit gesetzte dunkle Farbe an der hellen
+    // Form - genau das hat die Zwischenfassung vom 2026-08-25 gebaut
+    // (finales Review, R4). DWMWA_COLOR_DEFAULT ist der dokumentierte
+    // Reset-Wert; auf Fenstern, an denen nie eine Farbe gesetzt war,
+    // ist er ein No-op.
     if ACaption <> clNone then
-    begin
-      Farb  := ColorToRGB(ACaption);
-      HrCap := DwmSetWindowAttribute(H, DWMWA_CAPTION_COLOR, @Farb, SizeOf(Farb));
-    end;
+      Farb := ColorToRGB(ACaption)
+    else
+      Farb := DWMWA_COLOR_DEFAULT;
+    HrCap := DwmSetWindowAttribute(H, DWMWA_CAPTION_COLOR, @Farb, SizeOf(Farb));
     if AText <> clNone then
-    begin
-      Farb  := ColorToRGB(AText);
-      HrTxt := DwmSetWindowAttribute(H, DWMWA_TEXT_COLOR, @Farb, SizeOf(Farb));
-    end;
+      Farb := ColorToRGB(AText)
+    else
+      Farb := DWMWA_COLOR_DEFAULT;
+    HrTxt := DwmSetWindowAttribute(H, DWMWA_TEXT_COLOR, @Farb, SizeOf(Farb));
   except
     // dwmapi.dll wird verzoegert geladen. Fehlt sie oder ist die
     // Desktop-Komposition aus, ist eine unpassende Titelzeile das

@@ -104,6 +104,7 @@ begin
   UnitNode := nil;
   Graph    := nil;
   Binding  := nil;
+  try   // finally: Freigaben laufen auf JEDEM Weg hinaus (R1)
   try
     // 1) DFM parsen
     Parser := TDfmParser.Create;
@@ -196,19 +197,33 @@ begin
     TDfmComponentUnusedDetector.Analyze(Binding, Graph, RepoIdx,
       CtxSymbolRefIndex(AContext), PasFileName, DfmFileName, Results);
   except
-    // Parser-/Lookup-Crash bei degenerierten Eingaben nicht propagieren.
-    // Der Pascal-Detektor-Lauf laeuft danach sauber weiter.
     // AUSSER Stapelueberlauf und Abbruch (Kontrakt 2026-08-04): dieser
     // Sammelfang machte den Durchreich-Schutz in RunAllDetectors fuer
     // die komplette DFM-Familie wirkungslos.
     on EStackExhausted do raise;
     on EAbort do raise;
+    // Der else-Zweig ist TRAGEND, nicht Kosmetik: ein except-Block, der
+    // NUR on-Handler hat, re-raist alles Unpassende (Delphi-Semantik).
+    // Die Zwischenfassung vom 2026-08-25 (Paket A) hatte genau das
+    // gebaut und damit die Verschluck-Absicht dieses Fangs umgekehrt -
+    // jeder Parser-/Lookup-Crash bei degenerierten Eingaben haette
+    // wieder propagiert (finales Review, R1).
+    else
+      // Parser-/Lookup-Crash bei degenerierten Eingaben nicht
+      // propagieren. Der Pascal-Detektor-Lauf laeuft danach sauber
+      // weiter.
+      ;
   end;
-
-  Binding.Free;
-  if OwnsUnitNode then
-    UnitNode.Free;            // Cache-ASTs gibt der AstFileCache/Evict frei
-  Graph.Free;
+  finally
+    // Auf JEDEM Weg hinaus - auch beim gewollten Re-Raise von
+    // EStackExhausted/EAbort. Vorher standen die drei Zeilen NACH dem
+    // except: der Abbruch-Weg leakte Graph, Binding und ggf. den selbst
+    // geparsten AST bei jedem abgebrochenen Scan (R1).
+    Binding.Free;
+    if OwnsUnitNode then
+      UnitNode.Free;          // Cache-ASTs gibt der AstFileCache/Evict frei
+    Graph.Free;
+  end;
 end;
 
 end.

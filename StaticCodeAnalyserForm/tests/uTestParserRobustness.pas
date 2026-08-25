@@ -118,6 +118,10 @@ type
     // der Klammer - abgeschnittener Wert plus ein Phantom-nkField je
     // weiterem Record-Element.
     [Test] procedure Parser_TypedRecordConst_NoPhantomFields;
+    // R5 (finales Review 2026-08-25): unvollstaendige Klammer im
+    // Konstantenwert (Live-Editieren) darf nicht den Rest der Unit
+    // fressen - implementation und alle Methoden muessen im AST bleiben.
+    [Test] procedure Parser_UnclosedConstParen_DoesNotEatUnit;
   end;
 
 implementation
@@ -2709,6 +2713,42 @@ begin
       finally
         Secs.Free;
       end;
+    finally
+      Root.Free;
+    end;
+  finally
+    Parser.Free;
+  end;
+end;
+
+procedure TTestParserRobustness.Parser_UnclosedConstParen_DoesNotEatUnit;
+// 'const A = (1, 2;' - die schliessende Klammer fehlt (Watch-Mode scannt
+// beim Tippen). Der Depth-Scanner haelt die Tiefe dann fuer offen; ohne
+// die Rettungsleinen konsumierte er bis EOF, und die implementation
+// existierte fuer keinen Detektor mehr.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'const'#13#10+
+  '  A = (1, 2;'#13#10+
+  'implementation'#13#10+
+  'procedure P;'#13#10+
+  'begin'#13#10+
+  '  Beep;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.IsNotNull(ImplNodeOf(Root),
+        'implementation-Node fehlt - der Konstanten-Scanner hat die Unit gefressen');
+      Assert.IsTrue(Pos('P', TopLevelMethodNames(ImplNodeOf(Root))) > 0,
+        'Methode P fehlt im AST');
     finally
       Root.Free;
     end;

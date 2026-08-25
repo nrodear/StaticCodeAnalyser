@@ -1319,12 +1319,42 @@ begin
         ' - eigene Profile fehlen'));
       Exit;
     end;
-    for Eintrag in Gelesen do
-      // Ein eigenes Profil darf ein eingebautes NICHT verdecken. Sonst
-      // haette derselbe Name je nach Rechner eine andere Bedeutung, und
-      // ein SARIF-Vergleich zweier Maschinen waere wertlos.
-      if not FBuiltIn.ContainsKey(Eintrag.Key) then
-        FProfiles.AddOrSetValue(Eintrag.Key, Eintrag.Value);
+    // SORTIERT uebernehmen, nicht in Dictionary-Reihenfolge: seit dem
+    // case-insensitiven Katalog (G5-4) kollidieren Alt-Duplikate wie
+    // 'myteam'/'MyTeam' aus der Datei auf DENSELBEN Schluessel - ohne
+    // feste Reihenfolge bestimmte die Hash-Ordnung willkuerlich den
+    // Gewinner, und der Verlierer fiel beim naechsten Schreiben still
+    // aus der Datei (finales Review, R7). Jetzt gewinnt deterministisch
+    // der alphabetisch letzte, und jede Kollision wird gemeldet.
+    var Namen := TStringList.Create;
+    try
+      for Eintrag in Gelesen do
+        Namen.Add(Eintrag.Key);
+      Namen.Sort;
+      for var i := 0 to Namen.Count - 1 do
+      begin
+        // Ein eigenes Profil darf ein eingebautes NICHT verdecken. Sonst
+        // haette derselbe Name je nach Rechner eine andere Bedeutung,
+        // und ein SARIF-Vergleich zweier Maschinen waere wertlos. Seit
+        // G5-4 greift das auch fuer 'Default' vs. 'default' - so ein
+        // Altbestand wird NICHT mehr geladen und faellt beim naechsten
+        // Schreiben aus der Datei. Das passiert jetzt LAUT statt stumm.
+        if FBuiltIn.ContainsKey(Namen[i]) then
+        begin
+          OutputDebugString(PChar(Format(
+            'TRuleCatalog: eigenes Profil "%s" kollidiert (case-insensitiv) ' +
+            'mit einem eingebauten und wird ignoriert', [Namen[i]])));
+          Continue;
+        end;
+        if FProfiles.ContainsKey(Namen[i]) and not FBuiltIn.ContainsKey(Namen[i]) then
+          OutputDebugString(PChar(Format(
+            'TRuleCatalog: profiles.json enthaelt "%s" in mehreren ' +
+            'Schreibweisen - die alphabetisch letzte gewinnt', [Namen[i]])));
+        FProfiles.AddOrSetValue(Namen[i], Gelesen[Namen[i]]);
+      end;
+    finally
+      Namen.Free;
+    end;
   finally
     Gelesen.Free;
   end;

@@ -2,22 +2,22 @@
 # Erzeugt von tools/selfscan_gate.py --update (Profil strict).
 # Das Gate schlaegt fehl, wenn eine Regel MEHR Funde hat als
 # hier. Weniger ist immer erlaubt.
-TIERS 0 642 2716
+TIERS 0 646 2738
 AvoidOut 16
-BeginEndRequired 959
+BeginEndRequired 969
 BooleanParam 6
 BooleanPropertyNaming 11
 CaseStatementSize 3
-ClassPerFile 27
-CognitiveComplexity 341
+ClassPerFile 28
+CognitiveComplexity 342
 CommentedOutCode 21
 ConcatToFormat 31
 ConstantReturn 1
-CyclomaticComplexity 121
+CyclomaticComplexity 122
 DateFormatSettings 3
-DebugOutput 23
+DebugOutput 25
 DeepNesting 37
-DefaultCaseInCaseStatement 80
+DefaultCaseInCaseStatement 81
 DfmActionMismatch 1
 DfmDataModuleSplitHint 1
 DfmDbInUiForm 5
@@ -27,27 +27,27 @@ DfmFieldTypeMismatch 2
 DfmHardcodedCaption 15
 DfmRequiredFieldUnbound 4
 DuplicateBlock 225
-DuplicateString 233
-EmptyExcept 37
+DuplicateString 237
+EmptyExcept 36
 EmptyMethod 7
 EmptyOnHandler 5
-ExceptionTooGeneral 37
+ExceptionTooGeneral 38
 FieldByNameInLoop 1
 FormatLocaleHint 4
-GodClass 37
+GodClass 38
 HardcodedPath 7
 HardcodedString 1
 IfElseBegin 30
 InsecureCryptoAlgorithm 15
 LargeClass 44
 LegacyInitializationSection 2
-LongMethod 86
+LongMethod 87
 LongParamList 18
 MagicNumber 32
 MissingUnitHeader 90
 MultipleExit 18
 NestedRoutine 30
-NestedTry 274
+NestedTry 277
 NilComparison 259
 NoSonarMarker 5
 ParamByNameInLoop 1
@@ -55,7 +55,7 @@ PublicField 40
 PublicMemberWithoutDoc 39
 SetLengthAppendInLoop 2
 StringConcatInLoop 34
-TodoComment 11
+TodoComment 12
 UnusedLocalVar 2
 UnusedParameter 13
 UnusedRoutine 5

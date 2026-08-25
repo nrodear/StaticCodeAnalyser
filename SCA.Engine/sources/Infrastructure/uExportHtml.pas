@@ -2344,7 +2344,7 @@ begin
     SB.AppendLine('      // angezeigt und reflektieren NUR Datei-+Rule-Filter, NICHT die');
     SB.AppendLine('      // Sev-Klick-Auswahl (sonst wuerden die anderen Badges auf 0');
     SB.AppendLine('      // fallen sobald man "Fehler" klickt - verwirrend).');
-    SB.AppendLine('      var nErr = 0, nWarn = 0, nHint = 0;');
+    SB.AppendLine('      var nErr = 0, nWarn = 0, nHint = 0, nRead = 0;');
     SB.AppendLine('      document.querySelectorAll(''tr.finding'').forEach(function(row) {');
     SB.AppendLine('        var fileOk;');
     SB.AppendLine('        if (!fileVal) fileOk = true;');
@@ -2370,6 +2370,11 @@ begin
     SB.AppendLine('          if      (row.classList.contains(''err''))  nErr++;');
     SB.AppendLine('          else if (row.classList.contains(''warn'')) nWarn++;');
     SB.AppendLine('          else if (row.classList.contains(''hint'')) nHint++;');
+    SB.AppendLine('          // Lesefehler zaehlen in KEINE Severity-Kachel, aber in die');
+    SB.AppendLine('          // Gesamtzahl - das server-seitige nTotal enthaelt sie auch.');
+    SB.AppendLine('          // Ohne diesen Zaehler sprang die Gesamt-Kachel bei der');
+    SB.AppendLine('          // ersten Filter-Interaktion (finales Review, R6).');
+    SB.AppendLine('          else if (row.classList.contains(''readerr'')) nRead++;');
     SB.AppendLine('        }');
     SB.AppendLine('        var match  = fileOk && sevOk && ruleOk && searchOk && confOk && baseOk;');
     SB.AppendLine('        row.style.display = match ? '''' : ''none'';');
@@ -2394,7 +2399,7 @@ begin
     SB.AppendLine('      if (cErr)  cErr.textContent  = nErr;');
     SB.AppendLine('      if (cWarn) cWarn.textContent = nWarn;');
     SB.AppendLine('      if (cHint) cHint.textContent = nHint;');
-    SB.AppendLine('      if (cTot)  cTot.textContent  = (nErr + nWarn + nHint);');
+    SB.AppendLine('      if (cTot)  cTot.textContent  = (nErr + nWarn + nHint + nRead);');
     SB.AppendLine('      // URL-Hash aktualisieren (replaceState = kein History-Eintrag,');
     SB.AppendLine('      // sonst wuerde jeder Tastendruck im Search-Feld die Back-Button-');
     SB.AppendLine('      // History fluten).');

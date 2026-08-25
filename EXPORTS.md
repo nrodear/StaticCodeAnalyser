@@ -132,7 +132,14 @@ analyser.exe --path . --diff main...HEAD --report-html build/review.html
 
 `--branch` uses the VCS's changed-file set (Git and SVN auto-detected),
 `--diff <range>` a Git range including `a...b` common-ancestor form.
-Both include uncommitted edits. The HTML report is self-contained — no
+Both include uncommitted edits (`--diff` compares committed states only).
+
+Since 2026-08-25 a **failed VCS call exits 99** with the reason on
+stderr - a shallow clone whose base commit was never fetched (the GitHub
+Actions default of `fetch-depth: 1`) no longer turns the pipeline green
+without scanning a single file. Exit 0 is reserved for a genuinely empty
+diff. Fetch the base explicitly, e.g. `git fetch origin main` before the
+scan. The HTML report is self-contained — no
 external assets, opens from a file share or a CI artifact.
 
 ## Workflow 3 — SonarQube dashboard

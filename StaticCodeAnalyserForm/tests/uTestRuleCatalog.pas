@@ -969,8 +969,19 @@ end;
 
 procedure TTestRuleCatalog.ProfileNamesAreCaseInsensitive;
 var
-  Err : string;
+  Err     : string;
+  AltPfad : string;
+  TmpPfad : string;
 begin
+  // Ablageort auf eine TEMP-Datei umbiegen - dafuer existiert der
+  // Test-Hook UserProfilesPath. Ohne ihn schrieb dieser Test in die
+  // ECHTE %APPDATA%-profiles.json des Entwicklers (finales Review, R8);
+  // die Schreibpfade (SaveUserProfile/DeleteUserProfile) benutzen den
+  // Pfad live, ein Reload ist nicht noetig.
+  AltPfad := TRuleCatalog.UserProfilesPath;
+  TmpPfad := TPath.Combine(TPath.GetTempPath, 'sca_test_profiles_' +
+    TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '') + '.json');
+  TRuleCatalog.UserProfilesPath := TmpPfad;
   // Aufraeumen von frueheren Laeufen, dann anlegen und anders
   // kapitalisiert wiederfinden, aendern und loeschen.
   TRuleCatalog.DeleteUserProfile('case-probe', Err);
@@ -990,6 +1001,8 @@ begin
       'kein zweites Profil unter alter Schreibweise');
   finally
     TRuleCatalog.DeleteUserProfile('case-probe', Err);
+    TRuleCatalog.UserProfilesPath := AltPfad;
+    if TFile.Exists(TmpPfad) then TFile.Delete(TmpPfad);
   end;
 end;
 
