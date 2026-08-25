@@ -47,6 +47,11 @@ type
     [Test] procedure SkipConfig_RespectsPresetConfig;
     [Test] procedure IgnoreList_NilDefault_ScansAllProjectFiles;
     [Test] procedure IgnoreList_SkipsMatchingFile;
+    // G2-5-Hook (2026-08-25): der Vertrag "ReleaseTransientCaches leert
+    // den prozessweiten Text-Cache" - gemessen ueber TransientCacheCount.
+    // Faellt der Hook einem Refactoring zum Opfer, waechst das
+    // 32-Bit-Plugin wieder auf das 1,3-GB-Plateau der Messreihe.
+    [Test] procedure ReleaseTransientCaches_EmptiesTextCache;
   end;
 
 implementation
@@ -504,6 +509,43 @@ begin
     end;
   finally
     Ign.Free;
+  end;
+end;
+
+procedure TTestEngineApi.ReleaseTransientCaches_EmptiesTextCache;
+// Ein Lauf ueber eine echte Temp-Datei fuellt den Cache (Suppression-
+// Phase liest die Quelle); der Hook muss ihn nachweisbar leeren.
+var
+  Dir  : string;
+  Ses  : TAnalysisSession;
+  Req  : TScanRequest;
+  Res  : TScanResult;
+begin
+  Dir := TPath.Combine(TPath.GetTempPath, 'sca_hook_' +
+    TGuid.NewGuid.ToString.Replace('{', '').Replace('}', ''));
+  TDirectory.CreateDirectory(Dir);
+  try
+    TFile.WriteAllText(TPath.Combine(Dir, 'u.pas'),
+      'unit u;'#13#10'interface'#13#10'implementation'#13#10 +
+      'procedure P; begin end;'#13#10'end.');
+    Req := TScanRequest.Init;
+    Req.Scope := ssRecursive;
+    Req.Path  := Dir;
+    Ses := TAnalysisSession.Create;
+    try
+      Res := Ses.Run(Req);
+      Res.Free;
+    finally
+      Ses.Free;
+    end;
+    Assert.IsTrue(TransientCacheCount > 0,
+      'Vorbedingung: der Lauf muss den Text-Cache gefuellt haben - ' +
+      'sonst prueft der Test nichts');
+    TAnalysisSession.ReleaseTransientCaches;
+    Assert.AreEqual<Integer>(0, TransientCacheCount,
+      'der Hook muss den Cache leeren (G2-5)');
+  finally
+    TDirectory.Delete(Dir, True);
   end;
 end;
 

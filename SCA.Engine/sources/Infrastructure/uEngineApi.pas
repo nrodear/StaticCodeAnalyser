@@ -178,6 +178,13 @@ type
     // (Silent-Scan vs. laufender Bulk-/Watch-Run). True = Lock gehalten,
     // Caller MUSS ReleaseEngineLock rufen.
     class function TryAcquireEngineLock: Boolean; static;
+    /// <summary>G2-5-Hook: gibt die transienten Engine-Caches frei
+    /// (heute: der prozessweite Datei-Text-Cache). Der CONSUMER ruft das
+    /// an SEINEM letzten Punkt - Plugin nach Anzeige+Baseline, CLI nach
+    /// den Report-Writes, EXE nach dem Export, und hinter "Reset all
+    /// findings". Zu frueh kostet nur Warmstart (lazy Nachladen), nie
+    /// Korrektheit; waehrend eines LAUFENDEN Scans nicht rufen.</summary>
+    class procedure ReleaseTransientCaches; static;
   end;
 
 // Bequemlichkeit: Ein-Zeilen-Rekursiv-Scan ohne explizite Session.
@@ -195,6 +202,7 @@ implementation
 uses
   Winapi.Windows,   // OutputDebugString (ProjectScope-Warnungen)
   System.IOUtils, System.SyncObjs,
+  uFileTextCache,   // ReleaseTransientCaches (G2-5-Hook)
   uStaticAnalyzer2, uRuleCatalog, uLexer, uCustomRuleDetector, uVcsChanges,
   uRepoSettings, uBaseline, uExportSARIF, uExportSonarGeneric, uExportHtml,
   uPathOverrides,   // TPathOverrides.Clear im Direkt-Modus (Config-Riegel 2026-07-04)
@@ -727,6 +735,11 @@ begin
   finally
     GEngineLock.Leave;
   end;
+end;
+
+class procedure TAnalysisSession.ReleaseTransientCaches;
+begin
+  uFileTextCache.ReleaseTransientCaches;
 end;
 
 class procedure TAnalysisSession.AcquireEngineLock;

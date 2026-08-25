@@ -614,6 +614,11 @@ begin
     // Wenn DeliverResults die Liste nicht uebernommen hat, hier freigeben.
     if Assigned(FResults) then
       FreeAndNil(FResults);
+    // G2-5-Hook: der Scan-Start leert den Cache OHNEHIN - Waerme
+    // ueberlebt also nie bis zum naechsten Watch-Lauf, das Behalten
+    // kostet nur Residenz zwischen zwei Tastenanschlaegen. Clear ist
+    // FLock-geschuetzt, der Worker-Kontext ist damit unkritisch.
+    TAnalysisSession.ReleaseTransientCaches;
   end;
 end;
 

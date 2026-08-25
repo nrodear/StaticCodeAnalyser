@@ -750,6 +750,11 @@ begin
   FProgressBar.Position := 0;
   FProgressBar.Visible  := False;
   Screen.Cursor         := crDefault;
+  // G2-5-Hook, zentral fuer alle Scan-Wege (Voll, Branch, Projekt): die
+  // Funde stehen im Grid, der Text-Cache ist ab hier totes Gewicht. Ein
+  // spaeterer Export laedt seine ContextHashes lazy nach - langsamer,
+  // aber korrekt.
+  TAnalysisSession.ReleaseTransientCaches;
 end;
 
 procedure TForm2.ProgressCallback(Current, Total: Integer);

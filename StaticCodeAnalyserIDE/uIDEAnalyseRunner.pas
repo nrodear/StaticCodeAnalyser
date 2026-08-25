@@ -628,6 +628,13 @@ begin
       FProgress.EndRun;
     if Assigned(FOnRunDone) then
       FOnRunDone;
+    // G2-5-Hook: Funde sind angezeigt, Marker gesetzt - der Text-Cache
+    // ist ab hier totes Gewicht (Messung 2026-08-25: ~0,5 GB von 1,3 GB
+    // Residuum nach einem Korpus-Scan im 32-Bit-BDS). Ein spaeteres
+    // "Write baseline" laedt seine ContextHashes lazy nach - langsamer,
+    // aber korrekt; der Adressraum steht dem naechsten Scan wieder zur
+    // Verfuegung, statt dass der Prozess weiterwaechst.
+    TAnalysisSession.ReleaseTransientCaches;
   end;
 end;
 

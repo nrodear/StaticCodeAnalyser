@@ -1783,6 +1783,11 @@ begin
       FreeAndNil(gSuppressionTelemetry);
     Findings.Free;
     Files.Free;
+    // G2-5-Hook: alle Reports und ContextHashes sind geschrieben - ab
+    // hier ist der Text-Cache totes Gewicht. Im Einmal-Prozess der CLI
+    // fast symbolisch, aber derselbe Vertrag wie bei den residenten
+    // Consumern, und Tests/eingebettete Nutzer von Run profitieren.
+    TAnalysisSession.ReleaseTransientCaches;
     Settings.Free;
   end;
 end;

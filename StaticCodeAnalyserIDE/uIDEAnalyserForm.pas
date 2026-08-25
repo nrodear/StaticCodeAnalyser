@@ -3260,6 +3260,13 @@ begin
   // Properties-Panel falls offen
   if Assigned(GFindingsPropsForm) then
     GFindingsPropsForm.ResetAllStateForSync;
+  // G2-5-Hook: das ist der Moment, in dem der Anwender ausdruecklich
+  // Speicher zurueckfordert. Die Messung vom 2026-08-25 zeigte: der
+  // Reset leerte alle Panels, aber keinen einzigen Cache - bds.exe
+  // blieb auf dem Plateau. Der freigegebene Adressraum kommt dem
+  // naechsten Scan zugute (Task-Manager sinkt wegen FastMM-Pooling
+  // trotzdem kaum - das ist erwartet, nicht kaputt).
+  TAnalysisSession.ReleaseTransientCaches;
   StatusMode(_('All findings reset.'));
 end;
 

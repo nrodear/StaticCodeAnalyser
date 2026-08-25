@@ -142,6 +142,10 @@ type
       out Info: TFileEncodingInfo): Boolean;
 
     procedure Clear;
+    /// <summary>Zahl der Eintraege, FLock-geschuetzt. Nur Diagnose/Test
+    /// (TransientCacheCount) - Ablauflogik darf darauf nichts bauen, der
+    /// Wert ist im Parallel-Modus sofort stale.</summary>
+    function EntryCount: Integer;
 
     // Perf Stufe 2 (2026-07-25): entfernt NUR den Eintrag dieser Datei -
     // das per-File-Pendant zum seriellen Clear fuer den Parallel-Modus.
@@ -183,6 +187,24 @@ function AcquireLines(const FileName: string;
   AForceStat: Boolean = False): TStringList;
 
 procedure ReleaseLines(Lines: TStringList; OwnedByCache: Boolean);
+
+/// <summary>Leert den prozessweiten Text-Cache (G2-5-Hook, Engine-Seite).
+/// Der Aufrufer ist der CONSUMER, nicht die Engine - nur er weiss, wann
+/// die letzte Nacharbeit (Suppression-Marker, ContextHash fuer Baseline/
+/// SARIF) durch ist. Zu frueh gerufen kostet es nur Warmstart (der Cache
+/// fuellt sich lazy nach), nie Korrektheit.</summary>
+/// <remarks>Anlass ist die Messreihe vom 2026-08-25: nach EINEM
+/// default-Scan des Referenzkorpus im 32-Bit-BDS blieben ~1,3 GB stehen,
+/// davon ~0,5 GB dieser Cache - designgemaess bis zum naechsten Scan.
+/// Erfolgsmetrik ist NICHT das Task-Manager-Residuum (FastMM poolt
+/// freigegebene Bloecke), sondern der PEAK des naechsten grossen Scans:
+/// freigegebener Adressraum wird wiederverwendet statt neu zu wachsen.
+/// Details und Zahlen: Todo_Review_G2_EngineInfra_2026-08-25 (lokal).</remarks>
+procedure ReleaseTransientCaches;
+
+/// <summary>Zahl der gehaltenen Cache-Eintraege - fuer die Messbarkeit
+/// des Hooks (Test + Diagnose), nicht fuer Ablauflogik.</summary>
+function TransientCacheCount: Integer;
 
 // Standalone-Loader mit Encoding-Detection (Default -> UTF8 -> Unicode).
 // Caller besitzt Lines. False bei Read-/Decode-Fehler.
@@ -668,6 +690,16 @@ begin
   Result := True;
 end;
 
+function TFileTextCache.EntryCount: Integer;
+begin
+  FLock.Enter;
+  try
+    Result := FCache.Count;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 procedure TFileTextCache.Clear;
 begin
   // Perf (2026-07-05): P2-filetextcache-stat - Generation-Bump: alle danach
@@ -727,6 +759,23 @@ begin
   except
     FreeAndNil(Result);
   end;
+end;
+
+procedure ReleaseTransientCaches;
+begin
+  // Clear ist FLock-geschuetzt und bumpt die Generation - exakt derselbe
+  // Weg wie am Scan-Start. Ein parallel laufender Scan verliert dadurch
+  // schlimmstenfalls Cache-Waerme, nie Daten (die Eintraege werden lazy
+  // nachgeladen).
+  if Assigned(gFileTextCache) then
+    gFileTextCache.Clear;
+end;
+
+function TransientCacheCount: Integer;
+begin
+  Result := 0;
+  if Assigned(gFileTextCache) then
+    Result := gFileTextCache.EntryCount;
 end;
 
 function AcquireEncodingInfo(const FileName: string;
