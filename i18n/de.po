@@ -2158,3 +2158,58 @@ msgstr "Neu laden"
 
 msgid "Profile \"%s\": %d of %d rules. Built-in and read-only - use \"Copy...\" for your own (stored in %s)."
 msgstr "Profil \"%s\": %d von %d Regeln. Eingebaut und schreibgeschützt - mit \"Kopieren ...\" ein eigenes anlegen (Ablage: %s)."
+
+# --- 2026-08-25: Regelliste sortierbar + durchsuchbar ---
+
+msgid "Search ID, kind, rule text, severity or type..."
+msgstr "ID, Kind, Regeltext, Schweregrad oder Typ suchen ..."
+
+msgid "Profile \"%s\": %d of %d rules shown (filter \"%s\")."
+msgstr "Profil \"%s\": %d von %d Regeln angezeigt (Filter \"%s\")."
+
+msgid "%d of %d rules shown, %d selected"
+msgstr "%d von %d Regeln angezeigt, %d ausgewählt"
+
+msgid "%d rules, %d selected"
+msgstr "%d Regeln, %d ausgewählt"
+
+# --- 2026-08-25: Profile aus beliebiger Datei importieren ---
+
+msgid "File not found: %s"
+msgstr "Datei nicht gefunden: %s"
+
+msgid "Cannot read %s: %s"
+msgstr "%s ist nicht lesbar: %s"
+
+msgid "%s is not a valid JSON object."
+msgstr "%s ist kein gültiges JSON-Objekt."
+
+msgid "Import..."
+msgstr "Importieren ..."
+
+msgid "Import profiles"
+msgstr "Profile importieren"
+
+msgid "Profile files (*.json)|*.json|All files (*.*)|*.*"
+msgstr "Profildateien (*.json)|*.json|Alle Dateien (*.*)|*.*"
+
+msgid "Nothing to import: %s only contains names of built-in profiles (%s)."
+msgstr "Nichts zu importieren: %s enthält nur Namen eingebauter Profile (%s)."
+
+msgid "%s contains no profiles."
+msgstr "%s enthält keine Profile."
+
+msgid "New: %s"
+msgstr "Neu: %s"
+
+msgid "Will be overwritten: %s"
+msgstr "Wird überschrieben: %s"
+
+msgid "Skipped (built-in name): %s"
+msgstr "Übersprungen (Name eines eingebauten Profils): %s"
+
+msgid "Import now?"
+msgstr "Jetzt importieren?"
+
+msgid "\"%s\" was not imported: %s"
+msgstr "\"%s\" wurde nicht importiert: %s"

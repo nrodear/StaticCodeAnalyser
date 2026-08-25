@@ -81,8 +81,9 @@ implementation
 // Methode, sonst zerfaellt die Lesereihenfolge der Layout-Zeilen.
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
-  System.Generics.Defaults,
+  System.SysUtils, System.Classes,
+  System.Generics.Collections,
+  uRuleListBox,     // TRuleListBox - die geteilte Regelliste beider Fenster
   // Vcl.Controls steht bereits im interface-uses (TWinControl im
   // Hook-Typ) - hier nicht noch einmal, sonst E2004.
   Vcl.Forms, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls,
@@ -93,6 +94,20 @@ uses
   uLocalization;    // _() und CurrentLanguage
 
 const
+  // Fenster- und Knopftexte, die MEHRFACH gebraucht werden: einmal als
+  // Beschriftung, dann wieder als Titel der Rueckfrage oder der
+  // Fehlermeldung. Der eigene Detektor meldet sie ab dem dritten
+  // Vorkommen - zu Recht, denn die Kopien muessen zusammenbleiben: eine
+  // geaenderte Beschriftung mit altem Meldungstitel liest sich wie zwei
+  // verschiedene Funktionen.
+  //
+  // Der Wert bleibt der englische Quelltext, _() steht weiterhin an der
+  // Verwendungsstelle - die msgid aendert sich also nicht und die .po
+  // bleiben unberuehrt.
+  TXT_PROFILE_WINDOW = 'Rule-set profiles';
+  TXT_REMOVE_RULES   = 'Remove rules';
+  TXT_IMPORT         = 'Import profiles';
+
   // Alle Kinds als Menge. TRuleCatalog.AllKinds ist strict private, und
   // fuer diesen einen Ausdruck lohnt kein Aufreissen der Kapselung.
   ALL_KINDS = [Low(TFindingKind) .. High(TFindingKind)];
@@ -101,7 +116,7 @@ type
   TProfileViewerForm = class(TForm)
   strict private
     FLstProfiles : TListBox;
-    FLvRules     : TListView;
+    FRules       : TRuleListBox;
     FLblInfo     : TLabel;
     FBtnCopy     : TButton;
     FBtnAdd      : TButton;
@@ -109,14 +124,11 @@ type
     FBtnDelete   : TButton;
     FBtnSave     : TButton;
     FBtnReload   : TButton;
+    FBtnImport   : TButton;
     // Rohe Profilnamen, index-gleich zu FLstProfiles.Items: die Anzeige
     // haengt Regelzahl und Herkunft an, der Katalog-Zugriff braucht den
     // unveraenderten Namen.
     FNames       : TStringList;
-    // Kind je Zeile der Regelliste, index-gleich. Ueber TListItem.Data
-    // ginge es auch, aber ein Pointer-Cast auf ein Enum ist genau die
-    // Sorte Trick, die beim naechsten Umbau still bricht.
-    FRowKinds    : TList<TFindingKind>;
     FCurrent     : string;          // gewaehltes Profil
     FKinds       : TFindingKinds;   // Arbeitsstand des gewaehlten Profils
     FIsOwn       : Boolean;         // eigenes (aenderbares) Profil?
@@ -126,6 +138,9 @@ type
     procedure LoadProfiles(const APreferred: string);
     procedure ShowRulesOf(const AProfile: string);
     procedure RefreshRuleList;
+    // Haengt an TRuleListBox.OnFilled: die Infozeile muss nach jedem
+    // Fuellen stimmen, auch nach einer Filteraenderung.
+    procedure RulesFilled;
     procedure UpdateButtons;
     procedure SetDirty(AValue: Boolean);
     function  AskSaveIfDirty: Boolean;   // False = Abbruch durch Anwender
@@ -141,6 +156,25 @@ type
     // anlegt oder bearbeitet, saehe seine Profile sonst erst nach
     // einem Neustart der Anwendung bzw. der IDE.
     procedure ReloadClick(Sender: TObject);
+    // Uebernimmt Profile aus einer BELIEBIGEN Datei in die eigenen.
+    // "Neu laden" liest nur den festen Ablageort - wer ein Regelwerk
+    // per Mail oder aus einem Projektverzeichnis bekommt, will es nicht
+    // erst von Hand dorthin kopieren muessen.
+    procedure ImportClick(Sender: TObject);
+    /// <summary>Teilt die gelesenen Profilnamen in "neu", "wird
+    /// ueberschrieben" und "uebersprungen, Name eines eingebauten
+    /// Profils". Eigene Funktion, damit die Entscheidung nachlesbar ist,
+    /// ohne den ganzen Dialogablauf zu lesen.</summary>
+    procedure SplitImportNames(ANames, ANew, AReplaced, AFixed: TStringList);
+    /// <summary>Der Bestaetigungstext zu dieser Dreiteilung. Liefert
+    /// Leerstring, wenn es nichts zu uebernehmen gibt - dann hat der
+    /// Aufrufer nichts zu fragen.</summary>
+    function ImportPrompt(ANew, AReplaced, AFixed: TStringList): string;
+    /// <summary>Schreibt die uebernehmbaren Profile. Liefert den Namen des
+    /// zuletzt geschriebenen (leer = keines) und meldet den ERSTEN Fehler
+    /// - die weiteren haben meist dieselbe Ursache.</summary>
+    function WriteImported(ANames: TStringList;
+      AMap: TDictionary<string, TFindingKinds>): string;
     procedure CloseClick(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
@@ -162,31 +196,6 @@ type
 // Regel. Die msgids sind absichtlich WORTGLEICH mit denen dort, damit
 // beide Stellen aus demselben .po-Eintrag bedient werden.
 // ---------------------------------------------------------------------
-function SeverityText(S: TLeakSeverity): string;
-begin
-  case S of
-    lsError   : Result := _('Error');
-    lsWarning : Result := _('Warning');
-    lsHint    : Result := _('Hint');
-  else
-    Result := '';
-  end;
-end;
-
-function TypeText(T: TFindingType): string;
-begin
-  case T of
-    ftBug             : Result := _('Bug');
-    ftCodeSmell       : Result := _('Code Smell');
-    ftVulnerability   : Result := _('Vulnerability');
-    ftSecurityHotspot : Result := _('Security Hotspot');
-    ftCodeDuplication : Result := _('Code Duplication');
-    ftFileError       : Result := _('Read Error');
-  else
-    Result := '';
-  end;
-end;
-
 function KindCount(const AKinds: TFindingKinds): Integer;
 var
   K : TFindingKind;
@@ -203,45 +212,15 @@ end;
 // Nimmt eine MENGE entgegen, keinen Profilnamen - so bedient dieselbe
 // Funktion das gespeicherte Profil und den ungespeicherten Arbeitsstand.
 // ---------------------------------------------------------------------
-procedure BuildRuleList(const AKinds: TFindingKinds; ADest: TList<TRuleMeta>);
-var
-  K    : TFindingKind;
-  Lang : string;
-begin
-  ADest.Clear;
-  Lang := CurrentLanguage;
-  for K := Low(TFindingKind) to High(TFindingKind) do
-    if K in AKinds then
-      ADest.Add(TRuleCatalog.GetRule(K, Lang));
-
-  // Nach ID sortieren, nicht nach Kind-Ordinal: der Anwender sucht
-  // "SCA047", und die Ordinal-Reihenfolge des Enums ist historisch
-  // gewachsen, nicht numerisch.
-  ADest.Sort(TComparer<TRuleMeta>.Construct(
-    function(const A, B: TRuleMeta): Integer
-    begin
-      Result := CompareText(A.ID, B.ID);
-    end));
-end;
-
-// ---------------------------------------------------------------------
-// Auswahldialog "Regeln aufnehmen". Zeigt die Kandidaten mit Haken;
-// Ergebnis True + APicked, wenn der Anwender mindestens eine waehlt.
-// ---------------------------------------------------------------------
 function PickRules(const ACandidates: TFindingKinds;
   out APicked: TFindingKinds): Boolean;
 var
   Dlg    : TForm;
-  Lv     : TListView;
   Bottom : TPanel;
   BtnOk  : TButton;
   BtnNo  : TButton;
-  Rules  : TList<TRuleMeta>;
-  Kinds  : TList<TFindingKind>;
-  M      : TRuleMeta;
-  It     : TListItem;
-  Col    : TListColumn;
-  i      : Integer;
+  Lbl    : TLabel;
+  Liste  : TRuleListBox;
 begin
   Result  := False;
   APicked := [];
@@ -253,8 +232,7 @@ begin
     Exit;
   end;
 
-  Rules := TList<TRuleMeta>.Create;
-  Kinds := TList<TFindingKind>.Create;
+  Liste := nil;   // fuers finally, falls schon der Aufbau wirft
   Dlg   := TForm.CreateNew(nil);
   try
     Dlg.Caption      := _('Add rules');
@@ -298,37 +276,29 @@ begin
     BtnOk.Left        := BtnNo.Left - 118;
     BtnOk.Anchors     := [akTop, akRight];
 
-    Lv := TListView.Create(Dlg);
-    Lv.Parent     := Dlg;
-    Lv.Align      := alClient;
-    Lv.ViewStyle  := vsReport;
-    Lv.ReadOnly   := True;
-    Lv.RowSelect  := True;
-    Lv.GridLines  := True;
-    Lv.Checkboxes := True;
+    Lbl := TLabel.Create(Dlg);
+    Lbl.Parent := Bottom;
+    Lbl.Left   := 12;
+    Lbl.Top    := 14;
 
-    Col := Lv.Columns.Add; Col.Caption := _('ID');                   Col.Width := 80;
-    Col := Lv.Columns.Add; Col.Caption := _('Kind (profile token)'); Col.Width := 190;
-    Col := Lv.Columns.Add; Col.Caption := _('Rule');                 Col.Width := 340;
-    Col := Lv.Columns.Add; Col.Caption := _('Severity');             Col.Width := 90;
-    Col := Lv.Columns.Add; Col.Caption := _('Type');                 Col.Width := 130;
-
-    BuildRuleList(ACandidates, Rules);
-    Lv.Items.BeginUpdate;
-    try
-      for M in Rules do
+    // Dieselbe Liste wie im Profil-Fenster, hier mit Haken. Sortieren
+    // und Suchen kommen damit von selbst mit.
+    Liste := TRuleListBox.Create(Dlg, Dlg, True);
+    // Zaehlt die Haken INSGESAMT, nicht die sichtbaren: man filtert,
+    // hakt an, filtert weiter - ohne diese Zeile waere nicht zu sehen,
+    // dass die frueheren Haken noch stehen.
+    Liste.OnFilled :=
+      procedure
       begin
-        It := Lv.Items.Add;
-        It.Caption := M.ID;
-        It.SubItems.Add(KindName(M.Kind));
-        It.SubItems.Add(M.Name);
-        It.SubItems.Add(SeverityText(M.DefaultSeverity));
-        It.SubItems.Add(TypeText(M.FindingType));
-        Kinds.Add(M.Kind);
+        if Liste.FilterText <> '' then
+          Lbl.Caption := Format(
+            _('%d of %d rules shown, %d selected'),
+            [Liste.Shown, Liste.Total, Liste.CheckedCount])
+        else
+          Lbl.Caption := Format(_('%d rules, %d selected'),
+            [Liste.Total, Liste.CheckedCount]);
       end;
-    finally
-      Lv.Items.EndUpdate;
-    end;
+    Liste.SetKinds(ACandidates);
 
     // Vor dem Anzeigen: das Theming darf hier das Handle neu erzeugen,
     // sichtbar ist noch nichts. Die Titelzeile kommt mit.
@@ -337,15 +307,12 @@ begin
 
     if Dlg.ShowModal = mrOk then
     begin
-      for i := 0 to Lv.Items.Count - 1 do
-        if Lv.Items[i].Checked then
-          Include(APicked, Kinds[i]);
-      Result := APicked <> [];
+      APicked := Liste.CheckedKinds;
+      Result  := APicked <> [];
     end;
   finally
+    Liste.Free;
     Dlg.Free;
-    Kinds.Free;
-    Rules.Free;
   end;
 end;
 
@@ -355,7 +322,6 @@ constructor TProfileViewerForm.CreateNew(AOwner: TComponent; Dummy: Integer);
 begin
   inherited CreateNew(AOwner, Dummy);
   FNames    := TStringList.Create;
-  FRowKinds := TList<TFindingKind>.Create;
   BuildUi;
   LoadProfiles('');
   // Jetzt stehen die Controls. Das Theming darf hier das Handle neu
@@ -367,7 +333,7 @@ end;
 
 destructor TProfileViewerForm.Destroy;
 begin
-  FRowKinds.Free;
+  FRules.Free;
   FNames.Free;
   inherited;
 end;
@@ -375,7 +341,6 @@ end;
 procedure TProfileViewerForm.BuildUi;
 var
   Bottom : TPanel;
-  Col    : TListColumn;
   X      : Integer;
 
   function MkButton(const ACaption: string; AOnClick: TNotifyEvent): TButton;
@@ -394,7 +359,7 @@ var
   end;
 
 begin
-  Caption      := _('Rule-set profiles');
+  Caption      := _(TXT_PROFILE_WINDOW);
   Position     := poMainFormCenter;
   // PopupMode NICHT auf pmNone lassen. ShowModal macht sonst
   //   if (PopupMode = pmNone) and (Application.ModalPopupMode <> pmNone)
@@ -454,10 +419,11 @@ begin
   MkButton(_('Close'), CloseClick).Cancel := True;
   FBtnSave   := MkButton(_('Save'),           SaveClick);
   FBtnDelete := MkButton(_('Delete profile'), DeleteClick);
-  FBtnRemove := MkButton(_('Remove rules'),   RemoveClick);
+  FBtnRemove := MkButton(_(TXT_REMOVE_RULES),   RemoveClick);
   FBtnAdd    := MkButton(_('Add rules...'),   AddClick);
   FBtnCopy   := MkButton(_('Copy...'),        CopyClick);
   FBtnReload := MkButton(_('Reload'),         ReloadClick);
+  FBtnImport := MkButton(_('Import...'),      ImportClick);
 
   FLblInfo := TLabel.Create(Self);
   FLblInfo.Parent  := Bottom;
@@ -473,24 +439,16 @@ begin
   FLstProfiles.Width   := 250;
   FLstProfiles.OnClick := ProfileSelected;
 
-  // ---- rechts die Regeln des gewaehlten Profils ----
-  FLvRules := TListView.Create(Self);
-  FLvRules.Parent      := Self;
-  FLvRules.Align       := alClient;
-  FLvRules.ViewStyle   := vsReport;
-  FLvRules.ReadOnly    := True;
-  FLvRules.RowSelect   := True;
-  FLvRules.GridLines   := True;
-  FLvRules.MultiSelect := True;   // "Regeln entfernen" arbeitet auf der Auswahl
-
-  Col := FLvRules.Columns.Add; Col.Caption := _('ID');                   Col.Width := 80;
-  // Der Kind-Token ist das, was in einem Profil steht - nicht die
-  // SCA-ID. Ohne diese Spalte muesste man fuer ein eigenes Profil in
-  // DETECTORS.md nachschlagen; siehe docs/profiles.md.
-  Col := FLvRules.Columns.Add; Col.Caption := _('Kind (profile token)'); Col.Width := 190;
-  Col := FLvRules.Columns.Add; Col.Caption := _('Rule');                 Col.Width := 360;
-  Col := FLvRules.Columns.Add; Col.Caption := _('Severity');             Col.Width := 90;
-  Col := FLvRules.Columns.Add; Col.Caption := _('Type');                 Col.Width := 130;
+  // ---- rechts Suchfeld + Regeln des gewaehlten Profils ----
+  // Dieselbe Liste wie im Auswahldialog: Kopfzeilen sortieren,
+  // Textfeld filtert. Hier ohne Haken, dafuer mit Mehrfachauswahl -
+  // "Regeln entfernen" arbeitet darauf.
+  FRules := TRuleListBox.Create(Self, Self, False);
+  // Als anonyme Huelle: OnFilled ist ein "reference to procedure",
+  // RulesFilled eine Methode. Die direkte Zuweisung waere vermutlich
+  // erlaubt, aber sie ist selten genug, dass sie hier keinen Platz
+  // verdient - die eine Zeile kostet nichts und laesst keine Frage offen.
+  FRules.OnFilled := procedure begin RulesFilled; end;
 end;
 
 procedure TProfileViewerForm.LoadProfiles(const APreferred: string);
@@ -569,47 +527,32 @@ begin
 end;
 
 procedure TProfileViewerForm.RefreshRuleList;
-var
-  Rules : TList<TRuleMeta>;
-  M     : TRuleMeta;
-  It    : TListItem;
+// Sortierung und Filter bleiben ueber den Profilwechsel stehen - wer
+// eine Spalte sortiert hat, will nicht bei jedem Klick von vorn
+// anfangen.
 begin
-  Rules := TList<TRuleMeta>.Create;
-  try
-    BuildRuleList(FKinds, Rules);
-    FRowKinds.Clear;
-
-    FLvRules.Items.BeginUpdate;
-    try
-      FLvRules.Items.Clear;
-      for M in Rules do
-      begin
-        It := FLvRules.Items.Add;
-        It.Caption := M.ID;
-        It.SubItems.Add(KindName(M.Kind));
-        It.SubItems.Add(M.Name);
-        It.SubItems.Add(SeverityText(M.DefaultSeverity));
-        It.SubItems.Add(TypeText(M.FindingType));
-        FRowKinds.Add(M.Kind);
-      end;
-    finally
-      FLvRules.Items.EndUpdate;
-    end;
-
-    if FIsOwn then
-      FLblInfo.Caption := Format(
-        _('Profile "%s": %d of %d rules. Your own profile, stored in %s'),
-        [FCurrent, Rules.Count, TRuleCatalog.Count,
-         TRuleCatalog.UserProfilesFilePath])
-    else
-      FLblInfo.Caption := Format(
-        _('Profile "%s": %d of %d rules. Built-in and read-only - use "Copy..." for your own (stored in %s).'),
-        [FCurrent, Rules.Count, TRuleCatalog.Count,
-         TRuleCatalog.UserProfilesFilePath]);
-  finally
-    Rules.Free;
-  end;
+  FRules.SetKinds(FKinds);
   UpdateButtons;
+end;
+
+procedure TProfileViewerForm.RulesFilled;
+begin
+  if FRules.FilterText <> '' then
+    // Bei aktivem Filter sagen, wovon man einen Ausschnitt sieht - sonst
+    // haelt man die gefilterte Zahl fuer die Groesse des Profils.
+    FLblInfo.Caption := Format(
+      _('Profile "%s": %d of %d rules shown (filter "%s").'),
+      [FCurrent, FRules.Shown, FRules.Total, FRules.FilterText])
+  else if FIsOwn then
+    FLblInfo.Caption := Format(
+      _('Profile "%s": %d of %d rules. Your own profile, stored in %s'),
+      [FCurrent, FRules.Total, TRuleCatalog.Count,
+       TRuleCatalog.UserProfilesFilePath])
+  else
+    FLblInfo.Caption := Format(
+      _('Profile "%s": %d of %d rules. Built-in and read-only - use "Copy..." for your own (stored in %s).'),
+      [FCurrent, FRules.Total, TRuleCatalog.Count,
+       TRuleCatalog.UserProfilesFilePath]);
 end;
 
 procedure TProfileViewerForm.UpdateButtons;
@@ -620,6 +563,7 @@ begin
   // Neu laden geht immer - auch wenn die Liste leer ist, denn genau
   // dann will man es (Katalog war nicht da, Datei nachgelegt).
   FBtnReload.Enabled := True;
+  FBtnImport.Enabled := True;
   FBtnCopy.Enabled   := Has;
   FBtnAdd.Enabled    := Has and FIsOwn;
   FBtnRemove.Enabled := Has and FIsOwn;
@@ -641,7 +585,7 @@ begin
   if Result then
     SetDirty(False)
   else
-    Application.MessageBox(PChar(Err), PChar(_('Rule-set profiles')),
+    Application.MessageBox(PChar(Err), PChar(_(TXT_PROFILE_WINDOW)),
                            MB_OK or MB_ICONERROR);
 end;
 
@@ -654,7 +598,7 @@ begin
 
   Answer := Application.MessageBox(
     PChar(Format(_('Save the changes to profile "%s"?'), [FCurrent])),
-    PChar(_('Rule-set profiles')), MB_YESNOCANCEL or MB_ICONQUESTION);
+    PChar(_(TXT_PROFILE_WINDOW)), MB_YESNOCANCEL or MB_ICONQUESTION);
   case Answer of
     IDYES : Result := SaveCurrent;
     IDNO  : SetDirty(False);
@@ -719,27 +663,23 @@ end;
 procedure TProfileViewerForm.RemoveClick(Sender: TObject);
 var
   Doomed : TFindingKinds;
-  i      : Integer;
 begin
   if not FIsOwn then Exit;
 
-  // Erst einsammeln, dann entfernen: die Zeilenindizes verschieben sich,
-  // sobald die Liste neu aufgebaut wird.
-  Doomed := [];
-  for i := 0 to FLvRules.Items.Count - 1 do
-    if FLvRules.Items[i].Selected and (i < FRowKinds.Count) then
-      Include(Doomed, FRowKinds[i]);
+  // Nur die MARKIERTEN, und nur die gerade sichtbaren - bei aktivem
+  // Filter entfernt man genau das, was man vor sich sieht.
+  Doomed := FRules.SelectedKinds;
 
   if Doomed = [] then
   begin
     Application.MessageBox(PChar(_('Select the rules to remove first.')),
-      PChar(_('Remove rules')), MB_OK or MB_ICONINFORMATION);
+      PChar(_(TXT_REMOVE_RULES)), MB_OK or MB_ICONINFORMATION);
     Exit;
   end;
   if FKinds - Doomed = [] then
   begin
     Application.MessageBox(PChar(_('A profile without rules would find nothing.')),
-      PChar(_('Remove rules')), MB_OK or MB_ICONWARNING);
+      PChar(_(TXT_REMOVE_RULES)), MB_OK or MB_ICONWARNING);
     Exit;
   end;
 
@@ -755,12 +695,12 @@ begin
   if not FIsOwn then Exit;
   if Application.MessageBox(
        PChar(Format(_('Delete profile "%s"?'), [FCurrent])),
-       PChar(_('Rule-set profiles')),
+       PChar(_(TXT_PROFILE_WINDOW)),
        MB_YESNO or MB_ICONQUESTION) <> IDYES then Exit;
 
   if not TRuleCatalog.DeleteUserProfile(FCurrent, Err) then
   begin
-    Application.MessageBox(PChar(Err), PChar(_('Rule-set profiles')),
+    Application.MessageBox(PChar(Err), PChar(_(TXT_PROFILE_WINDOW)),
                            MB_OK or MB_ICONERROR);
     Exit;
   end;
@@ -791,6 +731,156 @@ begin
   TRuleCatalog.Reload;
   FChanged := True;
   LoadProfiles(Vorher);
+end;
+
+procedure TProfileViewerForm.SplitImportNames(ANames, ANew, AReplaced,
+  AFixed: TStringList);
+var
+  Name : string;
+begin
+  for Name in ANames do
+    if TRuleCatalog.IsBuiltInProfile(Name) then
+      // Ein eingebauter Name ist unantastbar: derselbe Name haette sonst
+      // je nach Rechner eine andere Bedeutung.
+      AFixed.Add(Name)
+    else if FNames.IndexOf(Name) >= 0 then
+      AReplaced.Add(Name)
+    else
+      ANew.Add(Name);
+end;
+
+function TProfileViewerForm.ImportPrompt(ANew, AReplaced,
+  AFixed: TStringList): string;
+begin
+  if (ANew.Count = 0) and (AReplaced.Count = 0) then Exit('');
+  Result := '';
+  if ANew.Count > 0 then
+    Result := Result + Format(_('New: %s'), [ANew.CommaText]) + sLineBreak;
+  if AReplaced.Count > 0 then
+    Result := Result + Format(_('Will be overwritten: %s'),
+                              [AReplaced.CommaText]) + sLineBreak;
+  if AFixed.Count > 0 then
+    Result := Result + Format(_('Skipped (built-in name): %s'),
+                              [AFixed.CommaText]) + sLineBreak;
+  Result := Result + sLineBreak + _('Import now?');
+end;
+
+function TProfileViewerForm.WriteImported(ANames: TStringList;
+  AMap: TDictionary<string, TFindingKinds>): string;
+// Jedes Profil einzeln ueber SaveUserProfile: dort sitzt die Namens- und
+// Inhaltspruefung, und dort wird zurueckgerollt, wenn das Schreiben
+// scheitert. Das kostet je Profil einen Schreibvorgang - bei der Handvoll
+// Profile einer Datei kein Thema, und es waere die falsche Ersparnis, die
+// Pruefung dafuer zu umgehen.
+var
+  Name           : string;
+  Fehler         : string;
+  Fehlgeschlagen : Integer;
+begin
+  Result := '';
+  Fehlgeschlagen := 0;
+  for Name in ANames do
+  begin
+    if TRuleCatalog.IsBuiltInProfile(Name) then Continue;
+    if TRuleCatalog.SaveUserProfile(Name, AMap[Name], Fehler) then
+      Result := Name
+    else
+    begin
+      Inc(Fehlgeschlagen);
+      // Nur der erste Fehler wird gezeigt - drei Meldungsfenster
+      // hintereinander helfen niemandem.
+      if Fehlgeschlagen = 1 then
+        Application.MessageBox(PChar(Format(_('"%s" was not imported: %s'),
+          [Name, Fehler])), PChar(_(TXT_IMPORT)),
+          MB_OK or MB_ICONERROR);
+    end;
+  end;
+end;
+
+procedure TProfileViewerForm.ImportClick(Sender: TObject);
+// Liest eine fremde Profildatei und uebernimmt daraus, was uebernommen
+// werden darf.
+//
+// Bewusst zweistufig: erst lesen und zeigen, was passieren WUERDE, dann
+// auf Bestaetigung schreiben. Ein Import, der stillschweigend ein
+// gleichnamiges eigenes Profil ueberschreibt, waere die eine Sache, die
+// man hinterher nicht mehr zurueckholen kann.
+var
+  Dlg     : TOpenDialog;
+  Gelesen : TDictionary<string, TFindingKinds>;
+  Fehler  : string;
+  Namen   : TStringList;
+  Eintrag : TPair<string, TFindingKinds>;
+  Neu     : TStringList;   // koennen angelegt werden
+  Ersetzt : TStringList;   // eigene Profile, die ueberschrieben wuerden
+  Fest    : TStringList;   // Namen eingebauter Profile - unantastbar
+  Text    : string;
+  Zuletzt : string;
+begin
+  if not AskSaveIfDirty then Exit;
+
+  Dlg := TOpenDialog.Create(nil);
+  Gelesen := TDictionary<string, TFindingKinds>.Create;
+  Namen   := TStringList.Create;
+  Neu     := TStringList.Create;
+  Ersetzt := TStringList.Create;
+  Fest    := TStringList.Create;
+  try
+    Dlg.Title      := _(TXT_IMPORT);
+    Dlg.Filter     := _('Profile files (*.json)|*.json|All files (*.*)|*.*');
+    Dlg.Options    := Dlg.Options + [ofFileMustExist, ofPathMustExist];
+    // Startet dort, wo die eigenen Profile liegen - der haeufigste Fall
+    // ist, eine Datei von woanders NEBEN die eigene zu legen.
+    Dlg.InitialDir := ExtractFilePath(TRuleCatalog.UserProfilesFilePath);
+    if not Dlg.Execute then Exit;
+
+    if not TRuleCatalog.ReadProfilesFile(Dlg.FileName, Gelesen, Fehler) then
+    begin
+      Application.MessageBox(PChar(Fehler), PChar(_(TXT_IMPORT)),
+                             MB_OK or MB_ICONERROR);
+      Exit;
+    end;
+
+    // Sortiert entscheiden und sortiert berichten - eine Dictionary-
+    // Reihenfolge ist nicht festgelegt, und eine Liste, die bei gleichem
+    // Inhalt anders aussieht, liest niemand zweimal.
+    for Eintrag in Gelesen do
+      Namen.Add(Eintrag.Key);
+    Namen.Sort;
+    SplitImportNames(Namen, Neu, Ersetzt, Fest);
+
+    Text := ImportPrompt(Neu, Ersetzt, Fest);
+    if Text = '' then
+    begin
+      if Fest.Count > 0 then
+        Text := Format(
+          _('Nothing to import: %s only contains names of built-in profiles (%s).'),
+          [ExtractFileName(Dlg.FileName), Fest.CommaText])
+      else
+        Text := Format(_('%s contains no profiles.'),
+                       [ExtractFileName(Dlg.FileName)]);
+      Application.MessageBox(PChar(Text), PChar(_(TXT_IMPORT)),
+                             MB_OK or MB_ICONINFORMATION);
+      Exit;
+    end;
+
+    if Application.MessageBox(PChar(Text), PChar(_(TXT_IMPORT)),
+         MB_YESNO or MB_ICONQUESTION) <> IDYES then Exit;
+
+    Zuletzt := WriteImported(Namen, Gelesen);
+    if Zuletzt <> '' then
+    begin
+      FChanged := True;
+      LoadProfiles(Zuletzt);
+    end;
+  finally
+    Fest.Free;
+    Ersetzt.Free;
+    Neu.Free;
+    Namen.Free;
+    Gelesen.Free;
+    Dlg.Free;
+  end;
 end;
 
 procedure TProfileViewerForm.CloseClick(Sender: TObject);

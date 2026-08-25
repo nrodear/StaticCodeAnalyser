@@ -1,7 +1,7 @@
 ﻿# Scan profiles
 
 A **profile** is a named set of rules. It answers one question: *which of
-the 196 detectors run in this scan?* Everything else - severity floor,
+the 198 detectors run in this scan?* Everything else - severity floor,
 suppressions, baseline - filters afterwards. The profile decides what is
 looked for in the first place.
 
@@ -9,17 +9,17 @@ looked for in the first place.
 
 | Profile | Rules | What it is for |
 |---|---|---|
-| `strict` | 196 | Everything. The completeness promise hangs on this one. |
-| `default` | 189 | Everything except the seven pure-convention rules of `style`. Those seven account for roughly half of all findings on a large code base - which is why they are not in the default. |
-| `selftest-quiet` | 185 | `default` minus a few formatting rules. Used when this repository scans itself. |
+| `strict` | 198 | Everything. The completeness promise hangs on this one. |
+| `default` | 191 | Everything except the seven pure-convention rules of `style`. Those seven account for roughly half of all findings on a large code base - which is why they are not in the default. |
+| `selftest-quiet` | 187 | `default` minus a few formatting rules. Used when this repository scans itself. |
 | `code-quality` | 26 | Maintainability: dead code, long methods, complexity, unused uses. |
 | `ide-fast` | 20 | Small enough to run on every file you open in the IDE. Bugs and security, no style. |
 | `dfm-only` | 20 | The form-file checks alone. |
-| `bugs-only` | 15 | Defects only - no smells, no conventions. |
+| `bugs-only` | 16 | Defects only - no smells, no conventions. |
 | `security` | 7 | Vulnerabilities and hotspots only. |
 | `style` | 7 | The pure-convention rules that `default` leaves out. |
 
-Counts are as shipped in 0.9.17, measured against the catalogue.
+Counts are measured against the current catalogue, not estimated.
 
 ## Choosing a profile
 
@@ -51,7 +51,7 @@ Each entry is a list of tokens, applied **left to right**:
 
 | Token | Effect |
 |---|---|
-| `*` | all 196 kinds |
+| `*` | all 198 kinds |
 | `Kind` | add this kind |
 | `!Kind` or `-Kind` | remove this kind |
 
@@ -114,6 +114,38 @@ by hand therefore does not show up on its own. Press **Reload** in the
 profile window and it is read again - no restart of the application or
 of the IDE. Profiles you create *in* the window are active immediately;
 Reload is only for edits made outside it.
+
+## Taking over someone else's rule set
+
+A `profiles.json` from a colleague, a project directory or a shared drive
+does not have to be copied into `%APPDATA%` first. **Import...** in the
+profile window reads any file and takes over what it may:
+
+* It accepts both shapes - the full file (`{"version": 1, "profiles":
+  {...}}`) and the bare map (`{"my-team": ["MemoryLeak", ...]}`).
+* Before anything is written it shows what would happen: which profiles
+  are new, which of your own would be **overwritten**, and which are
+  skipped because the name belongs to a built-in profile.
+* Nothing is written until you confirm.
+
+The imported profiles land in your own `profiles.json`. From then on they
+behave like any profile you made yourself - including `--profile <name>`
+on the command line.
+
+## Finding a rule in the list
+
+Both lists in the profile window - the profile's rules and the **Add
+rules...** picker - carry a search field and sortable columns:
+
+* Type anything into the field and the list narrows down. It searches all
+  five columns at once, so `SCA047`, `Dfm`, `Leak`, `Warning` and
+  `Bug` all work.
+* Click a column header to sort by it; click again to reverse. The ID is
+  always the second key, so the order never changes between two runs with
+  the same content.
+* In the picker, ticks survive the filter. Search for `Dfm`, tick three
+  rules, then search for `Leak` and tick two more - the footer counts all
+  five.
 
 ## Not the same thing: `examples/profile-*.yml`
 

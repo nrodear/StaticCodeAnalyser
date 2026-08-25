@@ -1,7 +1,7 @@
 ﻿# Profils d'analyse
 
 Un **profil** est un ensemble de règles nommé. Il répond à une seule
-question : *lesquels des 196 détecteurs s'exécutent dans cette analyse ?*
+question : *lesquels des 198 détecteurs s'exécutent dans cette analyse ?*
 Tout le reste - seuil de sévérité, suppressions, référence - filtre
 ensuite. Le profil décide de ce qui est cherché au départ.
 
@@ -9,17 +9,17 @@ ensuite. Le profil décide de ce qui est cherché au départ.
 
 | Profil | Règles | À quoi il sert |
 |---|---|---|
-| `strict` | 196 | Tout. C'est de ce profil que dépend la promesse d'exhaustivité. |
-| `default` | 189 | Tout sauf les sept règles de pure convention de `style`. Ces sept-là représentent environ la moitié des remontées sur une grosse base de code - d'où leur absence du profil par défaut. |
-| `selftest-quiet` | 185 | `default` moins quelques règles de formatage. Utilisé quand ce dépôt s'analyse lui-même. |
+| `strict` | 198 | Tout. C'est de ce profil que dépend la promesse d'exhaustivité. |
+| `default` | 191 | Tout sauf les sept règles de pure convention de `style`. Ces sept-là représentent environ la moitié des remontées sur une grosse base de code - d'où leur absence du profil par défaut. |
+| `selftest-quiet` | 187 | `default` moins quelques règles de formatage. Utilisé quand ce dépôt s'analyse lui-même. |
 | `code-quality` | 26 | Maintenabilité : code mort, méthodes longues, complexité, uses inutilisés. |
 | `ide-fast` | 20 | Assez léger pour tourner sur chaque fichier ouvert dans l'IDE. Bugs et sécurité, pas de style. |
 | `dfm-only` | 20 | Uniquement les contrôles sur les fichiers de fiche. |
-| `bugs-only` | 15 | Uniquement les défauts - ni smells, ni conventions. |
+| `bugs-only` | 16 | Uniquement les défauts - ni smells, ni conventions. |
 | `security` | 7 | Uniquement vulnérabilités et points chauds. |
 | `style` | 7 | Les règles de pure convention que `default` laisse de côté. |
 
-Les nombres correspondent à la version 0.9.17, mesurés sur le catalogue.
+Les nombres sont mesurés sur le catalogue actuel, non estimés.
 
 ## Choisir un profil
 
@@ -51,7 +51,7 @@ Chaque entrée est une liste de jetons, appliqués **de gauche à droite** :
 
 | Jeton | Effet |
 |---|---|
-| `*` | les 196 types de règles |
+| `*` | les 198 types de règles |
 | `Kind` | ajouter ce type |
 | `!Kind` ou `-Kind` | retirer ce type |
 
@@ -120,6 +120,41 @@ ajouté ou modifié à la main n'apparaît donc pas tout seul. Appuyez sur
 redémarrer l'application ni l'IDE. Les profils créés *dans* la fenêtre
 sont actifs immédiatement ; Recharger ne sert qu'aux modifications
 faites à l'extérieur.
+
+## Reprendre un jeu de règles existant
+
+Un `profiles.json` venant d'un collègue, d'un répertoire de projet ou d'un
+lecteur partagé n'a pas besoin d'être copié d'abord dans `%APPDATA%`.
+**Importer...** dans la fenêtre des profils lit n'importe quel fichier et
+en reprend ce qui peut l'être :
+
+* Les deux formes sont acceptées - le fichier complet (`{"version": 1,
+  "profiles": {...}}`) et la simple table (`{"mon-equipe":
+  ["MemoryLeak", ...]}`).
+* Avant toute écriture, la fenêtre indique ce qui va se passer : quels
+  profils sont nouveaux, lesquels des vôtres seraient **remplacés** et
+  lesquels sont ignorés parce que le nom appartient à un profil intégré.
+* Rien n'est écrit avant confirmation.
+
+Les profils repris arrivent dans votre propre `profiles.json`. Ils se
+comportent ensuite comme ceux que vous avez créés vous-même - y compris
+avec `--profile <nom>` en ligne de commande.
+
+## Trouver une règle dans la liste
+
+Les deux listes de la fenêtre des profils - les règles du profil et la
+sélection sous **Ajouter des règles...** - disposent d'un champ de
+recherche et de colonnes triables :
+
+* Ce qui est saisi dans le champ restreint la liste. La recherche porte
+  sur les cinq colonnes à la fois : `SCA047`, `Dfm`, `Leak`, `Warning` et
+  `Bug` fonctionnent tous.
+* Un clic sur un en-tête trie selon cette colonne, un second inverse le
+  sens. L'ID est toujours la clé secondaire - à contenu égal, l'ordre est
+  donc toujours le même.
+* Dans la sélection, les cases cochées survivent au filtre. Cherchez
+  `Dfm`, cochez trois règles, puis cherchez `Leak` et cochez-en deux
+  autres - le pied de fenêtre en compte cinq.
 
 ## À ne pas confondre : `examples/profile-*.yml`
 

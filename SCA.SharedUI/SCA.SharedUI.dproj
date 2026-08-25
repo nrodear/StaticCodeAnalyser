@@ -104,6 +104,7 @@
         <DCCReference Include="sources\uRecentPaths.pas"/>
         <DCCReference Include="sources\uScanTargetDialog.pas"/>
         <DCCReference Include="sources\uProfileViewer.pas"/>
+        <DCCReference Include="sources\uRuleListBox.pas"/>
         <DCCReference Include="sources\uWindowFrame.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

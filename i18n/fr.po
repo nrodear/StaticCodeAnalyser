@@ -2154,3 +2154,58 @@ msgstr "Recharger"
 
 msgid "Profile \"%s\": %d of %d rules. Built-in and read-only - use \"Copy...\" for your own (stored in %s)."
 msgstr "Profil \"%s\" : %d règles sur %d. Intégré et en lecture seule - utilisez \"Copier ...\" pour le vôtre (emplacement : %s)."
+
+# --- 2026-08-25: liste de regles triable et filtrable ---
+
+msgid "Search ID, kind, rule text, severity or type..."
+msgstr "Rechercher un ID, un type interne, un libellé, une sévérité ou un type..."
+
+msgid "Profile \"%s\": %d of %d rules shown (filter \"%s\")."
+msgstr "Profil \"%s\" : %d règles affichées sur %d (filtre \"%s\")."
+
+msgid "%d of %d rules shown, %d selected"
+msgstr "%d règles affichées sur %d, %d sélectionnées"
+
+msgid "%d rules, %d selected"
+msgstr "%d règles, %d sélectionnées"
+
+# --- 2026-08-25: import de profils depuis un fichier ---
+
+msgid "File not found: %s"
+msgstr "Fichier introuvable : %s"
+
+msgid "Cannot read %s: %s"
+msgstr "Lecture impossible de %s : %s"
+
+msgid "%s is not a valid JSON object."
+msgstr "%s n’est pas un objet JSON valide."
+
+msgid "Import..."
+msgstr "Importer..."
+
+msgid "Import profiles"
+msgstr "Importer des profils"
+
+msgid "Profile files (*.json)|*.json|All files (*.*)|*.*"
+msgstr "Fichiers de profils (*.json)|*.json|Tous les fichiers (*.*)|*.*"
+
+msgid "Nothing to import: %s only contains names of built-in profiles (%s)."
+msgstr "Rien à importer : %s ne contient que des noms de profils intégrés (%s)."
+
+msgid "%s contains no profiles."
+msgstr "%s ne contient aucun profil."
+
+msgid "New: %s"
+msgstr "Nouveaux : %s"
+
+msgid "Will be overwritten: %s"
+msgstr "Seront remplacés : %s"
+
+msgid "Skipped (built-in name): %s"
+msgstr "Ignorés (nom d’un profil intégré) : %s"
+
+msgid "Import now?"
+msgstr "Importer maintenant ?"
+
+msgid "\"%s\" was not imported: %s"
+msgstr "« %s » n’a pas été importé : %s"

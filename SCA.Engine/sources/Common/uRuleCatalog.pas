@@ -205,6 +205,16 @@ type
     // ueberleben ein Update.
     class function IsBuiltInProfile(const AName: string): Boolean; static;
     class function UserProfilesFilePath: string; static;
+    /// <summary>Liest eine Profildatei nach ADest, OHNE etwas zu
+    /// uebernehmen. Damit kann eine Oberflaeche eine fremde Datei
+    /// zeigen und den Anwender entscheiden lassen, bevor irgendetwas
+    /// gespeichert wird.</summary>
+    /// <remarks>Nimmt beide Formen: die volle Datei ({"profiles":{...}})
+    /// und die blosse Abbildung Name -> Token-Liste. Ein von Hand
+    /// weitergereichtes Regelwerk kommt mal so, mal so.</remarks>
+    class function ReadProfilesFile(const AFileName: string;
+      ADest: TDictionary<string, TFindingKinds>;
+      out AError: string): Boolean; static;
     // Legt an oder ueberschreibt ein EIGENES Profil. Verweigert jeden
     // Namen, den der ausgelieferte Katalog schon fuehrt. False + AError
     // bei ungueltigem Namen oder Schreibfehler.
@@ -240,6 +250,27 @@ uses
 // Katalog und profiles.json - beide muessen ParseProfileTokens mit
 // derselben Eingabe fuettern. Steht hier oben, weil eine Datei-Funktion
 // vor ihrer ersten Verwendung deklariert sein muss.
+function IstTokenListe(AArr: TJSONArray): Boolean;
+// Ein Profil ist "Name -> Liste von Token-STRINGS". Alles andere ist
+// keine Profilzeile, auch wenn es zufaellig ein Array ist.
+//
+// ANLASS (Test ReadProfilesFileSkipsNonArrayValues, 2026-08-25): der
+// Rueckfall auf das blanke Wurzelobjekt - fuer von Hand
+// weitergereichte Regelwerke ohne "profiles"-Rahmen - nahm aus einem
+// versehentlich gewaehlten sca-rules.json das Feld "rules" als Profil
+// an. Das IST ein Array, nur eben eines aus Objekten; JsonArrayToStrings
+// macht daraus lauter Leerstrings und uebrig blieb ein Profil namens
+// "rules" ohne eine einzige Regel. Der Test hatte recht, der Leser
+// nicht.
+var
+  i : Integer;
+begin
+  Result := False;
+  for i := 0 to AArr.Count - 1 do
+    if not (AArr.Items[i] is TJSONString) then Exit;
+  Result := True;
+end;
+
 function JsonArrayToStrings(AArr: TJSONArray): TArray<string>;
 var
   i : Integer;
@@ -1184,12 +1215,9 @@ begin
   Result := FBuiltIn.ContainsKey(Trim(AName));
 end;
 
-class procedure TRuleCatalog.LoadUserProfiles;
-// Liest profiles.json, falls vorhanden. Fehler sind hier NIE fatal: eine
-// kaputte oder halb geschriebene Datei darf das Werkzeug nicht am Start
-// hindern, sie kostet nur die eigenen Profile.
+class function TRuleCatalog.ReadProfilesFile(const AFileName: string;
+  ADest: TDictionary<string, TFindingKinds>; out AError: string): Boolean;
 var
-  FileName : string;
   Text     : string;
   Root     : TJSONValue;
   Obj      : TJSONObject;
@@ -1198,54 +1226,92 @@ var
   i        : Integer;
   Name     : string;
 begin
-  FileName := UserProfilesFilePath;
-  if not TFile.Exists(FileName) then Exit;
+  Result := False;
+  AError := '';
+  if not TFile.Exists(AFileName) then
+  begin
+    AError := Format(_('File not found: %s'), [AFileName]);
+    Exit;
+  end;
 
-  Root := nil;
   try
-    Text := TFile.ReadAllText(FileName, TEncoding.UTF8);
+    Text := TFile.ReadAllText(AFileName, TEncoding.UTF8);
     // TFile.WriteAllText stellt der Datei mit TEncoding.UTF8 eine BOM
     // voran. Ob der Leser sie schluckt, haengt am Verhalten von
     // TStreamReader; bleibt sie stehen, liefert ParseJSONValue nil - und
-    // die eigenen Profile waeren still weg, ohne Fehler, ohne Hinweis.
-    // Ein Zeichen abschneiden kostet nichts und nimmt die Frage raus.
+    // die Profile waeren still weg, ohne Fehler, ohne Hinweis.
     if (Text <> '') and (Text[1] = #$FEFF) then
       Delete(Text, 1, 1);
     Root := TJSONObject.ParseJSONValue(Text);
   except
     on E: Exception do
-      OutputDebugString(PChar(Format(
-        'TRuleCatalog: profiles.json nicht lesbar (%s) - eigene Profile fehlen',
-        [E.Message])));
+    begin
+      AError := Format(_('Cannot read %s: %s'), [AFileName, E.Message]);
+      Exit;
+    end;
   end;
+
   if not (Root is TJSONObject) then
   begin
     Root.Free;
+    AError := Format(_('%s is not a valid JSON object.'), [AFileName]);
     Exit;
   end;
 
   Obj := TJSONObject(Root);
   try
-    // FindObject ist eine in LoadFromJsonFile geschachtelte Funktion und
-    // hier nicht sichtbar - deshalb direkt ueber FindValue.
-    Profiles := nil;
+    // Volle Datei oder blosse Abbildung: fehlt "profiles", nehmen wir
+    // das Wurzelobjekt selbst. Nicht-Array-Werte werden dabei ohnehin
+    // uebersprungen, ein versehentlich uebergebenes sca-rules.json
+    // liefert also einfach nichts statt Unsinn.
     if Obj.FindValue('profiles') is TJSONObject then
-      Profiles := TJSONObject(Obj.FindValue('profiles'));
-    if Profiles = nil then Exit;
+      Profiles := TJSONObject(Obj.FindValue('profiles'))
+    else
+      Profiles := Obj;
+
     for i := 0 to Profiles.Count - 1 do
     begin
       Pair := Profiles.Pairs[i];
       if not (Pair.JsonValue is TJSONArray) then Continue;
+      if not IstTokenListe(TJSONArray(Pair.JsonValue)) then Continue;
       Name := Trim(Pair.JsonString.Value);
+      if Name = '' then Continue;
+      ADest.AddOrSetValue(Name,
+        ParseProfileTokens(JsonArrayToStrings(Pair.JsonValue as TJSONArray)));
+    end;
+    Result := True;
+  finally
+    Root.Free;
+  end;
+end;
+
+class procedure TRuleCatalog.LoadUserProfiles;
+// Liest profiles.json, falls vorhanden. Fehler sind hier NIE fatal: eine
+// kaputte oder halb geschriebene Datei darf das Werkzeug nicht am Start
+// hindern, sie kostet nur die eigenen Profile.
+var
+  Gelesen : TDictionary<string, TFindingKinds>;
+  Fehler  : string;
+  Eintrag : TPair<string, TFindingKinds>;
+begin
+  if not TFile.Exists(UserProfilesFilePath) then Exit;
+
+  Gelesen := TDictionary<string, TFindingKinds>.Create;
+  try
+    if not ReadProfilesFile(UserProfilesFilePath, Gelesen, Fehler) then
+    begin
+      OutputDebugString(PChar('TRuleCatalog: ' + Fehler +
+        ' - eigene Profile fehlen'));
+      Exit;
+    end;
+    for Eintrag in Gelesen do
       // Ein eigenes Profil darf ein eingebautes NICHT verdecken. Sonst
       // haette derselbe Name je nach Rechner eine andere Bedeutung, und
       // ein SARIF-Vergleich zweier Maschinen waere wertlos.
-      if (Name = '') or FBuiltIn.ContainsKey(Name) then Continue;
-      FProfiles.AddOrSetValue(Name,
-        ParseProfileTokens(JsonArrayToStrings(Pair.JsonValue as TJSONArray)));
-    end;
+      if not FBuiltIn.ContainsKey(Eintrag.Key) then
+        FProfiles.AddOrSetValue(Eintrag.Key, Eintrag.Value);
   finally
-    Root.Free;
+    Gelesen.Free;
   end;
 end;
 

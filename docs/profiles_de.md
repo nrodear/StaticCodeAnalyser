@@ -1,7 +1,7 @@
 ﻿# Scan-Profile
 
 Ein **Profil** ist eine benannte Regelmenge. Es beantwortet eine einzige
-Frage: *welche der 196 Detektoren laufen in diesem Scan?* Alles andere -
+Frage: *welche der 198 Detektoren laufen in diesem Scan?* Alles andere -
 Severity-Schwelle, Unterdrückungen, Baseline - filtert hinterher. Das
 Profil entscheidet, wonach überhaupt gesucht wird.
 
@@ -9,17 +9,17 @@ Profil entscheidet, wonach überhaupt gesucht wird.
 
 | Profil | Regeln | Wofür es da ist |
 |---|---|---|
-| `strict` | 196 | Alles. An diesem Profil hängt die Vollständigkeitszusage. |
-| `default` | 189 | Alles außer den sieben reinen Konventionsregeln aus `style`. Diese sieben machen auf einem großen Bestand rund die Hälfte aller Funde aus - deshalb stehen sie nicht im Default. |
-| `selftest-quiet` | 185 | `default` ohne ein paar Formatierungsregeln. Wird benutzt, wenn dieses Repository sich selbst scannt. |
+| `strict` | 198 | Alles. An diesem Profil hängt die Vollständigkeitszusage. |
+| `default` | 191 | Alles außer den sieben reinen Konventionsregeln aus `style`. Diese sieben machen auf einem großen Bestand rund die Hälfte aller Funde aus - deshalb stehen sie nicht im Default. |
+| `selftest-quiet` | 187 | `default` ohne ein paar Formatierungsregeln. Wird benutzt, wenn dieses Repository sich selbst scannt. |
 | `code-quality` | 26 | Wartbarkeit: toter Code, lange Methoden, Komplexität, unbenutzte Uses. |
 | `ide-fast` | 20 | Klein genug, um bei jeder geöffneten Datei in der IDE zu laufen. Bugs und Sicherheit, kein Stil. |
 | `dfm-only` | 20 | Nur die Form-Datei-Prüfungen. |
-| `bugs-only` | 15 | Nur Defekte - keine Smells, keine Konventionen. |
+| `bugs-only` | 16 | Nur Defekte - keine Smells, keine Konventionen. |
 | `security` | 7 | Nur Verwundbarkeiten und Hotspots. |
 | `style` | 7 | Die reinen Konventionsregeln, die `default` weglässt. |
 
-Die Zahlen sind der Stand von 0.9.17, am Katalog gemessen.
+Die Zahlen sind am aktuellen Katalog gemessen, nicht geschätzt.
 
 ## Ein Profil auswählen
 
@@ -52,7 +52,7 @@ rechts**:
 
 | Token | Wirkung |
 |---|---|
-| `*` | alle 196 Kinds |
+| `*` | alle 198 Kinds |
 | `Kind` | dieses Kind aufnehmen |
 | `!Kind` bzw. `-Kind` | dieses Kind entfernen |
 
@@ -119,6 +119,41 @@ angelegtes oder bearbeitetes Profil erscheint deshalb nicht von selbst.
 Im Profil-Fenster **Neu laden** drücken, dann wird sie erneut gelesen -
 ohne Neustart der Anwendung oder der IDE. Profile, die *im* Fenster
 entstehen, gelten sofort; „Neu laden" ist nur für Änderungen von außen.
+
+## Ein fremdes Regelwerk übernehmen
+
+Eine `profiles.json` von einem Kollegen, aus einem Projektverzeichnis oder
+von einem Netzlaufwerk muss nicht erst nach `%APPDATA%` kopiert werden.
+**Importieren ...** im Profil-Fenster liest eine beliebige Datei und
+übernimmt daraus, was übernommen werden darf:
+
+* Beide Formen werden gelesen - die vollständige Datei (`{"version": 1,
+  "profiles": {...}}`) und die bloße Abbildung (`{"mein-team":
+  ["MemoryLeak", ...]}`).
+* Vor dem Schreiben steht da, was passieren würde: welche Profile neu
+  sind, welche eigenen **überschrieben** würden und welche übersprungen
+  werden, weil der Name zu einem eingebauten Profil gehört.
+* Geschrieben wird erst nach Bestätigung.
+
+Die übernommenen Profile landen in der eigenen `profiles.json`. Danach
+verhalten sie sich wie selbst angelegte - einschließlich
+`--profile <Name>` auf der Kommandozeile.
+
+## Eine Regel in der Liste finden
+
+Beide Listen im Profil-Fenster - die Regeln des Profils und die Auswahl
+unter **Regeln aufnehmen ...** - haben ein Suchfeld und sortierbare
+Spalten:
+
+* Was im Feld steht, engt die Liste ein. Gesucht wird in allen fünf
+  Spalten gleichzeitig: `SCA047`, `Dfm`, `Leak`, `Warnung` und `Bug`
+  führen alle zum Ziel.
+* Ein Klick auf eine Spaltenüberschrift sortiert danach, ein zweiter
+  dreht die Richtung um. Zweiter Schlüssel ist immer die ID - die
+  Reihenfolge ist damit bei gleichem Inhalt jedes Mal dieselbe.
+* In der Auswahl überleben die Haken den Filter. Erst nach `Dfm` suchen
+  und drei Regeln ankreuzen, dann nach `Leak` suchen und zwei weitere -
+  die Fußzeile zählt alle fünf.
 
 ## Nicht dasselbe: `examples/profile-*.yml`
 

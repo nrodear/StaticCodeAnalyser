@@ -211,3 +211,58 @@ msgstr "Settings could not be reloaded - baseline filter unchanged."
 
 msgid "Settings could not be reloaded - nothing was saved."
 msgstr "Settings could not be reloaded - nothing was saved."
+
+# --- 2026-08-25: sortable + searchable rule list ---
+
+msgid "Search ID, kind, rule text, severity or type..."
+msgstr "Search ID, kind, rule text, severity or type..."
+
+msgid "Profile \"%s\": %d of %d rules shown (filter \"%s\")."
+msgstr "Profile \"%s\": %d of %d rules shown (filter \"%s\")."
+
+msgid "%d of %d rules shown, %d selected"
+msgstr "%d of %d rules shown, %d selected"
+
+msgid "%d rules, %d selected"
+msgstr "%d rules, %d selected"
+
+# --- 2026-08-25: import profiles from any file ---
+
+msgid "File not found: %s"
+msgstr "File not found: %s"
+
+msgid "Cannot read %s: %s"
+msgstr "Cannot read %s: %s"
+
+msgid "%s is not a valid JSON object."
+msgstr "%s is not a valid JSON object."
+
+msgid "Import..."
+msgstr "Import..."
+
+msgid "Import profiles"
+msgstr "Import profiles"
+
+msgid "Profile files (*.json)|*.json|All files (*.*)|*.*"
+msgstr "Profile files (*.json)|*.json|All files (*.*)|*.*"
+
+msgid "Nothing to import: %s only contains names of built-in profiles (%s)."
+msgstr "Nothing to import: %s only contains names of built-in profiles (%s)."
+
+msgid "%s contains no profiles."
+msgstr "%s contains no profiles."
+
+msgid "New: %s"
+msgstr "New: %s"
+
+msgid "Will be overwritten: %s"
+msgstr "Will be overwritten: %s"
+
+msgid "Skipped (built-in name): %s"
+msgstr "Skipped (built-in name): %s"
+
+msgid "Import now?"
+msgstr "Import now?"
+
+msgid "\"%s\" was not imported: %s"
+msgstr "\"%s\" was not imported: %s"
