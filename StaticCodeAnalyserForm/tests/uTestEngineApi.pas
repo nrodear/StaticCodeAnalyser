@@ -57,7 +57,8 @@ type
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.Generics.Collections,
+  System.SysUtils, System.Classes,   // TStringList - AcquireLines-Probe (G2-5-Test)
+  System.IOUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uAnalyzeContext, uAstFileCache, uFileTextCache, uSymbolReferenceIndex;
 
