@@ -623,6 +623,18 @@ begin
   if not InputQuery(_('Copy profile'), _('Name of the new profile:'), NewName) then
     Exit;
 
+  // Gleiche Ruecksicht wie der Import-Ablauf: ein vorhandenes EIGENES
+  // Profil wird nur nach Rueckfrage ueberschrieben. SaveUserProfile
+  // AENDERT kommentarlos - ohne diese Frage war ein Tippfehler im
+  // Namen das stille Ende eines gepflegten Profils (G5-3). Eingebaute
+  // Namen lehnt SaveUserProfile selbst ab.
+  if (FNames.IndexOf(Trim(NewName)) >= 0) and
+     not TRuleCatalog.IsBuiltInProfile(Trim(NewName)) then
+    if Application.MessageBox(PChar(Format(
+         _('"%s" already exists. Overwrite it?'), [Trim(NewName)])),
+         PChar(_('Copy profile')), MB_YESNO or MB_ICONQUESTION) <> IDYES then
+      Exit;
+
   if not TRuleCatalog.SaveUserProfile(NewName, FKinds, Err) then
   begin
     Application.MessageBox(PChar(Err), PChar(_('Copy profile')),
@@ -730,6 +742,10 @@ procedure SplitImportNames(ANames, AVorhanden, ANew, AReplaced,
 // Teilt die gelesenen Profilnamen in "neu", "wird ueberschrieben" und
 // "uebersprungen, Name eines eingebauten Profils". AVorhanden sind die
 // heute bekannten Profile.
+//
+// Vergleichsschaerfe: TStringList.IndexOf ist case-INSENSITIV - und der
+// Katalog seit G5-4 ebenso (TIStringComparer). Vorher log die Vorschau:
+// "Will be overwritten" legte bei anderer Schreibweise ein Duplikat an.
 var
   Name : string;
 begin

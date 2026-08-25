@@ -160,6 +160,13 @@ begin
   AFg    := clNone;
   if not (AStyle is TCustomStyleServices) then Exit;
   Svc := TCustomStyleServices(AStyle);
+  // Der NATIVE Systemstil beantwortet GetSystemColor mit
+  // Vcl.Graphics.ColorToRGB, also GetSysColor(COLOR_ACTIVECAPTION) -
+  // das ist seit Windows 8 eine eingefrorene Legacy-Farbe und NIE
+  // clNone. "Keine Auskunft" konnte diese Funktion fuer ihn also nie
+  // melden, und der Aufrufer strich der hellen Titelzeile die
+  // Altlast-Farbe statt sie Windows zu ueberlassen (G5-2).
+  if Svc.IsSystemStyle then Exit;
   try
     // ZUERST die vom Style DEKLARIERTEN Titelzeilenfarben. Am
     // 2026-08-24 aus den .vsf ausgelesen, damit hier keine Vermutung

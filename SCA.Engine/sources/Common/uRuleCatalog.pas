@@ -243,6 +243,7 @@ implementation
 uses
   Winapi.Windows,                  // OutputDebugString
   System.IOUtils, System.JSON,
+  System.Generics.Defaults,        // TIStringComparer - Profilnamen (G5-4)
   uLocalization;                   // NormalizeLangCode - EINE Normalisierung
                                    // fuer SetLanguage und Overlay-Lookup
 
@@ -316,8 +317,17 @@ class procedure TRuleCatalog.Init;
 begin
   FRules     := TDictionary<TFindingKind, TRuleMeta>.Create;
   FRulesByID := TDictionary<string, TRuleMeta>.Create;
-  FProfiles  := TDictionary<string, TFindingKinds>.Create;
-  FBuiltIn   := TDictionary<string, Boolean>.Create;
+  // Profilnamen vergleichen CASE-INSENSITIV (G5-4). Vorher war das
+  // Dictionary case-sensitiv, die Import-Vorschau verglich aber
+  // case-insensitiv: "Will be overwritten" legte bei anderer
+  // Schreibweise in Wahrheit ein ZWEITES Profil an ('myteam' neben
+  // 'MyTeam'), und welches davon --profile trifft, hing an der
+  // Schreibweise in der INI. Ein Name ist ein Name - Windows-Dateinamen
+  // und INI-Schluessel sind es auch nicht scharf.
+  FProfiles  := TDictionary<string, TFindingKinds>.Create(
+                  TIStringComparer.Ordinal);
+  FBuiltIn   := TDictionary<string, Boolean>.Create(
+                  TIStringComparer.Ordinal);
   FOverlays  := TObjectDictionary<string, TOverlayMap>.Create([doOwnsValues]);
   FLoaded    := False;
 end;

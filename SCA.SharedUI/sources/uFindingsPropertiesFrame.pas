@@ -81,12 +81,16 @@ type
     // gefuellt bei SetFindings, gelesen bei SetActiveFile - so behalten
     // andere offene Dateien ihre Findings, auch wenn der Wrapper-Cache
     // den naechsten Re-Scan skippt.
-    // OWNED: das Dictionary hat die TObjectList<TLeakFinding>-Refs; deren
-    // OwnsObjects ist True, damit beim Cache-Eviction die Findings freed
-    // werden. Beim Anzeigen werden Kopien der Refs in FAllFindings gelegt
-    // (Pointer-Sharing, NICHT zweite Owner) - genau wie bisher in
-    // FVisibleRows. FAllFindings.OwnsObjects ist deshalb auf False
-    // gesetzt sobald der Cache aktiv ist.
+    // OWNED: das Dictionary besitzt die Cache-Listen (doOwnsValues), und
+    // jede Cache-Liste besitzt ihre KLONE (StoreInCache/LoadFromCache
+    // arbeiten mit CloneFinding, nie mit geteilten Referenzen).
+    // FAllFindings besitzt seine Exemplare ebenfalls selbst
+    // (OwnsObjects=True, gesetzt im Konstruktor und nie geaendert) -
+    // Anzeige und Cache halten also ZWEI unabhaengige Objektwelten.
+    // Die Vorfassung dieses Kommentars beschrieb Pointer-Sharing mit
+    // OwnsObjects=False; wer ihr folgte und Referenzen teilte, haette
+    // ein Double-Free gebaut (G5-5). Nur FVisibleRows teilt Zeiger -
+    // in die jeweils aktive FAllFindings-Welt.
     FFindingsByFile : TObjectDictionary<string, TObjectList<TLeakFinding>>;
     FCurrentFile   : string;
     FGridConfig    : TFindingGridConfig;

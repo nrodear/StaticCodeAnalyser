@@ -67,7 +67,16 @@ type
     // wieder an.
     class var FDarkName: string;
     // Originalfarben je Control - s. ApplyToForm.
+    //
+    // Pointer-keyed, deshalb braucht der Cache einen AUSTRAGSWEG: ohne
+    // ihn wuchs er ueber die Prozesslebenszeit (jedes Profil-Fenster
+    // liess seine Eintraege zurueck), und ein wiederverwendeter
+    // Heap-Block haette einem NEUEN Control die Originalfarben eines
+    // TOTEN untergeschoben - falsche Farben ohne jede Fehlermeldung
+    // (G5-1). FReaper haengt sich per FreeNotification an jedes
+    // erfasste Control und traegt es bei dessen Zerstoerung aus.
     class var FOrigColors: TDictionary<Pointer, TAppThemeColors>;
+    class var FReaper: TComponent;   // konkret: TOrigColorReaper (impl.)
     class function ModeToStr(AMode: TAppThemeMode): string; static;
     class function StrToMode(const S: string): TAppThemeMode; static;
     // Roher Registry-Zugriff. Wirft bei unlesbarer Registry - der
@@ -364,6 +373,25 @@ begin
   Result := StyleServices.GetSystemColor(clBtnText);
 end;
 
+type
+  // Traegt zerstoerte Controls aus TAppTheme.FOrigColors aus. Lebt als
+  // besitzerloses Singleton neben dem Cache; angemeldet wird er je
+  // Control in ApplyToForm (FreeNotification). Siehe Feldkommentar an
+  // FOrigColors (G5-1).
+  TOrigColorReaper = class(TComponent)
+  protected
+    procedure Notification(AComponent: TComponent;
+      Operation: TOperation); override;
+  end;
+
+procedure TOrigColorReaper.Notification(AComponent: TComponent;
+  Operation: TOperation);
+begin
+  inherited;
+  if (Operation = opRemove) and Assigned(TAppTheme.FOrigColors) then
+    TAppTheme.FOrigColors.Remove(Pointer(AComponent));
+end;
+
 class procedure TAppTheme.ApplyToForm(ARoot: TWinControl);
 var
   TitelBg : TColor;
@@ -385,6 +413,8 @@ var
     begin
       Orig := Cur;
       FOrigColors.Add(Pointer(AC), Orig);
+      // Austragsweg mitbestellen - s. Feldkommentar (G5-1).
+      AC.FreeNotification(FReaper);
     end;
 
     // Nur was der Style NICHT selbst faerbt.
@@ -410,6 +440,8 @@ begin
   if not Assigned(ARoot) then Exit;
   if not Assigned(FOrigColors) then
     FOrigColors := TDictionary<Pointer, TAppThemeColors>.Create;
+  if not Assigned(FReaper) then
+    FReaper := TOrigColorReaper.Create(nil);
   Walk(ARoot);
 
   // Die Titelzeile gehoert dazu. Sie folgt weder dem VCL-Style noch den
@@ -425,8 +457,22 @@ begin
     // Titelzeilenfarbe.
     if not StyleCaptionColors(StyleServices, TitelBg, TitelFg) then
     begin
-      TitelBg := StyleChromeBg;
-      TitelFg := StyleChromeFg;
+      if TStyleManager.IsCustomStyleActive then
+      begin
+        // Custom-Style ohne deklarierte Caption-Farben: die Chrome-
+        // Farbe ist der beste verfuegbare Ton.
+        TitelBg := StyleChromeBg;
+        TitelFg := StyleChromeFg;
+      end
+      else
+      begin
+        // Nativer Stil: Windows malt die Titelzeile selbst am besten.
+        // clNone laesst ApplyTitleBarTheme die Farbattribute ungesetzt
+        // (nur der Dark-Schalter wird gestellt) - vorher bekam die
+        // helle Leiste hier die eingefrorene Legacy-Systemfarbe (G5-2).
+        TitelBg := clNone;
+        TitelFg := clNone;
+      end;
     end;
     uWindowFrame.ApplyTitleBarTheme(TCustomForm(ARoot), EffectiveDark,
                                     TitelBg, TitelFg);
@@ -503,7 +549,9 @@ initialization
 
 finalization
   // Der Cache haelt nur Zeiger als Schluessel, keine Objekte - er
-  // besitzt nichts und muss nur selbst freigegeben werden.
+  // besitzt nichts und muss nur selbst freigegeben werden. Der Reaper
+  // zuerst: sein Notification greift auf den Cache zu.
+  TAppTheme.FReaper.Free;
   TAppTheme.FOrigColors.Free;
 
 end.

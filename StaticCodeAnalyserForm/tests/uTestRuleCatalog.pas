@@ -111,6 +111,10 @@ type
     [Test] procedure ReadProfilesFileAcceptsBareMap;
     [Test] procedure ReadProfilesFileSkipsNonArrayValues;
     [Test] procedure ReadProfilesFileReportsMissingFile;
+    // G5-4 (Review 2026-08-25): Profilnamen sind case-insensitiv. Vorher
+    // war das Dictionary scharf, die Import-Vorschau unscharf - "Will be
+    // overwritten" legte bei anderer Schreibweise ein Duplikat an.
+    [Test] procedure ProfileNamesAreCaseInsensitive;
   end;
 
 implementation
@@ -962,5 +966,31 @@ begin
   end;
 end;
 
+
+procedure TTestRuleCatalog.ProfileNamesAreCaseInsensitive;
+var
+  Err : string;
+begin
+  // Aufraeumen von frueheren Laeufen, dann anlegen und anders
+  // kapitalisiert wiederfinden, aendern und loeschen.
+  TRuleCatalog.DeleteUserProfile('case-probe', Err);
+  try
+    Assert.IsTrue(TRuleCatalog.SaveUserProfile('Case-Probe',
+      [fkMemoryLeak], Err), 'Anlegen: ' + Err);
+    Assert.IsTrue(fkMemoryLeak in TRuleCatalog.GetProfile('CASE-PROBE'),
+      'GetProfile muss die andere Schreibweise treffen');
+    Assert.IsFalse(TRuleCatalog.GetProfile('case-probe') = [],
+      'kleingeschrieben ebenso');
+    // Ueberschreiben unter anderer Schreibweise erzeugt KEIN Duplikat.
+    Assert.IsTrue(TRuleCatalog.SaveUserProfile('CASE-probe',
+      [fkEmptyExcept], Err), 'Aendern: ' + Err);
+    Assert.IsTrue(fkEmptyExcept in TRuleCatalog.GetProfile('Case-Probe'),
+      'die Aenderung muss dasselbe Profil getroffen haben');
+    Assert.IsFalse(fkMemoryLeak in TRuleCatalog.GetProfile('Case-Probe'),
+      'kein zweites Profil unter alter Schreibweise');
+  finally
+    TRuleCatalog.DeleteUserProfile('case-probe', Err);
+  end;
+end;
 
 end.
