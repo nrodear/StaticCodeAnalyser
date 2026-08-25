@@ -629,6 +629,22 @@ begin
           E.PairStr('contextHash/' + CONTEXT_HASH_VERSION, CtxHash);
         E.EndObj;
 
+        // Evidenz-Politik sichtbar machen (K2 Stufe 1, 2026-08-26): die
+        // Konfidenz je Fund als property-Bag, damit CI-Konsumenten den
+        // Severity-Deckel NACHVOLLZIEHEN koennen (level=warning bei einer
+        // Katalog-Error-Regel erklaert sich ueber confidence<high). NUR
+        // wenn die Politik aktiv ist: mit [Rules] EvidenceTiering=0
+        // bleibt das SARIF byte-identisch zum Bestand - das haelt die
+        // A/B-Vergleichbarkeit sauber (ein Politik-Wechsel ist ein
+        // bewusster Baseline-Schnitt, kein Detektor-Drift; die 650-MB-
+        // Korpus-Exports wachsen nur im Politik-Modus).
+        if uSCAConsts.EvidenceTiering then
+        begin
+          E.BeginObjPair('properties');
+          E.PairStr('confidence', ConfidenceName(F.Confidence));
+          E.EndObj;
+        end;
+
         E.EndObj;                                      // result
         E.FlushChunk(False);
       end;
