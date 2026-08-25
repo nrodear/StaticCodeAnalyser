@@ -1351,6 +1351,20 @@ begin
     // (4 rote Tests, TestInsight 2026-08-09).
     fkDfmCrossFormCoupling: Result := fcLow;
 
+    // SCA001 MemoryLeak: Trust-Budget-Demote (K2 Stufe 2, 2026-08-26).
+    // FP-Voll-Audit 2026-08-15: 62-78 % FP auf 788 Korpus-Funden (Stufe 1
+    // 71 % @ 24, Stufe 2 78 % @ 50, FINAL-Tabelle 62 %) - die groesste
+    // einzelne Fehlalarm-Masse des Katalogs. Die dominanten FP-Klassen
+    // (Ownership-Transfer unter nicht erkanntem Namen, Freigabe im
+    // Callee, Property-Alias im Destruktor) brauchen den Callee-Summary-
+    // Index (Konzept K1); bis der steht, ist fcHigh nicht zu rechtfer-
+    // tigen. fcMedium: bleibt im Default-Profil sichtbar, verlaesst aber
+    // unter der Evidenz-Politik (uEvidenceTiering) den Error-Tier.
+    // ZURUECK auf fcHigh nur je EVIDENZPFAD (K2 Stufe 3) und nur mit
+    // frischer Korpus-Messung - nie pauschal. EIGENER Case-Zweig aus
+    // demselben Grund wie fkDfmCrossFormCoupling eins drueber.
+    fkMemoryLeak: Result := fcMedium;
+
   else
     Result := fcHigh;
   end;

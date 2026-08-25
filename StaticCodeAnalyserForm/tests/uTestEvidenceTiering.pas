@@ -29,6 +29,7 @@ type
     [Test] procedure FileReadError_BleibtUnangetastet;
     [Test] procedure RueckgabeZaehltNurGedeckelte;
     [Test] procedure PathOverride_Hochstufung_GewinntGegenDenDeckel;
+    [Test] procedure MemoryLeak_DefaultKonfidenz_IstMedium;
   end;
 
 implementation
@@ -178,6 +179,17 @@ begin
   finally
     L.Free;
   end;
+end;
+
+procedure TTestEvidenceTiering.MemoryLeak_DefaultKonfidenz_IstMedium;
+begin
+  // GOVERNANCE-PIN (K2 Stufe 2): SCA001 steht wegen 62-78 % Korpus-FP
+  // (Voll-Audit 2026-08-15) auf fcMedium. Wer diesen Test rot macht,
+  // will SCA001 re-promoten - das ist NUR mit frischer Korpus-Messung
+  // unter 5 % FP je Evidenzpfad zulaessig (Trust-Budget, Konzept
+  // FpUnter5Prozent). Der Pin schuetzt vor versehentlichem Zuruecksetzen.
+  Assert.IsTrue(KindDefaultConfidence(fkMemoryLeak) = fcMedium,
+    'SCA001 Trust-Budget-Demote (62-78 % FP) darf nicht ohne Messung kippen');
 end;
 
 initialization

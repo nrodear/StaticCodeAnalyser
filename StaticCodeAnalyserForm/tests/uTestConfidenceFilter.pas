@@ -89,7 +89,11 @@ end;
 procedure TTestConfidenceFilter.KindDefaultConfidence_BugKindsAreHigh;
 // Struktureller Bug-Match -> fcHigh
 begin
-  Assert.AreEqual<TFindingConfidence>(fcHigh,
+  // fkMemoryLeak wurde 2026-08-26 auf fcMedium demotet (Trust-Budget,
+  // K2 Stufe 2: 62-78% Korpus-FP im Voll-Audit 2026-08-15; Rueckweg nur
+  // je Evidenzpfad mit frischer Messung). Der Governance-Pin dazu liegt
+  // in uTestEvidenceTiering.MemoryLeak_DefaultKonfidenz_IstMedium.
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
     KindDefaultConfidence(fkMemoryLeak));
   // fkUseAfterFree wurde 2026-06-28 auf fcLow demotet (~94% FP, CFG noetig) -
   // siehe KindDefaultConfidence_HardenedHeuristicsAreLow.
@@ -187,7 +191,10 @@ begin
     Assert.AreEqual<TFindingConfidence>(fcMedium, F.Confidence,
       'SetKind soll fcMedium fuer Metrik-Kind setzen');
 
-    F.SetKind(fkMemoryLeak);
+    // fkNilDeref statt fkMemoryLeak: SCA001 ist seit dem Trust-Budget-
+    // Demote (K2 Stufe 2, 2026-08-26) fcMedium und taugt nicht mehr als
+    // fcHigh-Beispiel.
+    F.SetKind(fkNilDeref);
     Assert.AreEqual<TFindingConfidence>(fcHigh, F.Confidence,
       'SetKind soll fcHigh fuer Bug-Kind setzen');
   finally
