@@ -347,8 +347,12 @@ begin
   // Rauschen. Gleiche Bedingung wie im SARIF-Pfad - dort kam sie mit der
   // Mehrzeilen-Welle, der Sonar-Report hatte sie nie und zeigte jeden
   // mehrzeiligen Fund als Einzeiler.
-  if F.EndLine > LineNo then
-    Range.AddPair('endLine', TJSONNumber.Create(F.EndLine));
+  // SpanEnd statt Rohfeld EndLine: der Vertrag in uMethodd12 ("nicht
+  // direkt lesen - SpanEnd/IsMultiLine benutzen, die klemmen") gilt
+  // auch hier; der SARIF-Schwesterpfad haelt sich laengst daran.
+  // Ausgabe byte-identisch, solange EndLine geklemmt gueltig ist (G3-2).
+  if F.SpanEnd > LineNo then
+    Range.AddPair('endLine', TJSONNumber.Create(F.SpanEnd));
   Loc.AddPair('textRange', Range);
 
   Result.AddPair('primaryLocation', Loc);

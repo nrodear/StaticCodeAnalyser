@@ -240,6 +240,25 @@ begin
   Result := Build(F, TFixHintResolver.FixHint(F));
 end;
 
+function MdZelle(const S: string): string;
+// Markdown-Tabellenzelle: '|' wuerde die Spalte beenden, Zeilenumbrueche
+// die Zeile. Beides kommt in Meldetexten real vor (SCA015 zitiert
+// Quelltext-Strings).
+begin
+  Result := StringReplace(S, '|', '\|', [rfReplaceAll]);
+  Result := StringReplace(Result, #13#10, ' ', [rfReplaceAll]);
+  Result := StringReplace(Result, #10, ' ', [rfReplaceAll]);
+  Result := StringReplace(Result, #13, ' ', [rfReplaceAll]);
+end;
+
+function MdCode(const S: string): string;
+// Inhalt eines `Code-Spans`: ein Backtick im Namen beendet den Span.
+// Entfernen statt escapen - in einem Span gibt es kein Escape.
+begin
+  Result := MdZelle(StringReplace(S, '`', '', [rfReplaceAll]));
+end;
+
+
 class function TClaudePrompt.Build(F: TLeakFinding;
   const Hint: TFixHint): string;
 var
@@ -262,18 +281,22 @@ begin
     SB.AppendLine('');
 
     // -- Metadaten als Tabelle --------------------------------------------
+    // Nutzdaten-Zellen laufen durch MdZelle/MdCode (unten): ein '|' im
+    // Meldetext oder Pfad zerreisst sonst die Pipe-Tabelle, ein '`' im
+    // Methodennamen den Code-Span - und das Modell liest dann eine
+    // kaputte Tabelle als Teil der Aufgabe (G3-3).
     SB.AppendLine('## ' + _('Finding'));
     SB.AppendLine('');
     SB.AppendLine('| ' + _('Field') + ' | ' + _('Value') + ' |');
     SB.AppendLine('|------|------|');
-    SB.AppendLine('| ' + _('File') + ' | `' + F.FileName + '` |');
+    SB.AppendLine('| ' + _('File') + ' | `' + MdCode(F.FileName) + '` |');
     SB.AppendLine('| ' + _('Line') + ' | ' + F.LineNumber + ' |');
     if F.MethodName <> '' then
-      SB.AppendLine('| ' + _('Method') + ' | `' + F.MethodName + '` |');
+      SB.AppendLine('| ' + _('Method') + ' | `' + MdCode(F.MethodName) + '` |');
     SB.AppendLine('| ' + _('Severity') + ' | ' + F.SeverityText + ' |');
     SB.AppendLine('| ' + _('Type') + ' | ' + F.TypeText + ' |');
     SB.AppendLine('| ' + _('Rule') + ' | `' + KindName(F.Kind) + '` |');
-    SB.AppendLine('| ' + _('Detail') + ' | ' + F.MissingVar + ' |');
+    SB.AppendLine('| ' + _('Detail') + ' | ' + MdZelle(F.MissingVar) + ' |');
     SB.AppendLine('');
 
     if Hint.Description <> '' then

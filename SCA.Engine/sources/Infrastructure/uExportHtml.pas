@@ -465,25 +465,34 @@ begin
         begin
           fnDisp := HtmlDisplayPath(F.FileName, ABaseDir);
           Files.Add(fnDisp);
-          // Severity-Bit pro Datei akkumulieren.
-          if not FilesSev.TryGetValue(fnDisp, SevMask) then SevMask := 0;
-          case F.Severity of
-            lsError   : SevMask := SevMask or 1;
-            lsWarning : SevMask := SevMask or 2;
-            lsHint    : SevMask := SevMask or 4;
-          end;
-          FilesSev.AddOrSetValue(fnDisp, SevMask);
-          // Per-Datei-Aggregat fuer Top-Dateien-Risiko-Ranking (#11).
-          if not FileAgg.TryGetValue(fnDisp, Agg) then
+          // DERSELBE Kind-Guard wie bei nErr/nWarn/nHint oben (A3):
+          // ein Lesefehler ist kein Befund des Codes. Die Vorfassung
+          // schuetzte nur die Summenkacheln - in der Dateiliste und im
+          // Risiko-Ranking zaehlte der Lesefehler weiter als Error, und
+          // der Kommentar am data-sev-Emit ('Leer wenn die Datei nur
+          // Read-Errors enthaelt') war dadurch gelogen (G3-1).
+          if F.Kind <> fkFileReadError then
           begin
-            Agg.Err := 0; Agg.Warn := 0; Agg.Hint := 0;
+            // Severity-Bit pro Datei akkumulieren.
+            if not FilesSev.TryGetValue(fnDisp, SevMask) then SevMask := 0;
+            case F.Severity of
+              lsError   : SevMask := SevMask or 1;
+              lsWarning : SevMask := SevMask or 2;
+              lsHint    : SevMask := SevMask or 4;
+            end;
+            FilesSev.AddOrSetValue(fnDisp, SevMask);
+            // Per-Datei-Aggregat fuer Top-Dateien-Risiko-Ranking (#11).
+            if not FileAgg.TryGetValue(fnDisp, Agg) then
+            begin
+              Agg.Err := 0; Agg.Warn := 0; Agg.Hint := 0;
+            end;
+            case F.Severity of
+              lsError   : Inc(Agg.Err);
+              lsWarning : Inc(Agg.Warn);
+              lsHint    : Inc(Agg.Hint);
+            end;
+            FileAgg.AddOrSetValue(fnDisp, Agg);
           end;
-          case F.Severity of
-            lsError   : Inc(Agg.Err);
-            lsWarning : Inc(Agg.Warn);
-            lsHint    : Inc(Agg.Hint);
-          end;
-          FileAgg.AddOrSetValue(fnDisp, Agg);
         end;
       end;
 
@@ -579,9 +588,11 @@ begin
     SB.AppendLine('    th, td { border-bottom: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }');
     SB.AppendLine('    th { background: #f4f4f4; font-weight: 600; }');
     SB.AppendLine('    tr.err  td.sev { color: #b00000; font-weight: 600; }');
+    SB.AppendLine('    tr.readerr td.sev { color: #b00000; font-weight: 600; }');
     SB.AppendLine('    tr.warn td.sev { color: #b08000; font-weight: 600; }');
     SB.AppendLine('    tr.hint td.sev { color: #5a8000; font-weight: 600; }');
     SB.AppendLine('    tr.err  { background: #fff5f5; }');
+    SB.AppendLine('    tr.readerr { background: #fff5f5; }');
     SB.AppendLine('    tr.warn { background: #fffbe8; }');
     SB.AppendLine('    .num { text-align: right; font-variant-numeric: tabular-nums; color: #666; }');
     SB.AppendLine('    /* Klickbare Befund-Zeile + Folgezeile mit Hint */');
@@ -794,9 +805,11 @@ begin
     SB.AppendLine('    :root[data-theme="dark"] th, :root[data-theme="dark"] td { border-bottom-color: #3a3a3a; }');
     SB.AppendLine('    :root[data-theme="dark"] th { background: #2c2c2c; }');
     SB.AppendLine('    :root[data-theme="dark"] tr.err  { background: #322020; }');
+    SB.AppendLine('    :root[data-theme="dark"] tr.readerr { background: #322020; }');
     SB.AppendLine('    :root[data-theme="dark"] tr.warn { background: #322d1c; }');
     SB.AppendLine('    :root[data-theme="dark"] tr.hint { background: #20301c; }');
     SB.AppendLine('    :root[data-theme="dark"] tr.err  td.sev { color: #ff7373; }');
+    SB.AppendLine('    :root[data-theme="dark"] tr.readerr td.sev { color: #ff7373; }');
     SB.AppendLine('    :root[data-theme="dark"] tr.warn td.sev { color: #e6b45a; }');
     SB.AppendLine('    :root[data-theme="dark"] tr.hint td.sev { color: #a8d878; }');
     SB.AppendLine('    :root[data-theme="dark"] tr.finding:hover { filter: brightness(1.25); }');
@@ -920,9 +933,11 @@ begin
     SB.AppendLine('    :root[data-theme="sepia"] th, :root[data-theme="sepia"] td { border-bottom-color: #d8c7a4; }');
     SB.AppendLine('    :root[data-theme="sepia"] th { background: #eadcba; }');
     SB.AppendLine('    :root[data-theme="sepia"] tr.err  { background: #f2d9cb; }');
+    SB.AppendLine('    :root[data-theme="sepia"] tr.readerr { background: #f2d9cb; }');
     SB.AppendLine('    :root[data-theme="sepia"] tr.warn { background: #f0e2bd; }');
     SB.AppendLine('    :root[data-theme="sepia"] tr.hint { background: #e5e6c6; }');
     SB.AppendLine('    :root[data-theme="sepia"] tr.err  td.sev { color: #a81c00; }');
+    SB.AppendLine('    :root[data-theme="sepia"] tr.readerr td.sev { color: #a81c00; }');
     SB.AppendLine('    :root[data-theme="sepia"] tr.warn td.sev { color: #7d5200; }');
     SB.AppendLine('    :root[data-theme="sepia"] tr.hint td.sev { color: #47661a; }');
     SB.AppendLine('    :root[data-theme="sepia"] tr.finding:hover { filter: brightness(0.96); }');
@@ -1576,6 +1591,15 @@ begin
           Break;
         Inc(RowsEmitted);
 
+        // Lesefehler bekommen eine EIGENE Zeilenklasse: 'readerr' erbt
+        // die Error-Optik per CSS, aber der JS-Recount der Kacheln
+        // (classList.contains('err')) und der Severity-Filter zaehlen
+        // bzw. treffen ihn nicht mehr - konsistent zu A3, wo er aus den
+        // Summenkacheln schon draussen war. Sichtbar bleibt er unter
+        // "alle" und ueber seinen Sortierrang 3 am Tabellenende.
+        if F.Kind = fkFileReadError then
+          SevCl := 'readerr'
+        else
         case F.Severity of
           lsError   : SevCl := 'err';
           lsWarning : SevCl := 'warn';
@@ -2429,7 +2453,16 @@ begin
     SB.AppendLine('                qfHtml + ''</li>'';');
     SB.AppendLine('      });');
     SB.AppendLine('      ol.innerHTML = html;');
-    SB.AppendLine('      if (h2) h2.textContent = ''Top '' + topN.length + '' Detektoren (von '' + pool.length + '')'';');
+    // i18n-treu: dieselbe Ueberschrift traegt data-i18n="hdr-top-detectors";
+    // ein deutsches Literal hier hat sie beim ersten Rebuild fuer JEDE
+    // Sprache ueberschrieben, und applyLanguage las danach stale
+    // data-top-n-Werte (G3-4). Jetzt pflegen wir die data-Attribute und
+    // rendern ueber T(...) - der naechste Sprachwechsel bleibt korrekt.
+    SB.AppendLine('      if (h2) {');
+    SB.AppendLine('        h2.dataset.topN = topN.length;');
+    SB.AppendLine('        h2.dataset.topTotal = pool.length;');
+    SB.AppendLine('        h2.textContent = T(''hdr-top-detectors'', h2.dataset.topN, h2.dataset.topTotal);');
+    SB.AppendLine('      }');
     SB.AppendLine('      ol.querySelectorAll(''li[data-kind]'').forEach(wireTopDetectorClick);');
     SB.AppendLine('    }');
     SB.AppendLine('');
