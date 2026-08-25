@@ -44,6 +44,12 @@ type
     // Zeile fuer echte Farben haelt, faerbt die Marker unsichtbar - das
     // faellt sonst erst im Editor auf.
     [Test] procedure DefaultSchemeDelegatesAndDoesNotReadTheTable;
+    // Fremdbericht 2026-08-23, Befund 3: EditorColorSchemeToStr hatte ein
+    // else und persistierte jedes unbekannte Schema als 'default'. Der
+    // Anwender waehlt es, die INI behaelt etwas anderes, beim naechsten
+    // Laden ist die Wahl weg - ohne Fehler, ohne Hinweis. Der Rundlauf
+    // haelt fest, dass jedes Schema seinen eigenen Token hat.
+    [Test] procedure EverySchemeSurvivesTheIniRoundTrip;
     // System-Color-Indices muessen aufgeloest werden, nicht durchrutschen.
     [Test] procedure SystemColorIndexIsResolved;
     // EnsureHintContrast (Nur-Text-Hint 2026-08-12): der Akzent haelt
@@ -61,6 +67,7 @@ uses
   Winapi.Windows,    // GetRValue/GetGValue/GetBValue - stehen NICHT in
                      // Vcl.Graphics, das liefert nur ColorToRGB
   System.SysUtils,   // Format in den Kontrast-Fehlermeldungen
+  System.Classes,    // TStringList - Doppelte-Token-Probe
   System.UITypes, Vcl.Graphics, uAnalyserTypes, uAnalyserTheme;
 
 function Lum601(C: TColor): Integer;
@@ -200,6 +207,37 @@ begin
   Assert.AreNotEqual<TColor>(EditorAccent(fsError, ecsDefault, False),
     EditorAccent(fsError, ecsGray, False),
     'ecsGray muss sich vom Default unterscheiden');
+end;
+
+procedure TTestContrastColor.EverySchemeSurvivesTheIniRoundTrip;
+var
+  Sch    : TEditorColorScheme;
+  Token  : string;
+  Gesehen: TStringList;
+begin
+  Gesehen := TStringList.Create;
+  try
+    Gesehen.CaseSensitive := False;
+    for Sch := Low(TEditorColorScheme) to High(TEditorColorScheme) do
+    begin
+      Token := EditorColorSchemeToStr(Sch);
+      Assert.IsNotEmpty(Token, 'Schema ohne INI-Token');
+      Assert.AreEqual<TEditorColorScheme>(Sch, ParseEditorColorScheme(Token),
+        'Rundlauf gebrochen fuer Token ' + QuotedStr(Token));
+      // Zwei Schemata mit demselben Token waeren dasselbe Leck in gruen:
+      // der Rundlauf ginge, aber eines der beiden waere unerreichbar.
+      Assert.IsTrue(Gesehen.IndexOf(Token) < 0,
+        'Token ' + QuotedStr(Token) + ' ist doppelt vergeben');
+      Gesehen.Add(Token);
+    end;
+
+    // Und der Eintrag "Text" liegt HINTER den Schemata, nicht auf einem.
+    Assert.AreEqual<Integer>(High(EDITOR_COLOR_SCHEME_ORDER) + 1,
+      SCHEME_IDX_TEXTONLY,
+      'der TextOnly-Eintrag ueberdeckt ein Farbschema im Combo');
+  finally
+    Gesehen.Free;
+  end;
 end;
 
 initialization

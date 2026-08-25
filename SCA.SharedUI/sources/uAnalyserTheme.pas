@@ -106,8 +106,9 @@ function IsEditorBgDark: Boolean;
 /// </remarks>
 procedure RefreshEditorBgDarkCache;
 
-// String <-> Enum Konvertierung fuer INI-Persistierung. Akzeptiert
-// 'default', 'gray', 'subtle' case-insensitiv. Unbekannt -> ecsDefault.
+// String <-> Enum Konvertierung fuer INI-Persistierung. Akzeptiert die
+// Tokens aus EDITOR_COLOR_SCHEME_INFO, case-insensitiv. Unbekannt ->
+// ecsDefault (mit Debug-Log, damit ein Tippfehler auffaellt).
 function ParseEditorColorScheme(const S: string): TEditorColorScheme;
 function EditorColorSchemeToStr(Scheme: TEditorColorScheme): string;
 
@@ -119,13 +120,46 @@ function EditorColorSchemeToStr(Scheme: TEditorColorScheme): string;
 // erhalten.
 procedure RefreshEditorColorSchemeCache(const ASchemeStr: string);
 
+type
+  /// <summary>Alles, was je Farbschema variiert: der Token fuer die INI
+  /// und der Text fuer die Anzeige.</summary>
+  TEditorColorSchemeInfo = record
+    /// <summary>INI-Wert. STABIL und niemals uebersetzt - er steht in
+    /// Anwender-Dateien und muss ein Update ueberleben.</summary>
+    Token   : string;
+    /// <summary>Anzeigetext. Englisch hinterlegt, die Uebersetzung holt
+    /// der Aufrufer mit _() - die msgid bleibt damit dieselbe wie zu der
+    /// Zeit, als der Text noch literal im Options-Dialog stand.</summary>
+    Caption : string;
+  end;
+
 const
+  // EINE Tabelle ueber das GANZE Enum (Fremdbericht 2026-08-23, Befund 3).
+  //
+  // Vorher lagen dieselben drei Schemata an drei Stellen: ein
+  // array[0..2] fuer die Reihenfolge, drei literale Items.Add im
+  // Options-Dialog und zwei case-Anweisungen fuer die Persistenz. Ein
+  // viertes Schema waere an allen dreien still durchgefallen - im
+  // schlimmsten Fall haette der Anwender es gewaehlt, und die INI haette
+  // 'default' behalten, weil EditorColorSchemeToStr ein else hatte.
+  //
+  // Jetzt loest dasselbe Versaeumnis E2072 aus, und zwar hier.
+  EDITOR_COLOR_SCHEME_INFO: array[TEditorColorScheme] of TEditorColorSchemeInfo =
+    ((Token: 'default'; Caption: 'Default (bright colors)'),
+     (Token: 'gray';    Caption: 'Gray (neutral)'),
+     (Token: 'subtle';  Caption: 'Subtle (muted colors)'));
+
   // Display-Reihenfolge fuer ComboBoxen. Index hier == ComboBox.ItemIndex.
-  // Loest die ehemalige Dreifach-case-Statement (Items.Add + Load-Map +
-  // Save-Map) auf. Neues Schema dazu = ein Eintrag, zwei case-Branches
-  // verschwinden.
-  EDITOR_COLOR_SCHEME_ORDER: array[0..2] of TEditorColorScheme =
+  // Die Laenge haengt am Enum, nicht an einer Zahl - ein neues Schema
+  // ohne Eintrag hier gibt E2072 statt einer stillen Luecke im Combo.
+  EDITOR_COLOR_SCHEME_ORDER: array[0..Ord(High(TEditorColorScheme))] of TEditorColorScheme =
     (ecsDefault, ecsGray, ecsSubtle);
+
+  /// <summary>ComboBox-Index des Eintrags "Text", der KEIN Farbschema
+  /// ist, sondern [UI] OverlayTextOnly schaltet. Er haengt hinten an den
+  /// Schemata; die Zahl stand vorher zweimal literal im Options-Dialog
+  /// (uIDESCAOptions, zwei verschiedene Methoden).</summary>
+  SCHEME_IDX_TEXTONLY = High(EDITOR_COLOR_SCHEME_ORDER) + 1;
 
 // Konvertierung ComboBox.ItemIndex <-> TEditorColorScheme. Fuer Caller
 // die das Combo-Mapping nicht jedes Mal selbst hinschreiben wollen.
@@ -420,16 +454,19 @@ begin
 end;
 
 function ParseEditorColorScheme(const S: string): TEditorColorScheme;
-var Lower : string;
+// Schleife ueber die Tokens der Tabelle - ein neues Schema wird damit
+// gelesen, sobald es dort steht, ohne dass hier jemand nachzieht.
+var
+  Lower : string;
+  Sch   : TEditorColorScheme;
 begin
   Lower := LowerCase(Trim(S));
-  if Lower = 'gray' then Exit(ecsGray);
-  if Lower = 'subtle' then Exit(ecsSubtle);
-  if Lower = 'default' then Exit(ecsDefault);
-  // Unbekannter Wert: still auf Default zurueck, aber Debug-Log fuer
-  // den Fall dass der User einen Tippfehler in der INI hat (z.B. 'grey'
-  // statt 'gray'). Leere String + Erst-Init liefern auch Default, das
-  // ist OK - nur 'echte' Tippfehler werden geloggt.
+  for Sch := Low(TEditorColorScheme) to High(TEditorColorScheme) do
+    if Lower = EDITOR_COLOR_SCHEME_INFO[Sch].Token then Exit(Sch);
+  // Unbekannter Wert: still auf Default zurueck, aber Debug-Log fuer den
+  // Fall, dass in der INI ein Tippfehler steht (z.B. 'grey' statt
+  // 'gray'). Leerer String und Erst-Init liefern auch Default, das ist
+  // richtig - nur 'echte' Tippfehler werden geloggt.
   if Lower <> '' then
     Winapi.Windows.OutputDebugString(PChar(
       'SCA: unknown EditorColorScheme value ' + QuotedStr(S) +
@@ -438,13 +475,11 @@ begin
 end;
 
 function EditorColorSchemeToStr(Scheme: TEditorColorScheme): string;
+// Nachschlagen statt case: das fruehere else hat ein neues Schema still
+// als 'default' persistiert - der Anwender waehlt es, die INI behaelt
+// etwas anderes, und beim naechsten Laden ist die Wahl weg.
 begin
-  case Scheme of
-    ecsGray:   Result := 'gray';
-    ecsSubtle: Result := 'subtle';
-  else
-    Result := 'default';
-  end;
+  Result := EDITOR_COLOR_SCHEME_INFO[Scheme].Token;
 end;
 
 procedure RefreshEditorColorSchemeCache(const ASchemeStr: string);

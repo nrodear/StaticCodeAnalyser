@@ -478,9 +478,13 @@ begin
                                   lblEditorColorScheme.Height + 2;
   cboEditorColorScheme.Width   := 220;
   cboEditorColorScheme.Style   := csDropDownList;
-  cboEditorColorScheme.Items.Add(_('Default (bright colors)'));   // ecsDefault
-  cboEditorColorScheme.Items.Add(_('Gray (neutral)'));            // ecsGray
-  cboEditorColorScheme.Items.Add(_('Subtle (muted colors)'));     // ecsSubtle
+  // Aus der Tabelle, nicht aus drei literalen Zeilen: ein neues
+  // Farbschema erscheint damit von selbst, statt still zu fehlen
+  // (Fremdbericht 2026-08-23, Befund 3). Die msgids bleiben dieselben -
+  // _() bekommt weiterhin den englischen Text.
+  for var Idx := Low(EDITOR_COLOR_SCHEME_ORDER) to High(EDITOR_COLOR_SCHEME_ORDER) do
+    cboEditorColorScheme.Items.Add(
+      _(EDITOR_COLOR_SCHEME_INFO[EDITOR_COLOR_SCHEME_ORDER[Idx]].Caption));
   // Vierter Eintrag = Nur-Text-Variante ([UI] OverlayTextOnly=1,
   // Nutzerentscheid 2026-08-13): bright/gray/subtle behalten das
   // Fenster-Overlay mit voller Hint-Ansicht (Stufe 2) wie bisher,
@@ -819,8 +823,6 @@ procedure TSCAOptionsFrame.LoadDisplaySection(ASettings: TRepoSettings);
 // Zurueckwechseln gilt wieder das alte Schema (Nutzerentscheid
 // 2026-08-13: bright/gray/subtle = Fenster mit Stufe 2 wie bisher,
 // 'Text' = nur Stufe 1).
-const
-  SCHEME_IDX_TEXTONLY = 3;
 begin
   if Assigned(cboOverlayPos) then
   begin
@@ -846,8 +848,6 @@ procedure TSCAOptionsFrame.SaveDisplaySection(ASettings: TRepoSettings);
 // Index 3 = 'Text' (OverlayTextOnly=1, Farbschema bleibt UNANGETASTET,
 // damit Streifen ihre Farben behalten und der Zurueckwechsel das alte
 // Schema wiederfindet), Index 0..2 = Fenster-Overlay + Farbschema.
-const
-  SCHEME_IDX_TEXTONLY = 3;
 begin
   if Assigned(cboOverlayPos) then
   begin
