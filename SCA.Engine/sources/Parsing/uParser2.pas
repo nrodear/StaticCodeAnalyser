@@ -1034,8 +1034,22 @@ begin
         SecNode.Add(nkField, VN, T.Line, T.Col).TypeRef := FullRef;
       end;
 
-      SkipToSemicolon;
-      Eat(tkSemicolon);
+      // Recovery NICHT ueber eine Sektionsgrenze hinweg: der Wert-Scan
+      // oben bricht bei unvollstaendigen Klammern an implementation/
+      // procedure/... ab - SkipToSemicolon kennt diese Tokens aber nicht
+      // als Haltepunkte und fraesse dann 'implementation procedure P'
+      // bis zum naechsten ';' (der Robustness-Test
+      // Parser_UnclosedConstParen_DoesNotEatUnit hat genau das im
+      // ersten Bau gefangen, TestInsight 2026-08-25). An der Grenze
+      // stehen bleiben - der Exit-Waechter am Schleifenkopf fuehrt
+      // alle diese Tokens und beendet die Sektion sauber.
+      if not (Tok.Kind in [tkKwImplementation, tkKwType, tkKwVar,
+                           tkKwConst, tkKwProcedure, tkKwFunction,
+                           tkKwBegin, tkKwEnd]) then
+      begin
+        SkipToSemicolon;
+        Eat(tkSemicolon);
+      end;
     end;
   finally
     Names.Free;
