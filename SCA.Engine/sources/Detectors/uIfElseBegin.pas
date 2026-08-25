@@ -82,6 +82,11 @@ begin
       // Pattern: word `end` gefolgt von ws gefolgt von word `else`.
       p := PosEx('end', Lwr, p);
       if p = 0 then Break;
+      // Nicht in einem String-Literal - s. TDetectorUtils.InStringLiteral.
+      // Gemessen 2026-08-25: der einzige Fund im eigenen tests-Verzeichnis
+      // stand in einem Fixture-String.
+      if TDetectorUtils.InStringLiteral(Code, p) then
+      begin Inc(p, 3); Continue; end;
       if (p > 1) and IsIdent(Code[p - 1]) then begin Inc(p); Continue; end;
       if (p + 3 <= n) and IsIdent(Code[p + 3]) then begin Inc(p); Continue; end;
       // Skip ws nach `end`

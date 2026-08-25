@@ -144,6 +144,11 @@ begin
     begin
       pIf := PosEx('if', Lwr, pIf);
       if pIf = 0 then Break;
+      // Nicht in einem String-Literal - der Strip laesst Literale stehen.
+      // Gemessen 2026-08-25: alle drei Funde im eigenen tests-Verzeichnis
+      // kamen aus Fixture-Strings. Siehe TDetectorUtils.InStringLiteral.
+      if TDetectorUtils.InStringLiteral(Code, pIf) then
+      begin Inc(pIf, 2); Continue; end;
       // Wortgrenzen
       if (pIf > 1) and IsIdent(Code[pIf - 1]) then begin Inc(pIf); Continue; end;
       if (pIf + 2 <= n) and IsIdent(Code[pIf + 2]) then begin Inc(pIf); Continue; end;

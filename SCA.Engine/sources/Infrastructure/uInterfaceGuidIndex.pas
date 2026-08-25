@@ -128,38 +128,6 @@ uses
   uFileTextCache,   // TryLoadLinesWithFallback - Laden ohne Cache-Eintrag
   uDetectorUtils;
 
-function InStringLiteral(const ACode: string; APos: Integer): Boolean;
-// True, wenn APos INNERHALB eines Pascal-String-Literals liegt.
-//
-// WARUM DAS NOETIG IST: der Kommentar-Strip laesst Strings absichtlich
-// stehen - sonst waere die GUID selbst weg, die ja als Literal in den
-// eckigen Klammern steht. Damit steht aber auch jedes andere Pascal in
-// Strings noch da, und `'IFoo = interface'` in einer Testfixture oder in
-// einem Hint-Beispiel saehe wie eine Deklaration aus.
-//
-// Das ist keine Theorie: derselbe Weg in uEmptyInterface meldet heute
-// fuenf solcher Phantome allein im tests-Verzeichnis (Messung
-// 2026-08-25), und im Repo stehen 85 Zeilen dieser Art in 13 Dateien -
-// darunter uFixHint.pas, also Produktivcode.
-//
-// Zaehlweise: Anfuehrungszeichen ab dem Zeilenanfang. Ein Pascal-Literal
-// endet spaetestens am Zeilenende, deshalb genuegt die Zeile. Das
-// verdoppelte '' innerhalb eines Literals zaehlt als zwei und laesst die
-// Paritaet unveraendert - genau richtig, es steht ja weiter drin.
-var
-  i      : Integer;
-  Anzahl : Integer;
-begin
-  Anzahl := 0;
-  i := APos - 1;
-  while (i >= 1) and (ACode[i] <> #10) do
-  begin
-    if ACode[i] = '''' then Inc(Anzahl);
-    Dec(i);
-  end;
-  Result := Odd(Anzahl);
-end;
-
 function IstLeerraum(C: Char): Boolean;
 begin
   Result := CharInSet(C, [' ', #9, #10, #13]);
@@ -325,7 +293,7 @@ begin
       if (p + 9 <= Length(ACode)) and TDetectorUtils.IsIdentChar(ACode[p + 9]) then
       begin Inc(p); Continue; end;
       // Nicht in einem String-Literal - siehe InStringLiteral.
-      if InStringLiteral(ACode, p) then
+      if TDetectorUtils.InStringLiteral(ACode, p) then
       begin Inc(p, 9); Continue; end;
 
       // Links ein '='? Sonst ist es das Unit-Schluesselwort oder eine

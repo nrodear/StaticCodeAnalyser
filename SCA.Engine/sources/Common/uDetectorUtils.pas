@@ -287,6 +287,28 @@ type
       out LineForChar: TArray<Integer>; AContext: TAnalyzeContext;
       const FileName: string): string; static;
 
+    /// <summary>True, wenn APos INNERHALB eines Pascal-String-Literals
+    /// liegt.</summary>
+    /// <remarks>
+    ///   Pflichtpruefung fuer JEDEN Detektor auf
+    ///   StripFileCommentsKeepStrings: der Strip laesst Literale
+    ///   ABSICHTLICH stehen (uInterfaceGuid braucht die GUID, die als
+    ///   Literal in eckigen Klammern steht). Damit steht aber auch jedes
+    ///   andere Pascal in Strings noch da - Testfixtures, Hint-Beispiele,
+    ///   Code-Generator-Vorlagen.
+    ///
+    ///   Gemessen am 2026-08-25 im eigenen tests-Verzeichnis:
+    ///   EmptyInterface 6 von 6 Funden, RedundantConditional 3 von 3,
+    ///   IfElseBegin 1 von 1 - alles Text aus Fixtures.
+    ///
+    ///   Gezaehlt werden Anfuehrungszeichen ab Zeilenanfang; ein
+    ///   Pascal-Literal endet spaetestens am Zeilenende. Das verdoppelte
+    ///   '' innerhalb eines Literals zaehlt als zwei und laesst die
+    ///   Paritaet unveraendert - richtig, es steht ja weiter drin.
+    /// </remarks>
+    class function InStringLiteral(const ACode: string;
+      APos: Integer): Boolean; static;
+
     // Rueckrechnung Match-Position -> 1-basierte Quellzeile ueber die
     // LineForChar-Map aus StripStringsAndComments (dort: 0-basierter
     // Zeilenindex pro Zeichen). 0 wenn APos ausserhalb der Map liegt.
@@ -1192,6 +1214,22 @@ begin
   Result := StripFileCommentsKeepStrings(Lines, LineForChar);
   if AContext <> nil then
     AContext.PutKeepStringsText(FileName, Result, LineForChar);
+end;
+
+class function TDetectorUtils.InStringLiteral(const ACode: string;
+  APos: Integer): Boolean;
+var
+  i      : Integer;
+  Anzahl : Integer;
+begin
+  Anzahl := 0;
+  i := APos - 1;
+  while (i >= 1) and (ACode[i] <> #10) do
+  begin
+    if ACode[i] = '''' then Inc(Anzahl);
+    Dec(i);
+  end;
+  Result := Odd(Anzahl);
 end;
 
 class function TDetectorUtils.LineForPos(const LineFor: TArray<Integer>;

@@ -143,6 +143,12 @@ begin
       pInt := PosEx('interface', Lwr, pInt);
       if pInt = 0 then Break;
       pStart := pInt;
+      // Nicht in einem String-Literal. Der Strip laesst Literale stehen,
+      // deshalb sah dieser Lauf bis 2026-08-25 jedes 'IFoo = interface'
+      // in einer Fixture als Deklaration - im eigenen tests-Verzeichnis
+      // waren das ALLE sechs Funde. Siehe TDetectorUtils.InStringLiteral.
+      if TDetectorUtils.InStringLiteral(Code, pInt) then
+      begin Inc(pInt, 9); Continue; end;
       // Wortgrenzen
       if (pInt > 1) and IsIdent(Code[pInt - 1]) then
       begin Inc(pInt); Continue; end;
