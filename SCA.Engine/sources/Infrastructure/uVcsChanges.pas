@@ -647,8 +647,14 @@ begin
   Root := DetectRepo(APath, Kind);
   if (Root = '') or (Kind <> vkGit) then
   begin
-    AInfo := _('git not found. Install Git for Windows (git-scm.com) ' +
-               'or set the path to git.exe in analyser.ini.');
+    // Der haeufigste --diff-Fehlerfall ist KEIN fehlendes git, sondern
+    // ein Pfad ausserhalb eines Git-Repos - die alte Meldung schickte
+    // den Anwender git installieren (finales Review, R9; beim
+    // CLI-Nachtest 2026-08-25 aufgefallen, weil der Fix im ersten
+    // Anlauf einem Skript-Abbruch zum Opfer fiel und trotzdem als
+    // erledigt verbucht war). Gleicher unlokalisierter Stil wie die
+    // Schwester-Meldung in GetChangedPasFilesAuto.
+    AInfo := 'Kein Git-Repository in oder oberhalb von "' + APath + '"';
     FreeAndNil(Result);   // nil = Fehler, s. Interface-Vertrag
     Exit;
   end;
