@@ -10,7 +10,7 @@ interface
 
 uses
   DUnitX.TestFramework,
-  System.SysUtils, System.Generics.Collections,
+  System.Generics.Collections,
   uSCAConsts, uMethodd12, uEvidenceTiering, uPathOverrides;
 
 type
