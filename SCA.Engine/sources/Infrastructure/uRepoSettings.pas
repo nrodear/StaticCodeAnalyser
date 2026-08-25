@@ -178,6 +178,8 @@ type
     FProfile           : string;      // [Rules] Profile = ide-fast|default|strict
     FMinSeverity       : string;      // [Rules] MinSeverity = error|warning|hint
     FMinConfidence     : string;      // [Rules] MinConfidence = low|medium|high
+    FEvidenceTiering   : Boolean;     // [Rules] EvidenceTiering (Severity-Deckel
+                                      // nach Konfidenz, Default True - K2 Stufe 1)
     FIdeProfile        : string;      // [Rules] IdeProfile (Default: ide-fast)
     FIdeMinSeverity    : string;      // [Rules] IdeMinSeverity (Default: hint)
     FDetectorReviewFilterEnabled : Boolean; // [Rules] EnableDetectorReviewFilter
@@ -394,6 +396,14 @@ type
     // uSCAConsts.FindingMinConfidence gespiegelt.
     property MinConfidence:           string      read FMinConfidence
                                                   write FMinConfidence;
+
+    // Evidenz-Politik (K2 Stufe 1): Error-Tier nur fuer fcHigh-Befunde,
+    // fcMedium hoechstens Warning, fcLow hoechstens Hint. Default True;
+    // False = Bestandsverhalten (Severity unabhaengig von Konfidenz).
+    // In ApplyDetectorThresholds nach uSCAConsts.EvidenceTiering
+    // gespiegelt; Politik-Mechanik in uEvidenceTiering.
+    property EvidenceTiering:         Boolean     read FEvidenceTiering
+                                                  write FEvidenceTiering;
 
     // Wie Profile / MinSeverity, aber separat fuer das IDE-Plugin. Der
     // Form-Frame ruft UseIdeRuleSet vor ApplyDetectorThresholds; daraufhin
@@ -1260,6 +1270,7 @@ begin
   FProfile        := '';              // '' = default (= AllKinds, kein Filter)
   FMinSeverity    := 'hint';          // 'hint' = alles laeuft
   FMinConfidence  := 'medium';        // 'medium' = nur fcLow raus (Default)
+  FEvidenceTiering := True;           // Politik AN: Error nur fuer fcHigh
   FIdeProfile     := 'ide-fast';      // IDE-Plugin Default: schnelles Subset
   FIdeMinSeverity := 'hint';          // IDE-Plugin: alle Severities (Subset deckt schon)
   FDetectorReviewFilterEnabled := False; // internes Review-Tool, default aus
@@ -1726,6 +1737,10 @@ begin
     FProfile       := Trim(Ini.ReadString('Rules', 'Profile',       ''));
     FMinSeverity   := Trim(Ini.ReadString('Rules', 'MinSeverity',   'hint')).ToLower;
     FMinConfidence := Trim(Ini.ReadString('Rules', 'MinConfidence', 'medium')).ToLower;
+    // [Rules] EvidenceTiering (K2 Stufe 1, Default AN): Severity-Deckel
+    // nach Konfidenz - 0 = Bestandsverhalten (Opt-out fuer Nutzer, deren
+    // CI-Gates auf den alten Error-Zahlen stehen; CHANGELOG-Hinweis).
+    FEvidenceTiering := Ini.ReadBool('Rules', 'EvidenceTiering', True);
     // IDE-Plugin-spezifische Overrides. Werden via UseIdeRuleSet transient
     // in FProfile/FMinSeverity gespiegelt - die INI bleibt unveraendert.
     FIdeProfile     := Trim(Ini.ReadString('Rules', 'IdeProfile',     'ide-fast'));
@@ -2010,6 +2025,7 @@ begin
     Ini.WriteString('Rules', 'Profile',            FProfile);
     Ini.WriteString('Rules', 'MinSeverity',        FMinSeverity);
     Ini.WriteString('Rules', 'MinConfidence',      FMinConfidence);
+    Ini.WriteBool  ('Rules', 'EvidenceTiering',    FEvidenceTiering);
     Ini.WriteString('Rules', 'IdeProfile',         FIdeProfile);
     Ini.WriteString('Rules', 'IdeMinSeverity',     FIdeMinSeverity);
     Ini.WriteBool  ('Rules', 'EnableDetectorReviewFilter', FDetectorReviewFilterEnabled);
@@ -2125,6 +2141,12 @@ begin
 
   // [Rules] MinConfidence -> globaler Konfidenz-Schwellwert (Post-Filter).
   uSCAConsts.FindingMinConfidence := uSCAConsts.ParseConfidence(FMinConfidence, fcMedium);
+
+  // [Rules] EvidenceTiering -> Evidenz-Politik (Severity-Deckel nach
+  // Konfidenz, uEvidenceTiering). Erreicht via ApplyDetectorThresholds
+  // EXE, Plugin und CLI; der LSP (setzt ApplyRepoIni nicht) faehrt den
+  // Engine-Default aus uSCAConsts (ebenfalls AN) - gleiche Politik.
+  uSCAConsts.EvidenceTiering := FEvidenceTiering;
 
   // [Baseline] PathInFingerprint -> globaler Fingerprint-Modus. GRENZE
   // (TBaselineScope Schritte 2-6): die Baseline-Operationen selbst nehmen

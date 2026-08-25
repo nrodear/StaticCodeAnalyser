@@ -63,8 +63,13 @@ uses
   uAnalyzeContext, uAstFileCache, uFileTextCache, uSymbolReferenceIndex;
 
 const
-  // Garantiert ein lsError-Befund (fkSQLInjection, fcHigh) - robust gegen
-  // Severity-/Confidence-Schwellen.
+  // Garantiert MEHRERE Befunde, darunter einen, der auch unter der
+  // Evidenz-Politik (K2 Stufe 1, uEvidenceTiering) lsError BLEIBT:
+  //   * fkSQLInjection  - fcMedium seit jeher -> unter der Politik nur
+  //     noch Warning (der alte Kommentar "fcHigh" war stale),
+  //   * fkFormatMismatch - fcHigh + Katalog-Error ("%s %d" vs. 1 Arg,
+  //     Muster aus uTestFormatMismatch) -> traegt die ErrorCount>=1-
+  //     Zusicherungen dieser Fixture politik-fest.
   BUG_SRC =
     'unit SampleBug;'#13#10 +
     'interface'#13#10 +
@@ -72,6 +77,7 @@ const
     'procedure Run(const UserId: string);'#13#10 +
     'begin'#13#10 +
     '  Query.SQL.Text := ''SELECT * FROM users WHERE id='' + UserId;'#13#10 +
+    '  ShowMessage(Format(''%s ist %d Jahre alt'', [UserId]));'#13#10 +
     'end;'#13#10 +
     'end.';
 
@@ -265,7 +271,8 @@ begin
   Res := AnalyzeSource(BUG_SRC);
   try
     Assert.IsTrue(Res.FindingCount >= 1, 'In-Memory-Scan findet den Bug');
-    Assert.IsTrue(Res.ErrorCount   >= 1, 'SQL-Injection ist lsError');
+    Assert.IsTrue(Res.ErrorCount   >= 1,
+      'FormatMismatch ist lsError+fcHigh - ueberlebt die Evidenz-Politik');
   finally Res.Free; end;
 end;
 
@@ -297,7 +304,8 @@ begin
   Res := RunSingle(BUG_SRC, '');
   try
     Assert.IsTrue(Res.FindingCount >= 1, 'mind. ein Befund erwartet');
-    Assert.IsTrue(Res.ErrorCount   >= 1, 'SQL-Injection ist lsError');
+    Assert.IsTrue(Res.ErrorCount   >= 1,
+      'FormatMismatch ist lsError+fcHigh - ueberlebt die Evidenz-Politik');
   finally Res.Free; end;
 end;
 

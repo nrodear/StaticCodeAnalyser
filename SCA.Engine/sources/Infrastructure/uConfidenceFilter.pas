@@ -8,8 +8,9 @@ unit uConfidenceFilter;
 // Einordnung in die Post-Filter-Pipeline (vgl. uPathOverrides-Kommentar):
 //   1. Detektoren erzeugen Befunde (Default-Confidence = fcHigh)
 //   2. uSuppression.ApplyToFindings        (// noinspection)
-//   3. uPathOverrides.ApplyToFindings      (analyser.ini [PathOverrides])
-//   4. uConfidenceFilter.ApplyToFindings   (FindingMinConfidence)
+//   3. uEvidenceTiering.ApplyToFindings    ([Rules] EvidenceTiering)
+//   4. uPathOverrides.ApplyToFindings      (analyser.ini [PathOverrides])
+//   5. uConfidenceFilter.ApplyToFindings   (FindingMinConfidence)
 //
 // Der Schwellwert kommt global aus uSCAConsts.FindingMinConfidence (Default
 // fcMedium -> nur fcLow raus). fkFileReadError ist immer ausgenommen, weil
