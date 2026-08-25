@@ -36,6 +36,15 @@ type
     // Status-Text fuer die UI ("Git Branch vs main", "SVN Working Copy", ...).
     // ASettings (optional) ueberschreibt das Auto-Verhalten:
     //   BaseBranch, IncludeWorkingTree, GitExePath, SvnExePath.
+    //
+    // NIL = FEHLER (git/svn nicht auffindbar oder Aufruf gescheitert;
+    // AInfo traegt den Grund), LEERE LISTE = ehrlich nichts geaendert.
+    // Der Unterschied ist der ganze Zweck (G7-1, 2026-08-25): ein
+    // CI-Gate, das einen gescheiterten git-Aufruf als "nichts geaendert"
+    // liest, ist gruen, ohne eine Datei gesehen zu haben - exakt der
+    // Zustand, den die Exit-4-Mechanik fuer Lesefehler ausschliesst.
+    // Kein Base-Branch ist KEIN Fehler (dokumentierter Rueckfall auf
+    // den Working-Tree).
     class function GetChangedPasFiles(const ARepoRoot: string;
       AKind: TVcsKind; out AInfo: string;
       ASettings: TRepoSettings = nil): TStringList; static;
@@ -49,10 +58,15 @@ type
     // beiden Commits geaendert wurden. ARange ist eine git-Ref-Range im
     // Format 'shaA..shaB' oder 'branch1..branch2' (auch '...' fuer
     // "common ancestor"-Diff wird durchgereicht).
-    // Liefert nil wenn:
+    // Liefert nil wenn (und AInfo sagt warum):
     //   - Pfad kein git-Repo ist
-    //   - die Range nicht aufloesbar ist (unbekannter Sha)
+    //   - die Range nicht aufloesbar ist (unbekannter Sha, Shallow-Clone
+    //     ohne gefetchte Base - der GitHub-Actions-Default!)
     //   - git nicht gefunden wurde
+    // Dieser Kontrakt stand hier seit jeher - gehalten hat ihn die
+    // Implementierung erst seit G7-1 (2026-08-25): vorher kam in allen
+    // drei Faellen eine LEERE Liste zurueck, und die CLI hat daraus
+    // "nichts geaendert", Exit 0 gemacht.
     // Working-Tree wird NICHT einbezogen - diese Methode ist explizit
     // fuer committed-vs-committed Vergleiche (PR-Review-Use-Case).
     class function GetChangedPasFilesDiff(const APath, ARange: string;
@@ -356,6 +370,7 @@ begin
   begin
     AInfo := _('git not found. Install Git for Windows (git-scm.com) ' +
                'or set the path to git.exe in analyser.ini.');
+    FreeAndNil(Result);   // nil = Fehler, s. Interface-Vertrag
     Exit;
   end;
 
@@ -503,12 +518,14 @@ begin
   begin
     AInfo := _('svn not found. Install TortoiseSVN WITH the option ' +
                '"command line client tools" or set the path to svn.exe in analyser.ini.');
+    FreeAndNil(Result);   // nil = Fehler, s. Interface-Vertrag
     Exit;
   end;
 
   if not RunCmd(SvnExe, 'status', ARepoRoot, Output, ExitCode) then
   begin
     AInfo := Format(_('SVN call failed (exit code = %d)'), [ExitCode]);
+    FreeAndNil(Result);   // nil = Fehler, s. Interface-Vertrag
     Exit;
   end;
 
@@ -550,7 +567,9 @@ begin
     vkGit : Result := GetGitChanges(ARepoRoot, ASettings, AInfo);
     vkSvn : Result := GetSvnChanges(ARepoRoot, ASettings, AInfo);
   else
-    Result := TStringList.Create;
+    // vkNone explizit uebergeben: kein Repo ist hier ein FEHLER des
+    // Aufrufs, keine leere Aenderungsmenge.
+    Result := nil;
     AInfo  := 'Kein VCS erkannt';
   end;
 end;
@@ -565,7 +584,9 @@ begin
   Root := DetectRepo(APath, Kind);
   if Kind = vkNone then
   begin
-    Result := TStringList.Create;
+    // nil = Fehler: wer --branch auf einem Nicht-Repo faehrt, soll das
+    // erfahren - nicht ein leeres "nichts geaendert" mit Exit 0.
+    Result := nil;
     AInfo  := 'Kein Git-/SVN-Repository in oder oberhalb von "' + APath + '"';
     Exit;
   end;
@@ -607,6 +628,7 @@ begin
   begin
     AInfo := _('git not found. Install Git for Windows (git-scm.com) ' +
                'or set the path to git.exe in analyser.ini.');
+    FreeAndNil(Result);   // nil = Fehler, s. Interface-Vertrag
     Exit;
   end;
 
@@ -620,6 +642,7 @@ begin
   begin
     AInfo := _('git not found. Install Git for Windows (git-scm.com) ' +
                'or set the path to git.exe in analyser.ini.');
+    FreeAndNil(Result);   // nil = Fehler, s. Interface-Vertrag
     Exit;
   end;
 
@@ -632,6 +655,7 @@ begin
   begin
     AInfo := Format('git diff --name-only %s failed (exit %d)',
                     [ARange, ExitCode]);
+    FreeAndNil(Result);   // nil = Fehler - Range nicht aufloesbar
     Exit;
   end;
 

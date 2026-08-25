@@ -663,7 +663,10 @@ begin
             Files := TVcsChanges.GetChangedPasFilesAuto(Req.Path, Info, VcsSettings);
           try
             if Files = nil then
-              // kein Repo / Range nicht aufloesbar -> leeres Ergebnis statt Crash
+              // VCS-Fehler (kein Repo, kein git, Range nicht aufloesbar).
+              // Seit G7-1 (2026-08-25) ein REALER Pfad - vorher kam nie
+              // nil (G2-4, toter Kontrakt). Leeres Ergebnis statt Crash;
+              // Info traegt den Grund fuer den Consumer.
               Findings := TObjectList<TLeakFinding>.Create(True)
             else
               Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(

@@ -2,7 +2,7 @@
 # Erzeugt von tools/selfscan_gate.py --update (Profil strict).
 # Das Gate schlaegt fehl, wenn eine Regel MEHR Funde hat als
 # hier. Weniger ist immer erlaubt.
-TIERS 0 642 2713
+TIERS 0 642 2716
 AvoidOut 16
 BeginEndRequired 959
 BooleanParam 6
@@ -47,8 +47,8 @@ MagicNumber 32
 MissingUnitHeader 90
 MultipleExit 18
 NestedRoutine 30
-NestedTry 272
-NilComparison 258
+NestedTry 274
+NilComparison 259
 NoSonarMarker 5
 ParamByNameInLoop 1
 PublicField 40

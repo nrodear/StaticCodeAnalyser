@@ -108,6 +108,16 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `--diff` and `--branch` treated a failed git/svn call as "nothing
+  changed" and exited 0. On a shallow clone - the GitHub Actions default
+  of `fetch-depth: 1` - `git diff origin/main..HEAD` fails with exit 128,
+  and the pipeline went green without a single file scanned. A VCS
+  failure now prints the reason on stderr (regardless of `--quiet`) and
+  exits 99; exit 0 is reserved for a genuinely empty diff. The engine-level
+  contract (nil = error, empty list = no changes) had been documented on
+  `GetChangedPasFilesDiff` all along - the implementation just never
+  honoured it.
+
 - The fallback rule catalogue reported every rule as `Warning`. It read
   the finding type from `KIND_META` but hard-coded the severity, and in
   the IDE plugin the fallback is the normal path - so the plugin showed

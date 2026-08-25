@@ -145,6 +145,7 @@ uses
   uTestEmptyInterface in 'uTestEmptyInterface.pas',
   uTestInterfaceGuid in 'uTestInterfaceGuid.pas',
   uTestRuleListBox in 'uTestRuleListBox.pas',
+  uTestVcsChanges in 'uTestVcsChanges.pas',
   uTestAssertMessage in 'uTestAssertMessage.pas',
   uTestExplicitTObjectInheritance in 'uTestExplicitTObjectInheritance.pas',
   uTestGroupedDeclaration in 'uTestGroupedDeclaration.pas',

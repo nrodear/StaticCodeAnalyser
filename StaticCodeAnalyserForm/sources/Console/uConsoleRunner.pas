@@ -16,7 +16,7 @@
 //   2  = mindestens 1 Warning (keine Errors)
 //   3  = mindestens 1 Error
 //   4  = mindestens 1 Read-Error (Parser-/IO-Fehler)
-//   99 = Tool-Fehler (Args ungueltig, Pfad fehlt, ...)
+//   99 = Tool-Fehler (Args ungueltig, Pfad fehlt, VCS-Fehler bei --diff/--branch, ...)
 //
 // Die Rangleiter 1-3 gewinnt gegen 4: ein Lauf mit Errors UND Lesefehlern
 // meldet 3. --fail-on darf einen Lauf mit Lesefehlern aber nicht auf 0
@@ -647,7 +647,7 @@ begin
   WriteLn('   2 = warnings present');
   WriteLn('   3 = errors present');
   WriteLn('   4 = read errors (parser/IO), no higher tier reached');
-  WriteLn('  99 = tool error (bad args, missing path, ...)');
+  WriteLn('  99 = tool error (bad args, missing path, VCS failure in --diff/--branch, ...)');
   WriteLn('');
   WriteLn('  The tiers outrank each other in that order: a run with errors AND');
   WriteLn('  read errors exits 3, not 4. --fail-on lowers a suppressed tier to');
@@ -1352,7 +1352,19 @@ begin
       if Args.Diff <> '' then
       begin
         Files := TVcsChanges.GetChangedPasFilesDiff(Args.Path, Args.Diff, RepoInfo, Settings);
-        if (Files = nil) or (Files.Count = 0) then
+        // nil und leer sind zwei WELTEN (G7-1): nil heisst, git konnte die
+        // Frage nicht beantworten - kein Repo, kein git, Range nicht
+        // aufloesbar (Shallow-Clone ohne gefetchte Base ist der GitHub-
+        // Actions-DEFAULT). Das als "nichts geaendert" mit Exit 0 zu
+        // werten machte jede Pipeline gruen, die gar nichts gescannt hat.
+        // Auf stderr und OHNE Quiet-Ruecksicht: Fehler haben in --quiet
+        // nichts zu suchen ausser ihrer Meldung.
+        if Files = nil then
+        begin
+          WriteLn(ErrOutput, 'ERROR: --diff ', Args.Diff, ': ', RepoInfo);
+          Exit(Integer(cecToolError));
+        end;
+        if Files.Count = 0 then
         begin
           if not Args.Quiet then
             WriteLn('No .pas files differ in range ', Args.Diff, '. ', RepoInfo);
@@ -1369,7 +1381,13 @@ begin
       else if Args.Branch then
       begin
         Files := TVcsChanges.GetChangedPasFilesAuto(Args.Path, RepoInfo, Settings);
-        if (Files = nil) or (Files.Count = 0) then
+        // s. --diff oben: nil = VCS-Fehler, leer = ehrlich nichts geaendert.
+        if Files = nil then
+        begin
+          WriteLn(ErrOutput, 'ERROR: --branch: ', RepoInfo);
+          Exit(Integer(cecToolError));
+        end;
+        if Files.Count = 0 then
         begin
           if not Args.Quiet then
             WriteLn('No VCS-changed .pas files found. ', RepoInfo);

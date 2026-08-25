@@ -226,6 +226,7 @@
         <DCCReference Include="uTestEmptyInterface.pas"/>
         <DCCReference Include="uTestInterfaceGuid.pas"/>
         <DCCReference Include="uTestRuleListBox.pas"/>
+        <DCCReference Include="uTestVcsChanges.pas"/>
         <DCCReference Include="uTestAssertMessage.pas"/>
         <DCCReference Include="uTestExplicitTObjectInheritance.pas"/>
         <DCCReference Include="uTestGroupedDeclaration.pas"/>

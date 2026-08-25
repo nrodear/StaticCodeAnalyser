@@ -668,6 +668,13 @@ begin
 
   files := TVcsChanges.GetChangedPasFilesAuto(AStartPath, info, FRepoSettings);
   try
+    // nil = VCS-Fehler (seit G7-1 ein realer Rueckgabewert!) - ohne den
+    // Waechter waere files.Count hier ein AV. Info traegt den Grund.
+    if files = nil then
+    begin
+      FOnStatusMode(info);
+      Exit;
+    end;
     if files.Count = 0 then
     begin
       FOnStatusMode(info + _(' - no changed .pas files'));

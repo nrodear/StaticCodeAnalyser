@@ -2408,7 +2408,15 @@ begin
     ApplyDetectorConfig(Settings, True);
 
     Files := TVcsChanges.GetChangedPasFilesAuto(StartDir, Info, Settings);
-    if (Files = nil) or (Files.Count = 0) then
+    if Files = nil then
+    begin
+      // VCS-Fehler (kein Repo, kein git): Info traegt den Grund. Das
+      // fruehere Anhaengsel " - no changed .pas files" haette aus der
+      // Fehlermeldung eine Erfolgsmeldung gemacht.
+      StatusBar1.Panels[2].Text := Info;
+      Exit;
+    end;
+    if Files.Count = 0 then
     begin
       StatusBar1.Panels[2].Text := Info + _(' - no changed .pas files');
       Exit;
