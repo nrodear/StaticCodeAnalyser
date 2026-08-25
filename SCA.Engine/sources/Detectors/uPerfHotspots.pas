@@ -17,8 +17,10 @@ unit uPerfHotspots;
 //   * Loop-Body-Tracking ist im AST aufwendig (nkFor + nkWhile + nkRepeat
 //     muessen separat behandelt werden plus Inner-Body-Walk)
 //   * Pattern-Match ist Regex-trivial
-//   * False-Positive-Rate bei Strings/Comments durch StripFileComments
-//     vorgefiltert
+//   * Kommentare entfernt der Strip; String-LITERALE laesst er stehen
+//     und sie werden VOR jedem Match geblankt (BlankStringLiterals) -
+//     die Vorfassung dieses Kommentars behauptete die Filterung, der
+//     Code hatte sie nicht (G4-1)
 //
 // Suppression: per-Zeile `// noinspection StringConcatInLoop` etc. greift
 // ueber uSuppression.ApplyToFindings am Ende des Analyse-Laufs.
@@ -401,6 +403,15 @@ begin
   if Lines = nil then Exit;
   try
     Code := TDetectorUtils.StripFileCommentsKeepStringsCached(Lines, LineFor, AContext, FileName);
+    // Literale BLANKEN, bevor irgendetwas gematcht wird: der
+    // KeepStrings-Strip laesst sie stehen, und ein 'for i := ...' in
+    // einem Fixture- oder Generator-String legte einen Phantom-Header
+    // auf den Loop-Stack - dessen Range dann bis zum naechsten ECHTEN
+    // end lief und dort Phantom-Funde erzeugte. Auch die drei
+    // Regex-Matches lasen durch Literale. BlankStringLiterals ist
+    // laengenerhaltend, LineFor bleibt gueltig (G4-1; dasselbe Muster
+    // wie uCaseStatementSize/uEmptyBlock).
+    Code := TDetectorUtils.BlankStringLiterals(Code);
     FindLoopRanges(Code, Ranges);
     if Length(Ranges) = 0 then Exit;
     // Welle 1 (Core-Detektoren-Architektur): scope-genaue Typ-Aufloesung aus dem

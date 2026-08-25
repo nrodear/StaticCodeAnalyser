@@ -313,9 +313,18 @@ end;
 
 procedure EnsureUnitStripped(var AStripped: TStrippedUnit;
   const AFileName: string);
-// Einmal je DATEI, nicht je Methode. Der Strip selbst ist ueber
-// StripStringsAndCommentsCached ohnehin gecacht; das Split in Zeilen war es
-// nicht, und genau das legte je Aufruf ein Array ueber die ganze Datei an.
+// Einmal je DATEI, nicht je Methode - das ist der ganze Gewinn dieser
+// Funktion: das Zeilen-Split lief frueher je METHODE ueber die ganze
+// Datei.
+//
+// Der Strip selbst ist hier UNGECACHT: beide Aufrufe unten uebergeben
+// AContext=nil, und bei nil rechnet StripStringsAndCommentsCached immer
+// direkt (die Detektor-API dieser Unit fuehrt gar keinen Context). Die
+// Vorfassung dieses Kommentars behauptete "ohnehin gecacht" - wer ihr
+// glaubte, suchte Performance-Probleme an der falschen Stelle (G4-3).
+// Den Context durchzureichen waere ein API-Umbau ueber AnalyzeUnit und
+// AnalyzeMethod; er lohnt erst, wenn eine Messung diesen Strip als
+// heiss ausweist.
 var
   Code    : string;
   LineFor : TArray<Integer>;

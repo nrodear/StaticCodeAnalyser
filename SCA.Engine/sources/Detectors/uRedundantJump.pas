@@ -160,6 +160,13 @@ begin
   begin
     p := PosEx(Kw, Lwr, p);
     if p = 0 then Break;
+    // Nicht in einem String-Literal: der Match laeuft auf dem
+    // KeepStrings-Strip, ein 'exit;' in einem Fixture-String sah bis
+    // hierhin wie ein Jump-Statement aus. Die geblankte Zweitfassung
+    // existierte laengst, wurde aber nur fuer das Schleifen-Gate
+    // benutzt - nicht fuer den Match selbst (G4-2).
+    if TDetectorUtils.InStringLiteral(Code, p) then
+    begin Inc(p, KwLen); Continue; end;
     if (p > 1) and IsIdent(Code[p - 1]) then begin Inc(p); Continue; end;
     // Qualifizierter Methodenaufruf 'pV8Context.Exit;' ist KEIN Jump-Statement
     // (Ist-Messung 2026-07-18: CEF-V8-Context .Enter/.Exit-Paar als FP gemeldet).
