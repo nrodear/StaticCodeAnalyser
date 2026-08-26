@@ -23,6 +23,7 @@ uses
   uTestDetectorUtils in 'uTestDetectorUtils.pas',
   uTestConfidenceFilter in 'uTestConfidenceFilter.pas',
   uTestConfidencePipeline in 'uTestConfidencePipeline.pas',
+  uTestEvidenceTiering in 'uTestEvidenceTiering.pas',
   uTestPathOverrides in 'uTestPathOverrides.pas',
   uTestCFG in 'uTestCFG.pas',
   uTestParallelScan in 'uTestParallelScan.pas',

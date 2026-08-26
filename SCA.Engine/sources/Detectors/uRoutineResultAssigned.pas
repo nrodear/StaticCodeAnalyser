@@ -45,7 +45,11 @@
 //         die Result-Zuweisung.
 //       - nkAssign mit LHS = <FunctionName> (case-insensitive) - klassischer
 //         Pascal-Stil: `<func> := value`.
-//   * Sonst -> Finding.
+//   * Sonst -> Finding; durchlaeuft der Fund ALLE Quelltext-Gates, traegt
+//     er fcHigh (Error-Tier unter der Evidenz-Politik), sonst den
+//     fcMedium-Katalogdefault (Warning-Tier). Die letzte Audit-FP-Klasse
+//     (goto-Routinen, 15.08.) ist seit dem tkKwGoto-Dispatch im Parser
+//     (16.08.) geschlossen - Korpus-verifiziert am 26.08.
 //
 // Bewusst nicht analysiert:
 //   * Partial Coverage (Result in einem then-Zweig, aber nicht im else)
@@ -984,6 +988,14 @@ var
   RangeLow          : string;
   NStarts, NEnds    : TArray<Integer>;   // nkNestedRange-Spans (2026-07-31)
   UncoveredNested   : Boolean;
+  // K2 Stufe 3 (2026-08-26): True nur, wenn der Kandidat die Quelltext-
+  // Gates VOLLSTAENDIG durchlaufen hat (Lines vorhanden, Kopfzeile passt,
+  // Nested-Spans abgedeckt). Nur solche Funde tragen fcHigh - wer die
+  // Gates nicht durchlief (In-Memory-Scan, Datei/AST-Divergenz), bleibt
+  // beim fcMedium-Katalogdefault und damit unter der Evidenz-Politik
+  // im Warning-Tier. Beweisbasis: FP-Voll-Audit 2026-08-15, 0 FP in
+  // 18 gate-sauberen Stichproben-Funden.
+  Verified          : TArray<Boolean>;
 begin
   Methods := UnitNode.FindAll(nkMethod);
   try
@@ -1037,6 +1049,7 @@ begin
         Lines := AcquireLines(FileName, Cached);
         try
           SetLength(Keep, Cands.Count);
+          SetLength(Verified, Cands.Count);   // Default False (SetLength nullt)
           for i := 0 to Cands.Count - 1 do
           begin
             Keep[i] := True;
@@ -1063,6 +1076,16 @@ begin
             // aus (kein Drop) statt einen fremden Rumpf mitzuscannen.
             if UncoveredNested then Continue;
 
+            // KEIN goto/label-Gate (K2 Stufe 3, 2026-08-26): die einzige
+            // FP-Klasse des Voll-Audits 2026-08-15 (6/6 FPs = goto-Routinen,
+            // Walk starb am dispatch-losen goto-Statement) ist seit dem
+            // tkKwGoto-Zweig in uParser2 (2026-08-16, SCA011-Paket) AM
+            // PARSER geschlossen - am Korpus verifiziert 2026-08-26: keiner
+            // der sechs Audit-Orte (mormot ToVarUInt32/ToVarUInt64/
+            // _VariantCopy/...) feuert noch, Fundzahl 126 -> 101 passt zur
+            // Audit-Erwartung (~-30). Ein Quelltext-Gate hier waere nur
+            // noch FN-Preis auf inzwischen korrekt gelaufenen Walks.
+
             // (1) asm-Block im Rumpf -> Result kommt per Register.
             if CountWordOccurrences(RangeLow, 'asm') > 0 then
             begin
@@ -1078,6 +1101,12 @@ begin
             // (4) IFDEF-Twin im Bedingungskopf (zweifaches 'then').
             if SourceHasIfdefThenTwin(RangeLow) then
               Keep[i] := False;
+
+            // Alle Quelltext-Gates sind fuer diesen Kandidaten gelaufen
+            // (jede fruehere Unsicherheit hat per Continue uebersprungen).
+            // Ueberlebt er sie, ist jede im Audit kartierte FP-Klasse
+            // ausgeschlossen -> Evidenz reicht fuer fcHigh (K2 Stufe 3).
+            Verified[i] := Keep[i];
           end;
         finally
           ReleaseLines(Lines, Cached);
@@ -1088,7 +1117,18 @@ begin
         // Bewusst NACH der Gate-Schleife (die kann werfen, dieser Teil nicht).
         Cands.OwnsObjects := False;
         for i := 0 to Cands.Count - 1 do
-          if Keep[i] then Results.Add(Cands[i])
+          if Keep[i] then
+          begin
+            // K2 Stufe 3: gate-verifizierte Funde zurueck auf fcHigh -
+            // unter der Evidenz-Politik (uEvidenceTiering) tragen nur sie
+            // wieder den Error-Tier. Unverifizierte (In-Memory, Divergenz)
+            // behalten den fcMedium-Katalogdefault. Governance: haelt die
+            // fcHigh-Klasse die 5 % nicht (naechstes Audit), faellt diese
+            // Zeile - nie umgekehrt ohne Messung.
+            if Verified[i] then
+              Cands[i].Confidence := fcHigh;
+            Results.Add(Cands[i]);
+          end
           else Cands[i].Free;
       finally
         CandNodes.Free;

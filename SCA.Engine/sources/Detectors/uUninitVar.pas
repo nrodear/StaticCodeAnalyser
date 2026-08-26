@@ -1545,20 +1545,41 @@ var
   Matched : Boolean;
 
   procedure Merge(const AName: string; const AFlags: TArray<Boolean>);
-  // Overload-Merge: AND je Position, gekappt auf die kuerzere Liste.
-  // Leere Liste (parameterlose Redecl / unparsbare Signatur) macht den
-  // Namen damit dauerhaft unaufloesbar - konservativ (Fund bleibt).
+  // Overload-Merge: AND je GEMEINSAMER Position, Gesamtlaenge = die
+  // LAENGERE Liste. Begruendung (FP-Voll-Audit 2026-08-15 + rw8-Restfund
+  // JclSysUtils IntToStr): ein Call mit k Argumenten kann nur Overloads
+  // mit >= k Parametern binden - fuer Position k zaehlt also NUR deren
+  // Flag. Die fruehere Kappung auf die KUERZERE Liste liess die
+  // 1-Arg-Fassung 'IntToStr(Value)' das out-Flag von
+  // 'IntToStr(Value; out FirstDigitPos)' an Position 2 loeschen ->
+  // FirstDigitPos galt als Read -> zwei Error-Tier-FPs.
+  // Leere Liste (parameterlose Redecl / unparsbare Signatur) vergiftet
+  // den Namen weiterhin DAUERHAFT - die echte Signatur ist unbekannt,
+  // konservativ bleibt der Fund stehen.
   var
-    NewLen, m : Integer;
+    NewLen, Kurz, m : Integer;
   begin
     if AName = '' then Exit;
     if Result.TryGetValue(AName, Old) then
     begin
+      // Bereits vergiftet oder neuer Poison-Fall -> leer speichern.
+      if (Length(Old) = 0) or (Length(AFlags) = 0) then
+      begin
+        Result.AddOrSetValue(AName, nil);
+        Exit;
+      end;
       NewLen := Length(Old);
-      if Length(AFlags) < NewLen then NewLen := Length(AFlags);
+      if Length(AFlags) > NewLen then NewLen := Length(AFlags);
+      Kurz := Length(Old);
+      if Length(AFlags) < Kurz then Kurz := Length(AFlags);
       SetLength(Merged, NewLen);
       for m := 0 to NewLen - 1 do
-        Merged[m] := Old[m] and AFlags[m];
+        if m < Kurz then
+          Merged[m] := Old[m] and AFlags[m]
+        else if m < Length(Old) then
+          Merged[m] := Old[m]
+        else
+          Merged[m] := AFlags[m];
       Result.AddOrSetValue(AName, Merged);
     end
     else

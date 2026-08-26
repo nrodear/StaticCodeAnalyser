@@ -1056,6 +1056,7 @@ const
   // sind).
   DEF_DETECTOR_MIN_SEVERITY  = lsHint;
   DEF_FINDING_MIN_CONFIDENCE = fcMedium;
+  DEF_EVIDENCE_TIERING       = True;
 
 var
   // Whitelist erlaubter Kinds fuer den Detector-Loop. Wird von
@@ -1085,6 +1086,16 @@ var
   // wenn Ord(Confidence) < Ord(FindingMinConfidence). fkFileReadError ist
   // davon ausgenommen (Diagnose-Befund, vgl. uConfidenceFilter).
   FindingMinConfidence : TFindingConfidence = DEF_FINDING_MIN_CONFIDENCE;
+
+  // Evidenz-Politik (K2 Stufe 1, 2026-08-26): Severity-Deckel nach
+  // Konfidenz im Post-Filter (uEvidenceTiering) - Error nur fuer fcHigh,
+  // fcMedium hoechstens Warning, fcLow hoechstens Hint ("Error =
+  // bewiesen"). Default AN; Opt-out fuer Bestandsnutzer ueber
+  // [Rules] EvidenceTiering=0 (TRepoSettings.ApplyDetectorThresholds
+  // spiegelt hierher). BEWUSST ein Engine-Default und kein reiner
+  // ini-Schalter: der LSP-Consumer setzt ApplyRepoIni nicht und soll
+  // dieselbe Politik fahren wie EXE/Plugin/CLI (Gegenpruefung K2).
+  EvidenceTiering : Boolean = DEF_EVIDENCE_TIERING;
 
   // [Baseline] PathInFingerprint=1 (Opt-in, Default AUS = Bestand):
   // der Baseline-Fingerprint nutzt den normalisierten RELATIVpfad ab
@@ -1340,6 +1351,20 @@ begin
     // (4 rote Tests, TestInsight 2026-08-09).
     fkDfmCrossFormCoupling: Result := fcLow;
 
+    // SCA001 MemoryLeak: Trust-Budget-Demote (K2 Stufe 2, 2026-08-26).
+    // FP-Voll-Audit 2026-08-15: 62-78 % FP auf 788 Korpus-Funden (Stufe 1
+    // 71 % @ 24, Stufe 2 78 % @ 50, FINAL-Tabelle 62 %) - die groesste
+    // einzelne Fehlalarm-Masse des Katalogs. Die dominanten FP-Klassen
+    // (Ownership-Transfer unter nicht erkanntem Namen, Freigabe im
+    // Callee, Property-Alias im Destruktor) brauchen den Callee-Summary-
+    // Index (Konzept K1); bis der steht, ist fcHigh nicht zu rechtfer-
+    // tigen. fcMedium: bleibt im Default-Profil sichtbar, verlaesst aber
+    // unter der Evidenz-Politik (uEvidenceTiering) den Error-Tier.
+    // ZURUECK auf fcHigh nur je EVIDENZPFAD (K2 Stufe 3) und nur mit
+    // frischer Korpus-Messung - nie pauschal. EIGENER Case-Zweig aus
+    // demselben Grund wie fkDfmCrossFormCoupling eins drueber.
+    fkMemoryLeak: Result := fcMedium;
+
   else
     Result := fcHigh;
   end;
@@ -1536,6 +1561,7 @@ begin
   DetectorEnabledKinds      := [];   // leer = kein Filter, alle Detektoren
   DetectorMinSeverity       := DEF_DETECTOR_MIN_SEVERITY;
   FindingMinConfidence      := DEF_FINDING_MIN_CONFIDENCE;
+  EvidenceTiering           := DEF_EVIDENCE_TIERING;
   AutoDiscoverCustomClasses := DEF_AUTO_DISCOVER_CLASSES;
   // Perf Stufe 2 (2026-07-25): Parallel-Modus ist strikt per-Request opt-in
   // und darf nie still aus einem Vorlauf nachwirken.

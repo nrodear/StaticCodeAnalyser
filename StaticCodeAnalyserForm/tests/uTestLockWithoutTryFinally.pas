@@ -59,6 +59,23 @@ type
     // echter Lock dahinter bleibt sichtbar UND auf der richtigen Zeile.
     [Test] procedure EnterInStringWithEscapedQuote_NotReported;
     [Test] procedure RealEnterAfterStringLiteral_ReportedOnCodeLine;
+    // --- K2 Stufe 3 (2026-08-26): FP-Voll-Audit-Klassen + Evidenz je Fund ---
+    // Klasse 1: inc/dec-Intrinsic ohne ':=' ist nicht werfend (Alcinoe).
+    [Test] procedure IncDecOnlyBody_NotReported;
+    [Test] procedure IncDecArrayIndex_StillReported;
+    // Klassen 2+3: Release desselben Locks im finally eines benachbarten
+    // (Indy) bzw. umschliessenden (fBalls) try -> Fund bleibt, aber fcLow.
+    [Test] procedure AdjacentTryReleaseInFinally_LowConfidence;
+    [Test] procedure EnclosingFinallyFlagRelease_LowConfidence;
+    // TP-Gegenproben: finally OHNE Lock-Release (JvHttpGrabber-Form) und
+    // der nackte Fall bleiben fcHigh (Error-Tier unter der Politik).
+    [Test] procedure FinallyWithoutLockRelease_HighConfidence;
+    [Test] procedure PlainFinding_HighConfidence;
+    // Gegenpruefung 2026-08-26 (MAJOR): der ECS-Handle-Vergleich darf
+    // weder im Funktionsnamen selbst ('section' in leavecriticalSECTION)
+    // noch in einem FREMDEN Handle matchen - sonst wird ein echter TP
+    // als fcLow gefiltert.
+    [Test] procedure EcsWrongHandleInFinally_HighConfidence;
   end;
 
 implementation
@@ -586,6 +603,189 @@ begin
     Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FLock.Enter'),
       TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).LineNumber,
       'Fund muss auf der Code-Zeile liegen, nicht auf der Literal-Zeile');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.IncDecOnlyBody_NotReported;
+// FP-Voll-Audit 2026-08-15, Klasse 1 (Alcinoe.MemCached.Client:2134):
+// zwischen Acquire und Release steht nur eine Integer-Dekrementierung -
+// nicht werfende System-Intrinsic, das Lock kann nicht haengen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  FConnectionPoolCS.Acquire;'#13#10 +
+  '  dec(FWorkingConnectionCount);'#13#10 +
+  '  FConnectionPoolCS.Release;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLockWithoutTryFinally),
+    'inc/dec-Intrinsic ist nicht werfend - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.IncDecArrayIndex_StillReported;
+// TP-Gegenprobe: inc auf ein INDIZIERTES Ziel kann per Range-Check werfen -
+// bewusst enger als die Audit-Fix-Idee, der Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  FCS.Acquire;'#13#10 +
+  '  inc(FCounts[FIdx]);'#13#10 +
+  '  FCS.Release;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+    'Range-Check auf dem Index kann werfen - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.AdjacentTryReleaseInFinally_LowConfidence;
+// FP-Voll-Audit 2026-08-15, Klasse 2 (Indy IdTunnelMaster:566): das try
+// beginnt EINE Anweisung nach dem Enter, das finally released denselben
+// Lock. Fund bleibt (das Zwischenfenster kann werfen), aber fcLow.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  OnlyOneThread.Enter;'#13#10 +
+  '  listTemp := Clients.LockList;'#13#10 +
+  '  try'#13#10 +
+  '    DoWork(listTemp);'#13#10 +
+  '  finally'#13#10 +
+  '    Clients.UnlockList;'#13#10 +
+  '    OnlyOneThread.Leave;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+      'Fund bleibt - zwischen Enter und try kann LockList werfen');
+    Assert.IsTrue(
+      TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).Confidence = fcLow,
+      'Release liegt im finally des benachbarten try -> fcLow');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.EnclosingFinallyFlagRelease_LowConfidence;
+// FP-Voll-Audit 2026-08-15, Klasse 3 (ManagedThreads fBalls:99): Enter in
+// einer Schleife INNERHALB eines try, das finally des UMSCHLIESSENDEN try
+// gibt Flag-gesteuert frei. Der Scan muss dafuer durch das Schleifen-'end'
+// in negative Tiefen klettern.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    while not Terminated do'#13#10 +
+  '    begin'#13#10 +
+  '      Section.Enter;'#13#10 +
+  '      InsideCrit := True;'#13#10 +
+  '      MoveBalls;'#13#10 +
+  '      InsideCrit := False;'#13#10 +
+  '      Section.Leave;'#13#10 +
+  '    end;'#13#10 +
+  '  finally'#13#10 +
+  '    if InsideCrit then Section.Leave;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+      'Fund bleibt - Fenster zwischen Enter und Flag-Setzung');
+    Assert.IsTrue(
+      TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).Confidence = fcLow,
+      'Flag-gesteuertes Release im umschliessenden finally -> fcLow');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.FinallyWithoutLockRelease_HighConfidence;
+// TP-Gegenprobe (JvHttpGrabber-Form): es GIBT ein umschliessendes finally,
+// aber es gibt nur Handles frei, nie das Lock -> der Fund traegt fcHigh
+// und damit unter der Evidenz-Politik den Error-Tier.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Prepare;'#13#10 +      // Enter NICHT direkt hinter try (sonst
+  '    FCriticalSection.Enter;'#13#10 +  // greift PreviousStatementIsTry)
+  '    FTotalBytes := StrToInt(Buffer);'#13#10 +
+  '    FCriticalSection.Leave;'#13#10 +
+  '  finally'#13#10 +
+  '    CloseHandle(FHandle);'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+      'finally ohne Lock-Release schuetzt nicht - Fund bleibt');
+    Assert.IsTrue(
+      TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).Confidence = fcHigh,
+      'kein Release im finally -> volle Evidenz, fcHigh');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.PlainFinding_HighConfidence;
+// Der nackte Fall ohne jedes try traegt fcHigh - alle im Audit kartierten
+// FP-Klassen sind gate-gedeckt, die Rest-Stichprobe war 9/9 TP.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  FLock.Enter;'#13#10 +
+  '  DoWork;'#13#10 +
+  '  FLock.Leave;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1);
+    Assert.IsTrue(
+      TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).Confidence = fcHigh,
+      'ohne jede finally-Deckung -> fcHigh (Error-Tier unter der Politik)');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.EcsWrongHandleInFinally_HighConfidence;
+// Reviewer-Szenario: das finally released ein ANDERES Handle (SendCS) -
+// der Fund fuer 'Section' muss fcHigh bleiben. Die Erstfassung matchte
+// 'section' als Substring in 'leavecriticalsection' und haette den TP
+// auf fcLow gestuft (= im Default-Profil geloescht).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  EnterCriticalSection(Section);'#13#10 +
+  '  Prepare;'#13#10 +
+  '  try'#13#10 +
+  '    Send;'#13#10 +
+  '  finally'#13#10 +
+  '    LeaveCriticalSection(SendCS);'#13#10 +
+  '  end;'#13#10 +
+  '  LeaveCriticalSection(Section);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+      'Prepare kann werfen, Section-Release ist ungeschuetzt - TP bleibt');
+    Assert.IsTrue(
+      TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).Confidence = fcHigh,
+      'fremdes Handle im finally kreditiert NICHT -> fcHigh');
   finally F.Free; end;
 end;
 

@@ -1906,12 +1906,62 @@ begin
         // diesen Token nicht als Section-Grenze akzeptiert.
         var SkipStart := FNextCount;
         T := Tok;
-        if T.Kind <> tkIdent then begin Next; Continue; end;
-
-        VarNames.Clear;
-        while Tok.Kind = tkIdent do
+        if T.Kind <> tkIdent then
         begin
-          VarNames.Add(Next.Value);
+          // Kontext-Schluesselwort als fuehrender Variablenname: 'read',
+          // 'write', 'Result' & Co. sind NICHT reserviert - 'read: integer;'
+          // (mormot RecvWait) und 'Result: PPyObject;' in einer PROZEDUR
+          // (python4delphi) sind legales Delphi. Der alte Pfad verwarf das
+          // Wort kommentarlos, und die naechste Runde nahm den TYPNAMEN als
+          // typlose Variable - SCA166 meldete dann "integer/PPyObject/
+          // LongBool is read but never assigned" (4 der 7 Error-Funde des
+          // Voll-Audits, Klasse 'Typname wird Variablenname'). Forward-only
+          // ohne Lookahead: Wort konsumieren; folgt ':' oder ',', war es
+          // ein Deklarationsname - sonst exakt das alte Skip-Verhalten.
+          // Nur ident-foermige Werte (Buchstabe/Unterstrich) kommen in
+          // Frage; Literale/Operatoren gehen weiter den alten Weg.
+          if (T.Value = '') or
+             not CharInSet(T.Value[1], ['A'..'Z', 'a'..'z', '_']) then
+          begin
+            Next;
+            Continue;
+          end;
+          Next;
+          if not (Tok.Kind in [tkColon, tkComma]) then Continue;
+          VarNames.Clear;
+          VarNames.Add(T.Value);
+          // Komma konsumieren, falls vorhanden - die Fortsetzungs-
+          // schleife unten uebernimmt; steht Tok auf ':', beendet ihr
+          // Stop-Set die Liste sofort.
+          Eat(tkComma);
+        end
+        else
+          VarNames.Clear;
+
+        // Namensliste (Kopf ggf. schon gefuellt): auch FORTSETZUNGEN
+        // duerfen Kontextwoerter sein ('read, write: Integer;' - die
+        // Erstfassung nahm nur den Kopf, 'write' brach die Liste ab und
+        // 'read' blieb typlos; Gegenpruefung 2026-08-26, MINOR).
+        // Struktur-Schluesselwoerter (begin/end/var/...) beenden die
+        // Liste IMMER - sie duerfen nie als Name konsumiert werden.
+        while True do
+        begin
+          if Tok.Kind = tkIdent then
+            VarNames.Add(Next.Value)
+          else if not (Tok.Kind in [tkKwVar, tkKwConst, tkKwType,
+                        tkKwProcedure, tkKwFunction, tkKwConstructor,
+                        tkKwDestructor, tkKwOperator, tkKwBegin, tkKwAsm,
+                        tkKwEnd, tkEof, tkColon, tkSemicolon]) and
+                  (Tok.Value <> '') and
+                  CharInSet(Tok.Value[1], ['A'..'Z', 'a'..'z', '_']) then
+          begin
+            T := Tok;
+            Next;
+            if not (Tok.Kind in [tkColon, tkComma]) then Break;
+            VarNames.Add(T.Value);
+          end
+          else
+            Break;
           if not Eat(tkComma) then Break;
         end;
 

@@ -106,6 +106,7 @@
         <DCCReference Include="uTestDetectorUtils.pas"/>
         <DCCReference Include="uTestConfidenceFilter.pas"/>
         <DCCReference Include="uTestConfidencePipeline.pas"/>
+        <DCCReference Include="uTestEvidenceTiering.pas"/>
         <DCCReference Include="uTestPathOverrides.pas"/>
         <DCCReference Include="uTestCFG.pas"/>
         <DCCReference Include="uTestParallelScan.pas"/>

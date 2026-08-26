@@ -28,7 +28,10 @@ unit uPathOverrides;
 // Apply-Reihenfolge im Analyzer-Pipeline:
 //   1. Detector-Loop emittiert Findings
 //   2. uSuppression.ApplyToFindings (// noinspection)
-//   3. uPathOverrides.ApplyToFindings (diese Unit)
+//   3. uEvidenceTiering.ApplyToFindings (Severity-Deckel nach Konfidenz;
+//      laeuft BEWUSST davor - poaSeverityError ist eine explizite
+//      Nutzer-Hochstufung und behaelt das letzte Wort gegen die Politik)
+//   4. uPathOverrides.ApplyToFindings (diese Unit)
 //
 // Globs werden ueber System.Masks.TMask geprueft. Backslash <-> Slash
 // werden normalisiert; `**` matcht beliebige Unterverzeichnis-Tiefe.

@@ -131,6 +131,7 @@ uses
   uDetectorUtils,    // CommonDirOf (ScanRootDir-Anker der tplFixtureDir-Gates)
   uFileTextCache, uAnalyzeContext,
   uSuppression, uCustomClassDiscovery, uPathOverrides, uConfidenceFilter,
+  uEvidenceTiering,  // K2 Stufe 1 - Severity-Deckel nach Konfidenz (Post-Filter)
   uSynchronizeInDestructor, uLockWithoutTryFinally,
   uPerfHotspots, uConcurrencyExt, uRestHttpSecurity,
   uPublicMemberWithoutDoc, uNamingExt,  uRuleCatalog,
@@ -1449,6 +1450,10 @@ var
   // darum werden die Werte - wie PreMarkers - vorher aus dem Context gerettet.
   PostMinConf : TFindingConfidence;
   PostEnKinds : TFindingKinds;
+  // K2 Stufe 1 (2026-08-26): Politik-Schalter, gleiches Snapshot-Muster.
+  PostEvidTier : Boolean;
+  // Gegenpruefung 2026-08-26: Severity-Schwelle fuer den Deckel-Nachzug.
+  PostMinSev   : TLeakSeverity;
   // Perf Stufe 2 (2026-07-25): True wenn der Main-Loop parallel laeuft
   // (Gate-Auswertung s.u.; Default AUS, opt-in via DetectorParallelScan).
   UseParallel : Boolean;
@@ -2086,6 +2091,16 @@ begin
     // Config-Snapshot == Global zur Scan-Zeit ist (Filter-Skalar mutiert nicht).
     PostMinConf := CfgMinConfidence(Ctx);
     PostEnKinds := CfgEnabledKinds(Ctx);
+    // K2 Stufe 1: die Evidenz-Politik hat (noch) kein Ctx-Feld, der
+    // Schalter ist ein reiner Prozess-Global - Snapshot trotzdem HIER,
+    // damit er dieselbe Lebensregel traegt wie PostMinConf/PostEnKinds
+    // (Post-Filter liest nie frische Globals nach dem Teardown).
+    PostEvidTier := uSCAConsts.EvidenceTiering;
+    // Gegenpruefung 2026-08-26 (MAJOR): auch die Severity-Schwelle
+    // snapshotten - der Deckel muss sie nachziehen, sonst unterlaufen
+    // gedeckelte Funde einen error-only-Report (Details am Interface
+    // von TEvidenceTiering.ApplyToFindings).
+    PostMinSev := CfgMinSeverity(Ctx);
     FreeAndNil(Ctx);
     // Audit 2026-07-01 (Global-State): die in diesem Scan auto-entdeckten Klassen
     // wieder aus der GLOBALEN LeakyClasses entfernen -> zurueck auf die Caller-
@@ -2120,6 +2135,18 @@ begin
     TSuppression.ApplyToFindings(Results, PreMarkers, @PostEnKinds);
   except
     // Suppression-Fehler duerfen das Ergebnis nicht zerstoeren
+  end;
+
+  // Evidenz-Politik (K2 Stufe 1, 2026-08-26): Severity-Deckel nach
+  // Konfidenz - Error nur fuer fcHigh ("Error = bewiesen"). BEWUSST VOR
+  // den PathOverrides, damit die explizite Nutzer-Hochstufung je Pfad
+  // (poaSeverityError) das letzte Wort gegen die Politik behaelt;
+  // Begruendung und Nebenwirkungen im Kopf von uEvidenceTiering.
+  if PostEvidTier then
+  try
+    TEvidenceTiering.ApplyToFindings(Results, PostMinSev);
+  except
+    // Politik-Fehler duerfen das Ergebnis nicht zerstoeren
   end;
 
   // Path-Overrides anwenden (analyser.ini [PathOverrides]). Wird nach
