@@ -1906,13 +1906,45 @@ begin
         // diesen Token nicht als Section-Grenze akzeptiert.
         var SkipStart := FNextCount;
         T := Tok;
-        if T.Kind <> tkIdent then begin Next; Continue; end;
-
-        VarNames.Clear;
-        while Tok.Kind = tkIdent do
+        if T.Kind <> tkIdent then
         begin
-          VarNames.Add(Next.Value);
-          if not Eat(tkComma) then Break;
+          // Kontext-Schluesselwort als fuehrender Variablenname: 'read',
+          // 'write', 'Result' & Co. sind NICHT reserviert - 'read: integer;'
+          // (mormot RecvWait) und 'Result: PPyObject;' in einer PROZEDUR
+          // (python4delphi) sind legales Delphi. Der alte Pfad verwarf das
+          // Wort kommentarlos, und die naechste Runde nahm den TYPNAMEN als
+          // typlose Variable - SCA166 meldete dann "integer/PPyObject/
+          // LongBool is read but never assigned" (4 der 7 Error-Funde des
+          // Voll-Audits, Klasse 'Typname wird Variablenname'). Forward-only
+          // ohne Lookahead: Wort konsumieren; folgt ':' oder ',', war es
+          // ein Deklarationsname - sonst exakt das alte Skip-Verhalten.
+          // Nur ident-foermige Werte (Buchstabe/Unterstrich) kommen in
+          // Frage; Literale/Operatoren gehen weiter den alten Weg.
+          if (T.Value = '') or
+             not CharInSet(T.Value[1], ['A'..'Z', 'a'..'z', '_']) then
+          begin
+            Next;
+            Continue;
+          end;
+          Next;
+          if not (Tok.Kind in [tkColon, tkComma]) then Continue;
+          VarNames.Clear;
+          VarNames.Add(T.Value);
+          if Eat(tkComma) then
+            while Tok.Kind = tkIdent do
+            begin
+              VarNames.Add(Next.Value);
+              if not Eat(tkComma) then Break;
+            end;
+        end
+        else
+        begin
+          VarNames.Clear;
+          while Tok.Kind = tkIdent do
+          begin
+            VarNames.Add(Next.Value);
+            if not Eat(tkComma) then Break;
+          end;
         end;
 
         TypeName := '';

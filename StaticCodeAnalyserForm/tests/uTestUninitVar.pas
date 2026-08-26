@@ -240,6 +240,16 @@ type
     // Konstanten sind keine Lesestellen.
     [Test] procedure RecordConstLabel_SameNameAsLocal_NoFinding;
     [Test] procedure RealReadBeforeWrite_StillReported;
+
+    // ---- Voll-Audit 2026-08-15 / rw8-Restfunde (2026-08-26) ----------------
+    // Typname-Bug: Kontextwort als Variablenname ('read: integer;',
+    // 'Result: PPyObject;' in einer Prozedur) liess den Parser den TYPNAMEN
+    // als typlose Variable fuehren - Fix in uParser2 (Var-Section).
+    [Test] procedure KeywordNamedLocal_Assigned_NoPhantomTypename;
+    [Test] procedure KeywordNamedLocal_ResultInProcedure_NoPhantom;
+    // Gegenprobe: der Parser-Fix macht die echte Variable SICHTBAR -
+    // ist sie wirklich uninitialisiert, kommt jetzt der korrekte Fund.
+    [Test] procedure KeywordNamedLocal_TrulyUninit_ReportedUnderRealName;
   end;
 
 implementation
@@ -4344,6 +4354,81 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkUninitVar) >= 1,
     'ein echtes read-before-write muss weiterhin melden');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.KeywordNamedLocal_Assigned_NoPhantomTypename;
+// mormot RecvWait-Muster: 'read: integer;' - 'read' ist nicht reserviert.
+// Vor dem Parser-Fix wurde 'integer' als typlose Variable gefuehrt und
+// jedes 'integer' der Signatur als Read gezaehlt ("integer is read on
+// line ... but never assigned").
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function RecvWait(ms: integer): integer;'#13#10 +
+  'var'#13#10 +
+  '  read: integer;'#13#10 +
+  'begin'#13#10 +
+  '  read := SizeOf(ms);'#13#10 +
+  '  Result := read;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+    'weder Phantom-"integer" noch die korrekt zugewiesene "read"-Var');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.KeywordNamedLocal_ResultInProcedure_NoPhantom;
+// python4delphi-Muster: lokale Variable 'Result' in einer PROZEDUR
+// (legal - Result ist dort kein implizites Symbol). Vorher: Phantom-
+// Variable 'PPyObject', gelesen auf der Kopfzeile.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'type PPyObject = ^Integer;'#13#10 +
+  'procedure ExecuteEvent(Event: PPyObject);'#13#10 +
+  'var'#13#10 +
+  '  Result: PPyObject;'#13#10 +
+  'begin'#13#10 +
+  '  Result := nil;'#13#10 +
+  '  if Result = nil then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+    'kein Phantom-"PPyObject" - und Result wird vor dem Read gesetzt');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.KeywordNamedLocal_TrulyUninit_ReportedUnderRealName;
+// Der Parser-Fix ist kein blosser Suppressor: die keyword-benannte
+// Variable ist jetzt eine ECHTE Variable - bleibt sie uninitialisiert,
+// kommt der Fund unter ihrem richtigen Namen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Bad(ms: integer): integer;'#13#10 +
+  'var'#13#10 +
+  '  read: integer;'#13#10 +
+  'begin'#13#10 +
+  '  Result := read;'#13#10 +
+  'end;';
+var
+  F : TObjectList<TLeakFinding>;
+  i : Integer;
+  Getroffen : Boolean;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(CountKind(F, fkUninitVar) >= 1, 'echter uninit-Read');
+    Getroffen := False;
+    for i := 0 to F.Count - 1 do
+      if (F[i].Kind = fkUninitVar) and
+         (Pos('read', LowerCase(F[i].MissingVar)) > 0) and
+         (Pos('integer is read', LowerCase(F[i].MissingVar)) = 0) then
+        Getroffen := True;
+    Assert.IsTrue(Getroffen,
+      'der Fund nennt die echte Variable "read", nicht den Typnamen');
   finally F.Free; end;
 end;
 
