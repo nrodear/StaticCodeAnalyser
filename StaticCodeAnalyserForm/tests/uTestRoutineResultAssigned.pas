@@ -76,6 +76,12 @@ type
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
+
+    // ---- K2 Stufe 3 (2026-08-26): Evidenz je Fund ---------------------------
+    // Datei-Harness (Gates laufen echt) -> fcHigh; In-Memory-Harness (Gates
+    // inaktiv, schwaechere Zusage) -> fcMedium-Katalogdefault bleibt.
+    [Test] procedure VerifiedFinding_HighConfidence;
+    [Test] procedure InMemoryFinding_KeepsMediumConfidence;
   end;
 
 implementation
@@ -1001,6 +1007,51 @@ begin
   F := FindingsOnFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRoutineResultUnassigned),
     'Gate bleibt fuer den eigenen Rumpf aktiv, auch wenn eine nested routine existiert');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.VerifiedFinding_HighConfidence;
+// K2 Stufe 3: Durchlaeuft ein Fund ALLE Quelltext-Gates (Datei-Harness),
+// traegt er fcHigh und damit unter der Evidenz-Politik den Error-Tier.
+// Beweisbasis: FP-Voll-Audit 2026-08-15 - 0 FP in den 18 gate-sauberen
+// Stichproben-Funden; die einzige FP-Klasse (goto-Routinen) ist seit dem
+// tkKwGoto-Dispatch (16.08.) am Parser geschlossen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Broken(x: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  LogValue(x);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsOnFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkRoutineResultUnassigned) >= 1);
+    Assert.IsTrue(
+      TFindingHelper.FirstOf(F, fkRoutineResultUnassigned).Confidence = fcHigh,
+      'gate-verifizierter Fund traegt fcHigh (K2 Stufe 3)');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.InMemoryFinding_KeepsMediumConfidence;
+// Gegenprobe: im In-Memory-Harness (kein lesbares File) sind die
+// Quelltext-Gates inaktiv - die Evidenz reicht dann NICHT fuer fcHigh,
+// der fcMedium-Katalogdefault bleibt (Warning-Tier unter der Politik).
+// Genau die dokumentierte schwaechere Zusage des AST-Harness.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Broken(x: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  LogValue(x);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkRoutineResultUnassigned) >= 1);
+    Assert.IsTrue(
+      TFindingHelper.FirstOf(F, fkRoutineResultUnassigned).Confidence = fcMedium,
+      'ohne gelaufene Gates bleibt der fcMedium-Katalogdefault');
   finally F.Free; end;
 end;
 
