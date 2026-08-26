@@ -1152,6 +1152,14 @@ begin
   Result := IsSafeSqlHelperName(Callee);
 end;
 
+threadvar
+  // Reentranz-Bremse fuer IsTransparentHelperTerm: der Term-Walk laeuft
+  // ueber IsSanitizerDerivedLocal wieder in TermOk hinein (A := IfThen(_,B),
+  // B := IfThen(_,A) waere sonst endlos). threadvar wegen Parallel-Scan.
+  // MUSS vor IsSanitizedExpr stehen - TermOk liest sie (dcc64 E2003,
+  // Nutzer-Build 2026-08-26).
+  GTransparentTermDepth: Integer;
+
 class function TSQLInjectionDetector.IsSanitizedExpr(MethodNode: TAstNode;
   const Expr, SelfIdentLow: string): Boolean;
 // FP-Gate (2026-07-31): zerlegt Expr an den '+' der OBERSTEN Ebene (ausserhalb
@@ -1465,12 +1473,6 @@ begin
   end;
   // unbalanciert -> kein Gate (Fund bleibt)
 end;
-
-threadvar
-  // Reentranz-Bremse fuer IsTransparentHelperTerm: der Term-Walk laeuft
-  // ueber IsSanitizerDerivedLocal wieder in TermOk hinein (A := IfThen(_,B),
-  // B := IfThen(_,A) waere sonst endlos). threadvar wegen Parallel-Scan.
-  GTransparentTermDepth: Integer;
 
 class function TSQLInjectionDetector.IsQuotedPropertyPathLow(
   const TLow: string): Boolean;
