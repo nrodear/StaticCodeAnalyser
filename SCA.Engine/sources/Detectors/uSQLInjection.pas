@@ -293,6 +293,14 @@ type
     // kein SQL-Aufbau.
     class function ExecCallSqlArgIsPureLiteral(
       const CallName: string): Boolean; static;
+    // rw10-Nachverdrahtung (Phase 2, 2026-08-26): die Konventions-Gates
+    // muessen auch im SANITIZER-LOCAL-WALK greifen (UserHost :=
+    // IfThen(Escape..) und danach '...'+UserHost - der Fund sitzt an der
+    // VERWENDUNG, die Sicherheit an der ZUWEISUNG). Quoted*-Property als
+    // reiner Member-Pfad; transparenter Helfer als kompletter Term.
+    class function IsQuotedPropertyPathLow(const TLow: string): Boolean; static;
+    class function IsTransparentHelperTerm(MethodNode: TAstNode;
+      const Term: string): Boolean; static;
     // Verengung 2026-07-31 (derselbe Review-Fund): True wenn im Klammer-
     // inhalt des Aufrufs, dessen oeffnende Klammer in S an OpenParen steht,
     // ein Bezeichner vorkommt, der PARAMETER der Routine ist. Solche Terme
@@ -361,10 +369,15 @@ const
   //     SequenceName aus [MVCTable]-Attributen (SQLGenerators.PostgreSQL)
   // Match: WHOLE Name der letzten Pfad-Komponente - bewusst eng, damit
   // App-Variablen (code/city/lFilter...) NIE matchen.
-  ORM_META_IDENTS: array[0..8] of string = (
+  ORM_META_IDENTS: array[0..9] of string = (
     'sqltablename', 'ftablename', 'rowidfieldname',
     'sqltableretrieveblobfields', 'sqltableupdateblobfields',
-    'tablesimplefields', 'insertset', 'nameutf8', 'sequencename'
+    'tablesimplefields', 'insertset', 'nameutf8', 'sequencename',
+    // rw10-Nachverdrahtung 2026-08-26: FTS-Mapping-Feld der mORMot-
+    // TOrmProperties (Klassen-Attribut-Metadatum, mormot.orm.core
+    // FTS-Trigger-Generierung). Bewusst WHOLE-NAME statt einer
+    // '*fields'-Konvention - Dataset.Fields ist Laufzeitdaten.
+    'fftswithoutcontentfields'
   );
 
   // Safe-cast-/Escape-Funktionen: Output ist garantiert numerisch bzw.
@@ -1168,6 +1181,21 @@ var
     if IsScreamingSnakeConst(T) then Exit;
     if IsWellKnownEolConst(TLow) then Exit;
     if IsPlainIdentLow(TLow) and IsConstDerivedLocal(MethodNode, TLow) then Exit;
+    // rw10-Nachverdrahtung (Phase 2, 2026-08-26): dieselben Konventionen
+    // wie im Konkat-Pfad auch hier, wo die SICHERHEIT DER ZUWEISUNG
+    // entschieden wird (UserHost := IfThen(EscapeString.., ..)). Die
+    // threadvar-Bremse verhindert Endlos-Walks ueber wechselseitig
+    // zugewiesene Locals; Tiefe 2 deckt den Audit-Bestand.
+    if IsQuotedPropertyPathLow(TLow) then Exit;
+    if GTransparentTermDepth < 2 then
+    begin
+      Inc(GTransparentTermDepth);
+      try
+        if IsTransparentHelperTerm(MethodNode, T) then Exit;
+      finally
+        Dec(GTransparentTermDepth);
+      end;
+    end;
     Result := False;
   end;
 
@@ -1436,6 +1464,84 @@ begin
     end;
   end;
   // unbalanciert -> kein Gate (Fund bleibt)
+end;
+
+threadvar
+  // Reentranz-Bremse fuer IsTransparentHelperTerm: der Term-Walk laeuft
+  // ueber IsSanitizerDerivedLocal wieder in TermOk hinein (A := IfThen(_,B),
+  // B := IfThen(_,A) waere sonst endlos). threadvar wegen Parallel-Scan.
+  GTransparentTermDepth: Integer;
+
+class function TSQLInjectionDetector.IsQuotedPropertyPathLow(
+  const TLow: string): Boolean;
+// Reiner Member-Pfad (mind. ein '.'), dessen LETZTE Komponente die
+// quote*-Konvention traegt und der KEIN Call ist (DBObj.QuotedName).
+// Spiegel des Quoted-Gates in AllConcatTermsSafe fuer den Term-Walk.
+var
+  i, L, p  : Integer;
+  Depth    : Integer;
+  LastComp : string;
+  Dots     : Integer;
+begin
+  Result := False;
+  L := Length(TLow);
+  if (L = 0) or not CharInSet(TLow[1], ['a'..'z', '_']) then Exit;
+  i := 1; p := 1; Dots := 0;
+  while (i <= L) and CharInSet(TLow[i], ['a'..'z', '0'..'9', '_']) do Inc(i);
+  LastComp := Copy(TLow, p, i - p);
+  while i <= L do
+  begin
+    case TLow[i] of
+      '^': Inc(i);
+      '.':
+        begin
+          Inc(i); p := i; Inc(Dots);
+          while (i <= L) and CharInSet(TLow[i], ['a'..'z', '0'..'9', '_']) do
+            Inc(i);
+          if i = p then Exit;
+          LastComp := Copy(TLow, p, i - p);
+        end;
+      '[':
+        begin
+          Depth := 1; Inc(i);
+          while (i <= L) and (Depth > 0) do
+          begin
+            if TLow[i] = '[' then Inc(Depth)
+            else if TLow[i] = ']' then Dec(Depth);
+            Inc(i);
+          end;
+          if Depth > 0 then Exit;
+        end;
+    else
+      Exit; // Call/Operator/Whitespace -> kein reiner Pfad
+    end;
+  end;
+  Result := (Dots > 0) and LastComp.StartsWith('quoted');
+end;
+
+class function TSQLInjectionDetector.IsTransparentHelperTerm(
+  MethodNode: TAstNode; const Term: string): Boolean;
+// Term ist KOMPLETT ein Aufruf eines transparenten Helfers, dessen
+// Argumente alle sicher sind. Position/Struktur ueber die positions-
+// erhaltend geblankte Fassung, Inhalte aus dem Original.
+var
+  TStr    : string;
+  Blank   : string;
+  i, L    : Integer;
+  ident   : string;
+begin
+  Result := False;
+  TStr := Trim(Term);
+  L := Length(TStr);
+  if (L < 4) or (TStr[L] <> ')') then Exit;
+  Blank := TDetectorUtils.BlankStringLiterals(TStr).ToLower;
+  i := 1;
+  while (i <= L) and CharInSet(Blank[i], ['a'..'z', '0'..'9', '_']) do Inc(i);
+  ident := Copy(Blank, 1, i - 1);
+  if (ident = '') or (i > L) or (Blank[i] <> '(') then Exit;
+  if not IsTransparentHelperName(ident) then Exit;
+  Result := TransparentCallArgsSafe(MethodNode, TStr, Blank, i, 0,
+    ident.StartsWith('ifthen') or ident.StartsWith('alifthen'));
 end;
 
 class function TSQLInjectionDetector.IsSqlClauseClassRoutine(

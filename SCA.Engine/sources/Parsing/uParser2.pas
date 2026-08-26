@@ -1887,11 +1887,20 @@ begin
         Continue;
       end;
 
-      while not (Tok.Kind in [tkKwVar, tkKwConst, tkKwType,
+      while not (Tok.Kind in [tkKwVar, tkKwConst, tkKwType, tkKwLabel,
                               tkKwProcedure, tkKwFunction, tkKwConstructor,
                               tkKwDestructor, tkKwOperator,
                               tkKwBegin, tkKwAsm, tkKwEnd, tkEof]) do
       begin
+        // tkKwLabel ergaenzt (A/B-Fund rw10, 2026-08-26): ohne den Stopper
+        // lief diese Schleife in 'label Loop2, ..., Ret, Exit;' hinein und
+        // machte die SPRUNGMARKEN zu typlosen Pseudo-Locals - 'goto Ret'
+        // zaehlte dann als Read einer nie zugewiesenen Variablen (5 neue
+        // fcHigh-SCA166-FPs auf FastCode-PosEx-Kopien). Der Altbestand
+        // verschluckte die Liste stillschweigend mit anderem Endzustand;
+        // erst die Kommalisten-Fortsetzung machte das Loch sichtbar. Mit
+        // dem Stopper uebernimmt der tkKwLabel-Zweig der AUSSEN-Schleife
+        // (SkipToSemicolon) - Sprungmarken erreichen den AST nie als Vars.
         // Routine-Keywords (procedure/function/...) beenden die Var-Section:
         // sie leiten eine NESTED routine ein, KEINE weitere Variable. Ohne
         // diesen Stop fraesse der Var-Parser `procedure Local` als Pseudo-

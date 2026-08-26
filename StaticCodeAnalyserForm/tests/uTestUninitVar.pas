@@ -256,6 +256,10 @@ type
     // Gegenpruefung 2026-08-26 (MINOR): auch FORTSETZUNGEN der
     // Namensliste duerfen Kontextwoerter sein ('read, write: Integer;').
     [Test] procedure KeywordNamedLocals_CommaList_BothVisible;
+    // A/B-Fund rw10 (2026-08-26): eine label-Sektion NACH der var-Sektion
+    // darf ihre Sprungmarken nicht als Pseudo-Locals in den AST druecken -
+    // 'goto Ret' ist kein Read einer Variablen (FastCode-PosEx-Muster).
+    [Test] procedure LabelSectionAfterVars_NoPhantomLocals;
   end;
 
 implementation
@@ -4497,6 +4501,36 @@ begin
         Getroffen := True;
     Assert.IsTrue(Getroffen,
       'das zweite Kontextwort der Liste ist eine echte, sichtbare Variable');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.LabelSectionAfterVars_NoPhantomLocals;
+// FastCode-PosEx-Muster (mormot.core.base/FastcodePosExUnit): die
+// label-Liste folgt der var-Sektion und traegt auch keyword-foermige
+// Marken ('Exit'). Vor dem tkKwLabel-Stopper frass die Decl-Schleife
+// die Marken als typlose Locals, und 'goto Ret' wurde zum uninit-Read
+// (5 fcHigh-FPs im rw10-A/B).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function PosExFast(x: Integer): Integer;'#13#10 +
+  'var'#13#10 +
+  '  len: Integer;'#13#10 +
+  'label'#13#10 +
+  '  Loop2, TestT, Ret, Exit;'#13#10 +
+  'begin'#13#10 +
+  '  len := x;'#13#10 +
+  '  if len > 0 then goto Ret;'#13#10 +
+  '  Result := 0;'#13#10 +
+  '  goto Exit;'#13#10 +
+  'Ret:'#13#10 +
+  '  Result := len;'#13#10 +
+  'Exit:'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+    'Sprungmarken sind keine Variablen - kein uninit-Read auf goto-Ziele');
   finally F.Free; end;
 end;
 

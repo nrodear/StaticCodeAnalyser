@@ -166,6 +166,11 @@ type
     // Klasse 8: Konkat im gebundenen Parameter-Array, SQL rein literal.
     [Test] procedure SQL_ConcatInBoundParamArray_NoFinding;
     [Test] procedure SQL_ConcatInSqlArgOfExec_StillReported;
+    // Phase 2 (rw10-Nachverdrahtung): die Konventionen greifen auch im
+    // Sanitizer-Local-Walk - der Fund sitzt an der VERWENDUNG, die
+    // Sicherheit an der ZUWEISUNG (usermanager-UserHost-Muster).
+    [Test] procedure SQL_LocalFilledViaIfThenEscaped_NoFinding;
+    [Test] procedure SQL_LocalFilledViaIfThenRaw_StillReported;
   end;
 
 implementation
@@ -1821,6 +1826,49 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
       'Parameter bleibt Fund, auch in der Klausel-Klasse');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_LocalFilledViaIfThenEscaped_NoFinding;
+// Phase 2 (rw10): HeidiSQL usermanager 1625/1635 in Originalform - der
+// Local wird per IfThen aus Escapes GEFUELLT und erst danach konkateniert.
+// Die Erstrunde deckte nur das INLINE-IfThen; der Sanitizer-Local-Walk
+// (IsSanitizedExpr/TermOk) kannte die transparenten Helfer nicht.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run;'#13#10+
+  'begin'#13#10+
+  '  UserHost := IfThen(User.IsUser,'#13#10+
+  '    FConnection.EscapeString(User.Username) + ''@'' +'#13#10+
+  '      FConnection.EscapeString(User.Host),'#13#10+
+  '    FConnection.EscapeString(User.Username));'#13#10+
+  '  FConnection.Query(''REVOKE ALL ON x FROM '' + UserHost);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+      'escaped-at-source ueber IfThen: die Zuweisung traegt die Sicherheit');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_LocalFilledViaIfThenRaw_StillReported;
+// TP-Gegenprobe Phase 2: ein roher Parameter-Zweig in der ZUWEISUNG
+// vergiftet den Local - die Verwendung bleibt Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run(const AInput: string);'#13#10+
+  'begin'#13#10+
+  '  UserHost := IfThen(UseRaw, AInput, QuotedStr(AInput));'#13#10+
+  '  FConnection.Query(''DELETE FROM t WHERE n='' + UserHost);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+      'roher Zweig in der Zuweisung haelt den Fund an der Verwendung');
   finally F.Free; end;
 end;
 
