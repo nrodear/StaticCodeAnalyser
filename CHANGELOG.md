@@ -39,6 +39,10 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `high`) while evidence tiering is active, so CI consumers can see
   why a catalog-error rule reports at `warning`. With
   `EvidenceTiering=0` the SARIF output is byte-identical to before.
+- **SCA173 (VariantTypeMisuse) demoted to medium confidence**: after
+  the in-loop gate below, the measured residual false-positive rate is
+  ~12.5 %; the rule stays visible in the default profile (deliberately
+  not low confidence).
 - **SCA086 (AvoidOut) demoted to low confidence**: after the ABI
   gates below, the remaining corpus findings are dominated by vendored
   third-party code where `out` is the vendor's API decision; the rule
@@ -51,6 +55,28 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "no enclosing try..finally" claim does not hold there).
 
 ### Fixed
+- SCA072 (RedundantBoolean) learned four gates from the corpus
+  autopsy: `=` inside `[...]` attribute blocks is a named argument
+  (bracket balance carries across lines), comparisons on declared
+  `(Ole)Variant` identifiers are coercion intent (scope-checked
+  against the declaring routine), visibility-prefixed section heads
+  (`protected const`) and `type` sections count as declaration
+  context, and a bare `Boolean` type name on a wrapped declaration
+  line is not an operand. Corpus: 725 -> 400 findings, one documented
+  true-positive trade-off inside index brackets.
+- SCA173 (VariantTypeMisuse) now requires the Variant to actually be
+  USED inside a loop of the method (word-boundary match over the loop
+  subtrees) instead of flagging every Variant in any method that
+  contains a loop; methods with nested routines stay conservatively
+  reported (their bodies are opaque to the AST). Corpus: 613 -> 332
+  findings with zero true-positive loss in the audited sample.
+- SCA001 (MemoryLeak) no longer flags anonymous-method literals
+  (`X := procedure ... end` - reference-counted closures), borrowed
+  `...GetValue(..).AsObject` RTTI chains (the record constructor
+  allocates nothing), or threads whose own constructor in the same
+  unit sets `FreeOnTerminate := True` (unambiguous constructor
+  required; overloads keep reporting). 19 corpus findings removed,
+  all verified false positives.
 - SCA086 (AvoidOut) no longer flags `out` parameters whose signature
   is fixed from outside: declarations carrying an ABI directive
   (`stdcall`, `safecall`, `cdecl`, `external`, `varargs`, `dispid`,
