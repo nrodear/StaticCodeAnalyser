@@ -132,6 +132,12 @@ type
   private
     FFindings : TObjectList<TLeakFinding>;
     FBaseDir  : string;
+    // Kohorten-Stempel der Evidenz-Politik (Gegenpruefungs-MINOR
+    // 2026-08-26): der Politik-Zustand DES SCANS, der diese Funde erzeugt
+    // hat. WriteSarif reicht ihn explizit an den Writer durch - damit
+    // bleibt ein aelteres TScanResult auch dann konsistent, wenn spaeter
+    // im selben Prozess mit anderer Politik gescannt wurde.
+    FConfidenceProps : Boolean;
     function CountSeverity(ASev: TLeakSeverity): Integer;
   public
     constructor Create(AFindings: TObjectList<TLeakFinding>; const ABaseDir: string);
@@ -288,7 +294,8 @@ end;
 
 procedure TScanResult.WriteSarif(const AFileName, AToolName: string);
 begin
-  TSARIFWriter.WriteFile(AFileName, FFindings, FBaseDir, SCA_VERSION, AToolName);
+  TSARIFWriter.WriteFile(AFileName, FFindings, FBaseDir, SCA_VERSION,
+    AToolName, FConfidenceProps);
 end;
 
 procedure TScanResult.WriteSonar(const AFileName: string);
@@ -732,6 +739,9 @@ begin
   end;
 
   Result := TScanResult.Create(Findings, BaseDir);
+  // Kohorten-Stempel: uStaticAnalyzer2 hat ihn soeben fuer DIESEN Scan
+  // gesetzt (unter dem Engine-Lock, also race-frei uebernehmbar).
+  Result.FConfidenceProps := uSCAConsts.LastScanEvidenceTiering;
   finally
     GEngineLock.Leave;
   end;

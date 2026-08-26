@@ -73,7 +73,7 @@
 interface
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils, System.StrUtils, System.Generics.Collections,
   uAstNode, uSCAConsts, uMethodd12, uSQLInjectionScore, uDetectorUtils;
 
 type
@@ -140,8 +140,12 @@ type
     // MethodNode wird fuer die lokalen Dataflow-Gates gebraucht (const-
     // derived-Variablen, Format-Masken) und darf nil sein (dann greifen
     // nur die kontextfreien Pruefungen).
+    // ADepth (K2-Folgerunde 2026-08-26): Rekursionsbremse fuer das
+    // Transparente-Helfer-Gate - Argumente eines Helfers werden mit
+    // ADepth+1 geprueft, ab Tiefe 2 greift das Gate nicht mehr (bewusste
+    // Spiegelung der TermOk-Regel 'rekursionsfrei gegen x := x + y').
     class function AllConcatTermsSafe(MethodNode: TAstNode;
-      const RHS: string): Boolean; static;
+      const RHS: string; ADepth: Integer = 0): Boolean; static;
     // True wenn S ausschliesslich aus String-Literalen, Char-Codes
     // (#13, #$1B), '+'-Konkatenation und Whitespace besteht - also ein
     // zur Compile-Zeit fixer String, den kein Angreifer beeinflussen kann.
@@ -248,6 +252,55 @@ type
     // Nur solche Callees darf die Builder-Rolle freigeben - Trim/Copy/
     // VarToStr um Fremd-Input bleiben Fund.
     class function IsMappingCalleeName(const NameLow: string): Boolean; static;
+    // ---- K2-Folgerunde 2026-08-26 (Voll-Audit-S2-Klassen, 96 % FP) ----
+    // Konventions-Erweiterung der ORM-Metadaten (Klasse 'Metadaten hinter
+    // nicht gelistetem Namen'): statt die Positiv-Liste zu verlaengern,
+    // zaehlen Namens-KONVENTIONEN der letzten Pfad-Komponente (sqltable*,
+    // *tablename, *fieldname/-s, tablesimplefields*) sowie Metadaten-
+    // EMPFAENGER (vorletzte Komponente props/ormprops/tableprops/ftablemap).
+    class function IsOrmMetaConventionName(const LastLow,
+      PrevLow: string): Boolean; static;
+    // Klasse 'RQL-/SQL-Uebersetzer hinter dem Parameter-Veto': Callee-Namen,
+    // die den Parameter PARSEN/UEBERSETZEN statt ihn einzukleben
+    // (*byrql/*bysql, compile*/parse*/build*, create*sql). Nur als
+    // Ausnahme des CallArgUsesRoutineParam-Vetos in Builder-Kontexten.
+    class function IsSqlTranslatorCalleeName(
+      const NameLow: string): Boolean; static;
+    // Klasse 'transparente Helfer': Funktionen, die die Sicherheit ihrer
+    // Argumente DURCHREICHEN statt sie zu setzen (IfThen/Implode/Trim/...).
+    class function IsTransparentHelperName(
+      const NameLow: string): Boolean; static;
+    // Prueft die Top-Level-Argumente eines transparenten Helfers: jedes
+    // wird als eigener Konkat-Ausdruck mit ADepth+1 bewertet (ein
+    // unsicheres Argument -> False, der Fund bleibt).
+    // ASkipFirst: bei IfThen/ALIfThen* ist das ERSTE Argument die
+    // Boolean-BEDINGUNG - sie waehlt nur den Zweig und landet nie im
+    // String; sie darf die Bewertung nicht kippen (User.IsUser!).
+    class function TransparentCallArgsSafe(MethodNode: TAstNode;
+      const RHS, Stripped: string; OpenParen, ADepth: Integer;
+      ASkipFirst: Boolean): Boolean; static;
+    // Klasse 'SQL-Klausel-Klasse': die Klasse selbst IST der Builder
+    // (TALUpdateSQLClause.SQLText) - ihre bare self-Felder sind die vom
+    // Entwickler gesetzte Bauvorschrift, keine Fremd-Eingabe. Bewusst
+    // GETRENNT von IsSqlBuilderRoutine: nur *sqlclause*-Klassennamen, und
+    // Routine-PARAMETER bleiben auch hier unsicher.
+    class function IsSqlClauseClassRoutine(MethodNode: TAstNode): Boolean; static;
+    class function IdentIsRoutineParam(MethodNode: TAstNode;
+      const IdentLow: string): Boolean; static;
+    // Klasse 'Konkatenation im Parameter-Array': Exec*(<SQL>, [<Params>]) -
+    // ist das ERSTE Argument reiner Literaltext, ist der Aufruf per
+    // Definition parametrisiert; das '+' im gebundenen Werte-Array ist
+    // kein SQL-Aufbau.
+    class function ExecCallSqlArgIsPureLiteral(
+      const CallName: string): Boolean; static;
+    // rw10-Nachverdrahtung (Phase 2, 2026-08-26): die Konventions-Gates
+    // muessen auch im SANITIZER-LOCAL-WALK greifen (UserHost :=
+    // IfThen(Escape..) und danach '...'+UserHost - der Fund sitzt an der
+    // VERWENDUNG, die Sicherheit an der ZUWEISUNG). Quoted*-Property als
+    // reiner Member-Pfad; transparenter Helfer als kompletter Term.
+    class function IsQuotedPropertyPathLow(const TLow: string): Boolean; static;
+    class function IsTransparentHelperTerm(MethodNode: TAstNode;
+      const Term: string): Boolean; static;
     // Verengung 2026-07-31 (derselbe Review-Fund): True wenn im Klammer-
     // inhalt des Aufrufs, dessen oeffnende Klammer in S an OpenParen steht,
     // ein Bezeichner vorkommt, der PARAMETER der Routine ist. Solche Terme
@@ -316,10 +369,15 @@ const
   //     SequenceName aus [MVCTable]-Attributen (SQLGenerators.PostgreSQL)
   // Match: WHOLE Name der letzten Pfad-Komponente - bewusst eng, damit
   // App-Variablen (code/city/lFilter...) NIE matchen.
-  ORM_META_IDENTS: array[0..8] of string = (
+  ORM_META_IDENTS: array[0..9] of string = (
     'sqltablename', 'ftablename', 'rowidfieldname',
     'sqltableretrieveblobfields', 'sqltableupdateblobfields',
-    'tablesimplefields', 'insertset', 'nameutf8', 'sequencename'
+    'tablesimplefields', 'insertset', 'nameutf8', 'sequencename',
+    // rw10-Nachverdrahtung 2026-08-26: FTS-Mapping-Feld der mORMot-
+    // TOrmProperties (Klassen-Attribut-Metadatum, mormot.orm.core
+    // FTS-Trigger-Generierung). Bewusst WHOLE-NAME statt einer
+    // '*fields'-Konvention - Dataset.Fields ist Laufzeitdaten.
+    'fftswithoutcontentfields'
   );
 
   // Safe-cast-/Escape-Funktionen: Output ist garantiert numerisch bzw.
@@ -329,6 +387,18 @@ const
   SAFE_CASTS: array[0..7] of string = (
     'inttostr', 'int64tostr', 'formatint', 'getenumname',
     'quotedstr', 'quotedsql', 'quotedstrjson', 'sqlvartotext'
+  );
+
+  // K2-Folgerunde 2026-08-26 (Voll-Audit-S2, Klasse 'Fragment-/Durchleit-
+  // Helfer'): Funktionen, die die Sicherheit ihrer Argumente durchreichen.
+  // Ein Aufruf ist sicher, wenn ALLE Top-Level-Argumente sicher sind
+  // (TransparentCallArgsSafe, Tiefe-1-Rekursion mit Bremse). Belege:
+  // HeidiSQL IfThen(EscapeString..)/Implode(' ', WithClauses)/UpperCase
+  // (ObjType), Alcinoe ALIfThenA(<Literale>), mORMot JoinCsv(',', Felder).
+  TRANSPARENT_HELPERS: array[0..12] of string = (
+    'ifthen', 'alifthena', 'alifthenw', 'implode', 'join', 'joincsv',
+    'uppercase', 'lowercase', 'trim', 'trimleft', 'trimright',
+    'copy', 'stringreplace'
   );
 
 { ---- Heuristiken ---- }
@@ -460,7 +530,7 @@ begin
 end;
 
 class function TSQLInjectionDetector.AllConcatTermsSafe(MethodNode: TAstNode;
-  const RHS: string): Boolean;
+  const RHS: string; ADepth: Integer): Boolean;
 // Strippt alle String-Literale (mit ''-Escape-Handling) raus, dann an
 // jedem '+' den nachfolgenden Token (Identifier/Whitespace) extrahieren.
 // Wenn der Token entweder leer (Literal-Position) oder Aufruf einer
@@ -488,9 +558,14 @@ var
   Depth    : Integer;
   TermStart: Integer;   // Start des Terms hinter '+' (fuer Empfaenger-Pfad)
   Builder  : Boolean;   // umgebende Routine hat Query-Builder-Rolle
+  BuilderCls: Boolean;  // K2 2026-08-26: Klasse ist SQL-Klausel (*sqlclause*)
+  PrevComp : string;    // vorletzte Pfad-Komponente (Metadaten-Empfaenger)
 begin
   // FP-Gate (2026-07-31): Query-Builder-Rolle einmal pro Ausdruck bestimmen.
   Builder := IsSqlBuilderRoutine(MethodNode);
+  // K2-Folgerunde 2026-08-26 (Klasse 'SQL-Klausel-Klasse'): eng getrennt
+  // von der Builder-Rolle, gibt NUR bare Nicht-Parameter-Bezeichner frei.
+  BuilderCls := IsSqlClauseClassRoutine(MethodNode);
 
   // 1) String-Literale durch Leerzeichen ersetzen (Position erhalten).
   //    '' innerhalb eines Strings ist Escape-Quote, weiter im String.
@@ -557,6 +632,7 @@ begin
       if (j <= Length(Stripped)) and CharInSet(Stripped[j], ['.', '^', '[']) then
       begin
         LastComp := ident;
+        PrevComp := '';
         PathOk   := True;
         while (j <= Length(Stripped)) and PathOk do
         begin
@@ -573,7 +649,10 @@ begin
                 if j = p then
                   PathOk := False // '.' ohne Identifier -> kein Member-Pfad
                 else
+                begin
+                  PrevComp := LastComp;
                   LastComp := Copy(Stripped, p, j - p);
+                end;
               end;
             '[':
               begin
@@ -597,9 +676,22 @@ begin
             Break; // Pfad-Ende (Whitespace/Operator/Klammer)
           end;
         end;
-        if PathOk and IsOrmMetaIdent(LastComp) then
+        if PathOk and (IsOrmMetaIdent(LastComp)
+                       or IsOrmMetaConventionName(LastComp, PrevComp)) then
         begin
           i := j; // Pfad (inkl. Index-Inhalt) ueberspringen
+          Continue;
+        end;
+        // K2-Folgerunde 2026-08-26 (Klasse 'Quoted*-Property'): HeidiSQL
+        // liefert gequotete Bezeichner als PROPERTY (DBObj.QuotedName/
+        // .QuotedDatabase/.QuotedDbAndTableName/.QuotedColumn) - der Name
+        // traegt die quote*-Konvention, nur die Klammern fehlen. Nur fuer
+        // reine Member-Pfade OHNE folgendes '(' (der Getter quotet selbst);
+        // ein CALL laeuft weiter ueber IsSafeSqlHelperName unten.
+        if PathOk and LastComp.StartsWith('quoted')
+           and ((j > Length(Stripped)) or (Stripped[j] <> '(')) then
+        begin
+          i := j;
           Continue;
         end;
         // Kein Metadaten-Pfad: wie vor 2026-07-05 zaehlt der FUEHRENDE
@@ -647,10 +739,16 @@ begin
         // und BEIDE Zweige sind gesperrt, sobald ein Routine-PARAMETER im
         // Argument steht - 'GetOrderSQL(const AFilter)' mit
         // '+ Obj.Fetch(AFilter)' ist genau die Kern-Injection der Regel.
+        // K2-Folgerunde 2026-08-26 (Klasse 'RQL-Uebersetzer'): das
+        // Parameter-Veto bleibt die Regel, aber ein UEBERSETZER-Callee
+        // (CreateSQLWhereByRQL) PARST den Parameter statt ihn einzukleben -
+        // sein Ergebnis ist erzeugtes SQL. Ausnahme gilt NUR in den beiden
+        // Builder-Kontexten dieser Bedingung.
         if PathOk and (j <= Length(Stripped)) and (Stripped[j] = '(')
            and (IsSqlBuilderReceiver(Copy(Stripped, TermStart, j - TermStart))
                 or (Builder and IsMappingCalleeName(LastComp)))
-           and not CallArgUsesRoutineParam(MethodNode, Stripped, j) then
+           and (not CallArgUsesRoutineParam(MethodNode, Stripped, j)
+                or IsSqlTranslatorCalleeName(LastComp)) then
         begin
           i := j;
           Continue;
@@ -673,11 +771,17 @@ begin
         // FConnection.EscapeString(...) + '@' + FConnection.EscapeString(...),
         // danach 'CREATE USER ' + UserHost). Ein Parameter ohne sichtbare
         // Zuweisung faellt NICHT darunter -> echter Fremd-Input bleibt Fund.
+        // K2-Folgerunde 2026-08-26 (Klasse 'SQL-Klausel-Klasse'): in einer
+        // *sqlclause*-Klasse (TALUpdateSQLClause.SQLText) sind bare
+        // self-Felder (Table/Value/Where) die vom Entwickler gesetzte
+        // Bauvorschrift - Routine-PARAMETER bleiben auch dort unsicher.
         if not (IsConstDerivedLocal(MethodNode, ident)
                 or IsOrmMetaIdent(ident)
                 or IsWellKnownEolConst(ident)
                 or IsScreamingSnakeConst(IdentOrig)
-                or IsSanitizerDerivedLocal(MethodNode, ident)) then
+                or IsSanitizerDerivedLocal(MethodNode, ident)
+                or (BuilderCls
+                    and not IdentIsRoutineParam(MethodNode, ident))) then
           Exit(False); // bare Identifier -> Variable, unsicher
         Inc(i);
         Continue;
@@ -708,8 +812,20 @@ begin
       // Argument steht kein Routine-PARAMETER. Damit bleibt
       // 'SELECT ... note=' + Trim(AFilter) ein Error-Tier-Fund.
       if (not isSafe) and Builder and IsMappingCalleeName(ident)
-         and not CallArgUsesRoutineParam(MethodNode, Stripped, j) then
+         and (not CallArgUsesRoutineParam(MethodNode, Stripped, j)
+              or IsSqlTranslatorCalleeName(ident)) then
         isSafe := True;
+      // K2-Folgerunde 2026-08-26 (Klasse 'transparente Helfer'): IfThen/
+      // Implode/Trim/UpperCase & Co. REICHEN die Sicherheit ihrer
+      // Argumente durch - der Aufruf ist sicher, wenn ALLE Top-Level-
+      // Argumente sicher sind (rekursiv mit Tiefenbremse; ein unsicheres
+      // Argument erhaelt den Fund). HeidiSQL: 'REVOKE ... FROM '+UserHost
+      // via IfThen(EscapeString..+..EscapeString) war die zweitgroesste
+      // FP-Klasse des S2-Audits.
+      if (not isSafe) and (ADepth < 2)
+         and IsTransparentHelperName(ident) then
+        isSafe := TransparentCallArgsSafe(MethodNode, RHS, Stripped, j, ADepth,
+          ident.StartsWith('ifthen') or ident.StartsWith('alifthen'));
       if not isSafe then Exit(False); // andere Funktion -> unsicher
     end;
     Inc(i);
@@ -852,6 +968,7 @@ var
   i, L, p : Integer;
   Depth   : Integer;
   LastComp: string;
+  PrevComp: string;   // K2 2026-08-26: Metadaten-Empfaenger (props/...)
 begin
   Result := False;
   L := Length(ElemLow);
@@ -861,6 +978,7 @@ begin
   while (i <= L) and CharInSet(ElemLow[i], ['a'..'z', '0'..'9', '_']) do
     Inc(i);
   LastComp := Copy(ElemLow, p, i - p);
+  PrevComp := '';
   while i <= L do
   begin
     case ElemLow[i] of
@@ -874,6 +992,7 @@ begin
                 CharInSet(ElemLow[i], ['a'..'z', '0'..'9', '_']) do
             Inc(i);
           if i = p then Exit; // '.' ohne Identifier -> kein Member-Pfad
+          PrevComp := LastComp;
           LastComp := Copy(ElemLow, p, i - p);
         end;
       '[':
@@ -896,7 +1015,8 @@ begin
       Exit; // Operator/Call/Whitespace -> kein reiner Member-Pfad
     end;
   end;
-  Result := IsOrmMetaIdent(LastComp);
+  Result := IsOrmMetaIdent(LastComp)
+         or IsOrmMetaConventionName(LastComp, PrevComp);
 end;
 
 class function TSQLInjectionDetector.IsSafeSqlHelperCall(
@@ -1032,6 +1152,14 @@ begin
   Result := IsSafeSqlHelperName(Callee);
 end;
 
+threadvar
+  // Reentranz-Bremse fuer IsTransparentHelperTerm: der Term-Walk laeuft
+  // ueber IsSanitizerDerivedLocal wieder in TermOk hinein (A := IfThen(_,B),
+  // B := IfThen(_,A) waere sonst endlos). threadvar wegen Parallel-Scan.
+  // MUSS vor IsSanitizedExpr stehen - TermOk liest sie (dcc64 E2003,
+  // Nutzer-Build 2026-08-26).
+  GTransparentTermDepth: Integer;
+
 class function TSQLInjectionDetector.IsSanitizedExpr(MethodNode: TAstNode;
   const Expr, SelfIdentLow: string): Boolean;
 // FP-Gate (2026-07-31): zerlegt Expr an den '+' der OBERSTEN Ebene (ausserhalb
@@ -1061,6 +1189,21 @@ var
     if IsScreamingSnakeConst(T) then Exit;
     if IsWellKnownEolConst(TLow) then Exit;
     if IsPlainIdentLow(TLow) and IsConstDerivedLocal(MethodNode, TLow) then Exit;
+    // rw10-Nachverdrahtung (Phase 2, 2026-08-26): dieselben Konventionen
+    // wie im Konkat-Pfad auch hier, wo die SICHERHEIT DER ZUWEISUNG
+    // entschieden wird (UserHost := IfThen(EscapeString.., ..)). Die
+    // threadvar-Bremse verhindert Endlos-Walks ueber wechselseitig
+    // zugewiesene Locals; Tiefe 2 deckt den Audit-Bestand.
+    if IsQuotedPropertyPathLow(TLow) then Exit;
+    if GTransparentTermDepth < 2 then
+    begin
+      Inc(GTransparentTermDepth);
+      try
+        if IsTransparentHelperTerm(MethodNode, T) then Exit;
+      finally
+        Dec(GTransparentTermDepth);
+      end;
+    end;
     Result := False;
   end;
 
@@ -1226,6 +1369,277 @@ begin
     if Pos(s, NameLow) > 0 then Exit;
   for s in MAPPING_TOKENS do
     if Pos(s, NameLow) > 0 then Exit(True);
+end;
+
+class function TSQLInjectionDetector.IsOrmMetaConventionName(
+  const LastLow, PrevLow: string): Boolean;
+// K2-Folgerunde 2026-08-26: Konventions-Regel statt Listenpflege. Die
+// Audit-Belege (mormot.orm.core 9204ff SqlTableSimpleFieldsNoRowID/
+// fFtsWithoutContentFields, orm.sqlite3 RecordVersionField.Name,
+// TableSimpleFieldsNoRowID) fielen alle durch die enge Positivliste.
+// BEWUSST NICHT dabei: blosse '*fields'-Endung (Dataset.Fields ist ein
+// LAUFZEIT-Datencontainer) und '*name' allein (User.Name ist Eingabe) -
+// 'name' zaehlt nur hinter einem *field/*fields-Empfaenger.
+begin
+  Result :=
+    LastLow.StartsWith('sqltable')
+    or LastLow.StartsWith('tablesimplefields')
+    or LastLow.EndsWith('tablename')
+    or LastLow.EndsWith('fieldname')
+    or LastLow.EndsWith('fieldnames')
+    or ((LastLow = 'name') and
+        (PrevLow.EndsWith('field') or PrevLow.EndsWith('fields')))
+    or (PrevLow = 'props') or (PrevLow = 'ormprops')
+    or (PrevLow = 'tableprops') or (PrevLow = 'ftablemap');
+end;
+
+class function TSQLInjectionDetector.IsSqlTranslatorCalleeName(
+  const NameLow: string): Boolean;
+// K2-Folgerunde 2026-08-26: das Parameter-Veto (CallArgUsesRoutineParam)
+// kann 'Parameter wird eingeklebt' nicht von 'Parameter wird GEPARST'
+// unterscheiden - DMVC CreateSQLWhereByRQL(RQL, ...) uebersetzt RQL per
+// Compiler (GetRQLParser.Execute), der Rueckgabewert ist ERZEUGTES SQL.
+// Diese Namen duerfen das Veto in Builder-Kontexten aufheben; Trim/Copy/
+// Fetch u.ae. matchen nicht und bleiben Fund (Verengung 2026-07-31).
+begin
+  Result :=
+    NameLow.EndsWith('byrql') or NameLow.EndsWith('bysql')
+    or NameLow.StartsWith('compile') or NameLow.StartsWith('parse')
+    or NameLow.StartsWith('build')
+    or (NameLow.StartsWith('create') and NameLow.EndsWith('sql'));
+end;
+
+class function TSQLInjectionDetector.IsTransparentHelperName(
+  const NameLow: string): Boolean;
+var
+  S : string;
+begin
+  Result := False;
+  for S in TRANSPARENT_HELPERS do
+    if NameLow = S then Exit(True);
+end;
+
+class function TSQLInjectionDetector.TransparentCallArgsSafe(
+  MethodNode: TAstNode; const RHS, Stripped: string;
+  OpenParen, ADepth: Integer; ASkipFirst: Boolean): Boolean;
+// Top-Level-Argumente des Helfers bestimmen (Stripped ist literal-geblankt
+// und positionsgleich zu RHS -> reine Klammer-/Komma-Zaehlung) und jedes
+// als eigenen Konkat-Ausdruck bewerten. Der '''_''+'-Praefix zwingt die
+// Term-Schleife, auch den ERSTEN Term des Arguments zu pruefen (die
+// Schleife prueft nur Tokens HINTER einem '+'). Ein unsicheres Argument
+// -> False, der Fund bleibt.
+var
+  L, k, Depth, ArgStart : Integer;
+  Part : string;
+
+  function PartSafe(AFrom, ATo: Integer): Boolean;
+  begin
+    if ASkipFirst then
+    begin
+      // Boolean-Bedingung von IfThen/ALIfThen*: waehlt nur den Zweig,
+      // ihr Wert erreicht den String nie.
+      ASkipFirst := False;
+      Exit(True);
+    end;
+    Part := Trim(Copy(RHS, AFrom, ATo - AFrom + 1));
+    if Part = '' then Exit(True);
+    Result := AllConcatTermsSafe(MethodNode, '''_'' + ' + Part, ADepth + 1);
+  end;
+
+begin
+  Result := False;
+  L := Length(Stripped);
+  if (OpenParen < 1) or (OpenParen > L) or (Stripped[OpenParen] <> '(') then
+    Exit;
+  Depth    := 0;
+  ArgStart := OpenParen + 1;
+  for k := OpenParen to L do
+  begin
+    case Stripped[k] of
+      '(', '[': Inc(Depth);
+      ')', ']':
+        begin
+          Dec(Depth);
+          if Depth = 0 then
+            Exit(PartSafe(ArgStart, k - 1));   // letztes Argument
+        end;
+      ',':
+        if Depth = 1 then
+        begin
+          if not PartSafe(ArgStart, k - 1) then Exit(False);
+          ArgStart := k + 1;
+        end;
+    end;
+  end;
+  // unbalanciert -> kein Gate (Fund bleibt)
+end;
+
+class function TSQLInjectionDetector.IsQuotedPropertyPathLow(
+  const TLow: string): Boolean;
+// Reiner Member-Pfad (mind. ein '.'), dessen LETZTE Komponente die
+// quote*-Konvention traegt und der KEIN Call ist (DBObj.QuotedName).
+// Spiegel des Quoted-Gates in AllConcatTermsSafe fuer den Term-Walk.
+var
+  i, L, p  : Integer;
+  Depth    : Integer;
+  LastComp : string;
+  Dots     : Integer;
+begin
+  Result := False;
+  L := Length(TLow);
+  if (L = 0) or not CharInSet(TLow[1], ['a'..'z', '_']) then Exit;
+  i := 1; p := 1; Dots := 0;
+  while (i <= L) and CharInSet(TLow[i], ['a'..'z', '0'..'9', '_']) do Inc(i);
+  LastComp := Copy(TLow, p, i - p);
+  while i <= L do
+  begin
+    case TLow[i] of
+      '^': Inc(i);
+      '.':
+        begin
+          Inc(i); p := i; Inc(Dots);
+          while (i <= L) and CharInSet(TLow[i], ['a'..'z', '0'..'9', '_']) do
+            Inc(i);
+          if i = p then Exit;
+          LastComp := Copy(TLow, p, i - p);
+        end;
+      '[':
+        begin
+          Depth := 1; Inc(i);
+          while (i <= L) and (Depth > 0) do
+          begin
+            if TLow[i] = '[' then Inc(Depth)
+            else if TLow[i] = ']' then Dec(Depth);
+            Inc(i);
+          end;
+          if Depth > 0 then Exit;
+        end;
+    else
+      Exit; // Call/Operator/Whitespace -> kein reiner Pfad
+    end;
+  end;
+  Result := (Dots > 0) and LastComp.StartsWith('quoted');
+end;
+
+class function TSQLInjectionDetector.IsTransparentHelperTerm(
+  MethodNode: TAstNode; const Term: string): Boolean;
+// Term ist KOMPLETT ein Aufruf eines transparenten Helfers, dessen
+// Argumente alle sicher sind. Position/Struktur ueber die positions-
+// erhaltend geblankte Fassung, Inhalte aus dem Original.
+var
+  TStr    : string;
+  Blank   : string;
+  i, L    : Integer;
+  ident   : string;
+begin
+  Result := False;
+  TStr := Trim(Term);
+  L := Length(TStr);
+  if (L < 4) or (TStr[L] <> ')') then Exit;
+  Blank := TDetectorUtils.BlankStringLiterals(TStr).ToLower;
+  i := 1;
+  while (i <= L) and CharInSet(Blank[i], ['a'..'z', '0'..'9', '_']) do Inc(i);
+  ident := Copy(Blank, 1, i - 1);
+  if (ident = '') or (i > L) or (Blank[i] <> '(') then Exit;
+  if not IsTransparentHelperName(ident) then Exit;
+  Result := TransparentCallArgsSafe(MethodNode, TStr, Blank, i, 0,
+    ident.StartsWith('ifthen') or ident.StartsWith('alifthen'));
+end;
+
+class function TSQLInjectionDetector.IsSqlClauseClassRoutine(
+  MethodNode: TAstNode): Boolean;
+begin
+  Result := (MethodNode <> nil) and
+            (Pos('sqlclause', MethodNode.Name.ToLower) > 0);
+end;
+
+class function TSQLInjectionDetector.IdentIsRoutineParam(
+  MethodNode: TAstNode; const IdentLow: string): Boolean;
+// Wie der Parameter-Abgleich in CallArgUsesRoutineParam, nur fuer einen
+// EINZELNEN Bezeichner (bare-Feld-Freigabe der Klausel-Klassen darf nie
+// einen Routine-Parameter erfassen).
+var
+  Lst     : TList<TAstNode>;
+  N       : TAstNode;
+  NameLow : string;
+begin
+  Result := False;
+  if (MethodNode = nil) or (IdentLow = '') then Exit;
+  Lst := MethodNode.FindAll(nkParam);
+  try
+    for N in Lst do
+    begin
+      NameLow := N.Name.ToLower;
+      for var Mod_ in ['out ', 'var ', 'const '] do
+        if NameLow.StartsWith(Mod_) then
+          NameLow := Copy(NameLow, Length(Mod_) + 1, MaxInt);
+      if Trim(NameLow) = IdentLow then Exit(True);
+    end;
+  finally
+    Lst.Free;
+  end;
+end;
+
+class function TSQLInjectionDetector.ExecCallSqlArgIsPureLiteral(
+  const CallName: string): Boolean;
+// K2-Folgerunde 2026-08-26 (Klasse 'Konkat im Parameter-Array', DMVC
+// StreamedArrayWriterConfigU): LConn.ExecSQL('INSERT ... VALUES(?,?,?)',
+// [FIRST[Random(10)] + ' ' + LAST[..], ...]) - der SQL-Text ist rein
+// literal, das '+' liegt im GEBUNDENEN Werte-Array. Bedingungen: nach
+// einer bekannten Exec-Methode folgt als ERSTES Argument reiner
+// Literaltext, und das naechste Top-Level-Argument beginnt mit '['
+// (Array-Bindung). Positionsarbeit auf BlankStringLiterals (erhaltend).
+var
+  Blank    : string;
+  Kw       : string;
+  p, q, L  : Integer;
+  Depth    : Integer;
+  FirstArg : string;
+begin
+  Result := False;
+  Blank := TDetectorUtils.BlankStringLiterals(CallName).ToLower;
+  L := Length(Blank);
+  for Kw in SQL_CALL_METHODS do
+  begin
+    p := Pos(Kw, Blank);
+    while p > 0 do
+    begin
+      // linke Wortgrenze (dieselbe Regel wie ContainsWholeWordLower)
+      if (p = 1) or not CharInSet(Blank[p - 1],
+        ['a'..'z', '0'..'9', '_']) then
+      begin
+        q := p + Length(Kw) - 1;          // Position des '(' im Pattern
+        if (q <= L) and (Blank[q] = '(') then
+        begin
+          Depth := 0;
+          for var k := q to L do
+          begin
+            case Blank[k] of
+              '(', '[': Inc(Depth);
+              ')', ']':
+                begin
+                  Dec(Depth);
+                  if Depth = 0 then Exit;   // nur EIN Argument -> kein Gate
+                end;
+              ',':
+                if Depth = 1 then
+                begin
+                  FirstArg := Trim(Copy(CallName, q + 1, k - q - 1));
+                  // naechstes Argument muss die [..]-Bindung sein
+                  var r := k + 1;
+                  while (r <= L) and (Blank[r] <= ' ') do Inc(r);
+                  if (r <= L) and (Blank[r] = '[') and
+                     IsPureLiteralText(FirstArg) then
+                    Exit(True);
+                  Break;                    // erstes ',' entscheidet
+                end;
+            end;
+          end;
+        end;
+      end;
+      p := PosEx(Kw, Blank, p + 1);
+    end;
+  end;
 end;
 
 class function TSQLInjectionDetector.CallArgUsesRoutineParam(
@@ -1845,7 +2259,14 @@ begin
   // RegisterDDEServer(...,'[Open("%1")]') faelschlich 'open(' im DDE-Kommando.
   LowNoLit := TDetectorUtils.StripStringLiterals(CallName).ToLower;
   for Kw in SQL_CALL_METHODS do
-    if TDetectorUtils.ContainsWholeWordLower(Kw, LowNoLit) then Exit(True);
+    if TDetectorUtils.ContainsWholeWordLower(Kw, LowNoLit) then
+    begin
+      // K2-Folgerunde 2026-08-26 (Klasse 'Konkat im Parameter-Array'):
+      // Exec*(<rein literales SQL>, [<Werte>]) ist per Definition
+      // parametrisiert - das '+' liegt im gebundenen Array, nicht im SQL.
+      if ExecCallSqlArgIsPureLiteral(CallName) then Exit;
+      Exit(True);
+    end;
 
   // Keyword-Substring-Zweig: faengt SQL-Builder OHNE bekannte Exec-Methode
   // (z.B. Alcinoe SelectData('SELECT '+...)). ABER Log-/UI-Aufrufe tragen

@@ -84,6 +84,20 @@ type
     Err, Warn, Hint: Integer;
   end;
 
+  // Aggregierter Regel-Report (2026-08-26): eine Zeile JE REGEL statt der
+  // Einzelfunde - auf dem Referenzkorpus stehen 800k Funde 144 Regeln
+  // gegenueber, und die Frage "was meldet dieser Scan eigentlich" ist auf
+  // Regel-Ebene in Sekunden beantwortet, in der Fundtabelle nie.
+  // BEWUSST OHNE Datei-Menge je Regel: dafuer braeuchte es ein Set pro
+  // Regel ueber alle Funde - der HTML-Export hat eine OOM-Historie
+  // (8,4 GB auf dem Korpus, Fix 2026-08-21), und der Speicher dieses
+  // Blocks bleibt so konstant bei 144 Records statt mit der Fundzahl zu
+  // wachsen.
+  TRuleAgg = record
+    N, Err, Warn, Hint: Integer;
+    CHigh, CMed, CLow : Integer;
+  end;
+
 class function TExporterHtml.DefaultFileName(const SourceFile: string;
   const TargetDir: string): string;
 var
@@ -361,6 +375,12 @@ var
   KindPairs : TList<TPair<TFindingKind, Integer>>;
   KindEntry : TPair<TFindingKind, Integer>;
   CurKindCnt : Integer;
+  // Aggregierter Regel-Report (2026-08-26): je Regel Severity- und
+  // Konfidenz-Aufteilung. Wird in derselben ersten Schleife gefuellt
+  // (kein zweiter Durchlauf ueber die Fundliste) und in der Reihenfolge
+  // von KindPairs gerendert - also ohne eigene Sortierung.
+  RuleAgg  : TDictionary<TFindingKind, TRuleAgg>;
+  CurAgg   : TRuleAgg;
   Top10Set  : TStringList;  // KindName -> in Top10
   i         : Integer;
   // Per-Datei-Aggregat (err/warn/hint) fuer das Risiko-Ranking (#11) und den
@@ -417,6 +437,7 @@ begin
   FilesSev    := nil;
   SourceCache := nil;
   KindCount   := nil;
+  RuleAgg     := nil;
   KindPairs   := nil;
   Top10Set    := nil;
   FileAgg     := nil;
@@ -429,6 +450,7 @@ begin
     FilesSev := TDictionary<string, Cardinal>.Create;
     SourceCache := TObjectDictionary<string, TStringList>.Create([doOwnsValues]);
     KindCount := TDictionary<TFindingKind, Integer>.Create;
+    RuleAgg   := TDictionary<TFindingKind, TRuleAgg>.Create;
     FileAgg := TDictionary<string, TFileAgg>.Create;
     Top10Set := TStringList.Create;
     Top10Set.CaseSensitive := False;
@@ -461,6 +483,27 @@ begin
         // Detektor-Counter fuer Top-N-Liste.
         if not KindCount.TryGetValue(F.Kind, CurKindCnt) then CurKindCnt := 0;
         KindCount.AddOrSetValue(F.Kind, CurKindCnt + 1);
+        // Aggregierter Regel-Report: Severity + Konfidenz je Regel.
+        // Severity-Zaehlung MIT demselben fkFileReadError-Guard wie die
+        // Summenkacheln oben (A3) - ein Lesefehler ist kein Befund des
+        // Codes; N zaehlt ihn wie nTotal mit, damit die Regel-Zeile die
+        // Diagnose nicht verschweigt.
+        if not RuleAgg.TryGetValue(F.Kind, CurAgg) then
+          CurAgg := Default(TRuleAgg);
+        Inc(CurAgg.N);
+        if F.Kind <> fkFileReadError then
+          case F.Severity of
+            lsError   : Inc(CurAgg.Err);
+            lsWarning : Inc(CurAgg.Warn);
+            lsHint    : Inc(CurAgg.Hint);
+          end;
+        case F.Confidence of
+          fcHigh   : Inc(CurAgg.CHigh);
+          fcMedium : Inc(CurAgg.CMed);
+        else
+          Inc(CurAgg.CLow);
+        end;
+        RuleAgg.AddOrSetValue(F.Kind, CurAgg);
         if F.FileName <> '' then
         begin
           fnDisp := HtmlDisplayPath(F.FileName, ABaseDir);
@@ -573,6 +616,21 @@ begin
     SB.AppendLine('    h1 { font-size: 18px; margin-bottom: 4px; }');
     SB.AppendLine('    .meta { color: #666; font-size: 12px; margin-bottom: 16px; }');
     SB.AppendLine('    .summary { display: flex; gap: 12px; margin-bottom: 16px; }');
+    // Aggregierter Regel-Report (2026-08-26). Eigene Klassen statt der
+    // Fund-Tabellen-Styles: die Fundtabelle traegt Filter-/Sortier-Logik,
+    // die hier nichts zu suchen hat. overflow-x, damit neun Spalten auch
+    // im schmalen IDE-Dock scrollen statt die Seite zu sprengen.
+    SB.AppendLine('    .rule-report { margin: 12px 0 18px; }');
+    SB.AppendLine('    .rule-report > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }');
+    SB.AppendLine('    .rule-table { border-collapse: collapse; font-size: 12px; width: 100%; display: block; overflow-x: auto; }');
+    SB.AppendLine('    .rule-table th, .rule-table td { border-bottom: 1px solid #e0e0e0; padding: 3px 8px; text-align: left; white-space: nowrap; }');
+    SB.AppendLine('    .rule-table th { position: sticky; top: 0; background: #f6f6f6; }');
+    SB.AppendLine('    .rule-table td.num, .rule-table th.num { text-align: right; }');
+    SB.AppendLine('    .rule-table .rr-id { font-family: Consolas, monospace; }');
+    SB.AppendLine('    .rule-table .rr-e { color: #a00; }');
+    SB.AppendLine('    .rule-table .rr-w { color: #855000; }');
+    SB.AppendLine('    .rule-table .rr-h { color: #555; }');
+    SB.AppendLine('    .rule-table .rr-share { color: #555; }');
     SB.AppendLine('    .badge { padding: 6px 12px; border-radius: 4px; font-size: 12px; }');
     SB.AppendLine('    .badge b { font-size: 16px; display: block; }');
     SB.AppendLine('    .b-err  { background: #ffe5e5; color: #800; }');
@@ -839,6 +897,15 @@ begin
     SB.AppendLine('    :root[data-theme="dark"] th.sortable.sort-asc .sort-ind::before,');
     SB.AppendLine('      :root[data-theme="dark"] th.sortable.sort-desc .sort-ind::before { color: #e0e0e0; }');
     SB.AppendLine('    :root[data-theme="dark"] .top-detectors .td-count { color: #aaa; }');
+    // Regel-Report im Dunkelmodus (2026-08-26): Zeilentrenner und der
+    // sticky Kopf tragen im Hellmodus feste Hellwerte - ohne diese
+    // Ueberschreibung stuende weisser Kopf auf dunklem Grund.
+    SB.AppendLine('    :root[data-theme="dark"] .rule-table th { background: #2b2b2b; color: #ccc; }');
+    SB.AppendLine('    :root[data-theme="dark"] .rule-table th, :root[data-theme="dark"] .rule-table td { border-bottom-color: #3a3a3a; }');
+    SB.AppendLine('    :root[data-theme="dark"] .rule-table .rr-e { color: #ff8080; }');
+    SB.AppendLine('    :root[data-theme="dark"] .rule-table .rr-w { color: #e0b060; }');
+    SB.AppendLine('    :root[data-theme="dark"] .rule-table .rr-h,');
+    SB.AppendLine('      :root[data-theme="dark"] .rule-table .rr-share { color: #999; }');
     SB.AppendLine('    :root[data-theme="dark"] .top-detectors .td-qf { color: #5ab0f0; }');
     SB.AppendLine('    :root[data-theme="dark"] .cbar-num { color: #aaa; }');
     SB.AppendLine('    :root[data-theme="dark"] .src-line-num { color: #8a8a8a; }');
@@ -1356,6 +1423,82 @@ begin
       end;
       SB.AppendLine('    </ol>');
       SB.AppendLine('  </div>');
+    end;
+
+    // Aggregierter Regel-Report (2026-08-26): eine Zeile JE REGEL, ALLE
+    // Regeln (nicht Top-N) - die Frage "was meldet dieser Scan" ist damit
+    // auf einen Blick beantwortet, auch wenn die Fundtabelle 800k Zeilen
+    // haette. Reihenfolge = KindPairs (bereits absteigend nach Anzahl
+    // sortiert), also deterministisch und ohne zweite Sortierung.
+    // <details> zugeklappt: der Block ist Zusatzinformation und soll den
+    // Bericht oben nicht aufblaehen. Kosten im Dokument: ~1 Zeile je
+    // Regel (144 auf dem Referenzkorpus), unabhaengig von der Fundzahl.
+    if (KindPairs <> nil) and (KindPairs.Count > 0) then
+    begin
+      SB.AppendLine('  <details class="rule-report">');
+      SB.Append    ('    <summary data-i18n="hdr-rule-report" data-rules="');
+      SB.Append    (IntToStr(KindPairs.Count));
+      SB.Append    ('" data-total="');
+      SB.Append    (IntToStr(nTotal));
+      SB.Append    ('">Regel-Report: ');
+      SB.Append    (IntToStr(KindPairs.Count));
+      SB.Append    (' Regeln, ');
+      SB.Append    (IntToStr(nTotal));
+      SB.AppendLine(' Befunde</summary>');
+      SB.AppendLine('    <table class="rule-table">');
+      SB.AppendLine('      <thead><tr>');
+      SB.AppendLine('        <th data-i18n="rr-rule">Regel</th>');
+      SB.AppendLine('        <th data-i18n="rr-detector">Detektor</th>');
+      SB.AppendLine('        <th class="num" data-i18n="rr-total">Summe</th>');
+      SB.AppendLine('        <th class="num" data-i18n="sev-err">Fehler</th>');
+      SB.AppendLine('        <th class="num" data-i18n="sev-warn">Warnungen</th>');
+      SB.AppendLine('        <th class="num" data-i18n="sev-hint">Hinweise</th>');
+      SB.AppendLine('        <th class="num" data-i18n="rr-conf-high">hoch</th>');
+      SB.AppendLine('        <th class="num" data-i18n="rr-conf-med">mittel</th>');
+      SB.AppendLine('        <th class="num" data-i18n="rr-share">Anteil</th>');
+      SB.AppendLine('      </tr></thead>');
+      SB.AppendLine('      <tbody>');
+      for i := 0 to KindPairs.Count - 1 do
+      begin
+        if not RuleAgg.TryGetValue(KindPairs[i].Key, CurAgg) then Continue;
+        var KindNm := KindName(KindPairs[i].Key);
+        SB.Append('        <tr data-kind="');
+        SB.Append(HtmlEscape(KindNm));
+        SB.Append('"><td class="rr-id">');
+        SB.Append(HtmlEscape(TRuleCatalog.GetRuleCanonical(
+                    KindPairs[i].Key).ID));
+        SB.Append('</td><td>');
+        SB.Append(HtmlEscape(KindNm));
+        SB.Append('</td><td class="num"><b>');
+        SB.Append(IntToStr(CurAgg.N));
+        SB.Append('</b></td><td class="num rr-e">');
+        SB.Append(IntToStr(CurAgg.Err));
+        SB.Append('</td><td class="num rr-w">');
+        SB.Append(IntToStr(CurAgg.Warn));
+        SB.Append('</td><td class="num rr-h">');
+        SB.Append(IntToStr(CurAgg.Hint));
+        SB.Append('</td><td class="num">');
+        SB.Append(IntToStr(CurAgg.CHigh));
+        SB.Append('</td><td class="num">');
+        SB.Append(IntToStr(CurAgg.CMed));
+        SB.Append('</td><td class="num rr-share">');
+        // Ganzzahl-Promille -> "x,y %" ohne Float/Locale-Falle (dieselbe
+        // Regel wie beim Donut: kein Dezimaltrenner aus der Laufzeit).
+        if nTotal > 0 then
+        begin
+          var Promille := Round(CurAgg.N * 1000 / nTotal);
+          SB.Append(IntToStr(Promille div 10));
+          SB.Append(',');
+          SB.Append(IntToStr(Promille mod 10));
+          SB.Append(' %');
+        end
+        else
+          SB.Append('-');
+        SB.AppendLine('</td></tr>');
+      end;
+      SB.AppendLine('      </tbody>');
+      SB.AppendLine('    </table>');
+      SB.AppendLine('  </details>');
     end;
 
     // Top-Dateien-Risiko-Ranking (#11): analog zum Detektoren-Panel, aber
@@ -1906,6 +2049,13 @@ begin
     SB.AppendLine('        "btn-kbd":   "&#9000; Shortcuts",');
     SB.AppendLine('        "ttl-kbd":   "Show keyboard shortcuts (?)",');
     SB.AppendLine('        "hdr-top-detectors": "Top {0} detectors (of {1})",');
+    SB.AppendLine('        "hdr-rule-report": "Rule report: {0} rules, {1} findings",');
+    SB.AppendLine('        "rr-rule": "Rule",');
+    SB.AppendLine('        "rr-detector": "Detector",');
+    SB.AppendLine('        "rr-total": "Total",');
+    SB.AppendLine('        "rr-conf-high": "high",');
+    SB.AppendLine('        "rr-conf-med": "medium",');
+    SB.AppendLine('        "rr-share": "Share",');
     SB.AppendLine('        "kbd-help-title": "Keyboard shortcuts",');
     SB.AppendLine('        "kbd-help-close": "Close",');
     SB.AppendLine('        "sprint-header": "Total visible: {0} findings. Top {1} priorities:",');
@@ -1965,6 +2115,13 @@ begin
     SB.AppendLine('        "btn-kbd":   "&#9000; Shortcuts",');
     SB.AppendLine('        "ttl-kbd":   "Tastatur-Shortcuts anzeigen (?)",');
     SB.AppendLine('        "hdr-top-detectors": "Top {0} Detektoren (von {1})",');
+    SB.AppendLine('        "hdr-rule-report": "Regel-Report: {0} Regeln, {1} Befunde",');
+    SB.AppendLine('        "rr-rule": "Regel",');
+    SB.AppendLine('        "rr-detector": "Detektor",');
+    SB.AppendLine('        "rr-total": "Summe",');
+    SB.AppendLine('        "rr-conf-high": "hoch",');
+    SB.AppendLine('        "rr-conf-med": "mittel",');
+    SB.AppendLine('        "rr-share": "Anteil",');
     SB.AppendLine('        "kbd-help-title": "Tastatur-Shortcuts",');
     SB.AppendLine('        "kbd-help-close": "Schliessen",');
     SB.AppendLine('        "sprint-header": "Gesamt sichtbar: {0} Befunde. Top {1} Prioritaeten:",');
@@ -2032,6 +2189,13 @@ begin
     SB.AppendLine('        "btn-kbd":   "&#9000; Raccourcis",');
     SB.AppendLine('        "ttl-kbd":   "Afficher les raccourcis clavier (?)",');
     SB.AppendLine('        "hdr-top-detectors": "Top {0} d\u00e9tecteurs (sur {1})",');
+    SB.AppendLine('        "hdr-rule-report": "Rapport par r\u00e8gle : {0} r\u00e8gles, {1} r\u00e9sultats",');
+    SB.AppendLine('        "rr-rule": "R\u00e8gle",');
+    SB.AppendLine('        "rr-detector": "D\u00e9tecteur",');
+    SB.AppendLine('        "rr-total": "Total",');
+    SB.AppendLine('        "rr-conf-high": "haute",');
+    SB.AppendLine('        "rr-conf-med": "moyenne",');
+    SB.AppendLine('        "rr-share": "Part",');
     SB.AppendLine('        "kbd-help-title": "Raccourcis clavier",');
     SB.AppendLine('        "kbd-help-close": "Fermer",');
     SB.AppendLine('        "sprint-header": "Visibles au total\u00a0: {0} d\u00e9tections. Top {1} priorit\u00e9s\u00a0:",');
@@ -2072,6 +2236,7 @@ begin
     SB.AppendLine('        else if (key === "trunc-banner") el.innerHTML = T(key, el.dataset.hidden || "0");');
     SB.AppendLine('        else if (key === "opt-all-files") el.textContent = T(key, el.dataset.count || "0");');
     SB.AppendLine('        else if (key === "hdr-top-detectors") el.textContent = T(key, el.dataset.topN || "0", el.dataset.topTotal || "0");');
+    SB.AppendLine('        else if (key === "hdr-rule-report") el.textContent = T(key, el.dataset.rules || "0", el.dataset.total || "0");');
     SB.AppendLine('        // meta-Zeile: Datum/Datei stehen in data-when / data-file');
     SB.AppendLine('        else if (key === "meta-created") el.textContent = T(key, el.dataset.when || "");');
     SB.AppendLine('        else if (key === "meta-file")    el.textContent = T(key, el.dataset.file || "");');
@@ -2950,6 +3115,7 @@ begin
     SourceCache.Free;
     KindCount.Free;
     KindPairs.Free;
+    RuleAgg.Free;
     Top10Set.Free;
     FileAgg.Free;
     FileRank.Free;

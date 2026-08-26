@@ -8,6 +8,14 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- HTML report: a collapsible **rule report** listing every rule that
+  fired - findings, error/warning/hint split, confidence split and
+  share of the total, one row per rule. On a large corpus the finding
+  table has hundreds of thousands of rows; this block answers "what
+  does this scan actually report" at a glance. Costs one line per rule
+  regardless of finding count.
+
 ### Changed
 - **Evidence tiering ("error = proven")**: finding severity is now
   capped by the detector's confidence in that specific finding - only
@@ -31,6 +39,10 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `high`) while evidence tiering is active, so CI consumers can see
   why a catalog-error rule reports at `warning`. With
   `EvidenceTiering=0` the SARIF output is byte-identical to before.
+- **SCA086 (AvoidOut) demoted to low confidence**: after the ABI
+  gates below, the remaining corpus findings are dominated by vendored
+  third-party code where `out` is the vendor's API decision; the rule
+  stays available as opt-in below the default profile threshold.
 - **Per-finding evidence for SCA121 and SCA109**: findings that pass
   all source gates now carry high confidence and return to the error
   tier (corpus: 101 SCA121 + 35 SCA109 verified true positives moved
@@ -39,6 +51,40 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "no enclosing try..finally" claim does not hold there).
 
 ### Fixed
+- SCA086 (AvoidOut) no longer flags `out` parameters whose signature
+  is fixed from outside: declarations carrying an ABI directive
+  (`stdcall`, `safecall`, `cdecl`, `external`, `varargs`, `dispid`,
+  `winapi`), procedural types (`= function(...)` / `: procedure(...)`),
+  untyped `out` (the `QueryInterface`/`Supports` pattern - untyped
+  parameters are not finalized, so the rule's rationale does not
+  apply), `override` declarations bound by the base-class contract,
+  and the same-named implementation twin of a gated declaration
+  (previously every method counted twice). On the reference corpus
+  this removes over a third of the rule's findings, all verified
+  false positives.
+- SCA089 (PublicField) rebuilt its section tracking on a stateful
+  comment/string stripper: multi-line signature continuations, block
+  comments spanning lines, GPL headers containing "published", and
+  `record`/`object` value types (public fields are the idiom there)
+  no longer produce findings; FPC `public name '...'` export
+  directives no longer switch visibility mid-implementation. Corpus:
+  8,234 -> ~4,200 findings, sampled drops all false positives.
+- SCA123 (CastAndFree) recognises pointer-idiom operands
+  (`List[i]`, `.Objects[i]`, `.Pop`, `.Data` and friends) where the
+  cast is the only way to name the object being freed - the rule now
+  targets redundant casts on class-typed operands only. Corpus:
+  604 -> 146 findings.
+- SCA003 (SQLInjection) learned six safe-pattern conventions from the
+  full-corpus audit (96 % false-positive rate): ORM metadata by naming
+  convention (`SqlTable*`, `*TableName`, `*FieldName(s)`, `Props`/
+  `fTableMap` receivers), transparent helpers (`IfThen`, `Implode`,
+  `Trim`, `UpperCase`, ... are safe when all their string arguments
+  are), RQL/SQL translator callees (`*ByRQL`, `Compile*`, `Parse*`)
+  on builder receivers, quoter properties (`.QuotedName` etc.),
+  `*SQLClause*` builder classes, and concatenation inside the bound
+  parameter array of `Exec*('literal sql', [...])`. Real injections -
+  raw parameters glued into SQL - keep firing; each convention ships
+  with a true-positive guard test.
 - Parser: context keywords (`read`, `Result`, ...) are now accepted
   as variable names in local `var` sections. Previously the TYPE name
   became a phantom variable and SCA166 reported "integer/PPyObject is
@@ -49,6 +95,10 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - SCA109: `inc(x)`/`dec(x)` between lock acquire and release are
   recognised as non-throwing intrinsics (no more false positive on
   plain counter updates under a lock).
+- SARIF export now stamps the evidence-tiering state at SCAN time and
+  carries it with the finding cohort - toggling the ini between scan
+  and export can no longer mix `level` values and
+  `properties.confidence` from two different policy states.
 
 ---
 

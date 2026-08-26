@@ -29,6 +29,7 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 | `Profile` | String | _(vide)_ | Profil de règles pour la ligne de commande et l'exécutable autonome. Vide = toutes les règles. |
 | `MinSeverity` | String | `hint` | Sévérité la plus basse signalée : `error`, `warning`, `hint`. |
 | `MinConfidence` | String | `medium` | Seuil de confiance : `low` désactive le filtre, `medium` est la valeur livrée. |
+| `EvidenceTiering` | Bool | `True` | Politique d'évidence « error = prouvé » : la sévérité de chaque résultat est plafonnée par la confiance du détecteur (high → `error` autorisé, medium → `warning` au plus, low → `hint` au plus). Mettre `0` pour retrouver le comportement d'avant 0.9.18, p. ex. pour des portes CI basées sur les anciens totaux d'erreurs. |
 | `IdeProfile` | String | `ide-fast` | Profil utilisé par le plugin IDE. Reflété dans `Profile` à chaque exécution — sans l'écraser. |
 | `IdeMinSeverity` | String | `hint` | Seuil de sévérité du plugin IDE, reflété de la même manière. |
 | `EnableDetectorReviewFilter` | Bool | `False` | Filtre optionnel qui masque les règles encore en cours de révision. |

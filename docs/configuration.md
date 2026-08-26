@@ -28,6 +28,7 @@ given in.
 | `Profile` | String | _(empty)_ | Rule profile for CLI and standalone runs. Empty = all rules. |
 | `MinSeverity` | String | `hint` | Lowest severity that is reported: `error`, `warning`, `hint`. |
 | `MinConfidence` | String | `medium` | Confidence floor: `low` disables the filter, `medium` is the shipped default. |
+| `EvidenceTiering` | Bool | `True` | Evidence policy "error = proven": finding severity is capped by the detector's confidence in that specific finding (high → `error` allowed, medium → `warning` at most, low → `hint` at most). Set `0` to restore the pre-0.9.18 behaviour, e.g. for CI gates that count on the old error totals. |
 | `IdeProfile` | String | `ide-fast` | Profile the IDE plugin uses. Mirrored into `Profile` per run - it does not overwrite it. |
 | `IdeMinSeverity` | String | `hint` | Severity floor for the IDE plugin, mirrored the same way. |
 | `EnableDetectorReviewFilter` | Bool | `False` | Opt-in filter that hides rules still under review. |

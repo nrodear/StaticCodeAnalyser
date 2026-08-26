@@ -29,6 +29,7 @@ Lauf, in dem sie angegeben werden.
 | `Profile` | String | _(leer)_ | Regelprofil fuer CLI und Standalone. Leer = alle Regeln. |
 | `MinSeverity` | String | `hint` | Niedrigste gemeldete Schwere: `error`, `warning`, `hint`. |
 | `MinConfidence` | String | `medium` | Konfidenz-Untergrenze: `low` schaltet den Filter aus, `medium` ist Auslieferungsstand. |
+| `EvidenceTiering` | Bool | `True` | Evidenz-Politik "Error = bewiesen": die Severity jedes Funds wird auf seine Konfidenz gedeckelt (high → `error` erlaubt, medium → höchstens `warning`, low → höchstens `hint`). `0` stellt das Verhalten vor 0.9.18 wieder her, z. B. für CI-Gates, die auf den alten Error-Zahlen stehen. |
 | `IdeProfile` | String | `ide-fast` | Profil des IDE-Plugins. Wird je Lauf nach `Profile` gespiegelt, ueberschreibt es aber nicht. |
 | `IdeMinSeverity` | String | `hint` | Schwere-Untergrenze des IDE-Plugins, gleich gespiegelt. |
 | `EnableDetectorReviewFilter` | Bool | `False` | Opt-in-Filter, der Regeln in Ueberpruefung ausblendet. |

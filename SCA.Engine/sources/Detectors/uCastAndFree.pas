@@ -122,7 +122,52 @@ end;
 // Liefert den Cast-Ziel-Typ wenn S das Muster `<Ident>(<expr>).Free` oder
 // `<Ident>(<expr>).Destroy` beschreibt UND <Ident> nach Delphi-Konvention
 // ein Klassen-/Interface-Typ ist. Sonst leer.
-function ExtractCastBeforeFree(const CallName: string): string;
+// Autopsie 2026-08-26 (87,5 % FP im Voll-Audit): der Cast-OPERAND traegt
+// die Entscheidung. Beim pre-generics Container-Idiom (TList/TFPList/
+// TPSList/TSynList.List/TStack.Pop/TListItem.Data - alles Pointer) ist
+// der Cast ZWINGEND (E2018 ohne), die Regel-Behauptung "redundant" dort
+// sachlich falsch. Lexikalisch entscheidbar: Indexzugriffe ausser
+// Objects[..] (TStrings liefert TObject - die belegte TP-Klasse),
+// .Pop und .Data. Bare Idents bleiben gemeldet (Klassenfeld-TPs wie
+// JvButtons FGlyphDrawer); deren Pointer-Teilmenge (cdecl-Callbacks)
+// braeuchte den TypeIndex - vertagt bis nach dem A/B (Skeptiker-
+// Empfehlung: erst messen, wieviel Volumen dort ueberhaupt liegt).
+function OperandIsPointerIdiom(const Operand: string): Boolean;
+var
+  Op       : string;
+  i, p     : Integer;
+  LastComp : string;
+begin
+  Result := False;
+  Op := LowerCase(Trim(Operand));
+  // 'Pop()' normalisieren - NormalizeCallTail strippt nur hinter
+  // Free/Destroy, nicht im Operand (Gegenpruefungs-Spec-Luecke).
+  if Op.EndsWith('()') then
+    Op := Copy(Op, 1, Length(Op) - 2);
+  if Op = '' then Exit;
+  // Indexzugriff: Ident vor der LETZTEN '[' entscheidet. 'objects' ist
+  // die Ausnahme - bare 'Objects[I]' (with-Scope/Vererbung, doublecmd
+  // uvfsmodule:75) genauso wie 'X.Objects[I]'.
+  p := 0;
+  for i := Length(Op) downto 1 do
+    if Op[i] = '[' then begin p := i; Break; end;
+  if p > 0 then
+  begin
+    i := p - 1;
+    while (i >= 1) and CharInSet(Op[i], ['a'..'z', '0'..'9', '_']) do Dec(i);
+    LastComp := Copy(Op, i + 1, p - 1 - i);
+    Exit(LastComp <> 'objects');
+  end;
+  // Kein Index: letzter Pfadteil entscheidet (FStack.Pop, Item.Data).
+  p := Length(Op);
+  i := p;
+  while (i >= 1) and CharInSet(Op[i], ['a'..'z', '0'..'9', '_']) do Dec(i);
+  LastComp := Copy(Op, i + 1, p - i);
+  Result := (LastComp = 'pop') or (LastComp = 'data');
+end;
+
+function ExtractCastBeforeFree(const CallName: string;
+  out Operand: string): string;
 const
   SUFFIX_FREE    = '.Free';
   SUFFIX_DESTROY = '.Destroy';
@@ -134,6 +179,7 @@ var
   Target   : string;
 begin
   Result := '';
+  Operand := '';
   Body := NormalizeCallTail(CallName);
 
   // Welcher Suffix matched (case-insensitive)?
@@ -183,25 +229,41 @@ begin
 
   Target := Copy(Stripped, i + 1, StartPos - i - 1);
   if not LooksLikeClassType(Target) then Exit;
+  // Cast-INHALT fuer das Operand-Gate mitliefern (Autopsie 2026-08-26) -
+  // vorher wurde er weggeworfen, und genau dort steht die Information,
+  // ob der Cast zwingend ist (Pointer-Container) oder redundant.
+  Operand := Copy(Stripped, StartPos + 1, Length(Stripped) - StartPos - 1);
   Result := Target;
 end;
 
 class procedure TCastAndFreeDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  Calls  : TList<TAstNode>;
-  N      : TAstNode;
-  Target : string;
+  Calls   : TList<TAstNode>;
+  N       : TAstNode;
+  Target  : string;
+  Operand : string;
 begin
   Calls := MethodNode.FindAll(nkCall);
   try
     for N in Calls do
     begin
-      Target := ExtractCastBeforeFree(N.Name);
+      Target := ExtractCastBeforeFree(N.Name, Operand);
       if Target = '' then Continue;
+      // Autopsie 2026-08-26: Pointer-Idiom-Operanden (Index ausser
+      // Objects[..], .Pop, .Data) nicht melden - dort ist der Cast
+      // zum Kompilieren zwingend, nicht redundant. Am Korpus kostet
+      // das genau einen belegten TP (Contnrs.TObjectList-Index,
+      // SVGStyle:290) - lexikalisch von TList nicht unterscheidbar,
+      // der dokumentierte Preis des Sofort-Fixes.
+      if OperandIsPointerIdiom(Operand) then Continue;
+      // Meldetext entschaerft (war: "is redundant" - fuer die nicht
+      // beweisbare bare-Ident-Restmenge zu absolut; Baseline-Churn
+      // dieses Textwechsels ist im Commit dokumentiert).
       Results.Add(TLeakFinding.New(FileName, MethodNode.Name, N.Line,
-        Format('Type-cast %s(...) before Free/Destroy is redundant ' +
-               '(Destroy is virtual)', [Target]),
+        Format('Type-cast %s(...) before Free/Destroy - on a class-typed ' +
+               'operand the cast is redundant (Destroy is virtual)',
+               [Target]),
         fkCastAndFree));
     end;
   finally
