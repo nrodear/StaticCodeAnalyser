@@ -57,10 +57,22 @@ type
     //   fcHigh -> lsError, fcMedium -> lsWarning, fcLow -> lsHint.
     class function MaxSeverityFor(C: TFindingConfidence): TLeakSeverity; static;
     // Deckelt (in-place) die Severity jedes Befundes auf MaxSeverityFor
-    // seiner Konfidenz. Entfernt nichts, hebt nichts an. fkFileReadError
-    // bleibt unangetastet. Liefert die Anzahl der gedeckelten Befunde.
-    class function ApplyToFindings(
-      Findings: TObjectList<TLeakFinding>): Integer; static;
+    // seiner Konfidenz; hebt nie an. fkFileReadError bleibt unangetastet.
+    //
+    // AMinSeverity (Gegenpruefung 2026-08-26, MAJOR): der per-Fund-
+    // Severity-Filter laeuft im Detector-Loop VOR diesem Deckel - ein
+    // dort als Error durchgelassener fcMedium-Fund wuerde nach der
+    // Deckelung als Warning in einem "error-only"-Report stehen
+    // (MinSeverity=error + SCA001 = ~700 Vertragsbruch-Faelle am
+    // Korpus). Deshalb: reisst die GEDECKELTE Severity die Schwelle,
+    // wird der Befund ENTFERNT - das ist die nachgezogene Konsequenz
+    // desselben Filters, kein neuer Vertrag. Beim Auslieferungs-Default
+    // lsHint (Ord 2 = nichts ist schwaecher) entfernt der Schritt nie
+    // etwas; die Korpus-Beweise (byte-identisch bei Politik=aus, -701
+    // bei an, beide mit --min-severity hint) bleiben unberuehrt.
+    // Liefert die Anzahl der gedeckelten Befunde.
+    class function ApplyToFindings(Findings: TObjectList<TLeakFinding>;
+      AMinSeverity: TLeakSeverity = lsHint): Integer; static;
   end;
 
 implementation
@@ -77,25 +89,49 @@ begin
 end;
 
 class function TEvidenceTiering.ApplyToFindings(
-  Findings: TObjectList<TLeakFinding>): Integer;
+  Findings: TObjectList<TLeakFinding>;
+  AMinSeverity: TLeakSeverity): Integer;
 var
-  F   : TLeakFinding;
-  Cap : TLeakSeverity;
+  F       : TLeakFinding;
+  Cap     : TLeakSeverity;
+  r, w    : Integer;
+  OldOwns : Boolean;
 begin
   Result := 0;
   if (Findings = nil) or (Findings.Count = 0) then Exit;
-  for F in Findings do
-  begin
-    if F.Kind = fkFileReadError then Continue; // Diagnose nie anfassen
-    Cap := MaxSeverityFor(F.Confidence);
-    // Severity-Ordering: lsError=0 < lsWarning=1 < lsHint=2 - "strenger
-    // als der Deckel" heisst KLEINERE Ordinalzahl (vgl. den Ordering-
-    // Kommentar an DetectorMinSeverity in uSCAConsts).
-    if Ord(F.Severity) < Ord(Cap) then
+  // Single-Pass-Kompaktierung wie uConfidenceFilter (P5): Delete(i) waere
+  // auf grossen Listen quadratisch; beim Default AMinSeverity=lsHint wird
+  // ohnehin nie entfernt und w laeuft synchron mit r.
+  w := 0;
+  OldOwns := Findings.OwnsObjects;
+  Findings.OwnsObjects := False;
+  try
+    for r := 0 to Findings.Count - 1 do
     begin
-      F.Severity := Cap;
-      Inc(Result);
+      F := Findings[r];
+      if F.Kind <> fkFileReadError then // Diagnose nie anfassen/entfernen
+      begin
+        Cap := MaxSeverityFor(F.Confidence);
+        // Severity-Ordering: lsError=0 < lsWarning=1 < lsHint=2 -
+        // "strenger als der Deckel" heisst KLEINERE Ordinalzahl.
+        if Ord(F.Severity) < Ord(Cap) then
+        begin
+          F.Severity := Cap;
+          Inc(Result);
+        end;
+        // Nachgezogener MinSeverity-Filter (s. Interface-Kommentar).
+        if Ord(F.Severity) > Ord(AMinSeverity) then
+        begin
+          if OldOwns then F.Free;
+          Continue;
+        end;
+      end;
+      if w <> r then Findings[w] := F;
+      Inc(w);
     end;
+    Findings.Count := w;
+  finally
+    Findings.OwnsObjects := OldOwns;
   end;
 end;
 

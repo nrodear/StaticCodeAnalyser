@@ -1452,6 +1452,8 @@ var
   PostEnKinds : TFindingKinds;
   // K2 Stufe 1 (2026-08-26): Politik-Schalter, gleiches Snapshot-Muster.
   PostEvidTier : Boolean;
+  // Gegenpruefung 2026-08-26: Severity-Schwelle fuer den Deckel-Nachzug.
+  PostMinSev   : TLeakSeverity;
   // Perf Stufe 2 (2026-07-25): True wenn der Main-Loop parallel laeuft
   // (Gate-Auswertung s.u.; Default AUS, opt-in via DetectorParallelScan).
   UseParallel : Boolean;
@@ -2094,6 +2096,11 @@ begin
     // damit er dieselbe Lebensregel traegt wie PostMinConf/PostEnKinds
     // (Post-Filter liest nie frische Globals nach dem Teardown).
     PostEvidTier := uSCAConsts.EvidenceTiering;
+    // Gegenpruefung 2026-08-26 (MAJOR): auch die Severity-Schwelle
+    // snapshotten - der Deckel muss sie nachziehen, sonst unterlaufen
+    // gedeckelte Funde einen error-only-Report (Details am Interface
+    // von TEvidenceTiering.ApplyToFindings).
+    PostMinSev := CfgMinSeverity(Ctx);
     FreeAndNil(Ctx);
     // Audit 2026-07-01 (Global-State): die in diesem Scan auto-entdeckten Klassen
     // wieder aus der GLOBALEN LeakyClasses entfernen -> zurueck auf die Caller-
@@ -2137,7 +2144,7 @@ begin
   // Begruendung und Nebenwirkungen im Kopf von uEvidenceTiering.
   if PostEvidTier then
   try
-    TEvidenceTiering.ApplyToFindings(Results);
+    TEvidenceTiering.ApplyToFindings(Results, PostMinSev);
   except
     // Politik-Fehler duerfen das Ergebnis nicht zerstoeren
   end;

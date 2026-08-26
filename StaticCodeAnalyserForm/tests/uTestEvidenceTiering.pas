@@ -30,6 +30,11 @@ type
     [Test] procedure RueckgabeZaehltNurGedeckelte;
     [Test] procedure PathOverride_Hochstufung_GewinntGegenDenDeckel;
     [Test] procedure MemoryLeak_DefaultKonfidenz_IstMedium;
+    // Gegenpruefung 2026-08-26 (MAJOR): der Deckel zieht die Severity-
+    // Schwelle nach - gedeckelte Funde duerfen einen error-only-Report
+    // nicht unterlaufen.
+    [Test] procedure MinSevError_GedeckelterFund_WirdEntfernt;
+    [Test] procedure MinSevError_HighError_Bleibt;
   end;
 
 implementation
@@ -176,6 +181,41 @@ begin
     TPathOverrides.ApplyToFindings(L);
     Assert.IsTrue(L[0].Severity = lsError,
       'poaSeverityError stuft NACH dem Deckel wieder hoch - Nutzer gewinnt');
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TTestEvidenceTiering.MinSevError_GedeckelterFund_WirdEntfernt;
+var
+  L: TObjectList<TLeakFinding>;
+begin
+  // Szenario der Gegenpruefung: MinSeverity=error laesst den fcMedium-
+  // Error im Detector-Loop passieren (dort ist er noch Error); der
+  // Deckel macht ihn zu Warning - in einem error-only-Report darf er
+  // dann nicht stehen bleiben.
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    L.Add(MakeFinding(fkSQLInjection, lsError, fcMedium));
+    TEvidenceTiering.ApplyToFindings(L, lsError);
+    Assert.AreEqual<Integer>(0, L.Count,
+      'gedeckelter Fund reisst die error-Schwelle -> entfernt');
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TTestEvidenceTiering.MinSevError_HighError_Bleibt;
+var
+  L: TObjectList<TLeakFinding>;
+begin
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    L.Add(MakeFinding(fkMemoryLeak,    lsError, fcHigh));
+    L.Add(MakeFinding(fkFileReadError, lsError, fcLow));
+    Assert.AreEqual<Integer>(0, TEvidenceTiering.ApplyToFindings(L, lsError));
+    Assert.AreEqual<Integer>(2, L.Count,
+      'fcHigh-Error und Diagnose ueberleben die error-Schwelle');
   finally
     L.Free;
   end;

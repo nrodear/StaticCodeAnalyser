@@ -638,6 +638,16 @@ begin
         // A/B-Vergleichbarkeit sauber (ein Politik-Wechsel ist ein
         // bewusster Baseline-Schnitt, kein Detektor-Drift; die 650-MB-
         // Korpus-Exports wachsen nur im Politik-Modus).
+        //
+        // BEKANNTE KANTE (Gegenpruefung 2026-08-26, MINOR, bewusst offen):
+        // gelesen wird der Prozess-Global zur EXPORT-Zeit, nicht der
+        // Scan-Snapshot (PostEvidTier in uStaticAnalyzer2). Wer die ini
+        // zwischen Scan und Export umschaltet (naechster Auto-Scan wendet
+        // sie an) und dann die ALTE Fundliste exportiert, bekommt
+        // Properties und Levels aus zwei Welten. Sauberer Fix = Politik-
+        // Zustand an der Fund-Kohorte tragen (Parameter durch 4 Consumer
+        // faedeln) - kommt mit dem naechsten gebauten Inkrement, nicht
+        // ungebaut auf einen Alt-Stand.
         if uSCAConsts.EvidenceTiering then
         begin
           E.BeginObjPair('properties');
