@@ -361,6 +361,201 @@ begin
   end;
 end;
 
+function SegmentReleasesLock(const SegLow, IdLow: string): Boolean;
+// True wenn im (lowercased) Segment ein Release auf DENSELBEN Lock steht:
+// <id>.Leave/.Release/.Exit/.EndWrite bzw. LeaveCriticalSection(<id>...).
+// Flag-Guards ('if InsideCrit then Section.Leave;') stoeren nicht -
+// gesucht wird das Token, nicht die Anweisungsform (FP-Voll-Audit
+// 2026-08-15, Klasse 'Release im umschliessenden finally, Flag-gesteuert').
+var
+  p : Integer;
+
+  // Treffer nur an WORTGRENZE: 'lock.leave' darf nicht in 'block.leave'
+  // matchen - sonst wuerde ein fremder Lock als Release gutgeschrieben
+  // und der Fund faelschlich auf fcLow gestuft. Ein '.' davor bleibt
+  // erlaubt: 'FData.Lock.Leave' ist derselbe Lock, nur qualifiziert
+  // (der Enter-Regex captured ohnehin nur das letzte Glied vor .Enter).
+  function BoundedHit(const Needle: string): Boolean;
+  var
+    q : Integer;
+  begin
+    Result := False;
+    q := Pos(Needle, SegLow);
+    while q > 0 do
+    begin
+      if (q = 1) or not CharInSet(SegLow[q - 1],
+        ['a'..'z', '0'..'9', '_']) then Exit(True);
+      q := PosEx(Needle, SegLow, q + 1);
+    end;
+  end;
+
+begin
+  Result := False;
+  if IdLow = '' then Exit;
+  if BoundedHit(IdLow + '.leave') or
+     BoundedHit(IdLow + '.release') or
+     BoundedHit(IdLow + '.exit') or
+     BoundedHit(IdLow + '.endwrite') then Exit(True);
+  p := Pos('leavecriticalsection', SegLow);
+  while p > 0 do
+  begin
+    // Handle-Bezeichner in den 80 Zeichen hinter dem Call-Namen genuegt -
+    // laenger ist kein realer LeaveCriticalSection-Aufruf.
+    if Pos(IdLow, Copy(SegLow, p, 80)) > 0 then Exit(True);
+    p := PosEx('leavecriticalsection', SegLow, p + 1);
+  end;
+end;
+
+function EnclosingOrAdjacentFinallyReleases(const Code: string;
+  AfterStmtPos: Integer; const IdLow: string): Boolean;
+// FP-Voll-Audit 2026-08-15, Klassen 2+3: das Release liegt in einem
+// finally, das der bisherige Blick (NextStatementIsTry: nur die
+// unmittelbar naechste Anweisung; NearestBoundaryIsTry: rueckwaerts bis
+// zum ersten ';') nicht sieht. Zwei reale Formen:
+//   (2) 'Lock.Enter; X := Y.LockList; try ... finally ...; Lock.Leave; end;'
+//       - das try beginnt 1-2 Anweisungen NACH dem Enter (Indy
+//       IdTunnelMaster.pas:566).
+//   (3) Enter in einer Schleife INNERHALB eines try; das finally des
+//       UMSCHLIESSENDEN try gibt Flag-gesteuert frei (ManagedThreads
+//       fBalls.pas:99).
+// Vorwaertsscan mit Tiefenzaehler ab dem Enter-';':
+//   * Oeffner (begin/try/case/repeat/asm) +1, 'end'/'until' -1. Das Enter
+//     kann in Bloecken sitzen, die VOR dem umschliessenden finally enden
+//     (fBalls: Enter im while-begin) - deshalb klettert der Scan auch
+//     durch NEGATIVE Tiefen weiter, statt bei d<0 aufzugeben.
+//   * 'finally' auf Tiefe <= 0 -> finally eines UMSCHLIESSENDEN try
+//     (je negativer, desto weiter aussen).
+//   * 'try' auf Tiefe 0 innerhalb der ersten 2 Anweisungen -> "benachbart"
+//     (Klasse 2); sein 'finally' erscheint auf der gemerkten Tiefe.
+//   * Liefert das gefundene finally KEIN Release, laeuft der Scan weiter -
+//     auch ein weiter aussen liegendes finally darf noch liefern.
+//   * 'except'-Konstrukte werden komplett uebersprungen (ein Release im
+//     except-Zweig garantiert nichts).
+//   * Ein neuer Routinenkopf auf Tiefe <= 0 beendet die Suche (False).
+// Im gefundenen finally-Block (bis zu seinem 'end') muss das Release auf
+// DENSELBEN Bezeichner stehen (SegmentReleasesLock) - sonst bleibt der
+// Fund (JvHttpGrabber: finally gibt nur Handles frei -> TP bleibt).
+//
+// Der Aufrufer DROPPT bei True nicht, sondern stuft auf fcLow: das
+// Restfenster zwischen Enter und try/Flag kann werfen (Y.LockList!),
+// nur die Melde-Behauptung "no enclosing try..finally" traegt nicht.
+// Unter FindingMinConfidence=medium (Default) ist fcLow unsichtbar,
+// in low-Profilen bleibt der Hinweis erhalten.
+const
+  WINDOW    = 8000;
+  MIN_DEPTH = -8;   // tiefer verschachtelt ist keine reale Routine mehr
+var
+  hi, p    : Integer;
+  d, semis : Integer;
+  adjDepth : Integer;   // Tiefe des "benachbarten" try, -1 = keiner
+  w        : string;
+
+  // Liest das naechste Ident-Wort ab p (lowercased), zaehlt ';' auf
+  // Tiefe 0 fuer die Klasse-2-Naehe. Liefert False am Fensterende.
+  function NextWord: Boolean;
+  var
+    wStart : Integer;
+  begin
+    Result := False;
+    while p <= hi do
+    begin
+      if Code[p] = ';' then
+      begin
+        if (d = 0) then Inc(semis);
+        Inc(p);
+        Continue;
+      end;
+      if CharInSet(Code[p], ['A'..'Z', 'a'..'z', '_']) then
+      begin
+        wStart := p;
+        while (p <= hi) and
+              CharInSet(Code[p], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do Inc(p);
+        w := LowerCase(Copy(Code, wStart, p - wStart));
+        Exit(True);
+      end;
+      Inc(p);
+    end;
+  end;
+
+  // Tiefen-Buchhaltung eines Wortes; True fuer verarbeitete Woerter.
+  function DepthWord: Boolean;
+  begin
+    Result := True;
+    if (w = 'begin') or (w = 'case') or (w = 'repeat') or
+       (w = 'asm') or (w = 'try') then Inc(d)
+    else if (w = 'end') or (w = 'until') then Dec(d)
+    else Result := False;
+  end;
+
+  // Ueberspringt ab dem aktuellen Punkt bis die Tiefe UNTER ATarget faellt
+  // (Konstrukt geschlossen) - fuer except-Bloecke und erfolglose finallys.
+  procedure SkipUntilBelow(ATarget: Integer);
+  begin
+    while (d >= ATarget) and NextWord do
+      DepthWord;
+  end;
+
+var
+  finD, segStart : Integer;
+begin
+  Result := False;
+  hi := AfterStmtPos + WINDOW;
+  if hi > Length(Code) then hi := Length(Code);
+  d        := 0;
+  semis    := 0;
+  adjDepth := -1;
+  p := AfterStmtPos;
+  while NextWord do
+  begin
+    if w = 'try' then
+    begin
+      // Klasse (2): try beginnt hoechstens 2 Anweisungen nach dem Enter.
+      if (d = 0) and (adjDepth = -1) and (semis <= 2) then
+        adjDepth := d + 1;
+      Inc(d);
+      Continue;
+    end;
+    if DepthWord then
+    begin
+      if (adjDepth <> -1) and (d < adjDepth) then adjDepth := -1;
+      if d < MIN_DEPTH then Exit(False);
+      Continue;
+    end;
+    if w = 'finally' then
+    begin
+      if (d <= 0) or ((adjDepth <> -1) and (d = adjDepth)) then
+      begin
+        finD     := d;
+        segStart := p;
+        SkipUntilBelow(finD);   // Segment endet am 'end' des finally
+        if SegmentReleasesLock(
+             LowerCase(Copy(Code, segStart, p - segStart)), IdLow) then
+          Exit(True);
+        // kein Release HIER -> ein noch weiter aussen liegendes finally
+        // darf weiterhin liefern; d ist bereits unter finD.
+        if (adjDepth <> -1) and (d < adjDepth) then adjDepth := -1;
+      end;
+      Continue;
+    end;
+    if w = 'except' then
+    begin
+      if (d <= 0) or ((adjDepth <> -1) and (d = adjDepth)) then
+      begin
+        // try/except: der ganze Zweig garantiert nichts - ueberspringen.
+        SkipUntilBelow(d);
+        if (adjDepth <> -1) and (d < adjDepth) then adjDepth := -1;
+      end;
+      Continue;
+    end;
+    // Neuer Routinenkopf auf/unter Basistiefe: die eigene Routine ist zu
+    // Ende, ohne dass ein umschliessendes finally geliefert haette.
+    if (d <= 0) and
+       ((w = 'procedure') or (w = 'function') or (w = 'constructor') or
+        (w = 'destructor') or (w = 'initialization')) then
+      Exit(False);
+  end;
+end;
+
 function StatementCannotThrow(const Stmt: string): Boolean;
 // Real-World-FP-Audit 2026-07-12, FP-Klasse 'exception-free-body-parens'.
 // True wenn eine EINZELNE ;-getrennte Anweisung (die bereits ':=' enthaelt)
@@ -491,6 +686,15 @@ begin
   begin
     t := Trim(stmt);
     if t = '' then Continue;
+    // FP-Voll-Audit 2026-08-15, Klasse 'Body ohne Wurf-Pfad, aber ohne :=':
+    // inc(x)/dec(x) - optional mit Ganzzahl-Konstante - sind nicht werfende
+    // System-Intrinsics ohne Zuweisung (Alcinoe.MemCached: 'Acquire;
+    // dec(FWorkingConnectionCount); Release;'). BEWUSST enger als die
+    // Audit-Fix-Idee: nur gepunktete Bezeichner, KEIN '[' - ein Array-
+    // Index (inc(A[i])) kann per Range-Check werfen, der Fund bliebe.
+    if TRegEx.IsMatch(t,
+      '(?i)^(inc|dec)\s*\(\s*[a-z_][\w.]*\s*(,\s*\d+\s*)?\)$') then
+      Continue;
     if Pos(':=', t) = 0 then Exit(False);  // keine Zuweisung -> evtl. (paren-loser) Call
     // Real-World-FP-Audit 2026-07-12, FP-Klasse 'exception-free-body-parens':
     // '(' / '[' nicht mehr pauschal ablehnen - not(x), Set-Membership
@@ -648,6 +852,8 @@ var
   LineNo    : Integer;
   LockIdent : string;
   LockRe    : TRegEx;
+  GateIdLow : string;    // Lock-Bezeichner (lower) fuer das finally-Gate
+  q         : Integer;
 begin
   LockRe := TRegExMatches.CachedEx(LOCK_ENTER_PATTERN, [roNotEmpty]);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
@@ -730,9 +936,25 @@ begin
       // M.Groups[1] wirft in Delphi 12 'Index ueberschreitet das Maximum'.
       LockIdent := M.Value;
       if Pos('.', LockIdent) > 0 then
-        LockIdent := Copy(LockIdent, 1, Pos('.', LockIdent) - 1)
+      begin
+        LockIdent := Copy(LockIdent, 1, Pos('.', LockIdent) - 1);
+        GateIdLow := LowerCase(LockIdent);
+      end
       else
+      begin
+        // EnterCriticalSection( - Handle-Bezeichner hinter der Klammer
+        // fuer das finally-Gate extrahieren (erste Ident-Kette).
+        GateIdLow := '';
+        q := FindNextNonSpacePos(Code, M.Index + M.Length);
+        while (q > 0) and (q <= Length(Code)) and
+              CharInSet(Code[q], ['A'..'Z', 'a'..'z', '0'..'9', '_', '.']) do
+        begin
+          GateIdLow := GateIdLow + Code[q];
+          Inc(q);
+        end;
+        GateIdLow := LowerCase(GateIdLow);
         LockIdent := 'EnterCriticalSection(...)';
+      end;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
@@ -745,6 +967,23 @@ begin
                'matching Leave/Release in the finally block.',
                [LockIdent]);
       F.SetKind(fkLockWithoutTryFinally);
+      // K2 Stufe 3 (2026-08-26), Evidenz je Fund statt Katalog-Pauschale:
+      //   * Release desselben Locks steht im finally eines umschliessenden
+      //     oder direkt anschliessenden try -> die Melde-Behauptung "no
+      //     enclosing try..finally" traegt nicht; offen bleibt nur das
+      //     Restfenster bis zum try/Flag -> fcLow (Default-unsichtbar,
+      //     opt-in via MinConfidence=low).
+      //   * Sonst: alle im FP-Voll-Audit 2026-08-15 kartierten FP-Klassen
+      //     sind jetzt gate-gedeckt (Getter/Setter-Body inkl. inc/dec,
+      //     Split-Wrapper, BeginXxx, try-Grenzen, finally-Release) und die
+      //     9 verbliebenen Stichproben-Funde waren 9/9 TP -> fcHigh, der
+      //     Fund traegt unter der Evidenz-Politik wieder den Error-Tier.
+      //     Governance wie ueberall: haelt die fcHigh-Klasse die 5 % im
+      //     naechsten Audit nicht, faellt die Promotion - nie umgekehrt.
+      if EnclosingOrAdjacentFinallyReleases(Code, EndOfStmt, GateIdLow) then
+        F.Confidence := fcLow
+      else
+        F.Confidence := fcHigh;
       Results.Add(F);
     end;
   finally
