@@ -20,6 +20,9 @@ type
     [Test] procedure FuncPointerFieldHead_ReportedOnce;
     [Test] procedure PublishedInBlockComment_NoFinding;
     [Test] procedure RecordPublicField_NoFinding;
+    // rw12-A/B-Fund: FPC-Export-Direktive '{$ifdef FPC} public name ...'
+    // darf nach dem Kommentar-Strip keine Sektion schalten.
+    [Test] procedure FpcPublicNameDirective_NoFinding;
   end;
 
 implementation
@@ -218,6 +221,31 @@ begin
   finally F.Free; end;
 end;
 
+procedure TTestPublicField.FpcPublicNameDirective_NoFinding;
+// rw12-A/B (62 Adds): mormot.lib.static deklariert FPC-Exporte als
+// '{$ifdef FPC} public name ''__udivdi3''; {$endif}' hinter dem
+// Funktionskopf. Der Kommentar-Strip legte das 'public' frei und
+// schaltete mitten in der Implementation eine Sektion an - lokale
+// Vars wurden als Felder gemeldet. Der Schalter verlangt jetzt eine
+// Allein-Wort-Zeile.
+const SRC =
+  'unit t; interface'#13#10 +
+  'implementation'#13#10 +
+  'function udivdi3(num, den: Int64): Int64; cdecl;'#13#10 +
+  '  {$ifdef FPC} public name ''''__udivdi3''''; {$endif}'#13#10 +
+  'var'#13#10 +
+  '  q: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  q := 1; Result := q;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkPublicField),
+    'FPC-Export-Direktive schaltet keine Sektion - q ist kein Feld');
+  finally F.Free; end;
+end;
 initialization
   TDUnitX.RegisterTestFixture(TTestPublicField);
 

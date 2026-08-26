@@ -248,7 +248,16 @@ begin
       // Klammer fuer ihre Fortsetzungen). Der fruehere Code-Kommentar
       // behauptete diese Heuristik nur - jetzt existiert sie.
       WarInParens := OpenParens > 0;
-      if (Lower = 'public') or (Lower = 'published') then
+      // Der SCHALTER verlangt eine Allein-Wort-Zeile (rw12-A/B-Fund,
+      // 62 Adds): 'public name ''__udivdi3''' ist die FPC-Export-
+      // Direktive in '{$ifdef FPC} public name ...; {$endif}' - der
+      // Kommentar-Strip legte das 'public' frei und schaltete mitten in
+      // der IMPLEMENTATION eine Sektion an (lokale Vars wurden Felder,
+      // mormot.lib.static x3). Eine echte Sektionszeile besteht nach dem
+      // Strip NUR aus dem Keyword. Der seltene Einzeiler-Stil
+      // 'public Feld: T;' verliert den Schalter - FN-Richtung, billig.
+      if ((Lower = 'public') or (Lower = 'published')) and
+         SameText(Trim(Clean), Lower) then
       begin
         InPublic   := True;
         OpenParens := 0;   // Sektionsgrenze bricht jede Drift
