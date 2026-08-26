@@ -309,7 +309,7 @@ begin
       Fnd.SetKind(fkMemoryLeak);          // lsError laut Katalog
       Fnd.FileName   := FIXTURE_PAS;
       Fnd.LineNumber := IntToStr(i);
-      Fnd.MissingVar := leak + IntToStr(i);
+      Fnd.MissingVar := 'leak' + IntToStr(i);
       Fnd.Confidence := fcHigh;
       Fnd.Severity   := lsError;
       Findings.Add(Fnd);
@@ -317,13 +317,13 @@ begin
     Fnd := TLeakFinding.Create;
     Fnd.SetKind(fkTodoComment);           // lsHint
     Fnd.FileName   := FIXTURE_PAS;
-    Fnd.LineNumber := 10;
-    Fnd.MissingVar := TODO: x;
+    Fnd.LineNumber := '10';
+    Fnd.MissingVar := 'TODO: x';
     Fnd.Confidence := fcMedium;
     Fnd.Severity   := lsHint;
     Findings.Add(Fnd);
-    Fn := NeueTempDatei(sca-test-rr-, .html);
-    TExporterHtml.Run(Findings, , Fn, );
+    Fn := NeueTempDatei('sca-test-rr-', '.html');
+    TExporterHtml.Run(Findings, '', Fn, '');
     Result := TFile.ReadAllText(Fn, TEncoding.UTF8);
     if TFile.Exists(Fn) then TFile.Delete(Fn);
   finally
@@ -338,21 +338,21 @@ var
   H : string;
 begin
   H := RenderMixed;
-  Assert.IsTrue(H.Contains(class="rule-report"),
-    Regel-Report-Block muss im Bericht stehen);
-  Assert.IsTrue(H.Contains(data-i18n="hdr-rule-report"),
-    Ueberschrift traegt den i18n-Schluessel);
-  Assert.IsTrue(H.Contains(data-kind="MemoryLeak"),
-    MemoryLeak-Zeile fehlt);
-  Assert.IsTrue(H.Contains(data-kind="TodoComment"),
-    TodoComment-Zeile fehlt);
+  Assert.IsTrue(H.Contains('class="rule-report"'),
+    'Regel-Report-Block muss im Bericht stehen');
+  Assert.IsTrue(H.Contains('data-i18n="hdr-rule-report"'),
+    'Ueberschrift traegt den i18n-Schluessel');
+  Assert.IsTrue(H.Contains('data-kind="MemoryLeak"'),
+    'MemoryLeak-Zeile fehlt');
+  Assert.IsTrue(H.Contains('data-kind="TodoComment"'),
+    'TodoComment-Zeile fehlt');
   // Die MemoryLeak-Zeile traegt Summe 3 und 3 Fehler; der Vergleich
   // laeuft ueber das Zellen-Muster, nicht ueber die ganze Zeile
   // (Spaltenreihenfolge darf sich aendern, die Werte nicht).
-  Assert.IsTrue(H.Contains(<b>3</b></td><td class="num rr-e">3<),
-    MemoryLeak: Summe 3 / Fehler 3 erwartet);
-  Assert.IsTrue(H.Contains(<b>1</b></td><td class="num rr-e">0<),
-    TodoComment: Summe 1 / Fehler 0 erwartet);
+  Assert.IsTrue(H.Contains('<b>3</b></td><td class="num rr-e">3<'),
+    'MemoryLeak: Summe 3 / Fehler 3 erwartet');
+  Assert.IsTrue(H.Contains('<b>1</b></td><td class="num rr-e">0<'),
+    'TodoComment: Summe 1 / Fehler 0 erwartet');
 end;
 
 procedure TTestExportHtml.RuleReport_ShareUsesIntegerMath;
@@ -364,11 +364,12 @@ var
   H : string;
 begin
   H := RenderMixed;
-  Assert.IsTrue(H.Contains(rr-share">75,0 %),
-    3 von 4 Funden = 75,0 % (Ganzzahl-Promille, Komma));
-  Assert.IsTrue(H.Contains(rr-share">25,0 %),
-    1 von 4 Funden = 25,0 %);
+  Assert.IsTrue(H.Contains('rr-share">75,0 %'),
+    '3 von 4 Funden = 75,0 % (Ganzzahl-Promille, Komma)');
+  Assert.IsTrue(H.Contains('rr-share">25,0 %'),
+    '1 von 4 Funden = 25,0 %');
 end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestExportHtml);
 
