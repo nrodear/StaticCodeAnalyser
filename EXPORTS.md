@@ -194,6 +194,12 @@ alerts keep their identity across line drift. Paths are relative to
 `--base-dir` — point it at the repository root, which is what code
 scanning expects.
 
+The HTML report carries a collapsible **rule report** next to the
+finding table: one row per rule that fired, with findings, the
+error/warning/hint split, the confidence split and the share of the
+total. It is the aggregate view — useful exactly when the finding
+table is too long to read.
+
 While the evidence policy (`[Rules] EvidenceTiering`, default on) is
 active, every result also carries `properties.confidence`
 (`low`/`medium`/`high`) — that is how a catalog-error rule reporting at

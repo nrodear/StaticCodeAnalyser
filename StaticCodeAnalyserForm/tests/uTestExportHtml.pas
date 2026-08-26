@@ -39,6 +39,11 @@ type
     // Initialisierung nicht kippen.
     [Test] procedure UrlHash_NoValueInsideSelector;
     [Test] procedure UrlHash_BlockCatchesExceptions;
+    // Aggregierter Regel-Report (2026-08-26): eine Zeile je REGEL,
+    // Severity-/Konfidenz-Aufteilung, Anteil ohne Locale-Dezimal-
+    // trenner (dieselbe Ganzzahl-Regel wie beim Donut).
+    [Test] procedure RuleReport_AggregatesPerRule;
+    [Test] procedure RuleReport_ShareUsesIntegerMath;
   end;
 
 
@@ -286,6 +291,84 @@ begin
     'der catch muss vor dem finally des Hash-Blocks liegen');
 end;
 
+
+function RenderMixed: string;
+// Drei Regeln mit unterschiedlichen Severities/Konfidenzen - Basis
+// fuer die Aggregat-Pruefungen. SourceFile leer = Repo-Modus.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fn       : string;
+  i        : Integer;
+  Fnd      : TLeakFinding;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    for i := 1 to 3 do
+    begin
+      Fnd := TLeakFinding.Create;
+      Fnd.SetKind(fkMemoryLeak);          // lsError laut Katalog
+      Fnd.FileName   := FIXTURE_PAS;
+      Fnd.LineNumber := IntToStr(i);
+      Fnd.MissingVar := leak + IntToStr(i);
+      Fnd.Confidence := fcHigh;
+      Fnd.Severity   := lsError;
+      Findings.Add(Fnd);
+    end;
+    Fnd := TLeakFinding.Create;
+    Fnd.SetKind(fkTodoComment);           // lsHint
+    Fnd.FileName   := FIXTURE_PAS;
+    Fnd.LineNumber := 10;
+    Fnd.MissingVar := TODO: x;
+    Fnd.Confidence := fcMedium;
+    Fnd.Severity   := lsHint;
+    Findings.Add(Fnd);
+    Fn := NeueTempDatei(sca-test-rr-, .html);
+    TExporterHtml.Run(Findings, , Fn, );
+    Result := TFile.ReadAllText(Fn, TEncoding.UTF8);
+    if TFile.Exists(Fn) then TFile.Delete(Fn);
+  finally
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportHtml.RuleReport_AggregatesPerRule;
+// Der Block existiert, traegt beide Regeln und zaehlt je Regel
+// richtig: MemoryLeak 3 Funde/3 Fehler, TodoComment 1 Hinweis.
+var
+  H : string;
+begin
+  H := RenderMixed;
+  Assert.IsTrue(H.Contains(class="rule-report"),
+    Regel-Report-Block muss im Bericht stehen);
+  Assert.IsTrue(H.Contains(data-i18n="hdr-rule-report"),
+    Ueberschrift traegt den i18n-Schluessel);
+  Assert.IsTrue(H.Contains(data-kind="MemoryLeak"),
+    MemoryLeak-Zeile fehlt);
+  Assert.IsTrue(H.Contains(data-kind="TodoComment"),
+    TodoComment-Zeile fehlt);
+  // Die MemoryLeak-Zeile traegt Summe 3 und 3 Fehler; der Vergleich
+  // laeuft ueber das Zellen-Muster, nicht ueber die ganze Zeile
+  // (Spaltenreihenfolge darf sich aendern, die Werte nicht).
+  Assert.IsTrue(H.Contains(<b>3</b></td><td class="num rr-e">3<),
+    MemoryLeak: Summe 3 / Fehler 3 erwartet);
+  Assert.IsTrue(H.Contains(<b>1</b></td><td class="num rr-e">0<),
+    TodoComment: Summe 1 / Fehler 0 erwartet);
+end;
+
+procedure TTestExportHtml.RuleReport_ShareUsesIntegerMath;
+// Der Anteil wird als Ganzzahl-Promille gerechnet und mit Komma
+// ausgegeben - nie ueber Float/FormatFloat, deren Dezimaltrenner
+// von der Locale des Laufs abhinge (Determinismus-Regel des
+// Berichts, s. Donut).
+var
+  H : string;
+begin
+  H := RenderMixed;
+  Assert.IsTrue(H.Contains(rr-share">75,0 %),
+    3 von 4 Funden = 75,0 % (Ganzzahl-Promille, Komma));
+  Assert.IsTrue(H.Contains(rr-share">25,0 %),
+    1 von 4 Funden = 25,0 %);
+end;
 initialization
   TDUnitX.RegisterTestFixture(TTestExportHtml);
 

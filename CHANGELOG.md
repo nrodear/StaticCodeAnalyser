@@ -8,6 +8,14 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- HTML report: a collapsible **rule report** listing every rule that
+  fired - findings, error/warning/hint split, confidence split and
+  share of the total, one row per rule. On a large corpus the finding
+  table has hundreds of thousands of rows; this block answers "what
+  does this scan actually report" at a glance. Costs one line per rule
+  regardless of finding count.
+
 ### Changed
 - **Evidence tiering ("error = proven")**: finding severity is now
   capped by the detector's confidence in that specific finding - only
