@@ -147,6 +147,25 @@ type
     [Test] procedure SQL_SqlBuilderRoutineNonMappingCall_StillReported;
     [Test] procedure SQL_SqlGeneratorReceiverCall_NoFinding;
     [Test] procedure SQL_PlainReceiverCall_StillReported;
+    // ---- K2-Folgerunde 2026-08-26: Voll-Audit-S2-Klassen (96 % FP) ----
+    // Klasse 1: ORM-Metadaten per Namens-KONVENTION statt Positivliste.
+    [Test] procedure SQL_MetaConventionPath_NoFinding;
+    [Test] procedure SQL_PlainNameProperty_StillReported;
+    // Klasse 4: Quoted*-PROPERTY (klammerlos) traegt die Quoter-Konvention.
+    [Test] procedure SQL_QuotedProperty_NoFinding;
+    [Test] procedure SQL_BareQuotedIdent_StillReported;
+    // Klasse 2: transparente Helfer reichen Argument-Sicherheit durch.
+    [Test] procedure SQL_IfThenEscapedBothBranches_NoFinding;
+    [Test] procedure SQL_IfThenWithRawBranch_StillReported;
+    // Klasse 3: RQL-/SQL-Uebersetzer heben das Parameter-Veto auf.
+    [Test] procedure SQL_TranslatorCalleeWithParam_NoFinding;
+    [Test] procedure SQL_NonTranslatorCalleeWithParam_StillReported;
+    // Klasse 7: SQL-Klausel-Klasse - bare self-Felder sind Bauvorschrift.
+    [Test] procedure SQL_SqlClauseClassField_NoFinding;
+    [Test] procedure SQL_SqlClauseClassParam_StillReported;
+    // Klasse 8: Konkat im gebundenen Parameter-Array, SQL rein literal.
+    [Test] procedure SQL_ConcatInBoundParamArray_NoFinding;
+    [Test] procedure SQL_ConcatInSqlArgOfExec_StillReported;
   end;
 
 implementation
@@ -1620,6 +1639,224 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
     'Member-Call auf beliebigem Empfaenger bleibt SCA003-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_MetaConventionPath_NoFinding;
+// K2 2026-08-26, Klasse 1 (mormot.orm.core 9204ff): Metadaten-Property
+// hinter nicht gelistetem Namen - die KONVENTION (sqltable*-Praefix,
+// props-Empfaenger) traegt jetzt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run;'#13#10+
+  'begin'#13#10+
+  '  Server.ExecSQL(''SELECT '' + p.Props.SqlTableSimpleFieldsNoRowID + '' FROM '' + Model.TableProps[i].Props.SqlTableName);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+      'sqltable*-Konvention + props-Empfaenger sind Compile-Zeit-Metadaten');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_PlainNameProperty_StillReported;
+// TP-Gegenprobe Klasse 1: .Name OHNE *field-Empfaenger ist EINGABE
+// (User.Name) - die Konvention darf hier nicht greifen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run;'#13#10+
+  'begin'#13#10+
+  '  Conn.ExecSQL(''DELETE FROM t WHERE owner='' + User.Name);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+      'User.Name ist Laufzeit-Eingabe, keine Metadaten-Konvention');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_QuotedProperty_NoFinding;
+// K2 2026-08-26, Klasse 4 (HeidiSQL tabletools:2246): die Quoted*-
+// Property ist per Konvention das Ergebnis des Quoters.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run;'#13#10+
+  'begin'#13#10+
+  '  DBObj.Connection.Query(''DROP VIEW '' + DBObj.QuotedName);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+      'Quoted*-Property traegt die Quoter-Konvention');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_BareQuotedIdent_StillReported;
+// TP-Gegenprobe Klasse 4: ein BARER Bezeichner namens QuotedX ist
+// keine Property-Konvention - nur Member-PFADE geben frei.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run(const QuotedName: string);'#13#10+
+  'begin'#13#10+
+  '  Conn.ExecSQL(''DROP VIEW '' + QuotedName);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+      'barer Parameter bleibt Fund, auch wenn er Quoted* heisst');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_IfThenEscapedBothBranches_NoFinding;
+// K2 2026-08-26, Klasse 2 (HeidiSQL usermanager:1625/1635): beide
+// IfThen-ZWEIGE sind escaped; die Boolean-Bedingung (User.IsUser)
+// waehlt nur den Zweig und darf die Bewertung nicht kippen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run;'#13#10+
+  'begin'#13#10+
+  '  FConnection.Query(''REVOKE ALL ON x FROM '' + IfThen(User.IsUser, FConnection.EscapeString(User.Username) + ''@'' + FConnection.EscapeString(User.Host), FConnection.EscapeString(User.Username)));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+      'transparenter Helfer: alle String-Argumente escaped -> sicher');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_IfThenWithRawBranch_StillReported;
+// TP-Gegenprobe Klasse 2: EIN roher Zweig vergiftet den Helfer.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run(const AInput: string);'#13#10+
+  'begin'#13#10+
+  '  FConnection.Query(''DELETE FROM t WHERE n='' + IfThen(UseRaw, AInput, QuotedStr(AInput)));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+      'roher Zweig im IfThen bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_TranslatorCalleeWithParam_NoFinding;
+// K2 2026-08-26, Klasse 3 (DMVC ActiveRecord RestoreRQL): der RQL-
+// UEBERSETZER parst den Parameter, sein Ergebnis ist erzeugtes SQL.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.RestoreRQL(const RQL: string);'#13#10+
+  'begin'#13#10+
+  '  ExecSQL(''UPDATE '' + lAR.SQLGenerator.GetTableNameForSQL(TabName) + lAR.SQLGenerator.CreateSQLWhereByRQL(RQL, lAR.GetMapping, False));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+      '*ByRQL am SQLGenerator-Empfaenger uebersetzt statt einzukleben');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_NonTranslatorCalleeWithParam_StillReported;
+// TP-Gegenprobe Klasse 3 (Verengung 2026-07-31 bleibt): ein NICHT-
+// Uebersetzer-Callee mit Routine-Parameter im Argument bleibt Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.GetOrderSQL(const AFilter: string);'#13#10+
+  'begin'#13#10+
+  '  ExecSQL(''SELECT * FROM t WHERE '' + lAR.SQLGenerator.FetchData(AFilter));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+      'Nicht-Uebersetzer mit Parameter-Argument bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_SqlClauseClassField_NoFinding;
+// K2 2026-08-26, Klasse 7 (Alcinoe ALSQLClauses:441/453): die
+// Klausel-Klasse IST der Builder, bare self-Felder sind die
+// Bauvorschrift.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TALUpdateSQLClause.GetSQLText: string;'#13#10+
+  'begin'#13#10+
+  '  Result := ''Update '' + Table + '' Set '' + Value;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+      'bare Felder einer *SQLClause*-Klasse sind Entwickler-Bauvorschrift');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_SqlClauseClassParam_StillReported;
+// TP-Gegenprobe Klasse 7: Routine-PARAMETER bleiben auch in der
+// Klausel-Klasse unsicher.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TALUpdateSQLClause.Bad(const AInput: string): string;'#13#10+
+  'begin'#13#10+
+  '  Result := ''Update '' + AInput;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+      'Parameter bleibt Fund, auch in der Klausel-Klasse');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_ConcatInBoundParamArray_NoFinding;
+// K2 2026-08-26, Klasse 8 (DMVC streamed_array_writer): SQL rein
+// literal + parametrisiert, das + liegt im GEBUNDENEN Werte-Array.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Seed;'#13#10+
+  'begin'#13#10+
+  '  LConn.ExecSQL(''INSERT INTO people(n, c) VALUES(?, ?)'', [FIRST[Random(10)] + '' '' + LAST[Random(10)], COUNTRIES[Random(6)]]);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+      'Konkat im gebundenen Array ist kein SQL-Aufbau');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_ConcatInSqlArgOfExec_StillReported;
+// TP-Gegenprobe Klasse 8: Konkat im SQL-ARGUMENT selbst bleibt Fund,
+// auch wenn ein Parameter-Array folgt (JvDBPasswordDialog-Muster).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.ChangePassword(const NewPassword: string);'#13#10+
+  'begin'#13#10+
+  '  Connection.ExecSQL(''ALTER USER u IDENTIFIED BY '' + NewPassword, []);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkSQLInjection) >= 1,
+      'Konkat im SQL-Argument bleibt Fund trotz Array dahinter');
   finally F.Free; end;
 end;
 
