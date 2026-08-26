@@ -41,6 +41,91 @@ uses
 const
   EMIT_SEVERITY = lsHint;
 
+// Zeilenweiser Kommentar-/String-Strip MIT Zustand ueber Zeilengrenzen
+// (Autopsie 2026-08-26, Fix C; Vorbild uTautologicalExpr). Der alte
+// Detektor kannte Blockkommentare nur, wenn die Zeile damit BEGANN -
+// "published by the Free Software Foundation" in einem GPL-Header
+// schaltete InPublic an, und Klammern in {..}-Kommentaren haetten die
+// neue Balance-Zaehlung vergiftet (LoggerPro.FileAppender:107 u.a.).
+procedure StripLineStateful(const Line: string; var InBrace, InStar: Boolean;
+  out Clean: string);
+var
+  i, n : Integer;
+  Sb   : TStringBuilder;
+begin
+  n := Length(Line);
+  Sb := TStringBuilder.Create(n);
+  try
+    i := 1;
+    while i <= n do
+    begin
+      if InBrace then
+      begin
+        if Line[i] = '}' then InBrace := False;
+        Inc(i);
+        Continue;
+      end;
+      if InStar then
+      begin
+        if (Line[i] = '*') and (i < n) and (Line[i + 1] = ')') then
+        begin
+          InStar := False;
+          Inc(i, 2);
+          Continue;
+        end;
+        Inc(i);
+        Continue;
+      end;
+      case Line[i] of
+        '{': begin InBrace := True; Inc(i); end;
+        '(': if (i < n) and (Line[i + 1] = '*') then
+             begin
+               InStar := True;
+               Inc(i, 2);
+             end
+             else
+             begin
+               Sb.Append('(');
+               Inc(i);
+             end;
+        '/': if (i < n) and (Line[i + 1] = '/') then
+               Break // Zeilenkommentar - Rest der Zeile weg
+             else
+             begin
+               Sb.Append('/');
+               Inc(i);
+             end;
+        '''':
+          begin
+            // String-Literal komplett schlucken ('' = Escape).
+            Inc(i);
+            while i <= n do
+            begin
+              if Line[i] = '''' then
+              begin
+                if (i < n) and (Line[i + 1] = '''') then
+                  Inc(i, 2)
+                else
+                begin
+                  Inc(i);
+                  Break;
+                end;
+              end
+              else
+                Inc(i);
+            end;
+          end;
+      else
+        Sb.Append(Line[i]);
+        Inc(i);
+      end;
+    end;
+    Clean := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
+end;
+
 function ExtractFirstWord(const Line: string; out StartCol: Integer): string;
 var
   i, n, wStart : Integer;
@@ -118,18 +203,56 @@ var
   Lower    : string;
   InPublic : Boolean;
   F        : TLeakFinding;
+  // Autopsie 2026-08-26: drei neue Zustaende ueber Zeilengrenzen.
+  InBrace, InStar : Boolean;   // Fix C - Blockkommentar-Zustand
+  OpenParens      : Integer;   // Fix A - Klammer-Balance (Signaturen)
+  WarInParens     : Boolean;
+  InValueType     : Boolean;   // Fix B - record/object statt class
+  Clean, CleanLow : string;
+  k               : Integer;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
-    InPublic := False;
+    InPublic    := False;
+    InBrace     := False;
+    InStar      := False;
+    OpenParens  := 0;
+    InValueType := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      Word := ExtractFirstWord(Lines[i], Col);
+      // Fix C: ALLES arbeitet auf der kommentar-/literalfreien Zeile -
+      // damit kann weder "published" aus einem GPL-Header InPublic
+      // schalten noch eine Kommentar-Klammer die Balance vergiften.
+      StripLineStateful(Lines[i], InBrace, InStar, Clean);
+      Word := ExtractFirstWord(Clean, Col);
       if Word = '' then Continue;
       Lower := LowerCase(Word);
+      CleanLow := LowerCase(Clean);
+      // Fix B: Typkopf mitlesen. Oeffentliche Felder sind bei record/
+      // object das Idiom - die Kapselungs-Empfehlung gilt nur fuer
+      // Klassen. 'end' unten setzt den Zustand zurueck (Politik
+      // "unbekannt = melden": im Zweifel Klassen-Verhalten).
+      if Pos('= class', CleanLow) + Pos('=class', CleanLow) > 0 then
+        InValueType := False
+      else if (Pos('= record', CleanLow) + Pos('=record', CleanLow) +
+               Pos('= object', CleanLow) + Pos('=object', CleanLow) +
+               Pos('= packed record', CleanLow) +
+               Pos('= packed object', CleanLow)) > 0 then
+        InValueType := True;
+      // Fix A: stand die Zeile noch in einer offenen Klammer aus einer
+      // Vorzeile (mehrzeilige Signatur/Methodenzeiger-Feld), ist sie
+      // eine Parameter-Fortsetzung - NIE ein Feld. Balance-Update folgt
+      // UNTEN, auch fuer gemeldete Zeilen (die Kopfzeile eines
+      // Funktionszeiger-FELDES ist ein echter Fund und oeffnet die
+      // Klammer fuer ihre Fortsetzungen). Der fruehere Code-Kommentar
+      // behauptete diese Heuristik nur - jetzt existiert sie.
+      WarInParens := OpenParens > 0;
       if (Lower = 'public') or (Lower = 'published') then
-        InPublic := True
+      begin
+        InPublic   := True;
+        OpenParens := 0;   // Sektionsgrenze bricht jede Drift
+      end
       else if (Lower = 'private') or (Lower = 'protected') or
               (Lower = 'strict')  or (Lower = 'end') or
               // Section-Boundaries: nach 'implementation' / 'initialization' /
@@ -141,19 +264,37 @@ begin
               (Lower = 'implementation') or
               (Lower = 'initialization') or
               (Lower = 'finalization') then
-        InPublic := False
-      else if InPublic and LooksLikeField(Lines[i]) then
       begin
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := '';
-        F.LineNumber := IntToStr(i + 1);
-        F.MissingVar := Format(
-          'Public field `%s` - prefer a property for encapsulation ' +
-          '(getter/setter can be added later without breaking callers).',
-          [Word]);
-        F.SetKind(fkPublicField);
-        Results.Add(F);
+        InPublic   := False;
+        OpenParens := 0;
+        if Lower = 'end' then
+          InValueType := False;
+      end
+      else
+      begin
+        if (not WarInParens) and InPublic and (not InValueType) and
+           LooksLikeField(Clean) then
+        begin
+          F            := TLeakFinding.Create;
+          F.FileName   := FileName;
+          F.MethodName := '';
+          F.LineNumber := IntToStr(i + 1);
+          F.MissingVar := Format(
+            'Public field `%s` - prefer a property for encapsulation ' +
+            '(getter/setter can be added later without breaking callers).',
+            [Word]);
+          F.SetKind(fkPublicField);
+          Results.Add(F);
+        end;
+        // Fix A, Balance-Update NACH der Melde-Entscheidung: Klammern
+        // dieser (kommentar-/literalfreien) Zeile fortschreiben; nie
+        // unter 0 (verirrte ')' aus Code-Fragmenten sollen die
+        // Folgezeilen nicht vergiften).
+        for k := 1 to Length(Clean) do
+          case Clean[k] of
+            '(': Inc(OpenParens);
+            ')': if OpenParens > 0 then Dec(OpenParens);
+          end;
       end;
     end;
   finally
