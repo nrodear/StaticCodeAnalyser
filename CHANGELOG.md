@@ -31,6 +31,24 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `high`) while evidence tiering is active, so CI consumers can see
   why a catalog-error rule reports at `warning`. With
   `EvidenceTiering=0` the SARIF output is byte-identical to before.
+- **Per-finding evidence for SCA121 and SCA109**: findings that pass
+  all source gates now carry high confidence and return to the error
+  tier (corpus: 101 SCA121 + 35 SCA109 verified true positives moved
+  back to `error`); SCA109 findings whose lock IS released in an
+  adjacent or enclosing `finally` are graded low instead (the
+  "no enclosing try..finally" claim does not hold there).
+
+### Fixed
+- Parser: context keywords (`read`, `Result`, ...) are now accepted
+  as variable names in local `var` sections. Previously the TYPE name
+  became a phantom variable and SCA166 reported "integer/PPyObject is
+  read but never assigned" on the routine signature line.
+- SCA166: the same-file out-parameter index no longer lets a shorter
+  overload erase the `out` flag of a longer one (JclSysUtils
+  `IntToStr(Value; out FirstDigitPos)` pattern).
+- SCA109: `inc(x)`/`dec(x)` between lock acquire and release are
+  recognised as non-throwing intrinsics (no more false positive on
+  plain counter updates under a lock).
 
 ---
 
