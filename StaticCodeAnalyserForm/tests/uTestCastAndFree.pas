@@ -27,6 +27,12 @@ type
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
+    // Autopsie 2026-08-26 (Fix 1): Pointer-Idiom-Operanden.
+    [Test] procedure PointerContainerIndex_NotReported;
+    [Test] procedure ObjectsIndex_StillReported;
+    [Test] procedure BareObjectsIndex_StillReported;
+    [Test] procedure StackPopAndData_NotReported;
+    [Test] procedure BareClassField_StillReported;
   end;
 
 implementation
@@ -184,6 +190,103 @@ begin
     Assert.IsNotNull(Hit, 'fkCastAndFree finding expected');
     Assert.AreEqual(fkCastAndFree, Hit.Kind);
     Assert.AreEqual(lsHint,        Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestCastAndFree.PointerContainerIndex_NotReported;
+// Autopsie 2026-08-26, Fix 1: TList.Items ist Pointer - der Cast ist
+// zum Kompilieren ZWINGEND (E2018 ohne), nicht redundant. Die Klasse
+// stellte 19/24 des Audit-Samples.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Clear;'#13#10+
+  'begin'#13#10+
+  '  TItem(FList[0]).Free;'#13#10+
+  '  TItem(FList.Items[1]).Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCastAndFree),
+      'Index-Operand = Pointer-Idiom, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestCastAndFree.ObjectsIndex_StillReported;
+// TP-Gegenprobe: TStrings.Objects liefert TObject - dort ist der
+// Cast fuer Free wirklich redundant (die belegte TP-Klasse).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Clear;'#13#10+
+  'begin'#13#10+
+  '  TItem(FNames.Objects[0]).Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkCastAndFree) >= 1,
+      'Objects[..]-Zugriff bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestCastAndFree.BareObjectsIndex_StillReported;
+// TP-Gegenprobe (doublecmd uvfsmodule:75): bare Objects[I] in einer
+// TStringList-Ableitung - die Ausnahme muss auch OHNE Punkt greifen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TVfsList.Clear;'#13#10+
+  'begin'#13#10+
+  '  TVfsModule(Objects[0]).Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkCastAndFree) >= 1,
+      'bare Objects[..] bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestCastAndFree.StackPopAndData_NotReported;
+// Fix 1: TStack.Pop liefert Pointer, TListItem.Data ist Pointer -
+// beide Casts zwingend. Pop() mit Klammern wird normalisiert
+// (Gegenpruefungs-Spec-Luecke).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Drain;'#13#10+
+  'begin'#13#10+
+  '  TJob(FStack.Pop).Free;'#13#10+
+  '  TJob(FStack.Pop()).Free;'#13#10+
+  '  TMeta(Node.Data).Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCastAndFree),
+      'Pop/Pop()/Data sind Pointer-Idiome, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestCastAndFree.BareClassField_StillReported;
+// TP-Gegenprobe (JvButtons FGlyphDrawer): bare Feld-Operanden bleiben
+// gemeldet - die Klassenfeld-TPs sind der Grund, warum die Regel
+// nicht auf Objects-only verengt wurde.
+const SRC =
+  'unit t; implementation'#13#10+
+  'destructor TBtn.Destroy;'#13#10+
+  'begin'#13#10+
+  '  TGlyphEx(FGlyph).Free;'#13#10+
+  '  inherited;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkCastAndFree) >= 1,
+      'bare Ident-Operand bleibt Fund');
   finally F.Free; end;
 end;
 
