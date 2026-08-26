@@ -799,7 +799,11 @@ function SplitLockWrapperNoReleaseInScope(const Code: string; M: TMatch): Boolea
 // beginnt die evtl. paired Unlock-Methode), damit deren Release NICHT
 // faelschlich als in-scope zaehlt.
 const
-  KEYS : array[0..3] of string = ('procedure', 'function', 'constructor', 'destructor');
+  // 'operator' ergaenzt (Gegenpruefung 2026-08-26): class operator ist ein
+  // Routinenkopf wie jeder andere - ohne ihn liest der Wrapper-Scan in den
+  // Body des Folge-Operators hinein (dieselbe Luecke wie im finally-Scanner).
+  KEYS : array[0..4] of string = ('procedure', 'function', 'constructor',
+    'destructor', 'operator');
 var
   ident, lident, seg, segLow, w, handle, lhandle : string;
   p, n, wStart, wEnd, bodyEnd, q, k : Integer;

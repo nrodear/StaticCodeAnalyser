@@ -1097,6 +1097,16 @@ var
   // dieselbe Politik fahren wie EXE/Plugin/CLI (Gegenpruefung K2).
   EvidenceTiering : Boolean = DEF_EVIDENCE_TIERING;
 
+  // SCAN-STEMPEL der Evidenz-Politik (Gegenpruefungs-MINOR 2026-08-26):
+  // welchen Politik-Zustand der LETZTE Scan dieses Prozesses tatsaechlich
+  // angewandt hat (gesetzt von uStaticAnalyzer2 aus dem PostEvidTier-
+  // Snapshot). Der SARIF-Export liest DIESEN Stempel statt des Live-
+  // Schalters - wer die ini zwischen Scan und Export umschaltet, bekommt
+  // sonst Properties und Levels aus zwei Welten. OUTPUT-Stempel des
+  // Laufs, KEINE Konfiguration: bewusst NICHT in
+  // ResetEngineConfigDefaults (wie DiscoveredClasses, s. dort).
+  LastScanEvidenceTiering : Boolean = DEF_EVIDENCE_TIERING;
+
   // [Baseline] PathInFingerprint=1 (Opt-in, Default AUS = Bestand):
   // der Baseline-Fingerprint nutzt den normalisierten RELATIVpfad ab
   // BaselineFingerprintRoot statt nur des Dateinamens - gleichnamige

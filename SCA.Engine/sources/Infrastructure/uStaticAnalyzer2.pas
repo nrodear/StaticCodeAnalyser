@@ -2096,6 +2096,10 @@ begin
     // damit er dieselbe Lebensregel traegt wie PostMinConf/PostEnKinds
     // (Post-Filter liest nie frische Globals nach dem Teardown).
     PostEvidTier := uSCAConsts.EvidenceTiering;
+    // Kohorten-Stempel (Gegenpruefungs-MINOR 2026-08-26): der SARIF-
+    // Export dieses Prozesses richtet sich nach dem Politik-Zustand DES
+    // SCANS, nicht nach dem Live-Schalter zur Export-Zeit.
+    uSCAConsts.LastScanEvidenceTiering := PostEvidTier;
     // Gegenpruefung 2026-08-26 (MAJOR): auch die Severity-Schwelle
     // snapshotten - der Deckel muss sie nachziehen, sonst unterlaufen
     // gedeckelte Funde einen error-only-Report (Details am Interface

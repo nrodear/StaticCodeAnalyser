@@ -45,14 +45,32 @@ type
     //                 als absolute Pfade ausgegeben (file:// URI).
     //   AToolVersion- Version-String fuer tool.driver.version
     //   AToolName   - Name-String fuer tool.driver.name
+    //   AConfidenceProps - ob je Result properties.confidence geschrieben
+    //                 wird (Evidenz-Politik). Die Ueberladungen OHNE den
+    //                 Parameter lesen den SCAN-STEMPEL
+    //                 uSCAConsts.LastScanEvidenceTiering - also den
+    //                 Politik-Zustand des Scans, der die Funde erzeugt
+    //                 hat, NICHT den Live-Schalter zur Export-Zeit
+    //                 (Gegenpruefungs-MINOR 2026-08-26: ini-Wechsel
+    //                 zwischen Scan und Export mischte zwei Welten).
+    //                 TScanResult reicht seinen eigenen Kohorten-Stempel
+    //                 explizit durch.
     class procedure WriteFile(const AFileName: string;
       const AFindings: TObjectList<TLeakFinding>;
-      const ABaseDir, AToolVersion, AToolName: string); static;
+      const ABaseDir, AToolVersion, AToolName: string); overload; static;
+    class procedure WriteFile(const AFileName: string;
+      const AFindings: TObjectList<TLeakFinding>;
+      const ABaseDir, AToolVersion, AToolName: string;
+      AConfidenceProps: Boolean); overload; static;
 
     // Variante die direkt einen JSON-String liefert (fuer Tests).
     class function ToJsonString(
       const AFindings: TObjectList<TLeakFinding>;
-      const ABaseDir, AToolVersion, AToolName: string): string; static;
+      const ABaseDir, AToolVersion, AToolName: string): string; overload; static;
+    class function ToJsonString(
+      const AFindings: TObjectList<TLeakFinding>;
+      const ABaseDir, AToolVersion, AToolName: string;
+      AConfidenceProps: Boolean): string; overload; static;
   end;
 
 implementation
@@ -460,7 +478,8 @@ end;
 
 procedure EmitSarifDocument(E: TSarifJsonEmitter;
   const AFindings: TObjectList<TLeakFinding>;
-  const ABaseDir, AToolVersion, AToolName: string);
+  const ABaseDir, AToolVersion, AToolName: string;
+  AConfidenceProps: Boolean);
 // Emittiert das komplette SARIF-Dokument in exakt der Pair-Reihenfolge,
 // die vorher der TJSONObject-Aufbau (ToJsonString + BuildRulesArray +
 // BuildResultsArray) erzeugt hat.
@@ -639,16 +658,14 @@ begin
         // bewusster Baseline-Schnitt, kein Detektor-Drift; die 650-MB-
         // Korpus-Exports wachsen nur im Politik-Modus).
         //
-        // BEKANNTE KANTE (Gegenpruefung 2026-08-26, MINOR, bewusst offen):
-        // gelesen wird der Prozess-Global zur EXPORT-Zeit, nicht der
-        // Scan-Snapshot (PostEvidTier in uStaticAnalyzer2). Wer die ini
-        // zwischen Scan und Export umschaltet (naechster Auto-Scan wendet
-        // sie an) und dann die ALTE Fundliste exportiert, bekommt
-        // Properties und Levels aus zwei Welten. Sauberer Fix = Politik-
-        // Zustand an der Fund-Kohorte tragen (Parameter durch 4 Consumer
-        // faedeln) - kommt mit dem naechsten gebauten Inkrement, nicht
-        // ungebaut auf einen Alt-Stand.
-        if uSCAConsts.EvidenceTiering then
+        // Kohorten-Fix (Gegenpruefungs-MINOR, umgesetzt 2026-08-26):
+        // AConfidenceProps kommt vom Aufrufer - TScanResult traegt den
+        // Stempel seines Scans, die parameterlosen Ueberladungen lesen
+        // uSCAConsts.LastScanEvidenceTiering (Politik-Zustand des letzten
+        // Scans dieses Prozesses, gestempelt in uStaticAnalyzer2). Damit
+        // passen Properties und Levels immer zur selben Welt, auch wenn
+        // die ini zwischen Scan und Export umgeschaltet wurde.
+        if AConfidenceProps then
         begin
           E.BeginObjPair('properties');
           E.PairStr('confidence', ConfidenceName(F.Confidence));
@@ -675,12 +692,22 @@ end;
 class function TSARIFWriter.ToJsonString(
   const AFindings: TObjectList<TLeakFinding>;
   const ABaseDir, AToolVersion, AToolName: string): string;
+begin
+  Result := ToJsonString(AFindings, ABaseDir, AToolVersion, AToolName,
+    uSCAConsts.LastScanEvidenceTiering);
+end;
+
+class function TSARIFWriter.ToJsonString(
+  const AFindings: TObjectList<TLeakFinding>;
+  const ABaseDir, AToolVersion, AToolName: string;
+  AConfidenceProps: Boolean): string;
 var
   E : TSarifJsonEmitter;
 begin
   E := TSarifJsonEmitter.Create(nil);                  // String-Modus
   try
-    EmitSarifDocument(E, AFindings, ABaseDir, AToolVersion, AToolName);
+    EmitSarifDocument(E, AFindings, ABaseDir, AToolVersion, AToolName,
+      AConfidenceProps);
     Result := E.AsString;
   finally
     E.Free;
@@ -690,6 +717,15 @@ end;
 class procedure TSARIFWriter.WriteFile(const AFileName: string;
   const AFindings: TObjectList<TLeakFinding>;
   const ABaseDir, AToolVersion, AToolName: string);
+begin
+  WriteFile(AFileName, AFindings, ABaseDir, AToolVersion, AToolName,
+    uSCAConsts.LastScanEvidenceTiering);
+end;
+
+class procedure TSARIFWriter.WriteFile(const AFileName: string;
+  const AFindings: TObjectList<TLeakFinding>;
+  const ABaseDir, AToolVersion, AToolName: string;
+  AConfidenceProps: Boolean);
 var
   FS       : TFileStream;
   E        : TSarifJsonEmitter;
@@ -725,7 +761,8 @@ begin
     // klar" ist kein Grund, ein spezifikationswidriges Byte zu schreiben.
     E := TSarifJsonEmitter.Create(FS);
     try
-      EmitSarifDocument(E, AFindings, ABaseDir, AToolVersion, AToolName);
+      EmitSarifDocument(E, AFindings, ABaseDir, AToolVersion, AToolName,
+        AConfidenceProps);
     finally
       E.Free;
     end;

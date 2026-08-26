@@ -49,6 +49,10 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - SCA109: `inc(x)`/`dec(x)` between lock acquire and release are
   recognised as non-throwing intrinsics (no more false positive on
   plain counter updates under a lock).
+- SARIF export now stamps the evidence-tiering state at SCAN time and
+  carries it with the finding cohort - toggling the ini between scan
+  and export can no longer mix `level` values and
+  `properties.confidence` from two different policy states.
 
 ---
 
