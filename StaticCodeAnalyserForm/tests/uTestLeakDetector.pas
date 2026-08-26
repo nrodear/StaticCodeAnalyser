@@ -257,6 +257,12 @@ type
     [Test] procedure Leak_CtorAddsSelfMemberNotSelf_StillReported;
     [Test] procedure Leak_CtorRegistersSelfViaTypecast_NoFinding;  // Gegenprobe
     [Test] procedure Leak_CtorRegistersSelfAsTrailingArg_NoFinding;// Gegenprobe
+    // --- Autopsie 2026-08-26, Quick Wins diesseits K1 -------------------
+    [Test] procedure Leak_AnonProcLiteral_NoFinding;
+    [Test] procedure Leak_RttiAsObjectChain_NoFinding;
+    [Test] procedure Leak_FluentCreateChain_StillReported;        // TP-Gegenprobe
+    [Test] procedure Leak_CtorSetsFreeOnTerminate_NoFinding;
+    [Test] procedure Leak_CtorOverloadsFreeOnTerminate_StillReported;
     // (b) REGRESSIONSFALL: Empfaengertyp ist ein Unit-Alias bzw. eine
     //     Ableitung eines besitzenden Containers ('TPeople =
     //     TObjectList<TPerson>', delphimvcframework DAL.pas:136).
@@ -6067,6 +6073,135 @@ begin
     FieldLeakCount(SRC, 'C:' + PathDelim + 'proj' + PathDelim +
                         'source' + PathDelim + 'Bar.pas') >= 1,
     'ausserhalb von Testverzeichnissen muss der Feld-Pfad weiter melden');
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_AnonProcLiteral_NoFinding;
+// Autopsie 2026-08-26 Klasse 4a (Dev-Cpp main.pas 2365/2387/7071):
+// ein anonymes Methoden-Literal ist ein refcount-verwaltetes Closure,
+// kein Objekt des Aufrufers - Free waere ein Compilefehler.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var P: TProc;'#13#10+
+  'begin'#13#10+
+  '  P := procedure begin DoWork(''x''); end;'#13#10+
+  '  P();'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Closure-Literal ist kein Create');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_RttiAsObjectChain_NoFinding;
+// Klasse 4b (Vcl.Styles.DPIAware:284, 12 Korpus-Funde): TRttiContext
+// ist ein Record, die AsObject-Referenz aus GetValue ist GEBORGT -
+// Free waere ein Bug im fremden Objekt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TList;'#13#10+
+  'begin'#13#10+
+  '  L := TRttiContext.Create.GetType(TShape).GetField(''FBitmaps'')' +
+       '.GetValue(nil).AsObject as TList;'#13#10+
+  '  L.Clear;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'AsObject-Kette ist eine geborgte Referenz');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_FluentCreateChain_StillReported;
+// TP-Gegenprobe zu 4b: eine Fluent-Kette OHNE .AsObject besitzt ihr
+// Result - das Gate ist bewusst eng auf .asobject zugeschnitten.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TStringList;'#13#10+
+  'begin'#13#10+
+  '  L := TStringList.Create;'#13#10+
+  '  L.Add(''x'');'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'echtes Create ohne Free bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_CtorSetsFreeOnTerminate_NoFinding;
+// Klasse 5 (IdDNSServer:4152, uCEFApplicationCore:3510): der Thread
+// setzt FreeOnTerminate := True im EIGENEN Ctor derselben Unit -
+// er raeumt sich selbst ab.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TWorker = class(TThread)'#13#10+
+  '  public'#13#10+
+  '    constructor Create;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TWorker.Create;'#13#10+
+  'begin'#13#10+
+  '  inherited Create(False);'#13#10+
+  '  FreeOnTerminate := True;'#13#10+
+  'end;'#13#10+
+  'procedure Spawn;'#13#10+
+  'var W: TWorker;'#13#10+
+  'begin'#13#10+
+  '  W := TWorker.Create;'#13#10+
+  '  W.Start;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'selbstfreigebender Thread ist kein Leak des Aufrufers');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_CtorOverloadsFreeOnTerminate_StillReported;
+// Strenge-Gegenprobe: bei UEBERLADENEN Ctors ist nicht entscheidbar,
+// welcher gemeint war - kein Gate (analog Review-Blocker 2026-07-31).
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TWorker = class(TThread)'#13#10+
+  '  public'#13#10+
+  '    constructor Create; overload;'#13#10+
+  '    constructor Create(ATag: Integer); overload;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TWorker.Create;'#13#10+
+  'begin'#13#10+
+  '  FreeOnTerminate := True;'#13#10+
+  'end;'#13#10+
+  'constructor TWorker.Create(ATag: Integer);'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'procedure Spawn;'#13#10+
+  'var W: TWorker;'#13#10+
+  'begin'#13#10+
+  '  W := TWorker.Create(1);'#13#10+
+  '  W.Start;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'Overload-Mehrdeutigkeit gated nicht');
+  finally F.Free; end;
 end;
 
 end.
