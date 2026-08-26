@@ -1361,6 +1361,18 @@ begin
     // (4 rote Tests, TestInsight 2026-08-09).
     fkDfmCrossFormCoupling: Result := fcLow;
 
+    // SCA086 AvoidOut: Autopsie 2026-08-26 - rein lexikalischer Detektor,
+    // die COM-Ausnahme des Kopfkommentars existierte nur als Prosa. Die
+    // Gates G1-G4 (Direktiven-Tail, Funktionszeiger, untypisiertes out,
+    // override+Impl-Zwilling) nehmen die belegbaren ABI-/Vertragsfaelle
+    // raus (gemessen 3.393 von 9.233); der Rest ist zu ~57 % mORMot-
+    // Vendoring-Fremdcode, den kein lexikalisches Gate von eigener API
+    // trennen kann. Praezedenz SCA170: Gates UND fcLow, bis eine
+    // AST-Fassung die Signatur-Herkunft kennt. EIGENER Case-Zweig -
+    // NICHT in die fcMedium-Aufzaehlung haengen (siehe SCA040-Lehre
+    // direkt oberhalb: 4 rote Tests).
+    fkAvoidOut: Result := fcLow;
+
     // SCA001 MemoryLeak: Trust-Budget-Demote (K2 Stufe 2, 2026-08-26).
     // FP-Voll-Audit 2026-08-15: 62-78 % FP auf 788 Korpus-Funden (Stufe 1
     // 71 % @ 24, Stufe 2 78 % @ 50, FINAL-Tabelle 62 %) - die groesste

@@ -44,6 +44,12 @@ type
     class function HasMutModifier(const Name: string): Boolean; static;
   end;
 
+// Wortgrenz-Match einer Methoden-Direktive im lowercase Deklarations-
+// Tail. Seit 2026-08-26 exportiert: uAvoidOut nutzt dieselbe Pruefung
+// fuer sein Direktiven-Tail-Gate (stdcall/override/...), statt die
+// Wortgrenzen-Logik ein zweites Mal zu bauen.
+function MethodHasDirective(const TypeRefLow, Directive: string): Boolean;
+
 implementation
 
 uses

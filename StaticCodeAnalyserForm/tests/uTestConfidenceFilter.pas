@@ -145,6 +145,9 @@ begin
   Assert.AreEqual<TFindingConfidence>(fcLow,
     KindDefaultConfidence(fkConstStringParameter), 'SCA170 ~26% FP + war fcHigh -> fcLow');
   Assert.AreEqual<TFindingConfidence>(fcLow,
+    KindDefaultConfidence(fkAvoidOut),
+    'SCA086 Autopsie 2026-08-26: Rest nach G1-G4 zu ~57% Vendoring -> fcLow');
+  Assert.AreEqual<TFindingConfidence>(fcLow,
     KindDefaultConfidence(fkCanBeUnitPrivate), 'Single-File-Scope -> fcLow');
   Assert.AreEqual<TFindingConfidence>(fcLow,
     KindDefaultConfidence(fkCanBeProtected));
