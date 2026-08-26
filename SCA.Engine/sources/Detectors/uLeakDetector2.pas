@@ -90,6 +90,8 @@ type
     // ATypeLow ist `ATypeRef.ToLower` (vorberechnet vom Caller).
     class function MatchesCreate(const ATypeRef, ATypeLow: string;
       out CreatePos: Integer): Boolean; static;
+    class function CreateRhsIsBorrowedOrLiteral(
+      const RhsLow: string): Boolean; static;
     class function HasCreateAssign(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
     class function HasFunctionCallAssign(UnitNode, MethodNode: TAstNode;
@@ -433,6 +435,40 @@ begin
   end;
 end;
 
+class function TLeakDetector2.CreateRhsIsBorrowedOrLiteral(
+  const RhsLow: string): Boolean;
+// Autopsie 2026-08-26, Klasse 4 (15 Drops gezaehlt; GETEILT mit SCA009
+// via HasCreateAssign - dort inhaltlich identisch richtig: es wird
+// kein Objekt des Aufrufers allokiert, also braucht es kein finally):
+// (a) anonymes Methoden-Literal ('X := procedure ... end;') - das
+//     Closure ist refcount-verwaltet, Free waere ein Compilefehler;
+// (b) '.asobject'-Kette (TRttiContext.Create.GetType(..).GetValue(..)
+//     .AsObject as TList): der Record-Ctor allokiert nichts, die
+//     AsObject-Referenz ist per Definition GEBORGT - Free waere ein
+//     Bug im Fremdobjekt. Bewusst eng auf '.asobject' zugeschnitten,
+//     KEIN generisches '.create.<Kette>'-Gate: Fluent-APIs
+//     (TStringBuilder.Create.Append(...)) BESITZEN ihr Result.
+var
+  T : string;
+  p : Integer;
+begin
+  T := TrimLeft(RhsLow);
+  if (Copy(T, 1, 9) = 'procedure') and
+     ((Length(T) = 9) or not TDetectorUtils.IsIdentChar(T[10])) then
+    Exit(True);
+  if (Copy(T, 1, 8) = 'function') and
+     ((Length(T) = 8) or not TDetectorUtils.IsIdentChar(T[9])) then
+    Exit(True);
+  // Ketten-TAIL-Zuschnitt (Gegenpruefung 2026-08-26 MINOR): '.asobject'
+  // gated nur, wenn danach das Statement endet oder ein ' as '-Cast
+  // folgt. '.AsObject' INNERHALB von Argumenten
+  // ('TWrapper.Create(V.AsObject)' - dort folgt ')') allokiert real;
+  // Vorkommen in String-Literalen folgt meist weiterer Text/Quote.
+  p := Pos('.asobject', T);
+  Result := (p > 0) and
+            ((p + 9 > Length(T)) or CharInSet(T[p + 9], [' ', ';']));
+end;
+
 class function TLeakDetector2.HasCreateAssign(MethodNode: TAstNode;
   const VarNameLow: string): Boolean;
 var
@@ -448,6 +484,7 @@ begin
     // Exakter Namensvergleich (A.Name ist immer der vollständige LHS-Ausdruck)
     if A.Name.ToLower <> VarNameLow then Continue;
     TypeLow := A.TypeRef.ToLower;
+    if CreateRhsIsBorrowedOrLiteral(TypeLow) then Continue;
     if MatchesCreate(A.TypeRef, TypeLow, Dummy) then
       Exit(True);
   end;
@@ -466,6 +503,9 @@ begin
   begin
     if A.Name.ToLower <> VarNameLow then Continue;
     TypeLow := A.TypeRef.ToLower;
+    // Geschwisterpfad zu HasCreateAssign - Gate identisch, sonst
+    // zeigte die Befund-Zeile auf einen gegateten Nicht-Fund.
+    if CreateRhsIsBorrowedOrLiteral(TypeLow) then Continue;
     var Dummy : Integer;
     if MatchesCreate(A.TypeRef, TypeLow, Dummy) then
     begin
@@ -3207,6 +3247,69 @@ begin
   end;
 end;
 
+function CtorSetsFreeOnTerminate(AUnitNode, MethodNode: TAstNode;
+  const VarNameLow: string): Boolean;
+// Autopsie 2026-08-26, Klasse 5 (4 Drops gezaehlt, u.a. IdDNSServer,
+// uCEFApplicationCore): der Thread setzt 'FreeOnTerminate := True' im
+// EIGENEN Konstruktor DERSELBEN Unit - er raeumt sich selbst ab, der
+// Aufrufer darf gar nicht freigeben. Beweis-Anforderungen (streng,
+// analog CtorRegistersSelfWithFirstArg): (1) das Create-Assign nennt
+// die Klasse woertlich, (2) genau EIN Instanz-Ctor '<Klasse>.Create'
+// in dieser Unit (Overloads = keine Aussage), (3) in dessen Teilbaum
+// steht die FreeOnTerminate-True-Zuweisung. KEIN Vorfahren-Klettern.
+var
+  Assigns  : TList<TAstNode>;
+  A, N, CA : TAstNode;
+  ClassLow : string;
+  TR       : string;
+  Ctor     : TAstNode;
+  Cnt, cp  : Integer;
+begin
+  Result := False;
+  if AUnitNode = nil then Exit;
+  Assigns := MethodNode.FindAllRef(nkAssign);
+  for A in Assigns do
+  begin
+    if A.Name.ToLower <> VarNameLow then Continue;
+    TR := A.TypeRef.ToLower;
+    cp := Pos('.create', TR);
+    if cp <= 1 then Continue;
+    // Wortgrenze hinter '.create' (Gegenpruefung 2026-08-26 MAJOR):
+    // 'TWorker.CreateFromFile' darf NICHT nach dem schlichten Ctor
+    // 'TWorker.Create' beurteilt werden - Vorbild MatchesCreate/
+    // SplitCreateCall pruefen das Folgezeichen ebenfalls.
+    if (cp + 7 <= Length(TR)) and TDetectorUtils.IsIdentChar(TR[cp + 7]) then
+      Continue;
+    ClassLow := Trim(Copy(TR, 1, cp - 1));
+    if (ClassLow = '') or (Pos('.', ClassLow) > 0) or
+       (Pos('(', ClassLow) > 0) then Continue;
+    // Eindeutigen Instanz-Ctor dieser Unit suchen.
+    Ctor := nil; Cnt := 0;
+    for N in AUnitNode.FindAllRef(nkMethod) do
+      if StartsStr('constructor', N.TypeRef.ToLower) and
+         (Pos(';class', N.TypeRef.ToLower) = 0) and
+         (N.Name.ToLower = ClassLow + '.create') then
+      begin
+        Inc(Cnt);
+        Ctor := N;
+      end;
+    if (Cnt <> 1) or (Ctor = nil) then Continue;
+    for CA in Ctor.FindAllRef(nkAssign) do
+      if CA.TypeRef.ToLower.Trim.Equals('true') then
+      begin
+        TR := CA.Name.ToLower;
+        // NUR das eigene Flag (Gegenpruefung 2026-08-26 MAJOR): ein
+        // generisches '.freeonterminate'-Suffix traefe auch FREMDE
+        // Empfaenger ('FWatcher.FreeOnTerminate := True' im Ctor,
+        // JvCommStatus-Muster) - dann gaebe der Ctor eines Hosts,
+        // der einen selbstfreigebenden KIND-Thread startet, das Leak
+        // des Hosts selbst frei.
+        if (TR = 'freeonterminate') or (TR = 'self.freeonterminate') then
+          Exit(True);
+      end;
+  end;
+end;
+
 function CtorRegistersSelfWithFirstArg(AUnitNode, MethodNode: TAstNode;
   const VarNameLow: string): Boolean;
 const
@@ -3455,6 +3558,10 @@ begin
         // DERSELBEN Unit haengt sich per '<ErsterParam>.Add(Self)' in eine
         // besitzende Liste des uebergebenen Parents (jvcl JvInspector).
         if CtorRegistersSelfWithFirstArg(UnitNode, MethodNode, VarNameLow) then
+          Continue;
+        // FP-Gate (Autopsie 2026-08-26, Klasse 5): selbstfreigebender
+        // Thread - FreeOnTerminate := True im eigenen Ctor dieser Unit.
+        if CtorSetsFreeOnTerminate(UnitNode, MethodNode, VarNameLow) then
           Continue;
 
         FreeFound := SearchFree(MethodNode, VarNameLow, False, FreeInFin);

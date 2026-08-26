@@ -68,7 +68,10 @@ end;
 // Liefert Spalte des `=` / `<>` wenn ein redundanter Boolean-Vergleich
 // auf der Zeile gefunden wurde, sonst 0.
 function FindRedundantBool(const Line: string; var InBlockComm: Boolean;
-  var InParenStarComm: Boolean; var InConstSection: Boolean): Integer;
+  var InParenStarComm: Boolean; var InConstSection: Boolean;
+  var InBrackets: Integer;
+  AVariantScopes: TObjectDictionary<string, TList<Integer>>;
+  ACurScope: Integer): Integer;
 
   // Ist W das erste Wort von S (Wortgrenze dahinter)?
   function StartsWithWord(const S, W: string): Boolean;
@@ -77,6 +80,21 @@ function FindRedundantBool(const Line: string; var InBlockComm: Boolean;
     L := Length(W);
     Result := (Copy(S, 1, L) = W) and
               ((Length(S) = L) or not IsIdent(S[L + 1]));
+  end;
+
+  // Autopsie 2026-08-26, Gate B: LHS-Ident ist als (Ole)Variant
+  // deklariert - Variant-Vergleiche mit True sind Absicht (Dispatch/
+  // Koerzierung), kein redundanter Boolean. Scope-Pruefung ist
+  // PFLICHT (Gegenpruefung fand 7 Namens-Kollisionen mit echten
+  // Booleans): Veto nur, wenn die Deklaration im selben Routinen-
+  // Scope oder auf Unit-Ebene (Scope 0) liegt.
+  function VariantVeto(const LhsLow: string): Boolean;
+  var
+    Scopes : TList<Integer>;
+  begin
+    Result := (AVariantScopes <> nil) and
+              AVariantScopes.TryGetValue(LhsLow, Scopes) and
+              (Scopes.Contains(0) or Scopes.Contains(ACurScope));
   end;
 
 var
@@ -89,21 +107,44 @@ var
   RhsLow  : string;
   LineLow : string;
   Trim1   : string;
+  LhsLow  : string;
 begin
   Result := 0;
   Trim1 := TrimLeft(Line);
   LineLow := LowerCase(Trim1);
+  // Autopsie 2026-08-26, Gate C: Sichtbarkeits-/class-Praefixe vor dem
+  // Sektions-Match strippen - 'protected const' MUSS die const-Sektion
+  // schalten (14 Korpus-FPs, skia4delphi-Klassenkonstanten), sonst
+  // resettet das erste Wort 'protected' den Tracker.
+  while True do
+  begin
+    if StartsWithWord(LineLow, 'public') then Delete(LineLow, 1, 6)
+    else if StartsWithWord(LineLow, 'private') then Delete(LineLow, 1, 7)
+    else if StartsWithWord(LineLow, 'protected') then Delete(LineLow, 1, 9)
+    else if StartsWithWord(LineLow, 'published') then Delete(LineLow, 1, 9)
+    else if StartsWithWord(LineLow, 'strict') then Delete(LineLow, 1, 6)
+    else if StartsWithWord(LineLow, 'class') then Delete(LineLow, 1, 5)
+    else Break;
+    LineLow := TrimLeft(LineLow);
+    if LineLow = '' then Break;
+  end;
+  if LineLow = '' then LineLow := LowerCase(Trim1);
   // const-Section-Tracker (Ist-Messung 2026-07-18, SCA072 100% FP im Sample):
   // untypisierte Konstanten auf FOLGE-Zeilen eines const-Blocks ('X = True;')
   // sind Deklarationen, kein Vergleich. Der bisherige Zeilenanfangs-Check
   // ('const'/'type') sah nur die Kopfzeile. Eine const-Section enthaelt keinen
   // ausfuehrbaren Code -> Skip ist TP-safe-by-construction. Section endet am
   // naechsten Abschnitts-Keyword. State nur ausserhalb von Kommentaren pflegen.
+  // Seit 2026-08-26 schaltet auch 'type' EIN statt aus: type-Sektionen
+  // enthalten ebenfalls nur Deklarationen ('TData = False .. True;' -
+  // Boolean-Subrange, Gegenpruefungs-Fund); ausfuehrbarer Code beginnt
+  // erst bei begin/function/..., und die resetten weiterhin.
   if not (InBlockComm or InParenStarComm) then
   begin
-    if StartsWithWord(LineLow, 'const') or StartsWithWord(LineLow, 'resourcestring') then
+    if StartsWithWord(LineLow, 'const') or StartsWithWord(LineLow, 'resourcestring')
+       or StartsWithWord(LineLow, 'type') then
       InConstSection := True
-    else if StartsWithWord(LineLow, 'type') or StartsWithWord(LineLow, 'var')
+    else if StartsWithWord(LineLow, 'var')
          or StartsWithWord(LineLow, 'threadvar') or StartsWithWord(LineLow, 'label')
          or StartsWithWord(LineLow, 'procedure') or StartsWithWord(LineLow, 'function')
          or StartsWithWord(LineLow, 'constructor') or StartsWithWord(LineLow, 'destructor')
@@ -115,7 +156,10 @@ begin
          or StartsWithWord(LineLow, 'exports') or StartsWithWord(LineLow, 'public')
          or StartsWithWord(LineLow, 'private') or StartsWithWord(LineLow, 'protected')
          or StartsWithWord(LineLow, 'published') or StartsWithWord(LineLow, 'strict') then
+    begin
       InConstSection := False;
+      InBrackets := 0;   // Sektionsgrenze entklemmt eine haengende [-Bilanz
+    end;
   end;
   // Deklarations-Zeilen ausschliessen.
   if (Copy(LineLow, 1, 5) = 'const')
@@ -165,6 +209,18 @@ begin
       if pClose = 0 then begin InParenStarComm := True; Exit; end;
       i := pClose + 2; Continue;
     end;
+    // Autopsie 2026-08-26, Gate A: zeilenuebergreifende [ ]-Bilanz.
+    // In Attribut-Bloecken ('[DllImport(..., SetLastError = False)]',
+    // 92 Korpus-FPs in ssl_openssl_lib) ist '=' ein Named-Argument,
+    // kein Vergleich. Preis (dokumentierte FN-Richtung): auch
+    // 'X[a = True]' wird unterdrueckt; 'Booleans[2] = True' NICHT -
+    // dort steht der Operator hinter der schliessenden Klammer.
+    if c = '[' then begin Inc(InBrackets); Inc(i); Continue; end;
+    if c = ']' then
+    begin
+      if InBrackets > 0 then Dec(InBrackets);
+      Inc(i); Continue;
+    end;
     OpLen := 0;
     if c = '=' then
     begin
@@ -180,6 +236,7 @@ begin
       OpLen := 2;
     end;
     if OpLen = 0 then begin Inc(i); Continue; end;
+    if InBrackets > 0 then begin Inc(i, OpLen); Continue; end;   // Gate A
     // Linker Operand: vorheriges Nicht-Whitespace muss ident oder `)`/`]`
     j := i - 1;
     while (j >= 1) and CharInSet(Line[j], [' ', #9]) do Dec(j);
@@ -200,6 +257,24 @@ begin
     begin
       var bk := j;
       while (bk >= 1) and IsIdent(Line[bk]) do Dec(bk);   // LHS-Ident rueckwaerts
+      LhsLow := LowerCase(Copy(Line, bk + 1, j - bk));
+      // Autopsie 2026-08-26, Gate D: der LHS-Ident IST ein Boolean-
+      // Typname - das ist die Fortsetzungszeile einer umgebrochenen
+      // Deklaration ('X:' / Folgezeile 'Boolean = True;'), die die
+      // Colon-Rule nicht sieht (19 Korpus-FPs, alle einzeln als
+      // Deklarationsumbrueche verifiziert). Variablen, die woertlich
+      // 'boolean' heissen: 0 im Korpus.
+      if (LhsLow = 'boolean') or (LhsLow = 'bytebool') or
+         (LhsLow = 'wordbool') or (LhsLow = 'longbool') or
+         (LhsLow = 'bool') then
+      begin
+        Inc(i, OpLen); Continue;
+      end;
+      // Gate B: LHS ist deklarierter (Ole)Variant im selben Scope.
+      if VariantVeto(LhsLow) then
+      begin
+        Inc(i, OpLen); Continue;
+      end;
       while (bk >= 1) and CharInSet(Line[bk], [' ', #9]) do Dec(bk);
       if (bk >= 1) and (Line[bk] = ':') then
       begin
@@ -224,24 +299,164 @@ begin
   end;
 end;
 
+// ---- Gate-B-Vorlauf (Autopsie 2026-08-26) ---------------------------------
+
+function StripForDecl(const Line: string; var InBlk, InStar: Boolean): string;
+// Kommentare raus (zustandsbehaftet ueber Zeilen), String-Inhalte
+// geblankt - Basis fuer Kopf-Erkennung und Variant-Deklarations-Scan.
+var
+  i, n, p : Integer;
+  InStr   : Boolean;
+begin
+  Result := Line;
+  n := Length(Result); i := 1; InStr := False;
+  while i <= n do
+  begin
+    if InBlk then
+    begin
+      p := PosEx('}', Result, i);
+      if p = 0 then begin SetLength(Result, i - 1); Exit; end;
+      Delete(Result, i, p - i + 1); n := Length(Result);
+      InBlk := False; Continue;
+    end;
+    if InStar then
+    begin
+      p := PosEx('*)', Result, i);
+      if p = 0 then begin SetLength(Result, i - 1); Exit; end;
+      Delete(Result, i, p - i + 2); n := Length(Result);
+      InStar := False; Continue;
+    end;
+    if InStr then
+    begin
+      if Result[i] = '''' then InStr := False else Result[i] := ' ';
+      Inc(i); Continue;
+    end;
+    case Result[i] of
+      '''': begin InStr := True; Inc(i); end;
+      '/' : if (i < n) and (Result[i + 1] = '/') then
+            begin SetLength(Result, i - 1); Exit; end
+            else Inc(i);
+      '{' : begin
+              p := PosEx('}', Result, i + 1);
+              if p = 0 then begin InBlk := True; SetLength(Result, i - 1); Exit; end;
+              Delete(Result, i, p - i + 1); n := Length(Result);
+            end;
+      '(' : if (i < n) and (Result[i + 1] = '*') then
+            begin
+              p := PosEx('*)', Result, i + 2);
+              if p = 0 then begin InStar := True; SetLength(Result, i - 1); Exit; end;
+              Delete(Result, i, p - i + 2); n := Length(Result);
+            end
+            else Inc(i);
+    else
+      Inc(i);
+    end;
+  end;
+end;
+
+procedure RegisterVariantDecls(const Clean: string; AScope: Integer;
+  Dict: TObjectDictionary<string, TList<Integer>>);
+// Sammelt Idents aus 'name[, name]* : (Ole)Variant'-Deklarationen
+// (Locals, Params, Felder, Properties). Kommentare/Strings sind vom
+// Aufrufer bereits gestrippt - Kommentare zaehlen nie.
+var
+  p, q, e, n : Integer;
+  W, NameLow : string;
+  L : TList<Integer>;
+begin
+  n := Length(Clean);
+  p := 1;
+  while True do
+  begin
+    p := PosEx(':', Clean, p);
+    if p = 0 then Exit;
+    if (p < n) and (Clean[p + 1] = '=') then begin Inc(p, 2); Continue; end;
+    q := p + 1;
+    while (q <= n) and CharInSet(Clean[q], [' ', #9]) do Inc(q);
+    e := q;
+    while (e <= n) and IsIdent(Clean[e]) do Inc(e);
+    W := LowerCase(Copy(Clean, q, e - q));
+    if (W = 'variant') or (W = 'olevariant') then
+    begin
+      q := p - 1;
+      while True do
+      begin
+        while (q >= 1) and CharInSet(Clean[q], [' ', #9]) do Dec(q);
+        e := q;
+        while (e >= 1) and IsIdent(Clean[e]) do Dec(e);
+        if e = q then Break;
+        NameLow := LowerCase(Copy(Clean, e + 1, q - e));
+        if NameLow = '' then Break;
+        if not Dict.TryGetValue(NameLow, L) then
+        begin
+          L := TList<Integer>.Create;
+          Dict.Add(NameLow, L);
+        end;
+        if not L.Contains(AScope) then L.Add(AScope);
+        q := e;
+        while (q >= 1) and CharInSet(Clean[q], [' ', #9]) do Dec(q);
+        if (q >= 1) and (Clean[q] = ',') then Dec(q) else Break;
+      end;
+    end;
+    Inc(p);
+  end;
+end;
+
+function IsRoutineHead(const CleanTrimLow: string): Boolean;
+var
+  T : string;
+begin
+  T := CleanTrimLow;
+  if StartsStr('class ', T) then T := TrimLeft(Copy(T, 7, MaxInt));
+  Result := StartsStr('procedure ', T) or StartsStr('function ', T) or
+            StartsStr('constructor ', T) or StartsStr('destructor ', T);
+end;
+
 class procedure TRedundantBooleanDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines  : TStringList;
   i, Col : Integer;
   InBlk, InParen, InConst : Boolean;
+  InBrk  : Integer;
   F      : TLeakFinding;
   Cached : Boolean;
+  VariantScopes : TObjectDictionary<string, TList<Integer>>;
+  IsHead : TArray<Boolean>;
+  SBlk, SStar : Boolean;
+  Clean  : string;
+  CurScope, PreScope : Integer;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
+  VariantScopes := TObjectDictionary<string, TList<Integer>>.Create([doOwnsValues]);
   try
+    // Pre-Pass (Gate B): Routinen-Koepfe nummerieren und (Ole)Variant-
+    // Deklarationen je Scope einsammeln. Kopf-Parameter gehoeren zum
+    // Body-Scope (Inc VOR der Registrierung, im Hauptlauf identisch).
+    SetLength(IsHead, Lines.Count);
+    SBlk := False; SStar := False; PreScope := 0;
+    for i := 0 to Lines.Count - 1 do
+    begin
+      Clean := StripForDecl(Lines[i], SBlk, SStar);
+      if IsRoutineHead(LowerCase(TrimLeft(Clean))) then
+      begin
+        IsHead[i] := True;
+        Inc(PreScope);
+      end;
+      RegisterVariantDecls(Clean, PreScope, VariantScopes);
+    end;
+
     InBlk   := False;
     InParen := False;
     InConst := False;
+    InBrk   := 0;
+    CurScope := 0;
     for i := 0 to Lines.Count - 1 do
     begin
-      Col := FindRedundantBool(Lines[i], InBlk, InParen, InConst);
+      if IsHead[i] then Inc(CurScope);
+      Col := FindRedundantBool(Lines[i], InBlk, InParen, InConst, InBrk,
+        VariantScopes, CurScope);
       if Col <= 0 then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
@@ -254,6 +469,7 @@ begin
       Results.Add(F);
     end;
   finally
+    VariantScopes.Free;
     ReleaseLines(Lines, Cached);
   end;
 end;

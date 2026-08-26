@@ -1361,6 +1361,15 @@ begin
     // (4 rote Tests, TestInsight 2026-08-09).
     fkDfmCrossFormCoupling: Result := fcLow;
 
+    // SCA173 VariantTypeMisuse: Autopsie 2026-08-26 - nach Gate A
+    // (In-Loop-Usage) liegt die Rest-FP-Quote bei ~12,5 % (vorher 58 %).
+    // fcMedium statt fcLow - BEWUSST anders als SCA086: die Regel ist
+    // nach dem Gate nahe am Budget und bleibt im Default-Profil
+    // sichtbar; fcLow haette sie komplett hinter die MinConfidence-
+    // Schwelle geschoben (Skeptiker-Hinweis: alle 613 rw14-Funde
+    // trugen fcHigh). EIGENER Case-Zweig (SCA040-Lehre).
+    fkVariantTypeMisuse: Result := fcMedium;
+
     // SCA086 AvoidOut: Autopsie 2026-08-26 - rein lexikalischer Detektor,
     // die COM-Ausnahme des Kopfkommentars existierte nur als Prosa. Die
     // Gates G1-G4 (Direktiven-Tail, Funktionszeiger, untypisiertes out,

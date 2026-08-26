@@ -24,6 +24,15 @@ type
     [Test] procedure ConstBlockFolgezeile_NotReported;
     [Test] procedure InitializedGlobalVar_NotReported;
     [Test] procedure AssignRhsCompare_StillReported;   // TP-Gegenprobe
+    // Autopsie 2026-08-26: Gate A []-Bilanz, Gate B Variant-Index,
+    // Gate C Sichtbarkeits-Praefix/type-Sektion, Gate D Typname-LHS.
+    [Test] procedure AttributeNamedArg_NotReported;
+    [Test] procedure IndexedCompareAfterBracket_StillReported;
+    [Test] procedure VariantCompare_NotReported;
+    [Test] procedure VariantOtherScopeBoolean_StillReported;
+    [Test] procedure VisibilityPrefixedConst_NotReported;
+    [Test] procedure TypeSectionSubrange_NotReported;
+    [Test] procedure WrappedBooleanDecl_NotReported;
   end;
 
 implementation
@@ -229,6 +238,146 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkRedundantBoolean),
     'Vergleich auf Assign-RHS bleibt ein Fund (Colon-Rule greift nicht)');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantBoolean.AttributeNamedArg_NotReported;
+// Gate A: '=' in einem [Attribut(...)]-Block ist ein Named-Argument
+// (ssl_openssl_lib CIL-Block, 92 Korpus-FPs) - die []-Bilanz traegt
+// ueber Zeilen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  [DllImport(DLLSSLName, CharSet = CharSet.Ansi,'#13#10 +
+  '    SetLastError = False, CallingConvention= CallingConvention.cdecl)]'#13#10 +
+  '  DoIt;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRedundantBoolean),
+    'Named-Argument im Attribut ist kein Vergleich');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantBoolean.IndexedCompareAfterBracket_StillReported;
+// Gegenprobe Gate A: hinter der SCHLIESSENDEN Klammer ist die Bilanz
+// wieder 0 - 'Booleans[2] = True' bleibt Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if Booleans[2] = True then Bar;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkRedundantBoolean),
+    'Vergleich hinter ] bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantBoolean.VariantCompare_NotReported;
+// Gate B: LHS ist deklarierter Variant derselben Routine - der
+// Vergleich mit True ist Koerzierungs-Absicht (VarPyth-Familie,
+// 198 Korpus-FPs), kein redundanter Boolean.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Var2Type(V: Variant): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if V = True then Result := 1 else Result := 0;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRedundantBoolean),
+    'Variant-Vergleich ist kein redundanter Boolean');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantBoolean.VariantOtherScopeBoolean_StillReported;
+// Skeptiker-Auflage (7 Clash-Faelle im Korpus): das Variant-Veto gilt
+// NUR im Deklarations-Scope - ein gleichnamiger Boolean in einer
+// ANDEREN Routine bleibt Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Var2Type(V: Variant): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Result := Ord(V = True);'#13#10 +
+  'end;'#13#10 +
+  'procedure Anders;'#13#10 +
+  'var V: Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  V := Bar;'#13#10 +
+  '  if V = True then Baz;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkRedundantBoolean),
+    'Boolean-V der anderen Routine bleibt Fund, Variant-V schweigt');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantBoolean.VisibilityPrefixedConst_NotReported;
+// Gate C: 'protected const' schaltet die const-Sektion - vorher
+// resettete das erste Wort 'protected' den Tracker und die
+// Folgezeilen-Konstanten wurden Funde (14 Korpus-FPs, Skia).
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TAni = class'#13#10 +
+  '  protected const'#13#10 +
+  '    DefaultAutoReverse = False;'#13#10 +
+  '    DefaultLoop = True;'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRedundantBoolean),
+    'Klassen-Konstanten unter protected const sind Deklarationen');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantBoolean.TypeSectionSubrange_NotReported;
+// Skeptiker-Fund: Boolean-Subrange in der type-Sektion
+// ('TData = False .. True;') - type schaltet jetzt EIN statt aus.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TData = False .. True;'#13#10 +
+  '  TUhura = False .. High(Boolean);'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRedundantBoolean),
+    'Subrange-Deklaration ist kein Vergleich');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantBoolean.WrappedBooleanDecl_NotReported;
+// Gate D: umgebrochene Deklaration - der Typname 'Boolean' steht als
+// Schein-LHS auf der Folgezeile, die Colon-Rule sieht das ':' der
+// Vorzeile nicht (19 Korpus-FPs, alle Deklarationsumbrueche).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const A: string; B:'#13#10 +
+  '  Boolean = True);'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkRedundantBoolean),
+    'Typname-LHS ist eine Deklarations-Fortsetzung');
   finally F.Free; end;
 end;
 

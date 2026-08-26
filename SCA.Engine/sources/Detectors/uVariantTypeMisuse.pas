@@ -18,10 +18,23 @@ unit uVariantTypeMisuse;
 //     typed-Local-Var. Auch nkParam mit Variant-Typ als Hint melden.
 //
 // FP-Tradeoff:
-//   * Wir flaggen Variant in JEDER Methode mit Loop, ohne zu pruefen ob
-//     die Variant-Variable tatsaechlich im Loop genutzt wird. Variant-
-//     Vars die nur einmal vor dem Loop gelesen werden sind kein
-//     Performance-Problem - akzeptierter FP fuer einfache Detection.
+//   * Seit der Autopsie 2026-08-26 (Gate A) wird zusaetzlich geprueft,
+//     ob der Variant-NAME in einem der Loop-Teilbaeume der Methode
+//     vorkommt (Wortgrenzen-Match auf den flachen Node-Texten). Die
+//     alte Fassung meldete jeden Variant in jeder Methode mit
+//     irgendeinem Loop - 18 der 19 Stichproben-FPs und ALLE 14
+//     Audit-FPs vom 15.08. waren "Variant wird in keinem Loop benutzt"
+//     (Nutzung nur vor/nach dem Loop). GEMESSEN: 282 der 613
+//     rw14-Funde fallen, 0/21 TP-Verlust in der Stichprobe.
+//   * Grenzen des Gates, bewusst konservativ gehalten:
+//     - Methoden mit nested Routinen (nkNestedRange-Marker) werden
+//       NICHT gegated: deren Ruempfe sind im AST verworfen, die
+//       Loop-Sicht ist dort blind (36 Guard-Keeps enthalten belegte
+//       TPs, JvDBUtils-KeyValues-Familie - Guard nicht lockern).
+//     - until-Bedingungen stehen nicht im AST (geparst-verworfen,
+//       uParser2 ParseRepeatStmt) - eine Nutzung NUR dort waere
+//       unsichtbar; am Referenzkorpus 0 solcher Faelle (Skeptiker-
+//       Gegenzaehlung 2026-08-26).
 //   * COM-/OLE-Code wo Variant unvermeidbar ist (Excel/Word-Automation)
 //     wird gemeldet - Suppression-Marker bei expliziter Akzeptanz.
 //
@@ -41,9 +54,60 @@ type
   private
     class function IsVariantType(const TypeRef: string): Boolean; static;
     class function HasLoopChild(Method: TAstNode): Boolean; static;
+    class function UsedInAnyLoop(Method: TAstNode;
+      const NameLow: string): Boolean; static;
   end;
 
 implementation
+
+uses
+  uConstStringParameter;  // MethodHasDirective = Wortgrenzen-Match
+
+function SubtreeMentionsIdent(Root: TAstNode; const IdentLow: string): Boolean;
+// Wortgrenzen-Suche des Idents in den flachen Text-Repraesentationen
+// des Teilbaums. Argumente von Calls stehen in nkCall.NAME (nicht
+// TypeRef - Gegenpruefungs-Befund 2026-08-26), darum beide Felder.
+// ITERATIV mit explizitem Stack - die AST-Konvention verbietet echte
+// Rekursion ueber Children (Stack-Overflow-Historie).
+// Bekannte Luecke (dokumentiert): reine LHS-INDEX-Nutzung ('A[v] :=')
+// ist unsichtbar, ParsePrimary kollabiert '[expr]' zu '[]' - RHS-
+// Nutzung ist vollstaendig, darum nur LHS-only-Faelle betroffen.
+var
+  Stack : TList<TAstNode>;
+  N     : TAstNode;
+  i     : Integer;
+begin
+  Result := False;
+  Stack := TList<TAstNode>.Create;
+  try
+    Stack.Add(Root);
+    while Stack.Count > 0 do
+    begin
+      N := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if MethodHasDirective(LowerCase(N.Name), IdentLow) or
+         MethodHasDirective(LowerCase(N.TypeRef), IdentLow) then Exit(True);
+      for i := 0 to N.Children.Count - 1 do
+        Stack.Add(N.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
+function BareParamNameLow(const NodeNameLow: string): string;
+// nkParam.Name traegt den Modifier als Praefix ('const keyvalues' -
+// Parser-Konvention, uParser2 ParseParamList). Fuer den Loop-Match
+// zaehlt der NACKTE Name; ohne den Strip matcht die Such-Needle nie
+// und JEDER const/var/out-Variant-Param fiele - der Gegenpruefungs-
+// BLOCKER (JvCsvData.LocateRecord, const KeyValues im Record-Scan).
+begin
+  Result := NodeNameLow;
+  if Copy(Result, 1, 6) = 'const ' then Delete(Result, 1, 6)
+  else if Copy(Result, 1, 4) = 'var ' then Delete(Result, 1, 4)
+  else if Copy(Result, 1, 4) = 'out ' then Delete(Result, 1, 4);
+  Result := Trim(Result);
+end;
 
 class function TVariantTypeMisuseDetector.IsVariantType(
   const TypeRef: string): Boolean;
@@ -60,6 +124,25 @@ begin
   Result := Method.HasDescendant(nkForStmt) or
             Method.HasDescendant(nkWhileStmt) or
             Method.HasDescendant(nkRepeatStmt);
+end;
+
+class function TVariantTypeMisuseDetector.UsedInAnyLoop(Method: TAstNode;
+  const NameLow: string): Boolean;
+// Gate A (Autopsie 2026-08-26): kommt der Variant-Name in einem der
+// Loop-Teilbaeume vor? FindAllRef liefert die non-owning Cache-Liste
+// (uAstNode P6) - NICHT freigeben.
+var
+  Kind  : TNodeKind;
+  Loops : TList<TAstNode>;
+  L     : TAstNode;
+begin
+  for Kind in [nkForStmt, nkWhileStmt, nkRepeatStmt] do
+  begin
+    Loops := Method.FindAllRef(Kind);
+    for L in Loops do
+      if SubtreeMentionsIdent(L, NameLow) then Exit(True);
+  end;
+  Result := False;
 end;
 
 class procedure TVariantTypeMisuseDetector.AnalyzeUnit(
@@ -91,12 +174,18 @@ begin
     for M in Methods do
     begin
       if not HasLoopChild(M) then Continue;
-      // Variant Locals + Params dieser Methode melden.
+      // Gate-A-Guard: nested Routinen sind im AST verworfen - die
+      // Loop-Sicht ist blind, konservativ ALLE Kandidaten melden.
+      var NestedBlind := M.HasDescendant(nkNestedRange);
+      // Variant Locals + Params dieser Methode melden, wenn ihr Name
+      // in einem Loop-Teilbaum vorkommt (Gate A).
       for Ch in M.Children do
       begin
-        if (Ch.Kind = nkLocalVar) and IsVariantType(Ch.TypeRef) then
-          Emit(Ch.Line, Ch.Name, Ch.TypeRef, M.Name);
-        if (Ch.Kind = nkParam) and IsVariantType(Ch.TypeRef) then
+        if not ((Ch.Kind in [nkLocalVar, nkParam]) and
+                IsVariantType(Ch.TypeRef)) then Continue;
+        var BareLow := BareParamNameLow(LowerCase(Ch.Name));
+        if NestedBlind or (BareLow = '') or
+           UsedInAnyLoop(M, BareLow) then
           Emit(Ch.Line, Ch.Name, Ch.TypeRef, M.Name);
       end;
     end;

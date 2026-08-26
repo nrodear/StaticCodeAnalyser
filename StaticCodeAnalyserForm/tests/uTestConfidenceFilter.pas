@@ -133,6 +133,10 @@ begin
     KindDefaultConfidence(fkCommentedOutCode));
   Assert.AreEqual<TFindingConfidence>(fcMedium,
     KindDefaultConfidence(fkMagicNumber));
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkVariantTypeMisuse),
+    'SCA173: Gate A + fcMedium (Autopsie 2026-08-26) - NICHT fcLow, ' +
+    'die Regel bleibt im Default-Profil sichtbar');
 end;
 
 procedure TTestConfidenceFilter.KindDefaultConfidence_HardenedHeuristicsAreLow;
