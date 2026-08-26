@@ -71,6 +71,11 @@ type
     // der nackte Fall bleiben fcHigh (Error-Tier unter der Politik).
     [Test] procedure FinallyWithoutLockRelease_HighConfidence;
     [Test] procedure PlainFinding_HighConfidence;
+    // Gegenpruefung 2026-08-26 (MAJOR): der ECS-Handle-Vergleich darf
+    // weder im Funktionsnamen selbst ('section' in leavecriticalSECTION)
+    // noch in einem FREMDEN Handle matchen - sonst wird ein echter TP
+    // als fcLow gefiltert.
+    [Test] procedure EcsWrongHandleInFinally_HighConfidence;
   end;
 
 implementation
@@ -751,6 +756,36 @@ begin
     Assert.IsTrue(
       TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).Confidence = fcHigh,
       'ohne jede finally-Deckung -> fcHigh (Error-Tier unter der Politik)');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.EcsWrongHandleInFinally_HighConfidence;
+// Reviewer-Szenario: das finally released ein ANDERES Handle (SendCS) -
+// der Fund fuer 'Section' muss fcHigh bleiben. Die Erstfassung matchte
+// 'section' als Substring in 'leavecriticalsection' und haette den TP
+// auf fcLow gestuft (= im Default-Profil geloescht).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  EnterCriticalSection(Section);'#13#10 +
+  '  Prepare;'#13#10 +
+  '  try'#13#10 +
+  '    Send;'#13#10 +
+  '  finally'#13#10 +
+  '    LeaveCriticalSection(SendCS);'#13#10 +
+  '  end;'#13#10 +
+  '  LeaveCriticalSection(Section);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+      'Prepare kann werfen, Section-Release ist ungeschuetzt - TP bleibt');
+    Assert.IsTrue(
+      TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).Confidence = fcHigh,
+      'fremdes Handle im finally kreditiert NICHT -> fcHigh');
   finally F.Free; end;
 end;
 

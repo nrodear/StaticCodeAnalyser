@@ -368,7 +368,8 @@ function SegmentReleasesLock(const SegLow, IdLow: string): Boolean;
 // gesucht wird das Token, nicht die Anweisungsform (FP-Voll-Audit
 // 2026-08-15, Klasse 'Release im umschliessenden finally, Flag-gesteuert').
 var
-  p : Integer;
+  p, q   : Integer;
+  Handle : string;
 
   // Treffer nur an WORTGRENZE: 'lock.leave' darf nicht in 'block.leave'
   // matchen - sonst wuerde ein fremder Lock als Release gutgeschrieben
@@ -396,12 +397,37 @@ begin
      BoundedHit(IdLow + '.release') or
      BoundedHit(IdLow + '.exit') or
      BoundedHit(IdLow + '.endwrite') then Exit(True);
+  // Gegenpruefung 2026-08-26 (MAJOR): die fruehere Fassung suchte IdLow
+  // als nacktes Substring in einem 80-Zeichen-Fenster AB dem Token -
+  // 'section' matchte damit in 'leavecriticalSECTION' selbst, und 'cs'
+  // in JEDEM fremden Handle. Ein echter TP (Release des falschen Locks
+  // im finally) waere als fcLow gefiltert worden. Jetzt: den ERSTEN
+  // Ident hinter der Klammer parsen (Muster HasLeaveCriticalSection-
+  // ForHandle) und auf Gleichheit bzw. letztes Kettenglied pruefen.
   p := Pos('leavecriticalsection', SegLow);
   while p > 0 do
   begin
-    // Handle-Bezeichner in den 80 Zeichen hinter dem Call-Namen genuegt -
-    // laenger ist kein realer LeaveCriticalSection-Aufruf.
-    if Pos(IdLow, Copy(SegLow, p, 80)) > 0 then Exit(True);
+    q := p + Length('leavecriticalsection');
+    while (q <= Length(SegLow)) and (SegLow[q] = ' ') do Inc(q);
+    if (q <= Length(SegLow)) and (SegLow[q] = '(') then
+    begin
+      Inc(q);
+      while (q <= Length(SegLow)) and
+            CharInSet(SegLow[q], [' ', '@']) do Inc(q);
+      Handle := '';
+      while (q <= Length(SegLow)) and
+            CharInSet(SegLow[q], ['a'..'z', '0'..'9', '_', '.']) do
+      begin
+        Handle := Handle + SegLow[q];
+        Inc(q);
+      end;
+      // Enter-Seite traegt je nach Form das volle Handle ('flock.cs')
+      // oder nur ein Glied - Gleichheit oder Ketten-Endstueck zaehlt.
+      if (Handle <> '') and
+         ((Handle = IdLow) or
+          Handle.EndsWith('.' + IdLow) or IdLow.EndsWith('.' + Handle)) then
+        Exit(True);
+    end;
     p := PosEx('leavecriticalsection', SegLow, p + 1);
   end;
 end;
@@ -443,7 +469,12 @@ function EnclosingOrAdjacentFinallyReleases(const Code: string;
 // in low-Profilen bleibt der Hinweis erhalten.
 const
   WINDOW    = 8000;
-  MIN_DEPTH = -8;   // tiefer verschachtelt ist keine reale Routine mehr
+  // Negativ-Klettern eng halten (Gegenpruefung 2026-08-26, MINOR):
+  // die belegten Faelle liegen bei -1 (fBalls, ein Block ueber dem
+  // Enter); jede weitere Stufe vergroessert nur das Fenster fuer
+  // Tiefendrift durch Twin-'end's aus {$IFDEF}-Zweigen. -3 deckt
+  // Enter in zwei Schachtelungen unterm try und bleibt drift-arm.
+  MIN_DEPTH = -3;
 var
   hi, p    : Integer;
   d, semis : Integer;
@@ -463,6 +494,16 @@ var
       begin
         if (d = 0) then Inc(semis);
         Inc(p);
+        Continue;
+      end;
+      // asm-Label/Sprungziel '@end' o.ae.: das @-Wort komplett schlucken,
+      // sonst zaehlt sein 'end' als Blockschliesser und die Tiefe driftet
+      // (Gegenpruefung 2026-08-26, MINOR).
+      if Code[p] = '@' then
+      begin
+        Inc(p);
+        while (p <= hi) and
+              CharInSet(Code[p], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do Inc(p);
         Continue;
       end;
       if CharInSet(Code[p], ['A'..'Z', 'a'..'z', '_']) then
@@ -549,9 +590,14 @@ begin
     end;
     // Neuer Routinenkopf auf/unter Basistiefe: die eigene Routine ist zu
     // Ende, ohne dass ein umschliessendes finally geliefert haette.
+    // 'operator' gehoert dazu (class operator, Delphi-Records) - ohne ihn
+    // liefe der Scan in den Body des Folge-Operators und dessen finally
+    // koennte den Fund der VORGAENGER-Routine kreditieren (Gegenpruefung
+    // 2026-08-26, MINOR).
     if (d <= 0) and
        ((w = 'procedure') or (w = 'function') or (w = 'constructor') or
-        (w = 'destructor') or (w = 'initialization')) then
+        (w = 'destructor') or (w = 'operator') or
+        (w = 'initialization')) then
       Exit(False);
   end;
 end;

@@ -1930,21 +1930,39 @@ begin
           if not (Tok.Kind in [tkColon, tkComma]) then Continue;
           VarNames.Clear;
           VarNames.Add(T.Value);
-          if Eat(tkComma) then
-            while Tok.Kind = tkIdent do
-            begin
-              VarNames.Add(Next.Value);
-              if not Eat(tkComma) then Break;
-            end;
+          // Komma konsumieren, falls vorhanden - die Fortsetzungs-
+          // schleife unten uebernimmt; steht Tok auf ':', beendet ihr
+          // Stop-Set die Liste sofort.
+          Eat(tkComma);
         end
         else
-        begin
           VarNames.Clear;
-          while Tok.Kind = tkIdent do
+
+        // Namensliste (Kopf ggf. schon gefuellt): auch FORTSETZUNGEN
+        // duerfen Kontextwoerter sein ('read, write: Integer;' - die
+        // Erstfassung nahm nur den Kopf, 'write' brach die Liste ab und
+        // 'read' blieb typlos; Gegenpruefung 2026-08-26, MINOR).
+        // Struktur-Schluesselwoerter (begin/end/var/...) beenden die
+        // Liste IMMER - sie duerfen nie als Name konsumiert werden.
+        while True do
+        begin
+          if Tok.Kind = tkIdent then
+            VarNames.Add(Next.Value)
+          else if not (Tok.Kind in [tkKwVar, tkKwConst, tkKwType,
+                        tkKwProcedure, tkKwFunction, tkKwConstructor,
+                        tkKwDestructor, tkKwOperator, tkKwBegin, tkKwAsm,
+                        tkKwEnd, tkEof, tkColon, tkSemicolon]) and
+                  (Tok.Value <> '') and
+                  CharInSet(Tok.Value[1], ['A'..'Z', 'a'..'z', '_']) then
           begin
-            VarNames.Add(Next.Value);
-            if not Eat(tkComma) then Break;
-          end;
+            T := Tok;
+            Next;
+            if not (Tok.Kind in [tkColon, tkComma]) then Break;
+            VarNames.Add(T.Value);
+          end
+          else
+            Break;
+          if not Eat(tkComma) then Break;
         end;
 
         TypeName := '';

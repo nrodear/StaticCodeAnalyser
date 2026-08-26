@@ -253,6 +253,9 @@ type
     // out-Merge-Bug: die kuerzere Overload-Signatur loeschte das out-Flag
     // der laengeren (JclSysUtils IntToStr) - Merge jetzt auf Max-Laenge.
     [Test] procedure OutParamOverload_ShorterTwin_NoFinding;
+    // Gegenpruefung 2026-08-26 (MINOR): auch FORTSETZUNGEN der
+    // Namensliste duerfen Kontextwoerter sein ('read, write: Integer;').
+    [Test] procedure KeywordNamedLocals_CommaList_BothVisible;
   end;
 
 implementation
@@ -4463,6 +4466,37 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
     'out-Position der laengeren Overload zaehlt als Write');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.KeywordNamedLocals_CommaList_BothVisible;
+// 'read, write: Integer;' - die Erstfassung des Parser-Fixes nahm nur
+// den Kopf der Liste; 'write' brach sie ab, 'read' blieb typlos und
+// 'write' war fuer die Analyse unsichtbar. Jetzt sind beide echte
+// Variablen: das uninitialisierte 'write' wird gemeldet.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Bad2(x: Integer): Integer;'#13#10 +
+  'var'#13#10 +
+  '  read, write: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  read := x;'#13#10 +
+  '  Result := read + write;'#13#10 +
+  'end;';
+var
+  F : TObjectList<TLeakFinding>;
+  i : Integer;
+  Getroffen : Boolean;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Getroffen := False;
+    for i := 0 to F.Count - 1 do
+      if (F[i].Kind = fkUninitVar) and
+         (Pos('write', LowerCase(F[i].MissingVar)) > 0) then
+        Getroffen := True;
+    Assert.IsTrue(Getroffen,
+      'das zweite Kontextwort der Liste ist eine echte, sichtbare Variable');
   finally F.Free; end;
 end;
 
