@@ -21,6 +21,9 @@ type
     [Test] procedure FuncPtrType_NoFinding;
     [Test] procedure UntypedOut_NoFinding;
     [Test] procedure OverrideAndImplTwin_NoFinding;
+    // Gegenpruefung 2026-08-26: der Namensscan stoppte am '<' -
+    // Zwilling war fuer generische Klassen wirkungslos.
+    [Test] procedure OverrideGenericImplTwin_NoFinding;
     [Test] procedure FreeFunctionOutList_StillReported;
   end;
 
@@ -186,6 +189,30 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAvoidOut),
     'override-Decl UND Impl-Zwilling schweigen');
+  finally F.Free; end;
+end;
+
+procedure TTestAvoidOut.OverrideGenericImplTwin_NoFinding;
+// Skeptiker-Fund: `procedure TCache<T>.TryGet(` - der Namensscan
+// brach am '<' ab, HasDot blieb False, der Zwilling feuerte nie
+// (Korpus-Beleg MVCFramework.LRUCache.pas:145). Generic-Segment
+// wird jetzt uebersprungen: Decl gated per override, Impl-Kopf
+// der generischen Klasse faellt namensbasiert mit.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TCache<T> = class'#13#10 +
+  '    procedure TryGet(out Item: T); override;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TCache<T>.TryGet(out Item: T);'#13#10 +
+  'begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAvoidOut),
+    'generischer Impl-Zwilling faellt mit der override-Decl');
   finally F.Free; end;
 end;
 

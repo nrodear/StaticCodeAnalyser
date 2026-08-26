@@ -313,12 +313,17 @@ function DeclBareName(const JoinedLow: string; out HasDot: Boolean): string;
 // Routinen-Name der gejointen Decl; bei qualifizierten Impl-Koepfen
 // (`procedure tfoo.bar(`) das LETZTE Segment. HasDot unterscheidet
 // Interface-Decl (ohne Punkt) vom Implementations-Zwilling (mit Punkt).
+// Generic-Segmente werden UEBERSPRUNGEN (Gegenpruefung 2026-08-26:
+// `procedure tcache<t>.tryget(` stoppte am '<', HasDot blieb False,
+// der G4-Zwilling war fuer generische Klassen wirkungslos -
+// MVCFramework.LRUCache.pas:145 als Korpus-Beleg).
 const
   HEADS : array[0..3] of string = ('procedure', 'function', 'constructor', 'destructor');
 var
-  h, p, q, Seg : Integer;
+  h, p, q, L, Seg, SegEnd, Depth : Integer;
 begin
   Result := ''; HasDot := False;
+  L := Length(JoinedLow);
   p := 0;
   for h := 0 to High(HEADS) do
   begin
@@ -326,16 +331,33 @@ begin
     if (q > 0) and ((p = 0) or (q < p)) then p := q + Length(HEADS[h]) + 1;
   end;
   if p = 0 then Exit;
-  while (p <= Length(JoinedLow)) and (JoinedLow[p] = ' ') do Inc(p);
-  Seg := p;
+  while (p <= L) and (JoinedLow[p] = ' ') do Inc(p);
+  Seg := p; SegEnd := p;
   q := p;
-  while (q <= Length(JoinedLow)) and
-        (TDetectorUtils.IsIdentChar(JoinedLow[q]) or (JoinedLow[q] = '.')) do
+  while q <= L do
   begin
-    if JoinedLow[q] = '.' then begin HasDot := True; Seg := q + 1; end;
-    Inc(q);
+    if TDetectorUtils.IsIdentChar(JoinedLow[q]) then
+    begin
+      Inc(q); SegEnd := q;
+    end
+    else if JoinedLow[q] = '<' then
+    begin
+      Depth := 1; Inc(q);
+      while (q <= L) and (Depth > 0) do
+      begin
+        if JoinedLow[q] = '<' then Inc(Depth)
+        else if JoinedLow[q] = '>' then Dec(Depth);
+        Inc(q);
+      end;
+    end
+    else if JoinedLow[q] = '.' then
+    begin
+      HasDot := True; Inc(q); Seg := q; SegEnd := q;
+    end
+    else
+      Break;
   end;
-  Result := Copy(JoinedLow, Seg, q - Seg);
+  Result := Copy(JoinedLow, Seg, SegEnd - Seg);
 end;
 
 class procedure TAvoidOutDetector.AnalyzeUnit(UnitNode: TAstNode;
