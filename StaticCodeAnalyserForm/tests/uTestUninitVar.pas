@@ -250,6 +250,9 @@ type
     // Gegenprobe: der Parser-Fix macht die echte Variable SICHTBAR -
     // ist sie wirklich uninitialisiert, kommt jetzt der korrekte Fund.
     [Test] procedure KeywordNamedLocal_TrulyUninit_ReportedUnderRealName;
+    // out-Merge-Bug: die kuerzere Overload-Signatur loeschte das out-Flag
+    // der laengeren (JclSysUtils IntToStr) - Merge jetzt auf Max-Laenge.
+    [Test] procedure OutParamOverload_ShorterTwin_NoFinding;
   end;
 
 implementation
@@ -4429,6 +4432,37 @@ begin
         Getroffen := True;
     Assert.IsTrue(Getroffen,
       'der Fund nennt die echte Variable "read", nicht den Typnamen');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.OutParamOverload_ShorterTwin_NoFinding;
+// JclSysUtils-Muster: zwei unit-lokale Overloads, die kuerzere OHNE, die
+// laengere MIT out-Parameter an Position 2. Der Call bindet die laengere;
+// die alte Merge-Kappung auf die KUERZERE Liste loeschte das out-Flag ->
+// 'FirstDigitPos is read but never assigned' (2 Error-Tier-FPs in rw8).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function IntToStr2(const Value: Int64): string; overload;'#13#10 +
+  'begin'#13#10 +
+  '  Result := '''';'#13#10 +
+  'end;'#13#10 +
+  'function IntToStr2(const Value: Int64; out FirstDigitPos: Integer): string; overload;'#13#10 +
+  'begin'#13#10 +
+  '  FirstDigitPos := 1;'#13#10 +
+  '  Result := '''';'#13#10 +
+  'end;'#13#10 +
+  'function Probe(K: Int64): string;'#13#10 +
+  'var'#13#10 +
+  '  FirstDigitPos: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Result := IntToStr2(K, FirstDigitPos);'#13#10 +
+  '  if FirstDigitPos > 0 then Result := Result + ''x'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, CountKind(F, fkUninitVar),
+    'out-Position der laengeren Overload zaehlt als Write');
   finally F.Free; end;
 end;
 
