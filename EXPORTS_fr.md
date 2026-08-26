@@ -213,6 +213,16 @@ contextHash) : les alertes gardent leur identité malgré la dérive des
 lignes. Les chemins sont relatifs à `--base-dir` — pointez-le sur la
 racine du dépôt, c'est ce que le code scanning attend.
 
+Tant que la politique d'évidence est active (`[Rules] EvidenceTiering`,
+activée par défaut), chaque résultat porte aussi
+`properties.confidence` (`low`/`medium`/`high`) — c'est ainsi qu'une
+règle d'erreur du catalogue rapportée en `level: warning` s'explique.
+L'état est estampillé au moment du **scan** et voyage avec la cohorte
+de résultats : basculer l'ini entre le scan et l'export ne peut pas
+mélanger niveaux et confiances de deux mondes différents. Avec
+`EvidenceTiering=0`, le SARIF est identique octet pour octet à la
+sortie d'avant 0.9.18.
+
 Deux points à surveiller : le BOM UTF-8 peut faire trébucher les
 uploaders basés sur Node, et téléverser un SARIF **filtré par la
 référence** contrarie le cycle de vie des alertes de la plateforme

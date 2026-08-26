@@ -39,6 +39,17 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "no enclosing try..finally" claim does not hold there).
 
 ### Fixed
+- SCA003 (SQLInjection) learned six safe-pattern conventions from the
+  full-corpus audit (96 % false-positive rate): ORM metadata by naming
+  convention (`SqlTable*`, `*TableName`, `*FieldName(s)`, `Props`/
+  `fTableMap` receivers), transparent helpers (`IfThen`, `Implode`,
+  `Trim`, `UpperCase`, ... are safe when all their string arguments
+  are), RQL/SQL translator callees (`*ByRQL`, `Compile*`, `Parse*`)
+  on builder receivers, quoter properties (`.QuotedName` etc.),
+  `*SQLClause*` builder classes, and concatenation inside the bound
+  parameter array of `Exec*('literal sql', [...])`. Real injections -
+  raw parameters glued into SQL - keep firing; each convention ships
+  with a true-positive guard test.
 - Parser: context keywords (`read`, `Result`, ...) are now accepted
   as variable names in local `var` sections. Previously the TYPE name
   became a phantom variable and SCA166 reported "integer/PPyObject is

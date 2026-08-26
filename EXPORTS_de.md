@@ -203,6 +203,15 @@ Alerts ihre Identität über Zeilenverschiebungen behalten. Die Pfade sind
 relativ zu `--base-dir` — auf die Repository-Wurzel zeigen lassen, das
 erwartet Code-Scanning.
 
+Solange die Evidenz-Politik aktiv ist (`[Rules] EvidenceTiering`,
+Default an), trägt jedes Result zusätzlich `properties.confidence`
+(`low`/`medium`/`high`) — so erklärt sich eine Katalog-Error-Regel, die
+mit `level: warning` meldet. Der Zustand wird zur **Scan**-Zeit
+gestempelt und wandert mit der Fund-Kohorte: ein ini-Wechsel zwischen
+Scan und Export kann Levels und Konfidenzen nicht aus zwei Welten
+mischen. Mit `EvidenceTiering=0` ist das SARIF byte-identisch zum
+Stand vor 0.9.18.
+
 Zwei Fallen: Das UTF-8-BOM kann Node-basierte Uploader stören, und ein
 **baseline-gefiltertes** SARIF arbeitet gegen den Alert-Lebenszyklus der
 Plattform (sie schließt alles, was der Filter entfernt hat). Für

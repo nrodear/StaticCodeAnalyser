@@ -194,6 +194,15 @@ alerts keep their identity across line drift. Paths are relative to
 `--base-dir` — point it at the repository root, which is what code
 scanning expects.
 
+While the evidence policy (`[Rules] EvidenceTiering`, default on) is
+active, every result also carries `properties.confidence`
+(`low`/`medium`/`high`) — that is how a catalog-error rule reporting at
+`level: warning` explains itself. The flag is stamped at **scan** time
+and travels with the finding cohort, so toggling the ini between scan
+and export cannot mix levels and confidence values from two different
+policy states. With `EvidenceTiering=0` the SARIF is byte-identical to
+pre-0.9.18 output.
+
 Two things to watch: the UTF-8 BOM can trip Node-based uploaders, and
 uploading a **baseline-filtered** SARIF fights the platform's own alert
 lifecycle (it resolves everything the filter removed). For code scanning,
