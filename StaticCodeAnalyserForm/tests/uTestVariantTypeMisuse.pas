@@ -18,6 +18,10 @@ type
     [Test] procedure VariantOnlyAfterLoop_NotReported;
     [Test] procedure VariantInWhileCondition_Reported;
     [Test] procedure NestedRoutineBlindSpot_StillReported;
+    // Gegenpruefungs-BLOCKER 2026-08-26: nkParam.Name traegt den
+    // Modifier ('const keyvalues') - ohne Strip fiel JEDER solche
+    // Param, auch bei Hot-Path-Nutzung (JvCsvData.LocateRecord).
+    [Test] procedure ConstVariantParamUsedInLoop_StillReported;
   end;
 
 implementation
@@ -147,7 +151,7 @@ const SRC =
   'begin'#13#10 +
   '  v := Fetch;'#13#10 +
   '  while v <> Null do'#13#10 +
-  '    v := Fetch;'#13#10 +
+  '    Step;'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -181,6 +185,29 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkVariantTypeMisuse) >= 1,
       'nested-blinde Methode bleibt konservativ gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestVariantTypeMisuse.ConstVariantParamUsedInLoop_StillReported;
+// BLOCKER-Regression aus der Diff-Gegenpruefung: 'const KeyValues:
+// Variant' wird im Parser als Name 'const keyvalues' gefuehrt - die
+// Such-Needle matchte nie, der Kern-TP der Regel (JvCsvData
+// LocateRecord, Record-Scan-Doppelschleife) fiel still.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Find(const KeyValues: Variant): Integer;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Result := -1;'#13#10 +
+  '  for i := 0 to 100 do'#13#10 +
+  '    if Match(KeyValues, i) then Result := i;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkVariantTypeMisuse) >= 1,
+      'const-Variant-Param mit In-Loop-Nutzung bleibt Fund');
   finally F.Free; end;
 end;
 

@@ -459,9 +459,14 @@ begin
   if (Copy(T, 1, 8) = 'function') and
      ((Length(T) = 8) or not TDetectorUtils.IsIdentChar(T[9])) then
     Exit(True);
+  // Ketten-TAIL-Zuschnitt (Gegenpruefung 2026-08-26 MINOR): '.asobject'
+  // gated nur, wenn danach das Statement endet oder ein ' as '-Cast
+  // folgt. '.AsObject' INNERHALB von Argumenten
+  // ('TWrapper.Create(V.AsObject)' - dort folgt ')') allokiert real;
+  // Vorkommen in String-Literalen folgt meist weiterer Text/Quote.
   p := Pos('.asobject', T);
   Result := (p > 0) and
-            ((p + 9 > Length(T)) or not TDetectorUtils.IsIdentChar(T[p + 9]));
+            ((p + 9 > Length(T)) or CharInSet(T[p + 9], [' ', ';']));
 end;
 
 class function TLeakDetector2.HasCreateAssign(MethodNode: TAstNode;
@@ -3269,6 +3274,12 @@ begin
     TR := A.TypeRef.ToLower;
     cp := Pos('.create', TR);
     if cp <= 1 then Continue;
+    // Wortgrenze hinter '.create' (Gegenpruefung 2026-08-26 MAJOR):
+    // 'TWorker.CreateFromFile' darf NICHT nach dem schlichten Ctor
+    // 'TWorker.Create' beurteilt werden - Vorbild MatchesCreate/
+    // SplitCreateCall pruefen das Folgezeichen ebenfalls.
+    if (cp + 7 <= Length(TR)) and TDetectorUtils.IsIdentChar(TR[cp + 7]) then
+      Continue;
     ClassLow := Trim(Copy(TR, 1, cp - 1));
     if (ClassLow = '') or (Pos('.', ClassLow) > 0) or
        (Pos('(', ClassLow) > 0) then Continue;
@@ -3287,8 +3298,13 @@ begin
       if CA.TypeRef.ToLower.Trim.Equals('true') then
       begin
         TR := CA.Name.ToLower;
-        if (TR = 'freeonterminate') or (TR = 'self.freeonterminate') or
-           TR.EndsWith('.freeonterminate') then
+        // NUR das eigene Flag (Gegenpruefung 2026-08-26 MAJOR): ein
+        // generisches '.freeonterminate'-Suffix traefe auch FREMDE
+        // Empfaenger ('FWatcher.FreeOnTerminate := True' im Ctor,
+        // JvCommStatus-Muster) - dann gaebe der Ctor eines Hosts,
+        // der einen selbstfreigebenden KIND-Thread startet, das Leak
+        // des Hosts selbst frei.
+        if (TR = 'freeonterminate') or (TR = 'self.freeonterminate') then
           Exit(True);
       end;
   end;

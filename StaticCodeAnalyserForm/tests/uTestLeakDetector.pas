@@ -6079,12 +6079,18 @@ procedure TTestMemoryLeakAdvanced.Leak_AnonProcLiteral_NoFinding;
 // Autopsie 2026-08-26 Klasse 4a (Dev-Cpp main.pas 2365/2387/7071):
 // ein anonymes Methoden-Literal ist ein refcount-verwaltetes Closure,
 // kein Objekt des Aufrufers - Free waere ein Compilefehler.
+// WICHTIG (Gegenpruefungs-Blocker 2026-08-26): die Var muss einen
+// DEFAULT-leaky Typ tragen (TThread), sonst skippt IsLeakyType vor dem
+// Gate und der Test ist vakuoes-gruen (FindingsOf laeuft mit
+// AContext=nil = Default-LeakyClasses). Das innere '.Create' im
+// Literal ist der Ausloeser des Korpus-FP (Dev-Cpp main.pas:2365 -
+// MatchesCreate matchte den LITERAL-Text).
 const SRC =
   'unit t; implementation'#13#10+
   'procedure Foo;'#13#10+
-  'var P: TProc;'#13#10+
+  'var P: TThread;'#13#10+
   'begin'#13#10+
-  '  P := procedure begin DoWork(''x''); end;'#13#10+
+  '  P := procedure begin Sheet := TTabSheet.Create(Host); end;'#13#10+
   '  P();'#13#10+
   'end;'#13#10+
   'end.';
@@ -6092,7 +6098,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
-    'Closure-Literal ist kein Create');
+    'Closure-Literal ist kein Create des Aufrufers');
   finally F.Free; end;
 end;
 
@@ -6156,7 +6162,7 @@ const SRC =
   '  FreeOnTerminate := True;'#13#10+
   'end;'#13#10+
   'procedure Spawn;'#13#10+
-  'var W: TWorker;'#13#10+
+  'var W: TThread;'#13#10+
   'begin'#13#10+
   '  W := TWorker.Create;'#13#10+
   '  W.Start;'#13#10+
@@ -6190,7 +6196,7 @@ const SRC =
   'begin'#13#10+
   'end;'#13#10+
   'procedure Spawn;'#13#10+
-  'var W: TWorker;'#13#10+
+  'var W: TThread;'#13#10+
   'begin'#13#10+
   '  W := TWorker.Create(1);'#13#10+
   '  W.Start;'#13#10+
