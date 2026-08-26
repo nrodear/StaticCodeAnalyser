@@ -1642,7 +1642,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_MetaConventionPath_NoFinding;
+procedure TTestSQLInjectionExt.SQL_MetaConventionPath_NoFinding;
 // K2 2026-08-26, Klasse 1 (mormot.orm.core 9204ff): Metadaten-Property
 // hinter nicht gelistetem Namen - die KONVENTION (sqltable*-Praefix,
 // props-Empfaenger) traegt jetzt.
@@ -1661,7 +1661,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_PlainNameProperty_StillReported;
+procedure TTestSQLInjectionExt.SQL_PlainNameProperty_StillReported;
 // TP-Gegenprobe Klasse 1: .Name OHNE *field-Empfaenger ist EINGABE
 // (User.Name) - die Konvention darf hier nicht greifen.
 const SRC =
@@ -1679,7 +1679,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_QuotedProperty_NoFinding;
+procedure TTestSQLInjectionExt.SQL_QuotedProperty_NoFinding;
 // K2 2026-08-26, Klasse 4 (HeidiSQL tabletools:2246): die Quoted*-
 // Property ist per Konvention das Ergebnis des Quoters.
 const SRC =
@@ -1697,7 +1697,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_BareQuotedIdent_StillReported;
+procedure TTestSQLInjectionExt.SQL_BareQuotedIdent_StillReported;
 // TP-Gegenprobe Klasse 4: ein BARER Bezeichner namens QuotedX ist
 // keine Property-Konvention - nur Member-PFADE geben frei.
 const SRC =
@@ -1715,7 +1715,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_IfThenEscapedBothBranches_NoFinding;
+procedure TTestSQLInjectionExt.SQL_IfThenEscapedBothBranches_NoFinding;
 // K2 2026-08-26, Klasse 2 (HeidiSQL usermanager:1625/1635): beide
 // IfThen-ZWEIGE sind escaped; die Boolean-Bedingung (User.IsUser)
 // waehlt nur den Zweig und darf die Bewertung nicht kippen.
@@ -1734,7 +1734,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_IfThenWithRawBranch_StillReported;
+procedure TTestSQLInjectionExt.SQL_IfThenWithRawBranch_StillReported;
 // TP-Gegenprobe Klasse 2: EIN roher Zweig vergiftet den Helfer.
 const SRC =
   'unit t; implementation'#13#10+
@@ -1751,7 +1751,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_TranslatorCalleeWithParam_NoFinding;
+procedure TTestSQLInjectionExt.SQL_TranslatorCalleeWithParam_NoFinding;
 // K2 2026-08-26, Klasse 3 (DMVC ActiveRecord RestoreRQL): der RQL-
 // UEBERSETZER parst den Parameter, sein Ergebnis ist erzeugtes SQL.
 const SRC =
@@ -1769,7 +1769,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_NonTranslatorCalleeWithParam_StillReported;
+procedure TTestSQLInjectionExt.SQL_NonTranslatorCalleeWithParam_StillReported;
 // TP-Gegenprobe Klasse 3 (Verengung 2026-07-31 bleibt): ein NICHT-
 // Uebersetzer-Callee mit Routine-Parameter im Argument bleibt Fund.
 const SRC =
@@ -1787,7 +1787,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_SqlClauseClassField_NoFinding;
+procedure TTestSQLInjectionExt.SQL_SqlClauseClassField_NoFinding;
 // K2 2026-08-26, Klasse 7 (Alcinoe ALSQLClauses:441/453): die
 // Klausel-Klasse IST der Builder, bare self-Felder sind die
 // Bauvorschrift.
@@ -1806,7 +1806,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_SqlClauseClassParam_StillReported;
+procedure TTestSQLInjectionExt.SQL_SqlClauseClassParam_StillReported;
 // TP-Gegenprobe Klasse 7: Routine-PARAMETER bleiben auch in der
 // Klausel-Klasse unsicher.
 const SRC =
@@ -1824,7 +1824,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_ConcatInBoundParamArray_NoFinding;
+procedure TTestSQLInjectionExt.SQL_ConcatInBoundParamArray_NoFinding;
 // K2 2026-08-26, Klasse 8 (DMVC streamed_array_writer): SQL rein
 // literal + parametrisiert, das + liegt im GEBUNDENEN Werte-Array.
 const SRC =
@@ -1842,7 +1842,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_ConcatInSqlArgOfExec_StillReported;
+procedure TTestSQLInjectionExt.SQL_ConcatInSqlArgOfExec_StillReported;
 // TP-Gegenprobe Klasse 8: Konkat im SQL-ARGUMENT selbst bleibt Fund,
 // auch wenn ein Parameter-Array folgt (JvDBPasswordDialog-Muster).
 const SRC =
