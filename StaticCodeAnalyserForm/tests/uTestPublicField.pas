@@ -23,6 +23,9 @@ type
     // rw12-A/B-Fund: FPC-Export-Direktive '{$ifdef FPC} public name ...'
     // darf nach dem Kommentar-Strip keine Sektion schalten.
     [Test] procedure FpcPublicNameDirective_NoFinding;
+    // rw13-A/B-Fund: 'public class var' ist ein echter Sektionskopf -
+    // die Allein-Wort-Regel verlor 4 Klassenfeld-TPs (vcl.skia u.a.).
+    [Test] procedure PublicClassVarField_Reported;
   end;
 
 implementation
@@ -246,6 +249,28 @@ begin
     'FPC-Export-Direktive schaltet keine Sektion - q ist kein Feld');
   finally F.Free; end;
 end;
+procedure TTestPublicField.PublicClassVarField_Reported;
+// rw13-A/B: die Allein-Wort-Verengung (FPC-Export-Fix) nahm auch
+// 'public class var' den Schalter - dabei ist das ein ECHTER
+// Sektionskopf und FrameRate ein oeffentliches Klassenfeld
+// (vcl.skia.pas:367). Die Zusatzliste laesst die bekannten
+// Sektions-Formen wieder zu; 'public name' bleibt ausgesperrt.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TAni = class'#13#10 +
+  '  public class var'#13#10 +
+  '    FrameRate: Integer;'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkPublicField),
+    'class-var-Feld unter public class var ist ein Fund');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestPublicField);
 

@@ -193,6 +193,30 @@ begin
   Result := True;
 end;
 
+function IsSectionHeadLine(const CleanTrimmed, KeywordLow: string): Boolean;
+// Echte Sektionskopfzeile: das Keyword allein ODER mit bekanntem
+// Sektions-Zusatz ('class var' & Co, rw13-A/B: 4 Klassenfeld-TPs).
+// Geschlossene Liste - alles andere (insbesondere die FPC-Export-
+// Direktive 'public name ''...''') schaltet KEINE Sektion.
+const
+  ZUSATZ : array[0..5] of string = (
+    'var', 'const', 'type', 'class var', 'class const', 'class threadvar'
+  );
+var
+  T, Rest : string;
+  k : Integer;
+begin
+  T := LowerCase(StringReplace(CleanTrimmed, #9, ' ', [rfReplaceAll]));
+  if T = KeywordLow then Exit(True);
+  if not T.StartsWith(KeywordLow + ' ') then Exit(False);
+  Rest := Trim(Copy(T, Length(KeywordLow) + 2, MaxInt));
+  while Pos('  ', Rest) > 0 do
+    Rest := StringReplace(Rest, '  ', ' ', [rfReplaceAll]);
+  for k := 0 to High(ZUSATZ) do
+    if Rest = ZUSATZ[k] then Exit(True);
+  Result := False;
+end;
+
 class procedure TPublicFieldDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -254,10 +278,15 @@ begin
       // Kommentar-Strip legte das 'public' frei und schaltete mitten in
       // der IMPLEMENTATION eine Sektion an (lokale Vars wurden Felder,
       // mormot.lib.static x3). Eine echte Sektionszeile besteht nach dem
-      // Strip NUR aus dem Keyword. Der seltene Einzeiler-Stil
-      // 'public Feld: T;' verliert den Schalter - FN-Richtung, billig.
+      // Strip NUR aus dem Keyword - ODER aus Keyword + bekanntem
+      // Sektions-Zusatz: rw13-A/B fand 4 verlorene Klassenfeld-TPs
+      // unter 'public class var' (vcl.skia FrameRate, alcinoe
+      // FPaintStage/AniFrameRate, doublecmd isMountSupported). Die
+      // Zusatzliste ist geschlossen; 'name' (FPC-Export) steht bewusst
+      // NICHT drin. Der seltene Einzeiler-Stil 'public Feld: T;'
+      // verliert weiterhin den Schalter - FN-Richtung, billig.
       if ((Lower = 'public') or (Lower = 'published')) and
-         SameText(Trim(Clean), Lower) then
+         IsSectionHeadLine(Trim(Clean), Lower) then
       begin
         InPublic   := True;
         OpenParens := 0;   // Sektionsgrenze bricht jede Drift
