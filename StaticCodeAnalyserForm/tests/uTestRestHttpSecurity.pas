@@ -36,6 +36,7 @@ type
     [Test] procedure DisplayAndLogSinks_NotReported;
     [Test] procedure DisplaySinkMultiLine_NotReported;
     [Test] procedure SinkClosedOnPreviousLine_StillReported;
+    [Test] procedure NestedFetchInsideSink_StillReported;
     // GATE F - Host besteht nur aus Format-Platzhaltern
     [Test] procedure FormatPlaceholderHost_NotReported;
     [Test] procedure FormatPlaceholderInPath_StillReported;
@@ -361,6 +362,29 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHttpInsteadOfHttps),
     'Fortsetzungszeile gehoert noch in die Argumentliste der Senke');
+  finally F.Free; end;
+end;
+
+procedure TTestRestHttpSecurity.NestedFetchInsideSink_StillReported;
+// Gegenpruefungs-MAJOR 2026-08-27: die URL steht zwar innerhalb der
+// Anzeige-Senke, aber als Argument eines GESCHACHTELTEN Netz-Aufrufs -
+// dort wird sehr wohl eine Verbindung aufgebaut. CallStillOpen verlangt
+// deshalb Tiefe GENAU 1 (direktes Argument), nicht 'irgendwo in der
+// Klammer'.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Run;'#13#10 +
+  'begin'#13#10 +
+  '  Memo1.Lines.Add(HttpClient.Get(''http://api.contoso.de/v1/secret''));'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHttpInsteadOfHttps),
+      'geschachtelter Get-Aufruf ist ein echter Endpunkt, keine Anzeige');
   finally F.Free; end;
 end;
 

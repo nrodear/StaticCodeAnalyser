@@ -985,21 +985,46 @@ function DeclaredTypeIsNilValue(const ATypeLow: string): Boolean;
 //   * dynamische Arrays  'array of T' und 'TArray<T>'
 //   * Nullable<T>-Wrapper (Spring4D-Stil)
 //
-// ZWEI SCHREIBWEISEN, beide belegt im Parser: die klassische var-Sektion
-// konkateniert die Typ-Tokens OHNE Trenner ('arrayoftobject',
-// ParseVarLikeSection Z.2004 - dieselbe Form, die uUninitVar Z.551 nennt),
-// Parameter / Inline-var / for-var joinen dagegen mit JoinTokInto bzw. Blank
-// ('array of TObject'). Wer nur eine der beiden prueft, verfehlt die Haelfte.
+// DREI SCHREIBWEISEN, alle im Parser belegt (Gegenpruefung 2026-08-27 -
+// der Kopf nannte vorher nur zwei und die falsche Routine):
+//   (1) klassische var-Sektion: Typ-Tokens OHNE Trenner ('arrayoftobject',
+//       ParseLocalVarSection Z.2004, nkLocalVar Z.2030 - dieselbe Form,
+//       die uUninitVar Z.551 nennt);
+//   (2) Parameter: JoinTokInto, Blank nur zwischen Ident-Zeichen
+//       ('array of TObject', aber 'TArray<TObject>');
+//   (3) Inline-var und for-var: UNBEDINGTER Blank zwischen ALLEN Tokens
+//       (ParseInlineVarStmt Z.2779, ParseForStmt Z.2500) - dort kommt
+//       'TArray < TObject >' an. Deshalb werden Blanks um '<' entfernt,
+//       BEVOR die Generic-Praefixe geprueft werden; der 'array of'-Test
+//       laeuft weiter auf dem ungestrippten Text (ein Bezeichner kann kein
+//       Leerzeichen tragen - das ist genau seine Homonym-Sicherheit).
 //
-// Konservativ ausgelassen: 'packed array of T' (kein 'arrayof'-Praefix in
-// der trennerlosen Form) und qualifizierte Namen ('System.TArray<T>') -
-// dort bleibt der Fund stehen. Statische Arrays matchen bewusst NICHT
-// ('array[0..3]ofByte' hat weder das Praefix noch ' array of ').
+// BEKANNTE GRENZE (Gegenpruefung 2026-08-27, bewusst so belassen): in der
+// trennerlosen Form ist ein dynamisches Array nicht von einem NAMENSTYP
+// 'ArrayOfThing' unterscheidbar - beide kommen als 'arrayofthing' an. Das
+// ist dieselbe Homonym-Falle, die uUninitVar Z.549-560 beschreibt; dort
+// wird sie ueber eine Quellzeilen-Verifikation ('array' + PFLICHT-
+// Whitespace + 'of') geschlossen, die hier die Zeile mitschleppen wuerde.
+// Hier faellt die Richtung auf Suppression, ein solcher Bezeichner wuerde
+// also einen echten Fund schlucken. Korpus-Gegenprobe: genau EIN Treffer
+// (Img32.Text.pas:258 'familyNames : ArrayOfUtf8String'), und der ist ein
+// FELD - ResolvedTypeIsNilValue loest ohnehin nur nkLocalVar/nkParam auf,
+// also heute kein Schaden. Wenn der Fall real wird, ist die Quellzeilen-
+// Verifikation aus uUninitVar der Weg. Test ValueTypeArrayOfLookalike_...
+// haelt die Grenze fest.
+// Konservativ ausgelassen bleiben 'packed array of T' und qualifizierte
+// Namen ('System.TArray<T>'); statische Arrays matchen ohnehin nicht.
+var
+  Tight : string;
 begin
-  Result := ATypeLow.StartsWith('tarray<') or
-            ATypeLow.StartsWith('arrayof') or
-            ATypeLow.StartsWith('nullable<') or
-            (Pos('array of', ATypeLow) > 0);
+  // Blanks nur fuer die Generic-Praefixe entfernen (Form 3 liefert
+  // 'tarray < tobject >'); der 'array of'-Test braucht das Leerzeichen
+  // als Homonym-Schutz und laeuft deshalb auf dem Original.
+  Tight := StringReplace(ATypeLow, ' ', '', [rfReplaceAll]);
+  Result := Tight.StartsWith('tarray<') or
+            Tight.StartsWith('nullable<') or
+            (Pos('array of', ATypeLow) > 0) or
+            ATypeLow.StartsWith('arrayof');
 end;
 
 function ResolvedTypeIsNilValue(MethodNode: TAstNode;

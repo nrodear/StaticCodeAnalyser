@@ -52,6 +52,7 @@ type
     [Test] procedure ValueTypeDynArray_NotReported;
     [Test] procedure ValueTypeNullable_NotReported;
     [Test] procedure ValueTypeLookalikeName_StillReported;
+    [Test] procedure ValueTypeGenericInlineVar_NotReported;
     [Test] procedure BoolAliasGuard_NotReported;
     [Test] procedure BoolAliasAssignInBranch_StillReported;
     [Test] procedure BoolAliasFlagMutated_StillReported;
@@ -711,6 +712,29 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
     'Nullable<T> traegt nil als Wert - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.ValueTypeGenericInlineVar_NotReported;
+// Gegenpruefungs-MINOR 2026-08-27: ParseInlineVarStmt und ParseForStmt
+// setzen zwischen ALLE Typ-Tokens ein Leerzeichen - ein inline
+// deklariertes 'TArray<TObject>' kommt als 'tarray < tobject >' an und
+// wurde vom Praefix-Test verfehlt. Das Werttyp-Gate strippt die Blanks
+// jetzt vor der Generic-Pruefung.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  var Buf: TArray<TObject> := nil;'#13#10 +
+  '  Buf.DoStuff;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'nil ist bei einem dynamischen Array ein WERT - kein Deref moeglich');
   finally F.Free; end;
 end;
 

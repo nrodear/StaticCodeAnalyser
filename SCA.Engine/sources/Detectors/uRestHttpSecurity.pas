@@ -30,7 +30,7 @@ type
 
 implementation
 
-// noinspection-file AvoidOut, BeginEndRequired, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, InsecureCryptoAlgorithm, LongMethod, RedundantBoolean, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
+// noinspection-file AvoidOut, BeginEndRequired, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, InsecureCryptoAlgorithm, LongMethod, NestedRoutine, RedundantBoolean, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
 // InsecureCryptoAlgorithm: dieser Detektor enthaelt SSL3/TLS1/MD5/SHA1 als
 // eigene Detection-Patterns - Self-Match, kein realer Krypto-Einsatz.
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
@@ -359,7 +359,13 @@ begin
     end;
     Inc(i);
   end;
-  Result := Depth > 0;
+  // Gegenpruefung 2026-08-27 (MAJOR): '= 1', nicht '> 0'. Sonst gilt das
+  // Literal auch dann als Anzeige-Argument, wenn es in einem GESCHACHTELTEN
+  // Aufruf innerhalb der Senke steht - 'Memo.Lines.Add(HttpClient.Get(
+  // ''http://api/secret''))' waere gedroppt worden, obwohl dort wirklich
+  // eine Verbindung aufgebaut wird. Tiefe 1 heisst: direktes Argument der
+  // Senke. Am Korpus messneutral (T 52 / M 27 / D 6 / F 4 unveraendert).
+  Result := Depth = 1;
 end;
 
 function IsDisplayOrLogSinkArgument(const Code: string;
