@@ -61,6 +61,25 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "no enclosing try..finally" claim does not hold there).
 
 ### Fixed
+- SCA115 (HttpInsteadOfHttps) no longer reports plain-text URLs that
+  never reach the network: test-vector literals inside unit-test
+  fixtures (recognised by framework marker *and* fixture declaration,
+  not by path), OpenAPI metadata fields such as `TermsOfService` or
+  `LicenseUrl`, literals handed straight to a display or log sink,
+  and hosts consisting only of format placeholders (`http://%s:%d/`).
+  A URL nested inside a real fetch call keeps firing even when the
+  result is only displayed. Corpus: 176 -> about 87 findings.
+- SCA118 (ExceptionName) evaluates only the direct base class instead
+  of scanning the whole ancestor list for the substring "Exception".
+  Interface declarations from JNI/Java bindings, unrelated types that
+  merely contain the word, and established prefixes such as `Edws*`
+  or `E7Zip` no longer produce findings. Corpus: 86 -> 22.
+- SCA008 (NilDeref) gained five gates from its autopsy: indexed
+  targets (the AST cannot tell `a[i]` from `a[j]`), value types where
+  `nil` is a value rather than a pointer (dynamic arrays,
+  `Nullable<T>`), guards routed through a boolean helper variable,
+  `while` conditions guarding their own body, and nil tests in the
+  same branch as the assignment.
 - SCA071 (UnitLevelKeywordIndent) now tracks comment state across
   lines. It previously skipped a comment only when the opener sat at
   the start of the same line, so documentation headers, English prose

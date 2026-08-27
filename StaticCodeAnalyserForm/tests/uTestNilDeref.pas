@@ -46,6 +46,21 @@ type
     [Test] procedure CorrelatedAssignedForm_NoMutation_Dropped;
     [Test] procedure CorrelatedAssignedForm_FlagMutated_StillReported;
     [Test] procedure CorrelatedAssignedForm_VarOutCondBetween_StillReported;
+    // SCA008-Autopsie 2026-08-27 (S-Paket, 40er-Stichprobe / 44 von 48 FP):
+    // fuenf Gates gegen die gezaehlten FP-Klassen, je mit TP-Gegenprobe.
+    [Test] procedure IndexedNilTarget_NotReported;
+    [Test] procedure ValueTypeDynArray_NotReported;
+    [Test] procedure ValueTypeNullable_NotReported;
+    [Test] procedure ValueTypeLookalikeName_StillReported;
+    [Test] procedure ValueTypeGenericInlineVar_NotReported;
+    [Test] procedure BoolAliasGuard_NotReported;
+    [Test] procedure BoolAliasAssignInBranch_StillReported;
+    [Test] procedure BoolAliasFlagMutated_StillReported;
+    [Test] procedure BoolAliasFlagPassedAsVarArg_StillReported;
+    [Test] procedure WhileGuardAroundDeref_NotReported;
+    [Test] procedure WhileGuardDerefAfterLoop_StillReported;
+    [Test] procedure NestedNilTestGuardSameArm_NotReported;
+    [Test] procedure NestedNilTestGuardOtherArm_StillReported;
   end;
 
 implementation
@@ -630,6 +645,320 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
       'var/out-Uebergabe in fremder Bedingung muss weiter vetoen');
+  finally F.Free; end;
+end;
+
+{ SCA008-Autopsie 2026-08-27 (S-Paket): Gates gegen die gezaehlten FP-Klassen
+  der 40er-Stichprobe (44 von 48 Verdikten FP). Jeder Drop-Test hat, wo das
+  Gate ueberhaupt eine Grenze kennt, seine TP-Gegenprobe daneben. }
+
+procedure TTestNilDeref.IndexedNilTarget_NotReported;
+// Indexed-Skip (4 Drops): ParsePrimary kollabiert JEDEN Index-Ausdruck zu
+// '[]' - 'Items[0]' und 'Items[1]' heissen im AST beide 'Items[]'. Der
+// Detektor kann Elemente also gar nicht auseinanderhalten und meldet den
+// Guard-geschuetzten Zugriff auf ein ANDERES Element als nil-Deref. Genau
+// so lagen alle vier Korpus-Faelle: nil auf Element A, verifizierter Guard
+// und Zugriff auf Element B.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(Items: TList);'#13#10 +
+  'begin'#13#10 +
+  '  Items[0] := nil;'#13#10 +
+  '  if Assigned(Items[1]) then'#13#10 +
+  '    Items[1].DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+    'Element-Tracking ueber Indizes ist unsound - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.ValueTypeDynArray_NotReported;
+// Werttyp-Gate (5 Drops), trennerlose Schreibweise: die klassische var-
+// Sektion konkateniert die Typ-Tokens ohne Blank, der TypeRef lautet
+// 'arrayofTObject'. Bei einem dynamischen Array ist nil ein WERT (Laenge 0),
+// kein genullter Zeiger - ein Member-Zugriff kann dort nie eine AV sein.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Buf: array of TObject;'#13#10 +
+  'begin'#13#10 +
+  '  Buf := nil;'#13#10 +
+  '  Buf.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+    'nil ist bei array of T ein Wert, kein Zeiger - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.ValueTypeNullable_NotReported;
+// Werttyp-Gate, zweite Form: Nullable<T> (Spring4D-Stil). 'Opt := nil'
+// leert den Wrapper, es entsteht kein dereferenzierbarer Zeiger.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Opt: Nullable<TObject>;'#13#10 +
+  'begin'#13#10 +
+  '  Opt := nil;'#13#10 +
+  '  Opt.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+    'Nullable<T> traegt nil als Wert - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.ValueTypeGenericInlineVar_NotReported;
+// Gegenpruefungs-MINOR 2026-08-27: ParseInlineVarStmt und ParseForStmt
+// setzen zwischen ALLE Typ-Tokens ein Leerzeichen - ein inline
+// deklariertes 'TArray<TObject>' kommt als 'tarray < tobject >' an und
+// wurde vom Praefix-Test verfehlt. Das Werttyp-Gate strippt die Blanks
+// jetzt vor der Generic-Pruefung.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  var Buf: TArray<TObject> := nil;'#13#10 +
+  '  Buf.DoStuff;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'nil ist bei einem dynamischen Array ein WERT - kein Deref moeglich');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.ValueTypeLookalikeName_StillReported;
+// TP-Gegenprobe zum Werttyp-Gate: ein KLASSENname, der nur wie ein Array
+// klingt ('TArrayBuffer'), ist eine Referenz - der Praefix-Test darf nicht
+// auf den blossen Wortbestandteil anspringen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Buf: TArrayBuffer;'#13#10 +
+  'begin'#13#10 +
+  '  Buf := nil;'#13#10 +
+  '  Buf.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+    'TArrayBuffer ist eine Klasse, kein dynamisches Array - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.BoolAliasGuard_NotReported;
+// Boolean-Zwischenvariable (7 Drops): das nil-Praedikat wird zwischen-
+// gespeichert und erst danach abgefragt. 'if ok then' sieht fuer den
+// Detektor wie eine beliebige Bedingung aus, traegt aber exakt die Aussage
+// 'x <> nil'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var'#13#10 +
+  '  x: TObject;'#13#10 +
+  '  ok: Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  x := nil;'#13#10 +
+  '  ok := x <> nil;'#13#10 +
+  '  if ok then'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+    'kopierpropagiertes nil-Praedikat ist ein Guard - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.BoolAliasAssignInBranch_StillReported;
+// *** SKEPTIKER-MAJOR der Autopsie 2026-08-27 ***: ohne Dominanz-Zwang
+// frisst das Gate echte Funde. Hier laeuft die Flag-Zuweisung NUR im
+// c-Zweig; bei c = False traegt ok noch das alte True und der Deref sieht
+// x = nil. Die Zuweisung muss also auf demselben Arm liegen wie das
+// Guard-if, nicht in einem Zweig darunter.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(c: Boolean);'#13#10 +
+  'var'#13#10 +
+  '  x: TObject;'#13#10 +
+  '  ok: Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  ok := True;'#13#10 +
+  '  x := nil;'#13#10 +
+  '  if c then'#13#10 +
+  '    ok := x <> nil;'#13#10 +
+  '  if ok then'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+    'bedingte Flag-Zuweisung laeuft nicht auf jedem Pfad - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.BoolAliasFlagMutated_StillReported;
+// TP-Gegenprobe: das Flag wird nach dem Praedikat ueberschrieben - die
+// Kopplung an 'x <> nil' ist damit gebrochen und 'if ok' schuetzt nichts.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var'#13#10 +
+  '  x: TObject;'#13#10 +
+  '  ok: Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  x := nil;'#13#10 +
+  '  ok := x <> nil;'#13#10 +
+  '  ok := True;'#13#10 +
+  '  if ok then'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+    'Mutation des Flags bricht die Kopierpropagation - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.BoolAliasFlagPassedAsVarArg_StillReported;
+// TP-Gegenprobe: das Flag geht als potentielles var/out-Argument in einen
+// fremden Aufruf - der kann es beliebig setzen. Dasselbe Veto wie im
+// Korrelations-Gate, nur auf die Zwischenvariable angewandt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TryToggle(var b: Boolean): Boolean; forward;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var'#13#10 +
+  '  x: TObject;'#13#10 +
+  '  ok: Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  x := nil;'#13#10 +
+  '  ok := x <> nil;'#13#10 +
+  '  TryToggle(ok);'#13#10 +
+  '  if ok then'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+    'var/out-Uebergabe des Flags muss den Drop verhindern');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.WhileGuardAroundDeref_NotReported;
+// while-Guard (1 Drop): der Schleifenkopf ist fuer jede Iteration des
+// RUMPFS derselbe Guard wie eine if-Bedingung. Die Assigned()-Form faellt
+// schon vorher weg (sie sieht fuer IsPassedAsArgBetween wie eine var/out-
+// Uebergabe aus); die klammerfreie Vergleichsform legt ParseWhileStmt als
+// 'x<>nil' ab und niemand hat sie bisher gelesen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  x := nil;'#13#10 +
+  '  while x <> nil do'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+    'Deref im Rumpf laeuft nur mit erfuellter Schleifenbedingung');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.WhileGuardDerefAfterLoop_StillReported;
+// TP-Gegenprobe zum while-Guard: NACH der Schleife ist die Bedingung per
+// Definition falsch, x also nil. Ohne den Rumpf-Zwang (NodeContainsRef)
+// wuerde genau dieser echte Fund stillschweigend verschwinden.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  x := nil;'#13#10 +
+  '  while x <> nil do'#13#10 +
+  '    Beep;'#13#10 +
+  '  x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+    'nach der Schleife ist x garantiert nil - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.NestedNilTestGuardSameArm_NotReported;
+// Nested-Guard-Lockerung (1 Drop): der Early-Exit-Guard steckt zwar in
+// einem anderen if, der Deref aber im SELBEN Arm dahinter - jeder Pfad zum
+// Deref fuehrt durch den Guard. Korpus-Vorbild cnwizards
+// CnEditorToggleVar.pas (nil Z.304, Guard Z.350/351, Deref Z.392 - alle im
+// else-Arm des if aus Z.293).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(y: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  x := nil;'#13#10 +
+  '  if y then'#13#10 +
+  '  begin'#13#10 +
+  '    if x = nil then'#13#10 +
+  '      Exit;'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+    'Guard und Deref im selben Arm - der Guard dominiert den Deref');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.NestedNilTestGuardOtherArm_StillReported;
+// *** SKEPTIKER-MAJOR der Autopsie 2026-08-27 ***: die Lockerung muss
+// ARM-genau sein, nicht Container-genau. Hier enthaelt das aeussere if die
+// nil-Zuweisung (then) UND den Guard (else) - der Deref steht aber DAHINTER.
+// Bei c = True laeuft x := nil, der Guard im else-Arm laeuft nie, und
+// x.DoStuff dereferenziert nil. Eine Lockerung auf blosses
+// 'Container enthaelt beides' haette diesen echten Fund gedroppt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(c: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  if c then'#13#10 +
+  '    x := nil'#13#10 +
+  '  else'#13#10 +
+  '  begin'#13#10 +
+  '    if x = nil then'#13#10 +
+  '      Exit;'#13#10 +
+  '  end;'#13#10 +
+  '  x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+    'Guard im anderen Arm dominiert den Deref nicht - Fund bleibt');
   finally F.Free; end;
 end;
 

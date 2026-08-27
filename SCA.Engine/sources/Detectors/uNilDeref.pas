@@ -11,6 +11,8 @@ unit uNilDeref;
 //   - if Assigned(obj) then ...  (in If-Bedingung)
 //   - if obj <> nil then ...     (in If-Bedingung)
 //   - if obj = nil then Exit;    (Early-Exit-Guard)
+//   - while obj <> nil do obj.X  (Schleifenkopf guardet nur den RUMPF)
+//   - b := obj <> nil; if b then obj.X   (Boolean-Zwischenvariable)
 //   - .Free / .Destroy           (TObject.Free ist nil-safe)
 //   - Foo(obj) / x := Foo(obj)   (Uebergabe als Argument = potentielle
 //                                 var/out-Zuweisung, beendet nil-Zustand)
@@ -18,6 +20,9 @@ unit uNilDeref;
 //
 // Nicht erkannt (bewusst):
 //   - obj.field := nil           (Cleanup-Muster)
+//   - obj[i] := nil              (Element-Tracking ueber Indizes ist unsound)
+//   - Werttypen (array of T / TArray<T> / Nullable<T>) - dort ist nil ein
+//     WERT, kein Zeiger; ein Deref darauf kann nie eine AV sein
 //   - Selbstreferenzen (Self.X)
 
 interface
@@ -34,9 +39,13 @@ type
     class procedure AnalyzeMethod(MethodNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; const ADirLines: TArray<Integer>);
   private
-    // Pruefung ob ein If-Block der Methode einen Guard fuer VarLow enthaelt
+    // Pruefung ob ein If-Block der Methode einen Guard fuer VarLow enthaelt.
+    // ADerefNode (Autopsie 2026-08-27): schaltet zusaetzlich den while-Kopf-
+    // Guard frei - der gilt NUR fuer Derefs im Schleifenrumpf, dafuer braucht
+    // die Pruefung den Deref-Knoten. Ohne ihn arbeitet sie wie bisher.
     class function HasGuardingIf(MethodNode: TAstNode;
-      const VarLow: string; AfterLine, BeforeLine: Integer): Boolean; static;
+      const VarLow: string; AfterLine, BeforeLine: Integer;
+      ADerefNode: TAstNode = nil): Boolean; static;
     // Erkennt ob ein Call ein nil-sicherer Aufruf ist (.Free, .Destroy)
     class function IsNilSafeCall(const CallNameLow,
       VarLow: string): Boolean; static;
@@ -89,6 +98,12 @@ begin
   Result := False;
 end;
 
+// Subtree-Containment per Objekt-Identitaet. Die Definition steht weiter
+// unten bei den Branch-Gates (Z. ~300); HasGuardingIf braucht sie aber schon
+// hier fuer den while-Kopf-Guard - deshalb die Vorwaertsdeklaration statt
+// eines Umzugs (der die gewachsene Reihenfolge der Gates zerreissen wuerde).
+function NodeContainsRef(Root, Target: TAstNode): Boolean; forward;
+
 { Hilfsfunktion: prueft ob in der Bedingung ein Guard fuer varname steht.
   Verwendet TDetectorUtils.ContainsWholeWordLower fuer korrekte Wortgrenzen -
   vorher matchten 'assigned MyVar' faelschlich auch 'assigned MyVarOld'. }
@@ -120,11 +135,14 @@ begin
 end;
 
 class function TNilDerefDetector.HasGuardingIf(MethodNode: TAstNode;
-  const VarLow: string; AfterLine, BeforeLine: Integer): Boolean;
+  const VarLow: string; AfterLine, BeforeLine: Integer;
+  ADerefNode: TAstNode): Boolean;
 var
-  Ifs : TList<TAstNode>;
-  IfN : TAstNode;
-  Low : string;
+  Ifs    : TList<TAstNode>;
+  Whiles : TList<TAstNode>;
+  IfN    : TAstNode;
+  WhN    : TAstNode;
+  Low    : string;
 begin
   Result := False;
   Ifs := MethodNode.FindAllRef(nkIfStmt);
@@ -136,6 +154,31 @@ begin
     Low := IfN.TypeRef.ToLower;
     if Low = '' then Continue;
     if CondHasGuard(Low, VarLow) then Exit(True);
+  end;
+
+  // FP-Gate (SCA008-Autopsie 2026-08-27, 1 Drop): der Kopf einer while-
+  // Schleife ist fuer JEDE Iteration ihres RUMPFS derselbe Guard wie eine
+  // if-Bedingung - 'x := nil; ... while x <> nil do x.Foo' kann den Deref
+  // nur mit x <> nil erreichen. Die Assigned()-Schreibweise faellt schon
+  // vorher weg (IsPassedAsArgBetween scannt nkWhileStmt-Bedingungen und
+  // liest 'Assigned(x)' als potentielle var/out-Uebergabe); uebrig bleibt
+  // genau die klammerfreie Vergleichsform, die ParseWhileStmt per
+  // JoinTokInto als 'x<>nil' ablegt - CondHasGuard hat dieses Muster.
+  //
+  // NodeContainsRef ist hier PFLICHT, kein Komfort: NACH der Schleife ist
+  // die Bedingung per Definition falsch, die Variable also nil. Ohne den
+  // Rumpf-Zwang wuerde 'x := nil; while x <> nil do Beep; x.Foo' - ein
+  // echter Fund - stillschweigend gedroppt.
+  if ADerefNode = nil then Exit;
+  Whiles := MethodNode.FindAllRef(nkWhileStmt);
+  for WhN in Whiles do
+  begin
+    if WhN.Line < AfterLine then Continue;
+    if WhN.Line > BeforeLine then Continue;
+    Low := WhN.TypeRef.ToLower;
+    if Low = '' then Continue;
+    if not CondHasGuard(Low, VarLow) then Continue;
+    if NodeContainsRef(WhN, ADerefNode) then Exit(True);
   end;
 end;
 
@@ -308,6 +351,60 @@ begin
   end;
 end;
 
+function SameArmHoldsBoth(Container, A, B: TAstNode): Boolean;
+// ARM-GENAUE Containment-Pruefung (SCA008-Autopsie 2026-08-27, Skeptiker-
+// MAJOR zur Nested-Guard-Lockerung). NodeContainsRef allein beweist NICHT,
+// dass zwei Knoten gemeinsam laufen: ein if enthaelt then- UND else-Zweig,
+// ein case alle Arme. Genau daran haette die naive Fassung den TP-Fall
+//   if c then x := nil else begin if x = nil then Exit end;  x.Foo
+// gedroppt (Korpus-Vorbild cnwizards CnEditorToggleVar.pas:293/304/350).
+// True nur wenn A UND B im GLEICHEN Arm des Containers stehen:
+//   * nkIfStmt   - beide im then-Teil oder beide im else-Zweig
+//   * nkCaseStmt - beide im selben nkCaseArm (Arme sind Direktkinder,
+//                  ParseCaseStmt Z. ~2454/2463)
+//   * Schleifen  - beide im (einzigen) Rumpf, also in derselben Iteration
+//                  erreichbar
+// Einer drin / einer draussen oder verschiedene Arme -> False (konservativ).
+var
+  ElseN            : TAstNode;
+  Arm, ArmA, ArmB  : TAstNode;
+  AInElse, BInElse : Boolean;
+  i                : Integer;
+begin
+  Result := False;
+  if (Container = nil) or (A = nil) or (B = nil) then Exit;
+  if not NodeContainsRef(Container, A) then Exit;
+  if not NodeContainsRef(Container, B) then Exit;
+  case Container.Kind of
+    nkIfStmt:
+      begin
+        ElseN := Container.FindFirstChild(nkElseBranch);
+        if ElseN = nil then Exit(True);   // nur ein Arm - kein Zweig moeglich
+        AInElse := NodeContainsRef(ElseN, A);
+        BInElse := NodeContainsRef(ElseN, B);
+        Result  := (AInElse = BInElse);
+      end;
+    nkCaseStmt:
+      begin
+        ArmA := nil;
+        ArmB := nil;
+        for i := 0 to Container.Children.Count - 1 do
+        begin
+          Arm := Container.Children[i];
+          if Arm.Kind <> nkCaseArm then Continue;
+          if (ArmA = nil) and NodeContainsRef(Arm, A) then ArmA := Arm;
+          if (ArmB = nil) and NodeContainsRef(Arm, B) then ArmB := Arm;
+        end;
+        // Liegt einer der beiden ausserhalb jedes Arms (Selektor-Ausdruck,
+        // Malformed-Recovery), ist die Arm-Frage nicht entscheidbar -> False.
+        Result := (ArmA <> nil) and (ArmA = ArmB);
+      end;
+  else
+    // while/for/repeat: genau ein Rumpf.
+    Result := True;
+  end;
+end;
+
 class function TNilDerefDetector.IsInExclusiveBranch(MethodNode, AssignNode,
   DerefNode: TAstNode): Boolean;
 // FP-Gate (Auto-Runde 2026-07-19, Triage 15/18 FP - Sub-Klasse 'syntactic-
@@ -468,7 +565,8 @@ begin
 end;
 
 function HasNilTestEarlyExitBetween(MethodNode: TAstNode;
-  const VarLow: string; AfterLine, BeforeLine: Integer): Boolean;
+  const VarLow: string; AfterLine, BeforeLine: Integer;
+  ADeref: TAstNode): Boolean;
 // #6 Inkr.3 (SCA008 Form d): 'x := nil; ... if x = nil then Exit; ... x.Foo'.
 // Der Header behauptete diese Abdeckung schon immer, CondHasGuard hatte das
 // '= nil'-Pattern aber nie (Leser-Audit 2026-07-23). Ein nil-Test zwischen
@@ -483,6 +581,17 @@ function HasNilTestEarlyExitBetween(MethodNode: TAstNode;
 // begin if x = nil then Exit; end; x.Foo' - bei y=False faellt der nil-Wert
 // durch; 'while c do if x = nil then Exit;' - 0 Iterationen moeglich).
 // Solche geschachtelten Guards werden uebersprungen -> kein Drop.
+//
+// LOCKERUNG (SCA008-Autopsie 2026-08-27, 1 Drop): der Pfad-Einwand gilt nur,
+// solange der DEREF ausserhalb des Containers liegt. Steht er im SELBEN ARM
+// wie der Guard, fuehrt jeder Pfad zum Deref durch den Guard - und der Drop
+// ist wieder sauber. Korpus-Vorbild cnwizards CnEditorToggleVar.pas:
+// 'AProcInfo := nil' (Z.304), 'if AProcInfo = nil then Exit' (Z.350/351) und
+// der Deref (Z.392) liegen alle im else-Arm desselben if (Z.293).
+// ARM-genau, nicht Container-genau: die Container-Variante wuerde
+// 'if c then x := nil else begin if x = nil then Exit end; x.Foo' droppen,
+// obwohl das ein echter Fund ist (Skeptiker-MAJOR) - siehe SameArmHoldsBoth.
+// ADeref = nil laesst die alte, voll konservative Fassung stehen.
 var
   Ifs        : TList<TAstNode>;
   IfN        : TAstNode;
@@ -506,13 +615,16 @@ begin
     Cond := CondNormNoWs(IfN.TypeRef);
     if (Cond <> VarLow + '=nil') and (Cond <> 'nil=' + VarLow) and
        (Cond <> 'notassigned(' + VarLow + ')') then Continue;
-    // Guard darf nicht selbst in einem Branch/Loop geschachtelt sein.
+    // Guard darf nicht selbst in einem Branch/Loop geschachtelt sein -
+    // ausser der Deref liegt im SELBEN Arm dieses Containers (dann fuehrt
+    // jeder Pfad zum Deref durch den Guard, siehe Kopfkommentar).
     Nested := False;
     for Kind in [nkIfStmt, nkCaseStmt, nkWhileStmt, nkForStmt, nkRepeatStmt] do
     begin
       Containers := MethodNode.FindAllRef(Kind);
       for Cont in Containers do
-        if (Cont <> IfN) and NodeContainsRef(Cont, IfN) then
+        if (Cont <> IfN) and NodeContainsRef(Cont, IfN) and
+           not SameArmHoldsBoth(Cont, IfN, ADeref) then
         begin
           Nested := True;
           Break;
@@ -537,6 +649,160 @@ begin
           Break;
         end;
     if Terminates then Exit(True);
+  end;
+end;
+
+function ParseNilPredicate(const ARaw: string; out ACore: string;
+  out APos: Boolean): Boolean;
+// Wie ParseCorrelatedCond, aber NUR die echten nil-PRAEDIKATE
+// ('v <> nil', 'v = nil', 'nil <> v', 'nil = v', 'Assigned(v)',
+// 'not Assigned(v)'). Die blanken Formen der Whitelist ('v' / 'not v')
+// sind hier verboten: 'b := v' kopiert den ZEIGER, ist also kein nil-Test -
+// 'if b then v.Foo' waere dann gar kein Guard, sondern ein Alias-Deref.
+//
+// Erkennungsmerkmal ist NICHT 'enthaelt nil' (ein Bezeichner darf so
+// heissen - 'b := nilCount' waere sonst ein Praedikat), sondern die
+// Struktur: bei den bare-Formen ist die vollgestrippte Bedingung exakt der
+// Kern-Ident, bei 'not x' exakt 'not' davor. Alles andere der Whitelist ist
+// per Konstruktion eine Vergleichs- oder Assigned-Form.
+var
+  S : string;
+begin
+  Result := ParseCorrelatedCond(ARaw, ACore, APos);
+  if not Result then Exit;
+  S := CondNormNoWs(ARaw);
+  Result := (S <> ACore) and (S <> 'not' + ACore);
+end;
+
+function HasBoolAliasGuard(MethodNode: TAstNode;
+  Calls, Assigns: TList<TAstNode>; const VarLow: string;
+  ANilAssign, ADeref: TAstNode): Boolean;
+// FP-Gate (SCA008-Autopsie 2026-08-27, 7 Drops): Ein-Schritt-Kopier-
+// propagation ueber eine Boolean-Zwischenvariable.
+//   v := nil; ... b := v <> nil; ... if b then v.Foo;
+// Der Detektor sieht nur 'if b' und erkennt darin keinen nil-Guard, obwohl
+// b nichts anderes ist als das gespeicherte Praedikat. Beide Polaritaeten
+// werden korrekt verrechnet: im erreichten Arm gilt b = (PosCond xor
+// InElse), geschuetzt ist er genau dann, wenn dieser Wert die Aussage
+// 'v <> nil' traegt (b = PosRhs).
+//
+// *** SKEPTIKER-MAJOR (Autopsie 2026-08-27): ohne Dominanz-Zwang ist das
+// Gate ein TP-FRESSER. Bei
+//     Result := True; v := nil; if c then Result := v <> nil;
+//     if Result then v.Foo;
+// laeuft die b-Zuweisung NICHT auf jedem Pfad - bei c = False traegt
+// Result noch das alte True und der Deref sieht nil. Deshalb: die
+// b-Zuweisung darf in KEINEM Branch/Loop stecken, der nicht auch das
+// Guard-if im selben Arm enthaelt (SameArmHoldsBoth), und b darf im
+// Fenster weder neu zugewiesen noch als var/out-Argument uebergeben
+// werden. ***
+//
+// Fenster-Rezept identisch zu IsInCorrelatedExclusiveIfs: umschliesst eine
+// SCHLEIFE die b-Zuweisung oder das Guard-if, wird je Iteration neu
+// ausgewertet - dann zaehlt die GANZE Methode als Mutations-Fenster, weil
+// eine Mutation hinter dem Deref im naechsten Durchlauf VOR dem Guard liegt.
+var
+  Ifs, Loops, Containers : TList<TAstNode>;
+  BA, IfN, ElseN, Cont, N : TAstNode;
+  Kind                    : TNodeKind;
+  BName, CoreRhs, CoreCond, NmLow : string;
+  PosRhs, PosCond, InElse : Boolean;
+  Nested, Mutated         : Boolean;
+  WinStart, WinEnd        : Integer;
+begin
+  Result := False;
+  if (MethodNode = nil) or (ANilAssign = nil) or (ADeref = nil) then Exit;
+  Ifs := MethodNode.FindAllRef(nkIfStmt);
+  for BA in Assigns do
+  begin
+    if BA.Line <= ANilAssign.Line then Continue;
+    if BA.Line >= ADeref.Line then Continue;
+    // Billig-Vorfilter vor der Normalisierung: die kuerzesten Praedikate der
+    // Whitelist sind 'v=nil' und 'nil=v' - VIER Zeichen ueber dem Variablen-
+    // namen (JoinTokInto setzt um '=' und '<>' kein Blank). Kuerzere RHS
+    // koennen die Whitelist nie passieren.
+    if Length(BA.TypeRef) < Length(VarLow) + 4 then Continue;
+    BName := BA.Name.ToLower;
+    // Nur einfache lokale Flags - dotted/indizierte Ziele ('rec.f', 'a[]')
+    // sind nicht exakt trackbar (Lehre SCA001-XL: nur der Original-Wortlaut).
+    if not IsPlainIdentLower(BName) then Continue;
+    if BName = VarLow then Continue;
+    if not ParseNilPredicate(BA.TypeRef, CoreRhs, PosRhs) then Continue;
+    if CoreRhs <> VarLow then Continue;
+
+    for IfN in Ifs do
+    begin
+      if IfN.Line < BA.Line then Continue;
+      if IfN.Line > ADeref.Line then Continue;
+      // Die b-Zuweisung muss VOR dem Guard-if stehen, nicht darin:
+      // 'if b then begin b := v <> nil; v.Foo; end' testet das ALTE b, der
+      // Deref laeuft dort unbedingt - das waere ein echter Fund.
+      if NodeContainsRef(IfN, BA) then Continue;
+      if not ParseCorrelatedCond(IfN.TypeRef, CoreCond, PosCond) then Continue;
+      if CoreCond <> BName then Continue;
+      if not NodeContainsRef(IfN, ADeref) then Continue;
+      ElseN  := IfN.FindFirstChild(nkElseBranch);
+      InElse := (ElseN <> nil) and NodeContainsRef(ElseN, ADeref);
+      if (PosCond xor InElse) <> PosRhs then Continue;  // Arm schuetzt nicht
+
+      // Dominanz: b-Zuweisung laeuft auf jedem Pfad zum Guard-if?
+      Nested := False;
+      for Kind in [nkIfStmt, nkCaseStmt, nkWhileStmt, nkForStmt,
+                   nkRepeatStmt] do
+      begin
+        Containers := MethodNode.FindAllRef(Kind);
+        for Cont in Containers do
+          if NodeContainsRef(Cont, BA) and
+             not SameArmHoldsBoth(Cont, BA, IfN) then
+          begin
+            Nested := True;
+            Break;
+          end;
+        if Nested then Break;
+      end;
+      if Nested then Continue;
+
+      // Mutations-Fenster bestimmen (Schleife -> ganze Methode).
+      WinStart := BA.Line;
+      WinEnd   := ADeref.Line;
+      for Kind in [nkWhileStmt, nkForStmt, nkRepeatStmt] do
+      begin
+        Loops := MethodNode.FindAllRef(Kind);
+        for N in Loops do
+          if NodeContainsRef(N, BA) or NodeContainsRef(N, IfN) then
+          begin
+            WinStart := 0;
+            WinEnd   := MaxInt;
+            Break;
+          end;
+        if WinEnd = MaxInt then Break;
+      end;
+
+      Mutated := False;
+      for N in Assigns do
+      begin
+        if N = BA then Continue;
+        if (N.Line < WinStart) or (N.Line > WinEnd) then Continue;
+        NmLow := N.Name.ToLower;
+        if (NmLow = BName) or NmLow.EndsWith('.' + BName) then
+        begin
+          Mutated := True;
+          Break;
+        end;
+      end;
+      if Mutated then Continue;
+
+      // var/out-Uebergabe von b. IsPassedAsArgBetween arbeitet mit OFFENEN
+      // Grenzen (> AfterLine, < BeforeLine) - Start um 1 vorziehen, damit
+      // eine Mutation AUF der Zuweisungszeile zaehlt. Das Guard-if ist per
+      // Referenz ausgenommen: seine Bedingung hat die ParseCorrelatedCond-
+      // Whitelist passiert und ist nebenwirkungsfrei; ohne die Ausnahme
+      // vetote 'Assigned(b)' sich selbst (Lehre Review 2026-07-30).
+      if TNilDerefDetector.IsPassedAsArgBetween(MethodNode, Calls, Assigns,
+           BName, WinStart - 1, WinEnd, IfN) then Continue;
+
+      Exit(True);
+    end;
   end;
 end;
 
@@ -712,6 +978,96 @@ begin
   Result := not ACfg.CanReach(NilBlk, DerefBlk);
 end;
 
+function DeclaredTypeIsNilValue(const ATypeLow: string): Boolean;
+// True wenn der deklarierte Typ nil als WERT traegt statt als Zeiger. Dort
+// ist 'v := nil' eine Leerung (Laenge 0 / kein Wert), kein Nullen einer
+// Referenz - ein Member-Zugriff darauf kann konstruktiv keine AV ausloesen:
+//   * dynamische Arrays  'array of T' und 'TArray<T>'
+//   * Nullable<T>-Wrapper (Spring4D-Stil)
+//
+// DREI SCHREIBWEISEN, alle im Parser belegt (Gegenpruefung 2026-08-27 -
+// der Kopf nannte vorher nur zwei und die falsche Routine):
+//   (1) klassische var-Sektion: Typ-Tokens OHNE Trenner ('arrayoftobject',
+//       ParseLocalVarSection Z.2004, nkLocalVar Z.2030 - dieselbe Form,
+//       die uUninitVar Z.551 nennt);
+//   (2) Parameter: JoinTokInto, Blank nur zwischen Ident-Zeichen
+//       ('array of TObject', aber 'TArray<TObject>');
+//   (3) Inline-var und for-var: UNBEDINGTER Blank zwischen ALLEN Tokens
+//       (ParseInlineVarStmt Z.2779, ParseForStmt Z.2500) - dort kommt
+//       'TArray < TObject >' an. Deshalb werden Blanks um '<' entfernt,
+//       BEVOR die Generic-Praefixe geprueft werden; der 'array of'-Test
+//       laeuft weiter auf dem ungestrippten Text (ein Bezeichner kann kein
+//       Leerzeichen tragen - das ist genau seine Homonym-Sicherheit).
+//
+// BEKANNTE GRENZE (Gegenpruefung 2026-08-27, bewusst so belassen): in der
+// trennerlosen Form ist ein dynamisches Array nicht von einem NAMENSTYP
+// 'ArrayOfThing' unterscheidbar - beide kommen als 'arrayofthing' an. Das
+// ist dieselbe Homonym-Falle, die uUninitVar Z.549-560 beschreibt; dort
+// wird sie ueber eine Quellzeilen-Verifikation ('array' + PFLICHT-
+// Whitespace + 'of') geschlossen, die hier die Zeile mitschleppen wuerde.
+// Hier faellt die Richtung auf Suppression, ein solcher Bezeichner wuerde
+// also einen echten Fund schlucken. Korpus-Gegenprobe: genau EIN Treffer
+// (Img32.Text.pas:258 'familyNames : ArrayOfUtf8String'), und der ist ein
+// FELD - ResolvedTypeIsNilValue loest ohnehin nur nkLocalVar/nkParam auf,
+// also heute kein Schaden. Wenn der Fall real wird, ist die Quellzeilen-
+// Verifikation aus uUninitVar der Weg. Test ValueTypeArrayOfLookalike_...
+// haelt die Grenze fest.
+// Konservativ ausgelassen bleiben 'packed array of T' und qualifizierte
+// Namen ('System.TArray<T>'); statische Arrays matchen ohnehin nicht.
+var
+  Tight : string;
+begin
+  // Blanks nur fuer die Generic-Praefixe entfernen (Form 3 liefert
+  // 'tarray < tobject >'); der 'array of'-Test braucht das Leerzeichen
+  // als Homonym-Schutz und laeuft deshalb auf dem Original.
+  Tight := StringReplace(ATypeLow, ' ', '', [rfReplaceAll]);
+  Result := Tight.StartsWith('tarray<') or
+            Tight.StartsWith('nullable<') or
+            (Pos('array of', ATypeLow) > 0) or
+            ATypeLow.StartsWith('arrayof');
+end;
+
+function ResolvedTypeIsNilValue(MethodNode: TAstNode;
+  const VarLow: string): Boolean;
+// FP-Gate (SCA008-Autopsie 2026-08-27, 5 Drops): loest den DEKLARIERTEN Typ
+// der nil-gesetzten Variable im Methoden-Subtree auf (lokale Variablen und
+// Parameter) und droppt, wenn nil dort ein Wert ist (DeclaredTypeIsNilValue).
+//
+// Findet sich KEINE Deklaration (Feld der Klasse, Unit-Variable, Import),
+// bleibt der Fund stehen - der Methodenknoten traegt diese Deklarationen
+// nicht, Raten waere hier eine stille Suppression. Bei MEHREREN Treffern
+// gleichen Namens (verschattete Inline-vars) wird nur gedroppt, wenn JEDE
+// Deklaration ein Werttyp ist; eine einzige Referenz-Deklaration macht den
+// Deref wieder moeglich.
+var
+  Decls : TList<TAstNode>;
+  D     : TAstNode;
+  Kind  : TNodeKind;
+  Nm    : string;
+  Sp    : Integer;
+  Found : Boolean;
+begin
+  Result := False;
+  Found  := False;
+  if MethodNode = nil then Exit;
+  for Kind in [nkLocalVar, nkParam] do
+  begin
+    Decls := MethodNode.FindAllRef(Kind);
+    for D in Decls do
+    begin
+      Nm := D.Name.ToLower;
+      // nkParam.Name traegt den Modifier ('const x', 'var f', 'out o') -
+      // der Bezeichner ist der Teil hinter dem letzten Blank.
+      Sp := LastDelimiter(' ', Nm);
+      if Sp > 0 then Nm := Copy(Nm, Sp + 1, MaxInt);
+      if Nm <> VarLow then Continue;
+      Found := True;
+      if not DeclaredTypeIsNilValue(D.TypeRef.ToLower) then Exit(False);
+    end;
+  end;
+  Result := Found;
+end;
+
 class procedure TNilDerefDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   const ADirLines: TArray<Integer>);
@@ -733,11 +1089,25 @@ begin
       if NA.TypeRef.ToLower <> 'nil' then Continue;
       // Feldwerte (obj.field := nil) ueberspringen - Cleanup-Muster
       if Pos('.', NA.Name) > 0 then Continue;
+      // FP-Gate (SCA008-Autopsie 2026-08-27, 4 Drops): indizierte Ziele.
+      // ParsePrimary kollabiert jeden Index-Ausdruck zu '[]' ('fItems[i]'
+      // -> 'fItems[]'), der Index steht im AST also NIRGENDS. Damit sind
+      // 'a[i] := nil' und 'a[j].Foo' fuer den zeilenbasierten Abgleich
+      // ununterscheidbar - Element-Tracking waere hier reines Raten
+      // (zusaetzlich Aliasing ueber zwei Namen auf dasselbe Array). Alle
+      // vier Faelle der 40er-Stichprobe waren FP mit verifiziertem Guard
+      // am tatsaechlich benutzten Element.
+      if Pos('[', NA.Name) > 0 then Continue;
 
       VarLow := NA.Name.ToLower;
       if VarLow = '' then Continue;
       // Self oder Result als Variablenname ueberspringen
       if (VarLow = 'self') or (VarLow = 'result') then Continue;
+      // FP-Gate (SCA008-Autopsie 2026-08-27, 5 Drops): Werttyp - bei
+      // 'array of T' / 'TArray<T>' / 'Nullable<T>' ist nil ein WERT, kein
+      // Zeiger; ein Deref darauf kann keine AV sein. Einmal je nil-
+      // Zuweisung aufgeloest, nicht je Kandidatenpaar.
+      if ResolvedTypeIsNilValue(MethodNode, VarLow) then Continue;
 
       for var C in Calls do
       begin
@@ -777,8 +1147,17 @@ begin
         end;
         if Reassigned then Continue;
 
-        // Guard via If-Bedingung zwischen nil und Zugriff?
-        if HasGuardingIf(MethodNode, VarLow, NA.Line, C.Line) then Continue;
+        // Guard via If-Bedingung zwischen nil und Zugriff - oder via
+        // while-Kopf, wenn der Deref im Schleifenrumpf liegt (Autopsie
+        // 2026-08-27, 1 Drop).
+        if HasGuardingIf(MethodNode, VarLow, NA.Line, C.Line, C) then Continue;
+
+        // FP-Gate (SCA008-Autopsie 2026-08-27, 7 Drops): das nil-Praedikat
+        // steht in einer Boolean-Zwischenvariable ('b := v <> nil; ...
+        // if b then v.Foo'). Ein-Schritt-Kopierpropagation mit Dominanz-
+        // und Mutations-Zwang - siehe HasBoolAliasGuard.
+        if HasBoolAliasGuard(MethodNode, Calls, Assigns, VarLow, NA, C) then
+          Continue;
 
         // FP-Gate (2026-07-04): out-param-assign - Variable wurde zwischen
         // nil und Zugriff als Argument uebergeben (var/out-Zuweisung)?
@@ -810,7 +1189,7 @@ begin
         // FP-Gate #6 Inkr.3 (Form d): nil-Test-Early-Exit zwischen nil
         // und Deref ('if x = nil then Exit;') toetet die nil-Definition
         // auf dem Fall-through-Pfad.
-        if HasNilTestEarlyExitBetween(MethodNode, VarLow, NA.Line, C.Line) then
+        if HasNilTestEarlyExitBetween(MethodNode, VarLow, NA.Line, C.Line, C) then
           Continue;
 
         // FP-Gate #6 Inkr.3 (Form c): korrelierte Separat-ifs mit exakt
