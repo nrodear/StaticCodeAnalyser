@@ -285,7 +285,7 @@
     },
     "SCA071": {
       "name": "Unit-Section-Keyword nicht in Spalte 1",
-      "shortDescription": "`unit`/`interface`/`implementation`/`initialization`/`finalization` sollten in Spalte 1 beginnen"
+      "shortDescription": "`unit`/`interface`/`uses`/`implementation`/`initialization`/`finalization` sollten in Spalte 1 beginnen"
     },
     "SCA072": {
       "name": "Überflüssiger Boolean-Vergleich",

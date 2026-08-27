@@ -285,7 +285,7 @@
     },
     "SCA071": {
       "name": "Mot-clé de section d'unit qui n'est pas en colonne 1",
-      "shortDescription": "`unit`/`interface`/`implementation`/`initialization`/`finalization` doivent commencer en colonne 1"
+      "shortDescription": "`unit`/`interface`/`uses`/`implementation`/`initialization`/`finalization` doivent commencer en colonne 1"
     },
     "SCA072": {
       "name": "Comparaison booléenne redondante",

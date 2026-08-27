@@ -442,7 +442,7 @@ const
     (
       RuleID   : 'SCA071';
       Name     : 'Unit-Section-Keyword nicht in Spalte 1';
-      ShortDesc: '`unit`/`interface`/`implementation`/`initialization`/`finalization` sollten in Spalte 1 beginnen'
+      ShortDesc: '`unit`/`interface`/`uses`/`implementation`/`initialization`/`finalization` sollten in Spalte 1 beginnen'
     ),
     // SCA072
     (
@@ -1758,7 +1758,7 @@ const
     (
       RuleID   : 'SCA071';
       Name     : 'Mot-cl' + #$E9 + ' de section d''unit qui n''est pas en colonne 1';
-      ShortDesc: '`unit`/`interface`/`implementation`/`initialization`/`finalization` doivent commencer en colonne 1'
+      ShortDesc: '`unit`/`interface`/`uses`/`implementation`/`initialization`/`finalization` doivent commencer en colonne 1'
     ),
     // SCA072
     (
