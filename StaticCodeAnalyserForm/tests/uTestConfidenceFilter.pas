@@ -97,8 +97,12 @@ begin
     KindDefaultConfidence(fkMemoryLeak));
   // fkUseAfterFree wurde 2026-06-28 auf fcLow demotet (~94% FP, CFG noetig) -
   // siehe KindDefaultConfidence_HardenedHeuristicsAreLow.
-  Assert.AreEqual<TFindingConfidence>(fcHigh,
-    KindDefaultConfidence(fkNilDeref));
+  // fkNilDeref wurde 2026-08-27 auf fcMedium demotet (Autopsie: 44/48
+  // Korpus-Funde FP bei durchgehend fcHigh - im Bug-Tier unhaltbar;
+  // fcLow waere zu hart, die Regel findet echte AVs).
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkNilDeref),
+    'SCA008: 91,7% Korpus-FP -> fcMedium, raus aus dem Error-Tier');
   Assert.AreEqual<TFindingConfidence>(fcHigh,
     KindDefaultConfidence(fkFreeWithoutNil));
   Assert.AreEqual<TFindingConfidence>(fcHigh,
