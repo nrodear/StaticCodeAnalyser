@@ -19,6 +19,11 @@
 //   end;
 // hat Tiefe 2 (for + if), nicht 3.
 //
+// NICHT als neue Ebene gezaehlt: das 'if' einer 'else if'-KETTE.
+//   if A then .. else if B then .. else if C then ..
+// ist fachlich EINE mehrarmige Verzweigung (wie ein case), keine
+// dreifache Schachtelung - siehe Walk() fuer Mechanik und Messung.
+//
 // Schwelle: > MAX_DEPTH (Default: 4) bedeutet >= 5 verschachtelte Ebenen.
 
 interface
@@ -73,6 +78,29 @@ class procedure TDeepNestingDetector.Walk(Node: TAstNode; Depth: Integer;
 // Bei tief verschachteltem AST (z.B. JvId3v2.pas mit langen
 // if-then-else-Ketten) sprengte Walk(Self) den Default-Stack mit
 // STACK_OVERFLOW ($C00000FD). Explicit Stack mit (Node, Depth)-Paaren.
+//
+// FIX (Autopsie 2026-08-27, SCA018-FP-Klasse 'else-if-Kette'): ein
+// direkt unter nkElseBranch haengendes nkIfStmt zaehlt NICHT als neue
+// Ebene. Der Parser haengt den else-Zweig als nkElseBranch UNTER das
+// nkIfStmt (uParser2.ParseIfStmt:2402-2407) und dieses traegt bereits
+// die erhoehte Tiefe; jedes Kettenglied bekam dadurch +1, obwohl
+// 'if..else if..else if' fachlich EINE mehrarmige Verzweigung ist.
+// Mechanik-Vorlage: uCognitiveComplexity.CountInMethod:173-192, dort
+// seit 2026-07-26 im Einsatz (ElseIfDepth := ChildDepth - 1).
+// GEZAEHLT am Korpus D:\git-sca-realworld (rw17, Detektor-Replikat
+// ueber alle Dateien mit SCA018-Fund): 5.935 reproduzierte Funde ->
+// 2.316 Drops (39,0 %); 3.619 bleiben, davon 916 mit gesenkter Tiefe
+// und 543 mit verschobenem Anker (der Detektor meldet die TIEFSTE
+// Stelle - schrumpft die Kette, gewinnt eine andere Stelle der
+// Methode). 0 neue Funde, 0 gestiegene Tiefen - strukturell garantiert,
+// weil der Eingriff Inc() ausschliesslich UNTERDRUECKT.
+// BEWUSST ENG: nur das DIREKTE Kind. 'else begin if .. end' liegt unter
+// einem nkBlock und behaelt seinen Zuschlag - das ist echte
+// Schachtelung. 'else case' ebenso (nur nkIfStmt ist Kettenglied).
+// NICHT umgesetzt (Autopsie hat es widerlegt): Schwelle 4 -> 5/6/7. Die
+// FP-Quote bleibt dabei praktisch konstant (39,2 / 36,6 / 39,9 /
+// 44,7 %), weil Ketten schneller inflationieren als echte Schachtelung
+// tief wird.
 type
   TFrame = record
     N : TAstNode;
@@ -83,6 +111,7 @@ var
   Cur      : TFrame;
   Child    : TAstNode;
   NewDepth : Integer;
+  IsElseIf : Boolean;
   F        : TFrame;
 begin
   if Node = nil then Exit;
@@ -97,7 +126,12 @@ begin
       for Child in Cur.N.Children do
       begin
         NewDepth := Cur.D;
-        if Child.Kind in COUNTING_KINDS then
+        // Kettenglied 'else if': erbt die Tiefe des Kopf-if statt +1.
+        // nkElseBranch entsteht ausschliesslich in ParseIfStmt (geprueft
+        // 2026-08-27: einzige Add-Stelle) - der case-else-Zweig ist ein
+        // nkCaseArm und faellt hier bewusst NICHT hinein.
+        IsElseIf := (Cur.N.Kind = nkElseBranch) and (Child.Kind = nkIfStmt);
+        if (Child.Kind in COUNTING_KINDS) and not IsElseIf then
         begin
           Inc(NewDepth);
           if NewDepth > DeepestDepth then
