@@ -1361,6 +1361,45 @@ begin
     // (4 rote Tests, TestInsight 2026-08-09).
     fkDfmCrossFormCoupling: Result := fcLow;
 
+    // VOLLZAEHLUNGS-DEMOTES 2026-08-27: vier Regeln mit so kleiner
+    // Fundmenge, dass JEDER Fund im Korpus einzeln am Quelltext
+    // geprueft werden konnte - keine Stichprobe, keine Hochrechnung.
+    // Alle vier standen im else-Default auf fcHigh und damit im
+    // Error-Tier der Evidenz-Politik ("Error = bewiesen"). Das ist bei
+    // diesen Trefferbilanzen nicht haltbar. EIGENE Case-Zweige
+    // (SCA040-Lehre: nie in eine Aufzaehlung haengen).
+
+    // SCA124 InstanceInvokedConstructor: 0 TP / 4 FP. Alle vier sind
+    // EINE Ursache - das Werttyp-Gate fragt TTypeIndex mit dem
+    // Bare-Name, und eine Korpus-Unit deklariert eine eigene Klasse
+    // 'TRegEx', die den RTL-Record-Seed verdraengt. Der Seed-Vorrang-
+    // Fix ist kartiert, aber nicht risikofrei (die Korpus-Klasse ist
+    // echt) - bis dahin gehoert die Regel nicht in den Error-Tier.
+    fkInstanceInvokedConstructor: Result := fcMedium;
+
+    // SCA137 IntegerOverflow: 3 TP / 1 FP - die Quote ist gut, der
+    // Demote hat einen anderen Grund: der Detektor hat prinzipbedingt
+    // keine Wertebereichs-Analyse und kann den behaupteten Ueberlauf
+    // nie BEWEISEN. Zwei der drei Treffer brauchen Konfigurationswerte
+    // von 24 bzw. 50 Tagen, bevor sie ueberlaufen. Unter "Error =
+    // bewiesen" traegt das kein fcHigh.
+    fkIntegerOverflow: Result := fcMedium;
+
+    // SCA114 TThreadDestroyWithoutTerminate: 0 TP / 3 FP. Praemissen-
+    // Problem: TThread.Destroy fuehrt Terminate und WaitFor IMPLIZIT
+    // aus, ein nacktes FreeAndNil(Thread) ist also fuer sich genommen
+    // kein AV-Pfad - der Detektor weiss das selbst (Kommentar in
+    // uConcurrencyExt zu Gate c), der Meldetext behauptet trotzdem
+    // Heap-Korruption.
+    fkTThreadDestroyWithoutTerminate: Result := fcMedium;
+
+    // SCA027 DfmDuplicateBinding: 0 TP / 2 FP, und beide sind die zwei
+    // Haelften EINES Paares in EINER Datei. Dass zwei Controls dasselbe
+    // (DataSource, DataField) binden, ist als Beobachtung richtig - die
+    // Behauptung eines Schreibkonflikts ist es nicht, solange die Rolle
+    // der Komponente (rein lesend?) nicht geprueft wird.
+    fkDfmDuplicateBinding: Result := fcMedium;
+
     // SCA008 NilDeref: Autopsie 2026-08-27 (Scout+Skeptiker, 40er-
     // Stichprobe am Korpus). 44 von 48 rw15-Funden sind FP (91,7 %) -
     // und ALLE 48 trugen bis hier fcHigh, also Error-Tier-Anwaerter im

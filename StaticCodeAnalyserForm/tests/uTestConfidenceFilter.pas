@@ -22,6 +22,7 @@ type
     [Test] procedure KindDefaultConfidence_MetricsAreMedium;
     [Test] procedure KindDefaultConfidence_PatternMatchersAreMedium;
     [Test] procedure KindDefaultConfidence_HardenedHeuristicsAreLow;
+    [Test] procedure KindDefaultConfidence_VollzaehlungDemotesAreMedium;
     [Test] procedure KindDefaultConfidence_PureFormattingIsLow;
     [Test] procedure SetKind_AppliesKindDefaultConfidence;
     // ---- Filter ----
@@ -141,6 +142,31 @@ begin
     KindDefaultConfidence(fkVariantTypeMisuse),
     'SCA173: Gate A + fcMedium (Autopsie 2026-08-26) - NICHT fcLow, ' +
     'die Regel bleibt im Default-Profil sichtbar');
+end;
+
+procedure TTestConfidenceFilter.KindDefaultConfidence_VollzaehlungDemotesAreMedium;
+// GOVERNANCE-PIN (Vollzaehlung 2026-08-27): vier Regeln mit so kleiner
+// Fundmenge, dass JEDER Korpus-Fund einzeln am Quelltext geprueft wurde -
+// SCA124 0/4 TP, SCA114 0/3, SCA027 0/2, SCA137 3/4 (dort traegt nicht die
+// Quote den Demote, sondern die fehlende Wertebereichs-Analyse: der
+// behauptete Ueberlauf ist nie beweisbar). Alle vier standen im
+// else-Default auf fcHigh und damit im Error-Tier.
+// Wer diesen Test rot macht, will re-promoten - zulaessig NUR mit frischer
+// Vollzaehlung, nicht mit einer Stichprobe (genau daran ist die alte
+// Einschaetzung dieser Regeln gescheitert: Quoten aus n=1).
+begin
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkInstanceInvokedConstructor),
+    'SCA124: 0 TP / 4 FP in der Vollzaehlung');
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkIntegerOverflow),
+    'SCA137: kein Ueberlauf-Beweis ohne Wertebereichs-Analyse');
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkTThreadDestroyWithoutTerminate),
+    'SCA114: TThread.Destroy terminiert implizit - Praemisse traegt kein fcHigh');
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkDfmDuplicateBinding),
+    'SCA027: 0 TP / 2 FP, Rolle der Komponente wird nicht geprueft');
 end;
 
 procedure TTestConfidenceFilter.KindDefaultConfidence_HardenedHeuristicsAreLow;
