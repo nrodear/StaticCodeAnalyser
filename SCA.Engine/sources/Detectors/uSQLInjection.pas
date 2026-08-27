@@ -2,6 +2,38 @@
 
 // AST-basierter SQL-Injection-Detektor (Sonar-Regel #4).
 //
+// AUTOPSIE 2026-08-27 (Scout + Skeptiker, alle 64 rw16-Funde einzeln
+// klassifiziert: 7 TP / 55 FP). ERGEBNIS: KEIN weiteres Gate. Wer hier
+// die naechste FP-Runde plant, spart sich die Analyse - sie ist gelaufen:
+//   * Die am 26.08. offen gelassenen "Klasse 5 (Unit-Literale)" und
+//     "Klasse 6 (Mehrzweig-Dedup)" sind ABGELEHNT. Klasse 5 braeuchte eine
+//     Unit-Ebenen-Dataflow-Schicht fuer -7 Funde in EINER Korpusdatei;
+//     Klasse 6 bringt netto -2 und ist ein UX-/Anker-Argument, kein FP-
+//     Argument.
+//   * Auch das vermeintlich billige "Hygiene-Paket" ist am Korpus
+//     WIDERLEGT (Gegenpruefung, vier Blocker): IsTransparentHelperTerm in
+//     IsSafeFormatArgElement zu verdrahten bringt 0 Drops (nur 1 der 64
+//     Funde hat ueberhaupt einen Helfer-Term an dieser Stelle, und der
+//     hat einen zweiten Blocker); '.ToUpper' als Suffix-Helfer bringt 0
+//     (darunter liegt ein unbekanntes Member-Metadatum, das weiterhin
+//     blockt); eine UI-Text-Senke in IsNonSqlSink ist strukturell
+//     unmoeglich, weil IsAssignRisk diese Funktion NIRGENDS ruft - und
+//     waere in einem DB-Admin-Tool ohnehin falsch (dort IST der Memo der
+//     Statement-Puffer, HeidiSQL fuehrt SynMemo-Inhalte aus).
+//   * Der Rest ist NICHT lexikalisch trennbar: jede verbleibende
+//     Fundstelle braucht 2-4 unabhaengige Fakten (Parameter-Konvention +
+//     Callee-Rueckgabe-Vertrag + Akkumulator-Dataflow + prozedurale
+//     Fuellung per Append). Das ist Taint-Tracking, also K1
+//     (Callee-Summary-Index) - kein Gate.
+// Die Regel bleibt bewusst warning/fcMedium: sie ist ein Review-Zeiger
+// fuer ORM-/Treiber-/Admin-Tool-Code, kein Beweis. Ihre 4-5 echten Funde
+// (Klartext-Passwort in ALTER USER, rohe Request-Parameter in REST-
+// INSERT/UPDATE, roher Datenbankname zwischen SQL-Quotes) rechtfertigen
+// die Restmenge nur in dieser Lesart.
+// Messhinweis: 13 der 64 Funde liegen unter /test/ - sie erscheinen NUR,
+// weil die Korpus-Serie mit [Detectors] IncludeTests=1 faehrt; im
+// Default (IncludeTests=0) filtert TIgnoreList.IsTestPath sie weg.
+//
 // Erkennt SQL-Befehle, die durch String-Konkatenation (+) aufgebaut werden,
 // statt parametrisierte Queries zu verwenden.
 //
