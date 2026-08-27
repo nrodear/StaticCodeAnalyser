@@ -10,6 +10,10 @@ unit uRestHttpSecurity;
 //
 // Lexisch (URL-Literale + Property-Assignment-Pattern).
 // Localhost/127.0.0.1/::1 sind keine Findings - Dev-Workflows brauchen die.
+//
+// fkHttpInsteadOfHttps traegt seit dem FP-Paket 2026-08-27 fuenf weitere
+// Gates (P/F/M/D/T) - Herleitung und Korpus-Zahlen stehen im Block direkt
+// ueber TFixtureVerdict. fkDisabledTlsVerification ist davon NICHT beruehrt.
 
 interface
 
@@ -92,6 +96,18 @@ begin
   // Port abschneiden
   p := Pos(':', L);
   if p > 0 then L := Copy(L, 1, p - 1);
+  // GATE P (SCA115-FP-Paket 2026-08-27, 1 Fund): FQDN-Wurzelpunkt abschneiden.
+  // 'example.com.' IST 'example.com' - der abschliessende Punkt benennt die
+  // DNS-Wurzel (RFC 1034 3.1) und gehoert nicht zum Namen. Ohne den Schnitt
+  // rutschte der Host an JEDER Host-Regel unten vorbei, die auf Gleichheit
+  // oder Suffix prueft. Beleg:
+  //   Alcinoe\Tests\DUnitX\_Source\ALDUnitXTestUrl.pas:317
+  //     'http://example.com./' -> Host war 'example.com.', damit weder
+  //     = 'example.com' noch EndsWith('.example.com') -> Fund trotz RFC 2606.
+  // Korrektheits-, kein Volumenargument: der Schnitt steht NACH dem IPv6-Zweig
+  // (der Exit't vorher) und nach dem Port, damit 'host.:8080' genauso greift.
+  while L.EndsWith('.') do
+    L := Copy(L, 1, Length(L) - 1);
   Result := L;
 end;
 
@@ -146,6 +162,317 @@ begin
     H.StartsWith('169.254.') or H.StartsWith('fe80:');
 end;
 
+// ===========================================================================
+// SCA115-FP-Paket (Autopsie 2026-08-27)
+// ---------------------------------------------------------------------------
+// Vollklassifikation ALLER SCA115-Funde auf dem Realworld-Korpus (rw16):
+// 176 Funde = 110 FP / 66 TP, also 62,5% FP. Ursache: der Detektor bewertete
+// ausschliesslich das LITERAL. Er kannte weder die Rolle der URL im Aufruf
+// noch, ob sie ueberhaupt je eine Netzwerk-Senke erreicht.
+//
+// Die vier Gates unten (plus GATE P oben in ExtractHost) schliessen genau die
+// gezaehlten FP-Klassen. Nachgerechnet mit einer Emulation ueber denselben
+// Korpus: 177 Basis-Funde -> 87 verbleibend (T 52, M 27, D 6, F 4, P 1). Die
+// Emulation zaehlt einen Basis-Fund mehr als rw16 (Dateiliste), die Drop-Zahl
+// je Gate deckt sich mit der Autopsie.
+//
+// BEWUSST NICHT GEBAUT - am Korpus widerlegt:
+//   * Pfad-Gate ueber /test/- und /demo/-Segmente: traefe 116 Funde, davon
+//     28 BELEGTE TPs. Der Korpus legt echten Navigations-Code unter /tests/
+//     und /demos/ ab (Alcinoe\Archive\Demos\ALButton\_source\Unit1.pas oeffnet
+//     'http://static.arkadia.com/...' wirklich).
+//   * Lizenz-Host-Whitelist (mozilla.org & Co.): kostet 4 TPs fuer 3 Drops.
+//   * Konfidenz-Demote statt Drop: SCA115 ist Security-Hotspot; der
+//     Auslieferungs-Default-Filter greift dort anders - ein Demote waere ein
+//     No-Op. uSCAConsts bleibt deshalb unangetastet.
+// ===========================================================================
+
+type
+  // Tri-State fuer das dateiweite Testfixture-Urteil (GATE T). Der Wert wird
+  // LAZY berechnet - erst wenn ein http-Treffer alle billigeren Guards
+  // ueberlebt hat - und dann fuer die restlichen Treffer derselben Datei
+  // gemerkt. Wuerde er vor der Match-Schleife berechnet, liefe der Scan ueber
+  // den ganzen Dateitext auch fuer die ~99% Dateien OHNE einen einzigen
+  // http-Treffer: ein Perf-Rueckschritt fuer null zusaetzliche Wirkung.
+  TFixtureVerdict = (fvUnknown, fvNo, fvYes);
+
+function IsTestFixtureUnitBody(const CodeNoStr: string): Boolean;
+// GATE T (52 Drops): die Datei IST eine Testfixture-Unit - jedes URL-Literal
+// darin ist Eingabe- oder Erwartungswert eines Testfalls, kein Endpunkt.
+//
+// Geprueft wird der INHALT, nicht der Pfad: das Pfad-Gate ist am Korpus
+// widerlegt (28 belegte TPs unter /tests/ und /demos/, s. Kopf oben).
+//
+// Die UND-Verknuepfung aus (a) Framework-Marker und (b) Fixture-Deklaration
+// ist ZWINGEND. Mit (a) allein faellt
+//   mORMot2-master\ex\mvc-blog\MVCViewModel.pas
+// herein: die Unit bindet mormot.core.test NUR wegen
+// TSynTestCase.RandomTextParagraph ein (Demo-Daten), ist selbst aber kein
+// Test - Zeile 271 ('http://blog.synopse.info' an DotClearFlatImport) ist ein
+// belegter TP. Sie hat KEINE der (b)-Deklarationen und bleibt damit Fund.
+//
+// Gearbeitet wird auf CodeNoStr (String-Inhalte sind mit '~' aufgefuellt).
+// Damit kann kein Marker aus einem String-Literal stammen - weder aus einer
+// Fixture in einem Code-Generator noch aus den Musterlisten dieser Unit
+// selbst (Self-Match).
+//
+// Whitespace-Varianten ('class (TTestCase)') werden bewusst NICHT erkannt:
+// im Korpus sind das 4 Dateien, alle ohne ein einziges http-Literal - 0
+// Wirkung. Die Richtung des Fehlers ist ausserdem die sichere: ein nicht
+// erkanntes Fixture behaelt seinen FP, es geht kein TP verloren.
+const
+  // (a) Framework-Marker. 'DUnitX.TestFramework' steht als Leitfall zuerst,
+  //     obwohl 'DUnitX' es lexisch subsumiert - die Liste soll die
+  //     uses-Eintraege benennen, nicht minimal sein.
+  FRAMEWORK_MARKERS : array[0..3] of string = (
+    'dunitx.testframework', 'dunitx', 'testframework', 'mormot.core.test');
+  // (b) Fixture-Deklaration. 'class(tsyntests' ist bewusst ein PRAEFIX:
+  //     mORMot leitet auch von TSynTestsLogged ab
+  //     (mORMot2-master\ex\extdb-bench\PerfTestCases.pas:218).
+  FIXTURE_DECLS : array[0..4] of string = (
+    'tdunitx.registertestfixture', '[testfixture]',
+    'class(ttestcase)', 'class(tsyntestcase)', 'class(tsyntests');
+var
+  L      : string;
+  Marker : string;
+  HasFw  : Boolean;
+begin
+  Result := False;
+  L := LowerCase(CodeNoStr);
+  HasFw := False;
+  for Marker in FRAMEWORK_MARKERS do
+    if Pos(Marker, L) > 0 then
+    begin
+      HasFw := True;
+      Break;
+    end;
+  if not HasFw then Exit;
+  for Marker in FIXTURE_DECLS do
+    if Pos(Marker, L) > 0 then Exit(True);
+end;
+
+function IsFormatPlaceholderHost(const Url: string): Boolean;
+// GATE F (4 Drops): der HOST der URL besteht nur aus einem Format-Platzhalter.
+// So eine Zeichenkette geht nie als URL raus - erst der Format-Aufruf
+// entscheidet ueber das Ziel, und in aller Regel gleich mit ueber das Schema.
+// Belege:
+//   delphimvcframework\sources\MVCFramework.Server.HttpSys.pas:292
+//     'http://%s:%d/'   (Format)
+//   mORMot2-master\src\net\mormot.net.rtsphttp.pas:414
+//     'http://%:%/%'    (mORMot FormatUtf8, '%' ohne Konversionszeichen)
+//
+// Die Verankerung am ANFANG ist zwingend. Platzhalter im PFAD sind ein echter
+// Endpunkt - cnwizards\Source\Utils\CnImageProviderFindIcons.pas:110 baut
+// 'http://findicons.com/search/%s%s?icons=%d...' und schickt es durch
+// TCnHTTP.GetString: ein TP, der bei unverankertem Muster verloren ginge.
+const
+  // Das Schema steht bewusst OHNE das '%' in der Konstanten: 'http://' allein
+  // kann der eigene Detektor-Regex nicht treffen (er verlangt mindestens ein
+  // Zeichen HINTER dem Schema und davor das Apostroph), 'http://%' dagegen
+  // schon - diese Unit wuerde sich sonst selbst melden.
+  SCHEME = 'http://';
+var
+  Rest : string;
+begin
+  Result := False;
+  Rest := LowerCase(Url);
+  if not Rest.StartsWith(SCHEME) then Exit;
+  Rest := Copy(Rest, Length(SCHEME) + 1, MaxInt);
+  // Verankert: das '%' MUSS das erste Zeichen des Hosts sein; danach steht ein
+  // Konversionszeichen (Delphi Format / mORMot FormatUtf8) oder direkt der
+  // Trenner zum Port bzw. zum Pfad.
+  Result := (Length(Rest) >= 2) and (Rest[1] = '%') and
+            CharInSet(Rest[2], ['s', 'd', 'u', 'g', 'x', 'e', 'z', ':', '/']);
+end;
+
+function LineStartBefore(const Code: string; APos: Integer): Integer;
+// 1-basierter Index des ersten Zeichens der Zeile, in der APos liegt.
+// 'Code' kommt aus StripFileCommentsKeepStrings: kommentarfrei, pro Quellzeile
+// GENAU ein #10, keine #13 - der Rueckwaertslauf bis #10 ist damit exakt.
+var
+  S : Integer;
+begin
+  S := APos - 1;
+  while (S >= 1) and (Code[S] <> #10) do Dec(S);
+  Result := S + 1;
+end;
+
+function PrevNonBlankLineStart(const Code: string; ALineStart: Integer): Integer;
+// 1-basierter Startindex der letzten NICHT leeren Zeile vor ALineStart;
+// 0 wenn es keine gibt. Fuer mehrzeilige Aufrufe (GATE D).
+var
+  E, S : Integer;
+begin
+  Result := 0;
+  E := ALineStart - 1;              // das #10, das die Vorzeile beendet
+  while E >= 1 do
+  begin
+    S := LineStartBefore(Code, E);
+    if Trim(Copy(Code, S, E - S)) <> '' then Exit(S);
+    E := S - 1;
+  end;
+end;
+
+function CallStillOpen(const Code: string; AParenPos, AStop: Integer): Boolean;
+// True, wenn die runde Klammer an AParenPos bis AStop-1 NICHT wieder
+// geschlossen wurde - die Position AStop steht dann noch in IHRER
+// Argumentliste.
+//
+// Gezaehlt wird die Tiefe, nicht die Bilanz: sobald sie einmal auf 0
+// zurueckfaellt, ist der Aufruf zu Ende, auch wenn danach eine ANDERE
+// Klammer aufgeht. Mit einer blossen Bilanz wuerde
+//     Writeln(OutFile, 'a');   ShowMessage('http://x');
+// beim Writeln-Treffer +1 -1 +1 = 1 ergeben und den Aufruf faelschlich
+// als offen melden.
+//
+// Pascal-String-Literale werden UEBERSPRUNGEN: 'Code' enthaelt sie im
+// Original, und eine Klammer im Text eines Literals ist keine Klammer des
+// Aufrufs.
+var
+  i, Depth : Integer;
+begin
+  Depth := 0;
+  i := AParenPos;
+  while i < AStop do
+  begin
+    case Code[i] of
+      '''':
+        begin
+          Inc(i);
+          while i < AStop do
+          begin
+            if Code[i] = #10 then Break;        // Literal endet am Zeilenende
+            if Code[i] = '''' then
+            begin
+              if (i + 1 < AStop) and (Code[i + 1] = '''') then Inc(i)
+              else Break;                       // schliessendes Apostroph
+            end;
+            Inc(i);
+          end;
+        end;
+      '(' : Inc(Depth);
+      ')' :
+        begin
+          Dec(Depth);
+          if Depth <= 0 then Exit(False);
+        end;
+    end;
+    Inc(i);
+  end;
+  Result := Depth > 0;
+end;
+
+function IsDisplayOrLogSinkArgument(const Code: string;
+  AFrom, AUrlPos: Integer): Boolean;
+// GATE D (6 Drops): das URL-Literal ist ARGUMENT einer engen Anzeige-/Log-
+// Senke. Was in ein Memo, auf die Konsole, in eine MessageBox oder in einen
+// Fortschritts-Callback geschrieben wird, geht nicht ins Netz - es ist Text
+// fuer den Benutzer. Belege:
+//   Dev-Cpp\Source\VCL\SynEdit\SynGen\SynGenUnit.pas:765     Writeln(OutFile,..
+//   HeidiSQL\components\synedit\SynGen\SynGenUnit.pas:774    Writeln(FOutFile,..
+//   TES5Edit\Core\wbLOD.pas:3228                             wbProgressCallback(
+//   TES5Edit\xEdit\xeLogAnalyzerForm.pas:731,741,743         memoText.Lines.Add(
+//
+// Die Musterliste ist ABSCHLIESSEND und eng. Ein generisches 'Add(' ist
+// AUSDRUECKLICH NICHT drin - das faengt jede Liste, auch die der URLs, die ein
+// Downloader danach abarbeitet.
+//
+// Geprueft wird nicht "Senke steht irgendwo in der Naehe", sondern "das
+// Literal steht IN ihrer Argumentliste": zur gefundenen Senke wird geprueft,
+// ob ihre oeffnende Klammer bis zum Literal noch offen ist (CallStillOpen).
+// Ohne diese Bedingung wuerde
+//     WriteLn('fertig');
+//     Url := 'http://echter.endpunkt/api';
+// den TP darunter mitreissen - die Vorzeile wird ja mitgelesen, damit
+// Fortsetzungen wie 'memoText.Lines.Add(' + Zeilenumbruch + Literal greifen.
+// Am Korpus ist die Bedingung messneutral (6 Drops mit und ohne, alle sechs
+// stehen einzeilig); sie ist reiner TP-Schutz.
+//
+// 'Code' laesst String-Literale stehen - deshalb die Pflichtpruefung
+// TDetectorUtils.InStringLiteral auf jeden Senken-Treffer: ein 'writeln('
+// im Text eines Literals ist kein Aufruf.
+const
+  SINKS : array[0..2] of string = (
+    '.lines.add(', 'writeln(', 'showmessage(');
+  // Praefix-Pflicht: der Callback heisst im Korpus 'wbProgressCallback'. Ein
+  // nacktes 'ProgressCallback(' waere zu weit - das kann auch ein Aufruf sein,
+  // der die URL zum Herunterladen weiterreicht.
+  PROGRESS = 'progresscallback(';
+var
+  SpanLow : string;
+  S       : string;
+  p       : Integer;
+
+  function StillOpenAt(APatEnd: Integer): Boolean;
+  // APatEnd = 1-basierter Index der '(' des Musters IN SpanLow.
+  begin
+    Result := CallStillOpen(Code, AFrom + APatEnd - 1, AUrlPos);
+  end;
+
+begin
+  Result := False;
+  if AUrlPos <= AFrom then Exit;
+  SpanLow := LowerCase(Copy(Code, AFrom, AUrlPos - AFrom));
+  for S in SINKS do
+  begin
+    p := Pos(S, SpanLow);
+    while p > 0 do
+    begin
+      // p + Length(S) - 1 zeigt auf die '(' des Musters.
+      if (not TDetectorUtils.InStringLiteral(Code, AFrom + p - 1)) and
+         StillOpenAt(p + Length(S) - 1) then Exit(True);
+      p := PosEx(S, SpanLow, p + 1);
+    end;
+  end;
+  p := Pos(PROGRESS, SpanLow);
+  while p > 1 do
+  begin
+    if CharInSet(SpanLow[p - 1], ['a'..'z', '0'..'9', '_']) and
+       (not TDetectorUtils.InStringLiteral(Code, AFrom + p - 1)) and
+       StillOpenAt(p + Length(PROGRESS) - 1) then Exit(True);
+    p := PosEx(PROGRESS, SpanLow, p + 1);
+  end;
+end;
+
+function IsMetadataUrlAssignment(const LinePrefix: string): Boolean;
+// GATE M (27 Drops): links vom ':=' steht ein OpenAPI-/Registry-Metadatenfeld.
+// Der Wert wird in ein Dokument geschrieben (Swagger-Info-Block) und beschreibt
+// eine fremde Seite - er wird von diesem Programm nie abgerufen. Belege (alle
+// 27 Funde verteilen sich auf diese vier Feldnamen):
+//   delphimvcframework\samples\swagger_doc\WebModuleMainU.pas:57,63
+//     LSwagInfo.TermsOfService := / LSwagInfo.LicenseUrl :=
+//   delphimvcframework\lib\swagdoc\Demos\SampleApi\Sample.SwagDoc.pas:72,78
+//     fSwagDoc.Info.TermsOfService := / fSwagDoc.Info.License.Url :=
+//   delphimvcframework\samples\swagger_api_versioning_primer\WebModuleU.pas:40,52
+//     Result.ContactUrl :=
+//
+// Die Liste ist ABSCHLIESSEND. Sie darf NICHT um Homepage/HomeUrl/AboutBox
+// erweitert werden: 'HomeUrl := ''http://www.findicons.com''' in
+// cnwizards\Source\Utils\CnImageProviderFindIcons.pas:79 ist ein TP - der Wert
+// geht an OpenUrl und wird tatsaechlich aufgerufen.
+//
+// 'registryname' hat im Korpus NULL Treffer (die 27 kommen restlos aus den
+// vier Feldern oben) und steht hier auf Ansage des Pakets mit; er ist die
+// einzige unbelegte Zeile der Liste.
+//
+// Geprueft wird das Feld als unmittelbares Zuweisungsziel (Zeilenrest endet
+// auf '<feld> :='), nicht als Vorkommen irgendwo in der Zeile.
+const
+  META_FIELDS : array[0..6] of string = (
+    'termsofservice', 'licenseurl', 'licenceurl', 'license.url',
+    'licence.url', 'contacturl', 'registryname');
+var
+  L   : string;
+  Fld : string;
+begin
+  Result := False;
+  L := LowerCase(LinePrefix).TrimRight;
+  if not L.EndsWith(':=') then Exit;
+  L := Copy(L, 1, Length(L) - 2).TrimRight;
+  for Fld in META_FIELDS do
+    if L.EndsWith(Fld) then Exit(True);
+end;
+
 class procedure TRestHttpSecurityDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -159,6 +486,9 @@ var
   LineNo      : Integer;
   F           : TLeakFinding;
   Url         : string;
+  LStart      : Integer;         // Zeilenanfang des aktuellen Treffers
+  PrevStart   : Integer;         // Zeilenanfang der Vorzeile (0 = keine)
+  FixtureUnit : TFixtureVerdict; // GATE T - lazy, einmal pro Datei
   ReHttp      : TRegEx;
   ReSecProto  : TRegEx;
   ReIgnoreCrt : TRegEx;
@@ -208,10 +538,12 @@ begin
     //    Localhost. Match auf das gesamte URL-Literal bis whitespace
     //    oder ' (closing quote). NUTZT Code (mit Strings), nicht CodeNoStr.
     Matches := ReHttp.Matches(Code);
+    FixtureUnit := fvUnknown;
     for M in Matches do
     begin
       Url := M.Groups[1].Value;
       // Loopback-, IPC- und Doku-/Test-Adressen: kein erreichbarer Endpunkt
+      // (enthaelt GATE P, den FQDN-Wurzelpunkt-Schnitt in ExtractHost)
       if IsNonRoutableOrReservedHost(Url) then Continue;
       // XML-Namespace-Whitelist (URL ist eine Identitaet, kein Call)
       if (Pos('xmlns', LowerCase(Url)) > 0) or
@@ -219,6 +551,32 @@ begin
          (Pos('w3.org',      LowerCase(Url)) > 0) or
          (Pos('xmlsoap.org', LowerCase(Url)) > 0) or
          (Pos('namespaces',  LowerCase(Url)) > 0) then Continue;
+      // --- SCA115-FP-Paket 2026-08-27, Reihenfolge = aufsteigende Kosten ---
+      // GATE F: Host ist nur ein Format-Platzhalter (reiner String-Vergleich)
+      if IsFormatPlaceholderHost(Url) then Continue;
+      // Zeilenschnitt fuer GATE M und GATE D: 'Code' ist kommentarfrei und
+      // zeilenerhaltend, M.Index ist 1-basiert.
+      LStart := LineStartBefore(Code, M.Index);
+      // GATE M: OpenAPI-/Registry-Metadatenfeld links vom ':='
+      if IsMetadataUrlAssignment(Copy(Code, LStart, M.Index - LStart)) then
+        Continue;
+      // GATE D: das Literal ist Argument einer engen Anzeige-/Log-Senke.
+      // Der Blick beginnt eine nicht-leere Zeile frueher, damit mehrzeilige
+      // Aufrufe (Senke offen, Literal in der Folgezeile) mitgefasst sind.
+      PrevStart := PrevNonBlankLineStart(Code, LStart);
+      if PrevStart = 0 then PrevStart := LStart;
+      if IsDisplayOrLogSinkArgument(Code, PrevStart, M.Index) then Continue;
+      // GATE T: die Datei ist eine Testfixture-Unit. Teuerster Guard, deshalb
+      // LAZY und pro Datei nur EINMAL gerechnet - Dateien ohne ueberlebenden
+      // http-Treffer zahlen ihn gar nicht.
+      if FixtureUnit = fvUnknown then
+      begin
+        if IsTestFixtureUnitBody(CodeNoStr) then
+          FixtureUnit := fvYes
+        else
+          FixtureUnit := fvNo;
+      end;
+      if FixtureUnit = fvYes then Continue;
       Emit(fkHttpInsteadOfHttps,
         Format('Plaintext HTTP URL ''%s'' - prefer https:// for remote ' +
                'endpoints. MITM-readable; credentials, tokens and PII ' +
