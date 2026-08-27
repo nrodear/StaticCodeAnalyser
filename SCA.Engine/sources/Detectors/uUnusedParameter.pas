@@ -427,6 +427,18 @@ begin
   Result := False;
 end;
 
+// GEGENPRUEFUNG 2026-08-27, bewusst nicht zusammengelegt: eine
+// Zweitfassung derselben Frage steht als Sca147DeclHasMessageDirective
+// in uUnusedPrivateMethod.pas:292. Sie arbeitet auf dem STRING 'Code'
+// mit Startoffset, diese hier auf dem ZEILEN-Array mit Deklarations-
+// zeile - eine Vereinigung braucht eine gemeinsame Signatur und
+// beruehrt dann zwei Detektoren gleichzeitig. Das ist die teurere
+// Aenderung; wer sie angeht, sollte beide Direktiven-Erlaubnislisten
+// mitnehmen, die heute schon auseinanderlaufen.
+// BEKANNTE REICHWEITE (gezaehlt): Gate C sieht nur den Implementierungs-
+// kopf; 354 der 424 Korpus-Marker '{%H-}' stehen an der DEKLARATION und
+// werden damit nicht erreicht. Das ist eine Luecke, kein Fehler - die
+// erreichten 29 sind korrekt unterdrueckt.
 function DeclHasMessageDirective(const ALines: TArray<string>;
   AFirstLine: Integer): Boolean;
 // True, wenn die Deklaration ab AFirstLine die Direktive 'message <Arg>'

@@ -3,7 +3,9 @@
 // Detektor fuer zu tiefe Verschachtelung von Kontrollstrukturen.
 //
 // Gezaehlte Strukturen (kognitiver Aufwand):
-//   if / else   → erhoehen die Tiefe
+//   if          → erhoeht die Tiefe (der else-ZWEIG selbst nie -
+//                 nkElseBranch steht nicht in COUNTING_KINDS; zur
+//                 else-if-Kette siehe den Absatz weiter unten)
 //   for / while / repeat → Schleifen
 //   case        → Verzweigung
 //
@@ -90,10 +92,18 @@ class procedure TDeepNestingDetector.Walk(Node: TAstNode; Depth: Integer;
 // GEZAEHLT am Korpus D:\git-sca-realworld (rw17, Detektor-Replikat
 // ueber alle Dateien mit SCA018-Fund): 5.935 reproduzierte Funde ->
 // 2.316 Drops (39,0 %); 3.619 bleiben, davon 916 mit gesenkter Tiefe
-// und 543 mit verschobenem Anker (der Detektor meldet die TIEFSTE
+// und 619 mit verschobenem Anker (der Detektor meldet die TIEFSTE
 // Stelle - schrumpft die Kette, gewinnt eine andere Stelle der
-// Methode). 0 neue Funde, 0 gestiegene Tiefen - strukturell garantiert,
+// Methode; 178 dieser Verschiebungen passieren bei UNVERAENDERTER
+// Tiefe, weil bei Gleichstand ein anderer Knoten das strikte '>'
+// gewinnt). 0 neue Funde, 0 gestiegene Tiefen - strukturell garantiert,
 // weil der Eingriff Inc() ausschliesslich UNTERDRUECKT.
+// EHRLICH ZU DEN DROPS (Gegenpruefung 2026-08-27): sie sind NICHT alle
+// offensichtliche Fehlalarme. Nach-Tiefen der 2.316 Drops: 659 landen
+// auf Tiefe 1-2 (reine Kettensymptome), 1.022 auf GENAU Tiefe 4 - das
+// sind Schwellen-Grenzfaelle, die das Modell mit einem case gleichsetzt
+// (auch ein case zaehlt nur EINE Ebene). Wer die 39 % spaeter zitiert,
+// sollte sie nicht als '39 % bewiesene FPs' lesen.
 // BEWUSST ENG: nur das DIREKTE Kind. 'else begin if .. end' liegt unter
 // einem nkBlock und behaelt seinen Zuschlag - das ist echte
 // Schachtelung. 'else case' ebenso (nur nkIfStmt ist Kettenglied).

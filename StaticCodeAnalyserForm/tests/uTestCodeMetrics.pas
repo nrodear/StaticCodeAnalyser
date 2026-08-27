@@ -794,7 +794,9 @@ begin
 end;
 
 procedure TTestDeepNestingExt.DeepNesting_ChainPlusRealNesting_AnchorMovesToRealNesting;
-// ANKER-VERTRAG (im Korpus 543 von 3.619 ueberlebenden Funden = 15,0 %):
+// ANKER-VERTRAG (im Korpus 619 von 3.569 ueberlebenden Funden = 17,3 %;
+// die Erstmessung nannte 543 - ihr Replikat hatte die LIFO-Reihenfolge
+// von Walk nicht nachgebaut und damit den falschen Knoten als Anker):
 // der Detektor meldet die TIEFSTE Stelle der Methode. Schrumpft die Kette,
 // gewinnt eine andere Stelle - der Fund bleibt, wandert aber auf eine
 // ANDERE Zeile. Im A/B-Vergleich (Schluessel ruleId+uri+Zeile+Spalte) ist
