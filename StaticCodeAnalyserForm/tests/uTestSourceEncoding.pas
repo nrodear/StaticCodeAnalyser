@@ -86,6 +86,10 @@ type
     [Test] procedure Ident_HomoglyphGreekMu_True;
     [Test] procedure Ident_HomoglyphCyrillic_True;
     [Test] procedure Detect_NonLetterSymbol_NoS3_ButE1;
+    // ---- S3 Dekodier-Vertrauens-Gate (Vollzaehlung 2026-08-27) ------------
+    [Test] procedure Detect_S3_UntrustedDecode_NoS3_ButE3;
+    [Test] procedure Detect_S3_StrictUtf8NoBom_CyrillicIdent_S3;
+    [Test] procedure Detect_S3_Utf8Bom_CyrillicIdent_S3;
   end;
 
 implementation
@@ -655,6 +659,82 @@ begin
       'Symbol in Code-Position darf S3 nicht ausloesen');
     Assert.AreEqual<Integer>(1, CountKind(F, fkSourceUtf8NoBom),
       'E1 muss weiter feuern (Guard ist S3-lokal, monoton)');
+  finally F.Free; end;
+end;
+
+{ ---- S3 Dekodier-Vertrauens-Gate (Vollzaehlung 2026-08-27) --------------- }
+// Vollzaehlung SCA193: 3 Funde im ganzen Korpus, 1 TP / 2 FP. Beide FPs haben
+// dieselbe Wurzel - die Datei ist BOM-los UND kein gueltiges UTF-8, wird von
+// uFileTextCache.LoadFileSmart also mit TEncoding.Default (aktive System-
+// Codepage) dekodiert. S3 urteilt danach ueber Buchstaben, die in der echten
+// Quell-Codepage nicht existieren. Gate: S3 nur bei vertrauenswuerdiger
+// Dekodierung (BOM-gesteuert oder strikt gueltiges UTF-8).
+
+function CyrillicIdentLine2: TBytes;
+// Gemeinsames Fixture, ANKERZEILE 2: 'var L<U+043E>gin: string;' mit
+// kyrillischem o (UTF-8 D0 BE) mitten im Identifier - derselbe Confusable wie
+// in Ident_HomoglyphCyrillic_True. Zeile 1 ist reines ASCII, damit der
+// gemeldete Anker nicht trivial "1" ist.
+begin
+  Result := Cat(Ascii('unit t;'#13#10),
+                Cat(Ascii('var L'),
+                    Cat(TBytes.Create($D0, $BE), Ascii('gin: string;'))));
+end;
+
+procedure TTestSourceEncoding.Detect_S3_UntrustedDecode_NoS3_ButE3;
+var F: TObjectList<TLeakFinding>; Fnd: TLeakFinding;
+begin
+  // FP-Fixture (Korpus-Wurzel, minimal nachgebaut): dasselbe Identifier-Byte-
+  // paar wie im TP unten, aber Zeile 3 enthaelt ein $FF - damit ist die Datei
+  // BOM-los und NICHT strikt UTF-8, also Default-dekodiert. Die Bytes D0 BE
+  // sind dann keine Cyrillic-Quelle mehr, sondern zwei erfundene CP1252-
+  // Zeichen -> S3 darf nicht mehr urteilen.
+  // Diese Erwartung gilt codepage-UNABHAENGIG: das Gate schaltet S3 aus,
+  // bevor irgendein Buchstabe geprueft wird. Der Unterschied zum TP unten
+  // (gleicher Identifier, S3 = 1) beweist, dass wirklich das Gate wirkt und
+  // nicht etwa der Lexer oder der Letter-Guard.
+  F := DetectBytes(Cat(CyrillicIdentLine2, Cat(Ascii(#13#10'// '),
+                       TBytes.Create($FF))));
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkSourceNonAsciiIdentifier),
+      'S3 darf bei geratener (Default-)Dekodierung nicht feuern');
+    // Monotonie: das Gate ENTFERNT nur S3. Die Datei bleibt gemeldet - durch
+    // die ehrliche Regel E3 (codepage-abhaengiger Inhalt), verankert an der
+    // ersten Nicht-ASCII-Zeile 2.
+    Fnd := FirstKind(F, fkSourceAnsiNonAscii);
+    Assert.IsNotNull(Fnd, 'E3 muss weiter feuern (Datei bleibt gemeldet)');
+    Assert.AreEqual('2', Fnd.LineNumber, 'E3-Anker = erste Nicht-ASCII-Zeile');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Detect_S3_StrictUtf8NoBom_CyrillicIdent_S3;
+var F: TObjectList<TLeakFinding>; Fnd: TLeakFinding;
+begin
+  // TP-GEGENPROBE 1 (Gate-Zweig sbkNone + StrictUtf8): identischer Identifier,
+  // aber die Datei ist strikt gueltiges UTF-8 -> LoadFileSmart dekodiert
+  // garantiert als UTF-8, das kyrillische o steht wirklich im Quelltext.
+  // Der TP der Vollzaehlung hat genau diese Form und MUSS erhalten bleiben.
+  F := DetectBytes(CyrillicIdentLine2);
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceNonAsciiIdentifier),
+      'echter Homoglyph in vertrauenswuerdiger Quelle muss weiter feuern');
+    Fnd := FirstKind(F, fkSourceNonAsciiIdentifier);
+    Assert.AreEqual('2', Fnd.LineNumber, 'S3-Anker = Identifier-Zeile 2');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Detect_S3_Utf8Bom_CyrillicIdent_S3;
+var F: TObjectList<TLeakFinding>;
+begin
+  // TP-GEGENPROBE 2 (Gate-Zweig sbkUtf8): mit BOM ist die Dekodierung
+  // BOM-gesteuert und damit vertrauenswuerdig - S3 feuert, ohne dass ein
+  // Encoding-Fund dazukommt (die Datei-Kodierung ist ja korrekt).
+  F := DetectBytes(Cat(TBytes.Create($EF, $BB, $BF), CyrillicIdentLine2));
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceNonAsciiIdentifier),
+      'UTF-8+BOM ist vertrauenswuerdig -> S3 bleibt');
+    Assert.AreEqual<Integer>(0, CountKind(F, fkSourceUtf8NoBom), 'kein E1');
+    Assert.AreEqual<Integer>(0, CountKind(F, fkSourceAnsiNonAscii), 'kein E3');
   finally F.Free; end;
 end;
 
