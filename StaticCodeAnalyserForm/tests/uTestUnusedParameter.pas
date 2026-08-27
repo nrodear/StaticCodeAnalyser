@@ -69,6 +69,24 @@ type
     [Test] procedure RaiseOnlyBody_NotReported;
     [Test] procedure PlainClassWithoutInterface_StillReported;
     [Test] procedure BodyWithStatementBesideRaise_StillReported;
+
+    // ---- Korrektheits-Gates der Autopsie 2026-08-27 ------------------------
+    // Alle ueber FindingsOfFile: drei der vier Gates lesen die QUELLE
+    // (Deklarations-Schwanz, var-Decl-Zeile, rohe Kopfzeile). Im
+    // In-Memory-Harness ist Lines leer, dort bewiese der Test nichts.
+    // GATE A - 'message'-Handler (Parameter ist compiler-erzwungen).
+    [Test] procedure MessageHandler_UnusedParam_NotReported;
+    [Test] procedure PlainVarParamWithoutMessage_StillReported;    // TP-Gegenprobe
+    [Test] procedure DirectiveTailWithoutMessage_StillReported;    // TP-Gegenprobe
+    // GATE B - 'absolute'-Alias liest/schreibt die Storage des Parameters.
+    [Test] procedure AbsoluteAliasOnParam_NotReported;
+    [Test] procedure AbsoluteAliasOtherParam_StillReported;        // TP-Gegenprobe
+    [Test] procedure TypeNameContainingAbsolute_StillReported;     // TP-Gegenprobe
+    // GATE C - FPC-Suppressionsmarker '{%H-}' am Parameter.
+    [Test] procedure FpcHideMarkerAtParam_NotReported;
+    [Test] procedure FpcHideMarkerAtOtherParam_StillReported;      // TP-Gegenprobe
+    // GATE F - 'constref' ist ein Modifier, kein Parametername.
+    [Test] procedure ConstRefPhantom_NotReported_RealParamStillReported;
   end;
 
 implementation
@@ -791,6 +809,250 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
       'Nutzung hinter dem begin ist eine Nutzung');
+  finally F.Free; end;
+end;
+
+{ --- Korrektheits-Gates (SCA054-Autopsie 2026-08-27) ------------------- }
+
+procedure TTestUnusedParameter.MessageHandler_UnusedParam_NotReported;
+// GATE A (-1.019 Funde): 'message WM_SIZE' macht den einen var-Parameter zum
+// Vertrag - Delphi verlangt fuer Message-Handler GENAU einen (E2190). Ihn zu
+// streichen bricht die Uebersetzung, 'unused parameter' ist dort nicht
+// behebbar. Der Parser kennt 'message' nicht als Direktive (sie erreicht
+// TypeRef nie), deshalb entscheidet der Deklarations-SCHWANZ in der Quelle.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    procedure WMSize(var Msg: TWMSize); message WM_SIZE;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.WMSize(var Msg: TWMSize);'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+    'Message-Handler: der var-Parameter ist compiler-erzwungen');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.PlainVarParamWithoutMessage_StillReported;
+// TP-Gegenprobe zu GATE A: dieselbe Form OHNE 'message'. Ein einzelner
+// ungenutzter var-Parameter ist hier frei streichbar - der Fund bleibt.
+// Ohne diese Probe waere der Test darueber auch dann gruen, wenn das Gate
+// jede einparametrige var-Methode stumm schaltete.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    procedure DoIt(var Msg: TWMSize);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.DoIt(var Msg: TWMSize);'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      'ohne message-Direktive bleibt der Parameter ein echter Fund');
+    Hit := TFindingHelper.FirstOf(F, fkUnusedParameter);
+    Assert.IsNotNull(Hit);
+    // Anker: der Fund haengt an der IMPLEMENTIERUNGS-Kopfzeile (der Parser
+    // gibt jedem nkParam die Zeile des Methoden-Schluesselworts).
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'procedure TFoo.DoIt('),
+      Hit.LineNumber, 'Fundzeile bleibt die Kopfzeile der Implementierung');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.DirectiveTailWithoutMessage_StillReported;
+// TP-Gegenprobe zu GATE A, zweite Richtung: ein Direktiven-SCHWANZ ist da,
+// aber ohne 'message'. Der Schwanz-Leser muss 'overload' ueberspringen und
+// danach sauber aufhoeren, statt in die naechste Zeile weiterzusuchen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    procedure DoIt(var Msg: TWMSize); overload;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.DoIt(var Msg: TWMSize);'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+    'overload allein ist keine message-Direktive - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.AbsoluteAliasOnParam_NotReported;
+// GATE B (-414 Funde): 'var P: Byte absolute Buf;' legt P auf die Storage von
+// Buf. 'P := 1' schreibt Buf - 'never read in method body' ist unwahr.
+// Warum die Zaehlung das nicht sieht: der Parser konkateniert den Typ-Schwanz
+// ohne Trenner zu 'ByteabsoluteBuf', 'buf' hat dort keine Wortgrenze; und die
+// Quell-Rueckfrage beginnt erst am 'begin', die var-Sektion liegt davor.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(var Buf: Integer);'#13#10 +
+  'var'#13#10 +
+  '  P: Byte absolute Buf;'#13#10 +
+  'begin'#13#10 +
+  '  P := 1;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+    'Zugriff ueber den absolute-Alias ist ein Zugriff auf den Parameter');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.AbsoluteAliasOtherParam_StillReported;
+// TP-Gegenprobe zu GATE B: ein zweiter Parameter, auf den KEIN Alias zeigt,
+// bleibt ein Fund. Das Gate darf nur den Alias-Zielnamen entlasten, nicht
+// die ganze Methode.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(var Buf: Integer; Other: Integer);'#13#10 +
+  'var'#13#10 +
+  '  P: Byte absolute Buf;'#13#10 +
+  'begin'#13#10 +
+  '  P := 1;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      'nur der Alias-Zielname wird entlastet, Other bleibt ungenutzt');
+    Hit := TFindingHelper.FirstOf(F, fkUnusedParameter);
+    Assert.IsNotNull(Hit);
+    Assert.Contains(Hit.MissingVar, 'Other');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'procedure Foo(var Buf'),
+      Hit.LineNumber, 'Fundzeile bleibt die Kopfzeile');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.TypeNameContainingAbsolute_StillReported;
+// WAECHTER zu GATE B: ein Typname, in dem 'absolute' als Teilwort steckt
+// ('TAbsoluteItem'), ist KEIN Alias. Wuerde das Gate den Zielnamen aus dem
+// konkatenierten TypeRef ziehen statt aus der Quellzeile, ergaebe der Text
+// hinter 'absolute' genau 'Item' - und der gleichnamige Parameter waere
+// faelschlich entlastet. Genau diese Verwechslung faengt der Test.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Item: Integer);'#13#10 +
+  'var'#13#10 +
+  '  X: TAbsoluteItem;'#13#10 +
+  'begin'#13#10 +
+  '  X.Clear;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+    'absolute als Teilwort eines Typnamens ist kein Alias');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.FpcHideMarkerAtParam_NotReported;
+// GATE C (-29 Funde): '{%H-}' unmittelbar vor dem Parameternamen ist die
+// FPC-/Lazarus-Konvention fuer "Hint hier abschalten" - expliziter
+// Autor-Intent. SCA166/uUninitVar respektiert denselben Marker an
+// Deklarationen. Geprueft wird die ROHE Zeile: der Marker IST ein Kommentar
+// und waere in der gestrippten Fassung weggeblankt.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo({%H-}LogLevel: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  WriteLn(''nichts'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+    '{%H-} am Parameter ist explizite Autor-Suppression');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.FpcHideMarkerAtOtherParam_StillReported;
+// TP-Gegenprobe zu GATE C: der Marker klebt an A, nicht an B. Ein Marker
+// irgendwo in der Zeile darf NICHT die ganze Zeile suppressen - dieselbe
+// Adjazenz-Pflicht wie in SCA166.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo({%H-}Alpha: Integer; Beta: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  WriteLn(''nichts'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      'nur der markierte Parameter wird stumm geschaltet');
+    Hit := TFindingHelper.FirstOf(F, fkUnusedParameter);
+    Assert.IsNotNull(Hit);
+    Assert.Contains(Hit.MissingVar, 'Beta');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.ConstRefPhantom_NotReported_RealParamStillReported;
+// GATE F (-48 Funde): 'constref' ist ein FPC-Parametermodifier. Der Parser
+// kennt nur var/const/out und sammelt 'constref' deshalb als EIGENEN
+// Parameter mit leerem Typ ein - gemeldet wurde also ein Parameter, den die
+// Quelle nie deklariert hat. Der Test ist zugleich seine eigene
+// TP-Gegenprobe: der ECHTE Parameter dahinter bleibt gemeldet (vorher zwei
+// Funde, jetzt genau einer), das Gate nimmt nur das Phantom weg.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(constref Payload: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedParameter),
+      'nur der echte Parameter wird gemeldet, nicht der Modifier');
+    Hit := TFindingHelper.FirstOf(F, fkUnusedParameter);
+    Assert.IsNotNull(Hit);
+    Assert.Contains(Hit.MissingVar, 'Payload');
   finally F.Free; end;
 end;
 
