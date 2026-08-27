@@ -70,8 +70,17 @@ const
   // Der Match ist ein Praefix auf dem ganzen Aufrufnamen: ein qualifizierter
   // 'Bitmap.Assign(Other)' faengt nicht mit 'assign(' an und kann deshalb
   // keinen Namen in die Handle-Menge schmuggeln.
-  FILE_OPEN_CALLS : array[0..5] of string = (
-    'assignfile(', 'assign(', 'assignprn(', 'rewrite(', 'append(', 'closefile('
+  // Gegenpruefung 2026-08-27 (MAJOR): 'assign(' und 'append(' sind
+  // WIEDER RAUS - beide Namen sind ausserhalb der RTL-Datei-API belegt.
+  // Belegter Schaden: mormot.core.text.Append(var Text: RawUtf8; const
+  // Added: RawByteString) holte in test.orm.core.pas ueber 'Append(s,
+  // ''u'')' (:543/:553) die STRING-Variable 's' in die Handle-Menge und
+  // unterdrueckte damit das echte 'writeln(s)' in :703. Die vier
+  // uebrigen Namen sind eindeutig; laut Nachmessung haengt keine der
+  // ~985 richtigen Unterdrueckungen an den beiden gestrichenen - sie
+  // alle kommen ueber den Deklarations-Zweig.
+  FILE_OPEN_CALLS : array[0..3] of string = (
+    'assignfile(', 'assignprn(', 'rewrite(', 'closefile('
   );
 
   // Die RTL-Standardhandles sind KEIN Datei-I/O - 'WriteLn(Output, ...)' und
@@ -79,8 +88,12 @@ const
   // exakt der Fund, den SCA017 sucht. Whitelist, die auch dann greift, wenn
   // eine Unit den Namen zusaetzlich selbst deklariert
   // (Beleg LoggerPro.ConsoleAppender.pas:427 'Writeln(ErrOutput, ...)').
-  STD_TEXT_HANDLES : array[0..2] of string = (
-    'output', 'erroutput', 'input'
+  // stdout/stderr ergaenzt (Gegenpruefung 2026-08-27): der Korpus hat 11
+  // 'WriteLn(StdErr, ...)'-Stellen (gnugettext-Familie, CEF4Delphi); wo
+  // eine Unit StdErr selbst per AssignFile/Rewrite umleitet, haette der
+  // Oeffner-Zweig sonst eine echte stderr-Ausgabe stummgeschaltet.
+  STD_TEXT_HANDLES : array[0..4] of string = (
+    'output', 'erroutput', 'input', 'stdout', 'stderr'
   );
 
 // True wenn die Position AtPos im Text innerhalb eines String-Literals

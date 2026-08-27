@@ -38,7 +38,7 @@ type
 
 implementation
 
-// noinspection-file AvoidOut, BeginEndRequired, CyclomaticComplexity, DuplicateBlock, GroupedDeclaration, MultipleExit, NilComparison, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter
+// noinspection-file AvoidOut, BeginEndRequired, CyclomaticComplexity, DeepNesting, DuplicateBlock, GroupedDeclaration, MultipleExit, NilComparison, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

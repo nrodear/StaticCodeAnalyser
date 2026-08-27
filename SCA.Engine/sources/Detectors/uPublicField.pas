@@ -32,7 +32,7 @@ type
 
 implementation
 
-// noinspection-file AvoidOut, BeginEndRequired, CommentedOutCode, CyclomaticComplexity, GroupedDeclaration, MultipleExit, NilComparison, TooLongLine, UnsortedUses, UnusedParameter
+// noinspection-file AvoidOut, BeginEndRequired, CommentedOutCode, CyclomaticComplexity, DeepNesting, GroupedDeclaration, MultipleExit, NilComparison, TooLongLine, UnsortedUses, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses

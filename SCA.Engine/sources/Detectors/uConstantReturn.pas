@@ -179,6 +179,19 @@ begin
   Result := False;
   if S = '' then Exit;
   Txt := LowerCase(TDetectorUtils.StripStringLiterals(S));
+  // Punkt ENTKLEMMEN (Gegenpruefung 2026-08-27, MAJOR): der Wortgrenzen-
+  // Scan schliesst '.' als linke Grenze aus, damit ein fremdes Member
+  // 'FMsg.Result' nicht als Zugriff auf den eigenen Rueckgabewert zaehlt.
+  // Das trug aber nur dort, wo der Parser Tokens ohne Trenner joint
+  // (nkCall/nkWhile/nkCase). ParseIfStmt und ParseForStmt haengen an
+  // JEDES Token ein unbedingtes Leerzeichen: 'if c.Decl.Result = nil'
+  // kommt als 'c . decl . result = nil' an - links vom Wort steht ein
+  // Blank, der Ausschluss lief ins Leere und die Methode galt als
+  // mutierend. Belegter Preis vor dem Fix: 6 echte Funde geschluckt
+  // (u.a. cnwizards). Fuer die Join-Knoten ist das Kollabieren ein
+  // No-Op, dort liegt der Punkt ohnehin an.
+  Txt := StringReplace(Txt, ' .', '.', [rfReplaceAll]);
+  Txt := StringReplace(Txt, '. ', '.', [rfReplaceAll]);
   Result := HasBareWordUse(Txt, 'result') or
             ((FnNameLow <> '') and HasBareWordUse(Txt, FnNameLow));
 end;

@@ -30,7 +30,9 @@ unit uLegacyInitializationSection;
 //     Unit-Init durchgeht. Ersetzt durch einen Rueckwaerts-TOKEN-Walk ueber
 //     den kommentar- UND string-bereinigten Text.
 //
-//   GATE D (1 Drop, LittleTest43.pas:39). Ein echtes Legacy-Init ist immer
+//   GATE D (1 Drop an den 22 Walk-Kandidaten, NICHT an den 168 -
+//     LittleTest43.pas:39 fand die alte Zeilen-Heuristik gar nicht;
+//     die Altmenge zerfaellt restlos in 80 A + 73 B/C + 15 Ueberlebende). Ein echtes Legacy-Init ist immer
 //     das LETZTE Element der Datei. Liegt zwischen Kandidaten-`begin` und
 //     `end.` noch ein Routinen-Header, war der Kandidat ein Routinenrumpf.
 //

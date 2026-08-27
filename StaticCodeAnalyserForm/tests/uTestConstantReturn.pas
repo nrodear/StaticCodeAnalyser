@@ -30,6 +30,7 @@ type
     // --- Wortgrenzen des Escape-Scans --------------------------------------
     [Test] procedure PlainConstantResult_StillReported;
     [Test] procedure DottedResultMember_StillReported;
+    [Test] procedure DottedResultMemberInIfHead_StillReported;
     [Test] procedure ResultInStringLiteral_StillReported;
   end;
 
@@ -352,6 +353,30 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkConstantReturn) >= 1,
     'ohne jede Mutation bleibt es ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestConstantReturn.DottedResultMemberInIfHead_StillReported;
+// Gegenpruefungs-MAJOR 2026-08-27: derselbe Ausschluss, aber im IF-KOPF.
+// ParseIfStmt joint jedes Token mit einem unbedingten Leerzeichen
+// ('c . decl . result = nil'), darum lief der Punkt-Ausschluss dort ins
+// Leere und die Methode galt faelschlich als Result-mutierend - 6 echte
+// Korpus-Funde gingen so verloren. Der Fix kollabiert ' .' / '. '
+// vor dem Wortscan.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Check(c: TCtx): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if c.Decl.Result = nil then'#13#10 +
+  '    Result := -1'#13#10 +
+  '  else'#13#10 +
+  '    Result := -1;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkConstantReturn) >= 1,
+    'fremdes .Result im if-Kopf ist kein Zugriff auf den Rueckgabewert');
   finally F.Free; end;
 end;
 

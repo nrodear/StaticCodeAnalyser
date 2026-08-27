@@ -84,8 +84,13 @@ begin
     // UNC-Arm vor dem ToLower steht - deshalb StartsWith mit IgnoreCase
     // statt eines vorgezogenen ToLower, das der Laufwerks-Arm mitbezahlen
     // muesste.
-    for var OsFixedRoot in ['\\wsl$\', '\\wsl.localhost\', '\\tsclient'] do
-      if S.StartsWith(OsFixedRoot, True) then Exit(False);
+    // Gegenpruefung 2026-08-27: Praefix-Match NUR bis zur Segmentgrenze.
+    // '\\tsclient' ohne Trenner haette auch '\\tsclient01\install\x.exe'
+    // verschluckt - dort IST ein Hostname hardkodiert, und genau das
+    // nimmt der Absatz oben fuer Admin-Shares ausdruecklich aus.
+    for var OsFixedRoot in ['\\wsl$', '\\wsl.localhost', '\\tsclient'] do
+      if SameText(S, OsFixedRoot) or
+         S.StartsWith(OsFixedRoot + '\', True) then Exit(False);
     Exit(True);
   end;
 
