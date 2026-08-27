@@ -52,14 +52,16 @@ type
 
 implementation
 
-// noinspection-file HttpInsteadOfHttps
-// Saemtliche http://-Literale dieser Unit sind FIXTUREN fuer genau den
-// Detektor, der sie meldet - sie beschreiben, was er sehen soll, und sind
-// nie ein echter Endpunkt. Ohne die Unterdrueckung meldet der Self-Scan
-// jede neue Testzeile als eigenen Sicherheitsbefund.
-// Seit dem FP-Paket 2026-08-27 wuerde GATE T (Testfixture-Unit ueber den
-// Inhalt) hier ohnehin greifen - die Zeile bleibt trotzdem stehen: sie ist
-// die explizite Begruendung und ueberlebt jede Aenderung an GATE T.
+// KEIN noinspection-Marker mehr noetig (Self-Scan 2026-08-28): saemtliche
+// http://-Literale dieser Unit sind FIXTUREN fuer genau den Detektor, der
+// sie meldet - frueher brauchte es dafuer ein 'noinspection-file
+// HttpInsteadOfHttps'. Seit GATE T (Testfixture-Unit ueber den INHALT:
+// Framework-Marker UND Fixture-Deklaration) erkennt der Detektor die Lage
+// selbst, und unsere eigene Regel UnusedSuppression hat den Marker
+// prompt als tot gemeldet. Er ist deshalb entfernt - ein Marker, der
+// nichts unterdrueckt, ist genau der Befund, den diese Regel sucht.
+// Faellt GATE T je weg, meldet der Self-Scan diese Datei wieder; dann
+// gehoert der Marker zurueck, nicht vorsorglich.
 
 uses
   System.SysUtils, System.Generics.Collections,
