@@ -1361,6 +1361,19 @@ begin
     // (4 rote Tests, TestInsight 2026-08-09).
     fkDfmCrossFormCoupling: Result := fcLow;
 
+    // SCA008 NilDeref: Autopsie 2026-08-27 (Scout+Skeptiker, 40er-
+    // Stichprobe am Korpus). 44 von 48 rw15-Funden sind FP (91,7 %) -
+    // und ALLE 48 trugen bis hier fcHigh, also Error-Tier-Anwaerter im
+    // BUG-Bereich. Das ist unter der Evidenz-Politik nicht haltbar.
+    // fcMedium statt fcLow, weil die Regel echte Bugs findet (belegt:
+    // DDUtil.pas:868 ist ein beweisbarer AV) - sie gehoert sichtbar,
+    // nur nicht in den "Error = bewiesen"-Tier. Die FP-Klassen sind
+    // kartiert (Flag-Korrelation, Guard ueber Boolean-Zwischenvariable,
+    // Werttyp-Receiver, indizierte Variablen); nach deren Gates bleiben
+    // ~12 Funde mit 8-9 FPs - auch dann bleibt fcHigh unbegruendet.
+    // EIGENER Case-Zweig (SCA040-Lehre: nie in eine Aufzaehlung haengen).
+    fkNilDeref: Result := fcMedium;
+
     // SCA173 VariantTypeMisuse: Autopsie 2026-08-26 - nach Gate A
     // (In-Loop-Usage) liegt die Rest-FP-Quote bei ~12,5 % (vorher 58 %).
     // fcMedium statt fcLow - BEWUSST anders als SCA086: die Regel ist

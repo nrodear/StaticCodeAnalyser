@@ -631,7 +631,7 @@ const
     (
       RuleID   : 'SCA071';
       Name     : 'Unit-level keyword not at column 1';
-      ShortDesc: '`unit`/`interface`/`implementation`/`initialization`/`finalization` should start at column 1';
+      ShortDesc: '`unit`/`interface`/`uses`/`implementation`/`initialization`/`finalization` should start at column 1';
       BadEx    : '  implementation' + #13#10 + #13#10 + '  procedure Foo; ...';
       GoodEx   : 'implementation' + #13#10 + #13#10 + 'procedure Foo; ...'
     ),

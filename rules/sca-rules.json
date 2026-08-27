@@ -1449,7 +1449,7 @@
       "id": "SCA071",
       "kind": "UnitLevelKeywordIndent",
       "name": "Unit-level keyword not at column 1",
-      "shortDescription": "`unit`/`interface`/`implementation`/`initialization`/`finalization` should start at column 1",
+      "shortDescription": "`unit`/`interface`/`uses`/`implementation`/`initialization`/`finalization` should start at column 1",
       "fullDescription": "Object Pascal convention is that the structural section keywords of a unit are flush-left at column 1. Indented section keywords obscure the unit's structure when scanning and may hint at miscounted begin/end nesting. Matches SonarDelphi communitydelphi:UnitLevelKeywordIndentation.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",

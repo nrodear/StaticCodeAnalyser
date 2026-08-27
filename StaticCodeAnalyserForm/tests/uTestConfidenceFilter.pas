@@ -97,8 +97,12 @@ begin
     KindDefaultConfidence(fkMemoryLeak));
   // fkUseAfterFree wurde 2026-06-28 auf fcLow demotet (~94% FP, CFG noetig) -
   // siehe KindDefaultConfidence_HardenedHeuristicsAreLow.
-  Assert.AreEqual<TFindingConfidence>(fcHigh,
-    KindDefaultConfidence(fkNilDeref));
+  // fkNilDeref wurde 2026-08-27 auf fcMedium demotet (Autopsie: 44/48
+  // Korpus-Funde FP bei durchgehend fcHigh - im Bug-Tier unhaltbar;
+  // fcLow waere zu hart, die Regel findet echte AVs).
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkNilDeref),
+    'SCA008: 91,7% Korpus-FP -> fcMedium, raus aus dem Error-Tier');
   Assert.AreEqual<TFindingConfidence>(fcHigh,
     KindDefaultConfidence(fkFreeWithoutNil));
   Assert.AreEqual<TFindingConfidence>(fcHigh,
@@ -198,10 +202,12 @@ begin
     Assert.AreEqual<TFindingConfidence>(fcMedium, F.Confidence,
       'SetKind soll fcMedium fuer Metrik-Kind setzen');
 
-    // fkNilDeref statt fkMemoryLeak: SCA001 ist seit dem Trust-Budget-
-    // Demote (K2 Stufe 2, 2026-08-26) fcMedium und taugt nicht mehr als
-    // fcHigh-Beispiel.
-    F.SetKind(fkNilDeref);
+    // fkFreeWithoutNil statt fkNilDeref: SCA008 ist seit dem Autopsie-
+    // Demote (2026-08-27) fcMedium - wie fkMemoryLeak seit 2026-08-26
+    // davor. Beide taugen nicht mehr als fcHigh-Beispiel; SCA002
+    // FreeWithoutNil pinnt dieselbe Fixture 100 Zeilen hoeher ohnehin
+    // auf fcHigh, ein Bruch fiele also doppelt auf.
+    F.SetKind(fkFreeWithoutNil);
     Assert.AreEqual<TFindingConfidence>(fcHigh, F.Confidence,
       'SetKind soll fcHigh fuer Bug-Kind setzen');
   finally

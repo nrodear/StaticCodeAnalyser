@@ -30,6 +30,7 @@ type
     [Test] procedure RueckgabeZaehltNurGedeckelte;
     [Test] procedure PathOverride_Hochstufung_GewinntGegenDenDeckel;
     [Test] procedure MemoryLeak_DefaultKonfidenz_IstMedium;
+    [Test] procedure NilDeref_DefaultKonfidenz_IstMedium;
     // Gegenpruefung 2026-08-26 (MAJOR): der Deckel zieht die Severity-
     // Schwelle nach - gedeckelte Funde duerfen einen error-only-Report
     // nicht unterlaufen.
@@ -230,6 +231,18 @@ begin
   // FpUnter5Prozent). Der Pin schuetzt vor versehentlichem Zuruecksetzen.
   Assert.IsTrue(KindDefaultConfidence(fkMemoryLeak) = fcMedium,
     'SCA001 Trust-Budget-Demote (62-78 % FP) darf nicht ohne Messung kippen');
+end;
+
+procedure TTestEvidenceTiering.NilDeref_DefaultKonfidenz_IstMedium;
+begin
+  // GOVERNANCE-PIN (Autopsie 2026-08-27): SCA008 steht wegen 44/48
+  // Korpus-FP (91,7 %) auf fcMedium und ist damit aus dem Error-Tier
+  // raus. Wer diesen Test rot macht, will SCA008 re-promoten - zulaessig
+  // NUR nach den kartierten Gates MIT frischer Korpus-Messung
+  // (Konzept_FpUeber50Prozent_2026-08-27.md). fcLow waere die andere
+  // falsche Richtung: die Regel findet echte AVs (DDUtil.pas:868).
+  Assert.IsTrue(KindDefaultConfidence(fkNilDeref) = fcMedium,
+    'SCA008 Autopsie-Demote (91,7 % FP) darf nicht ohne Messung kippen');
 end;
 
 initialization

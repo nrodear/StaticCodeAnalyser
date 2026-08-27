@@ -337,7 +337,7 @@ Bisher nur über [`rules/sca-rules.json`](rules/sca-rules.json) referenziert; je
 | SCA068 | **TrailingCommaArgList** | `Foo(A, B,)` - Komma streichen oder fehlendes Argument ergänzen | Hint | Code Smell | ✅ | `uTrailingCommaArgList` |
 | SCA069 | **DigitGrouping** | Große Integer-Literale sollten den `_`-Trenner nutzen | Hint | Code Smell | ✅ | `uDigitGrouping` |
 | SCA070 | **CommentedOutCode** | Kommentar sieht aus wie Pascal-Code - löschen oder dokumentieren | Hint | Code Smell | ✅ | `uCommentedOutCode` |
-| SCA071 | **UnitLevelKeywordIndent** | `unit`/`interface`/`implementation`/`initialization`/`finalization` gehören an Spalte 1 | Hint | Code Smell | ✅ | `uUnitLevelKeywordIndent` |
+| SCA071 | **UnitLevelKeywordIndent** | `unit`/`interface`/`uses`/`implementation`/`initialization`/`finalization` gehören an Spalte 1 | Hint | Code Smell | ✅ | `uUnitLevelKeywordIndent` |
 | SCA072 | **RedundantBoolean** | `X = True` sollte `X` sein (analog `X <> False`) | Hint | Code Smell | ✅ | `uRedundantBoolean` |
 | SCA073 | **EmptyInterface** | Interface ohne Methoden/Properties und ohne benannten Vorfahren trägt keinen Kontrakt | Hint | Code Smell | ✅ | `uEmptyInterface` |
 | SCA074 | **AssertMessage** | `Assert(cond);` - eine `'why'`-Message für die Diagnose ergänzen | Hint | Code Smell | ✅ | `uAssertMessage` |

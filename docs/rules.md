@@ -1646,7 +1646,7 @@ Heuristic: comment content with 2+ code-style markers (trailing `;`, `:=`, keywo
 ## SCA071
 **Unit-level keyword not at column 1**
 
-> `unit`/`interface`/`implementation`/`initialization`/`finalization` should start at column 1
+> `unit`/`interface`/`uses`/`implementation`/`initialization`/`finalization` should start at column 1
 
 | Field | Value |
 |---|---|

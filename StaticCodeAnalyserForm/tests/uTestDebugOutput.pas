@@ -8,6 +8,11 @@ uses
   DUnitX.TestFramework,
   System.SysUtils, System.Classes, System.Generics.Collections,
   uSCAConsts, uMethodd12,
+  // Gate D (Datei-Name-Gate) laesst sich nur mit einem FREI WAEHLBAREN
+  // Dateinamen pruefen - TFindingHelper.FindingsOf fixiert 'sample.pas'.
+  // Deshalb hier zusaetzlich der direkte Detektor-Aufruf (gleiches Muster
+  // wie SecretCountForPath in uTestHardcodedSecret.pas).
+  uAstNode, uParser2, uDebugOutput,
   uTestSrcBuilder,
   uTestFindingHelper;
 
@@ -34,6 +39,19 @@ type
     // Welle 2 (nkConditionalRange): Debug-Output in {$IFDEF DEBUG} ist Absicht.
     [Test] procedure Debug_WriteLnInIfdefDebug_NotReported;
     [Test] procedure Debug_WriteLnInIfdefDebugElse_StillReported;
+    // Gate A (FP-Paket 2026-08-27): WriteLn auf ein Text-/TextFile-Handle ist
+    // Datei-I/O. Drei Beweisquellen fuer ein Handle + drei TP-Gegenproben.
+    [Test] procedure Debug_WriteLnToTextFileLocal_NoFinding;
+    [Test] procedure Debug_WriteLnToVarParamTextFile_NoFinding;
+    [Test] procedure Debug_WriteLnToAssignFileHandle_NoFinding;
+    [Test] procedure Debug_WriteLnToTextFileField_NoFinding;
+    [Test] procedure Debug_BareWriteLnBesideFileHandle_StillReported;
+    [Test] procedure Debug_WriteLnToStandardHandles_StillReported;
+    [Test] procedure Debug_WriteLnToStringVar_StillReported;
+    // Gate D (FP-Paket 2026-08-27): Logger-/Appender-Senke.
+    [Test] procedure Debug_LoggerFileName_NoFinding;
+    [Test] procedure Debug_AppenderFileName_NoFinding;
+    [Test] procedure Debug_PlainFileName_StillReported;
   end;
 
 implementation
@@ -245,6 +263,214 @@ begin
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDebugOutput),
     'WriteLn im {$ELSE}=Release-Zweig ist Produktions-Debug -> Fund');
   finally F.Free; end;
+end;
+
+// =============================================================================
+// Gate A - WriteLn auf ein Text-/TextFile-Handle ist Datei-I/O
+// (FP-Paket SCA017, 2026-08-27). Korpus: 980 der 2.717 code-echten WriteLn(-
+// Stellen haengen an einem belegten Handle; Traeger sind die SynGen-Code-
+// generatoren (SynGenUnit.pas, 806), Dev-Cpp/Compiler.pas (60, var-Parameter)
+// und doublecmd/uexceptions.pas (8, 'System.Text').
+// =============================================================================
+
+procedure TTestDebugOutput.Debug_WriteLnToTextFileLocal_NoFinding;
+// Beweisquelle 1: die Typdeklaration der lokalen Variablen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var F: TextFile;'#13#10+
+  'begin WriteLn(F, ''zeile''); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDebugOutput),
+    'WriteLn auf ein TextFile-Handle schreibt in eine Datei, nicht auf die Konsole');
+  finally F.Free; end;
+end;
+
+procedure TTestDebugOutput.Debug_WriteLnToVarParamTextFile_NoFinding;
+// Beweisquelle 1 in Parameter-Form. Der Parser legt den Modifier IM NAMEN ab
+// ('var F', uParser2.pas:1610) - ohne den Strip im Detektor liefe das Gate
+// hier ins Leere. Genau diese Form traegt die 60 Funde in
+// Dev-Cpp/Source/Compiler.pas ('procedure NewMakeFile(var F: TextFile)', :110).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TCompiler.NewMakeFile(var F: TextFile);'#13#10+
+  'begin WriteLn(F, ''makefile-zeile''); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDebugOutput),
+    'var-Parameter vom Typ TextFile ist ein Datei-Handle - Modifier-Praefix muss gestrippt werden');
+  finally F.Free; end;
+end;
+
+procedure TTestDebugOutput.Debug_WriteLnToAssignFileHandle_NoFinding;
+// Beweisquelle 2 OHNE jede Typdeklaration: das erste Argument von AssignFile/
+// Rewrite/CloseFile ist per Sprachdefinition ein Datei-Handle.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TGen.Dump;'#13#10+
+  'begin'#13#10+
+  '  AssignFile(FOut, ''out.txt'');'#13#10+
+  '  Rewrite(FOut);'#13#10+
+  '  WriteLn(FOut, ''zeile'');'#13#10+
+  '  CloseFile(FOut);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDebugOutput),
+    'AssignFile/Rewrite belegen das Handle auch ohne sichtbare Typdeklaration');
+  finally F.Free; end;
+end;
+
+procedure TTestDebugOutput.Debug_WriteLnToTextFileField_NoFinding;
+// Beweisquelle 1 als KLASSENFELD - die Form des groessten Korpus-Clusters
+// (SynGenUnit.pas:155 'OutFile: TextFile;', 404 + 402 Funde). Die Deklaration
+// steht in der interface-Sektion, der WriteLn Hunderte Zeilen weiter unten.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TGen = class'#13#10+
+  '  private'#13#10+
+  '    OutFile: TextFile;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure TGen.Emit;'#13#10+
+  'begin WriteLn(OutFile, ''generierter code''); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDebugOutput),
+    'Klassenfeld vom Typ TextFile ist genauso ein Datei-Handle wie eine lokale Variable');
+  finally F.Free; end;
+end;
+
+procedure TTestDebugOutput.Debug_BareWriteLnBesideFileHandle_StillReported;
+// TP-Gegenprobe zu Gate A: das Gate haengt am ARGUMENT, nicht an der Datei.
+// Eine Unit, die eine Textdatei schreibt, darf ihren vergessenen Konsolen-
+// WriteLn nicht mit durchschmuggeln.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var F: TextFile;'#13#10+
+  'begin'#13#10+
+  '  WriteLn(F, ''datei'');'#13#10+
+  '  WriteLn(''debug'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDebugOutput),
+    'nacktes WriteLn bleibt Fund, auch wenn dieselbe Routine eine Textdatei schreibt');
+  finally F.Free; end;
+end;
+
+procedure TTestDebugOutput.Debug_WriteLnToStandardHandles_StillReported;
+// TP-Gegenprobe zu Gate A: Output/ErrOutput/Input SIND die Konsole. Sie werden
+// hier sogar als TextFile deklariert, landen also in der Handle-Menge - die
+// Whitelist muss trotzdem gewinnen. Korpus-Beleg fuer die reale Form:
+// LoggerPro.ConsoleAppender.pas:427 'Writeln(ErrOutput, FormatLog(...))'.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var Output, ErrOutput: TextFile;'#13#10+
+  'begin'#13#10+
+  '  WriteLn(Output, ''a'');'#13#10+
+  '  WriteLn(ErrOutput, ''b'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkDebugOutput),
+    'Output/ErrOutput sind die Konsole - Standardhandles bleiben immer Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDebugOutput.Debug_WriteLnToStringVar_StillReported;
+// TP-Gegenprobe zu Gate A: das Gate keyt auf den TYP, nicht darauf, dass das
+// erste Argument ueberhaupt ein Bezeichner ist.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var S: string;'#13#10+
+  'begin WriteLn(S); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDebugOutput),
+    'WriteLn(S) mit S: string ist Konsolenausgabe und bleibt Fund');
+  finally F.Free; end;
+end;
+
+// =============================================================================
+// Gate D - Logger-/Appender-Senke (FP-Paket SCA017, 2026-08-27)
+// =============================================================================
+
+// Gemeinsame Quelle der drei Gate-D-Tests: eine unstrittige Debug-Ausgabe. Ob
+// sie gemeldet wird, haengt AUSSCHLIESSLICH am Dateinamen.
+const
+  SINK_SRC =
+    'unit t; implementation'#13#10+
+    'procedure TConsoleAppender.WriteLog;'#13#10+
+    'begin'#13#10+
+    '  WriteLn(''log line'');'#13#10+
+    '  OutputDebugString(''log line'');'#13#10+
+    'end;';
+
+// Parst SINK_SRC und laesst NUR den DebugOutput-Detektor unter APath laufen.
+// TFindingHelper.FindingsOf fixiert 'sample.pas' und kann Gate D nicht treffen.
+function DebugCountForPath(const APath: string): Integer;
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  F      : TObjectList<TLeakFinding>;
+begin
+  F := TObjectList<TLeakFinding>.Create(True);
+  try
+    Parser := TParser2.Create;
+    try
+      Root := Parser.ParseSource(SINK_SRC);
+      try
+        TDebugOutputDetector.AnalyzeUnit(Root, APath, F);
+      finally
+        Root.Free;
+      end;
+    finally
+      Parser.Free;
+    end;
+    Result := TFindingHelper.Count(F, fkDebugOutput);
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestDebugOutput.Debug_LoggerFileName_NoFinding;
+// In der Senke eines Logging-Frameworks ist die Ausgabe die IMPLEMENTIERUNG -
+// der Regel-Remedy 'nimm einen Logger' waere dort zirkulaer.
+// Beleg: LoggerPro.OutputDebugStringAppender.pas:87 (3 Vendoring-Kopien).
+begin
+  Assert.AreEqual<Integer>(0, DebugCountForPath('d:\repo\src\MyLogger.pas'),
+    'Logger-Senke: WriteLn/OutputDebugString sind dort die Implementierung');
+end;
+
+procedure TTestDebugOutput.Debug_AppenderFileName_NoFinding;
+// Beleg: LoggerPro.ConsoleAppender.pas:427/429 (3 Vendoring-Kopien).
+begin
+  Assert.AreEqual<Integer>(0,
+    DebugCountForPath('d:\repo\lib\LoggerPro.ConsoleAppender.pas'),
+    'Appender-Senke: WriteLn/OutputDebugString sind dort die Implementierung');
+end;
+
+procedure TTestDebugOutput.Debug_PlainFileName_StillReported;
+// TP-Gegenprobe zu Gate D: nur der BASENAME entscheidet. Eine gewoehnliche
+// Unit - auch eine, die unter einem Verzeichnis 'logger\' liegt - bleibt voll
+// analysiert, sonst wuerde ein einziger Ordnername einen ganzen Baum stummschalten.
+begin
+  Assert.AreEqual<Integer>(2, DebugCountForPath('d:\repo\logger\uMain.pas'),
+    'gewoehnliche Unit: WriteLn und OutputDebugString bleiben Funde');
 end;
 
 end.
