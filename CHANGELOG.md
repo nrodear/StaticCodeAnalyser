@@ -61,6 +61,25 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "no enclosing try..finally" claim does not hold there).
 
 ### Fixed
+- SCA018 (DeepNesting) no longer counts an `if … else if … else if`
+  chain as nested code. The parser attaches the else branch below the
+  `if`, which already carries the raised depth, so every chain link
+  added another level - although a chain is one multi-armed branch,
+  not n-fold nesting (the same reasoning `case` already gets). An
+  `else` with its own `begin` block keeps counting. Corpus: about 39 %
+  of the rule's findings drop; note that surviving findings may move to
+  a different line, because the rule reports the deepest spot in a
+  method.
+- SCA054 (UnusedParameter) stops reporting four cases where the claim
+  "never read" is simply untrue or the signature is not the author's
+  choice: VCL/FMX message handlers (the compiler requires exactly one
+  var parameter), parameters aliased via `absolute`, parameters marked
+  with the FPC suppression comment `{%H-}`, and a phantom `constref`
+  parameter that does not exist at all.
+- SCA089 (PublicField) stays silent for `published` sections - where a
+  public field is the prescribed form for DFM component binding - and
+  for declaration lines containing `=` (nested type aliases and typed
+  constants).
 - SCA115 (HttpInsteadOfHttps) no longer reports plain-text URLs that
   never reach the network: test-vector literals inside unit-test
   fixtures (recognised by framework marker *and* fixture declaration,

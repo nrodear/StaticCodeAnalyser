@@ -162,7 +162,7 @@ const
     (
       RuleID   : 'SCA018';
       Name     : 'Block nesting exceeds threshold';
-      ShortDesc: 'Nested if/for/while depth higher than configured maximum (default 4)';
+      ShortDesc: 'Nested if/for/while depth higher than configured maximum (default 4); an else-if chain counts as ONE level, like a case';
       BadEx    : 'if a then' + #13#10 + '  if b then' + #13#10 + '    if c then' + #13#10 +
         '      if d then DoStuff;';
       GoodEx   : 'if not a then Exit;' + #13#10 + 'if not b then Exit;' + #13#10 + 'if not c then Exit;' +

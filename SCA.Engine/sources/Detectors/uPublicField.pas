@@ -10,10 +10,14 @@ unit uPublicField;
 // "wir wollen den Wert beim Setzen normalisieren") moeglich sind.
 //
 // Erkennung: Visibility-Section-Tracking. Wenn nach einem `public`
-// (oder `published`) Keyword eine Zeile folgt, die ein Feld
-// deklariert (Pattern `Name: Typ;` ohne `function`/`procedure`/
-// `property`/`class function`/`const`/`constructor`/`destructor`),
-// wird gemeldet.
+// Keyword eine Zeile folgt, die ein Feld deklariert (Pattern
+// `Name: Typ;` ohne `function`/`procedure`/`property`/
+// `class function`/`const`/`constructor`/`destructor`), wird gemeldet.
+//
+// `published` schaltet die Sektion mit, wird aber NICHT gemeldet
+// (Autopsie 2026-08-27, G1) - dort ist das oeffentliche Feld die vom
+// DFM-Streamer vorgeschriebene Form, kein Kapselungsfehler. Details
+// samt Zaehlung am Melde-Guard in AnalyzeUnit.
 //
 // Schweregrad: lsHint.
 
@@ -187,6 +191,25 @@ begin
   // (Edge: Methoden-Pointer-Felder `MyEvt: procedure(x: Integer);` haben '(' -
   //  die werden ueber die Inside-Parens-Continuation-Heuristik gefiltert.)
   if Pos(')', trimmed) > 0 then Exit;
+  // Ein `=` in der bereinigten Zeile heisst: DEKLARATION, kein Feld.
+  // Delphi kennt keinen Feld-Initialisierer in Klassen - was hier mit
+  // `=` steht, ist entweder ein Nested-Type-Alias unter `public type`
+  // oder eine typisierte Konstante, deren `const` auf einer eigenen
+  // Zeile steht und deshalb den `const `-Praefixtest oben nicht
+  // ausloest.
+  // GEZAEHLT (Autopsie 2026-08-27, Korpus D:/git-sca-realworld,
+  // 13.419 .pas-Dateien, 4.209 Funde): genau 39 Fundzeilen enthalten
+  // nach dem Strip ein `=`, und alle 39 sind Deklarationen - kein
+  // einziges Feld darunter. Wirkung -39 Funde, 0 Adds.
+  //   18x Nested-Type-Alias, z.B. Alcinoe.BroadcastReceiver:26
+  //       `TCreateInstanceFunc = function: TALBroadcastReceiver;`
+  //       (17x Alcinoe, dazu mormot.core.threads:1070)
+  //   21x typisierte Konstante, MVCFramework.JWT:99 ff.
+  //       `Issuer: string = 'iss';` unter einer nackten `const`-Zeile
+  //       (7 Konstanten x 3 Repo-Kopien im Korpus)
+  // Der String-Strip loescht dabei den Wert, nicht das `=` - genau
+  // deshalb traegt das `=` die Entscheidung und nicht der Literal-Text.
+  if Pos('=', trimmed) > 0 then Exit;
   // Muss `:` und `;` enthalten - charakteristisch fuer Feld-Decl
   if (Pos(':', trimmed) = 0) then Exit;
   if (Pos(';', trimmed) = 0) then Exit;
@@ -226,6 +249,10 @@ var
   Word     : string;
   Lower    : string;
   InPublic : Boolean;
+  // G1 (Autopsie 2026-08-27): `published` schaltet die Sektion weiter
+  // mit (sonst wuerde ein nachfolgendes Feld dem VORIGEN public-Block
+  // zugerechnet), wird aber getrennt gefuehrt und nicht gemeldet.
+  InPublished : Boolean;
   F        : TLeakFinding;
   // Autopsie 2026-08-26: drei neue Zustaende ueber Zeilengrenzen.
   InBrace, InStar : Boolean;   // Fix C - Blockkommentar-Zustand
@@ -239,6 +266,7 @@ begin
   if Lines = nil then Exit;
   try
     InPublic    := False;
+    InPublished := False;
     InBrace     := False;
     InStar      := False;
     OpenParens  := 0;
@@ -289,6 +317,16 @@ begin
          IsSectionHeadLine(Trim(Clean), Lower) then
       begin
         InPublic   := True;
+        // G1: ZUWEISUNG, kein blosses Setzen - ein `public` nach einem
+        // `published` im selben Typ muss das Flag wieder loeschen.
+        // GEZAEHLT: die Setzen-ohne-Loeschen-Variante kostet 2 echte
+        // TPs im Korpus (rgmain.pas:83/84, mORMot2-Beispiel: der Typ
+        // wechselt published -> public -> published, und HelpMenu/
+        // HelpAboutMenuItem stehen im public-Block dazwischen). Genau
+        // richtig so: was der Autor aus published herausnimmt, wird vom
+        // Streamer NICHT mehr gebunden - FieldAddress findet es nicht -
+        // und faellt damit zurueck unter die Kapselungs-Empfehlung.
+        InPublished := (Lower = 'published');
         OpenParens := 0;   // Sektionsgrenze bricht jede Drift
       end
       else if (Lower = 'private') or (Lower = 'protected') or
@@ -303,15 +341,37 @@ begin
               (Lower = 'initialization') or
               (Lower = 'finalization') then
       begin
-        InPublic   := False;
-        OpenParens := 0;
+        InPublic    := False;
+        InPublished := False;
+        OpenParens  := 0;
         if Lower = 'end' then
           InValueType := False;
       end
       else
       begin
-        if (not WarInParens) and InPublic and (not InValueType) and
-           LooksLikeField(Clean) then
+        // G1 (Autopsie 2026-08-27): published-Sektionen schweigen.
+        // Ein published-Feld ist kein Kapselungsfehler, sondern die
+        // einzige Form, die der DFM-Streamer laden KANN:
+        // TComponent.SetReference sucht ueber Owner.FieldAddress(Name)
+        // im Feld-Table - und der Compiler emittiert dieses Table nur
+        // fuer published-Felder. Eine Property statt des Feldes wuerde
+        // das Laden brechen; die Empfehlung waere schlicht falsch.
+        // Dazu passt, dass Delphi in published ueberhaupt nur Felder
+        // von Klassen-/Interface-Typ zulaesst - die Sektion existiert
+        // fuer die Komponentenbindung, nicht fuer Nutzdaten.
+        // GEZAEHLT (Korpus D:/git-sca-realworld, 4.209 Funde): 37 Funde
+        // stehen unter einem expliziten `published`, und alle 37 sind
+        // DFM-Komponentenfelder - issrc IDE.ImagesModule:20-25
+        // (TImageList/TImageCollection, 6), jvcl
+        // fJvHLEdPropDlgTestParams (TPageControl/TTabSheet, 8 in 4
+        // Repo-Kopien), mORMot2-Beispiel rgmain:76-109 (TMenuItem/
+        // TPanel/TLabel/TSplitter, 23). Wirkung -37 Funde, 0 Adds.
+        // Der Normalfall - IDE-generierte Komponentenfelder in der
+        // IMPLIZITEN published-Sektion ohne Keyword - war ohnehin stumm
+        // (ohne Keyword bleibt InPublic False); G1 schliesst nur die
+        // Luecke fuer die handgeschriebene explizite Form.
+        if (not WarInParens) and InPublic and (not InPublished) and
+           (not InValueType) and LooksLikeField(Clean) then
         begin
           F            := TLeakFinding.Create;
           F.FileName   := FileName;

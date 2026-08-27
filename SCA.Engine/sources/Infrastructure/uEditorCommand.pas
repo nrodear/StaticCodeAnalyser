@@ -48,13 +48,15 @@ type
 
       /// <summary>Vorgabe: Visual Studio Code, weil dessen Aufrufform die
       /// verbreitetste ist. Sie greift NUR, wenn ExternalEditor gesetzt ist.</summary>
-      // noinspection PublicField
-      // EIGENER FEHLBEFUND, absichtlich stehengelassen: das ist eine
-      // Konstante, kein Feld. Der Detektor liest den const-Abschnitt eines
-      // Verbunds als oeffentliche Felder und schlaegt eine Eigenschaft vor
-      // - in eine solche laesst sich eine Konstante gar nicht umbauen.
-      // Warum ausgerechnet nur diese der fuenf Konstanten gemeldet wird,
-      // ist ungeklaert; als Fehlbefund vermerkt (Todo_Review_Core).
+      // Frueher stand hier ein 'noinspection PublicField' samt Vermerk
+      // "eigener Fehlbefund, Ursache ungeklaert": SCA089 las den
+      // const-Abschnitt dieses Verbunds als oeffentliche Felder und schlug
+      // eine Eigenschaft vor - in die sich eine Konstante gar nicht
+      // umbauen laesst. Die Ursache ist seit 2026-08-27 geklaert und
+      // behoben: das G2-Gate ueberspringt Zeilen mit '=' (Typaliase und
+      // typisierte Konstanten sind Deklarationen, keine Felder). Der
+      // Marker war damit tot und wurde von unserer eigenen Regel
+      // UnusedSuppression gemeldet - Dogfooding, das funktioniert hat.
       DEFAULT_ARGS  = '-g "%file%:%line%"';
 
     /// <summary>Liest die Einstellungen aus der analyser.ini.</summary>

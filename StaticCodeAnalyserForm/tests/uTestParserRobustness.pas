@@ -122,6 +122,10 @@ type
     // Konstantenwert (Live-Editieren) darf nicht den Rest der Unit
     // fressen - implementation und alle Methoden muessen im AST bleiben.
     [Test] procedure Parser_UnclosedConstParen_DoesNotEatUnit;
+    // Upstream-Bericht Ian Branch 2026-08-27: Positions-Drift in der
+    // Namenslisten-Fortsetzung. Prueft die ZEILE, nicht den Fund -
+    // genau die Luecke, durch die der Defekt gerutscht ist.
+    [Test] procedure VarNameList_WithContextKeyword_KeepsOwnLine;
   end;
 
 implementation
@@ -2757,4 +2761,64 @@ begin
   end;
 end;
 
+
+procedure TTestParserRobustness.VarNameList_WithContextKeyword_KeepsOwnLine;
+// UPSTREAM-BERICHT (Ian Branch, GITLAK, 2026-08-27) zum Kommalisten-Fix:
+// die Fortsetzungsschleife benutzte 'T' - dieselbe Variable, die die
+// Position der DEKLARATION traegt und nach der Schleife fuer JEDEN
+// emittierten nkLocalVar gelesen wird. Ein Kontextwort an zweiter Stelle
+// ueberschrieb sie, und alle Namen bekamen die Position des LETZTEN.
+//
+// WAS DER PARSER HIER LEISTET - und was NICHT (Testfassung korrigiert,
+// die erste Fassung dieses Tests war falsch und wurde rot): eine
+// Deklaration hat EINE Position, und alle ihre Namen teilen sie. Der
+// Emit lautet 'Parent.Add(nkLocalVar, VN, T.Line, T.Col)' fuer jedes VN -
+// pro Name eine eigene Zeile war nie das Verhalten und ist auch nicht
+// Ziel des Fixes. Richtig ist: BEIDE Namen tragen die Zeile des
+// DEKLARATIONSANFANGS (6), nicht die des letzten Namens (7).
+// Damit unterscheidet der Test genau die beiden Zustaende:
+//   defekt  -> read = 7, write = 7   (Position des letzten Namens)
+//   korrekt -> read = 6, write = 6   (Position der Deklaration)
+const SRC =
+  'unit t;'#13#10 +          // 1
+  'interface'#13#10 +        // 2
+  'implementation'#13#10 +   // 3
+  'procedure Foo;'#13#10 +   // 4
+  'var'#13#10 +              // 5
+  '  read,'#13#10 +          // 6  <- Deklarationsanfang
+  '  write: Integer;'#13#10 +// 7
+  'begin'#13#10 +
+  '  read := 1; write := 2;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var
+  Parser : TParser2;
+  Root, ImplN, M, C : TAstNode;
+  LineRead, LineWrite : Integer;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      ImplN := ImplNodeOf(Root);
+      Assert.IsNotNull(ImplN, 'implementation-Node fehlt');
+      M := nil;
+      for C in ImplN.Children do
+        if C.Kind = nkMethod then begin M := C; Break; end;
+      Assert.IsNotNull(M, 'Methode fehlt');
+      LineRead := -1; LineWrite := -1;
+      for C in M.Children do
+        if C.Kind = nkLocalVar then
+        begin
+          if SameText(C.Name, 'read')  then LineRead  := C.Line;
+          if SameText(C.Name, 'write') then LineWrite := C.Line;
+        end;
+      Assert.AreEqual<Integer>(6, LineRead,
+        'read traegt die Deklarationszeile');
+      Assert.AreEqual<Integer>(6, LineWrite,
+        'write traegt DIESELBE Deklarationszeile - vor dem Fix trugen ' +
+        'beide die Zeile 7 des letzten Namens');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
 end.

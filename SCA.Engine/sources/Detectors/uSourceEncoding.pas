@@ -22,6 +22,9 @@ unit uSourceEncoding;
 //                             mid-FEFF; Unicode-Abuse, CWE-1007). Warning.
 //   S3 fkSourceNonAsciiIdentifier - Nicht-ASCII in einem Identifier (Homoglyph/
 //                             Confusable, Trojan Source, CWE-1007). Warning.
+//                             Nur bei vertrauenswuerdiger Dekodierung
+//                             (IsDecodingTrustworthy) - S3 ist der einzige
+//                             Check hier, der ueber dekodierten TEXT urteilt.
 //
 // Gruppe A (Encoding) ist gegenseitig ausschliessend: genau EIN Fund pro Datei.
 // UTF-32/UTF-16 (E7/E4) sind BOM-bestimmte Ganzdatei-Verdikte (emittieren + RAUS,
@@ -128,6 +131,54 @@ end;
 function LineOr1(L: Integer): Integer; inline;
 begin
   if L > 0 then Result := L else Result := 1;
+end;
+
+function IsDecodingTrustworthy(const Info: TFileEncodingInfo): Boolean;
+// FP-Gate fuer S3 (Vollzaehlung SCA193 vom 2026-08-27: 3 Funde im GANZEN
+// Korpus, jeder einzeln am Quelltext geprueft - 1 TP, 2 FP; beide FPs haben
+// DIESELBE Wurzel). Wirkung dieses Gates: -2 Funde (3 -> 1), der TP bleibt.
+//
+// WARUM: S3 ist der einzige Check dieser Unit, der ueber DEKODIERTEN Text
+// urteilt (TLexer auf Lines.Text). E5/S1/S2 laufen auf den Rohbytes und sind
+// vom Dekodier-Ergebnis unabhaengig; E1/E3 entscheiden ueber die Bytes und
+// setzen fuer den Text-Pfad ohnehin sbkNone+StrictUtf8 voraus. Ist eine Datei
+// aber BOM-los UND kein gueltiges UTF-8, dekodiert uFileTextCache.LoadFileSmart
+// sie mit TEncoding.Default - der aktiven System-Codepage der Maschine, die
+// den Scan faehrt (hier CP1252). Damit entstehen Buchstaben, die in der echten
+// Quell-Codepage gar nicht existieren (im Korpus: GBK-Bytes werden zu ganz
+// anderen Zeichen umgedeutet). S3 faellt dann ein Homoglyph-Urteil ueber
+// erfundene Zeichen - exakt die 2 FPs. Kein Deckungsverlust: Gruppe A meldet
+// so eine Datei ohnehin, bei den beiden Korpus-Faellen durch die ehrliche
+// Regel E3 (fkSourceAnsiNonAscii, "codepage-abhaengig / nicht portabel").
+//
+// Vertrauenswuerdig = die Encoding-Wahl in LoadFileSmart war NICHT geraten:
+//   * sbkUtf8       - BOM sagt UTF-8, LoadFileSmart nimmt UTF-8.
+//   * sbkUtf16LE/BE - BOM sagt UTF-16; TEncoding.GetBufferEncoding trifft
+//                     diese BOM sicher. BOM-gesteuert ist genauso zuverlaessig
+//                     wie UTF-8 und gehoert deshalb dazu (Skeptiker-Nachtrag:
+//                     die enge Fassung "sbkUtf8 oder (sbkNone und StrictUtf8)"
+//                     haette UTF-16-Quellen grundlos ausgeschlossen).
+//   * sbkNone + StrictUtf8 - kein BOM, aber der strikte RFC-3629-Walk
+//                     bestaetigt UTF-8. Strikt ist eine TEILMENGE des lenienten
+//                     IsValidUtf8 in LoadFileSmart -> die Datei wurde dort
+//                     garantiert als UTF-8 dekodiert.
+// NICHT dabei:
+//   * sbkNone ohne StrictUtf8 -> TEncoding.Default = Rate-Pfad (die 2 FPs).
+//   * sbkUtf32LE/BE -> LoadFileSmart kennt kein UTF-32: GetBufferEncoding
+//     matcht bei FF FE 00 00 die UTF-16LE-BOM, der Rest wird Muell. UTF-32 als
+//     "vertrauenswuerdig" zu fuehren waere sachlich falsch.
+// Beide UTF-16/UTF-32-Zweige sind heute praktisch folgenlos: E4/E7 verlassen
+// AnalyzeUnit schon VOR dem S3-Block, diese BomKinds erreichen die Funktion
+// also nie. Die Liste beschreibt trotzdem die Dekodier-Wahrheit - fuer den
+// Fall, dass der Frueh-Exit spaeter wandert.
+//
+// Bewusst konservativ: BOM-los + lenient-gueltiges, aber strikt-ungueltiges
+// UTF-8 (ueberlang / Surrogat) gilt hier als nicht vertrauenswuerdig, obwohl
+// LoadFileSmart dort UTF-8 nimmt. Das Gate darf ausschliesslich Funde
+// ENTFERNEN, nie neue erzeugen (Monotonie) - im Zweifel also schweigen.
+begin
+  Result := (Info.BomKind in [sbkUtf8, sbkUtf16LE, sbkUtf16BE])
+            or ((Info.BomKind = sbkNone) and Info.StrictUtf8);
 end;
 
 procedure ScanNonAsciiTokens(const Source: string;
@@ -279,8 +330,14 @@ begin
 
   // S3 (Security, orthogonal): Homoglyph-/Confusable-Identifier. Feuert auch in
   // korrektem UTF-8+BOM (ein Cyrillic-Homoglyph in einem Identifier ist dort
-  // genauso gefaehrlich).
-  if Ident then
+  // genauso gefaehrlich) - aber NUR wenn der dekodierte Text die Quelle
+  // wirklich wiedergibt. Ohne dieses Gate urteilt S3 in codepage-geratenen
+  // Dateien ueber erfundene Buchstaben (Vollzaehlung 2026-08-27: 2 der 3
+  // Korpus-Funde waren genau das). Begruendung: IsDecodingTrustworthy.
+  // Der Lex-Durchgang oben bleibt ungegatet - er liefert zusaetzlich Outside
+  // fuer die E1-Confidence, und E1 feuert nur im vertrauenswuerdigen Fall
+  // (sbkNone + StrictUtf8), ist von diesem Gate also unberuehrt.
+  if Ident and IsDecodingTrustworthy(Info) then
     Results.Add(TLeakFinding.New(FileName, '', LineOr1(IdentLine),
       'Non-ASCII character in an identifier - homoglyph / confusable risk ' +
       '(Trojan Source, CWE-1007): a letter such as Cyrillic U+043E looks like ' +

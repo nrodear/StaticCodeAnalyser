@@ -421,7 +421,7 @@
       "id": "SCA018",
       "kind": "DeepNesting",
       "name": "Block nesting exceeds threshold",
-      "shortDescription": "Nested if/for/while depth higher than configured maximum (default 4)",
+      "shortDescription": "Nested if/for/while depth higher than configured maximum (default 4); an else-if chain counts as ONE level, like a case",
       "fullDescription": "Deep nesting hurts readability and indicates the method is doing too much. Use guard clauses (early Exit) or extract inner blocks into helper methods.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",

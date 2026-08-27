@@ -90,6 +90,12 @@ type
     [Test] procedure Secret_DefaultParamValue_NotReported;
     [Test] procedure Secret_ConcatenatedLiterals_StillReported;
     [Test] procedure Secret_LiteralWithCharCode_StillReported;
+    // Vollzaehlung 2026-08-27 (alle 16 Korpus-Funde einzeln geprueft):
+    // Gate B Suffix-Kette, Gate C Platzhalter, Gate D Meta-Suffixe.
+    [Test] procedure Secret_HeaderNameSuffixChain_NotReported;
+    [Test] procedure Secret_PlaceholderToken_NotReported;
+    [Test] procedure Secret_MetaSuffixExprAndCharacters_NotReported;
+    [Test] procedure Secret_RealSecretBesideGates_StillReported;
   end;
 
 implementation
@@ -869,6 +875,88 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1,
       '#-Zeichencode zwischen Literalen bleibt ein gueltiger Initialisierer');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretInit.Secret_HeaderNameSuffixChain_NotReported;
+// GATE B: 'FAPIKeyHeaderName' zerlegt sich in Keyword 'key' + Rest
+// 'headername' - beide Glieder stehen einzeln in META_SUFFIX, die KETTE
+// bisher nicht. Der Wert ist der NAME des HTTP-Headers, aus dem der Key
+// spaeter gelesen wird (Korpus: MVCFramework.Middleware.RateLimit.pas:353,
+// drei Vendoring-Kopien).
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TLimit.Init;'#13#10 +
+  'begin'#13#10 +
+  '  FAPIKeyHeaderName := ''X-API-Key'';'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+    'ein Header-NAME ist Konfiguration, kein Schluessel');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretInit.Secret_PlaceholderToken_NotReported;
+// GATE C: vollstaendig geklammerter Marker, der zur Laufzeit ersetzt wird
+// (Korpus: CnProjectBackupFrm.pas:298, neben '<compress.exe>').
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'const'#13#10 +
+  '  csCmdPassword = ''<Password>'';'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+    'Platzhalter in spitzen Klammern ist kein Geheimnis');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretInit.Secret_MetaSuffixExprAndCharacters_NotReported;
+// GATE D: 'PasswordExpr' ist ein SQL-Spaltenausdruck (HeidiSQL
+// usermanager.pas:401), 'AllowedPasswordCharacters' der erlaubte
+// Zeichenvorrat einer Passwortpruefung (JvBaseDBPasswordDialog.pas:385) -
+// beides Metadaten UEBER ein Geheimnis, nie das Geheimnis selbst.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TDlg.Init;'#13#10 +
+  'begin'#13#10 +
+  '  PasswordExpr := ''IF(LENGTH(password)>0, password, auth_string)'';'#13#10 +
+  '  FAllowedPasswordCharacters := ''ABCDEFGHIJ1234567890_'';'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+    'Ausdruck und Zeichenvorrat sind Metadaten, kein Passwort');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretInit.Secret_RealSecretBesideGates_StillReported;
+// TP-GEGENPROBE zu allen drei Gates: ein echter, zufaellig aussehender
+// Wert in derselben Datei bleibt meldepflichtig. Wird rot, sobald eines
+// der Gates zu breit greift.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TCfg.Init;'#13#10 +
+  'begin'#13#10 +
+  '  FAPIKeyHeaderName := ''X-API-Key'';'#13#10 +
+  '  FApiKey := ''Xk9pQz7LmR4tWv2n'';'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
+    'der echte Schluessel daneben bleibt ein Fund');
   finally F.Free; end;
 end;
 

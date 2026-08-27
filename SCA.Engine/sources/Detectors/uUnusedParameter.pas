@@ -12,6 +12,35 @@
 //   * Param-Name beginnt mit `_` (intentional convention).
 //   * Body ist asm-Block oder leer.
 //
+// KORREKTHEITS-GATES aus der SCA054-Autopsie 2026-08-27 (13.959 Funde). Alle
+// vier nehmen Meldungen weg, die sachlich FALSCH sind - nicht bloss
+// unerwuenscht. Gezaehlt auf dem Autopsie-Korpus:
+//   * GATE A `message`-Handler (-1.019): 'procedure WMFoo(var M: TMsg);
+//     message WM_FOO;' MUSS in Delphi genau einen var-Parameter tragen
+//     (E2190). Der Parameter ist Teil des Vertrags, streichen bricht die
+//     Uebersetzung. Siehe DeclHasMessageDirective - der alte Kommentar an
+//     IsInheritanceHook, das brauche einen Parser-Followup, war nur fuer
+//     HasModifier richtig (der Parser kennt 'message' nicht als Direktive
+//     und legt sie als zwei Phantom-Felder ab); ueber den Deklarations-
+//     SCHWANZ in der gestrippten Quelle ist der Fall entscheidbar.
+//   * GATE B 'absolute'-Alias (-414): 'var X: T absolute Param;' legt X auf
+//     die Storage von Param. Jeder Zugriff ueber X IST ein Zugriff auf
+//     Param - 'never read in method body' ist dort schlicht unwahr.
+//     Hausvorlage: uUninitVar.pas (AbsAliases).
+//   * GATE C FPC-Marker '{%H-}' am Parameter (-29): expliziter Autor-Intent
+//     ('Hint hier unterdruecken'). SCA166/uUninitVar respektiert denselben
+//     Marker an Deklarationen; hier gilt dieselbe Zusage.
+//   * GATE F 'constref'-Phantom (-48): 'constref' ist ein FPC-Parameter-
+//     modifier, den der Parser nicht kennt - er landet als eigener nkParam
+//     mit leerem Typ. Gemeldet wird also ein Parameter, der gar keiner ist.
+//
+// BEKANNTER REST (nicht behoben, damit er nicht verloren geht): 78 Funde
+// (0,56 % der Autopsie) behaupten 'never read', obwohl der Parametername
+// im ECHTEN Rumpf wortgebunden dasteht. Weder die AST-Zaehlung noch die
+// Quell-Rueckfrage sehen ihn - eine offene, echte FP-Klasse mit noch
+// unbekannter Ursache (Verdacht: Rumpf-Zeilenbereich BodyFrom..BodyTo zu
+// eng, s. BodyLineRangeFound). Eigenes Paket, eigene Messung.
+//
 // Erkennung:
 //   * MethodNode.FindAll(nkParam) → Liste der Param-Knoten
 //   * Body-Tokens einsammeln (rekursiv Name+TypeRef aller Children)
@@ -34,6 +63,11 @@ type
   TStrippedUnit = record
     Ready : Boolean;
     Lines : TArray<string>;
+    // ROHE Quellzeilen, zeilengleich zu Lines indiziert. Gebraucht von
+    // GATE C: '{%H-}' IST ein Kommentar und ist in Lines weggeblankt - die
+    // Autor-Suppression waere dort unsichtbar. Der Zusatz kostet praktisch
+    // nichts: Delphi-Strings sind refgezaehlt, kopiert werden nur Zeiger.
+    Raw   : TArray<string>;
   end;
 
   TUnusedParameterDetector = class
@@ -120,6 +154,22 @@ begin
   finally
     Classes.Free;
   end;
+end;
+
+// Deklarationsknoten zu einer Implementation - oder nil.
+//
+// 2026-08-27 aus IsInheritanceHook herausgezogen: seit GATE A gibt es einen
+// ZWEITEN Leser derselben Deklaration. FindDeclaration laeuft ueber
+// UnitNode.FindAll(nkClass), also ueber den ganzen Datei-Baum mit
+// Listen-Allokation - ihn zweimal je Methode zu bezahlen waere Verschwendung.
+// AnalyzeMethod holt ihn einmal und reicht ihn durch.
+function FindDeclarationFor(UnitNode, MethodNode: TAstNode): TAstNode;
+var
+  ClassName, BareName : string;
+begin
+  Result := nil;
+  if SplitQualified(MethodNode.Name, ClassName, BareName) then
+    Result := FindDeclaration(UnitNode, ClassName, BareName);
 end;
 
 // T2 (2026-07-29): Besitzertyp einer nested-type-Methode im Unit-Baum
@@ -224,15 +274,19 @@ end;
 
 // Inheritance-Hook-Check: an der Implementation selbst (selten) ODER an
 // ihrer zugehoerigen Class-Declaration (Default-Fall - Parser legt die
-// Modifier nur an der Declaration ab).
-function IsInheritanceHook(UnitNode, MethodNode: TAstNode): Boolean;
+// Modifier nur an der Declaration ab). ADecl kommt aus FindDeclarationFor
+// und darf nil sein.
+function IsInheritanceHook(MethodNode, ADecl: TAstNode): Boolean;
 
   function CheckOne(N: TAstNode): Boolean;
   begin
-    // Hinweis: 'message' ist KEINE vom Parser erkannte Method-Direktive
-    // (IsMethodDirective/IsMethodDirectiveIdent kennen sie nicht; 'message N'
-    // mit Konstanten-Arg landet nicht als ';message' im TypeRef). Message-
-    // Handler-Erkennung braucht daher einen Parser-Followup, nicht HasModifier.
+    // 'message' steht hier bewusst NICHT: der Parser kennt sie nicht als
+    // Direktive (IsMethodDirective/IsMethodDirectiveIdent fuehren sie nicht),
+    // sie erreicht TypeRef nie und HasModifier(N, 'message') ist konstant
+    // False. Der Fall wird stattdessen aus dem Deklarations-SCHWANZ der
+    // Quelle entschieden - s. DeclHasMessageDirective (GATE A). Die
+    // Vorfassung dieses Kommentars behauptete, das brauche einen
+    // Parser-Followup; das stimmte nur fuer den HasModifier-Weg.
     Result := (N <> nil) and
               (HasModifier(N, 'override')
             or HasModifier(N, 'virtual')
@@ -240,18 +294,8 @@ function IsInheritanceHook(UnitNode, MethodNode: TAstNode): Boolean;
             or HasModifier(N, 'dynamic'));
   end;
 
-var
-  ClassName, BareName : string;
-  Decl : TAstNode;
 begin
-  Result := CheckOne(MethodNode);
-  if Result then Exit;
-
-  if SplitQualified(MethodNode.Name, ClassName, BareName) then
-  begin
-    Decl := FindDeclaration(UnitNode, ClassName, BareName);
-    Result := CheckOne(Decl);
-  end;
+  Result := CheckOne(MethodNode) or CheckOne(ADecl);
 end;
 
 // Event-Handler-Konvention: der ERSTE Parameter ist 'Sender' (bzw. *Sender)
@@ -330,6 +374,7 @@ var
   LineFor : TArray<Integer>;
   Src     : TStringList;
   Owned   : Boolean;
+  i       : Integer;
 begin
   if AStripped.Ready then Exit;
   AStripped.Ready := True;
@@ -339,8 +384,335 @@ begin
     Code := TDetectorUtils.StripStringsAndCommentsCached(
       Src, LineFor, nil, AFileName, ' ');
     AStripped.Lines := Code.Split([#10]);
+    // Rohzeilen fuer GATE C mitnehmen (s. TStrippedUnit.Raw). Der Cache
+    // besitzt Src; die Kopie hier haelt nur Referenzen auf dieselben
+    // String-Puffer, es wird kein Zeichen dupliziert.
+    SetLength(AStripped.Raw, Src.Count);
+    for i := 0 to Src.Count - 1 do
+      AStripped.Raw[i] := Src[i];
   finally
     ReleaseLines(Src, Owned);
+  end;
+end;
+
+// ---------------------------------------------------------------------------
+// GATE A - 'message'-Handler (SCA054-Autopsie 2026-08-27, -1.019 Funde)
+// ---------------------------------------------------------------------------
+
+function IsIdentStartChar(C: Char): Boolean;
+begin
+  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']);
+end;
+
+function IsDeclTailDirective(const AWordLow: string): Boolean;
+// Woerter, die im Direktiven-Schwanz einer Methoden-Deklaration VOR einem
+// 'message' stehen duerfen. Die Liste ist bewusst eine ERLAUBNIS, keine
+// Verbotsliste: alles, was hier nicht steht, beendet den Schwanz und damit
+// die Suche - so kann das Fenster nie in eine folgende Deklaration
+// hineinlesen (dort steht immer procedure/function/property/end).
+const
+  TAIL_DIRECTIVES : array[0..33] of string = (
+    'abstract',    'assembler',   'cdecl',      'dcpcall',   'delphicall',
+    'deprecated',  'dispid',      'dynamic',    'experimental', 'export',
+    'external',    'far',         'final',      'forward',   'inline',
+    'library',     'local',       'mwpascal',   'near',      'noreturn',
+    'overload',    'override',    'pascal',     'platform',  'register',
+    'reintroduce', 'safecall',    'sealed',     'static',    'stdcall',
+    'unsafe',      'varargs',     'virtual',    'winapi');
+var
+  i : Integer;
+begin
+  for i := Low(TAIL_DIRECTIVES) to High(TAIL_DIRECTIVES) do
+    if AWordLow = TAIL_DIRECTIVES[i] then Exit(True);
+  Result := False;
+end;
+
+// GEGENPRUEFUNG 2026-08-27, bewusst nicht zusammengelegt: eine
+// Zweitfassung derselben Frage steht als Sca147DeclHasMessageDirective
+// in uUnusedPrivateMethod.pas:292. Sie arbeitet auf dem STRING 'Code'
+// mit Startoffset, diese hier auf dem ZEILEN-Array mit Deklarations-
+// zeile - eine Vereinigung braucht eine gemeinsame Signatur und
+// beruehrt dann zwei Detektoren gleichzeitig. Das ist die teurere
+// Aenderung; wer sie angeht, sollte beide Direktiven-Erlaubnislisten
+// mitnehmen, die heute schon auseinanderlaufen.
+// BEKANNTE REICHWEITE (gezaehlt): Gate C sieht nur den Implementierungs-
+// kopf; 354 der 424 Korpus-Marker '{%H-}' stehen an der DEKLARATION und
+// werden damit nicht erreicht. Das ist eine Luecke, kein Fehler - die
+// erreichten 29 sind korrekt unterdrueckt.
+function DeclHasMessageDirective(const ALines: TArray<string>;
+  AFirstLine: Integer): Boolean;
+// True, wenn die Deklaration ab AFirstLine die Direktive 'message <Arg>'
+// traegt.
+//
+// WARUM AUS DER QUELLE UND NICHT AUS DEM AST: der Parser fuehrt 'message'
+// nicht in IsMethodDirectiveIdent. ParseMethodDirectives bricht davor ab,
+// und der Klassenrumpf-Loop verdaut 'message' und die Konstante als ZWEI
+// Phantom-Felder. Im TypeRef steht davon nichts - HasModifier kann den Fall
+// prinzipiell nicht sehen.
+//
+// GELESEN WIRD DIE GESTRIPPTE QUELLE: ein 'message' in einem Kommentar oder
+// String zaehlt nicht (durchgaengige Zusage des Werkzeugs).
+//
+// Ablauf in zwei Phasen, damit kein Bezeichner aus der Signatur mitzaehlt:
+//   Phase 1 laeuft bis zum ';', das die Signatur schliesst. Die Semikolons
+//     der Parameterliste liegen auf Klammertiefe > 0 und zaehlen nicht.
+//   Phase 2 liest den Direktiven-Schwanz Wort fuer Wort. 'message' mit
+//     folgendem Argument -> True; ein bekanntes Direktivenwort -> weiter
+//     hinter dessen ';'; alles andere -> Ende, False.
+//
+// Das Fenster ist auf MAX_DECL_LINES begrenzt: eine laengere Parameterliste
+// liefert False, also hoechstens einen verbleibenden Fund (nie einen neuen).
+const
+  MAX_DECL_LINES = 6;
+var
+  Buf  : string;
+  W    : string;
+  Ch   : Char;
+  i, p, e, q, L, Depth : Integer;
+begin
+  Result := False;
+  if (AFirstLine < 1) or (AFirstLine > Length(ALines)) then Exit;
+  Buf := '';
+  for i := AFirstLine to AFirstLine + MAX_DECL_LINES - 1 do
+  begin
+    if i > Length(ALines) then Break;
+    // Trenner-Space: sonst klebte das letzte Wort einer Zeile an das erste
+    // der naechsten und der Wortvergleich unten liefe ins Leere.
+    Buf := Buf + ' ' + LowerCase(ALines[i - 1]);
+  end;
+  L := Length(Buf);
+
+  Depth := 0;
+  p     := 1;
+  while p <= L do
+  begin
+    Ch := Buf[p];
+    if (Ch = '(') or (Ch = '[') then Inc(Depth)
+    else if (Ch = ')') or (Ch = ']') then Dec(Depth)
+    else if (Ch = ';') and (Depth <= 0) then Break;
+    Inc(p);
+  end;
+  if p > L then Exit;
+  Inc(p);                        // hinter das Signatur-';'
+
+  while True do
+  begin
+    while (p <= L) and (Buf[p] <= ' ') do Inc(p);
+    if p > L then Exit;
+    if not IsIdentStartChar(Buf[p]) then Exit;
+    e := p;
+    while (e <= L) and IsIdentChar(Buf[e]) do Inc(e);
+    W := Copy(Buf, p, e - p);
+    if W = 'message' then
+    begin
+      // 'message' OHNE Argument gibt es nicht - ohne diese Pruefung wuerde
+      // ein Feld namens 'Message' hinter der Signatur den Gate ausloesen.
+      q := e;
+      while (q <= L) and (Buf[q] <= ' ') do Inc(q);
+      Result := (q <= L) and
+                (IsIdentStartChar(Buf[q]) or CharInSet(Buf[q], ['0'..'9']));
+      Exit;
+    end;
+    if not IsDeclTailDirective(W) then Exit;
+    p     := e;
+    Depth := 0;
+    while p <= L do
+    begin
+      Ch := Buf[p];
+      if (Ch = '(') or (Ch = '[') then Inc(Depth)
+      else if (Ch = ')') or (Ch = ']') then Dec(Depth)
+      else if (Ch = ';') and (Depth <= 0) then Break;
+      Inc(p);
+    end;
+    if p > L then Exit;
+    Inc(p);
+  end;
+end;
+
+function IsMessageHandler(ADecl: TAstNode; AParams: TList<TAstNode>;
+  var AStripped: TStrippedUnit; const AFileName: string): Boolean;
+// Message-Handler: der Parameter ist compiler-erzwungen, 'unused' ist dort
+// nicht behebbar (Streichen ergibt E2190 'Message methods must have exactly
+// one var parameter').
+//
+// Der Signatur-Vorfilter ist zugleich der Perf-Schutz und der Waechter gegen
+// eine Fehl-Lesung der Quelle: nur bei GENAU EINEM var-Parameter - also der
+// vom Compiler erzwungenen Form - wird ueberhaupt in die Datei geschaut.
+// Ein Parser- oder Textfehler kann so hoechstens eine einparametrige
+// Methode stumm schalten, nie eine beliebige.
+//
+// GEERBTE UNSCHAERFE: FindDeclaration nimmt bei gleichnamigen Overloads die
+// ERSTE Deklaration - dieselbe Grenze, die IsInheritanceHook seit jeher hat.
+// Praktisch folgenlos: ein Message-Handler hat eine feste Signatur und wird
+// nicht ueberladen, und der Ein-var-Parameter-Vorfilter deckelt den Schaden.
+var
+  P0 : string;
+begin
+  Result := False;
+  if ADecl = nil then Exit;
+  if AParams.Count <> 1 then Exit;
+  // Der Parser legt den Modifier als Namens-Praefix ab ('var Msg').
+  P0 := LowerCase(Trim(AParams[0].Name));
+  if Copy(P0, 1, 4) <> 'var ' then Exit;
+  EnsureUnitStripped(AStripped, AFileName);
+  if Length(AStripped.Lines) = 0 then Exit;
+  Result := DeclHasMessageDirective(AStripped.Lines, ADecl.Line);
+end;
+
+// ---------------------------------------------------------------------------
+// GATE B - 'absolute'-Alias auf einen Parameter (-414 Funde)
+// ---------------------------------------------------------------------------
+
+function CollectAbsoluteAliasTargets(MethodNode: TAstNode;
+  var AStripped: TStrippedUnit; const AFileName: string): string;
+// Liefert die Ziel-Bezeichner aller 'absolute'-Aliase der lokalen
+// var-Sektion, kleingeschrieben und in ' a b '-Form (Lookup per
+// Pos(' name ', ...) - kein Container, keine Freigabe).
+//
+// 'var P: Byte absolute Buf;' macht P zum zweiten Namen fuer die Storage von
+// Buf. Jeder Zugriff ueber P ist ein Zugriff auf Buf; 'never read in method
+// body' ist dort sachlich falsch. Hausvorlage: uUninitVar.pas (AbsAliases)
+// behandelt denselben Fall auf der Init-Seite.
+//
+// WARUM DIE ZAEHLUNG DAS NICHT SCHON SIEHT: ParseLocalVarSection konkateniert
+// den Typ-Schwanz OHNE Trenner ('Byte'+'absolute'+'Buf' -> 'ByteabsoluteBuf').
+// Im AST-Flachtext steht 'buf' damit mitten in einem Wort und faellt durch
+// die Wortgrenzen-Pruefung. Die Quell-Rueckfrage greift auch nicht: sie
+// beginnt erst am 'begin', die var-Sektion liegt davor.
+//
+// Entschieden wird auf der GESTRIPPTEN QUELLZEILE, nicht auf dem TypeRef:
+// im konkatenierten TypeRef gaebe es keine Wortgrenzen mehr, und ein Typ
+// namens 'TAbsolutePos' waere von einem echten 'absolute' nicht zu
+// unterscheiden.
+var
+  Ch       : TAstNode;
+  L        : string;
+  p, e, LL : Integer;
+begin
+  Result := '';
+  for Ch in MethodNode.Children do
+  begin
+    if Ch.Kind <> nkLocalVar then Continue;
+    if Pos('absolute', LowerCase(Ch.TypeRef)) = 0 then Continue;
+    EnsureUnitStripped(AStripped, AFileName);
+    if (Ch.Line < 1) or (Ch.Line > Length(AStripped.Lines)) then Continue;
+    L  := LowerCase(AStripped.Lines[Ch.Line - 1]);
+    LL := Length(L);
+    p  := Pos('absolute', L);
+    while p > 0 do
+    begin
+      if ((p = 1) or not IsIdentChar(L[p - 1])) and
+         ((p + 8 > LL) or not IsIdentChar(L[p + 8])) then
+      begin
+        e := p + 8;
+        while (e <= LL) and (L[e] <= ' ') do Inc(e);
+        p := e;
+        while (e <= LL) and IsIdentChar(L[e]) do Inc(e);
+        if e > p then
+          Result := Result + ' ' + Copy(L, p, e - p);
+        Break;                       // ein Alias je Deklarationszeile
+      end;
+      p := Pos('absolute', L, p + 1);
+    end;
+  end;
+  if Result <> '' then Result := Result + ' ';
+end;
+
+// ---------------------------------------------------------------------------
+// GATE C - FPC-Suppressionsmarker '{%H-}' am Parameter (-29 Funde)
+// ---------------------------------------------------------------------------
+
+function HeaderLastLine(const ALines: TArray<string>;
+  AFirstLine: Integer): Integer;
+// Letzte Zeile des Methodenkopfes: ab AFirstLine Klammern bilanzieren, bis
+// die Parameterliste wieder geschlossen ist. Gebraucht, weil der Parser ALLEN
+// nkParam-Knoten die Zeile des Methoden-Schluesselworts gibt - bei umbrochener
+// Parameterliste steht der Marker aber auf der Zeile SEINES Parameters.
+// Bilanziert wird auf der GESTRIPPTEN Quelle, damit Klammern in Kommentaren
+// und Strings nicht mitzaehlen. Harte Obergrenze, und ohne '(' auf der
+// Kopfzeile bleibt es bei AFirstLine - beides nur FN-Richtung.
+const
+  MAX_HEADER_LINES = 12;
+var
+  i, j, Depth : Integer;
+  Opened      : Boolean;
+  L           : string;
+begin
+  Result := AFirstLine;
+  if (AFirstLine < 1) or (AFirstLine > Length(ALines)) then Exit;
+  Depth  := 0;
+  Opened := False;
+  for i := AFirstLine to AFirstLine + MAX_HEADER_LINES - 1 do
+  begin
+    if i > Length(ALines) then Break;
+    L := ALines[i - 1];
+    for j := 1 to Length(L) do
+      if L[j] = '(' then
+      begin
+        Inc(Depth);
+        Opened := True;
+      end
+      else if L[j] = ')' then
+        Dec(Depth);
+    Result := i;
+    if not Opened then Exit;         // Parameterliste beginnt nicht hier
+    if Depth <= 0 then Exit;
+  end;
+end;
+
+function HasAdjacentFpcHideMarker(const ARawLine, ANameLow: string): Boolean;
+// '{%H-}' direkt vor oder hinter dem Parameternamen = der Autor hat den Hint
+// an genau dieser Stelle abgeschaltet (Lazarus-/FPC-Konvention).
+//
+// BEWUSSTE AUSNAHME von der Regel 'Kommentare zaehlen nie': '{%H-}' IST ein
+// Kommentar - genau deshalb wird die ROHE Zeile geprueft, in der gestrippten
+// ist der Marker weggeblankt. Identische Begruendung und identisches
+// Adjazenz-Gebot wie in uUninitVar.HasAdjacentFpcHideMarker (SCA166): ein
+// Marker an einem ANDEREN Parameter derselben Zeile suppresst nicht mit.
+var
+  L : string;
+  P, NL, LL, q : Integer;
+begin
+  Result := False;
+  if (ARawLine = '') or (ANameLow = '') then Exit;
+  L := LowerCase(ARawLine);
+  if Pos('{%h-}', L) = 0 then Exit;
+  NL := Length(ANameLow);
+  LL := Length(L);
+  P  := 1;
+  while True do
+  begin
+    P := Pos(ANameLow, L, P);
+    if P = 0 then Exit;
+    if ((P = 1) or not IsIdentChar(L[P - 1])) and
+       ((P + NL > LL) or not IsIdentChar(L[P + NL])) then
+    begin
+      q := P - 1;                                  // Marker VOR dem Namen
+      while (q >= 1) and (L[q] = ' ') do Dec(q);
+      if (q >= 5) and (Copy(L, q - 4, 5) = '{%h-}') then Exit(True);
+      q := P + NL;                                 // Marker NACH dem Namen
+      while (q <= LL) and (L[q] = ' ') do Inc(q);
+      if Copy(L, q, 5) = '{%h-}' then Exit(True);
+    end;
+    P := P + NL;
+  end;
+end;
+
+function ParamHasFpcHideMarker(var AStripped: TStrippedUnit;
+  const AFileName: string; AHeaderFirst: Integer;
+  const ANameLow: string): Boolean;
+var
+  i, LastL : Integer;
+begin
+  Result := False;
+  EnsureUnitStripped(AStripped, AFileName);
+  if Length(AStripped.Raw) = 0 then Exit;
+  LastL := HeaderLastLine(AStripped.Lines, AHeaderFirst);
+  for i := AHeaderFirst to LastL do
+  begin
+    if (i < 1) or (i > Length(AStripped.Raw)) then Continue;
+    if HasAdjacentFpcHideMarker(AStripped.Raw[i - 1], ANameLow) then
+      Exit(True);
   end;
 end;
 
@@ -379,6 +751,9 @@ var
   RefCount : Integer;
   F : TLeakFinding;
   OwnerCls : TAstNode;   // T2: Besitzertyp fuer den Interface-Skip
+  Decl : TAstNode;       // Class-Declaration dieser Implementation (oder nil)
+  // GATE B: Ziele der 'absolute'-Aliase dieser Methode als ' a b '-String.
+  AbsTargets : string;
   // Ist-Messung 2026-07-18 (SCA054-FP-Klasse 'nested-routine-Nutzung', 3/5 der
   // Sample-FPs): der Parser verwirft nested-routine-Bodies aus dem Method-AST
   // (nur nkNestedRange-Marker bleiben, Line=Start/TypeRef=EndLine) -> ein Param,
@@ -528,7 +903,8 @@ begin
   // der zugehoerigen Implementation aus (siehe IsInheritanceHook).
   if not MethodNode.HasChild(nkBlock) then Exit;
 
-  if IsInheritanceHook(UnitNode, MethodNode) then Exit;
+  Decl := FindDeclarationFor(UnitNode, MethodNode);
+  if IsInheritanceHook(MethodNode, Decl) then Exit;
 
   // Methoden verschachtelter Typen (T2-Guards-Ruecknahme 2026-07-29):
   // Seit der Parser nested types als eigene nkClass-/nkRecord-Knoten fuehrt
@@ -600,12 +976,26 @@ begin
   BodySB := TStringBuilder.Create;
   try
     if Params.Count = 0 then Exit;
+    // ---- GATE A (2026-08-27): message-Handler --------------------------
+    // Vor der Rumpf-Auswertung, weil der Vertrag den Parameter erzwingt -
+    // was im Rumpf steht, aendert daran nichts (Begruendung s.
+    // IsMessageHandler / DeclHasMessageDirective).
+    if IsMessageHandler(Decl, Params, AStripped, FileName) then Exit;
     // nkNestedRange-Marker der verworfenen nested routines einsammeln
     // (direkte MethodNode-Children, siehe uParser2 ~Z.1319).
     for var NR in MethodNode.Children do
       if NR.Kind = nkNestedRange then NestedMarks.Add(NR);
     CollectAllTokens(MethodNode, BodySB);
     BodyLow := LowerCase(BodySB.ToString);
+
+    // ---- GATE B (2026-08-27): 'absolute'-Aliase einsammeln --------------
+    // Vorfilter auf dem ohnehin vorhandenen Flachtext: ohne das Wort
+    // 'absolute' irgendwo im Methoden-Teilbaum kann es keinen Alias geben,
+    // und keine Methode zahlt einen Kind-Durchlauf oder Quellzugriff.
+    AbsTargets := '';
+    if Pos('absolute', BodyLow) > 0 then
+      AbsTargets := CollectAbsoluteAliasTargets(MethodNode, AStripped,
+                                                FileName);
 
     for P in Params do
     begin
@@ -617,8 +1007,23 @@ begin
       if SpaceIdx > 0 then
         Name := Copy(Name, SpaceIdx + 1, MaxInt);
       if Name.StartsWith('_') then Continue;
+      // ---- GATE F (2026-08-27): 'constref'-Phantom --------------------
+      // 'constref' ist ein FPC-Parametermodifier. Der Parser kennt nur
+      // var/const/out (uParser2 ~Z.1580); 'constref' wird deshalb als
+      // eigener Parameter mit LEEREM Typ eingesammelt und der echte
+      // Parameter dahinter separat. Gemeldet wuerde also ein Parameter,
+      // den die Quelle gar nicht deklariert. Bewusst nur die woertliche
+      // Ebene: ein ECHTER Parameter dieses Namens ist ausgeschlossen,
+      // weil 'constref' in FPC reserviert ist.
+      if SameText(Name, 'constref') then Continue;
 
       LowName := LowerCase(Name);
+
+      // ---- GATE B (2026-08-27): Parameter traegt einen 'absolute'-Alias -
+      // Ueber den Alias wird die Storage DIESES Parameters gelesen und
+      // geschrieben; 'never read in method body' waere unwahr.
+      if (AbsTargets <> '') and (Pos(' ' + LowName + ' ', AbsTargets) > 0) then
+        Continue;
 
       // Param-Deklaration ist EIN Vorkommen. Mindestens 2 noetig fuer "genutzt".
       RefCount := 0;
@@ -648,6 +1053,13 @@ begin
         // 'SystemPath[Kind] := x' und '(Obj as T).M(Index, 1)' - in beiden
         // Faellen fehlt der Bezeichner im AST-Text, steht aber im Rumpf.
         if UsedInMethodSource(LowName) then Continue;
+        // ---- GATE C (2026-08-27): FPC-'{%H-}' am Parameter --------------
+        // Letzter Halt vor dem Melden: der Autor hat den Hint an genau
+        // diesem Parameter abgeschaltet. Absichtlich hier unten - die
+        // Pruefung liest die ROHE Quelle und soll nur die wenigen
+        // Kandidaten kosten, die es bis zur Meldung schaffen.
+        if ParamHasFpcHideMarker(AStripped, FileName, MethodNode.Line,
+                                 LowName) then Continue;
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
         F.MethodName := MethodNode.Name;
@@ -677,6 +1089,7 @@ begin
   // Kandidaten zahlen gar nichts.
   Stripped.Ready := False;
   Stripped.Lines := nil;
+  Stripped.Raw   := nil;
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do

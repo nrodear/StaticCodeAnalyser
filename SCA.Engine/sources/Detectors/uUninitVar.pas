@@ -110,6 +110,55 @@ const
   // Calls (Recharakterisierung after30 2026-07-12: sonst gilt das gefuellte
   // Int-Arg als uninit-Read = FP). Ohne Eintrag faellt der Call auf den
   // pessimistic-Write-Default (ProcessCall/RegisterCallArgWrites) -> Write.
+  // Hinweis 2 (externer Fehlerbericht Ian Branch, 2026-08-27): diese Liste
+  // matcht ALLEIN auf den NAMEN - IsReadOnlyCall nimmt via
+  // ExtractCallFunctionName nur das letzte Segment vor '(', der Qualifier
+  // faellt weg. Ruft eine Unit einen gleichnamigen Overload aus einer
+  // FREMDEN Unit mit MEHR Argumenten auf, als die RTL-Form annimmt
+  // (JclSysUtils 'IntToStr(const Value: Int64; out FirstDigitPos)'), kann
+  // das die RTL-Routine nicht sein - der Namens-Match kreditiert sie
+  // trotzdem mit der Read-only-Garantie - und das gilt nicht nur bei
+  // MEHR Argumenten, sondern bei jeder gleichnamigen Fremdroutine mit
+  // var/out-Parameter: weder ProcessCall noch
+  // LineWritesVarAsUnknownCallArg (via IsNonWritingCallToken) setzen einen
+  // pessimistic-Write, und der Same-File-Signaturindex
+  // (BuildSameFileVarOutIndex / LineHasVarOutArgWriteFor) hat zu einer
+  // FREMDEN Unit nichts zu sagen -> das out-Argument zaehlt in
+  // FindFirstReadLine als READ, also potentieller FP.
+  // BELEGT, DASS ES REAL WAR: der Anker-Korpuslauf vom 2026-08-19
+  // (.audit/sca-rw-anker.sarif) enthaelt ZWEI Error-Tier-Funde, die genau
+  // dieser Mechanismus erzeugt hat - JclSysUtils.pas:2441 und :2574,
+  // beide 'FirstDigitPos is read ... but never assigned', Leseanker :2501
+  // bzw. :2576. Beide sind SAME-FILE-Overloads; der Overload-Merge vom
+  // 2026-08-26 (Max-Laengen-Merge in BuildSameFileVarOutIndex) hat sie
+  // geschlossen: im Lauf vom 2026-08-27 sind sie weg (SCA166 30 -> 22).
+  // Der gemeldete Pfad ist also nicht theoretisch, er hat produziert.
+  //
+  // WAS OFFEN BLEIBT: der Same-File-Index rettet nur, was IM SELBEN FILE
+  // deklariert ist. Fuer eine gleichnamige Fremdroutine mit var/out-
+  // Parameter greift weiterhin allein der Namens-Match. GEZAEHLT
+  // (Real-World-Korpus, 9.302 Nicht-Fixture-Dateien, 2026-08-27):
+  //   * 63 Routinen-DEKLARATIONEN tragen einen Namen dieser Liste UND
+  //     mindestens einen var/out-Parameter (copy 32, showmessage 12,
+  //     write 8, ...) - das ist die eigentliche Fallenmenge;
+  //   * 28 Aufrufstellen benutzen einen Listennamen mit MEHR Argumenten
+  //     als die RTL-Form. Davon 6 Deklarationen, 2 der JclSysUtils-Fall
+  //     oben, 20 unkritisch (var-PARAMETER statt Local, eine Zeile vorher
+  //     geschrieben, Casts, Konstanten, oder der @-Scan setzt den Write);
+  //   * verbleibende CROSS-UNIT-FP-Kandidaten im Korpus: 0.
+  //
+  // DESHALB KEIN ARGUMENTZAHL-GATE - und zwar nicht, weil der Befund
+  // falsch waere, sondern weil das Gate hier weniger traegt, als es
+  // kostet: es erfasst nur 15 der 63 Fallen (die uebrigen haben GLEICHE
+  // Stelligkeit), und fuer die variadischen Eintraege 'write'/'writeln'
+  // gibt es gar keine Zahl, gegen die man vergleichen koennte. Dazu die
+  // Gegenprobe: mit absichtlich zu kleinen RTL-Stelligkeiten (Copy=2,
+  // StrToIntDef=1, IntToHex=1) traf derselbe Scan 7.446 statt 28 Stellen -
+  // eine falsche Zahl in der Tabelle verwandelt tausende legitime
+  // Wert-Reads in pessimistic-Writes, also in FNs. Wenn hier je gegatet
+  // wird, dann NUR an den Eintraegen mit bekanntem out-/var-Overload und
+  // mit gemessener Stelligkeit, nicht als 57 handgepflegte Zahlen.
+  // Der richtige Fix waere ein Cross-Unit-Signaturindex (K1-Territorium).
   READ_ALLOWLIST : array[0..56] of string = (
     // --- Output ---
     'write', 'writeln', 'showmessage', 'showmessagefmt',

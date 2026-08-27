@@ -593,7 +593,7 @@ LogFile := TPath.Combine(GetEnvironmentVariable('LOGDIR'), 'app.log');
 ## SCA018
 **Block nesting exceeds threshold**
 
-> Nested if/for/while depth higher than configured maximum (default 4)
+> Nested if/for/while depth higher than configured maximum (default 4); an else-if chain counts as ONE level, like a case
 
 | Field | Value |
 |---|---|

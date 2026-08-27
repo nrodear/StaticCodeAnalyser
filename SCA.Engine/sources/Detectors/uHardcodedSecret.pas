@@ -17,6 +17,20 @@
 //   FPassword     := 'changeme'         → kein Befund (Dummy-Beispielwert)
 //   StartToken    := '{{'               → kein Befund (kein plausibler Wert)
 
+//
+// SCHWEREGRAD IM LAUF (Vollzaehlung SCA004, 2026-08-27): der Katalog-Default
+// ist lsError (uSCAConsts RULE_META: DefaultSeverity: lsError), im LAUF
+// erscheint die Regel aber als warning/medium. Grund: fkHardcodedSecret steht
+// in KindDefaultConfidence in der Gruppe "Pattern-Match-basiert" (fcMedium),
+// und die Evidenz-Politik (uEvidenceTiering: fcHigh->lsError,
+// fcMedium->lsWarning) deckelt die Katalog-Severity. Wer hier mit
+// "Error = bewiesen" argumentiert, argumentiert am Ist-Verhalten vorbei -
+// ein Demote ist NICHT noetig, der Deckel greift schon.
+//
+// VOLLZAEHLUNG 2026-08-27 (jeder Fund einzeln am Quelltext, keine Stichprobe):
+// 16 Funde im Korpus, 3 TP / 13 FP. Die Gates B/C/D unten raeumen 6 der 13
+// FPs; sie sind reine Listen-/Formpflege und kosten keinen der 3 TPs.
+
 interface
 
 uses
@@ -51,7 +65,8 @@ type
     //   AuthHeader.TokenRef  := 'X-Auth-Token'      (Header-Name)
     // Pattern: das Secret-Keyword ist ein TEIL des Identifier-Namens,
     // entweder mit Meta-Prefix (Source/Stored/Cached) oder Meta-Suffix
-    // (Char/Ref/Name/Length/Size/Mask/Header/Label/Caption/Hash).
+    // (Char/Ref/Name/Length/Size/Mask/Header/Label/Caption/Hash) - seit
+    // Gate B auch mit einer KETTE von Meta-Suffixen ('HeaderName').
     class function IsSecretMetaField(const Name: string): Boolean; static;
     // FP-Reduktion 2026-06-18 (Audit_ErrorDetectors E-2): erkennt Test-
     // Files anhand des Pfads (tests/, utest/, *test.pas etc.). Tests
@@ -131,6 +146,12 @@ type
     // Hilfs-Praedikat zu IsNonSecretValueShape: Wert ist ein einzelnes
     // Identifier-Token (^[A-Za-z_][A-Za-z0-9_]*$, keine Spaces/Sonderzeichen).
     class function IsIdentifierLikeToken(const S: string): Boolean; static;
+    // Hilfs-Praedikat zu IsNonSecretValueShape (Gate C, Vollzaehlung
+    // 2026-08-27): Wert ist VOLLSTAENDIG in <...>, {...} oder %...%
+    // geklammert und traegt innen nur ein einzelnes Marken-Token
+    // ([A-Za-z0-9_.-]+). Das ist ein Platzhalter, der zur Laufzeit ersetzt
+    // wird - '<Password>' in einer Liste von Kommandozeilen-Markern.
+    class function IsPlaceholderToken(const S: string): Boolean; static;
   end;
 
 implementation
@@ -243,10 +264,18 @@ const
     'source', 'stored', 'cached', 'initial',
     'default', 'sample', 'example', 'last', 'old'
   );
-  META_SUFFIX: array[0..13] of string = (
+  // GATE D (Vollzaehlung 2026-08-27, 2 Funde): 'expr', 'characters',
+  // 'chars', 'charset', 'pattern' ergaenzt. Belege: HeidiSQL
+  // usermanager.pas:401 'PasswordExpr' ist ein SQL-Spaltenausdruck,
+  // JvBaseDBPasswordDialog.pas:385 'AllowedPasswordCharacters' der
+  // erlaubte Zeichenvorrat einer Passwortpruefung - beides Metadaten
+  // ueber ein Geheimnis, nie das Geheimnis selbst. Gegengeprueft: kein
+  // TP-Name des Korpus endet auf eines dieser Suffixe.
+  META_SUFFIX: array[0..18] of string = (
     'char', 'ref', 'name', 'length', 'size', 'mask',
     'header', 'label', 'caption', 'hash', 'field',
-    'column', 'url', 'path'
+    'column', 'url', 'path',
+    'expr', 'characters', 'chars', 'charset', 'pattern'
   );
 var
   Bare, BareLow : string;
@@ -275,6 +304,22 @@ begin
       if Mid = Pre then Exit(True);                           // PrefixKeyword
     for Suf in META_SUFFIX do
       if MidLow = Suf then Exit(True);                        // KeywordSuffix
+    // GATE B (Vollzaehlung 2026-08-27, 3 Funde in 3 Vendoring-Kopien):
+    // Meta-Suffixe duerfen sich VERKETTEN. 'FAPIKeyHeaderName' zerlegt
+    // sich zu Keyword 'key' + Rest 'headername' - beides einzeln in der
+    // Liste, die Kette bisher nicht. Der Wert ist dort der NAME des
+    // HTTP-Headers, aus dem der Key spaeter gelesen wird (Beleg
+    // MVCFramework.Middleware.RateLimit.pas:353, direkt neben
+    // FHeaderPrefix := 'X-RateLimit-'), also Konfiguration.
+    // Bewusst nur ZWEI Glieder: das deckt die belegte Form ab, ohne die
+    // Zerlegung beliebig permissiv zu machen.
+    for Suf in META_SUFFIX do
+      if (MidLow <> Suf) and MidLow.StartsWith(Suf) then
+      begin
+        var Rest := Copy(MidLow, Length(Suf) + 1, MaxInt);
+        for var Suf2 in META_SUFFIX do
+          if Rest = Suf2 then Exit(True);                      // Suffix-Kette
+      end;
   end;
 end;
 
@@ -529,6 +574,29 @@ begin
     if (Body = D) or (Stem = D) then Exit(True);
 end;
 
+class function THardcodedSecretDetector.IsPlaceholderToken(
+  const S: string): Boolean;
+// GATE C (Vollzaehlung 2026-08-27, 1 Fund): ein Wert, der VOLLSTAENDIG in
+// <...>, {...} oder %...% geklammert ist und innen nur ein Marken-Token
+// traegt, ist ein Platzhalter - er wird zur Laufzeit ersetzt und war nie
+// ein Geheimnis. Beleg: CnProjectBackupFrm.pas:298 'csCmdPassword =
+// ''<Password>''' steht in einer Reihe gleichartiger Kommandozeilen-
+// Marker ('<compress.exe>', '<BackupFile>') und wird in :1139-1144 per
+// StringReplace durch den echten Wert ersetzt.
+var
+  i : Integer;
+begin
+  Result := False;
+  if Length(S) < 3 then Exit;
+  if not (((S[1] = '<') and (S[Length(S)] = '>')) or
+          ((S[1] = '{') and (S[Length(S)] = '}')) or
+          ((S[1] = '%') and (S[Length(S)] = '%'))) then Exit;
+  for i := 2 to Length(S) - 1 do
+    if not CharInSet(S[i], ['A'..'Z', 'a'..'z', '0'..'9', '_', '.', '-']) then
+      Exit;
+  Result := Length(S) > 2;   // leere Klammerung ist kein Platzhalter
+end;
+
 class function THardcodedSecretDetector.IsIdentifierLikeToken(
   const S: string): Boolean;
 var
@@ -606,6 +674,10 @@ begin
   //     auf einem Namens-/Spalten-Suffix endet ('authentication_string').
   //     Ein zufaelliges Secret ('Xk9pQz7Lm') erfuellt keine der drei
   //     Bedingungen und bleibt damit meldepflichtig.
+  // GATE C (Vollzaehlung 2026-08-27): geklammerter Platzhalter. Steht VOR
+  // dem Identifier-Zweig, weil '<Password>' dessen Zeichensatz gar nicht
+  // erfuellt (spitze Klammern) und sonst durchfiele.
+  if IsPlaceholderToken(BodyTrim) then Exit(True);
   if IsIdentifierLikeToken(BodyTrim) then
   begin
     BodyLow := BodyTrim.ToLower;

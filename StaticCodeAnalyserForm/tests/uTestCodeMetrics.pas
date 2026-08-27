@@ -71,6 +71,12 @@ type
     [Test] procedure DeepNesting_DeepCases_ReportsHint;
     [Test] procedure DeepNesting_RepeatLoops_Counted;
     [Test] procedure DeepNesting_TwoMethodsOneDeep_OnlyDeepReported;
+    // ---- 'else if'-Kette (Autopsie 2026-08-27) ------------------------------
+    [Test] procedure DeepNesting_ElseIfChainOneLine_NoFinding;
+    [Test] procedure DeepNesting_ElseIfCascadeOwnLine_NoFinding;
+    [Test] procedure DeepNesting_ElseBeginIf_KeepsNesting_ReportsHint;
+    [Test] procedure DeepNesting_RealNestingInsideElseIfArm_StillReported;
+    [Test] procedure DeepNesting_ChainPlusRealNesting_AnchorMovesToRealNesting;
   end;
 
   // ---- CyclomaticComplexity (TCyclomaticComplexityDetector) --------------------------
@@ -643,6 +649,190 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDeepNesting));
+  finally F.Free; end;
+end;
+
+// -----------------------------------------------------------------------------
+// 'else if'-Kette zaehlt nicht als Schachtelung (Autopsie 2026-08-27)
+// -----------------------------------------------------------------------------
+// Der Parser haengt den else-Zweig als nkElseBranch UNTER das nkIfStmt
+// (uParser2.ParseIfStmt) und dieses traegt bereits die erhoehte Tiefe. Jedes
+// Kettenglied bekam dadurch +1, obwohl 'if..else if..else if' fachlich EINE
+// mehrarmige Verzweigung ist. Am Korpus (rw17-Replikat, 5.935 reproduzierte
+// SCA018-Funde) waren 2.316 Funde (39,0 %) allein davon getrieben.
+// Mechanik-Vorlage: uCognitiveComplexity (dort seit 2026-07-26).
+
+procedure TTestDeepNestingExt.DeepNesting_ElseIfChainOneLine_NoFinding;
+// Haeufigste Auspraegung im Korpus (1.612 von 2.316 Drops): 'else if' auf
+// EINER Zeile. Sechs Glieder -> vorher Tiefen 1..6, Fund bei Tiefe 6.
+// Nachher liegen alle sechs auf Tiefe 1 -> kein Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A = 1 then Do1'#13#10+
+  '  else if A = 2 then Do2'#13#10+
+  '  else if A = 3 then Do3'#13#10+
+  '  else if A = 4 then Do4'#13#10+
+  '  else if A = 5 then Do5'#13#10+
+  '  else if A = 6 then Do6;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeepNesting),
+      'Kette aus 6 else-if ist EINE Verzweigung - vorher Tiefe 6 gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestDeepNestingExt.DeepNesting_ElseIfCascadeOwnLine_NoFinding;
+// Zweite Auspraegung (550 von 2.316 Drops): 'else' auf eigener Zeile, das
+// 'if' eine Zeile darunter. Selber AST (direktes nkIfStmt-Kind unter
+// nkElseBranch), deshalb muss auch diese Schreibweise still werden.
+// Fuenf Glieder -> vorher Tiefe 5 (ueber der Schwelle 4), nachher Tiefe 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A = 1 then'#13#10+
+  '    Do1'#13#10+
+  '  else'#13#10+
+  '    if A = 2 then'#13#10+
+  '      Do2'#13#10+
+  '    else'#13#10+
+  '      if A = 3 then'#13#10+
+  '        Do3'#13#10+
+  '      else'#13#10+
+  '        if A = 4 then'#13#10+
+  '          Do4'#13#10+
+  '        else'#13#10+
+  '          if A = 5 then'#13#10+
+  '            Do5;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeepNesting),
+      'Kaskaden-Schreibweise ergibt denselben AST wie die Einzeiler-Kette');
+  finally F.Free; end;
+end;
+
+procedure TTestDeepNestingExt.DeepNesting_ElseBeginIf_KeepsNesting_ReportsHint;
+// TP-GEGENPROBE + Enge-Riegel: 'else begin if .. end' ist ECHTE
+// Schachtelung. Das if haengt unter einem nkBlock, nicht direkt unter dem
+// nkElseBranch - das Gate darf hier NICHT greifen.
+// Tiefen: if A = 1, dann im else-Block if B..if E = 2..5 -> Fund Tiefe 5.
+// Vor UND nach der Korrektur identisch. Wer das Gate kuenftig auf den
+// ganzen else-Teilbaum ausweitet, senkt die Tiefe auf 4 und faellt hier auf.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    Do1'#13#10+
+  '  else'#13#10+
+  '  begin'#13#10+
+  '    if B then'#13#10+
+  '      if C then'#13#10+
+  '        if D then'#13#10+
+  '          if E then DoDeepE;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDeepNesting),
+      'else-begin-if bleibt echte Schachtelung (Tiefe 5)');
+    Hit := TFindingHelper.FirstOf(F, fkDeepNesting);
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'DoDeepE'), Hit.LineNumber,
+      'Anker ist das innerste if');
+    Assert.IsTrue(Pos('Depth 5 (if from line', Hit.MissingVar) > 0,
+      'Tiefe muss 5 bleiben - gemeldet wurde: ' + Hit.MissingVar);
+  finally F.Free; end;
+end;
+
+procedure TTestDeepNestingExt.DeepNesting_RealNestingInsideElseIfArm_StillReported;
+// TP-GEGENPROBE: das Gate neutralisiert nur das Kettenglied selbst, nicht
+// dessen Rumpf. Im Arm des 'else if' liegen vier echte Ebenen.
+// Vorher: else-if = 2, if B..if E = 3..6 -> Tiefe 6.
+// Nachher: else-if = 1, if B..if E = 2..5 -> Tiefe 5, Fund BLEIBT, Anker
+// unveraendert (die tiefste Stelle ist in beiden Faellen dieselbe Zeile).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A = 1 then'#13#10+
+  '    Do1'#13#10+
+  '  else if A = 2 then'#13#10+
+  '  begin'#13#10+
+  '    if B then'#13#10+
+  '      if C then'#13#10+
+  '        if D then'#13#10+
+  '          if E then DoDeepE;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDeepNesting),
+      'echte Schachtelung im Kettenarm bleibt ein Fund');
+    Hit := TFindingHelper.FirstOf(F, fkDeepNesting);
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'DoDeepE'), Hit.LineNumber,
+      'Anker bleibt das innerste if des Arms');
+    Assert.IsTrue(Pos('Depth 5 (if from line', Hit.MissingVar) > 0,
+      'Tiefe sinkt von 6 auf 5, bleibt aber ueber der Schwelle 4 - ' +
+      'gemeldet wurde: ' + Hit.MissingVar);
+  finally F.Free; end;
+end;
+
+procedure TTestDeepNestingExt.DeepNesting_ChainPlusRealNesting_AnchorMovesToRealNesting;
+// ANKER-VERTRAG (im Korpus 619 von 3.569 ueberlebenden Funden = 17,3 %;
+// die Erstmessung nannte 543 - ihr Replikat hatte die LIFO-Reihenfolge
+// von Walk nicht nachgebaut und damit den falschen Knoten als Anker):
+// der Detektor meldet die TIEFSTE Stelle der Methode. Schrumpft die Kette,
+// gewinnt eine andere Stelle - der Fund bleibt, wandert aber auf eine
+// ANDERE Zeile. Im A/B-Vergleich (Schluessel ruleId+uri+Zeile+Spalte) ist
+// das ein Drop+Add-Paar, KEIN echter Neufund.
+//   vorher : Kettenglied 6 -> Tiefe 6, Anker auf der DoChain6-Zeile
+//   nachher: echte Schachtelung -> Tiefe 5, Anker auf der DoDeepE-Zeile
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    if B then'#13#10+
+  '      if C then'#13#10+
+  '        if D then'#13#10+
+  '          if E then DoDeepE;'#13#10+
+  '  if F = 1 then Do1'#13#10+
+  '  else if F = 2 then Do2'#13#10+
+  '  else if F = 3 then Do3'#13#10+
+  '  else if F = 4 then Do4'#13#10+
+  '  else if F = 5 then Do5'#13#10+
+  '  else if F = 6 then DoChain6;'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDeepNesting),
+      'die echte Schachtelung traegt den Fund weiter');
+    Hit := TFindingHelper.FirstOf(F, fkDeepNesting);
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'DoDeepE'), Hit.LineNumber,
+      'Anker muss von der Kette (DoChain6) auf die echte Schachtelung ' +
+      'wandern - gemeldet wurde Zeile ' + Hit.LineNumber);
+    Assert.IsTrue(Pos('Depth 5 (if from line', Hit.MissingVar) > 0,
+      'gemeldet wurde: ' + Hit.MissingVar);
   finally F.Free; end;
 end;
 
