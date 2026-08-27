@@ -2768,19 +2768,25 @@ procedure TTestParserRobustness.VarNameList_WithContextKeyword_KeepsOwnLine;
 // Position der DEKLARATION traegt und nach der Schleife fuer JEDEN
 // emittierten nkLocalVar gelesen wird. Ein Kontextwort an zweiter Stelle
 // ueberschrieb sie, und alle Namen bekamen die Position des LETZTEN.
-// Ueber zwei Zeilen geschrieben heisst das: 'read' wird mit der Zeile von
-// 'write' emittiert - und die Zeile, auf der 'read' wirklich steht, ist
-// dann nicht mehr die aufgezeichnete Deklarationszeile.
-// Die Bestandstests sahen das nicht, weil sie auf FUNDE assertieren und
-// der Fund derselbe blieb. Dieser Test assertiert die POSITION.
+//
+// WAS DER PARSER HIER LEISTET - und was NICHT (Testfassung korrigiert,
+// die erste Fassung dieses Tests war falsch und wurde rot): eine
+// Deklaration hat EINE Position, und alle ihre Namen teilen sie. Der
+// Emit lautet 'Parent.Add(nkLocalVar, VN, T.Line, T.Col)' fuer jedes VN -
+// pro Name eine eigene Zeile war nie das Verhalten und ist auch nicht
+// Ziel des Fixes. Richtig ist: BEIDE Namen tragen die Zeile des
+// DEKLARATIONSANFANGS (6), nicht die des letzten Namens (7).
+// Damit unterscheidet der Test genau die beiden Zustaende:
+//   defekt  -> read = 7, write = 7   (Position des letzten Namens)
+//   korrekt -> read = 6, write = 6   (Position der Deklaration)
 const SRC =
   'unit t;'#13#10 +          // 1
   'interface'#13#10 +        // 2
   'implementation'#13#10 +   // 3
   'procedure Foo;'#13#10 +   // 4
   'var'#13#10 +              // 5
-  '  read,'#13#10 +          // 6  <- hier steht 'read'
-  '  write: Integer;'#13#10 +// 7  <- hier steht 'write'
+  '  read,'#13#10 +          // 6  <- Deklarationsanfang
+  '  write: Integer;'#13#10 +// 7
   'begin'#13#10 +
   '  read := 1; write := 2;'#13#10 +
   'end;'#13#10 +
@@ -2808,8 +2814,10 @@ begin
           if SameText(C.Name, 'write') then LineWrite := C.Line;
         end;
       Assert.AreEqual<Integer>(6, LineRead,
-        'read steht auf Zeile 6 - vor dem Fix trug es die Zeile von write');
-      Assert.AreEqual<Integer>(7, LineWrite, 'write steht auf Zeile 7');
+        'read traegt die Deklarationszeile');
+      Assert.AreEqual<Integer>(6, LineWrite,
+        'write traegt DIESELBE Deklarationszeile - vor dem Fix trugen ' +
+        'beide die Zeile 7 des letzten Namens');
     finally Root.Free; end;
   finally Parser.Free; end;
 end;
