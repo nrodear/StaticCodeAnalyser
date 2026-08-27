@@ -1,5 +1,27 @@
 unit uPublicMemberWithoutDoc;
 
+// AUTOPSIE 2026-08-27 (Scout + Skeptiker): KEIN Gate gebaut - und das
+// ist eine begruendete Entscheidung, keine Vertagung:
+//   * Die Regel ist im DEFAULT-Profil ABGESCHALTET (rules/sca-rules.json,
+//     profiles.default fuehrt '!PublicMemberWithoutDoc'). Ihre 89.240
+//     Korpus-Funde entstehen nur im strict-Lauf und erreichen keinen
+//     Default-Nutzer. Als FP-Traeger ist sie damit zweitrangig, so gross
+//     die Masse im Messlauf auch aussieht.
+//   * Auf Wortlaut-Ebene ist sie praezise: 40 von 40 Stichprobenfunden
+//     tragen tatsaechlich keinen Doku-Kommentar ueber der Deklaration.
+//   * Die vorgeschlagenen Gates fielen in der Gegenpruefung durch: das
+//     Kommentar-Paket waere NICHT drop-only gewesen (ein korrekter
+//     Kommentar-Scanner wertet '{$IFDEF}' nicht mehr als Doku und
+//     ADDIERT dadurch Funde), und das override-Paket (14.137 Drops)
+//     stuetzte sich auf sieben Stichproben.
+// BEKANNTE SCHWAECHEN, dokumentiert statt repariert: die Schlusszeile
+// eines mehrzeiligen Kommentars gilt als Code (Doku direkt darueber wird
+// uebersehen); 'published {kommentar}' trifft den Sichtbarkeits-Vergleich
+// nicht und laesst CurrentVis auf 'public' stehen; 'class function' und
+// Interfaces erzeugen ueberhaupt keine Funde. Wer hier ansetzt, braucht
+// einen echten Kommentar-Zustandsautomaten - und muss die Add-Richtung
+// vorher messen.
+
 // SCA117: Public-Member (Methode, Property, Klasse, Interface, Typ-Alias)
 // in der INTERFACE-Section ohne dokumentierenden Kommentar direkt davor.
 //
