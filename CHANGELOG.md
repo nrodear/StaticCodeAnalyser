@@ -39,6 +39,12 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `high`) while evidence tiering is active, so CI consumers can see
   why a catalog-error rule reports at `warning`. With
   `EvidenceTiering=0` the SARIF output is byte-identical to before.
+- **SCA008 (NilDeref) demoted to medium confidence**: a corpus autopsy
+  measured 44 false positives among 48 findings while every one of them
+  carried high confidence - untenable for a bug-tier rule under the
+  evidence policy. The rule still reports (it finds real access
+  violations), but it leaves the error tier. Severity is unchanged
+  (the catalog default is already `warning`).
 - **SCA173 (VariantTypeMisuse) demoted to medium confidence**: after
   the in-loop gate below, the measured residual false-positive rate is
   ~12.5 %; the rule stays visible in the default profile (deliberately
@@ -55,6 +61,47 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "no enclosing try..finally" claim does not hold there).
 
 ### Fixed
+- SCA071 (UnitLevelKeywordIndent) now tracks comment state across
+  lines. It previously skipped a comment only when the opener sat at
+  the start of the same line, so documentation headers, English prose
+  and `@longcode` sample units inside multi-line blocks were read as
+  code - one documentation block could produce a dozen findings.
+  Comment and string contents are blanked length-preservingly, so
+  reported columns stay correct. Corpus: roughly 200 findings drop to
+  about 30, and one genuine finding that the missing state had hidden
+  (`uses` behind a compiler directive) now appears.
+- SCA016 (HardcodedPath) gained three gates: path literals handed to a
+  local `Test*` helper inside a test unit are test vectors, the mORMot
+  `CheckEqual` assertion family joins the existing assertion list, and
+  OS-fixed namespace roots (`\\wsl$\`, `\\wsl.localhost\`, `\\tsclient`)
+  are not environment-dependent hardcoding. Admin shares such as
+  `\\server\c$` keep firing. Corpus: 134 -> 26 findings.
+- SCA088 (LegacyInitializationSection) replaces its line-based backward
+  scan with a token walk over comment- and string-stripped text, and
+  only analyses files that actually start with `unit` - a `program` or
+  `library` main block cannot contain an initialization section at all.
+  One-line `begin … end;` bodies no longer unbalance the depth count
+  and `begin`/`end` inside block comments no longer count as code.
+  Corpus: 168 -> 21 findings, and the rule now also catches legacy
+  sections the old scan missed (for example `end .` written with a
+  space before the dot).
+- SCA151 (ConstantReturn) no longer claims a constant return value when
+  the function actually mutates `Result` in some other way: passing it
+  as a var/out argument, filling it via `SetLength`/`SetString`,
+  `Inc`/`Dec`, indexed writes (`Result[i] := …`), using it as a `for`
+  loop variable, or reading it in a condition. `Exit(<literal>)` is now
+  counted as a return value as well, and identifiers that merely look
+  like hex numbers are no longer treated as literals. Corpus:
+  180 -> 48 findings.
+- SCA017 (DebugOutput) no longer reports `WriteLn(F, …)` on a
+  `Text`/`TextFile` handle - that is file or printer I/O, not a
+  forgotten console trace. Handles are recognised from local, parameter
+  and field declarations as well as from `AssignFile`/`Rewrite`/
+  `Append` calls; the standard handles `Output`, `ErrOutput` and
+  `Input` keep firing. Console appenders of logging frameworks
+  (file name containing `logger`/`appender`) are also exempt, where the
+  advice "use a logger" would be circular. Corpus: about 990 findings
+  removed, roughly a quarter of the rule's volume.
 - SCA072 (RedundantBoolean) learned four gates from the corpus
   autopsy: `=` inside `[...]` attribute blocks is a named argument
   (bracket balance carries across lines), comparisons on declared
