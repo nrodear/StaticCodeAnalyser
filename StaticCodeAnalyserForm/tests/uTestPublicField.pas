@@ -26,6 +26,11 @@ type
     // rw13-A/B-Fund: 'public class var' ist ein echter Sektionskopf -
     // die Allein-Wort-Regel verlor 4 Klassenfeld-TPs (vcl.skia u.a.).
     [Test] procedure PublicClassVarField_Reported;
+    // Autopsie 2026-08-27, G2 ('='-Gate, -39) und G1 (published, -37).
+    [Test] procedure PublicNestedTypeAlias_NoFinding;
+    [Test] procedure PublicTypedConstant_NoFinding;
+    [Test] procedure PublishedComponentField_NoFinding;
+    [Test] procedure PublishedThenPublic_FieldReported;
   end;
 
 implementation
@@ -133,12 +138,21 @@ procedure TTestPublicField.MultiLineSignatureParams_NoFinding;
 // Autopsie 2026-08-26, Fix A (Klammer-Balance): die mittlere Zeile
 // einer mehrzeiligen Signatur sah aus wie eine Feld-Deklaration -
 // die groesste FP-Klasse des Katalogs (korpusweit -2.056 gemessen).
+//
+// 2026-08-27 NACHGESCHAERFT: das neue '='-Gate (G2) haette diesen Test
+// entwertet - beide alten Fortsetzungszeilen haben einen Default-Wert
+// ('= 30' / '= 1'), die letzte zusaetzlich ein ')'. Der Test waere also
+// auch bei kaputtem Fix A gruen geblieben. Gemessen an der Replik:
+// ohne Fix A meldet die alte Fassung 0, die neue 'aOwner'. Die
+// defaultfreie Zeile 'aOwner: TObject;' haengt DESHALB drin - sie hat
+// weder '=' noch ')' und wird einzig von der Klammer-Balance gehalten.
 const SRC =
   'unit t; interface'#13#10+
   'type'#13#10+
   '  TFoo = class'#13#10+
   '  public'#13#10+
   '    function Reg(const aName: string;'#13#10+
+  '      aOwner: TObject;'#13#10+
   '      aTimeout: Integer = 30;'#13#10+
   '      aMode: Byte = 1): Boolean;'#13#10+
   '  end;'#13#10+
@@ -268,6 +282,123 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkPublicField),
     'class-var-Feld unter public class var ist ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestPublicField.PublicNestedTypeAlias_NoFinding;
+// Autopsie 2026-08-27, G2 ('='-Gate): ein Nested-Type-Alias unter
+// 'public type' hat ':' und ';' und keine ')' - er sah damit exakt wie
+// eine Feld-Deklaration aus. Korpus: 18 Funde dieser Bauart, 17 davon
+// in Alcinoe ('TCreateInstanceFunc = function: TALBroadcastReceiver;',
+// Alcinoe.BroadcastReceiver.pas:26 u.a.), einer in mormot.core.threads.
+// TP-Gegenprobe im selben public-Block: das echte Feld darunter meldet
+// weiter - und zwar auf SEINER Zeile, nicht auf der des Alias.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TSvc = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TCreateInstanceFunc = function: TSvc;'#13#10 +
+  '    Cache: Integer;'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkPublicField),
+      'Type-Alias schweigt, das Feld daneben meldet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'Cache: Integer'),
+      TFindingHelper.FirstOf(F, fkPublicField).LineNumber,
+      'Fund haengt an der Feldzeile, nicht am Alias');
+  finally F.Free; end;
+end;
+
+procedure TTestPublicField.PublicTypedConstant_NoFinding;
+// Autopsie 2026-08-27, G2: eine typisierte Konstante unter einer
+// NACKTEN 'const'-Zeile loest den 'const '-Praefixtest nicht aus - die
+// Zeile war ein Fund (delphimvcframework MVCFramework.JWT:99 ff.,
+// 7 Konstanten x 3 Repo-Kopien = 21 im Korpus). Nach dem String-Strip
+// bleibt 'Issuer: string = ;' stehen: das '=' traegt die Entscheidung,
+// nicht der Literal-Text.
+// TP-Gegenprobe: das echte Feld ueber der const-Zeile meldet weiter.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TJwt = class'#13#10 +
+  '  public'#13#10 +
+  '    Cache: Integer;'#13#10 +
+  '    const'#13#10 +
+  '    Issuer: string = ''iss'';'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkPublicField),
+      'typisierte Konstante schweigt, das Feld darueber meldet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'Cache: Integer'),
+      TFindingHelper.FirstOf(F, fkPublicField).LineNumber,
+      'Fund haengt an der Feldzeile, nicht an der Konstanten');
+  finally F.Free; end;
+end;
+
+procedure TTestPublicField.PublishedComponentField_NoFinding;
+// Autopsie 2026-08-27, G1: published-Felder sind kein Kapselungsfehler,
+// sondern die einzige Form, die der DFM-Streamer laden kann -
+// TComponent.SetReference sucht das Feld ueber Owner.FieldAddress im
+// Feld-Table, und der Compiler emittiert dieses Table nur fuer
+// published. Korpus: 37 Funde unter explizitem 'published', alle 37
+// DFM-Komponentenfelder; Vorlage issrc IDE.ImagesModule.pas:20.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TImages = class'#13#10 +
+  '  published'#13#10 +
+  '    LightBuildImageList: TImageList;'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkPublicField),
+    'published-Komponentenfeld ist die vorgeschriebene Form, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestPublicField.PublishedThenPublic_FieldReported;
+// TP-Gegenprobe zu G1: der published-Zustand wird ZUGEWIESEN, nicht nur
+// gesetzt - ein 'public' danach meldet wieder. Vorlage ist der einzige
+// Korpus-Fall dieser Bauart, mORMot2-Beispiel rgmain.pas:76-90: der Typ
+// wechselt published -> public -> published, und HelpMenu/
+// HelpAboutMenuItem stehen im public-Block dazwischen. GEZAEHLT: eine
+// Setzen-ohne-Loeschen-Fassung kostet genau diese 2 TPs.
+// Inhaltlich ist das auch richtig - was der Autor aus published
+// herausnimmt, bindet der Streamer nicht mehr (FieldAddress findet es
+// nicht), also greift die Kapselungs-Empfehlung wieder.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TMain = class'#13#10 +
+  '  published'#13#10 +
+  '    ReportsMenu: TMenuItem;'#13#10 +
+  '  public'#13#10 +
+  '    HelpMenu: TMenuItem;'#13#10 +
+  '  published'#13#10 +
+  '    TopPanel: TPanel;'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkPublicField),
+      'beide published-Bloecke schweigen, der public-Block dazwischen meldet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'HelpMenu: TMenuItem'),
+      TFindingHelper.FirstOf(F, fkPublicField).LineNumber,
+      'Fund haengt am public-Feld, nicht an einem published-Feld');
   finally F.Free; end;
 end;
 
