@@ -122,6 +122,10 @@ type
     // Konstantenwert (Live-Editieren) darf nicht den Rest der Unit
     // fressen - implementation und alle Methoden muessen im AST bleiben.
     [Test] procedure Parser_UnclosedConstParen_DoesNotEatUnit;
+    // Upstream-Bericht Ian Branch 2026-08-27: Positions-Drift in der
+    // Namenslisten-Fortsetzung. Prueft die ZEILE, nicht den Fund -
+    // genau die Luecke, durch die der Defekt gerutscht ist.
+    [Test] procedure VarNameList_WithContextKeyword_KeepsOwnLine;
   end;
 
 implementation
@@ -2757,4 +2761,56 @@ begin
   end;
 end;
 
+
+procedure TTestParserRobustness.VarNameList_WithContextKeyword_KeepsOwnLine;
+// UPSTREAM-BERICHT (Ian Branch, GITLAK, 2026-08-27) zum Kommalisten-Fix:
+// die Fortsetzungsschleife benutzte 'T' - dieselbe Variable, die die
+// Position der DEKLARATION traegt und nach der Schleife fuer JEDEN
+// emittierten nkLocalVar gelesen wird. Ein Kontextwort an zweiter Stelle
+// ueberschrieb sie, und alle Namen bekamen die Position des LETZTEN.
+// Ueber zwei Zeilen geschrieben heisst das: 'read' wird mit der Zeile von
+// 'write' emittiert - und die Zeile, auf der 'read' wirklich steht, ist
+// dann nicht mehr die aufgezeichnete Deklarationszeile.
+// Die Bestandstests sahen das nicht, weil sie auf FUNDE assertieren und
+// der Fund derselbe blieb. Dieser Test assertiert die POSITION.
+const SRC =
+  'unit t;'#13#10 +          // 1
+  'interface'#13#10 +        // 2
+  'implementation'#13#10 +   // 3
+  'procedure Foo;'#13#10 +   // 4
+  'var'#13#10 +              // 5
+  '  read,'#13#10 +          // 6  <- hier steht 'read'
+  '  write: Integer;'#13#10 +// 7  <- hier steht 'write'
+  'begin'#13#10 +
+  '  read := 1; write := 2;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var
+  Parser : TParser2;
+  Root, ImplN, M, C : TAstNode;
+  LineRead, LineWrite : Integer;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      ImplN := ImplNodeOf(Root);
+      Assert.IsNotNull(ImplN, 'implementation-Node fehlt');
+      M := nil;
+      for C in ImplN.Children do
+        if C.Kind = nkMethod then begin M := C; Break; end;
+      Assert.IsNotNull(M, 'Methode fehlt');
+      LineRead := -1; LineWrite := -1;
+      for C in M.Children do
+        if C.Kind = nkLocalVar then
+        begin
+          if SameText(C.Name, 'read')  then LineRead  := C.Line;
+          if SameText(C.Name, 'write') then LineWrite := C.Line;
+        end;
+      Assert.AreEqual<Integer>(6, LineRead,
+        'read steht auf Zeile 6 - vor dem Fix trug es die Zeile von write');
+      Assert.AreEqual<Integer>(7, LineWrite, 'write steht auf Zeile 7');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
 end.

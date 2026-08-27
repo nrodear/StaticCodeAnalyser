@@ -1964,10 +1964,20 @@ begin
                   (Tok.Value <> '') and
                   CharInSet(Tok.Value[1], ['A'..'Z', 'a'..'z', '_']) then
           begin
-            T := Tok;
+            // EIGENES Token (Upstream-Bericht Ian Branch, 2026-08-27):
+            // vorher stand hier 'T := Tok'. T traegt aber die Position der
+            // DEKLARATION (gesetzt vor der Schleife) und wird nach der
+            // Schleife fuer JEDEN emittierten nkLocalVar gelesen. Ein
+            // Kontextwort an zweiter Stelle ueberschrieb T also, und alle
+            // Namen der Liste bekamen die Position des LETZTEN Namens:
+            // 'var read, write: Integer;' meldete 'read' an der Spalte von
+            // 'write', ueber zwei Zeilen geschrieben sogar an dessen ZEILE.
+            // Die Tests sahen es nicht, weil sie auf Funde assertieren und
+            // der Fund derselbe blieb - die Position wandert nur.
+            var NameTok := Tok;
             Next;
             if not (Tok.Kind in [tkColon, tkComma]) then Break;
-            VarNames.Add(T.Value);
+            VarNames.Add(NameTok.Value);
           end
           else
             Break;
