@@ -115,32 +115,56 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   line numbers are the only thing separating two duplicate groups in one
   file. **Deliberately not applied globally**, and please do not
   "clean this up" later: normalising every rule would merge 140,703
-  identities on the corpus (counted; an estimated ~120,700 of them, ~15 %
-  of all findings, survive a per-method correction), 94,254 in SCA101
+  identities on the corpus in path mode and 114,577 in the default mode
+  (both counted; an *estimated* ~120,700 of them, ~15 % of all findings,
+  survive a per-method correction - that last one is an estimate, not a
+  count), 94,254 in SCA101
   alone, whose message differs only in a column number - one baseline
   entry would silence every single-statement branch in a file, invisibly.
   **Four other rules print a documented threshold into their message and
   are NOT covered by this** - re-tune `LongParamListMaxParams` (SCA013),
   `MaxCaseBranches` (SCA091), `MaxLineLength` (SCA062) or
-  `DuplicateBlockMinLines` (SCA021) and their findings still surface once
-  as new; `docs/configuration.md` now has the table. They are excluded on
-  the numbers: including SCA013 would cost 443 of its 10,099 identities
-  (4.4 %, nine times the rate below, because overloads differ in exactly
-  the parameter count that would be dropped) and SCA091 621 of 1,944
-  (31.9 %, because it records no method name and its message is otherwise
-  identical everywhere). **What it costs here, measured:** 185
-  findings lose their separate identity (SCA022 61, SCA176 60, SCA018
-  35, SCA012 29) - 0.49 % of the four rules, 0.024 % of the corpus. Each
+  `DuplicateBlockMinLines` (SCA021) and every finding of that rule gets a
+  new *fingerprint*; on a baseline older than v0.9.8, or where the code
+  within three lines of the finding changed as well, those findings
+  surface once as new. Otherwise the context hash still matches them - a
+  re-tuned threshold changes the message, not the line and not the
+  surrounding code - so **do not re-write the baseline just because you
+  turned one of those knobs**; `docs/configuration.md` now has the table
+  and the same caveat. They are excluded on the numbers: including SCA013
+  would cost 455 of its 10,099 identities (4.5 %, nine times the path-mode
+  rate below, because overloads differ in exactly the parameter count that
+  would be dropped) and SCA091 621 of 1,944 (31.9 %, because it records no
+  method name and its message is otherwise identical everywhere). In the
+  default mode the SCA013 gap closes to 4.4 % against 3.8 % and the case
+  rests on the structural reason rather than on the rate.
+  **What it costs here, measured:** **183 to 185** findings lose their
+  separate identity (SCA022 61, SCA176 60, SCA018 33-35, SCA012 29) -
+  0.49 % of the four rules, 0.024 % of the corpus. Each
   rule reports at most one finding per method, so the only findings that
   can collide are **same-named methods in one file**: overloads, or the
   same name in two classes of one unit. Accept one of those into a
-  baseline and its twin is accepted with it. (An earlier draft of this
-  entry said 222; that count came from a script whose regex stopped at
-  the `<` in `procedure TFoo<T>.Bar` and so merged every method of a
-  generic class. The 185 replicate the parser's own naming rule. Either
-  way the assumption-free bound - every finding of one rule in one file
-  assumed to sit in one method - is 20,194 against 140,703 for the global
-  variant, a factor of 7.) **One-time invalidation:**
+  baseline and its twin is accepted with it. **Those numbers hold in path
+  mode** (`PathInFingerprint=1`); in the default mode the file token is
+  the bare file name, same-named files in different folders share it, and
+  the cost is about **1,450 findings, 3.8 %** of the four rules (measured
+  per repository - the corpus carries four copies of some JVCL units).
+  Same distinction the source makes for the 6.11 % of the context-hash
+  key. (The spread of the first number is the method-name heuristic used
+  to count it: the name is not in the SARIF, it has to be read back from
+  the source. Three independent counts gave 222, 185 and 183. The 222 came
+  from a regex that stopped at the `<` in `procedure TFoo<T>.Bar` and so
+  merged every method of a generic class - simply wrong. The other two
+  replicate the parser's own naming rule and differ only in that the 183
+  reads **comment- and literal-stripped** code, which is what anyone
+  re-counting this must do: on raw lines, prose counts as method headers -
+  `you` out of a `MessageDlg` text and `to` out of the comment "Just a
+  simple procedure to increase ..." each threw two real methods into one
+  bucket. The argument that needs no name model at all: the assumption-free
+  bound - every finding of one rule in one file assumed to sit in one
+  method - is 20,194 against 140,703 for the global variant, a factor of
+  7; in the default mode 18,346 against 114,577, a factor of 6.)
+  **One-time invalidation:**
   every existing baseline entry of these four rules gets a new
   fingerprint. On baselines written by v0.9.8 or later this is invisible
   - the context hash matches them anyway, on the CLI and, as of this

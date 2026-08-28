@@ -539,12 +539,22 @@ const
   // entwertet den Eintrag ebenso - siehe uMethodd12.RelatedLines, wo das
   // Projekt genau diesen Fehlermodus schon einmal vermieden hat.
   //
+  // ALLE IDENTITAETS-ZAHLEN IN DIESEM BLOCK GELTEN IM PFAD-MODUS
+  // (PathInFingerprint=1), sofern nicht ausdruecklich anders gesagt - im
+  // Default ist der Datei-Token der BASISNAME (s. TBaselineScope.FileToken),
+  // und gleichnamige Dateien in verschiedenen Ordnern teilen ihn. Wo die
+  // Unterscheidung die Groessenordnung aendert, stehen BEIDE Zahlen. Es ist
+  // dieselbe Unterscheidung, die BaselineContextKey weiter unten fuer die
+  // 6,11 % macht. Gezaehlt wird je Baseline, und eine Baseline gehoert zu
+  // EINEM Repository - die Korpuszahlen sind also je Repo gruppiert.
+  //
   // WARUM NICHT GLOBAL UEBER ALLE REGELN - BITTE NICHT "AUFRAEUMEN":
   // Eine Normalisierung ohne diese Einschraenkung kostet an rw20
-  // ausgezaehlt 140.703 verschmolzene Identitaeten (nachgemessen; das ist
-  // die Obergrenze ohne Namensmodell, s.u.); GESCHAETZT bleiben davon nach
-  // Abzug der Regeln, die MethodName setzen, rund 120.700 = etwa 15 %
-  // ALLER Funde - die 140.703 sind gezaehlt, die 120.700 sind es nicht.
+  // ausgezaehlt 140.703 verschmolzene Identitaeten im Pfad-Modus, 114.577
+  // im Default (nachgemessen; das ist die Obergrenze ohne Namensmodell,
+  // s.u.); GESCHAETZT bleiben davon nach Abzug der Regeln, die MethodName
+  // setzen, rund 120.700 = etwa 15 % ALLER Funde - die 140.703 sind
+  // gezaehlt, die 120.700 sind es NICHT.
   // Der Killer ist SCA101 BeginEndRequired (285.942 Funde, groesste Regel
   // im Korpus, allein 94.254 verlorene Identitaeten):
   //   'Branch at column 5 uses a single statement without begin..end'
@@ -562,35 +572,64 @@ const
   // SCA021.
   //
   // WAS ES KOSTET (an rw20 methodengenau nachgemessen, nicht geschaetzt):
-  // 185 verlorene Identitaeten - SCA022 61, SCA176 60, SCA018 35,
-  // SCA012 29 - das sind 0,49 % der vier Regeln und 0,024 % des Korpus.
-  // Ursache ist ausschliesslich, dass jede dieser Regeln hoechstens EINEN
-  // Fund je Methode erzeugt: kollidieren koennen nur GLEICHNAMIGE Methoden
-  // derselben Datei mit verschiedenen Werten (Overloads, gleicher Name in
-  // zwei Klassen einer Unit). Festgenagelt am echten Weg Write -> Apply in
-  // uTestBaselineMetricFingerprint.
+  // 183 BIS 185 verlorene Identitaeten im Pfad-Modus - SCA022 61,
+  // SCA176 60, SCA018 33 bis 35, SCA012 29 -, das sind 0,49 % der vier
+  // Regeln (0,482 bis 0,487 %) und 0,024 % des Korpus.
+  // IM DEFAULT (Basisname) sind es rund 1.450 = 3,8 % der vier Regeln und
+  // 0,19 % des Korpus, also der ACHTFACHE Wert: dort teilen gleichnamige
+  // Dateien verschiedener Ordner den Token, und gleichnamige Methoden
+  // darin fallen nach der Normalisierung zusammen (rw20 enthaelt vier
+  // Kopien mancher JVCL-Units und sechs einer CEF4Delphi-Unit; 1.320 der
+  // 1.450 stammen aus solchen Datei-Verschmelzungen, nur 130 aus einer
+  // einzelnen Datei).
+  // Ursache ist im Pfad-Modus ausschliesslich, dass jede dieser Regeln
+  // hoechstens EINEN Fund je Methode erzeugt: kollidieren koennen nur
+  // GLEICHNAMIGE Methoden derselben Datei mit verschiedenen Werten
+  // (Overloads, gleicher Name in zwei Klassen einer Unit). Festgenagelt am
+  // echten Weg Write -> Apply in uTestBaselineMetricFingerprint.
   // EinBaselineEintrag_BlendetGleichnamigeMethodeMit.
   //
-  // WIE DIE 185 GEMESSEN WURDEN, und warum hier bis 2026-08-28 die falsche
-  // Zahl 222 stand: der Methodenname steht nicht im SARIF, er muss aus der
-  // Kopfzeile des Quelltexts gelesen werden. Das erste Skript brach seine
-  // Regex am '<' ab, las aus 'procedure TFoo<T>.Bar' nur 'TFoo' und warf
-  // damit ALLE Methoden einer generischen Klasse in einen Topf - zu viele
-  // Kollisionen. Die Nachmessung bildet die Namensregel des Parsers nach
-  // (uParser2.ParseMethodSignature: SkipGenericParams nach jedem
-  // Qualifizierer, also 'TFoo<T>.TInner<U>.Baz' -> 'TFoo.TInner.Baz').
+  // WARUM EINE SPANNE UND KEINE PUNKTZAHL - die Streuung ist ehrlich und
+  // ihre Ursache ist bekannt: der Methodenname steht NICHT im SARIF, er
+  // muss aus der Kopfzeile des Quelltexts gelesen werden, und jede
+  // Nachmessung braucht dafuer eine Heuristik. Drei unabhaengige
+  // Auszaehlungen ergaben 222, 185 und 183:
+  //   222 - Regex brach am '<' ab, las aus 'procedure TFoo<T>.Bar' nur
+  //         'TFoo' und warf ALLE Methoden einer generischen Klasse in
+  //         einen Topf. Schlicht falsch.
+  //   185 - bildet die Namensregel des Parsers nach
+  //         (uParser2.ParseMethodSignature: SkipGenericParams nach jedem
+  //         Qualifizierer, 'TFoo<T>.TInner<U>.Baz' -> 'TFoo.TInner.Baz'),
+  //         liest aber ROHZEILEN.
+  //   183 - dasselbe auf KOMMENTAR- UND LITERALBEREINIGTEM Text.
+  // WER NACHRECHNET, MUSS BEREINIGEN. Auf Rohzeilen zaehlen Prosa-Woerter
+  // als Methodenkoepfe: 82 Funde der vier Regeln bekamen so einen falschen
+  // Namen, und zwei davon kosteten eine Identitaet - 'you' aus dem
+  // MessageDlg-Text 'To use this function you need to apply a filter ...'
+  // (xeMainForm.pas:11360) und 'to' aus dem Kommentar 'Just a simple
+  // procedure to increase ...' (JvThumbImage.pas:616). Jeder dieser
+  // Phantomkoepfe warf zwei echte Methoden in einen Topf.
+  // ZUM ZWEITEN MAL DERSELBE FEHLER: bei der SCA091-Arbeit
+  // (uCaseStatementSize, Zweig sca091-sca070) waren die Zahlen zu
+  // &-maskierten Bezeichnern ebenfalls auf ROHEM Quelltext gemessen, und
+  // der einzige vermeintliche Treffer '&try' war der Windows-Accelerator
+  // in 'Re&try', also ein Stringliteral. Eine Textsuche ueber
+  // Delphi-Quelltext ist ohne Kommentar- und Literal-Strip keine
+  // Codeanalyse - genau die Hausinvariante, die jeder Detektor dieses
+  // Projekts einhaelt und die beide Messskripte gerissen haben.
   //
   // Wer die Zahl nicht nachrechnen will, braucht sie auch nicht: OHNE JEDES
   // NAMENSMODELL, also unter der (falschen) Annahme, alle Funde einer Datei
   // und Regel steckten in derselben Methode, liegt die Obergrenze bei
   // 20.194 fuer diese vier Regeln - gegen 140.703 bei globaler
   // Normalisierung. Faktor 7 zugunsten der Einschraenkung, ganz ohne
-  // Heuristik.
+  // Heuristik. Im Default lauten dieselben zwei Zahlen 18.346 gegen
+  // 114.577, Faktor 6 - das Argument haengt also nicht am Modus.
   //
-  // BEKANNTE GRENZE - LEERER MethodName: die 185 setzen voraus, dass der
-  // Parser einen Namen liefert. Traegt ein Fund MethodName = '', bleibt
-  // nach der Normalisierung gar kein Unterscheider mehr uebrig, und alle
-  // Funde dieser Regel in dieser Datei fallen auf EINEN Fingerprint
+  // BEKANNTE GRENZE - LEERER MethodName: die 183 bis 185 setzen voraus,
+  // dass der Parser einen Namen liefert. Traegt ein Fund MethodName = '',
+  // bleibt nach der Normalisierung gar kein Unterscheider mehr uebrig, und
+  // alle Funde dieser Regel in dieser Datei fallen auf EINEN Fingerprint
   // zusammen - dann gilt genau die Obergrenze 20.194 von oben.
   // Beobachtet ist das nicht: in rw20 hat kein einziger Fund der vier
   // Regeln einen leeren Namen, und er ist auch schwer zu erreichen, weil
@@ -614,22 +653,52 @@ const
   //
   // NICHT AUFGENOMMEN, OBWOHL SCHWELLWERT IM TEXT:
   // Vier weitere Regeln drucken einen dokumentierten [Detectors]-Knopf in
-  // ihre Meldung. Fuer sie gilt der Schutz dieses Zweiges NICHT - wer dort
-  // dreht, sieht die Funde einmalig als neu, und docs/configuration.md
-  // sagt das inzwischen auch so.
+  // ihre Meldung. Fuer sie gilt der Schutz dieses Zweiges NICHT: wer dort
+  // dreht, bekommt fuer jeden Fund der Regel einen NEUEN FINGERPRINT.
+  //
+  // WAS DAS FUER DEN NUTZER HEISST - PRAEZISE, weil docs/configuration.md
+  // hier bis 2026-08-28 zu scharf formulierte ("surfaces once as new") und
+  // damit zu einem ueberfluessigen --write-baseline einlud, das ALLE
+  // aktuellen Funde uebernimmt: der Fingerprint ist nur EINE der beiden
+  // Match-Quellen. TBaseline.Apply und TBaselineSet.Contains pruefen beide
+  // "contextHash ODER Fingerprint", und der contextHash haengt an den
+  // +/- CONTEXT_HASH_RADIUS Quellzeilen um die Fundstelle, nicht am
+  // Meldetext (s. Unit-Kopf: "ueberlebt ... jede Aenderung am
+  // Detailtext"). Ein gedrehter Schwellwert aendert nur den Meldetext -
+  // Fundzeile und umgebender Code bleiben, der contextHash trifft weiter.
+  // SICHTBAR wird der Bruch also nur dort, wo die zweite Quelle nicht
+  // greift: Baseline aelter als v0.9.8 (kein contextHash), Code innerhalb
+  // von drei Zeilen um den Fund ebenfalls geaendert, oder Baseline im
+  // anderen PathInFingerprint-Modus geschrieben (dann matcht ohnehin
+  // nichts, s. Mismatch-Warnung in Apply).
+  // Umgekehrt ist genau das der Wert dieses Zweiges fuer die VIER
+  // aufgenommenen Regeln: ihre Zusage haelt auch dann noch, wenn der
+  // contextHash NICHT mehr trifft.
   //
   //   SCA013 uLongParamList, LongParamListMaxParams, 10.099 Funde
   //     '%d parameters (limit: %d)'
   //     Strukturell fast wie die vier: setzt MethodName, verankert auf
   //     M.Line. Trotzdem draussen, und zwar auf den ZAHLEN, nicht aus
   //     Vergesslichkeit - an rw20 methodengenau nachgemessen kostete die
-  //     Aufnahme 443 verlorene Identitaeten auf 10.099 Funde = 4,4 %.
-  //     Das ist das NEUNFACHE der Rate der vier (185/37.990 = 0,49 %).
+  //     Aufnahme 455 verlorene Identitaeten auf 10.099 Funde = 4,5 % im
+  //     Pfad-Modus (448 = 4,4 % im Default).
   //     Grund: der Detektor dedupliziert je Datei auf (Name, ParamCount),
   //     Overloads unterscheiden sich also genau in der Zahl, die
   //     wegnormalisiert wuerde. Beispiel Alcinoe.FBX.Client.pas, 'Create':
   //     sechs Funde von '7 parameters' bis '12 parameters' fielen nach
   //     der Normalisierung in EINEN Baseline-Eintrag zusammen.
+  //     Im Pfad-Modus ist das das NEUNFACHE der Rate der vier
+  //     (183-185/37.990 = 0,49 %); im Default schrumpft der Abstand auf
+  //     4,4 % gegen 3,8 %, dort traegt der strukturelle Grund und nicht
+  //     die Rate.
+  //     443 STAND HIER BIS 2026-08-28 und war um 12 zu niedrig: das
+  //     Messskript liess &-maskierte Bezeichner als "kein Methodenkopf"
+  //     liegen. Der Lexer dieses Projekts verwirft das '&' und liefert
+  //     tkIdent (uLexer.pas:677), 'function &set(...)' heisst also
+  //     wirklich 'set'. Betroffen sind zwei JNI-Header aus Kastri:
+  //     DW.Androidapi.JNI.AndroidX.Media3.Common.pas mit zwei '&set'-
+  //     Overloads (+1) und DW.Androidapi.JNI.Guava.pas mit zwoelf
+  //     '&of'-Overloads, die auf EINEN Eintrag fielen (+11).
   //
   //   SCA091 uCaseStatementSize, MaxCaseBranches, 1.944 Funde
   //     '`case` statement with %d branches (>= %d) - consider '
@@ -639,8 +708,8 @@ const
   //     der Normalisierung ist der Meldetext KORPUSWEIT KONSTANT - an rw20
   //     genau ein einziger normalisierter Text -, es bliebe also nichts
   //     mehr, was zwei Funde einer Datei trennt: 621 von 1.944
-  //     Identitaeten weg = 31,9 % der Regel, 886 Dateien schrumpfen auf je
-  //     einen Eintrag.
+  //     Identitaeten weg = 31,9 % der Regel im Pfad-Modus (546 = 28,1 %
+  //     im Default), 886 Dateien schrumpfen auf je einen Eintrag.
   //
   //   SCA062 uTooLongLine, MaxLineLength
   //     'Line is %d characters (max %d) - wrap or extract subexpression.'
@@ -653,7 +722,8 @@ const
   //     'Code block (lines %d-%d, %d matched lines) appears %dx in file - '
   //     'consider extracting a method'
   //     Schon oben begruendet; zur Groessenordnung: 7.374 der 9.150
-  //     Identitaeten fielen weg = 80,6 %.
+  //     Identitaeten fielen weg = 80,6 % im Pfad-Modus (7.119 = 77,8 %
+  //     im Default).
   METRIC_DETAIL_KINDS : TFindingKinds =
     [fkCyclomaticComplexity, fkDeepNesting, fkCognitiveComplexity,
      fkLongMethod];

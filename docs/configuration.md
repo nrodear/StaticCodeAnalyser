@@ -75,41 +75,66 @@ given in.
 
 The fingerprint hashes the finding's message, and most threshold rules
 print the configured limit into that message. Turning such a knob then
-changes the *identity* of every finding of that rule without changing a
+changes the *fingerprint* of every finding of that rule without changing a
 single finding. Five of the nine threshold keys above are exempt from
-that, four are not - the table says which.
+that, four are not - the table says which, and the paragraph after it says
+what the "No" actually costs you, which is less than it sounds.
 
-| `[Detectors]` key | Rule | Re-tuning keeps the baseline? |
+| `[Detectors]` key | Rule | Re-tuning keeps the fingerprint? |
 |---|---|---|
 | `LongMethodMaxBodyLines` | SCA012 | **Yes** |
 | `LongMethodMaxStatements` | SCA012 | **Yes** |
 | `DeepNestingMaxDepth` | SCA018 | **Yes** |
 | `CyclomaticMax` | SCA022 | **Yes** |
 | `CognitiveLimit` | SCA176 | **Yes** |
-| `LongParamListMaxParams` | SCA013 | No - every SCA013 finding surfaces once as new |
-| `MaxCaseBranches` | SCA091 | No - every SCA091 finding surfaces once as new |
-| `MaxLineLength` | SCA062 | No - every SCA062 finding surfaces once as new |
-| `DuplicateBlockMinLines` | SCA021 | No - every SCA021 finding surfaces once as new |
+| `LongParamListMaxParams` | SCA013 | No - but see below, the context hash usually still matches |
+| `MaxCaseBranches` | SCA091 | No - but see below, the context hash usually still matches |
+| `MaxLineLength` | SCA062 | No - but see below, the context hash usually still matches |
+| `DuplicateBlockMinLines` | SCA021 | No - but see below, the context hash usually still matches |
 
-For the five exempt keys, no number from the message goes into the
-fingerprint: changing `CyclomaticMax` changes which findings are
-*reported*, never which of them your baseline already *accepts*. The one
-case this cannot tell apart: for SCA012, SCA018, SCA022 and SCA176, two
-same-named methods in one file - overloads, or the same name in two
-classes of one unit - share a single baseline entry. On the 783,105-finding
-reference corpus that affects 185 of 37,990 findings (0.49 %).
+**What the "No" rows do and do not mean.** They are about the
+fingerprint, and the fingerprint is only one of two match sources. Every
+entry a baseline of v0.9.8 or later carries also has a *context hash*
+over the source lines around the finding, and re-tuning a threshold
+changes only the wording of the message - not the finding's line, not the
+code around it. So in the normal case those findings keep matching and
+you see nothing. They surface once as new when the context hash cannot
+help: on a baseline older than v0.9.8 (those carry no context hash), when
+the code within three lines of the finding changed as well, or when the
+baseline was written with the other `PathInFingerprint` setting (then
+nothing matches at all and the run says so). In those cases re-write the
+baseline (`--write-baseline`, or "Write baseline" in the GUI and the
+plugin) - noting that a re-write accepts *all* current findings, not only
+the previously accepted ones. Do **not** re-write pre-emptively just
+because you turned one of those four knobs.
+
+That also makes the "Yes" rows the stronger promise, not the weaker one:
+they hold even when the context hash does *not* match, because for those
+five keys no number from the message goes into the fingerprint at all.
+Changing `CyclomaticMax` changes which findings are *reported*, never
+which of them your baseline already *accepts*.
+
+The one case the exempt five cannot tell apart: for SCA012, SCA018,
+SCA022 and SCA176, two same-named methods in one file - overloads, or the
+same name in two classes of one unit - share a single baseline entry. On
+the 783,105-finding reference corpus that affects **183 to 185 of 37,990
+findings (0.49 %) with `PathInFingerprint=1`**, and **about 1,450 (3.8 %)
+in the default mode**, where the file token is the bare file name and
+same-named files in different folders share it (the corpus has four
+copies of some JVCL units and six of one CEF4Delphi unit). Both numbers
+are per repository. The spread of the first one comes from the method-name
+heuristic used to count it, see CHANGELOG.
 
 The other four rules were left out on purpose, not forgotten. Dropping
 the numbers from *their* messages would merge findings that nothing else
-tells apart - measured on the same corpus, SCA013 would lose 443 of
-10,099 identities (4.4 %, nine times the rate of the exempt five, because
-overloads differ in exactly the parameter count that would be dropped),
-and SCA091 would lose 621 of 1,944 (31.9 %, because that rule records no
-method name and its message is otherwise identical everywhere). If you
-re-tune one of those four, re-write the baseline afterwards
-(`--write-baseline`, or "Write baseline" in the GUI and the plugin) -
-noting that a re-write accepts *all* current findings, not only the
-previously accepted ones.
+tells apart - measured on the same corpus and in the same path mode,
+SCA013 would lose 455 of 10,099 identities (4.5 %, nine times the rate of
+the exempt five, because overloads differ in exactly the parameter count
+that would be dropped) and SCA091 621 of 1,944 (31.9 %, because that rule
+records no method name and its message is otherwise identical
+everywhere). In the default mode the SCA013 gap closes to 4.4 % against
+3.8 % - there the case rests on the structural reason rather than on the
+rate.
 
 ## `[Score]`
 

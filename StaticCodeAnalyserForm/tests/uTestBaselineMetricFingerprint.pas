@@ -37,8 +37,11 @@ unit uTestBaselineMetricFingerprint;
 //       FASSUNG. Bei SCA101 (285.942 Funde, groesste Regel im Korpus) ist
 //       die Spaltennummer der EINZIGE Unterscheider zwischen zwei Funden
 //       derselben Datei. Eine Normalisierung ueber alle Regeln kostete an
-//       rw20 ausgezaehlt rund 120.700 Identitaeten (~15 %), allein 94.254
-//       davon in SCA101 - unsichtbar, weil die Funde einfach verschwinden.
+//       rw20 AUSGEZAEHLT 140.703 Identitaeten im Pfad-Modus (114.577 im
+//       Default); GESCHAETZT bleiben davon rund 120.700 (~15 %) nach Abzug
+//       der Regeln, die MethodName setzen - die 120.700 sind NICHT
+//       gezaehlt. Allein 94.254 der 140.703 entfallen auf SCA101 -
+//       unsichtbar, weil die Funde einfach verschwinden.
 //       WAECHTER, auch ohne den Zweig gruen; er wird rot, sobald jemand die
 //       Kind-Menge aufweicht.
 //   (g) DuplicateBlock_Zeilen_BleibenUnterscheider - dieselbe Grenze fuer
@@ -52,29 +55,38 @@ unit uTestBaselineMetricFingerprint;
 //       derselben Datei (Overload, oder gleicher Name in zwei Klassen einer
 //       Unit) mit verschiedenen Scores teilen ab jetzt einen Fingerprint;
 //       ein Baseline-Eintrag blendet beide aus. Am Korpus rw20
-//       methodengenau nachgemessen: 185 Faelle - SCA022 61, SCA176 60,
-//       SCA018 35, SCA012 29 - also 0,49 % der vier Regeln und 0,024 % des
-//       Korpus. OHNE DEN ZWEIG ROT, weil er das NEUE Verhalten beschreibt:
-//       bis 2026-08-28 blieb der Zwilling stehen.
+//       methodengenau nachgemessen: 183 bis 185 Faelle im PFAD-MODUS -
+//       SCA022 61, SCA176 60, SCA018 33-35, SCA012 29 - also 0,49 % der
+//       vier Regeln und 0,024 % des Korpus; im DEFAULT (Basisname) rund
+//       1.450 = 3,8 %. OHNE DEN ZWEIG ROT, weil er das NEUE Verhalten
+//       beschreibt: bis 2026-08-28 blieb der Zwilling stehen.
 //   (i) VerschiedeneMethoden_BleibenGetrennt - die Grenze dazu: der
-//       Methodenname traegt weiter. Ohne ihn waere aus den 185 Kollisionen
-//       eine je Datei und Regel geworden. REGRESSIONSSCHUTZ.
+//       Methodenname traegt weiter. Ohne ihn waere aus den 183-185
+//       Kollisionen eine je Datei und Regel geworden. REGRESSIONSSCHUTZ.
 //   (j) LeererMethodName_LaesstNurNochEineIdentitaetJeDatei - die BEKANNTE
 //       GRENZE, beziffert statt verschwiegen. Traegt ein Fund keinen
 //       Methodennamen, ist der Detailtext der letzte Unterscheider - und
 //       den normalisiert der Zweig weg. Dann gilt die annahmefreie
 //       Obergrenze: ein Fingerprint je Datei und Regel, an rw20 waeren das
-//       20.194 statt 185. Beobachtet ist der Fall bei diesen vier Regeln
+//       20.194 statt 183-185. Beobachtet ist der Fall bei diesen vier Regeln
 //       nicht (in rw20 kein einziger Fund mit leerem Namen; alle vier
 //       brauchen einen RUMPF, und das Headless-Method-Muster erzeugt
 //       nkMethod ohne nkBlock, also gar keinen Fund). OHNE DEN ZWEIG ROT.
 //
-// ZUR ZAHL 185: der Methodenname steht nicht im SARIF, er muss aus der
-// Kopfzeile gelesen werden. Bis 2026-08-28 stand hier 222 - das Skript
-// brach seine Regex am '<' ab, las aus 'procedure TFoo<T>.Bar' nur 'TFoo'
-// und verschmolz alle Methoden einer generischen Klasse. Die Nachmessung
-// bildet uParser2.ParseMethodSignature nach (SkipGenericParams nach jedem
-// Qualifizierer).
+// ZUR SPANNE 183 BIS 185: der Methodenname steht nicht im SARIF, er muss
+// aus der Kopfzeile gelesen werden - jede Nachmessung braucht dafuer eine
+// Heuristik, und daher kommt die Streuung. Drei Auszaehlungen ergaben 222,
+// 185 und 183. Die 222 waren falsch (Regex brach am '<' ab, las aus
+// 'procedure TFoo<T>.Bar' nur 'TFoo' und verschmolz alle Methoden einer
+// generischen Klasse). Die 185 und die 183 bilden beide
+// uParser2.ParseMethodSignature nach (SkipGenericParams nach jedem
+// Qualifizierer); die 183 lesen zusaetzlich KOMMENTAR- UND
+// LITERALBEREINIGTEN Text, und genau so muss es machen, wer nachrechnet:
+// auf Rohzeilen zaehlen Prosa-Woerter als Methodenkoepfe ('you' aus einem
+// MessageDlg-Text, 'to' aus dem Kommentar 'Just a simple procedure to
+// increase ...'). Alle Zahlen dieses Kopfes gelten im Pfad-Modus, sofern
+// nicht anders gesagt - Herleitung und Default-Werte bei
+// METRIC_DETAIL_KINDS in uBaseline.
 //
 // Kein Test hier fasst ein Prozess-Global an; die Fingerprint-Tests fassen
 // auch die Platte nicht an, weil TBaselineScope.ByFileName nur den
@@ -373,8 +385,9 @@ procedure TTestBaselineMetricFingerprint.EinBaselineEintrag_BlendetGleichnamigeM
 // Die vier Metrik-Regeln erzeugen hoechstens EINEN Fund je Methode.
 // Kollidieren koennen deshalb nur GLEICHNAMIGE Methoden derselben Datei -
 // Overloads, oder derselbe Name in zwei Klassen einer Unit. Am Korpus rw20
-// methodengenau nachgemessen sind das 185 Faelle (SCA022 61, SCA176 60,
-// SCA018 35, SCA012 29) = 0,49 % der vier Regeln, 0,024 % des Korpus.
+// methodengenau nachgemessen sind das 183 bis 185 Faelle im Pfad-Modus
+// (SCA022 61, SCA176 60, SCA018 33-35, SCA012 29) = 0,49 % der vier
+// Regeln, 0,024 % des Korpus; im Default rund 1.450 = 3,8 %.
 //
 // Die beiden Funde sitzen zehn Zeilen auseinander, ihre contextHash-Fenster
 // beruehren sich also nicht: der zweite Treffer kann NUR vom Fingerprint
@@ -410,7 +423,8 @@ begin
       TBaselineScope.ByFileName);
     Assert.AreEqual<Integer>(2, Dropped,
       'DIE KOSTEN: ein Eintrag blendet BEIDE gleichnamigen Methoden aus - ' +
-      '185 solcher Faelle auf rw20, gemessen und akzeptiert');
+      '183 bis 185 solcher Faelle auf rw20 im Pfad-Modus, gemessen und ' +
+      'akzeptiert');
     Assert.AreEqual<Integer>(0, Beide.Count,
       'und es bleibt kein Fund uebrig');
   finally
@@ -420,9 +434,9 @@ end;
 
 procedure TTestBaselineMetricFingerprint.VerschiedeneMethoden_BleibenGetrennt;
 // (i) REGRESSIONSSCHUTZ - die Grenze zu (h). Der Methodenname bleibt Teil
-// des Fingerprints. Fiele er mit, waere aus den 185 gemessenen Kollisionen
-// eine je Datei und Regel geworden: eine Baseline-Zeile legte dann alle
-// komplexen Methoden einer Unit still.
+// des Fingerprints. Fiele er mit, waere aus den 183-185 gemessenen
+// Kollisionen eine je Datei und Regel geworden: eine Baseline-Zeile legte
+// dann alle komplexen Methoden einer Unit still.
 begin
   Assert.AreNotEqual(
     Fp(fkCyclomaticComplexity, METHOD_A, CC_SCORE_11),
@@ -441,7 +455,8 @@ procedure TTestBaselineMetricFingerprint.LeererMethodName_LaesstNurNochEineIdent
 // normalisiert der Zweig weg. Zwei verschiedene Methoden mit
 // verschiedenen Scores teilen dann EINEN Fingerprint, ein Baseline-Eintrag
 // blendet beide aus. Es gilt dann die annahmefreie Obergrenze: ein
-// Fingerprint je Datei und Regel, an rw20 waeren das 20.194 statt 185.
+// Fingerprint je Datei und Regel, an rw20 waeren das 20.194 statt 183-185
+// (im Default 18.346).
 //
 // WIE WAHRSCHEINLICH IST DAS? Bei diesen vier Regeln nicht beobachtet.
 // Alle vier lesen MethodName aus M.Name und brauchen einen RUMPF (Score,
