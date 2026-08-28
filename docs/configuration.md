@@ -76,21 +76,22 @@ given in.
 The fingerprint hashes the finding's message, and most threshold rules
 print the configured limit into that message. Turning such a knob then
 changes the *fingerprint* of every finding of that rule without changing a
-single finding. Five of the nine threshold keys above are exempt from
-that, four are not - the table says which, and the paragraph after it says
-what the "No" actually costs you, which is less than it sounds.
+single finding. Five of the nine `[Detectors]` threshold keys above are
+exempt from that, four are not - the table says which, and the paragraph
+after it says what the "No" actually costs you, which is less than it
+sounds.
 
-| `[Detectors]` key | Rule | Re-tuning keeps the fingerprint? |
+| Key | Rule | Re-tuning keeps the fingerprint? |
 |---|---|---|
-| `LongMethodMaxBodyLines` | SCA012 | **Yes** |
-| `LongMethodMaxStatements` | SCA012 | **Yes** |
-| `DeepNestingMaxDepth` | SCA018 | **Yes** |
-| `CyclomaticMax` | SCA022 | **Yes** |
-| `CognitiveLimit` | SCA176 | **Yes** |
-| `LongParamListMaxParams` | SCA013 | No - but see below, the context hash usually still matches |
-| `MaxCaseBranches` | SCA091 | No - but see below, the context hash usually still matches |
-| `MaxLineLength` | SCA062 | No - but see below, the context hash usually still matches |
-| `DuplicateBlockMinLines` | SCA021 | No - but see below, the context hash usually still matches |
+| `[Detectors] LongMethodMaxBodyLines` | SCA012 | **Yes** |
+| `[Detectors] LongMethodMaxStatements` | SCA012 | **Yes** |
+| `[Detectors] DeepNestingMaxDepth` | SCA018 | **Yes** |
+| `[Detectors] CyclomaticMax` | SCA022 | **Yes** |
+| `[Detectors] CognitiveLimit` | SCA176 | **Yes** |
+| `[Detectors] LongParamListMaxParams` | SCA013 | No - but see below, the context hash usually still matches |
+| `[Detectors] MaxCaseBranches` | SCA091 | No - but see below, the context hash usually still matches |
+| `[Detectors] MaxLineLength` | SCA062 | No - but see below, the context hash usually still matches |
+| `[Detectors] DuplicateBlockMinLines` | SCA021 | No - but see below, the context hash usually still matches |
 
 **What the "No" rows do and do not mean.** They are about the
 fingerprint, and the fingerprint is only one of two match sources. Every
