@@ -1849,7 +1849,7 @@
       "kind": "CaseStatementSize",
       "name": "Large case statement",
       "shortDescription": "`case` with >= 10 branches - consider polymorphism / dispatch table",
-      "fullDescription": "A `case` with many branches usually hides a polymorphism or strategy pattern. The code would be more open/closed (new behavior = new class, not new branch) and the file shorter when each branch becomes its own class method or a `TDictionary<Key, TProc>` entry. Matches SonarDelphi communitydelphi:CaseStatementSize. Threshold currently hardcoded; `[Detectors] MaxCaseBranches` is planned.",
+      "fullDescription": "A `case` with many branches usually hides a polymorphism or strategy pattern. The code would be more open/closed (new behavior = new class, not new branch) and the file shorter when each branch becomes its own class method or a `TDictionary<Key, TProc>` entry. Matches SonarDelphi communitydelphi:CaseStatementSize. The threshold is configurable via `[Detectors] MaxCaseBranches` and defaults to 10. Every `case` is measured on its own: only labels at block depth 1 of that `case` count, so the labels of a nested `case` no longer inflate the enclosing one. A nested construct can therefore produce more than one finding - an outer `case` and an inner one are reported separately whenever each is over the threshold by itself.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["complexity", "open-closed"],
