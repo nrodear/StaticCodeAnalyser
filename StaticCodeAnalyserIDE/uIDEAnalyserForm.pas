@@ -1918,6 +1918,17 @@ begin
   HiddenSuffix := '';
   if ABaselineHidden > 0 then
     HiddenSuffix := ' - ' + Format(_('%d hidden by baseline'), [ABaselineHidden]);
+  // Beobachtbarkeit der ZWEITEN Match-Quelle (2026-08-28): ob der
+  // contextHash-Zweig ueberhaupt Material hat, war von aussen nicht zu
+  // sehen - beide Aufrufer verwarfen den Rueckgabewert von
+  // PrepareContextHashes, und "0 Hashes vorbereitet" (Alt-Baseline,
+  // Nachlauf nicht gelaufen) sah aus wie "wirkt". Die Zahl steht deshalb
+  // in der Statuszeile, sobald der Filter aktiv ist - AUCH die 0, denn
+  // genau die ist die Diagnose. Praezedenz: Apply meldet den
+  // pathFingerprint-Mismatch ebenfalls, statt still nichts zu matchen.
+  if BaselineFilterActive then
+    HiddenSuffix := HiddenSuffix + ' - ' + Format(_('%d context hashes'),
+      [FBaselineSet.PreparedContextHashes]);
   // Wenn TotalMatched gesetzt ist und ueber dem angezeigten Count liegt,
   // wurde gecappt (UIMaxDisplayedFindings) - macht's transparent.
   if (TotalMatched > 0) and (TotalMatched > FDisplayedFindings.Count) then
@@ -2270,7 +2281,17 @@ begin
     for i := 0 to Findings.Count - 1 do
       FAllFindings.Add(Findings[i]);
 
-    // 3) UI auffrischen
+    // 3) Vorab gerechnete contextHashes DIESER Datei nachziehen
+    // (2026-08-28). Sie stammen aus dem letzten Voll-Scan, also aus dem
+    // Stand VOR der Aenderung, die diesen Watch-Lauf ausgeloest hat -
+    // stehengelassen koennten sie einen frischen Fund gegen den Hash des
+    // alten Codes vergleichen und ihn faelschlich ausblenden. Laeuft VOR
+    // ApplyFilter (das fragt Contains) und vor dem G2-5-Hook im
+    // Worker-finally, also noch mit warmem Cache.
+    if Assigned(FBaselineSet) then
+      FBaselineSet.RefreshContextHashesForFile(FileName, Findings);
+
+    // 4) UI auffrischen
     UpdateStats;
     ApplyFilter;
     StatusMode(Format('[watch] updated %s (%d findings)',
@@ -2443,6 +2464,15 @@ begin
   // FRepoSettings, das PrepareAnalysis/SetupForRun vor dem Scan neu geladen
   // hat) - vor ApplyFilter, damit der erste Rebuild schon filtert.
   RefreshBaselineSet;
+  // SCAN-NACHLAUF (2026-08-28): die contextHashes der Funde EINMAL
+  // rechnen, solange der Text-Cache noch warm ist. Der Aufrufer
+  // (TAnalyseRunner.HandleScanDone) leert ihn direkt nach dieser Routine
+  // ueber den G2-5-Hook, und der Anzeige-Filter darf pro Fund keine Datei
+  // lesen - deshalb hier und nicht in TBaselineSet.Contains. Ohne den
+  // Aufruf verliert der Filter nur seine zweite Match-Quelle; ohne
+  // geladene Baseline mit contextHashes kostet er nichts.
+  if Assigned(FBaselineSet) then
+    FBaselineSet.PrepareContextHashes(FAllFindings);
   // Filter-Combos auf Eintraege mit > 0 Treffern reduzieren - vor
   // ApplyFilter damit die anschliessende Filterung schon gegen die
   // ggf. zurueckgesetzte Auswahl arbeitet.
@@ -3234,6 +3264,13 @@ procedure TAnalyserFrame.ClearAllFindings;
 begin
   if Assigned(FAllFindings) then FAllFindings.Clear;
   if Assigned(FDisplayedFindings) then FDisplayedFindings.Clear;
+  // Der vorab gerechnete contextHash-Speicher gehoert zu den Funden, die
+  // hier gerade weggeworfen werden - ohne Funde hat er keinen Frager mehr.
+  // Er ist zugleich der groesste Einzelposten des Plugins (gemessen
+  // ~220 MB auf dem Referenzkorpus, s. TBaselineSet.ReleaseContextHashes)
+  // und blieb bis 2026-08-28 selbst nach "Reset All Findings" stehen -
+  // genau der Menuepunkt, mit dem der Anwender Speicher zurueckfordert.
+  if Assigned(FBaselineSet) then FBaselineSet.ReleaseContextHashes;
   if Assigned(FResultGrid) then
   begin
     FResultGrid.RowCount := 2;   // FixedRows=1, RowCount>=FixedRows+1
@@ -4797,8 +4834,7 @@ begin
     // (matchende Funde werden entfernt + freigegeben; uebrig bleibt "neu seit
     // Baseline"). Kein Toggle noetig, deshalb kein TBaselineSet wie im Dock.
     // Ohne [Baseline] File= greift der .sca-Standardort des aktiven
-    // IDE-Projekts (Inkrement 4); unveraenderte Funde matchen dort auch im
-    // PathInFingerprint-Modus ueber den contextHash.
+    // IDE-Projekts (Inkrement 4).
     if Settings.BaselineOnlyNew then
     begin
       var BlPath := Trim(Settings.BaselineFile);
@@ -4813,9 +4849,17 @@ begin
         // geladenen Settings, Wurzel nach der ForProject-Regel. Der
         // Silent-Pfad kennt keine Scan-Wurzel - ohne aktives Projekt ist
         // der Zuschnitt nicht effektiv und der Token faellt sicher auf
-        // den Dateinamen zurueck (unveraenderte Funde matchen weiter
-        // ueber den contextHash). Vorher hing die Wurzel am Zufall, ob
+        // den Dateinamen zurueck. Vorher hing die Wurzel am Zufall, ob
         // das Dock-Fenster RefreshBaselineSet schon gerufen hatte.
+        // GRENZE seit 2026-08-28: hier stand "unveraenderte Funde matchen
+        // weiter ueber den contextHash". Das gilt nicht mehr - der
+        // contextHash-Schluessel traegt jetzt ebenfalls den Datei-Token
+        // (uBaseline.BaselineContextKey). Trifft eine im
+        // PathInFingerprint-Modus geschriebene Baseline auf diesen
+        // Rueckfall (kein aktives Projekt, aber [Baseline] File= gesetzt),
+        // matcht gar nichts mehr und alle Funde erscheinen als neu. Das
+        // ist die fail-open-Richtung; die Abhilfe ist, die Baseline im
+        // gerade eingestellten Modus neu zu schreiben.
         var BlScope := TBaselineScope.ByFileName;
         if Settings.BaselinePathInFingerprint then
         begin

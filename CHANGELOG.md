@@ -17,6 +17,68 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   regardless of finding count.
 
 ### Changed
+- **Baseline filter in the GUI and the IDE plugin now matches on the
+  context hash as well**, not just on the legacy fingerprint - the same
+  either/or rule the CLI (`--baseline`) has applied since v0.9.8. The
+  legacy fingerprint hashes the finding's detail text, and the four
+  metric rules write their score *and their threshold* into it
+  (`Cyclomatic complexity 11 (limit: 10)`). Re-tuning `CyclomaticMax`,
+  or any detector change that shifts a score, therefore changed the
+  *identity* of those findings and made "show only new findings"
+  surface them again although no line of code had moved - 37,987
+  findings (4.8 %) on the reference corpus. Baselines already carry the
+  context hash in every entry; the display filter simply discarded it
+  while loading. Nothing to migrate: existing baseline files start
+  working better the moment you update. **Note that the filter gets
+  more tolerant** - a finding shown as "new" today can be hidden from
+  now on; that is the intent. Limits, deliberately: baselines written
+  before v0.9.8 carry no context hash and behave exactly as before,
+  findings whose source file cannot be read fall back to the
+  fingerprint, and enabling the baseline *after* a scan leaves the
+  filter on the fingerprint alone until the next scan - the hashes are
+  computed once during the scan, while the file contents are still in
+  memory, precisely so the editor path never reads a file per finding.
+  What the context hash *is* deserves one more sentence, because it cuts
+  both ways: it hashes the three lines of code above and below the
+  finding, so it identifies a **code window, not a finding**. Change
+  that window and the hash stops helping - you notice, the finding shows
+  up as new. But textually identical windows **share** the hash, and you
+  do not notice that one: it hides things. Which is why the match key
+  carries the file and the rule as well (see the next entry), so the
+  tolerance stays inside one file and one rule.
+- **Baseline matching no longer treats a bare context hash as an
+  identity** (`--baseline` on the CLI included). This is a **behaviour
+  change on an existing feature**, and a correction of a defect that has
+  been live since v0.9.8, not a side effect of the new display filter.
+  The context hash covers only the seven normalised source lines around
+  a finding - no path, no rule. Any baseline entry therefore suppressed
+  *every* finding in the whole scan whose window was textually
+  identical. Counted on the reference corpus: 782,832 findings carry
+  only 480,268 distinct hashes; 148,292 hashes are shared by more than
+  one finding (57.5 % of all findings), 105,806 of those **across
+  files** (44.0 %) and 42,589 **across rules** (17.3 %). A single
+  baseline entry could suppress 302,564 findings (38.59 %), 239,018 of
+  them (30.48 %) in a *different* file - one boilerplate header line
+  covered 486 findings, one window covered 1,779. The key now carries
+  the file and the rule. How far that gets you depends on
+  `[Baseline] PathInFingerprint`: with it **on**, the file token is the
+  relative path and the number drops to 47,933 (6.11 %); with it
+  **off** - the default - the token is the bare file name, so
+  same-named files in different trees still share a key, and the number
+  is 214,545 (27.41 %), of which 173,544 (22.17 %) sit in a foreign
+  file. That residue is not new exposure: the legacy fingerprint carries
+  the very same bare-name token and never drew that border either.
+  Measured against it, this change adds 14,015 newly suppressible
+  findings (1.79 %), 4,277 of them (0.55 %) across files. Turn
+  `PathInFingerprint` on if you need the sharp border.
+  **What you will see:** findings can now *appear* that a baseline used
+  to hide, so a CI gate counting "new since baseline" may report more.
+  Nothing is hidden that was not hidden before. Second consequence: the
+  context hash now carries the file token, so it no longer bridges a
+  change of `[Baseline] PathInFingerprint`. Flip that switch and the
+  whole baseline stops matching instead of half-matching - `--baseline`
+  says so in its mismatch warning; re-write the baseline in the mode you
+  now use.
 - **Evidence tiering ("error = proven")**: finding severity is now
   capped by the detector's confidence in that specific finding - only
   high-confidence findings appear at `error` level, medium-confidence

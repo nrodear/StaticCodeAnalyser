@@ -2003,6 +2003,9 @@ msgstr "AVERTISSEMENT : ce jeton est stocké EN CLAIR dans analyser.ini. Enregis
 msgid "%d hidden by baseline"
 msgstr "%d masqués par la base"
 
+msgid "%d context hashes"
+msgstr "%d hachages de contexte"
+
 msgid "**Before (line %s):**"
 msgstr "**Avant (ligne %s) :**"
 

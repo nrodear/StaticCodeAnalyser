@@ -70,6 +70,27 @@ type
       AMemo: TDictionary<string, string>;
       AForceStat: Boolean = True): string; static;
 
+    // Der Schluessel, unter dem ContextHashMemo ablegt: LowerCase(Datei)
+    // + '|' + Zeile. Oeffentlich, seit ein Aufrufer das Memo VORAB
+    // befuellt und spaeter OHNE Datei-I/O darin nachschlagen will
+    // (TBaselineSet - der Anzeige-Filter in EXE und IDE darf pro Fund
+    // keine Datei lesen). Die Schluessel-Regel muss an EINER Stelle
+    // stehen: ein zweiter Bauer, der '07' anders behandelt als '7',
+    // traefe still daneben - der Nachschlag liefe ins Leere, und niemand
+    // saehe etwas anderes als "matcht halt nicht".
+    class function MemoKey(const F: TLeakFinding): string; static;
+
+    // Die beiden Haelften derselben Regel, damit sie niemand nachbaut:
+    //   MemoKeyFile   - Pfad       -> Datei-Anteil des Schluessels
+    //   FileOfMemoKey - Schluessel -> Datei-Anteil zurueck
+    // Gebraucht von TBaselineSet.RefreshContextHashesForFile: der
+    // Watch-Nachzug muss die Eintraege ganzer DATEIEN wegwerfen und dafuer
+    // beide Richtungen treffen - die zu leerenden Pfade kommen aus den
+    // Funden, die Kandidaten aus den vorhandenen Schluesseln. Getrennt
+    // wird am LETZTEN '|', weil die Zeile hinten steht.
+    class function MemoKeyFile(const AFileName: string): string; static;
+    class function FileOfMemoKey(const AMemoKey: string): string; static;
+
     // Normalisierungs-Helper (public fuer Tests):
     // Tabs -> Space, kollabiert Whitespace-Runs zu einem Space, trim,
     // verwirft leere Zeilen.
@@ -235,22 +256,56 @@ begin
   Result := ContextHashFor(F.FileName, LineNo, Radius);
 end;
 
+class function TFindingFingerprint.MemoKeyFile(
+  const AFileName: string): string;
+// Datei-Anteil des Schluessels. LowerCase auf den Pfad: Windows-FS ist
+// case-insensitiv, gleiche Datei in anderer Schreibweise soll nicht
+// doppelt gelesen werden.
+begin
+  Result := LowerCase(AFileName);
+end;
+
+class function TFindingFingerprint.FileOfMemoKey(
+  const AMemoKey: string): string;
+// Rueckweg: Schluessel -> Datei-Anteil. Getrennt wird am LETZTEN '|' -
+// die Zeile steht hinten. Kein '|' im Schluessel (leerer String, fremdes
+// Format) -> '' statt eines halben Pfads: ein leerer Datei-Anteil trifft
+// beim Aufrufer nichts, ein halber koennte falsch treffen.
+var
+  P : Integer;
+begin
+  P := LastDelimiter('|', AMemoKey);
+  if P <= 0 then Exit('');
+  Result := Copy(AMemoKey, 1, P - 1);
+end;
+
+class function TFindingFingerprint.MemoKey(const F: TLeakFinding): string;
+// Key-Bildung: LineNumber wird wie in ContextHash geparst (unparsbar -> 0,
+// liefert dann wie bisher ''), damit '7' und '07' denselben Eintrag
+// treffen. Der Datei-Anteil kommt aus MemoKeyFile, damit ein Aufrufer, der
+// nur einen PFAD hat, denselben Anteil bilden kann.
+var
+  LineNo : Integer;
+begin
+  if F = nil then Exit('');
+  if not TryStrToInt(F.LineNumber, LineNo) then LineNo := 0;
+  Result := MemoKeyFile(F.FileName) + '|' + IntToStr(LineNo);
+end;
+
 class function TFindingFingerprint.ContextHashMemo(const F: TLeakFinding;
   AMemo: TDictionary<string, string>; AForceStat: Boolean): string;
 // Perf (2026-07-05): P3 ContextHash-Memo - siehe Interface-Kommentar.
-// Key-Bildung: LineNumber wird wie in ContextHash geparst (unparsbar -> 0,
-// liefert dann wie bisher ''), damit '7' und '07' denselben Eintrag
-// treffen. LowerCase auf den Pfad: Windows-FS ist case-insensitiv, gleiche
-// Datei in anderer Schreibweise soll nicht doppelt gelesen werden.
+// Der Schluessel kommt aus MemoKey, damit ein Vorab-Befueller und ein
+// spaeterer Nachschlager dieselbe Regel benutzen.
 var
   LineNo : Integer;
   Key    : string;
 begin
   if F = nil then Exit('');
   if AMemo = nil then Exit(ContextHash(F));
-  if not TryStrToInt(F.LineNumber, LineNo) then LineNo := 0;
-  Key := LowerCase(F.FileName) + '|' + IntToStr(LineNo);
+  Key := MemoKey(F);
   if AMemo.TryGetValue(Key, Result) then Exit;
+  if not TryStrToInt(F.LineNumber, LineNo) then LineNo := 0;
   Result := ContextHashFor(F.FileName, LineNo, CONTEXT_HASH_RADIUS, AForceStat);
   AMemo.Add(Key, Result);
 end;
