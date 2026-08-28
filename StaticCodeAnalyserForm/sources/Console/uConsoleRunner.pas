@@ -1517,7 +1517,6 @@ begin
     // fkFileReadError bleibt drin (Diagnostic-Befund), kein Profile-Filter.
     if EffectiveHideTestFixtures then
     begin
-      var FixtureDropped := 0;
       // Betroffene DATEIEN mitfuehren, nicht nur zaehlen - siehe die
       // Ausgabe unten.
       var DroppedFiles := TStringList.Create;
@@ -1529,8 +1528,8 @@ begin
         // sind jetzt TFixtureFilter.Apply in der Engine. Verhalten
         // unveraendert; der Punkt war, dass EXE und Plugin dieselbe
         // Regel rufen KOENNEN, statt dass sie nur hier existiert.
-        FixtureDropped := TFixtureFilter.Apply(Findings, Args.Path,
-          DroppedFiles);
+        var FixtureDropped := TFixtureFilter.Apply(Findings,
+          Args.Path, DroppedFiles);
 
         // ERSTE-MINUTEN-FALLE (Durchlauf 2026-08-02): der Filter greift bei
         // Profil 'default' automatisch, und zu den Mustern gehoeren
