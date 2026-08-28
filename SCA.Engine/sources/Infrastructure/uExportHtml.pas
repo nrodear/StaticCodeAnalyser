@@ -3067,12 +3067,30 @@ begin
     SB.AppendLine('        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);');
     SB.AppendLine('      });');
     SB.AppendLine('      var TPL = { en: "Baseline: {0} new, {1} existing, {2} fixed", de: "Baseline: {0} neu, {1} bestehend, {2} behoben", fr: "Base: {0} nouveaux, {1} existants, {2} corrig\u00e9s" };');
+    // Fehlertext fuer eine Datei, die JSON.parse nicht annimmt. Bis
+    // 2026-08-28 stand hier ein leeres catch mit blossem return: der
+    // Nutzer waehlte seine Baseline, der Dialog schloss, und es passierte
+    // NICHTS - keine Meldung, kein Konsoleneintrag. Er sah weiter alle
+    // Funde als "neu" und musste annehmen, das Feature sei kaputt.
+    // Aufgefallen ist es an unseren EIGENEN Baselines, die ein roher
+    // Steuerzeichen-Fund ungueltig gemacht hat (uBaseline.TBaseline.Write,
+    // seit 2026-08-28 behoben); der stille Zweig bleibt aber fuer jede
+    // fremde oder von Hand bearbeitete Datei erreichbar - deshalb sagt er
+    // jetzt Bescheid, statt zu schweigen. Ohne Akzente, damit der
+    // FR-Text keine \u-Sequenz braucht.
+    SB.AppendLine('      var TPLERR = { en: "Baseline: not loaded - invalid JSON", de: "Baseline: nicht geladen - ungueltiges JSON", fr: "Base: non chargee - JSON invalide" };');
     SB.AppendLine('      var bf = document.getElementById("baseFile");');
     SB.AppendLine('      if (bf) bf.addEventListener("change", function(){');
     SB.AppendLine('        var f = bf.files && bf.files[0]; if (!f) return;');
     SB.AppendLine('        var rd = new FileReader();');
     SB.AppendLine('        rd.onload = function(){');
-    SB.AppendLine('          var base; try { base = JSON.parse(rd.result); } catch(e){ return; }');
+    SB.AppendLine('          var base;');
+    SB.AppendLine('          try { base = JSON.parse(rd.result); }');
+    SB.AppendLine('          catch(e){');
+    SB.AppendLine('            var se = document.getElementById("baseSummary");');
+    SB.AppendLine('            if (se) { var le = document.documentElement.lang || "de"; se.textContent = TPLERR[le] || TPLERR.de; }');
+    SB.AppendLine('            return;');
+    SB.AppendLine('          }');
     SB.AppendLine('          var arr = (base && base.findings) ? base.findings.map(function(x){ return x.fingerprint; }) : (base && base.fpids) ? base.fpids : (Array.isArray(base) ? base : []);');
     SB.AppendLine('          var set = {}; arr.forEach(function(id){ set[id] = 1; });');
     SB.AppendLine('          var seenNow = {}, nNew = 0, nExist = 0;');

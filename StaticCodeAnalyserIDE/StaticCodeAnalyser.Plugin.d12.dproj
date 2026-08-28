@@ -104,6 +104,7 @@
         <DCCReference Include="..\SCA.Engine\sources\Common\uCompatSet.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uCrashDiag.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uDetectorUtils.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uJsonFormat.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uLocalization.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uMethodd12.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uQuickFix.pas"/>

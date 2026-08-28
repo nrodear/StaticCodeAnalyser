@@ -115,6 +115,7 @@
         <DCCReference Include="uTestBaselineScope.pas"/>
         <DCCReference Include="uTestBaselineSetContextHash.pas"/>
         <DCCReference Include="uTestBaselineMetricFingerprint.pas"/>
+        <DCCReference Include="uTestBaselineJson.pas"/>
         <DCCReference Include="uTestSourceLineEdit.pas"/>
         <DCCReference Include="uTestEditorCommand.pas"/>
         <DCCReference Include="uTestDfmLexer.pas"/>

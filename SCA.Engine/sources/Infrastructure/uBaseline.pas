@@ -391,6 +391,8 @@ implementation
 
 uses
   System.JSON, System.IOUtils,
+  uJsonFormat,             // JsonFormatEscaped - Format(2) escaped keine
+                           // Steuerzeichen (s. TBaseline.Write)
   uFindingFingerprint;
 
 // Zielverzeichnis einer zu schreibenden Datei bei Bedarf anlegen - so,
@@ -867,7 +869,38 @@ begin
 
   SL := TStringList.Create;
   try
-    SL.Text := Root.Format(2);
+    // NICHT Root.Format(2) (2026-08-28): Format ruft ToChars mit LEEREN
+    // Optionen (System.JSON.pas:1609), und ohne EncodeBelow32 gehen
+    // #0..#7, #11 und #14..#31 ROH in die Datei. RFC 8259 par.7 verlangt
+    // fuer U+0000..U+001F ein \uXXXX - eine Baseline mit einem einzigen
+    // solchen Zeichen ist als GANZES kein gueltiges JSON mehr.
+    //
+    // Gemessen am Referenzkorpus rw21: 3 von 783.104 Eintraegen trugen
+    // die Bytes 0x00/0x04 im detail-Text (zwei JVCL-LED-Demos, ein
+    // mORMot-Escaping-Test). Fehlerrate 0,00038 % - Ausfallrate 100 %:
+    // python json.load, jq und JSON.parse brechen an der ersten solchen
+    // Zeile ab, und damit sind alle 371 MB unbrauchbar. Unser EIGENER
+    // Leser merkte davon nichts (Delphis Parser ist toleranter als die
+    // Spezifikation und nimmt Bytes < 0x20 unbeanstandet an), weshalb
+    // der Defekt vom ersten Commit dieser Unit an (50858f7) unentdeckt
+    // blieb. Getroffen hat es jedes FREMDE Werkzeug - und den
+    // "Baseline laden"-Knopf im HTML-Report.
+    //
+    // Der Sonar-Export (fb18279) und der SARIF-Emitter haben denselben
+    // Defekt 2026-08-05/06 je fuer sich behoben; hier war er stehen
+    // geblieben. JsonFormatEscaped ist die gemeinsame Stelle: gleiches
+    // Layout wie Format(2), aber jedes Blatt geht mit EncodeBelow32
+    // durch die RTL. Fuer Baeume ohne Steuerzeichen ist die Ausgabe
+    // byte-identisch - bestehende Baselines aendern sich also nicht.
+    //
+    // ESCAPEN, NICHT ERSETZEN: die Escape-Sequenz u0000 liest jeder
+    // Parser wieder als das Original-Zeichen zurueck; ein Platzhalter
+    // wie <0x00> waere dagegen eine stille Textaenderung. Der
+    // Fingerprint haengt an F.MissingVar und wird VOR dieser Zeile
+    // berechnet - er bleibt in beiden Faellen gleich, aber nur beim
+    // Escapen bleibt auch das detail-Feld die Wahrheit ueber den
+    // gescannten Quelltext.
+    SL.Text := JsonFormatEscaped(Root, 2);
     EnsureTargetDir(DestFile);
     SaveTextNoBom(SL, DestFile);
   finally

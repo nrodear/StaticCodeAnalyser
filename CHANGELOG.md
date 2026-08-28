@@ -218,6 +218,47 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "no enclosing try..finally" claim does not hold there).
 
 ### Fixed
+- **The baseline file `--write-baseline` produced was not valid JSON**
+  whenever a finding's message quoted a control character from the
+  scanned source. RFC 8259 requires `U+0000`-`U+001F` to be escaped;
+  Delphi's `TJSONValue.Format` - the pretty printer the writer used -
+  passes them through raw, because it calls `ToChars` with an empty
+  option set that is hard-wired in the RTL. Detectors quote source text,
+  and the lexer resolves character literals into real characters, so
+  `PasswordChar := #0` or a DFM string holding `#0#4` puts a raw
+  `0x00` into the message and from there into the file. On the
+  reference corpus that hit **3 of 783,104 entries** - and made all
+  **371 MB** unreadable for every strict parser: `python json.load`,
+  `jq` and `JSON.parse` abort at the first such line, not at the entry.
+  An error rate of 0.00038 % with a failure rate of 100 %.
+  **What was not affected**, and this is the important half: our own
+  readers. Delphi's JSON parser is more tolerant than the specification
+  and accepts bytes below `0x20` without complaint, so `--baseline`,
+  the GUI filter and the IDE plugin kept filtering correctly - no CI
+  gate ever went wrongly green, and nothing needs to be re-baselined.
+  What broke was every *foreign* tool: baseline differs, merge helpers,
+  counting scripts. **Fixed in a shared formatter** (`uJsonFormat`) that
+  keeps the RTL's indentation but hands every value *and every pair
+  name* to the RTL with `EncodeBelow32` - the same mechanism the
+  SonarQube export has used since it hit this defect on 2026-08-05, and
+  the SARIF emitter since 2026-08-06. Both had fixed their own exit and
+  left this one standing. **Output is byte-identical** for any tree
+  without control characters, so regenerating a baseline changes only
+  the entries that were broken; fingerprints are unaffected either way,
+  because they hash the finding's detail before serialisation and the
+  escape sequence reads back as exactly the character it replaced.
+  Existing baselines - including old ones with raw control bytes - keep
+  working unchanged; there is no migration. This is a pre-existing
+  defect, present since the baseline unit's first commit on 2026-05-18,
+  and unrelated to the baseline work elsewhere in this release; it
+  merely surfaced while verifying it. Two smaller repairs travel with
+  it: the user profile writer (`profiles.json`) used the same call and
+  has profile *names* as pair names, and the HTML report's **"load
+  baseline"** button no longer swallows a parse error - it caught the
+  exception and returned without a word, so the user picked a file,
+  nothing happened, and every finding stayed marked "new". It now says
+  the file could not be read. The guard test that both sibling exports
+  had, and the baseline did not, exists now.
 - SCA018 (DeepNesting) no longer counts an `if … else if … else if`
   chain as nested code. The parser attaches the else branch below the
   `if`, which already carries the raised depth, so every chain link

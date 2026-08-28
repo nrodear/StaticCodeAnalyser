@@ -44,6 +44,8 @@ type
     // trenner (dieselbe Ganzzahl-Regel wie beim Donut).
     [Test] procedure RuleReport_AggregatesPerRule;
     [Test] procedure RuleReport_ShareUsesIntegerMath;
+    // Schwesterpfad-Probe zum Baseline-Befund (2026-08-28).
+    [Test] procedure ControlCharInMessage_NoRawControlCharInReport;
   end;
 
 
@@ -368,6 +370,57 @@ begin
     '3 von 4 Funden = 75,0 % (Ganzzahl-Promille, Komma)');
   Assert.IsTrue(H.Contains('rr-share">25,0 %'),
     '1 von 4 Funden = 25,0 %');
+end;
+
+procedure TTestExportHtml.ControlCharInMessage_NoRawControlCharInReport;
+// SCHWESTERPFAD-PROBE zum Baseline-Befund (2026-08-28): der
+// Baseline-Writer schrieb Steuerzeichen aus dem Meldetext ROH heraus und
+// machte seine Datei damit fuer jeden strikten JSON-Parser unlesbar. Der
+// HTML-Report war an dieser Stelle bereits dicht - HtmlEscape
+// (uExportHtml.pas:169-170) macht &#N; daraus, und der sca-meta-Block
+// geht ueber JsonForScript -> TExporter.JsonEscape - aber ungeprueft.
+// Dieser Test haelt fest, dass es so bleibt; er ist vor und nach dem
+// Baseline-Fix gruen.
+//
+// Tab bleibt bewusst roh (HtmlEscape :165) und wird deshalb nicht
+// mitgezaehlt - im Markup ist er Whitespace, kein Problem.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fn       : string;
+  Html     : string;
+  Ch       : Char;
+  Raw      : Integer;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, FIXTURE_PAS, 7,
+      'Literal '#0' und '#4' im Text'));
+    Fn := NeueTempDatei('sca-test-ctl-', '.html');
+    try
+      TExporterHtml.Run(Findings, FIXTURE_PAS, Fn);
+      Html := TFile.ReadAllText(Fn, TEncoding.UTF8);
+    finally
+      if TFile.Exists(Fn) then
+      begin
+        TFile.Delete(Fn);
+      end;
+    end;
+  finally
+    Findings.Free;
+  end;
+  Raw := 0;
+  for Ch in Html do
+  begin
+    if (Ord(Ch) < 32) and (Ch <> #13) and (Ch <> #10) and (Ch <> #9) then
+    begin
+      Inc(Raw);
+    end;
+  end;
+  Assert.AreEqual(0, Raw, 'rohes Steuerzeichen im HTML-Report');
+  Assert.IsTrue(Html.Contains('&#0;'),
+    '#0 muss als NCR im Markup stehen');
+  Assert.IsTrue(Html.Contains('&#4;'),
+    '#4 muss als NCR im Markup stehen');
 end;
 
 initialization
