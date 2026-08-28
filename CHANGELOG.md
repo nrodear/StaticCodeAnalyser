@@ -17,6 +17,73 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   regardless of finding count.
 
 ### Changed
+- **Baseline filter in the GUI and the IDE plugin now matches on the
+  context hash as well**, not just on the legacy fingerprint - the same
+  either/or rule the CLI (`--baseline`) has applied since v0.9.8. The
+  legacy fingerprint hashes the finding's detail text, and the four
+  metric rules write their score *and their threshold* into it
+  (`Cyclomatic complexity 11 (limit: 10)`). Re-tuning `CyclomaticMax`,
+  or any detector change that shifts a score, therefore changed the
+  *identity* of those findings and made "show only new findings"
+  surface them again although no line of code had moved - 37,987
+  findings (4.8 %) on the reference corpus. That is the exposure; the
+  parser fix further down this release is a worked example of it
+  actually happening. It changed the score in the message of **105
+  findings** whose source code it did not touch. All 105 keep their
+  context hash and are therefore still matched; on the legacy
+  fingerprint alone, all 105 would have resurfaced as new. Baselines
+  already carry the context hash in every entry; the display filter
+  simply discarded it while loading. Nothing to migrate: existing
+  baseline files start working better the moment you update. **Note that the filter gets
+  more tolerant** - a finding shown as "new" today can be hidden from
+  now on; that is the intent. Limits, deliberately: baselines written
+  before v0.9.8 carry no context hash and behave exactly as before,
+  findings whose source file cannot be read fall back to the
+  fingerprint, and enabling the baseline *after* a scan leaves the
+  filter on the fingerprint alone until the next scan - the hashes are
+  computed once during the scan, while the file contents are still in
+  memory, precisely so the editor path never reads a file per finding.
+  What the context hash *is* deserves one more sentence, because it cuts
+  both ways: it hashes the three lines of code above and below the
+  finding, so it identifies a **code window, not a finding**. Change
+  that window and the hash stops helping - you notice, the finding shows
+  up as new. But textually identical windows **share** the hash, and you
+  do not notice that one: it hides things. Which is why the match key
+  carries the file and the rule as well (see the next entry), so the
+  tolerance stays inside one file and one rule.
+- **Baseline matching no longer treats a bare context hash as an
+  identity** (`--baseline` on the CLI included). This is a **behaviour
+  change on an existing feature**, and a correction of a defect that has
+  been live since v0.9.8, not a side effect of the new display filter.
+  The context hash covers only the seven normalised source lines around
+  a finding - no path, no rule. Any baseline entry therefore suppressed
+  *every* finding in the whole scan whose window was textually
+  identical. Counted on the reference corpus: 782,832 findings carry
+  only 480,268 distinct hashes; 148,292 hashes are shared by more than
+  one finding (57.5 % of all findings), 105,806 of those **across
+  files** (44.0 %) and 42,589 **across rules** (17.3 %). A single
+  baseline entry could suppress 302,564 findings (38.59 %), 239,018 of
+  them (30.48 %) in a *different* file - one boilerplate header line
+  covered 486 findings, one window covered 1,779. The key now carries
+  the file and the rule. How far that gets you depends on
+  `[Baseline] PathInFingerprint`: with it **on**, the file token is the
+  relative path and the number drops to 47,933 (6.11 %); with it
+  **off** - the default - the token is the bare file name, so
+  same-named files in different trees still share a key, and the number
+  is 214,545 (27.41 %), of which 173,544 (22.17 %) sit in a foreign
+  file. That residue is not new exposure: the legacy fingerprint carries
+  the very same bare-name token and never drew that border either.
+  Measured against it, this change adds 14,015 newly suppressible
+  findings (1.79 %), 4,277 of them (0.55 %) across files. Turn
+  `PathInFingerprint` on if you need the sharp border.
+  **What you will see:** findings can now *appear* that a baseline used
+  to hide, so a CI gate counting "new since baseline" may report more.
+  Nothing is hidden that was not hidden before. Second consequence: the
+  context hash now carries the file token, so it no longer bridges a
+  change of `[Baseline] PathInFingerprint`. Flip that switch and the
+  whole baseline stops matching instead of half-matching - `--baseline`
+  says so in its mismatch warning; re-write the baseline in the mode you
+  now use.
 - **Evidence tiering ("error = proven")**: finding severity is now
   capped by the detector's confidence in that specific finding - only
   high-confidence findings appear at `error` level, medium-confidence
@@ -196,10 +263,56 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   parameter array of `Exec*('literal sql', [...])`. Real injections -
   raw parameters glued into SQL - keep firing; each convention ships
   with a true-positive guard test.
+- **Parser: the `else` of a `case` is no longer swallowed by an `if` in
+  the last arm.** `case X of ... 3: if C then Foo; else Bar; end;` is
+  legal Pascal - the `;` after `Foo` terminates the `if`, so the `else`
+  belongs to the `case`. The parser checked for `else` unconditionally
+  and did not know whether the then-statement had already consumed its
+  own semicolon, so it attached the arm to the `if` instead. Two things
+  followed: the `case` looked like it had no `else` branch at all, and
+  where the else body held more than one statement, everything from the
+  second statement on was dropped from the syntax tree - invisible to
+  every rule. Measured on the reference corpus (784,056 findings):
+  **SCA168 (DefaultCaseInCaseStatement) 9,730 -> 9,582, minus 148
+  findings**, every one of them a rule claiming "case statement without
+  else" about a `case` that plainly has one. Eight files were verified
+  to hold a multi-statement else body; the statements recovered there
+  produced four new findings (2x SCA176, 1x SCA012, 1x SCA022). SCA018
+  ends one finding lower (3,708 -> 3,707): one method loses its finding
+  because the phantom branch had been inflating its depth by a level,
+  and in one other method the reported deepest spot moves to a
+  different line at unchanged depth - which a comparison keyed on file
+  and line shows as a drop plus an add. 105 further findings keep their
+  place and change only the number in their message - the metric rules
+  count the recovered `else` arm as the branch it always was. SCA166
+  and SCA008 did not move at all. The self-scan of this repository has
+  five such sites, all with a single-statement else body: SCA168
+  87 -> 82, nothing else.
 - Parser: context keywords (`read`, `Result`, ...) are now accepted
   as variable names in local `var` sections. Previously the TYPE name
   became a phantom variable and SCA166 reported "integer/PPyObject is
   read but never assigned" on the routine signature line.
+- **SCA106 (MethodName) stops reporting dual-mode C binding headers.**
+  A line such as `{$IFDEF SK_STATIC_LIBRARY}function {$ENDIF}sk4d_foo
+  {$IFNDEF SK_STATIC_LIBRARY}: function {$ENDIF}(...): x; cdecl;` is a
+  *variable* of a procedural type in the default build, not a method
+  header - the naming convention for methods does not apply to it. The
+  rule reads the parsed signature preprocessor-blind, so the return
+  type came out beginning with the keyword `function` or `procedure`,
+  which is not a valid return type and is the fingerprint of exactly
+  this construction. Corpus: **SCA106 11,192 -> 10,386, minus 806
+  findings** - all 806 in a single generated binding unit
+  (`skia4delphi/Source/System.Skia.API.pas`), which leaves the rule's
+  file list entirely. Handwritten headers are untouched.
+- SCA008 (NilDeref) treats two different arms of the same `case` as
+  mutually exclusive, the way it already did for the two branches of an
+  `if`. Without this the parser fix above would have traded a parser
+  defect for false positives: the swallowed `else` used to look like
+  the else branch of the arm's `if`, which is what suppressed the
+  finding. The exclusion does not apply when the `case` sits inside a
+  loop - a later pass can then see what an earlier one assigned.
+  Corpus: SCA008 unchanged at 30 findings across the parser fix, which
+  is the point of shipping both together.
 - SCA166: the same-file out-parameter index no longer lets a shorter
   overload erase the `out` flag of a longer one (JclSysUtils
   `IntToStr(Value; out FirstDigitPos)` pattern).

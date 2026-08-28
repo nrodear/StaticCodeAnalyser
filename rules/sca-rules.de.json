@@ -673,7 +673,7 @@
     },
     "SCA168": {
       "name": "case-Anweisung ohne else-Zweig",
-      "shortDescription": "Die case-Anweisung hat keinen else-Zweig - unbehandelte Werte fallen stillschweigend durch"
+      "shortDescription": "Die case-Anweisung hat keinen else-Zweig - unbehandelte Werte fallen stillschweigend durch; ein else nach einem if im letzten Arm ist das else des case"
     },
     "SCA169": {
       "name": "Assert-Argument enthält einen Aufruf mit Seiteneffekt",

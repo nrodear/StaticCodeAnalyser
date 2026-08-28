@@ -126,6 +126,49 @@ type
     // Namenslisten-Fortsetzung. Prueft die ZEILE, nicht den Fund -
     // genau die Luecke, durch die der Defekt gerutscht ist.
     [Test] procedure VarNameList_WithContextKeyword_KeepsOwnLine;
+
+    // ---- case-else vs. if-else (Parserfix 2026-08-28) ------------------
+    // ParseIfStmt pruefte nach dem then-Zweig bedingungslos auf
+    // 'else' und wusste nicht, ob die then-Anweisung ihr ';' schon
+    // geschluckt hatte. Ein case-else wurde dadurch zum else des ifs im
+    // LETZTEN ARM (Korpus: 151 Stellen in 120 Dateien, Beleg
+    // cnwizards .../DCU32/op.pas:509 mit Exit statt raise).
+    //
+    // Diese Tests assertieren STRUKTUR UND POSITION, nicht Fundzahlen:
+    // die Upstream-Lehre vom 2026-08-27 war, dass fundzahl-basierte Tests
+    // einen reinen Positionsdefekt gruen liessen.
+    [Test] procedure CaseElse_AfterArmIfThenExit_IsCaseArmNotElseBranch;
+    [Test] procedure CaseElse_AfterArmIfThenRaise_IsCaseArmNotElseBranch;
+    [Test] procedure CaseElse_RealIfElseInLastArm_KeepsItsElseBranch;
+    [Test] procedure CaseElse_MultiStatementBody_AllStatementsInAst;
+    [Test] procedure ExceptElse_AfterOnHandlerIf_BelongsToExceptBlock;
+    [Test] procedure IfThenEmptyStatement_ElseStillBindsToIf;
+    [Test] procedure CaseElse_AfterVariousSemicolonEatingArms_NoElseBranch;
+    // Verschachtelte ';'-Fresser als then-Anweisung des Arm-ifs: ein case
+    // und ein try fressen ihr ';' erst NACH ihrem eigenen 'end'. Beide
+    // Rahmen stellen den Taker-Zustand des Arms wieder her.
+    [Test] procedure CaseElse_AfterArmIfWithNestedCaseOrTry_NoElseBranch;
+    // Der abgelehnte else darf den Rumpf NICHT kosten: alles was nach dem
+    // case in derselben Methode steht, muss im AST bleiben.
+    [Test] procedure CaseElse_RejectedElse_RestOfMethodBodyIntact;
+
+    // ---- Bedingte Kompilierung: das ';'-vor-else-Idiom ------------------
+    // GEGENPROBE zum Fix oben. Der Lexer verwirft '{...}' samt Direktiven
+    // als Kommentar und emittiert im Default BEIDE Zweige - das Idiom
+    //   end {$IFDEF X} ; {$ELSE} else Foo; {$ENDIF}
+    // erzeugt also den Tokenstrom 'end ; else Foo ;'. Das ist ein ECHTES
+    // if-else mit einem ';' davor; im Quelltext hat E2029 nie gegriffen.
+    // Korpus: JsonDataObjects.pas:7627/:8242 (3 Kopien) + JvCsvData.pas:3743
+    // = 7 Stellen auf D:\git-sca-realworld, alle auf Methodenrumpf-Ebene.
+    // Die geschweiften Klammern stehen in den Tests IN STRINGLITERALEN -
+    // sonst waeren sie Direktiven DIESER Datei statt Testdaten.
+    [Test] procedure IfdefSemicolonElse_AtBodyLevel_ElseBindsToIf;
+    [Test] procedure IfdefSemicolonElse_InCaseArmBlock_ElseBindsToIf;
+    // BENANNTE RESTLUECKE, bewusst festgenagelt: direkt in einem case-Arm
+    // ist das Idiom im Tokenstrom nicht von einem echten case-else zu
+    // unterscheiden. Der Test haelt fest, dass der Schaden eine
+    // FEHLZUORDNUNG ist - und kein Token-Verlust.
+    [Test] procedure IfdefSemicolonElse_DirectlyInCaseArm_KnownGap_NothingLost;
   end;
 
 implementation
@@ -2821,4 +2864,992 @@ begin
     finally Root.Free; end;
   finally Parser.Free; end;
 end;
+
+{ ---- Helfer fuer die case-else-Tests (Parserfix 2026-08-28) ---- }
+
+// Der n-te DIREKTE nkCaseArm eines case-Knotens (0-basiert), nil wenn
+// es ihn nicht gibt. Direkt (nicht FindAll), weil genau die ZUORDNUNG
+// zum case-Knoten der Prueflingsteil ist - ein verschachtelter Arm
+// darf hier nicht mitzaehlen.
+function CaseArmAt(CaseNode: TAstNode; AIndex: Integer): TAstNode;
+var
+  C : TAstNode;
+  N : Integer;
+begin
+  Result := nil;
+  if CaseNode = nil then Exit;
+  N := 0;
+  for C in CaseNode.Children do
+    if C.Kind = nkCaseArm then
+    begin
+      if N = AIndex then Exit(C);
+      Inc(N);
+    end;
+end;
+
+// Namen aller direkten nkCaseArm-Kinder, in spitzen Klammern und
+// kommagetrennt ('<>,<>,<else>'). Die Klammern machen den LEEREN Namen
+// eines normalen Arms in der Fehlermeldung sichtbar. Der else-Arm heisst
+// 'else' - genau daran haengt SCA168.
+function CaseArmNameList(CaseNode: TAstNode): string;
+var
+  C : TAstNode;
+begin
+  Result := '';
+  if CaseNode = nil then Exit;
+  for C in CaseNode.Children do
+    if C.Kind = nkCaseArm then
+    begin
+      if Result <> '' then Result := Result + ',';
+      Result := Result + '<' + C.Name + '>';
+    end;
+end;
+
+// 'Name@Zeile' aller DIREKTEN nkCall-Kinder, kommagetrennt. Position ist
+// hier Teil der Zusicherung: die Upstream-Lehre vom 2026-08-27 war, dass
+// rein zaehlende Tests einen Positionsdefekt gruen liessen.
+function DirectCallsWithLines(N: TAstNode): string;
+var
+  C : TAstNode;
+begin
+  Result := '';
+  if N = nil then Exit;
+  for C in N.Children do
+    if C.Kind = nkCall then
+    begin
+      if Result <> '' then Result := Result + ',';
+      Result := Result + C.Name + '@' + IntToStr(C.Line);
+    end;
+end;
+
+// Rumpf-Block (nkBlock) der Methode mit diesem Namen. Ueber die nkMethod-
+// Knoten gesucht, nicht per Root.FindFirst(nkBlock): das traefe den ersten
+// Block IRGENDWO im Baum und waere bei mehreren Prozeduren zufaellig.
+function MethodBodyOf(Root: TAstNode; const AName: string): TAstNode;
+var
+  Methods : TList<TAstNode>;
+  M       : TAstNode;
+begin
+  Result  := nil;
+  Methods := Root.FindAll(nkMethod);
+  try
+    for M in Methods do
+      if SameText(M.Name, AName) then
+        Exit(M.FindFirstChild(nkBlock));
+  finally
+    Methods.Free;
+  end;
+end;
+
+procedure TTestParserRobustness.CaseElse_AfterArmIfThenExit_IsCaseArmNotElseBranch;
+// Die op.pas-Form (cnwizards .../DCU32/op.pas:509): der letzte Arm endet
+// auf 'if ... then Exit;', danach folgt das case-else. Vor dem Fix band
+// ParseIfStmt das else an das Arm-if - der case-else wurde ein
+// nkElseBranch statt eines nkCaseArm.
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure Decode(W, R: Integer; var RN: Integer);'#13#10+ // 4
+  'begin'#13#10+                                            // 5
+  '  case W of'#13#10+                                      // 6
+  '    0: RN := R;'#13#10+                                  // 7
+  '    1: if not RegW(R, RN) then Exit;'#13#10+             // 8
+  '    else Exit;'#13#10+                                   // 9
+  '  end;'#13#10+                                           // 10
+  'end;'#13#10+                                             // 11
+  'end.';                                                   // 12
+var
+  Parser  : TParser2;
+  Root    : TAstNode;
+  CaseN   : TAstNode;
+  ElseArm : TAstNode;
+  IfN     : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      CaseN := Root.FindFirst(nkCaseStmt);
+      Assert.IsNotNull(CaseN, 'nkCaseStmt fehlt');
+      Assert.AreEqual<Integer>(6, CaseN.Line, 'case steht in Zeile 6');
+
+      // KERN: kein einziger nkElseBranch im Baum - das else gehoert dem
+      // case, nicht dem if im letzten Arm.
+      Assert.AreEqual<Integer>(0, Root.DescendantCount(nkElseBranch),
+        'das case-else darf KEIN nkElseBranch sein');
+
+      Assert.AreEqual('<>,<>,<else>', CaseArmNameList(CaseN),
+        'drei Arme, der letzte mit Name ''else'' (daran haengt SCA168)');
+      Assert.AreEqual<Integer>(3, CaseN.DirectChildCount(nkCaseArm),
+        'genau drei direkte nkCaseArm');
+
+      // Positionen der Arme (nicht nur ihre Anzahl).
+      Assert.AreEqual<Integer>(7, CaseArmAt(CaseN, 0).Line, 'Arm 0 in Zeile 7');
+      Assert.AreEqual<Integer>(8, CaseArmAt(CaseN, 1).Line, 'Arm 1 in Zeile 8');
+
+      ElseArm := CaseArmAt(CaseN, 2);
+      Assert.IsNotNull(ElseArm, 'else-Arm fehlt');
+      Assert.AreEqual('else', ElseArm.Name, 'else-Arm traegt den Namen ''else''');
+      Assert.AreEqual<Integer>(9, ElseArm.Line, 'else-Arm in Zeile 9');
+      Assert.AreEqual<Integer>(1, ElseArm.DirectChildCount(nkExit),
+        'das Exit des case-else haengt direkt am else-Arm');
+
+      // Das Arm-if behaelt seinen then-Zweig und bekommt KEINEN else-Zweig.
+      IfN := CaseArmAt(CaseN, 1).FindFirst(nkIfStmt);
+      Assert.IsNotNull(IfN, 'nkIfStmt im Arm 1 fehlt');
+      Assert.AreEqual<Integer>(8, IfN.Line, 'das Arm-if steht in Zeile 8');
+      Assert.AreEqual<Integer>(1, IfN.DirectChildCount(nkExit),
+        'der then-Zweig (Exit) bleibt am if');
+      Assert.AreEqual<Integer>(0, IfN.DescendantCount(nkElseBranch),
+        'das Arm-if darf keinen else-Zweig bekommen haben');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.CaseElse_AfterArmIfThenRaise_IsCaseArmNotElseBranch;
+// Dieselbe Falle mit raise statt Exit - ParseRaiseStmt frisst sein ';'
+// genauso. Die urspruengliche Diagnose nannte nur diesen Fall; er ist
+// nicht der einzige, aber er muss ebenfalls halten.
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure Decode(W: Integer; var RN: Integer);'#13#10+   // 4
+  'begin'#13#10+                                            // 5
+  '  case W of'#13#10+                                      // 6
+  '    0: RN := 1;'#13#10+                                  // 7
+  '    1: if not Ok(W) then raise EAbort.Create(''bad'');'#13#10+ // 8
+  '    else RN := 0;'#13#10+                                // 9
+  '  end;'#13#10+                                           // 10
+  'end;'#13#10+                                             // 11
+  'end.';                                                   // 12
+var
+  Parser  : TParser2;
+  Root    : TAstNode;
+  CaseN   : TAstNode;
+  ElseArm : TAstNode;
+  IfN     : TAstNode;
+  Asg     : TAstNode;
+  C       : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      CaseN := Root.FindFirst(nkCaseStmt);
+      Assert.IsNotNull(CaseN, 'nkCaseStmt fehlt');
+      Assert.AreEqual<Integer>(0, Root.DescendantCount(nkElseBranch),
+        'das case-else darf KEIN nkElseBranch sein');
+      Assert.AreEqual('<>,<>,<else>', CaseArmNameList(CaseN),
+        'drei Arme, der letzte mit Name ''else''');
+
+      ElseArm := CaseArmAt(CaseN, 2);
+      Assert.IsNotNull(ElseArm, 'else-Arm fehlt');
+      Assert.AreEqual<Integer>(9, ElseArm.Line, 'else-Arm in Zeile 9');
+      Asg := nil;
+      for C in ElseArm.Children do
+        if C.Kind = nkAssign then Asg := C;
+      Assert.IsNotNull(Asg, 'die Zuweisung des case-else fehlt');
+      Assert.AreEqual('RN', Asg.Name, 'Zuweisungsziel im else-Arm');
+      Assert.AreEqual<Integer>(9, Asg.Line, 'Zuweisung in Zeile 9');
+
+      IfN := CaseArmAt(CaseN, 1).FindFirst(nkIfStmt);
+      Assert.IsNotNull(IfN, 'nkIfStmt im Arm 1 fehlt');
+      Assert.AreEqual<Integer>(1, IfN.DirectChildCount(nkRaise),
+        'das raise bleibt der then-Zweig des Arm-if');
+      Assert.AreEqual<Integer>(0, IfN.DescendantCount(nkElseBranch),
+        'das Arm-if darf keinen else-Zweig bekommen haben');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.CaseElse_RealIfElseInLastArm_KeepsItsElseBranch;
+// GEGENPROBE: der Fix darf nicht zu weit greifen. Ohne ';' vor dem else
+// ist es ein ECHTES if-else und muss gebunden bleiben - und das case
+// braucht trotzdem seinen eigenen else-Arm.
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure Decode(W: Integer; var RN: Integer);'#13#10+   // 4
+  'begin'#13#10+                                            // 5
+  '  case W of'#13#10+                                      // 6
+  '    0: RN := 1;'#13#10+                                  // 7
+  '    1: if Ok(W) then RN := 2 else RN := 3;'#13#10+       // 8
+  '    else RN := 4;'#13#10+                                // 9
+  '  end;'#13#10+                                           // 10
+  'end;'#13#10+                                             // 11
+  'end.';                                                   // 12
+var
+  Parser  : TParser2;
+  Root    : TAstNode;
+  CaseN   : TAstNode;
+  ElseArm : TAstNode;
+  IfN     : TAstNode;
+  ElseBr  : TAstNode;
+  Asg     : TAstNode;
+  C       : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      CaseN := Root.FindFirst(nkCaseStmt);
+      Assert.IsNotNull(CaseN, 'nkCaseStmt fehlt');
+      Assert.AreEqual('<>,<>,<else>', CaseArmNameList(CaseN),
+        'das case behaelt seinen eigenen else-Arm');
+
+      // GENAU EIN nkElseBranch im Baum: der des echten if-else.
+      Assert.AreEqual<Integer>(1, Root.DescendantCount(nkElseBranch),
+        'das echte if-else muss seinen else-Zweig behalten');
+
+      IfN := CaseArmAt(CaseN, 1).FindFirst(nkIfStmt);
+      Assert.IsNotNull(IfN, 'nkIfStmt im Arm 1 fehlt');
+      Assert.AreEqual<Integer>(1, IfN.DirectChildCount(nkElseBranch),
+        'der else-Zweig haengt am if, nicht am case');
+
+      ElseBr := IfN.FindFirst(nkElseBranch);
+      Assert.IsNotNull(ElseBr, 'nkElseBranch fehlt');
+      // Der Knoten traegt Zeile/Spalte des ERSTEN TOKENS NACH 'else'
+      // (ParseIfStmt liest die Position nach dem Next) - hier dieselbe
+      // Zeile 8. Bekannte Eigenheit, bewusst festgenagelt.
+      Assert.AreEqual<Integer>(8, ElseBr.Line, 'else-Zweig in Zeile 8');
+      Asg := nil;
+      for C in ElseBr.Children do
+        if C.Kind = nkAssign then Asg := C;
+      Assert.IsNotNull(Asg, 'Zuweisung im else-Zweig des if fehlt');
+      Assert.AreEqual('3', Asg.TypeRef,
+        'der else-Zweig des if traegt RN := 3');
+
+      // ... und der case-else-Arm traegt die 4, nicht die 3.
+      ElseArm := CaseArmAt(CaseN, 2);
+      Assert.IsNotNull(ElseArm, 'else-Arm fehlt');
+      Assert.AreEqual<Integer>(9, ElseArm.Line, 'else-Arm in Zeile 9');
+      Asg := nil;
+      for C in ElseArm.Children do
+        if C.Kind = nkAssign then Asg := C;
+      Assert.IsNotNull(Asg, 'Zuweisung im case-else fehlt');
+      Assert.AreEqual('4', Asg.TypeRef, 'der case-else traegt RN := 4');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.CaseElse_MultiStatementBody_AllStatementsInAst;
+// FOLGESCHADEN: bei MEHRSTELLIGEM case-else parste ParseIfStmt nur EINE
+// Anweisung in den (faelschlich erzeugten) else-Zweig; die Arm-Schleife
+// machte aus dem Rest einen Phantom-Arm und SkipTo verwarf ihn. Beta/
+// Gamma/Delta fehlten damit VOLLSTAENDIG im AST - fuer JEDEN Detektor
+// unsichtbar. Hier zaehlen deshalb Namen UND Zeilen.
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure Decode(W: Integer);'#13#10+                    // 4
+  'begin'#13#10+                                            // 5
+  '  case W of'#13#10+                                      // 6
+  '    0: AlphaProc;'#13#10+                                // 7
+  '    1: if Ok(W) then Exit;'#13#10+                       // 8
+  '    else'#13#10+                                         // 9
+  '      BetaProc;'#13#10+                                  // 10
+  '      GammaProc;'#13#10+                                 // 11
+  '      DeltaProc;'#13#10+                                 // 12
+  '  end;'#13#10+                                           // 13
+  'end;'#13#10+                                             // 14
+  'end.';                                                   // 15
+var
+  Parser  : TParser2;
+  Root    : TAstNode;
+  CaseN   : TAstNode;
+  ElseArm : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      CaseN := Root.FindFirst(nkCaseStmt);
+      Assert.IsNotNull(CaseN, 'nkCaseStmt fehlt');
+      Assert.AreEqual<Integer>(0, Root.DescendantCount(nkElseBranch),
+        'das case-else darf KEIN nkElseBranch sein');
+
+      // Genau DREI Arme: vor dem Fix entstand ein vierter Phantom-Arm aus
+      // dem Wiedereinstieg der Arm-Schleife.
+      Assert.AreEqual('<>,<>,<else>', CaseArmNameList(CaseN),
+        'genau drei Arme - ein vierter waere der Phantom-Arm');
+
+      ElseArm := CaseArmAt(CaseN, 2);
+      Assert.IsNotNull(ElseArm, 'else-Arm fehlt');
+      // 'else' steht allein in Zeile 9; der Arm-Knoten traegt die Position
+      // des ERSTEN TOKENS DANACH (BetaProc, Zeile 10) - die Position wird
+      // nach dem Eat(tkKwElse) gelesen. Bekannte Eigenheit, festgenagelt.
+      Assert.AreEqual<Integer>(10, ElseArm.Line,
+        'else-Arm traegt die Zeile des ersten Rumpf-Tokens');
+
+      // KERN: alle drei Anweisungen, an ihren echten Zeilen, direkt am Arm.
+      Assert.AreEqual('BetaProc@10,GammaProc@11,DeltaProc@12',
+        DirectCallsWithLines(ElseArm),
+        'der komplette mehrstellige else-Rumpf muss im AST stehen');
+      Assert.AreEqual<Integer>(3, ElseArm.DirectChildCount(nkCall),
+        'drei Anweisungen im else-Arm');
+
+      // Der erste Arm bleibt unberuehrt.
+      Assert.AreEqual('AlphaProc@7', DirectCallsWithLines(CaseArmAt(CaseN, 0)),
+        'Arm 0 bleibt unveraendert');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.ExceptElse_AfterOnHandlerIf_BelongsToExceptBlock;
+// Dieselbe Ursache im except-else: der on-Handler endet auf
+// 'if ... then Exit;', danach folgt das else des except-Blocks. Vor dem
+// Fix wanderte Cleanup in einen nkElseBranch INNERHALB des on-Handlers.
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure Foo;'#13#10+                                   // 4
+  'begin'#13#10+                                            // 5
+  '  try'#13#10+                                            // 6
+  '    Risky;'#13#10+                                       // 7
+  '  except'#13#10+                                         // 8
+  '    on E: Exception do if Retry then Exit;'#13#10+       // 9
+  '    else'#13#10+                                         // 10
+  '      Cleanup;'#13#10+                                   // 11
+  '  end;'#13#10+                                           // 12
+  'end;'#13#10+                                             // 13
+  'end.';                                                   // 14
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  TryN   : TAstNode;
+  ExN    : TAstNode;
+  OnN    : TAstNode;
+  IfN    : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      TryN := Root.FindFirst(nkTryExcept);
+      Assert.IsNotNull(TryN, 'nkTryExcept fehlt');
+      ExN := TryN.FindFirst(nkExceptBlock);
+      Assert.IsNotNull(ExN, 'nkExceptBlock fehlt');
+      Assert.AreEqual<Integer>(8, ExN.Line, 'except steht in Zeile 8');
+
+      // KERN: kein nkElseBranch - das else gehoert dem except-Block.
+      Assert.AreEqual<Integer>(0, Root.DescendantCount(nkElseBranch),
+        'das except-else darf KEIN nkElseBranch sein');
+
+      OnN := ExN.FindFirst(nkOnHandler);
+      Assert.IsNotNull(OnN, 'nkOnHandler fehlt');
+      Assert.AreEqual<Integer>(9, OnN.Line, 'on-Handler in Zeile 9');
+      Assert.AreEqual<Integer>(0, OnN.DescendantCount(nkElseBranch),
+        'der on-Handler darf keinen else-Zweig verschluckt haben');
+      Assert.AreEqual<Integer>(0, OnN.DescendantCount(nkCall),
+        'Cleanup darf NICHT unter dem on-Handler haengen');
+
+      IfN := OnN.FindFirst(nkIfStmt);
+      Assert.IsNotNull(IfN, 'nkIfStmt im on-Handler fehlt');
+      Assert.AreEqual<Integer>(1, IfN.DirectChildCount(nkExit),
+        'der then-Zweig (Exit) bleibt am if');
+
+      // Cleanup haengt DIREKT am except-Block (so parst ParseTryStmt den
+      // else-Zweig eines except - er bekommt keinen eigenen Knoten).
+      Assert.AreEqual('Cleanup@11', DirectCallsWithLines(ExN),
+        'der except-else-Rumpf haengt direkt am nkExceptBlock');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.IfThenEmptyStatement_ElseStillBindsToIf;
+// DAS BENANNTE REGRESSIONSRISIKO. 'if C then ; else X;' - hier gehoert
+// das ';' zur LEEREN then-Anweisung, das else also doch zum if. Der
+// nackte Test 'FLastConsumed <> tkSemicolon' wuerde hier falsch trennen;
+// ParseIfStmt faengt das ueber sein EmptyThen ab.
+// Delphi selbst lehnt die Form mit E2029 ab, korpusweit 0 Vorkommen -
+// dieser Test ist die Absicherung, nicht der Normalfall.
+//
+// ZWEI Prozeduren, und die zweite ist die wichtigere: seit dem
+// Taker-Gate (FElseTakerOpen) bindet ein else auf Methodenrumpf-Ebene
+// ohnehin immer ans if - dort traegt EmptyThen nichts mehr. Lastragend
+// ist es nur noch INNERHALB eines case-Arms, wo der Taker-Rahmen offen
+// ist. Genau das prueft 'Bar'.
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure Foo;'#13#10+                                   // 4
+  'begin'#13#10+                                            // 5
+  '  if Ready then ; else Fallback;'#13#10+                 // 6
+  'end;'#13#10+                                             // 7
+  'procedure Bar(W: Integer);'#13#10+                       // 8
+  'begin'#13#10+                                            // 9
+  '  case W of'#13#10+                                      // 10
+  '    0: if Ready then ; else Fallback2;'#13#10+           // 11
+  '  end;'#13#10+                                           // 12
+  'end;'#13#10+                                             // 13
+  'end.';                                                   // 14
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Body   : TAstNode;
+  CaseN  : TAstNode;
+  IfN    : TAstNode;
+  ElseBr : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.AreEqual<Integer>(2, Root.DescendantCount(nkIfStmt),
+        'genau zwei if im Baum');
+
+      // ---- Foo: Methodenrumpf-Ebene, kein Taker-Rahmen ----
+      Body := MethodBodyOf(Root, 'Foo');
+      Assert.IsNotNull(Body, 'Rumpf-Block von Foo fehlt');
+      IfN := Body.FindFirstChild(nkIfStmt);
+      Assert.IsNotNull(IfN, 'nkIfStmt in Foo fehlt');
+      Assert.AreEqual<Integer>(6, IfN.Line, 'if steht in Zeile 6');
+
+      // KERN: das else bleibt am if gebunden.
+      Assert.AreEqual<Integer>(1, IfN.DirectChildCount(nkElseBranch),
+        'bei leerem then-Zweig muss das else weiterhin an das if binden');
+
+      ElseBr := IfN.FindFirstChild(nkElseBranch);
+      Assert.IsNotNull(ElseBr, 'nkElseBranch fehlt');
+      Assert.AreEqual<Integer>(6, ElseBr.Line, 'else-Zweig in Zeile 6');
+      Assert.AreEqual('Fallback@6', DirectCallsWithLines(ElseBr),
+        'der else-Rumpf haengt am else-Zweig des if');
+
+      // ---- Bar: im case-Arm, Taker-Rahmen OFFEN - hier zaehlt EmptyThen ----
+      Body  := MethodBodyOf(Root, 'Bar');
+      Assert.IsNotNull(Body, 'Rumpf-Block von Bar fehlt');
+      CaseN := Body.FindFirstChild(nkCaseStmt);
+      Assert.IsNotNull(CaseN, 'nkCaseStmt in Bar fehlt');
+      Assert.AreEqual('<>', CaseArmNameList(CaseN),
+        'EmptyThen schlaegt den Taker-Rahmen: das case bekommt KEINEN else-Arm');
+
+      IfN := CaseArmAt(CaseN, 0).FindFirstChild(nkIfStmt);
+      Assert.IsNotNull(IfN, 'nkIfStmt im case-Arm fehlt');
+      Assert.AreEqual<Integer>(1, IfN.DirectChildCount(nkElseBranch),
+        'auch im case-Arm bindet das else bei leerem then-Zweig an das if');
+      Assert.AreEqual('Fallback2@11',
+        DirectCallsWithLines(IfN.FindFirstChild(nkElseBranch)),
+        'der else-Rumpf haengt am else-Zweig des Arm-if');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.CaseElse_AfterVariousSemicolonEatingArms_NoElseBranch;
+// Die Falle ist NICHT auf raise/Exit beschraenkt: praktisch jeder
+// Anweisungsparser frisst sein eigenes ';'. Vier Faelle in einer Datei -
+// 'end;' (ParseBlock), 'Foo;' (ParseCallOrAssign), while und for (beide
+// ueber die Rumpf-Anweisung). In allen vier muss das else beim case
+// bleiben.
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure WithBlock(W: Integer);'#13#10+                 // 4
+  'begin'#13#10+                                            // 5
+  '  case W of'#13#10+                                      // 6
+  '    0: if Ok(W) then begin AlphaProc; end;'#13#10+       // 7
+  '    else BetaProc;'#13#10+                               // 8
+  '  end;'#13#10+                                           // 9
+  'end;'#13#10+                                             // 10
+  'procedure WithCall(W: Integer);'#13#10+                  // 11
+  'begin'#13#10+                                            // 12
+  '  case W of'#13#10+                                      // 13
+  '    0: if Ok(W) then GammaProc;'#13#10+                  // 14
+  '    else DeltaProc;'#13#10+                              // 15
+  '  end;'#13#10+                                           // 16
+  'end;'#13#10+                                             // 17
+  'procedure WithWhile(W: Integer);'#13#10+                 // 18
+  'begin'#13#10+                                            // 19
+  '  case W of'#13#10+                                      // 20
+  '    0: if Ok(W) then while Ok(W) do EpsilonProc;'#13#10+ // 21
+  '    else ZetaProc;'#13#10+                               // 22
+  '  end;'#13#10+                                           // 23
+  'end;'#13#10+                                             // 24
+  'procedure WithFor(W: Integer);'#13#10+                   // 25
+  'var I: Integer;'#13#10+                                  // 26
+  'begin'#13#10+                                            // 27
+  '  case W of'#13#10+                                      // 28
+  '    0: if Ok(W) then for I := 1 to 3 do EtaProc;'#13#10+ // 29
+  '    else ThetaProc;'#13#10+                              // 30
+  '  end;'#13#10+                                           // 31
+  'end;'#13#10+                                             // 32
+  'end.';                                                   // 33
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Cases  : TList<TAstNode>;
+  Bodies : string;
+  N      : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      // KERN: in KEINEM der vier Faelle darf ein else-Zweig entstehen.
+      Assert.AreEqual<Integer>(0, Root.DescendantCount(nkElseBranch),
+        'kein case-else darf als nkElseBranch geparst worden sein');
+
+      Cases := Root.FindAll(nkCaseStmt);
+      try
+        Assert.AreEqual<Integer>(4, Cases.Count, 'vier case-Anweisungen');
+        Bodies := '';
+        for N in Cases do
+        begin
+          Assert.AreEqual('<>,<else>', CaseArmNameList(N),
+            'jedes case braucht genau einen normalen und einen else-Arm');
+          if Bodies <> '' then Bodies := Bodies + ';';
+          Bodies := Bodies + DirectCallsWithLines(CaseArmAt(N, 1));
+        end;
+        // Rumpf UND Zeile je else-Arm - beweist die Zuordnung, nicht nur
+        // die Existenz eines else-Arms.
+        Assert.AreEqual(
+          'BetaProc@8;DeltaProc@15;ZetaProc@22;ThetaProc@30', Bodies,
+          'jeder else-Rumpf haengt am else-Arm SEINES case');
+      finally Cases.Free; end;
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+{ ---- Tests fuer die Rahmen-/Direktiven-Faelle (2026-08-28) ---- }
+
+procedure TTestParserRobustness.CaseElse_AfterArmIfWithNestedCaseOrTry_NoElseBranch;
+// MINOR aus der Gegenpruefung: zwei ';'-Fresser als VERSCHACHTELTER Rahmen
+// in der then-Anweisung des Arm-ifs. Beide fressen ihr ';' erst nach dem
+// eigenen 'end' und stellen den Taker-Zustand des Arms danach wieder her -
+// das case-else muss trotzdem beim case bleiben. Heute korrekt, bisher
+// ungetestet.
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure ArmWithCase(W, X: Integer);'#13#10+            // 4
+  'begin'#13#10+                                            // 5
+  '  case W of'#13#10+                                      // 6
+  '    0: if Ok(W) then'#13#10+                             // 7
+  '         case X of'#13#10+                               // 8
+  '           1: AlphaProc;'#13#10+                         // 9
+  '         end;'#13#10+                                    // 10
+  '  else'#13#10+                                           // 11
+  '    BetaProc;'#13#10+                                    // 12
+  '  end;'#13#10+                                           // 13
+  'end;'#13#10+                                             // 14
+  'procedure ArmWithTry(W: Integer);'#13#10+                // 15
+  'begin'#13#10+                                            // 16
+  '  case W of'#13#10+                                      // 17
+  '    0: if Ok(W) then'#13#10+                             // 18
+  '         try'#13#10+                                     // 19
+  '           GammaProc;'#13#10+                            // 20
+  '         finally'#13#10+                                 // 21
+  '           DeltaProc;'#13#10+                            // 22
+  '         end;'#13#10+                                    // 23
+  '  else'#13#10+                                           // 24
+  '    EpsilonProc;'#13#10+                                 // 25
+  '  end;'#13#10+                                           // 26
+  'end;'#13#10+                                             // 27
+  'end.';                                                   // 28
+var
+  Parser    : TParser2;
+  Root      : TAstNode;
+  OuterCase : TAstNode;
+  InnerCase : TAstNode;
+  IfN       : TAstNode;
+  TryN      : TAstNode;
+  FinN      : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      // KERN: in keiner der beiden Formen darf ein nkElseBranch entstehen.
+      Assert.AreEqual<Integer>(0, Root.DescendantCount(nkElseBranch),
+        'beide case-else muessen case-Arme bleiben');
+
+      // ---- Fall 1: verschachteltes case als then-Anweisung ----
+      OuterCase := MethodBodyOf(Root, 'ArmWithCase').FindFirstChild(nkCaseStmt);
+      Assert.IsNotNull(OuterCase, 'aeusseres case in ArmWithCase fehlt');
+      Assert.AreEqual('<>,<else>', CaseArmNameList(OuterCase),
+        'ArmWithCase: ein normaler Arm und ein else-Arm');
+      Assert.AreEqual('BetaProc@12',
+        DirectCallsWithLines(CaseArmAt(OuterCase, 1)),
+        'ArmWithCase: der else-Rumpf haengt am else-Arm des AEUSSEREN case');
+
+      IfN := CaseArmAt(OuterCase, 0).FindFirstChild(nkIfStmt);
+      Assert.IsNotNull(IfN, 'Arm-if in ArmWithCase fehlt');
+      Assert.AreEqual<Integer>(7, IfN.Line, 'Arm-if in Zeile 7');
+      InnerCase := IfN.FindFirstChild(nkCaseStmt);
+      Assert.IsNotNull(InnerCase, 'das innere case ist die then-Anweisung');
+      Assert.AreEqual<Integer>(8, InnerCase.Line, 'inneres case in Zeile 8');
+      Assert.AreEqual('<>', CaseArmNameList(InnerCase),
+        'das innere case hat genau EINEN Arm und KEINEN else-Arm');
+      Assert.AreEqual('AlphaProc@9',
+        DirectCallsWithLines(CaseArmAt(InnerCase, 0)),
+        'der Arm des inneren case bleibt vollstaendig');
+
+      // ---- Fall 2: verschachteltes try..finally als then-Anweisung ----
+      OuterCase := MethodBodyOf(Root, 'ArmWithTry').FindFirstChild(nkCaseStmt);
+      Assert.IsNotNull(OuterCase, 'aeusseres case in ArmWithTry fehlt');
+      Assert.AreEqual('<>,<else>', CaseArmNameList(OuterCase),
+        'ArmWithTry: ein normaler Arm und ein else-Arm');
+      Assert.AreEqual('EpsilonProc@25',
+        DirectCallsWithLines(CaseArmAt(OuterCase, 1)),
+        'ArmWithTry: der else-Rumpf haengt am else-Arm des case');
+
+      IfN := CaseArmAt(OuterCase, 0).FindFirstChild(nkIfStmt);
+      Assert.IsNotNull(IfN, 'Arm-if in ArmWithTry fehlt');
+      TryN := IfN.FindFirstChild(nkTryFinally);
+      Assert.IsNotNull(TryN, 'das try..finally ist die then-Anweisung');
+      Assert.AreEqual('GammaProc@20', DirectCallsWithLines(TryN),
+        'der try-Rumpf bleibt am nkTryFinally');
+      FinN := TryN.FindFirstChild(nkFinallyBlock);
+      Assert.IsNotNull(FinN, 'nkFinallyBlock fehlt');
+      Assert.AreEqual('DeltaProc@22', DirectCallsWithLines(FinN),
+        'der finally-Rumpf bleibt am nkFinallyBlock');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.CaseElse_RejectedElse_RestOfMethodBodyIntact;
+// MAJOR-Testluecke aus der Gegenpruefung: ein ABGELEHNTES else darf den
+// Rest des Methodenrumpfs nicht kosten. Wird das else abgelehnt, ohne dass
+// jemand es aufnimmt, verlaesst ParseBlock seinen Rumpf bei tkKwElse ohne
+// Konsum - und ohne das 'end' zu fressen. Alles danach faellt aus dem AST.
+// Hier NIMMT der case es auf; der Test nagelt fest, dass die Anweisungen
+// VOR und NACH dem case erhalten bleiben.
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure Decode(W: Integer);'#13#10+                    // 4
+  'begin'#13#10+                                            // 5
+  '  AlphaProc;'#13#10+                                     // 6
+  '  case W of'#13#10+                                      // 7
+  '    0: if Ok(W) then Exit;'#13#10+                       // 8
+  '  else'#13#10+                                           // 9
+  '    BetaProc;'#13#10+                                    // 10
+  '  end;'#13#10+                                           // 11
+  '  GammaProc;'#13#10+                                     // 12
+  '  DeltaProc;'#13#10+                                     // 13
+  'end;'#13#10+                                             // 14
+  'end.';                                                   // 15
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Body   : TAstNode;
+  CaseN  : TAstNode;
+  IfN    : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.AreEqual<Integer>(0, Root.DescendantCount(nkElseBranch),
+        'das case-else darf KEIN nkElseBranch sein');
+
+      Body := MethodBodyOf(Root, 'Decode');
+      Assert.IsNotNull(Body, 'Rumpf-Block von Decode fehlt');
+      // KERN: der Rumpf ist vollstaendig - vor UND nach dem case.
+      Assert.AreEqual('AlphaProc@6,GammaProc@12,DeltaProc@13',
+        DirectCallsWithLines(Body),
+        'der Methodenrumpf darf durch das abgelehnte else nichts verlieren');
+
+      CaseN := Body.FindFirstChild(nkCaseStmt);
+      Assert.IsNotNull(CaseN, 'nkCaseStmt fehlt');
+      Assert.AreEqual('<>,<else>', CaseArmNameList(CaseN),
+        'ein normaler Arm und ein else-Arm');
+      Assert.AreEqual('BetaProc@10',
+        DirectCallsWithLines(CaseArmAt(CaseN, 1)),
+        'der else-Rumpf haengt am else-Arm');
+
+      IfN := CaseArmAt(CaseN, 0).FindFirstChild(nkIfStmt);
+      Assert.IsNotNull(IfN, 'Arm-if fehlt');
+      Assert.AreEqual<Integer>(1, IfN.DirectChildCount(nkExit),
+        'der then-Zweig (Exit) bleibt am Arm-if');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.IfdefSemicolonElse_AtBodyLevel_ElseBindsToIf;
+// DER BLOCKER AUS DER GEGENPRUEFUNG. Der Lexer verwirft '{...}' samt
+// Direktiven als Kommentar und emittiert im Default BEIDE Zweige
+// (gLexerIfdefSkipEnabled = False). Aus
+//     end {$IFDEF X} ; {$ELSE} else Foo; {$ENDIF}
+// wird der Tokenstrom 'end ; else Foo ;' - ein ECHTES if-else mit einem
+// ';' davor, denn ';' und else stehen in einander ausschliessenden
+// Zweigen. Wuerde das else hier abgelehnt, nimmt es niemand auf: ParseBlock
+// verlaesst den Rumpf bei tkKwElse ohne Konsum und ohne das 'end' - der
+// ganze Rest der Methode faellt aus dem AST.
+//
+// Zwei Korpusformen in einer Datei:
+//   ParseNumber  = JsonDataObjects.pas:7627/:8242 (begin..end vor dem ';')
+//   OpenFields   = JvCsvData.pas:3743 (nackter Aufruf vor dem ';')
+// Die geschweiften Klammern stehen in STRINGLITERALEN - sonst waeren sie
+// Direktiven DIESER Testdatei statt Testdaten.
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure ParseNumber(W: Integer);'#13#10+               // 4
+  'begin'#13#10+                                            // 5
+  '  if Ok(W) then'#13#10+                                  // 6
+  '  begin'#13#10+                                          // 7
+  '    AlphaProc;'#13#10+                                   // 8
+  '  end'#13#10+                                            // 9
+  '  {$IFDEF KEEP_PRECISION}'#13#10+                        // 10
+  '  ;'#13#10+                                              // 11
+  '  {$ELSE}'#13#10+                                        // 12
+  '  else'#13#10+                                           // 13
+  '    BetaProc;'#13#10+                                    // 14
+  '  {$ENDIF}'#13#10+                                       // 15
+  '  GammaProc;'#13#10+                                     // 16
+  '  DeltaProc;'#13#10+                                     // 17
+  'end;'#13#10+                                             // 18
+  'procedure OpenFields;'#13#10+                            // 19
+  'begin'#13#10+                                            // 20
+  '  {$IFNDEF HAS_AUTO_FIELDS}'#13#10+                      // 21
+  '  if DefaultFields then'#13#10+                          // 22
+  '  {$ENDIF}'#13#10+                                       // 23
+  '    CreateFields'#13#10+                                 // 24
+  '  {$IFDEF HAS_AUTO_FIELDS}'#13#10+                       // 25
+  '    ;'#13#10+                                            // 26
+  '  {$ELSE}'#13#10+                                        // 27
+  '  else'#13#10+                                           // 28
+  '    InternalInitFieldDefs;'#13#10+                       // 29
+  '  {$ENDIF}'#13#10+                                       // 30
+  '  BindFields;'#13#10+                                    // 31
+  'end;'#13#10+                                             // 32
+  'end.';                                                   // 33
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Body   : TAstNode;
+  IfN    : TAstNode;
+  ThenB  : TAstNode;
+  ElseBr : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      // Genau zwei else-Zweige - einer je Prozedur.
+      Assert.AreEqual<Integer>(2, Root.DescendantCount(nkElseBranch),
+        'beide {$IFDEF}-Idiome muessen ein if-else ergeben');
+      Assert.AreEqual<Integer>(0, Root.DescendantCount(nkCaseStmt),
+        'hier gibt es kein case - der Taker-Rahmen ist zu');
+
+      // ---- Form 1 (JsonDataObjects): begin..end vor dem ';' ----
+      Body := MethodBodyOf(Root, 'ParseNumber');
+      Assert.IsNotNull(Body, 'Rumpf-Block von ParseNumber fehlt');
+      IfN := Body.FindFirstChild(nkIfStmt);
+      Assert.IsNotNull(IfN, 'nkIfStmt in ParseNumber fehlt');
+      Assert.AreEqual<Integer>(6, IfN.Line, 'if steht in Zeile 6');
+      Assert.AreEqual<Integer>(1, IfN.DirectChildCount(nkElseBranch),
+        'das else muss an das if binden - sonst ist der Rumpf ab hier weg');
+
+      ThenB := IfN.FindFirstChild(nkBlock);
+      Assert.IsNotNull(ThenB, 'then-Block fehlt');
+      Assert.AreEqual('AlphaProc@8', DirectCallsWithLines(ThenB),
+        'der then-Block bleibt vollstaendig');
+
+      ElseBr := IfN.FindFirstChild(nkElseBranch);
+      Assert.IsNotNull(ElseBr, 'nkElseBranch fehlt');
+      Assert.AreEqual('BetaProc@14', DirectCallsWithLines(ElseBr),
+        'der else-Rumpf haengt am else-Zweig des if');
+
+      // KERN: alles NACH dem Idiom ist noch da. Genau das ging vor dem
+      // Taker-Gate verloren.
+      Assert.AreEqual('GammaProc@16,DeltaProc@17', DirectCallsWithLines(Body),
+        'der Rest des Methodenrumpfs muss erhalten bleiben');
+
+      // ---- Form 2 (JvCsvData): nackter Aufruf vor dem ';' ----
+      Body := MethodBodyOf(Root, 'OpenFields');
+      Assert.IsNotNull(Body, 'Rumpf-Block von OpenFields fehlt');
+      IfN := Body.FindFirstChild(nkIfStmt);
+      Assert.IsNotNull(IfN, 'nkIfStmt in OpenFields fehlt');
+      Assert.AreEqual<Integer>(22, IfN.Line, 'if steht in Zeile 22');
+      Assert.AreEqual('CreateFields@24', DirectCallsWithLines(IfN),
+        'die then-Anweisung bleibt am if');
+      Assert.AreEqual<Integer>(1, IfN.DirectChildCount(nkElseBranch),
+        'auch hier muss das else an das if binden');
+
+      ElseBr := IfN.FindFirstChild(nkElseBranch);
+      Assert.IsNotNull(ElseBr, 'nkElseBranch in OpenFields fehlt');
+      Assert.AreEqual('InternalInitFieldDefs@29', DirectCallsWithLines(ElseBr),
+        'der else-Rumpf haengt am else-Zweig des if');
+      Assert.AreEqual('BindFields@31', DirectCallsWithLines(Body),
+        'der Rest des Methodenrumpfs muss erhalten bleiben');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.IfdefSemicolonElse_InCaseArmBlock_ElseBindsToIf;
+// Dasselbe Idiom INNERHALB eines begin..end, das seinerseits in einem
+// case-Arm steht. Der Arm haette das else aufgenommen - der begin..end-
+// Rahmen dazwischen kann es aber nicht, also bindet es ans if. Genau
+// dafuer setzt ParseBlock den Taker-Rahmen aus und stellt ihn danach
+// wieder her: das case-else in Zeile 19 gehoert weiterhin dem case.
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure Decode(W: Integer);'#13#10+                    // 4
+  'begin'#13#10+                                            // 5
+  '  case W of'#13#10+                                      // 6
+  '    0:'#13#10+                                           // 7
+  '      begin'#13#10+                                      // 8
+  '        if Ok(W) then'#13#10+                            // 9
+  '          AlphaProc'#13#10+                              // 10
+  '        {$IFDEF KEEP_PRECISION}'#13#10+                  // 11
+  '        ;'#13#10+                                        // 12
+  '        {$ELSE}'#13#10+                                  // 13
+  '        else'#13#10+                                     // 14
+  '          BetaProc;'#13#10+                              // 15
+  '        {$ENDIF}'#13#10+                                 // 16
+  '        GammaProc;'#13#10+                               // 17
+  '      end;'#13#10+                                       // 18
+  '  else'#13#10+                                           // 19
+  '    DeltaProc;'#13#10+                                   // 20
+  '  end;'#13#10+                                           // 21
+  '  EpsilonProc;'#13#10+                                   // 22
+  'end;'#13#10+                                             // 23
+  'end.';                                                   // 24
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Body   : TAstNode;
+  CaseN  : TAstNode;
+  ArmBlk : TAstNode;
+  IfN    : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      // Genau EIN else-Zweig: der des if. Das case behaelt seinen else-Arm.
+      Assert.AreEqual<Integer>(1, Root.DescendantCount(nkElseBranch),
+        'das {$IFDEF}-else gehoert dem if, nicht dem case');
+
+      Body  := MethodBodyOf(Root, 'Decode');
+      Assert.IsNotNull(Body, 'Rumpf-Block von Decode fehlt');
+      CaseN := Body.FindFirstChild(nkCaseStmt);
+      Assert.IsNotNull(CaseN, 'nkCaseStmt fehlt');
+      Assert.AreEqual('<>,<else>', CaseArmNameList(CaseN),
+        'das case behaelt seinen eigenen else-Arm');
+      Assert.AreEqual('DeltaProc@20', DirectCallsWithLines(CaseArmAt(CaseN, 1)),
+        'der case-else-Rumpf haengt am else-Arm');
+
+      ArmBlk := CaseArmAt(CaseN, 0).FindFirstChild(nkBlock);
+      Assert.IsNotNull(ArmBlk, 'begin..end des Arms fehlt');
+      IfN := ArmBlk.FindFirstChild(nkIfStmt);
+      Assert.IsNotNull(IfN, 'nkIfStmt im Arm-Block fehlt');
+      Assert.AreEqual<Integer>(9, IfN.Line, 'if steht in Zeile 9');
+      Assert.AreEqual('AlphaProc@10', DirectCallsWithLines(IfN),
+        'die then-Anweisung bleibt am if');
+      Assert.AreEqual<Integer>(1, IfN.DirectChildCount(nkElseBranch),
+        'im begin..end nimmt niemand das else auf - es bindet ans if');
+      Assert.AreEqual('BetaProc@15',
+        DirectCallsWithLines(IfN.FindFirstChild(nkElseBranch)),
+        'der else-Rumpf haengt am else-Zweig des if');
+
+      // Nichts geht verloren - weder im Arm-Block noch nach dem case.
+      Assert.AreEqual('GammaProc@17', DirectCallsWithLines(ArmBlk),
+        'der Rest des Arm-Blocks bleibt erhalten');
+      Assert.AreEqual('EpsilonProc@22', DirectCallsWithLines(Body),
+        'der Rest des Methodenrumpfs bleibt erhalten');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.IfdefSemicolonElse_DirectlyInCaseArm_KnownGap_NothingLost;
+// BENANNTE RESTLUECKE, bewusst festgenagelt (2026-08-28).
+// Steht das {$IFDEF}-Idiom DIREKT in einem case-Arm - ohne begin..end
+// dazwischen -, dann ist der Taker-Rahmen offen und das else wird
+// abgelehnt. Der case nimmt es als seinen else-Arm. Im TOKENSTROM ist
+// dieser Fall von einem echten case-else nicht zu unterscheiden; dafuer
+// muesste der Lexer melden, dass zwischen ';' und 'else' eine bedingte
+// Direktive lag. Auf D:\git-sca-realworld kommt die Kombination 0-mal vor
+// (alle 7 Idiom-Stellen liegen auf Methodenrumpf-Ebene).
+//
+// Was dieser Test SICHERT: der Schaden ist eine FEHLZUORDNUNG, kein
+// Verlust. BetaProc bleibt im AST, AlphaProc bleibt am if, und der Rumpf
+// nach dem case ist unversehrt.
+//
+// Er sichert aber auch die REICHWEITE des Schadens, und die geht weiter
+// als der eine Arm: sobald der case sein else genommen hat, sammelt die
+// else-Schleife alles bis zum 'end' ein - der nachfolgende ECHTE Arm 1
+// verliert seine nkCaseArm-Struktur und landet im else-Rumpf. Deshalb
+// steht hier ein zweiter Arm; ohne ihn behauptete der Test eine
+// Harmlosigkeit, die er nicht geprueft hat.
+// Schlaegt der Test eines Tages um, weil die Luecke geschlossen wurde,
+// ist der erwartete neue Stand: nkElseBranch = 1 am if,
+// CaseArmNameList = '<>,<>' (zwei echte Arme, kein else-Arm).
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure Decode(W: Integer);'#13#10+                    // 4
+  'begin'#13#10+                                            // 5
+  '  case W of'#13#10+                                      // 6
+  '    0: if Ok(W) then'#13#10+                             // 7
+  '         AlphaProc'#13#10+                               // 8
+  '       {$IFDEF KEEP_PRECISION}'#13#10+                   // 9
+  '       ;'#13#10+                                         // 10
+  '       {$ELSE}'#13#10+                                   // 11
+  '       else'#13#10+                                      // 12
+  '         BetaProc;'#13#10+                               // 13
+  '       {$ENDIF}'#13#10+                                  // 14
+  '    1: ZetaProc;'#13#10+                                 // 15
+  '  end;'#13#10+                                           // 16
+  '  GammaProc;'#13#10+                                     // 17
+  'end;'#13#10+                                             // 18
+  'end.';                                                   // 19
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Body   : TAstNode;
+  CaseN  : TAstNode;
+  IfN    : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Body  := MethodBodyOf(Root, 'Decode');
+      Assert.IsNotNull(Body, 'Rumpf-Block von Decode fehlt');
+      CaseN := Body.FindFirstChild(nkCaseStmt);
+      Assert.IsNotNull(CaseN, 'nkCaseStmt fehlt');
+
+      // DIE LUECKE - so ist der Stand heute, nicht so soll er bleiben.
+      Assert.AreEqual<Integer>(0, Root.DescendantCount(nkElseBranch),
+        'RESTLUECKE: das if verliert seinen else-Zweig an den case-Arm');
+      Assert.AreEqual('<>,<else>', CaseArmNameList(CaseN),
+        'RESTLUECKE: der case bekommt einen else-Arm, den es nicht gibt - ' +
+        'und der ECHTE Arm 1 erscheint nicht mehr als eigener nkCaseArm, ' +
+        'weil die else-Schleife alles bis zum end einsammelt');
+
+      // ... und das ist die Zusicherung, die trotzdem gilt: NICHTS ist weg.
+      // Beide Aufrufe liegen im else-Arm - BetaProc gehoert dorthin (im
+      // aktiven Zweig), ZetaProc ist der strukturell verschluckte Arm 1.
+      // Genau diese Zeile unterscheidet "Fehlzuordnung" von "Verlust":
+      // wandert ZetaProc hier je heraus, ist die Luecke teurer geworden
+      // als dokumentiert.
+      Assert.AreEqual('BetaProc@13,ZetaProc@15',
+        DirectCallsWithLines(CaseArmAt(CaseN, 1)),
+        'BetaProc UND der verschluckte Arm 1 bleiben im AST - ' +
+        'Fehlzuordnung, kein Verlust');
+      IfN := CaseArmAt(CaseN, 0).FindFirstChild(nkIfStmt);
+      Assert.IsNotNull(IfN, 'Arm-if fehlt');
+      Assert.AreEqual('AlphaProc@8', DirectCallsWithLines(IfN),
+        'die then-Anweisung bleibt am if');
+      Assert.AreEqual('GammaProc@17', DirectCallsWithLines(Body),
+        'der Rumpf nach dem case bleibt unversehrt');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
 end.

@@ -21,6 +21,16 @@ unit uBaseline;
 //   einer Zeile verschiebt jedes Finding sonst. Trade-off: zwei Findings
 //   gleichen Detektor-Typs in derselben Methode mit identischem Detail
 //   matchen denselben Fingerprint -> Baseline matched einen davon (fine).
+//
+// ZWEITE MATCH-QUELLE - contextHash (seit v0.9.8, QUALIFIZIERT seit
+// 2026-08-28): jeder Eintrag traegt zusaetzlich einen Hash ueber die
+// +/- CONTEXT_HASH_RADIUS normalisierten Quellzeilen rund um die
+// Fundstelle. Er ueberlebt Zeilen-Drift, Re-Indent, Methoden-Rename und
+// jede Aenderung am Detailtext - alles, woran der Fingerprint zerbricht.
+// Er identifiziert dafuer ein CODE-FENSTER und KEINE Fundstelle: zwei
+// textgleiche Fenster teilen ihn, auch in verschiedenen Dateien. Deshalb
+// geht er nirgends nackt in eine Match-Menge, sondern nur mit Datei UND
+// Regel qualifiziert - die Zahlen dazu stehen bei BaselineContextKey.
 
 interface
 
@@ -132,7 +142,9 @@ type
     // Schreibers passen, sonst matcht die Legacy-Stufe nichts.
     // AWarnings (optional) sammelt Diagnose-Meldungen (z.B. Fingerprint-
     // Modus der Datei passt nicht zum uebergebenen Zuschnitt - dann
-    // greift NUR noch contextHash).
+    // matcht seit 2026-08-28 GAR NICHTS mehr, denn der Datei-Token
+    // steckt jetzt in BEIDEN Strecken; frueher trug der contextHash
+    // ueber die Modus-Differenz hinweg, und genau das war das Loch).
     class function Apply(Findings: TObjectList<TLeakFinding>;
       const BaselineFile: string; const AScope: TBaselineScope;
       AWarnings: TStrings = nil): Integer; static;
@@ -183,38 +195,190 @@ type
       AScanRoot: string): string; static;
   end;
 
-  // Non-destruktiver Baseline-Filter fuer Live-Consumer (IDE-Editor): laedt
-  // die Fingerprints einmalig und beantwortet pro Finding, ob es bereits in
-  // der Baseline steht - OHNE die Findings-Liste zu veraendern. TBaseline.Apply
-  // LOESCHT matchende Findings; das eignet sich nicht fuer einen umschaltbaren
-  // "nur neue Funde"-Editor-Filter, bei dem die Vollmenge fuer Export/Toggle
-  // erhalten bleiben muss. Match ueber den zeilenunabhaengigen Fingerprint
-  // (KEIN contextHash - der Editor-Pfad soll nicht pro Finding eine Datei
-  // erneut lesen).
+  // Non-destruktiver Baseline-Filter fuer Live-Consumer (IDE-Editor, EXE):
+  // laedt die Baseline einmalig und beantwortet pro Finding, ob es bereits
+  // darin steht - OHNE die Findings-Liste zu veraendern. TBaseline.Apply
+  // LOESCHT matchende Findings; das eignet sich nicht fuer einen
+  // umschaltbaren "nur neue Funde"-Filter, bei dem die Vollmenge fuer
+  // Export/Toggle erhalten bleiben muss.
+  //
+  // ZWEI MATCH-QUELLEN (seit 2026-08-28, Befund Baseline-Identitaet):
+  // contextHash ODER Legacy-Fingerprint - dieselbe EITHER/OR-Regel, die
+  // TBaseline.Apply auf dem CLI-Pfad seit v0.9.8 anwendet. Bis dahin kannte
+  // Contains NUR den Fingerprint, und der hasht MissingVar mit. Aendert
+  // ein Metrik-Detektor seinen Score, oder dreht der Nutzer an dem
+  // dokumentierten INI-Knopf CyclomaticMax, wechselt damit die IDENTITAET
+  // des Fundes: er erscheint in EXE und Plugin einmalig wieder als "neu",
+  // ohne Warnung und ohne dass sich am Code etwas geaendert haette
+  // (gemessen 37.987 Funde = 4,8 % des Referenzkorpus). Der CLI-Pfad war
+  // dagegen abgesichert - genau diese Luecke schliesst der Umbau.
+  //
+  // Die Rettungsdaten lagen bereits bei den Nutzern: TBaseline.Write legt
+  // den contextHash seit v0.9.8 in JEDEN Eintrag (s. BuildBaselineArray),
+  // LoadFromFile hat ihn beim Laden nur weggeworfen. Dieser Umbau hoert
+  // damit auf.
+  //
+  // WARUM DER HASH NICHT LAZY IM FILTER GERECHNET WIRD: er braucht die
+  // Quelldatei, und der Anzeige-Filter laeuft im Editor-Pfad. Seit dem
+  // G2-5-Hook (TAnalysisSession.ReleaseTransientCaches am Ende JEDES
+  // Scans) ist der Text-Cache beim ersten Filterlauf garantiert KALT -
+  // gemessen p50 252 und max 5.728 Dateien, die neu von der Platte kaemen,
+  // plus rund 27.000 Syscalls je Durchlauf, und der eben freigegebene
+  // halbe Gigabyte Cache fuellte sich sofort wieder auf. Deshalb rechnet
+  // der CONSUMER die Hashes EINMAL im Scan-Nachlauf, solange die Bytes
+  // noch warm sind (PrepareContextHashes), und Contains schlaegt nur noch
+  // nach: zwei Dictionary-Zugriffe, kein I/O.
+  //
+  // EHRLICHE GRENZEN:
+  //   * Baselines aelter als v0.9.8 tragen keinen contextHash. Dort bleibt
+  //     alles wie bisher - PrepareContextHashes rechnet dann gar nicht
+  //     erst, es gaebe nichts, wogegen zu matchen waere.
+  //   * Funde ohne berechenbaren Hash (Datei nicht lesbar, Zeile 0) fallen
+  //     wie bisher auf den Fingerprint zurueck.
+  //   * Der contextHash bindet an +/- CONTEXT_HASH_RADIUS Zeilen Code
+  //     RINGSUM. Das hat ZWEI Richtungen, und benannt gehoeren beide:
+  //       - Aendert sich der Code ringsum, hilft der Hash nicht. Diese
+  //         Richtung MERKT der Nutzer - der Fund taucht als "neu" auf.
+  //       - Der Hash identifiziert ein CODE-FENSTER, keine Fundstelle.
+  //         Textgleiche Fenster TEILEN ihn, und davon gibt es viele:
+  //         782.832 Funde des Referenzkorpus tragen nur 480.268
+  //         VERSCHIEDENE Hashes. Diese Richtung merkt der Nutzer NICHT -
+  //         sie blendet aus. Deshalb geht der Hash nicht nackt in die
+  //         Match-Menge, sondern mit Datei UND Regel qualifiziert
+  //         (BaselineContextKey, dort die vollen Zahlen). Was bleibt: zwei
+  //         Funde DERSELBEN Regel im selben Fenster DERSELBEN Datei sind
+  //         weiter nicht zu trennen - das kann der Legacy-Fingerprint
+  //         ebenso wenig (s. Unit-Kopf).
+  //   * Der vorab gerechnete Speicher ist gross: 705.617 Schluessel a rund
+  //     320 Byte, gemessen ~220 MB auf dem Referenzkorpus. Er faellt beim
+  //     naechsten PrepareContextHashes und ueber ReleaseContextHashes -
+  //     NICHT bei Clear und nicht bei LoadFromFile (s. dort, mit Grund).
+  //   * Wer die Baseline erst NACH einem Scan einschaltet, hat keinen
+  //     Hash-Speicher: der Filter arbeitet dann wie frueher allein ueber
+  //     den Fingerprint, bis der naechste Scan laeuft. Nachrechnen waere
+  //     genau das Datei-Lesen, das oben ausgeschlossen ist.
+  //   * Contains wird dadurch TOLERANTER: ein Fund, der heute als "neu"
+  //     angezeigt wird, kann kuenftig ausgeblendet werden. Das ist die
+  //     Absicht des Umbaus - aber es ist eine Verhaltensaenderung fuer
+  //     bestehende Baselines, und sie gehoert benannt.
   TBaselineSet = class
   private
-    FFingerprints: TDictionary<string, Boolean>;
+    FFingerprints : TDictionary<string, Boolean>;
+    // contextHash-Werte AUS DER BASELINE-DATEI - die zweite Match-Quelle.
+    // Der Schluessel ist NICHT der blosse Hash, sondern Datei + Regel +
+    // Hash (BaselineContextKey), gebildet aus den Feldern desselben
+    // Eintrags. Ein nackter Hash blendete jeden Fund mit textgleichem
+    // Code-Fenster aus, quer ueber Dateien und Regeln.
+    FContextHashes: TDictionary<string, Boolean>;
+    // contextHash JE FUND, im Scan-Nachlauf vorab gerechnet. Der Key ist
+    // der Memo-Schluessel aus TFindingFingerprint (Datei + Zeile), dieses
+    // Dictionary IST also zugleich das Memo, mit dem gerechnet wurde -
+    // deshalb kostet der Vorablauf keine Extra-Runde.
+    // Leer heisst "nicht gerechnet", nicht "kein Hash": Contains
+    // entscheidet dann allein ueber den Fingerprint.
+    FCtxByLine    : TDictionary<string, string>;
+    // Ergebnis des LETZTEN PrepareContextHashes - nur fuer die Anzeige,
+    // s. PreparedContextHashes.
+    FPreparedCtx  : Integer;
     // Zuschnitt, mit dem geladen wurde (Schritte 2-6): Contains rechnet
     // die Anfrage-Fingerprints mit DIESEM Wert statt mit den Prozess-
     // Globals - der Anzeige-Filter haengt damit nicht mehr am globalen
     // Zustand zum Abfragezeitpunkt.
     FScope        : TBaselineScope;
+    // Gemeinsamer Rumpf von PrepareContextHashes und
+    // RefreshContextHashesForFile.
+    function ComputeContextHashes(AFindings: TObjectList<TLeakFinding>;
+      AForceStat: Boolean): Integer;
   public
     constructor Create;
     destructor Destroy; override;
-    // Ersetzt den Inhalt durch die Fingerprints aus BaselineFile. Tolerant
-    // gegen beide Formate ({..,"findings":[{"fingerprint"..}]} ODER ein bare
-    // Array) - exakt das was TBaseline.Write / CLI --write-baseline schreibt
-    // und der HTML-Export liest. Fehlende/leere/kaputte Datei -> leeres Set
+    // Ersetzt den Inhalt durch die Match-Werte aus BaselineFile
+    // (fingerprint UND contextHash). Tolerant gegen beide Formate
+    // ({..,"findings":[{"fingerprint"..}]} ODER ein bare Array) - exakt
+    // das was TBaseline.Write / CLI --write-baseline schreibt und der
+    // HTML-Export liest. Fehlende/leere/kaputte Datei -> leeres Set
     // (Result 0), kein Fehler. Liefert die Anzahl geladener Fingerprints.
     // AScope wird gespeichert und gilt fuer alle folgenden Contains-
     // Abfragen - er muss zum Zuschnitt des Schreibers der Datei passen.
+    // Der vorab gerechnete Hash-Speicher bleibt UNANGETASTET: er gehoert
+    // zum Scan, nicht zur Datei, und die EXE laedt bei jedem Filterwechsel
+    // neu (s. TForm2.ApplyFilter).
     function LoadFromFile(const BaselineFile: string;
       const AScope: TBaselineScope): Integer;
     procedure Clear;
     function IsEmpty: Boolean;
     // True wenn F bereits in der Baseline steht (= KEIN neuer Fund).
     function Contains(const F: TLeakFinding): Boolean;
+
+    // SCAN-NACHLAUF, vor TAnalysisSession.ReleaseTransientCaches
+    // aufzurufen: rechnet den contextHash jedes Fundes EINMAL, solange die
+    // Quelldateien noch im Text-Cache liegen. Liefert die Anzahl der Funde
+    // mit nicht-leerem Hash.
+    // Verwirft den vorigen Stand IMMER - auch wenn nichts gerechnet wird.
+    // Ein stehengebliebener Eintrag gehoerte zum LETZTEN Scan und waere
+    // nach einer Quelltext-Aenderung schlicht falsch: er verglich einen
+    // frischen Fund mit dem Hash des alten Codes.
+    // Rechnet nur, wenn die geladene Baseline ueberhaupt contextHashes
+    // enthaelt (dieselbe Ersparnis, die Apply mit seinem HasCtx-Zweig
+    // macht) - Speicher rund 70 Zeichen je Fund.
+    function PrepareContextHashes(
+      AFindings: TObjectList<TLeakFinding>): Integer;
+    // Wie PrepareContextHashes, aber fuer einen WATCH-Lauf: verwirft die
+    // Eintraege der Dateien, die in AFindings VORKOMMEN (plus AFileName
+    // selbst, falls die jetzt fundfrei ist), und rechnet sie neu. Ohne das
+    // waeren die Eintraege dieser Dateien nach der Aenderung, die den
+    // Watch-Lauf ausgeloest hat, veraltet und koennten einen frischen Fund
+    // faelschlich ausblenden.
+    //
+    // WARUM NICHT NUR AFileName (Gegenpruefung 2026-08-28): ein Watch-Lauf
+    // liefert auch Funde FREMDER Dateien. TDfmAnalysisRunner meldet seine
+    // Detektoren mit dem .dfm-Pfad, und uIDEWatchMode leitet eine
+    // .dfm-Aenderung ausdruecklich auf die .pas-Analyse um
+    // (TWatchModeManager.MapToWatchedFile). Geloescht wurde nach der .pas,
+    // gerechnet ueber ALLE Funde - die .dfm-Eintraege des letzten
+    // Voll-Scans blieben stehen, Contains bekam sie per TryGetValue weiter
+    // zurueck, und der frische DFM-Fund wurde gegen den ALTEN Code
+    // geprueft und still ausgeblendet.
+    // Loesch- und Rechenschluessel stammen jetzt aus DERSELBEN Quelle
+    // (AFindings). Damit faellt zugleich die Abhaengigkeit von der
+    // Pfadschreibweise des Parameters weg - der Aufrufer musste bisher
+    // exakt die Schreibweise liefern, in der die Funde ihre Datei tragen.
+    //
+    // NICHT GEDECKT (Gegenpruefung 2026-08-28): liefert eine geaenderte
+    // Datei GAR KEINE Funde mehr, steht ihr Pfad in keinem Fund und ihre
+    // Eintraege bleiben im Speicher stehen. Das bleibt heute folgenlos,
+    // weil OnWatchFindings Schritt 1 die alten Funde derselben Datei
+    // ebenfalls stehenlaesst (uIDEAnalyserForm - eigener Fehler, eigener
+    // Fix); wer den behebt, muss diese Loesch-Menge mitziehen.
+    function RefreshContextHashesForFile(const AFileName: string;
+      AFindings: TObjectList<TLeakFinding>): Integer;
+
+    // Gibt den vorab gerechneten Hash-Speicher zurueck. Fuer den Moment,
+    // in dem der Anwender ausdruecklich Speicher zurueckfordert.
+    //
+    // WARUM ES DIE METHODE BRAUCHT: FCtxByLine ist der mit Abstand
+    // groesste Posten dieser Klasse - 705.617 Schluessel a rund 320 Byte,
+    // gemessen ~220 MB auf dem Referenzkorpus (die Schaetzung "~2 MB" im
+    // ersten Baubericht zaehlte nur den WERT, nicht den Schluessel). Weder
+    // Clear noch LoadFromFile fassen ihn an (beides mit Grund, s. dort),
+    // und der Menuepunkt "Reset All Findings" tat es bis 2026-08-28
+    // ebenfalls nicht: wer nach einem Scan zurueckstellte und nicht neu
+    // scannte, trug die 220 MB bis zum Prozessende mit.
+    // TDictionary.Clear gibt das Bucket-Array wirklich frei (RTL:
+    // SetLength(FItems, 0) + InternalSetCapacity(0)) - es braucht also
+    // kein Neuanlegen des Dictionaries.
+    procedure ReleaseContextHashes;
+
+    // Wie viele Funde beim letzten Scan-Nachlauf einen nicht-leeren
+    // contextHash bekommen haben. 0 heisst "die zweite Match-Quelle ist
+    // AUS" - und genau das war von "sie wirkt" bisher nicht zu
+    // unterscheiden, weil beide Aufrufer den Rueckgabewert von
+    // PrepareContextHashes verwarfen. Die Statuszeile von EXE und Plugin
+    // zeigt die Zahl, solange der Baseline-Filter aktiv ist.
+    // Der Watch-Nachzug (RefreshContextHashesForFile) rechnet sie NICHT
+    // fort: er betrifft die Funde einer einzelnen Datei, die Zahl bleibt
+    // die des letzten Voll-Laufs.
+    property PreparedContextHashes: Integer read FPreparedCtx;
   end;
 
 implementation
@@ -437,6 +601,13 @@ const
   // ignoriert + Warnung in ErrOutput.
   MAX_BASELINE_ENTRIES = 1_000_000;
   MAX_FINGERPRINT_LEN  = 256;
+  // Der contextHash-Schluessel traegt seit 2026-08-28 zusaetzlich den
+  // Datei-Token und den Regelnamen AUS DER DATEI - beide waeren sonst
+  // ungekappt, waehrend der Hash selbst bei 256 endet. Grosszuegig genug
+  // fuer tiefe Relativpfade (MAX_PATH ist 260), eng genug gegen eine
+  // praeparierte Datei. Ein laengerer Eintrag wird uebersprungen; sein
+  // Fund faellt damit auf den Fingerprint zurueck (fail-open).
+  MAX_CONTEXT_KEY_LEN  = 2048;
 
 function TryReadBaselineText(const FileName: string; var AText,
   AReason: string): Boolean;
@@ -527,21 +698,159 @@ begin
   end;
 end;
 
+function BaselineContextKey(const AFileToken, AKindName,
+  AContextHash: string): string;
+// DER SCHLUESSEL DER CONTEXTHASH-STRECKE. Eine Stelle, drei Nutzer:
+// CollectBaselineEntry baut ihn beim LADEN aus den Feldern des Eintrags,
+// TBaseline.Apply und TBaselineSet.Contains bauen ihn beim FRAGEN aus dem
+// Fund. Waeren es zwei Regeln, traefen sie still daneben - der Filter
+// meldete "matcht halt nicht", und niemand saehe warum.
+//
+// WARUM NICHT DER BLOSSE HASH (Gegenpruefung 2026-08-28, am Korpus rw19
+// AUSGEZAEHLT): TFindingFingerprint.ContextHashFor hasht ausschliesslich
+// die +/- CONTEXT_HASH_RADIUS normalisierten Quellzeilen - kein Pfad,
+// keine Regel, keine Spalte. Er identifiziert ein CODE-FENSTER, keine
+// Fundstelle. 782.832 Funde tragen nur 480.268 VERSCHIEDENE Hashes;
+// 148.292 Hashes haengen an mehr als einem Fund (57,5 % aller Funde),
+// 105.806 davon DATEIUEBERGREIFEND (44,0 %), 42.589 sogar
+// REGELUEBERGREIFEND (17,3 %).
+// Kollateral eines EINZELNEN Baseline-Eintrags:
+//   flacher Schluessel (der Bestand)  : 302.564 Funde = 38,59 %
+//   mit Datei im Schluessel           : 115.299       = 14,71 %
+//   mit Datei UND Regel, Datei = RELATIVPFAD
+//     (nur bei PathInFingerprint=1)   :  47.933       =  6,11 %
+//   mit Datei UND Regel, Datei = DATEINAME
+//     (DEF_BASELINE_PATH_FINGERPRINT=False, also der DEFAULT):
+//                                       214.545       = 27,41 %
+//                     davon aus einer FREMDEN Datei: 173.544 = 22,17 %
+// 239.018 Funde (30,48 %) waren durch EINEN Eintrag aus einer ANDEREN
+// Datei ausblendbar. Belege: eine Vorlagen-Kopfzeile traegt einen
+// SCA189-Hash ueber 486 Funde, 1.779 SCA101-Funde haengen an einem Hash,
+// und vendorte Kopien (uMain.pas:24 in zwei Baeumen) teilen ihren.
+//
+// DIE 6,11 % GELTEN NUR IM PFAD-MODUS - im Default ist FileToken der
+// BASISNAME (s. TBaselineScope.FileToken), gleichnamige Dateien in
+// verschiedenen Baeumen fallen also zusammen: synhighlighterjscript.pas
+// haengt mit 604 SCA101-Funden an EINEM Schluessel, verteilt ueber
+// Dev-Cpp und HeidiSQL. Das ist KEINE Verschlechterung durch diesen
+// Zweig - der Legacy-Fingerprint traegt denselben Basename-Token und
+// zieht die Grenze im Default ebensowenig. Ueber ihn HINAUS neu
+// ausblendbar sind gemessen 14.015 Funde (1,79 %), davon 4.277 (0,55 %)
+// dateiuebergreifend. Wer die Grenze scharf braucht, setzt
+// PathInFingerprint=1; dann gelten die 6,11 %.
+//
+// DIE DATEN LIEGEN IM EINTRAG: BuildBaselineArray schreibt 'file'
+// (= AScope.FileToken) und 'kind' (= KindName) in JEDE Zeile; der Frager
+// rechnet beides mit seinem Zuschnitt nach.
+//
+// PREIS "Toleranz gegen Regel-Umbenennung" - GEPRUEFT, kein Verlust: der
+// Kind-Name ist im Projekt ein oeffentlicher Bezeichner. Er steht als
+// 'kind' in rules/sca-rules.json (uRuleCatalog liest ihn ueber
+// KindFromName), in den Profilen und im Baseline-Feld selbst. Vor allem
+// aber steckt er BEREITS im Legacy-Fingerprint (s. TBaseline.Fingerprint).
+// Eine Umbenennung entwertet also heute schon jede bestehende Baseline auf
+// der Fingerprint-Strecke; dass der contextHash sie bisher ueberlebte, war
+// kein Vorteil, sondern genau die regeluebergreifende Toleranz aus den
+// 17,3 % oben. Wer einen Kind-Namen umbenennt, schreibt die Baselines neu -
+// mit oder ohne diesen Schluessel.
+begin
+  Result := AFileToken + '|' + AKindName + '|' + AContextHash;
+end;
+
+function JsonFieldStr(AObj: TJSONObject; const AName: string): string;
+// Feldwert als String; '' wenn das Feld fehlt oder null ist. Fehlende
+// Felder sind der Normalfall bei handgepflegten Dateien, kein Fehler.
+var
+  V : TJSONValue;
+begin
+  Result := '';
+  V := AObj.Values[AName];
+  if (V <> nil) and not V.Null then
+  begin
+    Result := V.Value;
+  end;
+end;
+
+procedure CollectBaselineEntry(AObj: TJSONObject;
+  AFpSet, ACtxSet: TDictionary<string, Boolean>);
+// Einen Baseline-Eintrag in die beiden Match-Mengen einsortieren, inkl.
+// der Hardening-Kappung. Gemeinsam fuer TBaseline.Apply und
+// TBaselineSet.LoadFromFile: bis 2026-08-28 stand die Feldregel zweimal
+// im File, und genau die zweite Kopie holte den contextHash nicht - der
+// Anzeige-Filter warf beim Laden weg, was Write hineingeschrieben hatte.
+// Ein einzelnes Set darf nil sein (Aufrufer, der nur eines fuellt).
+//
+// Der Unterschied zwischen den beiden Zweigen ist kein Versehen: ein
+// leerer contextHash bedeutet "nicht berechenbar" (Datei nicht lesbar)
+// und darf nie als Match-Wert in die Menge, waehrend beim Fingerprint
+// die Bestandsform ohne Leer-Pruefung erhalten bleibt.
+//
+// Der contextHash geht QUALIFIZIERT hinein - Datei und Regel aus DEMSELBEN
+// Eintrag (BaselineContextKey). Fehlt eines der beiden Felder (nur von
+// Hand moeglich; TBaseline.Write schreibt immer beide), bleibt der
+// jeweilige Teil leer und der Eintrag trifft praktisch keinen Fund mehr.
+// Das ist die fail-open-Richtung: er blendet dann nichts aus, statt zu
+// viel - die gefaehrliche Richtung ist die andere.
+var
+  V      : TJSONValue;
+  CtxKey : string;
+begin
+  if Assigned(AFpSet) then
+  begin
+    V := AObj.Values['fingerprint'];
+    if (V <> nil) and not V.Null
+       and (Length(V.Value) <= MAX_FINGERPRINT_LEN) then
+      AFpSet.AddOrSetValue(V.Value, True);
+  end;
+  if Assigned(ACtxSet) then
+  begin
+    V := AObj.Values['contextHash'];
+    if (V <> nil) and not V.Null
+       and (V.Value <> '')
+       and (Length(V.Value) <= MAX_FINGERPRINT_LEN) then
+    begin
+      CtxKey := BaselineContextKey(JsonFieldStr(AObj, 'file'),
+                                   JsonFieldStr(AObj, 'kind'), V.Value);
+      if Length(CtxKey) <= MAX_CONTEXT_KEY_LEN then
+        ACtxSet.AddOrSetValue(CtxKey, True);
+    end;
+  end;
+end;
+
 class function TBaseline.Apply(Findings: TObjectList<TLeakFinding>;
   const BaselineFile: string; const AScope: TBaselineScope;
   AWarnings: TStrings): Integer;
 // Match-Strategie (C.2):
-//   1. Wenn Finding einen contextHash hat UND der in der Baseline ist
-//      -> Drop (stabilster Pfad, ueberlebt Line-Drift + Re-Indent).
+//   1. Wenn Finding einen contextHash hat UND der - mit Datei und Regel
+//      qualifiziert - in der Baseline ist -> Drop (stabilster Pfad,
+//      ueberlebt Line-Drift + Re-Indent).
 //   2. Sonst: legacy fingerprint pruefen (File+Kind+Method+Detail).
 //   Backward-compat: alte Baselines ohne contextHash matchen weiter via 2.
+//
+// VERHALTENSAENDERUNG 2026-08-28 - AUSDRUECKLICH DEKLARIERT. Stufe 1
+// verglich bis dahin den NACKTEN Hash. Das ist ein BESTANDSFEHLER, seit
+// v0.9.8 auf dem CI-Pfad produktiv, und er entsteht nicht erst durch den
+// Anzeige-Filter-Umbau. Ein einzelner Baseline-Eintrag blendete damit
+// jeden Fund im ganzen Scan aus, dessen 7-Zeilen-Fenster textgleich ist -
+// quer ueber Dateien und Regeln. Am Korpus rw19 ausgezaehlt: 302.564 Funde
+// (38,59 %) waren Kollateral eines einzelnen Eintrags, 239.018 davon
+// (30,48 %) aus einer ANDEREN Datei; mit Datei und Regel im Schluessel
+// bleiben 47.933 (6,11 %). Zahlen und Herleitung: BaselineContextKey.
+//
+// WAS DAS FUER BESTEHENDE BASELINES HEISST: bisher zu tolerante Matches
+// fallen weg, es koennen also Funde ERSCHEINEN, die vorher ausgeblendet
+// waren - der Zaehler eines CI-Gates kann steigen, ohne dass sich am Code
+// etwas geaendert hat. Das ist die Korrektur des Fehlers, kein Regress.
+// Zusaetzlich ausgeblendet wird NICHTS.
+// Zweite Folge: der contextHash traegt jetzt den Datei-Token und ueberlebt
+// damit einen Fingerprint-MODUS-Wechsel nicht mehr. Bisher rettete er in
+// diesem Fall die ganze Datei; jetzt matcht bei Modus-Differenz gar
+// nichts - genau das sagt die Mismatch-Warnung unten.
 var
   Raw       : string;
   Root      : TJSONValue;
   Arr       : TJSONArray;
   Obj       : TJSONValue;
-  FpJson    : TJSONValue;
-  CtxJson   : TJSONValue;
   FpSet     : TDictionary<string, Boolean>;
   CtxSet    : TDictionary<string, Boolean>;
   CtxMemo   : TDictionary<string, string>;
@@ -564,16 +873,23 @@ begin
     if Root is TJSONObject then
     begin
       // Fingerprint-Modus-Marker pruefen: Datei im anderen Modus
-      // geschrieben -> die Legacy-Fingerprints koennen nicht matchen.
-      // Verglichen wird mit der WIRKUNG des uebergebenen Zuschnitts
-      // (Effective), symmetrisch zu dem, was Write in den Marker stellt.
+      // geschrieben -> die Datei-Tokens der Datei passen nicht zu denen,
+      // die dieser Leser bildet. Verglichen wird mit der WIRKUNG des
+      // uebergebenen Zuschnitts (Effective), symmetrisch zu dem, was Write
+      // in den Marker stellt.
+      // Der Satz "nur contextHash greift noch" stimmte bis 2026-08-28 und
+      // ist seither FALSCH: der Datei-Token steckt jetzt auch im
+      // contextHash-Schluessel (BaselineContextKey). Bei Modus-Differenz
+      // matcht gar nichts mehr - und das muss die Meldung sagen, sonst
+      // wiegt sie den Leser in Sicherheit.
       var MarkerVal := TJSONObject(Root).Values['pathFingerprint'];
       if (MarkerVal is TJSONBool) and Assigned(AWarnings) and
          (TJSONBool(MarkerVal).AsBoolean <> AScope.Effective) then
         AWarnings.Add(Format(
           'baseline fingerprint mode mismatch: file written with ' +
-          'PathInFingerprint=%s, current setting is %s - legacy ' +
-          'fingerprints will not match (only contextHash still applies)',
+          'PathInFingerprint=%s, current setting is %s - NOTHING will ' +
+          'match (both the legacy fingerprint and the context hash carry ' +
+          'the file token). Re-write the baseline in the current mode.',
           [BoolToStr(TJSONBool(MarkerVal).AsBoolean, True),
            BoolToStr(AScope.Effective, True)]));
       // Weicher Cast: 'findings' kann fehlen (Values liefert nil) ODER falsch
@@ -604,15 +920,7 @@ begin
         end;
         if not (Obj is TJSONObject) then Continue;
         Inc(Loaded);
-        FpJson := TJSONObject(Obj).Values['fingerprint'];
-        if (FpJson <> nil) and not FpJson.Null
-           and (Length(FpJson.Value) <= MAX_FINGERPRINT_LEN) then
-          FpSet.AddOrSetValue(FpJson.Value, True);
-        CtxJson := TJSONObject(Obj).Values['contextHash'];
-        if (CtxJson <> nil) and not CtxJson.Null
-           and (CtxJson.Value <> '')
-           and (Length(CtxJson.Value) <= MAX_FINGERPRINT_LEN) then
-          CtxSet.AddOrSetValue(CtxJson.Value, True);
+        CollectBaselineEntry(TJSONObject(Obj), FpSet, CtxSet);
       end;
       if Truncated then
         try
@@ -646,7 +954,10 @@ begin
         FCtx := TFindingFingerprint.ContextHashMemo(F, CtxMemo)
       else
         FCtx := '';
-      if ((FCtx <> '') and CtxSet.ContainsKey(FCtx))
+      // Qualifiziert nachschlagen - Datei und Regel dieses Fundes, mit dem
+      // Zuschnitt DIESES Lesers gerechnet (s. BaselineContextKey).
+      if ((FCtx <> '') and CtxSet.ContainsKey(BaselineContextKey(
+            AScope.FileToken(F.FileName), KindName(F.Kind), FCtx)))
          or FpSet.ContainsKey(Fingerprint(F, AScope)) then
       begin
         Findings.Delete(i);     // owns - F wird freigegeben
@@ -666,26 +977,55 @@ end;
 constructor TBaselineSet.Create;
 begin
   inherited Create;
-  FFingerprints := TDictionary<string, Boolean>.Create;
+  FFingerprints  := TDictionary<string, Boolean>.Create;
+  FContextHashes := TDictionary<string, Boolean>.Create;
+  FCtxByLine     := TDictionary<string, string>.Create;
+  FPreparedCtx   := 0;
 end;
 
 destructor TBaselineSet.Destroy;
 begin
+  FCtxByLine.Free;
+  FContextHashes.Free;
   FFingerprints.Free;
   inherited;
 end;
 
 procedure TBaselineSet.Clear;
+// Leert die Match-Mengen AUS DER DATEI. Der vorab gerechnete Hash-Speicher
+// bleibt bewusst stehen: er gehoert zum Scan, nicht zur Baseline-Datei.
+// Beide Consumer rufen Clear auch dann, wenn der Filter nur voruebergehend
+// aus ist (Haken weg, Datei gerade nicht auffindbar) - wuerde der Speicher
+// hier mitfallen, verloere ein Aus-und-wieder-Ein-Schalten die
+// contextHash-Strecke bis zum naechsten Scan. Weg ist er beim naechsten
+// PrepareContextHashes, das ihn immer zuerst verwirft - oder auf
+// ausdrueckliche Anforderung ueber ReleaseContextHashes.
 begin
   FFingerprints.Clear;
+  FContextHashes.Clear;
+end;
+
+procedure TBaselineSet.ReleaseContextHashes;
+// Siehe Deklaration: das ist der Weg, ueber den die gemessenen ~220 MB
+// zurueckkommen. TDictionary.Clear gibt das Bucket-Array frei, ein
+// Neuanlegen waere ueberfluessig.
+begin
+  FCtxByLine.Clear;
+  FPreparedCtx := 0;
 end;
 
 function TBaselineSet.IsEmpty: Boolean;
+// Beide Match-Quellen zaehlen. Praktisch entscheidet weiter die
+// Fingerprint-Menge (Write legt in JEDEN Eintrag einen Fingerprint); eine
+// handgepflegte Datei mit ausschliesslich contextHashes soll aber nicht
+// als "nichts geladen" gelten und den Filter still abschalten.
 begin
-  Result := FFingerprints.Count = 0;
+  Result := (FFingerprints.Count = 0) and (FContextHashes.Count = 0);
 end;
 
 function TBaselineSet.Contains(const F: TLeakFinding): Boolean;
+var
+  Ctx : string;
 begin
   // Lesefehler sind nie baseline-faehig - dieselbe Regel, die Write (:209)
   // und Apply (:459) schon befolgen. Dem ANZEIGE-Filter in EXE und Plugin
@@ -694,6 +1034,28 @@ begin
   // ausblenden, waehrend die CLI ihn weiter meldete. Ein Lauf, der Dateien
   // nicht lesen konnte, darf nirgends vollstaendig aussehen.
   if F.Kind = fkFileReadError then Exit(False);
+  // 1. contextHash - die stabilere Quelle, sie ueberlebt Zeilen-Drift,
+  //    Re-Indent, Methoden-Rename UND jede Aenderung am Detailtext (Score,
+  //    Schwellwert). Ausschliesslich aus dem vorab gefuellten Speicher:
+  //    kein Treffer heisst "nicht gerechnet", NICHT "kein Hash" - hier
+  //    wird niemals eine Datei gelesen, s. Klassenkommentar. Die beiden
+  //    Count-Guards halten den heissen ApplyFilter-Loop frei von der
+  //    Schluesselbildung, solange eine der beiden Seiten leer ist.
+  //    Nachgeschlagen wird QUALIFIZIERT (Datei + Regel + Hash, s.
+  //    BaselineContextKey): der blosse Hash blendete jeden Fund mit
+  //    textgleichem Code-Fenster aus, auch in fremden Dateien und unter
+  //    fremden Regeln. Der Datei-Token kommt aus FScope - demselben
+  //    Zuschnitt, mit dem LoadFromFile die Eintraege eingelesen hat.
+  if (FContextHashes.Count > 0) and (FCtxByLine.Count > 0)
+     and FCtxByLine.TryGetValue(TFindingFingerprint.MemoKey(F), Ctx)
+     and (Ctx <> '')
+     and FContextHashes.ContainsKey(BaselineContextKey(
+           FScope.FileToken(F.FileName), KindName(F.Kind), Ctx)) then
+  begin
+    Exit(True);
+  end;
+  // 2. Legacy-Fingerprint wie bisher - dieselbe EITHER/OR-Reihenfolge, die
+  //    TBaseline.Apply anwendet.
   // Count-Guard spart bei leerem Set (Filter aus / Datei fehlt) das SHA2-
   // Hashing pro Finding im heissen ApplyFilter-Loop.
   // Fingerprint mit dem in LoadFromFile gespeicherten Zuschnitt - nicht
@@ -703,21 +1065,125 @@ begin
             and FFingerprints.ContainsKey(TBaseline.Fingerprint(F, FScope));
 end;
 
+function TBaselineSet.ComputeContextHashes(
+  AFindings: TObjectList<TLeakFinding>; AForceStat: Boolean): Integer;
+// Gemeinsamer Rumpf der beiden Vorab-Rechnungen. ContextHashMemo legt das
+// Ergebnis selbst in FCtxByLine ab - auch das leere, damit eine unlesbare
+// Datei nicht bei jedem Fund erneut angefasst wird.
+var
+  F : TLeakFinding;
+begin
+  Result := 0;
+  if not Assigned(AFindings) then Exit;
+  for F in AFindings do
+  begin
+    // Symmetrisch zu Write/Apply/Contains: ein Lesefehler ist kein
+    // akzeptierbarer Befund und bekommt hier gar keinen Hash.
+    if F.Kind = fkFileReadError then Continue;
+    if TFindingFingerprint.ContextHashMemo(F, FCtxByLine, AForceStat) <> '' then
+      Inc(Result);
+  end;
+end;
+
+function TBaselineSet.PrepareContextHashes(
+  AFindings: TObjectList<TLeakFinding>): Integer;
+begin
+  Result := 0;
+  // IMMER zuerst verwerfen, auch wenn gleich ausgestiegen wird - s.
+  // Deklaration: ein Eintrag aus dem letzten Scan vergliche einen frischen
+  // Fund mit dem Hash von altem Code. Das gibt zugleich den Speicher
+  // zurueck, sobald ein Scan ohne Baseline laeuft.
+  ReleaseContextHashes;
+  // Keine contextHashes in der Datei (Baseline aelter als v0.9.8, oder
+  // Alt-Format): es gaebe nichts, wogegen zu matchen waere. Dann auch
+  // nicht rechnen - dieselbe Ersparnis wie der HasCtx-Zweig in Apply.
+  if FContextHashes.Count = 0 then Exit;
+  // AForceStat=False: die Bytes liegen noch im Text-Cache des gerade
+  // beendeten Scans, und seither hat sie niemand ueberschrieben. Genau die
+  // Annahme, die der SARIF-Export im selben Nachlauf schon macht - sie
+  // spart zwei Syscalls je Fund.
+  Result := ComputeContextHashes(AFindings, False);
+  FPreparedCtx := Result;
+end;
+
+function TBaselineSet.RefreshContextHashesForFile(const AFileName: string;
+  AFindings: TObjectList<TLeakFinding>): Integer;
+var
+  F     : TLeakFinding;
+  Key   : string;
+  Stale : TDictionary<string, Boolean>;
+  Dead  : TList<string>;
+begin
+  Result := 0;
+  // Nie gerechnet -> nichts zu pflegen. Contains faellt dann ohnehin auf
+  // den Fingerprint zurueck, und ein Teil-Nachtrag waere irrefuehrend.
+  if (FCtxByLine.Count = 0) or (FContextHashes.Count = 0) then Exit;
+  // WELCHE Dateien geleert werden, sagen DIE FUNDE - nicht der Parameter.
+  // Ein Watch-Lauf liefert auch Funde fremder Dateien (DFM-Detektoren
+  // melden mit dem .dfm-Pfad, s. Deklaration); deren Eintraege stammen
+  // ebenso aus dem Stand VOR der Aenderung. Weil Loesch- und
+  // Rechenschluessel damit aus derselben Quelle kommen, kann die
+  // Schreibweise gar nicht mehr auseinanderlaufen.
+  // AFileName kommt zusaetzlich hinein: liefert der Lauf fuer die
+  // ausloesende Datei jetzt GAR keine Funde mehr, stuenden ihre alten
+  // Eintraege sonst weiter im Speicher.
+  Stale := TDictionary<string, Boolean>.Create;
+  Dead  := TList<string>.Create;
+  try
+    Stale.AddOrSetValue(TFindingFingerprint.MemoKeyFile(AFileName), True);
+    if Assigned(AFindings) then
+    begin
+      for F in AFindings do
+      begin
+        Stale.AddOrSetValue(
+          TFindingFingerprint.MemoKeyFile(F.FileName), True);
+      end;
+    end;
+    for Key in FCtxByLine.Keys do
+    begin
+      if Stale.ContainsKey(TFindingFingerprint.FileOfMemoKey(Key)) then
+        Dead.Add(Key);
+    end;
+    for Key in Dead do
+    begin
+      FCtxByLine.Remove(Key);
+    end;
+  finally
+    Dead.Free;
+    Stale.Free;
+  end;
+  // AForceStat=True, anders als im Scan-Nachlauf: diese Datei hat sich
+  // gerade geaendert, ein Cache-Snapshot koennte veraltet sein. Es geht um
+  // die Funde EINER Datei - zwei Syscalls je Fund fallen hier nicht ins
+  // Gewicht.
+  Result := ComputeContextHashes(AFindings, True);
+end;
+
 function TBaselineSet.LoadFromFile(const BaselineFile: string;
   const AScope: TBaselineScope): Integer;
 // Parst dieselbe Struktur wie TBaseline.Apply (Objekt-mit-'findings' ODER bare
 // Array) + dieselben Hardening-Caps, aber non-destruktiv: sammelt nur die
-// Fingerprints. Bewusst als eigener Parse gehalten statt Apply umzubauen -
-// Apply ist der verifizierte CI-Gating-Pfad und bleibt byte-neutral.
+// Match-Werte. Bewusst als eigener Parse gehalten statt Apply umzubauen -
+// Apply ist der verifizierte CI-Gating-Pfad. Die FELDREGEL teilen sich
+// beide seit 2026-08-28 in CollectBaselineEntry: genau ihre Verdopplung war
+// der Grund, warum hier der contextHash fehlte, waehrend Apply ihn seit
+// v0.9.8 auswertete. Weil die Regel jetzt geteilt ist, gilt auch die
+// Schluessel-Qualifizierung (Datei + Regel) fuer BEIDE Leser - deshalb ist
+// Apply diesmal NICHT verhaltensneutral geblieben, s. dort.
 var
   Raw    : string;
   Root   : TJSONValue;
   Arr    : TJSONArray;
   Obj    : TJSONValue;
-  FpJson : TJSONValue;
   Loaded : Integer;
 begin
+  // Nur die Datei-Seite zuruecksetzen. Der vorab gerechnete Hash-Speicher
+  // ueberlebt: die EXE ruft RefreshBaselineSet bei JEDEM Filterwechsel,
+  // und ein Verwerfen hier haette die Vorab-Rechnung schon beim ersten
+  // ApplyFilter nach dem Scan wieder entwertet. Wer ihn wirklich los
+  // werden will, ruft ReleaseContextHashes (s. dort).
   FFingerprints.Clear;
+  FContextHashes.Clear;
   // Zuschnitt VOR den Ausstiegen speichern: auch ein leeres Set (Datei
   // fehlt/kaputt) antwortet danach konsistent mit dem Zuschnitt dieses
   // Ladeversuchs statt mit dem eines frueheren.
@@ -755,10 +1221,7 @@ begin
         if Loaded >= MAX_BASELINE_ENTRIES then Break;
         if not (Obj is TJSONObject) then Continue;
         Inc(Loaded);
-        FpJson := TJSONObject(Obj).Values['fingerprint'];
-        if (FpJson <> nil) and not FpJson.Null
-           and (Length(FpJson.Value) <= MAX_FINGERPRINT_LEN) then
-          FFingerprints.AddOrSetValue(FpJson.Value, True);
+        CollectBaselineEntry(TJSONObject(Obj), FFingerprints, FContextHashes);
       end;
     end;
   finally

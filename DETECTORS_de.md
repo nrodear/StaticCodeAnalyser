@@ -402,7 +402,7 @@ Spätere Wellen: Security/Injection, Suppression-Maschinerie, die Unused-Code-Fa
 | SCA164 | **UnusedRoutine** | Standalone-Prozedur/-Funktion im implementation-Abschnitt wird nie aufgerufen (seit 2026-07-19 Wort-Index-basiert) | Hint | Code Smell | ✅ | `uUnusedRoutine` |
 | SCA165 | **UnusedSuppression** | Ein `// noinspection X`-Marker unterdrückt an seiner Zielzeile keinen Fund - entweder wurde der Detektor besser (Suppression überflüssig) oder das Suppression-Ziel war falsch | Hint | Code Smell | ✅ | `uSuppression` |
 | SCA167 | **InsecureRandom** | Random / RandomRange / RandomFrom ohne Randomize - Seed=0 liefert bei jedem Lauf dieselbe deterministische Sequenz | Warning | Bug | ✅ | `uInsecureRandom` |
-| SCA168 | **DefaultCaseInCaseStatement** | case-Statement ohne else-Zweig - unbehandelte Werte fallen still durch | Hint | CodeSmell | ✅ | `uDefaultCaseInCaseStatement` |
+| SCA168 | **DefaultCaseInCaseStatement** | case-Statement ohne else-Zweig - unbehandelte Werte fallen still durch; ein else nach einem if im letzten Arm ist das else des case | Hint | CodeSmell | ✅ | `uDefaultCaseInCaseStatement` |
 | SCA169 | **AssertWithSideEffect** | Assert(SomeCall) - der Aufruf verschwindet im Release-Build und sein Seiteneffekt geht still verloren | Warning | Bug | ✅ | `uAssertWithSideEffect` |
 | SCA170 | **ConstStringParameter** | String-Parameter ohne const deklariert - erzeugt einen Refcount-Bump bei jedem Aufruf | Hint | CodeSmell | ✅ | `uConstStringParameter` |
 | SCA171 | **CompilerDirectiveScope** | {$WARNINGS OFF} (oder HINTS/RANGECHECKS/...) ohne schließendes ON - leckt in nachfolgende Units | Warning | CodeSmell | ✅ | `uCompilerDirectiveScope` |

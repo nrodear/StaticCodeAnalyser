@@ -1586,7 +1586,7 @@ const
     (
       RuleID   : 'SCA168';
       Name     : 'case statement without else branch';
-      ShortDesc: 'case statement has no else branch - unhandled values fall through silently';
+      ShortDesc: 'case statement has no else branch - unhandled values fall through silently; an else after an if in the last arm counts as the case''s else';
       BadEx    : 'case Status of' + #13#10 + '  stNew    : DoNew;' + #13#10 + '  stActive : DoActive;' +
         #13#10 + 'end;';
       GoodEx   : 'case Status of' + #13#10 + '  stNew    : DoNew;' + #13#10 + '  stActive : DoActive;' +

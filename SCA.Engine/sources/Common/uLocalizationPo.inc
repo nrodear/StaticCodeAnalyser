@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2215 Zeilen, 74895 Bytes
-  CPoLines_de: array[0..2214] of string = (
+  // i18n\de.po - 2218 Zeilen, 74949 Bytes
+  CPoLines_de: array[0..2217] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2011,6 +2011,9 @@ const
     'msgid "%d hidden by baseline"',
     'msgstr "%d durch Baseline ausgeblendet"',
     '',
+    'msgid "%d context hashes"',
+    'msgstr "%d Kontext-Hashes"',
+    '',
     'msgid "**Before (line %s):**"',
     'msgstr "**Vorher (Zeile %s):**"',
     '',
@@ -2504,8 +2507,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2211 Zeilen, 78520 Bytes
-  CPoLines_fr: array[0..2210] of string = (
+  // i18n\fr.po - 2214 Zeilen, 78580 Bytes
+  CPoLines_fr: array[0..2213] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4510,6 +4513,9 @@ const
     '',
     'msgid "%d hidden by baseline"',
     'msgstr "%d masqu'#$00E9's par la base"',
+    '',
+    'msgid "%d context hashes"',
+    'msgstr "%d hachages de contexte"',
     '',
     'msgid "**Before (line %s):**"',
     'msgstr "**Avant (ligne %s) :**"',

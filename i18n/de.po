@@ -1994,6 +1994,9 @@ msgstr "WARNUNG: Dieses Token liegt im KLARTEXT in der analyser.ini. Hier erneut
 msgid "%d hidden by baseline"
 msgstr "%d durch Baseline ausgeblendet"
 
+msgid "%d context hashes"
+msgstr "%d Kontext-Hashes"
+
 msgid "**Before (line %s):**"
 msgstr "**Vorher (Zeile %s):**"
 

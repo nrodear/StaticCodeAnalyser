@@ -61,6 +61,34 @@ type
     [Test] procedure WhileGuardDerefAfterLoop_StillReported;
     [Test] procedure NestedNilTestGuardSameArm_NotReported;
     [Test] procedure NestedNilTestGuardOtherArm_StillReported;
+    // Nachzug zum Parserfix 38ac2ea (2026-08-28): IsInExclusiveBranch kennt
+    // jetzt auch zwei verschiedene Arme DESSELBEN case. Warum die Faelle mit
+    // 'with' gebaut sind, steht bei ExclusiveCaseArms_NotReported.
+    [Test] procedure ExclusiveCaseArms_NotReported;
+    [Test] procedure ExclusiveCaseElseArm_NotReported;
+    [Test] procedure ExclusiveCaseSameArm_StillReported;
+    [Test] procedure ExclusiveNestedCaseInnerArms_NotReported;
+    [Test] procedure CaseArmIfThenWithCaseElse_NotReported;
+    [Test] procedure MultiLabelCaseArmIsOneArm_StillReported;
+    // Ueberreichweiten-Waechter zur Arm-Pruefung (Gegenpruefung 2026-08-28).
+    // Genau die vier Richtungen, in denen die Unterdrueckung still zu weit
+    // greifen wuerde: Schleife um das case, Deref hinter dem case, zwei
+    // verschiedene case, Deref hinter einem INNEREN case im selben
+    // Aussen-Arm.
+    [Test] procedure LoopAroundCaseArms_StillReported;
+    [Test] procedure DerefAfterCase_StillReported;
+    [Test] procedure TwoSeparateCases_StillReported;
+    [Test] procedure DerefAfterInnerCaseInSameOuterArm_StillReported;
+    // Nachzug MINOR 1 (Gegenpruefung 2026-08-28): das Schleifen-Veto begruendet
+    // sich damit, dass der CFG den Fall ueber die Rueckkante schon loest - und
+    // genau diese Loesung mass kein Test, weil LoopAroundCaseArms den
+    // with-Hebel traegt und deshalb NUR das Veto sieht. Der erste Test unten
+    // ist die nackte Form und haelt beides fest (Veto UND uCFG-Rueckkante);
+    // die beiden anderen nageln fest, dass das Veto auch repeat und for
+    // mitnimmt - das stand vorher nur in der Kind-Menge im Quelltext.
+    [Test] procedure PlainLoopAroundCaseArms_StillReported;
+    [Test] procedure RepeatAroundCaseArms_StillReported;
+    [Test] procedure ForAroundCaseArms_StillReported;
   end;
 
 implementation
@@ -959,6 +987,441 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
     'Guard im anderen Arm dominiert den Deref nicht - Fund bleibt');
+  finally F.Free; end;
+end;
+
+{ Arm-Exklusivitaet im case - Nachzug zum Parserfix 38ac2ea (2026-08-28) }
+
+procedure TTestNilDeref.ExclusiveCaseArms_NotReported;
+// Zwei verschiedene Arme desselben case laufen nie gemeinsam.
+//
+// WARUM DAS 'with' IM ARM STEHT - das ist der ganze Trick dieses Tests:
+// die nackte Form ('0: x := nil; 1: x.DoStuff;') prueft CfgCaseArmSiblings_
+// NotReported oben schon, und sie ist GRUEN ohne die Arm-Erweiterung, weil
+// CfgDropsNilDeref sie ueber CanReach droppt. Sie taugt deshalb nur als
+// Waechter, nicht als Beweis. Der CFG-Builder steigt in nkCall-Kinder nicht
+// ab, und ein with-Rumpf haengt als nkCall-Kind im Baum (uParser2 Z.2386) -
+// die nil-Zuweisung landet damit in KEINEM CFG-Block, NilBlk bleibt nil und
+// CfgDropsNilDeref droppt per Vertrag nicht. Hier ist die neue Arm-Pruefung
+// das einzige Netz: OHNE sie ist dieser Test ROT.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k: Integer);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  case k of'#13#10 +
+  '    0: with Owner do x := nil;'#13#10 +
+  '    1: x.DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'Arm 0 und Arm 1 schliessen sich aus - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.ExclusiveCaseElseArm_NotReported;
+// Wie oben, aber der Deref steht im else-Arm. Der else-Arm ist gegenueber
+// jedem regulaeren Arm genauso exklusiv wie zwei regulaere Arme
+// untereinander - im AST ist er schlicht ein weiterer nkCaseArm
+// (Name='else', uParser2 Z.2702), das Gate braucht dafuer keinen Sonderfall.
+// 'with' aus demselben Grund wie oben -> OHNE die Arm-Pruefung ROT.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k: Integer);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  case k of'#13#10 +
+  '    0: with Owner do x := nil;'#13#10 +
+  '  else'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'regulaerer Arm und else-Arm schliessen sich aus - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.ExclusiveCaseSameArm_StillReported;
+// UEBERREICHWEITEN-WAECHTER zur Arm-Pruefung: nil-Zuweisung UND Deref stehen
+// im SELBEN Arm, sie laufen also sequentiell. Der zweite Arm ist noetig,
+// damit das case den Vorfilter DirectChildCount(nkCaseArm) >= 2 passiert und
+// die Arm-Pruefung wirklich laeuft (mit nur einem Arm wuerde der Test
+// gruen bleiben, ohne etwas ueber das Gate auszusagen). Das 'with' ist hier
+// NICHT tragend, und zwar auf BEIDEN Wegen: mit dem 'with' liegt der
+// nkAssign in gar keinem CFG-Block (uCFG behandelt nkCall als Blatt,
+// Ausstieg 'NilBlk = nil'); OHNE das 'with' laegen beide Knoten im selben
+// Block und der Ausstieg waere 'NilBlk = DerefBlk'. Keiner der beiden
+// Wege droppt - das 'with' haelt hier nur die Fixture formgleich mit
+// ExclusiveCaseArms_NotReported.
+// Gruen mit UND ohne die Aenderung; rot nur, wenn das Gate zu weit greift
+// (z.B. 'beide irgendwo im selben case' statt 'in verschiedenen Armen').
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k: Integer);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  case k of'#13#10 +
+  '    0: begin'#13#10 +
+  '         with Owner do x := nil;'#13#10 +
+  '         x.DoStuff;'#13#10 +
+  '       end;'#13#10 +
+  '    1: DoOther;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'nil und Deref im SELBEN Arm laufen sequentiell - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.ExclusiveNestedCaseInnerArms_NotReported;
+// VERSCHACHTELTE case: im AEUSSEREN case liegen beide Knoten im SELBEN Arm
+// (Arm 0), im INNEREN in verschiedenen. Erwartet ist Unterdrueckung, und das
+// ist die strengere der beiden Aussagen: das aeussere case sagt nur, dass
+// beide denselben Weg nehmen KOENNEN, das innere sagt, dass sie es NICHT
+// koennen. Es genuegt also EIN case, das die beiden trennt - deshalb fragt
+// das Gate jedes case einzeln, statt einen gemeinsamen Vorfahren zu suchen.
+// Der umgekehrte Fall (im inneren zusammen, im aeusseren getrennt) braucht
+// keinen eigenen Test: dort findet das innere case nur EINEN der beiden
+// Knoten in seinen Armen und enthaelt sich, und das aeussere entscheidet -
+// das ist strukturell derselbe Lauf wie ExclusiveCaseArms_NotReported.
+// OHNE die Arm-Pruefung ROT (with-Trick s.o.).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k, m: Integer);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  case k of'#13#10 +
+  '    0: case m of'#13#10 +
+  '         0: with Owner do x := nil;'#13#10 +
+  '         1: x.DoStuff;'#13#10 +
+  '       end;'#13#10 +
+  '    1: DoOther;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'Trennung im INNEREN case genuegt - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.CaseArmIfThenWithCaseElse_NotReported;
+// Die im Bewegungsvertrag von 38ac2ea namentlich genannte Form: nil-Zuweisung
+// im then-Zweig des Arm-ifs, Deref im case-else. Bis zum Parserfix wurde sie
+// ueber den PHANTOM-nkElseBranch gedroppt (richtiges Ergebnis, falscher
+// Grund), seither sind es zwei echte Arme.
+// WAECHTER, nicht Beweis: dieser Test ist in allen drei Zustaenden gruen -
+// vor dem Parserfix ueber das Phantom, danach ueber CfgDropsNilDeref, und
+// jetzt zusaetzlich ueber die Arm-Pruefung (die als erste antwortet). Er
+// haelt genau die Stelle fest, an der das Paket sonst FPs eintauschen wuerde.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k: Integer; c: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  case k of'#13#10 +
+  '    0: if c then x := nil;'#13#10 +
+  '  else'#13#10 +
+  '    x.DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkNilDeref),
+      'Arm-if-then und case-else sind verschiedene Arme - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.MultiLabelCaseArmIsOneArm_StillReported;
+// Delphi kennt kein fall-through, aber mehrere LABELS je Arm. Der Parser
+// verschluckt die Label-Liste per SkipTo(tkColon) vor dem Arm-Body
+// (uParser2 Z.2694), '0, 1:' ergibt also EINEN nkCaseArm. Beide Knoten
+// liegen damit im selben Arm-Knoten und duerfen NICHT gedroppt werden.
+// Waechter fuer genau diese Parser-Zusage: gruen mit und ohne die
+// Aenderung, rot falls Labels je einen eigenen Arm bekaemen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k: Integer);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  case k of'#13#10 +
+  '    0, 1: begin'#13#10 +
+  '            with Owner do x := nil;'#13#10 +
+  '            x.DoStuff;'#13#10 +
+  '          end;'#13#10 +
+  '    2: DoOther;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'mehrere Labels ergeben EINEN Arm - Fund bleibt');
+  finally F.Free; end;
+end;
+
+{ Ueberreichweiten-Waechter zur Arm-Pruefung (Gegenpruefung 2026-08-28).
+  Der Waechter oben prueft nur die Richtung 'beide im selben Arm'. Die vier
+  hier decken die uebrigen ab.
+
+  ZUM with-HEBEL, korrigiert (MINOR 4 der Gegenpruefung - die Erstfassung
+  behauptete hier pauschal, ohne 'with' gaebe der CFG die Antwort statt der
+  Arm-Pruefung). Tragend ist der Hebel nur in den drei _NotReported-Faellen,
+  die ihn tragen: dort wuerde CfgDropsNilDeref ohne ihn selbst droppen und
+  die neue Pruefung maskieren. In den _StillReported-Faellen hier droppt der
+  CFG so oder so
+  nicht - die Knoten sind sequentiell erreichbar (Deref hinter dem case,
+  zweites case, innerer Arm) bzw. gar nicht erst in einem Block, weil das
+  'with' den nkAssign zum Blatt-Kind macht (selber Arm; ohne das 'with'
+  laegen sie im selben Block, was ebenfalls nicht droppt), und ueber die
+  Schleifen-Rueckkante ebenfalls (LoopAroundCaseArms). Der Hebel
+  bleibt trotzdem drin, aber aus einem anderen Grund: er haelt die Fixtures
+  formgleich mit den _NotReported-Faellen, die sie bewachen - genau EINE
+  Sache ist geaendert. }
+
+procedure TTestNilDeref.LoopAroundCaseArms_StillReported;
+// Regressionswaechter zum Schleifen-Veto, with-Variante. Die Arm-
+// Exklusivitaet gilt je DURCHLAUF: Iteration 1 nimmt Arm 0 (x := nil),
+// Iteration 2 nimmt Arm 1 und dereferenziert. Echter Fund.
+// Ohne das Veto in InDifferentCaseArms ist dieser Test ROT - der with-Hebel
+// haelt CfgDropsNilDeref draussen (NilBlk bleibt nil), also ist das Veto hier
+// das einzige Netz. Das ist der BEWEIS fuer das Veto, misst aber NUR das
+// Veto - die CFG-Rueckkante, mit der das Veto begruendet ist, sieht dieser
+// Test nicht. Dafuer gibt es PlainLoopAroundCaseArms_StillReported unten.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k: Integer; c: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  while c do'#13#10 +
+  '    case k of'#13#10 +
+  '      0: with Owner do x := nil;'#13#10 +
+  '      1: x.DoStuff;'#13#10 +
+  '    end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'Schleife um das case - zwei Iterationen nehmen beide Arme, Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.DerefAfterCase_StillReported;
+// Der Deref steht HINTER dem case, die nil-Zuweisung in Arm 0. Sequentiell,
+// echter Fund. Haengt allein daran, dass ArmHolding fuer den Deref nil
+// liefert (er steht in KEINEM Arm) und die Schleife dieses case ueberspringt.
+// Rot, sobald die Pruefung von 'in verschiedenen Armen' auf 'einer im Arm,
+// der andere irgendwo' aufweichen wuerde.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k: Integer);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  case k of'#13#10 +
+  '    0: with Owner do x := nil;'#13#10 +
+  '    1: DoOther;'#13#10 +
+  '  end;'#13#10 +
+  '  x.DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'Deref hinter dem case laeuft nach Arm 0 - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.TwoSeparateCases_StillReported;
+// ZWEI verschiedene case-Statements: nil in Arm 0 des ersten, Deref in Arm 0
+// des zweiten. Verschiedene Arme, aber eben nicht DESSELBEN case - die
+// beiden laufen hintereinander, der Fund ist echt. Jedes case findet nur
+// EINEN der beiden Knoten und muss sich enthalten.
+// KEIN Waechter fuer den Zeilen-Vorfilter, anders als die Erstfassung hier
+// behauptete (MINOR 2 der Gegenpruefung): richtig ist zwar, dass das zweite
+// case hinter der nil-Zuweisung beginnt und schon dort uebersprungen wird -
+// nur haengt das Ergebnis nicht daran. Nimmt man den Filter heraus, liefert
+// ArmHolding fuer die nil-Zuweisung im zweiten case trotzdem nil und die
+// Schleife enthaelt sich genauso. Der Filter ist per Parser-Invariante
+// ergebnisneutral und damit ueberhaupt nicht durch einen Test absicherbar -
+// die Begruendung steht bei CaseStartsAfterEither in uNilDeref.pas. Was
+// dieser Test wirklich haelt, ist die Aussage im Namen: Arme ZWEIER case
+// trennen nichts.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k, m: Integer);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  case k of'#13#10 +
+  '    0: with Owner do x := nil;'#13#10 +
+  '    1: DoOther;'#13#10 +
+  '  end;'#13#10 +
+  '  case m of'#13#10 +
+  '    0: x.DoStuff;'#13#10 +
+  '    1: DoMore;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'Arme ZWEIER case trennen nichts - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.DerefAfterInnerCaseInSameOuterArm_StillReported;
+// Gegenstueck zu ExclusiveNestedCaseInnerArms_NotReported: nil in Arm 0 des
+// INNEREN case, Deref dahinter - beide im SELBEN Arm 0 des aeusseren case.
+// Das aeussere case findet beide im gleichen Arm (kein Beweis), das innere
+// findet nur die nil-Zuweisung (kein Beweis). Sequentiell erreichbar, der
+// Fund ist echt.
+// Rot, wenn ein case, das beide Knoten irgendwo enthaelt, als Trennung
+// zaehlen wuerde - oder wenn ArmHolding beim inneren case den Deref faelsch-
+// lich einem Arm zuschlagen wuerde.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k, m: Integer);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  case k of'#13#10 +
+  '    0: begin'#13#10 +
+  '         case m of'#13#10 +
+  '           0: with Owner do x := nil;'#13#10 +
+  '           1: DoOther;'#13#10 +
+  '         end;'#13#10 +
+  '         x.DoStuff;'#13#10 +
+  '       end;'#13#10 +
+  '    1: DoMore;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'inneres case trennt nicht, aeusseres haelt beide im selben Arm - Fund bleibt');
+  finally F.Free; end;
+end;
+
+{ Die drei Schleifenformen des Vetos (Nachzug MINOR 1, 2026-08-28).
+  Kein 'with' im ersten Fall - genau darum geht es: er soll durch den CFG
+  laufen. Die beiden Nachbarn behalten den Hebel, damit dort wirklich nur
+  die Kind-Menge in NodeIsInsideLoop antwortet und nicht der CFG. }
+
+procedure TTestNilDeref.PlainLoopAroundCaseArms_StillReported;
+// DIE NACKTE while-FORM. Der Doppelwaechter, den LoopAroundCaseArms_
+// StillReported nicht sein kann, weil dessen with-Hebel den CFG aussperrt.
+// Hier laeuft der Fall durch beide Mechanismen, und er ist rot, sobald EINER
+// von beiden faellt:
+//   * nimmt jemand das Schleifen-Veto aus InDifferentCaseArms heraus, droppt
+//     die Arm-Pruefung den Fund noch VOR dem CFG - rot;
+//   * entfernt jemand in uCFG die Rueckkante (Z.513 'Connect(BodyTail,
+//     LoopHead)') oder aendert CanReach so, dass Arm 1 von Arm 0 aus
+//     unerreichbar wird, droppt CfgDropsNilDeref - ebenfalls rot.
+// Damit haengt die BEGRUENDUNG des Vetos ("der Fall ist beim CFG geloest, ein
+// Gate davor darf die Loesung nicht wegwerfen") erstmals an einer Assertion
+// statt nur an einem Kommentar. Echter Fund: Iteration 1 nimmt Arm 0, setzt x
+// auf nil, Iteration 2 nimmt Arm 1 und dereferenziert.
+// Erwarteter Weg heute: kein Arm-Drop (Veto), NilBlk = Arm-0-Block,
+// DerefBlk = Arm-1-Block, CanReach ueber CaseMerge -> LoopHead -> BodyStart
+// -> BranchBlk -> Arm 1 = True, also kein CFG-Drop.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k: Integer; c: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  while c do'#13#10 +
+  '    case k of'#13#10 +
+  '      0: x := nil;'#13#10 +
+  '      1: x.DoStuff;'#13#10 +
+  '    end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'while um das case - Veto UND CFG-Rueckkante muessen den Fund halten');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.RepeatAroundCaseArms_StillReported;
+// repeat..until. Dass das Veto auch diese Schleifenform mitnimmt, stand bis
+// heute nur in der Kind-Menge [nkWhileStmt, nkForStmt, nkRepeatStmt] von
+// NodeIsInsideLoop - keine Assertion hielt es fest.
+// BEWEIS, nicht Waechter: mit 'with' bleibt CfgDropsNilDeref draussen
+// (NilBlk = nil), das Veto ist also das einzige Netz. Streicht man
+// nkRepeatStmt aus der Menge, droppt die Arm-Pruefung und der Test wird ROT.
+// Der Fund ist echt - Durchlauf 1 nimmt Arm 0, Durchlauf 2 Arm 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k: Integer; c: Boolean);'#13#10 +
+  'var x: TObject;'#13#10 +
+  'begin'#13#10 +
+  '  repeat'#13#10 +
+  '    case k of'#13#10 +
+  '      0: with Owner do x := nil;'#13#10 +
+  '      1: x.DoStuff;'#13#10 +
+  '    end;'#13#10 +
+  '  until c;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'repeat um das case - zwei Durchlaeufe nehmen beide Arme, Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestNilDeref.ForAroundCaseArms_StillReported;
+// for-Schleife, dritte Form der Kind-Menge. Gleiche Bauweise und gleiche
+// Beweiskraft wie der repeat-Fall: ohne nkForStmt in NodeIsInsideLoop ROT.
+// IsForLoopAssigned kommt hier NICHT dazwischen, zweifach geprueft
+// (uNilDeref.pas:323 im Original, jetzt in derselben Routine): die Schleife
+// steigt bei 'FN.Line <= AfterLine' aus, und das for steht VOR der
+// nil-Zuweisung; ausserdem ist der Header 'i := 0 to 9', beginnt also nicht
+// mit 'x := '. Es waere sonst ein stiller Zweitgrund fuer Gruen und der Test
+// wuerde am Veto vorbeimessen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(k: Integer);'#13#10 +
+  'var'#13#10 +
+  '  x: TObject;'#13#10 +
+  '  i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 9 do'#13#10 +
+  '    case k of'#13#10 +
+  '      0: with Owner do x := nil;'#13#10 +
+  '      1: x.DoStuff;'#13#10 +
+  '    end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkNilDeref) >= 1,
+      'for um das case - zwei Iterationen nehmen beide Arme, Fund bleibt');
   finally F.Free; end;
 end;
 

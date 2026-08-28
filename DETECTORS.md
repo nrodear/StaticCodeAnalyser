@@ -402,7 +402,7 @@ Later waves: security/injection, suppression machinery, the unused-code family a
 | SCA164 | **UnusedRoutine** | Standalone procedure/function in the implementation section is never called (word-index based since 2026-07-19) | Hint | Code Smell | ✅ | `uUnusedRoutine` |
 | SCA165 | **UnusedSuppression** | A `// noinspection X` marker does not suppress any finding at its target line - either the detector improved (suppression no longer needed) or the suppression target was wrong | Hint | Code Smell | ✅ | `uSuppression` |
 | SCA167 | **InsecureRandom** | Random / RandomRange / RandomFrom used without Randomize - Seed=0 yields a deterministic sequence on every run | Warning | Bug | ✅ | `uInsecureRandom` |
-| SCA168 | **DefaultCaseInCaseStatement** | case statement has no else branch - unhandled values fall through silently | Hint | CodeSmell | ✅ | `uDefaultCaseInCaseStatement` |
+| SCA168 | **DefaultCaseInCaseStatement** | case statement has no else branch - unhandled values fall through silently; an else after an if in the last arm counts as the case's else | Hint | CodeSmell | ✅ | `uDefaultCaseInCaseStatement` |
 | SCA169 | **AssertWithSideEffect** | Assert(SomeCall) - the call disappears in Release builds and its side effect is silently lost | Warning | Bug | ✅ | `uAssertWithSideEffect` |
 | SCA170 | **ConstStringParameter** | string parameter declared without const - causes refcount bump on every call | Hint | CodeSmell | ✅ | `uConstStringParameter` |
 | SCA171 | **CompilerDirectiveScope** | {$WARNINGS OFF} (or HINTS/RANGECHECKS/...) without a closing ON - leaks into following units | Warning | CodeSmell | ✅ | `uCompilerDirectiveScope` |

@@ -4384,7 +4384,7 @@ end;
 ## SCA168
 **case statement without else branch**
 
-> case statement has no else branch - unhandled values fall through silently
+> case statement has no else branch - unhandled values fall through silently; an else after an if in the last arm counts as the case's else
 
 | Field | Value |
 |---|---|
@@ -4392,7 +4392,7 @@ end;
 | Tags | `control-flow`, `default-case` |
 | Detector | `uDefaultCaseInCaseStatement.pas` |
 
-A case statement without an else branch silently ignores all values that are not explicitly listed. When the case expression takes one of these unhandled values, no action is taken and no error is raised, which can mask logic bugs (especially when new enum values are added later and the case statements are not updated). Add `else ;` for an intentional no-op (which documents the decision) or a default handler that raises an exception / logs / asserts.
+A case statement without an else branch silently ignores all values that are not explicitly listed. When the case expression takes one of these unhandled values, no action is taken and no error is raised, which can mask logic bugs (especially when new enum values are added later and the case statements are not updated). Add `else ;` for an intentional no-op (which documents the decision) or a default handler that raises an exception / logs / asserts. Note when comparing against an older version: until 2026-08 the parser attached an else that followed an if in the last arm (`3: if C then Foo; else Bar;`) to that if rather than to the case, so the rule reported a missing else branch on case statements that plainly had one. Those false positives are gone - 148 of them on the reference corpus - and nothing changed about what the rule counts as a violation.
 
 ```pascal
 // BAD

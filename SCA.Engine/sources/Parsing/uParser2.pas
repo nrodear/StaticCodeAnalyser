@@ -22,6 +22,55 @@ type
     FLex      : TLexer;
     FNextCount: Integer; // Watchdog: max. Token-Aufrufe pro Datei
 
+    // Kind des ZULETZT konsumierten Tokens (tkUnknown = noch keines).
+    // Einziger Konsument ist ParseIfStmt: ein ';' unmittelbar vor einem
+    // 'else' ist ein Indiz dafuer, dass das else NICHT zum if gehoert
+    // (vollstaendige Begruendung samt Gegenbeispielen dort).
+    //
+    // +---------------------------------------------------------------+
+    // | INVARIANTE - BEIM AENDERN DIESER UNIT LESEN:                   |
+    // | FLastConsumed MUSS an JEDEM Konsumpunkt gesetzt werden. Es     |
+    // | gibt heute GENAU ZWEI, und beide sind mit "Konsumpunkt n von   |
+    // | 2" markiert:                                                   |
+    // |   1) TParser2.Next  -> FLex.Next                               |
+    // |   2) TParser2.Eat   -> FLex.TryConsume                         |
+    // | WER EIN WEITERES 'FLex.Next' ODER 'FLex.TryConsume' EINFUEGT,  |
+    // | MUSS FLastConsumed DORT EBENFALLS SETZEN - sonst steht das     |
+    // | Feld still falsch und ParseIfStmt bindet ein case-else wieder  |
+    // | an das if. Gegenprobe: 'FLex.Next' und 'FLex.TryConsume'       |
+    // | duerfen je genau EINMAL in dieser Unit vorkommen (greppbar).   |
+    // +---------------------------------------------------------------+
+    //
+    // Warum Eat eigens: Eat ruft FLex.TryConsume DIREKT und geht damit an
+    // Next vorbei (zaehlt deshalb auch FNextCount nicht mit). Genau
+    // Eat(tkSemicolon) ist der Fall, auf den ParseIfStmt angewiesen ist.
+    // Alle uebrigen FLex.*-Aufrufe (Peek/AtEnd/AddDefine/...) konsumieren
+    // nichts; SkipTo/SkipToSemicolon/SkipBalanced/GuardAdvance laufen ueber
+    // Next und sind damit abgedeckt.
+    FLastConsumed: TTokenKind;
+
+    // Kann ein UMGEBENDER Rahmen ein liegengelassenes 'else' ueberhaupt
+    // AUFNEHMEN? Nur dann darf ParseIfStmt ein else ablehnen (Begruendung
+    // in ParseIfStmt, Abschnitt "Warum die Taker-Frage noetig ist").
+    //
+    // True gilt genau in den beiden Anweisungslisten, hinter denen ein
+    // Konsument fuer ein nacktes else steht:
+    //   * die Arm-Liste von ParseCaseStmt   -> 'if Eat(tkKwElse)' danach
+    //   * die Handler-Liste von ParseTryStmt -> 'if Tok.Kind = tkKwElse'
+    // False gilt in jedem Rahmen, dessen Schleife bei tkKwElse zwar
+    // ABBRICHT, das Token aber niemand einsammelt - ParseBlock,
+    // ParseRepeatStmt, der try-Rumpf, der finally-Block sowie die beiden
+    // else-Rumpf-Listen selbst.
+    // NICHT angefasst (durchlaessig) wird der Wert von den Rahmen, die
+    // genau EINE Anweisung parsen und danach sofort zurueckkehren:
+    // if/for/while/with und die markierte Anweisung. Dort wandert ein
+    // liegengelassenes else korrekt zum naechsten Listen-Rahmen hoch.
+    //
+    // Der Wert wird an jedem dieser Rahmen mit try/finally gesichert und
+    // zurueckgestellt - er beschreibt den INNERSTEN Listen-Rahmen, nicht
+    // eine Verschachtelungstiefe.
+    FElseTakerOpen: Boolean;
+
     // IFDEF-Body-Recovery (2026-07-04, blcksock-Muster): Kontext fuer
     // Methoden-Header, die MITTEN in einem offenen Methoden-Body auftauchen
     // (zwei begin, ein end durch {$IFDEF}/{$ELSE}-Twin-Bodies). FImplNode
@@ -209,6 +258,8 @@ end;
 constructor TParser2.Create;
 begin
   inherited;
+  FLastConsumed  := tkUnknown; // ParseSource setzt pro Datei nach
+  FElseTakerOpen := False;     // dito
 end;
 
 function TParser2.ParseFile(const FileName: string): TAstNode;
@@ -257,6 +308,14 @@ begin
   end;
   try
     FNextCount := 0; // Watchdog pro Datei zuruecksetzen
+    // Ein Parser-Objekt parst mehrere Dateien nacheinander: weder das letzte
+    // Token noch ein offener Rahmen der VORIGEN Datei darf die erste
+    // if-Anweisung der naechsten beeinflussen. FElseTakerOpen stellen die
+    // Rahmen zwar selbst per try/finally zurueck; der Reset hier ist der
+    // Gurt fuer den Fall, dass jemand spaeter einen Rahmen ohne finally
+    // ergaenzt - die Datei-Grenze bleibt dann trotzdem sauber.
+    FLastConsumed  := tkUnknown;
+    FElseTakerOpen := False;
     // Recovery-Zustand pro Datei zuruecksetzen (2026-07-04): ein Parser-
     // Objekt kann mehrere Dateien nacheinander parsen; Reste einer
     // abgebrochenen Recovery duerfen nicht in die naechste Datei lecken.
@@ -318,6 +377,7 @@ begin
       'Parser-Watchdog: ueber %d Token-Aufrufe - Datei wahrscheinlich ' +
       'pathologisch, Analyse abgebrochen.', [MAX_NEXT_CALLS]);
   Result := FLex.Next;
+  FLastConsumed := Result.Kind; // Konsumpunkt 1 von 2 (siehe Feld-Kommentar)
 end;
 
 procedure TParser2.GuardAdvance(StartCount: Integer);
@@ -475,6 +535,11 @@ var
   Dummy: TToken;
 begin
   Result := FLex.TryConsume(K, Dummy);
+  // Konsumpunkt 2 von 2 - DIE FALLE: TryConsume geht direkt an den Lexer und
+  // damit an Next vorbei. Nur bei Erfolg setzen; ein fehlgeschlagenes Eat
+  // konsumiert nichts und darf das Feld deshalb nicht anfassen.
+  if Result then
+    FLastConsumed := K;
 end;
 
 procedure TParser2.SkipTo(const Stops: array of TTokenKind);
@@ -2056,32 +2121,46 @@ var
   T          : TToken;
   Block      : TAstNode;
   StartCount : Integer;
+  SavedTaker : Boolean;
 begin
   T     := Tok;
   Eat(tkKwBegin);
   Block := Parent.Add(nkBlock, 'begin', T.Line, T.Col);
 
-  while not FLex.AtEnd do
-  begin
-    StartCount := FNextCount;
-    T := Tok;
-    // Boundary-Recovery ({$ifdef}-Straddle-Merge, 2026-07-16): ein Top-Level-
-    // Routine-Header auf Spalte 1 bedeutet, dass DIESER Block nie geschlossen
-    // wurde (der Lexer emittiert beide {$ifdef}-Zweige -> zwei `begin`, ein
-    // `end` -> der Body frisst sonst die Folge-Routinen, mormot FromVarUInt64
-    // span 2407 statt ~35). Verlassen OHNE zu konsumieren: weil ParseBlock
-    // REKURSIV ist, unwinden alle offenen Bloecke aufwaerts, danach parst
-    // ParseImplementationSection die Routine regulaer. Begruendung + Spalte-1-
-    // Gate (Schutz vor anonymen Methoden/nested routines): AtTopLevelRoutineHead.
-    if AtTopLevelRoutineHead then Exit;
-    case T.Kind of
-      tkKwEnd                              : begin Next; Eat(tkSemicolon); Exit; end;
-      tkKwElse, tkKwExcept, tkKwFinally,
-      tkKwUntil, tkEof                     : Exit; // Blockgrenze – nicht konsumieren
-    else
-      ParseStatement(Block);
+  // else-Taker-Rahmen (2026-08-28): ein begin..end nimmt KEIN nacktes else
+  // auf - die Schleife unten bricht bei tkKwElse zwar ab, konsumiert das
+  // Token aber bewusst nicht, und danach ist auch das 'end' nicht mehr
+  // gefressen. Ein hier drin von ParseIfStmt abgelehntes else wuerde also
+  // den Rest des Blocks kosten. Deshalb im Block-Rumpf ausdruecklich AUS.
+  // Der Vorwert wird zurueckgestellt: steht der Block in einem case-Arm,
+  // gilt fuer das NACH dem 'end' folgende else wieder der Arm-Rahmen.
+  SavedTaker     := FElseTakerOpen;
+  FElseTakerOpen := False;
+  try
+    while not FLex.AtEnd do
+    begin
+      StartCount := FNextCount;
+      T := Tok;
+      // Boundary-Recovery ({$ifdef}-Straddle-Merge, 2026-07-16): ein Top-Level-
+      // Routine-Header auf Spalte 1 bedeutet, dass DIESER Block nie geschlossen
+      // wurde (der Lexer emittiert beide {$ifdef}-Zweige -> zwei `begin`, ein
+      // `end` -> der Body frisst sonst die Folge-Routinen, mormot FromVarUInt64
+      // span 2407 statt ~35). Verlassen OHNE zu konsumieren: weil ParseBlock
+      // REKURSIV ist, unwinden alle offenen Bloecke aufwaerts, danach parst
+      // ParseImplementationSection die Routine regulaer. Begruendung + Spalte-1-
+      // Gate (Schutz vor anonymen Methoden/nested routines): AtTopLevelRoutineHead.
+      if AtTopLevelRoutineHead then Exit;
+      case T.Kind of
+        tkKwEnd                            : begin Next; Eat(tkSemicolon); Exit; end;
+        tkKwElse, tkKwExcept, tkKwFinally,
+        tkKwUntil, tkEof                   : Exit; // Blockgrenze – nicht konsumieren
+      else
+        ParseStatement(Block);
+      end;
+      GuardAdvance(StartCount);
     end;
-    GuardAdvance(StartCount);
+  finally
+    FElseTakerOpen := SavedTaker;
   end;
 end;
 
@@ -2101,6 +2180,20 @@ var
   StartCount : Integer;
 begin
   StartCount := FNextCount;
+  // AKTENNOTIZ (2026-08-28) - BEKANNTER, HIER NICHT BEHOBENER DEFEKT:
+  // Diese Schleife schluckt die Leeranweisungen eines LEEREN case-Arms
+  // ('X: ;') und laeuft danach bis zum naechsten echten Token weiter. Bei
+  //     case X of
+  //       1: ;
+  //       else Foo;
+  //     end;
+  // steht danach das else des case an - der Arm bleibt leer und die
+  // Zuordnung verrutscht. Auf D:\git-sca-realworld sind das 2 Fundstellen;
+  // sie sind eine ZWEITE, von der if/case-else-Verwechslung UNABHAENGIGE
+  // Ursache und gehoeren in ein eigenes Paket (getrennt gehalten, damit das
+  // A/B des Parserfixes vom 2026-08-28 zuordenbar bleibt).
+  // Achtung beim Nachziehen: das hier konsumierte ';' setzt FLastConsumed
+  // auf tkSemicolon - ParseIfStmt kompensiert das ueber sein EmptyThen.
   while Eat(tkSemicolon) do ; // leere Anweisungen
   T := Tok;
 
@@ -2408,9 +2501,136 @@ begin
   IfNode.TypeRef := Trim(CondText);
 
   Eat(tkKwThen);
+
+  // Sonderfall LEERE then-Anweisung ('if C then ; else ...'): hier gehoert
+  // das ';' zur leeren Anweisung selbst, nicht hinter einen then-Zweig - das
+  // else bindet also doch an dieses if. Muss VOR ParseStatement gemerkt
+  // werden, weil dessen Leeranweisungs-Schleife ('while Eat(tkSemicolon)'
+  // am Kopf von ParseStatement) das ';' schluckt und FLastConsumed damit auf
+  // tkSemicolon steht. Delphi selbst lehnt die Form mit E2029 ab
+  // (';' not allowed before 'ELSE'); korpusweit 0 Vorkommen (gemessen
+  // 2026-08-28 auf D:\git-sca-realworld). Der Zweig ist reine Absicherung
+  // gegen eine Regression, kein Normalfall.
+  var EmptyThen := (Tok.Kind = tkSemicolon);
+
   ParseStatement(IfNode);
-  if Tok.Kind = tkKwElse then
+
+  // LEHRE (2026-08-28, Korpusfund): dieser Test fragte frueher nur
+  // 'Tok.Kind = tkKwElse' - und band JEDES else an das if, auch wenn die
+  // then-Anweisung ihr abschliessendes ';' bereits selbst geschluckt hatte.
+  //
+  // Warum ein konsumiertes ';' gegen ein if-else spricht:
+  // Im QUELLTEXT ist ein ';' vor dem else eines if-Statements ein
+  // SYNTAXFEHLER (E2029) - das if-else ist EINE Anweisung, und das ';'
+  // beendet Anweisungen. Steht also ein else hinter einem konsumierten ';',
+  // kann es im Quelltext kein if-else sein; auf Anweisungsebene bleibt dann
+  // nur das else eines umgebenden 'case' (oder eines 'except'). Genau
+  // dieses else muss hier liegen bleiben, damit der 'if Eat(tkKwElse)'-
+  // Zweig von ParseCaseStmt bzw. ParseTryStmt es als eigenen Arm einliest.
+  //
+  // Das Problem ist NICHT auf raise beschraenkt. Die wichtigsten Fresser
+  // des eigenen ';' - KEINE abschliessende Liste, die Bedingung haengt am
+  // Feld FLastConsumed und deckt damit strukturell jeden ab. Wer die
+  // vollstaendige Menge braucht, greppt 'Eat(tkSemicolon)' in dieser Unit
+  // (Stand 2026-08-28: 16 Stellen auf Anweisungsebene):
+  //   * ParseRaiseStmt          - Eat(tkSemicolon) am Rumpfende
+  //   * ParseStatement/tkKwExit - Eat(tkSemicolon) nach dem Exit-Argument
+  //   * ParseCallOrAssign       - SkipToSemicolon + Eat(tkSemicolon)
+  //   * ParseInlineVarStmt / ParseInlineConstStmt - dito
+  //   * ParseBlock              - im end-Zweig: 'Next; Eat(tkSemicolon)'
+  //   * ParseRepeatStmt         - nach 'until <expr>'
+  //   * ParseCaseStmt und ParseTryStmt - erst NACH ihrem 'end'
+  // Ausdruecklich NICHT dabei: ParseForStmt und ParseWhileStmt fressen
+  // selbst KEIN ';' - dort tut es die Rumpf-Anweisung (ParseStatement).
+  // Fuer die Bindungsfrage ist das dasselbe Ergebnis, fuer die Fehlersuche
+  // nicht: wer in ParseWhileStmt nach dem Eat sucht, findet keins.
+  //
+  // Korpusbeleg (cnwizards .../DCU32/op.pas:509) - mit Exit, nicht raise:
+  //     case W of
+  //       $0: RN := ntregB[R];
+  //       $1: if not RegW(R,RN) then Exit;
+  //       else Exit;          // <- wurde zum else DES ARM-IF
+  //     end;
+  // GEZAEHLT: 151 Fundstellen in 120 Dateien auf D:\git-sca-realworld.
+  //
+  // Folgeschaden war doppelt: der case-else landete als nkElseBranch statt
+  // als nkCaseArm (SCA168 sah nie einen Default-Zweig, SCA022 zaehlte den
+  // Arm nicht mit, uCFG zog eine Fallthrough-Kante die es nicht gibt), und
+  // bei MEHRSTELLIGEM case-else verwarf der SkipTo der Arm-Schleife in
+  // ParseCaseStmt alle weiteren Anweisungen komplett aus dem AST.
+  //
+  // ------------------------------------------------------------------
+  // AUSNAHME - warum die Taker-Frage (FElseTakerOpen) noetig ist:
+  // Die E2029-Begruendung oben gilt fuer den QUELLTEXT. Dieser Parser
+  // sieht aber nicht den Quelltext, sondern den TOKENSTROM des Lexers -
+  // und nur der zaehlt. Der Lexer verwirft '{...}' samt Direktiven als
+  // Kommentar (uLexer.ReadBraceComment, aufgerufen in ScanNext ohne
+  // Rueckgabe-Token) und emittiert im Default BEIDE Zweige einer
+  // bedingten Kompilierung (gLexerIfdefSkipEnabled = False, uLexer.pas).
+  // Dieselbe Lexer-Eigenschaft, auf die sich schon die Boundary-Recovery
+  // in ParseBlock und ParseMethodImpl ausdruecklich beruft.
+  //
+  // Damit erzeugt dieses verbreitete Idiom
+  //     end
+  //     {$IFDEF KEEP_BIGDECIMAL_PRECISION}
+  //     ;
+  //     {$ELSE}
+  //     else
+  //       Value := ParseAsDouble(F, P);
+  //     {$ENDIF}
+  // den Tokenstrom 'end ; else ...' - ein ECHTES if-else mit einem ';'
+  // davor. Das ';' und das else stehen in EINANDER AUSSCHLIESSENDEN
+  // Zweigen; im Quelltext hat E2029 nie gegriffen.
+  // Korpusbelege: JsonDataObjects.pas:7627 und :8242 (delphimvcframework,
+  // in 3 Kopien = 6 Stellen), JvCsvData.pas:3743 - zusammen 7 Stellen auf
+  // D:\git-sca-realworld, gemessen 2026-08-28. Die 7 sind NICHT alle
+  // Faelle des Lexer-Effekts, sondern nur die Form "';' ALLEIN im
+  // bedingten Zweig" - die einzige, die dieser Fix beruehrt.
+  //
+  // ZWEITE, HIER NICHT BEHOBENE FORM (Gegenpruefung 2026-08-28): das
+  // DOPPEL-else, '{$IFDEF} else A; {$ELSE} else B; {$ENDIF}'. Dort
+  // konsumiert ParseIfStmt das erste else und laesst das zweite stehen,
+  // worauf ParseBlock den Rumpf verlaesst - derselbe Rumpfverlust, nur
+  // aus anderer Ursache. 10 Stellen: dwsUtils.pas:3961/:4020/:7210
+  // (Alcinoe), DirectShow9.pas:22012, JvShell.pas:624 (jvcl, 3 Kopien),
+  // JvSpin.pas:1553, JclStrings.pas:3988, uwlxmodule.pas:441.
+  // Verhalten dort ist mit und ohne diesen Fix IDENTISCH - wer sie im
+  // A/B sieht, sieht keine Regression dieses Pakets. Eigenes Paket.
+  //
+  // Ein hier abgelehntes else, das NIEMAND aufnimmt, ist teurer als die
+  // Fehlbindung, die wir beheben: ParseBlock verlaesst seinen Rumpf bei
+  // tkKwElse ohne zu konsumieren und ohne das 'end' zu fressen - der
+  // ganze Rest des Methodenrumpfs faellt aus dem AST. Genau das passiert
+  // an allen 7 Korpusstellen, denn sie liegen auf Methodenrumpf-Ebene.
+  // Deshalb wird nur abgelehnt, wenn ein umgebender Rahmen das else
+  // ueberhaupt AUFNEHMEN kann (FElseTakerOpen, siehe Feld-Kommentar).
+  //
+  // BENANNTE RESTLUECKE: steht dasselbe {$IFDEF}-Idiom DIREKT in einem
+  // case-Arm oder einer except-Liste, ist FElseTakerOpen True und das
+  // else wird abgelehnt - der case/except nimmt es dann als seinen
+  // else-Zweig. Im Tokenstrom ist dieser Fall von einem echten case-else
+  // NICHT unterscheidbar; dafuer muesste der Lexer melden, dass zwischen
+  // ';' und 'else' eine bedingte Direktive lag. Auf D:\git-sca-realworld
+  // kommt die Kombination 0-mal vor (alle 7 Stellen sind Rumpf-Ebene).
+  // Der Schaden waere eine Fehlzuordnung ohne Verlust des else-Rumpfs -
+  // aber NICHT folgenlos: der case gilt ab da als abgeschlossen, alle
+  // FOLGENDEN Arme verlieren ihre nkCaseArm-Struktur. Verglichen mit dem
+  // Rumpf-Abbruch der Rumpf-Ebene ist das der kleinere Schaden, und er
+  // trifft heute niemanden. Bewusst offengelassen, eigenes Paket.
+  // ------------------------------------------------------------------
+  //
+  // FLastConsumed wird in Next UND in Eat gepflegt - siehe Feld-Kommentar,
+  // Eat geht an Next vorbei.
+  var ElseBelongsToOuterFrame :=
+        (FLastConsumed = tkSemicolon) and not EmptyThen and FElseTakerOpen;
+
+  if (Tok.Kind = tkKwElse) and not ElseBelongsToOuterFrame then
   begin
+    // Aktennotiz (2026-08-28): Position des nkElseBranch wird NACH dem
+    // Next gelesen und traegt deshalb Zeile/Spalte des ERSTEN TOKENS DES
+    // ELSE-ZWEIGS, nicht die des 'else'. Bekannt, hier bewusst NICHT
+    // angefasst - eine Korrektur verschoebe Fund-Anker in SCA018/SCA176
+    // und machte das A/B dieses Parserfixes unzuordenbar. Eigenes Paket.
     Next;
     var ElseNode := IfNode.Add(nkElseBranch, 'else', Tok.Line, Tok.Col);
     ParseStatement(ElseNode);
@@ -2428,10 +2648,11 @@ procedure TParser2.ParseCaseStmt(Parent: TAstNode);
 // Next-Call (Watchdog feuert nicht). Fuer mORMot's geschachtelte
 // case/if-else-Bloeke real reproduzierbar.
 var
-  T        : TToken;
-  CaseNode : TAstNode;
-  ArmNode  : TAstNode;
-  ArmStart : Integer;
+  T          : TToken;
+  CaseNode   : TAstNode;
+  ArmNode    : TAstNode;
+  ArmStart   : Integer;
+  SavedTaker : Boolean;
 begin
   T        := Next; // 'case'
   CaseNode := Parent.Add(nkCaseStmt, 'case', T.Line, T.Col);
@@ -2454,30 +2675,45 @@ begin
   CaseNode.TypeRef := Sel;
   Eat(tkKwOf);
 
-  // AtTopLevelRoutineHead: Boundary-Recovery muss auch durch einen offenen
-  // case-Frame nach oben unwinden koennen (sonst greift sie bei {$ifdef}-
-  // Straddle-Merges nicht, deren Body ein case enthaelt).
-  while not ((Tok.Kind in [tkKwEnd, tkKwElse, tkKwExcept, tkKwFinally,
-                           tkKwUntil, tkEof]) or AtTopLevelRoutineHead) do
-  begin
-    ArmStart := FNextCount;
-    ArmNode := CaseNode.Add(nkCaseArm, '', Tok.Line, Tok.Col);
-    SkipTo([tkColon, tkKwEnd, tkKwElse, tkEof]);
-    Eat(tkColon);
-    ParseStatement(ArmNode);
-    GuardAdvance(ArmStart);
-  end;
-
-  if Eat(tkKwElse) then
-  begin
-    var ElseArm := CaseNode.Add(nkCaseArm, 'else', Tok.Line, Tok.Col);
-    while not ((Tok.Kind in [tkKwEnd, tkKwExcept, tkKwFinally,
+  // else-Taker-Rahmen (2026-08-28): die Arm-Liste ist einer der beiden
+  // Rahmen, hinter denen ein Konsument fuer ein nacktes else steht - das
+  // 'if Eat(tkKwElse)' direkt unter der Schleife. Nur deshalb darf
+  // ParseIfStmt in einem Arm ein else liegen lassen. Vorwert sichern: ein
+  // case kann in einem begin..end stehen, das gerade AUS gesetzt hat.
+  SavedTaker := FElseTakerOpen;
+  try
+    FElseTakerOpen := True;
+    // AtTopLevelRoutineHead: Boundary-Recovery muss auch durch einen offenen
+    // case-Frame nach oben unwinden koennen (sonst greift sie bei {$ifdef}-
+    // Straddle-Merges nicht, deren Body ein case enthaelt).
+    while not ((Tok.Kind in [tkKwEnd, tkKwElse, tkKwExcept, tkKwFinally,
                              tkKwUntil, tkEof]) or AtTopLevelRoutineHead) do
     begin
-      var ElseStart := FNextCount;
-      ParseStatement(ElseArm);
-      GuardAdvance(ElseStart);
+      ArmStart := FNextCount;
+      ArmNode := CaseNode.Add(nkCaseArm, '', Tok.Line, Tok.Col);
+      SkipTo([tkColon, tkKwEnd, tkKwElse, tkEof]);
+      Eat(tkColon);
+      ParseStatement(ArmNode);
+      GuardAdvance(ArmStart);
     end;
+
+    if Eat(tkKwElse) then
+    begin
+      var ElseArm := CaseNode.Add(nkCaseArm, 'else', Tok.Line, Tok.Col);
+      // Im else-Rumpf selbst nimmt niemand mehr ein else auf: die Schleife
+      // unten listet tkKwElse nicht als Abbruch, ein liegengelassenes else
+      // fiele in ParseStatement und wuerde dort als Junk konsumiert.
+      FElseTakerOpen := False;
+      while not ((Tok.Kind in [tkKwEnd, tkKwExcept, tkKwFinally,
+                               tkKwUntil, tkEof]) or AtTopLevelRoutineHead) do
+      begin
+        var ElseStart := FNextCount;
+        ParseStatement(ElseArm);
+        GuardAdvance(ElseStart);
+      end;
+    end;
+  finally
+    FElseTakerOpen := SavedTaker;
   end;
 
   Eat(tkKwEnd);
@@ -2568,19 +2804,30 @@ var
   T          : TToken;
   RepeatNode : TAstNode;
   BodyStart  : Integer;
+  SavedTaker : Boolean;
 begin
   T          := Next; // 'repeat'
   RepeatNode := Parent.Add(nkRepeatStmt, 'repeat', T.Line, T.Col);
-  // AtTopLevelRoutineHead: Boundary-Recovery auch durch einen offenen repeat-
-  // Frame nach oben unwinden lassen (sonst greift sie bei Straddle-Merges nicht,
-  // deren Body ein repeat enthaelt - z.B. mormot FromVarUInt64).
-  while not ((Tok.Kind in [tkKwUntil, tkKwEnd, tkKwElse,
-                           tkKwExcept, tkKwFinally, tkEof])
-             or AtTopLevelRoutineHead) do
-  begin
-    BodyStart := FNextCount;
-    ParseStatement(RepeatNode);
-    GuardAdvance(BodyStart);
+  // else-Taker-Rahmen (2026-08-28): der repeat-Rumpf nimmt KEIN nacktes else
+  // auf - die Schleife bricht bei tkKwElse ab, danach liefe Eat(tkKwUntil)
+  // ins Leere und SkipToSemicolon fraesse quer durch den Rest. Also AUS,
+  // auch wenn das repeat in einem case-Arm steht.
+  SavedTaker     := FElseTakerOpen;
+  FElseTakerOpen := False;
+  try
+    // AtTopLevelRoutineHead: Boundary-Recovery auch durch einen offenen repeat-
+    // Frame nach oben unwinden lassen (sonst greift sie bei Straddle-Merges nicht,
+    // deren Body ein repeat enthaelt - z.B. mormot FromVarUInt64).
+    while not ((Tok.Kind in [tkKwUntil, tkKwEnd, tkKwElse,
+                             tkKwExcept, tkKwFinally, tkEof])
+               or AtTopLevelRoutineHead) do
+    begin
+      BodyStart := FNextCount;
+      ParseStatement(RepeatNode);
+      GuardAdvance(BodyStart);
+    end;
+  finally
+    FElseTakerOpen := SavedTaker;
   end;
   // Boundary-Recovery: hat die Loop wegen AtTopLevelRoutineHead abgebrochen,
   // MUSS hier ohne Konsum raus. SkipToSemicolon stoppt NICHT an Routine-
@@ -2598,15 +2845,26 @@ end;
 
 procedure TParser2.ParseTryStmt(Parent: TAstNode);
 var
-  T       : TToken;
-  TryNode : TAstNode;
-  TmpBlk  : TAstNode;
+  T          : TToken;
+  TryNode    : TAstNode;
+  TmpBlk     : TAstNode;
+  SavedTaker : Boolean;
 begin
   T := Next; // 'try'
+
+  // else-Taker-Rahmen (2026-08-28): VIER Anweisungslisten in EINER Methode,
+  // deshalb einmal sichern und im vorhandenen finally unten zuruecksetzen -
+  // jede Liste stellt ihren Wert selbst ein:
+  //   * try-Rumpf     -> AUS (bricht bei tkKwElse ab, niemand nimmt es)
+  //   * except-Liste  -> AN  (das 'if Tok.Kind = tkKwElse' danach nimmt es)
+  //   * except-else   -> AUS (dahinter kommt kein weiterer else-Konsument)
+  //   * finally-Liste -> AUS (dito)
+  SavedTaker := FElseTakerOpen;
 
   // Try-Rumpf in temporären Block lesen
   TmpBlk := TAstNode.Create(nkBlock, '__try_body__', T.Line, T.Col);
   try
+    FElseTakerOpen := False;
     // AtTopLevelRoutineHead: Boundary-Recovery muss auch durch einen offenen
     // try-Frame unwinden. Hinweis: feuert sie hier, folgt weder except noch
     // finally -> TmpBlk wird (wie bei jedem malformed try) verworfen. Das ist
@@ -2629,6 +2887,10 @@ begin
       var ExTok  := Next; // 'except' – Zeile des except-Schlüsselworts
       var ExNode := TryNode.Add(nkExceptBlock, 'except', ExTok.Line, ExTok.Col);
 
+      // Zweiter der beiden Taker-Rahmen: das 'if Tok.Kind = tkKwElse'
+      // unter dieser Schleife nimmt ein liegengelassenes else auf. Gilt
+      // auch fuer den Rumpf eines on-Handlers - er ist Teil dieser Liste.
+      FElseTakerOpen := True;
       while not ((Tok.Kind in [tkKwEnd, tkKwElse, tkKwFinally,
                                tkKwUntil, tkEof])
                  or AtTopLevelRoutineHead) do   // Boundary-Recovery unwinden
@@ -2671,6 +2933,9 @@ begin
       if Tok.Kind = tkKwElse then
       begin
         Next;  // 'else'
+        // Im except-else nimmt niemand mehr ein else auf (die Schleife
+        // listet tkKwElse nicht als Abbruch) - Taker-Rahmen wieder AUS.
+        FElseTakerOpen := False;
         while not ((Tok.Kind in [tkKwEnd, tkKwFinally, tkKwUntil, tkEof])
                    or AtTopLevelRoutineHead) do   // Boundary-Recovery unwinden
         begin
@@ -2687,6 +2952,10 @@ begin
 
       var FinTok  := Next; // 'finally' – Zeile des finally-Schlüsselworts
       var FinNode := TryNode.Add(nkFinallyBlock, 'finally', FinTok.Line, FinTok.Col);
+      // finally-Liste: kein else-Konsument dahinter - Taker-Rahmen AUS.
+      // (Steht formal schon von der try-Rumpf-Zuweisung auf False; hier
+      //  ausdruecklich, damit die Liste nicht vom Vorlauf abhaengt.)
+      FElseTakerOpen := False;
       while not ((Tok.Kind in [tkKwEnd, tkKwElse, tkKwExcept,
                                tkKwUntil, tkEof])
                  or AtTopLevelRoutineHead) do   // Boundary-Recovery unwinden
@@ -2710,6 +2979,7 @@ begin
       Parent.AdoptChildrenFrom(TmpBlk);
     end;
   finally
+    FElseTakerOpen := SavedTaker;   // else-Taker-Rahmen zurueckstellen
     TmpBlk.Free;
   end;
 

@@ -1113,8 +1113,16 @@ var
   // Dateien in verschiedenen Ordnern teilen sich dann KEINEN
   // Namensraum mehr (Konzept_BaselineSca, Inkrement PathInFingerprint).
   // TRADE-OFFS dokumentiert im Konzept: Ordner-Umzuege/anderer
-  // Scan-Zuschnitt invalidieren Fingerprints; byte-gleiche KOPIEN
-  // matchen weiter ueber den contextHash (bewusst).
+  // Scan-Zuschnitt invalidieren Fingerprints.
+  // KORREKTUR 2026-08-28: hier stand "byte-gleiche KOPIEN matchen weiter
+  // ueber den contextHash (bewusst)". Das war die Beschreibung eines
+  // Lochs, nicht eines Vorteils - der contextHash ging nackt in die
+  // Match-Menge und hob damit die Trennung wieder auf, um die es in
+  // diesem Schalter ueberhaupt geht. Seit dem Umbau traegt auch der
+  // contextHash-Schluessel den Datei-Token (uBaseline.BaselineContextKey):
+  // vendorte Kopien sind jetzt in BEIDEN Strecken getrennt. Preis: ein
+  // Wechsel dieses Schalters invalidiert eine bestehende Baseline
+  // vollstaendig - Apply meldet das als Warnung.
   //
   // GRENZE (TBaselineScope Schritte 2-6, 2026-08-19): die Baseline-
   // Operationen (TBaseline.Write/Apply, TBaselineSet.LoadFromFile) nehmen

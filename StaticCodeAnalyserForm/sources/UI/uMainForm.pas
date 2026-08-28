@@ -736,6 +736,20 @@ begin
   end;
   FProgressBar.Position := 0;
   FProgressBar.Visible  := True;
+  // Der vorab gerechnete contextHash-Speicher des VORIGEN Laufs ist ab
+  // hier tot: der neue Scan rechnet ihn am Ende ohnehin komplett neu
+  // (FillGridFromFindings -> PrepareContextHashes verwirft zuerst). Ihn
+  // erst dort fallen zu lassen hiesse, die gemessenen ~220 MB durch den
+  // ganzen Lauf mitzuschleppen (s. TBaselineSet.ReleaseContextHashes).
+  // Die EXE hat kein Gegenstueck zum Plugin-Menuepunkt "Reset All
+  // Findings"; "neuer Scan" ist hier die Aktion, mit der der Anwender den
+  // alten Stand ausdruecklich verwirft.
+  // PREIS, benannt: bricht der Lauf ab (Cancel, Fehler), bleibt das Grid
+  // auf den alten Funden stehen - die haben ab jetzt keinen Hash mehr und
+  // werden bis zum naechsten vollstaendigen Scan allein ueber den
+  // Fingerprint gefiltert. Das ist die fail-open-Richtung (Funde tauchen
+  // auf, es verschwindet keiner).
+  if Assigned(FBaselineSet) then FBaselineSet.ReleaseContextHashes;
 end;
 
 procedure TForm2.EndAnalysisUI;
@@ -1405,6 +1419,17 @@ begin
   // braeuchte sonst den Stand des VORIGEN Laufs. ApplyFilter laedt zwar
   // selbst nach, aber erst NACH dem Umbau.
   RefreshBaselineSet;
+  // SCAN-NACHLAUF (2026-08-28): die contextHashes der Funde EINMAL
+  // rechnen, solange der Text-Cache noch warm ist. EndAnalysisUI leert ihn
+  // gleich (G2-5-Hook), und der Anzeige-Filter darf pro Fund keine Datei
+  // lesen - deshalb hier und nicht in TBaselineSet.Contains. Ohne diesen
+  // Aufruf verliert der Filter nur seine zweite Match-Quelle und arbeitet
+  // wie frueher allein ueber den Fingerprint; die Rechnung selbst kostet
+  // nichts, wenn keine Baseline mit contextHashes geladen ist.
+  // Assigned-Guard wie in RefreshBaselineSet - dasselbe Feld, dieselbe
+  // Vorsicht.
+  if Assigned(FBaselineSet) then
+    FBaselineSet.PrepareContextHashes(FAllFindings);
   // Filter-Combos auf Eintraege mit > 0 Treffern reduzieren - muss VOR
   // ApplyFilter laufen damit die anschliessende Filter-Application schon
   // gegen die aktuelle Auswahl (ggf. zurueckgesetzt auf 'All') arbeitet.
@@ -1695,6 +1720,17 @@ begin
   HiddenSuffix := '';
   if BaselineHidden > 0 then
     HiddenSuffix := ' - ' + Format(_('%d hidden by baseline'), [BaselineHidden]);
+  // Beobachtbarkeit der ZWEITEN Match-Quelle (2026-08-28): ob der
+  // contextHash-Zweig ueberhaupt Material hat, war von aussen nicht zu
+  // sehen - beide Aufrufer verwarfen den Rueckgabewert von
+  // PrepareContextHashes, und "0 Hashes vorbereitet" (Alt-Baseline,
+  // Nachlauf nicht gelaufen) sah aus wie "wirkt". Die Zahl steht deshalb
+  // in der Statuszeile, sobald der Filter aktiv ist - AUCH die 0, denn
+  // genau die ist die Diagnose. Praezedenz: Apply meldet den
+  // pathFingerprint-Mismatch ebenfalls, statt still nichts zu matchen.
+  if BaselineActive then
+    HiddenSuffix := HiddenSuffix + ' - ' + Format(_('%d context hashes'),
+      [FBaselineSet.PreparedContextHashes]);
 
   // DetectorReview-Stichprobe: pro Detector-Kind 1 zufaelligen Befund
   // behalten. Wird NACH dem normalen Filter-Loop ausgefuehrt, damit
