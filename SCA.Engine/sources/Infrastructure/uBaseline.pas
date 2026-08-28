@@ -499,6 +499,18 @@ begin
   Result := ByPath(RootForProject(AProjectOrGroupFile, AScanRoot));
 end;
 
+// noinspection BooleanParam
+// SCA146 meldet hier zu Recht die FORM - ein Boolean waehlt zwischen
+// zwei Pfaden - und schlaegt "zwei Methoden mit sprechenden Namen" vor.
+// Die gibt es bereits: ForProject und ByFileName. Genau darum geht es
+// nicht: diese Funktion WAEHLT nicht, sie UEBERSETZT eine Einstellung
+// in die Wahl. Der Parameter ist kein erfundenes Modus-Flag, sondern
+// der INI-Schalter [Baseline] PathInFingerprint, den beide Wirte
+// ohnehin in der Hand halten.
+// Wer den Parameter aufloest, bekommt das if zurueck - und zwar in
+// BEIDE Consumer, wo es vor diesem Commit stand. Das war der Grund
+// fuer die Zentralisierung; der Marker ist der Preis dafuer und steht
+// bewusst hier statt in der Baseline, wo ihn niemand mehr sieht.
 class function TBaselineScope.FromSettings(APathInFingerprint: Boolean;
   const AProjectOrGroupFile, AScanRoot: string): TBaselineScope;
 // s. Deklaration - die Regel, die beide Wirte teilen.
