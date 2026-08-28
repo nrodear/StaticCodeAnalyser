@@ -69,6 +69,10 @@ type
     // sibling) - nil-Zuweisung und Deref in then/else-Schwesterzweigen DESSELBEN
     // if koennen auf keiner realen Ausfuehrung gemeinsam laufen. Runtime-
     // Gegenstueck zur preprocessor-Teilklasse von DirLineBetween.
+    // Seit 2026-08-28 (Nachzug zum Parserfix 38ac2ea) ebenso fuer zwei
+    // verschiedene Arme DESSELBEN case - siehe InDifferentCaseArms. Anders
+    // als der if/else-Rahmen hier hat der case-Rahmen ein Schleifen-Veto:
+    // umschliesst eine Schleife das case, gilt die Arm-Aussage nicht.
     class function IsInExclusiveBranch(MethodNode, AssignNode,
       DerefNode: TAstNode): Boolean; static;
     class function IsForLoopAssigned(MethodNode: TAstNode;
@@ -405,6 +409,239 @@ begin
   end;
 end;
 
+function ArmHolding(CaseN, N: TAstNode): TAstNode;
+// Der nkCaseArm-Direktkind von CaseN, in dessen Subtree N liegt - nil, wenn
+// N in KEINEM Arm steht (Selektor-Ausdruck, Position ausserhalb, Recovery-
+// Muell). Arme sind disjunkte Subtrees, der erste Treffer ist also DER
+// Treffer.
+// Der nkCaseStmt-Zweig von SameArmHoldsBoth (oben) traegt dieselbe Schleife
+// inline. Bewusst NICHT zusammengelegt, und der ehrliche Grund ist nicht
+// "nicht pruefbar": ergebnisgleich waere die Zusammenlegung sofort, aber
+// nicht kostengleich - SameArmHoldsBoth beantwortet beide Knoten in EINER
+// Runde ueber die Arme, zwei ArmHolding-Aufrufe waeren zwei. Eine bewusste
+// Nicht-Aenderung an fremdem, gebautem, gruenem Code.
+var
+  Arm : TAstNode;
+  i   : Integer;
+begin
+  Result := nil;
+  for i := 0 to CaseN.Children.Count - 1 do
+  begin
+    Arm := CaseN.Children[i];
+    if Arm.Kind <> nkCaseArm then Continue;
+    if NodeContainsRef(Arm, N) then Exit(Arm);
+  end;
+end;
+
+function CaseStartsAfterEither(CaseN, A, B: TAstNode): Boolean;
+// Zeilen-Vorfilter zu InDifferentCaseArms: beginnt das case NACH einem der
+// beiden Knoten, kann es diesen Knoten nicht enthalten - also auch nichts
+// trennen. Reiner Zeilenvergleich, kein Baumlauf.
+//
+// ERGEBNISNEUTRAL per Parser-Invariante (Gegenpruefung 2026-08-28, MINOR 2 -
+// der Vorgaenger-Kommentar am Test behauptete hier einen Waechter, den es
+// nicht geben kann): ParseCaseStmt nimmt fuer den nkCaseStmt die Zeile des
+// 'case'-Tokens (uParser2 Z.2658), jeder Arm und jede Anweisung darin
+// entsteht spaeter im Token-Strom und hat nie eine kleinere Zeile. Liegt ein
+// Knoten VOR dem 'case', liefert ArmHolding fuer ihn zwangslaeufig nil und
+// die Schleife ueberspringt das case ohnehin. ENTFERNT man den Filter,
+// faellt also dieselbe Entscheidung - er ist per Konstruktion nicht durch
+// einen Test absicherbar, und ein Test, der es behauptete, waere Theater.
+// Ein FALSCH HERUM gebauter Filter faellt dagegen sehr wohl auf: er wuerde
+// genau die trennenden case ueberspringen, und die drei with-Faelle
+// ExclusiveCaseArms/ExclusiveCaseElseArm/ExclusiveNestedCaseInnerArms
+// _NotReported werden rot.
+begin
+  Result := (CaseN.Line > A.Line) or (CaseN.Line > B.Line);
+end;
+
+function CaseSeparatesNodes(CaseN, A, B: TAstNode): Boolean;
+// Das Kern-Praedikat der Arm-Exklusivitaet: haelt DIESES eine case A und B in
+// ZWEI VERSCHIEDENEN Armen? Nur dann ist bewiesen, dass die beiden auf keiner
+// realen Ausfuehrung gemeinsam laufen.
+// Konservativ in jede Richtung: weniger als zwei Arme trennen nichts; ein
+// Knoten ausserhalb JEDES Arms (Selektor-Ausdruck, Position hinter dem case,
+// Recovery-Muell) macht die Arm-Frage unentscheidbar; derselbe Arm ist
+// sequentieller Ablauf. Reihenfolge nach Kosten: erst die blosse Kinderliste,
+// dann ein Baumlauf, der zweite nur wenn der erste getroffen hat.
+var
+  ArmA, ArmB : TAstNode;
+begin
+  Result := False;
+  if CaseN.DirectChildCount(nkCaseArm) < 2 then Exit;
+  ArmA := ArmHolding(CaseN, A);
+  if ArmA = nil then Exit;
+  ArmB := ArmHolding(CaseN, B);
+  Result := (ArmB <> nil) and (ArmB <> ArmA);
+end;
+
+function NodeIsInsideLoop(MethodNode, ANode: TAstNode): Boolean;
+// Umschliesst irgendeine while-/for-/repeat-Schleife der Methode diesen
+// Knoten? Traeger des SCHLEIFEN-VETOS - Begruendung bei InDifferentCaseArms.
+// Gleiche Bauweise wie das Fenster-Veto in IsInCorrelatedExclusiveIfs
+// (Z.~1135).
+var
+  Kind  : TNodeKind;
+  Loops : TList<TAstNode>;
+  LoopN : TAstNode;
+begin
+  Result := False;
+  for Kind in [nkWhileStmt, nkForStmt, nkRepeatStmt] do
+  begin
+    Loops := MethodNode.FindAllRef(Kind);
+    for LoopN in Loops do
+      if NodeContainsRef(LoopN, ANode) then Exit(True);
+  end;
+end;
+
+function InDifferentCaseArms(MethodNode, A, B: TAstNode): Boolean;
+// Nachzug zum Parserfix 38ac2ea (2026-08-28). True, wenn IRGENDEIN case der
+// Methode A und B in ZWEI VERSCHIEDENEN Armen haelt - dann laufen die beiden
+// auf keiner realen Ausfuehrung gemeinsam, dieselbe Aussage wie then/else
+// desselben if.
+//
+// WARUM JETZT: bis zum Parserfix band ParseIfStmt ein case-else an das if im
+// LETZTEN Arm. Die Form
+//     case k of
+//       0: if c then x := nil;
+//     else
+//       x.DoStuff;
+//     end;
+// kam als PHANTOM-nkElseBranch an und wurde von der if-Schleife in
+// IsInExclusiveBranch gedroppt - richtiges Ergebnis, falscher Grund. Seit
+// dem Fix sind es zwei ECHTE nkCaseArm; ohne diesen Helfer kaeme der Fund
+// zurueck.
+//
+// UEBERSCHNEIDUNG mit CfgDropsNilDeref (Z.~1168), absichtlich: das
+// Lehrbuch-Paar 'Arm 0 nil / Arm 1 Deref' droppt der CFG-Filter heute schon
+// ueber CanReach, Test CfgCaseArmSiblings_NotReported haelt das fest.
+// Trotzdem kein No-Op: der Helfer greift auch dort, wo der CFG-Lookup
+// scheitert. Der Builder steigt in nkCall-Kinder nicht ab, ein with-Rumpf
+// haengt aber als nkCall-Kind im Baum (uParser2 Z.2386) - jede Anweisung
+// darin landet in KEINEM CFG-Block, NilBlk bleibt nil, und CfgDropsNilDeref
+// droppt bei Lookup-Fehlschlag per Vertrag nicht. Genau diese Luecke nageln
+// die neuen Tests fest.
+//
+// AUFTEILUNG (Gegenpruefung 2026-08-28, MINOR 3): die Erstfassung stand als
+// eine Routine da und kam nach der Zaehlweise von uCyclomaticComplexity auf
+// McCabe 13 - ueber DEF_MAX_CYCLOMATIC = 10. Kein Selbst-Scan-Fund, weil
+// Z.84 dieser Unit ein 'noinspection-file ... CyclomaticComplexity' traegt
+// (das der Marker fuer AnalyzeMethod ist und dort auch bleiben muss);
+// gemessen sauber war sie trotzdem nicht. Zerlegt in die drei Fragen, die
+// der Rumpf ohnehin nacheinander stellt - 'beginnt das case zu spaet?',
+// 'trennt es die beiden?', 'steht es in einer Schleife?' - liegt jeder Teil
+// bei 1 bis 4 und der Rumpf bei 9. Verhalten unveraendert: gleiche
+// Reihenfolge, gleiche Kurzschluesse, alle Praedikate nebenwirkungsfrei.
+//
+// KOSTEN, ehrlich gerechnet (Korrektur zur ersten Fassung, die behauptete,
+// der Helfer stehe vor dem CFG und 'spare' ihn): gespart wird der CFG nur,
+// wenn der Helfer FEUERT. Im Normalfall ist er reiner ZUSATZAUFWAND, und
+// zwar je KANDIDATENPAAR - die Schleife in AnalyzeMethod ist 'for NA in
+// Assigns' x 'for C in Calls', und jeder ArmHolding-Lauf allokiert je Arm
+// eine TList in NodeContainsRef. Deshalb stehen drei Ausstiege VOR den
+// Baumlaeufen, vom billigsten zum teuersten:
+//   (a) Methoden ohne case - die grosse Mehrheit. Nicht bloss Kosmetik
+//       gegenueber der leeren Schleife: 'for X in TList<T>' allokiert einen
+//       Enumerator auf dem Heap, und das je Kandidatenpaar;
+//   (b) Zeilenfilter - CaseStartsAfterEither;
+//   (c) ein case mit weniger als zwei Armen kann nichts trennen - erster
+//       Ausstieg in CaseSeparatesNodes.
+// Das Schleifen-Veto (unten) steht dagegen ABSICHTLICH am Ende: es laeuft
+// nur noch fuer das eine case, das gerade unterdruecken wuerde.
+//
+// EXKLUSIVITAET, am Parser belegt: ParseCaseStmt legt JEDEN Arm als
+// nkCaseArm-DIREKTKIND des nkCaseStmt ab, den else-Arm mit Name='else'
+// (uParser2 Z.2693 / Z.2702); der Selektor steht als Text in TypeRef, nicht
+// als Kindknoten. Pro Durchlauf laeuft GENAU EIN Arm - Delphi kennt kein
+// fall-through. Der else-Arm ist gegenueber jedem regulaeren Arm damit
+// genauso exklusiv wie zwei regulaere Arme untereinander und braucht keinen
+// Sonderfall. MEHRERE LABELS je Arm ('0, 1: ...') aendern ebenfalls nichts:
+// die Label-Liste frisst SkipTo([tkColon,...]) VOR dem Arm-Body, es entsteht
+// EIN Knoten - zwei Treffer darin sind objektidentisch und werden NICHT
+// gedroppt.
+// EINE Ausnahme bricht die Arm-Exklusivitaet formal, GOTO:
+//     case k of
+//       0: begin x := nil; goto L; end;
+//       1: begin L: x.DoStuff; end;
+//     end;
+// laeuft beide Arme nacheinander, der Fund ist echt und wird hier
+// unterdrueckt. Geerbt, nicht neu: uCFG kennt keinen nkGoto-Zweig (im ganzen
+// Graphen fehlen Sprungkanten), und die if/else-Schleife oben ist genauso
+// blind. Bewusst kein Code dagegen - die Form kommt im Korpus nicht vor. Der
+// Weg waere der Goto-Guard aus SCA011 (uDeadCode Z.387-390): der Parser legt
+// je Sprungmarke einen nkLabelMark-Marker ab, allerdings am UNIT-Knoten
+// (uParser2 Z.342), den AnalyzeMethod nicht hat - die Label-Zeilen muessten
+// also wie ADirLines von AnalyzeUnit durchgereicht werden, danach genuegt
+// 'Methode enthaelt eine Sprungmarke -> keine Arm-Aussage'.
+//
+// VERSCHACHTELTE case brauchen KEINE Suche nach dem gemeinsamen Vorfahren:
+// jedes case wird EINZELN gefragt und muss BEIDE Knoten in eigenen Armen
+// finden. Trennt irgendeines der case sie, ist der Beweis erbracht - liegen
+// sie im aeusseren im selben Arm, im inneren aber in verschiedenen, gilt die
+// innere Trennung (und umgekehrt, wenn zwei getrennte innere case in zwei
+// Armen des aeusseren stehen). Findet ein case nur EINEN der beiden, enthaelt
+// es sich und die Schleife fragt das naechste. Exakt die Konservativitaet des
+// nkCaseStmt-Zweigs von SameArmHoldsBoth, der hier die Vorlage war.
+//
+// SCHLEIFEN-VETO, der Grund fuer den NodeIsInsideLoop-Zweig unten. Die
+// Arm-Aussage gilt je DURCHLAUF. Steht das case in einer Schleife, nimmt
+// Iteration 1 den einen und Iteration 2 den anderen Arm:
+//     while c do case k of 0: x := nil; 1: x.DoStuff; end;
+// Das ist ein ECHTER Fund, und er wird heute gemeldet - nicht zufaellig,
+// sondern weil uCFG fuer Schleifen eine echte Rueckkante zieht (Z.513
+// 'Connect(BodyTail, LoopHead)', Z.553 fuer repeat). CanReach findet den Weg
+// ArmStart -> CaseMerge -> LoopHead -> BodyStart -> BranchBlk -> ArmStart,
+// also droppt CfgDropsNilDeref nicht. Fuer case-Arme war der Schleifenfall
+// damit GELOEST; ein Gate, das VOR dem CFG laeuft und die Loesung wegwirft,
+// waere eine Regression, keine geerbte Luecke. Jedes case mit umgebender
+// Schleife wird deshalb uebersprungen und der Fall an CfgDropsNilDeref
+// durchgereicht - dieselbe Vorsicht, die HasGuardingIf (NodeContainsRef-Zwang
+// auf den while-Rumpf) und IsInCorrelatedExclusiveIfs (Fenster auf die ganze
+// Methode, sobald eine Schleife eines der ifs umschliesst) schon fuehren.
+// Diese ganze Begruendung haengt an der CFG-Rueckkante, und die haelt seit
+// 2026-08-28 ein eigener Test fest: PlainLoopAroundCaseArms_StillReported
+// baut die Form OHNE 'with', damit sie wirklich durch den CFG laeuft. Dass
+// das Veto auch repeat und for mitnimmt (die Menge in NodeIsInsideLoop),
+// stand vorher nur im Quelltext - jetzt je ein Test.
+// Die if/else-Schleife oben in IsInExclusiveBranch hat diese Absicherung
+// NICHT: 'while c do if b then x := nil else x.Foo;' wird seit 2026-07-19
+// gedroppt, obwohl zwei Iterationen beide Zweige nehmen koennen. OFFENE
+// ALTLAST, hier bewusst nicht mitgeloest (eigener A/B-Lauf noetig) - aber
+// kein Grund, den neuen Rahmen genauso undicht zu bauen.
+//
+// VERTRAUENSGRENZE: der Helfer glaubt der Arm-Aufteilung des Parsers. Wo die
+// Recovery Anweisungen in den falschen Arm haengt, wuerde er einen echten
+// Fund schlucken. Die beiden bekannten Restursachen sind in 38ac2ea benannt
+// und dort offen gelassen (leere Arme 'X: ;' - 2 Korpusstellen; das
+// Direktiven-Idiom direkt im Arm - 0 Korpusstellen); wer sie schliesst, macht
+// diese Grenze enger, nie weiter.
+var
+  Cases : TList<TAstNode>;
+  CaseN : TAstNode;
+begin
+  Result := False;
+  if (MethodNode = nil) or (A = nil) or (B = nil) then Exit;
+  // FindAllRef liefert die Cache-Liste und nie nil (EnsureCacheFor legt sie
+  // an) - dieselbe Annahme wie die nkIfStmt-Schleife in IsInExclusiveBranch.
+  Cases := MethodNode.FindAllRef(nkCaseStmt);
+  if Cases.Count = 0 then Exit;   // Vorfilter (a): Methode ohne case
+  for CaseN in Cases do
+  begin
+    // (b) und (c): 'Continue' heisst durchweg 'dieses case beweist nichts',
+    // der Fund bleibt also stehen - die sichere Richtung.
+    if CaseStartsAfterEither(CaseN, A, B) then Continue;
+    if not CaseSeparatesNodes(CaseN, A, B) then Continue;
+    // SCHLEIFEN-VETO: erst hier, weil es nur noch fuer das eine case laeuft,
+    // das gerade unterdruecken wuerde. Umschliesst eine Schleife dieses case,
+    // koennen zwei Iterationen beide Arme nehmen - der Fall geht ungedroppt
+    // weiter an CfgDropsNilDeref, der ihn ueber die Rueckkante loest. Ein
+    // ANDERES case der Methode darf trotzdem noch trennen, deshalb Continue
+    // statt Exit.
+    if NodeIsInsideLoop(MethodNode, CaseN) then Continue;
+    Exit(True);
+  end;
+end;
+
 class function TNilDerefDetector.IsInExclusiveBranch(MethodNode, AssignNode,
   DerefNode: TAstNode): Boolean;
 // FP-Gate (Auto-Runde 2026-07-19, Triage 15/18 FP - Sub-Klasse 'syntactic-
@@ -439,6 +676,10 @@ begin
     if (NAInThen and CInElse) or (NAInElse and CInThen) then
       Exit(True);
   end;
+
+  // Zweiter Rahmen mit derselben Aussage: zwei verschiedene Arme desselben
+  // case. Begruendung, Grenzen und Parser-Belege stehen bei der Funktion.
+  Result := InDifferentCaseArms(MethodNode, AssignNode, DerefNode);
 end;
 
 function IsPlainIdentLower(const S: string): Boolean;
