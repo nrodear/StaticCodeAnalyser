@@ -3728,8 +3728,9 @@ begin
         for i := 0 to F.Count - 1 do
           if F[i].Kind = fkMemoryLeak then
           begin
-            Assert.AreEqual<Integer>(Ord(fcMedium), Ord(F[i].Confidence),
-              'TInterfacedObject-Nachfahre: Konfidenz gesenkt, kein Error-Tier');
+            Assert.AreEqual<Integer>(Ord(fcLow), Ord(F[i].Confidence),
+              'TInterfacedObject-Nachfahre: auf fcLow gesenkt - fcMedium ' +
+              'waere ein No-Op, das ist bereits der Kind-Default');
             Gefunden := True;
           end;
         Assert.IsTrue(Gefunden, 'kein fkMemoryLeak-Fund zum Pruefen');
@@ -3781,7 +3782,7 @@ begin
           'TStringList leakt weiterhin');
         for i := 0 to F.Count - 1 do
           if F[i].Kind = fkMemoryLeak then
-            Assert.AreNotEqual<Integer>(Ord(fcMedium), Ord(F[i].Confidence),
+            Assert.AreNotEqual<Integer>(Ord(fcLow), Ord(F[i].Confidence),
               'kein TInterfacedObject-Nachfahre: Konfidenz unangetastet');
       finally
         F.Free;

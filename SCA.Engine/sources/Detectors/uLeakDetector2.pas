@@ -3485,10 +3485,22 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
   // dieser Detektor dateilokal nicht sehen (die Signatur der gerufenen
   // Routine liegt meist in einer fremden Unit).
   //
-  // Deshalb: Konfidenz herunter statt Fund weg. Der Befund verlaesst
-  // ueber die Evidenz-Politik den Error-Tier ("Error = bewiesen"),
-  // bleibt aber sichtbar - ein echtes Leck wie das oben genannte geht
-  // nicht verloren.
+  // Deshalb: Konfidenz herunter statt Fund weg (fcLow).
+  //
+  // DER PREIS, ehrlich benannt: fcLow liegt UNTER dem Default-Filter
+  // (DEF_FINDING_MIN_CONFIDENCE = fcMedium), die 28 verschwinden also
+  // aus der Default-Sicht - und der eine echte Fund geht dort mit.
+  // Im strict-Profil bleiben alle sichtbar. Vertretbar bei 26:1, aber
+  // keine saubere Loesung.
+  //
+  // DIE SAUBERE WAERE, den echten Fall abzutrennen, und das Merkmal
+  // dafuer steht fest: die 26 harmlosen werden als ARGUMENT an einen
+  // Aufruf uebergeben (WriteToAppender(lAppender) mit Parametertyp
+  // ILogAppender), der echte Fund NICHT - dort ist die Variable nur
+  // Empfaenger (SA.CopyTo(...)). Eine Bedingung "wird irgendwo als
+  // Argument uebergeben" traefe 26 und liesse den einen stehen.
+  // Nicht gebaut: das braucht einen Argument-Walk im Hot-Path und
+  // gehoert gegengeprueft, nicht nebenbei eingezogen.
   function InheritsFromInterfacedObject(const ATypeRef: string): Boolean;
   var
     TI  : TTypeIndex;
@@ -3521,7 +3533,13 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
     F.Severity   := Sev;
     F.Kind       := fkMemoryLeak;
     if ARefCounted then
-      F.Confidence := fcMedium          // s. InheritsFromInterfacedObject
+      // fcLOW, nicht fcMedium: KindDefaultConfidence(fkMemoryLeak) IST
+      // bereits fcMedium (uSCAConsts:1457), ein Demote dorthin waere
+      // ein No-Op gewesen. Erst fcLow wirkt - der Default-Filter
+      // DEF_FINDING_MIN_CONFIDENCE steht auf fcMedium, die Funde
+      // verlassen damit die Default-Sicht und bleiben im
+      // strict-Profil sichtbar.
+      F.Confidence := fcLow
     else
       F.Confidence := KindDefaultConfidence(fkMemoryLeak);
     Results.Add(F);
