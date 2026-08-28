@@ -3702,21 +3702,14 @@ begin
 end;
 
 function TAnalyserFrame.CurrentBaselineScope: TBaselineScope;
-// Modus aus den Frame-Settings ([Baseline] PathInFingerprint), Wurzel
-// nach der Regel in ForProject. Vorher hingen die zwei Write-Stellen an
-// den Prozess-Globals, deren Wurzel nur RefreshBaselineSet setzte - mit
-// "nur neue Funde" aus blieb sie leer, der Snapshot fiel still auf
-// Dateinamen-Tokens zurueck und der naechste Filter matchte nichts
-// (Review 2026-08-18, Befund A).
+// WIRT-Anteil: der Modus kommt aus den Frame-Settings
+// ([Baseline] PathInFingerprint), die Wurzel aus ScanRootDir. Die
+// REGEL selbst steht in TBaselineScope.FromSettings, samt der
+// Begruendung, warum sie zentral liegt.
 begin
-  if Assigned(FRepoSettings) and FRepoSettings.BaselinePathInFingerprint then
-  begin
-    Result := TBaselineScope.ForProject(CurrentProjOrGroupFile, ScanRootDir);
-  end
-  else
-  begin
-    Result := TBaselineScope.ByFileName;
-  end;
+  Result := TBaselineScope.FromSettings(
+    Assigned(FRepoSettings) and FRepoSettings.BaselinePathInFingerprint,
+    CurrentProjOrGroupFile, ScanRootDir);
 end;
 
 procedure TAnalyserFrame.RefreshBaselineSet;

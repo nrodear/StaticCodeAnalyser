@@ -25,132 +25,70 @@ unit uCaseStatementSize;
 // noetig, eine Block-Tiefe im Zaehler aber schon (siehe K1).
 //
 // ---------------------------------------------------------------------
-// FP-Gates 2026-08-28. Alle Zahlen sind ueber den Korpus
-// D:/git-sca-realworld (13.419 .pas-Dateien) GEMESSEN, nicht geschaetzt:
-// eine 1:1-Portierung dieser Unit reproduziert die 1.944 SCA091-Funde
-// des Laufs rw20 exakt - Fundmenge UND Zweigzahlen, 0 Abweichungen.
-// Die Gates sind auf dieser Replik gerechnet.
+// FP-Gates und Abstieg 2026-08-28 (Commit 6efe68e, verifiziert im Lauf
+// rw23). Die Herleitung mit allen Messzahlen steht in der
+// Commit-Message - hier stehen nur die REGELN und die Gruende, die
+// eine Entscheidung tragen. Wer die Zahlen nachrechnen will:
+//   git log --grep="case-Zweige richtig zaehlen" -1
 //
-//   K1  Tiefe-1-Gate in CountBranches (-437 Funde).
-//       CountBranches zaehlte ':' blind und addierte damit die Labels
-//       GESCHACHTELTER case-Statements auf den aeusseren case. Jetzt
-//       laeuft eine Block-Tiefe mit (begin/case/try/record/asm ++,
-//       end --), gezaehlt wird nur auf Tiefe 1; das Klammer-Gate bleibt.
-//   K2  record-Variantenteil (-29 Funde).
-//       `case Tag: Integer of 0: (A: X);` ist eine Typdeklaration, kein
-//       Statement. Folgt hinter dem ERSTEN gezaehlten ':' - nur durch
-//       Leerraum getrennt - eine '(', wird der Fund verworfen. Das Gate
-//       greift heute an 34 Stellen; 29 davon waren rw20-Funde und
-//       erscheinen als Drops, die restlichen 5 sind geschachtelte
-//       Variantenteile, die erst der Abstieg ueberhaupt besucht. Alle 34
-//       einzeln nachgesehen: ausnahmslos echte Variantenteile,
-//       TP-Verlust 0. Zur Enge des Kriteriums siehe IsRecordVariantPart.
-//   K6  Phantom-case aus einer nie uebersetzten {$IFNDEF}-Region
-//       (-1 Fund, +1 Fund). Siehe MAX_SELECTOR_LINES zur Kalibrierung.
+// K1  TIEFE-1-GATE in CountBranches. Ein `:` zaehlt nur auf Block-
+//     Tiefe 1 (begin/case/try/record/asm erhoehen, end senkt). Vorher
+//     addierte der Zaehler die Labels GESCHACHTELTER case auf den
+//     aeusseren - Compiler.SetupCompiler.pas meldete fuer ein case mit
+//     ZWEI eigenen Zweigen 55.
+//     PFLICHT dabei: ein Bezeichner hinter einem Punkt erhoeht die
+//     Tiefe NICHT (qualifizierte Enums wie TSymKind.Record). Ohne
+//     diesen Schutz faellt ein echter Fund weg - der Punkt-Zweig von
+//     IsMaskedIdent traegt also, er ist keine Vorsorge.
+// K2  RECORD-VARIANTENTEIL. Folgt hinter dem ersten gezaehlten `:`
+//     eine `(`, ist es eine Typdeklaration, kein Statement. Eng an
+//     einem Zeichen - siehe IsRecordVariantPart.
+// K6  PHANTOM-CASE aus einer nie uebersetzten {$IFNDEF}-Region, ueber
+//     die Selektor-Spanne erkannt (MAX_SELECTOR_LINES).
+// K3/K4/K5 (inline var, on-Handler, goto-Label im begin-Block)
+//     brauchen kein eigenes Gate - sie stehen auf Tiefe >= 2 und
+//     fallen mit K1 weg. Nachgemessen, nicht geglaubt.
 //
-//   K3 (inline var im begin-Block), K4 (on-Handler) und K5 (goto-Label
-//   im begin-Block) brauchen KEIN eigenes Gate - diese Doppelpunkte
-//   stehen auf Tiefe >= 2 und fallen mit K1 weg. Nachgemessen statt
-//   geglaubt: ueber die ueberlebenden Fundstellen bleiben 0 gezaehlte
-//   inline-var- und 0 gezaehlte on-Handler-Doppelpunkte.
+// ABSTIEG - die tragende Entscheidung dieser Runde.
+//   Der Scan sprang frueher mit `pCase := pEnd + 3` hinter das `end`
+//   und besuchte geschachtelte case NIE. Zusammen mit K1 waere das ein
+//   schlechtes Geschaeft gewesen: der aeussere Fund trug eine
+//   erfundene Zahl, der innere fehlte ganz. Jetzt laeuft der Scan mit
+//   `pCase := pOf + 2` IM Rumpf weiter; jedes case wird genau einmal
+//   besucht und nach seiner EIGENEN Zweigzahl beurteilt. Fortschritt
+//   ist garantiert, weil pOf >= pCase+4 gilt.
 //
-// ABSTIEG (das eigentliche Thema dieser Runde)
-//   Der Scan sprang frueher mit `pCase := pEnd + 3` hinter das `end` des
-//   gerade bewerteten case und besuchte geschachtelte case deshalb NIE.
-//   Zusammen mit K1 war das ein schlechtes Geschaeft: 98 der 437
-//   K1-Drops verbargen 161 innere case mit >= 10 EIGENEN Tiefe-1-Labels
-//   (ueber alle 467 Drops gerechnet: 99 und 162 - der zusaetzliche ist
-//   der K6-Phantom JclStrings.pas:698, dessen inneres case jetzt als
-//   Add in Zeile 1157 erscheint), und
-//   KEINES davon wurde separat gemeldet. 19 Dateien verloren SCA091
-//   dadurch komplett.
-//   Jetzt laeuft der Scan mit `pCase := pOf + 2` IM Rumpf weiter; jedes
-//   case im File wird genau einmal besucht und nach seiner eigenen
-//   Zweigzahl beurteilt. Fortschritt ist garantiert, weil pOf >= pCase+4
-//   gilt, der Scan also mindestens 6 Zeichen weiterrueckt.
-//   Das ist eine nach AUSSEN sichtbare Aenderung: ein verschachteltes
-//   Konstrukt liefert jetzt MEHRERE Funde statt einem. Deshalb steht sie
-//   auch in der Regelbeschreibung - Quelle ist rules/sca-rules.json,
-//   generiert nach docs/rules/SCA091.md (en/de/fr) und docs/rules.md.
-//   Groessenordnung: 401 Adds auf 105 Dateien, die 10 groessten tragen
-//   289 davon (72 %), allein die vier uPSRuntime-Klone 194 (48 %). Am
-//   staerksten betroffen ist issrc/Components/UniPs/Source/uPSRuntime.pas
-//   mit 32 -> 79 Funden.
+//   WARUM BEDINGUNGSLOS und nicht nur bei stummem Elter: die
+//   Alternative macht die Sichtbarkeit eines case von einer FREMDEN
+//   Eigenschaft abhaengig - der Groesse seines Elters. Der Beleg steht
+//   in EINER Datei: cnwizards/.../uPSRuntime.pas enthaelt zweimal
+//   dasselbe Konstrukt `case var1Type.BaseType of` mit je 18 Zweigen;
+//   gemeldet wuerde nur das mit dem kleineren Elter. Dieselbe Datei,
+//   dasselbe Konstrukt, gegenteiliges Verdikt - das ist niemandem zu
+//   erklaeren.
 //
-//   Gemessen wurden BEIDE angebotenen Varianten:
-//     immer absteigen                    1.478 -> 1.878  (+400)
-//     absteigen nur wenn aeusserer stumm 1.478 -> 1.601  (+123)
-//   Entschieden ist "immer absteigen", und zwar nicht wegen der groesseren
-//   Zahl, sondern weil die kleinere Variante die Sichtbarkeit eines case
-//   von einer FREMDEN Eigenschaft abhaengig macht - der Groesse seines
-//   Elters. Gemessene Folge: 277 echte, ueberschwellige case blieben
-//   stumm, nur weil ihr umgebendes case selbst gemeldet wurde, darunter
-//   eines mit 349 Zweigen (jvcl/.../usagesinfo.pas:1279) und eines mit
-//   221. Der Beleg fuer die Willkuer steht in EINER Datei:
-//   cnwizards/Source/ThirdParty/PascalScript/uPSRuntime.pas enthaelt in
-//   Zeile 4662 und in Zeile 5272 zweimal dasselbe Konstrukt
-//   `case var1Type.BaseType of` mit je 18 Zweigen; das erste wird
-//   gemeldet (sein Elter `case Cmd of` hat 8 Zweige), das zweite nicht
-//   (sein Elter `case CalcType of` hat 11). Dieselbe Datei, dasselbe
-//   Konstrukt, gegenteiliges Verdikt - das ist niemandem zu erklaeren.
-//   "Immer absteigen" meldet beide.
-//   Gegenprobe zur Doppelmeldung: es gibt im Korpus 0 Zeilen, auf denen
-//   zwei ueberschwellige case beginnen; kein Fund wird doppelt gemeldet.
-//   277 der 1.878 Funde (14,7 %) liegen in einem anderen Fund - das sind
-//   keine Duplikate, sondern zwei je fuer sich zu grosse case. Dieselbe
-//   Zahl steht schon zwei Absaetze weiter oben: 1.878 - 1.601 = 277, denn
-//   genau diese Funde sind es, die die stumme Variante verschluckt. Beide
-//   Wege einzeln nachgerechnet, beide liefern 277.
+//   NACH AUSSEN SICHTBAR: ein verschachteltes Konstrukt liefert jetzt
+//   MEHRERE Funde statt einem. Deshalb steht das auch in der
+//   Regelbeschreibung (Quelle rules/sca-rules.json).
 //
-// ABNAHME
-//   Die Bedingung lautet NICHT "0 Dateien verlieren SCA091 komplett" -
-//   das ist konstruktionsbedingt unerreichbar und waere auch kein Ziel:
-//   131 Dateien verlieren die Regel, und zwar zu Recht, weil ihre Funde
-//   ausnahmslos aufaddierte Fremdlabel-Zahlen oder record-Variantenteile
-//   waren. Die tragfaehige und bewiesene Form ist:
+// ABNAHMEBEDINGUNG - in der tragfaehigen Form:
+//   KEINE Datei verliert SCA091, waehrend sie noch ein case mit >= 10
+//   EIGENEN Tiefe-1-Labels enthaelt.
+//   Die woertliche Fassung "0 Dateien verlieren die Regel" ist
+//   konstruktionsbedingt unerreichbar und waere auch kein Ziel: wessen
+//   einziger Fund eine aufaddierte Fremdlabel-Zahl war, verliert sie
+//   zu Recht.
 //
-//     KEINE Datei verliert SCA091, waehrend sie noch ein case mit >= 10
-//     eigenen Tiefe-1-Labels enthaelt.
+// KEIN DROP-PAKET, SONDERN EIN TAUSCH. Es gehen mehr falsche Funde als
+//   netto Funde verschwinden - der Rest sind vorher unsichtbare innere
+//   case. Wer dieses Gate an einer Drop-Zahl misst, haelt es
+//   faelschlich fuer gescheitert: die Fundzahl sinkt kaum, die
+//   Fundqualitaet deutlich.
 //
-//   Vorher 19 solche Dateien, jetzt 0. Gemessen: von den 150 Dateien, die
-//   mit K1 OHNE Abstieg SCA091 komplett verloren, enthielten 19 noch ein
-//   echtes ueberschwelliges case; mit Abstieg sind es 0, gerechnet ueber
-//   alle 20.227 vollstaendig aufgeloesten case-Stellen des Korpus.
-//   Die 131 zu Recht verlierenden Dateien geben zusammen 156 Funde ab:
-//   145 aufaddierte Fremdlabel-Zahlen, 11 record-Variantenteile.
-//   Ueber den ganzen Korpus wurde jeder der 467 Drops einzeln aufgemacht
-//   und begruendet: 437 aufaddierte Fremdlabels, 29 record-Variantenteile,
-//   1 K6-Phantom, 0 ungeklaert.
-//   Deckung: 1.878 gemeldete Stellen gegen 1.478 ohne Abstieg. Die
-//   frueher hier stehende Formulierung "1.878 von 1.878 echten
-//   case-Stellen" war zirkulaer - sie definierte "echt" ueber die
-//   eigene Ausgabe. Belastbar ist der Vergleich der Varianten
-//   (always 1.878 / silent 1.601 / ohne Abstieg 1.478) und dass jeder
-//   der 401 Adds >= 10 EIGENE Tiefe-1-Labels traegt, einzeln geprueft.
-//
-// A/B-ERWARTUNG rw20 -> naechster Lauf
-//   SCA091           1.944 -> 1.878   (467 Drops, 401 Adds, netto -66)
-//   Korpus gesamt  783.105 -> 783.039 (netto -66, nur SCA091 bewegt sich)
-//   Die 401 Adds sind KEIN Rueckschritt: 400 davon sind geschachtelte
-//   case, die es immer schon gab und die der Sprung uebersprang; Nummer
-//   401 ist das echte case in jcl/.../JclStrings.pas:1157, das bisher vom
-//   Phantom-case in Zeile 698 verschluckt wurde. Stichprobe der Adds an
-//   der Schwelle (10 Zweige) von Hand gegengelesen: exakt 10 Zweige, echt.
-//
-// RESTKLASSE, gemessen und bewusst offen
-//   Ein goto-Label DIREKT im case-Rumpf (ohne begin) steht auf Tiefe 1
-//   und wird weiter mitgezaehlt. Betrifft genau 2 Funde
-//   (mormot.core.text.pas:9150 17->15 und :9269 19->18) - beide bleiben
-//   klar ueber der Schwelle, also kein FP. Die nackte inline-var im Zweig
-//   (`10: var A: Integer := 0;`) gehoerte in dieselbe Restklasse und ist
-//   jetzt geschlossen (siehe cwVar/InVarDecl). Das Muster ist real: an 6
-//   case-Stellen des Korpus aendert das Gate die Zweigzahl, echtester
-//   Fall ist dwsUtils.pas:5948 (`var pivotValue : Double := a[p];` steht
-//   in einem repeat-Rumpf, und repeat oeffnet zu Recht keine Block-Tiefe,
-//   also stand die Deklaration auf Tiefe 1). Keine dieser 6 Stellen
-//   ueberschreitet die Schwelle - deshalb bewegt sich kein einziger Fund,
-//   die Ueberzaehlung war aber echt.
-// ---------------------------------------------------------------------
+// RESTKLASSE, gemessen und bewusst offen: ein goto-Label DIREKT im
+//   case-Rumpf (ohne begin) steht auf Tiefe 1 und wird mitgezaehlt.
+//   Betrifft eine Handvoll Funde, alle bleiben ueber der Schwelle -
+//   kein Fehlalarm, nur eine leicht zu hohe Zahl.
 
 interface
 
@@ -215,7 +153,7 @@ const
   // MaxCaseBranches=5 haette die Grenze 5 ein echtes case verworfen. 20
   // haelt 2,5-fachen Abstand zum laengsten echten Selektor und bleibt um
   // Faktor 4,5 unter dem naechsten Phantom.
-  // Der Wechsel 5 -> 20 ist am Korpus ein exaktes No-Op (1.878 Funde mit
+  // Der Wechsel 5 -> 20 ist am Korpus ein exaktes No-Op (identische
   // beiden Werten, identische Fundmenge).
   MAX_SELECTOR_LINES = 20;
 
@@ -278,17 +216,17 @@ end;
 // Die drei Teile tragen NICHT dieselbe Last - deshalb einzeln gemessen,
 // statt sie in einem Satz zusammenzuwerfen:
 //
-//   * Der Punkt-Zweig TRAEGT. Ohne ihn faellt der Korpus von 1.878 auf
-//     1.877, und verloren geht genau der oben genannte Beleg
+//   * Der Punkt-Zweig TRAEGT. Ohne ihn verliert der Korpus genau EINEN
+//     Fund, und zwar den oben genannten Beleg
 //     python4delphi/Source/PythonDocs.pas:561 (10 Zweige). Das ist der
 //     einzige Teil dieser Funktion, der heute einen Fund haelt.
 //   * Die Leerraum-Erweiterung (Punkt am Zeilenende, Bezeichner in der
-//     naechsten Zeile) ist am Korpus ein exaktes No-Op: 1.878 mit und
+//     naechsten Zeile) ist am Korpus ein exaktes No-Op: identische
 //     ohne, identische Fundmenge. Gemessen ist damit nur, dass sie hier
 //     keine Zweigzahl bewegt - Vorsorge fuer eine Schreibweise, die die
 //     Sprache erlaubt.
 //     Vorsorge fuer eine Schreibweise, die die Sprache erlaubt.
-//   * Der &-Zweig ist ebenfalls ein No-Op (1.878 mit und ohne) - aber
+//   * Der &-Zweig ist ebenfalls ein No-Op (identische Fundmenge) - aber
 //     NICHT, weil es das Muster nicht gaebe: auf dem BEREINIGTEN Code
 //     (StripFileCommentsKeepStrings + BlankStringLiterals, also derselbe
 //     Strip, den der Detektor selbst fuehrt) stehen 86-mal `&end` in 23

@@ -4,6 +4,16 @@ unit uBaseline;
 // mit den AKZEPTIERTEN Findings, damit ein laufender Lauf NEUE Findings
 // vs. Baseline klar abhebt.
 //
+// ZU DEN ZAHLEN IN DIESER UNIT: die Kommentare belegen ihre
+// Entscheidungen mit Messwerten vom Referenzkorpus D:/git-sca-realworld
+// (Laeufe rw20 bis rw23, August 2026). Sie begruenden, WARUM etwas so
+// gebaut ist - etwa dass eine globale Ziffern-Normalisierung allein in
+// SCA101 rund 94.000 Identitaeten kostet. Als Groessenordnung bleiben
+// sie gueltig, als exakte Zahl altern sie mit jedem Detektor-Gate.
+// Wer sie neu braucht, rechnet sie nach; wer sie zitiert, nennt den
+// Lauf dazu. Ein Kommentar ist kein Messprotokoll - das steht in der
+// Commit-Historie (git log --grep=Fingerprint).
+//
 // Anwendung (typisch in CI):
 //   Erst-Lauf:  analyser.exe --full --path repo --write-baseline sca.baseline.json
 //   Folge-Lauf: analyser.exe --branch --path repo --baseline sca.baseline.json
@@ -93,7 +103,26 @@ type
     // durch. Die Prozess-Globals existieren nur noch als Grenze fuer die
     // verbliebenen FromGlobals-Leser (s. dort).
     class function ForProject(const AProjectOrGroupFile,
-      AScanRoot: string): TBaselineScope; static;
+      AScanRoot: string): TBaselineScope;
+
+    // DIE ENTSCHEIDUNGSREGEL fuer den Zuschnitt, an EINER Stelle.
+    // Beide Wirte - EXE und IDE-Plugin - beantworten dieselbe Frage:
+    // steht [Baseline] PathInFingerprint, dann Relativpfad ab der
+    // Scanwurzel, sonst blosser Dateiname. Nur WOHER die beiden Werte
+    // kommen, unterscheidet sich (Prozess-Global gegen
+    // Frame-Settings, Projektpfad-Feld gegen ScanRootDir) - und das ist
+    // Wirt-Sache, die Regel nicht.
+    //
+    // WARUM ZENTRAL: die Regel stand zweimal fast gleich in den
+    // Consumern, samt derselben achtzeiligen Begruendung. Bei zwei
+    // Kopien faellt eine einseitige Aenderung nicht auf - und genau
+    // hier ist sie teuer: ein falscher Zuschnitt laesst den
+    // Baseline-Filter still ins Leere laufen (Review 2026-08-18,
+    // Befund A: die Wurzel blieb leer, der Snapshot fiel auf
+    // Dateinamen-Tokens zurueck, der naechste Filter matchte nichts).
+    class function FromSettings(APathInFingerprint: Boolean;
+      const AProjectOrGroupFile, AScanRoot: string): TBaselineScope;
+      static; static;
     // Nur die Wurzel derselben Regel, als String - fuer die Aufrufer, die
     // (noch) uSCAConsts.BaselineFingerprintRoot direkt beschreiben.
     // Bewusst kein zweiter Regel-Ort: ForProject ruft dieselbe Funktion.
@@ -469,6 +498,20 @@ class function TBaselineScope.ForProject(const AProjectOrGroupFile,
   AScanRoot: string): TBaselineScope;
 begin
   Result := ByPath(RootForProject(AProjectOrGroupFile, AScanRoot));
+end;
+
+class function TBaselineScope.FromSettings(APathInFingerprint: Boolean;
+  const AProjectOrGroupFile, AScanRoot: string): TBaselineScope;
+// s. Deklaration - die Regel, die beide Wirte teilen.
+begin
+  if APathInFingerprint then
+  begin
+    Result := ForProject(AProjectOrGroupFile, AScanRoot);
+  end
+  else
+  begin
+    Result := ByFileName;
+  end;
 end;
 
 class function TBaselineScope.FromGlobals: TBaselineScope;

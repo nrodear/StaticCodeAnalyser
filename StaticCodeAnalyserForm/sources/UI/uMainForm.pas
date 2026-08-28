@@ -2802,24 +2802,16 @@ begin
 end;
 
 function TForm2.CurrentBaselineScope: TBaselineScope;
-// Modus aus der Globalen (die spiegelt [Baseline] PathInFingerprint seit
-// dem letzten ApplyDetectorThresholds bzw. RefreshBaselineSet - beide
-// Write-Stellen laufen nur nach einem Scan, der sie gesetzt hat), Wurzel
-// nach der Regel in ForProject. Vorher hingen die zwei Write-Stellen an
-// den Prozess-Globals, deren Wurzel nur RefreshBaselineSet setzte - mit
-// "nur neue Funde" aus blieb sie leer, der Snapshot fiel still auf
-// Dateinamen-Tokens zurueck und der naechste Filter matchte nichts
-// (Review 2026-08-18, Befund A).
+// WIRT-Anteil: der Modus kommt aus der Prozess-Globalen (sie spiegelt
+// [Baseline] PathInFingerprint seit dem letzten
+// ApplyDetectorThresholds bzw. RefreshBaselineSet - beide Write-Stellen
+// laufen nur nach einem Scan, der sie gesetzt hat), die Wurzel aus dem
+// Projektpfad-Feld. Die REGEL selbst steht in
+// TBaselineScope.FromSettings, samt der Begruendung, warum sie zentral
+// liegt.
 begin
-  if uSCAConsts.BaselinePathFingerprint then
-  begin
-    Result := TBaselineScope.ForProject(CurrentProjOrGroupFile,
-      DirOfProjectPath(Projectpath.Text));
-  end
-  else
-  begin
-    Result := TBaselineScope.ByFileName;
-  end;
+  Result := TBaselineScope.FromSettings(uSCAConsts.BaselinePathFingerprint,
+    CurrentProjOrGroupFile, DirOfProjectPath(Projectpath.Text));
 end;
 
 procedure TForm2.RefreshBaselineSet;
