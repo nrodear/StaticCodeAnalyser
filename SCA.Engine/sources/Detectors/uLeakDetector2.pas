@@ -3461,67 +3461,47 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext);
 
-  // ARC-HINWEIS (2026-08-28, aus der SCA001-Vollzaehlung): erbt der
-  // DEKLARATIONSTYP der Variablen von TInterfacedObject, KANN die
-  // Referenzzaehlung das Objekt freigeben - der letzte Release ruft
-  // Destroy. Ein fehlendes Free ist dann kein BEWIESENES Leck mehr.
+  // AKTENNOTIZ ARC / TInterfacedObject (2026-08-28) - VERSUCHT UND
+  // ZURUECKGENOMMEN, damit es niemand ein zweites Mal so baut.
   //
-  // WARUM NUR EIN DEMOTE UND KEIN DROP - am Korpus gemessen, nicht
-  // angenommen: von 568 SCA001-Funden erben 28 von TInterfacedObject,
-  // und 26 davon sind tatsaechlich Fehlalarme. Einer ist es NICHT:
-  // jcl .../Dummy/DummyRevisionProvider.pas:39 haelt einen
-  // TStreamAdapter (erbt TInterfacedObject) in einer OBJEKT-Variablen,
-  // uebergibt ihn nirgends an eine Interface-Referenz und gibt ihn nie
-  // frei - der Refcount bleibt 0, das Leck ist echt.
+  // IDEE: erbt der Deklarationstyp von TInterfacedObject, kann die
+  // Referenzzaehlung freigeben - solche Funde also unterdruecken oder
+  // in der Konfidenz senken. Am Korpus betrifft das 30 der 568 Funde.
   //
-  // Der Grund ist die Delphi-Regel selbst: die Referenzzaehlung greift
-  // erst, wenn das Objekt an eine INTERFACE-Referenz gebunden wird.
-  //     var X: TFoo;  X := TFoo.Create;   // Refcount 0 -> LECK
-  //     var X: IFoo;  X := TFoo.Create;   // Refcount 1 -> frei
-  // Beide Zeilen erben von TInterfacedObject; nur die zweite ist
-  // harmlos. Bemerkenswert: in ALLEN 28 Korpusfaellen ist die Variable
-  // OBJEKT-typisiert - die 26 harmlosen sind es nur deshalb, weil das
-  // Objekt SPAETER an einen Interface-Parameter geht. Genau das kann
-  // dieser Detektor dateilokal nicht sehen (die Signatur der gerufenen
-  // Routine liegt meist in einer fremden Unit).
+  // WARUM ES SO NICHT GEHT, gemessen am Lauf rw22:
+  // 1. Ein Demote auf fcMedium ist ein NO-OP -
+  //    KindDefaultConfidence(fkMemoryLeak) IST fcMedium
+  //    (uSCAConsts.pas:1457). SCA001 stand nie im Error-Tier; alle 568
+  //    Funde sind lsWarning.
+  // 2. Ein Demote auf fcLow ist kein Demote, sondern ein DROP - und
+  //    zwar ueberall: DEF_FINDING_MIN_CONFIDENCE = fcMedium filtert
+  //    auch im strict-Profil. Gemessen 30 Funde weg.
+  // 3. Unter diesen 30 sind ZWEI, die bleiben muessen:
+  //    jcl .../Dummy/DummyRevisionProvider.pas:39 (TStreamAdapter in
+  //    einer Objekt-Variablen, nie an ein Interface gebunden - echtes
+  //    Leck) und CodeReader....GenericGF.pas:642 (TStringBuilder, ein
+  //    HOMONYM: die RTL-Klasse erbt TObject, eine JVCL-Hilfsunit
+  //    deklariert gleichnamig class(TInterfacedObject, IStringBuilder)).
+  //    Der TypeIndex ist bei KINDS homonym-fest, bei der ELTERNKETTE
+  //    offenbar nicht - das ist der eigentliche Befund dieser Runde.
   //
-  // Deshalb: Konfidenz herunter statt Fund weg (fcLow).
+  // DER GRUND ist die Sprachregel: die Referenzzaehlung greift erst,
+  // wenn das Objekt an eine INTERFACE-Referenz gebunden wird. In ALLEN
+  // 30 Faellen ist die Variable OBJEKT-typisiert; die 28 harmlosen sind
+  // es nur, weil das Objekt spaeter uebergeben oder zugewiesen wird.
   //
-  // DER PREIS, ehrlich benannt: fcLow liegt UNTER dem Default-Filter
-  // (DEF_FINDING_MIN_CONFIDENCE = fcMedium), die 28 verschwinden also
-  // aus der Default-Sicht - und der eine echte Fund geht dort mit.
-  // Im strict-Profil bleiben alle sichtbar. Vertretbar bei 26:1, aber
-  // keine saubere Loesung.
-  //
-  // DIE SAUBERE WAERE, den echten Fall abzutrennen, und das Merkmal
-  // dafuer steht fest: die 26 harmlosen werden als ARGUMENT an einen
-  // Aufruf uebergeben (WriteToAppender(lAppender) mit Parametertyp
-  // ILogAppender), der echte Fund NICHT - dort ist die Variable nur
-  // Empfaenger (SA.CopyTo(...)). Eine Bedingung "wird irgendwo als
-  // Argument uebergeben" traefe 26 und liesse den einen stehen.
-  // Nicht gebaut: das braucht einen Argument-Walk im Hot-Path und
-  // gehoert gegengeprueft, nicht nebenbei eingezogen.
-  function InheritsFromInterfacedObject(const ATypeRef: string): Boolean;
-  var
-    TI  : TTypeIndex;
-    Low : string;
-  begin
-    Result := False;
-    TI := CtxTypeIndex(AContext);
-    // Single-File-Pfad: kein Index -> kein Hinweis, Verhalten wie bisher.
-    if (TI = nil) or TI.IsEmpty then Exit;
-    Low := Trim(ATypeRef).ToLower;
-    if Low = '' then Exit;
-    // IsDescendantOf ist homonym-fest (AddKindStrong-Muster im Index) -
-    // das ist hier keine Kuer: TStringBuilder gibt es im Korpus ZWEIMAL,
-    // einmal als RTL-Klasse und einmal als class(TInterfacedObject,
-    // IStringBuilder) in einer JVCL-Hilfsunit. Eine namensbasierte
-    // Hierarchie wirft beide zusammen.
-    Result := TI.IsDescendantOf(Low, 'tinterfacedobject');
-  end;
+  // DER WEG, DER TRAEGT (gemessen, nicht gebaut): beide Ausnahmen
+  // werden AUSSCHLIESSLICH als Empfaenger benutzt - SA.CopyTo(...),
+  // lResult.Append(...). Die 28 anderen haben mindestens eine
+  // Verwendung, die keine Methodenaufruf-Basis ist (Argument an
+  // WriteToAppender/CreateModule, Zuweisung an ein Interface-Feld).
+  // Eine Bedingung "nach dem Create NUR als <var>. verwendet" trennt
+  // sauber. Sie gehoert mit eigener Messung und Gegenpruefung gebaut,
+  // nicht nebenbei - dieser Anlauf hat zwei Fehler gebraucht, bis das
+  // klar war.
 
   procedure AddFinding(const MissingVar: string; Sev: TLeakSeverity;
-    VLine: Integer; ARefCounted: Boolean = False);
+    VLine: Integer);
   var
     F: TLeakFinding;
   begin
@@ -3532,16 +3512,7 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
     F.MissingVar := MissingVar;
     F.Severity   := Sev;
     F.Kind       := fkMemoryLeak;
-    if ARefCounted then
-      // fcLOW, nicht fcMedium: KindDefaultConfidence(fkMemoryLeak) IST
-      // bereits fcMedium (uSCAConsts:1457), ein Demote dorthin waere
-      // ein No-Op gewesen. Erst fcLow wirkt - der Default-Filter
-      // DEF_FINDING_MIN_CONFIDENCE steht auf fcMedium, die Funde
-      // verlassen damit die Default-Sicht und bleiben im
-      // strict-Profil sichtbar.
-      F.Confidence := fcLow
-    else
-      F.Confidence := KindDefaultConfidence(fkMemoryLeak);
+    F.Confidence := KindDefaultConfidence(fkMemoryLeak);
     Results.Add(F);
   end;
 
@@ -3648,8 +3619,7 @@ begin
           // Gates): der Subtree-Walk laeuft dann nur fuer Variablen, die
           // tatsaechlich gemeldet wuerden - Hot-Path-Schutz.
           if not LastUseIsOwnershipTransfer(MethodNode, VarNameLow) then
-            AddFinding(V.Name, lsError, ReportLine,
-                       InheritsFromInterfacedObject(V.TypeRef));
+            AddFinding(V.Name, lsError, ReportLine);
         end
         else if not FreeInFin and HasFinally
              and not HasExceptFreeRaise(MethodNode, VarNameLow) then

@@ -233,10 +233,6 @@ type
     // --- FP-Klasse 2: TComponent-/Owner-Ownership + Factory-Rueckgaben ---
     [Test] procedure Leak_ComponentOwnerCreate_DottedFieldArg_NoFinding;
     [Test] procedure Leak_ComponentOwnerCreate_TypeIndexProven_NoFinding;
-    // ARC-Demote (2026-08-28): TInterfacedObject-Nachfahre bleibt
-    // gemeldet, verlaesst aber den Error-Tier.
-    [Test] procedure Leak_InterfacedObject_DemotedNotDropped;
-    [Test] procedure Leak_PlainClass_KeepsHighConfidence;
     [Test] procedure Leak_DataClassDottedArg_StillReported;        // TP-Gegenprobe
     // Review 2026-07-31: dotted Argument OHNE Komponenten-Konvention ist kein
     // Owner-Nachweis mehr.
@@ -3669,121 +3665,6 @@ begin
         TLeakDetector2.AnalyzeUnit(Root, 'sample.pas', F, Ctx);
         Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
           'frm (TForm=TComponent-Nachfahre) unterdrueckt, sl (TStrings-Ast) bleibt');
-      finally
-        F.Free;
-        Ctx.Free;
-      end;
-    finally
-      Root.Free;
-    end;
-  finally
-    Parser.Free;
-  end;
-end;
-
-procedure TTestMemoryLeakAdvanced.Leak_InterfacedObject_DemotedNotDropped;
-// BEWEIS fuer den ARC-Demote. Erbt der Deklarationstyp von
-// TInterfacedObject, KANN die Referenzzaehlung freigeben - das Leck ist
-// damit nicht mehr BEWIESEN. Der Fund bleibt trotzdem stehen, nur mit
-// gesenkter Konfidenz; ueber die Evidenz-Politik faellt er damit aus dem
-// Error-Tier.
-//
-// Warum NICHT unterdrueckt wird, steht am Detektor: die Erbschaft allein
-// garantiert die Freigabe nicht. In der SCA001-Vollzaehlung vom 28.08.
-// war einer von 28 solchen Faellen ein ECHTES Leck (ein TStreamAdapter in
-// einer OBJEKT-Variablen, der nie an eine Interface-Referenz ging).
-// Genau dieser Fund darf nicht verschwinden - deshalb Demote statt Drop.
-const SRC =
-  'unit t; implementation'#13#10+
-  'procedure TFoo.Bar;'#13#10+
-  'var io: TInterfacedObject;'#13#10+
-  'begin'#13#10+
-  '  io := TInterfacedObject.Create;'#13#10+
-  '  io.ToString;'#13#10+
-  'end;';
-var
-  Parser : TParser2;
-  Root   : TAstNode;
-  Ctx    : TAnalyzeContext;
-  F      : TObjectList<TLeakFinding>;
-  i      : Integer;
-  Gefunden : Boolean;
-begin
-  Parser := TParser2.Create;
-  try
-    Root := Parser.ParseSource(SRC);
-    try
-      Ctx := TAnalyzeContext.Create;
-      F   := TObjectList<TLeakFinding>.Create(True);
-      try
-        Ctx.LeakyClasses.Add('TInterfacedObject');
-        Ctx.TypeIndex := TTypeIndex.Create;
-        // Nur die Seeds: TInterfacedObject steht dort selbst drin, und
-        // IsDescendantOf schliesst die Klasse selbst ein.
-        Ctx.TypeIndex.Build(nil, nil);
-        TLeakDetector2.AnalyzeUnit(Root, 'sample.pas', F, Ctx);
-        Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
-          'der Fund bleibt - ein Demote ist kein Drop');
-        Gefunden := False;
-        for i := 0 to F.Count - 1 do
-          if F[i].Kind = fkMemoryLeak then
-          begin
-            Assert.AreEqual<Integer>(Ord(fcLow), Ord(F[i].Confidence),
-              'TInterfacedObject-Nachfahre: auf fcLow gesenkt - fcMedium ' +
-              'waere ein No-Op, das ist bereits der Kind-Default');
-            Gefunden := True;
-          end;
-        Assert.IsTrue(Gefunden, 'kein fkMemoryLeak-Fund zum Pruefen');
-      finally
-        F.Free;
-        Ctx.Free;
-      end;
-    finally
-      Root.Free;
-    end;
-  finally
-    Parser.Free;
-  end;
-end;
-
-procedure TTestMemoryLeakAdvanced.Leak_PlainClass_KeepsHighConfidence;
-// UEBERREICHWEITEN-WAECHTER zum Demote: eine Klasse OHNE
-// TInterfacedObject in der Ahnenlinie behaelt ihre volle Konfidenz.
-// Faellt dieser Test um, greift der Demote pauschal und nimmt SCA001
-// den Error-Tier weg - das waere der teuerste denkbare Nebeneffekt,
-// weil die Regel ihren Wert genau daraus bezieht.
-const SRC =
-  'unit t; implementation'#13#10+
-  'procedure TFoo.Bar;'#13#10+
-  'var sl: TStringList;'#13#10+
-  'begin'#13#10+
-  '  sl := TStringList.Create;'#13#10+
-  '  sl.Sort;'#13#10+
-  'end;';
-var
-  Parser : TParser2;
-  Root   : TAstNode;
-  Ctx    : TAnalyzeContext;
-  F      : TObjectList<TLeakFinding>;
-  i      : Integer;
-begin
-  Parser := TParser2.Create;
-  try
-    Root := Parser.ParseSource(SRC);
-    try
-      Ctx := TAnalyzeContext.Create;
-      F   := TObjectList<TLeakFinding>.Create(True);
-      try
-        Ctx.LeakyClasses.Add('TStringList');
-        Ctx.TypeIndex := TTypeIndex.Create;
-        Ctx.TypeIndex.Build(nil, nil);
-        TLeakDetector2.AnalyzeUnit(Root, 'sample.pas', F, Ctx);
-        Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
-          'TStringList leakt weiterhin');
-        for i := 0 to F.Count - 1 do
-          if F[i].Kind = fkMemoryLeak then
-            Assert.AreNotEqual<Integer>(Ord(fcLow), Ord(F[i].Confidence),
-              'kein TInterfacedObject-Nachfahre: Konfidenz unangetastet');
       finally
         F.Free;
         Ctx.Free;
