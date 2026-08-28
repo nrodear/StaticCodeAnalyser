@@ -129,6 +129,10 @@ end;
 // als externe Referenz zaehlen. ExpandFileName loest auf einen absoluten
 // kanonischen Pfad auf; LowerCase ist case-insensitive (Windows-FS).
 function NormalizeUnitPath(const Path: string): string;
+// Dritte Normalisierung im Projekt, dritter Zweck: absoluter
+// kanonischer Pfad. Die beiden anderen tauschen nur Trennzeichen -
+// uPathOverrides.NormalizePath ("\" -> "/", Glob) und
+// SCA.SharedUI/uPathNormalize ("/" -> "\", Cache-Schluessel).
 begin
   if Path = '' then Exit('');
   Result := LowerCase(ExpandFileName(Path));

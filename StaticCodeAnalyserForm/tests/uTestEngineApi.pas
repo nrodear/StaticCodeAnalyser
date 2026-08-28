@@ -34,6 +34,12 @@ type
     [TearDown] procedure TearDown;
 
     [Test] procedure Init_HasSaneDefaults;
+    // TFixtureFilter (2026-08-29): die Regel lag bis dahin im
+    // CLI-Laeufer, jetzt in der Engine - hier ihr Vertrag.
+    [Test] procedure FixtureFilter_AutoHidesOnlyKnownProfiles;
+    [Test] procedure FixtureFilter_DropsFixturesKeepsProduction;
+    [Test] procedure FixtureFilter_ReadErrorSurvivesFilter;
+    [Test] procedure FixtureFilter_BaseDirAnchorsThePattern;
     [Test] procedure FindingAliases_MessageLineRuleId;
     [Test] procedure AnalyzeContext_DestroyFreesOwnedOnly;
     [Test] procedure AnalyzeSource_FindsBugInMemory;
@@ -571,6 +577,122 @@ begin
       'der Hook muss den Cache leeren (G2-5)');
   finally
     TDirectory.Delete(Dir, True);
+  end;
+end;
+
+{ ---- TFixtureFilter ---- }
+
+// Zu den woertlichen C:-Pfaden in diesem Block: sie SIND die
+// Testdaten - der Filter entscheidet allein anhand von Pfadsegmenten
+// und der Scanwurzel, also muessen beide im Test stehen. Die Marker
+// sind bewusst zeilengenau und nicht dateiweit: die uebrigen Tests
+// dieser Unit fahren ueber ECHTE Temp-Dateien, dort waere ein
+// hartkodierter Pfad ein echter Befund, den ein Dateimarker
+// verdecken wuerde.
+
+function MakeFindingFor(const AFile: string;
+  AKind: TFindingKind): TLeakFinding;
+// Minimaler Fund fuer die Filter-Tests: nur Datei und Art zaehlen, der
+// Filter sieht nichts anderes an.
+begin
+  Result          := TLeakFinding.Create;
+  Result.FileName := AFile;
+  Result.SetKind(AKind);
+end;
+
+
+procedure TTestEngineApi.FixtureFilter_AutoHidesOnlyKnownProfiles;
+// Die Profil-Liste ist ABSICHTLICH explizit. Ein
+// "alles ausser strict"-Ansatz haette jedes kuenftige Profil
+// stillschweigend zum Filtern gebracht - dieser Test faellt um, wenn
+// jemand die Logik umdreht.
+begin
+  Assert.IsTrue(TFixtureFilter.AutoHidesFixtures('default'),
+    'default filtert Fixtures automatisch');
+  Assert.IsTrue(TFixtureFilter.AutoHidesFixtures('selftest-quiet'),
+    'selftest-quiet ebenfalls (Dogfooding ohne Fixture-Rauschen)');
+  Assert.IsFalse(TFixtureFilter.AutoHidesFixtures('strict'),
+    'strict NICHT - wer strict faehrt, will alles sehen');
+  Assert.IsFalse(TFixtureFilter.AutoHidesFixtures(''),
+    'kein Profil -> nicht filtern');
+  Assert.IsFalse(TFixtureFilter.AutoHidesFixtures('security'),
+    'ein anderes Profil filtert nicht, solange es nicht gelistet ist');
+end;
+
+procedure TTestEngineApi.FixtureFilter_DropsFixturesKeepsProduction;
+// Der Grundfall: ein Fund in uTestFoo.pas geht, einer in uFoo.pas
+// bleibt. Zusaetzlich der Nebenzweck von ADroppedFiles - der
+// CLI-Laeufer zeigt die Namen an, weil "*Demo.pas" auch ein Name ist,
+// den ein Neuanwender fuer sein eigenes Projekt waehlt.
+var
+  F     : TObjectList<TLeakFinding>;
+  Namen : TStringList;
+  n     : Integer;
+begin
+  F     := TObjectList<TLeakFinding>.Create(True);
+  Namen := TStringList.Create;
+  try
+    // noinspection HardcodedPath
+    F.Add(MakeFindingFor('C:\repo\tests\uTestFoo.pas', fkMemoryLeak));
+    // noinspection HardcodedPath
+    F.Add(MakeFindingFor('C:\repo\src\uFoo.pas', fkMemoryLeak));
+    // noinspection HardcodedPath
+    n := TFixtureFilter.Apply(F, 'C:\repo', Namen);
+    Assert.AreEqual<Integer>(1, n, 'genau der Fixture-Fund faellt');
+    Assert.AreEqual<Integer>(1, F.Count, 'der Produktionsfund bleibt');
+    Assert.AreEqual('uFoo.pas', ExtractFileName(F[0].FileName),
+      'und zwar der richtige');
+    Assert.AreEqual<Integer>(1, Namen.Count,
+      'der gedroppte Dateiname wird gemeldet');
+  finally
+    Namen.Free;
+    F.Free;
+  end;
+end;
+
+procedure TTestEngineApi.FixtureFilter_ReadErrorSurvivesFilter;
+// DIE REGEL, DIE BEIM UMBAU LEICHT VERLORENGEHT: ein Lesefehler ist
+// eine Aussage ueber die VOLLSTAENDIGKEIT des Laufs, kein Befund - kein
+// Profil darf ihn wegfiltern. Ohne diesen Test meldet ein Scan, der
+// halbe Verzeichnisse nicht lesen konnte, stillschweigend "sauber".
+var
+  F : TObjectList<TLeakFinding>;
+  n : Integer;
+begin
+  F := TObjectList<TLeakFinding>.Create(True);
+  try
+    F.Add(MakeFindingFor('C:\repo\tests\uTestFoo.pas', fkFileReadError));
+    // noinspection HardcodedPath
+    F.Add(MakeFindingFor('C:\repo\tests\uTestBar.pas', fkMemoryLeak));
+    n := TFixtureFilter.Apply(F, 'C:\repo');
+    Assert.AreEqual<Integer>(1, n, 'nur der normale Fund faellt');
+    Assert.AreEqual<Integer>(1, F.Count, 'der Lesefehler bleibt stehen');
+    Assert.AreEqual<Integer>(Ord(fkFileReadError), Ord(F[0].Kind),
+      'und zwar er selbst, nicht der andere');
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestEngineApi.FixtureFilter_BaseDirAnchorsThePattern;
+// Die Scanwurzel verankert die Muster. Liegt der Scan UNTERHALB eines
+// Pfades, der zufaellig "tests" heisst, darf das nicht den ganzen Lauf
+// wegfiltern - sonst meldet ein Scan von C:\tests\meinprojekt
+// gar nichts.
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  F := TObjectList<TLeakFinding>.Create(True);
+  try
+    // noinspection HardcodedPath
+    F.Add(MakeFindingFor('C:\tests\meinprojekt\src\uFoo.pas',
+      fkMemoryLeak));
+    // noinspection HardcodedPath
+    TFixtureFilter.Apply(F, 'C:\tests\meinprojekt');
+    Assert.AreEqual<Integer>(1, F.Count,
+      'das tests-Segment liegt OBERHALB der Scanwurzel und zaehlt nicht');
+  finally
+    F.Free;
   end;
 end;
 

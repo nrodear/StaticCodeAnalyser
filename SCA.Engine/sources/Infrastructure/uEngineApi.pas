@@ -66,6 +66,48 @@ type
     ssProjectGroup  // Path = .groupproj -> Union aller Projekt-Listen
   );
 
+  // TEST-FIXTURE-FILTER - Entscheidung UND Anwendung, an einer Stelle.
+  //
+  // WARUM HIER UND NICHT IM CONSUMER: das Praedikat
+  // (TDetectorUtils.IsTestFixturePath) lag immer schon in der Engine, die
+  // Entscheidung, es anzuwenden, aber ausschliesslich im CLI-Laeufer.
+  // Gemessene Folge am Referenzkorpus: bei GLEICHER Konfiguration meldet
+  // die Standalone-Form rund 262.000 Funde, die CLI rund 187.000 - ein
+  // Viertel Unterschied, weil die GUI Testcode mitzaehlt. Das ist keine
+  // Konsumenten-Drift by design (die haengt an der INI und ist
+  // dokumentiert), sondern eine Engine-Entscheidung im falschen Projekt.
+  //
+  // DIESER SCHRITT AENDERT NICHTS AM VERHALTEN. Er holt die Regel in die
+  // Engine, damit sie EINMAL existiert; WER sie anwendet, bleibt vorerst
+  // wie gehabt (nur der CLI-Laeufer ruft sie). Ob EXE und Plugin
+  // nachziehen sollen, ist eine Produktentscheidung - sie waere fuer
+  // Anwender sichtbar und gehoert nicht in ein Refactoring.
+  TFixtureFilter = record
+  public
+    // Filtert dieses Profil Fixture-Funde automatisch? Gilt nur, wenn der
+    // Anwender es nicht explizit ueberschrieben hat.
+    //   strict         -> nein (wer strict faehrt, will alles sehen)
+    //   default        -> ja   (Fokus auf Produktionscode)
+    //   selftest-quiet -> ja   (Dogfooding ohne Fixture-Rauschen)
+    //   alles andere   -> nein (konservativ)
+    class function AutoHidesFixtures(const AProfile: string): Boolean;
+      static;
+
+    // Entfernt Fixture-Funde aus AFindings und liefert deren Anzahl.
+    // ABaseDir ist die Scanwurzel - sie verankert die Pfadmuster, damit
+    // ein fremder Repo-Pfad, der zufaellig "/tests/" enthaelt, nicht
+    // mitgefiltert wird.
+    // fkFileReadError bleibt IMMER stehen: ein Lesefehler ist eine
+    // Aussage ueber die Vollstaendigkeit des Laufs, kein Befund, den ein
+    // Profil wegfiltern darf.
+    // ADroppedFiles (optional) sammelt die betroffenen Dateinamen - der
+    // CLI-Laeufer zeigt sie an, weil "*Demo.pas" und "*Sample.pas" auch
+    // Namen sind, die ein Neuanwender fuer sein eigenes Projekt waehlt.
+    class function Apply(AFindings: TObjectList<TLeakFinding>;
+      const ABaseDir: string; ADroppedFiles: TStrings = nil): Integer;
+      static;
+  end;
+
   // Vollstaendige Scan-Anfrage. Statt globale Variablen zu setzen, fuellt der
   // Consumer dieses Record und uebergibt es an TAnalysisSession.Run.
   TScanRequest = record
@@ -212,6 +254,7 @@ uses
   uStaticAnalyzer2, uRuleCatalog, uLexer, uCustomRuleDetector, uVcsChanges,
   uRepoSettings, uBaseline, uExportSARIF, uExportSonarGeneric, uExportHtml,
   uPathOverrides,   // TPathOverrides.Clear im Direkt-Modus (Config-Riegel 2026-07-04)
+  uDetectorUtils,   // IsTestFixturePath (TFixtureFilter)
   uProjectFiles,    // ssProject/ssProjectGroup (Konzept_ScanScope_2026-07-20)
   uNotIncludedInProject;   // SCA194 - verwaiste .pas/.dfm im Projektordner
 
@@ -817,6 +860,42 @@ begin
     Result := Ses.Run(Req);
   finally
     Ses.Free;
+  end;
+end;
+
+{ TFixtureFilter }
+
+class function TFixtureFilter.AutoHidesFixtures(
+  const AProfile: string): Boolean;
+// s. Deklaration. Die Liste ist bewusst kurz und explizit - ein
+// "alles ausser strict"-Ansatz haette jedes neue Profil stillschweigend
+// zum Filtern gebracht.
+begin
+  Result := SameText(AProfile, 'default') or
+            SameText(AProfile, 'selftest-quiet');
+end;
+
+class function TFixtureFilter.Apply(AFindings: TObjectList<TLeakFinding>;
+  const ABaseDir: string; ADroppedFiles: TStrings): Integer;
+// s. Deklaration. Rueckwaerts durch die Liste, damit das Loeschen die
+// noch nicht geprueften Indizes nicht verschiebt.
+var
+  i : Integer;
+begin
+  Result := 0;
+  if not Assigned(AFindings) then Exit;
+  for i := AFindings.Count - 1 downto 0 do
+  begin
+    // Lesefehler ueberleben jeden Profil-Filter - s. Deklaration.
+    if AFindings[i].Kind = fkFileReadError then Continue;
+    if not TDetectorUtils.IsTestFixturePath(AFindings[i].FileName,
+         ABaseDir) then Continue;
+    if Assigned(ADroppedFiles) then
+    begin
+      ADroppedFiles.Add(ExtractFileName(AFindings[i].FileName));
+    end;
+    AFindings.Delete(i);
+    Inc(Result);
   end;
 end;
 
