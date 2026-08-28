@@ -3461,8 +3461,55 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext);
 
+  // ARC-HINWEIS (2026-08-28, aus der SCA001-Vollzaehlung): erbt der
+  // DEKLARATIONSTYP der Variablen von TInterfacedObject, KANN die
+  // Referenzzaehlung das Objekt freigeben - der letzte Release ruft
+  // Destroy. Ein fehlendes Free ist dann kein BEWIESENES Leck mehr.
+  //
+  // WARUM NUR EIN DEMOTE UND KEIN DROP - am Korpus gemessen, nicht
+  // angenommen: von 568 SCA001-Funden erben 28 von TInterfacedObject,
+  // und 26 davon sind tatsaechlich Fehlalarme. Einer ist es NICHT:
+  // jcl .../Dummy/DummyRevisionProvider.pas:39 haelt einen
+  // TStreamAdapter (erbt TInterfacedObject) in einer OBJEKT-Variablen,
+  // uebergibt ihn nirgends an eine Interface-Referenz und gibt ihn nie
+  // frei - der Refcount bleibt 0, das Leck ist echt.
+  //
+  // Der Grund ist die Delphi-Regel selbst: die Referenzzaehlung greift
+  // erst, wenn das Objekt an eine INTERFACE-Referenz gebunden wird.
+  //     var X: TFoo;  X := TFoo.Create;   // Refcount 0 -> LECK
+  //     var X: IFoo;  X := TFoo.Create;   // Refcount 1 -> frei
+  // Beide Zeilen erben von TInterfacedObject; nur die zweite ist
+  // harmlos. Bemerkenswert: in ALLEN 28 Korpusfaellen ist die Variable
+  // OBJEKT-typisiert - die 26 harmlosen sind es nur deshalb, weil das
+  // Objekt SPAETER an einen Interface-Parameter geht. Genau das kann
+  // dieser Detektor dateilokal nicht sehen (die Signatur der gerufenen
+  // Routine liegt meist in einer fremden Unit).
+  //
+  // Deshalb: Konfidenz herunter statt Fund weg. Der Befund verlaesst
+  // ueber die Evidenz-Politik den Error-Tier ("Error = bewiesen"),
+  // bleibt aber sichtbar - ein echtes Leck wie das oben genannte geht
+  // nicht verloren.
+  function InheritsFromInterfacedObject(const ATypeRef: string): Boolean;
+  var
+    TI  : TTypeIndex;
+    Low : string;
+  begin
+    Result := False;
+    TI := CtxTypeIndex(AContext);
+    // Single-File-Pfad: kein Index -> kein Hinweis, Verhalten wie bisher.
+    if (TI = nil) or TI.IsEmpty then Exit;
+    Low := Trim(ATypeRef).ToLower;
+    if Low = '' then Exit;
+    // IsDescendantOf ist homonym-fest (AddKindStrong-Muster im Index) -
+    // das ist hier keine Kuer: TStringBuilder gibt es im Korpus ZWEIMAL,
+    // einmal als RTL-Klasse und einmal als class(TInterfacedObject,
+    // IStringBuilder) in einer JVCL-Hilfsunit. Eine namensbasierte
+    // Hierarchie wirft beide zusammen.
+    Result := TI.IsDescendantOf(Low, 'tinterfacedobject');
+  end;
+
   procedure AddFinding(const MissingVar: string; Sev: TLeakSeverity;
-    VLine: Integer);
+    VLine: Integer; ARefCounted: Boolean = False);
   var
     F: TLeakFinding;
   begin
@@ -3473,7 +3520,10 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
     F.MissingVar := MissingVar;
     F.Severity   := Sev;
     F.Kind       := fkMemoryLeak;
-    F.Confidence := KindDefaultConfidence(fkMemoryLeak);
+    if ARefCounted then
+      F.Confidence := fcMedium          // s. InheritsFromInterfacedObject
+    else
+      F.Confidence := KindDefaultConfidence(fkMemoryLeak);
     Results.Add(F);
   end;
 
@@ -3580,7 +3630,8 @@ begin
           // Gates): der Subtree-Walk laeuft dann nur fuer Variablen, die
           // tatsaechlich gemeldet wuerden - Hot-Path-Schutz.
           if not LastUseIsOwnershipTransfer(MethodNode, VarNameLow) then
-            AddFinding(V.Name, lsError, ReportLine);
+            AddFinding(V.Name, lsError, ReportLine,
+                       InheritsFromInterfacedObject(V.TypeRef));
         end
         else if not FreeInFin and HasFinally
              and not HasExceptFreeRaise(MethodNode, VarNameLow) then
