@@ -99,6 +99,7 @@ contains
   uCompatSet in '..\SCA.Engine\sources\Common\uCompatSet.pas',
   uCrashDiag in '..\SCA.Engine\sources\Common\uCrashDiag.pas',
   uDetectorUtils in '..\SCA.Engine\sources\Common\uDetectorUtils.pas',
+  uJsonFormat in '..\SCA.Engine\sources\Common\uJsonFormat.pas',
   uLocalization in '..\SCA.Engine\sources\Common\uLocalization.pas',
   uMethodd12 in '..\SCA.Engine\sources\Common\uMethodd12.pas',
   uQuickFix in '..\SCA.Engine\sources\Common\uQuickFix.pas',

@@ -84,6 +84,96 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   whole baseline stops matching instead of half-matching - `--baseline`
   says so in its mismatch warning; re-write the baseline in the mode you
   now use.
+- **The score and the threshold of the four metric rules are no longer
+  part of the baseline fingerprint.** Read this entry on its own; it is
+  *not* the parser fix further down, and the two must not be added up.
+  The parser fix changes 105 fingerprints as a side effect. This change
+  changes **37,990** of them on purpose - 361 times as many - and the
+  point of listing them separately is that you can tell afterwards which
+  change did what. SCA022, SCA018, SCA176 and SCA012 write their
+  measured value *and the configured limit* into the message
+  (`Cyclomatic complexity 11 (limit: 10)`), and the fingerprint hashes
+  the message. `CyclomaticMax` and `DeepNestingMaxDepth` are documented
+  knobs in `analyser.ini` that `docs/configuration.md` invites you to
+  tune - and tuning one changed the *identity* of every finding of that
+  rule without changing a single finding. On the reference corpus that
+  is 37,990 findings, **4.85 %**, whose baseline entry hung on a config
+  value. For these four rules the fingerprint now replaces runs of
+  digits with a placeholder before hashing, so score and limit drop out
+  of the identity while everything else about the message keeps
+  separating findings. **A side effect worth more than the headline:**
+  SCA018 wrote the *line number* into its message (`Depth 8 (if from
+  line 1456, limit: 4)`) and thereby broke the promise the baseline
+  makes at the top of its own source - that a finding's line is
+  deliberately kept out of the fingerprint so that inserting a line
+  above it does not move every finding in the file. All 3,707 SCA018
+  findings on the corpus - the entire rule - lost their baseline
+  assignment on a pure line shift. They no longer do; the keyword
+  (`if`/`for`/`while`/`repeat`/`case`) carries no digits and keeps
+  telling two findings apart. SCA021 (DuplicateBlock, 9,150 findings)
+  carries the same break and is **deliberately not** included: there the
+  line numbers are the only thing separating two duplicate groups in one
+  file. **Deliberately not applied globally**, and please do not
+  "clean this up" later: normalising every rule would merge 140,703
+  identities on the corpus in path mode and 114,577 in the default mode
+  (both counted; an *estimated* ~120,700 of them, ~15 % of all findings,
+  survive a per-method correction - that last one is an estimate, not a
+  count), 94,254 in SCA101
+  alone, whose message differs only in a column number - one baseline
+  entry would silence every single-statement branch in a file, invisibly.
+  **Four other rules print a documented threshold into their message and
+  are NOT covered by this** - re-tune `LongParamListMaxParams` (SCA013),
+  `MaxCaseBranches` (SCA091), `MaxLineLength` (SCA062) or
+  `DuplicateBlockMinLines` (SCA021) and every finding of that rule gets a
+  new *fingerprint*; on a baseline older than v0.9.8, or where the code
+  within three lines of the finding changed as well, those findings
+  surface once as new. Otherwise the context hash still matches them - a
+  re-tuned threshold changes the message, not the line and not the
+  surrounding code - so **do not re-write the baseline just because you
+  turned one of those knobs**; `docs/configuration.md` now has the table
+  and the same caveat. They are excluded on the numbers: including SCA013
+  would cost 455 of its 10,099 identities (4.5 %, nine times the path-mode
+  rate below, because overloads differ in exactly the parameter count that
+  would be dropped) and SCA091 621 of 1,944 (31.9 %, because it records no
+  method name and its message is otherwise identical everywhere). In the
+  default mode the SCA013 gap closes to 4.4 % against 3.8 % and the case
+  rests on the structural reason rather than on the rate.
+  **What it costs here, measured:** **183 to 185** findings lose their
+  separate identity (SCA022 61, SCA176 60, SCA018 33-35, SCA012 29) -
+  0.49 % of the four rules, 0.024 % of the corpus. Each
+  rule reports at most one finding per method, so the only findings that
+  can collide are **same-named methods in one file**: overloads, or the
+  same name in two classes of one unit. Accept one of those into a
+  baseline and its twin is accepted with it. **Those numbers hold in path
+  mode** (`PathInFingerprint=1`); in the default mode the file token is
+  the bare file name, same-named files in different folders share it, and
+  the cost is about **1,450 findings, 3.8 %** of the four rules (measured
+  per repository - the corpus carries four copies of some JVCL units).
+  Same distinction the source makes for the 6.11 % of the context-hash
+  key. (The spread of the first number is the method-name heuristic used
+  to count it: the name is not in the SARIF, it has to be read back from
+  the source. Three independent counts gave 222, 185 and 183. The 222 came
+  from a regex that stopped at the `<` in `procedure TFoo<T>.Bar` and so
+  merged every method of a generic class - simply wrong. The other two
+  replicate the parser's own naming rule and differ only in that the 183
+  reads **comment- and literal-stripped** code, which is what anyone
+  re-counting this must do: on raw lines, prose counts as method headers -
+  `you` out of a `MessageDlg` text and `to` out of the comment "Just a
+  simple procedure to increase ..." each threw two real methods into one
+  bucket. The argument that needs no name model at all: the assumption-free
+  bound - every finding of one rule in one file assumed to sit in one
+  method - is 20,194 against 140,703 for the global variant, a factor of
+  7; in the default mode 18,346 against 114,577, a factor of 6.)
+  **One-time invalidation:**
+  every existing baseline entry of these four rules gets a new
+  fingerprint. On baselines written by v0.9.8 or later this is invisible
+  - the context hash matches them anyway, on the CLI and, as of this
+  release, in the GUI and the IDE plugin too (first entry above).
+  Baselines **older than v0.9.8 carry no context hash**, and there you
+  will see it: those findings surface once as new. Fix: re-write the
+  baseline (`--write-baseline`, or "Write baseline" in the GUI and the
+  plugin) - noting that a re-write accepts *all* current findings, not
+  only the previously accepted ones.
 - **Evidence tiering ("error = proven")**: finding severity is now
   capped by the detector's confidence in that specific finding - only
   high-confidence findings appear at `error` level, medium-confidence
@@ -128,6 +218,47 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "no enclosing try..finally" claim does not hold there).
 
 ### Fixed
+- **The baseline file `--write-baseline` produced was not valid JSON**
+  whenever a finding's message quoted a control character from the
+  scanned source. RFC 8259 requires `U+0000`-`U+001F` to be escaped;
+  Delphi's `TJSONValue.Format` - the pretty printer the writer used -
+  passes them through raw, because it calls `ToChars` with an empty
+  option set that is hard-wired in the RTL. Detectors quote source text,
+  and the lexer resolves character literals into real characters, so
+  `PasswordChar := #0` or a DFM string holding `#0#4` puts a raw
+  `0x00` into the message and from there into the file. On the
+  reference corpus that hit **3 of 783,104 entries** - and made all
+  **371 MB** unreadable for every strict parser: `python json.load`,
+  `jq` and `JSON.parse` abort at the first such line, not at the entry.
+  An error rate of 0.00038 % with a failure rate of 100 %.
+  **What was not affected**, and this is the important half: our own
+  readers. Delphi's JSON parser is more tolerant than the specification
+  and accepts bytes below `0x20` without complaint, so `--baseline`,
+  the GUI filter and the IDE plugin kept filtering correctly - no CI
+  gate ever went wrongly green, and nothing needs to be re-baselined.
+  What broke was every *foreign* tool: baseline differs, merge helpers,
+  counting scripts. **Fixed in a shared formatter** (`uJsonFormat`) that
+  keeps the RTL's indentation but hands every value *and every pair
+  name* to the RTL with `EncodeBelow32` - the same mechanism the
+  SonarQube export has used since it hit this defect on 2026-08-05, and
+  the SARIF emitter since 2026-08-06. Both had fixed their own exit and
+  left this one standing. **Output is byte-identical** for any tree
+  without control characters, so regenerating a baseline changes only
+  the entries that were broken; fingerprints are unaffected either way,
+  because they hash the finding's detail before serialisation and the
+  escape sequence reads back as exactly the character it replaced.
+  Existing baselines - including old ones with raw control bytes - keep
+  working unchanged; there is no migration. This is a pre-existing
+  defect, present since the baseline unit's first commit on 2026-05-18,
+  and unrelated to the baseline work elsewhere in this release; it
+  merely surfaced while verifying it. Two smaller repairs travel with
+  it: the user profile writer (`profiles.json`) used the same call and
+  has profile *names* as pair names, and the HTML report's **"load
+  baseline"** button no longer swallows a parse error - it caught the
+  exception and returned without a word, so the user picked a file,
+  nothing happened, and every finding stayed marked "new". It now says
+  the file could not be read. The guard test that both sibling exports
+  had, and the baseline did not, exists now.
 - SCA018 (DeepNesting) no longer counts an `if … else if … else if`
   chain as nested code. The parser attaches the else branch below the
   `if`, which already carries the raised depth, so every chain link

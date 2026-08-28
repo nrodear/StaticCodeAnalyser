@@ -72,6 +72,77 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 | `OnlyNew` | Bool | `False` | N'afficher que les résultats absents de la base de référence. |
 | `PathInFingerprint` | Bool | `False` | Inclure le chemin relatif dans l'empreinte — distingue des fichiers homonymes dans des dossiers différents. |
 
+### Quels seuils se réajustent sans invalider une base de référence
+
+L'empreinte hache le message du résultat, et la plupart des règles à seuil
+inscrivent la limite configurée dans ce message. Tourner un tel bouton
+change donc l'*empreinte* de chaque résultat de cette règle sans changer
+un seul résultat. Cinq des neuf seuils `[Detectors]` ci-dessus y
+échappent, quatre non — le tableau dit lesquels, et le paragraphe qui
+suit dit ce que le « Non » coûte réellement, c'est-à-dire moins qu'il
+n'y paraît.
+
+| Clé | Règle | L'empreinte survit-elle au réajustement ? |
+|---|---|---|
+| `[Detectors] LongMethodMaxBodyLines` | SCA012 | **Oui** |
+| `[Detectors] LongMethodMaxStatements` | SCA012 | **Oui** |
+| `[Detectors] DeepNestingMaxDepth` | SCA018 | **Oui** |
+| `[Detectors] CyclomaticMax` | SCA022 | **Oui** |
+| `[Detectors] CognitiveLimit` | SCA176 | **Oui** |
+| `[Detectors] LongParamListMaxParams` | SCA013 | Non — mais voir plus bas, le hachage de contexte correspond généralement quand même |
+| `[Detectors] MaxCaseBranches` | SCA091 | Non — mais voir plus bas, le hachage de contexte correspond généralement quand même |
+| `[Detectors] MaxLineLength` | SCA062 | Non — mais voir plus bas, le hachage de contexte correspond généralement quand même |
+| `[Detectors] DuplicateBlockMinLines` | SCA021 | Non — mais voir plus bas, le hachage de contexte correspond généralement quand même |
+
+**Ce que les lignes « Non » veulent dire, et ce qu'elles ne veulent pas
+dire.** Elles portent sur l'empreinte, et l'empreinte n'est qu'une des
+deux sources de correspondance. Toute entrée d'une base de référence
+écrite par la v0.9.8 ou une version plus récente porte aussi un *hachage
+de contexte* (`contextHash`) sur les lignes de source autour du résultat,
+et réajuster un seuil ne change que la formulation du message — ni la
+ligne du résultat, ni le code alentour. Dans le cas normal ces résultats
+continuent donc de correspondre et vous ne voyez rien. Ils apparaissent
+une fois comme nouveaux quand le hachage de contexte ne peut pas aider :
+sur une base de référence antérieure à la v0.9.8 (celles-là n'en portent
+pas), quand le code à moins de trois lignes du résultat a changé lui
+aussi, ou quand la base a été écrite avec l'autre réglage
+`PathInFingerprint` (alors plus rien ne correspond, et l'exécution le
+signale). Dans ces cas-là, réécrivez la base de référence
+(`--write-baseline`, ou « Write baseline » dans l'interface et le plugin)
+— en sachant qu'une réécriture accepte *tous* les résultats actuels, pas
+seulement ceux acceptés auparavant. Ne réécrivez **pas** par précaution
+au seul motif que vous avez tourné l'un de ces quatre boutons.
+
+Cela fait des lignes « Oui » la promesse la plus forte, non la plus
+faible : elles tiennent même quand le hachage de contexte ne correspond
+*pas*, car pour ces cinq clés aucun nombre du message n'entre dans
+l'empreinte. Changer `CyclomaticMax` change quels résultats sont
+*signalés*, jamais lesquels votre base de référence *accepte* déjà.
+
+Le seul cas que les cinq clés exemptées ne savent pas distinguer : pour
+SCA012, SCA018, SCA022 et SCA176, deux méthodes homonymes d'un même
+fichier — surcharges, ou le même nom dans deux classes d'une unité —
+partagent une seule entrée de référence. Sur le corpus de référence de
+783 105 résultats cela concerne **183 à 185 résultats sur 37 990
+(0,49 %) avec `PathInFingerprint=1`**, et **environ 1 450 (3,8 %) dans le
+mode par défaut**, où le jeton de fichier est le nom de fichier nu et où
+des fichiers homonymes dans des dossiers différents le partagent (le
+corpus contient quatre copies de certaines unités JVCL et six d'une unité
+CEF4Delphi). Les deux nombres valent par dépôt. L'écart du premier vient
+de l'heuristique de noms de méthodes utilisée pour le compter, voir le
+CHANGELOG.
+
+Les quatre autres règles ont été écartées à dessein, non par oubli.
+Retirer les nombres de *leurs* messages fusionnerait des résultats que
+rien d'autre ne distingue — mesuré sur le même corpus et dans le même
+mode de chemin, SCA013 perdrait 455 de ses 10 099 identités (4,5 %, neuf
+fois le taux des cinq clés exemptées, parce que les surcharges diffèrent
+précisément par le nombre de paramètres qui disparaîtrait) et SCA091 621
+sur 1 944 (31,9 %, parce que cette règle ne retient aucun nom de méthode
+et que son message est identique partout ailleurs). Dans le mode par
+défaut l'écart de SCA013 se referme à 4,4 % contre 3,8 % — là,
+l'argument repose sur la raison structurelle plutôt que sur le taux.
+
 ## `[Score]`
 
 | Clé | Type | Défaut | Signification |
