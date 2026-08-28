@@ -28,6 +28,45 @@
 // Die Typ-Erkennung liegt in TDetectorUtils.CollectFfiBindingTypes; die
 // Kriterien-Auswahl (und was verworfen wurde) ist dort dokumentiert.
 //
+// GATE 7 - DIE ZEILE IST GAR KEIN METHODENKOPF (2026-08-28). 806 der
+// 11.192 Korpusfunde sind ein Parser-Artefakt, kein Namensverstoss.
+//
+// URSACHE ist Praeprozessor-BLINDHEIT an einem Dual-Mode-Header. Die
+// naheliegende Erklaerung "Prozedurvariable im var-Block" ist WIDERLEGT
+// und darf nicht zurueckkommen: eine nackte Prozedurvariable erreicht
+// SCA106 ueberhaupt nie. TParser2.ParseVarLikeSection legt sie als nkField
+// ab, und nkField sieht dieser Detektor nicht - er laeuft ueber
+// FindAll(nkMethod). Gegengezaehlt: 10.953 solcher Zeilen in 331
+// Korpusdateien, davon NULL Funde.
+//
+// Die Fehlform steht in skia4delphi\Source\System.Skia.API.pas und lautet
+// (EINE Quellzeile, hier nur umbrochen):
+//   {$IFDEF SK_STATIC_LIBRARY}function {$ENDIF}gr4d_backendsemaphore_create
+//   {$IFNDEF SK_STATIC_LIBRARY}: function {$ENDIF}(): gr_backendsemaphore_t; cdecl;
+// BEIDE Zweige stehen im Tokenstrom, denn das IFDEF-Skipping des Lexers ist
+// Opt-in und per Default AUS (uLexer.gLexerIfdefSkipEnabled = False, das
+// Wiring sitzt in TParser2.ParseSource). Am fuehrenden `function` steigt
+// der Exit-Waechter am Schleifenkopf von ParseVarLikeSection aus,
+// ParseInterfaceSection dispatcht stattdessen in ParseMethodSignature -
+// heraus faellt ein nkMethod mit TypeRef
+// 'function:function():gr_backendsemaphore_t;cdecl'.
+//
+// Das Gate liest genau die Unmoeglichkeit, die dabei entsteht: einen
+// Routinenkopf, dessen RUECKGABETYP-Position mit `function` oder
+// `procedure` beginnt, gibt es in Object Pascal nicht. Eine procedure hat
+// keinen Rueckgabetyp, und ein Funktionsergebnis muss ein Typ-BEZEICHNER
+// sein, nie ein anonym hingeschriebener prozeduraler Typ. Das TP-Risiko
+// ist damit per SPRACHDEFINITION null, nicht bloss empirisch klein.
+//
+// EIN-DATEI-GEWINN, und das steht hier bewusst so: die Quelltext-
+// Gegenprobe ueber alle 16.024 .pas/.inc/.dpr des Korpus findet die Form
+// 806 mal in GENAU EINER Datei, ohne Ueberhang. Das Gate raeumt ein
+// Artefakt weg, es verallgemeinert nichts - wer daraus eine Regelklasse
+// ableitet, irrt sich ein zweites Mal. Die saubere Loesung waere ein
+// Praeprozessor, der einen der beiden Zweige auswaehlt; bis dahin ist das
+// hier der Deckel.
+// A/B-Vertrag: SCA106 11.192 -> 10.386, nur Drops, 0 Adds.
+//
 // EINE MELDUNG JE METHODE (2026-08-01, Backlog-Posten aus dem
 // Parser-Gate): FindAll(nkMethod) liefert fuer eine implementierte Methode
 // ZWEI Knoten - die Deklaration im Typ und die Implementierung. Beide
@@ -102,6 +141,75 @@ begin
     if Pos('tobject', LowerCase(Child.TypeRef)) > 0 then Exit(True);
     Exit;                              // nur ersten Parameter pruefen
   end;
+end;
+
+function HasProceduralReturnType(const ATypeRef: string): Boolean;
+// Gate 7: True, wenn die RUECKGABETYP-Position des Signatur-TypeRefs mit
+// dem Schluesselwort `function` oder `procedure` beginnt. Das ist kein
+// gueltiger Rueckgabetyp, sondern der Fingerabdruck des praeprozessor-blind
+// geparsten Dual-Mode-Headers (Herleitung im Kopfkommentar) - die Zeile ist
+// kein Methodenkopf.
+//
+// TypeRef-Format: `'kind[:rueckgabetyp][;dir1;dir2...]'`.
+//
+// WARUM DER ERSTE DOPPELPUNKT DIE RICHTIGE TRENNSTELLE IST: gesetzt wird er
+// an genau EINER Stelle, `MethKind + ':' + RetType` in
+// TParser2.ParseMethodSignature. `kind` ist der Wert des Routinen-
+// Schluesselworts, die Direktiven sind ebenfalls Schluesselwoerter
+// (ParseMethodDirectives) - keines von beiden kann einen Doppelpunkt
+// tragen. Dass der Rueckgabe-REST weitere enthaelt, stoert deshalb nicht,
+// und bei der Fehlform tut er das genau so:
+// 'function:function():gr_backendsemaphore_t;cdecl'. Auch Generics
+// (`TDictionary<string, Integer>`) und qualifizierte Typnamen
+// (`System.SysUtils.TFoo`) bringen keinen zweiten Doppelpunkt VOR die
+// Trennstelle - sie stehen ohnehin dahinter.
+//
+// WORTGRENZE ueber das erste TOKEN statt per StartsWith: beim Zusammenbau
+// setzt uParser2.JoinTokInto nur dann ein Trennzeichen, wenn beide Seiten
+// Identifier-Zeichen sind - ein Token endet also am ersten
+// Nicht-Identifier-Zeichen. Ein Typ namens `FunctionResult` liefert so das
+// Token 'functionresult' und faellt nicht unter das Gate.
+//
+// Zeichen ab #128 zaehlen hier MIT als Identifier-Zeichen.
+// uParser2.ParserIsIdentChar ist ASCII-only, weil es nur ueber das SETZEN
+// des Trenners entscheidet; Delphi erlaubt aber Unicode-Bezeichner, und ein
+// Typ `Functionaequivalent` mit echtem Umlaut waere sonst hinter 'function'
+// zerschnitten und faelschlich begnadigt worden.
+//
+// Case egal (SameText) - der Aufrufer reicht die lowercase-Fassung durch,
+// aber das soll keine stille Vorbedingung sein.
+const
+  ASCII_MAX = 127;
+var
+  pColon   : Integer;
+  i        : Integer;
+  TokStart : Integer;
+  FirstTok : string;
+begin
+  Result := False;
+  pColon := Pos(':', ATypeRef);
+  if pColon = 0 then Exit;      // ohne Rueckgabetyp gibt es nichts zu pruefen
+  i := pColon + 1;
+  // REIN DEFENSIV, feuert heute nie: RetType wird in ParseMethodSignature
+  // ausschliesslich ueber JoinTokInto aus dem Leerstring aufgebaut, und
+  // JoinTokInto setzt den Trenner nur ZWISCHEN zwei Tokens (Bedingung
+  // FullRHS <> '') - vor das erste also nicht. Hinter dem Doppelpunkt
+  // steht damit kein Blank. Die Schleife bleibt, damit das Gate nicht an
+  // dieser Zusammenbau-Eigenschaft haengt, falls sie sich aendert.
+  while (i <= Length(ATypeRef)) and (ATypeRef[i] = ' ') do
+  begin
+    Inc(i);
+  end;
+  TokStart := i;
+  while (i <= Length(ATypeRef)) and
+        (CharInSet(ATypeRef[i], ['A'..'Z', 'a'..'z', '0'..'9', '_']) or
+         (Ord(ATypeRef[i]) > ASCII_MAX)) do
+  begin
+    Inc(i);
+  end;
+  FirstTok := Copy(ATypeRef, TokStart, i - TokStart);
+  Result   := SameText(FirstTok, 'function') or
+              SameText(FirstTok, 'procedure');
 end;
 
 function BuildMethodOwnerMap(UnitNode: TAstNode)
@@ -335,6 +443,12 @@ begin
       TypeRefLow := LowerCase(M.TypeRef);
       // Gate 1: external -> der Bezeichner ist das Link-Symbol.
       if Pos(';external', TypeRefLow) > 0 then Continue;
+      // Gate 7 (2026-08-28): kein Methodenkopf, sondern der praeprozessor-
+      // blind geparste Dual-Mode-Header (Herleitung im Kopfkommentar).
+      // BESITZERUNABHAENGIG und deshalb HIER, nicht im OwnerName-Block
+      // weiter unten: die 806 Korpusfaelle sind Unit-Level-Routinen ohne
+      // Besitzertyp - dort haette das Gate sie nie erreicht.
+      if HasProceduralReturnType(TypeRefLow) then Continue;
 
       OwnerName := TDetectorUtils.OwnerTypeName(M.Name);
       if OwnerName = '' then

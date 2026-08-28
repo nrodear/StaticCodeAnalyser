@@ -34,16 +34,28 @@ type
     // Gate 6 (2026-08-21): ein Typ, der AUSNAHMSLOS camelCase benennt,
     // spiegelt eine fremde API - dort ist der Name ein ABI-Schluessel.
     [Test] procedure CamelTypeAmnesty_AndItsTwoBoundaries;
+    // Gate 7 (2026-08-28): der praeprozessor-blind geparste Dual-Mode-
+    // Header ist gar kein Methodenkopf.
+    [Test] procedure DualModeHeader_AndItsTwoBoundaries;
   end;
 
 implementation
 
-// noinspection-file HardcodedPath, ClassPerFile
+// noinspection-file HardcodedPath, ClassPerFile, GodClass
 // HardcodedPath: die Testpfade sind der PRUEFGEGENSTAND des
 // Testpfad-Gates - sie muessen woertlich dastehen, damit die
 // Verankerung der Segment-Muster ueberhaupt pruefbar ist.
 // ClassPerFile: die Klassen stehen in QUELLTEXT-STRINGS der
 // Fixtures, nicht als zweite Klasse dieser Unit.
+// GodClass: mit Gate 7 steht die Fixture bei 21 Testmethoden, eine ueber
+// der Schwelle von uGodClass (MAX_METHODS=20). Eine DUnitX-Fixture ist
+// eine flache Liste unabhaengiger Faelle - "in fokussierte Einheiten
+// aufteilen" waere hier kein Gewinn, sondern ein zweites Testmodul samt
+// Projektdatei-Eingriff. Vier Schwesterunits (uTestDuplicate,
+// uTestMissingFinally, uTestDfmDeadEvent, uTestEditorCommand) fuehren
+// denselben Marker aus demselben Grund. Die drei Faelle von Gate 7
+// bleiben trotzdem in EINER Methode gebuendelt - s. die Begruendung an
+// CamelTypeAmnesty_AndItsTwoBoundaries.
 
 uses
   System.SysUtils, System.Generics.Collections,
@@ -548,6 +560,101 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkMethodName) >= 2,
       'zwei camelCase-Methoden sind noch keine Konvention');
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestMethodName.DualModeHeader_AndItsTwoBoundaries;
+// Gate 7 und seine BEIDEN Grenzen in einem Vertrag - gleiche Bauform und
+// gleicher Grund wie bei CamelTypeAmnesty_AndItsTwoBoundaries.
+//
+// Das Gate wertet AUSSCHLIESSLICH die Rueckgabetyp-POSITION. Beide
+// Grenzen pruefen genau das: ein prozeduraler PARAMETER-Typ und ein
+// Typ-Bezeichner, der mit 'Function' ANFAENGT, muessen Funde bleiben.
+//
+// Was welcher Fall beweist: Fall 1 traegt das Gate (ohne Gate 7 liefert
+// SRC_DUAL_MODE 3 Funde statt 0 - alle Namen sind kleingeschrieben,
+// OwnerName ist leer, also greifen weder Gate 2 noch Gate 6). Die Faelle
+// 2 und 3 sind WAECHTER gegen eine zu breite Implementierung und bleiben
+// auch ohne das Gate gruen; sie kippen erst, wenn jemand statt des
+// ersten Tokens ein blosses StartsWith prueft oder die Parameterliste
+// mit einbezieht.
+var
+  F : TObjectList<TLeakFinding>;
+const
+  // 1) Die Fehlform aus skia4delphi\Source\System.Skia.API.pas, woertlich
+  //    nachgebaut. Der Lexer skippt die IFDEFs per Default NICHT (sie sind
+  //    fuer ihn Kommentar), also stehen beide Zweige im Tokenstrom:
+  //    ParseVarLikeSection steigt am fuehrenden `function` aus, die
+  //    Interface-Sektion dispatcht in ParseMethodSignature, und es
+  //    entsteht ein nkMethod mit TypeRef 'function:function():...'.
+  //    Das ist kein Methodenkopf - kein Fund.
+  SRC_DUAL_MODE =
+    'unit t;'#13#10+
+    'interface'#13#10+
+    '{$IFNDEF SK_STATIC_LIBRARY}'#13#10+
+    'var'#13#10+
+    '{$ENDIF}'#13#10+
+    '  {$IFDEF SK_STATIC_LIBRARY}function {$ENDIF}gr4d_backendsemaphore_create'+
+    '{$IFNDEF SK_STATIC_LIBRARY}: function {$ENDIF}(): gr_backendsemaphore_t; cdecl;'#13#10+
+    '  {$IFDEF SK_STATIC_LIBRARY}procedure {$ENDIF}gr4d_backendsemaphore_destroy'+
+    '{$IFNDEF SK_STATIC_LIBRARY}: procedure {$ENDIF}(self: gr_backendsemaphore_t); cdecl;'#13#10+
+    // Dritte Zeile: MEHRERE Parameter, und das ist die MEHRHEITSFORM -
+    // 463 der 806 Korpusfaelle (57 %) sehen so aus. Die Ret-Type-Schleife
+    // in ParseMethodSignature stoppt am ersten tkSemicolon, hier also
+    // schon INNERHALB der Parameterliste; der TypeRef bricht mittendrin
+    // ab ('procedure:procedure(self:sk_rrect_t') und traegt keine
+    // schliessende Klammer. Das Gate darf davon nicht abhaengen - es
+    // liest nur das erste Token der Rueckgabeposition, und das steht
+    // vor der Abbruchstelle. Ohne diese Zeile pruefte die Fixture nur
+    // die Minderheitsform.
+    '  {$IFDEF SK_STATIC_LIBRARY}procedure {$ENDIF}sk4d_rrect_inflate'+
+    '{$IFNDEF SK_STATIC_LIBRARY}: procedure {$ENDIF}(self: sk_rrect_t; dx, dy: float); cdecl;'#13#10+
+    'implementation'#13#10+
+    'end.';
+  // 2) Erste Grenze: ein prozeduraler PARAMETER-Typ. Hier steht `procedure`
+  //    hinter einem Doppelpunkt, aber in der Parameter-Liste - der TypeRef
+  //    der Methode traegt gar keinen Rueckgabetyp - beide bleiben Funde.
+  //    doStuff ist die realistische Form. doOther ist bewusst SYNTHETISCH:
+  //    `cb: procedure` kompiliert in Delphi nicht, denn auch in
+  //    Parameterposition verlangt die Sprache einen Typ-BEZEICHNER - genau
+  //    die Regel, auf die sich Gate 7 beruft. Als Parser-EINGABE ist die
+  //    Zeile trotzdem zulaessig, und sie ist der schaerfste Waechter, den
+  //    es gibt: sie bringt das Schluesselwort woertlich hinter einen
+  //    Doppelpunkt, ohne dass es in Rueckgabeposition steht.
+  SRC_PROC_PARAM =
+    'unit t; implementation'#13#10+
+    'procedure doStuff(cmp: TCompareFunc); begin end;'#13#10+
+    'procedure doOther(cb: procedure); begin end;';
+  // 3) Zweite Grenze: ein Typ-BEZEICHNER, der mit 'Function' anfaengt.
+  //    Die Wortgrenze muss ueber das erste Token laufen, nicht ueber ein
+  //    blosses StartsWith - sonst begnadigt das Gate hier faelschlich.
+  SRC_FUNCTION_PREFIX_TYPE =
+    'unit t; implementation'#13#10+
+    'function getIt: FunctionResult; begin end;';
+begin
+  F := TFindingHelper.FindingsOfFile(SRC_DUAL_MODE);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMethodName),
+      'ein Rueckgabetyp, der mit function/procedure beginnt, ist kein ' +
+      'Routinenkopf - in Object Pascal gibt es diese Form nicht');
+  finally
+    F.Free;
+  end;
+
+  F := TFindingHelper.FindingsOfFile(SRC_PROC_PARAM);
+  try
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkMethodName),
+      'nur die Rueckgabe-Position zaehlt, nicht die Parameter');
+  finally
+    F.Free;
+  end;
+
+  F := TFindingHelper.FindingsOfFile(SRC_FUNCTION_PREFIX_TYPE);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
+      'FunctionResult ist ein Typname, kein Schluesselwort');
   finally
     F.Free;
   end;
