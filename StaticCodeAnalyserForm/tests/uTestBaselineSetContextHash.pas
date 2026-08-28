@@ -144,10 +144,10 @@ const
   // BIS 2026-08-28 STAND HIER EIN SCORE-PAAR ('complexity 11' gegen
   // 'complexity 12'). Das geht seit dem Ziffern-Zweig in
   // TBaseline.Fingerprint (METRIC_DETAIL_KINDS) nicht mehr: bei den vier
-  // Metrik-Regeln fallen zwei Scores jetzt auf DENSELBEN Fingerprint, und
-  // fuenf Tests dieser Fixture haetten still das Gegenteil ihres Zwecks
-  // geprueft - sie waeren ueber den Fingerprint gruen geworden, ohne den
-  // contextHash je zu befragen. Der WORTLAUT-Wechsel ist der Fall, der
+  // Metrik-Regeln fallen zwei Scores jetzt auf DENSELBEN Fingerprint. Sechs
+  // Tests dieser Fixture haetten daran das Gegenteil ihres Zwecks geprueft -
+  // (a) (b) (c) (e) (f) waeren rot geworden, und (i) haette seine
+  // Vorbedingung verloren. Der WORTLAUT-Wechsel ist der Fall, der
   // beim Fingerprint weiterhin zerbricht (Rule-Text-Aenderung, i18n) und
   // fuer den es die zweite Match-Quelle also nach wie vor braucht.
   DETAIL_KURZ = 'Cyclomatic complexity 11 (limit: 10)';
