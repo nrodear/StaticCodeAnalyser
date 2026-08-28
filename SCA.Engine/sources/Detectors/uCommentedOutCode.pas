@@ -18,6 +18,76 @@ unit uCommentedOutCode;
 //
 // Schweregrad: lsHint - kein Bug, aber tote Wartungsschuld (commented-
 // out Code rottet weg, niemand traut sich es zu loeschen).
+//
+// ---------------------------------------------------------------------
+// AUDIT rw20 (2026-08-28, alle 15.863 SCA070-Funde nachgezaehlt)
+//
+// Gebaut wurde daraus NUR Klasse C - die Laengenschwelle im Adapter-
+// Doku-Header (Begruendung an Ort und Stelle in IsAdapterDocHeader).
+// A/B-Erwartung: SCA070 15.863 -> 15.708, also 155 Drops, 0 Adds und
+// keine verschobene Spalte.
+//
+// EIN-REPO-GEWINN, und das steht hier bewusst so: 155 Drops sind keine
+// 155 unabhaengigen Belege. Alle liegen in EINEM Repo (jvcl) und EINER
+// Dateifamilie (JvInterpreter_*), verteilt auf 53 Dateien - das sind
+// 13 Unit-Namen in je vier nahezu identischen Kopien desselben
+// Quellbaums (jvcl/run, tests/RALib/interpreter/Source,
+// tests/archive/jvcl/source, tests/restructured/source) plus einmalig
+// JvInterpreter_iMTracer.pas. Rechnet man die Kopien heraus, bleiben
+// 40 VERSCHIEDENE Faelle (Paare Kommentarname -> Routinenname, etwa
+// 'add' -> 'tstrings_add') auf 20 verschiedenen kurzen Namen; 'add'
+// allein stellt 76 der 155. Beide Zahlen gehoeren nebeneinander: die
+// Korrektur ist richtig, weil die 4 willkuerlich war, aber wer aus 155
+// einen Korpus-Hebel liest, verrechnet sich um den Faktor der Kopien.
+//
+// Drei weitere gezaehlte Klassen wurden NICHT mitgebaut - aus drei
+// VERSCHIEDENEN Gruenden. Wer eine davon aufgreift, muss den fuer sie
+// zutreffenden Grund entkraeften, nicht irgendeinen:
+//
+//   * Klasse A "Prosa, die das Wort function/procedure enthaelt"
+//     (792 Funde, korrigiert ~790): WIDERLEGT. Die Groesse stimmt, das
+//     tragende Versprechen "0 von 792 sind echte Treffer" nicht.
+//     Gegenbefund: mindestens zwei echte Funde sind belegt -
+//     JclMetadata.pas:1993, das einzige Signal einer 40 Zeilen langen
+//     stillgelegten Region, und Win64SEH.pas:76 -, und die Stichprobe
+//     deckte nur 25 % der Klasse ab; die dabei uebersehene Gestalt
+//     (Deklaration mit //-Trailer) ist die haeufigste Form
+//     auskommentierten Codes ueberhaupt. Dazu zwei Bau-Blocker in der
+//     vorgeschlagenen Fassung: Content/Lower/Trimmed sind an der
+//     Einbaustelle nicht im Scope, und Trimmed[Length(Trimmed)] ohne
+//     Leerstring-Wache ist eine AV bei jedem nackten '//' (3,7 % der
+//     Aufrufe).
+//
+//   * Klasse B "Prosa-Satz ohne Pascal-Syntax" (140 Funde, 508 falls A
+//     nie gebaut wird): NICHT widerlegt, nur zurueckgestellt. Die
+//     Gegenpruefung fuehrt B unter den BESTANDENEN Klassen: Groesse und
+//     FP-Urteil exakt reproduziert, TP-Risiko im Korpus 0, benannt ist
+//     allein eine Luecke (Bezeichner-Kopf plus schwaches Keyword).
+//     Zurueckgestellt, weil B kein reines Gate ist: es braucht einen
+//     Vorfix in diesem File - in FindCommentedOutCode schreibt der
+//     //-Zweig Result ohne die (Result = 0)-Wache, die die vier
+//     Block-Zweige haben, und ueberschreibt damit eine auf derselben
+//     Zeile bereits gefundene Spalte. Und die Groesse haengt an A: 140
+//     mit A, 508 ohne, nicht additiv.
+//     Die Vorlage ist an einer Stelle uneins, das gehoert hierher: ihr
+//     strukturiertes Feld sagt "haelt = False" mit der Begruendung "die
+//     Drop-only-Zusage nicht", ihr Tabellenkoerper sagt "haelt = ja"
+//     und schraenkt nur die Spalte drop-only ein ("nein - Wache fehlt;
+//     korpusweit 0 Adds gemessen"). Beide Lesarten treffen sich darin,
+//     dass drop-only strukturell offen ist und empirisch bei 0 Adds
+//     liegt. Einen Gegenbefund gegen die KLASSE gibt es in keiner der
+//     beiden.
+//
+//   * Klasse G "Block-Kommentar hinter Code" (40 Funde): WIDERLEGT.
+//     Gemessen mindestens 10 echt stillgelegte Statements und 12
+//     Grenzfaelle gegen 27 FPs; die verengte Fassung braechte noch 9
+//     Drops von 15.863. Schon der Zaehler selbst hat "nicht bauen"
+//     empfohlen.
+//
+// Ein falscher Nichtbau-Grund ist schaedlicher als gar keiner: er haelt
+// jemanden davon ab, eine zu Recht liegengebliebene Klasse spaeter
+// aufzugreifen.
+// ---------------------------------------------------------------------
 
 interface
 
@@ -331,6 +401,10 @@ end;
 //     (42 Faelle im Korpus, bleiben Funde), und ohne Unterstrich-Anker
 //     matchte 'im' in 'ImmedBW' (cnwizards).
 // Gemessene Wirkung: 4.515 der 20.354 Funde (22,2 %).
+//
+// Nachtrag rw20 (2026-08-28): die drei Bedingungen sind bestaetigt, die
+// zusaetzliche Mindestlaenge des Namens war es nicht - sie stand quer zum
+// Unterstrich-Anker und kostete 155 Doku-Header. Details unten am Gate.
 // ===========================================================================
 
 function SelfContainedComment(const Line: string; out Content: string): Boolean;
@@ -426,8 +500,56 @@ begin
   if not SelfContainedComment(Lines[CurIdx], Content) then Exit;
   if not IsRoutineHeaderOnly(Content) then Exit;
   Nm := RoutineNameOf(Trim(Content));
-  // Kurze Namen erzeugen zufaellige Teiltreffer - erst ab 4 Zeichen.
-  if Length(Nm) < 4 then Exit;
+  // Untergrenze 2, nicht 4 (Klasse C, Korpus rw20 2026-08-28). Die
+  // Trennschaerfe leistet NICHT die Laenge, sondern der Unterstrich-Anker
+  // weiter unten: bei 'add' -> 'tlist_add' ist er genauso scharf wie bei
+  // 'save' -> 'tregauto_save'. Die alte 4 war willkuerlich und hat 155
+  // Fundstellen echter Adapter-Doku-Header ('add', 'pop', 'run', 'arc',
+  // 'pie', 'cmp', 'ln') als auskommentierten Code gemeldet - das sind
+  // allerdings nur 40 verschiedene Faelle, alle im Repo jvcl und dort in
+  // der Dateifamilie JvInterpreter_*, die ueberwiegend in vier Kopien
+  // desselben Quellbaums liegt; die Einordnung steht im Unit-Kopf.
+  // Aufgeschluesselt: 151 der 155 haben einen Dreizeichen-Namen, 4 einen
+  // Zweizeichen-Namen ('ln', ein einziger Fall in vier Kopien). Die 2
+  // ist also nicht die ertragreichste Grenze, sondern die strukturell
+  // begruendete - eine 3 haette 151 geholt und genau einen Fall
+  // verfehlt.
+  //
+  // Eine Untergrenze bleibt aber noetig: bei EINEM Zeichen ist '_' + Nm
+  // nur noch ein Zwei-Zeichen-Suffix und damit kein Anker mehr. Im
+  // Korpus enden 3.761 Routinennamen auf '_' + ein Zeichen, verteilt auf
+  // gerade 34 verschiedene Endstuecke - 110,6 Namen je Endstueck, allein
+  // 1.883 auf '_r'. Bei zwei Zeichen sind es 3,0 Namen je Endstueck. Ein
+  // stillgelegtes '{ procedure R; }' ueber irgendeinem 'Foo_R' fiele
+  // sonst lautlos weg.
+  //
+  // Das gilt fuer BEIDE Zweige des Gates - es akzeptiert
+  // Nxt.EndsWith('_' + Nm) ODER Nxt.StartsWith(Nm + '_'), die Rechnung
+  // oben ist die des Suffix-Zweigs. Der Praefix-Zweig, selbst
+  // nachgerechnet: 1.937 Routinennamen beginnen mit einem Zeichen + '_',
+  // auf nur 12 verschiedene Anfangsstuecke - 161,4 Namen je Stueck,
+  // allein 1.835 auf 'g_' aus den GLib-Bindungen. Bei einem Zeichen
+  // bricht er also aus demselben Grund zusammen wie der Suffix-Zweig;
+  // die Untergrenze 2 deckt beide.
+  // Gleich verhaelt er sich damit aber NICHT: bei zwei Zeichen stehen
+  // 1.583 Namen auf 64 Anfangsstuecken, 24,7 je Stueck (679 davon
+  // 'cm_') - der Praefix-Zweig ist bei jeder Laenge unschaerfer als der
+  // Suffix-Zweig, weil vorangestellte Kuerzel Bibliotheks-Praefixe sind
+  // (g_, cm_, nw_, js_, get_, sk4d_) und keine Routinennamen. Getragen
+  // wird die Absenkung dort nicht von dieser Dichte, sondern davon,
+  // dass der Zweig im Korpus ueberhaupt nicht feuert: ueber alle 13.419
+  // .pas-Dateien liefert das Gate an 4.821 Stellen True, davon 4.821
+  // ueber den Suffix-Zweig und 0 ueber den Praefix-Zweig, bei JEDER
+  // Namenslaenge. Auch die 155 Drops kommen samt und sonders aus dem
+  // Suffix-Zweig. Am Praefix-Zweig bewegt die Absenkung gemessen nichts
+  // - wer ihn spaeter scharf stellt, muss neu rechnen.
+  //
+  // Deshalb absenken statt streichen: IsRoutineHeaderOnly hat oben schon
+  // RoutineNameOf(Trim(Content)) <> '' auf DEMSELBEN String verlangt, Nm
+  // ist hier also nie leer. 'Length(Nm) < 1' waere toter Code - die
+  // Zeile wegzulassen ist gleichbedeutend damit, die Ein-Zeichen-Namen
+  // zuzulassen.
+  if Length(Nm) < 2 then Exit;
 
   for j := CurIdx + 1 to Lines.Count - 1 do
   begin

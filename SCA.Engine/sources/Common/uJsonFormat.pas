@@ -82,7 +82,12 @@ function JsonFormatEscaped(AValue: TJSONValue;
 implementation
 
 uses
-  System.SysUtils;              // TStringBuilder, StringOfChar
+  System.SysUtils,              // TStringBuilder, StringOfChar
+  // H2443: Pairs[] und Items[] sind inline und greifen intern auf
+  // TList<T> zu - ohne diese Unit expandiert der Compiler sie nicht
+  // und meldet es je Aufrufstelle. Nur implementation-uses: die
+  // interface-Sektion braucht den Typ nicht (E2003-Falle).
+  System.Generics.Collections;
 
 const
   // DER Unterschied zur RTL-Vorlage - ein Options-Wert.

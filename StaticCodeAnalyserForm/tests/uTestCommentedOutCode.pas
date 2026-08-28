@@ -24,6 +24,10 @@ type
     [Test] procedure CommentedOutOverload_StillReported;
     [Test] procedure HeadOfCommentedBlock_StillReported;
     [Test] procedure ShortNameSubstring_StillReported;
+    // ---- Laengenschwelle des Ankers (Klasse C, rw20 2026-08-28) -----------
+    [Test] procedure AdapterDocHeaderShortName_NotReported;
+    [Test] procedure ShortNameNoAnchor_StillReported;
+    [Test] procedure SingleCharName_StillReported;
   end;
 
 implementation
@@ -222,6 +226,68 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkCommentedOutCode) >= 1,
     'Zufaellige Teilzeichenkette ist kein Adapter-Bezug');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.AdapterDocHeaderShortName_NotReported;
+// Klasse C (rw20 2026-08-28): die alte Mindestlaenge 4 hat den Anker fuer
+// kurze Namen nie erreicht und 155 echte Adapter-Doku-Header als
+// auskommentierten Code gemeldet. Korpus-Beleg jvcl
+// JvInterpreter_Classes.pas:68 - '{ function Add(...): Integer; }' ueber
+// 'TList_Add'. OHNE die Absenkung auf 2 ist dieser Test ROT.
+const SRC =
+  'unit t; implementation'#13#10 +
+  '{ procedure Add; }'#13#10 +
+  'procedure TList_Add(var Value: Variant);'#13#10 +
+  'begin'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCommentedOutCode),
+    'Signatur-Doku mit kurzem Namen ist kein auskommentierter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.ShortNameNoAnchor_StillReported;
+// WAECHTER zur Absenkung: die Arbeit macht der Unterstrich-Anker, nicht
+// die Laenge. 'add' passiert die Schwelle jetzt, aber 'AddRange' traegt
+// den Namen nicht AM UNTERSTRICH - der stillgelegte Kopf bleibt ein Fund.
+// Auch OHNE die Aenderung gruen (dort haelt ihn noch die alte Schwelle);
+// rot wird er, sobald jemand den Anker aufweicht.
+const SRC =
+  'unit t; implementation'#13#10 +
+  '//procedure Add(Item: Pointer);'#13#10 +
+  'procedure AddRange(Item: Pointer);'#13#10 +
+  'begin'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkCommentedOutCode) >= 1,
+    'Ohne Unterstrich-Anker bleibt der stillgelegte Kopf ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.SingleCharName_StillReported;
+// WAECHTER fuer die Untergrenze: bei EINEM Zeichen ist '_' + Name nur ein
+// Zwei-Zeichen-Suffix und kein Anker mehr - im Korpus enden 3.761
+// Routinennamen auf '_' + ein Zeichen, allein 1.883 auf '_r'. Der
+// stillgelegte Kopf bleibt deshalb ein Fund, obwohl 'TFoo_R' den Anker
+// formal traegt. Auch OHNE die Aenderung gruen; rot, sobald die
+// Untergrenze ganz faellt (Streichen der Zeile = 'Length(Nm) < 1' und
+// damit wirkungslos, weil Nm nie leer ist).
+const SRC =
+  'unit t; implementation'#13#10 +
+  '//procedure R(Item: Pointer);'#13#10 +
+  'procedure TFoo_R(Item: Pointer);'#13#10 +
+  'begin'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkCommentedOutCode) >= 1,
+    'Ein-Zeichen-Name traegt den Unterstrich-Anker nicht');
   finally F.Free; end;
 end;
 
