@@ -103,7 +103,7 @@ type
     // durch. Die Prozess-Globals existieren nur noch als Grenze fuer die
     // verbliebenen FromGlobals-Leser (s. dort).
     class function ForProject(const AProjectOrGroupFile,
-      AScanRoot: string): TBaselineScope;
+      AScanRoot: string): TBaselineScope; static;
 
     // DIE ENTSCHEIDUNGSREGEL fuer den Zuschnitt, an EINER Stelle.
     // Beide Wirte - EXE und IDE-Plugin - beantworten dieselbe Frage:
@@ -121,8 +121,7 @@ type
     // Befund A: die Wurzel blieb leer, der Snapshot fiel auf
     // Dateinamen-Tokens zurueck, der naechste Filter matchte nichts).
     class function FromSettings(APathInFingerprint: Boolean;
-      const AProjectOrGroupFile, AScanRoot: string): TBaselineScope;
-      static; static;
+      const AProjectOrGroupFile, AScanRoot: string): TBaselineScope; static;
     // Nur die Wurzel derselben Regel, als String - fuer die Aufrufer, die
     // (noch) uSCAConsts.BaselineFingerprintRoot direkt beschreiben.
     // Bewusst kein zweiter Regel-Ort: ForProject ruft dieselbe Funktion.
