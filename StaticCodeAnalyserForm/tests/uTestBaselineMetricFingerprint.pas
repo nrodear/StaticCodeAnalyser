@@ -52,13 +52,29 @@ unit uTestBaselineMetricFingerprint;
 //       derselben Datei (Overload, oder gleicher Name in zwei Klassen einer
 //       Unit) mit verschiedenen Scores teilen ab jetzt einen Fingerprint;
 //       ein Baseline-Eintrag blendet beide aus. Am Korpus rw20
-//       methodengenau nachgemessen: 222 Faelle - SCA022 75, SCA176 79,
-//       SCA012 38, SCA018 30 - also 0,58 % der vier Regeln und 0,03 % des
+//       methodengenau nachgemessen: 185 Faelle - SCA022 61, SCA176 60,
+//       SCA018 35, SCA012 29 - also 0,49 % der vier Regeln und 0,024 % des
 //       Korpus. OHNE DEN ZWEIG ROT, weil er das NEUE Verhalten beschreibt:
 //       bis 2026-08-28 blieb der Zwilling stehen.
 //   (i) VerschiedeneMethoden_BleibenGetrennt - die Grenze dazu: der
-//       Methodenname traegt weiter. Ohne ihn waere aus den 222 Kollisionen
+//       Methodenname traegt weiter. Ohne ihn waere aus den 185 Kollisionen
 //       eine je Datei und Regel geworden. REGRESSIONSSCHUTZ.
+//   (j) LeererMethodName_LaesstNurNochEineIdentitaetJeDatei - die BEKANNTE
+//       GRENZE, beziffert statt verschwiegen. Traegt ein Fund keinen
+//       Methodennamen, ist der Detailtext der letzte Unterscheider - und
+//       den normalisiert der Zweig weg. Dann gilt die annahmefreie
+//       Obergrenze: ein Fingerprint je Datei und Regel, an rw20 waeren das
+//       20.194 statt 185. Beobachtet ist der Fall bei diesen vier Regeln
+//       nicht (in rw20 kein einziger Fund mit leerem Namen; alle vier
+//       brauchen einen RUMPF, und das Headless-Method-Muster erzeugt
+//       nkMethod ohne nkBlock, also gar keinen Fund). OHNE DEN ZWEIG ROT.
+//
+// ZUR ZAHL 185: der Methodenname steht nicht im SARIF, er muss aus der
+// Kopfzeile gelesen werden. Bis 2026-08-28 stand hier 222 - das Skript
+// brach seine Regex am '<' ab, las aus 'procedure TFoo<T>.Bar' nur 'TFoo'
+// und verschmolz alle Methoden einer generischen Klasse. Die Nachmessung
+// bildet uParser2.ParseMethodSignature nach (SkipGenericParams nach jedem
+// Qualifizierer).
 //
 // Kein Test hier fasst ein Prozess-Global an; die Fingerprint-Tests fassen
 // auch die Platte nicht an, weil TBaselineScope.ByFileName nur den
@@ -98,6 +114,7 @@ type
     [Test] procedure DuplicateBlock_Zeilen_BleibenUnterscheider;
     [Test] procedure EinBaselineEintrag_BlendetGleichnamigeMethodeMit;
     [Test] procedure VerschiedeneMethoden_BleibenGetrennt;
+    [Test] procedure LeererMethodName_LaesstNurNochEineIdentitaetJeDatei;
   end;
 
 implementation
@@ -356,8 +373,8 @@ procedure TTestBaselineMetricFingerprint.EinBaselineEintrag_BlendetGleichnamigeM
 // Die vier Metrik-Regeln erzeugen hoechstens EINEN Fund je Methode.
 // Kollidieren koennen deshalb nur GLEICHNAMIGE Methoden derselben Datei -
 // Overloads, oder derselbe Name in zwei Klassen einer Unit. Am Korpus rw20
-// methodengenau nachgemessen sind das 222 Faelle (SCA022 75, SCA176 79,
-// SCA012 38, SCA018 30) = 0,58 % der vier Regeln, 0,03 % des Korpus.
+// methodengenau nachgemessen sind das 185 Faelle (SCA022 61, SCA176 60,
+// SCA018 35, SCA012 29) = 0,49 % der vier Regeln, 0,024 % des Korpus.
 //
 // Die beiden Funde sitzen zehn Zeilen auseinander, ihre contextHash-Fenster
 // beruehren sich also nicht: der zweite Treffer kann NUR vom Fingerprint
@@ -393,7 +410,7 @@ begin
       TBaselineScope.ByFileName);
     Assert.AreEqual<Integer>(2, Dropped,
       'DIE KOSTEN: ein Eintrag blendet BEIDE gleichnamigen Methoden aus - ' +
-      '222 solcher Faelle auf rw20, gemessen und akzeptiert');
+      '185 solcher Faelle auf rw20, gemessen und akzeptiert');
     Assert.AreEqual<Integer>(0, Beide.Count,
       'und es bleibt kein Fund uebrig');
   finally
@@ -403,7 +420,7 @@ end;
 
 procedure TTestBaselineMetricFingerprint.VerschiedeneMethoden_BleibenGetrennt;
 // (i) REGRESSIONSSCHUTZ - die Grenze zu (h). Der Methodenname bleibt Teil
-// des Fingerprints. Fiele er mit, waere aus den 222 gemessenen Kollisionen
+// des Fingerprints. Fiele er mit, waere aus den 185 gemessenen Kollisionen
 // eine je Datei und Regel geworden: eine Baseline-Zeile legte dann alle
 // komplexen Methoden einer Unit still.
 begin
@@ -411,6 +428,42 @@ begin
     Fp(fkCyclomaticComplexity, METHOD_A, CC_SCORE_11),
     Fp(fkCyclomaticComplexity, METHOD_B, CC_SCORE_11),
     'verschiedene Methoden bleiben verschiedene Funde');
+end;
+
+procedure TTestBaselineMetricFingerprint.LeererMethodName_LaesstNurNochEineIdentitaetJeDatei;
+// (j) OHNE DEN ZWEIG ROT - und das ist hier kein Erfolg, sondern DIE
+// BEKANNTE GRENZE, schriftlich festgehalten statt stillschweigend in Kauf
+// genommen.
+//
+// (i) haelt fest, dass der Methodenname weiter trennt. Dieser Test haelt
+// fest, was passiert, wenn es keinen gibt: dann ist der Detailtext der
+// letzte Unterscheider zweier Funde derselben Datei - und genau den
+// normalisiert der Zweig weg. Zwei verschiedene Methoden mit
+// verschiedenen Scores teilen dann EINEN Fingerprint, ein Baseline-Eintrag
+// blendet beide aus. Es gilt dann die annahmefreie Obergrenze: ein
+// Fingerprint je Datei und Regel, an rw20 waeren das 20.194 statt 185.
+//
+// WIE WAHRSCHEINLICH IST DAS? Bei diesen vier Regeln nicht beobachtet.
+// Alle vier lesen MethodName aus M.Name und brauchen einen RUMPF (Score,
+// Statements, Verschachtelung); das Headless-Method-Muster
+// (uParser2.pas:178) erzeugt nkMethod OHNE nkBlock - also gar keinen Fund -
+// und laesst den Namen intakt. In rw20 traegt kein einziger Fund der vier
+// Regeln einen leeren Namen. Wer die Menge aber um eine Regel erweitert,
+// die MethodName nicht setzt (SCA091 und SCA062 tun das nicht, SCA021 und
+// SCA101 auch nicht), bekommt genau dieses Verhalten - und dieser Test
+// sagt ihm, was er dann eingekauft hat.
+begin
+  Assert.AreEqual(
+    Fp(fkCyclomaticComplexity, '', CC_SCORE_11),
+    Fp(fkCyclomaticComplexity, '', CC_SCORE_12),
+    'BEKANNTE GRENZE: ohne Methodennamen bleibt nach der Normalisierung ' +
+    'kein Unterscheider - ein Fingerprint je Datei und Regel');
+  // Gegenprobe, damit der Test nicht versehentlich alles gleichsetzt: der
+  // DETEKTOR-TYP trennt weiter, auch bei leerem Namen.
+  Assert.AreNotEqual(
+    Fp(fkCyclomaticComplexity, '', CC_SCORE_11),
+    Fp(fkCognitiveComplexity, '', CC_SCORE_11),
+    'verschiedene Regeln bleiben verschiedene Funde');
 end;
 
 initialization

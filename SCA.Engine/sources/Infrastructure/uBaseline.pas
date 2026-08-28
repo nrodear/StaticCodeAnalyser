@@ -504,20 +504,33 @@ begin
 end;
 
 const
-  // DIE VIER METRIK-REGELN - und NUR sie. Ihr Detailtext traegt neben dem
-  // gemessenen Wert auch den KONFIGURIERTEN SCHWELLWERT:
-  //   SCA022 uCyclomaticComplexity 'Cyclomatic complexity %d (limit: %d)'
-  //   SCA018 uDeepNesting          'Depth %d (%s from line %d, limit: %d)'
-  //   SCA176 uCognitiveComplexity  'Cognitive complexity %d (limit: %d)'
-  //   SCA012 uLongMethod           '%d body lines, %d statements
-  //                                 (limit: %d / %d)'
+  // DIE VIER METRIK-REGELN, die der Zweig aufnimmt. Ihr Detailtext traegt
+  // neben dem gemessenen Wert auch den KONFIGURIERTEN SCHWELLWERT
+  // (Format-Strings WOERTLICH aus den Detektoren, inkl. Prosa-Schwanz - der
+  // ist es, der den Fund nach der Normalisierung noch unterscheidet):
+  //   SCA022 uCyclomaticComplexity
+  //     'Cyclomatic complexity %d (limit: %d) - viele Verzweigungen, '
+  //     'schwer zu testen'
+  //   SCA018 uDeepNesting
+  //     'Depth %d (%s from line %d, limit: %d)'
+  //   SCA176 uCognitiveComplexity
+  //     'Cognitive complexity %d (limit: %d) - nested control flow is '
+  //     'hard to follow. Refactor by extracting helper methods or '
+  //     'inverting guard conditions.'
+  //   SCA012 uLongMethod
+  //     '%d body lines, %d statements (limit: %d / %d)'
   //
-  // WARUM DER ZWEIG UEBERHAUPT EXISTIERT: alle fuenf Schwellen sind
-  // DOKUMENTIERTE Nutzer-Knoepfe in [Detectors] (docs/configuration.md) -
-  // CyclomaticMax, DeepNestingMaxDepth, CognitiveLimit,
-  // LongMethodMaxBodyLines, LongMethodMaxStatements. Wer eine von 10 auf 12
-  // dreht, aendert KEINEN einzigen Fund - aber jeden Fingerprint dieser
-  // Regeln, weil die 10 im Meldetext steht und der Meldetext gehasht wird.
+  // SIE SIND NICHT DIE EINZIGEN REGELN MIT SCHWELLWERT IM TEXT - siehe den
+  // Absatz "NICHT AUFGENOMMEN, OBWOHL SCHWELLWERT IM TEXT" weiter unten.
+  //
+  // WARUM DER ZWEIG UEBERHAUPT EXISTIERT: die fuenf Schwellen dieser vier
+  // Regeln sind DOKUMENTIERTE Nutzer-Knoepfe in [Detectors]
+  // (docs/configuration.md) - CyclomaticMax, DeepNestingMaxDepth,
+  // CognitiveLimit, LongMethodMaxBodyLines, LongMethodMaxStatements; es
+  // sind fuenf von NEUN Schwellen-Knoepfen, die die Datei dort auflistet.
+  // Wer eine von 10 auf 12 dreht, aendert KEINEN einzigen Fund - aber jeden
+  // Fingerprint dieser Regeln, weil die 10 im Meldetext steht und der
+  // Meldetext gehasht wird.
   // Gemessen an rw20 (783.105 Funde, 27 Repos): 37.990 Funde = 4,85 % des
   // Korpus haengen mit ihrer Baseline-Identitaet an einem INI-Wert, zu
   // dessen Aenderung die Doku ausdruecklich einlaedt. Das passiert heute
@@ -528,11 +541,12 @@ const
   //
   // WARUM NICHT GLOBAL UEBER ALLE REGELN - BITTE NICHT "AUFRAEUMEN":
   // Eine Normalisierung ohne diese Einschraenkung kostet an rw20
-  // ausgezaehlt 140.703 verschmolzene Identitaeten roh; methodengenau
-  // nachgerechnet fuer die Regeln, die MethodName setzen, bleiben rund
-  // 120.700 = etwa 15 % ALLER Funde. Der Killer ist SCA101
-  // BeginEndRequired (285.942 Funde, groesste Regel im Korpus, allein
-  // 94.254 verlorene Identitaeten):
+  // ausgezaehlt 140.703 verschmolzene Identitaeten (nachgemessen; das ist
+  // die Obergrenze ohne Namensmodell, s.u.); GESCHAETZT bleiben davon nach
+  // Abzug der Regeln, die MethodName setzen, rund 120.700 = etwa 15 %
+  // ALLER Funde - die 140.703 sind gezaehlt, die 120.700 sind es nicht.
+  // Der Killer ist SCA101 BeginEndRequired (285.942 Funde, groesste Regel
+  // im Korpus, allein 94.254 verlorene Identitaeten):
   //   'Branch at column 5 uses a single statement without begin..end'
   //   'Branch at column 42 uses a single statement without begin..end'
   // Die SPALTENNUMMER ist dort der EINZIGE Unterscheider zwischen zwei
@@ -548,14 +562,43 @@ const
   // SCA021.
   //
   // WAS ES KOSTET (an rw20 methodengenau nachgemessen, nicht geschaetzt):
-  // 222 verlorene Identitaeten - SCA022 75, SCA176 79, SCA012 38,
-  // SCA018 30 - das sind 0,58 % der vier Regeln und 0,03 % des Korpus.
+  // 185 verlorene Identitaeten - SCA022 61, SCA176 60, SCA018 35,
+  // SCA012 29 - das sind 0,49 % der vier Regeln und 0,024 % des Korpus.
   // Ursache ist ausschliesslich, dass jede dieser Regeln hoechstens EINEN
   // Fund je Methode erzeugt: kollidieren koennen nur GLEICHNAMIGE Methoden
   // derselben Datei mit verschiedenen Werten (Overloads, gleicher Name in
   // zwei Klassen einer Unit). Festgenagelt am echten Weg Write -> Apply in
   // uTestBaselineMetricFingerprint.
   // EinBaselineEintrag_BlendetGleichnamigeMethodeMit.
+  //
+  // WIE DIE 185 GEMESSEN WURDEN, und warum hier bis 2026-08-28 die falsche
+  // Zahl 222 stand: der Methodenname steht nicht im SARIF, er muss aus der
+  // Kopfzeile des Quelltexts gelesen werden. Das erste Skript brach seine
+  // Regex am '<' ab, las aus 'procedure TFoo<T>.Bar' nur 'TFoo' und warf
+  // damit ALLE Methoden einer generischen Klasse in einen Topf - zu viele
+  // Kollisionen. Die Nachmessung bildet die Namensregel des Parsers nach
+  // (uParser2.ParseMethodSignature: SkipGenericParams nach jedem
+  // Qualifizierer, also 'TFoo<T>.TInner<U>.Baz' -> 'TFoo.TInner.Baz').
+  //
+  // Wer die Zahl nicht nachrechnen will, braucht sie auch nicht: OHNE JEDES
+  // NAMENSMODELL, also unter der (falschen) Annahme, alle Funde einer Datei
+  // und Regel steckten in derselben Methode, liegt die Obergrenze bei
+  // 20.194 fuer diese vier Regeln - gegen 140.703 bei globaler
+  // Normalisierung. Faktor 7 zugunsten der Einschraenkung, ganz ohne
+  // Heuristik.
+  //
+  // BEKANNTE GRENZE - LEERER MethodName: die 185 setzen voraus, dass der
+  // Parser einen Namen liefert. Traegt ein Fund MethodName = '', bleibt
+  // nach der Normalisierung gar kein Unterscheider mehr uebrig, und alle
+  // Funde dieser Regel in dieser Datei fallen auf EINEN Fingerprint
+  // zusammen - dann gilt genau die Obergrenze 20.194 von oben.
+  // Beobachtet ist das nicht: in rw20 hat kein einziger Fund der vier
+  // Regeln einen leeren Namen, und er ist auch schwer zu erreichen, weil
+  // alle vier einen RUMPF brauchen (Score, Statements, Verschachtelung) -
+  // das Headless-Method-Muster (uParser2.pas:178) erzeugt nkMethod OHNE
+  // nkBlock, also gar keinen Fund, und laesst den Namen ohnehin intakt.
+  // Festgehalten in uTestBaselineMetricFingerprint.
+  // LeererMethodName_LaesstNurNochEineIdentitaetJeDatei.
   //
   // ZUGABE - der Zeilennummern-Vertragsbruch von SCA018 faellt mit:
   // 'Depth 8 (if from line 1456, limit: 4)' trug die Zeilennummer im
@@ -568,6 +611,49 @@ const
   // ('lines 248-272', 9.150 Funde) traegt denselben Bruch und ist hier
   // bewusst NICHT drin - bei ihr sind die Zeilennummern das Einzige, was
   // zwei Duplikat-Gruppen derselben Datei unterscheidet.
+  //
+  // NICHT AUFGENOMMEN, OBWOHL SCHWELLWERT IM TEXT:
+  // Vier weitere Regeln drucken einen dokumentierten [Detectors]-Knopf in
+  // ihre Meldung. Fuer sie gilt der Schutz dieses Zweiges NICHT - wer dort
+  // dreht, sieht die Funde einmalig als neu, und docs/configuration.md
+  // sagt das inzwischen auch so.
+  //
+  //   SCA013 uLongParamList, LongParamListMaxParams, 10.099 Funde
+  //     '%d parameters (limit: %d)'
+  //     Strukturell fast wie die vier: setzt MethodName, verankert auf
+  //     M.Line. Trotzdem draussen, und zwar auf den ZAHLEN, nicht aus
+  //     Vergesslichkeit - an rw20 methodengenau nachgemessen kostete die
+  //     Aufnahme 443 verlorene Identitaeten auf 10.099 Funde = 4,4 %.
+  //     Das ist das NEUNFACHE der Rate der vier (185/37.990 = 0,49 %).
+  //     Grund: der Detektor dedupliziert je Datei auf (Name, ParamCount),
+  //     Overloads unterscheiden sich also genau in der Zahl, die
+  //     wegnormalisiert wuerde. Beispiel Alcinoe.FBX.Client.pas, 'Create':
+  //     sechs Funde von '7 parameters' bis '12 parameters' fielen nach
+  //     der Normalisierung in EINEN Baseline-Eintrag zusammen.
+  //
+  //   SCA091 uCaseStatementSize, MaxCaseBranches, 1.944 Funde
+  //     '`case` statement with %d branches (>= %d) - consider '
+  //     'polymorphism, a dispatch table, or split into smaller cases.'
+  //     Das ist der SCA101-Fall, nur kleiner: der Detektor setzt
+  //     MethodName := '' und meldet mehrere case-Statements je Datei. Nach
+  //     der Normalisierung ist der Meldetext KORPUSWEIT KONSTANT - an rw20
+  //     genau ein einziger normalisierter Text -, es bliebe also nichts
+  //     mehr, was zwei Funde einer Datei trennt: 621 von 1.944
+  //     Identitaeten weg = 31,9 % der Regel, 886 Dateien schrumpfen auf je
+  //     einen Eintrag.
+  //
+  //   SCA062 uTooLongLine, MaxLineLength
+  //     'Line is %d characters (max %d) - wrap or extract subexpression.'
+  //     MethodName leer, ein Fund je zu langer Zeile - dieselbe Lage wie
+  //     SCA091. Steht als Style-Regel auf fcLow und faellt damit unter der
+  //     Default-Schwelle MinConfidence=medium heraus: 0 Funde in rw20,
+  //     der Bruch ist deshalb nicht beziffert, aber vorhanden.
+  //
+  //   SCA021 uDuplicateBlock, DuplicateBlockMinLines, 9.150 Funde
+  //     'Code block (lines %d-%d, %d matched lines) appears %dx in file - '
+  //     'consider extracting a method'
+  //     Schon oben begruendet; zur Groessenordnung: 7.374 der 9.150
+  //     Identitaeten fielen weg = 80,6 %.
   METRIC_DETAIL_KINDS : TFindingKinds =
     [fkCyclomaticComplexity, fkDeepNesting, fkCognitiveComplexity,
      fkLongMethod];

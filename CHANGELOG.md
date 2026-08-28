@@ -114,17 +114,33 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   carries the same break and is **deliberately not** included: there the
   line numbers are the only thing separating two duplicate groups in one
   file. **Deliberately not applied globally**, and please do not
-  "clean this up" later: normalising every rule would cost roughly
-  120,700 merged identities on the corpus (~15 % of all findings),
-  94,254 of them in SCA101 alone, whose message differs only in a column
-  number - one baseline entry would silence every single-statement
-  branch in a file, invisibly. **What it costs here, measured:** 222
-  findings lose their separate identity (SCA022 75, SCA176 79, SCA012
-  38, SCA018 30) - 0.58 % of the four rules, 0.03 % of the corpus. Each
+  "clean this up" later: normalising every rule would merge 140,703
+  identities on the corpus (counted; an estimated ~120,700 of them, ~15 %
+  of all findings, survive a per-method correction), 94,254 in SCA101
+  alone, whose message differs only in a column number - one baseline
+  entry would silence every single-statement branch in a file, invisibly.
+  **Four other rules print a documented threshold into their message and
+  are NOT covered by this** - re-tune `LongParamListMaxParams` (SCA013),
+  `MaxCaseBranches` (SCA091), `MaxLineLength` (SCA062) or
+  `DuplicateBlockMinLines` (SCA021) and their findings still surface once
+  as new; `docs/configuration.md` now has the table. They are excluded on
+  the numbers: including SCA013 would cost 443 of its 10,099 identities
+  (4.4 %, nine times the rate below, because overloads differ in exactly
+  the parameter count that would be dropped) and SCA091 621 of 1,944
+  (31.9 %, because it records no method name and its message is otherwise
+  identical everywhere). **What it costs here, measured:** 185
+  findings lose their separate identity (SCA022 61, SCA176 60, SCA018
+  35, SCA012 29) - 0.49 % of the four rules, 0.024 % of the corpus. Each
   rule reports at most one finding per method, so the only findings that
   can collide are **same-named methods in one file**: overloads, or the
   same name in two classes of one unit. Accept one of those into a
-  baseline and its twin is accepted with it. **One-time invalidation:**
+  baseline and its twin is accepted with it. (An earlier draft of this
+  entry said 222; that count came from a script whose regex stopped at
+  the `<` in `procedure TFoo<T>.Bar` and so merged every method of a
+  generic class. The 185 replicate the parser's own naming rule. Either
+  way the assumption-free bound - every finding of one rule in one file
+  assumed to sit in one method - is 20,194 against 140,703 for the global
+  variant, a factor of 7.) **One-time invalidation:**
   every existing baseline entry of these four rules gets a new
   fingerprint. On baselines written by v0.9.8 or later this is invisible
   - the context hash matches them anyway, on the CLI and, as of this

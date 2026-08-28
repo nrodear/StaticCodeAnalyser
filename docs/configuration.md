@@ -71,14 +71,45 @@ given in.
 | `OnlyNew` | Bool | `False` | Show only findings that are not in the baseline. |
 | `PathInFingerprint` | Bool | `False` | Include the relative path in the fingerprint - distinguishes same-named files in different folders. |
 
-Re-tuning a `[Detectors]` threshold does **not** invalidate a baseline.
-The metric rules SCA012, SCA018, SCA022 and SCA176 print their measured
-value and the configured limit in the message, but no number from those
-messages goes into the baseline fingerprint. Changing `CyclomaticMax`
-therefore changes which findings are *reported*, never which of them your
-baseline already *accepts*. The one case this cannot tell apart: for these
-four rules, two same-named methods in one file - overloads, or the same
-name in two classes of one unit - share a single baseline entry.
+### Which thresholds you can re-tune without invalidating a baseline
+
+The fingerprint hashes the finding's message, and most threshold rules
+print the configured limit into that message. Turning such a knob then
+changes the *identity* of every finding of that rule without changing a
+single finding. Five of the nine threshold keys above are exempt from
+that, four are not - the table says which.
+
+| `[Detectors]` key | Rule | Re-tuning keeps the baseline? |
+|---|---|---|
+| `LongMethodMaxBodyLines` | SCA012 | **Yes** |
+| `LongMethodMaxStatements` | SCA012 | **Yes** |
+| `DeepNestingMaxDepth` | SCA018 | **Yes** |
+| `CyclomaticMax` | SCA022 | **Yes** |
+| `CognitiveLimit` | SCA176 | **Yes** |
+| `LongParamListMaxParams` | SCA013 | No - every SCA013 finding surfaces once as new |
+| `MaxCaseBranches` | SCA091 | No - every SCA091 finding surfaces once as new |
+| `MaxLineLength` | SCA062 | No - every SCA062 finding surfaces once as new |
+| `DuplicateBlockMinLines` | SCA021 | No - every SCA021 finding surfaces once as new |
+
+For the five exempt keys, no number from the message goes into the
+fingerprint: changing `CyclomaticMax` changes which findings are
+*reported*, never which of them your baseline already *accepts*. The one
+case this cannot tell apart: for SCA012, SCA018, SCA022 and SCA176, two
+same-named methods in one file - overloads, or the same name in two
+classes of one unit - share a single baseline entry. On the 783,105-finding
+reference corpus that affects 185 of 37,990 findings (0.49 %).
+
+The other four rules were left out on purpose, not forgotten. Dropping
+the numbers from *their* messages would merge findings that nothing else
+tells apart - measured on the same corpus, SCA013 would lose 443 of
+10,099 identities (4.4 %, nine times the rate of the exempt five, because
+overloads differ in exactly the parameter count that would be dropped),
+and SCA091 would lose 621 of 1,944 (31.9 %, because that rule records no
+method name and its message is otherwise identical everywhere). If you
+re-tune one of those four, re-write the baseline afterwards
+(`--write-baseline`, or "Write baseline" in the GUI and the plugin) -
+noting that a re-write accepts *all* current findings, not only the
+previously accepted ones.
 
 ## `[Score]`
 
