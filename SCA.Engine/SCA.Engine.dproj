@@ -105,6 +105,7 @@
         <DCCReference Include="sources\Common\uCompatSet.pas"/>
         <DCCReference Include="sources\Common\uCrashDiag.pas"/>
         <DCCReference Include="sources\Common\uDetectorUtils.pas"/>
+        <DCCReference Include="sources\Common\uJsonFormat.pas"/>
         <DCCReference Include="sources\Common\uLocalization.pas"/>
         <DCCReference Include="sources\Common\uMethodd12.pas"/>
         <DCCReference Include="sources\Common\uQuickFix.pas"/>

@@ -5,18 +5,24 @@ unit uTestBaselineSetContextHash;
 //
 // WARUM ES SIE GIBT (Befund Baseline-Identitaet, 2026-08-28)
 //
-// TBaseline.Fingerprint hasht MissingVar - den Detailtext - mit. Die vier
-// Metrik-Detektoren schreiben ihre ZAHL genau dort hinein, und zwar samt
-// Schwellwert: 'Cyclomatic complexity 11 (limit: 10)'. Aendert sich der
-// Score, oder dreht der Nutzer an dem dokumentierten INI-Knopf
-// CyclomaticMax, wechselt damit die IDENTITAET des Fundes - obwohl sich am
-// Code keine einzige Zeile geaendert hat. Auf dem Referenzkorpus haengen
-// daran 37.987 Funde = 4,8 %.
+// TBaseline.Fingerprint hasht MissingVar - den Detailtext - mit. Aendert
+// sich der Text, wechselt die IDENTITAET des Fundes, obwohl sich am Code
+// keine einzige Zeile geaendert hat.
 //
 // TBaseline.Apply (CLI) faengt das seit v0.9.8 ueber den contextHash ab.
 // TBaselineSet.Contains - der Anzeige-Filter von EXE und IDE-Plugin - tat
 // es nicht: TBaseline.Write legte den contextHash in JEDE Baseline-Datei,
 // LoadFromFile warf ihn beim Laden wieder weg.
+//
+// ABGRENZUNG ZUM ZIFFERN-ZWEIG (2026-08-28, gleicher Tag): der ZAHLENteil
+// des Detailtexts der vier Metrik-Regeln geht seither gar nicht mehr in
+// den Fingerprint ein (METRIC_DETAIL_KINDS in uBaseline). Diese Fixture
+// prueft deshalb NICHT mehr mit einem Score-Paar, sondern mit einem
+// WORTLAUT-Paar - s. DETAIL_KURZ / DETAIL_LANG. Beide Zweige decken
+// verschiedene Ausfaelle: der Ziffern-Zweig den Schwellwert und den Score,
+// der contextHash jede uebrige Textaenderung und alle 139 anderen Regeln.
+// Der eigene Nachweis fuer den Ziffern-Zweig liegt in
+// uTestBaselineMetricFingerprint.
 //
 // WAS DIE TESTS FESTHALTEN
 //   (a) DetailChanged_MatchesViaContextHash - geaendertes Detail bei
@@ -131,10 +137,22 @@ const
   // ausserhalb.
   FIND_LINE = 8;
   METHOD_P  = 'P';
-  // Zwei Detailtexte derselben Regel, die sich NUR im Score unterscheiden -
-  // genau der Fall, an dem die Baseline-Identitaet heute zerbricht.
-  DETAIL_11 = 'Cyclomatic complexity 11 (limit: 10)';
-  DETAIL_12 = 'Cyclomatic complexity 12 (limit: 10)';
+  // Zwei Detailtexte derselben Regel, die sich im WORTLAUT unterscheiden -
+  // die kurze Fassung ist der Text aelterer Staende, die lange der heutige
+  // mit angehaengter Begruendung (uCyclomaticComplexity.pas).
+  //
+  // BIS 2026-08-28 STAND HIER EIN SCORE-PAAR ('complexity 11' gegen
+  // 'complexity 12'). Das geht seit dem Ziffern-Zweig in
+  // TBaseline.Fingerprint (METRIC_DETAIL_KINDS) nicht mehr: bei den vier
+  // Metrik-Regeln fallen zwei Scores jetzt auf DENSELBEN Fingerprint. Sechs
+  // Tests dieser Fixture haetten daran das Gegenteil ihres Zwecks geprueft -
+  // (a) (b) (c) (e) (f) waeren rot geworden, und (i) haette seine
+  // Vorbedingung verloren. Der WORTLAUT-Wechsel ist der Fall, der
+  // beim Fingerprint weiterhin zerbricht (Rule-Text-Aenderung, i18n) und
+  // fuer den es die zweite Match-Quelle also nach wie vor braucht.
+  DETAIL_KURZ = 'Cyclomatic complexity 11 (limit: 10)';
+  DETAIL_LANG = 'Cyclomatic complexity 11 (limit: 10) - viele ' +
+                'Verzweigungen, schwer zu testen';
   // Praefix ALLER Temp-Pfade dieser Fixture - liegengebliebene Leichen sind
   // daran zu erkennen. Gebraucht wird er nur noch in TempGuidPath.
   TMP_PREFIX = 'sca_blctx_';
@@ -323,7 +341,7 @@ procedure TTestBaselineSetContextHash.WriteTwinBaselineA;
 // der Datei-Token ist der blosse Dateiname, also 'utwin.pas' - der Baum
 // steht nirgends drin.
 begin
-  WriteOneEntryBaseline(MakeFindingIn(FTwinA, FIND_LINE, DETAIL_11),
+  WriteOneEntryBaseline(MakeFindingIn(FTwinA, FIND_LINE, DETAIL_KURZ),
     TempBaselineFile, TBaselineScope.ByFileName);
 end;
 
@@ -331,7 +349,7 @@ procedure TTestBaselineSetContextHash.WriteTwinBaselineAByPath;
 // Dasselbe im PFAD-Modus ab der gemeinsamen Wurzel: der Datei-Token ist
 // 'baum_a/utwin.pas' und trennt die Baeume.
 begin
-  WriteOneEntryBaseline(MakeFindingIn(FTwinA, FIND_LINE, DETAIL_11),
+  WriteOneEntryBaseline(MakeFindingIn(FTwinA, FIND_LINE, DETAIL_KURZ),
     TempBaselineFile, TBaselineScope.ByPath(FTwinRoot));
 end;
 
@@ -339,7 +357,10 @@ function TTestBaselineSetContextHash.MakeFindingIn(const AFile: string;
   ALine: Integer; const ADetail: string): TLeakFinding;
 // Ein Metrik-Fund auf einer beliebigen Quelldatei. fkCyclomaticComplexity
 // ist keine Zierde: es ist eine der vier Regeln, die ihren Score in den
-// Detailtext schreiben.
+// Detailtext schreiben - und damit der schaerfste Beleg dafuer, dass der
+// contextHash auch DORT noch gebraucht wird, wo der Ziffern-Zweig greift.
+// Der Ziffern-Zweig deckt nur die ZAHLEN ab; der Wortlaut daneben bleibt
+// eine Sollbruchstelle des Fingerprints.
 begin
   Result := TLeakFinding.New(AFile, METHOD_P, ALine, ADetail,
     fkCyclomaticComplexity);
@@ -418,8 +439,8 @@ end;
 
 procedure TTestBaselineSetContextHash.DetailChanged_MatchesViaContextHash;
 // (a) OHNE DEN UMBAU ROT. Der Fund steht an derselben Stelle, der Code
-// ringsum ist Zeile fuer Zeile unveraendert - nur der Score im Detailtext
-// ist von 11 auf 12 gewandert. Bis 2026-08-28 zeigte der Anzeige-Filter
+// ringsum ist Zeile fuer Zeile unveraendert - nur der WORTLAUT des
+// Detailtexts hat sich geaendert. Bis 2026-08-28 zeigte der Anzeige-Filter
 // ihn deshalb als "neu": LoadFromFile las den contextHash gar nicht erst
 // ein, und Contains kannte nur den Fingerprint.
 var
@@ -431,13 +452,13 @@ var
 begin
   Pas := WriteTempPas(BODY_V1);
   Assert.IsTrue(TFile.Exists(Pas), 'Vorbedingung: Quelldatei geschrieben');
-  WriteBaselineFor(DETAIL_11);
+  WriteBaselineFor(DETAIL_KURZ);
 
-  Neu  := MakeFinding(FIND_LINE, DETAIL_12);
+  Neu  := MakeFinding(FIND_LINE, DETAIL_LANG);
   List := ListWith(Neu);
   BSet := TBaselineSet.Create;
   try
-    Alt := MakeFinding(FIND_LINE, DETAIL_11);
+    Alt := MakeFinding(FIND_LINE, DETAIL_KURZ);
     try
       Assert.AreNotEqual(
         TBaseline.Fingerprint(Alt, TBaselineScope.ByFileName),
@@ -453,7 +474,7 @@ begin
     Assert.AreEqual<Integer>(1, BSet.PrepareContextHashes(List),
       'der Scan-Nachlauf rechnet den Hash des Fundes genau einmal');
     Assert.IsTrue(BSet.Contains(Neu),
-      'gleicher Code ringsum, nur anderer Score - der contextHash traegt');
+      'gleicher Code ringsum, nur anderer Wortlaut - der contextHash traegt');
   finally
     BSet.Free;
     List.Free;
@@ -475,12 +496,12 @@ var
 begin
   Pas := WriteTempPas(BODY_V1);
   Assert.IsTrue(TFile.Exists(Pas), 'Vorbedingung: Quelldatei geschrieben');
-  WriteLegacyBaselineFor(DETAIL_11);
+  WriteLegacyBaselineFor(DETAIL_KURZ);
   Assert.IsFalse(TFile.ReadAllText(TempBaselineFile).Contains('contextHash'),
     'Vorbedingung: die Alt-Datei traegt KEINEN contextHash');
 
-  Gleich := MakeFinding(FIND_LINE, DETAIL_11);
-  Anders := MakeFinding(FIND_LINE, DETAIL_12);
+  Gleich := MakeFinding(FIND_LINE, DETAIL_KURZ);
+  Anders := MakeFinding(FIND_LINE, DETAIL_LANG);
   List   := TObjectList<TLeakFinding>.Create(True);
   BSet   := TBaselineSet.Create;
   try
@@ -503,8 +524,8 @@ end;
 
 procedure TTestBaselineSetContextHash.CodeChanged_StillCountsAsNew;
 // (c) REGRESSIONSSCHUTZ gegen einen Hash, der ALLES matcht. Gleiche Lage
-// wie (a) - anderer Score -, aber diesmal hat sich zusaetzlich der Code an
-// der Fundstelle geaendert. Beide Match-Quellen muessen danebenliegen,
+// wie (a) - anderer Wortlaut -, aber diesmal hat sich zusaetzlich der Code
+// an der Fundstelle geaendert. Beide Match-Quellen muessen danebenliegen,
 // sonst waere der contextHash ein Freibrief.
 var
   Pas  : string;
@@ -513,7 +534,7 @@ var
   BSet : TBaselineSet;
 begin
   Pas := WriteTempPas(BODY_V1);
-  WriteBaselineFor(DETAIL_11);
+  WriteBaselineFor(DETAIL_KURZ);
   // Dieselbe Datei mit geaendertem Rumpf ueberschreiben und den Text-Cache
   // leeren - genau das, was ein zweiter Scan tut.
   WriteTempPas(BODY_V2);
@@ -521,7 +542,7 @@ begin
   Assert.Contains(TFile.ReadAllText(Pas), 'C := 99;',
     'Vorbedingung: die Quelldatei traegt jetzt den neuen Rumpf');
 
-  Neu  := MakeFinding(FIND_LINE, DETAIL_12);
+  Neu  := MakeFinding(FIND_LINE, DETAIL_LANG);
   List := ListWith(Neu);
   BSet := TBaselineSet.Create;
   try
@@ -549,7 +570,7 @@ var
 begin
   Pas  := WriteTempPas(BODY_V1);
   Assert.IsTrue(TFile.Exists(Pas), 'Vorbedingung: Quelldatei geschrieben');
-  F    := MakeFinding(FIND_LINE, DETAIL_11);
+  F    := MakeFinding(FIND_LINE, DETAIL_KURZ);
   List := ListWith(F);
   BSet := TBaselineSet.Create;
   try
@@ -608,10 +629,10 @@ var
 begin
   Pas := WriteTempPas(BODY_V1);
   Assert.IsTrue(TFile.Exists(Pas), 'Vorbedingung: Quelldatei geschrieben');
-  WriteBaselineFor(DETAIL_11);
+  WriteBaselineFor(DETAIL_KURZ);
 
-  Gleich := MakeFinding(FIND_LINE, DETAIL_11);
-  Anders := MakeFinding(FIND_LINE, DETAIL_12);
+  Gleich := MakeFinding(FIND_LINE, DETAIL_KURZ);
+  Anders := MakeFinding(FIND_LINE, DETAIL_LANG);
   BSet   := TBaselineSet.Create;
   try
     Assert.AreEqual<Integer>(1,
@@ -646,9 +667,9 @@ var
 begin
   Pas := WriteTempPas(BODY_V1);
   Assert.IsTrue(TFile.Exists(Pas), 'Vorbedingung: Quelldatei geschrieben');
-  WriteBaselineFor(DETAIL_11);
+  WriteBaselineFor(DETAIL_KURZ);
 
-  Alt   := MakeFinding(FIND_LINE, DETAIL_12);
+  Alt   := MakeFinding(FIND_LINE, DETAIL_LANG);
   Voll  := ListWith(Alt);
   Watch := TObjectList<TLeakFinding>.Create(True);
   BSet  := TBaselineSet.Create;
@@ -662,7 +683,7 @@ begin
     // Der Anwender tippt: die Datei aendert sich, und der Watch-Lauf
     // liefert die Funde genau dieser Datei neu.
     WriteTempPas(BODY_V2);
-    Neu := MakeFinding(FIND_LINE, DETAIL_12);
+    Neu := MakeFinding(FIND_LINE, DETAIL_LANG);
     Watch.Add(Neu);
     Assert.AreEqual<Integer>(1, BSet.RefreshContextHashesForFile(Pas, Watch),
       'der Nachzug rechnet den Hash der geaenderten Datei neu');
@@ -708,10 +729,10 @@ begin
   PasB := WriteTempPasB(BODY_V1);      // byte-gleicher Rumpf, andere Datei
   Assert.AreEqual(TFile.ReadAllText(FPasFile), TFile.ReadAllText(PasB),
     'Vorbedingung: beide Quelldateien sind inhaltsgleich');
-  WriteBaselineFor(DETAIL_11);         // Baseline kennt NUR Datei A
+  WriteBaselineFor(DETAIL_KURZ);       // Baseline kennt NUR Datei A
 
-  FundA := MakeFinding(FIND_LINE, DETAIL_11);
-  FundB := MakeFindingIn(PasB, FIND_LINE, DETAIL_11);
+  FundA := MakeFinding(FIND_LINE, DETAIL_KURZ);
+  FundB := MakeFindingIn(PasB, FIND_LINE, DETAIL_KURZ);
   List  := TObjectList<TLeakFinding>.Create(True);
   BSet  := TBaselineSet.Create;
   try
@@ -759,10 +780,10 @@ var
   BSet   : TBaselineSet;
 begin
   WriteTempPas(BODY_V1);
-  WriteBaselineFor(DETAIL_11);         // Regel fkCyclomaticComplexity
+  WriteBaselineFor(DETAIL_KURZ);       // Regel fkCyclomaticComplexity
 
-  Gleich := MakeFinding(FIND_LINE, DETAIL_11);
-  Andere := MakeOtherKindFinding(FIND_LINE, DETAIL_11);
+  Gleich := MakeFinding(FIND_LINE, DETAIL_KURZ);
+  Andere := MakeOtherKindFinding(FIND_LINE, DETAIL_KURZ);
   List   := TObjectList<TLeakFinding>.Create(True);
   BSet   := TBaselineSet.Create;
   try
@@ -813,11 +834,11 @@ procedure TTestBaselineSetContextHash.TwinName_OtherFolder_DefaultScope_MatchesA
 // enger macht, laesst diesen Test rot werden und muss die Folgen fuer
 // bestehende Baselines benennen, statt sie zu verstecken.
 var
-  FundA      : TLeakFinding;
-  FundB      : TLeakFinding;
-  FundBScore : TLeakFinding;
-  List       : TObjectList<TLeakFinding>;
-  BSet       : TBaselineSet;
+  FundA     : TLeakFinding;
+  FundB     : TLeakFinding;
+  FundBText : TLeakFinding;
+  List      : TObjectList<TLeakFinding>;
+  BSet      : TBaselineSet;
 begin
   WriteTwinPair(BODY_V1);
   Assert.AreEqual(ExtractFileName(FTwinA), ExtractFileName(FTwinB),
@@ -826,18 +847,18 @@ begin
     'Vorbedingung: und liegen doch in verschiedenen Baeumen');
   WriteTwinBaselineA;                  // Baseline kennt NUR Baum A
 
-  FundA      := MakeFindingIn(FTwinA, FIND_LINE, DETAIL_11);
-  FundB      := MakeFindingIn(FTwinB, FIND_LINE, DETAIL_11);
-  // Derselbe Fund in Baum B, nur mit gewandertem Score: sein Fingerprint
+  FundA     := MakeFindingIn(FTwinA, FIND_LINE, DETAIL_KURZ);
+  FundB     := MakeFindingIn(FTwinB, FIND_LINE, DETAIL_KURZ);
+  // Derselbe Fund in Baum B, nur mit gewandertem Wortlaut: sein Fingerprint
   // trennt, ein Treffer kann bei ihm also NUR aus dem contextHash-Zweig
   // kommen. So deckt der Test beide Strecken getrennt ab.
-  FundBScore := MakeFindingIn(FTwinB, FIND_LINE, DETAIL_12);
+  FundBText := MakeFindingIn(FTwinB, FIND_LINE, DETAIL_LANG);
   List := TObjectList<TLeakFinding>.Create(True);
   BSet := TBaselineSet.Create;
   try
     List.Add(FundA);
     List.Add(FundB);
-    List.Add(FundBScore);
+    List.Add(FundBText);
     Assert.AreEqual(
       TBaseline.Fingerprint(FundA, TBaselineScope.ByFileName),
       TBaseline.Fingerprint(FundB, TBaselineScope.ByFileName),
@@ -845,8 +866,8 @@ begin
       'im Default traegt er nur den Basisnamen');
     Assert.AreNotEqual(
       TBaseline.Fingerprint(FundA, TBaselineScope.ByFileName),
-      TBaseline.Fingerprint(FundBScore, TBaselineScope.ByFileName),
-      'Vorbedingung: mit gewandertem Score trennt der Fingerprint sehr ' +
+      TBaseline.Fingerprint(FundBText, TBaselineScope.ByFileName),
+      'Vorbedingung: mit gewandertem Wortlaut trennt der Fingerprint sehr ' +
       'wohl - bei diesem Fund kaeme ein Treffer nur aus dem contextHash');
     Assert.AreEqual(TFindingFingerprint.ContextHash(FundA),
                     TFindingFingerprint.ContextHash(FundB),
@@ -861,7 +882,7 @@ begin
     Assert.IsTrue(BSet.Contains(FundB),
       'EHRLICHE GRENZE: der gleichnamige Zwilling aus Baum B gilt im ' +
       'Default ebenfalls als bekannt - hier traegt schon der Fingerprint');
-    Assert.IsTrue(BSet.Contains(FundBScore),
+    Assert.IsTrue(BSet.Contains(FundBText),
       'EHRLICHE GRENZE, zweite Strecke: auch der QUALIFIZIERTE ' +
       'contextHash-Schluessel trennt die Baeume im Default nicht - sein ' +
       'Datei-Anteil IST der Basisname');
@@ -897,8 +918,8 @@ begin
     'Vorbedingung: Modus UND Wurzel sind gesetzt - sonst faellt der Token ' +
     'still auf den Dateinamen zurueck, und der Test pruefte (i) nach');
 
-  FundA := MakeFindingIn(FTwinA, FIND_LINE, DETAIL_11);
-  FundB := MakeFindingIn(FTwinB, FIND_LINE, DETAIL_11);
+  FundA := MakeFindingIn(FTwinA, FIND_LINE, DETAIL_KURZ);
+  FundB := MakeFindingIn(FTwinB, FIND_LINE, DETAIL_KURZ);
   List  := TObjectList<TLeakFinding>.Create(True);
   BSet  := TBaselineSet.Create;
   try

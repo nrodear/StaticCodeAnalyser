@@ -244,6 +244,7 @@ uses
   Winapi.Windows,                  // OutputDebugString
   System.IOUtils, System.JSON,
   System.Generics.Defaults,        // TIStringComparer - Profilnamen (G5-4)
+  uJsonFormat,                     // JsonFormatEscaped (WriteUserProfiles)
   uLocalization;                   // NormalizeLangCode - EINE Normalisierung
                                    // fuer SetLanguage und Overlay-Lookup
 
@@ -1394,7 +1395,16 @@ begin
     end;
     try
       ForceDirectories(ExtractFilePath(FileName));
-      TFile.WriteAllText(FileName, Root.Format(2), TEncoding.UTF8);
+      // NICHT Root.Format(2): das escaped keine Steuerzeichen unter 0x20
+      // (System.JSON.pas:1609 ruft ToChars mit leeren Optionen). Hier
+      // sind die Paar-NAMEN Nutzereingaben - ein Profilname aus der
+      // Zwischenablage kann ein Steuerzeichen tragen, und profiles.json
+      // waere danach fuer jeden strikten Parser kaputt. Vorsorge, kein
+      // belegter Fall: der belegte Fall stand im Baseline-Writer
+      // (2026-08-28), und dies ist sein Schwesterpfad - die letzte
+      // verbliebene Format(2)-Stelle im Repo.
+      TFile.WriteAllText(FileName, JsonFormatEscaped(Root, 2),
+        TEncoding.UTF8);
       Result := True;
     except
       on E: Exception do

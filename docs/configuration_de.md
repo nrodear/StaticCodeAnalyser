@@ -72,6 +72,77 @@ Lauf, in dem sie angegeben werden.
 | `OnlyNew` | Bool | `False` | Nur Funde anzeigen, die nicht in der Baseline stehen. |
 | `PathInFingerprint` | Bool | `False` | Den Relativpfad in den Fingerprint aufnehmen - trennt gleichnamige Dateien in verschiedenen Ordnern. |
 
+### Welche Schwellwerte sich aendern lassen, ohne eine Baseline zu entwerten
+
+Der Fingerprint hasht den Meldetext eines Funds, und die meisten
+Schwellwert-Regeln schreiben die eingestellte Grenze in diesen Meldetext.
+Wer an einer solchen Schraube dreht, aendert damit den *Fingerprint* jedes
+Funds dieser Regel, ohne einen einzigen Fund zu aendern. Fuenf der neun
+`[Detectors]`-Schwellwerte weiter oben sind davon ausgenommen, vier nicht -
+die Tabelle sagt welche, und der Absatz darunter sagt, was das "Nein"
+tatsaechlich kostet, naemlich weniger als es klingt.
+
+| Schluessel | Regel | Bleibt der Fingerprint beim Umstellen? |
+|---|---|---|
+| `[Detectors] LongMethodMaxBodyLines` | SCA012 | **Ja** |
+| `[Detectors] LongMethodMaxStatements` | SCA012 | **Ja** |
+| `[Detectors] DeepNestingMaxDepth` | SCA018 | **Ja** |
+| `[Detectors] CyclomaticMax` | SCA022 | **Ja** |
+| `[Detectors] CognitiveLimit` | SCA176 | **Ja** |
+| `[Detectors] LongParamListMaxParams` | SCA013 | Nein - aber siehe unten, der Kontext-Hash trifft meist trotzdem |
+| `[Detectors] MaxCaseBranches` | SCA091 | Nein - aber siehe unten, der Kontext-Hash trifft meist trotzdem |
+| `[Detectors] MaxLineLength` | SCA062 | Nein - aber siehe unten, der Kontext-Hash trifft meist trotzdem |
+| `[Detectors] DuplicateBlockMinLines` | SCA021 | Nein - aber siehe unten, der Kontext-Hash trifft meist trotzdem |
+
+**Was die "Nein"-Zeilen bedeuten und was nicht.** Sie betreffen den
+Fingerprint, und der Fingerprint ist nur eine von zwei Trefferquellen.
+Jeder Eintrag einer Baseline ab v0.9.8 traegt zusaetzlich einen
+*Kontext-Hash* (`contextHash`) ueber die Quelltextzeilen rund um den Fund,
+und ein geaenderter Schwellwert aendert nur den Wortlaut der Meldung -
+nicht die Zeile des Funds und nicht den Code darum herum. Im Normalfall
+passen diese Funde also weiterhin, und man sieht nichts. Einmalig als neu
+tauchen sie erst auf, wenn der Kontext-Hash nicht helfen kann: bei einer
+Baseline aelter als v0.9.8 (die traegt keinen Kontext-Hash), wenn sich der
+Code im Umkreis von drei Zeilen ebenfalls geaendert hat, oder wenn die
+Baseline mit der anderen `PathInFingerprint`-Einstellung geschrieben wurde
+(dann passt gar nichts mehr, und der Lauf sagt das auch). In diesen
+Faellen die Baseline neu schreiben (`--write-baseline`, oder "Write
+baseline" in Oberflaeche und Plugin) - wobei ein Neuschreiben *alle*
+aktuellen Funde uebernimmt, nicht nur die zuvor akzeptierten. Bitte
+**nicht** vorsorglich neu schreiben, nur weil eine dieser vier Schrauben
+verstellt wurde.
+
+Genau das macht die "Ja"-Zeilen zur staerkeren Zusage, nicht zur
+schwaecheren: sie gelten auch dann, wenn der Kontext-Hash *nicht* passt,
+denn fuer diese fuenf Schluessel geht ueberhaupt keine Zahl aus dem
+Meldetext in den Fingerprint ein. `CyclomaticMax` zu aendern aendert,
+welche Funde *gemeldet* werden, nie welche davon die Baseline bereits
+*akzeptiert* hat.
+
+Der eine Fall, den die ausgenommenen fuenf nicht auseinanderhalten
+koennen: bei SCA012, SCA018, SCA022 und SCA176 teilen sich zwei
+gleichnamige Methoden einer Datei - Overloads, oder derselbe Name in zwei
+Klassen einer Unit - einen einzigen Baseline-Eintrag. Auf dem
+Referenzkorpus mit 783.105 Funden betrifft das **183 bis 185 von 37.990
+Funden (0,49 %) bei `PathInFingerprint=1`** und **rund 1.450 (3,8 %) im
+Standardmodus**, wo das Datei-Token der blosse Dateiname ist und
+gleichnamige Dateien in verschiedenen Ordnern es sich teilen (der Korpus
+enthaelt von einigen JVCL-Units vier Kopien und von einer CEF4Delphi-Unit
+sechs). Beide Zahlen gelten je Repository. Die Spanne der ersten stammt
+aus der Methodennamen-Heuristik, mit der sie gezaehlt wurde, siehe
+CHANGELOG.
+
+Die anderen vier Regeln blieben mit Absicht aussen vor, nicht aus
+Vergesslichkeit. Naehme man die Zahlen aus *ihren* Meldetexten heraus,
+wuerden Funde verschmelzen, die sonst nichts unterscheidet - auf
+demselben Korpus und im selben Pfadmodus gemessen verloere SCA013 455
+von 10.099 Identitaeten (4,5 %, das Neunfache der ausgenommenen fuenf,
+weil sich Overloads genau in der Parameterzahl unterscheiden, die
+wegfiele) und SCA091 621 von 1.944 (31,9 %, weil diese Regel keinen
+Methodennamen festhaelt und ihr Meldetext sonst ueberall gleich lautet).
+Im Standardmodus schrumpft der Abstand bei SCA013 auf 4,4 % gegen 3,8 % -
+dort traegt der strukturelle Grund, nicht die Rate.
+
 ## `[Score]`
 
 | Schluessel | Typ | Standard | Bedeutung |

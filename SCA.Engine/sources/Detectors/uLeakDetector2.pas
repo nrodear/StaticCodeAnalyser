@@ -3461,6 +3461,45 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext);
 
+  // AKTENNOTIZ ARC / TInterfacedObject (2026-08-28) - VERSUCHT UND
+  // ZURUECKGENOMMEN, damit es niemand ein zweites Mal so baut.
+  //
+  // IDEE: erbt der Deklarationstyp von TInterfacedObject, kann die
+  // Referenzzaehlung freigeben - solche Funde also unterdruecken oder
+  // in der Konfidenz senken. Am Korpus betrifft das 30 der 568 Funde.
+  //
+  // WARUM ES SO NICHT GEHT, gemessen am Lauf rw22:
+  // 1. Ein Demote auf fcMedium ist ein NO-OP -
+  //    KindDefaultConfidence(fkMemoryLeak) IST fcMedium
+  //    (uSCAConsts.pas:1457). SCA001 stand nie im Error-Tier; alle 568
+  //    Funde sind lsWarning.
+  // 2. Ein Demote auf fcLow ist kein Demote, sondern ein DROP - und
+  //    zwar ueberall: DEF_FINDING_MIN_CONFIDENCE = fcMedium filtert
+  //    auch im strict-Profil. Gemessen 30 Funde weg.
+  // 3. Unter diesen 30 sind ZWEI, die bleiben muessen:
+  //    jcl .../Dummy/DummyRevisionProvider.pas:39 (TStreamAdapter in
+  //    einer Objekt-Variablen, nie an ein Interface gebunden - echtes
+  //    Leck) und CodeReader....GenericGF.pas:642 (TStringBuilder, ein
+  //    HOMONYM: die RTL-Klasse erbt TObject, eine JVCL-Hilfsunit
+  //    deklariert gleichnamig class(TInterfacedObject, IStringBuilder)).
+  //    Der TypeIndex ist bei KINDS homonym-fest, bei der ELTERNKETTE
+  //    offenbar nicht - das ist der eigentliche Befund dieser Runde.
+  //
+  // DER GRUND ist die Sprachregel: die Referenzzaehlung greift erst,
+  // wenn das Objekt an eine INTERFACE-Referenz gebunden wird. In ALLEN
+  // 30 Faellen ist die Variable OBJEKT-typisiert; die 28 harmlosen sind
+  // es nur, weil das Objekt spaeter uebergeben oder zugewiesen wird.
+  //
+  // DER WEG, DER TRAEGT (gemessen, nicht gebaut): beide Ausnahmen
+  // werden AUSSCHLIESSLICH als Empfaenger benutzt - SA.CopyTo(...),
+  // lResult.Append(...). Die 28 anderen haben mindestens eine
+  // Verwendung, die keine Methodenaufruf-Basis ist (Argument an
+  // WriteToAppender/CreateModule, Zuweisung an ein Interface-Feld).
+  // Eine Bedingung "nach dem Create NUR als <var>. verwendet" trennt
+  // sauber. Sie gehoert mit eigener Messung und Gegenpruefung gebaut,
+  // nicht nebenbei - dieser Anlauf hat zwei Fehler gebraucht, bis das
+  // klar war.
+
   procedure AddFinding(const MissingVar: string; Sev: TLeakSeverity;
     VLine: Integer);
   var
