@@ -582,6 +582,14 @@ end;
 
 { ---- TFixtureFilter ---- }
 
+// Zu den woertlichen C:-Pfaden in diesem Block: sie SIND die
+// Testdaten - der Filter entscheidet allein anhand von Pfadsegmenten
+// und der Scanwurzel, also muessen beide im Test stehen. Die Marker
+// sind bewusst zeilengenau und nicht dateiweit: die uebrigen Tests
+// dieser Unit fahren ueber ECHTE Temp-Dateien, dort waere ein
+// hartkodierter Pfad ein echter Befund, den ein Dateimarker
+// verdecken wuerde.
+
 function MakeFindingFor(const AFile: string;
   AKind: TFindingKind): TLeakFinding;
 // Minimaler Fund fuer die Filter-Tests: nur Datei und Art zaehlen, der
@@ -624,8 +632,11 @@ begin
   F     := TObjectList<TLeakFinding>.Create(True);
   Namen := TStringList.Create;
   try
+    // noinspection HardcodedPath
     F.Add(MakeFindingFor('C:\repo\tests\uTestFoo.pas', fkMemoryLeak));
+    // noinspection HardcodedPath
     F.Add(MakeFindingFor('C:\repo\src\uFoo.pas', fkMemoryLeak));
+    // noinspection HardcodedPath
     n := TFixtureFilter.Apply(F, 'C:\repo', Namen);
     Assert.AreEqual<Integer>(1, n, 'genau der Fixture-Fund faellt');
     Assert.AreEqual<Integer>(1, F.Count, 'der Produktionsfund bleibt');
@@ -651,6 +662,7 @@ begin
   F := TObjectList<TLeakFinding>.Create(True);
   try
     F.Add(MakeFindingFor('C:\repo\tests\uTestFoo.pas', fkFileReadError));
+    // noinspection HardcodedPath
     F.Add(MakeFindingFor('C:\repo\tests\uTestBar.pas', fkMemoryLeak));
     n := TFixtureFilter.Apply(F, 'C:\repo');
     Assert.AreEqual<Integer>(1, n, 'nur der normale Fund faellt');
@@ -672,8 +684,10 @@ var
 begin
   F := TObjectList<TLeakFinding>.Create(True);
   try
+    // noinspection HardcodedPath
     F.Add(MakeFindingFor('C:\tests\meinprojekt\src\uFoo.pas',
       fkMemoryLeak));
+    // noinspection HardcodedPath
     TFixtureFilter.Apply(F, 'C:\tests\meinprojekt');
     Assert.AreEqual<Integer>(1, F.Count,
       'das tests-Segment liegt OBERHALB der Scanwurzel und zaehlt nicht');
