@@ -1081,7 +1081,7 @@ const
     (
       RuleID   : 'SCA168';
       Name     : 'case-Anweisung ohne else-Zweig';
-      ShortDesc: 'Die case-Anweisung hat keinen else-Zweig - unbehandelte Werte fallen stillschweigend durch'
+      ShortDesc: 'Die case-Anweisung hat keinen else-Zweig - unbehandelte Werte fallen stillschweigend durch; ein else nach einem if im letzten Arm ist das else des case'
     ),
     // SCA169
     (
@@ -2438,7 +2438,7 @@ const
       RuleID   : 'SCA168';
       Name     : 'Instruction case sans branche else';
       ShortDesc: 'L''instruction case n''a pas de branche else - les valeurs non trait' + #$E9 +
-        'es passent silencieusement'
+        'es passent silencieusement ; un else suivant un if dans le dernier bras est le else du case'
     ),
     // SCA169
     (

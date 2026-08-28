@@ -673,7 +673,7 @@
     },
     "SCA168": {
       "name": "Instruction case sans branche else",
-      "shortDescription": "L'instruction case n'a pas de branche else - les valeurs non traitées passent silencieusement"
+      "shortDescription": "L'instruction case n'a pas de branche else - les valeurs non traitées passent silencieusement ; un else suivant un if dans le dernier bras est le else du case"
     },
     "SCA169": {
       "name": "L'argument d'Assert contient un appel a effet de bord",

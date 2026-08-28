@@ -26,10 +26,15 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or any detector change that shifts a score, therefore changed the
   *identity* of those findings and made "show only new findings"
   surface them again although no line of code had moved - 37,987
-  findings (4.8 %) on the reference corpus. Baselines already carry the
-  context hash in every entry; the display filter simply discarded it
-  while loading. Nothing to migrate: existing baseline files start
-  working better the moment you update. **Note that the filter gets
+  findings (4.8 %) on the reference corpus. That is the exposure; the
+  parser fix further down this release is a worked example of it
+  actually happening. It changed the score in the message of **105
+  findings** whose source code it did not touch. All 105 keep their
+  context hash and are therefore still matched; on the legacy
+  fingerprint alone, all 105 would have resurfaced as new. Baselines
+  already carry the context hash in every entry; the display filter
+  simply discarded it while loading. Nothing to migrate: existing
+  baseline files start working better the moment you update. **Note that the filter gets
   more tolerant** - a finding shown as "new" today can be hidden from
   now on; that is the intent. Limits, deliberately: baselines written
   before v0.9.8 carry no context hash and behave exactly as before,
@@ -258,10 +263,56 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   parameter array of `Exec*('literal sql', [...])`. Real injections -
   raw parameters glued into SQL - keep firing; each convention ships
   with a true-positive guard test.
+- **Parser: the `else` of a `case` is no longer swallowed by an `if` in
+  the last arm.** `case X of ... 3: if C then Foo; else Bar; end;` is
+  legal Pascal - the `;` after `Foo` terminates the `if`, so the `else`
+  belongs to the `case`. The parser checked for `else` unconditionally
+  and did not know whether the then-statement had already consumed its
+  own semicolon, so it attached the arm to the `if` instead. Two things
+  followed: the `case` looked like it had no `else` branch at all, and
+  where the else body held more than one statement, everything from the
+  second statement on was dropped from the syntax tree - invisible to
+  every rule. Measured on the reference corpus (784,056 findings):
+  **SCA168 (DefaultCaseInCaseStatement) 9,730 -> 9,582, minus 148
+  findings**, every one of them a rule claiming "case statement without
+  else" about a `case` that plainly has one. Eight files were verified
+  to hold a multi-statement else body; the statements recovered there
+  produced four new findings (2x SCA176, 1x SCA012, 1x SCA022). SCA018
+  ends one finding lower (3,708 -> 3,707): one method loses its finding
+  because the phantom branch had been inflating its depth by a level,
+  and in one other method the reported deepest spot moves to a
+  different line at unchanged depth - which a comparison keyed on file
+  and line shows as a drop plus an add. 105 further findings keep their
+  place and change only the number in their message - the metric rules
+  count the recovered `else` arm as the branch it always was. SCA166
+  and SCA008 did not move at all. The self-scan of this repository has
+  five such sites, all with a single-statement else body: SCA168
+  87 -> 82, nothing else.
 - Parser: context keywords (`read`, `Result`, ...) are now accepted
   as variable names in local `var` sections. Previously the TYPE name
   became a phantom variable and SCA166 reported "integer/PPyObject is
   read but never assigned" on the routine signature line.
+- **SCA106 (MethodName) stops reporting dual-mode C binding headers.**
+  A line such as `{$IFDEF SK_STATIC_LIBRARY}function {$ENDIF}sk4d_foo
+  {$IFNDEF SK_STATIC_LIBRARY}: function {$ENDIF}(...): x; cdecl;` is a
+  *variable* of a procedural type in the default build, not a method
+  header - the naming convention for methods does not apply to it. The
+  rule reads the parsed signature preprocessor-blind, so the return
+  type came out beginning with the keyword `function` or `procedure`,
+  which is not a valid return type and is the fingerprint of exactly
+  this construction. Corpus: **SCA106 11,192 -> 10,386, minus 806
+  findings** - all 806 in a single generated binding unit
+  (`skia4delphi/Source/System.Skia.API.pas`), which leaves the rule's
+  file list entirely. Handwritten headers are untouched.
+- SCA008 (NilDeref) treats two different arms of the same `case` as
+  mutually exclusive, the way it already did for the two branches of an
+  `if`. Without this the parser fix above would have traded a parser
+  defect for false positives: the swallowed `else` used to look like
+  the else branch of the arm's `if`, which is what suppressed the
+  finding. The exclusion does not apply when the `case` sits inside a
+  loop - a later pass can then see what an earlier one assigned.
+  Corpus: SCA008 unchanged at 30 findings across the parser fix, which
+  is the point of shipping both together.
 - SCA166: the same-file out-parameter index no longer lets a shorter
   overload erase the `out` flag of a longer one (JclSysUtils
   `IntToStr(Value; out FirstDigitPos)` pattern).

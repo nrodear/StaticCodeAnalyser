@@ -406,7 +406,7 @@ Vagues ultérieures : sécurité/injection, machinerie de suppression, la famill
 | SCA164 | **UnusedRoutine** | Procédure/fonction autonome de la section implementation jamais appelée (sur index de mots depuis le 2026-07-19) | Hint | Code Smell | ✅ | `uUnusedRoutine` |
 | SCA165 | **UnusedSuppression** | Un marqueur `// noinspection X` ne supprime aucun résultat à sa ligne cible - soit le détecteur s'est amélioré (suppression devenue inutile), soit la cible de la suppression était fausse | Hint | Code Smell | ✅ | `uSuppression` |
 | SCA167 | **InsecureRandom** | Random / RandomRange / RandomFrom utilisé sans Randomize - Seed=0 produit la même séquence déterministe à chaque exécution | Warning | Bug | ✅ | `uInsecureRandom` |
-| SCA168 | **DefaultCaseInCaseStatement** | L'instruction case n'a pas de branche else - les valeurs non gérées passent en silence | Hint | CodeSmell | ✅ | `uDefaultCaseInCaseStatement` |
+| SCA168 | **DefaultCaseInCaseStatement** | L'instruction case n'a pas de branche else - les valeurs non gérées passent en silence ; un else suivant un if dans le dernier bras est le else du case | Hint | CodeSmell | ✅ | `uDefaultCaseInCaseStatement` |
 | SCA169 | **AssertWithSideEffect** | Assert(SomeCall) - l'appel disparaît en build Release et son effet de bord est perdu en silence | Warning | Bug | ✅ | `uAssertWithSideEffect` |
 | SCA170 | **ConstStringParameter** | Paramètre string déclaré sans const - incrémente le refcount à chaque appel | Hint | CodeSmell | ✅ | `uConstStringParameter` |
 | SCA171 | **CompilerDirectiveScope** | {$WARNINGS OFF} (ou HINTS/RANGECHECKS/...) sans ON de fermeture - fuit dans les unités suivantes | Warning | CodeSmell | ✅ | `uCompilerDirectiveScope` |
