@@ -89,6 +89,14 @@ var
 function NormalizePath(const APath: string): string;
 // Backslash-zu-Slash damit ein einziger Glob beide OS-Konventionen
 // matched. Auch ToLower fuer case-insensitive Match (Windows-Default).
+//
+// ACHTUNG, GEGENRICHTUNG: diese Funktion macht "\" -> "/", die
+// gleichnamige Konvention in SCA.SharedUI/uPathNormalize macht das
+// UMGEKEHRTE ("/" -> "\", fuer Cache-Schluessel), und
+// uSymbolReferenceIndex.NormalizeUnitPath expandiert stattdessen auf
+// einen absoluten Pfad. Drei Zwecke, drei Ergebnisse - der Name
+// allein sagt nicht, welches man bekommt. Nicht vereinheitlichen,
+// ohne alle drei Aufruferkreise zu pruefen.
 begin
   Result := LowerCase(StringReplace(APath, '\', '/', [rfReplaceAll]));
 end;

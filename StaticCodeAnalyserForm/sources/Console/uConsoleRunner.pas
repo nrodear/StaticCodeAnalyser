@@ -1329,8 +1329,7 @@ begin
       EffectiveHideTestFixtures := Args.HideTestFixtures
     else
       EffectiveHideTestFixtures :=
-        SameText(Settings.Profile, 'default') or
-        SameText(Settings.Profile, 'selftest-quiet');
+        TFixtureFilter.AutoHidesFixtures(Settings.Profile);
 
     try
       // Request fuer die Engine-Facade bauen. Config kommt aus der repo-INI
@@ -1525,19 +1524,13 @@ begin
       try
         DroppedFiles.Sorted := True;
         DroppedFiles.Duplicates := dupIgnore;
-        for var i := Findings.Count - 1 downto 0 do
-        begin
-          if Findings[i].Kind = fkFileReadError then Continue;
-          // BaseDir hier ist der Scan-Wurzel-Pfad - sichert das Pfad-Anchoring
-          // gegen externe Repo-Pfade die zufaellig '/tests/' enthalten.
-          if TDetectorUtils.IsTestFixturePath(Findings[i].FileName,
-               Args.Path) then
-          begin
-            DroppedFiles.Add(ExtractFileName(Findings[i].FileName));
-            Findings.Delete(i);
-            Inc(FixtureDropped);
-          end;
-        end;
+        // Die Schleife lag frueher hier - Praedikat,
+        // Lesefehler-Ausnahme und Pfad-Anchoring ueber die Scanwurzel
+        // sind jetzt TFixtureFilter.Apply in der Engine. Verhalten
+        // unveraendert; der Punkt war, dass EXE und Plugin dieselbe
+        // Regel rufen KOENNEN, statt dass sie nur hier existiert.
+        FixtureDropped := TFixtureFilter.Apply(Findings, Args.Path,
+          DroppedFiles);
 
         // ERSTE-MINUTEN-FALLE (Durchlauf 2026-08-02): der Filter greift bei
         // Profil 'default' automatisch, und zu den Mustern gehoeren
