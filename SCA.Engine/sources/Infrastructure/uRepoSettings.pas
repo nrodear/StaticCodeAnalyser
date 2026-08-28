@@ -832,6 +832,20 @@ const
     ';MinConfidence=low'#13#10 +
     ';MinConfidence=high'#13#10 +
     ''#13#10 +
+    '; EvidenceTiering (0/1, default: 1)'#13#10 +
+    '; Caps the severity by the confidence of the finding, so that'#13#10 +
+    '; "error" means proven:'#13#10 +
+    ';   high   -> error'#13#10 +
+    ';   medium -> warning'#13#10 +
+    ';   low    -> hint'#13#10 +
+    '; An explicit PathOverride upgrade (severity:error:*) still wins'#13#10 +
+    '; against the cap - that is the pipeline order, on purpose.'#13#10 +
+    '; Read errors are exempt (they are diagnostics, not findings).'#13#10 +
+    '; With EvidenceTiering=0 the SARIF is byte-identical to the'#13#10 +
+    '; behaviour before the policy existed.'#13#10 +
+    'EvidenceTiering=1'#13#10 +
+    ';EvidenceTiering=0'#13#10 +
+    ''#13#10 +
     '; IdeProfile / IdeMinSeverity (defaults: ide-fast / hint)'#13#10 +
     '; Like Profile / MinSeverity, but for the IDE plugin only (live mode).'#13#10 +
     '; Standalone (form, CLI) uses Profile / MinSeverity. This lets the'#13#10 +
