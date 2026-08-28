@@ -71,6 +71,15 @@ given in.
 | `OnlyNew` | Bool | `False` | Show only findings that are not in the baseline. |
 | `PathInFingerprint` | Bool | `False` | Include the relative path in the fingerprint - distinguishes same-named files in different folders. |
 
+Re-tuning a `[Detectors]` threshold does **not** invalidate a baseline.
+The metric rules SCA012, SCA018, SCA022 and SCA176 print their measured
+value and the configured limit in the message, but no number from those
+messages goes into the baseline fingerprint. Changing `CyclomaticMax`
+therefore changes which findings are *reported*, never which of them your
+baseline already *accepts*. The one case this cannot tell apart: for these
+four rules, two same-named methods in one file - overloads, or the same
+name in two classes of one unit - share a single baseline entry.
+
 ## `[Score]`
 
 | Key | Type | Default | Meaning |

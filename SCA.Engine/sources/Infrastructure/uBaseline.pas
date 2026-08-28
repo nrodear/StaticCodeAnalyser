@@ -21,6 +21,9 @@ unit uBaseline;
 //   einer Zeile verschiebt jedes Finding sonst. Trade-off: zwei Findings
 //   gleichen Detektor-Typs in derselben Methode mit identischem Detail
 //   matchen denselben Fingerprint -> Baseline matched einen davon (fine).
+//   AUSNAHME fuer vier Metrik-Regeln: dort werden Ziffernfolgen im Detail
+//   vor dem Hashen ersetzt, weil dort der SCHWELLWERT mit im Text steht -
+//   Begruendung und Kosten bei METRIC_DETAIL_KINDS in der Implementation.
 //
 // ZWEITE MATCH-QUELLE - contextHash (seit v0.9.8, QUALIFIZIERT seit
 // 2026-08-28): jeder Eintrag traegt zusaetzlich einen Hash ueber die
@@ -500,6 +503,118 @@ begin
     Result := Copy(FullLow, Length(RootLow) + 1, MaxInt);
 end;
 
+const
+  // DIE VIER METRIK-REGELN - und NUR sie. Ihr Detailtext traegt neben dem
+  // gemessenen Wert auch den KONFIGURIERTEN SCHWELLWERT:
+  //   SCA022 uCyclomaticComplexity 'Cyclomatic complexity %d (limit: %d)'
+  //   SCA018 uDeepNesting          'Depth %d (%s from line %d, limit: %d)'
+  //   SCA176 uCognitiveComplexity  'Cognitive complexity %d (limit: %d)'
+  //   SCA012 uLongMethod           '%d body lines, %d statements
+  //                                 (limit: %d / %d)'
+  //
+  // WARUM DER ZWEIG UEBERHAUPT EXISTIERT: alle fuenf Schwellen sind
+  // DOKUMENTIERTE Nutzer-Knoepfe in [Detectors] (docs/configuration.md) -
+  // CyclomaticMax, DeepNestingMaxDepth, CognitiveLimit,
+  // LongMethodMaxBodyLines, LongMethodMaxStatements. Wer eine von 10 auf 12
+  // dreht, aendert KEINEN einzigen Fund - aber jeden Fingerprint dieser
+  // Regeln, weil die 10 im Meldetext steht und der Meldetext gehasht wird.
+  // Gemessen an rw20 (783.105 Funde, 27 Repos): 37.990 Funde = 4,85 % des
+  // Korpus haengen mit ihrer Baseline-Identitaet an einem INI-Wert, zu
+  // dessen Aenderung die Doku ausdruecklich einlaedt. Das passiert heute
+  // schon, ohne jedes Update von uns. Derselbe Grund gilt fuer den SCORE:
+  // ein Detektor- oder Parserfix, der den McCabe-Wert um 1 verschiebt,
+  // entwertet den Eintrag ebenso - siehe uMethodd12.RelatedLines, wo das
+  // Projekt genau diesen Fehlermodus schon einmal vermieden hat.
+  //
+  // WARUM NICHT GLOBAL UEBER ALLE REGELN - BITTE NICHT "AUFRAEUMEN":
+  // Eine Normalisierung ohne diese Einschraenkung kostet an rw20
+  // ausgezaehlt 140.703 verschmolzene Identitaeten roh; methodengenau
+  // nachgerechnet fuer die Regeln, die MethodName setzen, bleiben rund
+  // 120.700 = etwa 15 % ALLER Funde. Der Killer ist SCA101
+  // BeginEndRequired (285.942 Funde, groesste Regel im Korpus, allein
+  // 94.254 verlorene Identitaeten):
+  //   'Branch at column 5 uses a single statement without begin..end'
+  //   'Branch at column 42 uses a single statement without begin..end'
+  // Die SPALTENNUMMER ist dort der EINZIGE Unterscheider zwischen zwei
+  // Funden derselben Datei - MethodName setzt der Detektor nicht. Nach
+  // einer globalen Normalisierung legt EIN Baseline-Eintrag alle Branches
+  // einer Datei still, und zwar unsichtbar: die Funde verschwinden
+  // einfach, es gibt keine Meldung. Dasselbe Muster bei SCA090 NestedTry
+  // (1.490) und SCA066 EmptyArgumentList (2.141), beide 'at column %d',
+  // dazu SCA024 (5.158) und SCA021 (7.374).
+  // uTestBaselineMetricFingerprint.SCA101_Spalte_BleibtUnterscheider ist
+  // der Waechter dagegen - wer die Menge hier aufweicht, macht ihn rot;
+  // DuplicateBlock_Zeilen_BleibenUnterscheider haelt dieselbe Grenze fuer
+  // SCA021.
+  //
+  // WAS ES KOSTET (an rw20 methodengenau nachgemessen, nicht geschaetzt):
+  // 222 verlorene Identitaeten - SCA022 75, SCA176 79, SCA012 38,
+  // SCA018 30 - das sind 0,58 % der vier Regeln und 0,03 % des Korpus.
+  // Ursache ist ausschliesslich, dass jede dieser Regeln hoechstens EINEN
+  // Fund je Methode erzeugt: kollidieren koennen nur GLEICHNAMIGE Methoden
+  // derselben Datei mit verschiedenen Werten (Overloads, gleicher Name in
+  // zwei Klassen einer Unit). Festgenagelt am echten Weg Write -> Apply in
+  // uTestBaselineMetricFingerprint.
+  // EinBaselineEintrag_BlendetGleichnamigeMethodeMit.
+  //
+  // ZUGABE - der Zeilennummern-Vertragsbruch von SCA018 faellt mit:
+  // 'Depth 8 (if from line 1456, limit: 4)' trug die Zeilennummer im
+  // Text und brach damit die Zusage am Unit-Kopf, Line gehe NICHT in den
+  // Fingerprint. Alle 3.707 SCA018-Funde in rw20 (= 100 % der Regel)
+  // verloren ihre Baseline-Zuordnung schon bei reiner Zeilenverschiebung.
+  // Ab hier nicht mehr - der Kind-Name ('if'/'for'/'while'/'repeat'/
+  // 'case') ist ziffernfrei und bleibt als Unterscheider erhalten.
+  // NICHT mitgeloest, weil andere Regel: SCA021 DuplicateBlock
+  // ('lines 248-272', 9.150 Funde) traegt denselben Bruch und ist hier
+  // bewusst NICHT drin - bei ihr sind die Zeilennummern das Einzige, was
+  // zwei Duplikat-Gruppen derselben Datei unterscheidet.
+  METRIC_DETAIL_KINDS : TFindingKinds =
+    [fkCyclomaticComplexity, fkDeepNesting, fkCognitiveComplexity,
+     fkLongMethod];
+
+function DigitRunsToPlaceholder(const AText: string): string;
+// Jede zusammenhaengende Ziffernfolge wird EIN '#'. '(limit: 10)' und
+// '(limit: 12)' fallen damit auf '(limit: #)' zusammen, 'Depth 8' und
+// 'Depth 9' auf 'Depth #'.
+//
+// Handgeschrieben statt TRegEx: die Funktion laeuft je Fund und je
+// Filterdurchlauf, und TRegEx-Instanzen sind in diesem Projekt
+// nachweislich nicht nebenlaeufig benutzbar (uStaticAnalyzer2,
+// TRegExMatches.FCache traegt deshalb die Thread-ID im Schluessel).
+var
+  I, Len, Dst : Integer;
+  Buf         : string;
+  InRun       : Boolean;
+begin
+  Len := Length(AText);
+  SetLength(Buf, Len);
+  Dst   := 0;
+  InRun := False;
+  for I := 1 to Len do
+  begin
+    if (AText[I] >= '0') and (AText[I] <= '9') then
+    begin
+      // Nur der ERSTE Treffer eines Laufs schreibt - sonst haette
+      // '(limit: 10)' zwei Platzhalter und bliebe von '(limit: 9)'
+      // unterscheidbar, also genau der Fehler, gegen den es den Zweig gibt.
+      if not InRun then
+      begin
+        Inc(Dst);
+        Buf[Dst] := '#';
+        InRun := True;
+      end;
+    end
+    else
+    begin
+      InRun := False;
+      Inc(Dst);
+      Buf[Dst] := AText[I];
+    end;
+  end;
+  SetLength(Buf, Dst);
+  Result := Buf;
+end;
+
 class function TBaseline.Fingerprint(const F: TLeakFinding): string;
 // GRENZE (Schritte 2-6): letzter FromGlobals-Pfad neben der Facade,
 // s. Deklaration.
@@ -509,10 +624,23 @@ end;
 
 class function TBaseline.Fingerprint(const F: TLeakFinding;
   const AScope: TBaselineScope): string;
+var
+  Detail : string;
 begin
+  // Genau EIN Zweig, und er haengt am Kind - nicht am Text. Eine
+  // Text-Heuristik ("enthaelt 'limit:'") waere billiger zu schreiben und
+  // wuerde bei der naechsten Uebersetzung der Meldung still umkippen.
+  if F.Kind in METRIC_DETAIL_KINDS then
+  begin
+    Detail := DigitRunsToPlaceholder(F.MissingVar);
+  end
+  else
+  begin
+    Detail := F.MissingVar;
+  end;
   Result := THashSHA2.GetHashString(
     AScope.FileToken(F.FileName) + '|' + KindName(F.Kind) + '|' +
-    F.MethodName + '|' + F.MissingVar);
+    F.MethodName + '|' + Detail);
 end;
 
 function BuildBaselineArray(Findings: TObjectList<TLeakFinding>;

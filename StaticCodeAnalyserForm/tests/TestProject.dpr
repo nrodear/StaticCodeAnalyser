@@ -31,6 +31,7 @@ uses
   uTestAstSpans in 'uTestAstSpans.pas',
   uTestBaselineScope in 'uTestBaselineScope.pas',
   uTestBaselineSetContextHash in 'uTestBaselineSetContextHash.pas',
+  uTestBaselineMetricFingerprint in 'uTestBaselineMetricFingerprint.pas',
   uTestSourceLineEdit in 'uTestSourceLineEdit.pas',
   uTestEditorCommand in 'uTestEditorCommand.pas',
   uTestDfmLexer in 'uTestDfmLexer.pas',
