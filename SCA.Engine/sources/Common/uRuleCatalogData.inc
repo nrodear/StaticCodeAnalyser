@@ -17,8 +17,8 @@ const
     // SCA001
     (
       RuleID   : 'SCA001';
-      Name     : 'Object created without try/finally';
-      ShortDesc: 'Object created but never freed (potential memory leak)';
+      Name     : 'Object created without exception-safe release';
+      ShortDesc: 'Object created but not reliably freed (potential memory leak)';
       BadEx    : 'list := TStringList.Create;' + #13#10 + 'DoStuff(list);   // <-- exception here leaks list';
       GoodEx   : 'list := TStringList.Create;' + #13#10 + 'try' + #13#10 + '  DoStuff(list);' + #13#10 +
         'finally' + #13#10 + '  list.Free;' + #13#10 + 'end;'

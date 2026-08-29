@@ -3624,6 +3624,36 @@ begin
         else if not FreeInFin and HasFinally
              and not HasExceptFreeRaise(MethodNode, VarNameLow) then
         begin
+          // ---- VERTRAG DIESES ZWEIGS (festgeschrieben 2026-08-29) ----
+          // Bedingung: es GIBT ein Free, die Methode hat ein try/finally,
+          // und der Free liegt ausserhalb davon. Gemeldet wird also NICHT
+          // "nie freigegeben", sondern "nur auf dem Normalpfad freigegeben
+          // - eine Ausnahme im try-Block leckt".
+          //
+          // DAS IST EIN ECHTER BEFUND, kein Stilhinweis. Wer ein
+          // try/finally schreibt, erklaert damit, dass der Block
+          // ausnahmefest sein soll; ein Free daneben widerspricht dieser
+          // Erklaerung. Die Schwere ist lsWarning und nicht lsError, weil
+          // das Leck einen Ausnahmefall BRAUCHT - nicht, weil der Fund
+          // unsicher waere. Wer ihn als Fehlalarm zaehlt, zaehlt falsch.
+          //
+          // WARUM DAS HIER STEHT: die Vollzaehlung vom 28.08. verteilte 59
+          // Funde dieser Klasse (10,4 % aller SCA001) auf zwoelf
+          // Pruefpakete, und die bewerteten sie UNEINHEITLICH - 20 als
+          // echt, 39 als Fehlalarm. Allein daran schwankte die gemessene
+          // FP-Quote der Regel um 6,9 Punkte (67,4 % gegen 77,8 %). Ohne
+          // diesen Vertrag misst jede naechste Runde wieder etwas anderes.
+          // Den Ausschlag gab die Praezedenz in
+          // Todo_Funde_Detector_SCA001_2026-08-15.md:61.
+          //
+          // WO DER LESER DAS ERFAEHRT: der Meldetext eines Funds ist nur
+          // der Variablenname. WELCHE der drei Varianten vorliegt, sagt
+          // der Fix-Hint ("Free is outside the protecting finally block",
+          // uFixHint) - und seit 2026-08-29 properties.variant im SARIF.
+          // Vorher sahen Auditoren nur die Regelbeschreibung, und die
+          // sprach von "never freed" - drei von ihnen haben deshalb gegen
+          // den TEXT argumentiert und den FUND verworfen.
+          //
           // Prio-5-Gate: der Free steckt in einem re-raisenden except-Handler
           // (try..except VarName.Free; raise; end) - Ausnahme-Pfad-Cleanup,
           // aequivalent zu finally -> kein "Free ausserhalb finally"-Befund.
@@ -3662,7 +3692,7 @@ begin
         if LastUseIsOwnershipTransfer(MethodNode, VarNameLow) then Continue;
         var ReportLine := FindFuncCallAssignLine(MethodNode, VarNameLow);
         if ReportLine = 0 then ReportLine := V.Line;
-        AddFinding(V.Name + ' - R'#$FC'ckgabewert', lsWarning, ReportLine);
+        AddFinding(V.Name + LEAK_RETURN_VALUE_SUFFIX, lsWarning, ReportLine);
       end;
     end;
   finally

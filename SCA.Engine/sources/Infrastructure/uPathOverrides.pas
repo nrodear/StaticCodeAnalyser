@@ -260,12 +260,15 @@ begin
           case Rule.Action of
             poaDrop:
               DoDrop := True;
+            // OverrideSeverity statt Direktzuweisung - sie sichert die
+            // Detektor-Aussage, die sonst hier verlorenginge (s.
+            // TLeakFinding.OriginalSeverity).
             poaSeverityHint:
-              F.Severity := lsHint;
+              F.OverrideSeverity(lsHint);
             poaSeverityWarn:
-              F.Severity := lsWarning;
+              F.OverrideSeverity(lsWarning);
             poaSeverityError:
-              F.Severity := lsError;
+              F.OverrideSeverity(lsError);
           end;
           Break; // Erste Match-Rule gewinnt
         end;

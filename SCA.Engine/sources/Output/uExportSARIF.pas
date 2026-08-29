@@ -665,10 +665,28 @@ begin
         // Scans dieses Prozesses, gestempelt in uStaticAnalyzer2). Damit
         // passen Properties und Levels immer zur selben Welt, auch wenn
         // die ini zwischen Scan und Export umgeschaltet wurde.
-        if AConfidenceProps then
+        // Fund-VARIANTE bei SCA001 (2026-08-29). Der Meldetext eines
+        // Leck-Funds ist nur der Variablenname; WELCHE der drei Formen
+        // vorliegt, steckt allein in der Detektor-Schwere plus dem
+        // MissingVar-Suffix - und beides sieht ein SARIF-Konsument nicht:
+        // die Schwere ist hier laengst von der Evidenz-Politik auf
+        // warning gedeckelt (am Referenzkorpus 568 von 568 Funden). Bei
+        // der Vollzaehlung vom 28.08. haben drei Pruefer deshalb gegen die
+        // REGELBESCHREIBUNG argumentiert ("never freed", obwohl das Free
+        // im Rumpf steht) und Funde verworfen; 59 Funde wurden dadurch
+        // uneinheitlich bewertet.
+        //
+        // Nur fuer fkMemoryLeak: MemoryLeakVariant liefert fuer jede
+        // andere Fundart eine leere Zeichenkette, und das SARIF soll nicht
+        // um 782.000 leere Felder wachsen.
+        var LeakVariant := F.MemoryLeakVariant;
+        if AConfidenceProps or (LeakVariant <> '') then
         begin
           E.BeginObjPair('properties');
-          E.PairStr('confidence', ConfidenceName(F.Confidence));
+          if AConfidenceProps then
+            E.PairStr('confidence', ConfidenceName(F.Confidence));
+          if LeakVariant <> '' then
+            E.PairStr('variant', LeakVariant);
           E.EndObj;
         end;
 

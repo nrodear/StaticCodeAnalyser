@@ -4,7 +4,7 @@ All 198 detector rules. Click an ID for full details.
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
-| [SCA001](SCA001.md) | Object created without try/finally | Error | Bug | `uLeakDetector2.pas` |
+| [SCA001](SCA001.md) | Object created without exception-safe release | Error | Bug | `uLeakDetector2.pas` |
 | [SCA002](SCA002.md) | Empty except block | Warning | Code Smell | `uCodeSmells2.pas` |
 | [SCA003](SCA003.md) | SQL string built via concatenation | Error | Vulnerability | `uSQLInjection.pas` |
 | [SCA004](SCA004.md) | Hardcoded credential / API token | Error | Vulnerability | `uHardcodedSecret.pas` |

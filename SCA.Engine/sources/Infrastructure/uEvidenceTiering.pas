@@ -116,7 +116,13 @@ begin
         // "strenger als der Deckel" heisst KLEINERE Ordinalzahl.
         if Ord(F.Severity) < Ord(Cap) then
         begin
-          F.Severity := Cap;
+          // OverrideSeverity statt Direktzuweisung: sie sichert die
+          // Detektor-Aussage. Bei SCA001 unterscheidet allein die
+          // Schwere die Fund-Varianten, und dieser Deckel trifft dort
+          // JEDEN Fund (fcMedium) - ohne die Sicherung koennte hinterher
+          // niemand mehr "nie freigegeben" von "Free ausserhalb finally"
+          // unterscheiden.
+          F.OverrideSeverity(Cap);
           Inc(Result);
         end;
         // Nachgezogener MinSeverity-Filter (s. Interface-Kommentar).

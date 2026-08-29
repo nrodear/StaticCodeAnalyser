@@ -4,7 +4,7 @@ Les 198 règles de détection. Cliquez sur un identifiant pour le détail comple
 
 | ID | Nom | Sévérité | Type | Détecteur |
 |---|---|---|---|---|
-| [SCA001](SCA001.md) | Objet créé sans try/finally | Error | Bug | `uLeakDetector2.pas` |
+| [SCA001](SCA001.md) | Objet créé sans libération sûre face aux exceptions | Error | Bug | `uLeakDetector2.pas` |
 | [SCA002](SCA002.md) | Bloc except vide | Warning | Code Smell | `uCodeSmells2.pas` |
 | [SCA003](SCA003.md) | Chaîne SQL construite par concaténation | Error | Vulnerability | `uSQLInjection.pas` |
 | [SCA004](SCA004.md) | Identifiant / jeton d'API en dur | Error | Vulnerability | `uHardcodedSecret.pas` |

@@ -36,6 +36,9 @@ type
     // nicht unterlaufen.
     [Test] procedure MinSevError_GedeckelterFund_WirdEntfernt;
     [Test] procedure MinSevError_HighError_Bleibt;
+    // Detektor-Aussage ueberlebt das Deckeln (Fund 29.08.)
+    [Test] procedure Deckel_SichertDieDetektorSchwere;
+    [Test] procedure ZweiterUeberschreiber_HaeltDieErsteSicherung;
   end;
 
 implementation
@@ -243,6 +246,54 @@ begin
   // falsche Richtung: die Regel findet echte AVs (DDUtil.pas:868).
   Assert.IsTrue(KindDefaultConfidence(fkNilDeref) = fcMedium,
     'SCA008 Autopsie-Demote (91,7 % FP) darf nicht ohne Messung kippen');
+end;
+
+procedure TTestEvidenceTiering.Deckel_SichertDieDetektorSchwere;
+// Ohne diese Sicherung ist nach dem Deckeln nicht mehr feststellbar, was
+// der Detektor gemeint hat. Bei SCA001 unterscheidet genau das die
+// Fund-Varianten - und der Deckel trifft dort JEDEN Fund.
+var
+  L : TObjectList<TLeakFinding>;
+begin
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    L.Add(TLeakFinding.New('a.pas', 'M', 1, 'x', fkMemoryLeak));
+    L[0].Severity   := lsError;
+    L[0].Confidence := fcMedium;
+    Assert.AreEqual<Integer>(Ord(lsError), Ord(L[0].OriginalSeverity),
+      'vor dem Deckeln ist Severity selbst die Detektor-Aussage');
+
+    TEvidenceTiering.ApplyToFindings(L);
+
+    Assert.AreEqual<Integer>(Ord(lsWarning), Ord(L[0].Severity),
+      'gedeckelt');
+    Assert.AreEqual<Integer>(Ord(lsError), Ord(L[0].OriginalSeverity),
+      'Detektor-Aussage erhalten');
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TTestEvidenceTiering.ZweiterUeberschreiber_HaeltDieErsteSicherung;
+// Politik und PathOverrides koennen NACHEINANDER auf denselben Fund
+// greifen (Pipeline-Schritte 3 und 4). Die Aussage des Detektors gibt es
+// aber nur einmal - der zweite Schreiber darf sie nicht durch die
+// gedeckelte Zwischenstufe ersetzen.
+var
+  F : TLeakFinding;
+begin
+  F := TLeakFinding.New('a.pas', 'M', 1, 'x', fkMemoryLeak);
+  try
+    F.Severity := lsError;
+    F.OverrideSeverity(lsWarning);   // wie die Politik
+    F.OverrideSeverity(lsHint);      // wie ein PathOverride danach
+    Assert.AreEqual<Integer>(Ord(lsHint), Ord(F.Severity),
+      'der letzte Schreiber bestimmt die angezeigte Schwere');
+    Assert.AreEqual<Integer>(Ord(lsError), Ord(F.OriginalSeverity),
+      'aber die Detektor-Aussage bleibt die erste');
+  finally
+    F.Free;
+  end;
 end;
 
 initialization
