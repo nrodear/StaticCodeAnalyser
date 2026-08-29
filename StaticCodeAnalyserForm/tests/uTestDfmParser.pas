@@ -61,6 +61,12 @@ type
     [Test] procedure Test_Property_LookupCaseInsensitive;
     [Test] procedure Test_Property_MultilineString_MergedByLexer;
     [Test] procedure Test_Property_OnFormAndChild_BothCaptured;
+    // Upstream-Befunde 1, 3, 4 (GITLAK, 28.08.)
+    [Test] procedure Test_Property_ValueStartsOnNextLine_IsCaptured;
+    [Test] procedure Test_Property_Valueless_DoesNotAdoptNextName;
+    [Test] procedure Test_Component_WithoutName_ClassStillRead;
+    [Test] procedure Test_Truncated_KeepsWhatWasParsed;
+    [Test] procedure Test_NumericTypeSuffix_DoesNotBreakFile;
   end;
 
 implementation
@@ -745,6 +751,122 @@ begin
     Btn := G.Roots[0].Children[0];
     Assert.IsTrue(Btn.TryGetProperty('Caption', V));
     Assert.AreEqual('Click', V.RawValue);
+  finally G.Free; end;
+end;
+
+procedure TTestDfmParser.Test_Property_ValueStartsOnNextLine_IsCaptured;
+// UPSTREAM-BEFUND 1 (GITLAK): System.Classes hat LineLength = 64, TWriter
+// bricht laengere Werte um - der Wert beginnt dann auf der FOLGEZEILE.
+// Der bestehende Test Test_Property_MultilineString_MergedByLexer trifft
+// das NICHT: dort steht das erste Segment noch auf der Zeile des
+// Gleichheitszeichens, und genau daran lag es, dass die alte
+// Zeilengleichheit gruen blieb. Gemessen: von fuenf
+// ConnectionString-Werten im Korpus sind fuenf so umgebrochen - der
+// DB-Credential-Detektor sah keinen einzigen.
+var
+  G : TComponentGraph;
+  V : TPropValue;
+begin
+  G := ParseToGraph(
+    'object Form2: TForm2' + #13#10 +
+    '  ConnectionString =' + #13#10 +
+    '    ''Provider=Microsoft.Jet.OLEDB.4.0;Data Source=D'' +' + #13#10 +
+    '    ''ata\DBTest.mdb;Persist Security Info=False''' + #13#10 +
+    '  Tag = 7' + #13#10 +
+    'end');
+  try
+    Assert.IsTrue(G.Roots[0].TryGetProperty('ConnectionString', V),
+      'der umgebrochene Wert wird erfasst');
+    Assert.IsTrue(Pos('Persist Security Info', V.RawValue) > 0,
+      'und zwar mit der zweiten Haelfte');
+    Assert.IsTrue(G.Roots[0].TryGetProperty('Tag', V),
+      'die Property danach parst weiterhin');
+  finally G.Free; end;
+end;
+
+procedure TTestDfmParser.Test_Property_Valueless_DoesNotAdoptNextName;
+// Die Gegenprobe - und der Grund, warum die Zeilenpruefung ueberhaupt da
+// war: eine Property ohne Wert darf sich nicht den NAMEN der naechsten
+// aneignen. Bezeichner bricht TWriter nie um, deshalb bleibt genau
+// tkIdent das Abbruchkriterium.
+var
+  G : TComponentGraph;
+  V : TPropValue;
+begin
+  G := ParseToGraph(
+    'object Form2: TForm2' + #13#10 +
+    '  Caption =' + #13#10 +
+    '  Tag = 7' + #13#10 +
+    'end');
+  try
+    Assert.IsFalse(G.Roots[0].TryGetProperty('Caption', V),
+      'die wertlose Property bleibt unregistriert');
+    Assert.IsTrue(G.Roots[0].TryGetProperty('Tag', V),
+      'und Tag ist eine eigene Property, kein Wert von Caption');
+    Assert.AreEqual('7', V.RawValue);
+  finally G.Free; end;
+end;
+
+procedure TTestDfmParser.Test_Component_WithoutName_ClassStillRead;
+// UPSTREAM-BEFUND 3 (GITLAK): System.Classes schreibt "object TKlasse"
+// ohne Namen und ohne Doppelpunkt, wenn der Name leer ist. Vorher warf
+// das Consume(tkColon) - und die GANZE DFM war verloren.
+var
+  G : TComponentGraph;
+begin
+  G := ParseToGraph(
+    'object TAutoObject' + #13#10 +
+    '  Tag = 3' + #13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, G.Roots.Count,
+      'die Komponente entsteht, statt die Datei zu verlieren');
+  finally G.Free; end;
+end;
+
+procedure TTestDfmParser.Test_Truncated_KeepsWhatWasParsed;
+// UPSTREAM-BEFUND 4 (GITLAK): eine abgeschnittene DFM - unterbrochener
+// Checkout, halber Download, Datei noch im Schreiben - lieferte NULL
+// Funde statt der Funde aus dem Teil, der einwandfrei geparst hat.
+// ParseBody kehrt bei tkEof sauber zurueck; erst das Consume(tkKwEnd)
+// dahinter warf.
+var
+  G : TComponentGraph;
+  V : TPropValue;
+begin
+  G := ParseToGraph(
+    'object Form2: TForm2' + #13#10 +
+    '  Tag = 7');   // kein abschliessendes end
+  try
+    Assert.AreEqual<Integer>(1, G.Roots.Count,
+      'was geparst wurde, bleibt erhalten');
+    Assert.IsTrue(G.Roots[0].TryGetProperty('Tag', V),
+      'samt der Property davor');
+  finally G.Free; end;
+end;
+
+procedure TTestDfmParser.Test_NumericTypeSuffix_DoesNotBreakFile;
+// UPSTREAM-BEFUND 2 (GITLAK): TWriter haengt an nicht-ganzzahlige Werte
+// einen Typsuffix - d fuer vaDate, ebenso fuer vaSingle/vaCurrency/
+// vaExtended. "Value = 42379d" zerfiel in tkInteger + tkIdent(d);
+// ParseBody las das d als naechsten Property-Namen, das Consume(tkEquals)
+// traf einen Bezeichner und warf - die GANZE DFM war verloren, samt
+// allem, was schon geparst war.
+var
+  G : TComponentGraph;
+  V : TPropValue;
+begin
+  G := ParseToGraph(
+    'object Form2: TForm2' + #13#10 +
+    '  StartDate = 42379d' + #13#10 +
+    '  Tag = 7' + #13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, G.Roots.Count,
+      'die Datei ueberlebt den Typsuffix');
+    Assert.IsTrue(G.Roots[0].TryGetProperty('Tag', V),
+      'und die Property DAHINTER wird noch gelesen');
+    Assert.AreEqual('7', V.RawValue);
   finally G.Free; end;
 end;
 

@@ -246,8 +246,18 @@ type
     class function BlankNonCode(const Line: string;
       var State: TBlankScanState): string; static;
 
+    // AKeepColumns: Inline-Kommentare werden mit FillCh AUSGEFUELLT statt
+    // entfernt, der Rueckgabewert ist dann spaltengleich zur Eingabe.
+    // BEWUSST opt-in und NICHT Vorgabe: 40 Units lesen diesen Helfer, und
+    // mindestens uNestedRoutines verlaesst sich schriftlich auf das
+    // Gegenteil (dort :223 - "Kommentare sind ENTFERNT"). Gemessen an
+    // rw29 kostete die Umstellung als Vorgabe 506 SCA102-Funde, darunter
+    // nachweislich echte (Alcinoe.FMX.Dialogs.pas verlor alle neun,
+    // obwohl die geschachtelte Routine dort steht). Wer Spalten braucht,
+    // fordert sie an - s. uQuickFix.CodeOnly.
     class function ScanCodeLine(const Line: string; var State: TCommentScanState;
-      out LineCommentCol: Integer; FillCh: Char = '~'): string; static;
+      out LineCommentCol: Integer; FillCh: Char = '~';
+      AKeepColumns: Boolean = False): string; static;
 
     // Strippt Strings + Kommentare ueber den GESAMTEN Quelltext (Mehrzeilen-
     // Bloecke korrekt). Ergebnis ist EIN String, Zeilen mit #10 getrennt.
@@ -988,7 +998,7 @@ end;
 
 class function TDetectorUtils.ScanCodeLine(const Line: string;
   var State: TCommentScanState; out LineCommentCol: Integer;
-  FillCh: Char): string;
+  FillCh: Char; AKeepColumns: Boolean): string;
 var
   j, n   : Integer;
   c      : Char;
@@ -999,8 +1009,30 @@ var
 begin
   // Perf (2026-07-05): P1-strip-cache - TStringBuilder-Allokation pro Zeile
   // vermeiden (Hot-Path: laeuft pro Quellzeile pro Strip). Der Output ist
-  // nie laenger als der Input (Strings werden 1:1 durch FillCh ersetzt,
-  // Kommentare entfernt) -> einmal SetLength(n), per PChar-Cursor schreiben,
+  // nie laenger als der Input -> einmal SetLength(n), per PChar-Cursor
+  // schreiben, am Ende exakt auf OutLen trimmen.
+  //
+  // UPSTREAM-BEFUND 8 (GITLAK, 28.08.), behoben 2026-08-29: INLINE-
+  // Kommentare wurden UEBERSPRUNGEN statt geblankt, waehrend Strings 1:1
+  // ersetzt wurden. Damit war der Output kuerzer als der Input, und jede
+  // Spalte hinter einem Inline-Kommentar verschob sich nach links - in
+  // genau dem Helfer, auf dessen Spaltentreue die Aufrufer bauen.
+  // Sichtbar an zusammenwachsenden Bezeichnern:
+  //   X := Alpha{note}Beta;   ->   X := AlphaBeta;
+  // FindWholeWordLower('alpha') verfehlte so ein echtes Vorkommen, und
+  // eine Suche nach 'alphabeta' traf einen Bezeichner, den es nicht gibt
+  // - ein falsch Negatives und ein falsch Positives aus derselben Zeile.
+  // GEMESSEN (rw29) und deshalb OPT-IN: als Vorgabe kostete das Blanken
+  // 506 SCA102-Funde. uNestedRoutines schreibt bei sich (:223), dass
+  // Kommentare ENTFERNT sind und '~' als Token-Trenner wirkt - mit
+  // geblankten Kommentaren trennt es dort, wo Zusammenhang gebraucht
+  // wird. In Alcinoe.FMX.Dialogs.pas fielen alle neun Funde weg, obwohl
+  // die geschachtelte Routine dort steht. Ians Suite blieb gruen, weil
+  // sein Fork diesen Vertrag nicht kennt - unserer schon.
+  //
+  // AUSNAHME: laeuft ein Kommentar bis Zeilenende (die Break-Zweige),
+  // bleibt der Rest abgeschnitten - das verschiebt keine fruehere Spalte.
+
   // am Ende exakt auf OutLen trimmen. Ergebnis byte-identisch zum Builder.
   LineCommentCol := 0;
   InStr := False;
@@ -1017,14 +1049,24 @@ begin
       pClose := PosEx('}', Line, j);
       if pClose = 0 then Break;             // Block laeuft in naechste Zeile
       State.InBraceComment := False;
-      j := pClose + 1; Continue;
+      if AKeepColumns then
+        while j <= pClose do
+        begin Dst[OutLen] := FillCh; Inc(OutLen); Inc(j); end
+      else
+        j := pClose + 1;
+      Continue;
     end;
     if State.InParenComment then
     begin
       pClose := PosEx('*)', Line, j);
       if pClose = 0 then Break;
       State.InParenComment := False;
-      j := pClose + 2; Continue;
+      if AKeepColumns then
+        while j <= pClose + 1 do
+        begin Dst[OutLen] := FillCh; Inc(OutLen); Inc(j); end
+      else
+        j := pClose + 2;
+      Continue;
     end;
     c := Line[j];
     if InStr then
@@ -1051,13 +1093,23 @@ begin
     begin
       pClose := PosEx('}', Line, j + 1);
       if pClose = 0 then begin State.InBraceComment := True; Break; end;
-      j := pClose + 1; Continue;
+      if AKeepColumns then
+        while j <= pClose do
+        begin Dst[OutLen] := FillCh; Inc(OutLen); Inc(j); end
+      else
+        j := pClose + 1;
+      Continue;
     end;
     if (c = '(') and (j < n) and (Line[j + 1] = '*') then
     begin
       pClose := PosEx('*)', Line, j + 2);
       if pClose = 0 then begin State.InParenComment := True; Break; end;
-      j := pClose + 2; Continue;
+      if AKeepColumns then
+        while j <= pClose + 1 do
+        begin Dst[OutLen] := FillCh; Inc(OutLen); Inc(j); end
+      else
+        j := pClose + 2;
+      Continue;
     end;
     Dst[OutLen] := c; Inc(OutLen);
     Inc(j);

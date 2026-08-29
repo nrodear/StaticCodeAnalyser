@@ -36,6 +36,8 @@ type
     // ---- Registry ----
     [Test] procedure Registry_RedundantBoolean_IsRegistered;
     [Test] procedure Registry_NotRegistered_NoFix;
+    // Upstream-Befund 7 (GITLAK, 28.08.)
+    [Test] procedure Fix_LeavesStringLiteralsUntouched;
   end;
 
 implementation
@@ -247,6 +249,35 @@ begin
   try
     R := TQuickFix.ProposeFix(F, '  list := TStringList.Create;');
     Assert.IsFalse(R.Applied);
+  finally F.Free; end;
+end;
+
+procedure TTestQuickFix.Fix_LeavesStringLiteralsUntouched;
+// UPSTREAM-BEFUND 7 (GITLAK): die Anbieter matchten ihre Regexe gegen
+// die ROHE Zeile und ersetzten nach Position - sie schrieben damit in
+// String-Literale und Kommentare hinein. Das ist die einzige Stelle im
+// Werkzeug, die QUELLTEXT DES ANWENDERS veraendert; ein Treffer im
+// Literal ist deshalb keine Ungenauigkeit, sondern eine Beschaedigung.
+var
+  F : TLeakFinding;
+  R : TQuickFixResult;
+begin
+  F := MakeFinding(fkRedundantBoolean);
+  try
+    // Das "= True" steht hier NUR im Literal - es gibt nichts zu tun.
+    R := TQuickFix.ProposeFix(F,
+      '  WriteLn(''Cancelled = True'');');
+    Assert.IsFalse(R.Applied,
+      'im Literal wird nicht ersetzt');
+
+    // Gegenprobe: echter Code auf derselben Zeile wird sehr wohl
+    // gefixt, und das Literal daneben bleibt unangetastet.
+    R := TQuickFix.ProposeFix(F,
+      '  if IsActive = True then WriteLn(''a = True'');');
+    Assert.IsTrue(R.Applied, 'der echte Treffer wird gefixt');
+    Assert.AreEqual(
+      '  if IsActive then WriteLn(''a = True'');', R.Fixed,
+      'und der Text im Literal steht unveraendert da');
   finally F.Free; end;
 end;
 

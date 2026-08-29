@@ -74,10 +74,41 @@ implementation
 // ist wert-arm (statische Strings, kein Hot-Path, kein Locale-Risiko).
 
 uses
-  System.RegularExpressions;
+  System.RegularExpressions,
+  uDetectorUtils;   // ScanCodeLine - s. CodeOnly
 
 var
   GProviders : TDictionary<TFindingKind, TQuickFixProvider> = nil;
+
+function CodeOnly(const ALine: string): string;
+// Die Zeile mit ausgeblendeten String-Literalen und Kommentaren, in
+// SPALTENTREUER Form - jedes ausgeblendete Zeichen wird durch ein Blank
+// ersetzt, nicht entfernt.
+//
+// UPSTREAM-BEFUND 7 (GITLAK, 28.08.): die Anbieter hier matchten ihre
+// Regexe gegen die ROHE Zeile und ersetzten dann nach Position. Damit
+// schrieben sie in Literale und Kommentare hinein:
+//   ShowMessage(Call Obj.Free; first);
+//     -> ShowMessage(Call FreeAndNil(Obj); first);
+//   WriteLn(Cancelled = True);  ->  WriteLn(Cancelled);
+// Das ist die einzige Stelle im Werkzeug, die QUELLTEXT DES ANWENDERS
+// veraendert - ein Treffer im Literal ist deshalb keine Ungenauigkeit,
+// sondern eine Beschaedigung.
+//
+// Gematcht wird ab jetzt auf dieser Fassung, GESPLICED weiter auf der
+// Originalzeile: weil ScanCodeLine seit 2026-08-29 auch Kommentare
+// spaltentreu blankt (Befund 8), tragen M.Index und M.Length
+// unveraendert hinueber.
+var
+  State : TCommentScanState;
+  Dummy : Integer;
+begin
+  State  := Default(TCommentScanState);
+  // AKeepColumns=True: nur so bleibt die Spalte eines Treffers auf der
+  // Originalzeile gueltig. Die Vorgabe ist bewusst False, weil 40 andere
+  // Units den Helfer mit ENTFERNTEN Kommentaren lesen.
+  Result := TDetectorUtils.ScanCodeLine(ALine, State, Dummy, ' ', True);
+end;
 
 { ---- Built-in Provider: RedundantBoolean ---- }
 
@@ -108,7 +139,7 @@ begin
 
   // 1) <expr> = True  ->  <expr>
   Re := TRegEx.Create('(?i)\b' + EXPR + '\s*=\s*True\b');
-  M := Re.Match(OriginalLine);
+  M := Re.Match(CodeOnly(OriginalLine));
   if M.Success then
   begin
     FixedLine := Copy(OriginalLine, 1, M.Index - 1) + M.Groups[1].Value +
@@ -119,7 +150,7 @@ begin
 
   // 2) <expr> <> False  ->  <expr>
   Re := TRegEx.Create('(?i)\b' + EXPR + '\s*<>\s*False\b');
-  M := Re.Match(OriginalLine);
+  M := Re.Match(CodeOnly(OriginalLine));
   if M.Success then
   begin
     FixedLine := Copy(OriginalLine, 1, M.Index - 1) + M.Groups[1].Value +
@@ -130,7 +161,7 @@ begin
 
   // 3) <expr> = False  ->  not <expr>
   Re := TRegEx.Create('(?i)\b' + EXPR + '\s*=\s*False\b');
-  M := Re.Match(OriginalLine);
+  M := Re.Match(CodeOnly(OriginalLine));
   if M.Success then
   begin
     FixedLine := Copy(OriginalLine, 1, M.Index - 1) + 'not ' + M.Groups[1].Value +
@@ -141,7 +172,7 @@ begin
 
   // 4) <expr> <> True  ->  not <expr>
   Re := TRegEx.Create('(?i)\b' + EXPR + '\s*<>\s*True\b');
-  M := Re.Match(OriginalLine);
+  M := Re.Match(CodeOnly(OriginalLine));
   if M.Success then
   begin
     FixedLine := Copy(OriginalLine, 1, M.Index - 1) + 'not ' + M.Groups[1].Value +
@@ -175,7 +206,7 @@ begin
   FixedLine := OriginalLine;
   Description := '';
   Re := TRegEx.Create('(?i)\b' + EXPR + '\s*\.\s*Free\s*;');
-  M := Re.Match(OriginalLine);
+  M := Re.Match(CodeOnly(OriginalLine));
   if not M.Success then Exit;
   FixedLine := Copy(OriginalLine, 1, M.Index - 1) +
                Format('FreeAndNil(%s);', [M.Groups[1].Value]) +
@@ -203,7 +234,7 @@ begin
   FixedLine := OriginalLine;
   Description := '';
   Re := TRegEx.Create('\b' + EXPR + '\s*\(\s*\)');
-  M := Re.Match(OriginalLine);
+  M := Re.Match(CodeOnly(OriginalLine));
   if not M.Success then Exit;
   FixedLine := Copy(OriginalLine, 1, M.Index - 1) + M.Groups[1].Value +
                Copy(OriginalLine, M.Index + M.Length, MaxInt);
@@ -230,7 +261,7 @@ begin
   Description := '';
 
   Re := TRegEx.Create('(?i)Assigned\s*\(\s*' + EXPR + '\s*\)\s+and\s+\(\s*\1\s*<>\s*nil\s*\)');
-  M := Re.Match(OriginalLine);
+  M := Re.Match(CodeOnly(OriginalLine));
   if M.Success then
   begin
     FixedLine := Copy(OriginalLine, 1, M.Index - 1) +
@@ -241,7 +272,7 @@ begin
   end;
 
   Re := TRegEx.Create('(?i)\(\s*' + EXPR + '\s*<>\s*nil\s*\)\s+and\s+Assigned\s*\(\s*\1\s*\)');
-  M := Re.Match(OriginalLine);
+  M := Re.Match(CodeOnly(OriginalLine));
   if M.Success then
   begin
     FixedLine := Copy(OriginalLine, 1, M.Index - 1) +

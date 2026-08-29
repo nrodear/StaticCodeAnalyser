@@ -115,6 +115,8 @@ type
     // war das Dictionary scharf, die Import-Vorschau unscharf - "Will be
     // overwritten" legte bei anderer Schreibweise ein Duplikat an.
     [Test] procedure ProfileNamesAreCaseInsensitive;
+    // Upstream-Befund 5 (GITLAK, 28.08.)
+    [Test] procedure ImpactsAsStringsDoesNotRaise;
   end;
 
 implementation
@@ -1003,6 +1005,42 @@ begin
     TRuleCatalog.DeleteUserProfile('case-probe', Err);
     TRuleCatalog.UserProfilesPath := AltPfad;
     if TFile.Exists(TmpPfad) then TFile.Delete(TmpPfad);
+  end;
+end;
+
+procedure TTestRuleCatalog.ImpactsAsStringsDoesNotRaise;
+// UPSTREAM-BEFUND 5 (GITLAK): der Guard "if IObj = nil then Continue"
+// hinter einem as-Cast konnte nie greifen - as liefert nie nil, es
+// wirft EInvalidCast. Eine handgepflegte sca-rules.json mit
+// "impacts": ["high"] (Strings statt Objekte, etwa aus einem neueren
+// Schema) riss damit EnsureLoaded auf, ueber GetRule und
+// ResolvedRuleId bis in jeden Exporter: der Lauf starb beim EXPORT,
+// nach getaner Analyse.
+//
+// Setup ruft Reload, der globale Katalogzustand ist danach wieder der
+// echte - deshalb darf dieser Test eine eigene Datei laden.
+var
+  Pfad    : string;
+  AltPfad : string;
+begin
+  // LoadFromJsonFile ist privat - der Weg von aussen fuehrt ueber
+  // JsonFilePath + Reload, dasselbe Muster wie beim Profil-Test weiter
+  // unten mit UserProfilesPath.
+  Pfad    := TPath.Combine(TPath.GetTempPath,
+                           'sca-rules-impacts-test.json');
+  AltPfad := TRuleCatalog.JsonFilePath;
+  try
+    TFile.WriteAllText(Pfad, '{"rules":[{"id":"SCA001","kind":"MemoryLeak","name":"n","shortDescription":"s","fullDescription":"f","defaultSeverity":"Error","type":"Bug","impacts":["high"]}]}');
+    TRuleCatalog.JsonFilePath := Pfad;
+    // Wirft das Laden, faellt der Test mit genau dieser Exception -
+    // vor dem Fix war es EInvalidCast.
+    TRuleCatalog.Reload;
+    Assert.IsTrue(TRuleCatalog.GetRuleCanonical(fkMemoryLeak).ID <> '',
+      'der Katalog ist geladen, nicht auf halber Strecke gestorben');
+  finally
+    TRuleCatalog.JsonFilePath := AltPfad;
+    if TFile.Exists(Pfad) then TFile.Delete(Pfad);
+    TRuleCatalog.Reload;   // echten Katalog wiederherstellen
   end;
 end;
 
