@@ -416,6 +416,53 @@ end;
 //     NACH einer nested routine, deren var-Block nicht der der Fundstelle
 //     ist -> KEIN Demote.
 // Arbeitet auf dem gestrippten Code (Kommentare/Strings zaehlen NIE).
+function IstNullWaechter(const Code: string; AtPos: Integer;
+  const IdentLow: string): Boolean;
+// Erkennt das Waechter-Idiom  "if <v> = 0 then <v> := <etwas>"  -  die
+// Variable wird im then-Zweig SOFORT ueberschrieben.
+//
+// WARUM DAS KEIN BEFUND IST: hier wird nicht auf ein Rechenergebnis
+// geprueft, sondern ein Vorgabewert gesetzt, wenn der Aufrufer nichts
+// angegeben hat. Null ist in IEEE-754 exakt darstellbar, der Test also
+// verlaesslich - und ein Epsilon-Vergleich waere hier sogar FALSCH: er
+// wuerde 0.0001 mitfangen und stillschweigend auf den Vorgabewert
+// setzen. Beleg aus dem Kundenkorpus SVGIconImageList (29.08.),
+// Clipper.Core.pas:842:
+//     if sx = 0 then sx := 1;
+//     if sy = 0 then sy := 1;
+//
+// ABGRENZUNG, und sie ist der Grund fuer die enge Form: von 135
+// SCA144-Funden dieses Korpus tragen nur 19 dieses Muster. Die uebrigen
+// pruefen BERECHNETE Werte  ("if d = 0 then Exit",
+// "Result := (cp <> 0.0)" fuer Kollinearitaet)  -  und dort ist die
+// Warnung berechtigt, weil Rundung aus einer erwarteten Null eine
+// 1e-17 macht. Deshalb greift dieses Gate NUR, wenn dieselbe Variable
+// unmittelbar zugewiesen wird.
+//
+// Ergaenzt SentinelZeroLocalDemote unten: der demotet nur LOKALE
+// Variablen und laesst Parameter bewusst aus (Herkunft beim Caller
+// unbekannt). Beim Waechter-Idiom spielt die Herkunft keine Rolle - die
+// ABSICHT steht in der Zeile selbst.
+var
+  ZeilenAnfang, ZeilenEnde : Integer;
+  Zeile : string;
+  Re    : TRegEx;
+begin
+  Result := False;
+  if IdentLow = '' then Exit;
+  ZeilenAnfang := AtPos;
+  while (ZeilenAnfang > 1) and not CharInSet(Code[ZeilenAnfang - 1], [#10, #13]) do
+    Dec(ZeilenAnfang);
+  ZeilenEnde := AtPos;
+  while (ZeilenEnde <= Length(Code)) and not CharInSet(Code[ZeilenEnde], [#10, #13]) do
+    Inc(ZeilenEnde);
+  Zeile := LowerCase(Copy(Code, ZeilenAnfang, ZeilenEnde - ZeilenAnfang));
+  // Der Rueckverweis \1 erzwingt DIESELBE Variable links und im
+  // then-Zweig - ohne ihn faengt das Muster jede Zuweisung.
+  Re := TRegEx.Create('\bif\s+(' + TRegEx.Escape(IdentLow) + ')\s*(=|<>)\s*0(\.0+)?\s*then\s+\1\s*:=');
+  Result := Re.IsMatch(Zeile);
+end;
+
 function SentinelZeroLocalDemote(const Code: string; AtPos: Integer;
   const IdentLow: string): Boolean;
 var
@@ -1233,7 +1280,10 @@ begin
         else if IsZeroLiteralToken(LhsLow) and (FloatVars.IndexOf(RhsLow) >= 0) then
           SentVar := RhsLow;
         if SentVar <> '' then
-          DemoteLow := SentinelZeroLocalDemote(Code, M.Index, SentVar);
+          DemoteLow := SentinelZeroLocalDemote(Code, M.Index, SentVar)
+                       // Waechter-Idiom: gilt auch fuer Parameter, weil
+                       // die Absicht in der Zeile selbst steht.
+                       or IstNullWaechter(Code, M.Index, SentVar);
 
         F            := TLeakFinding.Create;
         F.FileName   := FileName;

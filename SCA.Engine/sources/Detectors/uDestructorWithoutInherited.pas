@@ -39,10 +39,49 @@ implementation
 
 uses
   System.Classes, System.StrUtils,
+  uTypeIndex,        // ParentOf/TypeKindOf - Basisklasse des Destruktors
+                     // (uAnalyzeContext steht bereits im interface-uses)
   uFileTextCache;
 
 const
   EMIT_SEVERITY = lsError;
+
+function ErbtDirektVonTObject(const AMethodName: string;
+  AContext: TAnalyzeContext): Boolean;
+// True, wenn die Klasse des Destruktors DIREKT von TObject erbt.
+//
+// WARUM DAS ZAEHLT (Kundenkorpus SVGIconImageList, 29.08.): dort waren
+// FUENF der 18 Error-Funde von dieser Art - TRectClip64, 
+// TCustomRendererCache, TFloodFillStack, TSvgParser, TWSVGGraphicFilter,
+// alle "= class" oder "= class(TObject)". Bei direkter TObject-Ableitung
+// ist TObject.Destroy LEER: das fehlende inherited ueberspringt nichts,
+// die Meldung "parent class cleanup is skipped, likely leak" trifft
+// nicht zu. Als lsError ("bewiesen") ist das zu hoch gegriffen.
+//
+// KEIN Drop: der Konventionsbruch bleibt real und wird in dem Moment zum
+// Fehler, in dem jemand eine Zwischenklasse einzieht. Deshalb nur
+// Konfidenz herunter (fcHigh -> fcMedium = Warnung statt Fehler).
+//
+// Ohne TypeIndex (nil) oder ohne Klassennamen wird NICHT demotet - im
+// Zweifel bleibt der Fund so streng wie bisher.
+var
+  Punkt : Integer;
+  Klasse, Eltern : string;
+  Idx : TTypeIndex;
+begin
+  Result := False;
+  Idx := CtxTypeIndex(AContext);
+  if Idx = nil then Exit;
+  Punkt := Pos('.', AMethodName);
+  if Punkt <= 1 then Exit;   // kein qualifizierter Name -> kein Urteil
+  Klasse := LowerCase(Copy(AMethodName, 1, Punkt - 1));
+  Eltern := Idx.ParentOf(Klasse);
+  // Leer = kein Parent im Index. Das heisst "class" ohne Basis, also
+  // implizit TObject - genau der Fall. Eine unbekannte Klasse liefert
+  // ebenfalls leer, deshalb steht die Kind-Pruefung davor.
+  if Idx.TypeKindOf(Klasse) <> tkiClass then Exit;
+  Result := (Eltern = '') or (Eltern = 'tobject');
+end;
 
 function IsDestructor(MethodNode: TAstNode): Boolean; inline;
 var
@@ -313,7 +352,11 @@ begin
       F.MissingVar := 'Destructor has no `inherited` call - parent ' +
         'class cleanup is skipped, likely leak. Add `inherited Destroy;` ' +
         'or `inherited;` at the end of the body.';
-      F.SetKind(fkDestructorWithoutInherited);
+      if ErbtDirektVonTObject(M.Name, AContext) then
+        // TObject.Destroy ist leer - Konventionsbruch, kein Leck.
+        F.SetKind(fkDestructorWithoutInherited, fcMedium)
+      else
+        F.SetKind(fkDestructorWithoutInherited);
       Results.Add(F);
     end;
   finally

@@ -78,6 +78,9 @@ type
     [Test] procedure SameValueRebuildIgnoredEpsilon_StillReported;   // TP-Gegenprobe
     [Test] procedure MaxMinIdentity_NotReported;                     // Gate 2b
     [Test] procedure MaxMinWithoutOtherOperand_StillReported;        // TP-Gegenprobe
+    // Waechter-Idiom (Kundenkorpus SVGIconImageList, 29.08.)
+    [Test] procedure ZeroGuardOnParameter_NotReported;
+    [Test] procedure ZeroTestWithoutAssignment_StillReported;
   end;
 
 implementation
@@ -1083,6 +1086,62 @@ begin
     Hit := TFindingHelper.FirstOf(F, fkFloatEquality);
     Assert.AreEqual<TFindingConfidence>(fcHigh, Hit.Confidence,
       'kein Zero-Literal, kein Sentinel-Demote - volle Confidence bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.ZeroGuardOnParameter_NotReported;
+// WAECHTER-IDIOM: "if <v> = 0 then <v> := <vorgabe>" setzt einen
+// Vorgabewert, wenn der Aufrufer nichts angegeben hat. Null ist in
+// IEEE-754 exakt darstellbar, der Test also verlaesslich - ein
+// Epsilon-Vergleich waere hier sogar FALSCH, weil er 0.0001 mitfinge.
+//
+// Beleg: Clipper.Core.pas:842 aus dem Kundenkorpus SVGIconImageList.
+// Der bestehende Sentinel-Demote greift dort NICHT, weil sx/sy
+// PARAMETER sind und ihre Herkunft nur beim Caller sichtbar ist. Beim
+// Waechter-Idiom steht die Absicht in der Zeile selbst.
+const SRC =
+  'unit t; implementation' + #13#10 +
+  'function ScalePath(sx, sy: double): Integer;' + #13#10 +
+  'begin' + #13#10 +
+  '  if sx = 0 then sx := 1;' + #13#10 +
+  '  if sy = 0 then sy := 1;' + #13#10 +
+  '  Result := 0;' + #13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  // ueber die PIPELINE, nicht FindingsOfFile: der Demote ist fcLow, und
+  // der greift erst im Confidence-Post-Filter. Der rohe Detektoraufruf
+  // wuerde den Fund noch zeigen - das ist die Mechanik, nicht die
+  // Nutzersicht.
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
+        'Waechter-Idiom setzt einen Vorgabewert - der Vergleich gegen ' +
+        'exakt Null ist genau richtig und im Default kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.ZeroTestWithoutAssignment_StillReported;
+// TP-GEGENPROBE, und sie ist der Grund fuer die enge Form des Gates: von
+// 135 SCA144-Funden des Kundenkorpus tragen nur 19 das Waechter-Idiom.
+// Die uebrigen pruefen BERECHNETE Werte - "if d = 0 then Exit" nach einer
+// Kreuzprodukt-Rechnung ist genau der Fall, in dem Rundung aus der
+// erwarteten Null eine 1e-17 macht und der Schutz nicht greift. Dort
+// muss der Fund stehen bleiben.
+const SRC =
+  'unit t; implementation' + #13#10 +
+  'function Cross(ax, ay, bx, by: double): Integer;' + #13#10 +
+  'var d: double;' + #13#10 +
+  'begin' + #13#10 +
+  '  d := ax * by - ay * bx;' + #13#10 +
+  '  if d = 0 then Exit(0);' + #13#10 +
+  '  Result := 1;' + #13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) > 0,
+        'ohne Zuweisung im then-Zweig bleibt der Fund - d ist ein ' +
+        'Rechenergebnis, das durch Rundung knapp an der Null vorbeigeht');
   finally F.Free; end;
 end;
 
