@@ -15,8 +15,9 @@ const
     // SCA001
     (
       RuleID   : 'SCA001';
-      Name     : 'Objekt ohne try/finally erzeugt';
-      ShortDesc: 'Objekt erzeugt, aber nie freigegeben (m' + #$F6 + 'gliches Speicherleck)'
+      Name     : 'Objekt ohne ausnahmesichere Freigabe erzeugt';
+      ShortDesc: 'Objekt erzeugt, aber nicht zuverl' + #$E4 + 'ssig freigegeben (m' + #$F6 +
+        'gliches Speicherleck)'
     ),
     // SCA002
     (
@@ -1292,9 +1293,9 @@ const
     // SCA001
     (
       RuleID   : 'SCA001';
-      Name     : 'Objet cr' + #$E9 + #$E9 + ' sans try/finally';
-      ShortDesc: 'Objet cr' + #$E9 + #$E9 + ' mais jamais lib' + #$E9 + 'r' + #$E9 + ' (fuite m' + #$E9 +
-        'moire possible)'
+      Name     : 'Objet cr' + #$E9 + #$E9 + ' sans lib' + #$E9 + 'ration s' + #$FB + 're face aux exceptions';
+      ShortDesc: 'Objet cr' + #$E9 + #$E9 + ' mais pas lib' + #$E9 + 'r' + #$E9 + ' de mani' + #$E8 +
+        're fiable (fuite m' + #$E9 + 'moire possible)'
     ),
     // SCA002
     (

@@ -4,8 +4,8 @@
   "basedOn": "1.5",
   "rules": {
     "SCA001": {
-      "name": "Objekt ohne try/finally erzeugt",
-      "shortDescription": "Objekt erzeugt, aber nie freigegeben (mögliches Speicherleck)"
+      "name": "Objekt ohne ausnahmesichere Freigabe erzeugt",
+      "shortDescription": "Objekt erzeugt, aber nicht zuverlässig freigegeben (mögliches Speicherleck)"
     },
     "SCA002": {
       "name": "Leerer except-Block",

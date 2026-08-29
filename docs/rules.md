@@ -4,7 +4,7 @@ All 198 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
-| [SCA001](#sca001) | Object created without try/finally | **Error** | Bug | `uLeakDetector2.pas` |
+| [SCA001](#sca001) | Object created without exception-safe release | **Error** | Bug | `uLeakDetector2.pas` |
 | [SCA002](#sca002) | Empty except block | Warning | Code Smell | `uCodeSmells2.pas` |
 | [SCA003](#sca003) | SQL string built via concatenation | **Error** | Vulnerability | `uSQLInjection.pas` |
 | [SCA004](#sca004) | Hardcoded credential / API token | **Error** | Vulnerability | `uHardcodedSecret.pas` |
@@ -206,9 +206,9 @@ All 198 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 ---
 
 ## SCA001
-**Object created without try/finally**
+**Object created without exception-safe release**
 
-> Object created but never freed (potential memory leak)
+> Object created but not reliably freed (potential memory leak)
 
 | Field | Value |
 |---|---|
@@ -218,7 +218,7 @@ All 198 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | Config | `[Detectors] LeakyClasses` |
 | Detector | `uLeakDetector2.pas` |
 
-`TObject.Create` (or `LeakyClass.Create`) without a protective `try/finally` block leaks the instance when subsequent code raises an exception. The `Free` call must run regardless of how the protected block exits.
+Reports three variants, all of which lose the instance when an exception occurs. (1) The object is never freed at all - reported as an error. (2) A `Free` exists, but it sits outside the protecting `try/finally`, so it runs only on the normal path and any exception inside the block leaks. (3) A function returns a freshly created object and the caller never frees it. Variants 2 and 3 are warnings rather than errors because the leak needs an exception to occur - not because the finding is uncertain. Which variant a finding belongs to is reported in `properties.variant` in the SARIF output and in the fix hint the UI shows; the message text itself carries only the variable name.
 
 ```pascal
 // BAD

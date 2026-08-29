@@ -28,7 +28,9 @@ interface
 
 uses
   DUnitX.TestFramework,
+  System.Generics.Collections,   // TObjectList - ApplyToFindings
   uSCAConsts, uMethodd12, uFixHint,
+  uEvidenceTiering,   // der Deckel, der den Bug vom 29.08. ausloeste
   uLocalization;   // SetLanguage/CurrentLanguage - LanguageChangeInvalidatesCache
 
 type
@@ -58,6 +60,12 @@ type
     [Test] procedure OtherKindsIgnoreMissingVar;
     // Sprachwechsel-Waechter (2026-08-19).
     [Test] procedure LanguageChangeInvalidatesCache;
+    // (b) Regressions-Anker fuer den Fund vom 29.08.: die Evidenz-Politik
+    //     deckelt JEDEN fkMemoryLeak auf lsWarning, danach darf der Hint
+    //     die Varianten trotzdem noch auseinanderhalten.
+    [Test] procedure CappedErrorStillGetsTheLeakHint;
+    [Test] procedure MemoryLeakVariantNamesTheThreeForms;
+    [Test] procedure ReturnValueSuffixIsSharedWithProduction;
   end;
 
 implementation
@@ -328,6 +336,87 @@ begin
   finally
     FA.Free;
   end;
+end;
+
+procedure TTestFixHint.CappedErrorStillGetsTheLeakHint;
+// DER REGRESSIONSTEST zum Fund vom 29.08. KindDefaultConfidence
+// (fkMemoryLeak) ist fcMedium, also deckelt die Evidenz-Politik JEDEN
+// SCA001-Fund auf lsWarning - am Referenzkorpus 568 von 568. Solange
+// uFixHint dann Severity las, bekam jedes echte Leck den Hinweis "Free is
+// outside the protecting finally block", also den Verweis auf ein Free,
+// das es gar nicht gibt.
+var
+  L : TObjectList<TLeakFinding>;
+  H : TFixHint;
+begin
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    L.Add(MakeLeak('leaked', lsError));
+    L[0].Confidence := fcMedium;   // wie KindDefaultConfidence(fkMemoryLeak)
+    TEvidenceTiering.ApplyToFindings(L);
+
+    Assert.AreEqual<Integer>(Ord(lsWarning), Ord(L[0].Severity),
+      'Vorbedingung: die Politik hat wirklich gedeckelt');
+    Assert.AreEqual<Integer>(Ord(lsError), Ord(L[0].OriginalSeverity),
+      'die Detektor-Aussage ueberlebt den Deckel');
+
+    H := TFixHintResolver.FixHint(L[0]);
+    Assert.IsTrue(Pos(MARK_ERROR, H.After) > 0,
+      'gedeckelter Error behaelt den "nie freigegeben"-Hinweis');
+    Assert.AreEqual<Integer>(0, Pos(MARK_FINALLY, H.Before),
+      'und bekommt NICHT den finally-Hinweis');
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TTestFixHint.MemoryLeakVariantNamesTheThreeForms;
+// MemoryLeakVariant ist das, was der SARIF-Export als properties.variant
+// ausgibt - ohne sie kann ein SARIF-Konsument die drei Formen nicht
+// unterscheiden, weil der Meldetext nur den Variablennamen traegt.
+var
+  F : TLeakFinding;
+begin
+  F := MakeLeak('leaked', lsError);
+  try
+    Assert.AreEqual('never-freed', F.MemoryLeakVariant,
+      'lsError = gar kein Free');
+    // Deckeln aendert die VARIANTE nicht, nur die angezeigte Schwere.
+    F.OverrideSeverity(lsWarning);
+    Assert.AreEqual('never-freed', F.MemoryLeakVariant,
+      'der Deckel darf die Variante nicht umdeuten');
+  finally
+    F.Free;
+  end;
+
+  F := MakeLeak('list' + SFX_RETURN_VALUE, lsWarning);
+  try
+    Assert.AreEqual('return-value-not-freed', F.MemoryLeakVariant,
+      'Suffix in MissingVar = Rueckgabewert-Form');
+  finally
+    F.Free;
+  end;
+
+  F := MakeLeak('list', lsWarning);
+  try
+    Assert.AreEqual('freed-outside-finally', F.MemoryLeakVariant,
+      'lsWarning ohne Suffix = Free neben dem finally');
+    F.SetKind(fkSQLInjection);
+    Assert.AreEqual('', F.MemoryLeakVariant,
+      'jede andere Fundart hat keine Leck-Variante');
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestFixHint.ReturnValueSuffixIsSharedWithProduction;
+// Die Konstante oben ist seit 2026-08-29 kein Duplikat mehr, sondern ein
+// PIN: sie haelt den woertlichen Wert fest, den der Produktionscode
+// benutzt. Der Suffix geht ueber MissingVar in den Baseline-Fingerprint -
+// wer ihn aendert, entwertet jede Baseline, die solche Funde enthaelt.
+begin
+  Assert.AreEqual(SFX_RETURN_VALUE, LEAK_RETURN_VALUE_SUFFIX,
+    'Testerwartung und Produktionskonstante muessen deckungsgleich sein');
 end;
 
 end.

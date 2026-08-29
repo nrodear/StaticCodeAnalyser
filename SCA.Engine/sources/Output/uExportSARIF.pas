@@ -497,6 +497,26 @@ var
   // obwohl ABaseDir konstant ist und nur ~10k eindeutige FileNames existieren.
   // Caller-scoped Memo FileName->RelPath (reine Funktion -> byte-identisch).
   RelMemo : TDictionary<string, string>;
+
+  procedure WriteResultProperties(AFinding: TLeakFinding);
+  // Der properties-Bag eines Results: Konfidenz (nur bei aktiver
+  // Evidenz-Politik) und die Leck-Variante (nur bei fkMemoryLeak).
+  // Eigene Routine, weil die Ergebnis-Schleife mit den drei zusaetzlichen
+  // Verzweigungen sonst ueber die McCabe-Schwelle geht - der Bag ist eine
+  // abgeschlossene Sache und liest sich hier besser als eingebettet.
+  var
+    LeakVariant : string;
+  begin
+    LeakVariant := AFinding.MemoryLeakVariant;
+    if not (AConfidenceProps or (LeakVariant <> '')) then Exit;
+    E.BeginObjPair('properties');
+    if AConfidenceProps then
+      E.PairStr('confidence', ConfidenceName(AFinding.Confidence));
+    if LeakVariant <> '' then
+      E.PairStr('variant', LeakVariant);
+    E.EndObj;
+  end;
+
 begin
   E.BeginObjValue;                                     // Root {
   E.PairStr('$schema',
@@ -665,12 +685,21 @@ begin
         // Scans dieses Prozesses, gestempelt in uStaticAnalyzer2). Damit
         // passen Properties und Levels immer zur selben Welt, auch wenn
         // die ini zwischen Scan und Export umgeschaltet wurde.
-        if AConfidenceProps then
-        begin
-          E.BeginObjPair('properties');
-          E.PairStr('confidence', ConfidenceName(F.Confidence));
-          E.EndObj;
-        end;
+        // Fund-VARIANTE bei SCA001 (2026-08-29). Der Meldetext eines
+        // Leck-Funds ist nur der Variablenname; WELCHE der drei Formen
+        // vorliegt, steckt allein in der Detektor-Schwere plus dem
+        // MissingVar-Suffix - und beides sieht ein SARIF-Konsument nicht:
+        // die Schwere ist hier laengst von der Evidenz-Politik auf
+        // warning gedeckelt (am Referenzkorpus 568 von 568 Funden). Bei
+        // der Vollzaehlung vom 28.08. haben drei Pruefer deshalb gegen die
+        // REGELBESCHREIBUNG argumentiert ("never freed", obwohl das Free
+        // im Rumpf steht) und Funde verworfen; 59 Funde wurden dadurch
+        // uneinheitlich bewertet.
+        //
+        // Nur fuer fkMemoryLeak: MemoryLeakVariant liefert fuer jede
+        // andere Fundart eine leere Zeichenkette, und das SARIF soll nicht
+        // um 782.000 leere Felder wachsen.
+        WriteResultProperties(F);
 
         E.EndObj;                                      // result
         E.FlushChunk(False);

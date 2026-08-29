@@ -6,6 +6,14 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uSCAConsts, uLocalization;  // _() — SeverityText/TypeText lokalisierbar
 
+const
+  // Suffix, den uLeakDetector2 an MissingVar haengt, wenn nicht eine
+  // Variable leckt, sondern ein Funktions-RUECKGABEWERT, den der Aufrufer
+  // nicht freigibt. Deutsch, weil er seit jeher so im Fund steht - und
+  // MissingVar geht in den Baseline-Fingerprint, eine Uebersetzung wuerde
+  // bestehende Baselines fuer jeden dieser Funde entwerten.
+  LEAK_RETURN_VALUE_SUFFIX = ' - R'#$FC'ckgabewert';
+
 type
   TMethodInfo = class
   public
@@ -28,6 +36,11 @@ type
     LineNumber: string;
     MissingVar: string;
     Severity:   TLeakSeverity;
+    // Von einem Post-Filter gesicherte DETEKTOR-Schwere. Nicht direkt
+    // lesen - OriginalSeverity nehmen, die den Fall "nie ueberschrieben"
+    // mit abdeckt.
+    SavedDetectorSeverity : TLeakSeverity;
+    SeverityWasOverridden : Boolean;
     Kind:       TFindingKind;
     // Letzte Quelltext-Zeile des Befund-Bereichs. 0 = nicht gesetzt =
     // einzeilig - und das ist der Default fuer ALLE Detektoren.
@@ -79,6 +92,32 @@ type
     procedure SetKind(K: TFindingKind; AConfidence: TFindingConfidence);
       overload;
     function SeverityText: string;
+    // Die Schwere, die der DETEKTOR vergeben hat. Zwei Post-Filter
+    // schreiben Severity nachtraeglich um: uEvidenceTiering deckelt sie
+    // nach Konfidenz, uPathOverrides setzt sie laut analyser.ini. Wer die
+    // AUSSAGE DES DETEKTORS braucht, muss diese Funktion nehmen.
+    //
+    // WOFUER DAS NOETIG IST: bei SCA001 unterscheidet allein die Schwere
+    // die Fund-Varianten - lsError heisst "nie freigegeben", lsWarning
+    // heisst "Free vorhanden, aber ausserhalb des finally". Da
+    // KindDefaultConfidence(fkMemoryLeak) fcMedium ist, deckelt die
+    // Evidenz-Politik JEDEN dieser Funde auf lsWarning (am Korpus
+    // gemessen: 568 von 568). Wer danach Severity liest, haelt jedes echte
+    // Leck fuer den finally-Fall und zeigt dem Nutzer einen Hinweis auf
+    // ein Free, das es gar nicht gibt.
+    function OriginalSeverity: TLeakSeverity;
+    // Der EINZIGE Weg, auf dem ein Post-Filter Severity aendern darf: er
+    // sichert dabei die Detektor-Aussage. Wer stattdessen Severity direkt
+    // zuweist, macht OriginalSeverity fuer diesen Fund wertlos.
+    procedure OverrideSeverity(ANew: TLeakSeverity);
+    // Welche der drei Formen von fkMemoryLeak dieser Fund ist:
+    //   never-freed            - gar kein Free (Detektor-Schwere lsError)
+    //   freed-outside-finally  - Free vorhanden, aber neben dem finally
+    //   return-value-not-freed - Aufrufer gibt den Rueckgabewert nicht frei
+    // Im Fund selbst stehen diese Formen NUR in der Detektor-Schwere und
+    // im MissingVar-Suffix - der Meldetext traegt bloss den
+    // Variablennamen. Leere Zeichenkette fuer jede andere Fundart.
+    function MemoryLeakVariant: string;
     function FindingType: TFindingType;
     function TypeText: string;
 
@@ -239,6 +278,44 @@ begin
   Result.LineNumber := IntToStr(ALine);
   Result.MissingVar := AMissingVar;
   Result.SetKind(AKind, AConfidence);
+end;
+
+function TLeakFinding.MemoryLeakVariant: string;
+// OriginalSeverity und nicht Severity - die Evidenz-Politik deckelt jeden
+// fkMemoryLeak auf lsWarning, danach waere never-freed nicht mehr
+// erkennbar (am Referenzkorpus: 568 von 568 Funden gedeckelt).
+begin
+  if Kind <> fkMemoryLeak then Exit('');
+  if OriginalSeverity = lsError then
+    Result := 'never-freed'
+  else if Pos(LEAK_RETURN_VALUE_SUFFIX, MissingVar) > 0 then
+    Result := 'return-value-not-freed'
+  else
+    Result := 'freed-outside-finally';
+end;
+
+procedure TLeakFinding.OverrideSeverity(ANew: TLeakSeverity);
+// Mehrfachaufrufe halten die ERSTE Sicherung: Evidenz-Politik und
+// PathOverrides koennen nacheinander greifen, aber die Aussage des
+// Detektors gibt es nur einmal.
+begin
+  if not SeverityWasOverridden then
+  begin
+    SavedDetectorSeverity := Severity;
+    SeverityWasOverridden := True;
+  end;
+  Severity := ANew;
+end;
+
+function TLeakFinding.OriginalSeverity: TLeakSeverity;
+// Vertrag siehe Deklaration. Ohne Ueberschreibung ist Severity selbst
+// die Detektor-Aussage - das deckt auch den Fall ab, dass die
+// Evidenz-Politik ausgeschaltet ist ([Rules] EvidenceTiering=0).
+begin
+  if SeverityWasOverridden then
+    Result := SavedDetectorSeverity
+  else
+    Result := Severity;
 end;
 
 function TLeakFinding.SeverityText: string;

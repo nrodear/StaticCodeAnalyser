@@ -74,7 +74,9 @@ const
   // Rueckgabewert einer Funktion haengt (list := BuildList(...) ohne Free).
   // Bewusst als SPOT: der Build-Zweig UND die Cache-Diskriminante
   // HintVariant lesen dasselbe Literal - so koennen sie nicht driften.
-  SFX_RETURN_VALUE = ' - R'#$FC'ckgabewert';
+  // Zentral in uMethodd12, weil der Detektor ihn schreibt, dieser Hint
+  // und der SARIF-Export ihn lesen - drei Stellen, eine Wahrheit.
+  SFX_RETURN_VALUE = LEAK_RETURN_VALUE_SUFFIX;
 
 class function TFixHintResolver.HintVariant(const Finding: TLeakFinding): Integer;
 // Diskriminante fuer Build-Zweige, die ausser Kind und Severity noch
@@ -88,16 +90,16 @@ class function TFixHintResolver.HintVariant(const Finding: TLeakFinding): Intege
 // SCA001-Treffer eines Scans wuerde den Slot fuellen und jeder weitere
 // bekaeme Description/Before/After der falschen Variante.
 //
-// Die lsError-Vorbedingung spiegelt die Zweig-Reihenfolge in Build: dort
+// Die lsError-Vorbedingung (auf OriginalSeverity, s. Build) spiegelt die Zweig-Reihenfolge in Build: dort
 // gewinnt der Leak-Zweig, MissingVar wird gar nicht gelesen. Damit bleiben
 // alle lsError-Befunde auf Variante 0 und belegen nur einen Slot.
 //
 // WICHTIG bei Erweiterungen: wer in Build einen Zweig ergaenzt, der ein
-// anderes Feld als Kind/Severity auswertet, MUSS ihn hier abbilden -
+// anderes Feld als Kind/OriginalSeverity auswertet, MUSS ihn hier abbilden -
 // sonst entsteht exakt derselbe Memoize-Bug erneut.
 begin
   Result := 0;
-  if (Finding.Kind = fkMemoryLeak) and (Finding.Severity <> lsError) and
+  if (Finding.Kind = fkMemoryLeak) and (Finding.OriginalSeverity <> lsError) and
      (Pos(SFX_RETURN_VALUE, Finding.MissingVar) > 0) then
     Result := 1;
 end;
@@ -122,7 +124,7 @@ begin
   // SCA001 ist der volumenstaerkste Detektor, ein Build()-Aufruf pro Fund
   // waere genau die Gettext-plus-3-KB-Allokation, gegen die der Cache
   // ueberhaupt eingefuehrt wurde. Ein zusaetzlicher Slot ist billiger.
-  Key := (Ord(Finding.Kind) shl 9) or (Ord(Finding.Severity) shl 1)
+  Key := (Ord(Finding.Kind) shl 9) or (Ord(Finding.OriginalSeverity) shl 1)
          or HintVariant(Finding);
   if FCache.TryGetValue(Key, Result) then Exit;
   Result := Build(Finding);
@@ -138,7 +140,13 @@ begin
   case Finding.Kind of
 
     fkMemoryLeak:
-      if Finding.Severity = lsError then
+      // OriginalSeverity, NICHT Severity: die Evidenz-Politik deckelt
+      // jeden fkMemoryLeak auf lsWarning (fcMedium), und zwar bevor ein
+      // Export hier ankommt - am Referenzkorpus 568 von 568 Funden. Wer
+      // Severity liest, schickt zu JEDEM echten Leck den Hinweis "Free is
+      // outside the protecting finally block", also zu einem Free, das es
+      // gar nicht gibt.
+      if Finding.OriginalSeverity = lsError then
       begin
         Result.Description := _('Object created but never freed (memory leak)');
         Result.Before :=

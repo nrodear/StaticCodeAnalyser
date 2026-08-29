@@ -4,8 +4,8 @@
   "basedOn": "1.5",
   "rules": {
     "SCA001": {
-      "name": "Objet créé sans try/finally",
-      "shortDescription": "Objet créé mais jamais libéré (fuite mémoire possible)"
+      "name": "Objet créé sans libération sûre face aux exceptions",
+      "shortDescription": "Objet créé mais pas libéré de manière fiable (fuite mémoire possible)"
     },
     "SCA002": {
       "name": "Bloc except vide",

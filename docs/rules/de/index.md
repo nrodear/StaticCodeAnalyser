@@ -4,7 +4,7 @@ Alle 198 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 
 | ID | Name | Schweregrad | Typ | Detektor |
 |---|---|---|---|---|
-| [SCA001](SCA001.md) | Objekt ohne try/finally erzeugt | Error | Bug | `uLeakDetector2.pas` |
+| [SCA001](SCA001.md) | Objekt ohne ausnahmesichere Freigabe erzeugt | Error | Bug | `uLeakDetector2.pas` |
 | [SCA002](SCA002.md) | Leerer except-Block | Warning | Code Smell | `uCodeSmells2.pas` |
 | [SCA003](SCA003.md) | SQL-String per Verkettung gebaut | Error | Vulnerability | `uSQLInjection.pas` |
 | [SCA004](SCA004.md) | Hartkodierte Zugangsdaten / API-Token | Error | Vulnerability | `uHardcodedSecret.pas` |
