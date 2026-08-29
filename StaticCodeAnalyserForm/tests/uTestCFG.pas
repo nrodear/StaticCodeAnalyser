@@ -146,58 +146,6 @@ begin
   end;
 end;
 
-procedure TTestCFG.Raise_Terminates_Sequence;
-// UPSTREAM-BEFUND (GITLAK, 28.08.): dieser Test delegierte an
-// Exit_Terminates_Sequence - und der baut einen CFG VON HAND, ohne
-// Builder-Lauf und ohne ein einziges nkRaise. Er war also gruen,
-// gleichgueltig was der Builder mit raise macht. Jetzt geht ein echtes
-// nkRaise durch TCFGBuilder.
-var
-  Meth : TAstNode;
-  CFG  : TCFG;
-begin
-  // raise; x := 1;   - die Zuweisung dahinter ist tot.
-  Meth := MakeMethod([ StmtRaise(1), StmtAssign(2) ]);
-  try
-    CFG := TCFGBuilder.BuildFromMethod(Meth);
-    try
-      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_),
-        'der raise-Block muendet in Exit_');
-      // Traegt ueberhaupt ein Block die Anweisung hinter dem raise, dann
-      // darf sie von Entry aus nicht erreichbar sein. Legt der Builder
-      // gar keinen an, ist das ebenso richtig - deshalb die Schleife
-      // statt einer festen Blockzahl.
-      for var B in CFG.Blocks do
-        if (B.AstNodes.Count > 0) and (B.AstNodes[0].Line = 2) then
-          Assert.IsFalse(CFG.CanReach(CFG.Entry, B),
-            'die Anweisung hinter dem raise ist unerreichbar');
-    finally CFG.Free; end;
-  finally Meth.Free; end;
-end;
-
-procedure TTestCFG.Break_Terminates_Sequence;
-// Wie Raise_Terminates_Sequence: delegierte an einen handgebauten CFG
-// ohne nkBreak (Upstream-Befund GITLAK). Jetzt ueber den Builder, und
-// zwar im repeat, weil dessen Rumpf mehrere Anweisungen aufnimmt.
-var
-  Meth : TAstNode;
-  CFG  : TCFG;
-begin
-  // repeat break; x := 1; until ...  - die Zuweisung ist tot.
-  Meth := MakeMethod([ StmtRepeat([ StmtBreak, StmtAssign(2) ]) ]);
-  try
-    CFG := TCFGBuilder.BuildFromMethod(Meth);
-    try
-      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_),
-        'der Weg aus der Schleife heraus existiert');
-      for var B in CFG.Blocks do
-        if (B.AstNodes.Count > 0) and (B.AstNodes[0].Line = 2) then
-          Assert.IsFalse(CFG.CanReach(CFG.Entry, B),
-            'die Anweisung hinter dem break ist unerreichbar');
-    finally CFG.Free; end;
-  finally Meth.Free; end;
-end;
-
 procedure TTestCFG.BeginEndBlock_InlineExpansion;
 var
   CFG : TCFG;
@@ -1100,6 +1048,57 @@ begin
       Assert.IsTrue(BranchCond.Kind = nkIfStmt, 'Branch-CondNode = nkIfStmt');
       Assert.IsNotNull(LoopCond, 'Loop-CondNode gesetzt');
       Assert.IsTrue(LoopCond.Kind = nkWhileStmt, 'Loop-CondNode = nkWhileStmt');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+
+procedure TTestCFG.Raise_Terminates_Sequence;
+// UPSTREAM-BEFUND (GITLAK, 28.08.): dieser Test delegierte an
+// Exit_Terminates_Sequence - und der baut einen CFG VON HAND, ohne
+// Builder-Lauf und ohne ein einziges nkRaise. Er war also gruen,
+// gleichgueltig was der Builder mit raise macht. Jetzt geht ein echtes
+// nkRaise durch TCFGBuilder.
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // raise; x := 1;   - die Zuweisung dahinter ist tot.
+  Meth := MakeMethod([ StmtRaise(1), StmtAssign(2) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_),
+        'der raise-Block muendet in Exit_');
+      // Traegt ueberhaupt ein Block die Anweisung hinter dem raise, dann
+      // darf sie von Entry aus nicht erreichbar sein. Legt der Builder
+      // gar keinen an, ist das ebenso richtig - deshalb die Schleife
+      // statt einer festen Blockzahl.
+      for var B in CFG.Blocks do
+        if (B.AstNodes.Count > 0) and (B.AstNodes[0].Line = 2) then
+          Assert.IsFalse(CFG.CanReach(CFG.Entry, B),
+            'die Anweisung hinter dem raise ist unerreichbar');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
+end;
+procedure TTestCFG.Break_Terminates_Sequence;
+// Wie Raise_Terminates_Sequence: delegierte an einen handgebauten CFG
+// ohne nkBreak (Upstream-Befund GITLAK). Jetzt ueber den Builder, und
+// zwar im repeat, weil dessen Rumpf mehrere Anweisungen aufnimmt.
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
+begin
+  // repeat break; x := 1; until ...  - die Zuweisung ist tot.
+  Meth := MakeMethod([ StmtRepeat([ StmtBreak, StmtAssign(2) ]) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_),
+        'der Weg aus der Schleife heraus existiert');
+      for var B in CFG.Blocks do
+        if (B.AstNodes.Count > 0) and (B.AstNodes[0].Line = 2) then
+          Assert.IsFalse(CFG.CanReach(CFG.Entry, B),
+            'die Anweisung hinter dem break ist unerreichbar');
     finally CFG.Free; end;
   finally Meth.Free; end;
 end;
