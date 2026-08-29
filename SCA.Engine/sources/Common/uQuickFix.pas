@@ -104,7 +104,10 @@ var
   Dummy : Integer;
 begin
   State  := Default(TCommentScanState);
-  Result := TDetectorUtils.ScanCodeLine(ALine, State, Dummy, ' ');
+  // AKeepColumns=True: nur so bleibt die Spalte eines Treffers auf der
+  // Originalzeile gueltig. Die Vorgabe ist bewusst False, weil 40 andere
+  // Units den Helfer mit ENTFERNTEN Kommentaren lesen.
+  Result := TDetectorUtils.ScanCodeLine(ALine, State, Dummy, ' ', True);
 end;
 
 { ---- Built-in Provider: RedundantBoolean ---- }

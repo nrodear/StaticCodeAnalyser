@@ -1033,22 +1033,37 @@ procedure TTestDetectorUtils.InlineComment_KeepsColumnsAndSeparatesTokens;
 // bauen. Die Folge war doppelt: die flankierenden Bezeichner wuchsen
 // zusammen, was fuer alpha ein falsch Negatives und fuer alphabeta ein
 // falsch Positives ergab.
+//
+// Die Spaltentreue ist seit rw29 OPT-IN: als Vorgabe kostete sie 506
+// SCA102-Funde, weil uNestedRoutines schriftlich mit ENTFERNTEN
+// Kommentaren rechnet. Der Test prueft deshalb BEIDE Betriebsarten.
 var
   State : TCommentScanState;
   Col   : Integer;
   R     : string;
 begin
   State := Default(TCommentScanState);
-  R := TDetectorUtils.ScanCodeLine('X := Alpha{note}Beta;', State, Col);
+  R := TDetectorUtils.ScanCodeLine('X := Alpha{note}Beta;',
+                                   State, Col, '~', True);
   Assert.AreEqual<Integer>(Length('X := Alpha{note}Beta;'),
     Length(R), 'Laenge bleibt erhalten - sonst wandern alle Spalten');
   Assert.AreEqual('X := Alpha~~~~~~Beta;', R,
-    'der Kommentar ist geblankt (Default-Fuellzeichen ~), nicht entfernt');
+    'mit AKeepColumns ist der Kommentar geblankt, nicht entfernt');
 
   State := Default(TCommentScanState);
-  R := TDetectorUtils.ScanCodeLine('A(*x*)B', State, Col);
+  R := TDetectorUtils.ScanCodeLine('A(*x*)B',
+                                   State, Col, '~', True);
   Assert.AreEqual('A~~~~~B', R,
     'auch die Klammer-Stern-Form');
+
+  // GEGENPROBE, und die ist der eigentliche Vertrag: OHNE das Flag
+  // bleibt es beim alten Verhalten. 40 Units lesen diesen Helfer mit
+  // ENTFERNTEN Kommentaren; rw29 hat gezeigt, was eine Umstellung als
+  // Vorgabe kostet (506 SCA102-Funde, darunter echte).
+  State := Default(TCommentScanState);
+  R := TDetectorUtils.ScanCodeLine('A(*x*)B', State, Col);
+  Assert.AreEqual('AB', R,
+    'Vorgabe: Kommentar ENTFERNT, Zeile wird kuerzer');
 end;
 
 initialization

@@ -40,6 +40,8 @@ type
     [Test] procedure FixtureFilter_DropsFixturesKeepsProduction;
     [Test] procedure FixtureFilter_ReadErrorSurvivesFilter;
     [Test] procedure FixtureFilter_BaseDirAnchorsThePattern;
+    // Upstream-Befund 6 (GITLAK, 28.08.)
+    [Test] procedure IgnoreList_BrokenMaskDoesNotKillTheScan;
     [Test] procedure FindingAliases_MessageLineRuleId;
     [Test] procedure AnalyzeContext_DestroyFreesOwnedOnly;
     [Test] procedure AnalyzeSource_FindsBugInMemory;
@@ -693,6 +695,43 @@ begin
       'das tests-Segment liegt OBERHALB der Scanwurzel und zaehlt nicht');
   finally
     F.Free;
+  end;
+end;
+
+procedure TTestEngineApi.IgnoreList_BrokenMaskDoesNotKillTheScan;
+// UPSTREAM-BEFUND 6 (GITLAK): System.Masks wirft EMaskException bei
+// unabgeschlossenem [, leerem [], fuehrendem - in einer Menge und ab
+// 31 Wildcards. IsIgnored laeuft je Datei UND je Verzeichnis im
+// per-Eintrag-except des Verzeichnis-Walks - ein Muster wie
+// Backup[1.pas liess damit jede .pas UND jede Rekursion ausfallen.
+// Der Scan lief durch, meldete null Funde und endete mit Code 0:
+// nichts unterschied "sauber" von "nicht angesehen".
+const
+  // noinspection HardcodedPath
+  DATEI = 'C:\repo\uFoo.pas';
+  // noinspection HardcodedPath
+  ECHTE = 'C:\repo\uEcht.pas';
+var
+  Liste : TIgnoreList;
+  Pfad  : string;
+begin
+  Pfad := TPath.Combine(TPath.GetTempPath, 'sca-ignore-broken.txt');
+  Liste := TIgnoreList.Create;
+  try
+    TFile.WriteAllText(Pfad,
+      'Backup[1.pas' + sLineBreak + 'uEcht.pas');
+    Liste.LoadFromFile(Pfad);
+
+    // Wirft der Aufruf, faellt der Test mit genau dieser Exception -
+    // vor dem Fix war es EMaskException, und im Walk verschluckte sie
+    // das per-Eintrag-except.
+    Assert.IsFalse(Liste.IsIgnored(DATEI),
+      'und es darf erst recht nicht ALLES treffen');
+    Assert.IsTrue(Liste.IsIgnored(ECHTE),
+      'das gueltige Muster daneben wirkt weiterhin');
+  finally
+    Liste.Free;
+    if TFile.Exists(Pfad) then TFile.Delete(Pfad);
   end;
 end;
 
