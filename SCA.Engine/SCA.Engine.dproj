@@ -296,6 +296,7 @@
         <DCCReference Include="sources\Infrastructure\uBaseline.pas"/>
         <DCCReference Include="sources\Infrastructure\uConfidenceFilter.pas"/>
         <DCCReference Include="sources\Infrastructure\uEvidenceTiering.pas"/>
+        <DCCReference Include="sources\Infrastructure\uGateStats.pas"/>
         <DCCReference Include="sources\Infrastructure\uDfmAnalysisRunner.pas"/>
         <DCCReference Include="sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
         <DCCReference Include="sources\Infrastructure\uDfmFrameResolver.pas"/>

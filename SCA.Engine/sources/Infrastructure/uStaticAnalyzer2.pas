@@ -92,6 +92,7 @@ implementation
 // im scan.log dokumentiert die Ursache.
 
 uses
+  uGateStats,   // gGateHits - Parallel-Gate, s. UseParallel
   Winapi.Windows,   // OutputDebugString (IndexRoot-Warnung, Scan-Scope 2026-07-20)
   System.IOUtils, System.Diagnostics,
   // Perf Stufe 2 (2026-07-25): Per-File-Parallelisierung des Main-Loops.
@@ -1687,7 +1688,10 @@ begin
       and Assigned(Ctx.AstFileCache)
       and (not Ctx.Config.AutoDiscover)
       and (not TCustomRuleDetector.HasRules)
-      and (Ctx.DetectorTimings = nil);
+      and (Ctx.DetectorTimings = nil)
+      // uGateStats zaehlt in ein ungeschuetztes Dictionary - wie die
+      // Timings misst es bewusst seriell.
+      and (gGateHits = nil);
 
     // Auskunft geben, wenn parallel gewuenscht war und es nicht dazu kam.
     // Reihenfolge = Gate-Reihenfolge oben; genannt wird die ERSTE zutreffende
@@ -1712,6 +1716,9 @@ begin
           + 'concurrent-safe'
       else if Ctx.DetectorTimings <> nil then
         gParallelDeclineReason := '--time-detectors misst bewusst seriell'
+      else if gGateHits <> nil then
+        gParallelDeclineReason := '--gate-stats zaehlt in ein '
+          + 'ungeschuetztes Dictionary und misst deshalb seriell'
       else
         gParallelDeclineReason := 'Grund unbekannt - Gate-Bedingung ohne '
           + 'zugehoerige Erklaerung, bitte melden';

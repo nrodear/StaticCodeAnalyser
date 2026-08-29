@@ -253,6 +253,7 @@ contains
   uBaseline in 'sources\Infrastructure\uBaseline.pas',
   uConfidenceFilter in 'sources\Infrastructure\uConfidenceFilter.pas',
   uEvidenceTiering in 'sources\Infrastructure\uEvidenceTiering.pas',
+  uGateStats in 'sources\Infrastructure\uGateStats.pas',
   uDfmAnalysisRunner in 'sources\Infrastructure\uDfmAnalysisRunner.pas',
   uDfmDbFieldAnalysis in 'sources\Infrastructure\uDfmDbFieldAnalysis.pas',
   uDfmFrameResolver in 'sources\Infrastructure\uDfmFrameResolver.pas',

@@ -290,6 +290,7 @@ contains
   uBaseline in '..\SCA.Engine\sources\Infrastructure\uBaseline.pas',
   uConfidenceFilter in '..\SCA.Engine\sources\Infrastructure\uConfidenceFilter.pas',
   uEvidenceTiering in '..\SCA.Engine\sources\Infrastructure\uEvidenceTiering.pas',
+  uGateStats in '..\SCA.Engine\sources\Infrastructure\uGateStats.pas',
   uDfmAnalysisRunner in '..\SCA.Engine\sources\Infrastructure\uDfmAnalysisRunner.pas',
   uDfmDbFieldAnalysis in '..\SCA.Engine\sources\Infrastructure\uDfmDbFieldAnalysis.pas',
   uDfmFrameResolver in '..\SCA.Engine\sources\Infrastructure\uDfmFrameResolver.pas',

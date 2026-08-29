@@ -295,6 +295,7 @@
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uBaseline.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uConfidenceFilter.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uEvidenceTiering.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uGateStats.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uDfmAnalysisRunner.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uDfmDbFieldAnalysis.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uDfmFrameResolver.pas"/>
