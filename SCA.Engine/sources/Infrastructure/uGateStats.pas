@@ -49,7 +49,6 @@ procedure GateHit(const AName: string); inline;
 // - eine Zeile bleibt eine Zeile, und die Kette liest sich weiter als
 // Kette. Der Boolean-Parameter ist hier kein Schalter, sondern der
 // Messwert selbst.
-// noinspection BooleanParam
 function Gate(const AName: string; AHit: Boolean): Boolean; inline;
 
 // Zeilenweiser Bericht, absteigend nach Treffern. Leer, wenn die Zaehlung
@@ -66,7 +65,7 @@ procedure GateHit(const AName: string);
 var
   N : Integer;
 begin
-  if gGateHits = nil then Exit;
+  if not Assigned(gGateHits) then Exit;
   if gGateHits.TryGetValue(AName, N) then
     gGateHits[AName] := N + 1
   else
@@ -86,7 +85,7 @@ var
   P     : TPair<string, Integer>;
 begin
   Result := '';
-  if gGateHits = nil then Exit;
+  if not Assigned(gGateHits) then Exit;
   Paare := gGateHits.ToArray;
   TArray.Sort<TPair<string, Integer>>(Paare,
     TComparer<TPair<string, Integer>>.Construct(
