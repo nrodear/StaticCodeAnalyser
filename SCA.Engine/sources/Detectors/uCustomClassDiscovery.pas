@@ -55,6 +55,9 @@ type
     // Hilfsfunktion: prueft ob ein Parent-Klassen-Name als
     // "Owner-managed / nicht-leakend" gilt.
     class function IsOwnerManagedParent(const ParentName: string): Boolean; static;
+    // True, wenn der Name in der RTL kein Klassentyp ist (s.
+    // RTL_NON_CLASS_NAMES) - solche Namen traegt die Discovery nicht ein.
+    class function IsRtlNonClassName(const AClassName: string): Boolean; static;
   private
     class function ClassHasCtorOrDtor(ClassNode: TAstNode): Boolean; static;
     class function UnitHasCreateCall(UnitNode: TAstNode;
@@ -82,6 +85,45 @@ const
     // managed sie via raise/except)
     'exception', 'eabort', 'eexternal'
   ];
+
+  // NAMEN, die in der RTL KEINE Klasse sind. Erklaert eine Fremdunit einen
+  // davon zur Klasse, darf die Auto-Discovery ihn NICHT korpusweit
+  // eintragen - sonst gilt jede Variable dieses Typs ueberall als
+  // Leck-Kandidat, auch die Tausenden, die den RTL-Typ meinen.
+  //
+  // GEMESSENER ANLASS (Vollzaehlung SCA001, 28.08., Klasse H): JVCL
+  // erklaert in run/JvBaseThumbnail.pas:73 "TFileName = class(TObject)".
+  // Seither galt jeder RTL-String vom Typ TFileName als Leck-Kandidat -
+  // und TFileName ist in System.SysUtils schlicht "type string".
+  //
+  // Die Liste bleibt kurz und belegt: jeder Eintrag ist in der RTL
+  // nachweislich Alias, Ordinaltyp oder Record, keiner eine Klasse. Ein
+  // falscher Eintrag kostet echte Funde, deshalb NICHTS aufnehmen, was
+  // nicht nachgeschlagen ist.
+  RTL_NON_CLASS_NAMES: array of string = [
+    'tfilename',    // System.SysUtils: type string
+    'tcaption',     // System.UITypes: type string
+    'tdatetime',    // System: type Double
+    'tdate',        // System: type TDateTime
+    'ttime',        // System: type TDateTime
+    'tcolor',       // System.UITypes: Integer-Bereich
+    'tcursor',      // System.UITypes: Integer-Bereich
+    'tshortcut'     // System.Classes: type Word
+  ];
+
+class function TCustomClassDiscovery.IsRtlNonClassName(
+  const AClassName: string): Boolean;
+// Vertrag siehe RTL_NON_CLASS_NAMES.
+var
+  Lower : string;
+  S     : string;
+begin
+  Result := False;
+  Lower := AClassName.ToLower.Trim;
+  if Lower = '' then Exit;
+  for S in RTL_NON_CLASS_NAMES do
+    if Lower = S then Exit(True);
+end;
 
 class function TCustomClassDiscovery.IsOwnerManagedParent(
   const ParentName: string): Boolean;
@@ -219,6 +261,9 @@ begin
       for Node in Classes do
       begin
         if Node.Name = '' then Continue;
+        // Ein RTL-Name, den eine Fremdunit zur Klasse erklaert, bleibt
+        // draussen - s. RTL_NON_CLASS_NAMES.
+        if IsRtlNonClassName(Node.Name) then Continue;
         // Parent-Name aus TypeRef. Leerer TypeRef = implizit TObject
         // (Pascal: `TFoo = class` ohne Parent erbt von TObject und ist
         // damit leakable). Forward-Decls (`TFoo = class;`) erzeugen keinen

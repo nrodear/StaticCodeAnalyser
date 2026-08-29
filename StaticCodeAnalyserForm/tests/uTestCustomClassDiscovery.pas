@@ -37,6 +37,9 @@ type
 
     // ---- API-Helper -------------------------------------------------------
     [Test] procedure IsOwnerManagedParent_DirectChecks;
+    // Vollzaehlung SCA001, Klasse H (28.08.)
+    [Test] procedure RtlNonClassName_NotDiscovered;
+    [Test] procedure IsRtlNonClassName_DirectChecks;
   end;
 
 implementation
@@ -256,6 +259,67 @@ begin
   Assert.IsFalse(TCustomClassDiscovery.IsOwnerManagedParent('TObject'));
   Assert.IsFalse(TCustomClassDiscovery.IsOwnerManagedParent('TStringList'));
   Assert.IsFalse(TCustomClassDiscovery.IsOwnerManagedParent(''));
+end;
+
+procedure TTestCustomClassDiscovery.RtlNonClassName_NotDiscovered;
+// VOLLZAEHLUNG SCA001, KLASSE H (14 Funde): JVCL erklaert in
+// run/JvBaseThumbnail.pas:73 "TFileName = class(TObject)". Die
+// Auto-Discovery trug den Namen daraufhin KORPUSWEIT in LeakyClasses ein
+// - und seitdem galt jede Variable vom RTL-Typ TFileName (in
+// System.SysUtils schlicht "type string") als Leck-Kandidat.
+//
+// TP-Risiko null: eine Klasse, die einen RTL-Nicht-Klassennamen
+// beansprucht, ist selbst dann nicht verfolgbar, wenn sie leckt - jeder
+// Fund waere ununterscheidbar von den Tausenden RTL-Verwendungen.
+var
+  Inst, Stat : TArray<string>;
+  S          : string;
+begin
+  RunDiscover(
+    'unit U;' + sLineBreak +
+    'interface' + sLineBreak +
+    'type' + sLineBreak +
+    '  TFileName = class(TObject)' + sLineBreak +
+    '    constructor Create;' + sLineBreak +
+    '  end;' + sLineBreak +
+    '  TEchteKlasse = class(TObject)' + sLineBreak +
+    '    constructor Create;' + sLineBreak +
+    '  end;' + sLineBreak +
+    'implementation' + sLineBreak +
+    'end.',
+    Inst, Stat);
+
+  for S in Inst do
+    Assert.AreNotEqual('TFileName', S,
+      'ein RTL-Nicht-Klassenname darf nicht korpusweit eingetragen '      + 'werden');
+  for S in Stat do
+    Assert.AreNotEqual('TFileName', S,
+      'auch nicht als static-only');
+
+  // Gegenprobe: die Sperre trifft NUR die Namensliste, nichts sonst.
+  Assert.IsTrue(Length(Inst) > 0, 'die echte Klasse wird weiter gefunden');
+  var Gefunden := False;
+  for S in Inst do
+    if SameText(S, 'TEchteKlasse') then Gefunden := True;
+  Assert.IsTrue(Gefunden, 'und zwar namentlich');
+end;
+
+procedure TTestCustomClassDiscovery.IsRtlNonClassName_DirectChecks;
+// Jeder Eintrag der Liste ist in der RTL nachgeschlagen. Ein FALSCHER
+// Eintrag kostet echte Funde - dieser Test haelt fest, was drinsteht.
+begin
+  Assert.IsTrue(TCustomClassDiscovery.IsRtlNonClassName('TFileName'),
+    'System.SysUtils: type string');
+  Assert.IsTrue(TCustomClassDiscovery.IsRtlNonClassName('tcaption'),
+    'case-insensitiv, Pascal-Konvention');
+  Assert.IsTrue(TCustomClassDiscovery.IsRtlNonClassName('TColor'));
+  Assert.IsTrue(TCustomClassDiscovery.IsRtlNonClassName('TDateTime'));
+  // Echte RTL-KLASSEN duerfen NICHT in der Liste stehen - sonst
+  // verschwinden echte Funde.
+  Assert.IsFalse(TCustomClassDiscovery.IsRtlNonClassName('TStringList'));
+  Assert.IsFalse(TCustomClassDiscovery.IsRtlNonClassName('TObject'));
+  Assert.IsFalse(TCustomClassDiscovery.IsRtlNonClassName('TStream'));
+  Assert.IsFalse(TCustomClassDiscovery.IsRtlNonClassName(''));
 end;
 
 initialization
