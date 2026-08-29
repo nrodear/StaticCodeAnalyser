@@ -110,6 +110,7 @@ type
     ParallelWorkers : string;       // --parallel-workers <n>     Worker-Anzahl (0/leer = auto)
     // ---- Perf-Diagnostik ----
     TimeDetectors : Boolean;        // --time-detectors           pro-Detektor-Timing-Tabelle nach Scan
+    GateStats : Boolean;            // --gate-stats               Trefferzahl je FP-Gate nach Scan
     TimeDetectorsOut : string;      // --time-detectors-out <file> schreibt die Markdown-Tabelle in
                                     //   die angegebene Datei (zusaetzlich zu/statt stdout). Pflicht
                                     //   wenn man die Tabelle als Datei archivieren will (stdout-Pipes
@@ -190,6 +191,7 @@ uses
   uRuleCatalog,                       // TRuleCatalog.GetProfile fuer die Startzeile
   uBaseline,
   uSuppressionTelemetry,              // C.5 Telemetrie
+  uGateStats,                         // --gate-stats: gGateHits / GateStatsReport
   uLexer;                             // A.5 Phase 1b-Wiring: gLexerIfdefSkipEnabled etc.
 
 const
@@ -337,6 +339,8 @@ begin
       Result.Parallel := True
     else if A = '--parallel-workers' then
       GetValue(Result.ParallelWorkers, '--parallel-workers')
+    else if A = '--gate-stats' then
+      Result.GateStats := True
     else if A = '--time-detectors' then
       Result.TimeDetectors := True
     else if A = '--time-detectors-out' then
@@ -605,6 +609,10 @@ begin
   WriteLn('                        automatisch: CPU-Kerne, gedeckelt auf Dateianzahl).');
   WriteLn('');
   WriteLn('Perf-Diagnostik:');
+  WriteLn('  --gate-stats          Trefferzahl je FP-Gate nach dem Scan. Zeigt,');
+  WriteLn('                        welche Gates GREIFEN - ein Gate mit null');
+  WriteLn('                        Treffern ueber einen grossen Korpus ist ein');
+  WriteLn('                        Loeschkandidat. Erzwingt seriellen Lauf.');
   WriteLn('  --time-detectors      Aggregiert per-Detektor TotalMs + CallCount');
   WriteLn('  --time-detectors-out <file>');
   WriteLn('                        Schreibt die Markdown-Tabelle in die angegebene Datei');
@@ -1312,6 +1320,15 @@ begin
     if Args.TimeDetectors then
       gDetectorTimings := TDictionary<string, TPair<Int64, Integer>>.Create;
 
+    // Trefferzaehlung je FP-Gate (--gate-stats). Zweck ist die
+    // GEGENrichtung zur ueblichen Frage: nicht welches Gate viel faengt,
+    // sondern welches gar nichts mehr tut - ein Gate mit null Treffern
+    // ueber den Referenzkorpus ist ein belegbarer Loeschkandidat statt
+    // einer Vermutung. uGateStats zaehlt ungeschuetzt, deshalb gilt wie
+    // bei den Timings: seriell.
+    if Args.GateStats then
+      gGateHits := TDictionary<string, Integer>.Create;
+
     // C.5 Telemetrie: pro suppressed Finding eine CSV-Zeile sammeln,
     // wenn --telemetry-csv <file> aktiv ist. uSuppression appendet
     // wenn gSuppressionTelemetry assigned ist.
@@ -1747,6 +1764,18 @@ begin
     // Finding-Auflistung weiter unterdrueckt bleibt.
     if Args.TimeDetectors and Assigned(gDetectorTimings) then
       WriteDetectorTimingsMarkdown(Args.TimeDetectorsOut);
+    // Gate-Trefferzahlen. Ein Schalter, der wortlos nichts tut, ist
+    // schlimmer als einer, der fehlt - deshalb sagt die Ausgabe auch
+    // dann etwas, wenn kein einziges Gate gegriffen hat.
+    if Args.GateStats and Assigned(gGateHits) then
+    begin
+      WriteLn;
+      WriteLn('Gate hits (FP gates that actually fired):');
+      if gGateHits.Count = 0 then
+        WriteLn('  none - no gate fired during this scan')
+      else
+        Write(GateStatsReport);
+    end;
     // C.5 Telemetrie: CSV schreiben wenn aktiviert.
     if (Args.TelemetryCsv <> '') and Assigned(gSuppressionTelemetry) then
     begin
@@ -1771,6 +1800,7 @@ begin
     Result := ApplyFailOnPolicy(Result, Args.FailOn, CntRe);
   finally
     FreeAndNil(gDetectorTimings);
+    FreeAndNil(gGateHits);
     if Assigned(gSuppressionTelemetry) then
       FreeAndNil(gSuppressionTelemetry);
     Findings.Free;

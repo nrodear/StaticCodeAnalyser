@@ -42,6 +42,9 @@ type
     [Test] procedure FixtureFilter_BaseDirAnchorsThePattern;
     // Upstream-Befund 6 (GITLAK, 28.08.)
     [Test] procedure IgnoreList_BrokenMaskDoesNotKillTheScan;
+    // Gate-Trefferzaehlung (Review "viele Bedingungen im Core", 29.08.)
+    [Test] procedure GateStats_OffByDefault_CostsNothing;
+    [Test] procedure GateStats_CountsAndPassesThrough;
     [Test] procedure FindingAliases_MessageLineRuleId;
     [Test] procedure AnalyzeContext_DestroyFreesOwnedOnly;
     [Test] procedure AnalyzeSource_FindsBugInMemory;
@@ -68,7 +71,8 @@ uses
   System.SysUtils, System.Classes,   // TStringList - AcquireLines-Probe (G2-5-Test)
   System.IOUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
-  uAnalyzeContext, uAstFileCache, uFileTextCache, uSymbolReferenceIndex;
+  uAnalyzeContext, uAstFileCache, uFileTextCache, uSymbolReferenceIndex,
+  uGateStats;   // Gate/GateHit/GateStatsReport
 
 const
   // Garantiert MEHRERE Befunde, darunter einen, der auch unter der
@@ -731,6 +735,53 @@ begin
     Liste.Free;
     if TFile.Exists(Pfad) then TFile.Delete(Pfad);
   end;
+end;
+
+procedure TTestEngineApi.GateStats_OffByDefault_CostsNothing;
+// Der Normalbetrieb ist der wichtige Fall: ohne Dictionary darf nichts
+// passieren und nichts kosten. Gate() muss seinen Wert trotzdem
+// unveraendert durchreichen - sonst aendert die blosse Anwesenheit der
+// Instrumentierung das Verhalten der Detektoren.
+begin
+  Assert.IsNull(gGateHits, 'Vorgabe ist AUS');
+  GateHit('SCA001.Irgendwas');   // darf nicht werfen
+  Assert.IsTrue(Gate('SCA001.A', True),
+    'True kommt als True zurueck, auch ohne Zaehlung');
+  Assert.IsFalse(Gate('SCA001.B', False),
+    'und False als False');
+  Assert.AreEqual('', GateStatsReport,
+    'ohne Zaehlung gibt es keinen Bericht');
+end;
+
+procedure TTestEngineApi.GateStats_CountsAndPassesThrough;
+// Gezaehlt wird NUR der Treffer (Gate liefert True). Ein Gate, das nicht
+// greift, darf nicht auftauchen - sonst waere die ganze Auswertung
+// wertlos: der Zweck ist gerade, Gates mit NULL Treffern zu finden.
+var
+  Bericht : string;
+begin
+  gGateHits := TDictionary<string, Integer>.Create;
+  try
+    Gate('SCA001.Trifft', True);
+    Gate('SCA001.Trifft', True);
+    Gate('SCA001.TrifftNie', False);
+
+    Assert.AreEqual<Integer>(1, gGateHits.Count,
+      'nur das greifende Gate steht im Dictionary');
+    Assert.AreEqual<Integer>(2, gGateHits['SCA001.Trifft'],
+      'zweimal getroffen, zweimal gezaehlt');
+    Assert.IsFalse(gGateHits.ContainsKey('SCA001.TrifftNie'),
+      'ein Gate ohne Treffer wird NICHT angelegt');
+
+    Bericht := GateStatsReport;
+    Assert.IsTrue(Pos('SCA001.Trifft', Bericht) > 0,
+      'der Bericht nennt das Gate');
+    Assert.IsTrue(Pos('2', Bericht) > 0,
+      'samt Trefferzahl');
+  finally
+    FreeAndNil(gGateHits);
+  end;
+  Assert.IsNull(gGateHits, 'danach wieder aus');
 end;
 
 initialization

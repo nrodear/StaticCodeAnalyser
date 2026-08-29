@@ -45,7 +45,8 @@ interface
 uses
   System.SysUtils, System.StrUtils, System.Classes, System.Generics.Collections,
   uAstNode, uSCAConsts, uMethodd12, uDetectorUtils, uAnalyzeContext,
-  uFileTextCache, uTypeIndex;
+  uFileTextCache, uTypeIndex,
+  uGateStats;   // Gate() - Trefferzaehlung, im Normalbetrieb ein Nil-Test
 
 type
   TLeakDetector2 = class
@@ -3553,7 +3554,7 @@ begin
     HasFinally := HasTryFinallyBlock(MethodNode);  // schleifeninvariant: einmal vor der Schleife statt pro Var
     for V in LocalVars do
     begin
-      if not IsLeakyType(V.TypeRef, AContext) then Continue;
+      if Gate('SCA001.NotLeakyType', not IsLeakyType(V.TypeRef, AContext)) then Continue;
 
       // Werttyp-Gate (Gross-Triage 2026-07-18): eine record-typisierte Local
       // ('sz := TSizeF.Create(..)' / TRegEx) ist ein WERT auf dem Stack -
@@ -3571,36 +3572,37 @@ begin
       // CreateY') ist KEINE direkte Konstruktion. Pfad 2 skippt '.create'-RHS
       // ebenfalls -> die Var wird komplett uebersprungen (Triage: 13/13
       // Instanz-Factory-Results waren fremd-owned; IDE/Container besitzen).
-      if HasCreateAssign(MethodNode, VarNameLow)
-         and not AllCreatesAreInstanceFactory(MethodNode, VarNameLow) then
+      if Gate('SCA001.CreateAssignNotFactory',
+              HasCreateAssign(MethodNode, VarNameLow)
+              and not AllCreatesAreInstanceFactory(MethodNode, VarNameLow)) then
       begin
-        if IsReturnedAsResult(MethodNode, VarNameLow) then Continue;
+        if Gate('SCA001.IsReturnedAsResult', IsReturnedAsResult(MethodNode, VarNameLow)) then Continue;
         // Zweiter Rueckgabeweg: out-/var-Parameter (2026-08-01).
-        if IsAssignedToOutParam(MethodNode, VarNameLow) then Continue;
+        if Gate('SCA001.IsAssignedToOutParam', IsAssignedToOutParam(MethodNode, VarNameLow)) then Continue;
         // UnitNode (2026-07-31): schaltet die Unit-lokale Alias-Aufloesung des
         // Add-Empfaengers frei (Regressionsfall 'TPeople = TObjectList<TPerson>').
-        if IsPassedToOwner(MethodNode, VarNameLow, UnitNode) then Continue;
+        if Gate('SCA001.IsPassedToOwner', IsPassedToOwner(MethodNode, VarNameLow, UnitNode)) then Continue;
         // FP-Gate (2026-07-04): owner-parameter - TKlasse.Create(Self/
         // Owner/AOwner/Application) uebergibt Ownership an den Owner
         // (TComponent-Konvention) -> kein Fund. Create(nil) meldet weiter.
-        if IsOwnerParamCreate(MethodNode, VarNameLow) then Continue;
+        if Gate('SCA001.IsOwnerParamCreate', IsOwnerParamCreate(MethodNode, VarNameLow)) then Continue;
         // Inkr.2: Interface-Cast-Uebergabe / raise-Ownership (Gross-Triage
         // iface-cast-Bucket 15/101 + Batch 8 'raise LException').
-        if IsHandedToInterface(MethodNode, VarNameLow) then Continue;
-        if IsRaisedAsException(MethodNode, VarNameLow) then Continue;
+        if Gate('SCA001.IsHandedToInterface', IsHandedToInterface(MethodNode, VarNameLow)) then Continue;
+        if Gate('SCA001.IsRaisedAsException', IsRaisedAsException(MethodNode, VarNameLow)) then Continue;
         // FP-Gate (2026-07-31, FP-Klasse 2 'TComponent-/Owner-Ownership'):
         // 'TFoo.Create(<Owner-Ausdruck>, ...)' mit nicht-nil Objekt-Ident als
         // erstem Argument = Component-Ownership, der Owner raeumt ab.
-        if IsComponentOwnerCreate(MethodNode, VarNameLow,
-             Trim(V.TypeRef.ToLower), AContext) then Continue;
+        if Gate('SCA001.IsComponentOwnerCreate', IsComponentOwnerCreate(MethodNode, VarNameLow,
+             Trim(V.TypeRef.ToLower), AContext)) then Continue;
         // FP-Gate (2026-07-31, Parser-Gate-Backlog 4e/1): der Callee-Ctor
         // DERSELBEN Unit haengt sich per '<ErsterParam>.Add(Self)' in eine
         // besitzende Liste des uebergebenen Parents (jvcl JvInspector).
-        if CtorRegistersSelfWithFirstArg(UnitNode, MethodNode, VarNameLow) then
+        if Gate('SCA001.CtorRegistersSelfWithFirstArg', CtorRegistersSelfWithFirstArg(UnitNode, MethodNode, VarNameLow)) then
           Continue;
         // FP-Gate (Autopsie 2026-08-26, Klasse 5): selbstfreigebender
         // Thread - FreeOnTerminate := True im eigenen Ctor dieser Unit.
-        if CtorSetsFreeOnTerminate(UnitNode, MethodNode, VarNameLow) then
+        if Gate('SCA001.CtorSetsFreeOnTerminate', CtorSetsFreeOnTerminate(UnitNode, MethodNode, VarNameLow)) then
           Continue;
 
         FreeFound := SearchFree(MethodNode, VarNameLow, False, FreeInFin);
@@ -3618,7 +3620,7 @@ begin
           // fremden Konstruktor. Bewusst ERST hier (nicht bei den uebrigen
           // Gates): der Subtree-Walk laeuft dann nur fuer Variablen, die
           // tatsaechlich gemeldet wuerden - Hot-Path-Schutz.
-          if not LastUseIsOwnershipTransfer(MethodNode, VarNameLow) then
+          if Gate('SCA001.NoOwnershipTransfer', not LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then
             AddFinding(V.Name, lsError, ReportLine);
         end
         else if not FreeInFin and HasFinally
@@ -3663,8 +3665,10 @@ begin
           // dann ebenfalls kein Befund. NUR dieser lsWarning-Zweig; der Leak-
           // (lsError-)Pfad oben ist unberuehrt -> kann nie einen Leak maskieren.
           EnsureStripped;
-          if not FreeInFinallyRegionBySource(MethodNode, StrippedLines, VarNameLow)
-             and not LastUseIsOwnershipTransfer(MethodNode, VarNameLow) then
+          if Gate('SCA001.WarnFreeOutsideFinally',
+                  not FreeInFinallyRegionBySource(MethodNode, StrippedLines,
+                                                  VarNameLow)
+                  and not LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then
             AddFinding(V.Name, lsWarning, ReportLine);
         end;
 
@@ -3672,15 +3676,15 @@ begin
       end;
 
       // ── Pfad 2: Funktionsaufruf-Zuweisung — list := BuildList(...) ──────────
-      if not HasFunctionCallAssign(UnitNode, MethodNode, VarNameLow) then Continue;
+      if Gate('SCA001.NoFunctionCallAssign', not HasFunctionCallAssign(UnitNode, MethodNode, VarNameLow)) then Continue;
 
-      if IsReturnedAsResult(MethodNode, VarNameLow) then Continue;
-      if IsAssignedToOutParam(MethodNode, VarNameLow) then Continue;
-      if IsPassedToOwner(MethodNode, VarNameLow, UnitNode) then Continue;
+      if Gate('SCA001.IsReturnedAsResult', IsReturnedAsResult(MethodNode, VarNameLow)) then Continue;
+      if Gate('SCA001.IsAssignedToOutParam', IsAssignedToOutParam(MethodNode, VarNameLow)) then Continue;
+      if Gate('SCA001.IsPassedToOwner', IsPassedToOwner(MethodNode, VarNameLow, UnitNode)) then Continue;
       // Inkr.2: Interface-Cast-Uebergabe / raise-Ownership auch fuer den
       // Rueckgabewert-Pfad (dasselbe Ownership-Argument).
-      if IsHandedToInterface(MethodNode, VarNameLow) then Continue;
-      if IsRaisedAsException(MethodNode, VarNameLow) then Continue;
+      if Gate('SCA001.IsHandedToInterface', IsHandedToInterface(MethodNode, VarNameLow)) then Continue;
+      if Gate('SCA001.IsRaisedAsException', IsRaisedAsException(MethodNode, VarNameLow)) then Continue;
 
       FreeFound := SearchFree(MethodNode, VarNameLow, False, FreeInFin);
 
@@ -3689,7 +3693,7 @@ begin
         // FP-Gate (2026-07-31, FP-Klasse 1): identisch zum Create-Pfad - der
         // letzte Use gibt das Objekt an eine besitzende Senke ab
         // ('Item := NewItem(...); ... AddMenuItem(Item);' - JvMRUList.pas:424).
-        if LastUseIsOwnershipTransfer(MethodNode, VarNameLow) then Continue;
+        if Gate('SCA001.LastUseIsOwnershipTransfer', LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then Continue;
         var ReportLine := FindFuncCallAssignLine(MethodNode, VarNameLow);
         if ReportLine = 0 then ReportLine := V.Line;
         AddFinding(V.Name + LEAK_RETURN_VALUE_SUFFIX, lsWarning, ReportLine);
