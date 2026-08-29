@@ -1109,10 +1109,14 @@ const SRC =
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOfFile(SRC);
+  // ueber die PIPELINE, nicht FindingsOfFile: der Demote ist fcLow, und
+  // der greift erst im Confidence-Post-Filter. Der rohe Detektoraufruf
+  // wuerde den Fund noch zeigen - das ist die Mechanik, nicht die
+  // Nutzersicht.
+  F := TFindingHelper.FindingsViaPipeline(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
         'Waechter-Idiom setzt einen Vorgabewert - der Vergleich gegen ' +
-        'exakt Null ist genau richtig und kein Befund');
+        'exakt Null ist genau richtig und im Default kein Befund');
   finally F.Free; end;
 end;
 
@@ -1134,7 +1138,7 @@ const SRC =
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOfFile(SRC);
+  F := TFindingHelper.FindingsViaPipeline(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) > 0,
         'ohne Zuweisung im then-Zweig bleibt der Fund - d ist ein ' +
         'Rechenergebnis, das durch Rundung knapp an der Null vorbeigeht');
