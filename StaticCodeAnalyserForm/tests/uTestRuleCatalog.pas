@@ -1020,18 +1020,25 @@ procedure TTestRuleCatalog.ImpactsAsStringsDoesNotRaise;
 // Setup ruft Reload, der globale Katalogzustand ist danach wieder der
 // echte - deshalb darf dieser Test eine eigene Datei laden.
 var
-  Pfad : string;
+  Pfad    : string;
+  AltPfad : string;
 begin
-  Pfad := TPath.Combine(TPath.GetTempPath,
-                        'sca-rules-impacts-test.json');
+  // LoadFromJsonFile ist privat - der Weg von aussen fuehrt ueber
+  // JsonFilePath + Reload, dasselbe Muster wie beim Profil-Test weiter
+  // unten mit UserProfilesPath.
+  Pfad    := TPath.Combine(TPath.GetTempPath,
+                           'sca-rules-impacts-test.json');
+  AltPfad := TRuleCatalog.JsonFilePath;
   try
     TFile.WriteAllText(Pfad, '{"rules":[{"id":"SCA001","kind":"MemoryLeak","name":"n","shortDescription":"s","fullDescription":"f","defaultSeverity":"Error","type":"Bug","impacts":["high"]}]}');
+    TRuleCatalog.JsonFilePath := Pfad;
     // Wirft das Laden, faellt der Test mit genau dieser Exception -
     // vor dem Fix war es EInvalidCast.
-    TRuleCatalog.LoadFromJsonFile(Pfad);
+    TRuleCatalog.Reload;
     Assert.IsTrue(TRuleCatalog.GetRuleCanonical(fkMemoryLeak).ID <> '',
       'der Katalog ist geladen, nicht auf halber Strecke gestorben');
   finally
+    TRuleCatalog.JsonFilePath := AltPfad;
     if TFile.Exists(Pfad) then TFile.Delete(Pfad);
     TRuleCatalog.Reload;   // echten Katalog wiederherstellen
   end;
