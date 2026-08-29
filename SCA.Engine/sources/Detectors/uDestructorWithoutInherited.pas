@@ -39,9 +39,8 @@ implementation
 
 uses
   System.Classes, System.StrUtils,
-  uAnalyzeContext,   // CtxTypeIndex - Basisklasse des Destruktors
-  uTypeIndex,        // ParentOf
-
+  uTypeIndex,        // ParentOf/TypeKindOf - Basisklasse des Destruktors
+                     // (uAnalyzeContext steht bereits im interface-uses)
   uFileTextCache;
 
 const
