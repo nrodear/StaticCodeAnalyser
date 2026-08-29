@@ -707,9 +707,7 @@ procedure TTestEngineApi.IgnoreList_BrokenMaskDoesNotKillTheScan;
 // Der Scan lief durch, meldete null Funde und endete mit Code 0:
 // nichts unterschied "sauber" von "nicht angesehen".
 const
-  // noinspection HardcodedPath
   DATEI = 'C:\repo\uFoo.pas';
-  // noinspection HardcodedPath
   ECHTE = 'C:\repo\uEcht.pas';
 var
   Liste : TIgnoreList;
