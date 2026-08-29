@@ -497,6 +497,26 @@ var
   // obwohl ABaseDir konstant ist und nur ~10k eindeutige FileNames existieren.
   // Caller-scoped Memo FileName->RelPath (reine Funktion -> byte-identisch).
   RelMemo : TDictionary<string, string>;
+
+  procedure WriteResultProperties(AFinding: TLeakFinding);
+  // Der properties-Bag eines Results: Konfidenz (nur bei aktiver
+  // Evidenz-Politik) und die Leck-Variante (nur bei fkMemoryLeak).
+  // Eigene Routine, weil die Ergebnis-Schleife mit den drei zusaetzlichen
+  // Verzweigungen sonst ueber die McCabe-Schwelle geht - der Bag ist eine
+  // abgeschlossene Sache und liest sich hier besser als eingebettet.
+  var
+    LeakVariant : string;
+  begin
+    LeakVariant := AFinding.MemoryLeakVariant;
+    if not (AConfidenceProps or (LeakVariant <> '')) then Exit;
+    E.BeginObjPair('properties');
+    if AConfidenceProps then
+      E.PairStr('confidence', ConfidenceName(AFinding.Confidence));
+    if LeakVariant <> '' then
+      E.PairStr('variant', LeakVariant);
+    E.EndObj;
+  end;
+
 begin
   E.BeginObjValue;                                     // Root {
   E.PairStr('$schema',
@@ -679,16 +699,7 @@ begin
         // Nur fuer fkMemoryLeak: MemoryLeakVariant liefert fuer jede
         // andere Fundart eine leere Zeichenkette, und das SARIF soll nicht
         // um 782.000 leere Felder wachsen.
-        var LeakVariant := F.MemoryLeakVariant;
-        if AConfidenceProps or (LeakVariant <> '') then
-        begin
-          E.BeginObjPair('properties');
-          if AConfidenceProps then
-            E.PairStr('confidence', ConfidenceName(F.Confidence));
-          if LeakVariant <> '' then
-            E.PairStr('variant', LeakVariant);
-          E.EndObj;
-        end;
+        WriteResultProperties(F);
 
         E.EndObj;                                      // result
         E.FlushChunk(False);
