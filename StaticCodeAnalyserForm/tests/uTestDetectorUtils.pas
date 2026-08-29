@@ -24,6 +24,8 @@ type
   public
     // ---- ScanCodeLine ----
     [Test] procedure PlainCode_NoCommentNoChange;
+    // Upstream-Befund 8 (GITLAK, 28.08.)
+    [Test] procedure InlineComment_KeepsColumnsAndSeparatesTokens;
     [Test] procedure LineComment_TruncatedAndColReported;
     [Test] procedure StringLiteral_FilledNotComment;
     [Test] procedure SlashSlashInsideString_NotAComment;
@@ -1022,6 +1024,32 @@ begin
   end;
 end;
 
+
+procedure TTestDetectorUtils.InlineComment_KeepsColumnsAndSeparatesTokens;
+// UPSTREAM-BEFUND 8 (GITLAK): Inline-Kommentare wurden UEBERSPRUNGEN
+// statt geblankt, waehrend String-Literale 1:1 ersetzt wurden. Der
+// Output war damit kuerzer als der Input, und jede Spalte dahinter
+// verschob sich - in dem Helfer, auf dessen Spaltentreue die Aufrufer
+// bauen. Die Folge war doppelt: die flankierenden Bezeichner wuchsen
+// zusammen, was fuer alpha ein falsch Negatives und fuer alphabeta ein
+// falsch Positives ergab.
+var
+  State : TCommentScanState;
+  Col   : Integer;
+  R     : string;
+begin
+  State := Default(TCommentScanState);
+  R := TDetectorUtils.ScanCodeLine('X := Alpha{note}Beta;', State, Col);
+  Assert.AreEqual<Integer>(Length('X := Alpha{note}Beta;'),
+    Length(R), 'Laenge bleibt erhalten - sonst wandern alle Spalten');
+  Assert.AreEqual('X := Alpha      Beta;', R,
+    'der Kommentar ist geblankt, nicht entfernt');
+
+  State := Default(TCommentScanState);
+  R := TDetectorUtils.ScanCodeLine('A(*x*)B', State, Col);
+  Assert.AreEqual('A     B', R,
+    'auch die Klammer-Stern-Form');
+end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestDetectorUtils);

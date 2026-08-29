@@ -999,8 +999,22 @@ var
 begin
   // Perf (2026-07-05): P1-strip-cache - TStringBuilder-Allokation pro Zeile
   // vermeiden (Hot-Path: laeuft pro Quellzeile pro Strip). Der Output ist
-  // nie laenger als der Input (Strings werden 1:1 durch FillCh ersetzt,
-  // Kommentare entfernt) -> einmal SetLength(n), per PChar-Cursor schreiben,
+  // nie laenger als der Input -> einmal SetLength(n), per PChar-Cursor
+  // schreiben, am Ende exakt auf OutLen trimmen.
+  //
+  // UPSTREAM-BEFUND 8 (GITLAK, 28.08.), behoben 2026-08-29: INLINE-
+  // Kommentare wurden UEBERSPRUNGEN statt geblankt, waehrend Strings 1:1
+  // ersetzt wurden. Damit war der Output kuerzer als der Input, und jede
+  // Spalte hinter einem Inline-Kommentar verschob sich nach links - in
+  // genau dem Helfer, auf dessen Spaltentreue die Aufrufer bauen.
+  // Sichtbar an zusammenwachsenden Bezeichnern:
+  //   X := Alpha{note}Beta;   ->   X := AlphaBeta;
+  // FindWholeWordLower('alpha') verfehlte so ein echtes Vorkommen, und
+  // eine Suche nach 'alphabeta' traf einen Bezeichner, den es nicht gibt
+  // - ein falsch Negatives und ein falsch Positives aus derselben Zeile.
+  // AUSNAHME: laeuft ein Kommentar bis Zeilenende (die Break-Zweige),
+  // bleibt der Rest abgeschnitten - das verschiebt keine fruehere Spalte.
+
   // am Ende exakt auf OutLen trimmen. Ergebnis byte-identisch zum Builder.
   LineCommentCol := 0;
   InStr := False;
@@ -1017,14 +1031,18 @@ begin
       pClose := PosEx('}', Line, j);
       if pClose = 0 then Break;             // Block laeuft in naechste Zeile
       State.InBraceComment := False;
-      j := pClose + 1; Continue;
+      while j <= pClose do
+      begin Dst[OutLen] := FillCh; Inc(OutLen); Inc(j); end;
+      Continue;
     end;
     if State.InParenComment then
     begin
       pClose := PosEx('*)', Line, j);
       if pClose = 0 then Break;
       State.InParenComment := False;
-      j := pClose + 2; Continue;
+      while j <= pClose + 1 do
+      begin Dst[OutLen] := FillCh; Inc(OutLen); Inc(j); end;
+      Continue;
     end;
     c := Line[j];
     if InStr then
@@ -1051,13 +1069,17 @@ begin
     begin
       pClose := PosEx('}', Line, j + 1);
       if pClose = 0 then begin State.InBraceComment := True; Break; end;
-      j := pClose + 1; Continue;
+      while j <= pClose do
+      begin Dst[OutLen] := FillCh; Inc(OutLen); Inc(j); end;
+      Continue;
     end;
     if (c = '(') and (j < n) and (Line[j + 1] = '*') then
     begin
       pClose := PosEx('*)', Line, j + 2);
       if pClose = 0 then begin State.InParenComment := True; Break; end;
-      j := pClose + 2; Continue;
+      while j <= pClose + 1 do
+      begin Dst[OutLen] := FillCh; Inc(OutLen); Inc(j); end;
+      Continue;
     end;
     Dst[OutLen] := c; Inc(OutLen);
     Inc(j);

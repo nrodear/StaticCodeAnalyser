@@ -635,8 +635,15 @@ begin
         SetLength(Meta.Impacts, ArrVal.Count);
         for var IxImp := 0 to ArrVal.Count - 1 do
         begin
+          // UPSTREAM-BEFUND 5 (GITLAK): 'as' liefert nie nil, es wirft
+          // EInvalidCast - der Guard darunter konnte also nie greifen.
+          // Ein handgepflegtes "impacts": ["high"] in sca-rules.json riss
+          // damit EnsureLoaded auf, ueber GetRule und ResolvedRuleId bis in
+          // jeden Exporter: der Lauf starb beim EXPORT, nach getaner
+          // Analyse. Jede andere Umwandlung in dieser Methode ist
+          // is-gepruefft; das hier war die einzige Ausnahme.
+          if not (ArrVal.Items[IxImp] is TJSONObject) then Continue;
           var IObj := ArrVal.Items[IxImp] as TJSONObject;
-          if IObj = nil then Continue;
           Meta.Impacts[IxImp].SoftwareQuality :=
             ParseSoftwareQuality(IObj.GetValue<string>('softwareQuality', ''));
           Meta.Impacts[IxImp].Severity :=

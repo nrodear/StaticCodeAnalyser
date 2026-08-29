@@ -13,10 +13,13 @@
 //
 // Properties werden in Phase 1 vollständig übersprungen - der Parser baut
 // nur die Komponenten-Hierarchie. Property-Werte werden anhand der Zeilen-
-// Information übersprungen: ein Property-Wert liegt per Konvention auf
-// derselben Zeile wie das '=' (Multi-Line-Werte wie Lines.Strings = (...)
-// oder Columns = <...> kommen aus dem Lexer bereits als ein einziges
-// atomares Token, das auf der '='-Zeile beginnt).
+// Information uebersprungen. ACHTUNG, hier stand bis 2026-08-29 die
+// Behauptung, ein Property-Wert liege "per Konvention" auf der Zeile
+// seines '=' - das ist FALSCH: System.Classes hat LineLength = 64, und
+// TWriter bricht jeden laengeren Stringwert um (s. TryParsePropertyValue).
+// Richtig ist: Multi-Line-Werte wie Lines.Strings = (...) oder
+// Columns = <...> kommen aus dem Lexer als EIN atomares Token, und die
+// '+'-Fortsetzung langer Strings fuegt der Lexer ebenfalls zusammen.
 //
 // Phase 2/3 erweitern diesen Parser um typisierte Property-Werte und
 // Event-Bindungen (siehe TODO.md).
@@ -100,8 +103,21 @@ var
 begin
   Header  := FLex.Next;                  // object | inherited | inline
   NameTok := FLex.Consume(tkIdent);
-  FLex.Consume(tkColon);
-  ClsTok  := FLex.Consume(tkIdent);
+  // UPSTREAM-BEFUND 3 (GITLAK, 28.08.): System.Classes schreibt
+  // 'object TKlasse' OHNE Namen und OHNE Doppelpunkt, wenn Name = ''.
+  // Das Consume darueber hat dann die KLASSE gelesen, und das
+  // Consume(tkColon) warf - die ganze DFM ging verloren. Also am
+  // Folgetoken entscheiden, was gerade gelesen wurde.
+  if FLex.Peek.Kind = tkColon then
+  begin
+    FLex.Consume(tkColon);
+    ClsTok := FLex.Consume(tkIdent);
+  end
+  else
+  begin
+    ClsTok  := NameTok;   // gelesen wurde die Klasse ...
+    NameTok := Default(TDfmToken);   // ... und der Name ist leer
+  end;
 
   if Parent <> nil then
     Node := Parent.Add(NameTok.Value, ClsTok.Value, Header.Line, Header.Col)
@@ -112,7 +128,15 @@ begin
   Node.IsInline    := Header.Kind = tkKwInline;
 
   ParseBody(Node);
-  FLex.Consume(tkKwEnd);
+  // UPSTREAM-BEFUND 4 (GITLAK, 28.08.): ParseBody kehrt bei tkEof
+  // sauber zurueck, und dieses Consume warf danach - eine
+  // abgeschnittene DFM (unterbrochener Checkout, halber Download,
+  // Datei noch im Schreiben) lieferte NULL Funde statt der Funde aus
+  // dem Teil, der einwandfrei geparst hat. Der Rest dieser Unit ist
+  // bewusst tolerant gebaut (s. Recovery-Kommentar oben); diese
+  // Consume-Aufrufe waren die Ausnahme.
+  if not FLex.AtEnd then
+    FLex.Consume(tkKwEnd);
 end;
 
 procedure TDfmParser.ParseBody(Owner: TComponentNode);
@@ -181,9 +205,11 @@ function TDfmParser.TryParsePropertyValue(EqLine: Integer;
 //     Bool, Ident) sind im Lexer bereits atomar.
 //
 // Robustheit:
-//   * Wert muss auf der gleichen Zeile wie '=' beginnen (DFM-Konvention).
-//     Wenn nicht, wird KEIN Token konsumiert - Property bleibt unregistriert
-//     und der Body-Loop ueber Property/Object-Tokens treibt weiter.
+//   * Ein Bezeichner auf einer ANDEREN Zeile als das '=' ist kein Wert,
+//     sondern der naechste Property-Name (die aktuelle Property ist dann
+//     wertlos). Dann wird KEIN Token konsumiert - die Property bleibt
+//     unregistriert und der Body-Loop treibt weiter. Werte anderer Art
+//     duerfen sehr wohl auf der Folgezeile stehen, s.o.
 //   * Kein nachlaufender Token-Skip: jedes weitere Token gehoert syntaktisch
 //     bereits zum naechsten Body-Item.
 var
@@ -197,7 +223,27 @@ begin
   Value.Col      := 0;
 
   if FLex.AtEnd then Exit;
-  if FLex.Peek.Line <> EqLine then Exit;     // Wert nicht auf '='-Zeile -> Skip
+  // UPSTREAM-BEFUND 1 (GITLAK, 28.08.), nachgemessen: die Regel "Wert
+  // steht auf der '='-Zeile" ist KEINE DFM-Konvention. System.Classes
+  // hat LineLength = 64, und TWriter bricht jeden laengeren Stringwert
+  // auf Fortsetzungszeilen um. Die alte Zeilengleichheit verwarf damit
+  // die gewoehnliche Serialisierung jedes langen Wertes.
+  //
+  // GEMESSEN auf D:\git-sca-realworld (2.917 DFM, 354.120
+  // Zuweisungszeilen): 1.589 umgebrochen in 440 Dateien - und von fuenf
+  // ConnectionString-Werten FUENF. uDfmHardcodedDbCreds verlangt
+  // pvkString und sah deshalb keinen einzigen; die Dateien galten als
+  // sauber, ohne dass irgendetwas "nichts gefunden" von "nichts
+  // gesehen" unterschied.
+  //
+  // Der Wert-Token selbst war nie das Problem: der Lexer fuegt die
+  // '+'-Fortsetzung bereits zu EINEM tkString zusammen (uDfmLexer:260).
+  // Es bleibt genau der Fall, den die Zeilenpruefung wirklich abwehren
+  // musste - eine WERTLOSE Property, deren Nachfolger sonst als ihr Wert
+  // gelesen wuerde. Der ist an tkIdent erkennbar: TWriter bricht Idents
+  // nie um, und ein Bezeichner auf der Folgezeile ist immer der naechste
+  // Property-Name.
+  if (FLex.Peek.Line <> EqLine) and (FLex.Peek.Kind = tkIdent) then Exit;
 
   Tok  := FLex.Peek;
   Sign := '';
@@ -205,7 +251,9 @@ begin
   begin
     FLex.Next;                                // '-' konsumieren
     Sign := '-';
-    if FLex.AtEnd or (FLex.Peek.Line <> EqLine) then Exit;
+    if FLex.AtEnd
+       or ((FLex.Peek.Line <> EqLine) and (FLex.Peek.Kind = tkIdent)) then
+      Exit;
     Tok := FLex.Peek;
   end;
 

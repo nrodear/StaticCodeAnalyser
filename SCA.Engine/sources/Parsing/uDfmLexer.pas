@@ -252,6 +252,22 @@ begin
       if CharInSet(CurChar, ['+','-']) then Advance;
       while CharInSet(CurChar, ['0'..'9']) do Advance;
     end;
+    // UPSTREAM-BEFUND 2 (GITLAK, 28.08.): TWriter haengt an
+    // nicht-ganzzahlige Werte einen TYPSUFFIX - 'd' fuer vaDate,
+    // ebenso fuer vaSingle/vaCurrency/vaExtended. 'Value = 42379d'
+    // zerfiel damit in tkInteger('42379') + tkIdent('d'); ParseBody
+    // las das 'd' als naechsten Property-Namen, Consume(tkEquals)
+    // traf einen Bezeichner und warf - die GANZE DFM war verloren,
+    // samt allem, was schon geparst war.
+    // Nur schlucken, wenn danach KEIN Bezeichnerzeichen folgt:
+    // sonst waere '42 downto' oder ein echtes Ident direkt hinter
+    // einer Zahl betroffen.
+    if CharInSet(CurChar, ['c','C','d','D','s','S'])
+       and not CharInSet(PeekChar, ['0'..'9', 'a'..'z', 'A'..'Z', '_']) then
+    begin
+      Kind := tkFloat;
+      Advance;
+    end;
   end;
   Result := MakeTok(Kind, Copy(FSource, Start, FPos - Start), L, C);
 end;

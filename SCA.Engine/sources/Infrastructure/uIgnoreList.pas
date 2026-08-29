@@ -68,6 +68,24 @@ implementation
 // noinspection-file CanBeClassMethod, CanBeStrictPrivate, ConcatToFormat, EmptyExcept, FreeWithoutNil, GroupedDeclaration, IfElseBegin, MultipleExit, NestedTry, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+function MatchesMaskSafe(const AName, APattern: string): Boolean;
+// MatchesMask mit dem Schutz, den die Schwesterunit uPathOverrides
+// (:214) schon hat: System.Masks wirft EMaskException bei kaputten
+// Mustern, und ein Muster aus ignore.txt kommt vom Anwender. Ein
+// defektes Muster darf nichts treffen - es darf aber vor allem nicht
+// den Verzeichnis-Walk abbrechen und damit den ganzen Scan still
+// leeren (Upstream-Befund 6, GITLAK).
+//
+// Die Fassung hier bleibt bewusst gleichlautend mit uPathOverrides,
+// damit die beiden Units nicht wieder auseinanderlaufen.
+begin
+  try
+    Result := MatchesMask(AName, APattern);
+  except
+    Result := False; // Defekt-Mask -> kein Match (defensiv)
+  end;
+end;
+
 const
   // Default-Inhalt der Ignore-Datei beim ersten Aufruf
   DEFAULT_FILE_CONTENT =
@@ -254,8 +272,11 @@ begin
   for DirPart in TEST_DIR_PARTS do
     if Pos('/' + DirPart + '/', FullLow) > 0 then Exit(True);
 
+  // Dieselbe Absicherung wie oben. Diese Muster sind zwar einkompiliert
+  // und damit heute gueltig - aber die Regel gilt fuer den Aufruf, nicht
+  // fuer seine derzeitige Eingabe.
   for Pat in TEST_FILE_PATTERNS do
-    if MatchesMask(Bare, Pat) then Exit(True);
+    if MatchesMaskSafe(Bare, Pat) then Exit(True);
 end;
 
 function TIgnoreList.IsIgnored(const FileName: string): Boolean;
@@ -273,9 +294,18 @@ begin
   for DirPart in FDirParts do
     if Pos('/' + DirPart + '/', FullLow) > 0 then Exit(True);
 
-  // Datei-Patterns: glob-Match gegen den Basis-Namen
+  // Datei-Patterns: glob-Match gegen den Basis-Namen.
+  // UPSTREAM-BEFUND 6 (GITLAK): System.Masks wirft EMaskException bei
+  // unabgeschlossenem '[', leerem '[]', fuehrendem '-' in einer Menge und
+  // ab 31 Wildcards. IsIgnored laeuft je Datei UND je Verzeichnis im
+  // per-Eintrag-except des Walks - ein Muster wie 'Backup[1.pas' liess
+  // damit jede .pas UND jede Rekursion ausfallen. Der Scan lief durch,
+  // meldete null Funde und endete mit 0.
+  // Die Schwesterunit uPathOverrides kapselt denselben Aufruf laengst
+  // ('broken mask -> no match (defensive)'); die beiden waren sich hier
+  // uneinig.
   for P in FPatterns do
-    if MatchesMask(Bare, P) then Exit(True);
+    if MatchesMaskSafe(Bare, P) then Exit(True);
 
   // Built-in Test-Filter (nur wenn aktiv).
   if FSkipTests and IsTestPath(FileName) then Exit(True);

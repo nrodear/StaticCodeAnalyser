@@ -147,18 +147,55 @@ begin
 end;
 
 procedure TTestCFG.Raise_Terminates_Sequence;
+// UPSTREAM-BEFUND (GITLAK, 28.08.): dieser Test delegierte an
+// Exit_Terminates_Sequence - und der baut einen CFG VON HAND, ohne
+// Builder-Lauf und ohne ein einziges nkRaise. Er war also gruen,
+// gleichgueltig was der Builder mit raise macht. Jetzt geht ein echtes
+// nkRaise durch TCFGBuilder.
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
 begin
-  // Raise modelliert wie Exit (in A.4.2 konservativ). A.4.5 wird das
-  // mit try/except-Pfaden verfeinern.
-  Exit_Terminates_Sequence;  // gleiche Erwartung wie Exit auf CFG-Ebene
+  // raise; x := 1;   - die Zuweisung dahinter ist tot.
+  Meth := MakeMethod([ StmtRaise(1), StmtAssign(2) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_),
+        'der raise-Block muendet in Exit_');
+      // Traegt ueberhaupt ein Block die Anweisung hinter dem raise, dann
+      // darf sie von Entry aus nicht erreichbar sein. Legt der Builder
+      // gar keinen an, ist das ebenso richtig - deshalb die Schleife
+      // statt einer festen Blockzahl.
+      for var B in CFG.Blocks do
+        if (B.AstNodes.Count > 0) and (B.AstNodes[0].Line = 2) then
+          Assert.IsFalse(CFG.CanReach(CFG.Entry, B),
+            'die Anweisung hinter dem raise ist unerreichbar');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
 end;
 
 procedure TTestCFG.Break_Terminates_Sequence;
+// Wie Raise_Terminates_Sequence: delegierte an einen handgebauten CFG
+// ohne nkBreak (Upstream-Befund GITLAK). Jetzt ueber den Builder, und
+// zwar im repeat, weil dessen Rumpf mehrere Anweisungen aufnimmt.
+var
+  Meth : TAstNode;
+  CFG  : TCFG;
 begin
-  // Break/Continue terminieren die aktuelle Sequenz - der Loop-Builder
-  // verkabelt sie in A.4.4 korrekt mit dem Loop-Header/-Exit. In A.4.2
-  // bleibt der CFG-Tail nil = "kein natuerlicher Folge-Block".
-  Exit_Terminates_Sequence;  // gleicher CFG-Effekt: Block hat keinen Tail-Successor
+  // repeat break; x := 1; until ...  - die Zuweisung ist tot.
+  Meth := MakeMethod([ StmtRepeat([ StmtBreak, StmtAssign(2) ]) ]);
+  try
+    CFG := TCFGBuilder.BuildFromMethod(Meth);
+    try
+      Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_),
+        'der Weg aus der Schleife heraus existiert');
+      for var B in CFG.Blocks do
+        if (B.AstNodes.Count > 0) and (B.AstNodes[0].Line = 2) then
+          Assert.IsFalse(CFG.CanReach(CFG.Entry, B),
+            'die Anweisung hinter dem break ist unerreichbar');
+    finally CFG.Free; end;
+  finally Meth.Free; end;
 end;
 
 procedure TTestCFG.BeginEndBlock_InlineExpansion;
@@ -455,6 +492,9 @@ begin
   for i := 0 to High(Body) do Result.AddChild(Body[i]);
 end;
 
+function StmtRaise(ALine: Integer = 1): TAstNode;
+begin Result := TAstNode.Create(nkRaise, 'raise', ALine, 1); end;
+
 function StmtBreak: TAstNode;
 begin Result := TAstNode.Create(nkBreak, 'break', 1, 1); end;
 
@@ -538,10 +578,23 @@ begin
     CFG := TCFGBuilder.BuildFromMethod(Meth);
     try
       Assert.IsTrue(CFG.CanReach(CFG.Entry, CFG.Exit_));
-      // Es muss zwei Wege zu Exit_ geben:
-      //   1) LoopHead -> NextBlk -> Exit_     (Cond-False-Pfad)
-      //   2) Body -> NextBlk (Break) -> Exit_
-      // Reachability test: alles erreicht Exit_.
+      // UPSTREAM-BEFUND (GITLAK, 28.08.): bis hierher stand nur die
+      // Zeile darueber - und die ist ueber den gewoehnlichen
+      // cond-false-Pfad wahr, ob es die Break-Kante gibt oder nicht.
+      // Loescht man sie im Builder, bleibt der Test gruen.
+      //
+      // Geprueft wird deshalb die KANTE selbst. Fuer "while cond do
+      // break;" baut uCFG (s. nkWhileStmt/nkBreak dort):
+      //   LoopHead -> BodyStart   (cond true)
+      //   LoopHead -> NextBlk     (cond false)
+      //   BodyStart -> NextBlk    (die Break-Kante)
+      // und KEINE Rueckkante, weil Break den Rumpf terminiert. NextBlk
+      // hat damit zwei Vorgaenger; ohne die Break-Kante waere es einer.
+      Assert.AreEqual<Integer>(1, CFG.Exit_.Predecessors.Count,
+        'genau ein Block muendet in Exit_ (der nach der Schleife)');
+      Assert.AreEqual<Integer>(2,
+        CFG.Exit_.Predecessors[0].Predecessors.Count,
+        'der Block nach der Schleife wird SOWOHL ueber cond-false '        + 'ALS AUCH ueber die Break-Kante erreicht');
     finally CFG.Free; end;
   finally Meth.Free; end;
 end;

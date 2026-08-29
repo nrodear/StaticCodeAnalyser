@@ -888,6 +888,19 @@ begin
     NewActive := ParentActive and (not IsDefined(Ident));
     PushConditional(NewActive, ALine);
   end
+  else if Verb = 'IFOPT' then
+  begin
+    // UPSTREAM-BEFUND 9a (GITLAK, 28.08.): {$IFOPT R+} wurde nicht
+    // gepusht - es fiel in den Zweig fuer unbekannte Direktiven - aber
+    // sein {$ENDIF} rief trotzdem PopConditional. Das innere ENDIF popte
+    // damit den AEUSSEREN Frame, und alles danach lief unter dem
+    // falschen Zweig:
+    //   {$IFDEF DEBUG} {$IFOPT R+} ... {$ENDIF} MoreCode; {$ENDIF}
+    // Der Zustand der Compilerschalter ist von hier aus nicht
+    // auswertbar. Ein Frame mit dem Zustand des Elternframes ist die
+    // konservative Wahl - und haelt vor allem den Stapel im Lot.
+    PushConditional(ParentActive, ALine);
+  end
   else if Verb = 'IF' then
   begin
     // A.5 Phase 2.1: Expression-Auswertung.
@@ -976,7 +989,12 @@ begin
   Verb := UpperCase(ParseDirectiveIdent(ABody, i));
   ParentDbg := (Length(FDbgStack) > 0) and FDbgStack[High(FDbgStack)].Debug;
 
-  if (Verb = 'IFDEF') or (Verb = 'IFNDEF') or (Verb = 'IF') then
+  // IFOPT gehoert hier ebenso dazu wie im Conditional-Stack darueber:
+  // der ENDIF-Zweig unten popt FDbgStack bedingungslos, ein fehlender
+  // Push bringt also auch DIESEN Stapel aus dem Lot. Ein IFOPT kann kein
+  // DEBUG-Symbol tragen, deshalb bleibt es beim geerbten ThisDbg.
+  if (Verb = 'IFDEF') or (Verb = 'IFNDEF') or (Verb = 'IF')
+     or (Verb = 'IFOPT') then
   begin
     ThisDbg := ParentDbg;
     if Verb = 'IFDEF' then
