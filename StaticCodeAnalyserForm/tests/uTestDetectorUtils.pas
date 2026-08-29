@@ -1042,12 +1042,12 @@ begin
   R := TDetectorUtils.ScanCodeLine('X := Alpha{note}Beta;', State, Col);
   Assert.AreEqual<Integer>(Length('X := Alpha{note}Beta;'),
     Length(R), 'Laenge bleibt erhalten - sonst wandern alle Spalten');
-  Assert.AreEqual('X := Alpha      Beta;', R,
-    'der Kommentar ist geblankt, nicht entfernt');
+  Assert.AreEqual('X := Alpha~~~~~~Beta;', R,
+    'der Kommentar ist geblankt (Default-Fuellzeichen ~), nicht entfernt');
 
   State := Default(TCommentScanState);
   R := TDetectorUtils.ScanCodeLine('A(*x*)B', State, Col);
-  Assert.AreEqual('A     B', R,
+  Assert.AreEqual('A~~~~~B', R,
     'auch die Klammer-Stern-Form');
 end;
 
