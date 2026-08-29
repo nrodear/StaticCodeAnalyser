@@ -23,6 +23,9 @@ type
     [Test] procedure CharLiteralComparison_StillReported;
     [Test] procedure PlaceholderInStringLiteral_StillReported;
     [Test] procedure PlaceholderInComment_StillReported;
+    // TObject-Basis (Kundenkorpus SVGIconImageList, 29.08.)
+    [Test] procedure DirectTObjectDescendant_IsWarningNotError;
+    [Test] procedure RealParentClass_StaysError;
   end;
 
 implementation
@@ -274,6 +277,84 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDestructorWithoutInherited));
+  finally F.Free; end;
+end;
+
+procedure TTestDestructorWithoutInherited.DirectTObjectDescendant_IsWarningNotError;
+// KUNDENKORPUS SVGIconImageList (29.08.): fuenf der 18 Error-Funde waren
+// von dieser Art - Klassen, die DIREKT von TObject erben. TObject.Destroy
+// ist leer, das fehlende inherited ueberspringt also nichts. Die Meldung
+// "parent class cleanup is skipped, likely leak" trifft dort nicht zu,
+// und lsError heisst in diesem Werkzeug "bewiesen".
+//
+// KEIN Drop: der Konventionsbruch bleibt real und wird zum Fehler, sobald
+// jemand eine Zwischenklasse einzieht. Nur die Schwere geht herunter.
+//
+// Der Weg ueber FindingsViaPipeline ist Pflicht: der TypeIndex wird NUR
+// dort gebaut, und ohne ihn faellt das Gate konservativ aus (kein Demote).
+const SRC =
+  'unit t;' + #13#10 +
+  'interface' + #13#10 +
+  'type' + #13#10 +
+  '  TFoo = class' + #13#10 +
+  '    FBar: TObject;' + #13#10 +
+  '    destructor Destroy; override;' + #13#10 +
+  '  end;' + #13#10 +
+  'implementation' + #13#10 +
+  'destructor TFoo.Destroy;' + #13#10 +
+  'begin' + #13#10 +
+  '  FreeAndNil(FBar);' + #13#10 +
+  'end;' + #13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    for Fnd in F do
+      if Fnd.Kind = fkDestructorWithoutInherited then
+      begin
+        Assert.AreEqual<TLeakSeverity>(lsWarning, Fnd.Severity,
+          'TObject-Basis: Konventionsbruch, kein Leck - Warnung statt Fehler');
+        Exit;
+      end;
+    Assert.Fail('der Fund muss BLEIBEN, nur milder');
+  finally F.Free; end;
+end;
+
+procedure TTestDestructorWithoutInherited.RealParentClass_StaysError;
+// GEGENPROBE: mit echter Basisklasse bleibt es ein Fehler. Hier
+// ueberspringt das fehlende inherited tatsaechlich die Aufraeumarbeit
+// der Elternklasse - genau der Fall, den die Regel meint.
+const SRC =
+  'unit t;' + #13#10 +
+  'interface' + #13#10 +
+  'type' + #13#10 +
+  '  TFoo = class(TComponent)' + #13#10 +
+  '    FBar: TObject;' + #13#10 +
+  '    destructor Destroy; override;' + #13#10 +
+  '  end;' + #13#10 +
+  'implementation' + #13#10 +
+  'destructor TFoo.Destroy;' + #13#10 +
+  'begin' + #13#10 +
+  '  FreeAndNil(FBar);' + #13#10 +
+  'end;' + #13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    for Fnd in F do
+      if Fnd.Kind = fkDestructorWithoutInherited then
+      begin
+        Assert.AreEqual<TLeakSeverity>(lsError, Fnd.Severity,
+          'echte Basisklasse: das Gate darf NICHT greifen');
+        Exit;
+      end;
+    Assert.Fail('expected fkDestructorWithoutInherited finding');
   finally F.Free; end;
 end;
 
