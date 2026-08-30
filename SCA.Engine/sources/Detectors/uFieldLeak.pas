@@ -52,6 +52,12 @@ uses
   uDetectorUtils;   // ContainsWholeWordLower fuer IsHandedToOwner
 
 type
+  // Instanz- oder class-Methode? Der Parser haengt an class-Methoden
+  // das TypeRef-Suffix ';class' (uParser2:743). Ein Enum statt eines
+  // Boolean, damit die Aufrufstelle lesbar bleibt - der eigene
+  // BooleanParam-Detektor hat den ersten Anlauf zu Recht gemeldet.
+  TMethodScope = (msInstance, msClassMethod);
+
   TFieldLeakDetector = class
   public
     // AContext (TD-1 2c): an TLeakDetector2.IsLeakyType durchgereicht, damit
@@ -60,8 +66,12 @@ type
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
+    // AScope=msClassMethod sucht die 'class'-Variante (TypeRef
+    // '<kind>;class', s. uParser2:743) - der Freigabeort fuer
+    // 'class var'. False die gewoehnliche Instanz-Methode.
     class function FindMethod(UnitNode: TAstNode; const Kind: string;
-      const ClassName: string): TAstNode; static;
+      const ClassName: string;
+      AScope: TMethodScope = msInstance): TAstNode; static;
     // Parser-Gate-Backlog 2026-07-31 (4e/1): Freigabe in 'BeforeDestruction'
     // statt in 'Destroy'. Delphi ruft BeforeDestruction GARANTIERT vor Destroy
     // (TObject.Free -> BeforeDestruction -> Destroy), ein dort freigegebenes
@@ -76,14 +86,6 @@ type
     // (genau ein Parameter vom Typ TObject) - also FormDestroy,
     // DataModuleDestroy, FrameDestroy. nil wenn keine da ist.
     class function FindDestroyEventHandler(UnitNode: TAstNode;
-      const ClassName: string): TAstNode; static;
-    // BESTANDSFEHLER (30.08.): der Parser markiert class-Methoden mit
-    // dem TypeRef-Suffix ';class' (uParser2:743, fuer den
-    // DestructorWithoutInherited-Detektor). FindMethod vergleicht
-    // per SameText und findet 'destructor;class' deshalb NIE - ein
-    // class var, das im class destructor freigegeben wird, galt als
-    // Leck. Sucht genau diese Form.
-    class function FindClassDestructor(UnitNode: TAstNode;
       const ClassName: string): TAstNode; static;
     class function HasFieldCreate(MethodNode: TAstNode;
       const FieldNameLow: string): Boolean; static;
@@ -119,22 +121,42 @@ uses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class function TFieldLeakDetector.FindMethod(UnitNode: TAstNode;
-  const Kind, ClassName: string): TAstNode;
+  const Kind, ClassName: string; AScope: TMethodScope): TAstNode;
 // Sucht eine Implementations-Methode mit gegebenem TypeRef ('constructor' bzw.
 // 'destructor') und Name 'ClassName.<Methodenname>'. nil wenn nicht da.
+//
+// AScope unterscheidet Instanz- von class-Methode. Der Parser haengt
+// an class-Methoden das TypeRef-Suffix ';class' (uParser2:743, damit der
+// DestructorWithoutInherited-Detektor den Class-Destruktor erkennt, der
+// keine inheritance chain hat). Der frueher hier stehende SameText-Vergleich
+// gegen den ROHEN TypeRef fand 'destructor;class' deshalb NIE - ein
+// class var, das im class destructor sauber freigegeben wird, galt als
+// Leck (Kastri DW.StartUpHook.Android.pas:29, 30.08.).
+//
+// Die beiden Varianten bleiben GETRENNT abfragbar statt zusammengefasst:
+// eine Klasse kann beides haben, und dann ist der class destructor der
+// Anker fuer 'class var', der Instanz-Destruktor der fuer normale Felder.
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;
   ClsLow  : string;
+  TypLow  : string;
+  pSemi   : Integer;
 begin
   Result := nil;
   ClsLow := ClassName.ToLower + '.';
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      if SameText(M.TypeRef, Kind) and
-         M.Name.ToLower.StartsWith(ClsLow) then
-        Exit(M);
+    begin
+      if not M.Name.ToLower.StartsWith(ClsLow) then Continue;
+      TypLow := M.TypeRef.ToLower;
+      if (Pos(';class', TypLow) > 0) <> (AScope = msClassMethod) then
+        Continue;
+      pSemi := Pos(';', TypLow);
+      if pSemi > 0 then TypLow := Copy(TypLow, 1, pSemi - 1);
+      if SameText(TypLow, Kind) then Exit(M);
+    end;
   finally
     Methods.Free;
   end;
@@ -159,46 +181,6 @@ begin
     for M in Methods do
       if M.Name.ToLower = Target then
         Exit(M);
-  finally
-    Methods.Free;
-  end;
-end;
-
-class function TFieldLeakDetector.FindClassDestructor(
-  UnitNode: TAstNode; const ClassName: string): TAstNode;
-// Der 'class destructor' einer Klasse - der Freigabeort fuer 'class var'.
-//
-// BELEG (Kastri DW.StartUpHook.Android.pas:29 und
-// DW.UniversalLinks.Android.pas:31):
-//   class var FInstance: TStartUpHook;
-//   class constructor CreateClass; begin FInstance := TStartUpHook.Create; end;
-//   class destructor DestroyClass; begin FInstance.Free; end;
-// Gemeldet wurde "not freed in Destroy", obwohl die Freigabe dasteht.
-//
-// URSACHE, minimal reproduziert (37 Zeilen): der TypeRef lautet
-// 'destructor;class', FindMethod vergleicht per SameText gegen
-// 'destructor' und findet ihn nie. Sichtbar wird das NUR bei Klassen im
-// implementation-Abschnitt - steht die Klasse im interface, erkennt der
-// Detektor das 'class var' gar nicht erst als Feld und schweigt aus dem
-// zweiten Grund. Zwei Fehler, die einander verdeckt haben.
-var
-  Methods : TList<TAstNode>;
-  M       : TAstNode;
-  ClsLow  : string;
-  TypLow  : string;
-begin
-  Result := nil;
-  if (not Assigned(UnitNode)) or (ClassName = '') then Exit;
-  ClsLow := ClassName.ToLower + '.';
-  Methods := UnitNode.FindAll(nkMethod);
-  try
-    for M in Methods do
-    begin
-      if not M.Name.ToLower.StartsWith(ClsLow) then Continue;
-      TypLow := M.TypeRef.ToLower;
-      if TypLow.StartsWith('destructor') and (Pos(';class', TypLow) > 0) then
-        Exit(M);
-    end;
   finally
     Methods.Free;
   end;
@@ -990,7 +972,8 @@ begin
       // kann einen Fund nur unterdruecken, nie einen erzeugen.
       EventCleanup := FindDestroyEventHandler(UnitNode, ClassNode.Name);
       // Dritter Ort: der class destructor (fuer 'class var'-Felder).
-      ClassDtor := FindClassDestructor(UnitNode, ClassNode.Name);
+      ClassDtor := FindMethod(UnitNode, 'destructor', ClassNode.Name,
+                               msClassMethod);
 
       Fields := ClassNode.FindAll(nkField);
       try

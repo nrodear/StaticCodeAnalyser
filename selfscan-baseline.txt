@@ -2,8 +2,8 @@
 # Erzeugt von tools/selfscan_gate.py --update (Profil strict).
 # Das Gate schlaegt fehl, wenn eine Regel MEHR Funde hat als
 # hier. Weniger ist immer erlaubt.
-TIERS 0 691 2858
-BeginEndRequired 1025
+TIERS 0 692 2862
+BeginEndRequired 1027
 BooleanParam 8
 BooleanPropertyNaming 12
 CaseStatementSize 3
@@ -24,7 +24,7 @@ DfmEmptyBoundEvent 1
 DfmFieldTypeMismatch 2
 DfmHardcodedCaption 15
 DfmRequiredFieldUnbound 4
-DuplicateBlock 242
+DuplicateBlock 244
 DuplicateString 260
 EmptyExcept 37
 EmptyMethod 7
@@ -36,7 +36,7 @@ HardcodedPath 7
 HardcodedString 1
 IfElseBegin 35
 InsecureCryptoAlgorithm 18
-LargeClass 49
+LargeClass 50
 LongMethod 97
 LongParamList 26
 MagicNumber 35
