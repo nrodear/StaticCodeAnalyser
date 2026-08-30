@@ -299,6 +299,7 @@ type
     // KLASSE D der Vollzaehlung: Owner-Argument ueber den TYP (30.08.)
     [Test] procedure OwnerArgIsComponentTyped_NotReported;
     [Test] procedure OwnerArgIsNotComponentTyped_StillReported;
+    [Test] procedure OwnerArgComponentButCreatedIsTObject_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -6512,6 +6513,49 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
     'TStringList ist kein TComponent - kein Owner, kein Freibrief');
+  finally F.Free; end;
+end;
+
+
+procedure TTestMemoryLeakAdvanced.OwnerArgComponentButCreatedIsTObject_StillReported;
+// REGRESSION zu rw38, und der zweite Fehlschluss derselben Bauart wie bei
+// Klasse F: das ARGUMENT ist eine echte Komponente, die ERZEUGTE Klasse
+// aber nicht. Die Owner-Konvention traegt nur, wenn das erzeugte Objekt
+// sich in die Components-Liste des Owners eintraegt - ein TObject tut das
+// nicht.
+//
+// BELEG (jvcl JvWndProcHook.pas:374):
+//   HookInfos := TJvHookInfos.Create(AControl);   AControl: TControl
+//   TJvHookInfos = class(TObject)
+//   constructor TJvHookInfos.Create(AControl: TControl);
+//   begin inherited Create; FControl := AControl; end;
+// Der Ctor merkt sich den Parent; umgekehrt passiert nichts.
+//
+// FIXTURE-KONSTRUKTION, damit der Test nicht vakuum-gruen wird: der
+// erzeugte Typ muss BEIDES sein - in DEFAULT_LEAKY_CLASSES (sonst
+// meldet der Detektor gar nichts und die Gegenprobe prueft ins Leere)
+// und unit-lokal mit TObject-Basis (sonst greift das Veto nicht). Die
+// Unit deklariert deshalb einen Typ mit dem Namen TStringList; im
+// Korpus heisst er TJvHookInfos und ist ueber AutoDiscoverClasses
+// leaky.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TStringList = class(TObject)'+#13#10+
+  '    FControl: TControl;'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure Registriere(AControl: TControl);'+#13#10+
+  'var HookInfos: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  HookInfos := TStringList.Create(AControl);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+    'TJvHookInfos ist ein TObject - der TControl ist kein Owner');
   finally F.Free; end;
 end;
 
