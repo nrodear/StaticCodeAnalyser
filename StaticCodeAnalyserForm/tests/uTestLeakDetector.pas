@@ -6229,17 +6229,17 @@ const SRC =
   'type'+#13#10+
   '  TBar = class'+#13#10+
   '    FItems: TObjectList;'+#13#10+
-  '    procedure AddItem(Item: TFoo);'+#13#10+
+  '    procedure AddItem(Item: TStringList);'+#13#10+
   '  end;'+#13#10+
   'implementation'+#13#10+
-  'procedure TBar.AddItem(Item: TFoo);'+#13#10+
+  'procedure TBar.AddItem(Item: TStringList);'+#13#10+
   'begin'+#13#10+
   '  FItems.Add(Item);'+#13#10+
   'end;'+#13#10+
   'procedure Use(B: TBar);'+#13#10+
-  'var Item: TFoo;'+#13#10+
+  'var Item: TStringList;'+#13#10+
   'begin'+#13#10+
-  '  Item := TFoo.Create;'+#13#10+
+  '  Item := TStringList.Create;'+#13#10+
   '  B.AddItem(Item);'+#13#10+
   'end;';
 var F: TObjectList<TLeakFinding>;
@@ -6262,17 +6262,17 @@ const SRC =
   'type'+#13#10+
   '  TBar = class'+#13#10+
   '    FItems: TObjectList;'+#13#10+
-  '    procedure AddItem(Item: TFoo);'+#13#10+
+  '    procedure AddItem(Item: TStringList);'+#13#10+
   '  end;'+#13#10+
   'implementation'+#13#10+
-  'procedure TBar.AddItem(Item: TFoo);'+#13#10+
+  'procedure TBar.AddItem(Item: TStringList);'+#13#10+
   'begin'+#13#10+
-  '  ShowMessage(Item.Name);'+#13#10+
+  '  ShowMessage(Item.Text);'+#13#10+
   'end;'+#13#10+
   'procedure Use(B: TBar);'+#13#10+
-  'var Item: TFoo;'+#13#10+
+  'var Item: TStringList;'+#13#10+
   'begin'+#13#10+
-  '  Item := TFoo.Create;'+#13#10+
+  '  Item := TStringList.Create;'+#13#10+
   '  B.AddItem(Item);'+#13#10+
   'end;';
 var F: TObjectList<TLeakFinding>;
@@ -6294,17 +6294,17 @@ const SRC =
   'type'+#13#10+
   '  TBar = class'+#13#10+
   '    FItems: TObjectList;'+#13#10+
-  '    procedure AddItem(Key: string; Item: TFoo);'+#13#10+
+  '    procedure AddItem(Key: string; Item: TStringList);'+#13#10+
   '  end;'+#13#10+
   'implementation'+#13#10+
-  'procedure TBar.AddItem(Key: string; Item: TFoo);'+#13#10+
+  'procedure TBar.AddItem(Key: string; Item: TStringList);'+#13#10+
   'begin'+#13#10+
   '  FItems.Add(Item);'+#13#10+
   'end;'+#13#10+
   'procedure Use(B: TBar);'+#13#10+
-  'var Item: TFoo;'+#13#10+
+  'var Item: TStringList;'+#13#10+
   'begin'+#13#10+
-  '  Item := TFoo.Create;'+#13#10+
+  '  Item := TStringList.Create;'+#13#10+
   '  B.AddItem(''k'', Item);'+#13#10+
   'end;';
 var F: TObjectList<TLeakFinding>;
