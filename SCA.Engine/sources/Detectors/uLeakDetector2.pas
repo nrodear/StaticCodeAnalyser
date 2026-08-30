@@ -1253,11 +1253,11 @@ var
 begin
   Result   := False;
   ATypeLow := '';
-  if (AMethodNode = nil) or (AReceiverLow = '') then Exit;
+  if (not Assigned(AMethodNode)) or (AReceiverLow = '') then Exit;
   for Kind in [nkLocalVar, nkParam] do
   begin
     Lst := AMethodNode.FindAllRef(Kind);
-    if Lst = nil then Continue;
+    if not Assigned(Lst) then Continue;
     for N in Lst do
     begin
       NameRaw := N.Name;
@@ -1324,6 +1324,13 @@ function ArgumenteAufOberstemNiveau(const ACallLow: string;
 // Kommas in geschachtelten Klammern, in eckigen Klammern und in
 // String-Literalen zaehlen NICHT mit - sonst waere 'Add(Format(''%d,%d'',
 // [a, b]))' dreiargumentig.
+//
+// UEBER DEM KOMPLEXITAETSRICHTWERT, mit Absicht: das hier ist ein
+// Zeichenscanner mit drei Zustaenden (Tiefe, im Text, Kommazahl).
+// Zerlegt man ihn, wandert der Zustand in Parameterlisten und die
+// Fallunterscheidung wird schwerer zu lesen, nicht leichter. Der
+// eigene Self-Scan meldet ihn (SCA022/SCA176) - das ist gesehen und
+// abgewogen, nicht uebersehen.
 var
   i, tiefe, kommas : Integer;
   imText : Boolean;
@@ -1359,8 +1366,152 @@ begin
           end;
         end;
       ',': if tiefe = 1 then Inc(kommas);
+    else
+      // Alle uebrigen Zeichen gehoeren zum Argumenttext und
+      // aendern weder Tiefe noch Zaehlung. Der Zweig steht da,
+      // weil ein case ohne else nicht erkennen laesst, ob der
+      // Rest bedacht wurde oder vergessen (SCA168 am eigenen
+      // Quelltext).
+      ;
     end;
   end;
+end;
+
+function MethodeHatRumpf(ANode: TAstNode): Boolean;
+// Die Klassendeklaration ('procedure AddItem(...)' im type-Block) ist
+// auch ein nkMethod, hat aber keinen nkBlock. Sie kann nichts
+// uebernehmen und darf den Kandidaten nicht mehrdeutig machen.
+var
+  Ch : TAstNode;
+begin
+  Result := False;
+  if not Assigned(ANode) then Exit;
+  for Ch in ANode.Children do
+    if Ch.Kind = nkBlock then Exit(True);
+end;
+
+function WortAbPosition(const AText, AWort: string; AAb: Integer): Boolean;
+// ALLE Substring-Treffer pruefen, nicht nur den ersten. In
+// 'fitems.add(item)' liegt der erste 'item'-Treffer INNERHALB von
+// 'fitems' und hat keine linke Wortgrenze; das echte Argument steht
+// dahinter. Genau daran ist die erste Fassung des Klasse-F-Gates
+// gescheitert - und VarInArgs an derselben Stelle schon einmal
+// ('pfileinfo(fi)', Inkr.3). Wer hier Pos statt PosEx nimmt, baut den
+// Fehler zum dritten Mal.
+var
+  p : Integer;
+begin
+  Result := False;
+  p := PosEx(AWort, AText, AAb);
+  while p > 0 do
+  begin
+    if TLeakDetector2.IsWholeWord(AText, AWort, p) then Exit(True);
+    p := PosEx(AWort, AText, p + 1);
+  end;
+end;
+
+function KandidatFuerCallee(AUnitNode: TAstNode;
+  const ACalleeLow: string): TAstNode;
+// Die EINE unit-lokale Routine, die der Aufruf meinen kann - oder nil.
+//
+// Unqualifiziert vergleichen: der Aufruf steht als 'Parent.AddItem',
+// die Implementierung als 'TCnDocBaseItem.AddItem'.
+//
+// EINDEUTIGKEIT ist Pflicht, nicht Kosmetik: tragen zwei Klassen der
+// Unit ein 'AddItem' und nur die eine uebernimmt, entschiede der erste
+// Treffer ueber ein echtes Leck der anderen. Bei Mehrdeutigkeit liefert
+// die Funktion nil und das Gate schweigt. Gleiches Vorgehen wie in
+// HasFunctionCallAssign (dort Stufe 2).
+var
+  Methods : TList<TAstNode>;
+  Mth     : TAstNode;
+  Zahl    : Integer;
+begin
+  Result := nil;
+  if (not Assigned(AUnitNode)) or (ACalleeLow = '') then Exit;
+  Methods := AUnitNode.FindAllRef(nkMethod);
+  if not Assigned(Methods) then Exit;
+  Zahl := 0;
+  for Mth in Methods do
+  begin
+    if TDetectorUtils.UnqualifiedNameLast(Mth.Name).ToLower <> ACalleeLow then
+      Continue;
+    if not MethodeHatRumpf(Mth) then Continue;
+    Inc(Zahl);
+    Result := Mth;
+  end;
+  if Zahl <> 1 then Result := nil;
+end;
+
+function EinzigerParameterNameLow(ACand: TAstNode): string;
+// Der Name des EINEN Parameters, oder leer.
+//
+// NUR direkte Kinder: FindAllRef waere subtree-weit und zaehlte die
+// Parameter verschachtelter Routinen mit; das Gate fiele dann still aus.
+//
+// Der Modifier steht IM Namen ('const item'), nicht daneben - genau so
+// liest ihn HasFunctionCallAssign. Was danach kein reiner Bezeichner
+// ist (Gruppe 'a, b: TFoo', Typanteil), taugt nicht als Suchwort; dann
+// lieber schweigen als falsch unterdruecken.
+var
+  P    : TAstNode;
+  Zahl : Integer;
+  i    : Integer;
+begin
+  Result := '';
+  if not Assigned(ACand) then Exit;
+  Zahl := 0;
+  for P in ACand.Children do
+    if P.Kind = nkParam then
+    begin
+      Inc(Zahl);
+      Result := P.Name.ToLower;
+    end;
+  if Zahl <> 1 then Exit('');
+  for var Mod_ in ['var ', 'const ', 'out '] do
+    if StartsStr(Mod_, Result) then
+      Result := Trim(Copy(Result, Length(Mod_) + 1, MaxInt));
+  if Result = '' then Exit;
+  for i := 1 to Length(Result) do
+    if not TLeakDetector2.IsIdentChar(Result[i]) then Exit('');
+end;
+
+function RumpfUebernimmtParameter(ACand: TAstNode;
+  const AParamLow: string): Boolean;
+// Legt der Rumpf den Parameter in einen Container oder in ein Feld?
+// Das ist die eigentliche Frage der Klasse F - sie haengt am RUMPF und
+// nicht am Namen des Gerufenen (s. CalleeTakesOwnershipLocal).
+var
+  Calls, Assigns : TList<TAstNode>;
+  C, A : TAstNode;
+  N    : string;
+begin
+  Result := False;
+  if (not Assigned(ACand)) or (AParamLow = '') then Exit;
+
+  // (a) Ein Container nimmt ihn auf: <irgendwas>.Add(Param)
+  Calls := ACand.FindAllRef(nkCall);
+  if Assigned(Calls) then
+    for C in Calls do
+    begin
+      N := C.Name.ToLower;
+      for var Marker in ['.add(', '.insert(', '.addobject('] do
+      begin
+        var pm := Pos(Marker, N);
+        if (pm > 0) and WortAbPosition(N, AParamLow, pm + Length(Marker)) then
+          Exit(True);
+      end;
+    end;
+
+  // (b) direkte Feldzuweisung: FFeld := Param
+  Assigns := ACand.FindAllRef(nkAssign);
+  if Assigned(Assigns) then
+    for A in Assigns do
+    begin
+      N := A.Name.ToLower;
+      if (N <> '') and (N[1] = 'f')
+         and (Trim(A.TypeRef).ToLower = AParamLow) then Exit(True);
+    end;
 end;
 
 function CalleeTakesOwnershipLocal(AUnitNode, AMethodNode: TAstNode;
@@ -1372,7 +1523,7 @@ function CalleeTakesOwnershipLocal(AUnitNode, AMethodNode: TAstNode;
 // BELEG aus dem Referenzkorpus (CnPasCodeDoc.pas:386):
 //   Item := TCnConstDocItem.Create;   <- gemeldet
 //   ...
-//   Parent.AddItem(Item);
+//   OwnerItem.AddItem(Item);
 // und in derselben Unit:
 //   function TCnDocBaseItem.AddItem(Item: TCnDocBaseItem): Integer;
 //   begin
@@ -1388,76 +1539,22 @@ function CalleeTakesOwnershipLocal(AUnitNode, AMethodNode: TAstNode;
 //
 // KONSERVATIV: nur Routinen mit GENAU EINEM Parameter. Bei mehreren
 // muesste die Argumentposition aufgeloest werden, und ein Fehlgriff dort
-// maskiert ein echtes Leck. Die einparametrige Form deckt das belegte
-// Muster ab; mehr kommt erst mit einer eigenen Messung.
+// maskiert ein echtes Leck.
 //
-// Der Aufloesungsweg (Rumpf-Traeger, Eindeutigkeit, direkte Kinder) ist
-// derselbe wie in HasFunctionCallAssign - die Begruendungen stehen dort
-// an den einzelnen Schritten und gelten hier unveraendert.
-
-  function HatRumpf(ANode: TAstNode): Boolean;
-  // Die Klassendeklaration ('procedure AddItem(...)' im type-Block) ist
-  // auch ein nkMethod, hat aber keinen nkBlock. Sie kann nichts
-  // uebernehmen und darf den Kandidaten nicht mehrdeutig machen.
-  var
-    Ch : TAstNode;
-  begin
-    Result := False;
-    for Ch in ANode.Children do
-      if Ch.Kind = nkBlock then Exit(True);
-  end;
-
-  function AlsWortDrin(const AText, AWort: string; AAb: Integer): Boolean;
-  // ALLE Substring-Treffer pruefen, nicht nur den ersten. In
-  // 'fitems.add(item)' liegt der erste 'item'-Treffer INNERHALB von
-  // 'fitems' und hat keine linke Wortgrenze; das echte Argument steht
-  // dahinter. Genau daran ist die erste Fassung dieses Gates
-  // gescheitert - und VarInArgs an derselben Stelle schon einmal
-  // ('pfileinfo(fi)', Inkr.3). Wer hier Pos statt PosEx nimmt, baut den
-  // Fehler zum dritten Mal.
-  var
-    p : Integer;
-  begin
-    Result := False;
-    p := PosEx(AWort, AText, AAb);
-    while p > 0 do
-    begin
-      if TLeakDetector2.IsWholeWord(AText, AWort, p) then Exit(True);
-      p := PosEx(AWort, AText, p + 1);
-    end;
-  end;
-
+// WAS DAS GATE NICHT BEWEIST, damit es niemand dafuer haelt: es prueft,
+// ob EIN Pfad des Gerufenen uebernimmt, nicht ob ALLE es tun. Und ob der
+// Container wirklich besitzt, prueft es nicht - mormot FakeCallbackAdd
+// legt in eine TSynObjectListLocked.Create(ownobject=false), dort traegt
+// allein der Interface-Refcount. Beides folgt der Bestandspolitik
+// (Feld-Container = permissiv).
 var
-  Methods, Calls, Assigns : TList<TAstNode>;
-  Mth, Cand, P, C, A      : TAstNode;
-  ParamLow, N, Kurz       : string;
-  KlasseCallee, TypLow    : string;
-  KandZahl, ParamZahl     : Integer;
+  Cand         : TAstNode;
+  KlasseCallee : string;
+  TypLow       : string;
 begin
   Result := False;
-  if (AUnitNode = nil) or (ACalleeLow = '') then Exit;
-  Methods := AUnitNode.FindAllRef(nkMethod);
-  if Methods = nil then Exit;
-
-  // Den EINEN Kandidaten suchen. Unqualifiziert vergleichen: der Aufruf
-  // steht als 'Parent.AddItem', die Implementierung als
-  // 'TCnDocBaseItem.AddItem'.
-  //
-  // EINDEUTIGKEIT ist Pflicht, nicht Kosmetik: tragen zwei Klassen der
-  // Unit ein 'AddItem' und nur die eine uebernimmt, entschiede der erste
-  // Treffer ueber ein echtes Leck der anderen. Bei Mehrdeutigkeit
-  // schweigt das Gate (der Fund bleibt).
-  Cand     := nil;
-  KandZahl := 0;
-  for Mth in Methods do
-  begin
-    Kurz := TDetectorUtils.UnqualifiedNameLast(Mth.Name).ToLower;
-    if Kurz <> ACalleeLow then Continue;
-    if not HatRumpf(Mth) then Continue;
-    Inc(KandZahl);
-    Cand := Mth;
-  end;
-  if (KandZahl <> 1) or (Cand = nil) then Exit;
+  Cand := KandidatFuerCallee(AUnitNode, ACalleeLow);
+  if not Assigned(Cand) then Exit;
 
   // Der Empfaenger muss zur Klasse des gefundenen Callee gehoeren. OHNE
   // diese Pruefung entscheidet blosse Namensgleichheit: in doublecmd
@@ -1482,54 +1579,7 @@ begin
     if FirstTypeIdentLow(TypLow) <> KlasseCallee then Exit;
   end;
 
-  // Genau ein Parameter - s. Kopfkommentar. NUR direkte Kinder:
-  // FindAllRef waere subtree-weit und zaehlte die Parameter
-  // verschachtelter Routinen mit; das Gate fiele dann still aus.
-  ParamZahl := 0;
-  ParamLow  := '';
-  for P in Cand.Children do
-    if P.Kind = nkParam then
-    begin
-      Inc(ParamZahl);
-      ParamLow := P.Name.ToLower;
-    end;
-  if ParamZahl <> 1 then Exit;
-  // Der Modifier steht IM Namen ('const item'), nicht daneben - genau so
-  // liest ihn HasFunctionCallAssign.
-  for var Mod_ in ['var ', 'const ', 'out '] do
-    if StartsStr(Mod_, ParamLow) then
-      ParamLow := Trim(Copy(ParamLow, Length(Mod_) + 1, MaxInt));
-  // Nur ein reiner Bezeichner taugt als Suchwort. Legt der Parser eine
-  // Gruppe ('a, b: TFoo') oder einen Typanteil in den Namen, waere das
-  // Wort-Matching unten sinnlos - dann lieber schweigen als falsch
-  // unterdruecken.
-  if ParamLow = '' then Exit;
-  for var i := 1 to Length(ParamLow) do
-    if not TLeakDetector2.IsIdentChar(ParamLow[i]) then Exit;
-
-  // (a) Ein Container nimmt ihn auf: <irgendwas>.Add(Param)
-  Calls := Cand.FindAllRef(nkCall);
-  if Calls <> nil then
-    for C in Calls do
-    begin
-      N := C.Name.ToLower;
-      for var Marker in ['.add(', '.insert(', '.addobject('] do
-      begin
-        var pm := Pos(Marker, N);
-        if (pm > 0) and AlsWortDrin(N, ParamLow, pm + Length(Marker)) then
-          Exit(True);
-      end;
-    end;
-
-  // (b) direkte Feldzuweisung: FFeld := Param
-  Assigns := Cand.FindAllRef(nkAssign);
-  if Assigns <> nil then
-    for A in Assigns do
-    begin
-      N := A.Name.ToLower;
-      if (N <> '') and (N[1] = 'f')
-         and (Trim(A.TypeRef).ToLower = ParamLow) then Exit(True);
-    end;
+  Result := RumpfUebernimmtParameter(Cand, EinzigerParameterNameLow(Cand));
 end;
 
 class function TLeakDetector2.IsPassedToOwner(MethodNode: TAstNode;
