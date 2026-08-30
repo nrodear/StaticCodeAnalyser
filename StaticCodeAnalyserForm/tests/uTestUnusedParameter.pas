@@ -87,6 +87,10 @@ type
     [Test] procedure FpcHideMarkerAtOtherParam_StillReported;      // TP-Gegenprobe
     // GATE F - 'constref' ist ein Modifier, kein Parametername.
     [Test] procedure ConstRefPhantom_NotReported_RealParamStillReported;
+    // GATE E - Routine als Prozedurwert (Stichprobe 2026-08-30)
+    [Test] procedure RoutinePassedAsArgument_NotReported;
+    [Test] procedure RoutineAssignedToEvent_NotReported;
+    [Test] procedure PlainRoutine_StillReported;
   end;
 
 implementation
@@ -1053,6 +1057,80 @@ begin
     Hit := TFindingHelper.FirstOf(F, fkUnusedParameter);
     Assert.IsNotNull(Hit);
     Assert.Contains(Hit.MissingVar, 'Payload');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.RoutinePassedAsArgument_NotReported;
+// GATE E: die Routine wird nicht gerufen, sondern als WERT uebergeben -
+// der Empfaenger gibt die Signatur vor. Nachgebaut nach dem dichtesten
+// Muster des Referenzkorpus (JvInterpreter_*):
+//   AddGet(TAnimate, 'Reset', TAnimate_Reset, 0, [varEmpty], varEmpty);
+// Dort ist Args in hunderten Handlern ungenutzt, und das ist richtig so:
+// streichen braeche die Uebersetzung.
+const SRC =
+  'unit t;' + #13#10 +
+  'implementation' + #13#10 +
+  'procedure TAnimate_Reset(var Value: Variant; Args: TArgs);' + #13#10 +
+  'begin' + #13#10 +
+  '  Value := 0;' + #13#10 +
+  'end;' + #13#10 +
+  'procedure Register;' + #13#10 +
+  'begin' + #13#10 +
+  '  AddGet(TAnimate, Reset, TAnimate_Reset, 0);' + #13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+        'als Prozedurwert registriert - die Signatur ist Vertrag');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.RoutineAssignedToEvent_NotReported;
+// Zweite Form desselben Musters, am Korpus verifiziert:
+//   FServer.OnParseAuthentication := ParseAuthenticationHandler;
+// Der Event-Typ gibt die Signatur vor.
+const SRC =
+  'unit t;' + #13#10 +
+  'implementation' + #13#10 +
+  'procedure ParseAuthHandler(AContext: TObject; var User: string);' + #13#10 +
+  'begin' + #13#10 +
+  '  User := x;' + #13#10 +
+  'end;' + #13#10 +
+  'procedure Setup;' + #13#10 +
+  'begin' + #13#10 +
+  '  FServer.OnParseAuth := ParseAuthHandler;' + #13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+        'einem Event zugewiesen - die Signatur ist Vertrag');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.PlainRoutine_StillReported;
+// TP-GEGENPROBE, und sie traegt das Gate: dieselbe ungenutzte Signatur,
+// aber die Routine wird GERUFEN statt weitergereicht. Dann ist der
+// Parameter wirklich ueberfluessig und der Fund muss stehen bleiben.
+// Ohne diesen Test waere GATE E ein Freibrief fuer jede Routine, deren
+// Name irgendwo im Text auftaucht.
+const SRC =
+  'unit t;' + #13#10 +
+  'implementation' + #13#10 +
+  'procedure DoTheWork(Value: Integer; Unbenutzt: TObject);' + #13#10 +
+  'begin' + #13#10 +
+  '  WriteLn(Value);' + #13#10 +
+  'end;' + #13#10 +
+  'procedure Caller;' + #13#10 +
+  'begin' + #13#10 +
+  '  DoTheWork(1, nil);' + #13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkUnusedParameter) > 0,
+        'normal gerufen - der ungenutzte Parameter bleibt ein Fund');
   finally F.Free; end;
 end;
 

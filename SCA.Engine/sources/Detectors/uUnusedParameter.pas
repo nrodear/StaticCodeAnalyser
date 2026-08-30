@@ -84,6 +84,9 @@ implementation
 // noinspection-file BeginEndRequired, ConsecutiveSection, GroupedDeclaration, NestedRoutine, NestedTry, NilComparison, StringConcatInLoop, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  System.RegularExpressions;   // GATE E - Prozedurwert-Muster
+
 const
   EMIT_SEVERITY = lsHint;
 
@@ -739,6 +742,57 @@ begin
   end;
 end;
 
+function RoutineUsedAsProcValue(var AStripped: TStrippedUnit;
+  const ARoutineName: string): Boolean;
+// GATE E (Stichprobe 2026-08-30, 200 SCA054-Funde aus dem Referenzkorpus):
+// die Routine wird nicht GERUFEN, sondern als WERT weitergereicht - als
+// Argument, per := an ein Event, oder ueber @. Dann gibt der Empfaenger
+// die Signatur vor, und ein ungelesener Parameter ist Vertragserfuellung,
+// kein Defekt. Ihn zu streichen bricht die Uebersetzung.
+//
+// GEMESSEN: 123 der 200 Stichprobenfunde (62 %) tragen dieses Muster.
+// Die dichtesten Stellen sind Registrierungs-Units mit einheitlichen
+// Callback-Signaturen -
+//   AddGet(TAnimate, 'Reset', TAnimate_Reset, 0, [varEmpty], varEmpty);
+//   FServer.OnParseAuthentication := ParseAuthenticationHandler;
+// - beide am Quelltext verifiziert.
+//
+// ABGRENZUNG zu den bestehenden Gates: die decken Faelle ab, in denen die
+// Signatur von OBEN kommt (override/virtual, inherited, message) oder der
+// Autor sie markiert (_-Praefix, {%H-}). Hier kommt sie von der
+// AUFRUFSEITE - dieselbe Ursache, andere Richtung.
+//
+// KONSERVATIV in zwei Punkten:
+//  * Namen unter 4 Zeichen werden NICHT gegatet. Ein Treffer auf 'Get',
+//    'Add' oder 'Run' waere zu leicht zufaellig, und ein
+//    verpasstes Gate kostet nur einen Fund - ein falsches kostet einen
+//    echten Befund.
+//  * Gesucht wird im GESTRIPPTEN Text: ein Name in einem String oder
+//    Kommentar zaehlt nicht als Verwendung.
+var
+  i     : Integer;
+  Zeile : string;
+  N     : string;
+begin
+  Result := False;
+  N := LowerCase(Trim(ARoutineName));
+  if Length(N) < 4 then Exit;
+  for i := 0 to High(AStripped.Lines) do
+  begin
+    Zeile := LowerCase(AStripped.Lines[i]);
+    if Pos(N, Zeile) = 0 then Continue;   // billiger Vorfilter
+    // (1) als Argument:  Foo(..., Name, ...)  /  Foo(Name)
+    if TRegEx.IsMatch(Zeile, '[(,]\s*' + TRegEx.Escape(N)
+                      + '\s*[,)]') then Exit(True);
+    // (2) an ein Event gehaengt, Form  X.OnFoo := Name
+    if TRegEx.IsMatch(Zeile, ':=\s*' + TRegEx.Escape(N)
+                      + '\s*;') then Exit(True);
+    // (3) Adresse:  @Name
+    if TRegEx.IsMatch(Zeile, '@\s*' + TRegEx.Escape(N)
+                      + '\b') then Exit(True);
+  end;
+end;
+
 class procedure TUnusedParameterDetector.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   var AStripped: TStrippedUnit);
@@ -754,6 +808,10 @@ var
   Decl : TAstNode;       // Class-Declaration dieser Implementation (oder nil)
   // GATE B: Ziele der 'absolute'-Aliase dieser Methode als ' a b '-String.
   AbsTargets : string;
+  // GATE E: Ergebnis von RoutineUsedAsProcValue, LAZY. -1 = noch nicht
+  //   geprueft. Die Pruefung liest ALLE Unit-Zeilen und soll nur die
+  //   Methoden kosten, bei denen tatsaechlich ein Fund ansteht.
+  ProcValueState : Integer;
   // Ist-Messung 2026-07-18 (SCA054-FP-Klasse 'nested-routine-Nutzung', 3/5 der
   // Sample-FPs): der Parser verwirft nested-routine-Bodies aus dem Method-AST
   // (nur nkNestedRange-Marker bleiben, Line=Start/TypeRef=EndLine) -> ein Param,
@@ -898,6 +956,7 @@ var
   end;
 
 begin
+  ProcValueState := -1;   // GATE E: lazy, s. Deklaration
   // Declarations (in nkClass) skippen - die haben keinen Body und keine
   // sinnvolle Reference-Count. Ihre Modifier konsultieren wir aber von
   // der zugehoerigen Implementation aus (siehe IsInheritanceHook).
@@ -1060,6 +1119,21 @@ begin
         // Kandidaten kosten, die es bis zur Meldung schaffen.
         if ParamHasFpcHideMarker(AStripped, FileName, MethodNode.Line,
                                  LowName) then Continue;
+        // ---- GATE E (2026-08-30): die Routine wird als WERT
+        // weitergereicht (Argument, := an ein Event, @Adresse). Dann gibt
+        // der Empfaenger die Signatur vor - den Parameter zu streichen
+        // braeche die Uebersetzung. Gemessen an 200 Stichprobenfunden aus
+        // dem Referenzkorpus: 62 % tragen dieses Muster. Lazy, weil die
+        // Pruefung die ganze Unit liest.
+        if ProcValueState < 0 then
+        begin
+          if RoutineUsedAsProcValue(AStripped,
+               TDetectorUtils.UnqualifiedNameLast(MethodNode.Name)) then
+            ProcValueState := 1
+          else
+            ProcValueState := 0;
+        end;
+        if ProcValueState = 1 then Continue;
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
         F.MethodName := MethodNode.Name;
