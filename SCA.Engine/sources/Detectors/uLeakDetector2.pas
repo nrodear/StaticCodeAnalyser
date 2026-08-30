@@ -1318,7 +1318,7 @@ function CalleeTakesOwnershipLocal(AUnitNode: TAstNode;
 // Muster ab; mehr kommt erst mit einer eigenen Messung.
 var
   Methods, Params, Calls, Assigns : TList<TAstNode>;
-  Mth, P, C, A : TAstNode;
+  Mth, C, A    : TAstNode;
   ParamLow, N  : string;
   Kurz         : string;
 begin

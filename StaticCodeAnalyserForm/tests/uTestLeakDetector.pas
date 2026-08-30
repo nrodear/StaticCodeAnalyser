@@ -290,6 +290,10 @@ type
     // die indizierte Kette nicht mehr am Veto vorbeischleusen.
     [Test] procedure Leak_FieldRootedIndexedNonOwning_StillReported;
     [Test] procedure Leak_BareFieldAssignment_StillExempt;
+    // KLASSE F der Vollzaehlung: unit-lokaler Callee uebernimmt (30.08.)
+    [Test] procedure LocalCalleeTakesOwnership_NotReported;
+    [Test] procedure LocalCalleeOnlyReads_StillReported;
+    [Test] procedure LocalCalleeTwoParams_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -343,10 +347,6 @@ type
     // Fixture-Gate 2026-08-18: der Feld-Pfad hatte keins.
     [Test] procedure Field_InFixturePath_NotReported;
     [Test] procedure Field_InProductionPath_StillReported;
-    // KLASSE F der Vollzaehlung: unit-lokaler Callee uebernimmt (30.08.)
-    [Test] procedure LocalCalleeTakesOwnership_NotReported;
-    [Test] procedure LocalCalleeOnlyReads_StillReported;
-    [Test] procedure LocalCalleeTwoParams_StillReported;
   private
     // Parst ASrc und laesst NUR den Feld-Detektor mit dem
     // angegebenen Dateinamen darueber laufen. Eigener Helfer,
@@ -6214,7 +6214,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestLeakDetector.LocalCalleeTakesOwnership_NotReported;
+procedure TTestMemoryLeakAdvanced.LocalCalleeTakesOwnership_NotReported;
 // KLASSE F: der Gerufene steht in DERSELBEN Unit und nimmt das Objekt
 // in einen Feld-Container. Nachgebaut nach dem Beleg aus dem
 // Referenzkorpus, CnPasCodeDoc.pas:386:
@@ -6250,7 +6250,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestLeakDetector.LocalCalleeOnlyReads_StillReported;
+procedure TTestMemoryLeakAdvanced.LocalCalleeOnlyReads_StillReported;
 // TP-GEGENPROBE, und sie traegt das Gate: derselbe Aufbau, aber der
 // Gerufene LIEST nur. Genau daran ist der erste Anlauf gescheitert -
 // eine Namensliste haette "AddItem" gegatet, ohne in den Rumpf zu sehen.
@@ -6283,7 +6283,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestLeakDetector.LocalCalleeTwoParams_StillReported;
+procedure TTestMemoryLeakAdvanced.LocalCalleeTwoParams_StillReported;
 // Die Grenze des Gates, absichtlich gezogen: bei mehr als EINEM
 // Parameter muesste die Argumentposition aufgeloest werden, und ein
 // Fehlgriff dort maskiert ein echtes Leck. Solange das nicht gemessen
