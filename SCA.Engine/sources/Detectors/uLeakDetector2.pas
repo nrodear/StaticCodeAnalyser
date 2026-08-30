@@ -1231,20 +1231,33 @@ begin
   end;
 end;
 
-class function TLeakDetector2.AddReceiverOwnsItems(MethodNode: TAstNode;
-  const ReceiverNameLow: string; AUnitNode: TAstNode): Boolean;
-// Pflicht-Whitelist: Receiver-Typ matched einen ownership-bewussten
-// Container (OWNING_PREFIXES) ODER loest in der Unit auf einen solchen auf.
-
-  function FindReceiverType(Kind: TNodeKind; out TypeLow: string): Boolean;
-  var
-    Lst : TList<TAstNode>;
-    N   : TAstNode;
-    NameLow, NameRaw : string;
+function ReceiverTypAufloesen(AMethodNode: TAstNode;
+  const AReceiverLow: string; out ATypeLow: string): Boolean;
+// Welchen Typ hat der Empfaenger eines Aufrufs, wenn die Methode ihn
+// als lokale Variable oder Parameter deklariert? False = nicht
+// aufloesbar (Feld, gepunkteter Zugriff, inferred var).
+//
+// True mit LEEREM ATypeLow ist moeglich und bedeutet etwas anderes als
+// False: die Deklaration steht da, traegt aber keinen Typ. Die
+// Aufrufer unterscheiden das.
+//
+// Herausgezogen aus AddReceiverOwnsItems (30.08.), weil das
+// Klasse-F-Gate dieselbe Frage stellt. Reihenfolge lokale Variable vor
+// Parameter ist die bisherige und bleibt: eine gleichnamige Lokale
+// verdeckt den Parameter.
+var
+  Lst : TList<TAstNode>;
+  N   : TAstNode;
+  NameLow, NameRaw : string;
+  Kind : TNodeKind;
+begin
+  Result   := False;
+  ATypeLow := '';
+  if (AMethodNode = nil) or (AReceiverLow = '') then Exit;
+  for Kind in [nkLocalVar, nkParam] do
   begin
-    Result := False;
-    TypeLow := '';
-    Lst := MethodNode.FindAllRef(Kind);
+    Lst := AMethodNode.FindAllRef(Kind);
+    if Lst = nil then Continue;
     for N in Lst do
     begin
       NameRaw := N.Name;
@@ -1254,13 +1267,19 @@ class function TLeakDetector2.AddReceiverOwnsItems(MethodNode: TAstNode;
         if NameRaw.ToLower.StartsWith(Mod_) then
           NameRaw := Copy(NameRaw, Length(Mod_) + 1, MaxInt);
       NameLow := NameRaw.ToLower;
-      if NameLow = ReceiverNameLow then
+      if NameLow = AReceiverLow then
       begin
-        TypeLow := N.TypeRef.ToLower;
+        ATypeLow := N.TypeRef.ToLower;
         Exit(True);
       end;
     end;
   end;
+end;
+
+class function TLeakDetector2.AddReceiverOwnsItems(MethodNode: TAstNode;
+  const ReceiverNameLow: string; AUnitNode: TAstNode): Boolean;
+// Pflicht-Whitelist: Receiver-Typ matched einen ownership-bewussten
+// Container (OWNING_PREFIXES) ODER loest in der Unit auf einen solchen auf.
 
 var
   TypeLow : string;
@@ -1271,8 +1290,7 @@ begin
   Result := True;
 
   // Typ aus Local-Var oder Parameter aufloesen.
-  if FindReceiverType(nkLocalVar, TypeLow) or
-     FindReceiverType(nkParam, TypeLow) then
+  if ReceiverTypAufloesen(MethodNode, ReceiverNameLow, TypeLow) then
   begin
     if TypeLow = '' then Exit;                    // sollte nicht passieren, defensiv
     Result := OwningContainerTypeLow(TypeLow);    // strikte Pruefung gegen Whitelist
@@ -1345,8 +1363,8 @@ begin
   end;
 end;
 
-function CalleeTakesOwnershipLocal(AUnitNode: TAstNode;
-  const ACalleeLow: string): Boolean;
+function CalleeTakesOwnershipLocal(AUnitNode, AMethodNode: TAstNode;
+  const ACalleeLow, AReceiverLow: string): Boolean;
 // KLASSE F der SCA001-Vollzaehlung: der Gerufene steht in DERSELBEN Unit
 // und uebernimmt das Objekt dort - dann ist die Uebergabe ein
 // Ownership-Transfer und kein Leck.
@@ -1413,6 +1431,7 @@ var
   Methods, Calls, Assigns : TList<TAstNode>;
   Mth, Cand, P, C, A      : TAstNode;
   ParamLow, N, Kurz       : string;
+  KlasseCallee, TypLow    : string;
   KandZahl, ParamZahl     : Integer;
 begin
   Result := False;
@@ -1439,6 +1458,29 @@ begin
     Cand := Mth;
   end;
   if (KandZahl <> 1) or (Cand = nil) then Exit;
+
+  // Der Empfaenger muss zur Klasse des gefundenen Callee gehoeren. OHNE
+  // diese Pruefung entscheidet blosse Namensgleichheit: in doublecmd
+  // uColorExt ruft 'AList.Add(AItem)' die Add-Methode eines TJSONArray;
+  // unit-lokal gibt es aber ein 'TColorExt.Add(AItem: TMaskItem)',
+  // dessen Rumpf drei Funde unterdrueckt hat, die ihn nie erreichen
+  // (rw34, rw35). Die Argumentzahl faengt das NICHT - 'AList.Add(AItem)'
+  // und 'TColorExt.Add(AItem)' sind beide einargumentig.
+  //
+  // KONSERVATIV: ist der Empfaengertyp nicht aufloesbar (Feld,
+  // gepunkteter Zugriff), schweigt das Gate. Der Bestand ist an
+  // vergleichbarer Stelle permissiv - dort schuetzt der Default aber
+  // ALTE Treffer, waehrend hier neue Unterdrueckungen entstuenden. Ein
+  // neues Gate soll beweisen, nicht vermuten.
+  if AReceiverLow <> '' then
+  begin
+    KlasseCallee := TDetectorUtils.OwnerTypeNameLower(Cand.Name);
+    // Empfaenger da, aber der Kandidat ist eine freistehende Routine:
+    // dann ist er nicht der Gerufene.
+    if KlasseCallee = '' then Exit;
+    if not ReceiverTypAufloesen(AMethodNode, AReceiverLow, TypLow) then Exit;
+    if FirstTypeIdentLow(TypLow) <> KlasseCallee then Exit;
+  end;
 
   // Genau ein Parameter - s. Kopfkommentar. NUR direkte Kinder:
   // FindAllRef waere subtree-weit und zaehlte die Parameter
@@ -1947,11 +1989,20 @@ begin
       var pKlammer := Pos('(', NameLow);
       if pKlammer > 1 then
       begin
-        var CalleeLow := TDetectorUtils.UnqualifiedNameLast(
-                           Copy(NameLow, 1, pKlammer - 1)).ToLower;
+        var VorKlammer := Copy(NameLow, 1, pKlammer - 1);
+        var CalleeLow  := TDetectorUtils.UnqualifiedNameLast(
+                            VorKlammer).ToLower;
+        // Empfaenger = alles vor dem letzten Punkt. 'self' zaehlt
+        // wie keiner - der Aufruf bleibt in der eigenen Klasse.
+        var RecvLow := '';
+        var pPunkt := LastDelimiter('.', VorKlammer);
+        if pPunkt > 0 then
+          RecvLow := Trim(Copy(VorKlammer, 1, pPunkt - 1));
+        if RecvLow = 'self' then RecvLow := '';
         if (ArgumenteAufOberstemNiveau(NameLow, pKlammer) = 1)
            and VarInArgs(NameLow, pKlammer + 1)
-           and CalleeTakesOwnershipLocal(AUnitNode, CalleeLow) then
+           and CalleeTakesOwnershipLocal(AUnitNode, MethodNode,
+                                         CalleeLow, RecvLow) then
           Exit(True);
       end;
     end;

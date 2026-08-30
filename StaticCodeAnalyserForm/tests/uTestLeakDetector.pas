@@ -295,6 +295,7 @@ type
     [Test] procedure LocalCalleeOnlyReads_StillReported;
     [Test] procedure LocalCalleeTwoParams_StillReported;
     [Test] procedure LocalCalleeArgCountMismatch_StillReported;
+    [Test] procedure LocalCalleeForeignReceiver_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -6353,6 +6354,47 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
         'zwei Argumente gegen einen Parameter - der Callee passt nicht');
+  finally F.Free; end;
+end;
+
+
+procedure TTestMemoryLeakAdvanced.LocalCalleeForeignReceiver_StillReported;
+// REGRESSION zu rw35: der Aufruf ist EINARGUMENTIG und trifft trotzdem
+// einen anderen Gerufenen - der Empfaenger gehoert einer fremden
+// Klasse. Nur der Empfaengertyp entscheidet das, die Argumentzahl
+// nicht.
+//
+// BELEG (doublecmd uColorExt.pas:344): 'AList.Add(AItem)' an einem
+// TJSONArray, waehrend unit-lokal ein TColorExt.Add(AItem: TMaskItem)
+// steht. Dieser eine Fund ueberlebte den Argumentzahl-Schnitt und war
+// weiter aus falschem Grund unterdrueckt.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TBar = class'+#13#10+
+  '    FItems: TObjectList;'+#13#10+
+  '    procedure Add(Item: TStringList);'+#13#10+
+  '  end;'+#13#10+
+  '  TFremd = class'+#13#10+
+  '    procedure Add(X: TObject);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure TBar.Add(Item: TStringList);'+#13#10+
+  'begin'+#13#10+
+  '  FItems.Add(Item);'+#13#10+
+  'end;'+#13#10+
+  'procedure Use(L: TFremd);'+#13#10+
+  'var Item: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Item := TStringList.Create;'+#13#10+
+  '  L.Add(Item);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+        'fremder Empfaengertyp - der unit-lokale Rumpf beweist nichts');
   finally F.Free; end;
 end;
 
