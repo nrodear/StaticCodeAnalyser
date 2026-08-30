@@ -219,6 +219,16 @@ function SinkCallPassesVar(AScope: TAstNode;
 function ScopeDeclaresIdent(AScope: TAstNode;
   const NameLow: string): Boolean; forward;
 
+// Weiter unten definiert (herausgezogen aus AddReceiverOwnsItems): Typ
+// einer lokalen Variablen oder eines Parameters. IsOwnerParamCreate
+// braucht ihn fuer den Owner-TYP, steht aber ueber der Definition.
+function ReceiverTypAufloesen(AMethodNode: TAstNode;
+  const AReceiverLow: string; out ATypeLow: string): Boolean; forward;
+
+// Ebenfalls weiter unten: erster Typbezeichner aus einem TypeRef
+// ('tobjectlist<tfoo>' -> 'tobjectlist').
+function FirstTypeIdentLow(const ATypeRef: string): string; forward;
+
 // True, wenn ASegLow ein kanonisch NICHT besitzender Container-Zugang ist
 // (Items/Objects/Lines/Strings/Data/Nodes). Liest dieselbe Liste wie das
 // Receiver-Veto des Aufruf-Pfades - eine Quelle, zwei Nutzer.
@@ -360,6 +370,42 @@ begin
   if StartsStr('loadlibrary', Name) then Exit(True);
 end;
 
+function IstKomponentenTypLow(const ATypLow: string): Boolean;
+// Ist der Typ ein TComponent-Nachfahre, dessen Owner-Rolle feststeht?
+//
+// KLASSE D der SCA001-Vollzaehlung. IsOwnerParamCreate kennt nur vier
+// kanonische BEZEICHNER (self/owner/aowner/application). Die Restfaelle
+// heissen anders, sind aber dasselbe:
+//   TBitBtn.Create(frmDialog)      frmDialog: TForm       (doublecmd uShowMsg, 5x)
+//   TQtFrameEx.Create(AWinControl) AWinControl: TWinControl (CEF4Delphi)
+// Der Bezeichner sagt nichts, der TYP sagt alles - deshalb eine Liste
+// ueber TYPEN statt eine laengere Namensliste.
+//
+// BEWUSST KURZ und ohne Ableitungskette: hier stehen nur Typen, deren
+// TComponent-Abstammung ausser Frage steht. Ein TPanel-Nachfahre der
+// Anwendung wird NICHT erkannt - das ist der Preis dafuer, dass kein
+// falscher Owner durchrutscht. Die Vollzaehlung nannte 21 Faelle; im
+// Korpus belegen liessen sich sechs, der Rest traegt andere Muster
+// (Rueckwaertsreferenz, TCollection cross-unit, Streams).
+//
+// GEGENBELEG, warum eine Namensliste NICHT reicht (rw36 gemessen):
+//   TPSBlockInfo.Create(Owner: TPSBlockInfo)  -> FOwner := Owner
+//   TDBObject.Create(OwnerConnection: TDBConnection)
+// Beide heissen nach Owner und uebernehmen NICHTS - das Kind haelt den
+// Parent, nicht umgekehrt.
+const
+  KOMPONENTEN : array[0..8] of string = (
+    'tcomponent', 'tcontrol', 'twincontrol', 'tcustomcontrol',
+    'tform', 'tcustomform', 'tframe', 'tcustomframe', 'tdatamodule');
+var
+  s : string;
+begin
+  Result := False;
+  if ATypLow = '' then Exit;
+  for s in KOMPONENTEN do
+    if ATypLow = s then Exit(True);
+end;
+
 class function TLeakDetector2.IsOwnerParamCreate(MethodNode: TAstNode;
   const VarNameLow: string): Boolean;
 // FP-Gate (2026-07-04): owner-parameter - Real-World-Audit Sektion 3.2:
@@ -432,6 +478,15 @@ begin
     // NICHT matchen.
     if (FirstArg = 'self') or (FirstArg = 'owner') or (FirstArg = 'aowner') or
        (FirstArg = 'application') or (FirstArg = 'self.owner') then
+      Exit(True);
+    // KLASSE D (Vollzaehlung, 30.08.): der Bezeichner ist keiner der
+    // kanonischen, aber sein TYP ist ein TComponent-Nachfahre - dann
+    // gilt dieselbe Owner-Konvention. Nur aufloesbare Typen (lokale
+    // Variable oder Parameter DIESER Routine); ein Feld oder ein
+    // gepunkteter Ausdruck bleibt unentschieden und damit ein Fund.
+    var OwnerTypLow : string;
+    if ReceiverTypAufloesen(MethodNode, FirstArg, OwnerTypLow)
+       and IstKomponentenTypLow(FirstTypeIdentLow(OwnerTypLow)) then
       Exit(True);
   end;
 end;

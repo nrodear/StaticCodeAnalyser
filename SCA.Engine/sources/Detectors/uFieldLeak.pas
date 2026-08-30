@@ -1,4 +1,4 @@
-unit uFieldLeak;
+﻿unit uFieldLeak;
 
 // Detektor fuer Klassen-Feld-Leaks im Create/Destroy-Pattern.
 //
@@ -70,6 +70,13 @@ type
     // TypeRef, denn BeforeDestruction ist eine procedure, kein destructor).
     class function FindMethodNamed(UnitNode: TAstNode;
       const ClassName, MethodNameLow: string): TAstNode; static;
+    // KLASSE L der SCA001-Vollzaehlung (30.08.): die Klasse hat gar
+    // keinen Destruktor, raeumt aber im OnDestroy-EVENT auf. Sucht
+    // eine Methode '<Klasse>.<...>Destroy' mit der Event-Signatur
+    // (genau ein Parameter vom Typ TObject) - also FormDestroy,
+    // DataModuleDestroy, FrameDestroy. nil wenn keine da ist.
+    class function FindDestroyEventHandler(UnitNode: TAstNode;
+      const ClassName: string): TAstNode; static;
     class function HasFieldCreate(MethodNode: TAstNode;
       const FieldNameLow: string): Boolean; static;
     // True wenn das Feld via TComponent-Owner-Pattern erzeugt wird:
@@ -144,6 +151,60 @@ begin
     for M in Methods do
       if M.Name.ToLower = Target then
         Exit(M);
+  finally
+    Methods.Free;
+  end;
+end;
+
+class function TFieldLeakDetector.FindDestroyEventHandler(
+  UnitNode: TAstNode; const ClassName: string): TAstNode;
+// Der OnDestroy-Handler einer Form/Frame/DataModule ist ein gueltiger
+// Freigabeort: die VCL ruft ihn beim Zerstoeren des Fensters.
+//
+// BELEG (jcl PeViewer PeResView.pas, 3 Funde): TPeResViewChild hat
+// KEINEN Destruktor - "created in constructor but no destructor exists" -
+// und gibt FResourceImage/FStringsList/FTempGraphic in FormDestroy frei.
+//
+// ENG GEFASST, weil ein zu weiter Anker echte Feld-Lecks maskiert: der
+// Name muss auf 'destroy' enden UND die Signatur muss die eines
+// Event-Handlers sein (genau EIN Parameter vom Typ TObject). Eine
+// gewoehnliche Aufraeummethode 'DoDestroy' ohne diese Signatur zaehlt
+// NICHT - sie laeuft nicht garantiert. 32 der 47 Feld-Funde im Korpus
+// haben ueberhaupt keine Freigabe in der Datei; die duerfen von dieser
+// Erweiterung nicht beruehrt werden.
+var
+  Methods : TList<TAstNode>;
+  M, P    : TAstNode;
+  ClsLow  : string;
+  Kurz    : string;
+  Zahl    : Integer;
+  Passt   : Boolean;
+begin
+  Result := nil;
+  if (UnitNode = nil) or (ClassName = '') then Exit;
+  ClsLow := ClassName.ToLower + '.';
+  Methods := UnitNode.FindAll(nkMethod);
+  try
+    for M in Methods do
+    begin
+      if not M.Name.ToLower.StartsWith(ClsLow) then Continue;
+      Kurz := Copy(M.Name.ToLower, Length(ClsLow) + 1, MaxInt);
+      if (Kurz = '') or not Kurz.EndsWith('destroy') then Continue;
+      // 'destroy' selbst ist der Destruktor, nicht der Handler.
+      if Kurz = 'destroy' then Continue;
+      // Event-Signatur: genau ein Parameter, Typ TObject. NUR direkte
+      // Kinder - FindAll waere subtree-weit und zaehlte die Parameter
+      // verschachtelter Routinen mit.
+      Zahl  := 0;
+      Passt := False;
+      for P in M.Children do
+        if P.Kind = nkParam then
+        begin
+          Inc(Zahl);
+          Passt := Trim(P.TypeRef).ToLower = 'tobject';
+        end;
+      if (Zahl = 1) and Passt then Exit(M);
+    end;
   finally
     Methods.Free;
   end;
@@ -829,6 +890,7 @@ var
   // BeforeDestruction den Destruktor ersetzen, aenderte sich der Text
   // ueberlebender Funde (= Identitaetswechsel im SARIF-Diff).
   Cleanup      : TAstNode;
+  EventCleanup : TAstNode;
   FieldNameLow : string;
   FreeFound    : Boolean;
   FreeInFin    : Boolean;
@@ -867,6 +929,10 @@ begin
       // BeforeDestruction -> Destroy). jvcl JvInspector/JvInspExtraEditors
       // raeumen ihre Felder ausschliesslich dort auf.
       Cleanup := FindMethodNamed(UnitNode, ClassNode.Name, 'beforedestruction');
+      // KLASSE L (30.08.): OnDestroy-Event als Freigabeort. Wie
+      // BeforeDestruction eine reine Erweiterung des SUCHRAUMS - sie
+      // kann einen Fund nur unterdruecken, nie einen erzeugen.
+      EventCleanup := FindDestroyEventHandler(UnitNode, ClassNode.Name);
 
       Fields := ClassNode.FindAll(nkField);
       try
@@ -904,6 +970,11 @@ begin
           // Suchraums - kann einen Fund nur unterdruecken.
           if not FreeFound and (Cleanup <> nil) then
             FreeFound := TLeakDetector2.SearchFree(Cleanup, FieldNameLow,
+                                                   False, FreeInFin);
+          // Dieselbe Pruefung auf dem OnDestroy-Handler.
+          if not FreeFound and (EventCleanup <> nil) then
+            FreeFound := TLeakDetector2.SearchFree(EventCleanup,
+                                                   FieldNameLow,
                                                    False, FreeInFin);
           // Alias-Free-Idiom (L := FField; FField := nil; L.Free) erkennen.
           if not FreeFound then
