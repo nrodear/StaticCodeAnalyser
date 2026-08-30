@@ -133,8 +133,11 @@ type
     // (TComponent-Owner-Konvention: der Owner gibt das Objekt in seinem
     // Destroy ueber die Components[]-Liste frei). Create(nil) zaehlt
     // bewusst NICHT - da muss der Aufrufer selbst freigeben.
+    // AUnitNode (30.08., Klasse D): nur fuer das Veto des
+    // Owner-TYP-Zweigs - ohne ihn bleibt alles wie bisher.
     class function IsOwnerParamCreate(MethodNode: TAstNode;
-      const VarNameLow: string): Boolean; static;
+      const VarNameLow: string;
+      AUnitNode: TAstNode = nil): Boolean; static;
     class function SearchFree(Node: TAstNode; const VarNameLow: string;
       InFinally: Boolean; out FoundInFinally: Boolean): Boolean; static;
     class function HasTryFinallyBlock(MethodNode: TAstNode): Boolean; static;
@@ -218,6 +221,16 @@ function SinkCallPassesVar(AScope: TAstNode;
 // steht aber ueber der Definition.
 function ScopeDeclaresIdent(AScope: TAstNode;
   const NameLow: string): Boolean; forward;
+
+// Weiter unten definiert (herausgezogen aus AddReceiverOwnsItems): Typ
+// einer lokalen Variablen oder eines Parameters. IsOwnerParamCreate
+// braucht ihn fuer den Owner-TYP, steht aber ueber der Definition.
+function ReceiverTypAufloesen(AMethodNode: TAstNode;
+  const AReceiverLow: string; out ATypeLow: string): Boolean; forward;
+
+// Ebenfalls weiter unten: erster Typbezeichner aus einem TypeRef
+// ('tobjectlist<tfoo>' -> 'tobjectlist').
+function FirstTypeIdentLow(const ATypeRef: string): string; forward;
 
 // True, wenn ASegLow ein kanonisch NICHT besitzender Container-Zugang ist
 // (Items/Objects/Lines/Strings/Data/Nodes). Liest dieselbe Liste wie das
@@ -360,8 +373,87 @@ begin
   if StartsStr('loadlibrary', Name) then Exit(True);
 end;
 
+function IstKomponentenTypLow(const ATypLow: string): Boolean;
+// Ist der Typ ein TComponent-Nachfahre, dessen Owner-Rolle feststeht?
+//
+// KLASSE D der SCA001-Vollzaehlung. IsOwnerParamCreate kennt nur vier
+// kanonische BEZEICHNER (self/owner/aowner/application). Die Restfaelle
+// heissen anders, sind aber dasselbe:
+//   TBitBtn.Create(frmDialog)      frmDialog: TForm       (doublecmd uShowMsg, 5x)
+//   TQtFrameEx.Create(AWinControl) AWinControl: TWinControl (CEF4Delphi)
+// Der Bezeichner sagt nichts, der TYP sagt alles - deshalb eine Liste
+// ueber TYPEN statt eine laengere Namensliste.
+//
+// BEWUSST KURZ und ohne Ableitungskette: hier stehen nur Typen, deren
+// TComponent-Abstammung ausser Frage steht. Ein TPanel-Nachfahre der
+// Anwendung wird NICHT erkannt - das ist der Preis dafuer, dass kein
+// falscher Owner durchrutscht. Die Vollzaehlung nannte 21 Faelle; im
+// Korpus belegen liessen sich sechs, der Rest traegt andere Muster
+// (Rueckwaertsreferenz, TCollection cross-unit, Streams).
+//
+// GEGENBELEG, warum eine Namensliste NICHT reicht (rw36 gemessen):
+//   TPSBlockInfo.Create(Owner: TPSBlockInfo)  -> FOwner := Owner
+//   TDBObject.Create(OwnerConnection: TDBConnection)
+// Beide heissen nach Owner und uebernehmen NICHTS - das Kind haelt den
+// Parent, nicht umgekehrt.
+const
+  KOMPONENTEN : array[0..8] of string = (
+    'tcomponent', 'tcontrol', 'twincontrol', 'tcustomcontrol',
+    'tform', 'tcustomform', 'tframe', 'tcustomframe', 'tdatamodule');
+var
+  s : string;
+begin
+  Result := False;
+  if ATypLow = '' then Exit;
+  for s in KOMPONENTEN do
+    if ATypLow = s then Exit(True);
+end;
+
+function UnitTypIstNachweislichKeineKomponente(AUnitNode: TAstNode;
+  const ATypLow: string; ADepth: Integer): Boolean;
+// VETO zum Owner-Typ-Zweig (rw38-Befund): die Owner-Konvention haengt
+// nicht am Typ des ARGUMENTS, sondern daran, ob die ERZEUGTE Klasse ein
+// TComponent ist. Nur dann traegt sich das Objekt in die
+// Components-Liste des Owners ein und wird von dessen Destroy befreit.
+//
+// BELEG (jvcl JvWndProcHook.pas:374):
+//   HookInfos := TJvHookInfos.Create(AControl);   AControl: TControl
+//   TJvHookInfos = class(TObject)
+//   constructor TJvHookInfos.Create(AControl: TControl);
+//   begin inherited Create; FControl := AControl; end;
+// Das Argument ist ein waschechter TControl, die erzeugte Klasse aber
+// ein blanker TObject - der Ctor merkt sich den Parent, umgekehrt
+// passiert nichts. Dieselbe Rueckwaertsreferenz wie bei TPSBlockInfo
+// und TDBObject.
+//
+// True nur, wenn die Unit den Typ SELBST deklariert und seine
+// Ableitungskette nachweislich keine Komponente trifft. Steht der Typ
+// nicht in der Unit (TBitBtn und jede andere RTL-Klasse), wissen wir
+// nichts - dann KEIN Veto, sonst faellt der belegte doublecmd-Fall mit.
+var
+  Lst  : TList<TAstNode>;
+  N    : TAstNode;
+  Base : string;
+begin
+  Result := False;
+  if (not Assigned(AUnitNode)) or (ATypLow = '') or (ADepth <= 0) then Exit;
+  Lst := AUnitNode.FindAllRef(nkClass);
+  if not Assigned(Lst) then Exit;
+  for N in Lst do
+  begin
+    if N.Name.ToLower <> ATypLow then Continue;
+    Base := FirstTypeIdentLow(N.TypeRef);
+    // 'TFoo = class' ohne Basis ist TObject.
+    if (Base = '') or (Base = 'tobject') then Exit(True);
+    if IstKomponentenTypLow(Base) then Exit(False);
+    // Basis ist ein weiterer Typ: unit-lokal weiterverfolgen. Ist sie
+    // NICHT unit-lokal, endet die Rekursion mit False = kein Veto.
+    Exit(UnitTypIstNachweislichKeineKomponente(AUnitNode, Base, ADepth - 1));
+  end;
+end;
+
 class function TLeakDetector2.IsOwnerParamCreate(MethodNode: TAstNode;
-  const VarNameLow: string): Boolean;
+  const VarNameLow: string; AUnitNode: TAstNode): Boolean;
 // FP-Gate (2026-07-04): owner-parameter - Real-World-Audit Sektion 3.2:
 // doublecmd foptionshotkeys.pas:687 `CommandsFormClass.Create(Application)`.
 // TComponent-Konvention: ein nicht-nil Owner-Argument uebernimmt die
@@ -432,6 +524,21 @@ begin
     // NICHT matchen.
     if (FirstArg = 'self') or (FirstArg = 'owner') or (FirstArg = 'aowner') or
        (FirstArg = 'application') or (FirstArg = 'self.owner') then
+      Exit(True);
+    // KLASSE D (Vollzaehlung, 30.08.): der Bezeichner ist keiner der
+    // kanonischen, aber sein TYP ist ein TComponent-Nachfahre - dann
+    // gilt dieselbe Owner-Konvention. Nur aufloesbare Typen (lokale
+    // Variable oder Parameter DIESER Routine); ein Feld oder ein
+    // gepunkteter Ausdruck bleibt unentschieden und damit ein Fund.
+    var OwnerTypLow : string;
+    if ReceiverTypAufloesen(MethodNode, FirstArg, OwnerTypLow)
+       and IstKomponentenTypLow(FirstTypeIdentLow(OwnerTypLow))
+       // VETO: die ERZEUGTE Klasse muss eine Komponente sein koennen -
+       // s. UnitTypIstNachweislichKeineKomponente (rw38: TJvHookInfos
+       // ist ein blanker TObject und nimmt nur eine Rueckwaerts-
+       // referenz auf seinen TControl entgegen).
+       and not UnitTypIstNachweislichKeineKomponente(AUnitNode,
+                 FirstTypeIdentLow(Copy(TypeLow, 1, CreatePos - 1)), 6) then
       Exit(True);
   end;
 end;
@@ -3906,7 +4013,7 @@ begin
         // FP-Gate (2026-07-04): owner-parameter - TKlasse.Create(Self/
         // Owner/AOwner/Application) uebergibt Ownership an den Owner
         // (TComponent-Konvention) -> kein Fund. Create(nil) meldet weiter.
-        if Gate('SCA001.IsOwnerParamCreate', IsOwnerParamCreate(MethodNode, VarNameLow)) then Continue;
+        if Gate('SCA001.IsOwnerParamCreate', IsOwnerParamCreate(MethodNode, VarNameLow, UnitNode)) then Continue;
         // Inkr.2: Interface-Cast-Uebergabe / raise-Ownership (Gross-Triage
         // iface-cast-Bucket 15/101 + Batch 8 'raise LException').
         if Gate('SCA001.IsHandedToInterface', IsHandedToInterface(MethodNode, VarNameLow)) then Continue;

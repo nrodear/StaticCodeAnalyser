@@ -296,6 +296,10 @@ type
     [Test] procedure LocalCalleeTwoParams_StillReported;
     [Test] procedure LocalCalleeArgCountMismatch_StillReported;
     [Test] procedure LocalCalleeForeignReceiver_StillReported;
+    // KLASSE D der Vollzaehlung: Owner-Argument ueber den TYP (30.08.)
+    [Test] procedure OwnerArgIsComponentTyped_NotReported;
+    [Test] procedure OwnerArgIsNotComponentTyped_StillReported;
+    [Test] procedure OwnerArgComponentButCreatedIsTObject_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -331,6 +335,13 @@ type
     // (a) Freigabe in BeforeDestruction statt Destroy (jvcl JvInspector).
     [Test] procedure Field_FreedInBeforeDestruction_NoFinding;
     [Test] procedure Field_BeforeDestructionFreesOther_StillReported; // TP-Gegenprobe
+    // (b) KLASSE L: Freigabe im OnDestroy-Event, kein Destruktor (30.08.)
+    [Test] procedure Field_FreedInOnDestroyHandler_NoFinding;
+    [Test] procedure Field_DestroyMethodWithoutEventSignature_StillReported;
+    // (c) BESTANDSFEHLER: class destructor traegt TypeRef
+    //     "destructor;class" und wurde nie gefunden (30.08.)
+    [Test] procedure Field_FreedInClassDestructor_NoFinding;
+    [Test] procedure Field_ClassDestructorFreesOther_StillReported;
     // (b) Transitive Component-Ownership ohne Destruktor (jvcl
     //     JvGammaPanel 61/63/64, JvCombobox 261).
     [Test] procedure Field_OwnerChainReachesSelf_NoFinding;
@@ -6395,6 +6406,238 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
         'fremder Empfaengertyp - der unit-lokale Rumpf beweist nichts');
+  finally F.Free; end;
+end;
+
+
+procedure TTestFieldLeak.Field_FreedInOnDestroyHandler_NoFinding;
+// KLASSE L der SCA001-Vollzaehlung (30.08.). jcl PeViewer PeResView.pas
+// 115/119/121: TPeResViewChild hat GAR KEINEN Destruktor - der Detektor
+// meldete "created in constructor but no destructor exists" - und raeumt
+// seine drei Felder im OnDestroy-Event auf. Die VCL ruft FormDestroy beim
+// Zerstoeren des Fensters, das Feld ist also aufgeraeumt.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TPeResViewChild = class'#13#10+
+  '  FResourceImage: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  procedure FormDestroy(Sender: TObject);'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TPeResViewChild.Create;'#13#10+
+  'begin'#13#10+
+  '  FResourceImage := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'procedure TPeResViewChild.FormDestroy(Sender: TObject);'#13#10+
+  'begin'#13#10+
+  '  FResourceImage.Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Freigabe im OnDestroy-Handler - die VCL ruft ihn garantiert');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_DestroyMethodWithoutEventSignature_StillReported;
+// TP-Gegenprobe zu KLASSE L, und der Grund fuer die enge Fassung: eine
+// Methode, die zufaellig auf 'Destroy' endet, aber NICHT die
+// Event-Signatur (ein Parameter vom Typ TObject) traegt, laeuft nicht
+// garantiert. 32 der 47 Feld-Funde im Korpus haben ueberhaupt keine
+// Freigabe - ein zu weiter Anker haette sie mitgenommen.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TFoo = class'#13#10+
+  '  FList: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  procedure DoDestroy;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TFoo.Create;'#13#10+
+  'begin'#13#10+
+  '  FList := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.DoDestroy;'#13#10+
+  'begin'#13#10+
+  '  FList.Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+    'DoDestroy ist kein Event-Handler - niemand ruft es garantiert');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.OwnerArgIsComponentTyped_NotReported;
+// KLASSE D der SCA001-Vollzaehlung (30.08.): das Owner-Argument heisst
+// nicht Self/Owner/AOwner/Application, sein TYP ist aber ein
+// TComponent-Nachfahre - dann gilt dieselbe Owner-Konvention.
+//
+// BELEG (doublecmd uShowMsg.pas 612/625/716/730/743): fuenfmal
+// 'TBitBtn.Create(frmDialog)' mit 'frmDialog: TForm'.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'implementation'+#13#10+
+  'procedure Zeige;'+#13#10+
+  'var frmDialog: TForm; Btn: TComponent;'+#13#10+
+  'begin'+#13#10+
+  '  Btn := TComponent.Create(frmDialog);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'frmDialog ist eine TForm - der Owner raeumt beim Destroy auf');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.OwnerArgIsNotComponentTyped_StillReported;
+// TP-Gegenprobe zu KLASSE D, und der Grund fuer die Typpruefung statt
+// einer laengeren Namensliste: im Korpus heissen zwei Muster nach Owner
+// und uebernehmen NICHTS -
+//   TPSBlockInfo.Create(Owner: TPSBlockInfo)    -> FOwner := Owner
+//   TDBObject.Create(OwnerConnection: TDBConnection)
+// Das Kind haelt dort den Parent, nicht umgekehrt.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'implementation'+#13#10+
+  'procedure Zeige;'+#13#10+
+  'var Parent: TStringList; Kind: TComponent;'+#13#10+
+  'begin'+#13#10+
+  '  Kind := TComponent.Create(Parent);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+    'TStringList ist kein TComponent - kein Owner, kein Freibrief');
+  finally F.Free; end;
+end;
+
+
+procedure TTestMemoryLeakAdvanced.OwnerArgComponentButCreatedIsTObject_StillReported;
+// REGRESSION zu rw38, und der zweite Fehlschluss derselben Bauart wie bei
+// Klasse F: das ARGUMENT ist eine echte Komponente, die ERZEUGTE Klasse
+// aber nicht. Die Owner-Konvention traegt nur, wenn das erzeugte Objekt
+// sich in die Components-Liste des Owners eintraegt - ein TObject tut das
+// nicht.
+//
+// BELEG (jvcl JvWndProcHook.pas:374):
+//   HookInfos := TJvHookInfos.Create(AControl);   AControl: TControl
+//   TJvHookInfos = class(TObject)
+//   constructor TJvHookInfos.Create(AControl: TControl);
+//   begin inherited Create; FControl := AControl; end;
+// Der Ctor merkt sich den Parent; umgekehrt passiert nichts.
+//
+// FIXTURE-KONSTRUKTION, damit der Test nicht vakuum-gruen wird: der
+// erzeugte Typ muss BEIDES sein - in DEFAULT_LEAKY_CLASSES (sonst
+// meldet der Detektor gar nichts und die Gegenprobe prueft ins Leere)
+// und unit-lokal mit TObject-Basis (sonst greift das Veto nicht). Die
+// Unit deklariert deshalb einen Typ mit dem Namen TStringList; im
+// Korpus heisst er TJvHookInfos und ist ueber AutoDiscoverClasses
+// leaky.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TStringList = class(TObject)'+#13#10+
+  '    FControl: TControl;'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure Registriere(AControl: TControl);'+#13#10+
+  'var HookInfos: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  HookInfos := TStringList.Create(AControl);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+    'TJvHookInfos ist ein TObject - der TControl ist kein Owner');
+  finally F.Free; end;
+end;
+
+
+procedure TTestFieldLeak.Field_FreedInClassDestructor_NoFinding;
+// BESTANDSFEHLER, gefunden am 30.08. beim Nachgehen der Klasse L.
+//
+// Der Parser markiert class-Methoden mit dem TypeRef-Suffix ';class'
+// (uParser2:743, damit der DestructorWithoutInherited-Detektor den
+// Class-Destruktor vom Instanz-Destruktor unterscheiden kann).
+// FindMethod vergleicht per SameText gegen 'destructor' und fand
+// 'destructor;class' deshalb NIE - ein class var, das im class
+// destructor freigegeben wird, galt als Leck.
+//
+// BELEG: Kastri DW.StartUpHook.Android.pas:29 und
+// DW.UniversalLinks.Android.pas:31.
+//
+// Die Klasse steht hier BEWUSST im implementation-Abschnitt: nur dort
+// wird der Fehler sichtbar. Steht sie im interface, erkennt der
+// Detektor das 'class var' gar nicht erst als Feld und schweigt aus
+// einem zweiten, unabhaengigen Grund - die beiden Fehler haben
+// einander verdeckt.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'type'#13#10+
+  '  TFoo = class(TObject)'#13#10+
+  '  private'#13#10+
+  '    class var FInstance: TStringList;'#13#10+
+  '    class constructor CreateClass;'#13#10+
+  '    class destructor DestroyClass;'#13#10+
+  '  end;'#13#10+
+  'class constructor TFoo.CreateClass;'#13#10+
+  'begin'#13#10+
+  '  FInstance := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'class destructor TFoo.DestroyClass;'#13#10+
+  'begin'#13#10+
+  '  FInstance.Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'class var wird im class destructor freigegeben - kein Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_ClassDestructorFreesOther_StillReported;
+// TP-Gegenprobe: die Klasse HAT einen class destructor, gibt darin aber
+// ein ANDERES Feld frei. Der erweiterte Suchraum darf nicht pauschal
+// entschaerfen - dieselbe Gegenprobe wie beim BeforeDestruction-Gate.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'type'#13#10+
+  '  TFoo = class(TObject)'#13#10+
+  '  private'#13#10+
+  '    class var FInstance: TStringList;'#13#10+
+  '    class var FOther: TStringList;'#13#10+
+  '    class constructor CreateClass;'#13#10+
+  '    class destructor DestroyClass;'#13#10+
+  '  end;'#13#10+
+  'class constructor TFoo.CreateClass;'#13#10+
+  'begin'#13#10+
+  '  FInstance := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'class destructor TFoo.DestroyClass;'#13#10+
+  'begin'#13#10+
+  '  FOther.Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+    'FInstance wird nirgends freigegeben - der Fund bleibt');
   finally F.Free; end;
 end;
 

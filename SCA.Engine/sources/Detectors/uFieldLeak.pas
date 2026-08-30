@@ -1,4 +1,4 @@
-unit uFieldLeak;
+﻿unit uFieldLeak;
 
 // Detektor fuer Klassen-Feld-Leaks im Create/Destroy-Pattern.
 //
@@ -52,6 +52,12 @@ uses
   uDetectorUtils;   // ContainsWholeWordLower fuer IsHandedToOwner
 
 type
+  // Instanz- oder class-Methode? Der Parser haengt an class-Methoden
+  // das TypeRef-Suffix ';class' (uParser2:743). Ein Enum statt eines
+  // Boolean, damit die Aufrufstelle lesbar bleibt - der eigene
+  // BooleanParam-Detektor hat den ersten Anlauf zu Recht gemeldet.
+  TMethodScope = (msInstance, msClassMethod);
+
   TFieldLeakDetector = class
   public
     // AContext (TD-1 2c): an TLeakDetector2.IsLeakyType durchgereicht, damit
@@ -60,8 +66,12 @@ type
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
+    // AScope=msClassMethod sucht die 'class'-Variante (TypeRef
+    // '<kind>;class', s. uParser2:743) - der Freigabeort fuer
+    // 'class var'. False die gewoehnliche Instanz-Methode.
     class function FindMethod(UnitNode: TAstNode; const Kind: string;
-      const ClassName: string): TAstNode; static;
+      const ClassName: string;
+      AScope: TMethodScope = msInstance): TAstNode; static;
     // Parser-Gate-Backlog 2026-07-31 (4e/1): Freigabe in 'BeforeDestruction'
     // statt in 'Destroy'. Delphi ruft BeforeDestruction GARANTIERT vor Destroy
     // (TObject.Free -> BeforeDestruction -> Destroy), ein dort freigegebenes
@@ -70,6 +80,13 @@ type
     // TypeRef, denn BeforeDestruction ist eine procedure, kein destructor).
     class function FindMethodNamed(UnitNode: TAstNode;
       const ClassName, MethodNameLow: string): TAstNode; static;
+    // KLASSE L der SCA001-Vollzaehlung (30.08.): die Klasse hat gar
+    // keinen Destruktor, raeumt aber im OnDestroy-EVENT auf. Sucht
+    // eine Methode '<Klasse>.<...>Destroy' mit der Event-Signatur
+    // (genau ein Parameter vom Typ TObject) - also FormDestroy,
+    // DataModuleDestroy, FrameDestroy. nil wenn keine da ist.
+    class function FindDestroyEventHandler(UnitNode: TAstNode;
+      const ClassName: string): TAstNode; static;
     class function HasFieldCreate(MethodNode: TAstNode;
       const FieldNameLow: string): Boolean; static;
     // True wenn das Feld via TComponent-Owner-Pattern erzeugt wird:
@@ -104,22 +121,42 @@ uses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 class function TFieldLeakDetector.FindMethod(UnitNode: TAstNode;
-  const Kind, ClassName: string): TAstNode;
+  const Kind, ClassName: string; AScope: TMethodScope): TAstNode;
 // Sucht eine Implementations-Methode mit gegebenem TypeRef ('constructor' bzw.
 // 'destructor') und Name 'ClassName.<Methodenname>'. nil wenn nicht da.
+//
+// AScope unterscheidet Instanz- von class-Methode. Der Parser haengt
+// an class-Methoden das TypeRef-Suffix ';class' (uParser2:743, damit der
+// DestructorWithoutInherited-Detektor den Class-Destruktor erkennt, der
+// keine inheritance chain hat). Der frueher hier stehende SameText-Vergleich
+// gegen den ROHEN TypeRef fand 'destructor;class' deshalb NIE - ein
+// class var, das im class destructor sauber freigegeben wird, galt als
+// Leck (Kastri DW.StartUpHook.Android.pas:29, 30.08.).
+//
+// Die beiden Varianten bleiben GETRENNT abfragbar statt zusammengefasst:
+// eine Klasse kann beides haben, und dann ist der class destructor der
+// Anker fuer 'class var', der Instanz-Destruktor der fuer normale Felder.
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;
   ClsLow  : string;
+  TypLow  : string;
+  pSemi   : Integer;
 begin
   Result := nil;
   ClsLow := ClassName.ToLower + '.';
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
-      if SameText(M.TypeRef, Kind) and
-         M.Name.ToLower.StartsWith(ClsLow) then
-        Exit(M);
+    begin
+      if not M.Name.ToLower.StartsWith(ClsLow) then Continue;
+      TypLow := M.TypeRef.ToLower;
+      if (Pos(';class', TypLow) > 0) <> (AScope = msClassMethod) then
+        Continue;
+      pSemi := Pos(';', TypLow);
+      if pSemi > 0 then TypLow := Copy(TypLow, 1, pSemi - 1);
+      if SameText(TypLow, Kind) then Exit(M);
+    end;
   finally
     Methods.Free;
   end;
@@ -144,6 +181,67 @@ begin
     for M in Methods do
       if M.Name.ToLower = Target then
         Exit(M);
+  finally
+    Methods.Free;
+  end;
+end;
+
+class function TFieldLeakDetector.FindDestroyEventHandler(
+  UnitNode: TAstNode; const ClassName: string): TAstNode;
+// Der OnDestroy-Handler einer Form/Frame/DataModule ist ein gueltiger
+// Freigabeort: die VCL ruft ihn beim Zerstoeren des Fensters.
+//
+// BELEG (jcl PeViewer PeResView.pas, 3 Funde): TPeResViewChild hat
+// KEINEN Destruktor - "created in constructor but no destructor exists" -
+// und gibt FResourceImage/FStringsList/FTempGraphic in FormDestroy frei.
+//
+// ENG GEFASST, weil ein zu weiter Anker echte Feld-Lecks maskiert: der
+// Name muss auf 'destroy' enden UND die Signatur muss die eines
+// Event-Handlers sein (genau EIN Parameter vom Typ TObject). Eine
+// gewoehnliche Aufraeummethode 'DoDestroy' ohne diese Signatur zaehlt
+// NICHT - sie laeuft nicht garantiert. 32 der 47 Feld-Funde im Korpus
+// haben ueberhaupt keine Freigabe in der Datei; die duerfen von dieser
+// Erweiterung nicht beruehrt werden.
+
+  function HatEventSignatur(AMethod: TAstNode): Boolean;
+  // Genau EIN Parameter vom Typ TObject - die Signatur eines
+  // VCL-Event-Handlers. NUR direkte Kinder: FindAll waere subtree-weit
+  // und zaehlte die Parameter verschachtelter Routinen mit.
+  var
+    P    : TAstNode;
+    Zahl : Integer;
+  begin
+    Result := False;
+    Zahl   := 0;
+    for P in AMethod.Children do
+      if P.Kind = nkParam then
+      begin
+        Inc(Zahl);
+        Result := Trim(P.TypeRef).ToLower = 'tobject';
+      end;
+    Result := Result and (Zahl = 1);
+  end;
+
+var
+  Methods : TList<TAstNode>;
+  M       : TAstNode;
+  ClsLow  : string;
+  Kurz    : string;
+begin
+  Result := nil;
+  if (not Assigned(UnitNode)) or (ClassName = '') then Exit;
+  ClsLow := ClassName.ToLower + '.';
+  Methods := UnitNode.FindAll(nkMethod);
+  try
+    for M in Methods do
+    begin
+      if not M.Name.ToLower.StartsWith(ClsLow) then Continue;
+      Kurz := Copy(M.Name.ToLower, Length(ClsLow) + 1, MaxInt);
+      // 'destroy' allein ist der Destruktor, nicht der Handler.
+      if (Kurz = '') or (Kurz = 'destroy') then Continue;
+      if not Kurz.EndsWith('destroy') then Continue;
+      if HatEventSignatur(M) then Exit(M);
+    end;
   finally
     Methods.Free;
   end;
@@ -829,6 +927,8 @@ var
   // BeforeDestruction den Destruktor ersetzen, aenderte sich der Text
   // ueberlebender Funde (= Identitaetswechsel im SARIF-Diff).
   Cleanup      : TAstNode;
+  EventCleanup : TAstNode;
+  ClassDtor    : TAstNode;
   FieldNameLow : string;
   FreeFound    : Boolean;
   FreeInFin    : Boolean;
@@ -867,6 +967,13 @@ begin
       // BeforeDestruction -> Destroy). jvcl JvInspector/JvInspExtraEditors
       // raeumen ihre Felder ausschliesslich dort auf.
       Cleanup := FindMethodNamed(UnitNode, ClassNode.Name, 'beforedestruction');
+      // KLASSE L (30.08.): OnDestroy-Event als Freigabeort. Wie
+      // BeforeDestruction eine reine Erweiterung des SUCHRAUMS - sie
+      // kann einen Fund nur unterdruecken, nie einen erzeugen.
+      EventCleanup := FindDestroyEventHandler(UnitNode, ClassNode.Name);
+      // Dritter Ort: der class destructor (fuer 'class var'-Felder).
+      ClassDtor := FindMethod(UnitNode, 'destructor', ClassNode.Name,
+                               msClassMethod);
 
       Fields := ClassNode.FindAll(nkField);
       try
@@ -904,6 +1011,15 @@ begin
           // Suchraums - kann einen Fund nur unterdruecken.
           if not FreeFound and (Cleanup <> nil) then
             FreeFound := TLeakDetector2.SearchFree(Cleanup, FieldNameLow,
+                                                   False, FreeInFin);
+          // Dieselbe Pruefung auf dem OnDestroy-Handler.
+          if not FreeFound and (EventCleanup <> nil) then
+            FreeFound := TLeakDetector2.SearchFree(EventCleanup,
+                                                   FieldNameLow,
+                                                   False, FreeInFin);
+          if not FreeFound and (ClassDtor <> nil) then
+            FreeFound := TLeakDetector2.SearchFree(ClassDtor,
+                                                   FieldNameLow,
                                                    False, FreeInFin);
           // Alias-Free-Idiom (L := FField; FField := nil; L.Free) erkennen.
           if not FreeFound then
