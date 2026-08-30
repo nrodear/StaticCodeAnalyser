@@ -290,6 +290,12 @@ type
     // die indizierte Kette nicht mehr am Veto vorbeischleusen.
     [Test] procedure Leak_FieldRootedIndexedNonOwning_StillReported;
     [Test] procedure Leak_BareFieldAssignment_StillExempt;
+    // KLASSE F der Vollzaehlung: unit-lokaler Callee uebernimmt (30.08.)
+    [Test] procedure LocalCalleeTakesOwnership_NotReported;
+    [Test] procedure LocalCalleeOnlyReads_StillReported;
+    [Test] procedure LocalCalleeTwoParams_StillReported;
+    [Test] procedure LocalCalleeArgCountMismatch_StillReported;
+    [Test] procedure LocalCalleeForeignReceiver_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -6207,6 +6213,188 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
     'Overload-Mehrdeutigkeit gated nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.LocalCalleeTakesOwnership_NotReported;
+// KLASSE F: der Gerufene steht in DERSELBEN Unit und nimmt das Objekt
+// in einen Feld-Container. Nachgebaut nach dem Beleg aus dem
+// Referenzkorpus, CnPasCodeDoc.pas:386:
+//   function TCnDocBaseItem.AddItem(Item: TCnDocBaseItem): Integer;
+//   begin
+//     FItems.Add(Item);      // FItems ist TObjectList.Create(True)
+//   end;
+// Der Aufrufer gibt das Objekt ab - "never freed" ist dort unwahr.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TBar = class'+#13#10+
+  '    FItems: TObjectList;'+#13#10+
+  '    procedure AddItem(Item: TStringList);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure TBar.AddItem(Item: TStringList);'+#13#10+
+  'begin'+#13#10+
+  '  FItems.Add(Item);'+#13#10+
+  'end;'+#13#10+
+  'procedure Use(B: TBar);'+#13#10+
+  'var Item: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Item := TStringList.Create;'+#13#10+
+  '  B.AddItem(Item);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+        'unit-lokaler Callee nimmt das Objekt in ein Feld - kein Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.LocalCalleeOnlyReads_StillReported;
+// TP-GEGENPROBE, und sie traegt das Gate: derselbe Aufbau, aber der
+// Gerufene LIEST nur. Genau daran ist der erste Anlauf gescheitert -
+// eine Namensliste haette "AddItem" gegatet, ohne in den Rumpf zu sehen.
+// Im Korpus ist AddProperty(Properties: TStrings) so ein Fall: es
+// befuellt, es uebernimmt nicht.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TBar = class'+#13#10+
+  '    FItems: TObjectList;'+#13#10+
+  '    procedure AddItem(Item: TStringList);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure TBar.AddItem(Item: TStringList);'+#13#10+
+  'begin'+#13#10+
+  '  ShowMessage(Item.Text);'+#13#10+
+  'end;'+#13#10+
+  'procedure Use(B: TBar);'+#13#10+
+  'var Item: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Item := TStringList.Create;'+#13#10+
+  '  B.AddItem(Item);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+        'der Callee liest nur - der Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.LocalCalleeTwoParams_StillReported;
+// Die Grenze des Gates, absichtlich gezogen: bei mehr als EINEM
+// Parameter muesste die Argumentposition aufgeloest werden, und ein
+// Fehlgriff dort maskiert ein echtes Leck. Solange das nicht gemessen
+// ist, bleibt der Fund stehen.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TBar = class'+#13#10+
+  '    FItems: TObjectList;'+#13#10+
+  '    procedure AddItem(Key: string; Item: TStringList);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure TBar.AddItem(Key: string; Item: TStringList);'+#13#10+
+  'begin'+#13#10+
+  '  FItems.Add(Item);'+#13#10+
+  'end;'+#13#10+
+  'procedure Use(B: TBar);'+#13#10+
+  'var Item: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Item := TStringList.Create;'+#13#10+
+  '  B.AddItem(''k'', Item);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+        'zwei Parameter - das Gate haelt sich bewusst heraus');
+  finally F.Free; end;
+end;
+
+
+procedure TTestMemoryLeakAdvanced.LocalCalleeArgCountMismatch_StillReported;
+// REGRESSION zu rw34: der Aufruf hat ZWEI Argumente, der einzige
+// gleichnamige Callee der Unit hat EINEN Parameter. Dann ist der
+// Gerufene ein anderer - hier die Add-Methode eines fremden Objekts -
+// und sein Rumpf beweist nichts.
+//
+// BELEG (doublecmd uColorExt.pas:337/344/347): TColorExt.Save ruft
+// AConfig.Add(''FileColors'', AList) an einem TJSONObject; unit-lokal
+// gibt es genau ein TColorExt.Add(AItem: TMaskItem), dessen Rumpf
+// FMaskItems.Add(AItem) ausfuehrt. Ohne diesen Schnitt hat die blosse
+// Namensgleichheit drei Funde unterdrueckt, die den gefundenen Callee
+// nie erreichen.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TBar = class'+#13#10+
+  '    FItems: TObjectList;'+#13#10+
+  '    procedure Add(Item: TStringList);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure TBar.Add(Item: TStringList);'+#13#10+
+  'begin'+#13#10+
+  '  FItems.Add(Item);'+#13#10+
+  'end;'+#13#10+
+  'procedure Use(Cfg: TJSONObject);'+#13#10+
+  'var Item: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Item := TStringList.Create;'+#13#10+
+  '  Cfg.Add(''Name'', Item);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+        'zwei Argumente gegen einen Parameter - der Callee passt nicht');
+  finally F.Free; end;
+end;
+
+
+procedure TTestMemoryLeakAdvanced.LocalCalleeForeignReceiver_StillReported;
+// REGRESSION zu rw35: der Aufruf ist EINARGUMENTIG und trifft trotzdem
+// einen anderen Gerufenen - der Empfaenger gehoert einer fremden
+// Klasse. Nur der Empfaengertyp entscheidet das, die Argumentzahl
+// nicht.
+//
+// BELEG (doublecmd uColorExt.pas:344): 'AList.Add(AItem)' an einem
+// TJSONArray, waehrend unit-lokal ein TColorExt.Add(AItem: TMaskItem)
+// steht. Dieser eine Fund ueberlebte den Argumentzahl-Schnitt und war
+// weiter aus falschem Grund unterdrueckt.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TBar = class'+#13#10+
+  '    FItems: TObjectList;'+#13#10+
+  '    procedure Add(Item: TStringList);'+#13#10+
+  '  end;'+#13#10+
+  '  TFremd = class'+#13#10+
+  '    procedure Add(X: TObject);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure TBar.Add(Item: TStringList);'+#13#10+
+  'begin'+#13#10+
+  '  FItems.Add(Item);'+#13#10+
+  'end;'+#13#10+
+  'procedure Use(L: TFremd);'+#13#10+
+  'var Item: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Item := TStringList.Create;'+#13#10+
+  '  L.Add(Item);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+        'fremder Empfaengertyp - der unit-lokale Rumpf beweist nichts');
   finally F.Free; end;
 end;
 

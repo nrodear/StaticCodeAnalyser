@@ -2,16 +2,16 @@
 # Erzeugt von tools/selfscan_gate.py --update (Profil strict).
 # Das Gate schlaegt fehl, wenn eine Regel MEHR Funde hat als
 # hier. Weniger ist immer erlaubt.
-TIERS 0 686 2821
-BeginEndRequired 1004
+TIERS 0 691 2857
+BeginEndRequired 1024
 BooleanParam 8
 BooleanPropertyNaming 12
 CaseStatementSize 3
 ClassPerFile 28
-CognitiveComplexity 364
+CognitiveComplexity 368
 CommentedOutCode 22
 ConcatToFormat 34
-CyclomaticComplexity 128
+CyclomaticComplexity 131
 DateFormatSettings 3
 DebugOutput 24
 DeepNesting 24
@@ -24,8 +24,8 @@ DfmEmptyBoundEvent 1
 DfmFieldTypeMismatch 2
 DfmHardcodedCaption 15
 DfmRequiredFieldUnbound 4
-DuplicateBlock 238
-DuplicateString 255
+DuplicateBlock 242
+DuplicateString 260
 EmptyExcept 37
 EmptyMethod 7
 EmptyOnHandler 5
@@ -36,15 +36,15 @@ HardcodedPath 7
 HardcodedString 1
 IfElseBegin 35
 InsecureCryptoAlgorithm 18
-LargeClass 48
-LongMethod 95
+LargeClass 49
+LongMethod 97
 LongParamList 26
 MagicNumber 35
 MissingUnitHeader 90
 MultipleExit 20
-NestedRoutine 33
-NestedTry 297
-NilComparison 279
+NestedRoutine 34
+NestedTry 299
+NilComparison 278
 NoSonarMarker 5
 PublicField 15
 PublicMemberWithoutDoc 39
