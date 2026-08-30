@@ -172,16 +172,34 @@ class function TFieldLeakDetector.FindDestroyEventHandler(
 // NICHT - sie laeuft nicht garantiert. 32 der 47 Feld-Funde im Korpus
 // haben ueberhaupt keine Freigabe in der Datei; die duerfen von dieser
 // Erweiterung nicht beruehrt werden.
+
+  function HatEventSignatur(AMethod: TAstNode): Boolean;
+  // Genau EIN Parameter vom Typ TObject - die Signatur eines
+  // VCL-Event-Handlers. NUR direkte Kinder: FindAll waere subtree-weit
+  // und zaehlte die Parameter verschachtelter Routinen mit.
+  var
+    P    : TAstNode;
+    Zahl : Integer;
+  begin
+    Result := False;
+    Zahl   := 0;
+    for P in AMethod.Children do
+      if P.Kind = nkParam then
+      begin
+        Inc(Zahl);
+        Result := Trim(P.TypeRef).ToLower = 'tobject';
+      end;
+    Result := Result and (Zahl = 1);
+  end;
+
 var
   Methods : TList<TAstNode>;
-  M, P    : TAstNode;
+  M       : TAstNode;
   ClsLow  : string;
   Kurz    : string;
-  Zahl    : Integer;
-  Passt   : Boolean;
 begin
   Result := nil;
-  if (UnitNode = nil) or (ClassName = '') then Exit;
+  if (not Assigned(UnitNode)) or (ClassName = '') then Exit;
   ClsLow := ClassName.ToLower + '.';
   Methods := UnitNode.FindAll(nkMethod);
   try
@@ -189,21 +207,10 @@ begin
     begin
       if not M.Name.ToLower.StartsWith(ClsLow) then Continue;
       Kurz := Copy(M.Name.ToLower, Length(ClsLow) + 1, MaxInt);
-      if (Kurz = '') or not Kurz.EndsWith('destroy') then Continue;
-      // 'destroy' selbst ist der Destruktor, nicht der Handler.
-      if Kurz = 'destroy' then Continue;
-      // Event-Signatur: genau ein Parameter, Typ TObject. NUR direkte
-      // Kinder - FindAll waere subtree-weit und zaehlte die Parameter
-      // verschachtelter Routinen mit.
-      Zahl  := 0;
-      Passt := False;
-      for P in M.Children do
-        if P.Kind = nkParam then
-        begin
-          Inc(Zahl);
-          Passt := Trim(P.TypeRef).ToLower = 'tobject';
-        end;
-      if (Zahl = 1) and Passt then Exit(M);
+      // 'destroy' allein ist der Destruktor, nicht der Handler.
+      if (Kurz = '') or (Kurz = 'destroy') then Continue;
+      if not Kurz.EndsWith('destroy') then Continue;
+      if HatEventSignatur(M) then Exit(M);
     end;
   finally
     Methods.Free;
