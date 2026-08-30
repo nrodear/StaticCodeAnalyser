@@ -77,6 +77,14 @@ type
     // DataModuleDestroy, FrameDestroy. nil wenn keine da ist.
     class function FindDestroyEventHandler(UnitNode: TAstNode;
       const ClassName: string): TAstNode; static;
+    // BESTANDSFEHLER (30.08.): der Parser markiert class-Methoden mit
+    // dem TypeRef-Suffix ';class' (uParser2:743, fuer den
+    // DestructorWithoutInherited-Detektor). FindMethod vergleicht
+    // per SameText und findet 'destructor;class' deshalb NIE - ein
+    // class var, das im class destructor freigegeben wird, galt als
+    // Leck. Sucht genau diese Form.
+    class function FindClassDestructor(UnitNode: TAstNode;
+      const ClassName: string): TAstNode; static;
     class function HasFieldCreate(MethodNode: TAstNode;
       const FieldNameLow: string): Boolean; static;
     // True wenn das Feld via TComponent-Owner-Pattern erzeugt wird:
@@ -151,6 +159,46 @@ begin
     for M in Methods do
       if M.Name.ToLower = Target then
         Exit(M);
+  finally
+    Methods.Free;
+  end;
+end;
+
+class function TFieldLeakDetector.FindClassDestructor(
+  UnitNode: TAstNode; const ClassName: string): TAstNode;
+// Der 'class destructor' einer Klasse - der Freigabeort fuer 'class var'.
+//
+// BELEG (Kastri DW.StartUpHook.Android.pas:29 und
+// DW.UniversalLinks.Android.pas:31):
+//   class var FInstance: TStartUpHook;
+//   class constructor CreateClass; begin FInstance := TStartUpHook.Create; end;
+//   class destructor DestroyClass; begin FInstance.Free; end;
+// Gemeldet wurde "not freed in Destroy", obwohl die Freigabe dasteht.
+//
+// URSACHE, minimal reproduziert (37 Zeilen): der TypeRef lautet
+// 'destructor;class', FindMethod vergleicht per SameText gegen
+// 'destructor' und findet ihn nie. Sichtbar wird das NUR bei Klassen im
+// implementation-Abschnitt - steht die Klasse im interface, erkennt der
+// Detektor das 'class var' gar nicht erst als Feld und schweigt aus dem
+// zweiten Grund. Zwei Fehler, die einander verdeckt haben.
+var
+  Methods : TList<TAstNode>;
+  M       : TAstNode;
+  ClsLow  : string;
+  TypLow  : string;
+begin
+  Result := nil;
+  if (not Assigned(UnitNode)) or (ClassName = '') then Exit;
+  ClsLow := ClassName.ToLower + '.';
+  Methods := UnitNode.FindAll(nkMethod);
+  try
+    for M in Methods do
+    begin
+      if not M.Name.ToLower.StartsWith(ClsLow) then Continue;
+      TypLow := M.TypeRef.ToLower;
+      if TypLow.StartsWith('destructor') and (Pos(';class', TypLow) > 0) then
+        Exit(M);
+    end;
   finally
     Methods.Free;
   end;
@@ -898,6 +946,7 @@ var
   // ueberlebender Funde (= Identitaetswechsel im SARIF-Diff).
   Cleanup      : TAstNode;
   EventCleanup : TAstNode;
+  ClassDtor    : TAstNode;
   FieldNameLow : string;
   FreeFound    : Boolean;
   FreeInFin    : Boolean;
@@ -940,6 +989,8 @@ begin
       // BeforeDestruction eine reine Erweiterung des SUCHRAUMS - sie
       // kann einen Fund nur unterdruecken, nie einen erzeugen.
       EventCleanup := FindDestroyEventHandler(UnitNode, ClassNode.Name);
+      // Dritter Ort: der class destructor (fuer 'class var'-Felder).
+      ClassDtor := FindClassDestructor(UnitNode, ClassNode.Name);
 
       Fields := ClassNode.FindAll(nkField);
       try
@@ -981,6 +1032,10 @@ begin
           // Dieselbe Pruefung auf dem OnDestroy-Handler.
           if not FreeFound and (EventCleanup <> nil) then
             FreeFound := TLeakDetector2.SearchFree(EventCleanup,
+                                                   FieldNameLow,
+                                                   False, FreeInFin);
+          if not FreeFound and (ClassDtor <> nil) then
+            FreeFound := TLeakDetector2.SearchFree(ClassDtor,
                                                    FieldNameLow,
                                                    False, FreeInFin);
           // Alias-Free-Idiom (L := FField; FField := nil; L.Free) erkennen.

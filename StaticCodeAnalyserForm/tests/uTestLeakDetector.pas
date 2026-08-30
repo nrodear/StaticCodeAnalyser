@@ -338,6 +338,10 @@ type
     // (b) KLASSE L: Freigabe im OnDestroy-Event, kein Destruktor (30.08.)
     [Test] procedure Field_FreedInOnDestroyHandler_NoFinding;
     [Test] procedure Field_DestroyMethodWithoutEventSignature_StillReported;
+    // (c) BESTANDSFEHLER: class destructor traegt TypeRef
+    //     "destructor;class" und wurde nie gefunden (30.08.)
+    [Test] procedure Field_FreedInClassDestructor_NoFinding;
+    [Test] procedure Field_ClassDestructorFreesOther_StillReported;
     // (b) Transitive Component-Ownership ohne Destruktor (jvcl
     //     JvGammaPanel 61/63/64, JvCombobox 261).
     [Test] procedure Field_OwnerChainReachesSelf_NoFinding;
@@ -6556,6 +6560,84 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
     'TJvHookInfos ist ein TObject - der TControl ist kein Owner');
+  finally F.Free; end;
+end;
+
+
+procedure TTestFieldLeak.Field_FreedInClassDestructor_NoFinding;
+// BESTANDSFEHLER, gefunden am 30.08. beim Nachgehen der Klasse L.
+//
+// Der Parser markiert class-Methoden mit dem TypeRef-Suffix ';class'
+// (uParser2:743, damit der DestructorWithoutInherited-Detektor den
+// Class-Destruktor vom Instanz-Destruktor unterscheiden kann).
+// FindMethod vergleicht per SameText gegen 'destructor' und fand
+// 'destructor;class' deshalb NIE - ein class var, das im class
+// destructor freigegeben wird, galt als Leck.
+//
+// BELEG: Kastri DW.StartUpHook.Android.pas:29 und
+// DW.UniversalLinks.Android.pas:31.
+//
+// Die Klasse steht hier BEWUSST im implementation-Abschnitt: nur dort
+// wird der Fehler sichtbar. Steht sie im interface, erkennt der
+// Detektor das 'class var' gar nicht erst als Feld und schweigt aus
+// einem zweiten, unabhaengigen Grund - die beiden Fehler haben
+// einander verdeckt.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'type'#13#10+
+  '  TFoo = class(TObject)'#13#10+
+  '  private'#13#10+
+  '    class var FInstance: TStringList;'#13#10+
+  '    class constructor CreateClass;'#13#10+
+  '    class destructor DestroyClass;'#13#10+
+  '  end;'#13#10+
+  'class constructor TFoo.CreateClass;'#13#10+
+  'begin'#13#10+
+  '  FInstance := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'class destructor TFoo.DestroyClass;'#13#10+
+  'begin'#13#10+
+  '  FInstance.Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'class var wird im class destructor freigegeben - kein Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_ClassDestructorFreesOther_StillReported;
+// TP-Gegenprobe: die Klasse HAT einen class destructor, gibt darin aber
+// ein ANDERES Feld frei. Der erweiterte Suchraum darf nicht pauschal
+// entschaerfen - dieselbe Gegenprobe wie beim BeforeDestruction-Gate.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'type'#13#10+
+  '  TFoo = class(TObject)'#13#10+
+  '  private'#13#10+
+  '    class var FInstance: TStringList;'#13#10+
+  '    class var FOther: TStringList;'#13#10+
+  '    class constructor CreateClass;'#13#10+
+  '    class destructor DestroyClass;'#13#10+
+  '  end;'#13#10+
+  'class constructor TFoo.CreateClass;'#13#10+
+  'begin'#13#10+
+  '  FInstance := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'class destructor TFoo.DestroyClass;'#13#10+
+  'begin'#13#10+
+  '  FOther.Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+    'FInstance wird nirgends freigegeben - der Fund bleibt');
   finally F.Free; end;
 end;
 
