@@ -1289,6 +1289,79 @@ begin
   end;
 end;
 
+function CalleeTakesOwnershipLocal(AUnitNode: TAstNode;
+  const ACalleeLow: string): Boolean;
+// KLASSE F der SCA001-Vollzaehlung: der Gerufene steht in DERSELBEN Unit
+// und uebernimmt das Objekt dort - dann ist die Uebergabe ein
+// Ownership-Transfer und kein Leck.
+//
+// BELEG aus dem Referenzkorpus (CnPasCodeDoc.pas:386):
+//   Item := TCnConstDocItem.Create;   <- gemeldet
+//   ...
+//   Parent.AddItem(Item);
+// und in derselben Unit:
+//   function TCnDocBaseItem.AddItem(Item: TCnDocBaseItem): Integer;
+//   begin
+//     FItems.Add(Item);        // FItems ist TObjectList.Create(True)
+//     Item.Owner := Self;
+//   end;
+//
+// WARUM NICHT ueber eine Namensliste (das war der erste Anlauf und er
+// ist am 30.08. gescheitert): aus der AUFRUFSTELLE laesst sich nicht
+// ablesen, ob der Gerufene behaelt. Die haeufigsten "Empfaenger" im
+// Korpus sind Casts, Locks und Leser - AddProperty(Properties: TStrings)
+// etwa befuellt nur, es uebernimmt nicht. Die Frage haengt am RUMPF.
+//
+// KONSERVATIV: nur Routinen mit GENAU EINEM Parameter. Bei mehreren
+// muesste die Argumentposition aufgeloest werden, und ein Fehlgriff dort
+// maskiert ein echtes Leck. Die einparametrige Form deckt das belegte
+// Muster ab; mehr kommt erst mit einer eigenen Messung.
+var
+  Methods, Params, Calls, Assigns : TList<TAstNode>;
+  Mth, P, C, A : TAstNode;
+  ParamLow, N  : string;
+  Kurz         : string;
+begin
+  Result := False;
+  if (AUnitNode = nil) or (ACalleeLow = '') then Exit;
+  Methods := AUnitNode.FindAllRef(nkMethod);
+  if Methods = nil then Exit;
+  for Mth in Methods do
+  begin
+    // Unqualifiziert vergleichen: der Aufruf steht als "Parent.AddItem",
+    // die Implementierung als "TCnDocBaseItem.AddItem".
+    Kurz := TDetectorUtils.UnqualifiedNameLast(Mth.Name).ToLower;
+    if Kurz <> ACalleeLow then Continue;
+    Params := Mth.FindAllRef(nkParam);
+    if (Params = nil) or (Params.Count <> 1) then Continue;
+    ParamLow := TDetectorUtils.UnqualifiedNameLast(Params[0].Name).ToLower;
+    if ParamLow = '' then Continue;
+    // (a) Feld-Container nimmt ihn auf:  F<irgendwas>.Add(Param)
+    Calls := Mth.FindAllRef(nkCall);
+    if Calls <> nil then
+      for C in Calls do
+      begin
+        N := C.Name.ToLower;
+        if (Pos('.add(', N) > 0) or (Pos('.insert(', N) > 0)
+           or (Pos('.addobject(', N) > 0) then
+        begin
+          var pp := Pos(ParamLow, N);
+          if (pp > 0) and TLeakDetector2.IsWholeWord(N, ParamLow, pp) then
+            Exit(True);
+        end;
+      end;
+    // (b) direkte Feldzuweisung:  FFeld := Param
+    Assigns := Mth.FindAllRef(nkAssign);
+    if Assigns <> nil then
+      for A in Assigns do
+      begin
+        N := A.Name.ToLower;
+        if (N <> '') and (N[1] = 'f')
+           and (Trim(A.TypeRef).ToLower = ParamLow) then Exit(True);
+      end;
+  end;
+end;
+
 class function TLeakDetector2.IsPassedToOwner(MethodNode: TAstNode;
   const VarNameLow: string; AUnitNode: TAstNode): Boolean;
 var
@@ -1735,6 +1808,24 @@ begin
     var pAdd := Pos('.addobject(', NameLow);
     if (pAdd > 0) and VarInArgs(NameLow, pAdd + 11) then
       Exit(True);
+
+    // KLASSE F (Vollzaehlung SCA001): der Gerufene steht in DERSELBEN
+    // Unit und nimmt das Objekt dort in ein Feld oder einen
+    // Feld-Container. Nur bei einparametrigen Routinen - s.
+    // CalleeTakesOwnershipLocal. AUnitNode ist optional; ohne ihn
+    // (SCA009-Pfad) bleibt alles wie bisher.
+    if Assigned(AUnitNode) then
+    begin
+      var pKlammer := Pos('(', NameLow);
+      if pKlammer > 1 then
+      begin
+        var CalleeLow := TDetectorUtils.UnqualifiedNameLast(
+                           Copy(NameLow, 1, pKlammer - 1)).ToLower;
+        if VarInArgs(NameLow, pKlammer)
+           and CalleeTakesOwnershipLocal(AUnitNode, CalleeLow) then
+          Exit(True);
+      end;
+    end;
 
     // #5 (Konzept_EngineArch): konfigurierbare Ownership-Sinks aus
     // [Detectors] OwnershipSinks. Aufruf einer Sink-Routine mit unserer Var

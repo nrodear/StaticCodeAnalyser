@@ -343,6 +343,10 @@ type
     // Fixture-Gate 2026-08-18: der Feld-Pfad hatte keins.
     [Test] procedure Field_InFixturePath_NotReported;
     [Test] procedure Field_InProductionPath_StillReported;
+    // KLASSE F der Vollzaehlung: unit-lokaler Callee uebernimmt (30.08.)
+    [Test] procedure LocalCalleeTakesOwnership_NotReported;
+    [Test] procedure LocalCalleeOnlyReads_StillReported;
+    [Test] procedure LocalCalleeTwoParams_StillReported;
   private
     // Parst ASrc und laesst NUR den Feld-Detektor mit dem
     // angegebenen Dateinamen darueber laufen. Eigener Helfer,
@@ -6207,6 +6211,107 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
     'Overload-Mehrdeutigkeit gated nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestLeakDetector.LocalCalleeTakesOwnership_NotReported;
+// KLASSE F: der Gerufene steht in DERSELBEN Unit und nimmt das Objekt
+// in einen Feld-Container. Nachgebaut nach dem Beleg aus dem
+// Referenzkorpus, CnPasCodeDoc.pas:386:
+//   function TCnDocBaseItem.AddItem(Item: TCnDocBaseItem): Integer;
+//   begin
+//     FItems.Add(Item);      // FItems ist TObjectList.Create(True)
+//   end;
+// Der Aufrufer gibt das Objekt ab - "never freed" ist dort unwahr.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TBar = class'+#13#10+
+  '    FItems: TObjectList;'+#13#10+
+  '    procedure AddItem(Item: TFoo);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure TBar.AddItem(Item: TFoo);'+#13#10+
+  'begin'+#13#10+
+  '  FItems.Add(Item);'+#13#10+
+  'end;'+#13#10+
+  'procedure Use(B: TBar);'+#13#10+
+  'var Item: TFoo;'+#13#10+
+  'begin'+#13#10+
+  '  Item := TFoo.Create;'+#13#10+
+  '  B.AddItem(Item);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+        'unit-lokaler Callee nimmt das Objekt in ein Feld - kein Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestLeakDetector.LocalCalleeOnlyReads_StillReported;
+// TP-GEGENPROBE, und sie traegt das Gate: derselbe Aufbau, aber der
+// Gerufene LIEST nur. Genau daran ist der erste Anlauf gescheitert -
+// eine Namensliste haette "AddItem" gegatet, ohne in den Rumpf zu sehen.
+// Im Korpus ist AddProperty(Properties: TStrings) so ein Fall: es
+// befuellt, es uebernimmt nicht.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TBar = class'+#13#10+
+  '    FItems: TObjectList;'+#13#10+
+  '    procedure AddItem(Item: TFoo);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure TBar.AddItem(Item: TFoo);'+#13#10+
+  'begin'+#13#10+
+  '  ShowMessage(Item.Name);'+#13#10+
+  'end;'+#13#10+
+  'procedure Use(B: TBar);'+#13#10+
+  'var Item: TFoo;'+#13#10+
+  'begin'+#13#10+
+  '  Item := TFoo.Create;'+#13#10+
+  '  B.AddItem(Item);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+        'der Callee liest nur - der Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestLeakDetector.LocalCalleeTwoParams_StillReported;
+// Die Grenze des Gates, absichtlich gezogen: bei mehr als EINEM
+// Parameter muesste die Argumentposition aufgeloest werden, und ein
+// Fehlgriff dort maskiert ein echtes Leck. Solange das nicht gemessen
+// ist, bleibt der Fund stehen.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TBar = class'+#13#10+
+  '    FItems: TObjectList;'+#13#10+
+  '    procedure AddItem(Key: string; Item: TFoo);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure TBar.AddItem(Key: string; Item: TFoo);'+#13#10+
+  'begin'+#13#10+
+  '  FItems.Add(Item);'+#13#10+
+  'end;'+#13#10+
+  'procedure Use(B: TBar);'+#13#10+
+  'var Item: TFoo;'+#13#10+
+  'begin'+#13#10+
+  '  Item := TFoo.Create;'+#13#10+
+  '  B.AddItem(''k'', Item);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+        'zwei Parameter - das Gate haelt sich bewusst heraus');
   finally F.Free; end;
 end;
 
