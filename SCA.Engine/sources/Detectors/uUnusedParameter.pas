@@ -784,7 +784,7 @@ begin
     // (1) als Argument:  Foo(..., Name, ...)  /  Foo(Name)
     if TRegEx.IsMatch(Zeile, '[(,]\s*' + TRegEx.Escape(N)
                       + '\s*[,)]') then Exit(True);
-    // (2) an ein Event gehaengt:  X.OnFoo := Name;
+    // (2) an ein Event gehaengt, Form  X.OnFoo := Name
     if TRegEx.IsMatch(Zeile, ':=\s*' + TRegEx.Escape(N)
                       + '\s*;') then Exit(True);
     // (3) Adresse:  @Name
