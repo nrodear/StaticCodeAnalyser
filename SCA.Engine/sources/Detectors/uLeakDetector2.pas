@@ -1289,6 +1289,62 @@ begin
   end;
 end;
 
+function ArgumenteAufOberstemNiveau(const ACallLow: string;
+  AKlammerPos: Integer): Integer;
+// Wieviele Argumente hat der Aufruf, der bei AKlammerPos seine
+// oeffnende Klammer hat? 0 = leere Liste, -1 = unlesbar (keine
+// passende schliessende Klammer im Token).
+//
+// WOZU, belegt an rw34: 'AConfig.Add(''FileColors'', AList)' in
+// doublecmd uColorExt ruft TJSONObject.Add - unit-lokal gibt es aber
+// genau ein 'TColorExt.Add(AItem: TMaskItem)', und dessen Rumpf legt
+// brav in ein Feld. Die Namensgleichheit allein hat drei Funde
+// unterdrueckt, die den gefundenen Callee nie erreichen. Zwei
+// Argumente gegen einen Parameter ist der billige Beweis dafuer, dass
+// die Aufloesung danebengriff.
+//
+// Kommas in geschachtelten Klammern, in eckigen Klammern und in
+// String-Literalen zaehlen NICHT mit - sonst waere 'Add(Format(''%d,%d'',
+// [a, b]))' dreiargumentig.
+var
+  i, tiefe, kommas : Integer;
+  imText : Boolean;
+  c      : Char;
+begin
+  Result := -1;
+  if (AKlammerPos < 1) or (AKlammerPos > Length(ACallLow))
+     or (ACallLow[AKlammerPos] <> '(') then Exit;
+  tiefe  := 0;
+  kommas := 0;
+  imText := False;
+  for i := AKlammerPos to Length(ACallLow) do
+  begin
+    c := ACallLow[i];
+    if imText then
+    begin
+      // Verdoppelte Apostrophe brauchen keine Sonderbehandlung: das
+      // zweite oeffnet den Text sofort wieder.
+      if c = '''' then imText := False;
+      Continue;
+    end;
+    case c of
+      '''': imText := True;
+      '(', '[': Inc(tiefe);
+      ')', ']':
+        begin
+          Dec(tiefe);
+          if tiefe <= 0 then
+          begin
+            if Trim(Copy(ACallLow, AKlammerPos + 1,
+                         i - AKlammerPos - 1)) = '' then Exit(0);
+            Exit(kommas + 1);
+          end;
+        end;
+      ',': if tiefe = 1 then Inc(kommas);
+    end;
+  end;
+end;
+
 function CalleeTakesOwnershipLocal(AUnitNode: TAstNode;
   const ACalleeLow: string): Boolean;
 // KLASSE F der SCA001-Vollzaehlung: der Gerufene steht in DERSELBEN Unit
@@ -1893,7 +1949,8 @@ begin
       begin
         var CalleeLow := TDetectorUtils.UnqualifiedNameLast(
                            Copy(NameLow, 1, pKlammer - 1)).ToLower;
-        if VarInArgs(NameLow, pKlammer + 1)
+        if (ArgumenteAufOberstemNiveau(NameLow, pKlammer) = 1)
+           and VarInArgs(NameLow, pKlammer + 1)
            and CalleeTakesOwnershipLocal(AUnitNode, CalleeLow) then
           Exit(True);
       end;

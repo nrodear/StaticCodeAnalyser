@@ -294,6 +294,7 @@ type
     [Test] procedure LocalCalleeTakesOwnership_NotReported;
     [Test] procedure LocalCalleeOnlyReads_StillReported;
     [Test] procedure LocalCalleeTwoParams_StillReported;
+    [Test] procedure LocalCalleeArgCountMismatch_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -6312,6 +6313,46 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
         'zwei Parameter - das Gate haelt sich bewusst heraus');
+  finally F.Free; end;
+end;
+
+
+procedure TTestMemoryLeakAdvanced.LocalCalleeArgCountMismatch_StillReported;
+// REGRESSION zu rw34: der Aufruf hat ZWEI Argumente, der einzige
+// gleichnamige Callee der Unit hat EINEN Parameter. Dann ist der
+// Gerufene ein anderer - hier die Add-Methode eines fremden Objekts -
+// und sein Rumpf beweist nichts.
+//
+// BELEG (doublecmd uColorExt.pas:337/344/347): TColorExt.Save ruft
+// AConfig.Add(''FileColors'', AList) an einem TJSONObject; unit-lokal
+// gibt es genau ein TColorExt.Add(AItem: TMaskItem), dessen Rumpf
+// FMaskItems.Add(AItem) ausfuehrt. Ohne diesen Schnitt hat die blosse
+// Namensgleichheit drei Funde unterdrueckt, die den gefundenen Callee
+// nie erreichen.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TBar = class'+#13#10+
+  '    FItems: TObjectList;'+#13#10+
+  '    procedure Add(Item: TStringList);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure TBar.Add(Item: TStringList);'+#13#10+
+  'begin'+#13#10+
+  '  FItems.Add(Item);'+#13#10+
+  'end;'+#13#10+
+  'procedure Use(Cfg: TJSONObject);'+#13#10+
+  'var Item: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Item := TStringList.Create;'+#13#10+
+  '  Cfg.Add(''Name'', Item);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+        'zwei Argumente gegen einen Parameter - der Callee passt nicht');
   finally F.Free; end;
 end;
 
