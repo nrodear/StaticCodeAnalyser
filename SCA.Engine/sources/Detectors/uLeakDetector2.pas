@@ -1316,50 +1316,122 @@ function CalleeTakesOwnershipLocal(AUnitNode: TAstNode;
 // muesste die Argumentposition aufgeloest werden, und ein Fehlgriff dort
 // maskiert ein echtes Leck. Die einparametrige Form deckt das belegte
 // Muster ab; mehr kommt erst mit einer eigenen Messung.
+//
+// Der Aufloesungsweg (Rumpf-Traeger, Eindeutigkeit, direkte Kinder) ist
+// derselbe wie in HasFunctionCallAssign - die Begruendungen stehen dort
+// an den einzelnen Schritten und gelten hier unveraendert.
+
+  function HatRumpf(ANode: TAstNode): Boolean;
+  // Die Klassendeklaration ('procedure AddItem(...)' im type-Block) ist
+  // auch ein nkMethod, hat aber keinen nkBlock. Sie kann nichts
+  // uebernehmen und darf den Kandidaten nicht mehrdeutig machen.
+  var
+    Ch : TAstNode;
+  begin
+    Result := False;
+    for Ch in ANode.Children do
+      if Ch.Kind = nkBlock then Exit(True);
+  end;
+
+  function AlsWortDrin(const AText, AWort: string; AAb: Integer): Boolean;
+  // ALLE Substring-Treffer pruefen, nicht nur den ersten. In
+  // 'fitems.add(item)' liegt der erste 'item'-Treffer INNERHALB von
+  // 'fitems' und hat keine linke Wortgrenze; das echte Argument steht
+  // dahinter. Genau daran ist die erste Fassung dieses Gates
+  // gescheitert - und VarInArgs an derselben Stelle schon einmal
+  // ('pfileinfo(fi)', Inkr.3). Wer hier Pos statt PosEx nimmt, baut den
+  // Fehler zum dritten Mal.
+  var
+    p : Integer;
+  begin
+    Result := False;
+    p := PosEx(AWort, AText, AAb);
+    while p > 0 do
+    begin
+      if TLeakDetector2.IsWholeWord(AText, AWort, p) then Exit(True);
+      p := PosEx(AWort, AText, p + 1);
+    end;
+  end;
+
 var
-  Methods, Params, Calls, Assigns : TList<TAstNode>;
-  Mth, C, A    : TAstNode;
-  ParamLow, N  : string;
-  Kurz         : string;
+  Methods, Calls, Assigns : TList<TAstNode>;
+  Mth, Cand, P, C, A      : TAstNode;
+  ParamLow, N, Kurz       : string;
+  KandZahl, ParamZahl     : Integer;
 begin
   Result := False;
   if (AUnitNode = nil) or (ACalleeLow = '') then Exit;
   Methods := AUnitNode.FindAllRef(nkMethod);
   if Methods = nil then Exit;
+
+  // Den EINEN Kandidaten suchen. Unqualifiziert vergleichen: der Aufruf
+  // steht als 'Parent.AddItem', die Implementierung als
+  // 'TCnDocBaseItem.AddItem'.
+  //
+  // EINDEUTIGKEIT ist Pflicht, nicht Kosmetik: tragen zwei Klassen der
+  // Unit ein 'AddItem' und nur die eine uebernimmt, entschiede der erste
+  // Treffer ueber ein echtes Leck der anderen. Bei Mehrdeutigkeit
+  // schweigt das Gate (der Fund bleibt).
+  Cand     := nil;
+  KandZahl := 0;
   for Mth in Methods do
   begin
-    // Unqualifiziert vergleichen: der Aufruf steht als "Parent.AddItem",
-    // die Implementierung als "TCnDocBaseItem.AddItem".
     Kurz := TDetectorUtils.UnqualifiedNameLast(Mth.Name).ToLower;
     if Kurz <> ACalleeLow then Continue;
-    Params := Mth.FindAllRef(nkParam);
-    if (Params = nil) or (Params.Count <> 1) then Continue;
-    ParamLow := TDetectorUtils.UnqualifiedNameLast(Params[0].Name).ToLower;
-    if ParamLow = '' then Continue;
-    // (a) Feld-Container nimmt ihn auf:  F<irgendwas>.Add(Param)
-    Calls := Mth.FindAllRef(nkCall);
-    if Calls <> nil then
-      for C in Calls do
-      begin
-        N := C.Name.ToLower;
-        if (Pos('.add(', N) > 0) or (Pos('.insert(', N) > 0)
-           or (Pos('.addobject(', N) > 0) then
-        begin
-          var pp := Pos(ParamLow, N);
-          if (pp > 0) and TLeakDetector2.IsWholeWord(N, ParamLow, pp) then
-            Exit(True);
-        end;
-      end;
-    // (b) direkte Feldzuweisung:  FFeld := Param
-    Assigns := Mth.FindAllRef(nkAssign);
-    if Assigns <> nil then
-      for A in Assigns do
-      begin
-        N := A.Name.ToLower;
-        if (N <> '') and (N[1] = 'f')
-           and (Trim(A.TypeRef).ToLower = ParamLow) then Exit(True);
-      end;
+    if not HatRumpf(Mth) then Continue;
+    Inc(KandZahl);
+    Cand := Mth;
   end;
+  if (KandZahl <> 1) or (Cand = nil) then Exit;
+
+  // Genau ein Parameter - s. Kopfkommentar. NUR direkte Kinder:
+  // FindAllRef waere subtree-weit und zaehlte die Parameter
+  // verschachtelter Routinen mit; das Gate fiele dann still aus.
+  ParamZahl := 0;
+  ParamLow  := '';
+  for P in Cand.Children do
+    if P.Kind = nkParam then
+    begin
+      Inc(ParamZahl);
+      ParamLow := P.Name.ToLower;
+    end;
+  if ParamZahl <> 1 then Exit;
+  // Der Modifier steht IM Namen ('const item'), nicht daneben - genau so
+  // liest ihn HasFunctionCallAssign.
+  for var Mod_ in ['var ', 'const ', 'out '] do
+    if StartsStr(Mod_, ParamLow) then
+      ParamLow := Trim(Copy(ParamLow, Length(Mod_) + 1, MaxInt));
+  // Nur ein reiner Bezeichner taugt als Suchwort. Legt der Parser eine
+  // Gruppe ('a, b: TFoo') oder einen Typanteil in den Namen, waere das
+  // Wort-Matching unten sinnlos - dann lieber schweigen als falsch
+  // unterdruecken.
+  if ParamLow = '' then Exit;
+  for var i := 1 to Length(ParamLow) do
+    if not TLeakDetector2.IsIdentChar(ParamLow[i]) then Exit;
+
+  // (a) Ein Container nimmt ihn auf: <irgendwas>.Add(Param)
+  Calls := Cand.FindAllRef(nkCall);
+  if Calls <> nil then
+    for C in Calls do
+    begin
+      N := C.Name.ToLower;
+      for var Marker in ['.add(', '.insert(', '.addobject('] do
+      begin
+        var pm := Pos(Marker, N);
+        if (pm > 0) and AlsWortDrin(N, ParamLow, pm + Length(Marker)) then
+          Exit(True);
+      end;
+    end;
+
+  // (b) direkte Feldzuweisung: FFeld := Param
+  Assigns := Cand.FindAllRef(nkAssign);
+  if Assigns <> nil then
+    for A in Assigns do
+    begin
+      N := A.Name.ToLower;
+      if (N <> '') and (N[1] = 'f')
+         and (Trim(A.TypeRef).ToLower = ParamLow) then Exit(True);
+    end;
 end;
 
 class function TLeakDetector2.IsPassedToOwner(MethodNode: TAstNode;
@@ -1821,7 +1893,7 @@ begin
       begin
         var CalleeLow := TDetectorUtils.UnqualifiedNameLast(
                            Copy(NameLow, 1, pKlammer - 1)).ToLower;
-        if VarInArgs(NameLow, pKlammer)
+        if VarInArgs(NameLow, pKlammer + 1)
            and CalleeTakesOwnershipLocal(AUnitNode, CalleeLow) then
           Exit(True);
       end;
