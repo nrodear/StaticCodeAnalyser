@@ -1425,76 +1425,6 @@ begin
   end;
 end;
 
-function ArgumenteAufOberstemNiveau(const ACallLow: string;
-  AKlammerPos: Integer): Integer;
-// Wieviele Argumente hat der Aufruf, der bei AKlammerPos seine
-// oeffnende Klammer hat? 0 = leere Liste, -1 = unlesbar (keine
-// passende schliessende Klammer im Token).
-//
-// WOZU, belegt an rw34: 'AConfig.Add(''FileColors'', AList)' in
-// doublecmd uColorExt ruft TJSONObject.Add - unit-lokal gibt es aber
-// genau ein 'TColorExt.Add(AItem: TMaskItem)', und dessen Rumpf legt
-// brav in ein Feld. Die Namensgleichheit allein hat drei Funde
-// unterdrueckt, die den gefundenen Callee nie erreichen. Zwei
-// Argumente gegen einen Parameter ist der billige Beweis dafuer, dass
-// die Aufloesung danebengriff.
-//
-// Kommas in geschachtelten Klammern, in eckigen Klammern und in
-// String-Literalen zaehlen NICHT mit - sonst waere 'Add(Format(''%d,%d'',
-// [a, b]))' dreiargumentig.
-//
-// UEBER DEM KOMPLEXITAETSRICHTWERT, mit Absicht: das hier ist ein
-// Zeichenscanner mit drei Zustaenden (Tiefe, im Text, Kommazahl).
-// Zerlegt man ihn, wandert der Zustand in Parameterlisten und die
-// Fallunterscheidung wird schwerer zu lesen, nicht leichter. Der
-// eigene Self-Scan meldet ihn (SCA022/SCA176) - das ist gesehen und
-// abgewogen, nicht uebersehen.
-var
-  i, tiefe, kommas : Integer;
-  imText : Boolean;
-  c      : Char;
-begin
-  Result := -1;
-  if (AKlammerPos < 1) or (AKlammerPos > Length(ACallLow))
-     or (ACallLow[AKlammerPos] <> '(') then Exit;
-  tiefe  := 0;
-  kommas := 0;
-  imText := False;
-  for i := AKlammerPos to Length(ACallLow) do
-  begin
-    c := ACallLow[i];
-    if imText then
-    begin
-      // Verdoppelte Apostrophe brauchen keine Sonderbehandlung: das
-      // zweite oeffnet den Text sofort wieder.
-      if c = '''' then imText := False;
-      Continue;
-    end;
-    case c of
-      '''': imText := True;
-      '(', '[': Inc(tiefe);
-      ')', ']':
-        begin
-          Dec(tiefe);
-          if tiefe <= 0 then
-          begin
-            if Trim(Copy(ACallLow, AKlammerPos + 1,
-                         i - AKlammerPos - 1)) = '' then Exit(0);
-            Exit(kommas + 1);
-          end;
-        end;
-      ',': if tiefe = 1 then Inc(kommas);
-    else
-      // Alle uebrigen Zeichen gehoeren zum Argumenttext und
-      // aendern weder Tiefe noch Zaehlung. Der Zweig steht da,
-      // weil ein case ohne else nicht erkennen laesst, ob der
-      // Rest bedacht wurde oder vergessen (SCA168 am eigenen
-      // Quelltext).
-      ;
-    end;
-  end;
-end;
-
 function MethodeHatRumpf(ANode: TAstNode): Boolean;
 // Die Klassendeklaration ('procedure AddItem(...)' im type-Block) ist
 // auch ein nkMethod, hat aber keinen nkBlock. Sie kann nichts
@@ -1574,49 +1504,69 @@ begin
     if not TLeakDetector2.IsIdentChar(Result[i]) then Exit('');
 end;
 
-function ArgumentIstExaktDerParameter(const ACallLow: string;
-  AAb: Integer; const AParamLow: string): Boolean;
-// Ist EINES der Top-Level-Argumente ab AAb GENAU der Parameter - und
-// nicht bloss ein Ausdruck, der mit ihm beginnt?
+function ArgumenteScannen(const ACallLow: string; AKlammerPos: Integer;
+  const ASuchwort: string; out AExakterTreffer: Boolean): Integer;
+// EIN Scanner ueber die Argumentliste, ZWEI Antworten:
+//   Ergebnis        = Zahl der Top-Level-Argumente (0 = leere Liste,
+//                     -1 = unlesbar, weil die schliessende Klammer fehlt)
+//   AExakterTreffer = eines der Argumente ist GENAU ASuchwort
 //
-// WOZU (Fund einer Gegenpruefung, 31.08.): die erste Fassung fragte
-// bloss, ob der Parametername irgendwo nach dem Marker als Wort
-// vorkommt. In
+// Vorher waren das zwei fast gleiche Funktionen; der eigene Self-Scan hat
+// die Kopie als DuplicateBlock gemeldet und hatte recht - beide zaehlten
+// dieselben Klammern, respektierten dieselben String-Literale und
+// unterschieden sich nur in der Antwort am Ende.
+//
+// WOZU DIE ZAHL, belegt an rw34: 'AConfig.Add(''FileColors'', AList)' in
+// doublecmd uColorExt ruft TJSONObject.Add - unit-lokal gibt es aber
+// genau ein 'TColorExt.Add(AItem: TMaskItem)'. Zwei Argumente gegen einen
+// Parameter ist der billige Beweis, dass die Aufloesung danebengriff.
+//
+// WOZU DER EXAKTE TREFFER, belegt an cnwizards CnWizClasses.pas:1431:
 //   procedure TCnSubMenuWizard.AddSubMenuWizard(SubMenuWiz: TCnSubMenuWizard);
 //   begin
 //     FList.Add(SubMenuWiz.Action);     // gespeichert wird die ACTION
 //   end;
-// (cnwizards CnWizClasses.pas:1431) matcht 'submenuwiz' mit sauberen
-// Wortgrenzen - links die Klammer, rechts der Punkt. Das Gate haette
-// geschlossen, der Parameter werde abgelegt, und ein
-//   Wiz := TCnSubMenuWizard.Create(..); Parent.AddSubMenuWizard(Wiz);
-// stillgelegt. Der Quellkommentar dort sagt ausdruecklich, dass
-// ClearSubActions die ACTION freigibt - der Wizard selbst leckt.
+// Eine blosse Wortsuche findet 'submenuwiz' mit sauberen Grenzen (links
+// die Klammer, rechts der Punkt) und schliesst faelschlich, der Parameter
+// werde abgelegt. Der Quellkommentar dort verweist auf ClearSubActions,
+// das die ACTION freigibt - der Wizard selbst leckt.
 //
-// Im Korpus ist der Fehlschluss nicht eingetreten (alle 21 Drops der
-// Klasse F sind handgeprueft), er war latent.
+// Kommas in geschachtelten Klammern, in eckigen Klammern und in
+// String-Literalen zaehlen NICHT mit - sonst waere
+// 'Add(Format(''%d,%d'', [a, b]))' dreiargumentig.
+//
+// UEBER DEM KOMPLEXITAETSRICHTWERT, mit Absicht: ein Zeichenscanner mit
+// drei Zustaenden (Tiefe, im Text, Argumentgrenze). Zerlegt man ihn,
+// wandert der Zustand in Parameterlisten und die Fallunterscheidung wird
+// schwerer zu lesen, nicht leichter.
 var
-  i, tiefe, start : Integer;
+  i, tiefe, kommas, start : Integer;
   imText : Boolean;
-  c : Char;
+  c      : Char;
 
-  function StueckPasst(AVon, ABis: Integer): Boolean;
+  procedure StueckPruefen(AVon, ABis: Integer);
   begin
-    Result := (ABis >= AVon)
-      and (Trim(Copy(ACallLow, AVon, ABis - AVon + 1)) = AParamLow);
+    if (ASuchwort <> '') and (ABis >= AVon)
+       and (Trim(Copy(ACallLow, AVon, ABis - AVon + 1)) = ASuchwort) then
+      AExakterTreffer := True;
   end;
 
 begin
-  Result := False;
-  if (AAb < 1) or (AAb > Length(ACallLow)) or (AParamLow = '') then Exit;
-  tiefe  := 1;                 // AAb steht bereits HINTER der Klammer
+  Result          := -1;
+  AExakterTreffer := False;
+  if (AKlammerPos < 1) or (AKlammerPos > Length(ACallLow))
+     or (ACallLow[AKlammerPos] <> '(') then Exit;
+  tiefe  := 0;
+  kommas := 0;
   imText := False;
-  start  := AAb;
-  for i := AAb to Length(ACallLow) do
+  start  := AKlammerPos + 1;
+  for i := AKlammerPos to Length(ACallLow) do
   begin
     c := ACallLow[i];
     if imText then
     begin
+      // Verdoppelte Apostrophe brauchen keine Sonderbehandlung: das
+      // zweite oeffnet den Text sofort wieder.
       if c = '''' then imText := False;
       Continue;
     end;
@@ -1626,13 +1576,20 @@ begin
       ')', ']':
         begin
           Dec(tiefe);
-          if tiefe <= 0 then Exit(StueckPasst(start, i - 1));
+          if tiefe <= 0 then
+          begin
+            StueckPruefen(start, i - 1);
+            if Trim(Copy(ACallLow, AKlammerPos + 1,
+                         i - AKlammerPos - 1)) = '' then Exit(0);
+            Exit(kommas + 1);
+          end;
         end;
       ',':
         if tiefe = 1 then
         begin
-          if StueckPasst(start, i - 1) then Exit(True);
+          StueckPruefen(start, i - 1);
           start := i + 1;
+          Inc(kommas);
         end;
     else
       // Alle uebrigen Zeichen gehoeren zum laufenden Argument.
@@ -1663,11 +1620,15 @@ begin
       for var Marker in ['.add(', '.insert(', '.addobject('] do
       begin
         var pm := Pos(Marker, N);
-        // EXAKT das Argument, nicht bloss ein Ausdruck, der mit dem
-        // Parameter beginnt - s. ArgumentIstExaktDerParameter.
-        if (pm > 0) and ArgumentIstExaktDerParameter(
-                          N, pm + Length(Marker), AParamLow) then
-          Exit(True);
+        // Der Marker endet auf '(' - seine letzte Position ist die
+        // Klammer selbst. EXAKT das Argument, nicht bloss ein
+        // Ausdruck, der mit dem Parameter beginnt (s. ArgumenteScannen).
+        var Treffer: Boolean;
+        if pm > 0 then
+        begin
+          ArgumenteScannen(N, pm + Length(Marker) - 1, AParamLow, Treffer);
+          if Treffer then Exit(True);
+        end;
       end;
     end;
 
@@ -2217,7 +2178,8 @@ begin
         if pPunkt > 0 then
           RecvLow := Trim(Copy(VorKlammer, 1, pPunkt - 1));
         if RecvLow = 'self' then RecvLow := '';
-        if (ArgumenteAufOberstemNiveau(NameLow, pKlammer) = 1)
+        var ArgTreffer: Boolean;
+        if (ArgumenteScannen(NameLow, pKlammer, '', ArgTreffer) = 1)
            and VarInArgs(NameLow, pKlammer + 1)
            and CalleeTakesOwnershipLocal(AUnitNode, MethodNode,
                                          CalleeLow, RecvLow) then
