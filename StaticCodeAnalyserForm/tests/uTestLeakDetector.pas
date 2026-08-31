@@ -350,6 +350,11 @@ type
     //     "destructor;class" und wurde nie gefunden (30.08.)
     [Test] procedure Field_FreedInClassDestructor_NoFinding;
     [Test] procedure Field_ClassDestructorFreesOther_StillReported;
+    // (d) KLASSE J: .NET-IDisposable - Dispose(Boolean); override (31.08.)
+    [Test] procedure Field_FreedInDisposeOverride_NoFinding;
+    [Test] procedure Field_DisposeWithoutOverride_StillReported;
+    [Test] procedure Field_ClassDisposeOverride_StillReported;
+    [Test] procedure Field_DisposeWrongSignature_StillReported;
     // (b) Transitive Component-Ownership ohne Destruktor (jvcl
     //     JvGammaPanel 61/63/64, JvCombobox 261).
     [Test] procedure Field_OwnerChainReachesSelf_NoFinding;
@@ -6793,6 +6798,141 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
     'abgelegt wird Item.Handle, nicht Item - der Parameter leckt');
+  finally F.Free; end;
+end;
+
+
+procedure TTestFieldLeak.Field_FreedInDisposeOverride_NoFinding;
+// KLASSE J (31.08.): .NET-IDisposable-Muster. Die Klasse hat KEINEN
+// Destruktor - gemeldet wurde "created in constructor but no destructor
+// exists" - und raeumt vollstaendig in Dispose(Boolean) auf.
+//
+// BELEG: Indy IdDsnPropEdBindingNET.pas:50/51 (FreeAndNil in 391/392),
+// Design/IdDsnPropEdBindingNET.pas:47, IdDsnSASLListEditorFormNET.pas:47.
+//
+// 'override' ist der tragende Teil: es belegt, dass eine Basisklasse
+// Dispose(Boolean) virtuell deklariert und der Aufrufer ausserhalb
+// dieser Klasse sitzt. Dass Dispose gerufen WIRD, laesst sich statisch
+// nicht zeigen - dass es einem fremden Vertrag gehoert, schon.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TFoo = class'#13#10+
+  '  FList: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  procedure Dispose(Disposing: Boolean); override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TFoo.Create;'#13#10+
+  'begin'#13#10+
+  '  FList := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Dispose(Disposing: Boolean);'#13#10+
+  'begin'#13#10+
+  '  FreeAndNil(FList);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'Freigabe in Dispose(Boolean); override - fremder Vertrag raeumt auf');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_DisposeWithoutOverride_StillReported;
+// TP-Gegenprobe 1 von 3: 'virtual' STATT 'override'. Dann gehoert die
+// Methode keinem fremden Vertrag, sondern deklariert einen eigenen -
+// gerufen wird sie nur, wenn jemand sie ruft.
+//
+// BELEG fuer die Gefahr (HeidiSQL VirtualTrees.WorkerThread.pas:19):
+// dort raeumt eine handgeschriebene Dispose-Methode den globalen Worker
+// ab, gerufen von Hand aus ReleaseThreadReference. Ohne den
+// override-Zwang waere das ein "garantierter" Freigabeort.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TFoo = class'#13#10+
+  '  FList: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  procedure Dispose(Disposing: Boolean); virtual;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TFoo.Create;'#13#10+
+  'begin'#13#10+
+  '  FList := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Dispose(Disposing: Boolean);'#13#10+
+  'begin'#13#10+
+  '  FreeAndNil(FList);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+    'virtual statt override - niemand ausserhalb ruft das garantiert');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_ClassDisposeOverride_StillReported;
+// TP-Gegenprobe 2 von 3: 'class procedure ... override'. Dieser Test
+// nagelt den ;class-AUSSCHLUSS fest - Gegenprobe 1 kaeme auch ohne ihn
+// durch, weil dort schon das fehlende override greift.
+//
+// Begruendung des Ausschlusses: eine Klassenmethode gehoert nicht zum
+// Instanz-Lebenszyklus. Sie kann das Feld einer einzelnen Instanz nicht
+// verlaesslich freigeben.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TFoo = class'#13#10+
+  '  FList: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  class procedure Dispose(Disposing: Boolean); override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TFoo.Create;'#13#10+
+  'begin'#13#10+
+  '  FList := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'class procedure TFoo.Dispose(Disposing: Boolean);'#13#10+
+  'begin'#13#10+
+  '  FreeAndNil(FList);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+    'Klassenmethode gehoert nicht zum Instanz-Lebenszyklus');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_DisposeWrongSignature_StillReported;
+// TP-Gegenprobe 3 von 3: 'Dispose' OHNE den Boolean-Parameter. Das ist
+// nicht die Signatur des .NET-Musters (Dispose() -> Dispose(True),
+// Finalizer -> Dispose(False)), sondern irgendeine Methode dieses
+// Namens.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TFoo = class'#13#10+
+  '  FList: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  procedure Dispose; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TFoo.Create;'#13#10+
+  'begin'#13#10+
+  '  FList := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Dispose;'#13#10+
+  'begin'#13#10+
+  '  FreeAndNil(FList);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+    'ohne Boolean-Parameter ist es nicht das IDisposable-Muster');
   finally F.Free; end;
 end;
 
