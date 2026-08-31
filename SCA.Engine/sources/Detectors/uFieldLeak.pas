@@ -191,6 +191,33 @@ begin
   end;
 end;
 
+function HatGenauEinenParameter(AMethod: TAstNode;
+  const ATypLow: string): Boolean;
+// Traegt die Methode GENAU EINEN Parameter vom Typ ATypLow?
+//
+// Zwei Suchraum-Erweiterungen brauchen dieselbe Frage mit anderem Typ:
+// der OnDestroy-Handler die VCL-Event-Signatur (TObject), die
+// Dispose-Methode das .NET-Muster (Boolean). Der eigene Self-Scan hat
+// die Kopie als DuplicateBlock gemeldet.
+//
+// NUR direkte Kinder: FindAll waere subtree-weit und zaehlte die
+// Parameter verschachtelter Routinen mit.
+var
+  P    : TAstNode;
+  Zahl : Integer;
+begin
+  Result := False;
+  Zahl   := 0;
+  if not Assigned(AMethod) then Exit;
+  for P in AMethod.Children do
+    if P.Kind = nkParam then
+    begin
+      Inc(Zahl);
+      Result := Trim(P.TypeRef).ToLower = ATypLow;
+    end;
+  Result := Result and (Zahl = 1);
+end;
+
 class function TFieldLeakDetector.FindDisposeMethod(UnitNode,
   ClassNode: TAstNode; const ClassName: string): TAstNode;
 // Die Dispose-Methode einer Klasse, die dem .NET-IDisposable-Muster
@@ -227,11 +254,9 @@ class function TFieldLeakDetector.FindDisposeMethod(UnitNode,
 // Reine SUCHRAUM-Erweiterung wie ihre drei Geschwister: kann einen Fund
 // nur unterdruecken, nie einen erzeugen.
 var
-  Decls : TList<TAstNode>;
-  M, P  : TAstNode;
+  Decls  : TList<TAstNode>;
+  M      : TAstNode;
   TypLow : string;
-  Zahl  : Integer;
-  Passt : Boolean;
 begin
   Result := nil;
   if (not Assigned(UnitNode)) or (not Assigned(ClassNode))
@@ -244,17 +269,7 @@ begin
       TypLow := M.TypeRef.ToLower;
       if Pos(';override', TypLow) = 0 then Continue;
       if Pos(';class', TypLow) > 0 then Continue;
-      // Signatur: genau ein Boolean. NUR direkte Kinder - FindAll waere
-      // subtree-weit und zaehlte Parameter verschachtelter Routinen mit.
-      Zahl  := 0;
-      Passt := False;
-      for P in M.Children do
-        if P.Kind = nkParam then
-        begin
-          Inc(Zahl);
-          Passt := Trim(P.TypeRef).ToLower = 'boolean';
-        end;
-      if (Zahl = 1) and Passt then
+      if HatGenauEinenParameter(M, 'boolean') then
         Exit(FindMethodNamed(UnitNode, ClassName, 'dispose'));
     end;
   finally
@@ -279,25 +294,6 @@ class function TFieldLeakDetector.FindDestroyEventHandler(
 // haben ueberhaupt keine Freigabe in der Datei; die duerfen von dieser
 // Erweiterung nicht beruehrt werden.
 
-  function HatEventSignatur(AMethod: TAstNode): Boolean;
-  // Genau EIN Parameter vom Typ TObject - die Signatur eines
-  // VCL-Event-Handlers. NUR direkte Kinder: FindAll waere subtree-weit
-  // und zaehlte die Parameter verschachtelter Routinen mit.
-  var
-    P    : TAstNode;
-    Zahl : Integer;
-  begin
-    Result := False;
-    Zahl   := 0;
-    for P in AMethod.Children do
-      if P.Kind = nkParam then
-      begin
-        Inc(Zahl);
-        Result := Trim(P.TypeRef).ToLower = 'tobject';
-      end;
-    Result := Result and (Zahl = 1);
-  end;
-
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;
@@ -316,7 +312,7 @@ begin
       // 'destroy' allein ist der Destruktor, nicht der Handler.
       if (Kurz = '') or (Kurz = 'destroy') then Continue;
       if not Kurz.EndsWith('destroy') then Continue;
-      if HatEventSignatur(M) then Exit(M);
+      if HatGenauEinenParameter(M, 'tobject') then Exit(M);
     end;
   finally
     Methods.Free;
