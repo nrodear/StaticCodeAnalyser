@@ -1,4 +1,4 @@
-unit uBeginEndRequired;
+﻿unit uBeginEndRequired;
 
 // Detektor fuer Statement-Bodies, die kein `begin..end` verwenden, obwohl
 // die Konvention im Projekt es vorschreiben sollte.
@@ -264,14 +264,25 @@ begin
     begin
       Cols.Clear;
       CollectBareBranches(Lines[i], InBlk, InParen, Cols, Pend);
-      if Pend.NewSet then
-        PendLine := i;
+      // REIHENFOLGE, gemessen am Korpus 31.08.: der Emit unten meldet den
+      // Branch der VORZEILE und liest dafuer PendLine. Stand die Zuweisung
+      // davor, ueberschrieb eine Zeile, die zugleich einen wartenden Branch
+      // ABSCHLIESST und einen neuen OEFFNET ('  DoIt else'), den Anker vor
+      // dem Lesen - der Fund landete eine Zeile zu tief.
+      //
+      // Betroffen 36 von 41.067 SCA101-Funden (0,088 %) in den 182
+      // Dateien einer AQL-Stichprobe; bei 17 davon traegt die gemeldete
+      // Zeile keinen eigenen Verstoss, dort war es ein Fehlalarm.
+      // Beispiel: jvcl JvDBTreeView.pas 581/582.
       if (Pend.ViolatedCol > 0) and (PendLine >= 0) then
         Results.Add(TLeakFinding.New(FileName, '', PendLine + 1,
           Format('Branch at column %d uses a single statement without ' +
                  '`begin..end` - explicit blocks survive future additions ' +
                  'without re-indenting errors.', [Pend.ViolatedCol]),
           fkBeginEndRequired));
+      // Erst jetzt wird der wartende Branch DIESER Zeile zum neuen Anker.
+      if Pend.NewSet then
+        PendLine := i;
       for Col in Cols do
         Results.Add(TLeakFinding.New(FileName, '', i + 1,
           Format('Branch at column %d uses a single statement without ' +
