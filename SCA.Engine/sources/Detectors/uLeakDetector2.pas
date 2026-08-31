@@ -1239,14 +1239,25 @@ const
   // wirklich Free auf ihre Items rufen. Bis 2026-07-31 lokal in
   // AddReceiverOwnsItems; hochgezogen, damit die Alias-Aufloesung
   // (UnitTypeIsOwningContainer) GENAU DIESELBE Liste benutzt.
-  OWNING_PREFIXES : array[0..6] of string = (
+  OWNING_PREFIXES : array[0..7] of string = (
     'tobjectlist',         // TObjectList<T>(True), TObjectList(True)
     'tobjectdictionary',   // TObjectDictionary
     'tobjectqueue',
     'tobjectstack',
     'tcomponentlist',      // VCL
     'townedcollection',    // VCL
-    'tinterfacelist'       // refcount-managed - effektiv ownership-aequiv
+    'tinterfacelist',      // refcount-managed - effektiv ownership-aequiv
+    // KLASSE A (30.08.): der JSON-Array BESITZT seine Elemente - in
+    // System.JSON wie in fpjson gibt sein Destructor sie frei. Gemessen
+    // 7 Funde, u.a. doublecmd dmhigh.pas:194/202
+    // ('Attributes := TJSONArray.Create; Attributes.Add(AttributeNode)').
+    //
+    // NUR der Array, NICHT TJSONObject: dessen 'Add' haelt
+    // Leak_SinkResolvedNonOwningReceiver_StillReported bewusst als Fund
+    // fest ('aufloesbarer Empfaenger ohne Ownership-Nachweis'). Die
+    // AddPair-Ausnahme in ReceiverVetoesSink ist eng auf jene RTL-Methode
+    // beschraenkt und bleibt es.
+    'tjsonarray'
   );
 
 function OwningContainerTypeLow(const TypeLow: string): Boolean;

@@ -303,6 +303,8 @@ type
     // KLASSE A: TJSONObject.AddPair uebernimmt - typgebunden (30.08.)
     [Test] procedure JsonAddPairTakesOwnership_NotReported;
     [Test] procedure AddPairOnForeignTypeIsNoTransfer_StillReported;
+    [Test] procedure JsonArrayAddTakesOwnership_NotReported;
+    [Test] procedure PlainListAddIsNoTransfer_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -6694,6 +6696,54 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
     'TMeinCache ist kein TJSONObject - AddPair beweist hier nichts');
+  finally F.Free; end;
+end;
+
+
+procedure TTestMemoryLeakAdvanced.JsonArrayAddTakesOwnership_NotReported;
+// KLASSE A der SCA001-Vollzaehlung: der JSON-Array BESITZT seine
+// Elemente - in System.JSON wie in fpjson gibt sein Destructor sie frei.
+//
+// BELEG (doublecmd dmhigh.pas:194/202): 'Attributes := TJSONArray.Create;
+// ... Attributes.Add(AttributeNode)'. Gemessen 7 Funde.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'implementation'+#13#10+
+  'procedure Baue;'+#13#10+
+  'var Arr: TJSONArray; Knoten: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Knoten := TStringList.Create;'+#13#10+
+  '  Arr.Add(Knoten);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'TJSONArray.Add uebernimmt - der Array raeumt auf');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.PlainListAddIsNoTransfer_StillReported;
+// TP-Gegenprobe und die Grenze der Erweiterung: TList.Add uebernimmt
+// KEIN Ownership. Sie ist der haeufigste Empfaenger in dieser Gruppe
+// (7 von 29 gemessenen Add-Faellen) und muss ein Fund bleiben - sonst
+// waere die Whitelist eine Sperrliste geworden.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'implementation'+#13#10+
+  'procedure Baue;'+#13#10+
+  'var L: TList; Knoten: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Knoten := TStringList.Create;'+#13#10+
+  '  L.Add(Knoten);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+    'TList.Add uebernimmt nicht - der Fund bleibt');
   finally F.Free; end;
 end;
 
