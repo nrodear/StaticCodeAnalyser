@@ -1508,26 +1508,6 @@ begin
     if Ch.Kind = nkBlock then Exit(True);
 end;
 
-function WortAbPosition(const AText, AWort: string; AAb: Integer): Boolean;
-// ALLE Substring-Treffer pruefen, nicht nur den ersten. In
-// 'fitems.add(item)' liegt der erste 'item'-Treffer INNERHALB von
-// 'fitems' und hat keine linke Wortgrenze; das echte Argument steht
-// dahinter. Genau daran ist die erste Fassung des Klasse-F-Gates
-// gescheitert - und VarInArgs an derselben Stelle schon einmal
-// ('pfileinfo(fi)', Inkr.3). Wer hier Pos statt PosEx nimmt, baut den
-// Fehler zum dritten Mal.
-var
-  p : Integer;
-begin
-  Result := False;
-  p := PosEx(AWort, AText, AAb);
-  while p > 0 do
-  begin
-    if TLeakDetector2.IsWholeWord(AText, AWort, p) then Exit(True);
-    p := PosEx(AWort, AText, p + 1);
-  end;
-end;
-
 function KandidatFuerCallee(AUnitNode: TAstNode;
   const ACalleeLow: string): TAstNode;
 // Die EINE unit-lokale Routine, die der Aufruf meinen kann - oder nil.
@@ -1594,6 +1574,73 @@ begin
     if not TLeakDetector2.IsIdentChar(Result[i]) then Exit('');
 end;
 
+function ArgumentIstExaktDerParameter(const ACallLow: string;
+  AAb: Integer; const AParamLow: string): Boolean;
+// Ist EINES der Top-Level-Argumente ab AAb GENAU der Parameter - und
+// nicht bloss ein Ausdruck, der mit ihm beginnt?
+//
+// WOZU (Fund einer Gegenpruefung, 31.08.): die erste Fassung fragte
+// bloss, ob der Parametername irgendwo nach dem Marker als Wort
+// vorkommt. In
+//   procedure TCnSubMenuWizard.AddSubMenuWizard(SubMenuWiz: TCnSubMenuWizard);
+//   begin
+//     FList.Add(SubMenuWiz.Action);     // gespeichert wird die ACTION
+//   end;
+// (cnwizards CnWizClasses.pas:1431) matcht 'submenuwiz' mit sauberen
+// Wortgrenzen - links die Klammer, rechts der Punkt. Das Gate haette
+// geschlossen, der Parameter werde abgelegt, und ein
+//   Wiz := TCnSubMenuWizard.Create(..); Parent.AddSubMenuWizard(Wiz);
+// stillgelegt. Der Quellkommentar dort sagt ausdruecklich, dass
+// ClearSubActions die ACTION freigibt - der Wizard selbst leckt.
+//
+// Im Korpus ist der Fehlschluss nicht eingetreten (alle 21 Drops der
+// Klasse F sind handgeprueft), er war latent.
+var
+  i, tiefe, start : Integer;
+  imText : Boolean;
+  c : Char;
+
+  function StueckPasst(AVon, ABis: Integer): Boolean;
+  begin
+    Result := (ABis >= AVon)
+      and (Trim(Copy(ACallLow, AVon, ABis - AVon + 1)) = AParamLow);
+  end;
+
+begin
+  Result := False;
+  if (AAb < 1) or (AAb > Length(ACallLow)) or (AParamLow = '') then Exit;
+  tiefe  := 1;                 // AAb steht bereits HINTER der Klammer
+  imText := False;
+  start  := AAb;
+  for i := AAb to Length(ACallLow) do
+  begin
+    c := ACallLow[i];
+    if imText then
+    begin
+      if c = '''' then imText := False;
+      Continue;
+    end;
+    case c of
+      '''': imText := True;
+      '(', '[': Inc(tiefe);
+      ')', ']':
+        begin
+          Dec(tiefe);
+          if tiefe <= 0 then Exit(StueckPasst(start, i - 1));
+        end;
+      ',':
+        if tiefe = 1 then
+        begin
+          if StueckPasst(start, i - 1) then Exit(True);
+          start := i + 1;
+        end;
+    else
+      // Alle uebrigen Zeichen gehoeren zum laufenden Argument.
+      ;
+    end;
+  end;
+end;
+
 function RumpfUebernimmtParameter(ACand: TAstNode;
   const AParamLow: string): Boolean;
 // Legt der Rumpf den Parameter in einen Container oder in ein Feld?
@@ -1616,7 +1663,10 @@ begin
       for var Marker in ['.add(', '.insert(', '.addobject('] do
       begin
         var pm := Pos(Marker, N);
-        if (pm > 0) and WortAbPosition(N, AParamLow, pm + Length(Marker)) then
+        // EXAKT das Argument, nicht bloss ein Ausdruck, der mit dem
+        // Parameter beginnt - s. ArgumentIstExaktDerParameter.
+        if (pm > 0) and ArgumentIstExaktDerParameter(
+                          N, pm + Length(Marker), AParamLow) then
           Exit(True);
       end;
     end;
