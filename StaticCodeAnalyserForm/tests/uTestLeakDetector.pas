@@ -305,6 +305,9 @@ type
     [Test] procedure AddPairOnForeignTypeIsNoTransfer_StillReported;
     [Test] procedure JsonArrayAddTakesOwnership_NotReported;
     [Test] procedure PlainListAddIsNoTransfer_StillReported;
+    // Gegenpruefung 31.08.: Callee legt eine EIGENSCHAFT ab, nicht
+    // den Parameter selbst
+    [Test] procedure LocalCalleeStoresPropertyNotParam_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -6744,6 +6747,52 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
     'TList.Add uebernimmt nicht - der Fund bleibt');
+  finally F.Free; end;
+end;
+
+
+procedure TTestMemoryLeakAdvanced.LocalCalleeStoresPropertyNotParam_StillReported;
+// REGRESSION, gefunden von einer adversarialen Gegenpruefung am 31.08.:
+// der Callee legt nicht den PARAMETER ab, sondern eine EIGENSCHAFT von
+// ihm. Dann ist der Parameter selbst weiterhin herrenlos.
+//
+// BELEG (cnwizards CnWizClasses.pas:1431):
+//   procedure TCnSubMenuWizard.AddSubMenuWizard(SubMenuWiz: TCnSubMenuWizard);
+//   begin
+//     Menu.Add(SubMenuWiz.Action.Menu);
+//     FList.Add(SubMenuWiz.Action);     // gespeichert wird die ACTION
+//   end;
+// Der Quellkommentar dort verweist auf ClearSubActions, das die ACTION
+// freigibt - der Wizard selbst leckt.
+//
+// Die erste Fassung des Gates suchte den Parameternamen als WORT nach
+// dem Marker. 'submenuwiz' hat dort saubere Wortgrenzen (links die
+// Klammer, rechts der Punkt) und matchte. Jetzt muss das Argument
+// EXAKT der Parameter sein.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TBar = class'+#13#10+
+  '    FItems: TObjectList;'+#13#10+
+  '    procedure AddItem(Item: TStringList);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure TBar.AddItem(Item: TStringList);'+#13#10+
+  'begin'+#13#10+
+  '  FItems.Add(Item.Handle);'+#13#10+
+  'end;'+#13#10+
+  'procedure Use(B: TBar);'+#13#10+
+  'var Item: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Item := TStringList.Create;'+#13#10+
+  '  B.AddItem(Item);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+    'abgelegt wird Item.Handle, nicht Item - der Parameter leckt');
   finally F.Free; end;
 end;
 
