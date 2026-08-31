@@ -1,4 +1,4 @@
-unit uCommentedOutCode;
+﻿unit uCommentedOutCode;
 
 // Detektor fuer "auskommentierten Code".
 //
@@ -231,7 +231,17 @@ end;
 // Pro Zeile: extrahiert den //-Kommentar-Inhalt (rest nach `//`) und
 // gibt Spalte des `//` zurueck wenn der Inhalt Code-Marker hat, sonst 0.
 function FindCommentedOutCode(const Line: string; var InBlockComm: Boolean;
-  var InParenStarComm: Boolean): Integer;
+  var InParenStarComm: Boolean; var InParenStarDirective: Boolean): Integer;
+// InParenStarDirective gehoert zu InParenStarComm und sagt, ob die offene
+// '(*'-Region mit '(*$' begann. Ohne dieses zweite Bit bliebe der
+// '(*$'-Sonder-Skip wirkungslos: von den 1.087 '(*$'-Vorkommen der 13.419
+// .pas laufen nur 91 ueber mehrere Zeilen, und NUR die tragen Fehlalarme -
+// die einzeiligen (896 davon '(*$HPPEMIT') melden schon heute nichts, ein
+// reiner Oeffner-Skip ist am Korpus gemessen ein No-Op. Der Fehlalarm
+// entsteht erst auf einer Fortsetzungszeile
+// (jcl/jcl/source/prototypes/JclHashMaps.pas:100 zur Direktive aus Zeile 82,
+// die erst in Zeile 103 schliesst) - und die liest der InParenStarComm-Zweig,
+// nicht der Oeffner-Zweig weiter unten.
 var
   i, n, pClose : Integer;
   InStr        : Boolean;
@@ -264,13 +274,24 @@ begin
       pClose := PosEx('*)', Line, i);
       if pClose = 0 then
       begin
+        // Fortsetzungszeile einer mehrzeiligen '(*$...*)'-Direktive traegt
+        // keinen Kommentar-Inhalt. HIER entstehen die Fehlalarme, nicht im
+        // Oeffner-Zweig: Beleg jcl/jcl/source/prototypes/JclHashMaps.pas:100
+        // ('function GetOwnsKeys: Boolean;' ist Argument des
+        // '(*$JPPEXPANDMACRO' aus Zeile 82) - im rw45-SARIF gemeldet mit
+        // Spalte 1, level note.
+        if InParenStarDirective then Exit;
         CmtContent := Copy(Line, i, n - i + 1);
         if LooksLikeCommentedCode(CmtContent) then Result := i;
         Exit;
       end;
-      CmtContent := Copy(Line, i, pClose - i);
-      if (Result = 0) and (LooksLikeCommentedCode(CmtContent)) then Result := i;
-      InParenStarComm := False;
+      if not InParenStarDirective then
+      begin
+        CmtContent := Copy(Line, i, pClose - i);
+        if (Result = 0) and (LooksLikeCommentedCode(CmtContent)) then Result := i;
+      end;
+      InParenStarComm      := False;
+      InParenStarDirective := False;
       i := pClose + 2; Continue;
     end;
     c := Line[i];
@@ -315,6 +336,46 @@ begin
     end;
     if (c = '(') and (i < n) and (Line[i + 1] = '*') then
     begin
+      // '(*$...*)' ist dieselbe Compiler-/Praeprozessor-Direktive wie
+      // '{$...}', nur in Alternate-Syntax - deshalb hier derselbe
+      // Sonder-Skip wie oben im '{'-Zweig. Der Lexer stellt beide Formen
+      // laengst gleich (uLexer.pas:431 fuer '{$', uLexer.pas:463 fuer '(*$',
+      // beide rufen HandleConditionalDirective; uLexer.pas:636-639 liefert
+      // fuer '(*' ueberhaupt keinen Kommentar-Token). Dieser Detektor liest
+      // die Quelle ueber AcquireLines zeilenweise selbst - nur deshalb hat
+      // die Ausnahme hier gefehlt. Die MEHRZEILIGEN Vorkommen im Korpus
+      // sind durchweg JEDI-Praeprozessor-Makros (22x '(*$JPPEXPANDMACRO',
+      // 69x '(*$JPPLOOP'), deren Rumpf jpp in die erzeugte Unit expandiert:
+      // aktiver Meta-Code, kein stillgelegter. Die einzeiligen sind
+      // ueberwiegend '(*$HPPEMIT' (896x) und schon heute stumm.
+      if (i + 2 <= n) and (Line[i + 2] = '$') then
+      begin
+        pClose := PosEx('*)', Line, i + 3);
+        if pClose = 0 then
+        begin
+          // Bewusst ZWEI Bits statt einem - hier ist der Fix gruendlicher
+          // als der '{'-Zweig oben, und das ist der Grund: der merkt sich
+          // beim Zeilenueberlauf nur "Block offen" und bewertet die
+          // Fortsetzungszeilen einer mehrzeiligen Direktive wieder als
+          // Kommentar. Genau daran waere ein reiner Oeffner-Skip hier
+          // wirkungslos geblieben (am Korpus gemessen: 0 Drops) - die 91
+          // MEHRZEILIGEN '(*$'-Regionen sind bis zu 21 Zeilen lang
+          // (JclHashMaps.pas:82-103) und liegen zwar alle im Repo jcl, aber
+          // in ZWEI Verzeichnissen: 79 in jcl/jcl/source/prototypes/ (13
+          // Dateien) und 12 in
+          // jcl/donations/dcl/bucket_arrays/JclBucketArraySets.pas (z.B.
+          // Region 52-54, dort ohne Fund - Zeile 54 endet auf ')', nicht
+          // auf ';'). Der
+          // '{'-Zweig bleibt trotzdem unangetastet: dieselbe Luecke ist
+          // dort korpusweit genau EINEN Fund wert (JclHashMaps.pas:248 in
+          // der Direktive aus Zeile 246) und rechtfertigt den Eingriff in
+          // den haeufigsten Pfad des Detektors nicht.
+          InParenStarComm      := True;
+          InParenStarDirective := True;
+          Exit;
+        end;
+        i := pClose + 2; Continue;
+      end;
       pClose := PosEx('*)', Line, i + 2);
       if pClose = 0 then
       begin
@@ -571,16 +632,21 @@ var
   Lines  : TStringList;
   i, Col : Integer;
   InBlk, InParen : Boolean;
+  // Zweites Bit zu InParen: die offene '(*'-Region ist eine '(*$'-Direktive
+  // und darf auf ihren Fortsetzungszeilen nicht als Kommentar bewertet
+  // werden. Begruendung samt Korpuszahlen steht an FindCommentedOutCode.
+  InParenDir : Boolean;
   Cached : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
-    InBlk   := False;
-    InParen := False;
+    InBlk      := False;
+    InParen    := False;
+    InParenDir := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      Col := FindCommentedOutCode(Lines[i], InBlk, InParen);
+      Col := FindCommentedOutCode(Lines[i], InBlk, InParen, InParenDir);
       if Col <= 0 then Continue;
       // FP-Schutz 1: Multi-Line-Doc-Block per '//' - Doc-Pattern mit
       // Pascal-Code-Beispielen, nicht commented-out Code. Echte

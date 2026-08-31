@@ -1,4 +1,4 @@
-unit uTestCommentedOutCode;
+﻿unit uTestCommentedOutCode;
 
 // Tests fuer TCommentedOutCodeDetector (Heuristik auf Pascal-Marker
 // in //- und {}-Kommentaren).
@@ -28,6 +28,10 @@ type
     [Test] procedure AdapterDocHeaderShortName_NotReported;
     [Test] procedure ShortNameNoAnchor_StillReported;
     [Test] procedure SingleCharName_StillReported;
+    // ---- '(*$...*)' als Direktive (AQL-Staffel 1, 2026-08-31) ----
+    [Test] procedure ParenStarDirective_NotReported;
+    [Test] procedure ParenStarBlockComment_StillReported;
+    [Test] procedure CodeAfterParenStarDirective_StillReported;
   end;
 
 implementation
@@ -288,6 +292,72 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkCommentedOutCode) >= 1,
     'Ein-Zeichen-Name traegt den Unterstrich-Anker nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.ParenStarDirective_NotReported;
+// AQL-Staffel 1 (2026-08-31): '(*$...*)' ist Alternate-Syntax derselben
+// Compiler-Direktive wie '{$...}'. Korpus-Beleg
+// jcl/jcl/source/prototypes/JclHashMaps.pas:82-103 - das JPPEXPANDMACRO
+// laeuft ueber 22 Zeilen, sein Rumpf ist Argument des JEDI-Praeprozessors,
+// gemeldet wurde daraus Zeile 100.
+// Der Kommentar MUSS mehrzeilig sein: ein einzeiliges '(*$..*)' loest im
+// Korpus keinen einzigen Fund aus (gemessen 0 von 15.711), ein Test damit
+// waere auch OHNE den Fix gruen und wuerde nichts sichern.
+// Ohne den Fix ROT mit 2 Funden (SRC-Zeile 3 und 4).
+const SRC =
+  'unit t; implementation'#13#10 +
+  '(*$JPPEXPANDMACRO MAKRO(TFoo,'#13#10 +
+  '  function Hash(const AKey: Integer): Integer; virtual; abstract;'#13#10 +
+  '  function FreeKey(var Key: Integer): Integer;'#13#10 +
+  '  property OwnsKeys: Boolean read FOwnsKeys;)*)'#13#10 +
+  'procedure Foo; begin DoStuff; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCommentedOutCode),
+    'Rumpf einer (*$..*)-Direktive ist kein auskommentierter Code');
+  finally F.Free; end;
+end;
+procedure TTestCommentedOutCode.ParenStarBlockComment_StillReported;
+// WAECHTER: nur '(*$' ist Direktive. Ein mehrzeiliger '(* ... *)'-Kommentar
+// mit stillgelegtem Code bleibt ein Fund - sonst nimmt der Fix der Regel die
+// ganze Klammer-Stern-Form ab. Gemessen: 3 Funde, vor UND nach dem Fix
+// identisch (SRC-Zeilen 2, 4, 5).
+const SRC =
+  'unit t; implementation'#13#10 +
+  '(* procedure OldWorker;'#13#10 +
+  '   begin'#13#10 +
+  '     X := 42;'#13#10 +
+  '   end; *)'#13#10 +
+  'procedure Foo; begin DoStuff; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkCommentedOutCode) >= 1,
+    'Mehrzeiliger (*..*)-Kommentar bleibt bewertbar');
+  finally F.Free; end;
+end;
+procedure TTestCommentedOutCode.CodeAfterParenStarDirective_StillReported;
+// WAECHTER: nach dem Skip ueber '(*$..*)' muss der REST der Zeile weiter
+// geprueft werden. Setzt jemand hinter dem Skip falsch auf (i := pClose + 2),
+// faellt der echte Kommentar dahinter lautlos weg, ohne dass eine Fundzahl
+// im Korpus das zeigt.
+// Auch OHNE den Fix gruen - wie ShortNameNoAnchor_StillReported ist er kein
+// Beweis fuer die Aenderung, sondern eine Sicherung gegen die naechste.
+// Gemessen: 1 Fund in Spalte 11, vor und nach dem Fix.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  (*$R+*) (* X := 42; if X then DoStuff; *)'#13#10 +
+  '  DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkCommentedOutCode) >= 1,
+    'Kommentar hinter der Direktive darf nicht mit weggeskippt werden');
   finally F.Free; end;
 end;
 
