@@ -2129,6 +2129,33 @@ begin
       end;
     end;
 
+    // KLASSE A der SCA001-Vollzaehlung: TJSONObject.AddPair uebernimmt
+    // das Kind - der JSON-Baum gibt es in seinem Destroy frei.
+    //
+    // BEWUSST AN DEN TYP GEBUNDEN, nicht an den Namen. Der Kommentar an
+    // ReceiverVetoesSink verwirft einen globalen Sink-Seed mit der
+    // Begruendung, dass RTL-Namen echte Lecks maskieren, und das gilt
+    // hier genauso: 'AddPair' allein sagt nichts - eine eigene
+    // Dictionary-Klasse mit AddPair(Key, Value) uebernimmt nichts. Erst
+    // "der Empfaenger IST ein TJSONObject" traegt.
+    //
+    // GEMESSEN (rw41): 16 Funde tragen dieses Muster, bei 10 ist der
+    // Empfaengertyp aufloesbar und durchweg TJSONObject (delphimvcframework
+    // LoggerPro und swagdoc). Die uebrigen 6 haengen an Feldern; dort
+    // schweigt das Gate, weil ReceiverTypAufloesen nur Lokale und
+    // Parameter kennt.
+    var pPair := Pos('.addpair(', NameLow);
+    if (pPair > 0) and VarInArgs(NameLow, pPair + 9) then
+    begin
+      var recvPair := Copy(NameLow, 1, pPair - 1);
+      if recvPair.StartsWith('self.') then
+        recvPair := Copy(recvPair, 6, MaxInt);
+      var TypPair : string;
+      if ReceiverTypAufloesen(MethodNode, recvPair, TypPair)
+         and (FirstTypeIdentLow(TypPair) = 'tjsonobject') then
+        Exit(True);
+    end;
+
     // TStringList.AddObject(text, obj) - klassisches Object-Owner-Pattern
     // (var-Deklaration hier: der fruehere gemeinsame 'pAdd' ist seit A2 in den
     // Add-Familie-for-Loop gewandert und dort scope-lokal.)
