@@ -1,4 +1,4 @@
-unit uTestBeginEndRequired;
+﻿unit uTestBeginEndRequired;
 
 interface
 
@@ -19,6 +19,8 @@ type
     [Test] procedure NextLineStatement_Reported;
     [Test] procedure NextLineBegin_NotReported;
     [Test] procedure ThenWithLineComment_NextLineStatement_Reported;
+    // AQL 31.08.: Zeilenanker bei einer Zeile, die abschliesst UND oeffnet
+    [Test] procedure ClosingAndOpeningLine_ReportsOnOwnLine;
   end;
 
 implementation
@@ -176,6 +178,43 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkBeginEndRequired));
+  finally F.Free; end;
+end;
+
+
+procedure TTestBeginEndRequired.ClosingAndOpeningLine_ReportsOnOwnLine;
+// AQL-Stichprobe 31.08.: eine Zeile, die einen wartenden Branch
+// ABSCHLIESST und zugleich einen neuen OEFFNET ('  DoSomething else'),
+// hat den Zeilenanker ueberschrieben, bevor der Emit ihn las - der Fund
+// des then-Zweigs landete eine Zeile zu tief.
+//
+// Gemessen betraf das 36 von 41.067 Funden (0,088 %) in den 182 Dateien
+// der Stichprobe; bei 17 davon trug die gemeldete Zeile keinen eigenen
+// Verstoss, dort war es ein Fehlalarm. Beleg: jvcl JvDBTreeView.pas
+// 581/582.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  if Cond then'#13#10 +
+  '    DoSomething else'#13#10 +
+  '    DoOther;'#13#10 +
+  'end;';
+var
+  F       : TObjectList<TLeakFinding>;
+  L       : TLeakFinding;
+  AufThen : Boolean;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    AufThen := False;
+    for L in F do
+      if (L.Kind = fkBeginEndRequired)
+         and (L.LineNumber = TFindingHelper.LineOf(SRC, 'if Cond then')) then
+        AufThen := True;
+    Assert.IsTrue(AufThen,
+      'der then-Zweig gehoert auf seine eigene Zeile, nicht auf die, ' +
+      'die ihn abschliesst');
   finally F.Free; end;
 end;
 
