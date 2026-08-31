@@ -87,6 +87,11 @@ type
     // DataModuleDestroy, FrameDestroy. nil wenn keine da ist.
     class function FindDestroyEventHandler(UnitNode: TAstNode;
       const ClassName: string): TAstNode; static;
+    // KLASSE J (31.08.): .NET-IDisposable-Muster - die Klasse hat
+    // keinen Destruktor und raeumt in 'Dispose(Boolean); override'
+    // auf. Bedingungen und Grenzen s. Implementierung.
+    class function FindDisposeMethod(UnitNode, ClassNode: TAstNode;
+      const ClassName: string): TAstNode; static;
     class function HasFieldCreate(MethodNode: TAstNode;
       const FieldNameLow: string): Boolean; static;
     // True wenn das Feld via TComponent-Owner-Pattern erzeugt wird:
@@ -186,6 +191,92 @@ begin
   end;
 end;
 
+function HatGenauEinenParameter(AMethod: TAstNode;
+  const ATypLow: string): Boolean;
+// Traegt die Methode GENAU EINEN Parameter vom Typ ATypLow?
+//
+// Zwei Suchraum-Erweiterungen brauchen dieselbe Frage mit anderem Typ:
+// der OnDestroy-Handler die VCL-Event-Signatur (TObject), die
+// Dispose-Methode das .NET-Muster (Boolean). Der eigene Self-Scan hat
+// die Kopie als DuplicateBlock gemeldet.
+//
+// NUR direkte Kinder: FindAll waere subtree-weit und zaehlte die
+// Parameter verschachtelter Routinen mit.
+var
+  P    : TAstNode;
+  Zahl : Integer;
+begin
+  Result := False;
+  Zahl   := 0;
+  if not Assigned(AMethod) then Exit;
+  for P in AMethod.Children do
+    if P.Kind = nkParam then
+    begin
+      Inc(Zahl);
+      Result := Trim(P.TypeRef).ToLower = ATypLow;
+    end;
+  Result := Result and (Zahl = 1);
+end;
+
+class function TFieldLeakDetector.FindDisposeMethod(UnitNode,
+  ClassNode: TAstNode; const ClassName: string): TAstNode;
+// Die Dispose-Methode einer Klasse, die dem .NET-IDisposable-Muster
+// folgt - dort raeumt nicht der Destruktor auf, sondern
+// 'procedure Dispose(Disposing: Boolean); override;'.
+//
+// BELEG (Klasse J der SCA001-Vollzaehlung, 4 Faelle):
+//   Indy Lib/Core/IdDsnPropEdBindingNET.pas:50/51  (FreeAndNil in :391/:392)
+//   Indy Lib/Design/IdDsnPropEdBindingNET.pas:47   (Sys.FreeAndNil in :38x)
+//   Indy Lib/Protocols/IdDsnSASLListEditorFormNET.pas:47
+// Gemeldet wurde "created in constructor but no destructor exists" -
+// einen Destruktor gibt es dort wirklich nicht, die Freigabe steht
+// vollstaendig in Dispose.
+//
+// WAS HIER BEWIESEN WIRD, UND WAS NICHT: dass Dispose gerufen WIRD,
+// laesst sich statisch nicht zeigen. Beweisbar ist, dass die Methode
+// Teil eines FREMDEN, virtuellen Vertrags ist - 'override' belegt, dass
+// eine Basisklasse Dispose(Boolean) virtuell deklariert und der Aufrufer
+// damit ausserhalb dieser Klasse sitzt. Das ist dieselbe Art Argument
+// wie beim OnDestroy-Handler (die VCL ruft ihn) und beim
+// BeforeDestruction-Gate (TObject.Free ruft es).
+//
+// DREI BEDINGUNGEN, jede einzeln noetig:
+//   * Name 'dispose'
+//   * ';override' im TypeRef der DEKLARATION - ohne den waere es eine
+//     handgeschriebene Aufraeummethode, die nur laeuft, wenn jemand sie
+//     ruft. Der Korpus hat so eine (HeidiSQL VirtualTrees.WorkerThread.pas:19).
+//   * KEIN ';class' - eine Klassenmethode gehoert nicht zum
+//     Instanz-Lebenszyklus. (Die WorkerThread-Zeile faellt schon durch
+//     den override-Test; als Begruendung fuer diesen Ausschluss taugt
+//     sie deshalb NICHT.)
+//   * genau EIN Parameter vom Typ Boolean - die Signatur des Musters
+//
+// Reine SUCHRAUM-Erweiterung wie ihre drei Geschwister: kann einen Fund
+// nur unterdruecken, nie einen erzeugen.
+var
+  Decls  : TList<TAstNode>;
+  M      : TAstNode;
+  TypLow : string;
+begin
+  Result := nil;
+  if (not Assigned(UnitNode)) or (not Assigned(ClassNode))
+     or (ClassName = '') then Exit;
+  Decls := ClassNode.FindAll(nkMethod);
+  try
+    for M in Decls do
+    begin
+      if M.Name.ToLower <> 'dispose' then Continue;
+      TypLow := M.TypeRef.ToLower;
+      if Pos(';override', TypLow) = 0 then Continue;
+      if Pos(';class', TypLow) > 0 then Continue;
+      if HatGenauEinenParameter(M, 'boolean') then
+        Exit(FindMethodNamed(UnitNode, ClassName, 'dispose'));
+    end;
+  finally
+    Decls.Free;
+  end;
+end;
+
 class function TFieldLeakDetector.FindDestroyEventHandler(
   UnitNode: TAstNode; const ClassName: string): TAstNode;
 // Der OnDestroy-Handler einer Form/Frame/DataModule ist ein gueltiger
@@ -202,25 +293,6 @@ class function TFieldLeakDetector.FindDestroyEventHandler(
 // NICHT - sie laeuft nicht garantiert. 32 der 47 Feld-Funde im Korpus
 // haben ueberhaupt keine Freigabe in der Datei; die duerfen von dieser
 // Erweiterung nicht beruehrt werden.
-
-  function HatEventSignatur(AMethod: TAstNode): Boolean;
-  // Genau EIN Parameter vom Typ TObject - die Signatur eines
-  // VCL-Event-Handlers. NUR direkte Kinder: FindAll waere subtree-weit
-  // und zaehlte die Parameter verschachtelter Routinen mit.
-  var
-    P    : TAstNode;
-    Zahl : Integer;
-  begin
-    Result := False;
-    Zahl   := 0;
-    for P in AMethod.Children do
-      if P.Kind = nkParam then
-      begin
-        Inc(Zahl);
-        Result := Trim(P.TypeRef).ToLower = 'tobject';
-      end;
-    Result := Result and (Zahl = 1);
-  end;
 
 var
   Methods : TList<TAstNode>;
@@ -240,7 +312,7 @@ begin
       // 'destroy' allein ist der Destruktor, nicht der Handler.
       if (Kurz = '') or (Kurz = 'destroy') then Continue;
       if not Kurz.EndsWith('destroy') then Continue;
-      if HatEventSignatur(M) then Exit(M);
+      if HatGenauEinenParameter(M, 'tobject') then Exit(M);
     end;
   finally
     Methods.Free;
@@ -929,6 +1001,7 @@ var
   Cleanup      : TAstNode;
   EventCleanup : TAstNode;
   ClassDtor    : TAstNode;
+  DisposeCleanup : TAstNode;
   FieldNameLow : string;
   FreeFound    : Boolean;
   FreeInFin    : Boolean;
@@ -974,6 +1047,9 @@ begin
       // Dritter Ort: der class destructor (fuer 'class var'-Felder).
       ClassDtor := FindMethod(UnitNode, 'destructor', ClassNode.Name,
                                msClassMethod);
+      // Fuenfter Ort: die Dispose-Methode des .NET-Musters.
+      DisposeCleanup := FindDisposeMethod(UnitNode, ClassNode,
+                                          ClassNode.Name);
 
       Fields := ClassNode.FindAll(nkField);
       try
@@ -1019,6 +1095,10 @@ begin
                                                    False, FreeInFin);
           if not FreeFound and (ClassDtor <> nil) then
             FreeFound := TLeakDetector2.SearchFree(ClassDtor,
+                                                   FieldNameLow,
+                                                   False, FreeInFin);
+          if not FreeFound and (DisposeCleanup <> nil) then
+            FreeFound := TLeakDetector2.SearchFree(DisposeCleanup,
                                                    FieldNameLow,
                                                    False, FreeInFin);
           // Alias-Free-Idiom (L := FField; FField := nil; L.Free) erkennen.
