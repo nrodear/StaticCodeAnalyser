@@ -3160,7 +3160,31 @@ end;
 // dadurch ausschliesslich ENGER: es kann nur noch WENIGER Funde unterdruecken.
 function ReceiverVetoesSink(AScope: TAstNode;
   const ReceiverNameLow, SinkNameLow: string): Boolean;
+var
+  TypLow : string;
 begin
+  // KLASSE A (30.08.): TJSONObject.AddPair uebernimmt das Kind - der
+  // JSON-Baum gibt es in seinem Destroy frei. Kein Veto, obwohl
+  // TJSONObject nicht in der RTL-Ownership-Whitelist steht.
+  //
+  // ENG AUF 'addpair' UND DEN TYP: der Kopfkommentar dieser Funktion
+  // verwirft einen globalen Sink-Seed, weil RTL-Namen echte Lecks
+  // maskieren, und Leak_SinkResolvedNonOwningReceiver_StillReported
+  // haelt fest, dass 'AConfig.Add(...)' an einem TJSONObject ein Fund
+  // BLEIBT. Beides gilt weiter - hier zaehlt nur die RTL-Methode
+  // AddPair mit nachgewiesenem TJSONObject-Empfaenger.
+  //
+  // Die Last-Use-Bedingung liegt dadurch AUTOMATISCH davor (diese
+  // Funktion wird nur aus SinkCallPassesVar unter
+  // LastUseIsOwnershipTransfer gerufen): wird das Objekt nach der
+  // Uebergabe noch benutzt, greift gar nichts. Ein erster Anlauf hing
+  // das Gate direkt in IsPassedToOwner und umging genau das -
+  // Leak_SinkAddThenUsedAgain_StillReported wurde rot und hatte recht.
+  if (SinkNameLow = 'addpair')
+     and ReceiverTypAufloesen(AScope, ReceiverNameLow, TypLow)
+     and (FirstTypeIdentLow(TypLow) = 'tjsonobject') then
+    Exit(False);
+
   // Leerer Empfaenger = unqualifizierter Aufruf der eigenen Klasse; der ist
   // per Definition nicht aufloesbar -> kein Veto (und kein Fehl-Match gegen
   // einen namenlosen Deklarationsknoten).

@@ -300,6 +300,9 @@ type
     [Test] procedure OwnerArgIsComponentTyped_NotReported;
     [Test] procedure OwnerArgIsNotComponentTyped_StillReported;
     [Test] procedure OwnerArgComponentButCreatedIsTObject_StillReported;
+    // KLASSE A: TJSONObject.AddPair uebernimmt - typgebunden (30.08.)
+    [Test] procedure JsonAddPairTakesOwnership_NotReported;
+    [Test] procedure AddPairOnForeignTypeIsNoTransfer_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -6638,6 +6641,59 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
     'FInstance wird nirgends freigegeben - der Fund bleibt');
+  finally F.Free; end;
+end;
+
+
+procedure TTestMemoryLeakAdvanced.JsonAddPairTakesOwnership_NotReported;
+// KLASSE A der SCA001-Vollzaehlung: TJSONObject.AddPair uebernimmt das
+// Kind, der JSON-Baum gibt es in seinem Destroy frei.
+//
+// BELEG (delphimvcframework LoggerPro.JSONLFileAppender.pas:178 und
+// swagdoc Swag.Doc.*): 16 Funde tragen dieses Muster, bei 10 ist der
+// Empfaengertyp aufloesbar und durchweg TJSONObject.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'implementation'+#13#10+
+  'procedure Baue;'+#13#10+
+  'var J: TJSONObject; Kind: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Kind := TStringList.Create;'+#13#10+
+  '  J.AddPair(''context'', Kind);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'TJSONObject.AddPair uebernimmt - der Baum raeumt auf');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.AddPairOnForeignTypeIsNoTransfer_StillReported;
+// TP-Gegenprobe und der Grund fuer die Typbindung: der Kommentar an
+// ReceiverVetoesSink verwirft einen globalen Sink-Seed, weil RTL-Namen
+// echte Lecks maskieren. 'AddPair' allein sagt nichts - eine eigene
+// Klasse mit AddPair(Key, Value) uebernimmt nichts.
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TMeinCache = class'+#13#10+
+  '    procedure AddPair(const AKey: string; AWert: TStringList);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure Baue;'+#13#10+
+  'var C: TMeinCache; Kind: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Kind := TStringList.Create;'+#13#10+
+  '  C.AddPair(''context'', Kind);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
+    'TMeinCache ist kein TJSONObject - AddPair beweist hier nichts');
   finally F.Free; end;
 end;
 
