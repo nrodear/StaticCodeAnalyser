@@ -51,9 +51,11 @@ const
 // procedure/function-Header. Der AST kann beides als nkLocalVar liefern
 // weil ParseMethodImpl-Cleanup nested-Methods nicht sauber traegt;
 // dieser Filter haelt FPs am Reporting-Punkt ab.
-function LooksLikeRealLocalVar(Lines: TStringList; LineNo1: Integer): Boolean;
+function LooksLikeRealLocalVar(Lines: TStringList; LineNo1: Integer;
+  const AName: string): Boolean;
 var
-  S, T : string;
+  S, T, NameLow : string;
+  i, tiefe, p   : Integer;
 begin
   Result := True;
   if (Lines = nil) or (LineNo1 <= 0) or (LineNo1 > Lines.Count) then Exit;
@@ -67,6 +69,40 @@ begin
      T.StartsWith('destructor ')  or T.StartsWith('destructor(')  or
      T.StartsWith('operator ')    or T.StartsWith('class ')      then
     Exit(False);
+
+  // SIGNATURPARAMETER statt Variable (2026-08-31, Kundenfund
+  // rdpwrap/src-rdpconfig/MainUnit.pas:126): steht der gemeldete
+  // Bezeichner INNERHALB einer Klammer, gehoert er zu einer
+  // Parameterliste und ist keine lokale Variable.
+  //
+  //   function DisableWowRedirection: Boolean;
+  //   type
+  //     TFunc = function(var Wow64FsEnableRedirection: LongBool): LongBool;
+  //
+  // 'Wow64FsEnableRedirection' benennt den Parameter einer SIGNATUR. Er
+  // dokumentiert nur und kann per Definition nie gelesen oder
+  // geschrieben werden - die Regel kann an ihm nie erfuellt sein.
+  //
+  // Der Zeilenanfangs-Test oben faengt das NICHT: die Zeile beginnt mit
+  // 'TFunc', nicht mit 'function'. Die Klammerprobe deckt beide Formen
+  // ab - den prozeduralen TYP ('X = function(..)') genauso wie die
+  // Variable mit prozeduralem Typ ('var F: function(..)').
+  NameLow := LowerCase(Trim(AName));
+  if NameLow = '' then Exit;
+  p := 0;
+  tiefe := 0;
+  for i := 1 to Length(T) do
+  begin
+    if T[i] = '(' then Inc(tiefe)
+    else if T[i] = ')' then Dec(tiefe)
+    else if (tiefe > 0) and (p = 0)
+            and (Copy(T, i, Length(NameLow)) = NameLow)
+            and ((i = 1) or not TDetectorUtils.IsIdentChar(T[i - 1]))
+            and ((i + Length(NameLow) > Length(T))
+                 or not TDetectorUtils.IsIdentChar(T[i + Length(NameLow)])) then
+      p := i;
+  end;
+  if p > 0 then Exit(False);
 end;
 
 function IsIdentChar(C: Char): Boolean; inline;
@@ -397,7 +433,7 @@ begin
         // Wenn dort z.B. 'procedure GetValue(...)' steht, ist das eine
         // nested Routine und KEIN unused Local - der AST-Knoten kommt
         // nur durch eine Parser-Eigenart in den nkLocalVar-Strom.
-        if not LooksLikeRealLocalVar(Lines, LV.Line) then Continue;
+        if not LooksLikeRealLocalVar(Lines, LV.Line, LV.Name) then Continue;
 
         // QUELLTEXT-GEGENPROBE (Audit 2026-07-31, siehe Block oben).
         // Einmalige Lazy-Initialisierung fuer diese Routine.
