@@ -1,4 +1,4 @@
-unit uTestTautologicalExpr;
+﻿unit uTestTautologicalExpr;
 
 // Tests fuer den TTautologicalExprDetector (file-scan).
 //
@@ -54,6 +54,8 @@ type
     // inline var im Rumpf darf Phase 3 nicht fuer den Rest der Routine
     // abschalten (Review 02.09.).
     [Test] procedure Taut_InlineVarInBody_ComparisonStillReported;
+    // Auskommentierter Code darf den Scanner nicht steuern (Review 02.09.).
+    [Test] procedure Taut_KeywordInsideBlockComment_ComparisonStillReported;
   end;
 
 implementation
@@ -62,6 +64,35 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+procedure TTestTautologicalExpr.Taut_KeywordInsideBlockComment_ComparisonStillReported;
+// WAECHTER (Review 02.09.). LageNachfuehren las urspruenglich die ROHE
+// Zeile. Eine Fortsetzungszeile eines Blockkommentars, die mit einem
+// Abschnitts-Schluesselwort beginnt, schaltete damit Phase 3 ab -
+// auskommentierter Code steuerte den Scanner. Jetzt laeuft die
+// Nachfuehrung hinter Phase 1 und sieht nur noch gestrippten Text.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var ProcessID: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  ProcessID := 7;'#13#10 +
+  '  { alter Stand:'#13#10 +
+  'var'#13#10 +
+  '  i: Integer;'#13#10 +
+  '  }'#13#10 +
+  '  if ProcessID = ProcessID then Bar;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    'ein var im Blockkommentar darf Phase 3 nicht abschalten');
+  finally F.Free; end;
+end;
 
 procedure TTestTautologicalExpr.Taut_InlineVarInBody_ComparisonStillReported;
 // WAECHTER (Review 02.09.). Ein inline 'var' (Delphi 10.3+) steht MITTEN

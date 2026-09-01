@@ -1,4 +1,4 @@
-unit uTautologicalExpr;
+﻿unit uTautologicalExpr;
 
 // Detector: tautologische binaere Ausdruecke wie `x = x`, `a and a`,
 // `(b or b)`, `(p <> p)`. Klassischer Copy-Paste-Bug oder vergessener
@@ -298,7 +298,9 @@ begin
              or not IsIdentChar(ALow[Length(AWort) + 1]));
 end;
 
-// Fuehrt TScanLage.InDeklaration ueber die Zeilen nach.
+// Fuehrt TScanLage.InDeklaration ueber die Zeilen nach. Erwartet den
+// GESTRIPPTEN Text aus Phase 1, nicht die rohe Zeile - sonst steuert
+// auskommentierter Code den Scanner.
 //
 // WARUM (02.09., AQL-Stichprobe des Error-Tiers): im const-Abschnitt ist
 // '=' der DEKLARATIONSTOKEN, kein Vergleichsoperator. Die Zeile
@@ -355,6 +357,14 @@ begin
   // Phase 1: Strings + Kommentare ausblanken.
   Clean := StripStringsAndComments(Line, ALage.InBlockComm,
                                    ALage.InParenStarComm);
+
+  // Abschnittszustand NACH Phase 1 nachfuehren, auf dem gestrippten
+  // Text. Auf der rohen Zeile wuerde ein auskommentiertes
+  // Schluesselwort den Scanner steuern: die Fortsetzungszeile eines
+  // Blockkommentars, die mit 'var' beginnt, schaltete Phase 3 ab
+  // (Review 02.09.). Eine vollstaendig auskommentierte Zeile ist nach
+  // Phase 1 leer und laesst den Zustand unberuehrt.
+  LageNachfuehren(Clean, ALage);
 
   // Phase 2: Boolean-Operatoren (` and ` / ` or ` / ` xor `).
   // Op-Position + Stop-Position werden auf Clean gesucht (Strings sind
@@ -468,7 +478,6 @@ begin
     for i := 0 to Lines.Count - 1 do
     begin
       Line := Lines[i];
-      LageNachfuehren(Line, Lage);
       if ScanForTautology(Line, Lage, MatchCol, Detail) then
       begin
         F            := TLeakFinding.Create;
