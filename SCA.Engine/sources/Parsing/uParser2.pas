@@ -2693,7 +2693,26 @@ begin
       ArmNode := CaseNode.Add(nkCaseArm, '', Tok.Line, Tok.Col);
       SkipTo([tkColon, tkKwEnd, tkKwElse, tkEof]);
       Eat(tkColon);
-      ParseStatement(ArmNode);
+      // LEERER ARM (01.09.): 'aaDelete: ;' hat KEINE Anweisung. Laeuft hier
+      // ParseStatement, frisst dessen Leeranweisungs-Schleife (Z. 2197,
+      // 'while Eat(tkSemicolon)') das ';' DIESES Arms und parst den
+      // FOLGENDEN Arm als seinen Rumpf. Beginnt der Folge-Arm mit einem
+      // Bezeichner-Label, geht das ueber ParseCallOrAssign in
+      // SkipToSemicolon; dessen SkipBalanced zaehlt im 'begin' des
+      // Folge-Arms auch die 'end' von try/finally mit, schliesst zu frueh
+      // und verschiebt alle Blockebenen des restlichen Rumpfs.
+      // BELEG Abbrevia AbGzTyp.pas:1152 ('aaDelete: ;'): SaveArchive galt
+      // danach als 88 statt 132 Rumpfzeilen, die Frees in den umgebenden
+      // finally-Bloecken (Z. 1195/1231) fielen aus dem AST -> zwei
+      // SCA001-Fehlalarme 'never-freed' auf Z. 1107/1112. Gegenprobe am
+      // echten File: derselbe Arm als 'begin end' -> beide Funde weg.
+      // VERTRAG: ein leerer Arm bleibt ein LEERER nkCaseArm; das ';'
+      // gehoert dem Arm, nicht der naechsten Anweisung.
+      // Gemessen auf D:\git-sca-realworld: 694 leere Arme, davon 204 vor
+      // 'else'/'end' - dort ist der Zweig schon heute folgenlos, weil
+      // ParseStatement an der Blockgrenze (Z. 2452) nichts tut.
+      if not Eat(tkSemicolon) then
+        ParseStatement(ArmNode);
       GuardAdvance(ArmStart);
     end;
 

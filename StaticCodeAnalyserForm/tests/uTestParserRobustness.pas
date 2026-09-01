@@ -152,6 +152,14 @@ type
     // case in derselben Methode steht, muss im AST bleiben.
     [Test] procedure CaseElse_RejectedElse_RestOfMethodBodyIntact;
 
+    // ---- Leerer case-Arm (01.09.) ---------------------------------------
+    // 'X: ;' hat keine Anweisung. Vor dem Fix frass die Leeranweisungs-
+    // Schleife von ParseStatement das ';' des Arms, und der FOLGENDE Arm
+    // wurde zum Rumpf des leeren Arms - beim Folge-Arm mit Label-LISTE
+    // sogar restlos verschluckt. Beleg Abbrevia AbGzTyp.pas:1152.
+    [Test] procedure CaseArm_EmptyArm_FollowingArmKeepsOwnStatement;
+    [Test] procedure CaseArm_EmptyArmBeforeBlockArm_NoPhantomLeak;
+
     // ---- Bedingte Kompilierung: das ';'-vor-else-Idiom ------------------
     // GEGENPROBE zum Fix oben. Der Lexer verwirft '{...}' samt Direktiven
     // als Kommentar und emittiert im Default BEIDE Zweige - das Idiom
@@ -3512,6 +3520,125 @@ begin
         'der finally-Rumpf bleibt am nkFinallyBlock');
     finally Root.Free; end;
   finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.CaseArm_EmptyArm_FollowingArmKeepsOwnStatement;
+// LEERER ARM (01.09.), AST-Seite. Vor dem Fix hatte das case nur ZWEI Arme:
+// ParseStatement frass das ';' von Arm 1, ParseCallOrAssign legte fuer das
+// Label 'aaAdd' ein Phantom-nkCall an und SkipToSemicolon verschluckte den
+// Rest des dritten Arms restlos. Am echten Code gegengeprueft: mit
+// 'aaAdd, aaMove: if P = nil then DoAdd;' meldet SCA126 (AST-basiert) den
+// nil-Vergleich HEUTE nicht und nach der Reparatur des Arms schon - die
+// Anweisung fehlt also wirklich im Baum, sie ist nicht nur fehlzugeordnet.
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure Save(Mode: TAction);'#13#10+                   // 4
+  'begin'#13#10+                                            // 5
+  '  case Mode of'#13#10+                                   // 6
+  '    aaNone: DoNone;'#13#10+                              // 7
+  '    aaDelete: ;'#13#10+                                  // 8
+  '    aaAdd, aaMove: DoAdd;'#13#10+                        // 9
+  '  end;'#13#10+                                           // 10
+  '  DoAfter;'#13#10+                                       // 11
+  'end;'#13#10+                                             // 12
+  'end.';                                                   // 13
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  CaseN  : TAstNode;
+  Body   : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      CaseN := Root.FindFirst(nkCaseStmt);
+      Assert.IsNotNull(CaseN, 'nkCaseStmt fehlt');
+
+      // KERN: drei Arme. Vor dem Fix waren es zwei.
+      Assert.AreEqual('<>,<>,<>', CaseArmNameList(CaseN),
+        'drei Arme - vor dem Fix verschluckte der leere Arm den dritten');
+      Assert.AreEqual<Integer>(3, CaseN.DirectChildCount(nkCaseArm),
+        'genau drei direkte nkCaseArm');
+
+      // Positionen, nicht nur Anzahl (Lehre vom 2026-08-27).
+      Assert.AreEqual<Integer>(7, CaseArmAt(CaseN, 0).Line, 'Arm 0 in Zeile 7');
+      Assert.AreEqual<Integer>(8, CaseArmAt(CaseN, 1).Line, 'Arm 1 in Zeile 8');
+      Assert.AreEqual<Integer>(9, CaseArmAt(CaseN, 2).Line, 'Arm 2 in Zeile 9');
+
+      Assert.AreEqual('DoNone@7', DirectCallsWithLines(CaseArmAt(CaseN, 0)),
+        'Arm 0 behaelt seine Anweisung');
+      Assert.AreEqual('', DirectCallsWithLines(CaseArmAt(CaseN, 1)),
+        'der LEERE Arm bleibt leer - vor dem Fix stand hier das ' +
+        'Phantom-nkCall ''aaAdd@9''');
+      Assert.AreEqual('DoAdd@9', DirectCallsWithLines(CaseArmAt(CaseN, 2)),
+        'der Folge-Arm behaelt seine eigene Anweisung');
+
+      Body := MethodBodyOf(Root, 'Save');
+      Assert.IsNotNull(Body, 'Rumpf-Block von Save fehlt');
+      Assert.AreEqual('DoAfter@11', DirectCallsWithLines(Body),
+        'der Rumpf nach dem case bleibt unversehrt');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.CaseArm_EmptyArmBeforeBlockArm_NoPhantomLeak;
+// LEERER ARM (01.09.), Detektorseite - Klasse J, Gruppe 'finally-uebersehen'.
+// Nachbau von Abbrevia AbGzTyp.pas SaveArchive (Z. 1106-1233): zwei
+// geschachtelte try/finally, dazwischen ein case mit LEEREM Arm
+// ('aaDelete: ;', Z. 1152) und einem Folge-Arm mit Bezeichner-Label-Liste
+// und 'begin'-Rumpf. SkipBalanced schloss dieses 'begin' am 'end' des
+// inneren try, der Parser landete auf 'except', und der Methodenrumpf
+// endete VOR den beiden finally-Bloecken - beide Frees waren unsichtbar
+// (SCA001 'never-freed' auf AbGzTyp.pas:1107 und :1112).
+// Die Form ist mit der Release-Exe gegengeprueft: so gebaut zwei Funde,
+// mit repariertem Arm keiner.
+const SRC =
+  'unit t;'#13#10+                                          // 1
+  'interface'#13#10+                                        // 2
+  'implementation'#13#10+                                   // 3
+  'procedure Save(Mode: TAction);'#13#10+                   // 4
+  'var'#13#10+                                              // 5
+  '  A, B: TStringList;'#13#10+                             // 6
+  'begin'#13#10+                                            // 7
+  '  try'#13#10+                                            // 8
+  '    A := TStringList.Create;'#13#10+                     // 9
+  '    try'#13#10+                                          // 10
+  '      B := TStringList.Create;'#13#10+                   // 11
+  '      case Mode of'#13#10+                               // 12
+  '        aaNone: DoNone;'#13#10+                          // 13
+  '        aaDelete: ;'#13#10+                              // 14
+  '        aaAdd, aaMove: begin'#13#10+                     // 15
+  '          try'#13#10+                                    // 16
+  '            try'#13#10+                                  // 17
+  '              DoWork;'#13#10+                            // 18
+  '            finally'#13#10+                              // 19
+  '              DoCleanup;'#13#10+                         // 20
+  '            end;'#13#10+                                 // 21
+  '          except'#13#10+                                 // 22
+  '            DoLog;'#13#10+                               // 23
+  '          end;'#13#10+                                   // 24
+  '        end;'#13#10+                                     // 25
+  '      end;'#13#10+                                       // 26
+  '    finally'#13#10+                                      // 27
+  '      A.Free;'#13#10+                                    // 28
+  '    end;'#13#10+                                         // 29
+  '  finally'#13#10+                                        // 30
+  '    B.Free;'#13#10+                                      // 31
+  '  end;'#13#10+                                           // 32
+  'end;'#13#10+                                             // 33
+  'end.';                                                   // 34
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'beide Objekte werden in einem finally freigegeben - vor dem Fix ' +
+      'meldete der Detektor zwei Phantom-Lecks, weil der Rumpf vor den ' +
+      'finally-Bloecken abbrach');
+  finally F.Free; end;
 end;
 
 procedure TTestParserRobustness.CaseElse_RejectedElse_RestOfMethodBodyIntact;
