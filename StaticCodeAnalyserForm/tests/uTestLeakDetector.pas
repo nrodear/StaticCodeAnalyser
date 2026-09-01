@@ -22,6 +22,13 @@ type
     [Test] procedure Leak_CreateFreeInFinally_NoFinding;
     [Test] procedure Leak_CustomFreeWrapper_NoFinding;
     [Test] procedure Leak_FreeOutsideFinally_ReportsWarning;
+    // Punkt-Luecke im finally (01.09.), Beleg
+    // CodeReader.ZXing.ScanManager.pas:200/:250. Das Trio pinnt den
+    // Diskriminator: gleiche Form, nur die Ausrichtung unterscheidet
+    // sich - und der Fix darf die finally-Region nicht aufweichen.
+    [Test] procedure Leak_AlignedDotFreeInFinally_NoFinding;
+    [Test] procedure Leak_TightDotFreeInFinally_NoFinding;
+    [Test] procedure Leak_AlignedDotFreeOutsideFinally_StillWarns;
     [Test] procedure Leak_ReturnResult_NoFinding;
     [Test] procedure Leak_ReturnViaLegacyFuncName_NoFinding;
     [Test] procedure Leak_ExitWithValue_NoFinding;
@@ -620,6 +627,155 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'ALFreeAndNil ist ein Free-Wrapper - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_AlignedDotFreeInFinally_NoFinding;
+// Erkennerfehler (01.09.), Beleg CodeReader.ZXing.ScanManager.pas:200
+// und :250: der Free steht IM finally, nur sind die Spalten
+// ausgerichtet ('bmp      .Free;'). LineFreesVar vergleicht gegen die
+// QUELLZEILE, also griff jede Nadel neben der Luecke vorbei und der
+// lsWarning-Vertrag behauptete 'Free ausserhalb des finally' - dort
+// schlicht falsch. Das FreeAndNil im try-Rumpf ist noetig, damit
+// SearchFree als First-Match-DFS mit InFinally=False aussteigt; erst
+// dann entscheidet dieser Rettungspfad ueberhaupt.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TBinaryBitmap = class'#13#10+
+  '  private'#13#10+
+  '    FBuf: Pointer;'#13#10+
+  '  public'#13#10+
+  '    constructor Create;'#13#10+
+  '    destructor Destroy; override;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TBinaryBitmap.Create;'#13#10+
+  'begin'#13#10+
+  '  FBuf := nil;'#13#10+
+  'end;'#13#10+
+  'destructor TBinaryBitmap.Destroy;'#13#10+
+  'begin'#13#10+
+  '  inherited;'#13#10+
+  'end;'#13#10+
+  'procedure Bar;'#13#10+
+  'var'#13#10+
+  '  bmp: TBinaryBitmap;'#13#10+
+  'begin'#13#10+
+  '  bmp := nil;'#13#10+
+  '  try'#13#10+
+  '    bmp := TBinaryBitmap.Create;'#13#10+
+  '    if (bmp <> nil) then FreeAndNil(bmp);'#13#10+
+  '    bmp := TBinaryBitmap.Create;'#13#10+
+  '  finally'#13#10+
+  '    bmp      .Free;'#13#10+
+  '  end;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'ausgerichteter Free IM finally ist kein Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_TightDotFreeInFinally_NoFinding;
+// Referenzfall zum Test darueber: dieselbe Fixture, nur eng
+// geschrieben. Lief schon vor dem Fix gruen und muss es bleiben -
+// er zeigt, dass die Normalisierung nichts hinzuerfindet.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TBinaryBitmap = class'#13#10+
+  '  private'#13#10+
+  '    FBuf: Pointer;'#13#10+
+  '  public'#13#10+
+  '    constructor Create;'#13#10+
+  '    destructor Destroy; override;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TBinaryBitmap.Create;'#13#10+
+  'begin'#13#10+
+  '  FBuf := nil;'#13#10+
+  'end;'#13#10+
+  'destructor TBinaryBitmap.Destroy;'#13#10+
+  'begin'#13#10+
+  '  inherited;'#13#10+
+  'end;'#13#10+
+  'procedure Bar;'#13#10+
+  'var'#13#10+
+  '  bmp: TBinaryBitmap;'#13#10+
+  'begin'#13#10+
+  '  bmp := nil;'#13#10+
+  '  try'#13#10+
+  '    bmp := TBinaryBitmap.Create;'#13#10+
+  '    if (bmp <> nil) then FreeAndNil(bmp);'#13#10+
+  '    bmp := TBinaryBitmap.Create;'#13#10+
+  '  finally'#13#10+
+  '    bmp.Free;'#13#10+
+  '  end;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'enger Free im finally bleibt fundfrei');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_AlignedDotFreeOutsideFinally_StillWarns;
+// GEGENPROBE, und der eigentliche Waechter: derselbe ausgerichtete
+// Free, aber AUSSERHALB des finally. Der Fund ist hier ECHT. Wuerde
+// die Normalisierung die Regionsgrenze aufweichen statt nur die
+// Punkt-Umgebung zu glaetten, verschwaende er - und der Fix haette
+// einen TP gekostet statt einen FP zu nehmen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TBinaryBitmap = class'#13#10+
+  '  private'#13#10+
+  '    FBuf: Pointer;'#13#10+
+  '  public'#13#10+
+  '    constructor Create;'#13#10+
+  '    destructor Destroy; override;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TBinaryBitmap.Create;'#13#10+
+  'begin'#13#10+
+  '  FBuf := nil;'#13#10+
+  'end;'#13#10+
+  'destructor TBinaryBitmap.Destroy;'#13#10+
+  'begin'#13#10+
+  '  inherited;'#13#10+
+  'end;'#13#10+
+  'procedure Bar;'#13#10+
+  'var'#13#10+
+  '  bmp: TBinaryBitmap;'#13#10+
+  'begin'#13#10+
+  '  bmp := nil;'#13#10+
+  '  try'#13#10+
+  '    bmp := TBinaryBitmap.Create;'#13#10+
+  '    if (bmp <> nil) then FreeAndNil(bmp);'#13#10+
+  '    bmp := TBinaryBitmap.Create;'#13#10+
+  '  finally'#13#10+
+  '    Sleep(0);'#13#10+
+  '  end;'#13#10+
+  '  bmp      .Free;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'ausgerichteter Free AUSSERHALB des finally bleibt ein Fund');
   finally F.Free; end;
 end;
 

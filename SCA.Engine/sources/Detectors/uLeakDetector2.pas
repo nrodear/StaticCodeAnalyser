@@ -2596,10 +2596,60 @@ var
     end;
   end;
 
+  // Blanks/Tabs, die unmittelbar an einem Punkt kleben, fallen weg:
+  // 'Obj . Free' / 'Obj .Free' / 'Obj. Free' -> 'Obj.Free'. WARUM: der
+  // Vergleich unten laeuft ueber die QUELLZEILE und nicht ueber Tokens, und
+  // die ausgerichtete Schreibweise trennt Empfaenger und Punkt - dann greift
+  // jede Nadel daneben. Beleg (01.09.): CodeReader.ZXing.ScanManager.pas:228
+  // und :277 schreiben 'BinaryBitmap      .Free;' INNERHALB des finally; der
+  // lsWarning-Vertrag behauptet dort 'Free ausserhalb des finally' und liegt
+  // damit falsch. SearchFree ist von der Luecke NICHT betroffen (der Parser
+  // normalisiert den Knotennamen) - es steigt als First-Match-DFS schon am
+  // frueheren FreeAndNil im try-Rumpf mit InFinally=False aus, weshalb die
+  // Entscheidung allein an dieser Quellzeile haengt. Angefasst wird nur die
+  // Punkt-Umgebung, damit die linke Wortgrenze in BoundedLeft weiter traegt.
+  function CollapseDotSpacing(const S: string): string;
+  var
+    i, n, k, o : Integer;
+  begin
+    n := Length(S);
+    SetLength(Result, n);
+    o := 0;
+    i := 1;
+    while i <= n do
+    begin
+      if CharInSet(S[i], [' ', #9]) then
+      begin
+        k := i;
+        while (k <= n) and CharInSet(S[k], [' ', #9]) do Inc(k);
+        if (k <= n) and (S[k] = '.') then
+        begin
+          i := k;                 // Luecke VOR dem Punkt faellt weg
+          Continue;
+        end;
+        while i < k do
+        begin
+          Inc(o); Result[o] := S[i]; Inc(i);
+        end;
+        Continue;
+      end;
+
+      Inc(o); Result[o] := S[i];
+      if S[i] = '.' then
+      begin
+        Inc(i);                   // Luecke NACH dem Punkt faellt weg
+        while (i <= n) and CharInSet(S[i], [' ', #9]) do Inc(i);
+      end
+      else
+        Inc(i);
+    end;
+    SetLength(Result, o);
+  end;
+
   function LineFreesVar(const S: string): Boolean;
   var Low : string;
   begin
-    Low := LowerCase(S);
+    Low := LowerCase(CollapseDotSpacing(S));
     Result := BoundedLeft(Low, VarNameLow + '.free', False)
            or BoundedLeft(Low, VarNameLow + '.destroy', False)
            or BoundedLeft(Low, 'freeandnil(' + VarNameLow, True)
