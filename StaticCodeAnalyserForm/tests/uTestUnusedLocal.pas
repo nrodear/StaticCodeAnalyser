@@ -1,4 +1,4 @@
-unit uTestUnusedLocal;
+﻿unit uTestUnusedLocal;
 
 // Tests fuer den TUnusedLocalDetector (fkUnusedLocalVar).
 
@@ -38,6 +38,10 @@ type
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Local_Finding_KindAndSeverity;
     [Test] procedure Local_Finding_MissingVarMentionsVarName;
+    // Signaturparameter statt Variable (Kundenfund 31.08.)
+    [Test] procedure Local_ProceduralTypeParam_NotReported;
+    [Test] procedure Local_VarWithProceduralType_NotReported;
+    [Test] procedure Local_NameAlsoInsideCall_StillReported;
   end;
 
 implementation
@@ -377,6 +381,84 @@ begin
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedLocalVar),
     'IST-Zustand: der AST-Token-Scan zaehlt Literalinhalte mit (Luecke, ' +
     'siehe Kommentar) - der Quelltext-Rueckfall kann das nicht heilen');
+  finally F.Free; end;
+end;
+
+
+procedure TTestUnusedLocal.Local_ProceduralTypeParam_NotReported;
+// KUNDENFUND 2026-08-31 (rdpwrap/src-rdpconfig/MainUnit.pas:126): der
+// Parametername einer prozeduralen TYPdeklaration wurde als unbenutzte
+// lokale Variable gemeldet.
+//
+// 'Wow64FsEnableRedirection' ist keine Variable, sondern benennt den
+// Parameter einer SIGNATUR. Er dokumentiert nur und kann per Definition
+// nie gelesen oder geschrieben werden - die Regel kann an ihm nie
+// erfuellt sein.
+//
+// Der bestehende Zeilenanfangs-Test greift hier NICHT: die Zeile
+// beginnt mit 'TFunc', nicht mit 'function'. Entscheidend ist, dass der
+// Bezeichner INNERHALB einer Klammer steht.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function DisableWowRedirection: Boolean;'#13#10 +
+  'type'#13#10 +
+  '  TFunc = function(var Wow64FsEnableRedirection: LongBool): LongBool; stdcall;'#13#10 +
+  'var'#13#10 +
+  '  Wow64DisableWow64FsRedirection: TFunc;'#13#10 +
+  '  OldValue: LongBool;'#13#10 +
+  'begin'#13#10 +
+  '  @Wow64DisableWow64FsRedirection := GetProcAddress(0, ''X'');'#13#10 +
+  '  Result := Wow64DisableWow64FsRedirection(OldValue);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedLocalVar),
+    'Parametername einer Typdeklaration ist keine lokale Variable');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedLocal.Local_VarWithProceduralType_NotReported;
+// Zweite Form derselben Sache, ohne eigenen Typnamen: eine VARIABLE mit
+// prozeduralem Typ traegt die Parameternamen direkt in ihrer
+// Deklaration. Auch hier ist 'AErr' ein Signaturname, keine Variable.
+// Die Klammerprobe deckt beide Formen ab - der Zeilenanfangs-Test
+// keine von beiden.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var'#13#10 +
+  '  Cb: function(AErr: Integer): Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  if Cb(0) then Bar;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedLocalVar),
+    'Signaturname in einer Variablendeklaration ist keine Variable');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedLocal.Local_NameAlsoInsideCall_StillReported;
+// TP-GEGENPROBE, und der Grund fuer die Wortgrenzen-Pruefung: die
+// Klammerprobe darf nur den DEKLARATIONS-Ort betrachten. Hier steht
+// 'ghostVar' zwar auch in einer Klammer - aber in einer anderen Zeile,
+// naemlich im Rumpf einer nested routine, die nie gerufen wird.
+// Die Deklarationszeile selbst hat keine Klammer, der Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var'#13#10 +
+  '  ghostVar: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Bar(42);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedLocalVar),
+    'gewoehnliche unbenutzte Variable bleibt ein Fund');
   finally F.Free; end;
 end;
 
