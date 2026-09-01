@@ -230,6 +230,200 @@ end;
 
 // Pro Zeile: extrahiert den //-Kommentar-Inhalt (rest nach `//`) und
 // gibt Spalte des `//` zurueck wenn der Inhalt Code-Marker hat, sonst 0.
+// Was ein Zweig der Zeilenschleife zurueckmeldet.
+//   szFertig - die Zeile ist abgeschlossen (frueher: Exit)
+//   szWeiter - der Zweig hat die Leseposition gesetzt, Schleife von vorn
+//              (frueher: Continue)
+type
+  TScanZweig = (szFertig, szWeiter);
+
+// --- Die sechs Zweige des Kommentar-Scanners ------------------------
+//
+// FindCommentedOutCode ist ein Zustandsautomat ueber EINE Zeile, mit
+// drei zeilenuebergreifenden Bits. Er lag am 01.09. bei Cognitive 98
+// (Grenze 15), und das war keine Grenzverletzung mehr, sondern eine
+// Groessenordnung. Die Clean-Code-Kalibrierung laesst State Machines
+// begruendet darueber liegen - aber nicht unbegrenzt und nicht ohne
+// die Begruendung im Code.
+//
+// Zerlegt ist er entlang der Faelle, die er ohnehin unterscheidet. Was
+// dabei NICHT angetastet wurde: die Zweige setzen den Fund
+// uneinheitlich - die Exit-Pfade unbedingt, die Weiter-Pfade nur bei
+// noch leerem Fund. In einer Zeile mit MEHREREN Kommentaren
+// entscheidet das ueber die gemeldete Spalte. Eine Vereinheitlichung
+// waere eine Verhaltensaenderung, kein Refactor, und gehoert deshalb
+// nicht hierher.
+
+// Fortsetzungszeile eines offenen '{'-Kommentars.
+function ZweigBlockFortsetzung(const ALine: string; ALaenge: Integer;
+  var APos: Integer; var AInBlockComm: Boolean; var AFund: Integer): TScanZweig;
+var
+  pClose : Integer;
+  Inhalt : string;
+begin
+  pClose := PosEx('}', ALine, APos);
+  if pClose = 0 then
+  begin
+    Inhalt := Copy(ALine, APos, ALaenge - APos + 1);
+    if LooksLikeCommentedCode(Inhalt) then AFund := APos;
+    Exit(szFertig);
+  end;
+  Inhalt := Copy(ALine, APos, pClose - APos);
+  if (AFund = 0) and (LooksLikeCommentedCode(Inhalt)) then AFund := APos;
+  AInBlockComm := False;
+  APos := pClose + 1;
+  Result := szWeiter;
+end;
+
+// Fortsetzungszeile eines offenen '(*'-Kommentars.
+function ZweigParenStarFortsetzung(const ALine: string; ALaenge: Integer;
+  var APos: Integer; var AInParenStarComm, AInParenStarDirective: Boolean;
+  var AFund: Integer): TScanZweig;
+var
+  pClose : Integer;
+  Inhalt : string;
+begin
+  pClose := PosEx('*)', ALine, APos);
+  if pClose = 0 then
+  begin
+    // Fortsetzungszeile einer mehrzeiligen '(*$...*)'-Direktive traegt
+    // keinen Kommentar-Inhalt. HIER entstehen die Fehlalarme, nicht im
+    // Oeffner-Zweig: Beleg jcl/jcl/source/prototypes/JclHashMaps.pas:100
+    // ('function GetOwnsKeys: Boolean;' ist Argument des
+    // '(*$JPPEXPANDMACRO' aus Zeile 82) - im rw45-SARIF gemeldet mit
+    // Spalte 1, level note.
+    if AInParenStarDirective then Exit(szFertig);
+    Inhalt := Copy(ALine, APos, ALaenge - APos + 1);
+    if LooksLikeCommentedCode(Inhalt) then AFund := APos;
+    Exit(szFertig);
+  end;
+  if not AInParenStarDirective then
+  begin
+    Inhalt := Copy(ALine, APos, pClose - APos);
+    if (AFund = 0) and (LooksLikeCommentedCode(Inhalt)) then AFund := APos;
+  end;
+  AInParenStarComm      := False;
+  AInParenStarDirective := False;
+  APos := pClose + 2;
+  Result := szWeiter;
+end;
+
+// Innerhalb eines String-Literals: nur die Leseposition weiterruecken.
+// '' ist das verdoppelte Hochkomma und beendet den String NICHT.
+procedure ZweigInString(const ALine: string; ALaenge: Integer;
+  var APos: Integer; var AInStr: Boolean);
+begin
+  if ALine[APos] <> '''' then
+  begin
+    Inc(APos);
+    Exit;
+  end;
+  if (APos < ALaenge) and (ALine[APos + 1] = '''') then
+    Inc(APos, 2)
+  else
+  begin
+    AInStr := False;
+    Inc(APos);
+  end;
+end;
+
+// Oeffnendes '{'. '{$...}' sind Compiler-Direktiven, nicht Kommentare -
+// Sonder-Skip.
+function ZweigBlockOeffner(const ALine: string; ALaenge: Integer;
+  var APos: Integer; var AInBlockComm: Boolean; var AFund: Integer): TScanZweig;
+var
+  pClose : Integer;
+  Inhalt : string;
+begin
+  if (APos + 1 <= ALaenge) and (ALine[APos + 1] = '$') then
+  begin
+    pClose := PosEx('}', ALine, APos + 2);
+    if pClose = 0 then
+    begin
+      AInBlockComm := True;
+      Exit(szFertig);
+    end;
+    APos := pClose + 1;
+    Exit(szWeiter);
+  end;
+  pClose := PosEx('}', ALine, APos + 1);
+  if pClose = 0 then
+  begin
+    AInBlockComm := True;
+    Inhalt := Copy(ALine, APos + 1, ALaenge - APos);
+    if LooksLikeCommentedCode(Inhalt) then AFund := APos;
+    Exit(szFertig);
+  end;
+  Inhalt := Copy(ALine, APos + 1, pClose - APos - 1);
+  if (AFund = 0) and (LooksLikeCommentedCode(Inhalt)) then AFund := APos;
+  APos := pClose + 1;
+  Result := szWeiter;
+end;
+
+// Oeffnendes '(*'.
+//
+// '(*$...*)' ist dieselbe Compiler-/Praeprozessor-Direktive wie '{$...}',
+// nur in Alternate-Syntax - deshalb hier derselbe Sonder-Skip wie im
+// '{'-Zweig. Der Lexer stellt beide Formen laengst gleich
+// (uLexer.pas:431 fuer '{$', uLexer.pas:463 fuer '(*$', beide rufen
+// HandleConditionalDirective; uLexer.pas:636-639 liefert fuer '(*'
+// ueberhaupt keinen Kommentar-Token). Dieser Detektor liest die Quelle
+// ueber AcquireLines zeilenweise selbst - nur deshalb hat die Ausnahme
+// hier gefehlt. Die MEHRZEILIGEN Vorkommen im Korpus sind durchweg
+// JEDI-Praeprozessor-Makros (22x '(*$JPPEXPANDMACRO', 69x '(*$JPPLOOP'),
+// deren Rumpf jpp in die erzeugte Unit expandiert: aktiver Meta-Code,
+// kein stillgelegter. Die einzeiligen sind ueberwiegend '(*$HPPEMIT'
+// (896x) und schon heute stumm.
+function ZweigParenStarOeffner(const ALine: string; ALaenge: Integer;
+  var APos: Integer; var AInParenStarComm, AInParenStarDirective: Boolean;
+  var AFund: Integer): TScanZweig;
+var
+  pClose : Integer;
+  Inhalt : string;
+begin
+  if (APos + 2 <= ALaenge) and (ALine[APos + 2] = '$') then
+  begin
+    pClose := PosEx('*)', ALine, APos + 3);
+    if pClose = 0 then
+    begin
+      // Bewusst ZWEI Bits statt einem - hier ist der Fix gruendlicher
+      // als der '{'-Zweig, und das ist der Grund: der merkt sich beim
+      // Zeilenueberlauf nur "Block offen" und bewertet die
+      // Fortsetzungszeilen einer mehrzeiligen Direktive wieder als
+      // Kommentar. Genau daran waere ein reiner Oeffner-Skip hier
+      // wirkungslos geblieben (am Korpus gemessen: 0 Drops) - die 91
+      // MEHRZEILIGEN '(*$'-Regionen sind bis zu 21 Zeilen lang
+      // (JclHashMaps.pas:82-103) und liegen zwar alle im Repo jcl, aber
+      // in ZWEI Verzeichnissen: 79 in jcl/jcl/source/prototypes/ (13
+      // Dateien) und 12 in
+      // jcl/donations/dcl/bucket_arrays/JclBucketArraySets.pas (z.B.
+      // Region 52-54, dort ohne Fund - Zeile 54 endet auf ')', nicht auf
+      // ';'). Der '{'-Zweig bleibt trotzdem unangetastet: dieselbe
+      // Luecke ist dort korpusweit genau EINEN Fund wert
+      // (JclHashMaps.pas:248 in der Direktive aus Zeile 246) und
+      // rechtfertigt den Eingriff in den haeufigsten Pfad des Detektors
+      // nicht.
+      AInParenStarComm      := True;
+      AInParenStarDirective := True;
+      Exit(szFertig);
+    end;
+    APos := pClose + 2;
+    Exit(szWeiter);
+  end;
+  pClose := PosEx('*)', ALine, APos + 2);
+  if pClose = 0 then
+  begin
+    AInParenStarComm := True;
+    Inhalt := Copy(ALine, APos + 2, ALaenge - APos - 1);
+    if LooksLikeCommentedCode(Inhalt) then AFund := APos;
+    Exit(szFertig);
+  end;
+  Inhalt := Copy(ALine, APos + 2, pClose - APos - 2);
+  if (AFund = 0) and (LooksLikeCommentedCode(Inhalt)) then AFund := APos;
+  APos := pClose + 2;
+  Result := szWeiter;
+end;
+
 function FindCommentedOutCode(const Line: string; var InBlockComm: Boolean;
   var InParenStarComm: Boolean; var InParenStarDirective: Boolean): Integer;
 // InParenStarDirective gehoert zu InParenStarComm und sagt, ob die offene
@@ -240,13 +434,18 @@ function FindCommentedOutCode(const Line: string; var InBlockComm: Boolean;
 // reiner Oeffner-Skip ist am Korpus gemessen ein No-Op. Der Fehlalarm
 // entsteht erst auf einer Fortsetzungszeile
 // (jcl/jcl/source/prototypes/JclHashMaps.pas:100 zur Direktive aus Zeile 82,
-// die erst in Zeile 103 schliesst) - und die liest der InParenStarComm-Zweig,
-// nicht der Oeffner-Zweig weiter unten.
+// die erst in Zeile 103 schliesst) - und die liest der
+// InParenStarComm-Zweig, nicht der Oeffner-Zweig.
+//
+// Der Rumpf ist nur noch die Fallunterscheidung; jeder Fall steht als
+// eigener Zweig darueber. Die REIHENFOLGE der Faelle traegt Bedeutung:
+// eine offene Kommentarregion schlaegt alles andere, und der
+// String-Test kommt vor den Kommentar-Oeffnern, weil '{' und '(*' in
+// einem String-Literal keine Kommentare oeffnen.
 var
-  i, n, pClose : Integer;
-  InStr        : Boolean;
-  c            : Char;
-  CmtContent   : string;
+  i, n : Integer;
+  InStr: Boolean;
+  c    : Char;
 begin
   Result := 0;
   InStr  := False;
@@ -256,137 +455,44 @@ begin
   begin
     if InBlockComm then
     begin
-      // Sammle den Kommentar-Inhalt bis `}` (oder Zeilenende)
-      pClose := PosEx('}', Line, i);
-      if pClose = 0 then
-      begin
-        CmtContent := Copy(Line, i, n - i + 1);
-        if LooksLikeCommentedCode(CmtContent) then Result := i;
-        Exit;
-      end;
-      CmtContent := Copy(Line, i, pClose - i);
-      if (Result = 0) and (LooksLikeCommentedCode(CmtContent)) then Result := i;
-      InBlockComm := False;
-      i := pClose + 1; Continue;
+      if ZweigBlockFortsetzung(Line, n, i, InBlockComm, Result) = szFertig then Exit;
+      Continue;
     end;
     if InParenStarComm then
     begin
-      pClose := PosEx('*)', Line, i);
-      if pClose = 0 then
-      begin
-        // Fortsetzungszeile einer mehrzeiligen '(*$...*)'-Direktive traegt
-        // keinen Kommentar-Inhalt. HIER entstehen die Fehlalarme, nicht im
-        // Oeffner-Zweig: Beleg jcl/jcl/source/prototypes/JclHashMaps.pas:100
-        // ('function GetOwnsKeys: Boolean;' ist Argument des
-        // '(*$JPPEXPANDMACRO' aus Zeile 82) - im rw45-SARIF gemeldet mit
-        // Spalte 1, level note.
-        if InParenStarDirective then Exit;
-        CmtContent := Copy(Line, i, n - i + 1);
-        if LooksLikeCommentedCode(CmtContent) then Result := i;
-        Exit;
-      end;
-      if not InParenStarDirective then
-      begin
-        CmtContent := Copy(Line, i, pClose - i);
-        if (Result = 0) and (LooksLikeCommentedCode(CmtContent)) then Result := i;
-      end;
-      InParenStarComm      := False;
-      InParenStarDirective := False;
-      i := pClose + 2; Continue;
-    end;
-    c := Line[i];
-    if InStr then
-    begin
-      if c = '''' then
-      begin
-        if (i < n) and (Line[i + 1] = '''') then Inc(i, 2)
-        else begin InStr := False; Inc(i); end;
-      end
-      else Inc(i);
+      if ZweigParenStarFortsetzung(Line, n, i, InParenStarComm,
+                                   InParenStarDirective, Result) = szFertig then Exit;
       Continue;
     end;
-    if c = '''' then begin InStr := True; Inc(i); Continue; end;
+    if InStr then
+    begin
+      ZweigInString(Line, n, i, InStr);
+      Continue;
+    end;
+    c := Line[i];
+    if c = '''' then
+    begin
+      InStr := True;
+      Inc(i);
+      Continue;
+    end;
     if (c = '/') and (i < n) and (Line[i + 1] = '/') then
     begin
-      // Inhalt des //-Kommentars
-      CmtContent := Copy(Line, i + 2, MaxInt);
-      if LooksLikeCommentedCode(CmtContent) then Result := i;
+      // Ein //-Kommentar laeuft bis Zeilenende - danach ist nichts mehr
+      // zu pruefen.
+      if LooksLikeCommentedCode(Copy(Line, i + 2, MaxInt)) then Result := i;
       Exit;
     end;
     if c = '{' then
     begin
-      // {$...} sind Compiler-Direktiven, nicht Kommentare - Sonder-Skip.
-      if (i + 1 <= n) and (Line[i + 1] = '$') then
-      begin
-        pClose := PosEx('}', Line, i + 2);
-        if pClose = 0 then begin InBlockComm := True; Exit; end;
-        i := pClose + 1; Continue;
-      end;
-      pClose := PosEx('}', Line, i + 1);
-      if pClose = 0 then
-      begin
-        InBlockComm := True;
-        CmtContent := Copy(Line, i + 1, n - i);
-        if LooksLikeCommentedCode(CmtContent) then Result := i;
-        Exit;
-      end;
-      CmtContent := Copy(Line, i + 1, pClose - i - 1);
-      if (Result = 0) and (LooksLikeCommentedCode(CmtContent)) then Result := i;
-      i := pClose + 1; Continue;
+      if ZweigBlockOeffner(Line, n, i, InBlockComm, Result) = szFertig then Exit;
+      Continue;
     end;
     if (c = '(') and (i < n) and (Line[i + 1] = '*') then
     begin
-      // '(*$...*)' ist dieselbe Compiler-/Praeprozessor-Direktive wie
-      // '{$...}', nur in Alternate-Syntax - deshalb hier derselbe
-      // Sonder-Skip wie oben im '{'-Zweig. Der Lexer stellt beide Formen
-      // laengst gleich (uLexer.pas:431 fuer '{$', uLexer.pas:463 fuer '(*$',
-      // beide rufen HandleConditionalDirective; uLexer.pas:636-639 liefert
-      // fuer '(*' ueberhaupt keinen Kommentar-Token). Dieser Detektor liest
-      // die Quelle ueber AcquireLines zeilenweise selbst - nur deshalb hat
-      // die Ausnahme hier gefehlt. Die MEHRZEILIGEN Vorkommen im Korpus
-      // sind durchweg JEDI-Praeprozessor-Makros (22x '(*$JPPEXPANDMACRO',
-      // 69x '(*$JPPLOOP'), deren Rumpf jpp in die erzeugte Unit expandiert:
-      // aktiver Meta-Code, kein stillgelegter. Die einzeiligen sind
-      // ueberwiegend '(*$HPPEMIT' (896x) und schon heute stumm.
-      if (i + 2 <= n) and (Line[i + 2] = '$') then
-      begin
-        pClose := PosEx('*)', Line, i + 3);
-        if pClose = 0 then
-        begin
-          // Bewusst ZWEI Bits statt einem - hier ist der Fix gruendlicher
-          // als der '{'-Zweig oben, und das ist der Grund: der merkt sich
-          // beim Zeilenueberlauf nur "Block offen" und bewertet die
-          // Fortsetzungszeilen einer mehrzeiligen Direktive wieder als
-          // Kommentar. Genau daran waere ein reiner Oeffner-Skip hier
-          // wirkungslos geblieben (am Korpus gemessen: 0 Drops) - die 91
-          // MEHRZEILIGEN '(*$'-Regionen sind bis zu 21 Zeilen lang
-          // (JclHashMaps.pas:82-103) und liegen zwar alle im Repo jcl, aber
-          // in ZWEI Verzeichnissen: 79 in jcl/jcl/source/prototypes/ (13
-          // Dateien) und 12 in
-          // jcl/donations/dcl/bucket_arrays/JclBucketArraySets.pas (z.B.
-          // Region 52-54, dort ohne Fund - Zeile 54 endet auf ')', nicht
-          // auf ';'). Der
-          // '{'-Zweig bleibt trotzdem unangetastet: dieselbe Luecke ist
-          // dort korpusweit genau EINEN Fund wert (JclHashMaps.pas:248 in
-          // der Direktive aus Zeile 246) und rechtfertigt den Eingriff in
-          // den haeufigsten Pfad des Detektors nicht.
-          InParenStarComm      := True;
-          InParenStarDirective := True;
-          Exit;
-        end;
-        i := pClose + 2; Continue;
-      end;
-      pClose := PosEx('*)', Line, i + 2);
-      if pClose = 0 then
-      begin
-        InParenStarComm := True;
-        CmtContent := Copy(Line, i + 2, n - i - 1);
-        if LooksLikeCommentedCode(CmtContent) then Result := i;
-        Exit;
-      end;
-      CmtContent := Copy(Line, i + 2, pClose - i - 2);
-      if (Result = 0) and (LooksLikeCommentedCode(CmtContent)) then Result := i;
-      i := pClose + 2; Continue;
+      if ZweigParenStarOeffner(Line, n, i, InParenStarComm,
+                               InParenStarDirective, Result) = szFertig then Exit;
+      Continue;
     end;
     Inc(i);
   end;
