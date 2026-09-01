@@ -646,37 +646,27 @@ procedure TTestMemoryLeak.Leak_AlignedDotFreeInFinally_NoFinding;
 // schlicht falsch. Das FreeAndNil im try-Rumpf ist noetig, damit
 // SearchFree als First-Match-DFS mit InFinally=False aussteigt; erst
 // dann entscheidet dieser Rettungspfad ueberhaupt.
+//
+// TStringList und nicht der Originaltyp: FindingsOfFile ruft ohne
+// AContext, und IsLeakyType faellt dann auf die GLOBALE
+// LeakyClasses-Liste zurueck - eine selbst deklarierte Klasse kennt sie
+// nicht, AnalyzeMethod braeche schon am NotLeakyType-Gate ab. Im
+// Vollscan traegt das die AutoDiscovery, im Test nicht.
 const SRC =
   'unit t;'#13#10+
   'interface'#13#10+
-  'type'#13#10+
-  '  TBinaryBitmap = class'#13#10+
-  '  private'#13#10+
-  '    FBuf: Pointer;'#13#10+
-  '  public'#13#10+
-  '    constructor Create;'#13#10+
-  '    destructor Destroy; override;'#13#10+
-  '  end;'#13#10+
   'implementation'#13#10+
-  'constructor TBinaryBitmap.Create;'#13#10+
-  'begin'#13#10+
-  '  FBuf := nil;'#13#10+
-  'end;'#13#10+
-  'destructor TBinaryBitmap.Destroy;'#13#10+
-  'begin'#13#10+
-  '  inherited;'#13#10+
-  'end;'#13#10+
   'procedure Bar;'#13#10+
   'var'#13#10+
-  '  bmp: TBinaryBitmap;'#13#10+
+  '  list: TStringList;'#13#10+
   'begin'#13#10+
-  '  bmp := nil;'#13#10+
+  '  list := nil;'#13#10+
   '  try'#13#10+
-  '    bmp := TBinaryBitmap.Create;'#13#10+
-  '    if (bmp <> nil) then FreeAndNil(bmp);'#13#10+
-  '    bmp := TBinaryBitmap.Create;'#13#10+
+  '    list := TStringList.Create;'#13#10+
+  '    if (list <> nil) then FreeAndNil(list);'#13#10+
+  '    list := TStringList.Create;'#13#10+
   '  finally'#13#10+
-  '    bmp      .Free;'#13#10+
+  '    list      .Free;'#13#10+
   '  end;'#13#10+
   'end;'#13#10+
   'end.';
@@ -696,34 +686,18 @@ procedure TTestMemoryLeak.Leak_TightDotFreeInFinally_NoFinding;
 const SRC =
   'unit t;'#13#10+
   'interface'#13#10+
-  'type'#13#10+
-  '  TBinaryBitmap = class'#13#10+
-  '  private'#13#10+
-  '    FBuf: Pointer;'#13#10+
-  '  public'#13#10+
-  '    constructor Create;'#13#10+
-  '    destructor Destroy; override;'#13#10+
-  '  end;'#13#10+
   'implementation'#13#10+
-  'constructor TBinaryBitmap.Create;'#13#10+
-  'begin'#13#10+
-  '  FBuf := nil;'#13#10+
-  'end;'#13#10+
-  'destructor TBinaryBitmap.Destroy;'#13#10+
-  'begin'#13#10+
-  '  inherited;'#13#10+
-  'end;'#13#10+
   'procedure Bar;'#13#10+
   'var'#13#10+
-  '  bmp: TBinaryBitmap;'#13#10+
+  '  list: TStringList;'#13#10+
   'begin'#13#10+
-  '  bmp := nil;'#13#10+
+  '  list := nil;'#13#10+
   '  try'#13#10+
-  '    bmp := TBinaryBitmap.Create;'#13#10+
-  '    if (bmp <> nil) then FreeAndNil(bmp);'#13#10+
-  '    bmp := TBinaryBitmap.Create;'#13#10+
+  '    list := TStringList.Create;'#13#10+
+  '    if (list <> nil) then FreeAndNil(list);'#13#10+
+  '    list := TStringList.Create;'#13#10+
   '  finally'#13#10+
-  '    bmp.Free;'#13#10+
+  '    list.Free;'#13#10+
   '  end;'#13#10+
   'end;'#13#10+
   'end.';
@@ -745,36 +719,20 @@ procedure TTestMemoryLeak.Leak_AlignedDotFreeOutsideFinally_StillWarns;
 const SRC =
   'unit t;'#13#10+
   'interface'#13#10+
-  'type'#13#10+
-  '  TBinaryBitmap = class'#13#10+
-  '  private'#13#10+
-  '    FBuf: Pointer;'#13#10+
-  '  public'#13#10+
-  '    constructor Create;'#13#10+
-  '    destructor Destroy; override;'#13#10+
-  '  end;'#13#10+
   'implementation'#13#10+
-  'constructor TBinaryBitmap.Create;'#13#10+
-  'begin'#13#10+
-  '  FBuf := nil;'#13#10+
-  'end;'#13#10+
-  'destructor TBinaryBitmap.Destroy;'#13#10+
-  'begin'#13#10+
-  '  inherited;'#13#10+
-  'end;'#13#10+
   'procedure Bar;'#13#10+
   'var'#13#10+
-  '  bmp: TBinaryBitmap;'#13#10+
+  '  list: TStringList;'#13#10+
   'begin'#13#10+
-  '  bmp := nil;'#13#10+
+  '  list := nil;'#13#10+
   '  try'#13#10+
-  '    bmp := TBinaryBitmap.Create;'#13#10+
-  '    if (bmp <> nil) then FreeAndNil(bmp);'#13#10+
-  '    bmp := TBinaryBitmap.Create;'#13#10+
+  '    list := TStringList.Create;'#13#10+
+  '    if (list <> nil) then FreeAndNil(list);'#13#10+
+  '    list := TStringList.Create;'#13#10+
   '  finally'#13#10+
   '    Sleep(0);'#13#10+
   '  end;'#13#10+
-  '  bmp      .Free;'#13#10+
+  '  list      .Free;'#13#10+
   'end;'#13#10+
   'end.';
 var F: TObjectList<TLeakFinding>;

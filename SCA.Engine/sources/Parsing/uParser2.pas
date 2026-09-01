@@ -2180,7 +2180,13 @@ var
   StartCount : Integer;
 begin
   StartCount := FNextCount;
-  // AKTENNOTIZ (2026-08-28) - BEKANNTER, HIER NICHT BEHOBENER DEFEKT:
+  // AKTENNOTIZ (2026-08-28), NACHGEZOGEN AM 02.09.: der Defekt ist
+  // behoben - aber NICHT hier, sondern in ParseCaseStmt an der
+  // Arm-Schleife, wo das ';' semantisch zum Arm gehoert. Diese
+  // Schleife bleibt unangetastet, weil die EmptyThen-Kompensation in
+  // ParseIfStmt an ihr haengt (siehe unten).
+  //
+  // Der urspruengliche Befund, zum Verstaendnis:
   // Diese Schleife schluckt die Leeranweisungen eines LEEREN case-Arms
   // ('X: ;') und laeuft danach bis zum naechsten echten Token weiter. Bei
   //     case X of
@@ -2188,10 +2194,12 @@ begin
   //       else Foo;
   //     end;
   // steht danach das else des case an - der Arm bleibt leer und die
-  // Zuordnung verrutscht. Auf D:\git-sca-realworld sind das 2 Fundstellen;
-  // sie sind eine ZWEITE, von der if/case-else-Verwechslung UNABHAENGIGE
-  // Ursache und gehoeren in ein eigenes Paket (getrennt gehalten, damit das
-  // A/B des Parserfixes vom 2026-08-28 zuordenbar bleibt).
+  // Zuordnung verrutscht. Die hier genannten 2 Fundstellen zaehlen NUR
+  // das Muster "leerer Arm vor else"; korpusweit sind es 694 leere Arme,
+  // davon 490 wirksam. Die Sache ist eine ZWEITE, von der
+  // if/case-else-Verwechslung UNABHAENGIGE Ursache - deshalb wurde sie
+  // am 2026-08-28 bewusst liegen gelassen, damit das A/B jenes
+  // Parserfixes zuordenbar blieb.
   // Achtung beim Nachziehen: das hier konsumierte ';' setzt FLastConsumed
   // auf tkSemicolon - ParseIfStmt kompensiert das ueber sein EmptyThen.
   while Eat(tkSemicolon) do ; // leere Anweisungen

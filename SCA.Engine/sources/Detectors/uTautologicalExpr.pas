@@ -1,4 +1,4 @@
-﻿unit uTautologicalExpr;
+unit uTautologicalExpr;
 
 // Detector: tautologische binaere Ausdruecke wie `x = x`, `a and a`,
 // `(b or b)`, `(p <> p)`. Klassischer Copy-Paste-Bug oder vergessener
@@ -289,6 +289,15 @@ type
     InDeklaration   : Boolean;   // in const/type/var/resourcestring
   end;
 
+// Beginnt ALow mit AWort UND endet das Wort dort auch? 'procedure' darf
+// nicht in 'procedures' treffen. ALow ist bereits klein und getrimmt.
+function WortAmZeilenanfang(const ALow, AWort: string): Boolean;
+begin
+  Result := ALow.StartsWith(AWort)
+        and ((Length(ALow) = Length(AWort))
+             or not IsIdentChar(ALow[Length(AWort) + 1]));
+end;
+
 // Fuehrt TScanLage.InDeklaration ueber die Zeilen nach.
 //
 // WARUM (02.09., AQL-Stichprobe des Error-Tiers): im const-Abschnitt ist
@@ -308,14 +317,25 @@ procedure LageNachfuehren(const ALine: string; var ALage: TScanLage);
 var
   L : string;
 begin
-  L := LowerCase(TrimLeft(ALine));
-  if L.StartsWith('const') or L.StartsWith('type') or L.StartsWith('var')
-     or L.StartsWith('resourcestring') then
+  L := LowerCase(Trim(ALine));
+  // NUR ein allein stehendes Schluesselwort eroeffnet einen Abschnitt.
+  // Zwei Gruende, beide aus dem Review vom 02.09.:
+  //   * ein inline 'var x: Integer;' (Delphi 10.3+) steht MITTEN im
+  //     Rumpf, also hinter dem 'begin'. Wuerde es den Zustand setzen,
+  //     saehe ihn nichts mehr zurueck und Phase 3 waere fuer den
+  //     gesamten Rest der Routine aus - ein Fehler, der sich als Erfolg
+  //     tarnt, weil er nur Funde WEGNIMMT.
+  //   * StartsWith ohne Wortgrenze trifft auch 'variable := 5;'.
+  // Ein klassischer Deklarationsblock schreibt das Schluesselwort auf
+  // eine eigene Zeile; alles andere traegt noch etwas dahinter.
+  if (L = 'const') or (L = 'type') or (L = 'var')
+     or (L = 'resourcestring') then
     ALage.InDeklaration := True
-  else if L.StartsWith('begin') or L.StartsWith('function')
-          or L.StartsWith('procedure') or L.StartsWith('constructor')
-          or L.StartsWith('destructor') or L.StartsWith('implementation')
-          or L.StartsWith('initialization') or L.StartsWith('finalization') then
+  else if WortAmZeilenanfang(L, 'begin') or WortAmZeilenanfang(L, 'function')
+          or WortAmZeilenanfang(L, 'procedure') or WortAmZeilenanfang(L, 'constructor')
+          or WortAmZeilenanfang(L, 'destructor') or WortAmZeilenanfang(L, 'implementation')
+          or WortAmZeilenanfang(L, 'initialization')
+          or WortAmZeilenanfang(L, 'finalization') then
     ALage.InDeklaration := False;
 end;
 

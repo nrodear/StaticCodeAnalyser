@@ -1,4 +1,4 @@
-﻿unit uTestTautologicalExpr;
+unit uTestTautologicalExpr;
 
 // Tests fuer den TTautologicalExprDetector (file-scan).
 //
@@ -50,6 +50,10 @@ type
     // Waechter - im CODE muss dieselbe Form ein Fund bleiben.
     [Test] procedure Taut_ConstAliasDeclaration_NotReported;
     [Test] procedure Taut_ComparisonInCodeAfterConstBlock_StillReported;
+    // Waechter gegen den gefaehrlichsten Fehler dieses Gates: ein
+    // inline var im Rumpf darf Phase 3 nicht fuer den Rest der Routine
+    // abschalten (Review 02.09.).
+    [Test] procedure Taut_InlineVarInBody_ComparisonStillReported;
   end;
 
 implementation
@@ -58,6 +62,36 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+procedure TTestTautologicalExpr.Taut_InlineVarInBody_ComparisonStillReported;
+// WAECHTER (Review 02.09.). Ein inline 'var' (Delphi 10.3+) steht MITTEN
+// im Rumpf, also hinter dem 'begin'. Setzte es den Deklarationszustand,
+// saehe ihn nichts mehr zurueck - Phase 3 waere fuer den gesamten Rest
+// der Routine aus, und die Regel verstummte still. Das ist der
+// gefaehrlichste denkbare Fehler dieses Gates, weil er sich als Erfolg
+// tarnt: er nimmt nur Funde WEG.
+//
+// Zweiter Teil derselben Falle: ein StartsWith ohne Wortgrenze trifft
+// auch 'variable := 5;'. Deshalb steht die hier mit drin.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  var variable := 5;'#13#10 +
+  '  var ProcessID: Integer;'#13#10 +
+  '  ProcessID := 7;'#13#10 +
+  '  if ProcessID = ProcessID then Bar;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    'inline var im Rumpf darf Phase 3 nicht abschalten');
+  finally F.Free; end;
+end;
 
 procedure TTestTautologicalExpr.Taut_ConstAliasDeclaration_NotReported;
 // Beleg mormot.core.os.delphi.pas:151/152 (und 17 weitere Stellen): das
