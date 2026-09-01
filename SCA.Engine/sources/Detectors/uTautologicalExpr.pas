@@ -1,4 +1,4 @@
-unit uTautologicalExpr;
+﻿unit uTautologicalExpr;
 
 // Detector: tautologische binaere Ausdruecke wie `x = x`, `a and a`,
 // `(b or b)`, `(p <> p)`. Klassischer Copy-Paste-Bug oder vergessener
@@ -279,8 +279,48 @@ end;
 // Sucht in einer Code-Zeile nach `<lhs> <op> <rhs>`-Pattern mit lhs == rhs
 // und op aus der relevanten Liste. Strings/Kommentare werden vorab
 // ausgeblendet, damit Op-Vorkommen darin nicht falsch matchen.
-function ScanForTautology(const Line: string; var InBlockComm,
-  InParenStarComm: Boolean; out MatchCol: Integer; out Detail: string): Boolean;
+// Zeilenuebergreifender Zustand des Scanners. Als Record, weil ein
+// drittes Bit ScanForTautology sonst auf sechs Parameter gebracht haette
+// (SCA013).
+type
+  TScanLage = record
+    InBlockComm     : Boolean;   // offener '{'-Kommentar
+    InParenStarComm : Boolean;   // offener '(*'-Kommentar
+    InDeklaration   : Boolean;   // in const/type/var/resourcestring
+  end;
+
+// Fuehrt TScanLage.InDeklaration ueber die Zeilen nach.
+//
+// WARUM (02.09., AQL-Stichprobe des Error-Tiers): im const-Abschnitt ist
+// '=' der DEKLARATIONSTOKEN, kein Vergleichsoperator. Die Zeile
+// 'F_OK = F_OK;' definiert eine neue Konstante aus der gleichnamigen
+// importierten - in mORMot ist das das durchgaengige Muster, um
+// Posix-Konstanten zu re-exportieren. Es gibt dort ueberhaupt keinen
+// auswertbaren Ausdruck, die Meldung "LHS == RHS" ist schlicht falsch.
+// Am Korpus gezaehlt: 19 der 45 SCA055-Funde sind solche Aliase (42 %),
+// und SCA055 meldet auf Error-Stufe.
+//
+// Nur Phase 3 (Vergleichsoperatoren) setzt deshalb aus. Phase 2
+// (and/or/xor) laeuft weiter: ein 'True or True' bleibt auch in einer
+// Deklaration eine Tautologie, und der einzige Korpustreffer dieser Art
+// (CnTestHighlightDemo.pas:16) liegt ohnehin ausserhalb.
+procedure LageNachfuehren(const ALine: string; var ALage: TScanLage);
+var
+  L : string;
+begin
+  L := LowerCase(TrimLeft(ALine));
+  if L.StartsWith('const') or L.StartsWith('type') or L.StartsWith('var')
+     or L.StartsWith('resourcestring') then
+    ALage.InDeklaration := True
+  else if L.StartsWith('begin') or L.StartsWith('function')
+          or L.StartsWith('procedure') or L.StartsWith('constructor')
+          or L.StartsWith('destructor') or L.StartsWith('implementation')
+          or L.StartsWith('initialization') or L.StartsWith('finalization') then
+    ALage.InDeklaration := False;
+end;
+
+function ScanForTautology(const Line: string; var ALage: TScanLage;
+  out MatchCol: Integer; out Detail: string): Boolean;
 var
   Clean : string;
   p     : Integer;
@@ -293,7 +333,8 @@ begin
   Detail := '';
 
   // Phase 1: Strings + Kommentare ausblanken.
-  Clean := StripStringsAndComments(Line, InBlockComm, InParenStarComm);
+  Clean := StripStringsAndComments(Line, ALage.InBlockComm,
+                                   ALage.InParenStarComm);
 
   // Phase 2: Boolean-Operatoren (` and ` / ` or ` / ` xor `).
   // Op-Position + Stop-Position werden auf Clean gesucht (Strings sind
@@ -342,6 +383,10 @@ begin
   // einstellige Variant zuerst.
   //
   // Wie in Phase 2: Op/Stop-Suche auf Clean, finale Lhs/Rhs aus Line.
+  // Im Deklarationsabschnitt ist '=' der Deklarationstoken - siehe
+  // LageNachfuehren. Phase 3 hat dort nichts zu suchen.
+  if ALage.InDeklaration then Exit;
+
   for var Op in CMP_OPS do
   begin
     var Search := ' ' + Op + ' ';
@@ -387,7 +432,7 @@ var
   MatchCol : Integer;
   Detail : string;
   Line : string;
-  InBlockComm, InParenStarComm : Boolean;
+  Lage : TScanLage;
   F : TLeakFinding;
   Cached : Boolean;
 begin
@@ -397,13 +442,14 @@ begin
 
     // Block-Kommentare spannen ueber Zeilen, daher State mitfuehren.
     // StringLiterale spannen in Pascal nicht ueber Zeilen -> per Line lokal.
-    InBlockComm := False;
-    InParenStarComm := False;
+    Lage.InBlockComm     := False;
+    Lage.InParenStarComm := False;
+    Lage.InDeklaration   := False;
     for i := 0 to Lines.Count - 1 do
     begin
       Line := Lines[i];
-      if ScanForTautology(Line, InBlockComm, InParenStarComm,
-                          MatchCol, Detail) then
+      LageNachfuehren(Line, Lage);
+      if ScanForTautology(Line, Lage, MatchCol, Detail) then
       begin
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
