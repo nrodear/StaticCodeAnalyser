@@ -46,6 +46,35 @@ uses
 const
   EMIT_SEVERITY = lsHint;
 
+// Steht der Bezeichner ANameLow mit Wortgrenzen INNERHALB einer
+// offenen Klammer? Beide Argumente sind bereits kleingeschrieben.
+//
+// Die Wortgrenzen sind der Grund fuer die Handarbeit statt Pos: 'n'
+// darf nicht in 'count' treffen. Die Klammertiefe zaehlt mit, weil nur
+// der Stand INNERHALB entscheidet - derselbe Name kann davor als
+// Typname stehen.
+function IdentInKlammern(const ACodeLow, ANameLow: string): Boolean;
+var
+  i, tiefe, len : Integer;
+begin
+  Result := False;
+  len := Length(ANameLow);
+  if len = 0 then Exit;
+  tiefe := 0;
+  for i := 1 to Length(ACodeLow) do
+  begin
+    if ACodeLow[i] = '(' then
+      Inc(tiefe)
+    else if ACodeLow[i] = ')' then
+      Dec(tiefe)
+    else if (tiefe > 0) and (Copy(ACodeLow, i, len) = ANameLow)
+            and ((i = 1) or not TDetectorUtils.IsIdentChar(ACodeLow[i - 1]))
+            and ((i + len > Length(ACodeLow))
+                 or not TDetectorUtils.IsIdentChar(ACodeLow[i + len])) then
+      Exit(True);
+  end;
+end;
+
 // Verifiziert via Source-Line dass die LineNumber des Findings eine
 // echte Var-Deklaration zeigt (Identifier ':' Type) und KEIN nested
 // procedure/function-Header. Der AST kann beides als nkLocalVar liefern
@@ -55,7 +84,6 @@ function LooksLikeRealLocalVar(Lines: TStringList; LineNo1: Integer;
   const AName: string): Boolean;
 var
   S, T, NameLow : string;
-  i, tiefe, p   : Integer;
 begin
   Result := True;
   if (Lines = nil) or (LineNo1 <= 0) or (LineNo1 > Lines.Count) then Exit;
@@ -89,20 +117,7 @@ begin
   // Variable mit prozeduralem Typ ('var F: function(..)').
   NameLow := LowerCase(Trim(AName));
   if NameLow = '' then Exit;
-  p := 0;
-  tiefe := 0;
-  for i := 1 to Length(T) do
-  begin
-    if T[i] = '(' then Inc(tiefe)
-    else if T[i] = ')' then Dec(tiefe)
-    else if (tiefe > 0) and (p = 0)
-            and (Copy(T, i, Length(NameLow)) = NameLow)
-            and ((i = 1) or not TDetectorUtils.IsIdentChar(T[i - 1]))
-            and ((i + Length(NameLow) > Length(T))
-                 or not TDetectorUtils.IsIdentChar(T[i + Length(NameLow)])) then
-      p := i;
-  end;
-  if p > 0 then Exit(False);
+  if IdentInKlammern(T, NameLow) then Exit(False);
 end;
 
 function IsIdentChar(C: Char): Boolean; inline;
