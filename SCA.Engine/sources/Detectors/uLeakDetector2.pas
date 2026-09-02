@@ -2297,6 +2297,60 @@ end;
 
 { ---- Free-Suche ---- }
 
+// Gibt die Anweisung ANameLow die Variable AVarLow direkt frei?
+//
+// Vier Schreibweisen, alle mit LINKER WORTGRENZE geprueft - ohne sie
+// wuerde 'mylist.free' auch fuer die Variable 'list' zaehlen.
+//
+// (1) varName.Free   - mit und ohne Klammern (list.Free / list.Free())
+// (2) varName.Destroy
+// (3) varName.DisposeOf - ARC-/NextGen-Idiom, auf Classic-Compilern
+//     Alias fuer Free. SCA001-Gross-Triage 2026-07-18 (free-missed-Bucket
+//     22/101): zwei reale Faelle (FMX LBitmap.DisposeOf / Str.DisposeOf)
+//     wurden als "nie freigegeben" gemeldet, weil SearchFree DisposeOf
+//     nicht kannte.
+// (4) Typecast-Free: 'TStringList(FParams).Free' / '(varName).Destroy'.
+//     Der Cast schiebt ein ')' zwischen Var-Namen und '.free', das Muster
+//     (1) verfehlt das (Gross-Triage: JvUIB TStringList(FParams).Free im
+//     Destroy -> FP "nie freigegeben"). Die linke Grenze '(' garantiert,
+//     dass varName das GANZE Cast-Argument ist (kein 'foo(x.varname)').
+//     ZUSATZ-Guard: der Kopf vor '(' muss ein TYP sein (t-Praefix-
+//     Konvention) - 'GetWrapper(list).Free' gibt das RESULT frei, nicht
+//     list, das waere ein False Negative. Dokumentiertes Rest-Risiko:
+//     t-praefixierte FUNKTIONEN ('Transform(x).Free') passieren den Guard
+//     (selten; SearchFree hat keinen AContext fuer einen echten Typ-Check
+//     via TTypeIndex - bewusst akzeptiert).
+function GibtVarFrei(const ANameLow, AVarLow: string): Boolean;
+var
+  pMatch, hS : Integer;
+  Nadel      : string;
+begin
+  Result := False;
+  // (1)-(3): direkter Aufruf auf der Variablen
+  for Nadel in ['.free', '.destroy', '.disposeof'] do
+  begin
+    pMatch := Pos(AVarLow + Nadel, ANameLow);
+    if (pMatch > 0)
+       and ((pMatch = 1) or not TLeakDetector2.IsIdentChar(ANameLow[pMatch - 1])) then
+      Exit(True);
+  end;
+  // (4): durch einen Typecast hindurch
+  pMatch := 0;
+  for Nadel in [').free', ').destroy', ').disposeof'] do
+  begin
+    pMatch := Pos('(' + AVarLow + Nadel, ANameLow);
+    if pMatch > 0 then Break;
+  end;
+  if pMatch > 1 then
+  begin
+    // Kopf-Ident vor der '(' rueckwaerts einsammeln; muss mit 't' beginnen.
+    hS := pMatch - 1;
+    while (hS >= 1) and TLeakDetector2.IsIdentChar(ANameLow[hS]) do Dec(hS);
+    if (hS + 1 < pMatch) and (ANameLow[hS + 1] = 't') then
+      Exit(True);
+  end;
+end;
+
 class function TLeakDetector2.SearchFree(Node: TAstNode;
   const VarNameLow: string; InFinally: Boolean;
   out FoundInFinally: Boolean; AExceptModus: TExceptModus): Boolean;
@@ -2316,62 +2370,15 @@ begin
   begin
     NameLow := Node.Name.ToLower;
 
-    // varName.Free   (mit und ohne Klammern: list.Free / list.Free())
-    pMatch := Pos(VarNameLow + '.free', NameLow);
-    if pMatch > 0 then
+    // Die vier Schreibweisen einer direkten Freigabe stehen jetzt in
+    // GibtVarFrei (Unit-Ebene). Sie waren vier fast gleiche Bloecke mit
+    // je zwei verschachtelten ifs - zusammen acht Verzweigungen, die den
+    // Rumpf dominierten, ohne dass eine davon vom Kontext abhing.
+    if GibtVarFrei(NameLow, VarNameLow) then
     begin
-      // Linke Wortgrenze: Zeichen vor varName darf kein Bezeichner sein
-      if (pMatch = 1) or not IsIdentChar(NameLow[pMatch - 1]) then
-      begin
-        Result := True; FoundInFinally := InFinally; Exit;
-      end;
-    end;
-
-    // varName.Destroy
-    pMatch := Pos(VarNameLow + '.destroy', NameLow);
-    if pMatch > 0 then
-    begin
-      if (pMatch = 1) or not IsIdentChar(NameLow[pMatch - 1]) then
-      begin
-        Result := True; FoundInFinally := InFinally; Exit;
-      end;
-    end;
-
-    // varName.DisposeOf - ARC-/NextGen-Idiom, auf Classic-Compilern Alias fuer
-    // Free. SCA001-Gross-Triage 2026-07-18 (free-missed-Bucket 22/101): 2 reale
-    // Faelle (FMX LBitmap.DisposeOf / Str.DisposeOf) als "nie freigegeben"
-    // gemeldet, weil SearchFree DisposeOf nicht kannte.
-    pMatch := Pos(VarNameLow + '.disposeof', NameLow);
-    if pMatch > 0 then
-    begin
-      if (pMatch = 1) or not IsIdentChar(NameLow[pMatch - 1]) then
-      begin
-        Result := True; FoundInFinally := InFinally; Exit;
-      end;
-    end;
-
-    // Typecast-Free: 'TStringList(FParams).Free' / '(varName).Destroy' - der
-    // Cast schiebt ')' zwischen Var-Namen und '.free', das 'varname.free'-
-    // Muster oben verfehlt das (Gross-Triage: JvUIB TStringList(FParams).Free
-    // im Destroy -> FP "nie freigegeben"). Linke Grenze '(' garantiert, dass
-    // varName das GANZE Cast-Argument ist (kein 'foo(x.varname)'). ZUSATZ-
-    // Guard: der Kopf vor '(' muss ein TYP sein (t-Praefix-Konvention) -
-    // 'GetWrapper(list).Free' gibt das RESULT frei, nicht list (waere FN).
-    // Dokumentiertes Rest-Risiko: t-praefixierte FUNKTIONEN ('Transform(x).Free')
-    // passieren den Guard (selten; SearchFree hat keinen AContext fuer einen
-    // echten Typ-Check via TTypeIndex - bewusst akzeptiert).
-    pMatch := Pos('(' + VarNameLow + ').free', NameLow);
-    if pMatch = 0 then pMatch := Pos('(' + VarNameLow + ').destroy', NameLow);
-    if pMatch = 0 then pMatch := Pos('(' + VarNameLow + ').disposeof', NameLow);
-    if pMatch > 1 then
-    begin
-      // Kopf-Ident vor der '(' rueckwaerts einsammeln; muss mit 't' beginnen.
-      var hS := pMatch - 1;
-      while (hS >= 1) and IsIdentChar(NameLow[hS]) do Dec(hS);
-      if (hS + 1 < pMatch) and (NameLow[hS + 1] = 't') then
-      begin
-        Result := True; FoundInFinally := InFinally; Exit;
-      end;
+      Result := True;
+      FoundInFinally := InFinally;
+      Exit;
     end;
 
     // 'with varName do ... Free' - der Parser legt with als nkCall(withExpr)
