@@ -1,4 +1,4 @@
-unit uTestSafetyChecks;
+﻿unit uTestSafetyChecks;
 
 // Tests fuer Sicherheits-/Korrektheits-Detektoren (Erweiterungen):
 // NilDeref, MissingFinally, DivByZero, DeadCode.
@@ -61,6 +61,14 @@ type
     [Test] procedure Div_StringDivisor_NoFinding;
     // FP-Gate Prio 7 (2026-07-06): "if n <= 0 then Exit"-Bail-Guard
     [Test] procedure Div_LessEqualZeroGuardExit_NoFinding;
+    // G5/G6 (02.09., AQL-Stichprobe): Guards, die 0 ausschliessen, ohne
+    // die 0 zu nennen. Die beiden letzten sind die Waechter - ">= 0"
+    // laesst die Null ZU, und eine Menge mit Bezeichnern ist von aussen
+    // nicht entscheidbar.
+    [Test] procedure Div_LowerBoundGuard_NoFinding;
+    [Test] procedure Div_NonZeroSetGuard_NoFinding;
+    [Test] procedure Div_LowerBoundIncludingZero_StillReported;
+    [Test] procedure Div_SetWithIdentifiers_StillReported;
     // G5 (#6 CFG-Schlussstueck 2026-07-24): Else-Kanten-Dominanz
     [Test] procedure Div_ElseBranchOfZeroCheck_NoFinding;
     [Test] procedure Div_AfterMergeOfZeroCheck_StillReports;
@@ -650,6 +658,87 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero));
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_LowerBoundGuard_NoFinding;
+// G5: eine Untergrenze mit einem anderen Literal als 0 oder 1
+// schliesst die Null genauso aus. Beleg aus der Stichprobe:
+// 'if MillisecondsElapsed >= Cardinal(1000)'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(N: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if N >= 1000 then'#13#10 +
+  '    Result := 100 div N'#13#10 +
+  '  else'#13#10 +
+  '    Result := 0;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'Untergrenze 1000 schliesst die Null aus');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_NonZeroSetGuard_NoFinding;
+// G6: eine Mengenpruefung ohne die 0 schliesst sie aus. Beleg:
+// 'if NumGlyphs in [2..5] then .. div NumGlyphs'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(N: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if N in [2..5] then'#13#10 +
+  '    Result := 100 div N'#13#10 +
+  '  else'#13#10 +
+  '    Result := 0;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'Menge [2..5] enthaelt keine Null');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_LowerBoundIncludingZero_StillReported;
+// WAECHTER zu G5: ">= 0" laesst die Null ZU. Wer die Grenze hier
+// falsch setzt, macht die Regel im haeufigsten Idiom blind.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(N: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if N >= 0 then'#13#10 +
+  '    Result := 100 div N'#13#10 +
+  '  else'#13#10 +
+  '    Result := 0;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    '">= 0" laesst die Null zu - der Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_SetWithIdentifiers_StillReported;
+// WAECHTER zu G6: steht ein Bezeichner in der Menge, ist ihr Inhalt
+// von hier aus unbekannt - dann gilt die Stelle als ungeschuetzt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(N: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if N in [Low..High] then'#13#10 +
+  '    Result := 100 div N'#13#10 +
+  '  else'#13#10 +
+  '    Result := 0;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'Menge mit Bezeichnern ist nicht entscheidbar');
   finally F.Free; end;
 end;
 
