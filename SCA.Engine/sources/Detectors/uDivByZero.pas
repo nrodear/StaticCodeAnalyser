@@ -94,6 +94,12 @@ type
     // bei "> K" fuer K >= 0. Ein Cast-Wrapper (Cardinal(1000)) wird
     // abgestreift.
     class function HasLowerBoundGuard(const ACondLow, AVarLow: string): Boolean; static;
+    // True wenn der THEN-Zweig VarLow ueberhaupt zuweist - egal was.
+    // Gegenstueck zu ThenBranchAssignsNonZeroTo: dort ist die Zuweisung
+    // die Rettung ("if x = 0 then x := 1"), hier ist sie das Problem
+    // ("if x > 8 then x := 8" - danach kann x alles sein, auch 0).
+    class function ThenBranchAssignsTo(IfN: TAstNode;
+      const VarLow: string): Boolean; static;
     // G6 (02.09.): Mengenpruefung "if NumGlyphs in [2..5]". Schuetzt, wenn
     // die Menge aus reinen Zahlenliteralen besteht und 0 nicht enthaelt.
     // Alles andere (Bezeichner, Konstanten in der Menge) ist NICHT
@@ -354,7 +360,15 @@ begin
       Exit(True);
 
     // G5/G6: Guards, die 0 ausschliessen, ohne die 0 zu nennen.
-    if HasLowerBoundGuard(Low, VarLow) or HasNonZeroSetGuard(Low, VarLow) then
+    //
+    // Die Zusatzbedingung ist NICHT kosmetisch: 'if x > 8 then x := 8'
+    // ist ein CLAMP, kein Guard. Der then-Zweig aendert die Variable,
+    // danach ist ihr Wert unbekannt und eine Division dahinter kann sehr
+    // wohl durch Null gehen. Die erste Fassung von G5 hat daran fuenf
+    // echte Funde verloren (pngimage.pas:5046 ff.), gefunden in der
+    // Handpruefung von rw54.
+    if (HasLowerBoundGuard(Low, VarLow) or HasNonZeroSetGuard(Low, VarLow))
+       and not ThenBranchAssignsTo(IfN, VarLow) then
       Exit(True);
     // Exit-Guard: 'if x <bail-cond> then Exit/Raise' schuetzt nur wenn der
     // THEN-Zweig den Code-Pfad verlaesst. Erfasst das haeufige "bail wenn
@@ -624,6 +638,43 @@ begin
     end;
     // Nur das erste Then-Statement betrachten.
     Break;
+  end;
+end;
+
+class function TDivByZeroDetector.ThenBranchAssignsTo(
+  IfN: TAstNode; const VarLow: string): Boolean;
+// Wie ThenBranchAssignsNonZeroTo, aber ohne Bedingung an den Wert:
+// JEDE Zuweisung an VarLow im THEN-Zweig zaehlt.
+//
+// Gebraucht von G5 (02.09., aus der Handpruefung von rw54): das
+// Clamp-Idiom "if DataDepth > 8 then DataDepth := 8;" sieht wie ein
+// Guard aus, ist aber keiner - nach dem if ist der Wert unbekannt und
+// die Division dahinter kann sehr wohl durch Null gehen. Beleg:
+// jvcl devtools/MakePNG/pngimage.pas:5046 ff., fuenf echte Funde, die
+// die erste Fassung von G5 entfernt hat.
+var
+  i, j   : Integer;
+  Branch : TAstNode;
+  Stmt   : TAstNode;
+
+  function AssignsVar(N: TAstNode): Boolean;
+  begin
+    Result := (N.Kind = nkAssign) and (N.Name.ToLower = VarLow);
+  end;
+
+begin
+  Result := False;
+  if IfN = nil then Exit;
+  for i := 0 to IfN.Children.Count - 1 do
+  begin
+    Branch := IfN.Children[i];
+    if Branch.Kind = nkElseBranch then Continue;
+    if AssignsVar(Branch) then Exit(True);
+    for j := 0 to Branch.Children.Count - 1 do
+    begin
+      Stmt := Branch.Children[j];
+      if AssignsVar(Stmt) then Exit(True);
+    end;
   end;
 end;
 

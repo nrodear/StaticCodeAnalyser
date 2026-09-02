@@ -72,6 +72,8 @@ type
     // Review 02.09.: die Schranke muss der GANZE Ausdruck sein.
     [Test] procedure Div_LowerBoundWithArithmetic_StillReported;
     [Test] procedure Div_LowerBoundInCast_NoFinding;
+    // Handpruefung rw54: das Clamp-Idiom ist KEIN Guard.
+    [Test] procedure Div_ClampInThenBranch_StillReported;
     // G5 (#6 CFG-Schlussstueck 2026-07-24): Else-Kanten-Dominanz
     [Test] procedure Div_ElseBranchOfZeroCheck_NoFinding;
     [Test] procedure Div_AfterMergeOfZeroCheck_StillReports;
@@ -661,6 +663,32 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero));
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_ClampInThenBranch_StillReported;
+// WAECHTER aus der Handpruefung von rw54. Die erste Fassung von G5 hat
+// an diesem Muster FUENF echte Funde entfernt (jvcl
+// devtools/MakePNG/pngimage.pas:5046 ff.).
+//
+// "if DataDepth > 8 then DataDepth := 8" sieht wie eine Untergrenze aus,
+// ist aber ein CLAMP: der then-Zweig AENDERT die Variable. Nach dem if
+// ist ihr Wert unbekannt - bei BitDepth = 0 geht die Division dahinter
+// durch Null.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(BitDepth: Integer): Integer;'#13#10 +
+  'var DataDepth: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  DataDepth := BitDepth;'#13#10 +
+  '  if DataDepth > 8 then DataDepth := 8;'#13#10 +
+  '  Result := 8 div DataDepth;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'ein Clamp im then-Zweig schliesst die Null nicht aus');
   finally F.Free; end;
 end;
 
