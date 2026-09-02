@@ -35,7 +35,7 @@ const
     (
       RuleID   : 'SCA003';
       Name     : 'SQL string built via concatenation';
-      ShortDesc: 'SQL string concatenated with ''+'' from user-controllable input (injection risk)';
+      ShortDesc: 'SQL string built by ''+'' concatenation with a non-literal operand (injection risk if that operand is untrusted)';
       BadEx    : 'Query.SQL.Text := ''SELECT * FROM Users WHERE Name='''''' + UserName + '''''''';';
       GoodEx   : 'Query.SQL.Text := ''SELECT * FROM Users WHERE Name=:n'';' + #13#10 +
         'Query.ParamByName(''n'').AsString := UserName;'
