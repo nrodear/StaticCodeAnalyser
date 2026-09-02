@@ -1,4 +1,4 @@
-unit uGetMemWithoutFreeMem;
+﻿unit uGetMemWithoutFreeMem;
 
 // Detektor: GetMem / AllocMem / ReallocMem ohne paired FreeMem im
 // gleichen Routinen-Body.
@@ -89,6 +89,7 @@ var
   F        : TLeakFinding;
   Detail   : string;
   TryPos   : Integer;
+  HandlerPos : Integer;
   FreePos  : Integer;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
@@ -184,6 +185,29 @@ begin
       if FreePos = 0 then Continue;
       // try kommt VOR FreeMem -> Pattern OK
       if (TryPos > 0) and (TryPos < FreePos) then Continue;
+
+      // Die Allokation kann auch INNERHALB eines schon offenen try
+      // stehen - dann liegt dessen "try" VOR der Alloc-Position und der
+      // Vorwaerts-Scan oben sieht es nie. Beleg aus der AQL-Stichprobe
+      // vom 02.09.: 11 der 20 Stichprobenfunde waren solche Faelle, alle
+      // mit demselben Defekt.
+      //
+      // Statt rueckwaerts zu suchen (was "end" gegen try/begin/case/
+      // record aufrechnen muesste) fragt der Test die Wirkung ab: steht
+      // ein "finally" oder "except" VOR dem FreeMem, ist das FreeMem
+      // Teil eines Handlers - und einen Handler ohne davorliegendes try
+      // gibt es in gueltigem Pascal nicht. Deckt beide gemessenen
+      // Idiome ab: "try .. GetMem .. finally FreeMem end" und
+      // "try .. GetMem .. except FreeMem; raise end".
+      //
+      // Rein monoton: der Test kann nur Funde ENTFERNEN. Ein echter
+      // Leak ohne jeden Schutz hat weder try noch Handler vor dem
+      // FreeMem und bleibt stehen.
+      HandlerPos := TDetectorUtils.FindWholeWordLower('finally', Snippet);
+      var ExceptPos := TDetectorUtils.FindWholeWordLower('except', Snippet);
+      if (ExceptPos > 0) and ((HandlerPos = 0) or (ExceptPos < HandlerPos)) then
+        HandlerPos := ExceptPos;
+      if (HandlerPos > 0) and (HandlerPos < FreePos) then Continue;
 
       LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
