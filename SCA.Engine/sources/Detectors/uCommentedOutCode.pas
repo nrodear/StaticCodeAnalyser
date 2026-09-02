@@ -237,6 +237,15 @@ end;
 type
   TScanZweig = (szFertig, szWeiter);
 
+  // Die offene '(*'-Region und ob sie mit '(*$' begann. Die beiden Bits
+  // werden IMMER gemeinsam gesetzt und gemeinsam zurueckgenommen -
+  // getrennt gefuehrt haben sie zwei Zweig-Helfer auf sechs Parameter
+  // gebracht (SCA013 im Selbst-Scan vom 02.09.).
+  TParenStarLage = record
+    Offen        : Boolean;
+    IstDirektive : Boolean;
+  end;
+
 // --- Die sechs Zweige des Kommentar-Scanners ------------------------
 //
 // FindCommentedOutCode ist ein Zustandsautomat ueber EINE Zeile, mit
@@ -277,7 +286,7 @@ end;
 
 // Fortsetzungszeile eines offenen '(*'-Kommentars.
 function ZweigParenStarFortsetzung(const ALine: string; ALaenge: Integer;
-  var APos: Integer; var AInParenStarComm, AInParenStarDirective: Boolean;
+  var APos: Integer; var ALage: TParenStarLage;
   var AFund: Integer): TScanZweig;
 var
   pClose : Integer;
@@ -292,18 +301,18 @@ begin
     // ('function GetOwnsKeys: Boolean;' ist Argument des
     // '(*$JPPEXPANDMACRO' aus Zeile 82) - im rw45-SARIF gemeldet mit
     // Spalte 1, level note.
-    if AInParenStarDirective then Exit(szFertig);
+    if ALage.IstDirektive then Exit(szFertig);
     Inhalt := Copy(ALine, APos, ALaenge - APos + 1);
     if LooksLikeCommentedCode(Inhalt) then AFund := APos;
     Exit(szFertig);
   end;
-  if not AInParenStarDirective then
+  if not ALage.IstDirektive then
   begin
     Inhalt := Copy(ALine, APos, pClose - APos);
     if (AFund = 0) and (LooksLikeCommentedCode(Inhalt)) then AFund := APos;
   end;
-  AInParenStarComm      := False;
-  AInParenStarDirective := False;
+  ALage.Offen        := False;
+  ALage.IstDirektive := False;
   APos := pClose + 2;
   Result := szWeiter;
 end;
@@ -375,7 +384,7 @@ end;
 // kein stillgelegter. Die einzeiligen sind ueberwiegend '(*$HPPEMIT'
 // (896x) und schon heute stumm.
 function ZweigParenStarOeffner(const ALine: string; ALaenge: Integer;
-  var APos: Integer; var AInParenStarComm, AInParenStarDirective: Boolean;
+  var APos: Integer; var ALage: TParenStarLage;
   var AFund: Integer): TScanZweig;
 var
   pClose : Integer;
@@ -403,8 +412,8 @@ begin
       // (JclHashMaps.pas:248 in der Direktive aus Zeile 246) und
       // rechtfertigt den Eingriff in den haeufigsten Pfad des Detektors
       // nicht.
-      AInParenStarComm      := True;
-      AInParenStarDirective := True;
+      ALage.Offen        := True;
+      ALage.IstDirektive := True;
       Exit(szFertig);
     end;
     APos := pClose + 2;
@@ -413,7 +422,7 @@ begin
   pClose := PosEx('*)', ALine, APos + 2);
   if pClose = 0 then
   begin
-    AInParenStarComm := True;
+    ALage.Offen := True;
     Inhalt := Copy(ALine, APos + 2, ALaenge - APos - 1);
     if LooksLikeCommentedCode(Inhalt) then AFund := APos;
     Exit(szFertig);
@@ -425,8 +434,8 @@ begin
 end;
 
 function FindCommentedOutCode(const Line: string; var InBlockComm: Boolean;
-  var InParenStarComm: Boolean; var InParenStarDirective: Boolean): Integer;
-// InParenStarDirective gehoert zu InParenStarComm und sagt, ob die offene
+  var AParenStar: TParenStarLage): Integer;
+// AParenStar.IstDirektive gehoert zu .Offen und sagt, ob die offene
 // '(*'-Region mit '(*$' begann. Ohne dieses zweite Bit bliebe der
 // '(*$'-Sonder-Skip wirkungslos: von den 1.087 '(*$'-Vorkommen der 13.419
 // .pas laufen nur 91 ueber mehrere Zeilen, und NUR die tragen Fehlalarme -
@@ -435,7 +444,7 @@ function FindCommentedOutCode(const Line: string; var InBlockComm: Boolean;
 // entsteht erst auf einer Fortsetzungszeile
 // (jcl/jcl/source/prototypes/JclHashMaps.pas:100 zur Direktive aus Zeile 82,
 // die erst in Zeile 103 schliesst) - und die liest der
-// InParenStarComm-Zweig, nicht der Oeffner-Zweig.
+// Fortsetzungs-Zweig, nicht der Oeffner-Zweig.
 //
 // Der Rumpf ist nur noch die Fallunterscheidung; jeder Fall steht als
 // eigener Zweig darueber. Die REIHENFOLGE der Faelle traegt Bedeutung:
@@ -458,10 +467,9 @@ begin
       if ZweigBlockFortsetzung(Line, n, i, InBlockComm, Result) = szFertig then Exit;
       Continue;
     end;
-    if InParenStarComm then
+    if AParenStar.Offen then
     begin
-      if ZweigParenStarFortsetzung(Line, n, i, InParenStarComm,
-                                   InParenStarDirective, Result) = szFertig then Exit;
+      if ZweigParenStarFortsetzung(Line, n, i, AParenStar, Result) = szFertig then Exit;
       Continue;
     end;
     if InStr then
@@ -490,8 +498,7 @@ begin
     end;
     if (c = '(') and (i < n) and (Line[i + 1] = '*') then
     begin
-      if ZweigParenStarOeffner(Line, n, i, InParenStarComm,
-                               InParenStarDirective, Result) = szFertig then Exit;
+      if ZweigParenStarOeffner(Line, n, i, AParenStar, Result) = szFertig then Exit;
       Continue;
     end;
     Inc(i);
@@ -737,22 +744,23 @@ class procedure TCommentedOutCodeDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   Lines  : TStringList;
   i, Col : Integer;
-  InBlk, InParen : Boolean;
-  // Zweites Bit zu InParen: die offene '(*'-Region ist eine '(*$'-Direktive
-  // und darf auf ihren Fortsetzungszeilen nicht als Kommentar bewertet
-  // werden. Begruendung samt Korpuszahlen steht an FindCommentedOutCode.
-  InParenDir : Boolean;
-  Cached : Boolean;
+  InBlk    : Boolean;
+  // Zeilenuebergreifender Zustand: eine offene '(*'-Region und ob sie
+  // als '(*$'-Direktive begann. Fortsetzungszeilen einer Direktive
+  // duerfen nicht als Kommentar bewertet werden; Begruendung samt
+  // Korpuszahlen steht an FindCommentedOutCode.
+  ParenStar: TParenStarLage;
+  Cached   : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     InBlk      := False;
-    InParen    := False;
-    InParenDir := False;
+    ParenStar.Offen        := False;
+    ParenStar.IstDirektive := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      Col := FindCommentedOutCode(Lines[i], InBlk, InParen, InParenDir);
+      Col := FindCommentedOutCode(Lines[i], InBlk, ParenStar);
       if Col <= 0 then Continue;
       // FP-Schutz 1: Multi-Line-Doc-Block per '//' - Doc-Pattern mit
       // Pascal-Code-Beispielen, nicht commented-out Code. Echte

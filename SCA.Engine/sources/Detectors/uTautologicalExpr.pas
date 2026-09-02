@@ -1,4 +1,4 @@
-unit uTautologicalExpr;
+﻿unit uTautologicalExpr;
 
 // Detector: tautologische binaere Ausdruecke wie `x = x`, `a and a`,
 // `(b or b)`, `(p <> p)`. Klassischer Copy-Paste-Bug oder vergessener
@@ -279,8 +279,70 @@ end;
 // Sucht in einer Code-Zeile nach `<lhs> <op> <rhs>`-Pattern mit lhs == rhs
 // und op aus der relevanten Liste. Strings/Kommentare werden vorab
 // ausgeblendet, damit Op-Vorkommen darin nicht falsch matchen.
-function ScanForTautology(const Line: string; var InBlockComm,
-  InParenStarComm: Boolean; out MatchCol: Integer; out Detail: string): Boolean;
+// Zeilenuebergreifender Zustand des Scanners. Als Record, weil ein
+// drittes Bit ScanForTautology sonst auf sechs Parameter gebracht haette
+// (SCA013).
+type
+  TScanLage = record
+    InBlockComm     : Boolean;   // offener '{'-Kommentar
+    InParenStarComm : Boolean;   // offener '(*'-Kommentar
+    InDeklaration   : Boolean;   // in const/type/var/resourcestring
+  end;
+
+// Beginnt ALow mit AWort UND endet das Wort dort auch? 'procedure' darf
+// nicht in 'procedures' treffen. ALow ist bereits klein und getrimmt.
+function WortAmZeilenanfang(const ALow, AWort: string): Boolean;
+begin
+  Result := ALow.StartsWith(AWort)
+        and ((Length(ALow) = Length(AWort))
+             or not IsIdentChar(ALow[Length(AWort) + 1]));
+end;
+
+// Fuehrt TScanLage.InDeklaration ueber die Zeilen nach. Erwartet den
+// GESTRIPPTEN Text aus Phase 1, nicht die rohe Zeile - sonst steuert
+// auskommentierter Code den Scanner.
+//
+// WARUM (02.09., AQL-Stichprobe des Error-Tiers): im const-Abschnitt ist
+// '=' der DEKLARATIONSTOKEN, kein Vergleichsoperator. Die Zeile
+// 'F_OK = F_OK;' definiert eine neue Konstante aus der gleichnamigen
+// importierten - in mORMot ist das das durchgaengige Muster, um
+// Posix-Konstanten zu re-exportieren. Es gibt dort ueberhaupt keinen
+// auswertbaren Ausdruck, die Meldung "LHS == RHS" ist schlicht falsch.
+// Am Korpus gezaehlt: 19 der 45 SCA055-Funde sind solche Aliase (42 %),
+// und SCA055 meldet auf Error-Stufe.
+//
+// Nur Phase 3 (Vergleichsoperatoren) setzt deshalb aus. Phase 2
+// (and/or/xor) laeuft weiter: ein 'True or True' bleibt auch in einer
+// Deklaration eine Tautologie, und der einzige Korpustreffer dieser Art
+// (CnTestHighlightDemo.pas:16) liegt ohnehin ausserhalb.
+procedure LageNachfuehren(const ALine: string; var ALage: TScanLage);
+var
+  L : string;
+begin
+  L := LowerCase(Trim(ALine));
+  // NUR ein allein stehendes Schluesselwort eroeffnet einen Abschnitt.
+  // Zwei Gruende, beide aus dem Review vom 02.09.:
+  //   * ein inline 'var x: Integer;' (Delphi 10.3+) steht MITTEN im
+  //     Rumpf, also hinter dem 'begin'. Wuerde es den Zustand setzen,
+  //     saehe ihn nichts mehr zurueck und Phase 3 waere fuer den
+  //     gesamten Rest der Routine aus - ein Fehler, der sich als Erfolg
+  //     tarnt, weil er nur Funde WEGNIMMT.
+  //   * StartsWith ohne Wortgrenze trifft auch 'variable := 5;'.
+  // Ein klassischer Deklarationsblock schreibt das Schluesselwort auf
+  // eine eigene Zeile; alles andere traegt noch etwas dahinter.
+  if (L = 'const') or (L = 'type') or (L = 'var')
+     or (L = 'resourcestring') then
+    ALage.InDeklaration := True
+  else if WortAmZeilenanfang(L, 'begin') or WortAmZeilenanfang(L, 'function')
+          or WortAmZeilenanfang(L, 'procedure') or WortAmZeilenanfang(L, 'constructor')
+          or WortAmZeilenanfang(L, 'destructor') or WortAmZeilenanfang(L, 'implementation')
+          or WortAmZeilenanfang(L, 'initialization')
+          or WortAmZeilenanfang(L, 'finalization') then
+    ALage.InDeklaration := False;
+end;
+
+function ScanForTautology(const Line: string; var ALage: TScanLage;
+  out MatchCol: Integer; out Detail: string): Boolean;
 var
   Clean : string;
   p     : Integer;
@@ -293,7 +355,16 @@ begin
   Detail := '';
 
   // Phase 1: Strings + Kommentare ausblanken.
-  Clean := StripStringsAndComments(Line, InBlockComm, InParenStarComm);
+  Clean := StripStringsAndComments(Line, ALage.InBlockComm,
+                                   ALage.InParenStarComm);
+
+  // Abschnittszustand NACH Phase 1 nachfuehren, auf dem gestrippten
+  // Text. Auf der rohen Zeile wuerde ein auskommentiertes
+  // Schluesselwort den Scanner steuern: die Fortsetzungszeile eines
+  // Blockkommentars, die mit 'var' beginnt, schaltete Phase 3 ab
+  // (Review 02.09.). Eine vollstaendig auskommentierte Zeile ist nach
+  // Phase 1 leer und laesst den Zustand unberuehrt.
+  LageNachfuehren(Clean, ALage);
 
   // Phase 2: Boolean-Operatoren (` and ` / ` or ` / ` xor `).
   // Op-Position + Stop-Position werden auf Clean gesucht (Strings sind
@@ -342,6 +413,10 @@ begin
   // einstellige Variant zuerst.
   //
   // Wie in Phase 2: Op/Stop-Suche auf Clean, finale Lhs/Rhs aus Line.
+  // Im Deklarationsabschnitt ist '=' der Deklarationstoken - siehe
+  // LageNachfuehren. Phase 3 hat dort nichts zu suchen.
+  if ALage.InDeklaration then Exit;
+
   for var Op in CMP_OPS do
   begin
     var Search := ' ' + Op + ' ';
@@ -387,7 +462,7 @@ var
   MatchCol : Integer;
   Detail : string;
   Line : string;
-  InBlockComm, InParenStarComm : Boolean;
+  Lage : TScanLage;
   F : TLeakFinding;
   Cached : Boolean;
 begin
@@ -397,13 +472,13 @@ begin
 
     // Block-Kommentare spannen ueber Zeilen, daher State mitfuehren.
     // StringLiterale spannen in Pascal nicht ueber Zeilen -> per Line lokal.
-    InBlockComm := False;
-    InParenStarComm := False;
+    Lage.InBlockComm     := False;
+    Lage.InParenStarComm := False;
+    Lage.InDeklaration   := False;
     for i := 0 to Lines.Count - 1 do
     begin
       Line := Lines[i];
-      if ScanForTautology(Line, InBlockComm, InParenStarComm,
-                          MatchCol, Detail) then
+      if ScanForTautology(Line, Lage, MatchCol, Detail) then
       begin
         F            := TLeakFinding.Create;
         F.FileName   := FileName;

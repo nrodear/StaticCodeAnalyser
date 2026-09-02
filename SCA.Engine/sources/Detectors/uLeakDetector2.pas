@@ -49,6 +49,12 @@ uses
   uGateStats;   // Gate() - Trefferzaehlung, im Normalbetrieb ein Nil-Test
 
 type
+  // Ob der Baumlauf except-Handler ueberspringt. Als Aufzaehlung statt
+  // Boolean, weil an der Aufrufstelle sonst ein nacktes True steht und
+  // erst die Deklaration verraet, was es bedeutet. Dieselbe Umstellung
+  // hat uFieldLeak am 31.08. bekommen (TMethodScope).
+  TExceptModus = (emMitExcept, emOhneExcept);
+
   TLeakDetector2 = class
   public
     // TD-1 Inkrement 2c (2026-07-06): AContext durchgereicht bis in IsLeakyType
@@ -138,18 +144,23 @@ type
     class function IsOwnerParamCreate(MethodNode: TAstNode;
       const VarNameLow: string;
       AUnitNode: TAstNode = nil): Boolean; static;
+    // AExceptModus=emOhneExcept (01.09.): blendet nkExceptBlock-Teilbaeume
+    // beantwortet derselbe Sucher die Frage "gibt der NORMALPFAD frei?" -
+    // gebraucht von HasExceptPathFree, um einen Free, der NUR im Handler
+    // steht, nicht als Rundum-Schutz zu lesen. Default emMitExcept: alle
+    // Bestandsaufrufer (auch uFieldLeak/uMissingFinally) bleiben unveraendert.
     class function SearchFree(Node: TAstNode; const VarNameLow: string;
-      InFinally: Boolean; out FoundInFinally: Boolean): Boolean; static;
+      InFinally: Boolean; out FoundInFinally: Boolean;
+      AExceptModus: TExceptModus = emMitExcept): Boolean; static;
     class function HasTryFinallyBlock(MethodNode: TAstNode): Boolean; static;
-    // FP-Gate Prio 5 (2026-07-06, Real-World-Audit): das Idiom
-    //   try ... except VarName.Free; raise; end
-    // gibt VarName auf dem Ausnahme-Pfad frei und wirft weiter - fuer die
-    // Leak-Analyse aequivalent zu einem finally-Free (schuetzt gegen Leak
-    // bei Exception). Der Detektor kannte bisher nur try/finally und meldete
-    // faelschlich "Free ausserhalb finally". True wenn ein except-Handler
-    // SOWOHL einen Free von VarName ALS AUCH ein raise (Re-Raise) enthaelt.
-    class function HasExceptFreeRaise(MethodNode: TAstNode;
-      const VarNameLow: string): Boolean; static;
+    // FP-Gate Prio 5 (2026-07-06, Real-World-Audit; regionsbezogen erweitert
+    // 01.09.): True, wenn ein except-Handler den Ausnahmepfad von VarName
+    // nachweislich abdeckt - entweder per Cleanup-und-weiterwerfen
+    // (Free + raise) oder per Free-im-Handler MIT Normalpfad-Free, sofern die
+    // Allokation (AAllocLine) unmittelbar an genau dem try haengt, zu dem der
+    // Handler gehoert. Begruendung, Belege und Gegenbeleg stehen am Rumpf.
+    class function HasExceptPathFree(MethodNode: TAstNode;
+      const VarNameLow: string; AAllocLine: Integer): Boolean; static;
     class function HasDescendantKind(Node: TAstNode;
       Kind: TNodeKind): Boolean; static;
     // True wenn der Receiver eines '.Add(item)'-Aufrufs ein ownership-
@@ -2278,7 +2289,7 @@ end;
 
 class function TLeakDetector2.SearchFree(Node: TAstNode;
   const VarNameLow: string; InFinally: Boolean;
-  out FoundInFinally: Boolean): Boolean;
+  out FoundInFinally: Boolean; AExceptModus: TExceptModus): Boolean;
 var
   Child        : TAstNode;
   NameLow      : string;
@@ -2374,6 +2385,10 @@ begin
       try
         for Child in Node.Children do
         begin
+          // emOhneExcept gilt auch im with-Walk, sonst zaehlte ein bare Free
+          // aus 'with v do try .. except Free; end' als Normalpfad-Free und
+          // der Parameter wuerde luegen (01.09.).
+          if (AExceptModus = emOhneExcept) and (Child.Kind = nkExceptBlock) then Continue;
           WStack.Add(Child);
           WFins.Add(InFinally or (Child.Kind = nkFinallyBlock));
         end;
@@ -2404,6 +2419,7 @@ begin
           end;
           for var WC in W.Children do
           begin
+            if (AExceptModus = emOhneExcept) and (WC.Kind = nkExceptBlock) then Continue;
             WStack.Add(WC);
             WFins.Add(WFin or (WC.Kind = nkFinallyBlock));
           end;
@@ -2472,8 +2488,9 @@ begin
 
   for Child in Node.Children do
   begin
+    if (AExceptModus = emOhneExcept) and (Child.Kind = nkExceptBlock) then Continue;
     ChildInFin := InFinally or (Child.Kind = nkFinallyBlock);
-    if SearchFree(Child, VarNameLow, ChildInFin, ChildFinFlag) then
+    if SearchFree(Child, VarNameLow, ChildInFin, ChildFinFlag, AExceptModus) then
     begin
       Result := True; FoundInFinally := ChildFinFlag; Exit;
     end;
@@ -2497,24 +2514,87 @@ begin
       Exit(True);
 end;
 
-class function TLeakDetector2.HasExceptFreeRaise(MethodNode: TAstNode;
-  const VarNameLow: string): Boolean;
-// Prio-5-Gate: sucht einen except-Handler (nkExceptBlock; on-Handler liegen
-// als nkOnHandler DARIN und werden von SearchFree/HasDescendantKind rekursiv
-// miterfasst), der SOWOHL einen Free von VarName ALS AUCH ein raise enthaelt.
-// Beides im selben Handler = das Cleanup-und-weiterwerfen-Idiom; ein Free ganz
-// ohne Re-Raise wird bewusst NICHT als Schutz gewertet (konservativ).
+class function TLeakDetector2.HasExceptPathFree(MethodNode: TAstNode;
+  const VarNameLow: string; AAllocLine: Integer): Boolean;
+// Prio-5-Gate: True, wenn ein except-Handler den AUSNAHMEPFAD von VarName
+// nachweislich abdeckt. Der Handler ist immer ein nkExceptBlock; on-Handler
+// liegen als nkOnHandler DARIN und werden von SearchFree/HasDescendantKind
+// rekursiv miterfasst. Zwei Gruende zaehlen als Abdeckung:
+//
+//   (1) Handler-Free UND raise - das Cleanup-und-weiterwerfen-Idiom
+//       (try ... except VarName.Free; raise; end). Unveraendert seit
+//       2026-07-06 und Vertrag von uTestLeakDetector.pas
+//       Leak_ExceptFreeRaise_WithUnrelatedFinally_NoWarning.
+//
+//   (2) 01.09. ERGAENZT: Handler-Free UND ein Free ausserhalb JEDES
+//       except-Blocks (= Normalpfad) UND die Allokation haengt unmittelbar
+//       an DIESEM try. Fuer die Leck-Frage ist raise naemlich irrelevant:
+//       ob der Handler weiterwirft, entscheidet ueber die Fehlerbehandlung,
+//       nicht darueber, ob das Objekt freigegeben wurde. Ein Handler, der
+//       freigibt und mit exit abbricht, deckt den Ausnahmepfad genauso ab.
+//       BELEG: D:/git-sca-realworld/Indy-master/Lib/Protocols/
+//       IdSSLOpenSSLUtils.pas:311 - LM wird 321 auf dem Normalpfad und 327
+//       im Handler freigegeben, der Handler schluckt bewusst (Quellkommentar
+//       322 "Surpress exception here"). Gemeldet wurde trotzdem, weil erst
+//       das FREMDE try/finally ab 334 (Variable Linf) HasFinally setzt.
+//
+// WARUM (2) REGIONSBEZOGEN IST UND NICHT METHODENWEIT - GEGENBELEG:
+// D:/git-sca-realworld/Dev-Cpp/Source/Tools/Packman/InstallWizards.pas:361.
+// Tar wird 393 im Handler und 400 auf dem Normalpfad freigegeben, das
+// schuetzende try oeffnet aber erst 366, und 363/364 dereferenzieren Tar
+// davor. Wirft dort etwas, leckt Tar wirklich - methodenweit gebaut wuerde
+// der Fix diesen echten Fund mitnehmen. Deshalb zaehlt ein Handler nur,
+// wenn zwischen Allokationszeile und dem 'try' seines Blocks keine Zeile
+// liegt (Indy 311 -> 312: Abstand 1, faellt weg; Dev-Cpp 361 -> 366:
+// Abstand 5, bleibt stehen). Ein groesserer Abstand gilt bewusst als
+// "nicht abgedeckt": Leerzeilen und Kommentare zwischen Create und try
+// kosten dann eine Unterdrueckung, aber nie einen echten Fund.
+//
+// AAllocLine = 0 (Allokationszeile unbekannt) schaltet (2) ab; dann gilt
+// wie bisher allein (1).
+//
+// MONOTON: die Funktion wird ausschliesslich NEGIERT und nur im lsWarning-
+// Zweig gelesen (eine einzige Aufrufstelle). Sie kann nur unterdruecken,
+// nie einen Fund erzeugen; der lsError-Pfad "nie freigegeben" bleibt
+// unberuehrt.
 var
-  Handlers : TList<TAstNode>;
-  H        : TAstNode;
-  DummyFin : Boolean;
+  Tries       : TList<TAstNode>;
+  TryNode     : TAstNode;
+  ExBlock     : TAstNode;
+  DummyFin    : Boolean;
+  NormalFree  : Boolean;
+  NormalKnown : Boolean;
 begin
-  Result := False;
-  Handlers := MethodNode.FindAllRef(nkExceptBlock);
-  for H in Handlers do
-    if HasDescendantKind(H, nkRaise) and
-       SearchFree(H, VarNameLow, False, DummyFin) then
-      Exit(True);
+  Result      := False;
+  NormalFree  := False;
+  NormalKnown := False;
+  // Ueber die nkTryExcept-Knoten laufen statt ueber die Handler: nur so ist
+  // die Zeile des ZUGEHOERIGEN 'try' bekannt (uParser2.pas:2884 setzt sie).
+  // Die Handler-Menge bleibt dieselbe wie beim frueheren
+  // FindAllRef(nkExceptBlock) - ein nkExceptBlock entsteht ausschliesslich
+  // als direktes Kind eines nkTryExcept (uParser2.pas:2888, einzige Stelle
+  // im Baum).
+  Tries := MethodNode.FindAllRef(nkTryExcept);
+  for TryNode in Tries do
+  begin
+    ExBlock := TryNode.FindFirstChild(nkExceptBlock);
+    if not Assigned(ExBlock) then Continue;
+    if not SearchFree(ExBlock, VarNameLow, False, DummyFin) then Continue;
+    if HasDescendantKind(ExBlock, nkRaise) then Exit(True);
+    // Regionsbindung zuerst - sie ist billig und schneidet den teureren
+    // Normalpfad-Walk fuer jeden nicht anliegenden Handler weg.
+    if (AAllocLine <= 0) or (TryNode.Line < AAllocLine)
+       or (TryNode.Line - AAllocLine > 1) then Continue;
+    if not NormalKnown then
+    begin
+      // Ohne diesen Nachweis deckt ein reiner Handler-Free nur den
+      // Ausnahmefall ab und der Erfolgspfad leckt weiter - genau die Lage
+      // von uTestLeakDetector.pas Leak_FreeInExceptOnly_KnownLimitation.
+      NormalFree  := SearchFree(MethodNode, VarNameLow, False, DummyFin, emOhneExcept);
+      NormalKnown := True;
+    end;
+    if NormalFree then Exit(True);
+  end;
 end;
 
 class function TLeakDetector2.FreeInFinallyRegionBySource(MethodNode: TAstNode;
@@ -2596,10 +2676,60 @@ var
     end;
   end;
 
+  // Blanks/Tabs, die unmittelbar an einem Punkt kleben, fallen weg:
+  // 'Obj . Free' / 'Obj .Free' / 'Obj. Free' -> 'Obj.Free'. WARUM: der
+  // Vergleich unten laeuft ueber die QUELLZEILE und nicht ueber Tokens, und
+  // die ausgerichtete Schreibweise trennt Empfaenger und Punkt - dann greift
+  // jede Nadel daneben. Beleg (01.09.): CodeReader.ZXing.ScanManager.pas:228
+  // und :277 schreiben 'BinaryBitmap      .Free;' INNERHALB des finally; der
+  // lsWarning-Vertrag behauptet dort 'Free ausserhalb des finally' und liegt
+  // damit falsch. SearchFree ist von der Luecke NICHT betroffen (der Parser
+  // normalisiert den Knotennamen) - es steigt als First-Match-DFS schon am
+  // frueheren FreeAndNil im try-Rumpf mit InFinally=False aus, weshalb die
+  // Entscheidung allein an dieser Quellzeile haengt. Angefasst wird nur die
+  // Punkt-Umgebung, damit die linke Wortgrenze in BoundedLeft weiter traegt.
+  function CollapseDotSpacing(const S: string): string;
+  var
+    i, n, k, o : Integer;
+  begin
+    n := Length(S);
+    SetLength(Result, n);
+    o := 0;
+    i := 1;
+    while i <= n do
+    begin
+      if CharInSet(S[i], [' ', #9]) then
+      begin
+        k := i;
+        while (k <= n) and CharInSet(S[k], [' ', #9]) do Inc(k);
+        if (k <= n) and (S[k] = '.') then
+        begin
+          i := k;                 // Luecke VOR dem Punkt faellt weg
+          Continue;
+        end;
+        while i < k do
+        begin
+          Inc(o); Result[o] := S[i]; Inc(i);
+        end;
+        Continue;
+      end;
+
+      Inc(o); Result[o] := S[i];
+      if S[i] = '.' then
+      begin
+        Inc(i);                   // Luecke NACH dem Punkt faellt weg
+        while (i <= n) and CharInSet(S[i], [' ', #9]) do Inc(i);
+      end
+      else
+        Inc(i);
+    end;
+    SetLength(Result, o);
+  end;
+
   function LineFreesVar(const S: string): Boolean;
   var Low : string;
   begin
-    Low := LowerCase(S);
+    Low := LowerCase(CollapseDotSpacing(S));
     Result := BoundedLeft(Low, VarNameLow + '.free', False)
            or BoundedLeft(Low, VarNameLow + '.destroy', False)
            or BoundedLeft(Low, 'freeandnil(' + VarNameLow, True)
@@ -4099,7 +4229,7 @@ begin
             AddFinding(V.Name, lsError, ReportLine);
         end
         else if not FreeInFin and HasFinally
-             and not HasExceptFreeRaise(MethodNode, VarNameLow) then
+             and not HasExceptPathFree(MethodNode, VarNameLow, ReportLine) then
         begin
           // ---- VERTRAG DIESES ZWEIGS (festgeschrieben 2026-08-29) ----
           // Bedingung: es GIBT ein Free, die Methode hat ein try/finally,
@@ -4131,9 +4261,15 @@ begin
           // sprach von "never freed" - drei von ihnen haben deshalb gegen
           // den TEXT argumentiert und den FUND verworfen.
           //
-          // Prio-5-Gate: der Free steckt in einem re-raisenden except-Handler
-          // (try..except VarName.Free; raise; end) - Ausnahme-Pfad-Cleanup,
-          // aequivalent zu finally -> kein "Free ausserhalb finally"-Befund.
+          // Prio-5-Gate: der Free steckt in einem except-Handler, der den
+          // Ausnahmepfad abdeckt - entweder per Cleanup-und-weiterwerfen
+          // (try..except VarName.Free; raise; end) oder, seit 01.09., per
+          // Free-im-Handler MIT Normalpfad-Free, wenn die Allokation
+          // unmittelbar an genau diesem try haengt (Beleg Indy
+          // IdSSLOpenSSLUtils.pas:311; die Regionsbindung laesst Dev-Cpp
+          // InstallWizards.pas:361 stehen, wo Tar zwischen Create und try
+          // schon dereferenziert wird) - Ausnahme-Pfad-Cleanup, aequivalent
+          // zu finally -> kein "Free ausserhalb finally"-Befund.
           // finally-Mis-Attachment-Fix (2026-07-13): der AST sagt "nicht im
           // finally", aber in der QUELLE liegt der Free doch in einer finally-
           // Region (nested-/cond-comp-/'F:=nil;try'-Parser-Fehlattachierung) ->

@@ -2180,7 +2180,13 @@ var
   StartCount : Integer;
 begin
   StartCount := FNextCount;
-  // AKTENNOTIZ (2026-08-28) - BEKANNTER, HIER NICHT BEHOBENER DEFEKT:
+  // AKTENNOTIZ (2026-08-28), NACHGEZOGEN AM 02.09.: der Defekt ist
+  // behoben - aber NICHT hier, sondern in ParseCaseStmt an der
+  // Arm-Schleife, wo das ';' semantisch zum Arm gehoert. Diese
+  // Schleife bleibt unangetastet, weil die EmptyThen-Kompensation in
+  // ParseIfStmt an ihr haengt (siehe unten).
+  //
+  // Der urspruengliche Befund, zum Verstaendnis:
   // Diese Schleife schluckt die Leeranweisungen eines LEEREN case-Arms
   // ('X: ;') und laeuft danach bis zum naechsten echten Token weiter. Bei
   //     case X of
@@ -2188,10 +2194,12 @@ begin
   //       else Foo;
   //     end;
   // steht danach das else des case an - der Arm bleibt leer und die
-  // Zuordnung verrutscht. Auf D:\git-sca-realworld sind das 2 Fundstellen;
-  // sie sind eine ZWEITE, von der if/case-else-Verwechslung UNABHAENGIGE
-  // Ursache und gehoeren in ein eigenes Paket (getrennt gehalten, damit das
-  // A/B des Parserfixes vom 2026-08-28 zuordenbar bleibt).
+  // Zuordnung verrutscht. Die hier genannten 2 Fundstellen zaehlen NUR
+  // das Muster "leerer Arm vor else"; korpusweit sind es 694 leere Arme,
+  // davon 490 wirksam. Die Sache ist eine ZWEITE, von der
+  // if/case-else-Verwechslung UNABHAENGIGE Ursache - deshalb wurde sie
+  // am 2026-08-28 bewusst liegen gelassen, damit das A/B jenes
+  // Parserfixes zuordenbar blieb.
   // Achtung beim Nachziehen: das hier konsumierte ';' setzt FLastConsumed
   // auf tkSemicolon - ParseIfStmt kompensiert das ueber sein EmptyThen.
   while Eat(tkSemicolon) do ; // leere Anweisungen
@@ -2693,7 +2701,26 @@ begin
       ArmNode := CaseNode.Add(nkCaseArm, '', Tok.Line, Tok.Col);
       SkipTo([tkColon, tkKwEnd, tkKwElse, tkEof]);
       Eat(tkColon);
-      ParseStatement(ArmNode);
+      // LEERER ARM (01.09.): 'aaDelete: ;' hat KEINE Anweisung. Laeuft hier
+      // ParseStatement, frisst dessen Leeranweisungs-Schleife (Z. 2197,
+      // 'while Eat(tkSemicolon)') das ';' DIESES Arms und parst den
+      // FOLGENDEN Arm als seinen Rumpf. Beginnt der Folge-Arm mit einem
+      // Bezeichner-Label, geht das ueber ParseCallOrAssign in
+      // SkipToSemicolon; dessen SkipBalanced zaehlt im 'begin' des
+      // Folge-Arms auch die 'end' von try/finally mit, schliesst zu frueh
+      // und verschiebt alle Blockebenen des restlichen Rumpfs.
+      // BELEG Abbrevia AbGzTyp.pas:1152 ('aaDelete: ;'): SaveArchive galt
+      // danach als 88 statt 132 Rumpfzeilen, die Frees in den umgebenden
+      // finally-Bloecken (Z. 1195/1231) fielen aus dem AST -> zwei
+      // SCA001-Fehlalarme 'never-freed' auf Z. 1107/1112. Gegenprobe am
+      // echten File: derselbe Arm als 'begin end' -> beide Funde weg.
+      // VERTRAG: ein leerer Arm bleibt ein LEERER nkCaseArm; das ';'
+      // gehoert dem Arm, nicht der naechsten Anweisung.
+      // Gemessen auf D:\git-sca-realworld: 694 leere Arme, davon 204 vor
+      // 'else'/'end' - dort ist der Zweig schon heute folgenlos, weil
+      // ParseStatement an der Blockgrenze (Z. 2452) nichts tut.
+      if not Eat(tkSemicolon) then
+        ParseStatement(ArmNode);
       GuardAdvance(ArmStart);
     end;
 

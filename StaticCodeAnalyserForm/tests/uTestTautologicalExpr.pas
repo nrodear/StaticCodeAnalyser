@@ -1,4 +1,4 @@
-unit uTestTautologicalExpr;
+﻿unit uTestTautologicalExpr;
 
 // Tests fuer den TTautologicalExprDetector (file-scan).
 //
@@ -45,6 +45,17 @@ type
     // verschiebt Spalten) muss diese Tests unveraendert gruen halten.
     [Test] procedure Taut_CommentBetweenOperands_PositionParity;
     [Test] procedure Taut_StringSlashSlash_DirectiveAndBlockCommentState;
+    // Konstanten-Alias im const-Block (02.09., AQL-Stichprobe): dort ist
+    // '=' der Deklarationstoken, kein Vergleich. Der zweite Test ist der
+    // Waechter - im CODE muss dieselbe Form ein Fund bleiben.
+    [Test] procedure Taut_ConstAliasDeclaration_NotReported;
+    [Test] procedure Taut_ComparisonInCodeAfterConstBlock_StillReported;
+    // Waechter gegen den gefaehrlichsten Fehler dieses Gates: ein
+    // inline var im Rumpf darf Phase 3 nicht fuer den Rest der Routine
+    // abschalten (Review 02.09.).
+    [Test] procedure Taut_InlineVarInBody_ComparisonStillReported;
+    // Auskommentierter Code darf den Scanner nicht steuern (Review 02.09.).
+    [Test] procedure Taut_KeywordInsideBlockComment_ComparisonStillReported;
   end;
 
 implementation
@@ -53,6 +64,115 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+procedure TTestTautologicalExpr.Taut_KeywordInsideBlockComment_ComparisonStillReported;
+// WAECHTER (Review 02.09.). LageNachfuehren las urspruenglich die ROHE
+// Zeile. Eine Fortsetzungszeile eines Blockkommentars, die mit einem
+// Abschnitts-Schluesselwort beginnt, schaltete damit Phase 3 ab -
+// auskommentierter Code steuerte den Scanner. Jetzt laeuft die
+// Nachfuehrung hinter Phase 1 und sieht nur noch gestrippten Text.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var ProcessID: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  ProcessID := 7;'#13#10 +
+  '  { alter Stand:'#13#10 +
+  'var'#13#10 +
+  '  i: Integer;'#13#10 +
+  '  }'#13#10 +
+  '  if ProcessID = ProcessID then Bar;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    'ein var im Blockkommentar darf Phase 3 nicht abschalten');
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.Taut_InlineVarInBody_ComparisonStillReported;
+// WAECHTER (Review 02.09.). Ein inline 'var' (Delphi 10.3+) steht MITTEN
+// im Rumpf, also hinter dem 'begin'. Setzte es den Deklarationszustand,
+// saehe ihn nichts mehr zurueck - Phase 3 waere fuer den gesamten Rest
+// der Routine aus, und die Regel verstummte still. Das ist der
+// gefaehrlichste denkbare Fehler dieses Gates, weil er sich als Erfolg
+// tarnt: er nimmt nur Funde WEG.
+//
+// Zweiter Teil derselben Falle: ein StartsWith ohne Wortgrenze trifft
+// auch 'variable := 5;'. Deshalb steht die hier mit drin.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  var variable := 5;'#13#10 +
+  '  var ProcessID: Integer;'#13#10 +
+  '  ProcessID := 7;'#13#10 +
+  '  if ProcessID = ProcessID then Bar;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    'inline var im Rumpf darf Phase 3 nicht abschalten');
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.Taut_ConstAliasDeclaration_NotReported;
+// Beleg mormot.core.os.delphi.pas:151/152 (und 17 weitere Stellen): das
+// Muster 'X = X;' im const-Abschnitt re-exportiert eine gleichnamige
+// Konstante aus einer ge-uses-ten Unit. Es gibt dort keinen auswertbaren
+// Ausdruck - die Meldung "LHS == RHS" ist sachlich falsch. Am Korpus
+// gezaehlt waren das 19 der 45 SCA055-Funde, und SCA055 meldet auf
+// Error-Stufe.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'const'#13#10 +
+  '  TCP_NODELAY = 1;'#13#10 +
+  '  FIONBIO           = FIONBIO;'#13#10 +
+  '  F_OK              = F_OK;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    'Konstanten-Alias im const-Block ist keine Tautologie');
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.Taut_ComparisonInCodeAfterConstBlock_StillReported;
+// WAECHTER: dieselbe Schreibweise, aber im Anweisungsteil - und nach
+// einem const-Block, damit der Abschnittszustand nachweislich wieder
+// zurueckgesetzt wird. Bliebe er stehen, waere die Regel hinter jedem
+// const-Abschnitt stumm. Beleg fuer den echten Treffer:
+// ThreadExpertSharedNames.pas:163.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'const'#13#10 +
+  '  F_OK = F_OK;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var ProcessID: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if ProcessID = ProcessID then Bar;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    'Vergleich im Code bleibt ein Fund, auch nach einem const-Block');
+  finally F.Free; end;
+end;
 
 procedure TTestTautologicalExpr.Equal_SameIdent_Reported;
 const SRC =

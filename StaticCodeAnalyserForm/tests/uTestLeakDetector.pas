@@ -22,6 +22,13 @@ type
     [Test] procedure Leak_CreateFreeInFinally_NoFinding;
     [Test] procedure Leak_CustomFreeWrapper_NoFinding;
     [Test] procedure Leak_FreeOutsideFinally_ReportsWarning;
+    // Punkt-Luecke im finally (01.09.), Beleg
+    // CodeReader.ZXing.ScanManager.pas:200/:250. Das Trio pinnt den
+    // Diskriminator: gleiche Form, nur die Ausrichtung unterscheidet
+    // sich - und der Fix darf die finally-Region nicht aufweichen.
+    [Test] procedure Leak_AlignedDotFreeInFinally_NoFinding;
+    [Test] procedure Leak_TightDotFreeInFinally_NoFinding;
+    [Test] procedure Leak_AlignedDotFreeOutsideFinally_StillWarns;
     [Test] procedure Leak_ReturnResult_NoFinding;
     [Test] procedure Leak_ReturnViaLegacyFuncName_NoFinding;
     [Test] procedure Leak_ExitWithValue_NoFinding;
@@ -140,6 +147,13 @@ type
   public
     // --- A: Wrong-Free / Mismatched Free (10 Tests) ---
     [Test] procedure Leak_FreeOnDifferentVarTypo_OriginalLeaks;
+    // Ausnahmepfad-Gate, regionsbezogen (01.09.). Beleg
+    // Indy IdSSLOpenSSLUtils.pas:311 und Dev-Cpp InstallWizards.pas:361.
+    // Der erste Test ist der Fix, die beiden anderen sind die Waechter:
+    // ohne Regionsbindung haette der Fix ihre echten Funde mitgenommen.
+    [Test] procedure Leak_ExceptFreeExit_NormalFreeSameTry_NoWarning;
+    [Test] procedure Leak_ExceptFreeExit_AllocBeforeTry_StillWarning;
+    [Test] procedure Leak_ExceptFreeExit_NoNormalFree_StillWarning;
     [Test] procedure Leak_NilAssignmentInsteadOfFree_ReportsError;
     [Test] procedure Leak_FreeBeforeCreate_KnownLimitation_NoFinding;
     [Test] procedure Leak_FreeOnFieldNotLocalVar_LocalLeaks;
@@ -620,6 +634,113 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'ALFreeAndNil ist ein Free-Wrapper - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_AlignedDotFreeInFinally_NoFinding;
+// Erkennerfehler (01.09.), Beleg CodeReader.ZXing.ScanManager.pas:200
+// und :250: der Free steht IM finally, nur sind die Spalten
+// ausgerichtet ('bmp      .Free;'). LineFreesVar vergleicht gegen die
+// QUELLZEILE, also griff jede Nadel neben der Luecke vorbei und der
+// lsWarning-Vertrag behauptete 'Free ausserhalb des finally' - dort
+// schlicht falsch. Das FreeAndNil im try-Rumpf ist noetig, damit
+// SearchFree als First-Match-DFS mit InFinally=False aussteigt; erst
+// dann entscheidet dieser Rettungspfad ueberhaupt.
+//
+// TStringList und nicht der Originaltyp: FindingsOfFile ruft ohne
+// AContext, und IsLeakyType faellt dann auf die GLOBALE
+// LeakyClasses-Liste zurueck - eine selbst deklarierte Klasse kennt sie
+// nicht, AnalyzeMethod braeche schon am NotLeakyType-Gate ab. Im
+// Vollscan traegt das die AutoDiscovery, im Test nicht.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Bar;'#13#10+
+  'var'#13#10+
+  '  list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := nil;'#13#10+
+  '  try'#13#10+
+  '    list := TStringList.Create;'#13#10+
+  '    if (list <> nil) then FreeAndNil(list);'#13#10+
+  '    list := TStringList.Create;'#13#10+
+  '  finally'#13#10+
+  '    list      .Free;'#13#10+
+  '  end;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'ausgerichteter Free IM finally ist kein Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_TightDotFreeInFinally_NoFinding;
+// Referenzfall zum Test darueber: dieselbe Fixture, nur eng
+// geschrieben. Lief schon vor dem Fix gruen und muss es bleiben -
+// er zeigt, dass die Normalisierung nichts hinzuerfindet.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Bar;'#13#10+
+  'var'#13#10+
+  '  list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := nil;'#13#10+
+  '  try'#13#10+
+  '    list := TStringList.Create;'#13#10+
+  '    if (list <> nil) then FreeAndNil(list);'#13#10+
+  '    list := TStringList.Create;'#13#10+
+  '  finally'#13#10+
+  '    list.Free;'#13#10+
+  '  end;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'enger Free im finally bleibt fundfrei');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_AlignedDotFreeOutsideFinally_StillWarns;
+// GEGENPROBE, und der eigentliche Waechter: derselbe ausgerichtete
+// Free, aber AUSSERHALB des finally. Der Fund ist hier ECHT. Wuerde
+// die Normalisierung die Regionsgrenze aufweichen statt nur die
+// Punkt-Umgebung zu glaetten, verschwaende er - und der Fix haette
+// einen TP gekostet statt einen FP zu nehmen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Bar;'#13#10+
+  'var'#13#10+
+  '  list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := nil;'#13#10+
+  '  try'#13#10+
+  '    list := TStringList.Create;'#13#10+
+  '    if (list <> nil) then FreeAndNil(list);'#13#10+
+  '    list := TStringList.Create;'#13#10+
+  '  finally'#13#10+
+  '    Sleep(0);'#13#10+
+  '  end;'#13#10+
+  '  list      .Free;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'ausgerichteter Free AUSSERHALB des finally bleibt ein Fund');
   finally F.Free; end;
 end;
 
@@ -2420,6 +2541,127 @@ end;
   ==================================================================== }
 
 // --- A: Wrong-Free / Mismatched Free (10 Tests) ---
+
+procedure TTestMemoryLeakAdvanced.Leak_ExceptFreeExit_NormalFreeSameTry_NoWarning;
+// FP-Gate Prio 5, regionsbezogen erweitert (01.09.). Nachbau von
+// D:/git-sca-realworld/Indy-master/Lib/Protocols/IdSSLOpenSSLUtils.pas:311:
+// m ist auf BEIDEN Pfaden freigegeben (Normalpfad im try-Rumpf, Ausnahme-
+// pfad im Handler), der Handler schluckt aber statt weiterzuwerfen. Frueher
+// meldete der Detektor lsWarning "Free ausserhalb finally", weil erstens das
+// FREMDE try/finally von a HasFinally setzt und zweitens HasExceptFreeRaise
+// ein raise verlangte. Fuer die Leck-Frage ist raise irrelevant.
+// Gegenstueck: Leak_ExceptFreeExit_AllocBeforeTry_StillWarning zeigt, dass
+// die Abdeckung an DIESEM try haengen muss.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var'#13#10+
+  '  a, m: TStringList;'#13#10+
+  'begin'#13#10+
+  '  a := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    a.Add(''x'');'#13#10+
+  '  finally'#13#10+
+  '    a.Free;'#13#10+          // fremdes try/finally -> HasFinally = True
+  '  end;'#13#10+
+  '  m := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    m.LoadFromFile(''c:\x.txt'');'#13#10+
+  '    m.Free;'#13#10+          // Normalpfad
+  '  except'#13#10+
+  '    m.Free;'#13#10+          // Ausnahmepfad, KEIN raise
+  '    Exit;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Handler-Free mit Exit plus Normalpfad-Free am selben try deckt beide ' +
+      'Pfade ab - das fremde finally von a darf keinen lsWarning fuer m ausloesen');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_ExceptFreeExit_AllocBeforeTry_StillWarning;
+// WAECHTER der Regionsbindung (01.09.). Nachbau von D:/git-sca-realworld/
+// Dev-Cpp/Source/Tools/Packman/InstallWizards.pas:361: der Handler gibt frei
+// und der Normalpfad hinter dem try ebenfalls - aber zwischen Create und dem
+// schuetzenden try steht schon eine Benutzung. Wirft sie, leckt das Objekt
+// unwiderruflich. Methodenweit gebaut haette der Fix genau diesen echten Fund
+// mitgenommen; die Bedingung "keine Zeile zwischen Create und try" haelt ihn.
+// Wer diesen Test rot sieht, hat die Regionsbindung ausgebaut.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var'#13#10+
+  '  a, m: TStringList;'#13#10+
+  'begin'#13#10+
+  '  a := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    a.Add(''x'');'#13#10+
+  '  finally'#13#10+
+  '    a.Free;'#13#10+
+  '  end;'#13#10+
+  '  m := TStringList.Create;'#13#10+
+  '  m.Add(''vor dem try'');'#13#10+   // ungeschuetztes Fenster
+  '  try'#13#10+
+  '    m.LoadFromFile(''c:\x.txt'');'#13#10+
+  '  except'#13#10+
+  '    m.Free;'#13#10+
+  '    Exit;'#13#10+
+  '  end;'#13#10+
+  '  m.Free;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'Allokation haengt NICHT am try - das Fenster davor bleibt ungeschuetzt, ' +
+      'der Handler-Free deckt es nicht ab');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_ExceptFreeExit_NoNormalFree_StillWarning;
+// WAECHTER fuer den SkipExcept-Parameter (01.09.). Der einzige Free von m
+// steht im except-Handler, der Erfolgspfad gibt nichts frei - laeuft der
+// try-Rumpf normal durch, leckt m. Der Fund muss bleiben. Faellt er weg, hat
+// SearchFree den Handler-Free als "Normalpfad-Free" zurueckgemeldet, d.h.
+// SkipExcept greift nicht in allen Baumlaeufen (Haupt-Rekursion UND with-Walk).
+// Verwandt mit Leak_FreeInExceptOnly_KnownLimitation_NoFinding, aber mit
+// fremdem try/finally - deshalb wird hier der lsWarning-Zweig betreten.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var'#13#10+
+  '  a, m: TStringList;'#13#10+
+  'begin'#13#10+
+  '  a := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    a.Add(''x'');'#13#10+
+  '  finally'#13#10+
+  '    a.Free;'#13#10+
+  '  end;'#13#10+
+  '  m := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    m.Add(''x'');'#13#10+
+  '  except'#13#10+
+  '    m.Free;'#13#10+          // NUR der Ausnahmepfad gibt frei
+  '    Exit;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'ohne Normalpfad-Free deckt der Handler nur den Ausnahmefall ab - ' +
+      'der Erfolgspfad leckt weiter');
+  finally F.Free; end;
+end;
 
 procedure TTestMemoryLeakAdvanced.Leak_FreeOnDifferentVarTypo_OriginalLeaks;
 // Klassischer Tippfehler: Variable 'list' wird erstellt, 'other' freigegeben.
