@@ -402,7 +402,7 @@
       "id": "SCA017",
       "kind": "DebugOutput",
       "name": "WriteLn/ShowMessage in production code",
-      "shortDescription": "Debug output statement found in production unit",
+      "shortDescription": "Unqualified WriteLn/Write, ShowMessage(Pos) or OutputDebugString call in a non-test unit",
       "fullDescription": "WriteLn / ShowMessage / OutputDebugString / OutputDebugStringA in non-test code is almost always leftover debugging: ShowMessage in particular blocks the UI thread and is unfit for any production code path. Replace with a structured logger (TLogger, mORMot TSynLog, log4d) so the call site captures severity, category, and source location, and ops can dial verbosity at runtime. The detector skips units under `*\\tests\\*`, `*\\test\\*` and units flagged by the project as test/cli (`*Console*`, `*TestProject*`). A `// noinspection DebugOutput` marker suppresses individual lines (e.g. interactive CLI banners).",
       "defaultSeverity": "Warning",
       "type": "Code Smell",

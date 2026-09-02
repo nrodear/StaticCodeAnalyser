@@ -1,4 +1,4 @@
-unit uTestSafetyChecks;
+﻿unit uTestSafetyChecks;
 
 // Tests fuer Sicherheits-/Korrektheits-Detektoren (Erweiterungen):
 // NilDeref, MissingFinally, DivByZero, DeadCode.
@@ -61,6 +61,19 @@ type
     [Test] procedure Div_StringDivisor_NoFinding;
     // FP-Gate Prio 7 (2026-07-06): "if n <= 0 then Exit"-Bail-Guard
     [Test] procedure Div_LessEqualZeroGuardExit_NoFinding;
+    // G5/G6 (02.09., AQL-Stichprobe): Guards, die 0 ausschliessen, ohne
+    // die 0 zu nennen. Die beiden letzten sind die Waechter - ">= 0"
+    // laesst die Null ZU, und eine Menge mit Bezeichnern ist von aussen
+    // nicht entscheidbar.
+    [Test] procedure Div_LowerBoundGuard_NoFinding;
+    [Test] procedure Div_NonZeroSetGuard_NoFinding;
+    [Test] procedure Div_LowerBoundIncludingZero_StillReported;
+    [Test] procedure Div_SetWithIdentifiers_StillReported;
+    // Review 02.09.: die Schranke muss der GANZE Ausdruck sein.
+    [Test] procedure Div_LowerBoundWithArithmetic_StillReported;
+    [Test] procedure Div_LowerBoundInCast_NoFinding;
+    // Handpruefung rw54: das Clamp-Idiom ist KEIN Guard.
+    [Test] procedure Div_ClampInThenBranch_StillReported;
     // G5 (#6 CFG-Schlussstueck 2026-07-24): Else-Kanten-Dominanz
     [Test] procedure Div_ElseBranchOfZeroCheck_NoFinding;
     [Test] procedure Div_AfterMergeOfZeroCheck_StillReports;
@@ -650,6 +663,157 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero));
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_ClampInThenBranch_StillReported;
+// WAECHTER aus der Handpruefung von rw54. Die erste Fassung von G5 hat
+// an diesem Muster FUENF echte Funde entfernt (jvcl
+// devtools/MakePNG/pngimage.pas:5046 ff.).
+//
+// "if DataDepth > 8 then DataDepth := 8" sieht wie eine Untergrenze aus,
+// ist aber ein CLAMP: der then-Zweig AENDERT die Variable. Nach dem if
+// ist ihr Wert unbekannt - bei BitDepth = 0 geht die Division dahinter
+// durch Null.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(BitDepth: Integer): Integer;'#13#10 +
+  'var DataDepth: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  DataDepth := BitDepth;'#13#10 +
+  '  if DataDepth > 8 then DataDepth := 8;'#13#10 +
+  '  Result := 8 div DataDepth;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'ein Clamp im then-Zweig schliesst die Null nicht aus');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_LowerBoundGuard_NoFinding;
+// G5: eine Untergrenze mit einem anderen Literal als 0 oder 1
+// schliesst die Null genauso aus. Beleg aus der Stichprobe:
+// 'if MillisecondsElapsed >= Cardinal(1000)'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(N: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if N >= 1000 then'#13#10 +
+  '    Result := 100 div N'#13#10 +
+  '  else'#13#10 +
+  '    Result := 0;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'Untergrenze 1000 schliesst die Null aus');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_NonZeroSetGuard_NoFinding;
+// G6: eine Mengenpruefung ohne die 0 schliesst sie aus. Beleg:
+// 'if NumGlyphs in [2..5] then .. div NumGlyphs'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(N: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if N in [2..5] then'#13#10 +
+  '    Result := 100 div N'#13#10 +
+  '  else'#13#10 +
+  '    Result := 0;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'Menge [2..5] enthaelt keine Null');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_LowerBoundIncludingZero_StillReported;
+// WAECHTER zu G5: ">= 0" laesst die Null ZU. Wer die Grenze hier
+// falsch setzt, macht die Regel im haeufigsten Idiom blind.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(N: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if N >= 0 then'#13#10 +
+  '    Result := 100 div N'#13#10 +
+  '  else'#13#10 +
+  '    Result := 0;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    '">= 0" laesst die Null zu - der Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_SetWithIdentifiers_StillReported;
+// WAECHTER zu G6: steht ein Bezeichner in der Menge, ist ihr Inhalt
+// von hier aus unbekannt - dann gilt die Stelle als ungeschuetzt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(N: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if N in [Low..High] then'#13#10 +
+  '    Result := 100 div N'#13#10 +
+  '  else'#13#10 +
+  '    Result := 0;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'Menge mit Bezeichnern ist nicht entscheidbar');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_LowerBoundWithArithmetic_StillReported;
+// WAECHTER (Review 02.09.): das Literal ist nicht der ganze Ausdruck.
+// "N >= 2 * Scale" ist bei Scale = 0 effektiv "N >= 0" - die Null kommt
+// durch und die Division stuerzt ab. Der erste Wurf des Gates las nur
+// den fuehrenden Ziffernlauf und haette den Fund geschluckt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(N, Scale: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if N >= 2 * Scale then'#13#10 +
+  '    Result := 100 div N'#13#10 +
+  '  else'#13#10 +
+  '    Result := 0;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'Literal mit Arithmetik dahinter ist keine Schranke');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_LowerBoundInCast_NoFinding;
+// Das MOTIVBEISPIEL des Gates, und es griff im ersten Wurf nicht:
+// der Parser normalisiert die Bedingung token-weise mit Leerzeichen,
+// aus "Cardinal(1000)" wird "cardinal ( 1000 )". Die Klammer stand
+// damit hinter Position 9 und fiel aus dem Cast-Fenster.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(N, Scale: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if N >= Cardinal(1000) then'#13#10 +
+  '    Result := 100 div N'#13#10 +
+  '  else'#13#10 +
+  '    Result := 0;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'Schranke in einem Cast schliesst die Null aus');
   finally F.Free; end;
 end;
 

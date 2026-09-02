@@ -681,12 +681,25 @@ var
     TargetLow, LhsLow: string;
   begin
     Result := False;
-    if (ThisClassLow = '') or (CalleeLow = '') then Exit;
-    TargetLow := ThisClassLow + '.' + CalleeLow;
+    if CalleeLow = '' then Exit;
+    // Zwei zulaessige Formen: eine Methode DIESER Klasse
+    // ('TFoo.MakeList') oder eine FREIE Funktion der Unit
+    // ('MakeList'). Die zweite fehlte bis zum 02.09. - ThisClassLow
+    // kommt aus der aufrufenden Methode und ist bei einer freien
+    // Prozedur leer, die Funktion stieg dann sofort aus. Solange die
+    // Namensheuristik daneben stand, fiel das nicht auf: sie fing
+    // jedes 'MakeXxx' ohnehin ab. Nach ihrer Streichung waren zwei
+    // Bestandstests rot, beide mit genau dieser Form - und beide zu
+    // Recht, denn eine unit-lokale Funktion mit 'Result := X.Create'
+    // uebergibt Ownership.
+    TargetLow := CalleeLow;
     Methods := UnitNode.FindAllRef(nkMethod);
     for Mth in Methods do
     begin
-      if Mth.Name.ToLower <> TargetLow then Continue;
+      var MthLow := Mth.Name.ToLower;
+      if (MthLow <> TargetLow)
+         and ((ThisClassLow = '') or (MthLow <> ThisClassLow + '.' + TargetLow)) then
+        Continue;
       Assigns := Mth.FindAllRef(nkAssign);
       for A in Assigns do
       begin
@@ -858,11 +871,9 @@ var
   // RhsOrig ist die Original-Case-RHS (A.TypeRef) - die CamelCase-Grenze
   // laesst sich nur im Original erkennen ('NewsFeed' != 'NewFeed').
   function OwningReturnCall(const RhsOrig: string): Boolean;
-  const
-    ROOTS : array[0..4] of string = ('create', 'new', 'clone', 'make', 'acquire');
   var
-    pp, dp, rl, sp : Integer;
-    Head, Callee, CalleeLow, root : string;
+    pp, dp : Integer;
+    Head, Callee, CalleeLow : string;
   begin
     Result := False;
     pp := Pos('(', RhsOrig);
@@ -877,24 +888,36 @@ var
       Callee := Trim(Head);
     CalleeLow := Callee.ToLower;
     if CalleeLow = '' then Exit;
-    // (a) konstruktor-artiger Name: Wurzel exakt, als CamelCase-Prefix
-    //     ('MakeList'/'NewFoo') oder als CamelCase-Suffix ('DoCreate').
-    //     Die Grossbuchstaben-Grenze im Original schuetzt vor Substring-
-    //     Zufaellen ('NewsFeed', 'Remake') die keine echten Konstruktoren sind.
-    for root in ROOTS do
-    begin
-      rl := Length(root);
-      if CalleeLow = root then Exit(True);
-      if (Length(CalleeLow) > rl) and StartsStr(root, CalleeLow) and
-         CharInSet(Callee[rl + 1], ['A'..'Z', '0'..'9']) then
-        Exit(True);
-      if (Length(CalleeLow) > rl) and EndsStr(root, CalleeLow) then
-      begin
-        sp := Length(Callee) - rl + 1;
-        if (sp >= 1) and CharInSet(Callee[sp], ['A'..'Z']) then
-          Exit(True);
-      end;
-    end;
+    // (a) KONSTRUKTOR-ARTIGER NAME - GESTRICHEN am 02.09.
+    //
+    // Bis dahin galt: heisst der Callee 'Create*'/'New*'/'Clone*'/
+    // 'Make*'/'Acquire*', uebergibt er Ownership. Die Annahme ist am
+    // Korpus WIDERLEGT. Eigene Stichprobe je Variante (n=20, ISO 2859-1,
+    // Ac=3): 19 Fehlalarme, und die Aufschluesselung nach Ausloeser ist
+    // eindeutig -
+    //
+    //     Namensheuristik        15 Funde,  0 Treffer
+    //     IsLocalFactory (unten)  5 Funde,  1 Treffer
+    //
+    // Am ganzen Korpus nachgezaehlt trugen 49 der 64
+    // return-value-not-freed-Funde eine dieser Wurzeln (create 34,
+    // clone 9, new 5, make 1). Die Heuristik erzeugte drei Viertel aller
+    // Funde dieser Variante und in der Stichprobe keinen einzigen
+    // richtigen.
+    //
+    // Der Grund ist strukturell: der Name beweist, dass der Callee etwas
+    // ERZEUGT - nicht, dass der Aufrufer es BESITZT. Die Bibliotheken
+    // benutzen durchweg Delphis Standardidiome, bei denen jemand anders
+    // besitzt: Collection-Add (der Callee haengt sein Result selbst ein),
+    // Component-Owner ('Create(Application)'), Parent-Zuweisung,
+    // Interface-Refcount ('Supports(..)'), Pool-Handles mit eigener
+    // Release-API.
+    //
+    // Was bleibt, ist (b): die BEWIESENE lokale Factory. Dort steht im
+    // Rumpf ein 'Result := X.Create' - das ist ein Beleg, kein Indiz.
+    // Auch der Pfad ist mit 1 von 5 noch zu schlecht; er ist aber ueber
+    // die gemessenen Muster gezielt reparierbar (Callee-Selbst-
+    // registrierung, Component-Ownership), die Namensheuristik nicht.
     // (b) bewiesene lokale Factory DERSELBEN Klasse (Body: Result := X.Create).
     //     Erhaelt die TP-Erkennung fuer named Factories die MIT Klammern
     //     aufgerufen werden ('list := BuildList()' mit Result := TFoo.Create).
@@ -2287,6 +2310,60 @@ end;
 
 { ---- Free-Suche ---- }
 
+// Gibt die Anweisung ANameLow die Variable AVarLow direkt frei?
+//
+// Vier Schreibweisen, alle mit LINKER WORTGRENZE geprueft - ohne sie
+// wuerde 'mylist.free' auch fuer die Variable 'list' zaehlen.
+//
+// (1) varName.Free   - mit und ohne Klammern (list.Free / list.Free())
+// (2) varName.Destroy
+// (3) varName.DisposeOf - ARC-/NextGen-Idiom, auf Classic-Compilern
+//     Alias fuer Free. SCA001-Gross-Triage 2026-07-18 (free-missed-Bucket
+//     22/101): zwei reale Faelle (FMX LBitmap.DisposeOf / Str.DisposeOf)
+//     wurden als "nie freigegeben" gemeldet, weil SearchFree DisposeOf
+//     nicht kannte.
+// (4) Typecast-Free: 'TStringList(FParams).Free' / '(varName).Destroy'.
+//     Der Cast schiebt ein ')' zwischen Var-Namen und '.free', das Muster
+//     (1) verfehlt das (Gross-Triage: JvUIB TStringList(FParams).Free im
+//     Destroy -> FP "nie freigegeben"). Die linke Grenze '(' garantiert,
+//     dass varName das GANZE Cast-Argument ist (kein 'foo(x.varname)').
+//     ZUSATZ-Guard: der Kopf vor '(' muss ein TYP sein (t-Praefix-
+//     Konvention) - 'GetWrapper(list).Free' gibt das RESULT frei, nicht
+//     list, das waere ein False Negative. Dokumentiertes Rest-Risiko:
+//     t-praefixierte FUNKTIONEN ('Transform(x).Free') passieren den Guard
+//     (selten; SearchFree hat keinen AContext fuer einen echten Typ-Check
+//     via TTypeIndex - bewusst akzeptiert).
+function GibtVarFrei(const ANameLow, AVarLow: string): Boolean;
+var
+  pMatch, hS : Integer;
+  Nadel      : string;
+begin
+  Result := False;
+  // (1)-(3): direkter Aufruf auf der Variablen
+  for Nadel in ['.free', '.destroy', '.disposeof'] do
+  begin
+    pMatch := Pos(AVarLow + Nadel, ANameLow);
+    if (pMatch > 0)
+       and ((pMatch = 1) or not TLeakDetector2.IsIdentChar(ANameLow[pMatch - 1])) then
+      Exit(True);
+  end;
+  // (4): durch einen Typecast hindurch
+  pMatch := 0;
+  for Nadel in [').free', ').destroy', ').disposeof'] do
+  begin
+    pMatch := Pos('(' + AVarLow + Nadel, ANameLow);
+    if pMatch > 0 then Break;
+  end;
+  if pMatch > 1 then
+  begin
+    // Kopf-Ident vor der '(' rueckwaerts einsammeln; muss mit 't' beginnen.
+    hS := pMatch - 1;
+    while (hS >= 1) and TLeakDetector2.IsIdentChar(ANameLow[hS]) do Dec(hS);
+    if (hS + 1 < pMatch) and (ANameLow[hS + 1] = 't') then
+      Exit(True);
+  end;
+end;
+
 class function TLeakDetector2.SearchFree(Node: TAstNode;
   const VarNameLow: string; InFinally: Boolean;
   out FoundInFinally: Boolean; AExceptModus: TExceptModus): Boolean;
@@ -2306,62 +2383,15 @@ begin
   begin
     NameLow := Node.Name.ToLower;
 
-    // varName.Free   (mit und ohne Klammern: list.Free / list.Free())
-    pMatch := Pos(VarNameLow + '.free', NameLow);
-    if pMatch > 0 then
+    // Die vier Schreibweisen einer direkten Freigabe stehen jetzt in
+    // GibtVarFrei (Unit-Ebene). Sie waren vier fast gleiche Bloecke mit
+    // je zwei verschachtelten ifs - zusammen acht Verzweigungen, die den
+    // Rumpf dominierten, ohne dass eine davon vom Kontext abhing.
+    if GibtVarFrei(NameLow, VarNameLow) then
     begin
-      // Linke Wortgrenze: Zeichen vor varName darf kein Bezeichner sein
-      if (pMatch = 1) or not IsIdentChar(NameLow[pMatch - 1]) then
-      begin
-        Result := True; FoundInFinally := InFinally; Exit;
-      end;
-    end;
-
-    // varName.Destroy
-    pMatch := Pos(VarNameLow + '.destroy', NameLow);
-    if pMatch > 0 then
-    begin
-      if (pMatch = 1) or not IsIdentChar(NameLow[pMatch - 1]) then
-      begin
-        Result := True; FoundInFinally := InFinally; Exit;
-      end;
-    end;
-
-    // varName.DisposeOf - ARC-/NextGen-Idiom, auf Classic-Compilern Alias fuer
-    // Free. SCA001-Gross-Triage 2026-07-18 (free-missed-Bucket 22/101): 2 reale
-    // Faelle (FMX LBitmap.DisposeOf / Str.DisposeOf) als "nie freigegeben"
-    // gemeldet, weil SearchFree DisposeOf nicht kannte.
-    pMatch := Pos(VarNameLow + '.disposeof', NameLow);
-    if pMatch > 0 then
-    begin
-      if (pMatch = 1) or not IsIdentChar(NameLow[pMatch - 1]) then
-      begin
-        Result := True; FoundInFinally := InFinally; Exit;
-      end;
-    end;
-
-    // Typecast-Free: 'TStringList(FParams).Free' / '(varName).Destroy' - der
-    // Cast schiebt ')' zwischen Var-Namen und '.free', das 'varname.free'-
-    // Muster oben verfehlt das (Gross-Triage: JvUIB TStringList(FParams).Free
-    // im Destroy -> FP "nie freigegeben"). Linke Grenze '(' garantiert, dass
-    // varName das GANZE Cast-Argument ist (kein 'foo(x.varname)'). ZUSATZ-
-    // Guard: der Kopf vor '(' muss ein TYP sein (t-Praefix-Konvention) -
-    // 'GetWrapper(list).Free' gibt das RESULT frei, nicht list (waere FN).
-    // Dokumentiertes Rest-Risiko: t-praefixierte FUNKTIONEN ('Transform(x).Free')
-    // passieren den Guard (selten; SearchFree hat keinen AContext fuer einen
-    // echten Typ-Check via TTypeIndex - bewusst akzeptiert).
-    pMatch := Pos('(' + VarNameLow + ').free', NameLow);
-    if pMatch = 0 then pMatch := Pos('(' + VarNameLow + ').destroy', NameLow);
-    if pMatch = 0 then pMatch := Pos('(' + VarNameLow + ').disposeof', NameLow);
-    if pMatch > 1 then
-    begin
-      // Kopf-Ident vor der '(' rueckwaerts einsammeln; muss mit 't' beginnen.
-      var hS := pMatch - 1;
-      while (hS >= 1) and IsIdentChar(NameLow[hS]) do Dec(hS);
-      if (hS + 1 < pMatch) and (NameLow[hS + 1] = 't') then
-      begin
-        Result := True; FoundInFinally := InFinally; Exit;
-      end;
+      Result := True;
+      FoundInFinally := InFinally;
+      Exit;
     end;
 
     // 'with varName do ... Free' - der Parser legt with als nkCall(withExpr)

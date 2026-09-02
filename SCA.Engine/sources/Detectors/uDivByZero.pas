@@ -89,6 +89,22 @@ type
     class function IsIntegerType(const TypeLow: string): Boolean; static;
     class function HasGuardingIf(MethodNode: TAstNode;
       const VarLow: string; BeforeLine: Integer): Boolean; static;
+    // G5 (02.09., AQL-Stichprobe): Untergrenze mit einem anderen Literal
+    // als 0/1 - "if Elapsed >= 1000". Schuetzt bei ">= K" fuer K >= 1 und
+    // bei "> K" fuer K >= 0. Ein Cast-Wrapper (Cardinal(1000)) wird
+    // abgestreift.
+    class function HasLowerBoundGuard(const ACondLow, AVarLow: string): Boolean; static;
+    // True wenn der THEN-Zweig VarLow ueberhaupt zuweist - egal was.
+    // Gegenstueck zu ThenBranchAssignsNonZeroTo: dort ist die Zuweisung
+    // die Rettung ("if x = 0 then x := 1"), hier ist sie das Problem
+    // ("if x > 8 then x := 8" - danach kann x alles sein, auch 0).
+    class function ThenBranchAssignsTo(IfN: TAstNode;
+      const VarLow: string): Boolean; static;
+    // G6 (02.09.): Mengenpruefung "if NumGlyphs in [2..5]". Schuetzt, wenn
+    // die Menge aus reinen Zahlenliteralen besteht und 0 nicht enthaelt.
+    // Alles andere (Bezeichner, Konstanten in der Menge) ist NICHT
+    // entscheidbar und gilt als ungeschuetzt.
+    class function HasNonZeroSetGuard(const ACondLow, AVarLow: string): Boolean; static;
     // True wenn der THEN-Zweig des if direkt mit Exit oder Raise endet
     // (ggf. via begin..end-Block). Wird gebraucht um 'if x = 0 then Exit'
     // (echter Guard) von 'if x = 0 then DoOther' (kein Guard) zu trennen.
@@ -342,6 +358,18 @@ begin
        TDetectorUtils.ContainsWholeWordLower('0<'    + VarLow, Low)  or
        TDetectorUtils.ContainsWholeWordLower('0 <> ' + VarLow, Low)  then
       Exit(True);
+
+    // G5/G6: Guards, die 0 ausschliessen, ohne die 0 zu nennen.
+    //
+    // Die Zusatzbedingung ist NICHT kosmetisch: 'if x > 8 then x := 8'
+    // ist ein CLAMP, kein Guard. Der then-Zweig aendert die Variable,
+    // danach ist ihr Wert unbekannt und eine Division dahinter kann sehr
+    // wohl durch Null gehen. Die erste Fassung von G5 hat daran fuenf
+    // echte Funde verloren (pngimage.pas:5046 ff.), gefunden in der
+    // Handpruefung von rw54.
+    if (HasLowerBoundGuard(Low, VarLow) or HasNonZeroSetGuard(Low, VarLow))
+       and not ThenBranchAssignsTo(IfN, VarLow) then
+      Exit(True);
     // Exit-Guard: 'if x <bail-cond> then Exit/Raise' schuetzt nur wenn der
     // THEN-Zweig den Code-Pfad verlaesst. Erfasst das haeufige "bail wenn
     // nicht-positiv"-Idiom fuer Integer-Divisoren:
@@ -368,6 +396,167 @@ begin
         Exit(True);
     end;
   end;
+end;
+
+// Naechstes Vorkommen von AWortLow als GANZES WORT ab AStart, oder 0.
+// Eigene Schleife statt TDetectorUtils.FindWholeWordLower: das prueft
+// die rechte Wortgrenze hinter dem GANZEN Needle, und die Gates unten
+// brauchen den Text DAHINTER (">= 1000", "in [2..5]"). Mit dem Operator
+// im Needle scheitert die Grenzpruefung an der folgenden Ziffer.
+function NaechstesGanzesWort(const AHaystackLow, AWortLow: string;
+  AStart: Integer): Integer;
+var
+  i, n, h : Integer;
+begin
+  Result := 0;
+  n := Length(AWortLow);
+  h := Length(AHaystackLow);
+  if (n = 0) or (h < n) then Exit;
+  i := AStart;
+  while True do
+  begin
+    i := PosEx(AWortLow, AHaystackLow, i);
+    if i = 0 then Exit;
+    if ((i = 1) or not TDetectorUtils.IsIdentChar(AHaystackLow[i - 1]))
+       and ((i + n > h) or not TDetectorUtils.IsIdentChar(AHaystackLow[i + n])) then
+      Exit(i);
+    Inc(i);
+  end;
+end;
+
+// Liest aus ARest eine SCHRANKE, die der ganze Ausdruck ist - und nur
+// dann. Erlaubt sind genau zwei Formen, jeweils gefolgt von Ende, ')',
+// 'and' oder 'or':
+//     <Literal>                  z.B. "1000 then .."
+//     <Bezeichner> ( <Literal> ) z.B. "cardinal ( 1000 )"
+//
+// WARUM SO STRENG (Review 02.09., zwei Befunde in einem):
+//  * Der erste Wurf las nur den fuehrenden Ziffernlauf und ignorierte
+//    den Rest. "x >= 2 * Scale" galt damit als Guard - bei Scale = 0
+//    lautet die Bedingung aber "x >= 0" und laesst die Null durch. Das
+//    verschluckt echte EZeroDivide-Funde. Die Schwesterfunktion
+//    IsClampedNonZero verlangt aus demselben Grund, dass der GESAMTE
+//    RHS die erwartete Form hat.
+//  * Der Parser normalisiert die Bedingung token-weise mit Leerzeichen
+//    ("cardinal ( 1000 )"). Das Motivbeispiel des Gates griff deshalb
+//    im ersten Wurf gar nicht - die Klammer stand hinter Position 9.
+function LiteralSchranke(const ARest: string; out AWert: Integer): Boolean;
+var
+  s, Zahl, Schwanz : string;
+  i                : Integer;
+begin
+  Result := False;
+  AWert  := -1;
+  s := TrimLeft(ARest);
+  // Cast-Kopf abstreifen: ein Bezeichner, dann eine offene Klammer.
+  // Der Test auf den ERSTEN Buchstaben ist noetig, weil IsIdentChar
+  // auch Ziffern einschliesst - ohne ihn lief die Schleife bei '1000'
+  // ueber die Zahl selbst, suchte dahinter eine '(' und stieg aus.
+  // (Gefunden im Bau vom 02.09.: der Waechtertest fuer '>= 1000' war
+  // rot, das Gate griff nie.)
+  Schwanz := '';
+  if (Length(s) > 0) and CharInSet(s[1], ['a'..'z', '_']) then
+  begin
+    i := 1;
+    while (i <= Length(s)) and TDetectorUtils.IsIdentChar(s[i]) do Inc(i);
+    Zahl := TrimLeft(Copy(s, i, Length(s)));   // Zahl hier nur Zwischenspeicher
+    if Zahl.StartsWith('(') then
+    begin
+      s := TrimLeft(Copy(Zahl, 2, Length(Zahl)));
+      Schwanz := ')';
+    end
+    else
+      Exit;   // Bezeichner ohne Klammer - eine benannte Konstante,
+              // von hier aus nicht aufloesbar
+  end;
+  // Literal lesen
+  i := 1;
+  while (i <= Length(s)) and CharInSet(s[i], ['0'..'9']) do Inc(i);
+  if i = 1 then Exit;
+  Zahl := Copy(s, 1, i - 1);
+  s := TrimLeft(Copy(s, i, Length(s)));
+  // Cast-Klammer schliessen, falls einer geoeffnet wurde
+  if Schwanz <> '' then
+  begin
+    if (s = '') or (s[1] <> ')') then Exit;
+    s := TrimLeft(Copy(s, 2, Length(s)));
+  end;
+  // Was danach kommt, darf den Wert nicht mehr veraendern.
+  if not ((s = '') or s.StartsWith(')')
+          or s.StartsWith('and ') or (s = 'and')
+          or s.StartsWith('or ') or (s = 'or')) then Exit;
+  AWert  := StrToIntDef(Zahl, -1);
+  Result := AWert >= 0;
+end;
+
+class function TDivByZeroDetector.HasLowerBoundGuard(
+  const ACondLow, AVarLow: string): Boolean;
+// "x >= K" schuetzt fuer K >= 1, "x > K" fuer K >= 0. Der Katalog oben
+// deckt nur K = 0 bzw. 1 ab; im Korpus stehen aber auch Schranken wie
+// "if MillisecondsElapsed >= Cardinal(1000)" (AQL-Stichprobe 02.09.).
+//
+// Bewusst eng: nur ein reines Ganzzahl-Literal zaehlt, notfalls in einem
+// Cast. Eine benannte Konstante ist von hier aus nicht aufloesbar und
+// gilt als ungeschuetzt - die sichere Richtung.
+var
+  p, Wert    : Integer;
+  Rest        : string;
+  MinWert    : Integer;
+begin
+  Result := False;
+  p := 1;
+  repeat
+    p := NaechstesGanzesWort(ACondLow, AVarLow, p);
+    if p <= 0 then Exit;
+    Rest := TrimLeft(Copy(ACondLow, p + Length(AVarLow), 48));
+    Inc(p);
+    if Rest.StartsWith('>=') then
+    begin
+      MinWert := 1;
+      Rest := TrimLeft(Copy(Rest, 3, 46));
+    end
+    else if Rest.StartsWith('>') then
+    begin
+      MinWert := 0;
+      Rest := TrimLeft(Copy(Rest, 2, 47));
+    end
+    else
+      Continue;
+    if LiteralSchranke(Rest, Wert) and (Wert >= MinWert) then Exit(True);
+  until False;
+end;
+
+class function TDivByZeroDetector.HasNonZeroSetGuard(
+  const ACondLow, AVarLow: string): Boolean;
+// "if NumGlyphs in [2..5] then .. div NumGlyphs" - die Menge schliesst 0
+// aus, ohne sie zu nennen (AQL-Stichprobe 02.09.).
+//
+// Nur reine Zahlenmengen werden ausgewertet. Steht ein Bezeichner darin
+// ("[Low..High]", "[cMin..cMax]"), ist der Inhalt von hier aus unbekannt
+// und die Stelle gilt als ungeschuetzt.
+var
+  p, e, i : Integer;
+  Menge   : string;
+  c       : Char;
+begin
+  Result := False;
+  p := NaechstesGanzesWort(ACondLow, AVarLow, 1);
+  if p <= 0 then Exit;
+  if not TrimLeft(Copy(ACondLow, p + Length(AVarLow), 8)).StartsWith('in') then Exit;
+  p := Pos('[', ACondLow, p);
+  e := Pos(']', ACondLow, p);
+  if (p <= 0) or (e <= p) then Exit;
+  Menge := Copy(ACondLow, p + 1, e - p - 1);
+  if Trim(Menge) = '' then Exit;
+  for c in Menge do
+    if not CharInSet(c, ['0'..'9', '.', ',', ' ']) then Exit;  // Bezeichner drin
+  // 0 als eigenstaendige Zahl in der Menge? Dann schuetzt sie nicht.
+  for i := 1 to Length(Menge) do
+    if (Menge[i] = '0')
+       and ((i = 1) or not CharInSet(Menge[i - 1], ['0'..'9']))
+       and ((i = Length(Menge)) or not CharInSet(Menge[i + 1], ['0'..'9'])) then
+      Exit;
+  Result := True;
 end;
 
 class function TDivByZeroDetector.ThenBranchExitsOrRaises(
@@ -449,6 +638,43 @@ begin
     end;
     // Nur das erste Then-Statement betrachten.
     Break;
+  end;
+end;
+
+class function TDivByZeroDetector.ThenBranchAssignsTo(
+  IfN: TAstNode; const VarLow: string): Boolean;
+// Wie ThenBranchAssignsNonZeroTo, aber ohne Bedingung an den Wert:
+// JEDE Zuweisung an VarLow im THEN-Zweig zaehlt.
+//
+// Gebraucht von G5 (02.09., aus der Handpruefung von rw54): das
+// Clamp-Idiom "if DataDepth > 8 then DataDepth := 8;" sieht wie ein
+// Guard aus, ist aber keiner - nach dem if ist der Wert unbekannt und
+// die Division dahinter kann sehr wohl durch Null gehen. Beleg:
+// jvcl devtools/MakePNG/pngimage.pas:5046 ff., fuenf echte Funde, die
+// die erste Fassung von G5 entfernt hat.
+var
+  i, j   : Integer;
+  Branch : TAstNode;
+  Stmt   : TAstNode;
+
+  function AssignsVar(N: TAstNode): Boolean;
+  begin
+    Result := (N.Kind = nkAssign) and (N.Name.ToLower = VarLow);
+  end;
+
+begin
+  Result := False;
+  if IfN = nil then Exit;
+  for i := 0 to IfN.Children.Count - 1 do
+  begin
+    Branch := IfN.Children[i];
+    if Branch.Kind = nkElseBranch then Continue;
+    if AssignsVar(Branch) then Exit(True);
+    for j := 0 to Branch.Children.Count - 1 do
+    begin
+      Stmt := Branch.Children[j];
+      if AssignsVar(Stmt) then Exit(True);
+    end;
   end;
 end;
 

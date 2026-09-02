@@ -1,4 +1,4 @@
-unit uTestGetMemWithoutFreeMem;
+﻿unit uTestGetMemWithoutFreeMem;
 
 interface
 
@@ -23,6 +23,14 @@ type
     [Test] procedure FreeMemOnlyInNextRoutine_NoFinding;
     [Test] procedure FreeMemFarApartSameRoutine_NoFinding;
     [Test] procedure PairedNoTryBeforeNextRoutine_StillReported;
+    // Alloc INNERHALB eines schon offenen try (AQL-Stichprobe 02.09.,
+    // 11 von 20 Funden). Der dritte Test ist der Waechter.
+    [Test] procedure AllocInsideOpenTry_FreeInFinally_NoFinding;
+    [Test] procedure AllocInsideOpenTry_FreeInExceptWithRaise_NoFinding;
+    [Test] procedure AllocNoProtectionAtAll_StillReported;
+    // Review 02.09.: ein Handler entlastet nur, solange sein try noch
+    // OFFEN ist.
+    [Test] procedure AllocInClosedTry_FreeMemOutside_StillReported;
   end;
 
 implementation
@@ -219,6 +227,114 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
     'fBuf := AllocMem -> Feld-Lifetime (RAII), kein lokaler Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.AllocInClosedTry_FreeMemOutside_StillReported;
+// WAECHTER (Review 02.09.). Das try wird VOR dem FreeMem geschlossen -
+// das finally raeumt nur die Critical Section auf, nicht den Puffer.
+// Eine Ausnahme in DoWork laeuft durch das finally hindurch nach aussen,
+// FreeMem hinter dem end wird nie erreicht: der Fund ist ECHT.
+//
+// Der erste Wurf des Handler-Gates schluckte ihn, weil er von "vor dem
+// FreeMem stand ein finally" auf "das FreeMem gehoert dazu" schloss.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure X;'#13#10 +
+  'var p: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  EnterCriticalSection(FCS);'#13#10 +
+  '  try'#13#10 +
+  '    GetMem(p, 128);'#13#10 +
+  '    DoWork(p);'#13#10 +
+  '  finally'#13#10 +
+  '    LeaveCriticalSection(FCS);'#13#10 +
+  '  end;'#13#10 +
+  '  FreeMem(p);'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+    'geschlossenes try entlastet das FreeMem dahinter nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.AllocInsideOpenTry_FreeInFinally_NoFinding;
+// Erkennerfehler (02.09., AQL-Stichprobe): die Allokation steht
+// INNERHALB eines bereits geoeffneten try. Dessen "try" liegt VOR der
+// Alloc-Position, und der Detektor sucht es nur VORWAERTS - er sah es
+// nie und meldete einen lehrbuchmaessig geschuetzten Puffer.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure A;'#13#10 +
+  'var p: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  BeginWork;'#13#10 +
+  '  try'#13#10 +
+  '    GetMem(p, 128);'#13#10 +
+  '    DoWork(p);'#13#10 +
+  '  finally'#13#10 +
+  '    FreeMem(p);'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+    'Alloc in offenem try, FreeMem im finally - geschuetzt');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.AllocInsideOpenTry_FreeInExceptWithRaise_NoFinding;
+// Zweites Idiom derselben Ursache (7 der 11 Stichproben-Fehlalarme):
+// "alloziere, gib im Erfolgsfall weiter, raeume nur im Fehlerfall auf".
+// Das FreeMem steht im except-Handler mit anschliessendem raise.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function B: Pointer;'#13#10 +
+  'var q: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    GetMem(q, 64);'#13#10 +
+  '    DoWork(q);'#13#10 +
+  '    Result := q;'#13#10 +
+  '  except'#13#10 +
+  '    FreeMem(q);'#13#10 +
+  '    raise;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+    'FreeMem im except-Handler ist Aufraeumcode, kein fehlendes Pairing');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.AllocNoProtectionAtAll_StillReported;
+// WAECHTER: kein try, kein Handler - nur GetMem und FreeMem
+// hintereinander. Eine Ausnahme dazwischen verliert den Puffer
+// wirklich. Der Fund MUSS bleiben; faellt er weg, ist der neue Test zu
+// breit und die Regel im haeufigsten Fall blind.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure C;'#13#10 +
+  'var r: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  GetMem(r, 32);'#13#10 +
+  '  DoWork(r);'#13#10 +
+  '  FreeMem(r);'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+    'ohne try und ohne Handler bleibt der Fund');
   finally F.Free; end;
 end;
 

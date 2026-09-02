@@ -49,7 +49,7 @@ type
     // konstruktor-artige Namen + bewiesene lokale Factories bleiben Fund.
     [Test] procedure Leak_BorrowedGetterCallWithParens_NoFinding;
     [Test] procedure Leak_BorrowedDottedGetterCallWithParens_NoFinding;
-    [Test] procedure Leak_ConstructorLikeCallReturn_NoFree_ReportsWarning;
+    [Test] procedure Leak_ConstructorLikeNameOnly_NoFinding;
     [Test] procedure Leak_LocalFactoryCallWithParens_NoFree_ReportsWarning;
     [Test] procedure Leak_SimilarVarName_NoFalsePositive;
     [Test] procedure Leak_MultipleVars_BothReported;
@@ -154,6 +154,10 @@ type
     [Test] procedure Leak_ExceptFreeExit_NormalFreeSameTry_NoWarning;
     [Test] procedure Leak_ExceptFreeExit_AllocBeforeTry_StillWarning;
     [Test] procedure Leak_ExceptFreeExit_NoNormalFree_StillWarning;
+    // Derselbe Waechter fuer den with-Walk (M2b, 02.09.): der
+    // emOhneExcept-Filter sitzt an DREI Stellen, der Test darueber
+    // deckt nur die Haupt-Rekursion ab.
+    [Test] procedure Leak_ExceptFreeExit_InsideWithBlock_StillWarning;
     [Test] procedure Leak_NilAssignmentInsteadOfFree_ReportsError;
     [Test] procedure Leak_FreeBeforeCreate_KnownLimitation_NoFinding;
     [Test] procedure Leak_FreeOnFieldNotLocalVar_LocalLeaks;
@@ -903,8 +907,17 @@ begin
 end;
 
 procedure TTestMemoryLeak.Leak_FunctionCallAssign_NoFreeReportsWarning;
+// 02.09.: MakeList ist jetzt WIRKLICH definiert. Vorher trug die
+// Fixture nur den Aufruf, und der Fund entstand allein aus dem
+// konstruktor-artigen NAMEN. Diese Heuristik ist am Korpus widerlegt
+// (0 Treffer in 15 Faellen) und gestrichen; die Absicht des Tests -
+// "Zuweisung aus einem Funktionsaufruf ohne Free ist ein Fund" -
+// bleibt richtig und wird jetzt ueber den belegten IsLocalFactory-Pfad
+// geprueft.
 const SRC =
   'unit t; implementation'#13#10+
+  'function MakeList: TStringList;'#13#10+
+  'begin Result := TStringList.Create; end;'#13#10+
   'procedure TFoo.Bar;'#13#10+
   'var list: TStringList;'#13#10+
   'begin'#13#10+
@@ -1423,11 +1436,26 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ConstructorLikeCallReturn_NoFree_ReportsWarning;
-// TP-Guard fuer das borrowed-reference-Gate (2026-07-11): ein konstruktor-
-// artiger Callee (Wurzel Make/New/Clone/Create/Acquire) uebergibt Ownership.
-// 'list := MakeList()' ohne Free bleibt ein Leak-Befund (Rueckgabewert) -
-// die FP-Reduktion darf konstruktor-artige Factory-Returns nicht schlucken.
+procedure TTestMemoryLeak.Leak_ConstructorLikeNameOnly_NoFinding;
+// UMGEDREHT AM 02.09. - dieser Test hielt bis dahin die Gegenrichtung fest:
+// "ein konstruktor-artiger Callee (Make/New/Clone/Create/Acquire) uebergibt
+// Ownership, der Fund muss bleiben" (11.07.).
+//
+// Die Annahme ist am Korpus widerlegt. Eigene Stichprobe der Variante
+// return-value-not-freed (n=20, ISO 2859-1 Level II, AQL 6,5 %, Ac=3):
+// 19 Fehlalarme. Nach Ausloeser getrennt trug die Namensheuristik
+// 15 Funde und NULL Treffer, der IsLocalFactory-Pfad 5 Funde und 1
+// Treffer. Am ganzen Korpus hingen 49 der 64 Funde dieser Variante am
+// Namen.
+//
+// Der Name beweist, dass der Callee etwas ERZEUGT - nicht, dass der
+// Aufrufer es BESITZT. Genau dazwischen liegen Delphis Standardidiome:
+// Collection-Add, Component-Owner, Parent, Refcount, Pool-Release.
+//
+// Ein Aufruf, von dem NUR der Name bekannt ist, ist damit kein Beleg
+// mehr. Wer den Fund zurueckhaben will, braucht einen belegten Pfad -
+// siehe Leak_ObjectReturnMakeCall_StillReported, wo MakeList wirklich
+// definiert ist und der Fund folgerichtig bleibt.
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -1440,8 +1468,8 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
-      'konstruktor-artiger Callee (MakeList) ohne Free bleibt ein Leak');
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'ein blosser konstruktor-artiger NAME ist kein Ownership-Beleg');
   finally F.Free; end;
 end;
 
@@ -2621,6 +2649,49 @@ begin
       TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'Allokation haengt NICHT am try - das Fenster davor bleibt ungeschuetzt, ' +
       'der Handler-Free deckt es nicht ab');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_ExceptFreeExit_InsideWithBlock_StillWarning;
+// WAECHTER fuer den with-Walk (M2b, 02.09.). Dieselbe Lage wie im Test
+// darunter - der einzige Free von m steht im except-Handler, der
+// Erfolgspfad gibt nichts frei -, aber der Handler liegt in einem
+// with-Block.
+//
+// SearchFree filtert except-Teilbaeume an DREI Stellen: der
+// Haupt-Rekursion und zweimal im with-Walk (Befuellen des WStack,
+// Nachschieben der Kinder). Faellt der Filter im with-Walk aus, liest
+// SearchFree den Handler-Free als Normalpfad-Free zurueck und der Fund
+// verschwindet - obwohl m auf dem Erfolgspfad wirklich leckt. Der
+// Fehler waere still: er nimmt nur Funde WEG.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var'#13#10+
+  '  a, m: TStringList;'#13#10+
+  'begin'#13#10+
+  '  a := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    a.Add(''x'');'#13#10+
+  '  finally'#13#10+
+  '    a.Free;'#13#10+
+  '  end;'#13#10+
+  '  m := TStringList.Create;'#13#10+
+  '  with m do'#13#10+
+  '  begin'#13#10+
+  '    try'#13#10+
+  '      Add(''x'');'#13#10+
+  '    except'#13#10+
+  '      m.Free;'#13#10+
+  '      Exit;'#13#10+
+  '    end;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+    'Free nur im except-Handler eines with-Blocks entlastet nicht');
   finally F.Free; end;
 end;
 

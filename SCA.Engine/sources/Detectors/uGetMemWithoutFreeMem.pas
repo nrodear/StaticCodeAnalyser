@@ -1,4 +1,4 @@
-unit uGetMemWithoutFreeMem;
+﻿unit uGetMemWithoutFreeMem;
 
 // Detektor: GetMem / AllocMem / ReallocMem ohne paired FreeMem im
 // gleichen Routinen-Body.
@@ -89,6 +89,7 @@ var
   F        : TLeakFinding;
   Detail   : string;
   TryPos   : Integer;
+  HandlerPos : Integer;
   FreePos  : Integer;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
@@ -184,6 +185,43 @@ begin
       if FreePos = 0 then Continue;
       // try kommt VOR FreeMem -> Pattern OK
       if (TryPos > 0) and (TryPos < FreePos) then Continue;
+
+      // Die Allokation kann auch INNERHALB eines schon offenen try
+      // stehen - dann liegt dessen "try" VOR der Alloc-Position und der
+      // Vorwaerts-Scan oben sieht es nie. Beleg aus der AQL-Stichprobe
+      // vom 02.09.: 11 der 20 Stichprobenfunde waren solche Faelle, alle
+      // mit demselben Defekt.
+      //
+      // Statt rueckwaerts zu suchen (was "end" gegen try/begin/case/
+      // record aufrechnen muesste) fragt der Test die Wirkung ab: steht
+      // ein "finally" oder "except" VOR dem FreeMem, ist das FreeMem
+      // Teil eines Handlers - und einen Handler ohne davorliegendes try
+      // gibt es in gueltigem Pascal nicht. Deckt beide gemessenen
+      // Idiome ab: "try .. GetMem .. finally FreeMem end" und
+      // "try .. GetMem .. except FreeMem; raise end".
+      //
+      // Rein monoton: der Test kann nur Funde ENTFERNEN. Ein echter
+      // Leak ohne jeden Schutz hat weder try noch Handler vor dem
+      // FreeMem und bleibt stehen.
+      HandlerPos := TDetectorUtils.FindWholeWordLower('finally', Snippet);
+      var ExceptPos := TDetectorUtils.FindWholeWordLower('except', Snippet);
+      if (ExceptPos > 0) and ((HandlerPos = 0) or (ExceptPos < HandlerPos)) then
+        HandlerPos := ExceptPos;
+      // ABER: der Handler muss zu einem NOCH OFFENEN try gehoeren.
+      // Liegt zwischen ihm und dem FreeMem ein "end", ist der
+      // geschuetzte Bereich schon zu und das FreeMem steht draussen:
+      //
+      //   try GetMem(p) .. finally LeaveCS(cs); end; FreeMem(p);
+      //
+      // Eine Ausnahme in der try-Region laeuft durch das finally hindurch
+      // nach aussen, FreeMem wird nie erreicht - der Fund ist ECHT.
+      // (Review 02.09.: ohne diese Bedingung war der Test ein
+      // Fehlschluss von "es stand ein Handler davor" auf "das FreeMem
+      // gehoert dazu" und entfernte genau solche Funde.)
+      if (HandlerPos > 0) and (HandlerPos < FreePos)
+         and (TDetectorUtils.FindWholeWordLower('end',
+                Copy(Snippet, HandlerPos, FreePos - HandlerPos)) = 0) then
+        Continue;
 
       LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
