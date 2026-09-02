@@ -858,11 +858,9 @@ var
   // RhsOrig ist die Original-Case-RHS (A.TypeRef) - die CamelCase-Grenze
   // laesst sich nur im Original erkennen ('NewsFeed' != 'NewFeed').
   function OwningReturnCall(const RhsOrig: string): Boolean;
-  const
-    ROOTS : array[0..4] of string = ('create', 'new', 'clone', 'make', 'acquire');
   var
-    pp, dp, rl, sp : Integer;
-    Head, Callee, CalleeLow, root : string;
+    pp, dp : Integer;
+    Head, Callee, CalleeLow : string;
   begin
     Result := False;
     pp := Pos('(', RhsOrig);
@@ -877,24 +875,36 @@ var
       Callee := Trim(Head);
     CalleeLow := Callee.ToLower;
     if CalleeLow = '' then Exit;
-    // (a) konstruktor-artiger Name: Wurzel exakt, als CamelCase-Prefix
-    //     ('MakeList'/'NewFoo') oder als CamelCase-Suffix ('DoCreate').
-    //     Die Grossbuchstaben-Grenze im Original schuetzt vor Substring-
-    //     Zufaellen ('NewsFeed', 'Remake') die keine echten Konstruktoren sind.
-    for root in ROOTS do
-    begin
-      rl := Length(root);
-      if CalleeLow = root then Exit(True);
-      if (Length(CalleeLow) > rl) and StartsStr(root, CalleeLow) and
-         CharInSet(Callee[rl + 1], ['A'..'Z', '0'..'9']) then
-        Exit(True);
-      if (Length(CalleeLow) > rl) and EndsStr(root, CalleeLow) then
-      begin
-        sp := Length(Callee) - rl + 1;
-        if (sp >= 1) and CharInSet(Callee[sp], ['A'..'Z']) then
-          Exit(True);
-      end;
-    end;
+    // (a) KONSTRUKTOR-ARTIGER NAME - GESTRICHEN am 02.09.
+    //
+    // Bis dahin galt: heisst der Callee 'Create*'/'New*'/'Clone*'/
+    // 'Make*'/'Acquire*', uebergibt er Ownership. Die Annahme ist am
+    // Korpus WIDERLEGT. Eigene Stichprobe je Variante (n=20, ISO 2859-1,
+    // Ac=3): 19 Fehlalarme, und die Aufschluesselung nach Ausloeser ist
+    // eindeutig -
+    //
+    //     Namensheuristik        15 Funde,  0 Treffer
+    //     IsLocalFactory (unten)  5 Funde,  1 Treffer
+    //
+    // Am ganzen Korpus nachgezaehlt trugen 49 der 64
+    // return-value-not-freed-Funde eine dieser Wurzeln (create 34,
+    // clone 9, new 5, make 1). Die Heuristik erzeugte drei Viertel aller
+    // Funde dieser Variante und in der Stichprobe keinen einzigen
+    // richtigen.
+    //
+    // Der Grund ist strukturell: der Name beweist, dass der Callee etwas
+    // ERZEUGT - nicht, dass der Aufrufer es BESITZT. Die Bibliotheken
+    // benutzen durchweg Delphis Standardidiome, bei denen jemand anders
+    // besitzt: Collection-Add (der Callee haengt sein Result selbst ein),
+    // Component-Owner ('Create(Application)'), Parent-Zuweisung,
+    // Interface-Refcount ('Supports(..)'), Pool-Handles mit eigener
+    // Release-API.
+    //
+    // Was bleibt, ist (b): die BEWIESENE lokale Factory. Dort steht im
+    // Rumpf ein 'Result := X.Create' - das ist ein Beleg, kein Indiz.
+    // Auch der Pfad ist mit 1 von 5 noch zu schlecht; er ist aber ueber
+    // die gemessenen Muster gezielt reparierbar (Callee-Selbst-
+    // registrierung, Component-Ownership), die Namensheuristik nicht.
     // (b) bewiesene lokale Factory DERSELBEN Klasse (Body: Result := X.Create).
     //     Erhaelt die TP-Erkennung fuer named Factories die MIT Klammern
     //     aufgerufen werden ('list := BuildList()' mit Result := TFoo.Create).
