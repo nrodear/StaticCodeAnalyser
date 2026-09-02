@@ -301,7 +301,7 @@ Checks from the original build-out that predate the Sonar-slot tables above; mos
 | SCA013 | **LongParamList** | Method has more parameters than configured maximum (default 7) | Hint | Code Smell | ✅ | `uLongParamList` |
 | SCA015 | **DuplicateString** | Same string literal appears N+ times - extract to constant | Hint | Code Duplication | ✅ | `uDuplicateString` |
 | SCA016 | **HardcodedPath** | Hardcoded C:\ / UNC / Linux path in source | Warning | Security Hotspot | ✅ | `uHardcodedPath` |
-| SCA017 | **DebugOutput** | Debug output statement found in production unit | Warning | Code Smell | ✅ | `uDebugOutput` |
+| SCA017 | **DebugOutput** | Unqualified WriteLn/Write, ShowMessage(Pos) or OutputDebugString call in a non-test unit | Warning | Code Smell | ✅ | `uDebugOutput` |
 | SCA023 | **CustomRule** | Pattern matched by a rule loaded from analyser-rules.yml | Warning | Code Smell | ✅ | `uCustomRuleDetector` |
 | SCA044 | **ConcatToFormat** | Multi-segment string concatenation - extract to a Format() call | Warning | Code Smell | ✅ | `uConcatToFormat` |
 | SCA045 | **WithStatement** | with statement - scope-shadowing trap the compiler does not warn about | Warning | Code Smell | ✅ | `uWithStatement` |
