@@ -2364,6 +2364,81 @@ begin
   end;
 end;
 
+// Gibt der Rumpf eines "with varName do" die Variable frei?
+//
+// Der Parser legt with als nkCall(withExpr) ab und haengt den Body-Block
+// als SUBTREE darunter (uParser2 tkKwWith-Zweig; "begin..end" erzeugt
+// einen nkBlock-Zwischenknoten). Ein bare Free/Destroy/DisposeOf in
+// diesem Subtree meint das with-Objekt.
+//
+// Herausgezogen am 03.09. (M5a). Es ist der zweite und letzte grosse
+// Block aus SearchFree; er blieb beim ersten Durchgang bewusst liegen,
+// weil er zwei parallele Stacks fuehrt und der A2-Fix an genau dieser
+// Kontextfuehrung haengt. Reine Extraktion - Reihenfolge, Bedingungen
+// und Stackfuehrung sind unveraendert.
+function WithSubtreeGibtFrei(ANode: TAstNode; AInFinally: Boolean;
+  AExceptModus: TExceptModus; out AImFinally: Boolean): Boolean;
+var
+  Child : TAstNode;
+begin
+  Result     := False;
+  AImFinally := False;
+  var WStack := TList<TAstNode>.Create;
+  // A2 (SCA009-Triage 2026-07-24): finally-Kontext JE STACK-EINTRAG
+  // mitfuehren. Vorher galt fuer bare Free im with-Subtree pauschal der
+  // Kontext des WITH-Knotens (auf Methodenebene False) - beim Idiom
+  // 'with L do try .. finally Free end' kam FoundInFinally=False zurueck
+  // und uMissingFinally meldete trotz korrektem Schutz (FP). Alle
+  // Konsumenten nutzen FoundInFinally nur zur Unterdrueckung -> monoton.
+  var WFins := TList<Boolean>.Create;
+  try
+    for Child in ANode.Children do
+    begin
+      // emOhneExcept gilt auch im with-Walk, sonst zaehlte ein bare Free
+      // aus 'with v do try .. except Free; end' als Normalpfad-Free und
+      // der Parameter wuerde luegen (01.09.).
+      if (AExceptModus = emOhneExcept) and (Child.Kind = nkExceptBlock) then Continue;
+      WStack.Add(Child);
+      WFins.Add(AInFinally or (Child.Kind = nkFinallyBlock));
+    end;
+    while WStack.Count > 0 do
+    begin
+      var W    := WStack[WStack.Count - 1];
+      var WFin := WFins[WFins.Count - 1];
+      WStack.Delete(WStack.Count - 1);
+      WFins.Delete(WFins.Count - 1);
+      if W.Kind = nkCall then
+      begin
+        var WLow := W.Name.ToLower;
+        if (WLow = 'free') or (WLow = 'free()')
+           or (WLow = 'destroy') or (WLow = 'disposeof') then
+        begin
+          AImFinally := WFin;
+          Exit(True);   // finally gibt WStack/WFins frei
+        end;
+        // NESTED with ('with bm do with other do Free') NICHT betreten:
+        // dessen bare Free gehoert zum INNEREN Objekt, nicht zu varName
+        // (Review-Fang 2026-07-18: sonst maskierter Leak von varName).
+        // Ein inneres with sieht aus wie dieses: klammerloser nicht-leerer
+        // nkCall MIT Children. nkBlock-Zwischenknoten sind kein nkCall
+        // und werden normal betreten.
+        if (W.Children.Count > 0) and (W.Name <> '')
+           and (Pos('(', W.Name) = 0) then
+          Continue;
+      end;
+      for var WC in W.Children do
+      begin
+        if (AExceptModus = emOhneExcept) and (WC.Kind = nkExceptBlock) then Continue;
+        WStack.Add(WC);
+        WFins.Add(WFin or (WC.Kind = nkFinallyBlock));
+      end;
+    end;
+  finally
+    WStack.Free;
+    WFins.Free;
+  end;
+end;
+
 class function TLeakDetector2.SearchFree(Node: TAstNode;
   const VarNameLow: string; InFinally: Boolean;
   out FoundInFinally: Boolean; AExceptModus: TExceptModus): Boolean;
@@ -2404,59 +2479,11 @@ begin
     // (Gross-Triage: DropTarget 'with bm do ... free' -> FP.)
     if (NameLow = VarNameLow) and (Node.Children.Count > 0) then
     begin
-      var WStack := TList<TAstNode>.Create;
-      // A2 (SCA009-Triage 2026-07-24): finally-Kontext JE STACK-EINTRAG
-      // mitfuehren. Vorher galt fuer bare Free im with-Subtree pauschal der
-      // Kontext des WITH-Knotens (auf Methodenebene False) - beim Idiom
-      // 'with L do try .. finally Free end' kam FoundInFinally=False zurueck
-      // und uMissingFinally meldete trotz korrektem Schutz (FP). Alle
-      // Konsumenten nutzen FoundInFinally nur zur Unterdrueckung -> monoton.
-      var WFins := TList<Boolean>.Create;
-      try
-        for Child in Node.Children do
-        begin
-          // emOhneExcept gilt auch im with-Walk, sonst zaehlte ein bare Free
-          // aus 'with v do try .. except Free; end' als Normalpfad-Free und
-          // der Parameter wuerde luegen (01.09.).
-          if (AExceptModus = emOhneExcept) and (Child.Kind = nkExceptBlock) then Continue;
-          WStack.Add(Child);
-          WFins.Add(InFinally or (Child.Kind = nkFinallyBlock));
-        end;
-        while WStack.Count > 0 do
-        begin
-          var W    := WStack[WStack.Count - 1];
-          var WFin := WFins[WFins.Count - 1];
-          WStack.Delete(WStack.Count - 1);
-          WFins.Delete(WFins.Count - 1);
-          if W.Kind = nkCall then
-          begin
-            var WLow := W.Name.ToLower;
-            if (WLow = 'free') or (WLow = 'free()')
-               or (WLow = 'destroy') or (WLow = 'disposeof') then
-            begin
-              Result := True; FoundInFinally := WFin;
-              Exit;   // finally gibt WStack/WFins frei
-            end;
-            // NESTED with ('with bm do with other do Free') NICHT betreten:
-            // dessen bare Free gehoert zum INNEREN Objekt, nicht zu varName
-            // (Review-Fang 2026-07-18: sonst maskierter Leak von varName).
-            // Ein inneres with sieht aus wie dieses: klammerloser nicht-leerer
-            // nkCall MIT Children. nkBlock-Zwischenknoten sind kein nkCall
-            // und werden normal betreten.
-            if (W.Children.Count > 0) and (W.Name <> '')
-               and (Pos('(', W.Name) = 0) then
-              Continue;
-          end;
-          for var WC in W.Children do
-          begin
-            if (AExceptModus = emOhneExcept) and (WC.Kind = nkExceptBlock) then Continue;
-            WStack.Add(WC);
-            WFins.Add(WFin or (WC.Kind = nkFinallyBlock));
-          end;
-        end;
-      finally
-        WStack.Free;
-        WFins.Free;
+      if WithSubtreeGibtFrei(Node, InFinally, AExceptModus, ChildFinFlag) then
+      begin
+        Result := True;
+        FoundInFinally := ChildFinFlag;
+        Exit;
       end;
     end;
 
