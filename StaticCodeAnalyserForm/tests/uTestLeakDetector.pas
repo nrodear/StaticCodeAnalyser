@@ -154,6 +154,10 @@ type
     [Test] procedure Leak_ExceptFreeExit_NormalFreeSameTry_NoWarning;
     [Test] procedure Leak_ExceptFreeExit_AllocBeforeTry_StillWarning;
     [Test] procedure Leak_ExceptFreeExit_NoNormalFree_StillWarning;
+    // Derselbe Waechter fuer den with-Walk (M2b, 02.09.): der
+    // emOhneExcept-Filter sitzt an DREI Stellen, der Test darueber
+    // deckt nur die Haupt-Rekursion ab.
+    [Test] procedure Leak_ExceptFreeExit_InsideWithBlock_StillWarning;
     [Test] procedure Leak_NilAssignmentInsteadOfFree_ReportsError;
     [Test] procedure Leak_FreeBeforeCreate_KnownLimitation_NoFinding;
     [Test] procedure Leak_FreeOnFieldNotLocalVar_LocalLeaks;
@@ -2621,6 +2625,49 @@ begin
       TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'Allokation haengt NICHT am try - das Fenster davor bleibt ungeschuetzt, ' +
       'der Handler-Free deckt es nicht ab');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_ExceptFreeExit_InsideWithBlock_StillWarning;
+// WAECHTER fuer den with-Walk (M2b, 02.09.). Dieselbe Lage wie im Test
+// darunter - der einzige Free von m steht im except-Handler, der
+// Erfolgspfad gibt nichts frei -, aber der Handler liegt in einem
+// with-Block.
+//
+// SearchFree filtert except-Teilbaeume an DREI Stellen: der
+// Haupt-Rekursion und zweimal im with-Walk (Befuellen des WStack,
+// Nachschieben der Kinder). Faellt der Filter im with-Walk aus, liest
+// SearchFree den Handler-Free als Normalpfad-Free zurueck und der Fund
+// verschwindet - obwohl m auf dem Erfolgspfad wirklich leckt. Der
+// Fehler waere still: er nimmt nur Funde WEG.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var'#13#10+
+  '  a, m: TStringList;'#13#10+
+  'begin'#13#10+
+  '  a := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    a.Add(''x'');'#13#10+
+  '  finally'#13#10+
+  '    a.Free;'#13#10+
+  '  end;'#13#10+
+  '  m := TStringList.Create;'#13#10+
+  '  with m do'#13#10+
+  '  begin'#13#10+
+  '    try'#13#10+
+  '      Add(''x'');'#13#10+
+  '    except'#13#10+
+  '      m.Free;'#13#10+
+  '      Exit;'#13#10+
+  '    end;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+    'Free nur im except-Handler eines with-Blocks entlastet nicht');
   finally F.Free; end;
 end;
 
