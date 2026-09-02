@@ -435,11 +435,16 @@ begin
   AWert  := -1;
   s := TrimLeft(ARest);
   // Cast-Kopf abstreifen: ein Bezeichner, dann eine offene Klammer.
-  i := 1;
-  while (i <= Length(s)) and TDetectorUtils.IsIdentChar(s[i]) do Inc(i);
+  // Der Test auf den ERSTEN Buchstaben ist noetig, weil IsIdentChar
+  // auch Ziffern einschliesst - ohne ihn lief die Schleife bei '1000'
+  // ueber die Zahl selbst, suchte dahinter eine '(' und stieg aus.
+  // (Gefunden im Bau vom 02.09.: der Waechtertest fuer '>= 1000' war
+  // rot, das Gate griff nie.)
   Schwanz := '';
-  if i > 1 then
+  if (Length(s) > 0) and CharInSet(s[1], ['a'..'z', '_']) then
   begin
+    i := 1;
+    while (i <= Length(s)) and TDetectorUtils.IsIdentChar(s[i]) do Inc(i);
     Zahl := TrimLeft(Copy(s, i, Length(s)));   // Zahl hier nur Zwischenspeicher
     if Zahl.StartsWith('(') then
     begin

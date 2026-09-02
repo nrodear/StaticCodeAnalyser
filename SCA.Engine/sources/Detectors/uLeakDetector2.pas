@@ -681,12 +681,25 @@ var
     TargetLow, LhsLow: string;
   begin
     Result := False;
-    if (ThisClassLow = '') or (CalleeLow = '') then Exit;
-    TargetLow := ThisClassLow + '.' + CalleeLow;
+    if CalleeLow = '' then Exit;
+    // Zwei zulaessige Formen: eine Methode DIESER Klasse
+    // ('TFoo.MakeList') oder eine FREIE Funktion der Unit
+    // ('MakeList'). Die zweite fehlte bis zum 02.09. - ThisClassLow
+    // kommt aus der aufrufenden Methode und ist bei einer freien
+    // Prozedur leer, die Funktion stieg dann sofort aus. Solange die
+    // Namensheuristik daneben stand, fiel das nicht auf: sie fing
+    // jedes 'MakeXxx' ohnehin ab. Nach ihrer Streichung waren zwei
+    // Bestandstests rot, beide mit genau dieser Form - und beide zu
+    // Recht, denn eine unit-lokale Funktion mit 'Result := X.Create'
+    // uebergibt Ownership.
+    TargetLow := CalleeLow;
     Methods := UnitNode.FindAllRef(nkMethod);
     for Mth in Methods do
     begin
-      if Mth.Name.ToLower <> TargetLow then Continue;
+      var MthLow := Mth.Name.ToLower;
+      if (MthLow <> TargetLow)
+         and ((ThisClassLow = '') or (MthLow <> ThisClassLow + '.' + TargetLow)) then
+        Continue;
       Assigns := Mth.FindAllRef(nkAssign);
       for A in Assigns do
       begin
