@@ -28,6 +28,9 @@ type
     [Test] procedure AllocInsideOpenTry_FreeInFinally_NoFinding;
     [Test] procedure AllocInsideOpenTry_FreeInExceptWithRaise_NoFinding;
     [Test] procedure AllocNoProtectionAtAll_StillReported;
+    // Review 02.09.: ein Handler entlastet nur, solange sein try noch
+    // OFFEN ist.
+    [Test] procedure AllocInClosedTry_FreeMemOutside_StillReported;
   end;
 
 implementation
@@ -224,6 +227,37 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
     'fBuf := AllocMem -> Feld-Lifetime (RAII), kein lokaler Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.AllocInClosedTry_FreeMemOutside_StillReported;
+// WAECHTER (Review 02.09.). Das try wird VOR dem FreeMem geschlossen -
+// das finally raeumt nur die Critical Section auf, nicht den Puffer.
+// Eine Ausnahme in DoWork laeuft durch das finally hindurch nach aussen,
+// FreeMem hinter dem end wird nie erreicht: der Fund ist ECHT.
+//
+// Der erste Wurf des Handler-Gates schluckte ihn, weil er von "vor dem
+// FreeMem stand ein finally" auf "das FreeMem gehoert dazu" schloss.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure X;'#13#10 +
+  'var p: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  EnterCriticalSection(FCS);'#13#10 +
+  '  try'#13#10 +
+  '    GetMem(p, 128);'#13#10 +
+  '    DoWork(p);'#13#10 +
+  '  finally'#13#10 +
+  '    LeaveCriticalSection(FCS);'#13#10 +
+  '  end;'#13#10 +
+  '  FreeMem(p);'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+    'geschlossenes try entlastet das FreeMem dahinter nicht');
   finally F.Free; end;
 end;
 

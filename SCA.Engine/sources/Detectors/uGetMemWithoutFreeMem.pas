@@ -207,7 +207,21 @@ begin
       var ExceptPos := TDetectorUtils.FindWholeWordLower('except', Snippet);
       if (ExceptPos > 0) and ((HandlerPos = 0) or (ExceptPos < HandlerPos)) then
         HandlerPos := ExceptPos;
-      if (HandlerPos > 0) and (HandlerPos < FreePos) then Continue;
+      // ABER: der Handler muss zu einem NOCH OFFENEN try gehoeren.
+      // Liegt zwischen ihm und dem FreeMem ein "end", ist der
+      // geschuetzte Bereich schon zu und das FreeMem steht draussen:
+      //
+      //   try GetMem(p) .. finally LeaveCS(cs); end; FreeMem(p);
+      //
+      // Eine Ausnahme in der try-Region laeuft durch das finally hindurch
+      // nach aussen, FreeMem wird nie erreicht - der Fund ist ECHT.
+      // (Review 02.09.: ohne diese Bedingung war der Test ein
+      // Fehlschluss von "es stand ein Handler davor" auf "das FreeMem
+      // gehoert dazu" und entfernte genau solche Funde.)
+      if (HandlerPos > 0) and (HandlerPos < FreePos)
+         and (TDetectorUtils.FindWholeWordLower('end',
+                Copy(Snippet, HandlerPos, FreePos - HandlerPos)) = 0) then
+        Continue;
 
       LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;

@@ -69,6 +69,9 @@ type
     [Test] procedure Div_NonZeroSetGuard_NoFinding;
     [Test] procedure Div_LowerBoundIncludingZero_StillReported;
     [Test] procedure Div_SetWithIdentifiers_StillReported;
+    // Review 02.09.: die Schranke muss der GANZE Ausdruck sein.
+    [Test] procedure Div_LowerBoundWithArithmetic_StillReported;
+    [Test] procedure Div_LowerBoundInCast_NoFinding;
     // G5 (#6 CFG-Schlussstueck 2026-07-24): Else-Kanten-Dominanz
     [Test] procedure Div_ElseBranchOfZeroCheck_NoFinding;
     [Test] procedure Div_AfterMergeOfZeroCheck_StillReports;
@@ -739,6 +742,50 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
     'Menge mit Bezeichnern ist nicht entscheidbar');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_LowerBoundWithArithmetic_StillReported;
+// WAECHTER (Review 02.09.): das Literal ist nicht der ganze Ausdruck.
+// "N >= 2 * Scale" ist bei Scale = 0 effektiv "N >= 0" - die Null kommt
+// durch und die Division stuerzt ab. Der erste Wurf des Gates las nur
+// den fuehrenden Ziffernlauf und haette den Fund geschluckt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(N, Scale: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if N >= 2 * Scale then'#13#10 +
+  '    Result := 100 div N'#13#10 +
+  '  else'#13#10 +
+  '    Result := 0;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'Literal mit Arithmetik dahinter ist keine Schranke');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_LowerBoundInCast_NoFinding;
+// Das MOTIVBEISPIEL des Gates, und es griff im ersten Wurf nicht:
+// der Parser normalisiert die Bedingung token-weise mit Leerzeichen,
+// aus "Cardinal(1000)" wird "cardinal ( 1000 )". Die Klammer stand
+// damit hinter Position 9 und fiel aus dem Cast-Fenster.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function A(N, Scale: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if N >= Cardinal(1000) then'#13#10 +
+  '    Result := 100 div N'#13#10 +
+  '  else'#13#10 +
+  '    Result := 0;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    'Schranke in einem Cast schliesst die Null aus');
   finally F.Free; end;
 end;
 

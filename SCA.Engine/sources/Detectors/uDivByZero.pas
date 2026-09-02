@@ -410,6 +410,66 @@ begin
   end;
 end;
 
+// Liest aus ARest eine SCHRANKE, die der ganze Ausdruck ist - und nur
+// dann. Erlaubt sind genau zwei Formen, jeweils gefolgt von Ende, ')',
+// 'and' oder 'or':
+//     <Literal>                  z.B. "1000 then .."
+//     <Bezeichner> ( <Literal> ) z.B. "cardinal ( 1000 )"
+//
+// WARUM SO STRENG (Review 02.09., zwei Befunde in einem):
+//  * Der erste Wurf las nur den fuehrenden Ziffernlauf und ignorierte
+//    den Rest. "x >= 2 * Scale" galt damit als Guard - bei Scale = 0
+//    lautet die Bedingung aber "x >= 0" und laesst die Null durch. Das
+//    verschluckt echte EZeroDivide-Funde. Die Schwesterfunktion
+//    IsClampedNonZero verlangt aus demselben Grund, dass der GESAMTE
+//    RHS die erwartete Form hat.
+//  * Der Parser normalisiert die Bedingung token-weise mit Leerzeichen
+//    ("cardinal ( 1000 )"). Das Motivbeispiel des Gates griff deshalb
+//    im ersten Wurf gar nicht - die Klammer stand hinter Position 9.
+function LiteralSchranke(const ARest: string; out AWert: Integer): Boolean;
+var
+  s, Zahl, Schwanz : string;
+  i                : Integer;
+begin
+  Result := False;
+  AWert  := -1;
+  s := TrimLeft(ARest);
+  // Cast-Kopf abstreifen: ein Bezeichner, dann eine offene Klammer.
+  i := 1;
+  while (i <= Length(s)) and TDetectorUtils.IsIdentChar(s[i]) do Inc(i);
+  Schwanz := '';
+  if i > 1 then
+  begin
+    Zahl := TrimLeft(Copy(s, i, Length(s)));   // Zahl hier nur Zwischenspeicher
+    if Zahl.StartsWith('(') then
+    begin
+      s := TrimLeft(Copy(Zahl, 2, Length(Zahl)));
+      Schwanz := ')';
+    end
+    else
+      Exit;   // Bezeichner ohne Klammer - eine benannte Konstante,
+              // von hier aus nicht aufloesbar
+  end;
+  // Literal lesen
+  i := 1;
+  while (i <= Length(s)) and CharInSet(s[i], ['0'..'9']) do Inc(i);
+  if i = 1 then Exit;
+  Zahl := Copy(s, 1, i - 1);
+  s := TrimLeft(Copy(s, i, Length(s)));
+  // Cast-Klammer schliessen, falls einer geoeffnet wurde
+  if Schwanz <> '' then
+  begin
+    if (s = '') or (s[1] <> ')') then Exit;
+    s := TrimLeft(Copy(s, 2, Length(s)));
+  end;
+  // Was danach kommt, darf den Wert nicht mehr veraendern.
+  if not ((s = '') or s.StartsWith(')')
+          or s.StartsWith('and ') or (s = 'and')
+          or s.StartsWith('or ') or (s = 'or')) then Exit;
+  AWert  := StrToIntDef(Zahl, -1);
+  Result := AWert >= 0;
+end;
+
 class function TDivByZeroDetector.HasLowerBoundGuard(
   const ACondLow, AVarLow: string): Boolean;
 // "x >= K" schuetzt fuer K >= 1, "x > K" fuer K >= 0. Der Katalog oben
@@ -420,8 +480,8 @@ class function TDivByZeroDetector.HasLowerBoundGuard(
 // Cast. Eine benannte Konstante ist von hier aus nicht aufloesbar und
 // gilt als ungeschuetzt - die sichere Richtung.
 var
-  p, i, Wert : Integer;
-  Rest       : string;
+  p, Wert    : Integer;
+  Rest        : string;
   MinWert    : Integer;
 begin
   Result := False;
@@ -443,15 +503,7 @@ begin
     end
     else
       Continue;
-    // Cast abstreifen: cardinal(1000) / integer(5) / longint(2)
-    i := Pos('(', Rest);
-    if (i > 0) and (i <= 9) then
-      Rest := TrimLeft(Copy(Rest, i + 1, 46));
-    i := 1;
-    while (i <= Length(Rest)) and CharInSet(Rest[i], ['0'..'9']) do Inc(i);
-    if i = 1 then Continue;   // kein Literal -> nicht entscheidbar
-    Wert := StrToIntDef(Copy(Rest, 1, i - 1), -1);
-    if (Wert >= 0) and (Wert >= MinWert) then Exit(True);
+    if LiteralSchranke(Rest, Wert) and (Wert >= MinWert) then Exit(True);
   until False;
 end;
 
