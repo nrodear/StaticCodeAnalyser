@@ -416,12 +416,11 @@ begin
   end;
 end;
 
-const
-  // Der Include-Name steht im SRC und im Dateinamen - eine Konstante,
-  // damit beide nicht auseinanderlaufen.
-  CIncName = 'sca_test_implinclude.inc';
-
-  CSrcMitInclude =
+// Die Fixture zum jeweiligen Include-Namen. Der Name MUSS je Test
+// verschieden sein - siehe ZaehleMitInclude.
+function SrcMitInclude(const AIncName: string): string;
+begin
+  Result :=
     'unit t;'#13#10 +
     'interface'#13#10 +
     'implementation'#13#10 +
@@ -429,8 +428,9 @@ const
     'begin'#13#10 +
     '  Beep;'#13#10 +
     'end;'#13#10 +
-    '{$I sca_test_implinclude.inc}'#13#10 +
+    '{$I ' + AIncName + '}'#13#10 +
     'end.';
+end;
 
 function ZaehleFunde(const ASrc: string): Integer;
 var
@@ -445,16 +445,22 @@ begin
 end;
 
 // Legt das Include an, scannt die Fixture, raeumt beides wieder ab und
-// liefert die Zahl der SCA164-Funde. Ein Helfer statt zweier
-// geschachtelter try-Bloecke je Test - beide Tests unterscheiden sich
-// nur im Include-Inhalt.
-function ZaehleMitInclude(const AIncInhalt: string): Integer;
+// liefert die Zahl der SCA164-Funde.
+//
+// JEDER TEST BRAUCHT EINEN EIGENEN INCLUDE-NAMEN. Der Detektor liest die
+// Datei ueber AcquireLines, und das fragt den Datei-Textcache OHNE
+// erneuten Stat ab (AForceStat = False). Zwei Tests, die
+// unterschiedlichen Inhalt unter denselben Namen schreiben, bekommen
+// deshalb beide den Inhalt des ERSTEN - gemessen am 03.09., der zweite
+// Test war dadurch rot. In Produktion aendert sich eine Include-Datei
+// waehrend eines Scans nicht; im Test schon.
+function ZaehleMitInclude(const AIncName, AIncInhalt: string): Integer;
 var
   IncPath : string;
 begin
-  IncPath := SchreibeInclude(CIncName, AIncInhalt);
+  IncPath := SchreibeInclude(AIncName, AIncInhalt);
   try
-    Result := ZaehleFunde(CSrcMitInclude);
+    Result := ZaehleFunde(SrcMitInclude(AIncName));
   finally
     if TFile.Exists(IncPath) then
     begin
@@ -475,6 +481,7 @@ procedure TTestUnusedRoutine.Unused_CallerInImplInclude_NoFinding;
 // Ohne den Fix ROT mit 1 Fund.
 begin
   Assert.AreEqual<Integer>(0, ZaehleMitInclude(
+    'sca_test_inc_mitaufrufer.inc',
     'procedure RuftAuf;'#13#10 +
     'begin'#13#10 +
     '  Helferlein;'#13#10 +
@@ -490,7 +497,8 @@ procedure TTestUnusedRoutine.Unused_ImplIncludeWithoutCaller_StillReported;
 // die nie einen Aufrufer enthalten. Deshalb wird der INHALT gelesen und
 // nur bei genanntem Namen unterdrueckt.
 begin
-  Assert.AreEqual<Integer>(1, ZaehleMitInclude('const CIrgendwas = 1;'),
+  Assert.AreEqual<Integer>(1, ZaehleMitInclude(
+    'sca_test_inc_ohneaufrufer.inc', 'const CIrgendwas = 1;'),
     'ein Include ohne den Namen entlastet die Routine nicht');
 end;
 
