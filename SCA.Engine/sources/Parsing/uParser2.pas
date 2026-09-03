@@ -20,7 +20,15 @@ type
     function ParseSource(const Source: string): TAstNode;
   private
     FLex      : TLexer;
-    FNextCount: Integer; // Watchdog: max. Token-Aufrufe pro Datei
+    // Zahl der KONSUMIERTEN Tokens. Zwei Aufgaben:
+    //   * Watchdog gegen pathologische Dateien (Grenze in Next)
+    //   * Fortschritts-Nachweis fuer GuardAdvance
+    // Beide Konsumpunkte zaehlen mit - Next UND Eat. Bis zum
+    // 03.09. hiess das Feld FConsumeCount und zaehlte nur Next; Eat
+    // geht ueber FLex.TryConsume daran vorbei. Eine Iteration, die
+    // NUR ueber Eat konsumierte, sah damit wie Stillstand aus, und
+    // GuardAdvance frass einen Token zu viel. Siehe dort.
+    FConsumeCount: Integer;
 
     // Kind des ZULETZT konsumierten Tokens (tkUnknown = noch keines).
     // Einziger Konsument ist ParseIfStmt: ein ';' unmittelbar vor einem
@@ -42,8 +50,10 @@ type
     // +---------------------------------------------------------------+
     //
     // Warum Eat eigens: Eat ruft FLex.TryConsume DIREKT und geht damit an
-    // Next vorbei (zaehlt deshalb auch FNextCount nicht mit). Genau
-    // Eat(tkSemicolon) ist der Fall, auf den ParseIfStmt angewiesen ist.
+    // Next vorbei. Genau Eat(tkSemicolon) ist der Fall, auf den
+    // ParseIfStmt angewiesen ist. Eat zaehlt seit dem 03.09. auch
+    // FConsumeCount hoch - vorher tat es das nicht, und GuardAdvance
+    // hielt eine reine Eat-Iteration fuer Stillstand.
     // Alle uebrigen FLex.*-Aufrufe (Peek/AtEnd/AddDefine/...) konsumieren
     // nichts; SkipTo/SkipToSemicolon/SkipBalanced/GuardAdvance laufen ueber
     // Next und sind damit abgedeckt.
@@ -307,7 +317,7 @@ begin
     FLex.EnableConditionalSkipping;
   end;
   try
-    FNextCount := 0; // Watchdog pro Datei zuruecksetzen
+    FConsumeCount := 0; // Watchdog pro Datei zuruecksetzen
     // Ein Parser-Objekt parst mehrere Dateien nacheinander: weder das letzte
     // Token noch ein offener Rahmen der VORIGEN Datei darf die erste
     // if-Anweisung der naechsten beeinflussen. FElseTakerOpen stellen die
@@ -371,8 +381,8 @@ const
   // genug Spielraum fuer SkipTo/SkipBalanced-Mehrlauf.
   MAX_NEXT_CALLS = 200 * 1000;
 begin
-  Inc(FNextCount);
-  if FNextCount > MAX_NEXT_CALLS then
+  Inc(FConsumeCount);
+  if FConsumeCount > MAX_NEXT_CALLS then
     raise Exception.CreateFmt(
       'Parser-Watchdog: ueber %d Token-Aufrufe - Datei wahrscheinlich ' +
       'pathologisch, Analyse abgebrochen.', [MAX_NEXT_CALLS]);
@@ -383,8 +393,26 @@ end;
 procedure TParser2.GuardAdvance(StartCount: Integer);
 // Wenn seit StartCount kein Token konsumiert wurde, einen forciert konsumieren.
 // In Outer-Loops einsetzen, deren Sub-Parser theoretisch nicht advancen koennten.
+//
+// MASSGEBLICH IST FConsumeCount, NICHT die Zahl der Next-Aufrufe. Bis zum
+// 03.09. verglich diese Pruefung gegen einen reinen Next-Zaehler, an dem Eat
+// vorbeilief. Folge: eine Iteration, die nur ein LEERES Statement konsumierte
+// (ParseStatement beginnt mit 'while Eat(tkSemicolon) do ;'), galt als
+// Stillstand - und der erzwungene Next frass den Listen-Terminator.
+//
+// Sichtbar an 'except; end': das 'end' des try verschwand, die Routine
+// schloss nie, und die NAECHSTE Routine wurde mit einverleibt. Genau EINE
+// Routine je Vorkommen - danach faengt AtTopLevelRoutineHead den Parser
+// wieder ein, der Parse bricht also NICHT ab.
+//
+// Der Schaden war trotzdem gross, weil jede Analyse an der falschen
+// Routinengrenze haengt: am Referenzkorpus 312 Vorkommen in 169 Dateien,
+// zusammen 875 Funde. Darunter 134x SCA002 (ein 'except;' IST ein leerer
+// Handler, wurde aber nie als solcher gesehen) und Fehlalarme, die nur
+// entstanden, weil Detektoren lokale Variablen in der falschen Routine
+// nachschlugen.
 begin
-  if (FNextCount = StartCount) and not FLex.AtEnd then
+  if (FConsumeCount = StartCount) and not FLex.AtEnd then
     Next;
 end;
 
@@ -537,9 +565,12 @@ begin
   Result := FLex.TryConsume(K, Dummy);
   // Konsumpunkt 2 von 2 - DIE FALLE: TryConsume geht direkt an den Lexer und
   // damit an Next vorbei. Nur bei Erfolg setzen; ein fehlgeschlagenes Eat
-  // konsumiert nichts und darf das Feld deshalb nicht anfassen.
+  // konsumiert nichts und darf die Felder deshalb nicht anfassen.
   if Result then
+  begin
+    Inc(FConsumeCount);  // Fortschritt - GuardAdvance MUSS ihn sehen
     FLastConsumed := K;
+  end;
 end;
 
 procedure TParser2.SkipTo(const Stops: array of TTokenKind);
@@ -677,7 +708,7 @@ var
 begin
   while not FLex.AtEnd do
   begin
-    StartCount := FNextCount;
+    StartCount := FConsumeCount;
     T := Tok;
     case T.Kind of
       tkKwUses                              : ParseUses(Parent);
@@ -708,7 +739,7 @@ begin
   FImplNode := Parent;
   while not FLex.AtEnd do
   begin
-    StartCount := FNextCount;
+    StartCount := FConsumeCount;
     T := Tok;
     case T.Kind of
       tkKwUses                              : ParseUses(Parent);
@@ -832,7 +863,7 @@ begin
 
   while not FLex.AtEnd do
   begin
-    StartCount := FNextCount;
+    StartCount := FConsumeCount;
     T := Tok;
     // tkKwType bewusst NICHT in Exit-Liste: lokale/wiederholte 'type'-Keywords
     // sollen die Section nicht beenden (sonst markiert der Watchdog die Datei
@@ -1392,7 +1423,7 @@ begin
 
   while not FLex.AtEnd do
   begin
-    StartCount := FNextCount;
+    StartCount := FConsumeCount;
     T := Tok;
     case T.Kind of
       tkLBracket:
@@ -1636,7 +1667,7 @@ begin
     try
       while not (Tok.Kind in [tkRParen, tkEof]) do
       begin
-        var ParamStart := FNextCount;
+        var ParamStart := FConsumeCount;
         // Attribute in Parameter-Position - beide Stellungen kommen vor:
         //   procedure P([Weak] A: TObject; const [MVCFromBody] B: TPerson);
         // Deshalb vor UND hinter dem Modifier ueberspringen (Backlog 4e #4).
@@ -1908,7 +1939,7 @@ begin
         while not (Tok.Kind in [tkKwVar, tkKwConst, tkKwBegin, tkKwAsm,
                                  tkKwEnd, tkEof]) do
         begin
-          var SkipStart := FNextCount;
+          var SkipStart := FConsumeCount;
           if (Tok.Kind in [tkKwProcedure, tkKwFunction, tkKwConstructor,
                            tkKwDestructor, tkKwOperator]) and
              (PrevKind = tkSemicolon) then
@@ -1978,7 +2009,7 @@ begin
         // koennen beide no-ops sein (z.B. wenn der nachfolgende Token ein
         // unerwartetes Schluesselwort ist), waehrend die Outer-Bedingung
         // diesen Token nicht als Section-Grenze akzeptiert.
-        var SkipStart := FNextCount;
+        var SkipStart := FConsumeCount;
         T := Tok;
         if T.Kind <> tkIdent then
         begin
@@ -2139,7 +2170,7 @@ begin
   try
     while not FLex.AtEnd do
     begin
-      StartCount := FNextCount;
+      StartCount := FConsumeCount;
       T := Tok;
       // Boundary-Recovery ({$ifdef}-Straddle-Merge, 2026-07-16): ein Top-Level-
       // Routine-Header auf Spalte 1 bedeutet, dass DIESER Block nie geschlossen
@@ -2179,7 +2210,7 @@ var
   ENode      : TAstNode;
   StartCount : Integer;
 begin
-  StartCount := FNextCount;
+  StartCount := FConsumeCount;
   // AKTENNOTIZ (2026-08-28), NACHGEZOGEN AM 02.09.: der Defekt ist
   // behoben - aber NICHT hier, sondern in ParseCaseStmt an der
   // Arm-Schleife, wo das ';' semantisch zum Arm gehoert. Diese
@@ -2403,7 +2434,7 @@ begin
         // Lexer in einem korrupten Zustand stecken bleibt.
         while not (Tok.Kind in [tkKwEnd, tkEof]) do
         begin
-          var SkipStart := FNextCount;
+          var SkipStart := FConsumeCount;
           Next;
           GuardAdvance(SkipStart);
         end;
@@ -2477,7 +2508,7 @@ begin
   // Forward-Progress-Garantie: stagniert die Token-Position und stehen wir
   // nicht an einer legitimen Block-Grenze, einen Token zwangsweise konsumieren.
   // Verhindert Endlos-Loops in den ParseBlock/ParseRepeatStmt-while-Schleifen.
-  if (FNextCount = StartCount) and
+  if (FConsumeCount = StartCount) and
      not (Tok.Kind in [tkKwEnd, tkKwElse, tkKwExcept, tkKwFinally,
                        tkKwUntil, tkEof]) then
     Next;
@@ -2697,7 +2728,7 @@ begin
     while not ((Tok.Kind in [tkKwEnd, tkKwElse, tkKwExcept, tkKwFinally,
                              tkKwUntil, tkEof]) or AtTopLevelRoutineHead) do
     begin
-      ArmStart := FNextCount;
+      ArmStart := FConsumeCount;
       ArmNode := CaseNode.Add(nkCaseArm, '', Tok.Line, Tok.Col);
       SkipTo([tkColon, tkKwEnd, tkKwElse, tkEof]);
       Eat(tkColon);
@@ -2734,7 +2765,7 @@ begin
       while not ((Tok.Kind in [tkKwEnd, tkKwExcept, tkKwFinally,
                                tkKwUntil, tkEof]) or AtTopLevelRoutineHead) do
       begin
-        var ElseStart := FNextCount;
+        var ElseStart := FConsumeCount;
         ParseStatement(ElseArm);
         GuardAdvance(ElseStart);
       end;
@@ -2849,7 +2880,7 @@ begin
                              tkKwExcept, tkKwFinally, tkEof])
                or AtTopLevelRoutineHead) do
     begin
-      BodyStart := FNextCount;
+      BodyStart := FConsumeCount;
       ParseStatement(RepeatNode);
       GuardAdvance(BodyStart);
     end;
@@ -2901,7 +2932,7 @@ begin
                              tkKwEnd, tkKwElse, tkKwUntil, tkEof])
                or AtTopLevelRoutineHead) do
     begin
-      var TryBodyStart := FNextCount;
+      var TryBodyStart := FConsumeCount;
       ParseStatement(TmpBlk);
       GuardAdvance(TryBodyStart);
     end;
@@ -2922,7 +2953,7 @@ begin
                                tkKwUntil, tkEof])
                  or AtTopLevelRoutineHead) do   // Boundary-Recovery unwinden
       begin
-        var ExceptStart := FNextCount;
+        var ExceptStart := FConsumeCount;
         if Tok.Kind = tkKwOn then
         begin
           var OnT    := Next;
@@ -2966,7 +2997,7 @@ begin
         while not ((Tok.Kind in [tkKwEnd, tkKwFinally, tkKwUntil, tkEof])
                    or AtTopLevelRoutineHead) do   // Boundary-Recovery unwinden
         begin
-          var ElseStart := FNextCount;
+          var ElseStart := FConsumeCount;
           ParseStatement(ExNode);
           GuardAdvance(ElseStart);
         end;
@@ -2987,7 +3018,7 @@ begin
                                tkKwUntil, tkEof])
                  or AtTopLevelRoutineHead) do   // Boundary-Recovery unwinden
       begin
-        var FinStart := FNextCount;
+        var FinStart := FConsumeCount;
         ParseStatement(FinNode);
         GuardAdvance(FinStart);
       end;
