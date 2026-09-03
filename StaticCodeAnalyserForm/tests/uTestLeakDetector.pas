@@ -51,6 +51,9 @@ type
     [Test] procedure Leak_BorrowedDottedGetterCallWithParens_NoFinding;
     [Test] procedure Leak_ConstructorLikeNameOnly_NoFinding;
     [Test] procedure Leak_LocalFactoryCallWithParens_NoFree_ReportsWarning;
+    // Die Befund-Zeile muss auf den AUSLOESENDEN Assign zeigen, nicht
+    // auf den ersten geklammerten (03.09.).
+    [Test] procedure Leak_FuncCallAssign_ReportsTriggeringLine;
     [Test] procedure Leak_SimilarVarName_NoFalsePositive;
     [Test] procedure Leak_MultipleVars_BothReported;
     [Test] procedure Leak_NoFalsePositive_BlacklistFree;
@@ -930,6 +933,47 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'Funktionsaufruf-Zuweisung ohne Free – Warning');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_FuncCallAssign_ReportsTriggeringLine;
+// 03.09.: die Befund-Zeile kam aus einer ZWEITEN Funktion
+// (FindFuncCallAssignLine), die nur zwei der fuenf Gates fuehrte, die
+// ueber den Fund entscheiden. Sie nahm den ERSTEN geklammerten Assign
+// an die Variable - hier den geborgten Getter, der den Fund gar nicht
+// ausloest. Beleg im Korpus: Dev-Cpp main.pas meldete 1699
+// ('FileIsOpen(...)') statt 1712 ('NewEditor(...)').
+//
+// Die Folge war nicht nur eine irrefuehrende Referenz: ein
+// noinspection-Marker ueber der ECHTEN Zeile blieb wirkungslos, weil
+// die Suppression-Map 1:1 gegen die Fundzeile vergleicht.
+//
+// Ohne den Fix ROT: gemeldet wird die GetCachedList-Zeile.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function MakeList: TStringList;'#13#10+
+  'begin Result := TStringList.Create; end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := GetCachedList();'#13#10+
+  '  list := MakeList();'#13#10+
+  '  list.Add(''x'');'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'die lokale Factory ohne Free ist ein Fund');
+    Fnd := TFindingHelper.FirstOf(F, fkMemoryLeak);
+    Assert.IsNotNull(Fnd, 'Fund erwartet');
+    // Erwartung aus dem SRC abgeleitet, nicht hartkodiert: 'MakeList()'
+    // mit Klammern trifft die Aufrufzeile, nicht die Deklaration.
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'MakeList()'), Fnd.LineNumber,
+      'gemeldet gehoert der ausloesende Assign, nicht der geborgte Getter');
   finally F.Free; end;
 end;
 
