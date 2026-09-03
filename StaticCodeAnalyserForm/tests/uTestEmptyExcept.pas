@@ -32,6 +32,8 @@ type
     [Test] procedure EmptyExcept_InsideTryFinally_Reported;
     [Test] procedure EmptyExcept_TwoExceptBlocks_BothReported;
     [Test] procedure EmptyExcept_WithOnAndEmptyOther_OnlyEmptyReported;
+    // Der leere Handler mit ueberzaehligem ';' (2026-09-03).
+    [Test] procedure EmptyExcept_WithSemicolon_ReportsWarning;
   end;
 
 implementation
@@ -220,6 +222,33 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyExcept));
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyExceptExt.EmptyExcept_WithSemicolon_ReportsWarning;
+// 'except;' ist ein LEERER Handler - er schluckt jede Ausnahme genauso
+// wie 'except end'. Gesehen wurde er trotzdem nie: GuardAdvance zaehlte
+// das ueber Eat konsumierte leere Statement nicht als Fortschritt, frass
+// das 'end' des try und zerstoerte damit den nkTryExcept-Knoten, an dem
+// dieser Detektor haengt.
+//
+// Es ist die haeufigste Form im Referenzkorpus: allein diese Regel
+// gewinnt durch den Fix 134 Funde zurueck.
+// Ohne den Fix ROT (0 statt 1).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  try'#13#10+
+  '    DoSomething;'#13#10+
+  '  except;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyExcept),
+    'ein except mit ueberzaehligem Semikolon ist ein leerer Handler');
   finally F.Free; end;
 end;
 

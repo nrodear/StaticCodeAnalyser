@@ -48,6 +48,15 @@ type
     [Test] procedure Parser_LocalNestedRecordTypeSection_RestOfFileParsed;
     [Test] procedure Parser_ForwardDeclThenTypeSection_RestOfFileParsed;
     [Test] procedure Parser_NestedTypeInImplClass_RestOfFileParsed;
+
+    // ---- Bug (2026-09-03): GuardAdvance zaehlte Eat nicht als Fortschritt --
+    // Eine Schleifen-Iteration, die NUR ein leeres Statement konsumiert,
+    // laeuft ueber Eat - das ging am Zaehler vorbei, GuardAdvance hielt es
+    // fuer Stillstand und frass den Listen-Terminator. Folge: die FOLGENDE
+    // Routine wurde einverleibt. Vier Auslöser-Formen am Korpus belegt,
+    // zwei davon hier; `repeat ... ; until` ist NICHT betroffen (gemessen).
+    [Test] procedure Parser_EmptyStmtBeforeExceptEnd_FollowingMethodTopLevel;
+    [Test] procedure Parser_EmptyStmtBeforeBlockEnd_FollowingMethodTopLevel;
     [Test] procedure Parser_TrailingCodeAfterEndDot_NotParsed;
 
     // ---- Bug B (2026-07-04): IFDEF-Methoden-Verschachtelung -----------
@@ -3975,6 +3984,86 @@ begin
         'die then-Anweisung bleibt am if');
       Assert.AreEqual('GammaProc@17', DirectCallsWithLines(Body),
         'der Rumpf nach dem case bleibt unversehrt');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_EmptyStmtBeforeExceptEnd_FollowingMethodTopLevel;
+// 'except;' - das haeufigste Vorkommen im Referenzkorpus. Der Handler
+// enthaelt genau ein leeres Statement; ParseStatement konsumiert es ueber
+// 'while Eat(tkSemicolon) do ;', und Eat zaehlte den Fortschritt nicht mit.
+// GuardAdvance erzwang daraufhin ein Next und frass das 'end' des try -
+// die Routine schloss nie und verschluckte die naechste.
+//
+// Ohne den Fix ROT: nur EINE Top-Level-Methode, 'Zweite' fehlt.
+// Am Korpus 312 Vorkommen in 169 Dateien, zusammen 875 Funde.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Erste;'#13#10+
+  'begin'#13#10+
+  '  try'#13#10+
+  '    Beep;'#13#10+
+  '  except;'#13#10+
+  '  end;'#13#10+
+  'end;'#13#10+
+  'procedure Zweite;'#13#10+
+  'begin'#13#10+
+  '  Beep;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  ImplN  : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      ImplN := ImplNodeOf(Root);
+      Assert.IsNotNull(ImplN, 'implementation-Node fehlt');
+      Assert.AreEqual('Erste,Zweite', TopLevelMethodNames(ImplN),
+        'die Routine nach dem leeren except-Handler darf nicht ' +
+        'einverleibt werden');
+      Assert.AreEqual<Integer>(2, Root.DescendantCount(nkMethod),
+        'keine zusaetzlichen/genesteten Methoden im Baum');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_EmptyStmtBeforeBlockEnd_FollowingMethodTopLevel;
+// Derselbe Fehler ohne try: ein ueberzaehliges ';' als letzte Anweisung
+// eines begin-Blocks. Zeigt, dass die Ursache im Fortschritts-Zaehler
+// liegt und nicht an der except-Behandlung haengt.
+// Ohne den Fix ROT.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Erste;'#13#10+
+  'begin'#13#10+
+  '  Beep;;'#13#10+
+  'end;'#13#10+
+  'procedure Zweite;'#13#10+
+  'begin'#13#10+
+  '  Beep;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  ImplN  : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      ImplN := ImplNodeOf(Root);
+      Assert.IsNotNull(ImplN, 'implementation-Node fehlt');
+      Assert.AreEqual('Erste,Zweite', TopLevelMethodNames(ImplN),
+        'ein ueberzaehliges Semikolon darf die naechste Routine nicht kosten');
     finally Root.Free; end;
   finally Parser.Free; end;
 end;
