@@ -1,4 +1,4 @@
-﻿unit uUnusedRoutine;
+unit uUnusedRoutine;
 
 // Detektor: top-level Procedure/Function in einer Unit wird nirgendwo
 // aufgerufen (SCA164).
@@ -250,7 +250,15 @@ begin
   if TPath.IsPathRooted(AZiel) then
     Voll := AZiel
   else
-    Voll := TPath.GetFullPath(ExtractFilePath(ABasisDatei) + AZiel);
+    // Bewusst nur zusammengesetzt, NICHT ueber TPath.GetFullPath
+    // normalisiert: das wirft bei ungueltigen Zeichen, und der
+    // Ziel-String kommt aus FREMDEM Quelltext - '{$I %FILE%}' ist
+    // gueltige Delphi-Syntax. Eine geworfene Ausnahme im
+    // Analysepfad waere teurer als jeder Fund. Noetig ist die
+    // Normalisierung ohnehin nicht: ein '..' loest das
+    // Dateisystem beim Oeffnen auf, und genau so ist der
+    // mORMot-Fall ('..' vor mormot.defines.inc) gemessen worden.
+    Voll := ExtractFilePath(ABasisDatei) + AZiel;
   IncLines := AcquireLines(Voll, IncCached, CtxFileTextCache(AContext));
   if not Assigned(IncLines) then Exit;
   try

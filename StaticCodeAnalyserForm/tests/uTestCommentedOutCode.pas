@@ -37,6 +37,7 @@ type
     [Test] procedure ProseWithFunctionAndParens_NoFinding;
     [Test] procedure CommentedOutSignature_StillReported;
     [Test] procedure CommentedOutAnonymousMethod_StillReported;
+    [Test] procedure CommentedOutClassMethod_StillReported;
   end;
 
 implementation
@@ -456,6 +457,31 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCommentedOutCode),
     'anonyme Methode mit Parameterliste bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.CommentedOutClassMethod_StillReported;
+// WAECHTER fuer den dritten Anker der Stellungspruefung. Neben
+// "Inhaltsanfang" und "hinter ';'" gibt es "hinter dem Wort 'class'" -
+// bei 'class function Foo' steht vor dem Schluesselwort weder ein
+// Satzanfang noch ein Semikolon. Ohne diesen Anker faellt jede
+// auskommentierte Klassenmethode weg.
+// Wie bei CommentedOutSignature_StillReported bewusst ohne
+// abschliessendes ';', sonst traegt das Semikolon den starken Marker
+// und die Fixture prueft den Anker nicht.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  DoA;'#13#10 +
+  '  { class function Berechne: Integer if noetig }'#13#10 +
+  '  DoB;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCommentedOutCode),
+    'auskommentierte Klassenmethode bleibt ein Fund');
   finally F.Free; end;
 end;
 
