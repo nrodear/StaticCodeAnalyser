@@ -32,6 +32,11 @@ type
     [Test] procedure ParenStarDirective_NotReported;
     [Test] procedure ParenStarBlockComment_StillReported;
     [Test] procedure CodeAfterParenStarDirective_StillReported;
+    // ---- 'function'/'procedure' nur in Deklarationsstellung (rw56) ----
+    [Test] procedure ProseWithFunctionNoun_NoFinding;
+    [Test] procedure ProseWithFunctionAndParens_NoFinding;
+    [Test] procedure CommentedOutSignature_StillReported;
+    [Test] procedure CommentedOutAnonymousMethod_StillReported;
   end;
 
 implementation
@@ -358,6 +363,99 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkCommentedOutCode) >= 1,
     'Kommentar hinter der Direktive darf nicht mit weggeskippt werden');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.ProseWithFunctionNoun_NoFinding;
+// rw56 (2026-09-03): 'function'/'procedure' galt als STARKER Marker,
+// sobald das Wort irgendwo im Kommentar stand. Damit flaggte der
+// Detektor jeden Kommentar, der ueber eine Routine SPRICHT. Am
+// Referenzkorpus 821 von 15.688 Funden - 5,2 %, und 18 der 30
+// AQL-Fehlalarme vom 31.08. waren genau dieses Muster.
+// Wortlaut aus dem Korpus: Dev-Cpp uEditorBrowser.pas:254.
+// Ohne den Fix ROT mit 1 Fund ('function' stark + 'if' schwach = 2).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  DoA;'#13#10 +
+  '  // This function should notify the user if a file is replaced'#13#10 +
+  '  DoB;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCommentedOutCode),
+    'Prosa ueber eine Funktion ist kein auskommentierter Code');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.ProseWithFunctionAndParens_NoFinding;
+// Die Stellungspruefung allein reicht NICHT: eine anonyme Methode hat
+// keinen Namen und darf deshalb links keinen Deklarationsanfang
+// verlangen - sonst faellt 'TProc = procedure (S: TObject)'. Genau
+// diese Lockerung laesst aber englische Prosa mit Klammer durch, wenn
+// die Parameterliste nicht geprueft wird: "function(s)", "the previous
+// function (GetResponse) did its", "reconstruction function (q / 2)".
+// Am Korpus waren das 4 der 9 sonst faelschlich gehaltenen Faelle.
+// Wortlaut aus dem Korpus: Indy IdReplyIMAP4.pas:368.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  DoA;'#13#10 +
+  '  { we can assume, if the previous function (GetResponse) did its }'#13#10 +
+  '  DoB;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCommentedOutCode),
+    'Klammer hinter dem Wort macht aus Prosa keine Parameterliste');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.CommentedOutSignature_StillReported;
+// WAECHTER gegen einen zu scharfen Fix. Diese Fixture ist vor UND nach
+// dem Fix ein Fund - sie bricht, wenn die Stellungspruefung den
+// benannten Kopf nicht mehr erkennt.
+// Der Kopf traegt bewusst KEIN abschliessendes ';': sonst waere das
+// Semikolon der starke Marker und die Fixture pruefte den Fix nicht.
+// Wortlaut aus dem Korpus: D3DSettings.pas:72.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  DoA;'#13#10 +
+  '  { procedure SetDisplayMode(value: TD3DMode) if IsWindowed }'#13#10 +
+  '  DoB;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCommentedOutCode),
+    'auskommentierter Routinenkopf bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.CommentedOutAnonymousMethod_StillReported;
+// WAECHTER fuer den anonymen Zweig: hier gibt es keinen Namen und links
+// steht ein '=', kein Deklarationsanfang. Traegt nur die
+// Parameterlisten-Erkennung, bleibt dieser Fund - sonst faellt er
+// zusammen mit der Prosa weg.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  DoA;'#13#10 +
+  '  { TNotify = procedure (Sender: TObject) of object if needed }'#13#10 +
+  '  DoB;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCommentedOutCode),
+    'anonyme Methode mit Parameterliste bleibt ein Fund');
   finally F.Free; end;
 end;
 

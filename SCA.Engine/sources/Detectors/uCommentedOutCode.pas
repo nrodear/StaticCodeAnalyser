@@ -176,9 +176,155 @@ begin
   end;
 end;
 
+// Position des naechsten Vorkommens von W als GANZES Wort ab AVon
+// (1-basiert), 0 wenn keines mehr folgt. ContainsWordCI beantwortet nur
+// die Ja/Nein-Frage; die Stellungspruefung unten braucht die Stelle.
+function WortPosAb(const Lower, W: string; AVon: Integer): Integer;
+var k, lenW, lenS : Integer;
+begin
+  Result := 0;
+  lenW := Length(W); lenS := Length(Lower);
+  if (lenW = 0) or (AVon < 1) then Exit;
+  k := AVon;
+  while k <= lenS - lenW + 1 do
+  begin
+    if (Copy(Lower, k, lenW) = W)
+       and ((k = 1) or not IsIdentChar(Lower[k - 1]))
+       and ((k + lenW > lenS) or not IsIdentChar(Lower[k + lenW])) then
+      Exit(k);
+    Inc(k);
+  end;
+end;
+
+// Erste Position ab AVon, die kein Leerraum ist (Length+1, wenn keine folgt).
+function NachLeerraum(const S: string; AVon: Integer): Integer;
+begin
+  Result := AVon;
+  while (Result <= Length(S)) and CharInSet(S[Result], [' ', #9]) do
+    Inc(Result);
+end;
+
+// Erste Position hinter dem Bezeichner, der bei AVon beginnt - oder AVon
+// selbst, wenn dort keiner beginnt. Punkte gehoeren dazu, damit die
+// qualifizierte Form 'TFoo.Bar' als ein Name zaehlt.
+function NachBezeichner(const S: string; AVon: Integer): Integer;
+begin
+  Result := AVon;
+  if (Result > Length(S))
+     or not CharInSet(S[Result], ['a'..'z', 'A'..'Z', '_']) then
+    Exit;
+  while (Result <= Length(S))
+        and (IsIdentChar(S[Result]) or (S[Result] = '.')) do
+    Inc(Result);
+end;
+
+// True wenn links von AKw ein Deklarationsanfang steht: Inhaltsanfang,
+// ';', '{' oder das Wort 'class'. In Prosa steht dort ein Artikel oder
+// ein Verb ("the function", "this procedure", "to function").
+function LinksIstDeklarationsanfang(const Lower: string; AKw: Integer): Boolean;
+var i : Integer;
+begin
+  i := AKw - 1;
+  while (i >= 1) and CharInSet(Lower[i], [' ', #9]) do Dec(i);
+  if i < 1 then Exit(True);
+  if CharInSet(Lower[i], [';', '{']) then Exit(True);
+  // 'class procedure' / 'class function'
+  Result := (i >= 5) and (Copy(Lower, i - 4, 5) = 'class')
+            and ((i = 5) or not IsIdentChar(Lower[i - 5]));
+end;
+
+// True wenn ab AVon ein BENANNTER Kopf folgt: Bezeichner und danach
+// '(', ':', ';' oder '=' - also 'Foo(', 'Foo;', 'Foo: Integer', 'Foo ='.
+// Englische Prosa scheitert hier am Folgezeichen: auf "function should"
+// folgt ein weiteres Wort, kein Signaturzeichen.
+function RechtsIstBenannteSignatur(const Lower: string; AVon: Integer): Boolean;
+var i, j : Integer;
+begin
+  i := NachLeerraum(Lower, AVon);
+  j := NachBezeichner(Lower, i);
+  if j = i then Exit(False);
+  j := NachLeerraum(Lower, j);
+  Result := (j <= Length(Lower)) and CharInSet(Lower[j], ['(', ':', ';', '=']);
+end;
+
+// True wenn ab AVon eine ANONYME Methode folgt: '(' mit erkennbarer
+// Parameterliste ('(Sender: TObject', '(const A, B') oder leerer Liste
+// mit Ergebnis ('(): Integer').
+//
+// Die Parameterlisten-Schranke ist nicht Kosmetik: ohne sie faengt die
+// Regel englische Prosa, die zufaellig eine Klammer traegt -
+// "function(s)", "the function (GetResponse) did its", "reconstruction
+// function (q / (2^N-1))". Am Korpus waren das 4 der 9 Faelle, die die
+// Stellungspruefung sonst faelschlich als Code durchgelassen haette.
+function RechtsIstAnonymeSignatur(const Lower: string; AVon: Integer): Boolean;
+var i, j : Integer;
+begin
+  i := NachLeerraum(Lower, AVon);
+  if (i > Length(Lower)) or (Lower[i] <> '(') then Exit(False);
+  i := NachLeerraum(Lower, i + 1);
+  if (i <= Length(Lower)) and (Lower[i] = ')') then
+  begin
+    i := NachLeerraum(Lower, i + 1);
+    Exit((i <= Length(Lower)) and CharInSet(Lower[i], [':', ';']));
+  end;
+  j := NachBezeichner(Lower, i);
+  if j = i then Exit(False);
+  // 'const'/'var'/'out' steht vor dem Parameternamen, nicht statt seiner.
+  if MatchStr(Copy(Lower, i, j - i), ['const', 'var', 'out']) then
+  begin
+    i := NachLeerraum(Lower, j);
+    j := NachBezeichner(Lower, i);
+    if j = i then Exit(False);
+  end;
+  j := NachLeerraum(Lower, j);
+  Result := (j <= Length(Lower)) and CharInSet(Lower[j], [':', ',']);
+end;
+
+// True wenn 'procedure'/'function' im Inhalt eine DEKLARATION eroeffnet,
+// statt als englisches Substantiv in Prosa zu stehen.
+//
+// Ohne diese Unterscheidung ist das blosse Wort ein starker Marker, und
+// damit flaggt der Detektor jeden Kommentar, der ueber eine Routine
+// SPRICHT: "This function should notify the user", "callback function
+// for WinHttpSetStatusCallback", "Function result will be erDeferred".
+// Am Referenzkorpus gezaehlt (rw56, alle 15.688 Funde nachgebildet):
+// 821 Funde entstehen ALLEIN so - 5,2 %. Die AQL-Stichprobe vom 31.08.
+// hat SCA070 mit 15 % zurueckgewiesen, und 18 der 30 geprueften
+// Fehlalarme waren genau dieses Muster.
+//
+// Code erkennt man an der STELLUNG, nicht am Wort:
+//   benannt - das Wort eroeffnet den Inhalt oder folgt auf ';'/'{'/
+//             'class', und ein Bezeichner samt Signaturzeichen folgt
+//   anonym  - 'procedure('/'function(' mit Parameterliste; das steht
+//             mitten im Ausdruck ('TProc = procedure (S: TObject)') und
+//             darf deshalb KEINEN Deklarationsanfang links verlangen
+function KeywordEroeffnetDeklaration(const Lower: string): Boolean;
+const
+  KWS : array[0..1] of string = ('procedure', 'function');
+var
+  w, p, q : Integer;
+begin
+  for w := Low(KWS) to High(KWS) do
+  begin
+    p := WortPosAb(Lower, KWS[w], 1);
+    while p > 0 do
+    begin
+      q := p + Length(KWS[w]);
+      if (LinksIstDeklarationsanfang(Lower, p)
+          and RechtsIstBenannteSignatur(Lower, q))
+         or RechtsIstAnonymeSignatur(Lower, q) then
+        Exit(True);
+      p := WortPosAb(Lower, KWS[w], p + 1);
+    end;
+  end;
+  Result := False;
+end;
+
 // True wenn der Inhalt einen UNZWEIDEUTIGEN Pascal-Marker traegt, der in
 // englischer Prosa praktisch nie vorkommt: ':=', Inhalt endet mit ';', oder
-// 'begin'/'procedure'/'function' als Wort. Die schwachen Keywords
+// 'begin' als Wort bzw. 'procedure'/'function' in DEKLARATIONSSTELLUNG
+// (das blosse Wort reicht nicht - s. KeywordEroeffnetDeklaration).
+// Die schwachen Keywords
 // (if/then/for/while/end) sind prosa-haeufig und reichen ALLEIN nicht -
 // sonst flaggt z.B. "if the value is nil then return" reine Prosa als Code
 // (dominante SCA070-FP-Klasse, Real-World 2026-06-28).
@@ -191,8 +337,7 @@ begin
   Result := ((Trimmed <> '') and (Trimmed[Length(Trimmed)] = ';'))
             or (Pos(':=', Content) > 0)
             or ContainsWordCI(Lower, 'begin')
-            or ContainsWordCI(Lower, 'procedure')
-            or ContainsWordCI(Lower, 'function');
+            or KeywordEroeffnetDeklaration(Lower);
 end;
 
 // Zaehlt code-typische Marker im Kommentar-Inhalt (starke + schwache).
