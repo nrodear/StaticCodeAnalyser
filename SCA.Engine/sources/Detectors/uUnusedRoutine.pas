@@ -75,6 +75,14 @@ type
     // Link-Gates (Audit 2026-07-31), siehe Implementations-Kommentar.
     class function IsExternalImport(const TypeRef: string): Boolean; static;
     class function UnitLinksObjectFile(Lines: TStringList): Boolean; static;
+    // Text aller '{$I datei}'-Includes AUS DEM IMPLEMENTATION-TEIL,
+    // aneinandergehaengt; '' wenn es keine gibt. Geschwister-Gate zu
+    // UnitLinksObjectFile: dort loest der Linker die Aufrufer auf, hier
+    // der Praeprozessor - in beiden Faellen steht der Aufrufer nicht im
+    // Unit-Text, und die Aussage "kein Aufrufer in der Unit" ist nicht
+    // belegbar. Siehe Implementations-Kommentar.
+    class function ImplIncludeText(Lines: TStringList; const FileName: string;
+      AContext: TAnalyzeContext): string; static;
     class function IsLinkAnchorCandidate(const TypeRef: string): Boolean; static;
     // True wenn die Routine ein Konstruktor oder Destruktor ist - nicht
     // wie eine normale Procedure gerufen. Match an TypeRef-Praefix.
@@ -91,6 +99,7 @@ implementation
 
 uses
   System.StrUtils,
+  System.IOUtils,   // TPath - Include-Pfad relativ zur Unit aufloesen
   uFileTextCache, uDetectorUtils, uAstSpans;
 
 const
@@ -173,6 +182,116 @@ begin
   end;
 end;
 
+// Dateiname aus einer Include-Direktive ab APos ('{$i foo.inc}' /
+// '{$include foo.inc}'), '' wenn die Zeile dort keine ist.
+//
+// Die Abgrenzung gegen '{$I+}' / '{$I-}' ist der ganze Witz: das ist die
+// IO-Pruefung und kein Include. Deshalb muss auf das 'i' ein LEERRAUM
+// oder ein Quote folgen, nie ein Vorzeichen.
+function IncludeTargetAt(const ALow, ARaw: string; APos: Integer): string;
+var
+  n, e : Integer;
+begin
+  Result := '';
+  n := APos + 2;                                   // hinter '{$'
+  if Copy(ALow, n, 7) = 'include' then
+    Inc(n, 7)
+  else if Copy(ALow, n, 1) = 'i' then
+    Inc(n)
+  else
+    Exit;
+  if (n > Length(ALow)) or not CharInSet(ALow[n], [' ', #9, '''']) then Exit;
+  while (n <= Length(ALow)) and CharInSet(ALow[n], [' ', #9, '''']) do Inc(n);
+  e := n;
+  while (e <= Length(ALow)) and not CharInSet(ALow[e], ['}', '''']) do Inc(e);
+  // ARaw, nicht ALow: Dateisysteme sind hier zwar unempfindlich, aber der
+  // Pfad gehoert unveraendert weitergereicht.
+  Result := Trim(Copy(ARaw, n, e - n));
+end;
+
+class function TUnusedRoutineDetector.ImplIncludeText(Lines: TStringList;
+  const FileName: string; AContext: TAnalyzeContext): string;
+// Steht im implementation-Teil ein '{$I datei}', ist der Unit-Text
+// UNVOLLSTAENDIG - der Praeprozessor setzt dort Code ein, den weder
+// Parser noch Wort-Index dieser Unit je sehen. Eine dort stehende
+// Aufrufstelle ist fuer SCA164 unsichtbar, und die Meldung "kein
+// Aufrufer innerhalb der Unit" wird zur Falschaussage.
+//
+// Selbst gefunden am eigenen Code (Selbstscan 03.09.):
+// uLocalization.pas:137 meldet 'JoinPoLines' als ungenutzt - die drei
+// Aufrufer stehen in uLocalizationPo.inc, eingebunden 26 Zeilen weiter
+// unten. Am Referenzkorpus sind es 13 weitere Faelle (uPSRuntime mit
+// x86.inc/x64.inc, mormot.core.os mit der posix-Variante, JclWin32).
+//
+// NUR der implementation-Teil, und der Inhalt wird WIRKLICH gelesen
+// statt die blosse Existenz zu werten. Beides ist noetig, sonst kostet
+// das Gate mehr als es bringt: Includes gibt es korpusweit in 742 der
+// 1.233 Fundstellen - fast alle sind Defines-Dateien im Unit-Kopf
+// (jcl.inc, mormot.defines.inc), die nie einen Aufrufer tragen. Ein
+// Gate auf die blosse Existenz haette 729 richtige Funde vernichtet.
+//
+// Eine Ebene, keine Rekursion: ein Include, das selbst wieder
+// einbindet, ist im Korpus nicht belegt, und die Aufloesung braucht
+// dann Suchpfade, die die Engine nicht kennt.
+var
+  i, p, ImplZeile : Integer;
+  Low, Ziel, Voll : string;
+  SB              : TStringBuilder;
+  IncLines        : TStringList;
+  IncCached       : Boolean;
+begin
+  Result := '';
+  if Lines = nil then Exit;
+  ImplZeile := -1;
+  for i := 0 to Lines.Count - 1 do
+  begin
+    Low := LowerCase(Trim(Lines[i]));
+    if (Low = 'implementation') or StartsStr('implementation ', Low)
+       or StartsStr('implementation'#9, Low) then
+    begin
+      ImplZeile := i;
+      Break;
+    end;
+  end;
+  if ImplZeile < 0 then Exit;
+
+  SB := TStringBuilder.Create;
+  try
+    for i := ImplZeile + 1 to Lines.Count - 1 do
+    begin
+      Low := LowerCase(Lines[i]);
+      p   := Pos('{$', Low);
+      while p > 0 do
+      begin
+        Ziel := IncludeTargetAt(Low, Lines[i], p);
+        if Ziel <> '' then
+        begin
+          if TPath.IsPathRooted(Ziel) then
+            Voll := Ziel
+          else
+            Voll := TPath.GetFullPath(ExtractFilePath(FileName) + Ziel);
+          IncLines := AcquireLines(Voll, IncCached,
+                                   CtxFileTextCache(AContext));
+          // nil = nicht auffindbar (Suchpfad des Compilers, generierte
+          // Datei). Dann liegt KEIN Beleg vor, und ohne Beleg wird nicht
+          // unterdrueckt - sonst stillte ein toter Include-Verweis die
+          // ganze Unit.
+          if IncLines <> nil then
+          try
+            SB.AppendLine(IncLines.Text);
+          finally
+            ReleaseLines(IncLines, IncCached);
+          end;
+        end;
+        p := Pos('{$', Low, p + 2);
+      end;
+    end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
 class function TUnusedRoutineDetector.IsLinkAnchorCandidate(
   const TypeRef: string): Boolean;
 // In einer obj-linkenden Unit sind das die Kandidaten, die der C-Code rufen
@@ -226,6 +345,10 @@ var
   // Perf P1 (Konzept_Performance25, 2026-07-19): EIN Wort-Positions-Index
   // pro File statt TRegEx-Volltext-Scan PRO Routine (O(Kandidaten x N) -> O(N)).
   WordIdx     : TObjectDictionary<string, TList<Integer>>;
+  // Wort-Index ueber den Text der '{$I}'-Includes des implementation-
+  // Teils; nil, wenn die Unit keine hat (der Normalfall).
+  IncWords    : TObjectDictionary<string, TList<Integer>>;
+  IncText     : string;
   InterfaceMethods : TStringList; // alle nkMethod-Namen unter nkInterface
   i           : Integer;
   IFList      : TList<TAstNode>;
@@ -270,7 +393,14 @@ begin
   // laeuft aber ueber alle Zeilen (mORMot setzt sie mitten in die Unit).
   LinksObj := UnitLinksObjectFile(Lines);
   WordIdx := nil;   // Perf P1: erst nach dem Strip gebaut; nil-sicher im finally
+  IncWords := nil;
   try
+    // Einmal je Datei, nicht je Routine: das Lesen der Include-Datei
+    // laeuft ueber denselben Text-Cache wie die Unit selbst.
+    IncText := ImplIncludeText(Lines, FileName, AContext);
+    if IncText <> '' then
+      IncWords := TDetectorUtils.BuildWordPositionIndex(IncText);
+
     // Strippt Strings + Kommentare und liefert die Char->Quellzeile-Map mit -
     // ersetzt den Zwilling von uUnusedPrivateMethod und sparte das O(n)-pro-
     // Match LineOfPos durch direkten Array-Lookup.
@@ -340,6 +470,10 @@ begin
           // Helper-Routinen faelschlich als 'self-call' aus (SCA164 FP).
           RoutineEnd := TAstSpans.SubtreeMaxLine(Mth) + 2;
           if HasExternalCaller(MethName, Mth.Line, RoutineEnd) then Continue;
+          // Der Aufrufer kann in einem '{$I}' des implementation-Teils
+          // stehen - dort sieht ihn weder Parser noch WordIdx.
+          if (IncWords <> nil)
+             and IncWords.ContainsKey(LowerCase(MethName)) then Continue;
 
           F            := TLeakFinding.Create;
           F.FileName   := FileName;
@@ -362,6 +496,7 @@ begin
     end;
   finally
     WordIdx.Free;
+    IncWords.Free;
     ReleaseLines(Lines, Cached);
   end;
 end;
