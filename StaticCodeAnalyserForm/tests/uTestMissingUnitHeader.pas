@@ -15,7 +15,7 @@ type
     [Test] procedure Finding_KindAndSeverity;
     // AQL Hint-Tier 03.09.: eine Kommentar-Prosazeile wurde fuer die
     // unit-Klausel gehalten (pyscripter-Kopfvorlage).
-    [Test] procedure CommentLineStartingWithUnit_NotTakenAsDecl;
+    [Test] procedure CommentLineStartingWithUnit_FindingOnRealDecl;
     [Test] procedure ReallyNoHeader_StillReported;
   end;
 
@@ -39,13 +39,19 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMissingUnitHeader.CommentLineStartingWithUnit_NotTakenAsDecl;
-// Erkennerfehler (AQL Hint-Tier 03.09., 2 von 125): LineIsUnitDecl
-// prueste nur das Praefix "unit " und traf damit die Prosazeile
-// " Unit Name: X" der pyscripter-Kopfvorlage. Der Detektor suchte
-// danach DAHINTER nach einem Kopfkommentar - der beschreibende Kopf
-// steht aber DAVOR und blieb unsichtbar.
-// Belege: pyscripter frmProjectExplorer.pas:2, uEditAppIntfs.pas:2.
+procedure TTestMissingUnitHeader.CommentLineStartingWithUnit_FindingOnRealDecl;
+// Erkennerfehler (AQL Hint-Tier 03.09.): LineIsUnitDecl prueste nur das
+// Praefix "unit " und traf damit die Prosazeile " Unit Name: X" der
+// pyscripter-Kopfvorlage. Gemeldet wurde dann eine KOMMENTARZEILE als
+// Ort der fehlenden Unit-Beschreibung.
+//
+// Der FUND selbst bleibt richtig: die Regel verlangt woertlich einen
+// Kommentar ZWISCHEN "unit ...;" und "interface", und dort steht
+// keiner - der Kopf liegt davor. Geprueft wird hier also die POSITION,
+// nicht das Verschwinden. Vor dem Fix: Zeile 2 (Prosazeile), danach
+// Zeile 6 (echte Klausel).
+//
+// Belege: pyscripter frmProjectExplorer.pas, uEditAppIntfs.pas.
 const SRC =
   '{-------------------------------------------------------------'#13#10 +
   ' Unit Name: frmTest'#13#10 +
@@ -59,8 +65,11 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingUnitHeader),
-    'Kopfvorlage mit Prosazeile "Unit Name:" ist ein beschriebener Kopf');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMissingUnitHeader),
+      'der Fund bleibt - zwischen Klausel und interface steht kein Kommentar');
+    Assert.AreEqual('6', TFindingHelper.FirstOf(F, fkMissingUnitHeader).LineNumber,
+      'gemeldet wird die ECHTE unit-Klausel, nicht die Kommentar-Prosazeile');
   finally F.Free; end;
 end;
 
