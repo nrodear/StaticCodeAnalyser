@@ -36,13 +36,17 @@ type
     [Test] procedure Unused_LibPrefixDirective_IsNotObjLink;
     [Test] procedure Unused_PascalHelperInObjLinkingUnit_StillReported;
 
+    // ---- Aufrufer in einem '{$I}' des implementation-Teils (03.09.) ------
+    [Test] procedure Unused_CallerInImplInclude_NoFinding;
+    [Test] procedure Unused_ImplIncludeWithoutCaller_StillReported;
+
     [Test] procedure Unused_Finding_KindSeverityConfidence;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils, System.Classes, System.IOUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
 
@@ -393,6 +397,101 @@ begin
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedRoutine),
     'Pascal-Helfer ohne Aufrufkonvention bleibt auch in obj-Units ein Fund');
   finally F.Free; end;
+end;
+
+// Legt eine Include-Datei neben die Fixture. FindingsOfFile schreibt die
+// .pas nach TPath.GetTempPath, und der Detektor loest '{$I}' relativ zur
+// Unit auf - beide liegen damit im selben Verzeichnis.
+function SchreibeInclude(const AName, AInhalt: string): string;
+var
+  SL : TStringList;
+begin
+  Result := TPath.Combine(TPath.GetTempPath, AName);
+  SL := TStringList.Create;
+  try
+    SL.Text := AInhalt;
+    SL.SaveToFile(Result, TEncoding.UTF8);
+  finally
+    SL.Free;
+  end;
+end;
+
+const
+  // Der Include-Name steht im SRC und im Dateinamen - eine Konstante,
+  // damit beide nicht auseinanderlaufen.
+  CIncName = 'sca_test_implinclude.inc';
+
+  CSrcMitInclude =
+    'unit t;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure Helferlein;'#13#10 +
+    'begin'#13#10 +
+    '  Beep;'#13#10 +
+    'end;'#13#10 +
+    '{$I sca_test_implinclude.inc}'#13#10 +
+    'end.';
+
+function ZaehleFunde(const ASrc: string): Integer;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(ASrc);
+  try
+    Result := TFindingHelper.Count(F, fkUnusedRoutine);
+  finally
+    F.Free;
+  end;
+end;
+
+// Legt das Include an, scannt die Fixture, raeumt beides wieder ab und
+// liefert die Zahl der SCA164-Funde. Ein Helfer statt zweier
+// geschachtelter try-Bloecke je Test - beide Tests unterscheiden sich
+// nur im Include-Inhalt.
+function ZaehleMitInclude(const AIncInhalt: string): Integer;
+var
+  IncPath : string;
+begin
+  IncPath := SchreibeInclude(CIncName, AIncInhalt);
+  try
+    Result := ZaehleFunde(CSrcMitInclude);
+  finally
+    if TFile.Exists(IncPath) then
+    begin
+      TFile.Delete(IncPath);
+    end;
+  end;
+end;
+
+procedure TTestUnusedRoutine.Unused_CallerInImplInclude_NoFinding;
+// Selbstscan 03.09.: uLocalization.pas:137 meldete 'JoinPoLines' als
+// ungenutzt - die drei Aufrufer stehen in uLocalizationPo.inc, per
+// '{$I}' 26 Zeilen weiter unten eingebunden. Weder Parser noch
+// Wort-Index sehen diesen Text, also ist die Aussage "kein Aufrufer
+// innerhalb der Unit" schlicht falsch.
+// Am Referenzkorpus 13 weitere Faelle (PascalScript uPSRuntime mit
+// x86.inc/x64.inc, mormot.core.os mit der posix-Variante, JclWin32 mit
+// AclApi.imp) - an den Include-Dateien nachgeschlagen, alle echt.
+// Ohne den Fix ROT mit 1 Fund.
+begin
+  Assert.AreEqual<Integer>(0, ZaehleMitInclude(
+    'procedure RuftAuf;'#13#10 +
+    'begin'#13#10 +
+    '  Helferlein;'#13#10 +
+    'end;'),
+    'der Aufrufer steht im Include - die Routine ist nicht ungenutzt');
+end;
+
+procedure TTestUnusedRoutine.Unused_ImplIncludeWithoutCaller_StillReported;
+// WAECHTER gegen die grobe Variante des Gates. Es waere naheliegend,
+// jede Unit mit einem '{$I}' auszunehmen - das kostet aber 729 richtige
+// Funde: korpusweit tragen 742 der 1.233 Fundstellen ein Include, fast
+// alle sind Defines-Dateien im Unit-Kopf (jcl.inc, mormot.defines.inc),
+// die nie einen Aufrufer enthalten. Deshalb wird der INHALT gelesen und
+// nur bei genanntem Namen unterdrueckt.
+begin
+  Assert.AreEqual<Integer>(1, ZaehleMitInclude('const CIrgendwas = 1;'),
+    'ein Include ohne den Namen entlastet die Routine nicht');
 end;
 
 initialization

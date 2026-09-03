@@ -101,8 +101,16 @@ type
       const RhsLow: string): Boolean; static;
     class function HasCreateAssign(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
+    // AAssignLine traegt die Zeile des Assigns, der den Fund AUSLOEST -
+    // 0 wenn keiner ausloest. Der Befund muss auf genau diese Zeile
+    // zeigen, und nur diese Funktion weiss, welche es ist: sie prueft
+    // fuenf Gates (borrowed / os-handle / Werttyp / OwningReturnCall /
+    // CalleeKeepsOwnership), an denen fruehere Assigns derselben
+    // Variablen scheitern koennen. Eine zweite Funktion, die die Zeile
+    // separat sucht, muesste dieselben fuenf Gates fuehren - und tat es
+    // nicht (s. Historie von FindFuncCallAssignLine).
     class function HasFunctionCallAssign(UnitNode, MethodNode: TAstNode;
-      const VarNameLow: string): Boolean; static;
+      const VarNameLow: string; out AAssignLine: Integer): Boolean; static;
     // Liefert die Quell-Zeile des ERSTEN `var := X.Create(...)`. Wird
     // genutzt um die Befund-Position auf die echte Create-Zeile zu legen
     // statt auf die var-Deklaration - bessere UX (Klick im Grid springt
@@ -111,8 +119,6 @@ type
     // Finding-Line gegen die Marker-Target-Line). 0 wenn kein passender
     // Assign gefunden - Caller faellt dann auf die var-Decl-Line zurueck.
     class function FindCreateLine(MethodNode: TAstNode;
-      const VarNameLow: string): Integer; static;
-    class function FindFuncCallAssignLine(MethodNode: TAstNode;
       const VarNameLow: string): Integer; static;
     class function IsReturnedAsResult(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
@@ -634,35 +640,17 @@ begin
   end;
 end;
 
-class function TLeakDetector2.FindFuncCallAssignLine(MethodNode: TAstNode;
-  const VarNameLow: string): Integer;
-var
-  Assigns : TList<TAstNode>;
-  A       : TAstNode;
-  RHS     : string;
-begin
-  Result  := 0;
-  Assigns := MethodNode.FindAllRef(nkAssign);
-  for A in Assigns do
-  begin
-    if A.Name.ToLower <> VarNameLow then Continue;
-    RHS := A.TypeRef.ToLower;
-    if Pos('.create', RHS) > 0 then Continue;
-    if (RHS = 'nil') or (RHS = '') then Continue;
-    // FP-Gate (2026-07-04): os-handle - dieselben Assigns ueberspringen,
-    // die HasFunctionCallAssign nicht als Fund wertet, damit die
-    // Befund-Zeile konsistent auf dem echten Ausloeser landet.
-    if IsOsHandleApiCall(RHS) then Continue;
-    if Pos('(', RHS) > 0 then
-    begin
-      Result := A.Line;
-      Exit;
-    end;
-  end;
-end;
-
+// Bis zum 03.09. suchte eine eigene Funktion FindFuncCallAssignLine die
+// Befund-Zeile ein zweites Mal - mit nur ZWEI der fuenf Gates, die
+// HasFunctionCallAssign fuehrt. Sie nahm damit den ERSTEN geklammerten
+// Assign an die Variable, nicht den, der den Fund ausloest. Beleg
+// Dev-Cpp main.pas: gemeldet wurde 1699 ('FileIsOpen(...)', ein
+// geborgter Getter, der den Fund gar nicht ausloest) statt 1712
+// ('NewEditor(...)'). Der Leser bekam eine geborgte Referenz als Beleg
+// vorgesetzt, und ein noinspection-Marker ueber der echten Zeile blieb
+// wirkungslos. Deshalb liefert jetzt die Entscheidung selbst die Zeile.
 class function TLeakDetector2.HasFunctionCallAssign(UnitNode, MethodNode: TAstNode;
-  const VarNameLow: string): Boolean;
+  const VarNameLow: string; out AAssignLine: Integer): Boolean;
 var
   ThisClassLow : string;
 
@@ -1055,7 +1043,8 @@ var
   A       : TAstNode;
   RHS     : string;
 begin
-  Result  := False;
+  Result      := False;
+  AAssignLine := 0;
   // Klasse der analysierten Methode ('tmeineklasse.foo' -> 'tmeineklasse').
   // Vorletztes Segment, nicht alles-vor-dem-letzten-Punkt: bei nested types
   // ('TOuter.TInner.DoIt') ergaebe Letzteres den gepunkteten Key
@@ -1089,6 +1078,7 @@ begin
         // FP-Gate (2026-07-31): same-unit-Factory behaelt das Ownership
         // (Result landet in einer eigenen Liste / Owner-Parameter).
         if CalleeKeepsOwnership(CalleeNameLow(RHS), RHS) then Continue;
+        AAssignLine := A.Line;
         Exit(True);
       end;
       Continue;
@@ -1107,6 +1097,11 @@ begin
       // FP-Gate (2026-07-31): auch die klammerlose Schwester-Factory kann das
       // Ownership behalten (Result wird intern in eine Liste gehaengt).
       if CalleeKeepsOwnership(RhsId, RHS) then Continue;
+      // Auch dieser Zweig traegt jetzt eine Zeile. Die alte
+      // FindFuncCallAssignLine verlangte eine '(' und lieferte hier
+      // IMMER 0 - der Befund landete auf der var-Deklaration, obwohl
+      // der Ausloeser eine konkrete Zuweisung ist.
+      AAssignLine := A.Line;
       Exit(True);
     end;
   end;
@@ -2364,6 +2359,81 @@ begin
   end;
 end;
 
+// Gibt der Rumpf eines "with varName do" die Variable frei?
+//
+// Der Parser legt with als nkCall(withExpr) ab und haengt den Body-Block
+// als SUBTREE darunter (uParser2 tkKwWith-Zweig; "begin..end" erzeugt
+// einen nkBlock-Zwischenknoten). Ein bare Free/Destroy/DisposeOf in
+// diesem Subtree meint das with-Objekt.
+//
+// Herausgezogen am 03.09. (M5a). Es ist der zweite und letzte grosse
+// Block aus SearchFree; er blieb beim ersten Durchgang bewusst liegen,
+// weil er zwei parallele Stacks fuehrt und der A2-Fix an genau dieser
+// Kontextfuehrung haengt. Reine Extraktion - Reihenfolge, Bedingungen
+// und Stackfuehrung sind unveraendert.
+function WithSubtreeGibtFrei(ANode: TAstNode; AInFinally: Boolean;
+  AExceptModus: TExceptModus; out AImFinally: Boolean): Boolean;
+var
+  Child : TAstNode;
+begin
+  Result     := False;
+  AImFinally := False;
+  var WStack := TList<TAstNode>.Create;
+  // A2 (SCA009-Triage 2026-07-24): finally-Kontext JE STACK-EINTRAG
+  // mitfuehren. Vorher galt fuer bare Free im with-Subtree pauschal der
+  // Kontext des WITH-Knotens (auf Methodenebene False) - beim Idiom
+  // 'with L do try .. finally Free end' kam FoundInFinally=False zurueck
+  // und uMissingFinally meldete trotz korrektem Schutz (FP). Alle
+  // Konsumenten nutzen FoundInFinally nur zur Unterdrueckung -> monoton.
+  var WFins := TList<Boolean>.Create;
+  try
+    for Child in ANode.Children do
+    begin
+      // emOhneExcept gilt auch im with-Walk, sonst zaehlte ein bare Free
+      // aus 'with v do try .. except Free; end' als Normalpfad-Free und
+      // der Parameter wuerde luegen (01.09.).
+      if (AExceptModus = emOhneExcept) and (Child.Kind = nkExceptBlock) then Continue;
+      WStack.Add(Child);
+      WFins.Add(AInFinally or (Child.Kind = nkFinallyBlock));
+    end;
+    while WStack.Count > 0 do
+    begin
+      var W    := WStack[WStack.Count - 1];
+      var WFin := WFins[WFins.Count - 1];
+      WStack.Delete(WStack.Count - 1);
+      WFins.Delete(WFins.Count - 1);
+      if W.Kind = nkCall then
+      begin
+        var WLow := W.Name.ToLower;
+        if (WLow = 'free') or (WLow = 'free()')
+           or (WLow = 'destroy') or (WLow = 'disposeof') then
+        begin
+          AImFinally := WFin;
+          Exit(True);   // finally gibt WStack/WFins frei
+        end;
+        // NESTED with ('with bm do with other do Free') NICHT betreten:
+        // dessen bare Free gehoert zum INNEREN Objekt, nicht zu varName
+        // (Review-Fang 2026-07-18: sonst maskierter Leak von varName).
+        // Ein inneres with sieht aus wie dieses: klammerloser nicht-leerer
+        // nkCall MIT Children. nkBlock-Zwischenknoten sind kein nkCall
+        // und werden normal betreten.
+        if (W.Children.Count > 0) and (W.Name <> '')
+           and (Pos('(', W.Name) = 0) then
+          Continue;
+      end;
+      for var WC in W.Children do
+      begin
+        if (AExceptModus = emOhneExcept) and (WC.Kind = nkExceptBlock) then Continue;
+        WStack.Add(WC);
+        WFins.Add(WFin or (WC.Kind = nkFinallyBlock));
+      end;
+    end;
+  finally
+    WStack.Free;
+    WFins.Free;
+  end;
+end;
+
 class function TLeakDetector2.SearchFree(Node: TAstNode;
   const VarNameLow: string; InFinally: Boolean;
   out FoundInFinally: Boolean; AExceptModus: TExceptModus): Boolean;
@@ -2404,59 +2474,11 @@ begin
     // (Gross-Triage: DropTarget 'with bm do ... free' -> FP.)
     if (NameLow = VarNameLow) and (Node.Children.Count > 0) then
     begin
-      var WStack := TList<TAstNode>.Create;
-      // A2 (SCA009-Triage 2026-07-24): finally-Kontext JE STACK-EINTRAG
-      // mitfuehren. Vorher galt fuer bare Free im with-Subtree pauschal der
-      // Kontext des WITH-Knotens (auf Methodenebene False) - beim Idiom
-      // 'with L do try .. finally Free end' kam FoundInFinally=False zurueck
-      // und uMissingFinally meldete trotz korrektem Schutz (FP). Alle
-      // Konsumenten nutzen FoundInFinally nur zur Unterdrueckung -> monoton.
-      var WFins := TList<Boolean>.Create;
-      try
-        for Child in Node.Children do
-        begin
-          // emOhneExcept gilt auch im with-Walk, sonst zaehlte ein bare Free
-          // aus 'with v do try .. except Free; end' als Normalpfad-Free und
-          // der Parameter wuerde luegen (01.09.).
-          if (AExceptModus = emOhneExcept) and (Child.Kind = nkExceptBlock) then Continue;
-          WStack.Add(Child);
-          WFins.Add(InFinally or (Child.Kind = nkFinallyBlock));
-        end;
-        while WStack.Count > 0 do
-        begin
-          var W    := WStack[WStack.Count - 1];
-          var WFin := WFins[WFins.Count - 1];
-          WStack.Delete(WStack.Count - 1);
-          WFins.Delete(WFins.Count - 1);
-          if W.Kind = nkCall then
-          begin
-            var WLow := W.Name.ToLower;
-            if (WLow = 'free') or (WLow = 'free()')
-               or (WLow = 'destroy') or (WLow = 'disposeof') then
-            begin
-              Result := True; FoundInFinally := WFin;
-              Exit;   // finally gibt WStack/WFins frei
-            end;
-            // NESTED with ('with bm do with other do Free') NICHT betreten:
-            // dessen bare Free gehoert zum INNEREN Objekt, nicht zu varName
-            // (Review-Fang 2026-07-18: sonst maskierter Leak von varName).
-            // Ein inneres with sieht aus wie dieses: klammerloser nicht-leerer
-            // nkCall MIT Children. nkBlock-Zwischenknoten sind kein nkCall
-            // und werden normal betreten.
-            if (W.Children.Count > 0) and (W.Name <> '')
-               and (Pos('(', W.Name) = 0) then
-              Continue;
-          end;
-          for var WC in W.Children do
-          begin
-            if (AExceptModus = emOhneExcept) and (WC.Kind = nkExceptBlock) then Continue;
-            WStack.Add(WC);
-            WFins.Add(WFin or (WC.Kind = nkFinallyBlock));
-          end;
-        end;
-      finally
-        WStack.Free;
-        WFins.Free;
+      if WithSubtreeGibtFrei(Node, InFinally, AExceptModus, ChildFinFlag) then
+      begin
+        Result := True;
+        FoundInFinally := ChildFinFlag;
+        Exit;
       end;
     end;
 
@@ -4317,7 +4339,10 @@ begin
       end;
 
       // ── Pfad 2: Funktionsaufruf-Zuweisung — list := BuildList(...) ──────────
-      if Gate('SCA001.NoFunctionCallAssign', not HasFunctionCallAssign(UnitNode, MethodNode, VarNameLow)) then Continue;
+      var FuncAssignLine : Integer;
+      if Gate('SCA001.NoFunctionCallAssign',
+              not HasFunctionCallAssign(UnitNode, MethodNode, VarNameLow,
+                                        FuncAssignLine)) then Continue;
 
       if Gate('SCA001.IsReturnedAsResult', IsReturnedAsResult(MethodNode, VarNameLow)) then Continue;
       if Gate('SCA001.IsAssignedToOutParam', IsAssignedToOutParam(MethodNode, VarNameLow)) then Continue;
@@ -4335,7 +4360,7 @@ begin
         // letzte Use gibt das Objekt an eine besitzende Senke ab
         // ('Item := NewItem(...); ... AddMenuItem(Item);' - JvMRUList.pas:424).
         if Gate('SCA001.LastUseIsOwnershipTransfer', LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then Continue;
-        var ReportLine := FindFuncCallAssignLine(MethodNode, VarNameLow);
+        var ReportLine := FuncAssignLine;
         if ReportLine = 0 then ReportLine := V.Line;
         AddFinding(V.Name + LEAK_RETURN_VALUE_SUFFIX, lsWarning, ReportLine);
       end;

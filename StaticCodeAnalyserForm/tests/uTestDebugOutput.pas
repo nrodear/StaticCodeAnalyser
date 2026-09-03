@@ -1,4 +1,4 @@
-unit uTestDebugOutput;
+﻿unit uTestDebugOutput;
 
 // Tests fuer den TDebugOutputDetector.
 
@@ -52,6 +52,13 @@ type
     [Test] procedure Debug_LoggerFileName_NoFinding;
     [Test] procedure Debug_AppenderFileName_NoFinding;
     [Test] procedure Debug_PlainFileName_StillReported;
+    // Gate E (03.09., AQL-Neumessung): der unqualifizierte Name bindet
+    // an eine gleichnamige EIGENE Routine der Unit.
+    [Test] procedure Debug_OwnWriteLnMethod_NoFinding;
+    [Test] procedure Debug_PlainWriteLn_StillReported;
+    // Review 03.09.: Gate E darf den EXPLIZITEN System.-Qualifier nicht
+    // schlucken - gerade dort steht er, wo der Name verschattet ist.
+    [Test] procedure Debug_SystemQualifiedDespiteOwnMethod_StillReported;
   end;
 
 implementation
@@ -445,6 +452,94 @@ begin
   finally
     F.Free;
   end;
+end;
+
+procedure TTestDebugOutput.Debug_SystemQualifiedDespiteOwnMethod_StillReported;
+// WAECHTER (Review 03.09.). Die Unit fuehrt eine eigene WriteLn-Methode -
+// Gate E greift hier also. Der Aufruf ist aber EXPLIZIT System.-qualifiziert
+// und damit per Sprachdefinition die RTL-Routine; er muss ein Fund bleiben.
+//
+// Genau diese Kombination ist der Normalfall: man schreibt "System." fast
+// nur, wenn der unqualifizierte Name verschattet ist. Der bestehende Test
+// Debug_SystemQualifiedWriteLn_ReportsWarning faengt das NICHT - seine
+// Fixture traegt keine eigene Deklaration, Gate E wird dort nie aktiv.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TWriter = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure WriteLn(const S: string);'#13#10 +
+  '    procedure Dump;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TWriter.WriteLn(const S: string);'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'procedure TWriter.Dump;'#13#10 +
+  'begin'#13#10 +
+  '  System.WriteLn(''trace'');'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDebugOutput),
+    'System.WriteLn bleibt ein Fund, auch wenn die Unit ein eigenes WriteLn hat');
+  finally F.Free; end;
+end;
+
+procedure TTestDebugOutput.Debug_OwnWriteLnMethod_NoFinding;
+// Erkennerfehler (AQL-Neumessung 03.09.): ein unqualifizierter Aufruf
+// bindet in Pascal zuerst an die eigene Klasse, erst dann an System.
+// Wo eine Unit selbst ein WriteLn deklariert - Indys TIdIOHandler ist
+// der Archetyp -, meint "WriteLn(..)" im Rumpf diese Methode und keine
+// Konsolenausgabe. Am Korpus 68 der 2899 Funde (2,3 %).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TWriter = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure WriteLn(const S: string);'#13#10 +
+  '    procedure Dump;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TWriter.WriteLn(const S: string);'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'procedure TWriter.Dump;'#13#10 +
+  'begin'#13#10 +
+  '  WriteLn(''x'');'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDebugOutput),
+    'eigene WriteLn-Methode ist kein RTL-Debug-Output');
+  finally F.Free; end;
+end;
+
+procedure TTestDebugOutput.Debug_PlainWriteLn_StillReported;
+// WAECHTER: ohne eigene Deklaration bleibt WriteLn der RTL-Aufruf
+// und damit ein Fund. Gate E darf nur greifen, wo die Unit den Namen
+// wirklich selbst belegt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Dump;'#13#10 +
+  'begin'#13#10 +
+  '  WriteLn(''x'');'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDebugOutput),
+    'ohne eigene Deklaration bleibt WriteLn ein Fund');
+  finally F.Free; end;
 end;
 
 procedure TTestDebugOutput.Debug_LoggerFileName_NoFinding;

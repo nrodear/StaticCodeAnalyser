@@ -263,7 +263,7 @@ try DoStuff except on E: Exception do LogError(E.Message); end;
 ## SCA003
 **SQL string built via concatenation**
 
-> SQL string concatenated with '+' from user-controllable input (injection risk)
+> SQL string built by '+' concatenation with a non-literal operand (injection risk if that operand is untrusted)
 
 | Field | Value |
 |---|---|
@@ -273,7 +273,7 @@ try DoStuff except on E: Exception do LogError(E.Message); end;
 | OWASP | A03:2021-Injection |
 | Detector | `uSQLInjection.pas` |
 
-Building SQL via `'WHERE x=' + user_input` enables SQL injection if the input is untrusted. Use parameterized queries (Params.ParamByName(...).Value := ...) instead.
+Building SQL via `'WHERE x='` + operand enables SQL injection when that operand is untrusted. The detector reports the CONCATENATION - it does not track where the operand comes from, so a finding is a review pointer, not proof of a vulnerability. Literal-only concatenations, integer-format masks and known sanitizers are already excluded. Use parameterized queries (`Params.ParamByName(...).Value := ...`) instead.
 
 ```pascal
 // BAD

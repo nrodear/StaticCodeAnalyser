@@ -1,4 +1,4 @@
-unit uDebugOutput;
+﻿unit uDebugOutput;
 
 // Detektor fuer Debug-Ausgaben in Produktionscode.
 // Erkennt Aufrufe von:
@@ -205,6 +205,53 @@ end;
 
 // Baut die Handle-Menge einer Unit (lowercase Bezeichner). Calls wird
 // durchgereicht statt neu gesucht - der Aufrufer hat die Liste ohnehin schon.
+// Gate E (03.09.): Namen der Routinen, die DIESE Unit selbst deklariert,
+// soweit sie mit einem der DEBUG_CALLS kollidieren.
+//
+// WARUM: ein unqualifizierter Aufruf bindet in Pascal zuerst an die
+// eigene Klasse bzw. Unit, erst dann an System. Wo eine Unit selbst ein
+// WriteLn deklariert - Indys TIdIOHandler ist der Archetyp -, meint
+// "WriteLn(...)" im Rumpf genau diese Methode und keine
+// Konsolenausgabe. Die Aussage der Regel trifft dort nicht zu.
+//
+// Gemessen (AQL-Neumessung 03.09., n=125): 4 Fehlalarme, alle dieser
+// Klasse. Am ganzen Korpus 68 der 2899 Funde (2,3 %), verteilt auf
+// writeln (50), showmessage (16), outputdebugstring (2).
+//
+// BEWUSST GROB: es zaehlt die Unit, nicht der Gueltigkeitsbereich. Ein
+// echtes System.WriteLn in einer Unit, die AUCH ein eigenes WriteLn
+// fuehrt, faellt damit mit weg. Die Alternative waere eine
+// Sichtbarkeitsaufloesung pro Aufrufort - viel Aufwand fuer eine Regel,
+// deren Aussage dort ohnehin mehrdeutig ist. Der Test geht in die
+// sichere Richtung: er kann nur Funde ENTFERNEN.
+procedure CollectOwnRoutineNames(UnitNode: TAstNode;
+  Names: TDictionary<string, Boolean>);
+var
+  Decls : TList<TAstNode>;
+  D     : TAstNode;
+  Bare  : string;
+  p     : Integer;
+begin
+  if (UnitNode = nil) or (Names = nil) then Exit;
+  // nkMethod deckt BEIDES ab - Klassenmethoden und freie Routinen; ein
+  // eigenes nkProcedure/nkFunction gibt es im TNodeKind-Enum nicht.
+  Decls := UnitNode.FindAllRef(nkMethod);
+  if Decls <> nil then
+    for D in Decls do
+    begin
+      // Methodennamen tragen das Klassenpraefix ("TIdIOHandler.WriteLn") -
+      // fuer den Vergleich zaehlt nur der letzte Teil.
+      Bare := D.Name.ToLower;
+      p := LastDelimiter('.', Bare);
+      if p > 0 then Bare := Copy(Bare, p + 1, MaxInt);
+      Bare := Trim(Bare);
+      if (Bare = 'writeln') or (Bare = 'write')
+         or (Bare = 'showmessage') or (Bare = 'showmessagepos')
+         or (Bare = 'outputdebugstring') then
+        Names.AddOrSetValue(Bare, True);
+    end;
+end;
+
 procedure CollectTextHandles(UnitNode: TAstNode; Calls: TList<TAstNode>;
   Handles: TDictionary<string, Boolean>);
 var
@@ -255,6 +302,8 @@ var
   N           : TAstNode;
   CondRanges  : TList<TAstNode>;   // Welle 2: nkConditionalRange (DEBUG-guarded {$IFDEF})
   TextHandles : TDictionary<string, Boolean>;   // Gate A: Text-/TextFile-Handles der Unit
+  OwnRoutines : TDictionary<string, Boolean>;   // Gate E: eigene Routinen gleichen Namens
+  SystemQualified : Boolean;   // Gate E: expliziter System.-Qualifier am Fundort
 
   // Welle 2 (Core-Detektoren-Architektur): True wenn Line in einer DEBUG-guarded
   // {$IFDEF DEBUG}-Range liegt (nkConditionalRange-Marker: Line=Start, TypeRef=Ende).
@@ -293,6 +342,7 @@ var
   begin
     NameLow := CallText.ToLower;
     Found   := '';
+    SystemQualified := False;
     for var Kw in DEBUG_CALLS do
     begin
       var p := Pos(Kw, NameLow);
@@ -319,6 +369,9 @@ var
             Dec(qStart);
           if Copy(NameLow, qStart + 1, qEnd - qStart) <> 'system' then
             Continue;
+          // Merken fuer Gate E: hier steht die RTL-Routine EXPLIZIT,
+          // da gibt es nichts aufzuloesen.
+          SystemQualified := True;
         end;
       end;
       // Gate A: 'WriteLn(F, ...)' mit F = Text-/TextFile-Handle schreibt in
@@ -335,6 +388,23 @@ var
       Break;
     end;
     if Found = '' then Exit;
+    // Gate E (03.09.): bindet der unqualifizierte Name an eine
+    // gleichnamige EIGENE Routine dieser Unit, ist es kein RTL-Aufruf.
+    // Indys TIdIOHandler.WriteLn ist der Archetyp - dort meint
+    // "WriteLn(...)" im Rumpf die Methode, nicht die Konsole.
+    // Gemessen: 68 der 2899 Korpusfunde (2,3 %).
+    //
+    // NICHT bei explizitem System.-Qualifier (Review 03.09.): der
+    // Zweig oben laesst 'System.WriteLn' ausdruecklich durch, weil das
+    // per Sprachdefinition die RTL-Routine IST - da ist nichts
+    // mehrdeutig. Und man schreibt 'System.' praktisch nur dann, wenn
+    // der unqualifizierte Name in der Unit verschattet ist, also
+    // genau dort, wo Gate E sonst greifen wuerde. Ohne diese
+    // Ausnahme braeche der Fix den Vertrag von
+    // Debug_SystemQualifiedWriteLn_ReportsWarning - und zwar still,
+    // weil dessen Fixture keine eigene Deklaration traegt.
+    if (not SystemQualified)
+       and OwnRoutines.ContainsKey(Found.Trim.TrimRight(['('])) then Exit;
     // Welle 2: Debug-Ausgabe in einem DEBUG-guarded {$IFDEF DEBUG}-Block ist
     // Absicht (aus Release-Builds auskompiliert), kein vergessener Produktions-
     // Debug -> unterdruecken. Additiv per nkConditionalRange-Marker.
@@ -352,30 +422,38 @@ begin
 
   TextHandles := TDictionary<string, Boolean>.Create;
   try
-    CondRanges := UnitNode.FindAll(nkConditionalRange);   // Welle 2 (additiv)
+    OwnRoutines := TDictionary<string, Boolean>.Create;
     try
-      Calls := UnitNode.FindAll(nkCall);
+      // Gate E: einmal je Unit, VOR der Call-Schleife - dieselbe
+      // Bauform wie CollectTextHandles.
+      CollectOwnRoutineNames(UnitNode, OwnRoutines);
+      CondRanges := UnitNode.FindAll(nkConditionalRange);   // Welle 2 (additiv)
       try
-        // Gate A: Handle-Menge steht VOR der Call-Schleife - eine Datei wird
-        // regelmaessig erst weiter unten geoeffnet als sie beschrieben wird
-        // (SynGenUnit.pas: WriteLn ab :200, AssignFile erst :750).
-        CollectTextHandles(UnitNode, Calls, TextHandles);
-        for N in Calls do
-          CheckCallText(N.Name, N.Line);
+        Calls := UnitNode.FindAll(nkCall);
+        try
+          // Gate A: Handle-Menge steht VOR der Call-Schleife - eine Datei wird
+          // regelmaessig erst weiter unten geoeffnet als sie beschrieben wird
+          // (SynGenUnit.pas: WriteLn ab :200, AssignFile erst :750).
+          CollectTextHandles(UnitNode, Calls, TextHandles);
+          for N in Calls do
+            CheckCallText(N.Name, N.Line);
+        finally
+          Calls.Free;
+        end;
+        // Auch nkAssign-RHS pruefen - Aufrufe wie 's := InputBox(...)' oder
+        // 'Result := WriteLnHelper(...)' leben im TypeRef der Zuweisung.
+        Assigns := UnitNode.FindAll(nkAssign);
+        try
+          for N in Assigns do
+            CheckCallText(N.TypeRef, N.Line);
+        finally
+          Assigns.Free;
+        end;
       finally
-        Calls.Free;
-      end;
-      // Auch nkAssign-RHS pruefen - Aufrufe wie 's := InputBox(...)' oder
-      // 'Result := WriteLnHelper(...)' leben im TypeRef der Zuweisung.
-      Assigns := UnitNode.FindAll(nkAssign);
-      try
-        for N in Assigns do
-          CheckCallText(N.TypeRef, N.Line);
-      finally
-        Assigns.Free;
+        CondRanges.Free;
       end;
     finally
-      CondRanges.Free;
+      OwnRoutines.Free;
     end;
   finally
     TextHandles.Free;

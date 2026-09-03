@@ -1,4 +1,4 @@
-unit uMissingUnitHeader;
+﻿unit uMissingUnitHeader;
 
 // Detektor: Unit beginnt ohne erklaerenden Kommentar-Block.
 //
@@ -64,11 +64,44 @@ begin
 end;
 
 function LineIsUnitDecl(const ALine: string): Boolean;
+// Eine ECHTE unit-Klausel: "unit" + Bezeichner (qualifiziert erlaubt) +
+// optionale Hint-Direktive + Semikolon.
+//
+// Der alte Test war nur Copy(T,1,5) = 'unit ' und traf damit jede
+// Kommentarzeile, die mit dem Wort beginnt. pyscripters Kopfvorlage
+// schreibt in Zeile 2 ' Unit Name: frmProjectExplorer' - der Detektor
+// hielt das fuer die Klausel und prueste anschliessend den Bereich
+// DAHINTER auf einen Kopfkommentar. Der beschreibende Kopf steht dort
+// aber DAVOR und blieb unsichtbar (AQL-Messung Hint-Tier 03.09.:
+// frmProjectExplorer.pas:2, uEditAppIntfs.pas:2).
+//
+// Bewusst ohne Regex und ohne Kommentar-Zustand: es genuegt, dass eine
+// Prosazeile die Form nicht erfuellt. ' Unit Name: X' scheitert am
+// fehlenden Semikolon und am Leerzeichen im "Bezeichner".
 var
-  T : string;
+  T    : string;
+  i, n : Integer;
 begin
+  Result := False;
   T := LowerCase(Trim(ALine));
-  Result := Copy(T, 1, 5) = 'unit ';
+  if Copy(T, 1, 5) <> 'unit ' then Exit;
+  i := 6;
+  n := Length(T);
+  while (i <= n) and (T[i] = ' ') do Inc(i);
+  if i > n then Exit;
+  // Bezeichner, Punkte fuer qualifizierte Namen erlaubt
+  if not CharInSet(T[i], ['a'..'z', '_']) then Exit;
+  while (i <= n) and CharInSet(T[i], ['a'..'z', '0'..'9', '_', '.']) do Inc(i);
+  while (i <= n) and (T[i] = ' ') do Inc(i);
+  // optionale Hint-Direktiven vor dem Semikolon
+  for var Hint in ['deprecated', 'platform', 'library', 'experimental'] do
+    if Copy(T, i, Length(Hint)) = Hint then
+    begin
+      Inc(i, Length(Hint));
+      while (i <= n) and (T[i] <> ';') do Inc(i);
+      Break;
+    end;
+  Result := (i <= n) and (T[i] = ';');
 end;
 
 function LineIsInterface(const ALine: string): Boolean;
