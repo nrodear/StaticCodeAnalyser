@@ -303,6 +303,7 @@ var
   CondRanges  : TList<TAstNode>;   // Welle 2: nkConditionalRange (DEBUG-guarded {$IFDEF})
   TextHandles : TDictionary<string, Boolean>;   // Gate A: Text-/TextFile-Handles der Unit
   OwnRoutines : TDictionary<string, Boolean>;   // Gate E: eigene Routinen gleichen Namens
+  SystemQualified : Boolean;   // Gate E: expliziter System.-Qualifier am Fundort
 
   // Welle 2 (Core-Detektoren-Architektur): True wenn Line in einer DEBUG-guarded
   // {$IFDEF DEBUG}-Range liegt (nkConditionalRange-Marker: Line=Start, TypeRef=Ende).
@@ -341,6 +342,7 @@ var
   begin
     NameLow := CallText.ToLower;
     Found   := '';
+    SystemQualified := False;
     for var Kw in DEBUG_CALLS do
     begin
       var p := Pos(Kw, NameLow);
@@ -367,6 +369,9 @@ var
             Dec(qStart);
           if Copy(NameLow, qStart + 1, qEnd - qStart) <> 'system' then
             Continue;
+          // Merken fuer Gate E: hier steht die RTL-Routine EXPLIZIT,
+          // da gibt es nichts aufzuloesen.
+          SystemQualified := True;
         end;
       end;
       // Gate A: 'WriteLn(F, ...)' mit F = Text-/TextFile-Handle schreibt in
@@ -388,7 +393,18 @@ var
     // Indys TIdIOHandler.WriteLn ist der Archetyp - dort meint
     // "WriteLn(...)" im Rumpf die Methode, nicht die Konsole.
     // Gemessen: 68 der 2899 Korpusfunde (2,3 %).
-    if OwnRoutines.ContainsKey(Found.Trim.TrimRight(['('])) then Exit;
+    //
+    // NICHT bei explizitem System.-Qualifier (Review 03.09.): der
+    // Zweig oben laesst 'System.WriteLn' ausdruecklich durch, weil das
+    // per Sprachdefinition die RTL-Routine IST - da ist nichts
+    // mehrdeutig. Und man schreibt 'System.' praktisch nur dann, wenn
+    // der unqualifizierte Name in der Unit verschattet ist, also
+    // genau dort, wo Gate E sonst greifen wuerde. Ohne diese
+    // Ausnahme braeche der Fix den Vertrag von
+    // Debug_SystemQualifiedWriteLn_ReportsWarning - und zwar still,
+    // weil dessen Fixture keine eigene Deklaration traegt.
+    if (not SystemQualified)
+       and OwnRoutines.ContainsKey(Found.Trim.TrimRight(['('])) then Exit;
     // Welle 2: Debug-Ausgabe in einem DEBUG-guarded {$IFDEF DEBUG}-Block ist
     // Absicht (aus Release-Builds auskompiliert), kein vergessener Produktions-
     // Debug -> unterdruecken. Additiv per nkConditionalRange-Marker.
