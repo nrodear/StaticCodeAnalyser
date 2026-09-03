@@ -432,6 +432,37 @@ const
     '{$I sca_test_implinclude.inc}'#13#10 +
     'end.';
 
+function ZaehleFunde(const ASrc: string): Integer;
+var
+  F : TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(ASrc);
+  try
+    Result := TFindingHelper.Count(F, fkUnusedRoutine);
+  finally
+    F.Free;
+  end;
+end;
+
+// Legt das Include an, scannt die Fixture, raeumt beides wieder ab und
+// liefert die Zahl der SCA164-Funde. Ein Helfer statt zweier
+// geschachtelter try-Bloecke je Test - beide Tests unterscheiden sich
+// nur im Include-Inhalt.
+function ZaehleMitInclude(const AIncInhalt: string): Integer;
+var
+  IncPath : string;
+begin
+  IncPath := SchreibeInclude(CIncName, AIncInhalt);
+  try
+    Result := ZaehleFunde(CSrcMitInclude);
+  finally
+    if TFile.Exists(IncPath) then
+    begin
+      TFile.Delete(IncPath);
+    end;
+  end;
+end;
+
 procedure TTestUnusedRoutine.Unused_CallerInImplInclude_NoFinding;
 // Selbstscan 03.09.: uLocalization.pas:137 meldete 'JoinPoLines' als
 // ungenutzt - die drei Aufrufer stehen in uLocalizationPo.inc, per
@@ -442,23 +473,13 @@ procedure TTestUnusedRoutine.Unused_CallerInImplInclude_NoFinding;
 // x86.inc/x64.inc, mormot.core.os mit der posix-Variante, JclWin32 mit
 // AclApi.imp) - an den Include-Dateien nachgeschlagen, alle echt.
 // Ohne den Fix ROT mit 1 Fund.
-var
-  F       : TObjectList<TLeakFinding>;
-  IncPath : string;
 begin
-  IncPath := SchreibeInclude(CIncName,
+  Assert.AreEqual<Integer>(0, ZaehleMitInclude(
     'procedure RuftAuf;'#13#10 +
     'begin'#13#10 +
     '  Helferlein;'#13#10 +
-    'end;');
-  try
-    F := TFindingHelper.FindingsOfFile(CSrcMitInclude);
-    try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedRoutine),
-      'der Aufrufer steht im Include - die Routine ist nicht ungenutzt');
-    finally F.Free; end;
-  finally
-    if TFile.Exists(IncPath) then TFile.Delete(IncPath);
-  end;
+    'end;'),
+    'der Aufrufer steht im Include - die Routine ist nicht ungenutzt');
 end;
 
 procedure TTestUnusedRoutine.Unused_ImplIncludeWithoutCaller_StillReported;
@@ -468,19 +489,9 @@ procedure TTestUnusedRoutine.Unused_ImplIncludeWithoutCaller_StillReported;
 // alle sind Defines-Dateien im Unit-Kopf (jcl.inc, mormot.defines.inc),
 // die nie einen Aufrufer enthalten. Deshalb wird der INHALT gelesen und
 // nur bei genanntem Namen unterdrueckt.
-var
-  F       : TObjectList<TLeakFinding>;
-  IncPath : string;
 begin
-  IncPath := SchreibeInclude(CIncName, 'const CIrgendwas = 1;');
-  try
-    F := TFindingHelper.FindingsOfFile(CSrcMitInclude);
-    try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedRoutine),
-      'ein Include ohne den Namen entlastet die Routine nicht');
-    finally F.Free; end;
-  finally
-    if TFile.Exists(IncPath) then TFile.Delete(IncPath);
-  end;
+  Assert.AreEqual<Integer>(1, ZaehleMitInclude('const CIrgendwas = 1;'),
+    'ein Include ohne den Namen entlastet die Routine nicht');
 end;
 
 initialization

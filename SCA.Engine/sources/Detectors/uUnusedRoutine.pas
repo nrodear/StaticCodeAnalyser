@@ -1,4 +1,4 @@
-unit uUnusedRoutine;
+﻿unit uUnusedRoutine;
 
 // Detektor: top-level Procedure/Function in einer Unit wird nirgendwo
 // aufgerufen (SCA164).
@@ -83,6 +83,12 @@ type
     // belegbar. Siehe Implementations-Kommentar.
     class function ImplIncludeText(Lines: TStringList; const FileName: string;
       AContext: TAnalyzeContext): string; static;
+    // Wort-Index ueber ImplIncludeText - nil, wenn die Unit keine
+    // Includes im implementation-Teil hat (der Normalfall). Der Aufrufer
+    // besitzt das Ergebnis.
+    class function ImplIncludeWords(Lines: TStringList;
+      const FileName: string; AContext: TAnalyzeContext):
+      TObjectDictionary<string, TList<Integer>>; static;
     class function IsLinkAnchorCandidate(const TypeRef: string): Boolean; static;
     // True wenn die Routine ein Konstruktor oder Destruktor ist - nicht
     // wie eine normale Procedure gerufen. Match an TypeRef-Praefix.
@@ -209,6 +215,70 @@ begin
   Result := Trim(Copy(ARaw, n, e - n));
 end;
 
+// Index der Zeile, die NUR aus 'implementation' besteht; -1 wenn keine.
+//
+// Bewusst nur die eigene Zeile: stuende das Wort einzeilig mit anderem
+// Code, griffe das Gate nicht und der Fund bliebe stehen wie bisher -
+// die harmlose Fehlrichtung. Am Referenzkorpus ist der Fall leer
+// gemessen: alle 1.233 SCA164-Fundstellen haben eine eigene Zeile.
+function ImplementationZeile(Lines: TStringList): Integer;
+var
+  i   : Integer;
+  Low : string;
+begin
+  for i := 0 to Lines.Count - 1 do
+  begin
+    Low := LowerCase(Trim(Lines[i]));
+    if (Low = 'implementation') or StartsStr('implementation ', Low)
+       or StartsStr('implementation'#9, Low) then
+      Exit(i);
+  end;
+  Result := -1;
+end;
+
+// Haengt den Text der Datei an, die '{$I}' an dieser Stelle einbindet.
+// Nicht auffindbar (Compiler-Suchpfad, generierte Datei) = KEIN Beleg,
+// und ohne Beleg wird nicht unterdrueckt: sonst stillte ein toter
+// Include-Verweis die ganze Unit.
+procedure HaengeIncludeDatei(const ABasisDatei, AZiel: string;
+  AContext: TAnalyzeContext; SB: TStringBuilder);
+var
+  Voll      : string;
+  IncLines  : TStringList;
+  IncCached : Boolean;
+begin
+  if TPath.IsPathRooted(AZiel) then
+    Voll := AZiel
+  else
+    Voll := TPath.GetFullPath(ExtractFilePath(ABasisDatei) + AZiel);
+  IncLines := AcquireLines(Voll, IncCached, CtxFileTextCache(AContext));
+  if not Assigned(IncLines) then Exit;
+  try
+    SB.AppendLine(IncLines.Text);
+  finally
+    ReleaseLines(IncLines, IncCached);
+  end;
+end;
+
+// Alle '{$...}' einer Zeile durchgehen und die Include-Ziele anhaengen.
+procedure HaengeIncludesDerZeile(const AZeile, ABasisDatei: string;
+  AContext: TAnalyzeContext; SB: TStringBuilder);
+var
+  Low  : string;
+  p    : Integer;
+  Ziel : string;
+begin
+  Low := LowerCase(AZeile);
+  p   := Pos('{$', Low);
+  while p > 0 do
+  begin
+    Ziel := IncludeTargetAt(Low, AZeile, p);
+    if Ziel <> '' then
+      HaengeIncludeDatei(ABasisDatei, Ziel, AContext, SB);
+    p := Pos('{$', Low, p + 2);
+  end;
+end;
+
 class function TUnusedRoutineDetector.ImplIncludeText(Lines: TStringList;
   const FileName: string; AContext: TAnalyzeContext): string;
 // Steht im implementation-Teil ein '{$I datei}', ist der Unit-Text
@@ -234,62 +304,35 @@ class function TUnusedRoutineDetector.ImplIncludeText(Lines: TStringList;
 // einbindet, ist im Korpus nicht belegt, und die Aufloesung braucht
 // dann Suchpfade, die die Engine nicht kennt.
 var
-  i, p, ImplZeile : Integer;
-  Low, Ziel, Voll : string;
-  SB              : TStringBuilder;
-  IncLines        : TStringList;
-  IncCached       : Boolean;
+  i        : Integer;
+  ImplZeile: Integer;
+  SB       : TStringBuilder;
 begin
   Result := '';
-  if Lines = nil then Exit;
-  ImplZeile := -1;
-  for i := 0 to Lines.Count - 1 do
-  begin
-    Low := LowerCase(Trim(Lines[i]));
-    if (Low = 'implementation') or StartsStr('implementation ', Low)
-       or StartsStr('implementation'#9, Low) then
-    begin
-      ImplZeile := i;
-      Break;
-    end;
-  end;
+  if not Assigned(Lines) then Exit;
+  ImplZeile := ImplementationZeile(Lines);
   if ImplZeile < 0 then Exit;
 
   SB := TStringBuilder.Create;
   try
     for i := ImplZeile + 1 to Lines.Count - 1 do
-    begin
-      Low := LowerCase(Lines[i]);
-      p   := Pos('{$', Low);
-      while p > 0 do
-      begin
-        Ziel := IncludeTargetAt(Low, Lines[i], p);
-        if Ziel <> '' then
-        begin
-          if TPath.IsPathRooted(Ziel) then
-            Voll := Ziel
-          else
-            Voll := TPath.GetFullPath(ExtractFilePath(FileName) + Ziel);
-          IncLines := AcquireLines(Voll, IncCached,
-                                   CtxFileTextCache(AContext));
-          // nil = nicht auffindbar (Suchpfad des Compilers, generierte
-          // Datei). Dann liegt KEIN Beleg vor, und ohne Beleg wird nicht
-          // unterdrueckt - sonst stillte ein toter Include-Verweis die
-          // ganze Unit.
-          if IncLines <> nil then
-          try
-            SB.AppendLine(IncLines.Text);
-          finally
-            ReleaseLines(IncLines, IncCached);
-          end;
-        end;
-        p := Pos('{$', Low, p + 2);
-      end;
-    end;
+      HaengeIncludesDerZeile(Lines[i], FileName, AContext, SB);
     Result := SB.ToString;
   finally
     SB.Free;
   end;
+end;
+
+class function TUnusedRoutineDetector.ImplIncludeWords(Lines: TStringList;
+  const FileName: string; AContext: TAnalyzeContext):
+  TObjectDictionary<string, TList<Integer>>;
+var
+  Txt : string;
+begin
+  Txt := ImplIncludeText(Lines, FileName, AContext);
+  if Txt = '' then
+    Exit(nil);
+  Result := TDetectorUtils.BuildWordPositionIndex(Txt);
 end;
 
 class function TUnusedRoutineDetector.IsLinkAnchorCandidate(
@@ -348,7 +391,6 @@ var
   // Wort-Index ueber den Text der '{$I}'-Includes des implementation-
   // Teils; nil, wenn die Unit keine hat (der Normalfall).
   IncWords    : TObjectDictionary<string, TList<Integer>>;
-  IncText     : string;
   InterfaceMethods : TStringList; // alle nkMethod-Namen unter nkInterface
   i           : Integer;
   IFList      : TList<TAstNode>;
@@ -397,9 +439,7 @@ begin
   try
     // Einmal je Datei, nicht je Routine: das Lesen der Include-Datei
     // laeuft ueber denselben Text-Cache wie die Unit selbst.
-    IncText := ImplIncludeText(Lines, FileName, AContext);
-    if IncText <> '' then
-      IncWords := TDetectorUtils.BuildWordPositionIndex(IncText);
+    IncWords := ImplIncludeWords(Lines, FileName, AContext);
 
     // Strippt Strings + Kommentare und liefert die Char->Quellzeile-Map mit -
     // ersetzt den Zwilling von uUnusedPrivateMethod und sparte das O(n)-pro-
@@ -472,7 +512,7 @@ begin
           if HasExternalCaller(MethName, Mth.Line, RoutineEnd) then Continue;
           // Der Aufrufer kann in einem '{$I}' des implementation-Teils
           // stehen - dort sieht ihn weder Parser noch WordIdx.
-          if (IncWords <> nil)
+          if Assigned(IncWords)
              and IncWords.ContainsKey(LowerCase(MethName)) then Continue;
 
           F            := TLeakFinding.Create;
