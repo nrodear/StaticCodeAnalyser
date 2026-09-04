@@ -1350,6 +1350,24 @@ begin
     fkRoutineResultUnassigned,   // SCA121 ~58% (absolute-Result, nested-scope, ifdef)
     fkLockWithoutTryFinally,     // SCA109 ~85% pre-guard (call-free-Getter/Setter)
 
+    // SCA136 LeakInConstructor: VOLLZAEHLUNG 2026-09-03, mindestens 6 der
+    // 8 Korpusfunde sind Fehlalarme. Die Praemisse traegt nicht - Delphi
+    // ruft bei einer Ausnahme IM Konstruktor automatisch den Destruktor
+    // der halbfertigen Instanz. Drei Eigentumsformen kennt der Detektor
+    // nicht:
+    //   * der Destruktor gibt das Feld frei (TJvCustomFiller,
+    //     TJvCustomDataProvider, TALiOSWebRTC via ALFreeAndNil(fQueue))
+    //   * die Freigabe laeuft ueber die EIGENSCHAFT statt das Feld -
+    //     TJvPlugin ruft 'Commands.Free', nicht 'FCommands.Free'
+    //   * ein EIGENTUEMER raeumt auf - TALVerticalSheet hat gar keinen
+    //     Destruktor und braucht keinen, weil
+    //     'TALRectangle.Create(Container)' das Eigentum uebergibt
+    //     (dasselbe Muster gatet SCA001 als IsComponentOwnerCreate).
+    // Demote statt Gate, wie bei SCA124: das Gate braucht Destruktor- und
+    // Eigentuemer-Wissen, der Demote kostet nichts und ist reversibel.
+    // Kein DROP - fcMedium liegt auf der Default-Schwelle.
+    fkLeakInConstructor,
+
     // SCA196 ManagedResultUninit: Start war fcLow (User-Entscheid); nach
     // 2 FP-Fix-Runden und Korpus-VOLLPRUEFUNG 2026-08-07 (51 Funde, 49
     // unikate Stellen, ALLE adversarial als TP verifiziert, 0 FP) auf

@@ -151,6 +151,12 @@ procedure TTestConfidenceFilter.KindDefaultConfidence_VollzaehlungDemotesAreMedi
 // Quote den Demote, sondern die fehlende Wertebereichs-Analyse: der
 // behauptete Ueberlauf ist nie beweisbar). Alle vier standen im
 // else-Default auf fcHigh und damit im Error-Tier.
+//
+// NACHTRAG 2026-09-03, fuenfte Regel: SCA136 LeakInConstructor, >=6 von 8
+// Funden Fehlalarm. Auch hier traegt die PRAEMISSE nicht - Delphi ruft bei
+// einer Ausnahme im Konstruktor automatisch den Destruktor, und der
+// Detektor kennt drei Eigentumsformen nicht (Destruktor gibt frei,
+// Freigabe ueber die Eigenschaft statt das Feld, Eigentuemer raeumt auf).
 // Wer diesen Test rot macht, will re-promoten - zulaessig NUR mit frischer
 // Vollzaehlung, nicht mit einer Stichprobe (genau daran ist die alte
 // Einschaetzung dieser Regeln gescheitert: Quoten aus n=1).
@@ -167,6 +173,9 @@ begin
   Assert.AreEqual<TFindingConfidence>(fcMedium,
     KindDefaultConfidence(fkDfmDuplicateBinding),
     'SCA027: 0 TP / 2 FP, Rolle der Komponente wird nicht geprueft');
+  Assert.AreEqual<TFindingConfidence>(fcMedium,
+    KindDefaultConfidence(fkLeakInConstructor),
+    'SCA136: Delphi ruft den Destruktor bei einer Ctor-Ausnahme selbst');
 end;
 
 procedure TTestConfidenceFilter.KindDefaultConfidence_HardenedHeuristicsAreLow;
