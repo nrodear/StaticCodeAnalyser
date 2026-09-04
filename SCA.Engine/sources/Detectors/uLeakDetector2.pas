@@ -195,6 +195,20 @@ type
     // NUR fuer den lsWarning-Zweig - kann nie einen Leak (lsError) maskieren.
     class function FreeInFinallyRegionBySource(MethodNode: TAstNode;
       const StrippedLines: TArray<string>; const VarNameLow: string): Boolean; static;
+    // K-nested-Gate (Vollzaehlung rw61, 2026-09-04): der Parser VERWIRFT
+    // die AST-Knoten geschachtelter Routinen (uParser2 haengt nur einen
+    // nkNestedRange-Marker an die Methode) - ein Free im Nested ist fuer
+    // SearchFree unsichtbar. Am Korpus exakt 4 Faelle, alle Bilderbuch
+    // (Setup.MainFunc LoadDecompressorDLL/LoadSevenZipDLL, HeidiSQL
+    // RunQueryFile/StopProgress, mORMot StartRequest/HandleCleanup): der
+    // Aussenrumpf erzeugt, die geschachtelte Routine gibt frei. True,
+    // wenn eine Quellzeile innerhalb einer nkNestedRange-Spanne VarName
+    // freigibt (ZeileGibtVarFrei - dieselben Nadeln wie der
+    // finally-Scan). Monoton: nur zusaetzliche Suppression in den
+    // not-FreeFound-Zweigen; die lsWarning-Zweige (Free ausserhalb
+    // finally) bleiben unberuehrt.
+    class function FreeInNestedRoutineBySource(MethodNode: TAstNode;
+      const StrippedLines: TArray<string>; const VarNameLow: string): Boolean; static;
     // SCA001-Inkr.2 (Gross-Triage 2026-07-19, iface-cast-Bucket 15/101): das
     // Objekt wird per Interface-Cast an die Refcount abgegeben ('v := IFoo(b)'
     // bzw. 'Intf := b as IFoo') - der Release gibt es frei, kein Leak.
@@ -2342,6 +2356,99 @@ begin
   end;
 end;
 
+// Gibt die (gestrippte) QUELLZEILE S die Variable AVarLow frei?
+//
+// Wortgleich die fruehere lokale LineFreesVar des finally-Scans
+// (FreeInFinallyRegionBySource) samt ihrer Helfer BoundedLeft und
+// CollapseDotSpacing - seit 2026-09-04 auf Unit-Ebene, weil das
+// K-nested-Gate dieselbe Frage stellt. Eine dritte Fassung der
+// Free-Mustererkennung neben GibtVarFrei (AST-Knotennamen) und dieser
+// Zeilenfassung waere die Rule-of-Three-Suende.
+function ZeileGibtVarFrei(const S, AVarLow: string): Boolean;
+var
+  Low : string;
+
+  function BoundedLeft(const Low, Needle: string; NeedRightBreak: Boolean): Boolean;
+  var q, rr : Integer;
+  begin
+    Result := False;
+    q := Pos(Needle, Low);
+    while q > 0 do
+    begin
+      if (q = 1) or not TLeakDetector2.IsIdentChar(Low[q - 1]) then
+      begin
+        if NeedRightBreak then
+        begin
+          rr := q + Length(Needle);
+          if (rr > Length(Low)) or not TLeakDetector2.IsIdentChar(Low[rr]) then Exit(True);
+        end
+        else
+          Exit(True);
+      end;
+      q := PosEx(Needle, Low, q + 1);
+    end;
+  end;
+
+  // Blanks/Tabs, die unmittelbar an einem Punkt kleben, fallen weg:
+  // 'Obj . Free' / 'Obj .Free' / 'Obj. Free' -> 'Obj.Free'. WARUM: der
+  // Vergleich unten laeuft ueber die QUELLZEILE und nicht ueber Tokens, und
+  // die ausgerichtete Schreibweise trennt Empfaenger und Punkt - dann greift
+  // jede Nadel daneben. Beleg (01.09.): CodeReader.ZXing.ScanManager.pas:228
+  // und :277 schreiben 'BinaryBitmap      .Free;' INNERHALB des finally; der
+  // lsWarning-Vertrag behauptet dort 'Free ausserhalb des finally' und liegt
+  // damit falsch. SearchFree ist von der Luecke NICHT betroffen (der Parser
+  // normalisiert den Knotennamen) - es steigt als First-Match-DFS schon am
+  // frueheren FreeAndNil im try-Rumpf mit InFinally=False aus, weshalb die
+  // Entscheidung allein an dieser Quellzeile haengt. Angefasst wird nur die
+  // Punkt-Umgebung, damit die linke Wortgrenze in BoundedLeft weiter traegt.
+  function CollapseDotSpacing(const S: string): string;
+  var
+    i, n, k, o : Integer;
+  begin
+    n := Length(S);
+    SetLength(Result, n);
+    o := 0;
+    i := 1;
+    while i <= n do
+    begin
+      if CharInSet(S[i], [' ', #9]) then
+      begin
+        k := i;
+        while (k <= n) and CharInSet(S[k], [' ', #9]) do Inc(k);
+        if (k <= n) and (S[k] = '.') then
+        begin
+          i := k;                 // Luecke VOR dem Punkt faellt weg
+          Continue;
+        end;
+        while i < k do
+        begin
+          Inc(o); Result[o] := S[i]; Inc(i);
+        end;
+        Continue;
+      end;
+
+      Inc(o); Result[o] := S[i];
+      if S[i] = '.' then
+      begin
+        Inc(i);                   // Luecke NACH dem Punkt faellt weg
+        while (i <= n) and CharInSet(S[i], [' ', #9]) do Inc(i);
+      end
+      else
+        Inc(i);
+    end;
+    SetLength(Result, o);
+  end;
+
+begin
+  Low := LowerCase(CollapseDotSpacing(S));
+  Result := BoundedLeft(Low, AVarLow + '.free', False)
+         or BoundedLeft(Low, AVarLow + '.destroy', False)
+         or BoundedLeft(Low, 'freeandnil(' + AVarLow, True)
+         or BoundedLeft(Low, 'freeandnil(self.' + AVarLow, True);
+end;
+
+
+
 // Gibt der Rumpf eines "with varName do" die Variable frei?
 //
 // Der Parser legt with als nkCall(withExpr) ab und haengt den Body-Block
@@ -2690,87 +2797,6 @@ var
     Result := Length(StrippedLines);      // Fallback: bis Dateiende
   end;
 
-  function BoundedLeft(const Low, Needle: string; NeedRightBreak: Boolean): Boolean;
-  var q, rr : Integer;
-  begin
-    Result := False;
-    q := Pos(Needle, Low);
-    while q > 0 do
-    begin
-      if (q = 1) or not TLeakDetector2.IsIdentChar(Low[q - 1]) then
-      begin
-        if NeedRightBreak then
-        begin
-          rr := q + Length(Needle);
-          if (rr > Length(Low)) or not TLeakDetector2.IsIdentChar(Low[rr]) then Exit(True);
-        end
-        else
-          Exit(True);
-      end;
-      q := PosEx(Needle, Low, q + 1);
-    end;
-  end;
-
-  // Blanks/Tabs, die unmittelbar an einem Punkt kleben, fallen weg:
-  // 'Obj . Free' / 'Obj .Free' / 'Obj. Free' -> 'Obj.Free'. WARUM: der
-  // Vergleich unten laeuft ueber die QUELLZEILE und nicht ueber Tokens, und
-  // die ausgerichtete Schreibweise trennt Empfaenger und Punkt - dann greift
-  // jede Nadel daneben. Beleg (01.09.): CodeReader.ZXing.ScanManager.pas:228
-  // und :277 schreiben 'BinaryBitmap      .Free;' INNERHALB des finally; der
-  // lsWarning-Vertrag behauptet dort 'Free ausserhalb des finally' und liegt
-  // damit falsch. SearchFree ist von der Luecke NICHT betroffen (der Parser
-  // normalisiert den Knotennamen) - es steigt als First-Match-DFS schon am
-  // frueheren FreeAndNil im try-Rumpf mit InFinally=False aus, weshalb die
-  // Entscheidung allein an dieser Quellzeile haengt. Angefasst wird nur die
-  // Punkt-Umgebung, damit die linke Wortgrenze in BoundedLeft weiter traegt.
-  function CollapseDotSpacing(const S: string): string;
-  var
-    i, n, k, o : Integer;
-  begin
-    n := Length(S);
-    SetLength(Result, n);
-    o := 0;
-    i := 1;
-    while i <= n do
-    begin
-      if CharInSet(S[i], [' ', #9]) then
-      begin
-        k := i;
-        while (k <= n) and CharInSet(S[k], [' ', #9]) do Inc(k);
-        if (k <= n) and (S[k] = '.') then
-        begin
-          i := k;                 // Luecke VOR dem Punkt faellt weg
-          Continue;
-        end;
-        while i < k do
-        begin
-          Inc(o); Result[o] := S[i]; Inc(i);
-        end;
-        Continue;
-      end;
-
-      Inc(o); Result[o] := S[i];
-      if S[i] = '.' then
-      begin
-        Inc(i);                   // Luecke NACH dem Punkt faellt weg
-        while (i <= n) and CharInSet(S[i], [' ', #9]) do Inc(i);
-      end
-      else
-        Inc(i);
-    end;
-    SetLength(Result, o);
-  end;
-
-  function LineFreesVar(const S: string): Boolean;
-  var Low : string;
-  begin
-    Low := LowerCase(CollapseDotSpacing(S));
-    Result := BoundedLeft(Low, VarNameLow + '.free', False)
-           or BoundedLeft(Low, VarNameLow + '.destroy', False)
-           or BoundedLeft(Low, 'freeandnil(' + VarNameLow, True)
-           or BoundedLeft(Low, 'freeandnil(self.' + VarNameLow, True);
-  end;
-
   // A2 (SCA009-Triage 2026-07-24): das klassische Dialog-Idiom
   //   L := TDlg.Create(nil); with L do try ... finally Free; end;
   // schreibt den Free OHNE Receiver - 'varname.free' verfehlt ihn. Gate:
@@ -2915,7 +2941,7 @@ begin
     for li := StartL to EndL do
       if (li >= 1) and (li <= Length(StrippedLines)) then
       begin
-        if LineFreesVar(StrippedLines[li - 1]) then Exit(True);
+        if ZeileGibtVarFrei(StrippedLines[li - 1], VarNameLow) then Exit(True);
         // A2: bare 'Free' zaehlt NUR unter dem strengen with-Gate (genau EIN
         // with in der Methode, Ziel = VarName, Body ist ein try) und nur in
         // finally-Regionen NACH der with-Zeile - dann ist der Receiver
@@ -2927,6 +2953,25 @@ begin
           Exit(True);
       end;
   end;
+end;
+
+class function TLeakDetector2.FreeInNestedRoutineBySource(MethodNode: TAstNode;
+  const StrippedLines: TArray<string>; const VarNameLow: string): Boolean;
+// Vertrag und Belege am Klassenkopf. StrippedLines: Index k-1 == Zeile k
+// (gleiche Konvention wie FreeInFinallyRegionBySource); leeres Array
+// (EnsureStripped fehlgeschlagen) -> False, der Fund bleibt.
+var
+  Starts, Ends : TArray<Integer>;
+  i, li        : Integer;
+begin
+  Result := False;
+  if Length(StrippedLines) = 0 then Exit;
+  TAstSpans.CollectNestedSpans(MethodNode, Starts, Ends);
+  for i := 0 to High(Starts) do
+    for li := Starts[i] to Ends[i] do
+      if (li >= 1) and (li <= Length(StrippedLines))
+         and ZeileGibtVarFrei(StrippedLines[li - 1], VarNameLow) then
+        Exit(True);
 end;
 
 class function TLeakDetector2.IsHandedToInterface(MethodNode: TAstNode;
@@ -4256,6 +4301,15 @@ begin
 
         if not FreeFound then
         begin
+          // K-nested-Gate (2026-09-04): ein Free in einer geschachtelten
+          // Routine ist im AST unsichtbar (Marker statt Knoten) - die
+          // Quellzeilen der nkNestedRange-Spannen entscheiden.
+          // Vollzaehlung rw61: exakt 4 Funde, alle Fehlalarme.
+          EnsureStripped;
+          if Gate('SCA001.FreeInNestedRoutine',
+                  FreeInNestedRoutineBySource(MethodNode, StrippedLines,
+                                              VarNameLow)) then
+            Continue;
           // FP-Gate (2026-07-31, FP-Klasse 1 'Ownership-Transfer an Senken'):
           // letzter Use ist die Uebergabe an eine besitzende Senke bzw. an einen
           // fremden Konstruktor. Bewusst ERST hier (nicht bei den uebrigen
@@ -4340,6 +4394,15 @@ begin
 
       if not FreeFound then
       begin
+        // K-nested-Gate, Geschwisterpfad-Symmetrie (Lehre 2026-08-25):
+        // die Vollzaehlung der 34 return-value-Funde in rw61 fand KEINEN
+        // Nested-Free - hier bewegt das Gate also nichts, aber der
+        // naechste Korpus muss nicht auf die Asymmetrie hereinfallen.
+        EnsureStripped;
+        if Gate('SCA001.FreeInNestedRoutine',
+                FreeInNestedRoutineBySource(MethodNode, StrippedLines,
+                                            VarNameLow)) then
+          Continue;
         // FP-Gate (2026-07-31, FP-Klasse 1): identisch zum Create-Pfad - der
         // letzte Use gibt das Objekt an eine besitzende Senke ab
         // ('Item := NewItem(...); ... AddMenuItem(Item);' - JvMRUList.pas:424).
