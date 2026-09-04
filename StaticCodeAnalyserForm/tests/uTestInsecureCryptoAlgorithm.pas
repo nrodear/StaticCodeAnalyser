@@ -452,6 +452,12 @@ procedure TTestInsecureCryptoAlgorithm.InsecureCrypto_DesAlsParameter_NoFinding;
 // Deklariert die Methode einen Parameter namens 'Des', meint das nackte
 // Wort per Pascal-Sichtbarkeit den Parameter, nie den Chiffre.
 // Ohne den Fix ROT (mehrere DES-Funde auf dem Rumpf).
+//
+// FindingsOf, NICHT FindingsOfFile: dieser Detektor ist NUR im
+// In-Memory-Harness registriert (uTestFindingHelper:189), wie alle 22
+// Bestandstests dieser Datei ihn rufen. Die erste Fassung nahm
+// FindingsOfFile - dort laeuft der Detektor gar nicht, die Gegenprobe
+// war rot und DIESER Test gruen, ohne etwas zu pruefen.
 const SRC =
   'unit t; implementation'#13#10 +
   'function StrCopy(Des, Src: PAnsiChar): PAnsiChar;'#13#10 +
@@ -461,7 +467,7 @@ const SRC =
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOfFile(SRC);
+  F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
     'der Destination-Parameter Des ist kein Krypto-Verweis');
   finally F.Free; end;
@@ -480,7 +486,7 @@ const SRC =
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOfFile(SRC);
+  F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
     'nacktes DES ohne gleichnamigen Parameter bleibt ein Fund');
   finally F.Free; end;
