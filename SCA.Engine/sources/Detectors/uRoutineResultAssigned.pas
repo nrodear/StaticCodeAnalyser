@@ -101,7 +101,8 @@ implementation
 uses
   System.Classes,        // TStringList fuer die Quelltext-Gates (2026-07-31)
   uFileTextCache,        // AcquireLines/ReleaseLines - Lazy-Load, nur bei Kandidaten
-  uManagedResultUninit;  // SCA196-Kollisionsregel (WouldReport, 2026-08-07)
+  uManagedResultUninit,
+  uAstSpans;  // SCA196-Kollisionsregel (WouldReport, 2026-08-07)
 
 // Liefert True wenn TypeRef einen Return-Type enthaelt (Format
 // 'function:RetType[;direktive...]'). Procedures haben keinen ':' im
@@ -690,37 +691,6 @@ end;
 // nkLabel-Knoten im Parser (eigenes Inkrement, Hebel D).
 // ===========================================================================
 
-// Fix 2026-07-31 (Pre-Build-Review-Fund Z.922 "Quelltext-Gates scannen den
-// Bereich verschachtelter Routinen mit"): uParser2.ParseMethodImpl (Z.1566ff)
-// parst nested routines, verwirft sie aus dem AST und haengt fuer jede einen
-// nkNestedRange-Marker an den Methodenknoten (Line = Startzeile, TypeRef =
-// Endzeile). Ohne diese Grenzen reichte der Quelltext-Bereich einer Routine vom
-// Kopf bis zum naechsten TOP-LEVEL-Kopf und schloss den ganzen Deklarationsteil
-// samt nested routines ein - ein `Inc(Result)` DORT gehoert der nested function
-// und stellte den echten Bug der AEUSSEREN Funktion still (TES5Edit
-// Sniff/Proc/ProcFindDrawCalls.pas:77 u.a.: Error-Tier-TP-Verlust).
-procedure CollectNestedSpans(AMethod: TAstNode;
-  var AStarts, AEnds: TArray<Integer>);
-var
-  Ch  : TAstNode;
-  Cnt : Integer;
-begin
-  AStarts := nil;
-  AEnds   := nil;
-  if AMethod = nil then Exit;
-  Cnt := 0;
-  for Ch in AMethod.Children do
-    if Ch.Kind = nkNestedRange then
-    begin
-      Inc(Cnt);
-      SetLength(AStarts, Cnt);
-      SetLength(AEnds,   Cnt);
-      AStarts[Cnt - 1] := Ch.Line;
-      AEnds[Cnt - 1]   := StrToIntDef(Ch.TypeRef, Ch.Line);
-      if AEnds[Cnt - 1] < AStarts[Cnt - 1] then
-        AEnds[Cnt - 1] := AStarts[Cnt - 1];
-    end;
-end;
 
 function LineIsInNestedSpan(ALine: Integer;
   const AStarts, AEnds: TArray<Integer>): Boolean;
@@ -1068,7 +1038,9 @@ begin
             // Deklarationsteil. Die verschachtelten Routinen darin gehoeren
             // NICHT zum eigenen Rumpf - ihr `Result` ist ein fremdes. Der
             // Parser liefert die exakten Grenzen als nkNestedRange-Marker.
-            CollectNestedSpans(M, NStarts, NEnds);
+            // Seit 2026-09-04 geteilt in TAstSpans - hier werden die
+            // Spannen AUSGESCHLOSSEN (Result der inneren Routine).
+            TAstSpans.CollectNestedSpans(M, NStarts, NEnds);
             RangeLow := CleanRangeText(Lines, M.Line, EndLine,
                                        NStarts, NEnds, UncoveredNested);
             // Kein Marker fuer einen sichtbaren Routinen-Kopf im Bereich ->

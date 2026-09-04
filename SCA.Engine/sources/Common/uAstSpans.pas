@@ -94,6 +94,19 @@ type
     /// Groesste Zeilennummer ueber ANode und alle seine Nachfahren.
     /// ANode = nil liefert 0. Kein Filter, kein Gate, keine Toleranz.
     class function SubtreeMaxLine(ANode: TAstNode): Integer; static;
+    /// Start-/Endzeilen aller nkNestedRange-Kinder der Methode - die
+    /// Spannen der GESCHACHTELTEN Routinen. Was der Aufrufer damit tut,
+    /// bleibt seine Politik: uRoutineResultAssigned schliesst die
+    /// Spannen AUS (Result der inneren Routine ist nicht das eigene),
+    /// uUnusedLocal schliesst sie EIN (ein Use im Nested zaehlt fuer
+    /// die aeussere Variable). Ein Ende vor dem Start wird auf den
+    /// Start geklemmt (StrToIntDef-Rueckfall).
+    ///
+    /// Bis 2026-09-04 lag die Logik byte-identisch in BEIDEN Detektoren;
+    /// O6.2 (SCA001 K-nested) haette die dritte Kopie gebraucht und war
+    /// genau daran zurueckgestellt (Rule of Three).
+    class procedure CollectNestedSpans(AMethod: TAstNode;
+      var AStarts, AEnds: TArray<Integer>); static;
   end;
 
 implementation
@@ -103,6 +116,7 @@ implementation
 // laeuft in TList<T>.GetItem, und ohne die deklarierende Unit im uses
 // meldet der Compiler H2443/H2445 (inline nicht expandiert).
 uses
+  System.SysUtils,   // StrToIntDef (CollectNestedSpans)
   System.Generics.Collections;
 
 const
@@ -156,6 +170,29 @@ begin
     Dec(Top);
     Cur := Stack[Top];
   until False;
+end;
+
+class procedure TAstSpans.CollectNestedSpans(AMethod: TAstNode;
+  var AStarts, AEnds: TArray<Integer>);
+var
+  Ch  : TAstNode;
+  Cnt : Integer;
+begin
+  AStarts := nil;
+  AEnds   := nil;
+  if AMethod = nil then Exit;
+  Cnt := 0;
+  for Ch in AMethod.Children do
+    if Ch.Kind = nkNestedRange then
+    begin
+      Inc(Cnt);
+      SetLength(AStarts, Cnt);
+      SetLength(AEnds,   Cnt);
+      AStarts[Cnt - 1] := Ch.Line;
+      AEnds[Cnt - 1]   := StrToIntDef(Ch.TypeRef, Ch.Line);
+      if AEnds[Cnt - 1] < AStarts[Cnt - 1] then
+        AEnds[Cnt - 1] := AStarts[Cnt - 1];
+    end;
 end;
 
 end.
