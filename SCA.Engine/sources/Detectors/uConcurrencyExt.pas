@@ -16,6 +16,14 @@ unit uConcurrencyExt;
 // Beide lexisch, weil das Pattern ohne AST-Tiefe matchbar ist und der
 // Parser keine TThread-Hierarchie nachverfolgt.
 //
+// ZUR GROESSE (Selbstscan 2026-09-04, Klasse > 500 Zeilen): die Unit
+// traegt ZWEI Regeln mit einem Dutzend korpusbegruendeter Gates, und
+// jedes Gate dokumentiert seine Messung am Code. Die Laenge ist
+// kommentargetrieben und gewollt - die Kalibrierung erlaubt begruendete
+// Grenzueberschreitung, verlangt aber genau diese Begruendung. Die
+// Regel-Schleifen selbst sind seit der Zerlegung eigene Prozeduren
+// (PruefeResumeAufrufe / PruefeFreeOhneTerminate).
+//
 // FP-Schutz: scannt gestrippten Code (TDetectorUtils.StripStringsAndComments)
 // statt rohem Quelltext. Damit feuern weder dxgettext-msgid-Strings wie
 // 'X.Free; X := nil; -> use FreeAndNil(X)' (uLocalization.pas) noch
@@ -424,6 +432,187 @@ var
     Results.Add(F);
   end;
 
+  // SCA113: <ident>.Resume - die ganze Regel in einer Prozedur
+  // (Zerlegung 2026-09-04; vorher lagen beide Regel-Schleifen direkt
+  // im AnalyzeUnit-Rumpf, kognitiv 42).
+  procedure PruefeResumeAufrufe;
+  begin
+      // 1) <ident>.Resume - aber NICHT TForm/TPanel/etc. .Resume das
+      //    optisch ein VCL-Resume-Painting-Event waere. Wir matchen
+      //    konservativ alles und verlassen uns auf den User-Suppress
+      //    wenn das ein FP ist - der Compiler markiert echte TThread.Resume
+      //    sowieso schon als deprecated.
+      Matches := ReResume.Matches(Code);
+      for M in Matches do
+      begin
+        Recv := M.Groups[1].Value;
+        // FP-Gate (Real-World-FP-Audit 2026-07-10): Nicht-Aufruf-Kontexte
+        // ('procedure TX.Resume'-Header, 'x := r.Resume'-Read, '= TEnum.Resume'-
+        // Vergleich) sind nie ein deprecated TThread.Resume-Aufruf.
+        if IsResumeNonCallContext(M.Index) then Continue;
+        // FP-Gate (Real-World-FP-Audit 2026-07-10): Empfaenger-Typ in-file
+        // aufloesbar UND nicht nach TThread aussehend (FMX-Animation, TTimer,
+        // TProcess, NSURLSessionTask) -> unterdruecken. Unaufloesbar -> weiter
+        // melden (kein FN; die echten TThread.Resume-TPs tragen 'Thread' im
+        // Namen bzw. loesen auf einen '...Thread'-Typ auf).
+        RecvType := ResolveResumeReceiverType(Recv);
+        if (RecvType <> '') and not LooksLikeThreadType(RecvType) then Continue;
+        // Zwei Gates fuer den UNAUFLOESBAREN Empfaenger (Vollzaehlung
+        // 2026-09-04: 114 Funde, 9 Fehlalarme; alle drei Mechaniken sind
+        // Faelle, die der Kommentar oben ausdruecklich unterdruecken
+        // WILL - TProcess, NSURLSessionTask stehen woertlich dort -, die
+        // die in-file-Aufloesung aber nicht erreicht):
+        //
+        // (a) PUNKTKETTE - 'FExProcess.Process.Resume'. Das Regex greift
+        //     nur das letzte Glied; dessen Deklaration liegt cross-unit
+        //     (TProcess-Property, 4x doublecmd; PyScripter
+        //     ActiveDebugger). Am Korpus waren ALLE fuenf unaufloesbaren
+        //     Punktketten-Empfaenger Fehlalarme. Traegt das letzte Glied
+        //     'thread' im Namen, wird weiter gemeldet - das deckt die
+        //     TP-Form 'Modul.FWorkerThread.Resume'.
+        if (RecvType = '') and (M.Index > 1) and (Code[M.Index - 1] = '.')
+           and not EndsStr('thread', LowerCase(Recv)) then Continue;
+        // (b) INLINE-VAR MIT TYPINFERENZ - 'var LTask :=
+        //     FURLSession.uploadTaskWithRequest(..)' hat keine
+        //     Typannotation, die Aufloesungs-Regexe greifen nie
+        //     (Alcinoe NSURLSessionTask, 2x). Steht im Initialisierer das
+        //     Token 'thread' ('var W := TWorkerThread.Create'), wird
+        //     weiter gemeldet.
+        if (RecvType = '') and InferenzInitOhneThreadToken(Recv) then Continue;
+        Emit(fkThreadResumeDeprecated,
+          Format('%s.Resume is deprecated since Delphi 2010 - prefer ' +
+                 '%s.Start or pass CreateSuspended=False to the constructor. ' +
+                 'Suppress per line if this is not a TThread reference: ' +
+                 '// noinspection ThreadResumeDeprecated',
+                 [Recv, Recv]),
+          M.Index);
+      end;
+  end;
+
+  // SCA114: FreeAndNil/Free ohne Terminate+WaitFor davor.
+  procedure PruefeFreeOhneTerminate;
+  begin
+      // 2) FreeAndNil(<ident>) oder <ident>.Free auf einer Zeile, davor
+      //    KEIN <ident>.Terminate (in den letzten ~10 Zeilen).
+      //    LookBack-Window in Bytes (gestripte Code-Laenge); ~500 chars
+      //    deckt ~10 Code-Zeilen ab.
+      Matches := ReFreeNil.Matches(Code);
+      for M in Matches do
+      begin
+        Ident := M.Groups[1].Value;
+
+        // Type-Filter: nur weitermachen wenn der Identifier nach einem
+        // TThread-Descendant aussieht. Lookups in dieser Reihenfolge:
+        //   1. Spezialfall 'Result': aus Function-Header oben.
+        //   2. `<Ident> : <Type>;`-Deklaration im selben File.
+        //   3. `<Ident> := T<Type>.Create...` als Konstruktor-Call im selben
+        //      File - faengt cross-unit deklarierte Globals (z.B.
+        //      `gDfmRepoIndex` in uDfmRepoIndex.pas, instanziiert hier).
+        // Wenn KEINER der drei Lookups einen Typ liefert, faellt der
+        // konservative Pfad weiter (Befund + Suppress-Hinweis im Detail).
+        DeclaredType := '';
+        if SameText(Ident, 'Result') then
+          DeclaredType := ResolveResultType(M.Index)
+        else
+        begin
+          ReDecl := TRegEx.Create(
+            '(?i)\b' + Ident + '\s*:\s*([A-Za-z0-9_<>,\s.]+?)\s*(?:;|\)|=)');
+          DeclMatch := ReDecl.Match(Code);
+          if DeclMatch.Success then
+            DeclaredType := DeclMatch.Groups[1].Value
+          else
+          begin
+            // Fallback: Konstruktor-Call `<Ident> := TXxx.Create...`. Faengt
+            // cross-unit-deklarierte Identifier die hier nur instanziiert
+            // werden - typischer Pfad fuer globale Indizes/Caches.
+            ReDecl := TRegEx.Create(
+              '(?i)\b' + Ident + '\s*:=\s*(T\w+)\s*\.\s*Create\b');
+            DeclMatch := ReDecl.Match(Code);
+            if DeclMatch.Success then
+              DeclaredType := DeclMatch.Groups[1].Value;
+          end;
+        end;
+        // Type-/Name-Filter: feuern wenn ENTWEDER der aufgeloeste Typ nach
+        // TThread aussieht, ODER der Typ unaufloesbar ist UND der IDENTIFIER-
+        // Name selbst den Thread-Hinweis traegt. Vermeidet FP bei
+        // TObjectList/TStringList/TStream/TForm/Result (aufgeloest, kein Thread)
+        // UND bei unaufloesbaren Nicht-Thread-Feldern (Real-World 2026-06-26:
+        // FFullFilesTree: TFiles im Parent-Unit, `FFileR, FFileL: TFile` -
+        // compound-Decl, Regex findet den Typ nicht). Cross-unit Thread-Globals
+        // bleiben erfasst, solange Name oder Konstruktor-Call den Thread zeigt.
+        if not (
+             ((DeclaredType <> '') and LooksLikeThreadType(DeclaredType))
+             or ((DeclaredType = '') and (Pos('thread', LowerCase(Ident)) > 0))
+           ) then
+          Continue;
+
+        // Track C Opt-in (Konzept_StrukturellePhase, Runde 2): Cross-Unit-
+        // Gegenprobe zur lexikalischen Suffix-Heuristik oben. Kennt der repo-
+        // weite TTypeIndex den aufgeloesten DeclaredType und ist er beweisbar
+        // KEIN TThread-Nachfahre (z.B. TJvThread=class(TJvComponent)), war das
+        // ein FP -> ueberspringen. nil/leerer Index oder unbekannter Typ ->
+        // kein Eingriff (bestehendes Verhalten, TP-safe). Greift nur fuer den
+        // aufgeloesten Typ-Zweig; der reine Ident-Name-Fallback (DeclaredType='')
+        // liefert '' -> keine Suppression.
+        if IsProvablyNotThread(DeclaredType) then Continue;
+
+        LookBack := M.Index - 500;
+        if LookBack < 1 then LookBack := 1;
+        Snippet := Copy(Code, LookBack, M.Index - LookBack);
+        // Heuristik (V2 Audit 2026-06-07): vor dem FreeAndNil muss innerhalb
+        // der LookBack-Range ENTWEDER `<Ident>.Terminate` ODER
+        // `<Ident>.WaitFor` vorkommen.
+        //
+        // V1 forderte BEIDES strikt - das war zu aggressiv: Thread-Patterns
+        // die mit endlichem Job laufen und natuerlich exit-en brauchen NUR
+        // WaitFor (z.B. MVCFramework.Console.TConsoleSpinner.Hide nutzt
+        // CompareExchange-Flag + WaitFor; Terminate macht hier nichts).
+        // Detector hat im Realfall 17 FPs in delphimvcframework gemeldet.
+        //
+        // Wer beide will: jeder Pattern allein ist 'protective intent' -
+        // das ist die relevante Heuristik. Echte Bugs (nackter FreeAndNil
+        // ohne irgendetwas) bleiben gemeldet.
+        HasTerminate :=
+          (Pos(LowerCase(Ident) + '.terminate', LowerCase(Snippet)) > 0) or
+          (Pos(LowerCase(Ident) + '.waitfor',   LowerCase(Snippet)) > 0);
+        if HasTerminate then Continue;
+
+        // FP-Gate (a) (Real-World-Audit 2026-07-31, FP-Klasse 'alternativer
+        // Beendigungs-Nachweis'): `TerminateThread(<Ident>.Handle, 0)` im
+        // LookBack-Fenster ist ein Hard-Kill des Workers - haesslich, aber der
+        // gemeldete Zustand ('worker may still be running') trifft nicht zu.
+        // Vorbild-FP: cnwizards CnWizUpgradeFrm finalization.
+        if TRegEx.IsMatch(Snippet,
+             '(?i)\bTerminateThread\s*\(\s*' + TRegEx.Escape(Ident) + '\b') then
+          Continue;
+
+        // FP-Gate (b) (Real-World-Audit 2026-07-31, gleiche FP-Klasse): das
+        // FreeAndNil steht unter einem POSITIVEN `if <Ident>.Finished`-Guard -
+        // der Worker ist nachweislich nicht mehr aktiv. Vorbild-FP: TES5Edit
+        // xeMainForm. Polaritaets-Auswertung siehe FinishedGuardProvesIdle
+        // (Review-Fund 2026-07-31: `if not <X>.Finished` / `if <X>.Started`
+        // beweisen das GEGENTEIL und duerfen nicht mehr unterdruecken).
+        if FinishedGuardProvesIdle(Snippet, Ident) then
+          Continue;
+
+        // FP-Gate (c) (Real-World-Audit 2026-07-31, FP-Klasse 'thread-honoriert-
+        // Terminated'): die in dieser Unit definierte Thread-Klasse wertet
+        // Terminated aus -> das implizite Terminate+WaitFor in TThread.Destroy
+        // reicht. Vorbild-FP: jvcl JvTimer (TJvTimerThread.Execute mit
+        // 'until Terminated'). Laeuft absichtlich ZULETZT (nur fuer die wenigen
+        // Kandidaten, die alle billigeren Gates passiert haben).
+        if ThreadHonorsTerminated(Ident, DeclaredType) then Continue;
+
+        Emit(fkTThreadDestroyWithoutTerminate,
+          Format('FreeAndNil(%s) without prior %s.Terminate + %s.WaitFor. ' +
+                 'If %s is a TThread descendant the worker may still be ' +
+                 'running -> AV / heap corruption. If it isnt a thread, ' +
+                 'suppress with // noinspection TThreadDestroyWithoutTerminate',
+                 [Ident, Ident, Ident, Ident]),
+          M.Index);
+      end;
+  end;
+
 begin
   ReFuncHeader := TRegExMatches.CachedEx(RE_FUNC_HEADER, [roNotEmpty]);
   ReResume     := TRegExMatches.CachedEx(RE_RESUME_CALL, [roNotEmpty]);
@@ -435,176 +624,8 @@ begin
     Code := TDetectorUtils.StripStringsAndCommentsCached(
       Lines, LineFor, AContext, FileName);
 
-    // 1) <ident>.Resume - aber NICHT TForm/TPanel/etc. .Resume das
-    //    optisch ein VCL-Resume-Painting-Event waere. Wir matchen
-    //    konservativ alles und verlassen uns auf den User-Suppress
-    //    wenn das ein FP ist - der Compiler markiert echte TThread.Resume
-    //    sowieso schon als deprecated.
-    Matches := ReResume.Matches(Code);
-    for M in Matches do
-    begin
-      Recv := M.Groups[1].Value;
-      // FP-Gate (Real-World-FP-Audit 2026-07-10): Nicht-Aufruf-Kontexte
-      // ('procedure TX.Resume'-Header, 'x := r.Resume'-Read, '= TEnum.Resume'-
-      // Vergleich) sind nie ein deprecated TThread.Resume-Aufruf.
-      if IsResumeNonCallContext(M.Index) then Continue;
-      // FP-Gate (Real-World-FP-Audit 2026-07-10): Empfaenger-Typ in-file
-      // aufloesbar UND nicht nach TThread aussehend (FMX-Animation, TTimer,
-      // TProcess, NSURLSessionTask) -> unterdruecken. Unaufloesbar -> weiter
-      // melden (kein FN; die echten TThread.Resume-TPs tragen 'Thread' im
-      // Namen bzw. loesen auf einen '...Thread'-Typ auf).
-      RecvType := ResolveResumeReceiverType(Recv);
-      if (RecvType <> '') and not LooksLikeThreadType(RecvType) then Continue;
-      // Zwei Gates fuer den UNAUFLOESBAREN Empfaenger (Vollzaehlung
-      // 2026-09-04: 114 Funde, 9 Fehlalarme; alle drei Mechaniken sind
-      // Faelle, die der Kommentar oben ausdruecklich unterdruecken
-      // WILL - TProcess, NSURLSessionTask stehen woertlich dort -, die
-      // die in-file-Aufloesung aber nicht erreicht):
-      //
-      // (a) PUNKTKETTE - 'FExProcess.Process.Resume'. Das Regex greift
-      //     nur das letzte Glied; dessen Deklaration liegt cross-unit
-      //     (TProcess-Property, 4x doublecmd; PyScripter
-      //     ActiveDebugger). Am Korpus waren ALLE fuenf unaufloesbaren
-      //     Punktketten-Empfaenger Fehlalarme. Traegt das letzte Glied
-      //     'thread' im Namen, wird weiter gemeldet - das deckt die
-      //     TP-Form 'Modul.FWorkerThread.Resume'.
-      if (RecvType = '') and (M.Index > 1) and (Code[M.Index - 1] = '.')
-         and not EndsStr('thread', LowerCase(Recv)) then Continue;
-      // (b) INLINE-VAR MIT TYPINFERENZ - 'var LTask :=
-      //     FURLSession.uploadTaskWithRequest(..)' hat keine
-      //     Typannotation, die Aufloesungs-Regexe greifen nie
-      //     (Alcinoe NSURLSessionTask, 2x). Steht im Initialisierer das
-      //     Token 'thread' ('var W := TWorkerThread.Create'), wird
-      //     weiter gemeldet.
-      if (RecvType = '') and InferenzInitOhneThreadToken(Recv) then Continue;
-      Emit(fkThreadResumeDeprecated,
-        Format('%s.Resume is deprecated since Delphi 2010 - prefer ' +
-               '%s.Start or pass CreateSuspended=False to the constructor. ' +
-               'Suppress per line if this is not a TThread reference: ' +
-               '// noinspection ThreadResumeDeprecated',
-               [Recv, Recv]),
-        M.Index);
-    end;
-
-    // 2) FreeAndNil(<ident>) oder <ident>.Free auf einer Zeile, davor
-    //    KEIN <ident>.Terminate (in den letzten ~10 Zeilen).
-    //    LookBack-Window in Bytes (gestripte Code-Laenge); ~500 chars
-    //    deckt ~10 Code-Zeilen ab.
-    Matches := ReFreeNil.Matches(Code);
-    for M in Matches do
-    begin
-      Ident := M.Groups[1].Value;
-
-      // Type-Filter: nur weitermachen wenn der Identifier nach einem
-      // TThread-Descendant aussieht. Lookups in dieser Reihenfolge:
-      //   1. Spezialfall 'Result': aus Function-Header oben.
-      //   2. `<Ident> : <Type>;`-Deklaration im selben File.
-      //   3. `<Ident> := T<Type>.Create...` als Konstruktor-Call im selben
-      //      File - faengt cross-unit deklarierte Globals (z.B.
-      //      `gDfmRepoIndex` in uDfmRepoIndex.pas, instanziiert hier).
-      // Wenn KEINER der drei Lookups einen Typ liefert, faellt der
-      // konservative Pfad weiter (Befund + Suppress-Hinweis im Detail).
-      DeclaredType := '';
-      if SameText(Ident, 'Result') then
-        DeclaredType := ResolveResultType(M.Index)
-      else
-      begin
-        ReDecl := TRegEx.Create(
-          '(?i)\b' + Ident + '\s*:\s*([A-Za-z0-9_<>,\s.]+?)\s*(?:;|\)|=)');
-        DeclMatch := ReDecl.Match(Code);
-        if DeclMatch.Success then
-          DeclaredType := DeclMatch.Groups[1].Value
-        else
-        begin
-          // Fallback: Konstruktor-Call `<Ident> := TXxx.Create...`. Faengt
-          // cross-unit-deklarierte Identifier die hier nur instanziiert
-          // werden - typischer Pfad fuer globale Indizes/Caches.
-          ReDecl := TRegEx.Create(
-            '(?i)\b' + Ident + '\s*:=\s*(T\w+)\s*\.\s*Create\b');
-          DeclMatch := ReDecl.Match(Code);
-          if DeclMatch.Success then
-            DeclaredType := DeclMatch.Groups[1].Value;
-        end;
-      end;
-      // Type-/Name-Filter: feuern wenn ENTWEDER der aufgeloeste Typ nach
-      // TThread aussieht, ODER der Typ unaufloesbar ist UND der IDENTIFIER-
-      // Name selbst den Thread-Hinweis traegt. Vermeidet FP bei
-      // TObjectList/TStringList/TStream/TForm/Result (aufgeloest, kein Thread)
-      // UND bei unaufloesbaren Nicht-Thread-Feldern (Real-World 2026-06-26:
-      // FFullFilesTree: TFiles im Parent-Unit, `FFileR, FFileL: TFile` -
-      // compound-Decl, Regex findet den Typ nicht). Cross-unit Thread-Globals
-      // bleiben erfasst, solange Name oder Konstruktor-Call den Thread zeigt.
-      if not (
-           ((DeclaredType <> '') and LooksLikeThreadType(DeclaredType))
-           or ((DeclaredType = '') and (Pos('thread', LowerCase(Ident)) > 0))
-         ) then
-        Continue;
-
-      // Track C Opt-in (Konzept_StrukturellePhase, Runde 2): Cross-Unit-
-      // Gegenprobe zur lexikalischen Suffix-Heuristik oben. Kennt der repo-
-      // weite TTypeIndex den aufgeloesten DeclaredType und ist er beweisbar
-      // KEIN TThread-Nachfahre (z.B. TJvThread=class(TJvComponent)), war das
-      // ein FP -> ueberspringen. nil/leerer Index oder unbekannter Typ ->
-      // kein Eingriff (bestehendes Verhalten, TP-safe). Greift nur fuer den
-      // aufgeloesten Typ-Zweig; der reine Ident-Name-Fallback (DeclaredType='')
-      // liefert '' -> keine Suppression.
-      if IsProvablyNotThread(DeclaredType) then Continue;
-
-      LookBack := M.Index - 500;
-      if LookBack < 1 then LookBack := 1;
-      Snippet := Copy(Code, LookBack, M.Index - LookBack);
-      // Heuristik (V2 Audit 2026-06-07): vor dem FreeAndNil muss innerhalb
-      // der LookBack-Range ENTWEDER `<Ident>.Terminate` ODER
-      // `<Ident>.WaitFor` vorkommen.
-      //
-      // V1 forderte BEIDES strikt - das war zu aggressiv: Thread-Patterns
-      // die mit endlichem Job laufen und natuerlich exit-en brauchen NUR
-      // WaitFor (z.B. MVCFramework.Console.TConsoleSpinner.Hide nutzt
-      // CompareExchange-Flag + WaitFor; Terminate macht hier nichts).
-      // Detector hat im Realfall 17 FPs in delphimvcframework gemeldet.
-      //
-      // Wer beide will: jeder Pattern allein ist 'protective intent' -
-      // das ist die relevante Heuristik. Echte Bugs (nackter FreeAndNil
-      // ohne irgendetwas) bleiben gemeldet.
-      HasTerminate :=
-        (Pos(LowerCase(Ident) + '.terminate', LowerCase(Snippet)) > 0) or
-        (Pos(LowerCase(Ident) + '.waitfor',   LowerCase(Snippet)) > 0);
-      if HasTerminate then Continue;
-
-      // FP-Gate (a) (Real-World-Audit 2026-07-31, FP-Klasse 'alternativer
-      // Beendigungs-Nachweis'): `TerminateThread(<Ident>.Handle, 0)` im
-      // LookBack-Fenster ist ein Hard-Kill des Workers - haesslich, aber der
-      // gemeldete Zustand ('worker may still be running') trifft nicht zu.
-      // Vorbild-FP: cnwizards CnWizUpgradeFrm finalization.
-      if TRegEx.IsMatch(Snippet,
-           '(?i)\bTerminateThread\s*\(\s*' + TRegEx.Escape(Ident) + '\b') then
-        Continue;
-
-      // FP-Gate (b) (Real-World-Audit 2026-07-31, gleiche FP-Klasse): das
-      // FreeAndNil steht unter einem POSITIVEN `if <Ident>.Finished`-Guard -
-      // der Worker ist nachweislich nicht mehr aktiv. Vorbild-FP: TES5Edit
-      // xeMainForm. Polaritaets-Auswertung siehe FinishedGuardProvesIdle
-      // (Review-Fund 2026-07-31: `if not <X>.Finished` / `if <X>.Started`
-      // beweisen das GEGENTEIL und duerfen nicht mehr unterdruecken).
-      if FinishedGuardProvesIdle(Snippet, Ident) then
-        Continue;
-
-      // FP-Gate (c) (Real-World-Audit 2026-07-31, FP-Klasse 'thread-honoriert-
-      // Terminated'): die in dieser Unit definierte Thread-Klasse wertet
-      // Terminated aus -> das implizite Terminate+WaitFor in TThread.Destroy
-      // reicht. Vorbild-FP: jvcl JvTimer (TJvTimerThread.Execute mit
-      // 'until Terminated'). Laeuft absichtlich ZULETZT (nur fuer die wenigen
-      // Kandidaten, die alle billigeren Gates passiert haben).
-      if ThreadHonorsTerminated(Ident, DeclaredType) then Continue;
-
-      Emit(fkTThreadDestroyWithoutTerminate,
-        Format('FreeAndNil(%s) without prior %s.Terminate + %s.WaitFor. ' +
-               'If %s is a TThread descendant the worker may still be ' +
-               'running -> AV / heap corruption. If it isnt a thread, ' +
-               'suppress with // noinspection TThreadDestroyWithoutTerminate',
-               [Ident, Ident, Ident, Ident]),
-        M.Index);
-    end;
+    PruefeResumeAufrufe;
+    PruefeFreeOhneTerminate;
   finally
     ReleaseLines(Lines, Cached);
   end;
