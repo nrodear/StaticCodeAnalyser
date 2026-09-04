@@ -246,14 +246,37 @@ class procedure TInsecureCryptoAlgorithmDetector.AnalyzeMethod(
 
 var
   Assigns, Calls : TList<TAstNode>;
-  N              : TAstNode;
+  N, PN          : TAstNode;
   Hit            : string;
+  // True wenn DIESE Methode einen Parameter namens 'Des' fuehrt. Dann
+  // meint das nackte Wort im Rumpf per Pascal-Sichtbarkeit den
+  // PARAMETER, nie den Chiffre - Abbrevia AbCrtl.pas deklariert
+  // 'StrCopy(Des, Src: PAnsiChar)' und alle fuenf DES-Funde des Korpus
+  // in Code-Kontext waren dieses Destination-Idiom (Vollzaehlung
+  // 2026-09-04, 5 von 180). Nur fuer das Token 'des' - es ist das
+  // einzige der Liste, das als gewoehnlicher Bezeichner vorkommt
+  // ('MD5'/'SHA1'/'RC4' sind im Korpus nie blanke Variablennamen).
+  // Ein echter Named-Const-Verweis 'Algo := DES;' feuert weiter,
+  // solange die Methode keinen solchen Parameter hat.
+  DesIstParameter: Boolean;
   // Dedup auf (Line, Hit) damit ein einzelner 'Hash := THashMD5.Create' nicht
   // doppelt geflagged wird (einmal ueber nkAssign.TypeRef, einmal ueber
   // nkCall.Name). Key-Format: 'line|hit'.
   Seen           : TDictionary<string, Boolean>;
   Key            : string;
 begin
+  DesIstParameter := False;
+  for PN in MethodNode.Children do
+    // Der Parser legt Parameter als '[modifier ]Name' ab ('const Des') -
+    // das letzte Leerzeichen-Token ist der Name.
+    if (PN.Kind = nkParam)
+       and SameText(Trim(Copy(PN.Name, LastDelimiter(' ', PN.Name) + 1, MaxInt)),
+                    'des') then
+    begin
+      DesIstParameter := True;
+      Break;
+    end;
+
   Seen := TDictionary<string, Boolean>.Create;
   try
     Assigns := MethodNode.FindAll(nkAssign);
@@ -263,6 +286,7 @@ begin
         // Erst Algorithmus-Token (in Literal/Identifier auf RHS)
         if FindWeakAlgo(N.TypeRef, Hit) then
         begin
+          if (LowerCase(Hit) = 'des') and DesIstParameter then Continue;
           Key := IntToStr(N.Line) + '|' + LowerCase(Hit);
           if not Seen.ContainsKey(Key) then
           begin
@@ -291,6 +315,7 @@ begin
       begin
         if FindWeakAlgo(N.Name, Hit) then
         begin
+          if (LowerCase(Hit) = 'des') and DesIstParameter then Continue;
           Key := IntToStr(N.Line) + '|' + LowerCase(Hit);
           if not Seen.ContainsKey(Key) then
           begin

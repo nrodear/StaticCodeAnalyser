@@ -31,6 +31,9 @@ type
     // ---- Negative: Wortgrenz-FP-Schutz -----------------------------------
     [Test] procedure InsecureCrypto_MD5HashIdentifier_NoFinding;
     [Test] procedure InsecureCrypto_SHA1024Identifier_NoFinding;
+    // Ein Parameter namens 'Des' ist kein DES-Chiffre (2026-09-04).
+    [Test] procedure InsecureCrypto_DesAlsParameter_NoFinding;
+    [Test] procedure InsecureCrypto_DesOhneParameter_StillReported;
     // ---- Negative: Natur-Sprach-Kontext (FP-Regression) -----------------
     [Test] procedure InsecureCrypto_DesInGermanSentence_NoFinding;
     [Test] procedure InsecureCrypto_DesInLongerString_NoFinding;
@@ -439,6 +442,47 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm));
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureCryptoAlgorithm.InsecureCrypto_DesAlsParameter_NoFinding;
+// Vollzaehlung 04.09.: alle fuenf DES-Funde des Korpus in Code-Kontext
+// waren das Destination-Idiom aus Abbrevia AbCrtl.pas -
+// 'StrCopy(Des, Src: PAnsiChar)' mit 'Move(Src^, Des^, ...)' im Rumpf.
+// Deklariert die Methode einen Parameter namens 'Des', meint das nackte
+// Wort per Pascal-Sichtbarkeit den Parameter, nie den Chiffre.
+// Ohne den Fix ROT (mehrere DES-Funde auf dem Rumpf).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function StrCopy(Des, Src: PAnsiChar): PAnsiChar;'#13#10 +
+  'begin'#13#10 +
+  '  Move(Src^, Des^, StrLen(Src) + 1);'#13#10 +
+  '  Result := Des;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+    'der Destination-Parameter Des ist kein Krypto-Verweis');
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureCryptoAlgorithm.InsecureCrypto_DesOhneParameter_StillReported;
+// GEGENPROBE: ohne einen solchen Parameter bleibt ein nacktes DES im
+// Code ein Fund - der Detektor-Kommentar will 'Algo := DES;' (named
+// const) ausdruecklich weiter melden. Bricht dieser Test, unterdrueckt
+// das Gate mehr als die gemessenen fuenf Faelle.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Waehle;'#13#10 +
+  'begin'#13#10 +
+  '  FAlgo := DES;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkInsecureCryptoAlgorithm),
+    'nacktes DES ohne gleichnamigen Parameter bleibt ein Fund');
   finally F.Free; end;
 end;
 
