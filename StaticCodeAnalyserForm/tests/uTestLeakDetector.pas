@@ -54,6 +54,9 @@ type
     // Die Befund-Zeile muss auf den AUSLOESENDEN Assign zeigen, nicht
     // auf den ersten geklammerten (03.09.).
     [Test] procedure Leak_FuncCallAssign_ReportsTriggeringLine;
+    // Der Create-Pfad meldet auf der Allokation, nicht auf der
+    // var-Deklaration - festgehalten beim Zusammenlegen (04.09.).
+    [Test] procedure Leak_CreateAssign_ReportsCreateLine;
     [Test] procedure Leak_SimilarVarName_NoFalsePositive;
     [Test] procedure Leak_MultipleVars_BothReported;
     [Test] procedure Leak_NoFalsePositive_BlacklistFree;
@@ -974,6 +977,43 @@ begin
     // mit Klammern trifft die Aufrufzeile, nicht die Deklaration.
     Assert.AreEqual(TFindingHelper.LineOf(SRC, 'MakeList()'), Fnd.LineNumber,
       'gemeldet gehoert der ausloesende Assign, nicht der geborgte Getter');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_CreateAssign_ReportsCreateLine;
+// WAECHTER, ergaenzt beim Zusammenlegen von FindCreateLine und
+// HasCreateAssign (04.09.). Das Verhalten "Befund auf der
+// Create-Zeile, nicht auf der var-Deklaration" war von KEINEM Test
+// festgehalten - dabei haengt daran mehr als die Optik: die
+// Suppression-Map vergleicht 1:1 gegen die Fund-Zeile, ein inline
+// `// noinspection` ueber dem Create waere sonst wirkungslos.
+//
+// Der Test ist vor UND nach dem Zusammenlegen gruen; er sichert die
+// Verhaltensgleichheit auf Unit-Ebene, die das Korpus-A/B nur als
+// Nullbewegung zeigt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  DoSomethingFirst;'#13#10+
+  '  list := TStringList.Create;'#13#10+
+  '  list.Add(''x'');'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'TStringList ohne Free ist ein Fund');
+    Fnd := TFindingHelper.FirstOf(F, fkMemoryLeak);
+    Assert.IsNotNull(Fnd, 'Fund erwartet');
+    // Erwartung aus dem SRC abgeleitet statt hartkodiert.
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'TStringList.Create'),
+      Fnd.LineNumber,
+      'gemeldet gehoert die Allokation, nicht die var-Deklaration');
   finally F.Free; end;
 end;
 
