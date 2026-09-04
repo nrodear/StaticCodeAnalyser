@@ -1,77 +1,44 @@
-# Regeneriert SCA.SharedUI\SCA.SharedUI.dpk aus dem aktuellen Stand von
-# SCA.SharedUI\sources\**\*.pas. Idempotent (analog regen-engine-dpk.ps1).
+# Regeneriert NUR die contains-Klausel von SCA.SharedUI\SCA.SharedUI.dpk
+# aus SCA.SharedUI\sources\**\*.pas.
+#
+# NEUFASSUNG 2026-09-05: die alte Fassung schrieb die GANZE Datei aus
+# einem Standardkopf neu und zerstoerte dabei den handgepflegten
+# {$RUNONLY}-Block samt der requires-Begruendungen (deshalb stand sie
+# seit 2026-08-16 als DEFEKT in den Notizen; Projektdateien wurden von
+# Hand gepflegt). Jetzt wird die Datei byte-erhaltend gelesen (Latin-1-
+# Roundtrip, verlustfrei je Byte) und ausschliesslich der Text zwischen
+# "contains" und dem naechsten ";" ersetzt - Kopf, requires, Kommentare
+# und Zeilenenden bleiben unangetastet. Idempotent: ohne Datei-Drift ist
+# der git-Diff nach einem Lauf LEER.
 
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
+$dpkPath    = 'SCA.SharedUI\SCA.SharedUI.dpk'
 $sourcesDir = 'SCA.SharedUI\sources'
-if (-not (Test-Path $sourcesDir)) {
-    Write-Error "Sources-Verzeichnis nicht gefunden: $sourcesDir"
-    exit 1
-}
+$prefix     = '^SCA\.SharedUI\\'
 
-$files = Get-ChildItem -Recurse -Path $sourcesDir -Filter *.pas |
+if (-not (Test-Path $sourcesDir)) { Write-Error "Sources-Verzeichnis nicht gefunden: $sourcesDir" }
+if (-not (Test-Path $dpkPath))    { Write-Error ".dpk nicht gefunden: $dpkPath" }
+
+$unitLines = Get-ChildItem -Recurse -Path $sourcesDir -Filter *.pas |
     Sort-Object FullName |
     ForEach-Object {
-        $unitName = $_.BaseName
-        $relPath  = $_.FullName.Substring((Get-Location).Path.Length + 1)
-        $relPath  = $relPath -replace '^SCA\.SharedUI\\', ''
-        "  $unitName in '$relPath',"
+        $relPath = $_.FullName.Substring((Get-Location).Path.Length + 1) -replace $prefix, ''
+        "  $($_.BaseName) in '$relPath'"
     }
+if (-not $unitLines) { Write-Error "Keine .pas-Dateien unter $sourcesDir" }
 
-if ($files.Count -eq 0) {
-    Write-Error "Keine .pas-Files in $sourcesDir gefunden"
-    exit 1
-}
+# Latin-1 ist eine 1:1-Byte-Abbildung - der Rest der Datei bleibt exakt.
+$enc = [System.Text.Encoding]::GetEncoding(28591)
+$raw = $enc.GetString([System.IO.File]::ReadAllBytes($dpkPath))
 
-$last = $files[-1].TrimEnd(',')
-$filesArr = @($files[0..($files.Count-2)]) + @($last)
-$containsBlock = $filesArr -join "`r`n"
+$m = [regex]::Match($raw, '(?m)^contains\s*?\r?\n')
+if (-not $m.Success) { Write-Error "Keine contains-Klausel in $dpkPath - nichts ersetzt." }
+$start = $m.Index + $m.Length
+$semi  = $raw.IndexOf(';', $start)
+if ($semi -lt 0) { Write-Error "contains-Klausel ohne ';' in $dpkPath - nichts ersetzt." }
 
-$dpkContent = @"
-package SCA.SharedUI;
-
-{`$R *.res}
-{`$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
-{`$ALIGN 8}
-{`$ASSERTIONS ON}
-{`$BOOLEVAL OFF}
-{`$DEBUGINFO OFF}
-{`$EXTENDEDSYNTAX ON}
-{`$IMPORTEDDATA ON}
-{`$IOCHECKS ON}
-{`$LOCALSYMBOLS ON}
-{`$LONGSTRINGS ON}
-{`$OPENSTRINGS ON}
-{`$OPTIMIZATION OFF}
-{`$OVERFLOWCHECKS ON}
-{`$RANGECHECKS ON}
-{`$REFERENCEINFO ON}
-{`$SAFEDIVIDE OFF}
-{`$STACKFRAMES ON}
-{`$TYPEDADDRESS OFF}
-{`$VARSTRINGCHECKS ON}
-{`$WRITEABLECONST OFF}
-{`$MINENUMSIZE 1}
-{`$IMAGEBASE `$400000}
-{`$DEFINE DEBUG}
-{`$ENDIF IMPLICITBUILDING}
-{`$IMPLICITBUILD ON}
-
-requires
-  rtl,
-  vcl,
-  vclwinx,
-  designide,
-  SCA.Engine;
-
-contains
-$containsBlock
-;
-
-end.
-"@
-
-$out = 'SCA.SharedUI\SCA.SharedUI.dpk'
-$dpkContent | Out-File -FilePath $out -Encoding utf8 -NoNewline
-Write-Host "Regenerated $out with $($files.Count) units."
+$neu = $raw.Substring(0, $start) + (($unitLines -join ",`r`n")) + $raw.Substring($semi)
+[System.IO.File]::WriteAllBytes($dpkPath, $enc.GetBytes($neu))
+Write-Host "contains-Klausel von $dpkPath erneuert: $($unitLines.Count) Units (Rest der Datei unveraendert)."
