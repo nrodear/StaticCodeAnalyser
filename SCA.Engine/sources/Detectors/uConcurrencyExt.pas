@@ -84,7 +84,6 @@ var
   ReDecl       : TRegEx;
   DeclMatch    : TMatch;
   Matches      : TMatchCollection;
-  M            : TMatch;
   Snippet      : string;
   LookBack     : Integer;
   LineNo       : Integer;
@@ -436,6 +435,8 @@ var
   // (Zerlegung 2026-09-04; vorher lagen beide Regel-Schleifen direkt
   // im AnalyzeUnit-Rumpf, kognitiv 42).
   procedure PruefeResumeAufrufe;
+  var
+    M : TMatch;   // E1019: die for-in-Variable MUSS lokal zur Schleifen-Routine sein
   begin
       // 1) <ident>.Resume - aber NICHT TForm/TPanel/etc. .Resume das
       //    optisch ein VCL-Resume-Painting-Event waere. Wir matchen
@@ -491,6 +492,8 @@ var
 
   // SCA114: FreeAndNil/Free ohne Terminate+WaitFor davor.
   procedure PruefeFreeOhneTerminate;
+  var
+    M : TMatch;   // E1019: die for-in-Variable MUSS lokal zur Schleifen-Routine sein
   begin
       // 2) FreeAndNil(<ident>) oder <ident>.Free auf einer Zeile, davor
       //    KEIN <ident>.Terminate (in den letzten ~10 Zeilen).
