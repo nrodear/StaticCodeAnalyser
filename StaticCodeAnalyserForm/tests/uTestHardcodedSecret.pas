@@ -1031,11 +1031,22 @@ procedure TTestHardcodedSecretInit.Secret_Verbindungszeichenfolge_StillReported;
 // Verbindungszeichenfolge setzt einen Wert an. Die erste Fassung der
 // Gegenausnahme pruefte das nicht und nahm dem Prosa-Gate genau die
 // Meldung wieder weg, fuer die es gebaut wurde.
+//
+// ZWEI Fixture-Fehler der ersten Fassung dieses Tests, beim ersten
+// Bau rot geworden:
+//   * LHS hiess 'FConn' - das steht nicht in der Schluesselwortliste,
+//     der Detektor feuert dort NIE. Der Test pruefte einen
+//     unerreichbaren Pfad.
+//   * der Wert hatte nur VIER Woerter - das Prosa-Gate (Schwelle 5)
+//     haette selbst mit richtigem LHS nicht gegriffen.
+// Jetzt: LHS triggert ('FPassword'), Wert hat fuenf Woerter samt
+// eingebettetem Credential - ohne die Gegenausnahme unterdrueckt das
+// Prosa-Gate diesen Fund, mit ihr bleibt er.
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Init;'#13#10+
   'begin'#13#10+
-  '  FConn := ''Data Source=srv;Initial Catalog=db;User Id=sa;Password=Xk9pQz7'';'#13#10+
+  '  FPassword := ''Data Source=srv;Initial Catalog=db;User Id=sa;Password=Xk9pQz7;Extra Info=x'';'#13#10+
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
