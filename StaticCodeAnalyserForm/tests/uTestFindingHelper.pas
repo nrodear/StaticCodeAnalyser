@@ -72,6 +72,20 @@ uses
 type
   // ---- Hilfsfunktionen ----------------------------------------------------------------
   TFindingHelper = record
+    // HARNESS-INVARIANTE (nach zwei stumm-gruenen Tests festgeschrieben,
+    // 2026-09-05). FindingsOf uebergibt den Platzhalter 'sample.pas' -
+    // JEDER Detektorpfad, der die Quelldatei liest (AcquireLines,
+    // Strip*Cached; aktuell tun das ~95 Detektoren), laeuft hier als
+    // stilles No-Op. Zwei Folgen, beide diese Woche real geworden:
+    //   1. Ein Test fuer einen quellzeilen-lesenden Pfad MUSS
+    //      FindingsOfFile nehmen (SCA162, 04.09.: NoFinding-Test war
+    //      gruen, weil der Detektor den Pfad nie erreichte).
+    //   2. UND der Detektor muss in FindingsOfFile REGISTRIERT sein -
+    //      die dortige Liste ist kuratiert und deutlich kuerzer als die
+    //      hiesige (SCA005, 05.09.: gar nicht registriert, jeder Test
+    //      waere stumm-gruen gewesen). Vor dem Testschreiben die
+    //      Registrierung pruefen, im Zweifel ergaenzen und einen
+    //      Positiv-Waechter daneben stellen.
     class function FindingsOf(const Source: string): TObjectList<TLeakFinding>; static;
     // FindingsOfFile schreibt den Source in eine temporaere Datei und ruft
     // alle Detektoren auf - benoetigt fuer file-scannende Detektoren wie
