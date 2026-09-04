@@ -30,6 +30,18 @@ unit uSetLengthAppendInLoop;
 // Limitierungen:
 //   * Single-File-lexisch. Fenster-basiert (600 Zeichen) - sehr lange
 //     Schleifen werden nicht voll erfasst.
+//   * DAS FENSTER KENNT DAS RUMPFENDE NICHT (belegt 2026-09-04): ein
+//     SetLength NACH dem end der Schleife wird gemeldet, solange es in
+//     die 600 Zeichen faellt. Beleg Alcinoe.FMX.VideoPlayer.pas:3564 -
+//     'Setlength(FEngines, length(FEngines) + 10)' steht im
+//     'if result = -1'-Zweig HINTER der Suchschleife; das ist korrekt
+//     amortisiertes Wachstum, gemeldet wird es trotzdem.
+//     Der Fix braucht einen Rumpfende-Scanner (do/begin..end-Tiefe,
+//     repeat..until). WARNUNG an den, der ihn baut: die Vorabzaehlung
+//     braucht eine EXAKTE Nachbildung dieser Fenster-Mechanik samt
+//     Gates A/C und Erste-Grow-Dedup - ein erster Versuch mit
+//     vereinfachten Gates reproduzierte nur 26 der 117 Fundzeilen
+//     (22 %) und taugte nicht als Vertragsgrundlage.
 //   * `SetLength(arr, Length(arr) + Constant)` (Block-Grow) wird ebenfalls
 //     geflaggt - das ist OK weil Block-Grow innerhalb einer Schleife
 //     ebenfalls suboptimal ist (vorher rechnen + einmal SetLength).
