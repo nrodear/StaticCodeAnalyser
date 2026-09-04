@@ -33,6 +33,9 @@ type
     [Test] procedure CastWithTrailingConcat_NotReported;
     [Test] procedure TwoCastsConcatenated_NotReported;
     [Test] procedure LiteralCastWithTrailingConcat_NotReported;
+    // Zeigerfeld einer Variant-Sicht ist ein Typ-Pun (2026-09-04).
+    [Test] procedure VariantPointerField_NotReported;
+    [Test] procedure EchtesStringFeld_StillReported;
   end;
 
 implementation
@@ -282,6 +285,48 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnicodeToAnsiCast),
     'ASCII-Literal bleibt ASCII-Literal, auch mit Trailing-Ausdruck');
+  finally F.Free; end;
+end;
+
+procedure TTestUnicodeToAnsiCast.VariantPointerField_NotReported;
+// Vollzaehlung 04.09.: 11 der 482 Korpusfunde casten ein ZEIGERFELD
+// einer Variant-Record-Sicht. Das Feld haelt eine bereits vorhandene
+// AnsiString-Referenz; der Cast fasst deren Referenzzaehlung an und
+// wandelt nichts - Codepage-Verlust ist ausgeschlossen.
+// mormot.core.rtti.pas:6299 sagt es im Code selbst: "copy AnsiString
+// with reference counting".
+// Ohne den Fix ROT mit 2 Funden (beide Seiten der Zuweisung).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(var Dest, Source: TVarData);'#13#10 +
+  'begin'#13#10 +
+  '  RawByteString(Dest.VAny) := RawByteString(Source.VAny);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnicodeToAnsiCast),
+    'Zeigerfeld-Cast wandelt nichts - kein Zeichenverlust moeglich');
+  finally F.Free; end;
+end;
+
+procedure TTestUnicodeToAnsiCast.EchtesStringFeld_StillReported;
+// GEGENPROBE: das Gate darf NUR die beiden gemessenen Zeigerfelder
+// treffen. Ein normales Feld mit V-Praefix ist ein gewoehnlicher
+// Operand und bleibt ein Fund - sonst waere aus dem Gate eine
+// Namensheuristik ueber das 'V' geworden.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const R: TMeinRecord);'#13#10 +
+  'var a: AnsiString;'#13#10 +
+  'begin'#13#10 +
+  '  a := AnsiString(R.VText);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnicodeToAnsiCast),
+    'nur .VAny und .VAnsiString sind gemessen - sonst nichts');
   finally F.Free; end;
 end;
 

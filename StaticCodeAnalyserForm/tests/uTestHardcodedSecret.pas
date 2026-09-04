@@ -96,6 +96,11 @@ type
     [Test] procedure Secret_PlaceholderToken_NotReported;
     [Test] procedure Secret_MetaSuffixExprAndCharacters_NotReported;
     [Test] procedure Secret_RealSecretBesideGates_StillReported;
+    // Vollzaehlung 2026-09-04: 4 von 10 waren keine Geheimwerte.
+    [Test] procedure Secret_Meldungstext_NotReported;
+    [Test] procedure Secret_ProsaUeberPrivateKey_NotReported;
+    [Test] procedure Secret_PemBlock_StillReported;
+    [Test] procedure Secret_Verbindungszeichenfolge_StillReported;
   end;
 
 implementation
@@ -957,6 +962,97 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
     'der echte Schluessel daneben bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretInit.Secret_Meldungstext_NotReported;
+// Vollzaehlung 04.09.: 3 der 10 Korpusfunde sind UI-MELDUNGEN, deren
+// Bezeichner 'Password' oder 'Token' traegt. Der Wert ist Prosa, kein
+// Credential - SetupLdrAndSetup.Messages.pas:51 und :52,
+// StringResources.pas:262.
+// Ohne den Fix ROT.
+const SRC =
+  'unit t; interface'#13#10+
+  'const'#13#10+
+  '  SMissingPassword = ''Please specify the password using the command line.'';'#13#10+
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+    'zehn Woerter sind eine Meldung, kein Geheimwert');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretInit.Secret_ProsaUeberPrivateKey_NotReported;
+// Der harte Marker 'private key' ueberstimmte ALLE Wert-Gates und machte
+// aus jedem Prosatext ueber private keys ein Secret. Beleg
+// IdSSLOpenSSLHeaders.pas:4598 - eine OpenSSL-Konstante.
+// Ohne den Fix ROT.
+const SRC =
+  'unit t; interface'#13#10+
+  'const'#13#10+
+  '  LN_private_key_usage_period = ''X509v3 Private Key Usage Period'';'#13#10+
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+    'der Name einer OpenSSL-Konstante ist kein Schluessel');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretInit.Secret_PemBlock_StillReported;
+// GEGENPROBE - genau dafuer war der Marker gedacht, und das muss er
+// weiter leisten. Ein PEM-Block traegt IMMER '-----BEGIN', der erste
+// harte Marker faengt ihn also ohne den geloeschten zweiten.
+// Beleg Kastri Main.pas:112 (Firebase-Service-Account-Key).
+const SRC =
+  'unit t; interface'#13#10+
+  'const'#13#10+
+  '  ServiceAccountPrivateKey = ''-----BEGIN PRIVATE KEY-----'' +'#13#10+
+  '    ''MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCx3yog0e8Te7T4'';'#13#10+
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1,
+    'ein eingebetteter PEM-Schluessel bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretInit.Secret_Verbindungszeichenfolge_StillReported;
+// GEGENAUSNAHME zum Prosa-Gate, im Review der eigenen Charge gefunden:
+// eine Verbindungszeichenfolge traegt Leerzeichen UND ein eingebettetes
+// Credential. Sie darf das Prosa-Gate nicht passieren.
+//
+// Entscheidend ist, was hinter dem '=' steht: eine MELDUNG nennt den
+// Schalter und laesst ihn leer ('... /PASSWORD= command line'), eine
+// Verbindungszeichenfolge setzt einen Wert an. Die erste Fassung der
+// Gegenausnahme pruefte das nicht und nahm dem Prosa-Gate genau die
+// Meldung wieder weg, fuer die es gebaut wurde.
+//
+// ZWEI Fixture-Fehler der ersten Fassung dieses Tests, beim ersten
+// Bau rot geworden:
+//   * LHS hiess 'FConn' - das steht nicht in der Schluesselwortliste,
+//     der Detektor feuert dort NIE. Der Test pruefte einen
+//     unerreichbaren Pfad.
+//   * der Wert hatte nur VIER Woerter - das Prosa-Gate (Schwelle 5)
+//     haette selbst mit richtigem LHS nicht gegriffen.
+// Jetzt: LHS triggert ('FPassword'), Wert hat fuenf Woerter samt
+// eingebettetem Credential - ohne die Gegenausnahme unterdrueckt das
+// Prosa-Gate diesen Fund, mit ihr bleibt er.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  FPassword := ''Data Source=srv;Initial Catalog=db;User Id=sa;Password=Xk9pQz7;Extra Info=x'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1,
+    'ein Credential IN der Verbindungszeichenfolge bleibt ein Fund');
   finally F.Free; end;
 end;
 

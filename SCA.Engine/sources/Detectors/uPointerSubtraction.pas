@@ -112,6 +112,16 @@ begin
   // ein direkter Fakt (Parser nkEnumType / Seed), kein Vererbungs-Ambiguitaet
   // -> kein FN-Risiko. nil/leerer Index (Tests/Single-File) -> uebersprungen,
   // bisheriges Verhalten (byte-identisch).
+  //
+  // GEMESSENE GRENZE (Vollzaehlung 2026-09-04, 4 von 35 Korpusfunden):
+  // "repo-weit" heisst der GESCANNTE Baum - die RTL gehoert nicht dazu.
+  // Ein Enum aus Vcl.Themes/System.UITypes ist damit unaufloesbar und
+  // bleibt ungegatet. Beleg Vcl.Styles.DbGrid.pas:186 -
+  // 'Integer(Indicator) - Integer(tgIndicatorArrow)' ist reine
+  // Ordinalarithmetik auf TThemedGrid, wird aber gemeldet.
+  // NICHT ueber die Schreibweise loesen ('tg'/'tk'-Praefix): Enum-Literale
+  // und normale Bezeichner sind daran nicht unterscheidbar. Sauber waere
+  // ein RTL-Enum-Seed im TypeIndex - eigenes Paket, offener Umfang.
   if (Idx <> nil) and (Idx.TypeKindOf(TypeLow) = tkiEnum) then
     Exit(True);
 end;

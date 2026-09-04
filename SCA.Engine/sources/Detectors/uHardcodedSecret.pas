@@ -610,6 +610,67 @@ begin
   Result := True;
 end;
 
+// Zahl der durch Leerraum getrennten Woerter. Fuer die
+// Prosa-Erkennung in IsNonSecretValueShape - dort die Begruendung.
+const
+  // Ab dieser Wortzahl gilt ein Wert als PROSA (Meldungstext), nicht als
+  // Credential. Bewusst hoch: die drei gemessenen Meldungen haben zehn
+  // Woerter, die sechs echten Funde genau eines. Eine Passphrase aus
+  // fuenf Woertern waere denkbar, ist im Korpus aber nicht belegt.
+  PROSA_WORT_SCHWELLE = 5;
+
+function WortAnzahl(const S: string): Integer;
+var
+  i      : Integer;
+  ImWort : Boolean;
+begin
+  Result := 0;
+  ImWort := False;
+  for i := 1 to Length(S) do
+    if CharInSet(S[i], [' ', #9, #10, #13]) then
+      ImWort := False
+    else if not ImWort then
+    begin
+      ImWort := True;
+      Inc(Result);
+    end;
+end;
+
+// True wenn im WERT selbst eine Credential-Zuweisung MIT Wert steht -
+// 'Password=geheim;' in einer Verbindungszeichenfolge.
+//
+// Entscheidend ist, was hinter dem '=' folgt. Eine Meldung nennt den
+// SCHALTER und laesst ihn leer ('... using the /PASSWORD= command line
+// parameter.'), eine Verbindungszeichenfolge setzt einen Wert an. Ohne
+// diese Unterscheidung nimmt die Gegenausnahme dem Prosa-Gate genau die
+// Meldung wieder weg, fuer die es gebaut wurde (im Review der eigenen
+// Charge aufgefallen, 2026-09-04).
+function EnthaeltCredentialZuweisung(const BodyLow: string): Boolean;
+const
+  SCHLUESSEL : array[0..5] of string = (
+    'password=', 'pwd=', 'secret=', 'apikey=', 'api_key=', 'token='
+  );
+var
+  S : string;
+  p : Integer;
+begin
+  Result := False;
+  for S in SCHLUESSEL do
+  begin
+    p := Pos(S, BodyLow);
+    while p > 0 do
+    begin
+      p := p + Length(S);
+      // Wert vorhanden = das naechste Zeichen ist kein Leerraum und
+      // kein Trennzeichen.
+      if (p <= Length(BodyLow))
+         and not CharInSet(BodyLow[p], [' ', #9, ';', ',', '&']) then
+        Exit(True);
+      p := Pos(S, BodyLow, p);
+    end;
+  end;
+end;
+
 class function THardcodedSecretDetector.IsNonSecretValueShape(
   const Literal, LhsName: string): Boolean;
 // Real-World-FP-Audit 2026-07-10: Der Detektor triggert auf dem LHS-Namen
@@ -637,9 +698,42 @@ begin
   // Harte Secret-Marker - NIEMALS unterdruecken (PEM/SSH-Keys). Schuetzt
   // eingebettete RSA-/Service-Account-Keys, die als JSON mit '\n' und
   // 'https://'-token_uri auftreten und sonst als Pfad/URL gelten wuerden.
-  if (Pos('-----begin', BodyLow) > 0) or (Pos('private key', BodyLow) > 0) or
+  //
+  // 'private key' stand hier bis zum 2026-09-04 als EIGENER Marker und
+  // war redundant: jeder PEM-Block traegt '-----BEGIN ... PRIVATE
+  // KEY-----', der erste Marker faengt ihn also schon. Am Korpus
+  // nachgesehen - der einzige echte eingebettete Key (Kastri
+  // Main.pas:112, FirebaseMessagingHttpV1ServiceAccountPrivateKey)
+  // beginnt mit '-----BEGIN PRIVATE KEY-----'.
+  // Kosten hatte der Marker sehr wohl: er ueberstimmt ALLE Wert-Gates
+  // und machte damit aus jedem PROSATEXT ueber private keys ein
+  // Secret - IdSSLOpenSSLHeaders.pas:4598 meldet die
+  // OpenSSL-Konstante 'X509v3 Private Key Usage Period'.
+  if (Pos('-----begin', BodyLow) > 0) or
      (Pos('ssh-rsa', BodyLow) > 0) or (Pos('ssh-ed25519', BodyLow) > 0) then
     Exit(False);
+
+  // (a0) FLIESSTEXT - eine Meldung, kein Geheimwert. Ein Credential
+  //      ist ein einzelnes Token; ab fuenf durch Leerzeichen
+  //      getrennten Woertern liegt Prosa vor.
+  //      Vollzaehlung 2026-09-04: 3 der 10 Korpusfunde sind
+  //      UI-Meldungen, deren BEZEICHNER 'Password'/'Token' traegt -
+  //      'Please specify the password using the /PASSWORD= command
+  //      line parameter.' (SetupLdrAndSetup.Messages.pas:51). Alle
+  //      drei haben zehn Woerter; die sechs echten Funde haben genau
+  //      EINES ('aaaa', 'FTPTest', 'rocks', 'pass@httpget', ...).
+  //      Die Schwelle ist bewusst hoch: eine Passphrase aus fuenf
+  //      Woertern waere denkbar, ist im Korpus aber nicht belegt -
+  //      und ein zu scharfes Gate kostet hier ein echtes Credential.
+  //      GEGENAUSNAHME (Review der eigenen Charge): eine
+  //      Verbindungszeichenfolge traegt Leerzeichen UND ein
+  //      eingebettetes Credential - 'Data Source=srv;Initial
+  //      Catalog=db;User Id=sa;Password=x'. Die vier Woerter des
+  //      Beispiels bleiben unter der Schwelle, eine laengere
+  //      Variante nicht. Wo der WERT selbst eine
+  //      Credential-Zuweisung enthaelt, wird nie unterdrueckt.
+  if not EnthaeltCredentialZuweisung(BodyLow)
+     and (WortAnzahl(BodyTrim) >= PROSA_WORT_SCHWELLE) then Exit;
 
   // (a) URL-Endpoint bzw. Registry-/Datei-Pfad - kein Geheimwert.
   //     'https://oauth2.googleapis.com/token', 'Software\Policies\...'

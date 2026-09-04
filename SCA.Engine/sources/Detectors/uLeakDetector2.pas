@@ -99,8 +99,21 @@ type
       out CreatePos: Integer): Boolean; static;
     class function CreateRhsIsBorrowedOrLiteral(
       const RhsLow: string): Boolean; static;
+    // ACreateLine traegt die Zeile des ERSTEN passenden
+    // `var := X.Create(...)` - 0 wenn keiner passt. Der Befund soll auf
+    // die Allokation zeigen statt auf die var-Deklaration (Klick im Grid
+    // springt dorthin, und ein inline-`// noinspection` ueber dem Create
+    // wird wirksam - die Suppression-Map vergleicht 1:1 gegen die
+    // Fund-Zeile).
+    //
+    // Die Zeile kommt aus DIESER Funktion und nicht aus einer zweiten:
+    // bis zum 04.09. gab es dafuer FindCreateLine, eine Kopie desselben
+    // Assign-Walks mit denselben Gates. Sie waren nachweislich gleich -
+    // aber genau diese Bauform trug bei FindFuncCallAssignLine einen
+    // echten Fehler, weil dort eine Gate-Ergaenzung nur an EINER Stelle
+    // ankam (behoben 03.09., d10102b).
     class function HasCreateAssign(MethodNode: TAstNode;
-      const VarNameLow: string): Boolean; static;
+      const VarNameLow: string; out ACreateLine: Integer): Boolean; static;
     // AAssignLine traegt die Zeile des Assigns, der den Fund AUSLOEST -
     // 0 wenn keiner ausloest. Der Befund muss auf genau diese Zeile
     // zeigen, und nur diese Funktion weiss, welche es ist: sie prueft
@@ -111,15 +124,6 @@ type
     // nicht (s. Historie von FindFuncCallAssignLine).
     class function HasFunctionCallAssign(UnitNode, MethodNode: TAstNode;
       const VarNameLow: string; out AAssignLine: Integer): Boolean; static;
-    // Liefert die Quell-Zeile des ERSTEN `var := X.Create(...)`. Wird
-    // genutzt um die Befund-Position auf die echte Create-Zeile zu legen
-    // statt auf die var-Deklaration - bessere UX (Klick im Grid springt
-    // zur Allokation), und macht inline `// noinspection`-Marker ueber
-    // dem Create-Aufruf wirksam (Suppression-Map vergleicht 1:1 die
-    // Finding-Line gegen die Marker-Target-Line). 0 wenn kein passender
-    // Assign gefunden - Caller faellt dann auf die var-Decl-Line zurueck.
-    class function FindCreateLine(MethodNode: TAstNode;
-      const VarNameLow: string): Integer; static;
     class function IsReturnedAsResult(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
     // Zweiter kanonischer Rueckgabeweg neben Result (T3-Backlog,
@@ -595,14 +599,15 @@ begin
 end;
 
 class function TLeakDetector2.HasCreateAssign(MethodNode: TAstNode;
-  const VarNameLow: string): Boolean;
+  const VarNameLow: string; out ACreateLine: Integer): Boolean;
 var
   Assigns  : TList<TAstNode>;
   A        : TAstNode;
   TypeLow  : string;
   Dummy    : Integer;
 begin
-  Result  := False;
+  Result      := False;
+  ACreateLine := 0;
   Assigns := MethodNode.FindAllRef(nkAssign);
   for A in Assigns do
   begin
@@ -611,31 +616,9 @@ begin
     TypeLow := A.TypeRef.ToLower;
     if CreateRhsIsBorrowedOrLiteral(TypeLow) then Continue;
     if MatchesCreate(A.TypeRef, TypeLow, Dummy) then
-      Exit(True);
-  end;
-end;
-
-class function TLeakDetector2.FindCreateLine(MethodNode: TAstNode;
-  const VarNameLow: string): Integer;
-var
-  Assigns : TList<TAstNode>;
-  A       : TAstNode;
-  TypeLow : string;
-begin
-  Result  := 0;
-  Assigns := MethodNode.FindAllRef(nkAssign);
-  for A in Assigns do
-  begin
-    if A.Name.ToLower <> VarNameLow then Continue;
-    TypeLow := A.TypeRef.ToLower;
-    // Geschwisterpfad zu HasCreateAssign - Gate identisch, sonst
-    // zeigte die Befund-Zeile auf einen gegateten Nicht-Fund.
-    if CreateRhsIsBorrowedOrLiteral(TypeLow) then Continue;
-    var Dummy : Integer;
-    if MatchesCreate(A.TypeRef, TypeLow, Dummy) then
     begin
-      Result := A.Line;
-      Exit;
+      ACreateLine := A.Line;
+      Exit(True);
     end;
   end;
 end;
@@ -4229,8 +4212,9 @@ begin
       // CreateY') ist KEINE direkte Konstruktion. Pfad 2 skippt '.create'-RHS
       // ebenfalls -> die Var wird komplett uebersprungen (Triage: 13/13
       // Instanz-Factory-Results waren fremd-owned; IDE/Container besitzen).
+      var CreateLine : Integer;
       if Gate('SCA001.CreateAssignNotFactory',
-              HasCreateAssign(MethodNode, VarNameLow)
+              HasCreateAssign(MethodNode, VarNameLow, CreateLine)
               and not AllCreatesAreInstanceFactory(MethodNode, VarNameLow)) then
       begin
         if Gate('SCA001.IsReturnedAsResult', IsReturnedAsResult(MethodNode, VarNameLow)) then Continue;
@@ -4267,7 +4251,7 @@ begin
         // Befund auf der Create-Zeile melden statt auf der var-Decl-Zeile.
         // Bessere UX (Klick im Grid -> Allokation), und macht inline
         // // noinspection-Marker direkt ueber dem Create wirksam.
-        var ReportLine := FindCreateLine(MethodNode, VarNameLow);
+        var ReportLine := CreateLine;
         if ReportLine = 0 then ReportLine := V.Line;
 
         if not FreeFound then

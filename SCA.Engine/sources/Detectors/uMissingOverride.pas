@@ -25,10 +25,17 @@ unit uMissingOverride;
 //   * Walk nkClass-Knoten. Aus TypeRef Direct-Parent extrahieren.
 //   * Wenn Parent in der gleichen Unit definiert ist:
 //     - Sammle dessen Methoden mit ';virtual' oder ';dynamic' Suffix
-//       als `Polymorphic-Names` (unqualifiziert, case-insensitive).
+//       als `Polymorphic-Names` (unqualifiziert, case-insensitive),
+//       zusaetzlich als `Name(Signatur`-Schluessel.
 //   * Subklassen-Methoden iterieren:
 //     - Wenn Name in Polymorphic-Names UND TypeRef enthaelt KEIN
 //       ';override' UND KEIN ';reintroduce' -> Finding.
+//
+//     Der NAME entscheidet ueber den Fund - eine gleichnamige
+//     Deklaration versteckt in Delphi ALLE geerbten Ueberladungen,
+//     auch bei abweichender Signatur (W1010). Die Signatur entscheidet
+//     nur ueber den RAT (2026-09-04): `override` ist bei abweichender
+//     Typfolge ein Compilerfehler. Siehe SignaturSchluessel.
 //
 // Limitierungen:
 //   * Cross-unit-Bases (TForm, TStrings) - nicht erkannt.
@@ -105,6 +112,49 @@ begin
   Result := Pos(';overload', LowerCase(TypeRef)) > 0;
 end;
 
+// Kopf + Parametertypen als vergleichbarer Schluessel, z.B.
+// 'constructor|string|boolean'. Namen und Parameter-Modifizierer
+// bleiben draussen - fuer die Frage "waere ein override ueberhaupt
+// moeglich" zaehlt allein die Typfolge.
+//
+// WOFUER: NICHT um den Fund zu unterdruecken - der ist richtig. Eine
+// gleichnamige Deklaration versteckt in Delphi ALLE geerbten
+// Ueberladungen, auch bei abweichender Signatur; W1010 feuert. Genau
+// das haelt der Test ConstructorHidesVirtual_Reported seit dem
+// 2026-07-10 als tp_examples_must_stay fest.
+//
+// Falsch ist nur der RAT. Belegt an Kastri DW.FileWriter.pas:45 -
+//   Eltern: constructor Create(const AFilename: string; AAppend: Boolean); overload; virtual;
+//   Kind:   constructor Create(const AFilename: string; const ATimestampFormat: string = '...');
+// Gleicher Name, andere Typfolge. Ein 'override' ist dort ein
+// COMPILERFEHLER; helfen wuerden 'overload' oder 'reintroduce'. Wer
+// dem Meldetext folgte, brach den Build.
+// Vollzaehlung 2026-09-04: 1 von 4 Korpusfunden.
+//
+// Ein Vorgabewert gehoert nicht zum Typ und wird abgeschnitten - der
+// Parser liest den Parametertyp bis ';' oder ')' und nimmt das
+// '= <wert>' sonst mit.
+function SignaturSchluessel(MethodNode: TAstNode): string;
+var
+  P    : TAstNode;
+  Kopf : string;
+  Typ  : string;
+  i    : Integer;
+begin
+  Kopf := LowerCase(Trim(MethodNode.TypeRef));
+  i := Pos(';', Kopf);
+  if i > 0 then Kopf := Copy(Kopf, 1, i - 1);
+  Result := Trim(Kopf);
+  for P in MethodNode.Children do
+    if P.Kind = nkParam then
+    begin
+      Typ := LowerCase(Trim(P.TypeRef));
+      i := Pos('=', Typ);
+      if i > 0 then Typ := Trim(Copy(Typ, 1, i - 1));
+      Result := Result + '|' + Typ;
+    end;
+end;
+
 function IsClassCtorOrDtor(const TypeRef: string): Boolean;
 // Real-World-FP-Audit 2026-07-10: `class constructor`/`class destructor` sind
 // statische Einmal-Initialisierer, die nicht am vtable-Dispatch teilnehmen und
@@ -133,6 +183,7 @@ var
   DerivedMethods : TList<TAstNode>;
   PM, DM      : TAstNode;
   PolyNames   : TStringList;
+  PolySigs    : TStringList;
   MethName    : string;
   F           : TLeakFinding;
 begin
@@ -155,8 +206,16 @@ begin
       if Parent = C then Continue;
 
       // Polymorphe Methoden-Namen der Parent-Klasse sammeln.
-      PolyNames := TStringList.Create;
+      // Wie oben bei ClassNodes/ClassByName: nil-init vor dem try, damit
+      // eine geworfene ZWEITE Allokation die erste nicht leckt.
+      PolyNames := nil;
+      PolySigs  := nil;
       try
+        PolyNames := TStringList.Create;
+        PolySigs  := TStringList.Create;
+        PolySigs.CaseSensitive := False;
+        PolySigs.Sorted := True;
+        PolySigs.Duplicates := dupIgnore;
         PolyNames.CaseSensitive := False;
         PolyNames.Sorted := True;
         PolyNames.Duplicates := dupIgnore;
@@ -164,7 +223,13 @@ begin
         try
           for PM in ParentMethods do
             if IsPolymorphicDeclaration(PM.TypeRef) then
+            begin
               PolyNames.Add(LowerCase(TDetectorUtils.UnqualifiedNameLast(PM.Name)));
+              // Zusaetzlich die Signatur - sie entscheidet nicht ueber den
+              // FUND, aber ueber den RAT (s. SignaturSchluessel).
+              PolySigs.Add(LowerCase(TDetectorUtils.UnqualifiedNameLast(PM.Name))
+                           + '(' + SignaturSchluessel(PM));
+            end;
         finally
           ParentMethods.Free;
         end;
@@ -192,10 +257,23 @@ begin
             F.FileName   := FileName;
             F.MethodName := DM.Name;
             F.LineNumber := IntToStr(DM.Line);
-            F.MissingVar := Format(
-              'Method %s.%s shadows virtual %s.%s - missing `override` (W1010)',
-              [C.Name, TDetectorUtils.UnqualifiedNameLast(DM.Name),
-               Parent.Name, TDetectorUtils.UnqualifiedNameLast(DM.Name)]);
+            // Zwei Raete, weil zwei verschiedene Lagen. Nur bei GLEICHER
+            // Signatur ist 'override' ueberhaupt moeglich; bei abweichender
+            // waere es ein Compilerfehler - dort helfen 'overload' oder
+            // 'reintroduce'. Der Fund bleibt in beiden Faellen: die
+            // Deklaration versteckt die geerbten Ueberladungen so oder so.
+            if PolySigs.IndexOf(MethName + '(' + SignaturSchluessel(DM)) >= 0 then
+              F.MissingVar := Format(
+                'Method %s.%s shadows virtual %s.%s - missing `override` (W1010)',
+                [C.Name, TDetectorUtils.UnqualifiedNameLast(DM.Name),
+                 Parent.Name, TDetectorUtils.UnqualifiedNameLast(DM.Name)])
+            else
+              F.MissingVar := Format(
+                'Method %s.%s hides all inherited %s.%s overloads (W1010) - ' +
+                'signatures differ, so use `overload` or `reintroduce`; ' +
+                '`override` would not compile',
+                [C.Name, TDetectorUtils.UnqualifiedNameLast(DM.Name),
+                 Parent.Name, TDetectorUtils.UnqualifiedNameLast(DM.Name)]);
             F.SetKind(fkMissingOverride);
             Results.Add(F);
           end;
@@ -203,6 +281,7 @@ begin
           DerivedMethods.Free;
         end;
       finally
+        PolySigs.Free;
         PolyNames.Free;
       end;
     end;

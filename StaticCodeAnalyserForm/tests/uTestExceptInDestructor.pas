@@ -14,6 +14,9 @@ type
     [Test] procedure RaiseInRegularMethod_NotReported;
     [Test] procedure RaiseInClassDestructor_NotReported;
     [Test] procedure Finding_KindAndSeverity;
+    // Zwei Schaeden, zwei Meldungen (Vollzaehlung 2026-09-04).
+    [Test] procedure RaiseNachInherited_MeldungOhneInheritedBehauptung;
+    [Test] procedure RaiseNachBedingtemInherited_BehaeltDieScharfeMeldung;
   end;
 
 implementation
@@ -112,6 +115,67 @@ begin
       if Fnd.Kind = fkExceptInDestructor then begin Hit := Fnd; Break; end;
     Assert.IsNotNull(Hit, 'fkExceptInDestructor finding expected');
     Assert.AreEqual(lsWarning, Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestExceptInDestructor.RaiseNachInherited_MeldungOhneInheritedBehauptung;
+// Vollzaehlung 04.09.: 2 der 7 Korpusfunde behaupteten "inherited
+// Destroy not called", obwohl das inherited die ERSTE Anweisung des
+// Rumpfs war. Beleg ZLibExGZ.pas:1241/1245.
+// Der Fund BLEIBT - eine Ausnahme aus einem Destruktor faellt dem
+// Free-Aufrufer vor die Fuesse -, aber die Meldung behauptet nicht
+// mehr, der Eltern-Cleanup sei ausgefallen.
+// Ohne den Fix ROT: die Meldung nennt 'not called'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  inherited Destroy;'#13#10 +
+  '  if Bad then'#13#10 +
+  '    raise EInvalidOp.Create(''oops'');'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkExceptInDestructor),
+      'der Fund bleibt - nur die Begruendung aendert sich');
+    Fnd := TFindingHelper.FirstOf(F, fkExceptInDestructor);
+    Assert.IsNotNull(Fnd, 'Fund erwartet');
+    Assert.IsTrue(Pos('after inherited Destroy', Fnd.MissingVar) > 0,
+      'Meldung muss den Escape nennen, nicht den Eltern-Cleanup');
+    Assert.IsTrue(Pos('not called', Fnd.MissingVar) = 0,
+      'inherited LIEF - das darf nicht mehr behauptet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptInDestructor.RaiseNachBedingtemInherited_BehaeltDieScharfeMeldung;
+// WAECHTER fuer die konservative Richtung: ein 'inherited' in einem
+// if-Zweig laeuft moeglicherweise gar nicht. Dann bleibt die schaerfere
+// Aussage stehen - im Zweifel wird zu viel behauptet, nicht zu wenig
+// gemeldet. Bricht dieser Test, gatet die Pruefung ueber Zweige hinweg.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  if Soll then'#13#10 +
+  '    inherited Destroy;'#13#10 +
+  '  if Bad then'#13#10 +
+  '    raise EInvalidOp.Create(''oops'');'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkExceptInDestructor));
+    Fnd := TFindingHelper.FirstOf(F, fkExceptInDestructor);
+    Assert.IsNotNull(Fnd, 'Fund erwartet');
+    Assert.IsTrue(Pos('not called', Fnd.MissingVar) > 0,
+      'bedingtes inherited entlastet nicht - scharfe Meldung bleibt');
   finally F.Free; end;
 end;
 

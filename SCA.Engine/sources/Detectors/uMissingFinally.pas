@@ -332,7 +332,13 @@ begin
 
       VarNameLow := V.Name.ToLower;
 
-      if not TLeakDetector2.HasCreateAssign(MethodNode, VarNameLow) then Continue;
+      // Die Create-Zeile kommt aus der Entscheidung selbst (04.09.,
+      // Zusammenlegung von FindCreateLine und HasCreateAssign) - sonst
+      // suchen zwei Funktionen dieselbe Stelle mit denselben Gates,
+      // und die naechste Gate-Ergaenzung kommt nur bei einer an.
+      var CreateLine : Integer;
+      if not TLeakDetector2.HasCreateAssign(MethodNode, VarNameLow,
+                                            CreateLine) then Continue;
       if TLeakDetector2.IsReturnedAsResult(MethodNode, VarNameLow) then Continue;
       if TLeakDetector2.IsPassedToOwner(MethodNode, VarNameLow)    then Continue;
       // Konsistenz-Port (Welle 2, 2026-07-18): uLeakDetector2 Pfad 1 hat dieses
@@ -368,7 +374,7 @@ begin
       // Create + Free vorhanden, aber kein try/finally.
       // Emit auf der Create-Zeile (statt var-decl): bessere UX und
       // // noinspection-Marker direkt ueber dem Create greifen jetzt.
-      var ReportLine := TLeakDetector2.FindCreateLine(MethodNode, VarNameLow);
+      var ReportLine := CreateLine;
       if ReportLine = 0 then ReportLine := V.Line;
 
       // C1: SafeSpan - nur harmloser Container-Code zwischen Create und
