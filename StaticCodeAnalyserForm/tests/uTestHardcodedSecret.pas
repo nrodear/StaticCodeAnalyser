@@ -100,6 +100,7 @@ type
     [Test] procedure Secret_Meldungstext_NotReported;
     [Test] procedure Secret_ProsaUeberPrivateKey_NotReported;
     [Test] procedure Secret_PemBlock_StillReported;
+    [Test] procedure Secret_Verbindungszeichenfolge_StillReported;
   end;
 
 implementation
@@ -1017,6 +1018,30 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1,
     'ein eingebetteter PEM-Schluessel bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecret.Secret_Verbindungszeichenfolge_StillReported;
+// GEGENAUSNAHME zum Prosa-Gate, im Review der eigenen Charge gefunden:
+// eine Verbindungszeichenfolge traegt Leerzeichen UND ein eingebettetes
+// Credential. Sie darf das Prosa-Gate nicht passieren.
+//
+// Entscheidend ist, was hinter dem '=' steht: eine MELDUNG nennt den
+// Schalter und laesst ihn leer ('... /PASSWORD= command line'), eine
+// Verbindungszeichenfolge setzt einen Wert an. Die erste Fassung der
+// Gegenausnahme pruefte das nicht und nahm dem Prosa-Gate genau die
+// Meldung wieder weg, fuer die es gebaut wurde.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  FConn := ''Data Source=srv;Initial Catalog=db;User Id=sa;Password=Xk9pQz7'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1,
+    'ein Credential IN der Verbindungszeichenfolge bleibt ein Fund');
   finally F.Free; end;
 end;
 

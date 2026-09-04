@@ -629,6 +629,41 @@ begin
     end;
 end;
 
+// True wenn im WERT selbst eine Credential-Zuweisung MIT Wert steht -
+// 'Password=geheim;' in einer Verbindungszeichenfolge.
+//
+// Entscheidend ist, was hinter dem '=' folgt. Eine Meldung nennt den
+// SCHALTER und laesst ihn leer ('... using the /PASSWORD= command line
+// parameter.'), eine Verbindungszeichenfolge setzt einen Wert an. Ohne
+// diese Unterscheidung nimmt die Gegenausnahme dem Prosa-Gate genau die
+// Meldung wieder weg, fuer die es gebaut wurde (im Review der eigenen
+// Charge aufgefallen, 2026-09-04).
+function EnthaeltCredentialZuweisung(const BodyLow: string): Boolean;
+const
+  SCHLUESSEL : array[0..5] of string = (
+    'password=', 'pwd=', 'secret=', 'apikey=', 'api_key=', 'token='
+  );
+var
+  S : string;
+  p : Integer;
+begin
+  Result := False;
+  for S in SCHLUESSEL do
+  begin
+    p := Pos(S, BodyLow);
+    while p > 0 do
+    begin
+      p := p + Length(S);
+      // Wert vorhanden = das naechste Zeichen ist kein Leerraum und
+      // kein Trennzeichen.
+      if (p <= Length(BodyLow))
+         and not CharInSet(BodyLow[p], [' ', #9, ';', ',', '&']) then
+        Exit(True);
+      p := Pos(S, BodyLow, p);
+    end;
+  end;
+end;
+
 class function THardcodedSecretDetector.IsNonSecretValueShape(
   const Literal, LhsName: string): Boolean;
 // Real-World-FP-Audit 2026-07-10: Der Detektor triggert auf dem LHS-Namen
@@ -683,7 +718,14 @@ begin
   //      Die Schwelle ist bewusst hoch: eine Passphrase aus fuenf
   //      Woertern waere denkbar, ist im Korpus aber nicht belegt -
   //      und ein zu scharfes Gate kostet hier ein echtes Credential.
-  if WortAnzahl(BodyTrim) >= 5 then Exit;
+  //      GEGENAUSNAHME (Review der eigenen Charge): eine
+  //      Verbindungszeichenfolge traegt Leerzeichen UND ein
+  //      eingebettetes Credential - 'Data Source=srv;Initial
+  //      Catalog=db;User Id=sa;Password=x'. Die vier Woerter des
+  //      Beispiels bleiben unter der Schwelle, eine laengere
+  //      Variante nicht. Wo der WERT selbst eine
+  //      Credential-Zuweisung enthaelt, wird nie unterdrueckt.
+  if not EnthaeltCredentialZuweisung(BodyLow) and (WortAnzahl(BodyTrim) >= 5) then Exit;
 
   // (a) URL-Endpoint bzw. Registry-/Datei-Pfad - kein Geheimwert.
   //     'https://oauth2.googleapis.com/token', 'Software\Policies\...'
