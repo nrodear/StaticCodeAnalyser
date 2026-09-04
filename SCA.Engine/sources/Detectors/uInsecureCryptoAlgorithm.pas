@@ -247,7 +247,6 @@ class procedure TInsecureCryptoAlgorithmDetector.AnalyzeMethod(
 var
   Assigns, Calls : TList<TAstNode>;
   N, PN          : TAstNode;
-  Hit            : string;
   // True wenn DIESE Methode einen Parameter namens 'Des' fuehrt. Dann
   // meint das nackte Wort im Rumpf per Pascal-Sichtbarkeit den
   // PARAMETER, nie den Chiffre - Abbrevia AbCrtl.pas deklariert
@@ -263,7 +262,38 @@ var
   // doppelt geflagged wird (einmal ueber nkAssign.TypeRef, einmal ueber
   // nkCall.Name). Key-Format: 'line|hit'.
   Seen           : TDictionary<string, Boolean>;
-  Key            : string;
+
+  // Dedup auf (Line, Hit) + Meldung - vorher viermal fast identisch
+  // ausgeschrieben (Zerlegung 2026-09-04, verhaltensgleich; das
+  // Korpus-A/B rw62 beweist es mit Nullbewegung).
+  procedure MeldeEinmal(const AHit, AContext: string; ALine: Integer);
+  var
+    Key : string;
+  begin
+    Key := IntToStr(ALine) + '|' + LowerCase(AHit);
+    if Seen.ContainsKey(Key) then Exit;
+    Seen.Add(Key, True);
+    Report(AHit, AContext, ALine);
+  end;
+
+  // Ein Knoten-Text gegen beide Erkennungswege. Die Reihenfolge und die
+  // Gate-Semantik entsprechen exakt den frueheren vier Bloecken:
+  // ein DES-Algo-Treffer, den das Parameter-Gate schluckt, beendet die
+  // Pruefung des KNOTENS (frueher 'Continue') - auch der Class-Check
+  // entfaellt dann.
+  procedure PruefeKnoten(const AText, AContext: string; ALine: Integer);
+  var
+    Hit : string;
+  begin
+    if FindWeakAlgo(AText, Hit) then
+    begin
+      if (LowerCase(Hit) = 'des') and DesIstParameter then Exit;
+      MeldeEinmal(Hit, AContext, ALine);
+    end;
+    if FindWeakClass(AText, Hit) then
+      MeldeEinmal(Hit, AContext, ALine);
+  end;
+
 begin
   DesIstParameter := False;
   for PN in MethodNode.Children do
@@ -282,29 +312,7 @@ begin
     Assigns := MethodNode.FindAll(nkAssign);
     try
       for N in Assigns do
-      begin
-        // Erst Algorithmus-Token (in Literal/Identifier auf RHS)
-        if FindWeakAlgo(N.TypeRef, Hit) then
-        begin
-          if (LowerCase(Hit) = 'des') and DesIstParameter then Continue;
-          Key := IntToStr(N.Line) + '|' + LowerCase(Hit);
-          if not Seen.ContainsKey(Key) then
-          begin
-            Seen.Add(Key, True);
-            Report(Hit, N.Name, N.Line);
-          end;
-        end;
-        // Dann Klassen-Wrapper (z.B. 'Hash := THashMD5.Create')
-        if FindWeakClass(N.TypeRef, Hit) then
-        begin
-          Key := IntToStr(N.Line) + '|' + LowerCase(Hit);
-          if not Seen.ContainsKey(Key) then
-          begin
-            Seen.Add(Key, True);
-            Report(Hit, N.Name, N.Line);
-          end;
-        end;
-      end;
+        PruefeKnoten(N.TypeRef, N.Name, N.Line);
     finally
       Assigns.Free;
     end;
@@ -312,27 +320,7 @@ begin
     Calls := MethodNode.FindAll(nkCall);
     try
       for N in Calls do
-      begin
-        if FindWeakAlgo(N.Name, Hit) then
-        begin
-          if (LowerCase(Hit) = 'des') and DesIstParameter then Continue;
-          Key := IntToStr(N.Line) + '|' + LowerCase(Hit);
-          if not Seen.ContainsKey(Key) then
-          begin
-            Seen.Add(Key, True);
-            Report(Hit, N.Name, N.Line);
-          end;
-        end;
-        if FindWeakClass(N.Name, Hit) then
-        begin
-          Key := IntToStr(N.Line) + '|' + LowerCase(Hit);
-          if not Seen.ContainsKey(Key) then
-          begin
-            Seen.Add(Key, True);
-            Report(Hit, N.Name, N.Line);
-          end;
-        end;
-      end;
+        PruefeKnoten(N.Name, N.Name, N.Line);
     finally
       Calls.Free;
     end;
