@@ -75,6 +75,13 @@ type
     // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
     [Test] procedure SameNameLocalConstInTwoRoutines_NotReported;
     [Test] procedure LocalConstGenuineMismatch_Reported;
+    // --- IFDEF-Doppelzaehlung (Vollzaehlung 2026-09-04) ---
+    // Der Lexer verwirft Direktiven; {$IFDEF}'a'{$ELSE}'b'{$ENDIF}
+    // klebt im Tokenstrom zu 'a''b' und der Zaehler addiert BEIDE
+    // Zweige. FindingsOfFile ist Pflicht: das Gate liest die
+    // Quellzeilen (im FindingsOf-Harness bewusstes No-Op).
+    [Test] procedure IfdefBranchLiterals_NoFinding;
+    [Test] procedure PlainMismatch_FileHarness_StillReported;
   end;
 
   // ---- Bare-Style (mORMot FormatUtf8/FormatString) -----------------------------------
@@ -746,6 +753,55 @@ begin
     Assert.IsTrue(TFindingHelper.Count(F, fkFormatMismatch) >= 1,
       'Lokale const mit echter Fehlpaarung (2 Platzhalter, 1 Argument) ' +
       'wird gegen die eigene Definition aufgeloest -> MUSS feuern');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchRealWorldFP.IfdefBranchLiterals_NoFinding;
+// Korpus-Klasse (3 Faelle, jvcl JvSelDSFrm.pas:121 u. a.): beide
+// IFDEF-Zweige des Format-Literals wurden addiert - "4 placeholders"
+// existiert in keinem kompilierten Programm. An der Exe vor dem Fix
+// reproduziert (Meldung '4 placeholders, 2 arguments').
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure A(const Component: TObject);'#13#10+
+  'var Caption: string;'#13#10+
+  'begin'#13#10+
+  '  Caption := Format({$IFDEF CBUILDER} ''%s->%s'' {$ELSE} ''%s.%s'' {$ENDIF},'#13#10+
+  '    [Component.ClassName, Caption]);'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
+      'IFDEF-alternierte Literale: Zaehlung unentscheidbar -> kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchRealWorldFP.PlainMismatch_FileHarness_StillReported;
+// Doppelter Waechter: (1) das Gate unterdrueckt NUR bei quote-
+// adjazenter Direktive - ein nackter Mismatch feuert weiter; (2) die
+// FindingsOfFile-Registrierung von SCA005 traegt (vor dem 04.09. lief
+// der Detektor dort GAR NICHT - dieser Test waere stumm-gruen gewesen).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure B;'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := Format(''%s %d'', [s]);'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFormatMismatch),
+      'nackter Mismatch (2 Platzhalter, 1 Argument) feuert im File-Harness');
   finally F.Free; end;
 end;
 end.

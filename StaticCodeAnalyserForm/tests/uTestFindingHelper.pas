@@ -349,6 +349,9 @@ begin
         // finally-Region-Tests inert (WithDoBareFreeNoTry_StillReported war
         // rot, weil der Detektor hier schlicht nie ausgefuehrt wurde).
         TLeakDetector2.AnalyzeUnit(Root, TempPath, Result);
+        // SCA005 hat seit 04.09. ein quellzeilen-lesendes Gate
+        // (DirektiveImAufruf) - gleiche Begruendung wie LeakDetector2.
+        TFormatMismatchDetector.AnalyzeUnit(Root, TempPath, Result);
         TMissingFinallyDetector.AnalyzeUnit(Root, TempPath, Result);
         // multi-line-Exit-Guard 2026-07-26: DeadCode hat jetzt einen Lines-
         // abhaengigen Klammer-Balance-Guard (AcquireLines + StripStrings...)
