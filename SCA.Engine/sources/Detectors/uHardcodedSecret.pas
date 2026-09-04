@@ -610,6 +610,25 @@ begin
   Result := True;
 end;
 
+// Zahl der durch Leerraum getrennten Woerter. Fuer die
+// Prosa-Erkennung in IsNonSecretValueShape - dort die Begruendung.
+function WortAnzahl(const S: string): Integer;
+var
+  i      : Integer;
+  ImWort : Boolean;
+begin
+  Result := 0;
+  ImWort := False;
+  for i := 1 to Length(S) do
+    if CharInSet(S[i], [' ', #9, #10, #13]) then
+      ImWort := False
+    else if not ImWort then
+    begin
+      ImWort := True;
+      Inc(Result);
+    end;
+end;
+
 class function THardcodedSecretDetector.IsNonSecretValueShape(
   const Literal, LhsName: string): Boolean;
 // Real-World-FP-Audit 2026-07-10: Der Detektor triggert auf dem LHS-Namen
@@ -637,9 +656,34 @@ begin
   // Harte Secret-Marker - NIEMALS unterdruecken (PEM/SSH-Keys). Schuetzt
   // eingebettete RSA-/Service-Account-Keys, die als JSON mit '\n' und
   // 'https://'-token_uri auftreten und sonst als Pfad/URL gelten wuerden.
-  if (Pos('-----begin', BodyLow) > 0) or (Pos('private key', BodyLow) > 0) or
+  //
+  // 'private key' stand hier bis zum 2026-09-04 als EIGENER Marker und
+  // war redundant: jeder PEM-Block traegt '-----BEGIN ... PRIVATE
+  // KEY-----', der erste Marker faengt ihn also schon. Am Korpus
+  // nachgesehen - der einzige echte eingebettete Key (Kastri
+  // Main.pas:112, FirebaseMessagingHttpV1ServiceAccountPrivateKey)
+  // beginnt mit '-----BEGIN PRIVATE KEY-----'.
+  // Kosten hatte der Marker sehr wohl: er ueberstimmt ALLE Wert-Gates
+  // und machte damit aus jedem PROSATEXT ueber private keys ein
+  // Secret - IdSSLOpenSSLHeaders.pas:4598 meldet die
+  // OpenSSL-Konstante 'X509v3 Private Key Usage Period'.
+  if (Pos('-----begin', BodyLow) > 0) or
      (Pos('ssh-rsa', BodyLow) > 0) or (Pos('ssh-ed25519', BodyLow) > 0) then
     Exit(False);
+
+  // (a0) FLIESSTEXT - eine Meldung, kein Geheimwert. Ein Credential
+  //      ist ein einzelnes Token; ab fuenf durch Leerzeichen
+  //      getrennten Woertern liegt Prosa vor.
+  //      Vollzaehlung 2026-09-04: 3 der 10 Korpusfunde sind
+  //      UI-Meldungen, deren BEZEICHNER 'Password'/'Token' traegt -
+  //      'Please specify the password using the /PASSWORD= command
+  //      line parameter.' (SetupLdrAndSetup.Messages.pas:51). Alle
+  //      drei haben zehn Woerter; die sechs echten Funde haben genau
+  //      EINES ('aaaa', 'FTPTest', 'rocks', 'pass@httpget', ...).
+  //      Die Schwelle ist bewusst hoch: eine Passphrase aus fuenf
+  //      Woertern waere denkbar, ist im Korpus aber nicht belegt -
+  //      und ein zu scharfes Gate kostet hier ein echtes Credential.
+  if WortAnzahl(BodyTrim) >= 5 then Exit;
 
   // (a) URL-Endpoint bzw. Registry-/Datei-Pfad - kein Geheimwert.
   //     'https://oauth2.googleapis.com/token', 'Software\Policies\...'
