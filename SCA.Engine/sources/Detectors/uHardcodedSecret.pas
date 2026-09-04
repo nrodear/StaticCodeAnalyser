@@ -612,6 +612,13 @@ end;
 
 // Zahl der durch Leerraum getrennten Woerter. Fuer die
 // Prosa-Erkennung in IsNonSecretValueShape - dort die Begruendung.
+const
+  // Ab dieser Wortzahl gilt ein Wert als PROSA (Meldungstext), nicht als
+  // Credential. Bewusst hoch: die drei gemessenen Meldungen haben zehn
+  // Woerter, die sechs echten Funde genau eines. Eine Passphrase aus
+  // fuenf Woertern waere denkbar, ist im Korpus aber nicht belegt.
+  PROSA_WORT_SCHWELLE = 5;
+
 function WortAnzahl(const S: string): Integer;
 var
   i      : Integer;
@@ -725,7 +732,8 @@ begin
   //      Beispiels bleiben unter der Schwelle, eine laengere
   //      Variante nicht. Wo der WERT selbst eine
   //      Credential-Zuweisung enthaelt, wird nie unterdrueckt.
-  if not EnthaeltCredentialZuweisung(BodyLow) and (WortAnzahl(BodyTrim) >= 5) then Exit;
+  if not EnthaeltCredentialZuweisung(BodyLow)
+     and (WortAnzahl(BodyTrim) >= PROSA_WORT_SCHWELLE) then Exit;
 
   // (a) URL-Endpoint bzw. Registry-/Datei-Pfad - kein Geheimwert.
   //     'https://oauth2.googleapis.com/token', 'Software\Policies\...'
