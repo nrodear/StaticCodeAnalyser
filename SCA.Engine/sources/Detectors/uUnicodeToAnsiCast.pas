@@ -232,6 +232,32 @@ begin
       Exit(True);
 end;
 
+// True wenn der Operand ein ZEIGERFELD einer Variant-Record-Sicht ist
+// ('TVarData(x).VAny', 'p^.VAny', 'V.VAnsiString'). Diese Felder halten
+// eine bereits vorhandene AnsiString-REFERENZ; der Cast fasst deren
+// Referenzzaehlung an und wandelt nichts. Codepage-Verlust ist dort
+// ausgeschlossen - mormot.core.rtti.pas:6299 sagt es im Code selbst:
+// "copy AnsiString with reference counting".
+//
+// Vollzaehlung 2026-09-04: 11 der 482 Korpusfunde (2,3 %), alle in
+// mORMot, alle dieses Muster. Nur die beiden GEMESSENEN Feldnamen
+// stehen hier - keine Heuristik ueber das 'V'-Praefix, sonst faenge das
+// Gate irgendwann ein echtes String-Feld mit passendem Namen.
+function OperandIsVariantPointerField(const Operand: string): Boolean;
+const
+  ZEIGERFELDER : array[0..1] of string = ('.vany', '.vansistring');
+var
+  Lower : string;
+  F     : string;
+begin
+  Result := False;
+  Lower := LowerCase(TrimRight(Operand));
+  for F in ZEIGERFELDER do
+    if (Length(Lower) >= Length(F))
+       and (Copy(Lower, Length(Lower) - Length(F) + 1, Length(F)) = F) then
+      Exit(True);
+end;
+
 // Pruefen ob `Text` einen AnsiString/AnsiChar/UTF8String/RawByteString/
 // ShortString-Cast enthaelt und entsprechend Befund anlegen. Wird sowohl
 // fuer nkCall (bare call) als auch nkAssign.TypeRef (typische Form
@@ -255,6 +281,7 @@ begin
   Operand := ExtractCastOperand(Text);
   if IsAsciiStringLiteral(Operand) then Exit;
   if OperandIsAsciiSafe(Operand) then Exit;
+  if OperandIsVariantPointerField(Operand) then Exit;
   if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
   else MethName := '';
   F            := TLeakFinding.Create;
