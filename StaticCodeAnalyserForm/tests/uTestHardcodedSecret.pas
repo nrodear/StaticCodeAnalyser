@@ -965,7 +965,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestHardcodedSecret.Secret_Meldungstext_NotReported;
+procedure TTestHardcodedSecretInit.Secret_Meldungstext_NotReported;
 // Vollzaehlung 04.09.: 3 der 10 Korpusfunde sind UI-MELDUNGEN, deren
 // Bezeichner 'Password' oder 'Token' traegt. Der Wert ist Prosa, kein
 // Credential - SetupLdrAndSetup.Messages.pas:51 und :52,
@@ -984,7 +984,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestHardcodedSecret.Secret_ProsaUeberPrivateKey_NotReported;
+procedure TTestHardcodedSecretInit.Secret_ProsaUeberPrivateKey_NotReported;
 // Der harte Marker 'private key' ueberstimmte ALLE Wert-Gates und machte
 // aus jedem Prosatext ueber private keys ein Secret. Beleg
 // IdSSLOpenSSLHeaders.pas:4598 - eine OpenSSL-Konstante.
@@ -1002,7 +1002,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestHardcodedSecret.Secret_PemBlock_StillReported;
+procedure TTestHardcodedSecretInit.Secret_PemBlock_StillReported;
 // GEGENPROBE - genau dafuer war der Marker gedacht, und das muss er
 // weiter leisten. Ein PEM-Block traegt IMMER '-----BEGIN', der erste
 // harte Marker faengt ihn also ohne den geloeschten zweiten.
@@ -1021,7 +1021,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestHardcodedSecret.Secret_Verbindungszeichenfolge_StillReported;
+procedure TTestHardcodedSecretInit.Secret_Verbindungszeichenfolge_StillReported;
 // GEGENAUSNAHME zum Prosa-Gate, im Review der eigenen Charge gefunden:
 // eine Verbindungszeichenfolge traegt Leerzeichen UND ein eingebettetes
 // Credential. Sie darf das Prosa-Gate nicht passieren.
