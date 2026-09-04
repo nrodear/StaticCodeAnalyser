@@ -264,8 +264,14 @@ var
   begin
     Result := '';
     if AIdent = '' then Exit;
+    // Komma-Listen-Deklaration mitnehmen ('comp, extr: TPrecisionTimer;'):
+    // die alte Fassung verlangte den Doppelpunkt DIREKT nach dem Namen
+    // und liess 'comp' unaufgeloest - der mORMot-Praezisionstimer wurde
+    // als TThread gemeldet (Vollzaehlung 2026-09-04, 2 der 9 Fehlalarme;
+    // das Resume/Pause-PAAR an der Fundstelle verraet den Timer). Das
+    // Match beginnt AM Identifier, Vorgaenger in der Liste stoeren nicht.
     Re := TRegEx.Create(
-      '(?i)\b' + AIdent + '\s*:\s*([A-Za-z0-9_<>,\s.]+?)\s*(?:;|\)|=)');
+      '(?i)\b' + AIdent + '\s*(?:,\s*\w+)*\s*:\s*([A-Za-z0-9_<>,\s.]+?)\s*(?:;|\)|=)');
     Mt := Re.Match(Code);
     if Mt.Success then
       Result := Mt.Groups[1].Value
@@ -295,6 +301,27 @@ var
           Result := Mt.Groups[1].Value;
       end;
     end;
+  end;
+
+  function InferenzInitOhneThreadToken(const AIdent: string): Boolean;
+  // True wenn AIdent per Inline-var MIT Typinferenz gebunden wird
+  // ('var X := <init>;') und der Initialisierer KEIN 'thread'-Token
+  // traegt. Der Empfaenger ist dann ueber keine der Namenskonventionen
+  // als Thread erkennbar, und die Meldung unterbleibt.
+  // TP-Risiko benannt: eine Factory ohne 'thread' im Namen, die einen
+  // TThread liefert, wuerde uebersehen - am Korpus ist diese Form nicht
+  // belegt (0 von 114); die belegten Inferenz-Empfaenger sind
+  // NSURLSessionTask-Handles.
+  var
+    Re : TRegEx;
+    Mt : TMatch;
+  begin
+    Result := False;
+    if AIdent = '' then Exit;
+    Re := TRegEx.Create('(?i)\bvar\s+' + AIdent + '\s*:=\s*([^;]{1,160})');
+    Mt := Re.Match(Code);
+    if not Mt.Success then Exit;
+    Result := Pos('thread', LowerCase(Mt.Groups[1].Value)) = 0;
   end;
 
   function ExecuteHonorsTerminated(const AClassName: string): Boolean;
@@ -428,6 +455,28 @@ begin
       // Namen bzw. loesen auf einen '...Thread'-Typ auf).
       RecvType := ResolveResumeReceiverType(Recv);
       if (RecvType <> '') and not LooksLikeThreadType(RecvType) then Continue;
+      // Zwei Gates fuer den UNAUFLOESBAREN Empfaenger (Vollzaehlung
+      // 2026-09-04: 114 Funde, 9 Fehlalarme; alle drei Mechaniken sind
+      // Faelle, die der Kommentar oben ausdruecklich unterdruecken
+      // WILL - TProcess, NSURLSessionTask stehen woertlich dort -, die
+      // die in-file-Aufloesung aber nicht erreicht):
+      //
+      // (a) PUNKTKETTE - 'FExProcess.Process.Resume'. Das Regex greift
+      //     nur das letzte Glied; dessen Deklaration liegt cross-unit
+      //     (TProcess-Property, 4x doublecmd; PyScripter
+      //     ActiveDebugger). Am Korpus waren ALLE fuenf unaufloesbaren
+      //     Punktketten-Empfaenger Fehlalarme. Traegt das letzte Glied
+      //     'thread' im Namen, wird weiter gemeldet - das deckt die
+      //     TP-Form 'Modul.FWorkerThread.Resume'.
+      if (RecvType = '') and (M.Index > 1) and (Code[M.Index - 1] = '.')
+         and not EndsStr('thread', LowerCase(Recv)) then Continue;
+      // (b) INLINE-VAR MIT TYPINFERENZ - 'var LTask :=
+      //     FURLSession.uploadTaskWithRequest(..)' hat keine
+      //     Typannotation, die Aufloesungs-Regexe greifen nie
+      //     (Alcinoe NSURLSessionTask, 2x). Steht im Initialisierer das
+      //     Token 'thread' ('var W := TWorkerThread.Create'), wird
+      //     weiter gemeldet.
+      if (RecvType = '') and InferenzInitOhneThreadToken(Recv) then Continue;
       Emit(fkThreadResumeDeprecated,
         Format('%s.Resume is deprecated since Delphi 2010 - prefer ' +
                '%s.Start or pass CreateSuspended=False to the constructor. ' +

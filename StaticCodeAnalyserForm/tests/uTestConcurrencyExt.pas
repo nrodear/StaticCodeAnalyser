@@ -15,6 +15,13 @@ type
     [Test] procedure Resume_Reported;
     [Test] procedure Start_NotReported;
     [Test] procedure ResumeAssignment_NotReported;
+    // Drei Gates am unaufloesbaren Empfaenger (Vollzaehlung 2026-09-04,
+    // 9 von 114 Fehlalarme).
+    [Test] procedure Resume_PunktketteCrossUnit_NotReported;
+    [Test] procedure Resume_PunktketteThreadSuffix_StillReported;
+    [Test] procedure Resume_KommaListenTimer_NotReported;
+    [Test] procedure Resume_InferenzOhneThread_NotReported;
+    [Test] procedure Resume_InferenzMitThreadCreate_StillReported;
 
     // TThreadDestroyWithoutTerminate
     [Test] procedure FreeAndNilWithoutTerminate_Reported;
@@ -1090,6 +1097,108 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
     'Terminated in der folgenden class procedure gehoert nicht zu Execute');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.Resume_PunktketteCrossUnit_NotReported;
+// Vollzaehlung 04.09.: alle fuenf unaufloesbaren Punktketten-Empfaenger
+// des Korpus waren Fehlalarme - doublecmd 'FExProcess.Process.Resume'
+// (TProcess-Property einer cross-unit-Klasse, 4x) und PyScripter
+// 'GI_PyControl.ActiveDebugger.Resume'. Das Regex greift nur das letzte
+// Glied, dessen Deklaration in-file nie auffindbar ist.
+// Ohne den Fix ROT.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  FExProcess.Process.Resume;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkThreadResumeDeprecated),
+    'unaufloesbares Punktketten-Glied ohne Thread-Namen ist kein Beleg');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.Resume_PunktketteThreadSuffix_StillReported;
+// GEGENPROBE zum Punktketten-Gate: traegt das letzte Glied 'Thread' im
+// Namen, wird weiter gemeldet - sonst verloere die Regel die Form
+// 'Modul.FWorkerThread.Resume'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  Modul.FWorkerThread.Resume;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkThreadResumeDeprecated),
+    'Thread-Suffix am letzten Glied bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.Resume_KommaListenTimer_NotReported;
+// mORMot test.core.base:11818 - 'comp, extr: TPrecisionTimer;' und
+// spaeter 'comp.Resume;' (das Resume/Pause-PAAR verraet den Timer).
+// Die Aufloesung verlangte den Doppelpunkt DIREKT nach dem Namen und
+// liess Komma-Listen-Deklarationen unaufgeloest.
+// Ohne den Fix ROT.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var comp, extr: TPrecisionTimer;'#13#10 +
+  'begin'#13#10 +
+  '  comp.Resume;'#13#10 +
+  '  comp.Pause;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkThreadResumeDeprecated),
+    'Komma-Listen-Deklaration muss aufloesen - TPrecisionTimer ist kein Thread');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.Resume_InferenzOhneThread_NotReported;
+// Alcinoe.HTTP.Worker:1504 - 'var LTask := FURLSession.uploadTask...(..)'
+// bindet per Typinferenz (NSURLSessionTask; .resume ist dort die
+// korrekte Start-API). Keine Typannotation, keine Aufloesung moeglich -
+// aber der Initialisierer traegt kein 'thread'-Token.
+// Ohne den Fix ROT.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  var LTask := FURLSession.uploadTaskWithRequest(LRequest);'#13#10 +
+  '  LTask.resume;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkThreadResumeDeprecated),
+    'Typinferenz ohne Thread-Token im Initialisierer ist kein Beleg');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.Resume_InferenzMitThreadCreate_StillReported;
+// GEGENPROBE zum Inferenz-Gate: 'var W := TWorkerThread.Create(True)'
+// loest ueber den Konstruktor-Regex auf einen ...Thread-Typ auf und
+// bleibt ein Fund. Bricht dieser Test, frisst das Inferenz-Gate echte
+// Threads.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  var W := TWorkerThread.Create(True);'#13#10 +
+  '  W.Resume;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkThreadResumeDeprecated),
+    'Konstruktor eines ...Thread-Typs bleibt ein Fund');
   finally F.Free; end;
 end;
 
