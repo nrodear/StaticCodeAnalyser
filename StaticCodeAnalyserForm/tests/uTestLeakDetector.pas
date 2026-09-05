@@ -15,6 +15,17 @@ type
   // ---- MemoryLeak (TLeakDetector2) ----------------------------------------------------
   [TestFixture]
   TTestMemoryLeak = class
+  // Kern des lokalen Leak-Pfads: finally-Disziplin, Rueckgabe- und
+  // Uebergabe-Formen. Am 05.09.2026 in fuenf sequenzielle Fixtures
+  // geteilt, als die Sammelklasse 91 Methoden / 2225 Zeilen Span trug
+  // (SCA138/SCA141 am eigenen Code). Reine Umhaengung - kein Test
+  // geaendert. Geschwister: ...Borrowed (geliehene Referenzen,
+  // Factories, Meldezeilen), ...TypeMatrix (nested-Gate +
+  // Typen-Matrix + Schleifen), ...TryGeometry (try/finally-
+  // Geometrien), ...OwnerAndContext (inline-var, Konstruktor-
+  // Varianten, Owner-/OS-Handle-Gates, Context). Neue Tests gehoeren
+  // in die THEMATISCH passende Fixture; steht eine bei 20 Methoden,
+  // wird zuerst geteilt (Schwelle MAX_METHODS = 20).
   public
     [Test] procedure Leak_CreateWithoutFree_ReportsError;
     // Real-World FP-Audit 2026-07-10: CreateAnonymousThread = FreeOnTerminate
@@ -36,6 +47,13 @@ type
     [Test] procedure Leak_PassedToConstructor_NoFinding;
     [Test] procedure Leak_FunctionCallAssign_NoFreeReportsWarning;
     [Test] procedure Leak_FunctionCallAssign_WithFree_NoFinding;
+  end;
+
+  // Geliehene Referenzen (Getter, Typecasts, Indexed-Access),
+  // Factory-Erkennung und die Meldezeilen-Vertraege.
+  [TestFixture]
+  TTestMemoryLeakBorrowed = class
+  public
     [Test] procedure Leak_BorrowedGetter_NoFinding;
     // Real-World 2026-06-26: 'Rueckgabewert'-FPs durch geliehene Referenzen
     // in Typecasts / Indexed-Access (cnwizards Design-Editoren).
@@ -64,6 +82,13 @@ type
     [Test] procedure Leak_NilWithoutFree_ReportsError;
     [Test] procedure Leak_DoubleCreate_KnownLimitation_NoFinding;
     [Test] procedure Leak_ObjectListAdd_FieldReceiver_NoFinding;
+  end;
+
+  // nested-Gate, Factory-ohne-Klammern, die Typen-Matrix der leaky
+  // Klassen und Schleifen-Allokationen.
+  [TestFixture]
+  TTestMemoryLeakTypeMatrix = class
+  public
     [Test] procedure Leak_ParseFilesAllClasses_NoFinding;
     [Test] procedure Leak_GenericObjectList_FreedInFinally_NoFinding;
     [Test] procedure Leak_FactoryMethodNoParens_BorrowedRef_NoFinding;
@@ -77,7 +102,7 @@ type
     // Datei.
     [Test] procedure Leak_FreeInNestedRoutine_NoFinding;
     [Test] procedure Leak_NestedFreesOtherVar_OuterStillReported;
-    // --- 30 weitere Leak-Tests ---
+    // --- Typen-Matrix + Schleifen ---
     [Test] procedure Leak_TFileStream_NoFree_ReportsError;
     [Test] procedure Leak_TMemoryStream_FreeInFinally_NoFinding;
     [Test] procedure Leak_TBitmap_NoFree_ReportsError;
@@ -90,6 +115,12 @@ type
     [Test] procedure Leak_CreateInForLoop_NoFree_ReportsError;
     [Test] procedure Leak_TwoVars_OnlyOneFreed_ReportsOneError;
     [Test] procedure Leak_FreeInTryBody_NotFinally_ReportsWarning;
+  end;
+
+  // try/finally-Geometrien: Regionen, Schachtelung, Wortgrenzen.
+  [TestFixture]
+  TTestMemoryLeakTryGeometry = class
+  public
     [Test] procedure Leak_DestroyInFinally_NoFinding;
     [Test] procedure Leak_CreateBeforeTry_FreeInFinally_NoFinding;
     [Test] procedure Leak_ThreeVarsAllFreed_NoFinding;
@@ -111,6 +142,13 @@ type
     [Test] procedure Leak_NestedBlockInFinally_FreeOutside_StillWarns;
     [Test] procedure Leak_TwoFreeAndNil_BothVars_NoFinding;
     [Test] procedure Leak_LargeMethod_OneVarLeaks_OneError;
+  end;
+
+  // inline-var, geschachtelte Eigen-finallys und die
+  // Konstruktor-Namensvarianten samt Borrowed-Regressionen.
+  [TestFixture]
+  TTestMemoryLeakCtorVariants = class
+  public
     [Test] procedure Leak_NestedTryFinally_InnerVarHasOwnFinally_NoFinding;
     [Test] procedure Leak_IfThenAssignElseBeginBlock_OuterFinallyFrees_NoFinding;
     [Test] procedure Leak_InheritedCreateWithVarArg_NoFinding;
@@ -124,6 +162,13 @@ type
     [Test] procedure Leak_CreateUtf8_NoFree_ReportsError;
     [Test] procedure Leak_CreateFmt_NoFree_ReportsError;
     [Test] procedure Leak_DotCreatedProperty_NotConstructor_NoFinding;
+  end;
+
+  // Owner-/OS-Handle-Gates und der context-getriebene
+  // LeakyClasses-Pfad.
+  [TestFixture]
+  TTestMemoryLeakOwnerAndContext = class
+  public
     // FP-Gates (2026-07-04, Real-World-Audit Prio 3): os-handle- und
     // owner-parameter-Gate inkl. TP-Guards (Create(nil) / Expr-Argument).
     [Test] procedure Leak_OsHandleSocketAssign_NoFinding;
@@ -480,7 +525,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ContextLeakyClasses_DrivesDetection;
+procedure TTestMemoryLeakOwnerAndContext.Leak_ContextLeakyClasses_DrivesDetection;
 // TD-1 Inkrement 2c: LeakyClasses wurde vom uSCAConsts-Global in den
 // TAnalyzeContext gezogen. Dieser Test beweist beide Richtungen des
 // CtxLeakyClasses-Fallbacks:
@@ -557,7 +602,7 @@ const
     '  mQuery := TOracleQuery.Create(nil);'#13#10+
     '  Result := ''N'';'#13#10;
 
-procedure TTestMemoryLeak.Leak_OracleQuery_ClassFuncFreeAndNilInFinally_NoFinding;
+procedure TTestMemoryLeakOwnerAndContext.Leak_OracleQuery_ClassFuncFreeAndNilInFinally_NoFinding;
 const SRC = ORACLE_SRC_HEAD +
   '  try'#13#10+
   '    mQuery.Session := MainSessionData.OracleSession;'#13#10+
@@ -592,7 +637,7 @@ begin
   end;
 end;
 
-procedure TTestMemoryLeak.Leak_OracleQuery_ClassFuncNoFree_ReportsError;
+procedure TTestMemoryLeakOwnerAndContext.Leak_OracleQuery_ClassFuncNoFree_ReportsError;
 const SRC = ORACLE_SRC_HEAD +
   '  mQuery.Session := MainSessionData.OracleSession;'#13#10+
   '  mQuery.SQL.Text := ''SELECT einlesenkz FROM onlogist_import'';'#13#10+
@@ -824,7 +869,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NestedBlockInFinally_FreeOutside_StillWarns;
+procedure TTestMemoryLeakTryGeometry.Leak_NestedBlockInFinally_FreeOutside_StillWarns;
 // finally-Mis-Attachment-Fix TP-Gegenprobe: der neue Source-basierte finally-
 // Region-Check muss die try-Region trotz nested 'begin/end' IM finally korrekt
 // begrenzen. 'list.Free' steht NACH dem try/finally -> ausserhalb der Region ->
@@ -983,7 +1028,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FuncCallAssign_ReportsTriggeringLine;
+procedure TTestMemoryLeakBorrowed.Leak_FuncCallAssign_ReportsTriggeringLine;
 // 03.09.: die Befund-Zeile kam aus einer ZWEITEN Funktion
 // (FindFuncCallAssignLine), die nur zwei der fuenf Gates fuehrte, die
 // ueber den Fund entscheiden. Sie nahm den ERSTEN geklammerten Assign
@@ -1024,7 +1069,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateAssign_ReportsCreateLine;
+procedure TTestMemoryLeakBorrowed.Leak_CreateAssign_ReportsCreateLine;
 // WAECHTER, ergaenzt beim Zusammenlegen von FindCreateLine und
 // HasCreateAssign (04.09.). Das Verhalten "Befund auf der
 // Create-Zeile, nicht auf der var-Deklaration" war von KEINEM Test
@@ -1061,7 +1106,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FreeInNestedRoutine_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_FreeInNestedRoutine_NoFinding;
 // K-nested-Gate (04.09.): der Aussenrumpf erzeugt, die geschachtelte
 // Routine gibt frei - exakt die vier Korpus-Faelle (Setup.MainFunc
 // LoadDecompressorDLL/LoadSevenZipDLL, HeidiSQL StopProgress, mORMot
@@ -1094,7 +1139,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NestedFreesOtherVar_OuterStillReported;
+procedure TTestMemoryLeakTypeMatrix.Leak_NestedFreesOtherVar_OuterStillReported;
 // GEGENPROBE, und der eigentliche Waechter: die geschachtelte Routine
 // befreit NUR b - a bleibt gemeldet. Ein Gate, das die Spannen zu
 // grob liest (Var-Name ignoriert), wuerde beide schlucken; ohne das
@@ -1132,7 +1177,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_BorrowedGetter_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_BorrowedGetter_NoFinding;
 // Regression TAstNode.FindAll - 'Source := EnsureCacheFor(AKind)' liefert
 // SHARED-Cache-Ref, kein Ownership-Transfer. Caller darf NICHT free-en.
 // Convention: Functions mit Prefix Ensure*/Get*/Find*/Lookup*/Peek*/
@@ -1154,7 +1199,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TypecastBareIdent_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_TypecastBareIdent_NoFinding;
 // FP-Fix 2026-06-28 (delphimvcframework): 'lList := TMVCListOfInteger(AObject)'.
 // Typecast eines bestehenden Identifiers/Params borgt die Referenz (ein Cast
 // allokiert nie) - kein Ownership, kein Leak. Frueher nur Casts mit '.'/'['-Arg
@@ -1175,7 +1220,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TypecastGetterResult_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_TypecastGetterResult_NoFinding;
 // cnwizards CnDesignPropEditors: Comp := TComponent(GetComponent(0)).
 // Typecast eines Accessor-Ergebnisses borgt - kein Ownership, kein Leak.
 const SRC =
@@ -1195,7 +1240,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TypecastIndexedItem_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_TypecastIndexedItem_NoFinding;
 // cnwizards CnPropertyCompareFrm: Comp := TComponent(FSelection[0]).
 // Typecast eines Collection-Items borgt - kein Ownership, kein Leak.
 const SRC =
@@ -1215,7 +1260,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_IndexedPropertyResult_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_IndexedPropertyResult_NoFinding;
 // cnwizards CnCompToCodeFrm: AChildComp := (Sender as TForm).Components[I].
 // Indexed-Property-Zugriff als Ergebnis borgt das Element - kein Leak.
 const SRC =
@@ -1257,7 +1302,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_SimilarVarName_NoFalsePositive;
+procedure TTestMemoryLeakBorrowed.Leak_SimilarVarName_NoFalsePositive;
 // VarNames und VarNamesList – der Detektor darf kein false positive auf
 // VarNamesList erzeugen, wenn nur VarNames freigegeben wird.
 const SRC =
@@ -1281,7 +1326,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_MultipleVars_BothReported;
+procedure TTestMemoryLeakBorrowed.Leak_MultipleVars_BothReported;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -1301,7 +1346,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NoFalsePositive_BlacklistFree;
+procedure TTestMemoryLeakBorrowed.Leak_NoFalsePositive_BlacklistFree;
 // 'blacklist.Free' soll 'list' NICHT als freigegeben markieren
 const SRC =
   'unit t; implementation'#13#10+
@@ -1326,7 +1371,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NoFalsePositive_FreeAndNilListExtra;
+procedure TTestMemoryLeakBorrowed.Leak_NoFalsePositive_FreeAndNilListExtra;
 // FreeAndNil(listExtra) soll 'list' NICHT als freigegeben markieren
 const SRC =
   'unit t; implementation'#13#10+
@@ -1350,7 +1395,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NilWithoutFree_ReportsError;
+procedure TTestMemoryLeakBorrowed.Leak_NilWithoutFree_ReportsError;
 // list := nil ohne vorheriges Free = Leck
 const SRC =
   'unit t; implementation'#13#10+
@@ -1370,7 +1415,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_DoubleCreate_KnownLimitation_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_DoubleCreate_KnownLimitation_NoFinding;
 // Zweites Create ohne zwischenzeitliches Free verliert die Referenz auf
 // das ERSTE Objekt - klassischer Reassignment-Leak. Aktueller String-
 // basierter Detektor trackt aber nur "Variablenname hat Free gesehen"
@@ -1398,7 +1443,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ObjectListAdd_FieldReceiver_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_ObjectListAdd_FieldReceiver_NoFinding;
 // FOwnerList.Add(item) - Receiver ist ein Klassen-Feld (F-Praefix),
 // dessen Typ NICHT in der Methode aufloesbar ist (kein Local-Var/Param-
 // Match). Recent fix `AddReceiverOwnsItems` faellt fuer unaufloesbare
@@ -1429,7 +1474,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ParseFilesAllClasses_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_ParseFilesAllClasses_NoFinding;
 // Entspricht dem realen Muster von TStaticAnalyzer.ParseFilesAllClasses:
 // 6 leaky Variablen (TStringList, TObjectList<...>), alle via FreeAndNil
 // im finally-Block freigegeben. Kein Befund erwartet.
@@ -1490,7 +1535,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_GenericObjectList_FreedInFinally_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_GenericObjectList_FreedInFinally_NoFinding;
 // TObjectList<T> mit generischem Typparameter: wird korrekt als leaky erkannt,
 // aber durch FreeAndNil im finally-Block sauber freigegeben.
 const SRC =
@@ -1514,7 +1559,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FactoryMethodNoParens_BorrowedRef_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_FactoryMethodNoParens_BorrowedRef_NoFinding;
 // Dotted-no-parens Pattern (`classes := TConsts.GetLeakyClasses`):
 // HasFunctionCallAssign verlangt explizit '(' im RHS. Ohne Klammern
 // wird das Pattern als geliehene Referenz gewertet (z.B. Field-Access
@@ -1539,7 +1584,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_SiblingFactoryNoParens_ReportsLeak;
+procedure TTestMemoryLeakTypeMatrix.Leak_SiblingFactoryNoParens_ReportsLeak;
 // FN-Fix (MeineUnit 2026-06-21): `list := MeineFactory;` (klammerloser
 // Aufruf einer parameterlosen Schwester-Factory DERSELBEN Klasse, deren
 // Body `Result := TFoo.Create` macht) ist Ownership-Transfer -> Leak,
@@ -1564,7 +1609,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_SiblingBorrowedGetterNoParens_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_SiblingBorrowedGetterNoParens_NoFinding;
 // Praezisions-Guard: eine Schwester-Methode die ein FELD zurueckgibt
 // (`Result := FCache`, kein Create) ist ein geliehener Getter - der
 // klammerlose Aufruf darf NICHT als Leak gemeldet werden.
@@ -1589,7 +1634,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_BorrowedGetterCallWithParens_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_BorrowedGetterCallWithParens_NoFinding;
 // FP-Gate (borrowed-reference, 2026-07-11, Real-World-Audit): cnwizards
 // 'Keys := CnOtaGetVersionInfoKeys(FProject)' bzw. 'Root :=
 // CnOtaGetRootComponentFromEditor(...)'. Der Callee ist ein GETTER (liefert
@@ -1613,7 +1658,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_BorrowedDottedGetterCallWithParens_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_BorrowedDottedGetterCallWithParens_NoFinding;
 // FP-Gate (borrowed-reference, 2026-07-11): Alcinoe ALFmxImgList
 // 'aBitmap := Images.Bitmap(aSize, AIndex)' - ImageList-Cache-Getter, geborgt
 // (der Quell-Kommentar dort warnt sogar, dass die ImageList das Bitmap
@@ -1635,7 +1680,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ConstructorLikeNameOnly_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_ConstructorLikeNameOnly_NoFinding;
 // UMGEDREHT AM 02.09. - dieser Test hielt bis dahin die Gegenrichtung fest:
 // "ein konstruktor-artiger Callee (Make/New/Clone/Create/Acquire) uebergibt
 // Ownership, der Fund muss bleiben" (11.07.).
@@ -1672,7 +1717,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_LocalFactoryCallWithParens_NoFree_ReportsWarning;
+procedure TTestMemoryLeakBorrowed.Leak_LocalFactoryCallWithParens_NoFree_ReportsWarning;
 // TP-Guard: eine bewiesene lokale Factory DERSELBEN Klasse, MIT Klammern
 // aufgerufen ('list := BuildList()' mit 'Result := TStringList.Create' im
 // Body), ist Ownership-Transfer. Der IsLocalFactory-Fallback haelt die
@@ -1698,7 +1743,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_IfThenAssignElseBeginBlock_OuterFinallyFrees_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_IfThenAssignElseBeginBlock_OuterFinallyFrees_NoFinding;
 // Regression: TDuplicateStringDetector.AnalyzeUnit produzierte einen
 // false-positive Memory-Leak-Befund fuer 'Lst', weil der Parser ein
 // "x := y else begin ... end;"-Muster im THEN-Zweig falsch verarbeitet hat.
@@ -1739,7 +1784,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_InheritedCreateWithVarArg_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_InheritedCreateWithVarArg_NoFinding;
 // Regression: Parser hat den Aufrufausdruck nach 'inherited' verworfen
 // (nkInherited.Name war nur 'inherited'). Folge: IsPassedToOwner sah
 // kein 'create' und meldete einen False-Positive Leak. Mit Fix wird
@@ -1761,7 +1806,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_InheritedCreateDottedCall_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_InheritedCreateDottedCall_NoFinding;
 // 'inherited Foo.Bar(...)' - dotted call nach inherited muss komplett
 // erfasst werden. ParsePrimary kann das, der alte Parser ist abgebrochen.
 const SRC =
@@ -1781,7 +1826,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_InlineVarWithCreate_NoFree_ReportsError;
+procedure TTestMemoryLeakCtorVariants.Leak_InlineVarWithCreate_NoFree_ReportsError;
 // Regression: mid-block 'var lst: TStringList := TStringList.Create;'
 // wurde vom Parser komplett ignoriert (kein nkLocalVar). Folge: Detektor
 // hat das Leak nicht erkannt. Mit Fix wird inline-var als nkLocalVar +
@@ -1802,7 +1847,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_InlineVarWithCreate_FreeInFinally_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_InlineVarWithCreate_FreeInFinally_NoFinding;
 // Inline-var korrekt mit try/finally - kein Befund.
 const SRC =
   'unit t; implementation'#13#10+
@@ -1824,7 +1869,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_AnonymousFunctionInRhs_NoCrash;
+procedure TTestMemoryLeakCtorVariants.Leak_AnonymousFunctionInRhs_NoCrash;
 // Regression: anonyme Methoden im RHS einer Zuweisung haben den Parser
 // fruehzeitig abbrechen lassen, weil das innere 'end' als Statement-Ende
 // interpretiert wurde. Mit begin/end-Tracking im RHS-Reader wird der
@@ -1855,7 +1900,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_AssignFromFieldDottedNoParens_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_AssignFromFieldDottedNoParens_NoFinding;
 // Regression: `list := obj.FList` ist eine geliehene Referenz auf ein
 // existierendes Feld - kein Ownership-Transfer, also kein Leak.
 // Vorher hat HasFunctionCallAssign jeden dotted Bezeichner ohne '(' als
@@ -1882,7 +1927,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateUtf8_NoFree_ReportsError;
+procedure TTestMemoryLeakCtorVariants.Leak_CreateUtf8_NoFree_ReportsError;
 // Regression: mORMot-Idiom `E := EOrmException.CreateUtf8('%', [...])`.
 // Vorher hat HasCreateAssign nur '.create' + non-Ident-Char akzeptiert,
 // 'createutf8' wurde als Verb-Form abgewiesen -> Leak unentdeckt.
@@ -1903,7 +1948,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateFmt_NoFree_ReportsError;
+procedure TTestMemoryLeakCtorVariants.Leak_CreateFmt_NoFree_ReportsError;
 // Regression: RTL-Idiom `E := EConvertError.CreateFmt('Bad %s', [s])`.
 // Analog CreateUtf8: 'F' gross => Konstruktor-Variante.
 var
@@ -1921,7 +1966,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_DotCreatedProperty_NotConstructor_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_DotCreatedProperty_NotConstructor_NoFinding;
 // Negative regression: `.Created` (Folge-Zeichen klein) ist KEIN Konstruktor -
 // kann Property oder Field-Read sein, die eine bereits existierende Instanz
 // liefert (Borrowed-Reference, kein Ownership-Transfer). Darf nicht als
@@ -1943,7 +1988,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_OsHandleSocketAssign_NoFinding;
+procedure TTestMemoryLeakOwnerAndContext.Leak_OsHandleSocketAssign_NoFinding;
 // FP-Gate (2026-07-04): os-handle - socket() liefert ein Integer-OS-Handle,
 // kein Delphi-Objekt; Freigabe laeuft ueber closesocket, nicht ueber Free.
 // Real-World: mormot.net.sock.pas:2835/3106/3122,
@@ -1965,7 +2010,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_OsHandleAcceptWrapperAssign_NoFinding;
+procedure TTestMemoryLeakOwnerAndContext.Leak_OsHandleAcceptWrapperAssign_NoFinding;
 // FP-Gate (2026-07-04): os-handle - doaccept() (mORMot-Wrapper um accept())
 // liefert ebenfalls ein OS-Handle. Real-World: mormot.net.sock.pas:3230.
 const SRC =
@@ -1985,7 +2030,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateWithOwnerApplication_NoFinding;
+procedure TTestMemoryLeakOwnerAndContext.Leak_CreateWithOwnerApplication_NoFinding;
 // FP-Gate (2026-07-04): owner-parameter - Create(Application) folgt der
 // TComponent-Owner-Konvention: die Application gibt das Objekt in ihrem
 // Destroy ueber die Components[]-Liste frei -> kein Leak.
@@ -2008,7 +2053,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateWithOwnerSelf_NoFinding;
+procedure TTestMemoryLeakOwnerAndContext.Leak_CreateWithOwnerSelf_NoFinding;
 // FP-Gate (2026-07-04): owner-parameter - Create(Self) im Form-/Frame-Code:
 // Self (der umgebende TComponent) uebernimmt die Freigabe.
 const SRC =
@@ -2028,7 +2073,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateWithNilOwner_ReportsError;
+procedure TTestMemoryLeakOwnerAndContext.Leak_CreateWithNilOwner_ReportsError;
 // TP-Guard fuer das owner-parameter-Gate (2026-07-04): Create(nil) hat
 // KEINEN Owner - der Aufrufer muss selbst freigeben. Entspricht dem
 // Korpus-TP sample-dunitx-belege_ui/BelegeUnit.pas:52
@@ -2050,7 +2095,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateWithSelfDerivedExprArg_ReportsError;
+procedure TTestMemoryLeakOwnerAndContext.Leak_CreateWithSelfDerivedExprArg_ReportsError;
 // TP-Guard fuer das owner-parameter-Gate (2026-07-04): das Gate verlangt,
 // dass das GESAMTE Argument exakt ein Owner-Bezeichner ist. Ein Ausdruck,
 // der 'Self' nur enthaelt, ist kein Owner. Entspricht dem Korpus-TP
@@ -2073,7 +2118,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NestedTryFinally_InnerVarHasOwnFinally_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_NestedTryFinally_InnerVarHasOwnFinally_NoFinding;
 // Reproduziert das Muster aus TDuplicateStringDetector.AnalyzeUnit:
 // 3 leaky Vars (Counts, AllNodes, Lst). AllNodes hat eigenes try/finally
 // in einer Schleife. Counts und Lst werden im aeusseren finally freigegeben.
@@ -2114,7 +2159,7 @@ end;
 
 { ---- 30 weitere MemoryLeak-Tests ---- }
 
-procedure TTestMemoryLeak.Leak_TFileStream_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_TFileStream_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2132,7 +2177,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TMemoryStream_FreeInFinally_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_TMemoryStream_FreeInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2154,7 +2199,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TBitmap_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_TBitmap_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2172,7 +2217,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TIniFile_DestroyInFinally_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_TIniFile_DestroyInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2194,7 +2239,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TStreamReader_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_TStreamReader_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2212,7 +2257,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TStreamWriter_FreeInFinally_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_TStreamWriter_FreeInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2234,7 +2279,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TRegistry_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_TRegistry_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2252,7 +2297,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TStringStream_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_TStringStream_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2270,7 +2315,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ShortVarName_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_ShortVarName_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2288,7 +2333,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateInForLoop_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_CreateInForLoop_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2309,7 +2354,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TwoVars_OnlyOneFreed_ReportsOneError;
+procedure TTestMemoryLeakTypeMatrix.Leak_TwoVars_OnlyOneFreed_ReportsOneError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2335,7 +2380,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FreeInTryBody_NotFinally_ReportsWarning;
+procedure TTestMemoryLeakTypeMatrix.Leak_FreeInTryBody_NotFinally_ReportsWarning;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2358,7 +2403,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_DestroyInFinally_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_DestroyInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2380,7 +2425,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateBeforeTry_FreeInFinally_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_CreateBeforeTry_FreeInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2402,7 +2447,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ThreeVarsAllFreed_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_ThreeVarsAllFreed_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2428,7 +2473,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_VarDeclaredButNeverCreated_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_VarDeclaredButNeverCreated_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2445,7 +2490,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateInWhileLoop_NoFree_ReportsError;
+procedure TTestMemoryLeakTryGeometry.Leak_CreateInWhileLoop_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2466,7 +2511,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FunctionCallFreedInFinally_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_FunctionCallFreedInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2488,7 +2533,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FactoryMethodFreedInFinally_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_FactoryMethodFreedInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2510,7 +2555,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_GenericObjectList_NoFree_ReportsError;
+procedure TTestMemoryLeakTryGeometry.Leak_GenericObjectList_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2528,7 +2573,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ConditionalCreate_NoFree_ReportsError;
+procedure TTestMemoryLeakTryGeometry.Leak_ConditionalCreate_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar(NeedList: Boolean);'#13#10+
@@ -2547,7 +2592,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FreeAndNilWordBoundary_NoFalsePositive;
+procedure TTestMemoryLeakTryGeometry.Leak_FreeAndNilWordBoundary_NoFalsePositive;
 // FreeAndNil(listmore) darf 'list' nicht als freigegeben markieren
 const SRC =
   'unit t; implementation'#13#10+
@@ -2572,7 +2617,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_DotFreeWordBoundary_NoFalsePositive;
+procedure TTestMemoryLeakTryGeometry.Leak_DotFreeWordBoundary_NoFalsePositive;
 // streamdata.Free darf 'stream' nicht als freigegeben markieren
 const SRC =
   'unit t; implementation'#13#10+
@@ -2597,7 +2642,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NestedTryFinally_OuterFinallyFrees_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_NestedTryFinally_OuterFinallyFrees_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2623,7 +2668,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateInsideTryBody_FreedInFinally_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_CreateInsideTryBody_FreedInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2645,7 +2690,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_PassedToClassCreate_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_PassedToClassCreate_NoFinding;
 // SomeOwner.Create(item) – Ownership geht auf SomeOwner über
 const SRC =
   'unit t; implementation'#13#10+
@@ -2664,7 +2709,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_MultipleTypes_EachLeaking_AllReported;
+procedure TTestMemoryLeakTryGeometry.Leak_MultipleTypes_EachLeaking_AllReported;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2684,7 +2729,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FreeAfterTryFinally_ReportsWarning;
+procedure TTestMemoryLeakTryGeometry.Leak_FreeAfterTryFinally_ReportsWarning;
 // Free steht nach dem try/finally-Block – zu spät
 const SRC =
   'unit t; implementation'#13#10+
@@ -2711,7 +2756,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TwoFreeAndNil_BothVars_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_TwoFreeAndNil_BothVars_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2735,7 +2780,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_LargeMethod_OneVarLeaks_OneError;
+procedure TTestMemoryLeakTryGeometry.Leak_LargeMethod_OneVarLeaks_OneError;
 // Methode mit vielen Variablen – nur eine leckt
 const SRC =
   'unit t; implementation'#13#10+
