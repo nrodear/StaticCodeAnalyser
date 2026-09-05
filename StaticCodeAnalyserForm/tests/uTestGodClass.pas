@@ -1,4 +1,4 @@
-unit uTestGodClass;
+﻿unit uTestGodClass;
 
 interface
 
@@ -24,6 +24,14 @@ type
     [Test] procedure MixedUnit_OnlyAppClassReported;
     [Test] procedure TypelibFile_NotReported;
     [Test] procedure NonTypelibFile_Gegenprobe_Reported;
+  end;
+
+  // Eigene Fixture fuer die Parser-Feld-Zaehler-Tests - abgespalten
+  // am 05.09.2026, als TTestGodClass selbst ueber die 500-Zeilen-
+  // Schwelle von SCA141 wuchs. Reine Umhaengung, Fixtures unveraendert.
+  [TestFixture]
+  TTestGodClassFieldCount = class
+  public
     // --- Phantom-nkField-Fixes (Parser, 2026-09-05) ---
     // Der Feld-Zaehler zaehlte geleakte Direktiven-Token als Felder
     // (message/dynamic/default/cdecl) und splittete prozedurale
@@ -500,7 +508,7 @@ begin
   end;
 end;
 
-procedure TTestGodClass.MessageHandlerDirective_NotCountedAsFields;
+procedure TTestGodClassFieldCount.MessageHandlerDirective_NotCountedAsFields;
 // 'message WM_X;' leakte als ZWEI Phantom-nkFields ('message' + Ident)
 // in den Klassenrumpf - korpusweit die groesste Phantomklasse (3.450).
 // Exe-Probe vor dem Fix: 15 echte Felder + 1 Handler = "16 fields".
@@ -529,7 +537,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestGodClass.ProcTypeFieldParams_NotCountedAsFields;
+procedure TTestGodClassFieldCount.ProcTypeFieldParams_NotCountedAsFields;
 // Prozeduraler Feldtyp: der Type-Walk stoppte am Param-';', die
 // Resttoken (aZwei, cdecl) wurden Phantom-nkFields. Exe-Probe vor dem
 // Fix: 15 echte Felder -> "17 fields".
@@ -553,7 +561,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestGodClass.ArrayPropertyDefault_NotCountedAsField;
+procedure TTestGodClassFieldCount.ArrayPropertyDefault_NotCountedAsField;
 // 'property ...; default;' - das nackte default wurde ein Phantomfeld
 // (109 am Korpus). Exe-Probe vor dem Fix: 15 + default = "16 fields".
 const SRC =
@@ -578,7 +586,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestGodClass.SixteenRealFields_StillReported;
+procedure TTestGodClassFieldCount.SixteenRealFields_StillReported;
 // GEGENPROBE: 16 ECHTE Felder reissen die Schwelle weiter - die
 // Guards verwerfen nur nackte Direktiven-Idents, keine Deklarationen.
 const SRC =
@@ -600,7 +608,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestGodClass.CommaListFields_CountPerName;
+procedure TTestGodClassFieldCount.CommaListFields_CountPerName;
 // Feld-ADDS Teil A: 'a, b: T;' zaehlte frueher NULL Felder - jetzt je
 // Name eines. 16 Felder ausschliesslich ueber Komma-Listen: ohne den
 // Fix meldet die Klasse nichts (0 gezaehlte Felder), mit ihm ist sie
@@ -624,7 +632,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestGodClass.KeywordNamedField_Counted;
+procedure TTestGodClassFieldCount.KeywordNamedField_Counted;
 // Feld-ADDS Teil B: 'Exit: TAction;' - der Lexer liefert tkKwExit,
 // der alte else-Zweig verschluckte das Feld (jvcl JvPlayList-Beleg
 // aus der rw66-Auswertung). 15 normale + Exit = 16 -> Fund.
@@ -650,5 +658,6 @@ end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestGodClass);
+  TDUnitX.RegisterTestFixture(TTestGodClassFieldCount);
 
 end.
