@@ -32,6 +32,9 @@ type
     [Test] procedure ProcTypeFieldParams_NotCountedAsFields;
     [Test] procedure ArrayPropertyDefault_NotCountedAsField;
     [Test] procedure SixteenRealFields_StillReported;
+    // --- Feld-ADDS (Charge 10): Komma-Listen + Keyword-Namen ---
+    [Test] procedure CommaListFields_CountPerName;
+    [Test] procedure KeywordNamedField_Counted;
   end;
 
 implementation
@@ -505,20 +508,20 @@ const SRC =
   'unit t; interface type'#13#10+
   '  TMsg = class(TObject)'#13#10+
   '  private'#13#10+
-  '    F1, F2: Integer;'#13#10+   // Komma-Liste zaehlt 0 (Fix a ist NICHT Teil dieser Charge)
+  '    F1, F2: Integer;'#13#10+   // seit dem Komma-Fix (Charge 10) zaehlen BEIDE
   '    F3: Integer; F4: Integer; F5: Integer; F6: Integer;'#13#10+
   '    F7: Integer; F8: Integer; F9: Integer; F10: Integer;'#13#10+
   '    F11: Integer; F12: Integer; F13: Integer; F14: Integer;'#13#10+
-  '    F15: Integer; F16: Integer;'#13#10+
+  '    F15: Integer;'#13#10+
   '    procedure WMFoo(var M: TObject); message 42;'#13#10+
   '    procedure CMBar(var M: TObject); message CM_FONTCHANGED;'#13#10+
   '  end;'#13#10+
   'implementation end.';
 var F: TObjectList<TLeakFinding>;
 begin
-  // 14 gezaehlte Felder (F3..F16) + frueher bis zu 3 Phantome ('message'
-  // x2-Formen) haetten die 15er-Schwelle gerissen; ohne Phantome bleibt
-  // die Klasse drunter.
+  // 15 echte Felder (F1..F15, Komma-Paar inklusive seit Charge 10) +
+  // frueher bis zu 3 message-Phantome haetten die 15er-Schwelle
+  // gerissen; ohne Phantome bleibt die Klasse exakt drauf und drunter.
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGodClass),
@@ -594,6 +597,54 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkGodClass),
       '16 echte Felder bleiben ein God-Class-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestGodClass.CommaListFields_CountPerName;
+// Feld-ADDS Teil A: 'a, b: T;' zaehlte frueher NULL Felder - jetzt je
+// Name eines. 16 Felder ausschliesslich ueber Komma-Listen: ohne den
+// Fix meldet die Klasse nichts (0 gezaehlte Felder), mit ihm ist sie
+// God-Class. Korpus: 42 solcher neuen Schwellen-Ueberschreiter.
+const SRC =
+  'unit t; interface type'#13#10+
+  '  TKomma = class(TObject)'#13#10+
+  '  private'#13#10+
+  '    A1, A2, A3, A4: Integer;'#13#10+
+  '    B1, B2, B3, B4: Integer;'#13#10+
+  '    C1, C2, C3, C4: Integer;'#13#10+
+  '    D1, D2, D3, D4: Integer;'#13#10+
+  '  end;'#13#10+
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkGodClass),
+      '16 Komma-Felder sind 16 Felder');
+  finally F.Free; end;
+end;
+
+procedure TTestGodClass.KeywordNamedField_Counted;
+// Feld-ADDS Teil B: 'Exit: TAction;' - der Lexer liefert tkKwExit,
+// der alte else-Zweig verschluckte das Feld (jvcl JvPlayList-Beleg
+// aus der rw66-Auswertung). 15 normale + Exit = 16 -> Fund.
+const SRC =
+  'unit t; interface type'#13#10+
+  '  TKw = class(TObject)'#13#10+
+  '  private'#13#10+
+  '    F1: Integer; F2: Integer; F3: Integer; F4: Integer;'#13#10+
+  '    F5: Integer; F6: Integer; F7: Integer; F8: Integer;'#13#10+
+  '    F9: Integer; F10: Integer; F11: Integer; F12: Integer;'#13#10+
+  '    F13: Integer; F14: Integer; F15: Integer;'#13#10+
+  '    Exit: TObject;'#13#10+
+  '  end;'#13#10+
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkGodClass),
+      'ein Keyword-benanntes Feld ist ein Feld');
   finally F.Free; end;
 end;
 
