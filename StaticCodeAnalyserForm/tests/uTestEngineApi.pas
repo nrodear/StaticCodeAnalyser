@@ -41,6 +41,11 @@ type
     // (c13_probe: Doppelzweig SCA001=1, Einzweig SCA001=0).
     [Test] procedure IfdefDefault_SingleBranchHidesInactiveLeak;
     [Test] procedure IfdefOptOut_DoubleBranchSeesInactiveLeak;
+    // Review-Blocker Charge 13: Form/IDE laufen mit SkipConfig=True -
+    // die IFDEF-Sicht muss TROTZDEM aus dem Request kommen
+    // (ApplyIfdefView vor der SkipConfig-Weiche), sonst blieben genau
+    // diese Konsumenten in der Doppelzweig-Sicht.
+    [Test] procedure IfdefView_AppliesDespiteSkipConfig;
     // TFixtureFilter (2026-08-29): die Regel lag bis dahin im
     // CLI-Laeufer, jetzt in der Engine - hier ihr Vertrag.
     [Test] procedure FixtureFilter_AutoHidesOnlyKnownProfiles;
@@ -309,6 +314,44 @@ begin
     try
       Assert.AreEqual<Integer>(1, ZaehleMemoryLeaks(Res),
         'Doppelzweig-Sicht parst den LINUX-Zweig und sieht das Leak');
+    finally Res.Free; end;
+  finally Ses.Free; end;
+end;
+
+procedure TTestEngineApi.IfdefView_AppliesDespiteSkipConfig;
+// Der Vorlauf stellt die Doppelzweig-Sicht her (gLexer-Global via
+// Opt-out-Lauf des Tests darueber ist NICHT garantiert - deshalb hier
+// explizit): erst ein Lauf mit IfdefDefines=nil, dann ein
+// SkipConfig-Lauf mit Init-Default. Saehe der zweite Lauf noch die
+// Doppelzweig-Sicht des ersten (alter Zustand: Wiring nur in
+// ApplyConfig, von SkipConfig uebersprungen), faende er das Leak.
+var
+  Req : TScanRequest;
+  Ses : TAnalysisSession;
+  Res : TScanResult;
+  Fn  : string;
+begin
+  Fn := TPath.Combine(FDir, 'ifdefprobe.pas');
+  TFile.WriteAllText(Fn, IFDEF_LEAK_SRC, TEncoding.UTF8);
+  Ses := TAnalysisSession.Create;
+  try
+    // Vorlauf: Doppelzweig als Prozess-Zustand etablieren.
+    Req := TScanRequest.Init;
+    Req.IfdefDefines := nil;
+    Req.Scope := ssSingleFile;
+    Req.Path  := Fn;
+    Res := Ses.Run(Req);
+    Res.Free;
+    // SkipConfig-Lauf mit Init-Default: die Sicht MUSS aus dem
+    // Request kommen, nicht aus dem geerbten Global.
+    Req := TScanRequest.Init;
+    Req.Scope      := ssSingleFile;
+    Req.Path       := Fn;
+    Req.SkipConfig := True;
+    Res := Ses.Run(Req);
+    try
+      Assert.AreEqual<Integer>(0, ZaehleMemoryLeaks(Res),
+        'Ein-Zweig-Default wirkt auch bei SkipConfig=True (Form/IDE-Pfad)');
     finally Res.Free; end;
   finally Ses.Free; end;
 end;

@@ -137,9 +137,11 @@ type
     ConfigRoot     : string;            // INI-Modus: Wurzel fuer INI-/PathOverrides-/Custom-Rules-
                                         // Aufloesung (ApplyDetectorThresholds). '' -> Path verwenden.
                                         // Noetig wenn Scan-Ziel != Config-Root (z.B. Single-File).
-    SkipConfig     : Boolean;           // true: Run wendet KEINE Config an - der Consumer hat den
-                                        // globalen Detektor-/Schwellen-State bereits selbst gesetzt
+    SkipConfig     : Boolean;           // true: Run wendet KEINE Detektor-/Schwellen-Config an - der
+                                        // Consumer hat den globalen State bereits selbst gesetzt
                                         // (z.B. IDE via TIDEAnalysisPrep.SetupForRun). Nur Scope->Scan->Baseline.
+                                        // AUSNAHME seit 05.09.2026: die IFDEF-Sicht (IfdefDefines) wendet
+                                        // Run IMMER an - sie ist Scan-Sicht, keine Config (ApplyIfdefView).
     // ssProject/ssProjectGroup/ssFileList (optional): Verzeichnis-Wurzel,
     // ueber die die Cross-Unit-Indizes (SymbolRef/Typ/DFM) gebaut werden,
     // waehrend die ANALYSE auf der Liste bleibt (Unused-FP-Vermeidung,
@@ -224,6 +226,13 @@ type
   TAnalysisSession = class
   private
     procedure ApplyConfig(const Req: TScanRequest);
+    // IFDEF-Sicht des Requests auf den globalen Lexer-State anwenden.
+    // EIGENE Prozedur, weil sie - anders als ApplyConfig - auch bei
+    // Req.SkipConfig=True laufen MUSS: SkipConfig-Konsumenten (Form,
+    // IDE) bereiten Detektor-Schwellen selbst vor, die SCAN-SICHT
+    // kommt aber aus dem Request. Ohne das liefe der Ein-Zweig-Default
+    // (05.09.2026) an Form/IDE vorbei - Review-Blocker der Charge 13.
+    procedure ApplyIfdefView(const Req: TScanRequest);
   public
     function Run(const Req: TScanRequest): TScanResult;
     // Prozessweiter Engine-Lock fuer Consumer, die eigene Config-Mutation
@@ -393,9 +402,29 @@ function TScanResult.HintCount   : Integer; begin Result := CountSeverity(lsHint
 
 { TAnalysisSession }
 
+procedure TAnalysisSession.ApplyIfdefView(const Req: TScanRequest);
+// Spiegelt Req.IfdefDefines in den globalen Lexer-State. Laeuft in Run
+// VOR der SkipConfig-Weiche (unter GEngineLock) - die Scan-SICHT ist
+// Request-Eigenschaft, keine Detektor-Config: auch ein Consumer, der
+// seine Schwellen selbst vorbereitet (SkipConfig=True), bekommt exakt
+// die Sicht seines Requests, nicht den Zufallszustand des Vorlaufs.
+var
+  Def : string;
+begin
+  LexerIfdefClear;
+  if Length(Req.IfdefDefines) > 0 then
+  begin
+    gLexerIfdefSkipEnabled := True;
+    for Def in Req.IfdefDefines do
+      if Trim(Def) <> '' then
+        LexerIfdefAddDefine(Trim(Def));
+  end
+  else
+    gLexerIfdefSkipEnabled := False;
+end;
+
 procedure TAnalysisSession.ApplyConfig(const Req: TScanRequest);
 var
-  Def      : string;
   Settings : TRepoSettings;
 begin
   // 0) Config-Riegel (2026-07-04, Audit Global-State): den kompletten
@@ -494,17 +523,9 @@ begin
   uSCAConsts.DetectorParallelScan    := Req.Parallel;
   uSCAConsts.DetectorParallelWorkers := Req.ParallelWorkers;
 
-  // 2) {$IFDEF}-aware Parsing (beide Modi - Request-Level statt globaler Fummelei)
-  LexerIfdefClear;
-  if Length(Req.IfdefDefines) > 0 then
-  begin
-    gLexerIfdefSkipEnabled := True;
-    for Def in Req.IfdefDefines do
-      if Trim(Def) <> '' then
-        LexerIfdefAddDefine(Trim(Def));
-  end
-  else
-    gLexerIfdefSkipEnabled := False;
+  // 2) {$IFDEF}-Sicht: seit dem Review-Blocker der Charge 13 NICHT mehr
+  //    hier, sondern in ApplyIfdefView - Run wendet sie VOR der
+  //    SkipConfig-Weiche an, damit sie auch Form/IDE erreicht.
 
   // 3) Custom-Rules: expliziter Request-Pfad gewinnt. Im INI-Modus hat
   //    ApplyDetectorThresholds evtl. schon INI-Custom-Rules geladen -- die
@@ -602,6 +623,10 @@ begin
   // halten (Deadlock) - der Watch-Worker released daher vor Synchronize.
   GEngineLock.Enter;
   try
+  // Die IFDEF-Sicht IMMER anwenden - auch bei SkipConfig=True (Form/
+  // IDE), sonst liefe der Ein-Zweig-Default an ihnen vorbei (Review-
+  // Blocker Charge 13; Doku an ApplyIfdefView).
+  ApplyIfdefView(Req);
   if not Req.SkipConfig then
     ApplyConfig(Req);
 
