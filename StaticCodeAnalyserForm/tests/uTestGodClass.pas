@@ -24,6 +24,14 @@ type
     [Test] procedure MixedUnit_OnlyAppClassReported;
     [Test] procedure TypelibFile_NotReported;
     [Test] procedure NonTypelibFile_Gegenprobe_Reported;
+    // --- Phantom-nkField-Fixes (Parser, 2026-09-05) ---
+    // Der Feld-Zaehler zaehlte geleakte Direktiven-Token als Felder
+    // (message/dynamic/default/cdecl) und splittete prozedurale
+    // Feldtypen an ihren Param-Semikola. Fixtures = Exe-Proben.
+    [Test] procedure MessageHandlerDirective_NotCountedAsFields;
+    [Test] procedure ProcTypeFieldParams_NotCountedAsFields;
+    [Test] procedure ArrayPropertyDefault_NotCountedAsField;
+    [Test] procedure SixteenRealFields_StillReported;
   end;
 
 implementation
@@ -487,6 +495,106 @@ begin
   finally
     SB.Free;
   end;
+end;
+
+procedure TTestGodClass.MessageHandlerDirective_NotCountedAsFields;
+// 'message WM_X;' leakte als ZWEI Phantom-nkFields ('message' + Ident)
+// in den Klassenrumpf - korpusweit die groesste Phantomklasse (3.450).
+// Exe-Probe vor dem Fix: 15 echte Felder + 1 Handler = "16 fields".
+const SRC =
+  'unit t; interface type'#13#10+
+  '  TMsg = class(TObject)'#13#10+
+  '  private'#13#10+
+  '    F1, F2: Integer;'#13#10+   // Komma-Liste zaehlt 0 (Fix a ist NICHT Teil dieser Charge)
+  '    F3: Integer; F4: Integer; F5: Integer; F6: Integer;'#13#10+
+  '    F7: Integer; F8: Integer; F9: Integer; F10: Integer;'#13#10+
+  '    F11: Integer; F12: Integer; F13: Integer; F14: Integer;'#13#10+
+  '    F15: Integer; F16: Integer;'#13#10+
+  '    procedure WMFoo(var M: TObject); message 42;'#13#10+
+  '    procedure CMBar(var M: TObject); message CM_FONTCHANGED;'#13#10+
+  '  end;'#13#10+
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  // 14 gezaehlte Felder (F3..F16) + frueher bis zu 3 Phantome ('message'
+  // x2-Formen) haetten die 15er-Schwelle gerissen; ohne Phantome bleibt
+  // die Klasse drunter.
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGodClass),
+      'message-Direktiven sind keine Felder');
+  finally F.Free; end;
+end;
+
+procedure TTestGodClass.ProcTypeFieldParams_NotCountedAsFields;
+// Prozeduraler Feldtyp: der Type-Walk stoppte am Param-';', die
+// Resttoken (aZwei, cdecl) wurden Phantom-nkFields. Exe-Probe vor dem
+// Fix: 15 echte Felder -> "17 fields".
+const SRC =
+  'unit t; interface type'#13#10+
+  '  TProz = class(TObject)'#13#10+
+  '  private'#13#10+
+  '    F1: Integer; F2: Integer; F3: Integer; F4: Integer;'#13#10+
+  '    F5: Integer; F6: Integer; F7: Integer; F8: Integer;'#13#10+
+  '    F9: Integer; F10: Integer; F11: Integer; F12: Integer;'#13#10+
+  '    F13: Integer; F14: Integer;'#13#10+
+  '    FRufer: function(aEins: Integer; aZwei: Pointer): Integer; cdecl;'#13#10+
+  '  end;'#13#10+
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGodClass),
+      'Params und Conventions eines Feldtyps sind keine Felder');
+  finally F.Free; end;
+end;
+
+procedure TTestGodClass.ArrayPropertyDefault_NotCountedAsField;
+// 'property ...; default;' - das nackte default wurde ein Phantomfeld
+// (109 am Korpus). Exe-Probe vor dem Fix: 15 + default = "16 fields".
+const SRC =
+  'unit t; interface type'#13#10+
+  '  TDef = class(TObject)'#13#10+
+  '  private'#13#10+
+  '    F1: Integer; F2: Integer; F3: Integer; F4: Integer;'#13#10+
+  '    F5: Integer; F6: Integer; F7: Integer; F8: Integer;'#13#10+
+  '    F9: Integer; F10: Integer; F11: Integer; F12: Integer;'#13#10+
+  '    F13: Integer; F14: Integer; F15: Integer;'#13#10+
+  '    function GetItem(I: Integer): Integer;'#13#10+
+  '  public'#13#10+
+  '    property Items[I: Integer]: Integer read GetItem; default;'#13#10+
+  '  end;'#13#10+
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGodClass),
+      'das Array-Property-default ist kein Feld');
+  finally F.Free; end;
+end;
+
+procedure TTestGodClass.SixteenRealFields_StillReported;
+// GEGENPROBE: 16 ECHTE Felder reissen die Schwelle weiter - die
+// Guards verwerfen nur nackte Direktiven-Idents, keine Deklarationen.
+const SRC =
+  'unit t; interface type'#13#10+
+  '  TEcht = class(TObject)'#13#10+
+  '  private'#13#10+
+  '    F1: Integer; F2: Integer; F3: Integer; F4: Integer;'#13#10+
+  '    F5: Integer; F6: Integer; F7: Integer; F8: Integer;'#13#10+
+  '    F9: Integer; F10: Integer; F11: Integer; F12: Integer;'#13#10+
+  '    F13: Integer; F14: Integer; F15: Integer; F16: Integer;'#13#10+
+  '  end;'#13#10+
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkGodClass),
+      '16 echte Felder bleiben ein God-Class-Fund');
+  finally F.Free; end;
 end;
 
 initialization
