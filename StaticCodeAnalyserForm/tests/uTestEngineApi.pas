@@ -34,6 +34,13 @@ type
     [TearDown] procedure TearDown;
 
     [Test] procedure Init_HasSaneDefaults;
+    // Ein-Zweig-Default (Produktentscheid 05.09.2026): Init traegt die
+    // vier Windows-Defines; ein {$IFDEF LINUX}-Leak ist damit
+    // unsichtbar, mit IfdefDefines=nil (Doppelzweig-Opt-out) sichtbar.
+    // Beide Richtungen VOR dem Bau an der rw67-Exe verprobt
+    // (c13_probe: Doppelzweig SCA001=1, Einzweig SCA001=0).
+    [Test] procedure IfdefDefault_SingleBranchHidesInactiveLeak;
+    [Test] procedure IfdefOptOut_DoubleBranchSeesInactiveLeak;
     // TFixtureFilter (2026-08-29): die Regel lag bis dahin im
     // CLI-Laeufer, jetzt in der Engine - hier ihr Vertrag.
     [Test] procedure FixtureFilter_AutoHidesOnlyKnownProfiles;
@@ -225,6 +232,85 @@ begin
   Assert.AreEqual<Integer>(Ord(lsHint), Ord(R.MinSeverity));
   Assert.AreEqual<Integer>(Ord(fcMedium), Ord(R.MinConfidence));
   Assert.IsFalse(R.UsesCheck);
+  // Ein-Zweig-Default (05.09.2026): Init traegt die Windows-Compiler-
+  // Sicht. Vor dem Entscheid war das Feld nil - dieser Assert ist ohne
+  // den Engine-Commit ROT.
+  Assert.AreEqual<Integer>(4, Length(R.IfdefDefines),
+    'Init traegt die vier Default-Defines');
+  Assert.AreEqual<string>('MSWINDOWS', R.IfdefDefines[0]);
+end;
+
+const
+  // {$IFDEF LINUX}-Leak: in der Ein-Zweig-Sicht (LINUX nicht im
+  // Default-Satz) ist der Zweig geskippt - kein Fund; die Doppelzweig-
+  // Sicht parst ihn und meldet das Leak. EXAKT die an der rw67-Exe
+  // verprobte c13_probe-Fixture (Doppelzweig 1 / Einzweig 0).
+  IFDEF_LEAK_SRC =
+    'unit ifdefprobe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure TFoo.Bar;'#13#10 +
+    'var'#13#10 +
+    '  list: TStringList;'#13#10 +
+    'begin'#13#10 +
+    '{$IFDEF LINUX}'#13#10 +
+    '  list := TStringList.Create;'#13#10 +
+    '  list.Add(''leak only visible when LINUX branch is parsed'');'#13#10 +
+    '{$ENDIF}'#13#10 +
+    'end;'#13#10 +
+    'end.';
+
+function ZaehleMemoryLeaks(Res: TScanResult): Integer;
+var F: TLeakFinding;
+begin
+  Result := 0;
+  for F in Res.Findings do
+    if F.Kind = fkMemoryLeak then Inc(Result);
+end;
+
+procedure TTestEngineApi.IfdefDefault_SingleBranchHidesInactiveLeak;
+var
+  Req : TScanRequest;
+  Ses : TAnalysisSession;
+  Res : TScanResult;
+  Fn  : string;
+begin
+  Fn := TPath.Combine(FDir, 'ifdefprobe.pas');
+  TFile.WriteAllText(Fn, IFDEF_LEAK_SRC, TEncoding.UTF8);
+  Req := TScanRequest.Init;          // traegt den Ein-Zweig-Default
+  Req.Scope := ssSingleFile;
+  Req.Path  := Fn;
+  Ses := TAnalysisSession.Create;
+  try
+    Res := Ses.Run(Req);
+    try
+      Assert.AreEqual<Integer>(0, ZaehleMemoryLeaks(Res),
+        'LINUX-Zweig ist in der Ein-Zweig-Default-Sicht geskippt');
+    finally Res.Free; end;
+  finally Ses.Free; end;
+end;
+
+procedure TTestEngineApi.IfdefOptOut_DoubleBranchSeesInactiveLeak;
+var
+  Req : TScanRequest;
+  Ses : TAnalysisSession;
+  Res : TScanResult;
+  Fn  : string;
+begin
+  Fn := TPath.Combine(FDir, 'ifdefprobe.pas');
+  TFile.WriteAllText(Fn, IFDEF_LEAK_SRC, TEncoding.UTF8);
+  Req := TScanRequest.Init;
+  Req.IfdefDefines := nil;           // Doppelzweig-Opt-out
+  Req.Scope := ssSingleFile;
+  Req.Path  := Fn;
+  Ses := TAnalysisSession.Create;
+  try
+    Res := Ses.Run(Req);
+    try
+      Assert.AreEqual<Integer>(1, ZaehleMemoryLeaks(Res),
+        'Doppelzweig-Sicht parst den LINUX-Zweig und sieht das Leak');
+    finally Res.Free; end;
+  finally Ses.Free; end;
 end;
 
 procedure TTestEngineApi.FindingAliases_MessageLineRuleId;
