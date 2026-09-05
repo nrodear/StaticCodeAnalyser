@@ -346,6 +346,13 @@ type
   // Klassen-Feld-Leaks im Create/Destroy-Pattern
   [TestFixture]
   TTestFieldLeak = class
+  // Kern des Feld-Leak-Pfads (ctor-erzeugte Felder). Am 05.09.2026 in
+  // vier thematische Fixtures geteilt, als die Sammelklasse ueber die
+  // SCA138-/SCA141-Schwellen wuchs (41 Methoden, 1277 Zeilen Span).
+  // Reine Umhaengung - kein Test, keine Fixture geaendert. Die drei
+  // Geschwister: TTestFieldLeakOwnership (Owner-/Uebergabe-Gates),
+  // TTestFieldLeakDtorSubstitutes (Freigabe-Orte ausserhalb Destroy),
+  // TTestFieldLeakPathGates (Namens-Alias + Pfad-Gates).
   public
     [Test] procedure Field_CreatedAndFreed_NoFinding;
     [Test] procedure Field_CreatedNotFreed_ReportsError;
@@ -364,6 +371,14 @@ type
     [Test] procedure Field_FreedViaDestroyMethod_NoFinding;
     [Test] procedure Field_TwoClassesIndependent_OnlyLeakingReported;
     [Test] procedure Field_FreedViaAlias_NoFinding;
+  end;
+
+  // Owner-/Uebergabe-Gates: der Fund entfaellt, wenn ein ANDERER die
+  // Ownership nachweislich traegt (Schwester-Feld, Component-Chain,
+  // Interface-Refcount, Owner-Pfad) - je mit TP-Gegenprobe.
+  [TestFixture]
+  TTestFieldLeakOwnership = class
+  public
     // --- 30%-Real-World-Audit 2026-07-31, FP-Klasse 3: indirekte Dtor-Freigabe
     //     (Owner = Schwester-Feld / Free in einer Helper-Methode). ---
     [Test] procedure Field_OwnerIsSiblingFieldFreedInDestroy_NoFinding;
@@ -377,7 +392,26 @@ type
     //     (Reader/Writer/Zip) besitzen ihren Quellstream NICHT. ---
     [Test] procedure Field_ConsumerOverSiblingStream_StillReported;
     [Test] procedure Field_OwnerFieldIsDataClass_StillReported;
-    // --- Parser-Gate-Backlog 2026-07-31 (Konzept 4e/1) -------------------
+    // (b) Transitive Component-Ownership ohne Destruktor (jvcl
+    //     JvGammaPanel 61/63/64, JvCombobox 261).
+    [Test] procedure Field_OwnerChainReachesSelf_NoFinding;
+    [Test] procedure Field_OwnerChainEndsAtNil_StillReported;         // TP-Gegenprobe
+    [Test] procedure Field_OwnerChainOnPlainObjectClass_StillReported; // TP-Gegenprobe
+    // FP-Gate 2026-08-17: Feld an ein Interface uebergeben = Refcount traegt
+    // die Ownership; ein Free im Destroy waere ein Double-Free.
+    [Test] procedure FieldHandedToInterface_NotReported;
+    [Test] procedure FieldNotHandedToInterface_StillReported;
+    // Owner-Gate 2026-08-17: der Owner darf ueber einen PFAD kommen.
+    [Test] procedure Field_OwnerViaPath_NoFinding;
+    [Test] procedure Field_OwnerLookalikeIdent_StillReported;
+  end;
+
+  // Freigabe-Orte AUSSERHALB des Destruktors, die als gleichwertig
+  // gelten (Parser-Gate-Backlog 2026-07-31, Konzept 4e/1 + Klassen
+  // L/J vom 30./31.08.) - je mit TP-Gegenprobe.
+  [TestFixture]
+  TTestFieldLeakDtorSubstitutes = class
+  public
     // (a) Freigabe in BeforeDestruction statt Destroy (jvcl JvInspector).
     [Test] procedure Field_FreedInBeforeDestruction_NoFinding;
     [Test] procedure Field_BeforeDestructionFreesOther_StillReported; // TP-Gegenprobe
@@ -393,18 +427,13 @@ type
     [Test] procedure Field_DisposeWithoutOverride_StillReported;
     [Test] procedure Field_ClassDisposeOverride_StillReported;
     [Test] procedure Field_DisposeWrongSignature_StillReported;
-    // (b) Transitive Component-Ownership ohne Destruktor (jvcl
-    //     JvGammaPanel 61/63/64, JvCombobox 261).
-    [Test] procedure Field_OwnerChainReachesSelf_NoFinding;
-    [Test] procedure Field_OwnerChainEndsAtNil_StillReported;         // TP-Gegenprobe
-    [Test] procedure Field_OwnerChainOnPlainObjectClass_StillReported; // TP-Gegenprobe
-    // FP-Gate 2026-08-17: Feld an ein Interface uebergeben = Refcount traegt
-    // die Ownership; ein Free im Destroy waere ein Double-Free.
-    [Test] procedure FieldHandedToInterface_NotReported;
-    [Test] procedure FieldNotHandedToInterface_StillReported;
-    // Owner-Gate 2026-08-17: der Owner darf ueber einen PFAD kommen.
-    [Test] procedure Field_OwnerViaPath_NoFinding;
-    [Test] procedure Field_OwnerLookalikeIdent_StillReported;
+  end;
+
+  // Namens-Alias- und Pfad-Gates; traegt den FieldLeakCount-Helfer,
+  // weil hier der DATEINAME die Testvariable ist.
+  [TestFixture]
+  TTestFieldLeakPathGates = class
+  public
     // Property-Alias 2026-08-18: Freigabe ueber den oeffentlichen Namen.
     [Test] procedure Field_FreedViaPropertyAlias_NoFinding;
     [Test] procedure Field_FreedViaForeignName_StillReported;
@@ -5320,7 +5349,7 @@ end;
 
 { --- 30%-Real-World-Audit 2026-07-31: FP-Klasse 3 (indirekte Dtor-Freigabe) - }
 
-procedure TTestFieldLeak.Field_OwnerIsSiblingFieldFreedInDestroy_NoFinding;
+procedure TTestFieldLeakOwnership.Field_OwnerIsSiblingFieldFreedInDestroy_NoFinding;
 // HeidiSQL grideditlinks.pas:130 - 'FEndTimer := TTimer.Create(FPanel)'; der
 // Owner FPanel ist ein SCHWESTER-FELD und wird im Destroy per FreeAndNil
 // freigegeben - der Component-Tree raeumt den Timer mit ab.
@@ -5353,7 +5382,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_OwnerFieldNotFreed_StillReported;
+procedure TTestFieldLeakOwnership.Field_OwnerFieldNotFreed_StillReported;
 // TP-Gegenprobe: dasselbe Muster, aber das Owner-Feld wird NICHT freigegeben.
 // Dann ist der Nachweis nicht erbracht und der Befund muss stehen bleiben.
 const SRC =
@@ -5383,7 +5412,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_FreedViaOwnHelperMethod_NoFinding;
+procedure TTestFieldLeakOwnership.Field_FreedViaOwnHelperMethod_NoFinding;
 // pyscripter JvDockVSNetStyle.pas:180 - der Destruktor ruft die Helper-Methode
 // FreeBlockList, die 'FreeAndNil(FBlocks)' macht. Eine Ebene Inlining.
 const SRC =
@@ -5417,7 +5446,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_HelperDoesNotFree_StillReported;
+procedure TTestFieldLeakOwnership.Field_HelperDoesNotFree_StillReported;
 // TP-Gegenprobe: der Destruktor ruft zwar eine eigene Helper-Methode, die
 // aber KEIN Free auf dem Feld macht -> Befund bleibt.
 const SRC =
@@ -5451,7 +5480,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_TpNoDestructorAtAll_StillReported;
+procedure TTestFieldLeakOwnership.Field_TpNoDestructorAtAll_StillReported;
 // TP aus der Audit-Liste (jvcl jvTracker.pas:68): FBackBitmap wird im Ctor
 // erzeugt, die Klasse hat GAR KEINEN Destruktor. Keines der neuen Gates darf
 // hier greifen (beide setzen einen vorhandenen Destruktor voraus).
@@ -5478,7 +5507,7 @@ end;
 
 { --- Pre-Build-Review 2026-07-31, Fund uFieldLeak.pas:333 -------------------- }
 
-procedure TTestFieldLeak.Field_ConsumerOverSiblingStream_StillReported;
+procedure TTestFieldLeakOwnership.Field_ConsumerOverSiblingStream_StillReported;
 // TP-Gegenprobe zum Schwester-Feld-Owner-Gate: TStreamReader KONSUMIERT den
 // uebergebenen Stream, er wird von ihm nicht besessen. 'FStream.Free' im
 // Destroy gibt also NUR den Stream frei - FReader leakt pro Instanz.
@@ -5513,7 +5542,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_OwnerFieldIsDataClass_StillReported;
+procedure TTestFieldLeakOwnership.Field_OwnerFieldIsDataClass_StillReported;
 // Zweite Richtung derselben Sperre: die ERZEUGTE Klasse steht nicht auf der
 // Sperrliste (TSynLogFile), aber der angebliche Owner ist ein Stream-Feld.
 // Ein Stream besitzt keinen Component-Tree und gibt beim Free nichts mit frei,
@@ -5549,7 +5578,7 @@ end;
 
 { --- Parser-Gate-Backlog 2026-07-31 (Konzept 4e/1) ------------------------- }
 
-procedure TTestFieldLeak.Field_FreedInBeforeDestruction_NoFinding;
+procedure TTestFieldLeakDtorSubstitutes.Field_FreedInBeforeDestruction_NoFinding;
 // jvcl JvInspector.pas 302/303/307/311/317/325/332/817/1057/1242/1385 und
 // JvInspExtraEditors 118/119: die Klassen raeumen ihre Felder AUSSCHLIESSLICH
 // in BeforeDestruction auf. Delphi ruft BeforeDestruction garantiert vor
@@ -5581,7 +5610,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_BeforeDestructionFreesOther_StillReported;
+procedure TTestFieldLeakDtorSubstitutes.Field_BeforeDestructionFreesOther_StillReported;
 // TP-Gegenprobe: die Klasse HAT ein BeforeDestruction, gibt darin aber ein
 // ANDERES Feld frei. Der neue Suchraum darf nicht pauschal entschaerfen.
 const SRC =
@@ -5611,7 +5640,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_OwnerChainReachesSelf_NoFinding;
+procedure TTestFieldLeakOwnership.Field_OwnerChainReachesSelf_NoFinding;
 // jvcl JvGammaPanel.pas 61/63/64: 'FGamma := TImage.Create(FPanel2)', FPanel2
 // gehoert FPanel1, FPanel1 = 'TPanel.Create(Self)'. Die Klasse hat GAR KEINEN
 // Destruktor - IsOwnedByFreedSiblingField (verlangt Dtor <> nil) kann dort
@@ -5641,7 +5670,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_OwnerChainEndsAtNil_StillReported;
+procedure TTestFieldLeakOwnership.Field_OwnerChainEndsAtNil_StillReported;
 // TP-Gegenprobe: die Kette endet bei 'nil' statt bei Self/AOwner - dann gibt
 // es keinen Component-Tree, der aufraeumt, und ohne Destruktor leakt FGamma.
 const SRC =
@@ -5666,7 +5695,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_OwnerChainOnPlainObjectClass_StillReported;
+procedure TTestFieldLeakOwnership.Field_OwnerChainOnPlainObjectClass_StillReported;
 // TP-Gegenprobe fuer Huerde H4, belegt an gexperts EII/D3/EIPanel.pas:238:
 // 'TSplitterControl = class' (direkter TObject-Nachfahre) mit
 // 'Create(ASplitControl, ATargetControl: TControl)'. Das erste Argument SIEHT
@@ -6281,7 +6310,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.FieldHandedToInterface_NotReported;
+procedure TTestFieldLeakOwnership.FieldHandedToInterface_NotReported;
 // Der Konstruktor gibt das Objekt an die Refcount ab; freigegeben wird ueber
 // das Nil-Setzen des Interface-Feldes. Ein Free im Destroy waere ein
 // Double-Free - der Fund waere also nicht nur unnoetig, sondern seine
@@ -6325,7 +6354,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.FieldNotHandedToInterface_StillReported;
+procedure TTestFieldLeakOwnership.FieldNotHandedToInterface_StillReported;
 // WAECHTER, und zugleich der Beleg, dass die Fixture oben ueberhaupt
 // meldefaehig ist: derselbe AUFBAU (Namen variiert, sonst waere es ein
 // DuplicateBlock-Fund) - nur ohne den Interface-Cast, und schon meldet er.
@@ -6358,7 +6387,7 @@ begin
 end;
 
 
-procedure TTestFieldLeak.Field_OwnerViaPath_NoFinding;
+procedure TTestFieldLeakOwnership.Field_OwnerViaPath_NoFinding;
 // Bis 2026-08-17 kannte das Gate nur sechs feste Muster und traf damit nur
 // den nackten Bezeichner: 'Create(AOwner)' ja, 'Create(AOwner.Owner)' nein.
 // Ein Owner ist aber ein Owner, egal ueber wieviele Punkte man ihn
@@ -6394,7 +6423,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_OwnerLookalikeIdent_StillReported;
+procedure TTestFieldLeakOwnership.Field_OwnerLookalikeIdent_StillReported;
 // WAECHTER gegen eine Namensheuristik: geprueft wird der WURZELBEZEICHNER
 // als GANZES, nicht ein Teilstring. 'ownerless' faengt mit 'owner' an und
 // ist trotzdem kein Owner - haette das Gate hier ein Pos() benutzt, waere
@@ -6426,7 +6455,7 @@ end;
 
 
 
-procedure TTestFieldLeak.Field_FreedViaPropertyAlias_NoFinding;
+procedure TTestFieldLeakPathGates.Field_FreedViaPropertyAlias_NoFinding;
 // 'Items.Free' gibt dasselbe Objekt frei wie 'FItems.Free' - nur ueber den
 // oeffentlichen Namen. SearchFree sucht den Feldnamen und findet nichts.
 // Belegt im Korpus (JvExplorerBar und Verwandte).
@@ -6464,7 +6493,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_FreedViaForeignName_StillReported;
+procedure TTestFieldLeakPathGates.Field_FreedViaForeignName_StillReported;
 // WAECHTER: irgendein anderer Name im Destruktor darf NICHT als Freigabe
 // durchgehen. Die Klasse deklariert hier keine Property 'Cache', also
 // greift Bedingung 2 des Gates nicht - der Leak bleibt ein Fund.
@@ -6498,7 +6527,7 @@ end;
 
 
 
-function TTestFieldLeak.FieldLeakCount(const ASrc,
+function TTestFieldLeakPathGates.FieldLeakCount(const ASrc,
   AFileName: string): Integer;
 // EIN try/finally mit nil-Vorbelegung statt drei geschachtelter
 // Bloecke - geschachtelte try-Ebenen sind im Selbstscan ein Fund, und
@@ -6525,7 +6554,7 @@ begin
   end;
 end;
 
-procedure TTestFieldLeak.Field_InFixturePath_NotReported;
+procedure TTestFieldLeakPathGates.Field_InFixturePath_NotReported;
 // Der Feld-Pfad besass bis zum 18.08. KEIN Fixture-Gate, obwohl der
 // Lokal-Pfad (TLeakDetector2.AnalyzeUnit) seit dem Restschulden-Audit
 // eines fuehrt und beide unter SCA001 melden. Am Korpus gemessen lagen
@@ -6562,7 +6591,7 @@ begin
     'Feld-Funde aus einem tests-Verzeichnis gehoeren nicht in den Bericht');
 end;
 
-procedure TTestFieldLeak.Field_InProductionPath_StillReported;
+procedure TTestFieldLeakPathGates.Field_InProductionPath_StillReported;
 // WAECHTER: derselbe Helfer, aber ein normaler Quellpfad. Haelt fest,
 // dass der Gate NUR an Testverzeichnissen greift und nicht
 // stillschweigend den ganzen Feld-Pfad abschaltet. Klassen- und
@@ -6906,7 +6935,7 @@ begin
 end;
 
 
-procedure TTestFieldLeak.Field_FreedInOnDestroyHandler_NoFinding;
+procedure TTestFieldLeakDtorSubstitutes.Field_FreedInOnDestroyHandler_NoFinding;
 // KLASSE L der SCA001-Vollzaehlung (30.08.). jcl PeViewer PeResView.pas
 // 115/119/121: TPeResViewChild hat GAR KEINEN Destruktor - der Detektor
 // meldete "created in constructor but no destructor exists" - und raeumt
@@ -6937,7 +6966,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_DestroyMethodWithoutEventSignature_StillReported;
+procedure TTestFieldLeakDtorSubstitutes.Field_DestroyMethodWithoutEventSignature_StillReported;
 // TP-Gegenprobe zu KLASSE L, und der Grund fuer die enge Fassung: eine
 // Methode, die zufaellig auf 'Destroy' endet, aber NICHT die
 // Event-Signatur (ein Parameter vom Typ TObject) traegt, laeuft nicht
@@ -7060,7 +7089,7 @@ begin
 end;
 
 
-procedure TTestFieldLeak.Field_FreedInClassDestructor_NoFinding;
+procedure TTestFieldLeakDtorSubstitutes.Field_FreedInClassDestructor_NoFinding;
 // BESTANDSFEHLER, gefunden am 30.08. beim Nachgehen der Klasse L.
 //
 // Der Parser markiert class-Methoden mit dem TypeRef-Suffix ';class'
@@ -7105,7 +7134,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_ClassDestructorFreesOther_StillReported;
+procedure TTestFieldLeakDtorSubstitutes.Field_ClassDestructorFreesOther_StillReported;
 // TP-Gegenprobe: die Klasse HAT einen class destructor, gibt darin aber
 // ein ANDERES Feld frei. Der erweiterte Suchraum darf nicht pauschal
 // entschaerfen - dieselbe Gegenprobe wie beim BeforeDestruction-Gate.
@@ -7285,7 +7314,7 @@ begin
 end;
 
 
-procedure TTestFieldLeak.Field_FreedInDisposeOverride_NoFinding;
+procedure TTestFieldLeakDtorSubstitutes.Field_FreedInDisposeOverride_NoFinding;
 // KLASSE J (31.08.): .NET-IDisposable-Muster. Die Klasse hat KEINEN
 // Destruktor - gemeldet wurde "created in constructor but no destructor
 // exists" - und raeumt vollstaendig in Dispose(Boolean) auf.
@@ -7322,7 +7351,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_DisposeWithoutOverride_StillReported;
+procedure TTestFieldLeakDtorSubstitutes.Field_DisposeWithoutOverride_StillReported;
 // TP-Gegenprobe 1 von 3: 'virtual' STATT 'override'. Dann gehoert die
 // Methode keinem fremden Vertrag, sondern deklariert einen eigenen -
 // gerufen wird sie nur, wenn jemand sie ruft.
@@ -7356,7 +7385,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_ClassDisposeOverride_StillReported;
+procedure TTestFieldLeakDtorSubstitutes.Field_ClassDisposeOverride_StillReported;
 // TP-Gegenprobe 2 von 3: 'class procedure ... override'. Dieser Test
 // nagelt den ;class-AUSSCHLUSS fest - Gegenprobe 1 kaeme auch ohne ihn
 // durch, weil dort schon das fehlende override greift.
@@ -7389,7 +7418,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_DisposeWrongSignature_StillReported;
+procedure TTestFieldLeakDtorSubstitutes.Field_DisposeWrongSignature_StillReported;
 // TP-Gegenprobe 3 von 3: 'Dispose' OHNE den Boolean-Parameter. Das ist
 // nicht die Signatur des .NET-Musters (Dispose() -> Dispose(True),
 // Finalizer -> Dispose(False)), sondern irgendeine Methode dieses
