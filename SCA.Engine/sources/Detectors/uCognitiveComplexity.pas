@@ -31,6 +31,25 @@ unit uCognitiveComplexity;
 // Schwellwert: DetectorMaxCognitive (Default 15 - Sonar-Industry-
 // Standard). > 15 bedeutet "schwer mental zu folgen".
 //
+// ZAEHLER-STICHPROBE 2026-09-05 (O2-Triage, letzte unvermessene
+// Metrik-Regel; volle Nachbildung des Scores waere Scheingenauigkeit,
+// deshalb HANDRECHNUNG nach diesem Kopf als Spezifikation):
+// geschichtete Ziehung 15 von 12.056 (rw66, Seed 20260905; das
+// Grenzband 16-17 mit 6 Faellen ueberrepraesentiert, weil nur dort
+// ein kleiner Zaehlfehler den Fund kippt). Ergebnis: ALLE SECHS
+// Grenzfaelle EXAKT getroffen (gnugettext 16, uPSRuntime 16,
+// JvDBCtrl 17, wbLOD 16, JvButtons 16, JvDBMove 17), drei
+// Mittelband-Faelle ebenfalls exakt (JclGraphics 20, frmMain 20,
+// Vcl.Styles.Utils.Forms 26), sechs Hochband-Faelle als >Limit
+// gesichert. NULL Zaehlfehler.
+// Dabei bestaetigte Eigenheiten der Spezifikation:
+//   * plain-else/try/except zaehlen NICHT (bewusst, s. "BEWUSST
+//     NICHT" vom 26.07.) - senkt gegenueber Sonar.
+//   * BITWEISES and/or in einer if-Bedingung zaehlt wie boolesches
+//     (CountBooleanOpsInCond kennt keine Typen; frmMain
+//     '(Flags shr i) and 1 = 1' zaehlt +1) - hebt leicht, konsistent.
+//   * Die else-if-Korrektur traegt exakt (uPSRuntime-Kette).
+//
 // Implementierung: iterative DFS analog SCA022 (Stack-Overflow-Schutz
 // bei tief verschachtelten Files - siehe Audit_jvcl_segfault.md).
 
