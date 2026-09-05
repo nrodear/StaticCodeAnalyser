@@ -122,10 +122,11 @@ type
     HideTestExplicit : Boolean;     // True wenn HideTestFixtures vom User explizit gesetzt wurde
                                     //   (Auto-Default je nach Profile sonst).
     // ---- A.5 IFDEF-Awareness (Phase 1b-Wiring) ----
-    IfdefAware    : Boolean;        // --ifdef-aware              Lexer skippt {$IFDEF X}-Branches
+    IfdefAware    : Boolean;        // --ifdef-aware              explizite Form des Ein-Zweig-
+                                    //   Defaults (seit 05.09.2026 ohnehin an; dokumentierender No-Op)
                                     //   wo X NICHT im IfdefDefines-Set steht
-    NoIfdefAware  : Boolean;        // --no-ifdef-aware           Opt-Out vom Profile-Auto-Default
-                                    //   (gewinnt ueber Profile-basiertes IfdefAware=True)
+    NoIfdefAware  : Boolean;        // --no-ifdef-aware           Doppelzweig-Sicht: alle Branches
+                                    //   parsen (Opt-Out vom Ein-Zweig-Default; gewinnt immer)
     IfdefDefines  : string;         // --define X[,Y,Z]           Comma-separated Defines
                                     //   (mehrfach --define X erlaubt - akkumuliert)
     ParseError    : string;         // nicht-leer wenn Args invalid
@@ -636,14 +637,14 @@ begin
   WriteLn('                        auch bei default-Profile.');
   WriteLn('');
   WriteLn('Conditional-Compilation (A.5):');
-  WriteLn('  --ifdef-aware         Lexer ueberspringt {$IFDEF X}-Branches');
-  WriteLn('                        wo X NICHT im Define-Set steht.');
-  WriteLn('                        Auto-On bei --profile selftest-quiet');
-  WriteLn('                        (mit MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS);');
-  WriteLn('                        sonst Default OFF.');
-  WriteLn('  --no-ifdef-aware      Opt-Out vom Profile-Auto-Default - alle Branches.');
-  WriteLn('  --define <X>[,Y,Z]    Defines fuer --ifdef-aware. Mehrfach moeglich.');
-  WriteLn('                        Beispiel: --define MSWINDOWS,WIN64,UNICODE');
+  WriteLn('  --ifdef-aware         Ein-Zweig-Sicht: Lexer ueberspringt {$IFDEF X}-');
+  WriteLn('                        Branches, wo X NICHT im Define-Set steht.');
+  WriteLn('                        Seit 2026-09-05 DEFAULT fuer alle Laeufe');
+  WriteLn('                        (Defines: MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS);');
+  WriteLn('                        das Flag bleibt als explizite Form erhalten.');
+  WriteLn('  --no-ifdef-aware      Doppelzweig-Sicht: ALLE Branches parsen (Opt-Out).');
+  WriteLn('  --define <X>[,Y,Z]    ERSETZT den Default-Define-Satz. Mehrfach moeglich.');
+  WriteLn('                        Beispiel: --define MSWINDOWS,WIN32,UNICODE');
   WriteLn('');
   WriteLn('Other:');
   WriteLn('  --help, -h, -?, /?    Show this help');
@@ -1041,25 +1042,17 @@ begin
   if Args.SonarInit then Exit(RunSonarInit(Args));
   if Args.SonarTest then Exit(RunSonarTest(Args));
 
-  // A.5 Phase 1b-Wiring: IFDEF-Awareness aus CLI-Args in den globalen
-  // Lexer-Config-State spiegeln. Wirkt fuer alle TParser2.ParseSource-
-  // Aufrufe waehrend des Runs.
-  //
-  // Profile-Auto-Default: --profile selftest-quiet aktiviert IfdefAware
-  // automatisch (mit MSWINDOWS+WIN64+UNICODE+CONDITIONALEXPRESSIONS als
-  // Default-Defines). User kann via --no-ifdef-aware opt-out wenn er
-  // bewusst alle Branches scannen will.
-  var EffectiveIfdefAware   : Boolean := Args.IfdefAware;
+  // A.5 Phase 1b-Wiring: IFDEF-Awareness. Seit dem Produktentscheid vom
+  // 05.09.2026 ist die Ein-Zweig-Sicht ENGINE-Default (TScanRequest.Init
+  // traegt DefaultIfdefDefines) - der fruehere selftest-quiet-Sonderfall
+  // ist damit hinfaellig. Hier bleibt: --define ersetzt den Default-Satz,
+  // --no-ifdef-aware stellt die Doppelzweig-Sicht her (Req.IfdefDefines
+  // wird dann unten EXPLIZIT geleert - der Init-Default muss aktiv
+  // zurueckgenommen werden), und die Meldung sagt an, was effektiv gilt.
+  var EffectiveIfdefAware   : Boolean := not Args.NoIfdefAware;
   var EffectiveIfdefDefines : string  := Args.IfdefDefines;
-  if (not EffectiveIfdefAware) and (not Args.NoIfdefAware)
-     and SameText(Args.Profile, 'selftest-quiet') then
-  begin
-    EffectiveIfdefAware := True;
-    if EffectiveIfdefDefines = '' then
-      EffectiveIfdefDefines := 'MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS';
-  end;
-  if Args.NoIfdefAware then
-    EffectiveIfdefAware := False;
+  if EffectiveIfdefAware and (EffectiveIfdefDefines = '') then
+    EffectiveIfdefDefines := string.Join(',', TScanRequest.DefaultIfdefDefines);
 
   // Die effektiven IFDEF-Defines wandern weiter unten als Request-Feld in
   // uEngineApi.Run (das setzt den Lexer-State) - hier nur noch die Meldung.
@@ -1382,7 +1375,11 @@ begin
       end;
       Req.Parallel        := Args.Parallel;
       Req.ParallelWorkers := StrToIntDef(Args.ParallelWorkers, 0);
-      if EffectiveIfdefAware and (EffectiveIfdefDefines <> '') then
+      if not EffectiveIfdefAware then
+        // Doppelzweig-Sicht: der Init-Default (DefaultIfdefDefines)
+        // muss AKTIV geleert werden, sonst bliebe er stehen.
+        Req.IfdefDefines := nil
+      else if EffectiveIfdefDefines <> '' then
         Req.IfdefDefines := EffectiveIfdefDefines.Split([',', ';']);
       // Custom-Rules: der Pfad MUSS in den Request. Der CLI laedt die YAML
       // zwar schon oben (fuer die Frueh-Validierung und die Meldung
