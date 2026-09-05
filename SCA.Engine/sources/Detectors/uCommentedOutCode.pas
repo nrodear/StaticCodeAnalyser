@@ -368,6 +368,19 @@ end;
 // STARKER (Pascal-spezifischer) Marker. Der Strong-Zwang killt die dominante
 // FP-Klasse (englische Prosa mit if/then/for/while/end). Echter commented-out
 // Code hat fast immer ':=', ';' oder begin/procedure/function.
+//
+// GEMESSEN 2026-09-05 (rw62, Los 14.034 nach Dedup, AQL-Stichprobe
+// n=125, Seed 20260905, spaltengefuehrt - die Spalte im Meldetext
+// macht den bewerteten Kommentar seit der Stellungs-Charge eindeutig
+// lokalisierbar, die aeltere Notiz "Restklasse nicht messbar" war
+// damit ueberholt): 124/125 Anspruch bestaetigt = 0,8 % FP (31.08.
+// noch 15 %, vor den Stellungs-Fixes). Der EINZIGE Fehlalarm ist die
+// vermutete Prosa-Restklasse - '{ Calculate the difference between
+// begin and end RGB values }' (JvVCLUtils.pas:1719): 'begin'/'end'
+// als WOERTER eines englischen Satzes plus Marker-Score. Hochgerechnet
+// bleibt die Klasse unter ~1 % des Loses - ein Prosa-Gate lohnt den
+// Eingriff nicht und wuerde an 'begin'/'end'-Zeilen echte Treffer
+// gefaehrden. Bewusst NICHT gebaut.
 function LooksLikeCommentedCode(const Raw: string): Boolean;
 begin
   Result := (ScoreCodeMarkers(Raw) >= 2) and HasStrongCodeMarker(Raw);
