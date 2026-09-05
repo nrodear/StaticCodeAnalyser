@@ -38,6 +38,12 @@ type
     [Test] procedure CommentedOutSignature_StillReported;
     [Test] procedure CommentedOutAnonymousMethod_StillReported;
     [Test] procedure CommentedOutClassMethod_StillReported;
+    // --- Region-Granularitaet (Produktentscheidung 2026-09-05) ---
+    // Benachbarte gemeldete Zeilen = EIN Fund mit endLine-Spanne;
+    // Einzeiler behalten woertlich die alte Meldung (Identitaets-
+    // Waechter fuer die 7.964 unbewegten Korpus-Funde).
+    [Test] procedure BraceBlock_TwoAdjacentLines_OneBlockFinding;
+    [Test] procedure SingleLine_KeepsPerLineMessage;
   end;
 
 implementation
@@ -482,6 +488,72 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCommentedOutCode),
     'auskommentierte Klassenmethode bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.BraceBlock_TwoAdjacentLines_OneBlockFinding;
+// Region-Granularitaet: die zwei benachbarten Code-Zeilen im
+// Klammerkommentar sind EIN Fund (Anker = erste Zeile, endLine =
+// letzte). An der Exe vor dem Fix geprueft: zwei Zeilenfunde ->
+// dieser Test ist ohne den Fix rot.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Aktiv;'#13#10+
+  'begin'#13#10+
+  '  {'#13#10+
+  '  x := 1;'#13#10+
+  '  y := x + 2;'#13#10+
+  '  }'#13#10+
+  '  Exit;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCommentedOutCode),
+      'benachbarte Zeilen sind EIN Block-Fund');
+    Fnd := TFindingHelper.FirstOf(F, fkCommentedOutCode);
+    Assert.IsNotNull(Fnd, 'Fund erwartet');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'x := 1;'), Fnd.LineNumber,
+      'Anker ist die erste Blockzeile');
+    Assert.IsTrue(Pos('block of 2 lines', Fnd.MissingVar) > 0,
+      'Block-Meldung nennt die Zeilenzahl');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.SingleLine_KeepsPerLineMessage;
+// IDENTITAETS-WAECHTER: 77 % der Korpus-Regionen sind einzeilig
+// (7.964 von 10.317) und muessen Zeile, Spalte und WOERTLICH die alte
+// Meldung behalten - sonst bricht jede SCA070-Baseline auch dort, wo
+// die Entscheidung nichts aendern wollte.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Einzeln;'#13#10+
+  'begin'#13#10+
+  '  DoReal;'#13#10+
+  '  //z := 42;'#13#10+
+  '  DoMore;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCommentedOutCode));
+    Fnd := TFindingHelper.FirstOf(F, fkCommentedOutCode);
+    Assert.IsNotNull(Fnd, 'Fund erwartet');
+    Assert.IsTrue(Pos('looks like commented-out code', Fnd.MissingVar) > 0,
+      'Einzeiler behaelt die alte Meldung woertlich');
+    Assert.AreEqual(0, Fnd.EndLine, 'Einzeiler traegt keine Spanne');
   finally F.Free; end;
 end;
 
