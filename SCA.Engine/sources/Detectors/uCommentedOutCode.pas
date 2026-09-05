@@ -375,9 +375,12 @@ end;
 // lokalisierbar, die aeltere Notiz "Restklasse nicht messbar" war
 // damit ueberholt): 124/125 Anspruch bestaetigt = 0,8 % FP (31.08.
 // noch 15 %, vor den Stellungs-Fixes). Der EINZIGE Fehlalarm ist die
-// vermutete Prosa-Restklasse - '{ Calculate the difference between
-// begin and end RGB values }' (JvVCLUtils.pas:1719): 'begin'/'end'
-// als WOERTER eines englischen Satzes plus Marker-Score. Hochgerechnet
+// vermutete Prosa-Restklasse: ein englischer Prosa-Blockkommentar in
+// JvVCLUtils.pas:1719, der die Schluesselwoerter fuer Blockanfang und
+// -ende als normale WOERTER des Satzes traegt ("Calculate the
+// difference between ... RGB values"). Bewusst PARAPHRASIERT statt
+// zitiert: das woertliche Zitat liess diese Regel auf ihre eigene
+// Doku feuern (Selbstscan der Charge 6). Hochgerechnet
 // bleibt die Klasse unter ~1 % des Loses - ein Prosa-Gate lohnt den
 // Eingriff nicht und wuerde an 'begin'/'end'-Zeilen echte Treffer
 // gefaehrden. Bewusst NICHT gebaut.

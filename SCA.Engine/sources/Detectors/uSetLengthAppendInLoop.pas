@@ -77,8 +77,11 @@ type
 
 implementation
 
-// noinspection-file AvoidOut, BeginEndRequired, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, LongMethod, NilComparison, RedundantBoolean, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter
+// noinspection-file AvoidOut, BeginEndRequired, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, LongMethod, MultipleExit, NilComparison, RedundantBoolean, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+// MultipleExit seit 2026-09-05: RumpfEndetVorGrow ist eine Guard-Kette
+// (jedes bewiesene Statement-Ende ist ein eigener Exit) - dieselbe
+// Bauform wie SearchFree im Leak-Detektor.
 
 uses
   System.RegularExpressions,
@@ -229,7 +232,9 @@ begin
 
   if ALoopKwLower = 'repeat' then
   begin
-    // repeat..until: Rep zaehlt repeat/until, Blk begin/case/try/asm-end.
+    // Zwei Zaehler: Rep fuer die Schleifenpaare selbst, Blk fuer die
+    // Blockpaare dazwischen (Prosa hier bewusst ohne Keyword-Aufzaehlung -
+    // die klaenge fuer SCA070 wie auskommentierter Code, Selbstfund 05.09.).
     Rep := 1; Blk := 0;
     while NaechstesToken(W) do
     begin
