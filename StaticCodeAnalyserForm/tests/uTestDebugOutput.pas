@@ -52,6 +52,11 @@ type
     [Test] procedure Debug_LoggerFileName_NoFinding;
     [Test] procedure Debug_AppenderFileName_NoFinding;
     [Test] procedure Debug_PlainFileName_StillReported;
+    // --- Geltungsbereich-Gate (eingeloestes Versprechen, 2026-09-05) ---
+    [Test] procedure Debug_TestsDirPath_NoFinding;
+    [Test] procedure Debug_SamplesDirPath_NoFinding;
+    [Test] procedure Debug_ConsoleUnitName_NoFinding;
+    [Test] procedure Debug_NeutralPath_StillReported;
     // Gate E (03.09., AQL-Neumessung): der unqualifizierte Name bindet
     // an eine gleichnamige EIGENE Routine der Unit.
     [Test] procedure Debug_OwnWriteLnMethod_NoFinding;
@@ -566,6 +571,42 @@ procedure TTestDebugOutput.Debug_PlainFileName_StillReported;
 begin
   Assert.AreEqual<Integer>(2, DebugCountForPath('d:\repo\logger\uMain.pas'),
     'gewoehnliche Unit: WriteLn und OutputDebugString bleiben Funde');
+end;
+
+procedure TTestDebugOutput.Debug_TestsDirPath_NoFinding;
+// Geltungsbereich-Gate Stufe 1: tplFixtureDir-Segment 'tests'.
+// Ohne das Gate liefert DIESELBE Fixture 2 Funde (s.
+// Debug_NeutralPath_StillReported) - dieser Test ist ohne den Fix rot.
+begin
+  Assert.AreEqual<Integer>(0, DebugCountForPath('d:\repo\tests\uFoo.pas'),
+    'WriteLn in einer Testunit ist kein Debug-Rest');
+end;
+
+procedure TTestDebugOutput.Debug_SamplesDirPath_NoFinding;
+// Stufe 1, breiter als der alte Versprechenstext: samples/demos
+// gehoeren zur projektweiten Definition - ein Demo SCHREIBT absichtlich
+// auf die Konsole.
+begin
+  Assert.AreEqual<Integer>(0, DebugCountForPath('d:\repo\samples\uBar.pas'),
+    'WriteLn in einem Sample ist Zweck, kein Rest');
+end;
+
+procedure TTestDebugOutput.Debug_ConsoleUnitName_NoFinding;
+// Stufe 2: *Console*-Unitname (wie versprochen) - alle 6 Korpus-Units
+// dieser Klasse sind zweckgebundene CLI-Ausgabe (MVCFramework.Console
+// u. a.).
+begin
+  Assert.AreEqual<Integer>(0, DebugCountForPath('d:\repo\src\MyConsoleApp.pas'),
+    'eine Konsolen-Unit hat WriteLn als Zweck');
+end;
+
+procedure TTestDebugOutput.Debug_NeutralPath_StillReported;
+// GEGENPROBE und Ohne-Fix-Anker: neutraler Pfad, neutraler Name ->
+// beide Funde bleiben. Zusammen mit den drei 0-Erwartungen oben ist
+// das Gate in beide Richtungen belegt.
+begin
+  Assert.AreEqual<Integer>(2, DebugCountForPath('d:\repo\src\uNormal.pas'),
+    'ausserhalb des Gates meldet SCA017 unveraendert');
 end;
 
 end.

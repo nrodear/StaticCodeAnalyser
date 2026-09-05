@@ -16,19 +16,25 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TDebugOutputDetector = class
   public
+    // AContext (2026-09-05, Default nil = Altverhalten der Direktaufrufe):
+    // liefert die Scanwurzel fuer das Geltungsbereich-Gate - Begruendung
+    // der Verankerung am SCA001-Gate (uLeakDetector2.AnalyzeUnit).
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
 
 // noinspection-file IfElseBegin, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+
+uses
+  uDetectorUtils;   // IsTestFixturePath (Geltungsbereich-Gate)
 
 const
   DEBUG_CALLS : array[0..4] of string = (
@@ -296,7 +302,8 @@ begin
 end;
 
 class procedure TDebugOutputDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   Calls       : TList<TAstNode>;
   N           : TAstNode;
@@ -416,6 +423,28 @@ var
 var
   Assigns : TList<TAstNode>;
 begin
+  // Geltungsbereich-Gate (2026-09-05): der Regeltext VERSPRACH diesen
+  // Skip seit dem Erst-Commit 50858f7, gebaut war er nie (Befund
+  // Charge 5, 04.09.). Jetzt eingeloest, in ZWEI Stufen:
+  //   1. tplFixtureDir-Pfadsegmente der PROJEKTWEITEN Definition
+  //      (test/tests/unittest/unittests/samples/demos, an der
+  //      Scanwurzel verankert) - bewusst BREITER als der alte
+  //      Versprechenstext (nur test/tests): Demos und Samples
+  //      schreiben genauso absichtlich auf die Konsole, und die
+  //      Projektregel lautet "keine eigene Musterliste"
+  //      (SCA001-Gate 2026-08-05, SCA143-Gate 2026-09-05).
+  //   2. Unit-NAME *Console* / *TestProject* (wie versprochen): eine
+  //      Konsolen-Unit hat WriteLn als Zweck, nicht als Debug-Rest.
+  //      Alle 6 Korpus-Units von Hand geprueft (MVCFramework.Console,
+  //      Horse.Provider.Console, ConsoleScriptRunner,
+  //      mormot.app.console - durchweg zweckgebundene CLI-Ausgabe).
+  // GEMESSEN rw64 vor dem Bau: 1.306 Segment- + 15 Namens-Funde von
+  // 2.832 = -1.321 (46,6 %). Segment-Splitt: tests 537, test 309,
+  // demos 232, samples 228.
+  if TDetectorUtils.IsTestFixturePath(FileName,
+       CtxScanRoot(AContext), tplFixtureDir) then Exit;
+  if (Pos('console', LowerCase(ExtractFileName(FileName))) > 0) or
+     (Pos('testproject', LowerCase(ExtractFileName(FileName))) > 0) then Exit;
   // Gate D vor allem anderen: in einer Logger-/Appender-Senke hat SCA017
   // nichts zu melden, also gar nicht erst analysieren.
   if IsLoggerSinkFile(FileName) then Exit;
