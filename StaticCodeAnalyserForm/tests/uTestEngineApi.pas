@@ -319,12 +319,15 @@ begin
 end;
 
 procedure TTestEngineApi.IfdefView_AppliesDespiteSkipConfig;
-// Der Vorlauf stellt die Doppelzweig-Sicht her (gLexer-Global via
-// Opt-out-Lauf des Tests darueber ist NICHT garantiert - deshalb hier
-// explizit): erst ein Lauf mit IfdefDefines=nil, dann ein
-// SkipConfig-Lauf mit Init-Default. Saehe der zweite Lauf noch die
-// Doppelzweig-Sicht des ersten (alter Zustand: Wiring nur in
-// ApplyConfig, von SkipConfig uebersprungen), faende er das Leak.
+// Beweist den Review-Blocker-Fix der Charge 13: ein SkipConfig-Lauf
+// bezieht seine IFDEF-Sicht aus dem REQUEST (ApplyIfdefView laeuft
+// vor der SkipConfig-Weiche). Im alten Zustand (Wiring nur in
+// ApplyConfig, von SkipConfig uebersprungen) saehe der Lauf den
+// Prozess-Vorzustand - im Testprozess die Doppelzweig-Sicht - und
+// faende das LINUX-Leak (1 statt 0). Der Opt-out-Vorlauf dokumentiert
+// die Unabhaengigkeit von der Lauf-Reihenfolge; seit dem
+// Lexer-State-Restore in Run (Bau-Rotlauf 06.09.: 6 kontaminierte
+// IFDEF-Fixture-Tests) hinterlaesst er ohnehin keinen Zustand mehr.
 var
   Req : TScanRequest;
   Ses : TAnalysisSession;

@@ -622,6 +622,16 @@ begin
   // re-entert hier problemlos. NIE ueber Synchronize/ProcessMessages hinweg
   // halten (Deadlock) - der Watch-Worker released daher vor Synchronize.
   GEngineLock.Enter;
+  // Lexer-Sicht des VORZUSTANDS sichern: Run hinterlaesst den globalen
+  // IFDEF-State, wie er ihn vorfand. Ohne das kontaminierte der erste
+  // Pipeline-Lauf im Prozess alle NACHFOLGENDEN Direktpfad-Nutzer
+  // (TParser2/Detektor-Tests im residenten Testprozess: 6 rote
+  // IFDEF-Fixture-Tests beim Charge-13-Bau, 06.09.). Produktiv ist das
+  // Restore neutral - jeder Run setzt seine Sicht ohnehin selbst.
+  var AlterIfdefSkip := gLexerIfdefSkipEnabled;
+  var AlteIfdefDefines: TArray<string> := nil;
+  if gLexerIfdefDefines <> nil then
+    AlteIfdefDefines := gLexerIfdefDefines.ToStringArray;
   try
   // Die IFDEF-Sicht IMMER anwenden - auch bei SkipConfig=True (Form/
   // IDE), sonst liefe der Ein-Zweig-Default an ihnen vorbei (Review-
@@ -829,6 +839,11 @@ begin
   // gesetzt (unter dem Engine-Lock, also race-frei uebernehmbar).
   Result.FConfidenceProps := uSCAConsts.LastScanEvidenceTiering;
   finally
+    // Lexer-Sicht des Vorzustands wiederherstellen (s. Sicherung oben).
+    LexerIfdefClear;
+    gLexerIfdefSkipEnabled := AlterIfdefSkip;
+    for var AltDef in AlteIfdefDefines do
+      LexerIfdefAddDefine(AltDef);
     GEngineLock.Leave;
   end;
 end;
