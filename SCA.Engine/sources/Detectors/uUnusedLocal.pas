@@ -41,7 +41,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uFileTextCache;
+  uFileTextCache,
+  uAstSpans;
 
 const
   EMIT_SEVERITY = lsHint;
@@ -263,32 +264,6 @@ begin
   end;
 end;
 
-// nkNestedRange-Marker der Routine einsammeln (Line = Start, TypeRef = Ende).
-// Format und Semantik wie in uRoutineResultAssigned.CollectNestedSpans - dort
-// werden die Spannen AUSGESCHLOSSEN, hier werden sie EINGESCHLOSSEN: fuer
-// `Result` gilt die innere Routine, fuer outer locals die aeussere.
-procedure CollectNestedSpansLocal(AMethod: TAstNode;
-  var AStarts, AEnds: TArray<Integer>);
-var
-  Ch  : TAstNode;
-  Cnt : Integer;
-begin
-  AStarts := nil;
-  AEnds   := nil;
-  if AMethod = nil then Exit;
-  Cnt := 0;
-  for Ch in AMethod.Children do
-    if Ch.Kind = nkNestedRange then
-    begin
-      Inc(Cnt);
-      SetLength(AStarts, Cnt);
-      SetLength(AEnds,   Cnt);
-      AStarts[Cnt - 1] := Ch.Line;
-      AEnds[Cnt - 1]   := StrToIntDef(Ch.TypeRef, Ch.Line);
-      if AEnds[Cnt - 1] < AStarts[Cnt - 1] then
-        AEnds[Cnt - 1] := AStarts[Cnt - 1];
-    end;
-end;
 
 // 1-basierter Index im gestrippten Text, an dem die 1-basierte Quellzeile
 // ALine1 beginnt. ALineFor ist monoton steigend (ein Block je Quellzeile),
@@ -457,7 +432,10 @@ begin
           SrcState := -1;
           if (Lines <> nil) and (RangeLo > 0) then
           begin
-            CollectNestedSpansLocal(MethodNode, NestStarts, NestEnds);
+            // Seit 2026-09-04 geteilt in TAstSpans - hier werden die
+            // Spannen EINGESCHLOSSEN (Use im Nested zaehlt fuer die
+            // aeussere Variable).
+            TAstSpans.CollectNestedSpans(MethodNode, NestStarts, NestEnds);
             RangeHi := RoutineRangeEnd(Lines, RangeLo, NestStarts, NestEnds);
             SrcLow  := LowerCase(TDetectorUtils.StripStringsAndCommentsCached(
                          Lines, SrcLineFor, AContext, FileName, ' '));

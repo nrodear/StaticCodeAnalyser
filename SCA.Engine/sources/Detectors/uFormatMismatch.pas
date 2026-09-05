@@ -109,9 +109,32 @@ type
     // (Defaults aus uSCAConsts.DetectorFormatFunctions, falls leer
     // Fallback ['format'] damit der Detektor immer was zu pruefen hat).
     class function FormatFunctionList: TArray<string>; static;
+    // IFDEF-Doppelzaehlungs-Gate (Vollzaehlung 2026-09-04): der Lexer
+    // verwirft Compiler-Direktiven; zwei per {$IFDEF}/{$ELSE}
+    // alternierende Format-Literale kleben im Tokenstrom zu 'a''b'
+    // zusammen - vom escapten Quote nicht unterscheidbar, der Zaehler
+    // addiert BEIDE Zweige ("4 placeholders" existiert in keinem
+    // kompilierten Programm; jvcl JvSelDSFrm.pas:121 u. a., 3 Korpus-
+    // Faelle, an der Exe reproduziert). Entscheidbar nur an der QUELLE:
+    // True, wenn Fundzeile oder Folgezeile (mehrzeilige Aufrufe) eine
+    // {$...}-Direktive traegt, die quote-ADJAZENT ist (zwischen ihr und
+    // dem naechsten ' steht hoechstens Leerraum) - das ist die Signatur
+    // "Direktive am Literal" = Merge-Risiko. Eine Direktive ABSEITS des
+    // Literals ({$IFOPT D+}SendDebugEx(Format(...)) - gexperts
+    // GX_ProofReaderDM.pas:1508, echter Fund) gated NICHT.
+    // Im FindingsOf-Harness (Platzhalter-Dateiname) liefert AcquireLines
+    // nil und das Gate ist ein bewusstes No-Op - Tests dafuer laufen
+    // ueber FindingsOfFile. Dokumentierte Restluecke: ein Literal, das
+    // selbst mit '{$' BEGINNT, gated faelschlich (nicht im Korpus).
+    class function DirektiveImAufruf(const FileName: string;
+      ALine: Integer): Boolean; static;
   end;
 
 implementation
+
+uses
+  System.Classes,   // TStringList (DirektiveImAufruf)
+  uFileTextCache;   // AcquireLines/ReleaseLines (DirektiveImAufruf)
 
 // noinspection-file BeginEndRequired, BooleanParam, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, LargeClass, LengthUnderflow, LongMethod, MultipleExit, NestedTry, NilComparison, PublicField, StringConcatInLoop, TooLongLine, UnsortedUses
 // Detector arbeitet auf Token-Strings - kurze Concat-Patterns fuer Param-
@@ -229,6 +252,42 @@ begin
   begin
     SetLength(Result, 1);
     Result[0] := 'format';
+  end;
+end;
+
+class function TFormatMismatchDetector.DirektiveImAufruf(
+  const FileName: string; ALine: Integer): Boolean;
+// Vertrag und Belege an der Deklaration.
+var
+  Lines : TStringList;
+  Owned : Boolean;
+  k, p, e : Integer;
+  Z, Vor, Nach : string;
+begin
+  Result := False;
+  Lines := AcquireLines(FileName, Owned);
+  if Lines = nil then Exit;   // Platzhalter-Dateiname -> bewusstes No-Op
+  try
+    for k := ALine to ALine + 1 do
+    begin
+      if (k < 1) or (k > Lines.Count) then Continue;
+      Z := Lines[k - 1];
+      p := Pos('{$', Z);
+      while p > 0 do
+      begin
+        e := p + 2;
+        while (e <= Length(Z)) and (Z[e] <> '}') do Inc(e);
+        if e > Length(Z) then Break;   // unvollstaendige Direktive auf der Zeile
+        Vor  := TrimRight(Copy(Z, 1, p - 1));
+        Nach := TrimLeft(Copy(Z, e + 1, MaxInt));
+        if ((Vor <> '') and (Vor[Length(Vor)] = '''')) or
+           ((Nach <> '') and (Nach[1] = '''')) then
+          Exit(True);
+        p := Pos('{$', Z, e + 1);
+      end;
+    end;
+  finally
+    ReleaseLines(Lines, Owned);
   end;
 end;
 
@@ -738,6 +797,12 @@ var
     // -> kein Mismatch-Befund (statisch unentscheidbar).
     if ArgCount < 0 then Exit;
     if PlaceCount = ArgCount then Exit;
+    // IFDEF-Doppelzaehlungs-Gate (s. Deklaration): quote-adjazente
+    // Direktive an der Fundstelle -> die Zaehlung ist nicht
+    // vertrauenswuerdig, beide Zweige wurden addiert. Bewusst NUR vor
+    // dem Mismatch - der Locale-Hint oben haengt nicht an der
+    // Platzhalter-ZAHL.
+    if DirektiveImAufruf(FileName, Line) then Exit;
     // Dedup: nkCall + nkAssign-Walk koennen denselben Format-Call doppelt
     // sehen (z.B. 'Result := someFunc(Format(...))' - nkAssign hat den
     // ganzen RHS, ein evtl. emittierter nkCall fuer someFunc enthaelt

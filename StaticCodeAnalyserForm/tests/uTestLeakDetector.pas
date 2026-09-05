@@ -69,6 +69,14 @@ type
     [Test] procedure Leak_FactoryMethodNoParens_BorrowedRef_NoFinding;
     [Test] procedure Leak_SiblingFactoryNoParens_ReportsLeak;
     [Test] procedure Leak_SiblingBorrowedGetterNoParens_NoFinding;
+    // K-nested-Gate (04.09.): ein Free in einer geschachtelten Routine
+    // ist im AST unsichtbar (der Parser verwirft die Knoten, uParser2
+    // haengt nur nkNestedRange-Marker an) - das Gate liest die
+    // Quellzeilen der Spannen. FindingsOfFile ist Pflicht: das Gate
+    // laeuft ueber EnsureStripped/AcquireLines und braucht die echte
+    // Datei.
+    [Test] procedure Leak_FreeInNestedRoutine_NoFinding;
+    [Test] procedure Leak_NestedFreesOtherVar_OuterStillReported;
     // --- 30 weitere Leak-Tests ---
     [Test] procedure Leak_TFileStream_NoFree_ReportsError;
     [Test] procedure Leak_TMemoryStream_FreeInFinally_NoFinding;
@@ -650,7 +658,8 @@ end;
 procedure TTestMemoryLeak.Leak_AlignedDotFreeInFinally_NoFinding;
 // Erkennerfehler (01.09.), Beleg CodeReader.ZXing.ScanManager.pas:200
 // und :250: der Free steht IM finally, nur sind die Spalten
-// ausgerichtet ('bmp      .Free;'). LineFreesVar vergleicht gegen die
+// ausgerichtet ('bmp      .Free;'). ZeileGibtVarFrei (vormals lokale
+// LineFreesVar) vergleicht gegen die
 // QUELLZEILE, also griff jede Nadel neben der Luecke vorbei und der
 // lsWarning-Vertrag behauptete 'Free ausserhalb des finally' - dort
 // schlicht falsch. Das FreeAndNil im try-Rumpf ist noetig, damit
@@ -1014,6 +1023,77 @@ begin
     Assert.AreEqual(TFindingHelper.LineOf(SRC, 'TStringList.Create'),
       Fnd.LineNumber,
       'gemeldet gehoert die Allokation, nicht die var-Deklaration');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_FreeInNestedRoutine_NoFinding;
+// K-nested-Gate (04.09.): der Aussenrumpf erzeugt, die geschachtelte
+// Routine gibt frei - exakt die vier Korpus-Faelle (Setup.MainFunc
+// LoadDecompressorDLL/LoadSevenZipDLL, HeidiSQL StopProgress, mORMot
+// HandleCleanup). Ohne das Gate meldet der Detektor 'never freed'
+// (an der Exe vor dem Fix belegt: Fund auf der Create-Zeile).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Outer;'#13#10+
+  'var'#13#10+
+  '  list: TStringList;'#13#10+
+  ''#13#10+
+  '  procedure Cleanup;'#13#10+
+  '  begin'#13#10+
+  '    FreeAndNil(list);'#13#10+
+  '  end;'#13#10+
+  ''#13#10+
+  'begin'#13#10+
+  '  list := TStringList.Create;'#13#10+
+  '  Cleanup;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Free in geschachtelter Routine ist kein Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_NestedFreesOtherVar_OuterStillReported;
+// GEGENPROBE, und der eigentliche Waechter: die geschachtelte Routine
+// befreit NUR b - a bleibt gemeldet. Ein Gate, das die Spannen zu
+// grob liest (Var-Name ignoriert), wuerde beide schlucken; ohne das
+// Gate waeren es zwei Funde. Beides macht den Test rot.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Outer;'#13#10+
+  'var'#13#10+
+  '  a, b: TStringList;'#13#10+
+  ''#13#10+
+  '  procedure Cleanup;'#13#10+
+  '  begin'#13#10+
+  '    FreeAndNil(b);'#13#10+
+  '  end;'#13#10+
+  ''#13#10+
+  'begin'#13#10+
+  '  a := TStringList.Create;'#13#10+
+  '  b := TStringList.Create;'#13#10+
+  '  Cleanup;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'nur a bleibt - b ist im Nested befreit');
+    Fnd := TFindingHelper.FirstOf(F, fkMemoryLeak);
+    Assert.IsNotNull(Fnd, 'Fund erwartet');
+    Assert.AreEqual('a', Fnd.MissingVar, 'der verbleibende Fund ist a');
   finally F.Free; end;
 end;
 

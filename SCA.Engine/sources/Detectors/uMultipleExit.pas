@@ -14,9 +14,28 @@ unit uMultipleExit;
 // exit-lastigen Methoden zu verlieren.
 //
 // Erkennung (AST):
-//   * Pro Methode: zaehle nkExit-Descendants (nested/anon-Methoden bekommen
-//     eigene nkMethod-Knoten -> keine Doppelzaehlung, verifiziert).
+//   * Pro Methode: zaehle nkExit-Descendants.
 //   * Threshold: > MAX_EXITS.
+//
+// WARUM nested/anon nicht doppelt zaehlen - Begruendung korrigiert
+// 2026-09-05 (die alte Fassung behauptete, nested routines bekaemen
+// eigene nkMethod-Knoten; das stimmt nur fuer ANONYME Methoden):
+//   * Geschachtelte Routinen werden vom Parser geparst und VERWORFEN
+//     (uParser2 haengt nur nkNestedRange-Marker an) - ihre nkExit-Knoten
+//     existieren im Baum gar nicht. Ein Exit dort verlaesst die nested
+//     Routine, nicht die Methode: Nicht-Zaehlen ist korrekt, es folgt
+//     aber aus der LOESCHUNG, nicht aus eigenen Knoten.
+//   * Anonyme Methoden bekommen tatsaechlich eigene nkMethod-Knoten.
+//
+// ZAEHLER-VOLLZAEHLUNG 2026-09-05 (O2-Triage "Metrik nur als Zaehler-
+// Korrektheit messen"): alle 625 Korpus-Funde (rw61) gegen eine
+// lexikalische Nachbildung. 55 Divergenzen, ALLE als designkonform
+// aufgeklaert: 50 Exits in geschachtelten Routinen (PascalScript
+// LoadData: 7 gemeldet, 76 im Text), Rest anonyme Methoden
+// (TES5Edit CopyInto: Exit(False) in FilteredBy-Lambdas) und
+// Artefakte der Nachbildung (1-Leerzeichen-Einrueckung). Kein einziger
+// Zaehlfehler; auch die SCA011-Parserluecke 'then (Exit(..))' hat hier
+// keinen Fund verfaelscht (es gab KEINE Unterzaehlung).
 
 interface
 

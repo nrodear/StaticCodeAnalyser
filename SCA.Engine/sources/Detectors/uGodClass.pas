@@ -25,6 +25,30 @@ unit uGodClass;
 //     (Properties zaehlen nicht - sie sind syntactic sugar.)
 //   * Schwelle: MethodCount > MAX_METHODS  OR FieldCount > MAX_FIELDS.
 //
+// ZAEHLER-VOLLZAEHLUNG 2026-09-05 (O2-Triage, alle 4.634 Korpus-Funde
+// rw61 gegen eine lexikalische Nachbildung): der METHODEN-Zaehler ist
+// praktisch sauber (30 Divergenzen, davon der Grossteil Nachbildungs-
+// Artefakte). Der FELD-Zaehler weicht in ~36 % der Funde ab, und zwar
+// NICHT hier, sondern in ParseClassBody (uParser2) - nkField ist dort
+// in drei per Exe-Probe belegten Klassen KEIN Feld bzw. es fehlt eins:
+//   (a) 'FA, FB: Integer;' wird per SkipToSemicolon KOMPLETT verworfen
+//       -> 0 statt 2 Felder (Unterzaehlung; im Los 239 Verdachtsfaelle).
+//   (b) 'FP: function(a: X;' ueber mehrere Zeilen: die Typ-Sammlung
+//       stoppt am ERSTEN ';' (dem Param-Trenner), jede weitere
+//       Param-Zeile faellt als eigenes nkField durch (Probe: 15
+//       deklarierte Felder -> "18 fields"; Extremfall TALFBXBaseLibrary
+//       740 gemeldet vs. 241 gezaehlt).
+//   (c) nacktes 'default;' hinter einer Array-Property: kein '='/','/
+//       ':' -> trotzdem Add(nkField, 'default') mit leerem TypeRef
+//       (Probe: identische Klasse ohne 'default;' bleibt stumm; im Los
+//       96 Funde exakt so erklaert).
+// Die Nachbildung reproduziert 2.823 von 4.427 auffindbaren Funden
+// exakt (63,8 %). Der Fix gehoert in den PARSER und ist ein eigenes
+// Paket (Meilenstein O5): nkField-Konsumenten sind auch SCA103,
+// uFieldLeak und der TypeIndex, und (a) erhoeht Zahlen, waehrend
+// (b)/(c) sie senken - die Bewegung braucht einen eigenen Vertrag.
+// AN DIESEM DETEKTOR ist nichts zu reparieren.
+//
 // Schwellwerte default 20 / 15 (Sonar-Konvention). Falls projektweit
 // strenger / lockerer noetig, koennen die Konstanten ueber das uSCAConsts-
 // Globals-Pattern konfigurierbar gemacht werden (analog LongMethod).
