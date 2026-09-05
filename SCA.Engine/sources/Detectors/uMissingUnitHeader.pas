@@ -50,6 +50,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  uDetectorUtils,   // IsTestFixturePath (Geltungsbereich-Gate)
   uFileTextCache;
 
 function LineHasComment(const ALine: string): Boolean;
@@ -120,6 +121,20 @@ var
   i, UnitLine, IfaceLine : Integer;
   HasComment : Boolean;
 begin
+  // Geltungsbereich-Gate (Produktentscheidung Nico 2026-09-05, analog
+  // dem SCA001-Gate vom 2026-08-05): Testunits dokumentieren sich
+  // ueber ihre Testnamen - ein fehlender Unit-Header in Test-,
+  // Sample- und Demo-Pfaden ist kein Fund. Beleg am eigenen Repo:
+  // SCA143 feuerte 90x, ausnahmslos headerlose Testunits.
+  // GEMESSEN rw63 VOR dem Bau: 4.084 von 6.860 Korpus-Funden
+  // (59,5 %) liegen in tplFixtureDir-Segmenten ('tests' 2.360,
+  // 'samples' 1.140, 'demos' 290, 'unittests' 164, 'test' 130).
+  // Stufe tplFixtureDir = NUR Verzeichnis-Segmente, an der
+  // Scanwurzel verankert - Begruendung der Stufe steht am
+  // SCA001-Gate (uLeakDetector2.AnalyzeUnit).
+  if TDetectorUtils.IsTestFixturePath(FileName,
+       CtxScanRoot(AContext), tplFixtureDir) then Exit;
+
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
