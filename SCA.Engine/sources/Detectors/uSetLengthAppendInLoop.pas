@@ -30,18 +30,31 @@ unit uSetLengthAppendInLoop;
 // Limitierungen:
 //   * Single-File-lexisch. Fenster-basiert (600 Zeichen) - sehr lange
 //     Schleifen werden nicht voll erfasst.
-//   * DAS FENSTER KENNT DAS RUMPFENDE NICHT (belegt 2026-09-04): ein
-//     SetLength NACH dem end der Schleife wird gemeldet, solange es in
-//     die 600 Zeichen faellt. Beleg Alcinoe.FMX.VideoPlayer.pas:3564 -
-//     'Setlength(FEngines, length(FEngines) + 10)' steht im
-//     'if result = -1'-Zweig HINTER der Suchschleife; das ist korrekt
-//     amortisiertes Wachstum, gemeldet wird es trotzdem.
-//     Der Fix braucht einen Rumpfende-Scanner (do/begin..end-Tiefe,
-//     repeat..until). WARNUNG an den, der ihn baut: die Vorabzaehlung
-//     braucht eine EXAKTE Nachbildung dieser Fenster-Mechanik samt
-//     Gates A/C und Erste-Grow-Dedup - ein erster Versuch mit
-//     vereinfachten Gates reproduzierte nur 26 der 117 Fundzeilen
-//     (22 %) und taugte nicht als Vertragsgrundlage.
+//   * Rumpfende-Gate (2026-09-05, BEHOBEN): frueher wurde ein SetLength
+//     NACH dem end der Schleife gemeldet, solange es in die 600 Zeichen
+//     fiel (Belege: Alcinoe.FMX.VideoPlayer.pas:3564 im
+//     'if result = -1'-Zweig HINTER der Suchschleife;
+//     MVCFramework.WebSocket JoinGroup - der beim verworfenen Guard B
+//     offen gebliebene Fall). RumpfEndetVorGrow beweist das Rumpfende
+//     lexikalisch (do-Suche, Tiefe ueber begin/case/try/asm/repeat,
+//     until/else/;-Enden, else-Peek nach block-schliessendem end) und
+//     gated NUR bei Beweis - kein 'do', kein Ende im Bereich -> Fund
+//     bleibt (TP-safe). Der fruehere Guard B scheiterte, weil ein
+//     reiner begin/end-Zaehler 'Schleife geschlossen' nicht von
+//     'innerer Block geschlossen' trennt - dieser Scanner kennt
+//     Einzelstatement-Enden (';'/'else'/'until' auf Tiefe 0) und das
+//     'end else'-Fortsetzen und faellt sonst auf 'kein Beweis' zurueck.
+//     GEMESSEN rw62 mit einer 100%-Nachbildung der Fenster-Mechanik
+//     (143/143 Roh-Funde reproduziert): 36 Roh-Funde gated, 20
+//     Fundzeilen fallen, ALLE 20 handgeprueft (Suchschleife-dann-
+//     einmal-anhaengen bzw. repeat-Eingabevalidierung-dann-anhaengen).
+//     Bekannte Restluecke: ein inline-'record'-Typ im Schleifenrumpf
+//     (var r: record..end) wuerde die Tiefe zu frueh schliessen -
+//     im Korpus kommt das nicht vor, die 20 Drops sind enumeriert.
+//   * Nachbildung fuer Vorabzaehlungen: sca157_replika.py-Mechanik
+//     (Strip AKeepColumns=False + Fenster + Gates A/C + Erste-Grow-
+//     Break) reproduziert rw62 zu 100 % - eine VEREINFACHTE Fassung
+//     schaffte am 04.09. nur 22 % und taugte nicht als Vertrag.
 //   * `SetLength(arr, Length(arr) + Constant)` (Block-Grow) wird ebenfalls
 //     geflaggt - das ist OK weil Block-Grow innerhalb einer Schleife
 //     ebenfalls suboptimal ist (vorher rechnen + einmal SetLength).
@@ -64,8 +77,11 @@ type
 
 implementation
 
-// noinspection-file AvoidOut, BeginEndRequired, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, LongMethod, NilComparison, RedundantBoolean, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter
+// noinspection-file AvoidOut, BeginEndRequired, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, LongMethod, MultipleExit, NilComparison, RedundantBoolean, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+// MultipleExit seit 2026-09-05: RumpfEndetVorGrow ist eine Guard-Kette
+// (jedes bewiesene Statement-Ende ist ein eigener Exit) - dieselbe
+// Bauform wie SearchFree im Leak-Detektor.
 
 uses
   System.RegularExpressions,
@@ -169,6 +185,131 @@ begin
     '(?i)\bif\b[^;]*(?:(?<!<)>=?|(?<![<>:])=)[^;]*' + CapRef + '[^;]*\bthen\s*$');
 end;
 
+// Rumpfende-Gate (2026-09-05): True, wenn der RUMPF der Schleife, deren
+// Keyword unmittelbar vor AScanFrom endet, NACHWEISLICH vor ASetLenPos
+// (1-basiert, Position des SetLength-Matches in Code) zu Ende ist.
+// Vertrag, Messung und Restluecke im Unit-Kopf. Kein 'do' bzw. kein
+// bewiesenes Ende im Bereich -> False, der Fund bleibt (TP-safe).
+function RumpfEndetVorGrow(const Code: string;
+  AScanFrom, ASetLenPos: Integer; const ALoopKwLower: string): Boolean;
+var
+  Pos_     : Integer;
+  Tiefe    : Integer;
+  Rep, Blk : Integer;
+  W        : string;
+  DoGesehen: Boolean;
+  EndOffen : Boolean;   // nach tiefen-schliessendem 'end': nur 'else' setzt fort
+
+  // Woerter ([A-Za-z_][A-Za-z0-9_]*) und ';' als Token, lowercase.
+  // Bewusst KEINE Zahlen: '5e3' liefert das harmlose Wort 'e3' - exakt
+  // wie die \w-Regex der Nachbildung, auf der die Messung beruht.
+  function NaechstesToken(out AWort: string): Boolean;
+  var s: Integer;
+  begin
+    Result := False;
+    while Pos_ < ASetLenPos do
+    begin
+      if Code[Pos_] = ';' then
+      begin
+        AWort := ';'; Inc(Pos_); Exit(True);
+      end;
+      if CharInSet(Code[Pos_], ['A'..'Z', 'a'..'z', '_']) then
+      begin
+        s := Pos_;
+        while (Pos_ < ASetLenPos) and
+              CharInSet(Code[Pos_], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+          Inc(Pos_);
+        AWort := LowerCase(Copy(Code, s, Pos_ - s));
+        Exit(True);
+      end;
+      Inc(Pos_);
+    end;
+  end;
+
+begin
+  Result := False;
+  Pos_ := AScanFrom;
+
+  if ALoopKwLower = 'repeat' then
+  begin
+    // Zwei Zaehler: Rep fuer die Schleifenpaare selbst, Blk fuer die
+    // Blockpaare dazwischen (Prosa hier bewusst ohne Keyword-Aufzaehlung -
+    // die klaenge fuer SCA070 wie auskommentierter Code, Selbstfund 05.09.).
+    Rep := 1; Blk := 0;
+    while NaechstesToken(W) do
+    begin
+      if (W = 'begin') or (W = 'case') or (W = 'try') or (W = 'asm') then
+        Inc(Blk)
+      else if W = 'end' then
+      begin
+        // 'end' ohne offenen Block: der UMGEBENDE Block endet vor dem
+        // until - der Rumpf ist erst recht vorbei.
+        if Blk > 0 then Dec(Blk) else Exit(True);
+      end
+      else if W = 'repeat' then
+        Inc(Rep)
+      else if W = 'until' then
+      begin
+        Dec(Rep);
+        if Rep = 0 then Exit(True);
+      end;
+    end;
+    Exit(False);
+  end;
+
+  // for/while: erst das 'do' der EIGENEN Schleife finden. 'do' ist
+  // reserviert und kommt im Laufbereichs-Ausdruck nicht vor; ein 'do'
+  // einer inneren Schleife kann nicht vor unserem liegen.
+  DoGesehen := False;
+  while (not DoGesehen) and NaechstesToken(W) do
+  begin
+    if W = 'do' then
+      DoGesehen := True
+    else if (W = 'begin') or (W = 'repeat') or (W = 'until') or
+            (W = 'end') or (W = ';') then
+      Exit(False);   // unerwartetes Konstrukt vor dem do -> kein Beweis
+  end;
+  if not DoGesehen then Exit(False);
+
+  // Statement-Ende suchen: Bloecke oeffnen/schliessen; auf Tiefe 0 endet
+  // das Statement an ';', 'else' oder dem 'until'/'end' des UMGEBENDEN
+  // Konstrukts. Nach einem tiefen-schliessenden 'end' setzt genau ein
+  // 'else' das Statement fort ('if..then begin..end else ..').
+  Tiefe := 0;
+  EndOffen := False;
+  while NaechstesToken(W) do
+  begin
+    if EndOffen then
+    begin
+      if W = 'else' then
+      begin
+        EndOffen := False;
+        Continue;
+      end;
+      Exit(True);
+    end;
+    if (W = 'begin') or (W = 'case') or (W = 'try') or (W = 'asm') or
+       (W = 'repeat') then
+      Inc(Tiefe)
+    else if W = 'until' then
+    begin
+      if Tiefe > 0 then Dec(Tiefe) else Exit(True);
+    end
+    else if W = 'end' then
+    begin
+      if Tiefe = 0 then Exit(True);
+      Dec(Tiefe);
+      if Tiefe = 0 then EndOffen := True;
+    end
+    else if (W = ';') and (Tiefe = 0) then
+      Exit(True)
+    else if (W = 'else') and (Tiefe = 0) then
+      Exit(True);
+  end;
+  // 'end' war das letzte Token vor dem Grow -> Statement ist zu.
+  if EndOffen then Exit(True);
+end;
+
 class procedure TSetLengthAppendInLoopDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 const
@@ -225,6 +366,15 @@ begin
         GrowAmount := FirstWordToken(
           Copy(Snippet, GrowM.Index + GrowM.Length, 48));
         if IsRoomGuardedBlockGrow(Between, ArrayName, GrowAmount) then Continue;
+
+        // Rumpfende-Gate (2026-09-05, Messung im Unit-Kopf): liegt das
+        // Grow NACH dem bewiesenen Rumpfende, faellt der Fund - und mit
+        // ihm alle spaeteren Kandidaten dieser Schleife (positions-
+        // geordnet, jeder weitere liegt erst recht dahinter) -> Break.
+        if RumpfEndetVorGrow(Code, AbsolutePos,
+             AbsolutePos + GrowM.Index - 1,
+             LowerCase(LoopM.Groups[1].Value)) then
+          Break;
 
         LineNo := TDetectorUtils.LineForPos(LineFor, AbsolutePos + GrowM.Index - 1);
         if LineNo <= 0 then LineNo := 1;

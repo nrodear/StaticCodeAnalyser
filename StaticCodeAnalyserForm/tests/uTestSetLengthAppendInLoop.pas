@@ -26,6 +26,12 @@ type
     [Test] procedure CapacityGuardedGrowByOne_Reported;
     // Verify-Concern 2026-07-12: '<>' darf NICHT als Overflow-Guard zaehlen
     [Test] procedure NotEqualLenCheckBlockGrow_Reported;
+    // --- Rumpfende-Gate (2026-09-05, Messung im Detektor-Kopf) ---
+    [Test] procedure AfterForBodyEnd_NotReported;
+    [Test] procedure AfterRepeatUntil_NotReported;
+    // TP-Waechter fuer den else-Peek: '..end else SetLength(..)' ist
+    // Teil des Schleifenstatements und MUSS Fund bleiben.
+    [Test] procedure GrowInElseBranchOfLoopStatement_StillReported;
   end;
 
 implementation
@@ -338,7 +344,95 @@ begin
   finally F.Free; end;
 end;
 
+procedure TTestSetLengthAppendInLoop.AfterForBodyEnd_NotReported;
+// Korpus-Klasse (20 Zeilen in rw62, alle handgeprueft): Suchschleife,
+// DANACH einmaliges Anhaengen - das klassische 'JoinGroup'-Muster
+// (MVCFramework.WebSocket.Server:375), das der verworfene Guard B
+// offen liess. Das Rumpfende ('end;' der for-Schleife) liegt beweisbar
+// vor dem SetLength -> kein Fund. An der Exe vor dem Fix: gemeldet.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure JoinGroup(var Gruppen: TArray<string>; const Neu: string);'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  for I := 0 to Length(Gruppen) - 1 do'#13#10+
+  '  begin'#13#10+
+  '    if Gruppen[I] = Neu then'#13#10+
+  '      Exit;'#13#10+
+  '  end;'#13#10+
+  '  SetLength(Gruppen, Length(Gruppen) + 1);'#13#10+
+  '  Gruppen[Length(Gruppen) - 1] := Neu;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'Anhaengen NACH dem Schleifenrumpf ist kein O(n*n)-Realloc');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.AfterRepeatUntil_NotReported;
+// Zweite Korpus-Form (UltimDBGrid:3457): repeat validiert eine Eingabe,
+// das Anhaengen folgt NACH dem until - einmal pro Aufruf.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Merke(var Liste: TArray<string>; Name: string);'#13#10+
+  'begin'#13#10+
+  '  repeat'#13#10+
+  '    Name := Trim(Name);'#13#10+
+  '  until Name <> '''';'#13#10+
+  '  SetLength(Liste, Length(Liste) + 1);'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'Anhaengen nach until ist kein Realloc in der Schleife');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.GrowInElseBranchOfLoopStatement_StillReported;
+// TP-WAECHTER, und der eigentliche Grund fuer den else-Peek des
+// Scanners: 'for..do if..then begin..end else SetLength(..)' - das
+// SetLength gehoert zum SCHLEIFENSTATEMENT (laeuft je Iteration).
+// Ein Scanner, der am block-schliessenden end aufhoert, wuerde hier
+// faelschlich gaten und einen echten O(n*n)-Fund kosten.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Sammle(var A: TArray<Integer>; N: Integer);'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  for I := 0 to N do'#13#10+
+  '    if I = 0 then'#13#10+
+  '    begin'#13#10+
+  '      A[0] := I;'#13#10+
+  '    end'#13#10+
+  '    else'#13#10+
+  '      SetLength(A, Length(A) + 1);'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'Grow im else-Zweig des Schleifenstatements bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+
 initialization
   TDUnitX.RegisterTestFixture(TTestSetLengthAppendInLoop);
+
 
 end.
