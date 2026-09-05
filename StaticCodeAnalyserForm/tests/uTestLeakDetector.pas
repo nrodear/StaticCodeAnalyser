@@ -16,16 +16,17 @@ type
   [TestFixture]
   TTestMemoryLeak = class
   // Kern des lokalen Leak-Pfads: finally-Disziplin, Rueckgabe- und
-  // Uebergabe-Formen. Am 05.09.2026 in fuenf sequenzielle Fixtures
+  // Uebergabe-Formen. Am 05.09.2026 in sechs sequenzielle Fixtures
   // geteilt, als die Sammelklasse 91 Methoden / 2225 Zeilen Span trug
   // (SCA138/SCA141 am eigenen Code). Reine Umhaengung - kein Test
   // geaendert. Geschwister: ...Borrowed (geliehene Referenzen,
   // Factories, Meldezeilen), ...TypeMatrix (nested-Gate +
   // Typen-Matrix + Schleifen), ...TryGeometry (try/finally-
-  // Geometrien), ...OwnerAndContext (inline-var, Konstruktor-
-  // Varianten, Owner-/OS-Handle-Gates, Context). Neue Tests gehoeren
-  // in die THEMATISCH passende Fixture; steht eine bei 20 Methoden,
-  // wird zuerst geteilt (Schwelle MAX_METHODS = 20).
+  // Geometrien), ...CtorVariants (inline-var, Konstruktor-
+  // Namensvarianten, Borrowed-Regressionen), ...OwnerAndContext
+  // (Owner-/OS-Handle-Gates, Context, Oracle-Repro). Neue Tests
+  // gehoeren in die THEMATISCH passende Fixture; steht eine bei 20
+  // Methoden, wird zuerst geteilt (Schwelle MAX_METHODS = 20).
   public
     [Test] procedure Leak_CreateWithoutFree_ReportsError;
     // Real-World FP-Audit 2026-07-10: CreateAnonymousThread = FreeOnTerminate

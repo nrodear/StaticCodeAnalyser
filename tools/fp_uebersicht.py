@@ -1388,9 +1388,10 @@ _ABGELEITET = [
     ('SCA197', 0.0, 149, 'Vollzaehlung',
      'Vollzaehlung 04.09.: 149/149 korrekt; die 2 Verdachtsfaelle waren '
      'AUSKOMMENTIERTE GUIDs - Kommentare zaehlen nie, Detektor richtig'),
-    ('SCA129', 0.0, 18, 'Vollzaehlung',
-     'Vollzaehlung der 18 Extra-Funde (04.09.) nach dem vany-Feld-Gate '
-     'der Charge 3: gesund. Loest die 42 % vom 15.08. ab'),
+    # SCA129 bleibt BEWUSST draussen: die 04.09.-Pruefung sah 18
+    # Extra-Funde von 464 - eine Teilmengen-Vollzaehlung traegt keine
+    # Regel-Quote (Review-Fund Charge 12). Die historische
+    # 42-%-Stichprobe bleibt als gekennzeichnete Obergrenze stehen.
     ('SCA136', 75.0, 8, 'Vollzaehlung',
      'Vollzaehlung 8 (03.09.): >=6 belegt harmlos (Delphi ruft bei '
      'Ctor-Exception den Dtor der halbfertigen Instanz; Freigabe via '
