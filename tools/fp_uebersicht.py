@@ -944,8 +944,18 @@ _S1_EINGELOEST = [
                       'Bewegungsvertraegen der Chargen'),
 ]
 _S1_WEG      = sum(x[1] for x in _S1_EINGELOEST)    # 34
-_S1_N_HEUTE  = _S1_N - _S1_WEG                      # 534
-_S1_FP_HEUTE = _S1_FP - _S1_WEG                     # 349
+# Charge 10 (rw67, 05.09.): +10 ADDS durch den Komma-Listen-/Keyword-
+# Feld-Parserfix - Ctor-erzeugte Felder, die vorher als nkField
+# unsichtbar waren (grideditlinks, table_editor). Alle 10 von Hand
+# gesichtet: Praedikat erfuellt und strukturgleich zu bereits
+# gemeldeten Einzelfeld-Geschwistern derselben Klassen. Sie erhoehen
+# die Grundgesamtheit, sind aber NICHT einzeln als TP/FP geurteilt -
+# deshalb bleiben sie aus der FP-Zahl draussen (Quote sinkt dadurch
+# rechnerisch leicht; das ist die ehrliche Richtung, denn die
+# Geschwister-Funde gelten als TP).
+_S1_ADDS_C10 = 10
+_S1_N_HEUTE  = _S1_N - _S1_WEG + _S1_ADDS_C10
+_S1_FP_HEUTE = _S1_FP - _S1_WEG
 
 # Selbstkontrolle: die Rechnung MUSS die gemessene Fundzahl treffen.
 # Tut sie es nicht, ist entweder ein Gate gebaut worden, ohne es hier
@@ -1249,20 +1259,25 @@ _ABGELEITET = [
      'Vollklassifikation aller 176 rw16-Funde (110 FP / 66 TP) minus 90 '
      'Gate-Drops -> ~20 auf 86 Restfunde. Die Restklasse (Anzeigetext in '
      'const/resourcestring) ist ohne Cross-Unit-Symbolindex nicht trennbar'),
-    ('SCA017', 44.0, 2899, 'Rechnung',
-     'Audit-FP-Masse 2.254 minus 988 belegte Drops -> ~1.266 auf 2.899. '
-     'UNSICHER: die 58-%-Audit-Quote beruht zu einem Gutteil auf der '
-     'zwischen zwei Schlichtungen STRITTIGEN Konsolen-UI-Lesart'),
+    # September-Overlay (05.09.): frische Quoten aus der Chargen-Kampagne
+    # ERSETZEN die Rechnungen/Schaetzungen des August - Quelle je Zeile
+    # der Nachtrag in Todo_FpQuotenJeDetektor_2026-08-15_FINAL.md.
+    ('SCA017', 0.0, 125, 'Stichprobe',
+     'AQL n=125 am PRAEZISIERTEN Regelanspruch (04.09., Los 2.625, '
+     'Inhalts-Dedup): 0 FP. Die 58-%-Audit-Quote stammte aus einer '
+     'verdorbenen Stichprobe (Auditor gelenkt) und ist verworfen; der '
+     'Test-/CLI-Skip ist seit Charge 8 eingeloest (-1.321 Funde)'),
     ('SCA008', 87.0, 30, 'Rechnung',
      '~44 Audit-FP minus 18 belegte Drops -> ~26 auf 30 Funde. Das M-Paket '
      '(Flag-Korrelation, TypeIndex-Alias) ist kartiert, nicht gebaut'),
-    ('SCA011', 100.0 * 2 / 59, 59, 'Vollzaehlung',
-     'alle 59 Funde einzeln geprueft (27.08.): 57 TP / 2 FP, von einem '
-     'Skeptiker mit eigenem Korpuslauf unabhaengig reproduziert'),
+    ('SCA011', 100.0 * 1 / 59, 59, 'Vollzaehlung',
+     'Nachmessung 04.09.: 1 FP / 59 (Rest = Parser-Kante "then (Exit(..))"). '
+     'Loest die 27.08.-Zaehlung (2/59) ab'),
     ('SCA047', 0.0, 30, 'Vollzaehlung',
      'alle 30 Funde einzeln geprueft (27.08.): 30 TP / 0 FP'),
-    ('SCA004', 100.0 * 7 / 10, 10, 'Vollzaehlung',
-     'alle 10 Restfunde nach den drei Gates: 3 TP / 7 FP'),
+    ('SCA004', 0.0, 10, 'Vollzaehlung',
+     'Vollzaehlung 03.09. NACH den Charge-3-Gates (PEM-vor-Prosa, '
+     'Credential): gesund. Die 7 Audit-FPs vom August sind gebaut'),
     ('SCA193', 0.0, 1, 'Vollzaehlung',
      'der eine Restfund nach dem Dekodier-Gate ist ein TP'),
     ('SCA071', 4.0, 25, 'Schaetzung',
@@ -1278,9 +1293,10 @@ _ABGELEITET = [
     ('SCA151', 8.0, 13, 'Stichprobe',
      '13 der 51 Keeps gesichtet, 0 FP; Callback-Konstanten bleiben als '
      'Grauzone stehen - 8 % als Aufschlag darauf'),
-    ('SCA016', 32.0, 26, 'Schaetzung',
-     '26 Restfunde, davon 7-10 in der Sonden-/Fallback-Grauzone '
-     '(Skeptiker-Korrektur)'),
+    ('SCA016', 100.0 * 1 / 27, 27, 'Vollzaehlung',
+     'Vollzaehlung 04.09.: 1 FP / 27 (Regex-Einzelfall). Loest die '
+     '32-%-Skeptiker-Schaetzung ab - die Grauzonen-Faelle hielten der '
+     'Einzelpruefung nicht stand'),
     ('SCA118', 20.0, 22, 'Schaetzung',
      '22 Keeps, davon ~6 aus maschinengenerierten Fremd-Headern '
      'grenzwertig (Skeptiker-Korrektur an der 0-%-Schlagzeile)'),
@@ -1319,20 +1335,13 @@ _ABGELEITET = [
      'kein Detektorproblem - hier ist nichts zu gaten'),
     # 30.08. aus dem Fremdkorpus SVGIconImageList, beide GEBAUT und am
     # Referenzkorpus gemessen.
-    ('SCA106', 100.0 * 127 / 10386, 10386, 'Rechnung',
-     'Audit-FP-Masse 8,33 % x 11.192 = ~933 minus die 806 am Korpus '
-     'belegten Gate-7-Drops -> ~127 auf 10.386. UNSICHER, und zwar nach '
-     'unten: die Audit-Akte nennt GENAU EINE FP-Klasse (IFDEF-Doppel'
-     'deklaration - Funktionszeiger-Variable im var-Block als Methode '
-     'gemeldet), und BEIDE FP der Stichprobe stehen in derselben Datei '
-     'skia4delphi/Source/System.Skia.API.pas, die Gate 7 geraeumt hat. '
-     'Der Artefaktanteil 806/11.192 = 7,2 % deckt sich fast genau mit der '
-     'Audit-Quote 8,3 %. Die gemessene FP-Masse ist damit vollstaendig '
-     'weg; die verbleibenden ~127 sind ein Extrapolationsrest ohne '
-     'benannte Klasse und liegen innerhalb der Streuung einer '
-     '2-von-24-Stichprobe. Belastbar ist nur: deutlich unter 8,3 %, '
-     'moeglicherweise 0 - eine Nachmessung an den 10.386 Restfunden steht '
-     'aus'),
+    ('SCA106', 0.0, 200, 'Stichprobe 200',
+     'Die am 30.08. hier angekuendigte Nachmessung ist gelaufen '
+     '(Vollpruefung einer 200er-Ziehung am 31.08.): 0 Erkennungsfehler - '
+     'ALLE geprueften Funde sind mechanisch korrekt, aber saemtlich '
+     'Konventionskonflikt (m_-Praefix statt F). Die 0 % messen '
+     'KORREKTHEIT; ob die Regel NUETZT, ist eine Konventionsfrage je '
+     'Kunde (SCA106-Lehre vom 31.08.)'),
     ('SCA168', 100.0 * 663 / 9582, 9582, 'Rechnung',
      'Audit-FP-Masse 8,33 % x 9.730 = ~811 minus die 148 belegten Drops '
      'des case-else-Parserfixes -> ~663 auf 9.582. Diese Rechnung geht '
@@ -1345,6 +1354,52 @@ _ABGELEITET = [
      'Parser-Klasse auf 1/24 x 9.730 = ~405 Funde hochrechnete, gezaehlt '
      'wurden aber 148 - Faktor 2,7 zu hoch. Die Tabelle fuehrt die '
      'konservativere Zahl; die ehrliche Spanne ist 4,2 bis 6,9 %'),
+    # ---- September-Kampagne, NEUE Regeln im Overlay (05.09.) -----------
+    ('SCA070', 0.8, 125, 'Stichprobe',
+     'AQL n=125 spaltengefuehrt (05.09., nach den Stellungs-Fixes der '
+     'Charge 2): 1 FP = die Prosa-Restklasse (<1 %), bewusst ohne Gate. '
+     'Die 15 % der 31.08.-AQL massen den Zustand VOR den Fixes; seit '
+     'Charge 7 gilt Region-Granularitaet (14.867 -> 10.317)'),
+    ('SCA113', 0.0, 105, 'Vollzaehlung',
+     'Vollzaehlung 114 (04.09.): 9 FP (Punktkette, Komma-Liste, '
+     'Typinferenz) - ALLE in Charge 4 gefixt. Die 105 verbliebenen sind '
+     'gezaehlte TPs. Die 100 % vom 15.08. massen die Schwesterregel '
+     'SCA114'),
+    ('SCA162', 0.0, 175, 'Vollzaehlung',
+     'Vollzaehlung 180 (04.09.): 5 FP (Parameter "Des" ist kein '
+     'DES-Chiffre) - in Charge 4 gefixt; Rest gezaehlte TPs'),
+    ('SCA005', 0.0, 27, 'Vollzaehlung',
+     'Vollzaehlung 35 / 30 dedupliziert (05.09.): einzige Fehlerklasse '
+     'war die IFDEF-Doppelzaehlung (3x), in Charge 5 gefixt. '
+     'mORMot-Bare-%-Ueberschuss bleibt als Nuetzlichkeits-Grauzone, ist '
+     'aber kein Zaehlfehler'),
+    ('SCA167', 3.6, 563, 'Rechnung',
+     'Mechanische Vollpruefung aller 563 Funde (04.09.): hat der '
+     '.dpr-Baum ein Randomize? 20 Fehlalarme (3,6 %, OBERGRENZE - ein '
+     'Randomize NACH dem Random-Aufruf macht den Fund nicht falsch). '
+     'Losbildung entscheidet: auf Repo-Ebene ergaebe dieselbe Frage '
+     '99,8 % und waere falsch'),
+    ('SCA083', 0.0, 71, 'Vollzaehlung', 'Vollzaehlung 04.09.: 0 FP / 71'),
+    ('SCA159', 0.0, 95, 'Vollzaehlung',
+     'Vollzaehlung 04.09.: 0 FP / 95 (die 8 % vom 15.08. hielten der '
+     'Einzelpruefung nicht stand)'),
+    ('SCA171', 0.0, 76, 'Vollzaehlung',
+     'Vollzaehlung 04.09.: 76/76 mechanisch korrekt'),
+    ('SCA197', 0.0, 149, 'Vollzaehlung',
+     'Vollzaehlung 04.09.: 149/149 korrekt; die 2 Verdachtsfaelle waren '
+     'AUSKOMMENTIERTE GUIDs - Kommentare zaehlen nie, Detektor richtig'),
+    # SCA129 bleibt BEWUSST draussen: die 04.09.-Pruefung sah 18
+    # Extra-Funde von 464 - eine Teilmengen-Vollzaehlung traegt keine
+    # Regel-Quote (Review-Fund Charge 12). Die historische
+    # 42-%-Stichprobe bleibt als gekennzeichnete Obergrenze stehen.
+    ('SCA136', 75.0, 8, 'Vollzaehlung',
+     'Vollzaehlung 8 (03.09.): >=6 belegt harmlos (Delphi ruft bei '
+     'Ctor-Exception den Dtor der halbfertigen Instanz; Freigabe via '
+     'Eigenschaft; Owner-Semantik). ZURUECKGEWIESEN und auf fcMedium '
+     'demoted - aus dem Error-Tier raus'),
+    ('SCA025', 11.0, 125, 'Stichprobe',
+     'AQL 31.08.: 11 % - zurueckgewiesen, Fix offen. Loest die '
+     'richtungslose 4-%-24er-Zahl ab'),
 ]
 _seen = {}
 for _e in _ABGELEITET:
@@ -1535,12 +1590,13 @@ w('> Der Dateiname traegt das Datum der ERSTEN Fassung und bleibt\n')
 w('> stabil, damit Verweise nicht brechen - massgeblich ist der Stand\n')
 w('> in dieser Zeile. Neu erzeugt aus tools/fp_uebersicht.py.\n')
 w('> LOKAL und gitignored (.gitignore Zeile 140, `Todo_*.md`).\n\n')
-w('> ACHTUNG QUOTEN-BASIS: die Hochrechnung nutzt weiterhin das\n')
-w('> 15.08.-Audit als Quotenquelle; die FRISCHEN September-Quoten\n')
-w('> (Nachtrag in Todo_FpQuotenJeDetektor_2026-08-15_FINAL.md:\n')
-w('> SCA017 0 %, SCA070 0,8 %, ...) sind NOCH NICHT eingerechnet -\n')
-w('> die FP-Masse ist damit eine OBERGRENZE. Ueberlagerung =\n')
-w('> notierte Folgeaufgabe der Portierung.\n')
+w('> QUOTEN-BASIS: das 15.08.-Audit, UEBERLAGERT von den frischen\n')
+w('> September-Quoten der Chargen-Kampagne (Overlay 05.09., Quelle je\n')
+w('> Regel: Nachtrag in Todo_FpQuotenJeDetektor_2026-08-15_FINAL.md).\n')
+w('> Ueberlagert sind u.a. SCA017 0 %, SCA070 0,8 %, SCA113/162/005\n')
+w('> 0 % nach Vollzaehlung+Fix, SCA106 0 % Korrektheit, SCA136 75 %.\n')
+w('> Die Spalte Basis nennt je Regel Art und Umfang der Messung;\n')
+w('> Prosa-Urteile ohne Zahl ("gesund") ueberlagern NICHT.\n')
 w('>\n')
 w('> Zwei Quellen, bewusst getrennt gehalten:\n')
 w('> * **Quote** = FP-Anteil je Regel. Woher sie kommt, sagt die Spalte\n')

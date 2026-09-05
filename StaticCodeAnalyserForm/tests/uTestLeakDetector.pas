@@ -15,6 +15,18 @@ type
   // ---- MemoryLeak (TLeakDetector2) ----------------------------------------------------
   [TestFixture]
   TTestMemoryLeak = class
+  // Kern des lokalen Leak-Pfads: finally-Disziplin, Rueckgabe- und
+  // Uebergabe-Formen. Am 05.09.2026 in sechs sequenzielle Fixtures
+  // geteilt, als die Sammelklasse 91 Methoden / 2225 Zeilen Span trug
+  // (SCA138/SCA141 am eigenen Code). Reine Umhaengung - kein Test
+  // geaendert. Geschwister: ...Borrowed (geliehene Referenzen,
+  // Factories, Meldezeilen), ...TypeMatrix (nested-Gate +
+  // Typen-Matrix + Schleifen), ...TryGeometry (try/finally-
+  // Geometrien), ...CtorVariants (inline-var, Konstruktor-
+  // Namensvarianten, Borrowed-Regressionen), ...OwnerAndContext
+  // (Owner-/OS-Handle-Gates, Context, Oracle-Repro). Neue Tests
+  // gehoeren in die THEMATISCH passende Fixture; steht eine bei 20
+  // Methoden, wird zuerst geteilt (Schwelle MAX_METHODS = 20).
   public
     [Test] procedure Leak_CreateWithoutFree_ReportsError;
     // Real-World FP-Audit 2026-07-10: CreateAnonymousThread = FreeOnTerminate
@@ -36,6 +48,13 @@ type
     [Test] procedure Leak_PassedToConstructor_NoFinding;
     [Test] procedure Leak_FunctionCallAssign_NoFreeReportsWarning;
     [Test] procedure Leak_FunctionCallAssign_WithFree_NoFinding;
+  end;
+
+  // Geliehene Referenzen (Getter, Typecasts, Indexed-Access),
+  // Factory-Erkennung und die Meldezeilen-Vertraege.
+  [TestFixture]
+  TTestMemoryLeakBorrowed = class
+  public
     [Test] procedure Leak_BorrowedGetter_NoFinding;
     // Real-World 2026-06-26: 'Rueckgabewert'-FPs durch geliehene Referenzen
     // in Typecasts / Indexed-Access (cnwizards Design-Editoren).
@@ -64,6 +83,13 @@ type
     [Test] procedure Leak_NilWithoutFree_ReportsError;
     [Test] procedure Leak_DoubleCreate_KnownLimitation_NoFinding;
     [Test] procedure Leak_ObjectListAdd_FieldReceiver_NoFinding;
+  end;
+
+  // nested-Gate, Factory-ohne-Klammern, die Typen-Matrix der leaky
+  // Klassen und Schleifen-Allokationen.
+  [TestFixture]
+  TTestMemoryLeakTypeMatrix = class
+  public
     [Test] procedure Leak_ParseFilesAllClasses_NoFinding;
     [Test] procedure Leak_GenericObjectList_FreedInFinally_NoFinding;
     [Test] procedure Leak_FactoryMethodNoParens_BorrowedRef_NoFinding;
@@ -77,7 +103,7 @@ type
     // Datei.
     [Test] procedure Leak_FreeInNestedRoutine_NoFinding;
     [Test] procedure Leak_NestedFreesOtherVar_OuterStillReported;
-    // --- 30 weitere Leak-Tests ---
+    // --- Typen-Matrix + Schleifen ---
     [Test] procedure Leak_TFileStream_NoFree_ReportsError;
     [Test] procedure Leak_TMemoryStream_FreeInFinally_NoFinding;
     [Test] procedure Leak_TBitmap_NoFree_ReportsError;
@@ -90,6 +116,12 @@ type
     [Test] procedure Leak_CreateInForLoop_NoFree_ReportsError;
     [Test] procedure Leak_TwoVars_OnlyOneFreed_ReportsOneError;
     [Test] procedure Leak_FreeInTryBody_NotFinally_ReportsWarning;
+  end;
+
+  // try/finally-Geometrien: Regionen, Schachtelung, Wortgrenzen.
+  [TestFixture]
+  TTestMemoryLeakTryGeometry = class
+  public
     [Test] procedure Leak_DestroyInFinally_NoFinding;
     [Test] procedure Leak_CreateBeforeTry_FreeInFinally_NoFinding;
     [Test] procedure Leak_ThreeVarsAllFreed_NoFinding;
@@ -111,6 +143,13 @@ type
     [Test] procedure Leak_NestedBlockInFinally_FreeOutside_StillWarns;
     [Test] procedure Leak_TwoFreeAndNil_BothVars_NoFinding;
     [Test] procedure Leak_LargeMethod_OneVarLeaks_OneError;
+  end;
+
+  // inline-var, geschachtelte Eigen-finallys und die
+  // Konstruktor-Namensvarianten samt Borrowed-Regressionen.
+  [TestFixture]
+  TTestMemoryLeakCtorVariants = class
+  public
     [Test] procedure Leak_NestedTryFinally_InnerVarHasOwnFinally_NoFinding;
     [Test] procedure Leak_IfThenAssignElseBeginBlock_OuterFinallyFrees_NoFinding;
     [Test] procedure Leak_InheritedCreateWithVarArg_NoFinding;
@@ -124,6 +163,13 @@ type
     [Test] procedure Leak_CreateUtf8_NoFree_ReportsError;
     [Test] procedure Leak_CreateFmt_NoFree_ReportsError;
     [Test] procedure Leak_DotCreatedProperty_NotConstructor_NoFinding;
+  end;
+
+  // Owner-/OS-Handle-Gates und der context-getriebene
+  // LeakyClasses-Pfad.
+  [TestFixture]
+  TTestMemoryLeakOwnerAndContext = class
+  public
     // FP-Gates (2026-07-04, Real-World-Audit Prio 3): os-handle- und
     // owner-parameter-Gate inkl. TP-Guards (Create(nil) / Expr-Argument).
     [Test] procedure Leak_OsHandleSocketAssign_NoFinding;
@@ -158,6 +204,12 @@ type
   // einen Kommentar mit "TODO: Detector improvement opportunity".
   [TestFixture]
   TTestMemoryLeakAdvanced = class
+  // Wrong-Free / Mismatched Free. Am 05.09.2026 an den bestehenden
+  // Blockkommentaren in neun Themen-Fixtures geteilt, als die
+  // Sammelklasse 120 Methoden / 3261 Zeilen Span trug (SCA138/SCA141
+  // am eigenen Code). Reine Umhaengung - kein Test geaendert. Neue
+  // Tests gehoeren in die thematisch passende Fixture; steht eine
+  // bei 20 Methoden, wird zuerst geteilt.
   public
     // --- A: Wrong-Free / Mismatched Free (10 Tests) ---
     [Test] procedure Leak_FreeOnDifferentVarTypo_OriginalLeaks;
@@ -183,7 +235,13 @@ type
     [Test] procedure Leak_ReassignedThenFree_KnownLimitation_NoFinding;
     [Test] procedure Leak_FreeOnlyInIfBranch_KnownLimitation_NoFinding;
     [Test] procedure Leak_UseAfterFree_KnownLimitation_NoFinding;
+  end;
 
+  // Referenz-Aliasing (zwei Refs auf ein Objekt) und die
+  // try/finally-Edge-Cases.
+  [TestFixture]
+  TTestMemoryLeakAliasing = class
+  public
     // --- B: Pointer / Reference Aliasing (8 Tests) ---
     [Test] procedure Leak_AssignedToOtherVarFreedViaOther_OriginalLeaks;
     [Test] procedure Leak_TwoVarsAliasedDoubleFree_KnownLimitation_NoFinding;
@@ -202,7 +260,13 @@ type
     [Test] procedure Leak_MultiCreateOneFinally_AllFreed_NoFinding;
     [Test] procedure Leak_MultiCreateOneFinally_LastNotFreed_OneError;
     [Test] procedure Leak_FreeAfterTryFinallyBlock_ReportsWarning;
+  end;
 
+  // Container-Ownership-Whitelist und Ctor-Argumente in
+  // Zuweisungs-RHS.
+  [TestFixture]
+  TTestMemoryLeakContainerOwnership = class
+  public
     // --- D: Container-Ownership-Whitelist (5 Tests) ---
     [Test] procedure Leak_TObjectListAddTypedReceiver_OwnershipRecognized;
     [Test] procedure Leak_TListAddNonOwning_ReportsError;
@@ -218,6 +282,13 @@ type
     [Test] procedure Leak_TestDirSegment_Suppressed;
     // Ownership-Sink Core-Audit 2026-07-18: Container-Add im BEDINGUNGS-Kontext.
     [Test] procedure Leak_AddNodeInCondition_OwnershipRecognized;
+  end;
+
+  // SearchFree-Haertung (DisposeOf/Typecast/with), Werttyp-Return,
+  // Interface-Casts, Instanz-Factories und die Custom-Add-Familie.
+  [TestFixture]
+  TTestMemoryLeakSearchFree = class
+  public
     // --- SCA001-Gross-Triage 2026-07-18 (free-missed-Bucket, SearchFree-Haertung) ---
     [Test] procedure Leak_DisposeOf_NoFinding;
     [Test] procedure Leak_TypecastFree_NoFinding;
@@ -236,6 +307,13 @@ type
     [Test] procedure Leak_CustomAddMethod_OwnershipRecognized;
     [Test] procedure Leak_InsertNodeCastArg_OwnershipRecognized;
     [Test] procedure Leak_AddressCall_StillReported;            // TP-Gegenprobe
+  end;
+
+  // Ownership-Transfer an besitzende Senken (FP-Klasse 1 des
+  // 30%-Audits) samt der Drop-Sampling-Waechter.
+  [TestFixture]
+  TTestMemoryLeakSinks = class
+  public
     // --- 30%-Real-World-Audit 2026-07-31, FP-Klasse 1: Ownership-Transfer an
     //     besitzende Senken (letzter Use = Uebergabe an Add/Insert/Append/
     //     Push/Enqueue bzw. an einen fremden Konstruktor). ---
@@ -262,6 +340,13 @@ type
     [Test] procedure Leak_SinkResolvedOwningAccessorName_NoFinding;
     [Test] procedure Leak_TpPenAssignedBack_StillReported;         // TP JvUtils.pas:1854
     [Test] procedure Leak_TpStringsUsedAfterForeignAdd_StillReported; // TP Indy:88
+  end;
+
+  // TComponent-/Owner-Ownership, Factory-Rueckgaben und die
+  // Ctor-Selbstregistrierung (Parser-Gate-Backlog 4e).
+  [TestFixture]
+  TTestMemoryLeakComponentOwner = class
+  public
     // --- FP-Klasse 2: TComponent-/Owner-Ownership + Factory-Rueckgaben ---
     [Test] procedure Leak_ComponentOwnerCreate_DottedFieldArg_NoFinding;
     [Test] procedure Leak_ComponentOwnerCreate_TypeIndexProven_NoFinding;
@@ -289,6 +374,13 @@ type
     [Test] procedure Leak_CtorAddsSelfMemberNotSelf_StillReported;
     [Test] procedure Leak_CtorRegistersSelfViaTypecast_NoFinding;  // Gegenprobe
     [Test] procedure Leak_CtorRegistersSelfAsTrailingArg_NoFinding;// Gegenprobe
+  end;
+
+  // Quick-Win-Gates der Autopsie 26.08. und die
+  // Alias-/Ableitungs-Empfaenger besitzender Container.
+  [TestFixture]
+  TTestMemoryLeakQuickWins = class
+  public
     // --- Autopsie 2026-08-26, Quick Wins diesseits K1 -------------------
     [Test] procedure Leak_AnonProcLiteral_NoFinding;
     [Test] procedure Leak_RttiAsObjectChain_NoFinding;
@@ -301,6 +393,13 @@ type
     [Test] procedure Leak_AddReceiverIsUnitAliasOfObjectList_NoFinding;
     [Test] procedure Leak_AddReceiverIsUnitClassOfObjectList_NoFinding;
     [Test] procedure Leak_AddReceiverIsUnitAliasOfTList_StillReported; // TP-Gegenprobe
+  end;
+
+  // out/var-Parameter als Rueckgabeweg und indizierte Ziele in
+  // fremdem Speicher (groesste FP-Klasse beider Audits).
+  [TestFixture]
+  TTestMemoryLeakOutVarIndexed = class
+  public
     // ---- out/var-Parameter als Rueckgabeweg (T3-Backlog, 2026-08-01) ------
     [Test] procedure Leak_OutParamReturn_NoFinding;
     [Test] procedure Leak_VarParamIndexedReturn_NoFinding;
@@ -322,6 +421,13 @@ type
     // die indizierte Kette nicht mehr am Veto vorbeischleusen.
     [Test] procedure Leak_FieldRootedIndexedNonOwning_StillReported;
     [Test] procedure Leak_BareFieldAssignment_StillExempt;
+  end;
+
+  // Die Vollzaehlungs-Klassen F (unit-lokaler Callee), D
+  // (Owner-Argument ueber den Typ) und A (typgebundenes AddPair).
+  [TestFixture]
+  TTestMemoryLeakCalleeClasses = class
+  public
     // KLASSE F der Vollzaehlung: unit-lokaler Callee uebernimmt (30.08.)
     [Test] procedure LocalCalleeTakesOwnership_NotReported;
     [Test] procedure LocalCalleeOnlyReads_StillReported;
@@ -346,6 +452,13 @@ type
   // Klassen-Feld-Leaks im Create/Destroy-Pattern
   [TestFixture]
   TTestFieldLeak = class
+  // Kern des Feld-Leak-Pfads (ctor-erzeugte Felder). Am 05.09.2026 in
+  // vier thematische Fixtures geteilt, als die Sammelklasse ueber die
+  // SCA138-/SCA141-Schwellen wuchs (41 Methoden, 1277 Zeilen Span).
+  // Reine Umhaengung - kein Test, keine Fixture geaendert. Die drei
+  // Geschwister: TTestFieldLeakOwnership (Owner-/Uebergabe-Gates),
+  // TTestFieldLeakDtorSubstitutes (Freigabe-Orte ausserhalb Destroy),
+  // TTestFieldLeakPathGates (Namens-Alias + Pfad-Gates).
   public
     [Test] procedure Field_CreatedAndFreed_NoFinding;
     [Test] procedure Field_CreatedNotFreed_ReportsError;
@@ -364,6 +477,14 @@ type
     [Test] procedure Field_FreedViaDestroyMethod_NoFinding;
     [Test] procedure Field_TwoClassesIndependent_OnlyLeakingReported;
     [Test] procedure Field_FreedViaAlias_NoFinding;
+  end;
+
+  // Owner-/Uebergabe-Gates: der Fund entfaellt, wenn ein ANDERER die
+  // Ownership nachweislich traegt (Schwester-Feld, Component-Chain,
+  // Interface-Refcount, Owner-Pfad) - je mit TP-Gegenprobe.
+  [TestFixture]
+  TTestFieldLeakOwnership = class
+  public
     // --- 30%-Real-World-Audit 2026-07-31, FP-Klasse 3: indirekte Dtor-Freigabe
     //     (Owner = Schwester-Feld / Free in einer Helper-Methode). ---
     [Test] procedure Field_OwnerIsSiblingFieldFreedInDestroy_NoFinding;
@@ -377,7 +498,26 @@ type
     //     (Reader/Writer/Zip) besitzen ihren Quellstream NICHT. ---
     [Test] procedure Field_ConsumerOverSiblingStream_StillReported;
     [Test] procedure Field_OwnerFieldIsDataClass_StillReported;
-    // --- Parser-Gate-Backlog 2026-07-31 (Konzept 4e/1) -------------------
+    // (b) Transitive Component-Ownership ohne Destruktor (jvcl
+    //     JvGammaPanel 61/63/64, JvCombobox 261).
+    [Test] procedure Field_OwnerChainReachesSelf_NoFinding;
+    [Test] procedure Field_OwnerChainEndsAtNil_StillReported;         // TP-Gegenprobe
+    [Test] procedure Field_OwnerChainOnPlainObjectClass_StillReported; // TP-Gegenprobe
+    // FP-Gate 2026-08-17: Feld an ein Interface uebergeben = Refcount traegt
+    // die Ownership; ein Free im Destroy waere ein Double-Free.
+    [Test] procedure FieldHandedToInterface_NotReported;
+    [Test] procedure FieldNotHandedToInterface_StillReported;
+    // Owner-Gate 2026-08-17: der Owner darf ueber einen PFAD kommen.
+    [Test] procedure Field_OwnerViaPath_NoFinding;
+    [Test] procedure Field_OwnerLookalikeIdent_StillReported;
+  end;
+
+  // Freigabe-Orte AUSSERHALB des Destruktors, die als gleichwertig
+  // gelten (Parser-Gate-Backlog 2026-07-31, Konzept 4e/1 + Klassen
+  // L/J vom 30./31.08.) - je mit TP-Gegenprobe.
+  [TestFixture]
+  TTestFieldLeakDtorSubstitutes = class
+  public
     // (a) Freigabe in BeforeDestruction statt Destroy (jvcl JvInspector).
     [Test] procedure Field_FreedInBeforeDestruction_NoFinding;
     [Test] procedure Field_BeforeDestructionFreesOther_StillReported; // TP-Gegenprobe
@@ -393,18 +533,13 @@ type
     [Test] procedure Field_DisposeWithoutOverride_StillReported;
     [Test] procedure Field_ClassDisposeOverride_StillReported;
     [Test] procedure Field_DisposeWrongSignature_StillReported;
-    // (b) Transitive Component-Ownership ohne Destruktor (jvcl
-    //     JvGammaPanel 61/63/64, JvCombobox 261).
-    [Test] procedure Field_OwnerChainReachesSelf_NoFinding;
-    [Test] procedure Field_OwnerChainEndsAtNil_StillReported;         // TP-Gegenprobe
-    [Test] procedure Field_OwnerChainOnPlainObjectClass_StillReported; // TP-Gegenprobe
-    // FP-Gate 2026-08-17: Feld an ein Interface uebergeben = Refcount traegt
-    // die Ownership; ein Free im Destroy waere ein Double-Free.
-    [Test] procedure FieldHandedToInterface_NotReported;
-    [Test] procedure FieldNotHandedToInterface_StillReported;
-    // Owner-Gate 2026-08-17: der Owner darf ueber einen PFAD kommen.
-    [Test] procedure Field_OwnerViaPath_NoFinding;
-    [Test] procedure Field_OwnerLookalikeIdent_StillReported;
+  end;
+
+  // Namens-Alias- und Pfad-Gates; traegt den FieldLeakCount-Helfer,
+  // weil hier der DATEINAME die Testvariable ist.
+  [TestFixture]
+  TTestFieldLeakPathGates = class
+  public
     // Property-Alias 2026-08-18: Freigabe ueber den oeffentlichen Namen.
     [Test] procedure Field_FreedViaPropertyAlias_NoFinding;
     [Test] procedure Field_FreedViaForeignName_StillReported;
@@ -451,7 +586,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ContextLeakyClasses_DrivesDetection;
+procedure TTestMemoryLeakOwnerAndContext.Leak_ContextLeakyClasses_DrivesDetection;
 // TD-1 Inkrement 2c: LeakyClasses wurde vom uSCAConsts-Global in den
 // TAnalyzeContext gezogen. Dieser Test beweist beide Richtungen des
 // CtxLeakyClasses-Fallbacks:
@@ -528,7 +663,7 @@ const
     '  mQuery := TOracleQuery.Create(nil);'#13#10+
     '  Result := ''N'';'#13#10;
 
-procedure TTestMemoryLeak.Leak_OracleQuery_ClassFuncFreeAndNilInFinally_NoFinding;
+procedure TTestMemoryLeakOwnerAndContext.Leak_OracleQuery_ClassFuncFreeAndNilInFinally_NoFinding;
 const SRC = ORACLE_SRC_HEAD +
   '  try'#13#10+
   '    mQuery.Session := MainSessionData.OracleSession;'#13#10+
@@ -563,7 +698,7 @@ begin
   end;
 end;
 
-procedure TTestMemoryLeak.Leak_OracleQuery_ClassFuncNoFree_ReportsError;
+procedure TTestMemoryLeakOwnerAndContext.Leak_OracleQuery_ClassFuncNoFree_ReportsError;
 const SRC = ORACLE_SRC_HEAD +
   '  mQuery.Session := MainSessionData.OracleSession;'#13#10+
   '  mQuery.SQL.Text := ''SELECT einlesenkz FROM onlogist_import'';'#13#10+
@@ -795,7 +930,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NestedBlockInFinally_FreeOutside_StillWarns;
+procedure TTestMemoryLeakTryGeometry.Leak_NestedBlockInFinally_FreeOutside_StillWarns;
 // finally-Mis-Attachment-Fix TP-Gegenprobe: der neue Source-basierte finally-
 // Region-Check muss die try-Region trotz nested 'begin/end' IM finally korrekt
 // begrenzen. 'list.Free' steht NACH dem try/finally -> ausserhalb der Region ->
@@ -954,7 +1089,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FuncCallAssign_ReportsTriggeringLine;
+procedure TTestMemoryLeakBorrowed.Leak_FuncCallAssign_ReportsTriggeringLine;
 // 03.09.: die Befund-Zeile kam aus einer ZWEITEN Funktion
 // (FindFuncCallAssignLine), die nur zwei der fuenf Gates fuehrte, die
 // ueber den Fund entscheiden. Sie nahm den ERSTEN geklammerten Assign
@@ -995,7 +1130,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateAssign_ReportsCreateLine;
+procedure TTestMemoryLeakBorrowed.Leak_CreateAssign_ReportsCreateLine;
 // WAECHTER, ergaenzt beim Zusammenlegen von FindCreateLine und
 // HasCreateAssign (04.09.). Das Verhalten "Befund auf der
 // Create-Zeile, nicht auf der var-Deklaration" war von KEINEM Test
@@ -1032,7 +1167,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FreeInNestedRoutine_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_FreeInNestedRoutine_NoFinding;
 // K-nested-Gate (04.09.): der Aussenrumpf erzeugt, die geschachtelte
 // Routine gibt frei - exakt die vier Korpus-Faelle (Setup.MainFunc
 // LoadDecompressorDLL/LoadSevenZipDLL, HeidiSQL StopProgress, mORMot
@@ -1065,7 +1200,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NestedFreesOtherVar_OuterStillReported;
+procedure TTestMemoryLeakTypeMatrix.Leak_NestedFreesOtherVar_OuterStillReported;
 // GEGENPROBE, und der eigentliche Waechter: die geschachtelte Routine
 // befreit NUR b - a bleibt gemeldet. Ein Gate, das die Spannen zu
 // grob liest (Var-Name ignoriert), wuerde beide schlucken; ohne das
@@ -1103,7 +1238,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_BorrowedGetter_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_BorrowedGetter_NoFinding;
 // Regression TAstNode.FindAll - 'Source := EnsureCacheFor(AKind)' liefert
 // SHARED-Cache-Ref, kein Ownership-Transfer. Caller darf NICHT free-en.
 // Convention: Functions mit Prefix Ensure*/Get*/Find*/Lookup*/Peek*/
@@ -1125,7 +1260,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TypecastBareIdent_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_TypecastBareIdent_NoFinding;
 // FP-Fix 2026-06-28 (delphimvcframework): 'lList := TMVCListOfInteger(AObject)'.
 // Typecast eines bestehenden Identifiers/Params borgt die Referenz (ein Cast
 // allokiert nie) - kein Ownership, kein Leak. Frueher nur Casts mit '.'/'['-Arg
@@ -1146,7 +1281,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TypecastGetterResult_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_TypecastGetterResult_NoFinding;
 // cnwizards CnDesignPropEditors: Comp := TComponent(GetComponent(0)).
 // Typecast eines Accessor-Ergebnisses borgt - kein Ownership, kein Leak.
 const SRC =
@@ -1166,7 +1301,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TypecastIndexedItem_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_TypecastIndexedItem_NoFinding;
 // cnwizards CnPropertyCompareFrm: Comp := TComponent(FSelection[0]).
 // Typecast eines Collection-Items borgt - kein Ownership, kein Leak.
 const SRC =
@@ -1186,7 +1321,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_IndexedPropertyResult_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_IndexedPropertyResult_NoFinding;
 // cnwizards CnCompToCodeFrm: AChildComp := (Sender as TForm).Components[I].
 // Indexed-Property-Zugriff als Ergebnis borgt das Element - kein Leak.
 const SRC =
@@ -1228,7 +1363,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_SimilarVarName_NoFalsePositive;
+procedure TTestMemoryLeakBorrowed.Leak_SimilarVarName_NoFalsePositive;
 // VarNames und VarNamesList – der Detektor darf kein false positive auf
 // VarNamesList erzeugen, wenn nur VarNames freigegeben wird.
 const SRC =
@@ -1252,7 +1387,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_MultipleVars_BothReported;
+procedure TTestMemoryLeakBorrowed.Leak_MultipleVars_BothReported;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -1272,7 +1407,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NoFalsePositive_BlacklistFree;
+procedure TTestMemoryLeakBorrowed.Leak_NoFalsePositive_BlacklistFree;
 // 'blacklist.Free' soll 'list' NICHT als freigegeben markieren
 const SRC =
   'unit t; implementation'#13#10+
@@ -1297,7 +1432,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NoFalsePositive_FreeAndNilListExtra;
+procedure TTestMemoryLeakBorrowed.Leak_NoFalsePositive_FreeAndNilListExtra;
 // FreeAndNil(listExtra) soll 'list' NICHT als freigegeben markieren
 const SRC =
   'unit t; implementation'#13#10+
@@ -1321,7 +1456,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NilWithoutFree_ReportsError;
+procedure TTestMemoryLeakBorrowed.Leak_NilWithoutFree_ReportsError;
 // list := nil ohne vorheriges Free = Leck
 const SRC =
   'unit t; implementation'#13#10+
@@ -1341,7 +1476,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_DoubleCreate_KnownLimitation_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_DoubleCreate_KnownLimitation_NoFinding;
 // Zweites Create ohne zwischenzeitliches Free verliert die Referenz auf
 // das ERSTE Objekt - klassischer Reassignment-Leak. Aktueller String-
 // basierter Detektor trackt aber nur "Variablenname hat Free gesehen"
@@ -1369,7 +1504,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ObjectListAdd_FieldReceiver_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_ObjectListAdd_FieldReceiver_NoFinding;
 // FOwnerList.Add(item) - Receiver ist ein Klassen-Feld (F-Praefix),
 // dessen Typ NICHT in der Methode aufloesbar ist (kein Local-Var/Param-
 // Match). Recent fix `AddReceiverOwnsItems` faellt fuer unaufloesbare
@@ -1400,7 +1535,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ParseFilesAllClasses_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_ParseFilesAllClasses_NoFinding;
 // Entspricht dem realen Muster von TStaticAnalyzer.ParseFilesAllClasses:
 // 6 leaky Variablen (TStringList, TObjectList<...>), alle via FreeAndNil
 // im finally-Block freigegeben. Kein Befund erwartet.
@@ -1461,7 +1596,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_GenericObjectList_FreedInFinally_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_GenericObjectList_FreedInFinally_NoFinding;
 // TObjectList<T> mit generischem Typparameter: wird korrekt als leaky erkannt,
 // aber durch FreeAndNil im finally-Block sauber freigegeben.
 const SRC =
@@ -1485,7 +1620,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FactoryMethodNoParens_BorrowedRef_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_FactoryMethodNoParens_BorrowedRef_NoFinding;
 // Dotted-no-parens Pattern (`classes := TConsts.GetLeakyClasses`):
 // HasFunctionCallAssign verlangt explizit '(' im RHS. Ohne Klammern
 // wird das Pattern als geliehene Referenz gewertet (z.B. Field-Access
@@ -1510,7 +1645,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_SiblingFactoryNoParens_ReportsLeak;
+procedure TTestMemoryLeakTypeMatrix.Leak_SiblingFactoryNoParens_ReportsLeak;
 // FN-Fix (MeineUnit 2026-06-21): `list := MeineFactory;` (klammerloser
 // Aufruf einer parameterlosen Schwester-Factory DERSELBEN Klasse, deren
 // Body `Result := TFoo.Create` macht) ist Ownership-Transfer -> Leak,
@@ -1535,7 +1670,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_SiblingBorrowedGetterNoParens_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_SiblingBorrowedGetterNoParens_NoFinding;
 // Praezisions-Guard: eine Schwester-Methode die ein FELD zurueckgibt
 // (`Result := FCache`, kein Create) ist ein geliehener Getter - der
 // klammerlose Aufruf darf NICHT als Leak gemeldet werden.
@@ -1560,7 +1695,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_BorrowedGetterCallWithParens_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_BorrowedGetterCallWithParens_NoFinding;
 // FP-Gate (borrowed-reference, 2026-07-11, Real-World-Audit): cnwizards
 // 'Keys := CnOtaGetVersionInfoKeys(FProject)' bzw. 'Root :=
 // CnOtaGetRootComponentFromEditor(...)'. Der Callee ist ein GETTER (liefert
@@ -1584,7 +1719,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_BorrowedDottedGetterCallWithParens_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_BorrowedDottedGetterCallWithParens_NoFinding;
 // FP-Gate (borrowed-reference, 2026-07-11): Alcinoe ALFmxImgList
 // 'aBitmap := Images.Bitmap(aSize, AIndex)' - ImageList-Cache-Getter, geborgt
 // (der Quell-Kommentar dort warnt sogar, dass die ImageList das Bitmap
@@ -1606,7 +1741,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ConstructorLikeNameOnly_NoFinding;
+procedure TTestMemoryLeakBorrowed.Leak_ConstructorLikeNameOnly_NoFinding;
 // UMGEDREHT AM 02.09. - dieser Test hielt bis dahin die Gegenrichtung fest:
 // "ein konstruktor-artiger Callee (Make/New/Clone/Create/Acquire) uebergibt
 // Ownership, der Fund muss bleiben" (11.07.).
@@ -1643,7 +1778,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_LocalFactoryCallWithParens_NoFree_ReportsWarning;
+procedure TTestMemoryLeakBorrowed.Leak_LocalFactoryCallWithParens_NoFree_ReportsWarning;
 // TP-Guard: eine bewiesene lokale Factory DERSELBEN Klasse, MIT Klammern
 // aufgerufen ('list := BuildList()' mit 'Result := TStringList.Create' im
 // Body), ist Ownership-Transfer. Der IsLocalFactory-Fallback haelt die
@@ -1669,7 +1804,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_IfThenAssignElseBeginBlock_OuterFinallyFrees_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_IfThenAssignElseBeginBlock_OuterFinallyFrees_NoFinding;
 // Regression: TDuplicateStringDetector.AnalyzeUnit produzierte einen
 // false-positive Memory-Leak-Befund fuer 'Lst', weil der Parser ein
 // "x := y else begin ... end;"-Muster im THEN-Zweig falsch verarbeitet hat.
@@ -1710,7 +1845,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_InheritedCreateWithVarArg_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_InheritedCreateWithVarArg_NoFinding;
 // Regression: Parser hat den Aufrufausdruck nach 'inherited' verworfen
 // (nkInherited.Name war nur 'inherited'). Folge: IsPassedToOwner sah
 // kein 'create' und meldete einen False-Positive Leak. Mit Fix wird
@@ -1732,7 +1867,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_InheritedCreateDottedCall_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_InheritedCreateDottedCall_NoFinding;
 // 'inherited Foo.Bar(...)' - dotted call nach inherited muss komplett
 // erfasst werden. ParsePrimary kann das, der alte Parser ist abgebrochen.
 const SRC =
@@ -1752,7 +1887,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_InlineVarWithCreate_NoFree_ReportsError;
+procedure TTestMemoryLeakCtorVariants.Leak_InlineVarWithCreate_NoFree_ReportsError;
 // Regression: mid-block 'var lst: TStringList := TStringList.Create;'
 // wurde vom Parser komplett ignoriert (kein nkLocalVar). Folge: Detektor
 // hat das Leak nicht erkannt. Mit Fix wird inline-var als nkLocalVar +
@@ -1773,7 +1908,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_InlineVarWithCreate_FreeInFinally_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_InlineVarWithCreate_FreeInFinally_NoFinding;
 // Inline-var korrekt mit try/finally - kein Befund.
 const SRC =
   'unit t; implementation'#13#10+
@@ -1795,7 +1930,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_AnonymousFunctionInRhs_NoCrash;
+procedure TTestMemoryLeakCtorVariants.Leak_AnonymousFunctionInRhs_NoCrash;
 // Regression: anonyme Methoden im RHS einer Zuweisung haben den Parser
 // fruehzeitig abbrechen lassen, weil das innere 'end' als Statement-Ende
 // interpretiert wurde. Mit begin/end-Tracking im RHS-Reader wird der
@@ -1826,7 +1961,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_AssignFromFieldDottedNoParens_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_AssignFromFieldDottedNoParens_NoFinding;
 // Regression: `list := obj.FList` ist eine geliehene Referenz auf ein
 // existierendes Feld - kein Ownership-Transfer, also kein Leak.
 // Vorher hat HasFunctionCallAssign jeden dotted Bezeichner ohne '(' als
@@ -1853,7 +1988,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateUtf8_NoFree_ReportsError;
+procedure TTestMemoryLeakCtorVariants.Leak_CreateUtf8_NoFree_ReportsError;
 // Regression: mORMot-Idiom `E := EOrmException.CreateUtf8('%', [...])`.
 // Vorher hat HasCreateAssign nur '.create' + non-Ident-Char akzeptiert,
 // 'createutf8' wurde als Verb-Form abgewiesen -> Leak unentdeckt.
@@ -1874,7 +2009,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateFmt_NoFree_ReportsError;
+procedure TTestMemoryLeakCtorVariants.Leak_CreateFmt_NoFree_ReportsError;
 // Regression: RTL-Idiom `E := EConvertError.CreateFmt('Bad %s', [s])`.
 // Analog CreateUtf8: 'F' gross => Konstruktor-Variante.
 var
@@ -1892,7 +2027,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_DotCreatedProperty_NotConstructor_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_DotCreatedProperty_NotConstructor_NoFinding;
 // Negative regression: `.Created` (Folge-Zeichen klein) ist KEIN Konstruktor -
 // kann Property oder Field-Read sein, die eine bereits existierende Instanz
 // liefert (Borrowed-Reference, kein Ownership-Transfer). Darf nicht als
@@ -1914,7 +2049,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_OsHandleSocketAssign_NoFinding;
+procedure TTestMemoryLeakOwnerAndContext.Leak_OsHandleSocketAssign_NoFinding;
 // FP-Gate (2026-07-04): os-handle - socket() liefert ein Integer-OS-Handle,
 // kein Delphi-Objekt; Freigabe laeuft ueber closesocket, nicht ueber Free.
 // Real-World: mormot.net.sock.pas:2835/3106/3122,
@@ -1936,7 +2071,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_OsHandleAcceptWrapperAssign_NoFinding;
+procedure TTestMemoryLeakOwnerAndContext.Leak_OsHandleAcceptWrapperAssign_NoFinding;
 // FP-Gate (2026-07-04): os-handle - doaccept() (mORMot-Wrapper um accept())
 // liefert ebenfalls ein OS-Handle. Real-World: mormot.net.sock.pas:3230.
 const SRC =
@@ -1956,7 +2091,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateWithOwnerApplication_NoFinding;
+procedure TTestMemoryLeakOwnerAndContext.Leak_CreateWithOwnerApplication_NoFinding;
 // FP-Gate (2026-07-04): owner-parameter - Create(Application) folgt der
 // TComponent-Owner-Konvention: die Application gibt das Objekt in ihrem
 // Destroy ueber die Components[]-Liste frei -> kein Leak.
@@ -1979,7 +2114,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateWithOwnerSelf_NoFinding;
+procedure TTestMemoryLeakOwnerAndContext.Leak_CreateWithOwnerSelf_NoFinding;
 // FP-Gate (2026-07-04): owner-parameter - Create(Self) im Form-/Frame-Code:
 // Self (der umgebende TComponent) uebernimmt die Freigabe.
 const SRC =
@@ -1999,7 +2134,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateWithNilOwner_ReportsError;
+procedure TTestMemoryLeakOwnerAndContext.Leak_CreateWithNilOwner_ReportsError;
 // TP-Guard fuer das owner-parameter-Gate (2026-07-04): Create(nil) hat
 // KEINEN Owner - der Aufrufer muss selbst freigeben. Entspricht dem
 // Korpus-TP sample-dunitx-belege_ui/BelegeUnit.pas:52
@@ -2021,7 +2156,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateWithSelfDerivedExprArg_ReportsError;
+procedure TTestMemoryLeakOwnerAndContext.Leak_CreateWithSelfDerivedExprArg_ReportsError;
 // TP-Guard fuer das owner-parameter-Gate (2026-07-04): das Gate verlangt,
 // dass das GESAMTE Argument exakt ein Owner-Bezeichner ist. Ein Ausdruck,
 // der 'Self' nur enthaelt, ist kein Owner. Entspricht dem Korpus-TP
@@ -2044,7 +2179,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NestedTryFinally_InnerVarHasOwnFinally_NoFinding;
+procedure TTestMemoryLeakCtorVariants.Leak_NestedTryFinally_InnerVarHasOwnFinally_NoFinding;
 // Reproduziert das Muster aus TDuplicateStringDetector.AnalyzeUnit:
 // 3 leaky Vars (Counts, AllNodes, Lst). AllNodes hat eigenes try/finally
 // in einer Schleife. Counts und Lst werden im aeusseren finally freigegeben.
@@ -2085,7 +2220,7 @@ end;
 
 { ---- 30 weitere MemoryLeak-Tests ---- }
 
-procedure TTestMemoryLeak.Leak_TFileStream_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_TFileStream_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2103,7 +2238,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TMemoryStream_FreeInFinally_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_TMemoryStream_FreeInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2125,7 +2260,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TBitmap_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_TBitmap_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2143,7 +2278,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TIniFile_DestroyInFinally_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_TIniFile_DestroyInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2165,7 +2300,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TStreamReader_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_TStreamReader_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2183,7 +2318,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TStreamWriter_FreeInFinally_NoFinding;
+procedure TTestMemoryLeakTypeMatrix.Leak_TStreamWriter_FreeInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2205,7 +2340,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TRegistry_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_TRegistry_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2223,7 +2358,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TStringStream_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_TStringStream_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2241,7 +2376,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ShortVarName_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_ShortVarName_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2259,7 +2394,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateInForLoop_NoFree_ReportsError;
+procedure TTestMemoryLeakTypeMatrix.Leak_CreateInForLoop_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2280,7 +2415,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TwoVars_OnlyOneFreed_ReportsOneError;
+procedure TTestMemoryLeakTypeMatrix.Leak_TwoVars_OnlyOneFreed_ReportsOneError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2306,7 +2441,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FreeInTryBody_NotFinally_ReportsWarning;
+procedure TTestMemoryLeakTypeMatrix.Leak_FreeInTryBody_NotFinally_ReportsWarning;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2329,7 +2464,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_DestroyInFinally_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_DestroyInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2351,7 +2486,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateBeforeTry_FreeInFinally_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_CreateBeforeTry_FreeInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2373,7 +2508,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ThreeVarsAllFreed_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_ThreeVarsAllFreed_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2399,7 +2534,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_VarDeclaredButNeverCreated_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_VarDeclaredButNeverCreated_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2416,7 +2551,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateInWhileLoop_NoFree_ReportsError;
+procedure TTestMemoryLeakTryGeometry.Leak_CreateInWhileLoop_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2437,7 +2572,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FunctionCallFreedInFinally_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_FunctionCallFreedInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2459,7 +2594,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FactoryMethodFreedInFinally_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_FactoryMethodFreedInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2481,7 +2616,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_GenericObjectList_NoFree_ReportsError;
+procedure TTestMemoryLeakTryGeometry.Leak_GenericObjectList_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2499,7 +2634,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_ConditionalCreate_NoFree_ReportsError;
+procedure TTestMemoryLeakTryGeometry.Leak_ConditionalCreate_NoFree_ReportsError;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar(NeedList: Boolean);'#13#10+
@@ -2518,7 +2653,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FreeAndNilWordBoundary_NoFalsePositive;
+procedure TTestMemoryLeakTryGeometry.Leak_FreeAndNilWordBoundary_NoFalsePositive;
 // FreeAndNil(listmore) darf 'list' nicht als freigegeben markieren
 const SRC =
   'unit t; implementation'#13#10+
@@ -2543,7 +2678,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_DotFreeWordBoundary_NoFalsePositive;
+procedure TTestMemoryLeakTryGeometry.Leak_DotFreeWordBoundary_NoFalsePositive;
 // streamdata.Free darf 'stream' nicht als freigegeben markieren
 const SRC =
   'unit t; implementation'#13#10+
@@ -2568,7 +2703,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_NestedTryFinally_OuterFinallyFrees_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_NestedTryFinally_OuterFinallyFrees_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2594,7 +2729,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_CreateInsideTryBody_FreedInFinally_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_CreateInsideTryBody_FreedInFinally_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2616,7 +2751,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_PassedToClassCreate_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_PassedToClassCreate_NoFinding;
 // SomeOwner.Create(item) – Ownership geht auf SomeOwner über
 const SRC =
   'unit t; implementation'#13#10+
@@ -2635,7 +2770,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_MultipleTypes_EachLeaking_AllReported;
+procedure TTestMemoryLeakTryGeometry.Leak_MultipleTypes_EachLeaking_AllReported;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2655,7 +2790,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_FreeAfterTryFinally_ReportsWarning;
+procedure TTestMemoryLeakTryGeometry.Leak_FreeAfterTryFinally_ReportsWarning;
 // Free steht nach dem try/finally-Block – zu spät
 const SRC =
   'unit t; implementation'#13#10+
@@ -2682,7 +2817,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_TwoFreeAndNil_BothVars_NoFinding;
+procedure TTestMemoryLeakTryGeometry.Leak_TwoFreeAndNil_BothVars_NoFinding;
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -2706,7 +2841,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeak.Leak_LargeMethod_OneVarLeaks_OneError;
+procedure TTestMemoryLeakTryGeometry.Leak_LargeMethod_OneVarLeaks_OneError;
 // Methode mit vielen Variablen – nur eine leckt
 const SRC =
   'unit t; implementation'#13#10+
@@ -3199,7 +3334,7 @@ end;
 
 // --- B: Pointer / Reference Aliasing (8 Tests) ---
 
-procedure TTestMemoryLeakAdvanced.Leak_AssignedToOtherVarFreedViaOther_OriginalLeaks;
+procedure TTestMemoryLeakAliasing.Leak_AssignedToOtherVarFreedViaOther_OriginalLeaks;
 // 'list' wird erstellt, in 'other' kopiert, 'other' wird freigegeben.
 // Detektor sieht 'list' nicht in der Free-Suche - 'other' ist eine
 // andere Variable. Dokumentiert: list bekommt Leak-Befund.
@@ -3225,7 +3360,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_TwoVarsAliasedDoubleFree_KnownLimitation_NoFinding;
+procedure TTestMemoryLeakAliasing.Leak_TwoVarsAliasedDoubleFree_KnownLimitation_NoFinding;
 // Double-Free via Aliasing: a und b zeigen aufs selbe Objekt, beide rufen
 // Free. Detektor sieht beide Variablen-Frees getrennt - 'a' freed, 'b'
 // freed (b hatte aber kein Create). Kein Leak-Befund - aber das ist
@@ -3250,7 +3385,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_NilCheckBeforeFree_NoFinding;
+procedure TTestMemoryLeakAliasing.Leak_NilCheckBeforeFree_NoFinding;
 // Defensive Nil-Check vor Free ist gueltiges Idiom, sollte nicht zu
 // False-Positive fuehren.
 const SRC =
@@ -3274,7 +3409,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_AssignedToFFieldWithFPrefix_NoFinding;
+procedure TTestMemoryLeakAliasing.Leak_AssignedToFFieldWithFPrefix_NoFinding;
 // FField := localVar - Var-zu-Feld-Transfer. Recent fix: F-Praefix als
 // Feld-Heuristik erkannt -> kein Leak-Befund auf der Lokalen.
 const SRC =
@@ -3294,7 +3429,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_AssignedToSelfDotField_NoFinding;
+procedure TTestMemoryLeakAliasing.Leak_AssignedToSelfDotField_NoFinding;
 // Self.FList := localVar - explizites Self-Praefix muss auch erkannt
 // werden (recent fix).
 const SRC =
@@ -3314,7 +3449,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_AssignedToFieldAsInterface_NoFinding;
+procedure TTestMemoryLeakAliasing.Leak_AssignedToFieldAsInterface_NoFinding;
 // FIfc := localVar as ISomething - Interface-Refcount uebernimmt
 // Lifetime. Recent fix erkennt das.
 const SRC =
@@ -3334,7 +3469,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_BorrowedFromAddCall_NoFinding;
+procedure TTestMemoryLeakAliasing.Leak_BorrowedFromAddCall_NoFinding;
 // node := tree.Add(...) - Borrowed-Return aus Tree-/Container-API.
 // Recent fix: '.add(' / '.addchild(' / '.addnode(' / '.appendchild('
 // als Borrowed-Return erkannt.
@@ -3355,7 +3490,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_BorrowedFromAddChildCall_NoFinding;
+procedure TTestMemoryLeakAliasing.Leak_BorrowedFromAddChildCall_NoFinding;
 // item := view.AddChild(name) - VCL TTreeView-Pattern.
 const SRC =
   'unit t; implementation'#13#10+
@@ -3374,7 +3509,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_AddNodeInCondition_OwnershipRecognized;
+procedure TTestMemoryLeakContainerOwnership.Leak_AddNodeInCondition_OwnershipRecognized;
 // Ownership-Sink Core-Audit 2026-07-18: das Item wird in einer if-BEDINGUNG an
 // eine ownership-uebernehmende Tree-Add-Methode uebergeben. Calls INNERHALB einer
 // Bedingung sind keine nkCall-Knoten (Flachtext in nkIfStmt.TypeRef), daher
@@ -3405,7 +3540,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_DisposeOf_NoFinding;
+procedure TTestMemoryLeakSearchFree.Leak_DisposeOf_NoFinding;
 // SCA001-Gross-Triage 2026-07-18 (free-missed 22/101): '.DisposeOf' ist das
 // ARC-/NextGen-Idiom (auf Classic Alias fuer Free) - SearchFree kannte es
 // nicht -> "nie freigegeben"-FP (FMX LBitmap.DisposeOf / Str.DisposeOf).
@@ -3427,7 +3562,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_TypecastFree_NoFinding;
+procedure TTestMemoryLeakSearchFree.Leak_TypecastFree_NoFinding;
 // free-missed: 'TStringList(list).Free' - der Cast schiebt ')' zwischen
 // Var-Namen und '.free' -> das 'varname.free'-Muster verfehlte es (JvUIB
 // TStringList(FParams).Free im Destroy).
@@ -3448,7 +3583,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_WithDoFree_NoFinding;
+procedure TTestMemoryLeakSearchFree.Leak_WithDoFree_NoFinding;
 // free-missed: 'with bm do begin ...; Free; end' - das bare Free im with-Body
 // meint das with-Objekt; der Parser haengt den Body als Children unter das
 // with-nkCall(bm) (DropTarget 'with bm do ... free').
@@ -3473,7 +3608,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_ValueTypeReturnCall_NoFinding;
+procedure TTestMemoryLeakSearchFree.Leak_ValueTypeReturnCall_NoFinding;
 // Werttyp-Return-Gate ('other'-Bucket, 3x MakePath): der 'Rueckgabewert'-Pfad
 // meldete Calls von in-unit-Funktionen mit WERT-Return (TFileName=String).
 // Werttypen koennen nie leaken -> Signatur-Lookup unterdrueckt den Fund.
@@ -3496,7 +3631,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_ObjectReturnMakeCall_StillReported;
+procedure TTestMemoryLeakSearchFree.Leak_ObjectReturnMakeCall_StillReported;
 // TP-Gegenprobe zum Werttyp-Gate: MakeList liefert laut in-unit-Signatur ein
 // OBJEKT (TStringList) - der 'Rueckgabewert'-Fund muss bleiben.
 const SRC =
@@ -3517,7 +3652,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_InterfaceHardCast_NoFinding;
+procedure TTestMemoryLeakSearchFree.Leak_InterfaceHardCast_NoFinding;
 // Inkr.2 (iface-cast 15/101): 'IBoxedValue(b)' - Interface-Hard-Cast gibt das
 // Objekt an die Refcount ab; der letzte Release gibt es frei. I-Konvention im
 // Original-Case ('I'+Grossbuchstabe; 'IntToStr(b)' matcht NICHT).
@@ -3538,7 +3673,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_AsInterfaceCast_NoFinding;
+procedure TTestMemoryLeakSearchFree.Leak_AsInterfaceCast_NoFinding;
 // Inkr.2: 'obj as IMyIntf' - as-Cast an Interface-Refcount.
 const SRC =
   'unit t; implementation'#13#10+
@@ -3557,7 +3692,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_RaisedVar_NoFinding;
+procedure TTestMemoryLeakSearchFree.Leak_RaisedVar_NoFinding;
 // Inkr.2 (Batch 8 'raise LException'): 'raise E' uebernimmt Ownership -
 // die RTL gibt das Objekt im Exception-Handler frei.
 const SRC =
@@ -3577,7 +3712,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_InstanceFactoryCreate_NoFinding;
+procedure TTestMemoryLeakSearchFree.Leak_InstanceFactoryCreate_NoFinding;
 // Inkr.2 (factory 13/101): 'mgr.CreateOptionFromFile(..)' - Receiver 'mgr' ist
 // eine lokale INSTANZ (kein Typname, TypeLow endet nicht auf 'class') -> das
 // ist eine Factory-Methode, keine direkte Konstruktion; Result fremd-owned
@@ -3599,7 +3734,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_TypeCreateSuffix_StillError;
+procedure TTestMemoryLeakSearchFree.Leak_TypeCreateSuffix_StillError;
 // TP-Gegenprobe: 'TSQLQuery.CreateNew(nil)' - Receiver ist ein TYPNAME (keine
 // Local/kein Param) -> direkte Konstruktion, Create(nil) ohne Free = Leak.
 const SRC =
@@ -3619,7 +3754,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_MetaclassCreateNew_StillError;
+procedure TTestMemoryLeakSearchFree.Leak_MetaclassCreateNew_StillError;
 // TP-Gegenprobe Metaclass: Receiver 'C' IST eine Local, aber ihr Typ endet auf
 // 'class' (TFormClass-Konvention) -> C.CreateNew ist eine ECHTE Konstruktion
 // ueber die Metaklasse -> Fund bleibt.
@@ -3640,7 +3775,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_CustomAddMethod_OwnershipRecognized;
+procedure TTestMemoryLeakSearchFree.Leak_CustomAddMethod_OwnershipRecognized;
 // Inkr.3 (add-call 27/101): 'FOptions.AddOption(sl)' - custom Add-Methode
 // registriert das Objekt in einer owning-Struktur des Consumers. Marker
 // '.add' + CamelCase-Suffix ('O' gross im Original) + Var als Arg;
@@ -3662,7 +3797,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_InsertNodeCastArg_OwnershipRecognized;
+procedure TTestMemoryLeakSearchFree.Leak_InsertNodeCastArg_OwnershipRecognized;
 // Inkr.3: 'FTree.InsertNode(..., PFileInfo(fi))' - Insert-Familie mit dem
 // Objekt in einem CAST-Argument (VarInArgs matcht wortgebunden im Cast).
 // Geerdet: HeidiSQL insertfiles.pas ListFiles.InsertNode(PFileInfo(FileInfo)).
@@ -3683,7 +3818,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_AddressCall_StillReported;
+procedure TTestMemoryLeakSearchFree.Leak_AddressCall_StillReported;
 // TP-Gegenprobe zur Camel-Regel: '.Address(obj)' ist KEINE Add-Familie
 // (Buchstabe nach '.add' ist 'r' und im Original KLEIN) -> kein Ownership-
 // Transfer -> das nie freigegebene Objekt bleibt ein Leak-Fund.
@@ -3716,7 +3851,7 @@ end;
   aufloesbarem Fremd-Container (TJSONObject/TCustomImageList) sind deshalb
   bewusst TP-Gegenproben, keine Drops. }
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkBareAddCall_LastUse_NoFinding;
+procedure TTestMemoryLeakSinks.Leak_SinkBareAddCall_LastUse_NoFinding;
 // pyscripter cFileTemplates.pas:271 - 'Add(FileTemplate)' ohne Receiver
 // (Self-Methode der besitzenden Collection). Ohne '.' vor dem Add griff bisher
 // KEINE Ownership-Regel.
@@ -3738,7 +3873,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkAddPairCamelInAssignRhs_LastUse_NoFinding;
+procedure TTestMemoryLeakSinks.Leak_SinkAddPairCamelInAssignRhs_LastUse_NoFinding;
 // swagdoc Swag.Doc.Path.Operation.RequestParameter.pas:218 -
 // 'FJsonObject.AddPair(Key, vJsonEnum)'; System.JSON AddPair uebernimmt.
 // vJsonEnum ist als TStringList deklariert, damit es ueberhaupt als leaky
@@ -3766,7 +3901,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkEnqueueCamel_LastUse_NoFinding;
+procedure TTestMemoryLeakSinks.Leak_SinkEnqueueCamel_LastUse_NoFinding;
 // LoggerPro.pas:2913 - 'FInner.EnqueueLogItem(lLogItem)'; die Queue besitzt
 // das Item. Das alte Gate kannte nur exakt '.enqueue('.
 const SRC =
@@ -3786,7 +3921,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkAddInAssignRhs_LastUse_NoFinding;
+procedure TTestMemoryLeakSinks.Leak_SinkAddInAssignRhs_LastUse_NoFinding;
 // doublecmd uthumbfileview.pas:137 - 'FWorkingFile.Tag := FBitmapList.Add(Bitmap)'.
 // Der Add-Aufruf steckt in der RHS einer Zuweisung auf ein FREMDES Ziel; der
 // nkCall-Zweig sah ihn nie.
@@ -3807,7 +3942,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkCtorArgInAssignRhs_LastUse_NoFinding;
+procedure TTestMemoryLeakSinks.Leak_SinkCtorArgInAssignRhs_LastUse_NoFinding;
 // doublecmd ufileview.pas:2166 - 'Worker := TFileListBuilder.Create(..., Hashed)';
 // der Worker-Ctor uebernimmt die Variable (var-Parameter, Free im Worker-Dtor).
 const SRC =
@@ -3827,7 +3962,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkAddThenUsedAgain_StillReported;
+procedure TTestMemoryLeakSinks.Leak_SinkAddThenUsedAgain_StillReported;
 // TP-Gegenprobe zum LAST-USE-Anker: das Objekt wird NACH der Senke noch
 // benutzt -> die Uebergabe ist nicht der letzte Use, das Gate darf nicht
 // greifen. Ohne diesen Anker waere jedes 'X.AddPair(k, obj)' blind
@@ -3850,7 +3985,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkResolvedNonOwningReceiver_StillReported;
+procedure TTestMemoryLeakSinks.Leak_SinkResolvedNonOwningReceiver_StillReported;
 // Regressionsanker fuer den Review-Fund 2026-07-31 ("ReceiverIsProvenNonOwning
 // kehrt die strikte Receiver-Policy um"). Beide Empfaenger sind in der Routine
 // AUFLOESBAR (Parameter bzw. Local-Var) und treffen die RTL-Ownership-Whitelist
@@ -3883,7 +4018,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkHelperCallArgNotUnwrapped_StillReported;
+procedure TTestMemoryLeakSinks.Leak_SinkHelperCallArgNotUnwrapped_StillReported;
 // Regressionsanker fuer den Review-Fund 2026-07-31 ("SinkArgIsVar packt
 // beliebige '<ident>(...)'-Koepfe aus, nicht nur Typecasts"): 'Describe(Buf)'
 // uebergibt einen STRING, nicht das Objekt - der Leak bleibt. Bewusst ein
@@ -3918,7 +4053,7 @@ end;
   nicht-besitzender Container-Zugang ist UND der Senkenname zur *Object*-Familie
   gehoert. }
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkDottedItemsAddObject_StillReported;
+procedure TTestMemoryLeakSinks.Leak_SinkDottedItemsAddObject_StillReported;
 // TP jvcl/jvcl/archive/JvAlarmsForm.pas:106 (und 5 baugleiche JVCL-Stellen):
 // 'Al' wird erzeugt, per TStrings.AddObject in die Listbox gehaengt und in der
 // GANZEN Unit nie freigegeben - TStrings.Destroy raeumt Objects[] nicht ab.
@@ -3943,7 +4078,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkDottedItemsAddChildObject_StillReported;
+procedure TTestMemoryLeakSinks.Leak_SinkDottedItemsAddChildObject_StillReported;
 // TP doublecmd-master/src/ftreeviewmenu.pas:230: das TTreeMenuItem landet als
 // TTreeNode.Data (untypisierter Pointer, kein Ownership) und wird nirgends
 // freigegeben. Empfaenger 'ATreeView.Items' ist dotted -> ohne die Zusatzhuerde
@@ -3968,7 +4103,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkDottedItemsPlainAdd_NoFinding;
+procedure TTestMemoryLeakSinks.Leak_SinkDottedItemsPlainAdd_NoFinding;
 // GEGENPROBE (korrekter Drop, muss gedroppt bleiben): mORMot
 // src/ui/mormot.ui.report.pas:5051/5191 - 'PopupMenu.Items.Add(Item)'. Hier ist
 // 'Items' ein TMenuItem und der gibt seine Kinder frei. Unterschied zu den
@@ -3996,7 +4131,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkBareAddObjectSelfCollection_NoFinding;
+procedure TTestMemoryLeakSinks.Leak_SinkBareAddObjectSelfCollection_NoFinding;
 // GEGENPROBE (korrekter Drop): gexperts Src/GX_ToDo.pas:265 bzw. jvcl
 // JvParameterList.pas:716 - unqualifiziertes 'AddObject(Token, TokenInfo)' der
 // eigenen TStringList-ABLEITUNG, die ihre Objects[] in Clear/Destroy selbst
@@ -4020,7 +4155,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkBareFieldAddObject_NoFinding;
+procedure TTestMemoryLeakSinks.Leak_SinkBareFieldAddObject_NoFinding;
 // GEGENPROBE (korrekter Drop): jvcl/jvcl/run/JvSAL.pas:608 -
 // 'Result := Atoms.AddObject(Op, AAtom)'. Der Empfaenger ist ein FELD mit
 // fachlichem Namen, kein Container-Zugang - das Veto darf nicht greifen.
@@ -4042,7 +4177,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_SinkResolvedOwningAccessorName_NoFinding;
+procedure TTestMemoryLeakSinks.Leak_SinkResolvedOwningAccessorName_NoFinding;
 // GEGENPROBE zum Local/Param-Probe-Zweig: der Empfaenger heisst zwar wie ein
 // Container-Zugang ('Data'), ist hier aber ein AUFLOESBARER Parameter vom Typ
 // TObjectList und trifft damit die RTL-Ownership-Whitelist. Ohne die
@@ -4066,7 +4201,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_TpPenAssignedBack_StillReported;
+procedure TTestMemoryLeakSinks.Leak_TpPenAssignedBack_StillReported;
 // TP aus der Audit-Liste (jvcl JvUtils.pas:1854): 'PenOld := TPen.Create',
 // zurueckkopiert per 'Canvas.Pen.Assign(PenOld)', nie freigegeben. Assign ist
 // KEINE Senke - der echte Leak muss erhalten bleiben. TFont statt TPen, weil
@@ -4089,7 +4224,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_TpStringsUsedAfterForeignAdd_StillReported;
+procedure TTestMemoryLeakSinks.Leak_TpStringsUsedAfterForeignAdd_StillReported;
 // TP aus der Audit-Liste (Indy SaveToLoadFromFileTests.pas:88): TheStrings wird
 // nie freigegeben. In derselben Methode gibt es einen Add-Aufruf - aber mit
 // einem ANDEREN Argument, und der letzte Use von TheStrings ist ein Lesezugriff.
@@ -4114,7 +4249,7 @@ end;
 
 { --- 30%-Real-World-Audit 2026-07-31: FP-Klasse 2 --------------------------- }
 
-procedure TTestMemoryLeakAdvanced.Leak_ComponentOwnerCreate_DottedFieldArg_NoFinding;
+procedure TTestMemoryLeakComponentOwner.Leak_ComponentOwnerCreate_DottedFieldArg_NoFinding;
 // doublecmd umaincommands.pas:2252 - 'TBriefFileView.Create(<Owner>, FrameRight)'.
 // Erstes Ctor-Argument ist ein nicht-nil Objekt-Ausdruck = TComponent-Owner-
 // Konvention. Ohne Typindex (AContext=nil) greift die Stufe-2-Heuristik: DOTTED
@@ -4142,7 +4277,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_ComponentOwnerCreate_TypeIndexProven_NoFinding;
+procedure TTestMemoryLeakComponentOwner.Leak_ComponentOwnerCreate_TypeIndexProven_NoFinding;
 // Stufe 1 des Gates: der Cross-Unit-Typindex belegt die TComponent-Ahnenlinie
 // (TForm -> ... -> TComponent ueber die RTL-Seeds). Zugleich die Gegenprobe:
 // TStringList ist im Index AUFLOESBAR und KEIN TComponent-Nachfahre -> das Gate
@@ -4190,7 +4325,7 @@ begin
   end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_DataClassDottedArg_StillReported;
+procedure TTestMemoryLeakComponentOwner.Leak_DataClassDottedArg_StillReported;
 // TP-Gegenprobe zur Stufe-2-Heuristik: bei bekannten DATEN-Klassen ist das
 // erste Ctor-Argument ein Dateiname/Quellstream, kein Owner - auch wenn es
 // zufaellig ein dotted Ausdruck ist. Ohne diese Sperrliste verschwaende der
@@ -4212,7 +4347,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_DottedNonComponentArg_StillReported;
+procedure TTestMemoryLeakComponentOwner.Leak_DottedNonComponentArg_StillReported;
 // Regressionsanker fuer den Review-Fund 2026-07-31 ("Stufe 2 wertet JEDES
 // dotted erste Ctor-Argument als Owner"). Beide Klassen stehen NICHT in der
 // Datenklassen-Sperrliste und sind im Typindex nicht aufloesbar; das erste
@@ -4240,7 +4375,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_FactoryStoresResultInContainer_NoFinding;
+procedure TTestMemoryLeakComponentOwner.Leak_FactoryStoresResultInContainer_NoFinding;
 // cnwizards DasmProc.pas:238 - 'E := AddMemData(...)'. Die same-unit-Factory
 // haengt ihr Result SELBST in die besitzende Liste ('Insert(i, Result)') - der
 // Aufrufer bekommt nur eine geliehene Referenz.
@@ -4266,7 +4401,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_FactoryReturnsOwnership_StillReported;
+procedure TTestMemoryLeakComponentOwner.Leak_FactoryReturnsOwnership_StillReported;
 // TP-Gegenprobe: eine Factory, die ihr Result NICHT wegspeichert und keinen
 // Owner-Parameter fuehrt, gibt das Ownership sehr wohl ab - der fehlende Free
 // beim Aufrufer bleibt ein Befund.
@@ -4291,7 +4426,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_FactoryHomonymInForeignClass_StillReported;
+procedure TTestMemoryLeakComponentOwner.Leak_FactoryHomonymInForeignClass_StillReported;
 // Regressionsanker fuer den Review-Fund 2026-07-31 ("CalleeKeepsOwnership loest
 // den Callee klassenuebergreifend auf"): Zwei gleichnamige Factories in einer
 // Unit. Nur die FREMDE (TWidgetFactory) fuehrt einen Owner-Parameter; der
@@ -4325,7 +4460,7 @@ end;
 
 { --- Parser-Gate-Backlog 2026-07-31 (Konzept 4e/1 + 4e/2) ------------------ }
 
-procedure TTestMemoryLeakAdvanced.Leak_CtorRegistersSelfWithParent_NoFinding;
+procedure TTestMemoryLeakComponentOwner.Leak_CtorRegistersSelfWithParent_NoFinding;
 // jvcl JvInspector.pas 4130/11876: 'TJvInspectorCustomCategoryItem.Create(
 // AParent, nil)'. Die Klasse hat keinen eigenen Ctor; der geerbte
 // TJvCustomInspectorItem.Create haengt sich per 'AParent.Add(Self)' in die
@@ -4364,7 +4499,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_CtorDoesNotRegisterSelf_StillReported;
+procedure TTestMemoryLeakComponentOwner.Leak_CtorDoesNotRegisterSelf_StillReported;
 // TP-Gegenprobe: identische Form, aber der Ctor MERKT sich den Parent nur
 // (Rueckwaerts-Referenz) statt sich in dessen Liste zu haengen. Dann uebernimmt
 // niemand die Ownership und der Fund muss stehen bleiben.
@@ -4398,7 +4533,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_CtorOverloadsAncestorRegisters_StillReported;
+procedure TTestMemoryLeakComponentOwner.Leak_CtorOverloadsAncestorRegisters_StillReported;
 // REVIEW-BLOCKER 1 (2026-07-31), ohne den Fix ROT:
 // 'TSynList' hat ZWEI ueberladene Konstruktoren, der Vorfahr 'TSynObjectList' genau
 // einen - und DER haengt sich per 'AParent.Add(Self)' in die Liste des Parents.
@@ -4453,7 +4588,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_CtorUniqueOwnRegisters_NoFinding;
+procedure TTestMemoryLeakComponentOwner.Leak_CtorUniqueOwnRegisters_NoFinding;
 // Gegenprobe zu Blocker 1: dieselbe Form, aber die Klasse hat GENAU EINEN
 // eigenen Ctor - und der registriert sich per 'AParent.Add(Self)'. Eindeutig
 // = beweisbar, das Gate muss weiter greifen (der Tri-State darf nicht
@@ -4491,7 +4626,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_CtorAddsSelfMemberNotSelf_StillReported;
+procedure TTestMemoryLeakComponentOwner.Leak_CtorAddsSelfMemberNotSelf_StillReported;
 // REVIEW-BLOCKER 2 (2026-07-31), ohne den Fix ROT:
 // Der Ctor uebergibt 'Self.FCaption' - ein FELD von Self, nicht Self. Die
 // alte Pruefung (TDetectorUtils.ContainsWholeWordLower) akzeptierte '.' als
@@ -4530,7 +4665,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_CtorRegistersSelfViaTypecast_NoFinding;
+procedure TTestMemoryLeakComponentOwner.Leak_CtorRegistersSelfViaTypecast_NoFinding;
 // Gegenprobe zu Blocker 2: 'AItems.Add(TObject(Self))' ist eine echte
 // Selbstregistrierung - die Klammer ist eine gueltige rechte Wortgrenze und
 // muss weiter matchen.
@@ -4565,7 +4700,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_CtorRegistersSelfAsTrailingArg_NoFinding;
+procedure TTestMemoryLeakComponentOwner.Leak_CtorRegistersSelfAsTrailingArg_NoFinding;
 // Gegenprobe zu Blocker 2: 'AItems.Insert(0, Self)' - Self hinter einem Komma
 // und am Ende der Argumentliste. Beide Grenzen (Komma links, Stringende
 // rechts) muessen weiter als Wortgrenze gelten.
@@ -4600,7 +4735,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_AddReceiverIsUnitAliasOfObjectList_NoFinding;
+procedure TTestMemoryLeakQuickWins.Leak_AddReceiverIsUnitAliasOfObjectList_NoFinding;
 // REGRESSIONSFALL des Parser-Inkrements (Konzept 4e/2), delphimvcframework
 // contrib/serversideviews_sempare/DAL.pas:136: 'TPeople = TObjectList<TPerson>'.
 // Vor dem Parser-Fix war 'TPeople' unaufloesbar -> AddReceiverOwnsItems lief in
@@ -4630,7 +4765,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_AddReceiverIsUnitClassOfObjectList_NoFinding;
+procedure TTestMemoryLeakQuickWins.Leak_AddReceiverIsUnitClassOfObjectList_NoFinding;
 // Zweite Auspraegung derselben Klasse (delphimvcframework samples/*/DAL.pas):
 // 'TPeople = class(TObjectList<TPerson>)' - Ableitung statt Alias. Auch hier
 // steht der besitzende Container erst in der Unit-lokalen Deklaration.
@@ -4658,7 +4793,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_AddReceiverIsUnitAliasOfTList_StillReported;
+procedure TTestMemoryLeakQuickWins.Leak_AddReceiverIsUnitAliasOfTList_StillReported;
 // TP-Gegenprobe: derselbe Alias-Mechanismus, aber auf TList - das ist KEIN
 // besitzender Container (kein OwnsObjects, kein Free auf Items). Die
 // Aufloesung darf die strikte Whitelist nicht aushebeln; der Fund bleibt.
@@ -4688,7 +4823,7 @@ end;
 
 // --- C: Try/Finally Edge Cases (7 Tests) ---
 
-procedure TTestMemoryLeakAdvanced.Leak_CreateInsideTryBeginFinally_NoFinding;
+procedure TTestMemoryLeakAliasing.Leak_CreateInsideTryBeginFinally_NoFinding;
 // Anti-Pattern: Create INNERHALB des try-Bodies. Wenn Create raised,
 // laeuft finally trotzdem - aber der spaetere Free auf nil ist no-op.
 // Wenn Create durchlief, freed finally korrekt. Statisch: Free im
@@ -4714,7 +4849,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_NestedTryFinally_BothFreed_NoFinding;
+procedure TTestMemoryLeakAliasing.Leak_NestedTryFinally_BothFreed_NoFinding;
 // Verschachtelte try/finally, beide Listen freigegeben.
 const SRC =
   'unit t; implementation'#13#10+
@@ -4743,7 +4878,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_NestedTryFinally_InnerLeaks_OneError;
+procedure TTestMemoryLeakAliasing.Leak_NestedTryFinally_InnerLeaks_OneError;
 // Verschachtelt, aber inner wird NICHT freigegeben.
 const SRC =
   'unit t; implementation'#13#10+
@@ -4769,7 +4904,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_TryExceptNoFinally_LeaksError;
+procedure TTestMemoryLeakAliasing.Leak_TryExceptNoFinally_LeaksError;
 // try/except statt try/finally - keine garantierte Cleanup. Wenn der
 // try-Body normal durchlaeuft, gibt es keinen Free.
 const SRC =
@@ -4794,7 +4929,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_MultiCreateOneFinally_AllFreed_NoFinding;
+procedure TTestMemoryLeakAliasing.Leak_MultiCreateOneFinally_AllFreed_NoFinding;
 // Drei Variablen, alle in einem finally-Block freigegeben.
 const SRC =
   'unit t; implementation'#13#10+
@@ -4821,7 +4956,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_MultiCreateOneFinally_LastNotFreed_OneError;
+procedure TTestMemoryLeakAliasing.Leak_MultiCreateOneFinally_LastNotFreed_OneError;
 // Drei Variablen, aber 'c' wird vergessen.
 const SRC =
   'unit t; implementation'#13#10+
@@ -4848,7 +4983,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_FreeAfterTryFinallyBlock_ReportsWarning;
+procedure TTestMemoryLeakAliasing.Leak_FreeAfterTryFinallyBlock_ReportsWarning;
 // Free steht NACH dem finally-Block (nicht IM finally). Andere Variablen
 // werden korrekt im finally behandelt - die hier ist ausserhalb.
 const SRC =
@@ -4878,7 +5013,7 @@ end;
 
 // --- D: Container-Ownership-Whitelist (5 Tests) ---
 
-procedure TTestMemoryLeakAdvanced.Leak_TObjectListAddTypedReceiver_OwnershipRecognized;
+procedure TTestMemoryLeakContainerOwnership.Leak_TObjectListAddTypedReceiver_OwnershipRecognized;
 // TObjectList ist ownership-aware - .Add(item) uebernimmt Lifecycle.
 // Recent fix: Receiver-Type-Lookup erkennt TObjectList-Receiver.
 const SRC =
@@ -4903,7 +5038,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_TListAddNonOwning_ReportsError;
+procedure TTestMemoryLeakContainerOwnership.Leak_TListAddNonOwning_ReportsError;
 // TList<T> ist NICHT ownership-aware - .Add(item) speichert nur die
 // Referenz. Recent fix: AddReceiverOwnsItems matched 'tlist' nicht
 // gegen die OWNING_PREFIXES-Whitelist (TObjectList/Dict/Queue/Stack).
@@ -4933,7 +5068,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_TObjectDictionaryAdd_OwnershipRecognized;
+procedure TTestMemoryLeakContainerOwnership.Leak_TObjectDictionaryAdd_OwnershipRecognized;
 // TObjectDictionary mit doOwnsValues - .Add(key, value) uebernimmt
 // Ownership des Values.
 const SRC =
@@ -4958,7 +5093,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_AddObjectMethod_OwnershipRecognized;
+procedure TTestMemoryLeakContainerOwnership.Leak_AddObjectMethod_OwnershipRecognized;
 // TStringList.AddObject(text, obj) - klassisches String+Object-Pattern.
 // Whitelisted via .addobject(-Branch in IsPassedToOwner.
 const SRC =
@@ -4983,7 +5118,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_TStackPush_OwnershipRecognized;
+procedure TTestMemoryLeakContainerOwnership.Leak_TStackPush_OwnershipRecognized;
 // TStack/TObjectStack.Push(item) als Ownership-Transfer.
 const SRC =
   'unit t; implementation'#13#10+
@@ -5320,7 +5455,7 @@ end;
 
 { --- 30%-Real-World-Audit 2026-07-31: FP-Klasse 3 (indirekte Dtor-Freigabe) - }
 
-procedure TTestFieldLeak.Field_OwnerIsSiblingFieldFreedInDestroy_NoFinding;
+procedure TTestFieldLeakOwnership.Field_OwnerIsSiblingFieldFreedInDestroy_NoFinding;
 // HeidiSQL grideditlinks.pas:130 - 'FEndTimer := TTimer.Create(FPanel)'; der
 // Owner FPanel ist ein SCHWESTER-FELD und wird im Destroy per FreeAndNil
 // freigegeben - der Component-Tree raeumt den Timer mit ab.
@@ -5353,7 +5488,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_OwnerFieldNotFreed_StillReported;
+procedure TTestFieldLeakOwnership.Field_OwnerFieldNotFreed_StillReported;
 // TP-Gegenprobe: dasselbe Muster, aber das Owner-Feld wird NICHT freigegeben.
 // Dann ist der Nachweis nicht erbracht und der Befund muss stehen bleiben.
 const SRC =
@@ -5383,7 +5518,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_FreedViaOwnHelperMethod_NoFinding;
+procedure TTestFieldLeakOwnership.Field_FreedViaOwnHelperMethod_NoFinding;
 // pyscripter JvDockVSNetStyle.pas:180 - der Destruktor ruft die Helper-Methode
 // FreeBlockList, die 'FreeAndNil(FBlocks)' macht. Eine Ebene Inlining.
 const SRC =
@@ -5417,7 +5552,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_HelperDoesNotFree_StillReported;
+procedure TTestFieldLeakOwnership.Field_HelperDoesNotFree_StillReported;
 // TP-Gegenprobe: der Destruktor ruft zwar eine eigene Helper-Methode, die
 // aber KEIN Free auf dem Feld macht -> Befund bleibt.
 const SRC =
@@ -5451,7 +5586,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_TpNoDestructorAtAll_StillReported;
+procedure TTestFieldLeakOwnership.Field_TpNoDestructorAtAll_StillReported;
 // TP aus der Audit-Liste (jvcl jvTracker.pas:68): FBackBitmap wird im Ctor
 // erzeugt, die Klasse hat GAR KEINEN Destruktor. Keines der neuen Gates darf
 // hier greifen (beide setzen einen vorhandenen Destruktor voraus).
@@ -5478,7 +5613,7 @@ end;
 
 { --- Pre-Build-Review 2026-07-31, Fund uFieldLeak.pas:333 -------------------- }
 
-procedure TTestFieldLeak.Field_ConsumerOverSiblingStream_StillReported;
+procedure TTestFieldLeakOwnership.Field_ConsumerOverSiblingStream_StillReported;
 // TP-Gegenprobe zum Schwester-Feld-Owner-Gate: TStreamReader KONSUMIERT den
 // uebergebenen Stream, er wird von ihm nicht besessen. 'FStream.Free' im
 // Destroy gibt also NUR den Stream frei - FReader leakt pro Instanz.
@@ -5513,7 +5648,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_OwnerFieldIsDataClass_StillReported;
+procedure TTestFieldLeakOwnership.Field_OwnerFieldIsDataClass_StillReported;
 // Zweite Richtung derselben Sperre: die ERZEUGTE Klasse steht nicht auf der
 // Sperrliste (TSynLogFile), aber der angebliche Owner ist ein Stream-Feld.
 // Ein Stream besitzt keinen Component-Tree und gibt beim Free nichts mit frei,
@@ -5549,7 +5684,7 @@ end;
 
 { --- Parser-Gate-Backlog 2026-07-31 (Konzept 4e/1) ------------------------- }
 
-procedure TTestFieldLeak.Field_FreedInBeforeDestruction_NoFinding;
+procedure TTestFieldLeakDtorSubstitutes.Field_FreedInBeforeDestruction_NoFinding;
 // jvcl JvInspector.pas 302/303/307/311/317/325/332/817/1057/1242/1385 und
 // JvInspExtraEditors 118/119: die Klassen raeumen ihre Felder AUSSCHLIESSLICH
 // in BeforeDestruction auf. Delphi ruft BeforeDestruction garantiert vor
@@ -5581,7 +5716,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_BeforeDestructionFreesOther_StillReported;
+procedure TTestFieldLeakDtorSubstitutes.Field_BeforeDestructionFreesOther_StillReported;
 // TP-Gegenprobe: die Klasse HAT ein BeforeDestruction, gibt darin aber ein
 // ANDERES Feld frei. Der neue Suchraum darf nicht pauschal entschaerfen.
 const SRC =
@@ -5611,7 +5746,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_OwnerChainReachesSelf_NoFinding;
+procedure TTestFieldLeakOwnership.Field_OwnerChainReachesSelf_NoFinding;
 // jvcl JvGammaPanel.pas 61/63/64: 'FGamma := TImage.Create(FPanel2)', FPanel2
 // gehoert FPanel1, FPanel1 = 'TPanel.Create(Self)'. Die Klasse hat GAR KEINEN
 // Destruktor - IsOwnedByFreedSiblingField (verlangt Dtor <> nil) kann dort
@@ -5641,7 +5776,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_OwnerChainEndsAtNil_StillReported;
+procedure TTestFieldLeakOwnership.Field_OwnerChainEndsAtNil_StillReported;
 // TP-Gegenprobe: die Kette endet bei 'nil' statt bei Self/AOwner - dann gibt
 // es keinen Component-Tree, der aufraeumt, und ohne Destruktor leakt FGamma.
 const SRC =
@@ -5666,7 +5801,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_OwnerChainOnPlainObjectClass_StillReported;
+procedure TTestFieldLeakOwnership.Field_OwnerChainOnPlainObjectClass_StillReported;
 // TP-Gegenprobe fuer Huerde H4, belegt an gexperts EII/D3/EIPanel.pas:238:
 // 'TSplitterControl = class' (direkter TObject-Nachfahre) mit
 // 'Create(ASplitControl, ATargetControl: TControl)'. Das erste Argument SIEHT
@@ -5704,7 +5839,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_OutParamReturn_NoFinding;
+procedure TTestMemoryLeakOutVarIndexed.Leak_OutParamReturn_NoFinding;
 // ACHTUNG (Konvention dieser Datei): die Fixture-Klasse MUSS in
 // DEFAULT_LEAKY_CLASSES stehen - sonst verwirft IsLeakyType sie VOR jedem
 // Gate und der Test ist wirkungslos, auch wenn er gruen leuchtet.
@@ -5732,7 +5867,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_VarParamIndexedReturn_NoFinding;
+procedure TTestMemoryLeakOutVarIndexed.Leak_VarParamIndexedReturn_NoFinding;
 // Zweite Form: Einhaengen in einen Rueckgabe-Container ueber den Index.
 const SRC =
   'unit t;'#13#10+
@@ -5757,7 +5892,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_ConstParamAssign_StillReported;
+procedure TTestMemoryLeakOutVarIndexed.Leak_ConstParamAssign_StillReported;
 // WAECHTER, der wichtigste: bei einem CONST-Parameter bleibt die Referenz
 // beim Aufgerufenen - dort WAERE es ein echtes Leck. Das Gate darf die
 // Modifier deshalb nicht ignorieren.
@@ -5784,7 +5919,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_PlainLocalAssign_StillReported;
+procedure TTestMemoryLeakOutVarIndexed.Leak_PlainLocalAssign_StillReported;
 // WAECHTER: Zuweisung an eine gewoehnliche lokale Variable ist kein
 // Ownership-Transfer.
 const SRC =
@@ -5810,7 +5945,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_IndexedForeignField_OwnershipRecognized;
+procedure TTestMemoryLeakOutVarIndexed.Leak_IndexedForeignField_OwnershipRecognized;
 // Fall (a) des Gates: die linke Seite traegt einen Punkt VOR der
 // Klammer, das Ziel liegt also in einem ANDEREN Objekt. Belegt im
 // Korpus durch die JCL-Hashmaps (4x dieselbe Form):
@@ -5843,7 +5978,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_IndexedSelfProperty_OwnershipRecognized;
+procedure TTestMemoryLeakOutVarIndexed.Leak_IndexedSelfProperty_OwnershipRecognized;
 // Fall (b): KEIN Punkt, die Wurzel ist eine indizierte Property von
 // Self (implizites Self). Entscheidend ist, dass die Wurzel NICHT als
 // Lokale oder Parameter deklariert ist - genau das trennt sie vom
@@ -5884,7 +6019,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_IndexedLocalArray_StillReported;
+procedure TTestMemoryLeakOutVarIndexed.Leak_IndexedLocalArray_StillReported;
 // WAECHTER, und der wichtigste der drei: ein LOKALES Array ist kein
 // fremder Speicher. Der Frame stirbt mitsamt dem Array, das Objekt
 // leckt. Ohne diesen Test wuerde die naechste Verallgemeinerung des
@@ -5913,7 +6048,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_IndexedNonOwningAccessor_StillReported;
+procedure TTestMemoryLeakOutVarIndexed.Leak_IndexedNonOwningAccessor_StillReported;
 // WAECHTER zum Empfaenger-Veto (2026-08-18): eine Index-Zuweisung in
 // Objects/Items/Lines/Strings/Data/Nodes ist KEIN Ownership-Transfer.
 // TStrings.Objects[] speichert nur die Referenz und gibt sie in Destroy
@@ -5950,7 +6085,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_IndexedElementProperty_StillReported;
+procedure TTestMemoryLeakOutVarIndexed.Leak_IndexedElementProperty_StillReported;
 // WAECHTER Form-Verankerung, Teil 1: die Zuweisung geht an eine PROPERTY
 // eines indizierten Elements, nicht in die Klammergruppe selbst -
 // 'Slots[I].Item := LNode' endet nicht auf ']'. Eine Property-Zuweisung
@@ -5987,7 +6122,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_IndexedElementNonOwning_StillReported;
+procedure TTestMemoryLeakOutVarIndexed.Leak_IndexedElementNonOwning_StillReported;
 // WAECHTER Form-Verankerung, Teil 2: bei einer KETTE entscheidet der
 // Empfaenger der LETZTEN Klammergruppe - hier 'Objects', der
 // kanonisch nicht-besitzende Zugang. Die erste Fassung prueft das
@@ -6017,7 +6152,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_IndexedUnqualifiedNonOwning_StillReported;
+procedure TTestMemoryLeakOutVarIndexed.Leak_IndexedUnqualifiedNonOwning_StillReported;
 // WAECHTER, den das Review als fehlend benannt hat: die UNQUALIFIZIERTE
 // Veto-Wurzel. 'Objects[K] := LNode' (implizites Self) muss gemeldet
 // bleiben - eine Fehlimplementierung, die das Veto nur im Punkt-Zweig
@@ -6051,7 +6186,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_FieldRootedIndexedNonOwning_StillReported;
+procedure TTestMemoryLeakOutVarIndexed.Leak_FieldRootedIndexedNonOwning_StillReported;
 // WAECHTER zum Feld-Transfer-Zweig: die Kette WURZELT in einem Feld
 // (FCombo), endet aber in einem kanonisch nicht-besitzenden Zugang
 // (Objects). Bis 2026-08-19 verliess der Zweig die Funktion beim
@@ -6088,7 +6223,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_BareFieldAssignment_StillExempt;
+procedure TTestMemoryLeakOutVarIndexed.Leak_BareFieldAssignment_StillExempt;
 // GEGENSTUECK: die BLANKE Feld-Zuweisung bleibt eine Abgabe. Ein Fix,
 // der den Zweig zu weit einschraenkt, wuerde hier still einen Fund
 // erzeugen - und der FieldLeakDetector meldet dieselbe Stelle dann
@@ -6123,7 +6258,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_CtorArgInAssignRhs_OwnershipRecognized;
+procedure TTestMemoryLeakContainerOwnership.Leak_CtorArgInAssignRhs_OwnershipRecognized;
 // Der Konstruktor-Zweig von IsPassedToOwner lief nur ueber nkCall-Knoten.
 // Aufrufe in einer Zuweisungs-RHS legt der Parser aber als Flachtext in
 // nkAssign.TypeRef ab - ausgerechnet die haeufigere Schreibweise war blind.
@@ -6145,7 +6280,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_CtorArgStandaloneCall_OwnershipRecognized;
+procedure TTestMemoryLeakContainerOwnership.Leak_CtorArgStandaloneCall_OwnershipRecognized;
 // Gegenstueck: dieselbe Uebergabe als FREISTEHENDER Aufruf. Lief schon
 // vorher - der Test pinnt, dass beide Schreibweisen gleich behandelt
 // werden. Genau diese Ungleichbehandlung war der Defekt.
@@ -6166,7 +6301,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_PlainCallArgInAssignRhs_StillReported;
+procedure TTestMemoryLeakContainerOwnership.Leak_PlainCallArgInAssignRhs_StillReported;
 // WAECHTER: das Gate darf NUR auf Konstruktoren ('.Create(') greifen. Ein
 // gewoehnlicher Funktionsaufruf mit unserer Variable als Argument
 // uebergibt keine Ownership - der Fund muss bleiben.
@@ -6233,7 +6368,7 @@ const
     '  list := TStringList.Create;'#13#10+
     'end;';
 
-procedure TTestMemoryLeakAdvanced.Leak_BareFileNameNoDirSegments_StillReported;
+procedure TTestMemoryLeakContainerOwnership.Leak_BareFileNameNoDirSegments_StillReported;
 // WAECHTER gegen die Regression vom 2026-08-05: das Testpfad-Gate lief
 // zuerst mit Basename-Mustern und traf damit den Harness-Platzhalter
 // 'sample.pas' (Muster '*Sample.pas'). Folge: der Detektor war im GESAMTEN
@@ -6244,7 +6379,7 @@ begin
     'blosser Dateiname ohne Verzeichnis ist kein Testpfad');
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_TestDirSegment_Suppressed;
+procedure TTestMemoryLeakContainerOwnership.Leak_TestDirSegment_Suppressed;
 // Gegenstueck: MIT Verzeichnis-Segment greift das Gate wie vorgesehen.
 begin
   Assert.AreEqual<Integer>(0,
@@ -6252,7 +6387,7 @@ begin
     'Verzeichnis-Segment tests greift');
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_CtorArgIsMemberOfVar_StillReported;
+procedure TTestMemoryLeakContainerOwnership.Leak_CtorArgIsMemberOfVar_StillReported;
 // WAECHTER, belegt am Korpus (after141): bei
 //   Ini := TIniFile.Create(Files.Strings[i]);
 // uebergibt der Aufrufer einen STRING, nicht die Liste. 'Files' behaelt
@@ -6281,7 +6416,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.FieldHandedToInterface_NotReported;
+procedure TTestFieldLeakOwnership.FieldHandedToInterface_NotReported;
 // Der Konstruktor gibt das Objekt an die Refcount ab; freigegeben wird ueber
 // das Nil-Setzen des Interface-Feldes. Ein Free im Destroy waere ein
 // Double-Free - der Fund waere also nicht nur unnoetig, sondern seine
@@ -6325,7 +6460,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.FieldNotHandedToInterface_StillReported;
+procedure TTestFieldLeakOwnership.FieldNotHandedToInterface_StillReported;
 // WAECHTER, und zugleich der Beleg, dass die Fixture oben ueberhaupt
 // meldefaehig ist: derselbe AUFBAU (Namen variiert, sonst waere es ein
 // DuplicateBlock-Fund) - nur ohne den Interface-Cast, und schon meldet er.
@@ -6358,7 +6493,7 @@ begin
 end;
 
 
-procedure TTestFieldLeak.Field_OwnerViaPath_NoFinding;
+procedure TTestFieldLeakOwnership.Field_OwnerViaPath_NoFinding;
 // Bis 2026-08-17 kannte das Gate nur sechs feste Muster und traf damit nur
 // den nackten Bezeichner: 'Create(AOwner)' ja, 'Create(AOwner.Owner)' nein.
 // Ein Owner ist aber ein Owner, egal ueber wieviele Punkte man ihn
@@ -6394,7 +6529,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_OwnerLookalikeIdent_StillReported;
+procedure TTestFieldLeakOwnership.Field_OwnerLookalikeIdent_StillReported;
 // WAECHTER gegen eine Namensheuristik: geprueft wird der WURZELBEZEICHNER
 // als GANZES, nicht ein Teilstring. 'ownerless' faengt mit 'owner' an und
 // ist trotzdem kein Owner - haette das Gate hier ein Pos() benutzt, waere
@@ -6426,7 +6561,7 @@ end;
 
 
 
-procedure TTestFieldLeak.Field_FreedViaPropertyAlias_NoFinding;
+procedure TTestFieldLeakPathGates.Field_FreedViaPropertyAlias_NoFinding;
 // 'Items.Free' gibt dasselbe Objekt frei wie 'FItems.Free' - nur ueber den
 // oeffentlichen Namen. SearchFree sucht den Feldnamen und findet nichts.
 // Belegt im Korpus (JvExplorerBar und Verwandte).
@@ -6464,7 +6599,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_FreedViaForeignName_StillReported;
+procedure TTestFieldLeakPathGates.Field_FreedViaForeignName_StillReported;
 // WAECHTER: irgendein anderer Name im Destruktor darf NICHT als Freigabe
 // durchgehen. Die Klasse deklariert hier keine Property 'Cache', also
 // greift Bedingung 2 des Gates nicht - der Leak bleibt ein Fund.
@@ -6498,7 +6633,7 @@ end;
 
 
 
-function TTestFieldLeak.FieldLeakCount(const ASrc,
+function TTestFieldLeakPathGates.FieldLeakCount(const ASrc,
   AFileName: string): Integer;
 // EIN try/finally mit nil-Vorbelegung statt drei geschachtelter
 // Bloecke - geschachtelte try-Ebenen sind im Selbstscan ein Fund, und
@@ -6525,7 +6660,7 @@ begin
   end;
 end;
 
-procedure TTestFieldLeak.Field_InFixturePath_NotReported;
+procedure TTestFieldLeakPathGates.Field_InFixturePath_NotReported;
 // Der Feld-Pfad besass bis zum 18.08. KEIN Fixture-Gate, obwohl der
 // Lokal-Pfad (TLeakDetector2.AnalyzeUnit) seit dem Restschulden-Audit
 // eines fuehrt und beide unter SCA001 melden. Am Korpus gemessen lagen
@@ -6562,7 +6697,7 @@ begin
     'Feld-Funde aus einem tests-Verzeichnis gehoeren nicht in den Bericht');
 end;
 
-procedure TTestFieldLeak.Field_InProductionPath_StillReported;
+procedure TTestFieldLeakPathGates.Field_InProductionPath_StillReported;
 // WAECHTER: derselbe Helfer, aber ein normaler Quellpfad. Haelt fest,
 // dass der Gate NUR an Testverzeichnissen greift und nicht
 // stillschweigend den ganzen Feld-Pfad abschaltet. Klassen- und
@@ -6588,7 +6723,7 @@ begin
     'ausserhalb von Testverzeichnissen muss der Feld-Pfad weiter melden');
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_AnonProcLiteral_NoFinding;
+procedure TTestMemoryLeakQuickWins.Leak_AnonProcLiteral_NoFinding;
 // Autopsie 2026-08-26 Klasse 4a (Dev-Cpp main.pas 2365/2387/7071):
 // ein anonymes Methoden-Literal ist ein refcount-verwaltetes Closure,
 // kein Objekt des Aufrufers - Free waere ein Compilefehler.
@@ -6615,7 +6750,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_RttiAsObjectChain_NoFinding;
+procedure TTestMemoryLeakQuickWins.Leak_RttiAsObjectChain_NoFinding;
 // Klasse 4b (Vcl.Styles.DPIAware:284, 12 Korpus-Funde): TRttiContext
 // ist ein Record, die AsObject-Referenz aus GetValue ist GEBORGT -
 // Free waere ein Bug im fremden Objekt.
@@ -6637,7 +6772,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_FluentCreateChain_StillReported;
+procedure TTestMemoryLeakQuickWins.Leak_FluentCreateChain_StillReported;
 // TP-Gegenprobe zu 4b: eine Fluent-Kette OHNE .AsObject besitzt ihr
 // Result - das Gate ist bewusst eng auf .asobject zugeschnitten.
 const SRC =
@@ -6657,7 +6792,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_CtorSetsFreeOnTerminate_NoFinding;
+procedure TTestMemoryLeakQuickWins.Leak_CtorSetsFreeOnTerminate_NoFinding;
 // Klasse 5 (IdDNSServer:4152, uCEFApplicationCore:3510): der Thread
 // setzt FreeOnTerminate := True im EIGENEN Ctor derselben Unit -
 // er raeumt sich selbst ab.
@@ -6689,7 +6824,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.Leak_CtorOverloadsFreeOnTerminate_StillReported;
+procedure TTestMemoryLeakQuickWins.Leak_CtorOverloadsFreeOnTerminate_StillReported;
 // Strenge-Gegenprobe: bei UEBERLADENEN Ctors ist nicht entscheidbar,
 // welcher gemeint war - kein Gate (analog Review-Blocker 2026-07-31).
 const SRC =
@@ -6723,7 +6858,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.LocalCalleeTakesOwnership_NotReported;
+procedure TTestMemoryLeakCalleeClasses.LocalCalleeTakesOwnership_NotReported;
 // KLASSE F: der Gerufene steht in DERSELBEN Unit und nimmt das Objekt
 // in einen Feld-Container. Nachgebaut nach dem Beleg aus dem
 // Referenzkorpus, CnPasCodeDoc.pas:386:
@@ -6759,7 +6894,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.LocalCalleeOnlyReads_StillReported;
+procedure TTestMemoryLeakCalleeClasses.LocalCalleeOnlyReads_StillReported;
 // TP-GEGENPROBE, und sie traegt das Gate: derselbe Aufbau, aber der
 // Gerufene LIEST nur. Genau daran ist der erste Anlauf gescheitert -
 // eine Namensliste haette "AddItem" gegatet, ohne in den Rumpf zu sehen.
@@ -6792,7 +6927,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.LocalCalleeTwoParams_StillReported;
+procedure TTestMemoryLeakCalleeClasses.LocalCalleeTwoParams_StillReported;
 // Die Grenze des Gates, absichtlich gezogen: bei mehr als EINEM
 // Parameter muesste die Argumentposition aufgeloest werden, und ein
 // Fehlgriff dort maskiert ein echtes Leck. Solange das nicht gemessen
@@ -6825,7 +6960,7 @@ begin
 end;
 
 
-procedure TTestMemoryLeakAdvanced.LocalCalleeArgCountMismatch_StillReported;
+procedure TTestMemoryLeakCalleeClasses.LocalCalleeArgCountMismatch_StillReported;
 // REGRESSION zu rw34: der Aufruf hat ZWEI Argumente, der einzige
 // gleichnamige Callee der Unit hat EINEN Parameter. Dann ist der
 // Gerufene ein anderer - hier die Add-Methode eines fremden Objekts -
@@ -6865,7 +7000,7 @@ begin
 end;
 
 
-procedure TTestMemoryLeakAdvanced.LocalCalleeForeignReceiver_StillReported;
+procedure TTestMemoryLeakCalleeClasses.LocalCalleeForeignReceiver_StillReported;
 // REGRESSION zu rw35: der Aufruf ist EINARGUMENTIG und trifft trotzdem
 // einen anderen Gerufenen - der Empfaenger gehoert einer fremden
 // Klasse. Nur der Empfaengertyp entscheidet das, die Argumentzahl
@@ -6906,7 +7041,7 @@ begin
 end;
 
 
-procedure TTestFieldLeak.Field_FreedInOnDestroyHandler_NoFinding;
+procedure TTestFieldLeakDtorSubstitutes.Field_FreedInOnDestroyHandler_NoFinding;
 // KLASSE L der SCA001-Vollzaehlung (30.08.). jcl PeViewer PeResView.pas
 // 115/119/121: TPeResViewChild hat GAR KEINEN Destruktor - der Detektor
 // meldete "created in constructor but no destructor exists" - und raeumt
@@ -6937,7 +7072,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_DestroyMethodWithoutEventSignature_StillReported;
+procedure TTestFieldLeakDtorSubstitutes.Field_DestroyMethodWithoutEventSignature_StillReported;
 // TP-Gegenprobe zu KLASSE L, und der Grund fuer die enge Fassung: eine
 // Methode, die zufaellig auf 'Destroy' endet, aber NICHT die
 // Event-Signatur (ein Parameter vom Typ TObject) traegt, laeuft nicht
@@ -6968,7 +7103,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.OwnerArgIsComponentTyped_NotReported;
+procedure TTestMemoryLeakCalleeClasses.OwnerArgIsComponentTyped_NotReported;
 // KLASSE D der SCA001-Vollzaehlung (30.08.): das Owner-Argument heisst
 // nicht Self/Owner/AOwner/Application, sein TYP ist aber ein
 // TComponent-Nachfahre - dann gilt dieselbe Owner-Konvention.
@@ -6992,7 +7127,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.OwnerArgIsNotComponentTyped_StillReported;
+procedure TTestMemoryLeakCalleeClasses.OwnerArgIsNotComponentTyped_StillReported;
 // TP-Gegenprobe zu KLASSE D, und der Grund fuer die Typpruefung statt
 // einer laengeren Namensliste: im Korpus heissen zwei Muster nach Owner
 // und uebernehmen NICHTS -
@@ -7017,7 +7152,7 @@ begin
 end;
 
 
-procedure TTestMemoryLeakAdvanced.OwnerArgComponentButCreatedIsTObject_StillReported;
+procedure TTestMemoryLeakCalleeClasses.OwnerArgComponentButCreatedIsTObject_StillReported;
 // REGRESSION zu rw38, und der zweite Fehlschluss derselben Bauart wie bei
 // Klasse F: das ARGUMENT ist eine echte Komponente, die ERZEUGTE Klasse
 // aber nicht. Die Owner-Konvention traegt nur, wenn das erzeugte Objekt
@@ -7060,7 +7195,7 @@ begin
 end;
 
 
-procedure TTestFieldLeak.Field_FreedInClassDestructor_NoFinding;
+procedure TTestFieldLeakDtorSubstitutes.Field_FreedInClassDestructor_NoFinding;
 // BESTANDSFEHLER, gefunden am 30.08. beim Nachgehen der Klasse L.
 //
 // Der Parser markiert class-Methoden mit dem TypeRef-Suffix ';class'
@@ -7105,7 +7240,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_ClassDestructorFreesOther_StillReported;
+procedure TTestFieldLeakDtorSubstitutes.Field_ClassDestructorFreesOther_StillReported;
 // TP-Gegenprobe: die Klasse HAT einen class destructor, gibt darin aber
 // ein ANDERES Feld frei. Der erweiterte Suchraum darf nicht pauschal
 // entschaerfen - dieselbe Gegenprobe wie beim BeforeDestruction-Gate.
@@ -7138,7 +7273,7 @@ begin
 end;
 
 
-procedure TTestMemoryLeakAdvanced.JsonAddPairTakesOwnership_NotReported;
+procedure TTestMemoryLeakCalleeClasses.JsonAddPairTakesOwnership_NotReported;
 // KLASSE A der SCA001-Vollzaehlung: TJSONObject.AddPair uebernimmt das
 // Kind, der JSON-Baum gibt es in seinem Destroy frei.
 //
@@ -7163,7 +7298,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.AddPairOnForeignTypeIsNoTransfer_StillReported;
+procedure TTestMemoryLeakCalleeClasses.AddPairOnForeignTypeIsNoTransfer_StillReported;
 // TP-Gegenprobe und der Grund fuer die Typbindung: der Kommentar an
 // ReceiverVetoesSink verwirft einen globalen Sink-Seed, weil RTL-Namen
 // echte Lecks maskieren. 'AddPair' allein sagt nichts - eine eigene
@@ -7191,7 +7326,7 @@ begin
 end;
 
 
-procedure TTestMemoryLeakAdvanced.JsonArrayAddTakesOwnership_NotReported;
+procedure TTestMemoryLeakCalleeClasses.JsonArrayAddTakesOwnership_NotReported;
 // KLASSE A der SCA001-Vollzaehlung: der JSON-Array BESITZT seine
 // Elemente - in System.JSON wie in fpjson gibt sein Destructor sie frei.
 //
@@ -7215,7 +7350,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMemoryLeakAdvanced.PlainListAddIsNoTransfer_StillReported;
+procedure TTestMemoryLeakCalleeClasses.PlainListAddIsNoTransfer_StillReported;
 // TP-Gegenprobe und die Grenze der Erweiterung: TList.Add uebernimmt
 // KEIN Ownership. Sie ist der haeufigste Empfaenger in dieser Gruppe
 // (7 von 29 gemessenen Add-Faellen) und muss ein Fund bleiben - sonst
@@ -7239,7 +7374,7 @@ begin
 end;
 
 
-procedure TTestMemoryLeakAdvanced.LocalCalleeStoresPropertyNotParam_StillReported;
+procedure TTestMemoryLeakCalleeClasses.LocalCalleeStoresPropertyNotParam_StillReported;
 // REGRESSION, gefunden von einer adversarialen Gegenpruefung am 31.08.:
 // der Callee legt nicht den PARAMETER ab, sondern eine EIGENSCHAFT von
 // ihm. Dann ist der Parameter selbst weiterhin herrenlos.
@@ -7285,7 +7420,7 @@ begin
 end;
 
 
-procedure TTestFieldLeak.Field_FreedInDisposeOverride_NoFinding;
+procedure TTestFieldLeakDtorSubstitutes.Field_FreedInDisposeOverride_NoFinding;
 // KLASSE J (31.08.): .NET-IDisposable-Muster. Die Klasse hat KEINEN
 // Destruktor - gemeldet wurde "created in constructor but no destructor
 // exists" - und raeumt vollstaendig in Dispose(Boolean) auf.
@@ -7322,7 +7457,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_DisposeWithoutOverride_StillReported;
+procedure TTestFieldLeakDtorSubstitutes.Field_DisposeWithoutOverride_StillReported;
 // TP-Gegenprobe 1 von 3: 'virtual' STATT 'override'. Dann gehoert die
 // Methode keinem fremden Vertrag, sondern deklariert einen eigenen -
 // gerufen wird sie nur, wenn jemand sie ruft.
@@ -7356,7 +7491,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_ClassDisposeOverride_StillReported;
+procedure TTestFieldLeakDtorSubstitutes.Field_ClassDisposeOverride_StillReported;
 // TP-Gegenprobe 2 von 3: 'class procedure ... override'. Dieser Test
 // nagelt den ;class-AUSSCHLUSS fest - Gegenprobe 1 kaeme auch ohne ihn
 // durch, weil dort schon das fehlende override greift.
@@ -7389,7 +7524,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestFieldLeak.Field_DisposeWrongSignature_StillReported;
+procedure TTestFieldLeakDtorSubstitutes.Field_DisposeWrongSignature_StillReported;
 // TP-Gegenprobe 3 von 3: 'Dispose' OHNE den Boolean-Parameter. Das ist
 // nicht die Signatur des .NET-Musters (Dispose() -> Dispose(True),
 // Finalizer -> Dispose(False)), sondern irgendeine Methode dieses
