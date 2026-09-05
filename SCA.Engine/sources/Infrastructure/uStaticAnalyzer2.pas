@@ -601,7 +601,9 @@ begin
   AddD3('MagicNumber',     fkMagicNumber,     TMagicNumberDetector.AnalyzeUnit);
   AddD3('DuplicateString', fkDuplicateString, TDuplicateStringDetector.AnalyzeUnit);
   AddD('HardcodedPath',   fkHardcodedPath,   THardcodedPathDetector.AnalyzeUnit);
-  AddD3('DebugOutput',     fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);
+  // Seit 2026-09-05 context-faehig (Scanwurzel fuers Geltungsbereich-
+  // Gate) -> volle 4-Parameter-Registrierung statt AddD3-Adapter.
+  AddD('DebugOutput',      fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);
   AddD('DeepNesting',     fkDeepNesting,     TDeepNestingDetector.AnalyzeUnit);   // TD-1: AContext-fuehrend
   AddD('TodoComment',     fkTodoComment,     TTodoCommentDetector.AnalyzeUnit, ['todo', 'fixme', 'hack', 'xxx']);
   AddD('EmptyMethod',      fkEmptyMethod,     TEmptyMethodDetector.AnalyzeUnit);   // AContext-fuehrend (Intent-Kommentar, 2026-08-01)
