@@ -2700,8 +2700,10 @@ begin
   // sieht aber nicht den Quelltext, sondern den TOKENSTROM des Lexers -
   // und nur der zaehlt. Der Lexer verwirft '{...}' samt Direktiven als
   // Kommentar (uLexer.ReadBraceComment, aufgerufen in ScanNext ohne
-  // Rueckgabe-Token) und emittiert im Default BEIDE Zweige einer
-  // bedingten Kompilierung (gLexerIfdefSkipEnabled = False, uLexer.pas).
+  // Rueckgabe-Token) und emittiert in der Doppelzweig-Sicht BEIDE
+  // Zweige einer bedingten Kompilierung (seit 05.09.2026 ist die
+  // Ein-Zweig-Sicht Request-Default; --no-ifdef-aware stellt die
+  // Doppelzweig-Sicht her, in der dieses Szenario gilt).
   // Dieselbe Lexer-Eigenschaft, auf die sich schon die Boundary-Recovery
   // in ParseBlock und ParseMethodImpl ausdruecklich beruft.
   //

@@ -213,8 +213,13 @@ type
 
 // A.5 Phase 1b-Wiring: globale Default-Konfiguration. Wird von
 // uParser2.TParser2.ParseSource gelesen und auf jeden neu erzeugten
-// Lexer angewendet. CLI-Flags (`--ifdef-aware`, `--define X`) in
-// uConsoleRunner setzen diese Variablen vor dem Scan.
+// Lexer angewendet. Gesetzt wird sie JE LAUF von uEngineApi
+// (Req.IfdefDefines); die VARIABLE startet False, aber seit dem
+// Produktentscheid vom 05.09.2026 fuellt TScanRequest.Init die
+// Defines mit der Windows-Compiler-Sicht (DefaultIfdefDefines) -
+// effektiv ist die Ein-Zweig-Sicht damit ueberall Default, die
+// Doppelzweig-Sicht Opt-out (Req.IfdefDefines := nil bzw. CLI
+// --no-ifdef-aware).
 //
 // Lazy-init: gLexerIfdefDefines wird beim ersten Add erstellt und in
 // finalization freigegeben. Thread-safe ist NICHT noetig - CLI-Args

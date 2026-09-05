@@ -123,7 +123,9 @@ type
     MaxFileBytes   : Integer;           // <= 0 -> Engine-Default (5 MB) beibehalten
     UsesCheck      : Boolean;           // teuren Unused-Uses-Detektor mitlaufen lassen
     AutoDiscover   : Boolean;           // Custom-Klassen waehrend des Scans entdecken
-    IfdefDefines   : TArray<string>;    // {$IFDEF}-aware Parsing mit diesen Defines (leer = aus)
+    IfdefDefines   : TArray<string>;    // {$IFDEF}-aware Parsing mit diesen Defines. Init setzt
+                                        // DefaultIfdefDefines (Ein-Zweig-Default seit 05.09.2026);
+                                        // leer/nil = Doppelzweig-Sicht (alle Branches parsen)
     CustomRulesPath: string;            // YAML mit Custom-Rules ('' = keine)
     BaselinePath   : string;            // Findings gegen diese Baseline-JSON filtern ('' = aus)
     WriteBaselinePath: string;          // aktuelle Findings als neue Baseline schreiben ('' = aus)
@@ -164,8 +166,19 @@ type
                                         // Im Parallel-Modus wird der Callback erst in der
                                         // Merge-Phase (auf dem Aufrufer-Thread) nachgereicht.
     // Liefert ein Request mit sinnvollen Defaults (ssRecursive, alle Detektoren,
-    // loseste Schwellen, Engine-Default-Limits).
+    // loseste Schwellen, Engine-Default-Limits; IFDEF-Ein-Zweig-Sicht
+    // mit DefaultIfdefDefines).
     class function Init: TScanRequest; static;
+    // Die vier Defines der Windows-Compiler-Sicht - seit dem
+    // Produktentscheid vom 05.09.2026 der ENGINE-Default fuer jeden
+    // Init-Request (vorher Doppelzweig-Parsing, Ein-Zweig nur opt-in).
+    // Ein Zweig ist das, was ein Delphi-Compiler real uebersetzt; das
+    // Doppelzweig-Parsing erzeugte bewiesene Phantom-Funde
+    // (uPSRuntime-SCA001-Familie, ~15k Funde Korpusbewegung, E4-Messung).
+    // Identisch mit dem Satz des frueheren selftest-quiet-Auto-Defaults
+    // und der E4-/Septembermessungen - die Messbasis bleibt vergleichbar.
+    // Doppelzweig-Sicht: IfdefDefines := nil (CLI: --no-ifdef-aware).
+    class function DefaultIfdefDefines: TArray<string>; static;
   end;
 
   // Ergebnis eines Scans. Besitzt die Findings-Liste; mit .Free freigeben
@@ -297,7 +310,7 @@ begin
   Result.MaxFileBytes    := 0;           // 0 -> Engine-Default (5 MB) belassen
   Result.UsesCheck       := False;
   Result.AutoDiscover    := False;
-  Result.IfdefDefines    := nil;
+  Result.IfdefDefines    := DefaultIfdefDefines;
   Result.CustomRulesPath := '';
   Result.BaselinePath      := '';
   Result.WriteBaselinePath := '';
@@ -311,6 +324,11 @@ begin
   Result.Parallel          := False;   // Perf Stufe 2: opt-in, Default AUS
   Result.ParallelWorkers   := 0;       // 0 = auto (ProcessorCount)
   Result.Progress        := nil;
+end;
+
+class function TScanRequest.DefaultIfdefDefines: TArray<string>;
+begin
+  Result := ['MSWINDOWS', 'WIN64', 'UNICODE', 'CONDITIONALEXPRESSIONS'];
 end;
 
 { TScanResult }
