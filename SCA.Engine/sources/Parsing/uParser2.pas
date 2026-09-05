@@ -1161,6 +1161,7 @@ var
   T          : TToken;
   FName      : string;
   FType      : string;
+  FeldNamen: TArray<string>;   // Feld-ADDS-Fix: 1..n Namen je Deklaration
   StartCount : Integer;
   // True solange wir in einer expliziten type-Sektion DIESES Klassenrumpfs
   // stehen. Nur dort erlaubt die Grammatik verschachtelte Typdeklarationen -
@@ -1518,25 +1519,54 @@ begin
         end;
       tkKwEnd :
         begin Next; Exit; end;
+      // FELD-ADDS-Fix Teil B (2026-09-05): Felder DUERFEN so heissen wie
+      // die nicht-reservierten Standard-Routinen (jvcl JvPlayList:
+      // 'Exit: TAction;'). Der Lexer tokenisiert sie als Keyword, der
+      // alte else-Zweig konsumierte sie wortlos - das Feld war
+      // unsichtbar (IsRoutineNameKeyword-Gattung, dort fuer
+      // METHODENNAMEN geloest). Sie laufen nur dann in den Feld-Pfad,
+      // wenn ':' oder ',' folgt (s. Guard unten) - ein aus einer
+      // kaputten Property geleaktes 'read'/'write' faellt zurueck ins
+      // alte Verhalten.
+      tkKwExit, tkKwResult, tkKwRead, tkKwWrite, tkKwBreak, tkKwContinue,
       tkIdent :
         begin
           // Feld-Deklaration - ODER eine Typ-/Konstantendeklaration, erkennbar
           // am '=' statt ':'. Der Lexer bietet nur 1-Token-Peek, deshalb wird
           // der Bezeichner zuerst konsumiert und danach entschieden.
           FName := Next.Value;
+          if (T.Kind <> tkIdent) and
+             (Tok.Kind <> tkColon) and (Tok.Kind <> tkComma) then
+            Continue;   // Keyword ohne Deklarationsform: wie frueher (1 Token)
           SkipGenericParams;          // TInner<T> = class ...
           if Eat(tkEq) then
           begin
             ParseNestedTypeDecl(FName, T);
             Continue;
           end;
-          if Eat(tkComma) then
+          // FELD-ADDS-Fix Teil A (2026-09-05): 'a, b, c: T;' legte
+          // frueher KEIN einziges Feld an (SkipToSemicolon) - jeder
+          // AST-Walk war fuer Komma-Felder blind (korpusweit 3.928
+          // Namen; Beleg-Folge: uFieldLeak uebersah ctor-erzeugte,
+          // nie befreite Listen wie HeidiSQL grideditlinks
+          // DisplayList). Jetzt: Namen einsammeln, der GEMEINSAME
+          // Type-Walk unten laeuft genau einmal, je Name ein nkField
+          // mit geteiltem TypeRef. Bricht die Liste irregulaer ab
+          // (kein Ident nach ','), bleibt das alte Skip-Verhalten.
+          FeldNamen := nil;
+          FeldNamen := FeldNamen + [FName];
+          while Eat(tkComma) do
           begin
-            // mehrere Felder in einer Zeile — einfach überspringen
-            SkipToSemicolon;
-            Eat(tkSemicolon);
-            Continue;
+            if Tok.Kind <> tkIdent then
+            begin
+              SkipToSemicolon;
+              Eat(tkSemicolon);
+              FeldNamen := nil;
+              Break;
+            end;
+            FeldNamen := FeldNamen + [Next.Value];
           end;
+          if FeldNamen = nil then Continue;
           // PHANTOM-nkFIELD-FIXES (Vollzaehlung+Proben 2026-09-05; die
           // Vertragszahlen stehen in vertrag_rw66.md der Charge 9):
           //
@@ -1603,7 +1633,8 @@ begin
               FType := FType + Tok.Value;
               Next;
             end;
-          VisNode.Add(nkField, FName, T.Line, T.Col).TypeRef := FType;
+          for var FeldN in FeldNamen do
+            VisNode.Add(nkField, FeldN, T.Line, T.Col).TypeRef := FType;
           Eat(tkSemicolon);
           // (P1) Der Type-Walk oben stoppt am ERSTEN ';' - bei einem
           // prozeduralen Feldtyp ('FP: function(a: X; b: Y): Z; cdecl;')

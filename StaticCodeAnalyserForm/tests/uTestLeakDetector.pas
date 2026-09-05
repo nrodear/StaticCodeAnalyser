@@ -349,6 +349,12 @@ type
   public
     [Test] procedure Field_CreatedAndFreed_NoFinding;
     [Test] procedure Field_CreatedNotFreed_ReportsError;
+    // Feld-ADDS (Charge 10): Komma-deklarierte Felder waren fuer den
+    // Field-Leak-Pfad unsichtbar (Exe-Probe: das Paar blieb stumm,
+    // das Einzelfeld feuerte). Beleg HeidiSQL grideditlinks
+    // 'ValueList, DisplayList: TStringList' - DisplayList leckte
+    // unsichtbar.
+    [Test] procedure Field_CommaDeclaredPair_BothLeaksReported;
     [Test] procedure Field_CreatedFreedViaFreeAndNil_NoFinding;
     [Test] procedure Field_NoDestructor_ReportsError;
     [Test] procedure Field_NotCreatedInCreate_NoFinding;
@@ -7410,6 +7416,37 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
     'ohne Boolean-Parameter ist es nicht das IDisposable-Muster');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_CommaDeclaredPair_BothLeaksReported;
+// Beide Komma-Felder werden im Ctor erzeugt und nie befreit - vor dem
+// Komma-Fix existierten ihre nkFields nicht und der Detektor war
+// blind (Exe-Probe 05.09.: 0 Funde auf exakt dieser Form).
+const SRC =
+  'unit t; interface'#13#10+
+  'type TPaar = class'#13#10+
+  '  FEins, FZwei: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TPaar.Create;'#13#10+
+  'begin'#13#10+
+  '  FEins := TStringList.Create;'#13#10+
+  '  FZwei := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'destructor TPaar.Destroy;'#13#10+
+  'begin'#13#10+
+  '  inherited;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(2, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'beide Komma-Felder lecken - zwei Funde');
   finally F.Free; end;
 end;
 
