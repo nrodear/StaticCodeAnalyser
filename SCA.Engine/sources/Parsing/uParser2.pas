@@ -1537,7 +1537,41 @@ begin
             Eat(tkSemicolon);
             Continue;
           end;
+          // PHANTOM-nkFIELD-FIXES (Vollzaehlung+Proben 2026-09-05; die
+          // Vertragszahlen stehen in vertrag_rw66.md der Charge 9):
+          //
+          // (P4a) 'message WM_X;' / 'dispid 3;' hinter einer Methode:
+          // ParseMethodDirectives kennt das ZWEITEILIGE Format nicht,
+          // beide Tokens leakten hierher und wurden nkFields ('message'
+          // ist mit 3.450 Phantomen die groesste Klasse im Korpus).
+          // Ein ECHTES Feld 'message: string;' traegt einen
+          // Doppelpunkt und nimmt weiter den Feld-Pfad unten.
+          // Consume-and-discard: bewusst KEINE TypeRef-Anreicherung
+          // der Methode (die waere eine eigene Bewegung fuer
+          // SCA135-Familie und ist als Folgepaket notiert).
+          // ('='/',' sind an dieser Stelle schon per Eat konsumiert worden,
+          // wenn sie da waren - hier zaehlen nur noch ':' und ';'.)
+          if (SameText(FName, 'message') or SameText(FName, 'dispid')) and
+             (Tok.Kind <> tkColon) and (Tok.Kind <> tkSemicolon) then
+          begin
+            SkipToSemicolon;
+            Eat(tkSemicolon);
+            Continue;
+          end;
+          //
+          // (P2/P3/P4b) NACKTER Ident direkt vor ';' - das ist nie eine
+          // gueltige Deklaration (Felder brauchen ':<Typ>'), sondern
+          // immer eine geleakte Direktive: 'default;' hinter einer
+          // Array-Property (109 Phantome), 'dynamic;'/'final;' hinter
+          // Methoden (2.279/2), Calling-Conventions hinter
+          // prozeduralen Feldtypen ('cdecl;' 20). Kein Knoten.
+          if Tok.Kind = tkSemicolon then
+          begin
+            Eat(tkSemicolon);
+            Continue;
+          end;
           FType := '';
+          var FeldParenTiefe := 0;
           if Eat(tkColon) then
             while not (Tok.Kind in [tkSemicolon, tkKwEnd, tkEof]) do
             begin
@@ -1564,11 +1598,42 @@ begin
                 end;
                 Continue;
               end;
+              if Tok.Kind = tkLParen then Inc(FeldParenTiefe)
+              else if Tok.Kind = tkRParen then Dec(FeldParenTiefe);
               FType := FType + Tok.Value;
               Next;
             end;
           VisNode.Add(nkField, FName, T.Line, T.Col).TypeRef := FType;
           Eat(tkSemicolon);
+          // (P1) Der Type-Walk oben stoppt am ERSTEN ';' - bei einem
+          // prozeduralen Feldtyp ('FP: function(a: X; b: Y): Z; cdecl;')
+          // liegt das MITTEN in der Parameterliste. Frueher liefen die
+          // Resttoken neu durch diesen Zweig und wurden Phantom-nkFields
+          // (TALFBXBaseLibrary: 740 gemeldete Felder bei 155 echten).
+          // Jetzt: Rest der Klammergruppe verwerfen, dann bis zum
+          // naechsten ';' (das '): Z;'-Ende). Die TypeRef des ECHTEN
+          // Felds bleibt byteidentisch abgeschnitten wie bisher -
+          // Anreicherung waere uFieldLeak-/SCA103-Bewegung und ist als
+          // Folgepaket notiert. Nachlaufende Conventions ('cdecl;')
+          // faengt der Nackter-Ident-Guard oben in der Folgeiteration.
+          if FeldParenTiefe > 0 then
+          begin
+            // tkKwEnd stoppt auch hier: der Walk oben kann an einem
+            // Klassen-'end' stehen geblieben sein (unbalancierte Quelle)
+            // - das gehoert dem Aussen-Loop, nicht diesem Verwerfer.
+            while (FeldParenTiefe > 0) and
+                  not (Tok.Kind in [tkEof, tkKwEnd]) do
+            begin
+              if Tok.Kind = tkLParen then Inc(FeldParenTiefe)
+              else if Tok.Kind = tkRParen then Dec(FeldParenTiefe);
+              Next;
+            end;
+            if Tok.Kind <> tkKwEnd then
+            begin
+              SkipToSemicolon;
+              Eat(tkSemicolon);
+            end;
+          end;
         end;
     else
       Next;
