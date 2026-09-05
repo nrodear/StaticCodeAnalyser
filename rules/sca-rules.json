@@ -1431,7 +1431,7 @@
       "kind": "CommentedOutCode",
       "name": "Commented-out code",
       "shortDescription": "Comment looks like Pascal code - delete or document",
-      "fullDescription": "Heuristic: comment content with 2+ code-style markers (trailing `;`, `:=`, keywords `begin`/`end`/`procedure`/`function`/`if`/`then`/`for`/`while`) is almost certainly commented-out code. Such code rots silently: nobody dares delete it, nobody updates it. Either remove it, or replace with a TODO that explains the intent. Matches SonarDelphi communitydelphi:CommentedOutCode.",
+      "fullDescription": "Heuristic: comment content with 2+ code-style markers (trailing `;`, `:=`, keywords `begin`/`end`/`procedure`/`function`/`if`/`then`/`for`/`while`) is almost certainly commented-out code. Such code rots silently: nobody dares delete it, nobody updates it. Either remove it, or replace with a TODO that explains the intent. Adjacent flagged lines are reported as ONE finding spanning the block (endLine marks the span; granularity decision 2026-09-05); a single flagged line keeps the per-line message. Matches SonarDelphi communitydelphi:CommentedOutCode.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["maintenance", "dead-code"],

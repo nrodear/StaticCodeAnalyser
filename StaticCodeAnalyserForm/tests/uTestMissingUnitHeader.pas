@@ -17,13 +17,20 @@ type
     // unit-Klausel gehalten (pyscripter-Kopfvorlage).
     [Test] procedure CommentLineStartingWithUnit_FindingOnRealDecl;
     [Test] procedure ReallyNoHeader_StillReported;
+    // --- Geltungsbereich-Gate (Produktentscheidung 2026-09-05) ---
+    // Direkte Aufrufe mit ECHTEN Temp-Dateien, weil der Harness-
+    // Platzhalterpfad keine Testsegmente traegt: /tests/ wird
+    // uebersprungen, /src/ meldet weiter.
+    [Test] procedure UnitInTestsDir_NotReported;
+    [Test] procedure UnitInSrcDir_StillReported;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.Generics.Collections,
-  uSCAConsts, uMethodd12,
+  System.SysUtils, System.Classes, System.IOUtils,
+  System.Generics.Collections,
+  uSCAConsts, uMethodd12, uAstNode, uParser2, uMissingUnitHeader,
   uTestFindingHelper;
 
 procedure TTestMissingUnitHeader.NoHeader_Reported;
@@ -137,6 +144,67 @@ begin
     Assert.IsNotNull(Hit, 'fkMissingUnitHeader finding expected');
     Assert.AreEqual(lsHint, Hit.Severity);
   finally F.Free; end;
+end;
+
+procedure TTestMissingUnitHeader.UnitInTestsDir_NotReported;
+// Gate-Probe mit echter Datei unter einem 'tests'-Segment. AContext =
+// nil -> Scanwurzel '' -> dokumentiertes Alt-Verhalten (Segmente im
+// GANZEN Pfad zaehlen) - genau dadurch ist das Gate hier testbar.
+var
+  Dir, Pfad : string;
+  SL  : TStringList;
+  F   : TObjectList<TLeakFinding>;
+  Root: TAstNode;
+  P   : TParser2;
+begin
+  Dir := TPath.Combine(TPath.GetTempPath, 'sca143_gate' + PathDelim + 'tests');
+  ForceDirectories(Dir);
+  Pfad := TPath.Combine(Dir, 'kopflos_a.pas');
+  SL := TStringList.Create;
+  try
+    SL.Text := 'unit kopflos_a;'#13#10'interface'#13#10'implementation'#13#10'end.';
+    SL.SaveToFile(Pfad, TEncoding.UTF8);
+  finally SL.Free; end;
+  F := TObjectList<TLeakFinding>.Create(True);
+  P := TParser2.Create;
+  try
+    Root := P.ParseFile(Pfad);
+    try
+      TMissingUnitHeaderDetector.AnalyzeUnit(Root, Pfad, F);
+      Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingUnitHeader),
+        'Testpfad-Segment /tests/ wird uebersprungen');
+    finally Root.Free; end;
+  finally P.Free; F.Free; end;
+end;
+
+procedure TTestMissingUnitHeader.UnitInSrcDir_StillReported;
+// GEGENPROBE: identischer Inhalt unter /src/ meldet weiter - das Gate
+// greift nur an den tplFixtureDir-Segmenten.
+var
+  Dir, Pfad : string;
+  SL  : TStringList;
+  F   : TObjectList<TLeakFinding>;
+  Root: TAstNode;
+  P   : TParser2;
+begin
+  Dir := TPath.Combine(TPath.GetTempPath, 'sca143_gate' + PathDelim + 'src');
+  ForceDirectories(Dir);
+  Pfad := TPath.Combine(Dir, 'kopflos_b.pas');
+  SL := TStringList.Create;
+  try
+    SL.Text := 'unit kopflos_b;'#13#10'interface'#13#10'implementation'#13#10'end.';
+    SL.SaveToFile(Pfad, TEncoding.UTF8);
+  finally SL.Free; end;
+  F := TObjectList<TLeakFinding>.Create(True);
+  P := TParser2.Create;
+  try
+    Root := P.ParseFile(Pfad);
+    try
+      TMissingUnitHeaderDetector.AnalyzeUnit(Root, Pfad, F);
+      Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMissingUnitHeader),
+        'ausserhalb der Testsegmente meldet SCA143 weiter');
+    finally Root.Free; end;
+  finally P.Free; F.Free; end;
 end;
 
 initialization

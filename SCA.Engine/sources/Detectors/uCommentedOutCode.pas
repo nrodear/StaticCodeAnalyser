@@ -912,6 +912,36 @@ var
   // Korpuszahlen steht an FindCommentedOutCode.
   ParenStar: TParenStarLage;
   Cached   : Boolean;
+  // Region-Sammler (s. Kommentar in der Schleife). RegStart = 0
+  // heisst: keine offene Region.
+  RegStart : Integer;
+  RegEnd   : Integer;
+  RegCol   : Integer;
+
+  procedure FlushRegion;
+  var
+    F : TLeakFinding;
+  begin
+    if RegStart = 0 then Exit;
+    if RegEnd = RegStart then
+      // Einzeiler: WOERTLICH die alte Meldung - Identitaet bleibt.
+      Results.Add(TLeakFinding.New(FileName, '', RegStart,
+        Format('Comment at column %d looks like commented-out code - ' +
+               'delete or extract into a TODO if still relevant.', [RegCol]),
+        fkCommentedOutCode))
+    else
+    begin
+      F := TLeakFinding.New(FileName, '', RegStart,
+        Format('Commented-out code block of %d lines starting at column %d - ' +
+               'delete or extract into a TODO if still relevant.',
+               [RegEnd - RegStart + 1, RegCol]),
+        fkCommentedOutCode);
+      F.EndLine := RegEnd;
+      Results.Add(F);
+    end;
+    RegStart := 0;
+  end;
+
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
@@ -919,6 +949,7 @@ begin
     InBlk      := False;
     ParenStar.Offen        := False;
     ParenStar.IstDirektive := False;
+    RegStart := 0; RegEnd := 0; RegCol := 0;
     for i := 0 to Lines.Count - 1 do
     begin
       Col := FindCommentedOutCode(Lines[i], InBlk, ParenStar);
@@ -943,11 +974,29 @@ begin
       // FP-Schutz 3 (Audit 2026-07-31): Adapter-Doku-Header - der Kommentar
       // dokumentiert die Signatur der Routine, die direkt darunter steht.
       if IsAdapterDocHeader(Lines, i) then Continue;
-      Results.Add(TLeakFinding.New(FileName, '', i + 1,
-        Format('Comment at column %d looks like commented-out code - ' +
-               'delete or extract into a TODO if still relevant.', [Col]),
-        fkCommentedOutCode));
+      // Region-Granularitaet (Produktentscheidung Nico 2026-09-05):
+      // direkt aufeinanderfolgende gemeldete Zeilen bilden EINEN Fund.
+      // Luecke 0 ist die strengste Lesart von "zusammenhaengend" -
+      // eine luecken-tolerante Bildung wuerde ungemeldete Prosa- oder
+      // Leerkommentarzeilen mit beanspruchen. Einzeiler behalten
+      // WOERTLICH die alte Meldung (77 % der Regionen, rw63: 7.964
+      // von 10.317) - deren Fund-Identitaet und Baselines bleiben
+      // stehen; nur Mehrzeilen-Bloecke wechseln auf die Block-Meldung
+      // mit endLine-Spanne. Anker = erste Blockzeile, Spalte = deren
+      // Spalte. Suppression wirkt damit am ANKER fuer den ganzen
+      // Block; ein Marker auf einer Folgezeile unterdrueckt nicht
+      // mehr einzeln (dokumentierte Folge der Entscheidung).
+      if (RegStart > 0) and (i + 1 = RegEnd + 1) then
+        RegEnd := i + 1
+      else
+      begin
+        FlushRegion;
+        RegStart := i + 1;
+        RegEnd   := i + 1;
+        RegCol   := Col;
+      end;
     end;
+    FlushRegion;
   finally
     ReleaseLines(Lines, Cached);
   end;
