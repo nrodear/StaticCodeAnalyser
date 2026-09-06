@@ -253,12 +253,23 @@ begin
     'Langbeschreibung fehlt im Drawer-Template');
   Assert.IsTrue(Pos('Vorher (problematisch)', FHtml) > 0,
     'Vorher-Kartentitel fehlt');
-  Assert.IsTrue(Pos('<pre>' + E(Meta.BadExample) + '</pre>', FHtml) > 0,
-    'Vorher-Beispielcode fehlt');
+  // #10#10 vor </pre>: die zwei Leerzeilen Anzeige-Luft
+  // (Nutzerwunsch 07.09.) - data-copy traegt den reinen Code.
+  Assert.IsTrue(Pos('<pre>' + E(Meta.BadExample) + #10#10 + '</pre>',
+    FHtml) > 0, 'Vorher-Beispielcode (mit Leerzeilen-Luft) fehlt');
   Assert.IsTrue(Pos('Nachher (empfohlen)', FHtml) > 0,
     'Nachher-Kartentitel fehlt');
-  Assert.IsTrue(Pos('<pre>' + E(Meta.GoodExample) + '</pre>', FHtml) > 0,
-    'Nachher-Beispielcode fehlt');
+  Assert.IsTrue(Pos('<pre>' + E(Meta.GoodExample) + #10#10 + '</pre>',
+    FHtml) > 0, 'Nachher-Beispielcode (mit Leerzeilen-Luft) fehlt');
+  Assert.IsTrue(Pos('data-copy="' + E(Meta.BadExample) + '"', FHtml) > 0,
+    'data-copy muss den REINEN Code ohne die Anzeige-Luft tragen');
+  // Untereinander: erst schlecht, dann gut, als Spalten-Stapel.
+  Assert.IsTrue(Pos('.codekarten{display:flex;flex-direction:column',
+    FHtml) > 0, 'Codekarten muessen untereinander stehen');
+  Assert.IsTrue(
+    Pos('class="codekarte schlecht"', FHtml) <
+    Pos('class="codekarte gut"', FHtml),
+    'die schlechte Karte steht vor der guten');
   Assert.IsTrue(Pos('<span class="chip cwe">' + E(Meta.CWE[0]) + '</span>',
     FHtml) > 0, 'CWE-Chip fehlt in der Meta-Zeile');
   Assert.IsTrue(Pos('<pre>' + E(Meta.ConfigKey) + '</pre>', FHtml) > 0,

@@ -290,8 +290,12 @@ begin
       + 'cursor:pointer;font-size:1em;padding:2px 9px;}');
     SB.AppendLine('.drawer-status{margin:6px 0 4px 0;display:flex;'
       + 'gap:6px;flex-wrap:wrap;}');
-    SB.AppendLine('.codekarten{display:flex;gap:10px;flex-wrap:wrap;}');
-    SB.AppendLine('.codekarte{flex:1 1 240px;border:1px solid '
+    // Untereinander statt nebeneinander (Nutzerwunsch 07.09., wie die
+    // Hint-Zeile des Findings-Reports): erst die schlechte, darunter
+    // die gute Karte - volle Drawer-Breite statt gequetschter Spalten.
+    SB.AppendLine('.codekarten{display:flex;flex-direction:column;'
+      + 'gap:10px;}');
+    SB.AppendLine('.codekarte{border:1px solid '
       + 'var(--rand);border-radius:8px;overflow:hidden;}');
     SB.AppendLine('.codekarte .karte-titel{display:flex;'
       + 'justify-content:space-between;align-items:center;'
@@ -726,19 +730,22 @@ begin
     if (R.Meta.BadExample <> '') or (R.Meta.GoodExample <> '') then
     begin
       SB.AppendLine('<div class="codekarten">');
+      // #10#10 vor </pre>: zwei Leerzeilen Luft am Blockende - derselbe
+      // Nutzerwunsch wie in der Hint-Zeile des Findings-Reports
+      // (data-copy bleibt der REINE Code, die Luft ist nur Anzeige).
       if R.Meta.BadExample <> '' then
         SB.AppendLine(Format('<div class="codekarte schlecht" '
           + 'data-copy="%s"><div class="karte-titel">Vorher '
           + '(problematisch)<button class="copy" '
           + 'onclick="kopiere(this)">Kopieren</button></div><pre>%s'
-          + '</pre></div>',
+          + #10#10'</pre></div>',
           [H(R.Meta.BadExample), H(R.Meta.BadExample)]));
       if R.Meta.GoodExample <> '' then
         SB.AppendLine(Format('<div class="codekarte gut" '
           + 'data-copy="%s"><div class="karte-titel">Nachher '
           + '(empfohlen)<button class="copy" '
           + 'onclick="kopiere(this)">Kopieren</button></div><pre>%s'
-          + '</pre></div>',
+          + #10#10'</pre></div>',
           [H(R.Meta.GoodExample), H(R.Meta.GoodExample)]));
       SB.AppendLine('</div>');
     end;
