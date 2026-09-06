@@ -193,7 +193,25 @@ type
     // Trefferzahl fuer ein Combo-Tag: Kind-Tags zaehlen per Kind,
     // Mode-Tags delegieren an CountForMode, Separatoren (-1) -> 0.
     class function CountForTag(AFindings: TList<TLeakFinding>;
-      ATag: Integer): Integer; static;
+      ATag: Integer): Integer; overload; static;
+    // Dasselbe UNTER einer Type-Sicht - Zaehlbasis der Kreuz-Reduktion
+    // (Nutzerentscheid 2026-09-06: ein Eintrag ohne Funde in der
+    // aktuellen Sicht ist nicht waehlbar). Zaehlt ueber Matches, damit
+    // Gruppen- und Kind-Tags exakt so zaehlen, wie das Grid filtert.
+    class function CountForTag(AFindings: TList<TLeakFinding>;
+      ATag: Integer; AType: TTypeFilter): Integer; overload; static;
+    // Reduziert den Severity-Katalog auf Eintraege mit > 0 Treffern
+    // unter der Type-Sicht. 'All' und 'Detector Review' bleiben immer;
+    // Trenner nur mit mindestens einem folgenden Detail-Eintrag
+    // (Orphan-Pass - vorher nur im Plugin, die EXE warf ALLE Trenner
+    // weg und verlor die Sektions-Struktur). EIN Durchlauf ueber die
+    // Fundliste statt einem je Katalog-Eintrag: der Katalog traegt
+    // ~200 Eintraege, die Fundliste ist sechsstellig, und die
+    // Reduktion laeuft seit 2026-09-06 bei jedem Type-Wechsel.
+    class function ReduceSeverityItems(
+      const AAll: TArray<TFilterComboItem>;
+      AFindings: TList<TLeakFinding>;
+      AType: TTypeFilter): TArray<TFilterComboItem>; static;
     class procedure AppendKindFilterItems(Items: TStrings); static;
     class function CountForMode(AFindings: TList<TLeakFinding>;
       AMode: TFilterMode): Integer; static;
@@ -806,6 +824,118 @@ begin
   end
   else if ATag >= 0 then
     Result := CountForMode(AFindings, TFilterMode(ATag));
+end;
+
+class function TFindingFilter.CountForTag(AFindings: TList<TLeakFinding>;
+  ATag: Integer; AType: TTypeFilter): Integer;
+var
+  C : TFindingFilterCriteria;
+  K : TFindingKind;
+  F : TLeakFinding;
+begin
+  Result := 0;
+  if AFindings = nil then Exit;
+  if ATag < 0 then Exit;                    // Separatoren zaehlen 0
+  C := Default(TFindingFilterCriteria);
+  if KindFromTag(ATag, K) then
+  begin
+    C.Mode       := fmSingleKind;
+    C.SingleKind := K;
+  end
+  else
+  begin
+    C.Mode := TFilterMode(ATag);
+  end;
+  C.TypeFilter := AType;
+  for F in AFindings do
+    if Matches(F, C) then Inc(Result);
+end;
+
+class function TFindingFilter.ReduceSeverityItems(
+  const AAll: TArray<TFilterComboItem>; AFindings: TList<TLeakFinding>;
+  AType: TTypeFilter): TArray<TFilterComboItem>;
+var
+  KindHit : array[TFindingKind] of Boolean;
+  ErrHit, WarnHit, HintHit : Boolean;
+  CErr, CWarn, CHint, CKind : TFindingFilterCriteria;
+  F    : TLeakFinding;
+  Tmp  : TList<TFilterComboItem>;
+  Item : TFilterComboItem;
+  i, n : Integer;
+
+  function TagHasHits(ATag: Integer): Boolean;
+  var
+    LK : TFindingKind;
+  begin
+    if KindFromTag(ATag, LK) then
+      Result := KindHit[LK]
+    else if ATag = Ord(fmErrors) then
+      Result := ErrHit
+    else if ATag = Ord(fmWarnings) then
+      Result := WarnHit
+    else if ATag = Ord(fmHints) then
+      Result := HintHit
+    else
+      // Katalog-fremder Mode-Tag (die Hand-Listen sind seit 2026-07-24
+      // ausgebaut - defensiv fuer alte Profile/Direktaufrufer): einzeln
+      // zaehlen statt falsch tilgen.
+      Result := CountForTag(AFindings, ATag, AType) > 0;
+  end;
+
+begin
+  SetLength(Result, 0);
+  FillChar(KindHit, SizeOf(KindHit), 0);
+  ErrHit  := False;
+  WarnHit := False;
+  HintHit := False;
+
+  CErr := Default(TFindingFilterCriteria);
+  CErr.Mode := fmErrors;   CErr.TypeFilter := AType;
+  CWarn := CErr; CWarn.Mode := fmWarnings;
+  CHint := CErr; CHint.Mode := fmHints;
+  CKind := CErr; CKind.Mode := fmSingleKind;
+
+  if AFindings <> nil then
+  begin
+    for F in AFindings do
+    begin
+      if not ErrHit  then ErrHit  := Matches(F, CErr);
+      if not WarnHit then WarnHit := Matches(F, CWarn);
+      if not HintHit then HintHit := Matches(F, CHint);
+      if not KindHit[F.Kind] then
+      begin
+        CKind.SingleKind := F.Kind;
+        KindHit[F.Kind] := Matches(F, CKind);
+      end;
+    end;
+  end;
+
+  Tmp := TList<TFilterComboItem>.Create;
+  try
+    for Item in AAll do
+    begin
+      if (Item.ModeOrd = -1)                 // Trenner: vorlaeufig behalten
+         or (Item.ModeOrd = Ord(fmAll))
+         or (Item.ModeOrd = Ord(fmDetectorReview))
+         or TagHasHits(Item.ModeOrd) then
+        Tmp.Add(Item);
+    end;
+    // Pass 2: verwaiste Trenner entfernen (Trenner gefolgt von Trenner
+    // oder am Listenende - '--- Errors ---' ohne Eintraege darunter).
+    n := 0;
+    SetLength(Result, Tmp.Count);
+    for i := 0 to Tmp.Count - 1 do
+    begin
+      if (Tmp[i].ModeOrd = -1)
+         and ((i = Tmp.Count - 1) or (Tmp[i + 1].ModeOrd = -1)) then
+        Continue;
+      Result[n] := Tmp[i];
+      Inc(n);
+    end;
+    SetLength(Result, n);
+  finally
+    Tmp.Free;
+  end;
 end;
 
 class procedure TFindingFilter.AppendKindFilterItems(Items: TStrings);

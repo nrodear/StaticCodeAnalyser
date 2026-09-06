@@ -70,6 +70,7 @@ uses
   uTestEmptyMethod in 'uTestEmptyMethod.pas',
   uTestDuplicate in 'uTestDuplicate.pas',
   uTestFuzzyComboSearch in 'uTestFuzzyComboSearch.pas',
+  uTestFilterComboReduce in 'uTestFilterComboReduce.pas',
   uTestDebugOutput in 'uTestDebugOutput.pas',
   uTestTodoComment in 'uTestTodoComment.pas',
   uTestCodeMetrics in 'uTestCodeMetrics.pas',
