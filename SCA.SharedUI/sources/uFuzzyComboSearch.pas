@@ -645,6 +645,27 @@ begin
   if FUpdating then Exit;
   if not Assigned(FCombo) then Exit;
 
+  // AUSWAHL-ECHO, kein Tippen (Bugfix 06.09.2026): Windows sendet bei
+  // einer MAUS-Auswahl CBN_CLOSEUP VOR CBN_SELCHANGE - der Commit
+  // stoppt den Timer also BEVOR das EN_CHANGE des Text-Updates hier
+  // eintrifft und ihn wieder armiert. Der spaeter feuernde Timer
+  // reduzierte dann die Liste STILL per Fuzzy auf den vollen
+  // Anzeigetext der Auswahl; das naechste Dropdown zeigte fast nur
+  // noch den gewaehlten Eintrag, dessen Wieder-Auswahl das Tag-Gate
+  // schluckte - "Dropdown aktualisiert das Grid nicht mehr, sobald
+  // einmal gewaehlt wurde" (beide Oberflaechen, gemeldet von Nico).
+  // Erkennung bewusst ENG: der Text entspricht EXAKT dem Display des
+  // aktuell selektierten Eintrags - wer von Hand den vollen Text eines
+  // ANDEREN Eintrags tippt, filtert weiterhin.
+  if (FCombo.ItemIndex >= 0) and (FCombo.ItemIndex < FCombo.Items.Count)
+     and SameText(FCombo.Text, FCombo.Items[FCombo.ItemIndex]) then
+  begin
+    FPending := '';
+    FIsFiltering := False;
+    FTimer.Enabled := False;
+    Exit;
+  end;
+
   FPending := FCombo.Text;
   FIsFiltering := FPending <> '';
   FTimer.Enabled := False;
@@ -706,6 +727,13 @@ begin
     Exit;                       // nichts gewaehlt -> nichts zu melden
   end;
   FHasPending := False;
+
+  // Sektions-Trenner sind keine Auswahl: ein Commit auf SEPARATOR_TAG
+  // wuerde FCommitted auf -1 setzen und den Host mit einem
+  // unwaehlbaren Eintrag benachrichtigen (Robustheits-Gate, Bugfix
+  // 06.09.2026 - der EXE-Host hat anders als das Plugin keinen
+  // eigenen Separator-Sprung).
+  if Tag = SEPARATOR_TAG then Exit;
 
   if Tag = FCommitted then Exit;
   FCommitted := Tag;
