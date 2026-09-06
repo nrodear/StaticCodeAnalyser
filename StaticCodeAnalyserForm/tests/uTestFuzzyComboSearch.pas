@@ -1,4 +1,4 @@
-unit uTestFuzzyComboSearch;
+﻿unit uTestFuzzyComboSearch;
 
 // Tests fuer uFuzzyComboSearch (SCA.SharedUI).
 //
@@ -55,6 +55,15 @@ type
     [Test] procedure Resync_ReselectingPreviousEntry_NotifiesAgain;
     [Test] procedure Resync_TakesCurrentSelectionAsCommitted;
     [Test] procedure NoteHostSelection_AlignsCommitGateWithDisplay;
+    // Bugfix 06.09.2026 (Nico-Meldung, beide Oberflaechen): bei
+    // MAUS-Auswahl sendet Windows CLOSEUP VOR SELCHANGE; das danach
+    // eintreffende EN_CHANGE-Echo des Text-Updates armierte den
+    // Entprell-Timer neu und die Fuzzy-Reduktion fror die Liste auf
+    // den gewaehlten Eintrag ein - jede weitere Auswahl war tot.
+    [Test] procedure MouseOrder_EditEcho_DoesNotShrinkList;
+    [Test] procedure MouseOrder_SecondSelection_NotifiesAgain;
+    [Test] procedure TypedFullTextOfOtherEntry_StillFilters;
+    [Test] procedure SeparatorCommit_DoesNotNotifyHost;
   end;
 
 implementation
@@ -355,6 +364,74 @@ begin
   SendNotify(CBN_CLOSEUP);
   Assert.AreEqual<Integer>(0, FChangeCount,
     'Zuklappen auf der nach dem Umbau angezeigten Auswahl meldet nicht');
+end;
+
+procedure TTestFuzzyComboEvents.MouseOrder_EditEcho_DoesNotShrinkList;
+// Exakte Maus-Reihenfolge: CLOSEUP -> SELCHANGE -> EN_CHANGE-Echo.
+// FilterNow ersetzt den Timerablauf. Ohne den Echo-Waechter in
+// ComboChange reduziert die Fuzzy-Suche die Liste auf den
+// Anzeigetext der Auswahl - dieser Test ist am Bestand ROT.
+var
+  Voll : Integer;
+begin
+  Voll := FCombo.Items.Count;
+  FCombo.ItemIndex := 5;
+  SendNotify(CBN_CLOSEUP);
+  SendNotify(CBN_SELCHANGE);
+  FCombo.Text := FCombo.Items[5];   // Text-Update der Auswahl
+  SendNotify(CBN_EDITCHANGE);       // dessen EN_CHANGE-Echo
+  FSearch.FilterNow;                // Timerablauf
+  Assert.AreEqual<Integer>(Voll, FCombo.Items.Count,
+    'das Auswahl-Echo darf die Liste nicht reduzieren');
+end;
+
+procedure TTestFuzzyComboEvents.MouseOrder_SecondSelection_NotifiesAgain;
+begin
+  FCombo.ItemIndex := 5;
+  SendNotify(CBN_CLOSEUP);
+  SendNotify(CBN_SELCHANGE);
+  FCombo.Text := FCombo.Items[5];
+  SendNotify(CBN_EDITCHANGE);
+  FSearch.FilterNow;
+  Assert.AreEqual<Integer>(1, FChangeCount, 'erste Auswahl meldet');
+  // Zweite Auswahl (wieder Maus-Reihenfolge) MUSS erneut melden -
+  // im Bestand war die Liste hier bereits eingefroren.
+  FCombo.ItemIndex := 7;
+  SendNotify(CBN_CLOSEUP);
+  SendNotify(CBN_SELCHANGE);
+  Assert.AreEqual<Integer>(2, FChangeCount,
+    'zweite Auswahl muss das Grid wieder erreichen');
+end;
+
+procedure TTestFuzzyComboEvents.TypedFullTextOfOtherEntry_StillFilters;
+// Der Echo-Waechter ist ENG: getippter Volltext eines ANDEREN als
+// des selektierten Eintrags filtert weiterhin (TP-Gegenprobe).
+var
+  Voll : Integer;
+begin
+  Voll := FCombo.Items.Count;
+  FCombo.ItemIndex := 0;             // 'All' selektiert
+  FCombo.Text := FCombo.Items[5];    // Volltext eines anderen
+  SendNotify(CBN_EDITCHANGE);
+  FSearch.FilterNow;
+  Assert.IsTrue(FCombo.Items.Count < Voll,
+    'echtes Tippen reduziert weiterhin (Liste voll = Waechter zu breit)');
+end;
+
+procedure TTestFuzzyComboEvents.SeparatorCommit_DoesNotNotifyHost;
+// Ein Commit auf der Trennzeile (Tag -1) meldet nichts und vergiftet
+// das Commit-Gedaechtnis nicht.
+begin
+  FCombo.ItemIndex := 1;             // '--- Errors (A-Z) ---'
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(0, FChangeCount,
+    'Trennzeile ist keine Auswahl');
+  FCombo.ItemIndex := 5;
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'danach meldet eine normale Auswahl genau einmal');
 end;
 
 end.

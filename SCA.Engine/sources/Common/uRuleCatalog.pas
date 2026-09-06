@@ -1174,6 +1174,7 @@ begin
   if Lookup = '' then Exit(AllKinds);
   if not FProfiles.TryGetValue(Lookup, Result) then
   begin
+    // noinspection DebugOutput (Diagnose-Kanal, Politik s. Overlay-Warnung)
     OutputDebugString(PChar(Format(
       'TRuleCatalog: profile "%s" nicht gefunden, fallback auf AllKinds',
       [Lookup])));
@@ -1267,6 +1268,7 @@ begin
       Delete(Text, 1, 1);
     Root := TJSONObject.ParseJSONValue(Text);
   except
+    // noinspection ExceptionTooGeneral (Lade-Robustheitsgrenze: defekte Konfig darf den Lauf nicht stoppen; Diagnose via DebugOutput-Kanal)
     on E: Exception do
     begin
       AError := Format(_('Cannot read %s: %s'), [AFileName, E.Message]);
@@ -1323,6 +1325,7 @@ begin
   try
     if not ReadProfilesFile(UserProfilesFilePath, Gelesen, Fehler) then
     begin
+      // noinspection DebugOutput (Diagnose-Kanal, Politik s. Overlay-Warnung)
       OutputDebugString(PChar('TRuleCatalog: ' + Fehler +
         ' - eigene Profile fehlen'));
       Exit;
@@ -1349,12 +1352,14 @@ begin
         // Schreiben aus der Datei. Das passiert jetzt LAUT statt stumm.
         if FBuiltIn.ContainsKey(Namen[i]) then
         begin
+          // noinspection DebugOutput (Diagnose-Kanal, Politik s. Overlay-Warnung)
           OutputDebugString(PChar(Format(
             'TRuleCatalog: eigenes Profil "%s" kollidiert (case-insensitiv) ' +
             'mit einem eingebauten und wird ignoriert', [Namen[i]])));
           Continue;
         end;
         if FProfiles.ContainsKey(Namen[i]) and not FBuiltIn.ContainsKey(Namen[i]) then
+          // noinspection DebugOutput (Diagnose-Kanal, Politik s. Overlay-Warnung)
           OutputDebugString(PChar(Format(
             'TRuleCatalog: profiles.json enthaelt "%s" in mehreren ' +
             'Schreibweisen - die alphabetisch letzte gewinnt', [Namen[i]])));
@@ -1414,6 +1419,7 @@ begin
         TEncoding.UTF8);
       Result := True;
     except
+      // noinspection ExceptionTooGeneral (Lade-Robustheitsgrenze: defekte Konfig darf den Lauf nicht stoppen; Diagnose via DebugOutput-Kanal)
       on E: Exception do
         AError := E.Message;
     end;

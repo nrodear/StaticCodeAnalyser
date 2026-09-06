@@ -129,8 +129,10 @@ type
                                     //   parsen (Opt-Out vom Ein-Zweig-Default; gewinnt immer)
     IfdefDefines  : string;         // --define X[,Y,Z]           Comma-separated Defines
                                     //   (mehrfach --define X erlaubt - akkumuliert)
-    InclDefines   : Boolean;        // --include-defines          Opt-in (Charge 14): {$I}-
-                                    //   Includes fuer ihre DEFINE-Wirkung lesen
+    InclDefines   : Boolean;        // --include-defines          explizite Form des Defaults
+                                    //   (seit 06.09.2026 ohnehin an; dokumentierender No-Op)
+    NoInclDefines : Boolean;        // --no-include-defines       Include-blind scannen
+                                    //   (Opt-Out vom Default; gewinnt immer)
     ParseError    : string;         // nicht-leer wenn Args invalid
   end;
 
@@ -369,6 +371,8 @@ begin
       Result.NoIfdefAware := True
     else if A = '--include-defines' then
       Result.InclDefines := True
+    else if A = '--no-include-defines' then
+      Result.NoInclDefines := True
     else if A = '--define' then
     begin
       var DefVal := '';
@@ -648,8 +652,9 @@ begin
   WriteLn('                        das Flag bleibt als explizite Form erhalten.');
   WriteLn('  --no-ifdef-aware      Doppelzweig-Sicht: ALLE Branches parsen (Opt-Out).');
   WriteLn('  --define <X>[,Y,Z]    ERSETZT den Default-Define-Satz. Mehrfach moeglich.');
-  WriteLn('  --include-defines     Opt-in: {$I}-Include-Dateien werden fuer ihre');
-  WriteLn('                        {$DEFINE}-Wirkung gelesen (mORMot2-/Indy-Muster).');
+  WriteLn('  --include-defines     {$I}-Includes fuer ihre {$DEFINE}-Wirkung lesen.');
+  WriteLn('                        Seit 2026-09-06 DEFAULT; Flag bleibt als explizite Form.');
+  WriteLn('  --no-include-defines  Include-blind scannen (Opt-Out).');
   WriteLn('                        Beispiel: --define MSWINDOWS,WIN32,UNICODE');
   WriteLn('');
   WriteLn('Other:');
@@ -869,6 +874,7 @@ begin
     WriteLn('Check sonar.projectKey before running sonar-scanner.');
     Result := Integer(cecClean);
   except
+    // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
     on E: Exception do
     begin
       WriteLn(ErrOutput, 'sonar-init failed: ', E.Message);
@@ -1015,6 +1021,7 @@ begin
       try
         Lines.SaveToFile(AOutFile, TEncoding.UTF8);
       except
+        // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
         on E: Exception do
           WriteLn(ErrOutput, 'Could not write timings to ', AOutFile,
                   ': ', E.Message);
@@ -1099,6 +1106,7 @@ begin
           WriteLn(Format('Loaded %d custom rule(s) from %s',
             [TCustomRuleDetector.RuleCount, Args.CustomRules]));
       except
+        // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
         on E: Exception do
         begin
           WriteLn(ErrOutput, 'Custom rules error: ', E.Message);
@@ -1126,6 +1134,7 @@ begin
       // strict-Profils, und ein voellig anderer Exit-Code als gestern
       // (G7-3). Der Lauf faehrt weiter (CLI-Schalter koennen die INI
       // ersetzen), aber der Grund steht auf stderr.
+      // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
       on E: Exception do
         WriteLn(ErrOutput,
           'WARNING: analyser.ini konnte nicht gelesen werden - ' +
@@ -1387,7 +1396,9 @@ begin
         Req.IfdefDefines := nil
       else if EffectiveIfdefDefines <> '' then
         Req.IfdefDefines := EffectiveIfdefDefines.Split([',', ';']);
-      Req.IncludeDefines := Args.InclDefines;
+      // Init-Default ist True; nur der Opt-out muss aktiv leeren.
+      if Args.NoInclDefines then
+        Req.IncludeDefines := False;
       // Custom-Rules: der Pfad MUSS in den Request. Der CLI laedt die YAML
       // zwar schon oben (fuer die Frueh-Validierung und die Meldung
       // "Loaded N custom rule(s)"), aber danach ruft
@@ -1522,6 +1533,7 @@ begin
         Flush(ErrOutput);
       end;
     except
+      // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
       on E: Exception do
       begin
         WriteLn(ErrOutput, 'Tool error: ', E.ClassName, ': ', E.Message);
@@ -1626,6 +1638,7 @@ begin
           WriteLn(Format('Baseline written: %s (%d findings)',
             [EffWriteBaseline, BlWritten]));
       except
+        // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
         on E: Exception do
         begin
           // Ein nicht geschriebener Snapshot ist ein Werkzeugfehler: der
@@ -1656,6 +1669,7 @@ begin
           WriteLn(Format('Baseline filtered: %d known findings dropped (%s)',
             [Dropped, EffBaseline]));
       except
+        // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
         on E: Exception do
           WriteLn(ErrOutput, 'Baseline read warning: ', E.Message);
         // Baseline-Fehler ist nicht fatal - Lauf geht ohne Filter weiter
@@ -1671,6 +1685,7 @@ begin
         if not Args.Quiet then
           WriteLn('SARIF report written: ', Args.ReportSarif);
       except
+        // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
         on E: Exception do
         begin
           WriteLn(ErrOutput, 'SARIF write error: ', E.Message);
@@ -1692,6 +1707,7 @@ begin
         if not Args.Quiet then
           WriteLn('HTML report written: ', Args.ReportHtml);
       except
+        // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
         on E: Exception do
         begin
           WriteLn(ErrOutput, 'HTML write error: ', E.Message);
@@ -1708,6 +1724,7 @@ begin
         if not Args.Quiet then
           WriteLn('CSV report written: ', Args.ReportCsv);
       except
+        // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
         on E: Exception do
         begin
           WriteLn(ErrOutput, 'CSV write error: ', E.Message);
@@ -1724,6 +1741,7 @@ begin
         if not Args.Quiet then
           WriteLn('JSON report written: ', Args.ReportJson);
       except
+        // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
         on E: Exception do
         begin
           WriteLn(ErrOutput, 'JSON write error: ', E.Message);
@@ -1754,6 +1772,7 @@ begin
             '--base-dir to the same root the scanner uses.');
         end;
       except
+        // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
         on E: Exception do
         begin
           WriteLn(ErrOutput, 'Sonar export error: ', E.Message);
@@ -1789,6 +1808,7 @@ begin
           WriteLn(Format('Telemetry: %d suppression-hits written to %s',
             [gSuppressionTelemetry.Count, Args.TelemetryCsv]));
       except
+        // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
         on E: Exception do
           WriteLn(ErrOutput, 'Telemetry write error: ', E.Message);
       end;

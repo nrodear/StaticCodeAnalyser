@@ -338,13 +338,16 @@ begin
 end;
 
 procedure TFuzzyComboSearch.FilterNow;
+// Simuliert den ABLAUF des Entprell-Timers: gefiltert wird der
+// Pending-Stand, den ComboChange hinterlassen hat - NICHT stumpf
+// FCombo.Text. Die Vorfassung ueberschrieb FPending mit dem Text und
+// lief damit am Auswahl-Echo-Waechter vorbei (Bau-Rotlauf 06.09.:
+// die MouseOrder-Tests bewiesen den Fix nicht, sie hebelten ihn aus).
+// Ein geleertes Pending ('' = Waechter hat das Echo verworfen)
+// filtert folgerichtig NICHTS.
 begin
-  FPending := '';
-  if Assigned(FCombo) then
-  begin
-    FPending := FCombo.Text;
-  end;
   FLastQuery := '';          // Gleichheits-Kurzschluss in TimerTick umgehen
+  if FPending = '' then Exit;
   TimerTick(nil);
 end;
 
@@ -645,6 +648,27 @@ begin
   if FUpdating then Exit;
   if not Assigned(FCombo) then Exit;
 
+  // AUSWAHL-ECHO, kein Tippen (Bugfix 06.09.2026): Windows sendet bei
+  // einer MAUS-Auswahl CBN_CLOSEUP VOR CBN_SELCHANGE - der Commit
+  // stoppt den Timer also BEVOR das EN_CHANGE des Text-Updates hier
+  // eintrifft und ihn wieder armiert. Der spaeter feuernde Timer
+  // reduzierte dann die Liste STILL per Fuzzy auf den vollen
+  // Anzeigetext der Auswahl; das naechste Dropdown zeigte fast nur
+  // noch den gewaehlten Eintrag, dessen Wieder-Auswahl das Tag-Gate
+  // schluckte - "Dropdown aktualisiert das Grid nicht mehr, sobald
+  // einmal gewaehlt wurde" (beide Oberflaechen, gemeldet von Nico).
+  // Erkennung bewusst ENG: der Text entspricht EXAKT dem Display des
+  // aktuell selektierten Eintrags - wer von Hand den vollen Text eines
+  // ANDEREN Eintrags tippt, filtert weiterhin.
+  if (FCombo.ItemIndex >= 0) and (FCombo.ItemIndex < FCombo.Items.Count)
+     and SameText(FCombo.Text, FCombo.Items[FCombo.ItemIndex]) then
+  begin
+    FPending := '';
+    FIsFiltering := False;
+    FTimer.Enabled := False;
+    Exit;
+  end;
+
   FPending := FCombo.Text;
   FIsFiltering := FPending <> '';
   FTimer.Enabled := False;
@@ -674,6 +698,14 @@ begin
   FTimer.Enabled := False;
   FPending := '';
   FHasPending := SelectedTag(FPendingTag);
+  // NACHZUEGLER-SELCHANGE der Maus-Reihenfolge (Bugfix 06.09.2026,
+  // Teil 2): bei Maus-Auswahl trifft SELCHANGE erst NACH dem
+  // CLOSEUP-Commit ein. Bliebe das Pending stehen, committete der
+  // NAECHSTE Vorgang den ALTEN Tag und setzte die Combo darauf
+  // zurueck. Ein Tag, der bereits Commit-Stand ist, ist keine
+  // anstehende Auswahl.
+  if FHasPending and (FPendingTag = FCommitted) then
+    FHasPending := False;
 end;
 
 procedure TFuzzyComboSearch.CommitSelection;
@@ -706,6 +738,13 @@ begin
     Exit;                       // nichts gewaehlt -> nichts zu melden
   end;
   FHasPending := False;
+
+  // Sektions-Trenner sind keine Auswahl: ein Commit auf SEPARATOR_TAG
+  // wuerde FCommitted auf -1 setzen und den Host mit einem
+  // unwaehlbaren Eintrag benachrichtigen (Robustheits-Gate, Bugfix
+  // 06.09.2026 - der EXE-Host hat anders als das Plugin keinen
+  // eigenen Separator-Sprung).
+  if Tag = SEPARATOR_TAG then Exit;
 
   if Tag = FCommitted then Exit;
   FCommitted := Tag;

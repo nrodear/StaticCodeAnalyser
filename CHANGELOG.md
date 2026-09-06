@@ -9,6 +9,17 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Single-branch `{$IFDEF}` view and include-define tracking are the
+  defaults.** The engine now parses what a Windows compiler would
+  compile: inactive conditional branches are skipped (defines
+  `MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS`), and `{$I}`
+  include files are read for their `{$DEFINE}` effect, so libraries
+  that keep their symbols in include files (mORMot, Indy, JVCL) are
+  seen the way the compiler sees them. On the reference corpus this
+  removes ~15,000 double-branch phantom findings and cuts the error
+  tier below both legacy views. Opt-outs: `--no-ifdef-aware`
+  (parse all branches), `--no-include-defines` (ignore includes),
+  `--define X[,Y]` (replace the default define set).
 - HTML report: a collapsible **rule report** listing every rule that
   fired - findings, error/warning/hint split, confidence split and
   share of the total, one row per rule. On a large corpus the finding
@@ -17,6 +28,22 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   regardless of finding count.
 
 ### Changed
+- SCA025 (DfmHardcodedCaption) gained three gates from its AQL
+  rejection (11 % FP): symbol-font glyph captions, resourcestring-
+  replaced placeholders, and forms under a runtime DFM translator
+  (gnugettext family, Dev-Cpp MultiLangSupport, cnwizards CnLangMgr)
+  are no longer reported - the translator gate matches identifiers
+  at word boundaries, so a form that merely *mentions* dxgettext in
+  a control name keeps its findings. Fully counted on the corpus:
+  -1,379 of 26,358.
+- SCA029 (DfmOrphanHandler) counts collection-item event bindings
+  (`item ... OnAction = Foo` - WebModule actions, plugin command
+  lists) as references (-31 false orphans).
+- SCA070 reports one finding per commented-out BLOCK (region
+  granularity, 14,867 -> 10,317); SCA017 honours its documented
+  test-path skip; SCA143 exempts test units; comma-separated and
+  keyword-named fields are real fields for the parser now, and its
+  phantom fields (message/dynamic directive leaks) are gone.
 - **Baseline filter in the GUI and the IDE plugin now matches on the
   context hash as well**, not just on the legacy fingerprint - the same
   either/or rule the CLI (`--baseline`) has applied since v0.9.8. The
@@ -218,6 +245,14 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "no enclosing try..finally" claim does not hold there).
 
 ### Fixed
+- **Filter dropdown froze after the first selection** (standalone
+  and IDE plugin): on a mouse selection Windows sends `CBN_CLOSEUP`
+  *before* `CBN_SELCHANGE`, so the edit-text echo re-armed the fuzzy
+  debounce timer after the commit had stopped it; the deferred
+  filter then silently shrank the list to the selected entry and the
+  tag gate swallowed every re-selection. The shared fuzzy helper now
+  recognises the selection echo and never commits section
+  separators.
 - **The baseline file `--write-baseline` produced was not valid JSON**
   whenever a finding's message quoted a control character from the
   scanned source. RFC 8259 requires `U+0000`-`U+001F` to be escaped;

@@ -954,7 +954,14 @@ _S1_WEG      = sum(x[1] for x in _S1_EINGELOEST)    # 34
 # rechnerisch leicht; das ist die ehrliche Richtung, denn die
 # Geschwister-Funde gelten als TP).
 _S1_ADDS_C10 = 10
-_S1_N_HEUTE  = _S1_N - _S1_WEG + _S1_ADDS_C10
+# Sicht-Posten (06.09., rw70b): unter Ein-Zweig + Include-Defines
+# verschwinden 10 SCA001 (492 -> 482) - Zweige, die mit den
+# Include-definierten Symbolen anders aktiv sind. SICHT-Drops, keine
+# FP-Urteile: die FP-Zahl bleibt unveraendert (konservativ - real
+# duerften einige der 10 FPs gewesen sein, die Doppelzweig-Phantome
+# der uPSRuntime-Gattung).
+_S1_SICHT_INCDEF = 10
+_S1_N_HEUTE  = _S1_N - _S1_WEG + _S1_ADDS_C10 - _S1_SICHT_INCDEF
 _S1_FP_HEUTE = _S1_FP - _S1_WEG
 
 # Selbstkontrolle: die Rechnung MUSS die gemessene Fundzahl treffen.
@@ -1248,10 +1255,8 @@ _ABGELEITET = [
      '- siehe Klasse I im Klassenabschnitt. Abgeloest wird eine '
      'Stichprobe: 62,5 % aus 24 Faellen, also ~355 FP; die FP-Masse dieser '
      'Regel STEIGT durch die Zaehlung um 60'),
-    ('SCA089', 42.0, 4187, 'Rechnung',
-     'Audit-FP-Masse 71 % x 8.234 = ~5.846 minus ~4.100 am Korpus belegte '
-     'FP-Drops (rw12+rw13b: Signatur-Fortsetzungen, Kommentar-Zustand, '
-     'record/object, FPC-"public name") -> ~1.750 auf 4.187'),
+    # SCA089: die alte 42-%-Rechnung ist durch die 06.09.-Sichtung
+    # ersetzt (Eintrag in der September-Runde-2-Sektion unten).
     ('SCA123', 51.0, 146, 'Rechnung',
      '88 % x 604 = ~532 FP minus 458 Drops mit dokumentiertem Preis 1 TP '
      '-> ~74 auf 146'),
@@ -1397,9 +1402,46 @@ _ABGELEITET = [
      'Ctor-Exception den Dtor der halbfertigen Instanz; Freigabe via '
      'Eigenschaft; Owner-Semantik). ZURUECKGEWIESEN und auf fcMedium '
      'demoted - aus dem Error-Tier raus'),
-    ('SCA025', 11.0, 125, 'Stichprobe',
-     'AQL 31.08.: 11 % - zurueckgewiesen, Fix offen. Loest die '
-     'richtungslose 4-%-24er-Zahl ab'),
+    ('SCA025', 100.0 * 0 / 125, 125, 'Stichprobe',
+     'AQL 31.08. mass 11 % und wies die Regel zurueck; Charge 15 '
+     '(06.09.) hat ALLE DREI belegten FP-Klassen gebaut und am '
+     'rw70b-Bestand vollgezaehlt (Glyph 44, resourcestring 7, '
+     'Uebersetzungs-Regime 1.099 = zusammen 1.150 Drops). Die 0 % '
+     'sind die erwartete Restquote der Korrektheit; die verbleibende '
+     'Grauzone "Projekt ohne i18n-Anspruch" ist Nuetzlichkeit '
+     '(Profilfrage), kein Fehlalarm. Nachmessung nach dem Bau faellig'),
+    # ---- September-Kampagne Runde 2 (06.09., 6h-Auftrag) ---------------
+    ('SCA089', 0.0, 40, 'Stichprobe',
+     'Sichtung einer 40er-Ziehung (dedup, seed 20260906) am '
+     'rw70b-Bestand: 0 mechanische Fehler - jeder Fund IST ein public '
+     'Feld einer Klasse. Die alte 42-%-Rechnung zaehlte Grauzonen als '
+     'FP; ehrlich getrennt: ~6/40 DLL-Loader-Bindings (mORMot-Muster, '
+     'Property waere absurd), ~12/40 nackte Datenklassen (DTO-Design), '
+     'Rest echte Kapselungs-Smells (inkl. public F-Praefix-Felder). '
+     'Korrektheit sauber; Nuetzlichkeit haengt am Klassentyp - '
+     'SCA106-Gattung'),
+    ('SCA132', 0.0, 1110, 'Rechnung',
+     'KONVENTIONS-TRIAGE statt FP-Messung (06.09.): alle 1.110 Funde '
+     'tragen dieselbe Meldung (Inhalts-Dedup = 1!) und dieselbe wahre '
+     'Behauptung "on E: Exception ist ein breiter Fang". Ob er ok ist, '
+     'ist Ort-Politik (Action-/Thread-Grenzen - unsere eigene '
+     'Review-Konvention erlaubt ihn genau dort). Die 41,7 % vom 15.08. '
+     'waren Grauzonen-Wertung einer 24er-Probe. Wie SCA106: '
+     'Korrektheit 0 % FP, Nuetzlichkeit = Profil'),
+    ('SCA053', 100.0 * 1 / 40, 40, 'Stichprobe',
+     '40er-Ziehung (dedup, 06.09.): 1 mechanischer FP - ein LOKALES '
+     'resourcestring-Keyword wird als "unused variable resourcestring" '
+     'gemeldet (GX_ClassBrowser:1995; Parser haelt den Abschnitt fuer '
+     'eine Var-Deklaration). Einzelfall-Klasse, notiert; dazu 1 '
+     'absolute-Overlay-Grauzone. Rest echt tote Variablen - gesund'),
+    ('SCA029', 100.0 * 12 / 40, 426, 'Rechnung',
+     'Charge 15 fixt die groesste belegte Klasse: 31/426 Funde nennen '
+     'Handler, die die DFM WOERTLICH in <item>-Bloecken bindet '
+     '(pvkItemList war fuer den Binder unsichtbar) - nach dem Bau weg. '
+     'Die 40er-Sichtung zeigt zwei Restklassen: inherited-Ahnen-DFM '
+     'ausserhalb des Laufs und Code-Bindung (prinzipiell Cross-File); '
+     'zusammen konservativ ~30 % der Restfunde -> als Quote gefuehrt, '
+     'bis eine Nachmessung am gebauten Stand sie beziffert'),
 ]
 _seen = {}
 for _e in _ABGELEITET:

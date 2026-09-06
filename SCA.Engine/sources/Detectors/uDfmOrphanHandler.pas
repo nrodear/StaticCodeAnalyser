@@ -23,7 +23,7 @@ interface
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
-  uAstNode, uFormBinder;
+  uAstNode, uFormBinder, uComponentGraph;
 
 type
   TDfmOrphanHandlerDetector = class
@@ -65,6 +65,43 @@ begin
   Result := True;
 end;
 
+procedure SammleItemListBindungen(Node: TComponentNode;
+  AZiel: TDictionary<string, Boolean>);
+// FP-Fix Charge 15 (Vollzaehlung rw70b: 31 von 426): Collection-Item-
+// Events ('Actions = < item OnAction = Foo end >', WebModule-Actions,
+// TJvPlugin-Commands, python4delphi-Events) speichert der DFM-Parser
+// als pvkItemList-ROHTEXT - der Binder sieht diese Bindungen nicht,
+// der Handler galt als verwaist, obwohl die DFM ihn woertlich bindet.
+// Der Scan bleibt bewusst LOKAL in diesem Detektor: die geteilte
+// Events-Liste des Binders speist auch SCA028/184 - dort wuerde jede
+// neue Bindung eigene Bewegung erzeugen (Lehre: Gate nie in geteilten
+// Helfern). Erkannt wird exakt die Form 'On<Ident> = <Ident>' am
+// Zeilenanfang des Item-Blocks; 'nil' zaehlt nicht (Binder-Vertrag).
+var
+  Pair   : TPair<string, TPropValue>;
+  Child  : TComponentNode;
+  S, Rhs : string;
+  P      : Integer;
+begin
+  for Pair in Node.Properties do
+  begin
+    if Pair.Value.Kind <> pvkItemList then Continue;
+    for S in Pair.Value.RawValue.Split([#10, #13]) do
+    begin
+      Rhs := Trim(S);
+      if (Length(Rhs) < 6) or (Copy(Rhs, 1, 2) <> 'On') then Continue;
+      P := Pos('=', Rhs);
+      if P = 0 then Continue;
+      if not IsValidIdent(Trim(Copy(Rhs, 1, P - 1))) then Continue;
+      Rhs := Trim(Copy(Rhs, P + 1, MaxInt));
+      if IsValidIdent(Rhs) and not SameText(Rhs, 'nil') then
+        AZiel.AddOrSetValue(LowerCase(Rhs), True);
+    end;
+  end;
+  for Child in Node.Children do
+    SammleItemListBindungen(Child, AZiel);
+end;
+
 class procedure TDfmOrphanHandlerDetector.Analyze(Binding: TFormBinding;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -90,6 +127,10 @@ begin
     begin
       for Ev in Walker.Events do
         BoundHandlers.AddOrSetValue(LowerCase(Ev.HandlerName), True);
+      // Collection-Item-Bindungen (pvkItemList) mitzaehlen - s. Doku
+      // an SammleItemListBindungen.
+      if Walker.FormNode <> nil then
+        SammleItemListBindungen(Walker.FormNode, BoundHandlers);
       Walker := Walker.Parent;
     end;
 
