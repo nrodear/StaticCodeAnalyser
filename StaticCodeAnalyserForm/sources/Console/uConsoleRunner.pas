@@ -129,6 +129,8 @@ type
                                     //   parsen (Opt-Out vom Ein-Zweig-Default; gewinnt immer)
     IfdefDefines  : string;         // --define X[,Y,Z]           Comma-separated Defines
                                     //   (mehrfach --define X erlaubt - akkumuliert)
+    InclDefines   : Boolean;        // --include-defines          Opt-in (Charge 14): {$I}-
+                                    //   Includes fuer ihre DEFINE-Wirkung lesen
     ParseError    : string;         // nicht-leer wenn Args invalid
   end;
 
@@ -365,6 +367,8 @@ begin
       Result.IfdefAware := True
     else if A = '--no-ifdef-aware' then
       Result.NoIfdefAware := True
+    else if A = '--include-defines' then
+      Result.InclDefines := True
     else if A = '--define' then
     begin
       var DefVal := '';
@@ -644,6 +648,8 @@ begin
   WriteLn('                        das Flag bleibt als explizite Form erhalten.');
   WriteLn('  --no-ifdef-aware      Doppelzweig-Sicht: ALLE Branches parsen (Opt-Out).');
   WriteLn('  --define <X>[,Y,Z]    ERSETZT den Default-Define-Satz. Mehrfach moeglich.');
+  WriteLn('  --include-defines     Opt-in: {$I}-Include-Dateien werden fuer ihre');
+  WriteLn('                        {$DEFINE}-Wirkung gelesen (mORMot2-/Indy-Muster).');
   WriteLn('                        Beispiel: --define MSWINDOWS,WIN32,UNICODE');
   WriteLn('');
   WriteLn('Other:');
@@ -1381,6 +1387,7 @@ begin
         Req.IfdefDefines := nil
       else if EffectiveIfdefDefines <> '' then
         Req.IfdefDefines := EffectiveIfdefDefines.Split([',', ';']);
+      Req.IncludeDefines := Args.InclDefines;
       // Custom-Rules: der Pfad MUSS in den Request. Der CLI laedt die YAML
       // zwar schon oben (fuer die Frueh-Validierung und die Meldung
       // "Loaded N custom rule(s)"), aber danach ruft

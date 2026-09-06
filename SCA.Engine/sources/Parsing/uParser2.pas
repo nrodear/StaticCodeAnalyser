@@ -20,6 +20,12 @@ type
     function ParseSource(const Source: string): TAstNode;
   private
     FLex      : TLexer;
+    // Include-Define-Tracking (Charge 14): voller Pfad der gerade
+    // geparsten DATEI - nur von ParseFile gesetzt (und im finally
+    // geleert), damit ParseSource dem Lexer das Verzeichnis fuer die
+    // {$I}-Aufloesung geben kann. In-Memory-Quellen haben keinen
+    // Pfad, das Feature bleibt dort inaktiv.
+    FCurrentFilePath : string;
     // Zahl der KONSUMIERTEN Tokens. Zwei Aufgaben:
     //   * Watchdog gegen pathologische Dateien (Grenze in Next)
     //   * Fortschritts-Nachweis fuer GuardAdvance
@@ -292,7 +298,14 @@ begin
         end;
       end;
     end;
-    Result      := ParseSource(SL.Text);
+    FCurrentFilePath := FileName;
+    try
+      Result := ParseSource(SL.Text);
+    finally
+      // Ein Parser-Objekt parst mehrere Dateien nacheinander - der
+      // Pfad darf nicht in einen folgenden ParseSource-Aufruf lecken.
+      FCurrentFilePath := '';
+    end;
     Result.Name := FileName;
   finally
     SL.Free;
@@ -316,6 +329,11 @@ begin
         FLex.AddDefine(gLexerIfdefDefines[i]);
     FLex.EnableConditionalSkipping;
   end;
+  // Include-Define-Tracking (Charge 14, Opt-in): das Verzeichnis der
+  // Datei ist die Basis der {$I}-Aufloesung; ohne ParseFile-Kontext
+  // (In-Memory) bleibt es leer und das Feature inaktiv.
+  if gLexerIncludeDefinesEnabled and (FCurrentFilePath <> '') then
+    FLex.SetSourceDir(ExtractFilePath(FCurrentFilePath));
   try
     FConsumeCount := 0; // Watchdog pro Datei zuruecksetzen
     // Ein Parser-Objekt parst mehrere Dateien nacheinander: weder das letzte
