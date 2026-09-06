@@ -71,6 +71,7 @@ uses
   uTestDuplicate in 'uTestDuplicate.pas',
   uTestFuzzyComboSearch in 'uTestFuzzyComboSearch.pas',
   uTestFilterComboReduce in 'uTestFilterComboReduce.pas',
+  uTestDetectorInfoExport in 'uTestDetectorInfoExport.pas',
   uTestDebugOutput in 'uTestDebugOutput.pas',
   uTestTodoComment in 'uTestTodoComment.pas',
   uTestCodeMetrics in 'uTestCodeMetrics.pas',
