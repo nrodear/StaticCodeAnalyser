@@ -1,6 +1,6 @@
 {
   "SCA.CLI.Demo/SCA.CLI.Demo.dproj": {
-    "platform": "Win32",
+    "platform": "Win64",
     "projectVersion": "20.1"
   },
   "SCA.Engine/SCA.Engine.dproj": {
@@ -16,7 +16,7 @@
     "projectVersion": "20.1"
   },
   "StaticCodeAnalyserForm/StaticCodeAnalyser.d12.dproj": {
-    "platform": "Win32",
+    "platform": "Win64",
     "projectVersion": "20.1"
   },
   "StaticCodeAnalyserForm/tests/TestProject.dproj": {

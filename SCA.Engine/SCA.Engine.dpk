@@ -265,6 +265,7 @@ contains
   uExportHtml in 'sources\Infrastructure\uExportHtml.pas',
   uDetectorInfoExport in 'sources\Infrastructure\uDetectorInfoExport.pas',
   uWorkbenchStyle in 'sources\Infrastructure\uWorkbenchStyle.pas',
+  uFindingsWorkbenchExport in 'sources\Infrastructure\uFindingsWorkbenchExport.pas',
   uFileTextCache in 'sources\Infrastructure\uFileTextCache.pas',
   uFindingFingerprint in 'sources\Infrastructure\uFindingFingerprint.pas',
   uFormBinder in 'sources\Infrastructure\uFormBinder.pas',
