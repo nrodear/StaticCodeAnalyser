@@ -33,12 +33,23 @@ type
     [Test] procedure Test_Finding_MissingVarContainsComponentAndValue;
     [Test] procedure Test_Finding_SeverityIsHint;
     [Test] procedure Test_Finding_KindIsHardcodedCaption;
+    // --- FP-Gates Charge 15 (AQL 31.08.: 11 %; Vollzaehlung rw70b:
+    //     1.150 von 26.358). Alle sechs Fixtures VOR dem Bau an der
+    //     rw70-Exe verprobt: jede feuert dort (6 Funde), nach den
+    //     Gates muessen exakt die drei Gate-Faelle fallen. ---
+    [Test] procedure Gate_Glyph_SymbolFontSingleChar_NotReported;
+    [Test] procedure Gate_Glyph_NormalFontSingleChar_StillReported;
+    [Test] procedure Gate_ResourceString_ReplacedProp_NotReported;
+    [Test] procedure Gate_PlainAssign_StillReported;
+    [Test] procedure Gate_Regime_GnugettextUses_NotReported;
+    [Test] procedure Gate_Regime_MarkerOnlyInComment_StillReported;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Generics.Collections,
+  System.IOUtils,   // TPath/TFile fuer die RunOnFiles-Gate-Tests
   uSCAConsts, uMethodd12,
   uDfmParser, uComponentGraph,
   uDfmHardcodedCaption;
@@ -297,6 +308,158 @@ begin
     'object Form: TForm Caption = ''X'' end');
   try
     Assert.AreEqual(fkDfmHardcodedCaption, F[0].Kind);
+  finally F.Free; end;
+end;
+
+{ --- FP-Gates Charge 15 --- }
+
+function RunOnFiles(const DfmSrc, PasSrc: string)
+  : TObjectList<TLeakFinding>;
+// Schreibt DFM+PAS unter GUID-Basisnamen (der Datei-Textcache stellt
+// per Name zurueck - fester Name machte Tests reihenfolgeabhaengig)
+// und laesst den Detektor mit dem ECHTEN DFM-Pfad laufen, damit
+// LadeNachbarPas die .pas findet.
+var
+  Base, DfmPath : string;
+  Parser : TDfmParser;
+  Graph  : TComponentGraph;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+  Base := TPath.Combine(TPath.GetTempPath, 'sca025_'
+    + TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '')
+      .Replace('-', ''));
+  DfmPath := Base + '.dfm';
+  TFile.WriteAllText(DfmPath, DfmSrc, TEncoding.UTF8);
+  TFile.WriteAllText(Base + '.pas', PasSrc, TEncoding.UTF8);
+  Parser := TDfmParser.Create;
+  try
+    Graph := Parser.ParseSource(DfmSrc);
+    try
+      TDfmHardcodedCaptionDetector.Analyze(Graph, DfmPath, Result);
+    finally
+      Graph.Free;
+    end;
+  finally
+    Parser.Free;
+    if TFile.Exists(DfmPath) then TFile.Delete(DfmPath);
+    if TFile.Exists(Base + '.pas') then TFile.Delete(Base + '.pas');
+  end;
+end;
+
+procedure TTestDfmHardcodedCaption.Gate_Glyph_SymbolFontSingleChar_NotReported;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object FormA: TFormA'#13#10 +
+    '  object Btn1: TButton'#13#10 +
+    '    Caption = ''q'''#13#10 +
+    '    Font.Name = ''Webdings'''#13#10 +
+    '  end'#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption),
+      'Webdings-Einzelzeichen ist ein Icon, kein Text');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.Gate_Glyph_NormalFontSingleChar_StillReported;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object FormA: TFormA'#13#10 +
+    '  object Btn2: TButton'#13#10 +
+    '    Caption = ''q'''#13#10 +
+    '    Font.Name = ''Tahoma'''#13#10 +
+    '  end'#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
+      'Normalfont-Einzelzeichen bleibt Fund (TP-Gegenprobe)');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.Gate_ResourceString_ReplacedProp_NotReported;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormB: TFormB'#13#10 +
+    '  object BtnR: TButton'#13#10 +
+    '    Caption = ''Platzhalter'''#13#10 +
+    '  end'#13#10 +
+    'end',
+    'unit resprobe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'resourcestring'#13#10 +
+    '  SEcht = ''Echter Text'';'#13#10 +
+    'procedure TFormB.Init;'#13#10 +
+    'begin'#13#10 +
+    '  BtnR.Caption := SEcht;'#13#10 +
+    'end;'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption),
+      'DFM-Wert ist toter Platzhalter - resourcestring ersetzt ihn');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.Gate_PlainAssign_StillReported;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormB: TFormB'#13#10 +
+    '  object BtnP: TButton'#13#10 +
+    '    Caption = ''Bleibt stehen'''#13#10 +
+    '  end'#13#10 +
+    'end',
+    'unit resprobe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'var X: string;'#13#10 +
+    'procedure TFormB.Init;'#13#10 +
+    'begin'#13#10 +
+    '  BtnP.Caption := X;'#13#10 +
+    'end;'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
+      'Zuweisung aus Nicht-resourcestring gated nicht (TP-Gegenprobe)');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.Gate_Regime_GnugettextUses_NotReported;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormC: TFormC'#13#10 +
+    '  Caption = ''Uebersetzt zur Laufzeit'''#13#10 +
+    'end',
+    'unit regimeprobe;'#13#10 +
+    'interface'#13#10 +
+    'uses gnugettext;'#13#10 +
+    'implementation'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption),
+      'Form im Laufzeit-Uebersetzungs-Regime: DFM-Text ist msgid-Quelle');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.Gate_Regime_MarkerOnlyInComment_StillReported;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormD: TFormD'#13#10 +
+    '  Caption = ''Marker nur im Kommentar'''#13#10 +
+    'end',
+    'unit kommprobe;'#13#10 +
+    'interface'#13#10 +
+    '// gnugettext waere hier nur Prosa'#13#10 +
+    'implementation'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
+      'Kommentare zaehlen NIE als Code-Use - Marker im Kommentar gated nicht');
   finally F.Free; end;
 end;
 
