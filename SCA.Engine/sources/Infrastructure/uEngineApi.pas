@@ -126,6 +126,9 @@ type
     IfdefDefines   : TArray<string>;    // {$IFDEF}-aware Parsing mit diesen Defines. Init setzt
                                         // DefaultIfdefDefines (Ein-Zweig-Default seit 05.09.2026);
                                         // leer/nil = Doppelzweig-Sicht (alle Branches parsen)
+    IncludeDefines : Boolean;           // OPT-IN (Charge 14): {$I}-Include-Dateien werden fuer ihre
+                                        // {$DEFINE}-Wirkung gelesen (mORMot2/Indy-Muster). Default
+                                        // False bis zum Messlauf-Entscheid; CLI --include-defines.
     CustomRulesPath: string;            // YAML mit Custom-Rules ('' = keine)
     BaselinePath   : string;            // Findings gegen diese Baseline-JSON filtern ('' = aus)
     WriteBaselinePath: string;          // aktuelle Findings als neue Baseline schreiben ('' = aus)
@@ -320,6 +323,7 @@ begin
   Result.UsesCheck       := False;
   Result.AutoDiscover    := False;
   Result.IfdefDefines    := DefaultIfdefDefines;
+  Result.IncludeDefines  := False;   // Opt-in bis zum Messlauf-Entscheid
   Result.CustomRulesPath := '';
   Result.BaselinePath      := '';
   Result.WriteBaselinePath := '';
@@ -421,6 +425,7 @@ begin
   end
   else
     gLexerIfdefSkipEnabled := False;
+  gLexerIncludeDefinesEnabled := Req.IncludeDefines;
 end;
 
 procedure TAnalysisSession.ApplyConfig(const Req: TScanRequest);
@@ -632,10 +637,12 @@ begin
   // Charge-13-Selbstscan: zwischen Enter und try darf nichts stehen,
   // sonst bleibt der Lock bei einer Exception haengen).
   var AlterIfdefSkip := False;
+  var AlterInclDefines := False;
   var AlteIfdefDefines: TArray<string> := nil;
   GEngineLock.Enter;
   try
-  AlterIfdefSkip := gLexerIfdefSkipEnabled;
+  AlterIfdefSkip   := gLexerIfdefSkipEnabled;
+  AlterInclDefines := gLexerIncludeDefinesEnabled;
   if gLexerIfdefDefines <> nil then
     AlteIfdefDefines := gLexerIfdefDefines.ToStringArray;
   // Die IFDEF-Sicht IMMER anwenden - auch bei SkipConfig=True (Form/
@@ -846,7 +853,8 @@ begin
   finally
     // Lexer-Sicht des Vorzustands wiederherstellen (s. Sicherung oben).
     LexerIfdefClear;
-    gLexerIfdefSkipEnabled := AlterIfdefSkip;
+    gLexerIfdefSkipEnabled      := AlterIfdefSkip;
+    gLexerIncludeDefinesEnabled := AlterInclDefines;
     for var AltDef in AlteIfdefDefines do
       LexerIfdefAddDefine(AltDef);
     GEngineLock.Leave;
