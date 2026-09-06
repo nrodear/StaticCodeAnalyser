@@ -35,12 +35,23 @@ type
     Tag     : NativeInt;
   end;
 
-  // noinspection LargeClass
+  // Wer einen Commit ausloest, entscheidet ueber das eindeutige
+  // Tipp-Ziel: nur explizite Uebernahme-Gesten (Enter, Fokusverlust -
+  // cgAccept) duerfen es committen. Ein Zuklappen (cgCloseUp) kommt
+  // auch von Escape und je nach Windows-Fassung vom programmatischen
+  // Listen-Umbau - dort wuerde der Einzeltreffer-Commit einen ABBRUCH
+  // in eine Auswahl verwandeln (Chargen-Review 06.09.).
+  TCommitGesture = (cgCloseUp, cgAccept);
+
+  // noinspection LargeClass, GodClass
   // Ein Bauteil, eine Verantwortung: die Klasse kapselt den kompletten
   // Ereignis-Vertrag einer tippbaren Combo (Schnappschuss, Entprellung,
   // Commit-Gate) - eine Aufspaltung wuerde nur privaten Zustand ueber
   // Units verteilen. Die Laenge kommt aus den Begruendungs-Kommentaren
-  // der Windows-Eigenheiten, nicht aus Logik-Masse.
+  // der Windows-Eigenheiten, nicht aus Logik-Masse. GodClass seit dem
+  // Event-Review 06.09. (Notification/Trenner-Sprung/Einzeltreffer
+  // hoben die Methodenzahl knapp ueber die 20) - gleiche Begruendung:
+  // alles Glieder EINES Ereignis-Vertrags.
   TFuzzyComboSearch = class(TComponent)
   private
     FCombo      : TComboBox;
@@ -69,13 +80,25 @@ type
     procedure ComboSelect(Sender: TObject);
     procedure ComboCloseUp(Sender: TObject);
     procedure ComboExit(Sender: TObject);
-    procedure CommitSelection;
+    procedure CommitSelection(AGesture: TCommitGesture);
     procedure ComboKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ApplyQuery(const AQuery: string);
     procedure FillFromSnapshot;
     procedure RestoreAll;
     procedure RestoreAllAndSelect(ATag: NativeInt);
     function  SelectedTag(var ATag: NativeInt): Boolean;
+    function  NextRealTagAfter(AIndex: Integer): NativeInt;
+    function  SingleVisibleTarget(var ATag: NativeInt): Boolean;
+    function  ResolveSeparatorJump(var ATag: NativeInt): Boolean;
+  protected
+    // Loest FCombo, wenn die Combo VOR dem Helfer stirbt. Ohne das traf
+    // die Handler-Restauration in Destroy freigegebenen Speicher: im
+    // VCL-Teardown zerstoert TWinControl.Destroy seine Kind-CONTROLS
+    // (die Combo) BEVOR DestroyComponents die besessenen Komponenten
+    // (diesen Helfer) erreicht - die Reihenfolge ist also der NORMALFALL,
+    // nicht die Ausnahme (Event-Review 06.09.2026).
+    procedure Notification(AComponent: TComponent;
+      Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -255,10 +278,21 @@ begin
   FTimer.OnTimer  := TimerTick;
 end;
 
+procedure TFuzzyComboSearch.Notification(AComponent: TComponent;
+  Operation: TOperation);
+begin
+  inherited;
+  if (Operation = opRemove) and (AComponent = FCombo) then
+  begin
+    FCombo := nil;
+  end;
+end;
+
 destructor TFuzzyComboSearch.Destroy;
 begin
   // Ereignisse zurueckgeben, falls die Combo uns ueberlebt (der Host
-  // besitzt sie, nicht wir).
+  // besitzt sie, nicht wir). Stirbt sie ZUERST - der Normalfall im
+  // Form-Teardown - hat Notification FCombo bereits auf nil gesetzt.
   if Assigned(FTimer) then
   begin
     FTimer.Enabled := False;
@@ -279,6 +313,9 @@ procedure TFuzzyComboSearch.Attach(ACombo: TComboBox);
 begin
   if not Assigned(ACombo) then Exit;
   FCombo := ACombo;
+  // Begruendung am Notification-Override: die Combo stirbt im Teardown
+  // VOR dem Helfer, Destroy darf sie dann nicht mehr anfassen.
+  ACombo.FreeNotification(Self);
   FHostChange  := ACombo.OnChange;
   FHostSelect  := ACombo.OnSelect;
   FHostKeyUp   := ACombo.OnKeyUp;
@@ -440,7 +477,12 @@ begin
 
     FUpdating := True;
     try
+      // BeginUpdate/EndUpdate als eigenes try/finally: wirft AddObject
+      // (praktisch nur OOM/Handle-Fehler), bliebe die Combo sonst
+      // dauerhaft im BeginUpdate-Zustand und zeichnete nie mehr
+      // (Bestandsfund, Chargen-Review 06.09.).
       FCombo.Items.BeginUpdate;
+      try
       FCombo.Items.Clear;
       Shown := Hits.Count;
       if Shown > MAX_HITS then
@@ -480,7 +522,9 @@ begin
       begin
         FCombo.Items.AddObject(_('   (no matches)'), TObject(SEPARATOR_TAG));
       end;
-      FCombo.Items.EndUpdate;
+      finally
+        FCombo.Items.EndUpdate;
+      end;
     finally
       FUpdating := False;
     end;
@@ -505,13 +549,17 @@ begin
   begin
     SetListDropped(False);
   end;
+  // EndUpdate im finally - Begruendung am ApplyQuery-Pendant.
   FCombo.Items.BeginUpdate;
-  FCombo.Items.Clear;
-  for i := 0 to FAll.Count - 1 do
-  begin
-    FCombo.Items.AddObject(FAll[i].Display, TObject(FAll[i].Tag));
+  try
+    FCombo.Items.Clear;
+    for i := 0 to FAll.Count - 1 do
+    begin
+      FCombo.Items.AddObject(FAll[i].Display, TObject(FAll[i].Tag));
+    end;
+  finally
+    FCombo.Items.EndUpdate;
   end;
-  FCombo.Items.EndUpdate;
   if WasDropped then
   begin
     SetListDropped(True);
@@ -559,6 +607,67 @@ begin
   end;
   FIsFiltering := False;
   FLastQuery := '';
+end;
+
+function TFuzzyComboSearch.SingleVisibleTarget(var ATag: NativeInt): Boolean;
+// Genau EIN waehlbares Ziel (Tag <> SEPARATOR_TAG) in der ANZEIGE?
+// Die Hinweiszeilen der reduzierten Liste ('... more matches',
+// '(no matches)') tragen den Trenner-Tag und zaehlen nicht mit.
+var
+  i, Hits : Integer;
+begin
+  ATag := SEPARATOR_TAG;
+  Hits := 0;
+  for i := 0 to FCombo.Items.Count - 1 do
+  begin
+    if NativeInt(FCombo.Items.Objects[i]) = SEPARATOR_TAG then Continue;
+    Inc(Hits);
+    if Hits > 1 then Break;
+    ATag := NativeInt(FCombo.Items.Objects[i]);
+  end;
+  Result := Hits = 1;
+end;
+
+function TFuzzyComboSearch.ResolveSeparatorJump(var ATag: NativeInt): Boolean;
+// Trenner-Klick -> erster Eintrag der Sektion darunter (vorher nur als
+// Host-Sonderweg im Plugin, den das Robustheits-Gate vom 06.09. mittags
+// unerreichbar machte - jetzt springen beide Wirte hier). False, wenn
+// es kein Sprungziel gibt (Hinweiszeile der reduzierten Liste, Trenner
+// am Listenende) - der Aufrufer legt dann die vorige Auswahl zurueck.
+//
+// Der Klick-Index zaehlt NUR, wenn die ANZEIGE der volle Schnappschuss
+// ist (Count-Vergleich): ein not-FIsFiltering-Gate liess zwei
+// Bestandsfenster offen, in denen die Anzeige noch reduziert war
+// (Echo-Waechter beim Blaettern; die 160 ms nach dem Textloeschen) -
+// ein Klick auf die Hinweiszeile haette dort einen willkuerlichen
+// Schnappschuss-Eintrag committet (Chargen-Review 06.09.).
+var
+  SepIdx : Integer;
+begin
+  SepIdx := -1;
+  if FCombo.Items.Count = FAll.Count then
+    SepIdx := FCombo.ItemIndex;
+  ATag := NextRealTagAfter(SepIdx);
+  Result := ATag <> SEPARATOR_TAG;
+end;
+
+function TFuzzyComboSearch.NextRealTagAfter(AIndex: Integer): NativeInt;
+// Erster waehlbarer Tag im Schnappschuss NACH AIndex - das Sprungziel
+// eines Trenner-Klicks. SEPARATOR_TAG, wenn es keinen gibt (auch bei
+// AIndex < 0, dem "kein echter Trenner geklickt"-Signal des Aufrufers).
+var
+  i : Integer;
+begin
+  Result := SEPARATOR_TAG;
+  if AIndex < 0 then Exit;
+  for i := AIndex + 1 to FAll.Count - 1 do
+  begin
+    if FAll[i].Tag <> SEPARATOR_TAG then
+    begin
+      Result := FAll[i].Tag;
+      Exit;
+    end;
+  end;
 end;
 
 function TFuzzyComboSearch.IsListDropped: Boolean;
@@ -611,17 +720,32 @@ begin
   // Also: war die Liste offen, wird sie zugeklappt, neu befuellt und
   // wieder aufgeklappt. War sie zu, bleibt sie zu - von selbst
   // aufzuklappen ist nichts, was eine gewoehnliche Combo tut.
+  // Beide SetListDropped-Aufrufe unter FUpdating: ein programmatisches
+  // Zuklappen KANN je nach Windows-Fassung ein CBN_CLOSEUP nachziehen -
+  // das darf nicht als Nutzer-Commit in CommitSelection einschlagen
+  // (Reentranz mitten im Tick; Chargen-Review 06.09., Verdachtsfall).
+  // FUpdating laesst den Commit-Pfad dann folgenlos abtropfen.
   var WasDropped : Boolean := IsListDropped;
   if WasDropped then
   begin
-    SetListDropped(False);
+    FUpdating := True;
+    try
+      SetListDropped(False);
+    finally
+      FUpdating := False;
+    end;
   end;
 
   ApplyQuery(Q);
 
   if WasDropped then
   begin
-    SetListDropped(True);
+    FUpdating := True;
+    try
+      SetListDropped(True);
+    finally
+      FUpdating := False;
+    end;
   end;
 
   // Der Neuaufbau der Liste setzt den Cursor an den Anfang - zuruecksetzen,
@@ -706,16 +830,28 @@ begin
   // anstehende Auswahl.
   if FHasPending and (FPendingTag = FCommitted) then
     FHasPending := False;
+  // Ein Trenner ist NIE eine anstehende Auswahl (Event-Review 06.09.2026):
+  // der Nachzuegler-SELCHANGE eines Maus-Klicks auf die Trennzeile traegt
+  // Tag -1, das der Gleichheits-Verwurf oben nicht fasst (-1 wird nie
+  // Commit-Stand). Das stale Pending haette den NAECHSTEN Klick
+  // verschluckt und die Combo auf die Trennzeile zurueckgesetzt. Der
+  // Trenner-SPRUNG selbst laeuft in CommitSelection ueber den ItemIndex.
+  if FHasPending and (FPendingTag = SEPARATOR_TAG) then
+    FHasPending := False;
 end;
 
-procedure TFuzzyComboSearch.CommitSelection;
+procedure TFuzzyComboSearch.CommitSelection(AGesture: TCommitGesture);
 // Der eine Ort, an dem der Host erfaehrt, dass sich etwas geaendert hat.
 //
 // Das Tag-Gate ist kein Luxus: Zuklappen ohne Auswahl-Aenderung (Escape,
 // Klick daneben, Enter auf dem bereits gewaehlten Eintrag) darf keinen
 // Filterlauf ausloesen.
+//
+// AGesture: siehe TCommitGesture - nur cgAccept darf das eindeutige
+// Ziel einer getippten Reduktion committen (Escape-Regression des
+// Chargen-Reviews 06.09.).
 var
-  Tag : NativeInt;
+  Tag, LiveTag : NativeInt;
 begin
   if FUpdating then Exit;
   if not Assigned(FCombo) then Exit;
@@ -726,25 +862,46 @@ begin
   if FHasPending then
   begin
     Tag := FPendingTag;
-    RestoreAllAndSelect(Tag);
+    // LIVE-VORRANG (Bestandsfix, Chargen-Review 06.09.): blaettert der
+    // Nutzer in der offenen Liste auf B und KLICKT dann C, laeuft der
+    // Maus-Commit (CLOSEUP zuerst) mit cursel=C, waehrend das Pending
+    // noch B traegt - ohne den Vorrang gewann B und der Klick auf C
+    // verschwand spurlos (der Nachzuegler-Verwurf las danach
+    // C=FCommitted-fremd, aber die Anzeige stand schon auf B). Die
+    // SICHTBARE Auswahl ist die juengere Willensaeusserung. Ohne
+    // gueltige Live-Auswahl (Pfeiltasten bei geschlossener Liste)
+    // traegt das Pending; ein Live-Trenner faellt in den Sprung unten.
+    if SelectedTag(LiveTag) and (LiveTag <> FPendingTag) then
+      Tag := LiveTag;
   end
-  else if SelectedTag(Tag) then
+  else if not SelectedTag(Tag)
+       and not ((AGesture = cgAccept) and FIsFiltering
+                and SingleVisibleTarget(Tag)) then
   begin
-    RestoreAllAndSelect(Tag);
-  end
-  else
-  begin
+    // Weder Auswahl noch (erlaubtes) eindeutiges Tipp-Ziel. Der
+    // Einzeltreffer-Fall dahinter: Tippen erzeugt kein CBN_SELCHANGE
+    // und der Listen-Neuaufbau laesst ItemIndex=-1 - ohne den
+    // SingleVisibleTarget-Zweig verwarf Enter Eingabe UND Reduktion,
+    // "Enter tat nichts" (Event-Review 06.09.). Mehrdeutige Eingaben
+    // verwerfen weiterhin: Auto-Auswahl aus mehreren waere geraten.
     RestoreAll;
     Exit;                       // nichts gewaehlt -> nichts zu melden
   end;
   FHasPending := False;
 
-  // Sektions-Trenner sind keine Auswahl: ein Commit auf SEPARATOR_TAG
-  // wuerde FCommitted auf -1 setzen und den Host mit einem
-  // unwaehlbaren Eintrag benachrichtigen (Robustheits-Gate, Bugfix
-  // 06.09.2026 - der EXE-Host hat anders als das Plugin keinen
-  // eigenen Separator-Sprung).
-  if Tag = SEPARATOR_TAG then Exit;
+  // Ein Sektions-Trenner ist keine Auswahl - ResolveSeparatorJump
+  // liefert den ersten Eintrag der Sektion darunter (User-Wunsch;
+  // Details und Gate-Begruendung dort). Ohne Sprungziel wird die
+  // vorige Auswahl zurueckgelegt und nichts gemeldet: ein Commit auf
+  // SEPARATOR_TAG wuerde FCommitted vergiften und den Host mit einem
+  // unwaehlbaren Eintrag melden.
+  if (Tag = SEPARATOR_TAG) and not ResolveSeparatorJump(Tag) then
+  begin
+    RestoreAllAndSelect(FCommitted);
+    Exit;
+  end;
+
+  RestoreAllAndSelect(Tag);
 
   if Tag = FCommitted then Exit;
   FCommitted := Tag;
@@ -761,8 +918,9 @@ end;
 
 procedure TFuzzyComboSearch.ComboCloseUp(Sender: TObject);
 // CBN_CLOSEUP - die dokumentierte Stelle fuer teure Verarbeitung.
+// OHNE Einzeltreffer-Annahme: ein Zuklappen kommt auch von Escape.
 begin
-  CommitSelection;
+  CommitSelection(cgCloseUp);
   if Assigned(FHostCloseUp) then
   begin
     FHostCloseUp(FCombo);
@@ -776,7 +934,8 @@ procedure TFuzzyComboSearch.ComboExit(Sender: TObject);
 begin
   if FIsFiltering or FHasPending then
   begin
-    CommitSelection;
+    // Explizite Geste: ein eindeutiges Tipp-Ziel wird uebernommen.
+    CommitSelection(cgAccept);
   end;
   if Assigned(FHostExit) then
   begin
@@ -799,7 +958,23 @@ begin
     // Enter schliesst die Liste nicht ueberall verlaesslich, und
     // Pfeiltasten bei GESCHLOSSENER Liste erzeugen gar kein CBN_CLOSEUP.
     // Das Tag-Gate in CommitSelection macht einen Doppel-Commit harmlos.
-    CommitSelection;
+    //
+    // Kommt Enter SCHNELLER als die Entprellung (FPending noch offen),
+    // wird die Reduktion erst angewandt - sonst saehe der
+    // Einzeltreffer-Zweig in CommitSelection noch die alte Liste.
+    // Nur bei GESCHLOSSENER Liste - ein Listen-Umbau von hier aus
+    // wuerde die CLOSEUP-Nachrichtenfolge kreuzen. BEKANNTE GRENZE
+    // (Chargen-Review 06.09.): bei OFFENER Liste raeumt der
+    // CLOSEUP-Leercommit die Eingabe bereits vor dem KeyUp - Enter
+    // committet den Einzeltreffer dort nicht. Der Standard-Tippweg
+    // ist die geschlossene Liste (sie oeffnet sich beim Tippen nicht
+    // von selbst, s. TimerTick).
+    if (FPending <> '') and not IsListDropped then
+    begin
+      FilterNow;
+    end;
+    // Explizite Geste: ein eindeutiges Tipp-Ziel wird uebernommen.
+    CommitSelection(cgAccept);
   end;
   if Assigned(FHostKeyUp) then
   begin

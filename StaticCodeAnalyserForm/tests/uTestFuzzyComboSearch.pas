@@ -63,18 +63,47 @@ type
     [Test] procedure MouseOrder_EditEcho_DoesNotShrinkList;
     [Test] procedure MouseOrder_SecondSelection_NotifiesAgain;
     [Test] procedure TypedFullTextOfOtherEntry_StillFilters;
-    [Test] procedure SeparatorCommit_DoesNotNotifyHost;
+    // Event-Review 06.09.2026: Trenner-Klick springt jetzt in BEIDEN
+    // Wirten zum ersten Eintrag der Sektion (vorher Host-Sonderweg im
+    // Plugin, den das Separator-Gate unerreichbar machte), und die
+    // Maus-Reihenfolge hinterlaesst kein stales -1-Pending mehr.
+    [Test] procedure SeparatorCommit_Keyboard_JumpsToFirstEntryOfSection;
+    [Test] procedure SeparatorClick_MouseOrder_DoesNotSwallowNextSelection;
+    [Test] procedure ArrowBrowse_EditEcho_DoesNotShrinkList;
+    [Test] procedure ComboFreedBeforeHelper_DestroyDoesNotTouchIt;
+    // Event-Review 06.09.2026, Enter-Pfad (Nicos Kernfrage): Enter nach
+    // Fuzzy-Tippen lief in den Leer-Zweig (Tippen erzeugt kein
+    // CBN_SELCHANGE, der Listen-Neuaufbau laesst ItemIndex = -1) und
+    // verwarf Eingabe UND Reduktion. Jetzt committet ein EINDEUTIGES
+    // Tipp-Ziel; mehrdeutige Eingaben verwerfen weiterhin bewusst.
+    [Test] procedure Enter_TypedUnambiguous_CommitsSingleHit;
+    [Test] procedure Enter_TypedAmbiguous_DoesNotCommit;
+    [Test] procedure Enter_OnSelectedEntry_NotifiesOnceDespiteCloseUp;
+    // Chargen-Review 06.09. (Runde 2): der Einzeltreffer-Commit gilt
+    // nur fuer EXPLIZITE Gesten (Enter/Fokusverlust) - ein Zuklappen
+    // kommt auch von Escape; die Live-Auswahl schlaegt ein aelteres
+    // Blaetter-Pending; Hinweiszeilen-Klicks und Trenner am Listenende
+    // committen nichts.
+    [Test] procedure EscapeCloseUp_AfterTyping_DoesNotCommit;
+    [Test] procedure FocusLoss_UnambiguousTyping_Commits;
+    [Test] procedure ArrowBrowseOpen_ThenMouseClick_CommitsClickedEntry;
+    [Test] procedure NoMatchesRow_ClickInStaleWindow_DoesNotCommit;
+    [Test] procedure SeparatorAtEnd_RestoresPreviousSelection;
   end;
 
 implementation
 
-// noinspection-file ClassPerFile, EmptyVisibilitySection, DuplicateString
+// noinspection-file ClassPerFile, EmptyVisibilitySection, DuplicateString, GodClass, HardcodedString
 // Zwei Fixtures in einer Unit: die reine Bewertungsfunktion und der
 // Ereignis-Vertrag gehoeren fachlich zusammen und sollen zusammen
 // gefunden werden. 'public' direkt nach dem Klassenkopf ist die
 // DUnitX-Form (Testmethoden muessen sichtbar sein). Der Beispielstring
 // 'SCA003  SQLInjection' wiederholt sich absichtlich - er ist der
-// Pruefgegenstand mehrerer Faelle.
+// Pruefgegenstand mehrerer Faelle. GodClass: eine DUnitX-Fixture
+// waechst mit jedem Ereignis-Regressionsfall - die Testmethoden SIND
+// der Katalog, eine Aufspaltung wuerde nur das Setup duplizieren.
+// HardcodedString: 'Rule20'/'Rule1' sind FIXTURE-EINGABEN in das
+// Tipp-Feld, keine nutzersichtbaren Texte.
 
 const
   SEPARATOR_TAG = -1;
@@ -418,20 +447,265 @@ begin
     'echtes Tippen reduziert weiterhin (Liste voll = Waechter zu breit)');
 end;
 
-procedure TTestFuzzyComboEvents.SeparatorCommit_DoesNotNotifyHost;
-// Ein Commit auf der Trennzeile (Tag -1) meldet nichts und vergiftet
-// das Commit-Gedaechtnis nicht.
+procedure TTestFuzzyComboEvents.Enter_TypedUnambiguous_CommitsSingleHit;
+// 'Rule20' trifft in der Fixture GENAU einen Eintrag (von Hand geprueft:
+// 'Rule2' hat keine 0, 'Rule12' keine 2-0-Folge). Enter muss dieses
+// eine Ziel committen - am Bestand blieb ItemIndex auf 'All' stehen
+// (Tippen selektiert nicht) und das Tag-Gate schwieg: dieser Test ist
+// am Bestand ROT.
+var
+  Key : Word;
 begin
-  FCombo.ItemIndex := 1;             // '--- Errors (A-Z) ---'
+  FCombo.Text := 'Rule20';
+  SendNotify(CBN_EDITCHANGE);
+  Key := VK_RETURN;
+  FCombo.OnKeyUp(FCombo, Key, []);   // Attach hat ComboKeyUp verdrahtet
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'Enter auf eindeutigem Tipp-Treffer muss genau einmal melden');
+  Assert.IsTrue(FCombo.ItemIndex >= 0, 'das Ziel muss selektiert sein');
+  Assert.AreEqual<NativeInt>(120,
+    NativeInt(FCombo.Items.Objects[FCombo.ItemIndex]),
+    'committet wird der eine Fuzzy-Treffer (SCA020  Rule20)');
+end;
+
+procedure TTestFuzzyComboEvents.Enter_TypedAmbiguous_DoesNotCommit;
+// 'Rule1' trifft Rule1 und Rule10..Rule19 - keine Auto-Auswahl aus
+// mehreren Treffern (waere geraten). Enter verwirft wie bisher.
+var
+  Key  : Word;
+  Voll : Integer;
+begin
+  Voll := FCombo.Items.Count;
+  FCombo.Text := 'Rule1';
+  SendNotify(CBN_EDITCHANGE);
+  Key := VK_RETURN;
+  FCombo.OnKeyUp(FCombo, Key, []);
+  Assert.AreEqual<Integer>(0, FChangeCount,
+    'mehrdeutiges Enter darf nicht raten und nicht melden');
+  Assert.AreEqual<Integer>(Voll, FCombo.Items.Count,
+    'nach dem verworfenen Enter steht die volle Liste');
+end;
+
+procedure TTestFuzzyComboEvents.Enter_OnSelectedEntry_NotifiesOnceDespiteCloseUp;
+// Der Kommentar am VK_RETURN-Zweig behauptet seit dem 06.09., das
+// Tag-Gate mache den Doppel-Commit (Enter-KeyUp + nachfolgendes
+// CBN_CLOSEUP) harmlos - hier ist der Beweis fuer die reale
+// Enter-Sequenz (Testluecke aus dem Event-Review).
+var
+  Key : Word;
+begin
+  FCombo.ItemIndex := 5;
   SendNotify(CBN_SELCHANGE);
+  Key := VK_RETURN;
+  FCombo.OnKeyUp(FCombo, Key, []);   // Commit ueber den KeyUp-Zweig
+  SendNotify(CBN_CLOSEUP);           // Windows schliesst die Liste danach
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'Enter + CloseUp auf derselben Auswahl melden zusammen genau einmal');
+end;
+
+procedure TTestFuzzyComboEvents.EscapeCloseUp_AfterTyping_DoesNotCommit;
+// Escape schliesst eine offene Liste (CBN_CLOSEUP) BEVOR der
+// Escape-KeyUp laeuft. Der CLOSEUP-Commit darf das eindeutige
+// Tipp-Ziel deshalb NICHT uebernehmen - sonst wuerde ein Abbruch zur
+// Auswahl (Regression der ersten Einzeltreffer-Fassung, vom
+// Chargen-Review gefangen: dieser Test ist an ihr ROT).
+var
+  Voll : Integer;
+begin
+  Voll := FCombo.Items.Count;
+  FCombo.Text := 'Rule20';
+  SendNotify(CBN_EDITCHANGE);
+  FSearch.FilterNow;                 // Liste = 1 Treffer
+  SendNotify(CBN_CLOSEUP);           // Zuklappen durch Escape
+  Assert.AreEqual<Integer>(0, FChangeCount,
+    'ein Zuklappen ist keine explizite Uebernahme-Geste');
+  Assert.AreEqual<Integer>(Voll, FCombo.Items.Count,
+    'die volle Liste ist zurueckgelegt');
+end;
+
+procedure TTestFuzzyComboEvents.FocusLoss_UnambiguousTyping_Commits;
+// Fokusverlust ist wie Enter eine Uebernahme-Geste: ein eindeutiges
+// Tipp-Ziel wird committet (Testluecke aus dem Chargen-Review).
+begin
+  FCombo.Text := 'Rule20';
+  SendNotify(CBN_EDITCHANGE);
+  FSearch.FilterNow;
+  FCombo.OnExit(FCombo);             // Attach hat ComboExit verdrahtet
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'Fokusverlust uebernimmt das eindeutige Tipp-Ziel');
+  Assert.AreEqual<NativeInt>(120,
+    NativeInt(FCombo.Items.Objects[FCombo.ItemIndex]),
+    'uebernommen wird der eine Fuzzy-Treffer');
+end;
+
+procedure TTestFuzzyComboEvents.ArrowBrowseOpen_ThenMouseClick_CommitsClickedEntry;
+// BESTANDSFIX (Chargen-Review 06.09.): Blaettern auf B (Pending),
+// dann Maus-Klick auf C - der Maus-Commit laeuft mit cursel=C, das
+// Pending traegt noch B. Ohne den Live-Vorrang gewann B und der Klick
+// auf C verschwand spurlos; dieser Test ist am Vor-Fix-Stand ROT.
+begin
+  FCombo.ItemIndex := 5;             // Blaettern -> Pending Tag 104
+  SendNotify(CBN_SELCHANGE);
+  FCombo.ItemIndex := 7;             // Maus-Klick: cursel steht auf C
+  SendNotify(CBN_CLOSEUP);
+  SendNotify(CBN_SELCHANGE);         // Nachzuegler der Maus-Reihenfolge
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'der Klick committet genau einmal');
+  Assert.AreEqual<NativeInt>(106,
+    NativeInt(FCombo.Items.Objects[FCombo.ItemIndex]),
+    'committet wird der GEKLICKTE Eintrag, nicht das Blaetter-Pending');
+end;
+
+procedure TTestFuzzyComboEvents.NoMatchesRow_ClickInStaleWindow_DoesNotCommit;
+// Das 160-ms-Fenster nach dem Textloeschen: FIsFiltering ist schon
+// False, die Anzeige zeigt noch die reduzierte Liste. Ein Klick auf
+// die '(no matches)'-Hinweiszeile (Tag -1) darf dann keinen
+// willkuerlichen Schnappschuss-Eintrag committen - das fruehere
+// not-FIsFiltering-Gate tat genau das (dieser Test ist daran ROT);
+// das Count-Gate (Anzeige == Schnappschuss) haelt dicht.
+begin
+  FCombo.Text := NO_MATCH_QUERY;
+  SendNotify(CBN_EDITCHANGE);
+  FSearch.FilterNow;                 // Liste = ['(no matches)']
+  FCombo.Text := '';
+  SendNotify(CBN_EDITCHANGE);        // FIsFiltering=False, Liste noch reduziert
+  FCombo.ItemIndex := 0;             // Klick auf die Hinweiszeile
   SendNotify(CBN_CLOSEUP);
   Assert.AreEqual<Integer>(0, FChangeCount,
-    'Trennzeile ist keine Auswahl');
+    'die Hinweiszeile ist kein Sprungbrett in den Schnappschuss');
+  // Commit-Gedaechtnis unvergiftet: eine normale Auswahl meldet danach.
   FCombo.ItemIndex := 5;
   SendNotify(CBN_SELCHANGE);
   SendNotify(CBN_CLOSEUP);
   Assert.AreEqual<Integer>(1, FChangeCount,
     'danach meldet eine normale Auswahl genau einmal');
+end;
+
+procedure TTestFuzzyComboEvents.SeparatorAtEnd_RestoresPreviousSelection;
+// Trenner ohne Folge-Eintrag: kein Sprungziel - die vorige Auswahl
+// wird zurueckgelegt, nichts gemeldet (Testluecke aus dem Review).
+begin
+  FCombo.ItemIndex := 5;
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(1, FChangeCount, 'Vorbedingung: Auswahl steht');
+
+  FCombo.Items.AddObject('--- tail ---', TObject(SEPARATOR_TAG));
+  FSearch.Resync;                    // Schnappschuss inkl. End-Trenner
+
+  FCombo.ItemIndex := FCombo.Items.Count - 1;   // Klick auf den End-Trenner
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'ohne Sprungziel wird nichts gemeldet');
+  Assert.AreEqual<NativeInt>(104,
+    NativeInt(FCombo.Items.Objects[FCombo.ItemIndex]),
+    'die vorige Auswahl liegt wieder an');
+end;
+
+procedure TTestFuzzyComboEvents.ComboFreedBeforeHelper_DestroyDoesNotTouchIt;
+// Teardown-Reihenfolge des VCL: Kind-CONTROLS sterben in
+// TWinControl.Destroy VOR den besessenen Komponenten (DestroyComponents).
+// Die Combo ist also beim Helfer-Destroy schon weg - ohne
+// FreeNotification schrieb die Handler-Restauration in freigegebenen
+// Speicher. GRENZE DES BEWEISES: ohne FullDebugMode ist ein stilles
+// Use-after-free meist symptomlos; der Test dokumentiert den Vertrag
+// und schlaegt unter einem pruefenden Speichermanager an.
+var
+  LCombo  : TComboBox;
+  LSearch : TFuzzyComboSearch;
+begin
+  LCombo := TComboBox.Create(nil);
+  try
+    LCombo.Parent := FForm;
+    LCombo.Items.AddObject('All', TObject(0));
+    LCombo.ItemIndex := 0;
+    LSearch := TFuzzyComboSearch.Create(nil);
+    try
+      LSearch.Attach(LCombo);
+      FreeAndNil(LCombo);          // Combo stirbt ZUERST (Teardown-Ordnung)
+    finally
+      LSearch.Free;                // darf die tote Combo nicht anfassen
+    end;
+  finally
+    LCombo.Free;                   // nil-sicher (FreeAndNil oben)
+  end;
+  Assert.Pass('Helfer-Destroy nach Combo-Free laeuft ohne Zugriff auf die tote Combo');
+end;
+
+procedure TTestFuzzyComboEvents.SeparatorCommit_Keyboard_JumpsToFirstEntryOfSection;
+// Tastatur-Reihenfolge (SELCHANGE vor CLOSEUP) auf der Trennzeile:
+// der Commit springt zum ERSTEN Eintrag der Sektion darunter und
+// meldet GENAU diesen - kein -1 im Commit-Gedaechtnis.
+// Fixture: Index 1 = '--- Errors (A-Z) ---', Index 2 = SCA001 (Tag 101).
+begin
+  FCombo.ItemIndex := 1;
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'Trenner-Klick springt und meldet den Sektions-Anfang genau einmal');
+  Assert.IsTrue(FCombo.ItemIndex >= 0, 'Sprungziel muss selektiert sein');
+  Assert.AreEqual<NativeInt>(101,
+    NativeInt(FCombo.Items.Objects[FCombo.ItemIndex]),
+    'Sprungziel ist der erste Eintrag NACH dem Trenner');
+  // Dieselbe Sektion erneut anspringen ist keine Aenderung mehr.
+  FCombo.ItemIndex := 1;
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'zweiter Sprung auf denselben Eintrag meldet nicht erneut');
+end;
+
+procedure TTestFuzzyComboEvents.SeparatorClick_MouseOrder_DoesNotSwallowNextSelection;
+// MAUS-Reihenfolge (CLOSEUP vor SELCHANGE) auf der Trennzeile. Am
+// Bestand hinterliess der Nachzuegler-SELCHANGE ein Pending mit Tag -1
+// (der Gleichheits-Verwurf fasst nur FPendingTag = FCommitted): der
+// NAECHSTE Klick auf einen echten Eintrag wurde verworfen und die
+// Combo sprang auf den ersten Trenner zurueck - dieser Test ist am
+// Bestand ROT.
+begin
+  FCombo.ItemIndex := 1;             // Klick auf die Trennzeile
+  SendNotify(CBN_CLOSEUP);           // Maus: Commit laeuft ZUERST
+  SendNotify(CBN_SELCHANGE);         // Nachzuegler liest den Ist-Stand
+  FCombo.Text := FCombo.Items[FCombo.ItemIndex];
+  SendNotify(CBN_EDITCHANGE);        // EN_CHANGE-Echo des Text-Updates
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'Trenner-Klick per Maus springt und meldet genau einmal');
+
+  FCombo.ItemIndex := 7;             // naechster Klick: echter Eintrag
+  SendNotify(CBN_CLOSEUP);
+  SendNotify(CBN_SELCHANGE);
+  Assert.AreEqual<Integer>(2, FChangeCount,
+    'der Klick nach dem Trenner darf nicht verschluckt werden');
+  Assert.AreEqual<NativeInt>(106,
+    NativeInt(FCombo.Items.Objects[FCombo.ItemIndex]),
+    'die Combo muss die geklickte Auswahl zeigen, nicht die Trennzeile');
+end;
+
+procedure TTestFuzzyComboEvents.ArrowBrowse_EditEcho_DoesNotShrinkList;
+// Pfeiltasten-Blaettern bei GESCHLOSSENER Liste aktualisiert den
+// Edit-Text je Taste und erzeugt dasselbe EN_CHANGE-Echo wie die
+// Maus-Auswahl - nur dass hier NIE ein CLOSEUP den Timer stoppt. Der
+// Echo-Waechter muss also auch diese Echos schlucken, sonst reduziert
+// der Entprell-Timer die Liste still auf den Auswahltext
+// (Testluecke aus dem Event-Review 06.09.).
+var
+  Voll : Integer;
+begin
+  Voll := FCombo.Items.Count;
+  FCombo.ItemIndex := 5;
+  SendNotify(CBN_SELCHANGE);
+  FCombo.Text := FCombo.Items[5];
+  SendNotify(CBN_EDITCHANGE);
+  FCombo.ItemIndex := 6;
+  SendNotify(CBN_SELCHANGE);
+  FCombo.Text := FCombo.Items[6];
+  SendNotify(CBN_EDITCHANGE);
+  FSearch.FilterNow;                 // ein faelschlich armierter Timer laeuft ab
+  Assert.AreEqual<Integer>(Voll, FCombo.Items.Count,
+    'Blaettern-Echos duerfen die Liste nicht reduzieren');
+  Assert.AreEqual<Integer>(0, FChangeCount,
+    'Blaettern allein meldet weiterhin nicht');
 end;
 
 end.

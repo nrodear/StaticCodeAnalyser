@@ -54,12 +54,6 @@ type
     // zu erweitern.
     FAllSeverityItems  : TArray<TFilterComboItem>;
     FAllTypeItems      : TArray<TFilterComboItem>;
-    // Letzter NICHT-Separator-Mode der gewaehlt war. Wird gebraucht um
-    // bei Klick auf einen Separator (Tag = -1) NICHT auf 'All'
-    // zurueckzuspringen sondern auf die zuletzt aktive Auswahl.
-    // Default 0 = Ord(fmAll); FilterChange aktualisiert bei jedem
-    // gueltigen Klick.
-    FLastNonSeparatorMode : Integer;
     // Unterdrueckungs-Zaehler fuer ApplyFilter. Ein Kachel-Klick setzt BEIDE
     // Combos und muss danach BEIDE Change-Handler rufen (der ItemIndex-Setter
     // feuert kein OnChange) - jeder von ihnen endet in ApplyFilter, also lief
@@ -344,6 +338,18 @@ type
     // setzt sie danach auf 'All' zurueck (Nutzerentscheid 2026-08-12:
     // ein Scan startet immer ungefiltert; identisch in der EXE).
     procedure RebuildFilterCombos;
+    // Kreuz-Reduktion (Nutzerentscheid 2026-09-06): baut NUR die
+    // Severity-Combo neu, reduziert auf Eintraege mit Treffern unter
+    // der AKTUELLEN Type-Sicht (FTypeFilter, +Baseline) und erhaelt
+    // die Auswahl, solange sie Treffer hat (sonst Rueckfall 'All' -
+    // inklusive FFilterMode, denn ApplyFilter liest die FELDER).
+    procedure RebuildSeverityComboForView;
+    // Baseline-bereinigte Zaehlbasis der Combo-Reduktionen (Konsistenz-
+    // Vertrag mit dem Grid, Review-Blocker 2026-08-12). AOwned traegt
+    // die ggf. erzeugte Filterliste - der Aufrufer gibt sie frei
+    // (nil-sicher, nil.Free ist ein No-op).
+    function BuildCountSource(
+      out AOwned: TList<TLeakFinding>): TList<TLeakFinding>;
     // UI-Build-Helper: aus dem Constructor ausgelagert um die Setup-
     // Pfade lesbar zu halten. Reihenfolge im Constructor:
     //   ApplyToolbarSizing -> WireResponsiveLayout -> BuildResultGrid.
@@ -1362,8 +1368,9 @@ end;
 
 procedure TAnalyserFrame.PopulateFilterCombo;
 // Severity-Filter: gruppiert nach Errors / Warnings / Hints. Sentinel-Items
-// mit Tag = -1 (z.B. '--- Errors ---') sind nicht selektierbar; FilterChange
-// faengt den Klick darauf ab und setzt zurueck auf "All".
+// mit Tag = -1 (z.B. '--- Errors ---') sind nicht selektierbar; Klicks
+// darauf behandelt der Fuzzy-Helfer (CommitSelection springt zum ersten
+// Eintrag der Sektion), FilterChange ignoriert Tag -1 nur noch defensiv.
 
   procedure Add(const ACaption: string; AMode: TFilterMode);
   begin
@@ -1655,17 +1662,24 @@ begin
            + sLineBreak + _('Click: filter grid to Hints'),
            Ord(fmHints), TileClickSeverity);
 
+  // Diese beiden gibt es seit dem Checklist-Dedup 2026-07-24 NICHT mehr
+  // als fm-Modus in der Combo - Ziel ist der generierte REGEL-Eintrag
+  // (KIND_TAG_BASE + Ord(Kind)), wie in der EXE. Die alten
+  // Ord(fm...)-Tags verfehlten seither IMMER und fielen still auf
+  // 'All' (Bestandsfund des Chargen-Reviews 06.09.).
   WireTile(FTileFileSev,  _('Read errors') + sLineBreak +
            _('File could not be read / parsed. Check path/encoding.')
            + sLineBreak + _('Click: filter grid to read errors'),
-           Ord(fmFileReadError), TileClickSeverity);
+           TFindingFilter.KIND_TAG_BASE + Ord(fkFileReadError),
+           TileClickSeverity);
 
   // Detector-spezifische Kachel
   WireTile(FTileCyclomatic, _('Cyclomatic Complexity') + sLineBreak +
            _('Methods with McCabe complexity > threshold (default 10).')
            + sLineBreak + _('Hard to test - refactor into smaller methods.')
            + sLineBreak + _('Click: filter grid to Cyclomatic'),
-           Ord(fmCyclomaticComplexity), TileClickSeverity);
+           TFindingFilter.KIND_TAG_BASE + Ord(fkCyclomaticComplexity),
+           TileClickSeverity);
 
   // Type-Bucket-Kacheln -> klick filtert TypeCombo
   WireTile(FTileBug,      _('Bugs') + sLineBreak +
@@ -1735,7 +1749,6 @@ end;
 procedure TAnalyserFrame.FilterChange(Sender: TObject);
 var
   idx, tag: Integer;
-  OldOnChange: TNotifyEvent;
 begin
   // Defensive Bound-Checks: ItemIndex kann -1 sein (nichts ausgewaehlt) oder
   // bei einer leeren Combo theoretisch ungueltig. Items.Objects[-1] waere AV.
@@ -1744,79 +1757,17 @@ begin
   if (idx < 0) or (idx >= FFilterCombo.Items.Count) then Exit;
 
   tag := Integer(FFilterCombo.Items.Objects[idx]);
-  if tag < 0 then
-  begin
-    // Separator-Eintrag (---/--- Errors ---/--- Hints ---). User-Wunsch:
-    // beim Klick zum NAECHSTEN Detail-Eintrag UNTERHALB des Separators
-    // springen (= erstes Item der jeweiligen Kategorie). Fallback wenn
-    // kein Item mehr unter dem Separator liegt: vorherige Auswahl
-    // wiederherstellen.
-    // Re-Entry-Schutz: ItemIndex-Setzen feuert OnChange erneut.
-    var NextIdx : Integer := -1;
-    for var j := idx + 1 to FFilterCombo.Items.Count - 1 do
-      if Integer(FFilterCombo.Items.Objects[j]) >= 0 then
-      begin
-        NextIdx := j;
-        Break;
-      end;
-    if NextIdx >= 0 then
-    begin
-      // Forward-Springen zum naechsten echten Eintrag - Filter wechselt.
-      tag := Integer(FFilterCombo.Items.Objects[NextIdx]);
-      OldOnChange := FFilterCombo.OnChange;
-      FFilterCombo.OnChange := nil;
-      try
-        FFilterCombo.ItemIndex := NextIdx;
-      finally
-        FFilterCombo.OnChange := OldOnChange;
-      end;
-      // Der Fuzzy-Helfer MUSS von einer programmatischen Auswahl erfahren -
-      // sonst misst sein Tag-Gate in CommitSelection gegen einen
-      // ueberholten Schnappschuss und verschluckt die naechste
-      // Wieder-Auswahl. Genau das passierte hier: nach dem ersten
-      // Separator-Klick klemmte jeder weitere, die Combo zeigte die nicht
-      // waehlbare Trennzeile und das Grid blieb auf dem alten Filter.
-      // Die sechs Kachel-Handler rufen das seit dem Review vom 12.08.,
-      // dieser Pfad war uebersehen worden.
-      if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
-      if TFindingFilter.KindFromTag(tag, FFilterKind) then
-        FFilterMode := fmSingleKind
-      else
-        FFilterMode := TFilterMode(tag);
-      FLastNonSeparatorMode := tag;
-      ApplyFilter;
-      Exit;
-    end;
-    // Kein Folge-Eintrag (Separator am Listen-Ende) -> vorherige Auswahl
-    // wiederherstellen, kein Filter-Update.
-    var RestoreIdx := 0;
-    for var i := 0 to FFilterCombo.Items.Count - 1 do
-      if (Integer(FFilterCombo.Items.Objects[i]) = FLastNonSeparatorMode)
-         and (Integer(FFilterCombo.Items.Objects[i]) >= 0) then
-      begin
-        RestoreIdx := i;
-        Break;
-      end;
-    OldOnChange := FFilterCombo.OnChange;
-    FFilterCombo.OnChange := nil;
-    try
-      FFilterCombo.ItemIndex := RestoreIdx;
-    finally
-      FFilterCombo.OnChange := OldOnChange;
-    end;
-    // Wie im Vorwaerts-Zweig: programmatische Auswahl dem Fuzzy-Helfer
-    // melden. Dieser Zweig ist nur ueber einen Separator am LISTENENDE
-    // erreichbar und damit praktisch tot - der Aufruf schadet dort nicht
-    // und haelt die beiden Haelften gleich, damit der naechste Umbau nicht
-    // wieder nur eine anfasst.
-    if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
-    Exit;
-  end;
+  // Trennzeilen erreichen den Handler nicht mehr: seit dem Trenner-
+  // Sprung im geteilten Helfer (Event-Review 06.09.) springt
+  // CommitSelection selbst zum ersten Eintrag der Sektion und meldet
+  // DEN - der fruehere 68-zeilige Sonderweg hier war seit dem
+  // Separator-Gate unerreichbar und ist ausgebaut. Der Guard bleibt
+  // fuer theoretische Direktaufrufe mit Trenner-Selektion.
+  if tag < 0 then Exit;
   if TFindingFilter.KindFromTag(tag, FFilterKind) then
     FFilterMode := fmSingleKind
   else
     FFilterMode := TFilterMode(tag);
-  FLastNonSeparatorMode := tag;  // Anker fuer den naechsten Separator-Klick
   ApplyFilter;
 end;
 
@@ -1833,6 +1784,11 @@ begin
     FTypeFilter := TTypeFilter(Integer(FTypeCombo.Items.Objects[idx]))
   else
     FTypeFilter := tfAll;
+  // Kreuz-Reduktion VOR dem Filterlauf (Nutzerentscheid 2026-09-06):
+  // die Severity-Combo bietet unter der neuen Type-Sicht nur noch
+  // Eintraege mit Treffern an; eine wegfallende Auswahl faellt auf
+  // 'All' zurueck (inkl. FFilterMode), das ApplyFilter direkt anwendet.
+  RebuildSeverityComboForView;
   ApplyFilter;
 end;
 
@@ -2344,65 +2300,28 @@ procedure TAnalyserFrame.RebuildFilterCombos;
 // nannte bis 2026-08-19 noch einen einzigen Aufrufer.
 var
   Item : TFilterComboItem;
-  i : Integer;
   Filtered : TArray<TFilterComboItem>;
-  Tmp : TList<TFilterComboItem>;
   CountSrc : TList<TLeakFinding>;
   OwnedSrc : TList<TLeakFinding>;
 begin
   if FAllFindings = nil then Exit;
   if Length(FAllSeverityItems) = 0 then Exit;
 
-  // KONSISTENZ MIT DEM GRID (Review-Blocker 2026-08-12): gezaehlt wird
-  // auf derselben baseline-bereinigten Menge, die ApplyFilter anzeigt.
-  // Vorher zaehlte die Reduktion roh - bei aktivem "nur neue Funde" bot
-  // die Combo Eintraege an, deren Grid-Sicht leer war. Die Kacheln
-  // zaehlen bewusst weiter die Gesamtmenge (Nutzerentscheid 2026-08-12);
-  // die Statuszeile benennt die ausgeblendete Anzahl.
-  // try beginnt VOR dem Create (nil.Free ist ein No-op): die
-  // Befuellschleife allokiert (Fingerprint-Strings, Listen-Wachstum) -
-  // eine Ausnahme dort haette die Liste sonst geleakt.
-  OwnedSrc := nil;
-  CountSrc := FAllFindings;
+  // Zaehlbasis: baseline-bereinigt via BuildCountSource (Konsistenz-
+  // Vertrag mit dem Grid, Review-Blocker 2026-08-12; Kacheln zaehlen
+  // bewusst weiter die Gesamtmenge, die Statuszeile benennt die
+  // ausgeblendete Anzahl). BuildCountSource ist selbst ausnahme-fest
+  // (im Fehlerfall bleibt OwnedSrc nil, nil.Free ist ein No-op);
+  // das try/finally hier sichert die Freigabe ueber die Reduktion.
+  CountSrc := BuildCountSource(OwnedSrc);
   try
-  if BaselineFilterActive then
-  begin
-    OwnedSrc := TList<TLeakFinding>.Create;
-    for i := 0 to FAllFindings.Count - 1 do
-      if not FBaselineSet.Contains(FAllFindings[i]) then
-        OwnedSrc.Add(FAllFindings[i]);
-    CountSrc := OwnedSrc;
-  end;
 
-  // ---- Severity-Filter: zwei-Pass-Filterung ----
-  Tmp := TList<TFilterComboItem>.Create;
-  try
-    for Item in FAllSeverityItems do
-    begin
-      if (Item.ModeOrd = -1)                    // Separator: vorlaeufig behalten
-         or (Item.ModeOrd = Ord(fmAll))
-         or (Item.ModeOrd = Ord(fmDetectorReview))
-         or (TFindingFilter.CountForTag(CountSrc, Item.ModeOrd) > 0) then
-        Tmp.Add(Item);
-    end;
-    // Pass 2: orphan separators entfernen (Separator gefolgt von Separator
-    // oder am Ende der Liste -> weg).
-    SetLength(Filtered, 0);
-    for i := 0 to Tmp.Count - 1 do
-    begin
-      if Tmp[i].ModeOrd = -1 then
-      begin
-        if (i = Tmp.Count - 1) or (Tmp[i + 1].ModeOrd = -1) then
-          Continue;
-      end;
-      // noinspection SetLengthAppendInLoop
-      // Filtered ist klein (max. Filter-Combo-Items, ~5-15); kein Perf-Hot-Path.
-      SetLength(Filtered, Length(Filtered) + 1);
-      Filtered[High(Filtered)] := Tmp[i];
-    end;
-  finally
-    Tmp.Free;
-  end;
+  // ---- Severity-Filter: geteilte Reduktion (uFindingFilter) ----
+  // Mit tfAll, weil dieser Neuaufbau zugleich der Reset BEIDER Combos
+  // auf 'All' ist. Der fruehere Zwei-Pass-Inline-Code (Orphan-Trenner)
+  // lebt seit 2026-09-06 in ReduceSeverityItems - geteilt mit der EXE.
+  Filtered := TFindingFilter.ReduceSeverityItems(FAllSeverityItems,
+    CountSrc, tfAll);
 
   FFilterCombo.Items.BeginUpdate;
   try
@@ -2447,6 +2366,89 @@ begin
   finally
     OwnedSrc.Free;
   end;
+end;
+
+function TAnalyserFrame.BuildCountSource(
+  out AOwned: TList<TLeakFinding>): TList<TLeakFinding>;
+var
+  i : Integer;
+begin
+  AOwned := nil;
+  Result := FAllFindings;
+  if not BaselineFilterActive then Exit;
+  // Ausnahme-fest: wirft die Befuellung (praktisch nur OOM), gibt es
+  // KEINE halbfertige Liste im out-Parameter - der Aufrufer klammert
+  // erst NACH dem Aufruf in try/finally (Chargen-Review 06.09.).
+  AOwned := TList<TLeakFinding>.Create;
+  try
+    for i := 0 to FAllFindings.Count - 1 do
+      if not FBaselineSet.Contains(FAllFindings[i]) then
+        AOwned.Add(FAllFindings[i]);
+  except
+    FreeAndNil(AOwned);
+    raise;
+  end;
+  Result := AOwned;
+end;
+
+procedure TAnalyserFrame.RebuildSeverityComboForView;
+// BEWUSST EINSEITIG: die Type-Combo wird nicht von der Severity-Auswahl
+// reduziert (zirkelfreie Reduktion), und der SUCHTEXT geht nicht in die
+// Sicht ein - er aendert sich je Tastendruck, die Combo flatterte.
+// Pendant in der EXE: TForm2.RebuildSeverityComboForView (dort liest
+// ApplyFilter die Combo direkt; hier sind FFilterMode/FFilterKind die
+// Wahrheit und werden beim Rueckfall mitgesetzt).
+var
+  Filtered : TArray<TFilterComboItem>;
+  CountSrc : TList<TLeakFinding>;
+  OwnedSrc : TList<TLeakFinding>;
+  Item     : TFilterComboItem;
+  KeepTag  : Integer;
+  i        : Integer;
+begin
+  if FAllFindings = nil then Exit;
+  if Length(FAllSeverityItems) = 0 then Exit;
+
+  // Auswahl-Erhalt ueber den TAG aus den FELDERN - sie sind die
+  // Filter-Wahrheit dieses Wirts (ApplyFilter liest nie die Combo).
+  if FFilterMode = fmSingleKind then
+    KeepTag := TFindingFilter.KIND_TAG_BASE + Ord(FFilterKind)
+  else
+    KeepTag := Ord(FFilterMode);
+
+  CountSrc := BuildCountSource(OwnedSrc);
+  try
+    Filtered := TFindingFilter.ReduceSeverityItems(FAllSeverityItems,
+      CountSrc, FTypeFilter);
+  finally
+    OwnedSrc.Free;
+  end;
+
+  FFilterCombo.Items.BeginUpdate;
+  try
+    FFilterCombo.Clear;
+    for Item in Filtered do
+      FFilterCombo.Items.AddObject(Item.Display, TObject(Item.ModeOrd));
+  finally
+    FFilterCombo.Items.EndUpdate;
+  end;
+  FFilterCombo.ItemIndex := 0;
+  FFilterMode := fmAll;                 // Rueckfall - ApplyFilter liest das Feld
+  for i := 0 to FFilterCombo.Items.Count - 1 do
+    if Integer(FFilterCombo.Items.Objects[i]) = KeepTag then
+    begin
+      FFilterCombo.ItemIndex := i;
+      // Felder zur erhaltenen Auswahl zurueckdrehen (FFilterKind ist
+      // bei Nicht-SingleKind-Tags ohne Bedeutung und bleibt stehen).
+      if TFindingFilter.KindFromTag(KeepTag, FFilterKind) then
+        FFilterMode := fmSingleKind
+      else
+        FFilterMode := TFilterMode(KeepTag);
+      Break;
+    end;
+  // Schnappschuss + Commit-Gedaechtnis des Fuzzy-Helfers der neuen
+  // Anzeige nachziehen (Vertrag wie in RebuildFilterCombos).
+  if Assigned(FFilterSearch) then FFilterSearch.Resync;
 end;
 
 procedure TAnalyserFrame.PopulateFindings(
@@ -3921,36 +3923,39 @@ procedure TAnalyserFrame.TileClickSeverity(Sender: TObject);
 // WICHTIG: TComboBox.ItemIndex-Setter feuert OnChange NICHT (nur User-
 // Interaktion tut das). Wir muessen FilterChange/TypeFilterChange explizit
 // aufrufen, sonst aktualisiert sich das Grid nicht.
+//
+// Sender.Tag ist der COMBO-Tag des Ziels: Ord(TFilterMode) fuer die
+// Gruppen-Kacheln, KIND_TAG_BASE+Ord(Kind) fuer die Detektor-Kacheln
+// (ReadErrors/Cyclomatic - deren fm-Modi flogen mit dem Checklist-Dedup
+// 2026-07-24 aus der Combo; die alten Ord(fm...)-Tags verfehlten IMMER
+// und fielen still auf 'All', Chargen-Review 06.09.).
 var
-  Target : TFilterMode;
+  TargetTag : Integer;
 begin
   if not Assigned(FFilterCombo) or not (Sender is TComponent) then Exit;
-  Target := TFilterMode(TComponent(Sender).Tag);
+  TargetTag := TComponent(Sender).Tag;
   // VOR der Zielsuche: eine offene Fuzzy-Reduktion tag-treu zuruecklegen,
   // damit die Suche die VOLLE Liste sieht (sonst verfehlte der Klick
   // sein Ziel, sobald der Nutzer gerade getippt hatte).
   if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   if Assigned(FTypeCombo) and (FTypeCombo.ItemIndex <> 0) then
     FTypeCombo.ItemIndex := 0;
-  // Tag-Suche mit Miss-Rueckfall auf 'All'. Seit 2026-08-19 im geteilten
-  // TTileFilterSelect.SelectByTag - dort steht auch die Begruendung des
-  // Rueckfalls. Vorher stand die Schleife fuenfmal (hier, TileClickType,
-  // und dreimal in der EXE), und der Rueckfall nur in den zwei
-  // Plugin-Kopien.
-  TTileFilterSelect.SelectByTag(FFilterCombo, Ord(Target));
-  // NACH dem Setzen, UNBEDINGT - auch im Miss-Fall (der Eintrag kann
-  // baseline-bereinigt fehlen, waehrend die Kachel die Gesamtmenge
-  // zaehlt): Commit-Gedaechtnis des Fuzzy-Helfers nachziehen
-  // (programmatisches ItemIndex sieht der Helfer nicht), dann BEIDE
-  // Change-Handler wie in der EXE. Vorher liefen sie nur im
-  // Treffer-Zweig - im Miss-Fall zeigte die Typ-Combo 'All', waehrend
-  // der Cache FTypeFilter den alten Wert behielt (Review 2026-08-12,
-  // Logik-Dimension). Erst Type-, dann Filter-Change; beide enden in
-  // ApplyFilter, das gegen denselben Stand idempotent ist.
-  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   Inc(FApplyFilterDepth);
   try
+    // ERST der Type-Wechsel: TypeFilterChange baut seit 2026-09-06 die
+    // Severity-Combo fuer die neue Sicht um (Auswahl-Erhalt aus den
+    // FELDERN). Liefe er NACH der Zielsuche, wuerfe der Umbau die
+    // Kachel-Auswahl wieder weg - Blocker des Chargen-Reviews 06.09.:
+    // alle fuenf Severity-Kacheln zeigten 'All'.
     TypeFilterChange(FTypeCombo);
+    // DANN das Ziel in der frisch aufgebauten tfAll-Liste suchen.
+    // Tag-Suche mit Miss-Rueckfall auf 'All' (geteilt,
+    // TTileFilterSelect.SelectByTag - Begruendung dort; der Eintrag
+    // kann baseline-bereinigt fehlen, die Kachel zaehlt die
+    // Gesamtmenge). Commit-Gedaechtnis des Fuzzy-Helfers nachziehen,
+    // auch im Miss-Fall (programmatisches ItemIndex sieht er nicht).
+    TTileFilterSelect.SelectByTag(FFilterCombo, TargetTag);
+    if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
     FilterChange(FFilterCombo);
   finally
     Dec(FApplyFilterDepth);
