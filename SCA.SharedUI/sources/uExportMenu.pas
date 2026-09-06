@@ -45,6 +45,7 @@ type
     procedure DoExportJira(Sender: TObject);
     procedure DoCopyClipboard(Sender: TObject);
     procedure DoExportHtml(Sender: TObject);
+    procedure DoExportHtmlV2(Sender: TObject);
     procedure DoExportSarif(Sender: TObject);
     procedure DoExportDetectorInfo(Sender: TObject);
     procedure AddSonarItems;
@@ -84,9 +85,10 @@ implementation
 // Export-Menu-Handlers: catch-all an UI-Action-Grenzen - File-IO/
 // Clipboard-Faults sollen als ShowMessage gemeldet werden, nicht die
 // App killen. Idiomatisch fuer VCL-Action-Handler. LargeClass seit dem
-// Detector-Info-Eintrag (534 Zeilen): die Klasse ist der KATALOG der
-// Exportwege - je Format ein Save-Dialog-Handler mit Begruendungs-
-// Kommentaren; eine Aufspaltung zerrisse nur das Menue.
+// Detector-Info-Eintrag, gewachsen um den HTML-V2-Eintrag (07.09.):
+// die Klasse ist der KATALOG der Exportwege - je Format ein
+// Save-Dialog-Handler mit Begruendungs-Kommentaren; eine Aufspaltung
+// zerrisse nur das Menue.
 
 uses
   System.SysUtils, System.Types, Vcl.Dialogs, Vcl.Clipbrd,
@@ -94,7 +96,16 @@ uses
   uExportSARIF,        // TSARIFWriter (SARIF-Eintrag im Menue)
   uEngineApi,          // SCA_DEFAULT_TOOLNAME
   uDetectorInfoExport, // Regelkatalog-Seite (Detector info)
+  uFindingsWorkbenchExport, // Funde-Export V2 (Workbench-Basis, 07.09.)
   uRepoSettings;       // ResolvedConfigPath - Default-Ablage der Seite
+
+const
+  // Dialog-Bausteine der drei HTML-Exporte (V1, V2, Detector-Info) -
+  // seit dem V2-Eintrag dritte Nutzung (Rule of Three). Das msgid
+  // bleibt das Literal der Konstante; _() ist reiner Laufzeit-Lookup,
+  // das Projekt hat keinen _(-Extraktions-Scanner (.po von Hand).
+  HTML_DLG_FILTER = 'HTML file (*.html)|*.html';
+  HTML_DLG_EXT    = 'html';
 
 constructor TFindingExportMenu.Create(AOwner: TComponent;
   AAllFindings: TObjectList<TLeakFinding>;
@@ -116,6 +127,13 @@ begin
   Mi := TMenuItem.Create(FPopup);
     Mi.Caption := _('HTML report (all findings)...');
     Mi.OnClick := DoExportHtml;
+    FPopup.Items.Add(Mi);
+  Mi := TMenuItem.Create(FPopup);
+    // Variante 2 (07.09.): derselbe Umfang (alle Befunde), aber die
+    // Workbench-Seite mit deduplizierter Regel-Doku und Drawer -
+    // bewusst direkt unter der V1, beide bleiben nebeneinander.
+    Mi.Caption := _('HTML report V2 (workbench, all findings)...');
+    Mi.OnClick := DoExportHtmlV2;
     FPopup.Items.Add(Mi);
   Mi := TMenuItem.Create(FPopup);
     // Umfang GEHOERT in die Beschriftung: JSON/CSV schreiben die
@@ -451,8 +469,8 @@ begin
   Dlg := TSaveDialog.Create(nil);
   try
     Dlg.Title      := _('Detector info export');
-    Dlg.Filter     := _('HTML file (*.html)|*.html');
-    Dlg.DefaultExt := 'html';
+    Dlg.Filter     := _(HTML_DLG_FILTER);
+    Dlg.DefaultExt := HTML_DLG_EXT;
     Dlg.FileName   := TDetectorInfoExport.DefaultFileName;
     Dlg.InitialDir := ExtractFilePath(TRepoSettings.ResolvedConfigPath);
     Dlg.Options    := Dlg.Options + [ofOverwritePrompt];
@@ -600,8 +618,8 @@ begin
 
   Dlg := TSaveDialog.Create(nil);
   try
-    Dlg.Filter      := _('HTML file (*.html)|*.html');
-    Dlg.DefaultExt  := 'html';
+    Dlg.Filter      := _(HTML_DLG_FILTER);
+    Dlg.DefaultExt  := HTML_DLG_EXT;
     Dlg.FileName    := ExtractFileName(defName);
     if baseDir <> '' then
       Dlg.InitialDir := baseDir;
@@ -616,6 +634,43 @@ begin
     except
       on E: Exception do
         FOnStatus(_('HTML export failed: ') + E.Message);
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TFindingExportMenu.DoExportHtmlV2(Sender: TObject);
+// Funde-Export VARIANTE 2 (uFindingsWorkbenchExport, 07.09.): alle
+// Befunde wie die V1, aber auf der Workbench-Architektur der
+// Detektor-Info-Seite (deduplizierte Regel-Doku, Drawer). BaseDir
+// steuert die Pfad-ANZEIGE im Bericht (Vertrag wie V1).
+var
+  Dlg     : TSaveDialog;
+  BaseDir : string;
+begin
+  if Assigned(FGetBaseDir) then
+    BaseDir := FGetBaseDir()
+  else
+    BaseDir := '';
+
+  Dlg := TSaveDialog.Create(nil);
+  try
+    Dlg.Filter      := _(HTML_DLG_FILTER);
+    Dlg.DefaultExt  := HTML_DLG_EXT;
+    Dlg.FileName    := TFindingsWorkbenchExport.DefaultFileName;
+    if BaseDir <> '' then
+      Dlg.InitialDir := BaseDir;
+    Dlg.Options     := Dlg.Options + [ofOverwritePrompt];
+    if not Dlg.Execute then Exit;
+
+    try
+      TFindingsWorkbenchExport.Run(FAll, BaseDir, Dlg.FileName);
+      FOnStatus(Format(_('HTML V2 report saved: %s'),
+        [ExtractFileName(Dlg.FileName)]));
+    except
+      on E: Exception do
+        FOnStatus(_('HTML V2 export failed: ') + E.Message);
     end;
   finally
     Dlg.Free;

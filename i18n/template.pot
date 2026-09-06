@@ -1091,6 +1091,15 @@ msgstr ""
 msgid "HTML report saved: %s"
 msgstr ""
 
+msgid "HTML report V2 (workbench, all findings)..."
+msgstr ""
+
+msgid "HTML V2 report saved: %s"
+msgstr ""
+
+msgid "HTML V2 export failed: "
+msgstr ""
+
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3109
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1666
 msgid "Hard to test - refactor into smaller methods."
