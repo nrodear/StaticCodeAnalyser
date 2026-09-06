@@ -12,8 +12,8 @@
 // als Delegation aufgerufen, sodass der Aufrufer weiterhin nur uExport
 // in seinen uses braucht.
 //
-// HTML-spezifische Helper (HtmlEscape, BuildCodeSnippet) liegen privat
-// in dieser Unit. Querschnittsfunktionen (KindToName, SaveUtf8WithBom,
+// HTML-spezifische Helper: BuildCodeSnippet liegt privat in dieser
+// Unit, HtmlEscape ist public (geteilt mit uDetectorInfoExport). Querschnittsfunktionen (KindToName, SaveUtf8WithBom,
 // SameSourceFile) kommen via uExport.
 
 interface
@@ -51,9 +51,12 @@ type
     // Waechtertest der Stueckgrenze - Aufrufer ist nur Run.
     class procedure SaveBuilderUtf8WithBom(ABuilder: TStringBuilder;
       const FileName: string); static;
+    // Public seit 2026-09-06: zweiter Konsument ist der Detector-Info-
+    // Export (uDetectorInfoExport) - eine dritte Escape-Kopie neben
+    // Json/Csv/JiraEscape in uExport waere die falsche Richtung.
+    class function HtmlEscape(const S: string): string; static;
   private
     class function JsonForScript(const S: string): string; static;
-    class function HtmlEscape(const S: string): string; static;
     // Liefert ein HTML-Fragment (<div class="src-snippet">) mit
     // ContextSize Zeilen vor und nach AroundLine. Die Fund-Zeile ist
     // optisch hervorgehoben. Liefert leeren String wenn SourceLines
