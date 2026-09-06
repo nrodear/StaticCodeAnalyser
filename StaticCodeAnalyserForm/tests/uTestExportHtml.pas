@@ -63,6 +63,13 @@ type
 
 implementation
 
+// noinspection-file DuplicateString, HardcodedPath, GodClass
+// Fixture-Ausnahme des Profils: '.html'/'x not freed' wiederholen sich
+// als Pruefgegenstand; die C:-Pfade im DefaultFileName-Fall SIND der
+// getestete Namensvertrag. GodClass: eine DUnitX-Fixture waechst mit
+// jedem Vertragsfall - die Testmethoden sind der Katalog, eine
+// Aufspaltung duplizierte nur die Render-Helfer.
+
 uses
   System.IOUtils, Winapi.Windows;
 
@@ -156,7 +163,7 @@ begin
   Winapi.Windows.SetEnvironmentVariable('SCA_REPORT_TIMESTAMP',
     PChar(APin));
   try
-    AProc();
+    AProc;
   finally
     Winapi.Windows.SetEnvironmentVariable('SCA_REPORT_TIMESTAMP', nil);
   end;
