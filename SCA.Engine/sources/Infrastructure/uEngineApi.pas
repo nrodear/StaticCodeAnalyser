@@ -123,7 +123,9 @@ type
     MaxFileBytes   : Integer;           // <= 0 -> Engine-Default (5 MB) beibehalten
     UsesCheck      : Boolean;           // teuren Unused-Uses-Detektor mitlaufen lassen
     AutoDiscover   : Boolean;           // Custom-Klassen waehrend des Scans entdecken
-    IfdefDefines   : TArray<string>;    // {$IFDEF}-aware Parsing mit diesen Defines (leer = aus)
+    IfdefDefines   : TArray<string>;    // {$IFDEF}-aware Parsing mit diesen Defines. Init setzt
+                                        // DefaultIfdefDefines (Ein-Zweig-Default seit 05.09.2026);
+                                        // leer/nil = Doppelzweig-Sicht (alle Branches parsen)
     CustomRulesPath: string;            // YAML mit Custom-Rules ('' = keine)
     BaselinePath   : string;            // Findings gegen diese Baseline-JSON filtern ('' = aus)
     WriteBaselinePath: string;          // aktuelle Findings als neue Baseline schreiben ('' = aus)
@@ -135,9 +137,11 @@ type
     ConfigRoot     : string;            // INI-Modus: Wurzel fuer INI-/PathOverrides-/Custom-Rules-
                                         // Aufloesung (ApplyDetectorThresholds). '' -> Path verwenden.
                                         // Noetig wenn Scan-Ziel != Config-Root (z.B. Single-File).
-    SkipConfig     : Boolean;           // true: Run wendet KEINE Config an - der Consumer hat den
-                                        // globalen Detektor-/Schwellen-State bereits selbst gesetzt
+    SkipConfig     : Boolean;           // true: Run wendet KEINE Detektor-/Schwellen-Config an - der
+                                        // Consumer hat den globalen State bereits selbst gesetzt
                                         // (z.B. IDE via TIDEAnalysisPrep.SetupForRun). Nur Scope->Scan->Baseline.
+                                        // AUSNAHME seit 05.09.2026: die IFDEF-Sicht (IfdefDefines) wendet
+                                        // Run IMMER an - sie ist Scan-Sicht, keine Config (ApplyIfdefView).
     // ssProject/ssProjectGroup/ssFileList (optional): Verzeichnis-Wurzel,
     // ueber die die Cross-Unit-Indizes (SymbolRef/Typ/DFM) gebaut werden,
     // waehrend die ANALYSE auf der Liste bleibt (Unused-FP-Vermeidung,
@@ -164,8 +168,19 @@ type
                                         // Im Parallel-Modus wird der Callback erst in der
                                         // Merge-Phase (auf dem Aufrufer-Thread) nachgereicht.
     // Liefert ein Request mit sinnvollen Defaults (ssRecursive, alle Detektoren,
-    // loseste Schwellen, Engine-Default-Limits).
+    // loseste Schwellen, Engine-Default-Limits; IFDEF-Ein-Zweig-Sicht
+    // mit DefaultIfdefDefines).
     class function Init: TScanRequest; static;
+    // Die vier Defines der Windows-Compiler-Sicht - seit dem
+    // Produktentscheid vom 05.09.2026 der ENGINE-Default fuer jeden
+    // Init-Request (vorher Doppelzweig-Parsing, Ein-Zweig nur opt-in).
+    // Ein Zweig ist das, was ein Delphi-Compiler real uebersetzt; das
+    // Doppelzweig-Parsing erzeugte bewiesene Phantom-Funde
+    // (uPSRuntime-SCA001-Familie, ~15k Funde Korpusbewegung, E4-Messung).
+    // Identisch mit dem Satz des frueheren selftest-quiet-Auto-Defaults
+    // und der E4-/Septembermessungen - die Messbasis bleibt vergleichbar.
+    // Doppelzweig-Sicht: IfdefDefines := nil (CLI: --no-ifdef-aware).
+    class function DefaultIfdefDefines: TArray<string>; static;
   end;
 
   // Ergebnis eines Scans. Besitzt die Findings-Liste; mit .Free freigeben
@@ -211,6 +226,13 @@ type
   TAnalysisSession = class
   private
     procedure ApplyConfig(const Req: TScanRequest);
+    // IFDEF-Sicht des Requests auf den globalen Lexer-State anwenden.
+    // EIGENE Prozedur, weil sie - anders als ApplyConfig - auch bei
+    // Req.SkipConfig=True laufen MUSS: SkipConfig-Konsumenten (Form,
+    // IDE) bereiten Detektor-Schwellen selbst vor, die SCAN-SICHT
+    // kommt aber aus dem Request. Ohne das liefe der Ein-Zweig-Default
+    // (05.09.2026) an Form/IDE vorbei - Review-Blocker der Charge 13.
+    procedure ApplyIfdefView(const Req: TScanRequest);
   public
     function Run(const Req: TScanRequest): TScanResult;
     // Prozessweiter Engine-Lock fuer Consumer, die eigene Config-Mutation
@@ -297,7 +319,7 @@ begin
   Result.MaxFileBytes    := 0;           // 0 -> Engine-Default (5 MB) belassen
   Result.UsesCheck       := False;
   Result.AutoDiscover    := False;
-  Result.IfdefDefines    := nil;
+  Result.IfdefDefines    := DefaultIfdefDefines;
   Result.CustomRulesPath := '';
   Result.BaselinePath      := '';
   Result.WriteBaselinePath := '';
@@ -311,6 +333,11 @@ begin
   Result.Parallel          := False;   // Perf Stufe 2: opt-in, Default AUS
   Result.ParallelWorkers   := 0;       // 0 = auto (ProcessorCount)
   Result.Progress        := nil;
+end;
+
+class function TScanRequest.DefaultIfdefDefines: TArray<string>;
+begin
+  Result := ['MSWINDOWS', 'WIN64', 'UNICODE', 'CONDITIONALEXPRESSIONS'];
 end;
 
 { TScanResult }
@@ -375,9 +402,29 @@ function TScanResult.HintCount   : Integer; begin Result := CountSeverity(lsHint
 
 { TAnalysisSession }
 
+procedure TAnalysisSession.ApplyIfdefView(const Req: TScanRequest);
+// Spiegelt Req.IfdefDefines in den globalen Lexer-State. Laeuft in Run
+// VOR der SkipConfig-Weiche (unter GEngineLock) - die Scan-SICHT ist
+// Request-Eigenschaft, keine Detektor-Config: auch ein Consumer, der
+// seine Schwellen selbst vorbereitet (SkipConfig=True), bekommt exakt
+// die Sicht seines Requests, nicht den Zufallszustand des Vorlaufs.
+var
+  Def : string;
+begin
+  LexerIfdefClear;
+  if Length(Req.IfdefDefines) > 0 then
+  begin
+    gLexerIfdefSkipEnabled := True;
+    for Def in Req.IfdefDefines do
+      if Trim(Def) <> '' then
+        LexerIfdefAddDefine(Trim(Def));
+  end
+  else
+    gLexerIfdefSkipEnabled := False;
+end;
+
 procedure TAnalysisSession.ApplyConfig(const Req: TScanRequest);
 var
-  Def      : string;
   Settings : TRepoSettings;
 begin
   // 0) Config-Riegel (2026-07-04, Audit Global-State): den kompletten
@@ -476,17 +523,9 @@ begin
   uSCAConsts.DetectorParallelScan    := Req.Parallel;
   uSCAConsts.DetectorParallelWorkers := Req.ParallelWorkers;
 
-  // 2) {$IFDEF}-aware Parsing (beide Modi - Request-Level statt globaler Fummelei)
-  LexerIfdefClear;
-  if Length(Req.IfdefDefines) > 0 then
-  begin
-    gLexerIfdefSkipEnabled := True;
-    for Def in Req.IfdefDefines do
-      if Trim(Def) <> '' then
-        LexerIfdefAddDefine(Trim(Def));
-  end
-  else
-    gLexerIfdefSkipEnabled := False;
+  // 2) {$IFDEF}-Sicht: seit dem Review-Blocker der Charge 13 NICHT mehr
+  //    hier, sondern in ApplyIfdefView - Run wendet sie VOR der
+  //    SkipConfig-Weiche an, damit sie auch Form/IDE erreicht.
 
   // 3) Custom-Rules: expliziter Request-Pfad gewinnt. Im INI-Modus hat
   //    ApplyDetectorThresholds evtl. schon INI-Custom-Rules geladen -- die
@@ -582,8 +621,27 @@ begin
   // Rekursiv -> ein Consumer, der den Lock bereits um SetupForRun+Run haelt,
   // re-entert hier problemlos. NIE ueber Synchronize/ProcessMessages hinweg
   // halten (Deadlock) - der Watch-Worker released daher vor Synchronize.
+  // Lexer-Sicht des VORZUSTANDS sichern: Run hinterlaesst den globalen
+  // IFDEF-State, wie er ihn vorfand. Ohne das kontaminierte der erste
+  // Pipeline-Lauf im Prozess alle NACHFOLGENDEN Direktpfad-Nutzer
+  // (TParser2/Detektor-Tests im residenten Testprozess: 6 rote
+  // IFDEF-Fixture-Tests beim Charge-13-Bau, 06.09.). Produktiv ist das
+  // Restore neutral - jeder Run setzt seine Sicht ohnehin selbst.
+  // Deklaration mit neutralem Startwert VOR dem Lock; die eigentliche
+  // Sicherung ist die ERSTE Aktion im try (Selbstfund SCA109 beim
+  // Charge-13-Selbstscan: zwischen Enter und try darf nichts stehen,
+  // sonst bleibt der Lock bei einer Exception haengen).
+  var AlterIfdefSkip := False;
+  var AlteIfdefDefines: TArray<string> := nil;
   GEngineLock.Enter;
   try
+  AlterIfdefSkip := gLexerIfdefSkipEnabled;
+  if gLexerIfdefDefines <> nil then
+    AlteIfdefDefines := gLexerIfdefDefines.ToStringArray;
+  // Die IFDEF-Sicht IMMER anwenden - auch bei SkipConfig=True (Form/
+  // IDE), sonst liefe der Ein-Zweig-Default an ihnen vorbei (Review-
+  // Blocker Charge 13; Doku an ApplyIfdefView).
+  ApplyIfdefView(Req);
   if not Req.SkipConfig then
     ApplyConfig(Req);
 
@@ -786,6 +844,11 @@ begin
   // gesetzt (unter dem Engine-Lock, also race-frei uebernehmbar).
   Result.FConfidenceProps := uSCAConsts.LastScanEvidenceTiering;
   finally
+    // Lexer-Sicht des Vorzustands wiederherstellen (s. Sicherung oben).
+    LexerIfdefClear;
+    gLexerIfdefSkipEnabled := AlterIfdefSkip;
+    for var AltDef in AlteIfdefDefines do
+      LexerIfdefAddDefine(AltDef);
     GEngineLock.Leave;
   end;
 end;

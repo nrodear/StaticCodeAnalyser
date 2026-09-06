@@ -43,8 +43,9 @@
 // (EINE Quellzeile, hier nur umbrochen):
 //   {$IFDEF SK_STATIC_LIBRARY}function {$ENDIF}gr4d_backendsemaphore_create
 //   {$IFNDEF SK_STATIC_LIBRARY}: function {$ENDIF}(): gr_backendsemaphore_t; cdecl;
-// BEIDE Zweige stehen im Tokenstrom, denn das IFDEF-Skipping des Lexers ist
-// Opt-in und per Default AUS (uLexer.gLexerIfdefSkipEnabled = False, das
+// BEIDE Zweige stehen im Tokenstrom, WENN die Doppelzweig-Sicht aktiv
+// ist (seit 05.09.2026 Opt-out: TScanRequest.Init setzt die
+// Ein-Zweig-Defines, --no-ifdef-aware bringt beide Zweige zurueck; das
 // Wiring sitzt in TParser2.ParseSource). Am fuehrenden `function` steigt
 // der Exit-Waechter am Schleifenkopf von ParseVarLikeSection aus,
 // ParseInterfaceSection dispatcht stattdessen in ParseMethodSignature -

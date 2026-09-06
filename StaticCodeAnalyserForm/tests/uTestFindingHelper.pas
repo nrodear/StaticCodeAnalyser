@@ -425,6 +425,12 @@ begin
     OldIfdefDefines := nil;
   try
     Req := TScanRequest.Init;         // Direkt-Modus: alle Detektoren, lsHint
+    // Doppelzweig-Sicht PINNEN (05.09.2026): Init traegt seit dem
+    // Ein-Zweig-Default die vier Windows-Defines - Test-Fixtures
+    // pruefen aber Detektorlogik und brauchen dafuer die VOLLSTAENDIGE
+    // Sicht (z.B. die SCA005-IFDEF-Doppelzaehlungs-Fixtures der
+    // Charge 5). Die Sichtwahl selbst testet uTestEngineApi.
+    Req.IfdefDefines  := nil;
     Req.Scope         := ssSource;
     Req.Source        := Source;
     Req.Path          := SAMPLE_FILENAME; // logischer Findings-Name (nicht test-artig!)
