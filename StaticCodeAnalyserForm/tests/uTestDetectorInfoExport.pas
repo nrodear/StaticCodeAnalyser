@@ -39,6 +39,9 @@ type
     [Test] procedure HeaderCount_ColspanAndFootnote_Consistent;
     [Test] procedure WriteToFile_InvalidPathRaises;
     [Test] procedure DefaultFileName_IsStableContract;
+    // Nutzerauftrag 2026-09-07: der Rollen-Block (Entwicklung/QA/PO)
+    // muss offen und VOR dem Suchfeld stehen - "immer gut zugaenglich".
+    [Test] procedure RoleBlock_PresentOpenAndBeforeSearch;
   end;
 
 implementation
@@ -391,6 +394,27 @@ begin
     'Dateinamens-Vertrag des Save-Dialogs');
   Assert.AreEqual('.html', ExtractFileExt(TDetectorInfoExport.DefaultFileName),
     'die Endung steuert den Dialogfilter');
+end;
+
+procedure TTestDetectorInfoExport.RoleBlock_PresentOpenAndBeforeSearch;
+// Drei Zusicherungen: der Block existiert mit allen drei Rollen, er
+// ist standardmaessig GEOEFFNET (details open - zugeklappt waere er
+// nicht "immer gut zugaenglich"), und er steht VOR dem Suchfeld
+// (wer die Seite oeffnet, sieht zuerst, wofuer sie da ist).
+var
+  PBlock, PSuche : Integer;
+begin
+  PBlock := Pos('<details open class="rollen">', FHtml);
+  Assert.IsTrue(PBlock > 0,
+    'Rollen-Block fehlt oder ist nicht standardmaessig geoeffnet');
+  Assert.IsTrue(Pos('<b>Entwicklung:</b>', FHtml) > 0,
+    'Entwickler-Rolle fehlt');
+  Assert.IsTrue(Pos('<b>QA / Test:</b>', FHtml) > 0, 'QA-Rolle fehlt');
+  Assert.IsTrue(Pos('<b>Product Owner:</b>', FHtml) > 0,
+    'Product-Owner-Rolle fehlt');
+  PSuche := Pos('id="suche"', FHtml);
+  Assert.IsTrue(PSuche > PBlock,
+    'der Rollen-Block muss VOR dem Suchfeld stehen');
 end;
 
 procedure TTestDetectorInfoExport.HtmlEscape_CoversQuote;

@@ -41,13 +41,16 @@ type
 
 implementation
 
-// noinspection-file DuplicateString, StringConcatInLoop
+// noinspection-file DuplicateString, StringConcatInLoop, InsecureCryptoAlgorithm
 // Ein HTML-Generator wiederholt Tags ('<td>', '</td>') bauartbedingt -
 // eine Konstante je Tag machte den Aufbau unlesbarer, nicht sicherer
 // (dieselbe Lage wie im grossen Findings-Report uExportHtml).
 // StringConcatInLoop: JoinArr verkettet Tags/CWE-Listen mit maximal
 // einer Handvoll Elementen - kein Hot-Path, TStringBuilder waere
-// Overhead ohne Gewinn.
+// Overhead ohne Gewinn. InsecureCryptoAlgorithm: SCA162 haelt den
+// deutschen ARTIKEL 'des' im Rollen-Text ('Pruefumfang des Werkzeugs')
+// fuer den DES-Algorithmus - reiner Fliesstext, kein Kryptobezug
+// (Detektor-Notiz in HowTo_Meilensteine: Wortgrenzen-/Kontext-Frage).
 
 uses
   uExportHtml,   // TExporterHtml.HtmlEscape - keine dritte Escape-Kopie
@@ -125,6 +128,9 @@ begin
     SB.AppendLine('.meta{color:#555;font-size:0.88em;margin-top:6px;}');
     SB.AppendLine('.aus{color:#a33;}');
     SB.AppendLine('.an{color:#2a7a2a;}');
+    SB.AppendLine('.rollen{margin:10px 0;background:#f4f7fb;'
+      + 'border:1px solid #d8e2ee;border-radius:4px;padding:6px 10px;}');
+    SB.AppendLine('.rollen .rolle{margin:6px 0 6px 12px;max-width:75em;}');
     SB.AppendLine('</style>');
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');
@@ -139,6 +145,31 @@ begin
       + 'darunter.</div>',
       [TExporterHtml.HtmlEscape(AToolName),
        TExporterHtml.HtmlEscape(AToolVersion), AAnzahl]));
+    // Rollen-Block (Nutzerauftrag 2026-09-07): WER nutzt die Seite
+    // wofuer - standardmaessig OFFEN ("immer gut zugaenglich"),
+    // einklappbar fuer die taegliche Nutzung; bewusst VOR dem Suchfeld.
+    SB.AppendLine('<details open class="rollen">');
+    SB.AppendLine('<summary><b>Wof&uuml;r diese Seite? (Entwicklung, QA, '
+      + 'Product Owner)</b></summary>');
+    SB.AppendLine('<div class="rolle"><b>Entwicklung:</b> Wenn ein Scan '
+      + 'eine SCA-Regel meldet, steht hier, was sie pr&uuml;ft und '
+      + 'warum, mit dem Vorher/Nachher-Beispiel als Fix-Muster. Der '
+      + 'noinspection-Name unterdr&uuml;ckt einen Einzelfund '
+      + 'begr&uuml;ndet im Code; der Konfigurations-Schl&uuml;ssel '
+      + 'kalibriert den Detektor projektweit.</div>');
+    SB.AppendLine('<div class="rolle"><b>QA / Test:</b> Der '
+      + 'Pr&uuml;fumfang des Werkzeugs auf einen Blick: welche Regel '
+      + 'mit welchem Typ, Schweregrad und welcher Konfidenz meldet und '
+      + 'ob sie im Default-Profil aktiv ist. SCA-IDs aus Berichten oder '
+      + 'Tickets lassen sich per Suche nachschlagen und fachlich '
+      + 'einordnen.</div>');
+    SB.AppendLine('<div class="rolle"><b>Product Owner:</b> Die '
+      + 'Qualit&auml;ts-Politik des Projekts: was abgedeckt ist (Bugs, '
+      + 'Sicherheit inkl. CWE-Bezug, Wartbarkeit), was das '
+      + 'Default-Profil bewusst ausl&auml;sst - die Grundlage, um '
+      + 'Profil-Entscheidungen und Regel-Ausnahmen zu '
+      + 'diskutieren.</div>');
+    SB.AppendLine('</details>');
     SB.AppendLine('<input id="suche" type="search" '
       + 'placeholder="Suchen &uuml;ber alle Inhalte ..." '
       + 'oninput="suche()"> <span id="zaehler" class="sub"></span>');
