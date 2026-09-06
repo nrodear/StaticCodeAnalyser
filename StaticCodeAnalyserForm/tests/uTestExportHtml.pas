@@ -64,6 +64,9 @@ type
     // Charge 18 (07.09., "alles soll sich gleich anfuehlen"): der
     // Report traegt das Workbench-Designsystem der Detector-Info-Seite.
     [Test] procedure Report_WearsWorkbenchLook;
+    // Charge 18 (07.09., Nachauftrag): Befund-Details oeffnen seitlich
+    // im Drawer wie im Detektor-Katalog - die Klappzeile ist Geschichte.
+    [Test] procedure FindingDetails_OpenInSideDrawer;
   end;
 
 
@@ -73,7 +76,7 @@ implementation
 // Fixture-Ausnahme des Profils: '.html'/'x not freed' wiederholen sich
 // als Pruefgegenstand; die C:-Pfade im DefaultFileName-Fall SIND der
 // getestete Namensvertrag. GodClass/LargeClass: eine DUnitX-Fixture
-// waechst mit jedem Vertragsfall (inzwischen 21) - die Testmethoden
+// waechst mit jedem Vertragsfall (inzwischen 23) - die Testmethoden
 // sind der Katalog, eine Aufspaltung duplizierte nur die Render-Helfer.
 
 uses
@@ -808,6 +811,42 @@ begin
   Assert.IsTrue(
     Pos(':root[data-theme="sepia"] { --grund: #f4ead2;', Html) > 0,
     'Sepia-Theme ueberschreibt die Tokens nicht');
+end;
+
+procedure TTestExportHtml.FindingDetails_OpenInSideDrawer;
+// Drawer-Vertrag des Reports (Nachauftrag 07.09.): Markup-Anker,
+// JS-Funktionen samt Verdrahtung, Drawer-CSS inkl. Responsive-Fall -
+// und als Gegenprobe, dass die alte Klappzeilen-Anzeige WEG ist
+// (ohne die Gegenprobe waere ein Doppel-UI aus Drawer UND Klappzeile
+// fuer diesen Test unsichtbar).
+var
+  Html : string;
+begin
+  Html := RenderReport;
+  Assert.IsTrue(Pos('<aside id="drawer" aria-label="Befund-Details">',
+    Html) > 0, 'Drawer-Markup fehlt');
+  Assert.IsTrue(Pos('id="drawer-schliessen"', Html) > 0,
+    'Close-Button fehlt');
+  Assert.IsTrue(Pos('id="drawer-kopf"', Html) > 0, 'Drawer-Kopf fehlt');
+  Assert.IsTrue(Pos('id="drawer-inhalt"', Html) > 0,
+    'Drawer-Inhalt fehlt');
+  Assert.IsTrue(Pos('function openDrawer(row, hint)', Html) > 0,
+    'openDrawer fehlt');
+  Assert.IsTrue(Pos('function closeDrawer()', Html) > 0,
+    'closeDrawer fehlt');
+  Assert.IsTrue(Pos('openDrawer(row, hint);', Html) > 0,
+    'wireToggle ruft openDrawer nicht (Definition allein oeffnet nichts)');
+  Assert.IsTrue(Pos('#drawer { position: fixed; top: 0; right: 0;',
+    Html) > 0, 'Drawer-CSS fehlt');
+  Assert.IsTrue(
+    Pos('@media (max-width: 900px) { #drawer { width: 100%;', Html) > 0,
+    'Responsive-Vollbild des Drawers fehlt');
+  // Gegenproben: die Klappzeile darf nie wieder sichtbar werden.
+  Assert.AreEqual<Integer>(0,
+    Pos('tr.finding-hint.open { display: table-row; }', Html),
+    'alte Klappzeilen-Anzeige lebt noch');
+  Assert.IsTrue(Pos('tr.finding-hint { display: none; }', Html) > 0,
+    'Hint-Zeile muss dauerhaft unsichtbare Datenquelle bleiben');
 end;
 
 initialization

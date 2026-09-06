@@ -675,10 +675,29 @@ begin
     SB.AppendLine('    tr.finding td.toggle { width: 18px; text-align: center; color: var(--dezent);');
     SB.AppendLine('       font-size: 10px; user-select: none; }');
     SB.AppendLine('    tr.finding.open td.toggle { color: var(--tinte); transform: rotate(0); }');
+    // Die Hint-Zeile bleibt als DATENQUELLE im DOM, sichtbar wird ihr
+    // Inhalt nur noch im Detail-Drawer (Nutzerwunsch 07.09.: Details
+    // kommen seitlich heraus wie im Detektor-Katalog). Deshalb gibt es
+    // keinen .open-Anzeigezustand der Zeile mehr.
     SB.AppendLine('    tr.finding-hint { display: none; }');
-    SB.AppendLine('    tr.finding-hint.open { display: table-row; }');
-    SB.AppendLine('    tr.finding-hint > td { background: #fbfcfe; padding: 10px 16px;');
-    SB.AppendLine('       border-bottom: 2px solid var(--rand); }');
+    // Detail-Drawer: Optik-Zwilling des Katalog-Drawers
+    // (uDetectorInfoExport, zweite Kopie - bei einer dritten Seite in
+    // uWorkbenchStyle heben). Nur Token-Farben, dadurch brauchen
+    // dark/sepia KEINE eigenen Drawer-Zeilen.
+    SB.AppendLine('    #drawer { position: fixed; top: 0; right: 0; height: 100%; width: 40%;');
+    SB.AppendLine('       min-width: 340px; max-width: 44em; background: var(--karte);');
+    SB.AppendLine('       border-left: 1px solid var(--rand); box-shadow: -4px 0 16px rgba(16,32,48,0.12);');
+    SB.AppendLine('       transform: translateX(102%); transition: transform 180ms ease;');
+    SB.AppendLine('       overflow-y: auto; padding: 14px 18px; z-index: 10; }');
+    SB.AppendLine('    #drawer.offen { transform: translateX(0); }');
+    SB.AppendLine('    #drawer h2 { margin: 0 0 2px 0; font-size: 1.12em; }');
+    SB.AppendLine('    #drawer-schliessen { float: right; border: 1px solid var(--rand);');
+    SB.AppendLine('       background: var(--karte); color: var(--tinte); border-radius: 6px;');
+    SB.AppendLine('       cursor: pointer; font-size: 1em; padding: 2px 9px; }');
+    SB.AppendLine('    .drawer-status { margin: 6px 0 4px 0; display: flex; gap: 6px; flex-wrap: wrap; }');
+    SB.AppendLine('    .drawer-ort { color: var(--dezent); font-size: 0.88em; margin-bottom: 8px;');
+    SB.AppendLine('       font-family: Consolas,monospace; word-break: break-all; }');
+    SB.AppendLine('    @media (max-width: 900px) { #drawer { width: 100%; min-width: 0; max-width: none; } }');
     SB.AppendLine('    .hint-desc { color: var(--tinte); margin: 0 0 6px 0; background: #fbfcfe; border: 1px solid var(--rand); border-radius: 8px; padding: 6px 10px; }');
     // #3/#4: Regel-Erklaerung-Fallback, CWE/OWASP-Badges, Regel-Beispiel-Note.
     SB.AppendLine('    .hint-rule-desc { border-left: 3px solid var(--akzent); }');
@@ -910,7 +929,6 @@ begin
     SB.AppendLine('    :root[data-theme="dark"] tr.warn td.sev { color: #e6b45a; }');
     SB.AppendLine('    :root[data-theme="dark"] tr.hint td.sev { color: #a8d878; }');
     SB.AppendLine('    :root[data-theme="dark"] tr.finding:hover { filter: brightness(1.25); }');
-    SB.AppendLine('    :root[data-theme="dark"] tr.finding-hint > td { background: #242424; }');
     SB.AppendLine('    :root[data-theme="dark"] .code-block pre { background: #262626; color: #d0d0d0; }');
     SB.AppendLine('    :root[data-theme="dark"] .code-before pre { background: #331e1e; color: #f0b0b0; }');
     SB.AppendLine('    :root[data-theme="dark"] .code-after  pre { background: #1e301e; color: #b0e0a0; }');
@@ -1055,7 +1073,6 @@ begin
     SB.AppendLine('    :root[data-theme="sepia"] tr.warn td.sev { color: #7d5200; }');
     SB.AppendLine('    :root[data-theme="sepia"] tr.hint td.sev { color: #47661a; }');
     SB.AppendLine('    :root[data-theme="sepia"] tr.finding:hover { filter: brightness(0.96); }');
-    SB.AppendLine('    :root[data-theme="sepia"] tr.finding-hint > td { background: #eee2c4; }');
     SB.AppendLine('    :root[data-theme="sepia"] .code-block pre { background: #ece0bf; color: #33270f; }');
     SB.AppendLine('    :root[data-theme="sepia"] .code-before pre { background: #f0d5c6; color: #7a2810; }');
     SB.AppendLine('    :root[data-theme="sepia"] .code-after  pre { background: #e0e4bf; color: #324c10; }');
@@ -1949,7 +1966,8 @@ begin
         SB.Append('<td>'); SB.Append(HtmlEscape(F.MissingVar)); SB.Append('</td>');
         SB.AppendLine('</tr>');
 
-        // Versteckte Hint-Zeile (wird per JS sichtbar geschaltet)
+        // Versteckte Hint-Zeile: dauerhaft unsichtbare Datenquelle -
+        // openDrawer klont ihren Zelleninhalt in den Detail-Drawer.
         if HasHint then
         begin
           // colspan = 8 oder 9 je nachdem ob Datei-Spalte da ist
@@ -2418,15 +2436,87 @@ begin
     SB.AppendLine('    var fileSel = document.getElementById(''fileFilter'');');
     SB.AppendLine('    var ruleSel = document.getElementById(''ruleFilter'');');
     SB.AppendLine('');
-    SB.AppendLine('    // ---- Toggle: Klick auf Befund-Zeile blendet Hint-Zeile ein/aus ----');
+    SB.AppendLine('    // ---- Detail-Drawer: Klick auf Befund-Zeile oeffnet die Details ----');
+    SB.AppendLine('    // seitlich (gleiches Bediengefuehl wie der Detektor-Katalog). Die');
+    SB.AppendLine('    // versteckte Hint-Zeile ist nur noch Datenquelle: ihr Zelleninhalt');
+    SB.AppendLine('    // wird beim Oeffnen in den Drawer geklont. Lazy-Lookup statt');
+    SB.AppendLine('    // Init-Cache: das Drawer-Markup steht hinter </main>, also NACH');
+    SB.AppendLine('    // diesem Skript im Dokument.');
+    SB.AppendLine('    function drawerEl() { return document.getElementById(''drawer''); }');
+    SB.AppendLine('    function closeDrawer() {');
+    SB.AppendLine('      var dw = drawerEl(); if (!dw) return;');
+    SB.AppendLine('      dw.classList.remove(''offen'');');
+    SB.AppendLine('      document.querySelectorAll(''tr.finding.open'').forEach(function(r) {');
+    SB.AppendLine('        r.classList.remove(''open'');');
+    SB.AppendLine('        var t = r.querySelector(''td.toggle'');');
+    SB.AppendLine('        if (t && t.textContent.length > 0) t.innerHTML = ''&#9656;'';');
+    SB.AppendLine('      });');
+    SB.AppendLine('    }');
+    SB.AppendLine('    function openDrawer(row, hint) {');
+    SB.AppendLine('      var dw = drawerEl(); if (!dw) return;');
+    SB.AppendLine('      var kopf   = document.getElementById(''drawer-kopf'');');
+    SB.AppendLine('      var inhalt = document.getElementById(''drawer-inhalt'');');
+    SB.AppendLine('      if (!kopf || !inhalt) return;');
+    SB.AppendLine('      // Kopf aus den Zellen der Zeile - kein zusaetzliches Markup je');
+    SB.AppendLine('      // Fund noetig (Report kann sehr gross sein). DOM-API statt');
+    SB.AppendLine('      // innerHTML-Bau, damit Zellentexte nicht re-escaped werden muessen.');
+    SB.AppendLine('      var sevCls = row.classList.contains(''err'')  ? ''sev-err''');
+    SB.AppendLine('                 : row.classList.contains(''warn'') ? ''sev-warn''');
+    SB.AppendLine('                 : row.classList.contains(''hint'') ? ''sev-hint'' : ''typ'';');
+    SB.AppendLine('      function cellTxt(col) {');
+    SB.AppendLine('        var c = row.children[colIndex[col]];');
+    SB.AppendLine('        return c ? c.textContent : '''';');
+    SB.AppendLine('      }');
+    SB.AppendLine('      kopf.innerHTML = '''';');
+    SB.AppendLine('      var h = document.createElement(''h2'');');
+    SB.AppendLine('      h.textContent = cellTxt(''rule'');');
+    SB.AppendLine('      kopf.appendChild(h);');
+    SB.AppendLine('      var st = document.createElement(''div'');');
+    SB.AppendLine('      st.className = ''drawer-status'';');
+    SB.AppendLine('      function badge(cls, txt) {');
+    SB.AppendLine('        if (!txt) return;');
+    SB.AppendLine('        var s = document.createElement(''span'');');
+    SB.AppendLine('        s.className = ''badge '' + cls;');
+    SB.AppendLine('        s.textContent = txt;');
+    SB.AppendLine('        st.appendChild(s);');
+    SB.AppendLine('      }');
+    SB.AppendLine('      badge(sevCls, cellTxt(''sev''));');
+    SB.AppendLine('      badge(''konf'', cellTxt(''conf''));');
+    SB.AppendLine('      badge(''typ'', cellTxt(''type''));');
+    SB.AppendLine('      kopf.appendChild(st);');
+    SB.AppendLine('      // Fundort rein symbolisch (Datei:Zeile + Methode) - keine Woerter,');
+    SB.AppendLine('      // damit der Kopf ohne i18n-Eintraege auskommt.');
+    SB.AppendLine('      var fileTxt = row.getAttribute(''data-file'') || '''';');
+    SB.AppendLine('      var ortTxt  = fileTxt ? fileTxt + '':'' + cellTxt(''line'') : cellTxt(''line'');');
+    SB.AppendLine('      if (cellTxt(''method'')) ortTxt += '' '' + String.fromCharCode(183) + '' '' + cellTxt(''method'');');
+    SB.AppendLine('      if (ortTxt) {');
+    SB.AppendLine('        var ort = document.createElement(''div'');');
+    SB.AppendLine('        ort.className = ''drawer-ort'';');
+    SB.AppendLine('        ort.textContent = ortTxt;');
+    SB.AppendLine('        kopf.appendChild(ort);');
+    SB.AppendLine('      }');
+    SB.AppendLine('      // Inhalt = Klon der Hint-Zelle. Der Klon haengt im Dokument,');
+    SB.AppendLine('      // applyLanguage uebersetzt seine data-i18n-Knoten also mit.');
+    SB.AppendLine('      inhalt.innerHTML = hint.cells[0] ? hint.cells[0].innerHTML : '''';');
+    SB.AppendLine('      dw.classList.add(''offen'');');
+    SB.AppendLine('      dw.scrollTop = 0;');
+    SB.AppendLine('    }');
+    SB.AppendLine('    // Close-Button per Delegation - der Drawer steht im DOM hinter');
+    SB.AppendLine('    // diesem Skript, ein Init-Listener faende ihn noch nicht.');
+    SB.AppendLine('    document.addEventListener(''click'', function(e) {');
+    SB.AppendLine('      if (e.target && e.target.id === ''drawer-schliessen'') closeDrawer();');
+    SB.AppendLine('    });');
     SB.AppendLine('    function wireToggle(row) {');
     SB.AppendLine('      var hint = row.nextElementSibling;');
     SB.AppendLine('      if (!hint || !hint.classList.contains(''finding-hint'')) return;');
     SB.AppendLine('      row.addEventListener(''click'', function() {');
-    SB.AppendLine('        var open = hint.classList.toggle(''open'');');
-    SB.AppendLine('        row.classList.toggle(''open'', open);');
+    SB.AppendLine('        // Zweiter Klick auf dieselbe Zeile schliesst (Toggle-Gefuehl).');
+    SB.AppendLine('        if (row.classList.contains(''open'')) { closeDrawer(); return; }');
+    SB.AppendLine('        closeDrawer();');
+    SB.AppendLine('        row.classList.add(''open'');');
     SB.AppendLine('        var t = row.querySelector(''td.toggle'');');
-    SB.AppendLine('        if (t) t.innerHTML = open ? ''&#9662;'' : ''&#9656;'';');
+    SB.AppendLine('        if (t) t.innerHTML = ''&#9662;'';');
+    SB.AppendLine('        openDrawer(row, hint);');
     SB.AppendLine('      });');
     SB.AppendLine('    }');
     SB.AppendLine('    document.querySelectorAll(''tr.finding'').forEach(wireToggle);');
@@ -2528,20 +2618,12 @@ begin
     SB.AppendLine('    // ---- Datei- und Severity-Filter (kombinierbar) ----');
     SB.AppendLine('    var activeSev = ''''; // '''' = alle, sonst ''err''/''warn''/''hint''');
     SB.AppendLine('');
-    SB.AppendLine('    // Alle expandierten Befunde wieder einklappen.');
-    SB.AppendLine('    // Wird bei Filter-Wechsel aufgerufen, damit der User nach dem');
-    SB.AppendLine('    // Umschalten nicht mit ploetzlich aufgeklappten Hint-Bloecken einer');
-    SB.AppendLine('    // anderen Problem-Gruppe konfrontiert wird.');
+    SB.AppendLine('    // Bei Filter-Wechsel: offenen Drawer schliessen (samt Zeilen-');
+    SB.AppendLine('    // Markierung), damit er nicht die Details eines Fundes aus einer');
+    SB.AppendLine('    // anderen, jetzt weggefilterten Problem-Gruppe zeigt. Der Name');
+    SB.AppendLine('    // bleibt aus der Klappzeilen-Aera - die Aufrufer sind dieselben.');
     SB.AppendLine('    function collapseAll() {');
-    SB.AppendLine('      document.querySelectorAll(''tr.finding.open'').forEach(function(row) {');
-    SB.AppendLine('        row.classList.remove(''open'');');
-    SB.AppendLine('        var t = row.querySelector(''td.toggle'');');
-    SB.AppendLine('        if (t && t.textContent.length > 0) t.innerHTML = ''&#9656;'';');
-    SB.AppendLine('      });');
-    SB.AppendLine('      document.querySelectorAll(''tr.finding-hint.open'').forEach(function(h) {');
-    SB.AppendLine('        h.classList.remove(''open'');');
-    SB.AppendLine('        h.style.display = ''''; // CSS uebernimmt wieder (display: none)');
-    SB.AppendLine('      });');
+    SB.AppendLine('      closeDrawer();');
     SB.AppendLine('    }');
     SB.AppendLine('');
     SB.AppendLine('    // QF_KINDS: Lookup-Set aller Kinds mit Quick-Fix-Provider.');
@@ -2608,18 +2690,15 @@ begin
     SB.AppendLine('        }');
     SB.AppendLine('        var match  = fileOk && sevOk && ruleOk && searchOk && confOk && baseOk;');
     SB.AppendLine('        row.style.display = match ? '''' : ''none'';');
-    SB.AppendLine('        var hint = row.nextElementSibling;');
-    SB.AppendLine('        if (hint && hint.classList.contains(''finding-hint'')) {');
-    SB.AppendLine('          if (!match) {');
-    SB.AppendLine('            hint.style.display = ''none'';');
-    SB.AppendLine('          } else if (hint.classList.contains(''open'')) {');
-    SB.AppendLine('            hint.style.display = ''table-row'';');
-    SB.AppendLine('          } else {');
-    SB.AppendLine('            hint.style.display = '''';');
-    SB.AppendLine('          }');
-    SB.AppendLine('        }');
+    SB.AppendLine('        // Die Hint-Zeile braucht kein Display-Management mehr - sie ist');
+    SB.AppendLine('        // per CSS dauerhaft unsichtbar und nur Datenquelle des Drawers.');
     SB.AppendLine('        if (match) visible++;');
     SB.AppendLine('      });');
+    SB.AppendLine('      // Wird der gerade gezeigte Fund weggefiltert (z.B. Live-Suche,');
+    SB.AppendLine('      // die ohne collapseAll laeuft), schliesst der Drawer mit - er');
+    SB.AppendLine('      // zeigte sonst die Details eines unsichtbaren Fundes.');
+    SB.AppendLine('      var opened = document.querySelector(''tr.finding.open'');');
+    SB.AppendLine('      if (opened && opened.style.display === ''none'') closeDrawer();');
     SB.AppendLine('      if (rowCnt) { rowCnt.dataset.count = visible; rowCnt.innerHTML = T("row-count", visible); }');
     SB.AppendLine('      // Master-Kacheln updaten - reflektieren den Datei-+Rule-Scope.');
     SB.AppendLine('      var cErr  = document.getElementById(''count-err'');');
@@ -3001,7 +3080,7 @@ begin
     SB.AppendLine('    // 1/2/3   - Severity-Filter (Error/Warning/Hint)');
     SB.AppendLine('    // 0       - alle Severities');
     SB.AppendLine('    // /       - Suche fokussieren');
-    SB.AppendLine('    // Esc     - Filter zuruecksetzen (oder Suche leeren)');
+    SB.AppendLine('    // Esc     - Hilfe/Drawer schliessen, sonst Filter zuruecksetzen (oder Suche leeren)');
     SB.AppendLine('    // ?       - Shortcuts-Hilfe');
     SB.AppendLine('    function activateSev(sev) {');
     SB.AppendLine('      activeSev = sev;');
@@ -3027,6 +3106,10 @@ begin
     SB.AppendLine('      var inField = (e.target.tagName === ''INPUT'' || e.target.tagName === ''TEXTAREA'' || e.target.tagName === ''SELECT'');');
     SB.AppendLine('      if (e.key === ''Escape'') {');
     SB.AppendLine('        if (kbdOverlay && kbdOverlay.classList.contains(''open'')) { closeKbdHelp(); return; }');
+    SB.AppendLine('        // Drawer vor den Filtern: erst die Detailansicht schliessen,');
+    SB.AppendLine('        // ein zweites Esc setzt dann die Filter zurueck.');
+    SB.AppendLine('        var dwEsc = drawerEl();');
+    SB.AppendLine('        if (dwEsc && dwEsc.classList.contains(''offen'')) { closeDrawer(); return; }');
     SB.AppendLine('        if (inField && e.target === searchInput) {');
     SB.AppendLine('          if (searchInput.value) { searchInput.value = ''''; applyFilter(); return; }');
     SB.AppendLine('          searchInput.blur(); return;');
@@ -3061,7 +3144,7 @@ begin
     SB.AppendLine('        ''<tr><td class="k"><kbd>3</kbd></td><td>nur Hinweise</td></tr>'' +');
     SB.AppendLine('        ''<tr><td class="k"><kbd>0</kbd></td><td>alle Severities</td></tr>'' +');
     SB.AppendLine('        ''<tr><td class="k"><kbd>/</kbd></td><td>Suche fokussieren</td></tr>'' +');
-    SB.AppendLine('        ''<tr><td class="k"><kbd>Esc</kbd></td><td>Filter zuruecksetzen</td></tr>'' +');
+    SB.AppendLine('        ''<tr><td class="k"><kbd>Esc</kbd></td><td>Detail schliessen / Filter zuruecksetzen</td></tr>'' +');
     SB.AppendLine('        ''<tr><td class="k"><kbd>?</kbd></td><td>diese Hilfe</td></tr>'' +');
     SB.AppendLine('        ''</table>'';');
     SB.AppendLine('      kbdHelp.querySelector(''.kbd-help-close'').addEventListener(''click'', closeKbdHelp);');
@@ -3184,6 +3267,15 @@ begin
     SB.AppendLine('  })();');
     SB.AppendLine('  </script>');
     SB.AppendLine('</main>');
+    // Detail-Drawer (leer; Kopf und Inhalt fuellt openDrawer aus der
+    // jeweils angeklickten Befund-Zeile). Steht bewusst NACH dem
+    // Skript - das JS greift deshalb lazy zu (drawerEl) und verdrahtet
+    // den Close-Button per Delegation.
+    SB.AppendLine('<aside id="drawer" aria-label="Befund-Details">');
+    SB.AppendLine('  <button id="drawer-schliessen" aria-label="Details schliessen">&times;</button>');
+    SB.AppendLine('  <div id="drawer-kopf"></div>');
+    SB.AppendLine('  <div id="drawer-inhalt"></div>');
+    SB.AppendLine('</aside>');
     SB.AppendLine('</body>');
     SB.AppendLine('</html>');
 
