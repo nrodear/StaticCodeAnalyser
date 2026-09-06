@@ -3371,6 +3371,12 @@ begin
   if Assigned(FSeveritySearch) then FSeveritySearch.NoteHostSelection;
   if SearchEdit.Text <> '' then
     SearchEdit.Text := '';           // OnChange feuert (Setter am EDIT)
+  // Das programmatische Leeren hat ueber SearchEditChange den
+  // Entprell-Timer armiert - entschaerfen, sonst laeuft ~200 ms nach
+  // dem direkten ApplyFilter unten ein ZWEITER identischer Filterlauf
+  // ueber die komplette Fundliste (Event-Review 06.09.).
+  if FSearchDebounce <> nil then
+    FSearchDebounce.Enabled := False;
   // Einmal filtern, s. TileClickSeverity.
   ApplyFilter;
 end;
