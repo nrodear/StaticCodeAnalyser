@@ -46,6 +46,13 @@ type
     // (ApplyIfdefView vor der SkipConfig-Weiche), sonst blieben genau
     // diese Konsumenten in der Doppelzweig-Sicht.
     [Test] procedure IfdefView_AppliesDespiteSkipConfig;
+    // Include-Define-Tracking (Charge 14, Opt-in): {$I probe.inc} mit
+    // {$DEFINE FROMINC} macht den {$IFDEF FROMINC}-Zweig sichtbar -
+    // aber NUR mit Req.IncludeDefines=True. Die Gegenrichtung (Default
+    // ignoriert das Include, 0 Funde) ist an der rw69-Exe verprobt
+    // (c14_probe); die Opt-in-Richtung existiert erst mit dem Feature.
+    [Test] procedure IncludeDefines_OptIn_SeesIncDefinedBranch;
+    [Test] procedure IncludeDefines_Default_IgnoresInclude;
     // TFixtureFilter (2026-08-29): die Regel lag bis dahin im
     // CLI-Laeufer, jetzt in der Engine - hier ihr Vertrag.
     [Test] procedure FixtureFilter_AutoHidesOnlyKnownProfiles;
@@ -314,6 +321,78 @@ begin
     try
       Assert.AreEqual<Integer>(1, ZaehleMemoryLeaks(Res),
         'Doppelzweig-Sicht parst den LINUX-Zweig und sieht das Leak');
+    finally Res.Free; end;
+  finally Ses.Free; end;
+end;
+
+const
+  // Fixture des Include-Define-Trackings: die Haupt-Datei inkludiert
+  // probe.inc (definiert FROMINC); das Leak liegt im {$IFDEF FROMINC}-
+  // Zweig. Ein-Zweig-Default vorausgesetzt (Init): ohne Include-Lesen
+  // ist FROMINC unbekannt -> Zweig geskippt -> 0 Funde (an der
+  // rw69-Exe verprobt); mit Feature -> 1 fkMemoryLeak.
+  INC_MAIN_SRC =
+    'unit incprobe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    '{$I probe.inc}'#13#10 +
+    'procedure TFoo.Bar;'#13#10 +
+    'var'#13#10 +
+    '  list: TStringList;'#13#10 +
+    'begin'#13#10 +
+    '{$IFDEF FROMINC}'#13#10 +
+    '  list := TStringList.Create;'#13#10 +
+    '  list.Add(''leak only visible when probe.inc defines FROMINC'');'#13#10 +
+    '{$ENDIF}'#13#10 +
+    'end;'#13#10 +
+    'end.';
+  INC_FILE_SRC = '{$DEFINE FROMINC}';
+
+procedure TTestEngineApi.IncludeDefines_OptIn_SeesIncDefinedBranch;
+var
+  Req : TScanRequest;
+  Ses : TAnalysisSession;
+  Res : TScanResult;
+  Fn  : string;
+begin
+  Fn := TPath.Combine(FDir, 'incprobe.pas');
+  TFile.WriteAllText(Fn, INC_MAIN_SRC, TEncoding.UTF8);
+  TFile.WriteAllText(TPath.Combine(FDir, 'probe.inc'), INC_FILE_SRC,
+    TEncoding.UTF8);
+  Req := TScanRequest.Init;          // Ein-Zweig-Default
+  Req.IncludeDefines := True;        // Opt-in
+  Req.Scope := ssSingleFile;
+  Req.Path  := Fn;
+  Ses := TAnalysisSession.Create;
+  try
+    Res := Ses.Run(Req);
+    try
+      Assert.AreEqual<Integer>(1, ZaehleMemoryLeaks(Res),
+        'probe.inc definiert FROMINC - der Zweig samt Leak wird geparst');
+    finally Res.Free; end;
+  finally Ses.Free; end;
+end;
+
+procedure TTestEngineApi.IncludeDefines_Default_IgnoresInclude;
+var
+  Req : TScanRequest;
+  Ses : TAnalysisSession;
+  Res : TScanResult;
+  Fn  : string;
+begin
+  Fn := TPath.Combine(FDir, 'incprobe.pas');
+  TFile.WriteAllText(Fn, INC_MAIN_SRC, TEncoding.UTF8);
+  TFile.WriteAllText(TPath.Combine(FDir, 'probe.inc'), INC_FILE_SRC,
+    TEncoding.UTF8);
+  Req := TScanRequest.Init;          // IncludeDefines bleibt False
+  Req.Scope := ssSingleFile;
+  Req.Path  := Fn;
+  Ses := TAnalysisSession.Create;
+  try
+    Res := Ses.Run(Req);
+    try
+      Assert.AreEqual<Integer>(0, ZaehleMemoryLeaks(Res),
+        'ohne Opt-in bleibt das Include unsichtbar (rw69-Exe-Probe)');
     finally Res.Free; end;
   finally Ses.Free; end;
 end;
