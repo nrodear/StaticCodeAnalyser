@@ -751,7 +751,7 @@ end
 | Tags | `dfm`, `i18n`, `localization` |
 | Detector | `uDfmHardcodedCaption.pas` |
 
-User-facing strings embedded in a `.dfm` cannot be localised, A/B-tested, or kept in a translation catalog. Assign at form construction time from a `resourcestring` or i18n helper.
+User-facing strings embedded in a `.dfm` cannot be localised, A/B-tested, or kept in a translation catalog. Assign at form construction time from a `resourcestring` or i18n helper. Not reported: single-character captions in symbol fonts (Webdings/Wingdings/Marlett/Symbol - icons, not text), DFM values that the form unit replaces from a `resourcestring` (dead placeholders), and forms whose unit uses a runtime DFM translator (gnugettext/dxgettext/JvGnugettext, `TranslateComponent`, Dev-Cpp `MultiLangSupport`, cnwizards `CnLangMgr`, `uLocalization*`) - there the DFM text IS the msgid source of the i18n layer.
 
 ---
 
@@ -823,7 +823,7 @@ DFM streaming crashes at form-load time with *"class TForm has no published meth
 | Tags | `dfm`, `dead-code` |
 | Detector | `uDfmOrphanHandler.pas` |
 
-Method looks like an event handler (`Sender: TObject`) but nothing in any `.dfm` references it. Likely leftover from a deleted control - remove or wire it up.
+Method looks like an event handler (`Sender: TObject`) but nothing in any `.dfm` references it - collection-item bindings (`item ... OnAction = Foo`, e.g. WebModule actions or plugin command lists) count as references. Known limits: handlers bound only in an ancestor DFM outside the scan, or assigned in code, are still reported. Likely leftover from a deleted control - remove or wire it up.
 
 ---
 
