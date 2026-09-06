@@ -1368,8 +1368,9 @@ end;
 
 procedure TAnalyserFrame.PopulateFilterCombo;
 // Severity-Filter: gruppiert nach Errors / Warnings / Hints. Sentinel-Items
-// mit Tag = -1 (z.B. '--- Errors ---') sind nicht selektierbar; FilterChange
-// faengt den Klick darauf ab und setzt zurueck auf "All".
+// mit Tag = -1 (z.B. '--- Errors ---') sind nicht selektierbar; Klicks
+// darauf behandelt der Fuzzy-Helfer (CommitSelection springt zum ersten
+// Eintrag der Sektion), FilterChange ignoriert Tag -1 nur noch defensiv.
 
   procedure Add(const ACaption: string; AMode: TFilterMode);
   begin
@@ -1661,17 +1662,24 @@ begin
            + sLineBreak + _('Click: filter grid to Hints'),
            Ord(fmHints), TileClickSeverity);
 
+  // Diese beiden gibt es seit dem Checklist-Dedup 2026-07-24 NICHT mehr
+  // als fm-Modus in der Combo - Ziel ist der generierte REGEL-Eintrag
+  // (KIND_TAG_BASE + Ord(Kind)), wie in der EXE. Die alten
+  // Ord(fm...)-Tags verfehlten seither IMMER und fielen still auf
+  // 'All' (Bestandsfund des Chargen-Reviews 06.09.).
   WireTile(FTileFileSev,  _('Read errors') + sLineBreak +
            _('File could not be read / parsed. Check path/encoding.')
            + sLineBreak + _('Click: filter grid to read errors'),
-           Ord(fmFileReadError), TileClickSeverity);
+           TFindingFilter.KIND_TAG_BASE + Ord(fkFileReadError),
+           TileClickSeverity);
 
   // Detector-spezifische Kachel
   WireTile(FTileCyclomatic, _('Cyclomatic Complexity') + sLineBreak +
            _('Methods with McCabe complexity > threshold (default 10).')
            + sLineBreak + _('Hard to test - refactor into smaller methods.')
            + sLineBreak + _('Click: filter grid to Cyclomatic'),
-           Ord(fmCyclomaticComplexity), TileClickSeverity);
+           TFindingFilter.KIND_TAG_BASE + Ord(fkCyclomaticComplexity),
+           TileClickSeverity);
 
   // Type-Bucket-Kacheln -> klick filtert TypeCombo
   WireTile(FTileBug,      _('Bugs') + sLineBreak +
@@ -3906,36 +3914,39 @@ procedure TAnalyserFrame.TileClickSeverity(Sender: TObject);
 // WICHTIG: TComboBox.ItemIndex-Setter feuert OnChange NICHT (nur User-
 // Interaktion tut das). Wir muessen FilterChange/TypeFilterChange explizit
 // aufrufen, sonst aktualisiert sich das Grid nicht.
+//
+// Sender.Tag ist der COMBO-Tag des Ziels: Ord(TFilterMode) fuer die
+// Gruppen-Kacheln, KIND_TAG_BASE+Ord(Kind) fuer die Detektor-Kacheln
+// (ReadErrors/Cyclomatic - deren fm-Modi flogen mit dem Checklist-Dedup
+// 2026-07-24 aus der Combo; die alten Ord(fm...)-Tags verfehlten IMMER
+// und fielen still auf 'All', Chargen-Review 06.09.).
 var
-  Target : TFilterMode;
+  TargetTag : Integer;
 begin
   if not Assigned(FFilterCombo) or not (Sender is TComponent) then Exit;
-  Target := TFilterMode(TComponent(Sender).Tag);
+  TargetTag := TComponent(Sender).Tag;
   // VOR der Zielsuche: eine offene Fuzzy-Reduktion tag-treu zuruecklegen,
   // damit die Suche die VOLLE Liste sieht (sonst verfehlte der Klick
   // sein Ziel, sobald der Nutzer gerade getippt hatte).
   if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   if Assigned(FTypeCombo) and (FTypeCombo.ItemIndex <> 0) then
     FTypeCombo.ItemIndex := 0;
-  // Tag-Suche mit Miss-Rueckfall auf 'All'. Seit 2026-08-19 im geteilten
-  // TTileFilterSelect.SelectByTag - dort steht auch die Begruendung des
-  // Rueckfalls. Vorher stand die Schleife fuenfmal (hier, TileClickType,
-  // und dreimal in der EXE), und der Rueckfall nur in den zwei
-  // Plugin-Kopien.
-  TTileFilterSelect.SelectByTag(FFilterCombo, Ord(Target));
-  // NACH dem Setzen, UNBEDINGT - auch im Miss-Fall (der Eintrag kann
-  // baseline-bereinigt fehlen, waehrend die Kachel die Gesamtmenge
-  // zaehlt): Commit-Gedaechtnis des Fuzzy-Helfers nachziehen
-  // (programmatisches ItemIndex sieht der Helfer nicht), dann BEIDE
-  // Change-Handler wie in der EXE. Vorher liefen sie nur im
-  // Treffer-Zweig - im Miss-Fall zeigte die Typ-Combo 'All', waehrend
-  // der Cache FTypeFilter den alten Wert behielt (Review 2026-08-12,
-  // Logik-Dimension). Erst Type-, dann Filter-Change; beide enden in
-  // ApplyFilter, das gegen denselben Stand idempotent ist.
-  if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
   Inc(FApplyFilterDepth);
   try
+    // ERST der Type-Wechsel: TypeFilterChange baut seit 2026-09-06 die
+    // Severity-Combo fuer die neue Sicht um (Auswahl-Erhalt aus den
+    // FELDERN). Liefe er NACH der Zielsuche, wuerfe der Umbau die
+    // Kachel-Auswahl wieder weg - Blocker des Chargen-Reviews 06.09.:
+    // alle fuenf Severity-Kacheln zeigten 'All'.
     TypeFilterChange(FTypeCombo);
+    // DANN das Ziel in der frisch aufgebauten tfAll-Liste suchen.
+    // Tag-Suche mit Miss-Rueckfall auf 'All' (geteilt,
+    // TTileFilterSelect.SelectByTag - Begruendung dort; der Eintrag
+    // kann baseline-bereinigt fehlen, die Kachel zaehlt die
+    // Gesamtmenge). Commit-Gedaechtnis des Fuzzy-Helfers nachziehen,
+    // auch im Miss-Fall (programmatisches ItemIndex sieht er nicht).
+    TTileFilterSelect.SelectByTag(FFilterCombo, TargetTag);
+    if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
     FilterChange(FFilterCombo);
   finally
     Dec(FApplyFilterDepth);
