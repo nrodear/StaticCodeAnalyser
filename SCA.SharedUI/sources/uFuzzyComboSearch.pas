@@ -35,6 +35,14 @@ type
     Tag     : NativeInt;
   end;
 
+  // Wer einen Commit ausloest, entscheidet ueber das eindeutige
+  // Tipp-Ziel: nur explizite Uebernahme-Gesten (Enter, Fokusverlust -
+  // cgAccept) duerfen es committen. Ein Zuklappen (cgCloseUp) kommt
+  // auch von Escape und je nach Windows-Fassung vom programmatischen
+  // Listen-Umbau - dort wuerde der Einzeltreffer-Commit einen ABBRUCH
+  // in eine Auswahl verwandeln (Chargen-Review 06.09.).
+  TCommitGesture = (cgCloseUp, cgAccept);
+
   // noinspection LargeClass, GodClass
   // Ein Bauteil, eine Verantwortung: die Klasse kapselt den kompletten
   // Ereignis-Vertrag einer tippbaren Combo (Schnappschuss, Entprellung,
@@ -72,7 +80,7 @@ type
     procedure ComboSelect(Sender: TObject);
     procedure ComboCloseUp(Sender: TObject);
     procedure ComboExit(Sender: TObject);
-    procedure CommitSelection(AAcceptTypedSingleHit: Boolean);
+    procedure CommitSelection(AGesture: TCommitGesture);
     procedure ComboKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ApplyQuery(const AQuery: string);
     procedure FillFromSnapshot;
@@ -81,6 +89,7 @@ type
     function  SelectedTag(var ATag: NativeInt): Boolean;
     function  NextRealTagAfter(AIndex: Integer): NativeInt;
     function  SingleVisibleTarget(var ATag: NativeInt): Boolean;
+    function  ResolveSeparatorJump(var ATag: NativeInt): Boolean;
   protected
     // Loest FCombo, wenn die Combo VOR dem Helfer stirbt. Ohne das traf
     // die Handler-Restauration in Destroy freigegebenen Speicher: im
@@ -619,6 +628,29 @@ begin
   Result := Hits = 1;
 end;
 
+function TFuzzyComboSearch.ResolveSeparatorJump(var ATag: NativeInt): Boolean;
+// Trenner-Klick -> erster Eintrag der Sektion darunter (vorher nur als
+// Host-Sonderweg im Plugin, den das Robustheits-Gate vom 06.09. mittags
+// unerreichbar machte - jetzt springen beide Wirte hier). False, wenn
+// es kein Sprungziel gibt (Hinweiszeile der reduzierten Liste, Trenner
+// am Listenende) - der Aufrufer legt dann die vorige Auswahl zurueck.
+//
+// Der Klick-Index zaehlt NUR, wenn die ANZEIGE der volle Schnappschuss
+// ist (Count-Vergleich): ein not-FIsFiltering-Gate liess zwei
+// Bestandsfenster offen, in denen die Anzeige noch reduziert war
+// (Echo-Waechter beim Blaettern; die 160 ms nach dem Textloeschen) -
+// ein Klick auf die Hinweiszeile haette dort einen willkuerlichen
+// Schnappschuss-Eintrag committet (Chargen-Review 06.09.).
+var
+  SepIdx : Integer;
+begin
+  SepIdx := -1;
+  if FCombo.Items.Count = FAll.Count then
+    SepIdx := FCombo.ItemIndex;
+  ATag := NextRealTagAfter(SepIdx);
+  Result := ATag <> SEPARATOR_TAG;
+end;
+
 function TFuzzyComboSearch.NextRealTagAfter(AIndex: Integer): NativeInt;
 // Erster waehlbarer Tag im Schnappschuss NACH AIndex - das Sprungziel
 // eines Trenner-Klicks. SEPARATOR_TAG, wenn es keinen gibt (auch bei
@@ -808,23 +840,18 @@ begin
     FHasPending := False;
 end;
 
-procedure TFuzzyComboSearch.CommitSelection(
-  AAcceptTypedSingleHit: Boolean);
+procedure TFuzzyComboSearch.CommitSelection(AGesture: TCommitGesture);
 // Der eine Ort, an dem der Host erfaehrt, dass sich etwas geaendert hat.
 //
 // Das Tag-Gate ist kein Luxus: Zuklappen ohne Auswahl-Aenderung (Escape,
 // Klick daneben, Enter auf dem bereits gewaehlten Eintrag) darf keinen
 // Filterlauf ausloesen.
 //
-// AAcceptTypedSingleHit: nur EXPLIZITE Gesten (Enter, Fokusverlust)
-// duerfen das eindeutige Ziel einer getippten Reduktion committen. Der
-// CLOSEUP-Pfad darf das NICHT - ein Zuklappen kommt auch von Escape
-// und (je nach Windows-Fassung) vom programmatischen Listen-Umbau; dort
-// wuerde der Einzeltreffer-Commit einen ABBRUCH in eine Auswahl
-// verwandeln (Chargen-Review 06.09., Escape-Regression).
+// AGesture: siehe TCommitGesture - nur cgAccept darf das eindeutige
+// Ziel einer getippten Reduktion committen (Escape-Regression des
+// Chargen-Reviews 06.09.).
 var
   Tag, LiveTag : NativeInt;
-  SepIdx       : Integer;
 begin
   if FUpdating then Exit;
   if not Assigned(FCombo) then Exit;
@@ -848,7 +875,7 @@ begin
       Tag := LiveTag;
   end
   else if not SelectedTag(Tag)
-       and not (AAcceptTypedSingleHit and FIsFiltering
+       and not ((AGesture = cgAccept) and FIsFiltering
                 and SingleVisibleTarget(Tag)) then
   begin
     // Weder Auswahl noch (erlaubtes) eindeutiges Tipp-Ziel. Der
@@ -862,32 +889,16 @@ begin
   end;
   FHasPending := False;
 
-  // Ein Sektions-Trenner ist keine Auswahl - aber ein Klick auf einen
-  // ECHTEN Trenner der vollen Liste traegt eine lesbare Absicht: den
-  // ersten Eintrag der Sektion darunter (User-Wunsch; vorher nur als
-  // Host-Sonderweg im Plugin, den das Robustheits-Gate vom 06.09.
-  // unerreichbar machte - jetzt springen beide Wirte hier). Der Index
-  // wird VOR dem Zuruecklegen festgehalten und zaehlt nur, wenn die
-  // ANZEIGE der volle Schnappschuss ist (Count-Vergleich - das
-  // fruehere not-FIsFiltering-Gate liess zwei Bestandsfenster offen,
-  // in denen die Anzeige noch reduziert war: Echo-Waechter beim
-  // Blaettern und die 160 ms nach dem Textloeschen; ein Klick auf die
-  // Hinweiszeile haette dann einen willkuerlichen Schnappschuss-
-  // Eintrag committet). Ohne Sprungziel (Hinweiszeile, Trenner am
-  // Listenende) wird die vorige Auswahl zurueckgelegt und nichts
-  // gemeldet: ein Commit auf SEPARATOR_TAG wuerde FCommitted
-  // vergiften und den Host mit einem unwaehlbaren Eintrag melden.
-  if Tag = SEPARATOR_TAG then
+  // Ein Sektions-Trenner ist keine Auswahl - ResolveSeparatorJump
+  // liefert den ersten Eintrag der Sektion darunter (User-Wunsch;
+  // Details und Gate-Begruendung dort). Ohne Sprungziel wird die
+  // vorige Auswahl zurueckgelegt und nichts gemeldet: ein Commit auf
+  // SEPARATOR_TAG wuerde FCommitted vergiften und den Host mit einem
+  // unwaehlbaren Eintrag melden.
+  if (Tag = SEPARATOR_TAG) and not ResolveSeparatorJump(Tag) then
   begin
-    SepIdx := -1;
-    if FCombo.Items.Count = FAll.Count then
-      SepIdx := FCombo.ItemIndex;
-    Tag := NextRealTagAfter(SepIdx);
-    if Tag = SEPARATOR_TAG then
-    begin
-      RestoreAllAndSelect(FCommitted);
-      Exit;
-    end;
+    RestoreAllAndSelect(FCommitted);
+    Exit;
   end;
 
   RestoreAllAndSelect(Tag);
@@ -909,7 +920,7 @@ procedure TFuzzyComboSearch.ComboCloseUp(Sender: TObject);
 // CBN_CLOSEUP - die dokumentierte Stelle fuer teure Verarbeitung.
 // OHNE Einzeltreffer-Annahme: ein Zuklappen kommt auch von Escape.
 begin
-  CommitSelection(False);
+  CommitSelection(cgCloseUp);
   if Assigned(FHostCloseUp) then
   begin
     FHostCloseUp(FCombo);
@@ -924,7 +935,7 @@ begin
   if FIsFiltering or FHasPending then
   begin
     // Explizite Geste: ein eindeutiges Tipp-Ziel wird uebernommen.
-    CommitSelection(True);
+    CommitSelection(cgAccept);
   end;
   if Assigned(FHostExit) then
   begin
@@ -963,7 +974,7 @@ begin
       FilterNow;
     end;
     // Explizite Geste: ein eindeutiges Tipp-Ziel wird uebernommen.
-    CommitSelection(True);
+    CommitSelection(cgAccept);
   end;
   if Assigned(FHostKeyUp) then
   begin
