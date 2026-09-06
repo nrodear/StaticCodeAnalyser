@@ -1815,7 +1815,13 @@ begin
         // sieht, muss das Suchfeld finden - der Token bleibt daneben
         // suchbar (data-rule-Filter und Exporte sprechen weiter Token).
         var KindNm := KindName(F.Kind);
-        var SearchBlob := LowerCase(Format('%s %s %s %s %s',
+        // AnsiLowerCase, NICHT LowerCase: die JS-Suche senkt die Eingabe
+        // Unicode-korrekt (toLowerCase) - mit ASCII-LowerCase blieben
+        // grosse Umlaute (lokalisierte Regelnamen, Methodennamen) im
+        // Blob stehen und die Funde waren ueber diese Woerter in keiner
+        // Schreibweise findbar. Schwesterfall zum Detector-Info-Major
+        // des Chargen-Reviews 06.09.
+        var SearchBlob := AnsiLowerCase(Format('%s %s %s %s %s',
           [F.MethodName, FileShort, F.MissingVar, KindNm, Meta.Name]));
         // #7 Baseline-Fingerprint: JETZT der GETEILTE Engine-Fingerprint
         // (TBaseline.Fingerprint = SHA2 aus datei|kind|methode|detail, ohne

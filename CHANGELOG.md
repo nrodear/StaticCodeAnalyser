@@ -8,6 +8,13 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- HTML report: the full-text search box lowercased its per-row search
+  index ASCII-only while the query is lowercased Unicode-aware - words
+  containing an uppercase umlaut (localized rule names, method names)
+  could not be found under any spelling. The index is now lowered
+  Unicode-aware, matching the query side.
+
 ### Added
 - **Detector info export** (burger menu -> Export -> "Detector info
   (rule catalog, HTML)..."): a self-contained, offline HTML page
