@@ -675,7 +675,7 @@ begin
   Result :=
     Format('<tbody data-id="%s" data-search="%s" data-typ="%s" '
       + 'data-sev="%d" data-konf="%d" data-prof="%s">'#13#10,
-      [H(R.Meta.ID), H(SuchBlob(Meta, K, Sev, Conf, R.ProfilTxt, R.Tags)),
+      [H(R.Meta.ID), H(SuchBlob(R)),
        TypCss(R.Meta.FindingType), Ord(R.Sev), Ord(R.Conf), R.ProfilTxt])
     + '<tr class="haupt" tabindex="0" '
     + 'onclick="oeffneDrawer(this.parentNode)">'
@@ -800,14 +800,10 @@ class function TDetectorInfoExport.BuildHtml(const ALang: string): string;
 var
   SB         : TStringBuilder;
   K          : TFindingKind;
-  Meta       : TRuleMeta;
+  Meta       : TRuleMeta;      // nur der Dashboard-Zaehlpass
   DefaultSet : TFindingKinds;
   Stat       : TKatalogStat;
-  Sev        : TLeakSeverity;
-  Conf       : TFindingConfidence;
-  InDefault  : Boolean;
-  Tags       : string;
-  ProfilTxt  : string;
+  R          : TRegelDaten;    // die Render-Schleife
   Anz        : Integer;
 begin
   DefaultSet := TRuleCatalog.GetProfile('default');
