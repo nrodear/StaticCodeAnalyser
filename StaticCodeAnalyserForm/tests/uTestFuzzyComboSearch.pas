@@ -64,6 +64,7 @@ type
     [Test] procedure MouseOrder_SecondSelection_NotifiesAgain;
     [Test] procedure TypedFullTextOfOtherEntry_StillFilters;
     [Test] procedure SeparatorCommit_DoesNotNotifyHost;
+    [Test] procedure ComboFreedBeforeHelper_DestroyDoesNotTouchIt;
   end;
 
 implementation
@@ -416,6 +417,36 @@ begin
   FSearch.FilterNow;
   Assert.IsTrue(FCombo.Items.Count < Voll,
     'echtes Tippen reduziert weiterhin (Liste voll = Waechter zu breit)');
+end;
+
+procedure TTestFuzzyComboEvents.ComboFreedBeforeHelper_DestroyDoesNotTouchIt;
+// Teardown-Reihenfolge des VCL: Kind-CONTROLS sterben in
+// TWinControl.Destroy VOR den besessenen Komponenten (DestroyComponents).
+// Die Combo ist also beim Helfer-Destroy schon weg - ohne
+// FreeNotification schrieb die Handler-Restauration in freigegebenen
+// Speicher. GRENZE DES BEWEISES: ohne FullDebugMode ist ein stilles
+// Use-after-free meist symptomlos; der Test dokumentiert den Vertrag
+// und schlaegt unter einem pruefenden Speichermanager an.
+var
+  LCombo  : TComboBox;
+  LSearch : TFuzzyComboSearch;
+begin
+  LCombo := TComboBox.Create(nil);
+  try
+    LCombo.Parent := FForm;
+    LCombo.Items.AddObject('All', TObject(0));
+    LCombo.ItemIndex := 0;
+    LSearch := TFuzzyComboSearch.Create(nil);
+    try
+      LSearch.Attach(LCombo);
+      FreeAndNil(LCombo);          // Combo stirbt ZUERST (Teardown-Ordnung)
+    finally
+      LSearch.Free;                // darf die tote Combo nicht anfassen
+    end;
+  finally
+    LCombo.Free;                   // nil-sicher (FreeAndNil oben)
+  end;
+  Assert.Pass('Helfer-Destroy nach Combo-Free laeuft ohne Zugriff auf die tote Combo');
 end;
 
 procedure TTestFuzzyComboEvents.SeparatorCommit_DoesNotNotifyHost;

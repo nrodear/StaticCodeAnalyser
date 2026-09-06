@@ -76,6 +76,15 @@ type
     procedure RestoreAll;
     procedure RestoreAllAndSelect(ATag: NativeInt);
     function  SelectedTag(var ATag: NativeInt): Boolean;
+  protected
+    // Loest FCombo, wenn die Combo VOR dem Helfer stirbt. Ohne das traf
+    // die Handler-Restauration in Destroy freigegebenen Speicher: im
+    // VCL-Teardown zerstoert TWinControl.Destroy seine Kind-CONTROLS
+    // (die Combo) BEVOR DestroyComponents die besessenen Komponenten
+    // (diesen Helfer) erreicht - die Reihenfolge ist also der NORMALFALL,
+    // nicht die Ausnahme (Event-Review 06.09.2026).
+    procedure Notification(AComponent: TComponent;
+      Operation: TOperation); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -255,10 +264,21 @@ begin
   FTimer.OnTimer  := TimerTick;
 end;
 
+procedure TFuzzyComboSearch.Notification(AComponent: TComponent;
+  Operation: TOperation);
+begin
+  inherited;
+  if (Operation = opRemove) and (AComponent = FCombo) then
+  begin
+    FCombo := nil;
+  end;
+end;
+
 destructor TFuzzyComboSearch.Destroy;
 begin
   // Ereignisse zurueckgeben, falls die Combo uns ueberlebt (der Host
-  // besitzt sie, nicht wir).
+  // besitzt sie, nicht wir). Stirbt sie ZUERST - der Normalfall im
+  // Form-Teardown - hat Notification FCombo bereits auf nil gesetzt.
   if Assigned(FTimer) then
   begin
     FTimer.Enabled := False;
@@ -279,6 +299,9 @@ procedure TFuzzyComboSearch.Attach(ACombo: TComboBox);
 begin
   if not Assigned(ACombo) then Exit;
   FCombo := ACombo;
+  // Begruendung am Notification-Override: die Combo stirbt im Teardown
+  // VOR dem Helfer, Destroy darf sie dann nicht mehr anfassen.
+  ACombo.FreeNotification(Self);
   FHostChange  := ACombo.OnChange;
   FHostSelect  := ACombo.OnSelect;
   FHostKeyUp   := ACombo.OnKeyUp;
