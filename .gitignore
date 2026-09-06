@@ -229,3 +229,6 @@ _notneeded/
 tools/__pycache__/
 __pycache__/
 *.pyc
+
+# Lokales Dokumenten-Archiv (Root-Aufraeumung 2026-09-06)
+_archiv/
