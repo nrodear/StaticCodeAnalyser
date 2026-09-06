@@ -80,10 +80,13 @@ type
 
 implementation
 
-// noinspection-file BeginEndRequired, CanBeClassMethod, CyclomaticComplexity, EmptyArgumentList, ExceptionTooGeneral, ExceptOnException, GroupedDeclaration, HardcodedString, LongParamList, NestedTry, NilComparison, PublicField, TooLongLine, UnsortedUses
+// noinspection-file BeginEndRequired, CanBeClassMethod, CyclomaticComplexity, EmptyArgumentList, ExceptionTooGeneral, ExceptOnException, GroupedDeclaration, HardcodedString, LongParamList, NestedTry, NilComparison, PublicField, TooLongLine, UnsortedUses, LargeClass
 // Export-Menu-Handlers: catch-all an UI-Action-Grenzen - File-IO/
 // Clipboard-Faults sollen als ShowMessage gemeldet werden, nicht die
-// App killen. Idiomatisch fuer VCL-Action-Handler.
+// App killen. Idiomatisch fuer VCL-Action-Handler. LargeClass seit dem
+// Detector-Info-Eintrag (534 Zeilen): die Klasse ist der KATALOG der
+// Exportwege - je Format ein Save-Dialog-Handler mit Begruendungs-
+// Kommentaren; eine Aufspaltung zerrisse nur das Menue.
 
 uses
   System.SysUtils, System.Types, Vcl.Dialogs, Vcl.Clipbrd,

@@ -10,8 +10,9 @@ unit uDetectorInfoExport;
 // Englisch (das DE-Overlay traegt Name + Kurzbeschreibung; die
 // Langbeschreibungen und die Vorher/Nachher-Beispiele existieren bisher
 // nur englisch). BEWUSST KEIN _(): das Artefakt soll nicht mit der
-// App-Sprache kippen. TODO (Nutzer-Backlog): EN/FR - dann wird die
-// Sprache hier parametrisiert (Chrome-Tabelle je Sprache + Overlays).
+// App-Sprache kippen. SPAETER laut Nutzer-Backlog EN/FR - dann wird
+// die Sprache hier parametrisiert (Chrome-Tabelle je Sprache plus
+// Overlays); bis dahin ist 'de' der einzige Aufrufwert.
 //
 // TECHNIK: ein <tbody> je Regel (Hauptzeile + aufklappbare Detailzeile
 // wandern beim Sortieren als Paar); Sortierung ueber data-sort bzw.
@@ -39,6 +40,14 @@ type
   end;
 
 implementation
+
+// noinspection-file DuplicateString, StringConcatInLoop
+// Ein HTML-Generator wiederholt Tags ('<td>', '</td>') bauartbedingt -
+// eine Konstante je Tag machte den Aufbau unlesbarer, nicht sicherer
+// (dieselbe Lage wie im grossen Findings-Report uExportHtml).
+// StringConcatInLoop: JoinArr verkettet Tags/CWE-Listen mit maximal
+// einer Handvoll Elementen - kein Hot-Path, TStringBuilder waere
+// Overhead ohne Gewinn.
 
 uses
   uExportHtml;   // TExporterHtml.HtmlEscape - keine dritte Escape-Kopie
