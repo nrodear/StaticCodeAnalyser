@@ -1,4 +1,4 @@
-unit uDfmHardcodedCaption;
+﻿unit uDfmHardcodedCaption;
 
 // Detektor: Hardcodierte UI-Strings im DFM.
 //
@@ -20,15 +20,15 @@ unit uDfmHardcodedCaption;
 // ausgeschlossen werden.
 //
 // FP-Gates (AQL 31.08. -> Charge 15, 06.09.2026; alle DREI belegten
-// FP-Klassen der 11-%-Messung, am rw70b-Bestand vollgezaehlt = 1.150
-// von 26.358):
+// FP-Klassen der 11-%-Messung, am rw70b-Bestand vollgezaehlt = 1.379
+// von 26.358; Zaehlung v5 nach der rw71-Nachschaerfung):
 //   G1 GLYPH (44): Ein-Zeichen-Caption bei Font.Name in einem
 //      Symbolfont (Webdings/Wingdings/Marlett/Symbol) ist ein Icon,
 //      kein Text.
 //   G2 RESOURCESTRING (7): die Nachbar-.pas weist DERSELBEN
 //      Komponenten-Property einen resourcestring-Ident zu - der
 //      DFM-Wert ist ein toter Platzhalter.
-//   G3 UEBERSETZUNGS-REGIME (1.099): die Nachbar-.pas nutzt einen
+//   G3 UEBERSETZUNGS-REGIME (1.328): die Nachbar-.pas nutzt einen
 //      Laufzeit-DFM-Uebersetzer (gnugettext/dxgettext/TranslateComponent,
 //      Dev-Cpp MultiLangSupport, cnwizards CnLangMgr, uLocalization*).
 //      Dann IST der DFM-Text die msgid-Quelle des i18n-Layers - er
@@ -61,7 +61,7 @@ implementation
 
 uses
   System.Classes,            // TStringList (Nachbar-.pas)
-  System.StrUtils,           // ContainsText (Regime-Marker)
+  System.StrUtils,           // StartsText (resourcestring-Blockenden)
   uDetectorUtils,            // StripStringsAndComments (G2/G3-Suche)
   uFileTextCache;            // AcquireLines (Prozess-Cache)
 
@@ -102,11 +102,20 @@ const
     ('Webdings', 'Wingdings', 'Wingdings 2', 'Wingdings 3', 'Marlett',
      'Symbol');
   // G3: Marker eines Laufzeit-DFM-Uebersetzers in der Form-Unit
-  // (Herleitung + Vollzaehlung im Unit-Kopf).
-  REGIME_MARKER: array[0..7] of string =
-    ('gnugettext', 'dxgettext', 'uLocalization', 'TranslateComponent',
+  // (Herleitung + Vollzaehlung im Unit-Kopf). Nachschaerfung nach dem
+  // rw71-A/B (06.09.): ContainsText traf auch KONFIG-Bezeichner wie
+  // 'CheckBoxDxgettextSupport' (der JVCL-Installer REDET ueber
+  // dxgettext, uebersetzt aber nicht) - jetzt Ident-Grenzen-Match.
+  // 'JvGnugettext' steht explizit dabei: der jvcl-Wrapper ist ein
+  // ECHTES Uebersetzungs-uses (pyscripter-Muster), trifft aber wegen
+  // des 'v' davor keine Grenze von 'gnugettext'.
+  REGIME_MARKER: array[0..8] of string =
+    ('gnugettext', 'dxgettext', 'JvGnugettext', 'TranslateComponent',
      'TranslateProperties', 'RetranslateComponent', 'MultiLangSupport',
-     'CnLangMgr');
+     'CnLangMgr', 'uLocalization');
+  // 'uLocalization' ist ein PREFIX (uLocalizationPo etc.): links
+  // Ident-Grenze Pflicht, rechts darf der Ident weiterlaufen.
+  REGIME_PREFIX_AB = 8;
 
 function IsSymbolFont(const AName: string): Boolean;
 var
@@ -114,6 +123,39 @@ var
 begin
   for S in SYMBOL_FONTS do
     if SameText(S, AName) then Exit(True);
+  Result := False;
+end;
+
+function IstIdentZeichen(C: Char): Boolean; inline;
+begin
+  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+end;
+
+function HatRegimeMarker(const ACodeLow: string): Boolean;
+// Ident-Grenzen-Suche der REGIME_MARKER im (bereits lowercased)
+// gestrippten Quelltext: links IMMER Nicht-Ident, rechts Nicht-Ident
+// ausser bei den Prefix-Markern (ab REGIME_PREFIX_AB).
+var
+  i, P, Start : Integer;
+  MkLow       : string;
+  Prefix      : Boolean;
+begin
+  for i := Low(REGIME_MARKER) to High(REGIME_MARKER) do
+  begin
+    MkLow  := LowerCase(REGIME_MARKER[i]);
+    Prefix := i >= REGIME_PREFIX_AB;
+    Start  := 1;
+    repeat
+      P := Pos(MkLow, ACodeLow, Start);
+      if P = 0 then Break;
+      if ((P = 1) or not IstIdentZeichen(ACodeLow[P - 1]))
+         and (Prefix
+              or (P + Length(MkLow) > Length(ACodeLow))
+              or not IstIdentZeichen(ACodeLow[P + Length(MkLow)])) then
+        Exit(True);
+      Start := P + 1;
+    until False;
+  end;
   Result := False;
 end;
 
@@ -129,7 +171,6 @@ var
   Cached    : Boolean;
   LineFor   : TArray<Integer>;
   Code, S   : string;
-  M         : string;
   InResBlock: Boolean;
   PosAssign, PosDot, PosSemi : Integer;
   Lhs, Rhs  : string;
@@ -143,12 +184,7 @@ begin
   finally
     if not Cached then Lines.Free;
   end;
-  for M in REGIME_MARKER do
-    if ContainsText(Code, M) then
-    begin
-      ARegime := True;
-      Break;
-    end;
+  ARegime := HatRegimeMarker(LowerCase(Code));
   InResBlock := False;
   for S in Code.Split([#10]) do
   begin

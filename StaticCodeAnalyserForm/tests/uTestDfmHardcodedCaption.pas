@@ -43,6 +43,12 @@ type
     [Test] procedure Gate_PlainAssign_StillReported;
     [Test] procedure Gate_Regime_GnugettextUses_NotReported;
     [Test] procedure Gate_Regime_MarkerOnlyInComment_StillReported;
+    // Nachschaerfung nach dem rw71-A/B: Marker-SUBSTRING in einem
+    // laengeren Ident (CheckBoxDxgettextSupport - der Installer
+    // REDET ueber dxgettext) gated NICHT; das JvGnugettext-uses
+    // (jvcl-Wrapper, pyscripter-Muster) gated SEHR WOHL.
+    [Test] procedure Gate_Regime_IdentSubstring_StillReported;
+    [Test] procedure Gate_Regime_JvGnugettextWrapper_NotReported;
   end;
 
 implementation
@@ -460,6 +466,44 @@ begin
   try
     Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
       'Kommentare zaehlen NIE als Code-Use - Marker im Kommentar gated nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.Gate_Regime_IdentSubstring_StillReported;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormE: TFormE'#13#10 +
+    '  Caption = ''Konfig-Seite'''#13#10 +
+    'end',
+    'unit subprobe;'#13#10 +
+    'interface'#13#10 +
+    'type TFormE = class'#13#10 +
+    '  CheckBoxDxgettextSupport: TObject;'#13#10 +
+    'end;'#13#10 +
+    'implementation'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
+      'dxgettext als Ident-SUBSTRING ist kein Uebersetzungs-Regime');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.Gate_Regime_JvGnugettextWrapper_NotReported;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormF: TFormF'#13#10 +
+    '  Caption = ''Wird uebersetzt'''#13#10 +
+    'end',
+    'unit wrapprobe;'#13#10 +
+    'interface'#13#10 +
+    'uses JvGnugettext;'#13#10 +
+    'implementation'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption),
+      'JvGnugettext ist der jvcl-gettext-Wrapper - echtes Regime');
   finally F.Free; end;
 end;
 
