@@ -60,6 +60,14 @@ type
     // behandeln, sonst landen '<br>'-Tokens im Attributwert (genau das
     // fing das Chargen-Review 06.09. beim zweiten Konsumenten).
     class function HtmlEscape(const S: string): string; static;
+    // Attributsichere Variante fuer MEHRZEILIGE Werte (data-copy der
+    // Codekarten beider Workbench-Seiten): wie HtmlEscape, aber
+    // Umbrueche als '&#10;' - der HTML-Parser stellt im dataset echte
+    // LF her, waehrend das literale '<br>' des Element-Vertrags im
+    // Attribut Datenmuell in der Zwischenablage waere (Chargen-Review
+    // 07.09., MAJOR). Fuer EINZEILIGE Attributwerte genuegt HtmlEscape.
+    class function HtmlAttrEscapeMultiline(const S: string): string;
+      static;
   private
     class function JsonForScript(const S: string): string; static;
     // Liefert ein HTML-Fragment (<div class="src-snippet">) mit
@@ -198,6 +206,17 @@ begin
   finally
     SB.Free;
   end;
+end;
+
+class function TExporterHtml.HtmlAttrEscapeMultiline(
+  const S: string): string;
+// Nachbearbeitung des HtmlEscape-Ergebnisses statt eigener Escape-
+// Kette: ein '<br>' im OUTPUT kann nur vom #10-Mapping stammen -
+// echte '<' sind dort bereits '&lt;' -, der Replace ist also
+// kollisionsfrei (Vertrag s. Deklaration).
+begin
+  Result := StringReplace(HtmlEscape(S), '<br>', '&#10;',
+    [rfReplaceAll]);
 end;
 
 class function TExporterHtml.BuildCodeSnippet(SourceLines: TStringList;

@@ -148,6 +148,15 @@ begin
   Result := TExporterHtml.HtmlEscape(S);
 end;
 
+function HA(const S: string): string;
+// Fuer MEHRZEILIGE Attributwerte (data-copy der Codekarten): H()
+// bildete Umbrueche auf literales '<br>' ab - der Kopieren-Button
+// lieferte damit '<br>'-Muell in die Zwischenablage (Chargen-Review
+// 07.09., MAJOR). '&#10;' dekodiert der Parser im dataset zu echtem LF.
+begin
+  Result := TExporterHtml.HtmlAttrEscapeMultiline(S);
+end;
+
 function ChipListe(const A: TArray<string>; const ACss: string): string;
 // Kleine Chips (Tags, CWE). Leeres Array -> leerer String.
 var
@@ -671,22 +680,23 @@ begin
     begin
       SB.AppendLine('<div class="codekarten">');
       // #10#10 vor </pre>: zwei Leerzeilen Luft am Blockende - derselbe
-      // Nutzerwunsch wie in der Hint-Zeile des Findings-Reports
-      // (data-copy bleibt der REINE Code, die Luft ist nur Anzeige).
+      // Nutzerwunsch wie in der Hint-Zeile des Findings-Reports.
+      // data-copy = der REINE Code ohne die Anzeige-Luft, via HA():
+      // Umbrueche als '&#10;', nicht als '<br>'-Token (s. HA).
       if R.Meta.BadExample <> '' then
         SB.AppendLine(Format('<div class="codekarte schlecht" '
           + 'data-copy="%s"><div class="karte-titel">Vorher '
           + '(problematisch)<button class="copy" '
           + 'onclick="kopiere(this)">Kopieren</button></div><pre>%s'
           + #10#10'</pre></div>',
-          [H(R.Meta.BadExample), H(R.Meta.BadExample)]));
+          [HA(R.Meta.BadExample), H(R.Meta.BadExample)]));
       if R.Meta.GoodExample <> '' then
         SB.AppendLine(Format('<div class="codekarte gut" '
           + 'data-copy="%s"><div class="karte-titel">Nachher '
           + '(empfohlen)<button class="copy" '
           + 'onclick="kopiere(this)">Kopieren</button></div><pre>%s'
           + #10#10'</pre></div>',
-          [H(R.Meta.GoodExample), H(R.Meta.GoodExample)]));
+          [HA(R.Meta.GoodExample), H(R.Meta.GoodExample)]));
       SB.AppendLine('</div>');
     end;
     SB.AppendLine(Format('<div class="karte" data-copy="// noinspection '

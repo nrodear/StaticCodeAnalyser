@@ -261,8 +261,19 @@ begin
     'Nachher-Kartentitel fehlt');
   Assert.IsTrue(Pos('<pre>' + E(Meta.GoodExample) + #10#10 + '</pre>',
     FHtml) > 0, 'Nachher-Beispielcode (mit Leerzeilen-Luft) fehlt');
-  Assert.IsTrue(Pos('data-copy="' + E(Meta.BadExample) + '"', FHtml) > 0,
-    'data-copy muss den REINEN Code ohne die Anzeige-Luft tragen');
+  // Seit dem Attribut-Fix (Chargen-Review 07.09.) traegt data-copy
+  // Umbrueche als '&#10;' - E() bildete sie auf '<br>' ab, und genau
+  // dieser Token landete vorher als Muell in der Zwischenablage.
+  Assert.IsTrue(Pos('data-copy="'
+    + StringReplace(E(Meta.BadExample), '<br>', '&#10;', [rfReplaceAll])
+    + '"', FHtml) > 0,
+    'data-copy muss den reinen Code mit &#10;-Umbruechen tragen');
+  Assert.IsTrue(Pos(#10, Meta.BadExample) > 0,
+    'Vorbedingung: das Beispiel ist mehrzeilig, sonst prueft der '
+    + 'Umbruch-Fall nichts');
+  Assert.AreEqual<Integer>(0,
+    Pos('data-copy="' + E(Meta.BadExample) + '"', FHtml),
+    'die alte <br>-Form darf nicht mehr emittiert werden');
   // Untereinander: erst schlecht, dann gut, als Spalten-Stapel.
   Assert.IsTrue(Pos('.codekarten{display:flex;flex-direction:column',
     FHtml) > 0, 'Codekarten muessen untereinander stehen');

@@ -30,6 +30,7 @@ type
     [Test] procedure FileReadError_NeutralBadgeAndOwnRank;
     [Test] procedure Run_WritesUtf8WithBom;
     [Test] procedure FindingFields_AreHtmlEscaped;
+    [Test] procedure DataCopy_CarriesRealNewlines_NoBrTokens;
   end;
 
 implementation
@@ -40,7 +41,8 @@ implementation
 
 uses
   System.IOUtils,
-  uFindingsWorkbenchExport, uRuleCatalog;
+  uFindingsWorkbenchExport, uRuleCatalog,
+  uExportHtml; // HtmlEscape - Erwartungsbau des data-copy-Vertrags
 
 function TTestFindingsWorkbenchExport.MakeFinding(Kind: TFindingKind;
   const Path: string; Line: Integer; const Msg: string): TLeakFinding;
@@ -280,6 +282,38 @@ begin
     'Detailtext muss escaped sein');
   Assert.IsTrue(Pos('Do&lt;Evil&gt;', Html) > 0,
     'escapter Methodenname fehlt - dann fehlt die Zeile selbst');
+end;
+
+procedure TTestFindingsWorkbenchExport.DataCopy_CarriesRealNewlines_NoBrTokens;
+// Chargen-Review 07.09. (MAJOR): data-copy der Codekarten lief durch
+// den Element-Escaper und trug '<br>'-Tokens statt Umbruechen - der
+// Kopieren-Button schrieb Muell in die Zwischenablage. Vertrag jetzt:
+// Umbrueche als '&#10;' im data-copy, waehrend der <pre>-INHALT
+// weiter die '<br>'-Form des Element-Vertrags traegt.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+  Meta     : TRuleMeta;
+  Erwartet : string;
+begin
+  Meta := TRuleCatalog.GetRule(fkMemoryLeak, 'de');
+  Assert.IsTrue(Pos(#10, Meta.BadExample) > 0,
+    'Vorbedingung: SCA001-Beispiel ist mehrzeilig');
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  Erwartet := StringReplace(TExporterHtml.HtmlEscape(Meta.BadExample),
+    '<br>', '&#10;', [rfReplaceAll]);
+  Assert.IsTrue(Pos('data-copy="' + Erwartet + '"', Html) > 0,
+    'data-copy muss Umbrueche als &#10; tragen');
+  Assert.AreEqual<Integer>(0,
+    Pos('data-copy="' + TExporterHtml.HtmlEscape(Meta.BadExample) + '"',
+      Html),
+    'die alte <br>-Form darf nicht mehr emittiert werden');
 end;
 
 initialization

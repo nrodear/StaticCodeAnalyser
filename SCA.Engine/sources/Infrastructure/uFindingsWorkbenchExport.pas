@@ -138,6 +138,15 @@ begin
   Result := TExporterHtml.HtmlEscape(S);
 end;
 
+function HA(const S: string): string;
+// Fuer MEHRZEILIGE Attributwerte (data-copy der Codekarten): H()
+// bildete Umbrueche auf literales '<br>' ab - der Kopieren-Button
+// lieferte damit '<br>'-Muell in die Zwischenablage (Chargen-Review
+// 07.09., MAJOR). '&#10;' dekodiert der Parser im dataset zu echtem LF.
+begin
+  Result := TExporterHtml.HtmlAttrEscapeMultiline(S);
+end;
+
 function Einzeilig(const S: string): string;
 // Umbrueche zu Leerzeichen, BEVOR HtmlEscape laeuft - der Escaper
 // bildet #10 auf ein literales '<br>' ab (Elementinhalt-Vertrag);
@@ -681,21 +690,22 @@ begin
     begin
       SB.AppendLine('<div class="codekarten">');
       // #10#10 vor </pre>: zwei Leerzeilen Luft am Blockende (gleicher
-      // Nutzerwunsch wie Katalog und V1; data-copy bleibt purer Code).
+      // Nutzerwunsch wie Katalog und V1). data-copy = der reine Code
+      // via HA(): Umbrueche als '&#10;', nicht als '<br>'-Token.
       if AMeta.BadExample <> '' then
         SB.AppendLine(Format('<div class="codekarte schlecht" '
           + 'data-copy="%s"><div class="karte-titel">Vorher '
           + '(problematisch)<button class="copy" '
           + 'onclick="kopiere(this)">Kopieren</button></div><pre>%s'
           + #10#10'</pre></div>',
-          [H(AMeta.BadExample), H(AMeta.BadExample)]));
+          [HA(AMeta.BadExample), H(AMeta.BadExample)]));
       if AMeta.GoodExample <> '' then
         SB.AppendLine(Format('<div class="codekarte gut" '
           + 'data-copy="%s"><div class="karte-titel">Nachher '
           + '(empfohlen)<button class="copy" '
           + 'onclick="kopiere(this)">Kopieren</button></div><pre>%s'
           + #10#10'</pre></div>',
-          [H(AMeta.GoodExample), H(AMeta.GoodExample)]));
+          [HA(AMeta.GoodExample), H(AMeta.GoodExample)]));
       SB.AppendLine('</div>');
     end;
     SB.AppendLine(Format('<div class="karte" data-copy="// noinspection '
