@@ -2216,3 +2216,15 @@ msgstr "Jetzt importieren?"
 
 msgid "\"%s\" was not imported: %s"
 msgstr "\"%s\" wurde nicht importiert: %s"
+
+msgid "Detector info (rule catalog, HTML)..."
+msgstr "Detektor-Info (Regelkatalog, HTML)..."
+
+msgid "Detector info export"
+msgstr "Detektor-Info-Export"
+
+msgid "Detector info saved: %s"
+msgstr "Detektor-Info gespeichert: %s"
+
+msgid "Detector info export failed: "
+msgstr "Detektor-Info-Export fehlgeschlagen: "

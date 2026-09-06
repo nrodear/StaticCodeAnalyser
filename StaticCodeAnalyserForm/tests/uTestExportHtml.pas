@@ -46,13 +46,35 @@ type
     [Test] procedure RuleReport_ShareUsesIntegerMath;
     // Schwesterpfad-Probe zum Baseline-Befund (2026-08-28).
     [Test] procedure ControlCharInMessage_NoRawControlCharInReport;
+    // Ausgabevertrag-Runde 2026-09-06 (Nutzerauftrag "fuer die beiden
+    // HTML soll es Tests geben"): Escaping der Fund-Felder, JS-Geruest
+    // samt Init-Aufrufen, Sonderfaelle und Determinismus-Kette.
+    [Test] procedure FindingFields_ScriptPayload_EscapedEverywhere;
+    [Test] procedure FileNameSpecialChars_EscapedInDropdownAndRowAttrs;
+    [Test] procedure JsSkeleton_CoreFunctionsWiredAndInitialized;
+    [Test] procedure FileReadError_OwnRowClass_NotCountedAsError;
+    [Test] procedure EmptyFindings_SkeletonValid_ChartsSuppressed;
+    [Test] procedure ReportFile_HasUtf8Bom_AndDecodesAsUtf8;
+    [Test] procedure DefaultFileName_SchemeAndTimestampPinning;
+    [Test] procedure PinnedTimestamp_SameValueInMetaLineAndJson;
+    [Test] procedure SearchBlob_LowersUmlautsLikeTheJsQuery;
+    // Nutzerwunsch 07.09.: Vorher/Nachher in der Hint-Zeile stehen
+    // UNTEREINANDER und jeder Codeblock traegt zwei Leerzeilen Luft.
+    [Test] procedure HintCodePair_StackedWithTrailingBlankLines;
   end;
 
 
 implementation
 
+// noinspection-file DuplicateString, HardcodedPath, GodClass, LargeClass
+// Fixture-Ausnahme des Profils: '.html'/'x not freed' wiederholen sich
+// als Pruefgegenstand; die C:-Pfade im DefaultFileName-Fall SIND der
+// getestete Namensvertrag. GodClass/LargeClass: eine DUnitX-Fixture
+// waechst mit jedem Vertragsfall (inzwischen 21) - die Testmethoden
+// sind der Katalog, eine Aufspaltung duplizierte nur die Render-Helfer.
+
 uses
-  System.IOUtils;
+  System.IOUtils, Winapi.Windows;
 
 // Der Pfad steht in drei Fixtures - einmal benannt statt dreimal
 // getippt (sonst meldet der Selfscan DuplicateString).
@@ -114,6 +136,39 @@ begin
     begin
       TFile.Delete(Fn);
     end;
+  end;
+end;
+
+function RenderFindings(Findings: TObjectList<TLeakFinding>): string;
+// Beliebige Fixture-Liste rendern und zuruecklesen (Repo-Modus,
+// SourceFile leer - sonst filtert die Tabelle, Kommentar an
+// RenderCapped). Die Liste gehoert dem AUFRUFER.
+var
+  Fn : string;
+begin
+  Fn := NeueTempDatei('sca-test-vertrag-', '.html');
+  try
+    TExporterHtml.Run(Findings, '', Fn, '');
+    Result := TFile.ReadAllText(Fn, TEncoding.UTF8);
+  finally
+    if TFile.Exists(Fn) then
+    begin
+      TFile.Delete(Fn);
+    end;
+  end;
+end;
+
+procedure MitGepinntemZeitstempel(const APin: string; AProc: TProc);
+// SCA_REPORT_TIMESTAMP setzen, AProc laufen lassen, IMMER restaurieren -
+// Prozess-Umgebung ist globaler State, den jeder Lauf zuruecknehmen
+// muss (Lexer-Kontaminations-Lehre der Chargen 13).
+begin
+  Winapi.Windows.SetEnvironmentVariable('SCA_REPORT_TIMESTAMP',
+    PChar(APin));
+  try
+    AProc;
+  finally
+    Winapi.Windows.SetEnvironmentVariable('SCA_REPORT_TIMESTAMP', nil);
   end;
 end;
 
@@ -421,6 +476,309 @@ begin
     '#0 muss als NCR im Markup stehen');
   Assert.IsTrue(Html.Contains('&#4;'),
     '#4 muss als NCR im Markup stehen');
+end;
+
+procedure TTestExportHtml.FindingFields_ScriptPayload_EscapedEverywhere;
+// XSS-Vertrag: MissingVar (Detail-Zelle), MethodName (Zelle + Blob)
+// laufen durch HtmlEscape - ein <script> aus einem Fund-Text (Meldetexte
+// tragen fremden Quelltext-Inhalt) darf NIE als Tag ankommen. Negativ
+// bewusst auf '<script>alert' statt '<script>' - der Report traegt drei
+// legitime Script-Tags (Head, sca-meta, Body-JS).
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fnd      : TLeakFinding;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Fnd := MakeFinding(fkMemoryLeak, FIXTURE_PAS, 5,
+      'x <script>alert(1)</script> & "q" ' + '''' + 'tick' + '''');
+    Fnd.MethodName := 'Do<Evil>';
+    Findings.Add(Fnd);
+    Html := RenderFindings(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.AreEqual<Integer>(0, Pos('<script>alert', Html),
+    'Payload darf nirgends roh stehen');
+  Assert.AreEqual<Integer>(0, Pos('Do<Evil>', Html),
+    'Methodenname darf in keiner Zelle roh stehen');
+  Assert.AreEqual<Integer>(0, Pos('do<evil>', Html),
+    'Methodenname darf auch im lowercased Suchblob nicht roh stehen');
+  Assert.IsTrue(Html.Contains('&lt;script&gt;alert(1)&lt;/script&gt;'),
+    'Payload steht escaped in der Detail-Zelle');
+  Assert.IsTrue(Html.Contains('&amp; &quot;q&quot;'),
+    'Ampersand und Anfuehrungszeichen escaped');
+  Assert.IsTrue(Html.Contains('&#39;tick&#39;'),
+    'Apostroph escaped');
+  Assert.IsTrue(Html.Contains('Do&lt;Evil&gt;'),
+    'Methoden-Zelle escaped');
+  Assert.IsTrue(Html.Contains('do&lt;evil&gt;'),
+    'Suchblob (lowercased) escaped');
+end;
+
+procedure TTestExportHtml.FileNameSpecialChars_EscapedInDropdownAndRowAttrs;
+// & und Apostroph sind unter Windows gueltige Dateinamens-Zeichen. Der
+// JS-Datei-Filter vergleicht option.value exakt gegen data-file - ein
+// ungeescapetes & braeche genau diese Dateien. Die Assertions sind
+// praefix-agnostisch (Suffix des Anzeigenamens), damit sie nicht an
+// der RelDisplayPath-Darstellung haengen.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak,
+      'src\Foo & Bar' + '''' + 's.pas', 3, 'x not freed'));
+    Html := RenderFindings(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Html.Contains('&amp; Bar&#39;s.pas"'),
+    'Dateiname escaped in option value / data-file');
+  Assert.IsTrue(Html.Contains('data-base="'),
+    'Gruppen-Attribut existiert');
+  Assert.IsTrue(Html.Contains('&amp; Bar&#39;s"'),
+    'Basisname (ohne Extension) escaped in data-base');
+  Assert.AreEqual<Integer>(0, Pos('Foo & Bar', Html),
+    'der Rohname (mit rohem &) darf nirgends stehen');
+end;
+
+procedure TTestExportHtml.JsSkeleton_CoreFunctionsWiredAndInitialized;
+// Kein Compiler sieht das eingebettete JS - nur dieser Test. Geprueft
+// werden Kernfunktionen, Datenstrukturen UND die drei Initialisierungs-
+// AUFRUFE am Script-Ende (der bestehende UrlHash-Test prueft nur den
+// Funktions-KOERPER; ohne den Aufruf waeren geteilte Filter-Links tot).
+var
+  Html : string;
+begin
+  Html := RenderReport;
+  Assert.IsTrue(Pos('function applyFilter()', Html) > 0, 'applyFilter fehlt');
+  Assert.IsTrue(Pos('function sortBy(col)', Html) > 0, 'sortBy fehlt');
+  Assert.IsTrue(Pos('function applyLanguage(lang)', Html) > 0,
+    'applyLanguage fehlt');
+  Assert.IsTrue(Pos('var I18N = {', Html) > 0, 'I18N-Tabelle fehlt');
+  Assert.IsTrue(Pos('var ALL_KINDS = [', Html) > 0, 'ALL_KINDS fehlt');
+  Assert.IsTrue(Pos('var PROFILES = {', Html) > 0, 'PROFILES fehlt');
+  Assert.IsTrue(Pos('id="findingsTable"', Html) > 0, 'Tabellen-Anker fehlt');
+  Assert.IsTrue(
+    Pos('document.querySelectorAll(''tr.finding'').forEach(wireToggle);',
+      Html) > 0, 'Toggle-Verdrahtung fehlt');
+  Assert.IsTrue(Pos('sortBy(''sev'');', Html) > 0,
+    'Initial-Sort-AUFRUF fehlt (Definition allein sortiert nichts)');
+  Assert.IsTrue(Pos('loadFromUrlHash();', Html) > 0,
+    'loadFromUrlHash-AUFRUF fehlt');
+  Assert.IsTrue(Pos('applyLanguage(SCA_LANG);', Html) > 0,
+    'Sprach-Initialisierung fehlt');
+end;
+
+procedure TTestExportHtml.FileReadError_OwnRowClass_NotCountedAsError;
+// A3-Vertrag (Export-Audit 2026-08-22): fkFileReadError ist eine
+// Lauf-Diagnose - zaehlt in total, nicht in error, bewegt den
+// Health-Score nicht, traegt Zeilenklasse 'readerr' und Sortierrang 3.
+// LineNumber bewusst '7', damit kein data-sort="3" der Zeilen-Spalte
+// mit dem Severity-Rang kollidiert.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fnd      : TLeakFinding;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Fnd := MakeFinding(fkFileReadError, 'src\Locked.pas', 7,
+      'Datei nicht lesbar');
+    Fnd.Severity := lsError;
+    Findings.Add(Fnd);
+    Html := RenderFindings(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Html.Contains('class="finding readerr"'),
+    'eigene Zeilenklasse statt finding err');
+  Assert.IsTrue(Html.Contains('"total":1'), 'sca-meta total zaehlt ihn');
+  Assert.IsTrue(Html.Contains(',"error":0'), 'sca-meta error zaehlt ihn NICHT');
+  Assert.IsTrue(Html.Contains('class="health-panel health-green"'),
+    'Health bleibt gruen trotz lsError-Diagnose');
+  Assert.IsTrue(Html.Contains('class="health-num">0</span>'),
+    'Score bleibt 0');
+  Assert.IsTrue(Html.Contains('<td class="sev" data-sort="3">'),
+    'Sortierrang 3 (Tabellenende)');
+  Assert.IsTrue(Html.Contains('id="count-err">0<'),
+    'Fehler-Kachel bleibt 0');
+end;
+
+procedure TTestExportHtml.EmptyFindings_SkeletonValid_ChartsSuppressed;
+// 0-Funde-Vertrag: vollstaendiges Dokument mit leerem Tabellen-Skelett
+// (das JS greift unbedingt auf findingsTable zu), health-green,
+// Zaehler 0 - und die datenabhaengigen Bloecke fehlen (deren Guards
+// schuetzen auch vor der Division durch nTotal=0 im Donut).
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Html := RenderFindings(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Html.StartsWith('<!DOCTYPE html>'),
+    'vollstaendiges Dokument (BOM schluckt ReadAllText)');
+  Assert.IsTrue(Html.Contains('"total":0'), 'sca-meta total 0');
+  Assert.IsTrue(Html.Contains('"files":0}'), 'sca-meta files 0');
+  Assert.IsFalse(Html.Contains('class="chart-panel"'),
+    'Donut-Block entfaellt ohne Funde');
+  Assert.IsFalse(Html.Contains('class="top-detectors"'),
+    'Top-Detektoren entfallen');
+  Assert.IsFalse(Html.Contains('class="top-files"'),
+    'Top-Dateien entfallen');
+  Assert.IsTrue(Html.Contains('id="findingsTable"'),
+    'Tabellen-Skelett bleibt');
+  Assert.IsTrue(Html.Contains('</tbody>'), 'tbody bleibt (leer)');
+  Assert.IsTrue(Html.Contains('data-count="0">0 Befunde'),
+    'Zeilenzaehler 0');
+  Assert.IsTrue(Html.Contains('class="health-panel health-green"'),
+    'Health gruen');
+end;
+
+procedure TTestExportHtml.ReportFile_HasUtf8Bom_AndDecodesAsUtf8;
+// Byte-Ebene: EF BB BF am Anfang, und das c-cedille der Sprachauswahl
+// ('Fran'#$E7'ais', vom Generator emittiert) liegt als UTF-8 auf
+// Platte. Der Chunked-Write-Test liest nur Text zurueck und KANN den
+// BOM nicht sehen (ReadAllText schluckt ihn).
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fn       : string;
+  Bytes    : TBytes;
+  Txt      : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, FIXTURE_PAS, 1, 'x not freed'));
+    Fn := NeueTempDatei('sca-test-bom-', '.html');
+    try
+      TExporterHtml.Run(Findings, '', Fn, '');
+      Bytes := TFile.ReadAllBytes(Fn);
+      Txt   := TFile.ReadAllText(Fn, TEncoding.UTF8);
+    finally
+      if TFile.Exists(Fn) then
+      begin
+        TFile.Delete(Fn);
+      end;
+    end;
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Length(Bytes) > 3, 'Datei nicht leer');
+  Assert.IsTrue((Bytes[0] = $EF) and (Bytes[1] = $BB) and (Bytes[2] = $BF),
+    'UTF-8-BOM fehlt (Export-Konvention)');
+  Assert.IsTrue(Txt.Contains('Fran' + #$E7 + 'ais'),
+    'Nicht-ASCII-Inhalt liegt als gueltiges UTF-8 auf Platte');
+end;
+
+procedure TTestExportHtml.DefaultFileName_SchemeAndTimestampPinning;
+// Der public Namensvertrag (CLI + Form leiten den Speichernamen ab):
+// analyse-Fallback, Basisname ohne Extension, _codereview_-Schema,
+// TargetDir-Delimiter - und SCA_REPORT_TIMESTAMP pinnt VERBATIM.
+begin
+  MitGepinntemZeitstempel('PIN2026',
+    procedure
+    begin
+      Assert.AreEqual('analyse_codereview_PIN2026.html',
+        TExporterHtml.DefaultFileName('', ''),
+        'Fallback-Schema ohne SourceFile/TargetDir');
+      Assert.AreEqual('C:\out\uFoo_codereview_PIN2026.html',
+        TExporterHtml.DefaultFileName('C:\src\uFoo.pas', 'C:\out'),
+        'Basisname + TargetDir mit Pfadtrenner');
+    end);
+end;
+
+procedure TTestExportHtml.PinnedTimestamp_SameValueInMetaLineAndJson;
+// Determinismus-Kette: der Zeitstempel wird EINMAL berechnet und
+// identisch in data-when, den sichtbaren Erstellt-Text und generatedAt
+// getragen - kein Konsument darf sich Now() neu holen.
+var
+  Html : string;
+begin
+  MitGepinntemZeitstempel('PIN-TS',
+    procedure
+    var
+      Findings : TObjectList<TLeakFinding>;
+    begin
+      Findings := TObjectList<TLeakFinding>.Create(True);
+      try
+        Findings.Add(MakeFinding(fkMemoryLeak, FIXTURE_PAS, 1,
+          'x not freed'));
+        Html := RenderFindings(Findings);
+      finally
+        Findings.Free;
+      end;
+    end);
+  Assert.IsTrue(Html.Contains('data-when="PIN-TS"'), 'data-when gepinnt');
+  Assert.IsTrue(Html.Contains('Erstellt: PIN-TS</span>'),
+    'sichtbarer Text gepinnt');
+  Assert.IsTrue(Html.Contains('"generatedAt":"PIN-TS"'),
+    'sca-meta generatedAt gepinnt');
+end;
+
+procedure TTestExportHtml.SearchBlob_LowersUmlautsLikeTheJsQuery;
+// Schwesterfall zum Detector-Info-Major (Chargen-Review 06.09.): die
+// JS-Suche senkt die Eingabe Unicode-korrekt, der Blob muss es genauso
+// tun - mit ASCII-LowerCase blieb ein grosses Ue (#$DC) stehen und der
+// Fund war ueber dieses Wort unauffindbar. Ohne den AnsiLowerCase-Fix
+// ist dieser Test ROT. Nicht-ASCII nur als Char-Codes (ASCII-Testdatei).
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fnd      : TLeakFinding;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Fnd := MakeFinding(fkMemoryLeak, FIXTURE_PAS, 9, 'x not freed');
+    Fnd.MethodName := 'PR' + #$DC + 'FUNG';   // grosses Ue
+    Findings.Add(Fnd);
+    Html := RenderFindings(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Pos('pr' + #$FC + 'fung', Html) > 0,
+    'Blob traegt die Unicode-gesenkte Form (kleines ue)');
+  Assert.AreEqual<Integer>(0, Pos('pr' + #$DC + 'fung', Html),
+    'kein stehengebliebenes grosses Ue im gesenkten Blob');
+end;
+
+procedure TTestExportHtml.HintCodePair_StackedWithTrailingBlankLines;
+// "Untereinander" haengt am CSS (display:block statt flex), die
+// "immer 2 Zeilen mehr" an JEDEM der vier Vorher/Nachher-Emits -
+// darum wird gezaehlt: jedes '</pre></div>' der Codebloecke muss die
+// beiden Leerzeilen davor tragen, nicht nur eines.
+var
+  Html : string;
+  Alle, MitLuft, P : Integer;
+begin
+  Html := RenderReport;
+  Assert.IsTrue(Pos('class="code-pair"', Html) > 0,
+    'Vorbedingung: der Report traegt einen Vorher/Nachher-Block');
+  Assert.IsTrue(Pos('.code-pair { display: block', Html) > 0,
+    'die Codebloecke muessen untereinander stehen (kein flex)');
+  Alle := 0;
+  P := Pos('</pre></div>', Html);
+  while P > 0 do
+  begin
+    Inc(Alle);
+    P := Pos('</pre></div>', Html, P + 1);
+  end;
+  MitLuft := 0;
+  P := Pos(#10#10'</pre></div>', Html);
+  while P > 0 do
+  begin
+    Inc(MitLuft);
+    P := Pos(#10#10'</pre></div>', Html, P + 1);
+  end;
+  Assert.IsTrue(Alle > 0, 'kein Codeblock im Report gefunden');
+  Assert.AreEqual<Integer>(Alle, MitLuft,
+    'JEDER Vorher/Nachher-Codeblock endet mit zwei Leerzeilen');
 end;
 
 initialization

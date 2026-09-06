@@ -8,7 +8,25 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- HTML report: the full-text search box lowercased its per-row search
+  index ASCII-only while the query is lowercased Unicode-aware - words
+  containing an uppercase umlaut (localized rule names, method names)
+  could not be found under any spelling. The index is now lowered
+  Unicode-aware, matching the query side.
+
 ### Added
+- **Detector info export** (burger menu -> Export -> "Detector info
+  (rule catalog, HTML)..."): a self-contained, offline HTML page
+  listing every detector - sortable columns (SCA id, name,
+  noinspection token, type, severity, confidence, default-profile
+  on/off, tags), a full-content search box (descriptions and code
+  samples included) and an expandable detail row per rule with the
+  full description, before/after code from the catalog, CWE, config
+  key and detector unit. Default save location is the config folder
+  next to `analyser.ini`. The page itself is German for now (rule
+  long texts fall back to English where no translation exists);
+  EN/FR pages are on the backlog.
 - **Single-branch `{$IFDEF}` view and include-define tracking are the
   defaults.** The engine now parses what a Windows compiler would
   compile: inactive conditional branches are skipped (defines

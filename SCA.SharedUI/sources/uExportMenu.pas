@@ -46,6 +46,7 @@ type
     procedure DoCopyClipboard(Sender: TObject);
     procedure DoExportHtml(Sender: TObject);
     procedure DoExportSarif(Sender: TObject);
+    procedure DoExportDetectorInfo(Sender: TObject);
     procedure AddSonarItems;
     procedure DoExportSonarGeneric(Sender: TObject);
     procedure DoExportSonarSingleIssue(Sender: TObject);
@@ -79,16 +80,21 @@ type
 
 implementation
 
-// noinspection-file BeginEndRequired, CanBeClassMethod, CyclomaticComplexity, EmptyArgumentList, ExceptionTooGeneral, ExceptOnException, GroupedDeclaration, HardcodedString, LongParamList, NestedTry, NilComparison, PublicField, TooLongLine, UnsortedUses
+// noinspection-file BeginEndRequired, CanBeClassMethod, CyclomaticComplexity, EmptyArgumentList, ExceptionTooGeneral, ExceptOnException, GroupedDeclaration, HardcodedString, LongParamList, NestedTry, NilComparison, PublicField, TooLongLine, UnsortedUses, LargeClass
 // Export-Menu-Handlers: catch-all an UI-Action-Grenzen - File-IO/
 // Clipboard-Faults sollen als ShowMessage gemeldet werden, nicht die
-// App killen. Idiomatisch fuer VCL-Action-Handler.
+// App killen. Idiomatisch fuer VCL-Action-Handler. LargeClass seit dem
+// Detector-Info-Eintrag (534 Zeilen): die Klasse ist der KATALOG der
+// Exportwege - je Format ein Save-Dialog-Handler mit Begruendungs-
+// Kommentaren; eine Aufspaltung zerrisse nur das Menue.
 
 uses
   System.SysUtils, System.Types, Vcl.Dialogs, Vcl.Clipbrd,
   uExport, uSCAConsts, uLocalization, uSonarPush,
-  uExportSARIF,   // TSARIFWriter (SARIF-Eintrag im Menue)
-  uEngineApi;     // SCA_DEFAULT_TOOLNAME
+  uExportSARIF,        // TSARIFWriter (SARIF-Eintrag im Menue)
+  uEngineApi,          // SCA_DEFAULT_TOOLNAME
+  uDetectorInfoExport, // Regelkatalog-Seite (Detector info)
+  uRepoSettings;       // ResolvedConfigPath - Default-Ablage der Seite
 
 constructor TFindingExportMenu.Create(AOwner: TComponent;
   AAllFindings: TObjectList<TLeakFinding>;
@@ -145,6 +151,17 @@ begin
     Mi.Caption := '-';
     FPopup.Items.Add(Mi);
   AddSonarItems;
+  Mi := TMenuItem.Create(FPopup);
+    Mi.Caption := '-';
+    FPopup.Items.Add(Mi);
+  Mi := TMenuItem.Create(FPopup);
+    // Kein Befund-Export: die Seite beschreibt den REGELKATALOG (alle
+    // Detektoren, sortier- und durchsuchbar) und funktioniert darum
+    // auch ohne vorherige Analyse - deshalb ganz unten, getrennt von
+    // den Findings-Formaten (Nutzerauftrag 2026-09-06).
+    Mi.Caption := _('Detector info (rule catalog, HTML)...');
+    Mi.OnClick := DoExportDetectorInfo;
+    FPopup.Items.Add(Mi);
 end;
 
 procedure TFindingExportMenu.AddSonarItems;
@@ -415,6 +432,38 @@ begin
     except
       on E: Exception do
         FOnStatus(_('SARIF export failed: ') + E.Message);
+    end;
+  finally
+    Dlg.Free;
+  end;
+end;
+
+procedure TFindingExportMenu.DoExportDetectorInfo(Sender: TObject);
+// Schreibt die Regelkatalog-Seite (uDetectorInfoExport) - unabhaengig
+// von Findings, darum ohne Leer-Pruefung. Default-Ablage ist das
+// Konfigverzeichnis (neben der analyser.ini, Nutzerwunsch 2026-09-06);
+// der Save-Dialog laesst jeden anderen Ort zu. Sprachcode 'de' fest -
+// die Seite ist bewusst sprachfix (s. Unit-Kopf von
+// uDetectorInfoExport; EN/FR ist Nutzer-Backlog).
+var
+  Dlg : TSaveDialog;
+begin
+  Dlg := TSaveDialog.Create(nil);
+  try
+    Dlg.Title      := _('Detector info export');
+    Dlg.Filter     := _('HTML file (*.html)|*.html');
+    Dlg.DefaultExt := 'html';
+    Dlg.FileName   := TDetectorInfoExport.DefaultFileName;
+    Dlg.InitialDir := ExtractFilePath(TRepoSettings.ResolvedConfigPath);
+    Dlg.Options    := Dlg.Options + [ofOverwritePrompt];
+    if not Dlg.Execute then Exit;
+    try
+      TDetectorInfoExport.WriteToFile(Dlg.FileName, 'de');
+      FOnStatus(Format(_('Detector info saved: %s'),
+        [ExtractFileName(Dlg.FileName)]));
+    except
+      on E: Exception do
+        FOnStatus(_('Detector info export failed: ') + E.Message);
     end;
   finally
     Dlg.Free;

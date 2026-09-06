@@ -263,6 +263,7 @@ contains
   uEvidenceTiering in 'sources\Infrastructure\uEvidenceTiering.pas',
   uExport in 'sources\Infrastructure\uExport.pas',
   uExportHtml in 'sources\Infrastructure\uExportHtml.pas',
+  uDetectorInfoExport in 'sources\Infrastructure\uDetectorInfoExport.pas',
   uFileTextCache in 'sources\Infrastructure\uFileTextCache.pas',
   uFindingFingerprint in 'sources\Infrastructure\uFindingFingerprint.pas',
   uFormBinder in 'sources\Infrastructure\uFormBinder.pas',

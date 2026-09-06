@@ -12,8 +12,8 @@
 // als Delegation aufgerufen, sodass der Aufrufer weiterhin nur uExport
 // in seinen uses braucht.
 //
-// HTML-spezifische Helper (HtmlEscape, BuildCodeSnippet) liegen privat
-// in dieser Unit. Querschnittsfunktionen (KindToName, SaveUtf8WithBom,
+// HTML-spezifische Helper: BuildCodeSnippet liegt privat in dieser
+// Unit, HtmlEscape ist public (geteilt mit uDetectorInfoExport). Querschnittsfunktionen (KindToName, SaveUtf8WithBom,
 // SameSourceFile) kommen via uExport.
 
 interface
@@ -51,9 +51,17 @@ type
     // Waechtertest der Stueckgrenze - Aufrufer ist nur Run.
     class procedure SaveBuilderUtf8WithBom(ABuilder: TStringBuilder;
       const FileName: string); static;
+    // Public seit 2026-09-06: zweiter Konsument ist der Detector-Info-
+    // Export (uDetectorInfoExport) - eine dritte Escape-Kopie neben
+    // Json/Csv/JiraEscape in uExport waere die falsche Richtung.
+    // VERTRAG: escapet & < > " ' und bildet #10 auf ein LITERALES
+    // '<br>' ab (#13 wird verschluckt) - gedacht fuer ELEMENTINHALTE.
+    // Wer in ein Attribut schreibt, muss Zeilenumbrueche vorher selbst
+    // behandeln, sonst landen '<br>'-Tokens im Attributwert (genau das
+    // fing das Chargen-Review 06.09. beim zweiten Konsumenten).
+    class function HtmlEscape(const S: string): string; static;
   private
     class function JsonForScript(const S: string): string; static;
-    class function HtmlEscape(const S: string): string; static;
     // Liefert ein HTML-Fragment (<div class="src-snippet">) mit
     // ContextSize Zeilen vor und nach AroundLine. Die Fund-Zeile ist
     // optisch hervorgehoben. Liefert leeren String wenn SourceLines
@@ -672,8 +680,11 @@ begin
     SB.AppendLine('    .cwe-badge { background: #fde8e8; color: #a02020; border: 1px solid #e8b0b0; }');
     SB.AppendLine('    .owasp-badge { background: #fff0e0; color: #a06020; border: 1px solid #e8c090; }');
     SB.AppendLine('    .rule-example-note { font-size: 11px; color: #888; font-style: italic; margin: 6px 0 2px 0; }');
-    SB.AppendLine('    .code-pair { display: flex; gap: 8px; margin-top: 4px; }');
-    SB.AppendLine('    .code-block { flex: 1; min-width: 0; }');
+    // Untereinander statt nebeneinander (Nutzerwunsch 07.09.): beim
+    // Vergleich springt das Auge zeilenweise, nicht spaltenweise.
+    SB.AppendLine('    .code-pair { display: block; margin-top: 4px; }');
+    SB.AppendLine('    .code-block { min-width: 0; }');
+    SB.AppendLine('    .code-block + .code-block { margin-top: 6px; }');
     SB.AppendLine('    .code-block h5 { margin: 0 0 2px 0; font-size: 11px; }');
     SB.AppendLine('    .code-before h5 { color: #800; }');
     SB.AppendLine('    .code-after  h5 { color: #060; }');
@@ -1807,7 +1818,13 @@ begin
         // sieht, muss das Suchfeld finden - der Token bleibt daneben
         // suchbar (data-rule-Filter und Exporte sprechen weiter Token).
         var KindNm := KindName(F.Kind);
-        var SearchBlob := LowerCase(Format('%s %s %s %s %s',
+        // AnsiLowerCase, NICHT LowerCase: die JS-Suche senkt die Eingabe
+        // Unicode-korrekt (toLowerCase) - mit ASCII-LowerCase blieben
+        // grosse Umlaute (lokalisierte Regelnamen, Methodennamen) im
+        // Blob stehen und die Funde waren ueber diese Woerter in keiner
+        // Schreibweise findbar. Schwesterfall zum Detector-Info-Major
+        // des Chargen-Reviews 06.09.
+        var SearchBlob := AnsiLowerCase(Format('%s %s %s %s %s',
           [F.MethodName, FileShort, F.MissingVar, KindNm, Meta.Name]));
         // #7 Baseline-Fingerprint: JETZT der GETEILTE Engine-Fingerprint
         // (TBaseline.Fingerprint = SHA2 aus datei|kind|methode|detail, ohne
@@ -1957,12 +1974,16 @@ begin
             begin
               SB.Append('<div class="code-block code-before"><h5 data-i18n="hint-before">Vorher (Problem)</h5><pre>');
               SB.Append(HtmlEscape(Hint.Before));
+              // Zwei Leerzeilen Luft am Blockende (Nutzerwunsch 07.09.,
+              // gilt fuer ALLE vier Vorher/Nachher-Emits).
+              SB.Append(#10#10);
               SB.Append('</pre></div>');
             end;
             if Hint.After <> '' then
             begin
               SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (Loesung)</h5><pre>');
               SB.Append(HtmlEscape(Hint.After));
+              SB.Append(#10#10);
               SB.Append('</pre></div>');
             end;
             SB.Append('</div>');
@@ -1978,12 +1999,14 @@ begin
             begin
               SB.Append('<div class="code-block code-before"><h5 data-i18n="hint-before">Vorher (Problem)</h5><pre>');
               SB.Append(HtmlEscape(Meta.BadExample));
+              SB.Append(#10#10);
               SB.Append('</pre></div>');
             end;
             if Meta.GoodExample <> '' then
             begin
               SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (Loesung)</h5><pre>');
               SB.Append(HtmlEscape(Meta.GoodExample));
+              SB.Append(#10#10);
               SB.Append('</pre></div>');
             end;
             SB.Append('</div>');
