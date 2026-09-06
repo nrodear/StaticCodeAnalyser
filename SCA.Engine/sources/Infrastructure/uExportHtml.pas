@@ -691,6 +691,7 @@ begin
     SB.AppendLine('       overflow-y: auto; padding: 14px 18px; z-index: 10; }');
     SB.AppendLine('    #drawer.offen { transform: translateX(0); }');
     SB.AppendLine('    #drawer h2 { margin: 0 0 2px 0; font-size: 1.12em; }');
+    SB.AppendLine('    #drawer h3 { margin: 14px 0 4px 0; font-size: 0.98em; }');
     SB.AppendLine('    #drawer-schliessen { float: right; border: 1px solid var(--rand);');
     SB.AppendLine('       background: var(--karte); color: var(--tinte); border-radius: 6px;');
     SB.AppendLine('       cursor: pointer; font-size: 1em; padding: 2px 9px; }');
@@ -1975,18 +1976,30 @@ begin
           var Cols := 8;
           if SourceFile = '' then Cols := 9;
           SB.Append('      <tr class="finding-hint"><td colspan="' + IntToStr(Cols) + '">');
-          if Hint.Description <> '' then
+          // Katalog-Parallele (Nutzerwunsch 07.09.): dieselben zwei
+          // Abschnitte wie im Detektor-Katalog-Drawer, in derselben
+          // Reihenfolge. Der fruehere Fallback "FullDescription nur bei
+          // leerer Hint.Description" entfaellt - das WARUM steht jetzt
+          // IMMER da, der fundspezifische Hinweis kommt gelabelt danach.
+          if Meta.ShortDescription <> '' then
           begin
+            SB.Append('<h3 data-i18n="hint-what">Was wird erkannt?</h3>');
             SB.Append('<div class="hint-desc">');
-            SB.Append(HtmlEscape(Hint.Description));
+            SB.Append(HtmlEscape(Meta.ShortDescription));
             SB.Append('</div>');
-          end
-          else if Meta.FullDescription <> '' then
+          end;
+          if Meta.FullDescription <> '' then
           begin
-            // #4: Fallback auf die kanonische Regel-Erklaerung (WARUM), wenn
-            // der per-Finding-FixHint keine eigene Beschreibung liefert.
+            SB.Append('<h3 data-i18n="hint-why">Warum ist das relevant?</h3>');
             SB.Append('<div class="hint-desc hint-rule-desc">');
             SB.Append(HtmlEscape(Meta.FullDescription));
+            SB.Append('</div>');
+          end;
+          if Hint.Description <> '' then
+          begin
+            SB.Append('<h3 data-i18n="hint-this">Hinweis zu diesem Fund</h3>');
+            SB.Append('<div class="hint-desc">');
+            SB.Append(HtmlEscape(Hint.Description));
             SB.Append('</div>');
           end;
 
@@ -2147,6 +2160,9 @@ begin
     SB.AppendLine('        "audience-hint": "<b>Optimised for Tech-Lead / Senior-Dev review</b> &middot; ' +
       'refactoring prioritisation. Start at the top with the Top Detectors (highest volume, <span class=\"td-qf\">QF</span> = quick-fix available); the table is sorted by severity (Errors &rarr; Hints).",');
     SB.AppendLine('        "src-snippet-hdr": "Source: {0}, line {1}",');
+    SB.AppendLine('        "hint-what": "What is detected?",');
+    SB.AppendLine('        "hint-why":  "Why does it matter?",');
+    SB.AppendLine('        "hint-this": "Note on this finding",');
     SB.AppendLine('        "hint-before": "Before (Problem)",');
     SB.AppendLine('        "hint-after":  "After (Fix)"');
     SB.AppendLine('      },');
@@ -2213,6 +2229,9 @@ begin
     SB.AppendLine('        "audience-hint": "<b>Optimiert fuer Tech-Lead / Senior-Dev Review</b> &middot; ' +
       'Refactoring-Priorisierung. Starte oben mit den Top-Detektoren (groesstes Volumen, <span class=\"td-qf\">QF</span> = Quick-Fix vorhanden), die Tabelle ist nach Severity sortiert (Fehler &rarr; Hinweis).",');
     SB.AppendLine('        "src-snippet-hdr": "Quelle: {0}, Zeile {1}",');
+    SB.AppendLine('        "hint-what": "Was wird erkannt?",');
+    SB.AppendLine('        "hint-why":  "Warum ist das relevant?",');
+    SB.AppendLine('        "hint-this": "Hinweis zu diesem Fund",');
     SB.AppendLine('        "hint-before": "Vorher (Problem)",');
     SB.AppendLine('        "hint-after":  "Nachher (Loesung)"');
     SB.AppendLine('      },');
@@ -2287,6 +2306,9 @@ begin
     SB.AppendLine('        "audience-hint": "<b>Optimis\u00e9 pour la revue Tech-Lead / Senior-Dev</b> &middot; ' +
       'priorisation du refactoring. Commencez par les Top D\u00e9tecteurs (volume le plus important, <span class=\"td-qf\">QF</span> = quick-fix disponible)\u00a0; le tableau est tri\u00e9 par s\u00e9v\u00e9rit\u00e9 (erreurs &rarr; indices).",');
     SB.AppendLine('        "src-snippet-hdr": "Source\u00a0: {0}, ligne {1}",');
+    SB.AppendLine('        "hint-what": "Qu''est-ce qui est d\u00e9tect\u00e9 ?",');
+    SB.AppendLine('        "hint-why":  "Pourquoi est-ce pertinent ?",');
+    SB.AppendLine('        "hint-this": "Remarque sur cette occurrence",');
     SB.AppendLine('        "hint-before": "Avant (probl\u00e8me)",');
     SB.AppendLine('        "hint-after":  "Apr\u00e8s (solution)"');
     SB.AppendLine('      }');

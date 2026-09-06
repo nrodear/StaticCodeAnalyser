@@ -847,6 +847,29 @@ begin
     'alte Klappzeilen-Anzeige lebt noch');
   Assert.IsTrue(Pos('tr.finding-hint { display: none; }', Html) > 0,
     'Hint-Zeile muss dauerhaft unsichtbare Datenquelle bleiben');
+  // Katalog-Parallele (Nachauftrag 07.09.): "Was wird erkannt?" und
+  // "Warum ist das relevant?" stehen in den Befund-Details - SCA001
+  // traegt beide Beschreibungen im Katalog, die Abschnitte muessen
+  // also erscheinen, in Katalog-Reihenfolge (Was vor Warum).
+  Assert.IsTrue(
+    Pos('<h3 data-i18n="hint-what">Was wird erkannt?</h3>', Html) > 0,
+    '"Was wird erkannt?"-Abschnitt fehlt in den Befund-Details');
+  Assert.IsTrue(
+    Pos('<h3 data-i18n="hint-why">Warum ist das relevant?</h3>', Html) > 0,
+    '"Warum ist das relevant?"-Abschnitt fehlt in den Befund-Details');
+  Assert.IsTrue(
+    Pos('<h3 data-i18n="hint-what">', Html) <
+    Pos('<h3 data-i18n="hint-why">', Html),
+    'Katalog-Reihenfolge verletzt: Was? gehoert vor Warum?');
+  // Die Ueberschriften sind uebersetzbar: alle drei Sprachbloecke
+  // tragen die Schluessel (hint-this deckt den fundspezifischen
+  // Hinweis ab, dessen Anzeige vom FixHint-Zweig abhaengt).
+  Assert.IsTrue(Pos('"hint-what": "What is detected?"', Html) > 0,
+    'en-Schluessel hint-what fehlt');
+  Assert.IsTrue(Pos('"hint-this": "Note on this finding"', Html) > 0,
+    'en-Schluessel hint-this fehlt');
+  Assert.IsTrue(Pos('"hint-this": "Remarque sur cette occurrence"',
+    Html) > 0, 'fr-Schluessel hint-this fehlt');
 end;
 
 initialization
