@@ -851,30 +851,94 @@ begin
     if Matches(F, C) then Inc(Result);
 end;
 
+type
+  // Hit-Flags EINES Durchlaufs ueber die Fundliste unter einer
+  // Type-Sicht: je Kind und je Severity-Gruppe "hat mindestens einen
+  // Treffer". Mehr braucht die Combo-Reduktion nicht - sie fragt >0,
+  // nie eine Anzahl.
+  TViewHits = record
+    Kind : array[TFindingKind] of Boolean;
+    Err  : Boolean;
+    Warn : Boolean;
+    Hint : Boolean;
+  end;
+
+function CollectViewHits(AFindings: TList<TLeakFinding>;
+  AType: TTypeFilter): TViewHits;
+// Pass 1 der Combo-Reduktion: EIN Durchlauf ueber die Funde statt
+// einem je Katalog-Eintrag (~200 Eintraege, sechsstellige Fundliste,
+// laeuft bei jedem Type-Wechsel). Gezaehlt wird per Matches, damit
+// Gruppen und Kinds exakt der Grid-Semantik folgen; Early-Out ueber
+// die bereits gesetzten Flags.
+var
+  CErr, CWarn, CHint, CKind : TFindingFilterCriteria;
+  F : TLeakFinding;
+begin
+  Result := Default(TViewHits);
+  if AFindings = nil then Exit;
+
+  CErr := Default(TFindingFilterCriteria);
+  CErr.Mode := fmErrors;   CErr.TypeFilter := AType;
+  CWarn := CErr; CWarn.Mode := fmWarnings;
+  CHint := CErr; CHint.Mode := fmHints;
+  CKind := CErr; CKind.Mode := fmSingleKind;
+
+  for F in AFindings do
+  begin
+    if not Result.Err  then Result.Err  := TFindingFilter.Matches(F, CErr);
+    if not Result.Warn then Result.Warn := TFindingFilter.Matches(F, CWarn);
+    if not Result.Hint then Result.Hint := TFindingFilter.Matches(F, CHint);
+    if not Result.Kind[F.Kind] then
+    begin
+      CKind.SingleKind := F.Kind;
+      Result.Kind[F.Kind] := TFindingFilter.Matches(F, CKind);
+    end;
+  end;
+end;
+
+function StripOrphanSeparators(
+  const AItems: TList<TFilterComboItem>): TArray<TFilterComboItem>;
+// Pass 2 der Combo-Reduktion: Trenner ohne folgenden Detail-Eintrag
+// (Trenner vor Trenner oder am Listenende) fallen weg - kein
+// '--- Errors ---' ueber einer leeren Sektion. Eigene Funktion, damit
+// ReduceSeverityItems die Zaehl- und die Struktur-Frage nicht in einem
+// Rumpf mischt (Selbstscan-Fund SCA176 der ersten Fassung).
+var
+  i, n : Integer;
+begin
+  n := 0;
+  SetLength(Result, AItems.Count);
+  for i := 0 to AItems.Count - 1 do
+  begin
+    if (AItems[i].ModeOrd = -1)
+       and ((i = AItems.Count - 1) or (AItems[i + 1].ModeOrd = -1)) then
+      Continue;
+    Result[n] := AItems[i];
+    Inc(n);
+  end;
+  SetLength(Result, n);
+end;
+
 class function TFindingFilter.ReduceSeverityItems(
   const AAll: TArray<TFilterComboItem>; AFindings: TList<TLeakFinding>;
   AType: TTypeFilter): TArray<TFilterComboItem>;
 var
-  KindHit : array[TFindingKind] of Boolean;
-  ErrHit, WarnHit, HintHit : Boolean;
-  CErr, CWarn, CHint, CKind : TFindingFilterCriteria;
-  F    : TLeakFinding;
+  Hits : TViewHits;
   Tmp  : TList<TFilterComboItem>;
   Item : TFilterComboItem;
-  i, n : Integer;
 
   function TagHasHits(ATag: Integer): Boolean;
   var
     LK : TFindingKind;
   begin
     if KindFromTag(ATag, LK) then
-      Result := KindHit[LK]
+      Result := Hits.Kind[LK]
     else if ATag = Ord(fmErrors) then
-      Result := ErrHit
+      Result := Hits.Err
     else if ATag = Ord(fmWarnings) then
-      Result := WarnHit
+      Result := Hits.Warn
     else if ATag = Ord(fmHints) then
-      Result := HintHit
+      Result := Hits.Hint
     else
       // Katalog-fremder Mode-Tag (die Hand-Listen sind seit 2026-07-24
       // ausgebaut - defensiv fuer alte Profile/Direktaufrufer): einzeln
@@ -884,31 +948,7 @@ var
 
 begin
   SetLength(Result, 0);
-  FillChar(KindHit, SizeOf(KindHit), 0);
-  ErrHit  := False;
-  WarnHit := False;
-  HintHit := False;
-
-  CErr := Default(TFindingFilterCriteria);
-  CErr.Mode := fmErrors;   CErr.TypeFilter := AType;
-  CWarn := CErr; CWarn.Mode := fmWarnings;
-  CHint := CErr; CHint.Mode := fmHints;
-  CKind := CErr; CKind.Mode := fmSingleKind;
-
-  if AFindings <> nil then
-  begin
-    for F in AFindings do
-    begin
-      if not ErrHit  then ErrHit  := Matches(F, CErr);
-      if not WarnHit then WarnHit := Matches(F, CWarn);
-      if not HintHit then HintHit := Matches(F, CHint);
-      if not KindHit[F.Kind] then
-      begin
-        CKind.SingleKind := F.Kind;
-        KindHit[F.Kind] := Matches(F, CKind);
-      end;
-    end;
-  end;
+  Hits := CollectViewHits(AFindings, AType);
 
   Tmp := TList<TFilterComboItem>.Create;
   try
@@ -920,19 +960,7 @@ begin
          or TagHasHits(Item.ModeOrd) then
         Tmp.Add(Item);
     end;
-    // Pass 2: verwaiste Trenner entfernen (Trenner gefolgt von Trenner
-    // oder am Listenende - '--- Errors ---' ohne Eintraege darunter).
-    n := 0;
-    SetLength(Result, Tmp.Count);
-    for i := 0 to Tmp.Count - 1 do
-    begin
-      if (Tmp[i].ModeOrd = -1)
-         and ((i = Tmp.Count - 1) or (Tmp[i + 1].ModeOrd = -1)) then
-        Continue;
-      Result[n] := Tmp[i];
-      Inc(n);
-    end;
-    SetLength(Result, n);
+    Result := StripOrphanSeparators(Tmp);
   finally
     Tmp.Free;
   end;

@@ -41,9 +41,13 @@ type
 
 implementation
 
-// noinspection-file DuplicateString
+// noinspection-file DuplicateString, HardcodedPath, StringConcatInLoop
 // Die Katalog-Labels ('All', 'sep', ...) wiederholen sich absichtlich -
-// sie sind der Pruefgegenstand der Fixtures.
+// sie sind der Pruefgegenstand der Fixtures. HardcodedPath:
+// 'C:\src\Probe.pas' ist ein synthetischer Fixture-Pfad, der nie
+// geoeffnet wird (Muster wie uTestFindingCopyText). StringConcatInLoop:
+// TagsOf verkettet maximal eine Handvoll Katalog-Tags fuer
+// Assertion-Texte - kein Hot-Path.
 
 { TTestFilterComboReduce }
 

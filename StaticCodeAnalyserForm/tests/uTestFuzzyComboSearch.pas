@@ -83,13 +83,17 @@ type
 
 implementation
 
-// noinspection-file ClassPerFile, EmptyVisibilitySection, DuplicateString
+// noinspection-file ClassPerFile, EmptyVisibilitySection, DuplicateString, GodClass, HardcodedString
 // Zwei Fixtures in einer Unit: die reine Bewertungsfunktion und der
 // Ereignis-Vertrag gehoeren fachlich zusammen und sollen zusammen
 // gefunden werden. 'public' direkt nach dem Klassenkopf ist die
 // DUnitX-Form (Testmethoden muessen sichtbar sein). Der Beispielstring
 // 'SCA003  SQLInjection' wiederholt sich absichtlich - er ist der
-// Pruefgegenstand mehrerer Faelle.
+// Pruefgegenstand mehrerer Faelle. GodClass: eine DUnitX-Fixture
+// waechst mit jedem Ereignis-Regressionsfall - die Testmethoden SIND
+// der Katalog, eine Aufspaltung wuerde nur das Setup duplizieren.
+// HardcodedString: 'Rule20'/'Rule1' sind FIXTURE-EINGABEN in das
+// Tipp-Feld, keine nutzersichtbaren Texte.
 
 const
   SEPARATOR_TAG = -1;

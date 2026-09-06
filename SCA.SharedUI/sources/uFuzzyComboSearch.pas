@@ -35,12 +35,15 @@ type
     Tag     : NativeInt;
   end;
 
-  // noinspection LargeClass
+  // noinspection LargeClass, GodClass
   // Ein Bauteil, eine Verantwortung: die Klasse kapselt den kompletten
   // Ereignis-Vertrag einer tippbaren Combo (Schnappschuss, Entprellung,
   // Commit-Gate) - eine Aufspaltung wuerde nur privaten Zustand ueber
   // Units verteilen. Die Laenge kommt aus den Begruendungs-Kommentaren
-  // der Windows-Eigenheiten, nicht aus Logik-Masse.
+  // der Windows-Eigenheiten, nicht aus Logik-Masse. GodClass seit dem
+  // Event-Review 06.09. (Notification/Trenner-Sprung/Einzeltreffer
+  // hoben die Methodenzahl knapp ueber die 20) - gleiche Begruendung:
+  // alles Glieder EINES Ereignis-Vertrags.
   TFuzzyComboSearch = class(TComponent)
   private
     FCombo      : TComboBox;
