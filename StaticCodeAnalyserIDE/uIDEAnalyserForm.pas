@@ -54,12 +54,6 @@ type
     // zu erweitern.
     FAllSeverityItems  : TArray<TFilterComboItem>;
     FAllTypeItems      : TArray<TFilterComboItem>;
-    // Letzter NICHT-Separator-Mode der gewaehlt war. Wird gebraucht um
-    // bei Klick auf einen Separator (Tag = -1) NICHT auf 'All'
-    // zurueckzuspringen sondern auf die zuletzt aktive Auswahl.
-    // Default 0 = Ord(fmAll); FilterChange aktualisiert bei jedem
-    // gueltigen Klick.
-    FLastNonSeparatorMode : Integer;
     // Unterdrueckungs-Zaehler fuer ApplyFilter. Ein Kachel-Klick setzt BEIDE
     // Combos und muss danach BEIDE Change-Handler rufen (der ItemIndex-Setter
     // feuert kein OnChange) - jeder von ihnen endet in ApplyFilter, also lief
@@ -1735,7 +1729,6 @@ end;
 procedure TAnalyserFrame.FilterChange(Sender: TObject);
 var
   idx, tag: Integer;
-  OldOnChange: TNotifyEvent;
 begin
   // Defensive Bound-Checks: ItemIndex kann -1 sein (nichts ausgewaehlt) oder
   // bei einer leeren Combo theoretisch ungueltig. Items.Objects[-1] waere AV.
@@ -1744,79 +1737,17 @@ begin
   if (idx < 0) or (idx >= FFilterCombo.Items.Count) then Exit;
 
   tag := Integer(FFilterCombo.Items.Objects[idx]);
-  if tag < 0 then
-  begin
-    // Separator-Eintrag (---/--- Errors ---/--- Hints ---). User-Wunsch:
-    // beim Klick zum NAECHSTEN Detail-Eintrag UNTERHALB des Separators
-    // springen (= erstes Item der jeweiligen Kategorie). Fallback wenn
-    // kein Item mehr unter dem Separator liegt: vorherige Auswahl
-    // wiederherstellen.
-    // Re-Entry-Schutz: ItemIndex-Setzen feuert OnChange erneut.
-    var NextIdx : Integer := -1;
-    for var j := idx + 1 to FFilterCombo.Items.Count - 1 do
-      if Integer(FFilterCombo.Items.Objects[j]) >= 0 then
-      begin
-        NextIdx := j;
-        Break;
-      end;
-    if NextIdx >= 0 then
-    begin
-      // Forward-Springen zum naechsten echten Eintrag - Filter wechselt.
-      tag := Integer(FFilterCombo.Items.Objects[NextIdx]);
-      OldOnChange := FFilterCombo.OnChange;
-      FFilterCombo.OnChange := nil;
-      try
-        FFilterCombo.ItemIndex := NextIdx;
-      finally
-        FFilterCombo.OnChange := OldOnChange;
-      end;
-      // Der Fuzzy-Helfer MUSS von einer programmatischen Auswahl erfahren -
-      // sonst misst sein Tag-Gate in CommitSelection gegen einen
-      // ueberholten Schnappschuss und verschluckt die naechste
-      // Wieder-Auswahl. Genau das passierte hier: nach dem ersten
-      // Separator-Klick klemmte jeder weitere, die Combo zeigte die nicht
-      // waehlbare Trennzeile und das Grid blieb auf dem alten Filter.
-      // Die sechs Kachel-Handler rufen das seit dem Review vom 12.08.,
-      // dieser Pfad war uebersehen worden.
-      if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
-      if TFindingFilter.KindFromTag(tag, FFilterKind) then
-        FFilterMode := fmSingleKind
-      else
-        FFilterMode := TFilterMode(tag);
-      FLastNonSeparatorMode := tag;
-      ApplyFilter;
-      Exit;
-    end;
-    // Kein Folge-Eintrag (Separator am Listen-Ende) -> vorherige Auswahl
-    // wiederherstellen, kein Filter-Update.
-    var RestoreIdx := 0;
-    for var i := 0 to FFilterCombo.Items.Count - 1 do
-      if (Integer(FFilterCombo.Items.Objects[i]) = FLastNonSeparatorMode)
-         and (Integer(FFilterCombo.Items.Objects[i]) >= 0) then
-      begin
-        RestoreIdx := i;
-        Break;
-      end;
-    OldOnChange := FFilterCombo.OnChange;
-    FFilterCombo.OnChange := nil;
-    try
-      FFilterCombo.ItemIndex := RestoreIdx;
-    finally
-      FFilterCombo.OnChange := OldOnChange;
-    end;
-    // Wie im Vorwaerts-Zweig: programmatische Auswahl dem Fuzzy-Helfer
-    // melden. Dieser Zweig ist nur ueber einen Separator am LISTENENDE
-    // erreichbar und damit praktisch tot - der Aufruf schadet dort nicht
-    // und haelt die beiden Haelften gleich, damit der naechste Umbau nicht
-    // wieder nur eine anfasst.
-    if Assigned(FFilterSearch) then FFilterSearch.NoteHostSelection;
-    Exit;
-  end;
+  // Trennzeilen erreichen den Handler nicht mehr: seit dem Trenner-
+  // Sprung im geteilten Helfer (Event-Review 06.09.) springt
+  // CommitSelection selbst zum ersten Eintrag der Sektion und meldet
+  // DEN - der fruehere 68-zeilige Sonderweg hier war seit dem
+  // Separator-Gate unerreichbar und ist ausgebaut. Der Guard bleibt
+  // fuer theoretische Direktaufrufe mit Trenner-Selektion.
+  if tag < 0 then Exit;
   if TFindingFilter.KindFromTag(tag, FFilterKind) then
     FFilterMode := fmSingleKind
   else
     FFilterMode := TFilterMode(tag);
-  FLastNonSeparatorMode := tag;  // Anker fuer den naechsten Separator-Klick
   ApplyFilter;
 end;
 
