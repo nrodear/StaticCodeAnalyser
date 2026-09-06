@@ -1,4 +1,4 @@
-unit uTestDfmOrphanHandler;
+﻿unit uTestDfmOrphanHandler;
 
 interface
 
@@ -19,6 +19,11 @@ type
     [Test] procedure Test_PrivateMethod_NotConsidered;
     [Test] procedure Test_Finding_KindAndSeverity;
     [Test] procedure Test_Finding_MissingVarMentionsMethod;
+    // FP-Fix Charge 15: Collection-Item-Events (pvkItemList) binden
+    // auch - beide Fixtures VOR dem Bau an der rw70-Exe verprobt
+    // (dort feuern DoAction UND Verwaist; nach dem Fix nur Verwaist).
+    [Test] procedure Gate_ItemListBoundHandler_NoFinding;
+    [Test] procedure Gate_ItemListOtherHandler_StillDetected;
   end;
 
 implementation
@@ -254,6 +259,63 @@ begin
   try
     Assert.Contains(F[0].MissingVar, 'btnDead');
     Assert.Contains(F[0].MissingVar, 'TF');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmOrphanHandler.Gate_ItemListBoundHandler_NoFinding;
+const PAS =
+  'unit u; interface uses Vcl.Forms;'#13#10 +
+  'type TWM = class(TForm)'#13#10 +
+  '  procedure DoAction(Sender: TObject);'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TWM.DoAction(Sender: TObject); begin end;'#13#10 +
+  'end.';
+const DFM =
+  'object WM: TWM'#13#10 +
+  '  object Acts: TWebActions'#13#10 +
+  '    Actions = <'#13#10 +
+  '      item'#13#10 +
+  '        Name = ''wa1'''#13#10 +
+  '        OnAction = DoAction'#13#10 +
+  '      end>'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM, PAS);
+  try
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmOrphanHandler),
+      'OnAction im item-Block IST eine Bindung');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmOrphanHandler.Gate_ItemListOtherHandler_StillDetected;
+// Gleiche DFM, aber die published Methode heisst anders als der
+// item-Handler - sie bleibt verwaist (TP-Gegenprobe).
+const PAS =
+  'unit u; interface uses Vcl.Forms;'#13#10 +
+  'type TWM = class(TForm)'#13#10 +
+  '  procedure Verwaist(Sender: TObject);'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TWM.Verwaist(Sender: TObject); begin end;'#13#10 +
+  'end.';
+const DFM =
+  'object WM: TWM'#13#10 +
+  '  object Acts: TWebActions'#13#10 +
+  '    Actions = <'#13#10 +
+  '      item'#13#10 +
+  '        OnAction = DoAction'#13#10 +
+  '      end>'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM, PAS);
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmOrphanHandler),
+      'fremder item-Handler rettet die verwaiste Methode nicht');
   finally F.Free; end;
 end;
 
