@@ -1797,6 +1797,15 @@ begin
 
   ResultGrid.RowCount := 2;
   ResultGrid.Rows[1].Clear;
+  // Repaint erzwingen (Bugfix 06.09.2026, Nico-Screenshot): im
+  // Virtual-Mode malt DrawCell aus FDisplayedFindings; der
+  // Platzhalter-Pfad unten setzt nur Cells[0,1] und invalidiert damit
+  // genau EINE Zelle. War vorher exakt 1 Fund sichtbar, ist
+  // RowCount:=2 ein No-op und Rows[1].Clear malt nichts neu - die
+  // Spalten Methode/Zeile/Detail/Schwere zeigten dann die PIXEL des
+  // alten Fundes neben 'No matches.'. Das Plugin ruft an derselben
+  // Stelle laengst Invalidate (uIDEAnalyserForm ApplyFilter).
+  ResultGrid.Invalidate;
 
   if FDisplayedFindings.Count = 0 then
   begin
