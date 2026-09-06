@@ -1,4 +1,4 @@
-unit uTestEngineApi;
+﻿unit uTestEngineApi;
 
 // Tests fuer die Engine-Facade uEngineApi (TScanRequest/TScanResult/
 // TAnalysisSession). End-to-End ueber echte Temp-Dateien.
@@ -46,13 +46,16 @@ type
     // (ApplyIfdefView vor der SkipConfig-Weiche), sonst blieben genau
     // diese Konsumenten in der Doppelzweig-Sicht.
     [Test] procedure IfdefView_AppliesDespiteSkipConfig;
-    // Include-Define-Tracking (Charge 14, Opt-in): {$I probe.inc} mit
-    // {$DEFINE FROMINC} macht den {$IFDEF FROMINC}-Zweig sichtbar -
-    // aber NUR mit Req.IncludeDefines=True. Die Gegenrichtung (Default
-    // ignoriert das Include, 0 Funde) ist an der rw69-Exe verprobt
-    // (c14_probe); die Opt-in-Richtung existiert erst mit dem Feature.
+    // Include-Define-Tracking: {$I probe.inc} mit {$DEFINE FROMINC}
+    // macht den {$IFDEF FROMINC}-Zweig sichtbar. Seit 06.09.2026 ist
+    // das DEFAULT (Nico-GO nach Messlauf rw70b: Errors 1.006->950);
+    // der Default-Test ist ohne den Init-Flip ROT. Opt-out
+    // (IncludeDefines=False, CLI --no-include-defines) stellt die
+    // Include-blinde Sicht her - an der rw69/rw70-Exe verprobt
+    // (c14_probe: 0 Funde).
     [Test] procedure IncludeDefines_OptIn_SeesIncDefinedBranch;
-    [Test] procedure IncludeDefines_Default_IgnoresInclude;
+    [Test] procedure IncludeDefines_Default_SeesIncDefinedBranch;
+    [Test] procedure IncludeDefines_OptOut_IgnoresInclude;
     // TFixtureFilter (2026-08-29): die Regel lag bis dahin im
     // CLI-Laeufer, jetzt in der Engine - hier ihr Vertrag.
     [Test] procedure FixtureFilter_AutoHidesOnlyKnownProfiles;
@@ -373,7 +376,9 @@ begin
   finally Ses.Free; end;
 end;
 
-procedure TTestEngineApi.IncludeDefines_Default_IgnoresInclude;
+procedure TTestEngineApi.IncludeDefines_Default_SeesIncDefinedBranch;
+// Der Init-Default traegt das Feature seit 06.09.2026 - ohne den
+// Flip in TScanRequest.Init ist dieser Test ROT (0 statt 1).
 var
   Req : TScanRequest;
   Ses : TAnalysisSession;
@@ -384,7 +389,32 @@ begin
   TFile.WriteAllText(Fn, INC_MAIN_SRC, TEncoding.UTF8);
   TFile.WriteAllText(TPath.Combine(FDir, 'probe.inc'), INC_FILE_SRC,
     TEncoding.UTF8);
-  Req := TScanRequest.Init;          // IncludeDefines bleibt False
+  Req := TScanRequest.Init;          // Default: IncludeDefines=True
+  Req.Scope := ssSingleFile;
+  Req.Path  := Fn;
+  Ses := TAnalysisSession.Create;
+  try
+    Res := Ses.Run(Req);
+    try
+      Assert.AreEqual<Integer>(1, ZaehleMemoryLeaks(Res),
+        'Default liest probe.inc - FROMINC-Zweig samt Leak sichtbar');
+    finally Res.Free; end;
+  finally Ses.Free; end;
+end;
+
+procedure TTestEngineApi.IncludeDefines_OptOut_IgnoresInclude;
+var
+  Req : TScanRequest;
+  Ses : TAnalysisSession;
+  Res : TScanResult;
+  Fn  : string;
+begin
+  Fn := TPath.Combine(FDir, 'incprobe.pas');
+  TFile.WriteAllText(Fn, INC_MAIN_SRC, TEncoding.UTF8);
+  TFile.WriteAllText(TPath.Combine(FDir, 'probe.inc'), INC_FILE_SRC,
+    TEncoding.UTF8);
+  Req := TScanRequest.Init;
+  Req.IncludeDefines := False;       // Opt-out (--no-include-defines)
   Req.Scope := ssSingleFile;
   Req.Path  := Fn;
   Ses := TAnalysisSession.Create;
@@ -392,7 +422,7 @@ begin
     Res := Ses.Run(Req);
     try
       Assert.AreEqual<Integer>(0, ZaehleMemoryLeaks(Res),
-        'ohne Opt-in bleibt das Include unsichtbar (rw69-Exe-Probe)');
+        'Opt-out scannt Include-blind (rw69/rw70-Exe-Probe)');
     finally Res.Free; end;
   finally Ses.Free; end;
 end;

@@ -1,4 +1,4 @@
-unit uEngineApi;
+﻿unit uEngineApi;
 
 // ============================================================================
 //  SCA.Engine - Public Facade (Phase 0)
@@ -126,9 +126,10 @@ type
     IfdefDefines   : TArray<string>;    // {$IFDEF}-aware Parsing mit diesen Defines. Init setzt
                                         // DefaultIfdefDefines (Ein-Zweig-Default seit 05.09.2026);
                                         // leer/nil = Doppelzweig-Sicht (alle Branches parsen)
-    IncludeDefines : Boolean;           // OPT-IN (Charge 14): {$I}-Include-Dateien werden fuer ihre
-                                        // {$DEFINE}-Wirkung gelesen (mORMot2/Indy-Muster). Default
-                                        // False bis zum Messlauf-Entscheid; CLI --include-defines.
+    IncludeDefines : Boolean;           // {$I}-Include-Dateien fuer ihre {$DEFINE}-Wirkung lesen
+                                        // (mORMot2/Indy-Muster). Init setzt True (DEFAULT seit
+                                        // 06.09.2026, Messlauf rw70b); False = Include-blind
+                                        // (CLI --no-include-defines).
     CustomRulesPath: string;            // YAML mit Custom-Rules ('' = keine)
     BaselinePath   : string;            // Findings gegen diese Baseline-JSON filtern ('' = aus)
     WriteBaselinePath: string;          // aktuelle Findings als neue Baseline schreiben ('' = aus)
@@ -323,7 +324,10 @@ begin
   Result.UsesCheck       := False;
   Result.AutoDiscover    := False;
   Result.IfdefDefines    := DefaultIfdefDefines;
-  Result.IncludeDefines  := False;   // Opt-in bis zum Messlauf-Entscheid
+  Result.IncludeDefines  := True;    // DEFAULT seit 06.09.2026 (Nico-GO nach
+                                     // Messlauf rw70b: Errors 1.006->950, die
+                                     // SCA166-Include-Blindheits-Familie faellt
+                                     // von 74 auf 1; CLI-Opt-out --no-include-defines)
   Result.CustomRulesPath := '';
   Result.BaselinePath      := '';
   Result.WriteBaselinePath := '';
