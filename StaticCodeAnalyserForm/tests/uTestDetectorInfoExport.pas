@@ -31,6 +31,14 @@ type
     [Test] procedure SearchBlob_IsLoweredUmlautsIncluded;
     [Test] procedure SearchBlob_AttributeSafeAndBreakFree;
     [Test] procedure HtmlEscape_CoversQuote;
+    // Ausgabevertrag-Runde 2026-09-06 (Nutzerauftrag "fuer die beiden
+    // HTML soll es Tests geben"): Detailzeilen-Inhalt, data-sort-
+    // Ordinale, Kopf-Selbstkonsistenz, Fehlerweg, Namensvertrag.
+    [Test] procedure DetailRow_CarriesDescriptionCweConfigUnit;
+    [Test] procedure DataSort_OrdinalsMatchDisplayedWords;
+    [Test] procedure HeaderCount_ColspanAndFootnote_Consistent;
+    [Test] procedure WriteToFile_InvalidPathRaises;
+    [Test] procedure DefaultFileName_IsStableContract;
   end;
 
 implementation
@@ -199,6 +207,190 @@ begin
   Assert.AreEqual<Integer>(
     Ord(High(TFindingKind)) - Ord(Low(TFindingKind)) + 1, Gezaehlt,
     'ein data-search-Wert je Regel');
+end;
+
+procedure TTestDetectorInfoExport.DetailRow_CarriesDescriptionCweConfigUnit;
+// Die Detailzeile traegt wirklich Kurz-/Langbeschreibung, beide
+// Beispiel-Bloecke und die Meta-Zeile - exemplarisch fuer SCA001 mit
+// dem identischen Aufbauweg des Generators nachgebaut (Erwartungen aus
+// Katalog + geteiltem Escaper, kein Nicht-ASCII-Literal im Test).
+var
+  Meta : TRuleMeta;
+
+  function E(const S: string): string;
+  begin
+    Result := TExporterHtml.HtmlEscape(S);
+  end;
+
+begin
+  Meta := TRuleCatalog.GetRule(fkMemoryLeak, 'de');
+  Assert.IsNotEmpty(Meta.FullDescription,
+    'Vorbedingung: SCA001 traegt FullDescription im Katalog');
+  Assert.IsTrue(Length(Meta.CWE) > 0,
+    'Vorbedingung: SCA001 traegt CWE im Katalog');
+  Assert.IsNotEmpty(Meta.ConfigKey,
+    'Vorbedingung: SCA001 traegt ConfigKey im Katalog');
+  Assert.IsNotEmpty(Meta.DetectorUnit,
+    'Vorbedingung: SCA001 traegt DetectorUnit im Katalog');
+
+  Assert.IsTrue(Pos('<summary>' + E(Meta.ShortDescription) + '</summary>',
+    FHtml) > 0, 'Kurzbeschreibung fehlt als summary');
+  Assert.IsTrue(Pos('<p>' + E(Meta.FullDescription) + '</p>', FHtml) > 0,
+    'Langbeschreibung fehlt in der Detailzeile');
+  Assert.IsTrue(Pos('<div><b>Vorher (problematisch)</b><pre>'
+    + E(Meta.BadExample) + '</pre></div>', FHtml) > 0,
+    'Vorher-Beispielblock fehlt');
+  Assert.IsTrue(Pos('<div><b>Nachher (empfohlen)</b><pre>'
+    + E(Meta.GoodExample) + '</pre></div>', FHtml) > 0,
+    'Nachher-Beispielblock fehlt');
+  Assert.IsTrue(Pos('<div class="meta">CWE: '
+    + E(string.Join(', ', Meta.CWE)) + ' &middot; Konfiguration: '
+    + E(Meta.ConfigKey) + ' &middot; Detektor-Unit: '
+    + E(Meta.DetectorUnit) + '</div>', FHtml) > 0,
+    'Meta-Zeile der Detailansicht fehlt');
+end;
+
+procedure TTestDetectorInfoExport.DataSort_OrdinalsMatchDisplayedWords;
+// Die data-sort-Ordinale muessen zum ANGEZEIGTEN Wort passen - eine
+// umsortierte Wortliste ohne Enum-Bezug stellte 'Hinweis' zwischen
+// 'Fehler' und 'Warnung'. Wortlisten hier = sichtbarer Seitenvertrag.
+const
+  SEV_WORT  : array[TLeakSeverity] of string =
+    ('Fehler', 'Warnung', 'Hinweis');
+  KONF_WORT : array[TFindingConfidence] of string =
+    ('niedrig', 'mittel', 'hoch');
+var
+  K      : TFindingKind;
+  S, S2  : TLeakSeverity;
+  C, C2  : TFindingConfidence;
+begin
+  for K := Low(TFindingKind) to High(TFindingKind) do
+  begin
+    Assert.IsTrue(Pos(Format('<td data-sort="%d">%s</td>',
+      [Ord(KindDefaultSeverity(K)), SEV_WORT[KindDefaultSeverity(K)]]),
+      FHtml) > 0,
+      Format('Schweregrad-Zelle fuer Kind %d fehlt oder falsch gepaart',
+        [Ord(K)]));
+    Assert.IsTrue(Pos(Format('<td data-sort="%d">%s</td>',
+      [Ord(KindDefaultConfidence(K)),
+       KONF_WORT[KindDefaultConfidence(K)]]), FHtml) > 0,
+      Format('Konfidenz-Zelle fuer Kind %d fehlt oder falsch gepaart',
+        [Ord(K)]));
+  end;
+  // Fehlpaarungen duerfen NICHT vorkommen (Wortmengen sind disjunkt,
+  // keine Spalten-Kollision).
+  for S := Low(TLeakSeverity) to High(TLeakSeverity) do
+    for S2 := Low(TLeakSeverity) to High(TLeakSeverity) do
+      if S <> S2 then
+        Assert.AreEqual<Integer>(0, Pos(Format('data-sort="%d">%s</td>',
+          [Ord(S), SEV_WORT[S2]]), FHtml),
+          'Schweregrad-Wort haengt am falschen Ordinal');
+  for C := Low(TFindingConfidence) to High(TFindingConfidence) do
+    for C2 := Low(TFindingConfidence) to High(TFindingConfidence) do
+      if C <> C2 then
+        Assert.AreEqual<Integer>(0, Pos(Format('data-sort="%d">%s</td>',
+          [Ord(C), KONF_WORT[C2]]), FHtml),
+          'Konfidenz-Wort haengt am falschen Ordinal');
+  // Default-Profil: an=0 (sortiert vor aus=1), keine Fehlpaarung.
+  Assert.IsTrue(
+    Pos('<td data-sort="0"><span class="an">an</span></td>', FHtml) > 0,
+    'an=0 fehlt');
+  Assert.IsTrue(
+    Pos('<td data-sort="1"><span class="aus">aus</span></td>', FHtml) > 0,
+    'aus=1 fehlt');
+  Assert.AreEqual<Integer>(0,
+    Pos('data-sort="1"><span class="an"', FHtml), 'an am falschen Rang');
+  Assert.AreEqual<Integer>(0,
+    Pos('data-sort="0"><span class="aus"', FHtml), 'aus am falschen Rang');
+  // Konsumenten-Seite: das Sortier-JS liest data-sort wirklich.
+  Assert.IsTrue(Pos('td.dataset.sort', FHtml) > 0,
+    'Sortier-JS liest data-sort nicht mehr');
+end;
+
+procedure TTestDetectorInfoExport.HeaderCount_ColspanAndFootnote_Consistent;
+// Selbstkonsistenz statt harter 8/198: Kopfzahl == tbody-Zahl,
+// colspan jeder Detailzeile == Zahl der Spaltenkoepfe, Evidenz-
+// Fussnote vorhanden. Katalogwachstum und eine KORREKT nachgezogene
+// neue Spalte bleiben gruen - nur Divergenz wird rot.
+var
+  P, N, B, C, D : Integer;
+begin
+  P := Pos(' Detektoren', FHtml);
+  Assert.IsTrue(P > 0, 'Kopfzeile fehlt');
+  N := 0;
+  var Stelle := 1;
+  var i := P - 1;
+  while (i > 0) and CharInSet(FHtml[i], ['0'..'9']) do
+  begin
+    N := N + (Ord(FHtml[i]) - Ord('0')) * Stelle;
+    Stelle := Stelle * 10;
+    Dec(i);
+  end;
+  Assert.IsTrue(N > 0, 'Kopfzahl nicht lesbar');
+
+  B := 0;
+  P := Pos('<tbody', FHtml);
+  while P > 0 do
+  begin
+    Inc(B);
+    P := Pos('<tbody', FHtml, P + 1);
+  end;
+  Assert.AreEqual<Integer>(B, N,
+    'Kopfzeile verspricht andere Zahl als darunter steht');
+
+  C := 0;
+  P := Pos('<th onclick="sortiere(', FHtml);
+  while P > 0 do
+  begin
+    Inc(C);
+    P := Pos('<th onclick="sortiere(', FHtml, P + 1);
+  end;
+  Assert.IsTrue(C > 0, 'keine Spaltenkoepfe gefunden');
+
+  D := 0;
+  P := Pos('<tr class="detail"><td colspan="' + IntToStr(C) + '">', FHtml);
+  while P > 0 do
+  begin
+    Inc(D);
+    P := Pos('<tr class="detail"><td colspan="' + IntToStr(C) + '">',
+      FHtml, P + 1);
+  end;
+  Assert.AreEqual<Integer>(B, D,
+    'jede Detailzeile muss exakt die Spaltenzahl spannen');
+
+  Assert.IsTrue(Pos('(Evidenz-Deckel)', FHtml) > 0,
+    'Fussnote zur Schweregrad-Semantik fehlt im Untertitel');
+end;
+
+procedure TTestDetectorInfoExport.WriteToFile_InvalidPathRaises;
+// Schreibfehler muessen den Aufrufer erreichen - der Save-Dialog
+// meldet sonst Erfolg, ohne dass eine Datei entsteht. Das Verzeichnis
+// existiert garantiert nicht und wird nicht angelegt (kein Cleanup).
+var
+  Pfad : string;
+begin
+  Pfad := TPath.Combine(TPath.Combine(TPath.GetTempPath,
+    'sca_gibtsnicht_' + TGuid.NewGuid.ToString
+      .Replace('{', '').Replace('}', '')), 'detinfo.html');
+  Assert.WillRaise(
+    procedure
+    begin
+      TDetectorInfoExport.WriteToFile(Pfad, 'de');
+    end,
+    EFCreateError,
+    'ungueltiger Zielpfad muss die Exception zum Aufrufer durchreichen');
+end;
+
+procedure TTestDetectorInfoExport.DefaultFileName_IsStableContract;
+// Der Save-Dialog-Vorschlag ist ein Vertrag (Dialogfilter, externe
+// Verweise) - eine Umbenennung beim EN/FR-Ausbau soll eine bewusste
+// Entscheidung sein, kein Nebeneffekt.
+begin
+  Assert.AreEqual('sca-detector-info.html',
+    TDetectorInfoExport.DefaultFileName,
+    'Dateinamens-Vertrag des Save-Dialogs');
+  Assert.AreEqual('.html', ExtractFileExt(TDetectorInfoExport.DefaultFileName),
+    'die Endung steuert den Dialogfilter');
 end;
 
 procedure TTestDetectorInfoExport.HtmlEscape_CoversQuote;
