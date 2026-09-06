@@ -61,6 +61,9 @@ type
     // Nutzerwunsch 07.09.: Vorher/Nachher in der Hint-Zeile stehen
     // UNTEREINANDER und jeder Codeblock traegt zwei Leerzeilen Luft.
     [Test] procedure HintCodePair_StackedWithTrailingBlankLines;
+    // Charge 18 (07.09., "alles soll sich gleich anfuehlen"): der
+    // Report traegt das Workbench-Designsystem der Detector-Info-Seite.
+    [Test] procedure Report_WearsWorkbenchLook;
   end;
 
 
@@ -779,6 +782,32 @@ begin
   Assert.IsTrue(Alle > 0, 'kein Codeblock im Report gefunden');
   Assert.AreEqual<Integer>(Alle, MitLuft,
     'JEDER Vorher/Nachher-Codeblock endet mit zwei Leerzeilen');
+end;
+
+procedure TTestExportHtml.Report_WearsWorkbenchLook;
+// Geteilter Kern (uWorkbenchStyle) + die Struktur-Anker des Umbaus:
+// Tokens, dunkler Kopf mit Titel+Meta, main-Wrapper, Theme-Token-
+// Overrides (Ableitungs-Invariante: Selektor je Zeile - die erste
+// Dark-Token-Zeile muss darum den vollen Selektor tragen).
+var
+  Html : string;
+begin
+  Html := RenderReport;
+  Assert.IsTrue(Pos('--akzent:#1a5da6', Html) > 0,
+    'Workbench-Tokens fehlen (uWorkbenchStyle nicht eingebunden)');
+  Assert.IsTrue(Pos('<header class="kopf">', Html) > 0,
+    'dunkler Workbench-Kopf fehlt');
+  Assert.IsTrue(Pos('</header>', Html) > 0, 'Kopf nicht geschlossen');
+  Assert.IsTrue(Pos('<main>', Html) > 0, 'main-Wrapper fehlt');
+  Assert.IsTrue(Pos('</main>', Html) > 0, 'main nicht geschlossen');
+  Assert.IsTrue(Pos('<header class="kopf">', Html) < Pos('<main>', Html),
+    'Kopf steht vor dem Inhalt');
+  Assert.IsTrue(
+    Pos(':root[data-theme="dark"] { --grund: #1e1e1e;', Html) > 0,
+    'Dark-Theme ueberschreibt die Tokens nicht');
+  Assert.IsTrue(
+    Pos(':root[data-theme="sepia"] { --grund: #f4ead2;', Html) > 0,
+    'Sepia-Theme ueberschreibt die Tokens nicht');
 end;
 
 initialization

@@ -84,7 +84,8 @@ implementation
 uses
   System.IOUtils,          // TPath (Relativpfad-Anzeige, HtmlDisplayPath)
   uExport, uFixHint, uRuleCatalog, uQuickFix, uBaseline,
-  uLocalization;           // CurrentLanguage - Regeltexte folgen der App-Sprache
+  uLocalization,           // CurrentLanguage - Regeltexte folgen der App-Sprache
+  uWorkbenchStyle;         // geteilter CSS-Kern beider HTML-Exporte (07.09.)
 
 type
   // Per-Datei-Aggregat fuer das Top-Dateien-Risiko-Ranking (#11).
@@ -620,84 +621,94 @@ begin
     SB.AppendLine('  <meta charset="UTF-8">');
     SB.Append    ('  <title>'); SB.Append(HtmlEscape(Title)); SB.AppendLine('</title>');
     SB.AppendLine('  <style>');
-    SB.AppendLine('    body { font-family: Segoe UI, Arial, sans-serif; margin: 24px; color: #222; }');
-    SB.AppendLine('    h1 { font-size: 18px; margin-bottom: 4px; }');
-    SB.AppendLine('    .meta { color: #666; font-size: 12px; margin-bottom: 16px; }');
-    SB.AppendLine('    .summary { display: flex; gap: 12px; margin-bottom: 16px; }');
+    // Workbench-Designsystem (07.09., "alles soll sich gleich
+    // anfuehlen"): geteilter Kern zuerst, dann restylen die folgenden
+    // Report-Regeln ihre Klassen auf die Tokens/Optik. JS-Klassen und
+    // Test-Strings bleiben unveraendert (CSS-Landkarte der Charge 18).
+    SB.Append(TWorkbenchStyle.BasisCss);
+    SB.AppendLine('    main { padding: 14px 20px; }');
+    SB.AppendLine('    header.kopf .meta { color: #b9c6d2; font-size: 12px; margin: 2px 0 0 0; }');
+    SB.AppendLine('    .summary { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }');
     // Aggregierter Regel-Report (2026-08-26). Eigene Klassen statt der
     // Fund-Tabellen-Styles: die Fundtabelle traegt Filter-/Sortier-Logik,
     // die hier nichts zu suchen hat. overflow-x, damit neun Spalten auch
     // im schmalen IDE-Dock scrollen statt die Seite zu sprengen.
-    SB.AppendLine('    .rule-report { margin: 12px 0 18px; }');
+    SB.AppendLine('    .rule-report { margin: 12px 0 18px; background: var(--karte); border: 1px solid var(--rand); border-radius: 8px; box-shadow: 0 1px 2px rgba(16,32,48,0.06); padding: 2px 10px 8px 10px; }');
     SB.AppendLine('    .rule-report > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }');
     SB.AppendLine('    .rule-table { border-collapse: collapse; font-size: 12px; width: 100%; display: block; overflow-x: auto; }');
-    SB.AppendLine('    .rule-table th, .rule-table td { border-bottom: 1px solid #e0e0e0; padding: 3px 8px; text-align: left; white-space: nowrap; }');
-    SB.AppendLine('    .rule-table th { position: sticky; top: 0; background: #f6f6f6; }');
+    SB.AppendLine('    .rule-table th, .rule-table td { border: 0; border-bottom: 1px solid var(--rand); padding: 3px 8px; text-align: left; white-space: nowrap; }');
+    SB.AppendLine('    .rule-table th { position: sticky; top: 0; background: #eef2f6; box-shadow: inset 0 -1px 0 var(--rand); }');
     SB.AppendLine('    .rule-table td.num, .rule-table th.num { text-align: right; }');
     SB.AppendLine('    .rule-table .rr-id { font-family: Consolas, monospace; }');
-    SB.AppendLine('    .rule-table .rr-e { color: #a00; }');
-    SB.AppendLine('    .rule-table .rr-w { color: #855000; }');
-    SB.AppendLine('    .rule-table .rr-h { color: #555; }');
-    SB.AppendLine('    .rule-table .rr-share { color: #555; }');
-    SB.AppendLine('    .badge { padding: 6px 12px; border-radius: 4px; font-size: 12px; }');
-    SB.AppendLine('    .badge b { font-size: 16px; display: block; }');
-    SB.AppendLine('    .b-err  { background: #ffe5e5; color: #800; }');
-    SB.AppendLine('    .b-warn { background: #fff5d0; color: #704000; }');
-    SB.AppendLine('    .b-hint { background: #e8f0d8; color: #305018; }');
-    SB.AppendLine('    .b-tot  { background: #eee; color: #333; }');
-    SB.AppendLine('    /* Klickbare Severity-Badges */');
-    SB.AppendLine('    .sev-filter { cursor: pointer; user-select: none;');
-    SB.AppendLine('       border: 2px solid transparent; transition: border-color 0.15s; }');
-    SB.AppendLine('    .sev-filter:hover { border-color: #888; }');
-    SB.AppendLine('    .sev-filter.sev-active { border-color: #333; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06); }');
-    SB.AppendLine('    table { border-collapse: collapse; width: 100%; font-size: 12px; }');
-    SB.AppendLine('    th, td { border-bottom: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }');
-    SB.AppendLine('    th { background: #f4f4f4; font-weight: 600; }');
-    SB.AppendLine('    tr.err  td.sev { color: #b00000; font-weight: 600; }');
-    SB.AppendLine('    tr.readerr td.sev { color: #b00000; font-weight: 600; }');
-    SB.AppendLine('    tr.warn td.sev { color: #b08000; font-weight: 600; }');
-    SB.AppendLine('    tr.hint td.sev { color: #5a8000; font-weight: 600; }');
-    SB.AppendLine('    tr.err  { background: #fff5f5; }');
-    SB.AppendLine('    tr.readerr { background: #fff5f5; }');
-    SB.AppendLine('    tr.warn { background: #fffbe8; }');
-    SB.AppendLine('    .num { text-align: right; font-variant-numeric: tabular-nums; color: #666; }');
+    SB.AppendLine('    .rule-table .rr-e { color: #9c2317; }');
+    SB.AppendLine('    .rule-table .rr-w { color: #8a5a00; }');
+    SB.AppendLine('    .rule-table .rr-h { color: var(--dezent); }');
+    SB.AppendLine('    .rule-table .rr-share { color: var(--dezent); }');
+    // Summenkarten in Kachel-Optik: Karte statt Vollfarbflaeche, die
+    // Severity sitzt in der Farbe der grossen Zahl (Workbench-Palette).
+    // Klassen b-*/sev-filter/sev-active sind JS-Vertrag und bleiben.
+    SB.AppendLine('    .summary .badge { background: var(--karte); border: 1px solid var(--rand); border-radius: 8px; padding: 8px 14px; min-width: 104px; font-size: 0.85em; color: var(--dezent); box-shadow: 0 1px 2px rgba(16,32,48,0.06); white-space: normal; }');
+    SB.AppendLine('    .summary .badge b { font-size: 1.6em; display: block; font-weight: 600; }');
+    SB.AppendLine('    .b-err  b { color: #9c2317; }');
+    SB.AppendLine('    .b-warn b { color: #8a5a00; }');
+    SB.AppendLine('    .b-hint b { color: #1a5da6; }');
+    SB.AppendLine('    .b-tot  b { color: var(--tinte); }');
+    SB.AppendLine('    /* Klickbare Severity-Kacheln */');
+    SB.AppendLine('    .sev-filter { cursor: pointer; user-select: none; transition: border-color 0.15s; }');
+    SB.AppendLine('    .sev-filter:hover { border-color: var(--akzent); }');
+    SB.AppendLine('    .sev-filter.sev-active { border-color: var(--akzent); box-shadow: inset 3px 0 0 var(--akzent); }');
+    SB.AppendLine('    table { border-collapse: collapse; width: 100%; font-size: 12px; background: var(--karte); border: 1px solid var(--rand); }');
+    SB.AppendLine('    th, td { border: 0; border-bottom: 1px solid var(--rand); padding: 7px 10px; text-align: left; vertical-align: top; }');
+    SB.AppendLine('    th { background: #eef2f6; font-weight: 600; position: sticky; top: 0; box-shadow: inset 0 -1px 0 var(--rand); }');
+    SB.AppendLine('    tr.err  td.sev { color: #9c2317; font-weight: 600; }');
+    SB.AppendLine('    tr.readerr td.sev { color: #9c2317; font-weight: 600; }');
+    SB.AppendLine('    tr.warn td.sev { color: #8a5a00; font-weight: 600; }');
+    SB.AppendLine('    tr.hint td.sev { color: #1a5da6; font-weight: 600; }');
+    SB.AppendLine('    tr.err  { background: #fdecea; }');
+    SB.AppendLine('    tr.readerr { background: #fdecea; }');
+    SB.AppendLine('    tr.warn { background: #fef4e5; }');
+    SB.AppendLine('    .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--dezent); }');
     SB.AppendLine('    /* Klickbare Befund-Zeile + Folgezeile mit Hint */');
     SB.AppendLine('    tr.finding { cursor: pointer; }');
     SB.AppendLine('    tr.finding:hover { filter: brightness(0.97); }');
-    SB.AppendLine('    tr.finding td.toggle { width: 18px; text-align: center; color: #888;');
+    SB.AppendLine('    tr.finding.open { box-shadow: inset 3px 0 0 var(--akzent); }');
+    SB.AppendLine('    tr.finding td.toggle { width: 18px; text-align: center; color: var(--dezent);');
     SB.AppendLine('       font-size: 10px; user-select: none; }');
-    SB.AppendLine('    tr.finding.open td.toggle { color: #333; transform: rotate(0); }');
+    SB.AppendLine('    tr.finding.open td.toggle { color: var(--tinte); transform: rotate(0); }');
     SB.AppendLine('    tr.finding-hint { display: none; }');
     SB.AppendLine('    tr.finding-hint.open { display: table-row; }');
-    SB.AppendLine('    tr.finding-hint > td { background: #fafafa; padding: 10px 16px;');
-    SB.AppendLine('       border-bottom: 2px solid #ddd; }');
-    SB.AppendLine('    .hint-desc { font-style: italic; color: #444; margin: 0 0 6px 0; }');
+    SB.AppendLine('    tr.finding-hint > td { background: #fbfcfe; padding: 10px 16px;');
+    SB.AppendLine('       border-bottom: 2px solid var(--rand); }');
+    SB.AppendLine('    .hint-desc { color: var(--tinte); margin: 0 0 6px 0; background: #fbfcfe; border: 1px solid var(--rand); border-radius: 8px; padding: 6px 10px; }');
     // #3/#4: Regel-Erklaerung-Fallback, CWE/OWASP-Badges, Regel-Beispiel-Note.
-    SB.AppendLine('    .hint-rule-desc { border-left: 3px solid #ccd; padding-left: 8px; }');
+    SB.AppendLine('    .hint-rule-desc { border-left: 3px solid var(--akzent); }');
     SB.AppendLine('    .sec-badges { margin: 0 0 6px 0; }');
     SB.AppendLine('    .sec-badge { display: inline-block; font-size: 10px; font-weight: 600;');
-    SB.AppendLine('      padding: 1px 6px; border-radius: 3px; margin-right: 5px; }');
-    SB.AppendLine('    .cwe-badge { background: #fde8e8; color: #a02020; border: 1px solid #e8b0b0; }');
-    SB.AppendLine('    .owasp-badge { background: #fff0e0; color: #a06020; border: 1px solid #e8c090; }');
-    SB.AppendLine('    .rule-example-note { font-size: 11px; color: #888; font-style: italic; margin: 6px 0 2px 0; }');
+    SB.AppendLine('      padding: 0 6px; border-radius: 4px; margin-right: 5px; }');
+    SB.AppendLine('    .cwe-badge { background: #f3ecfb; color: #5b2d91; border: 1px solid #dcc9f0; }');
+    SB.AppendLine('    .owasp-badge { background: #eef2f6; color: #3d4a58; border: 1px solid var(--rand); }');
+    SB.AppendLine('    .rule-example-note { font-size: 11px; color: var(--dezent); font-style: italic; margin: 6px 0 2px 0; }');
     // Untereinander statt nebeneinander (Nutzerwunsch 07.09.): beim
     // Vergleich springt das Auge zeilenweise, nicht spaltenweise.
     SB.AppendLine('    .code-pair { display: block; margin-top: 4px; }');
-    SB.AppendLine('    .code-block { min-width: 0; }');
-    SB.AppendLine('    .code-block + .code-block { margin-top: 6px; }');
-    SB.AppendLine('    .code-block h5 { margin: 0 0 2px 0; font-size: 11px; }');
-    SB.AppendLine('    .code-before h5 { color: #800; }');
-    SB.AppendLine('    .code-after  h5 { color: #060; }');
+    // Codekarten-Optik der Workbench: farbige Titelzeile (h5) auf
+    // Karten-Kopf, Code einheitlich dunkel - die dark/sepia-pre-
+    // Overrides weiter hinten gewinnen in ihren Themes weiterhin.
+    SB.AppendLine('    .code-block { min-width: 0; border: 1px solid var(--rand); border-radius: 8px; overflow: hidden; }');
+    SB.AppendLine('    .code-block + .code-block { margin-top: 10px; }');
+    SB.AppendLine('    .code-block h5 { margin: 0; font-size: 11px; padding: 4px 8px; }');
+    SB.AppendLine('    .code-before h5 { color: #9c2317; background: #fdecea; }');
+    SB.AppendLine('    .code-after  h5 { color: #1d6b2a; background: #e7f4e8; }');
     SB.AppendLine('    .code-block pre { margin: 0; padding: 6px 8px; font-size: 11px;');
     SB.AppendLine('       font-family: Consolas, "Courier New", monospace; overflow-x: auto;');
-    SB.AppendLine('       border-radius: 3px; white-space: pre; }');
-    SB.AppendLine('    .code-before pre { background: #fff0f0; color: #400; }');
-    SB.AppendLine('    .code-after  pre { background: #f0f8e8; color: #042; }');
+    SB.AppendLine('       white-space: pre; }');
+    SB.AppendLine('    .code-before pre { background: #23272e; color: #e6e6e6; }');
+    SB.AppendLine('    .code-after  pre { background: #23272e; color: #e6e6e6; }');
     SB.AppendLine('    /* Code-Snippet aus der echten Quelldatei */');
-    SB.AppendLine('    .src-snippet { background: #fafafa; border: 1px solid #e0e0e0;');
+    SB.AppendLine('    .src-snippet { background: #fafafa; border: 1px solid var(--rand);');
     SB.AppendLine('       padding: 4px 0; margin: 0 0 8px 0; font-size: 11px;');
     SB.AppendLine('       font-family: Consolas, "Courier New", monospace; overflow-x: auto;');
-    SB.AppendLine('       border-radius: 3px; }');
+    SB.AppendLine('       border-radius: 8px; }');
     SB.AppendLine('    .src-line { white-space: pre; padding: 0 8px; }');
     SB.AppendLine('    .src-line-num { color: #999; user-select: none; }');
     SB.AppendLine('    .src-line-bar { color: #ccc; user-select: none; }');
@@ -705,26 +716,28 @@ begin
     SB.AppendLine('    .src-line-active .src-line-num,');
     SB.AppendLine('    .src-line-active .src-line-bar { color: #b08000; font-weight: 600; }');
     SB.AppendLine('    .src-snippet-hdr { font-size: 11px; color: #666; margin: 0 0 2px 0; }');
-    SB.AppendLine('    /* Controls-Bar: Datei-Filter + Sort-Hinweise */');
-    SB.AppendLine('    .controls { display: flex; gap: 12px; align-items: center;');
+    SB.AppendLine('    /* Controls-Bar: Command-Bar-Optik der Workbench */');
+    SB.AppendLine('    .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap;');
     SB.AppendLine('       margin: 8px 0 12px 0; font-size: 12px; }');
-    SB.AppendLine('    .controls label { color: #555; }');
-    SB.AppendLine('    .controls select { font-size: 12px; padding: 4px 6px;');
-    SB.AppendLine('       border: 1px solid #ccc; border-radius: 3px; min-width: 200px; }');
-    SB.AppendLine('    .controls .hint { color: #888; font-style: italic; }');
-    SB.AppendLine('    .controls .row-count { color: #444; font-weight: 600; }');
-    SB.AppendLine('    .trunc-banner { margin: 8px 0; padding: 8px 12px; border-radius: 4px;');
-    SB.AppendLine('      background: #fff4e5; border: 1px solid #d98600; color: #6b4200; font-weight: 600; }');
+    SB.AppendLine('    .controls label { color: var(--dezent); }');
+    SB.AppendLine('    .controls select { font-size: 12px; padding: 6px 8px; background: var(--karte);');
+    SB.AppendLine('       border: 1px solid var(--rand); border-radius: 8px; min-width: 200px; }');
+    SB.AppendLine('    .controls input[type=search] { padding: 7px 10px; border: 1px solid var(--rand);');
+    SB.AppendLine('       border-radius: 8px; background: var(--karte); font-size: 12px; }');
+    SB.AppendLine('    .controls .hint { color: var(--dezent); font-style: italic; }');
+    SB.AppendLine('    .controls .row-count { color: var(--tinte); font-weight: 600; }');
+    SB.AppendLine('    .trunc-banner { margin: 8px 0; padding: 8px 12px; border-radius: 8px;');
+    SB.AppendLine('      background: #fef4e5; border: 1px solid #f1d9ad; color: #8a5a00; font-weight: 600; }');
     SB.AppendLine('    /* Sortierbare Header */');
     SB.AppendLine('    th.sortable { cursor: pointer; user-select: none; }');
-    SB.AppendLine('    th.sortable:hover { background: #ebebeb; }');
-    SB.AppendLine('    th.sortable .sort-ind { color: #aaa; margin-left: 4px; font-size: 10px; }');
-    SB.AppendLine('    th.sortable.sort-asc  .sort-ind::before { content: "\25B2"; color: #333; }');
-    SB.AppendLine('    th.sortable.sort-desc .sort-ind::before { content: "\25BC"; color: #333; }');
+    SB.AppendLine('    th.sortable:hover { background: #e3eaf2; }');
+    SB.AppendLine('    th.sortable .sort-ind { color: var(--dezent); margin-left: 4px; font-size: 10px; }');
+    SB.AppendLine('    th.sortable.sort-asc  .sort-ind::before { content: "\25B2"; color: #1a5da6; }');
+    SB.AppendLine('    th.sortable.sort-desc .sort-ind::before { content: "\25BC"; color: #1a5da6; }');
     SB.AppendLine('    /* Top-Detektoren-Panel */');
-    SB.AppendLine('    .top-detectors { background: #f8f8f8; border: 1px solid #e0e0e0;');
-    SB.AppendLine('       border-radius: 4px; padding: 8px 12px; margin-bottom: 12px;');
-    SB.AppendLine('       font-size: 12px; }');
+    SB.AppendLine('    .top-detectors { background: var(--karte); border: 1px solid var(--rand);');
+    SB.AppendLine('       border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;');
+    SB.AppendLine('       box-shadow: 0 1px 2px rgba(16,32,48,0.06); font-size: 12px; }');
     SB.AppendLine('    .top-detectors h2 { font-size: 13px; margin: 0 0 6px 0; color: #444;');
     SB.AppendLine('       font-weight: 600; }');
     SB.AppendLine('    .top-detectors ol { margin: 0; padding-left: 22px; columns: 2;');
@@ -736,31 +749,34 @@ begin
     SB.AppendLine('    .top-detectors .td-count { color: #666; font-variant-numeric: tabular-nums; }');
     SB.AppendLine('    /* QF-Badge: markiert Detektoren mit Quick-Fix-Provider (uQuickFix). */');
     SB.AppendLine('    /* Tech-Lead-Hint: das sind die "low-hanging fruit" beim Refactoring-Sprint. */');
-    SB.AppendLine('    .top-detectors .td-qf { color: #08a; font-size: 10px; margin-left: 6px;');
-    SB.AppendLine('       border: 1px solid #08a; border-radius: 2px; padding: 0 4px;');
-    SB.AppendLine('       font-weight: 600; letter-spacing: 0.5px; }');
-    SB.AppendLine('    /* Audience-Hint-Banner: macht klar fuer wen der Report optimiert ist. */');
-    SB.AppendLine('    .audience-hint { background: #eef5ff; border-left: 3px solid #3b73c4;');
-    SB.AppendLine('       padding: 8px 12px; margin: 0 0 12px 0; font-size: 12px; color: #234; }');
-    SB.AppendLine('    .audience-hint b { color: #1a3b6a; }');
+    SB.AppendLine('    .top-detectors .td-qf { color: #1a5da6; font-size: 10px; margin-left: 6px;');
+    SB.AppendLine('       border: 1px solid #c4dbf2; border-radius: 4px; padding: 0 4px;');
+    SB.AppendLine('       background: #eaf3fd; font-weight: 600; letter-spacing: 0.5px; }');
+    SB.AppendLine('    /* Audience-Hint als Rollen-Karte der Workbench */');
+    SB.AppendLine('    .audience-hint { background: var(--karte); border: 1px solid var(--rand);');
+    SB.AppendLine('       border-left: 3px solid var(--akzent); border-radius: 8px;');
+    SB.AppendLine('       box-shadow: 0 1px 2px rgba(16,32,48,0.06);');
+    SB.AppendLine('       padding: 8px 12px; margin: 0 0 12px 0; font-size: 12px; color: var(--tinte); }');
+    SB.AppendLine('    .audience-hint b { color: #1a5da6; }');
     // #14 Security-Sektion-Panel
-    SB.AppendLine('    .sec-panel { background: #fff0f0; border-left: 3px solid #d04040; border-radius: 4px;');
+    SB.AppendLine('    .sec-panel { background: #fdecea; border: 1px solid #f2c4bf;');
+    SB.AppendLine('      border-left: 3px solid #9c2317; border-radius: 8px;');
     SB.AppendLine('      padding: 8px 12px; margin: 0 0 12px 0; font-size: 13px; }');
     SB.AppendLine('    .sec-panel-icon { font-size: 15px; }');
-    SB.AppendLine('    .sec-panel b { color: #b00000; }');
+    SB.AppendLine('    .sec-panel b { color: #9c2317; }');
     SB.AppendLine('    :root[data-theme="dark"] .sec-panel { background: #331e1e; border-color: #d04040; color: #e0c0c0; }');
     SB.AppendLine('    :root[data-theme="dark"] .sec-panel b { color: #ff8080; }');
     SB.AppendLine('    /* Health-Score-Panel (#5): Ampel gruen/gelb/rot, reuse Severity-Farben */');
     SB.AppendLine('    .health-panel { display: flex; align-items: center; gap: 16px;');
-    SB.AppendLine('       border-radius: 4px; padding: 10px 14px; margin: 0 0 12px 0;');
-    SB.AppendLine('       border: 1px solid #ddd; }');
-    SB.AppendLine('    .health-panel.health-green  { background: #e8f0d8; border-color: #b8d088; }');
-    SB.AppendLine('    .health-panel.health-yellow { background: #fff5d0; border-color: #e8cd7a; }');
-    SB.AppendLine('    .health-panel.health-red    { background: #ffe5e5; border-color: #e0a0a0; }');
+    SB.AppendLine('       border-radius: 8px; padding: 10px 14px; margin: 0 0 12px 0;');
+    SB.AppendLine('       border: 1px solid var(--rand); box-shadow: 0 1px 2px rgba(16,32,48,0.06); }');
+    SB.AppendLine('    .health-panel.health-green  { background: #e7f4e8; border-color: #bcd9bf; }');
+    SB.AppendLine('    .health-panel.health-yellow { background: #fef4e5; border-color: #f1d9ad; }');
+    SB.AppendLine('    .health-panel.health-red    { background: #fdecea; border-color: #f2c4bf; }');
     // #6: Uebersicht-Charts (Donut + Kategorie-Balken)
     SB.AppendLine('    .chart-panel { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; margin: 0 0 14px 0; }');
-    SB.AppendLine('    .chart-box { background: #f8f8f8; border: 1px solid #e0e0e0; border-radius: 5px; padding: 10px 14px; }');
-    SB.AppendLine('    .chart-box h3 { font-size: 13px; margin: 0 0 8px 0; color: #444; font-weight: 600; }');
+    SB.AppendLine('    .chart-box { background: var(--karte); border: 1px solid var(--rand); border-radius: 8px; box-shadow: 0 1px 2px rgba(16,32,48,0.06); padding: 10px 14px; }');
+    SB.AppendLine('    .chart-box h3 { font-size: 13px; margin: 0 0 8px 0; color: var(--tinte); font-weight: 600; }');
     SB.AppendLine('    .donut-wrap { display: flex; align-items: center; gap: 14px; }');
     SB.AppendLine('    .donut { width: 110px; height: 110px; }');
     SB.AppendLine('    .donut-total { font-size: 26px; font-weight: 700; fill: #333; }');
@@ -772,9 +788,9 @@ begin
     SB.AppendLine('    .cbar { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 1px 0; }');
     SB.AppendLine('    .cbar-lbl { width: 160px; font-family: Consolas, "Courier New", monospace;');
     SB.AppendLine('       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }');
-    SB.AppendLine('    .cbar-track { flex: 0 0 190px; background: #eee; border-radius: 2px; height: 12px; }');
-    SB.AppendLine('    .cbar-fill { display: block; height: 12px; background: #6aa0d8; border-radius: 2px; }');
-    SB.AppendLine('    .cbar-num { color: #666; font-variant-numeric: tabular-nums; }');
+    SB.AppendLine('    .cbar-track { flex: 0 0 190px; background: #eef2f6; border-radius: 4px; height: 12px; }');
+    SB.AppendLine('    .cbar-fill { display: block; height: 12px; background: #1a5da6; border-radius: 4px; }');
+    SB.AppendLine('    .cbar-num { color: var(--dezent); font-variant-numeric: tabular-nums; }');
     // #7 Baseline-Diff: NEU-Zeilen mit gruenem Balken, bestehende leicht gedimmt.
     SB.AppendLine('    .base-summary { font-size: 12px; color: #555; margin-left: 4px; align-self: center; }');
     SB.AppendLine('    tr.finding[data-bstatus="new"] { box-shadow: inset 3px 0 0 #2a9d2a; }');
@@ -787,89 +803,101 @@ begin
     SB.AppendLine('    .health-num { font-size: 26px; font-weight: 700; line-height: 1.1;');
     SB.AppendLine('       font-variant-numeric: tabular-nums; }');
     SB.AppendLine('    .health-status { font-size: 12px; font-weight: 600; }');
-    SB.AppendLine('    .health-green  .health-num, .health-green  .health-status { color: #305018; }');
-    SB.AppendLine('    .health-yellow .health-num, .health-yellow .health-status { color: #704000; }');
-    SB.AppendLine('    .health-red    .health-num, .health-red    .health-status { color: #800; }');
-    SB.AppendLine('    .health-line { font-size: 13px; color: #333; }');
+    SB.AppendLine('    .health-green  .health-num, .health-green  .health-status { color: #1d6b2a; }');
+    SB.AppendLine('    .health-yellow .health-num, .health-yellow .health-status { color: #8a5a00; }');
+    SB.AppendLine('    .health-red    .health-num, .health-red    .health-status { color: #9c2317; }');
+    SB.AppendLine('    .health-line { font-size: 13px; color: var(--tinte); }');
     SB.AppendLine('    /* Top-Dateien-Risiko-Ranking (#11): analog zu .top-detectors */');
-    SB.AppendLine('    .top-files { background: #f8f8f8; border: 1px solid #e0e0e0;');
-    SB.AppendLine('       border-radius: 4px; padding: 8px 12px; margin-bottom: 12px;');
-    SB.AppendLine('       font-size: 12px; }');
+    SB.AppendLine('    .top-files { background: var(--karte); border: 1px solid var(--rand);');
+    SB.AppendLine('       border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;');
+    SB.AppendLine('       box-shadow: 0 1px 2px rgba(16,32,48,0.06); font-size: 12px; }');
     SB.AppendLine('    .top-files h2 { font-size: 13px; margin: 0 0 6px 0; color: #444;');
     SB.AppendLine('       font-weight: 600; }');
     SB.AppendLine('    .top-files ol { margin: 0; padding-left: 22px; columns: 2;');
     SB.AppendLine('       column-gap: 24px; }');
     SB.AppendLine('    .top-files li { padding: 2px 0; cursor: pointer; user-select: none; }');
-    SB.AppendLine('    .top-files li:hover { color: #06c; text-decoration: underline; }');
+    SB.AppendLine('    .top-files li:hover { color: #1a5da6; text-decoration: underline; }');
     SB.AppendLine('    .top-files .tf-name { font-family: Consolas, "Courier New", monospace; }');
-    SB.AppendLine('    .top-files .tf-score { color: #333; font-weight: 600;');
+    SB.AppendLine('    .top-files .tf-score { color: var(--tinte); font-weight: 600;');
     SB.AppendLine('       font-variant-numeric: tabular-nums; margin-left: 4px; }');
     SB.AppendLine('    .top-files .tf-counts { margin-left: 6px;');
     SB.AppendLine('       font-variant-numeric: tabular-nums; }');
-    SB.AppendLine('    .top-files .tf-e { color: #b00000; font-weight: 600; }');
-    SB.AppendLine('    .top-files .tf-w { color: #b08000; font-weight: 600; }');
-    SB.AppendLine('    .top-files .tf-h { color: #5a8000; font-weight: 600; }');
-    SB.AppendLine('    /* Konfidenz-Badge (#1): reuse Severity-Farbwelt */');
-    SB.AppendLine('    .conf-badge { font-size: 10px; padding: 0 5px; border-radius: 2px;');
-    SB.AppendLine('       font-weight: 600; }');
-    SB.AppendLine('    .conf-high   { background: #e8f0d8; color: #305018; }');
-    SB.AppendLine('    .conf-medium { background: #fff5d0; color: #704000; }');
+    SB.AppendLine('    .top-files .tf-e { color: #9c2317; font-weight: 600; }');
+    SB.AppendLine('    .top-files .tf-w { color: #8a5a00; font-weight: 600; }');
+    SB.AppendLine('    .top-files .tf-h { color: #1a5da6; font-weight: 600; }');
+    SB.AppendLine('    /* Konfidenz-Badge (#1): Workbench-neutral (Konfidenz ist');
+    SB.AppendLine('       bewusst sekundaer zur Severity, s. Designsystem-Konzept) */');
+    SB.AppendLine('    .conf-badge { font-size: 10px; padding: 0 5px; border-radius: 5px;');
+    SB.AppendLine('       border: 1px solid var(--rand); font-weight: 600; }');
+    SB.AppendLine('    .conf-high   { background: #f0f1f4; color: #3d4a58; }');
+    SB.AppendLine('    .conf-medium { background: #f0f1f4; color: #3d4a58; }');
     // #777 auf #eee waren 3,86:1 - unter AA (4,5:1) fuer normalen Text, und
     // die Badges sind klein. Die beiden Geschwister lagen mit 7,8 bzw. 7,9
     // deutlich darueber; nur diese eine Stufe fiel durch (Review 2026-08-19).
     // #5f5f5f: 5,50:1, gleiche Grau-Familie, kein Farbwechsel.
-    SB.AppendLine('    .conf-low    { background: #eee; color: #5f5f5f; }');
+    SB.AppendLine('    .conf-low    { background: #f0f1f4; color: #5f5f5f; }');
     SB.AppendLine('    .controls .conf-toggle { display: inline-flex; align-items: center;');
-    SB.AppendLine('       gap: 4px; color: #555; cursor: pointer; }');
-    SB.AppendLine('    /* Header-Actions: Sprint-Export, Shortcuts-Help neben Titel */');
-    SB.AppendLine('    .header-actions { display: flex; gap: 8px; margin: -8px 0 12px 0; }');
-    SB.AppendLine('    .tl-btn { background: #3b73c4; color: white; border: none;');
-    SB.AppendLine('       padding: 5px 12px; border-radius: 3px; cursor: pointer;');
+    SB.AppendLine('       gap: 4px; color: var(--dezent); cursor: pointer; }');
+    SB.AppendLine('    /* Header-Actions: Workbench-Buttons (Primaeraktion akzent-gefuellt) */');
+    SB.AppendLine('    .header-actions { display: flex; gap: 8px; margin: 8px 0 12px 0; }');
+    SB.AppendLine('    .tl-btn { background: var(--akzent); color: white; border: 1px solid var(--akzent);');
+    SB.AppendLine('       padding: 5px 12px; border-radius: 8px; cursor: pointer;');
     SB.AppendLine('       font-size: 12px; font-family: inherit; }');
-    SB.AppendLine('    .tl-btn:hover { background: #2a5fa0; }');
-    SB.AppendLine('    .tl-btn.secondary { background: #888; }');
-    SB.AppendLine('    .tl-btn.secondary:hover { background: #666; }');
+    SB.AppendLine('    .tl-btn:hover { background: #14497f; }');
+    SB.AppendLine('    .tl-btn.secondary { background: var(--karte); color: var(--tinte); border-color: var(--rand); }');
+    SB.AppendLine('    .tl-btn.secondary:hover { border-color: var(--akzent); background: var(--karte); }');
     SB.AppendLine('    /* Search-Input */');
-    SB.AppendLine('    .controls input[type="search"] { font-size: 12px; padding: 4px 6px;');
-    SB.AppendLine('       border: 1px solid #ccc; border-radius: 3px; width: 200px;');
+    SB.AppendLine('    .controls input[type="search"] { font-size: 12px;');
+    SB.AppendLine('       width: 220px;');
     SB.AppendLine('       font-family: inherit; }');
     SB.AppendLine('    /* Quick-Wins-Option im Profile-Dropdown abheben */');
-    SB.AppendLine('    #ruleFilter option[value="qf"] { color: #08a; font-weight: 600; }');
+    SB.AppendLine('    #ruleFilter option[value="qf"] { color: #1a5da6; font-weight: 600; }');
     SB.AppendLine('    /* Keyboard-Shortcuts-Help-Overlay */');
     SB.AppendLine('    .kbd-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4);');
     SB.AppendLine('       z-index: 999; display: none; }');
     SB.AppendLine('    .kbd-overlay.open { display: block; }');
     SB.AppendLine('    .kbd-help { position: fixed; top: 50%; left: 50%;');
-    SB.AppendLine('       transform: translate(-50%,-50%); background: white;');
-    SB.AppendLine('       border: 1px solid #888; border-radius: 5px; padding: 16px 22px;');
-    SB.AppendLine('       box-shadow: 0 4px 20px rgba(0,0,0,0.35); z-index: 1000;');
+    SB.AppendLine('       transform: translate(-50%,-50%); background: var(--karte);');
+    SB.AppendLine('       border: 1px solid var(--rand); border-radius: 8px; padding: 16px 22px;');
+    SB.AppendLine('       box-shadow: 0 4px 16px rgba(16,32,48,0.25); z-index: 1000;');
     SB.AppendLine('       display: none; font-size: 12px; min-width: 360px; }');
     SB.AppendLine('    .kbd-help.open { display: block; }');
-    SB.AppendLine('    .kbd-help h3 { margin: 0 0 12px 0; font-size: 14px; color: #1a3b6a; }');
-    SB.AppendLine('    .kbd-help table { width: 100%; border: none; }');
+    SB.AppendLine('    .kbd-help h3 { margin: 0 0 12px 0; font-size: 14px; color: #1a5da6; }');
+    SB.AppendLine('    .kbd-help table { width: 100%; border: none; background: transparent; }');
     SB.AppendLine('    .kbd-help td { padding: 4px 8px; border: none; }');
     SB.AppendLine('    .kbd-help td.k { width: 110px; text-align: right; }');
-    SB.AppendLine('    .kbd-help kbd { background: #eee; border: 1px solid #999;');
-    SB.AppendLine('       border-radius: 3px; padding: 1px 6px; font-family: Consolas,');
-    SB.AppendLine('       "Courier New", monospace; font-size: 11px; color: #222; }');
+    SB.AppendLine('    .kbd-help kbd { background: #eef2f6; border: 1px solid var(--rand);');
+    SB.AppendLine('       border-bottom-width: 2px;');
+    SB.AppendLine('       border-radius: 4px; padding: 1px 6px; font-family: Consolas,');
+    SB.AppendLine('       "Courier New", monospace; font-size: 11px; color: var(--tinte); }');
     SB.AppendLine('    .kbd-help-close { position: absolute; top: 8px; right: 12px;');
     SB.AppendLine('       background: none; border: none; font-size: 18px; cursor: pointer;');
-    SB.AppendLine('       color: #888; }');
+    SB.AppendLine('       color: var(--dezent); }');
     SB.AppendLine('    /* Copy-Toast - kurze Bestaetigung beim Clipboard-Kopieren */');
     SB.AppendLine('    .toast { position: fixed; bottom: 30px; left: 50%;');
-    SB.AppendLine('       transform: translateX(-50%); background: #1a3b6a; color: white;');
-    SB.AppendLine('       padding: 8px 18px; border-radius: 4px; font-size: 12px;');
+    SB.AppendLine('       transform: translateX(-50%); background: #20303f; color: white;');
+    SB.AppendLine('       padding: 8px 18px; border-radius: 999px; font-size: 12px;');
     SB.AppendLine('       opacity: 0; transition: opacity 0.25s; pointer-events: none;');
     SB.AppendLine('       z-index: 1001; }');
     SB.AppendLine('    .toast.show { opacity: 1; }');
     // #8 A11y: sichtbarer Fokus-Ring (Tastatur) + reduced-motion.
-    SB.AppendLine('    *:focus-visible { outline: 2px solid #4a90e2; outline-offset: 1px; border-radius: 2px; }');
+    SB.AppendLine('    *:focus-visible { outline: 2px solid #1a5da6; outline-offset: 1px; border-radius: 2px; }');
     SB.AppendLine('    @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }');
     // #9 Dark-Mode: EIN Regelsatz; JS setzt data-theme aus localStorage bzw.
     // prefers-color-scheme (keine @media-Duplikation). health-panel bleibt
     // farbkodiert (Status). Nur Schluessel-Flaechen ueberschrieben.
+    // Workbench-Token-Overrides ZUERST: alles, was in der Basis auf
+    // var(--...) haengt, kippt damit automatisch mit. Die folgenden
+    // Einzelregeln bleiben fuer alles, was Tokens nicht abdecken.
+    // ABLEITUNGS-INVARIANTE: der Selektor steht auf JEDER Zeile.
+    SB.AppendLine('    :root[data-theme="dark"] { --grund: #1e1e1e; --karte: #262626; }');
+    SB.AppendLine('    :root[data-theme="dark"] { --tinte: #d6d6d6; --dezent: #9aa4ad; }');
+    SB.AppendLine('    :root[data-theme="dark"] { --rand: #3a3a3a; --akzent: #6cb0ff; }');
     SB.AppendLine('    :root[data-theme="dark"] body { background: #1e1e1e; color: #d6d6d6; }');
     SB.AppendLine('    :root[data-theme="dark"] a { color: #6cb0ff; }');
+    SB.AppendLine('    :root[data-theme="dark"] th { background: #2c2c2c; box-shadow: inset 0 -1px 0 #3a3a3a; }');
+    SB.AppendLine('    :root[data-theme="dark"] .code-before h5 { background: #331e1e; }');
+    SB.AppendLine('    :root[data-theme="dark"] .code-after h5 { background: #1e301e; }');
     SB.AppendLine('    :root[data-theme="dark"] .meta { color: #999; }');
     SB.AppendLine('    :root[data-theme="dark"] th, :root[data-theme="dark"] td { border-bottom-color: #3a3a3a; }');
     SB.AppendLine('    :root[data-theme="dark"] th { background: #2c2c2c; }');
@@ -1005,7 +1033,15 @@ begin
     // damit bei OS-Dunkel dunkel, und sein Toggle ueberschreibt den
     // Wert mit 'dark'. Selbstheilend, kein Crash - der Preis dafuer,
     // dass die Wahl ueber Reports hinweg erhalten bleibt.
+    // Workbench-Token-Overrides ZUERST (wie im Dark-Block; Sepia wird
+    // nie per @media abgeleitet, die Zeilenform bleibt zur Symmetrie).
+    SB.AppendLine('    :root[data-theme="sepia"] { --grund: #f4ead2; --karte: #faf3e0; }');
+    SB.AppendLine('    :root[data-theme="sepia"] { --tinte: #3d2e1a; --dezent: #7a6648; }');
+    SB.AppendLine('    :root[data-theme="sepia"] { --rand: #d9c9a8; --akzent: #7a4a1f; }');
     SB.AppendLine('    :root[data-theme="sepia"] body { background: #f4ead2; color: #3d2e1a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] th { background: #ead9b8; box-shadow: inset 0 -1px 0 #d9c9a8; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .code-before h5 { background: #f0d5c6; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .code-after h5 { background: #e0e4bf; }');
     SB.AppendLine('    :root[data-theme="sepia"] a { color: #8a4a00; }');
     SB.AppendLine('    :root[data-theme="sepia"] .meta { color: #6b5942; }');
     SB.AppendLine('    :root[data-theme="sepia"] th, :root[data-theme="sepia"] td { border-bottom-color: #d8c7a4; }');
@@ -1164,6 +1200,10 @@ begin
     SB.AppendLine('    document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>');
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');
+    // Dunkler Workbench-Kopf (07.09.): Titel + Meta-Zeile im
+    // header.kopf-Balken, der restliche Inhalt in <main> (traegt das
+    // Seiten-Padding; body ist seit dem Token-Umbau randlos).
+    SB.AppendLine('<header class="kopf">');
     SB.Append    ('  <h1>'); SB.Append(HtmlEscape(Title)); SB.AppendLine('</h1>');
     // meta-Zeile mit zwei i18n-Spans + datums-Daten als Attribute, damit
     // applyLanguage die "Erstellt:" / "Datei:"-Labels neu rendern kann
@@ -1201,6 +1241,8 @@ begin
       SB.Append('</span>');
     end;
     SB.AppendLine('</div>');
+    SB.AppendLine('</header>');
+    SB.AppendLine('<main>');
 
     // Maschinenlesbarer Meta-Block (#10) - kein Rendering (application/json),
     // nur zum Parsen durch die Pipeline. generatedAt = derselbe deterministische
@@ -3141,6 +3183,7 @@ begin
     SB.AppendLine('    })();');
     SB.AppendLine('  })();');
     SB.AppendLine('  </script>');
+    SB.AppendLine('</main>');
     SB.AppendLine('</body>');
     SB.AppendLine('</html>');
 
