@@ -338,13 +338,16 @@ begin
 end;
 
 procedure TFuzzyComboSearch.FilterNow;
+// Simuliert den ABLAUF des Entprell-Timers: gefiltert wird der
+// Pending-Stand, den ComboChange hinterlassen hat - NICHT stumpf
+// FCombo.Text. Die Vorfassung ueberschrieb FPending mit dem Text und
+// lief damit am Auswahl-Echo-Waechter vorbei (Bau-Rotlauf 06.09.:
+// die MouseOrder-Tests bewiesen den Fix nicht, sie hebelten ihn aus).
+// Ein geleertes Pending ('' = Waechter hat das Echo verworfen)
+// filtert folgerichtig NICHTS.
 begin
-  FPending := '';
-  if Assigned(FCombo) then
-  begin
-    FPending := FCombo.Text;
-  end;
   FLastQuery := '';          // Gleichheits-Kurzschluss in TimerTick umgehen
+  if FPending = '' then Exit;
   TimerTick(nil);
 end;
 
