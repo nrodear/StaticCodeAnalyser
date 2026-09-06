@@ -42,6 +42,9 @@ type
     // Nutzerauftrag 2026-09-07: der Rollen-Block (Entwicklung/QA/PO)
     // muss offen und VOR dem Suchfeld stehen - "immer gut zugaenglich".
     [Test] procedure RoleBlock_PresentOpenAndBeforeSearch;
+    // Workbench-Umbau 07.09. (UI-Konzept-PDFs): Command-Bar, Chips,
+    // Dashboard, Drawer, Tastatur und Deep-Link muessen verdrahtet sein.
+    [Test] procedure Workbench_ScaffoldingWiredCompletely;
   end;
 
 implementation
@@ -68,7 +71,7 @@ begin
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
     Meta  := TRuleCatalog.GetRuleCanonical(K);
-    Zelle := '<td>' + Meta.ID + '</td>';
+    Zelle := '<td class="id">' + Meta.ID + '</td>';
     Assert.IsTrue(Pos(Zelle, FHtml) > 0,
       Format('%s fehlt in der Seite', [Meta.ID]));
   end;
@@ -135,9 +138,9 @@ procedure TTestDetectorInfoExport.DefaultProfileColumn_ShowsOnAndOff;
 // mindestens ein 'aus' (sonst waere GetProfile('default') zum
 // AllKinds-Fallback gekippt und die Spalte wertlos).
 begin
-  Assert.IsTrue(Pos('<span class="an">an</span>', FHtml) > 0,
+  Assert.IsTrue(Pos('<span class="pill an">an</span>', FHtml) > 0,
     'kein aktiver Default-Profil-Eintrag gefunden');
-  Assert.IsTrue(Pos('<span class="aus">aus</span>', FHtml) > 0,
+  Assert.IsTrue(Pos('<span class="pill aus">aus</span>', FHtml) > 0,
     'kein abgeschalteter Default-Profil-Eintrag gefunden');
 end;
 
@@ -236,21 +239,33 @@ begin
   Assert.IsNotEmpty(Meta.DetectorUnit,
     'Vorbedingung: SCA001 traegt DetectorUnit im Katalog');
 
-  Assert.IsTrue(Pos('<summary>' + E(Meta.ShortDescription) + '</summary>',
-    FHtml) > 0, 'Kurzbeschreibung fehlt als summary');
+  // Seit dem Workbench-Umbau (07.09.) liegen die Details als
+  // Drawer-Template neben der Zeile - dieselben Inhalte, neue Wrapper.
+  Assert.IsTrue(Pos('<template id="tpl-' + Meta.ID + '">', FHtml) > 0,
+    'Drawer-Template der Regel fehlt');
+  Assert.IsTrue(Pos('<h3>Was wird erkannt?</h3>', FHtml) > 0,
+    'Kurzbeschreibungs-Ueberschrift fehlt');
+  Assert.IsTrue(Pos('<p>' + E(Meta.ShortDescription) + '</p>', FHtml) > 0,
+    'Kurzbeschreibung fehlt im Drawer-Template');
+  Assert.IsTrue(Pos('<h3>Warum ist das relevant?</h3>', FHtml) > 0,
+    'Warum-Ueberschrift fehlt');
   Assert.IsTrue(Pos('<p>' + E(Meta.FullDescription) + '</p>', FHtml) > 0,
-    'Langbeschreibung fehlt in der Detailzeile');
-  Assert.IsTrue(Pos('<div><b>Vorher (problematisch)</b><pre>'
-    + E(Meta.BadExample) + '</pre></div>', FHtml) > 0,
-    'Vorher-Beispielblock fehlt');
-  Assert.IsTrue(Pos('<div><b>Nachher (empfohlen)</b><pre>'
-    + E(Meta.GoodExample) + '</pre></div>', FHtml) > 0,
-    'Nachher-Beispielblock fehlt');
-  Assert.IsTrue(Pos('<div class="meta">CWE: '
-    + E(string.Join(', ', Meta.CWE)) + ' &middot; Konfiguration: '
-    + E(Meta.ConfigKey) + ' &middot; Detektor-Unit: '
-    + E(Meta.DetectorUnit) + '</div>', FHtml) > 0,
-    'Meta-Zeile der Detailansicht fehlt');
+    'Langbeschreibung fehlt im Drawer-Template');
+  Assert.IsTrue(Pos('Vorher (problematisch)', FHtml) > 0,
+    'Vorher-Kartentitel fehlt');
+  Assert.IsTrue(Pos('<pre>' + E(Meta.BadExample) + '</pre>', FHtml) > 0,
+    'Vorher-Beispielcode fehlt');
+  Assert.IsTrue(Pos('Nachher (empfohlen)', FHtml) > 0,
+    'Nachher-Kartentitel fehlt');
+  Assert.IsTrue(Pos('<pre>' + E(Meta.GoodExample) + '</pre>', FHtml) > 0,
+    'Nachher-Beispielcode fehlt');
+  Assert.IsTrue(Pos('<span class="chip cwe">' + E(Meta.CWE[0]) + '</span>',
+    FHtml) > 0, 'CWE-Chip fehlt in der Meta-Zeile');
+  Assert.IsTrue(Pos('<pre>' + E(Meta.ConfigKey) + '</pre>', FHtml) > 0,
+    'Kalibrierungs-Karte ohne Konfigurations-Schluessel');
+  Assert.IsTrue(Pos('Detektor-Unit: <span class="mono">'
+    + E(Meta.DetectorUnit) + '</span>', FHtml) > 0,
+    'Detektor-Unit fehlt in der Meta-Zeile');
 end;
 
 procedure TTestDetectorInfoExport.DataSort_OrdinalsMatchDisplayedWords;
@@ -260,6 +275,7 @@ procedure TTestDetectorInfoExport.DataSort_OrdinalsMatchDisplayedWords;
 const
   SEV_WORT  : array[TLeakSeverity] of string =
     ('Fehler', 'Warnung', 'Hinweis');
+  SEV_CSS   : array[TLeakSeverity] of string = ('err', 'warn', 'hint');
   KONF_WORT : array[TFindingConfidence] of string =
     ('niedrig', 'mittel', 'hoch');
 var
@@ -269,12 +285,14 @@ var
 begin
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
-    Assert.IsTrue(Pos(Format('<td data-sort="%d">%s</td>',
-      [Ord(KindDefaultSeverity(K)), SEV_WORT[KindDefaultSeverity(K)]]),
-      FHtml) > 0,
+    Assert.IsTrue(Pos(Format(
+      '<td data-sort="%d"><span class="badge sev-%s">%s</span></td>',
+      [Ord(KindDefaultSeverity(K)), SEV_CSS[KindDefaultSeverity(K)],
+       SEV_WORT[KindDefaultSeverity(K)]]), FHtml) > 0,
       Format('Schweregrad-Zelle fuer Kind %d fehlt oder falsch gepaart',
         [Ord(K)]));
-    Assert.IsTrue(Pos(Format('<td data-sort="%d">%s</td>',
+    Assert.IsTrue(Pos(Format(
+      '<td data-sort="%d"><span class="badge konf">%s</span></td>',
       [Ord(KindDefaultConfidence(K)),
        KONF_WORT[KindDefaultConfidence(K)]]), FHtml) > 0,
       Format('Konfidenz-Zelle fuer Kind %d fehlt oder falsch gepaart',
@@ -285,26 +303,30 @@ begin
   for S := Low(TLeakSeverity) to High(TLeakSeverity) do
     for S2 := Low(TLeakSeverity) to High(TLeakSeverity) do
       if S <> S2 then
-        Assert.AreEqual<Integer>(0, Pos(Format('data-sort="%d">%s</td>',
-          [Ord(S), SEV_WORT[S2]]), FHtml),
+        Assert.AreEqual<Integer>(0, Pos(Format(
+          'data-sort="%d"><span class="badge sev-%s">%s</span>',
+          [Ord(S), SEV_CSS[S], SEV_WORT[S2]]), FHtml),
           'Schweregrad-Wort haengt am falschen Ordinal');
   for C := Low(TFindingConfidence) to High(TFindingConfidence) do
     for C2 := Low(TFindingConfidence) to High(TFindingConfidence) do
       if C <> C2 then
-        Assert.AreEqual<Integer>(0, Pos(Format('data-sort="%d">%s</td>',
+        Assert.AreEqual<Integer>(0, Pos(Format(
+          'data-sort="%d"><span class="badge konf">%s</span>',
           [Ord(C), KONF_WORT[C2]]), FHtml),
           'Konfidenz-Wort haengt am falschen Ordinal');
   // Default-Profil: an=0 (sortiert vor aus=1), keine Fehlpaarung.
-  Assert.IsTrue(
-    Pos('<td data-sort="0"><span class="an">an</span></td>', FHtml) > 0,
+  Assert.IsTrue(Pos(
+    '<td data-sort="0"><span class="pill an">an</span></td>', FHtml) > 0,
     'an=0 fehlt');
-  Assert.IsTrue(
-    Pos('<td data-sort="1"><span class="aus">aus</span></td>', FHtml) > 0,
+  Assert.IsTrue(Pos(
+    '<td data-sort="1"><span class="pill aus">aus</span></td>', FHtml) > 0,
     'aus=1 fehlt');
   Assert.AreEqual<Integer>(0,
-    Pos('data-sort="1"><span class="an"', FHtml), 'an am falschen Rang');
+    Pos('data-sort="1"><span class="pill an"', FHtml),
+    'an am falschen Rang');
   Assert.AreEqual<Integer>(0,
-    Pos('data-sort="0"><span class="aus"', FHtml), 'aus am falschen Rang');
+    Pos('data-sort="0"><span class="pill aus"', FHtml),
+    'aus am falschen Rang');
   // Konsumenten-Seite: das Sortier-JS liest data-sort wirklich.
   Assert.IsTrue(Pos('td.dataset.sort', FHtml) > 0,
     'Sortier-JS liest data-sort nicht mehr');
@@ -350,16 +372,17 @@ begin
   end;
   Assert.IsTrue(C > 0, 'keine Spaltenkoepfe gefunden');
 
+  // Seit dem Workbench-Umbau traegt jede Regel statt der Detailzeile
+  // ein Drawer-Template - eines je tbody, keines verwaist.
   D := 0;
-  P := Pos('<tr class="detail"><td colspan="' + IntToStr(C) + '">', FHtml);
+  P := Pos('<template id="tpl-', FHtml);
   while P > 0 do
   begin
     Inc(D);
-    P := Pos('<tr class="detail"><td colspan="' + IntToStr(C) + '">',
-      FHtml, P + 1);
+    P := Pos('<template id="tpl-', FHtml, P + 1);
   end;
   Assert.AreEqual<Integer>(B, D,
-    'jede Detailzeile muss exakt die Spaltenzahl spannen');
+    'jede Regel braucht genau ein Drawer-Template');
 
   Assert.IsTrue(Pos('(Evidenz-Deckel)', FHtml) > 0,
     'Fussnote zur Schweregrad-Semantik fehlt im Untertitel');
@@ -415,6 +438,73 @@ begin
   PSuche := Pos('id="suche"', FHtml);
   Assert.IsTrue(PSuche > PBlock,
     'der Rollen-Block muss VOR dem Suchfeld stehen');
+end;
+
+procedure TTestDetectorInfoExport.Workbench_ScaffoldingWiredCompletely;
+// String-pruefbare Zusicherungen des Workbench-Umbaus: jede fehlende
+// Verdrahtung degradierte die Seite still (kein Compiler sieht das JS).
+var
+  P, N : Integer;
+begin
+  // Filter-Chips: alle vier Gruppen existieren und rufen chip(this).
+  Assert.IsTrue(Pos('data-gruppe="typ"', FHtml) > 0, 'Typ-Chips fehlen');
+  Assert.IsTrue(Pos('data-gruppe="sev"', FHtml) > 0,
+    'Schweregrad-Chips fehlen');
+  Assert.IsTrue(Pos('data-gruppe="konf"', FHtml) > 0,
+    'Konfidenz-Chips fehlen');
+  Assert.IsTrue(Pos('data-gruppe="prof"', FHtml) > 0,
+    'Profil-Chips fehlen');
+  Assert.IsTrue(Pos('onclick="chip(this)"', FHtml) > 0,
+    'Chip-Verdrahtung fehlt');
+  Assert.IsTrue(Pos('function chip(', FHtml) > 0, 'chip()-JS fehlt');
+  Assert.IsTrue(Pos('function filterReset(', FHtml) > 0,
+    'Reset-JS fehlt');
+  // Jede Regel-tbody traegt die Chip-Filterbasis.
+  N := 0;
+  P := Pos('data-typ="', FHtml);
+  while P > 0 do
+  begin
+    Inc(N);
+    P := Pos('data-typ="', FHtml, P + 1);
+  end;
+  Assert.AreEqual<Integer>(
+    Ord(High(TFindingKind)) - Ord(Low(TFindingKind)) + 1, N,
+    'jede Regel braucht data-typ als Chip-Filterbasis');
+  // Dashboard: Kacheln mit den Kern-Kennzahlen.
+  Assert.IsTrue(Pos('class="kachel"', FHtml) > 0, 'Dashboard fehlt');
+  Assert.IsTrue(Pos('>Detektoren</div>', FHtml) > 0,
+    'Detektoren-Kachel fehlt');
+  Assert.IsTrue(Pos('>Security-Regeln</div>', FHtml) > 0,
+    'Security-Kachel fehlt');
+  Assert.IsTrue(Pos('>mit CWE-Bezug</div>', FHtml) > 0,
+    'CWE-Kachel fehlt');
+  // Drawer: Geruest + Oeffnen/Schliessen + Zeilen-Verdrahtung.
+  Assert.IsTrue(Pos('<aside id="drawer"', FHtml) > 0,
+    'Drawer-Geruest fehlt');
+  Assert.IsTrue(Pos('id="drawer-inhalt"', FHtml) > 0,
+    'Drawer-Inhaltskorb fehlt');
+  Assert.IsTrue(Pos('function oeffneDrawer(', FHtml) > 0,
+    'Drawer-Oeffnen-JS fehlt');
+  Assert.IsTrue(Pos('function schliesseDrawer(', FHtml) > 0,
+    'Drawer-Schliessen-JS fehlt');
+  Assert.IsTrue(Pos('onclick="oeffneDrawer(this.parentNode)"', FHtml) > 0,
+    'Zeilen sind nicht mit dem Drawer verdrahtet');
+  Assert.IsTrue(Pos('function kopiere(', FHtml) > 0, 'Copy-JS fehlt');
+  Assert.IsTrue(Pos('onclick="kopiere(this)"', FHtml) > 0,
+    'Copy-Buttons fehlen');
+  // Tastatur + Deep-Link + Empty-State.
+  Assert.IsTrue(Pos('ev.ctrlKey', FHtml) > 0,
+    'Strg+K-Handler fehlt');
+  Assert.IsTrue(Pos('"Escape"', FHtml) > 0, 'Esc-Handler fehlt');
+  Assert.IsTrue(Pos('"ArrowDown"', FHtml) > 0,
+    'Pfeil-Navigation fehlt');
+  Assert.IsTrue(Pos('function deepLink(', FHtml) > 0,
+    'Deep-Link-JS fehlt');
+  Assert.IsTrue(Pos('deepLink();', FHtml) > 0,
+    'Deep-Link-Initialaufruf fehlt');
+  Assert.IsTrue(Pos('id="leer"', FHtml) > 0, 'Empty-State fehlt');
+  Assert.IsTrue(Pos('suche();', FHtml) > 0,
+    'Initialer Zaehler-/Filterlauf fehlt');
 end;
 
 procedure TTestDetectorInfoExport.HtmlEscape_CoversQuote;
