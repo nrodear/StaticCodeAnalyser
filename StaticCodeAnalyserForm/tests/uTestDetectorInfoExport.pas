@@ -9,7 +9,8 @@ interface
 uses
   DUnitX.TestFramework,
   System.SysUtils, System.Classes, System.IOUtils,
-  uSCAConsts, uRuleCatalog, uDetectorInfoExport;
+  uSCAConsts, uRuleCatalog, uDetectorInfoExport,
+  uExportHtml;   // HtmlEscape-Vertragstest (Attribut-Integritaet)
 
 type
   [TestFixture]
@@ -24,9 +25,19 @@ type
     [Test] procedure SortAndSearchScaffolding_Present;
     [Test] procedure DefaultProfileColumn_ShowsOnAndOff;
     [Test] procedure WriteToFile_WritesUtf8WithBom;
+    // Chargen-Review 06.09.: die Suchbasis muss Unicode-gesenkt,
+    // umbruchfrei und attributrein sein - und der geteilte Escaper
+    // muss das Anfuehrungszeichen abdecken (Attribut-Integritaet).
+    [Test] procedure SearchBlob_IsLoweredUmlautsIncluded;
+    [Test] procedure SearchBlob_AttributeSafeAndBreakFree;
+    [Test] procedure HtmlEscape_CoversQuote;
   end;
 
 implementation
+
+// noinspection-file DuplicateString
+// 'data-search="' wiederholt sich absichtlich - das Attribut IST der
+// Pruefgegenstand mehrerer Faelle (Fixture-Ausnahme des Profils).
 
 procedure TTestDetectorInfoExport.Setup;
 begin
@@ -137,6 +148,67 @@ begin
   finally
     if FileExists(Datei) then DeleteFile(Datei);
   end;
+end;
+
+procedure TTestDetectorInfoExport.SearchBlob_IsLoweredUmlautsIncluded;
+// Das DE-Overlay traegt Regelnamen mit grossen Umlauten (z.B. SCA072
+// 'Ueberfluessig...'-Familie mit U-Umlaut). Die JS-Suche senkt die
+// Eingabe Unicode-korrekt - der Blob muss es genauso tun, sonst sind
+// diese Woerter in KEINER Schreibweise findbar (Review-Major; mit
+// ASCII-LowerCase ist dieser Test ROT). Das Testliteral bleibt ASCII:
+// der erwartete Text wird aus dem Katalog selbst gesenkt.
+var
+  Meta : TRuleMeta;
+begin
+  Assert.IsTrue(TRuleCatalog.GetRuleByID('SCA072', 'de', Meta),
+    'Vorbedingung: SCA072 existiert im Katalog');
+  Assert.AreNotEqual(LowerCase(Meta.Name), AnsiLowerCase(Meta.Name),
+    'Vorbedingung: der SCA072-DE-Name traegt einen Nicht-ASCII-'
+    + 'Grossbuchstaben (sonst prueft dieser Test nichts)');
+  Assert.IsTrue(Pos(AnsiLowerCase(Meta.Name), FHtml) > 0,
+    'die Unicode-gesenkte Form des Namens steht in der Suchbasis');
+end;
+
+procedure TTestDetectorInfoExport.SearchBlob_AttributeSafeAndBreakFree;
+// Jeder data-search-Wert muss frei von rohem <, > und " sein (die
+// Attribut-Grenze darf kein Katalogtext sprengen) und darf keine
+// '<br>'-Tokens tragen - der Escaper bildet #10 auf ein literales
+// '<br>' ab, im Suchtext flutete das jede 'br'-Suche und zerriss
+// Phrasen ueber Zeilengrenzen (Review-Minor; ohne die Umbruch-
+// Vorbehandlung ist dieser Test ROT).
+var
+  P, E    : Integer;
+  Wert    : string;
+  Gezaehlt : Integer;
+begin
+  Gezaehlt := 0;
+  P := Pos('data-search="', FHtml);
+  while P > 0 do
+  begin
+    P := P + Length('data-search="');
+    E := Pos('"', FHtml, P);
+    Assert.IsTrue(E > P, 'Attributwert ohne schliessendes Anfuehrungszeichen');
+    Wert := Copy(FHtml, P, E - P);
+    Assert.IsTrue(Pos('<', Wert) = 0, 'rohes < im data-search-Wert');
+    Assert.IsTrue(Pos('>', Wert) = 0, 'rohes > im data-search-Wert');
+    Assert.IsTrue(Pos('&lt;br', Wert) = 0,
+      'escaptes <br>-Token im data-search-Wert (Umbruch nicht vorbehandelt)');
+    Inc(Gezaehlt);
+    P := Pos('data-search="', FHtml, E);
+  end;
+  Assert.AreEqual<Integer>(
+    Ord(High(TFindingKind)) - Ord(Low(TFindingKind)) + 1, Gezaehlt,
+    'ein data-search-Wert je Regel');
+end;
+
+procedure TTestDetectorInfoExport.HtmlEscape_CoversQuote;
+// Vertragstest am geteilten Escaper: ein " im Katalogtext darf das
+// data-search-Attribut nie beenden. Faengt ein kuenftiges Refactoring,
+// das die &quot;-Behandlung verliert - die uebrigen Tests blieben
+// dann gruen (Review-Testluecke).
+begin
+  Assert.AreEqual('a&quot;b', TExporterHtml.HtmlEscape('a"b'),
+    'HtmlEscape muss das Anfuehrungszeichen escapen');
 end;
 
 end.

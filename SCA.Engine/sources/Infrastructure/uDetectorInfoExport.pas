@@ -50,7 +50,8 @@ implementation
 // Overhead ohne Gewinn.
 
 uses
-  uExportHtml;   // TExporterHtml.HtmlEscape - keine dritte Escape-Kopie
+  uExportHtml,   // TExporterHtml.HtmlEscape - keine dritte Escape-Kopie
+  uExport;       // TExporter.SaveUtf8WithBom - EIN Ort fuer die BOM-Politik
 
 const
   // Anzeige-Woerter der Seite (sprachfix deutsch, s. Unit-Kopf).
@@ -112,7 +113,11 @@ begin
     SB.AppendLine('th,td{border:1px solid #d0d0d0;padding:4px 8px;'
       + 'text-align:left;vertical-align:top;font-size:0.92em;}');
     SB.AppendLine('th{background:#f0f0f0;cursor:pointer;position:sticky;'
-      + 'top:0;white-space:nowrap;user-select:none;}');
+      + 'top:0;white-space:nowrap;user-select:none;'
+      // Der Zellrahmen eines sticky th scrollt bei border-collapse mit
+      // dem Tabellenkoerper weg - der inset-Schatten haelt die
+      // Kopf-Unterkante sichtbar (Review-Verdacht, kosmetisch).
+      + 'box-shadow:inset 0 -1px 0 #b0b0b0;}');
     SB.AppendLine('tr.detail td{background:#f7f9fc;}');
     SB.AppendLine('details summary{cursor:pointer;color:#1a5da6;}');
     SB.AppendLine('pre{background:#23272e;color:#e6e6e6;padding:8px;'
@@ -127,7 +132,11 @@ begin
     SB.AppendLine(Format(
       '<div class="sub">%s %s &middot; %d Detektoren &middot; '
       + 'Spalten-Klick sortiert; das Suchfeld filtert &uuml;ber den '
-      + 'gesamten Inhalt (auch Beschreibungen und Codebeispiele).</div>',
+      + 'gesamten Inhalt (auch Beschreibungen und Codebeispiele). '
+      + 'Schweregrad ist der Regel-Default: Fehler-Funde setzen in der '
+      + 'Standard-Politik Konfidenz &quot;hoch&quot; voraus '
+      + '(Evidenz-Deckel), sonst meldet der Lauf eine Stufe '
+      + 'darunter.</div>',
       [TExporterHtml.HtmlEscape(AToolName),
        TExporterHtml.HtmlEscape(AToolVersion), AAnzahl]));
     SB.AppendLine('<input id="suche" type="search" '
@@ -219,7 +228,9 @@ begin
   SL := TStringList.Create;
   try
     SL.Text := BuildHtml(ALang);
-    SL.SaveToFile(AFileName, TEncoding.UTF8);   // schreibt BOM (Preamble)
+    // Ueber den Konventions-Helfer, nicht direkt SaveToFile: die
+    // BOM-Politik der Exporte lebt an EINER Stelle (Chargen-Review).
+    TExporter.SaveUtf8WithBom(SL, AFileName);
   finally
     SL.Free;
   end;
@@ -249,8 +260,13 @@ begin
 
   SB := TStringBuilder.Create;
   try
+    // Anzahl = Zeilen der TABELLE (ein tbody je TFindingKind), nicht
+    // TRuleCatalog.Count: der Loader ist tolerant gegen gekuerzte
+    // Kataloge und fuellt fehlende Kinds per Fallback-Meta - die
+    // Kopfzeile darf nicht weniger versprechen, als darunter steht
+    // (Chargen-Review 06.09.).
     SB.Append(SeiteKopf(TRuleCatalog.ToolName, TRuleCatalog.ToolVersion,
-      TRuleCatalog.Count));
+      Ord(High(TFindingKind)) - Ord(Low(TFindingKind)) + 1));
 
     for K := Low(TFindingKind) to High(TFindingKind) do
     begin
@@ -272,7 +288,12 @@ begin
 
       // Suchbasis: ALLES, was die Regel ausmacht, lowercase - damit die
       // Suche "ueber den gesamten Content" geht, ohne das DOM zu lesen.
-      Blob := LowerCase(
+      // AnsiLowerCase, NICHT LowerCase: die JS-Seite senkt die Eingabe
+      // Unicode-korrekt (toLowerCase), LowerCase senkt nur A..Z - mit
+      // ihm blieben grosse Umlaute im Blob stehen und Woerter wie
+      // "Ueberlauf" waeren in keiner Schreibweise findbar
+      // (Chargen-Review 06.09., Major).
+      Blob := AnsiLowerCase(
         Meta.ID + ' ' + Meta.Name + ' ' + KIND_META[K].Name + ' '
         + TypText(Meta.FindingType) + ' ' + SEV_TEXT[Sev] + ' '
         + CONF_TEXT[Conf] + ' ' + ProfilTxt + ' ' + Tags + ' '
@@ -280,6 +301,13 @@ begin
         + Meta.DetectorUnit + ' ' + Meta.ShortDescription + ' '
         + Meta.FullDescription + ' ' + Meta.BadExample + ' '
         + Meta.GoodExample);
+      // Umbrueche werden zu Leerzeichen, BEVOR HtmlEscape laeuft - der
+      // Escaper bildet #10 auf ein literales '<br>' ab (Anzeige-
+      // Vertrag fuer Elementinhalte); im Suchattribut wuerde das jede
+      // 'br'-Suche fluten und Phrasen ueber Zeilengrenzen zerreissen.
+      Blob := StringReplace(Blob, #13#10, ' ', [rfReplaceAll]);
+      Blob := StringReplace(Blob, #10, ' ', [rfReplaceAll]);
+      Blob := StringReplace(Blob, #13, ' ', [rfReplaceAll]);
 
       SB.AppendLine(Format('<tbody data-search="%s">', [H(Blob)]));
       SB.AppendLine('<tr class="haupt">'

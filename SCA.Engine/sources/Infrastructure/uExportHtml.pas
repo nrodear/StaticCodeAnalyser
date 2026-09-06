@@ -54,6 +54,11 @@ type
     // Public seit 2026-09-06: zweiter Konsument ist der Detector-Info-
     // Export (uDetectorInfoExport) - eine dritte Escape-Kopie neben
     // Json/Csv/JiraEscape in uExport waere die falsche Richtung.
+    // VERTRAG: escapet & < > " ' und bildet #10 auf ein LITERALES
+    // '<br>' ab (#13 wird verschluckt) - gedacht fuer ELEMENTINHALTE.
+    // Wer in ein Attribut schreibt, muss Zeilenumbrueche vorher selbst
+    // behandeln, sonst landen '<br>'-Tokens im Attributwert (genau das
+    // fing das Chargen-Review 06.09. beim zweiten Konsumenten).
     class function HtmlEscape(const S: string): string; static;
   private
     class function JsonForScript(const S: string): string; static;
