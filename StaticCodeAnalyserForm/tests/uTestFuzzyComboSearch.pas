@@ -63,7 +63,13 @@ type
     [Test] procedure MouseOrder_EditEcho_DoesNotShrinkList;
     [Test] procedure MouseOrder_SecondSelection_NotifiesAgain;
     [Test] procedure TypedFullTextOfOtherEntry_StillFilters;
-    [Test] procedure SeparatorCommit_DoesNotNotifyHost;
+    // Event-Review 06.09.2026: Trenner-Klick springt jetzt in BEIDEN
+    // Wirten zum ersten Eintrag der Sektion (vorher Host-Sonderweg im
+    // Plugin, den das Separator-Gate unerreichbar machte), und die
+    // Maus-Reihenfolge hinterlaesst kein stales -1-Pending mehr.
+    [Test] procedure SeparatorCommit_Keyboard_JumpsToFirstEntryOfSection;
+    [Test] procedure SeparatorClick_MouseOrder_DoesNotSwallowNextSelection;
+    [Test] procedure ArrowBrowse_EditEcho_DoesNotShrinkList;
     [Test] procedure ComboFreedBeforeHelper_DestroyDoesNotTouchIt;
   end;
 
@@ -449,20 +455,79 @@ begin
   Assert.Pass('Helfer-Destroy nach Combo-Free laeuft ohne Zugriff auf die tote Combo');
 end;
 
-procedure TTestFuzzyComboEvents.SeparatorCommit_DoesNotNotifyHost;
-// Ein Commit auf der Trennzeile (Tag -1) meldet nichts und vergiftet
-// das Commit-Gedaechtnis nicht.
+procedure TTestFuzzyComboEvents.SeparatorCommit_Keyboard_JumpsToFirstEntryOfSection;
+// Tastatur-Reihenfolge (SELCHANGE vor CLOSEUP) auf der Trennzeile:
+// der Commit springt zum ERSTEN Eintrag der Sektion darunter und
+// meldet GENAU diesen - kein -1 im Commit-Gedaechtnis.
+// Fixture: Index 1 = '--- Errors (A-Z) ---', Index 2 = SCA001 (Tag 101).
 begin
-  FCombo.ItemIndex := 1;             // '--- Errors (A-Z) ---'
-  SendNotify(CBN_SELCHANGE);
-  SendNotify(CBN_CLOSEUP);
-  Assert.AreEqual<Integer>(0, FChangeCount,
-    'Trennzeile ist keine Auswahl');
-  FCombo.ItemIndex := 5;
+  FCombo.ItemIndex := 1;
   SendNotify(CBN_SELCHANGE);
   SendNotify(CBN_CLOSEUP);
   Assert.AreEqual<Integer>(1, FChangeCount,
-    'danach meldet eine normale Auswahl genau einmal');
+    'Trenner-Klick springt und meldet den Sektions-Anfang genau einmal');
+  Assert.IsTrue(FCombo.ItemIndex >= 0, 'Sprungziel muss selektiert sein');
+  Assert.AreEqual<NativeInt>(101,
+    NativeInt(FCombo.Items.Objects[FCombo.ItemIndex]),
+    'Sprungziel ist der erste Eintrag NACH dem Trenner');
+  // Dieselbe Sektion erneut anspringen ist keine Aenderung mehr.
+  FCombo.ItemIndex := 1;
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'zweiter Sprung auf denselben Eintrag meldet nicht erneut');
+end;
+
+procedure TTestFuzzyComboEvents.SeparatorClick_MouseOrder_DoesNotSwallowNextSelection;
+// MAUS-Reihenfolge (CLOSEUP vor SELCHANGE) auf der Trennzeile. Am
+// Bestand hinterliess der Nachzuegler-SELCHANGE ein Pending mit Tag -1
+// (der Gleichheits-Verwurf fasst nur FPendingTag = FCommitted): der
+// NAECHSTE Klick auf einen echten Eintrag wurde verworfen und die
+// Combo sprang auf den ersten Trenner zurueck - dieser Test ist am
+// Bestand ROT.
+begin
+  FCombo.ItemIndex := 1;             // Klick auf die Trennzeile
+  SendNotify(CBN_CLOSEUP);           // Maus: Commit laeuft ZUERST
+  SendNotify(CBN_SELCHANGE);         // Nachzuegler liest den Ist-Stand
+  FCombo.Text := FCombo.Items[FCombo.ItemIndex];
+  SendNotify(CBN_EDITCHANGE);        // EN_CHANGE-Echo des Text-Updates
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'Trenner-Klick per Maus springt und meldet genau einmal');
+
+  FCombo.ItemIndex := 7;             // naechster Klick: echter Eintrag
+  SendNotify(CBN_CLOSEUP);
+  SendNotify(CBN_SELCHANGE);
+  Assert.AreEqual<Integer>(2, FChangeCount,
+    'der Klick nach dem Trenner darf nicht verschluckt werden');
+  Assert.AreEqual<NativeInt>(106,
+    NativeInt(FCombo.Items.Objects[FCombo.ItemIndex]),
+    'die Combo muss die geklickte Auswahl zeigen, nicht die Trennzeile');
+end;
+
+procedure TTestFuzzyComboEvents.ArrowBrowse_EditEcho_DoesNotShrinkList;
+// Pfeiltasten-Blaettern bei GESCHLOSSENER Liste aktualisiert den
+// Edit-Text je Taste und erzeugt dasselbe EN_CHANGE-Echo wie die
+// Maus-Auswahl - nur dass hier NIE ein CLOSEUP den Timer stoppt. Der
+// Echo-Waechter muss also auch diese Echos schlucken, sonst reduziert
+// der Entprell-Timer die Liste still auf den Auswahltext
+// (Testluecke aus dem Event-Review 06.09.).
+var
+  Voll : Integer;
+begin
+  Voll := FCombo.Items.Count;
+  FCombo.ItemIndex := 5;
+  SendNotify(CBN_SELCHANGE);
+  FCombo.Text := FCombo.Items[5];
+  SendNotify(CBN_EDITCHANGE);
+  FCombo.ItemIndex := 6;
+  SendNotify(CBN_SELCHANGE);
+  FCombo.Text := FCombo.Items[6];
+  SendNotify(CBN_EDITCHANGE);
+  FSearch.FilterNow;                 // ein faelschlich armierter Timer laeuft ab
+  Assert.AreEqual<Integer>(Voll, FCombo.Items.Count,
+    'Blaettern-Echos duerfen die Liste nicht reduzieren');
+  Assert.AreEqual<Integer>(0, FChangeCount,
+    'Blaettern allein meldet weiterhin nicht');
 end;
 
 end.

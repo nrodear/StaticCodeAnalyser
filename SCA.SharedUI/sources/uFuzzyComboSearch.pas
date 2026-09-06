@@ -76,6 +76,7 @@ type
     procedure RestoreAll;
     procedure RestoreAllAndSelect(ATag: NativeInt);
     function  SelectedTag(var ATag: NativeInt): Boolean;
+    function  NextRealTagAfter(AIndex: Integer): NativeInt;
   protected
     // Loest FCombo, wenn die Combo VOR dem Helfer stirbt. Ohne das traf
     // die Handler-Restauration in Destroy freigegebenen Speicher: im
@@ -584,6 +585,25 @@ begin
   FLastQuery := '';
 end;
 
+function TFuzzyComboSearch.NextRealTagAfter(AIndex: Integer): NativeInt;
+// Erster waehlbarer Tag im Schnappschuss NACH AIndex - das Sprungziel
+// eines Trenner-Klicks. SEPARATOR_TAG, wenn es keinen gibt (auch bei
+// AIndex < 0, dem "kein echter Trenner geklickt"-Signal des Aufrufers).
+var
+  i : Integer;
+begin
+  Result := SEPARATOR_TAG;
+  if AIndex < 0 then Exit;
+  for i := AIndex + 1 to FAll.Count - 1 do
+  begin
+    if FAll[i].Tag <> SEPARATOR_TAG then
+    begin
+      Result := FAll[i].Tag;
+      Exit;
+    end;
+  end;
+end;
+
 function TFuzzyComboSearch.IsListDropped: Boolean;
 begin
   Result := Assigned(FCombo) and FCombo.HandleAllocated
@@ -729,6 +749,14 @@ begin
   // anstehende Auswahl.
   if FHasPending and (FPendingTag = FCommitted) then
     FHasPending := False;
+  // Ein Trenner ist NIE eine anstehende Auswahl (Event-Review 06.09.2026):
+  // der Nachzuegler-SELCHANGE eines Maus-Klicks auf die Trennzeile traegt
+  // Tag -1, das der Gleichheits-Verwurf oben nicht fasst (-1 wird nie
+  // Commit-Stand). Das stale Pending haette den NAECHSTEN Klick
+  // verschluckt und die Combo auf die Trennzeile zurueckgesetzt. Der
+  // Trenner-SPRUNG selbst laeuft in CommitSelection ueber den ItemIndex.
+  if FHasPending and (FPendingTag = SEPARATOR_TAG) then
+    FHasPending := False;
 end;
 
 procedure TFuzzyComboSearch.CommitSelection;
@@ -738,7 +766,8 @@ procedure TFuzzyComboSearch.CommitSelection;
 // Klick daneben, Enter auf dem bereits gewaehlten Eintrag) darf keinen
 // Filterlauf ausloesen.
 var
-  Tag : NativeInt;
+  Tag    : NativeInt;
+  SepIdx : Integer;
 begin
   if FUpdating then Exit;
   if not Assigned(FCombo) then Exit;
@@ -746,6 +775,7 @@ begin
   FTimer.Enabled := False;
   FPending := '';
 
+  SepIdx := -1;
   if FHasPending then
   begin
     Tag := FPendingTag;
@@ -753,6 +783,15 @@ begin
   end
   else if SelectedTag(Tag) then
   begin
+    // Fuer den Trenner-Sprung unten den ANGEKLICKTEN Index festhalten -
+    // nach dem Zuruecklegen der vollen Liste zeigt ItemIndex sonst auf
+    // deren ERSTEN Trenner. Nur die volle Liste traegt echte Trenner;
+    // die Hinweiszeilen der reduzierten Liste (gleicher Tag) sind kein
+    // Sprungziel.
+    if (Tag = SEPARATOR_TAG) and not FIsFiltering then
+    begin
+      SepIdx := FCombo.ItemIndex;
+    end;
     RestoreAllAndSelect(Tag);
   end
   else
@@ -762,12 +801,25 @@ begin
   end;
   FHasPending := False;
 
-  // Sektions-Trenner sind keine Auswahl: ein Commit auf SEPARATOR_TAG
-  // wuerde FCommitted auf -1 setzen und den Host mit einem
-  // unwaehlbaren Eintrag benachrichtigen (Robustheits-Gate, Bugfix
-  // 06.09.2026 - der EXE-Host hat anders als das Plugin keinen
-  // eigenen Separator-Sprung).
-  if Tag = SEPARATOR_TAG then Exit;
+  // Ein Sektions-Trenner ist keine Auswahl - aber ein Klick auf einen
+  // ECHTEN Trenner der vollen Liste traegt eine lesbare Absicht: den
+  // ersten Eintrag der Sektion darunter (User-Wunsch; vorher nur als
+  // Host-Sonderweg im Plugin, den das Robustheits-Gate vom 06.09.
+  // unerreichbar machte - jetzt springen beide Wirte hier). Ohne
+  // Sprungziel (Hinweiszeile der reduzierten Liste, Trenner am
+  // Listenende) wird die vorige Auswahl zurueckgelegt und nichts
+  // gemeldet: ein Commit auf SEPARATOR_TAG wuerde FCommitted vergiften
+  // und den Host mit einem unwaehlbaren Eintrag benachrichtigen.
+  if Tag = SEPARATOR_TAG then
+  begin
+    Tag := NextRealTagAfter(SepIdx);
+    if Tag = SEPARATOR_TAG then
+    begin
+      RestoreAllAndSelect(FCommitted);
+      Exit;
+    end;
+    RestoreAllAndSelect(Tag);
+  end;
 
   if Tag = FCommitted then Exit;
   FCommitted := Tag;
