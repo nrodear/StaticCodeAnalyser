@@ -37,6 +37,8 @@ type
     [Test] procedure TrailingSeparator_IsRemoved;
     [Test] procedure GroupEntries_FollowTheHits;
     [Test] procedure CountForTagWithAllView_MatchesLegacyCount;
+    [Test] procedure LegacyModeTag_CountedIndividually;
+    [Test] procedure CountForTag_RespectsTypeView;
   end;
 
 implementation
@@ -204,6 +206,49 @@ begin
   Assert.AreEqual(
     Format('%d|%d', [Ord(fmAll), Ord(fmHints)]), TagsOf(R),
     'leere Severity-Gruppen fallen, die getroffene bleibt');
+end;
+
+procedure TTestFilterComboReduce.LegacyModeTag_CountedIndividually;
+// Der defensive TagHasHits-Fallback: ein katalogfremder fm-Mode-Tag
+// (die Hand-Listen sind seit 2026-07-24 ausgebaut - alte Profile oder
+// Direktaufrufer koennten ihn noch fuehren) wird einzeln gezaehlt
+// statt pauschal getilgt (Testluecke aus dem Chargen-Review; der
+// Zweig ist zugleich der einzige produktive Konsument des
+// CountForTag-Overloads).
+var
+  Katalog, R : TArray<TFilterComboItem>;
+begin
+  Katalog := [MakeItem('All', Ord(fmAll)),
+              MakeItem('LegacyLeak', Ord(fmMemoryLeak))];
+
+  R := TFindingFilter.ReduceSeverityItems(Katalog, FFindings, tfAll);
+  Assert.AreEqual(IntToStr(Ord(fmAll)), TagsOf(R),
+    'ohne MemoryLeak-Fund faellt der Legacy-Eintrag');
+
+  AddFinding(fkMemoryLeak);
+  R := TFindingFilter.ReduceSeverityItems(Katalog, FFindings, tfAll);
+  Assert.AreEqual(
+    Format('%d|%d', [Ord(fmAll), Ord(fmMemoryLeak)]), TagsOf(R),
+    'mit MemoryLeak-Fund bleibt der Legacy-Eintrag (einzeln gezaehlt)');
+end;
+
+procedure TTestFilterComboReduce.CountForTag_RespectsTypeView;
+// Der CountForTag-Overload muss den Type-Filter wirklich anwenden -
+// fkNilDeref ist ftBug: unter tfBug zaehlt er, unter tfCodeSmell nicht
+// (Testluecke aus dem Chargen-Review: der Aequivalenztest prueft nur
+// tfAll).
+begin
+  AddFinding(fkNilDeref);
+  AddFinding(fkNilDeref);
+  Assert.AreEqual<Integer>(2,
+    TFindingFilter.CountForTag(FFindings, KindTag(fkNilDeref), tfBug),
+    'ftBug-Funde zaehlen unter der Bug-Sicht');
+  Assert.AreEqual<Integer>(0,
+    TFindingFilter.CountForTag(FFindings, KindTag(fkNilDeref), tfCodeSmell),
+    'unter einer fremden Type-Sicht zaehlt derselbe Kind-Tag 0');
+  Assert.AreEqual<Integer>(0,
+    TFindingFilter.CountForTag(FFindings, -1, tfBug),
+    'Separatoren zaehlen unter jeder Sicht 0');
 end;
 
 procedure TTestFilterComboReduce.CountForTagWithAllView_MatchesLegacyCount;
