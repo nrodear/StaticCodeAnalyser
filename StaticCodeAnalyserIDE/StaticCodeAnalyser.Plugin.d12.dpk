@@ -300,6 +300,7 @@ contains
   uExport in '..\SCA.Engine\sources\Infrastructure\uExport.pas',
   uExportHtml in '..\SCA.Engine\sources\Infrastructure\uExportHtml.pas',
   uDetectorInfoExport in '..\SCA.Engine\sources\Infrastructure\uDetectorInfoExport.pas',
+  uWorkbenchStyle in '..\SCA.Engine\sources\Infrastructure\uWorkbenchStyle.pas',
   uFileTextCache in '..\SCA.Engine\sources\Infrastructure\uFileTextCache.pas',
   uFindingFingerprint in '..\SCA.Engine\sources\Infrastructure\uFindingFingerprint.pas',
   uEditorCommand in '..\SCA.Engine\sources\Infrastructure\uEditorCommand.pas',
