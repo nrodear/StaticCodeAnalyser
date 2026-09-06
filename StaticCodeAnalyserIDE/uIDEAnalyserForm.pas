@@ -2310,8 +2310,9 @@ begin
   // Zaehlbasis: baseline-bereinigt via BuildCountSource (Konsistenz-
   // Vertrag mit dem Grid, Review-Blocker 2026-08-12; Kacheln zaehlen
   // bewusst weiter die Gesamtmenge, die Statuszeile benennt die
-  // ausgeblendete Anzahl). try beginnt VOR dem Create (nil.Free ist
-  // ein No-op) - eine Ausnahme in der Befuellung leakte sonst.
+  // ausgeblendete Anzahl). BuildCountSource ist selbst ausnahme-fest
+  // (im Fehlerfall bleibt OwnedSrc nil, nil.Free ist ein No-op);
+  // das try/finally hier sichert die Freigabe ueber die Reduktion.
   CountSrc := BuildCountSource(OwnedSrc);
   try
 
@@ -2375,10 +2376,18 @@ begin
   AOwned := nil;
   Result := FAllFindings;
   if not BaselineFilterActive then Exit;
+  // Ausnahme-fest: wirft die Befuellung (praktisch nur OOM), gibt es
+  // KEINE halbfertige Liste im out-Parameter - der Aufrufer klammert
+  // erst NACH dem Aufruf in try/finally (Chargen-Review 06.09.).
   AOwned := TList<TLeakFinding>.Create;
-  for i := 0 to FAllFindings.Count - 1 do
-    if not FBaselineSet.Contains(FAllFindings[i]) then
-      AOwned.Add(FAllFindings[i]);
+  try
+    for i := 0 to FAllFindings.Count - 1 do
+      if not FBaselineSet.Contains(FAllFindings[i]) then
+        AOwned.Add(FAllFindings[i]);
+  except
+    FreeAndNil(AOwned);
+    raise;
+  end;
   Result := AOwned;
 end;
 
