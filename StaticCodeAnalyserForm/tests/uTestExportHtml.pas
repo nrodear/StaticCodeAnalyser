@@ -58,6 +58,9 @@ type
     [Test] procedure DefaultFileName_SchemeAndTimestampPinning;
     [Test] procedure PinnedTimestamp_SameValueInMetaLineAndJson;
     [Test] procedure SearchBlob_LowersUmlautsLikeTheJsQuery;
+    // Nutzerwunsch 07.09.: Vorher/Nachher in der Hint-Zeile stehen
+    // UNTEREINANDER und jeder Codeblock traegt zwei Leerzeilen Luft.
+    [Test] procedure HintCodePair_StackedWithTrailingBlankLines;
   end;
 
 
@@ -743,6 +746,39 @@ begin
     'Blob traegt die Unicode-gesenkte Form (kleines ue)');
   Assert.AreEqual<Integer>(0, Pos('pr' + #$DC + 'fung', Html),
     'kein stehengebliebenes grosses Ue im gesenkten Blob');
+end;
+
+procedure TTestExportHtml.HintCodePair_StackedWithTrailingBlankLines;
+// "Untereinander" haengt am CSS (display:block statt flex), die
+// "immer 2 Zeilen mehr" an JEDEM der vier Vorher/Nachher-Emits -
+// darum wird gezaehlt: jedes '</pre></div>' der Codebloecke muss die
+// beiden Leerzeilen davor tragen, nicht nur eines.
+var
+  Html : string;
+  Alle, MitLuft, P : Integer;
+begin
+  Html := RenderReport;
+  Assert.IsTrue(Pos('class="code-pair"', Html) > 0,
+    'Vorbedingung: der Report traegt einen Vorher/Nachher-Block');
+  Assert.IsTrue(Pos('.code-pair { display: block', Html) > 0,
+    'die Codebloecke muessen untereinander stehen (kein flex)');
+  Alle := 0;
+  P := Pos('</pre></div>', Html);
+  while P > 0 do
+  begin
+    Inc(Alle);
+    P := Pos('</pre></div>', Html, P + 1);
+  end;
+  MitLuft := 0;
+  P := Pos(#10#10'</pre></div>', Html);
+  while P > 0 do
+  begin
+    Inc(MitLuft);
+    P := Pos(#10#10'</pre></div>', Html, P + 1);
+  end;
+  Assert.IsTrue(Alle > 0, 'kein Codeblock im Report gefunden');
+  Assert.AreEqual<Integer>(Alle, MitLuft,
+    'JEDER Vorher/Nachher-Codeblock endet mit zwei Leerzeilen');
 end;
 
 initialization

@@ -680,8 +680,11 @@ begin
     SB.AppendLine('    .cwe-badge { background: #fde8e8; color: #a02020; border: 1px solid #e8b0b0; }');
     SB.AppendLine('    .owasp-badge { background: #fff0e0; color: #a06020; border: 1px solid #e8c090; }');
     SB.AppendLine('    .rule-example-note { font-size: 11px; color: #888; font-style: italic; margin: 6px 0 2px 0; }');
-    SB.AppendLine('    .code-pair { display: flex; gap: 8px; margin-top: 4px; }');
-    SB.AppendLine('    .code-block { flex: 1; min-width: 0; }');
+    // Untereinander statt nebeneinander (Nutzerwunsch 07.09.): beim
+    // Vergleich springt das Auge zeilenweise, nicht spaltenweise.
+    SB.AppendLine('    .code-pair { display: block; margin-top: 4px; }');
+    SB.AppendLine('    .code-block { min-width: 0; }');
+    SB.AppendLine('    .code-block + .code-block { margin-top: 6px; }');
     SB.AppendLine('    .code-block h5 { margin: 0 0 2px 0; font-size: 11px; }');
     SB.AppendLine('    .code-before h5 { color: #800; }');
     SB.AppendLine('    .code-after  h5 { color: #060; }');
@@ -1971,12 +1974,16 @@ begin
             begin
               SB.Append('<div class="code-block code-before"><h5 data-i18n="hint-before">Vorher (Problem)</h5><pre>');
               SB.Append(HtmlEscape(Hint.Before));
+              // Zwei Leerzeilen Luft am Blockende (Nutzerwunsch 07.09.,
+              // gilt fuer ALLE vier Vorher/Nachher-Emits).
+              SB.Append(#10#10);
               SB.Append('</pre></div>');
             end;
             if Hint.After <> '' then
             begin
               SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (Loesung)</h5><pre>');
               SB.Append(HtmlEscape(Hint.After));
+              SB.Append(#10#10);
               SB.Append('</pre></div>');
             end;
             SB.Append('</div>');
@@ -1992,12 +1999,14 @@ begin
             begin
               SB.Append('<div class="code-block code-before"><h5 data-i18n="hint-before">Vorher (Problem)</h5><pre>');
               SB.Append(HtmlEscape(Meta.BadExample));
+              SB.Append(#10#10);
               SB.Append('</pre></div>');
             end;
             if Meta.GoodExample <> '' then
             begin
               SB.Append('<div class="code-block code-after"><h5 data-i18n="hint-after">Nachher (Loesung)</h5><pre>');
               SB.Append(HtmlEscape(Meta.GoodExample));
+              SB.Append(#10#10);
               SB.Append('</pre></div>');
             end;
             SB.Append('</div>');
