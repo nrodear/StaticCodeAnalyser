@@ -1030,13 +1030,16 @@ var
 begin
   if (FSourceDir = '') or (FIncludeDepth >= 3) then Exit;
   if (AFileName = '') or (AFileName[1] = '*') then Exit;
-  Pfad := TPath.Combine(FSourceDir, AFileName);
-  if not TFile.Exists(Pfad) then Exit;
   try
+    // TPath.Combine WIRFT bei ungueltigen Pfadzeichen (ein kaputter
+    // {$I}-Body im gescannten Fremdcode ist Nutzdaten, kein Grund zum
+    // Scan-Abbruch) - deshalb liegt die GANZE Aufloesung im try.
+    // Unlesbar/ungueltig = wie nicht gefunden: das Feature ist
+    // best-effort, der Scan selbst darf an einem Include nie scheitern.
+    Pfad := TPath.Combine(FSourceDir, AFileName);
+    if not TFile.Exists(Pfad) then Exit;
     IncText := TFile.ReadAllText(Pfad);
   except
-    // Unlesbar (Lock, Encoding) = wie nicht gefunden: das Feature ist
-    // best-effort, der Scan selbst darf an einem Include nie scheitern.
     Exit;
   end;
   if Length(IncText) > 1024 * 1024 then Exit;
