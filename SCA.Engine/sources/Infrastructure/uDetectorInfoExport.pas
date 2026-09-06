@@ -557,6 +557,21 @@ begin
       + '&& ev.key !== "Enter") return;');
     SB.AppendLine('  if (ev.target && ev.target.id === "suche" && '
       + 'ev.key === "Enter") return;');
+    SB.AppendLine('  // Buttons behalten ihre Enter-Aktivierung - ohne');
+    SB.AppendLine('  // den Ausstieg schluckte preventDefault den Klick');
+    SB.AppendLine('  // auf Chips/Reset/Copy und oeffnete stattdessen');
+    SB.AppendLine('  // die erste Zeile (Review 07.09., Bestandsfix).');
+    SB.AppendLine('  if (ev.target && ev.target.tagName === "BUTTON") '
+      + 'return;');
+    SB.AppendLine('  // Enter auf einer per Tab fokussierten Zeile');
+    SB.AppendLine('  // oeffnet DIESE Zeile, nicht die gewaehlt-/erste.');
+    SB.AppendLine('  if (ev.key === "Enter" && ev.target '
+      + '&& ev.target.classList '
+      + '&& ev.target.classList.contains("haupt")) {');
+    SB.AppendLine('    ev.preventDefault();');
+    SB.AppendLine('    oeffneDrawer(ev.target.parentNode);');
+    SB.AppendLine('    return;');
+    SB.AppendLine('  }');
     SB.AppendLine('  var zeilen = sichtbareZeilen();');
     SB.AppendLine('  if (!zeilen.length) return;');
     SB.AppendLine('  var idx = -1;');

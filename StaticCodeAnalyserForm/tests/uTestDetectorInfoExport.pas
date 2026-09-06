@@ -520,6 +520,13 @@ begin
   Assert.IsTrue(Pos('"Escape"', FHtml) > 0, 'Esc-Handler fehlt');
   Assert.IsTrue(Pos('"ArrowDown"', FHtml) > 0,
     'Pfeil-Navigation fehlt');
+  // Review 07.09. (Bestandsfix): Enter auf Buttons darf nicht vom
+  // Zeilen-Navigator geschluckt werden, Enter auf einer fokussierten
+  // Zeile oeffnet DIESE Zeile.
+  Assert.IsTrue(Pos('ev.target.tagName === "BUTTON"', FHtml) > 0,
+    'Button-Ausstieg des Tastatur-Handlers fehlt');
+  Assert.IsTrue(Pos('ev.target.classList.contains("haupt")', FHtml) > 0,
+    'Enter-auf-fokussierter-Zeile-Zweig fehlt');
   Assert.IsTrue(Pos('function deepLink(', FHtml) > 0,
     'Deep-Link-JS fehlt');
   Assert.IsTrue(Pos('deepLink();', FHtml) > 0,

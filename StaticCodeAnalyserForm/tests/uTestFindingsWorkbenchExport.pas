@@ -164,6 +164,10 @@ begin
   Assert.IsTrue(Pos('korb.appendChild(fundKopf(tb));', Html) > 0,
     'Drawer setzt den Fund-Kopf nicht VOR das Regel-Template');
   Assert.IsTrue(Pos('ev.ctrlKey', Html) > 0, 'Strg+K fehlt');
+  Assert.IsTrue(Pos('ev.target.tagName === "BUTTON"', Html) > 0,
+    'Button-Ausstieg des Tastatur-Handlers fehlt (Chips per Enter)');
+  Assert.IsTrue(Pos('ev.target.classList.contains("haupt")', Html) > 0,
+    'Enter-auf-fokussierter-Zeile-Zweig fehlt');
   Assert.IsTrue(Pos('function deepLink()', Html) > 0, 'Deep-Link fehlt');
   Assert.IsTrue(Pos('suche();'#13#10'deepLink();', Html) > 0,
     'Init-Aufrufe fehlen (Definition allein filtert nichts)');
