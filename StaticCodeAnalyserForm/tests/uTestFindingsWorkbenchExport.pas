@@ -31,6 +31,8 @@ type
     [Test] procedure Run_WritesUtf8WithBom;
     [Test] procedure FindingFields_AreHtmlEscaped;
     [Test] procedure DataCopy_CarriesRealNewlines_NoBrTokens;
+    [Test] procedure EmptyRun_SaysNoFindings_NotNoMatches;
+    [Test] procedure Run_MatchesBuildHtml_ByteForByte;
   end;
 
 implementation
@@ -43,6 +45,23 @@ uses
   System.IOUtils,
   uFindingsWorkbenchExport, uRuleCatalog,
   uExportHtml; // HtmlEscape - Erwartungsbau des data-copy-Vertrags
+
+function VorkommenIn(const AHtml, ATeil: string): Integer;
+// Teilstring-Zaehlung - gehoben aus dem Deduplikations-Test, seit der
+// Kuerzungs-Test die gerenderten tbodies mitzaehlt (Review 07.09.:
+// Banner und Kacheln entstehen UNABHAENGIG vom Zeilen-Loop, erst die
+// Zaehlung macht 'Truncates' zum Rot-Kriterium).
+var
+  P : Integer;
+begin
+  Result := 0;
+  P := Pos(ATeil, AHtml);
+  while P > 0 do
+  begin
+    Inc(Result);
+    P := Pos(ATeil, AHtml, P + 1);
+  end;
+end;
 
 function TTestFindingsWorkbenchExport.MakeFinding(Kind: TFindingKind;
   const Path: string; Line: Integer; const Msg: string): TLeakFinding;
@@ -74,16 +93,8 @@ var
   MetaDbg  : TRuleMeta;
 
   function Vorkommen(const Teil: string): Integer;
-  var
-    P : Integer;
   begin
-    Result := 0;
-    P := Pos(Teil, Html);
-    while P > 0 do
-    begin
-      Inc(Result);
-      P := Pos(Teil, Html, P + 1);
-    end;
+    Result := VorkommenIn(Html, Teil);
   end;
 
 begin
@@ -157,6 +168,8 @@ begin
   Assert.IsTrue(Pos('suche();'#13#10'deepLink();', Html) > 0,
     'Init-Aufrufe fehlen (Definition allein filtert nichts)');
   Assert.IsTrue(Pos('id="leer"', Html) > 0, 'Empty-State fehlt');
+  Assert.AreEqual<Integer>(0, Pos('data-wert="ferr"', Html),
+    'ohne Lesefehler darf kein Lesefehler-Chip erscheinen');
 end;
 
 procedure TTestFindingsWorkbenchExport.SearchBlob_IsAnsiLowered;
@@ -202,6 +215,9 @@ begin
     'Kuerzungsbanner fehlt');
   Assert.IsTrue(Pos('2 weitere Funde', Html) > 0,
     'Banner muss die Zahl der weggelassenen Funde nennen');
+  Assert.AreEqual<Integer>(3, VorkommenIn(Html, '<tbody data-rid="'),
+    'die Tabelle muss WIRKLICH auf 3 Zeilen gekuerzt sein - Banner '
+    + 'und Kacheln allein beweisen den Break im Zeilen-Loop nicht');
   Assert.IsTrue(
     Pos('<div class="zahl">5</div><div class="wofuer">Funde</div>',
       Html) > 0,
@@ -228,6 +244,11 @@ begin
     'Lesefehler brauchen den neutralen ferr-Badge');
   Assert.IsTrue(Pos('data-sev="3"', Html) > 0,
     'Lesefehler-Rang 3 (hinter lsHint) fehlt');
+  // Review 07.09.: ohne eigenen Typ-Chip waeren ferr-Zeilen bei
+  // aktivem Typ-Filter unerreichbar. Der Chip erscheint nur, wenn
+  // Lesefehler da sind (der Scaffolding-Test prueft die Gegenrichtung).
+  Assert.IsTrue(Pos('data-wert="ferr"', Html) > 0,
+    'Lesefehler-Typ-Chip fehlt trotz vorhandener Lesefehler');
 end;
 
 procedure TTestFindingsWorkbenchExport.Run_WritesUtf8WithBom;
@@ -314,6 +335,64 @@ begin
     Pos('data-copy="' + TExporterHtml.HtmlEscape(Meta.BadExample) + '"',
       Html),
     'die alte <br>-Form darf nicht mehr emittiert werden');
+end;
+
+procedure TTestFindingsWorkbenchExport.EmptyRun_SaysNoFindings_NotNoMatches;
+// Review 07.09.: ein Lauf OHNE Funde ist kein Filter-Problem - die
+// Seite muss 'Keine Funde in diesem Lauf.' anbieten, nicht die
+// Suche-verunglueckt-Botschaft mit wirkungslosem Reset-Button.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Pos('Keine Funde in diesem Lauf.', Html) > 0,
+    'Leerlauf-Botschaft fehlt');
+  Assert.IsTrue(Pos('id="leer-suche"', Html) > 0,
+    'Filter-Botschaft-Span fehlt');
+  Assert.IsTrue(Pos('var ohneFunde = ges === 0;', Html) > 0,
+    'JS-Weiche zwischen Leerlauf und leerer Trefferliste fehlt');
+  Assert.IsTrue(Pos('</html>', Html) > 0,
+    'die leere Seite muss vollstaendig schliessen');
+  Assert.AreEqual<Integer>(0, VorkommenIn(Html, '<tbody data-rid="'),
+    'null Funde duerfen null Zeilen ergeben');
+end;
+
+procedure TTestFindingsWorkbenchExport.Run_MatchesBuildHtml_ByteForByte;
+// Review 07.09.: der TStringList-Umweg der ersten Run-Fassung
+// normalisierte Zeilenenden (aus der #10#10-Anzeige-Luft wurde CRLF
+// plus Trailing-Break) - Run-Datei und BuildHtml-String waren nicht
+// identisch. Seit dem Builder-Pfad (SaveBuilderUtf8WithBom) muss
+// beides dasselbe Dokument sein.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fn       : string;
+  Gebaut   : string;
+  Gelesen  : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Gebaut := TFindingsWorkbenchExport.BuildHtml(Findings, '');
+    Fn := TPath.Combine(TPath.GetTempPath,
+      'sca-test-v2ab-' + TGUID.NewGuid.ToString + '.html');
+    try
+      TFindingsWorkbenchExport.Run(Findings, '', Fn);
+      Gelesen := TFile.ReadAllText(Fn, TEncoding.UTF8);
+    finally
+      if TFile.Exists(Fn) then TFile.Delete(Fn);
+    end;
+  finally
+    Findings.Free;
+  end;
+  Assert.AreEqual(Gebaut, Gelesen,
+    'Run muss exakt das BuildHtml-Dokument schreiben (keine '
+    + 'Zeilenende-Normalisierung durch einen Listen-Umweg)');
 end;
 
 initialization

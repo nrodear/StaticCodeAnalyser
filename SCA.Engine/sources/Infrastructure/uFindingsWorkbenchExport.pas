@@ -23,7 +23,11 @@ unit uFindingsWorkbenchExport;
 // Fund (braucht den SourceCache der V1), variantengenaue Vorher/
 // Nachher je Fund (der Start zeigt die kanonischen Regel-Beispiele),
 // Baseline/QuickFix/Charts/Health/i18n/Themes. KEIN Zeitstempel im
-// Kopf: die Seite ist dadurch ohne Pinning byte-stabil.
+// Kopf: die Seite ist dadurch ohne Pinning byte-stabil - mit EINER
+// dokumentierten Ausnahme: der fundspezifische data-hinweis kommt aus
+// dem _()-lokalisierten FixHint und folgt damit der App-Sprache
+// (byte-stabil je Sprachzustand; sprachfix ginge nur ueber einen
+// FixHint-API-Umbau, Review 07.09.).
 
 interface
 
@@ -46,6 +50,14 @@ type
       const ABaseDir, AFileName: string; AMaxRows: Integer = -1); static;
     // Vorschlag fuer den Save-Dialog.
     class function DefaultFileName: string; static;
+  private
+    // Gemeinsamer Seitenbau fuer BuildHtml (Tests) und Run (Datei):
+    // Run schreibt direkt aus dem Builder (SaveBuilderUtf8WithBom) -
+    // der TStringList-Umweg der ersten Fassung hielt den Bericht
+    // dreifach im Speicher (V1-OOM-Lehre; Chargen-Review 07.09.).
+    class procedure BauePage(ASB: TStringBuilder;
+      AFindings: TObjectList<TLeakFinding>;
+      const ABaseDir: string; AMaxRows: Integer); static;
   end;
 
 implementation
@@ -59,7 +71,6 @@ implementation
 // TStringBuilder).
 
 uses
-  System.IOUtils,
   uExportHtml,     // TExporterHtml.HtmlEscape - keine dritte Escape-Kopie
   uExport,         // TExporter.SaveUtf8WithBom - EIN Ort fuer die BOM-Politik
   uFixHint,        // TFixHintResolver.FixHint - fundspezifischer Hinweistext
@@ -169,19 +180,17 @@ begin
 end;
 
 function AnzeigePfad(const AFileName, ABaseDir: string): string;
-// Anzeigepfad wie V1 (HtmlDisplayPath, dort proc-nah lokal): relativ
-// zur Wurzel mit Forward-Slashes, sonst der Basisname. Zweite Kopie -
-// beim dritten Konsumenten nach uExport heben.
-var
-  Base, Full : string;
+// Anzeigepfad: relativ zur Wurzel via GETEILTER TExporter-Logik -
+// die lokale Prefix-Kopie des ersten Wurfs waere bereits die DRITTE
+// Implementierung gewesen (Review 07.09.; RelativeDisplayPath ist
+// laengst public). Einziger V2-Unterschied: bleibt der Pfad
+// unrelativiert (kein BaseDir / Datei ausserhalb), zeigt die schmale
+// Datei-Spalte den Basisnamen statt des vollen Pfads (V1-Verhalten
+// der Basename-Anzeige).
 begin
-  Result := ExtractFileName(AFileName);
-  if (ABaseDir = '') or (AFileName = '') then Exit;
-  Base := IncludeTrailingPathDelimiter(TPath.GetFullPath(ABaseDir));
-  Full := TPath.GetFullPath(AFileName);
-  if SameText(Copy(Full, 1, Length(Base)), Base) then
-    Result := StringReplace(Copy(Full, Length(Base) + 1, MaxInt),
-      '\', '/', [rfReplaceAll]);
+  Result := TExporter.RelativeDisplayPath(AFileName, ABaseDir);
+  if Result = AFileName then
+    Result := ExtractFileName(AFileName);
 end;
 
 function SeiteStyle: string;
@@ -280,10 +289,15 @@ begin
   end;
 end;
 
-function CommandUndChips: string;
+function CommandUndChips(ALesefehler: Integer): string;
 // Search-Command-Bar + Filter-Chips (Typ/Schweregrad/Konfidenz).
 // KEINE Profil-Chips: der Bericht zeigt einen GELAUFENEN Scan, das
-// Profil ist bereits angewendet.
+// Profil ist bereits angewendet. Lesefehler bekommen ihren eigenen
+// Typ-Chip (nur wenn welche da sind, wie die Kachel) - sonst waeren
+// sie bei aktivem Typ-Filter unerreichbar (Review 07.09.). BEWUSST
+// kein Schweregrad-Chip fuer sie: ein aktiver Schweregrad-Filter
+// blendet Lesefehler aus, wie sie auch in keine Severity-Kachel
+// zaehlen (V1-Politik).
 var
   SB : TStringBuilder;
   S  : TLeakSeverity;
@@ -320,6 +334,10 @@ begin
     SB.AppendLine('<button class="fchip" data-gruppe="typ" '
       + 'data-wert="dup" aria-pressed="false" onclick="chip(this)">'
       + 'Duplication</button>');
+    if ALesefehler > 0 then
+      SB.AppendLine('<button class="fchip" data-gruppe="typ" '
+        + 'data-wert="ferr" aria-pressed="false" onclick="chip(this)">'
+        + 'Lesefehler</button>');
     SB.AppendLine('<span class="gruppe">Schweregrad</span>');
     for S := Low(TLeakSeverity) to High(TLeakSeverity) do
       SB.AppendLine(Format('<button class="fchip" data-gruppe="sev" '
@@ -377,6 +395,11 @@ function SeitenJs: string;
 // Trefferzaehler, Empty-State, Tastatur, Deep-Link, Copy-Fallback);
 // der Drawer baut zusaetzlich den "Dieser Fund"-Kopf aus den Zellen
 // und klont danach das REGEL-Template (dedupliziert je Regel).
+// ZWEITE KOPIE der Katalog-JS-Mechanik (uDetectorInfoExport.DrawerJs)
+// mit gewollten Abweichungen (Drawer-folgt-Filter, Fund-Kopf,
+// Tastatur-Fixes) - bei einer DRITTEN Workbench-Seite den JS-Kern
+// analog TWorkbenchStyle.BasisCss heben (Review 07.09.; die Historie
+// zeigt, dass Fixes sonst je Seite einzeln nachgezogen werden).
 var
   SB : TStringBuilder;
 begin
@@ -442,6 +465,11 @@ begin
     SB.AppendLine('    sichtbar + " von " + ges + " Funden";');
     SB.AppendLine('  document.getElementById("leer").style.display =');
     SB.AppendLine('    sichtbar === 0 ? "block" : "none";');
+    SB.AppendLine('  var ohneFunde = ges === 0;');
+    SB.AppendLine('  document.getElementById("leer-suche").style.display '
+      + '= ohneFunde ? "none" : "";');
+    SB.AppendLine('  document.getElementById("leer-lauf").style.display '
+      + '= ohneFunde ? "" : "none";');
     SB.AppendLine('  var aktiv = q !== "";');
     SB.AppendLine('  for (var g2 in aktiveFilter) '
       + 'if (aktiveFilter[g2].length) aktiv = true;');
@@ -549,6 +577,21 @@ begin
       + '&& ev.key !== "Enter") return;');
     SB.AppendLine('  if (ev.target && ev.target.id === "suche" && '
       + 'ev.key === "Enter") return;');
+    SB.AppendLine('  // Buttons behalten ihre Enter-Aktivierung - ohne');
+    SB.AppendLine('  // den Ausstieg schluckte preventDefault den Klick');
+    SB.AppendLine('  // und oeffnete stattdessen die erste Zeile');
+    SB.AppendLine('  // (Review 07.09., Tastatur-Bedienung der Chips).');
+    SB.AppendLine('  if (ev.target && ev.target.tagName === "BUTTON") '
+      + 'return;');
+    SB.AppendLine('  // Enter auf einer per Tab fokussierten Zeile');
+    SB.AppendLine('  // oeffnet DIESE Zeile, nicht die gewaehlt-/erste.');
+    SB.AppendLine('  if (ev.key === "Enter" && ev.target '
+      + '&& ev.target.classList '
+      + '&& ev.target.classList.contains("haupt")) {');
+    SB.AppendLine('    ev.preventDefault();');
+    SB.AppendLine('    oeffneDrawer(ev.target.parentNode);');
+    SB.AppendLine('    return;');
+    SB.AppendLine('  }');
     SB.AppendLine('  var zeilen = sichtbareZeilen();');
     SB.AppendLine('  if (!zeilen.length) return;');
     SB.AppendLine('  var idx = -1;');
@@ -745,16 +788,20 @@ class procedure TFindingsWorkbenchExport.Run(
   AFindings: TObjectList<TLeakFinding>;
   const ABaseDir, AFileName: string; AMaxRows: Integer);
 var
-  SL : TStringList;
+  SB : TStringBuilder;
 begin
-  SL := TStringList.Create;
+  SB := TStringBuilder.Create;
   try
-    SL.Text := BuildHtml(AFindings, ABaseDir, AMaxRows);
-    // Konventions-Helfer statt SaveToFile: die BOM-Politik lebt an
-    // EINER Stelle (TEncoding.UTF8 schriebe in Delphi 12 kein BOM).
-    TExporter.SaveUtf8WithBom(SL, AFileName);
+    BauePage(SB, AFindings, ABaseDir, AMaxRows);
+    // Direkt aus dem Builder schreiben (BOM-Politik + Stueckgrenze im
+    // Helfer): kein ToString, keine TStringList - beides waeren
+    // Vollkopien des Berichts, und SL.Text normalisierte obendrein
+    // die bewusste #10#10-Anzeige-Luft der Codekarten zu CRLF
+    // (Chargen-Review 07.09.; V1-OOM-Lehre, genau dafuer ist
+    // SaveBuilderUtf8WithBom public).
+    TExporterHtml.SaveBuilderUtf8WithBom(SB, AFileName);
   finally
-    SL.Free;
+    SB.Free;
   end;
 end;
 
@@ -797,6 +844,21 @@ class function TFindingsWorkbenchExport.BuildHtml(
   AFindings: TObjectList<TLeakFinding>;
   const ABaseDir: string; AMaxRows: Integer): string;
 var
+  SB : TStringBuilder;
+begin
+  SB := TStringBuilder.Create;
+  try
+    BauePage(SB, AFindings, ABaseDir, AMaxRows);
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+class procedure TFindingsWorkbenchExport.BauePage(ASB: TStringBuilder;
+  AFindings: TObjectList<TLeakFinding>;
+  const ABaseDir: string; AMaxRows: Integer);
+var
   SB          : TStringBuilder;
   F           : TLeakFinding;
   Stat        : TFundStat;
@@ -820,8 +882,10 @@ begin
   if (MaxRows > 0) and (Stat.Gesamt > MaxRows) then
     RowsDropped := Stat.Gesamt - MaxRows;
 
-  SB := TStringBuilder.Create;
-  try
+  // Der Rumpf appendet in den UEBERGEBENEN Builder - lokal nur als
+  // Alias, damit die Emit-Zeilen unveraendert lesbar bleiben.
+  SB := ASB;
+  begin
     SB.AppendLine('<!DOCTYPE html>');
     SB.AppendLine('<html lang="de">');
     SB.AppendLine('<head>');
@@ -843,7 +907,7 @@ begin
        Stat.Gesamt]));
     SB.AppendLine('</header>');
     SB.AppendLine('<main>');
-    SB.Append(CommandUndChips);
+    SB.Append(CommandUndChips(Stat.Lesefehler));
     SB.Append(Dashboard(Stat));
 
     if RowsDropped > 0 then
@@ -879,9 +943,15 @@ begin
 
     SB.AppendLine('</table>');
     SB.AppendLine('</div>');
-    SB.AppendLine('<div id="leer">Keine Treffer. '
+    // Zwei Leer-Botschaften: ein Lauf OHNE Funde ist kein
+    // Filter-Problem - 'Keine Treffer + Reset' saehe dort aus wie
+    // eine verunglueckte Suche (Review 07.09.). Das JS waehlt.
+    SB.AppendLine('<div id="leer">'
+      + '<span id="leer-suche">Keine Treffer. '
       + '<button id="leer-reset" onclick="filterReset()">Filter '
-      + 'zur&uuml;cksetzen</button></div>');
+      + 'zur&uuml;cksetzen</button></span>'
+      + '<span id="leer-lauf" style="display:none">Keine Funde in '
+      + 'diesem Lauf.</span></div>');
 
     // Regel-Templates NACH der Tabelle, EINMAL je vorkommender Regel -
     // hier liegt die Deduplikation gegenueber der V1 (s. Unit-Kopf).
@@ -901,9 +971,6 @@ begin
     SB.AppendLine('</aside>');
     SB.Append(SeitenJs);
     SB.AppendLine('</body></html>');
-    Result := SB.ToString;
-  finally
-    SB.Free;
   end;
 end;
 
