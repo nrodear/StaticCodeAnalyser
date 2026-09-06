@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2218 Zeilen, 74949 Bytes
-  CPoLines_de: array[0..2217] of string = (
+  // i18n\de.po - 2230 Zeilen, 77491 Bytes
+  CPoLines_de: array[0..2229] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2232,7 +2232,19 @@ const
     'msgstr "Jetzt importieren?"',
     '',
     'msgid "\"%s\" was not imported: %s"',
-    'msgstr "\"%s\" wurde nicht importiert: %s"'
+    'msgstr "\"%s\" wurde nicht importiert: %s"',
+    '',
+    'msgid "Detector info (rule catalog, HTML)..."',
+    'msgstr "Detektor-Info (Regelkatalog, HTML)..."',
+    '',
+    'msgid "Detector info export"',
+    'msgstr "Detektor-Info-Export"',
+    '',
+    'msgid "Detector info saved: %s"',
+    'msgstr "Detektor-Info gespeichert: %s"',
+    '',
+    'msgid "Detector info export failed: "',
+    'msgstr "Detektor-Info-Export fehlgeschlagen: "'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -2507,8 +2519,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2214 Zeilen, 78580 Bytes
-  CPoLines_fr: array[0..2213] of string = (
+  // i18n\fr.po - 2226 Zeilen, 81150 Bytes
+  CPoLines_fr: array[0..2225] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4722,7 +4734,19 @@ const
     'msgstr "Importer maintenant ?"',
     '',
     'msgid "\"%s\" was not imported: %s"',
-    'msgstr "'#$00AB' %s '#$00BB' n'#$2019'a pas '#$00E9't'#$00E9' import'#$00E9' : %s"'
+    'msgstr "'#$00AB' %s '#$00BB' n'#$2019'a pas '#$00E9't'#$00E9' import'#$00E9' : %s"',
+    '',
+    'msgid "Detector info (rule catalog, HTML)..."',
+    'msgstr "Info d'#$00E9'tecteurs (catalogue de r'#$00E8'gles, HTML)..."',
+    '',
+    'msgid "Detector info export"',
+    'msgstr "Export des infos d'#$00E9'tecteurs"',
+    '',
+    'msgid "Detector info saved: %s"',
+    'msgstr "Infos d'#$00E9'tecteurs enregistr'#$00E9'es : %s"',
+    '',
+    'msgid "Detector info export failed: "',
+    'msgstr "'#$00C9'chec de l''export des infos d'#$00E9'tecteurs : "'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
