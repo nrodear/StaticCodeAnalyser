@@ -621,18 +621,23 @@ begin
   // Rekursiv -> ein Consumer, der den Lock bereits um SetupForRun+Run haelt,
   // re-entert hier problemlos. NIE ueber Synchronize/ProcessMessages hinweg
   // halten (Deadlock) - der Watch-Worker released daher vor Synchronize.
-  GEngineLock.Enter;
   // Lexer-Sicht des VORZUSTANDS sichern: Run hinterlaesst den globalen
   // IFDEF-State, wie er ihn vorfand. Ohne das kontaminierte der erste
   // Pipeline-Lauf im Prozess alle NACHFOLGENDEN Direktpfad-Nutzer
   // (TParser2/Detektor-Tests im residenten Testprozess: 6 rote
   // IFDEF-Fixture-Tests beim Charge-13-Bau, 06.09.). Produktiv ist das
   // Restore neutral - jeder Run setzt seine Sicht ohnehin selbst.
-  var AlterIfdefSkip := gLexerIfdefSkipEnabled;
+  // Deklaration mit neutralem Startwert VOR dem Lock; die eigentliche
+  // Sicherung ist die ERSTE Aktion im try (Selbstfund SCA109 beim
+  // Charge-13-Selbstscan: zwischen Enter und try darf nichts stehen,
+  // sonst bleibt der Lock bei einer Exception haengen).
+  var AlterIfdefSkip := False;
   var AlteIfdefDefines: TArray<string> := nil;
+  GEngineLock.Enter;
+  try
+  AlterIfdefSkip := gLexerIfdefSkipEnabled;
   if gLexerIfdefDefines <> nil then
     AlteIfdefDefines := gLexerIfdefDefines.ToStringArray;
-  try
   // Die IFDEF-Sicht IMMER anwenden - auch bei SkipConfig=True (Form/
   // IDE), sonst liefe der Ein-Zweig-Default an ihnen vorbei (Review-
   // Blocker Charge 13; Doku an ApplyIfdefView).
