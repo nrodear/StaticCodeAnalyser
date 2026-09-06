@@ -126,6 +126,12 @@ type
     FConditionalSkipEnabled : Boolean;
     // Statistik: wieviele Tokens wurden uebersprungen (fuer Telemetrie).
     FConditionalSkippedTokens : Integer;
+    // Include-Define-Tracking (Charge 14, Opt-in): Verzeichnis der
+    // gescannten Datei fuer die {$I}-Aufloesung ('' = Feature inaktiv,
+    // z.B. In-Memory-Quellen) und die Rekursionstiefe der
+    // Include-Kette (Includes in Includes; harte Grenze 3).
+    FSourceDir              : string;
+    FIncludeDepth           : Integer;
 
     // Welle 2: separater read-only Tracker fuer DEBUG-guarded {$IFDEF}-Ranges.
     // Voellig unabhaengig von FConditionalStack (dort keine Aenderung).
@@ -153,6 +159,15 @@ type
 
     // A.5 Phase 1a: Direktive-Recognition + Stack-Pflege.
     procedure HandleConditionalDirective(const ABody: string; ALine: Integer);
+    // Include-Define-Tracking (Opt-in): laedt die {$I}-Datei und
+    // uebernimmt die WIRKUNG ihrer {$DEFINE}/{$UNDEF}-Direktiven in
+    // FDefines - ausgewertet ueber einen Sub-Lexer mit EIGENEM
+    // Konditional-Stack (Include-Dateien definieren typisch bedingt,
+    // IdCompilerDefines.inc-Muster; ein unbalanciertes Include darf
+    // den Stack des Hauptstroms nicht zerlegen). Best-effort: nicht
+    // auffindbare/lesbare Dateien werden still uebergangen - das ist
+    // exakt das Verhalten OHNE Feature.
+    procedure ProcessIncludeDefines(const AFileName: string);
     procedure PushConditional(AActive: Boolean; ALine: Integer);
     procedure PopConditional;
     procedure ToggleConditionalToElse;
@@ -203,6 +218,11 @@ type
     // EnableConditionalSkipping(<Defines>).
     procedure AddDefine(const AName: string);
     procedure RemoveDefine(const AName: string);
+    // Include-Define-Tracking: Verzeichnis der Quelldatei setzen
+    // (Basis der {$I}-Aufloesung). Ohne Aufruf bleibt das Feature
+    // fuer diese Instanz inaktiv (In-Memory-Quellen haben kein
+    // Verzeichnis). Wirkt nur bei gLexerIncludeDefinesEnabled=True.
+    procedure SetSourceDir(const ADir: string);
     procedure EnableConditionalSkipping;
     procedure DisableConditionalSkipping;
     function  IsConditionalSkippingEnabled: Boolean;
@@ -227,12 +247,21 @@ type
 var
   gLexerIfdefSkipEnabled : Boolean = False;
   gLexerIfdefDefines     : TStringList = nil;
+  // Include-Define-Tracking (Charge 14): OPT-IN (CLI
+  // --include-defines, Req.IncludeDefines). Getrennt vom
+  // Skip-Schalter, weil es nur in Kombination mit der
+  // Ein-Zweig-Sicht Wirkung entfaltet - erst Messlauf, dann
+  // Default-Entscheid (dasselbe Muster wie beim IFDEF-Paket).
+  gLexerIncludeDefinesEnabled : Boolean = False;
 
 procedure LexerIfdefAddDefine(const AName: string);
 procedure LexerIfdefRemoveDefine(const AName: string);
 procedure LexerIfdefClear;
 
 implementation
+
+uses
+  System.IOUtils;   // TFile/TPath fuer das Include-Define-Tracking
 
 // noinspection-file AvoidOut, BeginEndRequired, CanBeClassMethod, CanBeStrictPrivate, CaseStatementSize, ConsecutiveSection, CyclomaticComplexity, DeepNesting, FreeAndNilHint, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, MultipleExit, NilComparison, PublicMemberWithoutDoc, RaisingRawException, RedundantBoolean, RedundantConditional, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember
 // Lexer-Token-Builder: kurze char-/keyword-Concats. MultipleExit = guard-
@@ -962,8 +991,68 @@ begin
         if Idx >= 0 then FDefines.Delete(Idx);
       end;
     end;
+  end
+  else if (Verb = 'I') or (Verb = 'INCLUDE') then
+  begin
+    // Include-Define-Tracking (Charge 14, Opt-in): {$I file.inc}.
+    // NICHT gemeint sind die IO-Check-Schalter {$I+}/{$I-} (Rest
+    // beginnt mit +/-) und FPC-Info-Includes {$I %DATE%} (scheitern
+    // unten still an TFile.Exists). Wirkt wie DEFINE nur im aktiven
+    // Branch - ein Include im toten Zweig definiert nichts.
+    if gLexerIncludeDefinesEnabled and ParentActive then
+    begin
+      Ident := Trim(Copy(ABody, i, MaxInt));
+      if (Ident <> '') and not CharInSet(Ident[1], ['+', '-']) then
+      begin
+        if (Length(Ident) >= 2) and (Ident[1] = '''')
+           and (Ident[Length(Ident)] = '''') then
+          Ident := Copy(Ident, 2, Length(Ident) - 2);
+        ProcessIncludeDefines(Ident);
+      end;
+    end;
   end;
-  // Andere Direktiven ($R, $WARN, $INCLUDE, etc.) ignorieren.
+  // Andere Direktiven ($R, $WARN, etc.) ignorieren.
+end;
+
+procedure TLexer.SetSourceDir(const ADir: string);
+begin
+  FSourceDir := ADir;
+end;
+
+procedure TLexer.ProcessIncludeDefines(const AFileName: string);
+// Vertrag im interface-Kommentar. Groessenlimit 1 MB: Include-
+// Dateien sind Define-/Deklarations-Traeger, kein Massencode - ein
+// Ausreisser soll den Scan nicht ausbremsen.
+var
+  Pfad    : string;
+  IncText : string;
+  Sub     : TLexer;
+begin
+  if (FSourceDir = '') or (FIncludeDepth >= 3) then Exit;
+  if (AFileName = '') or (AFileName[1] = '*') then Exit;
+  Pfad := TPath.Combine(FSourceDir, AFileName);
+  if not TFile.Exists(Pfad) then Exit;
+  try
+    IncText := TFile.ReadAllText(Pfad);
+  except
+    // Unlesbar (Lock, Encoding) = wie nicht gefunden: das Feature ist
+    // best-effort, der Scan selbst darf an einem Include nie scheitern.
+    Exit;
+  end;
+  if Length(IncText) > 1024 * 1024 then Exit;
+  Sub := TLexer.Create(IncText);
+  try
+    Sub.FSourceDir    := ExtractFilePath(Pfad);
+    Sub.FIncludeDepth := FIncludeDepth + 1;
+    Sub.FDefines.Assign(FDefines);
+    // Kompletter Scan NUR fuer die Direktiven-Wirkung; die Tokens der
+    // Include-Datei werden verworfen (kein Token-Splice - W2-light).
+    while Sub.Next.Kind <> tkEof do
+      ;
+    FDefines.Assign(Sub.FDefines);
+  finally
+    Sub.Free;
+  end;
 end;
 
 procedure TLexer.RecordDbgRange(S, E: Integer; ADebug: Boolean);
