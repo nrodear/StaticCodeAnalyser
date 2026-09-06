@@ -71,6 +71,14 @@ type
     [Test] procedure SeparatorClick_MouseOrder_DoesNotSwallowNextSelection;
     [Test] procedure ArrowBrowse_EditEcho_DoesNotShrinkList;
     [Test] procedure ComboFreedBeforeHelper_DestroyDoesNotTouchIt;
+    // Event-Review 06.09.2026, Enter-Pfad (Nicos Kernfrage): Enter nach
+    // Fuzzy-Tippen lief in den Leer-Zweig (Tippen erzeugt kein
+    // CBN_SELCHANGE, der Listen-Neuaufbau laesst ItemIndex = -1) und
+    // verwarf Eingabe UND Reduktion. Jetzt committet ein EINDEUTIGES
+    // Tipp-Ziel; mehrdeutige Eingaben verwerfen weiterhin bewusst.
+    [Test] procedure Enter_TypedUnambiguous_CommitsSingleHit;
+    [Test] procedure Enter_TypedAmbiguous_DoesNotCommit;
+    [Test] procedure Enter_OnSelectedEntry_NotifiesOnceDespiteCloseUp;
   end;
 
 implementation
@@ -423,6 +431,62 @@ begin
   FSearch.FilterNow;
   Assert.IsTrue(FCombo.Items.Count < Voll,
     'echtes Tippen reduziert weiterhin (Liste voll = Waechter zu breit)');
+end;
+
+procedure TTestFuzzyComboEvents.Enter_TypedUnambiguous_CommitsSingleHit;
+// 'Rule20' trifft in der Fixture GENAU einen Eintrag (von Hand geprueft:
+// 'Rule2' hat keine 0, 'Rule12' keine 2-0-Folge). Enter muss dieses
+// eine Ziel committen - am Bestand blieb ItemIndex auf 'All' stehen
+// (Tippen selektiert nicht) und das Tag-Gate schwieg: dieser Test ist
+// am Bestand ROT.
+var
+  Key : Word;
+begin
+  FCombo.Text := 'Rule20';
+  SendNotify(CBN_EDITCHANGE);
+  Key := VK_RETURN;
+  FCombo.OnKeyUp(FCombo, Key, []);   // Attach hat ComboKeyUp verdrahtet
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'Enter auf eindeutigem Tipp-Treffer muss genau einmal melden');
+  Assert.IsTrue(FCombo.ItemIndex >= 0, 'das Ziel muss selektiert sein');
+  Assert.AreEqual<NativeInt>(120,
+    NativeInt(FCombo.Items.Objects[FCombo.ItemIndex]),
+    'committet wird der eine Fuzzy-Treffer (SCA020  Rule20)');
+end;
+
+procedure TTestFuzzyComboEvents.Enter_TypedAmbiguous_DoesNotCommit;
+// 'Rule1' trifft Rule1 und Rule10..Rule19 - keine Auto-Auswahl aus
+// mehreren Treffern (waere geraten). Enter verwirft wie bisher.
+var
+  Key  : Word;
+  Voll : Integer;
+begin
+  Voll := FCombo.Items.Count;
+  FCombo.Text := 'Rule1';
+  SendNotify(CBN_EDITCHANGE);
+  Key := VK_RETURN;
+  FCombo.OnKeyUp(FCombo, Key, []);
+  Assert.AreEqual<Integer>(0, FChangeCount,
+    'mehrdeutiges Enter darf nicht raten und nicht melden');
+  Assert.AreEqual<Integer>(Voll, FCombo.Items.Count,
+    'nach dem verworfenen Enter steht die volle Liste');
+end;
+
+procedure TTestFuzzyComboEvents.Enter_OnSelectedEntry_NotifiesOnceDespiteCloseUp;
+// Der Kommentar am VK_RETURN-Zweig behauptet seit dem 06.09., das
+// Tag-Gate mache den Doppel-Commit (Enter-KeyUp + nachfolgendes
+// CBN_CLOSEUP) harmlos - hier ist der Beweis fuer die reale
+// Enter-Sequenz (Testluecke aus dem Event-Review).
+var
+  Key : Word;
+begin
+  FCombo.ItemIndex := 5;
+  SendNotify(CBN_SELCHANGE);
+  Key := VK_RETURN;
+  FCombo.OnKeyUp(FCombo, Key, []);   // Commit ueber den KeyUp-Zweig
+  SendNotify(CBN_CLOSEUP);           // Windows schliesst die Liste danach
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'Enter + CloseUp auf derselben Auswahl melden zusammen genau einmal');
 end;
 
 procedure TTestFuzzyComboEvents.ComboFreedBeforeHelper_DestroyDoesNotTouchIt;

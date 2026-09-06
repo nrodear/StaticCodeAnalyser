@@ -77,6 +77,7 @@ type
     procedure RestoreAllAndSelect(ATag: NativeInt);
     function  SelectedTag(var ATag: NativeInt): Boolean;
     function  NextRealTagAfter(AIndex: Integer): NativeInt;
+    function  SingleVisibleTarget(var ATag: NativeInt): Boolean;
   protected
     // Loest FCombo, wenn die Combo VOR dem Helfer stirbt. Ohne das traf
     // die Handler-Restauration in Destroy freigegebenen Speicher: im
@@ -585,6 +586,25 @@ begin
   FLastQuery := '';
 end;
 
+function TFuzzyComboSearch.SingleVisibleTarget(var ATag: NativeInt): Boolean;
+// Genau EIN waehlbares Ziel (Tag <> SEPARATOR_TAG) in der ANZEIGE?
+// Die Hinweiszeilen der reduzierten Liste ('... more matches',
+// '(no matches)') tragen den Trenner-Tag und zaehlen nicht mit.
+var
+  i, Hits : Integer;
+begin
+  ATag := SEPARATOR_TAG;
+  Hits := 0;
+  for i := 0 to FCombo.Items.Count - 1 do
+  begin
+    if NativeInt(FCombo.Items.Objects[i]) = SEPARATOR_TAG then Continue;
+    Inc(Hits);
+    if Hits > 1 then Break;
+    ATag := NativeInt(FCombo.Items.Objects[i]);
+  end;
+  Result := Hits = 1;
+end;
+
 function TFuzzyComboSearch.NextRealTagAfter(AIndex: Integer): NativeInt;
 // Erster waehlbarer Tag im Schnappschuss NACH AIndex - das Sprungziel
 // eines Trenner-Klicks. SEPARATOR_TAG, wenn es keinen gibt (auch bei
@@ -794,6 +814,17 @@ begin
     end;
     RestoreAllAndSelect(Tag);
   end
+  else if FIsFiltering and SingleVisibleTarget(Tag) then
+  begin
+    // Getippte Reduktion mit GENAU EINEM waehlbaren Ziel: die Absicht
+    // ist eindeutig - Enter/Zuklappen/Fokusverlust uebernimmt es.
+    // Vorher lief der Fall in den Leer-Zweig darunter (Tippen erzeugt
+    // kein CBN_SELCHANGE, der Listen-Neuaufbau laesst ItemIndex=-1):
+    // Enter verwarf Eingabe UND Reduktion - "Enter tat nichts"
+    // (Event-Review 06.09.2026). Mehrdeutige Eingaben verwerfen
+    // weiterhin: jede Auto-Auswahl aus mehreren Treffern waere geraten.
+    RestoreAllAndSelect(Tag);
+  end
   else
   begin
     RestoreAll;
@@ -874,6 +905,17 @@ begin
     // Enter schliesst die Liste nicht ueberall verlaesslich, und
     // Pfeiltasten bei GESCHLOSSENER Liste erzeugen gar kein CBN_CLOSEUP.
     // Das Tag-Gate in CommitSelection macht einen Doppel-Commit harmlos.
+    //
+    // Kommt Enter SCHNELLER als die Entprellung (FPending noch offen),
+    // wird die Reduktion erst angewandt - sonst saehe der
+    // Einzeltreffer-Zweig in CommitSelection noch die alte Liste.
+    // Nur bei GESCHLOSSENER Liste: bei offener uebernimmt ohnehin der
+    // CLOSEUP-Pfad, und ein Listen-Umbau von hier aus wuerde dessen
+    // Nachrichtenfolge kreuzen.
+    if (FPending <> '') and not IsListDropped then
+    begin
+      FilterNow;
+    end;
     CommitSelection;
   end;
   if Assigned(FHostKeyUp) then
