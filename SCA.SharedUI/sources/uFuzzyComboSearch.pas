@@ -695,6 +695,14 @@ begin
   FTimer.Enabled := False;
   FPending := '';
   FHasPending := SelectedTag(FPendingTag);
+  // NACHZUEGLER-SELCHANGE der Maus-Reihenfolge (Bugfix 06.09.2026,
+  // Teil 2): bei Maus-Auswahl trifft SELCHANGE erst NACH dem
+  // CLOSEUP-Commit ein. Bliebe das Pending stehen, committete der
+  // NAECHSTE Vorgang den ALTEN Tag und setzte die Combo darauf
+  // zurueck. Ein Tag, der bereits Commit-Stand ist, ist keine
+  // anstehende Auswahl.
+  if FHasPending and (FPendingTag = FCommitted) then
+    FHasPending := False;
 end;
 
 procedure TFuzzyComboSearch.CommitSelection;
