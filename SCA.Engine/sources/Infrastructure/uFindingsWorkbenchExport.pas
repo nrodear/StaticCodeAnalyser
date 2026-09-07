@@ -1036,8 +1036,11 @@ begin
       end;
 
     SB.AppendLine('</main>');
+    // wtDrawerAriaFunde, NICHT wtDrawerAria: hier stehen FUND-Details,
+    // nicht die Detektor-Details der Katalogseite (der erste Wurf griff
+    // zum Katalog-Text und machte den Scaffolding-Test rot).
     SB.AppendLine('<aside id="drawer" aria-label="'
-      + TWorkbenchI18n.T(wtDrawerAria, ALang) + '">');
+      + TWorkbenchI18n.T(wtDrawerAriaFunde, ALang) + '">');
     SB.AppendLine('<button id="drawer-schliessen" aria-label="'
       + TWorkbenchI18n.T(wtDrawerSchliessen, ALang)
       + '" onclick="schliesseDrawer()">&times;</button>');

@@ -52,7 +52,7 @@ type
     wtKaFunde, wtKaSecurityFunde, wtKaDateien, wtKaRegeln,
     wtKaLesefehler,
     // -- Drawer ---------------------------------------------------------
-    wtDrawerAria, wtDrawerSchliessen, wtWasWirdErkannt,
+    wtDrawerAria, wtDrawerAriaFunde, wtDrawerSchliessen, wtWasWirdErkannt,
     wtWarumRelevant, wtHinweisZuFund, wtVorher, wtNachher, wtKopieren,
     wtKopiert, wtUnterdruecken, wtUnterdrueckenText, wtKalibrierung,
     wtKalibrierungText, wtKeineKalibrierung, wtKonfidenzLabel,
@@ -159,6 +159,7 @@ const
     ('Lesefehler', 'Read errors', 'Erreurs de lecture'),
     // ---- Drawer -----------------------------------------------------------
     ('Detektor-Details', 'Detector details', 'D&eacute;tails du d&eacute;tecteur'),
+    ('Fund-Details', 'Finding details', 'D&eacute;tails du r&eacute;sultat'),
     ('Details schliessen', 'Close details', 'Fermer les d&eacute;tails'),
     ('Was wird erkannt?', 'What is detected?',
      'Qu''est-ce qui est d&eacute;tect&eacute; ?'),

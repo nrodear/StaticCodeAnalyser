@@ -491,8 +491,14 @@ begin
   // Token unveraendert.
   Assert.IsTrue(Pos('data-wert="hotspot"', Fr) > 0,
     'Typ-Token muss unuebersetzt bleiben');
-  Assert.IsTrue(Pos('data-sev="1"', Fr) > 0,
-    'Severity-Rang bleibt numerisch');
+  // Rang 0 = lsError: fkMemoryLeak traegt DefaultSeverity lsError
+  // (KIND_META in uSCAConsts). BELEGT statt geraten - der erste Wurf
+  // stand auf "1" und war rot.
+  Assert.IsTrue(Pos('data-sev="0"', Fr) > 0,
+    'Severity-Rang bleibt numerisch und sprachunabhaengig');
+  Assert.AreEqual(
+    Pos('data-sev="0"', Fr) > 0, Pos('data-sev="0"', En) > 0,
+    'derselbe Fund muss in JEDER Sprache denselben Rang tragen');
   Assert.IsTrue(Pos('class="badge sev-warn"', Fr) > 0,
     'Severity-CSS-Klasse muss unuebersetzt bleiben');
 end;
