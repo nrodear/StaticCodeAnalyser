@@ -33,6 +33,9 @@ type
     [Test] procedure DataCopy_CarriesRealNewlines_NoBrTokens;
     [Test] procedure EmptyRun_SaysNoFindings_NotNoMatches;
     [Test] procedure Run_MatchesBuildHtml_ByteForByte;
+    // Nutzerauftrag 07.09. (Screenshot): Datei als eigene Zeile UNTER
+    // Zeile+Methode - "Dateiname; voller Pfad" mit Ellipse.
+    [Test] procedure FileRow_UnderMainRow_NameFirstThenFullPath;
   end;
 
 implementation
@@ -397,6 +400,51 @@ begin
   Assert.AreEqual(Gebaut, Gelesen,
     'Run muss exakt das BuildHtml-Dokument schreiben (keine '
     + 'Zeilenende-Normalisierung durch einen Listen-Umweg)');
+end;
+
+procedure TTestFindingsWorkbenchExport.FileRow_UnderMainRow_NameFirstThenFullPath;
+// Layout-Vertrag des Zwei-Zeilen-Umbaus: die Hauptzeile beginnt mit
+// der Zeilennummer (keine Datei-Spalte, kein Datei-Spaltenkopf), die
+// Datei folgt als colspan-Zeile "Dateiname; voller Pfad" mit
+// Ellipse-CSS und title; traegt der Fund nur den Basisnamen,
+// entfaellt das Doppel.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Findings.Add(MakeFinding(fkDebugOutput, 'B.pas', 20, 'w'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Pos('<th onclick="sortiere(0)">Zeile', Html) > 0,
+    'erste sortierbare Spalte muss die Zeilennummer sein');
+  Assert.AreEqual<Integer>(0, Pos('>Datei<span', Html),
+    'der alte Datei-Spaltenkopf muss weg sein');
+  Assert.IsTrue(
+    Pos('<td class="pfadzeile" colspan="8" title="src\A.pas">'
+      + 'A.pas; src\A.pas</td>', Html) > 0,
+    'Datei-Zeile "Name; voller Pfad" mit title fehlt');
+  Assert.IsTrue(
+    Pos('<td class="pfadzeile" colspan="8" title="B.pas">'
+      + 'B.pas</td>', Html) > 0,
+    'bei blossem Basisnamen darf kein "Name; Name"-Doppel stehen');
+  Assert.IsTrue(
+    Pos('<tr class="haupt"', Html) < Pos('<tr class="datei"', Html),
+    'die Datei-Zeile steht UNTER der Hauptzeile');
+  Assert.IsTrue(Pos('data-pfad="src\A.pas"', Html) > 0,
+    'data-pfad (Drawer-Fundort) fehlt am tbody');
+  Assert.IsTrue(
+    Pos('td.pfadzeile{max-width:0;overflow:hidden;'
+      + 'text-overflow:ellipsis;white-space:nowrap;', Html) > 0,
+    'Ellipse-CSS der Datei-Zeile fehlt');
+  Assert.IsTrue(
+    Pos('<tr class="datei" onclick="oeffneDrawer(this.parentNode)">',
+      Html) > 0,
+    'auch die Datei-Zeile muss den Drawer oeffnen');
 end;
 
 initialization

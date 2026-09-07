@@ -180,17 +180,13 @@ begin
 end;
 
 function AnzeigePfad(const AFileName, ABaseDir: string): string;
-// Anzeigepfad: relativ zur Wurzel via GETEILTER TExporter-Logik -
-// die lokale Prefix-Kopie des ersten Wurfs waere bereits die DRITTE
-// Implementierung gewesen (Review 07.09.; RelativeDisplayPath ist
-// laengst public). Einziger V2-Unterschied: bleibt der Pfad
-// unrelativiert (kein BaseDir / Datei ausserhalb), zeigt die schmale
-// Datei-Spalte den Basisnamen statt des vollen Pfads (V1-Verhalten
-// der Basename-Anzeige).
+// VOLLER Anzeige-Pfad: relativ zur Wurzel via geteilter TExporter-
+// Logik (Review 07.09.: keine dritte Prefix-Kopie), sonst der
+// Fund-Pfad unveraendert. KEIN Basisname-Fallback mehr: seit dem
+// Zwei-Zeilen-Layout (Nutzerauftrag 07.09.) steht der Dateiname
+// ohnehin VOR dem Pfad in der Datei-Zeile.
 begin
   Result := TExporter.RelativeDisplayPath(AFileName, ABaseDir);
-  if Result = AFileName then
-    Result := ExtractFileName(AFileName);
 end;
 
 function SeiteStyle: string;
@@ -247,11 +243,20 @@ begin
       + 'margin-left:3px;}');
     SB.AppendLine('tr.haupt{border-top:1px solid var(--rand);'
       + 'cursor:pointer;}');
-    SB.AppendLine('tr.haupt:hover{background:#f2f6fb;}');
-    SB.AppendLine('tr.haupt.gewaehlt{background:#e8f0fa;'
+    SB.AppendLine('tr.datei{cursor:pointer;}');
+    // Hover + Auswahl liegen auf dem TBODY, damit Haupt- und
+    // Datei-Zeile eines Fundes als EIN Block wirken.
+    SB.AppendLine('#funde tbody:hover tr{background:#f2f6fb;}');
+    SB.AppendLine('tbody.gewaehlt tr{background:#e8f0fa;}');
+    SB.AppendLine('tbody.gewaehlt tr.haupt{'
       + 'box-shadow:inset 3px 0 0 var(--akzent);}');
-    SB.AppendLine('td.pfad{font-family:Consolas,monospace;'
-      + 'font-size:0.85em;word-break:break-all;}');
+    // Datei-Zeile "Name; voller Pfad": Ellipse statt Umbruch -
+    // max-width:0 laesst die uebrigen Zellen die Breite bestimmen
+    // (Tabellen-Ellipsis-Muster), title zeigt den vollen Pfad.
+    SB.AppendLine('td.pfadzeile{max-width:0;overflow:hidden;'
+      + 'text-overflow:ellipsis;white-space:nowrap;'
+      + 'font-family:Consolas,monospace;font-size:0.85em;'
+      + 'color:var(--dezent);padding-top:2px;}');
     SB.AppendLine('td.id{font-family:Consolas,monospace;font-weight:600;'
       + 'white-space:nowrap;}');
     SB.AppendLine('td.num{text-align:right;font-variant-numeric:'
@@ -475,7 +480,7 @@ begin
       + 'if (aktiveFilter[g2].length) aktiv = true;');
     SB.AppendLine('  document.getElementById("reset").style.display =');
     SB.AppendLine('    aktiv ? "inline" : "none";');
-    SB.AppendLine('  if (gewaehlt && gewaehlt.parentNode.style.display '
+    SB.AppendLine('  if (gewaehlt && gewaehlt.style.display '
       + '=== "none") schliesseDrawer();');
     SB.AppendLine('}');
     SB.AppendLine('function chip(btn) {');
@@ -501,13 +506,16 @@ begin
     SB.AppendLine('  var kopf = document.createElement("div");');
     SB.AppendLine('  var ort = document.createElement("div");');
     SB.AppendLine('  ort.className = "drawer-ort";');
-    SB.AppendLine('  var t = z.cells[0].textContent + ":" '
-      + '+ z.cells[1].textContent;');
-    SB.AppendLine('  if (z.cells[2].textContent) t += " " '
-      + '+ String.fromCharCode(183) + " " + z.cells[2].textContent;');
+    SB.AppendLine('  // Pfad aus data-pfad (die Datei hat keine Zelle');
+    SB.AppendLine('  // in der Hauptzeile mehr), Zeile/Methode/Detail');
+    SB.AppendLine('  // aus den Zellen 0/1/7 der tr.haupt.');
+    SB.AppendLine('  var t = (tb.dataset.pfad || "") + ":" '
+      + '+ z.cells[0].textContent;');
+    SB.AppendLine('  if (z.cells[1].textContent) t += " " '
+      + '+ String.fromCharCode(183) + " " + z.cells[1].textContent;');
     SB.AppendLine('  ort.textContent = t;');
     SB.AppendLine('  kopf.appendChild(ort);');
-    SB.AppendLine('  var det = z.cells[8].textContent;');
+    SB.AppendLine('  var det = z.cells[7].textContent;');
     SB.AppendLine('  if (det) {');
     SB.AppendLine('    var p = document.createElement("p");');
     SB.AppendLine('    p.textContent = det;');
@@ -534,8 +542,10 @@ begin
     SB.AppendLine('  var dw = document.getElementById("drawer");');
     SB.AppendLine('  dw.classList.add("offen");');
     SB.AppendLine('  dw.scrollTop = 0;');
+    SB.AppendLine('  // Auswahl liegt am TBODY - markiert Haupt- UND');
+    SB.AppendLine('  // Datei-Zeile als einen Block (CSS tbody.gewaehlt).');
     SB.AppendLine('  if (gewaehlt) gewaehlt.classList.remove("gewaehlt");');
-    SB.AppendLine('  gewaehlt = tb.rows[0];');
+    SB.AppendLine('  gewaehlt = tb;');
     SB.AppendLine('  gewaehlt.classList.add("gewaehlt");');
     SB.AppendLine('}');
     SB.AppendLine('function schliesseDrawer() {');
@@ -596,7 +606,7 @@ begin
     SB.AppendLine('  if (!zeilen.length) return;');
     SB.AppendLine('  var idx = -1;');
     SB.AppendLine('  for (var i = 0; i < zeilen.length; i++)');
-    SB.AppendLine('    if (gewaehlt && zeilen[i].rows[0] === gewaehlt) '
+    SB.AppendLine('    if (gewaehlt && zeilen[i] === gewaehlt) '
       + '{ idx = i; break; }');
     SB.AppendLine('  if (ev.key === "ArrowDown") idx++;');
     SB.AppendLine('  if (ev.key === "ArrowUp") idx--;');
@@ -649,14 +659,22 @@ end;
 
 function ZeileFuerFund(F: TLeakFinding; const AMeta: TRuleMeta;
   const APfad, AHinweis: string): string;
-// Ein tbody je Fund: EINE sichtbare Zeile + data-Attribute fuer Suche,
-// Chips und Drawer (data-rid = Regel-Anker des geteilten Templates).
-// Spalten: Datei, Zeile, Methode, SCA-ID, Regel, Typ, Schweregrad,
-// Konfidenz, Detail - fundKopf() im JS liest die Zellen 0/1/2/8.
+// Ein tbody je Fund, seit dem Nutzerauftrag 07.09. ZWEI Zeilen:
+//   tr.haupt: Zeile, Methode, SCA-ID, Regel, Typ, Schweregrad,
+//             Konfidenz, Detail (fundKopf() liest Zellen 0/1/7)
+//   tr.datei: colspan-8-Zeile "Dateiname; voller Pfad" mit
+//             CSS-Ellipse (title-Attribut traegt den vollen Pfad).
+// Die Datei stand vorher als umbrechende Schmalspalte VOR der Zeile -
+// unlesbar bei tiefen Pfaden (Screenshot-Befund). data-pfad am tbody
+// versorgt den Drawer-Fundort. Die Datei-Spalte ist damit nicht mehr
+// per Kopfklick sortierbar (kein Kopf) - Suche und Suchblob decken
+// den Datei-Zugriff.
 var
   SevTxt, SevBadge : string;
   SevRang          : Integer;
   HinweisAttr      : string;
+  DateiName        : string;
+  DateiZeile       : string;
 begin
   if F.Kind = fkFileReadError then
   begin
@@ -679,15 +697,22 @@ begin
       [H(Einzeilig(AHinweis))])
   else
     HinweisAttr := '';
+  // "Dateiname; voller Pfad" - das Doppel entfaellt, wenn der Fund
+  // ohnehin nur den Basisnamen traegt. ExtractFileName laeuft auf dem
+  // ORIGINAL-Pfad (Windows-Trenner), nicht auf dem Anzeige-Pfad.
+  DateiName := ExtractFileName(F.FileName);
+  if APfad = DateiName then
+    DateiZeile := H(DateiName)
+  else
+    DateiZeile := H(DateiName) + '; ' + H(APfad);
   Result :=
     Format('<tbody data-rid="%s" data-search="%s" data-typ="%s" '
-      + 'data-sev="%d" data-konf="%d"%s>'#13#10,
+      + 'data-sev="%d" data-konf="%d" data-pfad="%s"%s>'#13#10,
       [H(AMeta.ID), H(SuchBlobFund(F, AMeta, APfad, SevTxt)),
        TypCss(AMeta.FindingType), SevRang, Ord(F.Confidence),
-       HinweisAttr])
+       H(APfad), HinweisAttr])
     + '<tr class="haupt" tabindex="0" '
     + 'onclick="oeffneDrawer(this.parentNode)">'
-    + '<td class="pfad">' + H(APfad) + '</td>'
     + Format('<td class="num" data-sort="%d">%s</td>',
         [StrToIntDef(F.LineNumber, 0), H(F.LineNumber)])
     + '<td>' + H(F.MethodName) + '</td>'
@@ -699,6 +724,10 @@ begin
     + Format('<td data-sort="%d"><span class="badge konf">%s'
         + '</span></td>', [Ord(F.Confidence), CONF_TEXT[F.Confidence]])
     + '<td>' + H(F.MissingVar) + '</td>'
+    + '</tr>'#13#10
+    + '<tr class="datei" onclick="oeffneDrawer(this.parentNode)">'
+    + '<td class="pfadzeile" colspan="8" title="' + H(APfad) + '">'
+    + DateiZeile + '</td>'
     + '</tr>'#13#10'</tbody>';
 end;
 
@@ -919,16 +948,18 @@ begin
 
     SB.AppendLine('<div class="listwrap">');
     SB.AppendLine('<table id="funde">');
+    // Keine Datei-Spalte mehr: die Datei steht als eigene Zeile unter
+    // Zeile+Methode (tr.datei, s. ZeileFuerFund). Acht Koepfe = die
+    // Zellen der tr.haupt-Zeile, Indizes 0..7.
     SB.AppendLine('<thead><tr>'
-      + '<th onclick="sortiere(0)">Datei<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(1)">Zeile<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(2)">Methode<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(3)">SCA-ID<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(4)">Regel<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(5)">Typ<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(6)">Schweregrad<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(7)">Konfidenz<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(8)">Detail<span class="pfeil"></span></th>'
+      + '<th onclick="sortiere(0)">Zeile<span class="pfeil"></span></th>'
+      + '<th onclick="sortiere(1)">Methode<span class="pfeil"></span></th>'
+      + '<th onclick="sortiere(2)">SCA-ID<span class="pfeil"></span></th>'
+      + '<th onclick="sortiere(3)">Regel<span class="pfeil"></span></th>'
+      + '<th onclick="sortiere(4)">Typ<span class="pfeil"></span></th>'
+      + '<th onclick="sortiere(5)">Schweregrad<span class="pfeil"></span></th>'
+      + '<th onclick="sortiere(6)">Konfidenz<span class="pfeil"></span></th>'
+      + '<th onclick="sortiere(7)">Detail<span class="pfeil"></span></th>'
       + '</tr></thead>');
 
     for F in AFindings do
