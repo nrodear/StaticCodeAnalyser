@@ -290,6 +290,78 @@ begin
   Result := TExporter.RelativeDisplayPath(AFileName, ABaseDir);
 end;
 
+function DunkelRegeln(const ASel: string): string;
+// Der KOMPLETTE Dunkel-Regelsatz unter einem frei waehlbaren
+// Selektor: einmal fuer die ausdrueckliche Wahl
+// (:root[data-theme="dark"]), einmal fuer die Systempraeferenz im
+// @media-Block. EINE Quelle - zwei handgepflegte Kopien liefen im
+// V1-Report schon auseinander (dort "Ableitungs-Invariante").
+//
+// FARBWAHL (Ueberarbeitung 07.09. auf Nutzerbefund): blaustichiges
+// Grau statt neutralem Schwarzgrau, weil der Seitenkopf #20303f in
+// JEDEM Theme bleibt und ein neutrales Grau daneben schmutzig wirkt.
+// Entscheidend sind aber die FLAECHEN-Tokens: die Badges, Pills und
+// Chips trugen ihre hellen Pastellfarben aus dem geteilten CSS-Kern
+// und leuchteten auf dunklem Grund wie Textmarker. Regel fuer jede
+// Farbfamilie: gedaempfter dunkler Grund, heller Text DERSELBEN
+// Familie, Rand eine Stufe heller als der Grund - die Bedeutung
+// (rot/gelb/blau/lila/gruen) bleibt lesbar, ohne zu blenden.
+var
+  SB : TStringBuilder;
+
+  procedure Regel(const AInner, ADekl: string);
+  begin
+    if AInner = '' then
+      SB.AppendLine(ASel + '{' + ADekl + '}')
+    else
+      SB.AppendLine(ASel + ' ' + AInner + '{' + ADekl + '}');
+  end;
+
+begin
+  SB := TStringBuilder.Create;
+  try
+    Regel('', '--grund:#171b21;--karte:#1e242c;--tinte:#dde3ea;'
+      + '--dezent:#94a1b0;--rand:#333c47;--akzent:#6aa9e9;'
+      + '--f-err-bg:#3d201d;--f-err-fg:#f2a9a1;--f-err-br:#5e2f2a;'
+      + '--f-warn-bg:#3b2f18;--f-warn-fg:#e8c07a;--f-warn-br:#5c4826;'
+      + '--f-info-bg:#1b2c3d;--f-info-fg:#8fc1ee;--f-info-br:#2b4560;'
+      + '--f-neutral-bg:#2a323b;--f-neutral-fg:#c2ccd7;'
+      + '--f-lila-bg:#2e2440;--f-lila-fg:#c4a6ea;--f-lila-br:#463763;'
+      + '--f-gut-bg:#1c3320;--f-gut-fg:#8fcf95;'
+      + '--f-aus-bg:#3d201d;--f-aus-fg:#e8a49c;'
+      + '--f-chip-bg:#2a323b;--f-flaeche:#232a33;'
+      + '--f-code-bg:#12161b;--f-code-fg:#dbe1e8;');
+    // Was KEIN Token hat: Tabellenkopf, Hover, Auswahl, Tastenkappen.
+    Regel('th', 'background:#252d36;');
+    // ACHTUNG Spezifitaet: der Hover liegt seit dem Zwei-Zeilen-Umbau
+    // auf '#funde tbody:hover tr' (ID + 2 Elemente). Eine Dark-Regel
+    // auf 'tr.haupt:hover' verliert dagegen und die Zeile bliebe im
+    // dunklen Thema hellblau - beim Nachpruefen aufgefallen.
+    Regel('#funde tbody:hover tr', 'background:#232c36;');
+    Regel('tbody.gewaehlt tr', 'background:#26333f;');
+    Regel('.kbd', 'background:#2a323b;');
+    Regel('#gekuerzt', 'background:var(--f-warn-bg);'
+      + 'border-color:var(--f-warn-br);color:var(--f-warn-fg);');
+    Regel('.topliste li:hover', 'background:#232c36;');
+    Regel('.tl-bar', 'background:#2a323b;');
+    Regel('.src-line-active', 'background:#3b2f18;');
+    Regel('.src-line-num', 'color:#6e7b8a;');
+    // Health-Ampel: die kraeftigen Textfarben des hellen Modus sind
+    // auf dunklem Grund unlesbar - Rahmen bleiben satt, die Zahl
+    // wird aufgehellt.
+    Regel('.health-gruen', 'border-left-color:#3f8a4b;');
+    Regel('.health-gruen .health-zahl', 'color:#8fcf95;');
+    Regel('.health-gelb', 'border-left-color:#b8862b;');
+    Regel('.health-gelb .health-zahl', 'color:#e8c07a;');
+    Regel('.health-rot', 'border-left-color:#c0483a;');
+    Regel('.health-rot .health-zahl', 'color:#f2a9a1;');
+    Regel('.secpanel', 'border-left-color:#8a63c4;');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
 function SeiteStyle: string;
 // Workbench-Kern + Seitenspezifisches - Aufbau und Klassen bewusst
 // deckungsgleich mit der Katalogseite ("gleich anfuehlen").
@@ -447,36 +519,42 @@ begin
     // greift die Systempraeferenz (@media), mit Attribut gewinnt die
     // Wahl des Nutzers - beide Richtungen ausgeschrieben, damit der
     // Umschalter in JEDE Richtung sticht.
-    SB.AppendLine(':root[data-theme="dark"]{--grund:#1e1e1e;'
-      + '--karte:#262626;--tinte:#e0e0e0;--dezent:#9aa4ad;'
-      + '--rand:#3a3a3a;--akzent:#6aa9e9;}');
-    SB.AppendLine(':root[data-theme="dark"] th{background:#2f2f2f;}');
-    SB.AppendLine(':root[data-theme="dark"] tr.haupt:hover{'
-      + 'background:#2b3238;}');
-    SB.AppendLine(':root[data-theme="dark"] tbody.gewaehlt tr{'
-      + 'background:#2a3644;}');
-    SB.AppendLine(':root[data-theme="dark"] .kbd{background:#333;}');
-    SB.AppendLine(':root[data-theme="dark"] #gekuerzt{background:#3a3222;'
-      + 'border-color:#6b5a2e;color:#e8cf94;}');
-    SB.AppendLine(':root[data-theme="dark"] .codekarte.schlecht '
-      + '.karte-titel{background:#4a2320;color:#f3b3ac;}');
-    SB.AppendLine(':root[data-theme="dark"] .codekarte.gut '
-      + '.karte-titel{background:#20401f;color:#a9dda6;}');
-    SB.AppendLine(':root[data-theme="dark"] .karte{background:#232323;}');
+    SB.Append(DunkelRegeln(':root[data-theme="dark"]'));
+    // SEPIA bleibt ein HELLES Thema - die Badge-Farben muessen also
+    // nicht gedreht, nur waermer gestimmt werden, damit sie nicht
+    // kalt aus dem beigen Grund stechen. Der Code-Block bleibt dunkel
+    // (Lesbarkeit von Quelltext), nur eine Spur waermer.
     SB.AppendLine(':root[data-theme="sepia"]{--grund:#f4ead2;'
       + '--karte:#faf3e0;--tinte:#3d2e1a;--dezent:#7a6648;'
-      + '--rand:#d9c9a8;--akzent:#7a4a1f;}');
+      + '--rand:#d9c9a8;--akzent:#7a4a1f;'
+      + '--f-err-bg:#f7ded6;--f-err-fg:#8c2f1f;--f-err-br:#e0bcae;'
+      + '--f-warn-bg:#f7ecd0;--f-warn-fg:#7a5410;--f-warn-br:#ddc79a;'
+      + '--f-info-bg:#e8e6d8;--f-info-fg:#4a5a6b;--f-info-br:#c9c6b4;'
+      + '--f-neutral-bg:#efe6d0;--f-neutral-fg:#5a4a33;'
+      + '--f-lila-bg:#eee2e6;--f-lila-fg:#6b3a5e;--f-lila-br:#d5c2c8;'
+      + '--f-gut-bg:#e5edd6;--f-gut-fg:#3f6124;'
+      + '--f-aus-bg:#f2e2da;--f-aus-fg:#8a4126;'
+      + '--f-chip-bg:#efe6d0;--f-flaeche:#f7efdc;'
+      + '--f-code-bg:#2b2419;--f-code-fg:#e8dfc9;}');
     SB.AppendLine(':root[data-theme="sepia"] th{background:#efe3c6;}');
-    SB.AppendLine(':root[data-theme="sepia"] tr.haupt:hover{'
+    // dieselbe Spezifitaets-Falle wie im Dunkel-Thema (s. dort).
+    SB.AppendLine(':root[data-theme="sepia"] #funde tbody:hover tr{'
       + 'background:#f0e4c8;}');
     SB.AppendLine(':root[data-theme="sepia"] tbody.gewaehlt tr{'
       + 'background:#eaddbe;}');
     SB.AppendLine(':root[data-theme="sepia"] .kbd{background:#efe3c6;}');
-    SB.AppendLine(':root[data-theme="sepia"] .karte{background:#f7efdc;}');
+    SB.AppendLine(':root[data-theme="sepia"] .tl-bar{'
+      + 'background:#e8dcc0;}');
+    SB.AppendLine(':root[data-theme="sepia"] .topliste li:hover{'
+      + 'background:#f0e4c8;}');
+    // Systempraeferenz: DERSELBE Regelsatz, nur unter einem anderen
+    // Selektor. Er wird aus derselben Quelle erzeugt (DunkelRegeln) -
+    // zwei handgepflegte Kopien waeren mit der naechsten Farbaenderung
+    // auseinandergelaufen, und genau diese Divergenz-Gefahr ist im
+    // V1-Report als "Ableitungs-Invariante" dokumentiert.
     SB.AppendLine('@media (prefers-color-scheme:dark){');
-    SB.AppendLine(':root:not([data-theme="light"]):not([data-theme='
-      + '"sepia"]){--grund:#1e1e1e;--karte:#262626;--tinte:#e0e0e0;'
-      + '--dezent:#9aa4ad;--rand:#3a3a3a;--akzent:#6aa9e9;}');
+    SB.Append(DunkelRegeln(':root:not([data-theme="light"])'
+      + ':not([data-theme="sepia"])'));
     SB.AppendLine('}');
     SB.AppendLine('#btnTheme{border:1px solid var(--rand);'
       + 'background:var(--karte);color:var(--tinte);border-radius:6px;'

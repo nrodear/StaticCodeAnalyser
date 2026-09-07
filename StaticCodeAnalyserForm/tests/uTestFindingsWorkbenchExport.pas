@@ -605,12 +605,43 @@ begin
   finally
     Findings.Free;
   end;
-  Assert.IsTrue(Pos(':root[data-theme="dark"]{--grund:#1e1e1e;', Html) > 0,
+  Assert.IsTrue(Pos(':root[data-theme="dark"]{--grund:#171b21;', Html) > 0,
     'Dark-Theme ueberschreibt die Tokens nicht');
   Assert.IsTrue(Pos(':root[data-theme="sepia"]{--grund:#f4ead2;', Html) > 0,
     'Sepia-Theme ueberschreibt die Tokens nicht');
   Assert.IsTrue(Pos('@media (prefers-color-scheme:dark){', Html) > 0,
     'Systempraeferenz wird nicht beachtet');
+  // Farb-Ueberarbeitung 07.09.: JEDES Thema muss auch die
+  // FLAECHEN-Tokens drehen. Ohne sie zoegen Badges, Pills und Chips
+  // ihre hellen Pastellfarben aus dem geteilten CSS-Kern und
+  // leuchteten auf dunklem Grund wie Textmarker - genau der Befund,
+  // der die Ueberarbeitung ausgeloest hat.
+  Assert.IsTrue(Pos('--f-err-bg:#3d201d;', Html) > 0,
+    'Dark dreht die Fehler-Flaeche nicht mit');
+  Assert.IsTrue(Pos('--f-lila-bg:#2e2440;', Html) > 0,
+    'Dark dreht die CWE-/Vulnerability-Flaeche nicht mit');
+  Assert.IsTrue(Pos('--f-code-bg:#12161b;', Html) > 0,
+    'Dark dreht den Codeblock nicht mit');
+  Assert.IsTrue(Pos('--f-err-bg:#f7ded6;', Html) > 0,
+    'Sepia dreht die Fehler-Flaeche nicht mit');
+  // Der geteilte Kern MUSS die Flaechen ueber Tokens beziehen -
+  // sonst laeuft die Themenarbeit ins Leere.
+  Assert.IsTrue(
+    Pos('.badge.sev-err{background:var(--f-err-bg);', Html) > 0,
+    'der CSS-Kern nutzt fuer die Badges keine Tokens');
+  Assert.IsTrue(Pos('.chip{display:inline-block;'
+    + 'background:var(--f-chip-bg);', Html) > 0,
+    'der CSS-Kern nutzt fuer die Chips keine Tokens');
+  // Systempraeferenz-Block traegt DENSELBEN Satz (eine Quelle).
+  Assert.IsTrue(
+    Pos(':root:not([data-theme="light"]):not([data-theme="sepia"])'
+      + '{--grund:#171b21;', Html) > 0,
+    'der @media-Block traegt nicht denselben Regelsatz');
+  // Spezifitaets-Falle: der Hover haengt an '#funde tbody:hover tr'.
+  Assert.IsTrue(
+    Pos(':root[data-theme="dark"] #funde tbody:hover tr{', Html) > 0,
+    'der Dark-Hover muss den ID-Selektor tragen, sonst gewinnt die '
+    + 'helle Regel');
   Assert.IsTrue(Pos('id="btnTheme"', Html) > 0, 'Umschalter fehlt');
   Assert.IsTrue(Pos('var THEMEN = ["light", "dark", "sepia"];', Html) > 0,
     'Drei-Wege-Zyklus fehlt');
