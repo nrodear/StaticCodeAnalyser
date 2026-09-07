@@ -44,6 +44,7 @@ type
     [Test] procedure Dropdowns_FileAndRule_FilterAndReset;
     [Test] procedure TopLists_SortedByCount_AndClickable;
     [Test] procedure HealthAndSecurity_ScoreMatchesV1Formula;
+    [Test] procedure SourceSnippet_RendersAroundFindingLine;
   end;
 
 implementation
@@ -738,6 +739,61 @@ begin
     Pos('aktiveFilter.typ = ["vuln", "hotspot"];', Html) > 0,
     'der Security-Knopf muss die bestehenden Typ-Chips setzen, '
     + 'keinen eigenen Filterweg erfinden');
+end;
+
+procedure TTestFindingsWorkbenchExport.SourceSnippet_RendersAroundFindingLine;
+// Der Quell-Ausschnitt war die groesste Luecke der V2 gegenueber V1.
+// Geprueft mit einer ECHTEN Datei (sonst prueft der Test nur, dass
+// nichts passiert): 10 Zeilen, Fund auf Zeile 5, Kontext 3 -> die
+// Zeilen 2..8 muessen erscheinen, 1 und 9 nicht, und Zeile 5 traegt
+// die Hervorhebung.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+  Datei    : string;
+  SL       : TStringList;
+  i        : Integer;
+begin
+  Datei := TPath.Combine(TPath.GetTempPath,
+    'sca-snip-' + TGUID.NewGuid.ToString + '.pas');
+  SL := TStringList.Create;
+  try
+    for i := 1 to 10 do
+      SL.Add('zeile' + IntToStr(i) + ' inhalt;');
+    SL.SaveToFile(Datei);
+  finally
+    SL.Free;
+  end;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, Datei, 5, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+    if TFile.Exists(Datei) then TFile.Delete(Datei);
+  end;
+  Assert.IsTrue(Pos('<div class="src-snippet">', Html) > 0,
+    'Quell-Ausschnitt fehlt');
+  Assert.IsTrue(Pos('zeile5 inhalt;', Html) > 0,
+    'die Fundzeile selbst fehlt im Ausschnitt');
+  Assert.IsTrue(Pos('zeile2 inhalt;', Html) > 0,
+    'Kontext davor fehlt (3 Zeilen)');
+  Assert.IsTrue(Pos('zeile8 inhalt;', Html) > 0,
+    'Kontext danach fehlt (3 Zeilen)');
+  Assert.AreEqual<Integer>(0, Pos('zeile1 inhalt;', Html),
+    'Zeile 1 liegt ausserhalb des Kontexts und darf nicht erscheinen');
+  Assert.AreEqual<Integer>(0, Pos('zeile9 inhalt;', Html),
+    'Zeile 9 liegt ausserhalb des Kontexts und darf nicht erscheinen');
+  Assert.IsTrue(Pos('src-line src-line-active', Html) > 0,
+    'die Fundzeile ist nicht hervorgehoben');
+  // Traeger und Drawer-Anbindung.
+  Assert.IsTrue(Pos('<tr class="snippet">', Html) > 0,
+    'Traegerzeile des Ausschnitts fehlt');
+  Assert.IsTrue(Pos('tr.snippet{display:none;}', Html) > 0,
+    'der Ausschnitt darf in der Tabelle nicht sichtbar sein');
+  Assert.IsTrue(
+    Pos('kopf.appendChild(sn.cloneNode(true));', Html) > 0,
+    'der Drawer klont den Ausschnitt nicht');
 end;
 
 initialization

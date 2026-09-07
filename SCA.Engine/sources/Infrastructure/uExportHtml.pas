@@ -68,14 +68,21 @@ type
     // 07.09., MAJOR). Fuer EINZEILIGE Attributwerte genuegt HtmlEscape.
     class function HtmlAttrEscapeMultiline(const S: string): string;
       static;
-  private
-    class function JsonForScript(const S: string): string; static;
     // Liefert ein HTML-Fragment (<div class="src-snippet">) mit
     // ContextSize Zeilen vor und nach AroundLine. Die Fund-Zeile ist
     // optisch hervorgehoben. Liefert leeren String wenn SourceLines
     // nil/leer oder AroundLine ungueltig.
+    // PUBLIC seit 07.09.: zweiter Konsument ist der Funde-Export V2
+    // (uFindingsWorkbenchExport). Eine zweite Snippet-Implementierung
+    // haette zwei Berichte mit verschieden aussehenden Ausschnitten
+    // derselben Fundstelle ergeben - dieselbe Ueberlegung wie bei
+    // HtmlEscape. Das MARKUP ist damit ein geteilter Vertrag: wer die
+    // Klassen src-line/src-line-active umbenennt, fasst beide Seiten
+    // und deren CSS an.
     class function BuildCodeSnippet(SourceLines: TStringList;
       AroundLine, ContextSize: Integer): string; static;
+  private
+    class function JsonForScript(const S: string): string; static;
     // Report-Zeitstempel. Ist die Umgebungsvariable SCA_REPORT_TIMESTAMP
     // gesetzt, wird deren Wert VERBATIM zurueckgegeben (deterministische
     // CI-Builds -> byte-stabile Diffs), sonst FormatDateTime(AFmt, Now)

@@ -112,8 +112,22 @@ const
   SP_SEVERITY = 5;
   SP_KONFIDENZ = 6;
   SP_DETAIL   = 7;
+  // Zeilen vor und nach der Fundzeile im Quell-Ausschnitt (wie V1).
+  SNIPPET_KONTEXT = 3;
 
 type
+  // Alles, was eine Fundzeile braucht - EIN Parameter statt sechs
+  // (Selbstscan SCA013; dasselbe Muster wie TRegelDaten auf der
+  // Katalogseite).
+  TFundZeile = record
+    Fund    : TLeakFinding;
+    Meta    : TRuleMeta;
+    Pfad    : string;      // Anzeigepfad = Filterwert des Dropdowns
+    Hinweis : string;      // fundspezifischer FixHint-Text
+    Snippet : string;      // fertiges Quell-Ausschnitt-Markup
+    Lang    : string;
+  end;
+
   // Ein Eintrag der Auswahllisten (Datei- und Regel-Dropdown).
   TZaehlEintrag = record
     Wert    : string;    // Filterwert: Anzeigepfad bzw. SCA-ID
@@ -211,6 +225,49 @@ begin
   for i := 0 to High(A) do
     Result := Result + '<span class="chip ' + ACss + '">' + H(A[i])
       + '</span>';
+end;
+
+function QuellAusschnitt(ACache: TObjectDictionary<string, TStringList>;
+  const ADatei: string; AZeile: Integer): string;
+// Quellcode-Ausschnitt um die Fundzeile (V1-Feature, groesste Luecke
+// der V2 laut Feature-Abgleich). Das MARKUP kommt aus dem geteilten
+// TExporterHtml.BuildCodeSnippet - eine zweite Implementierung
+// haette zwei Berichte mit verschieden aussehenden Ausschnitten
+// derselben Stelle ergeben.
+// Der Cache haelt jede Datei EINMAL: ein Bericht hat typisch viele
+// Funde je Datei, und ohne Cache laese der Export dieselbe Datei
+// dutzendfach. Nicht lesbare Dateien werden als nil gemerkt, damit
+// ein fehlgeschlagener Zugriff nicht bei jedem Fund erneut versucht
+// wird (Bericht ueber geloeschten Code ist der Normalfall).
+var
+  Lines : TStringList;
+begin
+  Result := '';
+  if (ADatei = '') or (AZeile <= 0) then Exit;
+  if not ACache.TryGetValue(ADatei, Lines) then
+  begin
+    Lines := nil;
+    if FileExists(ADatei) then
+    begin
+      Lines := TStringList.Create;
+      try
+        Lines.LoadFromFile(ADatei);
+      except
+        // NACKTES except mit Absicht und ohne on-Klausel: hier ist
+        // JEDER Fehler dieselbe Aussage - "diese Datei liefert keinen
+        // Ausschnitt" - egal ob Rechte, Sperre, Kodierung oder ein
+        // Laufwerk, das zwischen FileExists und Laden verschwindet.
+        // Ein 'on E: Exception' waere hier nur eine breitere Zusage
+        // mit unbenutztem E; re-geworfen wird bewusst nichts, ein
+        // fehlender Ausschnitt darf keinen Export scheitern lassen.
+        FreeAndNil(Lines);
+      end;
+    end;
+    ACache.AddOrSetValue(ADatei, Lines);
+  end;
+  if Lines = nil then Exit;
+  Result := TExporterHtml.BuildCodeSnippet(Lines, AZeile,
+    SNIPPET_KONTEXT);
 end;
 
 function Kopf(ASpalte: Integer; AText: TWbText;
@@ -349,6 +406,17 @@ begin
       + 'white-space:nowrap;}');
     SB.AppendLine('td.num{text-align:right;font-variant-numeric:'
       + 'tabular-nums;color:var(--dezent);}');
+    // ---- Quell-Ausschnitt (Markup-Vertrag mit V1) ----------------------
+    // Die Klassennamen kommen aus TExporterHtml.BuildCodeSnippet und
+    // sind damit zwischen V1 und V2 geteilt - hier nur die Optik.
+    SB.AppendLine('tr.snippet{display:none;}');
+    SB.AppendLine('.src-snippet{background:#23272e;color:#e6e6e6;'
+      + 'border-radius:6px;padding:6px 0;margin:8px 0;overflow-x:auto;'
+      + 'font-family:Consolas,monospace;font-size:0.84em;}');
+    SB.AppendLine('.src-line{white-space:pre;padding:0 8px;}');
+    SB.AppendLine('.src-line-active{background:#3a2f1c;}');
+    SB.AppendLine('.src-line-num{color:#7d8794;user-select:none;}');
+    SB.AppendLine('.src-line-bar{color:#e8b339;}');
     // ---- Empty-State --------------------------------------------------
     SB.AppendLine('#leer{display:none;padding:26px;text-align:center;'
       + 'color:var(--dezent);}');
@@ -869,6 +937,12 @@ begin
     SB.AppendLine('    p.textContent = det;');
     SB.AppendLine('    kopf.appendChild(p);');
     SB.AppendLine('  }');
+    // Quell-Ausschnitt: liegt als unsichtbare tr.snippet beim Fund
+    // und wird in den Drawer geklont (nicht verschoben - die Zeile
+    // bleibt Datenquelle fuer das naechste Oeffnen).
+    SB.AppendLine('  var sn = tb.querySelector("tr.snippet '
+      + '.src-snippet");');
+    SB.AppendLine('  if (sn) kopf.appendChild(sn.cloneNode(true));');
     SB.AppendLine('  if (tb.dataset.hinweis) {');
     SB.AppendLine('    var h3 = document.createElement("h3");');
     SB.AppendLine('    h3.textContent = "'
@@ -1043,8 +1117,18 @@ begin
     + JoinArr(AMeta.CWE, ' ') + ' ' + JoinArr(AMeta.Tags, ' ')));
 end;
 
-function ZeileFuerFund(F: TLeakFinding; const AMeta: TRuleMeta;
-  const APfad, AHinweis, ALang: string): string;
+function Snippetblock(const ASnippet: string): string;
+// Traegerzeile fuer den Quell-Ausschnitt. Eine eigene, dauerhaft
+// unsichtbare tr haelt das tbody-Modell intakt (nur tr-Kinder) -
+// ein <template> direkt im tbody waere nach der HTML-Parser-Regel
+// fuer Tabellen aus der Tabelle herausgehoben worden.
+begin
+  if ASnippet = '' then Exit('');
+  Result := '<tr class="snippet"><td colspan="8">' + ASnippet
+    + '</td></tr>'#13#10;
+end;
+
+function ZeileFuerFund(const Z: TFundZeile): string;
 // Ein tbody je Fund, seit dem Nutzerauftrag 07.09. ZWEI Zeilen:
 //   tr.haupt: Zeile, Methode, SCA-ID, Regel, Typ, Schweregrad,
 //             Konfidenz, Detail (fundKopf() liest Zellen 0/1/7)
@@ -1062,60 +1146,67 @@ var
   DateiName        : string;
   DateiZeile       : string;
 begin
-  if F.Kind = fkFileReadError then
+  if Z.Fund.Kind = fkFileReadError then
   begin
     // Lesefehler: kein Schweregrad-Wort der Skala; eigener Rang hinter
     // den Hinweisen, neutraler Badge (wie die readerr-Politik der V1).
-    SevTxt   := TWorkbenchI18n.T(wtLesefehler, ALang);
+    SevTxt   := TWorkbenchI18n.T(wtLesefehler, Z.Lang);
     SevBadge := Format('<span class="badge typ ferr">%s</span>',
       [SevTxt]);
     SevRang  := SEV_RANG_LESEFEHLER;
   end
   else
   begin
-    SevTxt   := TWorkbenchI18n.T(SEV_KEY[F.Severity], ALang);
+    SevTxt   := TWorkbenchI18n.T(SEV_KEY[Z.Fund.Severity], Z.Lang);
     SevBadge := Format('<span class="badge sev-%s">%s</span>',
-      [SEV_CSS[F.Severity], SevTxt]);
-    SevRang  := Ord(F.Severity);
+      [SEV_CSS[Z.Fund.Severity], SevTxt]);
+    SevRang  := Ord(Z.Fund.Severity);
   end;
-  if AHinweis <> '' then
+  if Z.Hinweis <> '' then
     HinweisAttr := Format(' data-hinweis="%s"',
-      [H(Einzeilig(AHinweis))])
+      [H(Einzeilig(Z.Hinweis))])
   else
     HinweisAttr := '';
   // "Dateiname; voller Pfad" - das Doppel entfaellt, wenn der Fund
   // ohnehin nur den Basisnamen traegt. ExtractFileName laeuft auf dem
   // ORIGINAL-Pfad (Windows-Trenner), nicht auf dem Anzeige-Pfad.
-  DateiName := ExtractFileName(F.FileName);
-  if APfad = DateiName then
+  DateiName := ExtractFileName(Z.Fund.FileName);
+  if Z.Pfad = DateiName then
     DateiZeile := H(DateiName)
   else
-    DateiZeile := H(DateiName) + '; ' + H(APfad);
+    DateiZeile := H(DateiName) + '; ' + H(Z.Pfad);
   Result :=
     Format('<tbody data-rid="%s" data-search="%s" data-typ="%s" '
       + 'data-sev="%d" data-konf="%d" data-pfad="%s"%s>'#13#10,
-      [H(AMeta.ID), H(SuchBlobFund(F, AMeta, APfad, SevTxt, ALang)),
-       TypCss(AMeta.FindingType), SevRang, Ord(F.Confidence),
-       H(APfad), HinweisAttr])
+      [H(Z.Meta.ID),
+       H(SuchBlobFund(Z.Fund, Z.Meta, Z.Pfad, SevTxt, Z.Lang)),
+       TypCss(Z.Meta.FindingType), SevRang, Ord(Z.Fund.Confidence),
+       H(Z.Pfad), HinweisAttr])
     + '<tr class="haupt" tabindex="0" '
     + 'onclick="oeffneDrawer(this.parentNode)">'
     + Format('<td class="num" data-sort="%d">%s</td>',
-        [StrToIntDef(F.LineNumber, 0), H(F.LineNumber)])
-    + '<td>' + H(F.MethodName) + '</td>'
-    + '<td class="id">' + H(AMeta.ID) + '</td>'
-    + '<td>' + H(AMeta.Name) + '</td>'
+        [StrToIntDef(Z.Fund.LineNumber, 0), H(Z.Fund.LineNumber)])
+    + '<td>' + H(Z.Fund.MethodName) + '</td>'
+    + '<td class="id">' + H(Z.Meta.ID) + '</td>'
+    + '<td>' + H(Z.Meta.Name) + '</td>'
     + Format('<td><span class="badge typ %s">%s</span></td>',
-        [TypCss(AMeta.FindingType), H(TypText(AMeta.FindingType))])
+        [TypCss(Z.Meta.FindingType), H(TypText(Z.Meta.FindingType))])
     + Format('<td data-sort="%d">%s</td>', [SevRang, SevBadge])
     + Format('<td data-sort="%d"><span class="badge konf">%s'
-        + '</span></td>', [Ord(F.Confidence),
-                           TWorkbenchI18n.T(CONF_KEY[F.Confidence], ALang)])
-    + '<td>' + H(F.MissingVar) + '</td>'
+        + '</span></td>', [Ord(Z.Fund.Confidence),
+           TWorkbenchI18n.T(CONF_KEY[Z.Fund.Confidence], Z.Lang)])
+    + '<td>' + H(Z.Fund.MissingVar) + '</td>'
     + '</tr>'#13#10
     + '<tr class="datei" onclick="oeffneDrawer(this.parentNode)">'
-    + '<td class="pfadzeile" colspan="8" title="' + H(APfad) + '">'
+    + '<td class="pfadzeile" colspan="8" title="' + H(Z.Pfad) + '">'
     + DateiZeile + '</td>'
-    + '</tr>'#13#10'</tbody>';
+    + '</tr>'#13#10
+    // Der Quell-Ausschnitt liegt als unsichtbares TEMPLATE bei der
+    // Zeile, nicht in einem Attribut: er ist fertiges Markup und
+    // muesste sonst doppelt escaped und im JS wieder aufgeloest
+    // werden. Der Drawer klont ihn.
+    + Snippetblock(Z.Snippet)
+    + '</tbody>';
 end;
 
 function TemplateFuerRegel(K: TFindingKind; const AMeta: TRuleMeta;
@@ -1365,6 +1456,8 @@ var
   MaxRows     : Integer;
   RowsEmitted : Integer;
   RowsDropped : Integer;
+  QuellCache  : TObjectDictionary<string, TStringList>;
+  Zeile       : TFundZeile;
 begin
   if AMaxRows < 0 then
     MaxRows := V2_MAX_ROWS_DEFAULT
@@ -1437,14 +1530,24 @@ begin
       + Kopf(SP_DETAIL, wtSpDetail, ALang)
       + '</tr></thead>');
 
-    for F in AFindings do
-    begin
-      if (MaxRows > 0) and (RowsEmitted >= MaxRows) then Break;
-      Inc(RowsEmitted);
-      Meta := TRuleCatalog.GetRule(F.Kind, ALang);
-      Pfad := AnzeigePfad(F.FileName, ABaseDir);
-      SB.AppendLine(ZeileFuerFund(F, Meta, Pfad,
-        TFixHintResolver.FixHint(F).Description, ALang));
+    QuellCache := TObjectDictionary<string, TStringList>.Create(
+      [doOwnsValues]);
+    try
+      for F in AFindings do
+      begin
+        if (MaxRows > 0) and (RowsEmitted >= MaxRows) then Break;
+        Inc(RowsEmitted);
+        Zeile.Fund    := F;
+        Zeile.Meta    := TRuleCatalog.GetRule(F.Kind, ALang);
+        Zeile.Pfad    := AnzeigePfad(F.FileName, ABaseDir);
+        Zeile.Hinweis := TFixHintResolver.FixHint(F).Description;
+        Zeile.Snippet := QuellAusschnitt(QuellCache, F.FileName,
+          StrToIntDef(F.LineNumber, 0));
+        Zeile.Lang    := ALang;
+        SB.AppendLine(ZeileFuerFund(Zeile));
+      end;
+    finally
+      QuellCache.Free;
     end;
 
     SB.AppendLine('</table>');
