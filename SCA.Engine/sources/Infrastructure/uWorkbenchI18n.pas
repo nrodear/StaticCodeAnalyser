@@ -38,7 +38,7 @@ type
     wtZaehlerFunde, wtStrgTaste,
     // -- Chip-Gruppen --------------------------------------------------
     wtGruppeTyp, wtGruppeSchweregrad, wtGruppeKonfidenz,
-    wtGruppeProfil, wtChipLesefehler,
+    wtGruppeProfil, wtChipLesefehler, wtThema, wtThemaWechseln,
     // -- Schweregrad / Konfidenz / Profil ------------------------------
     wtSevFehler, wtSevWarnung, wtSevHinweis, wtLesefehler,
     wtKonfNiedrig, wtKonfMittel, wtKonfHoch, wtProfilAn, wtProfilAus,
@@ -118,6 +118,10 @@ const
     ('Konfidenz', 'Confidence', 'Confiance'),
     ('Default-Profil', 'Default profile', 'Profil par d&eacute;faut'),
     ('Lesefehler', 'Read error', 'Erreur de lecture'),
+    ('Thema', 'Theme', 'Th&egrave;me'),
+    ('Thema wechseln: hell / dunkel / sepia',
+     'Switch theme: light / dark / sepia',
+     'Changer de th&egrave;me : clair / sombre / s&eacute;pia'),
     // ---- Schweregrad / Konfidenz / Profil ------------------------------
     ('Fehler', 'Error', 'Erreur'),
     ('Warnung', 'Warning', 'Avertissement'),

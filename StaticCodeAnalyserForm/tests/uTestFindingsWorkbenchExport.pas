@@ -38,6 +38,9 @@ type
     [Test] procedure FileRow_UnderMainRow_NameFirstThenFullPath;
     // EN/FR-Nachtrag 07.09.: Seite in drei Sprachen, Token unberuehrt.
     [Test] procedure Language_TranslatesPageButKeepsTokens;
+    // Feature-Abgleich V1->V2 (Todo_FeatureListe..., 07.09.):
+    [Test] procedure InitialSort_BySeverity_WithConfidenceTiebreak;
+    [Test] procedure Themes_DarkAndSepiaAsTokenOverrides;
   end;
 
 implementation
@@ -530,6 +533,77 @@ begin
     'Severity-CSS-Klasse muss unuebersetzt bleiben (de vs. en)');
   Assert.IsTrue(SevKlasse(De) <> '',
     'ohne Severity-Klasse prueft der Vergleich nichts');
+end;
+
+procedure TTestFindingsWorkbenchExport.InitialSort_BySeverity_WithConfidenceTiebreak;
+// V1-Verhalten nachgezogen: der Bericht steht beim Oeffnen nach
+// Risiko sortiert (Fehler oben), nicht in Eingangsreihenfolge - und
+// bei gleicher Severity entscheidet die Konfidenz (hoch zuerst).
+// Geprueft wird die VERDRAHTUNG: der Aufruf am Skriptende und der
+// Tiebreak-Zweig; die Sortierung selbst laeuft im Browser.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  // Severity ist Spalte 5 (Zeile, Methode, SCA-ID, Regel, Typ, Sev).
+  Assert.IsTrue(Pos('sortiere(5);', Html) > 0,
+    'Initialsortierung nach Severity fehlt - ohne den AUFRUF steht '
+    + 'der Bericht in Eingangsreihenfolge da');
+  Assert.IsTrue(Pos('sortiere(5);', Html) < Pos('deepLink();', Html),
+    'die Sortierung muss vor dem Deep-Link laufen, sonst scrollt er '
+    + 'auf eine Zeile, die gleich verschoben wird');
+  Assert.IsTrue(Pos('if (spalte === 5) {', Html) > 0,
+    'Tiebreak-Zweig des Severity-Sorts fehlt');
+  Assert.IsTrue(Pos('return kb - ka;', Html) > 0,
+    'Konfidenz-Tiebreak muss absteigend sein (hoch zuerst)');
+  // Der Spaltenkopf 5 muss auch wirklich der Schweregrad sein -
+  // sonst sortiert die Seite still nach der falschen Spalte.
+  Assert.IsTrue(
+    Pos('<th onclick="sortiere(5)">Schweregrad', Html) > 0,
+    'Spalte 5 ist nicht der Schweregrad - Sortiervertrag gebrochen');
+end;
+
+procedure TTestFindingsWorkbenchExport.Themes_DarkAndSepiaAsTokenOverrides;
+// V1 hat drei Themes, V2 hatte nur hell. Seit dem Workbench-Umbau ist
+// ein Theme ein reiner Token-Block - genau das wird hier festgehalten,
+// damit spaetere Farbarbeit nicht wieder in Einzelregeln zerfaellt.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Pos(':root[data-theme="dark"]{--grund:#1e1e1e;', Html) > 0,
+    'Dark-Theme ueberschreibt die Tokens nicht');
+  Assert.IsTrue(Pos(':root[data-theme="sepia"]{--grund:#f4ead2;', Html) > 0,
+    'Sepia-Theme ueberschreibt die Tokens nicht');
+  Assert.IsTrue(Pos('@media (prefers-color-scheme:dark){', Html) > 0,
+    'Systempraeferenz wird nicht beachtet');
+  Assert.IsTrue(Pos('id="btnTheme"', Html) > 0, 'Umschalter fehlt');
+  Assert.IsTrue(Pos('var THEMEN = ["light", "dark", "sepia"];', Html) > 0,
+    'Drei-Wege-Zyklus fehlt');
+  Assert.IsTrue(Pos('sca-v2-theme', Html) > 0,
+    'die Wahl wird nicht gespeichert');
+  // localStorage kann werfen (file://, geblockte Site-Daten) - beide
+  // Zugriffe MUESSEN gekapselt sein, sonst stirbt das Init-Skript und
+  // mit ihm Suche, Sortierung und Drawer.
+  Assert.IsTrue(
+    Pos('try { gespeichert = localStorage.getItem(KEY); } catch',
+      Html) > 0, 'localStorage-Lesen ohne try/catch');
+  Assert.IsTrue(Pos('try { localStorage.setItem(KEY, next); } catch',
+    Html) > 0, 'localStorage-Schreiben ohne try/catch');
 end;
 
 initialization

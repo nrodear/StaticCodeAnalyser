@@ -99,6 +99,18 @@ const
   V2_MAX_ROWS_DEFAULT = 20000;
   // Sortierrang der Lesefehler-Zeilen (hinter lsHint = 2, wie V1).
   SEV_RANG_LESEFEHLER = 3;
+  // Spaltenindizes der Hauptzeile (tr.haupt). Sie sind ein DREIFACHER
+  // Vertrag: thead-Reihenfolge, sortiere(n) im JS und fundKopf(), das
+  // die Zellen fuer den Drawer-Kopf liest. Darum benannt statt
+  // gestreut - eine neue Spalte fasst hier UND an den drei Stellen an.
+  SP_ZEILE    = 0;
+  SP_METHODE  = 1;
+  SP_SCAID    = 2;
+  SP_REGEL    = 3;
+  SP_TYP      = 4;
+  SP_SEVERITY = 5;
+  SP_KONFIDENZ = 6;
+  SP_DETAIL   = 7;
 
 type
   // Kennzahlen der Dashboard-Kacheln - ein Zaehlpass ueber ALLE Funde
@@ -302,6 +314,48 @@ begin
       + 'font-family:Consolas,monospace;word-break:break-all;}');
     SB.AppendLine('.metarow{margin-top:12px;color:var(--dezent);'
       + 'font-size:0.88em;}');
+    // ---- Themes (Feature-Abgleich 07.09.) ------------------------------
+    // Seit dem Workbench-Umbau haengt fast alles an sechs Tokens -
+    // ein Theme ist deshalb genau EIN Ueberschreibungsblock und keine
+    // Parallelwelt. Der dunkle Kopf (header.kopf) bleibt in allen
+    // Themes dunkel, das ist die Marke der Seite. Ohne data-theme
+    // greift die Systempraeferenz (@media), mit Attribut gewinnt die
+    // Wahl des Nutzers - beide Richtungen ausgeschrieben, damit der
+    // Umschalter in JEDE Richtung sticht.
+    SB.AppendLine(':root[data-theme="dark"]{--grund:#1e1e1e;'
+      + '--karte:#262626;--tinte:#e0e0e0;--dezent:#9aa4ad;'
+      + '--rand:#3a3a3a;--akzent:#6aa9e9;}');
+    SB.AppendLine(':root[data-theme="dark"] th{background:#2f2f2f;}');
+    SB.AppendLine(':root[data-theme="dark"] tr.haupt:hover{'
+      + 'background:#2b3238;}');
+    SB.AppendLine(':root[data-theme="dark"] tbody.gewaehlt tr{'
+      + 'background:#2a3644;}');
+    SB.AppendLine(':root[data-theme="dark"] .kbd{background:#333;}');
+    SB.AppendLine(':root[data-theme="dark"] #gekuerzt{background:#3a3222;'
+      + 'border-color:#6b5a2e;color:#e8cf94;}');
+    SB.AppendLine(':root[data-theme="dark"] .codekarte.schlecht '
+      + '.karte-titel{background:#4a2320;color:#f3b3ac;}');
+    SB.AppendLine(':root[data-theme="dark"] .codekarte.gut '
+      + '.karte-titel{background:#20401f;color:#a9dda6;}');
+    SB.AppendLine(':root[data-theme="dark"] .karte{background:#232323;}');
+    SB.AppendLine(':root[data-theme="sepia"]{--grund:#f4ead2;'
+      + '--karte:#faf3e0;--tinte:#3d2e1a;--dezent:#7a6648;'
+      + '--rand:#d9c9a8;--akzent:#7a4a1f;}');
+    SB.AppendLine(':root[data-theme="sepia"] th{background:#efe3c6;}');
+    SB.AppendLine(':root[data-theme="sepia"] tr.haupt:hover{'
+      + 'background:#f0e4c8;}');
+    SB.AppendLine(':root[data-theme="sepia"] tbody.gewaehlt tr{'
+      + 'background:#eaddbe;}');
+    SB.AppendLine(':root[data-theme="sepia"] .kbd{background:#efe3c6;}');
+    SB.AppendLine(':root[data-theme="sepia"] .karte{background:#f7efdc;}');
+    SB.AppendLine('@media (prefers-color-scheme:dark){');
+    SB.AppendLine(':root:not([data-theme="light"]):not([data-theme='
+      + '"sepia"]){--grund:#1e1e1e;--karte:#262626;--tinte:#e0e0e0;'
+      + '--dezent:#9aa4ad;--rand:#3a3a3a;--akzent:#6aa9e9;}');
+    SB.AppendLine('}');
+    SB.AppendLine('#btnTheme{border:1px solid var(--rand);'
+      + 'background:var(--karte);color:var(--tinte);border-radius:6px;'
+      + 'cursor:pointer;font-size:0.86em;padding:3px 10px;}');
     // ---- Responsive ---------------------------------------------------
     SB.AppendLine('@media (max-width:900px){');
     SB.AppendLine('#drawer{width:100%;min-width:0;max-width:none;}');
@@ -342,6 +396,9 @@ begin
     SB.AppendLine('<span id="zaehler"></span>');
     SB.AppendLine('<button id="reset" onclick="filterReset()">'
       + TWorkbenchI18n.T(wtFilterReset, ALang) + '</button>');
+    SB.AppendLine('<button id="btnTheme" type="button" title="'
+      + TWorkbenchI18n.T(wtThemaWechseln, ALang) + '">'
+      + TWorkbenchI18n.T(wtThema, ALang) + '</button>');
     SB.AppendLine('</div>');
 
     SB.AppendLine('<div class="chips" id="chips">');
@@ -464,6 +521,17 @@ begin
     SB.AppendLine('    var x = zellwert(a, spalte), y = zellwert(b, spalte);');
     SB.AppendLine('    if (x < y) return auf ? -1 : 1;');
     SB.AppendLine('    if (x > y) return auf ? 1 : -1;');
+    SB.AppendLine('    // Gleichstand beim SEVERITY-Sort: sekundaer nach');
+    SB.AppendLine('    // Konfidenz (hoch=2 zuerst, darum umgekehrt) -');
+    SB.AppendLine('    // aus 400 gleich schweren Funden sind die');
+    SB.AppendLine('    // belastbaren die, die man zuerst ansieht');
+    SB.AppendLine('    // (V1-Verhalten, Feature-Abgleich 07.09.).');
+    SB.AppendLine('    if (spalte === ' + IntToStr(SP_SEVERITY) + ') {');
+    SB.AppendLine('      var ka = parseInt(a.dataset.konf, 10);');
+    SB.AppendLine('      var kb = parseInt(b.dataset.konf, 10);');
+    SB.AppendLine('      if (!isNaN(ka) && !isNaN(kb) && ka !== kb)');
+    SB.AppendLine('        return kb - ka;');
+    SB.AppendLine('    }');
     SB.AppendLine('    return 0;');
     SB.AppendLine('  });');
     SB.AppendLine('  for (var i = 0; i < tbs.length; i++) '
@@ -539,12 +607,14 @@ begin
     SB.AppendLine('  // in der Hauptzeile mehr), Zeile/Methode/Detail');
     SB.AppendLine('  // aus den Zellen 0/1/7 der tr.haupt.');
     SB.AppendLine('  var t = (tb.dataset.pfad || "") + ":" '
-      + '+ z.cells[0].textContent;');
-    SB.AppendLine('  if (z.cells[1].textContent) t += " " '
-      + '+ String.fromCharCode(183) + " " + z.cells[1].textContent;');
+      + '+ z.cells[' + IntToStr(SP_ZEILE) + '].textContent;');
+    SB.AppendLine('  if (z.cells[' + IntToStr(SP_METHODE)
+      + '].textContent) t += " " + String.fromCharCode(183) + " " '
+      + '+ z.cells[' + IntToStr(SP_METHODE) + '].textContent;');
     SB.AppendLine('  ort.textContent = t;');
     SB.AppendLine('  kopf.appendChild(ort);');
-    SB.AppendLine('  var det = z.cells[7].textContent;');
+    SB.AppendLine('  var det = z.cells[' + IntToStr(SP_DETAIL)
+      + '].textContent;');
     SB.AppendLine('  if (det) {');
     SB.AppendLine('    var p = document.createElement("p");');
     SB.AppendLine('    p.textContent = det;');
@@ -664,7 +734,40 @@ begin
     SB.AppendLine('      return;');
     SB.AppendLine('    }');
     SB.AppendLine('}');
+    // ---- Thema hell/dunkel/sepia (Feature-Abgleich 07.09.) -----------
+    // Drei-Wege-Zyklus wie im V1-Report, inklusive Speicherung. Ein
+    // fremder oder korrupter localStorage-Wert wird verworfen, statt
+    // als Attribut-Muell zu landen; ohne gespeicherte Wahl entscheidet
+    // die Systempraeferenz (die CSS-@media-Regel greift dann von
+    // selbst, darum wird NICHTS gesetzt). localStorage kann werfen
+    // (file://, geblockte Site-Daten) - alle Zugriffe gekapselt.
+    SB.AppendLine('(function(){');
+    SB.AppendLine('  var KEY = "sca-v2-theme";');
+    SB.AppendLine('  var THEMEN = ["light", "dark", "sepia"];');
+    SB.AppendLine('  var gespeichert = null;');
+    SB.AppendLine('  try { gespeichert = localStorage.getItem(KEY); } '
+      + 'catch (e) {}');
+    SB.AppendLine('  if (THEMEN.indexOf(gespeichert) >= 0)');
+    SB.AppendLine('    document.documentElement.setAttribute('
+      + '"data-theme", gespeichert);');
+    SB.AppendLine('  var bt = document.getElementById("btnTheme");');
+    SB.AppendLine('  if (bt) bt.addEventListener("click", function(){');
+    SB.AppendLine('    var jetzt = document.documentElement'
+      + '.getAttribute("data-theme");');
+    SB.AppendLine('    var next = THEMEN[(THEMEN.indexOf(jetzt) + 1) '
+      + '% THEMEN.length];');
+    SB.AppendLine('    document.documentElement.setAttribute('
+      + '"data-theme", next);');
+    SB.AppendLine('    try { localStorage.setItem(KEY, next); } '
+      + 'catch (e) {}');
+    SB.AppendLine('  });');
+    SB.AppendLine('})();');
     SB.AppendLine('window.addEventListener("hashchange", deepLink);');
+    // Initialsortierung nach Severity (aufsteigend = Rang 0 zuerst =
+    // Fehler oben). Ohne sie stand der Bericht in Eingangsreihenfolge
+    // da; V1 sortiert seit jeher nach Risiko - "hoechstes Risiko
+    // zuerst" ist die Gewohnheit der Leser (Feature-Abgleich 07.09.).
+    SB.AppendLine('sortiere(' + IntToStr(SP_SEVERITY) + ');');
     SB.AppendLine('suche();');
     SB.AppendLine('deepLink();');
     SB.AppendLine('</script>');
@@ -996,10 +1099,14 @@ begin
     // Zeile+Methode (tr.datei, s. ZeileFuerFund). Acht Koepfe = die
     // Zellen der tr.haupt-Zeile, Indizes 0..7.
     SB.AppendLine('<thead><tr>'
-      + Kopf(0, wtSpZeile, ALang)  + Kopf(1, wtSpMethode, ALang)
-      + Kopf(2, wtSpScaId, ALang)  + Kopf(3, wtSpRegel, ALang)
-      + Kopf(4, wtSpTyp, ALang)    + Kopf(5, wtSpSchweregrad, ALang)
-      + Kopf(6, wtSpKonfidenz, ALang) + Kopf(7, wtSpDetail, ALang)
+      + Kopf(SP_ZEILE, wtSpZeile, ALang)
+      + Kopf(SP_METHODE, wtSpMethode, ALang)
+      + Kopf(SP_SCAID, wtSpScaId, ALang)
+      + Kopf(SP_REGEL, wtSpRegel, ALang)
+      + Kopf(SP_TYP, wtSpTyp, ALang)
+      + Kopf(SP_SEVERITY, wtSpSchweregrad, ALang)
+      + Kopf(SP_KONFIDENZ, wtSpKonfidenz, ALang)
+      + Kopf(SP_DETAIL, wtSpDetail, ALang)
       + '</tr></thead>');
 
     for F in AFindings do
