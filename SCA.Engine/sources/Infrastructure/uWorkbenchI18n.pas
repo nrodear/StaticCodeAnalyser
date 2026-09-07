@@ -60,7 +60,7 @@ type
     wtWarumRelevant, wtHinweisZuFund, wtVorher, wtNachher, wtKopieren,
     wtKopiert, wtUnterdruecken, wtUnterdrueckenText, wtKalibrierung,
     wtKalibrierungText, wtKeineKalibrierung, wtKonfidenzLabel,
-    wtProfilLabel, wtRegelDefault, wtDetektorUnit, wtTagsLabel,
+    wtProfilLabel, wtDetektorUnit, wtTagsLabel,
     // -- Rollenblock (nur Katalogseite) ---------------------------------
     wtRollenTitel, wtRolleDev, wtRolleDevText, wtRolleQa, wtRolleQaText,
     wtRolleOwner, wtRolleOwnerText,
@@ -230,8 +230,6 @@ const
     ('Konfidenz %s', 'Confidence %s', 'Confiance %s'),
     ('Default-Profil %s', 'Default profile %s',
      'Profil par d&eacute;faut %s'),
-    ('Regel-Default %s', 'Rule default %s',
-     'Valeur par d&eacute;faut %s'),
     ('Detektor-Unit', 'Detector unit', 'Unit&eacute; du d&eacute;tecteur'),
     ('Tags', 'Tags', 'Tags'),
     // ---- Rollenblock -------------------------------------------------------

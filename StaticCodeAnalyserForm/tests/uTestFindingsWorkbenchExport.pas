@@ -55,7 +55,10 @@ implementation
 // noinspection-file DuplicateString, LargeClass, GodClass
 // Fixture-Ausnahme des Profils: HTML-Anker ('</template>', 'tpl-')
 // wiederholen sich als Pruefgegenstand bewusst variiert.
-// GodClass seit dem IDE-Focus-Redesign (08.09., 21 Testmethoden):
+// GodClass seit dem IDE-Focus-Redesign (08.09.): 19 [Test]-Methoden
+// plus die zwei Helfer MakeFinding und Render = 21 Methoden, und
+// SCA138 zaehlt ALLE Methoden gegen die Schwelle 20 (vorher 20 -
+// der Detektor schwieg auf den Punkt genau).
 // eine DUnitX-Fixture waechst mit jedem Vertragsfall, und genau das
 // SOLL sie - die Methoden SIND der Katalog der Zusagen dieser Seite.
 // Eine Aufspaltung duplizierte nur MakeFinding und Render und
@@ -66,6 +69,21 @@ uses
   System.IOUtils,
   uFindingsWorkbenchExport, uRuleCatalog,
   uExportHtml; // HtmlEscape - Erwartungsbau des data-copy-Vertrags
+
+procedure AssertReihenfolge(const AHtml, AErst, ADann, AMsg: string);
+// Prueft, dass BEIDE Anker vorkommen UND AErst vor ADann steht.
+// Ein blosses 'Pos(A) < Pos(B)' ist VAKUUM-GRUEN: fehlt A, liefert
+// Pos 0 und die Bedingung ist trivial wahr - der Test bestaende
+// also gerade dann, wenn das Gepruefte verschwunden ist
+// (Chargen-Review 08.09., MAJOR; betraf mehrere Stellen dieser
+// Fixture, darum ein Helfer statt einzelner Flicken).
+begin
+  Assert.IsTrue(Pos(AErst, AHtml) > 0,
+    AMsg + ' - der erste Anker fehlt ueberhaupt: ' + AErst);
+  Assert.IsTrue(Pos(ADann, AHtml) > 0,
+    AMsg + ' - der zweite Anker fehlt ueberhaupt: ' + ADann);
+  Assert.IsTrue(Pos(AErst, AHtml) < Pos(ADann, AHtml), AMsg);
+end;
 
 function VorkommenIn(const AHtml, ATeil: string): Integer;
 // Teilstring-Zaehlung - gehoben aus dem Deduplikations-Test, seit der
@@ -450,8 +468,7 @@ begin
     Pos('<td class="pfadzeile" colspan="8" title="B.pas">'
       + 'B.pas</td>', Html) > 0,
     'bei blossem Basisnamen darf kein "Name; Name"-Doppel stehen');
-  Assert.IsTrue(
-    Pos('<tr class="haupt"', Html) < Pos('<tr class="datei"', Html),
+  AssertReihenfolge(Html, '<tr class="haupt"', '<tr class="datei"',
     'die Datei-Zeile steht UNTER der Hauptzeile');
   Assert.IsTrue(Pos('data-pfad="src\A.pas"', Html) > 0,
     'data-pfad (Drawer-Fundort) fehlt am tbody');
@@ -585,7 +602,7 @@ begin
   Assert.IsTrue(Pos('sortiere(5);', Html) > 0,
     'Initialsortierung nach Severity fehlt - ohne den AUFRUF steht '
     + 'der Bericht in Eingangsreihenfolge da');
-  Assert.IsTrue(Pos('sortiere(5);', Html) < Pos('deepLink();', Html),
+  AssertReihenfolge(Html, 'sortiere(5);', 'deepLink();',
     'die Sortierung muss vor dem Deep-Link laufen, sonst scrollt er '
     + 'auf eine Zeile, die gleich verschoben wird');
   Assert.IsTrue(Pos('if (spalte === 5) {', Html) > 0,
@@ -709,9 +726,8 @@ begin
     'Regel-Option SCA001 fehlt');
   Assert.IsTrue(Pos('<option value="SCA017">', Html) > 0,
     'Regel-Option SCA017 fehlt');
-  Assert.IsTrue(
-    Pos('<option value="SCA001">', Html)
-    < Pos('<option value="SCA017">', Html),
+  AssertReihenfolge(Html, '<option value="SCA001">',
+    '<option value="SCA017">',
     'Regel-Dropdown muss nach Fundzahl absteigend sortiert sein '
     + '(SCA001 mit 2 Funden vor SCA017 mit 1)');
   // Verdrahtung in suche() und im Reset.
@@ -748,9 +764,9 @@ begin
   end;
   Assert.IsTrue(Pos('id="topRegeln"', Html) > 0, 'Top-Regeln fehlen');
   Assert.IsTrue(Pos('id="topDateien"', Html) > 0, 'Top-Dateien fehlen');
-  Assert.IsTrue(
-    Pos('data-ziel="dateiFilter" data-wert="src\z.pas"', Html)
-    < Pos('data-ziel="dateiFilter" data-wert="src\a.pas"', Html),
+  AssertReihenfolge(Html,
+    'data-ziel="dateiFilter" data-wert="src\z.pas"',
+    'data-ziel="dateiFilter" data-wert="src\a.pas"',
     'die Top-Dateien muessen nach Fundzahl sortiert sein, nicht '
     + 'alphabetisch (z.pas mit 3 vor a.pas mit 1)');
   Assert.IsTrue(Pos('function topKlick(el)', Html) > 0,
@@ -870,7 +886,11 @@ begin
   finally
     Findings.Free;
   end;
-  // --- Selection: drei unterscheidbare Zustaende --------------------
+  // --- Selection ------------------------------------------------------
+  // NEU ist hier nur der Rail; die Asserts auf Hover und Focus sind
+  // REGRESSIONS-Waechter fuer Bestandsregeln, die zusammen mit dem
+  // Rail die drei Zustaende bilden - sie waren vor diesem Umbau schon
+  // gruen und belegen ihn nicht (Review 08.09.).
   Assert.IsTrue(Pos('#funde tbody tr td:first-child{'
     + 'border-left:4px solid transparent;}', Html) > 0,
     'der 4px-Rail-Platzhalter fehlt (sonst springt das Layout beim '
@@ -878,6 +898,20 @@ begin
   Assert.IsTrue(Pos('#funde tbody.gewaehlt[data-sev="0"] tr '
     + 'td:first-child{border-left-color:var(--f-err-fg);}', Html) > 0,
     'der Rail wird nicht von der Severity gefaerbt');
+  // Rang 3 (Lesefehler) braucht eine EIGENE Farbe: der Rueckfall auf
+  // --akzent ist im hellen Thema byte-gleich mit --f-info-fg, ein
+  // Lesefehler saehe aus wie ein Hinweis (Review 08.09.).
+  Assert.IsTrue(Pos('#funde tbody.gewaehlt[data-sev="3"] tr '
+    + 'td:first-child{border-left-color:var(--dezent);}', Html) > 0,
+    'Lesefehler-Rail fehlt und faellt auf die Hinweis-Farbe zurueck');
+  // Die Auswahl hebt den REGELNAMEN an - Spalte 4, nicht 5 (5 waere
+  // die Typ-Zelle; der erste Wurf machte nur den Badge fett).
+  Assert.IsTrue(Pos('#funde tbody.gewaehlt tr.haupt td:nth-child(4){'
+    + 'font-weight:600;}', Html) > 0,
+    'die Auswahl hebt nicht den Regelnamen an');
+  Assert.AreEqual<Integer>(0,
+    Pos('tr.haupt td:nth-child(5){font-weight', Html),
+    'nth-child(5) ist die Typ-Zelle - diese Regel darf es nicht geben');
   Assert.IsTrue(Pos('#funde tbody:hover tr{', Html) > 0,
     'Hover-Zustand fehlt');
   Assert.IsTrue(Pos('tr.haupt:focus-visible{', Html) > 0,
@@ -900,13 +934,11 @@ begin
   Assert.IsTrue(Pos('badges.appendChild(b.cloneNode(true));', Html) > 0,
     'die Hero-Badges werden nicht aus den Zellen geklont');
   // --- Reihenfolge: Hero VOR Quellcode VOR Regel-Doku ---------------
-  Assert.IsTrue(
-    Pos('kopf.appendChild(hero);', Html)
-    < Pos('kopf.appendChild(sn.cloneNode(true));', Html),
+  AssertReihenfolge(Html, 'kopf.appendChild(hero);',
+    'kopf.appendChild(sn.cloneNode(true));',
     'der Quellcode muss NACH dem Hero kommen');
-  Assert.IsTrue(
-    Pos('korb.appendChild(fundKopf(tb));', Html)
-    < Pos('korb.appendChild(tpl.content.cloneNode(true));', Html),
+  AssertReihenfolge(Html, 'korb.appendChild(fundKopf(tb));',
+    'korb.appendChild(tpl.content.cloneNode(true));',
     'die Regel-Doku muss NACH dem Fund-Kopf kommen');
   // --- Template: kein doppelter Titel mehr, dafuer Staffelung -------
   Assert.AreEqual<Integer>(0, Pos('<div class="drawer-status">', Html),
@@ -918,6 +950,11 @@ begin
     'noinspection/Kalibrierung sind nicht als sekundaer gekennzeichnet');
   Assert.IsTrue(Pos('<h3>Fix-Muster</h3>', Html) > 0,
     'die Fix-Ueberschrift fehlt');
+  // Die h3-Grossschreibung darf die Kopieren-Buttons IN den
+  // Karten-Ueberschriften nicht erfassen (sonst 'KOPIEREN').
+  Assert.IsTrue(Pos('#drawer h3 button.copy{text-transform:none;',
+    Html) > 0,
+    'die Uppercase-Ruecknahme fuer Buttons in h3 fehlt');
   // --- Bewegung + Breite --------------------------------------------
   Assert.IsTrue(
     Pos('@media (prefers-reduced-motion:reduce){#drawer{transition:none;}}',

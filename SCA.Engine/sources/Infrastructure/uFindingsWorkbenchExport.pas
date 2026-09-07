@@ -338,7 +338,6 @@ begin
     // auf 'tr.haupt:hover' verliert dagegen und die Zeile bliebe im
     // dunklen Thema hellblau - beim Nachpruefen aufgefallen.
     Regel('#funde tbody:hover tr', 'background:#232c36;');
-    Regel('tbody.gewaehlt tr', 'background:#26333f;');
     Regel('.kbd', 'background:#2a323b;');
     Regel('#gekuerzt', 'background:var(--f-warn-bg);'
       + 'border-color:var(--f-warn-br);color:var(--f-warn-fg);');
@@ -359,6 +358,9 @@ begin
     // Inspector im Dunkeln: der Auswahl-Hintergrund der Zeile muss
     // sich vom Hover unterscheiden (drei Zustaende!), und der
     // Close-Button darf beim Ueberfahren nicht schwarz werden.
+    // Diese Regel ist die EINZIGE Auswahlfarbe des Themas - eine
+    // zweite ohne '#funde' waere durch die Spezifitaet tot und bei
+    // der naechsten Farbarbeit eine Stolperfalle (Review 08.09.).
     Regel('#funde tbody.gewaehlt tr', 'background:#27323f;');
     Regel('#drawer-schliessen:hover',
       'background:#2f3945;color:var(--tinte);');
@@ -369,8 +371,12 @@ begin
 end;
 
 function SeiteStyle: string;
-// Workbench-Kern + Seitenspezifisches - Aufbau und Klassen bewusst
-// deckungsgleich mit der Katalogseite ("gleich anfuehlen").
+// Workbench-Kern + Seitenspezifisches. Tabelle, Chips, Kacheln und
+// Codekarten sind bewusst deckungsgleich mit der Katalogseite
+// ("gleich anfuehlen"); der DRAWER weicht seit dem IDE-Focus-
+// Redesign (08.09.) ab - er ist hier ein Inspector mit Hero und
+// gestaffelten Ebenen, waehrend die Katalogseite ihren Regel-Drawer
+// behaelt (dort gibt es keinen Fund, dessen Werte oben stuenden).
 var
   SB : TStringBuilder;
 begin
@@ -495,11 +501,21 @@ begin
       + 'td:first-child{border-left-color:var(--f-warn-fg);}');
     SB.AppendLine('#funde tbody.gewaehlt[data-sev="2"] tr '
       + 'td:first-child{border-left-color:var(--f-info-fg);}');
-    // Auswahl hebt ID und Regelname leicht an - nicht mehr, sonst
-    // springt die Zeilenhoehe (Kriterium: kein Layout-Sprung).
-    SB.AppendLine('#funde tbody.gewaehlt tr.haupt td.id,'
-      + '#funde tbody.gewaehlt tr.haupt td:nth-child(5){'
-      + 'font-weight:600;color:var(--tinte);}');
+    // Rang 3 = LESEFEHLER: eigene, neutrale Rail-Farbe. Ohne diese
+    // Regel fiele er auf var(--akzent) zurueck - und das ist im
+    // hellen Thema BYTE-GLEICH mit var(--f-info-fg), ein Lesefehler
+    // saehe also aus wie ein Hinweis (Review 08.09.).
+    SB.AppendLine('#funde tbody.gewaehlt[data-sev="3"] tr '
+      + 'td:first-child{border-left-color:var(--dezent);}');
+    // Auswahl hebt den REGELNAMEN an - nicht mehr, sonst springt die
+    // Zeilenhoehe. Der Index kommt aus SP_REGEL statt als nackte Zahl:
+    // der erste Wurf stand auf nth-child(5) und traf damit die TYP-
+    // Zelle (Zellfolge: 1 Zeile, 2 Methode, 3 SCA-ID, 4 Regel, 5 Typ) -
+    // sichtbar wurde nur ein halbfetter Typ-Badge, der Titel des
+    // Fundes blieb unveraendert (Chargen-Review 08.09., MAJOR).
+    // td.id ist bewusst NICHT dabei: es traegt bereits font-weight:600.
+    SB.AppendLine('#funde tbody.gewaehlt tr.haupt td:nth-child('
+      + IntToStr(SP_REGEL + 1) + '){font-weight:600;}');
     // Datei-Zeile "Name; voller Pfad": Ellipse statt Umbruch -
     // max-width:0 laesst die uebrigen Zellen die Breite bestimmen
     // (Tabellen-Ellipsis-Muster), title zeigt den vollen Pfad.
@@ -544,6 +560,13 @@ begin
     SB.AppendLine('#drawer h3{margin:0 0 4px 0;font-size:0.92em;'
       + 'letter-spacing:0.02em;color:var(--dezent);'
       + 'text-transform:uppercase;}');
+    // Die Karten-Ueberschriften tragen den Kopieren-BUTTON in sich -
+    // ohne diese Ruecknahme staende dort 'KOPIEREN'/'KOPIERT',
+    // waehrend dieselben Buttons in den Codekarten normal aussehen
+    // (Review 08.09.). Auch die Farbe zuruecknehmen: ein Button in
+    // Dezent-Grau liest sich wie deaktiviert.
+    SB.AppendLine('#drawer h3 button.copy{text-transform:none;'
+      + 'letter-spacing:normal;color:var(--tinte);}');
     // Close-Button: integriert statt dominant - kein Rahmen, erst
     // beim Ueberfahren eine Flaeche (TODO-Punkt B).
     SB.AppendLine('#drawer-schliessen{float:right;border:0;'
@@ -620,8 +643,6 @@ begin
     // dieselbe Spezifitaets-Falle wie im Dunkel-Thema (s. dort).
     SB.AppendLine(':root[data-theme="sepia"] #funde tbody:hover tr{'
       + 'background:#f0e4c8;}');
-    SB.AppendLine(':root[data-theme="sepia"] tbody.gewaehlt tr{'
-      + 'background:#eaddbe;}');
     SB.AppendLine(':root[data-theme="sepia"] .kbd{background:#efe3c6;}');
     SB.AppendLine(':root[data-theme="sepia"] .tl-bar{'
       + 'background:#e8dcc0;}');
@@ -1108,6 +1129,9 @@ begin
       + 'punkt.classList.add("sev-warn");');
     SB.AppendLine('    else if (sevBadge.classList.contains("sev-hint")) '
       + 'punkt.classList.add("sev-hint");');
+    SB.AppendLine('    // sonst LESEFEHLER (badge typ ferr): der Punkt');
+    SB.AppendLine('    // bleibt neutral grau - dieselbe Aussage wie');
+    SB.AppendLine('    // sein Rail in der Tabelle (data-sev="3").');
     SB.AppendLine('  }');
     SB.AppendLine('  zeile.appendChild(punkt);');
     SB.AppendLine('  var id = document.createElement("span");');
@@ -1428,11 +1452,13 @@ begin
 end;
 
 function TemplateFuerRegel(K: TFindingKind; const AMeta: TRuleMeta;
-  ASev: TLeakSeverity; const ALang: string): string;
+  const ALang: string): string;
 // Regel-Doku als geteiltes Template - EINMAL je vorkommender Regel
-// (der Deduplikations-Kern der V2, s. Unit-Kopf). Inhalt und Optik
-// sind der Katalog-Drawer; ASev ist der Regel-Default (die konkrete
-// Fund-Severity steht in der Zeile und im Fund-Kopf des Drawers).
+// (der Deduplikations-Kern der V2, s. Unit-Kopf). Seit dem
+// IDE-Focus-Redesign (08.09.) OHNE Titel und Status-Badges: die
+// stehen im Hero des Inspectors und zeigen dort die Werte des
+// konkreten FUNDES. Damit entfiel auch der frueher uebergebene
+// Regel-Default-Schweregrad - ein Parameter, den niemand mehr las.
 var
   SB : TStringBuilder;
 begin
@@ -1798,8 +1824,7 @@ begin
       if K in Regeln then
       begin
         Meta := TRuleCatalog.GetRule(K, ALang);
-        SB.Append(TemplateFuerRegel(K, Meta, KindDefaultSeverity(K),
-          ALang));
+        SB.Append(TemplateFuerRegel(K, Meta, ALang));
       end;
 
     SB.AppendLine('</main>');
