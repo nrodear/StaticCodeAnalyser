@@ -68,8 +68,9 @@ implementation
 // Markup-Bloecke - zerschnitten wuerde nur der Lesefluss.
 
 uses
-  uExportHtml,   // TExporterHtml.HtmlEscape - keine dritte Escape-Kopie
-  uExport;       // TExporter.SaveUtf8WithBom - EIN Ort fuer die BOM-Politik
+  uExportHtml,     // TExporterHtml.HtmlEscape - keine dritte Escape-Kopie
+  uExport,         // TExporter.SaveUtf8WithBom - EIN Ort fuer die BOM-Politik
+  uWorkbenchStyle; // geteilter CSS-Kern beider HTML-Exporte (07.09.)
 
 const
   // Anzeige-Woerter der Seite (sprachfix deutsch, s. Unit-Kopf).
@@ -147,6 +148,15 @@ begin
   Result := TExporterHtml.HtmlEscape(S);
 end;
 
+function HA(const S: string): string;
+// Fuer MEHRZEILIGE Attributwerte (data-copy der Codekarten): H()
+// bildete Umbrueche auf literales '<br>' ab - der Kopieren-Button
+// lieferte damit '<br>'-Muell in die Zwischenablage (Chargen-Review
+// 07.09., MAJOR). '&#10;' dekodiert der Parser im dataset zu echtem LF.
+begin
+  Result := TExporterHtml.HtmlAttrEscapeMultiline(S);
+end;
+
 function ChipListe(const A: TArray<string>; const ACss: string): string;
 // Kleine Chips (Tags, CWE). Leeres Array -> leerer String.
 var
@@ -168,19 +178,10 @@ begin
   SB := TStringBuilder.Create;
   try
     SB.AppendLine('<style>');
-    SB.AppendLine(':root{--akzent:#1a5da6;--rand:#dfe5ec;--karte:#fff;'
-      + '--grund:#f5f7fa;--tinte:#1c2733;--dezent:#5c6b7a;}');
-    SB.AppendLine('*{box-sizing:border-box;}');
-    SB.AppendLine('body{font-family:Segoe UI,Arial,sans-serif;margin:0;'
-      + 'background:var(--grund);color:var(--tinte);}');
-    SB.AppendLine('.mono{font-family:Consolas,monospace;}');
-    SB.AppendLine('header.kopf{background:#20303f;color:#f2f6fa;'
-      + 'padding:14px 20px;}');
-    SB.AppendLine('header.kopf h1{font-size:1.35em;margin:0;}');
-    SB.AppendLine('header.kopf .sub{color:#b9c6d2;margin-top:2px;'
-      + 'font-size:0.92em;max-width:70em;}');
+    // Geteilter Workbench-Kern (Tokens, Kopf, Badges/Pills/Chips,
+    // Kacheln, Codekarten) - danach NUR noch Seitenspezifisches.
+    SB.Append(TWorkbenchStyle.BasisCss);
     SB.AppendLine('main{padding:14px 20px;}');
-    SB.AppendLine('a{color:var(--akzent);}');
     // ---- Rollen-Karten ------------------------------------------------
     SB.AppendLine('.rollen{margin:0 0 12px 0;}');
     SB.AppendLine('.rollen summary{cursor:pointer;font-size:1.02em;'
@@ -219,15 +220,7 @@ begin
     SB.AppendLine('#reset{display:none;border:none;background:none;'
       + 'color:var(--akzent);cursor:pointer;font-size:0.88em;'
       + 'text-decoration:underline;}');
-    // ---- Dashboard ----------------------------------------------------
-    SB.AppendLine('.dash{display:flex;gap:10px;flex-wrap:wrap;'
-      + 'margin:0 0 12px 0;}');
-    SB.AppendLine('.kachel{background:var(--karte);border:1px solid '
-      + 'var(--rand);border-radius:8px;padding:8px 14px;min-width:104px;'
-      + 'box-shadow:0 1px 2px rgba(16,32,48,0.06);}');
-    SB.AppendLine('.kachel .zahl{font-size:1.35em;font-weight:600;}');
-    SB.AppendLine('.kachel .wofuer{color:var(--dezent);'
-      + 'font-size:0.85em;}');
+    // (Dashboard-Kacheln: geteilte Basis, uWorkbenchStyle)
     // ---- Liste --------------------------------------------------------
     SB.AppendLine('.listwrap{background:var(--karte);border:1px solid '
       + 'var(--rand);border-radius:8px;overflow:auto;'
@@ -249,29 +242,6 @@ begin
       + 'white-space:nowrap;}');
     SB.AppendLine('td.noi{font-family:Consolas,monospace;'
       + 'font-size:0.85em;color:var(--dezent);}');
-    SB.AppendLine('.badge{display:inline-block;border-radius:5px;'
-      + 'padding:1px 8px;font-size:0.86em;border:1px solid transparent;'
-      + 'white-space:nowrap;}');
-    SB.AppendLine('.badge.sev-err{background:#fdecea;color:#9c2317;'
-      + 'border-color:#f2c4bf;}');
-    SB.AppendLine('.badge.sev-warn{background:#fef4e5;color:#8a5a00;'
-      + 'border-color:#f1d9ad;}');
-    SB.AppendLine('.badge.sev-hint{background:#eaf3fd;color:#1a5da6;'
-      + 'border-color:#c4dbf2;}');
-    SB.AppendLine('.badge.typ{background:#f0f1f4;color:#3d4a58;'
-      + 'border-color:var(--rand);}');
-    SB.AppendLine('.badge.typ.vuln,.badge.typ.hotspot{background:#f3ecfb;'
-      + 'color:#5b2d91;border-color:#dcc9f0;}');
-    SB.AppendLine('.badge.konf{background:#f0f1f4;color:#3d4a58;'
-      + 'border-color:var(--rand);font-size:0.8em;}');
-    SB.AppendLine('.pill{display:inline-block;border-radius:999px;'
-      + 'padding:1px 10px;font-size:0.84em;}');
-    SB.AppendLine('.pill.an{background:#e7f4e8;color:#1d6b2a;}');
-    SB.AppendLine('.pill.aus{background:#f4e9e8;color:#8f2d24;}');
-    SB.AppendLine('.chip{display:inline-block;background:#eef2f6;'
-      + 'border-radius:4px;padding:0 6px;margin:1px 3px 1px 0;'
-      + 'font-size:0.8em;color:#3d4a58;}');
-    SB.AppendLine('.chip.cwe{background:#f3ecfb;color:#5b2d91;}');
     // ---- Empty-State --------------------------------------------------
     SB.AppendLine('#leer{display:none;padding:26px;text-align:center;'
       + 'color:var(--dezent);}');
@@ -290,28 +260,7 @@ begin
       + 'cursor:pointer;font-size:1em;padding:2px 9px;}');
     SB.AppendLine('.drawer-status{margin:6px 0 4px 0;display:flex;'
       + 'gap:6px;flex-wrap:wrap;}');
-    // Untereinander statt nebeneinander (Nutzerwunsch 07.09., wie die
-    // Hint-Zeile des Findings-Reports): erst die schlechte, darunter
-    // die gute Karte - volle Drawer-Breite statt gequetschter Spalten.
-    SB.AppendLine('.codekarten{display:flex;flex-direction:column;'
-      + 'gap:10px;}');
-    SB.AppendLine('.codekarte{border:1px solid '
-      + 'var(--rand);border-radius:8px;overflow:hidden;}');
-    SB.AppendLine('.codekarte .karte-titel{display:flex;'
-      + 'justify-content:space-between;align-items:center;'
-      + 'padding:4px 8px;font-size:0.86em;}');
-    SB.AppendLine('.codekarte.schlecht .karte-titel{background:#fdecea;'
-      + 'color:#9c2317;}');
-    SB.AppendLine('.codekarte.gut .karte-titel{background:#e7f4e8;'
-      + 'color:#1d6b2a;}');
-    SB.AppendLine('pre{background:#23272e;color:#e6e6e6;margin:0;'
-      + 'padding:8px;overflow-x:auto;font-size:0.88em;'
-      + 'font-family:Consolas,monospace;}');
-    SB.AppendLine('.karte{border:1px solid var(--rand);border-radius:8px;'
-      + 'padding:8px 10px;margin-top:10px;background:#fbfcfe;}');
-    SB.AppendLine('button.copy{border:1px solid var(--rand);'
-      + 'background:var(--karte);border-radius:5px;cursor:pointer;'
-      + 'font-size:0.8em;padding:1px 8px;}');
+    // (pre/Codekarten/karte/copy: geteilte Basis, uWorkbenchStyle)
     SB.AppendLine('.metarow{margin-top:12px;color:var(--dezent);'
       + 'font-size:0.88em;}');
     // ---- Responsive ---------------------------------------------------
@@ -608,6 +557,21 @@ begin
       + '&& ev.key !== "Enter") return;');
     SB.AppendLine('  if (ev.target && ev.target.id === "suche" && '
       + 'ev.key === "Enter") return;');
+    SB.AppendLine('  // Buttons behalten ihre Enter-Aktivierung - ohne');
+    SB.AppendLine('  // den Ausstieg schluckte preventDefault den Klick');
+    SB.AppendLine('  // auf Chips/Reset/Copy und oeffnete stattdessen');
+    SB.AppendLine('  // die erste Zeile (Review 07.09., Bestandsfix).');
+    SB.AppendLine('  if (ev.target && ev.target.tagName === "BUTTON") '
+      + 'return;');
+    SB.AppendLine('  // Enter auf einer per Tab fokussierten Zeile');
+    SB.AppendLine('  // oeffnet DIESE Zeile, nicht die gewaehlt-/erste.');
+    SB.AppendLine('  if (ev.key === "Enter" && ev.target '
+      + '&& ev.target.classList '
+      + '&& ev.target.classList.contains("haupt")) {');
+    SB.AppendLine('    ev.preventDefault();');
+    SB.AppendLine('    oeffneDrawer(ev.target.parentNode);');
+    SB.AppendLine('    return;');
+    SB.AppendLine('  }');
     SB.AppendLine('  var zeilen = sichtbareZeilen();');
     SB.AppendLine('  if (!zeilen.length) return;');
     SB.AppendLine('  var idx = -1;');
@@ -731,22 +695,23 @@ begin
     begin
       SB.AppendLine('<div class="codekarten">');
       // #10#10 vor </pre>: zwei Leerzeilen Luft am Blockende - derselbe
-      // Nutzerwunsch wie in der Hint-Zeile des Findings-Reports
-      // (data-copy bleibt der REINE Code, die Luft ist nur Anzeige).
+      // Nutzerwunsch wie in der Hint-Zeile des Findings-Reports.
+      // data-copy = der REINE Code ohne die Anzeige-Luft, via HA():
+      // Umbrueche als '&#10;', nicht als '<br>'-Token (s. HA).
       if R.Meta.BadExample <> '' then
         SB.AppendLine(Format('<div class="codekarte schlecht" '
           + 'data-copy="%s"><div class="karte-titel">Vorher '
           + '(problematisch)<button class="copy" '
           + 'onclick="kopiere(this)">Kopieren</button></div><pre>%s'
           + #10#10'</pre></div>',
-          [H(R.Meta.BadExample), H(R.Meta.BadExample)]));
+          [HA(R.Meta.BadExample), H(R.Meta.BadExample)]));
       if R.Meta.GoodExample <> '' then
         SB.AppendLine(Format('<div class="codekarte gut" '
           + 'data-copy="%s"><div class="karte-titel">Nachher '
           + '(empfohlen)<button class="copy" '
           + 'onclick="kopiere(this)">Kopieren</button></div><pre>%s'
           + #10#10'</pre></div>',
-          [H(R.Meta.GoodExample), H(R.Meta.GoodExample)]));
+          [HA(R.Meta.GoodExample), H(R.Meta.GoodExample)]));
       SB.AppendLine('</div>');
     end;
     SB.AppendLine(Format('<div class="karte" data-copy="// noinspection '

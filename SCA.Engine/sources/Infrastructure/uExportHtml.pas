@@ -60,6 +60,14 @@ type
     // behandeln, sonst landen '<br>'-Tokens im Attributwert (genau das
     // fing das Chargen-Review 06.09. beim zweiten Konsumenten).
     class function HtmlEscape(const S: string): string; static;
+    // Attributsichere Variante fuer MEHRZEILIGE Werte (data-copy der
+    // Codekarten beider Workbench-Seiten): wie HtmlEscape, aber
+    // Umbrueche als '&#10;' - der HTML-Parser stellt im dataset echte
+    // LF her, waehrend das literale '<br>' des Element-Vertrags im
+    // Attribut Datenmuell in der Zwischenablage waere (Chargen-Review
+    // 07.09., MAJOR). Fuer EINZEILIGE Attributwerte genuegt HtmlEscape.
+    class function HtmlAttrEscapeMultiline(const S: string): string;
+      static;
   private
     class function JsonForScript(const S: string): string; static;
     // Liefert ein HTML-Fragment (<div class="src-snippet">) mit
@@ -84,7 +92,8 @@ implementation
 uses
   System.IOUtils,          // TPath (Relativpfad-Anzeige, HtmlDisplayPath)
   uExport, uFixHint, uRuleCatalog, uQuickFix, uBaseline,
-  uLocalization;           // CurrentLanguage - Regeltexte folgen der App-Sprache
+  uLocalization,           // CurrentLanguage - Regeltexte folgen der App-Sprache
+  uWorkbenchStyle;         // geteilter CSS-Kern beider HTML-Exporte (07.09.)
 
 type
   // Per-Datei-Aggregat fuer das Top-Dateien-Risiko-Ranking (#11).
@@ -197,6 +206,17 @@ begin
   finally
     SB.Free;
   end;
+end;
+
+class function TExporterHtml.HtmlAttrEscapeMultiline(
+  const S: string): string;
+// Nachbearbeitung des HtmlEscape-Ergebnisses statt eigener Escape-
+// Kette: ein '<br>' im OUTPUT kann nur vom #10-Mapping stammen -
+// echte '<' sind dort bereits '&lt;' -, der Replace ist also
+// kollisionsfrei (Vertrag s. Deklaration).
+begin
+  Result := StringReplace(HtmlEscape(S), '<br>', '&#10;',
+    [rfReplaceAll]);
 end;
 
 class function TExporterHtml.BuildCodeSnippet(SourceLines: TStringList;
@@ -620,84 +640,114 @@ begin
     SB.AppendLine('  <meta charset="UTF-8">');
     SB.Append    ('  <title>'); SB.Append(HtmlEscape(Title)); SB.AppendLine('</title>');
     SB.AppendLine('  <style>');
-    SB.AppendLine('    body { font-family: Segoe UI, Arial, sans-serif; margin: 24px; color: #222; }');
-    SB.AppendLine('    h1 { font-size: 18px; margin-bottom: 4px; }');
-    SB.AppendLine('    .meta { color: #666; font-size: 12px; margin-bottom: 16px; }');
-    SB.AppendLine('    .summary { display: flex; gap: 12px; margin-bottom: 16px; }');
+    // Workbench-Designsystem (07.09., "alles soll sich gleich
+    // anfuehlen"): geteilter Kern zuerst, dann restylen die folgenden
+    // Report-Regeln ihre Klassen auf die Tokens/Optik. JS-Klassen und
+    // Test-Strings bleiben unveraendert (CSS-Landkarte der Charge 18).
+    SB.Append(TWorkbenchStyle.BasisCss);
+    SB.AppendLine('    main { padding: 14px 20px; }');
+    SB.AppendLine('    header.kopf .meta { color: #b9c6d2; font-size: 12px; margin: 2px 0 0 0; }');
+    SB.AppendLine('    .summary { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }');
     // Aggregierter Regel-Report (2026-08-26). Eigene Klassen statt der
     // Fund-Tabellen-Styles: die Fundtabelle traegt Filter-/Sortier-Logik,
     // die hier nichts zu suchen hat. overflow-x, damit neun Spalten auch
     // im schmalen IDE-Dock scrollen statt die Seite zu sprengen.
-    SB.AppendLine('    .rule-report { margin: 12px 0 18px; }');
+    SB.AppendLine('    .rule-report { margin: 12px 0 18px; background: var(--karte); border: 1px solid var(--rand); border-radius: 8px; box-shadow: 0 1px 2px rgba(16,32,48,0.06); padding: 2px 10px 8px 10px; }');
     SB.AppendLine('    .rule-report > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }');
     SB.AppendLine('    .rule-table { border-collapse: collapse; font-size: 12px; width: 100%; display: block; overflow-x: auto; }');
-    SB.AppendLine('    .rule-table th, .rule-table td { border-bottom: 1px solid #e0e0e0; padding: 3px 8px; text-align: left; white-space: nowrap; }');
-    SB.AppendLine('    .rule-table th { position: sticky; top: 0; background: #f6f6f6; }');
+    SB.AppendLine('    .rule-table th, .rule-table td { border: 0; border-bottom: 1px solid var(--rand); padding: 3px 8px; text-align: left; white-space: nowrap; }');
+    SB.AppendLine('    .rule-table th { position: sticky; top: 0; background: #eef2f6; box-shadow: inset 0 -1px 0 var(--rand); }');
     SB.AppendLine('    .rule-table td.num, .rule-table th.num { text-align: right; }');
     SB.AppendLine('    .rule-table .rr-id { font-family: Consolas, monospace; }');
-    SB.AppendLine('    .rule-table .rr-e { color: #a00; }');
-    SB.AppendLine('    .rule-table .rr-w { color: #855000; }');
-    SB.AppendLine('    .rule-table .rr-h { color: #555; }');
-    SB.AppendLine('    .rule-table .rr-share { color: #555; }');
-    SB.AppendLine('    .badge { padding: 6px 12px; border-radius: 4px; font-size: 12px; }');
-    SB.AppendLine('    .badge b { font-size: 16px; display: block; }');
-    SB.AppendLine('    .b-err  { background: #ffe5e5; color: #800; }');
-    SB.AppendLine('    .b-warn { background: #fff5d0; color: #704000; }');
-    SB.AppendLine('    .b-hint { background: #e8f0d8; color: #305018; }');
-    SB.AppendLine('    .b-tot  { background: #eee; color: #333; }');
-    SB.AppendLine('    /* Klickbare Severity-Badges */');
-    SB.AppendLine('    .sev-filter { cursor: pointer; user-select: none;');
-    SB.AppendLine('       border: 2px solid transparent; transition: border-color 0.15s; }');
-    SB.AppendLine('    .sev-filter:hover { border-color: #888; }');
-    SB.AppendLine('    .sev-filter.sev-active { border-color: #333; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06); }');
-    SB.AppendLine('    table { border-collapse: collapse; width: 100%; font-size: 12px; }');
-    SB.AppendLine('    th, td { border-bottom: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }');
-    SB.AppendLine('    th { background: #f4f4f4; font-weight: 600; }');
-    SB.AppendLine('    tr.err  td.sev { color: #b00000; font-weight: 600; }');
-    SB.AppendLine('    tr.readerr td.sev { color: #b00000; font-weight: 600; }');
-    SB.AppendLine('    tr.warn td.sev { color: #b08000; font-weight: 600; }');
-    SB.AppendLine('    tr.hint td.sev { color: #5a8000; font-weight: 600; }');
-    SB.AppendLine('    tr.err  { background: #fff5f5; }');
-    SB.AppendLine('    tr.readerr { background: #fff5f5; }');
-    SB.AppendLine('    tr.warn { background: #fffbe8; }');
-    SB.AppendLine('    .num { text-align: right; font-variant-numeric: tabular-nums; color: #666; }');
+    SB.AppendLine('    .rule-table .rr-e { color: #9c2317; }');
+    SB.AppendLine('    .rule-table .rr-w { color: #8a5a00; }');
+    SB.AppendLine('    .rule-table .rr-h { color: var(--dezent); }');
+    SB.AppendLine('    .rule-table .rr-share { color: var(--dezent); }');
+    // Summenkarten in Kachel-Optik: Karte statt Vollfarbflaeche, die
+    // Severity sitzt in der Farbe der grossen Zahl (Workbench-Palette).
+    // Klassen b-*/sev-filter/sev-active sind JS-Vertrag und bleiben.
+    SB.AppendLine('    .summary .badge { background: var(--karte); border: 1px solid var(--rand); border-radius: 8px; padding: 8px 14px; min-width: 104px; font-size: 0.85em; color: var(--dezent); box-shadow: 0 1px 2px rgba(16,32,48,0.06); white-space: normal; }');
+    SB.AppendLine('    .summary .badge b { font-size: 1.6em; display: block; font-weight: 600; }');
+    SB.AppendLine('    .b-err  b { color: #9c2317; }');
+    SB.AppendLine('    .b-warn b { color: #8a5a00; }');
+    SB.AppendLine('    .b-hint b { color: #1a5da6; }');
+    SB.AppendLine('    .b-tot  b { color: var(--tinte); }');
+    SB.AppendLine('    /* Klickbare Severity-Kacheln */');
+    SB.AppendLine('    .sev-filter { cursor: pointer; user-select: none; transition: border-color 0.15s; }');
+    SB.AppendLine('    .sev-filter:hover { border-color: var(--akzent); }');
+    SB.AppendLine('    .sev-filter.sev-active { border-color: var(--akzent); box-shadow: inset 3px 0 0 var(--akzent); }');
+    SB.AppendLine('    table { border-collapse: collapse; width: 100%; font-size: 12px; background: var(--karte); border: 1px solid var(--rand); }');
+    SB.AppendLine('    th, td { border: 0; border-bottom: 1px solid var(--rand); padding: 7px 10px; text-align: left; vertical-align: top; }');
+    SB.AppendLine('    th { background: #eef2f6; font-weight: 600; position: sticky; top: 0; box-shadow: inset 0 -1px 0 var(--rand); }');
+    SB.AppendLine('    tr.err  td.sev { color: #9c2317; font-weight: 600; }');
+    SB.AppendLine('    tr.readerr td.sev { color: #9c2317; font-weight: 600; }');
+    SB.AppendLine('    tr.warn td.sev { color: #8a5a00; font-weight: 600; }');
+    SB.AppendLine('    tr.hint td.sev { color: #1a5da6; font-weight: 600; }');
+    SB.AppendLine('    tr.err  { background: #fdecea; }');
+    SB.AppendLine('    tr.readerr { background: #fdecea; }');
+    SB.AppendLine('    tr.warn { background: #fef4e5; }');
+    SB.AppendLine('    .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--dezent); }');
     SB.AppendLine('    /* Klickbare Befund-Zeile + Folgezeile mit Hint */');
     SB.AppendLine('    tr.finding { cursor: pointer; }');
     SB.AppendLine('    tr.finding:hover { filter: brightness(0.97); }');
-    SB.AppendLine('    tr.finding td.toggle { width: 18px; text-align: center; color: #888;');
+    SB.AppendLine('    tr.finding.open { box-shadow: inset 3px 0 0 var(--akzent); }');
+    SB.AppendLine('    tr.finding td.toggle { width: 18px; text-align: center; color: var(--dezent);');
     SB.AppendLine('       font-size: 10px; user-select: none; }');
-    SB.AppendLine('    tr.finding.open td.toggle { color: #333; transform: rotate(0); }');
+    SB.AppendLine('    tr.finding.open td.toggle { color: var(--tinte); transform: rotate(0); }');
+    // Die Hint-Zeile bleibt als DATENQUELLE im DOM, sichtbar wird ihr
+    // Inhalt nur noch im Detail-Drawer (Nutzerwunsch 07.09.: Details
+    // kommen seitlich heraus wie im Detektor-Katalog). Deshalb gibt es
+    // keinen .open-Anzeigezustand der Zeile mehr.
     SB.AppendLine('    tr.finding-hint { display: none; }');
-    SB.AppendLine('    tr.finding-hint.open { display: table-row; }');
-    SB.AppendLine('    tr.finding-hint > td { background: #fafafa; padding: 10px 16px;');
-    SB.AppendLine('       border-bottom: 2px solid #ddd; }');
-    SB.AppendLine('    .hint-desc { font-style: italic; color: #444; margin: 0 0 6px 0; }');
+    // Detail-Drawer: Optik-Zwilling des Katalog-Drawers
+    // (uDetectorInfoExport, zweite Kopie - bei einer dritten Seite in
+    // uWorkbenchStyle heben). Nur Token-Farben, dadurch brauchen
+    // dark/sepia KEINE eigenen Drawer-Zeilen.
+    SB.AppendLine('    #drawer { position: fixed; top: 0; right: 0; height: 100%; width: 40%;');
+    SB.AppendLine('       min-width: 340px; max-width: 44em; background: var(--karte);');
+    SB.AppendLine('       border-left: 1px solid var(--rand); box-shadow: -4px 0 16px rgba(16,32,48,0.12);');
+    SB.AppendLine('       transform: translateX(102%); transition: transform 180ms ease;');
+    SB.AppendLine('       overflow-y: auto; padding: 14px 18px; z-index: 10; }');
+    SB.AppendLine('    #drawer.offen { transform: translateX(0); }');
+    SB.AppendLine('    #drawer h2 { margin: 0 0 2px 0; font-size: 1.12em; }');
+    SB.AppendLine('    #drawer h3 { margin: 14px 0 4px 0; font-size: 0.98em; }');
+    SB.AppendLine('    #drawer-schliessen { float: right; border: 1px solid var(--rand);');
+    SB.AppendLine('       background: var(--karte); color: var(--tinte); border-radius: 6px;');
+    SB.AppendLine('       cursor: pointer; font-size: 1em; padding: 2px 9px; }');
+    SB.AppendLine('    .drawer-status { margin: 6px 0 4px 0; display: flex; gap: 6px; flex-wrap: wrap; }');
+    SB.AppendLine('    .drawer-ort { color: var(--dezent); font-size: 0.88em; margin-bottom: 8px;');
+    SB.AppendLine('       font-family: Consolas,monospace; word-break: break-all; }');
+    SB.AppendLine('    @media (max-width: 900px) { #drawer { width: 100%; min-width: 0; max-width: none; } }');
+    SB.AppendLine('    .hint-desc { color: var(--tinte); margin: 0 0 6px 0; background: #fbfcfe; border: 1px solid var(--rand); border-radius: 8px; padding: 6px 10px; }');
     // #3/#4: Regel-Erklaerung-Fallback, CWE/OWASP-Badges, Regel-Beispiel-Note.
-    SB.AppendLine('    .hint-rule-desc { border-left: 3px solid #ccd; padding-left: 8px; }');
+    SB.AppendLine('    .hint-rule-desc { border-left: 3px solid var(--akzent); }');
     SB.AppendLine('    .sec-badges { margin: 0 0 6px 0; }');
     SB.AppendLine('    .sec-badge { display: inline-block; font-size: 10px; font-weight: 600;');
-    SB.AppendLine('      padding: 1px 6px; border-radius: 3px; margin-right: 5px; }');
-    SB.AppendLine('    .cwe-badge { background: #fde8e8; color: #a02020; border: 1px solid #e8b0b0; }');
-    SB.AppendLine('    .owasp-badge { background: #fff0e0; color: #a06020; border: 1px solid #e8c090; }');
-    SB.AppendLine('    .rule-example-note { font-size: 11px; color: #888; font-style: italic; margin: 6px 0 2px 0; }');
+    SB.AppendLine('      padding: 0 6px; border-radius: 4px; margin-right: 5px; }');
+    SB.AppendLine('    .cwe-badge { background: #f3ecfb; color: #5b2d91; border: 1px solid #dcc9f0; }');
+    SB.AppendLine('    .owasp-badge { background: #eef2f6; color: #3d4a58; border: 1px solid var(--rand); }');
+    SB.AppendLine('    .rule-example-note { font-size: 11px; color: var(--dezent); font-style: italic; margin: 6px 0 2px 0; }');
     // Untereinander statt nebeneinander (Nutzerwunsch 07.09.): beim
     // Vergleich springt das Auge zeilenweise, nicht spaltenweise.
     SB.AppendLine('    .code-pair { display: block; margin-top: 4px; }');
-    SB.AppendLine('    .code-block { min-width: 0; }');
-    SB.AppendLine('    .code-block + .code-block { margin-top: 6px; }');
-    SB.AppendLine('    .code-block h5 { margin: 0 0 2px 0; font-size: 11px; }');
-    SB.AppendLine('    .code-before h5 { color: #800; }');
-    SB.AppendLine('    .code-after  h5 { color: #060; }');
+    // Codekarten-Optik der Workbench: farbige Titelzeile (h5) auf
+    // Karten-Kopf, Code einheitlich dunkel - die dark/sepia-pre-
+    // Overrides weiter hinten gewinnen in ihren Themes weiterhin.
+    SB.AppendLine('    .code-block { min-width: 0; border: 1px solid var(--rand); border-radius: 8px; overflow: hidden; }');
+    SB.AppendLine('    .code-block + .code-block { margin-top: 10px; }');
+    SB.AppendLine('    .code-block h5 { margin: 0; font-size: 11px; padding: 4px 8px; }');
+    SB.AppendLine('    .code-before h5 { color: #9c2317; background: #fdecea; }');
+    SB.AppendLine('    .code-after  h5 { color: #1d6b2a; background: #e7f4e8; }');
     SB.AppendLine('    .code-block pre { margin: 0; padding: 6px 8px; font-size: 11px;');
     SB.AppendLine('       font-family: Consolas, "Courier New", monospace; overflow-x: auto;');
-    SB.AppendLine('       border-radius: 3px; white-space: pre; }');
-    SB.AppendLine('    .code-before pre { background: #fff0f0; color: #400; }');
-    SB.AppendLine('    .code-after  pre { background: #f0f8e8; color: #042; }');
+    SB.AppendLine('       white-space: pre; }');
+    SB.AppendLine('    .code-before pre { background: #23272e; color: #e6e6e6; }');
+    SB.AppendLine('    .code-after  pre { background: #23272e; color: #e6e6e6; }');
     SB.AppendLine('    /* Code-Snippet aus der echten Quelldatei */');
-    SB.AppendLine('    .src-snippet { background: #fafafa; border: 1px solid #e0e0e0;');
+    SB.AppendLine('    .src-snippet { background: #fafafa; border: 1px solid var(--rand);');
     SB.AppendLine('       padding: 4px 0; margin: 0 0 8px 0; font-size: 11px;');
     SB.AppendLine('       font-family: Consolas, "Courier New", monospace; overflow-x: auto;');
-    SB.AppendLine('       border-radius: 3px; }');
+    SB.AppendLine('       border-radius: 8px; }');
     SB.AppendLine('    .src-line { white-space: pre; padding: 0 8px; }');
     SB.AppendLine('    .src-line-num { color: #999; user-select: none; }');
     SB.AppendLine('    .src-line-bar { color: #ccc; user-select: none; }');
@@ -705,26 +755,28 @@ begin
     SB.AppendLine('    .src-line-active .src-line-num,');
     SB.AppendLine('    .src-line-active .src-line-bar { color: #b08000; font-weight: 600; }');
     SB.AppendLine('    .src-snippet-hdr { font-size: 11px; color: #666; margin: 0 0 2px 0; }');
-    SB.AppendLine('    /* Controls-Bar: Datei-Filter + Sort-Hinweise */');
-    SB.AppendLine('    .controls { display: flex; gap: 12px; align-items: center;');
+    SB.AppendLine('    /* Controls-Bar: Command-Bar-Optik der Workbench */');
+    SB.AppendLine('    .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap;');
     SB.AppendLine('       margin: 8px 0 12px 0; font-size: 12px; }');
-    SB.AppendLine('    .controls label { color: #555; }');
-    SB.AppendLine('    .controls select { font-size: 12px; padding: 4px 6px;');
-    SB.AppendLine('       border: 1px solid #ccc; border-radius: 3px; min-width: 200px; }');
-    SB.AppendLine('    .controls .hint { color: #888; font-style: italic; }');
-    SB.AppendLine('    .controls .row-count { color: #444; font-weight: 600; }');
-    SB.AppendLine('    .trunc-banner { margin: 8px 0; padding: 8px 12px; border-radius: 4px;');
-    SB.AppendLine('      background: #fff4e5; border: 1px solid #d98600; color: #6b4200; font-weight: 600; }');
+    SB.AppendLine('    .controls label { color: var(--dezent); }');
+    SB.AppendLine('    .controls select { font-size: 12px; padding: 6px 8px; background: var(--karte);');
+    SB.AppendLine('       border: 1px solid var(--rand); border-radius: 8px; min-width: 200px; }');
+    SB.AppendLine('    .controls input[type=search] { padding: 7px 10px; border: 1px solid var(--rand);');
+    SB.AppendLine('       border-radius: 8px; background: var(--karte); font-size: 12px; }');
+    SB.AppendLine('    .controls .hint { color: var(--dezent); font-style: italic; }');
+    SB.AppendLine('    .controls .row-count { color: var(--tinte); font-weight: 600; }');
+    SB.AppendLine('    .trunc-banner { margin: 8px 0; padding: 8px 12px; border-radius: 8px;');
+    SB.AppendLine('      background: #fef4e5; border: 1px solid #f1d9ad; color: #8a5a00; font-weight: 600; }');
     SB.AppendLine('    /* Sortierbare Header */');
     SB.AppendLine('    th.sortable { cursor: pointer; user-select: none; }');
-    SB.AppendLine('    th.sortable:hover { background: #ebebeb; }');
-    SB.AppendLine('    th.sortable .sort-ind { color: #aaa; margin-left: 4px; font-size: 10px; }');
-    SB.AppendLine('    th.sortable.sort-asc  .sort-ind::before { content: "\25B2"; color: #333; }');
-    SB.AppendLine('    th.sortable.sort-desc .sort-ind::before { content: "\25BC"; color: #333; }');
+    SB.AppendLine('    th.sortable:hover { background: #e3eaf2; }');
+    SB.AppendLine('    th.sortable .sort-ind { color: var(--dezent); margin-left: 4px; font-size: 10px; }');
+    SB.AppendLine('    th.sortable.sort-asc  .sort-ind::before { content: "\25B2"; color: #1a5da6; }');
+    SB.AppendLine('    th.sortable.sort-desc .sort-ind::before { content: "\25BC"; color: #1a5da6; }');
     SB.AppendLine('    /* Top-Detektoren-Panel */');
-    SB.AppendLine('    .top-detectors { background: #f8f8f8; border: 1px solid #e0e0e0;');
-    SB.AppendLine('       border-radius: 4px; padding: 8px 12px; margin-bottom: 12px;');
-    SB.AppendLine('       font-size: 12px; }');
+    SB.AppendLine('    .top-detectors { background: var(--karte); border: 1px solid var(--rand);');
+    SB.AppendLine('       border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;');
+    SB.AppendLine('       box-shadow: 0 1px 2px rgba(16,32,48,0.06); font-size: 12px; }');
     SB.AppendLine('    .top-detectors h2 { font-size: 13px; margin: 0 0 6px 0; color: #444;');
     SB.AppendLine('       font-weight: 600; }');
     SB.AppendLine('    .top-detectors ol { margin: 0; padding-left: 22px; columns: 2;');
@@ -736,31 +788,34 @@ begin
     SB.AppendLine('    .top-detectors .td-count { color: #666; font-variant-numeric: tabular-nums; }');
     SB.AppendLine('    /* QF-Badge: markiert Detektoren mit Quick-Fix-Provider (uQuickFix). */');
     SB.AppendLine('    /* Tech-Lead-Hint: das sind die "low-hanging fruit" beim Refactoring-Sprint. */');
-    SB.AppendLine('    .top-detectors .td-qf { color: #08a; font-size: 10px; margin-left: 6px;');
-    SB.AppendLine('       border: 1px solid #08a; border-radius: 2px; padding: 0 4px;');
-    SB.AppendLine('       font-weight: 600; letter-spacing: 0.5px; }');
-    SB.AppendLine('    /* Audience-Hint-Banner: macht klar fuer wen der Report optimiert ist. */');
-    SB.AppendLine('    .audience-hint { background: #eef5ff; border-left: 3px solid #3b73c4;');
-    SB.AppendLine('       padding: 8px 12px; margin: 0 0 12px 0; font-size: 12px; color: #234; }');
-    SB.AppendLine('    .audience-hint b { color: #1a3b6a; }');
+    SB.AppendLine('    .top-detectors .td-qf { color: #1a5da6; font-size: 10px; margin-left: 6px;');
+    SB.AppendLine('       border: 1px solid #c4dbf2; border-radius: 4px; padding: 0 4px;');
+    SB.AppendLine('       background: #eaf3fd; font-weight: 600; letter-spacing: 0.5px; }');
+    SB.AppendLine('    /* Audience-Hint als Rollen-Karte der Workbench */');
+    SB.AppendLine('    .audience-hint { background: var(--karte); border: 1px solid var(--rand);');
+    SB.AppendLine('       border-left: 3px solid var(--akzent); border-radius: 8px;');
+    SB.AppendLine('       box-shadow: 0 1px 2px rgba(16,32,48,0.06);');
+    SB.AppendLine('       padding: 8px 12px; margin: 0 0 12px 0; font-size: 12px; color: var(--tinte); }');
+    SB.AppendLine('    .audience-hint b { color: #1a5da6; }');
     // #14 Security-Sektion-Panel
-    SB.AppendLine('    .sec-panel { background: #fff0f0; border-left: 3px solid #d04040; border-radius: 4px;');
+    SB.AppendLine('    .sec-panel { background: #fdecea; border: 1px solid #f2c4bf;');
+    SB.AppendLine('      border-left: 3px solid #9c2317; border-radius: 8px;');
     SB.AppendLine('      padding: 8px 12px; margin: 0 0 12px 0; font-size: 13px; }');
     SB.AppendLine('    .sec-panel-icon { font-size: 15px; }');
-    SB.AppendLine('    .sec-panel b { color: #b00000; }');
+    SB.AppendLine('    .sec-panel b { color: #9c2317; }');
     SB.AppendLine('    :root[data-theme="dark"] .sec-panel { background: #331e1e; border-color: #d04040; color: #e0c0c0; }');
     SB.AppendLine('    :root[data-theme="dark"] .sec-panel b { color: #ff8080; }');
     SB.AppendLine('    /* Health-Score-Panel (#5): Ampel gruen/gelb/rot, reuse Severity-Farben */');
     SB.AppendLine('    .health-panel { display: flex; align-items: center; gap: 16px;');
-    SB.AppendLine('       border-radius: 4px; padding: 10px 14px; margin: 0 0 12px 0;');
-    SB.AppendLine('       border: 1px solid #ddd; }');
-    SB.AppendLine('    .health-panel.health-green  { background: #e8f0d8; border-color: #b8d088; }');
-    SB.AppendLine('    .health-panel.health-yellow { background: #fff5d0; border-color: #e8cd7a; }');
-    SB.AppendLine('    .health-panel.health-red    { background: #ffe5e5; border-color: #e0a0a0; }');
+    SB.AppendLine('       border-radius: 8px; padding: 10px 14px; margin: 0 0 12px 0;');
+    SB.AppendLine('       border: 1px solid var(--rand); box-shadow: 0 1px 2px rgba(16,32,48,0.06); }');
+    SB.AppendLine('    .health-panel.health-green  { background: #e7f4e8; border-color: #bcd9bf; }');
+    SB.AppendLine('    .health-panel.health-yellow { background: #fef4e5; border-color: #f1d9ad; }');
+    SB.AppendLine('    .health-panel.health-red    { background: #fdecea; border-color: #f2c4bf; }');
     // #6: Uebersicht-Charts (Donut + Kategorie-Balken)
     SB.AppendLine('    .chart-panel { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; margin: 0 0 14px 0; }');
-    SB.AppendLine('    .chart-box { background: #f8f8f8; border: 1px solid #e0e0e0; border-radius: 5px; padding: 10px 14px; }');
-    SB.AppendLine('    .chart-box h3 { font-size: 13px; margin: 0 0 8px 0; color: #444; font-weight: 600; }');
+    SB.AppendLine('    .chart-box { background: var(--karte); border: 1px solid var(--rand); border-radius: 8px; box-shadow: 0 1px 2px rgba(16,32,48,0.06); padding: 10px 14px; }');
+    SB.AppendLine('    .chart-box h3 { font-size: 13px; margin: 0 0 8px 0; color: var(--tinte); font-weight: 600; }');
     SB.AppendLine('    .donut-wrap { display: flex; align-items: center; gap: 14px; }');
     SB.AppendLine('    .donut { width: 110px; height: 110px; }');
     SB.AppendLine('    .donut-total { font-size: 26px; font-weight: 700; fill: #333; }');
@@ -772,9 +827,9 @@ begin
     SB.AppendLine('    .cbar { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 1px 0; }');
     SB.AppendLine('    .cbar-lbl { width: 160px; font-family: Consolas, "Courier New", monospace;');
     SB.AppendLine('       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }');
-    SB.AppendLine('    .cbar-track { flex: 0 0 190px; background: #eee; border-radius: 2px; height: 12px; }');
-    SB.AppendLine('    .cbar-fill { display: block; height: 12px; background: #6aa0d8; border-radius: 2px; }');
-    SB.AppendLine('    .cbar-num { color: #666; font-variant-numeric: tabular-nums; }');
+    SB.AppendLine('    .cbar-track { flex: 0 0 190px; background: #eef2f6; border-radius: 4px; height: 12px; }');
+    SB.AppendLine('    .cbar-fill { display: block; height: 12px; background: #1a5da6; border-radius: 4px; }');
+    SB.AppendLine('    .cbar-num { color: var(--dezent); font-variant-numeric: tabular-nums; }');
     // #7 Baseline-Diff: NEU-Zeilen mit gruenem Balken, bestehende leicht gedimmt.
     SB.AppendLine('    .base-summary { font-size: 12px; color: #555; margin-left: 4px; align-self: center; }');
     SB.AppendLine('    tr.finding[data-bstatus="new"] { box-shadow: inset 3px 0 0 #2a9d2a; }');
@@ -787,89 +842,101 @@ begin
     SB.AppendLine('    .health-num { font-size: 26px; font-weight: 700; line-height: 1.1;');
     SB.AppendLine('       font-variant-numeric: tabular-nums; }');
     SB.AppendLine('    .health-status { font-size: 12px; font-weight: 600; }');
-    SB.AppendLine('    .health-green  .health-num, .health-green  .health-status { color: #305018; }');
-    SB.AppendLine('    .health-yellow .health-num, .health-yellow .health-status { color: #704000; }');
-    SB.AppendLine('    .health-red    .health-num, .health-red    .health-status { color: #800; }');
-    SB.AppendLine('    .health-line { font-size: 13px; color: #333; }');
+    SB.AppendLine('    .health-green  .health-num, .health-green  .health-status { color: #1d6b2a; }');
+    SB.AppendLine('    .health-yellow .health-num, .health-yellow .health-status { color: #8a5a00; }');
+    SB.AppendLine('    .health-red    .health-num, .health-red    .health-status { color: #9c2317; }');
+    SB.AppendLine('    .health-line { font-size: 13px; color: var(--tinte); }');
     SB.AppendLine('    /* Top-Dateien-Risiko-Ranking (#11): analog zu .top-detectors */');
-    SB.AppendLine('    .top-files { background: #f8f8f8; border: 1px solid #e0e0e0;');
-    SB.AppendLine('       border-radius: 4px; padding: 8px 12px; margin-bottom: 12px;');
-    SB.AppendLine('       font-size: 12px; }');
+    SB.AppendLine('    .top-files { background: var(--karte); border: 1px solid var(--rand);');
+    SB.AppendLine('       border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;');
+    SB.AppendLine('       box-shadow: 0 1px 2px rgba(16,32,48,0.06); font-size: 12px; }');
     SB.AppendLine('    .top-files h2 { font-size: 13px; margin: 0 0 6px 0; color: #444;');
     SB.AppendLine('       font-weight: 600; }');
     SB.AppendLine('    .top-files ol { margin: 0; padding-left: 22px; columns: 2;');
     SB.AppendLine('       column-gap: 24px; }');
     SB.AppendLine('    .top-files li { padding: 2px 0; cursor: pointer; user-select: none; }');
-    SB.AppendLine('    .top-files li:hover { color: #06c; text-decoration: underline; }');
+    SB.AppendLine('    .top-files li:hover { color: #1a5da6; text-decoration: underline; }');
     SB.AppendLine('    .top-files .tf-name { font-family: Consolas, "Courier New", monospace; }');
-    SB.AppendLine('    .top-files .tf-score { color: #333; font-weight: 600;');
+    SB.AppendLine('    .top-files .tf-score { color: var(--tinte); font-weight: 600;');
     SB.AppendLine('       font-variant-numeric: tabular-nums; margin-left: 4px; }');
     SB.AppendLine('    .top-files .tf-counts { margin-left: 6px;');
     SB.AppendLine('       font-variant-numeric: tabular-nums; }');
-    SB.AppendLine('    .top-files .tf-e { color: #b00000; font-weight: 600; }');
-    SB.AppendLine('    .top-files .tf-w { color: #b08000; font-weight: 600; }');
-    SB.AppendLine('    .top-files .tf-h { color: #5a8000; font-weight: 600; }');
-    SB.AppendLine('    /* Konfidenz-Badge (#1): reuse Severity-Farbwelt */');
-    SB.AppendLine('    .conf-badge { font-size: 10px; padding: 0 5px; border-radius: 2px;');
-    SB.AppendLine('       font-weight: 600; }');
-    SB.AppendLine('    .conf-high   { background: #e8f0d8; color: #305018; }');
-    SB.AppendLine('    .conf-medium { background: #fff5d0; color: #704000; }');
+    SB.AppendLine('    .top-files .tf-e { color: #9c2317; font-weight: 600; }');
+    SB.AppendLine('    .top-files .tf-w { color: #8a5a00; font-weight: 600; }');
+    SB.AppendLine('    .top-files .tf-h { color: #1a5da6; font-weight: 600; }');
+    SB.AppendLine('    /* Konfidenz-Badge (#1): Workbench-neutral (Konfidenz ist');
+    SB.AppendLine('       bewusst sekundaer zur Severity, s. Designsystem-Konzept) */');
+    SB.AppendLine('    .conf-badge { font-size: 10px; padding: 0 5px; border-radius: 5px;');
+    SB.AppendLine('       border: 1px solid var(--rand); font-weight: 600; }');
+    SB.AppendLine('    .conf-high   { background: #f0f1f4; color: #3d4a58; }');
+    SB.AppendLine('    .conf-medium { background: #f0f1f4; color: #3d4a58; }');
     // #777 auf #eee waren 3,86:1 - unter AA (4,5:1) fuer normalen Text, und
     // die Badges sind klein. Die beiden Geschwister lagen mit 7,8 bzw. 7,9
     // deutlich darueber; nur diese eine Stufe fiel durch (Review 2026-08-19).
     // #5f5f5f: 5,50:1, gleiche Grau-Familie, kein Farbwechsel.
-    SB.AppendLine('    .conf-low    { background: #eee; color: #5f5f5f; }');
+    SB.AppendLine('    .conf-low    { background: #f0f1f4; color: #5f5f5f; }');
     SB.AppendLine('    .controls .conf-toggle { display: inline-flex; align-items: center;');
-    SB.AppendLine('       gap: 4px; color: #555; cursor: pointer; }');
-    SB.AppendLine('    /* Header-Actions: Sprint-Export, Shortcuts-Help neben Titel */');
-    SB.AppendLine('    .header-actions { display: flex; gap: 8px; margin: -8px 0 12px 0; }');
-    SB.AppendLine('    .tl-btn { background: #3b73c4; color: white; border: none;');
-    SB.AppendLine('       padding: 5px 12px; border-radius: 3px; cursor: pointer;');
+    SB.AppendLine('       gap: 4px; color: var(--dezent); cursor: pointer; }');
+    SB.AppendLine('    /* Header-Actions: Workbench-Buttons (Primaeraktion akzent-gefuellt) */');
+    SB.AppendLine('    .header-actions { display: flex; gap: 8px; margin: 8px 0 12px 0; }');
+    SB.AppendLine('    .tl-btn { background: var(--akzent); color: white; border: 1px solid var(--akzent);');
+    SB.AppendLine('       padding: 5px 12px; border-radius: 8px; cursor: pointer;');
     SB.AppendLine('       font-size: 12px; font-family: inherit; }');
-    SB.AppendLine('    .tl-btn:hover { background: #2a5fa0; }');
-    SB.AppendLine('    .tl-btn.secondary { background: #888; }');
-    SB.AppendLine('    .tl-btn.secondary:hover { background: #666; }');
+    SB.AppendLine('    .tl-btn:hover { background: #14497f; }');
+    SB.AppendLine('    .tl-btn.secondary { background: var(--karte); color: var(--tinte); border-color: var(--rand); }');
+    SB.AppendLine('    .tl-btn.secondary:hover { border-color: var(--akzent); background: var(--karte); }');
     SB.AppendLine('    /* Search-Input */');
-    SB.AppendLine('    .controls input[type="search"] { font-size: 12px; padding: 4px 6px;');
-    SB.AppendLine('       border: 1px solid #ccc; border-radius: 3px; width: 200px;');
+    SB.AppendLine('    .controls input[type="search"] { font-size: 12px;');
+    SB.AppendLine('       width: 220px;');
     SB.AppendLine('       font-family: inherit; }');
     SB.AppendLine('    /* Quick-Wins-Option im Profile-Dropdown abheben */');
-    SB.AppendLine('    #ruleFilter option[value="qf"] { color: #08a; font-weight: 600; }');
+    SB.AppendLine('    #ruleFilter option[value="qf"] { color: #1a5da6; font-weight: 600; }');
     SB.AppendLine('    /* Keyboard-Shortcuts-Help-Overlay */');
     SB.AppendLine('    .kbd-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4);');
     SB.AppendLine('       z-index: 999; display: none; }');
     SB.AppendLine('    .kbd-overlay.open { display: block; }');
     SB.AppendLine('    .kbd-help { position: fixed; top: 50%; left: 50%;');
-    SB.AppendLine('       transform: translate(-50%,-50%); background: white;');
-    SB.AppendLine('       border: 1px solid #888; border-radius: 5px; padding: 16px 22px;');
-    SB.AppendLine('       box-shadow: 0 4px 20px rgba(0,0,0,0.35); z-index: 1000;');
+    SB.AppendLine('       transform: translate(-50%,-50%); background: var(--karte);');
+    SB.AppendLine('       border: 1px solid var(--rand); border-radius: 8px; padding: 16px 22px;');
+    SB.AppendLine('       box-shadow: 0 4px 16px rgba(16,32,48,0.25); z-index: 1000;');
     SB.AppendLine('       display: none; font-size: 12px; min-width: 360px; }');
     SB.AppendLine('    .kbd-help.open { display: block; }');
-    SB.AppendLine('    .kbd-help h3 { margin: 0 0 12px 0; font-size: 14px; color: #1a3b6a; }');
-    SB.AppendLine('    .kbd-help table { width: 100%; border: none; }');
+    SB.AppendLine('    .kbd-help h3 { margin: 0 0 12px 0; font-size: 14px; color: #1a5da6; }');
+    SB.AppendLine('    .kbd-help table { width: 100%; border: none; background: transparent; }');
     SB.AppendLine('    .kbd-help td { padding: 4px 8px; border: none; }');
     SB.AppendLine('    .kbd-help td.k { width: 110px; text-align: right; }');
-    SB.AppendLine('    .kbd-help kbd { background: #eee; border: 1px solid #999;');
-    SB.AppendLine('       border-radius: 3px; padding: 1px 6px; font-family: Consolas,');
-    SB.AppendLine('       "Courier New", monospace; font-size: 11px; color: #222; }');
+    SB.AppendLine('    .kbd-help kbd { background: #eef2f6; border: 1px solid var(--rand);');
+    SB.AppendLine('       border-bottom-width: 2px;');
+    SB.AppendLine('       border-radius: 4px; padding: 1px 6px; font-family: Consolas,');
+    SB.AppendLine('       "Courier New", monospace; font-size: 11px; color: var(--tinte); }');
     SB.AppendLine('    .kbd-help-close { position: absolute; top: 8px; right: 12px;');
     SB.AppendLine('       background: none; border: none; font-size: 18px; cursor: pointer;');
-    SB.AppendLine('       color: #888; }');
+    SB.AppendLine('       color: var(--dezent); }');
     SB.AppendLine('    /* Copy-Toast - kurze Bestaetigung beim Clipboard-Kopieren */');
     SB.AppendLine('    .toast { position: fixed; bottom: 30px; left: 50%;');
-    SB.AppendLine('       transform: translateX(-50%); background: #1a3b6a; color: white;');
-    SB.AppendLine('       padding: 8px 18px; border-radius: 4px; font-size: 12px;');
+    SB.AppendLine('       transform: translateX(-50%); background: #20303f; color: white;');
+    SB.AppendLine('       padding: 8px 18px; border-radius: 999px; font-size: 12px;');
     SB.AppendLine('       opacity: 0; transition: opacity 0.25s; pointer-events: none;');
     SB.AppendLine('       z-index: 1001; }');
     SB.AppendLine('    .toast.show { opacity: 1; }');
     // #8 A11y: sichtbarer Fokus-Ring (Tastatur) + reduced-motion.
-    SB.AppendLine('    *:focus-visible { outline: 2px solid #4a90e2; outline-offset: 1px; border-radius: 2px; }');
+    SB.AppendLine('    *:focus-visible { outline: 2px solid #1a5da6; outline-offset: 1px; border-radius: 2px; }');
     SB.AppendLine('    @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }');
     // #9 Dark-Mode: EIN Regelsatz; JS setzt data-theme aus localStorage bzw.
     // prefers-color-scheme (keine @media-Duplikation). health-panel bleibt
     // farbkodiert (Status). Nur Schluessel-Flaechen ueberschrieben.
+    // Workbench-Token-Overrides ZUERST: alles, was in der Basis auf
+    // var(--...) haengt, kippt damit automatisch mit. Die folgenden
+    // Einzelregeln bleiben fuer alles, was Tokens nicht abdecken.
+    // ABLEITUNGS-INVARIANTE: der Selektor steht auf JEDER Zeile.
+    SB.AppendLine('    :root[data-theme="dark"] { --grund: #1e1e1e; --karte: #262626; }');
+    SB.AppendLine('    :root[data-theme="dark"] { --tinte: #d6d6d6; --dezent: #9aa4ad; }');
+    SB.AppendLine('    :root[data-theme="dark"] { --rand: #3a3a3a; --akzent: #6cb0ff; }');
     SB.AppendLine('    :root[data-theme="dark"] body { background: #1e1e1e; color: #d6d6d6; }');
     SB.AppendLine('    :root[data-theme="dark"] a { color: #6cb0ff; }');
+    SB.AppendLine('    :root[data-theme="dark"] th { background: #2c2c2c; box-shadow: inset 0 -1px 0 #3a3a3a; }');
+    SB.AppendLine('    :root[data-theme="dark"] .code-before h5 { background: #331e1e; }');
+    SB.AppendLine('    :root[data-theme="dark"] .code-after h5 { background: #1e301e; }');
     SB.AppendLine('    :root[data-theme="dark"] .meta { color: #999; }');
     SB.AppendLine('    :root[data-theme="dark"] th, :root[data-theme="dark"] td { border-bottom-color: #3a3a3a; }');
     SB.AppendLine('    :root[data-theme="dark"] th { background: #2c2c2c; }');
@@ -882,7 +949,6 @@ begin
     SB.AppendLine('    :root[data-theme="dark"] tr.warn td.sev { color: #e6b45a; }');
     SB.AppendLine('    :root[data-theme="dark"] tr.hint td.sev { color: #a8d878; }');
     SB.AppendLine('    :root[data-theme="dark"] tr.finding:hover { filter: brightness(1.25); }');
-    SB.AppendLine('    :root[data-theme="dark"] tr.finding-hint > td { background: #242424; }');
     SB.AppendLine('    :root[data-theme="dark"] .code-block pre { background: #262626; color: #d0d0d0; }');
     SB.AppendLine('    :root[data-theme="dark"] .code-before pre { background: #331e1e; color: #f0b0b0; }');
     SB.AppendLine('    :root[data-theme="dark"] .code-after  pre { background: #1e301e; color: #b0e0a0; }');
@@ -1005,7 +1071,15 @@ begin
     // damit bei OS-Dunkel dunkel, und sein Toggle ueberschreibt den
     // Wert mit 'dark'. Selbstheilend, kein Crash - der Preis dafuer,
     // dass die Wahl ueber Reports hinweg erhalten bleibt.
+    // Workbench-Token-Overrides ZUERST (wie im Dark-Block; Sepia wird
+    // nie per @media abgeleitet, die Zeilenform bleibt zur Symmetrie).
+    SB.AppendLine('    :root[data-theme="sepia"] { --grund: #f4ead2; --karte: #faf3e0; }');
+    SB.AppendLine('    :root[data-theme="sepia"] { --tinte: #3d2e1a; --dezent: #7a6648; }');
+    SB.AppendLine('    :root[data-theme="sepia"] { --rand: #d9c9a8; --akzent: #7a4a1f; }');
     SB.AppendLine('    :root[data-theme="sepia"] body { background: #f4ead2; color: #3d2e1a; }');
+    SB.AppendLine('    :root[data-theme="sepia"] th { background: #ead9b8; box-shadow: inset 0 -1px 0 #d9c9a8; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .code-before h5 { background: #f0d5c6; }');
+    SB.AppendLine('    :root[data-theme="sepia"] .code-after h5 { background: #e0e4bf; }');
     SB.AppendLine('    :root[data-theme="sepia"] a { color: #8a4a00; }');
     SB.AppendLine('    :root[data-theme="sepia"] .meta { color: #6b5942; }');
     SB.AppendLine('    :root[data-theme="sepia"] th, :root[data-theme="sepia"] td { border-bottom-color: #d8c7a4; }');
@@ -1019,7 +1093,6 @@ begin
     SB.AppendLine('    :root[data-theme="sepia"] tr.warn td.sev { color: #7d5200; }');
     SB.AppendLine('    :root[data-theme="sepia"] tr.hint td.sev { color: #47661a; }');
     SB.AppendLine('    :root[data-theme="sepia"] tr.finding:hover { filter: brightness(0.96); }');
-    SB.AppendLine('    :root[data-theme="sepia"] tr.finding-hint > td { background: #eee2c4; }');
     SB.AppendLine('    :root[data-theme="sepia"] .code-block pre { background: #ece0bf; color: #33270f; }');
     SB.AppendLine('    :root[data-theme="sepia"] .code-before pre { background: #f0d5c6; color: #7a2810; }');
     SB.AppendLine('    :root[data-theme="sepia"] .code-after  pre { background: #e0e4bf; color: #324c10; }');
@@ -1164,6 +1237,10 @@ begin
     SB.AppendLine('    document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>');
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');
+    // Dunkler Workbench-Kopf (07.09.): Titel + Meta-Zeile im
+    // header.kopf-Balken, der restliche Inhalt in <main> (traegt das
+    // Seiten-Padding; body ist seit dem Token-Umbau randlos).
+    SB.AppendLine('<header class="kopf">');
     SB.Append    ('  <h1>'); SB.Append(HtmlEscape(Title)); SB.AppendLine('</h1>');
     // meta-Zeile mit zwei i18n-Spans + datums-Daten als Attribute, damit
     // applyLanguage die "Erstellt:" / "Datei:"-Labels neu rendern kann
@@ -1201,6 +1278,8 @@ begin
       SB.Append('</span>');
     end;
     SB.AppendLine('</div>');
+    SB.AppendLine('</header>');
+    SB.AppendLine('<main>');
 
     // Maschinenlesbarer Meta-Block (#10) - kein Rendering (application/json),
     // nur zum Parsen durch die Pipeline. generatedAt = derselbe deterministische
@@ -1907,7 +1986,8 @@ begin
         SB.Append('<td>'); SB.Append(HtmlEscape(F.MissingVar)); SB.Append('</td>');
         SB.AppendLine('</tr>');
 
-        // Versteckte Hint-Zeile (wird per JS sichtbar geschaltet)
+        // Versteckte Hint-Zeile: dauerhaft unsichtbare Datenquelle -
+        // openDrawer klont ihren Zelleninhalt in den Detail-Drawer.
         if HasHint then
         begin
           // colspan = 8 oder 9 je nachdem ob Datei-Spalte da ist
@@ -1915,18 +1995,30 @@ begin
           var Cols := 8;
           if SourceFile = '' then Cols := 9;
           SB.Append('      <tr class="finding-hint"><td colspan="' + IntToStr(Cols) + '">');
-          if Hint.Description <> '' then
+          // Katalog-Parallele (Nutzerwunsch 07.09.): dieselben zwei
+          // Abschnitte wie im Detektor-Katalog-Drawer, in derselben
+          // Reihenfolge. Der fruehere Fallback "FullDescription nur bei
+          // leerer Hint.Description" entfaellt - das WARUM steht jetzt
+          // IMMER da, der fundspezifische Hinweis kommt gelabelt danach.
+          if Meta.ShortDescription <> '' then
           begin
+            SB.Append('<h3 data-i18n="hint-what">Was wird erkannt?</h3>');
             SB.Append('<div class="hint-desc">');
-            SB.Append(HtmlEscape(Hint.Description));
+            SB.Append(HtmlEscape(Meta.ShortDescription));
             SB.Append('</div>');
-          end
-          else if Meta.FullDescription <> '' then
+          end;
+          if Meta.FullDescription <> '' then
           begin
-            // #4: Fallback auf die kanonische Regel-Erklaerung (WARUM), wenn
-            // der per-Finding-FixHint keine eigene Beschreibung liefert.
+            SB.Append('<h3 data-i18n="hint-why">Warum ist das relevant?</h3>');
             SB.Append('<div class="hint-desc hint-rule-desc">');
             SB.Append(HtmlEscape(Meta.FullDescription));
+            SB.Append('</div>');
+          end;
+          if Hint.Description <> '' then
+          begin
+            SB.Append('<h3 data-i18n="hint-this">Hinweis zu diesem Fund</h3>');
+            SB.Append('<div class="hint-desc">');
+            SB.Append(HtmlEscape(Hint.Description));
             SB.Append('</div>');
           end;
 
@@ -2087,6 +2179,9 @@ begin
     SB.AppendLine('        "audience-hint": "<b>Optimised for Tech-Lead / Senior-Dev review</b> &middot; ' +
       'refactoring prioritisation. Start at the top with the Top Detectors (highest volume, <span class=\"td-qf\">QF</span> = quick-fix available); the table is sorted by severity (Errors &rarr; Hints).",');
     SB.AppendLine('        "src-snippet-hdr": "Source: {0}, line {1}",');
+    SB.AppendLine('        "hint-what": "What is detected?",');
+    SB.AppendLine('        "hint-why":  "Why does it matter?",');
+    SB.AppendLine('        "hint-this": "Note on this finding",');
     SB.AppendLine('        "hint-before": "Before (Problem)",');
     SB.AppendLine('        "hint-after":  "After (Fix)"');
     SB.AppendLine('      },');
@@ -2153,6 +2248,9 @@ begin
     SB.AppendLine('        "audience-hint": "<b>Optimiert fuer Tech-Lead / Senior-Dev Review</b> &middot; ' +
       'Refactoring-Priorisierung. Starte oben mit den Top-Detektoren (groesstes Volumen, <span class=\"td-qf\">QF</span> = Quick-Fix vorhanden), die Tabelle ist nach Severity sortiert (Fehler &rarr; Hinweis).",');
     SB.AppendLine('        "src-snippet-hdr": "Quelle: {0}, Zeile {1}",');
+    SB.AppendLine('        "hint-what": "Was wird erkannt?",');
+    SB.AppendLine('        "hint-why":  "Warum ist das relevant?",');
+    SB.AppendLine('        "hint-this": "Hinweis zu diesem Fund",');
     SB.AppendLine('        "hint-before": "Vorher (Problem)",');
     SB.AppendLine('        "hint-after":  "Nachher (Loesung)"');
     SB.AppendLine('      },');
@@ -2227,6 +2325,9 @@ begin
     SB.AppendLine('        "audience-hint": "<b>Optimis\u00e9 pour la revue Tech-Lead / Senior-Dev</b> &middot; ' +
       'priorisation du refactoring. Commencez par les Top D\u00e9tecteurs (volume le plus important, <span class=\"td-qf\">QF</span> = quick-fix disponible)\u00a0; le tableau est tri\u00e9 par s\u00e9v\u00e9rit\u00e9 (erreurs &rarr; indices).",');
     SB.AppendLine('        "src-snippet-hdr": "Source\u00a0: {0}, ligne {1}",');
+    SB.AppendLine('        "hint-what": "Qu''est-ce qui est d\u00e9tect\u00e9 ?",');
+    SB.AppendLine('        "hint-why":  "Pourquoi est-ce pertinent ?",');
+    SB.AppendLine('        "hint-this": "Remarque sur cette occurrence",');
     SB.AppendLine('        "hint-before": "Avant (probl\u00e8me)",');
     SB.AppendLine('        "hint-after":  "Apr\u00e8s (solution)"');
     SB.AppendLine('      }');
@@ -2376,15 +2477,87 @@ begin
     SB.AppendLine('    var fileSel = document.getElementById(''fileFilter'');');
     SB.AppendLine('    var ruleSel = document.getElementById(''ruleFilter'');');
     SB.AppendLine('');
-    SB.AppendLine('    // ---- Toggle: Klick auf Befund-Zeile blendet Hint-Zeile ein/aus ----');
+    SB.AppendLine('    // ---- Detail-Drawer: Klick auf Befund-Zeile oeffnet die Details ----');
+    SB.AppendLine('    // seitlich (gleiches Bediengefuehl wie der Detektor-Katalog). Die');
+    SB.AppendLine('    // versteckte Hint-Zeile ist nur noch Datenquelle: ihr Zelleninhalt');
+    SB.AppendLine('    // wird beim Oeffnen in den Drawer geklont. Lazy-Lookup statt');
+    SB.AppendLine('    // Init-Cache: das Drawer-Markup steht hinter </main>, also NACH');
+    SB.AppendLine('    // diesem Skript im Dokument.');
+    SB.AppendLine('    function drawerEl() { return document.getElementById(''drawer''); }');
+    SB.AppendLine('    function closeDrawer() {');
+    SB.AppendLine('      var dw = drawerEl(); if (!dw) return;');
+    SB.AppendLine('      dw.classList.remove(''offen'');');
+    SB.AppendLine('      document.querySelectorAll(''tr.finding.open'').forEach(function(r) {');
+    SB.AppendLine('        r.classList.remove(''open'');');
+    SB.AppendLine('        var t = r.querySelector(''td.toggle'');');
+    SB.AppendLine('        if (t && t.textContent.length > 0) t.innerHTML = ''&#9656;'';');
+    SB.AppendLine('      });');
+    SB.AppendLine('    }');
+    SB.AppendLine('    function openDrawer(row, hint) {');
+    SB.AppendLine('      var dw = drawerEl(); if (!dw) return;');
+    SB.AppendLine('      var kopf   = document.getElementById(''drawer-kopf'');');
+    SB.AppendLine('      var inhalt = document.getElementById(''drawer-inhalt'');');
+    SB.AppendLine('      if (!kopf || !inhalt) return;');
+    SB.AppendLine('      // Kopf aus den Zellen der Zeile - kein zusaetzliches Markup je');
+    SB.AppendLine('      // Fund noetig (Report kann sehr gross sein). DOM-API statt');
+    SB.AppendLine('      // innerHTML-Bau, damit Zellentexte nicht re-escaped werden muessen.');
+    SB.AppendLine('      var sevCls = row.classList.contains(''err'')  ? ''sev-err''');
+    SB.AppendLine('                 : row.classList.contains(''warn'') ? ''sev-warn''');
+    SB.AppendLine('                 : row.classList.contains(''hint'') ? ''sev-hint'' : ''typ'';');
+    SB.AppendLine('      function cellTxt(col) {');
+    SB.AppendLine('        var c = row.children[colIndex[col]];');
+    SB.AppendLine('        return c ? c.textContent : '''';');
+    SB.AppendLine('      }');
+    SB.AppendLine('      kopf.innerHTML = '''';');
+    SB.AppendLine('      var h = document.createElement(''h2'');');
+    SB.AppendLine('      h.textContent = cellTxt(''rule'');');
+    SB.AppendLine('      kopf.appendChild(h);');
+    SB.AppendLine('      var st = document.createElement(''div'');');
+    SB.AppendLine('      st.className = ''drawer-status'';');
+    SB.AppendLine('      function badge(cls, txt) {');
+    SB.AppendLine('        if (!txt) return;');
+    SB.AppendLine('        var s = document.createElement(''span'');');
+    SB.AppendLine('        s.className = ''badge '' + cls;');
+    SB.AppendLine('        s.textContent = txt;');
+    SB.AppendLine('        st.appendChild(s);');
+    SB.AppendLine('      }');
+    SB.AppendLine('      badge(sevCls, cellTxt(''sev''));');
+    SB.AppendLine('      badge(''konf'', cellTxt(''conf''));');
+    SB.AppendLine('      badge(''typ'', cellTxt(''type''));');
+    SB.AppendLine('      kopf.appendChild(st);');
+    SB.AppendLine('      // Fundort rein symbolisch (Datei:Zeile + Methode) - keine Woerter,');
+    SB.AppendLine('      // damit der Kopf ohne i18n-Eintraege auskommt.');
+    SB.AppendLine('      var fileTxt = row.getAttribute(''data-file'') || '''';');
+    SB.AppendLine('      var ortTxt  = fileTxt ? fileTxt + '':'' + cellTxt(''line'') : cellTxt(''line'');');
+    SB.AppendLine('      if (cellTxt(''method'')) ortTxt += '' '' + String.fromCharCode(183) + '' '' + cellTxt(''method'');');
+    SB.AppendLine('      if (ortTxt) {');
+    SB.AppendLine('        var ort = document.createElement(''div'');');
+    SB.AppendLine('        ort.className = ''drawer-ort'';');
+    SB.AppendLine('        ort.textContent = ortTxt;');
+    SB.AppendLine('        kopf.appendChild(ort);');
+    SB.AppendLine('      }');
+    SB.AppendLine('      // Inhalt = Klon der Hint-Zelle. Der Klon haengt im Dokument,');
+    SB.AppendLine('      // applyLanguage uebersetzt seine data-i18n-Knoten also mit.');
+    SB.AppendLine('      inhalt.innerHTML = hint.cells[0] ? hint.cells[0].innerHTML : '''';');
+    SB.AppendLine('      dw.classList.add(''offen'');');
+    SB.AppendLine('      dw.scrollTop = 0;');
+    SB.AppendLine('    }');
+    SB.AppendLine('    // Close-Button per Delegation - der Drawer steht im DOM hinter');
+    SB.AppendLine('    // diesem Skript, ein Init-Listener faende ihn noch nicht.');
+    SB.AppendLine('    document.addEventListener(''click'', function(e) {');
+    SB.AppendLine('      if (e.target && e.target.id === ''drawer-schliessen'') closeDrawer();');
+    SB.AppendLine('    });');
     SB.AppendLine('    function wireToggle(row) {');
     SB.AppendLine('      var hint = row.nextElementSibling;');
     SB.AppendLine('      if (!hint || !hint.classList.contains(''finding-hint'')) return;');
     SB.AppendLine('      row.addEventListener(''click'', function() {');
-    SB.AppendLine('        var open = hint.classList.toggle(''open'');');
-    SB.AppendLine('        row.classList.toggle(''open'', open);');
+    SB.AppendLine('        // Zweiter Klick auf dieselbe Zeile schliesst (Toggle-Gefuehl).');
+    SB.AppendLine('        if (row.classList.contains(''open'')) { closeDrawer(); return; }');
+    SB.AppendLine('        closeDrawer();');
+    SB.AppendLine('        row.classList.add(''open'');');
     SB.AppendLine('        var t = row.querySelector(''td.toggle'');');
-    SB.AppendLine('        if (t) t.innerHTML = open ? ''&#9662;'' : ''&#9656;'';');
+    SB.AppendLine('        if (t) t.innerHTML = ''&#9662;'';');
+    SB.AppendLine('        openDrawer(row, hint);');
     SB.AppendLine('      });');
     SB.AppendLine('    }');
     SB.AppendLine('    document.querySelectorAll(''tr.finding'').forEach(wireToggle);');
@@ -2486,20 +2659,12 @@ begin
     SB.AppendLine('    // ---- Datei- und Severity-Filter (kombinierbar) ----');
     SB.AppendLine('    var activeSev = ''''; // '''' = alle, sonst ''err''/''warn''/''hint''');
     SB.AppendLine('');
-    SB.AppendLine('    // Alle expandierten Befunde wieder einklappen.');
-    SB.AppendLine('    // Wird bei Filter-Wechsel aufgerufen, damit der User nach dem');
-    SB.AppendLine('    // Umschalten nicht mit ploetzlich aufgeklappten Hint-Bloecken einer');
-    SB.AppendLine('    // anderen Problem-Gruppe konfrontiert wird.');
+    SB.AppendLine('    // Bei Filter-Wechsel: offenen Drawer schliessen (samt Zeilen-');
+    SB.AppendLine('    // Markierung), damit er nicht die Details eines Fundes aus einer');
+    SB.AppendLine('    // anderen, jetzt weggefilterten Problem-Gruppe zeigt. Der Name');
+    SB.AppendLine('    // bleibt aus der Klappzeilen-Aera - die Aufrufer sind dieselben.');
     SB.AppendLine('    function collapseAll() {');
-    SB.AppendLine('      document.querySelectorAll(''tr.finding.open'').forEach(function(row) {');
-    SB.AppendLine('        row.classList.remove(''open'');');
-    SB.AppendLine('        var t = row.querySelector(''td.toggle'');');
-    SB.AppendLine('        if (t && t.textContent.length > 0) t.innerHTML = ''&#9656;'';');
-    SB.AppendLine('      });');
-    SB.AppendLine('      document.querySelectorAll(''tr.finding-hint.open'').forEach(function(h) {');
-    SB.AppendLine('        h.classList.remove(''open'');');
-    SB.AppendLine('        h.style.display = ''''; // CSS uebernimmt wieder (display: none)');
-    SB.AppendLine('      });');
+    SB.AppendLine('      closeDrawer();');
     SB.AppendLine('    }');
     SB.AppendLine('');
     SB.AppendLine('    // QF_KINDS: Lookup-Set aller Kinds mit Quick-Fix-Provider.');
@@ -2566,18 +2731,15 @@ begin
     SB.AppendLine('        }');
     SB.AppendLine('        var match  = fileOk && sevOk && ruleOk && searchOk && confOk && baseOk;');
     SB.AppendLine('        row.style.display = match ? '''' : ''none'';');
-    SB.AppendLine('        var hint = row.nextElementSibling;');
-    SB.AppendLine('        if (hint && hint.classList.contains(''finding-hint'')) {');
-    SB.AppendLine('          if (!match) {');
-    SB.AppendLine('            hint.style.display = ''none'';');
-    SB.AppendLine('          } else if (hint.classList.contains(''open'')) {');
-    SB.AppendLine('            hint.style.display = ''table-row'';');
-    SB.AppendLine('          } else {');
-    SB.AppendLine('            hint.style.display = '''';');
-    SB.AppendLine('          }');
-    SB.AppendLine('        }');
+    SB.AppendLine('        // Die Hint-Zeile braucht kein Display-Management mehr - sie ist');
+    SB.AppendLine('        // per CSS dauerhaft unsichtbar und nur Datenquelle des Drawers.');
     SB.AppendLine('        if (match) visible++;');
     SB.AppendLine('      });');
+    SB.AppendLine('      // Wird der gerade gezeigte Fund weggefiltert (z.B. Live-Suche,');
+    SB.AppendLine('      // die ohne collapseAll laeuft), schliesst der Drawer mit - er');
+    SB.AppendLine('      // zeigte sonst die Details eines unsichtbaren Fundes.');
+    SB.AppendLine('      var opened = document.querySelector(''tr.finding.open'');');
+    SB.AppendLine('      if (opened && opened.style.display === ''none'') closeDrawer();');
     SB.AppendLine('      if (rowCnt) { rowCnt.dataset.count = visible; rowCnt.innerHTML = T("row-count", visible); }');
     SB.AppendLine('      // Master-Kacheln updaten - reflektieren den Datei-+Rule-Scope.');
     SB.AppendLine('      var cErr  = document.getElementById(''count-err'');');
@@ -2959,7 +3121,7 @@ begin
     SB.AppendLine('    // 1/2/3   - Severity-Filter (Error/Warning/Hint)');
     SB.AppendLine('    // 0       - alle Severities');
     SB.AppendLine('    // /       - Suche fokussieren');
-    SB.AppendLine('    // Esc     - Filter zuruecksetzen (oder Suche leeren)');
+    SB.AppendLine('    // Esc     - Hilfe/Drawer schliessen, sonst Filter zuruecksetzen (oder Suche leeren)');
     SB.AppendLine('    // ?       - Shortcuts-Hilfe');
     SB.AppendLine('    function activateSev(sev) {');
     SB.AppendLine('      activeSev = sev;');
@@ -2985,6 +3147,10 @@ begin
     SB.AppendLine('      var inField = (e.target.tagName === ''INPUT'' || e.target.tagName === ''TEXTAREA'' || e.target.tagName === ''SELECT'');');
     SB.AppendLine('      if (e.key === ''Escape'') {');
     SB.AppendLine('        if (kbdOverlay && kbdOverlay.classList.contains(''open'')) { closeKbdHelp(); return; }');
+    SB.AppendLine('        // Drawer vor den Filtern: erst die Detailansicht schliessen,');
+    SB.AppendLine('        // ein zweites Esc setzt dann die Filter zurueck.');
+    SB.AppendLine('        var dwEsc = drawerEl();');
+    SB.AppendLine('        if (dwEsc && dwEsc.classList.contains(''offen'')) { closeDrawer(); return; }');
     SB.AppendLine('        if (inField && e.target === searchInput) {');
     SB.AppendLine('          if (searchInput.value) { searchInput.value = ''''; applyFilter(); return; }');
     SB.AppendLine('          searchInput.blur(); return;');
@@ -3019,7 +3185,7 @@ begin
     SB.AppendLine('        ''<tr><td class="k"><kbd>3</kbd></td><td>nur Hinweise</td></tr>'' +');
     SB.AppendLine('        ''<tr><td class="k"><kbd>0</kbd></td><td>alle Severities</td></tr>'' +');
     SB.AppendLine('        ''<tr><td class="k"><kbd>/</kbd></td><td>Suche fokussieren</td></tr>'' +');
-    SB.AppendLine('        ''<tr><td class="k"><kbd>Esc</kbd></td><td>Filter zuruecksetzen</td></tr>'' +');
+    SB.AppendLine('        ''<tr><td class="k"><kbd>Esc</kbd></td><td>Detail schliessen / Filter zuruecksetzen</td></tr>'' +');
     SB.AppendLine('        ''<tr><td class="k"><kbd>?</kbd></td><td>diese Hilfe</td></tr>'' +');
     SB.AppendLine('        ''</table>'';');
     SB.AppendLine('      kbdHelp.querySelector(''.kbd-help-close'').addEventListener(''click'', closeKbdHelp);');
@@ -3141,6 +3307,16 @@ begin
     SB.AppendLine('    })();');
     SB.AppendLine('  })();');
     SB.AppendLine('  </script>');
+    SB.AppendLine('</main>');
+    // Detail-Drawer (leer; Kopf und Inhalt fuellt openDrawer aus der
+    // jeweils angeklickten Befund-Zeile). Steht bewusst NACH dem
+    // Skript - das JS greift deshalb lazy zu (drawerEl) und verdrahtet
+    // den Close-Button per Delegation.
+    SB.AppendLine('<aside id="drawer" aria-label="Befund-Details">');
+    SB.AppendLine('  <button id="drawer-schliessen" aria-label="Details schliessen">&times;</button>');
+    SB.AppendLine('  <div id="drawer-kopf"></div>');
+    SB.AppendLine('  <div id="drawer-inhalt"></div>');
+    SB.AppendLine('</aside>');
     SB.AppendLine('</body>');
     SB.AppendLine('</html>');
 

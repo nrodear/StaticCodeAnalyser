@@ -61,6 +61,12 @@ type
     // Nutzerwunsch 07.09.: Vorher/Nachher in der Hint-Zeile stehen
     // UNTEREINANDER und jeder Codeblock traegt zwei Leerzeilen Luft.
     [Test] procedure HintCodePair_StackedWithTrailingBlankLines;
+    // Charge 18 (07.09., "alles soll sich gleich anfuehlen"): der
+    // Report traegt das Workbench-Designsystem der Detector-Info-Seite.
+    [Test] procedure Report_WearsWorkbenchLook;
+    // Charge 18 (07.09., Nachauftrag): Befund-Details oeffnen seitlich
+    // im Drawer wie im Detektor-Katalog - die Klappzeile ist Geschichte.
+    [Test] procedure FindingDetails_OpenInSideDrawer;
   end;
 
 
@@ -70,7 +76,7 @@ implementation
 // Fixture-Ausnahme des Profils: '.html'/'x not freed' wiederholen sich
 // als Pruefgegenstand; die C:-Pfade im DefaultFileName-Fall SIND der
 // getestete Namensvertrag. GodClass/LargeClass: eine DUnitX-Fixture
-// waechst mit jedem Vertragsfall (inzwischen 21) - die Testmethoden
+// waechst mit jedem Vertragsfall (inzwischen 23) - die Testmethoden
 // sind der Katalog, eine Aufspaltung duplizierte nur die Render-Helfer.
 
 uses
@@ -779,6 +785,91 @@ begin
   Assert.IsTrue(Alle > 0, 'kein Codeblock im Report gefunden');
   Assert.AreEqual<Integer>(Alle, MitLuft,
     'JEDER Vorher/Nachher-Codeblock endet mit zwei Leerzeilen');
+end;
+
+procedure TTestExportHtml.Report_WearsWorkbenchLook;
+// Geteilter Kern (uWorkbenchStyle) + die Struktur-Anker des Umbaus:
+// Tokens, dunkler Kopf mit Titel+Meta, main-Wrapper, Theme-Token-
+// Overrides (Ableitungs-Invariante: Selektor je Zeile - die erste
+// Dark-Token-Zeile muss darum den vollen Selektor tragen).
+var
+  Html : string;
+begin
+  Html := RenderReport;
+  Assert.IsTrue(Pos('--akzent:#1a5da6', Html) > 0,
+    'Workbench-Tokens fehlen (uWorkbenchStyle nicht eingebunden)');
+  Assert.IsTrue(Pos('<header class="kopf">', Html) > 0,
+    'dunkler Workbench-Kopf fehlt');
+  Assert.IsTrue(Pos('</header>', Html) > 0, 'Kopf nicht geschlossen');
+  Assert.IsTrue(Pos('<main>', Html) > 0, 'main-Wrapper fehlt');
+  Assert.IsTrue(Pos('</main>', Html) > 0, 'main nicht geschlossen');
+  Assert.IsTrue(Pos('<header class="kopf">', Html) < Pos('<main>', Html),
+    'Kopf steht vor dem Inhalt');
+  Assert.IsTrue(
+    Pos(':root[data-theme="dark"] { --grund: #1e1e1e;', Html) > 0,
+    'Dark-Theme ueberschreibt die Tokens nicht');
+  Assert.IsTrue(
+    Pos(':root[data-theme="sepia"] { --grund: #f4ead2;', Html) > 0,
+    'Sepia-Theme ueberschreibt die Tokens nicht');
+end;
+
+procedure TTestExportHtml.FindingDetails_OpenInSideDrawer;
+// Drawer-Vertrag des Reports (Nachauftrag 07.09.): Markup-Anker,
+// JS-Funktionen samt Verdrahtung, Drawer-CSS inkl. Responsive-Fall -
+// und als Gegenprobe, dass die alte Klappzeilen-Anzeige WEG ist
+// (ohne die Gegenprobe waere ein Doppel-UI aus Drawer UND Klappzeile
+// fuer diesen Test unsichtbar).
+var
+  Html : string;
+begin
+  Html := RenderReport;
+  Assert.IsTrue(Pos('<aside id="drawer" aria-label="Befund-Details">',
+    Html) > 0, 'Drawer-Markup fehlt');
+  Assert.IsTrue(Pos('id="drawer-schliessen"', Html) > 0,
+    'Close-Button fehlt');
+  Assert.IsTrue(Pos('id="drawer-kopf"', Html) > 0, 'Drawer-Kopf fehlt');
+  Assert.IsTrue(Pos('id="drawer-inhalt"', Html) > 0,
+    'Drawer-Inhalt fehlt');
+  Assert.IsTrue(Pos('function openDrawer(row, hint)', Html) > 0,
+    'openDrawer fehlt');
+  Assert.IsTrue(Pos('function closeDrawer()', Html) > 0,
+    'closeDrawer fehlt');
+  Assert.IsTrue(Pos('openDrawer(row, hint);', Html) > 0,
+    'wireToggle ruft openDrawer nicht (Definition allein oeffnet nichts)');
+  Assert.IsTrue(Pos('#drawer { position: fixed; top: 0; right: 0;',
+    Html) > 0, 'Drawer-CSS fehlt');
+  Assert.IsTrue(
+    Pos('@media (max-width: 900px) { #drawer { width: 100%;', Html) > 0,
+    'Responsive-Vollbild des Drawers fehlt');
+  // Gegenproben: die Klappzeile darf nie wieder sichtbar werden.
+  Assert.AreEqual<Integer>(0,
+    Pos('tr.finding-hint.open { display: table-row; }', Html),
+    'alte Klappzeilen-Anzeige lebt noch');
+  Assert.IsTrue(Pos('tr.finding-hint { display: none; }', Html) > 0,
+    'Hint-Zeile muss dauerhaft unsichtbare Datenquelle bleiben');
+  // Katalog-Parallele (Nachauftrag 07.09.): "Was wird erkannt?" und
+  // "Warum ist das relevant?" stehen in den Befund-Details - SCA001
+  // traegt beide Beschreibungen im Katalog, die Abschnitte muessen
+  // also erscheinen, in Katalog-Reihenfolge (Was vor Warum).
+  Assert.IsTrue(
+    Pos('<h3 data-i18n="hint-what">Was wird erkannt?</h3>', Html) > 0,
+    '"Was wird erkannt?"-Abschnitt fehlt in den Befund-Details');
+  Assert.IsTrue(
+    Pos('<h3 data-i18n="hint-why">Warum ist das relevant?</h3>', Html) > 0,
+    '"Warum ist das relevant?"-Abschnitt fehlt in den Befund-Details');
+  Assert.IsTrue(
+    Pos('<h3 data-i18n="hint-what">', Html) <
+    Pos('<h3 data-i18n="hint-why">', Html),
+    'Katalog-Reihenfolge verletzt: Was? gehoert vor Warum?');
+  // Die Ueberschriften sind uebersetzbar: alle drei Sprachbloecke
+  // tragen die Schluessel (hint-this deckt den fundspezifischen
+  // Hinweis ab, dessen Anzeige vom FixHint-Zweig abhaengt).
+  Assert.IsTrue(Pos('"hint-what": "What is detected?"', Html) > 0,
+    'en-Schluessel hint-what fehlt');
+  Assert.IsTrue(Pos('"hint-this": "Note on this finding"', Html) > 0,
+    'en-Schluessel hint-this fehlt');
+  Assert.IsTrue(Pos('"hint-this": "Remarque sur cette occurrence"',
+    Html) > 0, 'fr-Schluessel hint-this fehlt');
 end;
 
 initialization

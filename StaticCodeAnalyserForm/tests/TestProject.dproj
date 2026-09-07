@@ -155,6 +155,7 @@
         <DCCReference Include="uTestFuzzyComboSearch.pas"/>
         <DCCReference Include="uTestFilterComboReduce.pas"/>
         <DCCReference Include="uTestDetectorInfoExport.pas"/>
+        <DCCReference Include="uTestFindingsWorkbenchExport.pas"/>
         <DCCReference Include="uTestDebugOutput.pas"/>
         <DCCReference Include="uTestTodoComment.pas"/>
         <DCCReference Include="uTestCodeMetrics.pas"/>
