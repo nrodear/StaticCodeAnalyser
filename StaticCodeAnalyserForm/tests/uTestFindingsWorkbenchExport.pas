@@ -457,11 +457,31 @@ procedure TTestFindingsWorkbenchExport.Language_TranslatesPageButKeepsTokens;
 // Bericht muss "error" die Fehler-Zeilen finden, nicht "Fehler").
 var
   Findings : TObjectList<TLeakFinding>;
-  En, Fr   : string;
+  De, En, Fr : string;
+
+  function SevKlasse(const AHtml: string): string;
+  // Liefert die Severity-CSS-Klasse der ersten Badge-Zelle, z.B.
+  // 'sev-err'. Ohne Kenntnis der konkreten Severity - so prueft der
+  // Aufrufer die GLEICHHEIT ueber die Sprachen statt einen Wert.
+  const
+    ANKER = 'class="badge sev-';
+  var
+    P, E : Integer;
+  begin
+    Result := '';
+    P := Pos(ANKER, AHtml);
+    if P = 0 then Exit;
+    Inc(P, Length(ANKER));
+    E := P;
+    while (E <= Length(AHtml)) and (AHtml[E] <> '"') do Inc(E);
+    Result := 'sev-' + Copy(AHtml, P, E - P);
+  end;
+
 begin
   Findings := TObjectList<TLeakFinding>.Create(True);
   try
     Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    De := TFindingsWorkbenchExport.BuildHtml(Findings, '', -1, 'de');
     En := TFindingsWorkbenchExport.BuildHtml(Findings, '', -1, 'en');
     Fr := TFindingsWorkbenchExport.BuildHtml(Findings, '', -1, 'fr');
   finally
@@ -499,8 +519,17 @@ begin
   Assert.AreEqual(
     Pos('data-sev="0"', Fr) > 0, Pos('data-sev="0"', En) > 0,
     'derselbe Fund muss in JEDER Sprache denselben Rang tragen');
-  Assert.IsTrue(Pos('class="badge sev-warn"', Fr) > 0,
-    'Severity-CSS-Klasse muss unuebersetzt bleiben');
+  // Die Severity-CSS-Klasse muss in ALLEN Sprachen dieselbe sein.
+  // Bewusst OHNE Annahme darueber, WELCHE es ist: der erste Wurf
+  // stand auf 'sev-warn', tatsaechlich ist fkMemoryLeak lsError -
+  // und dieselbe geratene Annahme hatte schon den data-sev-Assert
+  // rot gemacht. Geprueft wird die Zusage, nicht der Beispielwert.
+  Assert.AreEqual(SevKlasse(De), SevKlasse(Fr),
+    'Severity-CSS-Klasse muss unuebersetzt bleiben (de vs. fr)');
+  Assert.AreEqual(SevKlasse(De), SevKlasse(En),
+    'Severity-CSS-Klasse muss unuebersetzt bleiben (de vs. en)');
+  Assert.IsTrue(SevKlasse(De) <> '',
+    'ohne Severity-Klasse prueft der Vergleich nichts');
 end;
 
 initialization
