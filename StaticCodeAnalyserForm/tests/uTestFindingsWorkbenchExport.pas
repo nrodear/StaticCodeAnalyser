@@ -38,6 +38,13 @@ type
     [Test] procedure FileRow_UnderMainRow_NameFirstThenFullPath;
     // EN/FR-Nachtrag 07.09.: Seite in drei Sprachen, Token unberuehrt.
     [Test] procedure Language_TranslatesPageButKeepsTokens;
+    // Feature-Abgleich V1->V2 (Todo_FeatureListe..., 07.09.):
+    [Test] procedure InitialSort_BySeverity_WithConfidenceTiebreak;
+    [Test] procedure Themes_DarkAndSepiaAsTokenOverrides;
+    [Test] procedure Dropdowns_FileAndRule_FilterAndReset;
+    [Test] procedure TopLists_SortedByCount_AndClickable;
+    [Test] procedure HealthAndSecurity_ScoreMatchesV1Formula;
+    [Test] procedure SourceSnippet_RendersAroundFindingLine;
   end;
 
 implementation
@@ -459,6 +466,22 @@ var
   Findings : TObjectList<TLeakFinding>;
   De, En, Fr : string;
 
+  function OhneSkript(const AHtml: string): string;
+  // Alles vor dem <script>-Block. Die Sprachpruefungen zielen auf
+  // SICHTBARE Oberflaechentexte; das eingebettete JS traegt deutsche
+  // CODE-KOMMENTARE (Projektkonvention, wie der Pascal-Quelltext
+  // auch) - ein Assert ueber das ganze Dokument stolpert darueber
+  // und meldet einen Uebersetzungsfehler, wo keiner ist.
+  var
+    P : Integer;
+  begin
+    P := Pos('<script', AHtml);
+    if P > 0 then
+      Result := Copy(AHtml, 1, P - 1)
+    else
+      Result := AHtml;
+  end;
+
   function SevKlasse(const AHtml: string): string;
   // Liefert die Severity-CSS-Klasse der ersten Badge-Zelle, z.B.
   // 'sev-err'. Ohne Kenntnis der konkreten Severity - so prueft der
@@ -500,13 +523,13 @@ begin
   // der eigentliche Vertrag und kommt ohne Annahme darueber aus,
   // welche Severity die Fixture traegt.
   Assert.IsTrue(Pos('data-search="', En) > 0, 'Suchblob fehlt');
-  Assert.AreEqual<Integer>(0, Pos('Warnung', En),
+  Assert.AreEqual<Integer>(0, Pos('Warnung', OhneSkript(En)),
     'deutsches Severity-Wort im englischen Dokument');
-  Assert.AreEqual<Integer>(0, Pos('warnung', En),
+  Assert.AreEqual<Integer>(0, Pos('warnung', OhneSkript(En)),
     'deutsches Severity-Wort im englischen Suchblob');
-  Assert.AreEqual<Integer>(0, Pos('Hinweis', En),
+  Assert.AreEqual<Integer>(0, Pos('Hinweis', OhneSkript(En)),
     'deutsches Severity-Wort im englischen Dokument');
-  Assert.AreEqual<Integer>(0, Pos('Konfidenz', Fr),
+  Assert.AreEqual<Integer>(0, Pos('Konfidenz', OhneSkript(Fr)),
     'deutsches Label im franzoesischen Dokument');
   // Token unveraendert.
   Assert.IsTrue(Pos('data-wert="hotspot"', Fr) > 0,
@@ -530,6 +553,294 @@ begin
     'Severity-CSS-Klasse muss unuebersetzt bleiben (de vs. en)');
   Assert.IsTrue(SevKlasse(De) <> '',
     'ohne Severity-Klasse prueft der Vergleich nichts');
+end;
+
+procedure TTestFindingsWorkbenchExport.InitialSort_BySeverity_WithConfidenceTiebreak;
+// V1-Verhalten nachgezogen: der Bericht steht beim Oeffnen nach
+// Risiko sortiert (Fehler oben), nicht in Eingangsreihenfolge - und
+// bei gleicher Severity entscheidet die Konfidenz (hoch zuerst).
+// Geprueft wird die VERDRAHTUNG: der Aufruf am Skriptende und der
+// Tiebreak-Zweig; die Sortierung selbst laeuft im Browser.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  // Severity ist Spalte 5 (Zeile, Methode, SCA-ID, Regel, Typ, Sev).
+  Assert.IsTrue(Pos('sortiere(5);', Html) > 0,
+    'Initialsortierung nach Severity fehlt - ohne den AUFRUF steht '
+    + 'der Bericht in Eingangsreihenfolge da');
+  Assert.IsTrue(Pos('sortiere(5);', Html) < Pos('deepLink();', Html),
+    'die Sortierung muss vor dem Deep-Link laufen, sonst scrollt er '
+    + 'auf eine Zeile, die gleich verschoben wird');
+  Assert.IsTrue(Pos('if (spalte === 5) {', Html) > 0,
+    'Tiebreak-Zweig des Severity-Sorts fehlt');
+  Assert.IsTrue(Pos('return kb - ka;', Html) > 0,
+    'Konfidenz-Tiebreak muss absteigend sein (hoch zuerst)');
+  // Der Spaltenkopf 5 muss auch wirklich der Schweregrad sein -
+  // sonst sortiert die Seite still nach der falschen Spalte.
+  Assert.IsTrue(
+    Pos('<th onclick="sortiere(5)">Schweregrad', Html) > 0,
+    'Spalte 5 ist nicht der Schweregrad - Sortiervertrag gebrochen');
+end;
+
+procedure TTestFindingsWorkbenchExport.Themes_DarkAndSepiaAsTokenOverrides;
+// V1 hat drei Themes, V2 hatte nur hell. Seit dem Workbench-Umbau ist
+// ein Theme ein reiner Token-Block - genau das wird hier festgehalten,
+// damit spaetere Farbarbeit nicht wieder in Einzelregeln zerfaellt.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Pos(':root[data-theme="dark"]{--grund:#171b21;', Html) > 0,
+    'Dark-Theme ueberschreibt die Tokens nicht');
+  Assert.IsTrue(Pos(':root[data-theme="sepia"]{--grund:#f4ead2;', Html) > 0,
+    'Sepia-Theme ueberschreibt die Tokens nicht');
+  Assert.IsTrue(Pos('@media (prefers-color-scheme:dark){', Html) > 0,
+    'Systempraeferenz wird nicht beachtet');
+  // Farb-Ueberarbeitung 07.09.: JEDES Thema muss auch die
+  // FLAECHEN-Tokens drehen. Ohne sie zoegen Badges, Pills und Chips
+  // ihre hellen Pastellfarben aus dem geteilten CSS-Kern und
+  // leuchteten auf dunklem Grund wie Textmarker - genau der Befund,
+  // der die Ueberarbeitung ausgeloest hat.
+  Assert.IsTrue(Pos('--f-err-bg:#3d201d;', Html) > 0,
+    'Dark dreht die Fehler-Flaeche nicht mit');
+  Assert.IsTrue(Pos('--f-lila-bg:#2e2440;', Html) > 0,
+    'Dark dreht die CWE-/Vulnerability-Flaeche nicht mit');
+  Assert.IsTrue(Pos('--f-code-bg:#12161b;', Html) > 0,
+    'Dark dreht den Codeblock nicht mit');
+  Assert.IsTrue(Pos('--f-err-bg:#f7ded6;', Html) > 0,
+    'Sepia dreht die Fehler-Flaeche nicht mit');
+  // Der geteilte Kern MUSS die Flaechen ueber Tokens beziehen -
+  // sonst laeuft die Themenarbeit ins Leere.
+  Assert.IsTrue(
+    Pos('.badge.sev-err{background:var(--f-err-bg);', Html) > 0,
+    'der CSS-Kern nutzt fuer die Badges keine Tokens');
+  Assert.IsTrue(Pos('.chip{display:inline-block;'
+    + 'background:var(--f-chip-bg);', Html) > 0,
+    'der CSS-Kern nutzt fuer die Chips keine Tokens');
+  // Systempraeferenz-Block traegt DENSELBEN Satz (eine Quelle).
+  Assert.IsTrue(
+    Pos(':root:not([data-theme="light"]):not([data-theme="sepia"])'
+      + '{--grund:#171b21;', Html) > 0,
+    'der @media-Block traegt nicht denselben Regelsatz');
+  // Spezifitaets-Falle: der Hover haengt an '#funde tbody:hover tr'.
+  Assert.IsTrue(
+    Pos(':root[data-theme="dark"] #funde tbody:hover tr{', Html) > 0,
+    'der Dark-Hover muss den ID-Selektor tragen, sonst gewinnt die '
+    + 'helle Regel');
+  Assert.IsTrue(Pos('id="btnTheme"', Html) > 0, 'Umschalter fehlt');
+  Assert.IsTrue(Pos('var THEMEN = ["light", "dark", "sepia"];', Html) > 0,
+    'Drei-Wege-Zyklus fehlt');
+  Assert.IsTrue(Pos('sca-v2-theme', Html) > 0,
+    'die Wahl wird nicht gespeichert');
+  // localStorage kann werfen (file://, geblockte Site-Daten) - beide
+  // Zugriffe MUESSEN gekapselt sein, sonst stirbt das Init-Skript und
+  // mit ihm Suche, Sortierung und Drawer.
+  Assert.IsTrue(
+    Pos('try { gespeichert = localStorage.getItem(KEY); } catch',
+      Html) > 0, 'localStorage-Lesen ohne try/catch');
+  Assert.IsTrue(Pos('try { localStorage.setItem(KEY, next); } catch',
+    Html) > 0, 'localStorage-Schreiben ohne try/catch');
+end;
+
+procedure TTestFindingsWorkbenchExport.Dropdowns_FileAndRule_FilterAndReset;
+// Datei- und Regel-Dropdown (V1-Feature, in V2 nachgezogen). Wichtig
+// sind drei Dinge: die Optionswerte muessen zu den data-Attributen
+// der Zeilen passen (sonst filtert die Auswahl ins Leere), die
+// Filterlogik muss in suche() haengen, und filterReset muss sie
+// mit zuruecksetzen.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 20, 'b'));
+    Findings.Add(MakeFinding(fkDebugOutput, 'src\B.pas', 30, 'c'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Pos('id="dateiFilter"', Html) > 0,
+    'Datei-Dropdown fehlt');
+  Assert.IsTrue(Pos('id="regelFilter"', Html) > 0,
+    'Regel-Dropdown fehlt');
+  // Der Optionswert MUSS dem data-pfad der Zeile entsprechen. Bei
+  // leerem BaseDir ist der Anzeigepfad der VOLLE Fundpfad
+  // ('src\A.pas', nicht 'A.pas') - belegt ueber
+  // TExporter.RelativeDisplayPath, das ohne Wurzel unveraendert
+  // durchreicht (derselbe Wert steht im FileRow-Test im title).
+  Assert.IsTrue(
+    Pos('<option value="src\A.pas">src\A.pas (2)</option>', Html) > 0,
+    'Datei-Option mit Fundzahl fehlt oder Wert passt nicht');
+  Assert.IsTrue(Pos('data-pfad="src\A.pas"', Html) > 0,
+    'Zeilen-Attribut passt nicht zum Optionswert');
+  // Regeln nach Fundzahl absteigend - GEZIELT ueber die IDs geprueft:
+  // SCA001 (MemoryLeak, 2 Funde) muss vor SCA017 (DebugOutput, 1)
+  // stehen. Ein blosser Vergleich der Zeichenketten '(2)' und '(1)'
+  // haette die DATEI-Liste erwischt, die alphabetisch sortiert ist -
+  // der Test haette zufaellig gestimmt, ohne die Regel-Sortierung
+  // zu pruefen.
+  Assert.IsTrue(Pos('<option value="SCA001">', Html) > 0,
+    'Regel-Option SCA001 fehlt');
+  Assert.IsTrue(Pos('<option value="SCA017">', Html) > 0,
+    'Regel-Option SCA017 fehlt');
+  Assert.IsTrue(
+    Pos('<option value="SCA001">', Html)
+    < Pos('<option value="SCA017">', Html),
+    'Regel-Dropdown muss nach Fundzahl absteigend sortiert sein '
+    + '(SCA001 mit 2 Funden vor SCA017 mit 1)');
+  // Verdrahtung in suche() und im Reset.
+  Assert.IsTrue(Pos('tbs[i].dataset.pfad === datei', Html) > 0,
+    'Datei-Filter haengt nicht in suche()');
+  Assert.IsTrue(Pos('tbs[i].dataset.rid === regel', Html) > 0,
+    'Regel-Filter haengt nicht in suche()');
+  Assert.IsTrue(Pos('if (dd) dd.value = "";', Html) > 0,
+    'filterReset setzt das Datei-Dropdown nicht zurueck');
+  Assert.IsTrue(Pos('q !== "" || datei !== "" || regel !== ""',
+    Html) > 0, 'der Reset-Knopf erscheint bei Dropdown-Auswahl nicht');
+end;
+
+procedure TTestFindingsWorkbenchExport.TopLists_SortedByCount_AndClickable;
+// Top-Listen (V1-Feature): nach Fundzahl absteigend UND klickbar.
+// Der Sortier-Assert zielt auf die DATEI-Liste, weil sie im Dropdown
+// alphabetisch steht - genau dort faellt auf, wenn die Top-Liste die
+// Eingangsreihenfolge uebernimmt statt selbst zu sortieren.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+  i        : Integer;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    // 'z.pas' bekommt MEHR Funde als 'a.pas' - alphabetisch stuende
+    // a.pas vorn, nach Fundzahl muss z.pas gewinnen.
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\a.pas', 1, 'x'));
+    for i := 1 to 3 do
+      Findings.Add(MakeFinding(fkDebugOutput, 'src\z.pas', i, 'y'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Pos('id="topRegeln"', Html) > 0, 'Top-Regeln fehlen');
+  Assert.IsTrue(Pos('id="topDateien"', Html) > 0, 'Top-Dateien fehlen');
+  Assert.IsTrue(
+    Pos('data-ziel="dateiFilter" data-wert="src\z.pas"', Html)
+    < Pos('data-ziel="dateiFilter" data-wert="src\a.pas"', Html),
+    'die Top-Dateien muessen nach Fundzahl sortiert sein, nicht '
+    + 'alphabetisch (z.pas mit 3 vor a.pas mit 1)');
+  Assert.IsTrue(Pos('function topKlick(el)', Html) > 0,
+    'Klick-Handler der Top-Listen fehlt');
+  Assert.IsTrue(Pos('onclick="topKlick(this)"', Html) > 0,
+    'Top-Eintraege sind nicht verdrahtet');
+  Assert.IsTrue(Pos('dd.value = el.dataset.wert;', Html) > 0,
+    'der Klick setzt das Dropdown nicht');
+  // Balken: der groesste Eintrag hat 100 %.
+  Assert.IsTrue(Pos('style="width:100%"', Html) > 0,
+    'Balkenbreite fehlt oder ist nicht relativ zum Maximum');
+end;
+
+procedure TTestFindingsWorkbenchExport.HealthAndSecurity_ScoreMatchesV1Formula;
+// Health-Ampel mit der V1-FORMEL (Err*100 + Warn*10 + Hint*1) und
+// den V1-Schwellen - eine zweite Rechnung waere ein zweiter Massstab
+// fuer dieselbe Codebasis. Fixture: 1x fkMemoryLeak = lsError
+// (KIND_META, belegt) -> Score 100 -> ueber 49, unter 500 -> "gelb".
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Pos('class="health health-gelb"', Html) > 0,
+    'ein Fehler ergibt Score 100 -> Ampel gelb (49 < 100 <= 499)');
+  Assert.IsTrue(Pos('<div class="health-zahl">100</div>', Html) > 0,
+    'Score-Wert stimmt nicht mit der V1-Formel ueberein');
+  Assert.IsTrue(Pos('Beobachten', Html) > 0, 'Ampel-Text fehlt');
+  // Security-Panel: fkMemoryLeak ist ftBug, also KEIN Security-Fund -
+  // das Panel darf dann gar nicht erscheinen.
+  Assert.AreEqual<Integer>(0, Pos('id="btnSec"', Html),
+    'ohne Security-Funde darf kein Security-Panel erscheinen');
+  Assert.IsTrue(Pos('function zeigeSecurity()', Html) > 0,
+    'der Security-Handler gehoert trotzdem ins Skript');
+  Assert.IsTrue(
+    Pos('aktiveFilter.typ = ["vuln", "hotspot"];', Html) > 0,
+    'der Security-Knopf muss die bestehenden Typ-Chips setzen, '
+    + 'keinen eigenen Filterweg erfinden');
+end;
+
+procedure TTestFindingsWorkbenchExport.SourceSnippet_RendersAroundFindingLine;
+// Der Quell-Ausschnitt war die groesste Luecke der V2 gegenueber V1.
+// Geprueft mit einer ECHTEN Datei (sonst prueft der Test nur, dass
+// nichts passiert): 10 Zeilen, Fund auf Zeile 5, Kontext 3 -> die
+// Zeilen 2..8 muessen erscheinen, 1 und 9 nicht, und Zeile 5 traegt
+// die Hervorhebung.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+  Datei    : string;
+  SL       : TStringList;
+  i        : Integer;
+begin
+  Datei := TPath.Combine(TPath.GetTempPath,
+    'sca-snip-' + TGUID.NewGuid.ToString + '.pas');
+  SL := TStringList.Create;
+  try
+    for i := 1 to 10 do
+      SL.Add('zeile' + IntToStr(i) + ' inhalt;');
+    SL.SaveToFile(Datei);
+  finally
+    SL.Free;
+  end;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, Datei, 5, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+    if TFile.Exists(Datei) then TFile.Delete(Datei);
+  end;
+  Assert.IsTrue(Pos('<div class="src-snippet">', Html) > 0,
+    'Quell-Ausschnitt fehlt');
+  Assert.IsTrue(Pos('zeile5 inhalt;', Html) > 0,
+    'die Fundzeile selbst fehlt im Ausschnitt');
+  Assert.IsTrue(Pos('zeile2 inhalt;', Html) > 0,
+    'Kontext davor fehlt (3 Zeilen)');
+  Assert.IsTrue(Pos('zeile8 inhalt;', Html) > 0,
+    'Kontext danach fehlt (3 Zeilen)');
+  Assert.AreEqual<Integer>(0, Pos('zeile1 inhalt;', Html),
+    'Zeile 1 liegt ausserhalb des Kontexts und darf nicht erscheinen');
+  Assert.AreEqual<Integer>(0, Pos('zeile9 inhalt;', Html),
+    'Zeile 9 liegt ausserhalb des Kontexts und darf nicht erscheinen');
+  Assert.IsTrue(Pos('src-line src-line-active', Html) > 0,
+    'die Fundzeile ist nicht hervorgehoben');
+  // Traeger und Drawer-Anbindung.
+  Assert.IsTrue(Pos('<tr class="snippet">', Html) > 0,
+    'Traegerzeile des Ausschnitts fehlt');
+  Assert.IsTrue(Pos('tr.snippet{display:none;}', Html) > 0,
+    'der Ausschnitt darf in der Tabelle nicht sichtbar sein');
+  Assert.IsTrue(
+    Pos('kopf.appendChild(sn.cloneNode(true));', Html) > 0,
+    'der Drawer klont den Ausschnitt nicht');
 end;
 
 initialization

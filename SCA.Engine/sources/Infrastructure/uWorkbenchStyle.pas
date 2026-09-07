@@ -42,6 +42,26 @@ begin
     // ---- Design-Tokens ------------------------------------------------
     SB.AppendLine(':root{--akzent:#1a5da6;--rand:#dfe5ec;--karte:#fff;'
       + '--grund:#f5f7fa;--tinte:#1c2733;--dezent:#5c6b7a;}');
+    // FLAECHEN-TOKENS (seit 07.09.): die Farben der Badges, Pills,
+    // Chips, Codekarten-Titel und Karten standen frueher als feste
+    // Hex-Werte in den Regeln - alle fuer HELLE Flaechen gebaut.
+    // Im Dark-Theme leuchteten sie als grelle Pastellflecken, weil
+    // ein Theme nur die sechs Grund-Tokens drehte. Jetzt ist JEDE
+    // Farbflaeche ein Token: ein Theme bleibt EIN Ueberschreibungs-
+    // block, und niemand muss die Einzelregeln nachziehen.
+    // Die Werte hier sind exakt die bisherigen - der helle Modus
+    // sieht unveraendert aus.
+    SB.AppendLine(':root{'
+      + '--f-err-bg:#fdecea;--f-err-fg:#9c2317;--f-err-br:#f2c4bf;'
+      + '--f-warn-bg:#fef4e5;--f-warn-fg:#8a5a00;--f-warn-br:#f1d9ad;'
+      + '--f-info-bg:#eaf3fd;--f-info-fg:#1a5da6;--f-info-br:#c4dbf2;'
+      + '--f-neutral-bg:#f0f1f4;--f-neutral-fg:#3d4a58;'
+      + '--f-lila-bg:#f3ecfb;--f-lila-fg:#5b2d91;--f-lila-br:#dcc9f0;'
+      + '--f-gut-bg:#e7f4e8;--f-gut-fg:#1d6b2a;'
+      + '--f-aus-bg:#f4e9e8;--f-aus-fg:#8f2d24;'
+      + '--f-chip-bg:#eef2f6;'
+      + '--f-flaeche:#fbfcfe;'
+      + '--f-code-bg:#23272e;--f-code-fg:#e6e6e6;}');
     SB.AppendLine('*{box-sizing:border-box;}');
     SB.AppendLine('body{font-family:Segoe UI,Arial,sans-serif;margin:0;'
       + 'background:var(--grund);color:var(--tinte);}');
@@ -57,26 +77,32 @@ begin
     SB.AppendLine('.badge{display:inline-block;border-radius:5px;'
       + 'padding:1px 8px;font-size:0.86em;border:1px solid transparent;'
       + 'white-space:nowrap;}');
-    SB.AppendLine('.badge.sev-err{background:#fdecea;color:#9c2317;'
-      + 'border-color:#f2c4bf;}');
-    SB.AppendLine('.badge.sev-warn{background:#fef4e5;color:#8a5a00;'
-      + 'border-color:#f1d9ad;}');
-    SB.AppendLine('.badge.sev-hint{background:#eaf3fd;color:#1a5da6;'
-      + 'border-color:#c4dbf2;}');
-    SB.AppendLine('.badge.typ{background:#f0f1f4;color:#3d4a58;'
-      + 'border-color:var(--rand);}');
-    SB.AppendLine('.badge.typ.vuln,.badge.typ.hotspot{background:#f3ecfb;'
-      + 'color:#5b2d91;border-color:#dcc9f0;}');
-    SB.AppendLine('.badge.konf{background:#f0f1f4;color:#3d4a58;'
-      + 'border-color:var(--rand);font-size:0.8em;}');
+    SB.AppendLine('.badge.sev-err{background:var(--f-err-bg);'
+      + 'color:var(--f-err-fg);border-color:var(--f-err-br);}');
+    SB.AppendLine('.badge.sev-warn{background:var(--f-warn-bg);'
+      + 'color:var(--f-warn-fg);border-color:var(--f-warn-br);}');
+    SB.AppendLine('.badge.sev-hint{background:var(--f-info-bg);'
+      + 'color:var(--f-info-fg);border-color:var(--f-info-br);}');
+    SB.AppendLine('.badge.typ{background:var(--f-neutral-bg);'
+      + 'color:var(--f-neutral-fg);border-color:var(--rand);}');
+    SB.AppendLine('.badge.typ.vuln,.badge.typ.hotspot{'
+      + 'background:var(--f-lila-bg);color:var(--f-lila-fg);'
+      + 'border-color:var(--f-lila-br);}');
+    SB.AppendLine('.badge.konf{background:var(--f-neutral-bg);'
+      + 'color:var(--f-neutral-fg);border-color:var(--rand);'
+      + 'font-size:0.8em;}');
     SB.AppendLine('.pill{display:inline-block;border-radius:999px;'
       + 'padding:1px 10px;font-size:0.84em;}');
-    SB.AppendLine('.pill.an{background:#e7f4e8;color:#1d6b2a;}');
-    SB.AppendLine('.pill.aus{background:#f4e9e8;color:#8f2d24;}');
-    SB.AppendLine('.chip{display:inline-block;background:#eef2f6;'
+    SB.AppendLine('.pill.an{background:var(--f-gut-bg);'
+      + 'color:var(--f-gut-fg);}');
+    SB.AppendLine('.pill.aus{background:var(--f-aus-bg);'
+      + 'color:var(--f-aus-fg);}');
+    SB.AppendLine('.chip{display:inline-block;'
+      + 'background:var(--f-chip-bg);'
       + 'border-radius:4px;padding:0 6px;margin:1px 3px 1px 0;'
-      + 'font-size:0.8em;color:#3d4a58;}');
-    SB.AppendLine('.chip.cwe{background:#f3ecfb;color:#5b2d91;}');
+      + 'font-size:0.8em;color:var(--f-neutral-fg);}');
+    SB.AppendLine('.chip.cwe{background:var(--f-lila-bg);'
+      + 'color:var(--f-lila-fg);}');
     // ---- Kachel-Dashboard ---------------------------------------------
     SB.AppendLine('.dash{display:flex;gap:10px;flex-wrap:wrap;'
       + 'margin:0 0 12px 0;}');
@@ -87,7 +113,8 @@ begin
     SB.AppendLine('.kachel .wofuer{color:var(--dezent);'
       + 'font-size:0.85em;}');
     // ---- Code ---------------------------------------------------------
-    SB.AppendLine('pre{background:#23272e;color:#e6e6e6;margin:0;'
+    SB.AppendLine('pre{background:var(--f-code-bg);'
+      + 'color:var(--f-code-fg);margin:0;'
       + 'padding:8px;overflow-x:auto;font-size:0.88em;'
       + 'font-family:Consolas,monospace;}');
     // Codekarten UNTEREINANDER (Nutzerentscheid 07.09., beide Seiten):
@@ -99,12 +126,13 @@ begin
     SB.AppendLine('.codekarte .karte-titel{display:flex;'
       + 'justify-content:space-between;align-items:center;'
       + 'padding:4px 8px;font-size:0.86em;}');
-    SB.AppendLine('.codekarte.schlecht .karte-titel{background:#fdecea;'
-      + 'color:#9c2317;}');
-    SB.AppendLine('.codekarte.gut .karte-titel{background:#e7f4e8;'
-      + 'color:#1d6b2a;}');
+    SB.AppendLine('.codekarte.schlecht .karte-titel{'
+      + 'background:var(--f-err-bg);color:var(--f-err-fg);}');
+    SB.AppendLine('.codekarte.gut .karte-titel{'
+      + 'background:var(--f-gut-bg);color:var(--f-gut-fg);}');
     SB.AppendLine('.karte{border:1px solid var(--rand);border-radius:8px;'
-      + 'padding:8px 10px;margin-top:10px;background:#fbfcfe;}');
+      + 'padding:8px 10px;margin-top:10px;'
+      + 'background:var(--f-flaeche);}');
     SB.AppendLine('button.copy{border:1px solid var(--rand);'
       + 'background:var(--karte);border-radius:5px;cursor:pointer;'
       + 'font-size:0.8em;padding:1px 8px;}');
