@@ -19,6 +19,34 @@ unit uPublicField;
 // DFM-Streamer vorgeschriebene Form, kein Kapselungsfehler. Details
 // samt Zaehlung am Melde-Guard in AnalyzeUnit.
 //
+// NACHMESSUNG 2026-09-07 (rw76, VOLLZAEHLUNG aller 4.111 Funde -
+// keine Stichprobe; Anlass: MUSS-Katalog-Punkt 3 nannte noch die
+// 42-%-Quote des Voll-Audits vom 15.08., also den Stand VOR den
+// Autopsie-Gates). Je Fund wurde die Quellzeile im Korpus gelesen
+// und der Typkontext rueckwaerts gesucht. Ergebnis:
+//   * 3.785 (94,2 %) stehen zweifelsfrei in einem `= class`-Typ -
+//     die Regelidee greift, das sind Kapselungs-Treffer.
+//   * Die scheinbaren Ausreisser der Nachbildung (24 "record",
+//     8 "interface") sind ARTEFAKTE DER NACHBILDUNG, nicht Funde
+//     des Detektors: am Original geprueft steht dort ein
+//     mehrzeiliger Klassenkopf (`TGnuGettextInstance=` / Zeilenumbruch
+//     / `class`, HeidiSQL gnugettext:453-458) bzw. ein NESTED record
+//     vor dem gesuchten public (Alcinoe.Localization:25-33). Der
+//     Detektor liegt an beiden Stellen richtig. (Lehre: Abweichung
+//     der Nachbildung IMMER erst am Original pruefen.)
+//   * Einzige echte Restklasse: Fortsetzungszeilen mehrzeiliger
+//     property-Deklarationen, die nicht mit `property` BEGINNEN
+//     (z.B. `read FiX2; property X3:`) - LooksLikeField sieht dort
+//     nur `:` und `;`. VOLLZAEHLUNG: **2 Funde im ganzen Korpus**,
+//     beide in cnwizards .../CodeFormatter/TestCases/
+//     TestPropertyLines.pas, einer bewusst pathologisch formatierten
+//     Testdatei eines Code-Formatters. 2 von 4.111 = 0,05 %.
+// ENTSCHEID: KEIN weiteres Gate. Ein Filter fuer Property-Direktiven
+// am Zeilenanfang waere gefaehrlicher als der Fund - `Index` ist ein
+// voellig normaler FELDNAME (12 solcher echten Felder allein in
+// jvcl/SynEdit/TES5Edit), ein naiver Direktiven-Filter wuerde sie
+// verlieren. Die Klasse bleibt dokumentiert statt gefiltert.
+//
 // Schweregrad: lsHint.
 
 interface
