@@ -273,6 +273,46 @@ begin
     SB.AppendLine('.cmdbar select{max-width:32em;padding:5px 8px;'
       + 'border:1px solid var(--rand);border-radius:6px;'
       + 'background:var(--karte);color:var(--tinte);font-size:0.9em;}');
+    // ---- Health / Security / Top-Listen (Feature-Abgleich 07.09.) -----
+    SB.AppendLine('.panels{display:flex;gap:10px;flex-wrap:wrap;'
+      + 'margin:0 0 12px 0;}');
+    SB.AppendLine('.health,.secpanel{flex:1 1 300px;display:flex;'
+      + 'gap:12px;align-items:center;background:var(--karte);'
+      + 'border:1px solid var(--rand);border-radius:8px;'
+      + 'padding:10px 14px;box-shadow:0 1px 2px rgba(16,32,48,0.06);}');
+    SB.AppendLine('.health-zahl{font-size:1.7em;font-weight:700;}');
+    SB.AppendLine('.health-txt{color:var(--dezent);font-size:0.86em;}');
+    SB.AppendLine('.health-gruen{border-left:4px solid #1d6b2a;}');
+    SB.AppendLine('.health-gruen .health-zahl{color:#1d6b2a;}');
+    SB.AppendLine('.health-gelb{border-left:4px solid #8a5a00;}');
+    SB.AppendLine('.health-gelb .health-zahl{color:#8a5a00;}');
+    SB.AppendLine('.health-rot{border-left:4px solid #9c2317;}');
+    SB.AppendLine('.health-rot .health-zahl{color:#9c2317;}');
+    SB.AppendLine('.secpanel{border-left:4px solid #5b2d91;'
+      + 'justify-content:space-between;}');
+    SB.AppendLine('#btnSec{border:1px solid var(--rand);'
+      + 'background:var(--karte);color:var(--tinte);border-radius:6px;'
+      + 'cursor:pointer;font-size:0.86em;padding:4px 10px;'
+      + 'white-space:nowrap;}');
+    SB.AppendLine('.toplisten{display:flex;gap:10px;flex-wrap:wrap;'
+      + 'margin:0 0 12px 0;}');
+    SB.AppendLine('.topliste{flex:1 1 320px;background:var(--karte);'
+      + 'border:1px solid var(--rand);border-radius:8px;'
+      + 'padding:8px 12px;box-shadow:0 1px 2px rgba(16,32,48,0.06);}');
+    SB.AppendLine('.topliste h2{font-size:0.98em;margin:4px 0 6px 0;}');
+    SB.AppendLine('.topliste ul{list-style:none;margin:0;padding:0;}');
+    SB.AppendLine('.topliste li{display:flex;align-items:center;gap:8px;'
+      + 'padding:2px 0;cursor:pointer;font-size:0.86em;}');
+    SB.AppendLine('.topliste li:hover{background:#f2f6fb;}');
+    SB.AppendLine('.tl-name{flex:1 1 auto;overflow:hidden;'
+      + 'text-overflow:ellipsis;white-space:nowrap;'
+      + 'font-family:Consolas,monospace;}');
+    SB.AppendLine('.tl-bar{flex:0 0 90px;height:8px;background:#eef2f6;'
+      + 'border-radius:4px;overflow:hidden;}');
+    SB.AppendLine('.tl-fill{display:block;height:100%;'
+      + 'background:var(--akzent);}');
+    SB.AppendLine('.tl-zahl{flex:0 0 3em;text-align:right;'
+      + 'color:var(--dezent);font-variant-numeric:tabular-nums;}');
     // ---- Kuerzungsbanner ----------------------------------------------
     SB.AppendLine('#gekuerzt{background:#fef4e5;border:1px solid '
       + '#f1d9ad;border-radius:8px;padding:8px 12px;margin:0 0 10px 0;'
@@ -496,6 +536,121 @@ begin
   end;
 end;
 
+function TopListe(const AId, ATitel, AZielDropdown: string;
+  const AEintraege: TArray<TZaehlEintrag>): string;
+// Top-10-Liste als klickbarer Filter (V1-Feature): ein Klick setzt
+// das zugehoerige Dropdown und filtert. Verwertet die vorhandenen
+// Auswahllisten - kein zweiter Zaehlpass. SORTIERT SELBST nach
+// Fundzahl: die Datei-Liste kommt alphabetisch herein (so gehoert
+// sie ins Dropdown), fuer eine TOP-Liste waere das falsch, und die
+// Balkenbreite braucht ohnehin das Maximum an Position 0.
+const
+  TOP_N = 10;
+var
+  SB    : TStringBuilder;
+  Liste : TArray<TZaehlEintrag>;
+  i, n  : Integer;
+  Max   : Integer;
+  Breit : Integer;
+begin
+  if Length(AEintraege) < 2 then Exit('');
+  Liste := Copy(AEintraege, 0, Length(AEintraege));
+  TArray.Sort<TZaehlEintrag>(Liste, TComparer<TZaehlEintrag>.Construct(
+    function(const A, B: TZaehlEintrag): Integer
+    begin
+      Result := B.Anzahl - A.Anzahl;
+      if Result = 0 then Result := AnsiCompareText(A.Wert, B.Wert);
+    end));
+  n := Length(Liste);
+  if n > TOP_N then n := TOP_N;
+  Max := Liste[0].Anzahl;
+  if Max < 1 then Max := 1;
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('<div class="topliste" id="' + AId + '">');
+    SB.AppendLine('<h2>' + ATitel + '</h2><ul>');
+    for i := 0 to n - 1 do
+    begin
+      Breit := Round(100 * Liste[i].Anzahl / Max);
+      SB.AppendLine(Format('<li tabindex="0" role="button" '
+        + 'data-ziel="%s" data-wert="%s" onclick="topKlick(this)">'
+        + '<span class="tl-name">%s</span>'
+        + '<span class="tl-bar"><span class="tl-fill" '
+        + 'style="width:%d%%"></span></span>'
+        + '<span class="tl-zahl">%d</span></li>',
+        [AZielDropdown, H(Liste[i].Wert),
+         H(Liste[i].Wert), Breit, Liste[i].Anzahl]));
+    end;
+    SB.AppendLine('</ul></div>');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+function HealthUndSecurity(const AStat: TFundStat;
+  const ALang: string): string;
+// Health-Ampel und Security-Hinweis (V1-Features). Der Score ist
+// derselbe wie in V1 (Err*100 + Warn*10 + Hint*1) mit denselben
+// Schwellen 49 / 499 - eine zweite Rechnung waere ein zweiter
+// Massstab, und dann streiten die beiden Berichte ueber dieselbe
+// Codebasis.
+const
+  W_ERR      = 100;
+  W_WARN     = 10;
+  W_HINT     = 1;
+  GRUEN_MAX  = 49;
+  GELB_MAX   = 499;
+var
+  SB    : TStringBuilder;
+  Score : Integer;
+  Cls   : string;
+  Txt   : TWbText;
+begin
+  Score := AStat.Sev[lsError] * W_ERR + AStat.Sev[lsWarning] * W_WARN
+           + AStat.Sev[lsHint] * W_HINT;
+  if Score <= GRUEN_MAX then
+  begin
+    Cls := 'gruen';
+    Txt := wtHealthGruen;
+  end
+  else if Score <= GELB_MAX then
+  begin
+    Cls := 'gelb';
+    Txt := wtHealthGelb;
+  end
+  else
+  begin
+    Cls := 'rot';
+    Txt := wtHealthRot;
+  end;
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('<div class="panels">');
+    SB.AppendLine(Format('<div class="health health-%s">'
+      + '<div class="health-zahl">%d</div>'
+      + '<div><b>%s</b><div class="health-txt">%s</div></div></div>',
+      [Cls, Score, TWorkbenchI18n.T(Txt, ALang),
+       Format(TWorkbenchI18n.T(wtHealthFormel, ALang),
+         [AStat.Sev[lsError], AStat.Sev[lsWarning],
+          AStat.Sev[lsHint]])]));
+    // Security-Panel nur, wenn es etwas zu sagen hat.
+    if AStat.Security > 0 then
+      SB.AppendLine(Format('<div class="secpanel">'
+        + '<div><b>%s</b><div class="health-txt">%s</div></div>'
+        + '<button type="button" id="btnSec" onclick="zeigeSecurity()">'
+        + '%s</button></div>',
+        [Format(TWorkbenchI18n.T(wtSecurityTitel, ALang),
+           [AStat.Security]),
+         TWorkbenchI18n.T(wtSecurityText, ALang),
+         TWorkbenchI18n.T(wtSecurityZeigen, ALang)]));
+    SB.AppendLine('</div>');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
 function Dashboard(const AStat: TFundStat; const ALang: string): string;
 // Kennzahlen-Kacheln ueber ALLE Funde (auch bei gekuerzter Tabelle).
 var
@@ -642,6 +797,31 @@ begin
     SB.AppendLine('    aktiv ? "inline" : "none";');
     SB.AppendLine('  if (gewaehlt && gewaehlt.style.display '
       + '=== "none") schliesseDrawer();');
+    SB.AppendLine('}');
+    // Klick auf einen Top-Listen-Eintrag: setzt das zugehoerige
+    // Dropdown und filtert. Fehlt das Dropdown (zu kurze Liste), tut
+    // der Klick nichts - besser als ein Filter, den man nicht mehr
+    // sieht und nicht zuruecknehmen kann.
+    SB.AppendLine('function topKlick(el) {');
+    SB.AppendLine('  var dd = document.getElementById(el.dataset.ziel);');
+    SB.AppendLine('  if (!dd) return;');
+    SB.AppendLine('  dd.value = el.dataset.wert;');
+    SB.AppendLine('  suche();');
+    SB.AppendLine('  var tab = document.getElementById("funde");');
+    SB.AppendLine('  if (tab) tab.scrollIntoView({block:"start"});');
+    SB.AppendLine('}');
+    // Security-Knopf: setzt die beiden Typ-Chips, die als Security
+    // gelten (Vulnerability + Hotspot), statt einen eigenen Filter zu
+    // erfinden - so bleibt EIN Filterweg sichtbar und ruecknehmbar.
+    SB.AppendLine('function zeigeSecurity() {');
+    SB.AppendLine('  aktiveFilter.typ = ["vuln", "hotspot"];');
+    SB.AppendLine('  var bts = document.querySelectorAll('
+      + '"button.fchip[data-gruppe=\'typ\']");');
+    SB.AppendLine('  for (var i = 0; i < bts.length; i++)');
+    SB.AppendLine('    bts[i].setAttribute("aria-pressed",');
+    SB.AppendLine('      aktiveFilter.typ.indexOf(bts[i].dataset.wert) '
+      + '>= 0 ? "true" : "false");');
+    SB.AppendLine('  suche();');
     SB.AppendLine('}');
     SB.AppendLine('function chip(btn) {');
     SB.AppendLine('  var g = btn.dataset.gruppe, w = btn.dataset.wert;');
@@ -1224,6 +1404,17 @@ begin
     SB.AppendLine('<main>');
     SB.Append(CommandUndChips(Stat.Lesefehler, Stat, ALang));
     SB.Append(Dashboard(Stat, ALang));
+    SB.Append(HealthUndSecurity(Stat, ALang));
+    // Top-Listen nebeneinander; beide sind Ausschnitte der bereits
+    // sortierten Auswahllisten und filtern per Klick.
+    SB.AppendLine('<div class="toplisten">');
+    SB.Append(TopListe('topRegeln',
+      TWorkbenchI18n.T(wtTopRegeln, ALang), 'regelFilter',
+      Stat.RegelListe));
+    SB.Append(TopListe('topDateien',
+      TWorkbenchI18n.T(wtTopDateien, ALang), 'dateiFilter',
+      Stat.DateiListe));
+    SB.AppendLine('</div>');
 
     if RowsDropped > 0 then
       SB.AppendLine(Format('<div id="gekuerzt">'

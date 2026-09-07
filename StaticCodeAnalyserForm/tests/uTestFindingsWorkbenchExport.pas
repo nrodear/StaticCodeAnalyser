@@ -42,6 +42,8 @@ type
     [Test] procedure InitialSort_BySeverity_WithConfidenceTiebreak;
     [Test] procedure Themes_DarkAndSepiaAsTokenOverrides;
     [Test] procedure Dropdowns_FileAndRule_FilterAndReset;
+    [Test] procedure TopLists_SortedByCount_AndClickable;
+    [Test] procedure HealthAndSecurity_ScoreMatchesV1Formula;
   end;
 
 implementation
@@ -664,6 +666,78 @@ begin
     'filterReset setzt das Datei-Dropdown nicht zurueck');
   Assert.IsTrue(Pos('q !== "" || datei !== "" || regel !== ""',
     Html) > 0, 'der Reset-Knopf erscheint bei Dropdown-Auswahl nicht');
+end;
+
+procedure TTestFindingsWorkbenchExport.TopLists_SortedByCount_AndClickable;
+// Top-Listen (V1-Feature): nach Fundzahl absteigend UND klickbar.
+// Der Sortier-Assert zielt auf die DATEI-Liste, weil sie im Dropdown
+// alphabetisch steht - genau dort faellt auf, wenn die Top-Liste die
+// Eingangsreihenfolge uebernimmt statt selbst zu sortieren.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+  i        : Integer;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    // 'z.pas' bekommt MEHR Funde als 'a.pas' - alphabetisch stuende
+    // a.pas vorn, nach Fundzahl muss z.pas gewinnen.
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\a.pas', 1, 'x'));
+    for i := 1 to 3 do
+      Findings.Add(MakeFinding(fkDebugOutput, 'src\z.pas', i, 'y'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Pos('id="topRegeln"', Html) > 0, 'Top-Regeln fehlen');
+  Assert.IsTrue(Pos('id="topDateien"', Html) > 0, 'Top-Dateien fehlen');
+  Assert.IsTrue(
+    Pos('data-ziel="dateiFilter" data-wert="src\z.pas"', Html)
+    < Pos('data-ziel="dateiFilter" data-wert="src\a.pas"', Html),
+    'die Top-Dateien muessen nach Fundzahl sortiert sein, nicht '
+    + 'alphabetisch (z.pas mit 3 vor a.pas mit 1)');
+  Assert.IsTrue(Pos('function topKlick(el)', Html) > 0,
+    'Klick-Handler der Top-Listen fehlt');
+  Assert.IsTrue(Pos('onclick="topKlick(this)"', Html) > 0,
+    'Top-Eintraege sind nicht verdrahtet');
+  Assert.IsTrue(Pos('dd.value = el.dataset.wert;', Html) > 0,
+    'der Klick setzt das Dropdown nicht');
+  // Balken: der groesste Eintrag hat 100 %.
+  Assert.IsTrue(Pos('style="width:100%"', Html) > 0,
+    'Balkenbreite fehlt oder ist nicht relativ zum Maximum');
+end;
+
+procedure TTestFindingsWorkbenchExport.HealthAndSecurity_ScoreMatchesV1Formula;
+// Health-Ampel mit der V1-FORMEL (Err*100 + Warn*10 + Hint*1) und
+// den V1-Schwellen - eine zweite Rechnung waere ein zweiter Massstab
+// fuer dieselbe Codebasis. Fixture: 1x fkMemoryLeak = lsError
+// (KIND_META, belegt) -> Score 100 -> ueber 49, unter 500 -> "gelb".
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Pos('class="health health-gelb"', Html) > 0,
+    'ein Fehler ergibt Score 100 -> Ampel gelb (49 < 100 <= 499)');
+  Assert.IsTrue(Pos('<div class="health-zahl">100</div>', Html) > 0,
+    'Score-Wert stimmt nicht mit der V1-Formel ueberein');
+  Assert.IsTrue(Pos('Beobachten', Html) > 0, 'Ampel-Text fehlt');
+  // Security-Panel: fkMemoryLeak ist ftBug, also KEIN Security-Fund -
+  // das Panel darf dann gar nicht erscheinen.
+  Assert.AreEqual<Integer>(0, Pos('id="btnSec"', Html),
+    'ohne Security-Funde darf kein Security-Panel erscheinen');
+  Assert.IsTrue(Pos('function zeigeSecurity()', Html) > 0,
+    'der Security-Handler gehoert trotzdem ins Skript');
+  Assert.IsTrue(
+    Pos('aktiveFilter.typ = ["vuln", "hotspot"];', Html) > 0,
+    'der Security-Knopf muss die bestehenden Typ-Chips setzen, '
+    + 'keinen eigenen Filterweg erfinden');
 end;
 
 initialization

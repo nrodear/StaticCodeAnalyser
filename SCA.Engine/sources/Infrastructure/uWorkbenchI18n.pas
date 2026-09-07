@@ -40,6 +40,9 @@ type
     wtGruppeTyp, wtGruppeSchweregrad, wtGruppeKonfidenz,
     wtGruppeProfil, wtChipLesefehler, wtThema, wtThemaWechseln,
     wtAlleDateien, wtAlleRegeln,
+    wtTopRegeln, wtTopDateien, wtHealthGruen, wtHealthGelb,
+    wtHealthRot, wtHealthFormel, wtSecurityTitel, wtSecurityText,
+    wtSecurityZeigen,
     // -- Schweregrad / Konfidenz / Profil ------------------------------
     wtSevFehler, wtSevWarnung, wtSevHinweis, wtLesefehler,
     wtKonfNiedrig, wtKonfMittel, wtKonfHoch, wtProfilAn, wtProfilAus,
@@ -126,6 +129,27 @@ const
     ('Alle Dateien (%d)', 'All files (%d)', 'Tous les fichiers (%d)'),
     ('Alle Regeln (%d)', 'All rules (%d)',
      'Toutes les r&egrave;gles (%d)'),
+    ('H&auml;ufigste Regeln', 'Most frequent rules',
+     'R&egrave;gles les plus fr&eacute;quentes'),
+    ('Dateien mit den meisten Funden', 'Files with the most findings',
+     'Fichiers avec le plus de r&eacute;sultats'),
+    ('Gesund', 'Healthy', 'Sain'),
+    ('Beobachten', 'Watch', '&Agrave; surveiller'),
+    ('Kritisch', 'Critical', 'Critique'),
+    ('Punktzahl aus %d Fehlern, %d Warnungen, %d Hinweisen '
+     + '(Fehler z&auml;hlen 100, Warnungen 10, Hinweise 1).',
+     'Score from %d errors, %d warnings, %d hints '
+     + '(errors count 100, warnings 10, hints 1).',
+     'Score calcul&eacute; sur %d erreurs, %d avertissements, '
+     + '%d indications (erreur = 100, avertissement = 10, '
+     + 'indication = 1).'),
+    ('%d Security-Funde', '%d security findings',
+     '%d r&eacute;sultats de s&eacute;curit&eacute;'),
+    ('Vulnerability- und Security-Hotspot-Regeln zusammen.',
+     'Vulnerability and security hotspot rules combined.',
+     'R&egrave;gles Vulnerability et Security Hotspot r&eacute;unies.'),
+    ('Nur diese zeigen', 'Show only these',
+     'N''afficher que ceux-ci'),
     // ---- Schweregrad / Konfidenz / Profil ------------------------------
     ('Fehler', 'Error', 'Erreur'),
     ('Warnung', 'Warning', 'Avertissement'),
