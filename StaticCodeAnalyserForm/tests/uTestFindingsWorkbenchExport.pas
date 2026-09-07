@@ -466,6 +466,22 @@ var
   Findings : TObjectList<TLeakFinding>;
   De, En, Fr : string;
 
+  function OhneSkript(const AHtml: string): string;
+  // Alles vor dem <script>-Block. Die Sprachpruefungen zielen auf
+  // SICHTBARE Oberflaechentexte; das eingebettete JS traegt deutsche
+  // CODE-KOMMENTARE (Projektkonvention, wie der Pascal-Quelltext
+  // auch) - ein Assert ueber das ganze Dokument stolpert darueber
+  // und meldet einen Uebersetzungsfehler, wo keiner ist.
+  var
+    P : Integer;
+  begin
+    P := Pos('<script', AHtml);
+    if P > 0 then
+      Result := Copy(AHtml, 1, P - 1)
+    else
+      Result := AHtml;
+  end;
+
   function SevKlasse(const AHtml: string): string;
   // Liefert die Severity-CSS-Klasse der ersten Badge-Zelle, z.B.
   // 'sev-err'. Ohne Kenntnis der konkreten Severity - so prueft der
@@ -507,13 +523,13 @@ begin
   // der eigentliche Vertrag und kommt ohne Annahme darueber aus,
   // welche Severity die Fixture traegt.
   Assert.IsTrue(Pos('data-search="', En) > 0, 'Suchblob fehlt');
-  Assert.AreEqual<Integer>(0, Pos('Warnung', En),
+  Assert.AreEqual<Integer>(0, Pos('Warnung', OhneSkript(En)),
     'deutsches Severity-Wort im englischen Dokument');
-  Assert.AreEqual<Integer>(0, Pos('warnung', En),
+  Assert.AreEqual<Integer>(0, Pos('warnung', OhneSkript(En)),
     'deutsches Severity-Wort im englischen Suchblob');
-  Assert.AreEqual<Integer>(0, Pos('Hinweis', En),
+  Assert.AreEqual<Integer>(0, Pos('Hinweis', OhneSkript(En)),
     'deutsches Severity-Wort im englischen Dokument');
-  Assert.AreEqual<Integer>(0, Pos('Konfidenz', Fr),
+  Assert.AreEqual<Integer>(0, Pos('Konfidenz', OhneSkript(Fr)),
     'deutsches Label im franzoesischen Dokument');
   // Token unveraendert.
   Assert.IsTrue(Pos('data-wert="hotspot"', Fr) > 0,
