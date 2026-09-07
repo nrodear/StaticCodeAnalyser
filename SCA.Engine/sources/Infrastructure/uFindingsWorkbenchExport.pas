@@ -77,6 +77,7 @@ implementation
 // TStringBuilder).
 
 uses
+  System.Generics.Defaults,   // TComparer fuer die Dropdown-Listen
   uExportHtml,     // TExporterHtml.HtmlEscape - keine dritte Escape-Kopie
   uExport,         // TExporter.SaveUtf8WithBom - EIN Ort fuer die BOM-Politik
   uFixHint,        // TFixHintResolver.FixHint - fundspezifischer Hinweistext
@@ -113,6 +114,13 @@ const
   SP_DETAIL   = 7;
 
 type
+  // Ein Eintrag der Auswahllisten (Datei- und Regel-Dropdown).
+  TZaehlEintrag = record
+    Wert    : string;    // Filterwert: Anzeigepfad bzw. SCA-ID
+    Anzeige : string;    // Beschriftung inkl. Fundzahl
+    Anzahl  : Integer;
+  end;
+
   // Kennzahlen der Dashboard-Kacheln - ein Zaehlpass ueber ALLE Funde
   // (unabhaengig vom Zeilenbudget der Tabelle).
   TFundStat = record
@@ -122,6 +130,11 @@ type
     Security   : Integer;  // Funde von Vulnerability-/Hotspot-Regeln
     Dateien    : Integer;  // verschiedene Dateien
     Regeln     : Integer;  // verschiedene Regeln (Kinds)
+    // Auswahllisten fuer die Dropdowns (Feature-Abgleich 07.09.):
+    // Dateien alphabetisch, Regeln nach Fundzahl absteigend - die
+    // lauteste Regel zuerst ist der haeufigste Einstieg.
+    DateiListe : TArray<TZaehlEintrag>;
+    RegelListe : TArray<TZaehlEintrag>;
   end;
 
 function TypText(T: TFindingType): string;
@@ -256,6 +269,10 @@ begin
     SB.AppendLine('#reset{display:none;border:none;background:none;'
       + 'color:var(--akzent);cursor:pointer;font-size:0.88em;'
       + 'text-decoration:underline;}');
+    SB.AppendLine('.cmdbar.auswahl{margin:0 0 10px 0;}');
+    SB.AppendLine('.cmdbar select{max-width:32em;padding:5px 8px;'
+      + 'border:1px solid var(--rand);border-radius:6px;'
+      + 'background:var(--karte);color:var(--tinte);font-size:0.9em;}');
     // ---- Kuerzungsbanner ----------------------------------------------
     SB.AppendLine('#gekuerzt{background:#fef4e5;border:1px solid '
       + '#f1d9ad;border-radius:8px;padding:8px 12px;margin:0 0 10px 0;'
@@ -367,8 +384,31 @@ begin
   end;
 end;
 
+function Auswahlliste(const AId, AAlleText: string;
+  const AEintraege: TArray<TZaehlEintrag>): string;
+// Ein Dropdown mit "alle"-Eintrag. Leere Liste -> gar kein Markup:
+// ein Filter ueber genau eine Moeglichkeit ist nur Platzverbrauch.
+var
+  SB : TStringBuilder;
+  E  : TZaehlEintrag;
+begin
+  if Length(AEintraege) < 2 then Exit('');
+  SB := TStringBuilder.Create;
+  try
+    SB.Append('<select id="' + AId + '" onchange="suche()">');
+    SB.Append('<option value="">' + AAlleText + '</option>');
+    for E in AEintraege do
+      SB.Append('<option value="' + H(E.Wert) + '">'
+        + H(E.Anzeige) + '</option>');
+    SB.Append('</select>');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
 function CommandUndChips(ALesefehler: Integer;
-  const ALang: string): string;
+  const AStat: TFundStat; const ALang: string): string;
 // Search-Command-Bar + Filter-Chips (Typ/Schweregrad/Konfidenz).
 // KEINE Profil-Chips: der Bericht zeigt einen GELAUFENEN Scan, das
 // Profil ist bereits angewendet. Lesefehler bekommen ihren eigenen
@@ -399,6 +439,18 @@ begin
     SB.AppendLine('<button id="btnTheme" type="button" title="'
       + TWorkbenchI18n.T(wtThemaWechseln, ALang) + '">'
       + TWorkbenchI18n.T(wtThema, ALang) + '</button>');
+    SB.AppendLine('</div>');
+
+    // Datei- und Regel-Auswahl (Feature-Abgleich 07.09.): der
+    // schnellste Weg durch einen grossen Bericht - vorher ging das
+    // nur ueber die Freitextsuche.
+    SB.AppendLine('<div class="cmdbar auswahl">');
+    SB.AppendLine(Auswahlliste('dateiFilter',
+      Format(TWorkbenchI18n.T(wtAlleDateien, ALang), [AStat.Dateien]),
+      AStat.DateiListe));
+    SB.AppendLine(Auswahlliste('regelFilter',
+      Format(TWorkbenchI18n.T(wtAlleRegeln, ALang), [AStat.Regeln]),
+      AStat.RegelListe));
     SB.AppendLine('</div>');
 
     SB.AppendLine('<div class="chips" id="chips">');
@@ -547,13 +599,23 @@ begin
     SB.AppendLine('  }');
     SB.AppendLine('  return true;');
     SB.AppendLine('}');
+    // Wert eines Dropdowns; fehlt das Element (Liste zu kurz zum
+    // Anzeigen), gilt "kein Filter".
+    SB.AppendLine('function auswahl(id) {');
+    SB.AppendLine('  var el = document.getElementById(id);');
+    SB.AppendLine('  return el ? el.value : "";');
+    SB.AppendLine('}');
     SB.AppendLine('function suche() {');
     SB.AppendLine('  var q = document.getElementById("suche")'
       + '.value.toLowerCase();');
+    SB.AppendLine('  var datei = auswahl("dateiFilter");');
+    SB.AppendLine('  var regel = auswahl("regelFilter");');
     SB.AppendLine('  var tbs = alleTbodies(), sichtbar = 0;');
     SB.AppendLine('  for (var i = 0; i < tbs.length; i++) {');
     SB.AppendLine('    var hit = (q === "" || '
-      + 'tbs[i].dataset.search.indexOf(q) >= 0) && passtChips(tbs[i]);');
+      + 'tbs[i].dataset.search.indexOf(q) >= 0) && passtChips(tbs[i])');
+    SB.AppendLine('      && (datei === "" || tbs[i].dataset.pfad === datei)');
+    SB.AppendLine('      && (regel === "" || tbs[i].dataset.rid === regel);');
     SB.AppendLine('    tbs[i].style.display = hit ? "" : "none";');
     SB.AppendLine('    if (hit) sichtbar++;');
     SB.AppendLine('  }');
@@ -572,7 +634,8 @@ begin
       + '= ohneFunde ? "none" : "";');
     SB.AppendLine('  document.getElementById("leer-lauf").style.display '
       + '= ohneFunde ? "" : "none";');
-    SB.AppendLine('  var aktiv = q !== "";');
+    SB.AppendLine('  var aktiv = q !== "" || datei !== "" '
+      + '|| regel !== "";');
     SB.AppendLine('  for (var g2 in aktiveFilter) '
       + 'if (aktiveFilter[g2].length) aktiv = true;');
     SB.AppendLine('  document.getElementById("reset").style.display =');
@@ -595,6 +658,12 @@ begin
     SB.AppendLine('  for (var i = 0; i < bts.length; i++) '
       + 'bts[i].setAttribute("aria-pressed", "false");');
     SB.AppendLine('  document.getElementById("suche").value = "";');
+    // Auch die Dropdowns zuruecksetzen - sonst behauptet der
+    // Reset-Knopf mehr, als er tut.
+    SB.AppendLine('  var dd = document.getElementById("dateiFilter");');
+    SB.AppendLine('  if (dd) dd.value = "";');
+    SB.AppendLine('  var dr = document.getElementById("regelFilter");');
+    SB.AppendLine('  if (dr) dr.value = "";');
     SB.AppendLine('  suche();');
     SB.AppendLine('}');
     // ---- Drawer: Fund-Kopf + Regel-Template ---------------------------
@@ -981,7 +1050,63 @@ begin
   end;
 end;
 
+function DateiEintraege(
+  ADateien: TDictionary<string, Integer>): TArray<TZaehlEintrag>;
+// Datei-Dropdown: alphabetisch, mit Fundzahl in Klammern. Der WERT
+// ist der Anzeigepfad - identisch mit data-pfad an der Zeile.
+var
+  P : TPair<string, Integer>;
+  i : Integer;
+begin
+  SetLength(Result, ADateien.Count);
+  i := 0;
+  for P in ADateien do
+  begin
+    Result[i].Wert    := P.Key;
+    Result[i].Anzahl  := P.Value;
+    Result[i].Anzeige := Format('%s (%d)', [P.Key, P.Value]);
+    Inc(i);
+  end;
+  TArray.Sort<TZaehlEintrag>(Result, TComparer<TZaehlEintrag>.Construct(
+    function(const A, B: TZaehlEintrag): Integer
+    begin
+      Result := AnsiCompareText(A.Wert, B.Wert);
+    end));
+end;
+
+function RegelEintraege(const AJeKind: array of Integer;
+  ARegeln: TFindingKinds; const ALang: string): TArray<TZaehlEintrag>;
+// Regel-Dropdown: nach Fundzahl ABSTEIGEND (die lauteste Regel
+// zuerst - der haeufigste Einstieg in einen grossen Bericht), bei
+// Gleichstand nach SCA-ID. Der Wert ist die SCA-ID = data-rid.
+var
+  K    : TFindingKind;
+  Meta : TRuleMeta;
+  n    : Integer;
+begin
+  SetLength(Result, 0);
+  n := 0;
+  for K := Low(TFindingKind) to High(TFindingKind) do
+    if K in ARegeln then
+    begin
+      Meta := TRuleCatalog.GetRule(K, ALang);
+      SetLength(Result, n + 1);
+      Result[n].Wert    := Meta.ID;
+      Result[n].Anzahl  := AJeKind[Ord(K)];
+      Result[n].Anzeige := Format('%s %s (%d)',
+        [Meta.ID, Meta.Name, AJeKind[Ord(K)]]);
+      Inc(n);
+    end;
+  TArray.Sort<TZaehlEintrag>(Result, TComparer<TZaehlEintrag>.Construct(
+    function(const A, B: TZaehlEintrag): Integer
+    begin
+      Result := B.Anzahl - A.Anzahl;
+      if Result = 0 then Result := AnsiCompareText(A.Wert, B.Wert);
+    end));
+end;
+
 procedure ZaehleFunde(AFindings: TObjectList<TLeakFinding>;
+  const ABaseDir, ALang: string;
   out AStat: TFundStat; out ARegeln: TFindingKinds);
 // Zaehlpass ueber ALLE Funde - die Kacheln bleiben auch bei
 // gekuerzter Tabelle die Wahrheit ueber den ganzen Lauf. ARegeln
@@ -989,11 +1114,15 @@ procedure ZaehleFunde(AFindings: TObjectList<TLeakFinding>;
 var
   F       : TLeakFinding;
   K       : TFindingKind;
-  Dateien : TDictionary<string, Boolean>;
+  Dateien : TDictionary<string, Integer>;
+  JeKind  : array[TFindingKind] of Integer;
+  Pfad    : string;
+  Vorher  : Integer;
 begin
   AStat := Default(TFundStat);
   ARegeln := [];
-  Dateien := TDictionary<string, Boolean>.Create;
+  FillChar(JeKind, SizeOf(JeKind), 0);
+  Dateien := TDictionary<string, Integer>.Create;
   try
     for F in AFindings do
     begin
@@ -1007,12 +1136,20 @@ begin
       if TRuleCatalog.GetRuleCanonical(F.Kind).FindingType in
         [ftVulnerability, ftSecurityHotspot] then
         Inc(AStat.Security);
-      Dateien.AddOrSetValue(AnsiLowerCase(F.FileName), True);
+      // Dateien MIT Fundzahl, geschluesselt auf dem ANZEIGE-Pfad -
+      // derselbe Wert steht als data-pfad an der Zeile und ist damit
+      // der Filterwert des Dropdowns (Feature-Abgleich 07.09.).
+      Pfad := AnzeigePfad(F.FileName, ABaseDir);
+      if not Dateien.TryGetValue(Pfad, Vorher) then Vorher := 0;
+      Dateien.AddOrSetValue(Pfad, Vorher + 1);
+      Inc(JeKind[F.Kind]);
       Include(ARegeln, F.Kind);
     end;
     AStat.Dateien := Dateien.Count;
     for K := Low(TFindingKind) to High(TFindingKind) do
       if K in ARegeln then Inc(AStat.Regeln);
+    AStat.DateiListe := DateiEintraege(Dateien);
+    AStat.RegelListe := RegelEintraege(JeKind, ARegeln, ALang);
   finally
     Dateien.Free;
   end;
@@ -1054,7 +1191,7 @@ begin
   else
     MaxRows := AMaxRows;
 
-  ZaehleFunde(AFindings, Stat, Regeln);
+  ZaehleFunde(AFindings, ABaseDir, ALang, Stat, Regeln);
 
   RowsEmitted := 0;
   RowsDropped := 0;
@@ -1085,7 +1222,7 @@ begin
        Stat.Gesamt]));
     SB.AppendLine('</header>');
     SB.AppendLine('<main>');
-    SB.Append(CommandUndChips(Stat.Lesefehler, ALang));
+    SB.Append(CommandUndChips(Stat.Lesefehler, Stat, ALang));
     SB.Append(Dashboard(Stat, ALang));
 
     if RowsDropped > 0 then

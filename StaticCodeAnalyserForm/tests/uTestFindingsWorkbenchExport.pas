@@ -41,6 +41,7 @@ type
     // Feature-Abgleich V1->V2 (Todo_FeatureListe..., 07.09.):
     [Test] procedure InitialSort_BySeverity_WithConfidenceTiebreak;
     [Test] procedure Themes_DarkAndSepiaAsTokenOverrides;
+    [Test] procedure Dropdowns_FileAndRule_FilterAndReset;
   end;
 
 implementation
@@ -604,6 +605,65 @@ begin
       Html) > 0, 'localStorage-Lesen ohne try/catch');
   Assert.IsTrue(Pos('try { localStorage.setItem(KEY, next); } catch',
     Html) > 0, 'localStorage-Schreiben ohne try/catch');
+end;
+
+procedure TTestFindingsWorkbenchExport.Dropdowns_FileAndRule_FilterAndReset;
+// Datei- und Regel-Dropdown (V1-Feature, in V2 nachgezogen). Wichtig
+// sind drei Dinge: die Optionswerte muessen zu den data-Attributen
+// der Zeilen passen (sonst filtert die Auswahl ins Leere), die
+// Filterlogik muss in suche() haengen, und filterReset muss sie
+// mit zuruecksetzen.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 20, 'b'));
+    Findings.Add(MakeFinding(fkDebugOutput, 'src\B.pas', 30, 'c'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Pos('id="dateiFilter"', Html) > 0,
+    'Datei-Dropdown fehlt');
+  Assert.IsTrue(Pos('id="regelFilter"', Html) > 0,
+    'Regel-Dropdown fehlt');
+  // Der Optionswert MUSS dem data-pfad der Zeile entsprechen. Bei
+  // leerem BaseDir ist der Anzeigepfad der VOLLE Fundpfad
+  // ('src\A.pas', nicht 'A.pas') - belegt ueber
+  // TExporter.RelativeDisplayPath, das ohne Wurzel unveraendert
+  // durchreicht (derselbe Wert steht im FileRow-Test im title).
+  Assert.IsTrue(
+    Pos('<option value="src\A.pas">src\A.pas (2)</option>', Html) > 0,
+    'Datei-Option mit Fundzahl fehlt oder Wert passt nicht');
+  Assert.IsTrue(Pos('data-pfad="src\A.pas"', Html) > 0,
+    'Zeilen-Attribut passt nicht zum Optionswert');
+  // Regeln nach Fundzahl absteigend - GEZIELT ueber die IDs geprueft:
+  // SCA001 (MemoryLeak, 2 Funde) muss vor SCA017 (DebugOutput, 1)
+  // stehen. Ein blosser Vergleich der Zeichenketten '(2)' und '(1)'
+  // haette die DATEI-Liste erwischt, die alphabetisch sortiert ist -
+  // der Test haette zufaellig gestimmt, ohne die Regel-Sortierung
+  // zu pruefen.
+  Assert.IsTrue(Pos('<option value="SCA001">', Html) > 0,
+    'Regel-Option SCA001 fehlt');
+  Assert.IsTrue(Pos('<option value="SCA017">', Html) > 0,
+    'Regel-Option SCA017 fehlt');
+  Assert.IsTrue(
+    Pos('<option value="SCA001">', Html)
+    < Pos('<option value="SCA017">', Html),
+    'Regel-Dropdown muss nach Fundzahl absteigend sortiert sein '
+    + '(SCA001 mit 2 Funden vor SCA017 mit 1)');
+  // Verdrahtung in suche() und im Reset.
+  Assert.IsTrue(Pos('tbs[i].dataset.pfad === datei', Html) > 0,
+    'Datei-Filter haengt nicht in suche()');
+  Assert.IsTrue(Pos('tbs[i].dataset.rid === regel', Html) > 0,
+    'Regel-Filter haengt nicht in suche()');
+  Assert.IsTrue(Pos('if (dd) dd.value = "";', Html) > 0,
+    'filterReset setzt das Datei-Dropdown nicht zurueck');
+  Assert.IsTrue(Pos('q !== "" || datei !== "" || regel !== ""',
+    Html) > 0, 'der Reset-Knopf erscheint bei Dropdown-Auswahl nicht');
 end;
 
 initialization

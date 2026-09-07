@@ -39,6 +39,7 @@ type
     // -- Chip-Gruppen --------------------------------------------------
     wtGruppeTyp, wtGruppeSchweregrad, wtGruppeKonfidenz,
     wtGruppeProfil, wtChipLesefehler, wtThema, wtThemaWechseln,
+    wtAlleDateien, wtAlleRegeln,
     // -- Schweregrad / Konfidenz / Profil ------------------------------
     wtSevFehler, wtSevWarnung, wtSevHinweis, wtLesefehler,
     wtKonfNiedrig, wtKonfMittel, wtKonfHoch, wtProfilAn, wtProfilAus,
@@ -122,6 +123,9 @@ const
     ('Thema wechseln: hell / dunkel / sepia',
      'Switch theme: light / dark / sepia',
      'Changer de th&egrave;me : clair / sombre / s&eacute;pia'),
+    ('Alle Dateien (%d)', 'All files (%d)', 'Tous les fichiers (%d)'),
+    ('Alle Regeln (%d)', 'All rules (%d)',
+     'Toutes les r&egrave;gles (%d)'),
     // ---- Schweregrad / Konfidenz / Profil ------------------------------
     ('Fehler', 'Error', 'Erreur'),
     ('Warnung', 'Warning', 'Avertissement'),
