@@ -883,8 +883,11 @@ begin
     // erfinden - so bleibt EIN Filterweg sichtbar und ruecknehmbar.
     SB.AppendLine('function zeigeSecurity() {');
     SB.AppendLine('  aktiveFilter.typ = ["vuln", "hotspot"];');
+    // Apostrophe im JS-Selektor als '' verdoppelt - Delphi escapt
+    // mit doppeltem Apostroph, NICHT mit Backslash (der erste Wurf
+    // stand auf \' und war ein Compilerfehler).
     SB.AppendLine('  var bts = document.querySelectorAll('
-      + '"button.fchip[data-gruppe=\'typ\']");');
+      + '"button.fchip[data-gruppe=''typ'']");');
     SB.AppendLine('  for (var i = 0; i < bts.length; i++)');
     SB.AppendLine('    bts[i].setAttribute("aria-pressed",');
     SB.AppendLine('      aktiveFilter.typ.indexOf(bts[i].dataset.wert) '
