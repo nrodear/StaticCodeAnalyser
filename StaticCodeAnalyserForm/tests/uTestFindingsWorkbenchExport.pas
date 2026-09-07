@@ -36,6 +36,8 @@ type
     // Nutzerauftrag 07.09. (Screenshot): Datei als eigene Zeile UNTER
     // Zeile+Methode - "Dateiname; voller Pfad" mit Ellipse.
     [Test] procedure FileRow_UnderMainRow_NameFirstThenFullPath;
+    // EN/FR-Nachtrag 07.09.: Seite in drei Sprachen, Token unberuehrt.
+    [Test] procedure Language_TranslatesPageButKeepsTokens;
   end;
 
 implementation
@@ -445,6 +447,54 @@ begin
     Pos('<tr class="datei" onclick="oeffneDrawer(this.parentNode)">',
       Html) > 0,
     'auch die Datei-Zeile muss den Drawer oeffnen');
+end;
+
+procedure TTestFindingsWorkbenchExport.Language_TranslatesPageButKeepsTokens;
+// Wie der Zwilling auf der Katalogseite: Sichtbares wechselt, die
+// Filter-/Sortier-TOKEN bleiben. Zusaetzlich hier geprueft: der
+// SUCHBLOB folgt der Seitensprache - genau dafuer wird die Seite je
+// Sprache gebacken statt zur Laufzeit umgeschaltet (im englischen
+// Bericht muss "error" die Fehler-Zeilen finden, nicht "Fehler").
+var
+  Findings : TObjectList<TLeakFinding>;
+  En, Fr   : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    En := TFindingsWorkbenchExport.BuildHtml(Findings, '', -1, 'en');
+    Fr := TFindingsWorkbenchExport.BuildHtml(Findings, '', -1, 'fr');
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Pos('<h1>SCA Findings</h1>', En) > 0,
+    'englischer Titel fehlt');
+  Assert.IsTrue(Pos('<div class="wofuer">Findings</div>', En) > 0,
+    'englische Kachel-Beschriftung fehlt');
+  Assert.IsTrue(Pos('>Line<', En) > 0, 'englischer Spaltenkopf fehlt');
+  Assert.IsTrue(Pos('R&eacute;sultats SCA', Fr) > 0,
+    'franzoesischer Titel fehlt');
+  Assert.IsTrue(Pos('<html lang="fr">', Fr) > 0, 'lang=fr fehlt');
+  // Suchblob in der Seitensprache. Geprueft wird die NEGATIV-Richtung
+  // (kein deutsches Severity-Wort im englischen Dokument) - sie ist
+  // der eigentliche Vertrag und kommt ohne Annahme darueber aus,
+  // welche Severity die Fixture traegt.
+  Assert.IsTrue(Pos('data-search="', En) > 0, 'Suchblob fehlt');
+  Assert.AreEqual<Integer>(0, Pos('Warnung', En),
+    'deutsches Severity-Wort im englischen Dokument');
+  Assert.AreEqual<Integer>(0, Pos('warnung', En),
+    'deutsches Severity-Wort im englischen Suchblob');
+  Assert.AreEqual<Integer>(0, Pos('Hinweis', En),
+    'deutsches Severity-Wort im englischen Dokument');
+  Assert.AreEqual<Integer>(0, Pos('Konfidenz', Fr),
+    'deutsches Label im franzoesischen Dokument');
+  // Token unveraendert.
+  Assert.IsTrue(Pos('data-wert="hotspot"', Fr) > 0,
+    'Typ-Token muss unuebersetzt bleiben');
+  Assert.IsTrue(Pos('data-sev="1"', Fr) > 0,
+    'Severity-Rang bleibt numerisch');
+  Assert.IsTrue(Pos('class="badge sev-warn"', Fr) > 0,
+    'Severity-CSS-Klasse muss unuebersetzt bleiben');
 end;
 
 initialization

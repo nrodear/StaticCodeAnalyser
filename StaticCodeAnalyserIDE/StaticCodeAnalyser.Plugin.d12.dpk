@@ -301,6 +301,7 @@ contains
   uExportHtml in '..\SCA.Engine\sources\Infrastructure\uExportHtml.pas',
   uDetectorInfoExport in '..\SCA.Engine\sources\Infrastructure\uDetectorInfoExport.pas',
   uWorkbenchStyle in '..\SCA.Engine\sources\Infrastructure\uWorkbenchStyle.pas',
+  uWorkbenchI18n in '..\SCA.Engine\sources\Infrastructure\uWorkbenchI18n.pas',
   uFindingsWorkbenchExport in '..\SCA.Engine\sources\Infrastructure\uFindingsWorkbenchExport.pas',
   uFileTextCache in '..\SCA.Engine\sources\Infrastructure\uFileTextCache.pas',
   uFindingFingerprint in '..\SCA.Engine\sources\Infrastructure\uFindingFingerprint.pas',

@@ -460,9 +460,12 @@ procedure TFindingExportMenu.DoExportDetectorInfo(Sender: TObject);
 // Schreibt die Regelkatalog-Seite (uDetectorInfoExport) - unabhaengig
 // von Findings, darum ohne Leer-Pruefung. Default-Ablage ist das
 // Konfigverzeichnis (neben der analyser.ini, Nutzerwunsch 2026-09-06);
-// der Save-Dialog laesst jeden anderen Ort zu. Sprachcode 'de' fest -
-// die Seite ist bewusst sprachfix (s. Unit-Kopf von
-// uDetectorInfoExport; EN/FR ist Nutzer-Backlog).
+// der Save-Dialog laesst jeden anderen Ort zu.
+// SPRACHE seit 07.09.: die Seite wird in der AKTUELLEN App-Sprache
+// gebacken (CurrentLanguage, de/en/fr) - Oberflaeche UND Regeltexte.
+// Eine Datei traegt eine Sprache; wer eine andere braucht, stellt die
+// App um und exportiert erneut (Begruendung im Kopf von
+// uWorkbenchI18n).
 var
   Dlg : TSaveDialog;
 begin
@@ -476,7 +479,7 @@ begin
     Dlg.Options    := Dlg.Options + [ofOverwritePrompt];
     if not Dlg.Execute then Exit;
     try
-      TDetectorInfoExport.WriteToFile(Dlg.FileName, 'de');
+      TDetectorInfoExport.WriteToFile(Dlg.FileName, CurrentLanguage);
       FOnStatus(Format(_('Detector info saved: %s'),
         [ExtractFileName(Dlg.FileName)]));
     except
@@ -665,7 +668,10 @@ begin
     if not Dlg.Execute then Exit;
 
     try
-      TFindingsWorkbenchExport.Run(FAll, BaseDir, Dlg.FileName);
+      // -1 = Standard-Zeilenbudget; die Seite folgt der App-Sprache
+      // (Oberflaeche + Regeltexte, s. uWorkbenchI18n).
+      TFindingsWorkbenchExport.Run(FAll, BaseDir, Dlg.FileName, -1,
+        CurrentLanguage);
       FOnStatus(Format(_('HTML V2 report saved: %s'),
         [ExtractFileName(Dlg.FileName)]));
     except
