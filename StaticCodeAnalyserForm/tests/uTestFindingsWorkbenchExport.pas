@@ -45,13 +45,22 @@ type
     [Test] procedure TopLists_SortedByCount_AndClickable;
     [Test] procedure HealthAndSecurity_ScoreMatchesV1Formula;
     [Test] procedure SourceSnippet_RendersAroundFindingLine;
+    // IDE-Focus-Redesign 08.09. (Variante A des UI-TODO): Selection
+    // mit Severity-Rail, Inspector mit Hero und gestaffelten Ebenen.
+    [Test] procedure IdeInspector_HeroHierarchyAndSelectionStates;
   end;
 
 implementation
 
-// noinspection-file DuplicateString, LargeClass
+// noinspection-file DuplicateString, LargeClass, GodClass
 // Fixture-Ausnahme des Profils: HTML-Anker ('</template>', 'tpl-')
 // wiederholen sich als Pruefgegenstand bewusst variiert.
+// GodClass seit dem IDE-Focus-Redesign (08.09., 21 Testmethoden):
+// eine DUnitX-Fixture waechst mit jedem Vertragsfall, und genau das
+// SOLL sie - die Methoden SIND der Katalog der Zusagen dieser Seite.
+// Eine Aufspaltung duplizierte nur MakeFinding und Render und
+// zerrisse die Ablesbarkeit dessen, was der Export garantiert
+// (gleiche Lage und Begruendung wie in uTestExportHtml).
 
 uses
   System.IOUtils,
@@ -841,6 +850,87 @@ begin
   Assert.IsTrue(
     Pos('kopf.appendChild(sn.cloneNode(true));', Html) > 0,
     'der Drawer klont den Ausschnitt nicht');
+end;
+
+procedure TTestFindingsWorkbenchExport.IdeInspector_HeroHierarchyAndSelectionStates;
+// Variante A "IDE Focus": die Auswahl traegt einen 4px-Rail in der
+// SEVERITY-Farbe und ist von Hover und Focus unterscheidbar; der
+// Inspector beginnt mit einem Hero (Punkt, ID, Titel, Badges), zeigt
+// den Quellcode frueh und staffelt Erklaerung, Fix und die
+// sekundaeren Karten. Geprueft wird die STRUKTUR - die Optik selbst
+// sieht nur Nico.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  // --- Selection: drei unterscheidbare Zustaende --------------------
+  Assert.IsTrue(Pos('#funde tbody tr td:first-child{'
+    + 'border-left:4px solid transparent;}', Html) > 0,
+    'der 4px-Rail-Platzhalter fehlt (sonst springt das Layout beim '
+    + 'Auswaehlen)');
+  Assert.IsTrue(Pos('#funde tbody.gewaehlt[data-sev="0"] tr '
+    + 'td:first-child{border-left-color:var(--f-err-fg);}', Html) > 0,
+    'der Rail wird nicht von der Severity gefaerbt');
+  Assert.IsTrue(Pos('#funde tbody:hover tr{', Html) > 0,
+    'Hover-Zustand fehlt');
+  Assert.IsTrue(Pos('tr.haupt:focus-visible{', Html) > 0,
+    'Focus-Zustand fehlt - Tastaturbedienung braucht ihn eigenstaendig');
+  // --- Inspector-Hero ------------------------------------------------
+  Assert.IsTrue(Pos('hero.className = "insp-hero";', Html) > 0,
+    'Hero-Block fehlt');
+  Assert.IsTrue(Pos('punkt.className = "insp-punkt";', Html) > 0,
+    'Severity-Punkt des Hero fehlt');
+  Assert.IsTrue(Pos('id.className = "insp-id";', Html) > 0,
+    'SCA-ID im Hero fehlt');
+  Assert.IsTrue(Pos('titel.className = "insp-titel";', Html) > 0,
+    'Titel im Hero fehlt');
+  Assert.IsTrue(Pos('badges.className = "insp-badges";', Html) > 0,
+    'Badge-Zeile im Hero fehlt');
+  Assert.IsTrue(Pos('ort.className = "insp-ort";', Html) > 0,
+    'Location im Hero fehlt');
+  // Die Badges werden GEKLONT - so bleibt ihre Optik automatisch
+  // dieselbe wie in der Tabelle.
+  Assert.IsTrue(Pos('badges.appendChild(b.cloneNode(true));', Html) > 0,
+    'die Hero-Badges werden nicht aus den Zellen geklont');
+  // --- Reihenfolge: Hero VOR Quellcode VOR Regel-Doku ---------------
+  Assert.IsTrue(
+    Pos('kopf.appendChild(hero);', Html)
+    < Pos('kopf.appendChild(sn.cloneNode(true));', Html),
+    'der Quellcode muss NACH dem Hero kommen');
+  Assert.IsTrue(
+    Pos('korb.appendChild(fundKopf(tb));', Html)
+    < Pos('korb.appendChild(tpl.content.cloneNode(true));', Html),
+    'die Regel-Doku muss NACH dem Fund-Kopf kommen');
+  // --- Template: kein doppelter Titel mehr, dafuer Staffelung -------
+  Assert.AreEqual<Integer>(0, Pos('<div class="drawer-status">', Html),
+    'die alten Status-Badges des Templates muessen weg sein - sie '
+    + 'zeigten Regel-Defaults statt der Werte DIESES Fundes');
+  Assert.IsTrue(Pos('<div class="insp-fix">', Html) > 0,
+    'der Fix-Block fehlt');
+  Assert.IsTrue(Pos('<div class="insp-sekundaer">', Html) > 0,
+    'noinspection/Kalibrierung sind nicht als sekundaer gekennzeichnet');
+  Assert.IsTrue(Pos('<h3>Fix-Muster</h3>', Html) > 0,
+    'die Fix-Ueberschrift fehlt');
+  // --- Bewegung + Breite --------------------------------------------
+  Assert.IsTrue(
+    Pos('@media (prefers-reduced-motion:reduce){#drawer{transition:none;}}',
+      Html) > 0, 'reduzierte Bewegung wird nicht beachtet');
+  Assert.IsTrue(Pos('width:41%;', Html) > 0,
+    'Inspector-Breite ausserhalb des Zielbands 38-44 %');
+  // Inhalte bleiben vollstaendig (Akzeptanzkriterium 8).
+  Assert.IsTrue(Pos('<h3>Was wird erkannt?</h3>', Html) > 0,
+    'Erklaerung verloren');
+  Assert.IsTrue(Pos('// noinspection', Html) > 0,
+    'noinspection-Karte verloren');
+  Assert.IsTrue(Pos('class="metarow"', Html) > 0,
+    'Metadaten-Zeile verloren');
 end;
 
 initialization

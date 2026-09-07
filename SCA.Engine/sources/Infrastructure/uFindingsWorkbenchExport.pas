@@ -356,6 +356,12 @@ begin
     Regel('.health-rot', 'border-left-color:#c0483a;');
     Regel('.health-rot .health-zahl', 'color:#f2a9a1;');
     Regel('.secpanel', 'border-left-color:#8a63c4;');
+    // Inspector im Dunkeln: der Auswahl-Hintergrund der Zeile muss
+    // sich vom Hover unterscheiden (drei Zustaende!), und der
+    // Close-Button darf beim Ueberfahren nicht schwarz werden.
+    Regel('#funde tbody.gewaehlt tr', 'background:#27323f;');
+    Regel('#drawer-schliessen:hover',
+      'background:#2f3945;color:var(--tinte);');
     Result := SB.ToString;
   finally
     SB.Free;
@@ -461,12 +467,39 @@ begin
     SB.AppendLine('tr.haupt{border-top:1px solid var(--rand);'
       + 'cursor:pointer;}');
     SB.AppendLine('tr.datei{cursor:pointer;}');
-    // Hover + Auswahl liegen auf dem TBODY, damit Haupt- und
+    // DREI unterscheidbare Zustaende (IDE-Focus-Redesign 08.09.):
+    //   HOVER     - nur ein Hauch Flaeche, kein Rail
+    //   FOCUS     - Tastatur: sichtbarer Ring, unabhaengig von Auswahl
+    //   AUSWAHL   - 4px Rail in der SEVERITY-Farbe + ruhige Flaeche
+    // Hover und Auswahl liegen auf dem TBODY, damit Haupt- und
     // Datei-Zeile eines Fundes als EIN Block wirken.
     SB.AppendLine('#funde tbody:hover tr{background:#f2f6fb;}');
-    SB.AppendLine('tbody.gewaehlt tr{background:#e8f0fa;}');
-    SB.AppendLine('tbody.gewaehlt tr.haupt{'
-      + 'box-shadow:inset 3px 0 0 var(--akzent);}');
+    SB.AppendLine('#funde tbody.gewaehlt tr{background:#eaf1fa;}');
+    // Der Rail sitzt als border-left an der Hauptzeile - anders als
+    // ein box-shadow verschiebt er nichts und bleibt beim Scrollen
+    // exakt an der Zeile. 4px statt 3px: er soll aus zwei Metern
+    // Abstand erkennbar sein (Akzeptanzkriterium 1).
+    // Der Rail laeuft ueber BEIDE Zeilen des Fund-Blocks (Haupt- und
+    // Datei-Zeile) - nur an der Hauptzeile wirkte die Auswahl
+    // zerrissen.
+    SB.AppendLine('#funde tbody tr td:first-child{'
+      + 'border-left:4px solid transparent;}');
+    SB.AppendLine('#funde tbody.gewaehlt tr td:first-child{'
+      + 'border-left-color:var(--akzent);}');
+    // Die SEVERITY faerbt den Rail - so sagt die Auswahl zugleich,
+    // WIE schwer der aktive Fund wiegt (Variante A: "Severity
+    // unterstuetzt den Rail"). data-sev traegt den Rang am tbody.
+    SB.AppendLine('#funde tbody.gewaehlt[data-sev="0"] tr '
+      + 'td:first-child{border-left-color:var(--f-err-fg);}');
+    SB.AppendLine('#funde tbody.gewaehlt[data-sev="1"] tr '
+      + 'td:first-child{border-left-color:var(--f-warn-fg);}');
+    SB.AppendLine('#funde tbody.gewaehlt[data-sev="2"] tr '
+      + 'td:first-child{border-left-color:var(--f-info-fg);}');
+    // Auswahl hebt ID und Regelname leicht an - nicht mehr, sonst
+    // springt die Zeilenhoehe (Kriterium: kein Layout-Sprung).
+    SB.AppendLine('#funde tbody.gewaehlt tr.haupt td.id,'
+      + '#funde tbody.gewaehlt tr.haupt td:nth-child(5){'
+      + 'font-weight:600;color:var(--tinte);}');
     // Datei-Zeile "Name; voller Pfad": Ellipse statt Umbruch -
     // max-width:0 laesst die uebrigen Zellen die Breite bestimmen
     // (Tabellen-Ellipsis-Muster), title zeigt den vollen Pfad.
@@ -493,22 +526,69 @@ begin
     SB.AppendLine('#leer{display:none;padding:26px;text-align:center;'
       + 'color:var(--dezent);}');
     // ---- Drawer (Katalog-Zwilling) ------------------------------------
+    // Inspector statt Web-Drawer: 41 % Breite (Zielband 38-44 %),
+    // kein Schlagschatten mehr, sondern eine feste Kante zur Tabelle
+    // wie ein angedocktes IDE-Panel.
     SB.AppendLine('#drawer{position:fixed;top:0;right:0;height:100%;'
-      + 'width:40%;min-width:340px;max-width:44em;background:'
+      + 'width:41%;min-width:340px;max-width:46em;background:'
       + 'var(--karte);border-left:1px solid var(--rand);'
-      + 'box-shadow:-4px 0 16px rgba(16,32,48,0.12);'
-      + 'transform:translateX(102%);transition:transform 180ms ease;'
-      + 'overflow-y:auto;padding:14px 18px;z-index:10;}');
+      + 'box-shadow:-1px 0 0 var(--rand),-12px 0 24px '
+      + 'rgba(16,32,48,0.10);'
+      + 'transform:translateX(102%);transition:transform 200ms '
+      + 'cubic-bezier(0.22,0.61,0.36,1);'
+      + 'overflow-y:auto;padding:16px 20px 24px 20px;z-index:10;}');
+    // Wer Bewegung reduziert haben will, bekommt sie nicht.
+    SB.AppendLine('@media (prefers-reduced-motion:reduce){'
+      + '#drawer{transition:none;}}');
     SB.AppendLine('#drawer.offen{transform:translateX(0);}');
-    SB.AppendLine('#drawer h2{margin:0 0 2px 0;font-size:1.12em;}');
-    SB.AppendLine('#drawer h3{margin:14px 0 4px 0;font-size:0.98em;}');
-    SB.AppendLine('#drawer-schliessen{float:right;border:1px solid '
-      + 'var(--rand);background:var(--karte);border-radius:6px;'
-      + 'cursor:pointer;font-size:1em;padding:2px 9px;}');
-    SB.AppendLine('.drawer-status{margin:6px 0 4px 0;display:flex;'
-      + 'gap:6px;flex-wrap:wrap;}');
-    SB.AppendLine('.drawer-ort{color:var(--dezent);font-size:0.88em;'
-      + 'font-family:Consolas,monospace;word-break:break-all;}');
+    SB.AppendLine('#drawer h3{margin:0 0 4px 0;font-size:0.92em;'
+      + 'letter-spacing:0.02em;color:var(--dezent);'
+      + 'text-transform:uppercase;}');
+    // Close-Button: integriert statt dominant - kein Rahmen, erst
+    // beim Ueberfahren eine Flaeche (TODO-Punkt B).
+    SB.AppendLine('#drawer-schliessen{float:right;border:0;'
+      + 'background:none;color:var(--dezent);border-radius:6px;'
+      + 'cursor:pointer;font-size:1.15em;line-height:1;'
+      + 'padding:4px 8px;margin:-4px -6px 0 0;}');
+    SB.AppendLine('#drawer-schliessen:hover{background:var(--rand);'
+      + 'color:var(--tinte);}');
+    // ---- Inspector: Hero (Ebene 2 der Zielarchitektur) ---------------
+    // Severity-Punkt + SCA-ID + Titel + Badges. Der farbige Punkt
+    // wiederholt die Rail-Farbe der Zeile: dieselbe Aussage, zweimal
+    // gesehen - Tabelle und Inspector gehoeren sichtbar zusammen.
+    SB.AppendLine('.insp-hero{border-bottom:1px solid var(--rand);'
+      + 'padding-bottom:10px;margin-bottom:12px;}');
+    SB.AppendLine('.insp-kopfzeile{display:flex;align-items:baseline;'
+      + 'gap:8px;flex-wrap:wrap;}');
+    SB.AppendLine('.insp-punkt{width:9px;height:9px;border-radius:50%;'
+      + 'background:var(--dezent);flex:0 0 auto;'
+      + 'align-self:center;}');
+    SB.AppendLine('.insp-punkt.sev-err{background:var(--f-err-fg);}');
+    SB.AppendLine('.insp-punkt.sev-warn{background:var(--f-warn-fg);}');
+    SB.AppendLine('.insp-punkt.sev-hint{background:var(--f-info-fg);}');
+    SB.AppendLine('.insp-id{font-family:Consolas,monospace;'
+      + 'font-weight:700;font-size:0.94em;color:var(--dezent);}');
+    SB.AppendLine('.insp-titel{font-size:1.14em;font-weight:600;'
+      + 'line-height:1.25;flex:1 1 100%;margin:2px 0 0 0;}');
+    SB.AppendLine('.insp-badges{display:flex;gap:6px;flex-wrap:wrap;'
+      + 'margin-top:8px;}');
+    // ---- Inspector: Location (Ebene 3) --------------------------------
+    SB.AppendLine('.insp-ort{margin-top:8px;color:var(--dezent);'
+      + 'font-size:0.85em;font-family:Consolas,monospace;'
+      + 'word-break:break-all;}');
+    SB.AppendLine('.insp-detail{margin:10px 0 0 0;font-size:0.94em;}');
+    // ---- Inspector: Abschnitte (Ebenen 4-8) ---------------------------
+    // Gestaffelte Ebenen statt einer Textwueste: jede Section ein
+    // eigener Block mit ruhiger Ueberschrift.
+    SB.AppendLine('.insp-block{margin:16px 0 0 0;}');
+    SB.AppendLine('.insp-block p{margin:0 0 6px 0;font-size:0.94em;}');
+    // Der FIX ist die Handlung - er bekommt sichtbares Gewicht.
+    SB.AppendLine('.insp-fix{margin-top:18px;padding-top:14px;'
+      + 'border-top:2px solid var(--rand);}');
+    // Suppression/Konfiguration sind sekundaer (TODO-Punkt D):
+    // kleinere Schrift, gedaempft, aber vollstaendig.
+    SB.AppendLine('.insp-sekundaer{margin-top:16px;opacity:0.92;}');
+    SB.AppendLine('.insp-sekundaer .karte{font-size:0.9em;}');
     SB.AppendLine('.metarow{margin-top:12px;color:var(--dezent);'
       + 'font-size:0.88em;}');
     // ---- Themes (Feature-Abgleich 07.09.) ------------------------------
@@ -547,6 +627,10 @@ begin
       + 'background:#e8dcc0;}');
     SB.AppendLine(':root[data-theme="sepia"] .topliste li:hover{'
       + 'background:#f0e4c8;}');
+    SB.AppendLine(':root[data-theme="sepia"] #funde tbody.gewaehlt tr{'
+      + 'background:#ecdfbd;}');
+    SB.AppendLine(':root[data-theme="sepia"] #drawer-schliessen:hover{'
+      + 'background:#e6d8b6;color:var(--tinte);}');
     // Systempraeferenz: DERSELBE Regelsatz, nur unter einem anderen
     // Selektor. Er wird aus derselben Quelle erzeugt (DunkelRegeln) -
     // zwei handgepflegte Kopien waeren mit der naechsten Farbaenderung
@@ -996,42 +1080,95 @@ begin
     SB.AppendLine('  suche();');
     SB.AppendLine('}');
     // ---- Drawer: Fund-Kopf + Regel-Template ---------------------------
+    // fundKopf baut die Ebenen 2 bis 5 der Inspector-Hierarchie
+    // (IDE-Focus-Redesign 08.09.): HERO (Severity-Punkt, SCA-ID,
+    // Titel, Badges) -> LOCATION -> Fund-Detail -> QUELLCODE ->
+    // Hinweis. Alles kommt aus der ZEILE, also aus den Fund-Werten;
+    // die Regel-Doku liefert danach das geteilte Template.
+    // Die Badges werden aus den Zellen GEKLONT statt neu gebaut -
+    // so bleibt ihre Optik automatisch dieselbe wie in der Tabelle.
     SB.AppendLine('function fundKopf(tb) {');
     SB.AppendLine('  var z = tb.rows[0];');
     SB.AppendLine('  var kopf = document.createElement("div");');
+    SB.AppendLine('  var hero = document.createElement("div");');
+    SB.AppendLine('  hero.className = "insp-hero";');
+    // Kopfzeile: Punkt + ID (+ der Titel bricht darunter um).
+    SB.AppendLine('  var zeile = document.createElement("div");');
+    SB.AppendLine('  zeile.className = "insp-kopfzeile";');
+    SB.AppendLine('  var punkt = document.createElement("span");');
+    SB.AppendLine('  punkt.className = "insp-punkt";');
+    // Severity-Farbe des Punktes aus der Zeilenklasse der Badge-
+    // Zelle - dieselbe Quelle wie der Rail in der Tabelle.
+    SB.AppendLine('  var sevBadge = z.cells[' + IntToStr(SP_SEVERITY)
+      + '].querySelector(".badge");');
+    SB.AppendLine('  if (sevBadge) {');
+    SB.AppendLine('    if (sevBadge.classList.contains("sev-err")) '
+      + 'punkt.classList.add("sev-err");');
+    SB.AppendLine('    else if (sevBadge.classList.contains("sev-warn")) '
+      + 'punkt.classList.add("sev-warn");');
+    SB.AppendLine('    else if (sevBadge.classList.contains("sev-hint")) '
+      + 'punkt.classList.add("sev-hint");');
+    SB.AppendLine('  }');
+    SB.AppendLine('  zeile.appendChild(punkt);');
+    SB.AppendLine('  var id = document.createElement("span");');
+    SB.AppendLine('  id.className = "insp-id";');
+    SB.AppendLine('  id.textContent = z.cells[' + IntToStr(SP_SCAID)
+      + '].textContent;');
+    SB.AppendLine('  zeile.appendChild(id);');
+    SB.AppendLine('  var titel = document.createElement("div");');
+    SB.AppendLine('  titel.className = "insp-titel";');
+    SB.AppendLine('  titel.textContent = z.cells[' + IntToStr(SP_REGEL)
+      + '].textContent;');
+    SB.AppendLine('  zeile.appendChild(titel);');
+    SB.AppendLine('  hero.appendChild(zeile);');
+    // Badges: Typ, Severity, Konfidenz - geklont aus den Zellen.
+    SB.AppendLine('  var badges = document.createElement("div");');
+    SB.AppendLine('  badges.className = "insp-badges";');
+    SB.AppendLine('  [' + IntToStr(SP_TYP) + ', '
+      + IntToStr(SP_SEVERITY) + ', ' + IntToStr(SP_KONFIDENZ)
+      + '].forEach(function(sp) {');
+    SB.AppendLine('    var b = z.cells[sp].querySelector(".badge");');
+    SB.AppendLine('    if (b) badges.appendChild(b.cloneNode(true));');
+    SB.AppendLine('  });');
+    SB.AppendLine('  hero.appendChild(badges);');
+    // Location: Datei:Zeile - Methode, ruhig und monospace.
     SB.AppendLine('  var ort = document.createElement("div");');
-    SB.AppendLine('  ort.className = "drawer-ort";');
-    SB.AppendLine('  // Pfad aus data-pfad (die Datei hat keine Zelle');
-    SB.AppendLine('  // in der Hauptzeile mehr), Zeile/Methode/Detail');
-    SB.AppendLine('  // aus den Zellen 0/1/7 der tr.haupt.');
+    SB.AppendLine('  ort.className = "insp-ort";');
     SB.AppendLine('  var t = (tb.dataset.pfad || "") + ":" '
       + '+ z.cells[' + IntToStr(SP_ZEILE) + '].textContent;');
     SB.AppendLine('  if (z.cells[' + IntToStr(SP_METHODE)
       + '].textContent) t += " " + String.fromCharCode(183) + " " '
       + '+ z.cells[' + IntToStr(SP_METHODE) + '].textContent;');
     SB.AppendLine('  ort.textContent = t;');
-    SB.AppendLine('  kopf.appendChild(ort);');
+    SB.AppendLine('  hero.appendChild(ort);');
+    // Der konkrete Fund-Text gehoert noch zum Hero-Block.
     SB.AppendLine('  var det = z.cells[' + IntToStr(SP_DETAIL)
       + '].textContent;');
     SB.AppendLine('  if (det) {');
     SB.AppendLine('    var p = document.createElement("p");');
+    SB.AppendLine('    p.className = "insp-detail";');
     SB.AppendLine('    p.textContent = det;');
-    SB.AppendLine('    kopf.appendChild(p);');
+    SB.AppendLine('    hero.appendChild(p);');
     SB.AppendLine('  }');
-    // Quell-Ausschnitt: liegt als unsichtbare tr.snippet beim Fund
-    // und wird in den Drawer geklont (nicht verschoben - die Zeile
-    // bleibt Datenquelle fuer das naechste Oeffnen).
+    SB.AppendLine('  kopf.appendChild(hero);');
+    // Quell-Ausschnitt FRUEH (Ebene 4): fuer den Entwickler ist die
+    // Codezeile der visuelle Anker. Er liegt als unsichtbare
+    // tr.snippet beim Fund und wird geklont, nicht verschoben - die
+    // Zeile bleibt Datenquelle fuer das naechste Oeffnen.
     SB.AppendLine('  var sn = tb.querySelector("tr.snippet '
       + '.src-snippet");');
     SB.AppendLine('  if (sn) kopf.appendChild(sn.cloneNode(true));');
     SB.AppendLine('  if (tb.dataset.hinweis) {');
+    SB.AppendLine('    var blk = document.createElement("div");');
+    SB.AppendLine('    blk.className = "insp-block";');
     SB.AppendLine('    var h3 = document.createElement("h3");');
     SB.AppendLine('    h3.textContent = "'
       + TWorkbenchI18n.TJs(wtHinweisZuFund, ALang) + '";');
-    SB.AppendLine('    kopf.appendChild(h3);');
+    SB.AppendLine('    blk.appendChild(h3);');
     SB.AppendLine('    var hp = document.createElement("p");');
     SB.AppendLine('    hp.textContent = tb.dataset.hinweis;');
-    SB.AppendLine('    kopf.appendChild(hp);');
+    SB.AppendLine('    blk.appendChild(hp);');
+    SB.AppendLine('    kopf.appendChild(blk);');
     SB.AppendLine('  }');
     SB.AppendLine('  return kopf;');
     SB.AppendLine('}');
@@ -1302,26 +1439,31 @@ begin
   SB := TStringBuilder.Create;
   try
     SB.AppendLine(Format('<template id="tpl-%s">', [H(AMeta.ID)]));
-    SB.AppendLine('<h2><span class="mono">' + H(AMeta.ID) + '</span> '
-      + H(AMeta.Name) + '</h2>');
-    SB.AppendLine('<div class="drawer-status">'
-      + Format('<span class="badge typ %s">%s</span>',
-          [TypCss(AMeta.FindingType), H(TypText(AMeta.FindingType))])
-      + Format('<span class="badge sev-%s">'
-          + TWorkbenchI18n.T(wtRegelDefault, ALang) + '</span>',
-          [SEV_CSS[ASev], TWorkbenchI18n.T(SEV_KEY[ASev], ALang)])
-      + '</div>');
+    // KEIN Titel und KEINE Status-Badges mehr: die stehen seit dem
+    // IDE-Focus-Redesign (08.09.) im HERO des Inspectors und zeigen
+    // dort die Werte DIESES FUNDES statt der Regel-Defaults. Das
+    // Template liefert ab hier nur noch die Regel-Doku - Erklaerung,
+    // Fix, Suppression, Metadaten - in genau dieser Staffelung.
+    SB.AppendLine('<div class="insp-block">');
     SB.AppendLine('<h3>' + TWorkbenchI18n.T(wtWasWirdErkannt, ALang)
       + '</h3>');
     SB.AppendLine('<p>' + H(AMeta.ShortDescription) + '</p>');
+    SB.AppendLine('</div>');
     if AMeta.FullDescription <> '' then
     begin
+      SB.AppendLine('<div class="insp-block">');
       SB.AppendLine('<h3>' + TWorkbenchI18n.T(wtWarumRelevant, ALang)
         + '</h3>');
       SB.AppendLine('<p>' + H(AMeta.FullDescription) + '</p>');
+      SB.AppendLine('</div>');
     end;
     if (AMeta.BadExample <> '') or (AMeta.GoodExample <> '') then
     begin
+      // Der FIX ist die Handlung - eigener Block mit Trennlinie
+      // darueber, damit er sich vom Verstehen-Teil abhebt.
+      SB.AppendLine('<div class="insp-fix">');
+      SB.AppendLine('<h3>' + TWorkbenchI18n.T(wtFixMuster, ALang)
+        + '</h3>');
       SB.AppendLine('<div class="codekarten">');
       // #10#10 vor </pre>: zwei Leerzeilen Luft am Blockende (gleicher
       // Nutzerwunsch wie Katalog und V1). data-copy = der reine Code
@@ -1342,8 +1484,13 @@ begin
           + TWorkbenchI18n.T(wtKopieren, ALang)
           + '</button></div><pre>%s' + #10#10'</pre></div>',
           [HA(AMeta.GoodExample), H(AMeta.GoodExample)]));
-      SB.AppendLine('</div>');
+      SB.AppendLine('</div>');   // .codekarten
+      SB.AppendLine('</div>');   // .insp-fix
     end;
+    // Suppression und Kalibrierung: vollstaendig, aber SEKUNDAER -
+    // sie beantworten nicht "was ist das Problem", sondern "wie
+    // stelle ich es leiser" (TODO-Punkt D).
+    SB.AppendLine('<div class="insp-sekundaer">');
     SB.AppendLine(Format('<div class="karte" data-copy="// noinspection '
       + '%s"><h3>' + TWorkbenchI18n.T(wtUnterdruecken, ALang)
       + ' <button class="copy" onclick="kopiere(this)">'
@@ -1361,6 +1508,7 @@ begin
         + '<p>' + TWorkbenchI18n.T(wtKalibrierungText, ALang)
         + '</p></div>',
         [H(AMeta.ConfigKey), H(AMeta.ConfigKey)]));
+    SB.AppendLine('</div>');   // .insp-sekundaer
     SB.AppendLine('<div class="metarow">'
       + 'CWE: ' + ChipListe(AMeta.CWE, 'cwe')
       + ' &middot; ' + TWorkbenchI18n.T(wtTagsLabel, ALang) + ': '
