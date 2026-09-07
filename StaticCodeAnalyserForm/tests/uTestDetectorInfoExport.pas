@@ -10,7 +10,8 @@ uses
   DUnitX.TestFramework,
   System.SysUtils, System.Classes, System.IOUtils,
   uSCAConsts, uRuleCatalog, uDetectorInfoExport,
-  uExportHtml;   // HtmlEscape-Vertragstest (Attribut-Integritaet)
+  uExportHtml,     // HtmlEscape-Vertragstest (Attribut-Integritaet)
+  uWorkbenchI18n;  // Sprachtabellen-Waechter (EN/FR-Nachtrag 07.09.)
 
 type
   [TestFixture]
@@ -45,18 +46,105 @@ type
     // Workbench-Umbau 07.09. (UI-Konzept-PDFs): Command-Bar, Chips,
     // Dashboard, Drawer, Tastatur und Deep-Link muessen verdrahtet sein.
     [Test] procedure Workbench_ScaffoldingWiredCompletely;
+    // EN/FR-Nachtrag 07.09.: die Seite traegt die Sprache, die
+    // Filter-TOKEN bleiben davon unberuehrt.
+    [Test] procedure Language_TranslatesChromeButKeepsTokens;
+    // Waechter der Sprachtabelle selbst.
+    [Test] procedure I18n_JsVarianteOhneEntities_UndFallbackAufEn;
   end;
 
 implementation
 
-// noinspection-file DuplicateString
+// noinspection-file DuplicateString, LargeClass
 // 'data-search="' wiederholt sich absichtlich - das Attribut IST der
 // Pruefgegenstand mehrerer Faelle (Fixture-Ausnahme des Profils).
+// LargeClass seit dem EN/FR-Nachtrag (07.09., 543 Zeilen): eine
+// DUnitX-Fixture waechst mit jedem Vertragsfall - die Testmethoden
+// SIND der Katalog der Zusagen, eine Aufspaltung duplizierte nur den
+// Setup und den FHtml-Helfer (gleiche Lage und gleiche Begruendung
+// wie in uTestExportHtml).
 
 procedure TTestDetectorInfoExport.Setup;
 begin
   TRuleCatalog.Reload;   // frischer Katalogzustand (Muster uTestRuleCatalog)
   FHtml := TDetectorInfoExport.BuildHtml('de');
+end;
+
+procedure TTestDetectorInfoExport.Language_TranslatesChromeButKeepsTokens;
+// EN/FR-Nachtrag 07.09.: dieselbe Seite in drei Sprachen. Geprueft
+// wird BEIDES - dass die sichtbaren Texte wirklich wechseln UND dass
+// die maschinellen TOKEN es NICHT tun: data-wert/data-prof und die
+// CSS-Klasse '.pill an' sind der Filtervertrag zwischen Chip und
+// Zeile; wuerden sie mituebersetzt, filterte die Seite in EN/FR ins
+// Leere (der teure Teil dieses Umbaus).
+var
+  En, Fr : string;
+begin
+  En := TDetectorInfoExport.BuildHtml('en');
+  Fr := TDetectorInfoExport.BuildHtml('fr');
+  // Sichtbares wechselt.
+  Assert.IsTrue(Pos('<h1>SCA Detector Catalog</h1>', En) > 0,
+    'englischer Titel fehlt');
+  Assert.IsTrue(Pos('<h3>What is detected?</h3>', En) > 0,
+    'englische Drawer-Ueberschrift fehlt');
+  Assert.IsTrue(Pos('>Severity<', En) > 0,
+    'englischer Spaltenkopf fehlt');
+  Assert.IsTrue(Pos('<b>Development:</b>', En) > 0,
+    'englische Rollen-Karte fehlt');
+  Assert.IsTrue(Pos('Catalogue des d&eacute;tecteurs SCA', Fr) > 0,
+    'franzoesischer Titel fehlt');
+  Assert.IsTrue(Pos('Qu''est-ce qui est d&eacute;tect&eacute; ?', Fr) > 0,
+    'franzoesische Drawer-Ueberschrift fehlt');
+  // lang-Attribut folgt.
+  Assert.IsTrue(Pos('<html lang="en">', En) > 0, 'lang=en fehlt');
+  Assert.IsTrue(Pos('<html lang="fr">', Fr) > 0, 'lang=fr fehlt');
+  // Deutsch bleibt, wie es war (Bestandsschutz).
+  Assert.IsTrue(Pos('<h1>SCA Detektor-Katalog</h1>', FHtml) > 0,
+    'deutscher Titel darf sich nicht geaendert haben');
+  // TOKEN bleiben in ALLEN Sprachen gleich.
+  Assert.IsTrue(Pos('data-wert="an"', Fr) > 0,
+    'Profil-Chip-Token muss unuebersetzt bleiben');
+  Assert.IsTrue(Pos('data-prof="an"', Fr) > 0,
+    'Profil-Zeilen-Token muss unuebersetzt bleiben');
+  Assert.IsTrue(Pos('class="pill an"', Fr) > 0,
+    'Pill-CSS-Klasse muss unuebersetzt bleiben');
+  Assert.IsTrue(Pos('data-wert="hotspot"', Fr) > 0,
+    'Typ-Token muss unuebersetzt bleiben');
+  Assert.IsTrue(Pos('>Security Hotspot<', Fr) > 0,
+    'Sonar-Fachbegriffe bleiben in allen Sprachen englisch');
+  // Die sichtbare Pill traegt dagegen den uebersetzten Text.
+  Assert.IsTrue(Pos('<span class="pill an">activ&eacute;</span>', Fr) > 0,
+    'die sichtbare Profil-Pill muss uebersetzt sein');
+end;
+
+procedure TTestDetectorInfoExport.I18n_JsVarianteOhneEntities_UndFallbackAufEn;
+// Zwei Vertraege der Sprachtabelle: (a) TJs liefert KEINE
+// HTML-Entities - im JS wuerde textContent sie woertlich anzeigen
+// ('copi&eacute;'); (b) ein unbekannter Sprachcode faellt auf
+// Englisch zurueck statt leer zu bleiben.
+var
+  T : TWbText;
+  S : string;
+begin
+  for T := Low(TWbText) to High(TWbText) do
+  begin
+    S := TWorkbenchI18n.TJs(T, 'fr');
+    Assert.AreEqual<Integer>(0, Pos('&', S),
+      'TJs darf keine HTML-Entity liefern: ' + S);
+    Assert.IsTrue(TWorkbenchI18n.T(T, 'de') <> '',
+      'leerer deutscher Text an Position ' + IntToStr(Ord(T)));
+    Assert.IsTrue(TWorkbenchI18n.T(T, 'en') <> '',
+      'leerer englischer Text an Position ' + IntToStr(Ord(T)));
+    Assert.IsTrue(TWorkbenchI18n.T(T, 'fr') <> '',
+      'leerer franzoesischer Text an Position ' + IntToStr(Ord(T)));
+  end;
+  Assert.AreEqual(TWorkbenchI18n.T(wtSevFehler, 'en'),
+    TWorkbenchI18n.T(wtSevFehler, 'kl'),
+    'unbekannte Sprache muss auf Englisch fallen');
+  Assert.IsTrue(TWorkbenchI18n.IstBekannt('DE'),
+    'Sprachcode-Pruefung ist case-insensitiv');
+  Assert.IsFalse(TWorkbenchI18n.IstBekannt('kl'),
+    'unbekannter Code darf nicht als bekannt gelten');
 end;
 
 procedure TTestDetectorInfoExport.EveryRule_AppearsExactlyOnce;

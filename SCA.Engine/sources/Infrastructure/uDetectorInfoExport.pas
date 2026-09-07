@@ -17,15 +17,16 @@ unit uDetectorInfoExport;
 // nutzen einen execCommand-Fallback, weil navigator.clipboard unter
 // file:// kein Secure-Context ist.
 //
-// SPRACHE: die Seite ist bewusst DEUTSCH und sprachfix - Chrome-Texte
-// (Titel, Spalten, Suchfeld) stehen als Konstanten hier, die Regeltexte
-// kommen aus GetRule(K, 'de') mit dem dokumentierten Feld-Rueckfall auf
-// Englisch (das DE-Overlay traegt Name + Kurzbeschreibung; die
-// Langbeschreibungen und die Vorher/Nachher-Beispiele existieren bisher
-// nur englisch). BEWUSST KEIN _(): das Artefakt soll nicht mit der
-// App-Sprache kippen. SPAETER laut Nutzer-Backlog EN/FR - dann wird
-// die Sprache hier parametrisiert; bis dahin ist 'de' der einzige
-// Aufrufwert.
+// SPRACHE (07.09.: EN/FR nachgeliefert, Nutzerauftrag): ALang steuert
+// die GANZE Seite - die Chrome-Texte kommen aus TWorkbenchI18n, die
+// Regeltexte aus GetRule(K, ALang) mit dem dokumentierten Feld-
+// Rueckfall auf Englisch (das DE-Overlay traegt Name + Kurz-
+// beschreibung; Langbeschreibungen und Vorher/Nachher-Beispiele
+// existieren bisher nur englisch). Weiterhin BEWUSST KEIN _(): das
+// Artefakt kippt nicht mit der App-Sprache, sondern traegt die
+// Sprache, mit der es EXPORTIERT wurde. Eine Datei = eine Sprache -
+// die Begruendung gegen einen Laufzeit-Umschalter steht im Kopf von
+// uWorkbenchI18n (Badge-Woerter stecken auch im Such-Blob).
 //
 // TECHNIK: ein <tbody> je Regel (EINE sichtbare Zeile; die Detaildaten
 // liegen als nicht gerendertes <template id="tpl-SCAxxx"> daneben und
@@ -70,15 +71,17 @@ implementation
 uses
   uExportHtml,     // TExporterHtml.HtmlEscape - keine dritte Escape-Kopie
   uExport,         // TExporter.SaveUtf8WithBom - EIN Ort fuer die BOM-Politik
-  uWorkbenchStyle; // geteilter CSS-Kern beider HTML-Exporte (07.09.)
+  uWorkbenchStyle, // geteilter CSS-Kern beider HTML-Exporte (07.09.)
+  uWorkbenchI18n;  // geteilte Oberflaechentexte de/en/fr (07.09.)
 
 const
-  // Anzeige-Woerter der Seite (sprachfix deutsch, s. Unit-Kopf).
-  SEV_TEXT  : array[TLeakSeverity] of string =
-    ('Fehler', 'Warnung', 'Hinweis');
-  SEV_CSS   : array[TLeakSeverity] of string = ('err', 'warn', 'hint');
-  CONF_TEXT : array[TFindingConfidence] of string =
-    ('niedrig', 'mittel', 'hoch');   // Enum-Ordnung fcLow, fcMedium, fcHigh
+  SEV_CSS : array[TLeakSeverity] of string = ('err', 'warn', 'hint');
+  // Severity- und Konfidenz-Woerter kommen aus der Sprachtabelle -
+  // die Reihenfolge bildet die Enums ab (lsError.. / fcLow..).
+  SEV_KEY  : array[TLeakSeverity] of TWbText =
+    (wtSevFehler, wtSevWarnung, wtSevHinweis);
+  CONF_KEY : array[TFindingConfidence] of TWbText =
+    (wtKonfNiedrig, wtKonfMittel, wtKonfHoch);
 
 type
   // Kennzahlen des Dashboards - ein Zaehlpass ueber alle Kinds.
@@ -98,8 +101,13 @@ type
     Sev       : TLeakSeverity;
     Conf      : TFindingConfidence;
     InDefault : Boolean;
-    ProfilTxt : string;
-    Tags      : string;
+    // ProfilTxt ist das TOKEN 'an'/'aus': CSS-Klasse (.pill an) UND
+    // Filterwert (data-prof, muss zum data-wert der Chips passen) -
+    // es wird NIE uebersetzt. Sichtbar ist ProfilAnzeige.
+    ProfilTxt    : string;
+    ProfilAnzeige: string;
+    Tags         : string;
+    Lang         : string;   // Seitensprache - Zeile, Blob, Template
   end;
 
 function TypText(T: TFindingType): string;
@@ -155,6 +163,17 @@ function HA(const S: string): string;
 // 07.09., MAJOR). '&#10;' dekodiert der Parser im dataset zu echtem LF.
 begin
   Result := TExporterHtml.HtmlAttrEscapeMultiline(S);
+end;
+
+function Kopf(ASpalte: Integer; AText: TWbText;
+  const ALang: string): string;
+// Ein sortierbarer Spaltenkopf. Der Index ist der JS-Vertrag
+// (sortiere(n) zaehlt die Zellen der Hauptzeile), der Text kommt
+// uebersetzt aus der Tabelle.
+begin
+  Result := Format('<th onclick="sortiere(%d)">%s'
+    + '<span class="pfeil"></span></th>',
+    [ASpalte, TWorkbenchI18n.T(AText, ALang)]);
 end;
 
 function ChipListe(const A: TArray<string>; const ACss: string): string;
@@ -275,36 +294,32 @@ begin
   end;
 end;
 
-function RollenBlock: string;
+function RollenBlock(const ALang: string): string;
 // Drei Rollen-Karten, standardmaessig OFFEN, VOR dem Suchfeld
 // (Nutzerauftrag "immer gut zugaenglich"; Test RoleBlock_...).
+// Der Doppelpunkt hinter der Rolle steht im MARKUP, nicht in der
+// Sprachtabelle - so bleibt die Rollenbezeichnung fuer sich
+// wiederverwendbar und die Tabelle frei von Satzzeichen-Varianten.
 var
   SB : TStringBuilder;
+
+  procedure Karte(ATitel, AText: TWbText);
+  begin
+    SB.AppendLine('<div class="rolle-karte"><b>'
+      + TWorkbenchI18n.T(ATitel, ALang) + ':</b><p>'
+      + TWorkbenchI18n.T(AText, ALang) + '</p></div>');
+  end;
+
 begin
   SB := TStringBuilder.Create;
   try
     SB.AppendLine('<details open class="rollen">');
-    SB.AppendLine('<summary><b>Wof&uuml;r diese Seite? (Entwicklung, QA, '
-      + 'Product Owner)</b></summary>');
+    SB.AppendLine('<summary><b>'
+      + TWorkbenchI18n.T(wtRollenTitel, ALang) + '</b></summary>');
     SB.AppendLine('<div class="rollen-grid">');
-    SB.AppendLine('<div class="rolle-karte"><b>Entwicklung:</b><p>'
-      + 'Wenn ein Scan eine SCA-Regel meldet, steht hier, was sie '
-      + 'pr&uuml;ft und warum, mit dem Vorher/Nachher-Beispiel als '
-      + 'Fix-Muster. Der noinspection-Name unterdr&uuml;ckt einen '
-      + 'Einzelfund begr&uuml;ndet im Code; der Konfigurations-'
-      + 'Schl&uuml;ssel kalibriert den Detektor projektweit.</p></div>');
-    SB.AppendLine('<div class="rolle-karte"><b>QA / Test:</b><p>'
-      + 'Der Pr&uuml;fumfang auf einen Blick: welche Regel mit welchem '
-      + 'Typ, Schweregrad und welcher Konfidenz meldet und ob sie im '
-      + 'Default-Profil aktiv ist. SCA-IDs aus Berichten oder Tickets '
-      + 'lassen sich per Suche nachschlagen und fachlich '
-      + 'einordnen.</p></div>');
-    SB.AppendLine('<div class="rolle-karte"><b>Product Owner:</b><p>'
-      + 'Die Qualit&auml;ts-Politik des Projekts: was abgedeckt ist '
-      + '(Bugs, Sicherheit inkl. CWE-Bezug, Wartbarkeit), was das '
-      + 'Default-Profil bewusst ausl&auml;sst - die Grundlage, um '
-      + 'Profil-Entscheidungen und Regel-Ausnahmen zu '
-      + 'diskutieren.</p></div>');
+    Karte(wtRolleDev, wtRolleDevText);
+    Karte(wtRolleQa, wtRolleQaText);
+    Karte(wtRolleOwner, wtRolleOwnerText);
     SB.AppendLine('</div>');
     SB.AppendLine('</details>');
     Result := SB.ToString;
@@ -313,11 +328,13 @@ begin
   end;
 end;
 
-function CommandUndChips: string;
+function CommandUndChips(const ALang: string): string;
 // Search-Command-Bar (Strg+K, Trefferzaehler) + Filter-Chips.
 // Die Chips filtern UND-verknuepft ueber die Gruppen, ODER-verknuepft
 // innerhalb einer Gruppe; "Filter zuruecksetzen" erscheint nur bei
-// aktiven Filtern (UI-Konzept, Abschnitte 5+6).
+// aktiven Filtern (UI-Konzept, Abschnitte 5+6). Die Typ-Chips tragen
+// die Sonar-Fachbegriffe und bleiben in allen Sprachen englisch
+// (s. Kopf von uWorkbenchI18n).
 var
   SB : TStringBuilder;
   S  : TLeakSeverity;
@@ -327,18 +344,21 @@ begin
   try
     SB.AppendLine('<div class="cmdbar">');
     SB.AppendLine('<input id="suche" type="search" '
-      + 'aria-label="Regelkatalog durchsuchen" '
-      + 'placeholder="SCA-ID, Regelname, noinspection, CWE, Tag oder '
-      + 'Begriff suchen ..." oninput="suche()">');
-    SB.AppendLine('<span><span class="kbd">Strg</span>+<span class="kbd">'
-      + 'K</span></span>');
+      + 'aria-label="' + TWorkbenchI18n.T(wtSucheAria, ALang) + '" '
+      + 'placeholder="'
+      + TWorkbenchI18n.T(wtSuchePlatzhalterKatalog, ALang)
+      + '" oninput="suche()">');
+    SB.AppendLine('<span><span class="kbd">'
+      + TWorkbenchI18n.T(wtStrgTaste, ALang)
+      + '</span>+<span class="kbd">K</span></span>');
     SB.AppendLine('<span id="zaehler"></span>');
-    SB.AppendLine('<button id="reset" onclick="filterReset()">Filter '
-      + 'zur&uuml;cksetzen</button>');
+    SB.AppendLine('<button id="reset" onclick="filterReset()">'
+      + TWorkbenchI18n.T(wtFilterReset, ALang) + '</button>');
     SB.AppendLine('</div>');
 
     SB.AppendLine('<div class="chips" id="chips">');
-    SB.AppendLine('<span class="gruppe">Typ</span>');
+    SB.AppendLine('<span class="gruppe">'
+      + TWorkbenchI18n.T(wtGruppeTyp, ALang) + '</span>');
     SB.AppendLine('<button class="fchip" data-gruppe="typ" '
       + 'data-wert="bug" aria-pressed="false" onclick="chip(this)">'
       + 'Bug</button>');
@@ -354,23 +374,28 @@ begin
     SB.AppendLine('<button class="fchip" data-gruppe="typ" '
       + 'data-wert="dup" aria-pressed="false" onclick="chip(this)">'
       + 'Duplication</button>');
-    SB.AppendLine('<span class="gruppe">Schweregrad</span>');
+    SB.AppendLine('<span class="gruppe">'
+      + TWorkbenchI18n.T(wtGruppeSchweregrad, ALang) + '</span>');
     for S := Low(TLeakSeverity) to High(TLeakSeverity) do
       SB.AppendLine(Format('<button class="fchip" data-gruppe="sev" '
         + 'data-wert="%d" aria-pressed="false" onclick="chip(this)">'
-        + '%s</button>', [Ord(S), SEV_TEXT[S]]));
-    SB.AppendLine('<span class="gruppe">Konfidenz</span>');
+        + '%s</button>',
+        [Ord(S), TWorkbenchI18n.T(SEV_KEY[S], ALang)]));
+    SB.AppendLine('<span class="gruppe">'
+      + TWorkbenchI18n.T(wtGruppeKonfidenz, ALang) + '</span>');
     for C := High(TFindingConfidence) downto Low(TFindingConfidence) do
       SB.AppendLine(Format('<button class="fchip" data-gruppe="konf" '
         + 'data-wert="%d" aria-pressed="false" onclick="chip(this)">'
-        + '%s</button>', [Ord(C), CONF_TEXT[C]]));
-    SB.AppendLine('<span class="gruppe">Default-Profil</span>');
+        + '%s</button>',
+        [Ord(C), TWorkbenchI18n.T(CONF_KEY[C], ALang)]));
+    SB.AppendLine('<span class="gruppe">'
+      + TWorkbenchI18n.T(wtGruppeProfil, ALang) + '</span>');
     SB.AppendLine('<button class="fchip" data-gruppe="prof" '
-      + 'data-wert="an" aria-pressed="false" onclick="chip(this)">an'
-      + '</button>');
+      + 'data-wert="an" aria-pressed="false" onclick="chip(this)">'
+      + TWorkbenchI18n.T(wtProfilAn, ALang) + '</button>');
     SB.AppendLine('<button class="fchip" data-gruppe="prof" '
-      + 'data-wert="aus" aria-pressed="false" onclick="chip(this)">aus'
-      + '</button>');
+      + 'data-wert="aus" aria-pressed="false" onclick="chip(this)">'
+      + TWorkbenchI18n.T(wtProfilAus, ALang) + '</button>');
     SB.AppendLine('</div>');
     Result := SB.ToString;
   finally
@@ -378,33 +403,30 @@ begin
   end;
 end;
 
-function Dashboard(const AStat: TKatalogStat): string;
+function Dashboard(const AStat: TKatalogStat; const ALang: string): string;
 // Kennzahlen-Karten: Orientierung, bevor 198 Zeilen kommen.
 var
   SB : TStringBuilder;
+
+  procedure Kachel(AZahl: Integer; AWofuer: TWbText);
+  begin
+    SB.AppendLine(Format('<div class="kachel"><div class="zahl">%d</div>'
+      + '<div class="wofuer">%s</div></div>',
+      [AZahl, TWorkbenchI18n.T(AWofuer, ALang)]));
+  end;
+
 begin
   SB := TStringBuilder.Create;
   try
     SB.AppendLine('<div class="dash">');
-    SB.AppendLine(Format('<div class="kachel"><div class="zahl">%d</div>'
-      + '<div class="wofuer">Detektoren</div></div>', [AStat.Gesamt]));
-    SB.AppendLine(Format('<div class="kachel"><div class="zahl">%d</div>'
-      + '<div class="wofuer">Fehler</div></div>', [AStat.Sev[lsError]]));
-    SB.AppendLine(Format('<div class="kachel"><div class="zahl">%d</div>'
-      + '<div class="wofuer">Warnungen</div></div>',
-      [AStat.Sev[lsWarning]]));
-    SB.AppendLine(Format('<div class="kachel"><div class="zahl">%d</div>'
-      + '<div class="wofuer">Hinweise</div></div>', [AStat.Sev[lsHint]]));
-    SB.AppendLine(Format('<div class="kachel"><div class="zahl">%d</div>'
-      + '<div class="wofuer">Security-Regeln</div></div>',
-      [AStat.Security]));
-    SB.AppendLine(Format('<div class="kachel"><div class="zahl">%d</div>'
-      + '<div class="wofuer">mit CWE-Bezug</div></div>', [AStat.MitCwe]));
-    SB.AppendLine(Format('<div class="kachel"><div class="zahl">%d</div>'
-      + '<div class="wofuer">Default an</div></div>', [AStat.Aktiv]));
-    SB.AppendLine(Format('<div class="kachel"><div class="zahl">%d</div>'
-      + '<div class="wofuer">Default aus</div></div>',
-      [AStat.Gesamt - AStat.Aktiv]));
+    Kachel(AStat.Gesamt,            wtKaDetektoren);
+    Kachel(AStat.Sev[lsError],      wtKaFehler);
+    Kachel(AStat.Sev[lsWarning],    wtKaWarnungen);
+    Kachel(AStat.Sev[lsHint],       wtKaHinweise);
+    Kachel(AStat.Security,          wtKaSecurityRegeln);
+    Kachel(AStat.MitCwe,            wtKaMitCwe);
+    Kachel(AStat.Aktiv,             wtKaDefaultAn);
+    Kachel(AStat.Gesamt - AStat.Aktiv, wtKaDefaultAus);
     SB.AppendLine('</div>');
     Result := SB.ToString;
   finally
@@ -412,7 +434,7 @@ begin
   end;
 end;
 
-function DrawerJs: string;
+function DrawerJs(const ALang: string): string;
 // Das komplette Seiten-JS: Sortierung (tbody-Verschiebung, thead bleibt
 // vorn), Suche + Chip-Filter (UND ueber Gruppen, ODER in der Gruppe),
 // Trefferzaehler + Empty-State, Drawer (Template klonen), Tastatur
@@ -478,7 +500,13 @@ begin
     SB.AppendLine('  }');
     SB.AppendLine('  var ges = tbs.length;');
     SB.AppendLine('  document.getElementById("zaehler").textContent =');
-    SB.AppendLine('    sichtbar + " von " + ges + " Detektoren";');
+    // Zaehlertext aus der Sprachtabelle: '%d von %d Detektoren' wird
+    // zum JS-Ausdruck, indem die beiden %d durch die Variablen ersetzt
+    // werden - so bleibt die WORTSTELLUNG der Sprache erhalten (im
+    // Franzoesischen steht 'sur' zwischen den Zahlen).
+    SB.AppendLine('    ' + StringReplace(StringReplace(
+      '"' + TWorkbenchI18n.TJs(wtZaehlerDetektoren, ALang) + '"',
+      '%d', '" + sichtbar + "', []), '%d', '" + ges + "', []) + ';');
     SB.AppendLine('  document.getElementById("leer").style.display =');
     SB.AppendLine('    sichtbar === 0 ? "block" : "none";');
     SB.AppendLine('  var aktiv = q !== "";');
@@ -534,10 +562,11 @@ begin
     SB.AppendLine('  ta.value = txt; document.body.appendChild(ta);');
     SB.AppendLine('  ta.select();');
     SB.AppendLine('  try { document.execCommand("copy"); '
-      + 'btn.textContent = "kopiert"; } catch (e) {}');
+      + 'btn.textContent = "'
+      + TWorkbenchI18n.TJs(wtKopiert, ALang) + '"; } catch (e) {}');
     SB.AppendLine('  document.body.removeChild(ta);');
     SB.AppendLine('  setTimeout(function(){ btn.textContent = '
-      + '"Kopieren"; }, 1200);');
+      + '"' + TWorkbenchI18n.TJs(wtKopieren, ALang) + '"; }, 1200);');
     SB.AppendLine('}');
     // ---- Tastatur + Deep-Link ----------------------------------------
     SB.AppendLine('function sichtbareZeilen() {');
@@ -622,11 +651,16 @@ function SuchBlob(const R: TRegelDaten): string;
 // Escaper bildet #10 auf ein literales '<br>' ab (Anzeige-Vertrag fuer
 // Elementinhalte); im Suchattribut wuerde das jede 'br'-Suche fluten
 // und Phrasen ueber Zeilengrenzen zerreissen.
+// Die Severity-/Konfidenz-/Profil-Woerter stehen in der SEITENSPRACHE
+// im Blob - wonach der Leser sieht, danach sucht er auch (das ist der
+// Grund fuer eine Datei je Sprache statt eines Umschalters).
 begin
   Result := AnsiLowerCase(
     R.Meta.ID + ' ' + R.Meta.Name + ' ' + KIND_META[R.K].Name + ' '
-    + TypText(R.Meta.FindingType) + ' ' + SEV_TEXT[R.Sev] + ' '
-    + CONF_TEXT[R.Conf] + ' ' + R.ProfilTxt + ' ' + R.Tags + ' '
+    + TypText(R.Meta.FindingType) + ' '
+    + TWorkbenchI18n.T(SEV_KEY[R.Sev], R.Lang) + ' '
+    + TWorkbenchI18n.T(CONF_KEY[R.Conf], R.Lang) + ' '
+    + R.ProfilAnzeige + ' ' + R.Tags + ' '
     + JoinArr(R.Meta.CWE, ' ') + ' ' + R.Meta.ConfigKey + ' '
     + R.Meta.DetectorUnit + ' ' + R.Meta.ShortDescription + ' '
     + R.Meta.FullDescription + ' ' + R.Meta.BadExample + ' '
@@ -653,11 +687,13 @@ begin
     + Format('<td><span class="badge typ %s">%s</span></td>',
         [TypCss(R.Meta.FindingType), H(TypText(R.Meta.FindingType))])
     + Format('<td data-sort="%d"><span class="badge sev-%s">%s'
-        + '</span></td>', [Ord(R.Sev), SEV_CSS[R.Sev], SEV_TEXT[R.Sev]])
+        + '</span></td>', [Ord(R.Sev), SEV_CSS[R.Sev],
+                           TWorkbenchI18n.T(SEV_KEY[R.Sev], R.Lang)])
     + Format('<td data-sort="%d"><span class="badge konf">%s'
-        + '</span></td>', [Ord(R.Conf), CONF_TEXT[R.Conf]])
+        + '</span></td>', [Ord(R.Conf),
+                           TWorkbenchI18n.T(CONF_KEY[R.Conf], R.Lang)])
     + Format('<td data-sort="%d"><span class="pill %s">%s</span></td>',
-        [Ord(not R.InDefault), R.ProfilTxt, R.ProfilTxt])
+        [Ord(not R.InDefault), R.ProfilTxt, R.ProfilAnzeige])
     + '<td>' + ChipListe(R.Meta.Tags, 'tag') + '</td>'
     + '</tr>'#13#10'</tbody>';
 end;
@@ -678,17 +714,21 @@ begin
       + Format('<span class="badge typ %s">%s</span>',
           [TypCss(R.Meta.FindingType), H(TypText(R.Meta.FindingType))])
       + Format('<span class="badge sev-%s">%s</span>',
-          [SEV_CSS[R.Sev], SEV_TEXT[R.Sev]])
-      + Format('<span class="badge konf">Konfidenz %s</span>',
-          [CONF_TEXT[R.Conf]])
-      + Format('<span class="pill %s">Default-Profil %s</span>',
-          [R.ProfilTxt, R.ProfilTxt])
+          [SEV_CSS[R.Sev], TWorkbenchI18n.T(SEV_KEY[R.Sev], R.Lang)])
+      + Format('<span class="badge konf">' +
+          TWorkbenchI18n.T(wtKonfidenzLabel, R.Lang) + '</span>',
+          [TWorkbenchI18n.T(CONF_KEY[R.Conf], R.Lang)])
+      + Format('<span class="pill %s">' +
+          TWorkbenchI18n.T(wtProfilLabel, R.Lang) + '</span>',
+          [R.ProfilTxt, R.ProfilAnzeige])
       + '</div>');
-    SB.AppendLine('<h3>Was wird erkannt?</h3>');
+    SB.AppendLine('<h3>' + TWorkbenchI18n.T(wtWasWirdErkannt, R.Lang)
+      + '</h3>');
     SB.AppendLine('<p>' + H(R.Meta.ShortDescription) + '</p>');
     if R.Meta.FullDescription <> '' then
     begin
-      SB.AppendLine('<h3>Warum ist das relevant?</h3>');
+      SB.AppendLine('<h3>' + TWorkbenchI18n.T(wtWarumRelevant, R.Lang)
+        + '</h3>');
       SB.AppendLine('<p>' + H(R.Meta.FullDescription) + '</p>');
     end;
     if (R.Meta.BadExample <> '') or (R.Meta.GoodExample <> '') then
@@ -700,44 +740,49 @@ begin
       // Umbrueche als '&#10;', nicht als '<br>'-Token (s. HA).
       if R.Meta.BadExample <> '' then
         SB.AppendLine(Format('<div class="codekarte schlecht" '
-          + 'data-copy="%s"><div class="karte-titel">Vorher '
-          + '(problematisch)<button class="copy" '
-          + 'onclick="kopiere(this)">Kopieren</button></div><pre>%s'
-          + #10#10'</pre></div>',
+          + 'data-copy="%s"><div class="karte-titel">'
+          + TWorkbenchI18n.T(wtVorher, R.Lang)
+          + '<button class="copy" onclick="kopiere(this)">'
+          + TWorkbenchI18n.T(wtKopieren, R.Lang)
+          + '</button></div><pre>%s' + #10#10'</pre></div>',
           [HA(R.Meta.BadExample), H(R.Meta.BadExample)]));
       if R.Meta.GoodExample <> '' then
         SB.AppendLine(Format('<div class="codekarte gut" '
-          + 'data-copy="%s"><div class="karte-titel">Nachher '
-          + '(empfohlen)<button class="copy" '
-          + 'onclick="kopiere(this)">Kopieren</button></div><pre>%s'
-          + #10#10'</pre></div>',
+          + 'data-copy="%s"><div class="karte-titel">'
+          + TWorkbenchI18n.T(wtNachher, R.Lang)
+          + '<button class="copy" onclick="kopiere(this)">'
+          + TWorkbenchI18n.T(wtKopieren, R.Lang)
+          + '</button></div><pre>%s' + #10#10'</pre></div>',
           [HA(R.Meta.GoodExample), H(R.Meta.GoodExample)]));
       SB.AppendLine('</div>');
     end;
     SB.AppendLine(Format('<div class="karte" data-copy="// noinspection '
-      + '%s"><h3>Einzelfund unterdr&uuml;cken <button class="copy" '
-      + 'onclick="kopiere(this)">Kopieren</button></h3>'
+      + '%s"><h3>' + TWorkbenchI18n.T(wtUnterdruecken, R.Lang)
+      + ' <button class="copy" onclick="kopiere(this)">'
+      + TWorkbenchI18n.T(wtKopieren, R.Lang) + '</button></h3>'
       + '<pre>// noinspection %s</pre>'
-      + '<p>Unterdr&uuml;ckt diesen konkreten Fund an der markierten '
-      + 'Stelle. Die Regel bleibt projektweit aktiv.</p></div>',
+      + '<p>' + TWorkbenchI18n.T(wtUnterdrueckenText, R.Lang)
+      + '</p></div>',
       [H(KIND_META[R.K].Name), H(KIND_META[R.K].Name)]));
     if R.Meta.ConfigKey <> '' then
       SB.AppendLine(Format('<div class="karte" data-copy="%s">'
-        + '<h3>Projektweite Kalibrierung <button class="copy" '
-        + 'onclick="kopiere(this)">Kopieren</button></h3>'
+        + '<h3>' + TWorkbenchI18n.T(wtKalibrierung, R.Lang)
+        + ' <button class="copy" onclick="kopiere(this)">'
+        + TWorkbenchI18n.T(wtKopieren, R.Lang) + '</button></h3>'
         + '<pre>%s</pre>'
-        + '<p>Kalibriert den Detektor projektweit (analyser.ini) - '
-        + 'bewusst getrennt von der Einzelfund-Unterdr&uuml;ckung.'
+        + '<p>' + TWorkbenchI18n.T(wtKalibrierungText, R.Lang)
         + '</p></div>',
         [H(R.Meta.ConfigKey), H(R.Meta.ConfigKey)]))
     else
-      SB.AppendLine('<div class="karte"><h3>Projektweite '
-        + 'Kalibrierung</h3><p>Keine projektweite Konfiguration - '
-        + 'die Regel meldet ohne Schwellwerte.</p></div>');
+      SB.AppendLine('<div class="karte"><h3>'
+        + TWorkbenchI18n.T(wtKalibrierung, R.Lang) + '</h3><p>'
+        + TWorkbenchI18n.T(wtKeineKalibrierung, R.Lang) + '</p></div>');
     SB.AppendLine('<div class="metarow">'
       + 'CWE: ' + ChipListe(R.Meta.CWE, 'cwe')
-      + ' &middot; Tags: ' + ChipListe(R.Meta.Tags, 'tag')
-      + ' &middot; Detektor-Unit: <span class="mono">'
+      + ' &middot; ' + TWorkbenchI18n.T(wtTagsLabel, R.Lang) + ': '
+      + ChipListe(R.Meta.Tags, 'tag')
+      + ' &middot; ' + TWorkbenchI18n.T(wtDetektorUnit, R.Lang)
+      + ': <span class="mono">'
       + H(R.Meta.DetectorUnit) + '</span></div>');
     SB.AppendLine('</template>');
     Result := SB.ToString;
@@ -799,43 +844,35 @@ begin
   SB := TStringBuilder.Create;
   try
     SB.AppendLine('<!DOCTYPE html>');
-    SB.AppendLine('<html lang="de">');
+    SB.AppendLine('<html lang="' + LowerCase(Copy(ALang, 1, 2)) + '">');
     SB.AppendLine('<head>');
     SB.AppendLine('<meta charset="utf-8">');
     SB.AppendLine('<meta name="viewport" content="width=device-width, '
       + 'initial-scale=1">');
-    SB.AppendLine('<title>SCA Detektor-Katalog</title>');
+    SB.AppendLine('<title>' + TWorkbenchI18n.T(wtTitelKatalog, ALang)
+      + '</title>');
     SB.Append(SeiteStyle);
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');
     SB.AppendLine('<header class="kopf">');
-    SB.AppendLine('<h1>SCA Detektor-Katalog</h1>');
-    SB.AppendLine(Format(
-      '<div class="sub">%s %s &middot; %d Detektoren &middot; '
-      + 'Spalten-Klick sortiert; das Suchfeld filtert &uuml;ber den '
-      + 'gesamten Inhalt (auch Beschreibungen und Codebeispiele). '
-      + 'Schweregrad ist der Regel-Default: Fehler-Funde setzen in der '
-      + 'Standard-Politik Konfidenz &quot;hoch&quot; voraus '
-      + '(Evidenz-Deckel), sonst meldet der Lauf eine Stufe '
-      + 'darunter.</div>',
+    SB.AppendLine('<h1>' + TWorkbenchI18n.T(wtTitelKatalog, ALang)
+      + '</h1>');
+    SB.AppendLine(Format('<div class="sub">'
+      + TWorkbenchI18n.T(wtUntertitelKatalog, ALang) + '</div>',
       [H(TRuleCatalog.ToolName), H(TRuleCatalog.ToolVersion), Anz]));
     SB.AppendLine('</header>');
     SB.AppendLine('<main>');
-    SB.Append(RollenBlock);
-    SB.Append(CommandUndChips);
-    SB.Append(Dashboard(Stat));
+    SB.Append(RollenBlock(ALang));
+    SB.Append(CommandUndChips(ALang));
+    SB.Append(Dashboard(Stat, ALang));
 
     SB.AppendLine('<div class="listwrap">');
     SB.AppendLine('<table id="kat">');
     SB.AppendLine('<thead><tr>'
-      + '<th onclick="sortiere(0)">SCA-ID<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(1)">Name<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(2)">noinspection<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(3)">Typ<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(4)">Schweregrad<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(5)">Konfidenz<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(6)">Default-Profil<span class="pfeil"></span></th>'
-      + '<th onclick="sortiere(7)">Tags<span class="pfeil"></span></th>'
+      + Kopf(0, wtSpScaId, ALang)   + Kopf(1, wtSpName, ALang)
+      + Kopf(2, wtSpNoinspection, ALang) + Kopf(3, wtSpTyp, ALang)
+      + Kopf(4, wtSpSchweregrad, ALang)  + Kopf(5, wtSpKonfidenz, ALang)
+      + Kopf(6, wtSpProfil, ALang)  + Kopf(7, wtSpTags, ALang)
       + '</tr></thead>');
 
     // Je Regel: Badge-Zeile + Drawer-Template (Bausteine oben - haelt
@@ -848,24 +885,38 @@ begin
       R.Conf      := KindDefaultConfidence(K);
       R.InDefault := K in DefaultSet;
       R.Tags      := JoinArr(R.Meta.Tags, ', ');
-      if R.InDefault then R.ProfilTxt := 'an' else R.ProfilTxt := 'aus';
+      R.Lang      := ALang;
+      // Token bleibt 'an'/'aus' (CSS-Klasse + Chip-Filterwert), die
+      // Anzeige folgt der Sprache.
+      if R.InDefault then
+      begin
+        R.ProfilTxt     := 'an';
+        R.ProfilAnzeige := TWorkbenchI18n.T(wtProfilAn, ALang);
+      end
+      else
+      begin
+        R.ProfilTxt     := 'aus';
+        R.ProfilAnzeige := TWorkbenchI18n.T(wtProfilAus, ALang);
+      end;
       SB.AppendLine(ZeileFuerRegel(R));
       SB.Append(TemplateFuerRegel(R));
     end;
 
     SB.AppendLine('</table>');
     SB.AppendLine('</div>');
-    SB.AppendLine('<div id="leer">Keine Treffer. '
-      + '<button id="leer-reset" onclick="filterReset()">Filter '
-      + 'zur&uuml;cksetzen</button></div>');
+    SB.AppendLine('<div id="leer">'
+      + TWorkbenchI18n.T(wtKeineTreffer, ALang)
+      + ' <button id="leer-reset" onclick="filterReset()">'
+      + TWorkbenchI18n.T(wtFilterReset, ALang) + '</button></div>');
     SB.AppendLine('</main>');
-    SB.AppendLine('<aside id="drawer" aria-label="Detektor-Details">');
-    SB.AppendLine('<button id="drawer-schliessen" aria-label='
-      + '"Details schliessen" onclick="schliesseDrawer()">&times;'
-      + '</button>');
+    SB.AppendLine('<aside id="drawer" aria-label="'
+      + TWorkbenchI18n.T(wtDrawerAria, ALang) + '">');
+    SB.AppendLine('<button id="drawer-schliessen" aria-label="'
+      + TWorkbenchI18n.T(wtDrawerSchliessen, ALang)
+      + '" onclick="schliesseDrawer()">&times;</button>');
     SB.AppendLine('<div id="drawer-inhalt"></div>');
     SB.AppendLine('</aside>');
-    SB.Append(DrawerJs);
+    SB.Append(DrawerJs(ALang));
     SB.AppendLine('</body></html>');
     Result := SB.ToString;
   finally

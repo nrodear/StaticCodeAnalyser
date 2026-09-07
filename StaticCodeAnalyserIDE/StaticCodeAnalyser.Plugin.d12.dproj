@@ -306,6 +306,7 @@
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uExportHtml.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uDetectorInfoExport.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uWorkbenchStyle.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uWorkbenchI18n.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uFindingsWorkbenchExport.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uFileTextCache.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uFindingFingerprint.pas"/>
