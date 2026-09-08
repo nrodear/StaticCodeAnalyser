@@ -247,7 +247,11 @@ end;
 
 class function TConsoleRunner.ParseArgs(const Args: array of string): TCliArgs;
 // Akzeptiert sowohl "--key value" als auch "--key=value".
-// Boolean-Switches haben kein Value.
+//
+// Boolean-Switches haben kein Value - und ein Value daran ist seit dem
+// 08.09. ein harter Parse-Fehler, kein stilles Verwerfen mehr. Welche
+// Switches das sind und warum, steht an CLI_SCHALTER_OHNE_WERT direkt
+// ueber dieser Routine.
 var
   i      : Integer;
   A, V   : string;
@@ -540,6 +544,10 @@ begin
   WriteLn('Usage:');
   WriteLn('  analyser.exe --path <dir> [--full|--branch] [--report-sarif <file>]');
   WriteLn('  analyser.exe --file <path.pas> [--report-sarif <file>]');
+  WriteLn('');
+  WriteLn('  Switches with a value accept both --key=value and --key value.');
+  WriteLn('  Switches without one (--full, --quiet, ...) reject a value:');
+  WriteLn('  "--full=false" is a parse error, not a way to turn --full off.');
   WriteLn('');
   WriteLn('Input:');
   WriteLn('  --path <dir>          Project root, recursive scan (default mode = --full)');
