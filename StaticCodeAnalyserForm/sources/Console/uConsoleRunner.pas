@@ -213,6 +213,38 @@ const
 
 { ---- Args-Parser ---- }
 
+// Schalter, die KEINEN Wert nehmen.
+//
+// WOZU: die '='-Zerlegung in ParseArgs laeuft ueber ALLE Argumente, auch
+// ueber die reinen Boolean-Schalter. '--full=false' wurde bis 08.09. in
+// '--full' und ein stillschweigend verworfenes 'false' zerlegt - der
+// Schalter ging also auf TRUE. Der Aufrufer bekam exakt das Gegenteil
+// dessen, was er geschrieben hat, ohne jeden Hinweis (Modul-Codereview,
+// MAJOR). Mit dieser Liste wird daraus ein Parse-Fehler.
+//
+// VOLLZAEHLIGKEIT: die Liste ist nicht abgetippt, sondern maschinell aus
+// dem if-else-Baum unten gezogen (alle Zweige ohne GetValue-Aufruf).
+// tools/cli_schalter_gate.py wiederholt diese Ableitung und schlaegt an,
+// sobald ein neuer Boolean-Schalter dazukommt, ohne hier einzutragen -
+// sonst waere die Liste in drei Monaten wieder unvollstaendig.
+const
+  CLI_SCHALTER_OHNE_WERT: array[0..20] of string = (
+    '--branch', '--full', '--gate-stats', '--help', '--hide-test-fixtures',
+    '--ifdef-aware', '--include-defines', '--no-ifdef-aware',
+    '--no-include-defines', '--parallel', '--quiet', '--show-test-fixtures',
+    '--sonar-init', '--sonar-insecure', '--sonar-keep-downgraded',
+    '--sonar-test', '--time-detectors', '--version', '-?', '-h', '/?');
+
+function IstSchalterOhneWert(const AName: string): Boolean;
+var
+  S : string;
+begin
+  for S in CLI_SCHALTER_OHNE_WERT do
+    if AName = S then
+      Exit(True);
+  Result := False;
+end;
+
 class function TConsoleRunner.ParseArgs(const Args: array of string): TCliArgs;
 // Akzeptiert sowohl "--key value" als auch "--key=value".
 // Boolean-Switches haben kein Value.
@@ -268,7 +300,17 @@ begin
       HasVal := False;
     end;
 
-    if (A = '--help') or (A = '-h') or (A = '-?') or (A = '/?') then
+    // Muss VOR dem Schalter-Baum stehen: sonst haette der Zweig den Wert
+    // laengst verschluckt und den Schalter gesetzt. Siehe die Begruendung
+    // an CLI_SCHALTER_OHNE_WERT.
+    if HasVal and IstSchalterOhneWert(A) then
+    begin
+      Result.ParseError := Format(
+        '%s nimmt keinen Wert (geschrieben: %s=%s). Der Schalter wirkt '
+        + 'allein durch seine Anwesenheit.', [A, A, V]);
+      Errored := True;
+    end
+    else if (A = '--help') or (A = '-h') or (A = '-?') or (A = '/?') then
       Result.Help := True
     else if A = '--version' then
       Result.ShowVersion := True
@@ -315,8 +357,13 @@ begin
       GetValue(Result.BaselineScan, '--baseline-scan')
     else if A = '--baseline-path-fingerprint' then
       GetValue(Result.BaselinePathFp, '--baseline-path-fingerprint')
-    else if A.StartsWith('--fail-on=') then
-      Result.FailOn := LowerCase(A.Substring(Length('--fail-on=')))
+    // Hier stand bis 08.09. ein zusaetzlicher Zweig auf
+    // A.StartsWith('--fail-on='), der UNERREICHBAR war: das '=' ist zu
+    // diesem Zeitpunkt laengst abgetrennt, A heisst also schon
+    // '--fail-on'. Er suggerierte eine Sonderbehandlung der '='-Form
+    // (LowerCase), die es nie gab. Ohne Wirkung war das trotzdem: die
+    // Normalisierung passiert stromabwaerts in ApplyFailOnPolicy und in
+    // der Wertpruefung, beide ueber LowerCase(Trim(...)).
     else if A = '--fail-on' then
       GetValue(Result.FailOn, '--fail-on')
     // Sonar-Flags (Phase A todo-sonar.md)

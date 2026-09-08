@@ -98,6 +98,7 @@ uses
   // steht nicht in DCC_UnitSearchPath) - deshalb mit explizitem Pfad.
   uConsoleRunner in '..\sources\Console\uConsoleRunner.pas',
   uTestConsoleExitCode in 'uTestConsoleExitCode.pas',
+  uTestConsoleParseArgs in 'uTestConsoleParseArgs.pas',
   uTestExportSarifDiagnostics in 'uTestExportSarifDiagnostics.pas',
   uTestExportSonarTextRange in 'uTestExportSonarTextRange.pas',
   uTestContrastColor in 'uTestContrastColor.pas',
