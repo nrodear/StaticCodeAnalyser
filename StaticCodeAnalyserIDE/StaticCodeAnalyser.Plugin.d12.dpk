@@ -303,6 +303,7 @@ contains
   uWorkbenchStyle in '..\SCA.Engine\sources\Infrastructure\uWorkbenchStyle.pas',
   uWorkbenchI18n in '..\SCA.Engine\sources\Infrastructure\uWorkbenchI18n.pas',
   uFindingsWorkbenchExport in '..\SCA.Engine\sources\Infrastructure\uFindingsWorkbenchExport.pas',
+  uFindingsWorkbenchV3 in '..\SCA.Engine\sources\Infrastructure\uFindingsWorkbenchV3.pas',
   uFileTextCache in '..\SCA.Engine\sources\Infrastructure\uFileTextCache.pas',
   uFindingFingerprint in '..\SCA.Engine\sources\Infrastructure\uFindingFingerprint.pas',
   uEditorCommand in '..\SCA.Engine\sources\Infrastructure\uEditorCommand.pas',

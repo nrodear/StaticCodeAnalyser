@@ -55,6 +55,23 @@ type
       const ALang: string = 'de'); static;
     // Vorschlag fuer den Save-Dialog.
     class function DefaultFileName: string; static;
+
+    // Der komplette Style-Block dieser Seite, MIT <style>-Klammer:
+    // TWorkbenchStyle.BasisCss plus die seitenspezifischen Regeln
+    // (Tabelle, Chips, Drawer, Kacheln) plus die drei Themes.
+    //
+    // Public seit 09.09. fuer die V3-Seite (uFindingsWorkbenchV3), die
+    // dieselbe Optik traegt und sich nur im Rendering unterscheidet -
+    // Datenmodell statt vorgerenderter Tabelle. Eine zweite CSS-Kopie
+    // waere die falsche Antwort auf "V3 basiert auf V2": die beiden
+    // Seiten sollen sich gleich ANFUEHLEN, und das haelt nur EINE
+    // Quelle durch.
+    //
+    // V3 haengt eigene Regeln fuer die virtualisierte Liste HINTER
+    // diesen Block; die Tabellenregeln von V2 laufen dort ins Leere
+    // (rund 2 KB ungenutztes CSS gegen eine Seite, die von 60 MB auf
+    // 13 MB soll - kein Thema).
+    class function SeitenStyle: string; static;
   private
     // Gemeinsamer Seitenbau fuer BuildHtml (Tests) und Run (Datei):
     // Run schreibt direkt aus dem Builder (SaveBuilderUtf8WithBom) -
@@ -1579,6 +1596,14 @@ end;
 class function TFindingsWorkbenchExport.DefaultFileName: string;
 begin
   Result := 'sca-funde-v2.html';
+end;
+
+class function TFindingsWorkbenchExport.SeitenStyle: string;
+// Reine Weiterreichung der unit-lokalen SeiteStyle - die Seite selbst
+// ruft weiter direkt, der Umweg ist nur fuer V3 da. Begruendung an der
+// Deklaration.
+begin
+  Result := SeiteStyle;
 end;
 
 class procedure TFindingsWorkbenchExport.Run(

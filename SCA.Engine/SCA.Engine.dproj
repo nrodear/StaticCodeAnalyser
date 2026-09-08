@@ -310,6 +310,7 @@
         <DCCReference Include="sources\Infrastructure\uWorkbenchStyle.pas"/>
         <DCCReference Include="sources\Infrastructure\uWorkbenchI18n.pas"/>
         <DCCReference Include="sources\Infrastructure\uFindingsWorkbenchExport.pas"/>
+        <DCCReference Include="sources\Infrastructure\uFindingsWorkbenchV3.pas"/>
         <DCCReference Include="sources\Infrastructure\uFileTextCache.pas"/>
         <DCCReference Include="sources\Infrastructure\uFindingFingerprint.pas"/>
         <DCCReference Include="sources\Infrastructure\uFormBinder.pas"/>

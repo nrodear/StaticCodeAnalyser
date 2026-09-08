@@ -156,6 +156,7 @@
         <DCCReference Include="uTestFilterComboReduce.pas"/>
         <DCCReference Include="uTestDetectorInfoExport.pas"/>
         <DCCReference Include="uTestFindingsWorkbenchExport.pas"/>
+        <DCCReference Include="uTestFindingsWorkbenchV3.pas"/>
         <DCCReference Include="uTestExport.pas"/>
         <DCCReference Include="uTestDebugOutput.pas"/>
         <DCCReference Include="uTestTodoComment.pas"/>
