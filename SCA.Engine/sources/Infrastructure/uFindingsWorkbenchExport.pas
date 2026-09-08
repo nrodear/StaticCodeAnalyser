@@ -1729,7 +1729,6 @@ var
   Regeln      : TFindingKinds;
   K           : TFindingKind;
   Meta        : TRuleMeta;
-  Pfad        : string;
   MaxRows     : Integer;
   RowsEmitted : Integer;
   RowsDropped : Integer;
