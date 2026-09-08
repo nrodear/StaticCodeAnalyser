@@ -72,15 +72,24 @@ end;
 // einem WriteFile-Syscall pro 128 Bytes; auf der echten Konsole flusht
 // die RTL ohnehin pro Write-Statement, dort bringt der Puffer nichts).
 //
-// Liefert True wenn irgendein Output-Kanal verfuegbar ist (Konsole
-// und/oder Redirect). False nur ohne beides (Doppelklick aus Explorer) -
-// dann gehen WriteLns ins Leere, was nicht crash-relevant ist.
+// Nach dem Aufruf sind BEIDE Kanaele gebunden - an ihre Umleitung, an
+// die Konsole oder an das Null-Geraet. Ein Rueckgabewert waere nichts
+// wert: bis 08.09. lieferte die Routine "True wenn irgendein Kanal
+// verfuegbar ist", der einzige Aufrufer hat ihn nie gelesen, und mit
+// der NUL-Bindung waere er auch noch falsch geworden (False, obwohl
+// jetzt ein Kanal existiert).
+//
+// ACHTUNG, hier stand bis 08.09. das Gegenteil des Wahren ("nicht
+// crash-relevant"): ohne Bindung sind Output und ErrOutput UNGEBUNDEN,
+// und ein ungebundenes TextFile laesst unter {$I+} jedes WriteLn
+// werfen. Der Lauf starb an seiner ersten Ausgabezeile. Wer die
+// NUL-Bindung wieder herausnimmt, holt den Absturz zurueck.
 var
   // Muss die komplette WriteLn-Lifetime bis zum RTL-Finalization-Close
   // ueberleben -> Programm-globale Variable, kein lokales Array.
   GStdOutTextBuf: array[0..65535] of Byte;
 
-function AttachToParentConsole: Boolean;
+procedure AttachToParentConsole;
 const
   ATTACH_PARENT_PROCESS_FLAG = DWORD(-1);
 
@@ -111,39 +120,79 @@ const
     TTextRec(T).Handle := GetStdHandle(AStdHandleId);
   end;
 
+  // Bindet EINEN Kanal - und zwar in JEDEM Fall.
+  //
+  // Bis zum Chargen-Review 08.09. war das eine Alles-oder-nichts-
+  // Entscheidung: nur wenn WEDER Konsole NOCH irgendeine Umleitung
+  // vorlag, wurde auf NUL ausgewichen. Ist aber genau EINER der beiden
+  // Kanaele umgeleitet und keine Konsole attached, blieb der andere
+  // ungebunden - und ein ungebundenes TextFile laesst unter {$I+} jedes
+  // WriteLn mit EInOutError fliegen.
+  //
+  // Das ist kein konstruierter Fall: ein Elternprozess ohne Konsole
+  // (Dienst, Aufgabenplanung, pythonw.exe) startet die Exe mit
+  // stdout=PIPE und laesst stderr, wie es ist. Dann ist OutRedirected
+  // True, ErrRedirected und Attached False - und die erste Zeile nach
+  // ErrOutput toetet den Lauf. Der aeussere Handler macht daraus 99
+  // statt des abgestuften Exit-Codes: die Pipeline sieht einen
+  // Werkzeugfehler, wo ein sauberer Lauf war.
+  //
+  // Jeder Kanal bekommt sein EIGENES try: scheitert die Bindung des
+  // einen (kein NUL-Geraet, exotische Sandbox), soll der andere
+  // trotzdem zustande kommen.
+  procedure BindeKanal(var T: Text; AStdHandleId: DWORD;
+    ARedirected, AAttached: Boolean);
+  var
+    H : THandle;
+  begin
+    try
+      H := GetStdHandle(AStdHandleId);
+      if ARedirected then
+        BindToStdHandle(T, AStdHandleId)
+      else if AAttached then
+      begin
+        // CONOUT$ = Special-File der aktiven Konsole, immer schreibbar
+        // solange eine Konsole attached ist.
+        AssignFile(T, 'CONOUT$');
+        Rewrite(T);
+      end
+      else if (H <> 0) and (H <> INVALID_HANDLE_VALUE) then
+        // Weder umgeleitet noch selbst attached, aber ein gueltiger
+        // Handle: eine GEERBTE Konsole. AttachConsole scheitert dann
+        // mit ERROR_ACCESS_DENIED, weil schon eine haengt. Diesen Fall
+        // darf der NUL-Zweig unten nicht schlucken - er wuerde eine
+        // funktionierende Ausgabe stumm schalten.
+        BindToStdHandle(T, AStdHandleId)
+      else
+      begin
+        // Wirklich kein Kanal: auf das Null-Geraet binden, damit die
+        // WriteLns ins Leere laufen statt zu werfen. Der Lauf und vor
+        // allem die EXIT-CODES funktionieren - genau das, was der
+        // Kopfkommentar zusichert.
+        AssignFile(T, 'NUL');
+        Rewrite(T);
+      end;
+    except
+      // Auch NUL nicht verfuegbar: dann bleibt dieser Kanal ungebunden.
+      // Mehr ist hier nicht zu retten; der Exit-Code traegt weiter.
+    end;
+  end;
+
 var
   OutRedirected, ErrRedirected, Attached: Boolean;
 begin
   OutRedirected := IsRedirected(GetStdHandle(STD_OUTPUT_HANDLE));
   ErrRedirected := IsRedirected(GetStdHandle(STD_ERROR_HANDLE));
   Attached      := AttachConsole(ATTACH_PARENT_PROCESS_FLAG);
-  Result        := Attached or OutRedirected or ErrRedirected;
-  if not Result then Exit;
-  try
-    if OutRedirected then
-    begin
-      BindToStdHandle(Output, STD_OUTPUT_HANDLE);
-      SetTextBuf(Output, GStdOutTextBuf);
-    end
-    else if Attached then
-    begin
-      // CONOUT$ = Special-File der aktiven Konsole, immer schreibbar
-      // solange eine Konsole attached ist.
-      AssignFile(Output, 'CONOUT$');
-      Rewrite(Output);
-    end;
 
-    if ErrRedirected then
-      BindToStdHandle(ErrOutput, STD_ERROR_HANDLE)
-    else if Attached then
-    begin
-      AssignFile(ErrOutput, 'CONOUT$');
-      Rewrite(ErrOutput);
-    end;
-  except
-    // Bei IO-Errors stillschweigend zurueck - der CLI-Lauf laeuft weiter,
-    // nur ohne Output. Exit-Codes funktionieren unabhaengig davon.
-  end;
+  BindeKanal(Output, STD_OUTPUT_HANDLE, OutRedirected, Attached);
+  // Der 64-KB-Puffer nur fuer den umgeleiteten Normalausgabe-Fall (P13:
+  // sonst ein WriteFile-Syscall je 128 Bytes). Auf der echten Konsole
+  // flusht die RTL ohnehin pro Write-Statement, und auf NUL waere er
+  // sinnlos.
+  if OutRedirected then
+    SetTextBuf(Output, GStdOutTextBuf);
+  BindeKanal(ErrOutput, STD_ERROR_HANDLE, ErrRedirected, Attached);
 end;
 
 begin
@@ -160,8 +209,18 @@ begin
     except
       on E: Exception do
       begin
-        WriteLn(ErrOutput, 'Fatal: ', E.ClassName, ': ', E.Message);
+        // Die Meldung ist NACHRANGIG gegenueber dem Exit-Code: bricht
+        // der Ausgabekanal genau hier weg (Pipe geschlossen, Platte
+        // voll, NUL-Bindung oben fehlgeschlagen), darf das den 99er
+        // nicht mitreissen. Ohne dieses innere try flog die Exception
+        // aus dem Handler heraus und der Aufrufer bekam einen
+        // Laufzeitfehler statt eines auswertbaren Codes.
         CliExitCode := 99;
+        try
+          WriteLn(ErrOutput, 'Fatal: ', E.ClassName, ': ', E.Message);
+        except
+          // kein Kanal - der Exit-Code traegt die Information allein
+        end;
       end;
     end;
     // FreeConsole VOR Halt - Halt umgeht try/finally, also nicht

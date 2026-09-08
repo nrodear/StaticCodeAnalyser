@@ -480,6 +480,21 @@ begin
     // Hover und Auswahl liegen auf dem TBODY, damit Haupt- und
     // Datei-Zeile eines Fundes als EIN Block wirken.
     SB.AppendLine('#funde tbody:hover tr{background:#f2f6fb;}');
+    // Weiche Uebergaenge auf Hover, Chips und Top-Listen (UI-Konzept:
+    // 150-200 ms). Bisher hatte nur der Inspector einen - alles
+    // andere sprang hart um. NICHT auf border-left animieren: der
+    // Auswahl-Rail soll SOFORT da sein (Akzeptanzkriterium "innerhalb
+    // von ca. 100 ms eindeutig erkennbar").
+    SB.AppendLine('#funde tbody tr{transition:background 150ms ease;}');
+    SB.AppendLine('button.fchip{transition:background 150ms ease,'
+      + 'border-color 150ms ease,color 150ms ease;}');
+    SB.AppendLine('.topliste li{transition:background 150ms ease;}');
+    SB.AppendLine('button.copy,#btnTheme,#btnSec{'
+      + 'transition:background 150ms ease;}');
+    // Reduzierte Bewegung: ALLE Uebergaenge aus, nicht nur der
+    // Inspector (die engere Regel weiter unten bleibt als Doku).
+    SB.AppendLine('@media (prefers-reduced-motion:reduce){'
+      + '*{transition:none !important;}}');
     SB.AppendLine('#funde tbody.gewaehlt tr{background:#eaf1fa;}');
     // Der Rail sitzt als border-left an der Hauptzeile - anders als
     // ein box-shadow verschiebt er nichts und bleibt beim Scrollen
@@ -973,6 +988,13 @@ begin
     SB.AppendLine('    if (pf) pf.textContent = (k === spalte) ? '
       + '(auf ? String.fromCharCode(9650) : String.fromCharCode(9660)) '
       + ': "";');
+    // aria-sort an der ZELLE: die Richtung stand bisher nur im
+    // Pfeil-Zeichen und war fuer Screenreader unsichtbar
+    // (A11y-Restpunkt des UI-Konzept-Abgleichs 07.09.).
+    SB.AppendLine('    if (k === spalte)');
+    SB.AppendLine('      koepfe[k].setAttribute("aria-sort", '
+      + 'auf ? "ascending" : "descending");');
+    SB.AppendLine('    else koepfe[k].removeAttribute("aria-sort");');
     SB.AppendLine('  }');
     SB.AppendLine('  var tbs = alleTbodies();');
     SB.AppendLine('  tbs.sort(function(a, b) {');
@@ -1312,6 +1334,11 @@ begin
     SB.AppendLine('  var gespeichert = null;');
     SB.AppendLine('  try { gespeichert = localStorage.getItem(KEY); } '
       + 'catch (e) {}');
+    // Redundant, seit der Anti-Blitz-Block im <head> dasselbe tut -
+    // und bewusst stehengeblieben: er ist der Rueckfall, falls dort
+    // etwas scheitert, und idempotent (dasselbe Attribut, derselbe
+    // Wert). Wer ihn entfernt, muss den Head-Block als einzige Quelle
+    // pruefen. Denselben doppelten Boden fuehrt der V1-Report.
     SB.AppendLine('  if (THEMEN.indexOf(gespeichert) >= 0)');
     SB.AppendLine('    document.documentElement.setAttribute('
       + '"data-theme", gespeichert);');
@@ -1707,7 +1734,6 @@ var
   Regeln      : TFindingKinds;
   K           : TFindingKind;
   Meta        : TRuleMeta;
-  Pfad        : string;
   MaxRows     : Integer;
   RowsEmitted : Integer;
   RowsDropped : Integer;
@@ -1739,6 +1765,31 @@ begin
     SB.AppendLine('<title>' + TWorkbenchI18n.T(wtTitelFunde, ALang)
       + '</title>');
     SB.Append(SeiteStyle);
+    // Anti-Blitz: die gespeicherte Theme-Wahl muss VOR dem ersten Paint
+    // am <html>-Element stehen. Das grosse Skript am Body-Ende reicht
+    // NICHT - bis dahin hat der @media-Block laengst nach der
+    // SYSTEM-Praeferenz gemalt. Wer "light" oder "sepia" gewaehlt hat
+    // und ein dunkles OS fuehrt, sah den Bericht erst dunkel aufbauen
+    // und dann umkippen; mit "dark" auf hellem OS umgekehrt weiss.
+    //
+    // Je groesser der Bericht, desto laenger steht das falsche Thema:
+    // bei einem 60-MB-Export liegen Sekunden zwischen erstem Paint und
+    // dem Skript am Ende. Genau daran ist es aufgefallen.
+    //
+    // Der V1-Report hat diesen Block seit dem 19.08.; beim Bau der
+    // V2-Seite ist er nicht mitgewandert - dieselbe Gattung Fehler wie
+    // die geerbte OOM-Falle aus Charge 18, nur andersherum: hier wurde
+    // eine vorhandene LOESUNG nicht mitgenommen.
+    //
+    // Whitelist statt Blindanwendung, damit ein korrupter
+    // localStorage-Wert nicht als Attribut-Muell endet. Absichtlich
+    // winzig und try/catch-gekapselt: scheitert es, gilt wieder der
+    // bisherige Weg (Body-Skript + @media).
+    SB.AppendLine('<script>try{var t=localStorage.getItem('
+      + '"sca-v2-theme");');
+    SB.AppendLine('if(["light","dark","sepia"].indexOf(t)>=0)');
+    SB.AppendLine('document.documentElement.setAttribute('
+      + '"data-theme",t);}catch(e){}</script>');
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');
     SB.AppendLine('<header class="kopf">');

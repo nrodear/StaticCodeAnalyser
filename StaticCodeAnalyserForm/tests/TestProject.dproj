@@ -156,6 +156,7 @@
         <DCCReference Include="uTestFilterComboReduce.pas"/>
         <DCCReference Include="uTestDetectorInfoExport.pas"/>
         <DCCReference Include="uTestFindingsWorkbenchExport.pas"/>
+        <DCCReference Include="uTestExport.pas"/>
         <DCCReference Include="uTestDebugOutput.pas"/>
         <DCCReference Include="uTestTodoComment.pas"/>
         <DCCReference Include="uTestCodeMetrics.pas"/>
@@ -178,6 +179,7 @@
         <DCCReference Include="uTestSonarTokenStorage.pas"/>
         <DCCReference Include="..\sources\Console\uConsoleRunner.pas"/>
         <DCCReference Include="uTestConsoleExitCode.pas"/>
+        <DCCReference Include="uTestConsoleParseArgs.pas"/>
         <DCCReference Include="uTestExportSarifDiagnostics.pas"/>
         <DCCReference Include="uTestExportSonarTextRange.pas"/>
         <DCCReference Include="uTestContrastColor.pas"/>

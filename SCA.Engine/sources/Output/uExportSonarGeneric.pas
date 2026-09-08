@@ -199,20 +199,41 @@ end;
 
 { ---- Rule + Issue Builders ---- }
 
-function BuildRuleObject(const M: TRuleMeta; const IdOverride: string): TJSONObject;
-// IdOverride: bei Custom-Rule-Findings (F.RuleID gesetzt) muss die Rule-ID
-// im Rules-Array zur Issue.ruleId passen, sonst kann Sonar die Eintraege
-// nicht koppeln und ignoriert die MQR-Felder.
+function EffectiveRuleID(const F: TLeakFinding; const M: TRuleMeta): string;
+// Die Regel-ID eines Fundes: eine Custom-Rule-ID (z.B. 'PROJ001') gewinnt
+// gegen den Catalog-Lookup, sonst gilt die built-in ID.
+//
+// Steht seit 08.09. als eigene Funktion da, weil dieselben zwei Zeilen an
+// DREI Stellen gebraucht werden - BuildIssueObject, EmitRules und der
+// Gleichheits-Guard in EmitIssues. Laufen die auseinander, koppelt Sonar
+// Issue und Regel nicht mehr, und der Importer ignoriert die MQR-Felder
+// oder verwirft den Report ganz.
+begin
+  if F.RuleID <> '' then
+    Result := F.RuleID
+  else
+    Result := M.ID;
+end;
+
+function BuildRuleObject(const M: TRuleMeta; const ARuleID: string): TJSONObject;
+// ARuleID ist die FERTIGE Regel-ID, die der Aufrufer mit EffectiveRuleID
+// bestimmt hat - hier wird nicht mehr entschieden.
+//
+// Bis 08.09. hiess der Parameter IdOverride und traf die Entscheidung
+// "Custom-ID gewinnt, sonst Katalog-ID" ein VIERTES Mal selbst, waehrend
+// EmitRules denselben Wert daneben schon fuer den Dedup-Schluessel
+// berechnete. Heute lieferten beide dasselbe, aber damit war genau die
+// Drift offen, gegen die EffectiveRuleID angetreten ist: eine Aenderung
+// dort (Trim, Praefix, Uppercase) haette den Dedup-Schluessel und
+// issue.ruleId verschoben, rule.id aber nicht - und Sonar verwirft bei
+// checkRuleExistsInReport den GANZEN Report (Chargen-Review 08.09.).
 var
   Impacts : TJSONArray;
   IObj    : TJSONObject;
   I       : TSonarImpact;
 begin
   Result := TJSONObject.Create;
-  if IdOverride <> '' then
-    Result.AddPair('id', IdOverride)
-  else
-    Result.AddPair('id', M.ID);
+  Result.AddPair('id', ARuleID);
   Result.AddPair('name',         IfThen(M.Name <> '', M.Name, KindName(M.Kind)));
   Result.AddPair('description',  IfThen(M.FullDescription <> '',
                                          M.FullDescription, M.ShortDescription));
@@ -315,10 +336,7 @@ var
   LineNo : Integer;
   Msg    : string;
 begin
-  // Custom-Rule-IDs (z.B. 'PROJ001') gewinnen gegen den Catalog-Lookup -
-  // sonst die built-in ID aus dem Catalog.
-  if F.RuleID <> '' then RuleID := F.RuleID
-  else RuleID := M.ID;
+  RuleID := EffectiveRuleID(F, M);
   LineNo := ParseLineNumber(F.LineNumber);
   Msg := F.MissingVar;
   if Msg = '' then Msg := M.ShortDescription;
@@ -439,6 +457,10 @@ var
   RuleID : string;
   First  : Boolean;
 begin
+  // Lokaler nil-Guard, obwohl EmitReport schon einen hat: die Zusage
+  // "eine nil-Liste ist ein leerer Report, keine AV" soll hier gelten
+  // und nicht an genau einem Aufrufer haengen (Chargen-Review 08.09.).
+  if not Assigned(AFindings) then Exit;
   Seen  := TDictionary<string, Boolean>.Create;
   First := True;
   try
@@ -451,15 +473,15 @@ begin
       // und im Kopf der Unit. Auch hier, nicht nur bei den Issues: eine
       // Regel ohne Fund waere ein toter Eintrag im rules-Array.
       if not AKeepDowngraded and IsDowngraded(F, Meta) then Continue;
-      if F.RuleID <> '' then RuleID := F.RuleID
-      else RuleID := Meta.ID;
+      RuleID := EffectiveRuleID(F, Meta);
       if (RuleID = '') or Seen.ContainsKey(RuleID) then Continue;
       Seen.Add(RuleID, True);
       if not First then WStr(AStream, ',');
       First := False;
-      // F.RuleID leer -> BuildRuleObject nimmt die Katalog-ID. Der frueher
-      // hier stehende if/else war zwei Wege zum selben Aufruf.
-      WObj(AStream, BuildRuleObject(Meta, F.RuleID));
+      // Dieselbe ID, die oben schon der Dedup-Schluessel war und die
+      // EmitIssues fuer issue.ruleId bekommt - EINE Quelle, sonst
+      // koppelt Sonar die beiden Eintraege nicht.
+      WObj(AStream, BuildRuleObject(Meta, RuleID));
     end;
   finally
     Seen.Free;
@@ -481,6 +503,9 @@ var
 begin
   Result := 0;
   First  := True;
+  // s. EmitRules - der Guard steht auch hier lokal, damit die Zusage
+  // nicht am Aufrufer haengt.
+  if not Assigned(AFindings) then Exit;
   for F in AFindings do
   begin
     if F.Kind = fkFileReadError then Continue;
@@ -489,6 +514,20 @@ begin
     // zeigt der Report Regeln ohne Funde oder Funde ohne Regel (letzteres
     // lehnt der Validator ab: checkRuleExistsInReport).
     if not AKeepDowngraded and IsDowngraded(F, Meta) then Continue;
+    // Die DRITTE Bedingung aus EmitRules, die hier bis 08.09. fehlte: dort
+    // faellt ein Fund ohne Regel-ID raus, hier nicht - das Ergebnis waere
+    // ein Issue ohne zugehoerige Regel, und genau das lehnt der Validator
+    // ab (checkRuleExistsInReport). Nicht ein Fund fehlt dann, sondern der
+    // ganze Report wird verworfen.
+    //
+    // HEUTE IST DER ZWEIG EIN NO-OP, und das ist so gemessen: die
+    // Fallback-Metadaten bauen die ID aus dem Ordinalwert des Kinds
+    // (Format('SCA%.3d', [Ord(K) + 1]) in TRuleCatalog.MakeFallbackMeta),
+    // sie kann also nicht leer werden. Er steht hier, weil die Zusage
+    // "beide Schleifen sehen dieselbe Menge" sonst nur im Kommentar
+    // darueber steht und nicht im Code - und weil der Preis eines
+    // Irrtums der komplette Report ist.
+    if EffectiveRuleID(F, Meta) = '' then Continue;
     RelPath := MakeRelative(F.FileName, ABaseDir);
     if PathLeftAbsolute(RelPath) then Inc(Result);
     if not First then WStr(AStream, ',');
@@ -517,12 +556,22 @@ procedure EmitReport(AStream: TStream;
 // zweite die Issues. Der Preis ist ein Enum-Vergleich und ein
 // Katalog-Lookup pro Fund - gemessen an einem kompletten zweiten Abbild im
 // Speicher ist das nichts.
+//
+// NIL-LISTE: liefert einen leeren, aber GUELTIGEN Report. Der Guard steht
+// hier statt in den beiden Emittern, damit sie ihn garantiert gleich
+// sehen - das ist dieselbe Zusage wie oben. Alle Geschwister im Modul
+// pruefen auf nil (uExportSARIF, die ganze uExport-Familie); der Sonar-
+// Writer tat es als einziger nicht und lief in eine AV, wo die anderen
+// einen leeren Report schreiben (Modul-Codereview 08.09.).
 begin
+  AOutsideBase := 0;
   WStr(AStream, '{"rules":[');
-  EmitRules(AStream, AFindings, AKeepDowngraded);
+  if Assigned(AFindings) then
+    EmitRules(AStream, AFindings, AKeepDowngraded);
   WStr(AStream, '],"issues":[');
-  AOutsideBase := EmitIssues(AStream, AFindings, ABaseDir,
-                             AKeepDowngraded);
+  if Assigned(AFindings) then
+    AOutsideBase := EmitIssues(AStream, AFindings, ABaseDir,
+                               AKeepDowngraded);
   WStr(AStream, ']}');
 end;
 

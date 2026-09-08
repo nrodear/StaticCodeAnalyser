@@ -255,6 +255,19 @@ begin
     SB.AppendLine('tr.haupt{border-top:1px solid var(--rand);'
       + 'cursor:pointer;}');
     SB.AppendLine('tr.haupt:hover{background:#f2f6fb;}');
+    // Weiche Uebergaenge auf Hover und Chips (UI-Konzept: 150-200 ms
+    // "nur bei Sidebar, Hover und Filter"). Bisher hatte NUR der
+    // Drawer einen - die Chips sprangen hart um. Bewusst kurz: ein
+    // langsamer Filter fuehlt sich traege an, nicht wertig.
+    SB.AppendLine('tr.haupt{transition:background 150ms ease;}');
+    SB.AppendLine('button.fchip{transition:background 150ms ease,'
+      + 'border-color 150ms ease,color 150ms ease;}');
+    SB.AppendLine('button.copy,#drawer-schliessen{'
+      + 'transition:background 150ms ease;}');
+    // Wer Bewegung reduziert haben will, bekommt keine - gilt fuer
+    // ALLE Uebergaenge dieser Seite, auch den Drawer.
+    SB.AppendLine('@media (prefers-reduced-motion:reduce){'
+      + '*{transition:none !important;}}');
     SB.AppendLine('tr.haupt.gewaehlt{background:#e8f0fa;'
       + 'box-shadow:inset 3px 0 0 var(--akzent);}');
     SB.AppendLine('td.id{font-family:Consolas,monospace;font-weight:600;'
@@ -467,6 +480,14 @@ begin
     SB.AppendLine('    var pf = koepfe[k].querySelector(".pfeil");');
     SB.AppendLine('    if (pf) pf.textContent = '
       + '(k === spalte) ? (auf ? "\u25B2" : "\u25BC") : "";');
+    // aria-sort: die Richtung stand bisher NUR im Pfeil-Zeichen und
+    // war damit fuer Screenreader unsichtbar (UI-Konzept-Abgleich
+    // 07.09., A11y-Restpunkt). Der Wert gehoert an die Zelle, nicht
+    // an den Pfeil-Span.
+    SB.AppendLine('    if (k === spalte)');
+    SB.AppendLine('      koepfe[k].setAttribute("aria-sort", '
+      + 'auf ? "ascending" : "descending");');
+    SB.AppendLine('    else koepfe[k].removeAttribute("aria-sort");');
     SB.AppendLine('  }');
     SB.AppendLine('  var tbs = alleTbodies();');
     SB.AppendLine('  tbs.sort(function(a, b) {');

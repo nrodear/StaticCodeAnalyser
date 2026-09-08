@@ -38,6 +38,8 @@ type
     [Test] procedure DowngradedFinding_KeptWhenAsked;
     [Test] procedure EncodingFindingsAreNotSkipped;
     [Test] procedure OnlyReadErrors_ProducesValidEmptyReport;
+    // Die nil-Liste, an der der Writer bis 08.09. mit einer AV starb.
+    [Test] procedure NilFindings_ProducesValidEmptyReport;
   end;
 
 implementation
@@ -63,6 +65,44 @@ begin
   Result.FileName := Path;
   Result.LineNumber := IntToStr(Line);
   Result.MissingVar := Msg;
+end;
+
+procedure TTestExportSonarGeneric.NilFindings_ProducesValidEmptyReport;
+// Waechter des MAJOR vom 08.09.: der Sonar-Writer war der einzige im
+// Modul ohne nil-Pruefung. Wo uExportSARIF und die uExport-Familie einen
+// leeren Report schreiben, lief hier das for-in in eine AV. Ohne den
+// Guard wirft dieser Test, statt zu vergleichen.
+//
+// Geprueft wird nicht nur "keine Exception", sondern dass das Ergebnis
+// GUELTIGES JSON mit beiden Pflicht-Arrays ist - ein leerer String waere
+// sonst auch ein bestandener Test.
+var
+  Json : string;
+  Wert : TJSONValue;
+  Root : TJSONObject;
+begin
+  Json := TSonarGenericWriter.ToJsonString(nil, '');
+  // Erst parsen, dann casten - und beides INNERHALB des try. Stuende
+  // der as-Cast davor, wuerde er bei einem anderen Werttyp werfen und
+  // den geparsten Baum leaken (Chargen-Review 08.09.).
+  Wert := TJSONObject.ParseJSONValue(Json);
+  Assert.IsNotNull(Wert, 'nil-Liste muss gueltiges JSON liefern, nicht '
+    + 'einen leeren oder abgeschnittenen Text');
+  try
+    Root := Wert as TJSONObject;
+    Assert.IsNotNull(Root.GetValue<TJSONArray>('rules'),
+      'das rules-Array gehoert auch in den leeren Report');
+    Assert.IsNotNull(Root.GetValue<TJSONArray>('issues'),
+      'das issues-Array gehoert auch in den leeren Report');
+    Assert.AreEqual<Integer>(0, Root.GetValue<TJSONArray>('rules').Count);
+    Assert.AreEqual<Integer>(0, Root.GetValue<TJSONArray>('issues').Count);
+  finally
+    // Wert, nicht Root: Root ist nur die getypte Sicht auf dasselbe
+    // Objekt, und waere der Cast oben geflogen, haette Root nie einen
+    // definierten Inhalt bekommen - lokale Objektvariablen sind in
+    // Delphi nicht vorbelegt.
+    Wert.Free;
+  end;
 end;
 
 procedure TTestExportSonarGeneric.EmptyFindingsProducesEmptyArrays;

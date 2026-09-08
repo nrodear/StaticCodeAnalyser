@@ -8,7 +8,44 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **CLI: a value on a boolean switch is now a parse error** instead of
+  being silently discarded. `--full=false` used to switch `--full`
+  **ON** - the `=` was split off for every argument, including the
+  ~20 switches that take no value, and the value was dropped without
+  a word. The caller got the exact opposite of what they wrote, and
+  the run reported success. Affected switches (unchanged in the
+  `--switch` form): `--full`, `--quiet`, `--branch`, `--parallel`,
+  `--gate-stats`, `--time-detectors`, `--ifdef-aware`,
+  `--no-ifdef-aware`, `--include-defines`, `--no-include-defines`,
+  `--hide-test-fixtures`, `--show-test-fixtures`, the `--sonar-init`
+  / `--sonar-test` / `--sonar-keep-downgraded` / `--sonar-insecure`
+  family, `--help` and `--version`. Switches that take a value keep
+  accepting both `--key=value` and `--key value`.
+
 ### Fixed
+- **CLI without a console no longer dies on its first output line.**
+  Started from a service, the task scheduler or another GUI process,
+  `Output`/`ErrOutput` were left unbound - and an unbound text file
+  makes every `WriteLn` raise `EInOutError` under `{$I+}`. The same
+  applied when only *one* of the two streams was redirected (a parent
+  without a console piping stdout but not stderr): the other stream
+  stayed unbound. Both streams are now always bound - to their
+  redirect, to the console, or to the null device - so exit codes
+  survive even where no output can be shown.
+- CSV and JSON export wrote Windows path separators in the `File`
+  column / `file` field while SARIF wrote forward slashes for the
+  same finding, so CI scripts joining the two artifacts matched
+  nothing. Both now honour the documented forward-slash contract.
+- Single-file exports mixed findings from same-named units in
+  different folders (common in Delphi project groups) - the file
+  comparison only looked at the base name.
+- The HTML report timestamp no longer depends on the build machine's
+  locale (the `:` in the pattern was replaced by the system time
+  separator, although `generatedAt` is declared machine-readable),
+  and a `SCA_REPORT_TIMESTAMP` in ISO form no longer breaks the
+  default file name (a `:` opens an alternate data stream on Windows,
+  which made the report silently disappear).
 - HTML report: the full-text search box lowercased its per-row search
   index ASCII-only while the query is lowercased Unicode-aware - words
   containing an uppercase umlaut (localized rule names, method names)

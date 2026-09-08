@@ -73,6 +73,7 @@ uses
   uTestFilterComboReduce in 'uTestFilterComboReduce.pas',
   uTestDetectorInfoExport in 'uTestDetectorInfoExport.pas',
   uTestFindingsWorkbenchExport in 'uTestFindingsWorkbenchExport.pas',
+  uTestExport in 'uTestExport.pas',
   uTestDebugOutput in 'uTestDebugOutput.pas',
   uTestTodoComment in 'uTestTodoComment.pas',
   uTestCodeMetrics in 'uTestCodeMetrics.pas',
@@ -97,6 +98,7 @@ uses
   // steht nicht in DCC_UnitSearchPath) - deshalb mit explizitem Pfad.
   uConsoleRunner in '..\sources\Console\uConsoleRunner.pas',
   uTestConsoleExitCode in 'uTestConsoleExitCode.pas',
+  uTestConsoleParseArgs in 'uTestConsoleParseArgs.pas',
   uTestExportSarifDiagnostics in 'uTestExportSarifDiagnostics.pas',
   uTestExportSonarTextRange in 'uTestExportSonarTextRange.pas',
   uTestContrastColor in 'uTestContrastColor.pas',

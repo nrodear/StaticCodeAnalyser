@@ -56,6 +56,8 @@ type
     [Test] procedure EmptyFindings_SkeletonValid_ChartsSuppressed;
     [Test] procedure ReportFile_HasUtf8Bom_AndDecodesAsUtf8;
     [Test] procedure DefaultFileName_SchemeAndTimestampPinning;
+    // Der ISO-Zeitstempel, der den Report unauffindbar machte.
+    [Test] procedure DefaultFileName_IsoZeitstempelWirdEntschaerft;
     [Test] procedure PinnedTimestamp_SameValueInMetaLineAndJson;
     [Test] procedure SearchBlob_LowersUmlautsLikeTheJsQuery;
     // Nutzerwunsch 07.09.: Vorher/Nachher in der Hint-Zeile stehen
@@ -168,13 +170,34 @@ procedure MitGepinntemZeitstempel(const APin: string; AProc: TProc);
 // SCA_REPORT_TIMESTAMP setzen, AProc laufen lassen, IMMER restaurieren -
 // Prozess-Umgebung ist globaler State, den jeder Lauf zuruecknehmen
 // muss (Lexer-Kontaminations-Lehre der Chargen 13).
+//
+// RESTAURIEREN heisst seit dem 08.09. wirklich restaurieren: bis dahin
+// LOESCHTE das finally die Variable, statt den vorherigen Wert
+// zurueckzuschreiben. In einem CI-Lauf, der SCA_REPORT_TIMESTAMP
+// prozessweit setzt - genau der Anwendungsfall, fuer den es die
+// Variable gibt -, riss der erste Aufruf sie fuer alle nachfolgenden
+// Tests ab (Chargen-Review, MINOR).
+var
+  Vorher    : string;
+  WarGesetzt: Boolean;
 begin
+  // QUALIFIZIERT: Winapi.Windows steht in dieser Unit ZULETZT im uses
+  // und bringt ein gleichnamiges GetEnvironmentVariable mit voellig
+  // anderer Signatur (lpName, lpBuffer, nSize: DWORD) mit. Unqualifiziert
+  // gewinnt die - und das ist ein Uebersetzungsfehler, kein stiller.
+  Vorher     := System.SysUtils.GetEnvironmentVariable(
+                  'SCA_REPORT_TIMESTAMP');
+  WarGesetzt := Vorher <> '';
   Winapi.Windows.SetEnvironmentVariable('SCA_REPORT_TIMESTAMP',
     PChar(APin));
   try
     AProc;
   finally
-    Winapi.Windows.SetEnvironmentVariable('SCA_REPORT_TIMESTAMP', nil);
+    if WarGesetzt then
+      Winapi.Windows.SetEnvironmentVariable('SCA_REPORT_TIMESTAMP',
+        PChar(Vorher))
+    else
+      Winapi.Windows.SetEnvironmentVariable('SCA_REPORT_TIMESTAMP', nil);
   end;
 end;
 
@@ -573,6 +596,13 @@ begin
       Html) > 0, 'Toggle-Verdrahtung fehlt');
   Assert.IsTrue(Pos('sortBy(''sev'');', Html) > 0,
     'Initial-Sort-AUFRUF fehlt (Definition allein sortiert nichts)');
+  // A11y (08.09.): die Sortierrichtung steckte nur in der CSS-Klasse
+  // und im daraus erzeugten Pfeil - fuer Screenreader unsichtbar.
+  Assert.IsTrue(Pos('th.setAttribute(''aria-sort'', '
+    + 'desc ? ''descending'' : ''ascending'');', Html) > 0,
+    'aria-sort wird beim Sortieren nicht gesetzt');
+  Assert.IsTrue(Pos('th.removeAttribute(''aria-sort'');', Html) > 0,
+    'aria-sort bleibt an der alten Spalte stehen');
   Assert.IsTrue(Pos('loadFromUrlHash();', Html) > 0,
     'loadFromUrlHash-AUFRUF fehlt');
   Assert.IsTrue(Pos('applyLanguage(SCA_LANG);', Html) > 0,
@@ -683,10 +713,39 @@ begin
     'Nicht-ASCII-Inhalt liegt als gueltiges UTF-8 auf Platte');
 end;
 
+procedure TTestExportHtml.DefaultFileName_IsoZeitstempelWirdEntschaerft;
+// Waechter des MAJOR vom 08.09.: ein CI-Job, der SCA_REPORT_TIMESTAMP
+// mit einem ISO-Zeitstempel speist, bekam den ':' VERBATIM in den
+// Dateinamen. Unter Windows ist alles ab dem ':' ein alternativer
+// Datenstrom - der Report war danach nicht falsch benannt, sondern
+// gar nicht mehr auffindbar.
+//
+// Geprueft wird beides: dass kein verbotenes Zeichen uebrig bleibt UND
+// dass die Information erhalten bleibt (der Name darf nicht einfach
+// abgeschnitten werden).
+begin
+  MitGepinntemZeitstempel('2026-09-08T14:30:00Z',
+    procedure
+    var
+      Name : string;
+    begin
+      Name := TExporterHtml.DefaultFileName('', '');
+      Assert.AreEqual<Integer>(0, Pos(':', Name),
+        'ein Doppelpunkt im Dateinamen oeffnet unter Windows einen '
+        + 'alternativen Datenstrom - der Report verschwindet still');
+      Assert.AreEqual('analyse_codereview_2026-09-08T14-30-00Z.html',
+        Name,
+        'die verbotenen Zeichen werden ersetzt, nicht der Rest '
+        + 'abgeschnitten - der Zeitstempel bleibt lesbar');
+    end);
+end;
+
 procedure TTestExportHtml.DefaultFileName_SchemeAndTimestampPinning;
 // Der public Namensvertrag (CLI + Form leiten den Speichernamen ab):
 // analyse-Fallback, Basisname ohne Extension, _codereview_-Schema,
-// TargetDir-Delimiter - und SCA_REPORT_TIMESTAMP pinnt VERBATIM.
+// TargetDir-Delimiter - und SCA_REPORT_TIMESTAMP pinnt verbatim, solange
+// der Wert dateinamentauglich ist (fuer den Gegenfall siehe
+// DefaultFileName_IsoZeitstempelWirdEntschaerft).
 begin
   MitGepinntemZeitstempel('PIN2026',
     procedure

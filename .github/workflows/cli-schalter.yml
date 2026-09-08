@@ -1,0 +1,51 @@
+# GitHub Actions workflow: haelt die Liste der wertlosen CLI-Schalter
+# deckungsgleich mit dem Parser-Baum.
+#
+# Hintergrund (Befund 2026-09-08): die '='-Zerlegung in ParseArgs laeuft
+# ueber ALLE Argumente, auch ueber reine Boolean-Schalter. '--full=false'
+# wurde damit in '--full' und ein stillschweigend verworfenes 'false'
+# zerlegt - der Schalter ging auf TRUE. Der Aufrufer bekam exakt das
+# Gegenteil dessen, was er geschrieben hat, und der Lauf meldete Erfolg.
+#
+# Seitdem lehnt ParseArgs einen Wert an einem Boolean-Schalter ab. Die
+# dafuer noetige Liste CLI_SCHALTER_OHNE_WERT wuerde ohne dieses Gate
+# altern: wer einen neuen Schalter einbaut und den Eintrag vergisst,
+# bekommt das alte, stille Verhalten zurueck - nur fuer diesen einen
+# Schalter, was noch schwerer zu finden ist.
+#
+# Lokal vorab pruefen: `python tools/cli_schalter_gate.py`
+
+name: CLI-Schalter
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  cli-schalter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run CLI switch gate
+        run: python3 tools/cli_schalter_gate.py
+
+      - name: Erklaerung (bei Fehlschlag)
+        if: failure()
+        run: |
+          echo "Regel: jeder Schalter, dessen Zweig in ParseArgs KEIN"
+          echo "GetValue ruft, gehoert in CLI_SCHALTER_OHNE_WERT."
+          echo ""
+          echo "Fehlt einer, wird ein Wert daran wieder still verschluckt"
+          echo "und der Schalter trotzdem gesetzt - '--full=false'"
+          echo "schaltete --full EIN."
+          echo ""
+          echo "Steht einer zuviel drin, wird umgekehrt ein legitimes"
+          echo "'--schalter=wert' abgelehnt. Deshalb vor dem Eintragen"
+          echo "IMMER am Zweig nachsehen, welche der beiden Lagen vorliegt"
+          echo "- die Meldung des Gates sagt es, aber sie ersetzt den"
+          echo "Blick in den Code nicht."
+          echo ""
+          echo "Die Liste steht in uConsoleRunner.pas, direkt vor ParseArgs."

@@ -41,6 +41,8 @@ type
     // Feature-Abgleich V1->V2 (Todo_FeatureListe..., 07.09.):
     [Test] procedure InitialSort_BySeverity_WithConfidenceTiebreak;
     [Test] procedure Themes_DarkAndSepiaAsTokenOverrides;
+    // Der Theme-Blitz beim Laden (Nico-Befund 09.09.).
+    [Test] procedure Theme_AntiBlitzStehtImHead;
     [Test] procedure Dropdowns_FileAndRule_FilterAndReset;
     [Test] procedure TopLists_SortedByCount_AndClickable;
     [Test] procedure HealthAndSecurity_ScoreMatchesV1Formula;
@@ -607,6 +609,14 @@ begin
     + 'auf eine Zeile, die gleich verschoben wird');
   Assert.IsTrue(Pos('if (spalte === 5) {', Html) > 0,
     'Tiebreak-Zweig des Severity-Sorts fehlt');
+  // A11y (Restpunkt des UI-Abgleichs): die Sortierrichtung darf
+  // nicht nur im Pfeil-ZEICHEN stecken - Screenreader lesen
+  // aria-sort an der Kopfzelle.
+  Assert.IsTrue(Pos('koepfe[k].setAttribute("aria-sort", '
+    + 'auf ? "ascending" : "descending");', Html) > 0,
+    'aria-sort wird beim Sortieren nicht gesetzt');
+  Assert.IsTrue(Pos('koepfe[k].removeAttribute("aria-sort");', Html) > 0,
+    'aria-sort bleibt an der alten Spalte stehen');
   Assert.IsTrue(Pos('return kb - ka;', Html) > 0,
     'Konfidenz-Tiebreak muss absteigend sein (hoch zuerst)');
   // Der Spaltenkopf 5 muss auch wirklich der Schweregrad sein -
@@ -614,6 +624,41 @@ begin
   Assert.IsTrue(
     Pos('<th onclick="sortiere(5)">Schweregrad', Html) > 0,
     'Spalte 5 ist nicht der Schweregrad - Sortiervertrag gebrochen');
+end;
+
+procedure TTestFindingsWorkbenchExport.Theme_AntiBlitzStehtImHead;
+// Waechter fuer Nicos Befund vom 09.09.: die Seite schaltete das Thema
+// NACH dem Laden sichtbar um. Ursache war, dass data-theme erst im
+// grossen Skript am Body-Ende gesetzt wurde - bis dahin hatte der
+// @media-Block laengst nach der SYSTEM-Praeferenz gemalt.
+//
+// Der V1-Report loest das seit dem 19.08. mit einem winzigen
+// Head-Skript; bei V2 war es nicht mitgewandert. Genau diese Stellung
+// haelt der Test fest: das Lesen der gespeicherten Wahl muss VOR
+// </head> stehen, also vor dem ersten Paint.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'list'));
+    Html := TFindingsWorkbenchExport.BuildHtml(Findings, '', -1, 'de');
+  finally
+    Findings.Free;
+  end;
+
+  AssertReihenfolge(Html, 'localStorage.getItem("sca-v2-theme")',
+    '</head>',
+    'die gespeicherte Theme-Wahl wird erst NACH dem Head gelesen - '
+    + 'dann hat der Browser bereits im Systemthema gemalt und kippt '
+    + 'sichtbar um');
+  // Die Whitelist gehoert dazu: ohne sie landet ein korrupter
+  // localStorage-Wert als Attribut-Muell im html-Element.
+  AssertReihenfolge(Html, '["light","dark","sepia"].indexOf(t)',
+    '</head>',
+    'der Head-Block prueft den gespeicherten Wert nicht gegen die '
+    + 'Whitelist');
 end;
 
 procedure TTestFindingsWorkbenchExport.Themes_DarkAndSepiaAsTokenOverrides;
