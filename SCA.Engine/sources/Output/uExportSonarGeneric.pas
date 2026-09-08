@@ -199,6 +199,22 @@ end;
 
 { ---- Rule + Issue Builders ---- }
 
+function EffectiveRuleID(const F: TLeakFinding; const M: TRuleMeta): string;
+// Die Regel-ID eines Fundes: eine Custom-Rule-ID (z.B. 'PROJ001') gewinnt
+// gegen den Catalog-Lookup, sonst gilt die built-in ID.
+//
+// Steht seit 08.09. als eigene Funktion da, weil dieselben zwei Zeilen an
+// DREI Stellen gebraucht werden - BuildIssueObject, EmitRules und der
+// Gleichheits-Guard in EmitIssues. Laufen die auseinander, koppelt Sonar
+// Issue und Regel nicht mehr, und der Importer ignoriert die MQR-Felder
+// oder verwirft den Report ganz.
+begin
+  if F.RuleID <> '' then
+    Result := F.RuleID
+  else
+    Result := M.ID;
+end;
+
 function BuildRuleObject(const M: TRuleMeta; const IdOverride: string): TJSONObject;
 // IdOverride: bei Custom-Rule-Findings (F.RuleID gesetzt) muss die Rule-ID
 // im Rules-Array zur Issue.ruleId passen, sonst kann Sonar die Eintraege
@@ -315,10 +331,7 @@ var
   LineNo : Integer;
   Msg    : string;
 begin
-  // Custom-Rule-IDs (z.B. 'PROJ001') gewinnen gegen den Catalog-Lookup -
-  // sonst die built-in ID aus dem Catalog.
-  if F.RuleID <> '' then RuleID := F.RuleID
-  else RuleID := M.ID;
+  RuleID := EffectiveRuleID(F, M);
   LineNo := ParseLineNumber(F.LineNumber);
   Msg := F.MissingVar;
   if Msg = '' then Msg := M.ShortDescription;
@@ -451,8 +464,7 @@ begin
       // und im Kopf der Unit. Auch hier, nicht nur bei den Issues: eine
       // Regel ohne Fund waere ein toter Eintrag im rules-Array.
       if not AKeepDowngraded and IsDowngraded(F, Meta) then Continue;
-      if F.RuleID <> '' then RuleID := F.RuleID
-      else RuleID := Meta.ID;
+      RuleID := EffectiveRuleID(F, Meta);
       if (RuleID = '') or Seen.ContainsKey(RuleID) then Continue;
       Seen.Add(RuleID, True);
       if not First then WStr(AStream, ',');
@@ -489,6 +501,20 @@ begin
     // zeigt der Report Regeln ohne Funde oder Funde ohne Regel (letzteres
     // lehnt der Validator ab: checkRuleExistsInReport).
     if not AKeepDowngraded and IsDowngraded(F, Meta) then Continue;
+    // Die DRITTE Bedingung aus EmitRules, die hier bis 08.09. fehlte: dort
+    // faellt ein Fund ohne Regel-ID raus, hier nicht - das Ergebnis waere
+    // ein Issue ohne zugehoerige Regel, und genau das lehnt der Validator
+    // ab (checkRuleExistsInReport). Nicht ein Fund fehlt dann, sondern der
+    // ganze Report wird verworfen.
+    //
+    // HEUTE IST DER ZWEIG EIN NO-OP, und das ist so gemessen: die
+    // Fallback-Metadaten bauen die ID aus dem Ordinalwert des Kinds
+    // (Format('SCA%.3d', [Ord(K) + 1]) in TRuleCatalog.MakeFallbackMeta),
+    // sie kann also nicht leer werden. Er steht hier, weil die Zusage
+    // "beide Schleifen sehen dieselbe Menge" sonst nur im Kommentar
+    // darueber steht und nicht im Code - und weil der Preis eines
+    // Irrtums der komplette Report ist.
+    if EffectiveRuleID(F, Meta) = '' then Continue;
     RelPath := MakeRelative(F.FileName, ABaseDir);
     if PathLeftAbsolute(RelPath) then Inc(Result);
     if not First then WStr(AStream, ',');
@@ -517,12 +543,22 @@ procedure EmitReport(AStream: TStream;
 // zweite die Issues. Der Preis ist ein Enum-Vergleich und ein
 // Katalog-Lookup pro Fund - gemessen an einem kompletten zweiten Abbild im
 // Speicher ist das nichts.
+//
+// NIL-LISTE: liefert einen leeren, aber GUELTIGEN Report. Der Guard steht
+// hier statt in den beiden Emittern, damit sie ihn garantiert gleich
+// sehen - das ist dieselbe Zusage wie oben. Alle Geschwister im Modul
+// pruefen auf nil (uExportSARIF, die ganze uExport-Familie); der Sonar-
+// Writer tat es als einziger nicht und lief in eine AV, wo die anderen
+// einen leeren Report schreiben (Modul-Codereview 08.09.).
 begin
+  AOutsideBase := 0;
   WStr(AStream, '{"rules":[');
-  EmitRules(AStream, AFindings, AKeepDowngraded);
+  if Assigned(AFindings) then
+    EmitRules(AStream, AFindings, AKeepDowngraded);
   WStr(AStream, '],"issues":[');
-  AOutsideBase := EmitIssues(AStream, AFindings, ABaseDir,
-                             AKeepDowngraded);
+  if Assigned(AFindings) then
+    AOutsideBase := EmitIssues(AStream, AFindings, ABaseDir,
+                               AKeepDowngraded);
   WStr(AStream, ']}');
 end;
 
