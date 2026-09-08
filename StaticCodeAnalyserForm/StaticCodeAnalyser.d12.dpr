@@ -73,8 +73,16 @@ end;
 // die RTL ohnehin pro Write-Statement, dort bringt der Puffer nichts).
 //
 // Liefert True wenn irgendein Output-Kanal verfuegbar ist (Konsole
-// und/oder Redirect). False nur ohne beides (Doppelklick aus Explorer) -
-// dann gehen WriteLns ins Leere, was nicht crash-relevant ist.
+// und/oder Redirect). False nur ohne beides - Start aus einem Dienst,
+// einem Scheduler oder einem GUI-Prozess. Dann gehen die WriteLns auf
+// das Null-Geraet, siehe den Zweig unten.
+//
+// ACHTUNG, hier stand bis 08.09. das Gegenteil des Wahren ("nicht
+// crash-relevant"): OHNE die NUL-Bindung waren Output und ErrOutput im
+// False-Fall UNGEBUNDEN, und ein ungebundenes TextFile laesst unter
+// {$I+} jedes WriteLn werfen. Der Lauf starb an seiner ersten
+// Ausgabezeile. Wer diese Bindung wieder herausnimmt, holt den Absturz
+// zurueck.
 var
   // Muss die komplette WriteLn-Lifetime bis zum RTL-Finalization-Close
   // ueberleben -> Programm-globale Variable, kein lokales Array.
@@ -118,7 +126,30 @@ begin
   ErrRedirected := IsRedirected(GetStdHandle(STD_ERROR_HANDLE));
   Attached      := AttachConsole(ATTACH_PARENT_PROCESS_FLAG);
   Result        := Attached or OutRedirected or ErrRedirected;
-  if not Result then Exit;
+  if not Result then
+  begin
+    // WEDER Konsole NOCH Umleitung (Dienst, Scheduler, Start aus
+    // einem GUI-Prozess): Output und ErrOutput blieben hier frueher
+    // UNGEBUNDEN - und ein ungebundenes TextFile laesst unter {$I+}
+    // JEDES WriteLn mit EInOutError fliegen. Der CLI-Lauf starb
+    // damit an seiner ersten Ausgabezeile, und im Fehlerfall warf
+    // sogar der except-Handler beim Melden noch einmal, sodass statt
+    // Exit 99 ein Laufzeitfehler herauskam (Modul-Codereview 08.09.,
+    // BLOCKER).
+    // Bindung auf das Null-Geraet: alle Ausgaben laufen ins Leere,
+    // der Lauf selbst und vor allem die EXIT-CODES funktionieren -
+    // genau das, was der Kommentar unten ohnehin zusichert.
+    try
+      AssignFile(Output, 'NUL');
+      Rewrite(Output);
+      AssignFile(ErrOutput, 'NUL');
+      Rewrite(ErrOutput);
+    except
+      // Selbst NUL nicht verfuegbar: dann bleibt es beim alten
+      // Verhalten. Mehr ist an dieser Stelle nicht zu retten.
+    end;
+    Exit;
+  end;
   try
     if OutRedirected then
     begin
@@ -160,8 +191,18 @@ begin
     except
       on E: Exception do
       begin
-        WriteLn(ErrOutput, 'Fatal: ', E.ClassName, ': ', E.Message);
+        // Die Meldung ist NACHRANGIG gegenueber dem Exit-Code: bricht
+        // der Ausgabekanal genau hier weg (Pipe geschlossen, Platte
+        // voll, NUL-Bindung oben fehlgeschlagen), darf das den 99er
+        // nicht mitreissen. Ohne dieses innere try flog die Exception
+        // aus dem Handler heraus und der Aufrufer bekam einen
+        // Laufzeitfehler statt eines auswertbaren Codes.
         CliExitCode := 99;
+        try
+          WriteLn(ErrOutput, 'Fatal: ', E.ClassName, ': ', E.Message);
+        except
+          // kein Kanal - der Exit-Code traegt die Information allein
+        end;
       end;
     end;
     // FreeConsole VOR Halt - Halt umgeht try/finally, also nicht
