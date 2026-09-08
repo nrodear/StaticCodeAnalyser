@@ -56,6 +56,8 @@ type
     [Test] procedure EmptyFindings_SkeletonValid_ChartsSuppressed;
     [Test] procedure ReportFile_HasUtf8Bom_AndDecodesAsUtf8;
     [Test] procedure DefaultFileName_SchemeAndTimestampPinning;
+    // Der ISO-Zeitstempel, der den Report unauffindbar machte.
+    [Test] procedure DefaultFileName_IsoZeitstempelWirdEntschaerft;
     [Test] procedure PinnedTimestamp_SameValueInMetaLineAndJson;
     [Test] procedure SearchBlob_LowersUmlautsLikeTheJsQuery;
     // Nutzerwunsch 07.09.: Vorher/Nachher in der Hint-Zeile stehen
@@ -690,10 +692,39 @@ begin
     'Nicht-ASCII-Inhalt liegt als gueltiges UTF-8 auf Platte');
 end;
 
+procedure TTestExportHtml.DefaultFileName_IsoZeitstempelWirdEntschaerft;
+// Waechter des MAJOR vom 08.09.: ein CI-Job, der SCA_REPORT_TIMESTAMP
+// mit einem ISO-Zeitstempel speist, bekam den ':' VERBATIM in den
+// Dateinamen. Unter Windows ist alles ab dem ':' ein alternativer
+// Datenstrom - der Report war danach nicht falsch benannt, sondern
+// gar nicht mehr auffindbar.
+//
+// Geprueft wird beides: dass kein verbotenes Zeichen uebrig bleibt UND
+// dass die Information erhalten bleibt (der Name darf nicht einfach
+// abgeschnitten werden).
+begin
+  MitGepinntemZeitstempel('2026-09-08T14:30:00Z',
+    procedure
+    var
+      Name : string;
+    begin
+      Name := TExporterHtml.DefaultFileName('', '');
+      Assert.AreEqual<Integer>(0, Pos(':', Name),
+        'ein Doppelpunkt im Dateinamen oeffnet unter Windows einen '
+        + 'alternativen Datenstrom - der Report verschwindet still');
+      Assert.AreEqual('analyse_codereview_2026-09-08T14-30-00Z.html',
+        Name,
+        'die verbotenen Zeichen werden ersetzt, nicht der Rest '
+        + 'abgeschnitten - der Zeitstempel bleibt lesbar');
+    end);
+end;
+
 procedure TTestExportHtml.DefaultFileName_SchemeAndTimestampPinning;
 // Der public Namensvertrag (CLI + Form leiten den Speichernamen ab):
 // analyse-Fallback, Basisname ohne Extension, _codereview_-Schema,
-// TargetDir-Delimiter - und SCA_REPORT_TIMESTAMP pinnt VERBATIM.
+// TargetDir-Delimiter - und SCA_REPORT_TIMESTAMP pinnt verbatim, solange
+// der Wert dateinamentauglich ist (fuer den Gegenfall siehe
+// DefaultFileName_IsoZeitstempelWirdEntschaerft).
 begin
   MitGepinntemZeitstempel('PIN2026',
     procedure

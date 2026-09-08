@@ -94,7 +94,14 @@ type
     // Report-Zeitstempel. Ist die Umgebungsvariable SCA_REPORT_TIMESTAMP
     // gesetzt, wird deren Wert VERBATIM zurueckgegeben (deterministische
     // CI-Builds -> byte-stabile Diffs), sonst FormatDateTime(AFmt, Now)
-    // wie bisher (Default-Verhalten unveraendert).
+    // mit INVARIANTEN FormatSettings - der Wert geht als generatedAt in
+    // den JSON-Block und darf nicht am Zeittrenner des Bauservers
+    // haengen.
+    //
+    // Das Verbatim gilt fuer den INHALT. Fuer den Dateinamen saeubert
+    // DefaultFileName zusaetzlich die unter Windows verbotenen Zeichen -
+    // ein ISO-Zeitstempel mit ':' erzeugte dort sonst einen alternativen
+    // Datenstrom.
     class function ReportTimestamp(const AFmt: string): string; static;
   end;
 
@@ -132,6 +139,29 @@ type
 
 class function TExporterHtml.DefaultFileName(const SourceFile: string;
   const TargetDir: string): string;
+
+  // Alles, was Windows im Dateinamen verbietet, wird zu '-'.
+  //
+  // WARUM HIER UND NICHT IN ReportTimestamp: im INHALT des Reports muss
+  // der gepinnte Wert verbatim erscheinen, sonst taugt er nicht als
+  // Determinismus-Anker. Nur der DATEINAME hat zusaetzliche Regeln.
+  //
+  // Der praktische Fall ist der Doppelpunkt aus einem ISO-Zeitstempel:
+  // SCA_REPORT_TIMESTAMP=2026-09-08T14:30:00Z landete bis 08.09.
+  // VERBATIM im Namen, und alles ab dem ':' interpretiert Windows als
+  // alternativen Datenstrom. Der Report war damit nicht falsch benannt,
+  // sondern schlicht nicht mehr auffindbar (Modul-Codereview 08.09.).
+  function DateinamenTauglich(const S: string): string;
+  var
+    i : Integer;
+  begin
+    Result := S;
+    for i := 1 to Length(Result) do
+      if CharInSet(Result[i], ['<', '>', ':', '"', '/', '\', '|', '?', '*'])
+         or (Ord(Result[i]) < 32) then
+        Result[i] := '-';
+  end;
+
 var
   Base, DateStr: string;
 begin
@@ -139,7 +169,7 @@ begin
     Base := 'analyse'
   else
     Base := ChangeFileExt(ExtractFileName(SourceFile), '');
-  DateStr := ReportTimestamp('yyyy-mm-dd');
+  DateStr := DateinamenTauglich(ReportTimestamp('yyyy-mm-dd'));
   if TargetDir <> '' then
     Result := IncludeTrailingPathDelimiter(TargetDir) +
               Base + '_codereview_' + DateStr + '.html'
@@ -290,9 +320,19 @@ begin
   // GetEnvironmentVariable liefert '' wenn die Variable nicht existiert.
   Env := GetEnvironmentVariable('SCA_REPORT_TIMESTAMP');
   if Env <> '' then
-    Result := Env
-  else
-    Result := FormatDateTime(AFmt, Now);
+    Exit(Env);
+
+  // INVARIANT, nicht Systemgebietsschema: FormatDateTime ersetzt das ':'
+  // im Muster durch den TimeSeparator des Systems. Auf einer Maschine,
+  // die '.' als Zeittrenner fuehrt, wurde aus '2026-09-08 14:30' still
+  // '2026-09-08 14.30' - und der Wert geht als generatedAt in den
+  // JSON-Block, ist also ausdruecklich als maschinenlesbar deklariert.
+  // Der Report haette sich je nach Regionaleinstellung des Bauservers
+  // anders geparst (Modul-Codereview 08.09.).
+  //
+  // Auf deutschen und englischen Systemen aendert das nichts - dort ist
+  // der Trenner ohnehin ':'.
+  Result := FormatDateTime(AFmt, Now, TFormatSettings.Invariant);
 end;
 
 function HtmlDisplayPath(const AFileName, ABaseDir: string): string;
