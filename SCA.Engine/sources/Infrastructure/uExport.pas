@@ -110,8 +110,16 @@ begin
   Base := IncludeTrailingPathDelimiter(TPath.GetFullPath(ABaseDir));
   Full := TPath.GetFullPath(AFileName);
   if SameText(Copy(Full, 1, Length(Base)), Base) then
+    // Der Backslash im Suchmuster ist TRAGEND: mit leerem Muster
+    // steigt StringReplace sofort aus (RTL: 'if LenOP = 0 then
+    // Exit(Source)') und der Pfad ginge mit Windows-Trennern raus -
+    // genau das war hier bis 08.09. der Fall, waehrend die drei
+    // Schwesterfassungen (SARIF, Sonar, HtmlDisplayPath) korrekt
+    // ersetzten. Folge: CSV/JSON zeigten 'src\u.pas', SARIF fuer
+    // DENSELBEN Fund 'src/u.pas' - ein CI-Skript, das beide
+    // Artefakte ueber den Pfad verbindet, fand null Treffer.
     Result := StringReplace(Copy(Full, Length(Base) + 1, MaxInt),
-                            '', '/', [rfReplaceAll]);
+                            '\', '/', [rfReplaceAll]);
 end;
 
 class procedure TExporter.SaveUtf8NoBom(SL: TStringList;

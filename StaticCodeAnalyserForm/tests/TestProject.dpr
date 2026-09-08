@@ -73,6 +73,7 @@ uses
   uTestFilterComboReduce in 'uTestFilterComboReduce.pas',
   uTestDetectorInfoExport in 'uTestDetectorInfoExport.pas',
   uTestFindingsWorkbenchExport in 'uTestFindingsWorkbenchExport.pas',
+  uTestExport in 'uTestExport.pas',
   uTestDebugOutput in 'uTestDebugOutput.pas',
   uTestTodoComment in 'uTestTodoComment.pas',
   uTestCodeMetrics in 'uTestCodeMetrics.pas',
