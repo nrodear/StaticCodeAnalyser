@@ -31,8 +31,9 @@ type
     [Test] procedure JsonEscape_ControlCharsAndQuotes;
     [Test] procedure KindToName_IsStableAndNonEmpty;
     [Test] procedure SameSourceFile_MatchesRegardlessOfSeparator;
-    // Die BOM-Politik, an der die CI haengt.
-    [Test] procedure SaveUtf8NoBom_SchreibtKeinePraeambel;
+    // Die BOM-Politik, an der die CI haengt - beide Speicherwege.
+    [Test] procedure SaveBuilderUtf8_OhneBom_SchreibtKeinePraeambel;
+    [Test] procedure SaveBuilderUtf8_MitBom_SchreibtPraeambel;
     [Test] procedure SaveUtf8WithBom_SchreibtPraeambel;
   end;
 
@@ -143,26 +144,42 @@ begin
     'verschiedene Namen duerfen nicht zusammenfallen');
 end;
 
-// Schreibt eine Zeile ueber den gewaehlten Speicherweg und liefert die
-// ersten Bytes der entstandenen Datei zurueck. Ausgelagert, weil die
-// beiden BOM-Tests exakt dasselbe tun und sich nur im Schreiber und in
-// der Erwartung unterscheiden.
-function ErsteBytes(AMitBom: Boolean; const ADateiname: string): TBytes;
+// Die drei Speicherwege, die es in uExport gibt. Der Builder-Weg traegt
+// heute CSV, JSON und HTML; der Listen-Weg ist dem Detektor-Katalog
+// geblieben (uDetectorInfoExport).
+type
+  TSpeicherweg = (swBuilderOhneBom, swBuilderMitBom, swListeMitBom);
+
+// Schreibt eine Zeile ueber den gewaehlten Weg und liefert die Bytes der
+// entstandenen Datei zurueck. Ausgelagert, weil sich die BOM-Tests nur
+// im Weg und in der Erwartung unterscheiden.
+function ErsteBytes(AWeg: TSpeicherweg; const ADateiname: string): TBytes;
 var
+  SB   : TStringBuilder;
   SL   : TStringList;
   Ziel : string;
 begin
   Ziel := TPath.Combine(TPath.GetTempPath, ADateiname);
   try
-    SL := TStringList.Create;
-    try
-      SL.Add('{"a":1}');
-      if AMitBom then
-        TExporter.SaveUtf8WithBom(SL, Ziel)
-      else
-        TExporter.SaveUtf8NoBom(SL, Ziel);
-    finally
-      SL.Free;
+    if AWeg = swListeMitBom then
+    begin
+      SL := TStringList.Create;
+      try
+        SL.Add('{"a":1}');
+        TExporter.SaveUtf8WithBom(SL, Ziel);
+      finally
+        SL.Free;
+      end;
+    end
+    else
+    begin
+      SB := TStringBuilder.Create;
+      try
+        SB.AppendLine('{"a":1}');
+        TExporter.SaveBuilderUtf8(SB, Ziel, AWeg = swBuilderMitBom);
+      finally
+        SB.Free;
+      end;
     end;
     Result := TFile.ReadAllBytes(Ziel);
   finally
@@ -178,35 +195,50 @@ begin
     and (ABytes[1] = $BB) and (ABytes[2] = $BF);
 end;
 
-procedure TTestExport.SaveUtf8NoBom_SchreibtKeinePraeambel;
-// Waechter der JSON-Seite der BOM-Politik. Der Test ist NICHT
-// kosmetisch: TEncoding.UTF8 hat FUseBOM=True (TMBCSEncoding.Create
-// setzt es zuletzt) und liefert sehr wohl ein EF BB BF - allein
-// SL.WriteBOM := False haelt es zurueck. Wer diese Zeile fuer redundant
-// haelt und streicht, macht diesen Test rot, statt die CI-Pipeline
-// still zu brechen.
+procedure TTestExport.SaveBuilderUtf8_OhneBom_SchreibtKeinePraeambel;
+// Waechter der JSON-Seite der BOM-Politik, auf dem Weg, den ExportJson
+// seit 08.09. wirklich nimmt. Der Test ist NICHT kosmetisch:
+// TEncoding.UTF8 hat FUseBOM=True (TMBCSEncoding.Create setzt es
+// zuletzt) und GetPreamble liefert sehr wohl ein EF BB BF - allein das
+// Unterdruecken haelt es zurueck. Wer den Schalter fuer redundant haelt,
+// macht diesen Test rot, statt die CI-Pipeline still zu brechen.
 var
   Bytes : TBytes;
 begin
-  Bytes := ErsteBytes(False, 'sca_test_nobom.json');
+  Bytes := ErsteBytes(swBuilderOhneBom, 'sca_test_nobom.json');
   Assert.IsTrue(Length(Bytes) > 0, 'es wurde gar nichts geschrieben');
   Assert.IsFalse(HatUtf8Praeambel(Bytes),
     'die JSON-Ausgabe traegt eine BOM-Praeambel - RFC 8259 par.8.1 '
     + 'verbietet sie, und Nodes JSON.parse scheitert daran');
 end;
 
-procedure TTestExport.SaveUtf8WithBom_SchreibtPraeambel;
-// Die Gegenrichtung: ohne BOM zerfallen die Umlaute im deutschen Excel,
-// weil es eine CSV nur an der Praeambel als UTF-8 erkennt. Beide Tests
-// zusammen halten die Politik an BEIDEN Enden fest - ein Test allein
-// waere auch dann gruen, wenn beide Wege dasselbe taeten.
+procedure TTestExport.SaveBuilderUtf8_MitBom_SchreibtPraeambel;
+// Die Gegenrichtung auf demselben Weg: ohne BOM zerfallen die Umlaute
+// im deutschen Excel, weil es eine CSV nur an der Praeambel als UTF-8
+// erkennt. Erst das Paar haelt die Politik an BEIDEN Enden fest - ein
+// Test allein waere auch dann gruen, wenn der Parameter gar nichts
+// mehr taete.
 var
   Bytes : TBytes;
 begin
-  Bytes := ErsteBytes(True, 'sca_test_mitbom.csv');
+  Bytes := ErsteBytes(swBuilderMitBom, 'sca_test_mitbom.csv');
   Assert.IsTrue(HatUtf8Praeambel(Bytes),
     'CSV und HTML brauchen das BOM - deutsches Excel erkennt UTF-8 '
     + 'nur daran');
+end;
+
+procedure TTestExport.SaveUtf8WithBom_SchreibtPraeambel;
+// Der Listen-Weg hat seit dem Builder-Umbau nur noch EINEN Aufrufer,
+// den Detektor-Katalog (uDetectorInfoExport). Genau deshalb steht er
+// hier: eine Politik mit einem einzigen Aufrufer faellt sonst beim
+// naechsten Aufraeumen still um.
+var
+  Bytes : TBytes;
+begin
+  Bytes := ErsteBytes(swListeMitBom, 'sca_test_liste.html');
+  Assert.IsTrue(HatUtf8Praeambel(Bytes),
+    'der Listen-Weg muss weiter ein BOM schreiben - der Detektor-'
+    + 'Katalog haengt daran');
 end;
 
 initialization

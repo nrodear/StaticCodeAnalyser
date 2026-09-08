@@ -21,11 +21,14 @@ unit uExport;
 // Geschrieben wird die Preambel von TStrings.SaveToStream aber nur, wenn
 // BEIDES zutrifft: WriteBOM ist True UND GetPreamble ist nicht leer.
 //
-// Daraus folgt die Regel, an der hier nicht gedreht werden darf:
-// SL.WriteBOM := False in SaveUtf8NoBom ist NICHT redundant, sondern das
-// einzige, was das BOM verhindert. Wer der alten Begruendung glaubt und
-// die Zeile als ueberfluessig streicht, gibt der JSON-Ausgabe eine
+// Daraus folgt die Regel, an der hier nicht gedreht werden darf: eine
+// BOM-lose Ausgabe entsteht NUR, wenn der Schreiber die Preambel aktiv
+// unterdrueckt. Wer der alten Begruendung glaubt ("ist doch ohnehin
+// leer") und den Schalter streicht, gibt der JSON-Ausgabe eine
 // Praeambel - und damit scheitert jeder Node-JSON.parse in der Pipeline.
+// Traeger der Politik sind heute SaveBuilderUtf8 (Parameter AMitBom,
+// CSV/JSON/HTML) und SaveUtf8WithBom (TStringList, Detektor-Katalog).
+// uTestExport haelt beide Richtungen fest.
 
 interface
 
@@ -81,12 +84,35 @@ type
     // FUseBOM=False") war ausserdem falsch - siehe Unit-Kopf.
     class procedure SaveUtf8WithBom(SL: TStringList;
       const FileName: string); static;
-    // Speichert OHNE BOM - fuer JSON: RFC 8259 par.8.1 verbietet die
-    // Praeambel, und Nodes JSON.parse scheitert daran. Das WriteBOM
-    // := False im Rumpf ist TRAGEND, nicht redundant: TEncoding.UTF8
-    // liefert sehr wohl eine Preamble (Unit-Kopf).
-    class procedure SaveUtf8NoBom(SL: TStringList;
-      const FileName: string); static;
+    // Schreibt einen TStringBuilder stueckweise als UTF-8 auf Platte.
+    // AMitBom steuert die Praeambel: True fuer CSV und HTML, False fuer
+    // JSON (RFC 8259 par.8.1).
+    //
+    // WARUM NICHT UEBER TStringList: der Weg
+    //   SL.Text := SB.ToString;  SaveUtf8*(SL, ...)
+    // legt vor dem ersten Byte auf Platte VIER volle Kopien an - den
+    // Builder, den ToString-String, die in Zeilen zerlegte Liste und den
+    // von SaveToStream daraus wieder zusammengesetzten Text. Am Korpus-
+    // Bericht hat genau dieses Muster im HTML-Export eine Spitze von rund
+    // 8,4 GB erzeugt und dabei Exit-Code UND Zusammenfassung eines
+    // ansonsten erfolgreichen Scans verworfen (T1 des HTML-Reviews,
+    // 2026-08-05). Hier bleibt die Spitze der Builder plus ein Fenster
+    // von wenigen Megabyte.
+    //
+    // SURROGATE: eine Stueckgrenze darf kein Surrogatpaar zerschneiden,
+    // sonst kodiert GetBytes jede Haelfte fuer sich und die Datei ist
+    // dort still kaputt. Liegt die letzte Stelle eines Stuecks auf einer
+    // HOHEN Haelfte ($D800..$DBFF), wandert die Grenze um ein Zeichen
+    // zurueck. Der Ordinalvergleich steht bewusst statt
+    // TCharacter.IsHighSurrogate - er braucht keine weitere Unit.
+    //
+    // Die Logik lag bis 08.09. als TExporterHtml.SaveBuilderUtf8WithBom
+    // in der HTML-Unit; sie steht jetzt hier, weil CSV und JSON sie
+    // genauso brauchen und die Surrogat-Behandlung es nicht verdient,
+    // dreimal dazustehen. Der alte Einstiegspunkt bleibt als
+    // Delegation erhalten.
+    class procedure SaveBuilderUtf8(ABuilder: TStringBuilder;
+      const FileName: string; AMitBom: Boolean); static;
     // Anzeigepfad relativ zu ABaseDir (Forward Slashes). Leerer BaseDir
     // oder Datei ausserhalb -> unveraendert.
     class function RelativeDisplayPath(const AFileName,
@@ -137,14 +163,44 @@ begin
                             '\', '/', [rfReplaceAll]);
 end;
 
-class procedure TExporter.SaveUtf8NoBom(SL: TStringList;
-  const FileName: string);
+class procedure TExporter.SaveBuilderUtf8(ABuilder: TStringBuilder;
+  const FileName: string; AMitBom: Boolean);
+// Begruendung und Surrogat-Falle stehen an der Deklaration.
+const
+  CHUNK = 1024 * 1024;   // Zeichen, nicht Bytes
+var
+  Stream            : TFileStream;
+  Preamble, Bytes   : TBytes;
+  Start, Len, Total : Integer;
+  Part              : string;
 begin
-  // JSON OHNE Praeambel (RFC 8259 par.8.1) - wie SARIF, Sonar-Export und
-  // Baseline seit 2026-08-08. Beim CSV bleibt das BOM dagegen bewusst
-  // stehen: Excel erkennt UTF-8 nur daran.
-  SL.WriteBOM := False;
-  SL.SaveToFile(FileName, TEncoding.UTF8);
+  Total  := ABuilder.Length;
+  Stream := TFileStream.Create(FileName, fmCreate);
+  try
+    if AMitBom then
+    begin
+      Preamble := TEncoding.UTF8.GetPreamble;
+      if Length(Preamble) > 0 then
+        Stream.WriteBuffer(Preamble[0], Length(Preamble));
+    end;
+    Start := 0;
+    while Start < Total do
+    begin
+      Len := CHUNK;
+      if Start + Len >= Total then
+        Len := Total - Start
+      else if (Ord(ABuilder.Chars[Start + Len - 1]) >= $D800) and
+              (Ord(ABuilder.Chars[Start + Len - 1]) <= $DBFF) then
+        Dec(Len);
+      Part  := ABuilder.ToString(Start, Len);
+      Bytes := TEncoding.UTF8.GetBytes(Part);
+      if Length(Bytes) > 0 then
+        Stream.WriteBuffer(Bytes[0], Length(Bytes));
+      Inc(Start, Len);
+    end;
+  finally
+    Stream.Free;
+  end;
 end;
 
 class procedure TExporter.SaveUtf8WithBom(SL: TStringList;
@@ -238,27 +294,32 @@ end;
 class procedure TExporter.ExportCsv(Findings: TObjectList<TLeakFinding>;
   const FileName: string; const ABaseDir: string);
 var
-  SL : TStringList;
+  SB : TStringBuilder;
   F  : TLeakFinding;
 begin
-  SL := TStringList.Create;
+  // Builder statt TStringList aus demselben Grund wie in ExportJson: die
+  // Liste haelt am Ende den kompletten Bericht, GetTextStr baut daraus
+  // eine zweite Vollkopie und GetBytes eine dritte. AppendLine haengt
+  // dasselbe sLineBreak an, das GetTextStr angehaengt haette - die Datei
+  // ist byte-identisch zum bisherigen Weg.
+  SB := TStringBuilder.Create;
   try
     // Spalte 'Kind' enthaelt den Detector-Kind-Namen (z.B. 'MemoryLeak') -
     // frueher hiess der Header missverstaendlich 'Type', was Sonar-Typen
     // (Bug/CodeSmell/Vulnerability/...) suggerierte.
-    SL.Add('File;Method;Line;Kind;Severity;Detail');
+    SB.AppendLine('File;Method;Line;Kind;Severity;Detail');
     if Assigned(Findings) then
       for F in Findings do
-        SL.Add(
+        SB.AppendLine(
           CsvEscape(RelativeDisplayPath(F.FileName, ABaseDir)) + ';' +
           CsvEscape(F.MethodName)       + ';' +
           CsvEscape(F.LineNumber)       + ';' +
           CsvEscape(KindToName(F.Kind)) + ';' +
           CsvEscape(F.SeverityText)     + ';' +
           CsvEscape(F.MissingVar));
-    SaveUtf8WithBom(SL, FileName);
+    SaveBuilderUtf8(SB, FileName, True);
   finally
-    SL.Free;
+    SB.Free;
   end;
 end;
 
@@ -268,7 +329,6 @@ var
   SB    : TStringBuilder;
   i     : Integer;
   F     : TLeakFinding;
-  SL    : TStringList;
 begin
   SB := TStringBuilder.Create;
   try
@@ -298,14 +358,13 @@ begin
       end;
     end;
     SB.AppendLine(']');
-
-    SL := TStringList.Create;
-    try
-      SL.Text := SB.ToString;
-      SaveUtf8NoBom(SL, FileName);
-    finally
-      SL.Free;
-    end;
+    // Direkt aus dem Builder, ohne den Umweg ToString -> TStringList ->
+    // SaveToStream. Der Umweg legte vier Vollkopien des Reports an, bevor
+    // das erste Byte auf Platte lag - siehe SaveBuilderUtf8. Der Inhalt
+    // ist dabei unveraendert: JsonEscape neutralisiert #10 und #13, im
+    // Builder stehen also nur die AppendLine-Umbrueche, und genau die
+    // hat die TStringList zerlegt und wieder zusammengesetzt.
+    SaveBuilderUtf8(SB, FileName, False);
   finally
     SB.Free;
   end;

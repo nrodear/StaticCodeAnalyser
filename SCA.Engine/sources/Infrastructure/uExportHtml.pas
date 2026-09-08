@@ -47,8 +47,16 @@ type
     // Schreibt den Inhalt eines TStringBuilder als UTF-8 mit BOM,
     // OHNE ihn vorher zu einem String und einer TStringList zu
     // verdoppeln. Fuer grosse Berichte ist das der Unterschied
-    // zwischen 'laeuft' und 'out of memory'. Public allein fuer den
-    // Waechtertest der Stueckgrenze - Aufrufer ist nur Run.
+    // zwischen 'laeuft' und 'out of memory'.
+    //
+    // Seit 08.09. reine Delegation an TExporter.SaveBuilderUtf8 - die
+    // Stueckelung samt Surrogat-Behandlung steht dort, weil CSV und
+    // JSON denselben Weg gehen. Hier bleibt der Einstiegspunkt, weil
+    // "mit BOM" fuer HTML eine Vertragsaussage ist und nicht bei jedem
+    // Aufruf neu entschieden werden soll.
+    //
+    // Aufrufer: Run, der V2-Fundbericht (uFindingsWorkbenchExport) und
+    // der Waechtertest der Stueckgrenze (uTestExportHtml).
     class procedure SaveBuilderUtf8WithBom(ABuilder: TStringBuilder;
       const FileName: string); static;
     // Public seit 2026-09-06: zweiter Konsument ist der Detector-Info-
@@ -306,57 +314,16 @@ end;
 
 class procedure TExporterHtml.SaveBuilderUtf8WithBom(
   ABuilder: TStringBuilder; const FileName: string);
-// T1 des HTML-Reviews (2026-08-05): der bisherige Weg ueber
-//   SL.Text := SB.ToString;  TExporter.SaveUtf8WithBom(SL, ...)
-// legte VOR dem ersten Byte auf Platte drei volle Kopien an - den
-// Builder, den ToString-String und die in Zeilen zerlegte
-// TStringList. Beim Korpus-Bericht (gemessen 2.673 Zeichen je Fund,
-// bei 560.077 Funden rund 1,43 GB HTML) ergab das eine Spitze von
-// etwa 8,4 GB - ein OOM, der zusaetzlich Exit-Code UND
-// Zusammenfassung eines ansonsten erfolgreichen Scans verwarf.
+// Reine Delegation seit 08.09.: die stueckweise Kodierung samt der
+// Surrogat-Behandlung steht jetzt in TExporter.SaveBuilderUtf8, weil
+// CSV und JSON sie genauso brauchen (Modul-Codereview, MAJOR zum
+// OOM-Muster in uExport). Begruendung dort an der Deklaration.
 //
-// Hier wird der Builder stueckweise abgeholt und sofort kodiert
-// weggeschrieben. Die Spitze ist der Builder plus ein Fenster von
-// wenigen Megabyte; zwei der drei Kopien entfallen ersatzlos.
-//
-// SURROGATE: eine Stueckgrenze darf kein Surrogatpaar zerschneiden,
-// sonst schreibt GetBytes jede Haelfte fuer sich und die Datei ist
-// dort still kaputt. Liegt die letzte Stelle eines Stuecks auf einer
-// HOHEN Haelfte ($D800..$DBFF), wandert die Grenze um ein Zeichen
-// zurueck. Der Ordinalvergleich steht hier bewusst statt
-// TCharacter.IsHighSurrogate - er braucht keine weitere Unit.
-const
-  CHUNK = 1024 * 1024;   // Zeichen, nicht Bytes
-var
-  Stream            : TFileStream;
-  Preamble, Bytes   : TBytes;
-  Start, Len, Total : Integer;
-  Part              : string;
+// Der Einstiegspunkt bleibt bestehen, weil ihn ausser dem HTML-Report
+// auch der V2-Fundbericht und uTestExportHtml rufen - und weil "mit
+// BOM" fuer HTML eine Vertragsaussage ist, keine Option.
 begin
-  Total  := ABuilder.Length;
-  Stream := TFileStream.Create(FileName, fmCreate);
-  try
-    Preamble := TEncoding.UTF8.GetPreamble;
-    if Length(Preamble) > 0 then
-      Stream.WriteBuffer(Preamble[0], Length(Preamble));
-    Start := 0;
-    while Start < Total do
-    begin
-      Len := CHUNK;
-      if Start + Len >= Total then
-        Len := Total - Start
-      else if (Ord(ABuilder.Chars[Start + Len - 1]) >= $D800) and
-              (Ord(ABuilder.Chars[Start + Len - 1]) <= $DBFF) then
-        Dec(Len);
-      Part  := ABuilder.ToString(Start, Len);
-      Bytes := TEncoding.UTF8.GetBytes(Part);
-      if Length(Bytes) > 0 then
-        Stream.WriteBuffer(Bytes[0], Length(Bytes));
-      Inc(Start, Len);
-    end;
-  finally
-    Stream.Free;
-  end;
+  TExporter.SaveBuilderUtf8(ABuilder, FileName, True);
 end;
 
 class procedure TExporterHtml.Run(Findings: TObjectList<TLeakFinding>;
