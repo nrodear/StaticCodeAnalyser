@@ -11,9 +11,21 @@ unit uExport;
 // eine CSV nur am BOM als UTF-8 (sonst zerfallen die Umlaute), waehrend
 // RFC 8259 par.8.1 die Praeambel fuer JSON-Austausch verbietet und Nodes
 // JSON.parse daran scheitert - dieselbe Linie wie bei SARIF, Sonar-Export
-// und Baseline. WICHTIG: in Delphi 12 ist die Singleton TEncoding.UTF8 mit
-// FUseBOM=False konfiguriert; das BOM steuert deshalb TStrings.WriteBOM
-// (SaveUtf8WithBom / SaveUtf8NoBom).
+// und Baseline.
+//
+// WICHTIG, und bis 08.09. hier GENAU VERKEHRT HERUM aufgeschrieben: die
+// Singleton TEncoding.UTF8 hat FUseBOM = TRUE. Sie entsteht ueber
+// TUTF8Encoding.Create -> inherited TMBCSEncoding.Create(CP_UTF8, ...),
+// und dessen letzte Anweisung ist FUseBOM := True (System.SysUtils).
+// TEncoding.UTF8.GetPreamble liefert deshalb EF BB BF.
+// Geschrieben wird die Preambel von TStrings.SaveToStream aber nur, wenn
+// BEIDES zutrifft: WriteBOM ist True UND GetPreamble ist nicht leer.
+//
+// Daraus folgt die Regel, an der hier nicht gedreht werden darf:
+// SL.WriteBOM := False in SaveUtf8NoBom ist NICHT redundant, sondern das
+// einzige, was das BOM verhindert. Wer der alten Begruendung glaubt und
+// die Zeile als ueberfluessig streicht, gibt der JSON-Ausgabe eine
+// Praeambel - und damit scheitert jeder Node-JSON.parse in der Pipeline.
 
 interface
 
@@ -62,14 +74,17 @@ type
 
     // ---- Querschnitts-Helfer (public weil uExportHtml sie braucht) ----
 
-    // Speichert eine TStringList als UTF-8 MIT BOM. TEncoding.UTF8
-    // (Singleton) hat in Delphi 12 FUseBOM=False -> kein BOM via
-    // SaveToFile. Wir erzeugen daher eine eigene TUTF8Encoding-Instanz
-    // mit UseBOM=True, geben sie nach dem Save wieder frei.
+    // Speichert eine TStringList als UTF-8 MIT BOM (EF BB BF) - fuer
+    // CSV und HTML. Umgesetzt ueber SL.WriteBOM := True; die frueher
+    // hier beschriebene eigene TUTF8Encoding-Instanz gibt es seit dem
+    // Umbau nicht mehr, und ihre Begruendung ("TEncoding.UTF8 hat
+    // FUseBOM=False") war ausserdem falsch - siehe Unit-Kopf.
     class procedure SaveUtf8WithBom(SL: TStringList;
       const FileName: string); static;
-    // Fuer JSON: RFC 8259 par.8.1 verbietet die BOM-Praeambel, und Nodes
-    // JSON.parse scheitert daran.
+    // Speichert OHNE BOM - fuer JSON: RFC 8259 par.8.1 verbietet die
+    // Praeambel, und Nodes JSON.parse scheitert daran. Das WriteBOM
+    // := False im Rumpf ist TRAGEND, nicht redundant: TEncoding.UTF8
+    // liefert sehr wohl eine Preamble (Unit-Kopf).
     class procedure SaveUtf8NoBom(SL: TStringList;
       const FileName: string); static;
     // Anzeigepfad relativ zu ABaseDir (Forward Slashes). Leerer BaseDir

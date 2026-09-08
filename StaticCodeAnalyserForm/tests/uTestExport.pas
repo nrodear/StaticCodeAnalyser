@@ -31,6 +31,9 @@ type
     [Test] procedure JsonEscape_ControlCharsAndQuotes;
     [Test] procedure KindToName_IsStableAndNonEmpty;
     [Test] procedure SameSourceFile_MatchesRegardlessOfSeparator;
+    // Die BOM-Politik, an der die CI haengt.
+    [Test] procedure SaveUtf8NoBom_SchreibtKeinePraeambel;
+    [Test] procedure SaveUtf8WithBom_SchreibtPraeambel;
   end;
 
 implementation
@@ -138,6 +141,72 @@ begin
     'uMain.pas'), 'absoluter gegen blossen Namen muss greifen');
   Assert.IsFalse(TExporter.SameSourceFile('uMain.pas', 'uOther.pas'),
     'verschiedene Namen duerfen nicht zusammenfallen');
+end;
+
+// Schreibt eine Zeile ueber den gewaehlten Speicherweg und liefert die
+// ersten Bytes der entstandenen Datei zurueck. Ausgelagert, weil die
+// beiden BOM-Tests exakt dasselbe tun und sich nur im Schreiber und in
+// der Erwartung unterscheiden.
+function ErsteBytes(AMitBom: Boolean; const ADateiname: string): TBytes;
+var
+  SL   : TStringList;
+  Ziel : string;
+begin
+  Ziel := TPath.Combine(TPath.GetTempPath, ADateiname);
+  try
+    SL := TStringList.Create;
+    try
+      SL.Add('{"a":1}');
+      if AMitBom then
+        TExporter.SaveUtf8WithBom(SL, Ziel)
+      else
+        TExporter.SaveUtf8NoBom(SL, Ziel);
+    finally
+      SL.Free;
+    end;
+    Result := TFile.ReadAllBytes(Ziel);
+  finally
+    if TFile.Exists(Ziel) then
+      TFile.Delete(Ziel);
+  end;
+end;
+
+// True, wenn die Bytes mit der UTF-8-Praeambel EF BB BF beginnen.
+function HatUtf8Praeambel(const ABytes: TBytes): Boolean;
+begin
+  Result := (Length(ABytes) >= 3) and (ABytes[0] = $EF)
+    and (ABytes[1] = $BB) and (ABytes[2] = $BF);
+end;
+
+procedure TTestExport.SaveUtf8NoBom_SchreibtKeinePraeambel;
+// Waechter der JSON-Seite der BOM-Politik. Der Test ist NICHT
+// kosmetisch: TEncoding.UTF8 hat FUseBOM=True (TMBCSEncoding.Create
+// setzt es zuletzt) und liefert sehr wohl ein EF BB BF - allein
+// SL.WriteBOM := False haelt es zurueck. Wer diese Zeile fuer redundant
+// haelt und streicht, macht diesen Test rot, statt die CI-Pipeline
+// still zu brechen.
+var
+  Bytes : TBytes;
+begin
+  Bytes := ErsteBytes(False, 'sca_test_nobom.json');
+  Assert.IsTrue(Length(Bytes) > 0, 'es wurde gar nichts geschrieben');
+  Assert.IsFalse(HatUtf8Praeambel(Bytes),
+    'die JSON-Ausgabe traegt eine BOM-Praeambel - RFC 8259 par.8.1 '
+    + 'verbietet sie, und Nodes JSON.parse scheitert daran');
+end;
+
+procedure TTestExport.SaveUtf8WithBom_SchreibtPraeambel;
+// Die Gegenrichtung: ohne BOM zerfallen die Umlaute im deutschen Excel,
+// weil es eine CSV nur an der Praeambel als UTF-8 erkennt. Beide Tests
+// zusammen halten die Politik an BEIDEN Enden fest - ein Test allein
+// waere auch dann gruen, wenn beide Wege dasselbe taeten.
+var
+  Bytes : TBytes;
+begin
+  Bytes := ErsteBytes(True, 'sca_test_mitbom.csv');
+  Assert.IsTrue(HatUtf8Praeambel(Bytes),
+    'CSV und HTML brauchen das BOM - deutsches Excel erkennt UTF-8 '
+    + 'nur daran');
 end;
 
 initialization
