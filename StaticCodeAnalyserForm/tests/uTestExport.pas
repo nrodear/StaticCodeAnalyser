@@ -31,6 +31,10 @@ type
     [Test] procedure JsonEscape_ControlCharsAndQuotes;
     [Test] procedure KindToName_IsStableAndNonEmpty;
     [Test] procedure SameSourceFile_MatchesRegardlessOfSeparator;
+    // Der Ordner-Mix, den der Basisnamen-Vergleich zuliess.
+    [Test] procedure SameSourceFile_TrenntGleichnamigeAusAnderenOrdnern;
+    [Test] procedure SameSourceFile_AbsoluterPfadGegenRelativenTail;
+    [Test] procedure SameSourceFile_SuffixNurAnDerTrennergrenze;
     // Die BOM-Politik, an der die CI haengt - beide Speicherwege.
     [Test] procedure SaveBuilderUtf8_OhneBom_SchreibtKeinePraeambel;
     [Test] procedure SaveBuilderUtf8_MitBom_SchreibtPraeambel;
@@ -130,18 +134,49 @@ begin
 end;
 
 procedure TTestExport.SameSourceFile_MatchesRegardlessOfSeparator;
-// Der Einzeldatei-Export (Jira, Zwischenablage) filtert hierueber.
-// Geprueft wird der ZUGESAGTE Basisnamen-Vergleich; die bekannte
-// Grenze - gleichnamige Units aus verschiedenen Ordnern gelten als
-// dieselbe Datei - ist im Methodenkommentar dokumentiert und hier
-// als solche festgehalten, nicht als Wunschverhalten.
+// Der Einzeldatei-Export filtert hierueber. Diese drei Faelle galten
+// schon vor dem Umbau vom 08.09. und muessen ihn ueberleben.
 begin
   Assert.IsTrue(TExporter.SameSourceFile('src\uMain.pas',
     'src/uMain.pas'), 'Trennerform darf nicht entscheiden');
   Assert.IsTrue(TExporter.SameSourceFile('D:\a\uMain.pas',
-    'uMain.pas'), 'absoluter gegen blossen Namen muss greifen');
+    'uMain.pas'), 'absoluter gegen blossen Namen muss greifen - ohne '
+    + 'Verzeichnisanteil auf einer Seite ist der Basisname alles, was '
+    + 'vorliegt');
   Assert.IsFalse(TExporter.SameSourceFile('uMain.pas', 'uOther.pas'),
     'verschiedene Namen duerfen nicht zusammenfallen');
+end;
+
+procedure TTestExport.SameSourceFile_TrenntGleichnamigeAusAnderenOrdnern;
+// DER Waechter des MAJOR vom 08.09.: gleichnamige Units in mehreren
+// Ordnern sind in Delphi-Projektgruppen der Normalfall. Mit dem alten
+// Basisnamen-Vergleich war dieser Fall True, und der Einzeldatei-Export
+// zog die Befunde beider Dateien stillschweigend zusammen.
+begin
+  Assert.IsFalse(TExporter.SameSourceFile('D:\projA\uMain.pas',
+    'D:\projB\uMain.pas'),
+    'gleicher Dateiname in verschiedenen Ordnern ist NICHT dieselbe '
+    + 'Datei - genau hier mischte der Export vorher zwei Units');
+end;
+
+procedure TTestExport.SameSourceFile_AbsoluterPfadGegenRelativenTail;
+// Die Gegenprobe zum Waechter: der Aufrufer haelt mal einen absoluten,
+// mal einen relativen Pfad. Ein schlichter Volltextvergleich waere hier
+// rot und haette den Einzeldatei-Export leergefegt.
+begin
+  Assert.IsTrue(TExporter.SameSourceFile('D:\proj\src\uMain.pas',
+    'src\uMain.pas'),
+    'der relative Pfad ist ein echtes Suffix des absoluten');
+end;
+
+procedure TTestExport.SameSourceFile_SuffixNurAnDerTrennergrenze;
+// Die dritte Richtung: ein naiver Suffix-Vergleich ohne Trennergrenze
+// waere hier gruen und wuerde 'xsrc' fuer 'src' halten.
+begin
+  Assert.IsFalse(TExporter.SameSourceFile('D:\proj\xsrc\uMain.pas',
+    'src\uMain.pas'),
+    'ein Suffix mitten im Ordnernamen zaehlt nicht - vor dem Treffer '
+    + 'muss ein Trenner stehen');
 end;
 
 // Die drei Speicherwege, die es in uExport gibt. Der Builder-Weg traegt

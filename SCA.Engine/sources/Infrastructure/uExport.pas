@@ -120,8 +120,11 @@ type
     // Kanonischer Name eines Befund-Kinds (fuer CSV/JSON/Jira/HTML).
     class function KindToName(Kind: TFindingKind): string; static;
     // Vergleicht Datei-Pfade case-insensitiv und mit normalisierten
-    // Trennern - ein Befund kann mit absolutem oder relativem Pfad
-    // vorliegen, wir vergleichen den Basisnamen-Tail.
+    // Trennern. Ein Befund kann mit absolutem oder relativem Pfad
+    // vorliegen, deshalb muss der kuerzere Pfad ein Suffix des laengeren
+    // sein - an einer TRENNERGRENZE. Gleichnamige Units aus verschiedenen
+    // Ordnern fallen dadurch NICHT mehr zusammen (bis 08.09. taten sie
+    // es, siehe Rumpf).
     class function SameSourceFile(const A, B: string): Boolean; static;
     // JSON-String-Escaping - public, weil uExportHtml es fuer den
     // sca-meta-Block (#10) braucht (wie KindToName/SameSourceFile).
@@ -398,11 +401,51 @@ end;
 
 class function TExporter.SameSourceFile(const A, B: string): Boolean;
 // Vergleicht Datei-Pfade case-insensitiv und mit normalisierten Trennern.
-// Ein Befund kann mit absolutem oder relativem Pfad vorliegen, Aufrufer
-// uebergibt eines davon - wir vergleichen den Basisnamen-Tail.
+//
+// BIS 08.09. verglich diese Funktion NUR den Basisnamen. In einer
+// Projektgruppe mit mehreren Ordnern galten damit D:\projA\uMain.pas und
+// D:\projB\uMain.pas als dieselbe Datei, und der Einzeldatei-Export zog
+// die Befunde beider zusammen - ohne dass der Leser es sehen konnte
+// (Modul-Codereview, MAJOR). Gleichnamige Units sind in Delphi-
+// Projektgruppen der Normalfall, nicht die Ausnahme.
+//
+// Warum kein schlichter Volltextvergleich: der Aufrufer haelt mal einen
+// absoluten, mal einen relativen Pfad, je nachdem woher der Befund kommt.
+// Deshalb der TAIL-Vergleich - der kuerzere Pfad muss ein Suffix des
+// laengeren sein, UND ZWAR AN EINER TRENNERGRENZE. Ohne diese Bedingung
+// waere 'D:\xsrc\uMain.pas' dasselbe wie 'src\uMain.pas'.
+//
+// Fehlt einer Seite der Verzeichnisanteil ganz, bleibt es beim
+// Basisnamen - mehr Information liegt dann schlicht nicht vor.
+var
+  NA, NB, Kurz, Lang : string;
 begin
-  if (A = '') or (B = '') then Exit(False);
-  Result := SameText(ExtractFileName(A), ExtractFileName(B));
+  Result := False;
+  if (A = '') or (B = '') then Exit;
+
+  NA := StringReplace(A, '\', '/', [rfReplaceAll]);
+  NB := StringReplace(B, '\', '/', [rfReplaceAll]);
+
+  if (Pos('/', NA) = 0) or (Pos('/', NB) = 0) then
+    Exit(SameText(ExtractFileName(NA), ExtractFileName(NB)));
+
+  if Length(NA) < Length(NB) then
+  begin
+    Kurz := NA;
+    Lang := NB;
+  end
+  else
+  begin
+    Kurz := NB;
+    Lang := NA;
+  end;
+
+  if Length(Kurz) = Length(Lang) then
+    Exit(SameText(Kurz, Lang));
+
+  Result := SameText(Copy(Lang, Length(Lang) - Length(Kurz) + 1, MaxInt),
+                     Kurz)
+    and (Lang[Length(Lang) - Length(Kurz)] = '/');
 end;
 
 class function TExporter.BuildJiraText(Findings: TObjectList<TLeakFinding>;
