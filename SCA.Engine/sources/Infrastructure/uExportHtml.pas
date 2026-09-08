@@ -2631,8 +2631,15 @@ begin
     SB.AppendLine('      // Header-Indikator');
     SB.AppendLine('      table.querySelectorAll(''th.sortable'').forEach(function(th) {');
     SB.AppendLine('        th.classList.remove(''sort-asc'', ''sort-desc'');');
-    SB.AppendLine('        if (th.getAttribute(''data-col'') === col)');
+    SB.AppendLine('        if (th.getAttribute(''data-col'') === col) {');
     SB.AppendLine('          th.classList.add(desc ? ''sort-desc'' : ''sort-asc'');');
+    // aria-sort: die Richtung steckte bisher nur in der CSS-Klasse
+    // und im daraus erzeugten Pfeil-Zeichen - fuer Screenreader
+    // unsichtbar. Derselbe A11y-Restpunkt wie auf den beiden
+    // Workbench-Seiten, hier gleich mit erledigt (08.09.).
+    SB.AppendLine('          th.setAttribute(''aria-sort'', '
+      + 'desc ? ''descending'' : ''ascending'');');
+    SB.AppendLine('        } else th.removeAttribute(''aria-sort'');');
     SB.AppendLine('      });');
     SB.AppendLine('');
     SB.AppendLine('      // Pairs (finding, finding-hint?) zusammenhalten');

@@ -608,6 +608,11 @@ begin
   Assert.IsTrue(Pos('"Escape"', FHtml) > 0, 'Esc-Handler fehlt');
   Assert.IsTrue(Pos('"ArrowDown"', FHtml) > 0,
     'Pfeil-Navigation fehlt');
+  // A11y (08.09.): Sortierrichtung nicht nur als Pfeil-Zeichen -
+  // Screenreader lesen aria-sort an der Kopfzelle.
+  Assert.IsTrue(Pos('koepfe[k].setAttribute("aria-sort", '
+    + 'auf ? "ascending" : "descending");', FHtml) > 0,
+    'aria-sort wird beim Sortieren nicht gesetzt');
   // Review 07.09. (Bestandsfix): Enter auf Buttons darf nicht vom
   // Zeilen-Navigator geschluckt werden, Enter auf einer fokussierten
   // Zeile oeffnet DIESE Zeile.

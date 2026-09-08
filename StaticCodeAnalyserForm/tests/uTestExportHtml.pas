@@ -573,6 +573,13 @@ begin
       Html) > 0, 'Toggle-Verdrahtung fehlt');
   Assert.IsTrue(Pos('sortBy(''sev'');', Html) > 0,
     'Initial-Sort-AUFRUF fehlt (Definition allein sortiert nichts)');
+  // A11y (08.09.): die Sortierrichtung steckte nur in der CSS-Klasse
+  // und im daraus erzeugten Pfeil - fuer Screenreader unsichtbar.
+  Assert.IsTrue(Pos('th.setAttribute(''aria-sort'', '
+    + 'desc ? ''descending'' : ''ascending'');', Html) > 0,
+    'aria-sort wird beim Sortieren nicht gesetzt');
+  Assert.IsTrue(Pos('th.removeAttribute(''aria-sort'');', Html) > 0,
+    'aria-sort bleibt an der alten Spalte stehen');
   Assert.IsTrue(Pos('loadFromUrlHash();', Html) > 0,
     'loadFromUrlHash-AUFRUF fehlt');
   Assert.IsTrue(Pos('applyLanguage(SCA_LANG);', Html) > 0,

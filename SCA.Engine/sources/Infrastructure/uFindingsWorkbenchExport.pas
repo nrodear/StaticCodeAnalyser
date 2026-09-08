@@ -973,6 +973,13 @@ begin
     SB.AppendLine('    if (pf) pf.textContent = (k === spalte) ? '
       + '(auf ? String.fromCharCode(9650) : String.fromCharCode(9660)) '
       + ': "";');
+    // aria-sort an der ZELLE: die Richtung stand bisher nur im
+    // Pfeil-Zeichen und war fuer Screenreader unsichtbar
+    // (A11y-Restpunkt des UI-Konzept-Abgleichs 07.09.).
+    SB.AppendLine('    if (k === spalte)');
+    SB.AppendLine('      koepfe[k].setAttribute("aria-sort", '
+      + 'auf ? "ascending" : "descending");');
+    SB.AppendLine('    else koepfe[k].removeAttribute("aria-sort");');
     SB.AppendLine('  }');
     SB.AppendLine('  var tbs = alleTbodies();');
     SB.AppendLine('  tbs.sort(function(a, b) {');

@@ -607,6 +607,14 @@ begin
     + 'auf eine Zeile, die gleich verschoben wird');
   Assert.IsTrue(Pos('if (spalte === 5) {', Html) > 0,
     'Tiebreak-Zweig des Severity-Sorts fehlt');
+  // A11y (Restpunkt des UI-Abgleichs): die Sortierrichtung darf
+  // nicht nur im Pfeil-ZEICHEN stecken - Screenreader lesen
+  // aria-sort an der Kopfzelle.
+  Assert.IsTrue(Pos('koepfe[k].setAttribute("aria-sort", '
+    + 'auf ? "ascending" : "descending");', Html) > 0,
+    'aria-sort wird beim Sortieren nicht gesetzt');
+  Assert.IsTrue(Pos('koepfe[k].removeAttribute("aria-sort");', Html) > 0,
+    'aria-sort bleibt an der alten Spalte stehen');
   Assert.IsTrue(Pos('return kb - ka;', Html) > 0,
     'Konfidenz-Tiebreak muss absteigend sein (hoch zuerst)');
   // Der Spaltenkopf 5 muss auch wirklich der Schweregrad sein -

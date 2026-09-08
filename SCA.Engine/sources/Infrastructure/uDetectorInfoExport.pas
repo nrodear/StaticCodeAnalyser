@@ -467,6 +467,14 @@ begin
     SB.AppendLine('    var pf = koepfe[k].querySelector(".pfeil");');
     SB.AppendLine('    if (pf) pf.textContent = '
       + '(k === spalte) ? (auf ? "\u25B2" : "\u25BC") : "";');
+    // aria-sort: die Richtung stand bisher NUR im Pfeil-Zeichen und
+    // war damit fuer Screenreader unsichtbar (UI-Konzept-Abgleich
+    // 07.09., A11y-Restpunkt). Der Wert gehoert an die Zelle, nicht
+    // an den Pfeil-Span.
+    SB.AppendLine('    if (k === spalte)');
+    SB.AppendLine('      koepfe[k].setAttribute("aria-sort", '
+      + 'auf ? "ascending" : "descending");');
+    SB.AppendLine('    else koepfe[k].removeAttribute("aria-sort");');
     SB.AppendLine('  }');
     SB.AppendLine('  var tbs = alleTbodies();');
     SB.AppendLine('  tbs.sort(function(a, b) {');
