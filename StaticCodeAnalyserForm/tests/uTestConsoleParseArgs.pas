@@ -38,11 +38,12 @@ type
 
 implementation
 
-// noinspection-file HardcodedPath
-// Der Laufwerkspfad in QUELLE_B ist der Pruefaufbau, nicht der
-// Pruefgegenstand: ParseArgs braucht IRGENDEINE Eingabe-Quelle, sonst
-// meldet es 'Keine Eingabe-Quelle' und die Tests praeften den falschen
-// Fehler. Die Schwester-Fixtures fuehren den Marker aus demselben Grund.
+// KEIN noinspection HardcodedPath, obwohl QUELLE_B ein Laufwerksliteral
+// ist und die Schwester-Fixtures den Marker fuehren: gemessen (Selbstscan
+// 08.09.) feuert der Detektor hier gar nicht - er gated in Test-Units auf
+// Argumente von Assertionen und Test-Vektorhelfern, eine const-Deklaration
+// faellt nicht darunter. Ein Marker, der nichts unterdrueckt, ist selbst
+// ein Fund (SCA165), und den hat der eigene Scan prompt gemeldet.
 
 uses
   uConsoleRunner;
@@ -61,6 +62,12 @@ uses
 const
   QUELLE_A = '--file';
   QUELLE_B = 'C:\nicht-vorhanden\u.pas';
+  // Wiederholte Pruefwerte als Konstante - der eigene Scan meldet sie
+  // sonst als DuplicateString (SCA015), und in einer Fixture, die immer
+  // wieder denselben Wert erwartet, ist die Konstante ohnehin die
+  // ehrlichere Schreibweise.
+  KEIN_FEHLER = 'kein Fehler erwartet';
+  PROFILWERT  = 'strict';
 
 procedure TTestConsoleParseArgs.BooleanSchalterMitWert_IstEinFehler;
 // DER Waechter des MAJOR vom 08.09.: die '='-Zerlegung laeuft ueber ALLE
@@ -130,8 +137,8 @@ var
   A : TCliArgs;
 begin
   A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--profile=strict']);
-  Assert.AreEqual('', A.ParseError, 'kein Fehler erwartet');
-  Assert.AreEqual('strict', A.Profile,
+  Assert.AreEqual('', A.ParseError, KEIN_FEHLER);
+  Assert.AreEqual(PROFILWERT, A.Profile,
     'die =-Form muss bei Wert-Schaltern weiter greifen');
 end;
 
@@ -140,9 +147,10 @@ procedure TTestConsoleParseArgs.WertSchalter_MitLeerzeichen;
 var
   A : TCliArgs;
 begin
-  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--profile', 'strict']);
-  Assert.AreEqual('', A.ParseError, 'kein Fehler erwartet');
-  Assert.AreEqual('strict', A.Profile,
+  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B,
+    '--profile', PROFILWERT]);
+  Assert.AreEqual('', A.ParseError, KEIN_FEHLER);
+  Assert.AreEqual(PROFILWERT, A.Profile,
     'die getrennte Form muss weiter greifen');
 end;
 
@@ -154,7 +162,7 @@ var
   A : TCliArgs;
 begin
   A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--fail-on=error']);
-  Assert.AreEqual('', A.ParseError, 'kein Fehler erwartet');
+  Assert.AreEqual('', A.ParseError, KEIN_FEHLER);
   Assert.AreEqual('error', A.FailOn,
     '--fail-on=error muss weiter ankommen');
 end;
@@ -174,7 +182,7 @@ var
   A : TCliArgs;
 begin
   A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--fail-on=ERROR']);
-  Assert.AreEqual('', A.ParseError, 'kein Fehler erwartet');
+  Assert.AreEqual('', A.ParseError, KEIN_FEHLER);
   Assert.AreEqual('ERROR', A.FailOn, False,
     'der Wert kommt roh an - kleingeschrieben wird er erst bei der '
     + 'Auswertung. AreEqual steht hier bewusst case-SENSITIV, sonst '
