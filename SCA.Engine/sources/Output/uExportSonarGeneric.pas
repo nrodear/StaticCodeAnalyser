@@ -215,20 +215,25 @@ begin
     Result := M.ID;
 end;
 
-function BuildRuleObject(const M: TRuleMeta; const IdOverride: string): TJSONObject;
-// IdOverride: bei Custom-Rule-Findings (F.RuleID gesetzt) muss die Rule-ID
-// im Rules-Array zur Issue.ruleId passen, sonst kann Sonar die Eintraege
-// nicht koppeln und ignoriert die MQR-Felder.
+function BuildRuleObject(const M: TRuleMeta; const ARuleID: string): TJSONObject;
+// ARuleID ist die FERTIGE Regel-ID, die der Aufrufer mit EffectiveRuleID
+// bestimmt hat - hier wird nicht mehr entschieden.
+//
+// Bis 08.09. hiess der Parameter IdOverride und traf die Entscheidung
+// "Custom-ID gewinnt, sonst Katalog-ID" ein VIERTES Mal selbst, waehrend
+// EmitRules denselben Wert daneben schon fuer den Dedup-Schluessel
+// berechnete. Heute lieferten beide dasselbe, aber damit war genau die
+// Drift offen, gegen die EffectiveRuleID angetreten ist: eine Aenderung
+// dort (Trim, Praefix, Uppercase) haette den Dedup-Schluessel und
+// issue.ruleId verschoben, rule.id aber nicht - und Sonar verwirft bei
+// checkRuleExistsInReport den GANZEN Report (Chargen-Review 08.09.).
 var
   Impacts : TJSONArray;
   IObj    : TJSONObject;
   I       : TSonarImpact;
 begin
   Result := TJSONObject.Create;
-  if IdOverride <> '' then
-    Result.AddPair('id', IdOverride)
-  else
-    Result.AddPair('id', M.ID);
+  Result.AddPair('id', ARuleID);
   Result.AddPair('name',         IfThen(M.Name <> '', M.Name, KindName(M.Kind)));
   Result.AddPair('description',  IfThen(M.FullDescription <> '',
                                          M.FullDescription, M.ShortDescription));
@@ -469,9 +474,10 @@ begin
       Seen.Add(RuleID, True);
       if not First then WStr(AStream, ',');
       First := False;
-      // F.RuleID leer -> BuildRuleObject nimmt die Katalog-ID. Der frueher
-      // hier stehende if/else war zwei Wege zum selben Aufruf.
-      WObj(AStream, BuildRuleObject(Meta, F.RuleID));
+      // Dieselbe ID, die oben schon der Dedup-Schluessel war und die
+      // EmitIssues fuer issue.ruleId bekommt - EINE Quelle, sonst
+      // koppelt Sonar die beiden Eintraege nicht.
+      WObj(AStream, BuildRuleObject(Meta, RuleID));
     end;
   finally
     Seen.Free;
