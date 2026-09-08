@@ -16,9 +16,9 @@ unit uTestExport;
 interface
 
 uses
-  System.SysUtils, System.Classes, System.Generics.Collections,
+  System.SysUtils, System.Classes,
   DUnitX.TestFramework,
-  uSCAConsts, uMethodd12;
+  uSCAConsts;
 
 type
   [TestFixture]
@@ -130,7 +130,14 @@ begin
       'Kind-Namen duerfen kein Leerzeichen tragen (sie stehen in '
       + 'noinspection-Markern): ' + N);
   end;
-  Assert.AreEqual('MemoryLeak', TExporter.KindToName(fkMemoryLeak),
+  // AreEqual case-SENSITIV (vierter Parameter False): DUnitX vergleicht
+  // Strings per Default OHNE Ruecksicht auf Gross-/Kleinschreibung
+  // (DUnitX.Assert: fIgnoreCaseDefault := true). Eine Umbenennung auf
+  // 'memoryleak' waere sonst durchgewunken - und der Kind-Name geht in
+  // die SARIF-ruleId sowie in CSV und JSON, wo externe Konsumenten sehr
+  // wohl auf die Schreibweise achten. Fuer die noinspection-Marker
+  // selbst waere es egal, die vergleichen per SameText.
+  Assert.AreEqual('MemoryLeak', TExporter.KindToName(fkMemoryLeak), False,
     'der bekannteste Kind-Name hat sich geaendert - das braeche '
     + 'jede bestehende noinspection MemoryLeak beim Nutzer');
 end;

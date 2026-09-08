@@ -170,13 +170,34 @@ procedure MitGepinntemZeitstempel(const APin: string; AProc: TProc);
 // SCA_REPORT_TIMESTAMP setzen, AProc laufen lassen, IMMER restaurieren -
 // Prozess-Umgebung ist globaler State, den jeder Lauf zuruecknehmen
 // muss (Lexer-Kontaminations-Lehre der Chargen 13).
+//
+// RESTAURIEREN heisst seit dem 08.09. wirklich restaurieren: bis dahin
+// LOESCHTE das finally die Variable, statt den vorherigen Wert
+// zurueckzuschreiben. In einem CI-Lauf, der SCA_REPORT_TIMESTAMP
+// prozessweit setzt - genau der Anwendungsfall, fuer den es die
+// Variable gibt -, riss der erste Aufruf sie fuer alle nachfolgenden
+// Tests ab (Chargen-Review, MINOR).
+var
+  Vorher    : string;
+  WarGesetzt: Boolean;
 begin
+  // QUALIFIZIERT: Winapi.Windows steht in dieser Unit ZULETZT im uses
+  // und bringt ein gleichnamiges GetEnvironmentVariable mit voellig
+  // anderer Signatur (lpName, lpBuffer, nSize: DWORD) mit. Unqualifiziert
+  // gewinnt die - und das ist ein Uebersetzungsfehler, kein stiller.
+  Vorher     := System.SysUtils.GetEnvironmentVariable(
+                  'SCA_REPORT_TIMESTAMP');
+  WarGesetzt := Vorher <> '';
   Winapi.Windows.SetEnvironmentVariable('SCA_REPORT_TIMESTAMP',
     PChar(APin));
   try
     AProc;
   finally
-    Winapi.Windows.SetEnvironmentVariable('SCA_REPORT_TIMESTAMP', nil);
+    if WarGesetzt then
+      Winapi.Windows.SetEnvironmentVariable('SCA_REPORT_TIMESTAMP',
+        PChar(Vorher))
+    else
+      Winapi.Windows.SetEnvironmentVariable('SCA_REPORT_TIMESTAMP', nil);
   end;
 end;
 

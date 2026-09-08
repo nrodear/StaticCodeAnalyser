@@ -26,26 +26,41 @@ type
     [Test] procedure BooleanSchalterMitWert_IstEinFehler;
     [Test] procedure BooleanSchalterMitWert_SetztDenSchalterNicht;
     [Test] procedure BooleanSchalterOhneWert_Greift;
+    // Der Waechter darf nicht an einem einzigen Schalter haengen.
+    [Test] procedure ZweiterBooleanSchalterMitWert_IstEinFehler;
 
     // ---- Wert-Schalter nehmen weiter beide Schreibweisen ----
     [Test] procedure WertSchalter_MitGleichheitszeichen;
     [Test] procedure WertSchalter_MitLeerzeichen;
     [Test] procedure FailOn_MitGleichheitszeichen;
+    [Test] procedure FailOn_GrossgeschriebenKommtRohAn;
   end;
 
 implementation
 
+// noinspection-file HardcodedPath
+// Der Laufwerkspfad in QUELLE_B ist der Pruefaufbau, nicht der
+// Pruefgegenstand: ParseArgs braucht IRGENDEINE Eingabe-Quelle, sonst
+// meldet es 'Keine Eingabe-Quelle' und die Tests praeften den falschen
+// Fehler. Die Schwester-Fixtures fuehren den Marker aus demselben Grund.
+
 uses
-  System.SysUtils,
   uConsoleRunner;
 
-// Jeder Aufruf braucht eine Eingabe-Quelle, sonst setzt ParseArgs den
-// ParseError 'Keine Eingabe-Quelle' - und der Test praefte dann den
-// falschen Fehler. Der Pfad muss nicht existieren; ParseArgs prueft das
-// nur fuer --index-root.
+// WARUM --file UND NICHT --path: bei --path setzt ParseArgs am Ende
+//     if (Result.Path <> '') and not Result.Full and not Result.Branch
+//       then Result.Full := True;
+// den Schalter selbst. Ein Assert.IsTrue(A.Full) waere damit auch dann
+// gruen, wenn der '--full'-Zweig gar nichts mehr tut - der Chargen-
+// Review 08.09. hat genau diesen toten Test gefunden. An --file haengt
+// die Regel nicht, Full ist dort ausschliesslich Folge von --full.
+//
+// Die Datei muss nicht existieren: ParseArgs prueft das nicht (die
+// Existenzpruefung sitzt in Run, Zeile 1137), und SourceCount wird
+// genauso 1.
 const
-  QUELLE_A = '--path';
-  QUELLE_B = 'C:\nicht-vorhanden';
+  QUELLE_A = '--file';
+  QUELLE_B = 'C:\nicht-vorhanden\u.pas';
 
 procedure TTestConsoleParseArgs.BooleanSchalterMitWert_IstEinFehler;
 // DER Waechter des MAJOR vom 08.09.: die '='-Zerlegung laeuft ueber ALLE
@@ -80,6 +95,9 @@ procedure TTestConsoleParseArgs.BooleanSchalterOhneWert_Greift;
 // Gegenprobe: die normale Schreibweise muss unveraendert wirken. Ohne
 // diesen Test waere auch eine Aenderung gruen, die Boolean-Schalter
 // generell abwuergt.
+//
+// Traegt nur mit --file als Quelle - an --path haengt eine
+// Auto-Default-Regel fuer Full, siehe den Kommentar bei QUELLE_A.
 var
   A : TCliArgs;
 begin
@@ -88,6 +106,21 @@ begin
     'die normale Schreibweise darf keinen Fehler erzeugen');
   Assert.IsTrue(A.Full, '--full muss wirken');
   Assert.IsTrue(A.Quiet, '--quiet muss wirken');
+end;
+
+procedure TTestConsoleParseArgs.ZweiterBooleanSchalterMitWert_IstEinFehler;
+// Der Waechter darf nicht an --full haengen. Von den 21 Eintraegen in
+// CLI_SCHALTER_OHNE_WERT beruehrte bis 08.09. genau einer einen Test -
+// die Vollzaehligkeit der Liste haengt am Gate, ihre WIRKSAMKEIT muss
+// an mehr als einem Beispiel haengen.
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--quiet=0']);
+  Assert.IsTrue(A.ParseError <> '',
+    'auch --quiet nimmt keinen Wert');
+  Assert.IsFalse(A.Quiet,
+    '--quiet=0 darf --quiet nicht einschalten');
 end;
 
 procedure TTestConsoleParseArgs.WertSchalter_MitGleichheitszeichen;
@@ -124,6 +157,28 @@ begin
   Assert.AreEqual('', A.ParseError, 'kein Fehler erwartet');
   Assert.AreEqual('error', A.FailOn,
     '--fail-on=error muss weiter ankommen');
+end;
+
+procedure TTestConsoleParseArgs.FailOn_GrossgeschriebenKommtRohAn;
+// Die eigentliche Frage hinter dem entfernten Zweig, die der erste
+// Test NICHT beantwortet: der tote Zweig haette LowerCase angewandt,
+// bei 'error' ist das ein No-op. Erst ein grossgeschriebener Wert
+// zeigt, was das Entfernen wirklich bedeutet - der Wert kommt ROH an,
+// und die Normalisierung passiert stromabwaerts (Wertpruefung und
+// ApplyFailOnPolicy, beide LowerCase(Trim(...))).
+//
+// Dieser Test haelt damit die Zusage des Commits fest, dass nichts
+// verloren ging: verlaesst sich kuenftig jemand darauf, dass FailOn
+// schon kleingeschrieben ANKOMMT, wird er hier rot.
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--fail-on=ERROR']);
+  Assert.AreEqual('', A.ParseError, 'kein Fehler erwartet');
+  Assert.AreEqual('ERROR', A.FailOn, False,
+    'der Wert kommt roh an - kleingeschrieben wird er erst bei der '
+    + 'Auswertung. AreEqual steht hier bewusst case-SENSITIV, sonst '
+    + 'prueft der Fall gar nichts');
 end;
 
 initialization
