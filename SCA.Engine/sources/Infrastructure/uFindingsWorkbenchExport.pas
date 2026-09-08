@@ -1334,6 +1334,11 @@ begin
     SB.AppendLine('  var gespeichert = null;');
     SB.AppendLine('  try { gespeichert = localStorage.getItem(KEY); } '
       + 'catch (e) {}');
+    // Redundant, seit der Anti-Blitz-Block im <head> dasselbe tut -
+    // und bewusst stehengeblieben: er ist der Rueckfall, falls dort
+    // etwas scheitert, und idempotent (dasselbe Attribut, derselbe
+    // Wert). Wer ihn entfernt, muss den Head-Block als einzige Quelle
+    // pruefen. Denselben doppelten Boden fuehrt der V1-Report.
     SB.AppendLine('  if (THEMEN.indexOf(gespeichert) >= 0)');
     SB.AppendLine('    document.documentElement.setAttribute('
       + '"data-theme", gespeichert);');
@@ -1760,6 +1765,31 @@ begin
     SB.AppendLine('<title>' + TWorkbenchI18n.T(wtTitelFunde, ALang)
       + '</title>');
     SB.Append(SeiteStyle);
+    // Anti-Blitz: die gespeicherte Theme-Wahl muss VOR dem ersten Paint
+    // am <html>-Element stehen. Das grosse Skript am Body-Ende reicht
+    // NICHT - bis dahin hat der @media-Block laengst nach der
+    // SYSTEM-Praeferenz gemalt. Wer "light" oder "sepia" gewaehlt hat
+    // und ein dunkles OS fuehrt, sah den Bericht erst dunkel aufbauen
+    // und dann umkippen; mit "dark" auf hellem OS umgekehrt weiss.
+    //
+    // Je groesser der Bericht, desto laenger steht das falsche Thema:
+    // bei einem 60-MB-Export liegen Sekunden zwischen erstem Paint und
+    // dem Skript am Ende. Genau daran ist es aufgefallen.
+    //
+    // Der V1-Report hat diesen Block seit dem 19.08.; beim Bau der
+    // V2-Seite ist er nicht mitgewandert - dieselbe Gattung Fehler wie
+    // die geerbte OOM-Falle aus Charge 18, nur andersherum: hier wurde
+    // eine vorhandene LOESUNG nicht mitgenommen.
+    //
+    // Whitelist statt Blindanwendung, damit ein korrupter
+    // localStorage-Wert nicht als Attribut-Muell endet. Absichtlich
+    // winzig und try/catch-gekapselt: scheitert es, gilt wieder der
+    // bisherige Weg (Body-Skript + @media).
+    SB.AppendLine('<script>try{var t=localStorage.getItem('
+      + '"sca-v2-theme");');
+    SB.AppendLine('if(["light","dark","sepia"].indexOf(t)>=0)');
+    SB.AppendLine('document.documentElement.setAttribute('
+      + '"data-theme",t);}catch(e){}</script>');
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');
     SB.AppendLine('<header class="kopf">');
