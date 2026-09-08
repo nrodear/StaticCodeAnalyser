@@ -480,6 +480,21 @@ begin
     // Hover und Auswahl liegen auf dem TBODY, damit Haupt- und
     // Datei-Zeile eines Fundes als EIN Block wirken.
     SB.AppendLine('#funde tbody:hover tr{background:#f2f6fb;}');
+    // Weiche Uebergaenge auf Hover, Chips und Top-Listen (UI-Konzept:
+    // 150-200 ms). Bisher hatte nur der Inspector einen - alles
+    // andere sprang hart um. NICHT auf border-left animieren: der
+    // Auswahl-Rail soll SOFORT da sein (Akzeptanzkriterium "innerhalb
+    // von ca. 100 ms eindeutig erkennbar").
+    SB.AppendLine('#funde tbody tr{transition:background 150ms ease;}');
+    SB.AppendLine('button.fchip{transition:background 150ms ease,'
+      + 'border-color 150ms ease,color 150ms ease;}');
+    SB.AppendLine('.topliste li{transition:background 150ms ease;}');
+    SB.AppendLine('button.copy,#btnTheme,#btnSec{'
+      + 'transition:background 150ms ease;}');
+    // Reduzierte Bewegung: ALLE Uebergaenge aus, nicht nur der
+    // Inspector (die engere Regel weiter unten bleibt als Doku).
+    SB.AppendLine('@media (prefers-reduced-motion:reduce){'
+      + '*{transition:none !important;}}');
     SB.AppendLine('#funde tbody.gewaehlt tr{background:#eaf1fa;}');
     // Der Rail sitzt als border-left an der Hauptzeile - anders als
     // ein box-shadow verschiebt er nichts und bleibt beim Scrollen
