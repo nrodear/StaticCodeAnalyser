@@ -77,11 +77,16 @@ type
 
     // ---- Querschnitts-Helfer (public weil uExportHtml sie braucht) ----
 
-    // Speichert eine TStringList als UTF-8 MIT BOM (EF BB BF) - fuer
-    // CSV und HTML. Umgesetzt ueber SL.WriteBOM := True; die frueher
-    // hier beschriebene eigene TUTF8Encoding-Instanz gibt es seit dem
-    // Umbau nicht mehr, und ihre Begruendung ("TEncoding.UTF8 hat
+    // Speichert eine TStringList als UTF-8 MIT BOM (EF BB BF).
+    // Umgesetzt ueber SL.WriteBOM := True; die frueher hier
+    // beschriebene eigene TUTF8Encoding-Instanz gibt es seit dem Umbau
+    // nicht mehr, und ihre Begruendung ("TEncoding.UTF8 hat
     // FUseBOM=False") war ausserdem falsch - siehe Unit-Kopf.
+    //
+    // EINZIGER Aufrufer ist seit 08.09. der Detektor-Katalog
+    // (uDetectorInfoExport). CSV und HTML gehen ueber
+    // SaveBuilderUtf8 - hier stand faelschlich weiter "fuer CSV und
+    // HTML".
     class procedure SaveUtf8WithBom(SL: TStringList;
       const FileName: string); static;
     // Schreibt einen TStringBuilder stueckweise als UTF-8 auf Platte.
@@ -166,6 +171,18 @@ begin
                             '\', '/', [rfReplaceAll]);
 end;
 
+// noinspection BooleanParam
+// AMitBom IST die BOM-Politik, nicht ein Schalter davor. Ein
+// Methodenpaar wuerde entweder die Stueckelung samt Surrogat-
+// Behandlung verdoppeln oder einen privaten Kern brauchen, der
+// denselben Parameter traegt - beides schlechter als die eine Zeile
+// hier. Dieselbe Abwaegung fuehrt uExportSonarGeneric mit demselben
+// Marker.
+//
+// Der Marker steht VOR der Signatur, nicht im Kommentarblock darunter:
+// gemessen (Selbstscan 08.09.) haengt der Fund an der Signaturzeile,
+// und ein Marker dahinter unterdrueckt nichts - er wird dann selbst
+// zum Fund (SCA165).
 class procedure TExporter.SaveBuilderUtf8(ABuilder: TStringBuilder;
   const FileName: string; AMitBom: Boolean);
 // Begruendung und Surrogat-Falle stehen an der Deklaration.
@@ -177,7 +194,19 @@ var
   Start, Len, Total : Integer;
   Part              : string;
 begin
-  Total  := ABuilder.Length;
+  // nil-Builder: wie ein LEERER Builder behandeln, nicht mit einer AV
+  // quittieren. Dieselbe Zusage, mit der der Sonar-Writer am 08.09.
+  // seinen nil-Guard bekommen hat - eine public Methode der
+  // Ausgabeschicht stirbt nicht an einer leeren Eingabe.
+  //
+  // Bewusst KEIN frueher Exit: sonst bekaeme die nil-Datei kein BOM,
+  // waehrend die Datei aus einem leeren Builder eines traegt. Zwei
+  // Leerfaelle mit verschiedenen Bytes waeren eine Falle fuer den
+  // naechsten Vergleich.
+  if Assigned(ABuilder) then
+    Total := ABuilder.Length
+  else
+    Total := 0;
   Stream := TFileStream.Create(FileName, fmCreate);
   try
     if AMitBom then

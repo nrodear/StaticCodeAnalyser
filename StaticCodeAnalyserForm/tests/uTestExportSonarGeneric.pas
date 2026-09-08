@@ -78,13 +78,18 @@ procedure TTestExportSonarGeneric.NilFindings_ProducesValidEmptyReport;
 // sonst auch ein bestandener Test.
 var
   Json : string;
+  Wert : TJSONValue;
   Root : TJSONObject;
 begin
   Json := TSonarGenericWriter.ToJsonString(nil, '');
-  Root := TJSONObject.ParseJSONValue(Json) as TJSONObject;
-  Assert.IsNotNull(Root, 'nil-Liste muss gueltiges JSON liefern, nicht '
+  // Erst parsen, dann casten - und beides INNERHALB des try. Stuende
+  // der as-Cast davor, wuerde er bei einem anderen Werttyp werfen und
+  // den geparsten Baum leaken (Chargen-Review 08.09.).
+  Wert := TJSONObject.ParseJSONValue(Json);
+  Assert.IsNotNull(Wert, 'nil-Liste muss gueltiges JSON liefern, nicht '
     + 'einen leeren oder abgeschnittenen Text');
   try
+    Root := Wert as TJSONObject;
     Assert.IsNotNull(Root.GetValue<TJSONArray>('rules'),
       'das rules-Array gehoert auch in den leeren Report');
     Assert.IsNotNull(Root.GetValue<TJSONArray>('issues'),
@@ -92,7 +97,11 @@ begin
     Assert.AreEqual<Integer>(0, Root.GetValue<TJSONArray>('rules').Count);
     Assert.AreEqual<Integer>(0, Root.GetValue<TJSONArray>('issues').Count);
   finally
-    Root.Free;
+    // Wert, nicht Root: Root ist nur die getypte Sicht auf dasselbe
+    // Objekt, und waere der Cast oben geflogen, haette Root nie einen
+    // definierten Inhalt bekommen - lokale Objektvariablen sind in
+    // Delphi nicht vorbelegt.
+    Wert.Free;
   end;
 end;
 

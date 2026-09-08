@@ -457,6 +457,10 @@ var
   RuleID : string;
   First  : Boolean;
 begin
+  // Lokaler nil-Guard, obwohl EmitReport schon einen hat: die Zusage
+  // "eine nil-Liste ist ein leerer Report, keine AV" soll hier gelten
+  // und nicht an genau einem Aufrufer haengen (Chargen-Review 08.09.).
+  if not Assigned(AFindings) then Exit;
   Seen  := TDictionary<string, Boolean>.Create;
   First := True;
   try
@@ -499,6 +503,9 @@ var
 begin
   Result := 0;
   First  := True;
+  // s. EmitRules - der Guard steht auch hier lokal, damit die Zusage
+  // nicht am Aufrufer haengt.
+  if not Assigned(AFindings) then Exit;
   for F in AFindings do
   begin
     if F.Kind = fkFileReadError then Continue;

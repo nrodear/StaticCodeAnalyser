@@ -13,8 +13,12 @@
 // in seinen uses braucht.
 //
 // HTML-spezifische Helper: BuildCodeSnippet liegt privat in dieser
-// Unit, HtmlEscape ist public (geteilt mit uDetectorInfoExport). Querschnittsfunktionen (KindToName, SaveUtf8WithBom,
-// SameSourceFile) kommen via uExport.
+// Unit, HtmlEscape ist public (geteilt mit uDetectorInfoExport).
+// Querschnittsfunktionen (KindToName, SameSourceFile, JsonEscape und
+// der Stromschreiber SaveBuilderUtf8) kommen via uExport.
+// SaveUtf8WithBom stand hier bis 08.09. in der Liste, wird von dieser
+// Unit aber nirgends gerufen - der HTML-Report geht seit dem
+// OOM-Umbau ueber den Builder.
 
 interface
 
@@ -168,7 +172,16 @@ begin
   if SourceFile = '' then
     Base := 'analyse'
   else
-    Base := ChangeFileExt(ExtractFileName(SourceFile), '');
+    // Auch der Basisname geht durch den Sanitizer, nicht nur der
+    // Zeitstempel: ExtractFileName schneidet unter Windows nur an '\'
+    // und ':' ab, ein uebergebenes 'src/uFoo.pas' behaelt seinen
+    // Vorwaerts-Schraegstrich - und der stuende dann MITTEN im
+    // Dateinamen. Heute erreicht kein Produktionsaufrufer das (die
+    // Engine liefert Backslash-Pfade, uExportMenu uebergibt ''), aber
+    // die Methode ist public und ein Test uebergibt sehr wohl einen
+    // Pfad (Chargen-Review 08.09.).
+    Base := DateinamenTauglich(
+              ChangeFileExt(ExtractFileName(SourceFile), ''));
   DateStr := DateinamenTauglich(ReportTimestamp('yyyy-mm-dd'));
   if TargetDir <> '' then
     Result := IncludeTrailingPathDelimiter(TargetDir) +

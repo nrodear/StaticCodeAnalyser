@@ -613,6 +613,13 @@ begin
   Assert.IsTrue(Pos('koepfe[k].setAttribute("aria-sort", '
     + 'auf ? "ascending" : "descending");', FHtml) > 0,
     'aria-sort wird beim Sortieren nicht gesetzt');
+  // Die zweite Haelfte, die hier bis 08.09. fehlte: ohne das Entfernen
+  // an der vorher aktiven Spalte truege der Screenreader nach dem
+  // dritten Klick drei sortierte Spalten vor. Die Schwester-Fixture
+  // uTestFindingsWorkbenchExport prueft beide Haelften; hier stand nur
+  // eine (Chargen-Review 08.09.).
+  Assert.IsTrue(Pos('koepfe[k].removeAttribute("aria-sort");', FHtml) > 0,
+    'aria-sort wird an der vorher aktiven Spalte nicht entfernt');
   // Review 07.09. (Bestandsfix): Enter auf Buttons darf nicht vom
   // Zeilen-Navigator geschluckt werden, Enter auf einer fokussierten
   // Zeile oeffnet DIESE Zeile.
