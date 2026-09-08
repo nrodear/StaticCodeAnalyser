@@ -417,6 +417,28 @@ class function TExporter.SameSourceFile(const A, B: string): Boolean;
 //
 // Fehlt einer Seite der Verzeichnisanteil ganz, bleibt es beim
 // Basisnamen - mehr Information liegt dann schlicht nicht vor.
+
+  // NICHT ExtractFileName verwenden. Es schneidet unter Windows nur an
+  // '\' und ':' ab (System.SysUtils: LastDelimiter([PathDelim,
+  // DriveDelim]), PathDelim = '\'), der Vorwaerts-Schraegstrich ist dort
+  // KEIN Trenner. Auf dem oben zu '/' normalisierten Pfad findet es also
+  // nichts mehr und liefert aus 'D:/a/uMain.pas' ein '/a/uMain.pas' -
+  // der Basisnamen-Vergleich waere damit immer falsch.
+  //
+  // Genau daran ist der erste Anlauf dieses Umbaus gescheitert, und die
+  // Python-Nachbildung hat es VERDECKT: dort kennt split('/') den
+  // Trenner sehr wohl. Eine Nachbildung muss die Pfad-Semantik der
+  // Zielsprache nachbilden, nicht die der eigenen.
+  function Basisname(const S: string): string;
+  var
+    i : Integer;
+  begin
+    for i := Length(S) downto 1 do
+      if CharInSet(S[i], ['/', ':']) then
+        Exit(Copy(S, i + 1, MaxInt));
+    Result := S;
+  end;
+
 var
   NA, NB, Kurz, Lang : string;
 begin
@@ -427,7 +449,7 @@ begin
   NB := StringReplace(B, '\', '/', [rfReplaceAll]);
 
   if (Pos('/', NA) = 0) or (Pos('/', NB) = 0) then
-    Exit(SameText(ExtractFileName(NA), ExtractFileName(NB)));
+    Exit(SameText(Basisname(NA), Basisname(NB)));
 
   if Length(NA) < Length(NB) then
   begin

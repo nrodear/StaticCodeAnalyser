@@ -35,6 +35,8 @@ type
     [Test] procedure SameSourceFile_TrenntGleichnamigeAusAnderenOrdnern;
     [Test] procedure SameSourceFile_AbsoluterPfadGegenRelativenTail;
     [Test] procedure SameSourceFile_SuffixNurAnDerTrennergrenze;
+    // Die ExtractFileName-Falle im Fix selbst (Chargen-Review 08.09.).
+    [Test] procedure SameSourceFile_BasisnameOhneExtractFileName;
     // Die BOM-Politik, an der die CI haengt - beide Speicherwege.
     [Test] procedure SaveBuilderUtf8_OhneBom_SchreibtKeinePraeambel;
     [Test] procedure SaveBuilderUtf8_MitBom_SchreibtPraeambel;
@@ -167,6 +169,25 @@ begin
   Assert.IsTrue(TExporter.SameSourceFile('D:\proj\src\uMain.pas',
     'src\uMain.pas'),
     'der relative Pfad ist ein echtes Suffix des absoluten');
+end;
+
+procedure TTestExport.SameSourceFile_BasisnameOhneExtractFileName;
+// Waechter des BLOCKERs, den der Chargen-Review am 08.09. im FIX selbst
+// gefunden hat: die Funktion normalisiert alle Trenner zu '/' und zog
+// den Basisnamen danach mit ExtractFileName. Das schneidet unter
+// Windows aber nur an '\' und ':' ab (System.SysUtils:
+// LastDelimiter([PathDelim, DriveDelim])) - auf dem normalisierten Pfad
+// findet es nichts und liefert aus 'src/uMain.pas' wieder
+// 'src/uMain.pas'. Der Fallback-Zweig war damit immer falsch.
+//
+// Dieser Fall trifft den Zweig direkt: eine Seite MIT Ordner, die
+// andere OHNE - so kommt es nur zum Basisnamen-Vergleich.
+begin
+  Assert.IsTrue(TExporter.SameSourceFile('src\uMain.pas', 'uMain.pas'),
+    'ein Pfad mit Ordner gegen den blossen Dateinamen muss greifen - '
+    + 'mit ExtractFileName auf dem /-normalisierten Pfad war das False');
+  Assert.IsTrue(TExporter.SameSourceFile('src/uMain.pas', 'uMain.pas'),
+    'dasselbe mit Forward Slash in der Eingabe');
 end;
 
 procedure TTestExport.SameSourceFile_SuffixNurAnDerTrennergrenze;
