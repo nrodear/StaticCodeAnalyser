@@ -42,7 +42,7 @@ type
     wtAlleDateien, wtAlleRegeln,
     wtTopRegeln, wtTopDateien, wtHealthGruen, wtHealthGelb,
     wtHealthRot, wtHealthFormel, wtSecurityTitel, wtSecurityText,
-    wtSecurityZeigen,
+    wtSecurityZeigen, wtFixMuster,
     // -- Schweregrad / Konfidenz / Profil ------------------------------
     wtSevFehler, wtSevWarnung, wtSevHinweis, wtLesefehler,
     wtKonfNiedrig, wtKonfMittel, wtKonfHoch, wtProfilAn, wtProfilAus,
@@ -60,7 +60,7 @@ type
     wtWarumRelevant, wtHinweisZuFund, wtVorher, wtNachher, wtKopieren,
     wtKopiert, wtUnterdruecken, wtUnterdrueckenText, wtKalibrierung,
     wtKalibrierungText, wtKeineKalibrierung, wtKonfidenzLabel,
-    wtProfilLabel, wtRegelDefault, wtDetektorUnit, wtTagsLabel,
+    wtProfilLabel, wtDetektorUnit, wtTagsLabel,
     // -- Rollenblock (nur Katalogseite) ---------------------------------
     wtRollenTitel, wtRolleDev, wtRolleDevText, wtRolleQa, wtRolleQaText,
     wtRolleOwner, wtRolleOwnerText,
@@ -150,6 +150,7 @@ const
      'R&egrave;gles Vulnerability et Security Hotspot r&eacute;unies.'),
     ('Nur diese zeigen', 'Show only these',
      'N''afficher que ceux-ci'),
+    ('Fix-Muster', 'Fix pattern', 'Mod&egrave;le de correction'),
     // ---- Schweregrad / Konfidenz / Profil ------------------------------
     ('Fehler', 'Error', 'Erreur'),
     ('Warnung', 'Warning', 'Avertissement'),
@@ -229,8 +230,6 @@ const
     ('Konfidenz %s', 'Confidence %s', 'Confiance %s'),
     ('Default-Profil %s', 'Default profile %s',
      'Profil par d&eacute;faut %s'),
-    ('Regel-Default %s', 'Rule default %s',
-     'Valeur par d&eacute;faut %s'),
     ('Detektor-Unit', 'Detector unit', 'Unit&eacute; du d&eacute;tecteur'),
     ('Tags', 'Tags', 'Tags'),
     // ---- Rollenblock -------------------------------------------------------
