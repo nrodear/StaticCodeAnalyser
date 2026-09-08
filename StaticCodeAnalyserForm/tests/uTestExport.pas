@@ -16,9 +16,9 @@ unit uTestExport;
 interface
 
 uses
-  System.SysUtils, System.Classes,
+  System.SysUtils, System.Classes, System.Generics.Collections,
   DUnitX.TestFramework,
-  uSCAConsts;
+  uSCAConsts, uMethodd12;
 
 type
   [TestFixture]
@@ -41,6 +41,11 @@ type
     [Test] procedure SaveBuilderUtf8_OhneBom_SchreibtKeinePraeambel;
     [Test] procedure SaveBuilderUtf8_MitBom_SchreibtPraeambel;
     [Test] procedure SaveUtf8WithBom_SchreibtPraeambel;
+
+    // Die beiden Writer als GANZES - Praeambel UND Inhalt.
+    [Test] procedure ExportCsv_MitBomUndForwardSlashes;
+    [Test] procedure ExportJson_OhneBomUndForwardSlashes;
+    [Test] procedure ExportCsvUndJson_VertragenNil;
   end;
 
 implementation
@@ -302,6 +307,152 @@ begin
   Assert.IsTrue(HatUtf8Praeambel(Bytes),
     'der Listen-Weg muss weiter ein BOM schreiben - der Detektor-'
     + 'Katalog haengt daran');
+end;
+
+// Eine Fundliste mit genau einem Fund unterhalb von 'D:\proj'.
+// Ownership: der Aufrufer gibt die Liste frei, sie besitzt den Fund.
+function EineFundliste: TObjectList<TLeakFinding>;
+var
+  F : TLeakFinding;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+  F := TLeakFinding.Create;
+  F.SetKind(fkMemoryLeak);
+  F.FileName   := 'D:\proj\src\uMain.pas';
+  F.MethodName := 'TFoo.Bar';
+  F.LineNumber := '42';
+  F.MissingVar := 'list';
+  Result.Add(F);
+end;
+
+// Schreibt ueber ASchreiber in eine eigene Temp-Datei und liefert den
+// kompletten Inhalt als Bytes zurueck. Eigener Dateiname je Aufruf statt
+// eines festen - so koennen sich zwei Tests nie in die Quere kommen.
+function ExportBytes(const AEndung: string;
+  ASchreiber: TProc<TObjectList<TLeakFinding>, string>;
+  AFindings: TObjectList<TLeakFinding>): TBytes;
+var
+  Ziel : string;
+begin
+  Ziel := TPath.Combine(TPath.GetTempPath,
+    'sca_' + TPath.GetGUIDFileName(False) + AEndung);
+  try
+    ASchreiber(AFindings, Ziel);
+    Result := TFile.ReadAllBytes(Ziel);
+  finally
+    if TFile.Exists(Ziel) then
+      TFile.Delete(Ziel);
+  end;
+end;
+
+// Der Textteil einer Ausgabe ohne die UTF-8-Praeambel.
+function TextOhnePraeambel(const ABytes: TBytes): string;
+begin
+  if HatUtf8Praeambel(ABytes) then
+    Result := TEncoding.UTF8.GetString(ABytes, 3, Length(ABytes) - 3)
+  else
+    Result := TEncoding.UTF8.GetString(ABytes);
+end;
+
+procedure TTestExport.ExportCsv_MitBomUndForwardSlashes;
+// Der Writer als GANZES. Bis 08.09. gab es fuer ExportCsv und
+// ExportJson keinen einzigen Test - geprueft waren nur die Helfer eine
+// Ebene tiefer. Damit waere ein vertauschtes Flag
+// (SaveBuilderUtf8(..., False) fuer CSV) durchgegangen, obwohl alle
+// drei BOM-Tests gruen bleiben. Genau davor soll die Politik schuetzen.
+//
+// Zweiter Zweck: hier zeigt sich, ob der BLOCKER-Fix in
+// RelativeDisplayPath beim KONSUMENTEN ankommt. Der bisherige Test
+// prueft nur den Helfer - dass ExportCsv ihn mit dem BaseDir auch
+// fuettert, stand nirgends.
+var
+  L : TObjectList<TLeakFinding>;
+  B : TBytes;
+  T : string;
+begin
+  L := EineFundliste;
+  try
+    B := ExportBytes('.csv',
+      procedure(AL: TObjectList<TLeakFinding>; AZiel: string)
+      begin
+        TExporter.ExportCsv(AL, AZiel, 'D:\proj');
+      end, L);
+  finally
+    L.Free;
+  end;
+
+  Assert.IsTrue(HatUtf8Praeambel(B),
+    'die CSV braucht das BOM - deutsches Excel erkennt UTF-8 nur daran');
+  T := TextOhnePraeambel(B);
+  Assert.IsTrue(T.StartsWith('File;Method;Line;Kind;Severity;Detail'),
+    'die Kopfzeile ist ein Vertrag nach aussen: ' + Copy(T, 1, 60));
+  Assert.IsTrue(T.Contains('src/uMain.pas'),
+    'der Pfad muss RELATIV und mit Forward Slashes stehen - genau das '
+    + 'war der BLOCKER: ' + Copy(T, 1, 200));
+  Assert.AreEqual<Integer>(0, Pos('src\uMain.pas', T),
+    'kein Windows-Trenner im Relativpfad');
+end;
+
+procedure TTestExport.ExportJson_OhneBomUndForwardSlashes;
+// Die Gegenrichtung: JSON darf KEINE Praeambel tragen, und derselbe
+// Pfad muss auch hier relativ mit Forward Slashes stehen. Erst das Paar
+// haelt fest, dass die beiden Writer unterschiedlich flaggen - ein
+// einzelner Test waere auch dann gruen, wenn beide dasselbe taeten.
+var
+  L : TObjectList<TLeakFinding>;
+  B : TBytes;
+  T : string;
+begin
+  L := EineFundliste;
+  try
+    B := ExportBytes('.json',
+      procedure(AL: TObjectList<TLeakFinding>; AZiel: string)
+      begin
+        TExporter.ExportJson(AL, AZiel, 'D:\proj');
+      end, L);
+  finally
+    L.Free;
+  end;
+
+  Assert.IsFalse(HatUtf8Praeambel(B),
+    'die JSON-Ausgabe traegt eine BOM-Praeambel - RFC 8259 par.8.1 '
+    + 'verbietet sie, und Nodes JSON.parse scheitert daran');
+  T := TextOhnePraeambel(B);
+  Assert.IsTrue(T.Contains('"file": "src/uMain.pas"'),
+    'Pfad relativ mit Forward Slashes im file-Feld: ' + Copy(T, 1, 200));
+  Assert.IsTrue(T.Contains('"line": 42'),
+    'die Zeilennummer geht als ZAHL raus, nicht als Zeichenkette');
+  Assert.IsTrue(T.TrimRight.EndsWith(']'),
+    'das Array muss geschlossen sein - ein abgebrochener Schreibvorgang '
+    + 'faellt sonst nicht auf');
+end;
+
+procedure TTestExport.ExportCsvUndJson_VertragenNil;
+// Beide Writer pruefen auf nil (Assigned(Findings)). Der Sonar-Writer
+// tat das bis 08.09. NICHT und lief in eine AV - dieselbe Zusage
+// gehoert hier festgehalten, sonst faellt sie beim naechsten Umbau
+// still um. Erwartet wird eine gueltige, leere Ausgabe.
+var
+  B : TBytes;
+  T : string;
+begin
+  B := ExportBytes('.csv',
+    procedure(AL: TObjectList<TLeakFinding>; AZiel: string)
+    begin
+      TExporter.ExportCsv(AL, AZiel, '');
+    end, nil);
+  T := TextOhnePraeambel(B);
+  Assert.IsTrue(T.StartsWith('File;Method;Line;Kind;Severity;Detail'),
+    'die CSV behaelt ihre Kopfzeile auch ohne Funde');
+
+  B := ExportBytes('.json',
+    procedure(AL: TObjectList<TLeakFinding>; AZiel: string)
+    begin
+      TExporter.ExportJson(AL, AZiel, '');
+    end, nil);
+  T := TextOhnePraeambel(B).Trim;
+  Assert.IsTrue(T.StartsWith('[') and T.EndsWith(']'),
+    'JSON bleibt ein gueltiges, leeres Array: ' + T);
 end;
 
 initialization
