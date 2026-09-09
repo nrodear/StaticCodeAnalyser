@@ -118,6 +118,7 @@ type
     Snippet : TArray<string>;
   end;
 
+
   // Alles, was je REGEL gleich ist - steht einmal statt je Fund.
   //
   // Der FixHint gehoert AUSDRUECKLICH NICHT hierher: TFixHintResolver
@@ -132,6 +133,21 @@ type
     TypText : string;
     Erkannt : string;
     Warum   : string;
+  end;
+
+  // Die vier Tabellen des Datenmodells als EIN Buendel. Sie gehoeren
+  // zusammen - jede fuer sich ist wertlos, weil die Fundzeilen per
+  // Index in die anderen drei verweisen. Als Record statt als vier
+  // Parameter, weil SammleDaten damit auf fuenf Parameter kommt statt
+  // auf acht (SCA013).
+  //
+  // OWNERSHIP: der Erzeuger der Listen gibt sie frei. Der Record haelt
+  // nur Referenzen und raeumt NICHTS auf.
+  TV3Modell = record
+    Regeln   : TList<TV3Regel>;
+    Pfade    : TList<string>;
+    Hinweise : TList<string>;
+    Funde    : TList<TV3Fund>;
   end;
 
 { ---- kleine Helfer -------------------------------------------------- }
@@ -219,29 +235,41 @@ begin
     Result := Ord(F.Severity);
 end;
 
-function SevTextVon(F: TLeakFinding; const ALang: string): string;
-begin
-  if F.Kind = fkFileReadError then
-    Exit(TWorkbenchI18n.T(wtLesefehler, ALang));
-  case F.Severity of
-    lsError   : Result := TWorkbenchI18n.T(wtSevFehler, ALang);
-    lsWarning : Result := TWorkbenchI18n.T(wtSevWarnung, ALang);
-  else
-    Result := TWorkbenchI18n.T(wtSevHinweis, ALang);
-  end;
-end;
-
-function KonfTextVon(C: TFindingConfidence; const ALang: string): string;
-begin
-  case C of
-    fcLow    : Result := TWorkbenchI18n.T(wtKonfNiedrig, ALang);
-    fcMedium : Result := TWorkbenchI18n.T(wtKonfMittel, ALang);
-  else
-    Result := TWorkbenchI18n.T(wtKonfHoch, ALang);
-  end;
-end;
+// Hier standen bis zum Chargen-Review 09.09. zwei Funktionen
+// SevTextVon und KonfTextVon, die die Schweregrad- und
+// Konfidenz-Woerter je Fund geliefert haetten. Sie hatten nie einen
+// Aufrufer: die Seite bekommt beide Wortlisten EINMAL als JS-Arrays
+// (TSEV, TKONF) und schlaegt darin nach. Der eigene Detektor hat sie
+// als SCA164 gemeldet.
 
 { ---- Quelltext-Ausschnitt ------------------------------------------- }
+
+function GemeinsamerEinzug(const AZeilen: TArray<string>): Integer;
+// Die kleinste Zahl fuehrender LEERZEICHEN ueber alle nicht-leeren
+// Zeilen. Bei tief verschachteltem Code sind das je Zeile ein Dutzend,
+// die sich sonst ueber alle Funde summieren; die Seite legt sie beim
+// Rendern wieder an.
+//
+// Nur nicht-leere Zeilen zaehlen - eine Leerzeile haette das Ergebnis
+// immer auf 0 gezogen. Nur LEERZEICHEN, keine Tabs: bei gemischter
+// Einrueckung kommt so 0 heraus, und dann wird eben nichts abgezogen.
+// Das ist die sichere Richtung - ein zu grosser Abzug wuerde Code
+// abschneiden.
+var
+  i, E : Integer;
+begin
+  Result := MaxInt;
+  for i := 0 to High(AZeilen) do
+    if Trim(AZeilen[i]) <> '' then
+    begin
+      E := 0;
+      while (E < Length(AZeilen[i])) and (AZeilen[i][E + 1] = ' ') do
+        Inc(E);
+      Result := Min(Result, E);
+    end;
+  if Result = MaxInt then
+    Result := 0;
+end;
 
 function SnippetZeilen(ACache: TObjectDictionary<string, TStringList>;
   const ADatei: string; AZeile: Integer;
@@ -262,7 +290,7 @@ function SnippetZeilen(ACache: TObjectDictionary<string, TStringList>;
 // Rendern wieder an.
 var
   Lines   : TStringList;
-  Von, Bis, i, E : Integer;
+  Von, Bis, i : Integer;
   Roh     : TArray<string>;
 begin
   Result  := nil;
@@ -282,7 +310,11 @@ begin
         // und nie wieder versuchen.
         FreeAndNil(Lines);
       end;
-    ACache.Add(ADatei, Lines);
+    // AddOrSetValue wie in V2s QuellAusschnitt: Add wuerde bei einem
+    // schon belegten Schluessel werfen. Hier kann das nach dem
+    // TryGetValue davor nicht passieren - die Abweichung vom
+    // Schwestermuster hatte aber auch keinen Grund.
+    ACache.AddOrSetValue(ADatei, Lines);
   end;
   if Lines = nil then Exit;
 
@@ -294,20 +326,7 @@ begin
   for i := Von to Bis do
     Roh[i - Von] := Lines[i - 1];
 
-  // Gemeinsamer Einzug nur ueber die NICHT leeren Zeilen - eine
-  // Leerzeile haette ihn sonst immer auf 0 gezogen.
-  AEinzug := MaxInt;
-  for i := 0 to High(Roh) do
-    if Trim(Roh[i]) <> '' then
-    begin
-      E := 0;
-      while (E < Length(Roh[i])) and (Roh[i][E + 1] = ' ') do
-        Inc(E);
-      AEinzug := Min(AEinzug, E);
-    end;
-  if AEinzug = MaxInt then
-    AEinzug := 0;
-
+  AEinzug := GemeinsamerEinzug(Roh);
   for i := 0 to High(Roh) do
     if Trim(Roh[i]) = '' then
       Roh[i] := ''
@@ -421,6 +440,9 @@ begin
     // ---- Filterzustand -----------------------------------------------
     SB.AppendLine('var fTyp={},fSev={},fKonf={},sortSp=4,sortAuf=true;');
     SB.AppendLine('var sicht=[];');
+    // Index des gewaehlten Fundes (nicht der Zeile!) oder -1. Muss den
+    // Neuaufbau der Liste ueberleben - s. zeile().
+    SB.AppendLine('var gewaehlt=-1;');
     SB.AppendLine('var wrap=document.getElementById("v3wrap");');
     SB.AppendLine('var rows=document.getElementById("v3rows");');
     SB.AppendLine('var spacer=document.getElementById("v3spacer");');
@@ -504,7 +526,15 @@ begin
     SB.AppendLine('  var f=F[i],r=R[f[RI]],p=P[f[PI]];');
     SB.AppendLine('  var dz=esc(basis(p));');
     SB.AppendLine('  if(basis(p)!==p)dz+="; "+esc(p);');
-    SB.AppendLine('  return "<div class=''v3-zeile'' data-i=''"+i'
+    // Die Auswahl kommt aus dem ZUSTAND, nicht aus dem DOM: zeichnen()
+    // baut rows.innerHTML bei JEDEM Scrollschritt neu, eine nur am
+    // Element gesetzte Klasse waere nach einem Mausrad-Tick weg -
+    // waehrend der Drawer weiter denselben Fund zeigt (Chargen-Review
+    // 09.09., MAJOR). Dasselbe gilt fuer den Tastaturfokus, den der
+    // Neuaufbau ebenfalls verliert; deshalb bekommt die gewaehlte
+    // Zeile ihn zurueck (s. zeichnen).
+    SB.AppendLine('  var kl="v3-zeile"+(i===gewaehlt?" gewaehlt":"");');
+    SB.AppendLine('  return "<div class=''"+kl+"'' data-i=''"+i'
       + '+"'' tabindex=''0''>"');
     SB.AppendLine('    +"<div class=''v3-num''>"+f[Z]+"</div>"');
     SB.AppendLine('    +"<div><div class=''zl-methode''>"+esc(f[ME])'
@@ -571,20 +601,29 @@ begin
     SB.AppendLine('  dinhalt.innerHTML=h;');
     SB.AppendLine('  drawer.hidden=false;');
     SB.AppendLine('}');
+    SB.AppendLine('function waehle(i){');
+    SB.AppendLine('  var vor=rows.querySelector(".v3-zeile.gewaehlt");');
+    SB.AppendLine('  if(vor)vor.classList.remove("gewaehlt");');
+    SB.AppendLine('  gewaehlt=i;');
+    SB.AppendLine('  var neu=rows.querySelector('
+      + '"[data-i=''"+i+"'']");');
+    SB.AppendLine('  if(neu)neu.classList.add("gewaehlt");');
+    SB.AppendLine('  oeffne(i);');
+    SB.AppendLine('}');
     SB.AppendLine('rows.addEventListener("click",function(ev){');
     SB.AppendLine('  var z=ev.target.closest(".v3-zeile");');
     SB.AppendLine('  if(!z)return;');
-    SB.AppendLine('  var vor=rows.querySelector(".v3-zeile.gewaehlt");');
-    SB.AppendLine('  if(vor)vor.classList.remove("gewaehlt");');
-    SB.AppendLine('  z.classList.add("gewaehlt");');
-    SB.AppendLine('  oeffne(parseInt(z.getAttribute("data-i"),10));');
+    SB.AppendLine('  waehle(parseInt(z.getAttribute("data-i"),10));');
     SB.AppendLine('});');
     SB.AppendLine('rows.addEventListener("keydown",function(ev){');
     SB.AppendLine('  if(ev.key!=="Enter"&&ev.key!==" ")return;');
     SB.AppendLine('  var z=ev.target.closest(".v3-zeile");');
     SB.AppendLine('  if(!z)return;');
     SB.AppendLine('  ev.preventDefault();');
-    SB.AppendLine('  oeffne(parseInt(z.getAttribute("data-i"),10));');
+    // waehle statt oeffne: die Tastatur soll dieselbe Markierung
+    // setzen wie der Klick, sonst zeigt der Drawer einen Fund, den die
+    // Liste nicht hervorhebt.
+    SB.AppendLine('  waehle(parseInt(z.getAttribute("data-i"),10));');
     SB.AppendLine('});');
     SB.AppendLine('document.getElementById("drawer-schliessen")'
       + '.addEventListener("click",function(){drawer.hidden=true;});');
@@ -793,6 +832,188 @@ begin
   end;
 end;
 
+{ ---- Sammeln -------------------------------------------------------- }
+
+procedure SammleDaten(AFindings: TObjectList<TLeakFinding>;
+  const ABaseDir, ALang: string; AMaxRows: Integer;
+  const AModell: TV3Modell);
+// Fuellt die drei Nachschlagetabellen und die Fundliste.
+//
+// Eigene Routine seit dem Chargen-Review 09.09.: BauePage machte
+// vorher dreierlei und kam auf 308 Zeilen mit kognitiver Komplexitaet
+// 29. Sammeln, Serialisieren und das HTML-Geruest sind drei
+// Verantwortungen; hier ist die erste.
+//
+// Die drei Index-Woerterbuecher leben NUR hier - ausserhalb braucht sie
+// niemand, und der Aufrufer muss sie deshalb weder anlegen noch
+// freigeben.
+//
+// AMaxRows deckelt die Fundzahl (0 = unbegrenzt). Die Tabellen wachsen
+// nur mit den Funden, die es auch in die Liste schaffen.
+var
+  RegelIx    : TDictionary<string, Integer>;
+  PfadIx     : TDictionary<string, Integer>;
+  HinweisIx  : TDictionary<string, Integer>;
+  QuellCache : TObjectDictionary<string, TStringList>;
+  F          : TLeakFinding;
+  Meta       : TRuleMeta;
+  V          : TV3Fund;
+  Pfad       : string;
+
+  // Legt eine Regel einmalig an und liefert ihren Index.
+  function HoleRegelIx(AF: TLeakFinding; const AMeta: TRuleMeta): Integer;
+  var
+    Neu : TV3Regel;
+    Sch : string;
+  begin
+    // Schluessel ist die WIRKSAME Regel-ID: eine Custom-Rule-ID gewinnt
+    // gegen den Katalog, sonst gilt die eingebaute.
+    if AF.RuleID <> '' then
+      Sch := AF.RuleID
+    else
+      Sch := AMeta.ID;
+    if RegelIx.TryGetValue(Sch, Result) then Exit;
+
+    Neu.ID      := Sch;
+    Neu.Name    := AMeta.Name;
+    Neu.TypCss  := TypCssV3(AMeta.FindingType);
+    Neu.TypText := TypTextV3(AMeta.FindingType);
+    Neu.Erkannt := Einzeilig(AMeta.ShortDescription);
+    Neu.Warum   := Einzeilig(AMeta.FullDescription);
+    Result := AModell.Regeln.Add(Neu);
+    RegelIx.Add(Sch, Result);
+  end;
+
+  function HolePfadIx(const APfad: string): Integer;
+  begin
+    if PfadIx.TryGetValue(APfad, Result) then Exit;
+    Result := AModell.Pfade.Add(APfad);
+    PfadIx.Add(APfad, Result);
+  end;
+
+  // -1 = kein Hinweis. Sonst der Index in die hinweise-Tabelle; der
+  // Text steht dort EINMAL, egal wie viele Funde ihn tragen.
+  function HoleHinweisIx(const AText: string): Integer;
+  begin
+    if AText = '' then Exit(-1);
+    if HinweisIx.TryGetValue(AText, Result) then Exit;
+    Result := AModell.Hinweise.Add(AText);
+    HinweisIx.Add(AText, Result);
+  end;
+
+begin
+  if not Assigned(AFindings) then Exit;
+
+  RegelIx    := nil;
+  PfadIx     := nil;
+  HinweisIx  := nil;
+  QuellCache := nil;
+  try
+    RegelIx    := TDictionary<string, Integer>.Create;
+    PfadIx     := TDictionary<string, Integer>.Create;
+    HinweisIx  := TDictionary<string, Integer>.Create;
+    QuellCache := TObjectDictionary<string, TStringList>.Create(
+                    [doOwnsValues]);
+
+    for F in AFindings do
+    begin
+      if (AMaxRows > 0) and (AModell.Funde.Count >= AMaxRows) then Break;
+      // KANONISCH: die Anzeige-Sprache steuert ALang, nicht eine
+      // globale Variable - dieselbe Politik wie in V2 und SARIF.
+      Meta := TRuleCatalog.GetRule(F.Kind, ALang);
+      Pfad := AnzeigePfad(F.FileName, ABaseDir);
+
+      V.Zeile   := StrToIntDef(F.LineNumber, 0);
+      V.Methode := Einzeilig(F.MethodName);
+      V.RegelIx := HoleRegelIx(F, Meta);
+      V.PfadIx  := HolePfadIx(Pfad);
+      V.SevRang := SevRangVon(F);
+      V.Konf    := Ord(F.Confidence);
+      V.Detail  := Einzeilig(F.MissingVar);
+      V.HinwIx  := HoleHinweisIx(
+                     Einzeilig(TFixHintResolver.FixHint(F).Description));
+      V.Snippet := SnippetZeilen(QuellCache, F.FileName, V.Zeile,
+                                 V.SnipAb, V.SnipEin);
+      AModell.Funde.Add(V);
+    end;
+  finally
+    QuellCache.Free;
+    HinweisIx.Free;
+    PfadIx.Free;
+    RegelIx.Free;
+  end;
+end;
+
+{ ---- Das Datenmodell als JSON --------------------------------------- }
+
+procedure SchreibeTexte(ASB: TStringBuilder; ATexte: TList<string>);
+// Eine Stringliste als JSON-Array-INHALT (ohne die Klammern - die
+// setzt der Aufrufer, weil er den Feldnamen davor schreibt).
+// Pfade und Hinweise werden identisch serialisiert.
+var
+  i : Integer;
+begin
+  for i := 0 to ATexte.Count - 1 do
+  begin
+    if i > 0 then ASB.Append(',');
+    ASB.Append(JsonStr(ATexte[i]));
+  end;
+end;
+
+procedure SchreibeDatenmodell(ASB: TStringBuilder;
+  const AModell: TV3Modell);
+// Die drei Nachschlagetabellen und die Fundzeilen als kompaktes JSON.
+//
+// Eigene Routine seit dem Chargen-Review 09.09.: BauePage machte
+// vorher dreierlei - Daten sammeln, HTML-Geruest schreiben und
+// serialisieren - und kam damit auf 308 Zeilen. Das Serialisieren ist
+// der Teil, der sich ohne Rest abtrennen laesst.
+//
+// FELDREIHENFOLGE IST EIN VERTRAG: das Skript liest die Fundzeilen
+// ueber feste Indizes (Z, ME, RI, PI, SV, KF, DT, HI, SA, SE, SN in
+// SeitenJsV3). Wer hier ein Feld einschiebt, muss sie dort mitziehen -
+// sonst zeigt die Seite stillschweigend die falschen Spalten.
+var
+  i, k : Integer;
+  R    : TV3Regel;
+  V    : TV3Fund;
+  Erst : Boolean;
+begin
+  ASB.Append('{"regeln":[');
+  for i := 0 to AModell.Regeln.Count - 1 do
+  begin
+    R := AModell.Regeln[i];
+    if i > 0 then ASB.Append(',');
+    ASB.Append('[' + JsonStr(R.ID) + ',' + JsonStr(R.Name) + ','
+      + JsonStr(R.TypCss) + ',' + JsonStr(R.TypText) + ','
+      + JsonStr(R.Erkannt) + ',' + JsonStr(R.Warum) + ']');
+  end;
+  ASB.Append('],"pfade":[');
+  SchreibeTexte(ASB, AModell.Pfade);
+  ASB.Append('],"hinweise":[');
+  SchreibeTexte(ASB, AModell.Hinweise);
+  ASB.Append('],"funde":[');
+  for i := 0 to AModell.Funde.Count - 1 do
+  begin
+    V := AModell.Funde[i];
+    if i > 0 then ASB.Append(',');
+    ASB.Append('[' + IntToStr(V.Zeile) + ',' + JsonStr(V.Methode) + ','
+      + IntToStr(V.RegelIx) + ',' + IntToStr(V.PfadIx) + ','
+      + IntToStr(V.SevRang) + ',' + IntToStr(V.Konf) + ','
+      + JsonStr(V.Detail) + ',' + IntToStr(V.HinwIx) + ','
+      + IntToStr(V.SnipAb) + ',' + IntToStr(V.SnipEin) + ',[');
+    Erst := True;
+    for k := 0 to High(V.Snippet) do
+    begin
+      if not Erst then ASB.Append(',');
+      Erst := False;
+      ASB.Append(JsonStr(V.Snippet[k]));
+    end;
+    ASB.Append(']]');
+  end;
+  ASB.AppendLine(']}');
+end;
+
 { ---- Seitenbau ------------------------------------------------------ }
 
 class function TFindingsWorkbenchV3.DefaultFileName: string;
@@ -837,82 +1058,36 @@ class procedure TFindingsWorkbenchV3.BauePage(ASB: TStringBuilder;
   AFindings: TObjectList<TLeakFinding>; const ABaseDir: string;
   AMaxRows: Integer; const ALang: string);
 var
-  SB          : TStringBuilder;
-  MaxRows     : Integer;
-  Gesamt      : Integer;
-  Gekuerzt    : Integer;
-  Regeln      : TList<TV3Regel>;
-  RegelIx     : TDictionary<string, Integer>;
-  Pfade       : TList<string>;
-  PfadIx      : TDictionary<string, Integer>;
-  Hinweise    : TList<string>;
-  HinweisIx   : TDictionary<string, Integer>;
-  Funde       : TList<TV3Fund>;
-  QuellCache  : TObjectDictionary<string, TStringList>;
-  F           : TLeakFinding;
-  Meta        : TRuleMeta;
-  R           : TV3Regel;
-  V           : TV3Fund;
-  Pfad        : string;
-  i, k        : Integer;
-  Erst        : Boolean;
-
-  // Legt eine Regel einmalig an und liefert ihren Index.
-  function HoleRegelIx(AF: TLeakFinding; const AMeta: TRuleMeta): Integer;
-  var
-    Neu : TV3Regel;
-    Sch : string;
-  begin
-    // Schluessel ist die WIRKSAME Regel-ID: eine Custom-Rule-ID gewinnt
-    // gegen den Katalog, sonst gilt die eingebaute.
-    if AF.RuleID <> '' then
-      Sch := AF.RuleID
-    else
-      Sch := AMeta.ID;
-    if RegelIx.TryGetValue(Sch, Result) then Exit;
-
-    Neu.ID      := Sch;
-    Neu.Name    := AMeta.Name;
-    Neu.TypCss  := TypCssV3(AMeta.FindingType);
-    Neu.TypText := TypTextV3(AMeta.FindingType);
-    Neu.Erkannt := Einzeilig(AMeta.ShortDescription);
-    Neu.Warum   := Einzeilig(AMeta.FullDescription);
-    Result := Regeln.Add(Neu);
-    RegelIx.Add(Sch, Result);
-  end;
-
-  function HolePfadIx(const APfad: string): Integer;
-  begin
-    if PfadIx.TryGetValue(APfad, Result) then Exit;
-    Result := Pfade.Add(APfad);
-    PfadIx.Add(APfad, Result);
-  end;
-
-  // -1 = kein Hinweis. Sonst der Index in die hinweise-Tabelle; der
-  // Text steht dort EINMAL, egal wie viele Funde ihn tragen.
-  function HoleHinweisIx(const AText: string): Integer;
-  begin
-    if AText = '' then Exit(-1);
-    if HinweisIx.TryGetValue(AText, Result) then Exit;
-    Result := Hinweise.Add(AText);
-    HinweisIx.Add(AText, Result);
-  end;
-
+  SB       : TStringBuilder;
+  MaxRows  : Integer;
+  Gesamt   : Integer;
+  Gekuerzt : Integer;
+  Regeln   : TList<TV3Regel>;
+  Pfade    : TList<string>;
+  Hinweise : TList<string>;
+  Funde    : TList<TV3Fund>;
+  Modell   : TV3Modell;
 begin
   if AMaxRows < 0 then
     MaxRows := V3_MAX_ROWS_DEFAULT
   else
     MaxRows := AMaxRows;
 
-  Regeln     := TList<TV3Regel>.Create;
-  RegelIx    := TDictionary<string, Integer>.Create;
-  Pfade      := TList<string>.Create;
-  PfadIx     := TDictionary<string, Integer>.Create;
-  Hinweise   := TList<string>.Create;
-  HinweisIx  := TDictionary<string, Integer>.Create;
-  Funde      := TList<TV3Fund>.Create;
-  QuellCache := TObjectDictionary<string, TStringList>.Create([doOwnsValues]);
+  // Erst auf nil, dann INNERHALB des try erzeugen. Standen die
+  // Create-Aufrufe davor - so war es bis zum Chargen-Review 09.09. -,
+  // dann leaken die bereits erzeugten, sobald ein spaeteres wirft. Bei
+  // einem Bericht dieser Groesse ist Speichermangel kein theoretischer
+  // Fall. Free auf nil ist sicher, das finally bleibt unveraendert.
+  Regeln   := nil;
+  Pfade    := nil;
+  Hinweise := nil;
+  Funde    := nil;
   try
+    Regeln   := TList<TV3Regel>.Create;
+    Pfade    := TList<string>.Create;
+    Hinweise := TList<string>.Create;
+    Funde    := TList<TV3Fund>.Create;
+
     Gesamt := 0;
     if Assigned(AFindings) then
       Gesamt := AFindings.Count;
@@ -920,28 +1095,11 @@ begin
     if (MaxRows > 0) and (Gesamt > MaxRows) then
       Gekuerzt := Gesamt - MaxRows;
 
-    if Assigned(AFindings) then
-      for F in AFindings do
-      begin
-        if (MaxRows > 0) and (Funde.Count >= MaxRows) then Break;
-        // KANONISCH: die Anzeige-Sprache steuert ALang, nicht eine
-        // globale Variable - dieselbe Politik wie in V2 und SARIF.
-        Meta := TRuleCatalog.GetRule(F.Kind, ALang);
-        Pfad := AnzeigePfad(F.FileName, ABaseDir);
-
-        V.Zeile   := StrToIntDef(F.LineNumber, 0);
-        V.Methode := Einzeilig(F.MethodName);
-        V.RegelIx := HoleRegelIx(F, Meta);
-        V.PfadIx  := HolePfadIx(Pfad);
-        V.SevRang := SevRangVon(F);
-        V.Konf    := Ord(F.Confidence);
-        V.Detail  := Einzeilig(F.MissingVar);
-        V.HinwIx  := HoleHinweisIx(
-                       Einzeilig(TFixHintResolver.FixHint(F).Description));
-        V.Snippet := SnippetZeilen(QuellCache, F.FileName, V.Zeile,
-                                   V.SnipAb, V.SnipEin);
-        Funde.Add(V);
-      end;
+    Modell.Regeln   := Regeln;
+    Modell.Pfade    := Pfade;
+    Modell.Hinweise := Hinweise;
+    Modell.Funde    := Funde;
+    SammleDaten(AFindings, ABaseDir, ALang, MaxRows, Modell);
 
     SB := ASB;
     SB.AppendLine('<!DOCTYPE html>');
@@ -970,6 +1128,10 @@ begin
       + 'border-bottom:1px solid var(--rand);cursor:pointer;'
       + 'transition:background 150ms ease;}');
     SB.AppendLine('.v3-zeile:hover{background:var(--f-chip-bg);}');
+    // Wer Bewegung abgewaehlt hat, bekommt den Wechsel ohne Uebergang -
+    // dieselbe Ausnahme, die V2 fuer ihre Uebergaenge fuehrt.
+    SB.AppendLine('@media (prefers-reduced-motion:reduce){'
+      + '.v3-zeile{transition:none;}}');
     SB.AppendLine('.v3-zeile.gewaehlt{background:var(--f-chip-bg);'
       + 'border-left:3px solid var(--akzent);padding-left:9px;}');
     SB.AppendLine('.v3-zeile:focus-visible{outline:2px solid '
@@ -1084,60 +1246,16 @@ begin
     // Fund stehen hier nur die Werte, und alles je Regel oder je Datei
     // Gleiche steht EINMAL.
     SB.AppendLine('<script type="application/json" id="v3daten">');
-    SB.Append('{"regeln":[');
-    for i := 0 to Regeln.Count - 1 do
-    begin
-      R := Regeln[i];
-      if i > 0 then SB.Append(',');
-      SB.Append('[' + JsonStr(R.ID) + ',' + JsonStr(R.Name) + ','
-        + JsonStr(R.TypCss) + ',' + JsonStr(R.TypText) + ','
-        + JsonStr(R.Erkannt) + ',' + JsonStr(R.Warum) + ']');
-    end;
-    SB.Append('],"pfade":[');
-    for i := 0 to Pfade.Count - 1 do
-    begin
-      if i > 0 then SB.Append(',');
-      SB.Append(JsonStr(Pfade[i]));
-    end;
-    SB.Append('],"hinweise":[');
-    for i := 0 to Hinweise.Count - 1 do
-    begin
-      if i > 0 then SB.Append(',');
-      SB.Append(JsonStr(Hinweise[i]));
-    end;
-    SB.Append('],"funde":[');
-    for i := 0 to Funde.Count - 1 do
-    begin
-      V := Funde[i];
-      if i > 0 then SB.Append(',');
-      SB.Append('[' + IntToStr(V.Zeile) + ',' + JsonStr(V.Methode) + ','
-        + IntToStr(V.RegelIx) + ',' + IntToStr(V.PfadIx) + ','
-        + IntToStr(V.SevRang) + ',' + IntToStr(V.Konf) + ','
-        + JsonStr(V.Detail) + ',' + IntToStr(V.HinwIx) + ','
-        + IntToStr(V.SnipAb) + ',' + IntToStr(V.SnipEin) + ',[');
-      Erst := True;
-      for k := 0 to High(V.Snippet) do
-      begin
-        if not Erst then SB.Append(',');
-        Erst := False;
-        SB.Append(JsonStr(V.Snippet[k]));
-      end;
-      SB.Append(']]');
-    end;
-    SB.AppendLine(']}');
+    SchreibeDatenmodell(SB, Modell);
     SB.AppendLine('</script>');
 
     SB.Append(SeitenJsV3(ALang));
     SB.AppendLine('</body>');
     SB.AppendLine('</html>');
   finally
-    QuellCache.Free;
     Funde.Free;
-    HinweisIx.Free;
     Hinweise.Free;
-    PfadIx.Free;
     Pfade.Free;
-    RegelIx.Free;
     Regeln.Free;
   end;
 end;

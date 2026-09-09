@@ -39,10 +39,24 @@ type
     [Test] procedure Theme_AntiBlitzStehtImHead;
     [Test] procedure Zeilenhoehe_StimmtInCssUndJs;
     [Test] procedure Kopf_IstAngepinntUndSchrumpft;
+    // Die Auswahl muss den Neuaufbau der Liste ueberleben.
+    [Test] procedure Auswahl_UeberlebtDasScrollen;
     [Test] procedure LeereListe_IstGueltigeSeite;
   end;
 
 implementation
+
+// noinspection-file FormatLocaleHint
+// Der eigene Detektor meldet die beiden Format-Aufrufe mit %.1f als
+// locale-abhaengig (Komma statt Punkt als Dezimaltrenner) - und er hat
+// recht. Hier ist es aber gewollt: die Zeichenketten sind
+// FEHLERMELDUNGEN von Assertionen, die ein Mensch liest, wenn der Test
+// rot ist. In einer deutschen Umgebung ist "50,0 %" dort die richtige
+// Schreibweise, nicht die falsche.
+//
+// Die Regel bleibt scharf, wo sie hingehoert: in der Ausgabe des
+// Produkts. Genau dort hat sie am 08.09. den Report-Zeitstempel
+// gefangen (Charge 22).
 
 uses
   uFindingsWorkbenchV3, uFindingsWorkbenchExport;
@@ -85,6 +99,14 @@ procedure TTestFindingsWorkbenchV3.V3_IstDeutlichKleinerAlsV2;
 // sparen mehr), und ein Test, der bei jeder Fixture-Aenderung kippt,
 // wird irgendwann weggeklickt. Faellt V3 unter 50 %, ist trotzdem
 // etwas grundlegend kaputt - dann rendert die Seite wieder vor.
+//
+// WAS DIESER TEST NICHT MISST (Chargen-Review 09.09.): die
+// Fixture-Pfade existieren nicht, beide Seiten bekommen also LEERE
+// Codeausschnitte. Gerade der Posten, der in V2 44,7 % ausmacht und in
+// V3 erst beim Aufklappen entsteht, fehlt im Vergleich. Der Test
+// belegt die Struktur-Ersparnis, nicht den vollen Effekt - die
+// gemessenen 78 % stammen aus einem echten Export
+// (Konzept_V2Performance_2026-09-09.md), nicht von hier.
 var
   Findings : TObjectList<TLeakFinding>;
   V2, V3   : string;
@@ -262,6 +284,43 @@ begin
   Assert.IsTrue(Pos('var ZH=52;', Html) > 0,
     'die Zeilenhoehe im JS ist nicht 52 - CSS und JS laufen '
     + 'auseinander, der Scrollbalken springt');
+end;
+
+procedure TTestFindingsWorkbenchV3.Auswahl_UeberlebtDasScrollen;
+// Waechter des schwersten Befunds aus dem Chargen-Review 09.09.: die
+// Markierung der gewaehlten Zeile lebte NUR im DOM, und zeichnen()
+// baut die Liste bei JEDEM Scrollschritt neu. Wer einen Fund anklickte
+// und ein Mausrad-Tick weiterscrollte, hatte den Drawer offen und
+// keine markierte Zeile mehr.
+//
+// Der Test prueft die Reparatur an ihrer Wurzel: die Auswahl steht in
+// einer Variablen, und zeile() liest sie beim Bauen JEDER Zeile.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := VieleFunde(20);
+  try
+    Html := TFindingsWorkbenchV3.BuildHtml(Findings, '', -1, 'de');
+  finally
+    Findings.Free;
+  end;
+
+  Assert.IsTrue(Pos('var gewaehlt=-1;', Html) > 0,
+    'die Auswahl wird nicht als Zustand gehalten');
+  Assert.IsTrue(
+    Pos('var kl="v3-zeile"+(i===gewaehlt?" gewaehlt":"");', Html) > 0,
+    'zeile() liest die Auswahl nicht - sie waere nach dem naechsten '
+    + 'Scrollschritt weg');
+  // Und die Gegenseite: Klick UND Tastatur muessen denselben Weg
+  // nehmen, sonst zeigt der Drawer einen Fund, den die Liste nicht
+  // hervorhebt.
+  Assert.IsTrue(Pos('function waehle(i){', Html) > 0,
+    'es gibt keinen gemeinsamen Auswahl-Pfad');
+  Assert.AreEqual<Integer>(0,
+    Pos('oeffne(parseInt(z.getAttribute("data-i"),10));', Html),
+    'ein Pfad oeffnet den Drawer noch direkt, ohne die Auswahl zu '
+    + 'setzen');
 end;
 
 procedure TTestFindingsWorkbenchV3.Kopf_IstAngepinntUndSchrumpft;
