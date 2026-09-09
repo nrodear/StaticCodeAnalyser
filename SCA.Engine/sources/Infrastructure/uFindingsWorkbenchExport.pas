@@ -1953,9 +1953,15 @@ begin
        Stat.Gesamt]));
     SB.AppendLine('</header>');
     SB.AppendLine('<main id="bereich-inhalt">');
-    SB.Append(CommandUndChips(Stat.Lesefehler, Stat, ALang));
-    SB.Append(Dashboard(Stat, ALang));
+    // REIHENFOLGE (Nicos Vorgabe 09.09.): erst die Lage, dann die
+    // Werkzeuge. Ampel und Zahlen beantworten "wie steht es?", die
+    // Top-Listen "wo drueckt es?" - und die Filterleiste steht direkt
+    // ueber der Liste, auf die sie wirkt.
+    //
+    // Vorher stand die Filterleiste ganz oben, noch vor jeder Zahl:
+    // der Leser bekam Werkzeuge in die Hand, bevor er wusste, wofuer.
     SB.Append(HealthUndSecurity(Stat, ALang));
+    SB.Append(Dashboard(Stat, ALang));
     // Top-Listen nebeneinander; beide sind Ausschnitte der bereits
     // sortierten Auswahllisten und filtern per Klick.
     SB.AppendLine('<div class="toplisten" id="bereich-toplisten">');
@@ -1966,6 +1972,10 @@ begin
       TWorkbenchI18n.T(wtTopDateien, ALang), 'dateiFilter',
       Stat.DateiListe));
     SB.AppendLine('</div>');
+
+    // Filterleiste (Suche, Zaehler, Reset, Thema, Dropdowns, Chips)
+    // direkt ueber der Liste, auf die sie wirkt - s. Reihenfolge oben.
+    SB.Append(CommandUndChips(Stat.Lesefehler, Stat, ALang));
 
     if RowsDropped > 0 then
       SB.AppendLine(Format('<div id="gekuerzt">'

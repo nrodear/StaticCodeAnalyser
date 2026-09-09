@@ -43,6 +43,7 @@ type
     [Test] procedure Spaltenbreiten_SindFestWieInV3;
     [Test] procedure Spaltenzeile_KlebtAmScrollContainerNichtAmFenster;
     [Test] procedure Bereiche_HabenBenennbareIds;
+    [Test] procedure Bereiche_StehenInDerVorgegebenenReihenfolge;
     // Angepinnter Kopf mit zwei Zustaenden (Nutzerauftrag 09.09.).
     [Test] procedure Kopf_IstAngepinntUndSchrumpftBeimScrollen;
     // EN/FR-Nachtrag 07.09.: Seite in drei Sprachen, Token unberuehrt.
@@ -653,6 +654,45 @@ begin
     Assert.AreEqual<Integer>(1, VorkommenIn(Html,
       'id="' + BEREICHE[i] + '"'),
       'die ID ' + BEREICHE[i] + ' kommt mehrfach vor');
+end;
+
+procedure TTestFindingsWorkbenchExport.Bereiche_StehenInDerVorgegebenenReihenfolge;
+// Nicos Vorgabe 09.09. fuer den Seitenaufbau:
+//   Seitenkopf - Ampel - Kacheln - Toplisten - Suche/Dropdowns - Liste
+//
+// Erst die LAGE, dann die WERKZEUGE. Vorher stand die Filterleiste
+// ganz oben, noch vor jeder Zahl - der Leser bekam Werkzeuge in die
+// Hand, bevor er wusste wofuer; und sie stand weit weg von der Liste,
+// auf die sie wirkt.
+//
+// Der Test prueft die Kette PAARWEISE. Eine einzelne Reihenfolge zu
+// pruefen wuerde nicht auffallen, wenn ein Bereich in die Mitte
+// rutscht.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+
+  AssertReihenfolge(Html, 'id="bereich-seitenkopf"', 'id="bereich-ampel"',
+    'der Seitenkopf steht nicht vor der Ampel');
+  AssertReihenfolge(Html, 'id="bereich-ampel"', 'id="bereich-kacheln"',
+    'die Ampel steht nicht vor den Kacheln');
+  AssertReihenfolge(Html, 'id="bereich-kacheln"', 'id="bereich-toplisten"',
+    'die Kacheln stehen nicht vor den Top-Listen');
+  AssertReihenfolge(Html, 'id="bereich-toplisten"', 'id="bereich-suche"',
+    'die Top-Listen stehen nicht vor der Suche');
+  AssertReihenfolge(Html, 'id="bereich-suche"', 'id="bereich-dropdowns"',
+    'die Suche steht nicht vor den Dropdowns');
+  AssertReihenfolge(Html, 'id="bereich-dropdowns"',
+    'id="bereich-fundliste"',
+    'die Filterleiste steht nicht direkt ueber der Liste');
 end;
 
 procedure TTestFindingsWorkbenchExport.Kopf_IstAngepinntUndSchrumpftBeimScrollen;
