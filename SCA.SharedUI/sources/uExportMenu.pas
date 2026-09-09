@@ -26,6 +26,12 @@ type
   TStringFunc = function: string of object;
   TGridFunc   = function: TStringGrid of object;
 
+  // Der eigentliche Schreibvorgang eines Workbench-Fundberichts. Nur
+  // darin unterscheiden sich V2 und V3; alles um den Save-Dialog herum
+  // teilen sie sich (s. WorkbenchExport).
+  TWorkbenchWriter = reference to procedure(const AFileName,
+    ABaseDir: string);
+
   TFindingExportMenu = class(TComponent)
   private
     FPopup       : TPopupMenu;
@@ -46,6 +52,10 @@ type
     procedure DoCopyClipboard(Sender: TObject);
     procedure DoExportHtml(Sender: TObject);
     procedure DoExportHtmlV2(Sender: TObject);
+    procedure DoExportHtmlV3(Sender: TObject);
+    // Gemeinsamer Dialog von V2 und V3 - Begruendung am Rumpf.
+    procedure WorkbenchExport(const AVorschlag, AErfolg, AFehler: string;
+      ASchreiber: TWorkbenchWriter);
     procedure DoExportSarif(Sender: TObject);
     procedure DoExportDetectorInfo(Sender: TObject);
     procedure AddSonarItems;
@@ -97,6 +107,7 @@ uses
   uEngineApi,          // SCA_DEFAULT_TOOLNAME
   uDetectorInfoExport, // Regelkatalog-Seite (Detector info)
   uFindingsWorkbenchExport, // Funde-Export V2 (Workbench-Basis, 07.09.)
+  uFindingsWorkbenchV3,     // Funde-Export V3 (Datenmodell, 09.09.)
   uRepoSettings;       // ResolvedConfigPath - Default-Ablage der Seite
 
 const
@@ -134,6 +145,17 @@ begin
     // bewusst direkt unter der V1, beide bleiben nebeneinander.
     Mi.Caption := _('HTML report V2 (workbench, all findings)...');
     Mi.OnClick := DoExportHtmlV2;
+    FPopup.Items.Add(Mi);
+  Mi := TMenuItem.Create(FPopup);
+    // Variante 3 (09.09.): dieselbe Optik und derselbe Umfang wie V2,
+    // aber Datenmodell statt vorgerenderter Tabelle - die Liste
+    // rendert nur die sichtbaren Zeilen. Fuer grosse Berichte ist das
+    // der Unterschied zwischen 60 MB mit einer Million DOM-Knoten und
+    // 13 MB mit zweitausend. Die Beschriftung nennt den GRUND, nicht
+    // die Versionsnummer: "V3" allein sagt dem Leser nicht, warum er
+    // sie waehlen sollte.
+    Mi.Caption := _('HTML report V3 (fast, for large reports)...');
+    Mi.OnClick := DoExportHtmlV3;
     FPopup.Items.Add(Mi);
   Mi := TMenuItem.Create(FPopup);
     // Umfang GEHOERT in die Beschriftung: JSON/CSV schreiben die
@@ -643,11 +665,20 @@ begin
   end;
 end;
 
-procedure TFindingExportMenu.DoExportHtmlV2(Sender: TObject);
-// Funde-Export VARIANTE 2 (uFindingsWorkbenchExport, 07.09.): alle
-// Befunde wie die V1, aber auf der Workbench-Architektur der
-// Detektor-Info-Seite (deduplizierte Regel-Doku, Drawer). BaseDir
-// steuert die Pfad-ANZEIGE im Bericht (Vertrag wie V1).
+procedure TFindingExportMenu.WorkbenchExport(
+  const AVorschlag, AErfolg, AFehler: string;
+  ASchreiber: TWorkbenchWriter);
+// Gemeinsamer Dialog der beiden Workbench-Fundberichte (V2 und V3).
+//
+// Die zwei unterscheiden sich NUR in der Schreibklasse und den drei
+// Texten - alles andere (BaseDir holen, Dialog aufbauen, Filter,
+// Ueberschreib-Warnung, Fehlerbehandlung) war Wort fuer Wort gleich.
+// Mit V3 waere das die vierte Kopie desselben Musters in dieser Unit
+// geworden; V1 und der Detektor-Katalog bleiben eigenstaendig, weil
+// sie abweichen (V1 ohne BaseDir-Startverzeichnis, der Katalog mit
+// eigenem Titel und dem Konfigverzeichnis).
+//
+// BaseDir steuert nur die Pfad-ANZEIGE im Bericht (Vertrag wie V1).
 var
   Dlg     : TSaveDialog;
   BaseDir : string;
@@ -661,26 +692,57 @@ begin
   try
     Dlg.Filter      := _(HTML_DLG_FILTER);
     Dlg.DefaultExt  := HTML_DLG_EXT;
-    Dlg.FileName    := TFindingsWorkbenchExport.DefaultFileName;
+    Dlg.FileName    := AVorschlag;
     if BaseDir <> '' then
       Dlg.InitialDir := BaseDir;
     Dlg.Options     := Dlg.Options + [ofOverwritePrompt];
     if not Dlg.Execute then Exit;
 
     try
-      // -1 = Standard-Zeilenbudget; die Seite folgt der App-Sprache
-      // (Oberflaeche + Regeltexte, s. uWorkbenchI18n).
-      TFindingsWorkbenchExport.Run(FAll, BaseDir, Dlg.FileName, -1,
-        CurrentLanguage);
-      FOnStatus(Format(_('HTML V2 report saved: %s'),
-        [ExtractFileName(Dlg.FileName)]));
+      ASchreiber(Dlg.FileName, BaseDir);
+      FOnStatus(Format(AErfolg, [ExtractFileName(Dlg.FileName)]));
     except
       on E: Exception do
-        FOnStatus(_('HTML V2 export failed: ') + E.Message);
+        FOnStatus(AFehler + E.Message);
     end;
   finally
     Dlg.Free;
   end;
+end;
+
+procedure TFindingExportMenu.DoExportHtmlV2(Sender: TObject);
+// Funde-Export VARIANTE 2 (uFindingsWorkbenchExport, 07.09.): alle
+// Befunde wie die V1, aber auf der Workbench-Architektur der
+// Detektor-Info-Seite (deduplizierte Regel-Doku, Drawer).
+begin
+  WorkbenchExport(TFindingsWorkbenchExport.DefaultFileName,
+    _('HTML V2 report saved: %s'),
+    _('HTML V2 export failed: '),
+    procedure(const AFileName, ABaseDir: string)
+    begin
+      // -1 = Standard-Zeilenbudget; die Seite folgt der App-Sprache
+      // (Oberflaeche + Regeltexte, s. uWorkbenchI18n).
+      TFindingsWorkbenchExport.Run(FAll, ABaseDir, AFileName, -1,
+        CurrentLanguage);
+    end);
+end;
+
+procedure TFindingExportMenu.DoExportHtmlV3(Sender: TObject);
+// Funde-Export VARIANTE 3 (uFindingsWorkbenchV3, 09.09.): gleiche
+// Optik und gleicher Umfang wie V2, aber Datenmodell statt
+// vorgerenderter Tabelle - nur die sichtbaren Zeilen stehen im DOM.
+// Fuer grosse Berichte ist das der Unterschied zwischen 60 MB mit
+// einer Million DOM-Knoten und 13 MB mit zweitausend
+// (Messung: Konzept_V2Performance_2026-09-09.md).
+begin
+  WorkbenchExport(TFindingsWorkbenchV3.DefaultFileName,
+    _('HTML V3 report saved: %s'),
+    _('HTML V3 export failed: '),
+    procedure(const AFileName, ABaseDir: string)
+    begin
+      TFindingsWorkbenchV3.Run(FAll, ABaseDir, AFileName, -1,
+        CurrentLanguage);
+    end);
 end;
 
 end.
