@@ -913,19 +913,39 @@ var
   De, En, Fr : string;
 
   function OhneSkript(const AHtml: string): string;
-  // Alles vor dem <script>-Block. Die Sprachpruefungen zielen auf
-  // SICHTBARE Oberflaechentexte; das eingebettete JS traegt deutsche
-  // CODE-KOMMENTARE (Projektkonvention, wie der Pascal-Quelltext
-  // auch) - ein Assert ueber das ganze Dokument stolpert darueber
-  // und meldet einen Uebersetzungsfehler, wo keiner ist.
+  // Das Dokument OHNE seine script-Bloecke. Die Sprachpruefungen zielen
+  // auf SICHTBARE Oberflaechentexte; das eingebettete JS traegt deutsche
+  // CODE-KOMMENTARE (Projektkonvention, wie der Pascal-Quelltext auch) -
+  // ein Assert ueber das ganze Dokument stolpert darueber und meldet
+  // einen Uebersetzungsfehler, wo keiner ist.
+  //
+  // BIS 09.09. SCHNITT DIESE FUNKTION AM ERSTEN '<script' AB, und das
+  // ging gut, solange das erste Skript am Dokumentende stand. An
+  // diesem Tag kam eines in den <head> - der Themenschalter, damit die
+  // Seite nicht sichtbar umspringt. Von da an lieferte OhneSkript nur
+  // noch den Kopf, und ALLE Sprachpruefungen darunter waren blind:
+  // gruen, ohne je den Seiteninhalt gesehen zu haben.
+  //
+  // Deshalb jetzt jeden Block einzeln herausschneiden statt am ersten
+  // abzuschneiden. Der Test ist damit wieder scharf - und wenn er
+  // etwas findet, hat er es die ganze Zeit ueber nicht gesehen.
   var
-    P : Integer;
+    P, E : Integer;
   begin
-    P := Pos('<script', AHtml);
-    if P > 0 then
-      Result := Copy(AHtml, 1, P - 1)
-    else
-      Result := AHtml;
+    Result := AHtml;
+    P := Pos('<script', Result);
+    while P > 0 do
+    begin
+      E := Pos('</script>', Result, P);
+      if E = 0 then
+      begin
+        // Unabgeschlossen: der Rest gehoert zum Skript.
+        Result := Copy(Result, 1, P - 1);
+        Break;
+      end;
+      Delete(Result, P, E + Length('</script>') - P);
+      P := Pos('<script', Result);
+    end;
   end;
 
   function SevKlasse(const AHtml: string): string;
