@@ -349,7 +349,9 @@ begin
       + '--f-chip-bg:#2a323b;--f-flaeche:#232a33;'
       + '--f-code-bg:#12161b;--f-code-fg:#dbe1e8;');
     // Was KEIN Token hat: Tabellenkopf, Hover, Auswahl, Tastenkappen.
-    Regel('th', 'background:#252d36;');
+    // th braucht seit 09.09. KEINE eigene Dunkel-Regel mehr: die
+    // Flaeche kommt aus --f-flaeche, und das dreht dieses Theme
+    // ohnehin ein paar Zeilen weiter oben.
     // ACHTUNG Spezifitaet: der Hover liegt seit dem Zwei-Zeilen-Umbau
     // auf '#funde tbody:hover tr' (ID + 2 Elemente). Eine Dark-Regel
     // auf 'tr.haupt:hover' verliert dagegen und die Zeile bliebe im
@@ -485,7 +487,20 @@ begin
     // top an der KOPFHOEHE, nicht 0: der Seitenkopf ist seit 09.09.
     // selbst angepinnt, ein top:0 liesse die Spaltenzeile dahinter
     // verschwinden. --kopf-h pflegt TWorkbenchStyle.KopfVerhaltenJs.
-    SB.AppendLine('th{background:#eef2f6;cursor:pointer;position:sticky;'
+    //
+    // FLAECHE ALS TOKEN, nicht als Hexwert (Nicos Auftrag 09.09., aus
+    // der V3-Seite uebernommen): der Kopf stand mit #eef2f6 fest und
+    // brauchte je Theme eine eigene Ueberschreibung - eine im
+    // Dunkel-Regelsatz, eine bei Sepia. Beide sind damit entfallen.
+    // Drei Stellen fuer eine Flaeche waren zwei zu viel; genau das
+    // Token-Prinzip, das uWorkbenchStyle im Kopf beschreibt.
+    //
+    // Schriftgroesse und Innenabstand kommen ebenfalls von V3 - dort
+    // ist die Spaltenzeile kompakter als die Datenzeilen, was sie als
+    // Kopf lesbar macht statt als weitere Zeile.
+    SB.AppendLine('th{background:var(--f-flaeche);font-weight:600;'
+      + 'font-size:12px;padding:8px 12px;'
+      + 'cursor:pointer;position:sticky;'
       + 'top:var(--kopf-h,0px);white-space:nowrap;user-select:none;'
       + 'box-shadow:inset 0 -1px 0 var(--rand);}');
     SB.AppendLine('th .pfeil{color:var(--akzent);font-size:0.8em;'
@@ -622,31 +637,23 @@ begin
       + 'padding:4px 8px;margin:-4px -6px 0 0;}');
     SB.AppendLine('#drawer-schliessen:hover{background:var(--rand);'
       + 'color:var(--tinte);}');
-    // ---- Inspector: Hero (Ebene 2 der Zielarchitektur) ---------------
-    // Severity-Punkt + SCA-ID + Titel + Badges. Der farbige Punkt
-    // wiederholt die Rail-Farbe der Zeile: dieselbe Aussage, zweimal
-    // gesehen - Tabelle und Inspector gehoeren sichtbar zusammen.
-    SB.AppendLine('.insp-hero{border-bottom:1px solid var(--rand);'
-      + 'padding-bottom:10px;margin-bottom:12px;}');
-    SB.AppendLine('.insp-kopfzeile{display:flex;align-items:baseline;'
-      + 'gap:8px;flex-wrap:wrap;}');
-    SB.AppendLine('.insp-punkt{width:9px;height:9px;border-radius:50%;'
-      + 'background:var(--dezent);flex:0 0 auto;'
-      + 'align-self:center;}');
-    SB.AppendLine('.insp-punkt.sev-err{background:var(--f-err-fg);}');
-    SB.AppendLine('.insp-punkt.sev-warn{background:var(--f-warn-fg);}');
-    SB.AppendLine('.insp-punkt.sev-hint{background:var(--f-info-fg);}');
-    SB.AppendLine('.insp-id{font-family:Consolas,monospace;'
-      + 'font-weight:700;font-size:0.94em;color:var(--dezent);}');
+    // ---- Inspector-Kopf (Aufbau der V3-Seite, 09.09.) ----------------
+    // Badges - Ueberschrift - Fundort, alles auf einer Ebene. Der
+    // frueher hier stehende Hero-Block mit eigener Kopfzeile, farbigem
+    // Severity-Punkt und separater ID ist entfallen: der Punkt trug
+    // die Severity ein zweites Mal, die direkt daneben als Badge
+    // steht, und die Verschachtelung brachte nichts, was die flache
+    // Folge nicht auch zeigt.
+    SB.AppendLine('.insp-badges{display:flex;gap:6px;flex-wrap:wrap;}');
     SB.AppendLine('.insp-titel{font-size:1.14em;font-weight:600;'
-      + 'line-height:1.25;flex:1 1 100%;margin:2px 0 0 0;}');
-    SB.AppendLine('.insp-badges{display:flex;gap:6px;flex-wrap:wrap;'
-      + 'margin-top:8px;}');
-    // ---- Inspector: Location (Ebene 3) --------------------------------
-    SB.AppendLine('.insp-ort{margin-top:8px;color:var(--dezent);'
-      + 'font-size:0.85em;font-family:Consolas,monospace;'
-      + 'word-break:break-all;}');
-    SB.AppendLine('.insp-detail{margin:10px 0 0 0;font-size:0.94em;}');
+      + 'line-height:1.25;margin:8px 0 0 0;}');
+    // Der Fundort nutzt metarow (die Klasse gibt es weiter unten schon)
+    // plus eine eigene Ergaenzung: monospace und harter Umbruch, weil
+    // dort ein Dateipfad steht. Bewusst als ZUSATZ-Selektor statt als
+    // zweite .metarow-Regel - zwei gleichnamige Regeln haetten sich je
+    // nach Reihenfolge gegenseitig ueberschrieben.
+    SB.AppendLine('#drawer-inhalt .metarow{font-family:Consolas,'
+      + 'monospace;font-size:0.85em;word-break:break-all;}');
     // ---- Inspector: Abschnitte (Ebenen 4-8) ---------------------------
     // Gestaffelte Ebenen statt einer Textwueste: jede Section ein
     // eigener Block mit ruhiger Ueberschrift.
@@ -686,7 +693,8 @@ begin
       + '--f-aus-bg:#f2e2da;--f-aus-fg:#8a4126;'
       + '--f-chip-bg:#efe6d0;--f-flaeche:#f7efdc;'
       + '--f-code-bg:#2b2419;--f-code-fg:#e8dfc9;}');
-    SB.AppendLine(':root[data-theme="sepia"] th{background:#efe3c6;}');
+    // s. Dunkel-Regelsatz: die Kopf-Flaeche haengt am Token, eine
+    // eigene Sepia-Regel dafuer ist entfallen.
     // dieselbe Spezifitaets-Falle wie im Dunkel-Thema (s. dort).
     SB.AppendLine(':root[data-theme="sepia"] #funde tbody:hover tr{'
       + 'background:#f0e4c8;}');
@@ -1172,43 +1180,25 @@ begin
     // Die Badges werden aus den Zellen GEKLONT statt neu gebaut -
     // so bleibt ihre Optik automatisch dieselbe wie in der Tabelle.
     SB.AppendLine('function fundKopf(tb) {');
+    // AUFBAU AUS DER V3-SEITE uebernommen (Nicos Auftrag 09.09.):
+    // Badges - Ueberschrift - Fundort - Fundtext, alles auf EINER
+    // Ebene. Vorher lag darum ein insp-hero mit einer eigenen
+    // insp-kopfzeile, in der ein farbiger Punkt vor der ID stand und
+    // der Regelname darunter umbrach.
+    //
+    // WAS DABEI BLEIBT: alle drei Badges (Typ, Schweregrad,
+    // Konfidenz), ID, Regelname, Fundort und Fundtext - die
+    // Information ist dieselbe, nur flacher gesetzt.
+    // WAS ENTFAELLT: der farbige Punkt vor der ID. Er trug die
+    // Severity ein zweites Mal, die daneben schon als Badge steht.
+    //
+    // Der Regel-Block (Was wird erkannt / Warum relevant, Vorher/
+    // Nachher mit Copy, CWE, Tags) haengt UNVERAENDERT hinten dran -
+    // er kommt aus dem Template je Regel, nicht von hier. V3 hat ihn
+    // nicht; ihn mit zu uebernehmen hiesse, ihn zu verlieren.
     SB.AppendLine('  var z = tb.rows[0];');
     SB.AppendLine('  var kopf = document.createElement("div");');
-    SB.AppendLine('  var hero = document.createElement("div");');
-    SB.AppendLine('  hero.className = "insp-hero";');
-    // Kopfzeile: Punkt + ID (+ der Titel bricht darunter um).
-    SB.AppendLine('  var zeile = document.createElement("div");');
-    SB.AppendLine('  zeile.className = "insp-kopfzeile";');
-    SB.AppendLine('  var punkt = document.createElement("span");');
-    SB.AppendLine('  punkt.className = "insp-punkt";');
-    // Severity-Farbe des Punktes aus der Zeilenklasse der Badge-
-    // Zelle - dieselbe Quelle wie der Rail in der Tabelle.
-    SB.AppendLine('  var sevBadge = z.cells[' + IntToStr(SP_SEVERITY)
-      + '].querySelector(".badge");');
-    SB.AppendLine('  if (sevBadge) {');
-    SB.AppendLine('    if (sevBadge.classList.contains("sev-err")) '
-      + 'punkt.classList.add("sev-err");');
-    SB.AppendLine('    else if (sevBadge.classList.contains("sev-warn")) '
-      + 'punkt.classList.add("sev-warn");');
-    SB.AppendLine('    else if (sevBadge.classList.contains("sev-hint")) '
-      + 'punkt.classList.add("sev-hint");');
-    SB.AppendLine('    // sonst LESEFEHLER (badge typ ferr): der Punkt');
-    SB.AppendLine('    // bleibt neutral grau - dieselbe Aussage wie');
-    SB.AppendLine('    // sein Rail in der Tabelle (data-sev="3").');
-    SB.AppendLine('  }');
-    SB.AppendLine('  zeile.appendChild(punkt);');
-    SB.AppendLine('  var id = document.createElement("span");');
-    SB.AppendLine('  id.className = "insp-id";');
-    SB.AppendLine('  id.textContent = z.cells[' + IntToStr(SP_SCAID)
-      + '].textContent;');
-    SB.AppendLine('  zeile.appendChild(id);');
-    SB.AppendLine('  var titel = document.createElement("div");');
-    SB.AppendLine('  titel.className = "insp-titel";');
-    SB.AppendLine('  titel.textContent = z.cells[' + IntToStr(SP_REGEL)
-      + '].textContent;');
-    SB.AppendLine('  zeile.appendChild(titel);');
-    SB.AppendLine('  hero.appendChild(zeile);');
-    // Badges: Typ, Severity, Konfidenz - geklont aus den Zellen.
+    // Badges zuerst - Typ, Severity, Konfidenz, geklont aus den Zellen.
     SB.AppendLine('  var badges = document.createElement("div");');
     SB.AppendLine('  badges.className = "insp-badges";');
     SB.AppendLine('  [' + IntToStr(SP_TYP) + ', '
@@ -1217,10 +1207,17 @@ begin
     SB.AppendLine('    var b = z.cells[sp].querySelector(".badge");');
     SB.AppendLine('    if (b) badges.appendChild(b.cloneNode(true));');
     SB.AppendLine('  });');
-    SB.AppendLine('  hero.appendChild(badges);');
-    // Location: Datei:Zeile - Methode, ruhig und monospace.
+    SB.AppendLine('  kopf.appendChild(badges);');
+    // Ueberschrift: ID und Regelname in EINER Zeile, wie in V3.
+    SB.AppendLine('  var titel = document.createElement("h2");');
+    SB.AppendLine('  titel.className = "insp-titel";');
+    SB.AppendLine('  titel.textContent = z.cells[' + IntToStr(SP_SCAID)
+      + '].textContent + " " + z.cells[' + IntToStr(SP_REGEL)
+      + '].textContent;');
+    SB.AppendLine('  kopf.appendChild(titel);');
+    // Fundort: Datei:Zeile - Methode. Klasse metarow wie in V3.
     SB.AppendLine('  var ort = document.createElement("div");');
-    SB.AppendLine('  ort.className = "insp-ort";');
+    SB.AppendLine('  ort.className = "metarow";');
     SB.AppendLine('  var t = (tb.dataset.pfad || "") + ":" '
       + '+ z.cells[' + IntToStr(SP_ZEILE) + '].textContent;');
     // NUR die Methode, nicht die ganze Zelle: seit dem Umbau auf die
@@ -1233,17 +1230,19 @@ begin
     SB.AppendLine('  if (meth && meth.textContent) '
       + 't += " " + String.fromCharCode(183) + " " + meth.textContent;');
     SB.AppendLine('  ort.textContent = t;');
-    SB.AppendLine('  hero.appendChild(ort);');
-    // Der konkrete Fund-Text gehoert noch zum Hero-Block.
+    SB.AppendLine('  kopf.appendChild(ort);');
+    // Der Fundtext als insp-block - dieselbe Huelle, die V3 dafuer
+    // nimmt und die auch der Regel-Block darunter verwendet.
     SB.AppendLine('  var det = z.cells[' + IntToStr(SP_DETAIL)
       + '].textContent;');
     SB.AppendLine('  if (det) {');
+    SB.AppendLine('    var db = document.createElement("div");');
+    SB.AppendLine('    db.className = "insp-block";');
     SB.AppendLine('    var p = document.createElement("p");');
-    SB.AppendLine('    p.className = "insp-detail";');
     SB.AppendLine('    p.textContent = det;');
-    SB.AppendLine('    hero.appendChild(p);');
+    SB.AppendLine('    db.appendChild(p);');
+    SB.AppendLine('    kopf.appendChild(db);');
     SB.AppendLine('  }');
-    SB.AppendLine('  kopf.appendChild(hero);');
     // Quell-Ausschnitt FRUEH (Ebene 4): fuer den Entwickler ist die
     // Codezeile der visuelle Anker. Er liegt als unsichtbare
     // tr.snippet beim Fund und wird geklont, nicht verschoben - die

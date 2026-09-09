@@ -1040,27 +1040,32 @@ begin
     'Hover-Zustand fehlt');
   Assert.IsTrue(Pos('tr.haupt:focus-visible{', Html) > 0,
     'Focus-Zustand fehlt - Tastaturbedienung braucht ihn eigenstaendig');
-  // --- Inspector-Hero ------------------------------------------------
-  Assert.IsTrue(Pos('hero.className = "insp-hero";', Html) > 0,
-    'Hero-Block fehlt');
-  Assert.IsTrue(Pos('punkt.className = "insp-punkt";', Html) > 0,
-    'Severity-Punkt des Hero fehlt');
-  Assert.IsTrue(Pos('id.className = "insp-id";', Html) > 0,
-    'SCA-ID im Hero fehlt');
-  Assert.IsTrue(Pos('titel.className = "insp-titel";', Html) > 0,
-    'Titel im Hero fehlt');
+  // --- Inspector-Kopf (Aufbau der V3-Seite, 09.09.) ------------------
+  // Der verschachtelte Hero-Block ist entfallen: Badges, Ueberschrift
+  // und Fundort stehen jetzt flach nebeneinander, wie in V3. Der
+  // Severity-Punkt ist weg, weil das Badge daneben dasselbe sagt.
   Assert.IsTrue(Pos('badges.className = "insp-badges";', Html) > 0,
-    'Badge-Zeile im Hero fehlt');
-  Assert.IsTrue(Pos('ort.className = "insp-ort";', Html) > 0,
-    'Location im Hero fehlt');
+    'Badge-Zeile fehlt');
+  Assert.IsTrue(Pos('titel.className = "insp-titel";', Html) > 0,
+    'Ueberschrift fehlt');
+  Assert.IsTrue(Pos('ort.className = "metarow";', Html) > 0,
+    'Fundort fehlt oder nutzt nicht die geteilte metarow-Klasse');
+  Assert.AreEqual<Integer>(0, Pos('insp-hero', Html),
+    'der verschachtelte Hero-Block ist entfallen');
+  Assert.AreEqual<Integer>(0, Pos('insp-punkt', Html),
+    'der Severity-Punkt ist entfallen - das Badge sagt dasselbe');
+  // Die Ueberschrift traegt ID UND Regelname in einer Zeile.
+  Assert.IsTrue(Pos('titel.textContent = z.cells[2].textContent + " " '
+    + '+ z.cells[3].textContent;', Html) > 0,
+    'die Ueberschrift setzt nicht ID und Regelname zusammen');
   // Die Badges werden GEKLONT - so bleibt ihre Optik automatisch
   // dieselbe wie in der Tabelle.
   Assert.IsTrue(Pos('badges.appendChild(b.cloneNode(true));', Html) > 0,
-    'die Hero-Badges werden nicht aus den Zellen geklont');
-  // --- Reihenfolge: Hero VOR Quellcode VOR Regel-Doku ---------------
-  AssertReihenfolge(Html, 'kopf.appendChild(hero);',
+    'die Badges werden nicht aus den Zellen geklont');
+  // --- Reihenfolge: Kopf VOR Quellcode VOR Regel-Doku ---------------
+  AssertReihenfolge(Html, 'kopf.appendChild(ort);',
     'kopf.appendChild(sn.cloneNode(true));',
-    'der Quellcode muss NACH dem Hero kommen');
+    'der Quellcode muss NACH dem Fundort kommen');
   AssertReihenfolge(Html, 'korb.appendChild(fundKopf(tb));',
     'korb.appendChild(tpl.content.cloneNode(true));',
     'die Regel-Doku muss NACH dem Fund-Kopf kommen');
