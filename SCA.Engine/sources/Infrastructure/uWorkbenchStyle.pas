@@ -80,6 +80,21 @@ begin
       + 'background:var(--grund);color:var(--tinte);}');
     SB.AppendLine('.mono{font-family:Consolas,monospace;}');
     SB.AppendLine('a{color:var(--akzent);}');
+    // FORMULARELEMENTE ERBEN NICHT. Ein input, select oder button
+    // nimmt weder Schriftfamilie noch Textfarbe vom Elternteil - der
+    // Browser setzt seine eigenen Vorgaben, und die sind auf HELLEN
+    // Grund gerechnet. Im Dunkel-Thema stand deshalb schwarzer Text
+    // auf dunklem Feld: das Suchfeld war praktisch unlesbar (Nicos
+    // Befund 09.09.).
+    //
+    // Die Regel steht hier und nicht bei einer Seite, weil alle drei
+    // dieselben Steuerelemente tragen. Sie setzt NUR Schrift und
+    // Farbe; Rahmen, Polster und Rundung bleiben Sache der Seite.
+    SB.AppendLine('input,select,button,textarea{font:inherit;'
+      + 'color:var(--tinte);}');
+    // Der Platzhalter gedaempft, aber lesbar - die Browser-Vorgabe
+    // ist auf dunklem Grund oft kaum sichtbar.
+    SB.AppendLine('::placeholder{color:var(--dezent);opacity:1;}');
     // ---- Dunkler Seitenkopf (bewusst kein Token-Fall, s. Konzept) -----
     // ---- Kopf: angepinnt, zwei Zustaende -------------------------------
     // Der Kopf bleibt beim Scrollen oben stehen und schrumpft dabei auf
