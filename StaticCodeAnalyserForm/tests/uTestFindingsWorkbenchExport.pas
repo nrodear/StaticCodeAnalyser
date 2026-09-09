@@ -38,6 +38,9 @@ type
     [Test] procedure FileRow_UnderMainRow_NameFirstThenFullPath;
     // Die Methodenzelle traegt seit 09.09. zwei Texte (V3-Formatierung).
     [Test] procedure Methodenzelle_SortiertOhneDenPfad;
+    // Regel und Detail untereinander, feste Spaltenbreiten (09.09.).
+    [Test] procedure Regelzelle_TraegtRegelUndDetailUntereinander;
+    [Test] procedure Spaltenbreiten_SindFestWieInV3;
     // Angepinnter Kopf mit zwei Zustaenden (Nutzerauftrag 09.09.).
     [Test] procedure Kopf_IstAngepinntUndSchrumpftBeimScrollen;
     // EN/FR-Nachtrag 07.09.: Seite in drei Sprachen, Token unberuehrt.
@@ -488,6 +491,91 @@ begin
     Pos('.zl-datei{overflow:hidden;text-overflow:ellipsis;'
       + 'white-space:nowrap;', Html) > 0,
     'Ellipse-CSS der Datei-Zeile fehlt');
+end;
+
+procedure TTestFindingsWorkbenchExport.Regelzelle_TraegtRegelUndDetailUntereinander;
+// Nutzerauftrag 09.09.: Regelname und Detailtext sind beide oft lang
+// und haben sich als Nachbarspalten gegenseitig die Breite genommen.
+// Jetzt stehen sie in EINER Zelle untereinander, beide mit Ellipse.
+//
+// Der Test haelt auch die drei Folgen fest, die man sonst erst im
+// Browser sieht: die Detail-Spalte ist weg (sieben Spalten statt
+// acht), der Sortierschluessel traegt nur den Regelnamen, und der
+// Drawer liest gezielt die Teilzeilen statt der ganzen Zelle.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10,
+      'list not freed'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+
+  Assert.IsTrue(Pos('<div class="zl-regel">', Html) > 0,
+    'die Regel-Zeile der Zelle fehlt');
+  Assert.IsTrue(Pos('<div class="zl-detail">list not freed</div>',
+    Html) > 0, 'der Detailtext steht nicht unter der Regel');
+  Assert.IsTrue(Pos('.zl-detail{overflow:hidden;text-overflow:ellipsis;',
+    Html) > 0, 'der Detailtext kuerzt nicht mit Ellipse');
+  // Sieben Spalten: die eigene Detail-Spalte ist entfallen.
+  Assert.AreEqual<Integer>(0, Pos('colspan="8"', Html),
+    'irgendwo steht noch ein colspan ueber acht Spalten');
+  Assert.IsTrue(Pos('colspan="7"', Html) > 0,
+    'der Quellausschnitt spannt nicht ueber alle sieben Spalten');
+  // Der Drawer darf nicht die ganze Zelle lesen - sonst stuende im
+  // Titel "SCA001 MemoryLeakObject created but not..." am Stueck.
+  Assert.IsTrue(Pos('.querySelector(".zl-regel")', Html) > 0,
+    'der Drawer liest den Regelnamen nicht gezielt');
+  Assert.IsTrue(Pos('.querySelector(".zl-detail")', Html) > 0,
+    'der Drawer liest den Detailtext nicht gezielt');
+end;
+
+procedure TTestFindingsWorkbenchExport.Spaltenbreiten_SindFestWieInV3;
+// Nicos Review 09.09.: "die spaltenbreiten sind nicht richtig aus V3
+// uebernommen worden" - sie waren es gar nicht. V2 hatte NUR
+// table{width:100%}, den Rest machte die Browser-Automatik nach
+// Inhalt. Damit wanderten die Spalten von Bericht zu Bericht, und die
+// Ellipse griff nie: eine Zelle ohne feste Breite wird einfach
+// breiter, statt zu kuerzen.
+//
+// table-layout:fixed ist deshalb der TRAGENDE Teil - ohne ihn haetten
+// die width-Angaben keine Wirkung.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+
+  Assert.IsTrue(Pos('table-layout:fixed;', Html) > 0,
+    'ohne table-layout:fixed wirken die Spaltenbreiten nicht und die '
+    + 'Ellipse greift nie');
+  // Die Werte stammen aus dem Grid der V3-Seite.
+  Assert.IsTrue(Pos('th:nth-child(1){width:64px;}', Html) > 0,
+    'Zeilen-Spalte ohne feste Breite');
+  Assert.IsTrue(Pos('th:nth-child(3){width:92px;}', Html) > 0,
+    'SCA-ID-Spalte ohne feste Breite');
+  Assert.IsTrue(Pos('th:nth-child(5){width:132px;}', Html) > 0,
+    'Typ-Spalte ohne feste Breite');
+  Assert.IsTrue(Pos('th:nth-child(6){width:104px;}', Html) > 0,
+    'Schweregrad-Spalte ohne feste Breite');
+  Assert.IsTrue(Pos('th:nth-child(7){width:96px;}', Html) > 0,
+    'Konfidenz-Spalte ohne feste Breite');
+  // Die beiden TEXT-Spalten bekommen bewusst KEINE Breite - sie
+  // teilen sich den Rest (Gegenstueck zu 1fr im Grid).
+  Assert.AreEqual<Integer>(0, Pos('th:nth-child(2){width:', Html),
+    'die Methoden-Spalte darf keine feste Breite haben');
+  Assert.AreEqual<Integer>(0, Pos('th:nth-child(4){width:', Html),
+    'die Regel-Spalte darf keine feste Breite haben');
 end;
 
 procedure TTestFindingsWorkbenchExport.Kopf_IstAngepinntUndSchrumpftBeimScrollen;
@@ -1030,8 +1118,10 @@ begin
     'Lesefehler-Rail fehlt und faellt auf die Hinweis-Farbe zurueck');
   // Die Auswahl hebt den REGELNAMEN an - Spalte 4, nicht 5 (5 waere
   // die Typ-Zelle; der erste Wurf machte nur den Badge fett).
-  Assert.IsTrue(Pos('#funde tbody.gewaehlt tr.haupt td:nth-child(4){'
-    + 'font-weight:600;}', Html) > 0,
+  // Seit 09.09. gezielt die .zl-regel-Zeile: in derselben Zelle steht
+  // darunter der Detailtext, und der ist bewusst gedaempft.
+  Assert.IsTrue(Pos('#funde tbody.gewaehlt tr.haupt td:nth-child(4) '
+    + '.zl-regel{font-weight:700;}', Html) > 0,
     'die Auswahl hebt nicht den Regelnamen an');
   Assert.AreEqual<Integer>(0,
     Pos('tr.haupt td:nth-child(5){font-weight', Html),

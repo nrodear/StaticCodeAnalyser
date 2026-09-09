@@ -122,13 +122,27 @@ const
   // die Zellen fuer den Drawer-Kopf liest. Darum benannt statt
   // gestreut - eine neue Spalte fasst hier UND an den drei Stellen an.
   SP_ZEILE    = 0;
-  SP_METHODE  = 1;
+  SP_METHODE  = 1;   // + Datei darunter
   SP_SCAID    = 2;
-  SP_REGEL    = 3;
+  SP_REGEL    = 3;   // + Detailtext darunter
   SP_TYP      = 4;
   SP_SEVERITY = 5;
   SP_KONFIDENZ = 6;
-  SP_DETAIL   = 7;
+  // Anzahl der Spalten - fuer colspan der Zeilen, die sich ueber die
+  // ganze Breite legen (Quellausschnitt). Stand bis 09.09. als 8 fest
+  // verdrahtet an drei Stellen.
+  SP_ANZAHL   = 7;
+  // Die Spaltenbreiten der V3-Seite, uebernommen auf Nicos Auftrag
+  // 09.09. V2 hatte GAR KEINE - die Browser-Automatik verteilte nach
+  // Inhalt, und damit wanderten die Spalten von Bericht zu Bericht.
+  // Die beiden Textspalten (Methode+Datei, Regel+Detail) bekommen
+  // KEINE Breite: bei table-layout:fixed teilen sie sich, was die
+  // festen uebrig lassen - das ist das Tabellen-Gegenstueck zu 1fr.
+  SP_BREITE_ZEILE  = '64px';
+  SP_BREITE_SCAID  = '92px';
+  SP_BREITE_TYP    = '132px';
+  SP_BREITE_SEV    = '104px';
+  SP_BREITE_KONF   = '96px';
   // Zeilen vor und nach der Fundzeile im Quell-Ausschnitt (wie V1).
   SNIPPET_KONTEXT = 3;
 
@@ -481,7 +495,26 @@ begin
     SB.AppendLine('.listwrap{background:var(--karte);border:1px solid '
       + 'var(--rand);border-radius:8px;overflow:auto;'
       + 'box-shadow:0 1px 2px rgba(16,32,48,0.06);}');
-    SB.AppendLine('table{border-collapse:collapse;width:100%;}');
+    // table-layout:fixed traegt die Spaltenbreiten (Nicos Auftrag
+    // 09.09., Werte aus der V3-Seite). OHNE fixed verteilt der Browser
+    // nach INHALT - dann wandern die Spalten von Bericht zu Bericht,
+    // je nachdem wie lang der laengste Regelname gerade ist, und die
+    // Ellipse greift nie, weil die Zelle einfach breiter wird.
+    SB.AppendLine('table{border-collapse:collapse;width:100%;'
+      + 'table-layout:fixed;}');
+    // Die festen Spalten. Die beiden TEXT-Spalten (Methode+Datei,
+    // Regel+Detail) bekommen bewusst keine Breite und teilen sich den
+    // Rest - das Tabellen-Gegenstueck zu 1fr im Grid von V3.
+    SB.AppendLine('th:nth-child(' + IntToStr(SP_ZEILE + 1)
+      + '){width:' + SP_BREITE_ZEILE + ';}');
+    SB.AppendLine('th:nth-child(' + IntToStr(SP_SCAID + 1)
+      + '){width:' + SP_BREITE_SCAID + ';}');
+    SB.AppendLine('th:nth-child(' + IntToStr(SP_TYP + 1)
+      + '){width:' + SP_BREITE_TYP + ';}');
+    SB.AppendLine('th:nth-child(' + IntToStr(SP_SEVERITY + 1)
+      + '){width:' + SP_BREITE_SEV + ';}');
+    SB.AppendLine('th:nth-child(' + IntToStr(SP_KONFIDENZ + 1)
+      + '){width:' + SP_BREITE_KONF + ';}');
     SB.AppendLine('th,td{padding:7px 10px;text-align:left;'
       + 'vertical-align:top;font-size:0.92em;border:0;}');
     // top an der KOPFHOEHE, nicht 0: der Seitenkopf ist seit 09.09.
@@ -566,8 +599,11 @@ begin
     // sichtbar wurde nur ein halbfetter Typ-Badge, der Titel des
     // Fundes blieb unveraendert (Chargen-Review 08.09., MAJOR).
     // td.id ist bewusst NICHT dabei: es traegt bereits font-weight:600.
+    // Nur die REGEL-Zeile der Zelle, nicht die ganze Zelle: sonst
+    // wuerde auch der Detailtext darunter fett - der ist bewusst
+    // gedaempft.
     SB.AppendLine('#funde tbody.gewaehlt tr.haupt td:nth-child('
-      + IntToStr(SP_REGEL + 1) + '){font-weight:600;}');
+      + IntToStr(SP_REGEL + 1) + ') .zl-regel{font-weight:700;}');
     // Methode und Datei stehen seit 09.09. in EINER Zelle
     // uebereinander (V3-Formatierung). Beide Zeilen kuerzen mit
     // Ellipse statt umzubrechen - max-width:0 laesst die uebrigen
@@ -578,13 +614,23 @@ begin
     // Berichte denselben Style-Block teilen und dieselbe Zeile
     // zeichnen sollen.
     SB.AppendLine('tr.haupt>td:nth-child('
-      + IntToStr(SP_METHODE + 1) + '){max-width:0;}');
+      + IntToStr(SP_METHODE + 1) + '),tr.haupt>td:nth-child('
+      + IntToStr(SP_REGEL + 1) + '){max-width:0;}');
     SB.AppendLine('.zl-methode{overflow:hidden;'
       + 'text-overflow:ellipsis;white-space:nowrap;}');
     SB.AppendLine('.zl-datei{overflow:hidden;'
       + 'text-overflow:ellipsis;white-space:nowrap;'
       + 'font-family:Consolas,monospace;font-size:0.85em;'
       + 'color:var(--dezent);padding-top:2px;}');
+    // Regel und Detailtext stehen seit 09.09. ebenfalls uebereinander
+    // (Nicos Auftrag): beide sind oft lang und haben sich als
+    // Nachbarspalten gegenseitig die Breite genommen. Beide kuerzen
+    // mit Ellipse - der volle Text steht im Inspector.
+    SB.AppendLine('.zl-regel{overflow:hidden;'
+      + 'text-overflow:ellipsis;white-space:nowrap;font-weight:600;}');
+    SB.AppendLine('.zl-detail{overflow:hidden;'
+      + 'text-overflow:ellipsis;white-space:nowrap;'
+      + 'font-size:0.85em;color:var(--dezent);padding-top:2px;}');
     SB.AppendLine('td.id{font-family:Consolas,monospace;font-weight:600;'
       + 'white-space:nowrap;}');
     SB.AppendLine('td.num{text-align:right;font-variant-numeric:'
@@ -1211,9 +1257,14 @@ begin
     // Ueberschrift: ID und Regelname in EINER Zeile, wie in V3.
     SB.AppendLine('  var titel = document.createElement("h2");');
     SB.AppendLine('  titel.className = "insp-titel";');
+    // NUR .zl-regel, nicht die ganze Zelle: dort steht seit 09.09.
+    // auch der Detailtext. Ein blosses textContent haette den
+    // Titel zu "SCA168 case statement without else branchcase
+    // statement without else - unhandled..." gemacht.
+    SB.AppendLine('  var rn = z.cells[' + IntToStr(SP_REGEL)
+      + '].querySelector(".zl-regel");');
     SB.AppendLine('  titel.textContent = z.cells[' + IntToStr(SP_SCAID)
-      + '].textContent + " " + z.cells[' + IntToStr(SP_REGEL)
-      + '].textContent;');
+      + '].textContent + " " + (rn ? rn.textContent : "");');
     SB.AppendLine('  kopf.appendChild(titel);');
     // Fundort: Datei:Zeile - Methode. Klasse metarow wie in V3.
     SB.AppendLine('  var ort = document.createElement("div");');
@@ -1233,8 +1284,11 @@ begin
     SB.AppendLine('  kopf.appendChild(ort);');
     // Der Fundtext als insp-block - dieselbe Huelle, die V3 dafuer
     // nimmt und die auch der Regel-Block darunter verwendet.
-    SB.AppendLine('  var det = z.cells[' + IntToStr(SP_DETAIL)
-      + '].textContent;');
+    // Der Detailtext steht seit 09.09. als zweite Zeile IN der
+    // Regelzelle - eine eigene Detail-Spalte gibt es nicht mehr.
+    SB.AppendLine('  var dv = z.cells[' + IntToStr(SP_REGEL)
+      + '].querySelector(".zl-detail");');
+    SB.AppendLine('  var det = dv ? dv.textContent : "";');
     SB.AppendLine('  if (det) {');
     SB.AppendLine('    var db = document.createElement("div");');
     SB.AppendLine('    db.className = "insp-block";');
@@ -1442,7 +1496,8 @@ function Snippetblock(const ASnippet: string): string;
 // fuer Tabellen aus der Tabelle herausgehoben worden.
 begin
   if ASnippet = '' then Exit('');
-  Result := '<tr class="snippet"><td colspan="8">' + ASnippet
+  Result := '<tr class="snippet"><td colspan="' + IntToStr(SP_ANZAHL)
+    + '">' + ASnippet
     + '</td></tr>'#13#10;
 end;
 
@@ -1527,14 +1582,22 @@ begin
         [HA(Z.Fund.MethodName), H(Z.Fund.MethodName),
          HA(Z.Pfad), DateiZeile])
     + '<td class="id">' + H(Z.Meta.ID) + '</td>'
-    + '<td>' + H(Z.Meta.Name) + '</td>'
+    // Regelname UND Detailtext in EINER Zelle, untereinander (Nicos
+    // Auftrag 09.09.). Beide sind oft lang; nebeneinander in zwei
+    // Spalten haben sie sich gegenseitig die Breite genommen.
+    //
+    // data-sort traegt den REINEN Regelnamen - aus demselben Grund wie
+    // bei der Methodenzelle: der textContent enthaelt jetzt auch den
+    // Detailtext, sortiert wuerde also nach beidem.
+    + Format('<td data-sort="%s"><div class="zl-regel">%s</div>'
+        + '<div class="zl-detail">%s</div></td>',
+        [HA(Z.Meta.Name), H(Z.Meta.Name), H(Z.Fund.MissingVar)])
     + Format('<td><span class="badge typ %s">%s</span></td>',
         [TypCss(Z.Meta.FindingType), H(TypText(Z.Meta.FindingType))])
     + Format('<td data-sort="%d">%s</td>', [SevRang, SevBadge])
     + Format('<td data-sort="%d"><span class="badge konf">%s'
         + '</span></td>', [Ord(Z.Fund.Confidence),
            TWorkbenchI18n.T(CONF_KEY[Z.Fund.Confidence], Z.Lang)])
-    + '<td>' + H(Z.Fund.MissingVar) + '</td>'
     + '</tr>'#13#10
     // Der Quell-Ausschnitt liegt als unsichtbares TEMPLATE bei der
     // Zeile, nicht in einem Attribut: er ist fertiges Markup und
@@ -1897,8 +1960,10 @@ begin
     SB.AppendLine('<div class="listwrap">');
     SB.AppendLine('<table id="funde">');
     // Keine Datei-Spalte mehr: die Datei steht seit 09.09. in DERSELBEN
-    // Zelle wie die Methode, zweizeilig (s. ZeileFuerFund). Acht Koepfe = die
-    // Zellen der tr.haupt-Zeile, Indizes 0..7.
+    // Zelle wie die Methode, zweizeilig (s. ZeileFuerFund). SIEBEN
+    // Koepfe = die Zellen der tr.haupt-Zeile, Indizes 0..6: seit
+    // 09.09. teilt sich der Detailtext die Zelle mit dem Regelnamen,
+    // eine eigene Detail-Spalte gibt es nicht mehr.
     SB.AppendLine('<thead><tr>'
       + Kopf(SP_ZEILE, wtSpZeile, ALang)
       + Kopf(SP_METHODE, wtSpMethode, ALang)
@@ -1907,7 +1972,6 @@ begin
       + Kopf(SP_TYP, wtSpTyp, ALang)
       + Kopf(SP_SEVERITY, wtSpSchweregrad, ALang)
       + Kopf(SP_KONFIDENZ, wtSpKonfidenz, ALang)
-      + Kopf(SP_DETAIL, wtSpDetail, ALang)
       + '</tr></thead>');
 
     QuellCache := TObjectDictionary<string, TStringList>.Create(
