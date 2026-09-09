@@ -36,6 +36,8 @@ type
     // Nutzerauftrag 07.09. (Screenshot): Datei als eigene Zeile UNTER
     // Zeile+Methode - "Dateiname; voller Pfad" mit Ellipse.
     [Test] procedure FileRow_UnderMainRow_NameFirstThenFullPath;
+    // Die Methodenzelle traegt seit 09.09. zwei Texte (V3-Formatierung).
+    [Test] procedure Methodenzelle_SortiertOhneDenPfad;
     // EN/FR-Nachtrag 07.09.: Seite in drei Sprachen, Token unberuehrt.
     [Test] procedure Language_TranslatesPageButKeepsTokens;
     // Feature-Abgleich V1->V2 (Todo_FeatureListe..., 07.09.):
@@ -462,26 +464,59 @@ begin
     'erste sortierbare Spalte muss die Zeilennummer sein');
   Assert.AreEqual<Integer>(0, Pos('>Datei<span', Html),
     'der alte Datei-Spaltenkopf muss weg sein');
+  // Seit 09.09. steht die Datei in DERSELBEN Zelle wie die Methode,
+  // zweizeilig - die Formatierung der V3-Seite (Nicos Wunsch). Die
+  // eigene tr.datei mit colspan=8 gibt es nicht mehr.
   Assert.IsTrue(
-    Pos('<td class="pfadzeile" colspan="8" title="src\A.pas">'
-      + 'A.pas; src\A.pas</td>', Html) > 0,
-    'Datei-Zeile "Name; voller Pfad" mit title fehlt');
+    Pos('<div class="zl-datei" title="src\A.pas">A.pas; src\A.pas'
+      + '</div>', Html) > 0,
+    'Datei-Zeile "Name; voller Pfad" mit title fehlt in der '
+    + 'Methodenzelle');
   Assert.IsTrue(
-    Pos('<td class="pfadzeile" colspan="8" title="B.pas">'
-      + 'B.pas</td>', Html) > 0,
+    Pos('<div class="zl-datei" title="B.pas">B.pas</div>', Html) > 0,
     'bei blossem Basisnamen darf kein "Name; Name"-Doppel stehen');
-  AssertReihenfolge(Html, '<tr class="haupt"', '<tr class="datei"',
-    'die Datei-Zeile steht UNTER der Hauptzeile');
+  Assert.AreEqual<Integer>(0, Pos('<tr class="datei"', Html),
+    'die eigene Datei-Zeile ist entfallen - sie kostete je Fund eine '
+    + 'ganze Tabellenzeile');
+  Assert.AreEqual<Integer>(0, Pos('class="pfadzeile"', Html),
+    'die alte Pfadzeilen-Klasse darf nicht mehr vorkommen');
   Assert.IsTrue(Pos('data-pfad="src\A.pas"', Html) > 0,
     'data-pfad (Drawer-Fundort) fehlt am tbody');
   Assert.IsTrue(
-    Pos('td.pfadzeile{max-width:0;overflow:hidden;'
-      + 'text-overflow:ellipsis;white-space:nowrap;', Html) > 0,
+    Pos('.zl-datei{overflow:hidden;text-overflow:ellipsis;'
+      + 'white-space:nowrap;', Html) > 0,
     'Ellipse-CSS der Datei-Zeile fehlt');
-  Assert.IsTrue(
-    Pos('<tr class="datei" onclick="oeffneDrawer(this.parentNode)">',
-      Html) > 0,
-    'auch die Datei-Zeile muss den Drawer oeffnen');
+end;
+
+procedure TTestFindingsWorkbenchExport.Methodenzelle_SortiertOhneDenPfad;
+// Die Methodenzelle enthaelt seit 09.09. ZWEI Texte. Ohne eigenen
+// Sortierschluessel liest zellwert() ihren textContent - und damit
+// wuerde nach "Methode plus Dateipfad" sortiert, also faktisch nach
+// der Datei. Der Test haelt fest, dass data-sort den REINEN
+// Methodennamen traegt.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+
+  Assert.IsTrue(Pos('<td data-sort="TFoo.Bar"><div class="zl-methode">'
+    + 'TFoo.Bar</div>', Html) > 0,
+    'die Methodenzelle traegt keinen eigenen Sortierschluessel - '
+    + 'sortiert wuerde dann nach Methode UND Pfad');
+  // Und die Gegenseite: zellwert muss einen TEXT-Schluessel
+  // verkraften. Ein blindes parseInt liefert NaN, und NaN vergleicht
+  // sich mit allem als false - die Spalte waere unsortierbar, ohne
+  // dass es auffaellt.
+  Assert.IsTrue(Pos('return isNaN(n) ? d.toLowerCase() : n;', Html) > 0,
+    'zellwert() faellt bei nicht-numerischem data-sort nicht auf den '
+    + 'Textvergleich zurueck');
 end;
 
 procedure TTestFindingsWorkbenchExport.Language_TranslatesPageButKeepsTokens;

@@ -506,11 +506,11 @@ begin
     SB.AppendLine('  return "<div class=''v3-zeile'' data-i=''"+i'
       + '+"'' tabindex=''0''>"');
     SB.AppendLine('    +"<div class=''v3-num''>"+f[Z]+"</div>"');
-    SB.AppendLine('    +"<div><div class=''v3-haupt''>"+esc(f[ME])'
-      + '+"</div><div class=''v3-datei'' title=''"+esc(p)+"''>"+dz'
+    SB.AppendLine('    +"<div><div class=''zl-methode''>"+esc(f[ME])'
+      + '+"</div><div class=''zl-datei'' title=''"+esc(p)+"''>"+dz'
       + '+"</div></div>"');
     SB.AppendLine('    +"<div>"+esc(r[0])+"</div>"');
-    SB.AppendLine('    +"<div class=''v3-haupt''>"+esc(r[1])+"</div>"');
+    SB.AppendLine('    +"<div class=''zl-methode''>"+esc(r[1])+"</div>"');
     SB.AppendLine('    +"<div><span class=''badge typ "+r[2]+"''>"'
       + '+esc(r[3])+"</span></div>"');
     SB.AppendLine('    +"<div><span class=''badge sev-"+CSEV[f[SV]]'
@@ -970,12 +970,12 @@ begin
       + 'border-left:3px solid var(--akzent);padding-left:9px;}');
     SB.AppendLine('.v3-zeile:focus-visible{outline:2px solid '
       + 'var(--akzent);outline-offset:-2px;}');
-    // Zwei Textzeilen je Eintrag: oben Methode, darunter Dateiname und
-    // voller Pfad mit Ellipse (Nutzerwunsch 07.09., wie V2).
-    SB.AppendLine('.v3-haupt{overflow:hidden;text-overflow:ellipsis;'
-      + 'white-space:nowrap;}');
-    SB.AppendLine('.v3-datei{font-size:11px;color:var(--dezent);'
-      + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}');
+    // Zwei Textzeilen je Eintrag - oben die Methode, darunter Dateiname
+    // und voller Pfad mit Ellipse. Die Klassen .zl-methode und
+    // .zl-datei kommen aus dem GETEILTEN Style-Block (V2 traegt seit
+    // 09.09. dieselbe Zeile); hier stand bis dahin eine zweite,
+    // eigene Definition unter anderem Namen. Eine Formatierung, die in
+    // beiden Berichten gleich aussehen soll, gehoert an EINE Stelle.
     SB.AppendLine('.v3-num{text-align:right;font-variant-numeric:'
       + 'tabular-nums;color:var(--dezent);}');
     SB.AppendLine('#v3kopf{display:grid;'

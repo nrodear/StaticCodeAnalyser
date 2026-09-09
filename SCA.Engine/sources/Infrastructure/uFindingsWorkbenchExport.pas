@@ -489,7 +489,9 @@ begin
       + 'margin-left:3px;}');
     SB.AppendLine('tr.haupt{border-top:1px solid var(--rand);'
       + 'cursor:pointer;}');
-    SB.AppendLine('tr.datei{cursor:pointer;}');
+    // tr.datei ist am 09.09. entfallen - die Datei steht jetzt in der
+    // Methoden-Zelle (V3-Formatierung). Die Regel stand hier fuer den
+    // Zeiger auf der eigenen Dateizeile; die gibt es nicht mehr.
     // DREI unterscheidbare Zustaende (IDE-Focus-Redesign 08.09.):
     //   HOVER     - nur ein Hauch Flaeche, kein Rail
     //   FOCUS     - Tastatur: sichtbarer Ring, unabhaengig von Auswahl
@@ -548,10 +550,20 @@ begin
     // td.id ist bewusst NICHT dabei: es traegt bereits font-weight:600.
     SB.AppendLine('#funde tbody.gewaehlt tr.haupt td:nth-child('
       + IntToStr(SP_REGEL + 1) + '){font-weight:600;}');
-    // Datei-Zeile "Name; voller Pfad": Ellipse statt Umbruch -
-    // max-width:0 laesst die uebrigen Zellen die Breite bestimmen
-    // (Tabellen-Ellipsis-Muster), title zeigt den vollen Pfad.
-    SB.AppendLine('td.pfadzeile{max-width:0;overflow:hidden;'
+    // Methode und Datei stehen seit 09.09. in EINER Zelle
+    // uebereinander (V3-Formatierung). Beide Zeilen kuerzen mit
+    // Ellipse statt umzubrechen - max-width:0 laesst die uebrigen
+    // Zellen die Breite bestimmen (Tabellen-Ellipsis-Muster), das
+    // title-Attribut zeigt den vollen Pfad.
+    //
+    // Die Klassen heissen NEUTRAL (zl- statt v2-/v3-), weil beide
+    // Berichte denselben Style-Block teilen und dieselbe Zeile
+    // zeichnen sollen.
+    SB.AppendLine('tr.haupt>td:nth-child('
+      + IntToStr(SP_METHODE + 1) + '){max-width:0;}');
+    SB.AppendLine('.zl-methode{overflow:hidden;'
+      + 'text-overflow:ellipsis;white-space:nowrap;}');
+    SB.AppendLine('.zl-datei{overflow:hidden;'
       + 'text-overflow:ellipsis;white-space:nowrap;'
       + 'font-family:Consolas,monospace;font-size:0.85em;'
       + 'color:var(--dezent);padding-top:2px;}');
@@ -991,8 +1003,17 @@ begin
     SB.AppendLine('}');
     SB.AppendLine('function zellwert(tb, spalte) {');
     SB.AppendLine('  var td = tb.rows[0].cells[spalte];');
-    SB.AppendLine('  if (td.dataset.sort !== undefined) '
-      + 'return parseInt(td.dataset.sort, 10);');
+    // data-sort kann seit 09.09. auch ein TEXT sein: die Methodenzelle
+    // traegt dort den reinen Methodennamen, weil ihr textContent jetzt
+    // auch den Dateipfad enthaelt (V3-Formatierung). Ein blindes
+    // parseInt haette daraus NaN gemacht, und NaN vergleicht sich mit
+    // allem als false - die Spalte waere unsortierbar geworden, ohne
+    // dass es auffaellt.
+    SB.AppendLine('  var d = td.dataset.sort;');
+    SB.AppendLine('  if (d !== undefined) {');
+    SB.AppendLine('    var n = parseInt(d, 10);');
+    SB.AppendLine('    return isNaN(n) ? d.toLowerCase() : n;');
+    SB.AppendLine('  }');
     SB.AppendLine('  return td.textContent.toLowerCase();');
     SB.AppendLine('}');
     SB.AppendLine('function sortiere(spalte) {');
@@ -1199,9 +1220,15 @@ begin
     SB.AppendLine('  ort.className = "insp-ort";');
     SB.AppendLine('  var t = (tb.dataset.pfad || "") + ":" '
       + '+ z.cells[' + IntToStr(SP_ZEILE) + '].textContent;');
-    SB.AppendLine('  if (z.cells[' + IntToStr(SP_METHODE)
-      + '].textContent) t += " " + String.fromCharCode(183) + " " '
-      + '+ z.cells[' + IntToStr(SP_METHODE) + '].textContent;');
+    // NUR die Methode, nicht die ganze Zelle: seit dem Umbau auf die
+    // V3-Formatierung (09.09.) steht in dieser Zelle auch der
+    // Dateipfad. Ein blosses textContent haette daraus
+    // "pfad:zeile - TFoo.BarMeineUnit.pas; src/MeineUnit.pas"
+    // gemacht - der Pfad stuende dann zweimal in einer Zeile.
+    SB.AppendLine('  var meth = z.cells[' + IntToStr(SP_METHODE)
+      + '].querySelector(".zl-methode");');
+    SB.AppendLine('  if (meth && meth.textContent) '
+      + 't += " " + String.fromCharCode(183) + " " + meth.textContent;');
     SB.AppendLine('  ort.textContent = t;');
     SB.AppendLine('  hero.appendChild(ort);');
     // Der konkrete Fund-Text gehoert noch zum Hero-Block.
@@ -1415,12 +1442,21 @@ begin
 end;
 
 function ZeileFuerFund(const Z: TFundZeile): string;
-// Ein tbody je Fund, seit dem Nutzerauftrag 07.09. ZWEI Zeilen:
-//   tr.haupt: Zeile, Methode, SCA-ID, Regel, Typ, Schweregrad,
-//             Konfidenz, Detail (fundKopf() liest Zellen 0/1/7)
-//   tr.datei: colspan-8-Zeile "Dateiname; voller Pfad" mit
-//             CSS-Ellipse (title-Attribut traegt den vollen Pfad).
-// Die Datei stand vorher als umbrechende Schmalspalte VOR der Zeile -
+// Ein tbody je Fund mit EINER sichtbaren Zeile (Stand 09.09.):
+//   tr.haupt: Zeile, Methode+Datei, SCA-ID, Regel, Typ, Schweregrad,
+//             Konfidenz, Detail
+// Methode und Datei stehen in DERSELBEN Zelle uebereinander - die
+// Formatierung der V3-Seite, uebernommen auf Nicos Wunsch. Bis dahin
+// war die Datei eine eigene tr mit colspan=8; das kostete je Fund
+// eine ganze Tabellenzeile.
+//
+// ZWEI Stellen haengen daran und muessten mitwandern, wenn sich das
+// wieder aendert: die Methodenzelle traegt ihren Sortierschluessel in
+// data-sort (ihr textContent enthaelt jetzt auch den Pfad), und
+// fundKopf() liest fuer die Fundort-Zeile gezielt .zl-methode statt
+// der ganzen Zelle.
+//
+// Die Datei stand ganz frueher als umbrechende Schmalspalte VOR der Zeile -
 // unlesbar bei tiefen Pfaden (Screenshot-Befund). data-pfad am tbody
 // versorgt den Drawer-Fundort. Die Datei-Spalte ist damit nicht mehr
 // per Kopfklick sortierbar (kein Kopf) - Suche und Suchblob decken
@@ -1472,7 +1508,19 @@ begin
     + 'onclick="oeffneDrawer(this.parentNode)">'
     + Format('<td class="num" data-sort="%d">%s</td>',
         [StrToIntDef(Z.Fund.LineNumber, 0), H(Z.Fund.LineNumber)])
-    + '<td>' + H(Z.Fund.MethodName) + '</td>'
+    // Methode UND Datei in EINER Zelle, zweizeilig (V3-Formatierung,
+    // uebernommen am 09.09. auf Nicos Wunsch). Vorher war die Datei
+    // eine eigene tr mit colspan=8 - das kostete je Fund eine ganze
+    // Tabellenzeile, also ein Viertel der Zeilen des Berichts.
+    //
+    // data-sort traegt den REINEN Methodennamen: ohne ihn liest
+    // zellwert() den textContent der Zelle, und der enthaelt jetzt
+    // auch den Dateipfad - sortiert wuerde dann nach "Methode plus
+    // Datei" statt nach der Methode.
+    + Format('<td data-sort="%s"><div class="zl-methode">%s</div>'
+        + '<div class="zl-datei" title="%s">%s</div></td>',
+        [HA(Z.Fund.MethodName), H(Z.Fund.MethodName),
+         HA(Z.Pfad), DateiZeile])
     + '<td class="id">' + H(Z.Meta.ID) + '</td>'
     + '<td>' + H(Z.Meta.Name) + '</td>'
     + Format('<td><span class="badge typ %s">%s</span></td>',
@@ -1482,10 +1530,6 @@ begin
         + '</span></td>', [Ord(Z.Fund.Confidence),
            TWorkbenchI18n.T(CONF_KEY[Z.Fund.Confidence], Z.Lang)])
     + '<td>' + H(Z.Fund.MissingVar) + '</td>'
-    + '</tr>'#13#10
-    + '<tr class="datei" onclick="oeffneDrawer(this.parentNode)">'
-    + '<td class="pfadzeile" colspan="8" title="' + H(Z.Pfad) + '">'
-    + DateiZeile + '</td>'
     + '</tr>'#13#10
     // Der Quell-Ausschnitt liegt als unsichtbares TEMPLATE bei der
     // Zeile, nicht in einem Attribut: er ist fertiges Markup und
@@ -1847,8 +1891,8 @@ begin
 
     SB.AppendLine('<div class="listwrap">');
     SB.AppendLine('<table id="funde">');
-    // Keine Datei-Spalte mehr: die Datei steht als eigene Zeile unter
-    // Zeile+Methode (tr.datei, s. ZeileFuerFund). Acht Koepfe = die
+    // Keine Datei-Spalte mehr: die Datei steht seit 09.09. in DERSELBEN
+    // Zelle wie die Methode, zweizeilig (s. ZeileFuerFund). Acht Koepfe = die
     // Zellen der tr.haupt-Zeile, Indizes 0..7.
     SB.AppendLine('<thead><tr>'
       + Kopf(SP_ZEILE, wtSpZeile, ALang)
