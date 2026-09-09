@@ -1138,6 +1138,30 @@ begin
   end;
   Assert.IsTrue(Pos('id="topRegeln"', Html) > 0, 'Top-Regeln fehlen');
   Assert.IsTrue(Pos('id="topDateien"', Html) > 0, 'Top-Dateien fehlen');
+  // Beschriftung mit NAMEN, nicht nur der ID (Nico 09.09.): "SCA001"
+  // allein sagt niemandem, worum es geht. Der Filterwert bleibt die
+  // reine ID - nur die Anzeige wird laenger.
+  //
+  // Geprueft wird die STRUKTUR, nicht der konkrete Name: der kommt aus
+  // dem Regelkatalog und haengt an der Sprache UND daran, ob die
+  // rules-JSON zur Laufzeit gefunden wird (sonst greift der
+  // einkompilierte Fallback mit anderen Texten). Ein Test auf
+  // "SCA001 MemoryLeak" waere je nach Fundort der JSON rot - der
+  // deutsche Katalog sagt dort "Objekt ohne ausnahmesichere Freigabe
+  // erzeugt".
+  Assert.IsTrue(Pos('<span class="tl-name" title="SCA001 ', Html) > 0,
+    'die Top-Regeln zeigen nur die SCA-ID statt ID und Regelname');
+  Assert.AreEqual<Integer>(0,
+    Pos('<span class="tl-name" title="SCA001">', Html),
+    'der Titel besteht nur aus der ID - der Regelname fehlt');
+  Assert.IsTrue(Pos('data-wert="SCA001"', Html) > 0,
+    'der Filterwert muss die reine SCA-ID bleiben - das Dropdown '
+    + 'kennt keine Namen');
+  // Die Ellipse war schon da; sie traegt jetzt aber erst, weil der
+  // Text lang genug wird.
+  Assert.IsTrue(Pos('.tl-name{flex:1 1 auto;overflow:hidden;'
+    + 'text-overflow:ellipsis;white-space:nowrap;', Html) > 0,
+    'die Beschriftung der Top-Listen kuerzt nicht mit Ellipse');
   AssertReihenfolge(Html,
     'data-ziel="dateiFilter" data-wert="src\z.pas"',
     'data-ziel="dateiFilter" data-wert="src\a.pas"',

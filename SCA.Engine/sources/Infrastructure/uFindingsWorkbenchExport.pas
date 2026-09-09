@@ -162,7 +162,13 @@ type
   // Ein Eintrag der Auswahllisten (Datei- und Regel-Dropdown).
   TZaehlEintrag = record
     Wert    : string;    // Filterwert: Anzeigepfad bzw. SCA-ID
-    Anzeige : string;    // Beschriftung inkl. Fundzahl
+    Anzeige : string;    // Beschriftung inkl. Fundzahl (Dropdown)
+    // Beschriftung OHNE Fundzahl - fuer die Top-Listen, die die Zahl
+    // in einer eigenen Spalte fuehren. Bei Regeln ist das "SCA176
+    // CognitiveComplexity", bei Dateien der Pfad. Vorher zeigten die
+    // Top-Listen den WERT, und bei Regeln ist das die nackte ID -
+    // "SCA176" allein sagt niemandem, worum es geht (Nico 09.09.).
+    Titel   : string;
     Anzahl  : Integer;
   end;
 
@@ -963,12 +969,13 @@ begin
       Breit := Round(100 * Liste[i].Anzahl / Max);
       SB.AppendLine(Format('<li tabindex="0" role="button" '
         + 'data-ziel="%s" data-wert="%s" onclick="topKlick(this)">'
-        + '<span class="tl-name">%s</span>'
+        + '<span class="tl-name" title="%s">%s</span>'
         + '<span class="tl-bar"><span class="tl-fill" '
         + 'style="width:%d%%"></span></span>'
         + '<span class="tl-zahl">%d</span></li>',
         [AZielDropdown, H(Liste[i].Wert),
-         H(Liste[i].Wert), Breit, Liste[i].Anzahl]));
+         HA(Liste[i].Titel), H(Liste[i].Titel),
+         Breit, Liste[i].Anzahl]));
     end;
     SB.AppendLine('</ul></div>');
     Result := SB.ToString;
@@ -1792,6 +1799,7 @@ begin
     Result[i].Wert    := P.Key;
     Result[i].Anzahl  := P.Value;
     Result[i].Anzeige := Format('%s (%d)', [P.Key, P.Value]);
+    Result[i].Titel   := P.Key;
     Inc(i);
   end;
   TArray.Sort<TZaehlEintrag>(Result, TComparer<TZaehlEintrag>.Construct(
@@ -1822,6 +1830,7 @@ begin
       Result[n].Anzahl  := AJeKind[Ord(K)];
       Result[n].Anzeige := Format('%s %s (%d)',
         [Meta.ID, Meta.Name, AJeKind[Ord(K)]]);
+      Result[n].Titel   := Trim(Meta.ID + ' ' + Meta.Name);
       Inc(n);
     end;
   TArray.Sort<TZaehlEintrag>(Result, TComparer<TZaehlEintrag>.Construct(
