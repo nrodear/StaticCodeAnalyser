@@ -217,7 +217,10 @@ begin
   end;
   Assert.IsTrue(Pos('--akzent:#1a5da6', Html) > 0,
     'Workbench-Tokens fehlen (uWorkbenchStyle nicht eingebunden)');
-  Assert.IsTrue(Pos('<header class="kopf">', Html) > 0,
+  // Mit Bereichs-ID: die haben alle Hauptbloecke seit 09.09., damit
+  // im Gespraech benennbar ist, WO etwas stehen soll.
+  Assert.IsTrue(
+    Pos('<header class="kopf" id="bereich-seitenkopf">', Html) > 0,
     'dunkler Workbench-Kopf fehlt');
   Assert.IsTrue(Pos('id="suche"', Html) > 0, 'Command-Bar-Suche fehlt');
   Assert.IsTrue(Pos('data-gruppe="typ"', Html) > 0, 'Typ-Chips fehlen');
@@ -620,11 +623,14 @@ begin
     Html) > 0, 'der Detailtext steht nicht unter der Regel');
   Assert.IsTrue(Pos('.zl-detail{overflow:hidden;text-overflow:ellipsis;',
     Html) > 0, 'der Detailtext kuerzt nicht mit Ellipse');
-  // Sieben Spalten: die eigene Detail-Spalte ist entfallen.
-  Assert.AreEqual<Integer>(0, Pos('colspan="8"', Html),
-    'irgendwo steht noch ein colspan ueber acht Spalten');
-  Assert.IsTrue(Pos('colspan="7"', Html) > 0,
-    'der Quellausschnitt spannt nicht ueber alle sieben Spalten');
+  // GAR KEIN colspan mehr. Es sass auf der Ausschnitt-Zeile, und die
+  // ist display:none - sie hat nie etwas ausgerichtet. Bis 09.09. stand
+  // dort erst 8, dann 7; beide Zahlen waren Gewohnheit aus der Zeit, als
+  // der Ausschnitt aufgeklappt IN der Tabelle stand. Die Pruefung faengt
+  // damit auch den Rueckfall auf die alte Achtspaltigkeit.
+  Assert.AreEqual<Integer>(0, Pos('colspan=', Html),
+    'eine Zelle spannt ueber mehrere Spalten - die Tabelle hat seit '
+    + '09.09. keine solche Zeile mehr');
   // Der Drawer darf nicht die ganze Zelle lesen - sonst stuende im
   // Titel "SCA001 MemoryLeakObject created but not..." am Stueck.
   Assert.IsTrue(Pos('.querySelector(".zl-regel")', Html) > 0,
@@ -889,8 +895,16 @@ var
 begin
   Html := EinFundHtml;
 
-  Assert.IsTrue(Pos('<td data-sort="TFoo.Bar"><div class="zl-methode">'
-    + 'TFoo.Bar</div>', Html) > 0,
+  // 'TestMethod' ist der Methodenname des Standardfundes - NACHGESEHEN,
+  // nicht angenommen. Die erste Fassung dieses Tests stand auf einem
+  // erfundenen 'TFoo.Bar' und war damit von Geburt an rot; gemerkt hat
+  // es niemand, weil zwischen Schreiben und Bau eine ganze Charge lag.
+  //
+  // Der Vertrag ist unveraendert geprueft: der Standardfund liegt in
+  // src/A.pas, Methodenname und Pfad sind also verschieden. Genau das
+  // muss der Test zeigen - data-sort traegt den einen, nicht beide.
+  Assert.IsTrue(Pos('<td data-sort="TestMethod"><div class="zl-methode">'
+    + 'TestMethod</div>', Html) > 0,
     'die Methodenzelle traegt keinen eigenen Sortierschluessel - '
     + 'sortiert wuerde dann nach Methode UND Pfad');
   // Und die Gegenseite: zellwert muss einen TEXT-Schluessel
@@ -1429,8 +1443,14 @@ begin
   Assert.AreEqual<Integer>(0, Pos('insp-punkt', Html),
     'der Severity-Punkt ist entfallen - das Badge sagt dasselbe');
   // Die Ueberschrift traegt ID UND Regelname in einer Zeile.
+  // Der Regelname kommt aus .zl-regel, NICHT aus dem textContent der
+  // Zelle: die traegt seit 09.09. auch den Detailtext, und der gehoert
+  // nicht in die Ueberschrift.
+  Assert.IsTrue(
+    Pos('var rn = z.cells[3].querySelector(".zl-regel");', Html) > 0,
+    'der Regelname wird nicht aus seinem eigenen Block geholt');
   Assert.IsTrue(Pos('titel.textContent = z.cells[2].textContent + " " '
-    + '+ z.cells[3].textContent;', Html) > 0,
+    + '+ (rn ? rn.textContent : "");', Html) > 0,
     'die Ueberschrift setzt nicht ID und Regelname zusammen');
   // Die Badges werden GEKLONT - so bleibt ihre Optik automatisch
   // dieselbe wie in der Tabelle.

@@ -57,16 +57,6 @@ type
     class function DefaultFileName: string; static;
 
   private
-    // Der komplette Style-Block dieser Seite, MIT <style>-Klammer:
-    // TWorkbenchStyle.BasisCss plus die seitenspezifischen Regeln
-    // (Tabelle, Chips, Drawer, Kacheln) plus die drei Themes.
-    //
-    // War vom 09.09. bis zum 09.09. public, weil die V3-Seite dieselbe
-    // Optik trug und sich nur im Rendering unterschied. Mit dem Wegfall
-    // der V3 gibt es wieder genau einen Leser, und das Sichtbare einer
-    // Klasse ist eine Zusage - sie steht nur da, wo sie jemand braucht.
-    // Was von V3 zu teilen bleibt, liegt in TWorkbenchStyle.
-    class function SeitenStyle: string; static;
     // Gemeinsamer Seitenbau fuer BuildHtml (Tests) und Run (Datei):
     // Run schreibt direkt aus dem Builder (SaveBuilderUtf8WithBom) -
     // der TStringList-Umweg der ersten Fassung hielt den Bericht
@@ -1957,14 +1947,6 @@ begin
   Result := 'sca-funde-v2.html';
 end;
 
-class function TFindingsWorkbenchExport.SeitenStyle: string;
-// Reine Weiterreichung der unit-lokalen SeiteStyle - die Seite selbst
-// ruft weiter direkt, der Umweg ist nur fuer V3 da. Begruendung an der
-// Deklaration.
-begin
-  Result := SeiteStyle;
-end;
-
 class procedure TFindingsWorkbenchExport.Run(
   AFindings: TObjectList<TLeakFinding>;
   const ABaseDir, AFileName: string; AMaxRows: Integer;
@@ -2287,10 +2269,16 @@ begin
           SB.Append(TemplateFuerRegel(K, Meta, ALang));
           if not Erste then Zusatz.Append(',');
           Erste := False;
+          // Die Anfuehrungszeichen kommen HIER dazu: JsonForScript
+          // escapet nur den Inhalt, es klammert ihn nicht. Ohne diese
+          // beiden Paare stuende dort {SCA001:MemoryLeak } - kein
+          // gueltiges JavaScript, und die ganze Tabelle waere tot.
+          Zusatz.Append('"');
           Zusatz.Append(TExporterHtml.JsonForScript(Meta.ID));
-          Zusatz.Append(':');
+          Zusatz.Append('":"');
           Zusatz.Append(TExporterHtml.JsonForScript(
             SuchZusatzRegel(K, Meta)));
+          Zusatz.Append('"');
         end;
       Zusatz.AppendLine('};</script>');
       SB.Append(Zusatz.ToString);
