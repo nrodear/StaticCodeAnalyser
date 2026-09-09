@@ -38,6 +38,8 @@ type
     [Test] procedure FileRow_UnderMainRow_NameFirstThenFullPath;
     // Die Methodenzelle traegt seit 09.09. zwei Texte (V3-Formatierung).
     [Test] procedure Methodenzelle_SortiertOhneDenPfad;
+    // Angepinnter Kopf mit zwei Zustaenden (Nutzerauftrag 09.09.).
+    [Test] procedure Kopf_IstAngepinntUndSchrumpftBeimScrollen;
     // EN/FR-Nachtrag 07.09.: Seite in drei Sprachen, Token unberuehrt.
     [Test] procedure Language_TranslatesPageButKeepsTokens;
     // Feature-Abgleich V1->V2 (Todo_FeatureListe..., 07.09.):
@@ -486,6 +488,48 @@ begin
     Pos('.zl-datei{overflow:hidden;text-overflow:ellipsis;'
       + 'white-space:nowrap;', Html) > 0,
     'Ellipse-CSS der Datei-Zeile fehlt');
+end;
+
+procedure TTestFindingsWorkbenchExport.Kopf_IstAngepinntUndSchrumpftBeimScrollen;
+// Nutzerauftrag 09.09.: der Kopf bleibt oben stehen und zeigt beim
+// Scrollen nur noch die Ueberschrift.
+//
+// Der Test haelt die drei Teile fest, die zusammen wirken muessen -
+// und besonders den dritten, weil er sonst niemandem auffiele:
+//   1. der Kopf ist angepinnt und hat einen mini-Zustand
+//   2. das Umschalten passiert im Skript
+//   3. die sticky SPALTENZEILE haengt an der Kopfhoehe. Stuende sie
+//      weiter bei top:0, verschwaende sie hinter dem angepinnten
+//      Kopf - sichtbar erst, wenn man in einem langen Bericht
+//      scrollt.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+
+  Assert.IsTrue(Pos('header.kopf{background:#20303f;color:#f2f6fa;'
+    + 'padding:14px 20px;position:sticky;top:0;', Html) > 0,
+    'der Kopf ist nicht angepinnt');
+  Assert.IsTrue(Pos('header.kopf.mini .sub{max-height:0;opacity:0;',
+    Html) > 0,
+    'der minimierte Zustand blendet die Unterzeile nicht aus');
+  Assert.IsTrue(Pos('kopf.classList.toggle("mini",runter);', Html) > 0,
+    'es gibt keine Umschaltung zwischen den beiden Zustaenden');
+  Assert.IsTrue(Pos('top:var(--kopf-h,0px)', Html) > 0,
+    'die Spaltenzeile haengt nicht an der Kopfhoehe - sie wuerde beim '
+    + 'Scrollen hinter dem angepinnten Kopf verschwinden');
+  // Die Hoehe muss auch NACH der Animation stimmen, sonst bleibt die
+  // Spaltenzeile um die Differenz verschoben stehen.
+  Assert.IsTrue(
+    Pos('kopf.addEventListener("transitionend",hoeheMerken);', Html) > 0,
+    'die Kopfhoehe wird nach dem Uebergang nicht nachgezogen');
 end;
 
 procedure TTestFindingsWorkbenchExport.Methodenzelle_SortiertOhneDenPfad;

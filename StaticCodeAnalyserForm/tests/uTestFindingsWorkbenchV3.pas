@@ -38,6 +38,7 @@ type
     // ---- Was von V2 gelten bleibt ----
     [Test] procedure Theme_AntiBlitzStehtImHead;
     [Test] procedure Zeilenhoehe_StimmtInCssUndJs;
+    [Test] procedure Kopf_IstAngepinntUndSchrumpft;
     [Test] procedure LeereListe_IstGueltigeSeite;
   end;
 
@@ -261,6 +262,35 @@ begin
   Assert.IsTrue(Pos('var ZH=52;', Html) > 0,
     'die Zeilenhoehe im JS ist nicht 52 - CSS und JS laufen '
     + 'auseinander, der Scrollbalken springt');
+end;
+
+procedure TTestFindingsWorkbenchV3.Kopf_IstAngepinntUndSchrumpft;
+// Der angepinnte Kopf kommt aus dem geteilten Designsystem
+// (TWorkbenchStyle). Geprueft wird hier vor allem, dass diese Seite
+// ihn auch EINBINDET - das CSS kaeme ueber den geteilten Style-Block
+// ohnehin mit, das Verhalten aber nur ueber den ausdruecklichen
+// Aufruf. Ohne ihn haette V3 einen Kopf, der zwar oben klebt, aber
+// nie zusammenfaehrt.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := VieleFunde(5);
+  try
+    Html := TFindingsWorkbenchV3.BuildHtml(Findings, '', -1, 'de');
+  finally
+    Findings.Free;
+  end;
+
+  Assert.IsTrue(Pos('position:sticky;top:0;z-index:5;', Html) > 0,
+    'der Kopf ist nicht angepinnt');
+  Assert.IsTrue(Pos('kopf.classList.toggle("mini",runter);', Html) > 0,
+    'das Kopf-Verhalten ist nicht eingebunden');
+  // Die Spaltenzeile der virtualisierten Liste muss unter dem Kopf
+  // kleben, nicht dahinter verschwinden.
+  Assert.IsTrue(Pos('#v3kopf{', Html) > 0, 'die Spaltenzeile fehlt');
+  Assert.IsTrue(Pos('position:sticky;top:var(--kopf-h,0px);', Html) > 0,
+    'die Spaltenzeile haengt nicht an der Kopfhoehe');
 end;
 
 procedure TTestFindingsWorkbenchV3.LeereListe_IstGueltigeSeite;

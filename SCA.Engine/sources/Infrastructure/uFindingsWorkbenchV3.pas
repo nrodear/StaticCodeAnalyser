@@ -85,6 +85,7 @@ implementation
 uses
   System.Math, System.IOUtils,
   uExport, uExportHtml, uRuleCatalog, uFixHint,
+  uWorkbenchStyle,          // KopfVerhaltenJs - angepinnter Seitenkopf
   uWorkbenchI18n, uFindingsWorkbenchExport;
 
 const
@@ -782,6 +783,9 @@ begin
     SB.AppendLine('baueChips();baueKacheln();bauePanels();'
       + 'baueToplisten();filtern();');
     SB.AppendLine('})();');
+    // Angepinnter Kopf mit zwei Zustaenden - EINE Quelle fuer
+    // alle drei Seiten (Nutzerauftrag 09.09.).
+    SB.Append(TWorkbenchStyle.KopfVerhaltenJs);
     SB.AppendLine('</script>');
     Result := SB.ToString;
   finally
@@ -983,7 +987,7 @@ begin
       + 'gap:10px;padding:8px 12px;font-weight:600;font-size:12px;'
       + 'background:var(--f-flaeche);border:1px solid var(--rand);'
       + 'border-bottom:0;border-radius:8px 8px 0 0;'
-      + 'position:sticky;top:0;z-index:2;}');
+      + 'position:sticky;top:var(--kopf-h,0px);z-index:2;}');
     SB.AppendLine('#v3kopf span{cursor:pointer;user-select:none;}');
     SB.AppendLine('#v3leer{padding:28px;text-align:center;'
       + 'color:var(--dezent);}');

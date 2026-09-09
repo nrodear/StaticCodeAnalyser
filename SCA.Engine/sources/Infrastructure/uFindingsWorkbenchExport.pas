@@ -482,8 +482,11 @@ begin
     SB.AppendLine('table{border-collapse:collapse;width:100%;}');
     SB.AppendLine('th,td{padding:7px 10px;text-align:left;'
       + 'vertical-align:top;font-size:0.92em;border:0;}');
+    // top an der KOPFHOEHE, nicht 0: der Seitenkopf ist seit 09.09.
+    // selbst angepinnt, ein top:0 liesse die Spaltenzeile dahinter
+    // verschwinden. --kopf-h pflegt TWorkbenchStyle.KopfVerhaltenJs.
     SB.AppendLine('th{background:#eef2f6;cursor:pointer;position:sticky;'
-      + 'top:0;white-space:nowrap;user-select:none;'
+      + 'top:var(--kopf-h,0px);white-space:nowrap;user-select:none;'
       + 'box-shadow:inset 0 -1px 0 var(--rand);}');
     SB.AppendLine('th .pfeil{color:var(--akzent);font-size:0.8em;'
       + 'margin-left:3px;}');
@@ -1406,6 +1409,9 @@ begin
     SB.AppendLine('sortiere(' + IntToStr(SP_SEVERITY) + ');');
     SB.AppendLine('suche();');
     SB.AppendLine('deepLink();');
+    // Angepinnter Kopf mit zwei Zustaenden - EINE Quelle fuer
+    // alle drei Seiten (Nutzerauftrag 09.09.).
+    SB.Append(TWorkbenchStyle.KopfVerhaltenJs);
     SB.AppendLine('</script>');
     Result := SB.ToString;
   finally
