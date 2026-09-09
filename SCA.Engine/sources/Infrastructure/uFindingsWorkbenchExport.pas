@@ -542,9 +542,20 @@ begin
     // Der Hintergrund ist NICHT schmueckend: ohne ihn scrollt der
     // Listeninhalt sichtbar durch die angepinnte Leiste hindurch.
     // z-index 4 haelt sie unter dem Seitenkopf (5) und dem Drawer (10).
+    // padding-bottom statt Abstand darunter: der Chip-Block ist das
+    // letzte Kind und traegt margin-bottom:10px. Ein Kind-Aussenabstand
+    // faellt aus dem Elternteil HERAUS, wenn dieses unten weder Polster
+    // noch Rahmen hat - die zehn Pixel lagen also UNTER der bemalten
+    // Flaeche und blieben durchsichtig. Genau dort sah man die Funde
+    // durchlaufen (Nicos Befund 10.09.). Als Polster gehoeren sie zur
+    // Leiste, werden mitbemalt und zaehlen in --filter-h.
     SB.AppendLine('#bereich-filter{position:sticky;'
       + 'top:var(--kopf-h,0px);z-index:4;background:var(--grund);'
-      + 'padding-top:6px;margin-bottom:4px;}');
+      + 'padding-top:6px;padding-bottom:4px;}');
+    // Und der Aussenabstand des Chip-Blocks entfaellt - er ist jetzt
+    // das Polster der Leiste. Bliebe er stehen, waere der Abstand
+    // doppelt so gross wie vorher.
+    SB.AppendLine('#bereich-filter .chips{margin-bottom:0;}');
     // ---- Liste --------------------------------------------------------
     // EIN SCROLLER, UND DAS IST DIE SEITE (Nicos Befund 10.09.).
     //
@@ -625,7 +636,14 @@ begin
     SB.AppendLine('th{background:var(--f-flaeche);font-weight:600;'
       + 'font-size:12px;padding:8px 12px;'
       + 'cursor:pointer;position:sticky;z-index:2;'
-      + 'top:calc(var(--kopf-h,0px) + var(--filter-h,0px));'
+      // MINUS EIN PIXEL - Absicht, kein Rechenfehler. Auch mit
+      // gebrochen gemessenen Hoehen rastert der Browser jede
+      // angepinnte Box fuer sich; zwischen zweien bleibt bei krummen
+      // Zoomstufen gern eine Haarlinie stehen, und durch die sieht man
+      // die Zeilen laufen. Die Ueberdeckung kostet nichts: die
+      // Filterleiste liegt mit z-index 4 darueber und ist undurchsichtig,
+      // verdeckt also diesen einen Pixel der Spaltenzeile.
+      + 'top:calc(var(--kopf-h,0px) + var(--filter-h,0px) - 1px);'
       + 'white-space:nowrap;user-select:none;'
       + 'box-shadow:inset 0 -1px 0 var(--rand);}');
     // Die runden Ecken der Liste liegen auf den AEUSSEREN Kopfzellen,
@@ -1677,7 +1695,9 @@ begin
     SB.AppendLine('  if(!fl)return;');
     SB.AppendLine('  function merken(){');
     SB.AppendLine('    document.documentElement.style.setProperty('
-      + '"--filter-h",fl.offsetHeight+"px");');
+    // Bruchteile statt gerundeter Pixel - Begruendung wie bei --kopf-h
+    // in TWorkbenchStyle.KopfVerhaltenJs.
+      + '"--filter-h",fl.getBoundingClientRect().height+"px");');
     SB.AppendLine('  }');
     SB.AppendLine('  window.addEventListener("resize",merken);');
     // Die Chips-Leiste aendert ihre Hoehe auch OHNE resize: ein

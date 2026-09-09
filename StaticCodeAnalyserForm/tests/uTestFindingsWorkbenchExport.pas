@@ -727,7 +727,8 @@ begin
     Html),
     'die Spaltenzeile klebt am oberen Fensterrand - dort verschwindet '
     + 'sie hinter Seitenkopf und Filterleiste');
-  Assert.IsTrue(Pos('top:calc(var(--kopf-h,0px) + var(--filter-h,0px));',
+  Assert.IsTrue(
+    Pos('top:calc(var(--kopf-h,0px) + var(--filter-h,0px) - 1px);',
     Html) > 0,
     'die Spaltenzeile traegt nicht den Versatz um die beiden Bloecke, '
     + 'die ueber ihr kleben');
@@ -872,15 +873,30 @@ begin
     + 'statt der Seite, und die Kopfbereiche rasten nie ein');
   // 2. Die dritte Klebe-Ebene sitzt unter den beiden anderen.
   Assert.IsTrue(Pos('position:sticky;z-index:2;'
-    + 'top:calc(var(--kopf-h,0px) + var(--filter-h,0px));', Html) > 0,
+    + 'top:calc(var(--kopf-h,0px) + var(--filter-h,0px) - 1px);',
+    Html) > 0,
     'die Spaltenzeile rastet nicht unter Kopf UND Filterleiste ein');
+  // Die Filterleiste bemalt ihren Fussbereich selbst. Ohne das faellt
+  // der Aussenabstand des Chip-Blocks aus ihr heraus und bleibt
+  // durchsichtig - der Spalt, durch den Nico am 10.09. die Funde sah.
+  Assert.IsTrue(Pos('padding-top:6px;padding-bottom:4px;', Html) > 0,
+    'die Filterleiste bemalt ihren Fussbereich nicht');
+  Assert.IsTrue(Pos('#bereich-filter .chips{margin-bottom:0;}', Html) > 0,
+    'der Chip-Block traegt weiter einen Aussenabstand - der faellt aus '
+    + 'der Leiste heraus und wird nicht mitbemalt');
   Assert.IsTrue(Pos('#bereich-filter{position:sticky;'
     + 'top:var(--kopf-h,0px);z-index:4;', Html) > 0,
     'die Filterleiste rastet nicht unter dem Seitenkopf ein');
   // 3. Beide Groessen werden gepflegt.
-  Assert.IsTrue(Pos('"--filter-h",fl.offsetHeight+"px"', Html) > 0,
-    'die Hoehe der Filterleiste wird nicht gepflegt - die '
-    + 'Spaltenzeile rastet dann zu weit oben ein');
+  // GEBROCHEN messen, nicht gerundet: offsetHeight liefert ganze
+  // Pixel, und unter Windows-Skalierung sind Layouthoehen fast immer
+  // krumm. Aus zwei gerundeten Hoehen einen Versatz zu rechnen setzt
+  // die Spaltenzeile leicht zu tief - und durch den Spalt sieht man
+  // die Funde durchlaufen (Nicos Befund 10.09.).
+  Assert.IsTrue(
+    Pos('"--filter-h",fl.getBoundingClientRect().height+"px"', Html) > 0,
+    'die Hoehe der Filterleiste wird nicht gebrochen gemessen - '
+    + 'gerundet rastet die Spaltenzeile um Bruchteile daneben ein');
   // Die Chips brechen je nach Fensterbreite um; ohne Nachmessen waere
   // die Liste danach zu hoch oder zu niedrig.
   Assert.IsTrue(Pos('new ResizeObserver(merken).observe(fl)', Html) > 0,

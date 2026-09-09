@@ -222,7 +222,13 @@ begin
     SB.AppendLine('  var SCHWELLE=24;');
     SB.AppendLine('  function hoeheMerken(){');
     SB.AppendLine('    document.documentElement.style.setProperty('
-      + '"--kopf-h",kopf.offsetHeight+"px");');
+    // getBoundingClientRect().height, NICHT offsetHeight: das eine
+    // liefert Bruchteile, das andere rundet auf ganze Pixel. Unter
+    // Windows-Skalierung (125 %, 150 %) sind Layouthoehen fast immer
+    // gebrochen; wer daraus einen sticky-Versatz rechnet, landet leicht
+    // einen Bruchteil zu tief - und durch diesen Spalt sieht man die
+    // Zeilen durchlaufen (Nicos Befund 10.09.).
+      + '"--kopf-h",kopf.getBoundingClientRect().height+"px");');
     SB.AppendLine('  }');
     SB.AppendLine('  function zustand(){');
     SB.AppendLine('    var runter=(window.scrollY||'
