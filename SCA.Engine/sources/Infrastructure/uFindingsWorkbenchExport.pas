@@ -128,10 +128,6 @@ const
   SP_TYP      = 4;
   SP_SEVERITY = 5;
   SP_KONFIDENZ = 6;
-  // Anzahl der Spalten - fuer colspan der Zeilen, die sich ueber die
-  // ganze Breite legen (Quellausschnitt). Stand bis 09.09. als 8 fest
-  // verdrahtet an drei Stellen.
-  SP_ANZAHL   = 7;
   // Die Spaltenbreiten der V3-Seite, uebernommen auf Nicos Auftrag
   // 09.09. V2 hatte GAR KEINE - die Browser-Automatik verteilte nach
   // Inhalt, und damit wanderten die Spalten von Bericht zu Bericht.
@@ -155,7 +151,11 @@ type
     Meta    : TRuleMeta;
     Pfad    : string;      // Anzeigepfad = Filterwert des Dropdowns
     Hinweis : string;      // fundspezifischer FixHint-Text
-    Snippet : string;      // fertiges Quell-Ausschnitt-Markup
+    Snippet : string;      // Quell-Ausschnitt als ROHTEXT, #10-getrennt
+    // Nummer der ersten Zeile des Ausschnitts. Gehoert zum Snippet: ohne
+    // sie kann die Anzeige die Zeilennummern nicht beschriften, weil der
+    // Rohtext keine mehr traegt.
+    SnippetVon : Integer;
     Lang    : string;
   end;
 
@@ -265,21 +265,45 @@ begin
 end;
 
 function QuellAusschnitt(ACache: TObjectDictionary<string, TStringList>;
-  const ADatei: string; AZeile: Integer): string;
-// Quellcode-Ausschnitt um die Fundzeile (V1-Feature, groesste Luecke
-// der V2 laut Feature-Abgleich). Das MARKUP kommt aus dem geteilten
-// TExporterHtml.BuildCodeSnippet - eine zweite Implementierung
-// haette zwei Berichte mit verschieden aussehenden Ausschnitten
-// derselben Stelle ergeben.
+  const ADatei: string; AZeile: Integer; out AErsteZeile: Integer): string;
+// Quellcode-Ausschnitt um die Fundzeile, als ROHER TEXT: die Quellzeilen
+// escaped und mit #10 verbunden, sonst nichts. AErsteZeile gibt die
+// Nummer der ersten gelieferten Zeile zurueck - daraus zaehlt die
+// Anzeige weiter.
+//
+// WARUM NICHT MEHR DAS FERTIGE MARKUP (Aenderung 09.09.)
+// Bis hierher kam der Ausschnitt aus dem geteilten
+// TExporterHtml.BuildCodeSnippet und lag als fertiges HTML in der
+// Seite. Pro Zeile sind das rund 110 Zeichen Geruest - drei div, zwei
+// span, Klassennamen, Nummernblock, Pfeil - um durchschnittlich vierzig
+// Zeichen Code herum. Bei sieben Zeilen je Fund traegt der Bericht
+// damit etwa 770 Byte Wiederholung PRO FUND. Das war der groesste
+// einzelne Posten der Dateigroesse, groesser als die Fundzeile selbst.
+//
+// Das Geruest ist fuer jeden Ausschnitt identisch. Es steht deshalb
+// jetzt EINMAL im Skript und wird beim Oeffnen des Drawers um den
+// Rohtext gebaut - fuer genau den einen Ausschnitt, den der Leser
+// gerade sehen will. Das Aussehen bleibt Zeichen fuer Zeichen dasselbe;
+// die CSS-Klassen (.src-snippet, .src-line, .src-line-active,
+// .src-line-num, .src-line-bar) sind unveraendert.
+//
+// Die Trennung von V1 ist damit gewollt: V1 bleibt bei fertigem Markup,
+// weil ein V1-Bericht die Ausschnitte SICHTBAR nebeneinander zeigt und
+// nicht einzeln auf Klick. Zwei Berichte, zwei Anzeigewege - aber
+// dieselben Klassen und damit dasselbe Bild.
+//
 // Der Cache haelt jede Datei EINMAL: ein Bericht hat typisch viele
 // Funde je Datei, und ohne Cache laese der Export dieselbe Datei
 // dutzendfach. Nicht lesbare Dateien werden als nil gemerkt, damit
 // ein fehlgeschlagener Zugriff nicht bei jedem Fund erneut versucht
 // wird (Bericht ueber geloeschten Code ist der Normalfall).
 var
-  Lines : TStringList;
+  Lines            : TStringList;
+  SB               : TStringBuilder;
+  i, VonIdx, BisIdx: Integer;
 begin
-  Result := '';
+  Result      := '';
+  AErsteZeile := 0;
   if (ADatei = '') or (AZeile <= 0) then Exit;
   if not ACache.TryGetValue(ADatei, Lines) then
   begin
@@ -303,8 +327,29 @@ begin
     ACache.AddOrSetValue(ADatei, Lines);
   end;
   if Lines = nil then Exit;
-  Result := TExporterHtml.BuildCodeSnippet(Lines, AZeile,
-    SNIPPET_KONTEXT);
+  // Fenster um die Fundzeile, an beiden Enden auf die Datei begrenzt.
+  // Dieselbe Rechnung wie in BuildCodeSnippet - nur ohne das Markup.
+  VonIdx := AZeile - 1 - SNIPPET_KONTEXT;
+  BisIdx := AZeile - 1 + SNIPPET_KONTEXT;
+  if VonIdx < 0 then VonIdx := 0;
+  if BisIdx > Lines.Count - 1 then BisIdx := Lines.Count - 1;
+  if VonIdx > BisIdx then Exit;
+  SB := TStringBuilder.Create;
+  try
+    for i := VonIdx to BisIdx do
+    begin
+      if i > VonIdx then SB.Append(#10);
+      // JEDE ZEILE EINZELN escapen, nie den fertigen Block: H() ist ein
+      // ELEMENT-Vertrag und macht aus #10 ein <br>. Auf den ganzen Text
+      // angewandt haette es die Zeilentrenner in Markup verwandelt -
+      // genau die Falle, die am 07.09. beide Seiten getroffen hat.
+      SB.Append(H(Lines[i]));
+    end;
+    Result      := SB.ToString;
+    AErsteZeile := VonIdx + 1;
+  finally
+    SB.Free;
+  end;
 end;
 
 function Kopf(ASpalte: Integer; AText: TWbText;
@@ -689,8 +734,11 @@ begin
     SB.AppendLine('td.num{text-align:right;font-variant-numeric:'
       + 'tabular-nums;color:var(--dezent);}');
     // ---- Quell-Ausschnitt (Markup-Vertrag mit V1) ----------------------
-    // Die Klassennamen kommen aus TExporterHtml.BuildCodeSnippet und
-    // sind damit zwischen V1 und V2 geteilt - hier nur die Optik.
+    // Die Klassennamen sind zwischen V1 und V2 geteilt - hier nur die
+    // Optik. WER sie setzt, ist seit 09.09. verschieden: V1 schreibt
+    // sie beim Export (TExporterHtml.BuildCodeSnippet), V2 laesst sie
+    // beim Oeffnen bauen (baueAusschnitt im Seitenskript). Das Bild ist
+    // dasselbe; aendert sich hier eine Klasse, muessen BEIDE nach.
     SB.AppendLine('tr.snippet{display:none;}');
     SB.AppendLine('.src-snippet{background:#23272e;color:#e6e6e6;'
       + 'border-radius:6px;padding:6px 0;margin:8px 0;overflow-x:auto;'
@@ -1287,6 +1335,60 @@ begin
     // die Regel-Doku liefert danach das geteilte Template.
     // Die Badges werden aus den Zellen GEKLONT statt neu gebaut -
     // so bleibt ihre Optik automatisch dieselbe wie in der Tabelle.
+    // Das Geruest des Quell-Ausschnitts - EINMAL im Skript statt bei
+    // jedem Fund in der Seite (s. QuellAusschnitt). Es baut aus dem
+    // Rohtext der unsichtbaren Zeile genau das Markup, das frueher
+    // TExporterHtml.BuildCodeSnippet geschrieben hat: dieselben Klassen,
+    // dieselbe vierstellige rechtsbuendige Nummer, derselbe Pfeil,
+    // dieselben Leerzeichen dazwischen. Wer hier etwas aendert, aendert
+    // das Bild - der Vergleichspunkt ist BuildCodeSnippet in uExportHtml.
+    //
+    // Aufbau ueber das DOM und nicht ueber innerHTML: der Rohtext ist
+    // zwar escaped, aber er GEHOERT in einen Textknoten. Ueber
+    // innerHTML wuerde er ein zweites Mal als Markup gelesen, und aus
+    // dem escapten &lt;div&gt; einer Quellzeile wuerde wieder ein Tag.
+    SB.AppendLine('function baueAusschnitt(td) {');
+    SB.AppendLine('  var von = parseInt(td.dataset.l, 10) || 1;');
+    SB.AppendLine('  var akt = parseInt(td.dataset.a, 10) || 0;');
+    SB.AppendLine('  var wrap = document.createElement("div");');
+    SB.AppendLine('  wrap.className = "src-snippet";');
+    // String.fromCharCode statt der Escape-Folgen: Backslashes
+    // ueberleben den Weg durch die Werkzeugkette nicht zuverlaessig
+    // (mehrfach belegt), und ein verlorener Backslash macht aus dem
+    // Zeilentrenner ein stilles "n".
+    SB.AppendLine('  var zeilen = td.textContent.split('
+      + 'String.fromCharCode(10));');
+    SB.AppendLine('  for (var i = 0; i < zeilen.length; i++) {');
+    SB.AppendLine('    var nr = von + i;');
+    SB.AppendLine('    var aktiv = (nr === akt);');
+    SB.AppendLine('    var d = document.createElement("div");');
+    SB.AppendLine('    d.className = aktiv ? '
+      + '"src-line src-line-active" : "src-line";');
+    SB.AppendLine('    var sn = document.createElement("span");');
+    SB.AppendLine('    sn.className = "src-line-num";');
+    // Vierstellig rechtsbuendig wie Format('%4d'). Eine Schleife statt
+    // padStart: der Rest des Skripts kommt ohne ES2017 aus, und der
+    // Bericht soll auch in einem eingebetteten Browser lesbar sein.
+    SB.AppendLine('    var s = String(nr);');
+    SB.AppendLine('    while (s.length < 4) s = " " + s;');
+    SB.AppendLine('    sn.textContent = s;');
+    SB.AppendLine('    d.appendChild(sn);');
+    SB.AppendLine('    d.appendChild(document.createTextNode(" "));');
+    SB.AppendLine('    var sb = document.createElement("span");');
+    SB.AppendLine('    sb.className = "src-line-bar";');
+    // 9658 = der Pfeil nach rechts (frueher &#9658;), 160 = das
+    // geschuetzte Leerzeichen (frueher &nbsp;). Beide halten die
+    // Spalte, damit der Code aller Zeilen buendig steht.
+    SB.AppendLine('    sb.textContent = aktiv ? '
+      + 'String.fromCharCode(9658) : String.fromCharCode(160);');
+    SB.AppendLine('    d.appendChild(sb);');
+    SB.AppendLine('    d.appendChild(document.createTextNode(" "));');
+    SB.AppendLine('    d.appendChild(document.createTextNode('
+      + 'zeilen[i]));');
+    SB.AppendLine('    wrap.appendChild(d);');
+    SB.AppendLine('  }');
+    SB.AppendLine('  return wrap;');
+    SB.AppendLine('}');
     SB.AppendLine('function fundKopf(tb) {');
     // AUFBAU AUS DER V3-SEITE uebernommen (Nicos Auftrag 09.09.):
     // Badges - Ueberschrift - Fundort - Fundtext, alles auf EINER
@@ -1363,9 +1465,12 @@ begin
     // Codezeile der visuelle Anker. Er liegt als unsichtbare
     // tr.snippet beim Fund und wird geklont, nicht verschoben - die
     // Zeile bleibt Datenquelle fuer das naechste Oeffnen.
-    SB.AppendLine('  var sn = tb.querySelector("tr.snippet '
-      + '.src-snippet");');
-    SB.AppendLine('  if (sn) kopf.appendChild(sn.cloneNode(true));');
+    // Aus dem Rohtext der unsichtbaren Zeile das Geruest bauen. Es
+    // entsteht fuer GENAU den Ausschnitt, den der Leser gerade oeffnet -
+    // vorher stand es fertig bei jedem einzelnen Fund in der Datei.
+    // Das erzeugte Markup ist Zeichen fuer Zeichen dasselbe wie vorher.
+    SB.AppendLine('  var sz = tb.querySelector("tr.snippet td");');
+    SB.AppendLine('  if (sz) kopf.appendChild(baueAusschnitt(sz));');
     SB.AppendLine('  if (tb.dataset.hinweis) {');
     SB.AppendLine('    var blk = document.createElement("div");');
     SB.AppendLine('    blk.className = "insp-block";');
@@ -1575,15 +1680,31 @@ begin
     + JoinArr(AMeta.CWE, ' ') + ' ' + JoinArr(AMeta.Tags, ' ')));
 end;
 
-function Snippetblock(const ASnippet: string): string;
+function Snippetblock(const ASnippet: string;
+  AErsteZeile, AFundZeile: Integer): string;
 // Traegerzeile fuer den Quell-Ausschnitt. Eine eigene, dauerhaft
 // unsichtbare tr haelt das tbody-Modell intakt (nur tr-Kinder) -
 // ein <template> direkt im tbody waere nach der HTML-Parser-Regel
 // fuer Tabellen aus der Tabelle herausgehoben worden.
+//
+// Die Zelle traegt seit dem 09.09. nur noch den ROHEN Quelltext; das
+// Geruest baut das Skript beim Oeffnen (s. QuellAusschnitt). Zwei
+// Zahlen reichen ihm dafuer:
+//   data-l  Nummer der ERSTEN Zeile - ab hier wird weitergezaehlt
+//   data-a  Nummer der Fundzeile - sie bekommt Pfeil und Hervorhebung
+// data-a getrennt zu fuehren und nicht aus der Fundzeile der Hauptzeile
+// zu lesen kostet zwoelf Zeichen und macht die Zelle fuer sich
+// verstaendlich: der Ausschnitt bleibt richtig, auch wenn sich an der
+// Spaltenaufteilung wieder etwas aendert.
+//
+// KEIN colspan mehr: die Zeile ist display:none, sie hat nie etwas
+// ausgerichtet. Das Attribut war reine Gewohnheit aus der Zeit, als
+// der Ausschnitt aufgeklappt IN der Tabelle stand.
 begin
   if ASnippet = '' then Exit('');
-  Result := '<tr class="snippet"><td colspan="' + IntToStr(SP_ANZAHL)
-    + '">' + ASnippet
+  Result := Format('<tr class="snippet"><td data-l="%d" data-a="%d">',
+      [AErsteZeile, AFundZeile])
+    + ASnippet
     + '</td></tr>'#13#10;
 end;
 
@@ -1685,11 +1806,12 @@ begin
         + '</span></td>', [Ord(Z.Fund.Confidence),
            TWorkbenchI18n.T(CONF_KEY[Z.Fund.Confidence], Z.Lang)])
     + '</tr>'#13#10
-    // Der Quell-Ausschnitt liegt als unsichtbares TEMPLATE bei der
-    // Zeile, nicht in einem Attribut: er ist fertiges Markup und
-    // muesste sonst doppelt escaped und im JS wieder aufgeloest
-    // werden. Der Drawer klont ihn.
-    + Snippetblock(Z.Snippet)
+    // Der Quell-Ausschnitt liegt als Rohtext in einer unsichtbaren
+    // Zeile bei diesem Fund - nicht in einem Attribut, weil Zeilen-
+    // umbrueche dort nur als Entity ueberleben und je Zeile fuenf
+    // Zeichen kosten wuerden. Der Drawer baut daraus das Geruest.
+    + Snippetblock(Z.Snippet, Z.SnippetVon,
+        StrToIntDef(Z.Fund.LineNumber, 0))
     + '</tbody>';
 end;
 
@@ -2088,7 +2210,7 @@ begin
         Zeile.Pfad    := AnzeigePfad(F.FileName, ABaseDir);
         Zeile.Hinweis := TFixHintResolver.FixHint(F).Description;
         Zeile.Snippet := QuellAusschnitt(QuellCache, F.FileName,
-          StrToIntDef(F.LineNumber, 0));
+          StrToIntDef(F.LineNumber, 0), Zeile.SnippetVon);
         Zeile.Lang    := ALang;
         SB.AppendLine(ZeileFuerFund(Zeile));
       end;

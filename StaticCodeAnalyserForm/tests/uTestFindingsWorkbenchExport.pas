@@ -1235,8 +1235,7 @@ begin
     Findings.Free;
     if TFile.Exists(Datei) then TFile.Delete(Datei);
   end;
-  Assert.IsTrue(Pos('<div class="src-snippet">', Html) > 0,
-    'Quell-Ausschnitt fehlt');
+  // DER INHALT - unveraendert gegenueber frueher.
   Assert.IsTrue(Pos('zeile5 inhalt;', Html) > 0,
     'die Fundzeile selbst fehlt im Ausschnitt');
   Assert.IsTrue(Pos('zeile2 inhalt;', Html) > 0,
@@ -1247,16 +1246,34 @@ begin
     'Zeile 1 liegt ausserhalb des Kontexts und darf nicht erscheinen');
   Assert.AreEqual<Integer>(0, Pos('zeile9 inhalt;', Html),
     'Zeile 9 liegt ausserhalb des Kontexts und darf nicht erscheinen');
-  Assert.IsTrue(Pos('src-line src-line-active', Html) > 0,
-    'die Fundzeile ist nicht hervorgehoben');
-  // Traeger und Drawer-Anbindung.
+  // DIE FORM - seit 09.09. Rohtext statt fertigem Markup.
   Assert.IsTrue(Pos('<tr class="snippet">', Html) > 0,
     'Traegerzeile des Ausschnitts fehlt');
   Assert.IsTrue(Pos('tr.snippet{display:none;}', Html) > 0,
     'der Ausschnitt darf in der Tabelle nicht sichtbar sein');
-  Assert.IsTrue(
-    Pos('kopf.appendChild(sn.cloneNode(true));', Html) > 0,
-    'der Drawer klont den Ausschnitt nicht');
+  // Die beiden Zahlen, aus denen die Anzeige die Nummern rechnet:
+  // Fund auf 5, Kontext 3 -> erste Zeile ist die 2.
+  Assert.IsTrue(Pos('<td data-l="2" data-a="5">zeile2 inhalt;', Html) > 0,
+    'die Traegerzelle fuehrt nicht Startzeile, Fundzeile und Rohtext');
+  // DIE ERSPARNIS - und der einzige Grund fuer den Umbau. Ohne diese
+  // Gegenprobe waere ein Rueckfall auf fertiges Markup gruen: der
+  // Inhalt stimmte ja weiter, nur die Datei waere wieder dreimal so
+  // gross. Das Geruest darf in der SEITE nicht mehr vorkommen -
+  // ausser dort, wo das Skript es baut.
+  Assert.AreEqual<Integer>(0, Pos('<div class="src-line">', Html),
+    'das Zeilen-Geruest steht wieder in der Seite statt im Skript');
+  Assert.AreEqual<Integer>(0, Pos('<span class="src-line-num">', Html),
+    'der Nummernblock steht wieder in der Seite statt im Skript');
+  // DER BAUER - er ersetzt das Geruest und muss die Klassen fuehren,
+  // sonst faellt der Ausschnitt aus dem CSS heraus.
+  Assert.IsTrue(Pos('function baueAusschnitt(td) {', Html) > 0,
+    'die Anzeige-Funktion fuer den Ausschnitt fehlt');
+  Assert.IsTrue(Pos('wrap.className = "src-snippet";', Html) > 0,
+    'der gebaute Ausschnitt traegt die Rahmenklasse nicht');
+  Assert.IsTrue(Pos('"src-line src-line-active" : "src-line"', Html) > 0,
+    'der gebaute Ausschnitt hebt die Fundzeile nicht hervor');
+  Assert.IsTrue(Pos('kopf.appendChild(baueAusschnitt(sz));', Html) > 0,
+    'der Drawer baut den Ausschnitt nicht');
 end;
 
 procedure TTestFindingsWorkbenchExport.IdeInspector_HeroHierarchyAndSelectionStates;
