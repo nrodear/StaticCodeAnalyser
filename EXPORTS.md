@@ -27,7 +27,8 @@ program" — it means *not reachable from a script*.
 |---|---|---|---|
 | **SARIF 2.1.0** | `--report-sarif <file>` | ✅ *SARIF (all findings)* | GitHub / Azure code scanning, archival, tool interchange |
 | **Sonar Generic Issue** | `--sonar-export <file>` | ✅ *Sonar: write Generic Issue report* | SonarQube dashboard (see caveat below) |
-| **HTML report** | `--report-html <file>` | ✅ | Reading and sharing findings without any tooling |
+| **HTML report (CLI)** | `--report-html <file>` | — | Reading and sharing findings without any tooling |
+| **HTML report (GUI)** | — | ✅ | The same purpose, a different page — see below |
 | **Baseline JSON** | `--write-baseline <file>` | ✅ *Write baseline* | CI gate: "fail only on **new** findings" |
 | **CSV** | `--report-csv <file>` | ✅ | Excel, pivot tables, ad-hoc counting |
 | **JSON** | `--report-json <file>` | ✅ | Own scripts, ticket automation |
@@ -35,6 +36,25 @@ program" — it means *not reachable from a script*.
 | **AI prompt (clipboard)** | — | ✅ | Hand a single finding to an assistant, with code context |
 | **Suppression telemetry** | `--telemetry-csv <file>` | — | Which rules get suppressed most (noise ranking) |
 | **Detector timings** | `--time-detectors` (stdout) / `--time-detectors-out <file>` | — | Finding slow detectors |
+
+**Two HTML reports, not one.** They serve the same purpose and share
+their look, but they are separate pages and neither replaces the other:
+
+- `--report-html` is the CLI report. Every finding stands on the page
+  with its source excerpt; the rule report is a collapsible aggregate
+  next to the table. Built for reading top to bottom and for archiving.
+- The GUI's *HTML report* is the **workbench** page. Search, file and
+  rule dropdowns, chips, top-lists, sortable columns, and a side drawer
+  that shows source excerpt and rule documentation for the finding you
+  clicked. Built for working through a large report at the desk. Its
+  suggested file name carries the date:
+  `sca_codereview_YYYY-MM-DD.html`.
+
+The workbench page keeps the rule documentation **once per rule**, the
+source excerpt as plain text, and no per-finding copy of the search
+text — which is why it stays roughly half the size the same report used
+to have. Both are self-contained: no external assets, nothing leaves
+the machine.
 
 Two asymmetries are worth knowing before you plan anything:
 

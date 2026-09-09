@@ -28,7 +28,8 @@ uniquement » ne signifie donc jamais « programme différent », mais
 |---|---|---|---|
 | **SARIF 2.1.0** | `--report-sarif <fichier>` | ✅ *SARIF (all findings)* | code scanning GitHub / Azure, archivage, échange entre outils |
 | **Sonar Generic Issue** | `--sonar-export <fichier>` | ✅ *Sonar: write Generic Issue report* | tableau de bord SonarQube (voir la réserve plus bas) |
-| **Rapport HTML** | `--report-html <fichier>` | ✅ | lire et partager des résultats sans aucun outillage |
+| **Rapport HTML (CLI)** | `--report-html <fichier>` | — | lire et partager des résultats sans aucun outillage |
+| **Rapport HTML (interface)** | — | ✅ | même objectif, une autre page — voir ci-dessous |
 | **JSON de référence** | `--write-baseline <fichier>` | ✅ *Write baseline* | gate CI : « n'échouer que sur les **nouveaux** résultats » |
 | **CSV** | `--report-csv <fichier>` | ✅ | Excel, tableaux croisés, comptages ad hoc |
 | **JSON** | `--report-json <fichier>` | ✅ | scripts maison, automatisation de tickets |
@@ -36,6 +37,27 @@ uniquement » ne signifie donc jamais « programme différent », mais
 | **Prompt IA (presse-papiers)** | — | ✅ | confier un résultat isolé à un assistant, avec son contexte de code |
 | **Télémétrie de suppression** | `--telemetry-csv <fichier>` | — | quelles règles sont le plus souvent supprimées (classement du bruit) |
 | **Durées des détecteurs** | `--time-detectors` (stdout) / `--time-detectors-out <fichier>` | — | repérer les détecteurs lents |
+
+**Deux rapports HTML, et non un seul.** Ils servent le même objectif et
+partagent leur apparence, mais ce sont des pages distinctes et aucune ne
+remplace l'autre :
+
+- `--report-html` est le rapport de la CLI. Chaque résultat figure sur
+  la page avec son extrait de code ; le rapport de règles est une
+  synthèse dépliable à côté du tableau. Conçu pour une lecture de haut
+  en bas et pour l'archivage.
+- Le *rapport HTML* de l'interface est la page **d'atelier**.
+  Recherche, listes déroulantes fichier et règle, pastilles, palmarès,
+  colonnes triables, et un panneau latéral qui montre l'extrait de code
+  et la documentation de la règle du résultat cliqué. Conçu pour
+  dépouiller un grand rapport à son bureau. Son nom de fichier proposé
+  porte la date : `sca_codereview_AAAA-MM-JJ.html`.
+
+La page d'atelier conserve la documentation de règle **une fois par
+règle**, l'extrait de code en texte brut et aucune copie du texte de
+recherche par résultat — c'est pourquoi elle reste environ deux fois
+plus légère que le même rapport auparavant. Les deux sont autonomes :
+aucun fichier externe, rien ne quitte la machine.
 
 Deux asymétries méritent d'être connues avant de planifier quoi que ce
 soit :

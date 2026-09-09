@@ -437,9 +437,36 @@ grille prend toute la largeur (il réapparaît en ~250 ms après le désancrage)
 |--------|--------|---------|
 | **JSON** | `.json` | Tous les résultats sous forme de tableau |
 | **CSV** | `.csv` | Compatible Excel (séparé par des points-virgules) |
-| **Rapport HTML** | `.html` | Rapport autonome avec tri, filtres, extraits de code, avant/après. Cliquer sur un badge de sévérité filtre — et masque aussi, dans la liste déroulante, les fichiers sans résultat de cette sévérité (combinable avec le filtre de fichiers, lié par ET) |
+| **Rapport HTML** | `.html` | Rapport d'atelier autonome — recherche, filtres, palmarès, colonnes triables, panneau latéral avec l'extrait de code source et la documentation de la règle. Nom de fichier proposé : `sca_codereview_AAAA-MM-JJ.html`. Voir ci-dessous |
 | **Jira** | Presse-papiers | Markup wiki prêt à coller dans un ticket Jira (filtré sur un fichier) |
 | **Clipboard** | Presse-papiers | Texte brut avec avant/après (filtré sur un fichier) |
+
+#### Le rapport HTML
+
+Un seul, et non trois : l'interface proposait trois variantes HTML
+jusqu'au 2026-09-09 et n'en livre plus qu'une, le **rapport d'atelier**.
+
+Il s'ouvre sur la note de santé, les tuiles de statistiques et deux
+palmarès (« où ça fait mal ? »), puis la recherche, les listes
+déroulantes fichier et règle, et les pastilles type / sévérité /
+confiance. Un clic sur un résultat ouvre un **panneau latéral** avec
+l'extrait de code, l'emplacement et la documentation de cette règle
+précise. L'en-tête de page, la barre de filtres et la ligne d'en-têtes
+de colonnes s'épinglent l'une sous l'autre pendant le défilement : on
+voit donc toujours selon quoi on filtre et quelle colonne on lit.
+
+Il est **autonome** : aucun fichier externe, aucun CDN, rien ne quitte
+la machine. Il s'ouvre depuis un partage réseau ou un artefact de CI.
+
+À cette échelle la taille compte, et trois choses la contiennent : la
+documentation de règle est stockée **une fois par règle** au lieu d'une
+fois par résultat, l'extrait de code est stocké en texte brut et n'est
+construit qu'à l'ouverture du panneau, et le texte de recherche est lu
+dans la ligne au lieu d'être écrit une seconde fois. Au total, cela
+représente environ la moitié de ce que pesait le même rapport.
+
+> Le `--report-html` de la CLI est un **autre** rapport, inchangé —
+> voir [EXPORTS_fr.md](EXPORTS_fr.md).
 
 ### Panneau File-Findings (ancrage par fichier)
 
@@ -1043,7 +1070,12 @@ StaticCodeAnalyserForm/sources/        Moteur d'analyse (partagé entre autonome
     uRepoSettings.pas                  analyser.ini (BaseBranch, chemins d'exe)
     uSuppression.pas                   Marqueurs // noinspection
     uExport.pas                        JSON / CSV / Jira / presse-papiers
-    uExportHtml.pas                    Rapport HTML autonome
+    uExportHtml.pas                    Rapport HTML de la CLI
+                                         (--report-html) ; aussi le foyer
+                                         des aides HTML partagées
+    uFindingsWorkbenchExport.pas       Rapport d'atelier (interface)
+    uDetectorInfoExport.pas            Page du catalogue de règles
+    uWorkbenchStyle.pas                CSS partagé des pages d'atelier
 
   Output/
     uClaudePrompt.pas                  Générateur du prompt Markdown IA

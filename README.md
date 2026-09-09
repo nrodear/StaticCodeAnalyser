@@ -421,9 +421,35 @@ bar / tab the panel auto-hides and the grid takes the full width
 |--------|--------|---------|
 | **JSON** | `.json` | All findings as an array |
 | **CSV** | `.csv` | Excel-friendly (semicolon-separated) |
-| **HTML report** | `.html` | Self-contained report with sort, filter, code snippets, before/after. Click a severity badge to filter — also hides files in the dropdown that have no findings of that severity (combinable with the file dropdown filter, AND-linked) |
+| **HTML report** | `.html` | Self-contained workbench report — search, filters, top-lists, sortable columns, side drawer with source excerpt and rule documentation. Suggested file name `sca_codereview_YYYY-MM-DD.html`. See below |
 | **Jira** | Clipboard | Wiki markup ready to paste into a Jira ticket (filtered to one file) |
 | **Clipboard** | Clipboard | Plain text with before/after (filtered to one file) |
+
+#### The HTML report
+
+One report, not three: the GUI offered three HTML variants until
+2026-09-09 and now ships a single one, the **workbench report**.
+
+It opens with the health rating, the stat tiles and two top-lists
+("where does it hurt?"), followed by search, the file and rule
+dropdowns and the type / severity / confidence chips. A click on a
+finding opens a **side drawer** with the source excerpt, the location
+and the documentation for that rule. Page header, filter bar and column
+row pin below one another as you scroll, so you always see what you are
+filtering and which column you are reading.
+
+It is **self-contained** — no external assets, no CDN, nothing leaves
+the machine. It opens from a file share or a CI artifact.
+
+Size matters at this scale, and three things keep it down: the rule
+documentation is stored **once per rule** instead of once per finding,
+the source excerpt is stored as plain text and only rendered when the
+drawer opens, and the search text is read off the row instead of being
+written out a second time. Together that is roughly half of what the
+same report used to weigh.
+
+> The CLI's `--report-html` is a **different** report and unchanged —
+> see [EXPORTS.md](EXPORTS.md).
 
 ### File-Findings panel (per-file dock)
 
@@ -1014,7 +1040,12 @@ StaticCodeAnalyserForm/sources/        Analysis engine (shared by standalone + I
     uRepoSettings.pas                  analyser.ini (BaseBranch, exe paths)
     uSuppression.pas                   // noinspection markers
     uExport.pas                        JSON / CSV / Jira / clipboard
-    uExportHtml.pas                    Self-contained HTML report
+    uExportHtml.pas                    HTML report of the CLI
+                                         (--report-html); also the home
+                                         of the shared HTML helpers
+    uFindingsWorkbenchExport.pas       Workbench findings report (GUI)
+    uDetectorInfoExport.pas            Rule catalogue page
+    uWorkbenchStyle.pas                Shared CSS of the workbench pages
 
   Output/
     uClaudePrompt.pas                  AI Markdown prompt generator

@@ -423,9 +423,37 @@ dem Loslösen wieder zurück).
 |--------|--------|--------|
 | **JSON** | `.json` | Alle Befunde als Array |
 | **CSV** | `.csv` | Excel-tauglich (Semikolon-getrennt) |
-| **HTML-Report** | `.html` | Self-contained Report mit Sortierung, Filter, Code-Snippets, Vorher/Nachher. Klick auf eine Severity-Kachel filtert — und blendet zusätzlich Dateien im Dropdown aus, die keine Befunde dieser Severity haben (mit dem Datei-Filter UND-verknüpft) |
+| **HTML-Report** | `.html` | Self-contained Workbench-Bericht — Suche, Filter, Top-Listen, sortierbare Spalten, Seiten-Drawer mit Quellausschnitt und Regel-Doku. Dateinamen-Vorschlag `sca_codereview_JJJJ-MM-TT.html`. Siehe unten |
 | **Jira** | Clipboard | Wiki-Markup für Jira-Tickets (gefiltert auf Datei) |
 | **Clipboard** | Clipboard | Plain-Text mit Vorher/Nachher (gefiltert auf Datei) |
+
+#### Der HTML-Bericht
+
+Einer statt drei: die Oberfläche bot bis zum 2026-09-09 drei
+HTML-Varianten an und liefert jetzt genau eine, den
+**Workbench-Bericht**.
+
+Er beginnt mit der Bewertung, den Kacheln und zwei Top-Listen ("wo
+drückt es?"), darunter Suche, die Dropdowns für Datei und Regel sowie
+die Chips für Typ, Schweregrad und Konfidenz. Ein Klick auf einen Fund
+öffnet einen **Seiten-Drawer** mit Quellausschnitt, Fundort und der
+Dokumentation genau dieser Regel. Seitenkopf, Filterleiste und
+Spaltenzeile rasten beim Scrollen untereinander ein — man sieht also
+immer, wonach gefiltert wird und welche Spalte man liest.
+
+Er ist **self-contained**: keine externen Dateien, kein CDN, nichts
+verlässt den Rechner. Er öffnet sich von einem Dateishare oder aus
+einem CI-Artefakt.
+
+Bei dieser Menge zählt die Größe, und drei Dinge halten sie klein: die
+Regel-Doku steht **einmal je Regel** statt einmal je Fund, der
+Quellausschnitt liegt als reiner Text und wird erst beim Öffnen des
+Drawers gebaut, und der Suchtext wird aus der Zeile gelesen statt ein
+zweites Mal ausgeschrieben. Zusammen ist das rund die Hälfte dessen,
+was derselbe Bericht vorher wog.
+
+> `--report-html` der CLI ist ein **anderer** Bericht und unverändert —
+> siehe [EXPORTS_de.md](EXPORTS_de.md).
 
 ### File-Findings-Panel (Per-Datei-Dock)
 
@@ -1024,7 +1052,12 @@ StaticCodeAnalyserForm/sources/        Analyse-Engine (shared zwischen Standalon
     uRepoSettings.pas                  analyser.ini (BaseBranch etc.)
     uSuppression.pas                   // noinspection-Marker
     uExport.pas                        JSON / CSV / Jira / Clipboard
-    uExportHtml.pas                    Self-contained HTML-Report
+    uExportHtml.pas                    HTML-Report der CLI
+                                         (--report-html); zugleich Heimat
+                                         der geteilten HTML-Helfer
+    uFindingsWorkbenchExport.pas       Workbench-Fundbericht (GUI)
+    uDetectorInfoExport.pas            Regelkatalog-Seite
+    uWorkbenchStyle.pas                Geteiltes CSS der Workbench-Seiten
 
   Output/
     uClaudePrompt.pas                  AI-Markdown-Prompt-Generator

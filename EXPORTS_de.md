@@ -27,7 +27,8 @@ als CLI. „Nur in der GUI" heißt also nie „anderes Programm", sondern
 |---|---|---|---|
 | **SARIF 2.1.0** | `--report-sarif <Datei>` | ✅ *SARIF (all findings)* | GitHub-/Azure-Code-Scanning, Archiv, Werkzeug-Austausch |
 | **Sonar Generic Issue** | `--sonar-export <Datei>` | ✅ *Sonar: write Generic Issue report* | SonarQube-Dashboard (Einschränkung s. u.) |
-| **HTML-Report** | `--report-html <Datei>` | ✅ | Funde lesen und weitergeben, ohne Werkzeug beim Empfänger |
+| **HTML-Report (CLI)** | `--report-html <Datei>` | — | Funde lesen und weitergeben, ohne Werkzeug beim Empfänger |
+| **HTML-Report (GUI)** | — | ✅ | Derselbe Zweck, eine andere Seite — siehe unten |
 | **Baseline-JSON** | `--write-baseline <Datei>` | ✅ *Write baseline* | CI-Gate: „nur bei **neuen** Funden scheitern" |
 | **CSV** | `--report-csv <Datei>` | ✅ | Excel, Pivot, schnelles Auszählen |
 | **JSON** | `--report-json <Datei>` | ✅ | eigene Skripte, Ticket-Automatisierung |
@@ -35,6 +36,27 @@ als CLI. „Nur in der GUI" heißt also nie „anderes Programm", sondern
 | **AI-Prompt (Zwischenablage)** | — | ✅ | einzelnen Fund samt Codekontext an einen Assistenten geben |
 | **Suppression-Telemetrie** | `--telemetry-csv <Datei>` | — | welche Regeln am häufigsten unterdrückt werden |
 | **Detektor-Laufzeiten** | `--time-detectors` (stdout) / `--time-detectors-out <Datei>` | — | langsame Detektoren finden |
+
+**Zwei HTML-Berichte, nicht einer.** Sie dienen demselben Zweck und
+teilen ihr Aussehen, sind aber getrennte Seiten, und keiner ersetzt den
+anderen:
+
+- `--report-html` ist der Bericht der CLI. Jeder Fund steht mit seinem
+  Quellausschnitt auf der Seite; der Regel-Report ist eine aufklappbare
+  Zusammenfassung neben der Tabelle. Gebaut zum Lesen von oben nach
+  unten und zum Archivieren.
+- Der *HTML-Report* der Oberfläche ist die **Workbench**-Seite. Suche,
+  Dropdowns für Datei und Regel, Chips, Top-Listen, sortierbare Spalten
+  und ein Seiten-Drawer, der Quellausschnitt und Regel-Doku zum
+  angeklickten Fund zeigt. Gebaut zum Durcharbeiten eines großen
+  Berichts am Schreibtisch. Sein Dateinamen-Vorschlag trägt das Datum:
+  `sca_codereview_JJJJ-MM-TT.html`.
+
+Die Workbench-Seite hält die Regel-Doku **einmal je Regel**, den
+Quellausschnitt als reinen Text und keine Kopie des Suchtexts je Fund —
+deshalb bleibt sie rund halb so groß wie derselbe Bericht vorher. Beide
+sind self-contained: keine externen Dateien, nichts verlässt den
+Rechner.
 
 Zwei Asymmetrien sollte man kennen, bevor man etwas plant:
 
