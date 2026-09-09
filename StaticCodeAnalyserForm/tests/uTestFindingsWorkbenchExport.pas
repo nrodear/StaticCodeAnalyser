@@ -700,13 +700,29 @@ procedure TTestFindingsWorkbenchExport.Spaltenzeile_UndListenOverflow_GehoerenZu
 // sichert die KOPPLUNG. Wer .listwrap wieder ein overflow gibt, faellt
 // hier durch und wird auf das th gestossen.
 var
-  Html : string;
+  Html  : string;
+  Regel : string;
+  P, E  : Integer;
 begin
   Html := EinFundHtml;
 
-  Assert.AreEqual<Integer>(0, Pos('border-radius:8px;overflow', Html),
+  // AUF DIE REGEL ZIELEN, nicht aufs Dokument. Der erste Wurf suchte
+  // 'border-radius:8px;overflow' im ganzen HTML - und traf .codekarte
+  // aus dem geteilten Designsystem, die genau so anfaengt. Eine
+  // Zusicherung ueber das ganze Dokument ist bei CSS fast immer zu
+  // weit; hier wird der Rumpf von .listwrap ausgeschnitten und NUR
+  // der geprueft.
+  P := Pos('.listwrap{', Html);
+  Assert.IsTrue(P > 0, 'die Regel fuer die Fundliste fehlt ganz');
+  E := Pos('}', Html, P);
+  Assert.IsTrue(E > P, 'die Regel fuer die Fundliste ist offen');
+  Regel := Copy(Html, P, E - P + 1);
+  Assert.AreEqual<Integer>(0, Pos('overflow', Regel),
     'die Liste hat wieder ein overflow - dann ist SIE der Scroller, '
     + 'und das top am th muss zurueck auf 0');
+  Assert.AreEqual<Integer>(0, Pos('max-height', Regel),
+    'die Liste hat wieder eine eigene Hoehe - zusammen mit einem '
+    + 'overflow macht das den zweiten Scroller');
   Assert.AreEqual<Integer>(0, Pos('position:sticky;z-index:2;top:0;',
     Html),
     'die Spaltenzeile klebt am oberen Fensterrand - dort verschwindet '
@@ -1480,8 +1496,12 @@ begin
   Assert.IsTrue(Pos('badges.appendChild(b.cloneNode(true));', Html) > 0,
     'die Badges werden nicht aus den Zellen geklont');
   // --- Reihenfolge: Kopf VOR Quellcode VOR Regel-Doku ---------------
+  // Der Ausschnitt wird seit 09.09. GEBAUT statt geklont: er liegt als
+  // Rohtext bei der Zeile, nicht als fertiges Markup (s.
+  // SourceSnippet_RendersAroundFindingLine). Der Anker heisst deshalb
+  // anders - die gepruefte Reihenfolge ist dieselbe.
   AssertReihenfolge(Html, 'kopf.appendChild(ort);',
-    'kopf.appendChild(sn.cloneNode(true));',
+    'kopf.appendChild(baueAusschnitt(sz));',
     'der Quellcode muss NACH dem Fundort kommen');
   AssertReihenfolge(Html, 'korb.appendChild(fundKopf(tb));',
     'korb.appendChild(tpl.content.cloneNode(true));',
