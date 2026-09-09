@@ -1,4 +1,4 @@
-unit uTestFindingsWorkbenchExport;
+﻿unit uTestFindingsWorkbenchExport;
 
 // Vertragstests der Funde-Export-VARIANTE 2 (uFindingsWorkbenchExport,
 // Nutzerauftrag 07.09.): Workbench-Architektur der Detektor-Info-Seite
@@ -31,6 +31,7 @@ type
     [Test] procedure OneTbodyPerFinding_TemplatesDeduplicated;
     [Test] procedure WorkbenchScaffolding_WiredCompletely;
     [Test] procedure SearchBlob_IsAnsiLowered;
+    [Test] procedure SearchBlob_RuleExtrasSharedNotPerFinding;
     [Test] procedure MaxRows_TruncatesWithBanner_TilesKeepTotals;
     [Test] procedure FileReadError_NeutralBadgeAndOwnRank;
     [Test] procedure Run_WritesUtf8WithBom;
@@ -249,8 +250,20 @@ begin
 end;
 
 procedure TTestFindingsWorkbenchExport.SearchBlob_IsAnsiLowered;
-// Wie Katalog und V1: der Blob muss Unicode-gesenkt sein, sonst sind
-// Woerter mit grossen Umlauten in keiner Schreibweise findbar.
+// Die Suche muss Woerter mit grossen Umlauten in JEDER Schreibweise
+// finden. Wie das erreicht wird, hat sich am 09.09. umgedreht:
+//
+// FRUEHER trug jeder Fund einen fertig gesenkten Suchblob in
+// data-search, und der musste mit AnsiLowerCase gesenkt sein - mit
+// LowerCase waeren grosse Umlaute stehen geblieben, waehrend die
+// JS-Seite die Eingabe Unicode-korrekt senkt (Chargen-Review 06.09.).
+// Zwei Senkungen, die auseinanderlaufen konnten.
+//
+// HEUTE gibt es nur noch EINE Senkung, und sie liegt im Browser:
+// suchtext() liest den Zeilentext und senkt ihn mit demselben
+// toLowerCase, das auch die Eingabe senkt. Die Falle ist damit nicht
+// mehr behoben, sondern baulich unmoeglich - und genau das prueft
+// dieser Test.
 var
   Findings : TObjectList<TLeakFinding>;
   Html     : string;
@@ -263,11 +276,73 @@ begin
   finally
     Findings.Free;
   end;
-  Assert.IsTrue(Pos('pr'#$FC'fung offen', Html) > 0,
-    'Suchblob muss AnsiLowerCase nutzen (Umlaut-Senkung)');
-  Assert.AreEqual<Integer>(0, Pos('PR'#$DC'FUNG offen',
-    Copy(Html, Pos('data-search="', Html), 400)),
-    'im Suchattribut darf der ungesenkte Text nicht stehen');
+  // Der Text steht EINMAL in der Seite, in seiner Originalschreibung -
+  // sichtbar in der Zeile. Kein zweites, gesenktes Exemplar daneben.
+  Assert.IsTrue(Pos('PR'#$DC'FUNG offen', Html) > 0,
+    'der Detailtext fehlt in der Fundzeile');
+  Assert.AreEqual<Integer>(0, Pos('data-search="', Html),
+    'der Suchblob je Fund ist zurueck - er verdoppelt die Zeile');
+  Assert.AreEqual<Integer>(0, Pos('pr'#$FC'fung offen', Html),
+    'gesenktes Zweitexemplar des Detailtexts in der Seite');
+  // Beide Seiten des Vergleichs senken mit DEMSELBEN toLowerCase.
+  Assert.IsTrue(Pos('tb._s = t.toLowerCase();', Html) > 0,
+    'die Suchbasis wird nicht gesenkt');
+  Assert.IsTrue(
+    Pos('document.getElementById("suche").value.toLowerCase()', Html) > 0,
+    'die Eingabe wird nicht mit derselben Senkung behandelt');
+end;
+
+procedure TTestFindingsWorkbenchExport.SearchBlob_RuleExtrasSharedNotPerFinding;
+// Was zur Suche gehoert, aber nicht in der Fundzeile steht - Kind-Name,
+// CWE, Tags - liegt EINMAL JE REGEL in RSUCH, nicht einmal je Fund.
+//
+// Der Test nimmt DREI Funde DERSELBEN Regel. Damit trennt er die
+// Ersparnis vom blossen Vorhandensein: eine Umsetzung, die den Zusatz
+// weiterhin bei jedem Fund fuehrt, wuerde ihn dreimal schreiben und
+// faellt hier durch. Mit nur einem Fund waere beides ununterscheidbar.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+  i, N, P  : Integer;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    for i := 1 to 3 do
+      Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', i * 10, 'x'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+  Assert.IsTrue(Pos('var RSUCH={', Html) > 0,
+    'die Such-Zusatztabelle fehlt');
+  // Der Kind-Name steht NICHT in der Zeile - ohne ihn waere die Suche
+  // nach dem technischen Namen tot. Er ist der Grund, dass es die
+  // Tabelle ueberhaupt gibt.
+  // Mit fuehrendem Anfuehrungszeichen UND Leerzeichen dahinter: so
+  // steht der Name nur am Anfang eines Zusatz-Werts. Ohne die Klammer
+  // wuerde ein gleichlautender Tag mitgezaehlt, und der Test haenge
+  // daran, was der Regelkatalog gerade fuehrt.
+  Assert.IsTrue(Pos('"MemoryLeak ', Html) > 0,
+    'der Kind-Name fehlt in der Such-Zusatztabelle');
+  // EINMAL, nicht dreimal.
+  N := 0;
+  P := Pos('"MemoryLeak ', Html);
+  while P > 0 do
+  begin
+    Inc(N);
+    P := Pos('"MemoryLeak ', Html, P + 1);
+  end;
+  Assert.AreEqual<Integer>(1, N,
+    'der Kind-Name steht mehrfach - der Zusatz haengt wieder am Fund');
+  // Und die Anzeige nutzt ihn auch.
+  Assert.IsTrue(Pos('suchtext(tbs[i]).indexOf(q) >= 0', Html) > 0,
+    'die Suche liest die Zeile nicht ueber suchtext()');
+  Assert.IsTrue(Pos('RSUCH[tb.dataset.rid]', Html) > 0,
+    'suchtext() zieht den Regel-Zusatz nicht heran');
+  // Zelle fuer Zelle, nicht als textContent der ganzen Zeile: sonst
+  // kleben "42" und "DoFoo" zu "42DoFoo" und erzeugen Falschtreffer.
+  Assert.IsTrue(Pos('z.children[k].textContent + " "', Html) > 0,
+    'der Zeilentext wird nicht zellenweise getrennt gelesen');
 end;
 
 procedure TTestFindingsWorkbenchExport.MaxRows_TruncatesWithBanner_TilesKeepTotals;
@@ -893,7 +968,7 @@ begin
   // (kein deutsches Severity-Wort im englischen Dokument) - sie ist
   // der eigentliche Vertrag und kommt ohne Annahme darueber aus,
   // welche Severity die Fixture traegt.
-  Assert.IsTrue(Pos('data-search="', En) > 0, 'Suchblob fehlt');
+  Assert.IsTrue(Pos('var RSUCH={', En) > 0, 'Such-Zusatztabelle fehlt');
   Assert.AreEqual<Integer>(0, Pos('Warnung', OhneSkript(En)),
     'deutsches Severity-Wort im englischen Dokument');
   Assert.AreEqual<Integer>(0, Pos('warnung', OhneSkript(En)),

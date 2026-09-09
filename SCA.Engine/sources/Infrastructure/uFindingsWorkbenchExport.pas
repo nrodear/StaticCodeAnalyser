@@ -1,4 +1,4 @@
-unit uFindingsWorkbenchExport;
+﻿unit uFindingsWorkbenchExport;
 
 // Funde-Export VARIANTE 2 (Nutzerauftrag 07.09.): der Scan-Bericht auf
 // der ARCHITEKTUR der Detektor-Info-Seite (uDetectorInfoExport) - die
@@ -246,7 +246,7 @@ end;
 function Einzeilig(const S: string): string;
 // Umbrueche zu Leerzeichen, BEVOR HtmlEscape laeuft - der Escaper
 // bildet #10 auf ein literales '<br>' ab (Elementinhalt-Vertrag);
-// in ATTRIBUTEN (data-search, data-hinweis) waere das Datenmuell
+// in ATTRIBUTEN (data-hinweis, Regel-Zusatz) waere das Datenmuell
 // (genau der Fall aus dem Chargen-Review 06.09.).
 begin
   Result := StringReplace(S, #13#10, ' ', [rfReplaceAll]);
@@ -1238,6 +1238,38 @@ begin
     SB.AppendLine('  var el = document.getElementById(id);');
     SB.AppendLine('  return el ? el.value : "";');
     SB.AppendLine('}');
+    // Die Suchbasis eines Fundes - beim ERSTEN Bedarf aus der Zeile
+    // gelesen und danach am Knoten gemerkt. Sie stand bis 09.09. fertig
+    // in data-search bei jedem Fund; das waren rund 225 Byte, die nichts
+    // enthielten, was nicht in derselben Zeile schon sichtbar war.
+    //
+    // Der Zeilentext wird ZELLE FUER ZELLE geholt und mit Leerzeichen
+    // verbunden, nicht als textContent der ganzen Zeile: der klebt die
+    // Zellen aneinander ("42DoFoo"), und wo eine Zelle zwei Zeilen
+    // fuehrt (Methode/Datei, Regel/Detail), klebt er auch die. Kleben
+    // erzeugt zwar keine fehlenden, aber falsche Treffer an den
+    // Nahtstellen.
+    SB.AppendLine('function suchtext(tb) {');
+    SB.AppendLine('  if (tb._s !== undefined) return tb._s;');
+    SB.AppendLine('  var h = tb.querySelector("tr.haupt"), t = "";');
+    SB.AppendLine('  if (h) for (var j = 0; j < h.children.length; j++) {');
+    SB.AppendLine('    var z = h.children[j];');
+    SB.AppendLine('    if (z.children.length)');
+    SB.AppendLine('      for (var k = 0; k < z.children.length; k++)');
+    SB.AppendLine('        t += z.children[k].textContent + " ";');
+    SB.AppendLine('    else t += z.textContent + " ";');
+    SB.AppendLine('  }');
+    // RSUCH steht im Dokument VOR diesem Skript, ist aber notfalls
+    // auch leer verkraftbar: dann faellt nur die Suche nach Kind-Name,
+    // CWE und Tags aus, nicht die ganze Suche.
+    SB.AppendLine('  t += (typeof RSUCH === "object" && '
+      + 'RSUCH[tb.dataset.rid]) || "";');
+    // EINMAL senken, ueber alles. Solange Zeilentext und Zusatz
+    // dieselbe Senkung sehen, koennen sie nicht auseinanderlaufen -
+    // das war der Grund fuer die AnsiLowerCase-Auflage von frueher.
+    SB.AppendLine('  tb._s = t.toLowerCase();');
+    SB.AppendLine('  return tb._s;');
+    SB.AppendLine('}');
     SB.AppendLine('function suche() {');
     SB.AppendLine('  var q = document.getElementById("suche")'
       + '.value.toLowerCase();');
@@ -1246,7 +1278,7 @@ begin
     SB.AppendLine('  var tbs = alleTbodies(), sichtbar = 0;');
     SB.AppendLine('  for (var i = 0; i < tbs.length; i++) {');
     SB.AppendLine('    var hit = (q === "" || '
-      + 'tbs[i].dataset.search.indexOf(q) >= 0) && passtChips(tbs[i])');
+      + 'suchtext(tbs[i]).indexOf(q) >= 0) && passtChips(tbs[i])');
     SB.AppendLine('      && (datei === "" || tbs[i].dataset.pfad === datei)');
     SB.AppendLine('      && (regel === "" || tbs[i].dataset.rid === regel);');
     SB.AppendLine('    tbs[i].style.display = hit ? "" : "none";');
@@ -1663,21 +1695,33 @@ begin
   end;
 end;
 
-function SuchBlobFund(F: TLeakFinding; const AMeta: TRuleMeta;
-  const APfad, ASevTxt, ALang: string): string;
-// Suchbasis je Fund, lowercase. AnsiLowerCase, NICHT LowerCase - die
-// JS-Seite senkt Unicode-korrekt (toLowerCase); mit LowerCase blieben
-// grosse Umlaute im Blob stehen (Chargen-Review 06.09., Major).
-// Die Severity-/Konfidenz-Woerter stehen in der SEITENSPRACHE im Blob:
-// wonach der Leser sieht, danach sucht er auch.
+function SuchZusatzRegel(K: TFindingKind;
+  const AMeta: TRuleMeta): string;
+// Was zur Suche gehoert, aber NICHT in der Fundzeile steht: der
+// technische Kind-Name und die Metadaten CWE und Tags. Der Rest -
+// Pfad, Zeile, Methode, Detail, ID, Regelname, Typ, Schweregrad,
+// Konfidenz - ist sichtbar, und die Anzeige liest ihn direkt aus der
+// Zeile.
+//
+// WARUM NICHT MEHR JE FUND (Aenderung 09.09.)
+// Bis hierher trug jeder Fund einen fertigen Suchblob in data-search:
+// alles Sichtbare noch einmal, kleingeschrieben. Rund 225 Byte pro
+// Fund, die nichts enthielten, was nicht drei Zentimeter weiter rechts
+// schon stand. Bei vierzigtausend Funden sind das neun Megabyte, die
+// der Browser laedt und parst, damit die Suche sich einen DOM-Zugriff
+// spart.
+//
+// Was BLEIBT, ist je REGEL gleich - also steht es jetzt einmal je
+// Regel in einer Tabelle, nicht einmal je Fund in der Zeile.
+//
+// Kleingeschrieben wird nicht mehr hier, sondern in der Anzeige: sie
+// muss den Zeilentext ohnehin senken, und ein toLowerCase ueber alles
+// kann nicht auseinanderlaufen. Die alte AnsiLowerCase-Auflage - sie
+// stammte daher, dass Pascal und JS verschieden senken (Chargen-Review
+// 06.09.) - ist damit gegenstandslos.
 begin
-  Result := AnsiLowerCase(Einzeilig(
-    APfad + ' ' + F.LineNumber + ' ' + F.MethodName + ' '
-    + F.MissingVar + ' ' + AMeta.ID + ' ' + AMeta.Name + ' '
-    + KIND_META[F.Kind].Name + ' ' + TypText(AMeta.FindingType) + ' '
-    + ASevTxt + ' '
-    + TWorkbenchI18n.T(CONF_KEY[F.Confidence], ALang) + ' '
-    + JoinArr(AMeta.CWE, ' ') + ' ' + JoinArr(AMeta.Tags, ' ')));
+  Result := Einzeilig(KIND_META[K].Name + ' '
+    + JoinArr(AMeta.CWE, ' ') + ' ' + JoinArr(AMeta.Tags, ' '));
 end;
 
 function Snippetblock(const ASnippet: string;
@@ -1765,10 +1809,11 @@ begin
   else
     DateiZeile := H(DateiName) + '; ' + H(Z.Pfad);
   Result :=
-    Format('<tbody data-rid="%s" data-search="%s" data-typ="%s" '
+    // KEIN data-search mehr (seit 09.09.): die Suche liest den
+    // Zeilentext und holt sich den Rest aus der Regel-Tabelle RSUCH.
+    Format('<tbody data-rid="%s" data-typ="%s" '
       + 'data-sev="%d" data-konf="%d" data-pfad="%s"%s>'#13#10,
       [H(Z.Meta.ID),
-       H(SuchBlobFund(Z.Fund, Z.Meta, Z.Pfad, SevTxt, Z.Lang)),
        TypCss(Z.Meta.FindingType), SevRang, Ord(Z.Fund.Confidence),
        H(Z.Pfad), HinweisAttr])
     + '<tr class="haupt" tabindex="0" '
@@ -2086,6 +2131,8 @@ var
   RowsDropped : Integer;
   QuellCache  : TObjectDictionary<string, TStringList>;
   Zeile       : TFundZeile;
+  Zusatz      : TStringBuilder;
+  Erste       : Boolean;
 begin
   if AMaxRows < 0 then
     MaxRows := V2_MAX_ROWS_DEFAULT
@@ -2233,12 +2280,29 @@ begin
 
     // Regel-Templates NACH der Tabelle, EINMAL je vorkommender Regel -
     // hier liegt die Deduplikation gegenueber der V1 (s. Unit-Kopf).
-    for K := Low(TFindingKind) to High(TFindingKind) do
-      if K in Regeln then
-      begin
-        Meta := TRuleCatalog.GetRule(K, ALang);
-        SB.Append(TemplateFuerRegel(K, Meta, ALang));
-      end;
+    // Im selben Durchgang entsteht die Sucherweiterung: was zur Suche
+    // gehoert, aber nicht in der Fundzeile steht (s. SuchZusatzRegel).
+    Zusatz := TStringBuilder.Create;
+    try
+      Zusatz.Append('<script>var RSUCH={');
+      Erste := True;
+      for K := Low(TFindingKind) to High(TFindingKind) do
+        if K in Regeln then
+        begin
+          Meta := TRuleCatalog.GetRule(K, ALang);
+          SB.Append(TemplateFuerRegel(K, Meta, ALang));
+          if not Erste then Zusatz.Append(',');
+          Erste := False;
+          Zusatz.Append(TExporterHtml.JsonForScript(Meta.ID));
+          Zusatz.Append(':');
+          Zusatz.Append(TExporterHtml.JsonForScript(
+            SuchZusatzRegel(K, Meta)));
+        end;
+      Zusatz.AppendLine('};</script>');
+      SB.Append(Zusatz.ToString);
+    finally
+      Zusatz.Free;
+    end;
 
     SB.AppendLine('</main>');
     // wtDrawerAriaFunde, NICHT wtDrawerAria: hier stehen FUND-Details,
