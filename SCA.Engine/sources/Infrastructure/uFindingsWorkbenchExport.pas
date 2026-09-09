@@ -517,8 +517,26 @@ begin
       + 'top:var(--kopf-h,0px);z-index:4;background:var(--grund);'
       + 'padding-top:6px;margin-bottom:4px;}');
     // ---- Liste --------------------------------------------------------
+    // EIGENE SCROLLHOEHE (Nicos Wunsch 09.09.: "der header der funde
+    // soll auch sichtbar bleiben beim hoch scrollen").
+    //
+    // Der Spaltenkopf ist laengst sticky - er wirkte nur nie, weil
+    // .listwrap zwar overflow:auto trug, aber KEINE Hoehe. Ohne Hoehe
+    // scrollt sie nie selbst; die ganze Seite scrollt, und die Tabelle
+    // wandert samt Kopf nach oben davon. Erst mit einer Begrenzung
+    // wird sie zum echten Scrollbereich, und der Kopf bleibt stehen.
+    //
+    // Die Hoehe rechnet sich aus dem, was ueber der Liste KLEBT:
+    // Seitenkopf und Filterleiste. Beide Groessen pflegt das Skript
+    // als CSS-Variable, weil beide sich aendern - der Kopf schrumpft
+    // beim Scrollen, die Chips brechen je nach Fensterbreite um. Feste
+    // Werte (etwa 62vh wie in V3) waeren bei einem schmalen Fenster zu
+    // gross und bei einem breiten zu klein.
+    // Die 28px sind der Aussenabstand unter der Liste.
     SB.AppendLine('.listwrap{background:var(--karte);border:1px solid '
       + 'var(--rand);border-radius:8px;overflow:auto;'
+      + 'max-height:calc(100vh - var(--kopf-h,0px) '
+      + '- var(--filter-h,0px) - 28px);'
       + 'box-shadow:0 1px 2px rgba(16,32,48,0.06);}');
     // table-layout:fixed traegt die Spaltenbreiten (Nicos Auftrag
     // 09.09., Werte aus der V3-Seite). OHNE fixed verteilt der Browser
@@ -1509,6 +1527,30 @@ begin
     // Angepinnter Kopf mit zwei Zustaenden - EINE Quelle fuer
     // alle drei Seiten (Nutzerauftrag 09.09.).
     SB.Append(TWorkbenchStyle.KopfVerhaltenJs);
+    // --filter-h: die Hoehe der angepinnten Filterleiste. Sie geht in
+    // die max-height der Liste ein, damit deren Spaltenkopf beim
+    // Scrollen stehen bleibt (s. .listwrap).
+    //
+    // Eigener Block statt im geteilten Kopf-Verhalten: die
+    // Filterleiste gibt es nur auf DIESER Seite. Die Hoehe aendert
+    // sich mit der Fensterbreite, weil die Chips umbrechen - deshalb
+    // auch am resize.
+    SB.AppendLine('(function(){');
+    SB.AppendLine('  var fl=document.getElementById("bereich-filter");');
+    SB.AppendLine('  if(!fl)return;');
+    SB.AppendLine('  function merken(){');
+    SB.AppendLine('    document.documentElement.style.setProperty('
+      + '"--filter-h",fl.offsetHeight+"px");');
+    SB.AppendLine('  }');
+    SB.AppendLine('  window.addEventListener("resize",merken);');
+    // Die Chips-Leiste aendert ihre Hoehe auch OHNE resize: ein
+    // Lesefehler-Chip kommt hinzu, ein Filter blendet Chips aus.
+    // ResizeObserver faengt das; wo es ihn nicht gibt, bleibt es beim
+    // Startwert - dann ist die Liste hoechstens etwas zu hoch.
+    SB.AppendLine('  if(window.ResizeObserver)'
+      + 'new ResizeObserver(merken).observe(fl);');
+    SB.AppendLine('  merken();');
+    SB.AppendLine('})();');
     SB.AppendLine('</script>');
     Result := SB.ToString;
   finally

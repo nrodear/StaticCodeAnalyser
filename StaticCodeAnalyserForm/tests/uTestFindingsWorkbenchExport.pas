@@ -22,6 +22,11 @@ type
       Line: Integer; const Msg: string): TLeakFinding;
     function Render(Findings: TObjectList<TLeakFinding>;
       const ABaseDir: string = ''; AMaxRows: Integer = -1): string;
+    // Ein Bericht mit genau EINEM Standardfund - der Aufbau, den
+    // die meisten Tests brauchen. Ausgelagert, weil er sonst in
+    // jedem Test dieselben acht Zeilen kostet (der eigene Scan
+    // meldete ihn als SCA021).
+    function EinFundHtml: string;
   public
     [Test] procedure OneTbodyPerFinding_TemplatesDeduplicated;
     [Test] procedure WorkbenchScaffolding_WiredCompletely;
@@ -45,6 +50,7 @@ type
     [Test] procedure Bereiche_HabenBenennbareIds;
     [Test] procedure Bereiche_StehenInDerVorgegebenenReihenfolge;
     [Test] procedure Filterleiste_BleibtBeimScrollenSichtbar;
+    [Test] procedure Spaltenkopf_BleibtBeimScrollenSichtbar;
     // Angepinnter Kopf mit zwei Zustaenden (Nutzerauftrag 09.09.).
     [Test] procedure Kopf_IstAngepinntUndSchrumpftBeimScrollen;
     // EN/FR-Nachtrag 07.09.: Seite in drei Sprachen, Token unberuehrt.
@@ -132,6 +138,20 @@ function TTestFindingsWorkbenchExport.Render(
 begin
   Result := TFindingsWorkbenchExport.BuildHtml(Findings, ABaseDir,
     AMaxRows);
+end;
+
+function TTestFindingsWorkbenchExport.EinFundHtml: string;
+// Begruendung an der Deklaration.
+var
+  Findings : TObjectList<TLeakFinding>;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Result := Render(Findings);
+  finally
+    Findings.Free;
+  end;
 end;
 
 procedure TTestFindingsWorkbenchExport.OneTbodyPerFinding_TemplatesDeduplicated;
@@ -549,16 +569,9 @@ procedure TTestFindingsWorkbenchExport.Spaltenbreiten_SindFestWieInV3;
 // table-layout:fixed ist deshalb der TRAGENDE Teil - ohne ihn haetten
 // die width-Angaben keine Wirkung.
 var
-  Findings : TObjectList<TLeakFinding>;
-  Html     : string;
+  Html : string;
 begin
-  Findings := TObjectList<TLeakFinding>.Create(True);
-  try
-    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
-    Html := Render(Findings);
-  finally
-    Findings.Free;
-  end;
+  Html := EinFundHtml;
 
   Assert.IsTrue(Pos('table-layout:fixed;', Html) > 0,
     'ohne table-layout:fixed wirken die Spaltenbreiten nicht und die '
@@ -596,16 +609,9 @@ procedure TTestFindingsWorkbenchExport.Spaltenzeile_KlebtAmScrollContainerNichtA
 // war verwechselt: hier top:0, weil der Kopf IM Scroller liegt - auf
 // der V3-Seite dagegen var(--kopf-h), weil er dort ausserhalb steht.
 var
-  Findings : TObjectList<TLeakFinding>;
-  Html     : string;
+  Html : string;
 begin
-  Findings := TObjectList<TLeakFinding>.Create(True);
-  try
-    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
-    Html := Render(Findings);
-  finally
-    Findings.Free;
-  end;
+  Html := EinFundHtml;
 
   Assert.IsTrue(Pos('position:sticky;top:0;', Html) > 0,
     'die Spaltenzeile klebt nicht am oberen Rand ihres Scrollers');
@@ -670,16 +676,9 @@ procedure TTestFindingsWorkbenchExport.Bereiche_StehenInDerVorgegebenenReihenfol
 // pruefen wuerde nicht auffallen, wenn ein Bereich in die Mitte
 // rutscht.
 var
-  Findings : TObjectList<TLeakFinding>;
-  Html     : string;
+  Html : string;
 begin
-  Findings := TObjectList<TLeakFinding>.Create(True);
-  try
-    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
-    Html := Render(Findings);
-  finally
-    Findings.Free;
-  end;
+  Html := EinFundHtml;
 
   AssertReihenfolge(Html, 'id="bereich-seitenkopf"', 'id="bereich-ampel"',
     'der Seitenkopf steht nicht vor der Ampel');
@@ -711,16 +710,9 @@ procedure TTestFindingsWorkbenchExport.Filterleiste_BleibtBeimScrollenSichtbar;
 //      der .listwrap, sein Bezug ist also das Fenster, und der
 //      Seitenkopf klebt davor
 var
-  Findings : TObjectList<TLeakFinding>;
-  Html     : string;
+  Html : string;
 begin
-  Findings := TObjectList<TLeakFinding>.Create(True);
-  try
-    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
-    Html := Render(Findings);
-  finally
-    Findings.Free;
-  end;
+  Html := EinFundHtml;
 
   Assert.IsTrue(Pos('<div id="bereich-filter">', Html) > 0,
     'die gemeinsame Huelle um Suche, Dropdowns und Chips fehlt');
@@ -740,6 +732,42 @@ begin
     'die Huelle reicht ueber die Liste hinaus');
 end;
 
+procedure TTestFindingsWorkbenchExport.Spaltenkopf_BleibtBeimScrollenSichtbar;
+// Nicos Wunsch 09.09.: "der header der funde soll auch sichtbar
+// bleiben beim hoch scrollen".
+//
+// Der Spaltenkopf war laengst sticky - er WIRKTE nur nie. .listwrap
+// trug zwar overflow:auto, aber keine Hoehe; ohne Begrenzung scrollt
+// sie nie selbst, die ganze Seite scrollt, und die Tabelle wandert
+// samt Kopf davon.
+//
+// Der Test prueft die KETTE, denn jedes Glied allein ist wertlos:
+//   1. der Kopf klebt (position:sticky, top:0 im Scroller)
+//   2. die Liste IST ein Scroller (overflow + Hoehe) - fehlt die
+//      Hoehe, ist Punkt 1 wirkungslos
+//   3. die Hoehe rechnet mit dem, was darueber klebt
+//   4. das Skript pflegt die zweite Groesse dafuer
+var
+  Html : string;
+begin
+  Html := EinFundHtml;
+
+  Assert.IsTrue(Pos('position:sticky;top:0;', Html) > 0,
+    'der Spaltenkopf klebt nicht');
+  Assert.IsTrue(Pos('max-height:calc(100vh - var(--kopf-h,0px) '
+    + '- var(--filter-h,0px) - 28px);', Html) > 0,
+    'die Liste hat keine eigene Scrollhoehe - damit bleibt der '
+    + 'sticky Spaltenkopf wirkungslos, weil die Seite scrollt statt '
+    + 'der Liste');
+  Assert.IsTrue(Pos('"--filter-h",fl.offsetHeight+"px"', Html) > 0,
+    'die Hoehe der Filterleiste wird nicht gepflegt - die Rechnung '
+    + 'der Listenhoehe faellt dann auf 0px zurueck');
+  // Die Chips brechen je nach Fensterbreite um; ohne Nachmessen waere
+  // die Liste danach zu hoch oder zu niedrig.
+  Assert.IsTrue(Pos('new ResizeObserver(merken).observe(fl)', Html) > 0,
+    'die Filterleiste wird nicht auf Hoehenaenderungen beobachtet');
+end;
+
 procedure TTestFindingsWorkbenchExport.Kopf_IstAngepinntUndSchrumpftBeimScrollen;
 // Nutzerauftrag 09.09.: der Kopf bleibt oben stehen und zeigt beim
 // Scrollen nur noch die Ueberschrift.
@@ -753,16 +781,9 @@ procedure TTestFindingsWorkbenchExport.Kopf_IstAngepinntUndSchrumpftBeimScrollen
 //      Kopf - sichtbar erst, wenn man in einem langen Bericht
 //      scrollt.
 var
-  Findings : TObjectList<TLeakFinding>;
-  Html     : string;
+  Html : string;
 begin
-  Findings := TObjectList<TLeakFinding>.Create(True);
-  try
-    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
-    Html := Render(Findings);
-  finally
-    Findings.Free;
-  end;
+  Html := EinFundHtml;
 
   Assert.IsTrue(Pos('header.kopf{background:#20303f;color:#f2f6fa;'
     + 'padding:14px 20px;position:sticky;top:0;', Html) > 0,
@@ -789,16 +810,9 @@ procedure TTestFindingsWorkbenchExport.Methodenzelle_SortiertOhneDenPfad;
 // der Datei. Der Test haelt fest, dass data-sort den REINEN
 // Methodennamen traegt.
 var
-  Findings : TObjectList<TLeakFinding>;
-  Html     : string;
+  Html : string;
 begin
-  Findings := TObjectList<TLeakFinding>.Create(True);
-  try
-    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
-    Html := Render(Findings);
-  finally
-    Findings.Free;
-  end;
+  Html := EinFundHtml;
 
   Assert.IsTrue(Pos('<td data-sort="TFoo.Bar"><div class="zl-methode">'
     + 'TFoo.Bar</div>', Html) > 0,
@@ -919,16 +933,9 @@ procedure TTestFindingsWorkbenchExport.InitialSort_BySeverity_WithConfidenceTieb
 // Geprueft wird die VERDRAHTUNG: der Aufruf am Skriptende und der
 // Tiebreak-Zweig; die Sortierung selbst laeuft im Browser.
 var
-  Findings : TObjectList<TLeakFinding>;
-  Html     : string;
+  Html : string;
 begin
-  Findings := TObjectList<TLeakFinding>.Create(True);
-  try
-    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
-    Html := Render(Findings);
-  finally
-    Findings.Free;
-  end;
+  Html := EinFundHtml;
   // Severity ist Spalte 5 (Zeile, Methode, SCA-ID, Regel, Typ, Sev).
   Assert.IsTrue(Pos('sortiere(5);', Html) > 0,
     'Initialsortierung nach Severity fehlt - ohne den AUFRUF steht '
@@ -995,16 +1002,9 @@ procedure TTestFindingsWorkbenchExport.Themes_DarkAndSepiaAsTokenOverrides;
 // ein Theme ein reiner Token-Block - genau das wird hier festgehalten,
 // damit spaetere Farbarbeit nicht wieder in Einzelregeln zerfaellt.
 var
-  Findings : TObjectList<TLeakFinding>;
-  Html     : string;
+  Html : string;
 begin
-  Findings := TObjectList<TLeakFinding>.Create(True);
-  try
-    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
-    Html := Render(Findings);
-  finally
-    Findings.Free;
-  end;
+  Html := EinFundHtml;
   Assert.IsTrue(Pos(':root[data-theme="dark"]{--grund:#171b21;', Html) > 0,
     'Dark-Theme ueberschreibt die Tokens nicht');
   Assert.IsTrue(Pos(':root[data-theme="sepia"]{--grund:#f4ead2;', Html) > 0,
@@ -1184,16 +1184,9 @@ procedure TTestFindingsWorkbenchExport.HealthAndSecurity_ScoreMatchesV1Formula;
 // fuer dieselbe Codebasis. Fixture: 1x fkMemoryLeak = lsError
 // (KIND_META, belegt) -> Score 100 -> ueber 49, unter 500 -> "gelb".
 var
-  Findings : TObjectList<TLeakFinding>;
-  Html     : string;
+  Html : string;
 begin
-  Findings := TObjectList<TLeakFinding>.Create(True);
-  try
-    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
-    Html := Render(Findings);
-  finally
-    Findings.Free;
-  end;
+  Html := EinFundHtml;
   Assert.IsTrue(Pos('class="health health-gelb"', Html) > 0,
     'ein Fehler ergibt Score 100 -> Ampel gelb (49 < 100 <= 499)');
   Assert.IsTrue(Pos('<div class="health-zahl">100</div>', Html) > 0,
@@ -1274,16 +1267,9 @@ procedure TTestFindingsWorkbenchExport.IdeInspector_HeroHierarchyAndSelectionSta
 // sekundaeren Karten. Geprueft wird die STRUKTUR - die Optik selbst
 // sieht nur Nico.
 var
-  Findings : TObjectList<TLeakFinding>;
-  Html     : string;
+  Html : string;
 begin
-  Findings := TObjectList<TLeakFinding>.Create(True);
-  try
-    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
-    Html := Render(Findings);
-  finally
-    Findings.Free;
-  end;
+  Html := EinFundHtml;
   // --- Selection ------------------------------------------------------
   // NEU ist hier nur der Rail; die Asserts auf Hover und Focus sind
   // REGRESSIONS-Waechter fuer Bestandsregeln, die zusammen mit dem
