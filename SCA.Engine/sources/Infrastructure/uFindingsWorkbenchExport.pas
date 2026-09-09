@@ -517,9 +517,19 @@ begin
       + '){width:' + SP_BREITE_KONF + ';}');
     SB.AppendLine('th,td{padding:7px 10px;text-align:left;'
       + 'vertical-align:top;font-size:0.92em;border:0;}');
-    // top an der KOPFHOEHE, nicht 0: der Seitenkopf ist seit 09.09.
-    // selbst angepinnt, ein top:0 liesse die Spaltenzeile dahinter
-    // verschwinden. --kopf-h pflegt TWorkbenchStyle.KopfVerhaltenJs.
+    // top:0 - NICHT var(--kopf-h). Das war am 09.09. kurzzeitig
+    // anders und hat die Spaltenzeile sichtbar nach unten gerueckt
+    // (Nico-Befund: "rutscht runter").
+    //
+    // DER GRUND: position:sticky bezieht sich auf den naechsten
+    // SCROLL-CONTAINER, und das ist hier .listwrap mit ihrem
+    // overflow:auto - nicht das Fenster. Ein top von der Hoehe des
+    // SEITEN-Kopfes rueckt die Zeile also um genau diesen Betrag in
+    // die Liste hinein, statt sie unter dem Seitenkopf zu halten.
+    //
+    // Auf der V3-Seite ist es umgekehrt richtig: dort liegt die
+    // Spaltenzeile AUSSERHALB des Scrollers (#v3kopf vor #v3wrap) und
+    // klebt am Fenster - deshalb steht dort var(--kopf-h).
     //
     // FLAECHE ALS TOKEN, nicht als Hexwert (Nicos Auftrag 09.09., aus
     // der V3-Seite uebernommen): der Kopf stand mit #eef2f6 fest und
@@ -534,7 +544,7 @@ begin
     SB.AppendLine('th{background:var(--f-flaeche);font-weight:600;'
       + 'font-size:12px;padding:8px 12px;'
       + 'cursor:pointer;position:sticky;'
-      + 'top:var(--kopf-h,0px);white-space:nowrap;user-select:none;'
+      + 'top:0;white-space:nowrap;user-select:none;'
       + 'box-shadow:inset 0 -1px 0 var(--rand);}');
     SB.AppendLine('th .pfeil{color:var(--akzent);font-size:0.8em;'
       + 'margin-left:3px;}');
@@ -816,7 +826,7 @@ var
 begin
   SB := TStringBuilder.Create;
   try
-    SB.AppendLine('<div class="cmdbar">');
+    SB.AppendLine('<div class="cmdbar" id="bereich-suche">');
     SB.AppendLine('<input id="suche" type="search" '
       + 'aria-label="' + TWorkbenchI18n.T(wtSucheAria, ALang) + '" '
       + 'placeholder="'
@@ -836,7 +846,8 @@ begin
     // Datei- und Regel-Auswahl (Feature-Abgleich 07.09.): der
     // schnellste Weg durch einen grossen Bericht - vorher ging das
     // nur ueber die Freitextsuche.
-    SB.AppendLine('<div class="cmdbar auswahl">');
+    SB.AppendLine('<div class="cmdbar auswahl" '
+      + 'id="bereich-dropdowns">');
     SB.AppendLine(Auswahlliste('dateiFilter',
       Format(TWorkbenchI18n.T(wtAlleDateien, ALang), [AStat.Dateien]),
       AStat.DateiListe));
@@ -978,7 +989,7 @@ begin
   end;
   SB := TStringBuilder.Create;
   try
-    SB.AppendLine('<div class="panels">');
+    SB.AppendLine('<div class="panels" id="bereich-ampel">');
     SB.AppendLine(Format('<div class="health health-%s">'
       + '<div class="health-zahl">%d</div>'
       + '<div><b>%s</b><div class="health-txt">%s</div></div></div>',
@@ -1018,7 +1029,7 @@ var
 begin
   SB := TStringBuilder.Create;
   try
-    SB.AppendLine('<div class="dash">');
+    SB.AppendLine('<div class="dash" id="bereich-kacheln">');
     Kachel(AStat.Gesamt,         wtKaFunde);
     Kachel(AStat.Sev[lsError],   wtKaFehler);
     Kachel(AStat.Sev[lsWarning], wtKaWarnungen);
@@ -1929,7 +1940,11 @@ begin
       + '"data-theme",t);}catch(e){}</script>');
     SB.AppendLine('</head>');
     SB.AppendLine('<body>');
-    SB.AppendLine('<header class="kopf">');
+    // IDs an allen Bereichen (Nicos Auftrag 09.09.): damit im
+    // Gespraech benennbar ist, WO etwas stehen soll - "in
+    // #bereich-kacheln" statt "oben rechts". Die Namen sind
+    // deutsch und beschreiben den ZWECK, nicht die Optik.
+    SB.AppendLine('<header class="kopf" id="bereich-seitenkopf">');
     SB.AppendLine('<h1>' + TWorkbenchI18n.T(wtTitelFunde, ALang)
       + '</h1>');
     SB.AppendLine(Format('<div class="sub">'
@@ -1937,13 +1952,13 @@ begin
       [H(TRuleCatalog.ToolName), H(TRuleCatalog.ToolVersion),
        Stat.Gesamt]));
     SB.AppendLine('</header>');
-    SB.AppendLine('<main>');
+    SB.AppendLine('<main id="bereich-inhalt">');
     SB.Append(CommandUndChips(Stat.Lesefehler, Stat, ALang));
     SB.Append(Dashboard(Stat, ALang));
     SB.Append(HealthUndSecurity(Stat, ALang));
     // Top-Listen nebeneinander; beide sind Ausschnitte der bereits
     // sortierten Auswahllisten und filtern per Klick.
-    SB.AppendLine('<div class="toplisten">');
+    SB.AppendLine('<div class="toplisten" id="bereich-toplisten">');
     SB.Append(TopListe('topRegeln',
       TWorkbenchI18n.T(wtTopRegeln, ALang), 'regelFilter',
       Stat.RegelListe));
@@ -1957,7 +1972,7 @@ begin
         + TWorkbenchI18n.T(wtKuerzungsbanner, ALang) + '</div>',
         [MaxRows, RowsDropped]));
 
-    SB.AppendLine('<div class="listwrap">');
+    SB.AppendLine('<div class="listwrap" id="bereich-fundliste">');
     SB.AppendLine('<table id="funde">');
     // Keine Datei-Spalte mehr: die Datei steht seit 09.09. in DERSELBEN
     // Zelle wie die Methode, zweizeilig (s. ZeileFuerFund). SIEBEN

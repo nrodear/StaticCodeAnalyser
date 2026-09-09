@@ -41,6 +41,8 @@ type
     // Regel und Detail untereinander, feste Spaltenbreiten (09.09.).
     [Test] procedure Regelzelle_TraegtRegelUndDetailUntereinander;
     [Test] procedure Spaltenbreiten_SindFestWieInV3;
+    [Test] procedure Spaltenzeile_KlebtAmScrollContainerNichtAmFenster;
+    [Test] procedure Bereiche_HabenBenennbareIds;
     // Angepinnter Kopf mit zwei Zustaenden (Nutzerauftrag 09.09.).
     [Test] procedure Kopf_IstAngepinntUndSchrumpftBeimScrollen;
     // EN/FR-Nachtrag 07.09.: Seite in drei Sprachen, Token unberuehrt.
@@ -576,6 +578,81 @@ begin
     'die Methoden-Spalte darf keine feste Breite haben');
   Assert.AreEqual<Integer>(0, Pos('th:nth-child(4){width:', Html),
     'die Regel-Spalte darf keine feste Breite haben');
+end;
+
+procedure TTestFindingsWorkbenchExport.Spaltenzeile_KlebtAmScrollContainerNichtAmFenster;
+// Nico-Befund 09.09.: die Spaltenzeile "rutscht runter" statt in der
+// ersten Zeile zu stehen.
+//
+// URSACHE war ein top:var(--kopf-h) am th. position:sticky bezieht
+// sich auf den naechsten SCROLL-CONTAINER, und das ist hier .listwrap
+// mit ihrem overflow:auto - nicht das Fenster. Ein top von der Hoehe
+// des SEITEN-Kopfes rueckt die Zeile also um genau diesen Betrag in
+// die Liste hinein.
+//
+// Der Test haelt BEIDE Seiten der Unterscheidung fest, denn genau sie
+// war verwechselt: hier top:0, weil der Kopf IM Scroller liegt - auf
+// der V3-Seite dagegen var(--kopf-h), weil er dort ausserhalb steht.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+
+  Assert.IsTrue(Pos('position:sticky;top:0;', Html) > 0,
+    'die Spaltenzeile klebt nicht am oberen Rand ihres Scrollers');
+  Assert.AreEqual<Integer>(0, Pos('top:var(--kopf-h,0px);white-space',
+    Html),
+    'die Spaltenzeile bezieht sich auf die Seitenkopfhoehe - damit '
+    + 'rutscht sie um genau diesen Betrag in die Liste hinein, weil '
+    + '.listwrap mit overflow:auto der Scroll-Container ist');
+  // Die Voraussetzung der ganzen Rechnung: .listwrap IST der Scroller.
+  Assert.IsTrue(Pos('.listwrap{background:var(--karte);border:1px solid '
+    + 'var(--rand);border-radius:8px;overflow:auto;', Html) > 0,
+    'ohne overflow:auto auf .listwrap gilt die Begruendung nicht mehr '
+    + '- dann waere top:var(--kopf-h) richtig');
+end;
+
+procedure TTestFindingsWorkbenchExport.Bereiche_HabenBenennbareIds;
+// Nutzerauftrag 09.09.: die Bereiche der Seite brauchen Namen, damit
+// im Gespraech benennbar ist, WO etwas stehen soll - "in
+// #bereich-kacheln" statt "oben rechts".
+//
+// Der Test haelt die Namen fest, weil sie ab jetzt eine Zusage nach
+// aussen sind: wer einen umbenennt, bricht die Verstaendigung darueber.
+const
+  BEREICHE : array[0..7] of string = (
+    'bereich-seitenkopf', 'bereich-inhalt', 'bereich-kacheln',
+    'bereich-ampel', 'bereich-toplisten', 'bereich-suche',
+    'bereich-dropdowns', 'bereich-fundliste');
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+  i        : Integer;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+
+  for i := Low(BEREICHE) to High(BEREICHE) do
+    Assert.IsTrue(Pos('id="' + BEREICHE[i] + '"', Html) > 0,
+      'der Bereich ' + BEREICHE[i] + ' hat keine ID');
+  // Jede ID darf nur EINMAL vorkommen - doppelte ID ist ungueltiges
+  // HTML, und querySelector faende dann die falsche.
+  for i := Low(BEREICHE) to High(BEREICHE) do
+    Assert.AreEqual<Integer>(1, VorkommenIn(Html,
+      'id="' + BEREICHE[i] + '"'),
+      'die ID ' + BEREICHE[i] + ' kommt mehrfach vor');
 end;
 
 procedure TTestFindingsWorkbenchExport.Kopf_IstAngepinntUndSchrumpftBeimScrollen;
