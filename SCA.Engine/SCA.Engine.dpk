@@ -1,4 +1,4 @@
-package SCA.Engine;
+﻿package SCA.Engine;
 
 // ---------------------------------------------------------------------
 // Pakettyp (2026-08-23): Laufzeitpaket: requires nur rtl und xmlrtl, registriert nichts in der IDE.
@@ -267,7 +267,6 @@ contains
   uWorkbenchStyle in 'sources\Infrastructure\uWorkbenchStyle.pas',
   uWorkbenchI18n in 'sources\Infrastructure\uWorkbenchI18n.pas',
   uFindingsWorkbenchExport in 'sources\Infrastructure\uFindingsWorkbenchExport.pas',
-  uFindingsWorkbenchV3 in 'sources\Infrastructure\uFindingsWorkbenchV3.pas',
   uFileTextCache in 'sources\Infrastructure\uFileTextCache.pas',
   uFindingFingerprint in 'sources\Infrastructure\uFindingFingerprint.pas',
   uFormBinder in 'sources\Infrastructure\uFormBinder.pas',

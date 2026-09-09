@@ -56,23 +56,17 @@ type
     // Vorschlag fuer den Save-Dialog.
     class function DefaultFileName: string; static;
 
+  private
     // Der komplette Style-Block dieser Seite, MIT <style>-Klammer:
     // TWorkbenchStyle.BasisCss plus die seitenspezifischen Regeln
     // (Tabelle, Chips, Drawer, Kacheln) plus die drei Themes.
     //
-    // Public seit 09.09. fuer die V3-Seite (uFindingsWorkbenchV3), die
-    // dieselbe Optik traegt und sich nur im Rendering unterscheidet -
-    // Datenmodell statt vorgerenderter Tabelle. Eine zweite CSS-Kopie
-    // waere die falsche Antwort auf "V3 basiert auf V2": die beiden
-    // Seiten sollen sich gleich ANFUEHLEN, und das haelt nur EINE
-    // Quelle durch.
-    //
-    // V3 haengt eigene Regeln fuer die virtualisierte Liste HINTER
-    // diesen Block; die Tabellenregeln von V2 laufen dort ins Leere
-    // (rund 2 KB ungenutztes CSS gegen eine Seite, die von 60 MB auf
-    // 13 MB soll - kein Thema).
+    // War vom 09.09. bis zum 09.09. public, weil die V3-Seite dieselbe
+    // Optik trug und sich nur im Rendering unterschied. Mit dem Wegfall
+    // der V3 gibt es wieder genau einen Leser, und das Sichtbare einer
+    // Klasse ist eine Zusage - sie steht nur da, wo sie jemand braucht.
+    // Was von V3 zu teilen bleibt, liegt in TWorkbenchStyle.
     class function SeitenStyle: string; static;
-  private
     // Gemeinsamer Seitenbau fuer BuildHtml (Tests) und Run (Datei):
     // Run schreibt direkt aus dem Builder (SaveBuilderUtf8WithBom) -
     // der TStringList-Umweg der ersten Fassung hielt den Bericht

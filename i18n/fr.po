@@ -1201,24 +1201,6 @@ msgstr "Rapport HTML (tous les résultats)..."
 msgid "HTML report saved: %s"
 msgstr "Rapport HTML enregistré : %s"
 
-msgid "HTML report V2 (workbench, all findings)..."
-msgstr "Rapport HTML V2 (workbench, tous les résultats)..."
-
-msgid "HTML report V3 (fast, for large reports)..."
-msgstr "Rapport HTML V3 (rapide, pour les grands rapports)..."
-
-msgid "HTML V2 report saved: %s"
-msgstr "Rapport HTML V2 enregistré : %s"
-
-msgid "HTML V3 report saved: %s"
-msgstr "Rapport HTML V3 enregistré : %s"
-
-msgid "HTML V2 export failed: "
-msgstr "Échec de l'export HTML V2 : "
-
-msgid "HTML V3 export failed: "
-msgstr "Échec de l'export HTML V3 : "
-
 msgid "Hard to test - refactor into smaller methods."
 msgstr "Difficile à tester - refactorer en méthodes plus petites."
 
