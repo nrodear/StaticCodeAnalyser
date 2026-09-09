@@ -84,17 +84,33 @@ type
     // ContextSize Zeilen vor und nach AroundLine. Die Fund-Zeile ist
     // optisch hervorgehoben. Liefert leeren String wenn SourceLines
     // nil/leer oder AroundLine ungueltig.
-    // PUBLIC seit 07.09.: zweiter Konsument ist der Funde-Export V2
-    // (uFindingsWorkbenchExport). Eine zweite Snippet-Implementierung
-    // haette zwei Berichte mit verschieden aussehenden Ausschnitten
-    // derselben Fundstelle ergeben - dieselbe Ueberlegung wie bei
-    // HtmlEscape. Das MARKUP ist damit ein geteilter Vertrag: wer die
-    // Klassen src-line/src-line-active umbenennt, fasst beide Seiten
-    // und deren CSS an.
+    //
+    // Aufrufer ist seit 09.09. wieder nur diese Unit: der Funde-Export
+    // V2 schreibt seine Ausschnitte nicht mehr aus, sondern legt den
+    // rohen Quelltext ab und baut das Geruest erst beim Oeffnen - das
+    // spart ihm rund 765 Byte je Fund.
+    //
+    // TROTZDEM public und trotzdem ein GETEILTER VERTRAG: das Markup,
+    // das V2 im Browser baut, ist Zeichen fuer Zeichen dieses hier, und
+    // beide Seiten haengen am selben CSS. Wer die Klassen
+    // src-line/src-line-active umbenennt oder den Aufbau aendert, fasst
+    // baueAusschnitt in uFindingsWorkbenchExport mit an. Die Sichtbarkeit
+    // haelt diese Kopplung sichtbar; privat wuerde sie vergessen.
     class function BuildCodeSnippet(SourceLines: TStringList;
       AroundLine, ContextSize: Integer): string; static;
-  private
+    // Ein JSON-String MIT Anfuehrungszeichen, sicher fuer den Einbau in
+    // ein <script>. Escapet zusaetzlich '<' zu \u003c: der Browser
+    // beendet das Element beim ersten '</script>' im Textinhalt, ganz
+    // unabhaengig von JSON-Syntax, und alles danach waere ausfuehrbares
+    // Skript. JSON.parse macht daraus wieder '<' - der INHALT bleibt
+    // unveraendert, nur seine Textform ist harmlos.
+    //
+    // PUBLIC seit 09.09.: zweiter Konsument ist der Funde-Export V2
+    // (Regel-Zusatztabelle RSUCH). Dieselbe Ueberlegung wie bei
+    // HtmlEscape - eine zweite Escape-Implementierung waere eine
+    // zweite Stelle, an der diese Falle wieder aufgehen kann.
     class function JsonForScript(const S: string): string; static;
+  private
     // Report-Zeitstempel. Ist die Umgebungsvariable SCA_REPORT_TIMESTAMP
     // gesetzt, wird deren Wert VERBATIM zurueckgegeben (deterministische
     // CI-Builds -> byte-stabile Diffs), sonst FormatDateTime(AFmt, Now)

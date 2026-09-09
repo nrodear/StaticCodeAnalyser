@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2239 Zeilen, 77754 Bytes
-  CPoLines_de: array[0..2238] of string = (
+  // i18n\de.po - 2230 Zeilen, 77491 Bytes
+  CPoLines_de: array[0..2229] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -1209,15 +1209,6 @@ const
     '',
     'msgid "HTML report saved: %s"',
     'msgstr "HTML-Report gespeichert: %s"',
-    '',
-    'msgid "HTML report V2 (workbench, all findings)..."',
-    'msgstr "HTML-Report V2 (Workbench, alle Befunde)..."',
-    '',
-    'msgid "HTML V2 report saved: %s"',
-    'msgstr "HTML-V2-Report gespeichert: %s"',
-    '',
-    'msgid "HTML V2 export failed: "',
-    'msgstr "HTML-V2-Export fehlgeschlagen: "',
     '',
     'msgid "Hard to test - refactor into smaller methods."',
     'msgstr "Schwer zu testen - in kleinere Methoden refactoren."',
@@ -2528,8 +2519,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2235 Zeilen, 81421 Bytes
-  CPoLines_fr: array[0..2234] of string = (
+  // i18n\fr.po - 2226 Zeilen, 81150 Bytes
+  CPoLines_fr: array[0..2225] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -3732,15 +3723,6 @@ const
     '',
     'msgid "HTML report saved: %s"',
     'msgstr "Rapport HTML enregistr'#$00E9' : %s"',
-    '',
-    'msgid "HTML report V2 (workbench, all findings)..."',
-    'msgstr "Rapport HTML V2 (workbench, tous les r'#$00E9'sultats)..."',
-    '',
-    'msgid "HTML V2 report saved: %s"',
-    'msgstr "Rapport HTML V2 enregistr'#$00E9' : %s"',
-    '',
-    'msgid "HTML V2 export failed: "',
-    'msgstr "'#$00C9'chec de l''export HTML V2 : "',
     '',
     'msgid "Hard to test - refactor into smaller methods."',
     'msgstr "Difficile '#$00E0' tester - refactorer en m'#$00E9'thodes plus petites."',

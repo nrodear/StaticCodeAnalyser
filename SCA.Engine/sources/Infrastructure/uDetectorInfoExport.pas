@@ -247,6 +247,10 @@ begin
     SB.AppendLine('table{border-collapse:collapse;width:100%;}');
     SB.AppendLine('th,td{padding:7px 10px;text-align:left;'
       + 'vertical-align:top;font-size:0.92em;border:0;}');
+    // top:0 - der Bezug ist .listwrap mit ihrem overflow:auto, nicht
+    // das Fenster. Ein top von der Seitenkopfhoehe wuerde die
+    // Spaltenzeile in die Liste hineinschieben statt sie unter dem
+    // Kopf zu halten; Begruendung ausfuehrlich auf der Findings-Seite.
     SB.AppendLine('th{background:#eef2f6;cursor:pointer;position:sticky;'
       + 'top:0;white-space:nowrap;user-select:none;'
       + 'box-shadow:inset 0 -1px 0 var(--rand);}');
@@ -654,6 +658,9 @@ begin
     SB.AppendLine('window.addEventListener("hashchange", deepLink);');
     SB.AppendLine('suche();');
     SB.AppendLine('deepLink();');
+    // Angepinnter Kopf mit zwei Zustaenden - EINE Quelle fuer
+    // alle drei Seiten (Nutzerauftrag 09.09.).
+    SB.Append(TWorkbenchStyle.KopfVerhaltenJs);
     SB.AppendLine('</script>');
     Result := SB.ToString;
   finally

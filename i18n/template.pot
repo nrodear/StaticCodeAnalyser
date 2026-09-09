@@ -27,40 +27,53 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 
-#: SCA.SharedUI/sources/uFuzzyComboSearch.pas:478
+#: SCA.SharedUI/sources/uFuzzyComboSearch.pas:523
 msgid "   (no matches)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFuzzyComboSearch.pas:459
+#: SCA.SharedUI/sources/uFuzzyComboSearch.pas:504
 msgid "   ... %d more matches - refine the search"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2413
-#: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:673
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2581
+#: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:687
 msgid " - no changed .pas files"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4089
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4668
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4131
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4710
 msgid " · "
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1317
+#: SCA.SharedUI/sources/uProfileViewer.pas:634
+msgid "\"%s\" already exists. Overwrite it?"
+msgstr ""
+
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1451
 msgid "\"%s\" is a built-in profile and cannot be changed."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1367
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1501
 msgid "\"%s\" is a built-in profile."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1765
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1771
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1790
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1928
+#: SCA.SharedUI/sources/uProfileViewer.pas:805
+msgid "\"%s\" was not imported: %s"
+msgstr ""
+
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1910
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1916
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1935
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1895
 msgid "%d / %d findings"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:677
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1827
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1886
+msgid "%d context hashes"
+msgstr ""
+
+#: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:691
 msgid "%d file(s) - running..."
 msgstr ""
 
@@ -72,83 +85,99 @@ msgstr ""
 msgid "%d findings on this line"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1692
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1920
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1817
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1876
 msgid "%d hidden by baseline"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:818
+#: SCA.SharedUI/sources/uProfileViewer.pas:281
+msgid "%d of %d rules shown, %d selected"
+msgstr ""
+
+#: SCA.SharedUI/sources/uProfileViewer.pas:284
+msgid "%d rules, %d selected"
+msgstr ""
+
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:822
 msgid "%s (%d findings)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:821
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:825
 msgid "%s (%d of %d findings)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:816
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:820
 msgid "%s (no findings)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:811
+#: SCA.SharedUI/sources/uProfileViewer.pas:872
+msgid "%s contains no profiles."
+msgstr ""
+
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1282
+msgid "%s is not a valid JSON object."
+msgstr ""
+
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:815
 msgid "(no file selected)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:338
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:342
 msgid "(no file)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2864
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2896
 msgid "**After (paste directly):**"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2862
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2894
 msgid "**Before (line %s):**"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:534
+#: SCA.SharedUI/sources/uProfileViewer.pas:478
 msgid "- own"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingFilter.pas:866
+#: SCA.SharedUI/sources/uFindingFilter.pas:1024
 msgid "--- Errors (A-Z) ---"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingFilter.pas:866
+#: SCA.SharedUI/sources/uFindingFilter.pas:1024
 msgid "--- Hints (A-Z) ---"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingFilter.pas:866
+#: SCA.SharedUI/sources/uFindingFilter.pas:1024
 msgid "--- Warnings (A-Z) ---"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1921
+#: SCA.Engine/sources/Output/uFixHint.pas:1929
 msgid "// NOSONAR suppression marker found - audit it"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:324
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:347
 msgid "1-2 sentences why the rule fires on THIS specific code (not the generic explanation above)."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3248
+#: SCA.Engine/sources/Output/uFixHint.pas:3256
 msgid "8-bit string cast silently drops non-codepage characters"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1332
-#: SCA.SharedUI/sources/uProfileViewer.pas:741
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1466
+#: SCA.SharedUI/sources/uProfileViewer.pas:679
 msgid "A profile without rules would find nothing."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:994
+#: SCA.Engine/sources/Output/uFixHint.pas:1002
 msgid "A single method handles too many component events - split it up"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2224
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3048
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2885
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2379
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3208
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2917
 msgid "AI prompt copied to clipboard: %s, line %s (%s)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4281
+#: SCA.Engine/sources/Output/uFixHint.pas:4289
 msgid "ANSI source (no BOM, not UTF-8) - code-page-dependent, non-portable"
 msgstr ""
 
@@ -156,28 +185,28 @@ msgstr ""
 msgid "Accept self-signed TLS certificates"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1154
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1160
 msgid "Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:649
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:665
 msgid "Actions menu: Cancel, Export, Settings, Ignore"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:292
+#: SCA.SharedUI/sources/uProfileViewer.pas:256
 msgid "Add"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:252
-#: SCA.SharedUI/sources/uProfileViewer.pas:260
+#: SCA.SharedUI/sources/uProfileViewer.pas:217
+#: SCA.SharedUI/sources/uProfileViewer.pas:224
 msgid "Add rules"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:458
+#: SCA.SharedUI/sources/uProfileViewer.pas:409
 msgid "Add rules..."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:503
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:507
 msgid "Affects only the editor marker stripe, mini-infobar and hover overlay titlebar. Properties Panel + main grid remain at the default severity colors. Light/Dark variants are automatic. \"Text\" replaces the overlay window with a transparent one-line hint (badge + rule name, no description/fix block - see the findings panel); dismiss a finding by clicking its text. Takes effect on save."
 msgstr ""
 
@@ -189,34 +218,34 @@ msgstr ""
 msgid "After (solution)"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:539
+#: SCA.Engine/sources/Infrastructure/uExport.pas:715
 msgid "After:"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:507
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:545
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1423
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:523
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:561
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1430
 msgid "All"
 msgstr ""
 
 #: SCA.SharedUI/sources/uScanTargetDialog.pas:53
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:654
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:658
 msgid "All files"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3263
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3309
 msgid "All findings reset."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3208
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3240
 msgid "All markers cleared."
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:694
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:698
 msgid "All severities"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1327
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1461
 msgid "Allowed characters: letters, digits, hyphen, underscore and dot."
 msgstr ""
 
@@ -225,40 +254,40 @@ msgid "Also at line(s): %s"
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:499
-#: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:665
+#: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:672
 msgid "An analysis is already running."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3486
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3532
 msgid "Analyse Branch-Changes"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5140
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5189
 msgid "Analyse current file (silent)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1204
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1239
 msgid "Analyse directory"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1202
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1237
 msgid "Analyse group"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1201
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1236
 msgid "Analyse project"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2417
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2585
 msgid "Analysing %d changed file(s). %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1329
-#: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:651
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1364
+#: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:658
 msgid "Analysing: "
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEWatchMode.pas:1058
+#: StaticCodeAnalyserIDE/uIDEWatchMode.pas:1075
 msgid "Analysing: %s"
 msgstr ""
 
@@ -266,13 +295,13 @@ msgstr ""
 msgid "Analysis cancelled - no new findings loaded"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1282
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1317
 msgid "Analysis cancelled."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1289
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1357
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2445
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1324
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1392
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2613
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:599
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:618
 msgid "Analysis error: "
@@ -282,31 +311,31 @@ msgstr ""
 msgid "Annotation overlay position:"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:303
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:326
 msgid "Anti-pattern"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2558
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2726
 msgid "Appearance"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:565
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:569
 msgid "Applies to the plugin user interface only - detector messages, findings and exports are never translated. The list holds the built-in translations plus every i18n\\<code>.po file placed next to the plugin BPL. Captions already on screen switch after an IDE restart."
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:343
+#: SCA.Engine/sources/Infrastructure/uExport.pas:519
 msgid "As of: "
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2075
+#: SCA.Engine/sources/Output/uFixHint.pas:2083
 msgid "Assert() without explanatory message"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2290
+#: SCA.Engine/sources/Output/uFixHint.pas:2298
 msgid "Assigned(X) and (X <> nil) - one check is enough"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2616
+#: SCA.Engine/sources/Output/uFixHint.pas:2624
 msgid "Asymmetric begin/end in if/else - format consistently"
 msgstr ""
 
@@ -318,36 +347,36 @@ msgstr ""
 msgid "AutoDiscoverClasses - extend LeakyClasses with project-specific classes"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3331
+#: SCA.Engine/sources/Output/uFixHint.pas:3339
 msgid "Bare raise; outside an except/on handler raises NIL - Access Violation"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:590
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:594
 msgid "Baseline (show only new findings)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3842
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:649
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3881
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:653
 msgid "Baseline JSON"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2911
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3071
 msgid "Baseline JSON (*.json)|*.json"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:604
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:608
 msgid "Baseline file:"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2819
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3724
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2979
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3763
 msgid "Baseline is enabled but no baseline file was found."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2844
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2934
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3749
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3869
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3004
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3094
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3788
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3908
 msgid "Baseline written: %s (%d findings)"
 msgstr ""
 
@@ -359,39 +388,39 @@ msgstr ""
 msgid "Before (problem)"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:534
+#: SCA.Engine/sources/Infrastructure/uExport.pas:710
 msgid "Before:"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4266
+#: SCA.Engine/sources/Output/uFixHint.pas:4274
 msgid "Bidirectional override char (Trojan Source) - code reads differently than it compiles"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1797
+#: SCA.Engine/sources/Output/uFixHint.pas:1805
 msgid "Binary expression has identical left and right side - copy-paste bug?"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2037
+#: SCA.Engine/sources/Output/uFixHint.pas:2045
 msgid "Boolean compared to True/False - redundant"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3638
+#: SCA.Engine/sources/Output/uFixHint.pas:3646
 msgid "Boolean comparison is always true / always false"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3719
+#: SCA.Engine/sources/Output/uFixHint.pas:3727
 msgid "Boolean parameter drives internal branching - consider two methods with descriptive names"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2659
+#: SCA.Engine/sources/Output/uFixHint.pas:2667
 msgid "Branch body without begin..end - add explicit block"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3162
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3194
 msgid "Branch changes: please provide a valid project path (for repo detection)."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:469
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:485
 msgid "Branch-Changes"
 msgstr ""
 
@@ -399,82 +428,86 @@ msgstr ""
 msgid "Branch:"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:278
-#: SCA.SharedUI/sources/uProfileViewer.pas:179
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:546
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1424
+#: SCA.Engine/sources/Common/uMethodd12.pas:355
+#: SCA.SharedUI/sources/uRuleListBox.pas:140
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:562
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1431
 msgid "Bug"
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:462
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3114
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1671
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3274
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1685
 msgid "Bugs"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:123
+#: SCA.SharedUI/sources/uExportMenu.pas:161
 msgid "CSV (filtered view)..."
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:242
+#: SCA.SharedUI/sources/uExportMenu.pas:291
 msgid "CSV export"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:262
+#: SCA.SharedUI/sources/uExportMenu.pas:311
 msgid "CSV export failed: "
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:243
+#: SCA.SharedUI/sources/uExportMenu.pas:292
 msgid "CSV file (*.csv)|*.csv"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:258
+#: SCA.SharedUI/sources/uExportMenu.pas:307
 msgid "CSV saved: %s (%d entries)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:281
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:620
+#: SCA.SharedUI/sources/uProfileViewer.pas:245
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:636
 msgid "Cancel"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2536
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3496
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2704
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3542
 msgid "Cancel Analysis"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3190
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3222
 msgid "Cancelling analysis..."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4107
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1274
+msgid "Cannot read %s: %s"
+msgstr ""
+
+#: SCA.Engine/sources/Output/uFixHint.pas:4115
 msgid "Cardinal/Integer subtraction on pointers truncates upper 32 bits on Win64"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:323
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:346
 msgid "Cause"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1221
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1256
 msgid "Checking all classes..."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2715
+#: SCA.Engine/sources/Output/uFixHint.pas:2723
 msgid "Class field without \"F\" prefix"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3739
+#: SCA.Engine/sources/Output/uFixHint.pas:3747
 msgid "Class has too many methods or fields - split into focused units"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3373
+#: SCA.Engine/sources/Output/uFixHint.pas:3381
 msgid "Class inherits an abstract method but does not override it - EAbstractError"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3487
+#: SCA.Engine/sources/Output/uFixHint.pas:3495
 msgid "Class spans too many lines - split responsibilities into focused units"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2738
+#: SCA.Engine/sources/Output/uFixHint.pas:2746
 msgid "Class/record type without \"T\" prefix"
 msgstr ""
 
@@ -482,86 +515,86 @@ msgstr ""
 msgid "Clean - minor smells only"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:400
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1129
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:404
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1135
 msgid "Clear all editor markers in all files (grids stay)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3502
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3548
 msgid "Clear all markers"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3117
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1674
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3277
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1688
 msgid "Click: filter grid to Bug type"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3110
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1667
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3270
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1680
 msgid "Click: filter grid to Cyclomatic"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3125
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1684
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3285
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1698
 msgid "Click: filter grid to Duplicate type"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3090
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1645
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3250
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1652
 msgid "Click: filter grid to Errors"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3098
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1655
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3258
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1662
 msgid "Click: filter grid to Hints"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3121
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1679
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3281
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1693
 msgid "Click: filter grid to Vulnerability type"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3094
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1650
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3254
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1657
 msgid "Click: filter grid to Warnings"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3105
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1660
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3265
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1672
 msgid "Click: filter grid to read errors"
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:514
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3134
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1692
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3294
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1706
 msgid "Click: reset filters (show everything)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:368
+#: SCA.SharedUI/sources/uExportMenu.pas:417
 msgid "Clipboard copy failed: "
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3044
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3071
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3204
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3231
 msgid "Clipboard is locked by another program."
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:357
+#: SCA.SharedUI/sources/uExportMenu.pas:406
 msgid "Clipboard: please select a row first (file not unambiguous)."
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:454
+#: SCA.SharedUI/sources/uProfileViewer.pas:405
 msgid "Close"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:289
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:312
 msgid "Code (>>> marks the line that triggered the rule)"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:282
-#: SCA.SharedUI/sources/uProfileViewer.pas:183
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:550
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1428
+#: SCA.Engine/sources/Common/uMethodd12.pas:359
+#: SCA.SharedUI/sources/uRuleListBox.pas:144
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:566
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1435
 msgid "Code Duplication"
 msgstr ""
 
@@ -569,55 +602,55 @@ msgstr ""
 msgid "Code Quality"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:279
-#: SCA.SharedUI/sources/uProfileViewer.pas:180
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:547
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1425
+#: SCA.Engine/sources/Common/uMethodd12.pas:356
+#: SCA.SharedUI/sources/uRuleListBox.pas:141
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:563
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1432
 msgid "Code Smell"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:494
+#: SCA.Engine/sources/Infrastructure/uExport.pas:670
 msgid "Code analysis: "
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1057
+#: SCA.Engine/sources/Output/uFixHint.pas:1065
 msgid "Code reaches into another form's published fields - tight coupling"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:256
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:275
 msgid "Code review request - Delphi static analysis finding"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3097
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1654
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3257
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1661
 msgid "Code smells / style. Refactoring candidates."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2001
+#: SCA.Engine/sources/Output/uFixHint.pas:2009
 msgid "Comment contains Pascal-code markers - delete it or restore it"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1120
+#: SCA.Engine/sources/Output/uFixHint.pas:1128
 msgid "Component class is on the project-defined forbidden list"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:833
+#: SCA.Engine/sources/Output/uFixHint.pas:841
 msgid "Component event is wired but the handler body is empty"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1026
+#: SCA.Engine/sources/Output/uFixHint.pas:1034
 msgid "Component has both Action and OnClick - the OnClick handler is dead code"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1373
+#: SCA.Engine/sources/Output/uFixHint.pas:1381
 msgid "Component uses the IDE default name - rename for clarity"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3267
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3449
 msgid "Configure external editor..."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1860
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2005
 msgid "Configured editor cannot be started: %s"
 msgstr ""
 
@@ -625,82 +658,83 @@ msgstr ""
 msgid "Connectivity"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3396
+#: SCA.Engine/sources/Output/uFixHint.pas:3404
 msgid "Constructor allocates fields and raises - partially-initialized fields leak"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2558
+#: SCA.Engine/sources/Output/uFixHint.pas:2566
 msgid "Constructor does not call inherited - parent state uninitialized"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3151
+#: SCA.Engine/sources/Output/uFixHint.pas:3159
 msgid "Constructor invoked on instance - no allocation, fields re-initialised over live data"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3124
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1683
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3284
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1697
 msgid "Copied code (strings, blocks). Extract Method/Constant candidates."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2986
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1592
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3146
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1599
 msgid "Copy AI prompt"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2991
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1596
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3151
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1603
 msgid "Copy Jira issue"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:693
-#: SCA.SharedUI/sources/uProfileViewer.pas:698
+#: SCA.SharedUI/sources/uProfileViewer.pas:623
+#: SCA.SharedUI/sources/uProfileViewer.pas:635
+#: SCA.SharedUI/sources/uProfileViewer.pas:640
 msgid "Copy profile"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:459
+#: SCA.SharedUI/sources/uProfileViewer.pas:410
 msgid "Copy..."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1952
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2097
 msgid "Could not open %s: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3558
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3641
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3315
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3341
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3740
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3823
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3361
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3387
 msgid "Could not open editor. File: "
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3355
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3537
 msgid "Could not save the choice - analyser.ini is not writable: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2852
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2942
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3757
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3873
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3012
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3102
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3796
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3912
 msgid "Could not write baseline: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:630
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:634
 msgid "Create a baseline from the current findings via the dock menu \"Write baseline from current scan...\", or with the CLI --write-baseline. The file is shared across CLI, IDE and HTML export. Takes effect on the next analysis."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:372
+#: SCA.Engine/sources/Output/uFixHint.pas:380
 msgid "Create without try/finally - exception path leaks the object"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3116
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1673
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3276
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1687
 msgid "Crosses severities - Bugs can be Errors OR Warnings."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3135
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3167
 msgid "Current file is not a Pascal file."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1402
+#: SCA.Engine/sources/Output/uFixHint.pas:1410
 msgid "Custom rule defined in analyser-rules.yml matched this code"
 msgstr ""
 
@@ -708,16 +742,16 @@ msgstr ""
 msgid "Cyclomatic"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3107
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1664
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3267
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1677
 msgid "Cyclomatic Complexity"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:677
+#: SCA.Engine/sources/Output/uFixHint.pas:685
 msgid "Cyclomatic complexity too high - too many branches; extract methods or simplify conditions"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1232
+#: SCA.Engine/sources/Output/uFixHint.pas:1240
 msgid "DB-control class does not fit the field data type"
 msgstr ""
 
@@ -725,25 +759,25 @@ msgstr ""
 msgid "DFM Viewer"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4036
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4078
 msgid "DFM as text: %s  Line: %d"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:861
+#: SCA.Engine/sources/Output/uFixHint.pas:869
 msgid "DFM declares a component but the form class has no published field for it"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2631
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3253
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2799
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3435
 msgid "DFM findings: Delphi IDE"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2631
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3253
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2799
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3435
 msgid "DFM findings: built-in viewer"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1959
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2104
 msgid "DFM viewer: %s  Line: %d"
 msgstr ""
 
@@ -751,36 +785,32 @@ msgstr ""
 msgid "DPAPI-encrypted in analyser.ini [SonarTokens] - bound to this Windows account, so a copied file is useless elsewhere."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2631
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3253
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2799
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3435
 msgid "Dark"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1146
+#: SCA.Engine/sources/Output/uFixHint.pas:1154
 msgid "Database component sits on a Form/Frame - move to a TDataModule"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:926
+#: SCA.Engine/sources/Output/uFixHint.pas:934
 msgid "Database credentials sit in the form file - move them out"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:421
+#: SCA.Engine/sources/Output/uFixHint.pas:429
 msgid "Dead code: statements after Exit / raise are unreachable"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:619
+#: SCA.Engine/sources/Output/uFixHint.pas:627
 msgid "Debug output left in production code"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:481
-msgid "Default (bright colors)"
-msgstr ""
-
-#: SCA.SharedUI/sources/uProfileViewer.pas:456
+#: SCA.SharedUI/sources/uProfileViewer.pas:407
 msgid "Delete profile"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:757
+#: SCA.SharedUI/sources/uProfileViewer.pas:695
 msgid "Delete profile \"%s\"?"
 msgstr ""
 
@@ -788,13 +818,13 @@ msgstr ""
 msgid "Delphi project/group (*.dproj;*.groupproj)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2579
+#: SCA.Engine/sources/Output/uFixHint.pas:2587
 msgid "Destructor does not call inherited - resource leak"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:348
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:276
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2488
+#: SCA.Engine/sources/Infrastructure/uExport.pas:524
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:299
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2656
 msgid "Detail"
 msgstr ""
 
@@ -802,8 +832,24 @@ msgstr ""
 msgid "Detect"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:518
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:534
 msgid "Detector Review (1 per detector, random)"
+msgstr ""
+
+#: SCA.SharedUI/sources/uExportMenu.pas:194
+msgid "Detector info (rule catalog, HTML)..."
+msgstr ""
+
+#: SCA.SharedUI/sources/uExportMenu.pas:488
+msgid "Detector info export"
+msgstr ""
+
+#: SCA.SharedUI/sources/uExportMenu.pas:501
+msgid "Detector info export failed: "
+msgstr ""
+
+#: SCA.SharedUI/sources/uExportMenu.pas:497
+msgid "Detector info saved: %s"
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDESCAOptions.pas:363
@@ -818,29 +864,29 @@ msgstr ""
 msgid "Display"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:398
+#: SCA.Engine/sources/Output/uFixHint.pas:406
 msgid "Division by zero: EZeroDivide or EDivByZero possible"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1766
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1911
 msgid "Done. No findings."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2254
+#: SCA.Engine/sources/Output/uFixHint.pas:2262
 msgid "Double semicolon \";;\" - one is enough"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2520
+#: SCA.Engine/sources/Output/uFixHint.pas:2528
 msgid "Doubled parentheses around a simple expression"
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:464
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3123
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1682
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3283
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1696
 msgid "Duplicates"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:506
+#: SCA.Engine/sources/Infrastructure/uExport.pas:682
 msgid "ERROR"
 msgstr ""
 
@@ -852,23 +898,23 @@ msgstr ""
 msgid "Editor right-click triggers a single-file analysis; findings appear as stripes + hover overlays in the editor (no dock)."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1939
+#: SCA.Engine/sources/Output/uFixHint.pas:1947
 msgid "Empty argument list \"()\" - drop the parentheses"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2137
+#: SCA.Engine/sources/Output/uFixHint.pas:2145
 msgid "Empty begin..end block"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:213
+#: SCA.Engine/sources/Output/uFixHint.pas:221
 msgid "Empty except block silently swallows every exception"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2268
+#: SCA.Engine/sources/Output/uFixHint.pas:2276
 msgid "Empty finally block - either drop the try or add cleanup"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2341
+#: SCA.Engine/sources/Output/uFixHint.pas:2349
 msgid "Empty visibility section in class - delete it"
 msgstr ""
 
@@ -876,33 +922,33 @@ msgstr ""
 msgid "Enable silent analysis (editor right-click menu)"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:256
-#: SCA.Engine/sources/Infrastructure/uExport.pas:360
-#: SCA.SharedUI/sources/uProfileViewer.pas:168
+#: SCA.Engine/sources/Common/uMethodd12.pas:333
+#: SCA.Engine/sources/Infrastructure/uExport.pas:536
+#: SCA.SharedUI/sources/uRuleListBox.pas:129
 #: StaticCodeAnalyserIDE/uIDEMessages.pas:56
 msgid "Error"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:388
+#: SCA.Engine/sources/Infrastructure/uExport.pas:564
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:458
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3088
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1643
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3248
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1650
 msgid "Errors"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:525
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:541
 msgid "Errors (all)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:696
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:700
 msgid "Errors + Warnings"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:695
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:699
 msgid "Errors only"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:373
+#: SCA.SharedUI/sources/uExportMenu.pas:422
 msgid "Errors+warnings for %s copied to clipboard."
 msgstr ""
 
@@ -910,62 +956,62 @@ msgstr ""
 msgid "Errors: %d, Warnings: %d, Hints: %d"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:890
+#: SCA.Engine/sources/Output/uFixHint.pas:898
 msgid "Event handler in DFM points to a method that no longer exists"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3016
+#: SCA.Engine/sources/Output/uFixHint.pas:3024
 msgid "Exception class without E-prefix"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3052
+#: SCA.Engine/sources/Output/uFixHint.pas:3060
 msgid "Exception is constructed but never raised"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2209
+#: SCA.Engine/sources/Output/uFixHint.pas:2217
 msgid "Exit/Continue directly before end - redundant"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:601
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2541
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3521
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:617
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2709
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3567
 msgid "Export"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:602
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:618
 msgid "Export findings: HTML / JSON / CSV / Jira / Clipboard / Sonar"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:267
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:290
 msgid "Field"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2896
+#: SCA.Engine/sources/Output/uFixHint.pas:2904
 msgid "FieldByName in loop - cache the TField reference outside"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:269
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:292
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:232
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2485
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1564
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2653
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1571
 msgid "File"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:818
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:853
 msgid "File %d"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:815
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:850
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:584
 msgid "File %d / %d (%d%%)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3104
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1659
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3264
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1671
 msgid "File could not be read / parsed. Check path/encoding."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:321
+#: SCA.Engine/sources/Output/uFixHint.pas:329
 msgid "File could not be read or parsed"
 msgstr ""
 
@@ -974,36 +1020,40 @@ msgid "File does not exist yet: "
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uDfmTextViewer.pas:42
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1314
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2041
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3141
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4001
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1349
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2196
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3173
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4043
 msgid "File not found: "
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2482
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1188
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1257
+msgid "File not found: %s"
+msgstr ""
+
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2650
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1194
 msgid "Filter file / method / finding..."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1930
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1897
 msgid "Filter: %s%s"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:265
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:288
 msgid "Finding"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:398
+#: SCA.Engine/sources/Infrastructure/uExport.pas:574
 msgid "Findings in detail"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3115
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1672
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3275
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1686
 msgid "Findings of type Bug (wrong behaviour, crash, wrong result)."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:325
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:348
 msgid "Fix"
 msgstr ""
 
@@ -1011,51 +1061,51 @@ msgstr ""
 msgid "Fix hint"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3548
+#: SCA.Engine/sources/Output/uFixHint.pas:3556
 msgid "Float equality is unreliable due to IEEE-754 rounding - use SameValue/Math.IsZero"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1711
+#: SCA.Engine/sources/Output/uFixHint.pas:1719
 msgid "Float format spec without TFormatSettings - locale-dependent decimal separator"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:295
+#: SCA.Engine/sources/Output/uFixHint.pas:303
 msgid "Format() placeholder count does not match argument count"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:188
+#: SCA.Engine/sources/Output/uFixHint.pas:196
 msgid "Free is outside the protecting finally block"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3442
+#: SCA.Engine/sources/Output/uFixHint.pas:3450
 msgid "Free without nil-out - prefer FreeAndNil for dangling-pointer safety"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3653
+#: SCA.Engine/sources/Output/uFixHint.pas:3661
 msgid "Function always returns the same literal on every code path"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3068
+#: SCA.Engine/sources/Output/uFixHint.pas:3076
 msgid "Function never assigns Result - return value undefined"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:165
+#: SCA.Engine/sources/Output/uFixHint.pas:173
 msgid "Function return value is not freed by the caller"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3818
+#: SCA.Engine/sources/Output/uFixHint.pas:3826
 msgid "GetMem / AllocMem without try/finally - an exception leaks the heap buffer"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:661
+#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:712
 msgid "Git diff %s: %d file(s) to analyse"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:392
+#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:421
 msgid "Git: branch vs "
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:395
+#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:424
 msgid "Git: no base branch - working tree only"
 msgstr ""
 
@@ -1063,49 +1113,37 @@ msgstr ""
 msgid "Grade scale: A=0, B<=%d, C<=%d, D<=%d, E>%d"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:482
-msgid "Gray (neutral)"
-msgstr ""
-
-#: SCA.Engine/sources/Output/uFixHint.pas:2109
+#: SCA.Engine/sources/Output/uFixHint.pas:2117
 msgid "Grouped variable/field declaration - one per line"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:508
+#: SCA.Engine/sources/Infrastructure/uExport.pas:684
 msgid "HINT"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:569
+#: SCA.SharedUI/sources/uExportMenu.pas:681
 msgid "HTML export failed: "
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:554
+#: SCA.SharedUI/sources/uExportMenu.pas:489
+#: SCA.SharedUI/sources/uExportMenu.pas:649
 msgid "HTML file (*.html)|*.html"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:111
+#: SCA.SharedUI/sources/uExportMenu.pas:149
 msgid "HTML report (all findings)..."
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:565
+#: SCA.SharedUI/sources/uExportMenu.pas:680
 msgid "HTML report saved: %s"
 msgstr ""
 
-msgid "HTML report V2 (workbench, all findings)..."
-msgstr ""
-
-msgid "HTML V2 report saved: %s"
-msgstr ""
-
-msgid "HTML V2 export failed: "
-msgstr ""
-
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3109
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1666
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3269
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1679
 msgid "Hard to test - refactor into smaller methods."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:593
+#: SCA.Engine/sources/Output/uFixHint.pas:601
 msgid "Hardcoded path - load it from configuration instead"
 msgstr ""
 
@@ -1113,25 +1151,25 @@ msgstr ""
 msgid "Hide"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:258
-#: SCA.Engine/sources/Infrastructure/uExport.pas:368
-#: SCA.SharedUI/sources/uProfileViewer.pas:170
+#: SCA.Engine/sources/Common/uMethodd12.pas:335
+#: SCA.Engine/sources/Infrastructure/uExport.pas:544
+#: SCA.SharedUI/sources/uRuleListBox.pas:131
 #: StaticCodeAnalyserIDE/uIDEMessages.pas:58
 msgid "Hint"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:529
+#: SCA.Engine/sources/Infrastructure/uExport.pas:705
 msgid "Hint: "
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:391
+#: SCA.Engine/sources/Infrastructure/uExport.pas:567
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:460
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3096
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1653
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3256
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1660
 msgid "Hints"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:527
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:543
 msgid "Hints (all)"
 msgstr ""
 
@@ -1139,8 +1177,7 @@ msgstr ""
 msgid "Host URL:"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:310
-#: SCA.SharedUI/sources/uProfileViewer.pas:486
+#: SCA.SharedUI/sources/uRuleListBox.pas:210
 msgid "ID"
 msgstr ""
 
@@ -1148,25 +1185,41 @@ msgstr ""
 msgid "IDE Profile:"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3131
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3163
 msgid "IDE editor service not available."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:330
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:353
 msgid "If the finding is a false positive, say so and explain why - then suggest a `// noinspection %s` suppression marker on the affected line."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3290
+#: SCA.Engine/sources/Output/uFixHint.pas:3298
 msgid "IfThen() evaluates both branches - no short-circuit semantics"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3645
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3827
 msgid "Ignore list opened: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2552
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3548
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2720
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3594
 msgid "Ignore list..."
+msgstr ""
+
+#: SCA.SharedUI/sources/uProfileViewer.pas:777
+msgid "Import now?"
+msgstr ""
+
+#: SCA.SharedUI/sources/uProfileViewer.pas:806
+#: SCA.SharedUI/sources/uProfileViewer.pas:841
+#: SCA.SharedUI/sources/uProfileViewer.pas:851
+#: SCA.SharedUI/sources/uProfileViewer.pas:874
+#: SCA.SharedUI/sources/uProfileViewer.pas:879
+msgid "Import profiles"
+msgstr ""
+
+#: SCA.SharedUI/sources/uProfileViewer.pas:412
+msgid "Import..."
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDESCAOptions.pas:379
@@ -1177,175 +1230,174 @@ msgstr ""
 msgid "Info"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:963
+#: SCA.Engine/sources/Output/uFixHint.pas:971
 msgid "Input control sits directly on the form - wrap it in a panel"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3002
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3162
 msgid "Insert suppression marker"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3423
+#: SCA.Engine/sources/Output/uFixHint.pas:3431
 msgid "Int64 target gets product of two ints - multiplication overflows in 32-bit"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2054
+#: SCA.Engine/sources/Output/uFixHint.pas:2062
 msgid "Interface declaration has no methods"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2759
+#: SCA.Engine/sources/Output/uFixHint.pas:2767
 msgid "Interface type without \"I\" prefix"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4238
+#: SCA.Engine/sources/Output/uFixHint.pas:4246
 msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4314
+#: SCA.Engine/sources/Output/uFixHint.pas:4322
 msgid "Invisible / zero-width character in source - hidden-text abuse"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:119
+#: SCA.SharedUI/sources/uExportMenu.pas:157
 msgid "JSON (filtered view)..."
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:285
+#: SCA.SharedUI/sources/uExportMenu.pas:334
 msgid "JSON export"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:303
+#: SCA.SharedUI/sources/uExportMenu.pas:352
 msgid "JSON export failed: "
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:286
+#: SCA.SharedUI/sources/uExportMenu.pas:335
 msgid "JSON file (*.json)|*.json"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:299
+#: SCA.SharedUI/sources/uExportMenu.pas:348
 msgid "JSON saved: %s (%d entries)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:339
+#: SCA.SharedUI/sources/uExportMenu.pas:388
 msgid "Jira export failed: "
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:323
+#: SCA.SharedUI/sources/uExportMenu.pas:372
 msgid "Jira export: please select a row first (file not unambiguous)."
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:137
+#: SCA.SharedUI/sources/uExportMenu.pas:175
 msgid "Jira markup -> Clipboard"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2220
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3075
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2809
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2375
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3235
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2841
 msgid "Jira mini issue copied to clipboard: %s, line %s (%s)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:344
+#: SCA.SharedUI/sources/uExportMenu.pas:393
 msgid "Jira wiki markup for %s copied to clipboard (errors+warnings)."
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:311
-#: SCA.SharedUI/sources/uProfileViewer.pas:490
+#: SCA.SharedUI/sources/uRuleListBox.pas:214
 msgid "Kind (profile token)"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:514
+#: SCA.Engine/sources/Infrastructure/uExport.pas:690
 msgid "L. "
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2564
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2732
 msgid "Language"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:540
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:544
 msgid "Language (analyser.ini [UI])"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1985
+#: SCA.Engine/sources/Output/uFixHint.pas:1993
 msgid "Large integer literal without digit grouping"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1536
+#: SCA.Engine/sources/Output/uFixHint.pas:1544
 msgid "Length()/.Count minus a constant can underflow on empty input"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2631
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3253
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2799
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3435
 msgid "Light"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2631
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3253
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2799
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3435
 msgid "Like Windows"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3093
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1649
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3253
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1656
 msgid "Likely bugs / risky patterns. Review before merge."
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:348
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:270
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:454
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:956
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2487
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1566
+#: SCA.Engine/sources/Infrastructure/uExport.pas:524
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:293
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:458
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:960
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2655
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1573
 msgid "Line"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1890
+#: SCA.Engine/sources/Output/uFixHint.pas:1898
 msgid "Line ends with whitespace - diff hygiene"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3030
+#: SCA.Engine/sources/Output/uFixHint.pas:3038
 msgid "Local constant should be UPPER_SNAKE_CASE"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1645
+#: SCA.Engine/sources/Output/uFixHint.pas:1653
 msgid "Local variable declared but never read or written"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4164
+#: SCA.Engine/sources/Output/uFixHint.pas:4172
 msgid "Local variable read before its first assignment - undefined value (garbage / AV)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3228
+#: SCA.Engine/sources/Output/uFixHint.pas:3236
 msgid "Locale-dependent conversion without explicit TFormatSettings"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2831
+#: SCA.Engine/sources/Output/uFixHint.pas:2839
 msgid "Lock acquired without try..finally release - exception leaves the lock held"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3767
+#: SCA.Engine/sources/Output/uFixHint.pas:3775
 msgid "Lock acquired without try/finally - an exception leaks the lock and deadlocks the next caller"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1421
+#: SCA.Engine/sources/Output/uFixHint.pas:1429
 msgid "Long string concatenation - prefer Format() for readability"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2820
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3725
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2980
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3764
 msgid "Looked for:"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:511
+#: SCA.Engine/sources/Output/uFixHint.pas:519
 msgid "Magic number - replace literal with a named constant"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1759
+#: SCA.Engine/sources/Output/uFixHint.pas:1767
 msgid "Many DB components on one form - extract into a TDataModule"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1287
+#: SCA.Engine/sources/Output/uFixHint.pas:1295
 msgid "Master-detail wiring forms a cycle - opening the dataset will loop endlessly"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1734
+#: SCA.Engine/sources/Output/uFixHint.pas:1742
 msgid "MasterSource set without MasterFields/IndexFieldNames - silent cross-join"
 msgstr ""
 
@@ -1353,46 +1405,46 @@ msgstr ""
 msgid "Message"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:348
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:272
+#: SCA.Engine/sources/Infrastructure/uExport.pas:524
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:295
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:235
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:453
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:955
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2486
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1565
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:457
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:959
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2654
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1572
 msgid "Method"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:779
+#: SCA.Engine/sources/Output/uFixHint.pas:787
 msgid "Method body is empty - forgotten stub or unintentional?"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2498
+#: SCA.Engine/sources/Output/uFixHint.pas:2506
 msgid "Method calls inherited more than once"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3462
+#: SCA.Engine/sources/Output/uFixHint.pas:3470
 msgid "Method has too many Exit statements - consolidate guards / single return"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2779
+#: SCA.Engine/sources/Output/uFixHint.pas:2787
 msgid "Method name not in PascalCase"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3613
+#: SCA.Engine/sources/Output/uFixHint.pas:3621
 msgid "Method never accesses Self or instance fields - could be `class function`"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3696
+#: SCA.Engine/sources/Output/uFixHint.pas:3704
 msgid "Method shadows a virtual parent method - add `override` directive"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:449
+#: SCA.Engine/sources/Output/uFixHint.pas:457
 msgid "Method too long - splitting it improves readability and testability"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3108
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1665
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3268
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1678
 msgid "Methods with McCabe complexity > threshold (default 10)."
 msgstr ""
 
@@ -1400,11 +1452,11 @@ msgstr ""
 msgid "Min-Severity:"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2473
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2641
 msgid "Min:"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2344
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2499
 msgid "MinSeverity \"%s\" - active on next analysis run"
 msgstr ""
 
@@ -1412,19 +1464,19 @@ msgstr ""
 msgid "More than %d files found - scan cancelled."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:789
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:824
 msgid "More than %d files found - scan stopped. Choose a subfolder, or exclude folders via the ignore list (hamburger menu)."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3792
+#: SCA.Engine/sources/Output/uFixHint.pas:3800
 msgid "Move / FillChar uses SizeOf(pointer-type) - copies only 4/8 bytes, not the target buffer"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2234
+#: SCA.Engine/sources/Output/uFixHint.pas:2242
 msgid "Multiple class declarations in one unit"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1315
+#: SCA.Engine/sources/Output/uFixHint.pas:1323
 msgid "Multiple components bind the same DataSource and DataField"
 msgstr ""
 
@@ -1432,39 +1484,43 @@ msgstr ""
 msgid "Multiple errors/vulnerabilities - refactor advised"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:563
+#: SCA.Engine/sources/Output/uFixHint.pas:571
 msgid "Multiple identical code blocks - extract a method (DRY)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4252
+#: SCA.Engine/sources/Output/uFixHint.pas:4260
 msgid "NUL / control byte in source - binary file or mis-detected encoding"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:693
+#: SCA.SharedUI/sources/uProfileViewer.pas:623
 msgid "Name of the new profile:"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2684
+#: SCA.Engine/sources/Output/uFixHint.pas:2692
 msgid "Nested procedure/function - consider extracting"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2419
+#: SCA.Engine/sources/Output/uFixHint.pas:2427
 msgid "Nested try block - consider extracting a procedure"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:645
+#: SCA.Engine/sources/Output/uFixHint.pas:653
 msgid "Nesting too deep - use early exit (guard clauses) or extract a method"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:344
+#: SCA.SharedUI/sources/uProfileViewer.pas:770
+msgid "New: %s"
+msgstr ""
+
+#: SCA.Engine/sources/Output/uFixHint.pas:352
 msgid "Nil dereference: access through a possibly nil reference"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1895
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1851
 msgid "No entries for this filter."
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3133
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3165
 msgid "No file opened."
 msgstr ""
 
@@ -1472,14 +1528,14 @@ msgstr ""
 msgid "No findings - clean baseline"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2827
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2905
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3731
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3832
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2987
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3065
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3770
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3871
 msgid "No findings to write. Run an analysis first."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1764
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1909
 msgid "No findings."
 msgstr ""
 
@@ -1487,16 +1543,16 @@ msgstr ""
 msgid "No fix hint available."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1770
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1915
 msgid "No matches."
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:551
+#: SCA.SharedUI/sources/uProfileViewer.pas:495
 msgid "No rule catalogue found - profiles unavailable."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2834
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3739
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2994
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3778
 msgid "No scan target selected - pick a path or project first."
 msgstr ""
 
@@ -1504,20 +1560,24 @@ msgstr ""
 msgid "No sonar-project.properties found in "
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4328
+#: SCA.Engine/sources/Output/uFixHint.pas:4336
 msgid "Non-ASCII character in identifier - homoglyph / confusable risk"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:236
-#: SCA.SharedUI/sources/uExportMenu.pas:279
+#: SCA.SharedUI/sources/uExportMenu.pas:285
+#: SCA.SharedUI/sources/uExportMenu.pas:328
 msgid "Nothing to export - filter returns 0 entries."
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:389
+#: SCA.SharedUI/sources/uExportMenu.pas:438
 msgid "Nothing to export - no findings."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:143
+#: SCA.SharedUI/sources/uProfileViewer.pas:869
+msgid "Nothing to import: %s only contains names of built-in profiles (%s)."
+msgstr ""
+
+#: SCA.Engine/sources/Output/uFixHint.pas:151
 msgid "Object created but never freed (memory leak)"
 msgstr ""
 
@@ -1529,82 +1589,82 @@ msgstr ""
 msgid "Open analyser.ini"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2980
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3140
 msgid "Open finding"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2561
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2729
 msgid "Open findings with"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:753
+#: SCA.Engine/sources/Output/uFixHint.pas:761
 msgid "Open marker (TODO / FIXME / HACK / XXX) - resolve before release"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1944
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2089
 msgid "Opened in Delphi IDE: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1926
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2071
 msgid "Opened in external editor: %s  Line: %d"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4017
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4039
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4059
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:4081
 msgid "Opened: %s  Line: %d"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3174
+#: SCA.Engine/sources/Output/uFixHint.pas:3182
 msgid "Override whose body is just \"inherited\" adds nothing"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3272
+#: SCA.Engine/sources/Output/uFixHint.pas:3280
 msgid "PChar(Char) reinterprets the codepoint as a pointer - undefined behaviour"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3897
+#: SCA.Engine/sources/Output/uFixHint.pas:3905
 msgid "PChar(s) arithmetic without empty-check - PChar('') is nil, arithmetic triggers AV"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2878
+#: SCA.Engine/sources/Output/uFixHint.pas:2886
 msgid "ParamByName in loop - cache the TParam reference outside"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1670
+#: SCA.Engine/sources/Output/uFixHint.pas:1678
 msgid "Parameter never read in method body"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1121
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1156
 msgid "Pascal file (*.pas)|*.pas|All files|*.*"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1903
+#: SCA.Engine/sources/Output/uFixHint.pas:1911
 msgid "Pascal keyword not in lowercase"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:266
+#: SCA.Engine/sources/Output/uFixHint.pas:274
 msgid "Password / token literal in source code"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2480
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1043
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2648
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1049
 msgid "Path:"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:141
+#: SCA.SharedUI/sources/uExportMenu.pas:179
 msgid "Plain text -> Clipboard"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2954
+#: SCA.Engine/sources/Output/uFixHint.pas:2962
 msgid "Plaintext HTTP URL - prefer https:// for remote endpoints"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1096
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3075
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1131
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3107
 msgid "Please provide a valid project path."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:321
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:344
 msgid "Please respond with three sections"
 msgstr ""
 
@@ -1612,28 +1672,32 @@ msgstr ""
 msgid "Plugin Open Error"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2642
+#: SCA.Engine/sources/Output/uFixHint.pas:2650
 msgid "Pointer type alias should start with \"P\""
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3191
+#: SCA.Engine/sources/Output/uFixHint.pas:3199
 msgid "Prefer Assigned() over \"= nil\" / \"<> nil\""
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3591
+#: SCA.Engine/sources/Output/uFixHint.pas:3599
 msgid "Private method has no caller in the unit - dead code"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2321
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1855
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2476
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1811
 msgid "Profile \"%s\" - active on next analysis run"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:606
+#: SCA.SharedUI/sources/uProfileViewer.pas:530
+msgid "Profile \"%s\": %d of %d rules shown (filter \"%s\")."
+msgstr ""
+
+#: SCA.SharedUI/sources/uProfileViewer.pas:539
 msgid "Profile \"%s\": %d of %d rules. Built-in and read-only - use \"Copy...\" for your own (stored in %s)."
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:601
+#: SCA.SharedUI/sources/uProfileViewer.pas:534
 msgid "Profile \"%s\": %d of %d rules. Your own profile, stored in %s"
 msgstr ""
 
@@ -1641,8 +1705,12 @@ msgstr ""
 msgid "Profile (CLI/Form):"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2474
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1138
+#: SCA.SharedUI/sources/uProfileViewer.pas:842
+msgid "Profile files (*.json)|*.json|All files (*.*)|*.*"
+msgstr ""
+
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2642
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1144
 msgid "Profile:"
 msgstr ""
 
@@ -1650,86 +1718,86 @@ msgstr ""
 msgid "Project Key:"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2399
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2559
 msgid "Project path is empty."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2393
+#: SCA.Engine/sources/Output/uFixHint.pas:2401
 msgid "Public field - expose a property instead"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1816
+#: SCA.Engine/sources/Output/uFixHint.pas:1824
 msgid "Public member has no callers anywhere - dead API"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1556
+#: SCA.Engine/sources/Output/uFixHint.pas:1564
 msgid "Public member is referenced only within the current unit - Delphi-classic `private` (unit-scope) suffices"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1591
+#: SCA.Engine/sources/Output/uFixHint.pas:1599
 msgid "Public member is used only by methods of its own class - `strict private` reaches the strongest encapsulation"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1619
+#: SCA.Engine/sources/Output/uFixHint.pas:1627
 msgid "Public member is used only by subclasses - protected is tighter"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2988
+#: SCA.Engine/sources/Output/uFixHint.pas:2996
 msgid "Public member missing doc comment"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:809
+#: SCA.Engine/sources/Output/uFixHint.pas:817
 msgid "Published method looks like an event handler but no component binds it"
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:474
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3131
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1689
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3291
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1703
 msgid "Quality"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2881
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2913
 msgid "Quick-Fix + AI prompt copied to clipboard: %s, line %s (%s)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2141
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2955
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2296
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2987
 msgid "Quick-Fix applied: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2123
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2924
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2278
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2956
 msgid "Quick-Fix: cannot locate source line"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2144
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2299
 msgid "Quick-Fix: could not write file: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2957
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2989
 msgid "Quick-Fix: editor write failed (file not in IDE?)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2128
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2937
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2283
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2969
 msgid "Quick-Fix: line out of range"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2117
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2916
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2272
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2948
 msgid "Quick-Fix: no provider for '%s' - manual fix required"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2135
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2948
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2290
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2980
 msgid "Quick-Fix: pattern not matched on line %d - manual fix required"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3211
+#: SCA.Engine/sources/Output/uFixHint.pas:3219
 msgid "Raise a specific exception class, not the base Exception"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3566
+#: SCA.Engine/sources/Output/uFixHint.pas:3574
 msgid "Raise inside destructor without try/except - cleanup is aborted"
 msgstr ""
 
@@ -1737,36 +1805,36 @@ msgstr ""
 msgid "Raw score: %d"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3107
+#: SCA.Engine/sources/Output/uFixHint.pas:3115
 msgid "Re-raise of bound variable loses the original stack trace"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:380
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:384
 msgid "Re-run analysis for current file"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:253
-#: SCA.Engine/sources/Common/uMethodd12.pas:283
-#: SCA.SharedUI/sources/uProfileViewer.pas:184
+#: SCA.Engine/sources/Common/uMethodd12.pas:330
+#: SCA.Engine/sources/Common/uMethodd12.pas:360
+#: SCA.SharedUI/sources/uRuleListBox.pas:145
 msgid "Read Error"
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:461
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3103
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1658
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3263
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1670
 msgid "Read errors"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1002
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1008
 msgid "Ready."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3089
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1644
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3249
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1651
 msgid "Real bugs / security holes (severity Error). Fix immediately."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:311
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:334
 msgid "Recommended fix"
 msgstr ""
 
@@ -1774,52 +1842,51 @@ msgstr ""
 msgid "Refactor needed - many critical findings"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:299
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:322
 msgid "Reference pattern (generic example for this rule, NOT the user's code)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:460
+#: SCA.SharedUI/sources/uProfileViewer.pas:411
 msgid "Reload"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:457
-#: SCA.SharedUI/sources/uProfileViewer.pas:736
-#: SCA.SharedUI/sources/uProfileViewer.pas:742
+#: SCA.SharedUI/sources/uProfileViewer.pas:408
+#: SCA.SharedUI/sources/uProfileViewer.pas:674
+#: SCA.SharedUI/sources/uProfileViewer.pas:680
 msgid "Remove rules"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1177
+#: SCA.Engine/sources/Output/uFixHint.pas:1185
 msgid "Required dataset field has no DB-control binding it"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1205
+#: SCA.Engine/sources/Output/uFixHint.pas:1213
 msgid "Required field is bound only to invisible controls"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3511
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3557
 msgid "Reset all findings (clear panels + markers)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:365
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:369
 msgid "Reset panel + clear editor markers (main grid stays)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3087
+#: SCA.Engine/sources/Output/uFixHint.pas:3095
 msgid "Result of managed type is read before it is assigned"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:348
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:275
+#: SCA.Engine/sources/Infrastructure/uExport.pas:524
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:298
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:229
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:456
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:958
-#: SCA.SharedUI/sources/uProfileViewer.pas:312
-#: SCA.SharedUI/sources/uProfileViewer.pas:491
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1568
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:460
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:962
+#: SCA.SharedUI/sources/uRuleListBox.pas:215
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1575
 msgid "Rule"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:281
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:304
 msgid "Rule description"
 msgstr ""
 
@@ -1827,24 +1894,24 @@ msgstr ""
 msgid "Rule-Set (analyser.ini [Rules])"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1140
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1146
 msgid "Rule-set profile (ide-fast / default / strict). Takes effect at the next analysis run."
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:397
-#: SCA.SharedUI/sources/uProfileViewer.pas:644
-#: SCA.SharedUI/sources/uProfileViewer.pas:657
-#: SCA.SharedUI/sources/uProfileViewer.pas:758
-#: SCA.SharedUI/sources/uProfileViewer.pas:763
+#: SCA.SharedUI/sources/uProfileViewer.pas:348
+#: SCA.SharedUI/sources/uProfileViewer.pas:574
+#: SCA.SharedUI/sources/uProfileViewer.pas:587
+#: SCA.SharedUI/sources/uProfileViewer.pas:696
+#: SCA.SharedUI/sources/uProfileViewer.pas:701
 msgid "Rule-set profiles"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2553
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3556
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2721
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3602
 msgid "Rule-set profiles..."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1164
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1199
 msgid "Rule-set: Profile=%s, MinSeverity=%s"
 msgstr ""
 
@@ -1852,35 +1919,35 @@ msgstr ""
 msgid "Running health-check (this may take up to ~15s)..."
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:130
+#: SCA.SharedUI/sources/uExportMenu.pas:168
 msgid "SARIF (all findings)..."
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:395
+#: SCA.SharedUI/sources/uExportMenu.pas:444
 msgid "SARIF export"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:417
+#: SCA.SharedUI/sources/uExportMenu.pas:466
 msgid "SARIF export failed: "
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:396
+#: SCA.SharedUI/sources/uExportMenu.pas:445
 msgid "SARIF file (*.sarif)|*.sarif"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:413
+#: SCA.SharedUI/sources/uExportMenu.pas:462
 msgid "SARIF report saved: %s (%d findings)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:243
+#: SCA.Engine/sources/Output/uFixHint.pas:251
 msgid "SQL command built with \"+\" - SQL injection risk"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1259
+#: SCA.Engine/sources/Output/uFixHint.pas:1267
 msgid "SQL query is built from a UI input field - parameterize instead of concatenating"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:511
+#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:548
 msgid "SVN call failed (exit code = %d)"
 msgstr ""
 
@@ -1888,7 +1955,7 @@ msgstr ""
 msgid "Same line at end (default)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:455
+#: SCA.SharedUI/sources/uProfileViewer.pas:406
 msgid "Save"
 msgstr ""
 
@@ -1896,11 +1963,11 @@ msgstr ""
 msgid "Save once to create it."
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:656
+#: SCA.SharedUI/sources/uProfileViewer.pas:586
 msgid "Save the changes to profile \"%s\"?"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEWatchMode.pas:935
+#: StaticCodeAnalyserIDE/uIDEWatchMode.pas:952
 msgid "Saved, queueing analysis: %s"
 msgstr ""
 
@@ -1908,34 +1975,38 @@ msgstr ""
 msgid "Scan this folder"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:799
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:834
 #: StaticCodeAnalyserIDE/uIDEAnalyseRunner.pas:572
 msgid "Scanning... %d found"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1932
+#: SCA.SharedUI/sources/uRuleListBox.pas:194
+msgid "Search ID, kind, rule text, severity or type..."
+msgstr ""
+
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1899
 msgid "Search: "
 msgstr ""
 
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:463
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3119
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1677
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3279
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1691
 msgid "Security"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:281
-#: SCA.SharedUI/sources/uProfileViewer.pas:182
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:549
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1427
+#: SCA.Engine/sources/Common/uMethodd12.pas:358
+#: SCA.SharedUI/sources/uRuleListBox.pas:143
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:565
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1434
 msgid "Security Hotspot"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3120
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1678
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3280
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1692
 msgid "Security holes (SQL injection, hardcoded secrets ...)."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1120
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1155
 msgid "Select Pascal file to analyse"
 msgstr ""
 
@@ -1944,7 +2015,7 @@ msgstr ""
 msgid "Select a row to see the fix hint"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:646
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:650
 msgid "Select baseline file"
 msgstr ""
 
@@ -1952,11 +2023,11 @@ msgstr ""
 msgid "Select folder, project (.dproj) or group (.groupproj)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:735
+#: SCA.SharedUI/sources/uProfileViewer.pas:673
 msgid "Select the rules to remove first."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1481
+#: SCA.Engine/sources/Output/uFixHint.pas:1489
 msgid "Self-assignment is a no-op - usually a copy-paste mistake"
 msgstr ""
 
@@ -1964,48 +2035,47 @@ msgstr ""
 msgid "Server"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3857
+#: SCA.Engine/sources/Output/uFixHint.pas:3865
 msgid "SetLength growing by 1 inside a loop - O(n^2) reallocation; grow once before the loop"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3814
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3853
 msgid "Settings could not be reloaded - baseline filter unchanged."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2310
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2335
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2869
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3468
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2465
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2490
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3029
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3650
 msgid "Settings could not be reloaded - nothing was saved."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2551
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3543
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2719
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3589
 msgid "Settings..."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3561
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3345
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3743
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3391
 msgid "Settings: %s - changes take effect on the next analysis run."
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:348
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:273
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:457
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:959
-#: SCA.SharedUI/sources/uProfileViewer.pas:313
-#: SCA.SharedUI/sources/uProfileViewer.pas:492
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2489
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1569
+#: SCA.Engine/sources/Infrastructure/uExport.pas:524
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:296
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:461
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:963
+#: SCA.SharedUI/sources/uRuleListBox.pas:216
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2657
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1576
 msgid "Severity"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2471
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1082
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2639
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1088
 msgid "Severity:"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4076
+#: SCA.Engine/sources/Output/uFixHint.pas:4084
 msgid "Shell API called with string concatenation in arguments"
 msgstr ""
 
@@ -2018,17 +2088,17 @@ msgstr ""
 msgid "Show annotation overlay on hover (otherwise click marked line)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:598
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:602
 msgid "Show only findings new since the baseline (hide the legacy backlog)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2543
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3533
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2711
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3579
 msgid "Show only new findings (baseline)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1786
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1924
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1931
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1891
 msgid "Showing first %d of %d findings - refine the filter to see more"
 msgstr ""
 
@@ -2036,55 +2106,59 @@ msgstr ""
 msgid "Silent Mode"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:444
+#: SCA.SharedUI/sources/uProfileViewer.pas:775
+msgid "Skipped (built-in name): %s"
+msgstr ""
+
+#: SCA.SharedUI/sources/uExportMenu.pas:528
 msgid "Sonar Generic Issue Format (*.json)|*.json"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:443
+#: SCA.SharedUI/sources/uExportMenu.pas:527
 msgid "Sonar export"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:463
+#: SCA.SharedUI/sources/uExportMenu.pas:547
 msgid "Sonar export failed: "
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:533
+#: SCA.SharedUI/sources/uExportMenu.pas:617
 msgid "Sonar push failed: "
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:485
+#: SCA.SharedUI/sources/uExportMenu.pas:569
 msgid "Sonar push needs a project directory (run analysis first)."
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:529
+#: SCA.SharedUI/sources/uExportMenu.pas:613
 msgid "Sonar push: .sonar\\external\\ now holds exactly these %d issue file(s) - files from earlier pushes were removed."
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:519
+#: SCA.SharedUI/sources/uExportMenu.pas:603
 msgid "Sonar push: select at least one finding first."
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:459
+#: SCA.SharedUI/sources/uExportMenu.pas:543
 msgid "Sonar report saved: %s (%d findings)"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:165
+#: SCA.SharedUI/sources/uExportMenu.pas:214
 msgid "Sonar: send selected as external issue"
 msgstr ""
 
-#: SCA.SharedUI/sources/uExportMenu.pas:161
+#: SCA.SharedUI/sources/uExportMenu.pas:210
 msgid "Sonar: write Generic Issue report (all findings)..."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1877
+#: SCA.Engine/sources/Output/uFixHint.pas:1885
 msgid "Source line exceeds 120 characters - wrap or extract"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5141
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5190
 msgid "Static Code Analyser: analyse this file, no dock opens"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5473
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5526
 msgid "Static Code Analysis"
 msgstr ""
 
@@ -2094,69 +2168,65 @@ msgstr ""
 msgid "Static Code Analysis - File"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2470
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2638
 msgid "Static Code Analysis Tool for Delphi"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3970
+#: SCA.Engine/sources/Output/uFixHint.pas:3978
 msgid "String cast from raw pointer assumes a null-terminator - heap overread if missing"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2859
+#: SCA.Engine/sources/Output/uFixHint.pas:2867
 msgid "String concatenation in loop - quadratic reallocations"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:538
+#: SCA.Engine/sources/Output/uFixHint.pas:546
 msgid "String literal repeated - extract to a constant or resourcestring"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:483
-msgid "Subtle (muted colors)"
-msgstr ""
-
-#: SCA.Engine/sources/Infrastructure/uExport.pas:387
+#: SCA.Engine/sources/Infrastructure/uExport.pas:563
 msgid "Summary"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2094
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2984
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2249
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3016
 msgid "Suppress inserted: %s"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2089
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2977
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2244
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3009
 msgid "Suppress: cannot locate source line"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2097
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2252
 msgid "Suppress: could not write file: %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2986
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3018
 msgid "Suppress: editor write failed (file not in IDE?)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4202
+#: SCA.Engine/sources/Output/uFixHint.pas:4210
 msgid "Suppression marker has no matching finding - probably stale after fix"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2798
+#: SCA.Engine/sources/Output/uFixHint.pas:2806
 msgid "Synchronize() in a destructor - worker and UI thread deadlock each other"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2969
+#: SCA.Engine/sources/Output/uFixHint.pas:2977
 msgid "TLS verification disabled - MITM-attack surface"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2933
+#: SCA.Engine/sources/Output/uFixHint.pas:2941
 msgid "TThread destroyed without Terminate+WaitFor - worker may still be running"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2916
+#: SCA.Engine/sources/Output/uFixHint.pas:2924
 msgid "TThread.Resume is deprecated - use TThread.Start (since Delphi 2010)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1860
+#: SCA.Engine/sources/Output/uFixHint.pas:1868
 msgid "Tab character in source - use spaces for indentation"
 msgstr ""
 
@@ -2164,117 +2234,116 @@ msgstr ""
 msgid "Test Connection"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:491
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:495
 msgid "Text (one-line hint, no window)"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1312
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1446
 msgid "The profile name must not be empty."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1372
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1506
 msgid "There is no profile \"%s\"."
 msgstr ""
 
-#: SCA.SharedUI/sources/uProfileViewer.pas:251
+#: SCA.SharedUI/sources/uProfileViewer.pas:216
 msgid "This profile already contains every rule."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:480
+#: SCA.Engine/sources/Output/uFixHint.pas:488
 msgid "Too many parameters - introduce a parameter object / record"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4031
+#: SCA.Engine/sources/Output/uFixHint.pas:4039
 msgid "Top-level routine appears unused (dead code)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1971
+#: SCA.Engine/sources/Output/uFixHint.pas:1979
 msgid "Trailing comma in argument list"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2181
+#: SCA.Engine/sources/Output/uFixHint.pas:2189
 msgid "Two consecutive const/type/var sections - merge them"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1090
+#: SCA.Engine/sources/Output/uFixHint.pas:1098
 msgid "Two sibling controls share the same TabOrder - tab navigation is undefined"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2535
+#: SCA.Engine/sources/Output/uFixHint.pas:2543
 msgid "Two visibility sections with the same keyword - merge them"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:274
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:455
-#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:957
-#: SCA.SharedUI/sources/uProfileViewer.pas:314
-#: SCA.SharedUI/sources/uProfileViewer.pas:493
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1567
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:297
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:459
+#: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:961
+#: SCA.SharedUI/sources/uRuleListBox.pas:217
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1574
 msgid "Type"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3134
+#: SCA.Engine/sources/Output/uFixHint.pas:3142
 msgid "Type-cast before Free / Destroy has no effect (Destroy is virtual)"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2472
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1095
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2640
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1101
 msgid "Type:"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3933
+#: SCA.Engine/sources/Output/uFixHint.pas:3941
 msgid "Typed exception handler is empty - swallows a specific exception silently"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:547
+#: StaticCodeAnalyserIDE/uIDESCAOptions.pas:551
 msgid "UI language:"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3483
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3665
 msgid "UI language: %s - remaining captions (tiles, filter lists, help panel) switch after a restart."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1344
+#: SCA.Engine/sources/Output/uFixHint.pas:1352
 msgid "UI text in DFM is a literal string - route it through the localization layer"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1692
+#: SCA.Engine/sources/Output/uFixHint.pas:1700
 msgid "UPDATE/DELETE/TRUNCATE without WHERE - affects ALL rows"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4294
+#: SCA.Engine/sources/Output/uFixHint.pas:4302
 msgid "UTF-16 source - compiles, but unusual and text-tool-unfriendly"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4304
+#: SCA.Engine/sources/Output/uFixHint.pas:4312
 msgid "UTF-32 source - compiler rejects it with fatal error F2438"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4221
+#: SCA.Engine/sources/Output/uFixHint.pas:4229
 msgid "UTF-8 source without BOM - Delphi compiler reads it as ANSI (mojibake)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2363
+#: SCA.Engine/sources/Output/uFixHint.pas:2371
 msgid "Unit ends with begin..end. - use initialization section"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2481
+#: SCA.Engine/sources/Output/uFixHint.pas:2489
 msgid "Unit has no declarations - delete it or fill it"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3528
+#: SCA.Engine/sources/Output/uFixHint.pas:3536
 msgid "Unit has no descriptive header comment"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2017
+#: SCA.Engine/sources/Output/uFixHint.pas:2025
 msgid "Unit-level keyword not at column 1"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3676
+#: SCA.Engine/sources/Output/uFixHint.pas:3684
 msgid "User-visible string is hardcoded - move to resourcestring / i18n"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:724
+#: SCA.Engine/sources/Output/uFixHint.pas:732
 msgid "Uses entry may be unused - remove to reduce coupling"
 msgstr ""
 
@@ -2282,19 +2351,19 @@ msgstr ""
 msgid "UsesCheck - report unused entries in uses clause (may produce false positives)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:267
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:290
 msgid "Value"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3352
+#: SCA.Engine/sources/Output/uFixHint.pas:3360
 msgid "Variable used after Free / FreeAndNil - dangling pointer, AV likely"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:327
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:350
 msgid "Verify"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1502
+#: SCA.Engine/sources/Output/uFixHint.pas:1510
 msgid "Virtual method called from constructor - override sees half-initialized Self"
 msgstr ""
 
@@ -2306,14 +2375,14 @@ msgstr ""
 msgid "Vulnerabilities: %d, Hotspots: %d, File errors: %d"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:280
-#: SCA.SharedUI/sources/uProfileViewer.pas:181
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:548
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1426
+#: SCA.Engine/sources/Common/uMethodd12.pas:357
+#: SCA.SharedUI/sources/uRuleListBox.pas:142
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:564
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1433
 msgid "Vulnerability"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:507
+#: SCA.Engine/sources/Infrastructure/uExport.pas:683
 msgid "WARNING"
 msgstr ""
 
@@ -2321,38 +2390,38 @@ msgstr ""
 msgid "WARNING: this token is stored as PLAINTEXT in analyser.ini. Save it again here to DPAPI-encrypt it for your account."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:257
-#: SCA.Engine/sources/Infrastructure/uExport.pas:364
-#: SCA.SharedUI/sources/uProfileViewer.pas:169
+#: SCA.Engine/sources/Common/uMethodd12.pas:334
+#: SCA.Engine/sources/Infrastructure/uExport.pas:540
+#: SCA.SharedUI/sources/uRuleListBox.pas:130
 #: StaticCodeAnalyserIDE/uIDEMessages.pas:57
 msgid "Warning"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:389
+#: SCA.Engine/sources/Infrastructure/uExport.pas:565
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:459
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3092
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1648
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3252
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1655
 msgid "Warnings"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:526
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:542
 msgid "Warnings (all)"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEWatchMode.pas:825
+#: StaticCodeAnalyserIDE/uIDEWatchMode.pas:842
 msgid "Watch: could not attach to %s"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEWatchMode.pas:837
+#: StaticCodeAnalyserIDE/uIDEWatchMode.pas:854
 msgid "Watching: %s"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3999
+#: SCA.Engine/sources/Output/uFixHint.pas:4007
 msgid "Weak/deprecated crypto algorithm in use"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3132
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1690
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3292
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1704
 msgid "Weighted quality score (lower = better)."
 msgstr ""
 
@@ -2360,8 +2429,8 @@ msgstr ""
 msgid "Weights: Vuln 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3133
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1691
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3293
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1705
 msgid "Weights: Vulnerability 10, Error 7, Hotspot 5, Warning 3, Hint 1, FileErr 2."
 msgstr ""
 
@@ -2373,90 +2442,93 @@ msgstr ""
 msgid "Where the hover annotation overlay anchors relative to the finding line. Takes effect after IDE restart."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2821
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3726
+#: SCA.SharedUI/sources/uProfileViewer.pas:772
+msgid "Will be overwritten: %s"
+msgstr ""
+
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2981
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3765
 msgid "Write a new baseline with the current findings now?"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2823
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2910
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2983
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3070
 msgid "Write baseline"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2542
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3527
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2710
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3573
 msgid "Write baseline from current scan..."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2305
+#: SCA.Engine/sources/Output/uFixHint.pas:2313
 msgid "X.Free; X := nil; -> use FreeAndNil(X)"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:258
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:277
 msgid "You are a senior Delphi developer reviewing the output of a static code analyser. Target version: Delphi 12 Athens (RTL/VCL). Suggest minimal, idiomatic fixes - no sweeping refactors, no style overhauls, no new dependencies unless strictly required."
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:470
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:486
 msgid "analyse only files changed in current branch"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1953
+#: SCA.Engine/sources/Output/uFixHint.pas:1961
 msgid "asm..end block - platform-specific, hard to port"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2453
+#: SCA.Engine/sources/Output/uFixHint.pas:2461
 msgid "case statement has many branches - consider dispatch table"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2091
+#: SCA.Engine/sources/Output/uFixHint.pas:2099
 msgid "class(TObject) - TObject is the default base, drop it"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3580
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3590
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1454
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3762
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3772
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1461
 msgid "default"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3307
+#: SCA.Engine/sources/Output/uFixHint.pas:3315
 msgid "except on E: Exception catches every error - prefer a specific subclass"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1463
+#: SCA.Engine/sources/Output/uFixHint.pas:1471
 msgid "for-loop range is reversed - the loop body never runs"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:357
-#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:608
-#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:621
+#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:371
+#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:670
 msgid "git not found. Install Git for Windows (git-scm.com) or set the path to git.exe in analyser.ini."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1841
+#: SCA.Engine/sources/Output/uFixHint.pas:1849
 msgid "goto weakens structured control flow"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:341
+#: SCA.Engine/sources/Infrastructure/uExport.pas:517
 msgid "h2. Code analysis: "
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2600
+#: SCA.Engine/sources/Output/uFixHint.pas:2608
 msgid "if X then Y := True else Y := False - assign expression directly"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:518
+#: SCA.Engine/sources/Infrastructure/uExport.pas:694
 msgid "in"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:382
+#: SCA.Engine/sources/Infrastructure/uExport.pas:558
 msgid "no findings"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2156
+#: SCA.Engine/sources/Output/uFixHint.pas:2164
 msgid "on E: Exception catches everything - too broad"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:2319
+#: SCA.Engine/sources/Output/uFixHint.pas:2327
 msgid "out parameter - prefer Result or var"
 msgstr ""
 
@@ -2464,36 +2536,36 @@ msgstr ""
 msgid "sonar.projectKey not found in "
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:504
+#: SCA.Engine/sources/Infrastructure/uVcsChanges.pas:540
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:326
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:349
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:3509
+#: SCA.Engine/sources/Output/uFixHint.pas:3517
 msgid "uses clause is not in alphabetical order"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:328
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:351
 msgid "what to test or check after the fix to confirm the issue is gone (and no regressions)."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:1439
+#: SCA.Engine/sources/Output/uFixHint.pas:1447
 msgid "with statement can silently rebind identifiers - avoid it"
 msgstr ""
 
-#: SCA.Engine/sources/Output/uFixHint.pas:4136
+#: SCA.Engine/sources/Output/uFixHint.pas:4144
 msgid "with statement names multiple targets - ambiguous member lookup"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1197
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1116
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:1232
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1122
 msgid "▶ Analyse"
 msgstr ""
 
-#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2481
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1120
+#: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2649
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1126
 msgid "📄 File"
 msgstr ""

@@ -26,6 +26,19 @@ type
     // ihn in seinen Style-Block ein (Reihenfolge: Basis ZUERST, dann
     // seitenspezifische Regeln, damit die Seite gezielt verfeinern kann).
     class function BasisCss: string; static;
+
+    // Das Verhalten des angepinnten Kopfes, OHNE <script>-Klammer.
+    //
+    // WARUM VERHALTEN IN EINER STYLE-UNIT: der zusammenfahrende Kopf
+    // ist zur Haelfte CSS (die beiden Zustaende) und zur Haelfte die
+    // Handvoll Zeilen, die zwischen ihnen umschaltet. Die Zustaende
+    // stehen hier; die Umschaltung woanders zu haben hiesse, dass ein
+    // Aufraeumen an einer Stelle die andere still kaputtmacht. Alle
+    // drei Seiten binden denselben Baustein ein.
+    //
+    // Der Aufrufer haengt das Ergebnis in seinen eigenen
+    // <script>-Block, nach dem <header class="kopf">.
+    class function KopfVerhaltenJs: string; static;
   end;
 
 implementation
@@ -67,12 +80,58 @@ begin
       + 'background:var(--grund);color:var(--tinte);}');
     SB.AppendLine('.mono{font-family:Consolas,monospace;}');
     SB.AppendLine('a{color:var(--akzent);}');
+    // FORMULARELEMENTE ERBEN NICHT. Ein input, select oder button
+    // nimmt weder Schriftfamilie noch Textfarbe vom Elternteil - der
+    // Browser setzt seine eigenen Vorgaben, und die sind auf HELLEN
+    // Grund gerechnet. Im Dunkel-Thema stand deshalb schwarzer Text
+    // auf dunklem Feld: das Suchfeld war praktisch unlesbar (Nicos
+    // Befund 09.09.).
+    //
+    // Die Regel steht hier und nicht bei einer Seite, weil alle drei
+    // dieselben Steuerelemente tragen. Sie setzt NUR Schrift und
+    // Farbe; Rahmen, Polster und Rundung bleiben Sache der Seite.
+    SB.AppendLine('input,select,button,textarea{font:inherit;'
+      + 'color:var(--tinte);}');
+    // Der Platzhalter gedaempft, aber lesbar - die Browser-Vorgabe
+    // ist auf dunklem Grund oft kaum sichtbar.
+    SB.AppendLine('::placeholder{color:var(--dezent);opacity:1;}');
     // ---- Dunkler Seitenkopf (bewusst kein Token-Fall, s. Konzept) -----
+    // ---- Kopf: angepinnt, zwei Zustaende -------------------------------
+    // Der Kopf bleibt beim Scrollen oben stehen und schrumpft dabei auf
+    // die Ueberschrift zusammen (Nutzerauftrag 09.09.). Statt zu
+    // verschwinden, traegt er die Orientierung ueber den ganzen
+    // Bericht - bei 20.000 Zeilen weiss man sonst nach dreimal
+    // Blaettern nicht mehr, was man vor sich hat.
+    //
+    // --kopf-h ist die AKTUELLE Kopfhoehe. Die Seiten haengen ihre
+    // sticky Tabellenkoepfe daran (top:var(--kopf-h)), sonst
+    // verschwaende die Spaltenzeile unter dem Kopf. Das JS pflegt den
+    // Wert bei jedem Zustandswechsel; der Rueckfall 0px gilt, solange
+    // kein Skript lief.
+    // z-index 5: UEBER der sticky Spaltenzeile (2) und dem Inhalt,
+    // aber UNTER dem Drawer (10). Ein hoeherer Wert liesse den Kopf
+    // ueber dem aufgeklappten Inspector liegen und dessen obere Ecke
+    // verdecken - die Staffelung der Seiten ist 2 / 5 / 10.
     SB.AppendLine('header.kopf{background:#20303f;color:#f2f6fa;'
-      + 'padding:14px 20px;}');
-    SB.AppendLine('header.kopf h1{font-size:1.35em;margin:0;}');
+      + 'padding:14px 20px;position:sticky;top:0;z-index:5;'
+      + 'transition:padding 180ms ease;}');
+    SB.AppendLine('header.kopf h1{font-size:1.35em;margin:0;'
+      + 'transition:font-size 180ms ease;}');
+    // Die Unterzeile faehrt zusammen statt hart zu verschwinden:
+    // max-height traegt die Bewegung, opacity nimmt ihr die Haerte.
     SB.AppendLine('header.kopf .sub{color:#b9c6d2;margin-top:2px;'
-      + 'font-size:0.92em;max-width:70em;}');
+      + 'font-size:0.92em;max-width:70em;max-height:6em;opacity:1;'
+      + 'overflow:hidden;'
+      + 'transition:max-height 180ms ease,opacity 140ms ease,'
+      + 'margin-top 180ms ease;}');
+    SB.AppendLine('header.kopf.mini{padding-top:8px;padding-bottom:8px;}');
+    SB.AppendLine('header.kopf.mini h1{font-size:1.1em;}');
+    SB.AppendLine('header.kopf.mini .sub{max-height:0;opacity:0;'
+      + 'margin-top:0;}');
+    // Wer Bewegung abgewaehlt hat, bekommt den Zustandswechsel ohne
+    // Animation - der Kopf schrumpft trotzdem, er tut es nur sofort.
+    SB.AppendLine('@media (prefers-reduced-motion:reduce){'
+      + 'header.kopf,header.kopf h1,header.kopf .sub{transition:none;}}');
     // ---- Badges / Pills / Chips ---------------------------------------
     SB.AppendLine('.badge{display:inline-block;border-radius:5px;'
       + 'padding:1px 8px;font-size:0.86em;border:1px solid transparent;'
@@ -136,6 +195,59 @@ begin
     SB.AppendLine('button.copy{border:1px solid var(--rand);'
       + 'background:var(--karte);border-radius:5px;cursor:pointer;'
       + 'font-size:0.8em;padding:1px 8px;}');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+class function TWorkbenchStyle.KopfVerhaltenJs: string;
+// Begruendung an der Deklaration. Zwei Aufgaben:
+//   1. ab einer Schwelle die Klasse "mini" setzen bzw. nehmen
+//   2. --kopf-h auf die aktuelle Kopfhoehe halten, damit die sticky
+//      Tabellenkoepfe der Seiten unter dem Kopf kleben und nicht
+//      dahinter verschwinden
+var
+  SB : TStringBuilder;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('(function(){');
+    SB.AppendLine('  var kopf=document.querySelector("header.kopf");');
+    SB.AppendLine('  if(!kopf)return;');
+    // Die Schwelle ist bewusst klein: der Kopf soll zusammenfahren,
+    // SOBALD gescrollt wird, nicht erst wenn er ohnehin halb weg
+    // waere. 24px sind etwa eine Zeile - genug, um ein versehentliches
+    // Antippen des Rades nicht als Scrollen zu werten.
+    SB.AppendLine('  var SCHWELLE=24;');
+    SB.AppendLine('  function hoeheMerken(){');
+    SB.AppendLine('    document.documentElement.style.setProperty('
+    // getBoundingClientRect().height, NICHT offsetHeight: das eine
+    // liefert Bruchteile, das andere rundet auf ganze Pixel. Unter
+    // Windows-Skalierung (125 %, 150 %) sind Layouthoehen fast immer
+    // gebrochen; wer daraus einen sticky-Versatz rechnet, landet leicht
+    // einen Bruchteil zu tief - und durch diesen Spalt sieht man die
+    // Zeilen durchlaufen (Nicos Befund 10.09.).
+      + '"--kopf-h",kopf.getBoundingClientRect().height+"px");');
+    SB.AppendLine('  }');
+    SB.AppendLine('  function zustand(){');
+    SB.AppendLine('    var runter=(window.scrollY||'
+      + 'document.documentElement.scrollTop||0)>SCHWELLE;');
+    SB.AppendLine('    if(runter===kopf.classList.contains("mini"))return;');
+    SB.AppendLine('    kopf.classList.toggle("mini",runter);');
+    SB.AppendLine('    hoeheMerken();');
+    SB.AppendLine('  }');
+    // Waehrend der Transition aendert sich die Hoehe laufend; erst am
+    // Ende steht der Zielwert. Ohne dieses Nachziehen bliebe der
+    // Tabellenkopf um die Differenz verschoben stehen.
+    SB.AppendLine('  kopf.addEventListener("transitionend",hoeheMerken);');
+    // passive: der Handler ruft kein preventDefault, und ohne die
+    // Zusage muss der Browser vor jedem Scrollschritt darauf warten.
+    SB.AppendLine('  window.addEventListener("scroll",zustand,'
+      + '{passive:true});');
+    SB.AppendLine('  window.addEventListener("resize",hoeheMerken);');
+    SB.AppendLine('  hoeheMerken();zustand();');
+    SB.AppendLine('})();');
     Result := SB.ToString;
   finally
     SB.Free;

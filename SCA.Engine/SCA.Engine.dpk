@@ -1,4 +1,4 @@
-package SCA.Engine;
+﻿package SCA.Engine;
 
 // ---------------------------------------------------------------------
 // Pakettyp (2026-08-23): Laufzeitpaket: requires nur rtl und xmlrtl, registriert nichts in der IDE.
