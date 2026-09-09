@@ -47,7 +47,7 @@ type
     // Regel und Detail untereinander, feste Spaltenbreiten (09.09.).
     [Test] procedure Regelzelle_TraegtRegelUndDetailUntereinander;
     [Test] procedure Spaltenbreiten_SindFestWieInV3;
-    [Test] procedure Spaltenzeile_KlebtAmScrollContainerNichtAmFenster;
+    [Test] procedure Spaltenzeile_UndListenOverflow_GehoerenZusammen;
     [Test] procedure Bereiche_HabenBenennbareIds;
     [Test] procedure Bereiche_StehenInDerVorgegebenenReihenfolge;
     [Test] procedure Filterleiste_BleibtBeimScrollenSichtbar;
@@ -676,36 +676,45 @@ begin
     'die Regel-Spalte darf keine feste Breite haben');
 end;
 
-procedure TTestFindingsWorkbenchExport.Spaltenzeile_KlebtAmScrollContainerNichtAmFenster;
-// Nico-Befund 09.09.: die Spaltenzeile "rutscht runter" statt in der
-// ersten Zeile zu stehen.
+procedure TTestFindingsWorkbenchExport.Spaltenzeile_UndListenOverflow_GehoerenZusammen;
+// ZWEI EINSTELLUNGEN, DIE NUR GEMEINSAM RICHTIG SIND.
 //
-// URSACHE war ein top:var(--kopf-h) am th. position:sticky bezieht
-// sich auf den naechsten SCROLL-CONTAINER, und das ist hier .listwrap
-// mit ihrem overflow:auto - nicht das Fenster. Ein top von der Hoehe
-// des SEITEN-Kopfes rueckt die Zeile also um genau diesen Betrag in
-// die Liste hinein.
+// position:sticky bezieht sich auf den naechsten SCROLL-CONTAINER.
+// Davon haengt ab, welches top an der Spaltenzeile stimmt:
 //
-// Der Test haelt BEIDE Seiten der Unterscheidung fest, denn genau sie
-// war verwechselt: hier top:0, weil der Kopf IM Scroller liegt - auf
-// der V3-Seite dagegen var(--kopf-h), weil er dort ausserhalb steht.
+//   .listwrap MIT overflow  -> sie ist der Scroller -> th top:0
+//                              (ein Kopfversatz schoebe die Zeile in
+//                              die Liste hinein: "rutscht runter",
+//                              Nico-Befund 09.09.)
+//   .listwrap OHNE overflow -> das FENSTER ist der Scroller -> th
+//                              braucht den Versatz um Kopf und
+//                              Filterleiste, sonst verschwindet die
+//                              Zeile hinter beiden
+//
+// Das Projekt hat beide Faelle erlebt, in dieser Reihenfolge, und
+// jedes Mal war die eine Aenderung ohne die andere falsch. Seit dem
+// 10.09. gilt der zweite Fall: es gibt nur noch einen Scroller (s.
+// Spaltenkopf_BleibtBeimScrollenSichtbar).
+//
+// Dieser Test sichert nicht das Verhalten - das tut der andere - er
+// sichert die KOPPLUNG. Wer .listwrap wieder ein overflow gibt, faellt
+// hier durch und wird auf das th gestossen.
 var
   Html : string;
 begin
   Html := EinFundHtml;
 
-  Assert.IsTrue(Pos('position:sticky;top:0;', Html) > 0,
-    'die Spaltenzeile klebt nicht am oberen Rand ihres Scrollers');
-  Assert.AreEqual<Integer>(0, Pos('top:var(--kopf-h,0px);white-space',
+  Assert.AreEqual<Integer>(0, Pos('border-radius:8px;overflow', Html),
+    'die Liste hat wieder ein overflow - dann ist SIE der Scroller, '
+    + 'und das top am th muss zurueck auf 0');
+  Assert.AreEqual<Integer>(0, Pos('position:sticky;z-index:2;top:0;',
     Html),
-    'die Spaltenzeile bezieht sich auf die Seitenkopfhoehe - damit '
-    + 'rutscht sie um genau diesen Betrag in die Liste hinein, weil '
-    + '.listwrap mit overflow:auto der Scroll-Container ist');
-  // Die Voraussetzung der ganzen Rechnung: .listwrap IST der Scroller.
-  Assert.IsTrue(Pos('.listwrap{background:var(--karte);border:1px solid '
-    + 'var(--rand);border-radius:8px;overflow:auto;', Html) > 0,
-    'ohne overflow:auto auf .listwrap gilt die Begruendung nicht mehr '
-    + '- dann waere top:var(--kopf-h) richtig');
+    'die Spaltenzeile klebt am oberen Fensterrand - dort verschwindet '
+    + 'sie hinter Seitenkopf und Filterleiste');
+  Assert.IsTrue(Pos('top:calc(var(--kopf-h,0px) + var(--filter-h,0px));',
+    Html) > 0,
+    'die Spaltenzeile traegt nicht den Versatz um die beiden Bloecke, '
+    + 'die ueber ihr kleben');
 end;
 
 procedure TTestFindingsWorkbenchExport.Bereiche_HabenBenennbareIds;
@@ -814,35 +823,48 @@ begin
 end;
 
 procedure TTestFindingsWorkbenchExport.Spaltenkopf_BleibtBeimScrollenSichtbar;
-// Nicos Wunsch 09.09.: "der header der funde soll auch sichtbar
-// bleiben beim hoch scrollen".
+// Zwei Wuensche, die zusammen NUR mit einem einzigen Scroller gehen:
+//   09.09. "der header der funde soll auch sichtbar bleiben beim hoch
+//          scrollen"
+//   10.09. "solange die oben fixierbaren Header noch nicht fixiert
+//          sind, soll die ganze HTML noch nach oben scrollen"
 //
-// Der Spaltenkopf war laengst sticky - er WIRKTE nur nie. .listwrap
-// trug zwar overflow:auto, aber keine Hoehe; ohne Begrenzung scrollt
-// sie nie selbst, die ganze Seite scrollt, und die Tabelle wandert
-// samt Kopf davon.
+// Der erste Wurf gab der Liste eine eigene Hoehe und ein eigenes
+// overflow. Damit gab es ZWEI Scroller, und der Browser bedient immer
+// den unter dem Mauszeiger: wer ueber der Liste scrollte, bewegte nur
+// sie. Die Seite blieb stehen, also rasteten Kopf und Filterleiste nie
+// ein - Nicos Befund vom 10.09.
 //
 // Der Test prueft die KETTE, denn jedes Glied allein ist wertlos:
-//   1. der Kopf klebt (position:sticky, top:0 im Scroller)
-//   2. die Liste IST ein Scroller (overflow + Hoehe) - fehlt die
-//      Hoehe, ist Punkt 1 wirkungslos
-//   3. die Hoehe rechnet mit dem, was darueber klebt
-//   4. das Skript pflegt die zweite Groesse dafuer
+//   1. es gibt genau EINEN Scroller - die Liste ist keiner mehr
+//   2. drei Klebe-Ebenen, jede unter der vorigen: Kopf (0),
+//      Filterleiste (--kopf-h), Spaltenzeile (--kopf-h + --filter-h)
+//   3. das Skript pflegt beide Groessen, sonst rechnet Ebene 3 mit 0
 var
   Html : string;
 begin
   Html := EinFundHtml;
 
-  Assert.IsTrue(Pos('position:sticky;top:0;', Html) > 0,
-    'der Spaltenkopf klebt nicht');
-  Assert.IsTrue(Pos('max-height:calc(100vh - var(--kopf-h,0px) '
-    + '- var(--filter-h,0px) - 28px);', Html) > 0,
-    'die Liste hat keine eigene Scrollhoehe - damit bleibt der '
-    + 'sticky Spaltenkopf wirkungslos, weil die Seite scrollt statt '
-    + 'der Liste');
+  // 1. EIN SCROLLER. Die vollstaendige Regel, damit weder ein
+  // overflow noch eine max-height zurueckkommen kann: beide machten
+  // die Liste wieder zum zweiten Scroller und Nicos Befund waere
+  // zurueck. Auch overflow:hidden - schon das genuegt dafuer.
+  Assert.IsTrue(Pos('.listwrap{background:var(--karte);border:1px solid '
+    + 'var(--rand);border-radius:8px;'
+    + 'box-shadow:0 1px 2px rgba(16,32,48,0.06);}', Html) > 0,
+    'die Liste ist wieder ein eigener Scroller - dann scrollt sie '
+    + 'statt der Seite, und die Kopfbereiche rasten nie ein');
+  // 2. Die dritte Klebe-Ebene sitzt unter den beiden anderen.
+  Assert.IsTrue(Pos('position:sticky;z-index:2;'
+    + 'top:calc(var(--kopf-h,0px) + var(--filter-h,0px));', Html) > 0,
+    'die Spaltenzeile rastet nicht unter Kopf UND Filterleiste ein');
+  Assert.IsTrue(Pos('#bereich-filter{position:sticky;'
+    + 'top:var(--kopf-h,0px);z-index:4;', Html) > 0,
+    'die Filterleiste rastet nicht unter dem Seitenkopf ein');
+  // 3. Beide Groessen werden gepflegt.
   Assert.IsTrue(Pos('"--filter-h",fl.offsetHeight+"px"', Html) > 0,
-    'die Hoehe der Filterleiste wird nicht gepflegt - die Rechnung '
-    + 'der Listenhoehe faellt dann auf 0px zurueck');
+    'die Hoehe der Filterleiste wird nicht gepflegt - die '
+    + 'Spaltenzeile rastet dann zu weit oben ein');
   // Die Chips brechen je nach Fensterbreite um; ohne Nachmessen waere
   // die Liste danach zu hoch oder zu niedrig.
   Assert.IsTrue(Pos('new ResizeObserver(merken).observe(fl)', Html) > 0,
@@ -857,10 +879,11 @@ procedure TTestFindingsWorkbenchExport.Kopf_IstAngepinntUndSchrumpftBeimScrollen
 // und besonders den dritten, weil er sonst niemandem auffiele:
 //   1. der Kopf ist angepinnt und hat einen mini-Zustand
 //   2. das Umschalten passiert im Skript
-//   3. die sticky SPALTENZEILE haengt an der Kopfhoehe. Stuende sie
-//      weiter bei top:0, verschwaende sie hinter dem angepinnten
-//      Kopf - sichtbar erst, wenn man in einem langen Bericht
-//      scrollt.
+//   3. die angepinnte FILTERLEISTE haengt an der Kopfhoehe. Stuende
+//      sie bei top:0, verschwaende sie hinter dem angepinnten Kopf -
+//      sichtbar erst, wenn man in einem langen Bericht scrollt.
+//      (Die Spaltenzeile darunter prueft
+//      Spaltenkopf_BleibtBeimScrollenSichtbar.)
 var
   Html : string;
 begin
@@ -875,10 +898,10 @@ begin
   Assert.IsTrue(Pos('kopf.classList.toggle("mini",runter);', Html) > 0,
     'es gibt keine Umschaltung zwischen den beiden Zustaenden');
   Assert.IsTrue(Pos('top:var(--kopf-h,0px)', Html) > 0,
-    'die Spaltenzeile haengt nicht an der Kopfhoehe - sie wuerde beim '
+    'die Filterleiste haengt nicht an der Kopfhoehe - sie wuerde beim '
     + 'Scrollen hinter dem angepinnten Kopf verschwinden');
-  // Die Hoehe muss auch NACH der Animation stimmen, sonst bleibt die
-  // Spaltenzeile um die Differenz verschoben stehen.
+  // Die Hoehe muss auch NACH der Animation stimmen, sonst bleiben
+  // Filterleiste und Spaltenzeile um die Differenz verschoben.
   Assert.IsTrue(
     Pos('kopf.addEventListener("transitionend",hoeheMerken);', Html) > 0,
     'die Kopfhoehe wird nach dem Uebergang nicht nachgezogen');

@@ -546,26 +546,29 @@ begin
       + 'top:var(--kopf-h,0px);z-index:4;background:var(--grund);'
       + 'padding-top:6px;margin-bottom:4px;}');
     // ---- Liste --------------------------------------------------------
-    // EIGENE SCROLLHOEHE (Nicos Wunsch 09.09.: "der header der funde
-    // soll auch sichtbar bleiben beim hoch scrollen").
+    // EIN SCROLLER, UND DAS IST DIE SEITE (Nicos Befund 10.09.).
     //
-    // Der Spaltenkopf ist laengst sticky - er wirkte nur nie, weil
-    // .listwrap zwar overflow:auto trug, aber KEINE Hoehe. Ohne Hoehe
-    // scrollt sie nie selbst; die ganze Seite scrollt, und die Tabelle
-    // wandert samt Kopf nach oben davon. Erst mit einer Begrenzung
-    // wird sie zum echten Scrollbereich, und der Kopf bleibt stehen.
+    // Vorher hatte die Liste eine eigene Hoehe und ein eigenes
+    // overflow:auto. Damit gab es ZWEI Scroller, und der Browser
+    // bedient immer den unter dem Mauszeiger: wer ueber der Liste
+    // scrollte, bewegte nur sie. Die Seite blieb stehen, also blieben
+    // Ampel, Kacheln und Toplisten stehen, und Seitenkopf wie
+    // Filterleiste rasteten nie ein - obwohl beide sticky sind.
     //
-    // Die Hoehe rechnet sich aus dem, was ueber der Liste KLEBT:
-    // Seitenkopf und Filterleiste. Beide Groessen pflegt das Skript
-    // als CSS-Variable, weil beide sich aendern - der Kopf schrumpft
-    // beim Scrollen, die Chips brechen je nach Fensterbreite um. Feste
-    // Werte (etwa 62vh wie in V3) waeren bei einem schmalen Fenster zu
-    // gross und bei einem breiten zu klein.
-    // Die 28px sind der Aussenabstand unter der Liste.
+    // Nicos Vorgabe: solange die Kopfbereiche noch nicht angepinnt
+    // sind, soll die ganze Seite nach oben scrollen. Das ist mit einem
+    // zweiten Scroller nicht zu haben - er faengt das Rad vorher ab.
+    // Ohne ihn ergibt sich die gewuenschte Reihenfolge von selbst:
+    // erst scrollen die oberen Bereiche weg, dabei rasten Kopf,
+    // Filterleiste und Spaltenzeile der Reihe nach ein, und danach
+    // laeuft die Liste unter ihnen durch.
+    //
+    // KEIN overflow mehr - auch kein hidden. Schon overflow:hidden
+    // macht das Element wieder zum Scroll-Container und wuerde die
+    // Spaltenzeile erneut an die Box binden statt ans Fenster. Die
+    // runden Ecken uebernehmen deshalb die aeusseren Kopfzellen (s.u.).
     SB.AppendLine('.listwrap{background:var(--karte);border:1px solid '
-      + 'var(--rand);border-radius:8px;overflow:auto;'
-      + 'max-height:calc(100vh - var(--kopf-h,0px) '
-      + '- var(--filter-h,0px) - 28px);'
+      + 'var(--rand);border-radius:8px;'
       + 'box-shadow:0 1px 2px rgba(16,32,48,0.06);}');
     // table-layout:fixed traegt die Spaltenbreiten (Nicos Auftrag
     // 09.09., Werte aus der V3-Seite). OHNE fixed verteilt der Browser
@@ -589,19 +592,25 @@ begin
       + '){width:' + SP_BREITE_KONF + ';}');
     SB.AppendLine('th,td{padding:7px 10px;text-align:left;'
       + 'vertical-align:top;font-size:0.92em;border:0;}');
-    // top:0 - NICHT var(--kopf-h). Das war am 09.09. kurzzeitig
-    // anders und hat die Spaltenzeile sichtbar nach unten gerueckt
-    // (Nico-Befund: "rutscht runter").
+    // DIE DRITTE KLEBE-EBENE. Seitenkopf (top:0), Filterleiste
+    // (top:--kopf-h), Spaltenzeile (top:--kopf-h + --filter-h): jede
+    // rastet unter der vorigen ein, in genau dieser Reihenfolge.
     //
-    // DER GRUND: position:sticky bezieht sich auf den naechsten
-    // SCROLL-CONTAINER, und das ist hier .listwrap mit ihrem
-    // overflow:auto - nicht das Fenster. Ein top von der Hoehe des
-    // SEITEN-Kopfes rueckt die Zeile also um genau diesen Betrag in
-    // die Liste hinein, statt sie unter dem Seitenkopf zu halten.
+    // Diese Zeile stand zwischendurch auf top:0, und das war damals
+    // richtig: solange .listwrap ein eigenes overflow:auto trug, war
+    // SIE der naechste Scroll-Container, und ein top von der Hoehe des
+    // SEITEN-Kopfes rueckte die Zeile um genau diesen Betrag in die
+    // Liste hinein statt unter den Kopf ("rutscht runter", 09.09.).
     //
-    // Auf der V3-Seite ist es umgekehrt richtig: dort liegt die
-    // Spaltenzeile AUSSERHALB des Scrollers (#v3kopf vor #v3wrap) und
-    // klebt am Fenster - deshalb steht dort var(--kopf-h).
+    // Mit dem Wegfall des zweiten Scrollers (s. .listwrap) ist der
+    // Bezug wieder das FENSTER - und damit ist der Kopfversatz nicht
+    // nur erlaubt, sondern noetig. Wer hier wieder ein overflow an
+    // .listwrap haengt, muss diese Zeile mit zurueckdrehen; die beiden
+    // gehoeren zusammen.
+    //
+    // z-index 2 haelt die Zeile ueber den Datenzeilen, aber unter
+    // Filterleiste (4) und Seitenkopf (5) - sonst schoebe sie sich
+    // beim Einrasten vor die Leiste, unter der sie stehen soll.
     //
     // FLAECHE ALS TOKEN, nicht als Hexwert (Nicos Auftrag 09.09., aus
     // der V3-Seite uebernommen): der Kopf stand mit #eef2f6 fest und
@@ -615,9 +624,16 @@ begin
     // Kopf lesbar macht statt als weitere Zeile.
     SB.AppendLine('th{background:var(--f-flaeche);font-weight:600;'
       + 'font-size:12px;padding:8px 12px;'
-      + 'cursor:pointer;position:sticky;'
-      + 'top:0;white-space:nowrap;user-select:none;'
+      + 'cursor:pointer;position:sticky;z-index:2;'
+      + 'top:calc(var(--kopf-h,0px) + var(--filter-h,0px));'
+      + 'white-space:nowrap;user-select:none;'
       + 'box-shadow:inset 0 -1px 0 var(--rand);}');
+    // Die runden Ecken der Liste liegen auf den AEUSSEREN Kopfzellen,
+    // weil .listwrap seit 10.09. nichts mehr abschneiden darf (ein
+    // overflow wuerde sie zum Scroll-Container machen). Ohne das
+    // stiesse die graue Kopfflaeche eckig in die runde Umrandung.
+    SB.AppendLine('th:first-child{border-top-left-radius:8px;}');
+    SB.AppendLine('th:last-child{border-top-right-radius:8px;}');
     SB.AppendLine('th .pfeil{color:var(--akzent);font-size:0.8em;'
       + 'margin-left:3px;}');
     SB.AppendLine('tr.haupt{border-top:1px solid var(--rand);'
@@ -1648,9 +1664,9 @@ begin
     // Angepinnter Kopf mit zwei Zustaenden - EINE Quelle fuer
     // alle drei Seiten (Nutzerauftrag 09.09.).
     SB.Append(TWorkbenchStyle.KopfVerhaltenJs);
-    // --filter-h: die Hoehe der angepinnten Filterleiste. Sie geht in
-    // die max-height der Liste ein, damit deren Spaltenkopf beim
-    // Scrollen stehen bleibt (s. .listwrap).
+    // --filter-h: die Hoehe der angepinnten Filterleiste. Sie sagt der
+    // Spaltenzeile, wie weit unter dem Fensterrand sie einrasten muss -
+    // naemlich unter Seitenkopf UND Filterleiste (s. th).
     //
     // Eigener Block statt im geteilten Kopf-Verhalten: die
     // Filterleiste gibt es nur auf DIESER Seite. Die Hoehe aendert
