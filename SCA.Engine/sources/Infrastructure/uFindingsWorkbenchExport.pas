@@ -491,6 +491,25 @@ begin
     SB.AppendLine('#gekuerzt{background:#fef4e5;border:1px solid '
       + '#f1d9ad;border-radius:8px;padding:8px 12px;margin:0 0 10px 0;'
       + 'color:#8a5a00;}');
+    // ---- Filterleiste: bleibt beim Scrollen erreichbar ---------------
+    // Suche, Dropdowns und Chips stehen im Dokument direkt ueber der
+    // Liste - beim Scrollen durch 20.000 Zeilen waeren sie sonst weg
+    // (Nicos Wunsch 09.09.: "sollen auch oben sichtbar sein, unter dem
+    // header").
+    //
+    // HIER ist var(--kopf-h) RICHTIG, anders als beim Spaltenkopf der
+    // Tabelle: dieser Block liegt AUSSERHALB der .listwrap, sein
+    // Scroll-Container ist also das Fenster, und der Seitenkopf klebt
+    // davor. Die Variable haelt TWorkbenchStyle.KopfVerhaltenJs auf der
+    // aktuellen Kopfhoehe - der Kopf schrumpft beim Scrollen, die
+    // Filterleiste rueckt entsprechend nach.
+    //
+    // Der Hintergrund ist NICHT schmueckend: ohne ihn scrollt der
+    // Listeninhalt sichtbar durch die angepinnte Leiste hindurch.
+    // z-index 4 haelt sie unter dem Seitenkopf (5) und dem Drawer (10).
+    SB.AppendLine('#bereich-filter{position:sticky;'
+      + 'top:var(--kopf-h,0px);z-index:4;background:var(--grund);'
+      + 'padding-top:6px;margin-bottom:4px;}');
     // ---- Liste --------------------------------------------------------
     SB.AppendLine('.listwrap{background:var(--karte);border:1px solid '
       + 'var(--rand);border-radius:8px;overflow:auto;'
@@ -826,6 +845,12 @@ var
 begin
   SB := TStringBuilder.Create;
   try
+    // Gemeinsame Huelle um Suche, Dropdowns und Chips: sie
+    // traegt das sticky, damit die Filter beim Scrollen durch
+    // die Liste erreichbar bleiben (Nicos Wunsch 09.09.).
+    // Einzeln angepinnt wuerden sich die drei ueberlagern -
+    // sie klebten alle am selben top.
+    SB.AppendLine('<div id="bereich-filter">');
     SB.AppendLine('<div class="cmdbar" id="bereich-suche">');
     SB.AppendLine('<input id="suche" type="search" '
       + 'aria-label="' + TWorkbenchI18n.T(wtSucheAria, ALang) + '" '
@@ -893,6 +918,7 @@ begin
         + '%s</button>',
         [Ord(C), TWorkbenchI18n.T(CONF_KEY[C], ALang)]));
     SB.AppendLine('</div>');
+    SB.AppendLine('</div>');   // bereich-filter
     Result := SB.ToString;
   finally
     SB.Free;

@@ -44,6 +44,7 @@ type
     [Test] procedure Spaltenzeile_KlebtAmScrollContainerNichtAmFenster;
     [Test] procedure Bereiche_HabenBenennbareIds;
     [Test] procedure Bereiche_StehenInDerVorgegebenenReihenfolge;
+    [Test] procedure Filterleiste_BleibtBeimScrollenSichtbar;
     // Angepinnter Kopf mit zwei Zustaenden (Nutzerauftrag 09.09.).
     [Test] procedure Kopf_IstAngepinntUndSchrumpftBeimScrollen;
     // EN/FR-Nachtrag 07.09.: Seite in drei Sprachen, Token unberuehrt.
@@ -693,6 +694,50 @@ begin
   AssertReihenfolge(Html, 'id="bereich-dropdowns"',
     'id="bereich-fundliste"',
     'die Filterleiste steht nicht direkt ueber der Liste');
+end;
+
+procedure TTestFindingsWorkbenchExport.Filterleiste_BleibtBeimScrollenSichtbar;
+// Nicos Wunsch 09.09.: Suche, Dropdowns und Chips sollen auch oben
+// sichtbar sein, unter dem Header. Im Dokument stehen sie direkt ueber
+// der Liste; beim Scrollen durch 20.000 Zeilen waeren sie sonst weg.
+//
+// Drei Dinge muessen zusammenkommen, und zwei davon sieht man erst,
+// wenn sie FEHLEN:
+//   1. eine gemeinsame Huelle - einzeln angepinnt wuerden sich die
+//      drei Bloecke am selben top ueberlagern
+//   2. ein Hintergrund - sonst scrollt der Listeninhalt sichtbar
+//      durch die angepinnte Leiste hindurch
+//   3. top an der KOPFHOEHE, nicht 0: hier liegt der Block ausserhalb
+//      der .listwrap, sein Bezug ist also das Fenster, und der
+//      Seitenkopf klebt davor
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, 'src\A.pas', 10, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+  end;
+
+  Assert.IsTrue(Pos('<div id="bereich-filter">', Html) > 0,
+    'die gemeinsame Huelle um Suche, Dropdowns und Chips fehlt');
+  Assert.IsTrue(Pos('#bereich-filter{position:sticky;'
+    + 'top:var(--kopf-h,0px);', Html) > 0,
+    'die Filterleiste ist nicht unter dem Seitenkopf angepinnt');
+  Assert.IsTrue(Pos('z-index:4;background:var(--grund);', Html) > 0,
+    'ohne eigenen Hintergrund scrollt der Listeninhalt sichtbar durch '
+    + 'die angepinnte Leiste');
+  // Die Huelle umschliesst wirklich alle drei - sonst klebt nur ein
+  // Teil und der Rest scrollt weg.
+  AssertReihenfolge(Html, 'id="bereich-filter"', 'id="bereich-suche"',
+    'die Suche liegt nicht in der Huelle');
+  AssertReihenfolge(Html, 'id="bereich-dropdowns"', 'id="chips"',
+    'die Chips stehen nicht hinter den Dropdowns');
+  AssertReihenfolge(Html, 'id="chips"', 'id="bereich-fundliste"',
+    'die Huelle reicht ueber die Liste hinaus');
 end;
 
 procedure TTestFindingsWorkbenchExport.Kopf_IstAngepinntUndSchrumpftBeimScrollen;
