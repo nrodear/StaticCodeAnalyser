@@ -4,7 +4,8 @@
 // Nutzerauftrag 07.09.): Workbench-Architektur der Detektor-Info-Seite
 // auf dem Scan-Bericht. Kernvertraege: ein tbody je Fund, Regel-Doku
 // DEDUPLIZIERT (ein Template je vorkommender Regel - egal wie viele
-// Funde sie hat), Suchblob AnsiLowerCase, Zeilenbudget mit Banner,
+// Funde sie hat), Suche ueber den Zeilentext statt ueber einen
+// Blob je Fund, Zeilenbudget mit Banner,
 // UTF-8-BOM, Drawer-/JS-Geruest samt Init-Aufrufen.
 
 interface
@@ -35,6 +36,7 @@ type
     [Test] procedure MaxRows_TruncatesWithBanner_TilesKeepTotals;
     [Test] procedure FileReadError_NeutralBadgeAndOwnRank;
     [Test] procedure Run_WritesUtf8WithBom;
+    [Test] procedure DefaultFileName_TraegtDatumUndBleibtWindowstauglich;
     [Test] procedure FindingFields_AreHtmlEscaped;
     [Test] procedure DataCopy_CarriesRealNewlines_NoBrTokens;
     [Test] procedure EmptyRun_SaysNoFindings_NotNoMatches;
@@ -403,6 +405,43 @@ begin
   // Lesefehler da sind (der Scaffolding-Test prueft die Gegenrichtung).
   Assert.IsTrue(Pos('data-wert="ferr"', Html) > 0,
     'Lesefehler-Typ-Chip fehlt trotz vorhandener Lesefehler');
+end;
+
+procedure TTestFindingsWorkbenchExport.DefaultFileName_TraegtDatumUndBleibtWindowstauglich;
+// Nicos Auftrag 10.09.: "sca_codereview_2026-09-06.html".
+//
+// Geprueft wird die FORM, nicht das Datum von heute - sonst haenge der
+// Test an der Uhr und an SCA_REPORT_TIMESTAMP. Die Umgebungsvariable
+// hier zu setzen waere die genauere, aber schlechtere Wahl: sie ist
+// globaler Zustand, und jeder Test, der ihn setzt, muss ihn wieder
+// herstellen (Lehre aus der Lexer-Kontamination, sechs rote Tests).
+var
+  Name : string;
+  i    : Integer;
+begin
+  Name := TFindingsWorkbenchExport.DefaultFileName;
+
+  Assert.IsTrue(Name.StartsWith('sca_codereview_'),
+    'der Vorschlag heisst nicht mehr sca_codereview_...: ' + Name);
+  Assert.IsTrue(Name.EndsWith('.html'),
+    'der Vorschlag traegt keine .html-Endung: ' + Name);
+  // Zwischen Praefix und Endung MUSS etwas stehen - sonst waere der
+  // Name wieder fest und jeder Export ueberschriebe den vorigen.
+  Assert.IsTrue(
+    Length(Name) > Length('sca_codereview_') + Length('.html'),
+    'zwischen Praefix und Endung steht nichts - der Name traegt kein '
+    + 'Datum, und zwei Exporte ueberschreiben sich gegenseitig');
+  // WINDOWS-TAUGLICH. Das ist kein Formalismus: SCA_REPORT_TIMESTAMP
+  // darf einen ISO-Zeitstempel liefern, und dessen Doppelpunkt macht
+  // aus dem Rest einen alternativen Datenstrom - die Datei ist dann
+  // nicht falsch benannt, sondern unauffindbar (Modul-Codereview
+  // 08.09.). Der Vorschlag geht durch V1s Sanitizer; dieser Test
+  // haelt fest, dass er das weiterhin tut.
+  for i := 1 to Length(Name) do
+    Assert.IsFalse(
+      CharInSet(Name[i], ['<', '>', ':', '"', '/', '\', '|', '?', '*'])
+      or (Ord(Name[i]) < 32),
+      'unter Windows verbotenes Zeichen im Vorschlag: ' + Name);
 end;
 
 procedure TTestFindingsWorkbenchExport.Run_WritesUtf8WithBom;

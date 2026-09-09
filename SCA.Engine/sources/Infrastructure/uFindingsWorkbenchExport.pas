@@ -1979,8 +1979,26 @@ begin
 end;
 
 class function TFindingsWorkbenchExport.DefaultFileName: string;
+// Vorschlag fuer den Save-Dialog: sca_codereview_2026-09-06.html
+// (Nicos Auftrag 10.09.).
+//
+// MIT DATUM, und das ist der Punkt. Der bisherige feste Name
+// 'sca-funde-v2.html' liess jeden Export den vorigen ueberschreiben -
+// zwei Staende nebeneinanderzulegen ging nur, wenn man im Dialog von
+// Hand umbenannte. Das Datum macht den Bericht ausserdem ohne Oeffnen
+// zuordenbar. Die Versionsnummer faellt weg; es gibt seit dem 09.09.
+// nur noch einen HTML-Fundbericht.
+//
+// Gebaut wird der Name von V1, nicht hier nachgebaut. Der Parameter
+// heisst dort SourceFile, dient aber genau als BASISNAME - leer ergibt
+// 'analyse', 'sca' ergibt 'sca'. Mitgeliefert bekommt man damit zwei
+// Dinge, die man sonst kopieren muesste: die Pinnung ueber
+// SCA_REPORT_TIMESTAMP (deterministische Bauten) und das Ersetzen der
+// unter Windows verbotenen Zeichen - ein ISO-Zeitstempel bringt einen
+// Doppelpunkt mit, und ab dem liest Windows einen alternativen
+// Datenstrom (Modul-Codereview 08.09.).
 begin
-  Result := 'sca-funde-v2.html';
+  Result := TExporterHtml.DefaultFileName('sca', '');
 end;
 
 class procedure TFindingsWorkbenchExport.Run(
