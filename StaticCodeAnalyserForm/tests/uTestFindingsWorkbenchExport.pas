@@ -941,6 +941,18 @@ begin
   // die Liste danach zu hoch oder zu niedrig.
   Assert.IsTrue(Pos('new ResizeObserver(merken).observe(fl)', Html) > 0,
     'die Filterleiste wird nicht auf Hoehenaenderungen beobachtet');
+  // 4. scrollIntoView kennt die Klebe-Kette: ohne scroll-margin
+  // scrollen Pfeiltasten-Navigation und topKlick ihr Ziel an den
+  // Fensterrand - unter Kopf, Filterleiste und Spaltenzeile
+  // (Chargen-Review 10.09., Major).
+  Assert.IsTrue(Pos('scroll-margin-top:calc(var(--kopf-h,0px) '
+    + '+ var(--filter-h,0px) + 40px);', Html) > 0,
+    'die Fundzeilen tragen keinen Scroll-Versatz - eine per Pfeiltaste '
+    + 'angesteuerte Zeile landet hinter den angepinnten Schichten');
+  Assert.IsTrue(Pos('#funde{scroll-margin-top:calc(var(--kopf-h,0px) '
+    + '+ var(--filter-h,0px));}', Html) > 0,
+    'die Tabelle traegt keinen Scroll-Versatz - topKlick scrollt sie '
+    + 'unter die Filterleiste');
 end;
 
 procedure TTestFindingsWorkbenchExport.Kopf_IstAngepinntUndSchrumpftBeimScrollen;

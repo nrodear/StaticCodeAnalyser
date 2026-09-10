@@ -652,7 +652,25 @@ begin
     SB.AppendLine('th .pfeil{color:var(--akzent);font-size:0.8em;'
       + 'margin-left:3px;}');
     SB.AppendLine('tr.haupt{border-top:1px solid var(--rand);'
-      + 'cursor:pointer;}');
+      + 'cursor:pointer;'
+      // scroll-margin: beide scrollIntoView-Wege (Pfeiltasten-
+      // Navigation auf den Zeilen, topKlick auf die Tabelle) scrollen
+      // sonst ihr Ziel an den FENSTERRAND - und dort liegen seit dem
+      // Ein-Scroller-Umbau drei angepinnte Schichten darueber (Kopf,
+      // Filterleiste, Spaltenzeile). Die Zielzeile landete unsichtbar
+      // dahinter (Chargen-Review 10.09.). Der Versatz nennt die zwei
+      // gemessenen Hoehen plus 40px fuer die Spaltenzeile, deren Hoehe
+      // keine Variable pflegt - bewusst grosszuegig: ein paar Pixel zu
+      // viel stellen die Zeile etwas tiefer, ein Pixel zu wenig
+      // versteckt sie.
+      + 'scroll-margin-top:calc(var(--kopf-h,0px) '
+      + '+ var(--filter-h,0px) + 40px);}');
+    // Dasselbe fuer das topKlick-Ziel: die Tabelle soll unter der
+    // Filterleiste beginnen, nicht unter dem Fensterrand. OHNE den
+    // 40px-Anteil - die Spaltenzeile gehoert der Tabelle selbst und
+    // steht bei dieser Lage genau richtig.
+    SB.AppendLine('#funde{scroll-margin-top:calc(var(--kopf-h,0px) '
+      + '+ var(--filter-h,0px));}');
     // tr.datei ist am 09.09. entfallen - die Datei steht jetzt in der
     // Methoden-Zelle (V3-Formatierung). Die Regel stand hier fuer den
     // Zeiger auf der eigenen Dateizeile; die gibt es nicht mehr.
