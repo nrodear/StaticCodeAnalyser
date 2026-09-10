@@ -832,7 +832,7 @@ rm -rf "$WC"
 exit $EXIT
 ```
 
-Exit-Code-Mapping (siehe [Headless CLI](#headless-cli-mode)):
+Exit-Code-Mapping:
 - 0 = clean → commit erlaubt
 - 1 = nur Hints → commit erlaubt
 - 2 = Warnings → commit erlaubt (oder blockieren via Hook-Logik)
