@@ -1,4 +1,53 @@
-﻿# Release 0.9.17 — Delphi 13, un rapport qui s'affiche à nouveau, et un INI qui garde ses commentaires
+﻿# Release 0.9.18 — Error signifie prouvé, une référence qui tient, et un seul rapport de résultats
+
+🇬🇧 [English version](RELEASE_NOTES.md) · 🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md)
+
+Notes de version complètes : [docs/releases/v0.9.18.md](docs/releases/v0.9.18.md)
+([deutsch](docs/releases/v0.9.18_de.md)).
+
+- **Error signifie prouvé.** La sévérité de chaque résultat est
+  désormais plafonnée par la confiance du détecteur dans CE résultat
+  précis : seuls les résultats à haute confiance sortent en `error`.
+  Sur le corpus de référence, le taux de faux positifs du niveau
+  error passe de ~32 % à ~4 %. **Rupture pour les portes CI** qui
+  comptent les anciens totaux — désactivation :
+  `[Rules] EvidenceTiering=0`.
+- **Le moteur analyse ce que le compilateur compile.** Les branches
+  `{$IFDEF}` inactives sont sautées et les includes `{$I}` sont lus
+  pour leurs `{$DEFINE}` — par défaut. ~15 000 résultats fantômes de
+  double branche disparaissent du corpus. Désactivations :
+  `--no-ifdef-aware`, `--no-include-defines`, `--define`.
+- **Une référence qui tient.** L'interface et le plugin IDE matchent
+  désormais sur le hash de contexte comme la CLI ; la clé porte le
+  fichier et la règle, une entrée ne peut donc plus éteindre des
+  résultats dans tout le scan (pire cas mesuré : 38,6 % du corpus —
+  désormais 6,1 % avec `PathInFingerprint`, 27,4 % sans) ; retoucher
+  un seuil métrique ne change plus l'identité des résultats ; et
+  `--write-baseline` écrit du JSON que les parseurs stricts acceptent.
+- **Un rapport HTML au lieu de trois**, environ deux fois plus léger (calculé à partir du balisage émis) :
+  la page d'atelier — recherche, pastilles, palmarès, colonnes
+  triables, panneau latéral avec extrait de code et documentation par
+  règle, en-têtes épinglés, nom de fichier daté
+  (`sca_codereview_AAAA-MM-JJ.html`). Le `--report-html` de la CLI est
+  un autre rapport, inchangé.
+- **Un catalogue de règles à distribuer :** l'export d'infos
+  détecteurs écrit une page HTML autonome listant les 198 règles avec
+  doc, exemples et clés de configuration.
+- **Plus de trente règles font moins de bruit** — chaque correction
+  une affirmation que la règle ne pouvait pas tenir, aucune un seuil
+  relâché — et le parseur n'avale plus le `else` d'un `case` se
+  terminant par un `if`.
+- **Durcissement CLI :** une valeur sur un commutateur booléen est
+  désormais une erreur d'analyse (`--full=false` ACTIVAIT le
+  commutateur), et les exécutions sans console ne meurent plus à leur
+  première ligne de sortie.
+- **Des profils de règles façonnables**, deux nouvelles règles sur
+  les GUID d'interface (GUID manquant, GUID dupliqué), et une liste
+  déroulante de filtre qui ne gèle plus après la première sélection.
+
+---
+
+# Précédemment — Release 0.9.17 — Delphi 13, un rapport qui s'affiche à nouveau, et un INI qui garde ses commentaires
 
 🇬🇧 [English version](RELEASE_NOTES.md) · 🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md)
 
@@ -31,7 +80,7 @@ Notes de version complètes : [docs/releases/v0.9.17.md](docs/releases/v0.9.17.m
 
 ---
 
-# Vorher — Release 0.9.16 — Un presse-papiers silencieux, des filtres honnêtes et un conseil en texte seul
+# Précédemment — Release 0.9.16 — Un presse-papiers silencieux, des filtres honnêtes et un conseil en texte seul
 
 🇬🇧 [English version](RELEASE_NOTES.md) · 🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md)
 

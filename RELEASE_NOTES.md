@@ -1,4 +1,50 @@
-﻿# Release 0.9.17 — Delphi 13, a report that renders again, and an INI that keeps its comments
+﻿# Release 0.9.18 — Error means proven, a baseline that holds, and one findings report
+
+🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
+
+Full release notes: [docs/releases/v0.9.18.md](docs/releases/v0.9.18.md)
+([deutsch](docs/releases/v0.9.18_de.md)).
+
+- **Error means proven.** Finding severity is now capped by the
+  detector's confidence in that specific finding: only high-confidence
+  findings report at `error`. On the reference corpus this cuts the
+  error-tier false-positive rate from ~32 % to ~4 %. **Breaking for CI
+  gates** that count old error totals — opt out with
+  `[Rules] EvidenceTiering=0`.
+- **The engine now parses what the compiler compiles.** Inactive
+  `{$IFDEF}` branches are skipped and `{$I}` include files are read for
+  their `{$DEFINE}` effect — by default. ~15,000 double-branch phantom
+  findings disappear from the reference corpus. Opt-outs:
+  `--no-ifdef-aware`, `--no-include-defines`, `--define`.
+- **A baseline that holds.** The GUI and the IDE plugin now match on
+  the context hash like the CLI; the match key carries file and rule,
+  so one baseline entry can no longer silence findings across the whole
+  scan (worst case measured: 38.6 % of the corpus — now 6.1 % with
+  `PathInFingerprint`, 27.4 % without); re-tuning a metric threshold no
+  longer changes finding identities; and `--write-baseline` writes
+  JSON that strict parsers accept.
+- **One HTML findings report instead of three**, at roughly half the
+  size (computed from the emitted markup): the workbench page — search, chips, top lists, sortable
+  columns, a side drawer with source excerpt and per-rule
+  documentation, pinned headers, and a date-stamped file name
+  (`sca_codereview_YYYY-MM-DD.html`). The CLI's `--report-html` is a
+  different, unchanged report.
+- **A rule catalog to hand out:** the detector info export writes a
+  self-contained HTML page listing all 198 rules with docs, examples
+  and config keys.
+- **Over thirty rules report less noise** — each fix a claim the rule
+  could not support, none a loosened threshold — and the parser no
+  longer swallows the `else` of a `case` ending in an `if`.
+- **CLI hardening:** a value on a boolean switch is now a parse error
+  (`--full=false` used to turn the switch ON), and runs without a
+  console no longer die on their first output line.
+- **Rule-set profiles you can shape**, plus two new rules about
+  interface GUIDs (missing GUID, duplicated GUID), plus a filter
+  dropdown that no longer freezes after the first selection.
+
+---
+
+# Previously — Release 0.9.17 — Delphi 13, a report that renders again, and an INI that keeps its comments
 
 🇩🇪 [Deutsche Fassung](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
@@ -28,7 +74,7 @@ Full release notes: [docs/releases/v0.9.17.md](docs/releases/v0.9.17.md)
 
 ---
 
-# Vorher — Release 0.9.16 — A quiet clipboard, honest filters, and a text-only hint
+# Previously — Release 0.9.16 — A quiet clipboard, honest filters, and a text-only hint
 
 🇩🇪 [Deutsche Version](RELEASE_NOTES_de.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 

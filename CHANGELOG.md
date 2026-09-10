@@ -6,7 +6,47 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [v0.9.18] - 2026-09-10 - Error means proven, a baseline that holds, and one findings report
+
+### Added - the findings workbench
+
+- **One HTML findings report.** Next to the original HTML report the
+  GUI's export menu had gained a second, workbench-based one — and a
+  third variant existed briefly during development, distinguished only
+  by a version number in the caption. What remains is
+  the **workbench report**: health rating, stat tiles and two top lists
+  ("where does it hurt?") first, then search, file and rule dropdowns
+  and type/severity/confidence chips, then the findings table. A click
+  on a finding opens a **side drawer** with the source excerpt, the
+  location and the documentation of exactly that rule - the rule
+  documentation is stored **once per rule**, not once per finding.
+  Page header, filter bar and column row pin below one another while
+  the page scrolls, and there is deliberately only **one scroller**:
+  the page scrolls until the pinned parts latch, then the list runs
+  underneath them. The CLI's `--report-html` is a different, unchanged
+  report - `EXPORTS.md` explains which one serves what.
+- **Roughly half the size.** Two per-finding payloads carried nothing
+  a reader could not already see: the source excerpt shipped as
+  finished markup (~835 bytes of scaffolding per finding - now stored
+  as raw text, the scaffolding is built once in the page script when
+  the drawer opens, character-identical to before), and every row
+  carried a lowercased copy of itself as a search blob (~225 bytes -
+  now the search reads the visible row; what is *not* visible, the
+  technical kind name, CWE and tags, is stored once per rule). About
+  990 bytes saved per finding, computed from the emitted markup.
+- **Date-stamped default file name:** `sca_codereview_YYYY-MM-DD.html`
+  instead of a fixed name that made every export overwrite the
+  previous one. Built by the shared name helper, so a pinned
+  `SCA_REPORT_TIMESTAMP` and the Windows-forbidden-character rules
+  come along for free.
+- **Readable form controls in the dark theme.** Form elements do not
+  inherit text color; the search box was black-on-dark. One rule in
+  the shared design system now gives inputs, selects, buttons and
+  textareas the page's font and ink, plus a visible placeholder.
+- **No theme flash on load.** The stored theme is applied by a tiny
+  head script before first paint (whitelisted values, try/catch), so
+  the page no longer renders light and then switches.
+
 
 ### Changed
 - **CLI: a value on a boolean switch is now a parse error** instead of
@@ -50,7 +90,10 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   index ASCII-only while the query is lowercased Unicode-aware - words
   containing an uppercase umlaut (localized rule names, method names)
   could not be found under any spelling. The index is now lowered
-  Unicode-aware, matching the query side.
+  Unicode-aware, matching the query side. (Later in this release the
+  per-row index was removed altogether - the search now reads the
+  visible row and lowers once, in the browser, so the two sides can
+  no longer diverge by construction.)
 
 ### Added
 - **Detector info export** (burger menu -> Export -> "Detector info
@@ -547,40 +590,9 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [0.9.17] - Delphi 13
+### Rule-set profiles you can shape, and two rules about interface GUIDs
 
-### Added
-- Delphi 13 support in the installer: three targets - `bpl\d12`
-  (Delphi 12, 32-bit), `bpl\d13` (Delphi 13, 32-bit) and `bpl\d13x64`
-  (Delphi 13, 64-bit IDE, registered under *Known Packages x64*).
-  Every file and registry entry is guarded by a check for that IDE, so
-  nothing is written into a branch that cannot load it.
-- Sonar export can keep downgraded findings out of the report.
-
-### Fixed
-- The HTML report needed 8.4 GB on the reference corpus and ran out of
-  memory; it now needs 62 MB. Two further silent failures of the same
-  page are fixed with it.
-- `analyser.ini` keeps its comments, ordering and commented-out
-  examples. Four writers touch that file; all four were changed.
-- Editing the line a finding sits on removes the marker instead of
-  leaving it over text it no longer matches.
-- The annotation overlay no longer paints from a timer, which was
-  producing a second, counter-moving caret.
-- 743 source and documentation files carried UTF-8 without a BOM and
-  were read as ANSI by the compiler, the IDE editor and PowerShell.
-- Rule selection in the UI shows rule ID and token only.
-
-### Notes
-- Delphi 12 remains 32-bit. It has no 64-bit IDE and ships `designide`
-  for Win32 only; a Win64 build of the plugin is not possible there and
-  now fails with a readable message instead of `E2202`.
-
----
-
-## [Unreleased] - Rule-set profiles you can shape, and two rules about interface GUIDs
-
-### Added
+#### Added
 
 - **Two rules about interface GUIDs.** `SCA197 InterfaceWithoutGuid`
   flags an interface declared without one: without a GUID the type
@@ -647,7 +659,7 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to be read once per program start, so a profile written by hand only
   appeared after a restart of the application or the IDE.
 
-### Fixed
+#### Fixed
 
 - `--diff` and `--branch` treated a failed git/svn call as "nothing
   changed" and exited 0. On a shallow clone - the GitHub Actions default
@@ -675,9 +687,8 @@ and [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   now indexes the whole enum, at the price of one dead row. Reported
   from a downstream fork; thank you.
 
----
 
-## [Unreleased] - A false-positive pass over the real-world corpus
+### A false-positive pass over the real-world corpus
 
 The first full false-positive audit of the rule set (all 142 active rules,
 3162 verdicts read at source across a 24-repository corpus) turned into a
@@ -689,7 +700,7 @@ several parser fixes recovered routine bodies the parser had been dropping.
 
 Numbers below are per-rule counts on that corpus, not projections.
 
-### Changed -- rules that stopped claiming what they could not prove
+#### Changed -- rules that stopped claiming what they could not prove
 
 - **SCA047 `SelfAssignment` compares storage locations instead of text**
   (134 to 22 findings). It used to flag any assignment whose two sides
@@ -742,7 +753,7 @@ Numbers below are per-rule counts on that corpus, not projections.
   is visible. `SCA054 UnusedParameter` improved the same way (13,974 to
   13,952).
 
-### Removed
+#### Removed
 
 - **`ofmDfmFallbackPas` is gone -- it described a code path that never
   existed.** The enum value, a comparison against it, an unreachable
@@ -762,7 +773,7 @@ Numbers below are per-rule counts on that corpus, not projections.
   was never written. It is now documented at the declaration instead of
   contradicted.
 
-### Fixed -- parser
+#### Fixed -- parser
 
 - **`Exit(...)` arguments are scanned bracket-balanced.** An `Exit` whose
   argument contained a `;` inside brackets ended the scan early and the
@@ -783,13 +794,44 @@ CognitiveComplexity` +16, `SCA022 CyclomaticComplexity` +15. Every added
 finding was checked against recomputable metrics (line counts, nesting
 depth, complexity) and matched.
 
-### Internal
+#### Internal
 
 - **`uAstSpans`** collects the "greatest line number in this subtree"
   computation that had been copied into seven detectors; five of them now
   call the shared primitive. The AST walk is iterative rather than
   recursive, so deeply nested files no longer risk the stack. Findings are
   byte-identical across the corpus before and after.
+
+---
+
+## [0.9.17] - Delphi 13
+
+### Added
+- Delphi 13 support in the installer: three targets - `bpl\d12`
+  (Delphi 12, 32-bit), `bpl\d13` (Delphi 13, 32-bit) and `bpl\d13x64`
+  (Delphi 13, 64-bit IDE, registered under *Known Packages x64*).
+  Every file and registry entry is guarded by a check for that IDE, so
+  nothing is written into a branch that cannot load it.
+- Sonar export can keep downgraded findings out of the report.
+
+### Fixed
+- The HTML report needed 8.4 GB on the reference corpus and ran out of
+  memory; it now needs 62 MB. Two further silent failures of the same
+  page are fixed with it.
+- `analyser.ini` keeps its comments, ordering and commented-out
+  examples. Four writers touch that file; all four were changed.
+- Editing the line a finding sits on removes the marker instead of
+  leaving it over text it no longer matches.
+- The annotation overlay no longer paints from a timer, which was
+  producing a second, counter-moving caret.
+- 743 source and documentation files carried UTF-8 without a BOM and
+  were read as ANSI by the compiler, the IDE editor and PowerShell.
+- Rule selection in the UI shows rule ID and token only.
+
+### Notes
+- Delphi 12 remains 32-bit. It has no 64-bit IDE and ships `designide`
+  for Win32 only; a Win64 build of the plugin is not possible there and
+  now fails with a readable message instead of `E2202`.
 
 ---
 

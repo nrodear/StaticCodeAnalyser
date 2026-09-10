@@ -1,4 +1,51 @@
-﻿# Release 0.9.17 — Delphi 13, ein Bericht der wieder aufgeht, und eine INI, die ihre Kommentare behält
+﻿# Release 0.9.18 — Error heisst bewiesen, eine Baseline die haelt, und ein Fundbericht
+
+🇬🇧 [English version](RELEASE_NOTES.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
+
+Vollstaendige Release-Notes: [docs/releases/v0.9.18_de.md](docs/releases/v0.9.18_de.md)
+([english](docs/releases/v0.9.18.md)).
+
+- **Error heisst bewiesen.** Die Severity jedes Funds wird auf die
+  Konfidenz des Detektors in GENAU diesem Fund gedeckelt: nur Funde
+  mit hoher Konfidenz melden als `error`. Auf dem Referenzkorpus
+  faellt die Falsch-Positiv-Quote der Error-Stufe von ~32 % auf ~4 %.
+  **Breaking fuer CI-Gates**, die auf den alten Error-Zahlen stehen —
+  Opt-out: `[Rules] EvidenceTiering=0`.
+- **Die Engine parst, was der Compiler uebersetzt.** Inaktive
+  `{$IFDEF}`-Zweige werden uebersprungen, `{$I}`-Includes auf ihre
+  `{$DEFINE}`-Wirkung gelesen — als Voreinstellung. ~15.000
+  Doppelzweig-Phantomfunde verschwinden vom Referenzkorpus. Opt-outs:
+  `--no-ifdef-aware`, `--no-include-defines`, `--define`.
+- **Eine Baseline, die haelt.** GUI und IDE-Plugin matchen jetzt wie
+  die CLI auch ueber den Kontext-Hash; der Schluessel traegt Datei und
+  Regel, ein Baseline-Eintrag kann also nicht mehr Funde im ganzen
+  Scan stummschalten (gemessener Extremfall: 38,6 % des Korpus —
+  jetzt 6,1 % mit `PathInFingerprint`, 27,4 % ohne); ein umgestellter
+  Metrik-Schwellwert aendert keine Fund-Identitaeten mehr; und
+  `--write-baseline` schreibt JSON, das strikte Parser annehmen.
+- **Ein HTML-Fundbericht statt drei**, rund halb so gross (gerechnet aus dem emittierten Markup): die
+  Workbench-Seite — Suche, Chips, Top-Listen, sortierbare Spalten,
+  Seiten-Drawer mit Quellausschnitt und Regel-Doku je Regel,
+  angepinnte Koepfe, Dateiname mit Datum
+  (`sca_codereview_JJJJ-MM-TT.html`). `--report-html` der CLI ist ein
+  anderer, unveraenderter Bericht.
+- **Ein Regelkatalog zum Weitergeben:** der Detektor-Info-Export
+  schreibt eine self-contained HTML-Seite mit allen 198 Regeln samt
+  Doku, Beispielen und Konfig-Schluesseln.
+- **Ueber dreissig Regeln melden weniger Rauschen** — jeder Fix eine
+  Behauptung, die die Regel nicht halten konnte, keiner ein gelockerter
+  Schwellwert — und der Parser verschluckt nicht mehr das `else` eines
+  `case`, das mit einem `if` endet.
+- **CLI-Haertung:** ein Wert an einem booleschen Schalter ist jetzt ein
+  Parse-Fehler (`--full=false` schaltete den Schalter EIN), und Laeufe
+  ohne Konsole sterben nicht mehr an ihrer ersten Ausgabezeile.
+- **Formbare Regel-Profile**, dazu zwei neue Regeln zu
+  Interface-GUIDs (fehlende GUID, doppelte GUID), dazu ein
+  Filter-Dropdown, das nach der ersten Auswahl nicht mehr einfriert.
+
+---
+
+# Vorher — Release 0.9.17 — Delphi 13, ein Bericht der wieder aufgeht, und eine INI, die ihre Kommentare behält
 
 🇬🇧 [English version](RELEASE_NOTES.md) · 🇫🇷 [Version française](RELEASE_NOTES_fr.md)
 
