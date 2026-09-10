@@ -27,14 +27,29 @@ type
     // seitenspezifische Regeln, damit die Seite gezielt verfeinern kann).
     class function BasisCss: string; static;
 
+    // Das ANPINNEN des Kopfes samt seiner zwei Zustaende, OHNE
+    // <style>-Klammer - einzubinden NACH BasisCss, und NUR von Seiten,
+    // die auch KopfVerhaltenJs einbinden.
+    //
+    // WARUM NICHT IN BasisCss: BasisCss hat einen Konsumenten mehr als
+    // das Kopf-Verhalten - den klassischen CLI-Report (--report-html).
+    // Der traegt kein Kopf-Skript und pinnt seine eigenen
+    // Spaltenkoepfe mit top:0 ans Fenster. Als das Anpinnen in
+    // BasisCss lag, klemmte dort ploetzlich der Kopfbalken permanent
+    // oben, und die Spaltenkoepfe verschwanden beim Scrollen dahinter
+    // (Chargen-Review 10.09., Blocker). Optik teilen alle drei
+    // Konsumenten; VERHALTEN teilen nur die, die es bestellt haben.
+    class function KopfAngepinntCss: string; static;
+
     // Das Verhalten des angepinnten Kopfes, OHNE <script>-Klammer.
     //
     // WARUM VERHALTEN IN EINER STYLE-UNIT: der zusammenfahrende Kopf
-    // ist zur Haelfte CSS (die beiden Zustaende) und zur Haelfte die
-    // Handvoll Zeilen, die zwischen ihnen umschaltet. Die Zustaende
-    // stehen hier; die Umschaltung woanders zu haben hiesse, dass ein
-    // Aufraeumen an einer Stelle die andere still kaputtmacht. Alle
-    // drei Seiten binden denselben Baustein ein.
+    // ist zur Haelfte CSS (die beiden Zustaende, KopfAngepinntCss) und
+    // zur Haelfte die Handvoll Zeilen, die zwischen ihnen umschaltet.
+    // Die Zustaende stehen hier; die Umschaltung woanders zu haben
+    // hiesse, dass ein Aufraeumen an einer Stelle die andere still
+    // kaputtmacht. Beide Workbench-Seiten binden denselben Baustein
+    // ein - immer PAARIG mit KopfAngepinntCss.
     //
     // Der Aufrufer haengt das Ergebnis in seinen eigenen
     // <script>-Block, nach dem <header class="kopf">.
@@ -96,42 +111,15 @@ begin
     // ist auf dunklem Grund oft kaum sichtbar.
     SB.AppendLine('::placeholder{color:var(--dezent);opacity:1;}');
     // ---- Dunkler Seitenkopf (bewusst kein Token-Fall, s. Konzept) -----
-    // ---- Kopf: angepinnt, zwei Zustaende -------------------------------
-    // Der Kopf bleibt beim Scrollen oben stehen und schrumpft dabei auf
-    // die Ueberschrift zusammen (Nutzerauftrag 09.09.). Statt zu
-    // verschwinden, traegt er die Orientierung ueber den ganzen
-    // Bericht - bei 20.000 Zeilen weiss man sonst nach dreimal
-    // Blaettern nicht mehr, was man vor sich hat.
-    //
-    // --kopf-h ist die AKTUELLE Kopfhoehe. Die Seiten haengen ihre
-    // sticky Tabellenkoepfe daran (top:var(--kopf-h)), sonst
-    // verschwaende die Spaltenzeile unter dem Kopf. Das JS pflegt den
-    // Wert bei jedem Zustandswechsel; der Rueckfall 0px gilt, solange
-    // kein Skript lief.
-    // z-index 5: UEBER der sticky Spaltenzeile (2) und dem Inhalt,
-    // aber UNTER dem Drawer (10). Ein hoeherer Wert liesse den Kopf
-    // ueber dem aufgeklappten Inspector liegen und dessen obere Ecke
-    // verdecken - die Staffelung der Seiten ist 2 / 5 / 10.
+    // NUR die Optik. Das Anpinnen samt der zwei Zustaende liegt in
+    // KopfAngepinntCss - der klassische CLI-Report bindet BasisCss ein,
+    // will aber keinen klemmenden Kopf (Begruendung an der Deklaration;
+    // Chargen-Review 10.09., Blocker).
     SB.AppendLine('header.kopf{background:#20303f;color:#f2f6fa;'
-      + 'padding:14px 20px;position:sticky;top:0;z-index:5;'
-      + 'transition:padding 180ms ease;}');
-    SB.AppendLine('header.kopf h1{font-size:1.35em;margin:0;'
-      + 'transition:font-size 180ms ease;}');
-    // Die Unterzeile faehrt zusammen statt hart zu verschwinden:
-    // max-height traegt die Bewegung, opacity nimmt ihr die Haerte.
+      + 'padding:14px 20px;}');
+    SB.AppendLine('header.kopf h1{font-size:1.35em;margin:0;}');
     SB.AppendLine('header.kopf .sub{color:#b9c6d2;margin-top:2px;'
-      + 'font-size:0.92em;max-width:70em;max-height:6em;opacity:1;'
-      + 'overflow:hidden;'
-      + 'transition:max-height 180ms ease,opacity 140ms ease,'
-      + 'margin-top 180ms ease;}');
-    SB.AppendLine('header.kopf.mini{padding-top:8px;padding-bottom:8px;}');
-    SB.AppendLine('header.kopf.mini h1{font-size:1.1em;}');
-    SB.AppendLine('header.kopf.mini .sub{max-height:0;opacity:0;'
-      + 'margin-top:0;}');
-    // Wer Bewegung abgewaehlt hat, bekommt den Zustandswechsel ohne
-    // Animation - der Kopf schrumpft trotzdem, er tut es nur sofort.
-    SB.AppendLine('@media (prefers-reduced-motion:reduce){'
-      + 'header.kopf,header.kopf h1,header.kopf .sub{transition:none;}}');
+      + 'font-size:0.92em;max-width:70em;}');
     // ---- Badges / Pills / Chips ---------------------------------------
     SB.AppendLine('.badge{display:inline-block;border-radius:5px;'
       + 'padding:1px 8px;font-size:0.86em;border:1px solid transparent;'
@@ -195,6 +183,49 @@ begin
     SB.AppendLine('button.copy{border:1px solid var(--rand);'
       + 'background:var(--karte);border-radius:5px;cursor:pointer;'
       + 'font-size:0.8em;padding:1px 8px;}');
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+class function TWorkbenchStyle.KopfAngepinntCss: string;
+// Der Kopf bleibt beim Scrollen oben stehen und schrumpft dabei auf
+// die Ueberschrift zusammen (Nutzerauftrag 09.09.). Statt zu
+// verschwinden, traegt er die Orientierung ueber den ganzen Bericht -
+// bei 20.000 Zeilen weiss man sonst nach dreimal Blaettern nicht
+// mehr, was man vor sich hat.
+//
+// --kopf-h ist die AKTUELLE Kopfhoehe. Die Seiten haengen ihre sticky
+// Tabellenkoepfe daran (top:var(--kopf-h)), sonst verschwaende die
+// Spaltenzeile unter dem Kopf. Das JS pflegt den Wert bei jedem
+// Zustandswechsel; der Rueckfall 0px gilt, solange kein Skript lief.
+// z-index 5: UEBER der sticky Spaltenzeile (2) und dem Inhalt, aber
+// UNTER dem Drawer (10). Ein hoeherer Wert liesse den Kopf ueber dem
+// aufgeklappten Inspector liegen und dessen obere Ecke verdecken -
+// die Staffelung der Seiten ist 2 / 5 / 10.
+var
+  SB : TStringBuilder;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('header.kopf{position:sticky;top:0;z-index:5;'
+      + 'transition:padding 180ms ease;}');
+    SB.AppendLine('header.kopf h1{transition:font-size 180ms ease;}');
+    // Die Unterzeile faehrt zusammen statt hart zu verschwinden:
+    // max-height traegt die Bewegung, opacity nimmt ihr die Haerte.
+    SB.AppendLine('header.kopf .sub{max-height:6em;opacity:1;'
+      + 'overflow:hidden;'
+      + 'transition:max-height 180ms ease,opacity 140ms ease,'
+      + 'margin-top 180ms ease;}');
+    SB.AppendLine('header.kopf.mini{padding-top:8px;padding-bottom:8px;}');
+    SB.AppendLine('header.kopf.mini h1{font-size:1.1em;}');
+    SB.AppendLine('header.kopf.mini .sub{max-height:0;opacity:0;'
+      + 'margin-top:0;}');
+    // Wer Bewegung abgewaehlt hat, bekommt den Zustandswechsel ohne
+    // Animation - der Kopf schrumpft trotzdem, er tut es nur sofort.
+    SB.AppendLine('@media (prefers-reduced-motion:reduce){'
+      + 'header.kopf,header.kopf h1,header.kopf .sub{transition:none;}}');
     Result := SB.ToString;
   finally
     SB.Free;

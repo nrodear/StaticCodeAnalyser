@@ -859,6 +859,16 @@ begin
     'Workbench-Tokens fehlen (uWorkbenchStyle nicht eingebunden)');
   Assert.IsTrue(Pos('<header class="kopf">', Html) > 0,
     'dunkler Workbench-Kopf fehlt');
+  // Der Kopf traegt hier die OPTIK des Designsystems, aber NICHT das
+  // Anpinnen: dieser Report hat kein Kopf-Skript und pinnt seine
+  // eigenen Spaltenkoepfe mit top:0 ans Fenster. Ein angepinnter
+  // Kopfbalken legte sich beim Scrollen genau darueber - der Blocker
+  // des Chargen-Reviews 10.09. Die Zusicherung haelt fest, dass
+  // KopfAngepinntCss hier draussen bleibt.
+  Assert.AreEqual<Integer>(0, Pos('header.kopf{position:sticky', Html),
+    'der Kopf dieses Reports ist angepinnt - er begraebt die eigenen '
+    + 'top:0-Spaltenkoepfe (KopfAngepinntCss gehoert nur in die '
+    + 'Workbench-Seiten)');
   Assert.IsTrue(Pos('</header>', Html) > 0, 'Kopf nicht geschlossen');
   Assert.IsTrue(Pos('<main>', Html) > 0, 'main-Wrapper fehlt');
   Assert.IsTrue(Pos('</main>', Html) > 0, 'main nicht geschlossen');

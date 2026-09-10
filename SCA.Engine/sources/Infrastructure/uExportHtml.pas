@@ -110,6 +110,29 @@ type
     // HtmlEscape - eine zweite Escape-Implementierung waere eine
     // zweite Stelle, an der diese Falle wieder aufgehen kann.
     class function JsonForScript(const S: string): string; static;
+    // Laedt eine Quelldatei fuer die Ausschnitt-Anzeige: UTF-8 zuerst,
+    // bei Dekodierfehler System-Default (ANSI); nil, wenn die Datei
+    // fehlt oder in keiner der beiden Lesarten lesbar ist. Der
+    // Aufrufer BESITZT das Ergebnis (beide Konsumenten legen es in
+    // einen eigenen Cache, nil eingeschlossen - ein fehlgeschlagener
+    // Zugriff soll nicht je Fund neu versucht werden).
+    //
+    // WARUM UTF-8 ZUERST: LoadFromFile ohne Encoding erkennt nur ein
+    // BOM und faellt sonst auf die ANSI-Codepage zurueck - UTF-8 OHNE
+    // BOM (der Normalfall in fremden Repos; das eigene brauchte am
+    // 20.08. einen BOM-Fix fuer 743 Dateien) dekodiert dann STILL
+    // falsch, und jedes 'ae'/'é' im Ausschnitt wird zu
+    // Zwei-Zeichen-Muell. Falsch dekodiertes UTF-8 wirft dagegen, und
+    // der Fallback greift.
+    //
+    // PUBLIC seit 10.09.: zweiter Konsument ist der Quell-Ausschnitt
+    // des Workbench-Fundberichts. Der lud ohne Encoding und zeigte
+    // fuer denselben Fund einen ANDEREN Ausschnitt als diese Seite
+    // (Chargen-Review 10.09., Blocker) - dieselbe Ueberlegung wie bei
+    // HtmlEscape: eine zweite Ladelogik ist eine zweite Stelle, an
+    // der die Falle wieder aufgeht.
+    class function LadeQuellzeilen(const APath: string): TStringList;
+      static;
   private
     // Report-Zeitstempel. Ist die Umgebungsvariable SCA_REPORT_TIMESTAMP
     // gesetzt, wird deren Wert VERBATIM zurueckgegeben (deterministische
@@ -227,6 +250,30 @@ class function TExporterHtml.JsonForScript(const S: string): string;
 begin
   Result := StringReplace(TExporter.JsonEscape(S), '<', '\u003c',
                           [rfReplaceAll]);
+end;
+
+class function TExporterHtml.LadeQuellzeilen(const APath: string): TStringList;
+// Vertrag und Begruendung an der Deklaration. Gehoben aus dem
+// SourceCache-Lader dieser Unit (10.09.), wortgleiche Semantik.
+begin
+  Result := nil;
+  if (APath = '') or not FileExists(APath) then Exit;
+  Result := TStringList.Create;
+  try
+    Result.LoadFromFile(APath, TEncoding.UTF8);
+  except
+    // UTF-8 fehlgeschlagen - mit System-Default (ANSI) versuchen.
+    // NACKTES except mit Absicht: hier ist jeder Fehler dieselbe
+    // Aussage ("diese Lesart liefert nichts"), und der zweite Versuch
+    // bzw. das nil ist die Antwort - ein fehlender Ausschnitt darf
+    // keinen Export scheitern lassen.
+    Result.Clear;
+    try
+      Result.LoadFromFile(APath);
+    except
+      FreeAndNil(Result);
+    end;
+  end;
 end;
 
 class function TExporterHtml.HtmlEscape(const S: string): string;
@@ -468,28 +515,15 @@ var
 
   function GetSourceLines(const APath: string): TStringList;
   // Liest die Datei genau einmal, cached die Zeilen.
-  // Liefert nil wenn die Datei nicht (mehr) existiert oder nicht lesbar ist.
+  // Liefert nil wenn die Datei nicht (mehr) existiert oder nicht
+  // lesbar ist. Die LADE-Logik (UTF-8 zuerst, ANSI-Fallback) liegt
+  // seit 10.09. im geteilten LadeQuellzeilen - der Workbench-Bericht
+  // laedt jetzt identisch, derselbe Fund zeigt in beiden Berichten
+  // denselben Ausschnitt.
   begin
     if APath = '' then Exit(nil);
     if SourceCache.TryGetValue(APath, Result) then Exit;
-    Result := nil;
-    if not FileExists(APath) then
-    begin
-      SourceCache.Add(APath, nil);
-      Exit;
-    end;
-    Result := TStringList.Create;
-    try
-      Result.LoadFromFile(APath, TEncoding.UTF8);
-    except
-      // UTF-8 fehlgeschlagen - mit System-Default (ANSI) versuchen
-      Result.Clear;
-      try
-        Result.LoadFromFile(APath);
-      except
-        FreeAndNil(Result);
-      end;
-    end;
+    Result := LadeQuellzeilen(APath);
     // Auch nil ablegen, damit wir nicht jedes Mal neu probieren
     SourceCache.Add(APath, Result);
   end;

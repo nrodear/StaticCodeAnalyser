@@ -281,6 +281,14 @@ function QuellAusschnitt(ACache: TObjectDictionary<string, TStringList>;
 // dutzendfach. Nicht lesbare Dateien werden als nil gemerkt, damit
 // ein fehlgeschlagener Zugriff nicht bei jedem Fund erneut versucht
 // wird (Bericht ueber geloeschten Code ist der Normalfall).
+//
+// GELADEN wird ueber den geteilten TExporterHtml.LadeQuellzeilen
+// (UTF-8 zuerst, ANSI-Fallback). Bis 10.09. lud diese Funktion ohne
+// Encoding - LoadFromFile erkennt dann nur ein BOM und dekodiert
+// UTF-8 OHNE BOM still als ANSI: jedes 'ae' im Drawer-Ausschnitt
+// wurde zu Zwei-Zeichen-Muell, und derselbe Fund zeigte im
+// CLI-Bericht einen ANDEREN Ausschnitt als hier (Chargen-Review
+// 10.09., Blocker).
 var
   Lines            : TStringList;
   SB               : TStringBuilder;
@@ -291,23 +299,7 @@ begin
   if (ADatei = '') or (AZeile <= 0) then Exit;
   if not ACache.TryGetValue(ADatei, Lines) then
   begin
-    Lines := nil;
-    if FileExists(ADatei) then
-    begin
-      Lines := TStringList.Create;
-      try
-        Lines.LoadFromFile(ADatei);
-      except
-        // NACKTES except mit Absicht und ohne on-Klausel: hier ist
-        // JEDER Fehler dieselbe Aussage - "diese Datei liefert keinen
-        // Ausschnitt" - egal ob Rechte, Sperre, Kodierung oder ein
-        // Laufwerk, das zwischen FileExists und Laden verschwindet.
-        // Ein 'on E: Exception' waere hier nur eine breitere Zusage
-        // mit unbenutztem E; re-geworfen wird bewusst nichts, ein
-        // fehlender Ausschnitt darf keinen Export scheitern lassen.
-        FreeAndNil(Lines);
-      end;
-    end;
+    Lines := TExporterHtml.LadeQuellzeilen(ADatei);
     ACache.AddOrSetValue(ADatei, Lines);
   end;
   if Lines = nil then Exit;
@@ -452,6 +444,11 @@ begin
   try
     SB.AppendLine('<style>');
     SB.Append(TWorkbenchStyle.BasisCss);
+    // Angepinnter Kopf: CSS und JS sind ein PAAR - wer das eine
+    // einbindet, bindet das andere (s. Deklarationen in
+    // uWorkbenchStyle; der CLI-Report bekommt bewusst keins von
+    // beiden).
+    SB.Append(TWorkbenchStyle.KopfAngepinntCss);
     SB.AppendLine('main{padding:14px 20px;}');
     // ---- Command-Bar + Chips (Katalog-Zwilling) -----------------------
     SB.AppendLine('.cmdbar{display:flex;gap:10px;align-items:center;'
@@ -655,7 +652,25 @@ begin
     SB.AppendLine('th .pfeil{color:var(--akzent);font-size:0.8em;'
       + 'margin-left:3px;}');
     SB.AppendLine('tr.haupt{border-top:1px solid var(--rand);'
-      + 'cursor:pointer;}');
+      + 'cursor:pointer;'
+      // scroll-margin: beide scrollIntoView-Wege (Pfeiltasten-
+      // Navigation auf den Zeilen, topKlick auf die Tabelle) scrollen
+      // sonst ihr Ziel an den FENSTERRAND - und dort liegen seit dem
+      // Ein-Scroller-Umbau drei angepinnte Schichten darueber (Kopf,
+      // Filterleiste, Spaltenzeile). Die Zielzeile landete unsichtbar
+      // dahinter (Chargen-Review 10.09.). Der Versatz nennt die zwei
+      // gemessenen Hoehen plus 40px fuer die Spaltenzeile, deren Hoehe
+      // keine Variable pflegt - bewusst grosszuegig: ein paar Pixel zu
+      // viel stellen die Zeile etwas tiefer, ein Pixel zu wenig
+      // versteckt sie.
+      + 'scroll-margin-top:calc(var(--kopf-h,0px) '
+      + '+ var(--filter-h,0px) + 40px);}');
+    // Dasselbe fuer das topKlick-Ziel: die Tabelle soll unter der
+    // Filterleiste beginnen, nicht unter dem Fensterrand. OHNE den
+    // 40px-Anteil - die Spaltenzeile gehoert der Tabelle selbst und
+    // steht bei dieser Lage genau richtig.
+    SB.AppendLine('#funde{scroll-margin-top:calc(var(--kopf-h,0px) '
+      + '+ var(--filter-h,0px));}');
     // tr.datei ist am 09.09. entfallen - die Datei steht jetzt in der
     // Methoden-Zelle (V3-Formatierung). Die Regel stand hier fuer den
     // Zeiger auf der eigenen Dateizeile; die gibt es nicht mehr.
