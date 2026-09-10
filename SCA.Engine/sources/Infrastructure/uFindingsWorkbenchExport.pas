@@ -452,6 +452,11 @@ begin
   try
     SB.AppendLine('<style>');
     SB.Append(TWorkbenchStyle.BasisCss);
+    // Angepinnter Kopf: CSS und JS sind ein PAAR - wer das eine
+    // einbindet, bindet das andere (s. Deklarationen in
+    // uWorkbenchStyle; der CLI-Report bekommt bewusst keins von
+    // beiden).
+    SB.Append(TWorkbenchStyle.KopfAngepinntCss);
     SB.AppendLine('main{padding:14px 20px;}');
     // ---- Command-Bar + Chips (Katalog-Zwilling) -----------------------
     SB.AppendLine('.cmdbar{display:flex;gap:10px;align-items:center;'

@@ -200,6 +200,9 @@ begin
     // Geteilter Workbench-Kern (Tokens, Kopf, Badges/Pills/Chips,
     // Kacheln, Codekarten) - danach NUR noch Seitenspezifisches.
     SB.Append(TWorkbenchStyle.BasisCss);
+    // Angepinnter Kopf: CSS und JS sind ein PAAR - diese Seite bindet
+    // auch KopfVerhaltenJs ein (s. Deklarationen in uWorkbenchStyle).
+    SB.Append(TWorkbenchStyle.KopfAngepinntCss);
     SB.AppendLine('main{padding:14px 20px;}');
     // ---- Rollen-Karten ------------------------------------------------
     SB.AppendLine('.rollen{margin:0 0 12px 0;}');

@@ -960,9 +960,17 @@ var
 begin
   Html := EinFundHtml;
 
+  // ZWEI Regeln, kein Kombi-String mehr: die Optik kommt aus BasisCss,
+  // das Anpinnen aus KopfAngepinntCss. Getrennt, weil der CLI-Report
+  // BasisCss einbindet, aber keinen klemmenden Kopf will - dort begrub
+  // das Anpinnen die eigenen top:0-Spaltenkoepfe (Review 10.09.,
+  // Blocker). Diese Seite muss BEIDE Teile tragen.
   Assert.IsTrue(Pos('header.kopf{background:#20303f;color:#f2f6fa;'
-    + 'padding:14px 20px;position:sticky;top:0;', Html) > 0,
-    'der Kopf ist nicht angepinnt');
+    + 'padding:14px 20px;}', Html) > 0,
+    'die Kopf-Optik aus BasisCss fehlt');
+  Assert.IsTrue(Pos('header.kopf{position:sticky;top:0;z-index:5;',
+    Html) > 0,
+    'der Kopf ist nicht angepinnt (KopfAngepinntCss fehlt)');
   Assert.IsTrue(Pos('header.kopf.mini .sub{max-height:0;opacity:0;',
     Html) > 0,
     'der minimierte Zustand blendet die Unterzeile nicht aus');

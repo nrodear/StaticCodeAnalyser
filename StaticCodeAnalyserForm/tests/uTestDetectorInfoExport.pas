@@ -556,6 +556,17 @@ procedure TTestDetectorInfoExport.Workbench_ScaffoldingWiredCompletely;
 var
   P, N : Integer;
 begin
+  // Angepinnter Kopf: CSS und JS sind ein PAAR (uWorkbenchStyle).
+  // Diese Seite bindet KopfVerhaltenJs ein - fehlt KopfAngepinntCss,
+  // misst das Skript einen Kopf, der gar nicht klebt, und die sticky
+  // Spaltenzeile rechnet mit einer Phantomhoehe.
+  Assert.IsTrue(Pos('header.kopf{position:sticky;top:0;z-index:5;',
+    FHtml) > 0,
+    'KopfAngepinntCss fehlt - das eingebundene Kopf-Skript haette '
+    + 'nichts anzupinnen');
+  Assert.IsTrue(Pos('kopf.classList.toggle("mini",runter);', FHtml) > 0,
+    'KopfVerhaltenJs fehlt - der angepinnte Kopf haette keine '
+    + 'Umschaltung');
   // Filter-Chips: alle vier Gruppen existieren und rufen chip(this).
   Assert.IsTrue(Pos('data-gruppe="typ"', FHtml) > 0, 'Typ-Chips fehlen');
   Assert.IsTrue(Pos('data-gruppe="sev"', FHtml) > 0,
