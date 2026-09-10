@@ -7,8 +7,9 @@ kommen die Funde dorthin, wo ich sie brauche?"** Sie beschreibt jeden
 Export, welches der drei Frontends ihn erzeugen kann, und die sechs
 Workflows, die Teams tatsächlich fahren.
 
-Alles hier wurde gegen das gebaute Binary v0.9.14 geprüft. Wo ein Weg
-heute kaputt ist, steht es dabei — samt Umgehung.
+Die Workflows hier wurden gegen gebaute Binaries geprüft (v0.9.14 und
+später); die Abschnitte zum Workbench-Bericht beschreiben den Stand
+0.9.18. Wo ein Weg heute kaputt ist, steht es dabei — samt Umgehung.
 
 ---
 
@@ -33,6 +34,9 @@ als CLI. „Nur in der GUI" heißt also nie „anderes Programm", sondern
 | **CSV** | `--report-csv <Datei>` | ✅ | Excel, Pivot, schnelles Auszählen |
 | **JSON** | `--report-json <Datei>` | ✅ | eigene Skripte, Ticket-Automatisierung |
 | **Jira-Wiki-Markup** | — | ✅ | Fund in ein Ticket einfügen |
+| **Klartext (Zwischenablage)** | — | ✅ | Funde einer Datei mit Vorher/Nachher, zum Einfügen |
+| **Sonar: einzelner Fund** | — | ✅ | Ein gewählter Fund als External-Issue-Datei unter `.sonar\external\` |
+| **Detektor-Info (Regelkatalog)** | — | ✅ | Self-contained HTML-Seite aller 198 Regeln — kein Fund-Export |
 | **AI-Prompt (Zwischenablage)** | — | ✅ | einzelnen Fund samt Codekontext an einen Assistenten geben |
 | **Suppression-Telemetrie** | `--telemetry-csv <Datei>` | — | welche Regeln am häufigsten unterdrückt werden |
 | **Detektor-Laufzeiten** | `--time-detectors` (stdout) / `--time-detectors-out <Datei>` | — | langsame Detektoren finden |

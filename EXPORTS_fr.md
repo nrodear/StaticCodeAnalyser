@@ -7,8 +7,10 @@ comment amener les résultats là où j'en ai besoin ? »** Elle décrit
 chaque export que l'outil sait produire, lequel des trois frontaux peut
 le produire, et les six workflows que les équipes pratiquent réellement.
 
-Tout ce qui suit a été vérifié contre le binaire compilé v0.9.14. Là où
-un chemin est aujourd'hui cassé, c'est indiqué — contournement compris.
+Les flux de travail ont été vérifiés contre des binaires compilés
+(v0.9.14 et suivants) ; les sections sur le rapport d'atelier décrivent
+l'état 0.9.18. Là où un chemin est aujourd'hui cassé, c'est indiqué —
+contournement compris.
 
 ---
 
@@ -34,6 +36,9 @@ uniquement » ne signifie donc jamais « programme différent », mais
 | **CSV** | `--report-csv <fichier>` | ✅ | Excel, tableaux croisés, comptages ad hoc |
 | **JSON** | `--report-json <fichier>` | ✅ | scripts maison, automatisation de tickets |
 | **Markup wiki Jira** | — | ✅ | coller un résultat dans un ticket |
+| **Texte brut (presse-papiers)** | — | ✅ | les résultats d'un fichier avec avant/après, à coller |
+| **Sonar : résultat unique** | — | ✅ | un résultat choisi comme fichier external-issue sous `.sonar\external\` |
+| **Infos détecteurs (catalogue)** | — | ✅ | page HTML autonome des 198 règles — pas un export de résultats |
 | **Prompt IA (presse-papiers)** | — | ✅ | confier un résultat isolé à un assistant, avec son contexte de code |
 | **Télémétrie de suppression** | `--telemetry-csv <fichier>` | — | quelles règles sont le plus souvent supprimées (classement du bruit) |
 | **Durées des détecteurs** | `--time-detectors` (stdout) / `--time-detectors-out <fichier>` | — | repérer les détecteurs lents |

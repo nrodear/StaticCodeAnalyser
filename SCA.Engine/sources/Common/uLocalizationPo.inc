@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2230 Zeilen, 77491 Bytes
-  CPoLines_de: array[0..2229] of string = (
+  // i18n\de.po - 2233 Zeilen, 77591 Bytes
+  CPoLines_de: array[0..2232] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2011,6 +2011,9 @@ const
     'msgid "%d hidden by baseline"',
     'msgstr "%d durch Baseline ausgeblendet"',
     '',
+    'msgid "\"%s\" already exists. Overwrite it?"',
+    'msgstr "\"%s\" existiert bereits. '#$00DC'berschreiben?"',
+    '',
     'msgid "%d context hashes"',
     'msgstr "%d Kontext-Hashes"',
     '',
@@ -2519,8 +2522,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2226 Zeilen, 81150 Bytes
-  CPoLines_fr: array[0..2225] of string = (
+  // i18n\fr.po - 2229 Zeilen, 81245 Bytes
+  CPoLines_fr: array[0..2228] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4525,6 +4528,9 @@ const
     '',
     'msgid "%d hidden by baseline"',
     'msgstr "%d masqu'#$00E9's par la base"',
+    '',
+    'msgid "\"%s\" already exists. Overwrite it?"',
+    'msgstr "\"%s\" existe d'#$00E9'j'#$00E0'. L'#$2019#$00E9'craser ?"',
     '',
     'msgid "%d context hashes"',
     'msgstr "%d hachages de contexte"',

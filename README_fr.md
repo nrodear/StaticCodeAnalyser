@@ -128,7 +128,7 @@ pour un flux de travail différent. Choisissez selon votre poste du moment :
 | **Analyser un projet hors de Delphi** (RAD non installé / machine batch) | — | ✅ choisir un dossier, cliquer sur **▶ Analyse** | ✅ `analyser.exe <dossier>` |
 | **Exécuter comme hook pre-commit** | — | — | ✅ `--min-severity error --quiet --fail-on error`, le code de sortie reflète la sévérité |
 | **Exécuter en CI / GitHub Actions** | — | — | ✅ `--report-sarif sca.sarif`, étape d'upload SARIF |
-| **Envoyer les résultats vers SonarQube / SonarCloud** (SCA écrit le fichier, `sonar-scanner` l'importe) | ✅ Export → Sonar | ✅ Export → Sonar | ✅ `--sonar-export sca-findings.json` — voir [EXPORTS_fr.md](EXPORTS_fr.md#workflow-3--sonarqube-dashboard) |
+| **Envoyer les résultats vers SonarQube / SonarCloud** (SCA écrit le fichier, `sonar-scanner` l'importe) | ✅ Export → Sonar | ✅ Export → Sonar | ✅ `--sonar-export sca-findings.json` — voir [EXPORTS_fr.md](EXPORTS_fr.md#workflow-3--tableau-de-bord-sonarqube) |
 | **Générer un rapport HTML** pour les parties prenantes / pièces jointes Jira | ✅ Export → HTML | ✅ Export → HTML | ✅ `--report-html <fichier>` |
 | **Générer un prompt de revue Claude** pour tout le lot (flux Tech-Lead) | ✅ Export → prompt Claude | clic de ligne → presse-papiers | — |
 | **Export CSV / JSON / Jira** des résultats | ✅ menu Export | ✅ menu Export | — (GUI uniquement) |
@@ -435,7 +435,7 @@ grille prend toute la largeur (il réapparaît en ~250 ms après le désancrage)
 
 | Bouton | Format | Contenu |
 |--------|--------|---------|
-| **JSON** | `.json` | Tous les résultats sous forme de tableau |
+| **JSON** | `.json` | La vue filtrée de la grille sous forme de tableau (la légende du menu le dit) |
 | **CSV** | `.csv` | Compatible Excel (séparé par des points-virgules) |
 | **Rapport HTML** | `.html` | Rapport d'atelier autonome — recherche, filtres, palmarès, colonnes triables, panneau latéral avec l'extrait de code source et la documentation de la règle. Nom de fichier proposé : `sca_codereview_AAAA-MM-JJ.html`. Voir ci-dessous |
 | **Jira** | Presse-papiers | Markup wiki prêt à coller dans un ticket Jira (filtré sur un fichier) |
@@ -443,8 +443,11 @@ grille prend toute la largeur (il réapparaît en ~250 ms après le désancrage)
 
 #### Le rapport HTML
 
-Un seul, et non trois : l'interface proposait trois variantes HTML
-jusqu'au 2026-09-09 et n'en livre plus qu'une, le **rapport d'atelier**.
+Un seul au lieu d'une famille grandissante : à côté du rapport HTML
+d'origine, le menu avait gagné un second rapport basé sur l'atelier —
+et une troisième variante a brièvement existé pendant le développement.
+Depuis le 2026-09-09, l'interface n'en livre qu'un : le **rapport
+d'atelier**.
 
 Il s'ouvre sur la note de santé, les tuiles de statistiques et deux
 palmarès (« où ça fait mal ? »), puis la recherche, les listes
@@ -1037,7 +1040,7 @@ StaticCodeAnalyserIDE/                 Paquets expert IDE : jeu de dev
   uIDEAnalyseProgress.pas              Contrôleur d'état occupé
                                        (Begin/EndRun, drapeau d'annulation)
 
-StaticCodeAnalyserForm/sources/        Moteur d'analyse (partagé entre autonome + plugin IDE)
+SCA.Engine/sources/                    Moteur d'analyse (partagé par autonome, plugin IDE et CLI)
   Common/
     uSCAConsts.pas                     TFindingKind + KIND_META, source unique
                                        de vérité (correspondance des catégories Sonar)
@@ -1075,7 +1078,9 @@ StaticCodeAnalyserForm/sources/        Moteur d'analyse (partagé entre autonome
                                          des aides HTML partagées
     uFindingsWorkbenchExport.pas       Rapport d'atelier (interface)
     uDetectorInfoExport.pas            Page du catalogue de règles
-    uWorkbenchStyle.pas                CSS partagé des pages d'atelier
+    uWorkbenchStyle.pas                CSS partagé + comportement de
+                                         l'en-tête épinglé (JS) des pages
+                                         d'atelier
 
   Output/
     uClaudePrompt.pas                  Générateur du prompt Markdown IA

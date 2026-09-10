@@ -421,7 +421,7 @@ dem Loslösen wieder zurück).
 
 | Button | Format | Inhalt |
 |--------|--------|--------|
-| **JSON** | `.json` | Alle Befunde als Array |
+| **JSON** | `.json` | Die gefilterte Grid-Sicht als Array (so sagt es auch die Menü-Beschriftung) |
 | **CSV** | `.csv` | Excel-tauglich (Semikolon-getrennt) |
 | **HTML-Report** | `.html` | Self-contained Workbench-Bericht — Suche, Filter, Top-Listen, sortierbare Spalten, Seiten-Drawer mit Quellausschnitt und Regel-Doku. Dateinamen-Vorschlag `sca_codereview_JJJJ-MM-TT.html`. Siehe unten |
 | **Jira** | Clipboard | Wiki-Markup für Jira-Tickets (gefiltert auf Datei) |
@@ -429,8 +429,10 @@ dem Loslösen wieder zurück).
 
 #### Der HTML-Bericht
 
-Einer statt drei: die Oberfläche bot bis zum 2026-09-09 drei
-HTML-Varianten an und liefert jetzt genau eine, den
+Einer statt einer wachsenden Familie: neben dem urspruenglichen
+HTML-Report war ein zweiter, Workbench-basierter dazugekommen — und
+eine dritte Variante existierte kurz waehrend der Entwicklung. Seit dem
+2026-09-09 liefert die Oberflaeche genau einen, den
 **Workbench-Bericht**.
 
 Er beginnt mit der Bewertung, den Kacheln und zwei Top-Listen ("wo
@@ -1019,7 +1021,7 @@ StaticCodeAnalyserIDE/                 IDE-Expert-Pakete: Dev-Satz
   uIDEAnalyseProgress.pas              Busy-State-Controller
                                        (Begin/EndRun, Cancel-Flag)
 
-StaticCodeAnalyserForm/sources/        Analyse-Engine (shared zwischen Standalone + IDE-Plugin)
+SCA.Engine/sources/                    Analyse-Engine (geteilt von Standalone, IDE-Plugin und CLI)
   Common/
     uSCAConsts.pas                     TFindingKind + KIND_META Single source
                                        of truth (Sonar-Kategorie-Mapping)
@@ -1057,7 +1059,8 @@ StaticCodeAnalyserForm/sources/        Analyse-Engine (shared zwischen Standalon
                                          der geteilten HTML-Helfer
     uFindingsWorkbenchExport.pas       Workbench-Fundbericht (GUI)
     uDetectorInfoExport.pas            Regelkatalog-Seite
-    uWorkbenchStyle.pas                Geteiltes CSS der Workbench-Seiten
+    uWorkbenchStyle.pas                Geteiltes CSS + Kopf-Verhalten
+                                         (JS) der Workbench-Seiten
 
   Output/
     uClaudePrompt.pas                  AI-Markdown-Prompt-Generator
@@ -1196,7 +1199,7 @@ Multi-GB-Scans).
 | **Standalone-EXE** | `StaticCodeAnalyserForm/analyser.d12.dproj` | Verzeichnis-/Datei-Scan außerhalb der IDE |
 | **IDE-Plugin** | `StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.dpk` (Dev-Satz mit `SCA.Engine.dpk` + `SCA.SharedUI.dpk`; Releases liefern den Monolith `StaticCodeAnalyser.Plugin.d12.dpk`) | Hauptfeature: dockbares Tool-Fenster mit allen Funktionen |
 
-Beide nutzen die gemeinsame Analyse-Engine in `StaticCodeAnalyserForm/sources/`.
+Beide nutzen die gemeinsame Analyse-Engine in `SCA.Engine/sources/`.
 
 ---
 

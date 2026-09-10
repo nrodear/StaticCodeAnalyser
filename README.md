@@ -419,7 +419,7 @@ bar / tab the panel auto-hides and the grid takes the full width
 
 | Button | Format | Content |
 |--------|--------|---------|
-| **JSON** | `.json` | All findings as an array |
+| **JSON** | `.json` | The filtered grid view as an array (the menu caption says so) |
 | **CSV** | `.csv` | Excel-friendly (semicolon-separated) |
 | **HTML report** | `.html` | Self-contained workbench report — search, filters, top-lists, sortable columns, side drawer with source excerpt and rule documentation. Suggested file name `sca_codereview_YYYY-MM-DD.html`. See below |
 | **Jira** | Clipboard | Wiki markup ready to paste into a Jira ticket (filtered to one file) |
@@ -427,8 +427,10 @@ bar / tab the panel auto-hides and the grid takes the full width
 
 #### The HTML report
 
-One report, not three: the GUI offered three HTML variants until
-2026-09-09 and now ships a single one, the **workbench report**.
+One report instead of a growing family: next to the original HTML
+report the menu had gained a second, workbench-based one — and a third
+variant existed briefly during development. Since 2026-09-09 the GUI
+ships exactly one, the **workbench report**.
 
 It opens with the health rating, the stat tiles and two top-lists
 ("where does it hurt?"), followed by search, the file and rule
@@ -998,7 +1000,6 @@ StaticCodeAnalyserIDE/                 IDE expert packages: dev set
   uIDEStatsTiles.pas                   Sonar-style tile row builder
   uIDEHelpPanel.pas                    Right-side help panel with before/after,
                                        auto-hide when docked
-  uIDEExportMenu.pas                   Export dropdown (JSON/CSV/HTML/Jira)
   uIDEEditorIntegration.pas            ToolsAPI wrappers: current .pas file,
                                        project dir, OpenFileAtLine
   uIDEStatusBar.pas                    Three-panel status bar
@@ -1007,22 +1008,16 @@ StaticCodeAnalyserIDE/                 IDE expert packages: dev set
   uIDEAnalyseProgress.pas              Busy-state controller
                                        (Begin/EndRun, Cancel-flag)
 
-StaticCodeAnalyserForm/sources/        Analysis engine (shared by standalone + IDE plugin)
+SCA.Engine/sources/                    Analysis engine (shared by standalone, IDE plugin and CLI)
   Common/
     uSCAConsts.pas                     TFindingKind + KIND_META single source
                                        of truth (Sonar category mapping)
     uMethodd12.pas                     TLeakFinding record + helpers
-    uRecentPaths.pas                   recent.ini handling
     uRegExMatches.pas                  shared regex helpers
     uDetectorUtils.pas                 IsIdentChar, IsWholeWord helpers
     uCollectValues.pas                 AST literal-value collection
 
-  UI/
-    uAnalyserPalette.pas               Central colour constants
     uAnalyserTypes.pas                 TFindingSeverity enum + conversions
-    uAnalyserTheme.pas                 SeverityBg, SeverityAccent, BlendColor
-    uFindingGridRenderer.pas           StringGrid OnDrawCell logic
-    uFindingFilter.pas                 Severity/type/search filter pipeline
     uLocalization.pas                  dxgettext wrapper (_('…') macro)
 
   Parsing/
@@ -1045,7 +1040,9 @@ StaticCodeAnalyserForm/sources/        Analysis engine (shared by standalone + I
                                          of the shared HTML helpers
     uFindingsWorkbenchExport.pas       Workbench findings report (GUI)
     uDetectorInfoExport.pas            Rule catalogue page
-    uWorkbenchStyle.pas                Shared CSS of the workbench pages
+    uWorkbenchStyle.pas                Shared CSS + pinned-header
+                                         behaviour (JS) of the workbench
+                                         pages
 
   Output/
     uClaudePrompt.pas                  AI Markdown prompt generator
@@ -1067,6 +1064,20 @@ StaticCodeAnalyserForm/sources/        Analysis engine (shared by standalone + I
     uTodoComment.pas, uEmptyMethod.pas
     uCustomClassDiscovery.pas          AutoDiscoverClasses helper
                                        (not a detector — feeds LeakyClasses)
+
+SCA.SharedUI/sources/                  UI pieces shared by EXE and IDE plugin
+  uAnalyserPalette.pas                 Central colour constants
+  uAnalyserTheme.pas                   SeverityBg, SeverityAccent, BlendColor
+  uFindingGridRenderer.pas             StringGrid OnDrawCell logic
+  uFindingFilter.pas                   Severity/type/search filter pipeline
+  uExportMenu.pas                      Export dropdown (JSON/CSV/HTML/
+                                       Sonar/Jira/rule catalog)
+  uRecentPaths.pas                     recent.ini handling
+
+StaticCodeAnalyserForm/sources/        Standalone front-end
+  MainController.pas                   GUI shell wiring
+  UI/                                  Forms, options dialog, panels
+  Console/uConsoleRunner.pas           CLI (--path, --report-*, exit codes)
 ```
 
 ### Data flow
@@ -1181,7 +1192,7 @@ larger heap (relevant only on multi-GB scans).
 | **Standalone EXE** | `StaticCodeAnalyserForm/analyser.d12.dproj` | Folder/file scan outside the IDE |
 | **IDE plugin** | `StaticCodeAnalyserIDE/StaticCodeAnalyser.IDE.d12.dpk` (dev set with `SCA.Engine.dpk` + `SCA.SharedUI.dpk`; releases ship the monolith `StaticCodeAnalyser.Plugin.d12.dpk`) | Main feature — dockable tool window with the full feature set |
 
-Both share the analysis engine in `StaticCodeAnalyserForm/sources/`.
+Both share the analysis engine in `SCA.Engine/sources/`.
 
 ---
 

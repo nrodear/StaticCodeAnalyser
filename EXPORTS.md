@@ -7,8 +7,10 @@ findings where I need them?"** It covers every export the tool can
 produce, which of the three front-ends can produce it, and the six
 workflows teams actually run.
 
-Everything here was verified against the built v0.9.14 binary. Where a
-path is known to be broken today, it says so, with the workaround.
+The workflows here were verified against built binaries (v0.9.14 and
+later); the sections on the workbench report describe the 0.9.18 state.
+Where a path is known to be broken today, it says so, with the
+workaround.
 
 ---
 
@@ -33,6 +35,9 @@ program" — it means *not reachable from a script*.
 | **CSV** | `--report-csv <file>` | ✅ | Excel, pivot tables, ad-hoc counting |
 | **JSON** | `--report-json <file>` | ✅ | Own scripts, ticket automation |
 | **Jira wiki markup** | — | ✅ | Pasting a finding into a ticket |
+| **Plain text (clipboard)** | — | ✅ | One file's findings with before/after, for pasting |
+| **Sonar: single finding** | — | ✅ | One selected finding as an external-issue file under `.sonar\external\` |
+| **Detector info (rule catalog)** | — | ✅ | Self-contained HTML page of all 198 rules — not a findings export |
 | **AI prompt (clipboard)** | — | ✅ | Hand a single finding to an assistant, with code context |
 | **Suppression telemetry** | `--telemetry-csv <file>` | — | Which rules get suppressed most (noise ranking) |
 | **Detector timings** | `--time-detectors` (stdout) / `--time-detectors-out <file>` | — | Finding slow detectors |
