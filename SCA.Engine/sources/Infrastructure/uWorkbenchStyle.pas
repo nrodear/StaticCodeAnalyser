@@ -37,7 +37,7 @@ type
     // Spaltenkoepfe mit top:0 ans Fenster. Als das Anpinnen in
     // BasisCss lag, klemmte dort ploetzlich der Kopfbalken permanent
     // oben, und die Spaltenkoepfe verschwanden beim Scrollen dahinter
-    // (Chargen-Review 10.09., Blocker). Optik teilen alle vier
+    // (Chargen-Review 10.09., Blocker). Optik teilen alle drei
     // Konsumenten; VERHALTEN teilen nur die, die es bestellt haben.
     class function KopfAngepinntCss: string; static;
 
