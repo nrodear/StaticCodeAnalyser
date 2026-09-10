@@ -67,6 +67,7 @@ type
     [Test] procedure TopLists_SortedByCount_AndClickable;
     [Test] procedure HealthAndSecurity_ScoreMatchesV1Formula;
     [Test] procedure SourceSnippet_RendersAroundFindingLine;
+    [Test] procedure SourceSnippet_LiestUtf8OhneBom;
     // IDE-Focus-Redesign 08.09. (Variante A des UI-TODO): Selection
     // mit Severity-Rail, Inspector mit Hero und gestaffelten Ebenen.
     [Test] procedure IdeInspector_HeroHierarchyAndSelectionStates;
@@ -1413,6 +1414,52 @@ begin
     Pos('aktiveFilter.typ = ["vuln", "hotspot"];', Html) > 0,
     'der Security-Knopf muss die bestehenden Typ-Chips setzen, '
     + 'keinen eigenen Filterweg erfinden');
+end;
+
+procedure TTestFindingsWorkbenchExport.SourceSnippet_LiestUtf8OhneBom;
+// Blocker 2 des Chargen-Reviews 10.09.: der Ausschnitt lud ohne
+// Encoding. LoadFromFile erkennt dann nur ein BOM und dekodiert
+// UTF-8 OHNE BOM still als ANSI - aus einem 'ü' im Quelltext wird
+// Zwei-Zeichen-Muell im Drawer. UTF-8 ohne BOM ist der Normalfall in
+// fremden Repos (das eigene brauchte am 20.08. einen BOM-Fix fuer
+// 743 Dateien).
+//
+// Die Fixture schreibt deshalb GEZIELT ohne BOM (WriteBOM=False).
+// Mit BOM waere der Test auch am alten, kaputten Lader gruen gewesen
+// - die BOM-Erkennung von LoadFromFile haette ihn gerettet und der
+// Test haette nichts geprueft.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Html     : string;
+  Datei    : string;
+  SL       : TStringList;
+  i        : Integer;
+begin
+  Datei := TPath.Combine(TPath.GetTempPath,
+    'sca-utf8-' + TGUID.NewGuid.ToString + '.pas');
+  SL := TStringList.Create;
+  try
+    for i := 1 to 5 do
+      SL.Add('zeile' + IntToStr(i) + ' pr'#$FC'ft Gr'#$F6#$DF'e;');
+    SL.WriteBOM := False;
+    SL.SaveToFile(Datei, TEncoding.UTF8);
+  finally
+    SL.Free;
+  end;
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, Datei, 3, 'a'));
+    Html := Render(Findings);
+  finally
+    Findings.Free;
+    if TFile.Exists(Datei) then TFile.Delete(Datei);
+  end;
+  Assert.IsTrue(Pos('zeile3 pr'#$FC'ft Gr'#$F6#$DF'e;', Html) > 0,
+    'die Umlaute des UTF-8-ohne-BOM-Quelltexts kommen nicht heil im '
+    + 'Ausschnitt an - der Lader dekodiert als ANSI');
+  Assert.AreEqual<Integer>(0, Pos('pr'#$C3#$BC'ft', Html),
+    'Mojibake im Ausschnitt - genau die Doppel-Zeichen-Folge einer '
+    + 'ANSI-Fehldekodierung');
 end;
 
 procedure TTestFindingsWorkbenchExport.SourceSnippet_RendersAroundFindingLine;

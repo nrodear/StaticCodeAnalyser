@@ -281,6 +281,14 @@ function QuellAusschnitt(ACache: TObjectDictionary<string, TStringList>;
 // dutzendfach. Nicht lesbare Dateien werden als nil gemerkt, damit
 // ein fehlgeschlagener Zugriff nicht bei jedem Fund erneut versucht
 // wird (Bericht ueber geloeschten Code ist der Normalfall).
+//
+// GELADEN wird ueber den geteilten TExporterHtml.LadeQuellzeilen
+// (UTF-8 zuerst, ANSI-Fallback). Bis 10.09. lud diese Funktion ohne
+// Encoding - LoadFromFile erkennt dann nur ein BOM und dekodiert
+// UTF-8 OHNE BOM still als ANSI: jedes 'ae' im Drawer-Ausschnitt
+// wurde zu Zwei-Zeichen-Muell, und derselbe Fund zeigte im
+// CLI-Bericht einen ANDEREN Ausschnitt als hier (Chargen-Review
+// 10.09., Blocker).
 var
   Lines            : TStringList;
   SB               : TStringBuilder;
@@ -291,23 +299,7 @@ begin
   if (ADatei = '') or (AZeile <= 0) then Exit;
   if not ACache.TryGetValue(ADatei, Lines) then
   begin
-    Lines := nil;
-    if FileExists(ADatei) then
-    begin
-      Lines := TStringList.Create;
-      try
-        Lines.LoadFromFile(ADatei);
-      except
-        // NACKTES except mit Absicht und ohne on-Klausel: hier ist
-        // JEDER Fehler dieselbe Aussage - "diese Datei liefert keinen
-        // Ausschnitt" - egal ob Rechte, Sperre, Kodierung oder ein
-        // Laufwerk, das zwischen FileExists und Laden verschwindet.
-        // Ein 'on E: Exception' waere hier nur eine breitere Zusage
-        // mit unbenutztem E; re-geworfen wird bewusst nichts, ein
-        // fehlender Ausschnitt darf keinen Export scheitern lassen.
-        FreeAndNil(Lines);
-      end;
-    end;
+    Lines := TExporterHtml.LadeQuellzeilen(ADatei);
     ACache.AddOrSetValue(ADatei, Lines);
   end;
   if Lines = nil then Exit;
