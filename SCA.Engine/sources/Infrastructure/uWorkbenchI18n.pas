@@ -320,18 +320,19 @@ const
      + 'noinspection) ; cliquez sur une colonne pour trier, le champ '
      + 'de recherche filtre par fichier, m&eacute;thode, r&egrave;gle '
      + 'et description.'),
+    // KEIN V1-Verweis mehr: seit dem 09.09. gibt es im Export-Menue
+    // nur noch diesen einen HTML-Fundbericht - der Rat "die V1
+    // nutzen" war nicht mehr befolgbar (Chargen-Review 10.09.).
     ('Tabelle auf %d Zeilen gek&uuml;rzt - %d weitere Funde sind nicht '
      + 'gerendert. Die Kacheln oben z&auml;hlen ALLE Funde; f&uuml;r '
-     + 'den Volltext-Bericht die V1 nutzen oder das Zeilenbudget '
-     + 'erh&ouml;hen.',
+     + 'den Volltext das Zeilenbudget erh&ouml;hen.',
      'Table truncated to %d rows - %d further findings are not '
-     + 'rendered. The tiles above count ALL findings; use the V1 report '
-     + 'for the full text or raise the row budget.',
+     + 'rendered. The tiles above count ALL findings; raise the row '
+     + 'budget for the full text.',
      'Tableau limit&eacute; &agrave; %d lignes - %d r&eacute;sultats '
      + 'suppl&eacute;mentaires ne sont pas affich&eacute;s. Les tuiles '
-     + 'ci-dessus comptent TOUS les r&eacute;sultats ; utilisez le '
-     + 'rapport V1 pour le texte int&eacute;gral ou augmentez le budget '
-     + 'de lignes.'),
+     + 'ci-dessus comptent TOUS les r&eacute;sultats ; augmentez le '
+     + 'budget de lignes pour le texte int&eacute;gral.'),
     ('Keine Funde in diesem Lauf.', 'No findings in this run.',
      'Aucun r&eacute;sultat dans cette analyse.')
   );
