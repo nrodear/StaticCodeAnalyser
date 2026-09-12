@@ -27,6 +27,9 @@ type
     [Test] procedure UnrelatedCall_NoFinding;
 
     [Test] procedure Finding_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Testluecke 93): der nkCall-Zweig
+    [Test] procedure CastInArgumentPosition_Reported;
+    [Test] procedure StringCastInArgumentPosition_NotReported;
   end;
 
 implementation
@@ -214,6 +217,48 @@ begin
     Assert.IsNotNull(Hit, 'fkCharToCharPointerCast finding expected');
     Assert.AreEqual(fkCharToCharPointerCast, Hit.Kind);
     Assert.AreEqual(lsError,                 Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestCharToCharPointerCast.CastInArgumentPosition_Reported;
+// Testluecke 93 (Voll-Review 2026-09-12): alle fuenf Positivtests
+// nutzten die Zuweisungsform 'p := PChar(...)' und damit den
+// nkAssign-Zweig. Der nkCall-Zweig - Cast als ARGUMENT eines anderen
+// Aufrufs - war blind getestet; genau dort sass der Blocker 3
+// derselben Charge (der Kopfkommentar behauptete die Abdeckung, die es
+// nicht gab). Ohne diesen Test kann der Zweig jederzeit wieder
+// verschwinden.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  SaveToFile(PChar(''A''));'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkCharToCharPointerCast),
+    'auch in Argument-Position zeigt der Cast auf Adresse $41');
+  finally F.Free; end;
+end;
+
+procedure TTestCharToCharPointerCast.StringCastInArgumentPosition_NotReported;
+// Gegenprobe im SELBEN Zweig: PChar auf einen STRING ist das normale
+// Delphi-Idiom und kein Fund. Ohne sie koennte der nkCall-Zweig zum
+// Alles-Melder werden.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string);'#13#10 +
+  'begin'#13#10 +
+  '  SaveToFile(PChar(s));'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkCharToCharPointerCast),
+    'PChar(<string>) ist das normale Idiom');
   finally F.Free; end;
 end;
 

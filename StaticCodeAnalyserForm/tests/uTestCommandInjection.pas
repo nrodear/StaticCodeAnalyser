@@ -29,6 +29,9 @@ type
 
     // ---- Finding-Inhalt --------------------------------------------------
     [Test] procedure CmdInj_Finding_KindSeverityConfidence;
+    // Voll-Review 2026-09-12 (Testluecke 96): der Pseudo-Taint-Pfad
+    [Test] procedure TaintedVarPassedToShellApi_Reported;
+    [Test] procedure ConstCommandPassedToShellApi_NotReported;
   end;
 
 implementation
@@ -203,6 +206,51 @@ begin
     Assert.AreEqual(lsError, Hit.Severity);
     Assert.AreEqual(fcLow, Hit.Confidence,
       'CommandInjection ist heuristisch ohne Taint-Tracking -> Confidence=fcLow');
+  finally F.Free; end;
+end;
+
+procedure TTestCommandInjection.TaintedVarPassedToShellApi_Reported;
+// Testluecke 96 (Voll-Review 2026-09-12): der komplette Pseudo-Taint-
+// Pfad (CollectTaintedVars + ArgsContainTaintedVar, Feature vom
+// 2026-06-18) war ungetestet. Er ist die zweite von zwei
+// Fund-Ursachen: die Argumente selbst enthalten hier KEINE
+// Konkatenation - der Verdacht kommt allein daher, dass 'cmd' vorher
+// aus einer Konkatenation entstanden ist.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(u: string);'#13#10 +
+  'var cmd: string;'#13#10 +
+  'begin'#13#10 +
+  '  cmd := ''dir '' + u;'#13#10 +
+  '  ShellExecute(0, nil, PChar(cmd), nil, nil, 0);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkCommandInjection),
+    'die vorher konkatenierte Variable macht den Aufruf verdaechtig');
+  finally F.Free; end;
+end;
+
+procedure TTestCommandInjection.ConstCommandPassedToShellApi_NotReported;
+// Die Gegenprobe, ohne die der Test darueber wertlos waere: dieselbe
+// Form, aber 'cmd' entsteht OHNE Konkatenation - dann ist nichts
+// tainted und der Aufruf bleibt stumm.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var cmd: string;'#13#10 +
+  'begin'#13#10 +
+  '  cmd := ''dir'';'#13#10 +
+  '  ShellExecute(0, nil, PChar(cmd), nil, nil, 0);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkCommandInjection),
+    'ohne Konkatenation ist die Variable nicht tainted');
   finally F.Free; end;
 end;
 
