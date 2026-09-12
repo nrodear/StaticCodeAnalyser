@@ -6,6 +6,10 @@ uses
   DUnitX.TestFramework;
 
 type
+  // noinspection GodClass
+  // 21 Testmethoden, 0 Felder: eine Vertragstest-Sammlung je Gate des
+  // Detektors, kein Zustand - die Schwelle (20) misst Produktivklassen.
+  // Aufspalten wuerde nur die Gate-Zusammenhaenge zerreissen.
   [TestFixture]
   TTestLeakInConstructor = class
   public
