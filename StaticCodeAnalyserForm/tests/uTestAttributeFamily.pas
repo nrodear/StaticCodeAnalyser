@@ -23,6 +23,9 @@ type
   public
     [Test] procedure SameAttributeTwice_Reported;
     [Test] procedure DifferentArgs_NotReported;
+    // Voll-Review 2026-09-12 (Testluecke 122)
+    [Test] procedure IdenticalArgsTwice_Reported;
+    [Test] procedure SameAttributeDifferentMembers_NotReported;
   end;
 
   [TestFixture]
@@ -45,6 +48,9 @@ type
     // Fixes hier festgehalten.
     [Test] procedure FixtureEndWithTrailingComment_Reported;
     [Test] procedure CommentedEndInsideClass_NotReported;
+    // Voll-Review 2026-09-12 (Testluecke 123)
+    [Test] procedure TestCaseCountsAsTestMarker_NotReported;
+    [Test] procedure InheritsCustomBase_NotReported;
   end;
 
   [TestFixture]
@@ -370,6 +376,111 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAttributeMisalignment));
+  finally F.Free; end;
+end;
+
+procedure TTestAttributeDuplicate.IdenticalArgsTwice_Reported;
+// Testluecke 122 (Voll-Review 2026-09-12): dass ZWEI Attribute mit
+// IDENTISCHEN Argumenten am selben Member ein Duplikat sind, war nicht
+// gepinnt - nur der Fall ohne Argumente. An der gebauten Exe
+// verifiziert.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TA = class'#13#10 +
+  '  public'#13#10 +
+  '    [TestCase(''A'',''1'')]'#13#10 +
+  '    [TestCase(''A'',''1'')]'#13#10 +
+  '    procedure Doppelt;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkAttributeDuplicate),
+    'zweimal dasselbe Attribut mit denselben Argumenten ist ein Duplikat');
+  finally F.Free; end;
+end;
+
+procedure TTestAttributeDuplicate.SameAttributeDifferentMembers_NotReported;
+// Die Gegenprobe zum FP-Fix vom 2026-06-21: dasselbe Attribut an
+// VERSCHIEDENEN Membern ist kein Duplikat. Das ist der Normalfall in
+// delphimvcframework ([MVCInheritable] an jeder Methode) - ohne die
+// TargetLine-Logik waere jede solche Unit voller Falschmeldungen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TB = class'#13#10 +
+  '  public'#13#10 +
+  '    [MVCInheritable]'#13#10 +
+  '    function A: Integer;'#13#10 +
+  '    [MVCInheritable]'#13#10 +
+  '    function B: Integer;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkAttributeDuplicate),
+    'dasselbe Attribut an zwei Membern ist kein Duplikat');
+  finally F.Free; end;
+end;
+
+procedure TTestAttributeTestFixtureWithoutTests.TestCaseCountsAsTestMarker_NotReported;
+// Testluecke 123 (Voll-Review 2026-09-12): TestCase/TestMethod zaehlen
+// seit dem FP-Fix 2026-06-21 als Test-Marker (TEST_RE) - ungetestet.
+// Eine Fixture, deren einzige Methode ein [TestCase] traegt, ist keine
+// Zombie-Fixture.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  [TestFixture]'#13#10 +
+  '  TMitTestCase = class'#13#10 +
+  '  public'#13#10 +
+  '    [TestCase(''x'',''1'')]'#13#10 +
+  '    procedure P;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkAttributeTestFixtureWithoutTests),
+    '[TestCase] ist ein Test-Marker');
+  finally F.Free; end;
+end;
+
+procedure TTestAttributeTestFixtureWithoutTests.InheritsCustomBase_NotReported;
+// Zweiter ungetesteter Pfad: leitet die Fixture von einer EIGENEN
+// Basis ab, koennen die Tests dort stehen - InheritsCustom-Skip
+// (FP-Fix delphimvcframework). Die Fixture endet hier ausserdem mit
+// 'end; // Kommentar', deckt also zugleich den kommentarbereinigten
+// Fenster-Schliesser mit ab.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  [TestFixture]'#13#10 +
+  '  TAbgeleitet = class(TEigeneBase)'#13#10 +
+  '  public'#13#10 +
+  '    procedure Q;'#13#10 +
+  '  end; // Kommentar hinter end'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkAttributeTestFixtureWithoutTests),
+    'die Tests koennen in der eigenen Basisklasse stehen');
   finally F.Free; end;
 end;
 

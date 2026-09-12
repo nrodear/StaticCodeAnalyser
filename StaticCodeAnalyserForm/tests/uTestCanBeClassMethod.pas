@@ -36,9 +36,21 @@ type
     // Review 2026-07-30: homonyme Klassennamen (top-level vs. nested)
     // duerfen weder Member mischen noch die Vererbungskette verlieren.
     [Test] procedure HomonymClasses_ConservativeSkip;
+    // Voll-Review 2026-09-12 (Testluecke 126): die drei Skips
+    [Test] procedure EventHandlerSignature_Skipped;
+    [Test] procedure MessageDirective_Skipped;
+    [Test] procedure ReintroduceDirective_Skipped;
   end;
 
 implementation
+
+// noinspection-file LargeClass
+// Eine Test-Fixture je Detektor ist die Projektkonvention; die Klasse
+// waechst mit jedem gepinnten Fall. Mit den drei Skips aus Testluecke
+// 126 (Voll-Review 2026-09-12) hat sie die 500-Zeilen-Schwelle
+// ueberschritten - Aufteilen wuerde die Faelle desselben Detektors
+// auseinanderreissen. Gleicher Marker und gleiche Begruendung wie in
+// uTestDetectorUtils und uTestTautologicalExpr.
 
 uses
   System.SysUtils, System.Generics.Collections,
@@ -598,6 +610,85 @@ begin
       'nur TWorker.Util darf gemeldet werden - Homonym-Key TItem und ' +
       'seine Ableitung TChild werden konservativ uebersprungen (kein FP ' +
       'trotz verlorener Parent-Kette)');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.EventHandlerSignature_Skipped;
+// Testluecke 126 (Voll-Review 2026-09-12): der Event-Handler-Skip war
+// ungetestet - ein Bruch waere erst am Korpus aufgefallen. Und er ist
+// heikel: derselbe Helfer (TDetectorUtils.IsEventHandlerSignature)
+// wurde in dieser Charge von Substring- auf exakten TObject-Vergleich
+// umgestellt und hat dabei bei SCA146 allein 774 Funde bewegt. Genau
+// deshalb gehoert er hier festgenagelt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure BtnClick(Sender: TObject);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.BtnClick(Sender: TObject);'#13#10 +
+  'begin'#13#10 +
+  '  ShowMessage(''x'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
+    'Event-Handler behalten ihre Instanz-Signatur - der Designer setzt sie');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.MessageDirective_Skipped;
+// VCL-Message-Handler: die Direktive bindet die Methode an die
+// Instanz-Dispatch-Tabelle, 'class' waere dort nicht moeglich.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure Msg(var M: TMessage); message WM_USER;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Msg(var M: TMessage);'#13#10 +
+  'begin'#13#10 +
+  '  ShowMessage(''y'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
+    'message-Handler koennen keine Klassenmethoden sein');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.ReintroduceDirective_Skipped;
+// reintroduce verdeckt eine gleichnamige geerbte Methode - die
+// Umstellung auf 'class' wuerde die Verdeckung veraendern.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure Re; reintroduce;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Re;'#13#10 +
+  'begin'#13#10 +
+  '  ShowMessage(''z'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
+    'reintroduce bleibt eine Instanzmethode');
   finally F.Free; end;
 end;
 

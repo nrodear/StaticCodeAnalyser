@@ -14,6 +14,9 @@ type
     [Test] procedure AssertWithLengthCall_NotReported;
     [Test] procedure AssertWithConversionFunc_NotReported;
     [Test] procedure AssertCallPatternInStringLiteral_NotReported;
+    // Voll-Review 2026-09-12 (Testluecke 120): Pfad 1 (Call MIT Klammern)
+    [Test] procedure CallWithParensAndMutationVerb_Reported;
+    [Test] procedure PlainComparison_NotReported;
   end;
 
 implementation
@@ -108,6 +111,44 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAssertWithSideEffect),
       'Call-Muster im String-Inhalt ist kein Side-Effect-Call');
+  finally F.Free; end;
+end;
+
+procedure TTestAssertWithSideEffect.CallWithParensAndMutationVerb_Reported;
+// Testluecke 120 (Voll-Review 2026-09-12): das einzige Positiv-Fixture
+// lief ueber den Bare-Ident-Pfad ('Assert(InitializeSubsystem)'). Pfad 1
+// - Aufruf MIT Klammern und Mutations-Verb - war ungetestet; ein Bruch
+// in CALL_RE waere unbemerkt geblieben. An der gebauten Exe verifiziert.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P(X: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Assert(UpdateCache(X));'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkAssertWithSideEffect),
+    'der Aufruf verschwindet im Release-Build mitsamt seinem Effekt');
+  finally F.Free; end;
+end;
+
+procedure TTestAssertWithSideEffect.PlainComparison_NotReported;
+// Gegenprobe: ein reiner Vergleich hat keinen Effekt, der verloren
+// gehen koennte.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P(X: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Assert(X > 0);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkAssertWithSideEffect),
+    'ein Vergleich ist kein Seiteneffekt');
   finally F.Free; end;
 end;
 
