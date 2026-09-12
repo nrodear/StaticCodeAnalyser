@@ -79,12 +79,28 @@ begin
     HasDecl  := False;
     for i := 0 to Lines.Count - 1 do
     begin
+      // {$I ...}/{$INCLUDE ...} zaehlt als Inhalt (Voll-Review
+      // 2026-09-12, Major 60): eine Unit, deren Deklarationen aus
+      // einem Include kommen ('interface {$I decls.inc}
+      // implementation end.'), ist NICHT leer - die Loeschempfehlung
+      // braeche den Build. ExtractFirstWord liefert fuer '{'-Zeilen
+      // leer, deshalb der eigene Check auf der Rohzeile.
+      L := TrimLeft(Lines[i]);
+      if (Copy(L, 1, 3) = '{$I') or (Copy(L, 1, 3) = '{$i') then
+        HasDecl := True;
       Word := ExtractFirstWord(Lines[i]);
       if Word = '' then Continue;
       L := LowerCase(Word);
       if L = 'unit' then HasUnit := True
       else if L = 'interface' then HasIface := True
       else if L = 'implementation' then HasImpl := True
+      // initialization/finalization-Bloecke leisten Arbeit
+      // (Registrierungs-Units!) - 'delete the file' braeche das
+      // Programm; ihr blosses Vorhandensein zaehlt als Inhalt
+      // (Voll-Review 2026-09-12, Major 60). 'begin' faengt die
+      // Kurzform 'begin ... end.' des Hauptblocks.
+      else if (L = 'initialization') or (L = 'finalization')
+           or (L = 'begin') then HasDecl := True
       else if IsDeclarationKw(L) then HasDecl := True;
     end;
     // Es muss eine echte Unit sein UND keine Deklaration enthalten
