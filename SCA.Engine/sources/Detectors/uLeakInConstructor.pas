@@ -1,4 +1,4 @@
-unit uLeakInConstructor;
+﻿unit uLeakInConstructor;
 
 // Detektor: Constructor weist Felder via .Create zu UND raised - bei raise
 // nach partieller Initialisierung leaken die schon erzeugten Felder.
@@ -461,6 +461,33 @@ begin
   Result := LooksLikeThreadClass(Ctor, Dtors);
 end;
 
+// True, wenn der Ctor selbst einen gleichnamigen LOKAL oder PARAMETER
+// deklariert - dann ist der f-praefixierte LHS KEIN Feld. Vor diesem
+// Gate wurde 'var fs: TFileStream' im Ctor als allokiertes Feld
+// gesammelt und der Destruktor-Abgleich meldete lsError auf korrektem
+// Code (Voll-Review 2026-09-12, Blocker). Bewusst NICHT auf
+// 'F'+Grossbuchstabe verengt - das verloere den mORMot-Stil 'fOwner'.
+// (Analogon: ScopeDeclaresIdent in uLeakDetector2.)
+function CtorDeclaresIdent(MethodNode: TAstNode;
+  const NameLow: string): Boolean;
+var
+  Kind    : TNodeKind;
+  N       : TAstNode;
+  NameRaw : string;
+begin
+  Result := False;
+  if (MethodNode = nil) or (NameLow = '') then Exit;
+  for Kind in [nkLocalVar, nkParam] do
+    for N in MethodNode.FindAllRef(Kind) do
+    begin
+      NameRaw := N.Name;
+      for var Mod_ in ['var ', 'const ', 'out '] do
+        if NameRaw.ToLower.StartsWith(Mod_) then
+          NameRaw := Copy(NameRaw, Length(Mod_) + 1, MaxInt);
+      if NameRaw.ToLower = NameLow then Exit(True);
+    end;
+end;
+
 // Sammelt die im Ctor allokierten F-Feldnamen (lowercase, dedupliziert) und
 // liefert die Zeile der ERSTEN Allokation (MaxInt wenn keine).
 // Hier greifen [G2] und [G3].
@@ -487,6 +514,8 @@ begin
 
     FieldLow := BareIdentPrefix(LhsLow);
     if FieldLow = '' then Continue;
+    // Ctor-LOKALE und Parameter mit f-Praefix sind keine Felder.
+    if CtorDeclaresIdent(MethodNode, FieldLow) then Continue;
     // Schon erfasst (Mehrfach-Allokation desselben Feldes in verschiedenen
     // Zweigen): nur die Zeile nachziehen, die Gates nicht erneut fahren.
     if Fields.IndexOf(FieldLow) >= 0 then

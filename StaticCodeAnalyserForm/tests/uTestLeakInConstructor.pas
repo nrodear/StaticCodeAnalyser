@@ -1,4 +1,4 @@
-unit uTestLeakInConstructor;
+﻿unit uTestLeakInConstructor;
 
 interface
 
@@ -10,6 +10,9 @@ type
   TTestLeakInConstructor = class
   public
     [Test] procedure FieldCreateThenRaise_Reported;
+    // Voll-Review 2026-09-12 (Blocker): Ctor-Lokale mit f-Praefix
+    // zaehlten als Felder.
+    [Test] procedure CtorLocalWithFPrefix_NoFinding;
     [Test] procedure FieldCreateWithoutRaise_NoFinding;
     [Test] procedure RaiseWithoutFieldCreate_NoFinding;
     [Test] procedure ProtectedByTryExcept_NoFinding;
@@ -57,6 +60,44 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+procedure TTestLeakInConstructor.CtorLocalWithFPrefix_NoFinding;
+// 'var fs: TFileStream' im Konstruktor, sauber per try/finally
+// freigegeben: 'fs' beginnt mit f, wurde als allokiertes FELD
+// gesammelt, und der Destruktor-Abgleich meldete lsError auf
+// korrektem Code. Das Lokal-/Parameter-Gate muss greifen.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type TConfig = class'#13#10 +
+  'public'#13#10 +
+  '  constructor Create(const AFile: string);'#13#10 +
+  '  destructor Destroy; override;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TConfig.Create(const AFile: string);'#13#10 +
+  'var fs: TFileStream;'#13#10 +
+  'begin'#13#10 +
+  '  fs := TFileStream.Create(AFile, fmOpenRead);'#13#10 +
+  '  try'#13#10 +
+  '    LoadFrom(fs);'#13#10 +
+  '  finally'#13#10 +
+  '    fs.Free;'#13#10 +
+  '  end;'#13#10 +
+  '  if not FValid then raise EConfigError.Create(''bad'');'#13#10 +
+  'end;'#13#10 +
+  'destructor TConfig.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  inherited;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLeakInConstructor),
+    'eine Ctor-lokale Variable mit f-Praefix ist kein Feld');
+  finally F.Free; end;
+end;
 
 procedure TTestLeakInConstructor.FieldCreateThenRaise_Reported;
 const SRC =
