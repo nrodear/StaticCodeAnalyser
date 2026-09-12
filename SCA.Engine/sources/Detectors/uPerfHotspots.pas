@@ -1,4 +1,4 @@
-unit uPerfHotspots;
+﻿unit uPerfHotspots;
 
 // Performance-Hotspot-Detektor-Familie (SCA110-112).
 //
@@ -418,8 +418,6 @@ var
   Ranges   : TArray<TLoopRange>;
   M        : TMatch;
   Matches  : TMatchCollection;
-  LineNo   : Integer;
-  F        : TLeakFinding;
   TR       : TTypeResolver;   // Welle 1: additive AST-Typ-Aufloesung (SCA110-Opt-in)
   ReConcat : TRegEx;
   ReParam  : TRegEx;
@@ -427,15 +425,11 @@ var
 
   procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer);
   begin
-    LineNo := TDetectorUtils.LineForPos(LineFor, AtPos);
-    if LineNo <= 0 then LineNo := 1;
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := '';
-    F.LineNumber := IntToStr(LineNo);
-    F.MissingVar := Detail;
-    F.SetKind(K);
-    Results.Add(F);
+    // Seit Voll-Review 2026-09-12 zentral: TLeakFinding.NewAtPos
+    // (LineForPos-Aufloesung + Fallback Zeile 1, byte-identische
+    // Feldfolge). Der Wrapper bleibt, damit die Aufrufstellen
+    // unveraendert bleiben.
+    Results.Add(TLeakFinding.NewAtPos(FileName, LineFor, AtPos, Detail, K));
   end;
 
 begin

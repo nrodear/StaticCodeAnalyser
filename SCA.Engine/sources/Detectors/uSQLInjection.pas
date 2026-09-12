@@ -2416,7 +2416,6 @@ class procedure TSQLInjectionDetector.AnalyzeMethod(MethodNode: TAstNode;
 
   procedure Report(const Target, RHS: string; Line: Integer);
   var
-    F             : TLeakFinding;
     Estimate      : TFixEstimate;
     DisplayTarget : string;
     ParenPos      : Integer;
@@ -2428,14 +2427,12 @@ class procedure TSQLInjectionDetector.AnalyzeMethod(MethodNode: TAstNode;
     else
       DisplayTarget := Target;
 
-    Estimate     := TSQLFixScorer.Estimate(RHS);
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := MethodNode.Name;
-    F.LineNumber := IntToStr(Line);
-    F.MissingVar := DisplayTarget + '  [' + TSQLFixScorer.FormatShort(Estimate) + ']';
-    F.SetKind(fkSQLInjection);
-    Results.Add(F);
+    Estimate := TSQLFixScorer.Estimate(RHS);
+    // Factory statt Feld-fuer-Feld (Voll-Review 2026-09-12) -
+    // identische Feldfolge, siehe TLeakFinding.New.
+    Results.Add(TLeakFinding.New(FileName, MethodNode.Name, Line,
+      DisplayTarget + '  [' + TSQLFixScorer.FormatShort(Estimate) + ']',
+      fkSQLInjection));
   end;
 
 var

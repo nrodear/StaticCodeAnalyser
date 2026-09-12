@@ -1,4 +1,4 @@
-unit uInsecureRandom;
+﻿unit uInsecureRandom;
 
 // Detektor: Aufruf von Random / RandomRange / RandomFrom ohne dass im File
 // irgendwo Randomize aufgerufen wird.
@@ -205,16 +205,13 @@ var
   HasRandomize   : Boolean;
 
   procedure Emit(ALine: Integer; const ACallName: string);
-  var L: TLeakFinding;
   begin
-    L            := TLeakFinding.Create;
-    L.FileName   := FileName;
-    L.MethodName := '';
-    L.LineNumber := IntToStr(ALine);
-    L.MissingVar := ACallName + '(...) without prior Randomize - ' +
-                    'deterministic sequence (Seed=0 until Randomize)';
-    L.SetKind(fkInsecureRandom);
-    Results.Add(L);
+    // Factory statt Feld-fuer-Feld (Voll-Review 2026-09-12) -
+    // identische Feldfolge, siehe TLeakFinding.New.
+    Results.Add(TLeakFinding.New(FileName, '', ALine,
+      ACallName + '(...) without prior Randomize - ' +
+      'deterministic sequence (Seed=0 until Randomize)',
+      fkInsecureRandom));
   end;
 
 begin

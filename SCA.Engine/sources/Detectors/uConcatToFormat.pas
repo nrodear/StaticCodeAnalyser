@@ -1,4 +1,4 @@
-unit uConcatToFormat;
+﻿unit uConcatToFormat;
 
 // AST-basierter Refactoring-Hint: "Convert concatenation -> Format()".
 //
@@ -205,17 +205,12 @@ class procedure TConcatToFormatDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 
   procedure Report(const Target: string; PlusCount, Line: Integer);
-  var
-    F : TLeakFinding;
   begin
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := MethodNode.Name;
-    F.LineNumber := IntToStr(Line);
-    F.MissingVar := Format('Concat (%d x ''+'') -> Format(...) %s',
-                           [PlusCount, Target]);
-    F.SetKind(fkConcatToFormat);
-    Results.Add(F);
+    // Factory statt Feld-fuer-Feld (Voll-Review 2026-09-12) -
+    // identische Feldfolge, siehe TLeakFinding.New.
+    Results.Add(TLeakFinding.New(FileName, MethodNode.Name, Line,
+      Format('Concat (%d x ''+'') -> Format(...) %s', [PlusCount, Target]),
+      fkConcatToFormat));
   end;
 
 var

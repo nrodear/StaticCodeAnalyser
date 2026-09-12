@@ -232,16 +232,12 @@ class procedure TInsecureCryptoAlgorithmDetector.AnalyzeMethod(
   Results: TObjectList<TLeakFinding>);
 
   procedure Report(const What, Context: string; Line: Integer);
-  var F: TLeakFinding;
   begin
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := MethodNode.Name;
-    F.LineNumber := IntToStr(Line);
-    F.MissingVar := Format(
-      'Insecure crypto algorithm: %s used in %s', [What, Context]);
-    F.SetKind(fkInsecureCryptoAlgorithm);
-    Results.Add(F);
+    // Factory statt Feld-fuer-Feld (Voll-Review 2026-09-12) -
+    // identische Feldfolge, siehe TLeakFinding.New.
+    Results.Add(TLeakFinding.New(FileName, MethodNode.Name, Line,
+      Format('Insecure crypto algorithm: %s used in %s', [What, Context]),
+      fkInsecureCryptoAlgorithm));
   end;
 
 var

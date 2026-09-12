@@ -1,4 +1,4 @@
-unit uConcurrencyExt;
+﻿unit uConcurrencyExt;
 
 // Concurrency-Familie erweitert (SCA113-114).
 //
@@ -86,8 +86,6 @@ var
   Matches      : TMatchCollection;
   Snippet      : string;
   LookBack     : Integer;
-  LineNo       : Integer;
-  F            : TLeakFinding;
   HasTerminate : Boolean;
   Ident        : string;
   DeclaredType : string;
@@ -420,15 +418,11 @@ var
 
   procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer);
   begin
-    LineNo := TDetectorUtils.LineForPos(LineFor, AtPos);
-    if LineNo <= 0 then LineNo := 1;
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := '';
-    F.LineNumber := IntToStr(LineNo);
-    F.MissingVar := Detail;
-    F.SetKind(K);
-    Results.Add(F);
+    // Seit Voll-Review 2026-09-12 zentral: TLeakFinding.NewAtPos
+    // (LineForPos-Aufloesung + Fallback Zeile 1, byte-identische
+    // Feldfolge). Der Wrapper bleibt, damit die Aufrufstellen
+    // unveraendert bleiben.
+    Results.Add(TLeakFinding.NewAtPos(FileName, LineFor, AtPos, Detail, K));
   end;
 
   // SCA113: <ident>.Resume - die ganze Regel in einer Prozedur

@@ -1,4 +1,4 @@
-unit uRestHttpSecurity;
+﻿unit uRestHttpSecurity;
 
 // REST/HTTP-Security-Detektor-Familie (SCA115-116).
 //
@@ -489,8 +489,6 @@ var
   LineFor     : TArray<Integer>;
   Matches     : TMatchCollection;
   M           : TMatch;
-  LineNo      : Integer;
-  F           : TLeakFinding;
   Url         : string;
   LStart      : Integer;         // Zeilenanfang des aktuellen Treffers
   PrevStart   : Integer;         // Zeilenanfang der Vorzeile (0 = keine)
@@ -505,15 +503,11 @@ var
 
   procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer);
   begin
-    LineNo := TDetectorUtils.LineForPos(LineFor, AtPos);
-    if LineNo <= 0 then LineNo := 1;
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := '';
-    F.LineNumber := IntToStr(LineNo);
-    F.MissingVar := Detail;
-    F.SetKind(K);
-    Results.Add(F);
+    // Seit Voll-Review 2026-09-12 zentral: TLeakFinding.NewAtPos
+    // (LineForPos-Aufloesung + Fallback Zeile 1, byte-identische
+    // Feldfolge). Der Wrapper bleibt, damit die Aufrufstellen
+    // unveraendert bleiben.
+    Results.Add(TLeakFinding.NewAtPos(FileName, LineFor, AtPos, Detail, K));
   end;
 
 begin

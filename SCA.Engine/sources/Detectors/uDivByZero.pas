@@ -1123,14 +1123,14 @@ class procedure TDivByZeroDetector.AnalyzeMethod(MethodNode: TAstNode;
   procedure Report(const Detail: string; Line: Integer; Sev: TLeakSeverity);
   var F: TLeakFinding;
   begin
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := MethodNode.Name;
-    F.LineNumber := IntToStr(Line);
-    F.MissingVar := Detail;
-    F.Severity   := Sev;
-    F.Kind       := fkDivByZero;
-    F.Confidence := KindDefaultConfidence(fkDivByZero);
+    // Factory + expliziter Severity-Override (Voll-Review 2026-09-12):
+    // die alte Fassung setzte Kind direkt, Severity=Sev und
+    // Confidence=KindDefault - New/SetKind liefert Kind +
+    // Katalog-Severity + Default-Confidence, der Override danach
+    // stellt exakt denselben Feld-Endstand her.
+    F := TLeakFinding.New(FileName, MethodNode.Name, Line, Detail,
+      fkDivByZero);
+    F.Severity := Sev;
     Results.Add(F);
   end;
 
