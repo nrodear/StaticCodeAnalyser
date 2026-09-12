@@ -53,6 +53,43 @@ begin
   Result := CharInSet(C, ['A'..'Z','a'..'z','_']);
 end;
 
+// Erstes Wort der Zeile, lowercased; leer bei Leer-/Kommentar-/
+// Sonderzeichen-Zeilen. Fuer das Sektions-Gate in AnalyzeUnit.
+function FirstWordLow(const Line: string): string;
+var
+  i, n, w : Integer;
+begin
+  Result := '';
+  n := Length(Line);
+  i := 1;
+  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
+  if (i > n) or not IsIdentStart(Line[i]) then Exit;
+  w := i;
+  while (i <= n) and IsIdent(Line[i]) do Inc(i);
+  Result := LowerCase(Copy(Line, w, i - w));
+end;
+
+// True wenn das Wort eine type-Sektion BEENDET (Sektions-Keywords und
+// Routinen-Koepfe). 'end' fehlt BEWUSST: das end eines record/class
+// beendet die umgebende type-Sektion nicht - 'TRec = record ... end;
+// TBad = ^TRec;' ist derselbe Block und muss meldbar bleiben.
+// Dokumentierte Grenze: eine Methodenzeile INNERHALB einer
+// Klassendeklaration ('    procedure X;') schaltet ebenfalls aus -
+// ein Nicht-P-Alias NACH einer Klasse in derselben type-Sektion wird
+// dann erst ab dem naechsten 'type' wieder gesehen (seltene Form;
+// derselbe Zuschnitt wie der Sektions-Tracker in uRedundantBoolean).
+function EndsTypeSection(const W: string): Boolean;
+begin
+  Result := (W = 'const') or (W = 'resourcestring') or (W = 'var')
+         or (W = 'threadvar') or (W = 'label') or (W = 'uses')
+         or (W = 'begin') or (W = 'procedure') or (W = 'function')
+         or (W = 'constructor') or (W = 'destructor')
+         or (W = 'operator') or (W = 'class') or (W = 'property')
+         or (W = 'implementation') or (W = 'interface')
+         or (W = 'initialization') or (W = 'finalization')
+         or (W = 'exports');
+end;
+
 // Liefert Spalte des Ident wenn die Zeile ein Pointer-Typ-Alias
 // definiert dessen Name NICHT mit `P` beginnt.
 function FindBadPointerName(const Line: string; var InBlockComm: Boolean;
@@ -147,16 +184,38 @@ var
   InBlk, InParen : Boolean;
   F      : TLeakFinding;
   Cached : Boolean;
+  InTypeSec : Boolean;
+  W      : string;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     InBlk   := False;
     InParen := False;
+    InTypeSec := False;
     for i := 0 to Lines.Count - 1 do
     begin
+      // Sektions-Gate (Voll-Review 2026-09-12, Blocker): das Muster
+      // '<Ident> = ^<Ident>' ist nur in einer TYPE-Sektion ein
+      // Pointer-Alias. Delphis Caret-Notation fuer Steuerzeichen
+      // matcht dasselbe Muster - 'const CR = ^M;' und
+      // 'if Key = ^C then' erzeugten den Fund 'rename to start with
+      // P', ohne dass irgendwo ein Pointer-Typ deklariert wird.
+      // Zustand nur ausserhalb offener Blockkommentare nachfuehren;
+      // die Wertung passiert VOR dem Zeilen-Scan (der Zustand gilt am
+      // Zeilenanfang), das Melde-Gate NACH ihm, damit InBlk/InParen
+      // fuer Folgezeilen immer gepflegt werden.
+      if not (InBlk or InParen) then
+      begin
+        W := FirstWordLow(Lines[i]);
+        if W = 'type' then
+          InTypeSec := True
+        else if EndsTypeSection(W) then
+          InTypeSec := False;
+      end;
       Col := FindBadPointerName(Lines[i], InBlk, InParen);
       if Col <= 0 then Continue;
+      if not InTypeSec then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := '';
