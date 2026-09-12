@@ -172,6 +172,9 @@ var
   LineFor   : TArray<Integer>;
   Code, S   : string;
   InResBlock: Boolean;
+  W          : string;
+  WCol       : Integer;
+  Rest       : string;
   PosAssign, PosDot, PosSemi : Integer;
   Lhs, Rhs  : string;
 begin
@@ -190,19 +193,34 @@ begin
   begin
     Lhs := Trim(S);
     if Lhs = '' then Continue;
-    if SameText(Lhs, 'resourcestring') then
+    // Erstes WORT der Zeile (wortgenau, Voll-Review 2026-09-12, Major
+    // 56): der fruehere Praefix-Match (StartsText) beendete den
+    // resourcestring-Block schon bei Res-Idents mit Keyword-PRAEFIX
+    // ('typeCaption = ...', 'endUserNote = ...') - dieser und alle
+    // folgenden Res-Idents fehlten im G2-Gate, und die Caption wurde
+    // gemeldet, obwohl die .pas sie nachweislich zur Laufzeit ersetzt.
+    W := LowerCase(TDetectorUtils.ExtractFirstWord(Lhs, WCol));
+    if W = 'resourcestring' then
     begin
       InResBlock := True;
+      // Einzeiler 'resourcestring SFoo = ...' (vorher matchte nur die
+      // alleinstehende Zeile): den Rest der Zeile gleich einsammeln.
+      Rest := TrimLeft(Copy(Lhs, WCol + Length('resourcestring'), MaxInt));
+      if Rest <> '' then
+      begin
+        PosAssign := Pos('=', Rest);
+        if PosAssign > 1 then
+          AResIdents.Add(LowerCase(Trim(Copy(Rest, 1, PosAssign - 1))));
+      end;
       Continue;
     end;
     if InResBlock then
     begin
-      // Abschnittswechsel beendet den Block.
-      if StartsText('var', Lhs) or StartsText('const', Lhs)
-         or StartsText('type', Lhs) or StartsText('procedure', Lhs)
-         or StartsText('function', Lhs) or StartsText('implementation', Lhs)
-         or StartsText('begin', Lhs) or StartsText('end', Lhs)
-         or StartsText('uses', Lhs) then
+      // Abschnittswechsel beendet den Block - wortgenau (s.o.).
+      if (W = 'var') or (W = 'const') or (W = 'type')
+         or (W = 'procedure') or (W = 'function')
+         or (W = 'implementation') or (W = 'begin') or (W = 'end')
+         or (W = 'uses') then
         InResBlock := False
       else
       begin

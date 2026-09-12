@@ -40,6 +40,8 @@ type
     [Test] procedure Gate_Glyph_SymbolFontSingleChar_NotReported;
     [Test] procedure Gate_Glyph_NormalFontSingleChar_StillReported;
     [Test] procedure Gate_ResourceString_ReplacedProp_NotReported;
+    // Voll-Review 2026-09-12 (Major 56): wortgenauer Sektionswechsel
+    [Test] procedure Gate_ResIdentWithKeywordPrefix_NotReported;
     [Test] procedure Gate_PlainAssign_StillReported;
     [Test] procedure Gate_Regime_GnugettextUses_NotReported;
     [Test] procedure Gate_Regime_MarkerOnlyInComment_StillReported;
@@ -406,6 +408,37 @@ begin
   try
     Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption),
       'DFM-Wert ist toter Platzhalter - resourcestring ersetzt ihn');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.Gate_ResIdentWithKeywordPrefix_NotReported;
+// Voll-Review 2026-09-12 (Major 56): der Praefix-Match beendete den
+// resourcestring-Block schon bei 'typeCaption = ...' (StartsText
+// 'type') - der folgende Res-Ident fehlte im Gate und die Caption
+// wurde trotz Laufzeit-Ersetzung gemeldet.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormB: TFormB'#13#10 +
+    '  object BtnR: TButton'#13#10 +
+    '    Caption = ''Platzhalter'''#13#10 +
+    '  end'#13#10 +
+    'end',
+    'unit resprobe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'resourcestring'#13#10 +
+    '  typeCaption = ''Anderer Text'';'#13#10 +
+    '  SEcht = ''Echter Text'';'#13#10 +
+    'procedure TFormB.Init;'#13#10 +
+    'begin'#13#10 +
+    '  BtnR.Caption := SEcht;'#13#10 +
+    'end;'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption),
+      'typeCaption ist ein Res-Ident, kein Sektionswechsel - das Gate ' +
+      'muss SEcht weiter sehen');
   finally F.Free; end;
 end;
 
