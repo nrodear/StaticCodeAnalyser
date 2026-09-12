@@ -54,7 +54,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uFileTextCache;
+  uFileTextCache,
+  uAstSpans;   // FindBodyBlock (Voll-Review 2026-09-12)
 
 const
   // Ein leerer Rumpf ist kurz. Die Grenze verhindert nur, dass ein
@@ -63,12 +64,9 @@ const
 
 class function TEmptyMethodDetector.FindBodyBlock(
   MethodNode: TAstNode): TAstNode;
-var Child: TAstNode;
 begin
-  Result := nil;
-  for Child in MethodNode.Children do
-    if Child.Kind = nkBlock then
-      Exit(Child);
+  // Voll-Review 2026-09-12: zentral (TAstSpans.FindBodyBlock).
+  Result := TAstSpans.FindBodyBlock(MethodNode);
 end;
 
 // Kommentartext einer Zeile einsammeln (Einzeilen-Formen plus der in einer

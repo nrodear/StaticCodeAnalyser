@@ -107,6 +107,19 @@ type
     /// genau daran zurueckgestellt (Rule of Three).
     class procedure CollectNestedSpans(AMethod: TAstNode;
       var AStarts, AEnds: TArray<Integer>); static;
+    /// Erstes DIREKTES nkBlock-Kind einer Methode - deren Rumpf; nil
+    /// fuer Forward-Deklarationen (und fuer AMethod = nil). Stand vor
+    /// dem Voll-Review 2026-09-12 sechsmal byte-gleich in den
+    /// Detektoren; die nil-Guard-Fassung (uDfmEmptyBoundEvent) ist
+    /// die sichere Obermenge. NICHT dasselbe wie die namensaehnlichen
+    /// HasBodyBlock-Varianten (uCanBeClassMethod: Statement-Fallback;
+    /// uLeakInConstructor: eine Ebene tiefer) - andere Vertraege,
+    /// bleiben lokal.
+    class function FindBodyBlock(AMethod: TAstNode): TAstNode; static;
+    /// True wenn der Teilbaum irgendwo ein nkInherited traegt
+    /// (rekursiv; nil-fest). Vorher zweimal byte-gleich in
+    /// uConstructorWithoutInherited/uDestructorWithoutInherited.
+    class function HasInheritedCall(ANode: TAstNode): Boolean; static;
   end;
 
 implementation
@@ -124,6 +137,28 @@ const
   // typischer Methoden- und Klassenknoten ohne Nachwachsen ab; darueber
   // hinaus verdoppelt der Walk selbst.
   INITIAL_STACK_CAPACITY = 64;
+
+class function TAstSpans.FindBodyBlock(AMethod: TAstNode): TAstNode;
+var
+  Child : TAstNode;
+begin
+  Result := nil;
+  if AMethod = nil then Exit;
+  for Child in AMethod.Children do
+    if Child.Kind = nkBlock then
+      Exit(Child);
+end;
+
+class function TAstSpans.HasInheritedCall(ANode: TAstNode): Boolean;
+var
+  Child : TAstNode;
+begin
+  Result := False;
+  if ANode = nil then Exit;
+  if ANode.Kind = nkInherited then Exit(True);
+  for Child in ANode.Children do
+    if HasInheritedCall(Child) then Exit(True);
+end;
 
 class function TAstSpans.SubtreeMaxLine(ANode: TAstNode): Integer;
 var
