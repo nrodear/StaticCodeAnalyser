@@ -160,6 +160,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  System.StrUtils,  // PosEx (Vorkommen-Schleife IsSecretName)
   uDetectorUtils;   // Fund 3: zentrale Test-Pfad-Muster (IsTestFixturePath)
 
 const
@@ -197,27 +198,35 @@ begin
   NameLow := Name.ToLower;
   for Kw in SECRET_KW do
   begin
+    // ALLE Vorkommen des Keywords pruefen (Voll-Review 2026-09-12,
+    // Major 68; Projekt-Lehre 'Pos findet nur das erste Vorkommen'):
+    // in 'FTokenizerToken' scheitert das erste 'token' (in
+    // 'Tokenizer') an der rechten Grenze - das zweite, gueltige
+    // 'Token' wurde vorher nie geprueft.
     p := Pos(Kw, NameLow);
-    if p = 0 then Continue;
-
-    // LEFT boundary
-    LeftOK :=
-      (p = 1) or                                     // Identifier-Anfang
-      (Name[p - 1] = '_') or                         // nach Underscore
-      (CharInSet(Name[p], ['A'..'Z'])) or            // CamelCase
-      (not CharInSet(Name[p - 1],                    // sonstige Nicht-Buchstaben
-                     ['A'..'Z', 'a'..'z', '0'..'9']));
-    if not LeftOK then Continue;
-
-    // RIGHT boundary - Position direkt nach dem Match.
-    pRight := p + Length(Kw);
-    RightOK :=
-      (pRight > Length(Name)) or                     // Identifier-Ende
-      (Name[pRight] = '_') or                        // vor Underscore
-      (CharInSet(Name[pRight], ['A'..'Z'])) or       // CamelCase-Beginn
-      (not CharInSet(Name[pRight],                   // Nicht-Buchstaben
-                     ['A'..'Z', 'a'..'z', '0'..'9']));
-    if RightOK then Exit(True);
+    while p > 0 do
+    begin
+      // LEFT boundary
+      LeftOK :=
+        (p = 1) or                                   // Identifier-Anfang
+        (Name[p - 1] = '_') or                       // nach Underscore
+        (CharInSet(Name[p], ['A'..'Z'])) or          // CamelCase
+        (not CharInSet(Name[p - 1],                  // sonstige Nicht-Buchstaben
+                       ['A'..'Z', 'a'..'z', '0'..'9']));
+      if LeftOK then
+      begin
+        // RIGHT boundary - Position direkt nach dem Match.
+        pRight := p + Length(Kw);
+        RightOK :=
+          (pRight > Length(Name)) or                 // Identifier-Ende
+          (Name[pRight] = '_') or                    // vor Underscore
+          (CharInSet(Name[pRight], ['A'..'Z'])) or   // CamelCase-Beginn
+          (not CharInSet(Name[pRight],               // Nicht-Buchstaben
+                         ['A'..'Z', 'a'..'z', '0'..'9']));
+        if RightOK then Exit(True);
+      end;
+      p := PosEx(Kw, NameLow, p + 1);
+    end;
   end;
   Result := False;
 end;
@@ -295,31 +304,37 @@ begin
 
   for Kw in SECRET_KW do
   begin
+    // ALLE Vorkommen (Voll-Review 2026-09-12, Major 68 - gleiche
+    // Vorkommen-Schleife wie IsSecretName): das Meta-Muster kann am
+    // zweiten Vorkommen des Keywords haengen.
     P := Pos(Kw, BareLow);
-    if P = 0 then Continue;
-    // Mid = der Teil VOR dem Keyword, MidLow = nach dem Keyword
-    Mid := LowerCase(Copy(BareLow, 1, P - 1));               // Prefix-Kandidat
-    MidLow := Copy(BareLow, P + Length(Kw), MaxInt);          // Suffix-Kandidat
-    for Pre in META_PREFIX do
-      if Mid = Pre then Exit(True);                           // PrefixKeyword
-    for Suf in META_SUFFIX do
-      if MidLow = Suf then Exit(True);                        // KeywordSuffix
-    // GATE B (Vollzaehlung 2026-08-27, 3 Funde in 3 Vendoring-Kopien):
-    // Meta-Suffixe duerfen sich VERKETTEN. 'FAPIKeyHeaderName' zerlegt
-    // sich zu Keyword 'key' + Rest 'headername' - beides einzeln in der
-    // Liste, die Kette bisher nicht. Der Wert ist dort der NAME des
-    // HTTP-Headers, aus dem der Key spaeter gelesen wird (Beleg
-    // MVCFramework.Middleware.RateLimit.pas:353, direkt neben
-    // FHeaderPrefix := 'X-RateLimit-'), also Konfiguration.
-    // Bewusst nur ZWEI Glieder: das deckt die belegte Form ab, ohne die
-    // Zerlegung beliebig permissiv zu machen.
-    for Suf in META_SUFFIX do
-      if (MidLow <> Suf) and MidLow.StartsWith(Suf) then
-      begin
-        var Rest := Copy(MidLow, Length(Suf) + 1, MaxInt);
-        for var Suf2 in META_SUFFIX do
-          if Rest = Suf2 then Exit(True);                      // Suffix-Kette
-      end;
+    while P > 0 do
+    begin
+      // Mid = der Teil VOR dem Keyword, MidLow = nach dem Keyword
+      Mid := LowerCase(Copy(BareLow, 1, P - 1));               // Prefix-Kandidat
+      MidLow := Copy(BareLow, P + Length(Kw), MaxInt);          // Suffix-Kandidat
+      for Pre in META_PREFIX do
+        if Mid = Pre then Exit(True);                           // PrefixKeyword
+      for Suf in META_SUFFIX do
+        if MidLow = Suf then Exit(True);                        // KeywordSuffix
+      // GATE B (Vollzaehlung 2026-08-27, 3 Funde in 3 Vendoring-Kopien):
+      // Meta-Suffixe duerfen sich VERKETTEN. 'FAPIKeyHeaderName' zerlegt
+      // sich zu Keyword 'key' + Rest 'headername' - beides einzeln in der
+      // Liste, die Kette bisher nicht. Der Wert ist dort der NAME des
+      // HTTP-Headers, aus dem der Key spaeter gelesen wird (Beleg
+      // MVCFramework.Middleware.RateLimit.pas:353, direkt neben
+      // FHeaderPrefix := 'X-RateLimit-'), also Konfiguration.
+      // Bewusst nur ZWEI Glieder: das deckt die belegte Form ab, ohne die
+      // Zerlegung beliebig permissiv zu machen.
+      for Suf in META_SUFFIX do
+        if (MidLow <> Suf) and MidLow.StartsWith(Suf) then
+        begin
+          var Rest := Copy(MidLow, Length(Suf) + 1, MaxInt);
+          for var Suf2 in META_SUFFIX do
+            if Rest = Suf2 then Exit(True);                      // Suffix-Kette
+        end;
+      P := PosEx(Kw, BareLow, P + 1);
+    end;
   end;
 end;
 
@@ -1042,6 +1057,13 @@ begin
       // (URL/Pfad/GUID/Format-Template/Label/Config-Key-Name) - analog
       // AnalyzeMethod. Der Field-Name N.Name dient dem LHS-Spiegel-Check.
       if THardcodedSecretDetector.IsNonSecretValueShape(Literal, N.Name) then Continue;
+      // ConnectionString ohne Passwort-Anteil ist ein Template, kein
+      // Secret - dasselbe Gate wie in AnalyzeMethod (Voll-Review
+      // 2026-09-12, Major 67: der Geschwisterpfad fehlte hier;
+      // Projekt-Lehre 'Vertragsfixes auf alle Geschwisterpfade').
+      if (Pos('connectionstring', N.Name.ToLower) > 0) and
+         not THardcodedSecretDetector.ConnectionStringHasPassword(Literal) then
+        Continue;
 
       if Length(Literal) > MAX_VAL_LEN then
         LitShort := Copy(Literal, 1, MAX_VAL_LEN - 4) + '...'''

@@ -29,6 +29,10 @@ type
     [Test] procedure Secret_EmptyLiteral_NoFinding;
     // ConnectionString ohne Password-Anteil ist kein Secret
     [Test] procedure Secret_ConnStringNoPassword_NoFinding;
+    // Voll-Review 2026-09-12 (Major 67/68): const-Geschwisterpfad und
+    // Keyword-Zweitvorkommen
+    [Test] procedure Secret_ConstConnStringNoPassword_NoFinding;
+    [Test] procedure Secret_SecondKeywordOccurrence_Reported;
     [Test] procedure Secret_ConnStringWithPassword_ReportsError;
   end;
 
@@ -1053,6 +1057,51 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkHardcodedSecret) >= 1,
     'ein Credential IN der Verbindungszeichenfolge bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecret.Secret_ConstConnStringNoPassword_NoFinding;
+// Voll-Review 2026-09-12 (Major 67): das ConnectionString-ohne-
+// Passwort-Gate existierte nur im Methodenrumpf-Pfad (AnalyzeMethod) -
+// die identische Bindung als const lief durch ScanFieldsForSecrets
+// OHNE das Gate und wurde gemeldet (Bestands-Exe: 1 FP, empirisch
+// belegt; Projekt-Lehre 'Vertragsfixes auf alle Geschwisterpfade').
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'const'#13#10+
+  '  cConnectionString = ''Server=localhost;Database=test;'';'#13#10+
+  'implementation'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
+      'ConnectionString ohne Passwort-Anteil ist ein Template - auch als const');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecret.Secret_SecondKeywordOccurrence_Reported;
+// Voll-Review 2026-09-12 (Major 68): IsSecretName pruefte je Keyword
+// nur das ERSTE Vorkommen. In 'FTokenizerToken' scheitert das in
+// 'Tokenizer' eingebettete 'token' an der rechten Wortgrenze - das
+// zweite, gueltige 'Token' am Namensende wurde nie geprueft
+// (Bestands-Exe: 0 Funde auf dieser Fixture, empirisch belegt). Der
+// Wert 'Xk9pQz7Lm' ist genau das im IsNonSecretValueShape-Gate (e)
+// dokumentierte meldepflichtige Zufalls-Secret.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Init;'#13#10+
+  'begin'#13#10+
+  '  FTokenizerToken := ''Xk9pQz7Lm'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
+      'das zweite Token-Vorkommen traegt die gueltigen Wortgrenzen');
   finally F.Free; end;
 end;
 
