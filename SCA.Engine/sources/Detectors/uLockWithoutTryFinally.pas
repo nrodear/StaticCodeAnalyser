@@ -70,8 +70,19 @@ const
   // paralleles Match mutierte deren Subject/Offsets. Das Pattern kommt
   // jetzt pro Thread aus TRegExMatches.CachedEx; [roNotEmpty] entspricht
   // exakt dem Default des alten Ein-Arg-TRegEx.Create.
+  // TMonitor-Alternation ZUERST und mit konsumiertem '(' - so laufen
+  // TMonitor.Enter(Obj)/TryEnter(Obj) denselben Weg wie
+  // EnterCriticalSection(handle) und werden nicht von den Gates fuer
+  // parameterlose Acquire-Methoden verworfen. Vor dem Voll-Review
+  // 2026-09-12 (Blocker) war TMonitor.Enter trotz Kopf-Vertrag
+  // UNERREICHBAR: die (\w+)-Alternation matchte ohne '(',
+  // MatchHasArguments verwarf den Pflicht-Parameter (die alte
+  // Begruendung 'TMonitor.Enter nimmt keine Parameter' war faktisch
+  // falsch - es ist class procedure Enter(const AObject: TObject)),
+  // und die Release-Suchen kannten tmonitor.exit nicht.
   LOCK_ENTER_PATTERN =
-    '(?i)\b(?:(\w+)\.(Enter|Acquire|BeginWrite)\b|EnterCriticalSection\s*\()';
+    '(?i)\b(?:TMonitor\s*\.\s*(?:Enter|TryEnter)\s*\(' +
+    '|(\w+)\.(Enter|Acquire|BeginWrite)\b|EnterCriticalSection\s*\()';
 
 function FindNextNonSpacePos(const Code: string; Start: Integer): Integer;
 // Skipt Whitespace + Newlines ab Start. Liefert die Position des
@@ -267,9 +278,13 @@ end;
 
 function MatchHasArguments(const Code: string; M: TMatch): Boolean;
 // True wenn das Match einem Pattern '<ident>.Acquire(arg, ...)' folgt -
-// mit NICHT-LEEREN Args. Echte Lock-Acquire-Methoden (TCriticalSection,
-// TMonitor.Enter) nehmen KEINE Parameter; Cache-/Pool-Acquire dagegen
-// nimmt einen Key (z.B. gAstFileCache.Acquire(FileName)).
+// mit NICHT-LEEREN Args. Die hier gemeinten Lock-Acquire-Methoden
+// (TCriticalSection.Acquire/Enter) nehmen keine Parameter;
+// Cache-/Pool-Acquire dagegen nimmt einen Key (z.B.
+// gAstFileCache.Acquire(FileName)). TMonitor.Enter(Obj) nimmt sehr
+// wohl einen Parameter - diese Form laeuft ueber die eigene
+// Pattern-Alternation mit konsumiertem '(' und erreicht dieses Gate
+// nie (Voll-Review 2026-09-12).
 //
 // Heuristik: nach dem Match das naechste Non-Space-Zeichen pruefen. Wenn
 // '(' und das uebernaechste Non-Space-Zeichen NICHT ')' ist, hat der Call
@@ -397,6 +412,9 @@ begin
      BoundedHit(IdLow + '.release') or
      BoundedHit(IdLow + '.exit') or
      BoundedHit(IdLow + '.endwrite') then Exit(True);
+  // TMonitor-Form: das Release heisst TMonitor.Exit(<handle>), der
+  // Handle steht im Argument, nicht vor dem Punkt.
+  if HasMonitorExitForHandle(SegLow, IdLow) then Exit(True);
   // Gegenpruefung 2026-08-26 (MAJOR): die fruehere Fassung suchte IdLow
   // als nacktes Substring in einem 80-Zeichen-Fenster AB dem Token -
   // 'section' matchte damit in 'leavecriticalSECTION' selbst, und 'cs'
@@ -751,6 +769,44 @@ begin
   end;
 end;
 
+// TMonitor-Gegenstueck zu HasLeaveCriticalSectionForHandle:
+// 'tmonitor.exit(<handle>)' bzw. 'system.tmonitor.exit(<handle>)' im
+// (lowercased) Segment, Handle-Vergleich wie dort (Gleichheit oder
+// Ketten-Endstueck).
+function HasMonitorExitForHandle(const SegLow, LHandle: string): Boolean;
+var
+  p, q   : Integer;
+  Handle : string;
+begin
+  Result := False;
+  if LHandle = '' then Exit;
+  p := Pos('tmonitor.exit', SegLow);
+  while p > 0 do
+  begin
+    q := p + Length('tmonitor.exit');
+    while (q <= Length(SegLow)) and (SegLow[q] = ' ') do Inc(q);
+    if (q <= Length(SegLow)) and (SegLow[q] = '(') then
+    begin
+      Inc(q);
+      while (q <= Length(SegLow)) and
+            CharInSet(SegLow[q], [' ', '@']) do Inc(q);
+      Handle := '';
+      while (q <= Length(SegLow)) and
+            CharInSet(SegLow[q], ['a'..'z', '0'..'9', '_', '.']) do
+      begin
+        Handle := Handle + SegLow[q];
+        Inc(q);
+      end;
+      if (Handle <> '') and
+         ((Handle = LHandle) or
+          Handle.EndsWith('.' + LHandle) or
+          LHandle.EndsWith('.' + Handle)) then
+        Exit(True);
+    end;
+    p := PosEx('tmonitor.exit', SegLow, p + 1);
+  end;
+end;
+
 function HasLeaveCriticalSectionForHandle(const SegLow, LHandle: string): Boolean;
 // Real-World-FP-Audit 2026-07-12, FP-Klasse 'split-wrapper-winapi-form'.
 // True wenn im (bereits lowercased) Segment ein LeaveCriticalSection(<LHandle>)
@@ -873,9 +929,11 @@ begin
   seg := Copy(Code, M.Index, bodyEnd - M.Index + 1);
   segLow := LowerCase(seg);
   if isWinApi then
-    // WinAPI-Split-Wrapper: kein LeaveCriticalSection(<selber Handle>) im selben
+    // WinAPI-/TMonitor-Split-Wrapper: kein LeaveCriticalSection(<selber
+    // Handle>) und kein TMonitor.Exit(<selber Handle>) im selben
     // Routinen-Body -> Release an paired Geschwister-Methode delegiert (FP).
     hasRelease := HasLeaveCriticalSectionForHandle(segLow, lhandle)
+      or HasMonitorExitForHandle(segLow, lhandle)
   else
     hasRelease :=
       (Pos(lident + '.leave', segLow) > 0) or
@@ -985,15 +1043,13 @@ begin
       // die EnterCriticalSection-Alternation hat keine Capture-Group 1, und
       // M.Groups[1] wirft in Delphi 12 'Index ueberschreitet das Maximum'.
       LockIdent := M.Value;
-      if Pos('.', LockIdent) > 0 then
+      if (LockIdent <> '') and (LockIdent[Length(LockIdent)] = '(') then
       begin
-        LockIdent := Copy(LockIdent, 1, Pos('.', LockIdent) - 1);
-        GateIdLow := LowerCase(LockIdent);
-      end
-      else
-      begin
-        // EnterCriticalSection( - Handle-Bezeichner hinter der Klammer
-        // fuer das finally-Gate extrahieren (erste Ident-Kette).
+        // Klammer-Formen (EnterCriticalSection( / TMonitor.Enter( ):
+        // der LOCK ist das erste Argument - Handle-Bezeichner hinter
+        // der Klammer fuer das finally-Gate extrahieren. VOR dem
+        // Punkt-Zweig, denn 'TMonitor.Enter(' traegt einen Punkt, aber
+        // 'tmonitor' ist der Klassenname, nicht der Lock.
         GateIdLow := '';
         q := FindNextNonSpacePos(Code, M.Index + M.Length);
         while (q > 0) and (q <= Length(Code)) and
@@ -1003,7 +1059,15 @@ begin
           Inc(q);
         end;
         GateIdLow := LowerCase(GateIdLow);
-        LockIdent := 'EnterCriticalSection(...)';
+        if Pos('tmonitor', LowerCase(LockIdent)) > 0 then
+          LockIdent := 'TMonitor.Enter(' + GateIdLow + ')'
+        else
+          LockIdent := 'EnterCriticalSection(...)';
+      end
+      else if Pos('.', LockIdent) > 0 then
+      begin
+        LockIdent := Copy(LockIdent, 1, Pos('.', LockIdent) - 1);
+        GateIdLow := LowerCase(LockIdent);
       end;
 
       F            := TLeakFinding.Create;
