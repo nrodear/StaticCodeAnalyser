@@ -33,14 +33,21 @@ unit uPointerArithmeticOnString;
 //   * Pattern B: `Inc(P<...>, ...)` wo das Argument vorher als
 //     `PChar|PAnsiChar|PWideChar(<id>)` zugewiesen wurde - das ist
 //     schwer ohne Flow-Analyse; daher nur Pattern A.
-//   * 80 Zeichen Backward-Snippet vor dem Match: wenn `if <id> <> ''`
-//     oder `if Length(<id>)` ODER `if Assigned` vorhanden, gelten wir
-//     als gepruefte Variante - kein Finding.
+//   * LOOK_BEHIND Zeichen Backward-Snippet vor dem Match: wenn
+//     `if <id> <> ''` oder `if Length(<id>)` ODER `if Assigned(<id>)`
+//     vorhanden, gelten wir als gepruefte Variante - kein Finding.
+//     Der Bezeichner wird dabei mit LINKER WORTGRENZE gesucht, sonst
+//     unterdrueckt ein fremdes 'flags=0' den Fund fuer 's'
+//     (Voll-Review 2026-09-12, Major 79).
 //
 // Limitierungen:
 //   * Single-File-lexisch. Keine Flow-Analyse - der Check kann
-//     theoretisch weiter weg sein. 80-Zeichen-Vor-Fenster ist
-//     Heuristik (Empty-Check direkt davor = typisches mORMot-Pattern).
+//     theoretisch weiter weg sein. Das Vor-Fenster ist Heuristik
+//     (Empty-Check direkt davor = typisches mORMot-Pattern); seine
+//     Groesse steht als LOOK_BEHIND bei der Implementierung und wird
+//     hier bewusst NICHT als Zahl wiederholt - der Header nannte bis
+//     zum Voll-Review 2026-09-12 zweimal '80', der Code fuehrt aber
+//     seit langem 200 (Minor 266).
 //   * Pattern B (Inc auf gespeichertem PChar) wird nicht erfasst.
 //
 // Schweregrad: lsWarning - latente Access-Violation.
@@ -121,13 +128,25 @@ begin
       // Spaces als Platzhalter zwischen <var> und 'then' duerften nicht
       // stoeren, weil VarName <> nil und Numeric-Vergleiche eigene
       // Sicherheits-Semantik haben).
+      //
+      // LINKE WORTGRENZE (Voll-Review 2026-09-12, Major 79): die
+      // Suche lief frueher ueber Pos und traf damit SUFFIXE fremder
+      // Bezeichner - fuer die Variable 's' unterdrueckte schon ein
+      // 'if flags=0 then' im Vorfenster den Fund ('flags=0' enthaelt
+      // 's='), fuer 'p' reichte 'temp='. Bei den ueblichen
+      // Ein-Buchstaben-Variablen dieses Musters (p := PChar(s) + 5)
+      // ist die Kollision wahrscheinlich, und der verschwundene Fund
+      // ist eine latente AV. FindTokenBoundedLower verlangt die
+      // Grenze nur dort, wo das Muster selbst auf einem
+      // Ident-Zeichen beginnt/endet - '(' und '=' bleiben also
+      // natuerliche Grenzen (gleiche Nutzung wie in uPathTraversal).
       GuardLow := LowerCase(VarName);
-      if (Pos(GuardLow + ' <> ',   Before) > 0) or
-         (Pos(GuardLow + '<>',     Before) > 0) or
-         (Pos(GuardLow + ' = ',    Before) > 0) or
-         (Pos(GuardLow + '=',      Before) > 0) or
-         (Pos('length(' + GuardLow + ')',   Before) > 0) or
-         (Pos('assigned(' + GuardLow + ')', Before) > 0) then
+      if (TDetectorUtils.FindTokenBoundedLower(GuardLow + ' <> ', Before) > 0) or
+         (TDetectorUtils.FindTokenBoundedLower(GuardLow + '<>',   Before) > 0) or
+         (TDetectorUtils.FindTokenBoundedLower(GuardLow + ' = ',  Before) > 0) or
+         (TDetectorUtils.FindTokenBoundedLower(GuardLow + '=',    Before) > 0) or
+         (TDetectorUtils.FindTokenBoundedLower('length(' + GuardLow + ')',   Before) > 0) or
+         (TDetectorUtils.FindTokenBoundedLower('assigned(' + GuardLow + ')', Before) > 0) then
         Continue;
 
       LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
