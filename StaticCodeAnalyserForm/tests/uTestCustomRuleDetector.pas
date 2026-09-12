@@ -34,6 +34,8 @@ type
     [Test] procedure FindingHasRuleIdAndKindCustomRule;
     [Test] procedure FindingHasCorrectLineNumber;
     [Test] procedure FileExclude_SkipsExcludedFiles;
+    // Voll-Review 2026-09-12 (Major 53): Windows-Pfade sind case-insensitiv
+    [Test] procedure FileExclude_MatchesCaseInsensitive;
     [Test] procedure FileInclude_OnlyScansIncludedFiles;
     [Test] procedure NoRules_NoFindings;
     [Test] procedure FullYamlRoundtrip_ViaTempFile;
@@ -216,6 +218,32 @@ begin
       'Excluded Datei darf KEIN Finding produzieren');
     // Andere Datei matcht nicht Exclude -> Finding kommt
     TCustomRuleDetector.AnalyzeFile('src/Production.pas',
+      'XYZ here'#10, Findings);
+    Assert.AreEqual<Integer>(1, Findings.Count);
+  finally Findings.Free; end;
+end;
+
+procedure TTestCustomRuleDetector.FileExclude_MatchesCaseInsensitive;
+// Voll-Review 2026-09-12 (Major 53): der Glob-Match lief case-sensitiv
+// gegen Windows-Pfade - ein klein geschriebenes Exclude-Glob griff
+// gegen gemischt-gecaste Dateinamen nicht, die Regel lief still ins
+// Leere.
+var
+  Rule     : TCustomRule;
+  Findings : TObjectList<TLeakFinding>;
+begin
+  Rule := MakeRule('R001', 'XYZ');
+  Rule.FileExclude := ['**/*test*.pas'];   // klein geschrieben
+  TCustomRuleDetector.AddRule(Rule);
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    // Gemischt-gecaste Datei matcht das kleine Glob case-insensitiv.
+    TCustomRuleDetector.AnalyzeFile('Src/uMyTEST.pas',
+      'XYZ here'#10, Findings);
+    Assert.AreEqual<Integer>(0, Findings.Count,
+      'Exclude muss case-insensitiv greifen (Windows-Pfade)');
+    // Gegenrichtung: Nicht-Test-Datei liefert weiter.
+    TCustomRuleDetector.AnalyzeFile('Src/Production.pas',
       'XYZ here'#10, Findings);
     Assert.AreEqual<Integer>(1, Findings.Count);
   finally Findings.Free; end;

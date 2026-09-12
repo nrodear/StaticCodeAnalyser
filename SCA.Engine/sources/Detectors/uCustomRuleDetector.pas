@@ -308,7 +308,12 @@ end;
 class function TCustomRuleDetector.FileMatchesGlobs(const FileName: string;
   const Globs: TArray<string>): Boolean;
 // Returns True wenn FileName auf MIN. EIN Glob matcht.
-// Match erfolgt gegen FullPath (Forward-Slashes normalisiert).
+// Match erfolgt gegen FullPath (Forward-Slashes normalisiert) und
+// CASE-INSENSITIV (Voll-Review 2026-09-12, Major 53): Windows-Pfade
+// sind case-insensitiv, und derselbe Pfad kommt je nach Quelle in
+// verschiedener Schreibweise an (Laufwerksbuchstabe, DFM-Referenzen,
+// Projektdatei) - ein case-sensitiver Match liess file-include/
+// file-exclude-Regeln je nach Schreibweise still ins Leere laufen.
 // Konvertiert Glob -> Regex on-the-fly. Bei sehr vielen Files koennte
 // eine pre-compiled Regex-Liste pro Rule die Performance verbessern -
 // aktuell ist die Glob-Anzahl pro Rule jedoch klein (<10 typisch).
@@ -319,7 +324,7 @@ begin
   Norm := StringReplace(FileName, '\', '/', [rfReplaceAll]);
   for G in Globs do
     if TRegEx.IsMatch(Norm, GlobToRegexPattern(StringReplace(G, '\', '/',
-      [rfReplaceAll]))) then
+      [rfReplaceAll])), [roIgnoreCase]) then
       Exit(True);
   Result := False;
 end;
