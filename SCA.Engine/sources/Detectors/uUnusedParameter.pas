@@ -404,7 +404,9 @@ end;
 
 function IsIdentStartChar(C: Char): Boolean;
 begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']);
+  // Voll-Review 2026-09-12: zentral - namensgleich zu
+  // TDetectorUtils.IsIdentStartChar, daher qualifizierte Delegation.
+  Result := TDetectorUtils.IsIdentStartChar(C);
 end;
 
 function IsDeclTailDirective(const AWordLow: string): Boolean;

@@ -1,4 +1,4 @@
-unit uNestedRoutines;
+﻿unit uNestedRoutines;
 
 // Detektor fuer geschachtelte Routinen (nested procedures/functions
 // innerhalb der lokalen Decl-Section einer anderen Methode).
@@ -227,7 +227,9 @@ end;
 
 function IsIdentStartCh(C: Char): Boolean;
 begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']);
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.IsIdentStartChar);
+  // der Wrapper behaelt seinen Unit-lokalen Namen.
+  Result := TDetectorUtils.IsIdentStartChar(C);
 end;
 
 function SkipIdentAt(const Code: string; P: Integer): Integer;

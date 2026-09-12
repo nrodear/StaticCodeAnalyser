@@ -85,6 +85,13 @@ type
     // Wortgrenze rechts vom Punkt erkannt werden.
     class function IsIdentChar(Ch: Char): Boolean; static; inline;
 
+    // Erstes Zeichen eines Pascal-Bezeichners (A..Z, a..z, _ - OHNE
+    // Ziffern). Voll-Review 2026-09-12: die Klasse stand 15x
+    // byte-gleich in den Detektoren (inkl. einer nested Kopie in
+    // dieser Unit); jetzt zentral wie IsIdentChar seit der
+    // Backlog-Welle 1.
+    class function IsIdentStartChar(Ch: Char): Boolean; static; inline;
+
     // True wenn FileName auf ein bekanntes Test-/Demo-Fixture-Pattern
     // matched. Konsumenten (CLI, IDE-Filter) koennen Findings aus solchen
     // Files optional ausblenden - die enthalten meist absichtliche Bugs
@@ -584,6 +591,11 @@ begin
   // dritte Variante gewesen, die so nie irgendwo stand. Semantisch sind
   // beide identisch (Ch > #255 faellt in beiden Faellen raus).
   Result := CharInSet(Ch, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+end;
+
+class function TDetectorUtils.IsIdentStartChar(Ch: Char): Boolean;
+begin
+  Result := CharInSet(Ch, ['A'..'Z', 'a'..'z', '_']);
 end;
 
 class function TDetectorUtils.IsTestFixturePath(const FileName: string;
@@ -1542,11 +1554,6 @@ end;
 class procedure TDetectorUtils.ParseCallsInExpr(const Expr: string;
   Calls: TList<TExprCall>);
 
-  function IsIdentStart(C: Char): Boolean; inline;
-  begin
-    Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']);
-  end;
-
 var
   T          : string;
   i, NameStart, NameEnd, Depth, ArgsStart : Integer;
@@ -1557,7 +1564,7 @@ begin
   i := 1;
   while i <= Length(T) do
   begin
-    if not IsIdentStart(T[i]) then
+    if not IsIdentStartChar(T[i]) then
     begin
       Inc(i);
       Continue;

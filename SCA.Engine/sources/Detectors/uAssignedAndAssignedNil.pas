@@ -1,4 +1,4 @@
-unit uAssignedAndAssignedNil;
+﻿unit uAssignedAndAssignedNil;
 
 // Detektor fuer redundante Pattern `Assigned(X) and (X <> nil)` bzw. die
 // Variation `(X <> nil) and Assigned(X)`.
@@ -52,7 +52,11 @@ end;
 
 function IsIdentStart(C: Char): Boolean; inline;
 begin
-  Result := CharInSet(C, ['A'..'Z','a'..'z','_']);
+  // Voll-Review 2026-09-12: Zeichenklasse zentralisiert - die lokale
+  // Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentStartChar (A..Z, a..z, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentStartChar(C);
 end;
 
 // Hilfs-Funktion: parse `Assigned(<Id>)` ab Position p. Bei Erfolg:

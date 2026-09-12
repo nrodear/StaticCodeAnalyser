@@ -1,4 +1,4 @@
-unit uLowercaseKeyword;
+﻿unit uLowercaseKeyword;
 
 // Detektor fuer Pascal-Keywords, die NICHT in Kleinschreibung stehen.
 //
@@ -92,7 +92,11 @@ end;
 
 function IsIdentStart(C: Char): Boolean; inline;
 begin
-  Result := CharInSet(C, ['A'..'Z','a'..'z','_']);
+  // Voll-Review 2026-09-12: Zeichenklasse zentralisiert - die lokale
+  // Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentStartChar (A..Z, a..z, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentStartChar(C);
 end;
 
 // Liefert True, falls Word (lowercase) ein Pascal-Keyword aus der

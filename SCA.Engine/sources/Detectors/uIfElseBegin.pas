@@ -1,4 +1,4 @@
-unit uIfElseBegin;
+﻿unit uIfElseBegin;
 
 // Detektor fuer asymmetrische `begin..end`-Verwendung in if/else.
 //
@@ -53,7 +53,11 @@ end;
 
 function IsIdentStart(C: Char): Boolean; inline;
 begin
-  Result := CharInSet(C, ['A'..'Z','a'..'z','_']);
+  // Voll-Review 2026-09-12: Zeichenklasse zentralisiert - die lokale
+  // Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentStartChar (A..Z, a..z, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentStartChar(C);
 end;
 
 class procedure TIfElseBeginDetector.AnalyzeUnit(UnitNode: TAstNode;

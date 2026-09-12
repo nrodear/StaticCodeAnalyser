@@ -1,4 +1,4 @@
-unit uTypeName;
+﻿unit uTypeName;
 
 // Detektor fuer Class/Record-Type-Namen, die nicht der T-Prefix-
 // Konvention folgen.
@@ -55,7 +55,11 @@ end;
 
 function IsIdentStart(C: Char): Boolean; inline;
 begin
-  Result := CharInSet(C, ['A'..'Z','a'..'z','_']);
+  // Voll-Review 2026-09-12: Zeichenklasse zentralisiert - die lokale
+  // Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentStartChar (A..Z, a..z, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentStartChar(C);
 end;
 
 // Liefert Position des Type-Namens wenn die Zeile `<Ident> = class`

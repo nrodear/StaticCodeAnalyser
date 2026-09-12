@@ -1,4 +1,4 @@
-unit uCastAndFree;
+﻿unit uCastAndFree;
 
 // Detektor: `<ClassType>(<obj>).Free` (oder `.Destroy`) - Typ-Cast direkt
 // vor Free/Destroy.
@@ -67,8 +67,8 @@ implementation
 // entfernt: ihr EINZIGER Aufrufer war der Rumpf von IsIdentChar, der jetzt an
 // TDetectorUtils delegiert. Stehen geblieben waere sie ein neuer Selbst-Fund
 // (SCA164 UnusedRoutine) - genau die Art stiller ADD, die diese Welle
-// vermeiden soll. Wer sie wieder braucht: TDetectorUtils hat keine
-// Start-Variante, die 13 anderen Units halten ihre eigene.
+// vermeiden soll. Wer sie wieder braucht:
+// TDetectorUtils.IsIdentStartChar (zentral seit Voll-Review 2026-09-12).
 function IsIdentChar(C: Char): Boolean; inline;
 begin
   // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
