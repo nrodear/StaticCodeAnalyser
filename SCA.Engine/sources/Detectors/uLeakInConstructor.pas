@@ -126,27 +126,23 @@ const
 
 function IsIdentChar(C: Char): Boolean;
 begin
-  Result := CharInSet(C, ['a'..'z', 'A'..'Z', '0'..'9', '_']);
+  // Voll-Review 2026-09-12: Zeichenklasse zentralisiert - die lokale
+  // Fassung war zeichenweise identisch zu TDetectorUtils.IsIdentChar
+  // (eine der zwei letzten echten Vollkopien der Synthese). Der
+  // Wrapper bleibt, damit die Aufrufer in dieser Unit unveraendert
+  // bleiben.
+  Result := TDetectorUtils.IsIdentChar(C);
 end;
 
 // Ganzwort-Suche in bereits gelowertem Text: 'ftimer' matcht 'ftimer.free'
 // und 'freeandnil(ftimer)', aber NICHT 'ftimer2' oder 'xftimer'.
 function ContainsIdent(const HaystackLow, IdentLow: string): Boolean;
-var
-  P, Start, L : Integer;
 begin
-  Result := False;
-  L := Length(IdentLow);
-  if (L = 0) or (HaystackLow = '') then Exit;
-  Start := 1;
-  repeat
-    P := PosEx(IdentLow, HaystackLow, Start);
-    if P = 0 then Exit;
-    if ((P = 1) or not IsIdentChar(HaystackLow[P - 1])) and
-       ((P + L > Length(HaystackLow)) or not IsIdentChar(HaystackLow[P + L])) then
-      Exit(True);
-    Start := P + 1;
-  until False;
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.
+  // ContainsWholeWordLower - gleicher Kontrakt: bereits gelowerter
+  // Haystack, IsIdentChar-Wortgrenzen beidseitig). Parameterreihen-
+  // folge dort (Needle, Haystack).
+  Result := TDetectorUtils.ContainsWholeWordLower(IdentLow, HaystackLow);
 end;
 
 // 'Self.FFoo' -> 'ffoo'; 'Self.FFoo.Bar' -> 'ffoo.bar'. Trim + lowercase.

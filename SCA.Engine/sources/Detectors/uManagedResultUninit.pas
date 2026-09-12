@@ -260,23 +260,12 @@ end;
 
 // Word-boundary-Lookup von Needle in Haystack (beide lowercased).
 function ContainsIdentifier(const Haystack, Needle: string): Boolean;
-var
-  pIx           : Integer;
-  Before, After : Char;
 begin
-  Result := False;
-  if Needle = '' then Exit;
-  pIx := Pos(Needle, Haystack);
-  while pIx > 0 do
-  begin
-    if pIx = 1 then Before := ' ' else Before := Haystack[pIx - 1];
-    if pIx + Length(Needle) > Length(Haystack) then After := ' '
-    else After := Haystack[pIx + Length(Needle)];
-    if (not TDetectorUtils.IsIdentChar(Before)) and
-       (not TDetectorUtils.IsIdentChar(After)) then
-      Exit(True);
-    pIx := PosEx(Needle, Haystack, pIx + 1);
-  end;
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.
+  // ContainsWholeWordLower - gleicher Kontrakt: beide bereits
+  // lowercased, IsIdentChar-Wortgrenzen; '.', '[', '^' sind keine
+  // Identifier-Zeichen und zaehlen weiter als Boundary).
+  Result := TDetectorUtils.ContainsWholeWordLower(Needle, Haystack);
 end;
 
 // True wenn der (literal-bereinigte, lowercased) Ausdruck Result als

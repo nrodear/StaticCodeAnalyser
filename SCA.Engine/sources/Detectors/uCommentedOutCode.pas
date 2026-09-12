@@ -160,40 +160,22 @@ end;
 
 // Wortgrenz-Match (case-insensitive) eines Keywords im (lowercase) Inhalt.
 function ContainsWordCI(const Lower, W: string): Boolean;
-var k, lenW, lenS : Integer;
 begin
-  Result := False;
-  lenW := Length(W); lenS := Length(Lower);
-  if lenW = 0 then Exit;
-  k := 1;
-  while k <= lenS - lenW + 1 do
-  begin
-    if Copy(Lower, k, lenW) = W then
-      if ((k = 1) or not IsIdentChar(Lower[k - 1])) and
-         ((k + lenW > lenS) or not IsIdentChar(Lower[k + lenW])) then
-        Exit(True);
-    Inc(k);
-  end;
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.
+  // ContainsWholeWordLower). Die alte Fassung scannte zeichenweise
+  // mit Copy je Position - gleicher Kontrakt, nur langsamer.
+  Result := TDetectorUtils.ContainsWholeWordLower(W, Lower);
 end;
 
 // Position des naechsten Vorkommens von W als GANZES Wort ab AVon
 // (1-basiert), 0 wenn keines mehr folgt. ContainsWordCI beantwortet nur
 // die Ja/Nein-Frage; die Stellungspruefung unten braucht die Stelle.
 function WortPosAb(const Lower, W: string; AVon: Integer): Integer;
-var k, lenW, lenS : Integer;
 begin
-  Result := 0;
-  lenW := Length(W); lenS := Length(Lower);
-  if (lenW = 0) or (AVon < 1) then Exit;
-  k := AVon;
-  while k <= lenS - lenW + 1 do
-  begin
-    if (Copy(Lower, k, lenW) = W)
-       and ((k = 1) or not IsIdentChar(Lower[k - 1]))
-       and ((k + lenW > lenS) or not IsIdentChar(Lower[k + lenW])) then
-      Exit(k);
-    Inc(k);
-  end;
+  // Voll-Review 2026-09-12: zentral - die AFrom-Overload von
+  // TDetectorUtils.FindWholeWordLower ist die Hebung DIESER Kopie
+  // (AVon < 1 liefert 0, wie hier seit jeher).
+  Result := TDetectorUtils.FindWholeWordLower(W, Lower, AVon);
 end;
 
 // Erste Position ab AVon, die kein Leerraum ist (Length+1, wenn keine folgt).

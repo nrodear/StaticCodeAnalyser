@@ -155,7 +155,13 @@ type
     //   FindWholeWordLower('sql', 'my.sql=') -> 4  (rechts steht '=')
     //   FindWholeWordLower('assigned x', 'assigned xa') -> 0
     class function FindWholeWordLower(const Needle, HaystackLower: string)
-      : Integer; static;
+      : Integer; overload; static;
+
+    // Wie oben, Suche ab AFrom (1-basiert; AFrom < 1 liefert 0 -
+    // Kontrakt der WortPosAb-Kopie aus uCommentedOutCode, deren
+    // Hebung diese Overload ist; Voll-Review 2026-09-12).
+    class function FindWholeWordLower(const Needle, HaystackLower: string;
+      AFrom: Integer): Integer; overload; static;
 
 
     // True, wenn Needle als ganzes Wort in HaystackLower vorkommt.
@@ -806,6 +812,12 @@ end;
 
 class function TDetectorUtils.FindWholeWordLower(const Needle,
   HaystackLower: string): Integer;
+begin
+  Result := FindWholeWordLower(Needle, HaystackLower, 1);
+end;
+
+class function TDetectorUtils.FindWholeWordLower(const Needle,
+  HaystackLower: string; AFrom: Integer): Integer;
 var
   Start, NLen, HLen, i: Integer;
   LeftOK, RightOK     : Boolean;
@@ -813,11 +825,11 @@ begin
   Result := 0;
   NLen   := Length(Needle);
   HLen   := Length(HaystackLower);
-  if (NLen = 0) or (HLen < NLen) then Exit;
+  if (NLen = 0) or (HLen < NLen) or (AFrom < 1) then Exit;
 
-  // Pos() ist die Schleife - wir starten ab Position 1 und springen weiter
+  // Pos() ist die Schleife - wir starten ab AFrom und springen weiter
   // wenn der Match keine echten Wortgrenzen hat.
-  Start := 1;
+  Start := AFrom;
   while True do
   begin
     i := PosEx(Needle, HaystackLower, Start);

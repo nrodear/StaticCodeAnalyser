@@ -102,28 +102,13 @@ end;
 // Perf (2026-07-05): P8 - aus dem alten Standalone-BodyReferences gehoisted,
 // damit die gecachte Variante in AnalyzeUnit exakt dieselbe Logik nutzt.
 function ContainsIdent(const Hay, Needle: string): Boolean;
-var
-  P, NL, HL : Integer;
-  Before, After : Char;
 begin
-  Result := False;
-  NL := Length(Needle);
-  HL := Length(Hay);
-  if (NL = 0) or (HL < NL) then Exit;
-  P := 1;
-  while True do
-  begin
-    P := Pos(Needle, Hay, P);
-    if P = 0 then Exit;
-    Before := #0;
-    if P > 1 then Before := Hay[P - 1];
-    After := #0;
-    if P + NL - 1 < HL then After := Hay[P + NL];
-    if not CharInSet(Before, ['a'..'z','0'..'9','_']) and
-       not CharInSet(After,  ['a'..'z','0'..'9','_']) then
-      Exit(True);
-    P := P + NL;
-  end;
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.
+  // ContainsWholeWordLower). Die alte lokale Grenzklasse prueft nur
+  // Kleinbuchstaben - auf dem hier IMMER gelowerten Body ist das zur
+  // zentralen IsIdentChar-Klasse aequivalent (Grossbuchstaben kommen
+  // nicht vor).
+  Result := TDetectorUtils.ContainsWholeWordLower(Needle, Hay);
 end;
 
 type
