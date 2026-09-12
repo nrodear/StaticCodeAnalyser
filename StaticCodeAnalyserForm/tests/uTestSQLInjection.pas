@@ -1962,7 +1962,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_LeadingTaintedTerm_ReportsError;
+procedure TTestSQLInjectionExt.SQL_LeadingTaintedTerm_ReportsError;
 // Voll-Review 2026-09-12 (Major 80): AllConcatTermsSafe inspiziert per
 // Konstruktion nur Tokens HINTER einem '+' - der fuehrende Term wurde
 // nie geprueft. 'SQL.Text := Edit1.Text + '' ORDER BY 1''' blieb stumm,
@@ -1984,7 +1984,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_AccumulatorIdiom_NoFinding;
+procedure TTestSQLInjectionExt.SQL_AccumulatorIdiom_NoFinding;
 // Die Gegenrichtung zu Major 80 und der Grund, warum der fuehrende Term
 // nicht naiv geprueft werden darf: beim Akkumulator-Idiom IST der
 // fuehrende Term das Ziel selbst. Heute korrekt stumm (an der
@@ -2004,7 +2004,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_LeadingLiteralStaysSafe_NoFinding;
+procedure TTestSQLInjectionExt.SQL_LeadingLiteralStaysSafe_NoFinding;
 // Zweite Gegenrichtung: ein fuehrendes LITERAL mit safe-cast dahinter
 // bleibt sicher - die neue Pruefung darf die Whitelist nicht aushebeln.
 const SRC =
@@ -2022,7 +2022,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_BareSqlTarget_ReportsError;
+procedure TTestSQLInjectionExt.SQL_BareSqlTarget_ReportsError;
 // Voll-Review 2026-09-12 (Major 81): fuer das bare '<x>.SQL := ...'
 // stand in SQL_PROPS ein Eintrag '.sql:=', der nie matchen konnte -
 // nkAssign.Name traegt nur die LHS, ein ':=' landet dort nirgends.
@@ -2043,7 +2043,7 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestSQLInjection.SQL_SqlSuffixIdent_NoFalsePositive;
+procedure TTestSQLInjectionExt.SQL_SqlSuffixIdent_NoFalsePositive;
 // Gegenrichtung zu Major 81: die Endungs-Pruefung darf nur an der
 // Punkt-Grenze greifen. 'FMySql' endet zwar auf 'sql', ist aber EIN
 // Bezeichner - kein SQL-Ziel.
