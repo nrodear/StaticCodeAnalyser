@@ -53,6 +53,9 @@ type
     // GATE E - Interface LOKAL deklariert: nur namensgleiche Member werden
     // still, echte tote Helfer derselben Klasse bleiben Funde.
     [Test] procedure LocalInterface_OnlyMembersSilenced;
+    // GATE E - Voll-Review 2026-09-12 (Blocker): class(IFoo) OHNE
+    // Basisklasse (implizit TObject) - Eintrag 0 ist das Interface.
+    [Test] procedure InterfaceOnlyParentList_Blanket_NotReported;
   end;
 
 implementation
@@ -563,6 +566,39 @@ begin
     Assert.AreEqual<Integer>(1, CountForMethod(F, 'DeadHelper'),
       'kein Interface-Member -> bleibt Fund (kein Blanket bei lokalem Interface)');
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedPrivateMethod));
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedPrivateMethod.InterfaceOnlyParentList_Blanket_NotReported;
+// Voll-Review 2026-09-12 (Blocker): 'TFoo = class(IFremd)' ist
+// gueltiges Delphi (Basis implizit TObject), der Parser legt NUR
+// 'IFremd' im TypeRef ab. Gate E startete die Interface-Suche stur
+// bei Eintrag 1 - bei der Ein-Eintrag-Form lief sie nie, und die
+// private Methode, die das cross-unit deklarierte Interface bedient
+// (Aufruf per Interface-Dispatch, im File nur Decl + Impl-Kopf),
+// wurde als 'appears unused' gemeldet (Bestands-Exe: 1 FP, empirisch
+// belegt). uUnusedParameter behandelt dieselbe Form seit jeher.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses uFremd;'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class(IFremd)'#13#10 +
+  '  private'#13#10 +
+  '    procedure Bediene;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Bediene;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkUnusedPrivateMethod),
+    'class(IFremd): das fremde Interface macht die Klasse zum ' +
+    'Blanket-Fall - kein appears-unused auf Interface-Bedienern');
   finally F.Free; end;
 end;
 

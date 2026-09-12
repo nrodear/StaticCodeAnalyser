@@ -515,10 +515,21 @@ end;
 // GATE E, Teil 1: welche Interfaces implementiert diese Klasse?
 //
 // Delphi-Grammatik: in 'TFoo = class(TBase, I1, I2)' ist Eintrag 0 die
-// Basisklasse, ab Eintrag 1 stehen ausschliesslich Interfaces. Zusaetzlich
-// wird die I-Konvention verlangt - Schutz gegen IFDEF-Zwillinge, bei denen
-// der Lexer beide Zweige emittiert und so eine zweite "Basisklasse" in die
-// Liste rutscht ('class({$IFDEF X}TA{$ELSE}TB{$ENDIF})' -> 'TA TB').
+// Basisklasse, ab Eintrag 1 stehen ausschliesslich Interfaces - ABER
+// 'TFoo = class(IFremd)' ist ebenfalls gueltig (Basis implizit
+// TObject), und dann ist Eintrag 0 selbst ein Interface. Bis zum
+// Voll-Review 2026-09-12 (Blocker) startete die Schleife stur bei 1:
+// bei der Ein-Eintrag-Form lief sie nie, Gate E blieb ifsNone, und
+// eine private Methode, die IFremd bedient (Aufruf cross-unit per
+// Interface-Dispatch), wurde als 'appears unused' gemeldet - exakt
+// die FP-Klasse, die Gate E laut eigenem Audit (2026-07-31, 100% FP)
+// schliessen soll. uUnusedParameter.OwnerHasInterfaceParents
+// behandelt dieselbe Form seit jeher explizit. Eintrag 0 wird daher
+// mitgeprueft; die I-Konvention bleibt fuer ALLE Eintraege verlangt -
+// Schutz gegen IFDEF-Zwillinge, bei denen der Lexer beide Zweige
+// emittiert und so eine zweite "Basisklasse" in die Liste rutscht
+// ('class({$IFDEF X}TA{$ELSE}TB{$ENDIF})' -> 'TA TB': weder TA noch
+// TB tragen die I-Form, nichts wird aufgenommen).
 function Sca147CollectImplementedInterfaces(C: TAstNode;
   ADest: TStringList; AScratch: TStringList): Boolean;
 var
@@ -528,7 +539,7 @@ begin
   Result := False;
   if C.TypeRef = '' then Exit;
   Sca147SplitNames(C.TypeRef, AScratch);
-  for i := 1 to AScratch.Count - 1 do
+  for i := 0 to AScratch.Count - 1 do
     if Sca147IsInterfaceStyleName(AScratch[i]) then
       ADest.Add(AScratch[i]);
   Result := ADest.Count > 0;
