@@ -448,6 +448,9 @@ type
     // Gegenpruefung 31.08.: Callee legt eine EIGENSCHAFT ab, nicht
     // den Parameter selbst
     [Test] procedure LocalCalleeStoresPropertyNotParam_StillReported;
+    // Voll-Review 2026-09-12 (Major 73): Pfad (b) Feld vs. f-Lokale
+    [Test] procedure LocalCalleeFieldAssign_NotReported;
+    [Test] procedure LocalCalleeLocalFPrefixAssign_StillReported;
   end;
 
   // ---- FieldLeak (TFieldLeakDetector) ------------------------------------------------
@@ -6893,6 +6896,72 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
         'unit-lokaler Callee nimmt das Objekt in ein Feld - kein Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakCalleeClasses.LocalCalleeFieldAssign_NotReported;
+// Pfad (b) von RumpfUebernimmtParameter - direkte FELD-Zuweisung
+// (FEntry := AEntry) statt Container-Add. Erster Test dieses Pfads
+// ueberhaupt (Voll-Review 2026-09-12, Major 73: die Klasse-F-
+// Bestandstests fahren alle Pfad (a) ueber '.Add(').
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TKeeper = class'+#13#10+
+  '    FEntry: TStringList;'+#13#10+
+  '    procedure Keep(AEntry: TStringList);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure TKeeper.Keep(AEntry: TStringList);'+#13#10+
+  'begin'+#13#10+
+  '  FEntry := AEntry;'+#13#10+
+  'end;'+#13#10+
+  'procedure Use(K: TKeeper);'+#13#10+
+  'var Entry: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Entry := TStringList.Create;'+#13#10+
+  '  K.Keep(Entry);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+        'Callee legt den Parameter in ein echtes Feld - Uebernahme');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakCalleeClasses.LocalCalleeLocalFPrefixAssign_StillReported;
+// Voll-Review 2026-09-12 (Major 73): das 'f'-Praefix allein beweist
+// kein Feld. Eine deklarierte LOKALE des Callee ('fmt := AEntry')
+// erfuellte das alte Muster und maskierte das Error-Tier-Leck beim
+// Aufrufer (Bestands-Exe: 0 Funde auf dieser Fixture; die
+// Kontrollfassung OHNE die fmt-Zuweisung meldet das Leck - empirisch
+// belegt, die Maskierung haengt exakt an Pfad (b)).
+const SRC =
+  'unit t;'+#13#10+
+  'interface'+#13#10+
+  'type'+#13#10+
+  '  TLog = class'+#13#10+
+  '    procedure Append(AEntry: TStringList);'+#13#10+
+  '  end;'+#13#10+
+  'implementation'+#13#10+
+  'procedure TLog.Append(AEntry: TStringList);'+#13#10+
+  'var fmt: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  fmt := AEntry;'+#13#10+
+  'end;'+#13#10+
+  'procedure Use(L: TLog);'+#13#10+
+  'var Entry: TStringList;'+#13#10+
+  'begin'+#13#10+
+  '  Entry := TStringList.Create;'+#13#10+
+  '  L.Append(Entry);'+#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+        'Kopie in eine Callee-Lokale ist keine Uebernahme - Leck bleibt');
   finally F.Free; end;
 end;
 

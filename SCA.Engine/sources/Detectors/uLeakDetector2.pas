@@ -1633,6 +1633,7 @@ var
   Calls, Assigns : TList<TAstNode>;
   C, A : TAstNode;
   N    : string;
+  LhsIdentEnde : Integer;
 begin
   Result := False;
   if (not Assigned(ACand)) or (AParamLow = '') then Exit;
@@ -1665,7 +1666,23 @@ begin
     begin
       N := A.Name.ToLower;
       if (N <> '') and (N[1] = 'f')
-         and (Trim(A.TypeRef).ToLower = AParamLow) then Exit(True);
+         and (Trim(A.TypeRef).ToLower = AParamLow) then
+      begin
+        // Voll-Review 2026-09-12 (Major 73): das 'f'-Praefix allein
+        // beweist kein FELD - eine deklarierte Lokale des Callee
+        // ('fmt := AEntry') erfuellte das Muster und maskierte das
+        // Error-Tier-Leck beim Aufrufer. Der Gate-Kopf verlangt
+        // 'beweisen, nicht vermuten': was der Callee selbst als
+        // Lokale/Parameter deklariert, ist beweisbar kein Feld.
+        // Gemessen wird das fuehrende Ident-Segment der LHS, damit
+        // auch 'fmt.prop := Param' an der Lokalen scheitert.
+        LhsIdentEnde := 1;
+        while (LhsIdentEnde <= Length(N))
+              and TLeakDetector2.IsIdentChar(N[LhsIdentEnde]) do
+          Inc(LhsIdentEnde);
+        if not ScopeDeclaresIdent(ACand, Copy(N, 1, LhsIdentEnde - 1)) then
+          Exit(True);
+      end;
     end;
 end;
 
