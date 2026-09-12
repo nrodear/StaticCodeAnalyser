@@ -1,4 +1,4 @@
-unit uTestLengthUnderflow;
+﻿unit uTestLengthUnderflow;
 
 // Tests fuer den TLengthUnderflowDetector (file-basiert).
 //
@@ -17,6 +17,10 @@ type
   public
     // ---- Positive Varianten ------------------------------------------------
     [Test] procedure Length_MinusTwo_Reported;
+    // Voll-Review 2026-09-12 (Blocker): Kommentare als Code gescannt,
+    // Apostroph im Kommentar vergiftete den String-Zustand.
+    [Test] procedure PatternInBlockComment_NoFinding;
+    [Test] procedure ApostropheInCommentDoesNotPoisonRest;
     [Test] procedure Length_MinusFour_Reported;
     [Test] procedure DotCount_MinusThree_Reported;
     [Test] procedure DotLength_MinusFive_Reported;
@@ -42,6 +46,46 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+procedure TTestLengthUnderflow.PatternInBlockComment_NoFinding;
+// '{ Length(buf) - 4 }' ist Kommentar - Projekt-Invariante: Kommentare
+// zaehlen NIE als Code-Use. Vor dem Fix: 1 Fehlfund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  { Length(buf) - 4 }'#13#10 +
+  '  DoWork;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLengthUnderflow),
+    'Length-Muster im Kommentar darf nicht melden');
+  finally F.Free; end;
+end;
+
+procedure TTestLengthUnderflow.ApostropheInCommentDoesNotPoisonRest;
+// Der FN-Kaskadenfall: ein einzelner Apostroph in einem Kommentar
+// ('don''t' als Prosa) setzte InStr=True fuer den Dateirest - ein
+// ECHTER Underflow zwei Zeilen spaeter wurde verschluckt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const s: string);'#13#10 +
+  'var c: Char;'#13#10 +
+  'begin'#13#10 +
+  '  { don''t call this yet }'#13#10 +
+  '  c := s[Length(s) - 1];'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(
+    TFindingHelper.Count(F, fkLengthUnderflow) >= 1,
+    'der echte Underflow hinter dem Apostroph-Kommentar muss melden');
+  finally F.Free; end;
+end;
 
 procedure TTestLengthUnderflow.Length_MinusTwo_Reported;
 const SRC =
