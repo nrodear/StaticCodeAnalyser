@@ -73,6 +73,10 @@ type
     // Real-World 2026-06-28: Nested-Closure unter Headless-Method-Pattern
     [Test] procedure OuterVarReadOnlyInNestedRoutine_NoFinding;
     [Test] procedure OuterVarUninitDespiteNestedRoutine_StillFlagged;
+    // Voll-Review 2026-09-12 (Major 86): Kommentare und String-Literale
+    // in einer nested routine sind KEIN Code-Use der Outer-Variablen
+    [Test] procedure NestedRoutineCommentOnly_StillFlagged;
+    [Test] procedure NestedRoutineStringLiteralOnly_StillFlagged;
     // Real-World FP-Audit 2026-07-10 (SCA166 100% FP im Korpus):
     // (A) Typecast-Assignment-Target 'TFoo<T>(x) := y' schreibt x
     [Test] procedure TypecastAssignTargetGeneric_NoFinding;
@@ -1412,6 +1416,81 @@ begin
   RunOn(SRC, L);
   try Assert.AreEqual<Integer>(0, CountKind(L, fkUninitVar),
     'outer-var nur in nested routine gelesen, im outer-body erzeugt - kein UninitVar');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.NestedRoutineCommentOnly_StillFlagged;
+// Voll-Review 2026-09-12 (Major 86): die Closure-Suppression las die
+// ROHEN Quellzeilen. Ein blosser Kommentar mit dem Variablennamen in
+// der nested routine genuegte, um den echten never-written-Fund zu
+// unterdruecken - Verstoss gegen die Projektregel 'Kommentare zaehlen
+// NIE als Code-Use', und ein FN auf Error-Tier.
+//
+// An der Bestands-Exe sauber eingekreist: dieselbe Routine OHNE die
+// Kommentarzeile meldet 1 Fund, MIT ihr 0. Die Anon-Schwester
+// VarUsedInAnonRanges liest den gestrippten Cache seit jeher; jetzt
+// tun es beide Nested-Scans.
+// Bezeichner bewusst anders als in
+// OuterVarUninitDespiteNestedRoutine_StillFlagged: inhaltlich ist das
+// dessen Zwilling (einzige Differenz = die Kommentarzeile), aber
+// byte-nah gebaut melden sich die beiden Fixtures gegenseitig als
+// DuplicateBlock. Der A/B-Beweis steht ohnehin im Kopfkommentar.
+const
+  SRC =
+    'unit w;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'function FSum: Integer;'#13#10 +
+    'var'#13#10 +
+    '  Gesamt: Integer;'#13#10 +
+    '  procedure Hilfe;'#13#10 +
+    '  begin'#13#10 +
+    '    // Gesamt wird spaeter gefuellt'#13#10 +
+    '    WriteLn(''start'');'#13#10 +
+    '  end;'#13#10 +
+    'begin'#13#10 +
+    '  Hilfe;'#13#10 +
+    '  Result := Gesamt;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+    'ein Kommentar ist kein Code-Use - der Fund bleibt');
+  finally L.Free; end;
+end;
+
+procedure TTestUninitVar.NestedRoutineStringLiteralOnly_StillFlagged;
+// Derselbe Defekt, andere Quelle: mangels Strip zaehlte auch ein
+// STRING-LITERAL mit dem Variablennamen als Use (Bestands-Exe: 0 Funde
+// auf dieser Fixture). Der gestrippte Cache blankt Literale mit.
+// Bewusst anders geformt als der Kommentar-Zwilling (Prozedur statt
+// Funktion, zweite Lokale, Ausgabe statt Result) - sonst melden sich
+// die beiden Fixtures gegenseitig als DuplicateBlock.
+const
+  SRC =
+    'unit v;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure Report(out AOut: Integer);'#13#10 +
+    'var'#13#10 +
+    '  Summe, Zaehler: Integer;'#13#10 +
+    '  procedure Zeige;'#13#10 +
+    '  begin'#13#10 +
+    '    WriteLn(''Summe ist noch leer'');'#13#10 +
+    '  end;'#13#10 +
+    'begin'#13#10 +
+    '  Zaehler := 0;'#13#10 +
+    '  Zeige;'#13#10 +
+    '  AOut := Summe + Zaehler;'#13#10 +
+    'end;'#13#10 +
+    'end.'#13#10;
+var L : TObjectList<TLeakFinding>;
+begin
+  RunOn(SRC, L);
+  try Assert.IsTrue(CountKind(L, fkUninitVar) >= 1,
+    'ein String-Literal ist kein Code-Use - der Fund bleibt');
   finally L.Free; end;
 end;
 
