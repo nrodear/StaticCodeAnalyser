@@ -34,6 +34,9 @@ type
     // Gate 6 (2026-08-21): ein Typ, der AUSNAHMSLOS camelCase benennt,
     // spiegelt eine fremde API - dort ist der Name ein ABI-Schluessel.
     [Test] procedure CamelTypeAmnesty_AndItsTwoBoundaries;
+    // Voll-Review 2026-09-12: Event-Handler-Amnestie exakt statt Substring
+    [Test] procedure EventHandlerSender_NotReported;
+    [Test] procedure TObjectListFirstParam_StillReported;
     // Gate 7 (2026-08-28): der praeprozessor-blind geparste Dual-Mode-
     // Header ist gar kein Methodenkopf.
     [Test] procedure DualModeHeader_AndItsTwoBoundaries;
@@ -658,6 +661,67 @@ begin
   finally
     F.Free;
   end;
+end;
+
+procedure TTestMethodName.EventHandlerSender_NotReported;
+// Waechter fuer die DFM-Event-Handler-Amnestie: btnSaveClick(Sender:
+// TObject) traegt per IDE-Konvention den kleingeschriebenen
+// Component-Praefix und darf nicht gemeldet werden. Haelt die
+// Gegenrichtung des exakt-statt-Substring-Fixes (Voll-Review
+// 2026-09-12) - ein uebergriffiger Fix, der die Amnestie ganz
+// verliert, waere hier rot.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TForm1 = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure btnSaveClick(Sender: TObject);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TForm1.btnSaveClick(Sender: TObject);'#13#10 +
+  'begin'#13#10 +
+  '  Speichern;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMethodName),
+    'Sender: TObject ist die Handler-Amnestie - kein Naming-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestMethodName.TObjectListFirstParam_StillReported;
+// Voll-Review 2026-09-12 (Gruppen-Finding): die Amnestie matchte
+// 'tobject' als SUBSTRING - eine Methode mit TObjectList<T> als
+// erstem Parameter galt als Event-Handler, ihr kleingeschriebener
+// Name verschwand still (Bestands-Exe: eh1 0 Funde vs. eh2 1 Fund
+// mit Integer-Erstparameter, empirisch belegt). Jetzt vergleicht der
+// zentrale Helfer exakt (letztes Segment, Generic gekappt).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Generics.Collections;'#13#10 +
+  'type'#13#10 +
+  '  TItem = class end;'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure sammleAuf(AItems: TObjectList<TItem>);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.sammleAuf(AItems: TObjectList<TItem>);'#13#10 +
+  'begin'#13#10 +
+  '  AItems.Clear;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
+    'TObjectList<T> als erster Parameter ist KEIN Event-Handler - ' +
+    'der kleingeschriebene Name muss gemeldet werden');
+  finally F.Free; end;
 end;
 
 initialization

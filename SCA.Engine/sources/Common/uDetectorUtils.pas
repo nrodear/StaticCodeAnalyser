@@ -1960,10 +1960,19 @@ end;
 
 class function TDetectorUtils.IsEventHandlerSignature(
   MethodNode: TAstNode): Boolean;
-// Byte-identische Hebung der uCanBeClassMethod-/uMethodName-Fassungen
-// (Voll-Review 2026-09-12): erster nkParam entscheidet - 'Sender' als
-// Name oder 'tobject' im TypeRef. Faengt FormCreate(Sender: TObject),
+// Hebung der uCanBeClassMethod-/uMethodName-Fassungen (Voll-Review
+// 2026-09-12): erster nkParam entscheidet - 'Sender' als Name oder
+// der Typ TObject. Faengt FormCreate(Sender: TObject),
 // btnClick(Sender: TObject), OnFilter(Sender: TObject; ...) etc.
+//
+// Der TYP-Vergleich ist EXAKT (letztes Namenssegment, Generic-Suffix
+// gekappt - FirstParentToken-Schablone), nicht Substring: die
+// fruehere Pos('tobject', ...)-Fassung erklaerte JEDE Methode zum
+// Event-Handler, deren erster Parameter TObjectList<T>/
+// TObjectDictionary & Co. war - reale, haeufige Signaturen, deren
+// Funde still verschwanden (Gruppen-Finding des Voll-Reviews; die
+// Kopf-Doku beider Kopien deckte nur den exakten Typ TObject).
+// 'System.TObject' matcht weiter (Qualifier-Kappung).
 var
   Child : TAstNode;
 begin
@@ -1972,7 +1981,8 @@ begin
   begin
     if Child.Kind <> nkParam then Continue;
     if SameText(Child.Name, 'Sender') then Exit(True);
-    if Pos('tobject', LowerCase(Child.TypeRef)) > 0 then Exit(True);
+    if SameText(FirstParentToken(Child.TypeRef), 'TObject') then
+      Exit(True);
     Exit;                              // nur ersten Parameter pruefen
   end;
 end;
