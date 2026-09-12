@@ -67,8 +67,15 @@ unit uManagedResultUninit;
 // Warum praktisch FP-frei: VOR dem ersten textuellen Write gibt es keinen
 // legalen Weg, wie Result definierten Inhalt haette - die einzigen
 // Seitenkanaele (absolute-Alias, @Result, var/out-Durchreichung, asm)
-// werden als Write bzw. Skip behandelt. Branch-Blindheit kostet nur
-// False NEGATIVES (Write im then-Zweig VOR dem Lesen dahinter), nie FPs;
+// werden als Write bzw. Skip behandelt. Branch-Blindheit kostet
+// ueberwiegend False NEGATIVES (Write im then-Zweig VOR dem Lesen
+// dahinter) - die fruehere Behauptung 'nie FPs' war zu stark: der
+// Walker meldet in DOKUMENTREIHENFOLGE, beim Separator-Join-Idiom
+// ('if i > 0 then Result := Result + Sep + A[i] else Result := A[i]')
+// stand der Lese-Arm vor dem Schreib-Arm und wurde als FP gemeldet,
+// obwohl die erste Iteration immer den else-Arm nimmt. Seit
+// Voll-Review 2026-09-12 (Major 76) gilt ein if mit bar schreibendem
+// Arm deshalb konservativ als Write (s. IfArmSchreibtBar);
 // Pfad-Analyse ist Variante 1 (spaeteres Inkrement, CFG).
 //
 // Kollisionsregel (User-Entscheid): wo SCA196 feuert, bleibt SCA121
@@ -572,10 +579,68 @@ begin
     St.Written := True;
 end;
 
+// True wenn ein ARM des if-Statements Result (oder den FnName-Alias)
+// bar zuweist, OHNE es dabei zu lesen. Geprueft werden die direkten
+// Statement-Kinder und - fuer den else-Zweig - die Kinder eines
+// direkten nkElseBranch (ParseIfStmt haengt das then-Statement direkt
+// an, das else-Statement unter nkElseBranch).
+//
+// Voll-Review 2026-09-12 (Major 76): schreibt ein Arm bar, kann die
+// Laufzeit diesen Arm zuerst nehmen - ein Read im Geschwister-Arm ist
+// dann kein beweisbarer Uninitialized-Read mehr. Das Separator-Join-
+// Idiom 'for i := ... do if i > 0 then Result := Result + Sep + A[i]
+// else Result := A[i]' nimmt in der ERSTEN Iteration immer den
+// else-Arm; der alte Walker meldete den then-Arm in Dokumentreihen-
+// folge als FP und widerlegte damit die Kopf-Behauptung 'Branch-
+// Blindheit kostet nie FPs'.
+function IfArmSchreibtBar(IfNode: TAstNode; const St: TScanState): Boolean;
+
+  function ArmSchreibtBar(Arm: TAstNode): Boolean;
+  var
+    LhsNorm : string;
+    RhsLow  : string;
+    Rhs     : TRhsUse;
+    HeadKind: Integer;
+  begin
+    Result := False;
+    if Arm.Kind <> nkAssign then Exit;
+    LhsNorm  := NormalizeLhs(Arm.Name);
+    HeadKind := LhsHead(LhsNorm, RESULT_IDENT);
+    if (HeadKind = 0) and (St.FnNameLow <> '') then
+      HeadKind := LhsHead(LhsNorm, St.FnNameLow);
+    if HeadKind <> 1 then Exit;                    // nur die BARE Zuweisung
+    RhsLow := StripStringLiterals(LowerCase(Arm.TypeRef));
+    ClassifyResultUses(RhsLow, Rhs);
+    Result := not Rhs.Reads;
+  end;
+
+var
+  Child, ElseChild : TAstNode;
+begin
+  Result := False;
+  for Child in IfNode.Children do
+  begin
+    if ArmSchreibtBar(Child) then Exit(True);
+    if Child.Kind = nkElseBranch then
+      for ElseChild in Child.Children do
+        if ArmSchreibtBar(ElseChild) then Exit(True);
+  end;
+end;
+
 procedure WalkNode(N: TAstNode; var St: TScanState);
 var
   Child : TAstNode;
 begin
+  // Major 76 (Voll-Review 2026-09-12): if-Statement mit einem bar
+  // schreibenden Arm -> ohne CFG ist kein Read der Geschwister-Arme
+  // beweisbar; konservativ gilt das ganze if als Write (FN-Richtung,
+  // nie FP). Bestandsverhalten dahinter unveraendert: eine bare
+  // Zuweisung in einem Arm setzte Written schon immer global.
+  if (N.Kind = nkIfStmt) and IfArmSchreibtBar(N, St) then
+  begin
+    St.Written := True;
+    Exit;
+  end;
   case N.Kind of
     nkAssign: HandleAssign(N, St);
     nkCall:   HandleCall(N, St);
