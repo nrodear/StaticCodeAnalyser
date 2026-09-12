@@ -101,21 +101,34 @@ var
   IsSectionKw : Boolean;
   IsResetKw   : Boolean;
   ParenDepth  : Integer;
+  ScanState   : TCommentScanState;
+  DummyCol    : Integer;
+  Line        : string;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     LastSection := '';
     ParenDepth  := 0;
+    ScanState   := Default(TCommentScanState);
     for i := 0 to Lines.Count - 1 do
     begin
+      // Kommentar-Zustand UEBER Zeilen (Voll-Review 2026-09-12, Major
+      // 48): die Rohzeilen-Sicht las Fortsetzungszeilen mehrzeiliger
+      // Blockkommentare als Code - stand das Wort var am Anfang einer
+      // Kommentar-Fortsetzungszeile, setzte es LastSection='var', und
+      // die naechste ECHTE var-Section
+      // wurde als 'Consecutive var section' gemeldet. ScanCodeLine
+      // entfernt Kommentare zustandsbehaftet und blankt Literale -
+      // damit ist auch das ':='-Gate unten automatisch literal-fest.
+      Line := TDetectorUtils.ScanCodeLine(Lines[i], ScanState, DummyCol);
       // Section-Erkennung NUR auf Statement-Ebene (Paren-Tiefe 0). Innerhalb
       // einer (mehrzeiligen) Parameterliste sind `const`/`var`-Zeilenanfaenge
       // Parameter-Modifier, keine Sections -> nicht werten (sonst FP auf der
       // ersten Body-`var`-Section nach `procedure Foo(... var X: T);`).
       if ParenDepth <= 0 then
       begin
-        Word := ExtractFirstWord(Lines[i], Col);
+        Word := ExtractFirstWord(Line, Col);
         if Word <> '' then
         begin
           Lower := LowerCase(Word);
@@ -129,8 +142,7 @@ begin
           // LastSection ueberlebt beliebige Identifier-Zeilen).
           // Geprueft auf der geblankten Zeile - ':=' in einem
           // String-Literal zaehlt nicht.
-          if IsSectionKw and
-             (Pos(':=', TDetectorUtils.BlankStringLiterals(Lines[i])) > 0) then
+          if IsSectionKw and (Pos(':=', Line) > 0) then
             IsSectionKw := False;
           IsResetKw := (Lower = 'procedure') or (Lower = 'function')
                     or (Lower = 'constructor') or (Lower = 'destructor')
@@ -158,7 +170,7 @@ begin
       // Paren-Tiefe der Zeile nachfuehren - NACH der Wort-Wertung, damit
       // `procedure Foo(` selbst noch als Reset auf Tiefe 0 zaehlt und erst
       // die Folgezeilen (Parameter) als "in Klammern" gelten.
-      Inc(ParenDepth, ParenDelta(Lines[i]));
+      Inc(ParenDepth, ParenDelta(Line));
       if ParenDepth < 0 then ParenDepth := 0;
     end;
   finally

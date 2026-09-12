@@ -89,6 +89,9 @@ var
   SeenVis     : TStringList;
   CurrentVis  : string;
   CurHasMembs : Boolean;
+  ScanState   : TCommentScanState;
+  DummyCol    : Integer;
+  Line        : string;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
@@ -97,9 +100,16 @@ begin
     SeenVis.CaseSensitive := False;
     CurrentVis := '';
     CurHasMembs := False;
+    ScanState := Default(TCommentScanState);
     for i := 0 to Lines.Count - 1 do
     begin
-      Word := ExtractFirstWord(Lines[i]);
+      // Kommentar-Zustand UEBER Zeilen (Voll-Review 2026-09-12, Major
+      // 48): ein 'end' oder 'private' in der Fortsetzungszeile eines
+      // mehrzeiligen Blockkommentars resettete bzw. vergiftete den
+      // Klassen-State. ScanCodeLine entfernt Kommentare
+      // zustandsbehaftet und blankt Literale.
+      Line := TDetectorUtils.ScanCodeLine(Lines[i], ScanState, DummyCol);
+      Word := ExtractFirstWord(Line);
       if Word = '' then Continue;
       L := LowerCase(Word);
       // `end` schliesst Klassen-Block (oder andere) - State zuruecksetzen

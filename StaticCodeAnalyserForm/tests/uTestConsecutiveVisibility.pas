@@ -14,6 +14,8 @@ type
     [Test] procedure AlternatingVisibility_NoFinding;
     [Test] procedure EmptyHeaderThenSame_NotReported;
     [Test] procedure ConsecutiveVisibility_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Major 48): Kommentar-Fortsetzungszeilen
+    [Test] procedure CommentContinuationPrivate_NoFinding;
   end;
 
 implementation
@@ -131,6 +133,34 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkConsecutiveVisibility finding');
+  finally F.Free; end;
+end;
+
+procedure TTestConsecutiveVisibility.CommentContinuationPrivate_NoFinding;
+// Voll-Review 2026-09-12 (Major 48): das Wort 'private' in der
+// Fortsetzungszeile eines mehrzeiligen Blockkommentars vergiftete den
+// Klassen-State - die Kommentarzeile wurde als zweite private-Section
+// gemeldet (Bestands-Exe: 1 FP, empirisch belegt, cv1.pas).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    FA: Integer;'#13#10 +
+  '    { Hinweis:'#13#10 +
+  '      private Daten hier }'#13#10 +
+  '    procedure P;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.P; begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkConsecutiveVisibility),
+    'private im Kommentar ist keine Visibility-Section');
   finally F.Free; end;
 end;
 
