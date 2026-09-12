@@ -1085,27 +1085,13 @@ begin
 end;
 
 procedure CollectBodyTokens(Root: TAstNode; SB: TStringBuilder);
-// Iterativ analog uUnusedLocal.CollectAllTokens - sammelt Name+TypeRef.
-var
-  Stack : TStack<TAstNode>;
-  Cur   : TAstNode;
-  i     : Integer;
+// Sammelt Name+TypeRef. Der Kopf sagte schon 'Iterativ analog
+// uUnusedLocal.CollectAllTokens' - seit Voll-Review 2026-09-12
+// (Posten 89) ist es nicht mehr analog, sondern dieselbe Routine:
+// TDetectorUtils.CollectNameTypeTokens. Wrapper bleibt fuer die
+// Aufrufer dieser Unit.
 begin
-  if Root = nil then Exit;
-  Stack := TStack<TAstNode>.Create;
-  try
-    Stack.Push(Root);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack.Pop;
-      if Cur.Name    <> '' then SB.Append(' ').Append(Cur.Name);
-      if Cur.TypeRef <> '' then SB.Append(' ').Append(Cur.TypeRef);
-      for i := 0 to Cur.Children.Count - 1 do
-        Stack.Push(Cur.Children[i]);
-    end;
-  finally
-    Stack.Free;
-  end;
+  TDetectorUtils.CollectNameTypeTokens(Root, SB);
 end;
 
 function LooksLikeRealLocalVar(Lines: TStringList; LineNo1: Integer): Boolean;

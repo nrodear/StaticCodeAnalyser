@@ -406,6 +406,26 @@ type
     class function BuildMethodOwnerMap(UnitNode: TAstNode)
       : TDictionary<TAstNode, string>; static;
 
+    // Haengt Name und TypeRef JEDES Knotens des Teilbaums space-getrennt
+    // an SB an - der Flachtext, auf dem uUnusedLocal, uUnusedParameter
+    // und uUninitVar ihr Ganzwort-Matching fahren.
+    //
+    // Iterativ (eigener Stack), damit tiefe ASTs keinen Stack-Overflow
+    // ausloesen. Besuchsreihenfolge ist die der bisherigen drei Kopien
+    // (Pop/Push-DFS) - fuer eine Konkatenation ohne Positionsbezug
+    // ohnehin unerheblich, aber so bleibt der Flachtext byte-gleich.
+    //
+    // Zentralisiert aus drei byte-gleichen Kopien (Voll-Review
+    // 2026-09-12, Posten 89): uUnusedLocal.CollectAllTokens,
+    // uUnusedParameter.CollectAllTokens und uUninitVar.CollectBodyTokens
+    // (letztere trug den Hinweis 'Iterativ analog
+    // uUnusedLocal.CollectAllTokens' bereits im Kopf). Der Vertrag ist
+    // damit an EINER Stelle aenderbar - das war der Punkt: der
+    // KnownGap-Test Local_NameOnlyInStringLiteral_KnownGap kuendigt ein
+    // Literal-Blanking an, das sonst drei Units synchron braeuchte.
+    class procedure CollectNameTypeTokens(Root: TAstNode;
+      SB: TStringBuilder); static;
+
     // Der ERSTE Bezeichner der Vorfahrenliste eines nkClass.TypeRef -
     // in Delphi zwingend die Basisklasse, alles danach sind
     // Interfaces. Der Parser legt die Liste SPACE-separiert ab
@@ -1523,6 +1543,31 @@ end;
 class function TDetectorUtils.OwnerTypeNameLower(const AName: string): string;
 begin
   Result := LowerCase(OwnerTypeName(AName));
+end;
+
+class procedure TDetectorUtils.CollectNameTypeTokens(Root: TAstNode;
+  SB: TStringBuilder);
+// Vertrag siehe interface.
+var
+  Stack : TStack<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  if Root = nil then Exit;
+  Stack := TStack<TAstNode>.Create;
+  try
+    Stack.Push(Root);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack.Pop;
+      if Cur.Name    <> '' then SB.Append(' ').Append(Cur.Name);
+      if Cur.TypeRef <> '' then SB.Append(' ').Append(Cur.TypeRef);
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Push(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
 end;
 
 class function TDetectorUtils.BuildMethodOwnerMap(UnitNode: TAstNode)
