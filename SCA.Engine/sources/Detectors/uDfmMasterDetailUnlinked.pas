@@ -96,6 +96,18 @@ function HasParameterizedSql(N: TComponentNode): Boolean;
 const
   SQL_PROPS : array[0..2] of string =
     ('SQL.Strings', 'CommandText', 'SelectSQL.Strings');
+  // Ein ':' zaehlt als Parameterstart, wenn weder links noch rechts
+  // ein weiterer ':' steht ('::' = Cast) und rechts ein Bezeichner
+  // beginnt. Eigene kleine Funktion, damit die Schleife flach bleibt
+  // (die verschachtelte Erstfassung riss die eigene SCA176-Schwelle).
+  function IsParamColon(const S: string; i: Integer): Boolean;
+  begin
+    Result := (S[i] = ':')
+      and ((i = 1) or (S[i - 1] <> ':'))
+      and (S[i + 1] <> ':')
+      and CharInSet(S[i + 1], ['A'..'Z', 'a'..'z', '_']);
+  end;
+
 var
   PropName : string;
   V        : TPropValue;
@@ -109,13 +121,7 @@ begin
     if not (V.Kind in [pvkString, pvkStrList]) then Continue;
     S := V.RawValue;
     for i := 1 to Length(S) - 1 do
-    begin
-      if S[i] <> ':' then Continue;
-      if (i > 1) and (S[i - 1] = ':') then Continue;
-      if S[i + 1] = ':' then Continue;
-      if CharInSet(S[i + 1], ['A'..'Z', 'a'..'z', '_']) then
-        Exit(True);
-    end;
+      if IsParamColon(S, i) then Exit(True);
   end;
 end;
 
