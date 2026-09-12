@@ -55,51 +55,10 @@ uses
 
 class function TCyclomaticComplexityDetector.CountBooleanOpsInCond(
   const CondText: string): Integer;
-// Zaehlt and/or/xor als ganze Woerter (case-insensitive). Wort-Boundary
-// per Pre/Post-Char-Check, damit z.B. 'random', 'standard' nicht matchen.
-var
-  Lo : string;
-  i  : Integer;
-
-  function IsWordChar(C: Char): Boolean;
-  begin
-    // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
-    // lokale Fassung war zeichenweise identisch zu
-    // TDetectorUtils.IsIdentChar (a..z, A..Z, 0..9, _). Der Wrapper
-    // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
-    Result := TDetectorUtils.IsIdentChar(C);
-  end;
-
-  function IsBoundaryAt(Pos: Integer): Boolean;
-  begin
-    Result := (Pos < 1) or (Pos > Length(Lo)) or (not IsWordChar(Lo[Pos]));
-  end;
-
-  function MatchAt(Pos: Integer; const W: string): Boolean;
-  var
-    j : Integer;
-  begin
-    if Pos + Length(W) - 1 > Length(Lo) then Exit(False);
-    for j := 1 to Length(W) do
-      if Lo[Pos + j - 1] <> W[j] then Exit(False);
-    Result := IsBoundaryAt(Pos - 1) and IsBoundaryAt(Pos + Length(W));
-  end;
-
+// Seit Voll-Review 2026-09-12 zentral (TDetectorUtils.
+// CountBooleanOpsLower, s. Begruendung dort). Wrapper bleibt.
 begin
-  Result := 0;
-  // Review-MEDIUM 2026-08-09: Literale blanken - and/or/xor INNERHALB eines
-  // String-Literals (z.B. Pos(' and ', SQL)) sind keine Boolean-Operatoren.
-  Lo := LowerCase(TDetectorUtils.BlankStringLiterals(CondText));
-  i  := 1;
-  while i <= Length(Lo) do
-  begin
-    case Lo[i] of
-      'a': if MatchAt(i, 'and') then begin Inc(Result); Inc(i, 3); Continue; end;
-      'o': if MatchAt(i, 'or')  then begin Inc(Result); Inc(i, 2); Continue; end;
-      'x': if MatchAt(i, 'xor') then begin Inc(Result); Inc(i, 3); Continue; end;
-    end;
-    Inc(i);
-  end;
+  Result := TDetectorUtils.CountBooleanOpsLower(CondText);
 end;
 
 class procedure TCyclomaticComplexityDetector.Walk(Node: TAstNode;

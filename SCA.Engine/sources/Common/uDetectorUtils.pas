@@ -567,6 +567,19 @@ type
     // Schritt).
     class function IsEventHandlerSignature(MethodNode: TAstNode)
       : Boolean; static;
+
+    // Zaehlt and/or/xor als ganze Woerter (case-insensitive,
+    // Wort-Boundary per Pre-/Post-Zeichen) im literal-geblankten
+    // Text - and/or/xor INNERHALB eines String-Literals
+    // (Pos(' and ', SQL)) sind keine Boolean-Operatoren. Gehoben aus
+    // uCognitiveComplexity/uCyclomaticComplexity (Voll-Review
+    // 2026-09-12): die dokumentierte Kopier-Begruendung ('Detektoren
+    // unabhaengig halten') war am Code erodiert - beide Kopien hingen
+    // laengst an TDetectorUtils (IsIdentChar, BlankStringLiterals)
+    // und mussten zweimal synchron nachgezogen werden (Backlog-Welle
+    // 1; Literal-Blanking 2026-08-09).
+    class function CountBooleanOpsLower(const ACondText: string)
+      : Integer; static;
   end;
 
 
@@ -1956,6 +1969,43 @@ begin
   Seg := LowerCase(UnqualifiedNameLast(Trim(ATypeName)));
   if Seg = '' then Exit;
   Result := AFfiTypes.IndexOf(Seg) >= 0;
+end;
+
+class function TDetectorUtils.CountBooleanOpsLower(
+  const ACondText: string): Integer;
+// Byte-identische Hebung der beiden Detektor-Fassungen (Kern-Schleife
+// samt Wort-Boundary-Helfern; Begruendung an der Deklaration).
+var
+  Lo : string;
+  i  : Integer;
+  function IsBoundaryAt(Pos: Integer): Boolean;
+  begin
+    Result := (Pos < 1) or (Pos > Length(Lo)) or (not IsIdentChar(Lo[Pos]));
+  end;
+  function MatchAt(Pos: Integer; const W: string): Boolean;
+  var j: Integer;
+  begin
+    if Pos + Length(W) - 1 > Length(Lo) then Exit(False);
+    for j := 1 to Length(W) do
+      if Lo[Pos + j - 1] <> W[j] then Exit(False);
+    Result := IsBoundaryAt(Pos - 1) and IsBoundaryAt(Pos + Length(W));
+  end;
+begin
+  Result := 0;
+  // Literale blanken - and/or/xor in einem String-Literal zaehlen nicht.
+  Lo := LowerCase(BlankStringLiterals(ACondText));
+  i  := 1;
+  while i <= Length(Lo) do
+  begin
+    case Lo[i] of
+      'a': if MatchAt(i, 'and') then begin Inc(Result); Inc(i, 3); Continue; end;
+      'o': if MatchAt(i, 'or')  then begin Inc(Result); Inc(i, 2); Continue; end;
+      'x': if MatchAt(i, 'xor') then begin Inc(Result); Inc(i, 3); Continue; end;
+    else
+      ;   // jedes andere Zeichen: kein Operator-Anfang, einfach weiter
+    end;
+    Inc(i);
+  end;
 end;
 
 class function TDetectorUtils.IsEventHandlerSignature(
