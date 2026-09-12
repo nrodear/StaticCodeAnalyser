@@ -33,6 +33,34 @@
 //     (case-insensitive): `AnsiString(`, `RawByteString(`, `ShortString(`
 //   * Skip-Heuristik: Argument ist leerer String-Literal ('')
 //
+// PREFIX-MATCH: die FN-Klasse und warum sie (noch) steht
+// (Voll-Review 2026-09-12, Major 85)
+//   Der Match greift nur am ANFANG von nkCall.Name bzw. nkAssign.TypeRef.
+//   Der Parser legt je Statement genau EINEN Knoten an und faltet
+//   Argumente als Text in den Namen (ParseCallOrAssign / ParsePrimary),
+//   es gibt also keine Unterknoten fuer Teilausdruecke. Damit sind zwei
+//   haeufige Formen systematisch blind:
+//     SaveToFile(AnsiString(u));        // Cast in ARGUMENT-Position
+//     a := 'x' + AnsiString(u);         // Cast MITTEN im RHS
+//   Beide sind an der Bestands-Exe als Nicht-Funde belegt, waehrend die
+//   Zuweisungsform derselben Zeile gemeldet wird.
+//
+//   Das ist KEINE gute Grenze, nur eine bewusst noch nicht gezogene:
+//   ein Substring-Scan mit linker Wortgrenze wuerde sie schliessen. Er
+//   ist hier bewusst NICHT eingebaut, weil er ein RECALL-PAKET ist -
+//   am Korpus gezaehlt (16.023 Dateien, Shape-Naeherung): 881 Casts
+//   stehen am Statement-/RHS-Anfang, 1.828 nicht. Die Regel wuerde sich
+//   also verdreifachen. Solche Bewegungen bekommen im Projekt einen
+//   eigenen Zweig und einen eigenen Bau, sonst ueberdecken sie jeden
+//   anderen Vertrag der Charge - und die 1.828 brauchen vorher eine
+//   FP-Stichprobe (Alcinoe faehrt A-Suffix-Helfer, die schon heute die
+//   ASCII_SAFE_OPERAND_PREFIXES-Liste fuellen).
+//
+//   Die zwei Formen sind als dokumentierende Tests festgehalten
+//   (ArgumentPositionCast_NotReported_KnownLimit,
+//   MidRhsCast_NotReported_KnownLimit) - faellt die Grenze, werden sie
+//   rot und muessen bewusst umgestellt werden.
+//
 // Bewusste False-Positives (akzeptabel):
 //   * `AnsiString(<expr>)` wenn <expr> bereits AnsiString ist (redundanter
 //     Cast) - signalisiert Verwirrung oder Konversion zwischen Code-Pages.
