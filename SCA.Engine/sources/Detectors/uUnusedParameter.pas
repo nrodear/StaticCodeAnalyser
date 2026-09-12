@@ -320,9 +320,17 @@ begin
   try
     if Params.Count = 0 then Exit;
     LowName := LowerCase(Trim(Params[0].Name));   // Modifier-Prefix stoert EndsWith nicht
-    LowType := LowerCase(Params[0].TypeRef);
+    // Typvergleich EXAKT (FirstParentToken: Generic gekappt, letztes
+    // Namenssegment) statt Substring (Voll-Review 2026-09-12,
+    // Posten 88): Pos('tobject', ...) erklaerte jede Methode mit
+    // TObjectList<T>/TObjectDictionary als erstem Parameter zum
+    // Event-Handler und skippte sie KOMPLETT - der echte ungenutzte
+    // Parameter daneben verschwand still. Der eigene Kommentar oben
+    // dokumentierte immer nur den exakten Typ TObject;
+    // 'System.TObject' matcht weiter.
+    LowType := TDetectorUtils.FirstParentToken(Params[0].TypeRef);
     Result := (LowName = 'sender') or LowName.EndsWith('sender')
-              or (Pos('tobject', LowType) > 0);
+              or SameText(LowType, 'TObject');
   finally
     Params.Free;
   end;

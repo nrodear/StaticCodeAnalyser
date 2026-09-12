@@ -1,4 +1,4 @@
-unit uTestUnusedParameter;
+﻿unit uTestUnusedParameter;
 
 // Tests fuer den TUnusedParameterDetector (fkUnusedParameter).
 //
@@ -91,6 +91,9 @@ type
     [Test] procedure RoutinePassedAsArgument_NotReported;
     [Test] procedure RoutineAssignedToEvent_NotReported;
     [Test] procedure PlainRoutine_StillReported;
+    // Voll-Review 2026-09-12: Handler-Amnestie exakt statt Substring
+    [Test] procedure TObjectListFirstParam_UnusedStillReported;
+    [Test] procedure SenderTObject_UnusedSecondParam_NotReported;
   end;
 
 implementation
@@ -1131,6 +1134,61 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkUnusedParameter) > 0,
         'normal gerufen - der ungenutzte Parameter bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.TObjectListFirstParam_UnusedStillReported;
+// Voll-Review 2026-09-12 (Posten 88): IsLikelyEventHandler matchte
+// 'tobject' als SUBSTRING - 'AddItems(AList: TObjectList<TItem>;
+// Count: Integer)' galt als Event-Handler und wurde KOMPLETT
+// geskippt, der ungenutzte Count verschwand still (Bestands-Exe: 0
+// Funde, empirisch belegt). Jetzt exakter Typvergleich.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Generics.Collections;'#13#10 +
+  'type'#13#10 +
+  '  TItem = class end;'#13#10 +
+  'procedure AddItems(AList: TObjectList<TItem>; Count: Integer);'#13#10 +
+  'implementation'#13#10 +
+  'procedure AddItems(AList: TObjectList<TItem>; Count: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  AList.Clear;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkUnusedParameter) >= 1,
+    'TObjectList<T> als erster Parameter ist kein Event-Handler - ' +
+    'der ungenutzte Count muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.SenderTObject_UnusedSecondParam_NotReported;
+// Gegenrichtung: echte Handler-Signatur (Sender: TObject) bleibt
+// amnestiert, auch wenn ein Pflicht-Parameter ungenutzt ist - das
+// war die dominante SCA054-FP-Klasse (Real-World 2026-06-28). Ein
+// uebergriffiger Exakt-Fix, der die Amnestie verliert, waere rot.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TForm1 = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure GridDrawCell(Sender: TObject; ACol: Integer);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TForm1.GridDrawCell(Sender: TObject; ACol: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Male;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedParameter),
+    'Sender: TObject amnestiert den ganzen Handler - kein Fund auf ACol');
   finally F.Free; end;
 end;
 
