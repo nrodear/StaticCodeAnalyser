@@ -161,40 +161,9 @@ begin
   Result := Copy(CallName, Open + 1, Close - Open - 1);
 end;
 
-// Splittet den Args-String an TOP-LEVEL-Kommas (respektiert nested Parens +
-// String-Literale). IfThen(cond, a, b) -> ['cond', ' a', ' b'].
-function SplitTopLevelArgs(const Args: string): TArray<string>;
-var
-  parts : TList<string>;
-  i, depth, start : Integer;
-  inStr : Boolean;
-  c : Char;
-begin
-  parts := TList<string>.Create;
-  try
-    depth := 0; inStr := False; start := 1;
-    for i := 1 to Length(Args) do
-    begin
-      c := Args[i];
-      if inStr then
-      begin
-        if c = '''' then inStr := False;
-      end
-      else if c = '''' then inStr := True
-      else if c = '(' then Inc(depth)
-      else if c = ')' then Dec(depth)
-      else if (c = ',') and (depth = 0) then
-      begin
-        parts.Add(Copy(Args, start, i - start));
-        start := i + 1;
-      end;
-    end;
-    parts.Add(Copy(Args, start, Length(Args) - start + 1));
-    Result := parts.ToArray;
-  finally
-    parts.Free;
-  end;
-end;
+// Der Top-Level-Argument-Split lebt seit Voll-Review 2026-09-12
+// (Posten 71) byte-identisch in TDetectorUtils.SplitTopLevelArgs -
+// uInheritedMethodEmpty war die dritte Kopie-Anwaerterin.
 
 // Lowercased Identifier direkt vor '(' an ParenPos; '' bei Grouping-Paren
 // '(expr)' (dann steht kein Bezeichner unmittelbar davor).
@@ -237,7 +206,7 @@ var
   cleaned, id : string;
 begin
   Result := False;
-  parts := SplitTopLevelArgs(Args);
+  parts := TDetectorUtils.SplitTopLevelArgs(Args);
   if Length(parts) < 2 then Exit;   // keine Value-Branches
   for k := 1 to High(parts) do      // Index 0 = Kondition, ausgeschlossen
   begin

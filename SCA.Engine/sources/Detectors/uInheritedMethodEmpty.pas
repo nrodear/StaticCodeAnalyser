@@ -81,6 +81,66 @@ end;
 // jetzt TDetectorUtils.UnqualifiedNameLast (war in 8 Detektoren dupliziert,
 // eine Kopie mit abweichender Semantik). Verhalten hier unveraendert.
 
+// True wenn die Argumentliste des inherited-Aufrufs die Parameter der
+// Methode EXAKT 1:1 durchreicht: gleiche Anzahl, gleiche Reihenfolge,
+// jedes Argument ist der pure Parameter-Name (wie das Sonar-Pendant
+// InheritedMethodWithNoCodeCheck).
+//
+// Voll-Review 2026-09-12 (Major 71): vorher wurde die Argumentliste
+// komplett IGNORIERT - `inherited Create(nil)` (reparentet auf nil)
+// und `inherited SetName(Trim(S))` (transformiert das Argument)
+// bekamen die Empfehlung 'remove the override entirely'; wer ihr
+// folgt, aendert das Verhalten. Ohne Klammerteil (`inherited Create;`)
+// bleibt der Vertrag des Vorgaengers unveraendert bestehen.
+//
+// nkParam.Name traegt den Modifier als Praefix ('const S') - fuer den
+// Vergleich zaehlt das letzte Leerraum-getrennte Wort.
+function ArgsSindExakteDurchreichung(MethodNode: TAstNode;
+  const InheritArg: string): Boolean;
+var
+  OpenP, CloseP, i, k : Integer;
+  Args                : TArray<string>;
+  ParamNames          : TList<string>;
+  Child               : TAstNode;
+  PName               : string;
+  SpacePos            : Integer;
+begin
+  Result := False;
+  OpenP := Pos('(', InheritArg);
+  if OpenP = 0 then Exit(True);   // kein Klammerteil: Vorgaenger-Vertrag
+  CloseP := Length(InheritArg);
+  while (CloseP > OpenP) and (InheritArg[CloseP] <> ')') do Dec(CloseP);
+  if CloseP <= OpenP then Exit;   // unbalanciert - konservativ kein Fund
+
+  ParamNames := TList<string>.Create;
+  try
+    for i := 0 to MethodNode.Children.Count - 1 do
+    begin
+      Child := MethodNode.Children[i];
+      if Child.Kind <> nkParam then Continue;
+      PName := Child.Name;
+      SpacePos := LastDelimiter(' ', PName);
+      if SpacePos > 0 then
+        PName := Copy(PName, SpacePos + 1, MaxInt);
+      ParamNames.Add(PName);
+    end;
+
+    Args := TDetectorUtils.SplitTopLevelArgs(
+      Copy(InheritArg, OpenP + 1, CloseP - OpenP - 1));
+    // 'Destroy()' liefert genau ein leeres Teil - das ist die leere
+    // Argumentliste, keine Ein-Argument-Liste.
+    if (Length(Args) = 1) and (Trim(Args[0]) = '') then
+      Exit(ParamNames.Count = 0);
+
+    if Length(Args) <> ParamNames.Count then Exit;
+    for k := 0 to High(Args) do
+      if not SameText(Trim(Args[k]), ParamNames[k]) then Exit;
+    Result := True;
+  finally
+    ParamNames.Free;
+  end;
+end;
+
 // Liefert den ersten Identifier aus einem Call-Ausdruck.
 // 'Foo' -> 'Foo'; 'Foo(args)' -> 'Foo'; '' -> ''.
 function FirstIdent(const Expr: string): string;
@@ -150,14 +210,19 @@ begin
   if BodyCount <> 1 then Exit;
   if TheOnly.Kind <> nkInherited then Exit;
 
-  // inherited mit leerem Argument ODER inherited <selber Method-Name>:
-  // beides bedeutet "nur Bypass".
+  // inherited mit leerem Argument ODER inherited <selber Method-Name>
+  // mit EXAKT durchgereichten Argumenten: beides bedeutet "nur Bypass".
+  // Ein anderer NAME meint eine andere Methode; TRANSFORMIERTE
+  // Argumente (`inherited Create(nil)`, `inherited SetName(Trim(S))`)
+  // sind seit Voll-Review 2026-09-12 (Major 71) ebenfalls KEIN Bypass -
+  // die Empfehlung 'remove the override' wuerde dort Verhalten aendern.
   InheritArg := Trim(TheOnly.Name);
   MethShort  := TDetectorUtils.UnqualifiedNameLast(MethodNode.Name);
   if InheritArg <> '' then
   begin
     var ArgIdent := FirstIdent(InheritArg);
     if not SameText(ArgIdent, MethShort) then Exit;
+    if not ArgsSindExakteDurchreichung(MethodNode, InheritArg) then Exit;
   end;
 
   F            := TLeakFinding.Create;

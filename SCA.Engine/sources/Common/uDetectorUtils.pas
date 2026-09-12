@@ -224,6 +224,18 @@ type
     // die Kopien waren namensgleich, aber semantisch gegensaetzlich.
     class function BlankStringLiterals(const S: string): string; static;
 
+    // Splittet einen Argumentlisten-Text an TOP-LEVEL-Kommas: nested
+    // Parens und String-Literale werden respektiert.
+    // 'cond, a, b' -> ['cond', ' a', ' b'] (Teile UNGETRIMMT, wie die
+    // Ursprungsfassung).
+    // Zentralisiert aus uIfThenShortCircuit (Voll-Review 2026-09-12,
+    // Posten 71: dritte Kopie stand an - uInheritedMethodEmpty braucht
+    // denselben Split fuer den 1:1-Durchreichungs-Vergleich). NICHT
+    // verwechseln mit uLeakDetector2.SinkSplitTopLevelArgs - der
+    // Balancierer dort hat einen eigenen, dokumentierten Vertrag
+    // (Namensvetter, bewusst getrennt).
+    class function SplitTopLevelArgs(const Args: string): TArray<string>; static;
+
     // === ZEILEN-SCANNER (Strings + Kommentare) =========================
     // Single source of truth fuer die String-/Kommentar-Zustandsmaschine.
     // Frueher hatten uFloatEquality und uNoSonarMarker je eine eigene Kopie
@@ -1014,6 +1026,42 @@ begin
     else if inStr then
       Result[i] := ' ';
     Inc(i);
+  end;
+end;
+
+class function TDetectorUtils.SplitTopLevelArgs(
+  const Args: string): TArray<string>;
+// Byte-identische Zentralisierung der uIfThenShortCircuit-Fassung
+// (Voll-Review 2026-09-12, Posten 71) - Vertrag siehe interface.
+var
+  parts : TList<string>;
+  i, depth, start : Integer;
+  inStr : Boolean;
+  c : Char;
+begin
+  parts := TList<string>.Create;
+  try
+    depth := 0; inStr := False; start := 1;
+    for i := 1 to Length(Args) do
+    begin
+      c := Args[i];
+      if inStr then
+      begin
+        if c = '''' then inStr := False;
+      end
+      else if c = '''' then inStr := True
+      else if c = '(' then Inc(depth)
+      else if c = ')' then Dec(depth)
+      else if (c = ',') and (depth = 0) then
+      begin
+        parts.Add(Copy(Args, start, i - start));
+        start := i + 1;
+      end;
+    end;
+    parts.Add(Copy(Args, start, Length(Args) - start + 1));
+    Result := parts.ToArray;
+  finally
+    parts.Free;
   end;
 end;
 
