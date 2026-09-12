@@ -15,6 +15,8 @@ type
     [Test] procedure LengthGreaterZero_NotReported;
     [Test] procedure NormalComparison_NotReported;
     [Test] procedure Finding_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Testluecke 124): die vierte Variante
+    [Test] procedure ZeroGreaterLength_Reported;
   end;
 
 implementation
@@ -115,6 +117,26 @@ begin
       if Fnd.Kind = fkBoolAlwaysTrue then begin Hit := Fnd; Break; end;
     Assert.IsNotNull(Hit, 'fkBoolAlwaysTrue finding expected');
     Assert.AreEqual(lsWarning, Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestBoolAlwaysTrue.ZeroGreaterLength_Reported;
+// Testluecke 124 (Voll-Review 2026-09-12): '0 > Length(s)' ist die
+// vierte Variante und die einzige mit eigenem Meldetext ('always
+// False' statt 'always True') - getestet waren nur >=, < und 0<=.
+// An der Bestands-Exe verifiziert: die Zeile meldet, mit genau diesem
+// Text.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string);'#13#10 +
+  'begin'#13#10 +
+  '  if 0 > Length(s) then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkBoolAlwaysTrue),
+    '0 > Length(s) ist immer False - Length ist nie negativ');
   finally F.Free; end;
 end;
 
