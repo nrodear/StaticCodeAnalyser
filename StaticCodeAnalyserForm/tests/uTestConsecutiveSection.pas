@@ -1,4 +1,4 @@
-unit uTestConsecutiveSection;
+﻿unit uTestConsecutiveSection;
 
 interface
 
@@ -13,6 +13,9 @@ type
     [Test] procedure ConstThenConst_Reported;
     [Test] procedure TypeThenType_Reported;
     [Test] procedure VarThenVar_Reported;
+    // Voll-Review 2026-09-12 (Blocker): Inline-var-Statements sind
+    // keine Sections.
+    [Test] procedure TwoInlineVars_NoFinding;
     [Test] procedure SectionAcrossProcedure_NoFinding;
     [Test] procedure VarParamThenBodyVar_NoFinding;
     [Test] procedure MultiLineParamThenConsecutiveVar_Reported;
@@ -86,6 +89,31 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkConsecutiveSection));
+  finally F.Free; end;
+end;
+
+procedure TTestConsecutiveSection.TwoInlineVars_NoFinding;
+// Zwei Inline-vars (Delphi 10.3+) im selben Rumpf sind STATEMENTS -
+// vor dem Fix meldete der zweite 'Consecutive var section', weil
+// LastSection beliebige Identifier-Zeilen ueberlebt. Das ':='-Gate
+// trennt Statement von Section; ':=' im String-Literal zaehlt nicht
+// (geblankte Zeile).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  'var A := 1;'#13#10 +
+  '  Nutze(A);'#13#10 +
+  'var B := 2;'#13#10 +
+  '  Nutze(B);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkConsecutiveSection),
+    'Inline-var-Statements duerfen keine Section-Folge melden');
   finally F.Free; end;
 end;
 

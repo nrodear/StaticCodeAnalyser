@@ -1,4 +1,4 @@
-unit uConsecutiveSection;
+﻿unit uConsecutiveSection;
 
 // Detektor fuer konsekutive Section-Keywords im Unit/Class-Scope:
 // `const X = 1; const Y = 2;` -> sollte `const X = 1; Y = 2;` sein.
@@ -37,7 +37,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uFileTextCache;
+  uFileTextCache,
+  uDetectorUtils;   // BlankStringLiterals (Inline-var-Gate)
 
 const
   EMIT_SEVERITY = lsHint;
@@ -135,6 +136,18 @@ begin
         begin
           Lower := LowerCase(Word);
           IsSectionKw := (Lower = 'const') or (Lower = 'type') or (Lower = 'var');
+          // Inline-var/const (Delphi 10.3+): 'var X := 1;' im Rumpf ist
+          // ein STATEMENT, keine Section. In einer echten Deklarations-
+          // Section ist ':=' nie legal (initialisierte Globals nutzen
+          // '='), also trennt genau dieses Token die beiden Welten.
+          // Ohne das Gate meldete der zweite Inline-var einer Methode
+          // 'Consecutive var section' (Voll-Review 2026-09-12, Blocker;
+          // LastSection ueberlebt beliebige Identifier-Zeilen).
+          // Geprueft auf der geblankten Zeile - ':=' in einem
+          // String-Literal zaehlt nicht.
+          if IsSectionKw and
+             (Pos(':=', TDetectorUtils.BlankStringLiterals(Lines[i])) > 0) then
+            IsSectionKw := False;
           IsResetKw := (Lower = 'procedure') or (Lower = 'function')
                     or (Lower = 'constructor') or (Lower = 'destructor')
                     or (Lower = 'begin') or (Lower = 'end')
