@@ -574,6 +574,7 @@ class function TSQLInjectionDetector.AllConcatTermsSafe(MethodNode: TAstNode;
 //   ' WHERE NAME=' + QuotedStr(s) + ' OR'   -> True
 //   ' WHERE NAME=' + name                   -> False (bare Identifier)
 //   ' WHERE NAME=' + Format('%s',[name])    -> False (kein safe-cast)
+//   ' WHERE NAME=' + (Sender as TEdit).Text -> False (Klammergruppe)
 //
 // SAFE_CASTS steht seit 2026-07-05 im Unit-const-Block (auch von
 // IsSafeSqlHelperCall genutzt).
@@ -648,6 +649,34 @@ begin
       TermStart := p;
       if ident = '' then
       begin
+        // Klammergruppe statt geblanktes Literal? Ein geblanktes
+        // Literal laesst j auf Blank/Operator/Ende stehen, NIE auf
+        // '(' (Voll-Review 2026-09-12, Blocker): '+ (Sender as
+        // TEdit).Text' lief hier als 'Literal-Position' durch und
+        // unterdrueckte den Fund - die Klammer der Standard-Cast-
+        // Syntax schaltete den Detektor ab, waehrend '+ Edit1.Text'
+        // ohne Klammern gemeldet wurde. Ist der balancierte
+        // Klammerinhalt nach dem Blanken leer (verklammertes
+        // Literal), bleibt die Position sicher; jeder andere Inhalt
+        // ist ein hier nicht bewerteter Ausdruck -> konservativ
+        // unsicher (bekannte Restgrenze: auch '+ (IntToStr(x))'
+        // meldet - die verklammerte Form eines safe-casts ist im
+        // Korpus kein gaengiges Idiom).
+        if (j <= Length(Stripped)) and (Stripped[j] = '(') then
+        begin
+          Depth := 1;
+          p := j + 1;
+          while (p <= Length(Stripped)) and (Depth > 0) do
+          begin
+            if Stripped[p] = '(' then Inc(Depth)
+            else if Stripped[p] = ')' then Dec(Depth);
+            Inc(p);
+          end;
+          if Trim(Copy(Stripped, j + 1, p - j - 2)) <> '' then
+            Exit(False);
+          i := p;
+          Continue;
+        end;
         // Position war ein gestripptes Literal -> ok.
         Inc(i);
         Continue;

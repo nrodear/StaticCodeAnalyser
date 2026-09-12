@@ -27,6 +27,9 @@ type
     [Test] procedure SQL_CreateTableMultilineLiteral_NoFinding;
     // Wortgrenze: 'commandtext' darf nicht 'mycommandtextra' matchen
     [Test] procedure SQL_CommandTextSubstring_NoFalsePositive;
+    // Voll-Review 2026-09-12 (Blocker): '(' hinter '+' galt als Literal
+    [Test] procedure SQL_ParenCastConcat_StillReported;
+    [Test] procedure SQL_ParenthesizedLiteralConcat_NoFinding;
   end;
 
   // ---- SQLInjection Erweiterungen ----------------------------------------------------
@@ -190,6 +193,49 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
       'SQL.Text mit Konkatenation – Error');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_ParenCastConcat_StillReported;
+// Voll-Review 2026-09-12 (Blocker): die Ident-Extraktion in
+// AllConcatTermsSafe lieferte bei '(' hinter dem '+' einen leeren
+// Ident, und der Leer-Ident-Zweig wertete die Position als geblanktes
+// Literal -> '+ (Sender as TEdit).Text' unterdrueckte den Fund,
+// waehrend '+ Edit1.Text' ohne Klammern gemeldet wurde (Bestands-Exe:
+// 0 vs. 1, empirisch belegt). Die Klammer der Standard-Cast-Syntax
+// schaltete den Detektor ab.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Suche(Sender: TObject);'#13#10+
+  'begin'#13#10+
+  '  Query.SQL.Text := ''SELECT * FROM T WHERE name=''+(Sender as TEdit).Text;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkSQLInjection),
+      'Klammergruppe hinter + ist kein Literal - der Cast-Ausdruck ' +
+      'traegt externen Input');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjection.SQL_ParenthesizedLiteralConcat_NoFinding;
+// Gegenrichtung zum Klammer-Gate: ein VERKLAMMERTES Literal blankt zu
+// '(   )' - leerer Klammerinhalt bleibt eine sichere Position (ein
+// Gate, das jede Klammer meldet, waere hier rot).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Run;'#13#10+
+  'begin'#13#10+
+  '  Query.SQL.Text := ''SELECT * FROM T WHERE k=''+(''fest'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkSQLInjection),
+      'verklammertes Literal ist kein externer Input');
   finally F.Free; end;
 end;
 
