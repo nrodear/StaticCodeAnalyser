@@ -223,21 +223,57 @@ begin
   Result := ResolvedTypeIsNonFloat(TypeStr);
 end;
 
-// Real-World-FP-Audit 2026-07-10: liefert True wenn direkt vor der Kennung
-// an IdentStart das Keyword 'const' steht. Eine Inline-/Sektions-Konstante
-// 'const deltaT = 1/(...)' bindet einen Wert und ist KEIN '='-Vergleich.
+// Real-World-FP-Audit 2026-07-10: liefert True wenn die Kennung an
+// IdentStart in einem const-Block gebunden wird. Eine Inline-/
+// Sektions-Konstante 'const deltaT = 1/(...)' bindet einen Wert und
+// ist KEIN '='-Vergleich.
+//
+// Seit Voll-Review 2026-09-12 (Major 65) laeuft der Scan rueckwaerts
+// ueber die 'ident = expr;'-EINTRAEGE des Blocks statt nur EIN Wort:
+// beim zweiten Eintrag ('const Margin = 10; Scale = 1.5;') stand
+// vorher ';' vor der Kennung, das Gate griff nicht, und die
+// Konstanten-Bindung wurde als Float-Vergleich gemeldet. Uebersprungen
+// werden nur Zeichen, die in const-Eintraegen legal sind - jedes
+// andere (':', '<', '[', ...) beendet die Suche als Nicht-Konstante,
+// damit 'x := scale = 1.5' nie bis zu einem fruehen const-Block
+// durchlaeuft. Dokumentierte Grenze: eine TYPISIERTE
+// Vorgaenger-Konstante ('B: Integer = 2;') kappt die Kette am ':' -
+// der Folge-Eintrag wird dann weiter gemeldet (konservativ, wie
+// Bestand).
+// Abschnitts-/Anweisungs-Keyword, das die Rueckwaertssuche von
+// PrecededByConstKeyword beendet (eigene Funktion, damit der Scan
+// unter der SCA176-Schwelle bleibt).
+function IstBlockEndeWort(const W: string): Boolean;
+begin
+  Result := (W = 'var') or (W = 'type') or (W = 'begin') or (W = 'end')
+         or (W = 'function') or (W = 'procedure') or (W = 'then')
+         or (W = 'do') or (W = 'if') or (W = 'while') or (W = 'until')
+         or (W = 'uses') or (W = 'implementation') or (W = 'interface');
+end;
+
 function PrecededByConstKeyword(const Code: string; IdentStart: Integer): Boolean;
 var
   p, wEnd : Integer;
+  W       : string;
 begin
   Result := False;
   p := IdentStart - 1;
-  while (p >= 1) and CharInSet(Code[p], [' ', #9, #10, #13]) do Dec(p);
-  if p < 1 then Exit;
-  wEnd := p;
-  while (p >= 1) and CharInSet(Code[p], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
-    Dec(p);
-  Result := SameText(Copy(Code, p + 1, wEnd - p), 'const');
+  while p >= 1 do
+  begin
+    while (p >= 1) and CharInSet(Code[p],
+      [' ', #9, #10, #13, ';', '=', '(', ')', '+', '-', '*', '/', '.',
+       ',', '''', '$', '#']) do Dec(p);
+    if p < 1 then Exit;
+    if not CharInSet(Code[p], ['A'..'Z', 'a'..'z', '0'..'9', '_']) then
+      Exit;
+    wEnd := p;
+    while (p >= 1) and CharInSet(Code[p], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+      Dec(p);
+    W := LowerCase(Copy(Code, p + 1, wEnd - p));
+    if (W = 'const') or (W = 'resourcestring') then Exit(True);
+    if IstBlockEndeWort(W) then Exit;
+    // sonst: Ident/Zahl eines frueheren Eintrags - weiter rueckwaerts.
+  end;
 end;
 
 
