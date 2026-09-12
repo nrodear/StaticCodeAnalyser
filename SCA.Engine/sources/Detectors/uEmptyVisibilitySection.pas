@@ -33,47 +33,25 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uFileTextCache;
+  uFileTextCache,
+  uDetectorUtils   // ExtractFirstWord (Voll-Review 2026-09-12);
 
 const
   EMIT_SEVERITY = lsHint;
 
 function ExtractFirstWord(const Line: string; out StartCol: Integer): string;
-var
-  i, n, wStart : Integer;
-  c            : Char;
+// Voll-Review 2026-09-12: zentral (ExtractFirstWordOrBracket).
+// Attribut-Zeile ('[Test]', '[Weak]', ...): '[' als Pseudo-Wort liefern.
+// Der Aufrufer behandelt es wie jeden Nicht-Keyword-Bezeichner - die
+// Section hat INHALT, denn das Attribut gehoert zum folgenden Member.
+// Vorher wurden solche Zeilen uebersprungen wie Leerzeilen, und JEDE
+// DUnitX-Fixture ('public' + nur '[Test] procedure ...' + 'end') galt
+// als leere Section - 226 False-Positives allein im eigenen
+// Testverzeichnis (Baseline-Kommentar 2026-08-04). Trifft auch
+// mehrzeilige Mengen-/Array-Konstanten, die mit '[' beginnen - dort ist
+// 'Inhalt' ebenso die sichere Richtung fuer eine Hint-Regel.
 begin
-  Result := '';
-  StartCol := 0;
-  n := Length(Line);
-  i := 1;
-  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
-  if i > n then Exit;
-  c := Line[i];
-  if c = '{' then Exit;
-  if (c = '/') and (i < n) and (Line[i + 1] = '/') then Exit;
-  if (c = '(') and (i < n) and (Line[i + 1] = '*') then Exit;
-  // Attribut-Zeile ('[Test]', '[Weak]', ...): '[' als Pseudo-Wort liefern.
-  // Der Aufrufer behandelt es wie jeden Nicht-Keyword-Bezeichner - die
-  // Section hat INHALT, denn das Attribut gehoert zum folgenden Member.
-  // Vorher wurden solche Zeilen uebersprungen wie Leerzeilen, und JEDE
-  // DUnitX-Fixture ('public' + nur '[Test] procedure ...' + 'end') galt
-  // als leere Section - 226 False-Positives allein im eigenen
-  // Testverzeichnis (Baseline-Kommentar 2026-08-04). Trifft auch
-  // mehrzeilige Mengen-/Array-Konstanten, die mit '[' beginnen - dort ist
-  // 'Inhalt' ebenso die sichere Richtung fuer eine Hint-Regel.
-  if c = '[' then
-  begin
-    StartCol := i;
-    Result := '[';
-    Exit;
-  end;
-  if not CharInSet(c, ['A'..'Z','a'..'z','_']) then Exit;
-  wStart := i;
-  StartCol := wStart;
-  while (i <= n) and CharInSet(Line[i], ['A'..'Z','a'..'z','0'..'9','_']) do
-    Inc(i);
-  Result := Copy(Line, wStart, i - wStart);
+  Result := TDetectorUtils.ExtractFirstWordOrBracket(Line, StartCol);
 end;
 
 function IsVisibilityKw(const Lower: string): Boolean; inline;

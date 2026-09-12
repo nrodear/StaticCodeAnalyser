@@ -42,7 +42,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uFileTextCache;
+  uFileTextCache,
+  uDetectorUtils   // ExtractFirstWord (Voll-Review 2026-09-12);
 
 const
   EMIT_SEVERITY = lsHint;
@@ -206,35 +207,22 @@ end;
 // startet, gibt FirstWord = '' zurueck.
 procedure ExtractFirstWord(const Line: string; out FirstWord: string;
   out StartCol: Integer; out RestEmpty: Boolean);
+// Kern seit Voll-Review 2026-09-12 zentral (TDetectorUtils.
+// ExtractFirstWord); die RestEmpty-Ableitung (nur Whitespace plus
+// optionale ';' hinter dem Wort) bleibt bewusst hier - kein anderer
+// Konsument braucht sie.
 var
-  i, n, wStart : Integer;
-  c            : Char;
+  i, n : Integer;
 begin
-  FirstWord := '';
-  StartCol  := 0;
+  FirstWord := TDetectorUtils.ExtractFirstWord(Line, StartCol);
   RestEmpty := False;
+  if FirstWord = '' then Exit;
   n := Length(Line);
-  i := 1;
-  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
-  if i > n then Exit;
-  c := Line[i];
-  // Kommentar-Start am Zeilenbeginn -> ignorieren
-  if c = '{' then Exit;
-  if (c = '/') and (i < n) and (Line[i + 1] = '/') then Exit;
-  if (c = '(') and (i < n) and (Line[i + 1] = '*') then Exit;
-  // Wort scannen
-  if not CharInSet(c, ['A'..'Z','a'..'z','_']) then Exit;
-  wStart := i;
-  StartCol := wStart;
-  while (i <= n) and CharInSet(Line[i], ['A'..'Z','a'..'z','0'..'9','_']) do
-    Inc(i);
-  FirstWord := Copy(Line, wStart, i - wStart);
-  // RestEmpty: nur Whitespace + optional `;` bis Zeilenende
+  i := StartCol + Length(FirstWord);
   RestEmpty := True;
   while i <= n do
   begin
-    c := Line[i];
-    if CharInSet(c, [' ', #9, ';']) then Inc(i)
+    if CharInSet(Line[i], [' ', #9, ';']) then Inc(i)
     else begin RestEmpty := False; Break; end;
   end;
 end;

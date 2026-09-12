@@ -68,7 +68,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uFileTextCache;
+  uFileTextCache,
+  uDetectorUtils   // ExtractFirstWord (Voll-Review 2026-09-12);
 
 const
   EMIT_SEVERITY = lsHint;
@@ -159,26 +160,10 @@ begin
 end;
 
 function ExtractFirstWord(const Line: string; out StartCol: Integer): string;
-var
-  i, n, wStart : Integer;
-  c            : Char;
 begin
-  Result := '';
-  StartCol := 0;
-  n := Length(Line);
-  i := 1;
-  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
-  if i > n then Exit;
-  c := Line[i];
-  if c = '{' then Exit;
-  if (c = '/') and (i < n) and (Line[i + 1] = '/') then Exit;
-  if (c = '(') and (i < n) and (Line[i + 1] = '*') then Exit;
-  if not CharInSet(c, ['A'..'Z','a'..'z','_']) then Exit;
-  wStart := i;
-  StartCol := wStart;
-  while (i <= n) and CharInSet(Line[i], ['A'..'Z','a'..'z','0'..'9','_']) do
-    Inc(i);
-  Result := Copy(Line, wStart, i - wStart);
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.ExtractFirstWord,
+  // dort der Vertrag). Der Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.ExtractFirstWord(Line, StartCol);
 end;
 
 // True wenn die Zeile ein Feld deklariert (kein procedure/function/...)

@@ -41,30 +41,19 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uFileTextCache;
+  uFileTextCache,
+  uDetectorUtils   // ExtractFirstWord (Voll-Review 2026-09-12);
 
 const
   EMIT_SEVERITY = lsHint;
 
 function ExtractFirstWord(const Line: string): string;
 var
-  i, n, wStart : Integer;
-  c            : Char;
+  Dummy : Integer;
 begin
-  Result := '';
-  n := Length(Line);
-  i := 1;
-  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
-  if i > n then Exit;
-  c := Line[i];
-  if c = '{' then Exit;
-  if (c = '/') and (i < n) and (Line[i + 1] = '/') then Exit;
-  if (c = '(') and (i < n) and (Line[i + 1] = '*') then Exit;
-  if not CharInSet(c, ['A'..'Z','a'..'z','_']) then Exit;
-  wStart := i;
-  while (i <= n) and CharInSet(Line[i], ['A'..'Z','a'..'z','0'..'9','_']) do
-    Inc(i);
-  Result := Copy(Line, wStart, i - wStart);
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.ExtractFirstWord);
+  // diese Unit braucht die Spalte nicht.
+  Result := TDetectorUtils.ExtractFirstWord(Line, Dummy);
 end;
 
 function IsVisibilityKw(const Lower: string): Boolean; inline;

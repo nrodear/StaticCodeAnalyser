@@ -580,6 +580,27 @@ type
     // 1; Literal-Blanking 2026-08-09).
     class function CountBooleanOpsLower(const ACondText: string)
       : Integer; static;
+
+    // Erstes Wort einer Zeile (nach fuehrendem Whitespace), leer bei
+    // Leerzeilen und wenn die Zeile mit einem Kommentar-Opener
+    // ('{', '//', '(*') beginnt; StartCol = 1-basierte Spalte des
+    // Wortes (0 wenn keins). Gehoben aus 8 Detektor-Kopien
+    // (Voll-Review 2026-09-12; vor dem Umzug alle acht gedifft:
+    // 7 identischer Kern, dazu die '['-Variante darunter).
+    // KEIN Blockkommentar-Zustand ueber Zeilen - der Opener wird nur
+    // an der ERSTEN Nicht-Whitespace-Position erkannt; die Nachruestung
+    // ist ein separater, fundbewegender Schritt.
+    class function ExtractFirstWord(const Line: string;
+      out StartCol: Integer): string; static;
+
+    // Wie ExtractFirstWord, aber eine '['-Zeile liefert das
+    // Pseudo-Wort '[' - Attribut-Zeilen ('[Test]', '[Weak]') zaehlen
+    // als Inhalt (der 226-DUnitX-FP-Fix von uEmptyVisibilitySection,
+    // Baseline 2026-08-04). Eigene benannte Funktion statt eines
+    // Boolean-Schalters - der eigene fkBooleanParam-Detektor haette
+    // das Flag zu Recht geruegt.
+    class function ExtractFirstWordOrBracket(const Line: string;
+      out StartCol: Integer): string; static;
   end;
 
 
@@ -1969,6 +1990,48 @@ begin
   Seg := LowerCase(UnqualifiedNameLast(Trim(ATypeName)));
   if Seg = '' then Exit;
   Result := AFfiTypes.IndexOf(Seg) >= 0;
+end;
+
+class function TDetectorUtils.ExtractFirstWord(const Line: string;
+  out StartCol: Integer): string;
+var
+  i, n, wStart : Integer;
+  c            : Char;
+begin
+  Result := '';
+  StartCol := 0;
+  n := Length(Line);
+  i := 1;
+  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
+  if i > n then Exit;
+  c := Line[i];
+  if c = '{' then Exit;
+  if (c = '/') and (i < n) and (Line[i + 1] = '/') then Exit;
+  if (c = '(') and (i < n) and (Line[i + 1] = '*') then Exit;
+  if not CharInSet(c, ['A'..'Z', 'a'..'z', '_']) then Exit;
+  wStart := i;
+  StartCol := wStart;
+  while (i <= n) and CharInSet(Line[i], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+    Inc(i);
+  Result := Copy(Line, wStart, i - wStart);
+end;
+
+class function TDetectorUtils.ExtractFirstWordOrBracket(const Line: string;
+  out StartCol: Integer): string;
+// Reihenfolge unerheblich: eine Zeile, die mit '[' beginnt, faellt in
+// keinen Kommentar-Opener - fuer alle anderen entscheidet der Kern.
+var
+  i, n : Integer;
+begin
+  n := Length(Line);
+  i := 1;
+  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
+  if (i <= n) and (Line[i] = '[') then
+  begin
+    StartCol := i;
+    Exit('[');
+  end;
+  Result := ExtractFirstWord(Line, StartCol);
 end;
 
 class function TDetectorUtils.CountBooleanOpsLower(

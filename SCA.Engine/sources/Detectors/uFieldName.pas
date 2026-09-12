@@ -50,26 +50,10 @@ const
   EMIT_SEVERITY = lsHint;
 
 function ExtractFirstWord(const Line: string; out StartCol: Integer): string;
-var
-  i, n, wStart : Integer;
-  c            : Char;
 begin
-  Result := '';
-  StartCol := 0;
-  n := Length(Line);
-  i := 1;
-  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
-  if i > n then Exit;
-  c := Line[i];
-  if c = '{' then Exit;
-  if (c = '/') and (i < n) and (Line[i + 1] = '/') then Exit;
-  if (c = '(') and (i < n) and (Line[i + 1] = '*') then Exit;
-  if not CharInSet(c, ['A'..'Z','a'..'z','_']) then Exit;
-  wStart := i;
-  StartCol := wStart;
-  while (i <= n) and CharInSet(Line[i], ['A'..'Z','a'..'z','0'..'9','_']) do
-    Inc(i);
-  Result := Copy(Line, wStart, i - wStart);
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.ExtractFirstWord,
+  // dort der Vertrag). Der Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.ExtractFirstWord(Line, StartCol);
 end;
 
 function IsMethodOrPropertyDecl(const Lower: string): Boolean; inline;
@@ -121,6 +105,23 @@ type
     InConstType : Boolean;
   end;
 
+// Zweites Wort der Zeile hinter dem ersten (ab AFirstCol) ist 'const'
+// oder 'type' - unterscheidet 'class const'/'class type' (eroeffnen
+// eine Konstanten-/Typ-Untersektion) von 'class var'/'class function'
+// (beenden sie).
+function SecondWordIsConstOrType(const Line: string;
+  AFirstCol: Integer): Boolean;
+var
+  p, Dummy : Integer;
+  W2       : string;
+begin
+  p := AFirstCol;
+  while (p <= Length(Line)) and
+        CharInSet(Line[p], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do Inc(p);
+  W2 := LowerCase(ExtractFirstWord(Copy(Line, p, MaxInt), Dummy));
+  Result := (W2 = 'const') or (W2 = 'type');
+end;
+
 // Sektions-Zustand beim Ueberspringen einer Deklarations-Zeile
 // (IsMethodOrPropertyDecl-Treffer) nachfuehren:
 // (a) bleibt die Klammerbilanz der Zeile offen, folgen
@@ -144,23 +145,6 @@ begin
     St.InConstType := False
   else if Lower = 'class' then
     St.InConstType := SecondWordIsConstOrType(Line, ACol);
-end;
-
-// Zweites Wort der Zeile hinter dem ersten (ab AFirstCol) ist 'const'
-// oder 'type' - unterscheidet 'class const'/'class type' (eroeffnen
-// eine Konstanten-/Typ-Untersektion) von 'class var'/'class function'
-// (beenden sie).
-function SecondWordIsConstOrType(const Line: string;
-  AFirstCol: Integer): Boolean;
-var
-  p, Dummy : Integer;
-  W2       : string;
-begin
-  p := AFirstCol;
-  while (p <= Length(Line)) and
-        CharInSet(Line[p], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do Inc(p);
-  W2 := LowerCase(ExtractFirstWord(Copy(Line, p, MaxInt), Dummy));
-  Result := (W2 = 'const') or (W2 = 'type');
 end;
 
 class procedure TFieldNameDetector.AnalyzeUnit(UnitNode: TAstNode;
