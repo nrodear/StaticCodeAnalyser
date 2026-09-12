@@ -17,6 +17,8 @@ type
     // --- Real-World-Audit 2026-07-31: Branch-Exklusivitaet ---
     [Test] procedure ThenElseExclusiveBranches_NotReported;
     [Test] procedure SameThenBranchWithElse_StillReported;
+    // Voll-Review 2026-09-12 (Blocker): Zugriff VOR der FoT-Zuweisung
+    [Test] procedure AccessBeforeLateFoT_NotReported;
   end;
 
 implementation
@@ -183,6 +185,37 @@ begin
   try
     Assert.IsTrue(TFindingHelper.Count(F, fkThreadFreeOnTerminateWithRef) >= 1,
       'Zugriff im SELBEN Zweig wie FreeOnTerminate bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestThreadFreeOnTerminateWithRef.AccessBeforeLateFoT_NotReported;
+// Voll-Review 2026-09-12 (Blocker): Pass 2 gatete nur an der
+// Aktivierungszeile - Commit c7c20ab hatte den Vergleich gegen die
+// FoT-Zeile ERSETZT statt ergaenzt. Ein Zugriff ZWISCHEN Start und
+// einer spaeteren FoT-Zuweisung wurde als 'after
+// FreeOnTerminate:=True' gemeldet, obwohl FoT dort noch False ist:
+// nach WaitFor ist der Thread beendet, die spaetere Zuweisung
+// wirkungslos (Bestands-Exe: 1 Fund, empirisch belegt). Der
+// Kopf-Vertrag verlangt 'subsequent (Line > Pass-1-Line)'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var T: TMyThread;'#13#10 +
+  'begin'#13#10 +
+  '  T := TMyThread.Create(True);'#13#10 +
+  '  T.Start;'#13#10 +
+  '  T.WaitFor;'#13#10 +
+  '  if SomeCond then'#13#10 +
+  '    T.FreeOnTerminate := True;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkThreadFreeOnTerminateWithRef),
+      'WaitFor VOR der FoT-Zuweisung ist sicher - FoT ist dort noch ' +
+      'False, kein Selbstabbau moeglich');
   finally F.Free; end;
 end;
 

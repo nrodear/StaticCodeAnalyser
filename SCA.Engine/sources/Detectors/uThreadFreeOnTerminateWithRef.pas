@@ -275,6 +275,16 @@ begin
             for N in Assigns do
             begin
               if N.Line <= GateLine then Continue;
+              // ... UND nach der FoT-Zuweisung selbst (Voll-Review
+              // 2026-09-12, Blocker): Commit c7c20ab hatte den
+              // Pair.Value-Vergleich durch den GateLine-Vergleich
+              // ERSETZT statt ergaenzt - ein Zugriff ZWISCHEN Start
+              // und einer spaeteren FoT-Zuweisung wurde als 'after
+              // FreeOnTerminate:=True' gemeldet, obwohl FoT dort noch
+              // False ist (nach WaitFor ist der Thread beendet, die
+              // spaetere Zuweisung wirkungslos). Der Kopf-Vertrag
+              // ('subsequent, Line > Pass-1-Line') verlangt beide.
+              if N.Line <= Pair.Value then Continue;
               // Nur RHS-Reads (N.TypeRef) flaggen - LHS-Property-Assignments
               // (`<var>.Name := x`) sind Config, kein gefaehrlicher Read.
               if HasDangerousMemberAccess(N.TypeRef, Pair.Key) then
@@ -305,6 +315,9 @@ begin
             for N in Calls do
             begin
               if N.Line <= GateLine then Continue;
+              // Beide Gates wie in der Assign-Schleife (s. Kommentar
+              // dort): nach Aktivierung UND nach der FoT-Zuweisung.
+              if N.Line <= Pair.Value then Continue;
               if HasDangerousMemberAccess(N.Name, Pair.Key) then
               begin
                 // FP-Gate 2026-07-31 (mutually-exclusive-branches), s.o.
