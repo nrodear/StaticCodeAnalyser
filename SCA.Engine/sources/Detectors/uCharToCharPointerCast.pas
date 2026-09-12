@@ -130,19 +130,21 @@ begin
   if (AOpenParen <= 0) or (AOpenParen > Length(Text)) or
      (Text[AOpenParen] <> '(') then Exit;
   Depth := 0; InStr := False;
+  // Flach gehalten (Guard-Stil): jede Bedingung eine Ebene - die
+  // verschachtelte Erstfassung riss die eigene SCA176-Schwelle.
   for i := AOpenParen to Length(Text) do
   begin
-    if Text[i] = '''' then InStr := not InStr
-    else if not InStr then
+    if Text[i] = '''' then
     begin
-      if Text[i] = '(' then Inc(Depth)
-      else if Text[i] = ')' then
-      begin
-        Dec(Depth);
-        if Depth = 0 then
-          Exit(Trim(Copy(Text, AOpenParen + 1, i - AOpenParen - 1)));
-      end;
+      InStr := not InStr;
+      Continue;
     end;
+    if InStr then Continue;
+    if Text[i] = '(' then Inc(Depth);
+    if Text[i] <> ')' then Continue;
+    Dec(Depth);
+    if Depth = 0 then
+      Exit(Trim(Copy(Text, AOpenParen + 1, i - AOpenParen - 1)));
   end;
 end;
 
