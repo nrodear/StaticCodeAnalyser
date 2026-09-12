@@ -60,15 +60,16 @@ uses
   uDetectorUtils;  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
 
 // Extrahiert den direkten Parent-Klassennamen aus `TFoo = class(TBar, IFoo)`.
-// TypeRef der nkClass-Node sieht typisch so aus: 'TBar' oder 'TBar,IFoo' oder
-// leer (kein expliziter Parent).
+// Der fruehere Kommentar hier behauptete das Format 'TBar,IFoo' - das
+// war FALSCH: der Parser legt die Vorfahrenliste SPACE-separiert ab
+// ('TBar IFoo', tkComma landet nie im TypeRef). Der Komma-Split griff
+// deshalb NIE; bei Interface in der Elternliste blieb der Gesamtstring
+// stehen, der ClassByName-Lookup lief leer und die Subklasse lieferte
+// keine Override-Zaehlung (Voll-Review 2026-09-12, Blocker - Zwilling
+// des Fixes in uMissingOverride). Jetzt die zentrale Schablone.
 function ExtractParentName(const TypeRef: string): string;
-var
-  Comma : Integer;
 begin
-  Result := Trim(TypeRef);
-  Comma := Pos(',', Result);
-  if Comma > 0 then Result := Trim(Copy(Result, 1, Comma - 1));
+  Result := TDetectorUtils.FirstParentToken(TypeRef);
 end;
 
 function IsAbstractMethod(const MethodTypeRef: string): Boolean;

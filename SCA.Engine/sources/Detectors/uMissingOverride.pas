@@ -67,13 +67,17 @@ implementation
 uses
   uDetectorUtils;  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
 
+// Direkter Parent-Klassenname aus nkClass.TypeRef. Der Parser legt die
+// Vorfahrenliste SPACE-separiert ab ('TBase IThing') - der fruehere
+// Komma-Split hier griff NIE: bei 'class(TBase, IThing)' blieb 'TBase
+// IThing' als Ganzes stehen, der ClassByName-Lookup lief leer und die
+// Subklasse wurde GAR NICHT geprueft - jeder W1010-Fund entfiel fuer
+// Subklassen mit Interface in der Elternliste (Voll-Review 2026-09-12,
+// Blocker). Jetzt die zentrale Schablone (Space-Split + Generic- und
+// Unit-Qualifier-Kappung, Gleichlauf mit uTypeIndex.BaseClassNameLow).
 function ExtractParentName(const TypeRef: string): string;
-var
-  Comma : Integer;
 begin
-  Result := Trim(TypeRef);
-  Comma := Pos(',', Result);
-  if Comma > 0 then Result := Trim(Copy(Result, 1, Comma - 1));
+  Result := TDetectorUtils.FirstParentToken(TypeRef);
 end;
 
 function IsPolymorphicDeclaration(const TypeRef: string): Boolean;

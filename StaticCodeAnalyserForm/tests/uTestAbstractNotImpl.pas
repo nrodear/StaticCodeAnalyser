@@ -18,6 +18,8 @@ type
     [Test] procedure TCustomBase_TreatedAsAbstract_NoFinding;
     [Test] procedure IntermediateBase_LeafOverrides_NoFinding;
     [Test] procedure Finding_KindAndSeverity;
+    // --- Voll-Review 2026-09-12 (Blocker): Interface in der Elternliste ---
+    [Test] procedure InterfaceInParentList_AbstractMissing_Reported;
   end;
 
 implementation
@@ -220,6 +222,35 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAbstractNotImpl),
     'Intermediate-Basis (selbst Parent) nicht flaggen - Blatt liefert Override');
+  finally F.Free; end;
+end;
+
+procedure TTestAbstractNotImpl.InterfaceInParentList_AbstractMissing_Reported;
+// Voll-Review 2026-09-12 (Blocker, Zwilling des uMissingOverride-Fixes):
+// die byte-gleiche ExtractParentName-Kopie splittete am Komma, der
+// Parser trennt aber mit BLANK ('TBase IThing') - der Parent-Lookup
+// lief leer und die fehlende abstract-Implementierung einer Subklasse
+// mit Interface in der Elternliste blieb ungemeldet (Bestands-Exe: 0,
+// empirisch geprueft).
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  IThing = interface'#13#10 +
+  '    procedure Ping;'#13#10 +
+  '  end;'#13#10 +
+  '  TBase = class'#13#10 +
+  '    procedure DoWork; virtual; abstract;'#13#10 +
+  '  end;'#13#10 +
+  '  TDerived = class(TBase, IThing)'#13#10 +
+  '    procedure Ping;'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkAbstractNotImpl),
+    'class(TBase, IThing) ohne DoWork-Override: EAbstractError-Risiko ' +
+    'muss gemeldet werden - Basisklasse ist der erste Eltern-Ident');
   finally F.Free; end;
 end;
 

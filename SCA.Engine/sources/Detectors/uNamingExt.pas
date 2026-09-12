@@ -71,6 +71,9 @@ implementation
 // noinspection-file CyclomaticComplexity, GroupedDeclaration, LongMethod, NestedTry, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uDetectorUtils;   // FirstParentToken (Hebung, Voll-Review 2026-09-12)
+
 const
   // Laengster akzeptierter Kleinbuchstaben-Tag zwischen dem 'E' und dem
   // ersten Grossbuchstaben. Der Korpus braucht 3 ('Edws', 'Ejim'); mehr
@@ -112,26 +115,12 @@ begin
 end;
 
 function FirstParentToken(const ATypeRef: string): string;
-// Der ERSTE Bezeichner der Vorfahrenliste - in Delphi zwingend die
-// Basisklasse, alles danach sind Interfaces (ParseClassBody, uParser2.pas:
-// 1236-1306, legt sie space-separiert ab, dotted-Namen zusammenhaengend).
-// Unit-Qualifier wird gekappt ('Vcl.Forms.TForm' -> 'TForm'), Generic-
-// Suffixe defensiv ebenfalls: der Parser legt sie heute in nkGenericArgs ab,
-// aber uTypeIndex.BaseClassNameLow:121-139 - dieselbe Schablone - haelt die
-// Absicherung vor, und beide sollen sich gleich verhalten.
-var
-  S : string;
-  P : Integer;
+// Seit Voll-Review 2026-09-12 zentral: TDetectorUtils.FirstParentToken
+// ist die byte-identische Hebung DIESER Fassung (Begruendung und
+// Format-Vertrag dort). Der Wrapper bleibt, damit die Aufrufer in
+// dieser Unit unveraendert bleiben.
 begin
-  S := Trim(ATypeRef);
-  if S = '' then Exit('');
-  P := Pos('<', S);
-  if P > 0 then S := Trim(Copy(S, 1, P - 1));
-  P := Pos(' ', S);
-  if P > 0 then S := Trim(Copy(S, 1, P - 1));
-  P := LastDelimiter('.', S);
-  if P > 0 then S := Copy(S, P + 1, MaxInt);
-  Result := S;
+  Result := TDetectorUtils.FirstParentToken(ATypeRef);
 end;
 
 function IsExceptionDescendant(const TypeRef: string): Boolean;

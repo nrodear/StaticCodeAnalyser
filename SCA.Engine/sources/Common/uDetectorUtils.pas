@@ -370,6 +370,21 @@ type
     // Wie OwnerTypeName, zusaetzlich lowercase (Match-Key-Nutzung).
     class function OwnerTypeNameLower(const AName: string): string; static;
 
+    // Der ERSTE Bezeichner der Vorfahrenliste eines nkClass.TypeRef -
+    // in Delphi zwingend die Basisklasse, alles danach sind
+    // Interfaces. Der Parser legt die Liste SPACE-separiert ab
+    // (uParser2, ParseClassBody: tkComma wird verworfen und landet nie
+    // im TypeRef) - ein Komma-Split greift dort NIE. Unit-Qualifier
+    // wird gekappt ('Vcl.Forms.TForm' -> 'TForm'), Generic-Suffixe
+    // defensiv ebenfalls; gleiche Schablone wie
+    // uTypeIndex.BaseClassNameLow - beide sollen sich gleich
+    // verhalten. Gehoben aus uNamingExt (Voll-Review 2026-09-12): die
+    // lokalen ExtractParentName-Kopien in uMissingOverride und
+    // uAbstractNotImpl splitteten am Komma und liessen
+    // 'class(TBase, IThing)'-Subklassen komplett ungeprueft.
+    class function FirstParentToken(const ATypeRef: string)
+      : string; static;
+
     // True, wenn der Methodenname zwei oder mehr Qualifizierer traegt, die
     // Methode also einem in einem anderen Typ deklarierten Typ gehoert
     // ('TOuter.TInner.DoIt'). Solange ParseClassBody keinen tkKwType-Zweig
@@ -1341,6 +1356,25 @@ end;
 class function TDetectorUtils.OwnerTypeNameLower(const AName: string): string;
 begin
   Result := LowerCase(OwnerTypeName(AName));
+end;
+
+class function TDetectorUtils.FirstParentToken(const ATypeRef: string): string;
+// Byte-identische Hebung der uNamingExt-Fassung (Voll-Review
+// 2026-09-12): Generic-Kappung, Space-Split (erster Eltern-Ident),
+// Unit-Qualifier-Kappung - in dieser Reihenfolge.
+var
+  S : string;
+  P : Integer;
+begin
+  S := Trim(ATypeRef);
+  if S = '' then Exit('');
+  P := Pos('<', S);
+  if P > 0 then S := Trim(Copy(S, 1, P - 1));
+  P := Pos(' ', S);
+  if P > 0 then S := Trim(Copy(S, 1, P - 1));
+  P := LastDelimiter('.', S);
+  if P > 0 then S := Copy(S, P + 1, MaxInt);
+  Result := S;
 end;
 
 class function TDetectorUtils.IsNestedTypeMethodName(
