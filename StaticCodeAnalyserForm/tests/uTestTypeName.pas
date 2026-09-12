@@ -21,6 +21,11 @@ type
     [Test] procedure RPrefixRecord_NoFinding;
     [Test] procedure RPrefixClass_StillReported;
     [Test] procedure CPortRecord_StillReported;
+    // Voll-Review 2026-09-12 (Testluecke 116): die Suppressions
+    [Test] procedure EPrefixException_NoFinding;
+    [Test] procedure ErrorSuffix_NoFinding;
+    [Test] procedure ExceptionSuffix_NoFinding;
+    [Test] procedure GenericClassDecl_Reported;
   end;
 
 implementation
@@ -190,6 +195,73 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTypeName),
     'C-Port-Struktur folgt keiner Delphi-Konvention');
+  finally F.Free; end;
+end;
+
+procedure TTestTypeName.EPrefixException_NoFinding;
+// Testluecke 116 (Voll-Review 2026-09-12): die E-Praefix-Suppression
+// ('E' + Grossbuchstabe) war ungetestet - dabei ist sie der Grund,
+// warum SCA151 nicht ueber jeder Exception-Klasse feuert (an der
+// Bestands-Exe verifiziert: kein Fund).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type EMyError = class(Exception) end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTypeName),
+    'E + Grossbuchstabe ist die Exception-Konvention');
+  finally F.Free; end;
+end;
+
+procedure TTestTypeName.ErrorSuffix_NoFinding;
+// Zweiter Suppressions-Zweig: Name endet auf 'Error' - greift auch
+// ohne E-Praefix (Bestands-Exe: kein Fund).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type MyParseError = class(Exception) end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTypeName),
+    'Error-Suffix zaehlt als Exception-Konvention');
+  finally F.Free; end;
+end;
+
+procedure TTestTypeName.ExceptionSuffix_NoFinding;
+// Dritter Zweig: Name endet auf 'Exception' (Bestands-Exe: kein Fund).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type SomeException = class(Exception) end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTypeName),
+    'Exception-Suffix zaehlt als Exception-Konvention');
+  finally F.Free; end;
+end;
+
+procedure TTestTypeName.GenericClassDecl_Reported;
+// Gegenrichtung zu den drei Suppressions: eine generische Deklaration
+// ohne T-Praefix bleibt ein Fund - die Suppressions duerfen nicht
+// versehentlich alles durchlassen, was ungewoehnlich aussieht
+// (Bestands-Exe: 1 Fund auf 'Foo').
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type Foo<T> = class end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTypeName),
+    'generische Klasse ohne T-Praefix bleibt ein Fund');
   finally F.Free; end;
 end;
 
