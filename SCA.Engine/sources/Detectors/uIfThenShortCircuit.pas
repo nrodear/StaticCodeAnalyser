@@ -29,7 +29,12 @@ unit uIfThenShortCircuit;
 // Erkennung (AST-basiert):
 //   * Walker iteriert nkCall-Knoten
 //   * Match wenn der Call-Name dem Pattern `IfThen(...)` entspricht
-//     (auch qualifiziert: `Math.IfThen`, `StrUtils.IfThen`).
+//     (auch qualifiziert: `Math.IfThen`, `StrUtils.IfThen`) - seit
+//     Voll-Review 2026-09-12 (Major 70) auch EINGEBETTET in einen
+//     umgebenden Call (`ShowMessage(IfThen(...))`) bzw. eine
+//     umhuellende Funktion (`x := Trim(IfThen(...))`): der Parser
+//     emittiert verschachtelte Calls nicht als eigene nkCall-Knoten,
+//     der Text des aeusseren Knotens ist die einzige Sicht darauf.
 //   * Innerhalb der Argument-Liste: pruefe ob nested `(...)` vorkommt,
 //     d.h. einer der Arme ist ein Funktions-/Method-Call.
 //   * String-Literale werden vor der Klammern-Zaehlung entfernt -
@@ -61,29 +66,70 @@ implementation
 uses
   uAstSpans;   // CollectWithMethodScope (Voll-Review 2026-09-12)
 
-// True wenn CallName ein IfThen-Call ist (bare `IfThen(` oder qualifiziert
-// `Math.IfThen(` / `StrUtils.IfThen(` / `System.Math.IfThen(` ...).
-function IsIfThenCall(const CallName: string): Boolean;
+// True wenn S an APos (1-basiert, Zeichen VOR einem '.') rueckwaerts auf
+// das Namens-Segment ASegLow endet und davor eine Segmentgrenze steht -
+// 'math' trifft 'Math.' und 'System.Math.', nicht 'MyMath.'.
+function EndetAufSegment(const S: string; AEnd: Integer;
+  const ASegLow: string): Boolean;
 var
-  Lower : string;
+  b : Integer;
 begin
-  Lower := LowerCase(TrimLeft(CallName));
-  Result := (Pos('ifthen(',         Lower) = 1) or
-            (Pos('math.ifthen(',    Lower) > 0) or
-            (Pos('strutils.ifthen(', Lower) > 0);
-  // Defensive: `xifthen(` wuerde matchen via `ifthen(` Substring-Pos=2+,
-  // aber das schliessen wir aus (Pos = 1 only fuer den bare-Case).
-  if not Result then Exit;
-  // Pruefe dass keine Identifier-Zeichen vor 'ifthen(' stehen wenn der
-  // Match nicht am Anfang ist.
-  if Pos('ifthen(', Lower) = 1 then Exit(True);
-  // Qualifiziert: muss '.ifthen(' sein, kein 'xifthen('.
-  Result := (Pos('.ifthen(', Lower) > 0);
+  Result := False;
+  b := AEnd - Length(ASegLow);
+  if b < 0 then Exit;
+  if LowerCase(Copy(S, b + 1, Length(ASegLow))) <> ASegLow then Exit;
+  Result := (b = 0) or not TDetectorUtils.IsIdentChar(S[b]);
 end;
 
-// Extrahiert den Args-Teil zwischen aeusserer '(' und schliessender ')'.
-// Geht von balancierten Parens aus.
-function ExtractOuterArgs(const CallName: string): string;
+// Liefert die Position der oeffnenden '(' des ERSTEN gueltigen
+// IfThen-Vorkommens in Text, 0 wenn keines. Gueltig ist:
+//   * bare `IfThen(` mit linker Nicht-Ident-Grenze - auch EINGEBETTET
+//     als Argument eines umgebenden Calls oder in einer umhuellenden
+//     Funktion (Voll-Review 2026-09-12, Major 70: der alte Anker
+//     Pos=1 liess `ShowMessage(IfThen(b, 'x', LoadCfg()))` und
+//     `x := Trim(IfThen(...))` komplett durchrutschen - der Parser
+//     emittiert verschachtelte Calls nicht als eigene nkCall-Knoten,
+//     der Text ist also die einzige Sicht auf die eingebettete Form);
+//   * qualifiziert `Math.IfThen(` / `StrUtils.IfThen(` (auch
+//     `System.Math.` etc.) - ein FREMDER Qualifier (`Foo.IfThen(`)
+//     zaehlt weiterhin NICHT: eine fremde IfThen-Methode kann echte
+//     Lazy-Semantik haben, das war schon der Vertrag des Vorgaengers.
+// Suche am geblankten Text (Literale zaehlen nicht), Positionen passen
+// aufs Original, weil BlankStringLiterals laengenerhaltend ist.
+function FindIfThenOpenParen(const Text: string): Integer;
+const
+  KW = 'ifthen(';
+var
+  Lower : string;
+  p     : Integer;
+  Ok    : Boolean;
+begin
+  Result := 0;
+  Lower := LowerCase(TDetectorUtils.BlankStringLiterals(Text));
+  p := Pos(KW, Lower);
+  while p > 0 do
+  begin
+    if (p = 1) or not (TDetectorUtils.IsIdentChar(Lower[p - 1])
+                       or (Lower[p - 1] = '.')) then
+      Ok := True   // bare Form an Wortgrenze
+    else if Lower[p - 1] = '.' then
+      Ok := EndetAufSegment(Lower, p - 1, 'math')
+            or EndetAufSegment(Lower, p - 1, 'strutils')
+    else
+      Ok := False; // 'xifthen(' - Teil eines anderen Bezeichners
+    if Ok then
+      Exit(p + Length(KW) - 1);   // Position der '('
+    p := Pos(KW, Lower, p + 1);
+  end;
+end;
+
+// Extrahiert den Args-Teil zwischen der '(' an AOpenPos und ihrer
+// schliessenden ')'. Geht von balancierten Parens aus. AOpenPos kommt
+// aus FindIfThenOpenParen - vorher setzte die Extraktion an der ERSTEN
+// '(' des Gesamttexts an und lieferte bei eingebetteten Formen die
+// Argumente des UMHUELLENDEN Calls (ein Top-Level-Argument, Laenge<2,
+// stiller Exit in ValueBranchHasSideEffectCall - Major 70).
+function ExtractOuterArgs(const CallName: string; AOpenPos: Integer): string;
 var
   Open, Close, Depth, i : Integer;
   Blanked : string;
@@ -93,8 +139,8 @@ begin
   // duerfen die Klammertiefe nicht verschieben (laengenerhaltend, damit die
   // Copy-Positionen weiter aufs Original passen).
   Blanked := TDetectorUtils.BlankStringLiterals(CallName);
-  Open := Pos('(', Blanked);
-  if Open <= 0 then Exit;
+  Open := AOpenPos;
+  if (Open <= 0) or (Open > Length(Blanked)) or (Blanked[Open] <> '(') then Exit;
   Depth := 0;
   Close := 0;
   for i := Open to Length(Blanked) do
@@ -215,9 +261,11 @@ var
   F        : TLeakFinding;
   MethName : string;
   Args     : string;
+  OpenPos  : Integer;
 begin
-  if not IsIfThenCall(Text) then Exit;
-  Args := ExtractOuterArgs(Text);
+  OpenPos := FindIfThenOpenParen(Text);
+  if OpenPos = 0 then Exit;
+  Args := ExtractOuterArgs(Text, OpenPos);
   if not ValueBranchHasSideEffectCall(Args) then Exit;
   if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
   else MethName := '';
