@@ -1,4 +1,4 @@
-unit uFreeAndNilHint;
+﻿unit uFreeAndNilHint;
 
 // Detektor fuer manuelles `X.Free; X := nil;` Pattern.
 //
@@ -118,6 +118,9 @@ class procedure TFreeAndNilHintDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines    : TStringList;
+  Code     : TStringList;
+  State    : TCommentScanState;
+  DummyCol : Integer;
   i        : Integer;
   Cached   : Boolean;
   Receiver : string;
@@ -125,12 +128,22 @@ var
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
+  Code := TStringList.Create;
   try
-    for i := 0 to Lines.Count - 2 do
+    // Auf KOMMENTARBEREINIGTEN Zeilen matchen (Voll-Review 2026-09-12,
+    // Blocker): der Roh-Scan meldete das Muster auch in mehrzeilig
+    // auskommentiertem Alt-Code ('{ Alte Version: FConn.Free; ... }').
+    // ScanCodeLine blankt zudem String-Literale - 'FConn.Free' in
+    // einem Log-Text zaehlt nicht. State traegt offene Bloecke ueber
+    // Zeilen; die Zeilen-Indizes bleiben 1:1 erhalten.
+    State := Default(TCommentScanState);
+    for i := 0 to Lines.Count - 1 do
+      Code.Add(TDetectorUtils.ScanCodeLine(Lines[i], State, DummyCol));
+    for i := 0 to Code.Count - 2 do
     begin
-      Receiver := ExtractFreeReceiver(Lines[i]);
+      Receiver := ExtractFreeReceiver(Code[i]);
       if Receiver = '' then Continue;
-      if not IsAssignNil(Lines[i + 1], Receiver) then Continue;
+      if not IsAssignNil(Code[i + 1], Receiver) then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := '';
@@ -143,6 +156,7 @@ begin
       Results.Add(F);
     end;
   finally
+    Code.Free;
     ReleaseLines(Lines, Cached);
   end;
 end;
