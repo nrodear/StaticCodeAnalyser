@@ -139,6 +139,12 @@ type
     /// mit Method=nil, erst seine Kinder erben ein nkMethod-ARoot.
     class function CollectWithMethodScope(ARoot: TAstNode;
       const AKinds: TNodeKinds): TArray<TNodeScopePair>; static;
+    /// True wenn ATarget im Teilbaum von ARoot liegt (OBJEKT-Identitaet;
+    /// TAstNode hat keinen Parent-Pointer). Iterative DFS, nil-fest.
+    /// Gehoben aus uNilDeref/uThreadFreeOnTerminateWithRef
+    /// (Voll-Review 2026-09-12, zwei byte-gleiche Kopien).
+    class function SubtreeContains(ARoot, ATarget: TAstNode)
+      : Boolean; static;
   end;
 
 implementation
@@ -177,6 +183,30 @@ begin
   if ANode.Kind = nkInherited then Exit(True);
   for Child in ANode.Children do
     if HasInheritedCall(Child) then Exit(True);
+end;
+
+class function TAstSpans.SubtreeContains(ARoot, ATarget: TAstNode): Boolean;
+var
+  Stack : TList<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  Result := False;
+  if (ARoot = nil) or (ATarget = nil) then Exit;
+  Stack := TList<TAstNode>.Create;
+  try
+    Stack.Add(ARoot);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if Cur = ATarget then Exit(True);
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Add(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
 end;
 
 class function TAstSpans.CollectWithMethodScope(ARoot: TAstNode;

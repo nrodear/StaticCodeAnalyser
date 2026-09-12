@@ -79,7 +79,8 @@ implementation
 // noinspection-file SQLInjection
 
 uses
-  System.RegularExpressions;
+  System.RegularExpressions,
+  uAstSpans;   // SubtreeContains (Voll-Review 2026-09-12)
 
 class function TThreadFreeOnTerminateWithRefDetector.MatchFreeOnTerminateLHS(
   const LHS: string): string;
@@ -141,30 +142,9 @@ begin
 end;
 
 function NodeContainsRef(Root, Target: TAstNode): Boolean;
-// Subtree-Containment per OBJEKT-Identitaet (TAstNode hat keinen Parent-
-// Pointer). Iterative DFS. Lokale Kopie des Musters aus uNilDeref - geteilte
-// Units bleiben unangetastet.
-var
-  Stack : TList<TAstNode>;
-  Cur   : TAstNode;
-  i     : Integer;
 begin
-  Result := False;
-  if (Root = nil) or (Target = nil) then Exit;
-  Stack := TList<TAstNode>.Create;
-  try
-    Stack.Add(Root);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      if Cur = Target then Exit(True);
-      for i := 0 to Cur.Children.Count - 1 do
-        Stack.Add(Cur.Children[i]);
-    end;
-  finally
-    Stack.Free;
-  end;
+  // Voll-Review 2026-09-12: zentral (TAstSpans.SubtreeContains).
+  Result := TAstSpans.SubtreeContains(Root, Target);
 end;
 
 class function TThreadFreeOnTerminateWithRefDetector.IsInExclusiveBranch(

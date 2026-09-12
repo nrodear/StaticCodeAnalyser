@@ -85,7 +85,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uCFG;   // #6 Inkr.2: CFG-Erreichbarkeits-Postfilter (Q1)
+  uCFG,        // #6 Inkr.2: CFG-Erreichbarkeits-Postfilter (Q1)
+  uAstSpans;   // SubtreeContains (Voll-Review 2026-09-12)
 
 function DirLineBetween(const Lines: TArray<Integer>; A, B: Integer): Boolean;
 // Real-World-FP-Audit 2026-07-12, FP-Klasse 'preprocessor-branch' (Teilklasse
@@ -330,29 +331,9 @@ begin
 end;
 
 function NodeContainsRef(Root, Target: TAstNode): Boolean;
-// Subtree-Containment per OBJEKT-Identitaet (TAstNode hat keinen Parent-
-// Pointer). Iterative DFS (Hardening-v4-Stil).
-var
-  Stack : TList<TAstNode>;
-  Cur   : TAstNode;
-  i     : Integer;
 begin
-  Result := False;
-  if (Root = nil) or (Target = nil) then Exit;
-  Stack := TList<TAstNode>.Create;
-  try
-    Stack.Add(Root);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      if Cur = Target then Exit(True);
-      for i := 0 to Cur.Children.Count - 1 do
-        Stack.Add(Cur.Children[i]);
-    end;
-  finally
-    Stack.Free;
-  end;
+  // Voll-Review 2026-09-12: zentral (TAstSpans.SubtreeContains).
+  Result := TAstSpans.SubtreeContains(Root, Target);
 end;
 
 function SameArmHoldsBoth(Container, A, B: TAstNode): Boolean;
