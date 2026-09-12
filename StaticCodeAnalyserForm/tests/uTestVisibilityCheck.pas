@@ -57,6 +57,11 @@ type
     // ---- Utility-/Namespace-Klassen ueberspringen -------------------------
     [Test] procedure UtilityClass_OnlyClassFunctions_NotReported;
     [Test] procedure UtilityClass_WithCtor_StillAnalyzed;
+
+    // Voll-Review 2026-09-12 (Major 91): nested Klasse - der
+    // OtherRefs-Skip muss den BESITZERTYP vergleichen, nicht das erste
+    // Namenssegment
+    [Test] procedure NestedClass_OnlyOwnCallers_CanBeStrictPrivate;
   end;
 
 implementation
@@ -700,6 +705,49 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkCanBeStrictPrivate) >= 1);
+  finally F.Free; end;
+end;
+
+procedure TTestVisibilityCheck.NestedClass_OnlyOwnCallers_CanBeStrictPrivate;
+// Voll-Review 2026-09-12 (Major 91): der Bucket-Aufbau wurde am
+// 2026-07-28 auf den Besitzertyp umgestellt, der OtherRefs-Skip nicht.
+// Bei einer nested Klasse ist ClassNode.Name der EINFACHE Name
+// ('TInner'), die Implementierungen tragen zwei Qualifizierer
+// ('touter.tinner.run') - StartsWith('tinner.') griff also nicht, und
+// die EIGENEN Methoden der nested Klasse zaehlten zusaetzlich als
+// OtherRefs. Weil die Klassifikation 'else if OtherRefs > 0' VOR dem
+// StrictPrivate-Zweig prueft, kippte die Kategorie auf
+// CanBeUnitPrivate - genau der Effekt, den der Bucket-Kommentar als
+// behoben beschreibt.
+//
+// Der nicht-verschachtelte Zwilling ist
+// PublicMethod_OnlyOwnCallers_CanBePrivate; die einzige Differenz ist
+// die Verschachtelung.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TOuter = class'#13#10 +
+  '  public'#13#10 +
+  '    type'#13#10 +
+  '      TInner = class'#13#10 +
+  '      public'#13#10 +
+  '        procedure Helper;'#13#10 +
+  '        procedure Run;'#13#10 +
+  '      end;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TOuter.TInner.Helper; begin end;'#13#10 +
+  'procedure TOuter.TInner.Run; begin Helper; end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkCanBeStrictPrivate) >= 1,
+      'Helper wird nur von der eigenen nested Klasse gerufen');
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeUnitPrivate),
+      'die eigenen Methoden der nested Klasse sind keine OtherRefs');
   finally F.Free; end;
 end;
 

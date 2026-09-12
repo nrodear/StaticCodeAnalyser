@@ -398,11 +398,27 @@ var
       if Impl = Member then Continue;
       // P8: gecachtes NormalizeIdent statt LowerCase+Trim pro Paar.
       var Lower := MethodNamesNorm[Impl];
-      // Skippen wenn zur eigenen Klasse oder einem Descendant
-      if Lower.StartsWith(ClassLow + '.') then Continue;
+      // Skippen wenn zur eigenen Klasse oder einem Descendant.
+      //
+      // BESITZERTYP statt erstem Segment (Voll-Review 2026-09-12,
+      // Major 91): der Bucket-Aufbau wurde am 2026-07-28 genau dafuer
+      // umgestellt, dieser Filter aber nicht. Bei einer nested Klasse
+      // ist ClassNode.Name der EINFACHE Name ('TInner'), die
+      // Implementierungen tragen zwei Qualifizierer ('touter.tinner.run')
+      // - StartsWith('tinner.') greift also nicht, und die EIGENEN
+      // Methoden der nested Klasse wurden zusaetzlich als OtherRefs
+      // gezaehlt. Da die Klassifikation 'else if OtherRefs > 0' VOR dem
+      // StrictPrivate-Zweig prueft, kippte ein rein klassenintern
+      // genutztes Member auf fkCanBeUnitPrivate - exakt der Kipp-Effekt,
+      // den der Bucket-Kommentar als behoben beschreibt.
+      //
+      // OwnerTypeNameLower liefert bei EINEM Qualifizierer dasselbe wie
+      // das alte StartsWith, bei zweien den richtigen Besitzer.
+      var OwnerLow := TDetectorUtils.OwnerTypeNameLower(Lower);
+      if OwnerLow = ClassLow then Continue;
       var Skip := False;
       for SubLow in Descendants do
-        if Lower.StartsWith(SubLow + '.') then
+        if OwnerLow = SubLow then
         begin
           Skip := True;
           Break;
