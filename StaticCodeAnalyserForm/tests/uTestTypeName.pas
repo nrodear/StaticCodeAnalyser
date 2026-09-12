@@ -16,6 +16,11 @@ type
     [Test] procedure ClassOfReference_NotReported;
     [Test] procedure NonClassType_NoFinding;
     [Test] procedure TypeName_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Major 84): RXxx ist laut Unit-Kopf eine
+    // gueltige RECORD-Konvention
+    [Test] procedure RPrefixRecord_NoFinding;
+    [Test] procedure RPrefixClass_StillReported;
+    [Test] procedure CPortRecord_StillReported;
   end;
 
 implementation
@@ -135,6 +140,57 @@ begin
       end;
     Assert.Fail('expected fkTypeName finding');
   finally Findings.Free; end;
+end;
+
+procedure TTestTypeName.RPrefixRecord_NoFinding;
+// Voll-Review 2026-09-12 (Major 84): der Unit-Kopf nennt 'RPoint'
+// woertlich als konformes Record - der Code meldete es trotzdem
+// (Bestands-Exe: 1 Fund auf genau diesem Namen, empirisch belegt).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type RPoint = record X, Y: Double; end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTypeName),
+    'RXxx ist die dokumentierte Record-Konvention');
+  finally F.Free; end;
+end;
+
+procedure TTestTypeName.RPrefixClass_StillReported;
+// Gegenrichtung 1: R ist eine RECORD-Konvention. Fuer Klassen bleibt
+// T verbindlich - die Ausnahme darf nicht auf 'class' durchschlagen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type RList = class end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTypeName),
+    'fuer Klassen gilt weiterhin T');
+  finally F.Free; end;
+end;
+
+procedure TTestTypeName.CPortRecord_StillReported;
+// Gegenrichtung 2: uebernommene C-Strukturen sind keine Records mit
+// R-Konvention. Am Korpus sind das 23 der 25 Namen mit
+// 'R'+Grossbuchstabe (RC4_KEY, REPARSE_DATA_BUFFER, RAND_METHOD, ...);
+// sie tragen '_' bzw. keinen Kleinbuchstaben und bleiben gemeldet.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type RC4_KEY = record Data: Integer; end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTypeName),
+    'C-Port-Struktur folgt keiner Delphi-Konvention');
+  finally F.Free; end;
 end;
 
 initialization
