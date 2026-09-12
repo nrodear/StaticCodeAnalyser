@@ -121,26 +121,16 @@ begin
 end;
 
 function IsEventHandlerSignature(MethodNode: TAstNode): Boolean;
-// True wenn die Methode eine Event-Handler-Signatur hat - mind. 1 Parameter
-// 'Sender: TObject'. Solche Methoden werden vom Form-Designer per DFM zur
-// Laufzeit an Komponenten-Events gebunden und MUESSEN Instance-Methods sein.
-// Heuristik:
-//   * Mind. ein nkParam-Child der Methode.
-//   * Erster Parameter hat Name 'Sender' (case-insensitive) ODER
-//     TypeRef matched 'tobject' (case-insensitive).
-// Faengt FormCreate(Sender: TObject), btnClick(Sender: TObject),
-// OnFilter(Sender: TObject; const Item: TItem; var Accept: Boolean) etc.
-var
-  Child : TAstNode;
+// True wenn die Methode eine Event-Handler-Signatur hat (Sender-
+// Parameter) - solche Methoden werden vom Form-Designer per DFM zur
+// Laufzeit an Komponenten-Events gebunden und MUESSEN Instance-Methods
+// sein. Seit Voll-Review 2026-09-12 zentral:
+// TDetectorUtils.IsEventHandlerSignature ist die byte-identische
+// Hebung DIESER Fassung (die uMethodName-Kopie war als 'Spiegel'
+// dokumentiert). Der Wrapper bleibt, damit die Aufrufer in dieser
+// Unit unveraendert bleiben.
 begin
-  Result := False;
-  for Child in MethodNode.Children do
-  begin
-    if Child.Kind <> nkParam then Continue;
-    if SameText(Child.Name, 'Sender') then Exit(True);
-    if Pos('tobject', LowerCase(Child.TypeRef)) > 0 then Exit(True);
-    Exit;                              // nur ersten Parameter prufen
-  end;
+  Result := TDetectorUtils.IsEventHandlerSignature(MethodNode);
 end;
 
 function HasBodyBlock(MethodNode: TAstNode): Boolean;

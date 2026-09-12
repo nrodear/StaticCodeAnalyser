@@ -555,6 +555,18 @@ type
     // wird das letzte Segment.
     class function IsFfiBindingTypeName(AFfiTypes: TStringList;
       const ATypeName: string): Boolean; static;
+
+    // True wenn die Methode eine Event-Handler-Signatur hat - erster
+    // nkParam heisst 'Sender' (case-insensitive) oder sein TypeRef
+    // enthaelt 'tobject'. Solche Methoden werden vom Form-Designer per
+    // DFM zur Laufzeit an Komponenten-Events gebunden. Gehoben aus
+    // uCanBeClassMethod/uMethodName (Voll-Review 2026-09-12) - die
+    // zweite Kopie war woertlich als 'Spiegel' dokumentiert und beide
+    // trugen denselben tobject-Substring-Defekt; der ist nach der
+    // Hebung genau EINMAL zu fixen (separater, fundbewegender
+    // Schritt).
+    class function IsEventHandlerSignature(MethodNode: TAstNode)
+      : Boolean; static;
   end;
 
 
@@ -1944,6 +1956,25 @@ begin
   Seg := LowerCase(UnqualifiedNameLast(Trim(ATypeName)));
   if Seg = '' then Exit;
   Result := AFfiTypes.IndexOf(Seg) >= 0;
+end;
+
+class function TDetectorUtils.IsEventHandlerSignature(
+  MethodNode: TAstNode): Boolean;
+// Byte-identische Hebung der uCanBeClassMethod-/uMethodName-Fassungen
+// (Voll-Review 2026-09-12): erster nkParam entscheidet - 'Sender' als
+// Name oder 'tobject' im TypeRef. Faengt FormCreate(Sender: TObject),
+// btnClick(Sender: TObject), OnFilter(Sender: TObject; ...) etc.
+var
+  Child : TAstNode;
+begin
+  Result := False;
+  for Child in MethodNode.Children do
+  begin
+    if Child.Kind <> nkParam then Continue;
+    if SameText(Child.Name, 'Sender') then Exit(True);
+    if Pos('tobject', LowerCase(Child.TypeRef)) > 0 then Exit(True);
+    Exit;                              // nur ersten Parameter pruefen
+  end;
 end;
 
 end.

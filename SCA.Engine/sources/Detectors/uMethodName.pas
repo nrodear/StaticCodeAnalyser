@@ -125,23 +125,16 @@ begin
 end;
 
 function IsEventHandlerSignature(MethodNode: TAstNode): Boolean;
-// True wenn die Methode eine DFM-Event-Handler-Signatur hat - mind. 1
-// Parameter 'Sender: TObject'. Solche Methoden werden vom Form-Designer
-// per DFM gebunden und tragen per IDE-Konvention den Component-Namen als
-// kleingeschriebenes Praefix (actSaveExecute, btnSaveClick, qDataAfterScroll).
-// Spiegelt die Heuristik aus uCanBeClassMethod (Round-3-Fix); ohne diese
-// produzierte Self-Test auf realem VCL-Form-Code ~8 FPs.
-var
-  Child : TAstNode;
+// True wenn die Methode eine DFM-Event-Handler-Signatur hat - solche
+// Methoden werden vom Form-Designer per DFM gebunden und tragen per
+// IDE-Konvention den Component-Namen als kleingeschriebenes Praefix
+// (actSaveExecute, btnSaveClick, qDataAfterScroll); ohne die Ausnahme
+// produzierte Self-Test auf realem VCL-Form-Code ~8 FPs. Seit
+// Voll-Review 2026-09-12 zentral (TDetectorUtils) - diese Fassung war
+// die als 'Spiegel' dokumentierte Kopie von uCanBeClassMethod und
+// konnte bei der naechsten Heuristik-Aenderung driften.
 begin
-  Result := False;
-  for Child in MethodNode.Children do
-  begin
-    if Child.Kind <> nkParam then Continue;
-    if SameText(Child.Name, 'Sender') then Exit(True);
-    if Pos('tobject', LowerCase(Child.TypeRef)) > 0 then Exit(True);
-    Exit;                              // nur ersten Parameter pruefen
-  end;
+  Result := TDetectorUtils.IsEventHandlerSignature(MethodNode);
 end;
 
 function HasProceduralReturnType(const ATypeRef: string): Boolean;
