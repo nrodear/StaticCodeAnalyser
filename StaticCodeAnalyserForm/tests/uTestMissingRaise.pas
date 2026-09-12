@@ -17,7 +17,15 @@ type
     // ---- Positive Varianten ------------------------------------------------
     [Test] procedure ExceptionCreate_NoRaise_Reported;
     [Test] procedure SpecificExceptionCreate_NoRaise_Reported;
-    [Test] procedure ExceptionCreateFmt_NoRaise_Reported;
+    [Test] procedure ExceptionCreateWithFormatArg_NoRaise_Reported;
+    // Voll-Review 2026-09-12 (Major 77/78): die ECHTEN
+    // Konstruktor-Varianten und der klammerlose Aufruf. Der Test
+    // darueber hiess bis dahin 'ExceptionCreateFmt...', pruefte aber
+    // '.Create(Format(...))' - die Luecke war auch im Test blind.
+    [Test] procedure ExceptionCreateFmtVariant_NoRaise_Reported;
+    [Test] procedure ExceptionCreateResFmt_NoRaise_Reported;
+    [Test] procedure ParenlessCreate_NoRaise_Reported;
+    [Test] procedure RaisedCreateFmt_NoFinding;
     [Test] procedure MultipleExceptionCreates_AllReported;
 
     // ---- Negative Varianten / Guards --------------------------------------
@@ -70,8 +78,12 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestMissingRaise.ExceptionCreateFmt_NoRaise_Reported;
-// Variante: .Create mit Format-args.
+procedure TTestMissingRaise.ExceptionCreateWithFormatArg_NoRaise_Reported;
+// Variante: .Create mit Format-ARGUMENT. Hiess bis zum Voll-Review
+// 2026-09-12 'ExceptionCreateFmt_NoRaise_Reported' und suggerierte
+// damit eine Abdeckung von '.CreateFmt', die es nie gab (Major 77) -
+// die wirkliche CreateFmt-Form steht jetzt in
+// ExceptionCreateFmtVariant_NoRaise_Reported.
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo(x: Integer);'#13#10 +
@@ -267,6 +279,85 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingRaise),
     '''.Create'' im String-Literal ist kein Missing-Raise');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingRaise.ExceptionCreateFmtVariant_NoRaise_Reported;
+// Voll-Review 2026-09-12 (Major 77): es wurde ausschliesslich das
+// blanke '.Create' erkannt - hinter '.Create' stand bei '.CreateFmt'
+// ein 'F' und die Grenzpruefung schlug fehl, der Fund entfiel
+// komplett (Bestands-Exe: 0 Funde auf dieser Fixture, empirisch
+// belegt; CreateFmt ist bei Exceptions die haeufigste Variante).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string);'#13#10 +
+  'begin EConvertError.CreateFmt(''bad %s'', [s]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMissingRaise),
+    'CreateFmt ohne raise ist derselbe Bug wie Create ohne raise');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingRaise.ExceptionCreateResFmt_NoRaise_Reported;
+// Geschwisterform mit dem LAENGEREN Suffix - pinnt zugleich die
+// Reihenfolge der Suffix-Liste: wuerde 'Res' vor 'ResFmt' greifen,
+// stuende hinter dem Suffix ein 'F' statt der Klammer (Bestands-Exe:
+// 0 Funde, empirisch belegt).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string);'#13#10 +
+  'begin EConvertError.CreateResFmt(@SBadArg, [s]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMissingRaise),
+    'CreateResFmt ohne raise muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingRaise.ParenlessCreate_NoRaise_Reported;
+// Voll-Review 2026-09-12 (Major 78): die Suchschleife endete eine
+// Position zu frueh, der Punkt eines auf '.Create' ENDENDEN Namens
+// wurde nie geprueft und der eigens dafuer gebaute Sonderfall-Zweig
+// war toter Code.
+//
+// Dass die Form ueberhaupt einen nkCall erzeugt, ist an der
+// Bestands-Exe GEMESSEN statt vermutet: 'EOutOfMemory.Create()'
+// meldet, 'EOutOfMemory.Create;' nicht - die einzige Differenz ist
+// das Namensende. Ein abschliessendes ';' im Namen scheidet aus, das
+// pruefte schon die alte Grenzpruefung.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  EOutOfMemory.Create;'#13#10 +
+  '  x := 1;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMissingRaise),
+    'klammerloser Konstruktor-Aufruf ohne raise ist derselbe Bug');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingRaise.RaisedCreateFmt_NoFinding;
+// Gegenrichtung zu Major 77: die GERAISETE Variante darf durch die
+// Suffix-Erweiterung nicht zum Fund werden (der Parser legt
+// 'raise X.CreateFmt(...)' als nkRaise ab, es entsteht kein nkCall -
+// dieser Test pinnt das fuer die neuen Suffixe mit).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string);'#13#10 +
+  'begin raise EConvertError.CreateFmt(''bad %s'', [s]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingRaise),
+    'geraistes CreateFmt ist kein Fund');
   finally F.Free; end;
 end;
 
