@@ -43,7 +43,7 @@ implementation
 
 uses
   uFileTextCache,
-  uDetectorUtils   // ExtractFirstWord (Voll-Review 2026-09-12);
+  uDetectorUtils;   // ExtractFirstWord (Voll-Review 2026-09-12)
 
 const
   EMIT_SEVERITY = lsHint;
