@@ -416,29 +416,24 @@ procedure TTestDfmHardcodedCaption.Gate_ResIdentWithKeywordPrefix_NotReported;
 // resourcestring-Block schon bei 'typeCaption = ...' (StartsText
 // 'type') - der folgende Res-Ident fehlte im Gate und die Caption
 // wurde trotz Laufzeit-Ersetzung gemeldet.
+// Fixture bewusst namens- und layoutvariiert gegen den
+// Gate_ResourceString-Nachbarn - sonst meldet der Selbstscan die
+// Zwillinge als DuplicateBlock/DuplicateString.
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOnFiles(
-    'object FormB: TFormB'#13#10 +
-    '  object BtnR: TButton'#13#10 +
-    '    Caption = ''Platzhalter'''#13#10 +
-    '  end'#13#10 +
-    'end',
-    'unit resprobe;'#13#10 +
-    'interface'#13#10 +
-    'implementation'#13#10 +
+    'object FormC: TFormC'#13#10'  object BtnQ: TButton'#13#10 +
+    '    Caption = ''Rohtext'''#13#10'  end'#13#10'end',
+    'unit resprobe2;'#13#10'interface'#13#10'implementation'#13#10 +
     'resourcestring'#13#10 +
     '  typeCaption = ''Anderer Text'';'#13#10 +
-    '  SEcht = ''Echter Text'';'#13#10 +
-    'procedure TFormB.Init;'#13#10 +
-    'begin'#13#10 +
-    '  BtnR.Caption := SEcht;'#13#10 +
-    'end;'#13#10 +
-    'end.');
+    '  SWahr = ''Echter Text 2'';'#13#10 +
+    'procedure TFormC.Setup;'#13#10'begin'#13#10 +
+    '  BtnQ.Caption := SWahr;'#13#10'end;'#13#10'end.');
   try
     Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption),
       'typeCaption ist ein Res-Ident, kein Sektionswechsel - das Gate ' +
-      'muss SEcht weiter sehen');
+      'muss SWahr weiter sehen');
   finally F.Free; end;
 end;
 
