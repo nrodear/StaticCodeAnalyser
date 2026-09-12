@@ -265,12 +265,36 @@ begin
   end;
 end;
 
+// Fortsetzungszeile eines OFFENEN Blockkommentars: liefert Start (1),
+// Ende und Fortsetzungsposition des Segments; schliesst InBlockComm,
+// wenn die Zeile das '}' traegt. Ausgegliedert, damit AnalyzeUnit
+// unter der eigenen SCA176-Schwelle bleibt.
+function OffenerBlockRest(const Line: string; var InBlockComm: Boolean;
+  out CommentEnd, ScanFrom: Integer): Integer;
+var
+  p : Integer;
+begin
+  Result := 1;
+  p := Pos('}', Line);
+  if p > 0 then
+  begin
+    CommentEnd  := p;
+    ScanFrom    := p + 1;
+    InBlockComm := False;
+  end
+  else
+  begin
+    CommentEnd := Length(Line);
+    ScanFrom   := 0;
+  end;
+end;
+
 class procedure TTodoCommentDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines       : TStringList;
   Line        : string;
-  i, p        : Integer;
+  i           : Integer;
   InBlockComm : Boolean;   // {...}-Block ueber mehrere Zeilen
   CommentAt   : Integer;   // Spalte ab der Kommentar beginnt (1-basiert)
   CommentEnd  : Integer;   // letzte Spalte des Kommentar-Segments
@@ -298,19 +322,8 @@ begin
         // er endet am '}' oder mit der Zeile. Der Rest der Zeile
         // gehoert danach der Segment-Schleife (vorher wurde er als
         // Kommentar weiterdurchsucht - Blocker s. Scanner-Kommentar).
-        CommentAt := 1;
-        p := Pos('}', Line);
-        if p > 0 then
-        begin
-          CommentEnd := p;
-          ScanFrom   := p + 1;
-          InBlockComm := False;
-        end
-        else
-        begin
-          CommentEnd := Length(Line);
-          ScanFrom   := 0;
-        end;
+        CommentAt := OffenerBlockRest(Line, InBlockComm,
+          CommentEnd, ScanFrom);
         Treffer := FindMarkerInComment(Line, CommentAt, CommentEnd,
           Marker, MarkerPos);
       end;
