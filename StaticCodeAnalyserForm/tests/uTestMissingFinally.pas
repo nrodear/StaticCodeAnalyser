@@ -41,6 +41,8 @@ type
     [Test] procedure SafeSpanContainer_NotReported;
     [Test] procedure SafeSpanForeignCall_StillReported;      // TP-Gegenprobe
     [Test] procedure SafeSpanLoadFromFile_StillReported;     // TP-Gegenprobe
+    [Test] procedure SafeSpanPrefixCollision_StillReported;   // TP-Gegenprobe
+    [Test] procedure SafeSpanFreeInstancePrefix_StillReported; // TP-Gegenprobe
     // --- C2 (Triage 2026-07-24, umgesetzt 2026-07-25): except-swallow ---
     // Handler schluckt die Exception -> Free auf beiden Pfaden erreichbar.
     [Test] procedure ExceptSwallow_NotReported;
@@ -481,6 +483,65 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMissingFinally) >= 1,
     'fremder Call im Span -> SafeSpan greift nicht, Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingFinally.SafeSpanPrefixCollision_StillReported;
+// Voll-Review 2026-09-12 (Blocker): die FreeIdx-Suche band per
+// Praefix-Match an FREMDE Variablen - 'FreeAndNil(listbox);' matchte
+// bei var 'list' ('freeandnil(list' ist Praefix). Der Span bis zur
+// fremden Zeile war rein list-Member -> SafeSpan unterdrueckte den
+// ECHTEN list-Fund, obwohl DoRisky zwischen Create und list.Free
+// werfen kann. Assert auf EXAKT 2 ist beidseitig scharf: die
+// Bestandsfassung meldete 1 (nur listbox; an der Bestands-Exe
+// empirisch geprueft), ein uebergriffiger Terminator-Check 0.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var list, listbox: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  listbox := TStringList.Create;'#13#10 +
+  '  list := TStringList.Create;'#13#10 +
+  '  list.Add(''x'');'#13#10 +
+  '  FreeAndNil(listbox);'#13#10 +
+  '  DoRisky;'#13#10 +
+  '  list.Free;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkMissingFinally),
+    'freeandnil(listbox) darf den FreeIdx von list nicht setzen - ' +
+    'beide Vars ohne try/finally muessen gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingFinally.SafeSpanFreeInstancePrefix_StillReported;
+// Zweite Form desselben Blockers: 'list.FreeInstance;' matchte den
+// '.free'-Praefix, FreeIdx band an die falsche Zeile, der leere Span
+// unterdrueckte den Fund - obwohl DoRisky vor dem echten list.Free
+// werfen kann. Bestandsfassung meldete 0 (empirisch geprueft).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var list: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  list := TStringList.Create;'#13#10 +
+  '  list.FreeInstance;'#13#10 +
+  '  DoRisky;'#13#10 +
+  '  list.Free;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMissingFinally),
+    'list.FreeInstance ist kein Free von list - der Fund bleibt');
   finally F.Free; end;
 end;
 

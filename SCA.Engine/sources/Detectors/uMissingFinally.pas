@@ -50,6 +50,40 @@ implementation
 // noinspection-file BeginEndRequired, CanBeStrictPrivate, LongMethod, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+// Free-Zeilen-Erkennung MIT Terminator fuer die SafeSpan-FreeIdx-Suche
+// (Voll-Review 2026-09-12, Blocker): der fruehere reine Praefix-Match
+// band an FREMDE Variablen - 'freeandnil(listbox);' matchte bei var
+// 'list' ('freeandnil(list' ist Praefix), 'list.freeinstance;' den
+// '.free'-Praefix. Der Span bis zur fremden Zeile war dann harmlos und
+// SafeSpan unterdrueckte einen ECHTEN Fund (FN), obwohl zwischen Create
+// und dem tatsaechlichen Free riskanter Code stand. Jetzt: nach
+// '<var>.free'/'<var>.destroy' muss ein Nicht-Ident-Zeichen folgen
+// (oder das Zeilenende), nach 'freeandnil(<var>' - optional mit
+// Blanks - ein ')'. L kommt bereits getrimmt und lowercased an.
+function IsFreeLineFor(const L, AVarLow: string): Boolean;
+
+  function TailIsNonIdent(const APrefix: string): Boolean;
+  begin
+    Result := L.StartsWith(APrefix) and
+      ((Length(L) = Length(APrefix)) or
+       not TDetectorUtils.IsIdentChar(L[Length(APrefix) + 1]));
+  end;
+
+var
+  p : Integer;
+begin
+  Result := True;
+  if TailIsNonIdent(AVarLow + '.free') then Exit;
+  if TailIsNonIdent(AVarLow + '.destroy') then Exit;
+  if L.StartsWith('freeandnil(' + AVarLow) then
+  begin
+    p := Length('freeandnil(') + Length(AVarLow) + 1;
+    while (p <= Length(L)) and (L[p] = ' ') do Inc(p);
+    if (p <= Length(L)) and (L[p] = ')') then Exit;
+  end;
+  Result := False;
+end;
+
 class procedure TMissingFinallyDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext);
@@ -131,8 +165,11 @@ var
     for i := ACreateLine + 1 to Length(StrippedLines) do
     begin
       L := LowerCase(Trim(StrippedLines[i - 1]));
-      if L.StartsWith(AVarLow + '.free') or L.StartsWith(AVarLow + '.destroy')
-         or L.StartsWith('freeandnil(' + AVarLow) then
+      // Terminator-genau statt Praefix (IsFreeLineFor, Blocker
+      // 2026-09-12): 'freeandnil(listbox)' darf bei var 'list' den
+      // FreeIdx nicht setzen - sonst endet der Span-Check an der
+      // fremden Zeile und unterdrueckt einen echten Fund.
+      if IsFreeLineFor(L, AVarLow) then
       begin
         FreeIdx := i;
         Break;
