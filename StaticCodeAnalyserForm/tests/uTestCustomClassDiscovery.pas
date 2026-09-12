@@ -8,8 +8,11 @@ unit uTestCustomClassDiscovery;
 //   * Instantiable - Klassen mit Ctor/Dtor ODER Create-Call -> leak-relevant
 //   * StaticOnly   - keine Instanziierungs-Evidenz, vermutlich Utility-Klassen
 //
-// Owner-managed Parents (TForm/TFrame/TComponent/TInterfacedObject/...)
-// werden vor der Klassifizierung ausgeschlossen.
+// Owner-managed Parents (TForm/TFrame/TInterfacedObject/...) werden
+// vor der Klassifizierung ausgeschlossen. TComponent ist BEWUSST
+// nicht dabei (Voll-Review 2026-09-12, Major 52): Create(nil) ist
+// bei non-visual Components gaengig, dort leakt es - s. Unit-Kopf
+// von uCustomClassDiscovery.
 
 interface
 
@@ -25,6 +28,8 @@ type
     [Test] procedure FrameDescendant_IsSkipped;
     [Test] procedure InterfacedObjectDescendant_IsSkipped;
     [Test] procedure ExceptionDescendant_IsSkipped;
+    // Voll-Review 2026-09-12 (Major 52): nagelt die Entscheidung fest
+    [Test] procedure TComponentParent_IsNotOwnerManaged;
 
     // ---- Instantiable-Klassifikation --------------------------------------
     [Test] procedure ClassWithCtor_IsInstantiable;
@@ -320,6 +325,20 @@ begin
   Assert.IsFalse(TCustomClassDiscovery.IsRtlNonClassName('TObject'));
   Assert.IsFalse(TCustomClassDiscovery.IsRtlNonClassName('TStream'));
   Assert.IsFalse(TCustomClassDiscovery.IsRtlNonClassName(''));
+end;
+
+procedure TTestCustomClassDiscovery.TComponentParent_IsNotOwnerManaged;
+// Voll-Review 2026-09-12 (Major 52): der fruehere Unit-Kopf versprach
+// einen TComponent-Skip, den OWNER_MANAGED nie enthielt. Die
+// Entscheidung des Reviews: TComponent bleibt GETRACKT (Create(nil)
+// ist bei non-visual Components gaengig - 'false positive ist besser
+// als verpasster Leak'). Dieser Assert nagelt die gewaehlte Wahrheit
+// fest; wer TComponent doch skippen will, muss ihn bewusst umdrehen.
+begin
+  Assert.IsFalse(TCustomClassDiscovery.IsOwnerManagedParent('TComponent'),
+    'TComponent ist bewusst NICHT owner-managed-geskippt');
+  Assert.IsTrue(TCustomClassDiscovery.IsOwnerManagedParent('TForm'),
+    'Kontrolle: TForm bleibt geskippt');
 end;
 
 initialization
