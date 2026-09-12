@@ -130,18 +130,45 @@ begin
       // Skip whitespace
       j := i + 2;
       while (j <= n) and CharInSet(Line[j], [' ', #9]) do Inc(j);
-      // Identifier (Binding-Variable, Name wird nicht gebraucht)
-      if (j > n) or not IsIdentStart(Line[j]) then begin Inc(i); Continue; end;
-      while (j <= n) and IsIdent(Line[j]) do Inc(j);
-      // `:`
-      while (j <= n) and CharInSet(Line[j], [' ', #9]) do Inc(j);
-      if (j > n) or (Line[j] <> ':') then begin Inc(i); Continue; end;
-      Inc(j);
-      while (j <= n) and CharInSet(Line[j], [' ', #9]) do Inc(j);
-      // `Exception` Wort (exakt, ohne Suffix)
+      // Identifier: Binding-Variable ODER - anonyme Form 'on Exception
+      // do' - bereits der Typ (Voll-Review 2026-09-12, Major 63; die
+      // Form faengt die Wurzelklasse ohne Binding-Variable und war
+      // vorher unsichtbar). Punkt-Ketten ('System.SysUtils.Exception')
+      // werden mitgelesen, das LETZTE Segment entscheidet.
       if (j > n) or not IsIdentStart(Line[j]) then begin Inc(i); Continue; end;
       wStart := j;
       while (j <= n) and IsIdent(Line[j]) do Inc(j);
+      while (j < n) and (Line[j] = '.') and IsIdentStart(Line[j + 1]) do
+      begin
+        Inc(j);
+        wStart := j;
+        while (j <= n) and IsIdent(Line[j]) do Inc(j);
+      end;
+      Word := Copy(Line, wStart, j - wStart);
+      // `:`?
+      while (j <= n) and CharInSet(Line[j], [' ', #9]) do Inc(j);
+      if (j > n) or (Line[j] <> ':') then
+      begin
+        // Kein ':' -> das gelesene Wort war der TYP (anonyme Form).
+        if SameText(Word, 'Exception') then
+        begin
+          Result := OnCol;
+          Exit;
+        end;
+        Inc(i); Continue;
+      end;
+      Inc(j);
+      while (j <= n) and CharInSet(Line[j], [' ', #9]) do Inc(j);
+      // `Exception` Wort (exakt, ohne Suffix; Punkt-Kette wie oben)
+      if (j > n) or not IsIdentStart(Line[j]) then begin Inc(i); Continue; end;
+      wStart := j;
+      while (j <= n) and IsIdent(Line[j]) do Inc(j);
+      while (j < n) and (Line[j] = '.') and IsIdentStart(Line[j + 1]) do
+      begin
+        Inc(j);
+        wStart := j;
+        while (j <= n) and IsIdent(Line[j]) do Inc(j);
+      end;
       Word := Copy(Line, wStart, j - wStart);
       if SameText(Word, 'Exception') then
       begin

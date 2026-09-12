@@ -13,6 +13,9 @@ type
     [Test] procedure OnException_Reported;
     [Test] procedure OnEDatabaseError_NotReported;
     [Test] procedure ExceptOnException_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Major 63): anonyme und qualifizierte Form
+    [Test] procedure AnonymousOnException_Reported;
+    [Test] procedure OnSpecificClass_Anonymous_NoFinding;
   end;
 
 implementation
@@ -85,6 +88,58 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkExceptOnException finding');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptOnException.AnonymousOnException_Reported;
+// Voll-Review 2026-09-12 (Major 63): 'on Exception do' faengt die
+// Wurzelklasse ohne Binding-Variable - der Scanner verlangte zwingend
+// 'Ident : Exception' und lieferte 0 (Bestands-Exe: 0, empirisch
+// belegt, eo1.pas).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Tu;'#13#10 +
+  '  except'#13#10 +
+  '    on Exception do'#13#10 +
+  '      Terminate;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkExceptOnException),
+    'die anonyme Form faengt die Wurzelklasse genauso');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptOnException.OnSpecificClass_Anonymous_NoFinding;
+// Gegenrichtung: 'on EConvertError do' ist eine SPEZIFISCHE Klasse -
+// ein anonymer Zweig, der jedes on ohne ':' meldet, waere hier rot.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Tu;'#13#10 +
+  '  except'#13#10 +
+  '    on EConvertError do'#13#10 +
+  '      Melde;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkExceptOnException),
+    'spezifische Klasse ohne Binding ist in Ordnung');
   finally F.Free; end;
 end;
 
