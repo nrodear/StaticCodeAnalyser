@@ -106,11 +106,17 @@ procedure CollectUnprotectedRaises(Node: TAstNode; InHandler: Boolean;
 //   nkTryExcept
 //   ├── (try-body statements, raises HIER sind durch das except gefangen)
 //   └── nkExceptBlock
-//       └── (handler statements, raises hier sind UN-gefangen
-//            (re-raise propagiert raus))
+//       └── (handler statements)
 //
-// Wir markieren also try-body-Kinder von nkTryExcept als protected,
-// aber NICHT die nkExceptBlock-Kinder.
+// Handler-Kinder (nkExceptBlock/nkOnHandler) werden BEWUSST ebenfalls
+// als protected markiert: ein raise im Handler ist das im Unit-Kopf
+// abgesegnete 'bewusst durchreichen' - wer im except-Block re-raist,
+// hat die Ausnahme gesehen und entschieden. Die Vorfassung dieses
+// Kommentars behauptete das Gegenteil ('NICHT die nkExceptBlock-
+// Kinder') und widersprach dem Code - der naechste Bearbeiter haette
+// einen 'Fix' gebaut, der das gewollte Verhalten kippt (Voll-Review
+// 2026-09-12, Major 62; der Waechter-Test
+// ReRaiseInHandler_NotReported pinnt die Entscheidung).
 var
   Child          : TAstNode;
   NextInHandler  : Boolean;
