@@ -89,6 +89,15 @@ uses
   uAstNode;
 
 type
+  /// Knoten samt naechstumschliessender nkMethod aus dem Scope-Walk
+  /// (Method = nil auf Unit-Ebene). Dient zugleich als Stack-Frame.
+  TNodeScopePair = record
+    Node   : TAstNode;
+    Method : TAstNode;
+  end;
+
+  TNodeKinds = set of TNodeKind;
+
   TAstSpans = class
   public
     /// Groesste Zeilennummer ueber ANode und alle seine Nachfahren.
@@ -120,6 +129,16 @@ type
     /// (rekursiv; nil-fest). Vorher zweimal byte-gleich in
     /// uConstructorWithoutInherited/uDestructorWithoutInherited.
     class function HasInheritedCall(ANode: TAstNode): Boolean; static;
+    /// Iterative Preorder-DFS ohne Rekursions-Stack (Hardening v4,
+    /// Audit_jvcl_segfault) ueber ARoot, die je Knoten die
+    /// naechstumschliessende nkMethod mitfuehrt. Gesammelt werden die
+    /// Knoten, deren Kind in AKinds liegt - ein LEERES Set sammelt
+    /// ALLE Knoten (uNilComparison-Politik). Reihenfolge exakt wie
+    /// die sechs frueheren WalkAndCheck-Kopien der Detektoren
+    /// (Kinder rueckwaerts gepusht); der Wurzelknoten selbst laeuft
+    /// mit Method=nil, erst seine Kinder erben ein nkMethod-ARoot.
+    class function CollectWithMethodScope(ARoot: TAstNode;
+      const AKinds: TNodeKinds): TArray<TNodeScopePair>; static;
   end;
 
 implementation
@@ -158,6 +177,46 @@ begin
   if ANode.Kind = nkInherited then Exit(True);
   for Child in ANode.Children do
     if HasInheritedCall(Child) then Exit(True);
+end;
+
+class function TAstSpans.CollectWithMethodScope(ARoot: TAstNode;
+  const AKinds: TNodeKinds): TArray<TNodeScopePair>;
+var
+  Stack    : TList<TNodeScopePair>;
+  Cur, F   : TNodeScopePair;
+  i, Cnt   : Integer;
+  NextMeth : TAstNode;
+begin
+  Result := nil;
+  if ARoot = nil then Exit;
+  Cnt := 0;
+  Stack := TList<TNodeScopePair>.Create;
+  try
+    F.Node := ARoot; F.Method := nil;
+    Stack.Add(F);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if (AKinds = []) or (Cur.Node.Kind in AKinds) then
+      begin
+        if Cnt = Length(Result) then
+          SetLength(Result, (Cnt * 2) + INITIAL_STACK_CAPACITY);
+        Result[Cnt] := Cur;
+        Inc(Cnt);
+      end;
+      if Cur.Node.Kind = nkMethod then NextMeth := Cur.Node
+      else NextMeth := Cur.Method;
+      for i := Cur.Node.Children.Count - 1 downto 0 do
+      begin
+        F.Node := Cur.Node.Children[i]; F.Method := NextMeth;
+        Stack.Add(F);
+      end;
+    end;
+  finally
+    Stack.Free;
+  end;
+  SetLength(Result, Cnt);
 end;
 
 class function TAstSpans.SubtreeMaxLine(ANode: TAstNode): Integer;

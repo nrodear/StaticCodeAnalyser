@@ -51,6 +51,9 @@ implementation
 // noinspection-file BeginEndRequired, GroupedDeclaration, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uAstSpans;   // CollectWithMethodScope (Voll-Review 2026-09-12)
+
 // True wenn der raise-Ausdruck genau die RTL-Klasse `Exception` instanziiert
 // (case-insensitive, mit optionalen Leerzeichen).
 function RaisesGenericException(const Expr: string): Boolean;
@@ -66,55 +69,31 @@ begin
             (Pos('exception.create', Lower) = 1);
 end;
 
-procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
+procedure WalkAndCheck(Node: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
-// Hardening v4: iterative DFS - siehe Audit_jvcl_segfault.
-type TFrame = record N, M: TAstNode; end;
+// Seit Voll-Review 2026-09-12 ueber den zentralen Scope-Walk
+// (TAstSpans.CollectWithMethodScope) - Mechanik, Besuchsreihenfolge
+// und Hardening v4 (iterative DFS, Audit_jvcl_segfault) identisch
+// zur frueheren lokalen Kopie.
 var
-  Stack : TList<TFrame>;
-  Cur, F : TFrame;
-  i      : Integer;
-  Find   : TLeakFinding;
+  P        : TNodeScopePair;
   MethName : string;
-  NextMeth : TAstNode;
 begin
-  if Node = nil then Exit;
-  Stack := TList<TFrame>.Create;
-  try
-    F.N := Node; F.M := CurrentMethod;
-    Stack.Add(F);
-    while Stack.Count > 0 do
+  for P in TAstSpans.CollectWithMethodScope(Node, [nkRaise]) do
+    if RaisesGenericException(P.Node.Name) then
     begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      if (Cur.N.Kind = nkRaise) and RaisesGenericException(Cur.N.Name) then
-      begin
-        if Assigned(Cur.M) then MethName := Cur.M.Name else MethName := '';
-        Find             := TLeakFinding.Create;
-        Find.FileName    := FileName;
-        Find.MethodName  := MethName;
-        Find.LineNumber  := IntToStr(Cur.N.Line);
-        Find.MissingVar  :=
-          'Raising bare "Exception" - use a specific subclass (e.g. EArgumentException)';
-        Find.SetKind(fkRaisingRawException);
-        Results.Add(Find);
-      end;
-      if Cur.N.Kind = nkMethod then NextMeth := Cur.N else NextMeth := Cur.M;
-      for i := Cur.N.Children.Count - 1 downto 0 do
-      begin
-        F.N := Cur.N.Children[i]; F.M := NextMeth;
-        Stack.Add(F);
-      end;
+      if Assigned(P.Method) then MethName := P.Method.Name
+      else MethName := '';
+      Results.Add(TLeakFinding.New(FileName, MethName, P.Node.Line,
+        'Raising bare "Exception" - use a specific subclass (e.g. EArgumentException)',
+        fkRaisingRawException));
     end;
-  finally
-    Stack.Free;
-  end;
 end;
 
 class procedure TRaisingRawExceptionDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 begin
-  WalkAndCheck(UnitNode, nil, FileName, Results);
+  WalkAndCheck(UnitNode, FileName, Results);
 end;
 
 end.

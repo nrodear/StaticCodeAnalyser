@@ -58,6 +58,9 @@ implementation
 // noinspection-file BeginEndRequired, GroupedDeclaration, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uAstSpans;   // CollectWithMethodScope (Voll-Review 2026-09-12)
+
 // True wenn CallName ein IfThen-Call ist (bare `IfThen(` oder qualifiziert
 // `Math.IfThen(` / `StrUtils.IfThen(` / `System.Math.IfThen(` ...).
 function IsIfThenCall(const CallName: string): Boolean;
@@ -228,45 +231,26 @@ begin
   Results.Add(F);
 end;
 
-procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
+procedure WalkAndCheck(Node: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
-// Hardening v4: iterative DFS - siehe Audit_jvcl_segfault.
-type TFrame = record N, M: TAstNode; end;
+// Seit Voll-Review 2026-09-12 ueber den zentralen Scope-Walk
+// (TAstSpans.CollectWithMethodScope) - Mechanik, Besuchsreihenfolge
+// und Hardening v4 (iterative DFS, Audit_jvcl_segfault) identisch
+// zur frueheren lokalen Kopie.
 var
-  Stack : TList<TFrame>;
-  Cur, F : TFrame;
-  i      : Integer;
-  NextMeth : TAstNode;
+  P : TNodeScopePair;
 begin
-  if Node = nil then Exit;
-  Stack := TList<TFrame>.Create;
-  try
-    F.N := Node; F.M := CurrentMethod;
-    Stack.Add(F);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      case Cur.N.Kind of
-        nkCall:   CheckIfThenText(Cur.N.Name,    Cur.N, Cur.M, FileName, Results);
-        nkAssign: CheckIfThenText(Cur.N.TypeRef, Cur.N, Cur.M, FileName, Results);
-      end;
-      if Cur.N.Kind = nkMethod then NextMeth := Cur.N else NextMeth := Cur.M;
-      for i := Cur.N.Children.Count - 1 downto 0 do
-      begin
-        F.N := Cur.N.Children[i]; F.M := NextMeth;
-        Stack.Add(F);
-      end;
+  for P in TAstSpans.CollectWithMethodScope(Node, [nkCall, nkAssign]) do
+    case P.Node.Kind of
+      nkCall:   CheckIfThenText(P.Node.Name,    P.Node, P.Method, FileName, Results);
+      nkAssign: CheckIfThenText(P.Node.TypeRef, P.Node, P.Method, FileName, Results);
     end;
-  finally
-    Stack.Free;
-  end;
 end;
 
 class procedure TIfThenShortCircuitDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 begin
-  WalkAndCheck(UnitNode, nil, FileName, Results);
+  WalkAndCheck(UnitNode, FileName, Results);
 end;
 
 end.

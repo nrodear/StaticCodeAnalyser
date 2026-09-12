@@ -69,7 +69,8 @@ implementation
 
 uses
   System.StrUtils,               // PosEx
-  uDetectorUtils;                // IsIdentChar, BlankStringLiterals
+  uDetectorUtils,                // IsIdentChar, BlankStringLiterals
+  uAstSpans;                     // CollectWithMethodScope (Voll-Review 2026-09-12)
 
 const
   CAST_PREFIXES: array of string = [
@@ -242,53 +243,26 @@ begin
   until False;
 end;
 
-procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
+procedure WalkAndCheck(Node: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
-// Hardening v4: iterative DFS mit Frame-Tracking. Verhindert
-// STACK_OVERFLOW bei tief verschachteltem AST (siehe Audit_jvcl_segfault).
-type
-  TFrame = record
-    N : TAstNode;
-    M : TAstNode;   // CurrentMethod fuer diesen Knoten
-  end;
+// Seit Voll-Review 2026-09-12 ueber den zentralen Scope-Walk
+// (TAstSpans.CollectWithMethodScope) - Mechanik, Besuchsreihenfolge
+// und Hardening v4 (iterative DFS, Audit_jvcl_segfault) identisch
+// zur frueheren lokalen Kopie.
 var
-  Stack : TList<TFrame>;
-  Cur, F : TFrame;
-  i      : Integer;
+  P : TNodeScopePair;
 begin
-  if Node = nil then Exit;
-  Stack := TList<TFrame>.Create;
-  try
-    F.N := Node; F.M := CurrentMethod;
-    Stack.Add(F);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      case Cur.N.Kind of
-        nkCall:
-          CheckCastText(Cur.N.Name, Cur.N, Cur.M, FileName, Results);
-        nkAssign:
-          CheckCastText(Cur.N.TypeRef, Cur.N, Cur.M, FileName, Results);
-      end;
-      // Sub-Method-Boundary: nkMethod-Knoten startet eigenen Method-Scope
-      var NextMeth : TAstNode;
-      if Cur.N.Kind = nkMethod then NextMeth := Cur.N else NextMeth := Cur.M;
-      for i := Cur.N.Children.Count - 1 downto 0 do
-      begin
-        F.N := Cur.N.Children[i]; F.M := NextMeth;
-        Stack.Add(F);
-      end;
+  for P in TAstSpans.CollectWithMethodScope(Node, [nkCall, nkAssign]) do
+    case P.Node.Kind of
+      nkCall:   CheckCastText(P.Node.Name,    P.Node, P.Method, FileName, Results);
+      nkAssign: CheckCastText(P.Node.TypeRef, P.Node, P.Method, FileName, Results);
     end;
-  finally
-    Stack.Free;
-  end;
 end;
 
 class procedure TCharToCharPointerCastDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 begin
-  WalkAndCheck(UnitNode, nil, FileName, Results);
+  WalkAndCheck(UnitNode, FileName, Results);
 end;
 
 end.
