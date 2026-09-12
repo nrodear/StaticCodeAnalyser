@@ -1,4 +1,4 @@
-unit uTestAttributeFamily;
+﻿unit uTestAttributeFamily;
 
 // Konsolidierte Tests fuer SCA179-183 (Attribute-Detector-Familie).
 // Ein einziges Unit-File spart Plumbing-Overhead (5 Test-Units waeren
@@ -40,6 +40,11 @@ type
     // FP-Fix 2026-07-25 (Doku-Quickwins 2026-07-25): DUnitX-Auto-Discovery.
     [Test] procedure FixturePublishedProcNoAttr_NotReported;
     [Test] procedure FixtureWithoutAnyMethod_Reported;
+    // Voll-Review 2026-09-12 (Blocker): der Fenster-Schliesser las die
+    // ROHZEILE statt der kommentarbereinigten - beide Richtungen des
+    // Fixes hier festgehalten.
+    [Test] procedure FixtureEndWithTrailingComment_Reported;
+    [Test] procedure CommentedEndInsideClass_NotReported;
   end;
 
   [TestFixture]
@@ -195,6 +200,58 @@ begin
 end;
 
 { TTestAttributeTestFixtureWithoutTests }
+
+procedure TTestAttributeTestFixtureWithoutTests.FixtureEndWithTrailingComment_Reported;
+// `end; // TFooTests` beendet die Klasse GENAUSO wie ein nacktes
+// `end;` - die alte Rohzeilen-Regel verlangte aber das Zeilenende
+// direkt nach dem ';' und schloss das Fenster nie: die Zombie-Meldung
+// entfiel, und jede weitere Fixture der Datei erbte den Zustand.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  [TestFixture]'#13#10 +
+  '  TFooTests = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure Helper;'#13#10 +
+  '  end; // TFooTests'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(
+    TFindingHelper.Count(F, fkAttributeTestFixtureWithoutTests) >= 1,
+    'Zombie-Fixture mit Kommentar hinter end; muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestAttributeTestFixtureWithoutTests.CommentedEndInsideClass_NotReported;
+// Ein `end;` INNERHALB eines Blockkommentars (auskommentierter Code in
+// der Klasse) ist KEIN Klassenende. Die alte Rohzeilen-Regel schloss
+// das Fenster dort und meldete die Fixture als Zombie, obwohl weiter
+// unten ein echtes [Test] steht.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  [TestFixture]'#13#10 +
+  '  TFooTests = class'#13#10 +
+  '  public'#13#10 +
+  '    { alter Entwurf:'#13#10 +
+  '    end;'#13#10 +
+  '    }'#13#10 +
+  '    [Test]'#13#10 +
+  '    procedure Wirklich;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkAttributeTestFixtureWithoutTests),
+    'auskommentiertes end; darf das Klassenfenster nicht schliessen');
+  finally F.Free; end;
+end;
 
 procedure TTestAttributeTestFixtureWithoutTests.FixtureNoTests_Reported;
 const SRC =
