@@ -140,6 +140,15 @@ begin
     for M in Methods do
     begin
       if LooksLikeSetter(M.Name) then Continue;
+      // Event-Handler-Signatur (Sender: TObject ...): die Booleans
+      // solcher Methoden (CanClose, Accept, Handled, ...) sind FREMDE
+      // VCL-Vertraege, keine selbstgewaehlte Flag-API. Der Unit-Kopf
+      // (Z.30) verspricht diese Ausnahme seit jeher - eingebaut ist
+      // sie seit dem Voll-Review 2026-09-12: der Modifier-Fix an der
+      // Namens-Extraktion machte die Luecke scharf, denn vorher
+      // verschluckte der Vollnamen-Vergleich ('var canclose' kommt in
+      // keiner if-Bedingung vor) die Handler-Booleans zufaellig mit.
+      if TDetectorUtils.IsEventHandlerSignature(M) then Continue;
       Params := M.FindAll(nkParam);
       try
         for P in Params do
