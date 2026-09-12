@@ -395,6 +395,17 @@ type
     // Wie OwnerTypeName, zusaetzlich lowercase (Match-Key-Nutzung).
     class function OwnerTypeNameLower(const AName: string): string; static;
 
+    // Ordnet jeder in einem Typ-RUMPF deklarierten Methode den Namen
+    // ihres Typs zu. Notwendig, weil der AST keinen Parent-Zeiger hat:
+    // eine IMPLEMENTIERUNG traegt den Typ im qualifizierten Namen
+    // ('TFoo.bar'), eine DEKLARATION im Klassen-/Interface-Rumpf nicht.
+    // Caller besitzt das Ergebnis (Free).
+    // Byte-identische Zentralisierung aus uMethodName (Voll-Review
+    // 2026-09-12, Posten 74: uLongParamList ist der zweite Konsument -
+    // dessen Dedup-Schluessel brauchte denselben Besitzertyp).
+    class function BuildMethodOwnerMap(UnitNode: TAstNode)
+      : TDictionary<TAstNode, string>; static;
+
     // Der ERSTE Bezeichner der Vorfahrenliste eines nkClass.TypeRef -
     // in Delphi zwingend die Basisklasse, alles danach sind
     // Interfaces. Der Parser legt die Liste SPACE-separiert ab
@@ -1512,6 +1523,45 @@ end;
 class function TDetectorUtils.OwnerTypeNameLower(const AName: string): string;
 begin
   Result := LowerCase(OwnerTypeName(AName));
+end;
+
+class function TDetectorUtils.BuildMethodOwnerMap(UnitNode: TAstNode)
+  : TDictionary<TAstNode, string>;
+// Vertrag siehe interface. Verschachtelte Typen haengen als GESCHWISTER
+// in der Typsektion (siehe ParseNestedTypeDecl in uParser2), nicht
+// unter dem aeusseren Knoten - der Subtree-Walk je Typknoten ordnet
+// also nichts doppelt zu.
+const
+  // Interface-Typen fuehrt der Parser ebenfalls als nkClass; nkRecord
+  // deckt record/object mit Methoden ab.
+  OWNER_KINDS : array[0..1] of TNodeKind = (nkClass, nkRecord);
+var
+  Types : TList<TAstNode>;
+  Meths : TList<TAstNode>;
+  T, M  : TAstNode;
+  ki    : Integer;
+begin
+  Result := TDictionary<TAstNode, string>.Create;
+  if UnitNode = nil then Exit;
+  for ki := Low(OWNER_KINDS) to High(OWNER_KINDS) do
+  begin
+    Types := UnitNode.FindAll(OWNER_KINDS[ki]);
+    try
+      for T in Types do
+      begin
+        if T.Name = '' then Continue;
+        Meths := T.FindAll(nkMethod);
+        try
+          for M in Meths do
+            Result.AddOrSetValue(M, T.Name);
+        finally
+          Meths.Free;
+        end;
+      end;
+    finally
+      Types.Free;
+    end;
+  end;
 end;
 
 class function TDetectorUtils.FirstParentToken(const ATypeRef: string): string;

@@ -22,6 +22,9 @@ implementation
 // noinspection-file ConcatToFormat, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uDetectorUtils;   // OwnerTypeNameLower + BuildMethodOwnerMap (Major 74)
+
 // Schwellwert kommt aus uSCAConsts.DetectorMaxParams (analyser.ini ->
 // LongParamListMaxParams). Default 5.
 
@@ -35,12 +38,15 @@ var
   Key        : string;
   F          : TLeakFinding;
   MaxParams  : Integer;   // TD-1: Schwelle per-Scan aus AContext.Config
+  OwnerMap   : TDictionary<TAstNode, string>;
+  OwnerLow   : string;
 begin
   // TD-1 (2026-07-06): Schwelle einmal aus dem Context lesen (scan-konstant).
   MaxParams := CfgMaxParams(AContext);
   // Methoden koennen sowohl in Interface (Deklaration) als auch in
   // Implementation auftauchen → mit Methodennamen deduplizieren.
   Reported := TDictionary<string, Boolean>.Create;
+  OwnerMap := nil;
   Methods  := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
@@ -48,7 +54,26 @@ begin
       ParamCount := M.ChildCount(nkParam);
       if ParamCount <= MaxParams then Continue;
 
-      Key := M.Name + ':' + IntToStr(ParamCount);
+      // Schluessel ist (Besitzertyp, lokaler Name, Anzahl) - wie in
+      // uMethodName (Voll-Review 2026-09-12, Major 74): der alte
+      // Schluessel M.Name kollidierte NIE zwischen Deklaration ('Bar')
+      // und Implementierung ('TFoo.Bar') - jede implementierte
+      // Klassenmethode ueber der Schwelle wurde DOPPELT gemeldet -,
+      // und er kollidierte FAELSCHLICH zwischen gleichnamigen Methoden
+      // verschiedener Typen ('IAlpha.Setup'/'IBeta.Setup' - der zweite
+      // Befund fiel weg). Deklarations-Knoten (unqualifizierter Name)
+      // beziehen den Besitzer lazy aus der OwnerMap; gemeldet wird der
+      // erste Knoten in Dokumentreihenfolge, also die Deklaration.
+      OwnerLow := TDetectorUtils.OwnerTypeNameLower(M.Name);
+      if OwnerLow = '' then
+      begin
+        if OwnerMap = nil then
+          OwnerMap := TDetectorUtils.BuildMethodOwnerMap(UnitNode);
+        if OwnerMap.TryGetValue(M, OwnerLow) then
+          OwnerLow := LowerCase(OwnerLow);
+      end;
+      Key := OwnerLow + '.' + TDetectorUtils.UnqualifiedNameLastLower(M.Name)
+             + ':' + IntToStr(ParamCount);
       if Reported.ContainsKey(Key) then Continue;
       Reported.Add(Key, True);
 
@@ -64,6 +89,7 @@ begin
   finally
     Methods.Free;
     Reported.Free;
+    OwnerMap.Free;
   end;
 end;
 

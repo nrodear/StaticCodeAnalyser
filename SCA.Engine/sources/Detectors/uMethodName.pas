@@ -208,46 +208,12 @@ end;
 
 function BuildMethodOwnerMap(UnitNode: TAstNode)
   : TDictionary<TAstNode, string>;
-// Ordnet jeder in einem Typ-RUMPF deklarierten Methode den Namen ihres
-// Typs zu. Notwendig, weil der AST keinen Parent-Zeiger hat: eine
-// IMPLEMENTIERUNG traegt den Typ im qualifizierten Namen ('TFoo.bar'),
-// eine DEKLARATION im Klassen-/Interface-Rumpf nicht.
-//
-// Verschachtelte Typen haengen als GESCHWISTER in der Typsektion (siehe
-// ParseNestedTypeDecl in uParser2), nicht unter dem aeusseren Knoten -
-// der Subtree-Walk je Typknoten ordnet also nichts doppelt zu.
-// Caller besitzt das Ergebnis (Free).
-const
-  // Interface-Typen fuehrt der Parser ebenfalls als nkClass; nkRecord
-  // deckt record/object mit Methoden ab.
-  OWNER_KINDS : array[0..1] of TNodeKind = (nkClass, nkRecord);
-var
-  Types : TList<TAstNode>;
-  Meths : TList<TAstNode>;
-  T, M  : TAstNode;
-  ki    : Integer;
+// Seit Voll-Review 2026-09-12 (Posten 74) byte-identisch in
+// TDetectorUtils.BuildMethodOwnerMap zentralisiert - uLongParamList
+// ist der zweite Konsument. Der Wrapper bleibt, damit die Aufrufer
+// in dieser Unit unveraendert bleiben.
 begin
-  Result := TDictionary<TAstNode, string>.Create;
-  if UnitNode = nil then Exit;
-  for ki := Low(OWNER_KINDS) to High(OWNER_KINDS) do
-  begin
-    Types := UnitNode.FindAll(OWNER_KINDS[ki]);
-    try
-      for T in Types do
-      begin
-        if T.Name = '' then Continue;
-        Meths := T.FindAll(nkMethod);
-        try
-          for M in Meths do
-            Result.AddOrSetValue(M, T.Name);
-        finally
-          Meths.Free;
-        end;
-      end;
-    finally
-      Types.Free;
-    end;
-  end;
+  Result := TDetectorUtils.BuildMethodOwnerMap(UnitNode);
 end;
 
 procedure CountMethodNameStyle(TypeNode: TAstNode;
