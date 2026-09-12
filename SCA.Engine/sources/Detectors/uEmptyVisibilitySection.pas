@@ -78,15 +78,28 @@ var
   LastVis     : string;
   LastVisLine : Integer;
   F           : TLeakFinding;
+  ScanState   : TCommentScanState;
+  DummyCol    : Integer;
+  Line        : string;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     LastVis := '';
     LastVisLine := -1;
+    ScanState := Default(TCommentScanState);
     for i := 0 to Lines.Count - 1 do
     begin
-      Word := ExtractFirstWord(Lines[i], Col);
+      // Kommentar-Zustand UEBER Zeilen (Voll-Review 2026-09-12, Major
+      // 61, gleiche Gattung wie Major 48): die Fortsetzungszeile eines
+      // mehrzeiligen Blockkommentars wurde als Code gelesen - ein
+      // 'private ...' darin setzte LastVis (FP am folgenden end), ein
+      // Identifier-Anfang resettete eine WIRKLICH leere Section (FN).
+      // Der '['-Pseudo-Wort-Vertrag (ExtractFirstWordOrBracket im
+      // lokalen Wrapper) bleibt unveraendert - ScanCodeLine laesst
+      // '['-Zeilen stehen.
+      Line := TDetectorUtils.ScanCodeLine(Lines[i], ScanState, DummyCol);
+      Word := ExtractFirstWord(Line, Col);
       if Word = '' then Continue;
       Lower := LowerCase(Word);
       if IsVisibilityKw(Lower) then

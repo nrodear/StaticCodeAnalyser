@@ -35,7 +35,9 @@ const SRC =
   'type'#13#10 +
   '  TFixture = class'#13#10 +
   '  public'#13#10 +
-  '    [Test] procedure One;'#13#10 +
+  '    [Test] procedure One;
+    // Voll-Review 2026-09-12 (Major 61): Kommentar-Fortsetzungszeilen
+    [Test] procedure CommentContinuationPrivate_NoPhantomSection;'#13#10 +
   '    [Test]'#13#10 +
   '    procedure Two;'#13#10 +
   '  end;'#13#10 +
@@ -147,6 +149,33 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkEmptyVisibilitySection finding');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyVisibilitySection.CommentContinuationPrivate_NoPhantomSection;
+// Voll-Review 2026-09-12 (Major 61): 'private ...' in der
+// Fortsetzungszeile eines mehrzeiligen Blockkommentars setzte
+// LastVis, und das folgende 'end' meldete eine leere private-Section,
+// die es nie gab (Bestands-Exe: 1 FP, empirisch belegt, ev1.pas).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure P;'#13#10 +
+  '    { Hinweis:'#13#10 +
+  '      private Daten nicht anfassen }'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.P; begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkEmptyVisibilitySection),
+    'private im Kommentar eroeffnet keine Section');
   finally F.Free; end;
 end;
 
