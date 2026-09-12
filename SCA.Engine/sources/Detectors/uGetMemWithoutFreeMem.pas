@@ -73,37 +73,35 @@ uses
 function HandlerGeschlossen(const Snippet: string;
   AHandlerPos, AFreePos: Integer): Boolean;
 var
-  Teil  : string;
-  Tiefe : Integer;
-  P     : Integer;
-  W     : string;
-  N     : Integer;
+  Teil   : string;
+  Tiefe  : Integer;
+  P, N   : Integer;
+  WStart : Integer;
+  W      : string;
 begin
   Result := False;
   Teil := LowerCase(Copy(Snippet, AHandlerPos, AFreePos - AHandlerPos));
   Tiefe := 0;
   P := 1;
   N := Length(Teil);
+  // Flach und ohne Konkat in der Schleife (eigener Scan: SCA110/176).
   while P <= N do
   begin
-    if TDetectorUtils.IsIdentChar(Teil[P]) then
+    if not TDetectorUtils.IsIdentChar(Teil[P]) then
     begin
-      W := '';
-      while (P <= N) and TDetectorUtils.IsIdentChar(Teil[P]) do
-      begin
-        W := W + Teil[P];
-        Inc(P);
-      end;
-      if (W = 'begin') or (W = 'case') or (W = 'try') or (W = 'record') then
-        Inc(Tiefe)
-      else if W = 'end' then
-      begin
-        Dec(Tiefe);
-        if Tiefe < 0 then Exit(True);
-      end;
-    end
-    else
       Inc(P);
+      Continue;
+    end;
+    WStart := P;
+    while (P <= N) and TDetectorUtils.IsIdentChar(Teil[P]) do Inc(P);
+    W := Copy(Teil, WStart, P - WStart);
+    if (W = 'begin') or (W = 'case') or (W = 'try') or (W = 'record') then
+      Inc(Tiefe)
+    else if W = 'end' then
+    begin
+      Dec(Tiefe);
+      if Tiefe < 0 then Exit(True);
+    end;
   end;
 end;
 
