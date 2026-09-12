@@ -36,6 +36,10 @@ type
     [Test] procedure DivByZero_LiteralZero_ReportsError;
     [Test] procedure DivByZero_ParamWithoutGuard_ReportsWarning;
     [Test] procedure DivByZero_ParamWithGuard_NoFinding;
+    // Voll-Review 2026-09-12 (Blocker): if und Division auf EINER
+    // Zeile - der reine Zeilenvergleich uebersprang den Guard.
+    [Test] procedure DivByZero_OneLineGuard_NoFinding;
+    [Test] procedure DivByZero_OneLineIfWithoutZeroGuard_StillReported;
     [Test] procedure DivByZero_LocalVarWithoutGuard_ReportsWarning;
     [Test] procedure DivByZero_NonIntegerType_NoFinding;
     // DeadCode
@@ -366,6 +370,47 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
       'Guard if Count > 0 – kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestNewChecks.DivByZero_OneLineGuard_NoFinding;
+// Das Einzeiler-Idiom: 'if n <> 0 then x := t div n;' - if und
+// Division teilen die Zeile (IfN.Line = DivNode.Line). Vor dem Fix
+// uebersprang HasGuardingIf den Guard per >= und meldete lsWarning
+// auf korrekt geschuetztem Code.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.Teile(t, n: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  if n <> 0 then Result := t div n;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+      'Einzeiler-Guard schuetzt die Division auf derselben Zeile');
+  finally F.Free; end;
+end;
+
+procedure TTestNewChecks.DivByZero_OneLineIfWithoutZeroGuard_StillReported;
+// Gegenprobe zur Gleiche-Zeile-Regel: ein if OHNE Null-Bedingung auf
+// derselben Zeile darf NICHT als Guard zaehlen - sonst waere jedes
+// 'if b then x := t div n;' still.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.Teile(t, n: Integer; b: Boolean): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  if b then Result := t div n;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+      'ein Nicht-Null-if auf derselben Zeile ist kein Guard');
   finally F.Free; end;
 end;
 

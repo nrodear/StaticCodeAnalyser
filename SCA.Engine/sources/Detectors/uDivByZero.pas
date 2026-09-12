@@ -88,7 +88,7 @@ type
     class function ExtractDivisor(const ExprLow: string): string; static;
     class function IsIntegerType(const TypeLow: string): Boolean; static;
     class function HasGuardingIf(MethodNode: TAstNode;
-      const VarLow: string; BeforeLine: Integer): Boolean; static;
+      const VarLow: string; DivNode: TAstNode): Boolean; static;
     // G5 (02.09., AQL-Stichprobe): Untergrenze mit einem anderen Literal
     // als 0/1 - "if Elapsed >= 1000". Schuetzt bei ">= K" fuer K >= 1 und
     // bei "> K" fuer K >= 0. Ein Cast-Wrapper (Cardinal(1000)) wird
@@ -333,7 +333,7 @@ begin
 end;
 
 class function TDivByZeroDetector.HasGuardingIf(MethodNode: TAstNode;
-  const VarLow: string; BeforeLine: Integer): Boolean;
+  const VarLow: string; DivNode: TAstNode): Boolean;
 var
   Ifs : TList<TAstNode>;
   IfN : TAstNode;
@@ -343,7 +343,18 @@ begin
   Ifs := MethodNode.FindAllRef(nkIfStmt);
   for IfN in Ifs do
   begin
-    if IfN.Line >= BeforeLine then Continue;
+    // Einzeiler-Idiom 'if n <> 0 then x := t div n;': if und Division
+    // teilen die Zeile, und der alte reine Zeilenvergleich (>=)
+    // uebersprang genau diesen Guard (Voll-Review 2026-09-12,
+    // Blocker). Gleiche Zeile zaehlt jetzt, wenn die Division im
+    // Subtree des if liegt. Dass eine Division im ELSE-Zweig damit
+    // ebenfalls als geschuetzt gilt, ist KEINE neue Unschaerfe - die
+    // mehrzeilige Form hat dieselbe lexikalische Grenze schon immer
+    // (ein if VOR der Divisionszeile zaehlt, egal in welchem Zweig
+    // die Division liegt).
+    if IfN.Line > DivNode.Line then Continue;
+    if (IfN.Line = DivNode.Line) and not NodeInSubtree(IfN, DivNode) then
+      Continue;
     Low := IfN.TypeRef.ToLower;
     if Low = '' then Continue;
     // Strikte Guards: die Bedingung selbst schuetzt direkt vor 0.
@@ -868,7 +879,10 @@ begin
   Ifs := MethodNode.FindAllRef(nkIfStmt);
   for IfN in Ifs do
   begin
-    if IfN.Line >= DivNode.Line then Continue;
+    // Gleiche-Zeile-Regel wie in HasGuardingIf (Einzeiler-Idiom).
+    if IfN.Line > DivNode.Line then Continue;
+    if (IfN.Line = DivNode.Line) and not NodeInSubtree(IfN, DivNode) then
+      Continue;
     Low := IfN.TypeRef.ToLower;
     if Low = '' then Continue;
     // Bail-Bedingung auf dem Divisor (dieselbe Menge wie im Exit/Raise-Zweig
@@ -1163,7 +1177,7 @@ begin
       if (Divisor = '') or (IntVars.IndexOf(Divisor) < 0) then Continue;
 
       // Gibt es einen Guard?
-      if HasGuardingIf(MethodNode, Divisor, N.Line) then Continue;
+      if HasGuardingIf(MethodNode, Divisor, N) then Continue;
 
       // G1: aufsteigende for-Schleifenvariable mit nichtnull-Literal-Start -
       // im Rumpf immer >= Start >= 1 (Real-World-FP-Audit 2026-07-12).
