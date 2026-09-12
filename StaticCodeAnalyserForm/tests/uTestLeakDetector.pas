@@ -163,6 +163,8 @@ type
     [Test] procedure Leak_CreateUtf8_NoFree_ReportsError;
     [Test] procedure Leak_CreateFmt_NoFree_ReportsError;
     [Test] procedure Leak_DotCreatedProperty_NotConstructor_NoFinding;
+    // Voll-Review 2026-09-12 (Major 64): ueberladene Konstruktoren
+    [Test] procedure Leak_FieldCreatedInSecondOverloadCtor_Reported;
   end;
 
   // Owner-/OS-Handle-Gates und der context-getriebene
@@ -7582,6 +7584,47 @@ begin
   try
     Assert.AreEqual<Integer>(2, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'beide Komma-Felder lecken - zwei Funde');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakCtorVariants.Leak_FieldCreatedInSecondOverloadCtor_Reported;
+// Voll-Review 2026-09-12 (Major 64): der Feld-Leak-Pfad prueft nur den
+// ERSTEN Konstruktor in Dateireihenfolge - ein Leak aus dem zweiten
+// 'constructor Create(...); overload;' war unsichtbar (Bestands-Exe:
+// 0 Funde, empirisch belegt, fl1.pas). Jetzt laufen alle Ctors.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    FList: TStringList;'#13#10 +
+  '  public'#13#10 +
+  '    constructor Create; overload;'#13#10 +
+  '    constructor Create(const APath: string); overload;'#13#10 +
+  '    destructor Destroy; override;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  inherited;'#13#10 +
+  'end;'#13#10 +
+  'constructor TFoo.Create(const APath: string);'#13#10 +
+  'begin'#13#10 +
+  '  inherited Create;'#13#10 +
+  '  FList := TStringList.Create;'#13#10 +
+  'end;'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  inherited;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+    'das im ZWEITEN Konstruktor erzeugte, nie freigegebene Feld ist ' +
+    'ein Leak');
   finally F.Free; end;
 end;
 
