@@ -55,7 +55,8 @@ const
   // Loop nach Name - so faengt der Detektor jetzt auch {$PUSH}/{$POP}
   // (State-Save/Restore) und ignoriert alle anderen ({$DEFINE}, {$I ...}).
   // Zweite Alternation (Gruppen 3/4) seit Voll-Review 2026-09-12
-  // (Major 46): die KURZFORMEN {$B±}/{$Q±}/{$R±} schalten dieselben
+  // (Major 46): die KURZFORMEN {$B+}/{$B-}, {$Q+}/{$Q-} und
+  // {$R+}/{$R-} schalten dieselben
   // Switches wie BOOLEVAL/OVERFLOWCHECKS/RANGECHECKS - vorher blieb
   // ein per '{$R+}' geschlossenes '{$RANGECHECKS OFF}' als falscher
   // Fund stehen, und ein nacktes '{$R-}' war unsichtbar. Exakt EIN
@@ -75,7 +76,7 @@ begin
 end;
 
 // Kurzform-Schalter auf den getrackten Langform-Namen mappen
-// ({$B±} = BOOLEVAL, {$Q±} = OVERFLOWCHECKS, {$R±} = RANGECHECKS).
+// ({$B+/-} = BOOLEVAL, {$Q+/-} = OVERFLOWCHECKS, {$R+/-} = RANGECHECKS).
 function KurzformName(Ch: Char): string;
 begin
   case Ch of

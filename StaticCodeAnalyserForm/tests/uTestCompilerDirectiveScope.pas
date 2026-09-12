@@ -14,7 +14,7 @@ type
     [Test] procedure RangeChecksOffWithoutOn_Reported;
     [Test] procedure WarningsOffInsidePushPop_NotReported;
     [Test] procedure DirectiveInStringLiteral_NotReported;
-    // Voll-Review 2026-09-12 (Major 46): Kurzformen {$R±}/{$B±}/{$Q±}
+    // Voll-Review 2026-09-12 (Major 46): Kurzformen {$R+/-} etc.
     [Test] procedure LongOffClosedByShortPlus_NotReported;
     [Test] procedure ShortMinusWithoutOn_Reported;
     [Test] procedure ResourceDirective_NotConfused;
