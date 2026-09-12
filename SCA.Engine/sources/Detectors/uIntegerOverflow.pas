@@ -71,7 +71,13 @@ const
   // paralleles Match mutierte deren Subject/Offsets. Die Patterns kommen
   // jetzt pro Thread aus TRegExMatches.CachedEx; [roNotEmpty] entspricht
   // exakt dem Default des alten Ein-Arg-TRegEx.Create.
-  RE_INT64_VAR_DECL = '(?im)\b(\w+)\s*:\s*(Int64|UInt64|QWord)\b';
+  // Voll-Review 2026-09-12 (Major 72): die Gruppe faengt die GANZE
+  // Ident-Liste ('Total, Sum'), nicht nur den letzten Bezeichner -
+  // Mehrfach-Deklarationen sind Standard-Delphi, und der alte
+  // Ein-Ident-Match verlor beide Richtungen: 'Total' war kein
+  // Int64-Ziel (FN) und ein nicht registrierter Int64-Operand
+  // unterlief das Promotion-Gate (lsError-FP).
+  RE_INT64_VAR_DECL = '(?im)\b(\w+(?:\s*,\s*\w+)*)\s*:\s*(Int64|UInt64|QWord)\b';
   RE_PRODUCT_ASSIGN = '(?im)\b(\w+)\s*:=\s*(\w+)\s*\*\s*(\w+)\s*;';
   // Real-World-FP-Audit 2026-07-12 (FP-Klasse 'scope-blinde file-globale
   // Var-Sammlung'): fuer die per-Method-Scope-Aufteilung der Ziel-Erkennung.
@@ -126,15 +132,20 @@ end;
 // Sammelt alle Int64/UInt64/QWord-Variablennamen (lowercase) aus AText in ADest.
 procedure CollectInt64VarsInto(const AText: string; ADest: TStringList);
 var
-  M  : TMatch;
-  Re : TRegEx;
+  M     : TMatch;
+  Re    : TRegEx;
+  Ident : string;
 begin
   // Eigener CachedEx-Bezug statt Parameter-Durchreiche: der Dictionary-Hit
   // ist billig und die Signatur bleibt stabil (2x pro File aufgerufen).
   Re := TRegExMatches.CachedEx(RE_INT64_VAR_DECL, [roNotEmpty]);
   for M in Re.Matches(AText) do
     if IsInt64Type(M.Groups[2].Value) then
-      ADest.Add(LowerCase(M.Groups[1].Value));
+      // Major 72: Gruppe 1 traegt die komma-getrennte Ident-Liste der
+      // Mehrfach-Deklaration - JEDEN Bezeichner registrieren.
+      for Ident in M.Groups[1].Value.Split([',']) do
+        if Trim(Ident) <> '' then
+          ADest.Add(LowerCase(Trim(Ident)));
 end;
 
 class procedure TIntegerOverflowDetector.AnalyzeUnit(UnitNode: TAstNode;

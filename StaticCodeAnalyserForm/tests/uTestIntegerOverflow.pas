@@ -24,6 +24,9 @@ type
     // TP-Gegenprobe: Felder (file-level, ausserhalb jeder Routine deklariert)
     // bleiben gueltige Int64-Ziele.
     [Test] procedure Int64Mul_FieldTarget_Reported;
+    // Voll-Review 2026-09-12 (Major 72): Mehrfach-Deklarationen
+    [Test] procedure MultiDecl_FirstIdentIsTarget_Reported;
+    [Test] procedure MultiDecl_FirstIdentOperand_NoFinding;
   end;
 
 implementation
@@ -211,6 +214,49 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkIntegerOverflow) >= 1);
+  finally F.Free; end;
+end;
+
+procedure TTestIntegerOverflow.MultiDecl_FirstIdentIsTarget_Reported;
+// Voll-Review 2026-09-12 (Major 72, FN-Richtung): der alte Ein-Ident-
+// Match registrierte aus 'Total, Sum: Int64' nur 'Sum' - 'Total' war
+// kein Int64-Ziel und das Kernpattern blieb ungemeldet (Bestands-Exe:
+// 0 Funde auf dieser Fixture, empirisch belegt).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Total, Sum: Int64;'#13#10 +
+  '    SectorCount, SectorSize: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Total := SectorCount * SectorSize;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkIntegerOverflow),
+    'auch der ERSTE Ident einer Mehrfach-Deklaration ist ein Int64-Ziel');
+  finally F.Free; end;
+end;
+
+procedure TTestIntegerOverflow.MultiDecl_FirstIdentOperand_NoFinding;
+// FP-Richtung desselben Defekts: 'A' aus 'A, F: Int64' stand nicht in
+// Int64Vars, das Operand-Promotion-Gate griff nicht - lsError-Fund
+// 'cast one operand to Int64', obwohl der Compiler korrekt promoted
+// (Bestands-Exe: 1 FP auf dieser Fixture, empirisch belegt).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var A, B: Int64;'#13#10 +
+  '    R: Int64;'#13#10 +
+  '    C: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  R := A * C;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkIntegerOverflow),
+    'Int64-Operand aus Mehrfach-Deklaration promoted die Multiplikation');
   finally F.Free; end;
 end;
 
