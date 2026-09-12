@@ -25,6 +25,10 @@ type
     [Test] procedure LockFacadeReleaseInSiblingMethod_NotReported;
     [Test] procedure RaiiCtorDtorPair_NotReported;
     [Test] procedure AcquireReleaseSameRoutineWithSiblingBelow_StillReported;
+
+    // Voll-Review 2026-09-12 (Major 87): Events sind bewusst NICHT
+    // abgedeckt - dokumentierender Test, kein Vertrag auf Abdeckung
+    [Test] procedure RtlEventWaitFor_NotCovered_ByDesign;
   end;
 
 implementation
@@ -317,6 +321,35 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkUnpairedLock) >= 1,
     'Acquire/Release in EINER Routine bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnpairedLock.RtlEventWaitFor_NotCovered_ByDesign;
+// DOKUMENTIERT EINE GEWOLLTE GRENZE (Voll-Review 2026-09-12, Major 87).
+// Unit-Kopf und Regex-Kommentar behaupteten seit der Geburt der Unit,
+// 'RTLeventWaitFor(' sei abgedeckt - implementiert war es nie. Statt
+// die Behauptung nachzubauen, wurde gemessen:
+//   * Alle 18 RTLeventWaitFor-Stellen des Korpus haben im
+//     200-Zeichen-Fenster kein Release -> die Erweiterung waere dort
+//     beweisbar wirkungslos (UnlockPos = 0 -> Continue).
+//   * Sie waere auch semantisch schief: ein Event setzt typischerweise
+//     ein ANDERER Thread, ein fehlendes Gegenstueck in derselben
+//     Routine ist der Normalfall.
+// Faellt die Entscheidung spaeter anders, wird dieser Test rot und muss
+// bewusst umgestellt werden.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Warte;'#13#10 +
+  'begin'#13#10 +
+  '  RTLeventWaitFor(FEvent);'#13#10 +
+  '  DoStuff;'#13#10 +
+  '  RTLeventResetEvent(FEvent);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnpairedLock),
+    'GEWOLLTE GRENZE: Events sind kein Lock/Unlock-Paar');
   finally F.Free; end;
 end;
 
