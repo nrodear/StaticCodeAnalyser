@@ -1,4 +1,4 @@
-unit uTestDfmMasterDetailUnlinked;
+﻿unit uTestDfmMasterDetailUnlinked;
 
 // Tests fuer den TDfmMasterDetailUnlinkedDetector.
 // Pattern: MasterSource gesetzt, MasterFields + IndexFieldNames beide leer.
@@ -20,6 +20,10 @@ type
     // --- Negative (Skip / NoFinding) ---
     [Test] procedure Test_MasterSourceWithMasterFields_NoFinding;
     [Test] procedure Test_MasterSourceWithIndexFieldNames_NoFinding;
+    // Voll-Review 2026-09-12 (Blocker): FireDAC-Parameter-Master-Detail
+    // ist die dokumentierte Standard-Konfiguration ohne MasterFields.
+    [Test] procedure Test_ParameterizedSqlWithMasterSource_NoFinding;
+    [Test] procedure Test_SqlCastDoubleColon_StillReported;
     [Test] procedure Test_NoMasterSource_NoFinding;
     [Test] procedure Test_EmptyDfm_NoFinding;
 
@@ -142,6 +146,46 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try Assert.AreEqual<Integer>(0, Count(F, fkDfmMasterDetailUnlinked));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmMasterDetailUnlinked.Test_ParameterizedSqlWithMasterSource_NoFinding;
+// SELECT ... WHERE custid = :custid + MasterSource = FireDACs
+// parameter-basiertes Master-Detail. FireDAC fuellt die Parameter beim
+// Master-Scroll; MasterFields ist dort weder noetig noch ueblich.
+// Vor dem Fix: lsError-Fehlfund 'silent cross-join at runtime'.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object qOrders: TFDQuery'#13#10 +
+  '    MasterSource = dsCustomers'#13#10 +
+  '    SQL.Strings = ('#13#10 +
+  '      ''SELECT * FROM orders WHERE custid = :custid'')'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmMasterDetailUnlinked),
+    'parametrisiertes Detail-SQL ist gewollte Kopplung - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmMasterDetailUnlinked.Test_SqlCastDoubleColon_StillReported;
+// '::' ist SQL-Cast-Syntax (etwa Postgres), KEIN benannter Parameter -
+// das Gate darf hier nicht greifen, der echte Unlinked-Fund bleibt.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object qOrders: TFDQuery'#13#10 +
+  '    MasterSource = dsCustomers'#13#10 +
+  '    SQL.Strings = ('#13#10 +
+  '      ''SELECT id::text FROM orders'')'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmMasterDetailUnlinked),
+    'ein ::-Cast ist kein Parameter - der Unlinked-Fund muss bleiben');
   finally F.Free; end;
 end;
 

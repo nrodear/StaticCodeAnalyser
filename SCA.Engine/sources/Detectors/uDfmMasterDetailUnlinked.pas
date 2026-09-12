@@ -76,6 +76,49 @@ begin
     Result := Trim(V.RawValue);
 end;
 
+// True, wenn eine der SQL-Properties der Komponente einen benannten
+// Parameter (':' + Bezeichnerstart) traegt.
+//
+// WARUM DIESES GATE (Voll-Review 2026-09-12, Blocker): FireDAC (und
+// ADO/IBX analog) dokumentiert parameter-basiertes Master-Detail als
+// Standardweg - MasterSource gesetzt, Detail-SQL mit :param, dessen
+// Name ein Master-Feld ist; FireDAC fuellt die Parameter beim
+// Master-Scroll. MasterFields/IndexFieldNames sind dort WEDER noetig
+// noch ueblich, einen Cross-Join gibt es nicht. Der Detektor meldete
+// diese dokumentierte Standard-Konfiguration als lsError/ftBug.
+//
+// Konservativ je Evidenz-Politik ('Error = bewiesen'): JEDES
+// parametrisierte SQL macht die Kopplung plausibel gewollt -> still.
+// Ein ':param', der kein Master-Feld ist, kann hier nicht vom echten
+// Fall unterschieden werden (die Master-Feldliste steht nicht im DFM).
+// '::' (SQL-Cast-Syntax) zaehlt nicht als Parameter.
+function HasParameterizedSql(N: TComponentNode): Boolean;
+const
+  SQL_PROPS : array[0..2] of string =
+    ('SQL.Strings', 'CommandText', 'SelectSQL.Strings');
+var
+  PropName : string;
+  V        : TPropValue;
+  S        : string;
+  i        : Integer;
+begin
+  Result := False;
+  for PropName in SQL_PROPS do
+  begin
+    if not N.TryGetProperty(PropName, V) then Continue;
+    if not (V.Kind in [pvkString, pvkStrList]) then Continue;
+    S := V.RawValue;
+    for i := 1 to Length(S) - 1 do
+    begin
+      if S[i] <> ':' then Continue;
+      if (i > 1) and (S[i - 1] = ':') then Continue;
+      if S[i + 1] = ':' then Continue;
+      if CharInSet(S[i + 1], ['A'..'Z', 'a'..'z', '_']) then
+        Exit(True);
+    end;
+  end;
+end;
+
 class procedure TDfmMasterDetailUnlinkedDetector.Analyze(Graph: TComponentGraph;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -100,6 +143,12 @@ begin
       HasMasterFields := HasNonEmptyString(N, 'MasterFields');
       HasIndexFields  := HasNonEmptyString(N, 'IndexFieldNames');
       if HasMasterFields or HasIndexFields then Continue;
+
+      // 3. Parameter-basiertes Master-Detail (Begruendung am Helfer):
+      // parametrisiertes Detail-SQL + MasterSource ist der dokumentierte
+      // FireDAC-Standardweg OHNE MasterFields - kein Cross-Join, kein
+      // Fund.
+      if HasParameterizedSql(N) then Continue;
 
       // -> Treffer
       F            := TLeakFinding.Create;
