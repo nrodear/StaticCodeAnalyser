@@ -1,4 +1,4 @@
-unit uBooleanParam;
+﻿unit uBooleanParam;
 
 // Detektor: Boolean-Parameter wird intern als Branching-Flag genutzt.
 //
@@ -131,6 +131,8 @@ var
   IfStmts : TList<TAstNode>;
   I       : TAstNode;
   IdentLow : string;
+  IdentOrig : string;
+  pBlank  : Integer;
   Hit     : Boolean;
 begin
   Methods := UnitNode.FindAll(nkMethod);
@@ -144,7 +146,21 @@ begin
         begin
           if not IsBooleanType(P.TypeRef) then Continue;
           if P.Name = '' then Continue;
-          IdentLow := LowerCase(P.Name);
+          // P.Name traegt das MODIFIER-PRAEFIX mit: der Parser schreibt
+          // 'const IsError' bzw. 'var Handled' in den Knotennamen
+          // (uParser2, nkParam-Erzeugung: Name := Modifier + ' ' + PN).
+          // Bis zum Voll-Review 2026-09-12 (Blocker) verglich dieser
+          // Detektor den VOLLEN Namen gegen die if-Bedingung - 'const
+          // iserror' kommt dort nie vor, der Detektor war fuer jeden
+          // modifizierten Parameter tot, und auch die Handled/CanShow-
+          // Skips griffen bei 'var handled' ins Leere. Das LETZTE Wort
+          // ist der Bezeichner.
+          IdentOrig := P.Name;
+          pBlank := LastDelimiter(' ', IdentOrig);
+          if pBlank > 0 then
+            IdentOrig := Copy(IdentOrig, pBlank + 1, MaxInt);
+          if IdentOrig = '' then Continue;
+          IdentLow := LowerCase(IdentOrig);
           // Spezial-Skips: typische VCL-Event-Handler-Booleans wie
           // 'CanShow', 'Handled' werden ueber API-Konventionen erwartet
           // und sind keine selbstgewaehlte Flag-API.
@@ -169,7 +185,10 @@ begin
           Results.Add(TLeakFinding.New(FileName, M.Name, M.Line,
             Format('Boolean parameter %s of %s drives internal branching - ' +
                    'consider two methods with descriptive names',
-              [P.Name, M.Name]),
+            // IdentOrig, nicht P.Name: die Meldung ist Teil der
+            // Fund-Identitaet, und 'const IsError' waere Datenmuell im
+            // Text. Fuer unmodifizierte Parameter byte-identisch.
+              [IdentOrig, M.Name]),
             fkBooleanParam));
         end;
       finally
