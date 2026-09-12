@@ -376,6 +376,80 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------
+// Gemeinsamer Release-Suchkern (Voll-Review 2026-09-12): die Suche nach
+// '<call>(<handle>)' mit Ketten-Vergleich stand nach dem TMonitor-Fix
+// DREIMAL im Code - als LeaveCriticalSection-Schleife in
+// SegmentReleasesLock, als TMonitor.Exit-Fassung und (abweichend, s. u.)
+// als HasLeaveCriticalSectionForHandle fuer den Split-Wrapper. Die
+// ersten beiden sind bis aufs Call-Token identisch und laufen jetzt
+// ueber HasReleaseCallForHandle. Die Split-Wrapper-Fassung
+// HasLeaveCriticalSectionForHandle bleibt EIGENSTAENDIG: sie vergleicht
+// bewusst nur den fuehrenden Ident OHNE Punkt-Kette und exakt - eine
+// dokumentiert andere Semantik, keine vierte Kopie.
+
+const
+  MONITOR_EXIT_LOW = 'tmonitor.exit';
+
+// '@'-Skip + Ident-Kette (inkl. '.') ab Position q im lowercased Text;
+// q steht danach HINTER der Kette.
+function ReadHandleChainAt(const SegLow: string; var q: Integer): string;
+var
+  hStart : Integer;
+begin
+  while (q <= Length(SegLow)) and CharInSet(SegLow[q], [' ', '@']) do
+    Inc(q);
+  hStart := q;
+  while (q <= Length(SegLow)) and
+        CharInSet(SegLow[q], ['a'..'z', '0'..'9', '_', '.']) do Inc(q);
+  Result := Copy(SegLow, hStart, q - hStart);
+end;
+
+// Die Enter-Seite traegt je nach Form das volle Handle ('flock.cs')
+// oder nur ein Glied - Gleichheit oder Ketten-Endstueck zaehlt
+// (beidseitig).
+function HandleMatchesChain(const Handle, LHandle: string): Boolean;
+begin
+  Result := (Handle <> '') and
+    ((Handle = LHandle) or Handle.EndsWith('.' + LHandle) or
+     LHandle.EndsWith('.' + Handle));
+end;
+
+// True wenn im (lowercased) Segment ein '<ACallLow>(<handle>)' steht,
+// dessen Handle-Kette zu LHandle passt. ACallLow wird als Substring
+// gesucht (Namespace-Praefixe wie 'mormot.core.os.LeaveCriticalSection'
+// matchen mit - gewollt, wie die fruehere Inline-Fassung).
+function HasReleaseCallForHandle(const SegLow, ACallLow,
+  LHandle: string): Boolean;
+var
+  p, q : Integer;
+begin
+  Result := False;
+  if LHandle = '' then Exit;
+  p := Pos(ACallLow, SegLow);
+  while p > 0 do
+  begin
+    q := p + Length(ACallLow);
+    while (q <= Length(SegLow)) and (SegLow[q] = ' ') do Inc(q);
+    if (q <= Length(SegLow)) and (SegLow[q] = '(') then
+    begin
+      Inc(q);
+      if HandleMatchesChain(ReadHandleChainAt(SegLow, q), LHandle) then
+        Exit(True);
+    end;
+    p := PosEx(ACallLow, SegLow, p + 1);
+  end;
+end;
+
+// TMonitor-Gegenstueck zu HasLeaveCriticalSectionForHandle:
+// 'tmonitor.exit(<handle>)' im Segment, Ketten-Vergleich wie im
+// finally-Gate (konservativ: mehr erkannte Releases -> weniger Skips
+// -> TP-sicher).
+function HasMonitorExitForHandle(const SegLow, LHandle: string): Boolean;
+begin
+  Result := HasReleaseCallForHandle(SegLow, MONITOR_EXIT_LOW, LHandle);
+end;
+
 function SegmentReleasesLock(const SegLow, IdLow: string): Boolean;
 // True wenn im (lowercased) Segment ein Release auf DENSELBEN Lock steht:
 // <id>.Leave/.Release/.Exit/.EndWrite bzw. LeaveCriticalSection(<id>...).
@@ -383,9 +457,6 @@ function SegmentReleasesLock(const SegLow, IdLow: string): Boolean;
 // gesucht wird das Token, nicht die Anweisungsform (FP-Voll-Audit
 // 2026-08-15, Klasse 'Release im umschliessenden finally, Flag-gesteuert').
 var
-  p, q   : Integer;
-  Handle : string;
-
   // Treffer nur an WORTGRENZE: 'lock.leave' darf nicht in 'block.leave'
   // matchen - sonst wuerde ein fremder Lock als Release gutgeschrieben
   // und der Fund faelschlich auf fcLow gestuft. Ein '.' davor bleibt
@@ -420,34 +491,10 @@ begin
   // 'section' matchte damit in 'leavecriticalSECTION' selbst, und 'cs'
   // in JEDEM fremden Handle. Ein echter TP (Release des falschen Locks
   // im finally) waere als fcLow gefiltert worden. Jetzt: den ERSTEN
-  // Ident hinter der Klammer parsen (Muster HasLeaveCriticalSection-
-  // ForHandle) und auf Gleichheit bzw. letztes Kettenglied pruefen.
-  p := Pos('leavecriticalsection', SegLow);
-  while p > 0 do
-  begin
-    q := p + Length('leavecriticalsection');
-    while (q <= Length(SegLow)) and (SegLow[q] = ' ') do Inc(q);
-    if (q <= Length(SegLow)) and (SegLow[q] = '(') then
-    begin
-      Inc(q);
-      while (q <= Length(SegLow)) and
-            CharInSet(SegLow[q], [' ', '@']) do Inc(q);
-      Handle := '';
-      while (q <= Length(SegLow)) and
-            CharInSet(SegLow[q], ['a'..'z', '0'..'9', '_', '.']) do
-      begin
-        Handle := Handle + SegLow[q];
-        Inc(q);
-      end;
-      // Enter-Seite traegt je nach Form das volle Handle ('flock.cs')
-      // oder nur ein Glied - Gleichheit oder Ketten-Endstueck zaehlt.
-      if (Handle <> '') and
-         ((Handle = IdLow) or
-          Handle.EndsWith('.' + IdLow) or IdLow.EndsWith('.' + Handle)) then
-        Exit(True);
-    end;
-    p := PosEx('leavecriticalsection', SegLow, p + 1);
-  end;
+  // Ident hinter der Klammer parsen und auf Gleichheit bzw. letztes
+  // Kettenglied pruefen - seit Voll-Review 2026-09-12 ueber den
+  // gemeinsamen Kern HasReleaseCallForHandle (identische Semantik).
+  Result := HasReleaseCallForHandle(SegLow, 'leavecriticalsection', IdLow);
 end;
 
 function EnclosingOrAdjacentFinallyReleases(const Code: string;
@@ -769,44 +816,6 @@ begin
   end;
 end;
 
-// TMonitor-Gegenstueck zu HasLeaveCriticalSectionForHandle:
-// 'tmonitor.exit(<handle>)' bzw. 'system.tmonitor.exit(<handle>)' im
-// (lowercased) Segment, Handle-Vergleich wie dort (Gleichheit oder
-// Ketten-Endstueck).
-function HasMonitorExitForHandle(const SegLow, LHandle: string): Boolean;
-var
-  p, q   : Integer;
-  Handle : string;
-begin
-  Result := False;
-  if LHandle = '' then Exit;
-  p := Pos('tmonitor.exit', SegLow);
-  while p > 0 do
-  begin
-    q := p + Length('tmonitor.exit');
-    while (q <= Length(SegLow)) and (SegLow[q] = ' ') do Inc(q);
-    if (q <= Length(SegLow)) and (SegLow[q] = '(') then
-    begin
-      Inc(q);
-      while (q <= Length(SegLow)) and
-            CharInSet(SegLow[q], [' ', '@']) do Inc(q);
-      Handle := '';
-      while (q <= Length(SegLow)) and
-            CharInSet(SegLow[q], ['a'..'z', '0'..'9', '_', '.']) do
-      begin
-        Handle := Handle + SegLow[q];
-        Inc(q);
-      end;
-      if (Handle <> '') and
-         ((Handle = LHandle) or
-          Handle.EndsWith('.' + LHandle) or
-          LHandle.EndsWith('.' + Handle)) then
-        Exit(True);
-    end;
-    p := PosEx('tmonitor.exit', SegLow, p + 1);
-  end;
-end;
-
 function HasLeaveCriticalSectionForHandle(const SegLow, LHandle: string): Boolean;
 // Real-World-FP-Audit 2026-07-12, FP-Klasse 'split-wrapper-winapi-form'.
 // True wenn im (bereits lowercased) Segment ein LeaveCriticalSection(<LHandle>)
@@ -944,6 +953,47 @@ begin
   Result := not hasRelease;
 end;
 
+// Lock-Identifier (Meldetext) und Gate-Bezeichner (lower, fuer das
+// finally-Gate) aus dem Enter-Match bestimmen. Aus AnalyzeUnit
+// ausgegliedert (Voll-Review 2026-09-12) - der Klammer-Formen-Zweig kam
+// mit dem TMonitor-Fix dazu und trieb die dortige Komplexitaet weiter.
+// Aus dem Match-WERT statt Groups[1]: die EnterCriticalSection-
+// Alternation hat keine Capture-Group 1, und M.Groups[1] wirft in
+// Delphi 12 'Index ueberschreitet das Maximum'.
+procedure ExtractLockIdent(const Code: string; const M: TMatch;
+  out LockIdent, GateIdLow: string);
+var
+  q : Integer;
+begin
+  GateIdLow := '';
+  LockIdent := M.Value;
+  if (LockIdent <> '') and (LockIdent[Length(LockIdent)] = '(') then
+  begin
+    // Klammer-Formen (EnterCriticalSection( / TMonitor.Enter( ): der
+    // LOCK ist das erste Argument - Handle-Bezeichner hinter der
+    // Klammer extrahieren. VOR dem Punkt-Zweig, denn 'TMonitor.Enter('
+    // traegt einen Punkt, aber 'tmonitor' ist der Klassenname, nicht
+    // der Lock.
+    q := FindNextNonSpacePos(Code, M.Index + M.Length);
+    while (q > 0) and (q <= Length(Code)) and
+          CharInSet(Code[q], ['A'..'Z', 'a'..'z', '0'..'9', '_', '.']) do
+    begin
+      GateIdLow := GateIdLow + Code[q];
+      Inc(q);
+    end;
+    GateIdLow := LowerCase(GateIdLow);
+    if Pos('tmonitor', LowerCase(LockIdent)) > 0 then
+      LockIdent := 'TMonitor.Enter(' + GateIdLow + ')'
+    else
+      LockIdent := 'EnterCriticalSection(...)';
+  end
+  else if Pos('.', LockIdent) > 0 then
+  begin
+    LockIdent := Copy(LockIdent, 1, Pos('.', LockIdent) - 1);
+    GateIdLow := LowerCase(LockIdent);
+  end;
+end;
+
 class procedure TLockWithoutTryFinallyDetector.AnalyzeUnit(
   UnitNode: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
@@ -961,7 +1011,6 @@ var
   LockIdent : string;
   LockRe    : TRegEx;
   GateIdLow : string;    // Lock-Bezeichner (lower) fuer das finally-Gate
-  q         : Integer;
 begin
   LockRe := TRegExMatches.CachedEx(LOCK_ENTER_PATTERN, [roNotEmpty]);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
@@ -1039,36 +1088,7 @@ begin
       LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
 
-      // Lock-Identifier aus dem Match-Wert extrahieren statt Groups[1]:
-      // die EnterCriticalSection-Alternation hat keine Capture-Group 1, und
-      // M.Groups[1] wirft in Delphi 12 'Index ueberschreitet das Maximum'.
-      LockIdent := M.Value;
-      if (LockIdent <> '') and (LockIdent[Length(LockIdent)] = '(') then
-      begin
-        // Klammer-Formen (EnterCriticalSection( / TMonitor.Enter( ):
-        // der LOCK ist das erste Argument - Handle-Bezeichner hinter
-        // der Klammer fuer das finally-Gate extrahieren. VOR dem
-        // Punkt-Zweig, denn 'TMonitor.Enter(' traegt einen Punkt, aber
-        // 'tmonitor' ist der Klassenname, nicht der Lock.
-        GateIdLow := '';
-        q := FindNextNonSpacePos(Code, M.Index + M.Length);
-        while (q > 0) and (q <= Length(Code)) and
-              CharInSet(Code[q], ['A'..'Z', 'a'..'z', '0'..'9', '_', '.']) do
-        begin
-          GateIdLow := GateIdLow + Code[q];
-          Inc(q);
-        end;
-        GateIdLow := LowerCase(GateIdLow);
-        if Pos('tmonitor', LowerCase(LockIdent)) > 0 then
-          LockIdent := 'TMonitor.Enter(' + GateIdLow + ')'
-        else
-          LockIdent := 'EnterCriticalSection(...)';
-      end
-      else if Pos('.', LockIdent) > 0 then
-      begin
-        LockIdent := Copy(LockIdent, 1, Pos('.', LockIdent) - 1);
-        GateIdLow := LowerCase(LockIdent);
-      end;
+      ExtractLockIdent(Code, M, LockIdent, GateIdLow);
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
