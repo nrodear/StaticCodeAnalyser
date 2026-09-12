@@ -1,4 +1,4 @@
-﻿unit uTestLockWithoutTryFinally;
+unit uTestLockWithoutTryFinally;
 
 // Tests fuer den TLockWithoutTryFinallyDetector (SCA109).
 // Lock-Acquire (Enter/Acquire/BeginWrite/EnterCriticalSection) ohne

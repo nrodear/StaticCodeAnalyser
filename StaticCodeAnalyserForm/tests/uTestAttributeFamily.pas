@@ -1,4 +1,4 @@
-﻿unit uTestAttributeFamily;
+unit uTestAttributeFamily;
 
 // Konsolidierte Tests fuer SCA179-183 (Attribute-Detector-Familie).
 // Ein einziges Unit-File spart Plumbing-Overhead (5 Test-Units waeren

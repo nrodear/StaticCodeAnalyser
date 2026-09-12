@@ -1,4 +1,4 @@
-﻿unit uFreeWithoutNil;
+unit uFreeWithoutNil;
 
 // Detektor: <ident>.Free ohne nachfolgendes <ident> := nil (oder
 // FreeAndNil(<ident>) statt der Zwei-Schritt-Variante).

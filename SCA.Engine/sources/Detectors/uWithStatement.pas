@@ -1,4 +1,4 @@
-﻿unit uWithStatement;
+unit uWithStatement;
 
 // Detektor fuer das `with X do ...` Statement.
 //

@@ -1,4 +1,4 @@
-﻿unit uLeakInConstructor;
+unit uLeakInConstructor;
 
 // Detektor: Constructor weist Felder via .Create zu UND raised - bei raise
 // nach partieller Initialisierung leaken die schon erzeugten Felder.

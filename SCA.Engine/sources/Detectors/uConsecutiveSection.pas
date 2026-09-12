@@ -1,4 +1,4 @@
-﻿unit uConsecutiveSection;
+unit uConsecutiveSection;
 
 // Detektor fuer konsekutive Section-Keywords im Unit/Class-Scope:
 // `const X = 1; const Y = 2;` -> sollte `const X = 1; Y = 2;` sein.

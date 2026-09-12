@@ -1,4 +1,4 @@
-﻿unit uRestHttpSecurity;
+unit uRestHttpSecurity;
 
 // REST/HTTP-Security-Detektor-Familie (SCA115-116).
 //

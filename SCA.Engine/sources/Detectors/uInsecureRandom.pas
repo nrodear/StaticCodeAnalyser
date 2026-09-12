@@ -1,4 +1,4 @@
-﻿unit uInsecureRandom;
+unit uInsecureRandom;
 
 // Detektor: Aufruf von Random / RandomRange / RandomFrom ohne dass im File
 // irgendwo Randomize aufgerufen wird.

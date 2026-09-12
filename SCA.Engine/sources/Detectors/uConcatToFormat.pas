@@ -1,4 +1,4 @@
-﻿unit uConcatToFormat;
+unit uConcatToFormat;
 
 // AST-basierter Refactoring-Hint: "Convert concatenation -> Format()".
 //

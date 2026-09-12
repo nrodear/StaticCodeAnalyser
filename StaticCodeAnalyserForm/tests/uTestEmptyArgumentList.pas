@@ -1,4 +1,4 @@
-﻿unit uTestEmptyArgumentList;
+unit uTestEmptyArgumentList;
 
 // Tests fuer TEmptyArgumentListDetector (file-scan: `Foo()` -> `Foo;`).
 

@@ -1,4 +1,4 @@
-﻿unit uTestGroupedDeclaration;
+unit uTestGroupedDeclaration;
 
 interface
 

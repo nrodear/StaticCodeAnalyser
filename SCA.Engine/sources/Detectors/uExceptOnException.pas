@@ -1,4 +1,4 @@
-﻿unit uExceptOnException;
+unit uExceptOnException;
 
 // Detektor fuer `except on E: Exception do ...` - das Fangen der Basis-
 // Klasse `Exception` ist fast immer ein Code-Smell.

@@ -1,4 +1,4 @@
-﻿unit uAssignedAndAssignedNil;
+unit uAssignedAndAssignedNil;
 
 // Detektor fuer redundante Pattern `Assigned(X) and (X <> nil)` bzw. die
 // Variation `(X <> nil) and Assigned(X)`.

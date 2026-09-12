@@ -1,4 +1,4 @@
-﻿unit uConcurrencyExt;
+unit uConcurrencyExt;
 
 // Concurrency-Familie erweitert (SCA113-114).
 //

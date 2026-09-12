@@ -1,4 +1,4 @@
-﻿unit uRedundantConditional;
+unit uRedundantConditional;
 
 // Detektor fuer redundante if-Conditionals der Form
 //   if Cond then Result := True else Result := False;

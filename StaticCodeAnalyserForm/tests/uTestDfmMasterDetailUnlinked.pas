@@ -1,4 +1,4 @@
-﻿unit uTestDfmMasterDetailUnlinked;
+unit uTestDfmMasterDetailUnlinked;
 
 // Tests fuer den TDfmMasterDetailUnlinkedDetector.
 // Pattern: MasterSource gesetzt, MasterFields + IndexFieldNames beide leer.

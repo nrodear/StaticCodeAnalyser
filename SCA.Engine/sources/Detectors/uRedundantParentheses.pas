@@ -1,4 +1,4 @@
-﻿unit uRedundantParentheses;
+unit uRedundantParentheses;
 
 // Detektor fuer doppelte/redundante Klammern um einfache Ausdruecke.
 //

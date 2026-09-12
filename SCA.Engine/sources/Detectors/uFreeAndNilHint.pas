@@ -1,4 +1,4 @@
-﻿unit uFreeAndNilHint;
+unit uFreeAndNilHint;
 
 // Detektor fuer manuelles `X.Free; X := nil;` Pattern.
 //

@@ -1,4 +1,4 @@
-﻿unit uTestCharToCharPointerCast;
+unit uTestCharToCharPointerCast;
 
 // Tests fuer den TCharToCharPointerCastDetector.
 

@@ -1,4 +1,4 @@
-﻿unit uCharToCharPointerCast;
+unit uCharToCharPointerCast;
 
 // Detektor: `PChar(<Char>)` / `PWideChar(<Char>)` / `PAnsiChar(<Char>)`
 // Cast - Char-Wert wird als Pointer reinterpretiert.

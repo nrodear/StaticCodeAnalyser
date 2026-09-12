@@ -1,4 +1,4 @@
-﻿unit uPointerName;
+unit uPointerName;
 
 // Detektor fuer Pointer-Typen, deren Name nicht mit `P` beginnt.
 //

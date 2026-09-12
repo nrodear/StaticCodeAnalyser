@@ -1,4 +1,4 @@
-﻿unit uTestLengthUnderflow;
+unit uTestLengthUnderflow;
 
 // Tests fuer den TLengthUnderflowDetector (file-basiert).
 //

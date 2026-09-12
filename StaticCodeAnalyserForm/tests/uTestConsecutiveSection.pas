@@ -1,4 +1,4 @@
-﻿unit uTestConsecutiveSection;
+unit uTestConsecutiveSection;
 
 interface
 

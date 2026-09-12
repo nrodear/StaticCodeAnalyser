@@ -1,4 +1,4 @@
-﻿unit uBooleanParam;
+unit uBooleanParam;
 
 // Detektor: Boolean-Parameter wird intern als Branching-Flag genutzt.
 //

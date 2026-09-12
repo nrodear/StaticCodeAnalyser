@@ -1,4 +1,4 @@
-﻿unit uInterfaceName;
+unit uInterfaceName;
 
 // Detektor fuer Interface-Typen ohne `I`-Prefix.
 //

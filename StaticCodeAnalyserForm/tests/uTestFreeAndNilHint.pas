@@ -1,4 +1,4 @@
-﻿unit uTestFreeAndNilHint;
+unit uTestFreeAndNilHint;
 
 interface
 

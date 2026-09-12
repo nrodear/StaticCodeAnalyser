@@ -1,4 +1,4 @@
-﻿unit uLengthUnderflow;
+unit uLengthUnderflow;
 
 // Detektor: `Length(s) - X` / `.Count - X` ohne vorausgehenden Guard.
 //

@@ -1,4 +1,4 @@
-﻿unit uVariantTypeMisuse;
+unit uVariantTypeMisuse;
 
 // Detektor: Variant-Typ in Performance-relevantem Kontext (Methode die
 // einen Loop enthaelt).

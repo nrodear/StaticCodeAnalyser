@@ -1,4 +1,4 @@
-﻿unit uNestedRoutines;
+unit uNestedRoutines;
 
 // Detektor fuer geschachtelte Routinen (nested procedures/functions
 // innerhalb der lokalen Decl-Section einer anderen Methode).

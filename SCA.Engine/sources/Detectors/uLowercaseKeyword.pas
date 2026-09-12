@@ -1,4 +1,4 @@
-﻿unit uLowercaseKeyword;
+unit uLowercaseKeyword;
 
 // Detektor fuer Pascal-Keywords, die NICHT in Kleinschreibung stehen.
 //

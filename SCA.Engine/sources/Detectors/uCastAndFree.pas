@@ -1,4 +1,4 @@
-﻿unit uCastAndFree;
+unit uCastAndFree;
 
 // Detektor: `<ClassType>(<obj>).Free` (oder `.Destroy`) - Typ-Cast direkt
 // vor Free/Destroy.

@@ -1,4 +1,4 @@
-﻿unit uTestWithStatement;
+unit uTestWithStatement;
 
 // Tests fuer den TWithStatementDetector (file-basiertes Scanning).
 //

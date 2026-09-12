@@ -1,4 +1,4 @@
-﻿unit uPerfHotspots;
+unit uPerfHotspots;
 
 // Performance-Hotspot-Detektor-Familie (SCA110-112).
 //

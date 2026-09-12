@@ -1,4 +1,4 @@
-﻿unit uGroupedDeclaration;
+unit uGroupedDeclaration;
 
 // Detektor fuer gruppierte Deklarationen `A, B: Type;`.
 //

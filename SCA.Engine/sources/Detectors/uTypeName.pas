@@ -1,4 +1,4 @@
-﻿unit uTypeName;
+unit uTypeName;
 
 // Detektor fuer Class/Record-Type-Namen, die nicht der T-Prefix-
 // Konvention folgen.

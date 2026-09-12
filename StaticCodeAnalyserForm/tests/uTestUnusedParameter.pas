@@ -1,4 +1,4 @@
-﻿unit uTestUnusedParameter;
+unit uTestUnusedParameter;
 
 // Tests fuer den TUnusedParameterDetector (fkUnusedParameter).
 //

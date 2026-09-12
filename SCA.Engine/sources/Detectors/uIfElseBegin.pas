@@ -1,4 +1,4 @@
-﻿unit uIfElseBegin;
+unit uIfElseBegin;
 
 // Detektor fuer asymmetrische `begin..end`-Verwendung in if/else.
 //

@@ -1,4 +1,4 @@
-﻿unit uTestLeakInConstructor;
+unit uTestLeakInConstructor;
 
 interface
 

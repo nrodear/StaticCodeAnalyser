@@ -1,4 +1,4 @@
-﻿unit uEmptyArgumentList;
+unit uEmptyArgumentList;
 
 // Detektor fuer leere Argument-Listen `()` nach Identifiern.
 //

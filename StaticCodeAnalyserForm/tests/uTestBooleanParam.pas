@@ -1,4 +1,4 @@
-﻿unit uTestBooleanParam;
+unit uTestBooleanParam;
 
 interface
 
