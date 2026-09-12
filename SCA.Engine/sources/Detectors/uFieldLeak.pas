@@ -72,7 +72,7 @@ type
     // Wie FindMethod, aber ALLE Treffer (ueberladene Konstruktoren!).
     // Der Aufrufer besitzt die Liste.
     class function FindMethods(UnitNode: TAstNode; const Kind: string;
-      const ClassName: string; AScope: TMethodScope = msInstanceMethod)
+      const ClassName: string; AScope: TMethodScope = msInstance)
       : TList<TAstNode>; static;
     class function FindMethod(UnitNode: TAstNode; const Kind: string;
       const ClassName: string;
