@@ -456,7 +456,6 @@ function SegmentReleasesLock(const SegLow, IdLow: string): Boolean;
 // Flag-Guards ('if InsideCrit then Section.Leave;') stoeren nicht -
 // gesucht wird das Token, nicht die Anweisungsform (FP-Voll-Audit
 // 2026-08-15, Klasse 'Release im umschliessenden finally, Flag-gesteuert').
-var
   // Treffer nur an WORTGRENZE: 'lock.leave' darf nicht in 'block.leave'
   // matchen - sonst wuerde ein fremder Lock als Release gutgeschrieben
   // und der Fund faelschlich auf fcLow gestuft. Ein '.' davor bleibt
