@@ -65,7 +65,8 @@ implementation
 
 uses
   System.Classes,
-  uFileTextCache;
+  uFileTextCache,
+  uDetectorUtils;   // OwnerTypeNameLower (Nested-Klassen-Zuordnung)
 
 const
   EMIT_SEVERITY = lsError;
@@ -565,11 +566,21 @@ begin
 
         // ABER: MethodByName muss auch die Top-Level-Impls enthalten
         // (Methods werden im Klassen-Subtree gefunden - meist nur Headers).
-        // Wir nehmen Top-Level-nkMethod und matchen via "<Klasse>.<Name>"-Prefix.
+        // Zuordnung ueber den BESITZERTYP (vorletztes Namenssegment),
+        // nicht per First-Praefix-StartsWith (Voll-Review 2026-09-12,
+        // Blocker): Impl-Header nested Klassen heissen
+        // 'TOuter.TInner.Create' - der Praefix-Match ordnete sie der
+        // AEUSSEREN Klasse zu (fremde Ruempfe in TOuters Helper-Ketten,
+        // FP-Richtung) und der inneren NIE (StartsWith('tinner.')
+        // matcht nicht; der Virtual-Call im Ctor einer nested Klasse
+        // war unsichtbar, FN). Gleiche Falle wie in uVisibilityCheck
+        // am 2026-07-28 geschlossen; der Parser-Zensus nennt 2951
+        // Nested-Impl-Header in 91 Korpusdateien.
         CtorList := UnitNode.FindAll(nkMethod);
         try
           for M in CtorList do
-            if LowerCase(M.Name).StartsWith(LowerCase(ClassNode.Name) + '.') then
+            if TDetectorUtils.OwnerTypeNameLower(M.Name)
+               = LowerCase(ClassNode.Name) then
             begin
               var DotPos := LastDelimiter('.', M.Name);
               LowName := LowerCase(Copy(M.Name, DotPos + 1, MaxInt));
@@ -587,8 +598,11 @@ begin
           CtorList := UnitNode.FindAll(nkMethod);
           try
             for Ctor in CtorList do
+              // Besitzertyp-Match statt Praefix - s. Kommentar an der
+              // MethodByName-Sammlung oben (Voll-Review 2026-09-12).
               if IsConstructor(Ctor) and
-                 LowerCase(Ctor.Name).StartsWith(LowerCase(ClassNode.Name) + '.') then
+                 (TDetectorUtils.OwnerTypeNameLower(Ctor.Name)
+                  = LowerCase(ClassNode.Name)) then
                 ClassImplCtors.Add(Ctor);
           finally
             CtorList.Free;
