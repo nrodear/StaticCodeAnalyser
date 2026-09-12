@@ -7690,7 +7690,12 @@ const SRC =
   'end.';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOfFile(SRC);
+  // FindingsOf, NICHT FindingsOfFile: den Feld-Leak meldet
+  // TFieldLeakDetector, und der ist nur im AST-Harness registriert
+  // (uTestFindingHelper Z.169). Mit FindingsOfFile laeuft er nicht und
+  // der Test misst 0, obwohl die CLI den Fund liefert
+  // (Testlauf 2026-09-12).
+  F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
     'das im ZWEITEN Konstruktor erzeugte, nie freigegebene Feld ist ' +
     'ein Leak');

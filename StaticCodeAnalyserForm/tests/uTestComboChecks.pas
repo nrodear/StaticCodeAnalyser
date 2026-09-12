@@ -1123,7 +1123,11 @@ const SRC =
   'end.';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOfFile(SRC);
+  // FindingsOf, NICHT FindingsOfFile: THardcodedPathDetector ist nur im
+  // AST-Harness registriert (uTestFindingHelper Z.164). Mit
+  // FindingsOfFile laeuft der Detektor gar nicht und der Test misst 0,
+  // obwohl die CLI den Fund liefert (Testlauf 2026-09-12).
+  F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedPath),
       'die const-Bindung ist der Standardort fuer hardkodierte Pfade');

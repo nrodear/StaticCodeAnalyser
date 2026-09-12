@@ -70,13 +70,20 @@ procedure TTestLengthUnderflow.ApostropheInCommentDoesNotPoisonRest;
 // Der FN-Kaskadenfall: ein einzelner Apostroph in einem Kommentar
 // ('don''t' als Prosa) setzte InStr=True fuer den Dateirest - ein
 // ECHTER Underflow zwei Zeilen spaeter wurde verschluckt.
+//
+// Die Underflow-Form ist bewusst dieselbe wie im gruenen
+// Length_MinusTwo_Reported: 'Length(s) - 2'. Die erste Fassung nahm
+// 'Length(s) - 1' - das ist laut Unit-Kopf die AUSGENOMMENE Form (das
+// 'for i := 0 to Length(s)-1'-Idiom, Schwelle K > 1) und haette auch
+// ohne Kommentar nie gemeldet. Der Test mass damit nichts
+// (Testlauf 2026-09-12).
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo(const s: string);'#13#10 +
-  'var c: Char;'#13#10 +
+  'var i: Integer;'#13#10 +
   'begin'#13#10 +
   '  { don''t call this yet }'#13#10 +
-  '  c := s[Length(s) - 1];'#13#10 +
+  '  i := Length(s) - 2;'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin

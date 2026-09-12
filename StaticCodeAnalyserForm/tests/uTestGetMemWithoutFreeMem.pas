@@ -74,13 +74,22 @@ procedure TTestGetMemWithoutFreeMem.FreeMemAfterClosedFinally_StillReported;
 // Gegenprobe (Review 02.09. bleibt gewahrt): schliesst das finally
 // VOR dem FreeMem wirklich (ungedecktes end), steht das FreeMem
 // draussen - der Fund ist echt und muss bleiben.
+//
+// Der GetMem steht INNERHALB des schon offenen try, und das ist
+// wesentlich: liegt das 'try' im Vorwaerts-Fenster hinter dem GetMem,
+// greift schon das fruehere Gate 'try kommt VOR FreeMem -> Pattern OK'
+// und die Handler-Logik laeuft nie an. Die erste Fassung dieses Tests
+// hatte genau diese Form und pruefte damit den falschen Pfad
+// (Testlauf 2026-09-12). Jetzt ist TryPos = 0 im Fenster, der Fund
+// haengt allein an HandlerGeschlossen - an der gebauten Exe
+// verifiziert.
 const SRC =
   'unit t; implementation'#13#10 +
   'procedure Foo(N: Integer);'#13#10 +
   'var P: Pointer;'#13#10 +
   'begin'#13#10 +
-  '  GetMem(P, N);'#13#10 +
   '  try'#13#10 +
+  '    GetMem(P, N);'#13#10 +
   '    Arbeite(P);'#13#10 +
   '  finally'#13#10 +
   '    LeaveCS;'#13#10 +
