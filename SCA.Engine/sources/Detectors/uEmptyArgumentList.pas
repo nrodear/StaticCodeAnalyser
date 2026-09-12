@@ -1,4 +1,4 @@
-unit uEmptyArgumentList;
+﻿unit uEmptyArgumentList;
 
 // Detektor fuer leere Argument-Listen `()` nach Identifiern.
 //
@@ -58,11 +58,16 @@ begin
   Result := TDetectorUtils.IsIdentChar(C);
 end;
 
-// Liefert die 1-basierte Spalte des `(` einer leeren Argument-Liste
-// nach einem Identifier, sonst 0. Setzt die Cursors `i`, `InStr`,
-// `InBlockComm`, `InParenStarComm` korrekt fort.
-function FindEmptyArgList(const Line: string; var InBlockComm: Boolean;
-  var InParenStarComm: Boolean): Integer;
+// Sammelt die 1-basierten Spalten ALLER leeren Argument-Listen der
+// Zeile in ACols und scannt die Zeile ZU ENDE - auch nach einem
+// Treffer. Der alte Ein-Treffer-Exit (Voll-Review 2026-09-12,
+// Blocker) liess den Kommentar-Zustand der Restzeile unverfolgt:
+// 'Init();  { abgeschaltet:' setzte InBlockComm nie, die
+// auskommentierten Folgezeilen wurden als Code gescannt und gemeldet;
+// und ein zweiter Treffer derselben Zeile ('Foo(); Bar();') ging
+// verloren.
+procedure FindEmptyArgLists(const Line: string; var InBlockComm: Boolean;
+  var InParenStarComm: Boolean; ACols: TList<Integer>);
 var
   i, n, j : Integer;
   InStr   : Boolean;
@@ -70,7 +75,6 @@ var
   c, prev : Char;
   AllWs   : Boolean;
 begin
-  Result := 0;
   InStr  := False;
   i := 1;
   n := Length(Line);
@@ -143,8 +147,11 @@ begin
       end;
       if AllWs and (j <= n) and (Line[j] = ')') then
       begin
-        Result := i;
-        Exit;
+        // Treffer merken und HINTER der ')' weiterscannen - kein Exit,
+        // der Zustand der Restzeile muss weitergefuehrt werden.
+        ACols.Add(i);
+        i := j + 1;
+        Continue;
       end;
     end;
     Inc(i);
@@ -155,25 +162,29 @@ class procedure TEmptyArgumentListDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines  : TStringList;
-  i, Col : Integer;
+  i, k   : Integer;
+  Cols   : TList<Integer>;
   InBlk, InParen : Boolean;
   Cached : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
+  Cols := TList<Integer>.Create;
   try
     InBlk   := False;
     InParen := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      Col := FindEmptyArgList(Lines[i], InBlk, InParen);
-      if Col <= 0 then Continue;
-      Results.Add(TLeakFinding.New(FileName, '', i + 1,
-        Format('Empty argument list `()` at column %d - drop the parens ' +
-               '(Delphi convention).', [Col]),
-        fkEmptyArgumentList));
+      Cols.Clear;
+      FindEmptyArgLists(Lines[i], InBlk, InParen, Cols);
+      for k := 0 to Cols.Count - 1 do
+        Results.Add(TLeakFinding.New(FileName, '', i + 1,
+          Format('Empty argument list `()` at column %d - drop the parens ' +
+                 '(Delphi convention).', [Cols[k]]),
+          fkEmptyArgumentList));
     end;
   finally
+    Cols.Free;
     ReleaseLines(Lines, Cached);
   end;
 end;

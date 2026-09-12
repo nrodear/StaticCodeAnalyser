@@ -1,4 +1,4 @@
-unit uTestEmptyArgumentList;
+﻿unit uTestEmptyArgumentList;
 
 // Tests fuer TEmptyArgumentListDetector (file-scan: `Foo()` -> `Foo;`).
 
@@ -18,6 +18,11 @@ type
     [Test] procedure EmptyParensAfterComma_NotReported;
     [Test] procedure EmptyParensInString_NotReported;
     [Test] procedure EmptyParensInComment_NotReported;
+    // Voll-Review 2026-09-12 (Blocker): der Ein-Treffer-Exit liess den
+    // Kommentar-Zustand der Restzeile unverfolgt und verlor
+    // Zweittreffer.
+    [Test] procedure CommentOpenedAfterHit_FollowingLinesNotScanned;
+    [Test] procedure TwoEmptyCallsOnOneLine_BothReported;
     [Test] procedure EmptyArgumentList_KindAndSeverity;
   end;
 
@@ -125,6 +130,47 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyArgumentList));
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyArgumentList.CommentOpenedAfterHit_FollowingLinesNotScanned;
+// 'Init();  { abgeschaltet:' - der Treffer bei Init() beendete den
+// Zeilenscan, das dahinter GEOEFFNETE {-Kommentar wurde nie
+// registriert, und die auskommentierte Folgezeile 'Cleanup();' wurde
+// als Code gemeldet. Erwartet: genau EIN Fund (Init), keiner fuer
+// die auskommentierte Zeile.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  Init();  { abgeschaltet:'#13#10 +
+  '  Cleanup();'#13#10 +
+  '  }'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkEmptyArgumentList),
+    'die auskommentierte Folgezeile darf nicht mitgemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyArgumentList.TwoEmptyCallsOnOneLine_BothReported;
+// 'Foo(); Bar();' auf einer Zeile: der alte Exit nach dem ersten
+// Treffer verlor den zweiten.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  A(); B();'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(2,
+    TFindingHelper.Count(F, fkEmptyArgumentList),
+    'beide leeren Argumentlisten derselben Zeile muessen melden');
   finally F.Free; end;
 end;
 
