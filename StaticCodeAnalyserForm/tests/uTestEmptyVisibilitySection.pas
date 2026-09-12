@@ -15,6 +15,8 @@ type
     [Test] procedure EmptyVisibilitySection_KindAndSeverity;
     [Test] procedure AttributedMembersOnly_NoFinding;
     [Test] procedure EmptyDespiteAttributeInNextSection_StillReported;
+    // Voll-Review 2026-09-12 (Major 61): Kommentar-Fortsetzungszeilen
+    [Test] procedure CommentContinuationPrivate_NoPhantomSection;
   end;
 
 implementation
@@ -35,9 +37,7 @@ const SRC =
   'type'#13#10 +
   '  TFixture = class'#13#10 +
   '  public'#13#10 +
-  '    [Test] procedure One;
-    // Voll-Review 2026-09-12 (Major 61): Kommentar-Fortsetzungszeilen
-    [Test] procedure CommentContinuationPrivate_NoPhantomSection;'#13#10 +
+  '    [Test] procedure One;'#13#10 +
   '    [Test]'#13#10 +
   '    procedure Two;'#13#10 +
   '  end;'#13#10 +
