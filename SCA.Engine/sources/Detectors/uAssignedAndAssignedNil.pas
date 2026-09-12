@@ -88,14 +88,18 @@ end;
 
 // Hilfs-Funktion: parse `<Id> <> nil` ab Position p (innerhalb von
 // `(...)`-Klammern; wir akzeptieren auch ohne Klammern). Bei Erfolg:
-// Position nach `nil`. Bei Misserfolg: 0.
-function ParseNotNil(const Line: string; p: Integer; const ExpectedId: string): Integer;
+// Position nach `nil` (bzw. nach `)`), der Identifier in IdName. Bei
+// Misserfolg: 0. Seit Voll-Review 2026-09-12 mit out-Id - der
+// Spiegel-Pfad `(X <> nil) and Assigned(X)` kennt die Id noch nicht,
+// wenn er hier ankommt.
+function ParseNotNilAnyId(const Line: string; p: Integer;
+  out IdName: string): Integer;
 var
   n, q     : Integer;
-  IdName   : string;
   HadParen : Boolean;
 begin
   Result := 0;
+  IdName := '';
   n := Length(Line);
   q := p;
   while (q <= n) and CharInSet(Line[q], [' ', #9]) do Inc(q);
@@ -106,7 +110,6 @@ begin
   var Start: Integer; Start := q;
   while (q <= n) and IsIdent(Line[q]) do Inc(q);
   IdName := Copy(Line, Start, q - Start);
-  if not SameText(IdName, ExpectedId) then Exit;
   while (q <= n) and CharInSet(Line[q], [' ', #9]) do Inc(q);
   if (q + 1 > n) then Exit;
   if (Line[q] <> '<') or (Line[q + 1] <> '>') then Exit;
@@ -125,6 +128,17 @@ begin
   Result := q;
 end;
 
+// Bestandssignatur: wie ParseNotNilAnyId, aber der Identifier muss
+// ExpectedId entsprechen (case-insensitive).
+function ParseNotNil(const Line: string; p: Integer;
+  const ExpectedId: string): Integer;
+var
+  IdName : string;
+begin
+  Result := ParseNotNilAnyId(Line, p, IdName);
+  if (Result > 0) and not SameText(IdName, ExpectedId) then Result := 0;
+end;
+
 // Liefert Spalte von `Assigned` wenn `Assigned(X) and (X <> nil)` oder
 // `(X <> nil) and Assigned(X)` gefunden, sonst 0.
 function FindAssignedAndNil(const Line: string; var InBlockComm: Boolean;
@@ -135,6 +149,7 @@ var
   pClose     : Integer;
   c          : Char;
   Id1        : string;
+  Id2        : string;
   After      : Integer;
   AfterAnd   : Integer;
 begin
@@ -203,6 +218,39 @@ begin
             Exit;
           end;
         end;
+        i := After;
+        Continue;
+      end;
+    end;
+    // Spiegel-Form `(X <> nil) and Assigned(X)`: Header und
+    // Helfer-Kommentar versprachen sie seit jeher, geparst wurde bis
+    // zum Voll-Review 2026-09-12 nur die Assigned-zuerst-Form (Major
+    // 44). Einstieg an '(' oder Ident-Start; die Id kommt aus dem
+    // NotNil-Teil und muss im Assigned() dahinter wiederkehren.
+    if (c = '(') or IsIdentStart(c) then
+    begin
+      After := ParseNotNilAnyId(Line, i, Id1);
+      if After > 0 then
+      begin
+        j := After;
+        while (j <= n) and CharInSet(Line[j], [' ', #9]) do Inc(j);
+        if (j + 2 <= n) and SameText(Copy(Line, j, 3), 'and') and
+           ((j + 3 > n) or not IsIdent(Line[j + 3])) then
+        begin
+          AfterAnd := j + 3;
+          while (AfterAnd <= n) and
+                CharInSet(Line[AfterAnd], [' ', #9]) do Inc(AfterAnd);
+          if (ParseAssignedCall(Line, AfterAnd, Id2) > 0)
+             and SameText(Id2, Id1) then
+          begin
+            Result := i;
+            Exit;
+          end;
+        end;
+        // Kein Spiegel-Treffer: hinter dem geparsten NotNil-Teil
+        // weiterscannen - in seinem Innern beginnt kein anderer
+        // Kandidat ('<Id> <> nil' enthaelt weder Assigned noch eine
+        // weitere Vergleichsform).
         i := After;
         Continue;
       end;
