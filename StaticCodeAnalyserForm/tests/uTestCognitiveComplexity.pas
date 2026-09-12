@@ -16,6 +16,9 @@ type
     [Test] procedure ElseIfChain5_StaysUnderLimit;
     [Test] procedure NestedIfs_KeepNestingPenalty;
     [Test] procedure BooleanWordsInStringLiteral_NotCounted;
+    // Voll-Review 2026-09-12 (Testluecke 95): Boolean-Operatoren POSITIV
+    [Test] procedure BooleanOperatorsRaiseScore_Reported;
+    [Test] procedure PlainConditionsStayUnderLimit_NoFinding;
   end;
 
 implementation
@@ -210,6 +213,53 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCognitiveComplexity),
       'Literal-Woerter duerfen den Cognitive-Score nicht inflationieren');
+  finally F.Free; end;
+end;
+
+procedure TTestCognitiveComplexity.BooleanOperatorsRaiseScore_Reported;
+// Testluecke 95 (Voll-Review 2026-09-12): dass and/or den Score
+// erhoehen (B3), war nur NEGATIV geprueft - ueber das Literal-Blanking
+// ('die Woerter in einem String zaehlen nicht'). Ein Positivtest
+// fehlte: ohne ihn koennte B3 ganz ausfallen und der Negativtest
+// bliebe trotzdem gruen. Zwei Bedingungen mit je acht Operatoren
+// heben den Score auf 16 (Limit 15) - an der gebauten Exe gemessen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P(a, b, c, d, e, f, g, h: Boolean);'#13#10 +
+  'begin'#13#10 +
+  '  if a and b and c and d and e and f and g and h then'#13#10 +
+  '    DoIt;'#13#10 +
+  '  if a or b or c or d or e or f or g or h then'#13#10 +
+  '    DoIt;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkCognitiveComplexity),
+    'die Boolean-Operatoren muessen den Score heben');
+  finally F.Free; end;
+end;
+
+procedure TTestCognitiveComplexity.PlainConditionsStayUnderLimit_NoFinding;
+// Die Gegenprobe: dieselbe Zahl von if-Statements OHNE Operatorkette
+// bleibt unter dem Limit. Damit ist belegt, dass wirklich die
+// Operatoren den Unterschied machen und nicht die Verzweigungen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Q(a, b: Boolean);'#13#10 +
+  'begin'#13#10 +
+  '  if a then'#13#10 +
+  '    DoIt;'#13#10 +
+  '  if b then'#13#10 +
+  '    DoIt;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkCognitiveComplexity),
+    'zwei schlichte Bedingungen bleiben weit unter dem Limit');
   finally F.Free; end;
 end;
 

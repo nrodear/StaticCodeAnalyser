@@ -38,6 +38,8 @@ type
     [Test] procedure RealCallBesideStringLiteral_StillReported;
 
     [Test] procedure Finding_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Testluecke 108): Suppression-Asymmetrie
+    [Test] procedure FormatSettingsOnlyInLiteral_StillReported;
   end;
 
 implementation
@@ -226,6 +228,30 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkDateFormatSettings) >= 1);
+  finally F.Free; end;
+end;
+
+procedure TTestDateFormatSettings.FormatSettingsOnlyInLiteral_StillReported;
+// Testluecke 108 (Voll-Review 2026-09-12): die Suppression darf nur
+// greifen, wenn wirklich ein TFormatSettings-Argument uebergeben wird.
+// Steht das Wort NUR in einem String-Literal derselben Routine - etwa
+// in einer Meldung an den Nutzer -, ist der Aufruf weiterhin
+// locale-abhaengig und muss gemeldet bleiben. An der gebauten Exe
+// verifiziert.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P(S: string);'#13#10 +
+  'var D: TDateTime;'#13#10 +
+  'begin'#13#10 +
+  '  D := StrToDate(S);'#13#10 +
+  '  WriteLn(''FormatSettings beachten'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkDateFormatSettings),
+    'das Wort im Literal ist kein uebergebenes TFormatSettings');
   finally F.Free; end;
 end;
 

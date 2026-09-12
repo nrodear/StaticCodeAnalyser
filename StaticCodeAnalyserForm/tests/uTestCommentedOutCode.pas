@@ -44,9 +44,18 @@ type
     // Waechter fuer die 7.964 unbewegten Korpus-Funde).
     [Test] procedure BraceBlock_TwoAdjacentLines_OneBlockFinding;
     [Test] procedure SingleLine_KeepsPerLineMessage;
+    // Voll-Review 2026-09-12 (Testluecke 97): FP-Schutz 2
+    [Test] procedure InlineCommentAfterCode_NotReported;
   end;
 
 implementation
+
+// noinspection-file LargeClass
+// Eine Test-Fixture je Detektor ist die Projektkonvention; diese hier
+// ist mit 22 Waechter-Paaren ohnehin die groesste - mit dem Fall aus
+// Testluecke 97 (Voll-Review 2026-09-12) ueberschreitet sie die
+// 500-Zeilen-Schwelle. Aufteilen wuerde die Faelle desselben
+// Detektors auseinanderreissen.
 
 uses
   System.SysUtils, System.Generics.Collections,
@@ -554,6 +563,33 @@ begin
     Assert.IsTrue(Pos('looks like commented-out code', Fnd.MissingVar) > 0,
       'Einzeiler behaelt die alte Meldung woertlich');
     Assert.AreEqual(0, Fnd.EndLine, 'Einzeiler traegt keine Spanne');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.InlineCommentAfterCode_NotReported;
+// Testluecke 97 (Voll-Review 2026-09-12): FP-Schutz 2
+// (IsInlineComment) war ohne direkten Test. Ein Kommentar HINTER Code
+// ist typisch eine Erlaeuterung zur Zeile, kein stillgelegter Block -
+// deshalb wird er ausgenommen, auch wenn er wie Code aussieht.
+//
+// Die Fixture stellt beide Faelle nebeneinander: dieselbe
+// Zeichenfolge einmal hinter Code (kein Fund) und einmal auf eigener
+// Zeile (Fund). Nur so ist belegt, dass der Unterschied wirklich an
+// der Inline-Lage haengt - an der gebauten Exe gemessen, genau ein
+// Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  DoIt;  // x := 1; y := 2; z := 3;'#13#10 +
+  '  // x := 1; y := 2; z := 3;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkCommentedOutCode),
+    'nur der Kommentar auf eigener Zeile zaehlt');
   finally F.Free; end;
 end;
 

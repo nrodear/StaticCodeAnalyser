@@ -98,6 +98,8 @@ type
     [Test] procedure Cyclomatic_Finding_MissingVarMentionsCcValue;
     [Test] procedure Cyclomatic_MultipleHitsInSameUnit_AllReported;
     [Test] procedure Cyclomatic_BooleanWordsInStringLiteral_NotCounted;
+    // Voll-Review 2026-09-12 (Testluecke 107): 'xor' als Operator
+    [Test] procedure Cyclomatic_XorCountsAsBranch_Reported;
   end;
 
 implementation
@@ -1143,6 +1145,32 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCyclomaticComplexity),
     'Literal-Woerter duerfen die Complexity nicht inflationieren');
+  finally F.Free; end;
+end;
+
+procedure TTestCyclomaticComplexity.Cyclomatic_XorCountsAsBranch_Reported;
+// Testluecke 107 (Voll-Review 2026-09-12): 'and' und 'or' waren
+// abgedeckt, 'xor' nicht. Sechs if-Statements mit je einem xor ergeben
+// 13 (Limit 10) - ohne die xor-Zaehlung waeren es 7 und der Test
+// bliebe stumm. An der gebauten Exe gemessen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function F(a, b, c, d, e, f, g, h, i, j, k, l: Boolean): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Result := 0;'#13#10 +
+  '  if a xor b then Inc(Result);'#13#10 +
+  '  if c xor d then Inc(Result);'#13#10 +
+  '  if e xor f then Inc(Result);'#13#10 +
+  '  if g xor h then Inc(Result);'#13#10 +
+  '  if i xor j then Inc(Result);'#13#10 +
+  '  if k xor l then Inc(Result);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkCyclomaticComplexity),
+    'xor ist ein Verzweigungsoperator und zaehlt mit');
   finally F.Free; end;
 end;
 
