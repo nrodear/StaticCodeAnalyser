@@ -40,8 +40,14 @@ uses
 type
   TCustomClassDiscovery = class
   public
-    // Scannt UnitNode nach Klassen-Deklarationen. Owner-managed Subklassen
-    // (TForm/TFrame/TComponent/TInterfacedObject etc.) werden uebersprungen,
+    // Scannt UnitNode nach Klassen-Deklarationen. Owner-managed
+    // Subklassen (TForm/TFrame/TInterfacedObject etc., vollstaendige
+    // Liste in OWNER_MANAGED) werden uebersprungen,
+    // TComponent BEWUSST NICHT - Begruendung im Unit-Kopf. Dieser
+    // Kommentar nannte TComponent bis zum Voll-Review 2026-09-12
+    // (Major 52 / Testluecke 105) mit und widersprach damit dem
+    // korrigierten Kopf; der Test
+    // IsOwnerManagedParent_TComponentIsNotSkipped pinnt es jetzt.
     // alle anderen werden in zwei Gruppen aufgeteilt:
     //
     //   InstantiableNames  - Klassen mit Konstruktor/Destruktor in der

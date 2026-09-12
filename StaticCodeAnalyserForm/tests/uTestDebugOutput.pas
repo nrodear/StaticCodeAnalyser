@@ -64,6 +64,8 @@ type
     // Review 03.09.: Gate E darf den EXPLIZITEN System.-Qualifier nicht
     // schlucken - gerade dort steht er, wo der Name verschattet ist.
     [Test] procedure Debug_SystemQualifiedDespiteOwnMethod_StillReported;
+    // Voll-Review 2026-09-12 (Testluecke 127): 'writeln ' mit Leerzeichen
+    [Test] procedure Debug_WritelnWithSpaceBeforeParen_Reported;
   end;
 
 implementation
@@ -607,6 +609,27 @@ procedure TTestDebugOutput.Debug_NeutralPath_StillReported;
 begin
   Assert.AreEqual<Integer>(2, DebugCountForPath('d:\repo\src\uNormal.pas'),
     'ausserhalb des Gates meldet SCA017 unveraendert');
+end;
+
+procedure TTestDebugOutput.Debug_WritelnWithSpaceBeforeParen_Reported;
+// Testluecke 127 (Voll-Review 2026-09-12): der DEBUG_CALLS-Eintrag
+// 'writeln ' (mit LEERZEICHEN statt Klammer) war ungetestet, und es
+// war offen, ob er ueberhaupt noch erreichbar ist. Er ist es - an der
+// gebauten Exe gemessen: 'writeln (''...'');' meldet. Der Eintrag ist
+// also kein toter Ballast, sondern deckt die in fremdem Code
+// verbreitete Schreibweise mit Leerzeichen ab.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  writeln (''kein Klammer-Aufruf'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDebugOutput),
+    'writeln mit Leerzeichen vor der Klammer ist derselbe Debug-Ausgang');
+  finally F.Free; end;
 end;
 
 end.

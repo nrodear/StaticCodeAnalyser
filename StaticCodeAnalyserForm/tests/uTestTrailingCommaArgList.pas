@@ -18,6 +18,9 @@ type
     [Test] procedure TrailingCommaInComment_NotReported;
     [Test] procedure InteriorComma_NotReported;
     [Test] procedure TrailingCommaArgList_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Testluecke 113): die Kommentar-Zustaende
+    [Test] procedure ParenStarCommentDoesNotSuppressRealCase;
+    [Test] procedure MultiLineBraceCommentDoesNotSuppressRealCase;
   end;
 
 implementation
@@ -129,6 +132,56 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkTrailingCommaArgList finding');
+  finally F.Free; end;
+end;
+
+procedure TTestTrailingCommaArgList.ParenStarCommentDoesNotSuppressRealCase;
+// Testluecke 113 (Voll-Review 2026-09-12): der (*..*)-Pfad war ohne
+// Test. Die Fixture legt beide Faelle nebeneinander - dieselbe
+// Zeichenfolge einmal im Kommentar (darf NICHT melden) und einmal als
+// echter Aufruf (muss melden). Genau EIN Fund beweist beide Seiten
+// zugleich.
+//
+// Der Detektor arbeitet zeilenweise: die abschliessende Klammer muss
+// auf derselben Zeile stehen wie das Komma (an der gebauten Exe
+// gemessen - die mehrzeilige Form meldet nicht, und das ist eine
+// andere, hier nicht behandelte Grenze).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  (* Beispiel: DoIt(1, 2, ); *)'#13#10 +
+  '  DoIt(1, 2, );'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkTrailingCommaArgList),
+    'nur der echte Aufruf zaehlt, nicht das Beispiel im Kommentar');
+  finally F.Free; end;
+end;
+
+procedure TTestTrailingCommaArgList.MultiLineBraceCommentDoesNotSuppressRealCase;
+// Zweiter Zustand: ein {..}-Blockkommentar ueber MEHRERE Zeilen, in
+// dem das Muster vorkommt. Der Zustand muss ueber die Zeilengrenze
+// getragen werden - sonst meldete die mittlere Kommentarzeile, und der
+// echte Fall dahinter koennte verloren gehen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  { Beispiel:'#13#10 +
+  '    DoIt(1, 2, );'#13#10 +
+  '    noch im Kommentar }'#13#10 +
+  '  DoIt(1, 2, );'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkTrailingCommaArgList),
+    'der Blockkommentar-Zustand traegt ueber Zeilen');
   finally F.Free; end;
 end;
 

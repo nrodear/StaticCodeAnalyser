@@ -43,6 +43,9 @@ type
     // DIREKT auf und konnten deshalb nie bemerken, dass der
     // Konfigurationsschritt die geladenen Regeln wieder loescht.
     [Test] procedure PipelineWithRepoIni_RulesSurviveConfig;
+    // Voll-Review 2026-09-12 (Testluecke 106): target wird NICHT
+    // ausgewertet - dokumentierende Pin
+    [Test] procedure TargetComment_IsNotEvaluated_KnownLimit;
   end;
 
 implementation
@@ -409,6 +412,39 @@ begin
     begin
       TDirectory.Delete(Dir, True);
     end;
+  end;
+end;
+
+procedure TTestCustomRuleDetector.TargetComment_IsNotEvaluated_KnownLimit;
+// Testluecke 106 (Voll-Review 2026-09-12): der Unit-Kopf sagt
+// ausdruecklich 'das Regelfeld target wird geparst und NICHT
+// ausgewertet' - festgehalten war das nirgends. Dieser Test
+// DOKUMENTIERT die Grenze: eine Regel mit Target rtComment trifft
+// trotzdem im CODE.
+//
+// Er haelt eine LUECKE fest, keinen Wunschzustand. Wird
+// Target-Filtering nachgeruestet, wird er rot und muss bewusst auf 0
+// umgestellt werden - genau das soll er leisten, damit die Aenderung
+// nicht unbemerkt an der Doku vorbeilaeuft.
+var
+  Rule     : TCustomRule;
+  Findings : TObjectList<TLeakFinding>;
+begin
+  TCustomRuleDetector.ClearRules;
+  // Bewusst NICHT das sonst uebliche 'TADOQuery': es steht in dieser
+  // Datei schon zweimal, ein drittes Vorkommen loeste SCA015 aus.
+  Rule := MakeRule('R900', 'TIdHTTP');
+  Rule.Target := rtComment;   // laut Doku wirkungslos
+  TCustomRuleDetector.AddRule(Rule);
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    TCustomRuleDetector.AnalyzeFile('probe.pas',
+      'unit Foo;'#10'  h := TIdHTTP.Create;'#10, Findings);
+    Assert.AreEqual<Integer>(1, CountByRule(Findings, 'R900'),
+      'BEKANNTE GRENZE: target wird geparst, aber nicht ausgewertet');
+  finally
+    Findings.Free;
+    TCustomRuleDetector.ClearRules;
   end;
 end;
 

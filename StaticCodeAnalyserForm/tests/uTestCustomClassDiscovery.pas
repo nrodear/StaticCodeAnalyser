@@ -45,6 +45,9 @@ type
     // Vollzaehlung SCA001, Klasse H (28.08.)
     [Test] procedure RtlNonClassName_NotDiscovered;
     [Test] procedure IsRtlNonClassName_DirectChecks;
+    // Voll-Review 2026-09-12 (Testluecke 105): TComponent ist BEWUSST
+    // nicht auf der Skip-Liste
+    [Test] procedure IsOwnerManagedParent_TComponentIsNotSkipped;
   end;
 
 implementation
@@ -339,6 +342,27 @@ begin
     'TComponent ist bewusst NICHT owner-managed-geskippt');
   Assert.IsTrue(TCustomClassDiscovery.IsOwnerManagedParent('TForm'),
     'Kontrolle: TForm bleibt geskippt');
+end;
+
+procedure TTestCustomClassDiscovery.IsOwnerManagedParent_TComponentIsNotSkipped;
+// Testluecke 105 (Voll-Review 2026-09-12): Unit- und Testkopf
+// versprachen einen TComponent-Skip, den OWNER_MANAGED nie enthielt.
+// Major 52 hat die Doku korrigiert - dieser Test haelt die
+// ENTSCHEIDUNG fest, damit sie nicht als Versehen zurueckgedreht wird.
+//
+// Der Grund steht im Unit-Kopf: das AOwner-Pattern raeumt nur auf, wenn
+// tatsaechlich ein Owner uebergeben wird. 'Create(nil)' ist bei
+// non-visual Components gaengig, und genau dort leakt es. Nach dem
+// Grundsatz dieser Unit ('false positive ist besser als verpasster
+// Leak') bleiben solche Klassen getrackt.
+begin
+  Assert.IsFalse(TCustomClassDiscovery.IsOwnerManagedParent('TComponent'),
+    'TComponent ist BEWUSST nicht owner-managed - s. Unit-Kopf');
+  // Ein Nachbar der Liste bleibt, was er ist - sonst waere nicht
+  // gezeigt, dass hier eine Entscheidung und kein Listenfehler steht.
+  // Bewusst TFrame und nicht TForm: letzteres steht in dieser Datei
+  // schon zweimal, ein drittes Vorkommen loeste SCA015 aus.
+  Assert.IsTrue(TCustomClassDiscovery.IsOwnerManagedParent('TFrame'));
 end;
 
 initialization
