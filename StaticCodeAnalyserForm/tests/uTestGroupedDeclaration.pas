@@ -1,4 +1,4 @@
-unit uTestGroupedDeclaration;
+﻿unit uTestGroupedDeclaration;
 
 interface
 
@@ -10,6 +10,10 @@ type
   TTestGroupedDeclaration = class
   public
     [Test] procedure SingleVarPerLine_NoFinding;
+    // Voll-Review 2026-09-12 (Blocker): case-Label-Listen sind Syntax,
+    // keine gruppierte Deklaration.
+    [Test] procedure CaseLabelsWithStatement_NoFinding;
+    [Test] procedure GroupedVarAfterCaseEnd_StillReported;
     [Test] procedure TwoVarsGrouped_Reported;
     [Test] procedure ThreeVarsGrouped_Reported;
     [Test] procedure ParameterGrouped_NotReported;
@@ -23,6 +27,56 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+procedure TTestGroupedDeclaration.CaseLabelsWithStatement_NoFinding;
+// 'vaOne, vaTwo: DoIt;' im case-Rumpf erfuellte das Muster (>=2
+// Idents, ':', Ident danach) und meldete - obwohl das schlicht
+// case-Syntax ist. Das case-Gate muss den Rumpf ausnehmen, auch
+// mit geschachteltem begin-Block.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(K: TKind);'#13#10 +
+  'begin'#13#10 +
+  '  case K of'#13#10 +
+  '    vaOne, vaTwo: DoIt;'#13#10 +
+  '    vaThree: begin'#13#10 +
+  '      Log;'#13#10 +
+  '    end;'#13#10 +
+  '    nkCall, nkAssign: ProcessNode;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkGroupedDeclaration),
+    'case-Label-Listen duerfen nicht als gruppierte Deklaration melden');
+  finally F.Free; end;
+end;
+
+procedure TTestGroupedDeclaration.GroupedVarAfterCaseEnd_StillReported;
+// Gegenprobe: NACH dem case-Ende ist das Gate wieder offen - eine
+// echte Gruppen-Deklaration in der naechsten Prozedur muss melden.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(K: TKind);'#13#10 +
+  'begin'#13#10 +
+  '  case K of'#13#10 +
+  '    vaOne: DoIt;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var A, B: Integer;'#13#10 +
+  'begin'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(
+    TFindingHelper.Count(F, fkGroupedDeclaration) >= 1,
+    'nach dem case-Ende muss die echte Gruppen-Deklaration melden');
+  finally F.Free; end;
+end;
 
 procedure TTestGroupedDeclaration.SingleVarPerLine_NoFinding;
 const SRC =

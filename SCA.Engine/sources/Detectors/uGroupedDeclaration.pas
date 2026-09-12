@@ -1,4 +1,4 @@
-unit uGroupedDeclaration;
+﻿unit uGroupedDeclaration;
 
 // Detektor fuer gruppierte Deklarationen `A, B: Type;`.
 //
@@ -68,8 +68,34 @@ end;
 // sind LEGITIME Pascal-Syntax und kein Style-Defekt - die Regel betrifft nur
 // var/field/const-Sektionen (depth=0). Caller fuehrt ParenDepth UEBER Zeilen
 // hinweg fort, damit mehrzeilige Method-Header korrekt behandelt werden.
+// Blockwort-Zaehlung fuer das case-Gate: 'case' oeffnet, 'end'
+// schliesst - Bloecke INNERHALB des case (begin/try/record) werden
+// gegengezaehlt, damit deren 'end' nicht das case beendet.
+// GRENZE (dokumentiert, akzeptiert): ein case IN einem begin-Block IN
+// einem aeusseren case verwechselt beim inneren end die Ebene - das
+// Gate endet dann zu frueh und der alte FP bleibt in diesem Exoten.
+// Vor dem Gate meldete JEDE case-Label-Liste (Voll-Review 2026-09-12,
+// Blocker).
+procedure ZaehleBlockwort(const W: string;
+  var CaseDepth, InnerDepth: Integer);
+begin
+  if W = 'case' then
+    Inc(CaseDepth)
+  else if (W = 'begin') or (W = 'try') or (W = 'record') then
+  begin
+    if CaseDepth > 0 then Inc(InnerDepth);
+  end
+  else if W = 'end' then
+  begin
+    if CaseDepth = 0 then Exit;
+    if InnerDepth > 0 then Dec(InnerDepth)
+    else Dec(CaseDepth);
+  end;
+end;
+
 function FindGroupedDecl(const Line: string; var InBlockComm: Boolean;
-  var InParenStarComm: Boolean; var ParenDepth: Integer): Integer;
+  var InParenStarComm: Boolean; var ParenDepth: Integer;
+  var CaseDepth, InnerDepth: Integer): Integer;
 type
   TStateKind = (skScan, skAfterIdent, skExpectId2);
 var
@@ -80,6 +106,7 @@ var
   State    : TStateKind;
   FirstCol : Integer;
   IdCount  : Integer;
+  Wort     : string;
 begin
   Result   := 0;
   InStr    := False;
@@ -149,6 +176,16 @@ begin
             FirstCol := i;
             IdCount  := 1;
             while (i <= n) and IsIdent(Line[i]) do Inc(i);
+            // case-Gate: Blockwoerter zaehlen; INNERHALB eines case
+            // ist 'label1, label2: Anweisung' Syntax, kein Stilmangel.
+            Wort := LowerCase(Copy(Line, FirstCol, i - FirstCol));
+            ZaehleBlockwort(Wort, CaseDepth, InnerDepth);
+            if CaseDepth > 0 then
+            begin
+              State := skScan;
+              FirstCol := 0; IdCount := 0;
+              Continue;
+            end;
             State := skAfterIdent;
             Continue;
           end;
@@ -196,7 +233,16 @@ begin
           begin Inc(i); Continue; end;
           if IsIdentStart(c) then
           begin
+            j := i;
             while (i <= n) and IsIdent(Line[i]) do Inc(i);
+            Wort := LowerCase(Copy(Line, j, i - j));
+            ZaehleBlockwort(Wort, CaseDepth, InnerDepth);
+            if CaseDepth > 0 then
+            begin
+              State := skScan;
+              FirstCol := 0; IdCount := 0;
+              Continue;
+            end;
             Inc(IdCount);
             State := skAfterIdent;
             Continue;
@@ -218,6 +264,8 @@ var
   i, Col : Integer;
   InBlk, InParen : Boolean;
   ParenDepth : Integer;
+  CaseDepth  : Integer;
+  InnerDepth : Integer;
   Cached : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
@@ -226,9 +274,12 @@ begin
     InBlk   := False;
     InParen := False;
     ParenDepth := 0;
+    CaseDepth  := 0;
+    InnerDepth := 0;
     for i := 0 to Lines.Count - 1 do
     begin
-      Col := FindGroupedDecl(Lines[i], InBlk, InParen, ParenDepth);
+      Col := FindGroupedDecl(Lines[i], InBlk, InParen, ParenDepth,
+        CaseDepth, InnerDepth);
       if Col <= 0 then Continue;
       Results.Add(TLeakFinding.New(FileName, '', i + 1,
         Format('Grouped declaration at column %d (`A, B: Type`) - split ' +
