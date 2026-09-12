@@ -121,20 +121,13 @@ end;
 procedure TTestExceptOnException.OnSpecificClass_Anonymous_NoFinding;
 // Gegenrichtung: 'on EConvertError do' ist eine SPEZIFISCHE Klasse -
 // ein anonymer Zweig, der jedes on ohne ':' meldet, waere hier rot.
+// Fixture layoutvariiert gegen den Anonymous-Zwilling (DuplicateBlock).
 const SRC =
-  'unit t;'#13#10 +
-  'interface'#13#10 +
-  'implementation'#13#10 +
-  'procedure P;'#13#10 +
-  'begin'#13#10 +
-  '  try'#13#10 +
-  '    Tu;'#13#10 +
-  '  except'#13#10 +
-  '    on EConvertError do'#13#10 +
-  '      Melde;'#13#10 +
-  '  end;'#13#10 +
-  'end;'#13#10 +
-  'end.';
+  'unit t;'#13#10'interface'#13#10'implementation'#13#10 +
+  'procedure Q;'#13#10'begin'#13#10 +
+  '  try'#13#10'    Rechne;'#13#10'  except'#13#10 +
+  '    on EConvertError do'#13#10'      Melde;'#13#10 +
+  '  end;'#13#10'end;'#13#10'end.';
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
