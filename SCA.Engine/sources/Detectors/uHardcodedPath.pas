@@ -272,7 +272,13 @@ begin
   try
     Reported := TDictionary<string, Boolean>.Create;
     Lst      := TStringList.Create;
-    for var Kind in [nkAssign, nkCall] do
+    // nkField/nkLocalVar seit Voll-Review 2026-09-12 (Major 66): der
+    // Parser legt Konstanten-Bindungen ('const DEFAULT_LOG =
+    // ''C:\...'';' auf Unit- wie Routinen-Ebene) und Feld-Inits als
+    // nkField/nkLocalVar mit 'Typ = Literal' im TypeRef ab - genau
+    // der klassischste Ort fuer hardkodierte Pfade erzeugte weder
+    // nkAssign noch nkCall und blieb unsichtbar.
+    for var Kind in [nkAssign, nkCall, nkField, nkLocalVar] do
     begin
       AllNodes := UnitNode.FindAll(Kind);
       try
@@ -300,10 +306,12 @@ begin
              and IsLocalTestHelperCall(N.Name) then Continue;
 
           Lst.Clear;
-          if Kind = nkAssign then
-            ExtractStrings(N.TypeRef, Lst)
+          if Kind = nkCall then
+            ExtractStrings(N.Name, Lst)
           else
-            ExtractStrings(N.Name, Lst);
+            // nkAssign-RHS wie bisher; nkField/nkLocalVar tragen
+            // 'Typ = Literal' im TypeRef.
+            ExtractStrings(N.TypeRef, Lst);
 
           for S in Lst do
           begin
