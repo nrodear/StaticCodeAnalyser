@@ -378,6 +378,37 @@ begin
     ALage.InDeklaration := False;
 end;
 
+// Startposition des LINKEN Operanden innerhalb des Zeilenpraefixes vor
+// einem Operator: direkt hinter dem LETZTEN Pascal-Stopwort. Gegenstueck
+// zur Rhs-Stop-Liste in Phase 2, ohne das eine Schleife ueber alle
+// Operator-Vorkommen nichts brachte - die Lhs war immer der komplette
+// Zeilenpraefix (Voll-Review 2026-09-12, Major 82).
+//
+// ACleanLowPrefix ist geblankt (Phase 1) und lowercase, damit Stopwoerter
+// in String-Literalen nicht falsch matchen. Ohne Treffer: 1.
+function LinkerOperandStart(const ACleanLowPrefix: string): Integer;
+const
+  STOPS : array[0..6] of string =
+    (';', ' then ', ' do ', ' begin ', ' and ', ' or ', ' xor ');
+var
+  Stop    : string;
+  q, Last : Integer;
+begin
+  Result := 1;
+  for Stop in STOPS do
+  begin
+    Last := 0;
+    q := Pos(Stop, ACleanLowPrefix);
+    while q > 0 do
+    begin
+      Last := q;
+      q := Pos(Stop, ACleanLowPrefix, q + 1);
+    end;
+    if (Last > 0) and (Last + Length(Stop) > Result) then
+      Result := Last + Length(Stop);
+  end;
+end;
+
 function ScanForTautology(const Line: string; var ALage: TScanLage;
   out MatchCol: Integer; out Detail: string): Boolean;
 var
@@ -410,12 +441,22 @@ begin
   // Norm()-Vergleich den Original-String-Inhalt, und z.B.
   //   `Foo('function ') or Foo('function(')`
   // wird NICHT als tautologisch gemeldet (Strings sind unterschiedlich).
+  // ALLE Vorkommen je Operator, wie Phase 3 (Voll-Review 2026-09-12,
+  // Major 82): vorher wurde nur das ERSTE geprueft, und die Lhs war der
+  // komplette Zeilenpraefix. 'if Flag and x and x then' blieb damit
+  // stumm, waehrend 'if x and x and Flag then' gemeldet wurde - die
+  // Erkennung haengte an der Position des Fehlers in der Zeile (an der
+  // Bestands-Exe nachgemessen). Beides gehoert zusammen: eine blosse
+  // Schleife brachte nichts, solange die Lhs nicht am naechstliegenden
+  // Stop LINKS vom Operator gekappt wird.
+  var CleanLower := LowerCase(Clean);
   for var Op in OPS do
   begin
-    p := Pos(Op, LowerCase(Clean));
-    if p > 0 then
+    p := Pos(Op, CleanLower);
+    while p > 0 do
     begin
-      var Lhs       := Copy(Line, 1, p - 1);
+      var LhsStart  := LinkerOperandStart(Copy(CleanLower, 1, p - 1));
+      var Lhs       := Copy(Line, LhsStart, p - LhsStart);
       var RhsStart  := p + Length(Op);
       var Rhs       := Copy(Line,  RhsStart, MaxInt);
       var RhsClean  := Copy(Clean, RhsStart, MaxInt);
@@ -444,6 +485,7 @@ begin
         Detail := Lhs + Op + Rhs;
         Exit(True);
       end;
+      p := Pos(Op, CleanLower, p + 1);
     end;
   end;
 
