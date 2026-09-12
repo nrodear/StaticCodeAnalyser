@@ -533,7 +533,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1,
-    TFindingHelper.Count(F, fkTautologicalExpr),
+    TFindingHelper.Count(F, fkTautologicalBoolExpr),
     'geklammerte Vergleichs-Tautologie muss gemeldet werden');
   finally F.Free; end;
 end;
@@ -556,7 +556,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1,
-    TFindingHelper.Count(F, fkTautologicalExpr),
+    TFindingHelper.Count(F, fkTautologicalBoolExpr),
     'geklammerte Boolean-Tautologie muss gemeldet werden');
   finally F.Free; end;
 end;
@@ -578,7 +578,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1,
-    TFindingHelper.Count(F, fkTautologicalExpr),
+    TFindingHelper.Count(F, fkTautologicalBoolExpr),
     'die Tautologie hinter einem frueheren and muss gemeldet werden');
   finally F.Free; end;
 end;
@@ -597,7 +597,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1,
-    TFindingHelper.Count(F, fkTautologicalExpr),
+    TFindingHelper.Count(F, fkTautologicalBoolExpr),
     'die Tautologie hinter einem frueheren or muss gemeldet werden');
   finally F.Free; end;
 end;
@@ -616,7 +616,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0,
-    TFindingHelper.Count(F, fkTautologicalExpr),
+    TFindingHelper.Count(F, fkTautologicalBoolExpr),
     'drei verschiedene Operanden sind keine Tautologie');
   finally F.Free; end;
 end;
