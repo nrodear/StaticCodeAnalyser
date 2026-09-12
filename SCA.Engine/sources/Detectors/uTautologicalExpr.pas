@@ -37,7 +37,8 @@ implementation
 
 uses
   System.StrUtils,
-  uFileTextCache;
+  uFileTextCache,
+  uDetectorUtils;   // BlankStringLiterals (Klammer-Bilanz)
 
 const
   EMIT_SEVERITY = lsError;
@@ -259,6 +260,42 @@ begin
   until not Changed;
 end;
 
+// Klammerbilanz ('(' minus ')') mit geblankten String-Literalen -
+// Klammern in Literalen ('Foo(''('')') zaehlen nicht.
+function ParenBalanceOf(const S: string): Integer;
+var
+  B : string;
+  i : Integer;
+begin
+  Result := 0;
+  B := TDetectorUtils.BlankStringLiterals(S);
+  for i := 1 to Length(B) do
+    if B[i] = '(' then Inc(Result)
+    else if B[i] = ')' then Dec(Result);
+end;
+
+// Unbalancierte RANDklammern abwerfen (Voll-Review 2026-09-12,
+// Blocker): bei 'if (x = x) then' behielt die Lhs die oeffnende
+// Klammer ('(x'), und in Phase 2 behielt die Rhs die schliessende
+// ('b)') - der Norm-Vergleich schlug fehl, und die in Delphi
+// haeufigste Schreibweise einer Bedingung (geklammert) war fuer die
+// Regel komplett unsichtbar, obwohl der Unit-Kopf '(b or b)' und
+// '(p <> p)' ausdruecklich als Zielmuster nennt. Es fallen NUR
+// unbalancierte Raender: eine fuehrende '(' faellt nur, solange die
+// Bilanz positiv ist, eine schliessende ')' nur, solange sie negativ
+// ist. '(a) or (a)' bleibt beidseitig '(a)' - identische Seiten
+// vergleichen weiter identisch.
+function StripUnbalancedParens(const S: string): string;
+begin
+  Result := Trim(S);
+  while (Result <> '') and (Result[1] = '(')
+        and (ParenBalanceOf(Result) > 0) do
+    Result := TrimLeft(Copy(Result, 2, MaxInt));
+  while (Result <> '') and (Result[Length(Result)] = ')')
+        and (ParenBalanceOf(Result) < 0) do
+    Result := TrimRight(Copy(Result, 1, Length(Result) - 1));
+end;
+
 // True wenn der Ausdruck einen nicht-deterministischen Call enthaelt -
 // dann sind zwei textgleiche Seiten NICHT tautologisch (jeder Aufruf
 // liefert einen anderen Wert). Real-World-FP 2026-06-21:
@@ -395,9 +432,11 @@ begin
           RhsLower := Copy(RhsLower, 1, SP - 1);
         end;
       end;
-      // Lhs-Prefix-Strip (z.B. `  if a` -> `a`)
-      Lhs := StripLhsPrefix(Lhs);
-      Rhs := Trim(Rhs);
+      // Lhs-Prefix-Strip (z.B. `  if a` -> `a`), dann unbalancierte
+      // Randklammern beider Seiten (s. StripUnbalancedParens): 'if
+      // (b or b) then' lieferte hier '(b' gegen 'b)' - kein Fund.
+      Lhs := StripUnbalancedParens(StripLhsPrefix(Lhs));
+      Rhs := StripUnbalancedParens(Rhs);
       if (Lhs <> '') and (Rhs <> '') and (Norm(Lhs) = Norm(Rhs))
          and not ContainsNonDeterministic(Lhs) then
       begin
@@ -437,8 +476,12 @@ begin
           RhsLower := Copy(RhsLower, 1, SP - 1);
         end;
       end;
-      Lhs := StripLhsPrefix(Lhs);
-      Rhs := Trim(Rhs);
+      // Wie Phase 2: nach dem Prefix-Strip unbalancierte Randklammern
+      // beider Seiten abwerfen - 'if (x = x) then' lieferte hier '(x'
+      // gegen 'x' (die Rhs verliert ihre ')' an der Stop-Liste, die
+      // Lhs behaelt die '(') - kein Fund.
+      Lhs := StripUnbalancedParens(StripLhsPrefix(Lhs));
+      Rhs := StripUnbalancedParens(Rhs);
       // Doppelt-genullt-vermeiden: `:= x` darf nicht als `= x` matchen.
       // Da wir Op mit umgebenden Spaces suchen (` = `), trifft das nicht zu -
       // bei `x := x` waere die Such-Subsequence `:= x` ohne Vor-Space.

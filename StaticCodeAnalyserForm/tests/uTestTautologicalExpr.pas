@@ -54,6 +54,9 @@ type
     // inline var im Rumpf darf Phase 3 nicht fuer den Rest der Routine
     // abschalten (Review 02.09.).
     [Test] procedure Taut_InlineVarInBody_ComparisonStillReported;
+    // Voll-Review 2026-09-12 (Blocker): geklammerte Bedingung war blind
+    [Test] procedure Taut_ParenthesizedEqual_Reported;
+    [Test] procedure Taut_ParenthesizedOr_Reported;
     // Auskommentierter Code darf den Scanner nicht steuern (Review 02.09.).
     [Test] procedure Taut_KeywordInsideBlockComment_ComparisonStillReported;
   end;
@@ -495,6 +498,52 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTautologicalBoolExpr),
     'genau 1 Finding: IsUrl-Zeile feuert, y=y im (*..*)-Block nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.Taut_ParenthesizedEqual_Reported;
+// Voll-Review 2026-09-12 (Blocker): bei 'if (x = x) then' behielt die
+// Lhs die oeffnende Klammer ('(x') waehrend die Rhs ihre ')' an der
+// Stop-Liste verlor ('x') - Norm-Mismatch, kein Fund. Die haeufigste
+// Delphi-Schreibweise einer Bedingung war fuer diese lsError-Regel
+// unsichtbar, obwohl der Unit-Kopf '(p <> p)' als Zielmuster nennt
+// (Bestands-Exe: 0 Funde, empirisch belegt). Jetzt werfen beide
+// Seiten unbalancierte Randklammern ab.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(x: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  if (x = x) then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkTautologicalExpr),
+    'geklammerte Vergleichs-Tautologie muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.Taut_ParenthesizedOr_Reported;
+// Zwilling fuer Phase 2 (Boolean-Operatoren): 'if (b or b) then'
+// lieferte '(b' gegen 'b)' - kein Fund, obwohl der Unit-Kopf
+// '(b or b)' ausdruecklich als Zielmuster nennt (Bestands-Exe: 0,
+// empirisch belegt). Die Gegenrichtung (balancierte Klammern bleiben
+// unangetastet) decken CaseSensitiveCharLiterals_NoFinding
+// ('(FirstChar = ''F'') or (FirstChar = ''f'')') und
+// BitAndCompareConstant_NoFinding ('(n and 1) = 1').
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(b: Boolean);'#13#10 +
+  'begin'#13#10 +
+  '  if (b or b) then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkTautologicalExpr),
+    'geklammerte Boolean-Tautologie muss gemeldet werden');
   finally F.Free; end;
 end;
 
