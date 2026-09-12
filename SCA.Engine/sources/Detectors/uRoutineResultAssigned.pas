@@ -108,28 +108,18 @@ uses
 // 'function:RetType[;direktive...]'). Procedures haben keinen ':' im
 // Kind-Teil. Robust gegen Direktiven-Suffix.
 function IsFunctionMethod(const TypeRef: string): Boolean;
-var
-  ColonPos, SemiPos : Integer;
 begin
-  ColonPos := Pos(':', TypeRef);
-  if ColonPos = 0 then Exit(False);
-  SemiPos := Pos(';', TypeRef);
-  // ':' muss VOR dem ersten ';'-Direktiv-Trenner kommen, sonst koennte
-  // ein generisches 'procedure;virtual:abstract' (theoretisch) falsch
-  // matchen. In der Praxis kommt das nicht vor, defensiv trotzdem.
-  Result := (SemiPos = 0) or (ColonPos < SemiPos);
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.IsFunctionTypeRef(TypeRef);
 end;
 
 // True wenn TypeRef einen der Body-losen Direktiven-Marker enthaelt.
 function IsBodyless(const TypeRef: string): Boolean;
-var
-  Low : string;
 begin
-  Low := LowerCase(TypeRef);
-  Result := (Pos(';abstract',  Low) > 0) or
-            (Pos(';forward',   Low) > 0) or
-            (Pos(';external',  Low) > 0) or
-            (Pos(';dispid',    Low) > 0);
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.IsBodylessTypeRef(TypeRef);
 end;
 
 // True wenn die Methode mindestens eine Statement-Art im Body hat.
@@ -191,17 +181,12 @@ end;
 
 // Normalisiert eine LHS-String fuer Vergleich: lowercase, Whitespace raus.
 function NormalizeLhs(const S: string): string;
-var
-  i : Integer;
-  C : Char;
 begin
-  Result := '';
-  for i := 1 to Length(S) do
-  begin
-    C := S[i];
-    if C > ' ' then
-      Result := Result + LowerCase(C);
-  end;
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  // Die alte lokale Fassung lowerte je Zeichen (Konkat in der
+  // Schleife) - semantisch identisch zur zentralen SetLength-Fassung.
+  Result := TDetectorUtils.NormalizeLhsLower(S);
 end;
 
 // True wenn LhsLow eine Result-Zuweisung repraesentiert.
@@ -291,30 +276,10 @@ end;
 // z.B. Img32/mORMot-Bit-Manipulation; zero-FN: ein absolute-Result-Alias
 // schreibt per Definition in den Return-Slot.)
 function HasAbsoluteResultAlias(MethodNode: TAstNode): Boolean;
-var
-  LocalVars : TList<TAstNode>;
-  LV : TAstNode;
-  Low : string;
-  p, j : Integer;
 begin
-  Result := False;
-  LocalVars := MethodNode.FindAll(nkLocalVar);
-  try
-    for LV in LocalVars do
-    begin
-      Low := LowerCase(LV.TypeRef);
-      p := Pos('absolute', Low);
-      if p = 0 then Continue;
-      j := p + 8;                                  // hinter 'absolute'
-      while (j <= Length(Low)) and (Low[j] <= ' ') do Inc(j);
-      if (Copy(Low, j, 6) = 'result')
-         and ((j + 6 > Length(Low))
-              or not CharInSet(Low[j + 6], ['a'..'z', '0'..'9', '_'])) then
-        Exit(True);
-    end;
-  finally
-    LocalVars.Free;
-  end;
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.HasAbsoluteResultAlias(MethodNode);
 end;
 
 function ExprWritesOrPassesResult(const SLow, FnNameLow: string): Boolean;
@@ -420,16 +385,10 @@ end;
 
 // Extrahiert den Return-Typ aus dem Kind-String 'function:RetType[;direktive...]'.
 function ExtractReturnType(const TypeRef: string): string;
-var
-  c, s : Integer;
 begin
-  Result := '';
-  c := Pos(':', TypeRef);
-  if c = 0 then Exit;
-  Result := Copy(TypeRef, c + 1, MaxInt);
-  s := Pos(';', Result);
-  if s > 0 then Result := Copy(Result, 1, s - 1);
-  Result := Trim(Result);
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.ExtractReturnType(TypeRef);
 end;
 
 // True wenn der Return-Typ ein compiler-MANAGED Typ ist (auto-init ''/nil/

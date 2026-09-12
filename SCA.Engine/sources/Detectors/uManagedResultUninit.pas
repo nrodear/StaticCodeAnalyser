@@ -136,37 +136,24 @@ type
 // Extrahiert den Return-Typ aus 'function:RetType[;direktive...]'
 // (gleiche TypeRef-Konvention wie uRoutineResultAssigned).
 function ExtractReturnType(const TypeRef: string): string;
-var
-  c, s : Integer;
 begin
-  Result := '';
-  c := Pos(':', TypeRef);
-  if c = 0 then Exit;
-  Result := Copy(TypeRef, c + 1, MaxInt);
-  s := Pos(';', Result);
-  if s > 0 then Result := Copy(Result, 1, s - 1);
-  Result := Trim(Result);
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.ExtractReturnType(TypeRef);
 end;
 
 function IsFunctionMethod(const TypeRef: string): Boolean;
-var
-  ColonPos, SemiPos : Integer;
 begin
-  ColonPos := Pos(':', TypeRef);
-  if ColonPos = 0 then Exit(False);
-  SemiPos := Pos(';', TypeRef);
-  Result := (SemiPos = 0) or (ColonPos < SemiPos);
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.IsFunctionTypeRef(TypeRef);
 end;
 
 function IsBodyless(const TypeRef: string): Boolean;
-var
-  Low : string;
 begin
-  Low := LowerCase(TypeRef);
-  Result := (Pos(';abstract',  Low) > 0) or
-            (Pos(';forward',   Low) > 0) or
-            (Pos(';external',  Low) > 0) or
-            (Pos(';dispid',    Low) > 0);
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.IsBodylessTypeRef(TypeRef);
 end;
 
 function HasOwnBodyBlock(N: TAstNode): Boolean;
@@ -182,30 +169,10 @@ end;
 // der Walker saehe nie einen Result-Write -> Methode skippen (Kopie der
 // SCA121-Logik, dort seit Real-World 2026-06-28 zero-FN belegt).
 function HasAbsoluteResultAlias(MethodNode: TAstNode): Boolean;
-var
-  LocalVars : TList<TAstNode>;
-  LV  : TAstNode;
-  Low : string;
-  p, j : Integer;
 begin
-  Result := False;
-  LocalVars := MethodNode.FindAll(nkLocalVar);
-  try
-    for LV in LocalVars do
-    begin
-      Low := LowerCase(LV.TypeRef);
-      p := Pos('absolute', Low);
-      if p = 0 then Continue;
-      j := p + 8;
-      while (j <= Length(Low)) and (Low[j] <= ' ') do Inc(j);
-      if (Copy(Low, j, 6) = RESULT_IDENT)
-         and ((j + 6 > Length(Low))
-              or not CharInSet(Low[j + 6], ['a'..'z', '0'..'9', '_'])) then
-        Exit(True);
-    end;
-  finally
-    LocalVars.Free;
-  end;
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.HasAbsoluteResultAlias(MethodNode);
 end;
 
 // Entfernt '...'-String-Literale (ersetzt sie durch ein Leerzeichen, damit
@@ -462,19 +429,10 @@ end;
 // uRoutineResultAssigned, hier ohne Konkat-Schleife: erst kompaktieren,
 // dann einmal LowerCase).
 function NormalizeLhs(const S: string): string;
-var
-  i, o : Integer;
 begin
-  SetLength(Result, Length(S));
-  o := 0;
-  for i := 1 to Length(S) do
-    if S[i] > ' ' then
-    begin
-      Inc(o);
-      Result[o] := S[i];
-    end;
-  SetLength(Result, o);
-  Result := LowerCase(Result);
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.NormalizeLhsLower(S);
 end;
 
 // --- Dokument-Reihenfolge-Walker -------------------------------------------

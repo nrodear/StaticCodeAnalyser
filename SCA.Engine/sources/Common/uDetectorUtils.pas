@@ -607,6 +607,44 @@ type
     // das Flag zu Recht geruegt.
     class function ExtractFirstWordOrBracket(const Line: string;
       out StartCol: Integer): string; static;
+
+    // ------- Method-TypeRef-Vertrag (kind[:ret][;dir...]) -----------
+    // Der Parser legt Methodenart, Rueckgabetyp und Direktiven als
+    // flachen Text in nkMethod.TypeRef ab:
+    //   'procedure' / 'function:Integer' / 'function:T;virtual'.
+    // Diese Sektion buendelt die Leser dieses PARSER-Vertrags - kommt
+    // eine neue Direktive dazu, zieht genau EINE Stelle nach
+    // (Voll-Review 2026-09-12; vorher 3x IsBodyless + 2x
+    // IsFunctionMethod + 2er-Paare woertlich in den Detektoren).
+
+    // True wenn der TypeRef eine FUNKTION beschreibt: ':' vor dem
+    // ersten ';'-Direktiv-Trenner. ACHTUNG: uConstantReturn nutzt
+    // absichtlich eine ANDERE Praefix-Heuristik
+    // (StartsText('function', ...)) und bleibt lokal - die zwei
+    // Fassungen unterscheiden sich fuer 'function' ohne
+    // Rueckgabetyp-Segment; Vereinheitlichung waere fundbewegend.
+    class function IsFunctionTypeRef(const ATypeRef: string)
+      : Boolean; static;
+
+    // True wenn die Deklaration keinen eigenen Rumpf hat:
+    // ;abstract / ;forward / ;external / ;dispid.
+    class function IsBodylessTypeRef(const ATypeRef: string)
+      : Boolean; static;
+
+    // Rueckgabetyp aus dem TypeRef ('function:T;virtual' -> 'T');
+    // leer fuer Prozeduren.
+    class function ExtractReturnType(const ATypeRef: string)
+      : string; static;
+
+    // True wenn eine lokale Variable per 'absolute Result' die
+    // Storage des Funktionsergebnisses aliast - jeder Zugriff ueber
+    // sie IST ein Result-Zugriff.
+    class function HasAbsoluteResultAlias(AMethodNode: TAstNode)
+      : Boolean; static;
+
+    // Whitespace raus + lowercase - normalisiert eine
+    // Zuweisungs-LHS fuer Vergleiche ('Result .X' -> 'result.x').
+    class function NormalizeLhsLower(const S: string): string; static;
   end;
 
 
@@ -2110,6 +2148,87 @@ begin
       Exit(True);
     Exit;                              // nur ersten Parameter pruefen
   end;
+end;
+
+class function TDetectorUtils.IsFunctionTypeRef(
+  const ATypeRef: string): Boolean;
+var
+  ColonPos, SemiPos : Integer;
+begin
+  ColonPos := Pos(':', ATypeRef);
+  if ColonPos = 0 then Exit(False);
+  SemiPos := Pos(';', ATypeRef);
+  Result := (SemiPos = 0) or (ColonPos < SemiPos);
+end;
+
+class function TDetectorUtils.IsBodylessTypeRef(
+  const ATypeRef: string): Boolean;
+var
+  Low : string;
+begin
+  Low := LowerCase(ATypeRef);
+  Result := (Pos(';abstract',  Low) > 0) or
+            (Pos(';forward',   Low) > 0) or
+            (Pos(';external',  Low) > 0) or
+            (Pos(';dispid',    Low) > 0);
+end;
+
+class function TDetectorUtils.ExtractReturnType(
+  const ATypeRef: string): string;
+var
+  c, s : Integer;
+begin
+  Result := '';
+  c := Pos(':', ATypeRef);
+  if c = 0 then Exit;
+  Result := Copy(ATypeRef, c + 1, MaxInt);
+  s := Pos(';', Result);
+  if s > 0 then Result := Copy(Result, 1, s - 1);
+  Result := Trim(Result);
+end;
+
+class function TDetectorUtils.HasAbsoluteResultAlias(
+  AMethodNode: TAstNode): Boolean;
+var
+  LocalVars : TList<TAstNode>;
+  LV  : TAstNode;
+  Low : string;
+  p, j : Integer;
+begin
+  Result := False;
+  LocalVars := AMethodNode.FindAll(nkLocalVar);
+  try
+    for LV in LocalVars do
+    begin
+      Low := LowerCase(LV.TypeRef);
+      p := Pos('absolute', Low);
+      if p = 0 then Continue;
+      j := p + 8;                                  // hinter 'absolute'
+      while (j <= Length(Low)) and (Low[j] <= ' ') do Inc(j);
+      if (Copy(Low, j, 6) = 'result')
+         and ((j + 6 > Length(Low))
+              or not CharInSet(Low[j + 6], ['a'..'z', '0'..'9', '_'])) then
+        Exit(True);
+    end;
+  finally
+    LocalVars.Free;
+  end;
+end;
+
+class function TDetectorUtils.NormalizeLhsLower(const S: string): string;
+var
+  i, o : Integer;
+begin
+  SetLength(Result, Length(S));
+  o := 0;
+  for i := 1 to Length(S) do
+    if S[i] > ' ' then
+    begin
+      Inc(o);
+      Result[o] := S[i];
+    end;
+  SetLength(Result, o);
+  Result := LowerCase(Result);
 end;
 
 end.

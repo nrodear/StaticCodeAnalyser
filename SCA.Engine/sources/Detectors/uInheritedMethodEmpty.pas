@@ -71,13 +71,10 @@ end;
 
 // Bodyless = abstract / forward / external / dispid - keine Implementation.
 function IsBodyless(const TypeRef: string): Boolean;
-var Low: string;
 begin
-  Low := LowerCase(TypeRef);
-  Result := (Pos(';abstract', Low) > 0) or
-            (Pos(';forward',  Low) > 0) or
-            (Pos(';external', Low) > 0) or
-            (Pos(';dispid',   Low) > 0);
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.IsBodylessTypeRef(TypeRef);
 end;
 
 // Restschulden-Audit 2026-07-26: lokale UnqualifiedName-Kopie entfernt -
