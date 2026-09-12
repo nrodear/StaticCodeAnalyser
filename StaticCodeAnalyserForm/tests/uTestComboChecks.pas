@@ -40,6 +40,8 @@ type
     // Zeile - der reine Zeilenvergleich uebersprang den Guard.
     [Test] procedure DivByZero_OneLineGuard_NoFinding;
     [Test] procedure DivByZero_OneLineIfWithoutZeroGuard_StillReported;
+    // Voll-Review 2026-09-12 (Major 59): Knoten- statt Zeilen-Vergleich
+    [Test] procedure DivByZero_SameLineZeroAssign_StillReported;
     [Test] procedure DivByZero_LocalVarWithoutGuard_ReportsWarning;
     [Test] procedure DivByZero_NonIntegerType_NoFinding;
     // DeadCode
@@ -391,6 +393,32 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
       'Einzeiler-Guard schuetzt die Division auf derselben Zeile');
+  finally F.Free; end;
+end;
+
+procedure TTestNewChecks.DivByZero_SameLineZeroAssign_StillReported;
+// Voll-Review 2026-09-12 (Major 59): der Zeilen-Skip in
+// AllAssignmentsProvablyNonZero nahm JEDES Statement der
+// Divisionszeile aus - 'n := 0; x := 100 div n;' auf EINER Zeile
+// liess das n := 0 unsichtbar, die fruehere nichtnull-Init gewann und
+// der garantierte EZeroDivide wurde verschluckt (Bestands-Exe: 0
+// Funde, empirisch belegt, dz1.pas). Jetzt ist nur der
+// Divisions-KNOTEN selbst ausgenommen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Kaputt;'#13#10+
+  'var n, x: Integer;'#13#10+
+  'begin'#13#10+
+  '  n := 1;'#13#10+
+  '  n := 0; x := 100 div n;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+      'n := 0 auf der Divisionszeile bricht den Nichtnull-Beweis - ' +
+      'der Fund muss bleiben');
   finally F.Free; end;
 end;
 

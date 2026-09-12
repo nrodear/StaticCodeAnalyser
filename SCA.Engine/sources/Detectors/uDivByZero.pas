@@ -123,7 +123,8 @@ type
     // zugewiesen bekommt (nichtnull-Ganzzahl-Literale ODER Clamp G3) und
     // mindestens einmal vor der Division (provably-nonzero).
     class function AllAssignmentsProvablyNonZero(MethodNode: TAstNode;
-      const VarLow: string; BeforeLine: Integer): Boolean; static;
+      const VarLow: string; ADivNode: TAstNode): Boolean; static;
+
     // True wenn Target im Subtree von Root liegt (Knoten-Identitaet, nicht
     // Zeilenbereich). Basis fuer die Schleifen-Enthaltenseins-Pruefungen.
     class function NodeInSubtree(Root, Target: TAstNode): Boolean; static;
@@ -730,7 +731,7 @@ begin
 end;
 
 class function TDivByZeroDetector.AllAssignmentsProvablyNonZero(
-  MethodNode: TAstNode; const VarLow: string; BeforeLine: Integer): Boolean;
+  MethodNode: TAstNode; const VarLow: string; ADivNode: TAstNode): Boolean;
 // True wenn JEDE Zuweisung an VarLow im ganzen Methodenrumpf beweisbar <> 0 ist
 // (nichtnull-Ganzzahl-Literal ODER Clamp G3 wie 'Max(1,..)') UND mindestens eine
 // davon vor der Division liegt. Dann ist VarLow an der Divisionsstelle
@@ -757,13 +758,19 @@ begin
   for A in Assigns do
   begin
     if A.Name.ToLower <> VarLow then Continue;
-    // Die Divisions-Zuweisung selbst (gleiche Zeile) tragt die 'div'-RHS -
-    // sie darf die Pruefung nicht scheitern lassen und zaehlt nicht als
-    // vorherige Init.
-    if A.Line = BeforeLine then Continue;
+    // Nur die Divisions-Zuweisung SELBST (Knoten-Identitaet) ist vom
+    // Beweis ausgenommen - sie traegt die 'div'-RHS. Der fruehere
+    // Zeilen-Vergleich (A.Line = BeforeLine) nahm JEDES Statement der
+    // Divisionszeile aus: 'n := 0; x := 100 div n;' auf EINER Zeile
+    // liess das n := 0 unsichtbar, eine fruehere nichtnull-Init
+    // gewann, und ein echter EZeroDivide wurde verschluckt
+    // (Voll-Review 2026-09-12, Major 59 - verletzte den eigenen
+    // Vertrag 'sobald IRGENDEINE Zuweisung nicht beweisbar ist,
+    // brechen wir ab').
+    if A = ADivNode then Continue;
     if not (IsNonZeroIntLiteral(A.TypeRef) or IsClampedNonZero(A.TypeRef)) then
       Exit; // Result bleibt False
-    if A.Line < BeforeLine then FoundPrior := True;
+    if A.Line < ADivNode.Line then FoundPrior := True;
   end;
   Result := FoundPrior;
 end;
@@ -955,8 +962,15 @@ begin
     // Reassign-Pruefung: nkAssign an den Divisor im Rumpf VOR der Division.
     Reassigned := False;
     Lst := MethodNode.FindAllRef(nkAssign);
+    // Same-line-Zuweisungen VOR der Division zaehlen konservativ mit
+    // (N.Line <= DivNode.Line, aber nie der Div-Knoten selbst): der
+    // Einzeiler 'begin n := GetNext; x := t div n end' reassignte den
+    // Divisor unsichtbar - die Suppression blieb und der Fund
+    // verschwand (Voll-Review 2026-09-12, Major 59; Fehltreffer
+    // unterdruecken hier nur NICHT - FP-Richtung, safe).
     for N in Lst do
-      if (N.Line < DivNode.Line) and (N.Name.ToLower = VarLow)
+      if (N.Line <= DivNode.Line) and (N <> DivNode)
+         and (N.Name.ToLower = VarLow)
          and NodeInSubtree(WhileN, N) then
       begin
         Reassigned := True;
@@ -1197,7 +1211,7 @@ begin
       // Ausdruecken belegt (nichtnull-Literale ODER Clamp 'Max(1,..)' G3) - kann
       // an der Divisionsstelle nicht 0 sein. TP-sicher, weil jede nicht-beweisbare
       // Zuweisung die Suppression aufhebt (Real-World-Audit 2026-07-10/-12).
-      if AllAssignmentsProvablyNonZero(MethodNode, Divisor, N.Line) then Continue;
+      if AllAssignmentsProvablyNonZero(MethodNode, Divisor, N) then Continue;
 
       // G5 (#6 CFG-Schlussstueck 2026-07-24): 'if n = 0 then Handle
       // else x := a div n' - die Else-Kante dominiert die Division,
