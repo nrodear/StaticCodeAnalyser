@@ -11,6 +11,8 @@ type
   public
     // --- Treffer ---
     [Test] procedure Test_DottedAssignToOtherForm_Detected;
+    // Voll-Review 2026-09-12 (Major 55): auch LESE-Zugriffe (RHS)
+    [Test] procedure Test_ReadAccessFromOtherForm_Detected;
     [Test] procedure Test_CallOnOtherForm_Detected;
     [Test] procedure Test_DeepDottedPath_Detected;
 
@@ -157,6 +159,33 @@ begin
   F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
   try
     Assert.AreEqual<Integer>(1, Count(F, fkDfmCrossFormCoupling));
+  finally F.Free; end;
+end;
+
+procedure TTestDfmCrossFormCoupling.Test_ReadAccessFromOtherForm_Detected;
+// Voll-Review 2026-09-12 (Major 55): nur LHS und Call-Namen wurden
+// geprueft - 'x := Form2.Edit1.Text;' (RHS in nkAssign.TypeRef) war
+// derselbe Kapselungsbruch und blieb unsichtbar.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TMain = class(TForm) end;'#13#10 +
+  'var Main: TMain;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TMain.Go;'#13#10 +
+  'var x: string;'#13#10 +
+  'begin'#13#10 +
+  '  x := Form2.Edit1.Text;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+const DFM = 'object Main: TMain end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunWithIndex(DFM, PAS_MAIN, PAS_OTHER);
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmCrossFormCoupling),
+      'Lese-Zugriff auf fremde Form ist derselbe Kapselungsbruch');
   finally F.Free; end;
 end;
 
