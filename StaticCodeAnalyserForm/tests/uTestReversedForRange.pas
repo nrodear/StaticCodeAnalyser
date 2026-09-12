@@ -32,6 +32,8 @@ type
     // ---- Finding-Inhalt ---------------------------------------------------
     [Test] procedure Reversed_Finding_KindAndSeverity;
     [Test] procedure Reversed_MultipleHitsInSameMethod_AllReported;
+    // Voll-Review 2026-09-12 (Blocker): do am Zeilenende war blind
+    [Test] procedure Reversed_DoAtLineEnd_Reported;
   end;
 
 implementation
@@ -227,6 +229,38 @@ begin
   try
     Assert.AreEqual<Integer>(3, TFindingHelper.Count(F, fkReversedForRange),
       'Drei reversed-for in einer Methode -> 3 Findings');
+  finally F.Free; end;
+end;
+
+procedure TTestReversedForRange.Reversed_DoAtLineEnd_Reported;
+// Voll-Review 2026-09-12 (Blocker): endete die Zeile exakt mit 'do'
+// (Body auf der Folgezeile - der Standard-Delphi-Stil), verlangte der
+// Wortgrenzen-Guard ein Zeichen HINTER dem do und verwarf den
+// kompletten einzeiligen for-Kopf als 'Range mehrzeilig'. Der
+// klassische downto-vergessen-Bug blieb genau im haeufigsten
+// Formatierungsfall ungemeldet (Bestands-Exe: 0 Funde, empirisch
+// belegt). Alle bisherigen Positiv-Fixtures hatten eine Anweisung
+// hinter dem do auf derselben Zeile - deshalb war die Luecke
+// testgruen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 10 to 1 do'#13#10 +
+  '  begin'#13#10 +
+  '    Bar(i);'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkReversedForRange),
+    'for 10 to 1 mit do am Zeilenende muss gemeldet werden');
   finally F.Free; end;
 end;
 
