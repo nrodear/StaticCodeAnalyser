@@ -133,6 +133,47 @@ var
     Result := MatchKeyword('begin', From);
   end;
 
+  // Matchendes 'end' zum Body-'begin' - mit Tiefenzaehlung und BEIDEN
+  // Wortgrenzen ueber MatchKeyword (Voll-Review 2026-09-12, Blocker):
+  // die fruehere nackte PosEx-Suche prueft nur die RECHTE Grenze und
+  // fand das eingebettete 'end' von 'Append('/'Send(' als Body-Ende -
+  // die Range endete mitten im Bezeichner und das Concat dahinter lag
+  // ausserhalb jeder Range (FN; ironischerweise erzeugte genau das
+  // empfohlene TStringBuilder.Append den blinden Fleck). Scheiterte
+  // der Rechts-Check ('Friends' - 's' folgt), gab es KEINE
+  // Weitersuche: der Header blieb auf dem Stack und das naechste
+  // beliebige 'begin' im File wurde zur Phantom-Range (dieselbe
+  // Fehlerklasse wie der Review-HIGH-Fix 2026-08-08). Und das erste
+  // echte INNERE 'end' (if-Block im Loop) schnitt die Range zu frueh
+  // ab. Tiefe: begin/case/try eroeffnen einen end-pflichtigen Block;
+  // 'record' kommt in Loop-Bodies nicht vor (Code ist gestrippt).
+  function FindMatchingEnd(From: Integer): Integer;
+  var
+    Depth, p : Integer;
+  begin
+    Result := 0;
+    Depth  := 0;
+    p := From;
+    while p <= n do
+    begin
+      if MatchKeyword('begin', p) or MatchKeyword('case', p)
+         or MatchKeyword('try', p) then
+      begin
+        Inc(Depth);
+        Inc(p, WordLen);
+        Continue;
+      end;
+      if MatchKeyword('end', p) then
+      begin
+        if Depth = 0 then Exit(p);
+        Dec(Depth);
+        Inc(p, WordLen);
+        Continue;
+      end;
+      Inc(p);
+    end;
+  end;
+
 begin
   L := LowerCase(Code);
   n := Length(L);
@@ -198,9 +239,8 @@ begin
       if MatchKeyword('begin', i) and (Stack.Count > 0) then
       begin
         var BodyStart := i + 5;
-        var EndPos    := PosEx('end', L, BodyStart);
-        if (EndPos > 0) and
-           ((EndPos + 3 > n) or not IsIdent(L[EndPos + 3])) then
+        var EndPos    := FindMatchingEnd(BodyStart);
+        if EndPos > 0 then
         begin
           R.StartPos := BodyStart;
           R.EndPos   := EndPos - 1;
@@ -209,6 +249,10 @@ begin
           i := EndPos + 3;
           Continue;
         end;
+        // Kein matchendes 'end' bis EOF (kaputtes Fragment): Header
+        // trotzdem verwerfen - sonst wuerde das naechste beliebige
+        // 'begin' im File zur Phantom-Range (Blocker 2026-09-12).
+        Stack.Pop;
       end;
       Inc(i);
     end;
