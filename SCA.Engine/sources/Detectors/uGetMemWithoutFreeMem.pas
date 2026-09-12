@@ -65,6 +65,48 @@ uses
   System.RegularExpressions,
   uFileTextCache, uDetectorUtils;
 
+// Balance-Zaehlung zwischen Handler-Keyword und FreeMem: oeffnende
+// Bloecke (begin/case/try/record) erhoehen, 'end' senkt. Faellt die
+// Tiefe unter 0, hat DIESES end den Handler geschlossen - das FreeMem
+// dahinter gehoert nicht mehr zum Schutzbereich. Geschachtelte
+// Bloecke IM Handler bleiben dagegen gedeckt (Voll-Review 2026-09-12).
+function HandlerGeschlossen(const Snippet: string;
+  AHandlerPos, AFreePos: Integer): Boolean;
+var
+  Teil  : string;
+  Tiefe : Integer;
+  P     : Integer;
+  W     : string;
+  N     : Integer;
+begin
+  Result := False;
+  Teil := LowerCase(Copy(Snippet, AHandlerPos, AFreePos - AHandlerPos));
+  Tiefe := 0;
+  P := 1;
+  N := Length(Teil);
+  while P <= N do
+  begin
+    if TDetectorUtils.IsIdentChar(Teil[P]) then
+    begin
+      W := '';
+      while (P <= N) and TDetectorUtils.IsIdentChar(Teil[P]) do
+      begin
+        W := W + Teil[P];
+        Inc(P);
+      end;
+      if (W = 'begin') or (W = 'case') or (W = 'try') or (W = 'record') then
+        Inc(Tiefe)
+      else if W = 'end' then
+      begin
+        Dec(Tiefe);
+        if Tiefe < 0 then Exit(True);
+      end;
+    end
+    else
+      Inc(P);
+  end;
+end;
+
 class procedure TGetMemWithoutFreeMemDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 const
@@ -208,8 +250,8 @@ begin
       if (ExceptPos > 0) and ((HandlerPos = 0) or (ExceptPos < HandlerPos)) then
         HandlerPos := ExceptPos;
       // ABER: der Handler muss zu einem NOCH OFFENEN try gehoeren.
-      // Liegt zwischen ihm und dem FreeMem ein "end", ist der
-      // geschuetzte Bereich schon zu und das FreeMem steht draussen:
+      // Schliesst zwischen ihm und dem FreeMem ein UNGEDECKTES "end"
+      // den Handler, steht das FreeMem draussen:
       //
       //   try GetMem(p) .. finally LeaveCS(cs); end; FreeMem(p);
       //
@@ -218,9 +260,16 @@ begin
       // (Review 02.09.: ohne diese Bedingung war der Test ein
       // Fehlschluss von "es stand ein Handler davor" auf "das FreeMem
       // gehoert dazu" und entfernte genau solche Funde.)
+      //
+      // GEZAEHLT wird die Balance, nicht 'irgendein end' (Voll-Review
+      // 2026-09-12, Blocker): ein geschachtelter Block IM Handler -
+      // 'finally if Flag then begin Log; end; FreeMem(p); end;' -
+      // traegt sein eigenes end, und das alte Vorkommens-Gate hielt
+      // den Handler damit faelschlich fuer geschlossen und meldete
+      // das Lehrbuch-Muster. Nur ein end, das die Tiefe unter 0
+      // drueckt, schliesst den Handler selbst.
       if (HandlerPos > 0) and (HandlerPos < FreePos)
-         and (TDetectorUtils.FindWholeWordLower('end',
-                Copy(Snippet, HandlerPos, FreePos - HandlerPos)) = 0) then
+         and not HandlerGeschlossen(Snippet, HandlerPos, FreePos) then
         Continue;
 
       LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
