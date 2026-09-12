@@ -178,6 +178,12 @@ type
 function ApplyFailOnPolicy(Raw: Integer; const FailOn: string;
   ReadErrors: Integer): Integer;
 
+// Stack-Reserve aus dem PE-Header von AExePath in MB; 0 wenn die Datei
+// kein lesbarer PE ist. Steht im Interface, damit der Wachposten
+// testbar bleibt (gleiche Begruendung wie bei ApplyFailOnPolicy) - der
+// Vertrag ist an synthetischen PE32- und PE32+-Koepfen gepinnt.
+function PeStackReserveMB(const AExePath: string): Integer;
+
 implementation
 
 // noinspection-file BeginEndRequired, CanBeClassMethod, ConsecutiveSection, DebugOutput, ExceptOnException, GroupedDeclaration, IfElseBegin, InsecureCryptoAlgorithm, NestedRoutine, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedPublicMember
@@ -198,6 +204,92 @@ uses
   uSuppressionTelemetry,              // C.5 Telemetrie
   uGateStats,                         // --gate-stats: gGateHits / GateStatsReport
   uLexer;                             // A.5 Phase 1b-Wiring: gLexerIfdefSkipEnabled etc.
+
+// Liest die Stack-Reserve aus dem PE-Header von AExePath (in MB),
+// 0 wenn der Header nicht lesbar ist. Der Wachposten ruft sie mit
+// ParamStr(0); der Parameter existiert, damit sie testbar ist.
+//
+// WARUM DAS HIER STEHT (Messung 2026-09-12): Delphi ignoriert
+// $MAXSTACKSIZE und <DCC_MaxStackSize>; die Reserve muss nach JEDEM
+// Build per tools/patch-stack-size.ps1 gesetzt werden. Passiert das
+// nicht, sprengen die rekursiven AST-Walks bei tief verschachteltem
+// Real-World-Code den 1-MB-Default - und der Ausfall wird als
+// DATEI-LESEFEHLER verbucht, der Lauf sieht erfolgreich aus.
+//
+// Gemessen an mORMot2 (dieselbe Binaerdatei, nur das PE-Feld anders):
+//   1 MB : 62 Errors / 2390 Warnings / 25611 Hints / 1 Read Error
+//  32 MB : 117 Errors / 4503 Warnings / 45294 Hints / 0 Read Errors
+// Der ungepatchte Lauf verliert also rund 44 % der Funde. Genau so ist
+// 2026-08-02 v0.9.10 ungepatcht ins Release gegangen - der Patch stand
+// nirgends im Ablauf, nur im Gedaechtnis. Diese Warnung macht ihn
+// sichtbar, bevor jemand einer stillen Messung traut.
+function PeStackReserveMB(const AExePath: string): Integer;
+const
+  // Offset der SizeOfStackReserve im Optional-Header, identisch fuer
+  // PE32 und PE32+ (nur die Breite unterscheidet sich) - dieselbe
+  // Rechnung wie in tools/patch-stack-size.ps1.
+  OPT_HEADER_OFFSET   = $18;
+  STACK_RESERVE_DELTA = $48;
+  MAGIC_PE32PLUS      = $20B;
+var
+  Stream : TFileStream;
+  PeOfs  : Integer;
+  Magic  : Word;
+  R32    : Cardinal;
+  R64    : UInt64;
+begin
+  Result := 0;
+  try
+    Stream := TFileStream.Create(AExePath, fmOpenRead or fmShareDenyNone);
+    try
+      Stream.Position := $3C;
+      Stream.ReadBuffer(PeOfs, SizeOf(PeOfs));
+      Stream.Position := PeOfs + OPT_HEADER_OFFSET;
+      Stream.ReadBuffer(Magic, SizeOf(Magic));
+      Stream.Position := PeOfs + OPT_HEADER_OFFSET + STACK_RESERVE_DELTA;
+      if Magic = MAGIC_PE32PLUS then
+      begin
+        Stream.ReadBuffer(R64, SizeOf(R64));
+        Result := Integer(R64 div (1024 * 1024));
+      end
+      else
+      begin
+        Stream.ReadBuffer(R32, SizeOf(R32));
+        Result := Integer(R32 div (1024 * 1024));
+      end;
+    finally
+      Stream.Free;
+    end;
+  // Breit mit Absicht: das hier ist eine DIAGNOSE. Ein gesperrter,
+  // verschobener oder exotisch gelayouteter PE-Header darf den
+  // Analyse-Lauf nicht kosten - im Zweifel schweigt der Wachposten
+  // (Result = 0 unterdrueckt die Warnung) statt zu stoeren.
+  except
+    // noinspection ExceptionTooGeneral
+    on E: Exception do
+      Result := 0;
+  end;
+end;
+
+// Warnt auf stderr, wenn die Reserve unter der Projektschwelle liegt.
+// stderr BEWUSST auch bei --quiet: --quiet unterdrueckt Funde, nicht
+// die Aussage 'dieser Lauf ist moeglicherweise unvollstaendig'.
+procedure WarnBeiKleinemStack;
+const
+  MIN_STACK_MB = 32;
+var
+  MB : Integer;
+begin
+  MB := PeStackReserveMB(ParamStr(0));
+  if (MB <= 0) or (MB >= MIN_STACK_MB) then Exit;
+  WriteLn(ErrOutput, Format(
+    'WARNING: stack reserve is %d MB (expected >= %d MB). Deep recursive ' +
+    'walks can overflow and are booked as read errors - findings may be ' +
+    'MISSING without an obvious failure.', [MB, MIN_STACK_MB]));
+  WriteLn(ErrOutput,
+    '         Fix: tools\patch-stack-size.ps1 "<this exe>"  ' +
+    '(the patch is reset by every build).');
+end;
 
 const
   // Bis zu so vielen gefilterten Dateien werden die Namen genannt; darueber
@@ -1105,6 +1197,9 @@ begin
   end;
   if Args.Help    then begin WriteHelp;    Exit(Integer(cecClean)); end;
   if Args.ShowVersion then begin WriteVersion; Exit(Integer(cecClean)); end;
+
+  // Wachposten VOR dem ersten Scan - s. WarnBeiKleinemStack.
+  WarnBeiKleinemStack;
 
   // Sonar standalone actions - kein Analyse-Run noetig
   if Args.SonarInit then Exit(RunSonarInit(Args));
