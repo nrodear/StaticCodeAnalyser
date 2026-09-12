@@ -54,7 +54,8 @@ implementation
 
 uses
   System.StrUtils,
-  uDetectorUtils;  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
+  uDetectorUtils,  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
+  uAstSpans;       // FindBodyBlock (Voll-Review 2026-09-12)
 
 const
   STRING_TYPES : array[0..5] of string = (
@@ -164,6 +165,15 @@ begin
       // ueberspringen - dort ist const nicht lokal umstellbar (dominante FP-Klasse).
       if PolyNames.Contains(TDetectorUtils.UnqualifiedNameLastLower(M.Name)) then Continue;
       if IsEventHandlerMethod(M) then Continue;
+      // Nur die IMPLEMENTIERUNG melden (Voll-Review 2026-09-12, Major
+      // 50): UnitNode.FindAll(nkMethod) liefert Class-Body-Deklaration
+      // UND Implementierungs-Header - beide tragen die Parameter, und
+      // jeder Treffer wurde DOPPELT gemeldet (Decl-Zeile + Impl-Zeile;
+      // kein Dedup im Nachlauf). Delphi verlangt die Implementierung
+      // in derselben Unit; koerperlose Signaturen (abstract/external/
+      // forward) sind damit ebenfalls draussen - dort waere der
+      // const-Rat ohnehin an der falschen Stelle.
+      if TAstSpans.FindBodyBlock(M) = nil then Continue;
       for P in M.Children do
       begin
         if P.Kind <> nkParam then Continue;
