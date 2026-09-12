@@ -17,9 +17,14 @@ unit uHardcodedString;
 //   Form1.Caption := _(SCaption);             // via dxgettext / TLang.GetString
 //
 // Erkennung (lexisch, narrow):
-//   * Strip Strings + Kommentare NICHT - wir wollen ja die String-Literale
-//     finden. Stattdessen direkt Pattern-Match auf die User-sichtbaren
-//     Properties.
+//   * Kommentare werden ueber TDetectorUtils.StripFileCommentsKeepStrings-
+//     Cached entfernt, die String-Literale bleiben stehen - wir wollen sie
+//     ja finden (Voll-Review 2026-09-12, Major 69: vorher wurden nur
+//     GANZZEILIGE //-Kommentare uebersprungen; auskommentierter Code in
+//     {..}-Bloecken und hinter Trailing-// wurde gemeldet und verstiess
+//     gegen die Projektregel 'Kommentare zaehlen NIE als Code-Use').
+//     Pattern-Match auf die User-sichtbaren Properties im gestrippten
+//     Gesamttext, Quellzeile via LineForChar.
 //   * Pattern: `<ident>.Caption|Hint|Text := '<text>'`
 //     ODER: `ShowMessage|MessageDlg\s*\('<text>'`
 //   * Skip-Conditions:
@@ -59,7 +64,8 @@ implementation
 
 uses
   System.RegularExpressions,
-  uFileTextCache, uRegExMatches;
+  uFileTextCache, uRegExMatches,
+  uDetectorUtils;   // StripFileCommentsKeepStringsCached (Major 69)
 
 const
   // Thread-Fix (2026-08-19): die frueheren unit-vars (CachedReX + Init-Flag)
@@ -67,10 +73,15 @@ const
   // paralleles Match mutierte deren Subject/Offsets. Die Patterns kommen
   // jetzt pro Thread aus TRegExMatches.CachedEx; [roNotEmpty] entspricht
   // exakt dem Default des alten Ein-Arg-TRegEx.Create.
+  // Seit Major 69 laufen die Patterns ueber den GESTRIPPTEN GESAMTTEXT
+  // statt zeilenweise. `[ \t]` statt `\s` und `[^''\n]` statt `[^'']`
+  // konservieren die alte Zeilengrenze: ein Match reicht nie ueber ein
+  // Zeilenende - sonst waere der Umbau eine zweite, ungewollte
+  // Bewegungsrichtung (mehrzeilige Zuweisungen).
   RE_PROPERTY_ASSIGN =
-    '(?i)\.\s*(?:Caption|Hint|Text)\s*:=\s*''([^'']*(?:''''[^'']*)*)''';
+    '(?i)\.[ \t]*(?:Caption|Hint|Text)[ \t]*:=[ \t]*''([^''\n]*(?:''''[^''\n]*)*)''';
   RE_DIALOG_CALL =
-    '(?i)\b(?:ShowMessage|MessageDlg)\s*\(\s*''([^'']*(?:''''[^'']*)*)''';
+    '(?i)\b(?:ShowMessage|MessageDlg)[ \t]*\([ \t]*''([^''\n]*(?:''''[^''\n]*)*)''';
 
 function ContainsLetter(const S: string): Boolean;
 var
@@ -121,53 +132,63 @@ class procedure THardcodedStringDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   Lines    : TStringList;
   Cached   : Boolean;
-  i        : Integer;
-  Line     : string;
+  Code     : string;
+  LineFor  : TArray<Integer>;
   M        : TMatch;
   Lit      : string;
   F        : TLeakFinding;
   RePropertyAssign : TRegEx;
   ReDialogCall     : TRegEx;
+
+  // Quellzeile (1-basiert) zum Match-Anfang; 0 wenn ausserhalb (defensiv,
+  // analog uIfElseBegin - LineForChar traegt je Ergebnis-Zeichen den
+  // 0-basierten Quellzeilen-Index).
+  function ZeileZuMatch(const AMatch: TMatch): Integer;
+  begin
+    if (AMatch.Index >= 1) and (AMatch.Index <= Length(LineFor)) then
+      Result := LineFor[AMatch.Index - 1] + 1
+    else
+      Result := 0;
+  end;
+
 begin
   RePropertyAssign := TRegExMatches.CachedEx(RE_PROPERTY_ASSIGN, [roNotEmpty]);
   ReDialogCall     := TRegExMatches.CachedEx(RE_DIALOG_CALL, [roNotEmpty]);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
-    for i := 0 to Lines.Count - 1 do
+    // Major 69: Kommentare zentral strippen statt nur ganzzeilige
+    // //-Kommentare zu ueberspringen - Strings bleiben stehen, die
+    // Literale sind ja das Suchziel.
+    Code := TDetectorUtils.StripFileCommentsKeepStringsCached(
+      Lines, LineFor, AContext, FileName);
+    for M in RePropertyAssign.Matches(Code) do
     begin
-      Line := Lines[i];
-      // Comment-Skip: einfache Zeilen-Kommentare ueberspringen wir grob.
-      if Trim(Line).StartsWith('//') then Continue;
-
-      for M in RePropertyAssign.Matches(Line) do
-      begin
-        Lit := M.Groups[1].Value;
-        if not ShouldReport(Lit) then Continue;
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := '';
-        F.LineNumber := IntToStr(i + 1);
-        F.MissingVar := Format(
-          'User-visible string %s assigned directly - move to resourcestring / i18n',
-          [QuotedStr(Lit)]);
-        F.SetKind(fkHardcodedString);
-        Results.Add(F);
-      end;
-      for M in ReDialogCall.Matches(Line) do
-      begin
-        Lit := M.Groups[1].Value;
-        if not ShouldReport(Lit) then Continue;
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := '';
-        F.LineNumber := IntToStr(i + 1);
-        F.MissingVar := Format(
-          'User-visible string %s in ShowMessage/MessageDlg - move to resourcestring / i18n',
-          [QuotedStr(Lit)]);
-        F.SetKind(fkHardcodedString);
-        Results.Add(F);
-      end;
+      Lit := M.Groups[1].Value;
+      if not ShouldReport(Lit) then Continue;
+      F            := TLeakFinding.Create;
+      F.FileName   := FileName;
+      F.MethodName := '';
+      F.LineNumber := IntToStr(ZeileZuMatch(M));
+      F.MissingVar := Format(
+        'User-visible string %s assigned directly - move to resourcestring / i18n',
+        [QuotedStr(Lit)]);
+      F.SetKind(fkHardcodedString);
+      Results.Add(F);
+    end;
+    for M in ReDialogCall.Matches(Code) do
+    begin
+      Lit := M.Groups[1].Value;
+      if not ShouldReport(Lit) then Continue;
+      F            := TLeakFinding.Create;
+      F.FileName   := FileName;
+      F.MethodName := '';
+      F.LineNumber := IntToStr(ZeileZuMatch(M));
+      F.MissingVar := Format(
+        'User-visible string %s in ShowMessage/MessageDlg - move to resourcestring / i18n',
+        [QuotedStr(Lit)]);
+      F.SetKind(fkHardcodedString);
+      Results.Add(F);
     end;
   finally
     ReleaseLines(Lines, Cached);

@@ -16,6 +16,9 @@ type
     [Test] procedure SingleCharString_NotReported;
     [Test] procedure NonLetterString_NotReported;
     [Test] procedure Finding_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Major 69): Kommentare zaehlen NIE als Code
+    [Test] procedure BlockComment_NotReported;
+    [Test] procedure TrailingLineComment_NotReported;
   end;
 
 implementation
@@ -130,6 +133,43 @@ begin
       if Fnd.Kind = fkHardcodedString then begin Hit := Fnd; Break; end;
     Assert.IsNotNull(Hit, 'fkHardcodedString finding expected');
     Assert.AreEqual(lsHint, Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedString.BlockComment_NotReported;
+// Voll-Review 2026-09-12 (Major 69): nur GANZZEILIGE //-Kommentare
+// wurden uebersprungen - auskommentierter Code im {..}-Block wurde
+// gemeldet (Bestands-Exe: 1 FP auf dieser Fixture, empirisch belegt;
+// Projektregel 'Kommentare zaehlen NIE als Code-Use').
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  { Form1.Caption := ''Alte Beschriftung''; }'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedString),
+    'auskommentierte Zuweisung im Blockkommentar ist kein Code-Use');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedString.TrailingLineComment_NotReported;
+// Geschwisterfall zu BlockComment_NotReported: der //-Kommentar HINTER
+// Code auf derselben Zeile fiel durch den alten Trim-StartsWith-Skip
+// (Bestands-Exe: 1 FP auf dieser Fixture, empirisch belegt).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  DoIt; // ShowMessage(''Hallo Welt'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedString),
+    'Trailing-Kommentar hinter Code ist kein Code-Use');
   finally F.Free; end;
 end;
 
