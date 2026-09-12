@@ -34,6 +34,9 @@ type
     // supprimieren - die Decl-Aufloesung entscheidet, wem der Ctor gehoert.
     [Test] procedure HomonymRecordClass_CtorDeclResolved_Flagged;
     [Test] procedure HomonymBothDeclareCtor_Suppressed;
+    // Voll-Review 2026-09-12 (Testluecke 104): Self.Create-Delegation
+    [Test] procedure SelfCreateDelegation_NotReported;
+    [Test] procedure NoInheritedNoDelegation_StillReported;
   end;
 
 implementation
@@ -443,6 +446,66 @@ begin
     Assert.AreEqual<Integer>(0,
       TFindingHelper.Count(F, fkConstructorWithoutInherited),
       'beidseitige Ctor-Decl = nicht entscheidbar -> konservativ still');
+  finally F.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.SelfCreateDelegation_NotReported;
+// Testluecke 104 (Voll-Review 2026-09-12): getestet war nur das nackte
+// 'Create' als Delegation; der Zweig fuer 'Self.Create(...)' in
+// CallIsUnqualifiedCreate war ungepinnt. Ein delegierender Konstruktor
+// ruft inherited ueber den Ziel-Konstruktor - kein Fund. An der
+// gebauten Exe verifiziert.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    constructor Create; overload;'#13#10 +
+  '    constructor Create(A: Integer); overload;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  Self.Create(1);'#13#10 +
+  'end;'#13#10 +
+  'constructor TFoo.Create(A: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  inherited Create;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkConstructorWithoutInherited),
+    'Self.Create delegiert - das inherited steht im Ziel-Konstruktor');
+  finally F.Free; end;
+end;
+
+procedure TTestConstructorWithoutInherited.NoInheritedNoDelegation_StillReported;
+// Gegenprobe: ohne inherited UND ohne Delegation bleibt der Fund -
+// sonst koennte der Delegations-Zweig zum Alles-Schlucker werden.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class(TBase)'#13#10 +
+  '  public'#13#10 +
+  '    constructor Create;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TFoo.Create;'#13#10 +
+  'begin'#13#10 +
+  '  FX := 1;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkConstructorWithoutInherited),
+    'ohne inherited und ohne Delegation bleibt es ein Fund');
   finally F.Free; end;
 end;
 
