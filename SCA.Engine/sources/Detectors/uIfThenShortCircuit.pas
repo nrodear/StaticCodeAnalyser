@@ -66,9 +66,17 @@ implementation
 uses
   uAstSpans;   // CollectWithMethodScope (Voll-Review 2026-09-12)
 
-// True wenn S an APos (1-basiert, Zeichen VOR einem '.') rueckwaerts auf
-// das Namens-Segment ASegLow endet und davor eine Segmentgrenze steht -
-// 'math' trifft 'Math.' und 'System.Math.', nicht 'MyMath.'.
+// True wenn S rueckwaerts ab AEnd auf das Namens-Segment ASegLow endet
+// und davor eine Segmentgrenze steht - 'math' trifft 'Math.' und
+// 'System.Math.', nicht 'MyMath.'.
+//
+// AEnd ist der Index des LETZTEN ZEICHENS DES SEGMENTS, nicht der des
+// Punktes dahinter. Bei 'math.ifthen(' also die 4 ('h'), nicht die 5.
+// Genau daran ist die erste Fassung gescheitert: der Aufrufer uebergab
+// die Punkt-Position, der Vergleich las damit 'ath.' statt 'math' und
+// jede qualifizierte Form fiel durch - auch die beiden Bestandstests
+// MathIfThenWithCalls_Reported und StrUtilsIfThenWithCalls_Reported
+// (Testlauf 2026-09-12).
 function EndetAufSegment(const S: string; AEnd: Integer;
   const ASegLow: string): Boolean;
 var
@@ -113,8 +121,9 @@ begin
                        or (Lower[p - 1] = '.')) then
       Ok := True   // bare Form an Wortgrenze
     else if Lower[p - 1] = '.' then
-      Ok := EndetAufSegment(Lower, p - 1, 'math')
-            or EndetAufSegment(Lower, p - 1, 'strutils')
+      // p-2 = letztes Zeichen des Qualifizierers (p-1 ist der Punkt)
+      Ok := EndetAufSegment(Lower, p - 2, 'math')
+            or EndetAufSegment(Lower, p - 2, 'strutils')
     else
       Ok := False; // 'xifthen(' - Teil eines anderen Bezeichners
     if Ok then
