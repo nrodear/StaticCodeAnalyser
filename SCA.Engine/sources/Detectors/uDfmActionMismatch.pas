@@ -1,13 +1,20 @@
 unit uDfmActionMismatch;
 
 // Detektor: Komponente hat sowohl Action- als auch OnClick-Property
-// gesetzt. Wenn Action gesetzt ist, gewinnt das ueber OnClick - der
-// OnClick-Handler wird nie aufgerufen und ist toter Code.
+// gesetzt - mehrdeutige Verdrahtung. Zur Laufzeit gewinnt der
+// EXPLIZITE OnClick-Handler: TControl.Click ruft FOnClick, wenn es
+// zugewiesen ist und nicht auf Action.OnExecute zeigt - erst SONST
+// laeuft ActionLink.Execute (gleiche Logik in TMenuItem.Click). Die
+// Vorfassung dieses Kopfs behauptete das Umgekehrte ('Action
+// gewinnt') - wer dem alten Rat folgte und die OnClick-Zeile aus dem
+// DFM loeschte, AENDERTE das Laufzeitverhalten (Voll-Review
+// 2026-09-12, Major 54; die Fundmenge selbst war und ist richtig -
+// die Doppel-Verdrahtung ist der Smell).
 //
 // Beispiel:
 //   object btnSave: TButton
-//     Action  = ActSave
-//     OnClick = btnSaveClick      // <- niemals gerufen
+//     Action  = ActSave           // <- OnExecute laeuft NICHT
+//     OnClick = btnSaveClick      // <- DAS laeuft zur Laufzeit
 //   end
 //
 // Erkennung: Property 'Action' (pvkIdent, nicht leer) UND 'OnClick'
@@ -59,7 +66,9 @@ begin
       F.MethodName := '';
       F.LineNumber := IntToStr(Clk.Line);
       F.MissingVar := Format(
-        '%s has Action=%s AND OnClick=%s - Action wins, OnClick handler is dead',
+        '%s has Action=%s AND OnClick=%s - ambiguous wiring: the ' +
+        'explicit OnClick overrides the Action''s OnExecute ' +
+        '(TControl.Click) - remove one of the two',
         [N.Name, Act.RawValue, Clk.RawValue]);
       F.SetKind(fkDfmActionMismatch);
       Results.Add(F);
