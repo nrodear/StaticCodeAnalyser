@@ -43,7 +43,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uFileTextCache;
+  uFileTextCache,
+  uDetectorUtils;   // BlankStringLiterals (ParenDelta)
 
 const
   EMIT_SEVERITY = lsHint;
@@ -84,6 +85,84 @@ begin
          or (Lower = 'out') or (Lower = 'inout');
 end;
 
+// Paren-Delta einer Zeile ('(' minus ')'), String-Literale und
+// //-Kommentare ausgenommen, '(*'/'*)'-Delimiter nicht mitgezaehlt.
+// Gleiche Aufgabe wie die Fassung in uConsecutiveSection, aber ueber
+// die geteilte BlankStringLiterals-Infrastruktur statt eines eigenen
+// Quote-Toggles. Hier gebraucht, um OFFENE Parameterlisten
+// mehrzeiliger Methodenkoepfe zu erkennen - deren Fortsetzungszeilen
+// ('B: string;') sind Parameter, keine Felder.
+function ParenDelta(const Line: string): Integer;
+var
+  S    : string;
+  i, n : Integer;
+  p    : Integer;
+begin
+  Result := 0;
+  S := TDetectorUtils.BlankStringLiterals(Line);
+  p := Pos('//', S);
+  if p > 0 then S := Copy(S, 1, p - 1);
+  n := Length(S);
+  for i := 1 to n do
+  begin
+    if (S[i] = '(') and not ((i < n) and (S[i + 1] = '*')) then Inc(Result);
+    if (S[i] = ')') and not ((i > 1) and (S[i - 1] = '*')) then Dec(Result);
+  end;
+end;
+
+type
+  // Sektions-Zustand des zeilenweisen Scans: offene Parameterliste
+  // eines mehrzeiligen Kopfs (InParamList/ParenBal) und laufende
+  // const-/type-Untersektion (InConstType). Als Record gebuendelt,
+  // damit die Nachfuehr-Routine unter der Parameter-Schwelle bleibt.
+  TSectionState = record
+    InParamList : Boolean;
+    ParenBal    : Integer;
+    InConstType : Boolean;
+  end;
+
+// Sektions-Zustand beim Ueberspringen einer Deklarations-Zeile
+// (IsMethodOrPropertyDecl-Treffer) nachfuehren:
+// (a) bleibt die Klammerbilanz der Zeile offen, folgen
+//     Parameterzeilen eines mehrzeiligen Kopfs;
+// (b) 'const'/'type' eroeffnen eine Untersektion - alles bis zum
+//     naechsten Abschnitts-Keyword sind (typisierte) Konstanten bzw.
+//     Typen, keine Felder. 'var' und Methoden-Koepfe beenden sie;
+//     'out'/'inout'/'case'/'strict' (Parameter-Continuation bzw.
+//     Varianten-Teil) lassen sie unveraendert; bei 'class'
+//     entscheidet das zweite Wort ('class const' vs. 'class var').
+procedure TrackDeclLine(const Line, Lower: string; ACol: Integer;
+  var St: TSectionState);
+begin
+  St.ParenBal := ParenDelta(Line);
+  St.InParamList := St.ParenBal > 0;
+  if (Lower = 'const') or (Lower = 'type') then
+    St.InConstType := True
+  else if (Lower = 'var') or (Lower = 'procedure')
+       or (Lower = 'function') or (Lower = 'constructor')
+       or (Lower = 'destructor') or (Lower = 'property') then
+    St.InConstType := False
+  else if Lower = 'class' then
+    St.InConstType := SecondWordIsConstOrType(Line, ACol);
+end;
+
+// Zweites Wort der Zeile hinter dem ersten (ab AFirstCol) ist 'const'
+// oder 'type' - unterscheidet 'class const'/'class type' (eroeffnen
+// eine Konstanten-/Typ-Untersektion) von 'class var'/'class function'
+// (beenden sie).
+function SecondWordIsConstOrType(const Line: string;
+  AFirstCol: Integer): Boolean;
+var
+  p, Dummy : Integer;
+  W2       : string;
+begin
+  p := AFirstCol;
+  while (p <= Length(Line)) and
+        CharInSet(Line[p], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do Inc(p);
+  W2 := LowerCase(ExtractFirstWord(Copy(Line, p, MaxInt), Dummy));
+  Result := (W2 = 'const') or (W2 = 'type');
+end;
+
 class procedure TFieldNameDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -99,15 +178,29 @@ var
   ColonPos    : Integer;
   SemiPos     : Integer;
   FirstChar   : Char;
+  St          : TSectionState;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     InClass     := False;
     InCheckVis  := False;
+    St          := Default(TSectionState);
     for i := 0 to Lines.Count - 1 do
     begin
       Word := ExtractFirstWord(Lines[i], Col);
+      // Offene Parameterliste eines mehrzeiligen Methodenkopfs: alle
+      // Zeilen bis zur schliessenden ')' sind Parameter, keine Felder
+      // ('B: string;' mitten im Kopf passierte bis zum Voll-Review
+      // 2026-09-12 alle Guards -> FP, Blocker). VOR dem Leerwort-Gate:
+      // auch eine Zeile, die mit ')' beginnt (Word=''), muss die
+      // Bilanz nachfuehren.
+      if St.InParamList then
+      begin
+        Inc(St.ParenBal, ParenDelta(Lines[i]));
+        if St.ParenBal <= 0 then St.InParamList := False;
+        Continue;
+      end;
       if Word = '' then Continue;
       Lower := LowerCase(Word);
       // Class/Record startet einen Block
@@ -122,24 +215,42 @@ begin
         // F-Prefix-Regel nicht erfuellen. -> Erst nach explizitem
         // 'private'/'protected' anfangen zu checken.
         InCheckVis := False;
+        St.InConstType := False;
         Continue;
       end;
       if not InClass then Continue;
-      // Visibility-Tracking
-      if Lower = 'private' then begin InCheckVis := True; Continue; end;
-      if Lower = 'protected' then begin InCheckVis := True; Continue; end;
-      if Lower = 'public' then begin InCheckVis := False; Continue; end;
-      if Lower = 'published' then begin InCheckVis := False; Continue; end;
+      // Visibility-Tracking; eine neue Sichtbarkeit beendet auch eine
+      // laufende const-/type-Untersektion (Felder folgen wieder).
+      if Lower = 'private' then
+        begin InCheckVis := True; St.InConstType := False; Continue; end;
+      if Lower = 'protected' then
+        begin InCheckVis := True; St.InConstType := False; Continue; end;
+      if Lower = 'public' then
+        begin InCheckVis := False; St.InConstType := False; Continue; end;
+      if Lower = 'published' then
+        begin InCheckVis := False; St.InConstType := False; Continue; end;
       if Lower = 'strict' then Continue;
       if Lower = 'end' then
       begin
         InClass := False;
         InCheckVis := False;
+        St.InConstType := False;
         Continue;
       end;
       if not InCheckVis then Continue;
-      // Skip method/property/const/type/etc declarations
-      if IsMethodOrPropertyDecl(Lower) then Continue;
+      // Skip method/property/const/type/etc declarations - und dabei
+      // den Sektions-Zustand nachfuehren (Voll-Review 2026-09-12,
+      // Begruendung an TrackDeclLine):
+      if IsMethodOrPropertyDecl(Lower) then
+      begin
+        TrackDeclLine(Lines[i], Lower, Col, St);
+        Continue;
+      end;
+      // Typisierte Konstante bzw. Typ-Deklaration in einer laufenden
+      // const-/type-Untersektion: 'Timeout: Integer = 500;' traegt ':'
+      // und ';' wie ein Feld, ist aber keins (zweite FP-Klasse des
+      // Blockers).
+      if St.InConstType then Continue;
       // Feld-Heuristik: enthaelt `:` und `;`
       trimmed := Lines[i];
       ColonPos := Pos(':', trimmed);
