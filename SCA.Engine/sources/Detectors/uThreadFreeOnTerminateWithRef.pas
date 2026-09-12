@@ -265,9 +265,28 @@ begin
               // spaetere Zuweisung wirkungslos). Der Kopf-Vertrag
               // ('subsequent, Line > Pass-1-Line') verlangt beide.
               if N.Line <= Pair.Value then Continue;
-              // Nur RHS-Reads (N.TypeRef) flaggen - LHS-Property-Assignments
-              // (`<var>.Name := x`) sind Config, kein gefaehrlicher Read.
-              if HasDangerousMemberAccess(N.TypeRef, Pair.Key) then
+              // RHS-Reads (N.TypeRef) UND LHS-Schreibzugriffe (N.Name).
+              //
+              // Der Kommentar hier sagte bis zum Voll-Review 2026-09-12
+              // (Major 83), LHS-Zuweisungen seien 'Config, kein
+              // gefaehrlicher Read', und der LHS-Check war entfernt.
+              // Die Begruendung traegt an DIESER Stelle nicht: Pass 2
+              // sieht ausschliesslich Statements NACH der Aktivierung,
+              // und dort ist ein Schreibzugriff auf ein moeglicherweise
+              // bereits selbstzerstoertes Objekt genauso ein
+              // Use-after-Free wie ein Read. Die FP-Klasse, um die es
+              // 2026-06-21 wirklich ging (Config ZWISCHEN FoT und
+              // Start, Test ConfigBeforeStart_NotReported), faengt seit
+              // Commit c7c20ab das GateLine-Gate - c7c20ab hat den
+              // LHS-Check nur mit-entfernt, statt ihn stehen zu lassen.
+              //
+              // Am Korpus gezaehlt (16.023 Dateien, Shape-Naeherung
+              // '<v>.FreeOnTerminate := True' -> '<v>.Start' -> spaeteres
+              // '<v>.<prop> :='): NULL Vorkommen. Die Rueckkehr des
+              // Checks bewegt dort also nichts - sie schliesst eine
+              // Luecke, die der alte Code vor c7c20ab nicht hatte.
+              if HasDangerousMemberAccess(N.TypeRef, Pair.Key)
+                 or HasDangerousMemberAccess(N.Name, Pair.Key) then
               begin
                 // FP-Gate 2026-07-31 (mutually-exclusive-branches): FoT-
                 // Zuweisung und Zugriff in then- bzw. else-Zweig desselben

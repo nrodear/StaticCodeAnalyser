@@ -19,6 +19,8 @@ type
     [Test] procedure SameThenBranchWithElse_StillReported;
     // Voll-Review 2026-09-12 (Blocker): Zugriff VOR der FoT-Zuweisung
     [Test] procedure AccessBeforeLateFoT_NotReported;
+    // Voll-Review 2026-09-12 (Major 83): Schreibzugriff NACH Start
+    [Test] procedure LhsWriteAfterStart_Reported;
   end;
 
 implementation
@@ -216,6 +218,39 @@ begin
       TFindingHelper.Count(F, fkThreadFreeOnTerminateWithRef),
       'WaitFor VOR der FoT-Zuweisung ist sicher - FoT ist dort noch ' +
       'False, kein Selbstabbau moeglich');
+  finally F.Free; end;
+end;
+
+procedure TTestThreadFreeOnTerminateWithRef.LhsWriteAfterStart_Reported;
+// Voll-Review 2026-09-12 (Major 83): Pass 2 flaggte nur RHS-Reads. Der
+// Kommentar begruendete das mit 'LHS-Assignments sind Config' - das
+// gilt aber nur VOR Start, und genau dieser Fall wird schon vom
+// GateLine-Gate ausgefiltert (s. ConfigBeforeStart_NotReported, das
+// unveraendert gruen bleibt). NACH Start ist ein Schreibzugriff auf
+// ein moeglicherweise selbstzerstoertes Objekt genauso ein
+// Use-after-Free wie ein Read.
+//
+// An der Bestands-Exe belegt: in derselben Routine wird 'x :=
+// T.Priority;' nach Start gemeldet, 'T.OnTerminate := HandleDone;'
+// direkt darueber nicht. Der alte Code VOR Commit c7c20ab meldete
+// beides - c7c20ab hat den LHS-Check beim Einbau des GateLine-Gates
+// mit-entfernt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var T: TMyThread;'#13#10 +
+  'begin'#13#10 +
+  '  T := TMyThread.Create(True);'#13#10 +
+  '  T.FreeOnTerminate := True;'#13#10 +
+  '  T.Start;'#13#10 +
+  '  T.OnTerminate := HandleDone;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkThreadFreeOnTerminateWithRef),
+      'Schreibzugriff nach Start ist ein Use-after-Free-Kandidat');
   finally F.Free; end;
 end;
 
