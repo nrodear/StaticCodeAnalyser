@@ -1,4 +1,4 @@
-unit uTestWithStatement;
+﻿unit uTestWithStatement;
 
 // Tests fuer den TWithStatementDetector (file-basiertes Scanning).
 //
@@ -25,6 +25,9 @@ type
   public
     // ---- Positive Varianten ------------------------------------------------
     [Test] procedure With_SimpleStatement_Reported;
+    // Voll-Review 2026-09-12 (Blocker): Exit am Treffer verlor den
+    // Kommentar-Zustand des Zeilenrests.
+    [Test] procedure With_CommentOpenedAfterHit_NextLineNotScanned;
     [Test] procedure With_NestedWith_OnePerLineRule;
     [Test] procedure With_MultipleStatements_AllReported;
     [Test] procedure With_UppercaseKeyword_StillReported;
@@ -48,6 +51,27 @@ uses
   uTestFindingHelper;
 
 // ---- Positive Varianten ------------------------------------------------------
+
+procedure TTestWithStatement.With_CommentOpenedAfterHit_NextLineNotScanned;
+// 'with L do begin  { alte Notiz' meldet (korrekt) - aber das dahinter
+// GEOEFFNETE '{' muss den Zustand setzen: die auskommentierte
+// Folgezeile 'with M do Add(1); }' darf NICHT melden. Vor dem Fix: 2.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  with L do begin  { alte Notiz'#13#10 +
+  '  with M do Add(1); }'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkWithStatement),
+    'das auskommentierte with der Folgezeile darf nicht melden');
+  finally F.Free; end;
+end;
 
 procedure TTestWithStatement.With_SimpleStatement_Reported;
 const SRC =
