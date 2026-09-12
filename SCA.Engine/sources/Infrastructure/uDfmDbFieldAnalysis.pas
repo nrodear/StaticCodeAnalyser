@@ -51,6 +51,21 @@ function BuildBindingIndex(All: TList<TComponentNode>): TBindingIndex;
 function ResolveDataSetForDataSource(All: TList<TComponentNode>;
   const DataSourceName: string): TComponentNode;
 
+// DFM-Feldname eines TField-Knotens: FieldName-Property (getrimmt,
+// pvkString), Fallback Komponentenname. Gehoben aus
+// uDfmFieldTypeMismatch/uDfmRequiredField (Voll-Review 2026-09-12; die
+// zwei Kopien unterschieden sich nur im Zugriffsstil -
+// TryGetProperty+Kind-Check vs. GetString -, AsString prueft denselben
+// pvkString-Kind, die Semantik ist identisch).
+function DbFieldName(Field: TComponentNode): string;
+
+// DataSet -> DataSource: erste TDataSource-Komponente, deren
+// DataSet-Property (pvkIdent) auf den DataSet zeigt. Typisch 1:1 -
+// es kann mehrere geben, wir nehmen die erste; die offene
+// Multi-DataSource-Frage ist seit der Hebung an EINER Stelle loesbar.
+function FindDataSourceForDataSet(All: TList<TComponentNode>;
+  DataSet: TComponentNode): TComponentNode;
+
 implementation
 
 // noinspection-file ConcatToFormat, CyclomaticComplexity, GroupedDeclaration, MultipleExit, NilComparison, TooLongLine, UnsortedUses
@@ -224,6 +239,25 @@ begin
 
   for N in All do
     if SameText(N.Name, Target) then Exit(N);
+end;
+
+function DbFieldName(Field: TComponentNode): string;
+begin
+  Result := Trim(Field.GetString('FieldName', ''));
+  if Result = '' then
+    Result := Field.Name;       // Fallback: Komponentenname als Field-Hint
+end;
+
+function FindDataSourceForDataSet(All: TList<TComponentNode>;
+  DataSet: TComponentNode): TComponentNode;
+var
+  N: TComponentNode;
+begin
+  Result := nil;
+  for N in All do
+    if IsDataSourceClass(N.ClassRef)
+       and SameText(N.GetIdent('DataSet', ''), DataSet.Name) then
+      Exit(N);
 end;
 
 end.
