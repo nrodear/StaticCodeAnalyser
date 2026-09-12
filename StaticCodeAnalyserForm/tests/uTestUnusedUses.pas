@@ -63,6 +63,10 @@ type
     // Verwendungsnachweis erhalten (Waechter gegen 'Vereinfachung' des
     // Eltern-Loop-Zweigs auf SkipGenericParams).
     [Test] procedure Uses_GenericParentArg_H2_NoFinding;
+    // Voll-Review 2026-09-12 (Major 90): korrigierte KnownIdents-Eintraege
+    [Test] procedure Uses_HashedStringList_H2_NoFinding;
+    [Test] procedure Uses_IdSslIoHandlerSocket_H2_NoFinding;
+    [Test] procedure Uses_UnknownIdentOfMappedUnit_StillReported;
   end;
 
 implementation
@@ -735,6 +739,73 @@ begin
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
       'Generic-Argument der Elternliste ist ein Verwendungsnachweis - ' +
       'System.IniFiles darf nicht als unused gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Uses_HashedStringList_H2_NoFinding;
+// Voll-Review 2026-09-12 (Major 90): in der System.IniFiles-Liste stand
+// 'thashedinitfile' - ein Bezeichner, den es nicht gibt (0 Korpus-
+// treffer). Eine Unit, die aus System.IniFiles nur THashedStringList
+// nutzt (51 Korpustreffer), hatte damit keinen Nachweis und wurde
+// faelschlich als unused gemeldet.
+const SRC =
+  'unit t;'#13#10+
+  'uses System.IniFiles;'#13#10+
+  'implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: THashedStringList;'#13#10+
+  'begin'#13#10+
+  '  L := THashedStringList.Create;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+    'THashedStringList ist der Nachweis fuer System.IniFiles');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Uses_IdSslIoHandlerSocket_H2_NoFinding;
+// Derselbe Defekt in der Indy-Liste: 'tidssliohannlersocketopenssl'
+// (Buchstabendreher) statt TIdSSLIOHandlerSocketOpenSSL - 85
+// Korpustreffer fuer die richtige Schreibweise, 0 fuer die falsche.
+const SRC =
+  'unit t;'#13#10+
+  'uses IdSSLOpenSSL;'#13#10+
+  'implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var H: TIdSSLIOHandlerSocketOpenSSL;'#13#10+
+  'begin'#13#10+
+  '  H := TIdSSLIOHandlerSocketOpenSSL.Create(nil);'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+    'TIdSSLIOHandlerSocketOpenSSL ist der Nachweis fuer IdSSLOpenSSL');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Uses_UnknownIdentOfMappedUnit_StillReported;
+// Gegenrichtung: die Korrektur darf H2 nicht generell entschaerfen.
+// Eine gemappte Unit, aus der KEIN gelisteter Bezeichner vorkommt,
+// bleibt ein Fund.
+const SRC =
+  'unit t;'#13#10+
+  'uses System.IniFiles;'#13#10+
+  'implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  WriteLn(''nichts aus IniFiles'');'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
+    'ohne jeden gelisteten Bezeichner bleibt die Unit unused');
   finally F.Free; end;
 end;
 
