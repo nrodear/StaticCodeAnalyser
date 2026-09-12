@@ -76,26 +76,34 @@ end;
 // Gate endet dann zu frueh und der alte FP bleibt in diesem Exoten.
 // Vor dem Gate meldete JEDE case-Label-Liste (Voll-Review 2026-09-12,
 // Blocker).
-procedure ZaehleBlockwort(const W: string;
-  var CaseDepth, InnerDepth: Integer);
+type
+  // Die zwei Zaehler des case-Gates als EIN Zustand - sie reisen immer
+  // gemeinsam ueber die Zeilen (und halten FindGroupedDecl unter der
+  // eigenen SCA013-Parametergrenze).
+  TCaseGate = record
+    CaseDepth  : Integer;
+    InnerDepth : Integer;
+  end;
+
+procedure ZaehleBlockwort(const W: string; var Gate: TCaseGate);
 begin
   if W = 'case' then
-    Inc(CaseDepth)
+    Inc(Gate.CaseDepth)
   else if (W = 'begin') or (W = 'try') or (W = 'record') then
   begin
-    if CaseDepth > 0 then Inc(InnerDepth);
+    if Gate.CaseDepth > 0 then Inc(Gate.InnerDepth);
   end
   else if W = 'end' then
   begin
-    if CaseDepth = 0 then Exit;
-    if InnerDepth > 0 then Dec(InnerDepth)
-    else Dec(CaseDepth);
+    if Gate.CaseDepth = 0 then Exit;
+    if Gate.InnerDepth > 0 then Dec(Gate.InnerDepth)
+    else Dec(Gate.CaseDepth);
   end;
 end;
 
 function FindGroupedDecl(const Line: string; var InBlockComm: Boolean;
   var InParenStarComm: Boolean; var ParenDepth: Integer;
-  var CaseDepth, InnerDepth: Integer): Integer;
+  var Gate: TCaseGate): Integer;
 type
   TStateKind = (skScan, skAfterIdent, skExpectId2);
 var
@@ -179,8 +187,8 @@ begin
             // case-Gate: Blockwoerter zaehlen; INNERHALB eines case
             // ist 'label1, label2: Anweisung' Syntax, kein Stilmangel.
             Wort := LowerCase(Copy(Line, FirstCol, i - FirstCol));
-            ZaehleBlockwort(Wort, CaseDepth, InnerDepth);
-            if CaseDepth > 0 then
+            ZaehleBlockwort(Wort, Gate);
+            if Gate.CaseDepth > 0 then
             begin
               State := skScan;
               FirstCol := 0; IdCount := 0;
@@ -236,8 +244,8 @@ begin
             j := i;
             while (i <= n) and IsIdent(Line[i]) do Inc(i);
             Wort := LowerCase(Copy(Line, j, i - j));
-            ZaehleBlockwort(Wort, CaseDepth, InnerDepth);
-            if CaseDepth > 0 then
+            ZaehleBlockwort(Wort, Gate);
+            if Gate.CaseDepth > 0 then
             begin
               State := skScan;
               FirstCol := 0; IdCount := 0;
@@ -264,8 +272,7 @@ var
   i, Col : Integer;
   InBlk, InParen : Boolean;
   ParenDepth : Integer;
-  CaseDepth  : Integer;
-  InnerDepth : Integer;
+  Gate       : TCaseGate;
   Cached : Boolean;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
@@ -274,12 +281,10 @@ begin
     InBlk   := False;
     InParen := False;
     ParenDepth := 0;
-    CaseDepth  := 0;
-    InnerDepth := 0;
+    Gate := Default(TCaseGate);
     for i := 0 to Lines.Count - 1 do
     begin
-      Col := FindGroupedDecl(Lines[i], InBlk, InParen, ParenDepth,
-        CaseDepth, InnerDepth);
+      Col := FindGroupedDecl(Lines[i], InBlk, InParen, ParenDepth, Gate);
       if Col <= 0 then Continue;
       Results.Add(TLeakFinding.New(FileName, '', i + 1,
         Format('Grouped declaration at column %d (`A, B: Type`) - split ' +
