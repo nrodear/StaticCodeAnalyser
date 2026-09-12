@@ -23,6 +23,10 @@ type
     [Test] procedure Todo_BraceComment_ReportsHint;
     [Test] procedure Todo_MultilineBraceComment_ReportsHint;
     [Test] procedure Todo_TodoInsideStringLiteral_NoFinding;
+    // Voll-Review 2026-09-12 (Blocker): die Suche lief hinter einem
+    // geschlossenen { } weiter und traf Strings/Code dahinter.
+    [Test] procedure Todo_StringBehindClosedBrace_NoFinding;
+    [Test] procedure Todo_SecondCommentOnLine_StillReported;
     [Test] procedure Todo_TodoAsIdentifier_NoFinding;
     [Test] procedure Todo_LowercaseMarker_StillReported;
     [Test] procedure Todo_NoMarker_NoFinding;
@@ -124,6 +128,44 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTodoComment));
+  finally F.Free; end;
+end;
+
+procedure TTestTodoComment.Todo_StringBehindClosedBrace_NoFinding;
+// 'x := 1; { init } s := ''TODO: nicht vergessen'';' - der Kommentar
+// endet am '}', das TODO steht in einem STRING dahinter. Vor dem Fix
+// durchsuchte FindMarkerInComment die ganze Restzeile und meldete.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var s: string; x: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  x := 1; { init } s := ''TODO: nicht vergessen'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTodoComment),
+    'ein TODO im String hinter einem geschlossenen Kommentar ist keins');
+  finally F.Free; end;
+end;
+
+procedure TTestTodoComment.Todo_SecondCommentOnLine_StillReported;
+// Die Gegenrichtung der Segment-Schleife: nach einem geschlossenen
+// { init } muss ein ECHTER Marker im ZWEITEN Kommentar derselben
+// Zeile weiterhin gefunden werden.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  x := 1; { init } // TODO: spaeter aufraeumen'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTodoComment),
+    'der Marker im zweiten Kommentar der Zeile muss melden');
   finally F.Free; end;
 end;
 

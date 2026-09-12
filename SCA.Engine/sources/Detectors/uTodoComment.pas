@@ -63,20 +63,32 @@ const
 // IsIdentChar siehe uDetectorUtils.TDetectorUtils.IsIdentChar - lokal entfernt
 // (Duplikat). Aufrufer unten verwenden den Klassen-Helfer direkt.
 
-function ScanLineCommentStart(const Line: string;
-  var InBlockComm: Boolean): Integer;
+function ScanLineCommentStart(const Line: string; AFrom: Integer;
+  var InBlockComm: Boolean; out AEnd, ANext: Integer): Integer;
 // Liefert die 1-basierte Spalte ab der ein Kommentar beginnt (inkl. der
-// Marker '//' oder '{'). 0 falls kein Kommentar in dieser Zeile startet.
+// Marker '//' oder '{'), gesucht AB AFrom. 0 falls keiner mehr startet.
 // Ueberspringt Pascal-String-Literale ('...' inkl. doppelter '' Escapes)
 // damit ''// in einem String'' nicht faelschlich als Kommentar gilt.
+//
+// AEnd  = letzte Spalte, die noch ZUM Kommentar gehoert (bei '//' und
+//         offenem '{' das Zeilenende). Die Marker-Suche darf nicht
+//         darueber hinaus - vor dem Voll-Review 2026-09-12 (Blocker)
+//         wurde nach einem GESCHLOSSENEN '{ init }' der Rest der Zeile
+//         als Kommentar durchsucht, und ein TODO in einem
+//         String-Literal dahinter meldete.
+// ANext = erste Spalte HINTER dem Kommentar (0 = Zeile zu Ende) - dort
+//         setzt der Aufrufer die Segment-Schleife fort.
 var
   i, n   : Integer;
   InStr  : Boolean;
   pClose : Integer;
 begin
   Result := 0;
+  AEnd   := 0;
+  ANext  := 0;
   InStr  := False;
-  i := 1;
+  i := AFrom;
+  if i < 1 then i := 1;
   n := Length(Line);
   while i <= n do
   begin
@@ -107,6 +119,8 @@ begin
           if (i < n) and (Line[i+1] = '/') then
           begin
             Result := i;
+            AEnd   := n;
+            ANext  := 0;
             Exit;
           end;
           Inc(i);
@@ -116,7 +130,18 @@ begin
           Result := i;
           pClose := Pos('}', Line, i + 1);
           if pClose = 0 then
+          begin
             InBlockComm := True;
+            AEnd  := n;
+            ANext := 0;
+          end
+          else
+          begin
+            // GESCHLOSSENES Segment: Suche endet am '}', der Rest der
+            // Zeile gehoert dem Aufrufer (Segment-Schleife).
+            AEnd  := pClose;
+            ANext := pClose + 1;
+          end;
           Exit;
         end;
     else
@@ -156,9 +181,12 @@ begin
 end;
 
 function FindMarkerInComment(const Line: string;
-  CommentStart: Integer; out Marker: string;
+  CommentStart, CommentEnd: Integer; out Marker: string;
   out MarkerPos: Integer): Boolean;
-// Sucht den ersten Marker im Bereich [CommentStart..End-of-Line].
+// Sucht den ersten Marker im Bereich [CommentStart..CommentEnd] -
+// NICHT bis zum Zeilenende: hinter einem geschlossenen '{ ... }' kann
+// Code oder ein String-Literal stehen (Voll-Review 2026-09-12,
+// Blocker).
 //
 // FP-Schutz fuer Datei-/Pfad-Referenzen wie 'todo-sonar.md', 'todo.md':
 // nach dem Marker direkt ein '-' oder '.' (ohne Whitespace) deutet auf
@@ -173,7 +201,7 @@ begin
   for M in MARKERS do
   begin
     p := CommentStart;
-    while p <= Length(Line) - Length(M) + 1 do
+    while p <= CommentEnd - Length(M) + 1 do
     begin
       // Marker aus NUR_GROSS zaehlen nur in exakter Schreibweise,
       // s. Begruendung an der Tabelle.
@@ -245,6 +273,9 @@ var
   i, p        : Integer;
   InBlockComm : Boolean;   // {...}-Block ueber mehrere Zeilen
   CommentAt   : Integer;   // Spalte ab der Kommentar beginnt (1-basiert)
+  CommentEnd  : Integer;   // letzte Spalte des Kommentar-Segments
+  ScanFrom    : Integer;   // Fortsetzung der Segment-Schleife (0 = fertig)
+  Treffer     : Boolean;
   Marker      : string;
   MarkerPos   : Integer;
   Snippet     : string;
@@ -258,27 +289,50 @@ begin
     for i := 0 to Lines.Count - 1 do
     begin
       Line := Lines[i];
+      Treffer  := False;
+      ScanFrom := 1;
 
       if InBlockComm then
       begin
-        // Kompletter Zeilenanfang ist Kommentar bis '}' oder Zeilenende
+        // Zeilenanfang ist Fortsetzung eines offenen Blockkommentars -
+        // er endet am '}' oder mit der Zeile. Der Rest der Zeile
+        // gehoert danach der Segment-Schleife (vorher wurde er als
+        // Kommentar weiterdurchsucht - Blocker s. Scanner-Kommentar).
         CommentAt := 1;
         p := Pos('}', Line);
         if p > 0 then
+        begin
+          CommentEnd := p;
+          ScanFrom   := p + 1;
           InBlockComm := False;
-      end
-      else
-      begin
-        // String-aware Scan: ueberspringt Apostroph-Literale damit
-        // 'foo // bar' den '// bar' nicht als Kommentar ansieht.
-        CommentAt := ScanLineCommentStart(Line, InBlockComm);
+        end
+        else
+        begin
+          CommentEnd := Length(Line);
+          ScanFrom   := 0;
+        end;
+        Treffer := FindMarkerInComment(Line, CommentAt, CommentEnd,
+          Marker, MarkerPos);
       end;
 
-      if CommentAt = 0 then Continue;
-
-      if FindMarkerInComment(Line, CommentAt, Marker, MarkerPos) then
+      // Segment-Schleife: eine Zeile kann MEHRERE Kommentare tragen
+      // ('x := 1; { init } y := 2; // TODO spaeter'). Gemeldet wird wie
+      // bisher hoechstens EIN Fund je Zeile - der erste Marker.
+      while (not Treffer) and (ScanFrom > 0) do
       begin
-        // Snippet ab dem Marker bis Zeilenende, Whitespace getrimmt
+        CommentAt := ScanLineCommentStart(Line, ScanFrom, InBlockComm,
+          CommentEnd, ScanFrom);
+        if CommentAt = 0 then Break;
+        Treffer := FindMarkerInComment(Line, CommentAt, CommentEnd,
+          Marker, MarkerPos);
+      end;
+
+      if Treffer then
+      begin
+        // Snippet ab dem Marker bis Zeilenende, Whitespace getrimmt -
+        // BEWUSST unveraendert bis Zeilenende (nicht bis CommentEnd):
+        // der Text ist Teil der Fund-Identitaet, eine Kappung haette
+        // alle Bestandsfunde mit Kommentar-plus-Code-Zeilen bewegt.
         Snippet := Trim(Copy(Line, MarkerPos, MaxInt));
         if Length(Snippet) > 60 then
           Snippet := Copy(Snippet, 1, 57) + '...';
