@@ -66,6 +66,11 @@ var
   HasIface  : Boolean;
   HasImpl   : Boolean;
   HasDecl   : Boolean;
+  // Kommentar-Zustand ueber Zeilen (Voll-Review 2026-09-12,
+  // Minor 246) - s. Begruendung an der Auswertung unten.
+  ScanState : TCommentScanState;
+  DummyCol  : Integer;
+  Code      : string;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
@@ -74,6 +79,7 @@ begin
     HasIface := False;
     HasImpl  := False;
     HasDecl  := False;
+    ScanState := Default(TCommentScanState);
     for i := 0 to Lines.Count - 1 do
     begin
       // {$I ...}/{$INCLUDE ...} zaehlt als Inhalt (Voll-Review
@@ -85,7 +91,18 @@ begin
       L := TrimLeft(Lines[i]);
       if (Copy(L, 1, 3) = '{$I') or (Copy(L, 1, 3) = '{$i') then
         HasDecl := True;
-      Word := ExtractFirstWord(Lines[i]);
+      // Die Auswertung laeuft auf der KOMMENTBEREINIGTEN Zeile - der
+      // Kopf verspricht das seit jeher, die Umsetzung las bis zum
+      // Voll-Review 2026-09-12 die Rohzeile (Minor 246). Eine leere
+      // Unit, in deren Kopfkommentar irgendwo "procedure Foo;" steht,
+      // galt damit als gefuellt und wurde nie gemeldet.
+      //
+      // Die {$I-Pruefung oben bleibt bewusst auf der ROHZEILE:
+      // Compiler-Direktiven stehen in geschweiften Klammern und
+      // wuerden vom Kommentar-Scanner mit ausgeblendet - der
+      // Include-Schutz aus Major 60 ginge sonst verloren.
+      Code := TDetectorUtils.ScanCodeLine(Lines[i], ScanState, DummyCol);
+      Word := ExtractFirstWord(Code);
       if Word = '' then Continue;
       L := LowerCase(Word);
       if L = 'unit' then HasUnit := True
