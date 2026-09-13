@@ -60,25 +60,15 @@ end;
 
 function FieldName(Field: TComponentNode): string;
 begin
-  Result := Trim(Field.GetString('FieldName', ''));
-  if Result = '' then
-    Result := Field.Name;       // Fallback: Komponentenname als Field-Hint
+  // Voll-Review 2026-09-12: zentral (uDfmDbFieldAnalysis).
+  Result := DbFieldName(Field);
 end;
 
 function FindDataSourceForDataSet(All: TList<TComponentNode>;
   DataSet: TComponentNode): TComponentNode;
-// DataSet -> DataSource: irgendeine TDataSource-Komponente, deren
-// DataSet-Property auf den DataSet zeigt. Es kann mehrere geben; wir
-// nehmen die erste, die wir finden (typisch ist 1:1 - eine DataSource
-// pro DataSet).
-var
-  N: TComponentNode;
 begin
-  Result := nil;
-  for N in All do
-    if IsDataSourceClass(N.ClassRef)
-       and SameText(N.GetIdent('DataSet', ''), DataSet.Name) then
-      Exit(N);
+  // Voll-Review 2026-09-12: zentral (uDfmDbFieldAnalysis).
+  Result := uDfmDbFieldAnalysis.FindDataSourceForDataSet(All, DataSet);
 end;
 
 class procedure TDfmRequiredFieldDetector.Analyze(Graph: TComponentGraph;

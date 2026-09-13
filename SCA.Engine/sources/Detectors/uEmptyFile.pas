@@ -33,30 +33,16 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uFileTextCache;
-
-const
-  EMIT_SEVERITY = lsHint;
+  uFileTextCache,
+  uDetectorUtils;   // ExtractFirstWord (Voll-Review 2026-09-12)
 
 function ExtractFirstWord(const Line: string): string;
 var
-  i, n, wStart : Integer;
-  c            : Char;
+  Dummy : Integer;
 begin
-  Result := '';
-  n := Length(Line);
-  i := 1;
-  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
-  if i > n then Exit;
-  c := Line[i];
-  if c = '{' then Exit;
-  if (c = '/') and (i < n) and (Line[i + 1] = '/') then Exit;
-  if (c = '(') and (i < n) and (Line[i + 1] = '*') then Exit;
-  if not CharInSet(c, ['A'..'Z','a'..'z','_']) then Exit;
-  wStart := i;
-  while (i <= n) and CharInSet(Line[i], ['A'..'Z','a'..'z','0'..'9','_']) do
-    Inc(i);
-  Result := Copy(Line, wStart, i - wStart);
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.ExtractFirstWord);
+  // diese Unit braucht die Spalte nicht.
+  Result := TDetectorUtils.ExtractFirstWord(Line, Dummy);
 end;
 
 function IsDeclarationKw(const Lower: string): Boolean; inline;
@@ -90,12 +76,28 @@ begin
     HasDecl  := False;
     for i := 0 to Lines.Count - 1 do
     begin
+      // {$I ...}/{$INCLUDE ...} zaehlt als Inhalt (Voll-Review
+      // 2026-09-12, Major 60): eine Unit, deren Deklarationen aus
+      // einem Include kommen ('interface {$I decls.inc}
+      // implementation end.'), ist NICHT leer - die Loeschempfehlung
+      // braeche den Build. ExtractFirstWord liefert fuer '{'-Zeilen
+      // leer, deshalb der eigene Check auf der Rohzeile.
+      L := TrimLeft(Lines[i]);
+      if (Copy(L, 1, 3) = '{$I') or (Copy(L, 1, 3) = '{$i') then
+        HasDecl := True;
       Word := ExtractFirstWord(Lines[i]);
       if Word = '' then Continue;
       L := LowerCase(Word);
       if L = 'unit' then HasUnit := True
       else if L = 'interface' then HasIface := True
       else if L = 'implementation' then HasImpl := True
+      // initialization/finalization-Bloecke leisten Arbeit
+      // (Registrierungs-Units!) - 'delete the file' braeche das
+      // Programm; ihr blosses Vorhandensein zaehlt als Inhalt
+      // (Voll-Review 2026-09-12, Major 60). 'begin' faengt die
+      // Kurzform 'begin ... end.' des Hauptblocks.
+      else if (L = 'initialization') or (L = 'finalization')
+           or (L = 'begin') then HasDecl := True
       else if IsDeclarationKw(L) then HasDecl := True;
     end;
     // Es muss eine echte Unit sein UND keine Deklaration enthalten

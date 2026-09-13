@@ -17,6 +17,10 @@ type
   TTestFormatMismatch = class
   public
     [Test] procedure Format_MorePlaceholdersThanArgs_ReportsError;
+    // Voll-Review 2026-09-12 (2 Blocker): Erste-Treffer-Maskierung
+    // und die entgrenzte '['-Suche hinter dem Call-Ende.
+    [Test] procedure Format_InsideWrapperCall_InnerMismatchReported;
+    [Test] procedure Format_OpenArrayPlusIndexerBehind_NoFinding;
     [Test] procedure Format_MoreArgsThanPlaceholders_ReportsError;
     [Test] procedure Format_Matching_NoFinding;
     [Test] procedure Format_EscapedPercent_NotCounted;
@@ -127,6 +131,47 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFormatMismatch),
       '2 Platzhalter, 1 Argument – Error');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatch.Format_InsideWrapperCall_InnerMismatchReported;
+// s := LogFormat(Format('%s %d', [a])): Pos('format(') trifft zuerst
+// INNERHALB von 'logformat(' - das alte Continue sprang zum naechsten
+// Listeneintrag und der echte innere Mismatch blieb unsichtbar. Die
+// Vorkommens-Schleife muss weiterlaufen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar(a: string);'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := LogFormat(Format(''%s %d'', [a]));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkFormatMismatch) >= 1,
+      'der Wrapper-Name darf den inneren Format-Mismatch nicht maskieren');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatch.Format_OpenArrayPlusIndexerBehind_NoFinding;
+// Format(fmt, Args) + Items[0]: Args ist ein Open-Array (-1, nicht
+// zaehlbar). Die alte '['-Suche lief ueber das Call-Ende hinaus,
+// zaehlte Items[0] als das Argument-Array und meldete einen
+// Fehlfund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.Bar(const fmt: string; const Args: array of const): string;'#13#10+
+  'begin'#13#10+
+  '  Result := Format(fmt, Args) + Items[0];'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
+      'ein fremdes [ hinter dem Call-Ende ist kein Argument-Array');
   finally F.Free; end;
 end;
 

@@ -33,6 +33,34 @@
 //     (case-insensitive): `AnsiString(`, `RawByteString(`, `ShortString(`
 //   * Skip-Heuristik: Argument ist leerer String-Literal ('')
 //
+// PREFIX-MATCH: die FN-Klasse und warum sie (noch) steht
+// (Voll-Review 2026-09-12, Major 85)
+//   Der Match greift nur am ANFANG von nkCall.Name bzw. nkAssign.TypeRef.
+//   Der Parser legt je Statement genau EINEN Knoten an und faltet
+//   Argumente als Text in den Namen (ParseCallOrAssign / ParsePrimary),
+//   es gibt also keine Unterknoten fuer Teilausdruecke. Damit sind zwei
+//   haeufige Formen systematisch blind:
+//     SaveToFile(AnsiString(u));        // Cast in ARGUMENT-Position
+//     a := 'x' + AnsiString(u);         // Cast MITTEN im RHS
+//   Beide sind an der Bestands-Exe als Nicht-Funde belegt, waehrend die
+//   Zuweisungsform derselben Zeile gemeldet wird.
+//
+//   Das ist KEINE gute Grenze, nur eine bewusst noch nicht gezogene:
+//   ein Substring-Scan mit linker Wortgrenze wuerde sie schliessen. Er
+//   ist hier bewusst NICHT eingebaut, weil er ein RECALL-PAKET ist -
+//   am Korpus gezaehlt (16.023 Dateien, Shape-Naeherung): 881 Casts
+//   stehen am Statement-/RHS-Anfang, 1.828 nicht. Die Regel wuerde sich
+//   also verdreifachen. Solche Bewegungen bekommen im Projekt einen
+//   eigenen Zweig und einen eigenen Bau, sonst ueberdecken sie jeden
+//   anderen Vertrag der Charge - und die 1.828 brauchen vorher eine
+//   FP-Stichprobe (Alcinoe faehrt A-Suffix-Helfer, die schon heute die
+//   ASCII_SAFE_OPERAND_PREFIXES-Liste fuellen).
+//
+//   Die zwei Formen sind als dokumentierende Tests festgehalten
+//   (ArgumentPositionCast_NotReported_KnownLimit,
+//   MidRhsCast_NotReported_KnownLimit) - faellt die Grenze, werden sie
+//   rot und muessen bewusst umgestellt werden.
+//
 // Bewusste False-Positives (akzeptabel):
 //   * `AnsiString(<expr>)` wenn <expr> bereits AnsiString ist (redundanter
 //     Cast) - signalisiert Verwirrung oder Konversion zwischen Code-Pages.
@@ -60,6 +88,9 @@ implementation
 
 // noinspection-file BeginEndRequired, GroupedDeclaration, RedundantJump, TooLongLine, UnsortedUses
 // noinspection-file UnusedParameter
+uses
+  uAstSpans;   // CollectWithMethodScope (Voll-Review 2026-09-12)
+
 // AContext ist der Kontext-Parameter aus der AddD-Registrierung (B10, 2026-08-16).
 // Er wird HIER bewusst noch nicht gelesen: die Umstellung ist ein eigener,
 // verhaltensneutraler Schritt VOR der Regelaenderung, die ihn braucht - so
@@ -295,46 +326,27 @@ begin
   Results.Add(F);
 end;
 
-procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
+procedure WalkAndCheck(Node: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
-// Hardening v4: iterative DFS - siehe Audit_jvcl_segfault.
-type TFrame = record N, M: TAstNode; end;
+// Seit Voll-Review 2026-09-12 ueber den zentralen Scope-Walk
+// (TAstSpans.CollectWithMethodScope) - Mechanik, Besuchsreihenfolge
+// und Hardening v4 (iterative DFS, Audit_jvcl_segfault) identisch
+// zur frueheren lokalen Kopie.
 var
-  Stack : TList<TFrame>;
-  Cur, F : TFrame;
-  i      : Integer;
-  NextMeth : TAstNode;
+  P : TNodeScopePair;
 begin
-  if Node = nil then Exit;
-  Stack := TList<TFrame>.Create;
-  try
-    F.N := Node; F.M := CurrentMethod;
-    Stack.Add(F);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      case Cur.N.Kind of
-        nkCall:   CheckCastText(Cur.N.Name,    Cur.N, Cur.M, FileName, Results);
-        nkAssign: CheckCastText(Cur.N.TypeRef, Cur.N, Cur.M, FileName, Results);
-      end;
-      if Cur.N.Kind = nkMethod then NextMeth := Cur.N else NextMeth := Cur.M;
-      for i := Cur.N.Children.Count - 1 downto 0 do
-      begin
-        F.N := Cur.N.Children[i]; F.M := NextMeth;
-        Stack.Add(F);
-      end;
+  for P in TAstSpans.CollectWithMethodScope(Node, [nkCall, nkAssign]) do
+    case P.Node.Kind of
+      nkCall:   CheckCastText(P.Node.Name,    P.Node, P.Method, FileName, Results);
+      nkAssign: CheckCastText(P.Node.TypeRef, P.Node, P.Method, FileName, Results);
     end;
-  finally
-    Stack.Free;
-  end;
 end;
 
 class procedure TUnicodeToAnsiCastDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext);
 begin
-  WalkAndCheck(UnitNode, nil, FileName, Results);
+  WalkAndCheck(UnitNode, FileName, Results);
 end;
 
 end.

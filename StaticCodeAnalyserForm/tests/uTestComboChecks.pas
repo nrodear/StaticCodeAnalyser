@@ -36,6 +36,12 @@ type
     [Test] procedure DivByZero_LiteralZero_ReportsError;
     [Test] procedure DivByZero_ParamWithoutGuard_ReportsWarning;
     [Test] procedure DivByZero_ParamWithGuard_NoFinding;
+    // Voll-Review 2026-09-12 (Blocker): if und Division auf EINER
+    // Zeile - der reine Zeilenvergleich uebersprang den Guard.
+    [Test] procedure DivByZero_OneLineGuard_NoFinding;
+    [Test] procedure DivByZero_OneLineIfWithoutZeroGuard_StillReported;
+    // Voll-Review 2026-09-12 (Major 59): Knoten- statt Zeilen-Vergleich
+    [Test] procedure DivByZero_SameLineZeroAssign_StillReported;
     [Test] procedure DivByZero_LocalVarWithoutGuard_ReportsWarning;
     [Test] procedure DivByZero_NonIntegerType_NoFinding;
     // DeadCode
@@ -78,6 +84,8 @@ type
     // Coverage-Aufholjagd fuer die Schwaechsten 5
     [Test] procedure Suppression_NoinspectionCyclomaticComplexity_FiltersFinding;
     [Test] procedure Suppression_NoinspectionHardcodedPath_FiltersFinding;
+    // Voll-Review 2026-09-12 (Major 66): Pfade in const-Bindungen
+    [Test] procedure HardcodedPath_InConstDeclaration_Reported;
     [Test] procedure Suppression_NoinspectionHardcodedSecret_FiltersFinding;
     [Test] procedure Suppression_NoinspectionSQLInjection_FiltersFinding;
     // DetectorMinSeverity - Post-Filter ueber TStaticAnalyzer2
@@ -366,6 +374,73 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
       'Guard if Count > 0 – kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestNewChecks.DivByZero_OneLineGuard_NoFinding;
+// Das Einzeiler-Idiom: 'if n <> 0 then x := t div n;' - if und
+// Division teilen die Zeile (IfN.Line = DivNode.Line). Vor dem Fix
+// uebersprang HasGuardingIf den Guard per >= und meldete lsWarning
+// auf korrekt geschuetztem Code.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.Teile(t, n: Integer): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  if n <> 0 then Result := t div n;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+      'Einzeiler-Guard schuetzt die Division auf derselben Zeile');
+  finally F.Free; end;
+end;
+
+procedure TTestNewChecks.DivByZero_SameLineZeroAssign_StillReported;
+// Voll-Review 2026-09-12 (Major 59): der Zeilen-Skip in
+// AllAssignmentsProvablyNonZero nahm JEDES Statement der
+// Divisionszeile aus - 'n := 0; x := 100 div n;' auf EINER Zeile
+// liess das n := 0 unsichtbar, die fruehere nichtnull-Init gewann und
+// der garantierte EZeroDivide wurde verschluckt (Bestands-Exe: 0
+// Funde, empirisch belegt, dz1.pas). Jetzt ist nur der
+// Divisions-KNOTEN selbst ausgenommen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Kaputt;'#13#10+
+  'var n, x: Integer;'#13#10+
+  'begin'#13#10+
+  '  n := 1;'#13#10+
+  '  n := 0; x := 100 div n;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+      'n := 0 auf der Divisionszeile bricht den Nichtnull-Beweis - ' +
+      'der Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestNewChecks.DivByZero_OneLineIfWithoutZeroGuard_StillReported;
+// Gegenprobe zur Gleiche-Zeile-Regel: ein if OHNE Null-Bedingung auf
+// derselben Zeile darf NICHT als Guard zaehlen - sonst waere jedes
+// 'if b then x := t div n;' still.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.Teile(t, n: Integer; b: Boolean): Integer;'#13#10+
+  'begin'#13#10+
+  '  Result := 0;'#13#10+
+  '  if b then Result := t div n;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkDivByZero) >= 1,
+      'ein Nicht-Null-if auf derselben Zeile ist kein Guard');
   finally F.Free; end;
 end;
 
@@ -1031,6 +1106,32 @@ begin
   finally
     if FileExists(FName) then DeleteFile(FName);
   end;
+end;
+
+procedure TTestNewChecks.HardcodedPath_InConstDeclaration_Reported;
+// Voll-Review 2026-09-12 (Major 66): 'const DEFAULT_LOG = ''C:\...'';'
+// erzeugt weder nkAssign noch nkCall - der klassischste Ort fuer
+// hardkodierte Pfade blieb unsichtbar (Bestands-Exe: 0 Funde,
+// empirisch belegt, hp1.pas). Jetzt werden nkField/nkLocalVar
+// (Konstanten-Bindungen im TypeRef) mitgescannt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'const'#13#10 +
+  '  DEFAULT_LOG = ''C:\ProgramData\app.log'';'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  // FindingsOf, NICHT FindingsOfFile: THardcodedPathDetector ist nur im
+  // AST-Harness registriert (uTestFindingHelper Z.164). Mit
+  // FindingsOfFile laeuft der Detektor gar nicht und der Test misst 0,
+  // obwohl die CLI den Fund liefert (Testlauf 2026-09-12).
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedPath),
+      'die const-Bindung ist der Standardort fuer hardkodierte Pfade');
+  finally F.Free; end;
 end;
 
 procedure TTestNewChecks.Suppression_NoinspectionHardcodedPath_FiltersFinding;

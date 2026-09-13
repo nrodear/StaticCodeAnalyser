@@ -12,6 +12,8 @@ type
     [Test] procedure FreeAlone_NoFinding;
     [Test] procedure FreeAndNilOnNextLine_Reported;
     [Test] procedure DifferentReceiver_NoFinding;
+    // Voll-Review 2026-09-12 (Blocker): kein Blockkommentar-Tracking.
+    [Test] procedure PatternInsideBlockComment_NoFinding;
     [Test] procedure FreeAndNilHint_KindAndSeverity;
   end;
 
@@ -61,6 +63,29 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFreeAndNilHint));
+  finally F.Free; end;
+end;
+
+procedure TTestFreeAndNilHint.PatternInsideBlockComment_NoFinding;
+// Mehrzeilig auskommentierter Alt-Code lieferte vor dem Fix einen
+// Fund - der Roh-Scan kannte keinen Blockkommentar-Zustand
+// (Projekt-Invariante: Kommentare zaehlen NIE als Code-Use).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  { Alte Version:'#13#10 +
+  '  FConn.Free;'#13#10 +
+  '  FConn := nil;'#13#10 +
+  '  }'#13#10 +
+  '  DoNew;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkFreeAndNilHint),
+    'auskommentierter Alt-Code darf keinen FreeAndNil-Hinweis melden');
   finally F.Free; end;
 end;
 

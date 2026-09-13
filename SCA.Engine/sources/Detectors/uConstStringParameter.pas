@@ -54,7 +54,8 @@ implementation
 
 uses
   System.StrUtils,
-  uDetectorUtils;  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
+  uDetectorUtils,  // UnqualifiedNameLast (Restschulden-Audit 2026-07-26)
+  uAstSpans;       // FindBodyBlock (Voll-Review 2026-09-12)
 
 const
   STRING_TYPES : array[0..5] of string = (
@@ -112,6 +113,15 @@ end;
 function MethodHasAnyContractDirective(const TypeRefLow: string): Boolean;
 // Polymorphe/Vertrags-Direktiven, die die Signatur fixieren -> string-Param
 // kann nicht lokal auf const umgestellt werden (Basisklasse/Interface-Vertrag).
+//
+// EINSCHRAENKUNG (Voll-Review 2026-09-12): der 'message'-Term unten ist
+// konstant False. Der Parser kennt die Direktive nicht
+// (uParser2.pas:180/:196), sie erreicht TypeRef nie. Message-Handler sind
+// hier also NICHT geschuetzt - praktisch faellt das kaum auf, weil ihr
+// einziger Parameter ein 'var'-Message-Record ist und keine Zeichenkette,
+// aber die Zusage im Kopf stimmt nur, sobald der Parser nachzieht.
+// Gleiche Ursache und gleiche Behandlung wie in uCanBeClassMethod:119;
+// Behebung ueber Posten 9004 (eigener Zweig, Parser + Bau).
 begin
   Result := MethodHasDirective(TypeRefLow, 'virtual')  or MethodHasDirective(TypeRefLow, 'override') or
             MethodHasDirective(TypeRefLow, 'dynamic')  or MethodHasDirective(TypeRefLow, 'message')  or
@@ -164,6 +174,15 @@ begin
       // ueberspringen - dort ist const nicht lokal umstellbar (dominante FP-Klasse).
       if PolyNames.Contains(TDetectorUtils.UnqualifiedNameLastLower(M.Name)) then Continue;
       if IsEventHandlerMethod(M) then Continue;
+      // Nur die IMPLEMENTIERUNG melden (Voll-Review 2026-09-12, Major
+      // 50): UnitNode.FindAll(nkMethod) liefert Class-Body-Deklaration
+      // UND Implementierungs-Header - beide tragen die Parameter, und
+      // jeder Treffer wurde DOPPELT gemeldet (Decl-Zeile + Impl-Zeile;
+      // kein Dedup im Nachlauf). Delphi verlangt die Implementierung
+      // in derselben Unit; koerperlose Signaturen (abstract/external/
+      // forward) sind damit ebenfalls draussen - dort waere der
+      // const-Rat ohnehin an der falschen Stelle.
+      if TAstSpans.FindBodyBlock(M) = nil then Continue;
       for P in M.Children do
       begin
         if P.Kind <> nkParam then Continue;

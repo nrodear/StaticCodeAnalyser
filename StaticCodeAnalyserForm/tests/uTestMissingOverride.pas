@@ -21,6 +21,9 @@ type
     // Der RAT haengt an der Signatur, der Fund nicht (2026-09-04).
     [Test] procedure AbweichendeSignatur_RaetNichtZuOverride;
     [Test] procedure GleicheSignatur_RaetWeiterZuOverride;
+    // --- Voll-Review 2026-09-12 (Blocker): Interface in der Elternliste ---
+    [Test] procedure InterfaceInParentList_Reported;
+    [Test] procedure InterfaceInParentList_WithOverride_NotReported;
   end;
 
 implementation
@@ -261,6 +264,65 @@ begin
     Assert.IsNotNull(Fnd, 'Fund erwartet');
     Assert.IsTrue(Pos('missing `override`', Fnd.MissingVar) > 0,
       'gleiche Signatur - override ist hier der richtige Rat');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingOverride.InterfaceInParentList_Reported;
+// Voll-Review 2026-09-12 (Blocker): ExtractParentName splittete am
+// Komma - der Parser trennt die Elternliste aber mit BLANK
+// ('TBase IThing'). Der ClassByName-Lookup lief leer und JEDE
+// Subklasse mit Interface in der Elternliste blieb ungeprueft (die
+// Bestands-Exe meldet hier 0 - empirisch geprueft). Assert auf EXAKT
+// 1: nur DoWork verdeckt eine virtuelle Methode; Ping kommt aus dem
+// Interface und darf nicht mitgezaehlt werden.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  IThing = interface'#13#10 +
+  '    procedure Ping;'#13#10 +
+  '  end;'#13#10 +
+  '  TBase = class'#13#10 +
+  '    procedure DoWork; virtual;'#13#10 +
+  '  end;'#13#10 +
+  '  TDerived = class(TBase, IThing)'#13#10 +
+  '    procedure DoWork;'#13#10 +
+  '    procedure Ping;'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMissingOverride),
+    'class(TBase, IThing): DoWork ohne override muss gemeldet werden - ' +
+    'die Basisklasse ist der ERSTE Eltern-Ident, space-separiert');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingOverride.InterfaceInParentList_WithOverride_NotReported;
+// Gegenrichtung zum Interface-Eltern-Fix: mit korrektem override darf
+// die Interface-Form weiterhin NICHT gemeldet werden (ein Fix, der bei
+// Interface-Eltern pauschal meldet, waere hier rot). Fixture bewusst
+// mit anderen Namen als der Reported-Zwilling - sonst meldet der
+// Selbstscan die beiden als 8-Zeilen-DuplicateBlock.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  IPingable = interface'#13#10 +
+  '    procedure Refresh;'#13#10 +
+  '  end;'#13#10 +
+  '  TWidgetBase = class'#13#10 +
+  '    procedure DoPaint; virtual;'#13#10 +
+  '  end;'#13#10 +
+  '  TWidget = class(TWidgetBase, IPingable)'#13#10 +
+  '    procedure DoPaint; override;'#13#10 +
+  '    procedure Refresh;'#13#10 +
+  '  end;'#13#10 +
+  'implementation end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMissingOverride),
+    'override vorhanden - kein Fund, auch mit Interface in der Elternliste');
   finally F.Free; end;
 end;
 

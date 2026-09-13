@@ -13,10 +13,14 @@ unit uRedundantConditional;
 //
 // Erkennung: lexikalisch ueber den joined komment-bereinigten Code.
 // Pattern:
-//   `if` <expr> `then` <Ident> `:=` (True|False) [`;`] `else` <SameIdent>
+//   `if` <expr> `then` <Ident> `:=` (True|False) `else` <SameIdent>
 //   `:=` (True|False) [`;`]
 // wobei die beiden Boolean-Werte verschieden sein muessen und der
-// Ident auf beiden Seiten gleich.
+// Ident auf beiden Seiten gleich. KEIN optionales ';' vor dem else:
+// 'then X := True; else' ist in kompilierbarem Delphi NIE ein if-else
+// (E2153) - ein nach ';' gefundenes 'else' gehoert zwingend zu einem
+// umschliessenden case/except, und der Vereinfachungs-Rat waere dort
+// semantikaendernd (Voll-Review 2026-09-12, Blocker).
 //
 // Schweregrad: lsHint.
 
@@ -43,9 +47,6 @@ uses
   System.StrUtils,
   uFileTextCache;
 
-const
-  EMIT_SEVERITY = lsHint;
-
 function IsIdent(C: Char): Boolean; inline;
 begin
   // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
@@ -57,7 +58,11 @@ end;
 
 function IsIdentStart(C: Char): Boolean; inline;
 begin
-  Result := CharInSet(C, ['A'..'Z','a'..'z','_']);
+  // Voll-Review 2026-09-12: Zeichenklasse zentralisiert - die lokale
+  // Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentStartChar (A..Z, a..z, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentStartChar(C);
 end;
 
 // Aus Code ab Position p das naechste schreibbare Token extrahieren
@@ -101,17 +106,6 @@ begin
   q := ScanWordAfter(Code, q, Lower);
   Result := SameText(Lower, Kw);
   if Result then p := q;
-end;
-
-// Pruefe ab p ob `;` (optional whitespace davor).
-function SkipOptionalSemi(const Code: string; var p: Integer): Boolean;
-var
-  n : Integer;
-begin
-  Result := True;
-  n := Length(Code);
-  while (p <= n) and CharInSet(Code[p], [' ', #9, #10, #13]) do Inc(p);
-  if (p <= n) and (Code[p] = ';') then Inc(p);
 end;
 
 class procedure TRedundantConditionalDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -191,8 +185,14 @@ begin
       IsBool := SameText(Rhs1, 'True') or SameText(Rhs1, 'False');
       if not IsBool then begin Inc(pIf, 2); Continue; end;
       p := q;
-      SkipOptionalSemi(Code, p);
-      // `else`
+      // BEWUSST kein Semikolon-Skip vor dem 'else' (Voll-Review
+      // 2026-09-12, Blocker): 'then X := True; else' ist im
+      // if-Statement E2153 - ein nach ';' folgendes 'else' gehoert
+      // zwingend zu einem umschliessenden case/except, und der
+      // Vereinfachungs-Rat waere dort semantikaendernd (der
+      // else-Zweig laeuft fuer ANDERE case-Werte, nicht fuer die
+      // negierte Bedingung). Fuer das echte Muster ohne ';' braucht
+      // es keinen Skip - ExpectKeyword ueberspringt Whitespace selbst.
       if not ExpectKeyword(Code, p, 'else') then
       begin Inc(pIf, 2); Continue; end;
       // <SameIdent>

@@ -163,6 +163,16 @@ type
     class function New(const AFileName, AMethodName: string; ALine: Integer;
       const AMissingVar: string; AKind: TFindingKind;
       AConfidence: TFindingConfidence): TLeakFinding; overload; static;
+    // Wie New, aber mit Positions- statt Zeilenangabe: loest AAtPos
+    // ueber die LineFor-Tabelle auf (TDetectorUtils.LineForPos,
+    // Fallback Zeile 1) und traegt KEINEN MethodName - exakt die
+    // Emit-Form, die vor dem Voll-Review 2026-09-12 dreimal
+    // zeichenidentisch in uPerfHotspots/uConcurrencyExt/
+    // uRestHttpSecurity stand.
+    class function NewAtPos(const AFileName: string;
+      const ALineFor: TArray<Integer>; AAtPos: Integer;
+      const AMissingVar: string; AKind: TFindingKind)
+      : TLeakFinding; static;
   end;
 
 implementation
@@ -174,7 +184,11 @@ uses
   // Nur fuer ResolvedRuleId (Kind -> SCAxxx). Bewusst in der IMPLEMENTATION,
   // damit das Interface uMethodd12 schlank bleibt und kein Interface-Zyklus
   // entsteht (uRuleCatalog nutzt uMethodd12 NICHT).
-  uRuleCatalog;
+  uRuleCatalog,
+  // Nur fuer NewAtPos (LineForPos). Ebenfalls implementation-seitig -
+  // uDetectorUtils haengt interface-seitig an uAstNode, nicht an
+  // dieser Unit; ein Interface-Zyklus entsteht nicht.
+  uDetectorUtils;
 
 { TMethodInfo }
 
@@ -278,6 +292,17 @@ begin
   Result.LineNumber := IntToStr(ALine);
   Result.MissingVar := AMissingVar;
   Result.SetKind(AKind, AConfidence);
+end;
+
+class function TLeakFinding.NewAtPos(const AFileName: string;
+  const ALineFor: TArray<Integer>; AAtPos: Integer;
+  const AMissingVar: string; AKind: TFindingKind): TLeakFinding;
+var
+  LineNo : Integer;
+begin
+  LineNo := TDetectorUtils.LineForPos(ALineFor, AAtPos);
+  if LineNo <= 0 then LineNo := 1;
+  Result := New(AFileName, '', LineNo, AMissingVar, AKind);
 end;
 
 function TLeakFinding.MemoryLeakVariant: string;

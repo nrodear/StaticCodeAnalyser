@@ -177,7 +177,17 @@ begin
       begin
         // Heuristic: `end;` an Zeilen-Anfang (= Klassen-/Record-Ende
         // auf Top-Level, nicht innerhalb method).
-        if ReEnd.IsMatch(Lines[i]) then
+        //
+        // Auf CODE matchen, nicht auf Lines[i] - wie jede andere
+        // Pruefung dieser Schleife. Die Rohzeile war hier doppelt
+        // falsch (Voll-Review 2026-09-12, Blocker): `end; // TFooTests`
+        // schloss das Fenster NIE (die Regel verlangt $ nach dem ';'),
+        // damit entfiel die Zombie-Meldung und jede weitere Fixture
+        // der Datei erbte den HasTest-Zustand; und ein `end;` INNERHALB
+        // eines Blockkommentars (auskommentierter Code) schloss das
+        // Fenster ZU FRUEH und meldete eine Fixture mit spaeterem
+        // [Test] als Zombie.
+        if ReEnd.IsMatch(Code) then
         begin
           if (not HasTest) and (not InheritsCustom) and
              (not HasPublishedProc) then

@@ -38,12 +38,9 @@ uses
 // die fruheren hardcoded Konstanten).
 
 class function TLongMethodDetector.FindBodyBlock(MethodNode: TAstNode): TAstNode;
-var Child: TAstNode;
 begin
-  Result := nil;
-  for Child in MethodNode.Children do
-    if Child.Kind = nkBlock then
-      Exit(Child);
+  // Voll-Review 2026-09-12: zentral (TAstSpans.FindBodyBlock).
+  Result := TAstSpans.FindBodyBlock(MethodNode);
 end;
 
 class function TLongMethodDetector.CountStatements(Node: TAstNode): Integer;

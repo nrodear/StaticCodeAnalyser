@@ -17,6 +17,8 @@ type
     [Test] procedure TrailingMixed_Reported;
     [Test] procedure EmptyLine_NoFinding;
     [Test] procedure TrailingWs_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Testluecke 114): Zeile aus NUR Whitespace
+    [Test] procedure WhitespaceOnlyLine_Reported;
   end;
 
 implementation
@@ -113,6 +115,28 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkTrailingWhitespace finding');
+  finally F.Free; end;
+end;
+
+procedure TTestTrailingWhitespace.WhitespaceOnlyLine_Reported;
+// Testluecke 114 (Voll-Review 2026-09-12): eine Zeile, die AUSSCHLIESSLICH
+// aus Whitespace besteht, wird gemeldet (HasTrailingWs laeuft bis
+// FirstWsCol = 1) - sie grenzt direkt an den dokumentierten
+// Leerzeilen-Ausschluss (Length = 0, s. EmptyLine_NoFinding), war aber
+// nirgends fixiert. Ohne Pin koennte ein 'Trim'-Refactor die eine oder
+// die andere Seite still umdrehen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  '   '#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTrailingWhitespace),
+    'eine reine Whitespace-Zeile ist Trailing Whitespace ab Spalte 1');
   finally F.Free; end;
 end;
 

@@ -133,6 +133,8 @@ var
   All                : TList<TAstNode>;
   Node               : TAstNode;
   Lhs, Rhs           : string;
+  CallPath           : string;
+  ParenPos           : Integer;
   DbHit, UiHit       : string;
 begin
   if Binding = nil then Exit;
@@ -178,8 +180,19 @@ begin
       begin
         Lhs := Node.Name;
         // Bei Calls steht der ganze Aufruf-Ausdruck im Name-Feld inkl.
-        // Argumenten - daher reicht ein einziger Substring-Test.
-        if not FindFieldHit(Lhs, DbFields, SQL_PROP_SUFFIXES, DbHit) then Continue;
+        // Argumenten. Der DB-Hit wird NUR im Call-PFAD vor der ersten
+        // '(' gesucht (Voll-Review 2026-09-12, Major 57): der Kopf
+        // verlangt, dass die SQL-Property das AUFGERUFENE Ziel ist -
+        // vorher matchte der Gesamtausdruck, und Diagnose-Code wie
+        // 'ShowMessage(qFind.SQL.Text + edName.Text);' wurde als
+        // lsError/ftVulnerability gemeldet, obwohl nur gelesen und
+        // angezeigt wird. Der UI-Hit sucht weiter im Gesamtausdruck
+        // (die Benutzereingabe steht in den Argumenten).
+        CallPath := Lhs;
+        ParenPos := Pos('(', CallPath);
+        if ParenPos > 0 then
+          CallPath := Copy(CallPath, 1, ParenPos - 1);
+        if not FindFieldHit(CallPath, DbFields, SQL_PROP_SUFFIXES, DbHit) then Continue;
         if Pos('+', Lhs) = 0 then Continue;
         if not FindFieldHit(Lhs, UiFields, UI_TEXT_SUFFIXES, UiHit) then Continue;
 

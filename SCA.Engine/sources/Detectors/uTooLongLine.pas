@@ -31,14 +31,16 @@ type
 
 implementation
 
-// noinspection-file BeginEndRequired, CanBeClassMethod, ConsecutiveSection, GroupedDeclaration, NilComparison, TooLongLine, UnsortedUses, UnusedParameter
+// noinspection-file BeginEndRequired, ConsecutiveSection, GroupedDeclaration, NilComparison, TooLongLine, UnsortedUses, UnusedParameter
+// CanBeClassMethod ist aus der Liste raus: der Marker unterdrueckte
+// einen FALSCH POSITIVEN, den die tote EMIT_SEVERITY-Konstante
+// ausloeste (Voll-Review 2026-09-12). Mit ihr ist auch der Fund weg,
+// und UnusedSuppression meldete den Marker zu Recht. Der Defekt
+// dahinter steht als Posten 9007.
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
   uFileTextCache;
-
-const
-  EMIT_SEVERITY = lsHint;
 
 class procedure TTooLongLineDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);

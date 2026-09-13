@@ -17,6 +17,10 @@ type
     // Zwei Schaeden, zwei Meldungen (Vollzaehlung 2026-09-04).
     [Test] procedure RaiseNachInherited_MeldungOhneInheritedBehauptung;
     [Test] procedure RaiseNachBedingtemInherited_BehaeltDieScharfeMeldung;
+    // Voll-Review 2026-09-12 (Major 62): Waechter fuer die Entscheidung
+    [Test] procedure ReRaiseInHandler_NotReported;
+    // Testluecke 149: finally faengt nicht
+    [Test] procedure RaiseInTryFinally_StillReported;
   end;
 
 implementation
@@ -176,6 +180,72 @@ begin
     Assert.IsNotNull(Fnd, 'Fund erwartet');
     Assert.IsTrue(Pos('not called', Fnd.MissingVar) > 0,
       'bedingtes inherited entlastet nicht - scharfe Meldung bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptInDestructor.ReRaiseInHandler_NotReported;
+// Voll-Review 2026-09-12 (Major 62): der Layout-Kommentar in
+// CollectUnprotectedRaises behauptete, Handler-Raises wuerden
+// gemeldet - der Code markiert sie BEWUSST als protected (re-raise =
+// das im Unit-Kopf abgesegnete 'bewusst durchreichen'). Dieser
+// Waechter pinnt die Entscheidung; wer Handler-Raises doch melden
+// will, muss ihn bewusst umdrehen und den Unit-Kopf anpassen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Cleanup;'#13#10 +
+  '  except'#13#10 +
+  '    Log(''weg'');'#13#10 +
+  '    raise;'#13#10 +
+  '  end;'#13#10 +
+  '  inherited;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkExceptInDestructor),
+    're-raise im Handler ist dokumentiertes Durchreichen - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptInDestructor.RaiseInTryFinally_StillReported;
+// Testluecke 149 (Voll-Review 2026-09-12). Die Schwester von
+// ReRaiseInHandler_NotReported und die wichtigere Haelfte: ein
+// try..FINALLY schuetzt NICHT. finally raeumt auf und laesst die
+// Ausnahme weiterlaufen - der Destruktor bricht trotzdem ab, und
+// inherited Destroy bleibt ungerufen.
+//
+// Ohne diesen Test waere CollectUnprotectedRaises einseitig belegt:
+// dass try..except schuetzt, steht in zwei Tests; dass try..finally
+// es NICHT tut, stand nirgends. Wer den Schutz auf "irgendein try"
+// verallgemeinert, saehe kein Rot.
+// Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TB = class'#13#10 +
+  '    destructor Destroy; override;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'destructor TB.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    raise EAbort.Create(''weg'');'#13#10 +
+  '  finally'#13#10 +
+  '    FreeStuff;'#13#10 +
+  '  end;'#13#10 +
+  '  inherited;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkExceptInDestructor),
+    'finally raeumt auf, faengt aber nicht - der raise entkommt');
   finally F.Free; end;
 end;
 

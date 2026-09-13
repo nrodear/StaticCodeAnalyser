@@ -55,6 +55,9 @@ implementation
 // noinspection-file BeginEndRequired, GroupedDeclaration, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedRoutine
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uAstSpans;   // CollectWithMethodScope (Voll-Review 2026-09-12)
+
 const
   // Locale-abhaengige RTL-Funktionen. Klein-geschrieben fuer Lookup.
   LOCALE_DEPENDENT: array of string = [
@@ -174,7 +177,16 @@ begin
   if HitName = '' then Exit;
   // Defense gegen False-Positive: User reicht explizit TFormatSettings
   // durch ('strtodate(s, FormatSettings)' ist sicher).
-  if MentionsFormatSettings(Text) then Exit;
+  //
+  // AUF DEM GESTRIPPTEN TEXT, wie die Suche darueber (Voll-Review
+  // 2026-09-12, Minor 235): bis dahin las die Unterdrueckung den ROHEN
+  // Text und liess sich von einem blossen Vorkommen in einem
+  // String-Literal ausloesen -
+  //   s := FormatDateTime('FormatSettings yyyy-mm-dd', d);
+  // war still, obwohl gar keine TFormatSettings uebergeben werden. Die
+  // Asymmetrie war der Fehler: wer den Treffer im gestrippten Text
+  // sucht, muss die Ausnahme dort auch suchen.
+  if MentionsFormatSettings(LowText) then Exit;
   if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
   else MethName := '';
   Results.Add(TLeakFinding.New(FileName, MethName, Node.Line,
@@ -183,40 +195,20 @@ begin
     fkDateFormatSettings));
 end;
 
-procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
+procedure WalkAndCheck(Node: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
-// Hardening v4: iterative DFS - siehe Audit_jvcl_segfault.
-type
-  TFrame = record N, M: TAstNode; end;
+// Seit Voll-Review 2026-09-12 ueber den zentralen Scope-Walk
+// (TAstSpans.CollectWithMethodScope) - Mechanik, Besuchsreihenfolge
+// und Hardening v4 (iterative DFS, Audit_jvcl_segfault) identisch
+// zur frueheren lokalen Kopie.
 var
-  Stack : TList<TFrame>;
-  Cur, F : TFrame;
-  i      : Integer;
-  NextMeth : TAstNode;
+  P : TNodeScopePair;
 begin
-  if Node = nil then Exit;
-  Stack := TList<TFrame>.Create;
-  try
-    F.N := Node; F.M := CurrentMethod;
-    Stack.Add(F);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      case Cur.N.Kind of
-        nkCall:   CheckCallText(Cur.N.Name,    Cur.N, Cur.M, FileName, Results);
-        nkAssign: CheckCallText(Cur.N.TypeRef, Cur.N, Cur.M, FileName, Results);
-      end;
-      if Cur.N.Kind = nkMethod then NextMeth := Cur.N else NextMeth := Cur.M;
-      for i := Cur.N.Children.Count - 1 downto 0 do
-      begin
-        F.N := Cur.N.Children[i]; F.M := NextMeth;
-        Stack.Add(F);
-      end;
+  for P in TAstSpans.CollectWithMethodScope(Node, [nkCall, nkAssign]) do
+    case P.Node.Kind of
+      nkCall:   CheckCallText(P.Node.Name,    P.Node, P.Method, FileName, Results);
+      nkAssign: CheckCallText(P.Node.TypeRef, P.Node, P.Method, FileName, Results);
     end;
-  finally
-    Stack.Free;
-  end;
 end;
 {$IF False}
 // Original-Recursive-Code zur Referenz - falls Bug im Iterativ.
@@ -243,7 +235,7 @@ end;
 class procedure TDateFormatSettingsDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 begin
-  WalkAndCheck(UnitNode, nil, FileName, Results);
+  WalkAndCheck(UnitNode, FileName, Results);
 end;
 
 end.

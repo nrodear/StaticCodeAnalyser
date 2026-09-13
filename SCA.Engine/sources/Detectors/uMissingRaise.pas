@@ -76,14 +76,57 @@ begin
   Result := (Length(S) >= 2) and (S[1] = 'E') and IsUpperAsciiLetter(S[2]);
 end;
 
+// True, wenn ab APos (dem ersten Zeichen HINTER '.Create') eine gueltige
+// Konstruktor-Fortsetzung steht: optional eine der RTL-Suffix-Varianten,
+// danach das Namensende oder '(' / ' ' / ';'.
+//
+// Voll-Review 2026-09-12 (Major 77): vorher wurde ausschliesslich das
+// blanke '.Create' erkannt - 'EConvertError.CreateFmt(...)' scheiterte am
+// nachfolgenden 'F' und blieb komplett unerkannt, obwohl es exakt derselbe
+// Copy-Paste-Bug ist. Aufgenommen ist die VOLLSTAENDIGE
+// Konstruktor-Familie von System.SysUtils.Exception, nicht nur die vier im
+// Befund genannten: dieselbe Begruendung traegt fuer jede von ihnen, und
+// eine Teilmenge waere die naechste Luecke.
+//
+// Reihenfolge LAENGSTE zuerst, weil die Suffixe einander praefixen
+// ('Res' in 'ResFmt'): die Grenzpruefung hinter dem Suffix faengt eine
+// Fehlwahl zwar ohnehin ab, aber die Liste soll nicht davon abhaengen.
+// Der leere Suffix am Ende deckt das blanke '.Create'.
+function CreateSuffixOk(const Scan: string; APos: Integer): Boolean;
+const
+  CREATE_SUFFIX : array[0..7] of string = (
+    'ResFmtHelp', 'ResHelp', 'FmtHelp', 'ResFmt', 'Help', 'Fmt', 'Res', '');
+var
+  L, k : Integer;
+  Suf  : string;
+  Ch   : Char;
+begin
+  Result := False;
+  L := Length(Scan);
+  for Suf in CREATE_SUFFIX do
+  begin
+    if (Suf <> '') and not SameText(Copy(Scan, APos, Length(Suf)), Suf) then
+      Continue;
+    k := APos + Length(Suf);
+    // Namensende - der Fall, den der frueher unerreichbare Zweig meinte
+    // (Voll-Review 2026-09-12, Major 78).
+    if k > L then Exit(True);
+    Ch := Scan[k];
+    if (Ch = '(') or (Ch = ' ') or (Ch = ';') then Exit(True);
+  end;
+end;
+
 // Extrahiert den Klassen-Identifier aus einem Call-Namen, wenn die Form
-// '<Ident>.Create(...)' (case-insensitive) vorliegt. Sonst leerer String.
+// '<Ident>.Create(...)' (case-insensitive) vorliegt - inklusive der
+// RTL-Konstruktor-Varianten (CreateFmt/CreateRes/CreateResFmt/...,
+// s. CreateSuffixOk). Sonst leerer String.
 //
 // Beispiele:
-//   'Exception.Create('foo')'  -> 'Exception'
-//   'EConvertError.Create()'   -> 'EConvertError'
-//   'Self.DoSomething(...)'    -> ''     (kein .Create)
-//   'X.Y.Create(...)'          -> ''     (nicht atomarer Klassen-Ident -
+//   'Exception.Create('foo')'    -> 'Exception'
+//   'EConvertError.Create()'     -> 'EConvertError'
+//   'EConvertError.CreateFmt(.)' -> 'EConvertError'
+//   'Self.DoSomething(...)'      -> ''   (kein .Create)
+//   'X.Y.Create(...)'            -> ''   (nicht atomarer Klassen-Ident -
 //                                         Owner.Member.Create faengt das aus,
 //                                         haetten wir kein Bug-Pattern)
 function ExtractCreateTarget(const CallName: string): string;
@@ -106,23 +149,22 @@ begin
   // bis vor 'Create' - so faengt 'TFoo.Bar.Create()' nicht.
   PosDot := 0;
   i := 1;
-  while i <= L - Length(DOT_CREATE) do
+  // '+ 1' seit Voll-Review 2026-09-12 (Major 78): die alte Grenze
+  // 'i <= L - Length(DOT_CREATE)' endete bei i = L-7 und erreichte damit
+  // die Position L-6 nie - genau die, an der ein Name auf '.Create'
+  // ENDET. Der eigens dafuer gebaute Sonderfall-Zweig war beweisbar tot
+  // und widersprach dem eigenen Verify-Kommentar; er lebt jetzt als
+  // 'k > L'-Zweig in CreateSuffixOk.
+  while i <= L - Length(DOT_CREATE) + 1 do
   begin
+    // Verify: hinter '.Create' folgt eine RTL-Suffix-Variante und dann
+    // '(' / Whitespace / ';' / das Namensende.
     if (Scan[i] = '.') and
-       SameText(Copy(Scan, i, Length(DOT_CREATE)), DOT_CREATE) then
+       SameText(Copy(Scan, i, Length(DOT_CREATE)), DOT_CREATE) and
+       CreateSuffixOk(Scan, i + Length(DOT_CREATE)) then
     begin
-      // Verify: hinter '.Create' folgt '(' oder Ende oder Whitespace.
-      if i + Length(DOT_CREATE) > L then
-      begin
-        PosDot := i;
-        Break;
-      end;
-      Ch := Scan[i + Length(DOT_CREATE)];
-      if (Ch = '(') or (Ch = ' ') or (Ch = ';') then
-      begin
-        PosDot := i;
-        Break;
-      end;
+      PosDot := i;
+      Break;
     end;
     Inc(i);
   end;

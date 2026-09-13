@@ -134,6 +134,7 @@ implementation
 
 uses
   System.Classes,   // TStringList (DirektiveImAufruf)
+  System.StrUtils,  // PosEx (Vorkommens-Schleife der Format-Namen)
   uFileTextCache;   // AcquireLines/ReleaseLines (DirektiveImAufruf)
 
 // noinspection-file BeginEndRequired, BooleanParam, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DeepNesting, GroupedDeclaration, IfElseBegin, LargeClass, LengthUnderflow, LongMethod, MultipleExit, NestedTry, NilComparison, PublicField, StringConcatInLoop, TooLongLine, UnsortedUses
@@ -320,17 +321,18 @@ begin
 
   for FuncName in FormatFunctionList do
   begin
+    // ALLE Vorkommen dieses Namens pruefen, nicht nur das erste
+    // (Voll-Review 2026-09-12, Blocker): bei
+    // 's := LogFormat(Format(...))' findet Pos 'format(' zuerst
+    // INNERHALB von 'logformat(' - das alte Continue sprang zum
+    // NAECHSTEN Listeneintrag und der echte innere Call blieb
+    // ungeprueft. Ein Fehlkandidat darf nur SICH SELBST verwerfen.
     pCall := Pos(FuncName + '(', Low);
+    while (pCall > 0) and
+          (((pCall > 1) and TDetectorUtils.IsIdentChar(Low[pCall - 1]))
+           or IsInsideStringLiteral(CallName, pCall)) do
+      pCall := PosEx(FuncName + '(', Low, pCall + 1);
     if pCall = 0 then Continue;
-    // Linke Wortgrenze: kein Ident-Char vor dem Funktionsnamen.
-    if (pCall > 1) and TDetectorUtils.IsIdentChar(Low[pCall - 1]) then
-      Continue;
-    // FP-Schutz: 'format(' INNERHALB eines Pascal-String-Literals des
-    // CallText (typischer Quickfix-Template-Pattern in uFixHint.pas:
-    //   Result.After := 'Msg := Format(''%s'', [Name])')
-    // ist kein echter Call sondern ein zitiertes Code-Beispiel.
-    if IsInsideStringLiteral(CallName, pCall) then
-      Continue;
 
     MatchedFunc := FuncName;
     FuncEnd := pCall + Length(FuncName) + 1; // direkt nach '('
@@ -547,9 +549,28 @@ var
 begin
   Result := 0;
 
-  // '[' suchen ab StartPos
+  // '[' suchen ab StartPos - aber NUR innerhalb des Format-Calls und
+  // NUR als direktes Argument. Die alte unbegrenzte Suche lief ueber
+  // das schliessende ')' des Calls hinaus und griff ein fremdes '['
+  // desselben Statements ('Format(fmt, Args) + Items[0]'): aus dem
+  // korrekten -1 (Open-Array, nicht zaehlbar) wurde ein Fehlfund
+  // '2 placeholders, 1 arguments' (Voll-Review 2026-09-12, Blocker).
+  // Zulaessig zwischen StartPos und '[' sind nur Whitespace und das
+  // Argument-Komma; ein ')' auf Tiefe 0 beendet den Call -> -1.
   i := StartPos;
-  while (i <= Length(Text)) and (Text[i] <> '[') do Inc(i);
+  while (i <= Length(Text)) and (Text[i] <> '[') do
+  begin
+    if Text[i] = ')' then begin Result := -1; Exit; end;
+    if not CharInSet(Text[i], [' ', #9, ',']) then
+    begin
+      // Ident/Aufruf statt Array-Literal (Format(fmt, vr)) - nicht
+      // zaehlbar. Deckt auch 'MyArr[0]' als Argument: dessen '[' ist
+      // kein Array-LITERAL.
+      Result := -1;
+      Exit;
+    end;
+    Inc(i);
+  end;
   if i > Length(Text) then
   begin
     // Kein literales '[...]'-Array -> Args via Variable/Open-Array uebergeben

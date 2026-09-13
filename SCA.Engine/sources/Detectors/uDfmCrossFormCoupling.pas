@@ -184,10 +184,22 @@ begin
     All := Binding.UnitNode.FindAll(nkAssign);
     try
       for Node in All do
+      begin
         // Cross-Form-Zugriff sieht typisch dotted aus. Reiner Ident-Assign
         // ('X := 1') ist hier nicht relevant.
         if Pos('.', Node.Name) > 0 then
           CheckNode(Node, Node.Name);
+        // Auch die RHS (Voll-Review 2026-09-12, Major 55): der Parser
+        // legt sie in nkAssign.TypeRef ab (denselben Pfad nutzt
+        // uDebugOutput laengst). 'x := Form2.Edit1.Text;' ist derselbe
+        // Kapselungsbruch wie die Schreibrichtung und war vorher
+        // unsichtbar. FirstIdent-, Shadow- und Index-Gates gelten
+        // unveraendert; eingebettete Zugriffe hinter Operatoren
+        // ('y + Form2....') bleiben Grenze - FirstIdent sieht nur den
+        // Ausdrucksanfang.
+        if Pos('.', Node.TypeRef) > 0 then
+          CheckNode(Node, Node.TypeRef);
+      end;
     finally
       All.Free;
     end;

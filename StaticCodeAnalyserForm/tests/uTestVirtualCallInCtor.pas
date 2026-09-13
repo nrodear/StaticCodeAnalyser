@@ -49,6 +49,8 @@ type
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure VCall_Finding_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Blocker): nested Klassen waren unsichtbar
+    [Test] procedure VCall_NestedClassCtor_Reported;
   end;
 
 implementation
@@ -774,6 +776,47 @@ begin
   F := FindingsOfRealFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkVirtualCallInCtor),
     'parameterlose PROZEDUR bleibt ein Methodenzeiger');
+  finally F.Free; end;
+end;
+
+procedure TTestVirtualCallInCtor.VCall_NestedClassCtor_Reported;
+// Voll-Review 2026-09-12 (Blocker): Impl-Header nested Klassen heissen
+// 'TOuter.TInner.Create' - der fruehere First-Praefix-Match
+// (StartsWith('tinner.')) ordnete sie der inneren Klasse NIE zu, der
+// klassische Virtual-Call-im-Ctor einer nested Klasse war unsichtbar
+// (Bestands-Exe: 0 Funde, empirisch belegt; Parser-Zensus: 2951
+// Nested-Impl-Header in 91 Korpusdateien). Jetzt ordnet der
+// Besitzertyp (OwnerTypeNameLower, vorletztes Segment) zu - wie in
+// uVisibilityCheck seit 2026-07-28. Datei-Harness wie die
+// SCA048-Tests (identisch zum CLI-Beleg).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TOuter = class'#13#10 +
+  '  public type'#13#10 +
+  '    TInner = class'#13#10 +
+  '    public'#13#10 +
+  '      constructor Create;'#13#10 +
+  '      procedure Setup; virtual;'#13#10 +
+  '    end;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TOuter.TInner.Create;'#13#10 +
+  'begin'#13#10 +
+  '  Setup;'#13#10 +
+  'end;'#13#10 +
+  'procedure TOuter.TInner.Setup;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsOfRealFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkVirtualCallInCtor),
+    'Virtual-Call im Ctor einer nested Klasse muss gemeldet werden - ' +
+    'der Besitzertyp von TOuter.TInner.Create ist TInner');
   finally F.Free; end;
 end;
 

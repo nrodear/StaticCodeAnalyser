@@ -153,19 +153,16 @@ var
   M, Ch   : TAstNode;
 
   procedure Emit(Line: Integer; const VarName, TypeRef, MethodName: string);
-  var L: TLeakFinding;
   begin
-    L            := TLeakFinding.Create;
-    L.FileName   := FileName;
-    L.MethodName := MethodName;
-    L.LineNumber := IntToStr(Line);
-    L.MissingVar := 'Variant "' + VarName + ': ' + TypeRef +
-                    '" inside a method that contains a loop - each Variant ' +
-                    'operation goes through COM-VarType-dispatch (~10-100x ' +
-                    'slower than typed). Use a typed local variable for ' +
-                    'hot-path computation.';
-    L.SetKind(fkVariantTypeMisuse);
-    Results.Add(L);
+    // Factory statt Feld-fuer-Feld (Voll-Review 2026-09-12) -
+    // identische Feldfolge, siehe TLeakFinding.New.
+    Results.Add(TLeakFinding.New(FileName, MethodName, Line,
+      'Variant "' + VarName + ': ' + TypeRef +
+      '" inside a method that contains a loop - each Variant ' +
+      'operation goes through COM-VarType-dispatch (~10-100x ' +
+      'slower than typed). Use a typed local variable for ' +
+      'hot-path computation.',
+      fkVariantTypeMisuse));
   end;
 
 begin

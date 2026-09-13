@@ -132,8 +132,6 @@ var
   M      : TMatch;
   Hits   : TList<TAttrHit>;
   Hit    : TAttrHit;
-  Seen   : TDictionary<string, Integer>;  // 'name|args' -> firstLine
-  Key    : string;
   FirstLine : Integer;
   F      : TLeakFinding;
 begin
@@ -184,38 +182,36 @@ begin
     // FP-Fix 2026-06-21: `[MVCInheritable] function A; [MVCInheritable]
     // function B;` ist KEIN Duplikat (verschiedene TargetLine). Vorher
     // wurde es per 2-Zeilen-Fenster falsch geflagged.
-    Seen := TDictionary<string, Integer>.Create;
-    try
-      for i := 0 to Hits.Count - 1 do
+    // Seen-Dictionary und Key sind mit dem 2-Zeilen-Fenster-Algorithmus
+    // weggefallen (Voll-Review 2026-09-12, Minor 229): beide wurden noch
+    // befuellt, aber nie gelesen - die Duplikatsuche laeuft ueber die
+    // Rueckwaerts-Schleife unten, die zusaetzlich TargetLine vergleicht.
+    for i := 0 to Hits.Count - 1 do
+    begin
+      Hit := Hits[i];
+      if Hit.TargetLine <= 0 then Continue; // kein Target -> kein Dup
+      FirstLine := -1;
+      for j := i - 1 downto 0 do
       begin
-        Hit := Hits[i];
-        if Hit.TargetLine <= 0 then Continue; // kein Target -> kein Dup
-        Key := Hit.Name + '|' + Hit.Args;
-        FirstLine := -1;
-        for j := i - 1 downto 0 do
+        if Hits[j].TargetLine <> Hit.TargetLine then Continue;
+        if (LowerCase(Hits[j].Name) = Hit.Name) and
+           (Hits[j].Args = Hit.Args) then
         begin
-          if Hits[j].TargetLine <> Hit.TargetLine then Continue;
-          if (LowerCase(Hits[j].Name) = Hit.Name) and
-             (Hits[j].Args = Hit.Args) then
-          begin
-            FirstLine := Hits[j].Line;
-            Break;
-          end;
+          FirstLine := Hits[j].Line;
+          Break;
         end;
-        if FirstLine < 0 then Continue;
-        F            := TLeakFinding.Create;
-        F.FileName   := FileName;
-        F.MethodName := '';
-        F.LineNumber := IntToStr(Hit.Line);
-        F.MissingVar := 'Duplicate attribute [' + Hit.Name + Hit.Args +
-                        '] (first seen at line ' + IntToStr(FirstLine) +
-                        '). Identical attribute applied twice has no effect ' +
-                        'and is usually a copy-paste artefact.';
-        F.SetKind(fkAttributeDuplicate);
-        Results.Add(F);
       end;
-    finally
-      Seen.Free;
+      if FirstLine < 0 then Continue;
+      F            := TLeakFinding.Create;
+      F.FileName   := FileName;
+      F.MethodName := '';
+      F.LineNumber := IntToStr(Hit.Line);
+      F.MissingVar := 'Duplicate attribute [' + Hit.Name + Hit.Args +
+                      '] (first seen at line ' + IntToStr(FirstLine) +
+                      '). Identical attribute applied twice has no effect ' +
+                      'and is usually a copy-paste artefact.';
+      F.SetKind(fkAttributeDuplicate);
+      Results.Add(F);
     end;
   finally
     Hits.Free;

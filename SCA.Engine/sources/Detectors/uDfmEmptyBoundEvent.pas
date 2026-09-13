@@ -34,14 +34,14 @@ implementation
 // noinspection-file ConcatToFormat, NilComparison, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uAstSpans;   // FindBodyBlock (Voll-Review 2026-09-12)
+
 function FindBodyBlock(Method: TAstNode): TAstNode;
-var Child: TAstNode;
 begin
-  Result := nil;
-  if Method = nil then Exit;
-  for Child in Method.Children do
-    if Child.Kind = nkBlock then
-      Exit(Child);
+  // Voll-Review 2026-09-12: zentral - die zentrale Fassung traegt
+  // genau DIESEN nil-Guard (sichere Obermenge der 6 Kopien).
+  Result := TAstSpans.FindBodyBlock(Method);
 end;
 
 class procedure TDfmEmptyBoundEventDetector.Analyze(Binding: TFormBinding;

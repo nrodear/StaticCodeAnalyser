@@ -114,7 +114,6 @@ uses
   uFileTextCache;
 
 const
-  EMIT_SEVERITY = lsHint;
 
   // Routinen-Schluesselwoerter, die der Zeilen-Automat als Kopf wertet.
   // `class procedure`/`class function` stehen bewusst NICHT drin: der
@@ -172,26 +171,10 @@ type
   TRoutineHeaders = TArray<TRoutineHeader>;
 
 function ExtractFirstWord(const Line: string; out StartCol: Integer): string;
-var
-  i, n, wStart : Integer;
-  c            : Char;
 begin
-  Result := '';
-  StartCol := 0;
-  n := Length(Line);
-  i := 1;
-  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
-  if i > n then Exit;
-  c := Line[i];
-  if c = '{' then Exit;
-  if (c = '/') and (i < n) and (Line[i + 1] = '/') then Exit;
-  if (c = '(') and (i < n) and (Line[i + 1] = '*') then Exit;
-  if not CharInSet(c, ['A'..'Z','a'..'z','_']) then Exit;
-  wStart := i;
-  StartCol := wStart;
-  while (i <= n) and CharInSet(Line[i], ['A'..'Z','a'..'z','0'..'9','_']) do
-    Inc(i);
-  Result := Copy(Line, wStart, i - wStart);
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.ExtractFirstWord,
+  // dort der Vertrag). Der Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.ExtractFirstWord(Line, StartCol);
 end;
 
 function LineContainsWord(const Line, Word: string): Boolean;
@@ -227,7 +210,9 @@ end;
 
 function IsIdentStartCh(C: Char): Boolean;
 begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']);
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.IsIdentStartChar);
+  // der Wrapper behaelt seinen Unit-lokalen Namen.
+  Result := TDetectorUtils.IsIdentStartChar(C);
 end;
 
 function SkipIdentAt(const Code: string; P: Integer): Integer;

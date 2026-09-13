@@ -69,6 +69,11 @@ type
     // AScope=msClassMethod sucht die 'class'-Variante (TypeRef
     // '<kind>;class', s. uParser2:743) - der Freigabeort fuer
     // 'class var'. False die gewoehnliche Instanz-Methode.
+    // Wie FindMethod, aber ALLE Treffer (ueberladene Konstruktoren!).
+    // Der Aufrufer besitzt die Liste.
+    class function FindMethods(UnitNode: TAstNode; const Kind: string;
+      const ClassName: string; AScope: TMethodScope = msInstance)
+      : TList<TAstNode>; static;
     class function FindMethod(UnitNode: TAstNode; const Kind: string;
       const ClassName: string;
       AScope: TMethodScope = msInstance): TAstNode; static;
@@ -127,20 +132,37 @@ uses
 
 class function TFieldLeakDetector.FindMethod(UnitNode: TAstNode;
   const Kind, ClassName: string; AScope: TMethodScope): TAstNode;
-// Sucht eine Implementations-Methode mit gegebenem TypeRef ('constructor' bzw.
-// 'destructor') und Name 'ClassName.<Methodenname>'. nil wenn nicht da.
+// Erster Treffer in Dateireihenfolge. Seit Voll-Review 2026-09-12
+// ueber FindMethods - die Such-/Scope-Logik (inkl. der ';class'-
+// TypeRef-Behandlung, s. Kommentar dort) existiert nur noch EINMAL.
+var
+  L : TList<TAstNode>;
+begin
+  Result := nil;
+  L := FindMethods(UnitNode, Kind, ClassName, AScope);
+  try
+    if L.Count > 0 then Result := L[0];
+  finally
+    L.Free;
+  end;
+end;
+
+class function TFieldLeakDetector.FindMethods(UnitNode: TAstNode;
+  const Kind, ClassName: string; AScope: TMethodScope): TList<TAstNode>;
+// Alle Implementations-Methoden mit gegebenem TypeRef-Kind
+// ('constructor'/'destructor') und Name 'ClassName.<Methodenname>' -
+// noetig fuer UEBERLADENE Konstruktoren (Voll-Review 2026-09-12,
+// Major 64): der fruehere Einzel-Finder exitete beim ersten Treffer,
+// und Leaks aus dem zweiten 'constructor Create(...); overload;'
+// waren unsichtbar.
 //
 // AScope unterscheidet Instanz- von class-Methode. Der Parser haengt
-// an class-Methoden das TypeRef-Suffix ';class' (uParser2:743, damit der
-// DestructorWithoutInherited-Detektor den Class-Destruktor erkennt, der
-// keine inheritance chain hat). Der frueher hier stehende SameText-Vergleich
-// gegen den ROHEN TypeRef fand 'destructor;class' deshalb NIE - ein
-// class var, das im class destructor sauber freigegeben wird, galt als
-// Leck (Kastri DW.StartUpHook.Android.pas:29, 30.08.).
-//
-// Die beiden Varianten bleiben GETRENNT abfragbar statt zusammengefasst:
-// eine Klasse kann beides haben, und dann ist der class destructor der
-// Anker fuer 'class var', der Instanz-Destruktor der fuer normale Felder.
+// an class-Methoden das TypeRef-Suffix ';class' (uParser2:743); ein
+// roher SameText-Vergleich faende 'destructor;class' nie - ein class
+// var, das im class destructor sauber freigegeben wird, galt als
+// Leck (Kastri DW.StartUpHook.Android.pas:29, 30.08.). Instanz- und
+// class-Variante bleiben getrennt abfragbar: eine Klasse kann beides
+// haben.
 var
   Methods : TList<TAstNode>;
   M       : TAstNode;
@@ -148,7 +170,7 @@ var
   TypLow  : string;
   pSemi   : Integer;
 begin
-  Result := nil;
+  Result := TList<TAstNode>.Create;
   ClsLow := ClassName.ToLower + '.';
   Methods := UnitNode.FindAll(nkMethod);
   try
@@ -160,7 +182,7 @@ begin
         Continue;
       pSemi := Pos(';', TypLow);
       if pSemi > 0 then TypLow := Copy(TypLow, 1, pSemi - 1);
-      if SameText(TypLow, Kind) then Exit(M);
+      if SameText(TypLow, Kind) then Result.Add(M);
     end;
   finally
     Methods.Free;
@@ -993,6 +1015,8 @@ var
   Fields       : TList<TAstNode>;
   Field        : TAstNode;
   Ctor, Dtor   : TAstNode;
+  Ctors        : TList<TAstNode>;
+  CtorKand     : TAstNode;
   // Parser-Gate-Backlog 2026-07-31 (4e/1): zweiter Aufraeum-Ort. BEWUSST eine
   // eigene Variable statt einer Zuweisung an Dtor - der Befundtext haengt an
   // 'Dtor = nil' ("no destructor exists" vs. "not freed in Destroy"). Wuerde
@@ -1031,9 +1055,16 @@ begin
     begin
       if ClassNode.Name = '' then Continue;
 
-      // Konstruktor + Destruktor der Klasse suchen.
-      Ctor := FindMethod(UnitNode, 'constructor', ClassNode.Name);
-      if Ctor = nil then Continue; // ohne Konstruktor nichts zu pruefen
+      // ALLE Konstruktoren der Klasse suchen (Voll-Review 2026-09-12,
+      // Major 64): vorher lief die ganze Pruefung nur auf dem ERSTEN
+      // Ctor in Dateireihenfolge - ein Leak im ueberladenen zweiten
+      // Konstruktor war unsichtbar.
+      Ctors := FindMethods(UnitNode, 'constructor', ClassNode.Name);
+      if Ctors.Count = 0 then
+      begin
+        Ctors.Free;
+        Continue; // ohne Konstruktor nichts zu pruefen
+      end;
 
       Dtor := FindMethod(UnitNode, 'destructor', ClassNode.Name);
       // BeforeDestruction laeuft garantiert VOR Destroy (TObject.Free ->
@@ -1058,23 +1089,29 @@ begin
           if not TLeakDetector2.IsLeakyType(Field.TypeRef, AContext) then Continue;
           FieldNameLow := Field.Name.ToLower;
 
-          // Feld muss im Konstruktor per .Create zugewiesen werden,
-          // sonst ist es kein Konstruktor-erzeugtes Feld.
-          if not HasFieldCreate(Ctor, FieldNameLow) then Continue;
-
-          // TComponent-Ownership-Pattern: FField := X.Create(Self) etc.
-          // Owner gibt das Feld via DestroyComponents automatisch frei -
-          // explicit Free im Destruktor waere redundant. Beispiele:
-          //   FTimer  := TTimer.Create(Self);    -- VCL TComponent-Tree
-          //   FAction := TAction.Create(AOwner); -- weitergereichter Owner
-          if IsCreatedWithComponentOwner(Ctor, FieldNameLow) then Continue;
-
-          // Ownership-Transfer: Feld wird im Ctor als ARG weitergereicht
-          // ('AddAttribute(FField)', 'FList.Add(FField)') -> der Empfaenger kann
-          // es freigeben, ein fehlendes Free hier ist dann kein Leak. Die im
-          // Unit-Kopf dokumentierte FP-Quelle; mit Custom-Class-Discovery
-          // dominierte sie die Funde (Recall-Messung 2026-07-15: +2410).
-          if IsHandedToOwner(Ctor, FieldNameLow) then Continue;
+          // Feld muss in EINEM der Konstruktoren per .Create zugewiesen
+          // werden - und dort keines der Ctor-Gates erfuellen. Je Ctor
+          // gelten dieselben drei Pruefungen wie frueher (Reihenfolge
+          // unveraendert); gemeldet wird, wenn MINDESTENS ein Ctor das
+          // Feld leak-verdaechtig erzeugt (Ctor1 mit Owner + Ctor2
+          // ohne ist ein echter Leak-Pfad). Alle nachfolgenden Gates
+          // laufen auf DIESEM Ctor. Gates im Detail:
+          // * TComponent-Ownership: FField := X.Create(Self/AOwner) -
+          //   der Owner raeumt via DestroyComponents ab.
+          // * Ownership-Transfer: Feld als ARG weitergereicht
+          //   ('AddAttribute(FField)') - der Empfaenger gibt frei
+          //   (Unit-Kopf-FP-Quelle; Recall-Messung 2026-07-15: +2410
+          //   mit Custom-Class-Discovery).
+          Ctor := nil;
+          for CtorKand in Ctors do
+          begin
+            if not HasFieldCreate(CtorKand, FieldNameLow) then Continue;
+            if IsCreatedWithComponentOwner(CtorKand, FieldNameLow) then Continue;
+            if IsHandedToOwner(CtorKand, FieldNameLow) then Continue;
+            Ctor := CtorKand;
+            Break;
+          end;
+          if Ctor = nil then Continue;
 
           // Pruefen ob im Destruktor ein .Free / .Destroy / FreeAndNil
           // fuer das Feld vorkommt. Reuse von SearchFree aus uLeakDetector2.
@@ -1191,6 +1228,7 @@ begin
         end;
       finally
         Fields.Free;
+        Ctors.Free;
       end;
     end;
   finally

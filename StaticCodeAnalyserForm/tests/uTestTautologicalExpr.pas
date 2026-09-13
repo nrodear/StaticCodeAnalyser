@@ -54,11 +54,28 @@ type
     // inline var im Rumpf darf Phase 3 nicht fuer den Rest der Routine
     // abschalten (Review 02.09.).
     [Test] procedure Taut_InlineVarInBody_ComparisonStillReported;
+    // Voll-Review 2026-09-12 (Blocker): geklammerte Bedingung war blind
+    [Test] procedure Taut_ParenthesizedEqual_Reported;
+    [Test] procedure Taut_ParenthesizedOr_Reported;
+    // Voll-Review 2026-09-12 (Major 82): Phase 2 prueft ALLE
+    // Operator-Vorkommen der Zeile, nicht nur das erste
+    [Test] procedure Taut_SecondAndOccurrence_Reported;
+    [Test] procedure Taut_SecondOrOccurrence_Reported;
+    [Test] procedure Taut_ThreeDistinctOperands_NoFinding;
     // Auskommentierter Code darf den Scanner nicht steuern (Review 02.09.).
     [Test] procedure Taut_KeywordInsideBlockComment_ComparisonStillReported;
   end;
 
 implementation
+
+// noinspection-file LargeClass
+// Eine Test-Fixture je Detektor ist die Projektkonvention; die Klasse
+// waechst mit jedem gepinnten Fall. Mit den drei Faellen aus Major 82
+// (Voll-Review 2026-09-12) hat sie die 500-Zeilen-Schwelle
+// ueberschritten - Aufteilen wuerde die Faelle desselben Detektors
+// auseinanderreissen, ohne etwas lesbarer zu machen. Gleicher Marker
+// und gleiche Begruendung wie in uTestDetectorUtils, uTestExportHtml
+// und uTestFindingsWorkbenchExport.
 
 uses
   System.SysUtils, System.Generics.Collections,
@@ -495,6 +512,112 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTautologicalBoolExpr),
     'genau 1 Finding: IsUrl-Zeile feuert, y=y im (*..*)-Block nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.Taut_ParenthesizedEqual_Reported;
+// Voll-Review 2026-09-12 (Blocker): bei 'if (x = x) then' behielt die
+// Lhs die oeffnende Klammer ('(x') waehrend die Rhs ihre ')' an der
+// Stop-Liste verlor ('x') - Norm-Mismatch, kein Fund. Die haeufigste
+// Delphi-Schreibweise einer Bedingung war fuer diese lsError-Regel
+// unsichtbar, obwohl der Unit-Kopf '(p <> p)' als Zielmuster nennt
+// (Bestands-Exe: 0 Funde, empirisch belegt). Jetzt werfen beide
+// Seiten unbalancierte Randklammern ab.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(x: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  if (x = x) then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    'geklammerte Vergleichs-Tautologie muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.Taut_ParenthesizedOr_Reported;
+// Zwilling fuer Phase 2 (Boolean-Operatoren): 'if (b or b) then'
+// lieferte '(b' gegen 'b)' - kein Fund, obwohl der Unit-Kopf
+// '(b or b)' ausdruecklich als Zielmuster nennt (Bestands-Exe: 0,
+// empirisch belegt). Die Gegenrichtung (balancierte Klammern bleiben
+// unangetastet) decken CaseSensitiveCharLiterals_NoFinding
+// ('(FirstChar = ''F'') or (FirstChar = ''f'')') und
+// BitAndCompareConstant_NoFinding ('(n and 1) = 1').
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(b: Boolean);'#13#10 +
+  'begin'#13#10 +
+  '  if (b or b) then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    'geklammerte Boolean-Tautologie muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.Taut_SecondAndOccurrence_Reported;
+// Voll-Review 2026-09-12 (Major 82): Phase 2 prueft je Operator nur
+// das ERSTE Vorkommen der Zeile, und die Lhs war immer der komplette
+// Zeilenpraefix. 'if Flag and x and x then' blieb damit stumm,
+// waehrend die spiegelbildliche Zeile 'if x and x and Flag then'
+// gemeldet wurde - die Erkennung haengte an der POSITION des Fehlers
+// (Bestands-Exe: nur die zweite Zeile meldet, empirisch belegt).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(Flag, x: Boolean);'#13#10 +
+  'begin'#13#10 +
+  '  if Flag and x and x then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    'die Tautologie hinter einem frueheren and muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.Taut_SecondOrOccurrence_Reported;
+// Derselbe Defekt fuer ' or ' (Bestands-Exe: 0 Funde, empirisch
+// belegt). Zwei Operatoren getrennt getestet, weil Phase 2 je
+// Operator eine eigene Schleife faehrt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(Flag, x: Boolean);'#13#10 +
+  'begin'#13#10 +
+  '  if Flag or x or x then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    'die Tautologie hinter einem frueheren or muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestTautologicalExpr.Taut_ThreeDistinctOperands_NoFinding;
+// Gegenrichtung: drei VERSCHIEDENE Operanden in derselben Kette. Die
+// neue Schleife darf nicht dadurch melden, dass sie die Lhs zu weit
+// links kappt und zwei fremde Operanden gegeneinander stellt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(Flag, x, y: Boolean);'#13#10 +
+  'begin'#13#10 +
+  '  if Flag and x and y then Exit;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkTautologicalBoolExpr),
+    'drei verschiedene Operanden sind keine Tautologie');
   finally F.Free; end;
 end;
 

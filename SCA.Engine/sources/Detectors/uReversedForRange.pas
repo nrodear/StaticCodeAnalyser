@@ -38,9 +38,6 @@ implementation
 uses
   uFileTextCache;
 
-const
-  EMIT_SEVERITY = lsError;
-
 function IsIdent(C: Char): Boolean; inline;
 begin
   // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
@@ -223,11 +220,18 @@ begin
       NumStr := Copy(Line, Start, p - Start);
       ToVal := StrToInt64Def(NumStr, 0);
 
-      // `do` (mit Word-Boundary). Analog zur `to`-Pruefung oben:
-      // p + 2 <= n macht den (p + 2 > n)-Pfad tot, deshalb nur IsIdent.
+      // `do` (mit Word-Boundary). Das Zeilenende ist ein LEGALER und
+      // haeufiger Abschluss ('for i := 10 to 1 do' + begin auf der
+      // Folgezeile, Standard-Delphi-Stil). Bis zum Voll-Review
+      // 2026-09-12 (Blocker) verlangte der Guard 'p + 2 <= n' ein
+      // Zeichen HINTER dem do - der fruehere Kommentar begruendete das
+      // mit einer Analogie zur to-Pruefung, die faktisch falsch war:
+      // nach 'to' MUSS auf derselben Zeile ein Wert folgen, nach 'do'
+      // nicht. Genau der dominante Formatierungsfall (Body auf
+      // Folgezeile) blieb dadurch ungemeldet.
       while (p <= n) and (Line[p] = ' ') do Inc(p);
-      if not ((p + 2 <= n) and SameText(Copy(Line, p, 2), 'do') and
-              not IsIdent(Line[p + 2])) then
+      if not ((p + 1 <= n) and SameText(Copy(Line, p, 2), 'do') and
+              ((p + 2 > n) or not IsIdent(Line[p + 2]))) then
       begin
         // Range mehrzeilig - Konservativ: kein Match
         Inc(i); Continue;

@@ -13,6 +13,8 @@ type
     [Test] procedure FreeAndNil_NotReported;
     [Test] procedure FreeAtMethodEnd_NotReported;
     [Test] procedure FreeFollowedByNilAssign_NotReported;
+    // Voll-Review 2026-09-12 (Blocker): nil-Out auf DERSELBEN Zeile.
+    [Test] procedure FreeAndNilOutOnOneLine_NotReported;
     [Test] procedure FreeInDestructor_NotReported;
     // Real-World FP-Audit 2026-07-10: class destructor + OnDestroy-Handler
     [Test] procedure FreeInClassDestructor_NotReported;
@@ -72,13 +74,16 @@ begin
 end;
 
 procedure TTestFreeWithoutNil.FreeAndNil_NotReported;
+// FELD-Receiver, nicht lokale Variable (Voll-Review 2026-09-12,
+// Major): lokale Variablen nimmt schon der Local-Var-Skip - der Test
+// prueft sonst NICHT den FreeAndNil-Pfad, den er zu pruefen behauptet.
 const SRC =
   'unit t; implementation'#13#10 +
-  'procedure Foo;'#13#10 +
-  'var L: TStringList;'#13#10 +
+  'procedure TFoo.Reset;'#13#10 +
   'begin'#13#10 +
-  '  L := TStringList.Create;'#13#10 +
-  '  FreeAndNil(L);'#13#10 +
+  '  FList.Free;'#13#10 +
+  '  DoLog;'#13#10 +
+  '  FreeAndNil(FList);'#13#10 +
   '  WriteLn(''after'');'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
@@ -90,13 +95,14 @@ end;
 
 procedure TTestFreeWithoutNil.FreeAtMethodEnd_NotReported;
 // Free als letzte Anweisung -> kein Folge-Use moeglich -> kein Befund.
+// FELD-Receiver (Voll-Review 2026-09-12, Major): mit lokaler Variable
+// griff der Local-Var-Skip, IsLastStmtOfMethod lief nie.
 const SRC =
   'unit t; implementation'#13#10 +
-  'procedure Foo;'#13#10 +
-  'var L: TStringList;'#13#10 +
+  'procedure TFoo.Shutdown;'#13#10 +
   'begin'#13#10 +
-  '  L := TStringList.Create;'#13#10 +
-  '  L.Free;'#13#10 +
+  '  DoLog;'#13#10 +
+  '  FList.Free;'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -106,14 +112,14 @@ begin
 end;
 
 procedure TTestFreeWithoutNil.FreeFollowedByNilAssign_NotReported;
+// FELD-Receiver (Voll-Review 2026-09-12, Major): erst damit laeuft
+// HasNilOutAfter - lokale Variablen nimmt der Local-Var-Skip vorher.
 const SRC =
   'unit t; implementation'#13#10 +
-  'procedure Foo;'#13#10 +
-  'var L: TStringList;'#13#10 +
+  'procedure TFoo.Reset;'#13#10 +
   'begin'#13#10 +
-  '  L := TStringList.Create;'#13#10 +
-  '  L.Free;'#13#10 +
-  '  L := nil;'#13#10 +
+  '  FList.Free;'#13#10 +
+  '  FList := nil;'#13#10 +
   '  WriteLn(''after'');'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
@@ -195,6 +201,26 @@ begin
       if Fnd.Kind = fkFreeWithoutNil then begin Hit := Fnd; Break; end;
     Assert.IsNotNull(Hit, 'fkFreeWithoutNil finding expected');
     Assert.AreEqual(lsWarning, Hit.Severity);
+  finally F.Free; end;
+end;
+
+procedure TTestFreeWithoutNil.FreeAndNilOutOnOneLine_NotReported;
+// 'FTimer.Free; FTimer := nil; RestartUI;' auf EINER Zeile: das
+// nil-Assign traegt dieselbe Zeilennummer wie der Free-Call - der
+// alte '<='-Vergleich sprang darueber und meldete genau das Muster,
+// das die Regel empfiehlt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Reset;'#13#10 +
+  'begin'#13#10 +
+  '  FTimer.Free; FTimer := nil; RestartUI;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkFreeWithoutNil),
+    'das Einzeiler-nil-Out ist genau das empfohlene Muster');
   finally F.Free; end;
 end;
 

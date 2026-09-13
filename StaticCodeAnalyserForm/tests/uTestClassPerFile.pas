@@ -15,6 +15,8 @@ type
     [Test] procedure ClassOfReference_NotCounted;
     [Test] procedure ClassPerFile_KindAndSeverity;
     [Test] procedure ClassKeywordInStringLiteral_NotCounted;
+    // Voll-Review 2026-09-12 (Testluecke 94): die class-Varianten
+    [Test] procedure ClassAbstractCountsAsSecondClass_Reported;
   end;
 
 implementation
@@ -131,6 +133,30 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkClassPerFile));
+  finally F.Free; end;
+end;
+
+procedure TTestClassPerFile.ClassAbstractCountsAsSecondClass_Reported;
+// Testluecke 94 (Voll-Review 2026-09-12): dass 'class abstract' (und
+// ebenso 'class sealed' / 'class helper for') als vollwertige zweite
+// Klasse zaehlt, war nicht gepinnt. Ein Zaehler, der nur auf das
+// nackte 'class' sieht, wuerde diese Formen still uebersehen. An der
+// gebauten Exe verifiziert.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TEins = class'#13#10 +
+  '  end;'#13#10 +
+  '  TZwei = class abstract'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkClassPerFile),
+    'class abstract ist eine zweite Klasse');
   finally F.Free; end;
 end;
 

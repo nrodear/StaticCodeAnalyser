@@ -87,9 +87,6 @@ implementation
 uses
   System.RegularExpressions;   // GATE E - Prozedurwert-Muster
 
-const
-  EMIT_SEVERITY = lsHint;
-
 function IsIdentChar(C: Char): Boolean; inline;
 begin
   // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
@@ -320,9 +317,17 @@ begin
   try
     if Params.Count = 0 then Exit;
     LowName := LowerCase(Trim(Params[0].Name));   // Modifier-Prefix stoert EndsWith nicht
-    LowType := LowerCase(Params[0].TypeRef);
+    // Typvergleich EXAKT (FirstParentToken: Generic gekappt, letztes
+    // Namenssegment) statt Substring (Voll-Review 2026-09-12,
+    // Posten 88): Pos('tobject', ...) erklaerte jede Methode mit
+    // TObjectList<T>/TObjectDictionary als erstem Parameter zum
+    // Event-Handler und skippte sie KOMPLETT - der echte ungenutzte
+    // Parameter daneben verschwand still. Der eigene Kommentar oben
+    // dokumentierte immer nur den exakten Typ TObject;
+    // 'System.TObject' matcht weiter.
+    LowType := TDetectorUtils.FirstParentToken(Params[0].TypeRef);
     Result := (LowName = 'sender') or LowName.EndsWith('sender')
-              or (Pos('tobject', LowType) > 0);
+              or SameText(LowType, 'TObject');
   finally
     Params.Free;
   end;
@@ -404,7 +409,9 @@ end;
 
 function IsIdentStartChar(C: Char): Boolean;
 begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']);
+  // Voll-Review 2026-09-12: zentral - namensgleich zu
+  // TDetectorUtils.IsIdentStartChar, daher qualifizierte Delegation.
+  Result := TDetectorUtils.IsIdentStartChar(C);
 end;
 
 function IsDeclTailDirective(const AWordLow: string): Boolean;
@@ -720,26 +727,11 @@ begin
 end;
 
 procedure CollectAllTokens(Root: TAstNode; SB: TStringBuilder);
-var
-  Stack : TStack<TAstNode>;
-  Cur : TAstNode;
-  i : Integer;
+// Seit Voll-Review 2026-09-12 (Posten 89) byte-identisch in
+// TDetectorUtils.CollectNameTypeTokens (dritte Kopie derselben
+// Routine). Wrapper bleibt fuer die Aufrufer dieser Unit.
 begin
-  if Root = nil then Exit;
-  Stack := TStack<TAstNode>.Create;
-  try
-    Stack.Push(Root);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack.Pop;
-      if Cur.Name    <> '' then SB.Append(' ').Append(Cur.Name);
-      if Cur.TypeRef <> '' then SB.Append(' ').Append(Cur.TypeRef);
-      for i := 0 to Cur.Children.Count - 1 do
-        Stack.Push(Cur.Children[i]);
-    end;
-  finally
-    Stack.Free;
-  end;
+  TDetectorUtils.CollectNameTypeTokens(Root, SB);
 end;
 
 function RoutineUsedAsProcValue(var AStripped: TStrippedUnit;

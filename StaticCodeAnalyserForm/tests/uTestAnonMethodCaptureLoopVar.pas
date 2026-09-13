@@ -18,6 +18,13 @@ type
     [Test] procedure LoopVarOnlyAsCallReceiver_NotReported;
     [Test] procedure LoopVarAsReceiverAndInClosureBody_Reported;
     [Test] procedure ProcKeywordOnlyInStringLiteral_NotReported;
+    // Voll-Review 2026-09-12 (Testluecke 119): die uebrigen SYNC_MARKERS
+    [Test] procedure ForEachMarker_NotReported;
+    [Test] procedure BareForEachMarker_NotReported;
+    [Test] procedure SortComparerMarker_NotReported;
+    [Test] procedure UnknownCallee_StillReported;
+    // Minor 226: das Sync-Gate las den ROHEN Ausdruck
+    [Test] procedure SyncWordOnlyInStringLiteral_StillReported;
   end;
 
 implementation
@@ -192,6 +199,124 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkAnonMethodCaptureLoopVar),
       'procedure-Keyword nur im String-Literal ist keine anonyme Methode');
+  finally F.Free; end;
+end;
+
+procedure TTestAnonMethodCaptureLoopVar.ForEachMarker_NotReported;
+// Testluecke 119 (Voll-Review 2026-09-12): von den vier SYNC_MARKERS
+// war nur 'synchronize' getestet. Sie stehen fuer SOFORT ausgefuehrte
+// Closures - dort ist die Schleifenvariable noch die richtige, und
+// genau deshalb wird nicht gemeldet. An der gebauten Exe verifiziert.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P(L: TList);'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 10 do'#13#10 +
+  '    L.ForEach(procedure begin DoIt(i); end);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkAnonMethodCaptureLoopVar),
+    '.ForEach fuehrt die Closure sofort aus');
+  finally F.Free; end;
+end;
+
+procedure TTestAnonMethodCaptureLoopVar.BareForEachMarker_NotReported;
+// Zweite Form desselben Markers: unqualifiziert 'ForEach(' statt
+// '.ForEach'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 10 do'#13#10 +
+  '    ForEach(procedure begin DoIt(i); end);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkAnonMethodCaptureLoopVar),
+    'auch die unqualifizierte ForEach-Form ist sofort ausgefuehrt');
+  finally F.Free; end;
+end;
+
+procedure TTestAnonMethodCaptureLoopVar.SortComparerMarker_NotReported;
+// Dritter Marker: '.Sort(' - die Comparer-Closure laeuft waehrend des
+// Sortierens, nicht spaeter.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P(L: TList);'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 10 do'#13#10 +
+  '    L.Sort(procedure begin DoIt(i); end);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkAnonMethodCaptureLoopVar),
+    '.Sort ruft den Comparer sofort');
+  finally F.Free; end;
+end;
+
+procedure TTestAnonMethodCaptureLoopVar.UnknownCallee_StillReported;
+// Die Gegenprobe, ohne die die drei Tests darueber wertlos waeren: ein
+// UNBEKANNTER Aufgerufener ist kein Marker - dort kann die Closure
+// aufgehoben werden, und der Fund bleibt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 10 do'#13#10 +
+  '    Later(procedure begin DoIt(i); end);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkAnonMethodCaptureLoopVar),
+    'ohne Marker bleibt die By-Reference-Falle ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestAnonMethodCaptureLoopVar.SyncWordOnlyInStringLiteral_StillReported;
+// Minor 226 (Voll-Review 2026-09-12). Das Sync-Gate durchsuchte den
+// ROHEN Ausdruck nach Synchronize/Queue/ForceQueue - ein solches Wort
+// in einem beliebigen String-Literal des Closure-Rumpfs, etwa in einer
+// Log-Meldung, schaltete den Fund still ab. Regex und Tail-Schnitt
+// darueber arbeiten laengst auf dem geblankten Text; nur die Ausnahme
+// nicht.
+//
+// Die Gegenprobe gibt es schon: SyncClosureWithLoopVar_NotReported
+// prueft den ECHTEN Synchronize-Aufruf - der muss weiterhin
+// unterdruecken, sonst waere aus der Verengung eine Verbreiterung
+// geworden.
+// Am gebauten Stand nachgemessen: vor dem Fix 0 Funde, danach 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 10 do'#13#10 +
+  '    TThread.CreateAnonymousThread('#13#10 +
+  '      procedure'#13#10 +
+  '      begin'#13#10 +
+  '        Log(''siehe Synchronize im Handbuch'');'#13#10 +
+  '        Verarbeite(i);'#13#10 +
+  '      end).Start;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkAnonMethodCaptureLoopVar),
+    'ein Sync-Wort im Literal ist kein Synchronize-Aufruf');
   finally F.Free; end;
 end;
 

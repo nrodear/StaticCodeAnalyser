@@ -75,7 +75,6 @@ uses
   uDetectorUtils;   // OwnerTypeNameLower (nested-type-Bucketing, 2026-07-28)
 
 const
-  EMIT_SEVERITY = lsHint;
 
   // Klassen-Familien, die wegen RTTI/DFM/Streaming public bleiben muessen
   RTTI_DRIVEN_BASES: array[0..3] of string = (
@@ -102,28 +101,13 @@ end;
 // Perf (2026-07-05): P8 - aus dem alten Standalone-BodyReferences gehoisted,
 // damit die gecachte Variante in AnalyzeUnit exakt dieselbe Logik nutzt.
 function ContainsIdent(const Hay, Needle: string): Boolean;
-var
-  P, NL, HL : Integer;
-  Before, After : Char;
 begin
-  Result := False;
-  NL := Length(Needle);
-  HL := Length(Hay);
-  if (NL = 0) or (HL < NL) then Exit;
-  P := 1;
-  while True do
-  begin
-    P := Pos(Needle, Hay, P);
-    if P = 0 then Exit;
-    Before := #0;
-    if P > 1 then Before := Hay[P - 1];
-    After := #0;
-    if P + NL - 1 < HL then After := Hay[P + NL];
-    if not CharInSet(Before, ['a'..'z','0'..'9','_']) and
-       not CharInSet(After,  ['a'..'z','0'..'9','_']) then
-      Exit(True);
-    P := P + NL;
-  end;
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.
+  // ContainsWholeWordLower). Die alte lokale Grenzklasse prueft nur
+  // Kleinbuchstaben - auf dem hier IMMER gelowerten Body ist das zur
+  // zentralen IsIdentChar-Klasse aequivalent (Grossbuchstaben kommen
+  // nicht vor).
+  Result := TDetectorUtils.ContainsWholeWordLower(Needle, Hay);
 end;
 
 type
@@ -413,11 +397,27 @@ var
       if Impl = Member then Continue;
       // P8: gecachtes NormalizeIdent statt LowerCase+Trim pro Paar.
       var Lower := MethodNamesNorm[Impl];
-      // Skippen wenn zur eigenen Klasse oder einem Descendant
-      if Lower.StartsWith(ClassLow + '.') then Continue;
+      // Skippen wenn zur eigenen Klasse oder einem Descendant.
+      //
+      // BESITZERTYP statt erstem Segment (Voll-Review 2026-09-12,
+      // Major 91): der Bucket-Aufbau wurde am 2026-07-28 genau dafuer
+      // umgestellt, dieser Filter aber nicht. Bei einer nested Klasse
+      // ist ClassNode.Name der EINFACHE Name ('TInner'), die
+      // Implementierungen tragen zwei Qualifizierer ('touter.tinner.run')
+      // - StartsWith('tinner.') greift also nicht, und die EIGENEN
+      // Methoden der nested Klasse wurden zusaetzlich als OtherRefs
+      // gezaehlt. Da die Klassifikation 'else if OtherRefs > 0' VOR dem
+      // StrictPrivate-Zweig prueft, kippte ein rein klassenintern
+      // genutztes Member auf fkCanBeUnitPrivate - exakt der Kipp-Effekt,
+      // den der Bucket-Kommentar als behoben beschreibt.
+      //
+      // OwnerTypeNameLower liefert bei EINEM Qualifizierer dasselbe wie
+      // das alte StartsWith, bei zweien den richtigen Besitzer.
+      var OwnerLow := TDetectorUtils.OwnerTypeNameLower(Lower);
+      if OwnerLow = ClassLow then Continue;
       var Skip := False;
       for SubLow in Descendants do
-        if Lower.StartsWith(SubLow + '.') then
+        if OwnerLow = SubLow then
         begin
           Skip := True;
           Break;

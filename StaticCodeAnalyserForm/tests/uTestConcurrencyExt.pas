@@ -96,6 +96,8 @@ type
     [Test] procedure FreeAndNilInElseOfFinishedGuard_StillReported;
     // --- Review-Fund 2026-07-31: Rumpf-Ende von ExecuteHonorsTerminated ---
     [Test] procedure FreeAndNilIgnoringExecuteBeforeClassProc_StillReported;
+    // Voll-Review 2026-09-12 (Major 47): Zaun fuer die bewusste Grenze
+    [Test] procedure BareFreeForm_IsDocumentedBoundary_NoFinding;
   end;
 
 implementation
@@ -1199,6 +1201,33 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkThreadResumeDeprecated),
     'Konstruktor eines ...Thread-Typs bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestConcurrencyExt.BareFreeForm_IsDocumentedBoundary_NoFinding;
+// Voll-Review 2026-09-12 (Major 47): der Unit-Kopf versprach frueher
+// auch die nackte '.Free'-Form, implementiert war sie nie. Die
+// Entscheidung des Reviews: FreeAndNil-only ist die BEWUSSTE Grenze
+// (TThread.Free ruft im Destruktor selbst Terminate+WaitFor; ein
+// .Free-Zweig braeuchte eine eigene Korpus-Messung). Dieser Test ist
+// der ZAUN um diese Grenze - wer den .Free-Zweig doch baut, muss ihn
+// bewusst umdrehen und die Messung mitbringen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Stoppe(W: TThread);'#13#10 +
+  'begin'#13#10 +
+  '  W.Free;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkTThreadDestroyWithoutTerminate),
+    'nackte .Free-Form ist dokumentierte Grenze - kein Fund');
   finally F.Free; end;
 end;
 

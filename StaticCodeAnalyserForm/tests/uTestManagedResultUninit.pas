@@ -21,6 +21,9 @@ type
     [Test] procedure TryGetValueCountsAsInit_NotReported;
     [Test] procedure ResultWordInsideStringLiteral_NotReported;
     [Test] procedure UnmanagedReturnType_NotReported;
+    // Voll-Review 2026-09-12 (Major 76): if-Arm-Konservativitaet
+    [Test] procedure JoinIdiom_ElseArmWritesBare_NoFinding;
+    [Test] procedure IfWithoutWritingArm_StillReported;
     [Test] procedure AbsoluteResultAlias_NotReported;
     [Test] procedure InterfaceMethodCall_Reported_And_Sca121Silent;
     [Test] procedure ExitWithValueCountsAsInit_NotReported;
@@ -533,6 +536,54 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit));
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninit.JoinIdiom_ElseArmWritesBare_NoFinding;
+// Voll-Review 2026-09-12 (Major 76): der Walker meldete in
+// DOKUMENTREIHENFOLGE - beim Separator-Join-Idiom stand der Lese-Arm
+// vor dem Schreib-Arm und wurde gemeldet, obwohl die erste Iteration
+// IMMER den else-Arm nimmt (Bestands-Exe: 1 FP auf dieser Fixture,
+// empirisch belegt). Schreibt ein Arm bar, gilt das if konservativ
+// als Write.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Join(const A: array of string): string;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to High(A) do'#13#10 +
+  '    if i > 0 then'#13#10 +
+  '      Result := Result + '','' + A[i]'#13#10 +
+  '    else'#13#10 +
+  '      Result := A[i];'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkManagedResultUninit),
+    'ein bar schreibender if-Arm macht den Geschwister-Read unbeweisbar');
+  finally F.Free; end;
+end;
+
+procedure TTestManagedResultUninit.IfWithoutWritingArm_StillReported;
+// Gegenrichtung: schreibt KEIN Arm des if Result bar, bleibt ein
+// Read in einem Arm ein Fund - pinnt, dass Major 76 nicht
+// ueberschiesst (nur die Arm-Geschwister-Konstellation ist
+// unbeweisbar).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Foo(C: Boolean): string;'#13#10 +
+  'var X: string;'#13#10 +
+  'begin'#13#10 +
+  '  if C then'#13#10 +
+  '    X := Result;'#13#10 +
+  '  Result := X;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkManagedResultUninit),
+    'Read im if ohne schreibenden Geschwister-Arm bleibt ein Fund');
   finally F.Free; end;
 end;
 

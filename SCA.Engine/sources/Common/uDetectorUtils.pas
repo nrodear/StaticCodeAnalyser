@@ -85,6 +85,13 @@ type
     // Wortgrenze rechts vom Punkt erkannt werden.
     class function IsIdentChar(Ch: Char): Boolean; static; inline;
 
+    // Erstes Zeichen eines Pascal-Bezeichners (A..Z, a..z, _ - OHNE
+    // Ziffern). Voll-Review 2026-09-12: die Klasse stand 15x
+    // byte-gleich in den Detektoren (inkl. einer nested Kopie in
+    // dieser Unit); jetzt zentral wie IsIdentChar seit der
+    // Backlog-Welle 1.
+    class function IsIdentStartChar(Ch: Char): Boolean; static; inline;
+
     // True wenn FileName auf ein bekanntes Test-/Demo-Fixture-Pattern
     // matched. Konsumenten (CLI, IDE-Filter) koennen Findings aus solchen
     // Files optional ausblenden - die enthalten meist absichtliche Bugs
@@ -148,7 +155,13 @@ type
     //   FindWholeWordLower('sql', 'my.sql=') -> 4  (rechts steht '=')
     //   FindWholeWordLower('assigned x', 'assigned xa') -> 0
     class function FindWholeWordLower(const Needle, HaystackLower: string)
-      : Integer; static;
+      : Integer; overload; static;
+
+    // Wie oben, Suche ab AFrom (1-basiert; AFrom < 1 liefert 0 -
+    // Kontrakt der WortPosAb-Kopie aus uCommentedOutCode, deren
+    // Hebung diese Overload ist; Voll-Review 2026-09-12).
+    class function FindWholeWordLower(const Needle, HaystackLower: string;
+      AFrom: Integer): Integer; overload; static;
 
 
     // True, wenn Needle als ganzes Wort in HaystackLower vorkommt.
@@ -210,6 +223,18 @@ type
     // Hochgezogen aus uDivByZero (Fund 4, Restschulden-Audit 2026-07-26);
     // die Kopien waren namensgleich, aber semantisch gegensaetzlich.
     class function BlankStringLiterals(const S: string): string; static;
+
+    // Splittet einen Argumentlisten-Text an TOP-LEVEL-Kommas: nested
+    // Parens und String-Literale werden respektiert.
+    // 'cond, a, b' -> ['cond', ' a', ' b'] (Teile UNGETRIMMT, wie die
+    // Ursprungsfassung).
+    // Zentralisiert aus uIfThenShortCircuit (Voll-Review 2026-09-12,
+    // Posten 71: dritte Kopie stand an - uInheritedMethodEmpty braucht
+    // denselben Split fuer den 1:1-Durchreichungs-Vergleich). NICHT
+    // verwechseln mit uLeakDetector2.SinkSplitTopLevelArgs - der
+    // Balancierer dort hat einen eigenen, dokumentierten Vertrag
+    // (Namensvetter, bewusst getrennt).
+    class function SplitTopLevelArgs(const Args: string): TArray<string>; static;
 
     // === ZEILEN-SCANNER (Strings + Kommentare) =========================
     // Single source of truth fuer die String-/Kommentar-Zustandsmaschine.
@@ -369,6 +394,52 @@ type
 
     // Wie OwnerTypeName, zusaetzlich lowercase (Match-Key-Nutzung).
     class function OwnerTypeNameLower(const AName: string): string; static;
+
+    // Ordnet jeder in einem Typ-RUMPF deklarierten Methode den Namen
+    // ihres Typs zu. Notwendig, weil der AST keinen Parent-Zeiger hat:
+    // eine IMPLEMENTIERUNG traegt den Typ im qualifizierten Namen
+    // ('TFoo.bar'), eine DEKLARATION im Klassen-/Interface-Rumpf nicht.
+    // Caller besitzt das Ergebnis (Free).
+    // Byte-identische Zentralisierung aus uMethodName (Voll-Review
+    // 2026-09-12, Posten 74: uLongParamList ist der zweite Konsument -
+    // dessen Dedup-Schluessel brauchte denselben Besitzertyp).
+    class function BuildMethodOwnerMap(UnitNode: TAstNode)
+      : TDictionary<TAstNode, string>; static;
+
+    // Haengt Name und TypeRef JEDES Knotens des Teilbaums space-getrennt
+    // an SB an - der Flachtext, auf dem uUnusedLocal, uUnusedParameter
+    // und uUninitVar ihr Ganzwort-Matching fahren.
+    //
+    // Iterativ (eigener Stack), damit tiefe ASTs keinen Stack-Overflow
+    // ausloesen. Besuchsreihenfolge ist die der bisherigen drei Kopien
+    // (Pop/Push-DFS) - fuer eine Konkatenation ohne Positionsbezug
+    // ohnehin unerheblich, aber so bleibt der Flachtext byte-gleich.
+    //
+    // Zentralisiert aus drei byte-gleichen Kopien (Voll-Review
+    // 2026-09-12, Posten 89): uUnusedLocal.CollectAllTokens,
+    // uUnusedParameter.CollectAllTokens und uUninitVar.CollectBodyTokens
+    // (letztere trug den Hinweis 'Iterativ analog
+    // uUnusedLocal.CollectAllTokens' bereits im Kopf). Der Vertrag ist
+    // damit an EINER Stelle aenderbar - das war der Punkt: der
+    // KnownGap-Test Local_NameOnlyInStringLiteral_KnownGap kuendigt ein
+    // Literal-Blanking an, das sonst drei Units synchron braeuchte.
+    class procedure CollectNameTypeTokens(Root: TAstNode;
+      SB: TStringBuilder); static;
+
+    // Der ERSTE Bezeichner der Vorfahrenliste eines nkClass.TypeRef -
+    // in Delphi zwingend die Basisklasse, alles danach sind
+    // Interfaces. Der Parser legt die Liste SPACE-separiert ab
+    // (uParser2, ParseClassBody: tkComma wird verworfen und landet nie
+    // im TypeRef) - ein Komma-Split greift dort NIE. Unit-Qualifier
+    // wird gekappt ('Vcl.Forms.TForm' -> 'TForm'), Generic-Suffixe
+    // defensiv ebenfalls; gleiche Schablone wie
+    // uTypeIndex.BaseClassNameLow - beide sollen sich gleich
+    // verhalten. Gehoben aus uNamingExt (Voll-Review 2026-09-12): die
+    // lokalen ExtractParentName-Kopien in uMissingOverride und
+    // uAbstractNotImpl splitteten am Komma und liessen
+    // 'class(TBase, IThing)'-Subklassen komplett ungeprueft.
+    class function FirstParentToken(const ATypeRef: string)
+      : string; static;
 
     // True, wenn der Methodenname zwei oder mehr Qualifizierer traegt, die
     // Methode also einem in einem anderen Typ deklarierten Typ gehoert
@@ -533,6 +604,90 @@ type
     // wird das letzte Segment.
     class function IsFfiBindingTypeName(AFfiTypes: TStringList;
       const ATypeName: string): Boolean; static;
+
+    // True wenn die Methode eine Event-Handler-Signatur hat - erster
+    // nkParam heisst 'Sender' (case-insensitive) oder sein TypeRef
+    // enthaelt 'tobject'. Solche Methoden werden vom Form-Designer per
+    // DFM zur Laufzeit an Komponenten-Events gebunden. Gehoben aus
+    // uCanBeClassMethod/uMethodName (Voll-Review 2026-09-12) - die
+    // zweite Kopie war woertlich als 'Spiegel' dokumentiert und beide
+    // trugen denselben tobject-Substring-Defekt; der ist nach der
+    // Hebung genau EINMAL zu fixen (separater, fundbewegender
+    // Schritt).
+    class function IsEventHandlerSignature(MethodNode: TAstNode)
+      : Boolean; static;
+
+    // Zaehlt and/or/xor als ganze Woerter (case-insensitive,
+    // Wort-Boundary per Pre-/Post-Zeichen) im literal-geblankten
+    // Text - and/or/xor INNERHALB eines String-Literals
+    // (Pos(' and ', SQL)) sind keine Boolean-Operatoren. Gehoben aus
+    // uCognitiveComplexity/uCyclomaticComplexity (Voll-Review
+    // 2026-09-12): die dokumentierte Kopier-Begruendung ('Detektoren
+    // unabhaengig halten') war am Code erodiert - beide Kopien hingen
+    // laengst an TDetectorUtils (IsIdentChar, BlankStringLiterals)
+    // und mussten zweimal synchron nachgezogen werden (Backlog-Welle
+    // 1; Literal-Blanking 2026-08-09).
+    class function CountBooleanOpsLower(const ACondText: string)
+      : Integer; static;
+
+    // Erstes Wort einer Zeile (nach fuehrendem Whitespace), leer bei
+    // Leerzeilen und wenn die Zeile mit einem Kommentar-Opener
+    // ('{', '//', '(*') beginnt; StartCol = 1-basierte Spalte des
+    // Wortes (0 wenn keins). Gehoben aus 8 Detektor-Kopien
+    // (Voll-Review 2026-09-12; vor dem Umzug alle acht gedifft:
+    // 7 identischer Kern, dazu die '['-Variante darunter).
+    // KEIN Blockkommentar-Zustand ueber Zeilen - der Opener wird nur
+    // an der ERSTEN Nicht-Whitespace-Position erkannt; die Nachruestung
+    // ist ein separater, fundbewegender Schritt.
+    class function ExtractFirstWord(const Line: string;
+      out StartCol: Integer): string; static;
+
+    // Wie ExtractFirstWord, aber eine '['-Zeile liefert das
+    // Pseudo-Wort '[' - Attribut-Zeilen ('[Test]', '[Weak]') zaehlen
+    // als Inhalt (der 226-DUnitX-FP-Fix von uEmptyVisibilitySection,
+    // Baseline 2026-08-04). Eigene benannte Funktion statt eines
+    // Boolean-Schalters - der eigene fkBooleanParam-Detektor haette
+    // das Flag zu Recht geruegt.
+    class function ExtractFirstWordOrBracket(const Line: string;
+      out StartCol: Integer): string; static;
+
+    // ------- Method-TypeRef-Vertrag (kind[:ret][;dir...]) -----------
+    // Der Parser legt Methodenart, Rueckgabetyp und Direktiven als
+    // flachen Text in nkMethod.TypeRef ab:
+    //   'procedure' / 'function:Integer' / 'function:T;virtual'.
+    // Diese Sektion buendelt die Leser dieses PARSER-Vertrags - kommt
+    // eine neue Direktive dazu, zieht genau EINE Stelle nach
+    // (Voll-Review 2026-09-12; vorher 3x IsBodyless + 2x
+    // IsFunctionMethod + 2er-Paare woertlich in den Detektoren).
+
+    // True wenn der TypeRef eine FUNKTION beschreibt: ':' vor dem
+    // ersten ';'-Direktiv-Trenner. ACHTUNG: uConstantReturn nutzt
+    // absichtlich eine ANDERE Praefix-Heuristik
+    // (StartsText('function', ...)) und bleibt lokal - die zwei
+    // Fassungen unterscheiden sich fuer 'function' ohne
+    // Rueckgabetyp-Segment; Vereinheitlichung waere fundbewegend.
+    class function IsFunctionTypeRef(const ATypeRef: string)
+      : Boolean; static;
+
+    // True wenn die Deklaration keinen eigenen Rumpf hat:
+    // ;abstract / ;forward / ;external / ;dispid.
+    class function IsBodylessTypeRef(const ATypeRef: string)
+      : Boolean; static;
+
+    // Rueckgabetyp aus dem TypeRef ('function:T;virtual' -> 'T');
+    // leer fuer Prozeduren.
+    class function ExtractReturnType(const ATypeRef: string)
+      : string; static;
+
+    // True wenn eine lokale Variable per 'absolute Result' die
+    // Storage des Funktionsergebnisses aliast - jeder Zugriff ueber
+    // sie IST ein Result-Zugriff.
+    class function HasAbsoluteResultAlias(AMethodNode: TAstNode)
+      : Boolean; static;
+
+    // Whitespace raus + lowercase - normalisiert eine
+    // Zuweisungs-LHS fuer Vergleiche ('Result .X' -> 'result.x').
+    class function NormalizeLhsLower(const S: string): string; static;
   end;
 
 
@@ -569,6 +724,11 @@ begin
   // dritte Variante gewesen, die so nie irgendwo stand. Semantisch sind
   // beide identisch (Ch > #255 faellt in beiden Faellen raus).
   Result := CharInSet(Ch, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+end;
+
+class function TDetectorUtils.IsIdentStartChar(Ch: Char): Boolean;
+begin
+  Result := CharInSet(Ch, ['A'..'Z', 'a'..'z', '_']);
 end;
 
 class function TDetectorUtils.IsTestFixturePath(const FileName: string;
@@ -733,6 +893,12 @@ end;
 
 class function TDetectorUtils.FindWholeWordLower(const Needle,
   HaystackLower: string): Integer;
+begin
+  Result := FindWholeWordLower(Needle, HaystackLower, 1);
+end;
+
+class function TDetectorUtils.FindWholeWordLower(const Needle,
+  HaystackLower: string; AFrom: Integer): Integer;
 var
   Start, NLen, HLen, i: Integer;
   LeftOK, RightOK     : Boolean;
@@ -740,11 +906,11 @@ begin
   Result := 0;
   NLen   := Length(Needle);
   HLen   := Length(HaystackLower);
-  if (NLen = 0) or (HLen < NLen) then Exit;
+  if (NLen = 0) or (HLen < NLen) or (AFrom < 1) then Exit;
 
-  // Pos() ist die Schleife - wir starten ab Position 1 und springen weiter
+  // Pos() ist die Schleife - wir starten ab AFrom und springen weiter
   // wenn der Match keine echten Wortgrenzen hat.
-  Start := 1;
+  Start := AFrom;
   while True do
   begin
     i := PosEx(Needle, HaystackLower, Start);
@@ -891,6 +1057,42 @@ begin
     else if inStr then
       Result[i] := ' ';
     Inc(i);
+  end;
+end;
+
+class function TDetectorUtils.SplitTopLevelArgs(
+  const Args: string): TArray<string>;
+// Byte-identische Zentralisierung der uIfThenShortCircuit-Fassung
+// (Voll-Review 2026-09-12, Posten 71) - Vertrag siehe interface.
+var
+  parts : TList<string>;
+  i, depth, start : Integer;
+  inStr : Boolean;
+  c : Char;
+begin
+  parts := TList<string>.Create;
+  try
+    depth := 0; inStr := False; start := 1;
+    for i := 1 to Length(Args) do
+    begin
+      c := Args[i];
+      if inStr then
+      begin
+        if c = '''' then inStr := False;
+      end
+      else if c = '''' then inStr := True
+      else if c = '(' then Inc(depth)
+      else if c = ')' then Dec(depth)
+      else if (c = ',') and (depth = 0) then
+      begin
+        parts.Add(Copy(Args, start, i - start));
+        start := i + 1;
+      end;
+    end;
+    parts.Add(Copy(Args, start, Length(Args) - start + 1));
+    Result := parts.ToArray;
+  finally
+    parts.Free;
   end;
 end;
 
@@ -1343,6 +1545,89 @@ begin
   Result := LowerCase(OwnerTypeName(AName));
 end;
 
+class procedure TDetectorUtils.CollectNameTypeTokens(Root: TAstNode;
+  SB: TStringBuilder);
+// Vertrag siehe interface.
+var
+  Stack : TStack<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
+begin
+  if Root = nil then Exit;
+  Stack := TStack<TAstNode>.Create;
+  try
+    Stack.Push(Root);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack.Pop;
+      if Cur.Name    <> '' then SB.Append(' ').Append(Cur.Name);
+      if Cur.TypeRef <> '' then SB.Append(' ').Append(Cur.TypeRef);
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Push(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
+end;
+
+class function TDetectorUtils.BuildMethodOwnerMap(UnitNode: TAstNode)
+  : TDictionary<TAstNode, string>;
+// Vertrag siehe interface. Verschachtelte Typen haengen als GESCHWISTER
+// in der Typsektion (siehe ParseNestedTypeDecl in uParser2), nicht
+// unter dem aeusseren Knoten - der Subtree-Walk je Typknoten ordnet
+// also nichts doppelt zu.
+const
+  // Interface-Typen fuehrt der Parser ebenfalls als nkClass; nkRecord
+  // deckt record/object mit Methoden ab.
+  OWNER_KINDS : array[0..1] of TNodeKind = (nkClass, nkRecord);
+var
+  Types : TList<TAstNode>;
+  Meths : TList<TAstNode>;
+  T, M  : TAstNode;
+  ki    : Integer;
+begin
+  Result := TDictionary<TAstNode, string>.Create;
+  if UnitNode = nil then Exit;
+  for ki := Low(OWNER_KINDS) to High(OWNER_KINDS) do
+  begin
+    Types := UnitNode.FindAll(OWNER_KINDS[ki]);
+    try
+      for T in Types do
+      begin
+        if T.Name = '' then Continue;
+        Meths := T.FindAll(nkMethod);
+        try
+          for M in Meths do
+            Result.AddOrSetValue(M, T.Name);
+        finally
+          Meths.Free;
+        end;
+      end;
+    finally
+      Types.Free;
+    end;
+  end;
+end;
+
+class function TDetectorUtils.FirstParentToken(const ATypeRef: string): string;
+// Byte-identische Hebung der uNamingExt-Fassung (Voll-Review
+// 2026-09-12): Generic-Kappung, Space-Split (erster Eltern-Ident),
+// Unit-Qualifier-Kappung - in dieser Reihenfolge.
+var
+  S : string;
+  P : Integer;
+begin
+  S := Trim(ATypeRef);
+  if S = '' then Exit('');
+  P := Pos('<', S);
+  if P > 0 then S := Trim(Copy(S, 1, P - 1));
+  P := Pos(' ', S);
+  if P > 0 then S := Trim(Copy(S, 1, P - 1));
+  P := LastDelimiter('.', S);
+  if P > 0 then S := Copy(S, P + 1, MaxInt);
+  Result := S;
+end;
+
 class function TDetectorUtils.IsNestedTypeMethodName(
   const AName: string): Boolean;
 var
@@ -1508,11 +1793,6 @@ end;
 class procedure TDetectorUtils.ParseCallsInExpr(const Expr: string;
   Calls: TList<TExprCall>);
 
-  function IsIdentStart(C: Char): Boolean; inline;
-  begin
-    Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']);
-  end;
-
 var
   T          : string;
   i, NameStart, NameEnd, Depth, ArgsStart : Integer;
@@ -1523,7 +1803,7 @@ begin
   i := 1;
   while i <= Length(T) do
   begin
-    if not IsIdentStart(T[i]) then
+    if not IsIdentStartChar(T[i]) then
     begin
       Inc(i);
       Continue;
@@ -1903,6 +2183,195 @@ begin
   Seg := LowerCase(UnqualifiedNameLast(Trim(ATypeName)));
   if Seg = '' then Exit;
   Result := AFfiTypes.IndexOf(Seg) >= 0;
+end;
+
+class function TDetectorUtils.ExtractFirstWord(const Line: string;
+  out StartCol: Integer): string;
+var
+  i, n, wStart : Integer;
+  c            : Char;
+begin
+  Result := '';
+  StartCol := 0;
+  n := Length(Line);
+  i := 1;
+  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
+  if i > n then Exit;
+  c := Line[i];
+  if c = '{' then Exit;
+  if (c = '/') and (i < n) and (Line[i + 1] = '/') then Exit;
+  if (c = '(') and (i < n) and (Line[i + 1] = '*') then Exit;
+  if not CharInSet(c, ['A'..'Z', 'a'..'z', '_']) then Exit;
+  wStart := i;
+  StartCol := wStart;
+  while (i <= n) and CharInSet(Line[i], ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+    Inc(i);
+  Result := Copy(Line, wStart, i - wStart);
+end;
+
+class function TDetectorUtils.ExtractFirstWordOrBracket(const Line: string;
+  out StartCol: Integer): string;
+// Reihenfolge unerheblich: eine Zeile, die mit '[' beginnt, faellt in
+// keinen Kommentar-Opener - fuer alle anderen entscheidet der Kern.
+var
+  i, n : Integer;
+begin
+  n := Length(Line);
+  i := 1;
+  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
+  if (i <= n) and (Line[i] = '[') then
+  begin
+    StartCol := i;
+    Exit('[');
+  end;
+  Result := ExtractFirstWord(Line, StartCol);
+end;
+
+class function TDetectorUtils.CountBooleanOpsLower(
+  const ACondText: string): Integer;
+// Byte-identische Hebung der beiden Detektor-Fassungen (Kern-Schleife
+// samt Wort-Boundary-Helfern; Begruendung an der Deklaration).
+var
+  Lo : string;
+  i  : Integer;
+  function IsBoundaryAt(Pos: Integer): Boolean;
+  begin
+    Result := (Pos < 1) or (Pos > Length(Lo)) or (not IsIdentChar(Lo[Pos]));
+  end;
+  function MatchAt(Pos: Integer; const W: string): Boolean;
+  var j: Integer;
+  begin
+    if Pos + Length(W) - 1 > Length(Lo) then Exit(False);
+    for j := 1 to Length(W) do
+      if Lo[Pos + j - 1] <> W[j] then Exit(False);
+    Result := IsBoundaryAt(Pos - 1) and IsBoundaryAt(Pos + Length(W));
+  end;
+begin
+  Result := 0;
+  // Literale blanken - and/or/xor in einem String-Literal zaehlen nicht.
+  Lo := LowerCase(BlankStringLiterals(ACondText));
+  i  := 1;
+  while i <= Length(Lo) do
+  begin
+    case Lo[i] of
+      'a': if MatchAt(i, 'and') then begin Inc(Result); Inc(i, 3); Continue; end;
+      'o': if MatchAt(i, 'or')  then begin Inc(Result); Inc(i, 2); Continue; end;
+      'x': if MatchAt(i, 'xor') then begin Inc(Result); Inc(i, 3); Continue; end;
+    else
+      ;   // jedes andere Zeichen: kein Operator-Anfang, einfach weiter
+    end;
+    Inc(i);
+  end;
+end;
+
+class function TDetectorUtils.IsEventHandlerSignature(
+  MethodNode: TAstNode): Boolean;
+// Hebung der uCanBeClassMethod-/uMethodName-Fassungen (Voll-Review
+// 2026-09-12): erster nkParam entscheidet - 'Sender' als Name oder
+// der Typ TObject. Faengt FormCreate(Sender: TObject),
+// btnClick(Sender: TObject), OnFilter(Sender: TObject; ...) etc.
+//
+// Der TYP-Vergleich ist EXAKT (letztes Namenssegment, Generic-Suffix
+// gekappt - FirstParentToken-Schablone), nicht Substring: die
+// fruehere Pos('tobject', ...)-Fassung erklaerte JEDE Methode zum
+// Event-Handler, deren erster Parameter TObjectList<T>/
+// TObjectDictionary & Co. war - reale, haeufige Signaturen, deren
+// Funde still verschwanden (Gruppen-Finding des Voll-Reviews; die
+// Kopf-Doku beider Kopien deckte nur den exakten Typ TObject).
+// 'System.TObject' matcht weiter (Qualifier-Kappung).
+var
+  Child : TAstNode;
+begin
+  Result := False;
+  for Child in MethodNode.Children do
+  begin
+    if Child.Kind <> nkParam then Continue;
+    if SameText(Child.Name, 'Sender') then Exit(True);
+    if SameText(FirstParentToken(Child.TypeRef), 'TObject') then
+      Exit(True);
+    Exit;                              // nur ersten Parameter pruefen
+  end;
+end;
+
+class function TDetectorUtils.IsFunctionTypeRef(
+  const ATypeRef: string): Boolean;
+var
+  ColonPos, SemiPos : Integer;
+begin
+  ColonPos := Pos(':', ATypeRef);
+  if ColonPos = 0 then Exit(False);
+  SemiPos := Pos(';', ATypeRef);
+  Result := (SemiPos = 0) or (ColonPos < SemiPos);
+end;
+
+class function TDetectorUtils.IsBodylessTypeRef(
+  const ATypeRef: string): Boolean;
+var
+  Low : string;
+begin
+  Low := LowerCase(ATypeRef);
+  Result := (Pos(';abstract',  Low) > 0) or
+            (Pos(';forward',   Low) > 0) or
+            (Pos(';external',  Low) > 0) or
+            (Pos(';dispid',    Low) > 0);
+end;
+
+class function TDetectorUtils.ExtractReturnType(
+  const ATypeRef: string): string;
+var
+  c, s : Integer;
+begin
+  Result := '';
+  c := Pos(':', ATypeRef);
+  if c = 0 then Exit;
+  Result := Copy(ATypeRef, c + 1, MaxInt);
+  s := Pos(';', Result);
+  if s > 0 then Result := Copy(Result, 1, s - 1);
+  Result := Trim(Result);
+end;
+
+class function TDetectorUtils.HasAbsoluteResultAlias(
+  AMethodNode: TAstNode): Boolean;
+var
+  LocalVars : TList<TAstNode>;
+  LV  : TAstNode;
+  Low : string;
+  p, j : Integer;
+begin
+  Result := False;
+  LocalVars := AMethodNode.FindAll(nkLocalVar);
+  try
+    for LV in LocalVars do
+    begin
+      Low := LowerCase(LV.TypeRef);
+      p := Pos('absolute', Low);
+      if p = 0 then Continue;
+      j := p + 8;                                  // hinter 'absolute'
+      while (j <= Length(Low)) and (Low[j] <= ' ') do Inc(j);
+      if (Copy(Low, j, 6) = 'result')
+         and ((j + 6 > Length(Low))
+              or not CharInSet(Low[j + 6], ['a'..'z', '0'..'9', '_'])) then
+        Exit(True);
+    end;
+  finally
+    LocalVars.Free;
+  end;
+end;
+
+class function TDetectorUtils.NormalizeLhsLower(const S: string): string;
+var
+  i, o : Integer;
+begin
+  SetLength(Result, Length(S));
+  o := 0;
+  for i := 1 to Length(S) do
+    if S[i] > ' ' then
+    begin
+      Inc(o);
+      Result[o] := S[i];
+    end;
+  SetLength(Result, o);
+  Result := LowerCase(Result);
 end;
 
 end.

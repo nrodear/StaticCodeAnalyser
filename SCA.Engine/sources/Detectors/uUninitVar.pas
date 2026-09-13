@@ -714,8 +714,22 @@ begin
       Exit(True);
 end;
 
-function IsVarUsedInNestedRanges(Lines: TStringList;
-  const NameLow: string; const Ranges: TList<TLineRange>): Boolean;
+function IsVarUsedInNestedRanges(const AStrippedLow: TArray<string>;
+  AFrom0: Integer; const NameLow: string;
+  const Ranges: TList<TLineRange>): Boolean;
+// QUELLE IST DER GESTRIPPTE CACHE, nicht die rohen Zeilen (Voll-Review
+// 2026-09-12, Major 86): vorher las die Funktion Lines[i] roh, ein
+// blosser Kommentar mit dem Variablennamen in einer nested routine
+// ('// Cands wird spaeter gefuellt') genuegte also, um den echten
+// never-written-Fund zu unterdruecken - Error-Tier-FN und ein Verstoss
+// gegen die Projektregel 'Kommentare zaehlen NIE als Code-Use'. Dasselbe
+// galt fuer String-Literale. Die Anon-Schwester VarUsedInAnonRanges liest
+// den gestrippten Cache seit jeher; jetzt tun es beide.
+//
+// AStrippedLow ist bereits lowercase und deckt [AFrom0 .. AFrom0+High]
+// (0-basierte Lines-Indizes) ab - genau den Methodenbereich, in dem alle
+// Ranges liegen. Zeilen ausserhalb gibt es hier nicht; sie wuerden
+// uebersprungen.
 // Prueft ob NameLow als Identifier (mit Wortgrenzen) in einer der
 // Nested-Method-Source-Zeilen auftaucht. Wenn ja, ist die Variable
 // vermutlich eine outer-scope-Var die als Closure in nested-Procs
@@ -734,14 +748,14 @@ var
   Before, After : Char;
 begin
   Result := False;
-  if (Lines = nil) or (Ranges = nil) or (NameLow = '') then Exit;
+  if (Length(AStrippedLow) = 0) or (Ranges = nil) or (NameLow = '') then Exit;
   NameLen := Length(NameLow);
   for k := 0 to Ranges.Count - 1 do
   begin
     for i := Ranges[k].StartLine - 1 to Ranges[k].EndLine - 1 do
     begin
-      if (i < 0) or (i >= Lines.Count) then Continue;
-      L := LowerCase(Lines[i]);
+      if (i - AFrom0 < 0) or (i - AFrom0 > High(AStrippedLow)) then Continue;
+      L := AStrippedLow[i - AFrom0];      // bereits geblankt + lowercase
       P := Pos(NameLow, L);
       while P > 0 do
       begin
@@ -758,8 +772,8 @@ begin
   end;
 end;
 
-function IsVarReadInNestedRoutineFromSource(Lines: TStringList;
-  DeclLine: Integer; const NameLow: string): Boolean;
+function IsVarReadInNestedRoutineFromSource(const AStrippedLow: TArray<string>;
+  AFrom0: Integer; DeclLine: Integer; const NameLow: string): Boolean;
 // Robuste, AST-UNABHAENGIGE Closure-Erkennung fuer die Headless-Method-FP-
 // Klasse: eine outer-scope-Variable wird im outer-body erzeugt/zugewiesen,
 // aber NUR in einer nested routine gelesen. Unter dem Headless-Pattern
@@ -774,6 +788,11 @@ function IsVarReadInNestedRoutineFromSource(Lines: TStringList;
 // (eingerueckter procedure/function-Header) vorkommt. Policy identisch zur
 // bestehenden Closure-Regel (Closure-Vars werden nicht geflaggt) - nur
 // robuster in der Erkennung, daher kein neuer FN-Typ.
+//
+// Quelle ist der GESTRIPPTE Cache (Voll-Review 2026-09-12, Major 86) -
+// Begruendung s. IsVarUsedInNestedRanges. Der Strip ist
+// laengenerhaltend, die Spalten-/Einrueckungslogik von IsNestedHeader
+// und der Spalte-0-'begin'-Abbruch bleiben damit gueltig.
 var
   i, Dummy, Depth : Integer;
   Raw, LTrim      : string;
@@ -799,15 +818,16 @@ var
 
 begin
   Result := False;
-  if (Lines = nil) or (NameLow = '') then Exit;
-  if (DeclLine <= 0) or (DeclLine >= Lines.Count) then Exit;
+  if (Length(AStrippedLow) = 0) or (NameLow = '') then Exit;
+  if (DeclLine <= 0) or (DeclLine - AFrom0 > High(AStrippedLow)) then Exit;
   InNested := False; Depth := 0; Started := False;
   // Ab der Zeile NACH der Deklaration (0-based Index DeclLine = Quellzeile
   // DeclLine+1) bis zum Outer-Body-'begin'.
-  for i := DeclLine to Lines.Count - 1 do
+  for i := DeclLine to High(AStrippedLow) + AFrom0 do
   begin
-    Raw   := Lines[i];
-    LTrim := LowerCase(TrimLeft(Raw));
+    if i - AFrom0 < 0 then Continue;
+    Raw   := AStrippedLow[i - AFrom0];    // geblankt + lowercase
+    LTrim := TrimLeft(Raw);
     // Spalte-0-'begin' = Outer-Body-Start: Deklarations-/nested-Sektion vorbei.
     // Nachfolgende Reads waeren echter Outer-Body, keine Closure -> stop.
     if (Length(Raw) > 0) and (Raw[1] > ' ') and LTrim.StartsWith('begin') then Break;
@@ -1065,27 +1085,13 @@ begin
 end;
 
 procedure CollectBodyTokens(Root: TAstNode; SB: TStringBuilder);
-// Iterativ analog uUnusedLocal.CollectAllTokens - sammelt Name+TypeRef.
-var
-  Stack : TStack<TAstNode>;
-  Cur   : TAstNode;
-  i     : Integer;
+// Sammelt Name+TypeRef. Der Kopf sagte schon 'Iterativ analog
+// uUnusedLocal.CollectAllTokens' - seit Voll-Review 2026-09-12
+// (Posten 89) ist es nicht mehr analog, sondern dieselbe Routine:
+// TDetectorUtils.CollectNameTypeTokens. Wrapper bleibt fuer die
+// Aufrufer dieser Unit.
 begin
-  if Root = nil then Exit;
-  Stack := TStack<TAstNode>.Create;
-  try
-    Stack.Push(Root);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack.Pop;
-      if Cur.Name    <> '' then SB.Append(' ').Append(Cur.Name);
-      if Cur.TypeRef <> '' then SB.Append(' ').Append(Cur.TypeRef);
-      for i := 0 to Cur.Children.Count - 1 do
-        Stack.Push(Cur.Children[i]);
-    end;
-  finally
-    Stack.Free;
-  end;
+  TDetectorUtils.CollectNameTypeTokens(Root, SB);
 end;
 
 function LooksLikeRealLocalVar(Lines: TStringList; LineNo1: Integer): Boolean;
@@ -4097,13 +4103,18 @@ var
       // nested-Proc liest. Der Lifecycle ist path-sensitive (Aufruf-
       // Reihenfolge); konservativ kein Finding. Killt 5-12 FPs aus dem
       // Self-Scan (Cands/Reported/SourceCache/grid/HasVal etc.).
-      if IsVarUsedInNestedRanges(Lines, P.NameLow, NestedRanges) then
+      // Quelle: der gestrippte Cache (Major 86). Er ist hier immer
+      // gebaut - PhaseC baut ihn fuer die erste Variable mit
+      // RefCount>1, und genau die erreichen diese Schleife.
+      if IsVarUsedInNestedRanges(StrippedLow, StrippedFrom0,
+                                 P.NameLow, NestedRanges) then
         Continue;
       // Robuster Source-Fallback: greift wenn der Parser unter dem Headless-
       // Pattern (nested routine + zweite var-Section) KEINE nkNestedRange-Marker
       // liefert, sodass NestedRanges leer/unvollstaendig ist und obiger Check
       // ins Leere laeuft (uRuleCatalog Cands, uFormatMismatch Reported).
-      if IsVarReadInNestedRoutineFromSource(Lines, P.DeclLine, P.NameLow) then
+      if IsVarReadInNestedRoutineFromSource(StrippedLow, StrippedFrom0,
+                                            P.DeclLine, P.NameLow) then
         Continue;
 
       // ANMERKUNG (Perf 2026-08-02): hier stand der Aufruf von

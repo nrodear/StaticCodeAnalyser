@@ -10,6 +10,9 @@ type
   TTestLeakInConstructor = class
   public
     [Test] procedure FieldCreateThenRaise_Reported;
+    // Voll-Review 2026-09-12 (Blocker): Ctor-Lokale mit f-Praefix
+    // zaehlten als Felder.
+    [Test] procedure CtorLocalWithFPrefix_NoFinding;
     [Test] procedure FieldCreateWithoutRaise_NoFinding;
     [Test] procedure RaiseWithoutFieldCreate_NoFinding;
     [Test] procedure ProtectedByTryExcept_NoFinding;
@@ -42,6 +45,19 @@ type
 
   // Literal-Stripping-Welle A (2026-08-09) - eigene Fixture, damit die Basisklasse unter der GodClass-Schwelle bleibt.
   [TestFixture]
+  // ---- Testluecke 165: lokale f-Variablen -----------------------------
+  // Eigene Fixture, nicht zwei weitere Methoden in
+  // TTestLeakInConstructor: die spannte mit meinen zweien 528 Zeilen und
+  // der Selbstscan meldete LargeClass. Die Datei kennt das Muster schon
+  // (TTestLeakInConstructorLiterals darunter).
+  [TestFixture]
+  TTestLeakInConstructorLocals = class
+  public
+    [Test] procedure LocalFPrefixVarFreedInFinally_NoFinding;
+    [Test] procedure RealFieldWithoutDestructor_StillReported;
+  end;
+
+  [TestFixture]
   TTestLeakInConstructorLiterals = class
   public
     [Test] procedure LiteralDotCreateInAssign_NoFinding;
@@ -50,13 +66,53 @@ type
 
 implementation
 
-// noinspection-file ClassPerFile
+// noinspection-file ClassPerFile, GodClass
+// GodClass: 21 Testmethoden, 0 Felder - eine Vertragstest-Sammlung je
+// Detektor-Gate, kein Zustand; die Schwelle (20) misst Produktivklassen.
 // Zwei thematisch getrennte Fixtures in einer Unit.
 
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+procedure TTestLeakInConstructor.CtorLocalWithFPrefix_NoFinding;
+// 'var fs: TFileStream' im Konstruktor, sauber per try/finally
+// freigegeben: 'fs' beginnt mit f, wurde als allokiertes FELD
+// gesammelt, und der Destruktor-Abgleich meldete lsError auf
+// korrektem Code. Das Lokal-/Parameter-Gate muss greifen.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type TConfig = class'#13#10 +
+  'public'#13#10 +
+  '  constructor Create(const AFile: string);'#13#10 +
+  '  destructor Destroy; override;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TConfig.Create(const AFile: string);'#13#10 +
+  'var fs: TFileStream;'#13#10 +
+  'begin'#13#10 +
+  '  fs := TFileStream.Create(AFile, fmOpenRead);'#13#10 +
+  '  try'#13#10 +
+  '    LoadFrom(fs);'#13#10 +
+  '  finally'#13#10 +
+  '    fs.Free;'#13#10 +
+  '  end;'#13#10 +
+  '  if not FValid then raise EConfigError.Create(''bad'');'#13#10 +
+  'end;'#13#10 +
+  'destructor TConfig.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  inherited;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLeakInConstructor),
+    'eine Ctor-lokale Variable mit f-Praefix ist kein Feld');
+  finally F.Free; end;
+end;
 
 procedure TTestLeakInConstructor.FieldCreateThenRaise_Reported;
 const SRC =
@@ -563,6 +619,80 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkLeakInConstructor) >= 1,
     'Literal-Text im Destruktor ist keine Freigabe - der Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+{ --- Testluecke 165: lokale f-Variablen ---------------------------- }
+//
+// CollectAllocatedFields sammelt Feld-Allokationen im Konstruktor. Ein
+// LOKALES 'fs: TStringList' sieht mit seinem f-Praefix aus wie ein
+// Feld - es ist aber eine Variable, und wenn sie per try/finally
+// freigegeben wird, ist nichts undicht. Alle Bestandsfixturen
+// allokieren ausschliesslich echte F-Felder; der FP-Pfad war ungeprueft.
+// Beide am gebauten Stand nachgemessen.
+//
+// HARNESS: FindingsOf. TLeakInConstructorDetector ist nur DORT
+// registriert (uTestFindingHelper:187), nicht in FindingsOfFile - der
+// erste Anlauf stand dort. compile_sanity_gate hat es als WARNUNG
+// gemeldet (fkMemoryLeak hat mehrere Erzeuger, deshalb kein harter
+// Befund); die 22 Bestandstests der Datei nutzen ebenfalls FindingsOf.
+
+procedure TTestLeakInConstructorLocals.LocalFPrefixVarFreedInFinally_NoFinding;
+// Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TB = class'#13#10 +
+  '    constructor Create;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TB.Create;'#13#10 +
+  'var'#13#10 +
+  '  fs: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  fs := TStringList.Create;'#13#10 +
+  '  try'#13#10 +
+  '    fs.Add(''x'');'#13#10 +
+  '  finally'#13#10 +
+  '    fs.Free;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkMemoryLeak),
+    'eine lokale Variable mit f-Praefix ist kein Feld');
+  finally F.Free; end;
+end;
+
+procedure TTestLeakInConstructorLocals.RealFieldWithoutDestructor_StillReported;
+// Die Gegenprobe: ein ECHTES Feld, im Konstruktor erzeugt, ohne
+// Destruktor. Ohne sie waere die Null oben auch dann erklaerbar, wenn
+// der Detektor die Konstellation gar nicht erreicht.
+// Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TA = class'#13#10 +
+  '    FEcht: TStringList;'#13#10 +
+  '    constructor Create;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'constructor TA.Create;'#13#10 +
+  'begin'#13#10 +
+  '  FEcht := TStringList.Create;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkMemoryLeak),
+    'ein echtes Feld ohne Destruktor ist ein Leck');
   finally F.Free; end;
 end;
 

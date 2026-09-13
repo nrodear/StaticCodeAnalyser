@@ -14,6 +14,9 @@ type
     [Test] procedure AssignedAndNotNil_NoParens_Reported;
     [Test] procedure DifferentIdentifiers_NoFinding;
     [Test] procedure AssignedAndAssignedNil_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Major 44): die versprochene Spiegel-Form
+    [Test] procedure NotNilThenAssigned_Reported;
+    [Test] procedure NotNilThenAssignedDifferentIds_NoFinding;
   end;
 
 implementation
@@ -86,6 +89,52 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkAssignedAndAssignedNil finding');
+  finally F.Free; end;
+end;
+
+procedure TTestAssignedAndAssignedNil.NotNilThenAssigned_Reported;
+// Voll-Review 2026-09-12 (Major 44): Header und Helfer-Kommentar
+// versprachen die Spiegel-Form '(X <> nil) and Assigned(X)' seit
+// jeher - geparst wurde nur die Assigned-zuerst-Form (Bestands-Exe:
+// 0 Funde, empirisch belegt).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure P(Obj: TObject);'#13#10 +
+  'begin'#13#10 +
+  '  if (Obj <> nil) and Assigned(Obj) then'#13#10 +
+  '    Tu;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkAssignedAndAssignedNil),
+    'die Spiegel-Form ist genauso redundant und muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestAssignedAndAssignedNil.NotNilThenAssignedDifferentIds_NoFinding;
+// Gegenrichtung: verschiedene Bezeichner sind KEINE Redundanz - ein
+// Spiegel-Pfad, der die Id nicht vergleicht, waere hier rot.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure P(A, B: TObject);'#13#10 +
+  'begin'#13#10 +
+  '  if (A <> nil) and Assigned(B) then'#13#10 +
+  '    Tu;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkAssignedAndAssignedNil),
+    'verschiedene Bezeichner - keine Redundanz');
   finally F.Free; end;
 end;
 

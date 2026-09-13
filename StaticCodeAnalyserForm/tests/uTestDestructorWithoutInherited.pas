@@ -26,6 +26,11 @@ type
     // TObject-Basis (Kundenkorpus SVGIconImageList, 29.08.)
     [Test] procedure DirectTObjectDescendant_IsWarningNotError;
     [Test] procedure RealParentClass_StaysError;
+
+    // ---- Stub-File-Gate (Testluecke 129) ----------------------------------
+    [Test] procedure StubFile_FiveEmptyBodies_Silenced;
+    [Test] procedure StubFile_FourEmptyBodies_CountLimbMissed_StillReported;
+    [Test] procedure StubFile_RatioBelowLimit_StillReported;
   end;
 
 implementation
@@ -355,6 +360,150 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkDestructorWithoutInherited finding');
+  finally F.Free; end;
+end;
+
+// ---------------------------------------------------------------------------
+// Stub-File-Gate (Testluecke 129, Voll-Review 2026-09-12)
+// ---------------------------------------------------------------------------
+// AnalyzeUnit schweigt fuer die GANZE Unit, wenn >=5 effektiv-leere
+// Method-Bodies UND das Verhaeltnis empty/total ueber 70 % liegt
+// (uDestructorWithoutInherited.pas:298-320) - das PScript-Stub-Muster.
+// Fuer diesen Kind gab es dazu keinen einzigen Test; repo-weit prueft nur
+// uTestRoutineResultAssigned:235 die gleichnamige Heuristik des ANDEREN
+// Detektors. Die zwei Bedingungen sind mit UND verknuepft, deshalb drei
+// Tests: einmal beide erfuellt, einmal je eine Bedingung verfehlt. Mit nur
+// einer Gegenprobe koennte das andere Glied unbemerkt wegfallen.
+//
+// Die drei Fixtures sind am gebauten Stand nachgemessen (0 / 1 / 1), nicht
+// aus dem Kopf gerechnet - und zwar an den Zeichenketten, die hier stehen:
+// die Einzeiler-Form 'procedure TFoo.Stub1; begin end;' ist eine andere
+// Eingabe als der dreizeilige Rumpf, mit dem der erste Versuch lief.
+//
+// Die drei aehneln sich absichtlich bis auf die Stub-Zahl - der Selbstscan
+// meldet dafuer vier zusaetzliche DuplicateBlock-Hints. Kein Mangel: genau
+// dieser eine Unterschied IST der Prueffall, und ein Generator statt
+// literaler Fixtures wuerde verstecken, was der Parser wirklich sieht
+// (Profil-Politik: SCA015/SCA021 zaehlen in Testunits nicht).
+
+procedure TTestDestructorWithoutInherited.StubFile_FiveEmptyBodies_Silenced;
+// 5 leere Rumpfe + 1 Destruktor = 6 Bodies, Verhaeltnis 0,83 -> Gate greift.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class(TObject)'#13#10 +
+  '  private'#13#10 +
+  '    FBar: TObject;'#13#10 +
+  '  public'#13#10 +
+  '    procedure Stub1;'#13#10 +
+  '    procedure Stub2;'#13#10 +
+  '    procedure Stub3;'#13#10 +
+  '    procedure Stub4;'#13#10 +
+  '    procedure Stub5;'#13#10 +
+  '    destructor Destroy; override;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Stub1; begin end;'#13#10 +
+  'procedure TFoo.Stub2; begin end;'#13#10 +
+  'procedure TFoo.Stub3; begin end;'#13#10 +
+  'procedure TFoo.Stub4; begin end;'#13#10 +
+  'procedure TFoo.Stub5; begin end;'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FBar);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkDestructorWithoutInherited),
+    'Stub-File: die ganze Unit bleibt still');
+  finally F.Free; end;
+end;
+
+procedure TTestDestructorWithoutInherited.StubFile_FourEmptyBodies_CountLimbMissed_StillReported;
+// Nur 4 leere Rumpfe - das Verhaeltnis waere mit 0,80 hoch genug, die
+// ANZAHL reicht nicht. Isoliert das erste Glied der UND-Bedingung.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class(TObject)'#13#10 +
+  '  private'#13#10 +
+  '    FBar: TObject;'#13#10 +
+  '  public'#13#10 +
+  '    procedure Stub1;'#13#10 +
+  '    procedure Stub2;'#13#10 +
+  '    procedure Stub3;'#13#10 +
+  '    procedure Stub4;'#13#10 +
+  '    destructor Destroy; override;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Stub1; begin end;'#13#10 +
+  'procedure TFoo.Stub2; begin end;'#13#10 +
+  'procedure TFoo.Stub3; begin end;'#13#10 +
+  'procedure TFoo.Stub4; begin end;'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FBar);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkDestructorWithoutInherited),
+    'vier leere Rumpfe reissen die Schwelle von fuenf nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestDestructorWithoutInherited.StubFile_RatioBelowLimit_StillReported;
+// 5 leere Rumpfe - die ANZAHL stimmt -, dazu 2 gefuellte Methoden: 5 von 8
+// sind 0,625 und damit unter 70 %. Isoliert das zweite Glied.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class(TObject)'#13#10 +
+  '  private'#13#10 +
+  '    FBar: TObject;'#13#10 +
+  '  public'#13#10 +
+  '    procedure Stub1;'#13#10 +
+  '    procedure Stub2;'#13#10 +
+  '    procedure Stub3;'#13#10 +
+  '    procedure Stub4;'#13#10 +
+  '    procedure Stub5;'#13#10 +
+  '    procedure Work1;'#13#10 +
+  '    procedure Work2;'#13#10 +
+  '    destructor Destroy; override;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Stub1; begin end;'#13#10 +
+  'procedure TFoo.Stub2; begin end;'#13#10 +
+  'procedure TFoo.Stub3; begin end;'#13#10 +
+  'procedure TFoo.Stub4; begin end;'#13#10 +
+  'procedure TFoo.Stub5; begin end;'#13#10 +
+  'procedure TFoo.Work1;'#13#10 +
+  'begin'#13#10 +
+  '  DoIt;'#13#10 +
+  'end;'#13#10 +
+  'procedure TFoo.Work2;'#13#10 +
+  'begin'#13#10 +
+  '  DoIt;'#13#10 +
+  'end;'#13#10 +
+  'destructor TFoo.Destroy;'#13#10 +
+  'begin'#13#10 +
+  '  FreeAndNil(FBar);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkDestructorWithoutInherited),
+    'unter 70 % greift das Gate nicht, auch bei fuenf leeren Rumpfen');
   finally F.Free; end;
 end;
 

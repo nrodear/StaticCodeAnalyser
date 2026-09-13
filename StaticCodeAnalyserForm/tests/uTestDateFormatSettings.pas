@@ -38,6 +38,8 @@ type
     [Test] procedure RealCallBesideStringLiteral_StillReported;
 
     [Test] procedure Finding_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Testluecke 108): Suppression-Asymmetrie
+    [Test] procedure FormatSettingsOnlyInLiteral_StillReported;
   end;
 
 implementation
@@ -226,6 +228,36 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkDateFormatSettings) >= 1);
+  finally F.Free; end;
+end;
+
+procedure TTestDateFormatSettings.FormatSettingsOnlyInLiteral_StillReported;
+// Testluecke 108, GESCHAERFT beim Minor 235 (Voll-Review 2026-09-12).
+// Die Suppression darf nur greifen, wenn wirklich ein
+// TFormatSettings-Argument uebergeben wird - steht das Wort nur in
+// einem String-Literal, ist der Aufruf weiterhin locale-abhaengig.
+//
+// DIE ERSTE FASSUNG DIESES TESTS WAR GRUEN, OHNE DEN FEHLER ZU
+// BERUEHREN: sie stellte das Literal in eine EIGENE Anweisung
+// (WriteLn in der Zeile darunter). CheckCallText arbeitet aber pro
+// KNOTEN - ein Literal aus einer anderen Anweisung erreicht die
+// Unterdrueckung nie, und der Test konnte gar nicht rot werden.
+// Jetzt steht das Wort IM Argument desselben Aufrufs; damit greift
+// der Pfad, um den es geht.
+// Am gebauten Stand nachgemessen: vor dem Fix 0 Funde, danach 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P(D: TDateTime);'#13#10 +
+  'var S: string;'#13#10 +
+  'begin'#13#10 +
+  '  S := FormatDateTime(''FormatSettings yyyy-mm-dd'', D);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkDateFormatSettings),
+    'das Wort im Literal ist kein uebergebenes TFormatSettings');
   finally F.Free; end;
 end;
 

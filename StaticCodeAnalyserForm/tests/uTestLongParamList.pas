@@ -19,6 +19,9 @@ type
     // AContext.Config statt direkt vom uSCAConsts-Prozess-Global.
     [Test] procedure ContextConfig_OverridesGlobal;
     [Test] procedure NilContext_FallsBackToGlobal;
+    // Voll-Review 2026-09-12 (Major 74): Dedup ueber (Besitzertyp, Name)
+    [Test] procedure ClassMethodDeclPlusImpl_OneFinding;
+    [Test] procedure SameNameDifferentTypes_TwoFindings;
   end;
 
 implementation
@@ -148,6 +151,59 @@ begin
     Res2.Free;
     Parser.Free;
   end;
+end;
+
+procedure TTestLongParamList.ClassMethodDeclPlusImpl_OneFinding;
+// Voll-Review 2026-09-12 (Major 74): der alte Schluessel M.Name
+// kollidierte NIE zwischen Deklaration ('Bar') und Implementierung
+// ('TFoo.Bar') - jede implementierte Klassenmethode ueber der
+// Schwelle wurde DOPPELT gemeldet (Bestands-Exe: 2 Funde auf dieser
+// Fixture, empirisch belegt; Twin-Defekt wie SCA106 am 2026-08-01).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure Bar(A, B, C, D, E, F, G, H: Integer);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Bar(A, B, C, D, E, F, G, H: Integer);'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLongParamList),
+    'Deklaration und Implementierung derselben Methode sind EIN Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestLongParamList.SameNameDifferentTypes_TwoFindings;
+// FN-Richtung desselben Defekts: gleichnamige, nur deklarierte
+// Methoden ZWEIER Typen teilten den Schluessel - der zweite Befund
+// wurde unterdrueckt (Bestands-Exe: 1 Fund auf dieser Fixture,
+// empirisch belegt). Der Besitzertyp kommt fuer Deklarations-Knoten
+// lazy aus der OwnerMap.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  IAlpha = interface'#13#10 +
+  '    procedure Setup(A, B, C, D, E, F, G, H: Integer);'#13#10 +
+  '  end;'#13#10 +
+  '  IBeta = interface'#13#10 +
+  '    procedure Setup(A, B, C, D, E, F, G, H: Integer);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkLongParamList),
+    'gleichnamige Methoden verschiedener Typen sind ZWEI Befunde');
+  finally F.Free; end;
 end;
 
 initialization

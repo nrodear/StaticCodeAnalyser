@@ -22,6 +22,8 @@ type
     [Test] procedure Test_SqlFromParameter_NoFinding;
     [Test] procedure Test_NoDbQueryField_NoFinding;
     [Test] procedure Test_NoUiInputField_NoFinding;
+    // Voll-Review 2026-09-12 (Major 57): DB-Hit nur im Call-Pfad
+    [Test] procedure Test_SqlReadInDiagnosticCall_NoFinding;
     [Test] procedure Test_AssignmentToOtherProperty_NoFinding;
     [Test] procedure Test_AssignmentWithoutConcat_NoFinding;
     // Review-MEDIUM 2026-08-09: kurze Feldnamen brauchen linke Wortgrenze,
@@ -400,6 +402,31 @@ begin
   try
     Assert.Contains(F[0].MissingVar, 'qFind');
     Assert.Contains(F[0].MissingVar, 'edName');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmSqlFromUserInput.Test_SqlReadInDiagnosticCall_NoFinding;
+// Voll-Review 2026-09-12 (Major 57): der Call-Zweig matchte die
+// SQL-Property auch in den ARGUMENTEN - Diagnose-Code wie
+// 'ShowMessage(qFind.SQL.Text + edName.Text);' wurde als
+// lsError/ftVulnerability gemeldet, obwohl nur gelesen und angezeigt
+// wird. Der DB-Hit zaehlt jetzt nur im Call-Pfad VOR der ersten '('.
+const PAS =
+  'unit u; interface uses Vcl.Forms;'#13#10 +
+  'type TF = class(TForm) qFind: TADOQuery; edName: TEdit; end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TF.zeig;'#13#10 +
+  'begin'#13#10 +
+  '  ShowMessage(qFind.SQL.Text + edName.Text);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM_BASIC, PAS);
+  try
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmSqlFromUserInput),
+      'Lesen und Anzeigen des SQL ist keine Injection - der Call-Pfad ' +
+      'ist ShowMessage, nicht die SQL-Property');
   finally F.Free; end;
 end;
 

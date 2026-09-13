@@ -79,7 +79,8 @@ implementation
 // noinspection-file SQLInjection
 
 uses
-  System.RegularExpressions;
+  System.RegularExpressions,
+  uAstSpans;   // SubtreeContains (Voll-Review 2026-09-12)
 
 class function TThreadFreeOnTerminateWithRefDetector.MatchFreeOnTerminateLHS(
   const LHS: string): string;
@@ -141,30 +142,9 @@ begin
 end;
 
 function NodeContainsRef(Root, Target: TAstNode): Boolean;
-// Subtree-Containment per OBJEKT-Identitaet (TAstNode hat keinen Parent-
-// Pointer). Iterative DFS. Lokale Kopie des Musters aus uNilDeref - geteilte
-// Units bleiben unangetastet.
-var
-  Stack : TList<TAstNode>;
-  Cur   : TAstNode;
-  i     : Integer;
 begin
-  Result := False;
-  if (Root = nil) or (Target = nil) then Exit;
-  Stack := TList<TAstNode>.Create;
-  try
-    Stack.Add(Root);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      if Cur = Target then Exit(True);
-      for i := 0 to Cur.Children.Count - 1 do
-        Stack.Add(Cur.Children[i]);
-    end;
-  finally
-    Stack.Free;
-  end;
+  // Voll-Review 2026-09-12: zentral (TAstSpans.SubtreeContains).
+  Result := TAstSpans.SubtreeContains(Root, Target);
 end;
 
 class function TThreadFreeOnTerminateWithRefDetector.IsInExclusiveBranch(
@@ -275,9 +255,38 @@ begin
             for N in Assigns do
             begin
               if N.Line <= GateLine then Continue;
-              // Nur RHS-Reads (N.TypeRef) flaggen - LHS-Property-Assignments
-              // (`<var>.Name := x`) sind Config, kein gefaehrlicher Read.
-              if HasDangerousMemberAccess(N.TypeRef, Pair.Key) then
+              // ... UND nach der FoT-Zuweisung selbst (Voll-Review
+              // 2026-09-12, Blocker): Commit c7c20ab hatte den
+              // Pair.Value-Vergleich durch den GateLine-Vergleich
+              // ERSETZT statt ergaenzt - ein Zugriff ZWISCHEN Start
+              // und einer spaeteren FoT-Zuweisung wurde als 'after
+              // FreeOnTerminate:=True' gemeldet, obwohl FoT dort noch
+              // False ist (nach WaitFor ist der Thread beendet, die
+              // spaetere Zuweisung wirkungslos). Der Kopf-Vertrag
+              // ('subsequent, Line > Pass-1-Line') verlangt beide.
+              if N.Line <= Pair.Value then Continue;
+              // RHS-Reads (N.TypeRef) UND LHS-Schreibzugriffe (N.Name).
+              //
+              // Der Kommentar hier sagte bis zum Voll-Review 2026-09-12
+              // (Major 83), LHS-Zuweisungen seien 'Config, kein
+              // gefaehrlicher Read', und der LHS-Check war entfernt.
+              // Die Begruendung traegt an DIESER Stelle nicht: Pass 2
+              // sieht ausschliesslich Statements NACH der Aktivierung,
+              // und dort ist ein Schreibzugriff auf ein moeglicherweise
+              // bereits selbstzerstoertes Objekt genauso ein
+              // Use-after-Free wie ein Read. Die FP-Klasse, um die es
+              // 2026-06-21 wirklich ging (Config ZWISCHEN FoT und
+              // Start, Test ConfigBeforeStart_NotReported), faengt seit
+              // Commit c7c20ab das GateLine-Gate - c7c20ab hat den
+              // LHS-Check nur mit-entfernt, statt ihn stehen zu lassen.
+              //
+              // Am Korpus gezaehlt (16.023 Dateien, Shape-Naeherung
+              // '<v>.FreeOnTerminate := True' -> '<v>.Start' -> spaeteres
+              // '<v>.<prop> :='): NULL Vorkommen. Die Rueckkehr des
+              // Checks bewegt dort also nichts - sie schliesst eine
+              // Luecke, die der alte Code vor c7c20ab nicht hatte.
+              if HasDangerousMemberAccess(N.TypeRef, Pair.Key)
+                 or HasDangerousMemberAccess(N.Name, Pair.Key) then
               begin
                 // FP-Gate 2026-07-31 (mutually-exclusive-branches): FoT-
                 // Zuweisung und Zugriff in then- bzw. else-Zweig desselben
@@ -305,6 +314,9 @@ begin
             for N in Calls do
             begin
               if N.Line <= GateLine then Continue;
+              // Beide Gates wie in der Assign-Schleife (s. Kommentar
+              // dort): nach Aktivierung UND nach der FoT-Zuweisung.
+              if N.Line <= Pair.Value then Continue;
               if HasDangerousMemberAccess(N.Name, Pair.Key) then
               begin
                 // FP-Gate 2026-07-31 (mutually-exclusive-branches), s.o.

@@ -36,9 +36,26 @@ type
     // Review 2026-07-30: homonyme Klassennamen (top-level vs. nested)
     // duerfen weder Member mischen noch die Vererbungskette verlieren.
     [Test] procedure HomonymClasses_ConservativeSkip;
+    // Voll-Review 2026-09-12 (Testluecke 126): die drei Skips
+    [Test] procedure EventHandlerSignature_Skipped;
+    [Test] procedure MessageDirective_StillReported_ParserGap;
+    [Test] procedure ReintroduceDirective_Skipped;
+    // Posten 9007 (Voll-Review 2026-09-12, beim EMIT_SEVERITY-Kehraus
+    // gefunden): const-Sektion + public-Sektion verliert ;class
+    [Test] procedure ConstPlusPublicSection_KnownFalsePositive;
+    [Test] procedure SameWithoutConstSection_NoFinding;
+    [Test] procedure SameWithoutPublicSection_NoFinding;
   end;
 
 implementation
+
+// noinspection-file LargeClass
+// Eine Test-Fixture je Detektor ist die Projektkonvention; die Klasse
+// waechst mit jedem gepinnten Fall. Mit den drei Skips aus Testluecke
+// 126 (Voll-Review 2026-09-12) hat sie die 500-Zeilen-Schwelle
+// ueberschritten - Aufteilen wuerde die Faelle desselben Detektors
+// auseinanderreissen. Gleicher Marker und gleiche Begruendung wie in
+// uTestDetectorUtils und uTestTautologicalExpr.
 
 uses
   System.SysUtils, System.Generics.Collections,
@@ -598,6 +615,228 @@ begin
       'nur TWorker.Util darf gemeldet werden - Homonym-Key TItem und ' +
       'seine Ableitung TChild werden konservativ uebersprungen (kein FP ' +
       'trotz verlorener Parent-Kette)');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.EventHandlerSignature_Skipped;
+// Testluecke 126 (Voll-Review 2026-09-12): der Event-Handler-Skip war
+// ungetestet - ein Bruch waere erst am Korpus aufgefallen. Und er ist
+// heikel: derselbe Helfer (TDetectorUtils.IsEventHandlerSignature)
+// wurde in dieser Charge von Substring- auf exakten TObject-Vergleich
+// umgestellt und hat dabei bei SCA146 allein 774 Funde bewegt. Genau
+// deshalb gehoert er hier festgenagelt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure BtnClick(Sender: TObject);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.BtnClick(Sender: TObject);'#13#10 +
+  'begin'#13#10 +
+  '  ShowMessage(''x'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
+    'Event-Handler behalten ihre Instanz-Signatur - der Designer setzt sie');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.MessageDirective_StillReported_ParserGap;
+// PIN AUF EINEN BEKANNTEN DEFEKT - die erwartete 1 ist ein FALSCH
+// POSITIVER FUND, kein gewuenschtes Verhalten.
+//
+// Sachlage: ein VCL-Message-Handler kann keine Klassenmethode werden,
+// die Direktive bindet ihn an die Instanz-Dispatch-Tabelle.
+// IsPolymorphicMethod (uCanBeClassMethod.pas:119) verspricht den Skip
+// auch - nur kann er nie greifen: der Parser fuehrt 'message' weder in
+// IsMethodDirective noch in IsMethodDirectiveIdent
+// (uParser2.pas:180 bzw. :196), ParseMethodDirectives bricht davor ab,
+// und im TypeRef steht davon nichts. HasDirectiveWord(Low, 'message')
+// ist damit konstant False - eine tote Regel.
+//
+// Der Befund ist im Projekt bekannt und an anderer Stelle bereits
+// geloest: SCA054 liest die Direktive seit dem 27.08. aus der
+// GESTRIPPTEN QUELLE (Gate A, uUnusedParameter.pas:410, -1.019 Funde).
+// Dieser Detektor hat keinen Quellzugriff (kein AcquireLines), eine
+// dritte Kopie der Direktiven-Suche ist ausdruecklich unerwuenscht
+// (uUnusedParameter.pas:447 warnt, dass die zwei vorhandenen bereits
+// auseinanderlaufen). Die Behebung braucht deshalb einen eigenen Zweig
+// und einen Bau - Posten 9004 im Restposten-Verzeichnis.
+//
+// WER DEN PARSER REPARIERT, sieht diesen Test rot: dann ist die
+// Erwartung auf 0 zu stellen, der Name auf '_Skipped' zurueckzunehmen
+// und dieser Kommentarblock zu loeschen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure Msg(var M: TMessage); message WM_USER;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Msg(var M: TMessage);'#13#10 +
+  'begin'#13#10 +
+  '  ShowMessage(''y'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCanBeClassMethod),
+    'BEKANNTER FP: der Parser reicht die message-Direktive nicht ins ' +
+    'TypeRef, der Skip in IsPolymorphicMethod ist tot (Posten 9004)');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.ReintroduceDirective_Skipped;
+// reintroduce verdeckt eine gleichnamige geerbte Methode - die
+// Umstellung auf 'class' wuerde die Verdeckung veraendern.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure Re; reintroduce;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Re;'#13#10 +
+  'begin'#13#10 +
+  '  ShowMessage(''z'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
+    'reintroduce bleibt eine Instanzmethode');
+  finally F.Free; end;
+end;
+
+{ --- Posten 9007: const-Sektion kostet den ;class-Suffix ---------- }
+//
+// GEFUNDEN BEIM AUFRAEUMEN, nicht gesucht: nach dem Entfernen der toten
+// EMIT_SEVERITY-Konstante aus uTooLongLine meldete der Selbstscan dort
+// UnusedSuppression - der noinspection-Marker fuer CanBeClassMethod
+// hatte nichts mehr zu unterdruecken. Die Konstante war also nicht
+// inert: sie hat einen FALSCH POSITIVEN erzeugt.
+//
+// AUSLOESER, an einer 2x2x2-Matrix GEMESSEN statt geraten: es braucht
+// BEIDES - eine const-Sektion im Implementierungsteil UND eine
+// explizite public-Sektion in der Klassendeklaration. Fehlt eines von
+// beiden, bleibt der Fund aus. Leerzeilen und die Frage, ob der
+// Methodenkopf ein- oder mehrzeilig ist, spielen KEINE Rolle - das
+// hatte ich zuerst angenommen und die Matrix hat es widerlegt.
+//
+// Wirkung: im TypeRef fehlt der ;class-Suffix, IsAlreadyClassMethod
+// sieht eine gewoehnliche Methode - und der Detektor raet, man solle
+// sie zur Klassenmethode machen, die sie schon ist.
+//
+// Vermutete Stelle: uParser2:790 haengt ;class index-basiert an
+// Children[BeforeCount]; bei mehrzeiligem Kopf trifft der Index
+// offenbar einen anderen Knoten. NICHT hier behoben - der ;class-Suffix
+// wird auch von uFieldLeak und uVirtualCallInCtor gelesen, eine
+// Parseraenderung braucht Bau und A/B ueber mehrere Regeln.
+//
+// Korpuswirkung heute: KEINE. fkCanBeClassMethod ist fcLow und steht
+// im Referenzlauf nicht (0 Vorkommen in der A/B-SARIF vom 13.09.).
+// Alle drei am gebauten Stand nachgemessen.
+//
+// Die drei Fixturen unterscheiden sich absichtlich in je EINER
+// Variablen - das ist die Matrix. Der Selbstscan meldet dafuer drei
+// zusaetzliche DuplicateBlock-Hints; in Testunits per Profil-Politik
+// kein Mangel.
+
+procedure TTestCanBeClassMethod.ConstPlusPublicSection_KnownFalsePositive;
+// Die 1 ist der DEFEKT. Wer 9007 behebt, stellt sie auf 0.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    class procedure Go(A: Integer; const B: string;'#13#10 +
+  '      C: Integer = 0);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'const'#13#10 +
+  '  X = 1;'#13#10 +
+  'class procedure TFoo.Go(A: Integer;'#13#10 +
+  '  const B: string; C: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  DoIt;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkCanBeClassMethod),
+    'BEKANNTER FP (Posten 9007): Go IST bereits eine Klassenmethode');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.SameWithoutConstSection_NoFinding;
+// Erste Gegenprobe: identisch bis auf die fehlende const-Sektion.
+// Sie allein macht den Unterschied.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    class procedure Go(A: Integer; const B: string;'#13#10 +
+  '      C: Integer = 0);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'class procedure TFoo.Go(A: Integer;'#13#10 +
+  '  const B: string; C: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  DoIt;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkCanBeClassMethod),
+    'ohne const-Sektion bleibt der ;class-Suffix erhalten');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.SameWithoutPublicSection_NoFinding;
+// Zweite Gegenprobe: MIT const, aber OHNE public-Sektion. Erst beides
+// zusammen loest den FP aus - ohne diesen Test wuerde man die
+// const-Sektion fuer die alleinige Ursache halten.
+// Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    class procedure Go;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'const'#13#10 +
+  '  X = 1;'#13#10 +
+  'class procedure TFoo.Go;'#13#10 +
+  'begin'#13#10 +
+  '  DoIt;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkCanBeClassMethod),
+    'ohne public-Sektion bleibt der ;class-Suffix erhalten');
   finally F.Free; end;
 end;
 

@@ -5,13 +5,25 @@ unit uIfThenShortCircuit;
 // unabhaengig von cond.
 //
 // Pattern (Bug / Performance / Side-Effects):
-//   x := Math.IfThen(IsCacheHit, FetchFromCache, FetchFromDb);
-//   //                          ^^^^^^^^^^^^^^  ^^^^^^^^^^^^
-//   //                          beide Calls laufen IMMER!
+//   x := Math.IfThen(IsCacheHit, FetchFromCache(), FetchFromDb());
+//   //                           ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+//   //                           beide Calls laufen IMMER!
 //
-//   x := IfThen(WantSafeMode, RiskyOperation, SafeOperation);
-//   //                        ^^^^^^^^^^^^^^  RiskyOp laeuft AUCH wenn
-//   //                                        WantSafeMode True ist!
+//   x := IfThen(WantSafeMode, RiskyOperation(), SafeOperation());
+//   //                        ^^^^^^^^^^^^^^^^  RiskyOp laeuft AUCH wenn
+//   //                                          WantSafeMode True ist!
+//
+// GEMELDET WIRD NUR DIE KLAMMERFORM. Ein Arm ohne Klammern
+// ('IfThen(b, FetchA, FetchB)') ist zwar in Delphi ebenfalls ein Aufruf,
+// wenn FetchA eine parameterlose Funktion ist - aus dem Quelltext allein
+// laesst sich das aber nicht von einer Variablen oder Konstanten
+// unterscheiden, und die sind der weit haeufigere Fall. Die Klammer ist
+// deshalb Bedingung (precision-first wie im ganzen Detektor); der Preis
+// ist ein FN fuer parameterlose Aufrufe.
+// Bis zum Voll-Review 2026-09-12 zeigten die Beispiele oben die
+// klammerlose Form und versprachen damit etwas, das der Detektor nicht
+// tut (Testluecke 158; gepinnt in
+// uTestIfThenShortCircuit.ParameterlessArms_KnownGap_NoFinding).
 //
 // Korrekt: klassisches if-then-else mit Short-Circuit-Semantik.
 //   if IsCacheHit then
@@ -29,7 +41,12 @@ unit uIfThenShortCircuit;
 // Erkennung (AST-basiert):
 //   * Walker iteriert nkCall-Knoten
 //   * Match wenn der Call-Name dem Pattern `IfThen(...)` entspricht
-//     (auch qualifiziert: `Math.IfThen`, `StrUtils.IfThen`).
+//     (auch qualifiziert: `Math.IfThen`, `StrUtils.IfThen`) - seit
+//     Voll-Review 2026-09-12 (Major 70) auch EINGEBETTET in einen
+//     umgebenden Call (`ShowMessage(IfThen(...))`) bzw. eine
+//     umhuellende Funktion (`x := Trim(IfThen(...))`): der Parser
+//     emittiert verschachtelte Calls nicht als eigene nkCall-Knoten,
+//     der Text des aeusseren Knotens ist die einzige Sicht darauf.
 //   * Innerhalb der Argument-Liste: pruefe ob nested `(...)` vorkommt,
 //     d.h. einer der Arme ist ein Funktions-/Method-Call.
 //   * String-Literale werden vor der Klammern-Zaehlung entfernt -
@@ -58,29 +75,82 @@ implementation
 // noinspection-file BeginEndRequired, GroupedDeclaration, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
-// True wenn CallName ein IfThen-Call ist (bare `IfThen(` oder qualifiziert
-// `Math.IfThen(` / `StrUtils.IfThen(` / `System.Math.IfThen(` ...).
-function IsIfThenCall(const CallName: string): Boolean;
+uses
+  uAstSpans;   // CollectWithMethodScope (Voll-Review 2026-09-12)
+
+// True wenn S rueckwaerts ab AEnd auf das Namens-Segment ASegLow endet
+// und davor eine Segmentgrenze steht - 'math' trifft 'Math.' und
+// 'System.Math.', nicht 'MyMath.'.
+//
+// AEnd ist der Index des LETZTEN ZEICHENS DES SEGMENTS, nicht der des
+// Punktes dahinter. Bei 'math.ifthen(' also die 4 ('h'), nicht die 5.
+// Genau daran ist die erste Fassung gescheitert: der Aufrufer uebergab
+// die Punkt-Position, der Vergleich las damit 'ath.' statt 'math' und
+// jede qualifizierte Form fiel durch - auch die beiden Bestandstests
+// MathIfThenWithCalls_Reported und StrUtilsIfThenWithCalls_Reported
+// (Testlauf 2026-09-12).
+function EndetAufSegment(const S: string; AEnd: Integer;
+  const ASegLow: string): Boolean;
 var
-  Lower : string;
+  b : Integer;
 begin
-  Lower := LowerCase(TrimLeft(CallName));
-  Result := (Pos('ifthen(',         Lower) = 1) or
-            (Pos('math.ifthen(',    Lower) > 0) or
-            (Pos('strutils.ifthen(', Lower) > 0);
-  // Defensive: `xifthen(` wuerde matchen via `ifthen(` Substring-Pos=2+,
-  // aber das schliessen wir aus (Pos = 1 only fuer den bare-Case).
-  if not Result then Exit;
-  // Pruefe dass keine Identifier-Zeichen vor 'ifthen(' stehen wenn der
-  // Match nicht am Anfang ist.
-  if Pos('ifthen(', Lower) = 1 then Exit(True);
-  // Qualifiziert: muss '.ifthen(' sein, kein 'xifthen('.
-  Result := (Pos('.ifthen(', Lower) > 0);
+  Result := False;
+  b := AEnd - Length(ASegLow);
+  if b < 0 then Exit;
+  if LowerCase(Copy(S, b + 1, Length(ASegLow))) <> ASegLow then Exit;
+  Result := (b = 0) or not TDetectorUtils.IsIdentChar(S[b]);
 end;
 
-// Extrahiert den Args-Teil zwischen aeusserer '(' und schliessender ')'.
-// Geht von balancierten Parens aus.
-function ExtractOuterArgs(const CallName: string): string;
+// Liefert die Position der oeffnenden '(' des ERSTEN gueltigen
+// IfThen-Vorkommens in Text, 0 wenn keines. Gueltig ist:
+//   * bare `IfThen(` mit linker Nicht-Ident-Grenze - auch EINGEBETTET
+//     als Argument eines umgebenden Calls oder in einer umhuellenden
+//     Funktion (Voll-Review 2026-09-12, Major 70: der alte Anker
+//     Pos=1 liess `ShowMessage(IfThen(b, 'x', LoadCfg()))` und
+//     `x := Trim(IfThen(...))` komplett durchrutschen - der Parser
+//     emittiert verschachtelte Calls nicht als eigene nkCall-Knoten,
+//     der Text ist also die einzige Sicht auf die eingebettete Form);
+//   * qualifiziert `Math.IfThen(` / `StrUtils.IfThen(` (auch
+//     `System.Math.` etc.) - ein FREMDER Qualifier (`Foo.IfThen(`)
+//     zaehlt weiterhin NICHT: eine fremde IfThen-Methode kann echte
+//     Lazy-Semantik haben, das war schon der Vertrag des Vorgaengers.
+// Suche am geblankten Text (Literale zaehlen nicht), Positionen passen
+// aufs Original, weil BlankStringLiterals laengenerhaltend ist.
+function FindIfThenOpenParen(const Text: string): Integer;
+const
+  KW = 'ifthen(';
+var
+  Lower : string;
+  p     : Integer;
+  Ok    : Boolean;
+begin
+  Result := 0;
+  Lower := LowerCase(TDetectorUtils.BlankStringLiterals(Text));
+  p := Pos(KW, Lower);
+  while p > 0 do
+  begin
+    if (p = 1) or not (TDetectorUtils.IsIdentChar(Lower[p - 1])
+                       or (Lower[p - 1] = '.')) then
+      Ok := True   // bare Form an Wortgrenze
+    else if Lower[p - 1] = '.' then
+      // p-2 = letztes Zeichen des Qualifizierers (p-1 ist der Punkt)
+      Ok := EndetAufSegment(Lower, p - 2, 'math')
+            or EndetAufSegment(Lower, p - 2, 'strutils')
+    else
+      Ok := False; // 'xifthen(' - Teil eines anderen Bezeichners
+    if Ok then
+      Exit(p + Length(KW) - 1);   // Position der '('
+    p := Pos(KW, Lower, p + 1);
+  end;
+end;
+
+// Extrahiert den Args-Teil zwischen der '(' an AOpenPos und ihrer
+// schliessenden ')'. Geht von balancierten Parens aus. AOpenPos kommt
+// aus FindIfThenOpenParen - vorher setzte die Extraktion an der ERSTEN
+// '(' des Gesamttexts an und lieferte bei eingebetteten Formen die
+// Argumente des UMHUELLENDEN Calls (ein Top-Level-Argument, Laenge<2,
+// stiller Exit in ValueBranchHasSideEffectCall - Major 70).
+function ExtractOuterArgs(const CallName: string; AOpenPos: Integer): string;
 var
   Open, Close, Depth, i : Integer;
   Blanked : string;
@@ -90,8 +160,8 @@ begin
   // duerfen die Klammertiefe nicht verschieben (laengenerhaltend, damit die
   // Copy-Positionen weiter aufs Original passen).
   Blanked := TDetectorUtils.BlankStringLiterals(CallName);
-  Open := Pos('(', Blanked);
-  if Open <= 0 then Exit;
+  Open := AOpenPos;
+  if (Open <= 0) or (Open > Length(Blanked)) or (Blanked[Open] <> '(') then Exit;
   Depth := 0;
   Close := 0;
   for i := Open to Length(Blanked) do
@@ -112,40 +182,9 @@ begin
   Result := Copy(CallName, Open + 1, Close - Open - 1);
 end;
 
-// Splittet den Args-String an TOP-LEVEL-Kommas (respektiert nested Parens +
-// String-Literale). IfThen(cond, a, b) -> ['cond', ' a', ' b'].
-function SplitTopLevelArgs(const Args: string): TArray<string>;
-var
-  parts : TList<string>;
-  i, depth, start : Integer;
-  inStr : Boolean;
-  c : Char;
-begin
-  parts := TList<string>.Create;
-  try
-    depth := 0; inStr := False; start := 1;
-    for i := 1 to Length(Args) do
-    begin
-      c := Args[i];
-      if inStr then
-      begin
-        if c = '''' then inStr := False;
-      end
-      else if c = '''' then inStr := True
-      else if c = '(' then Inc(depth)
-      else if c = ')' then Dec(depth)
-      else if (c = ',') and (depth = 0) then
-      begin
-        parts.Add(Copy(Args, start, i - start));
-        start := i + 1;
-      end;
-    end;
-    parts.Add(Copy(Args, start, Length(Args) - start + 1));
-    Result := parts.ToArray;
-  finally
-    parts.Free;
-  end;
-end;
+// Der Top-Level-Argument-Split lebt seit Voll-Review 2026-09-12
+// (Posten 71) byte-identisch in TDetectorUtils.SplitTopLevelArgs -
+// uInheritedMethodEmpty war die dritte Kopie-Anwaerterin.
 
 // Lowercased Identifier direkt vor '(' an ParenPos; '' bei Grouping-Paren
 // '(expr)' (dann steht kein Bezeichner unmittelbar davor).
@@ -188,7 +227,7 @@ var
   cleaned, id : string;
 begin
   Result := False;
-  parts := SplitTopLevelArgs(Args);
+  parts := TDetectorUtils.SplitTopLevelArgs(Args);
   if Length(parts) < 2 then Exit;   // keine Value-Branches
   for k := 1 to High(parts) do      // Index 0 = Kondition, ausgeschlossen
   begin
@@ -212,9 +251,11 @@ var
   F        : TLeakFinding;
   MethName : string;
   Args     : string;
+  OpenPos  : Integer;
 begin
-  if not IsIfThenCall(Text) then Exit;
-  Args := ExtractOuterArgs(Text);
+  OpenPos := FindIfThenOpenParen(Text);
+  if OpenPos = 0 then Exit;
+  Args := ExtractOuterArgs(Text, OpenPos);
   if not ValueBranchHasSideEffectCall(Args) then Exit;
   if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
   else MethName := '';
@@ -228,45 +269,26 @@ begin
   Results.Add(F);
 end;
 
-procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
+procedure WalkAndCheck(Node: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
-// Hardening v4: iterative DFS - siehe Audit_jvcl_segfault.
-type TFrame = record N, M: TAstNode; end;
+// Seit Voll-Review 2026-09-12 ueber den zentralen Scope-Walk
+// (TAstSpans.CollectWithMethodScope) - Mechanik, Besuchsreihenfolge
+// und Hardening v4 (iterative DFS, Audit_jvcl_segfault) identisch
+// zur frueheren lokalen Kopie.
 var
-  Stack : TList<TFrame>;
-  Cur, F : TFrame;
-  i      : Integer;
-  NextMeth : TAstNode;
+  P : TNodeScopePair;
 begin
-  if Node = nil then Exit;
-  Stack := TList<TFrame>.Create;
-  try
-    F.N := Node; F.M := CurrentMethod;
-    Stack.Add(F);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      case Cur.N.Kind of
-        nkCall:   CheckIfThenText(Cur.N.Name,    Cur.N, Cur.M, FileName, Results);
-        nkAssign: CheckIfThenText(Cur.N.TypeRef, Cur.N, Cur.M, FileName, Results);
-      end;
-      if Cur.N.Kind = nkMethod then NextMeth := Cur.N else NextMeth := Cur.M;
-      for i := Cur.N.Children.Count - 1 downto 0 do
-      begin
-        F.N := Cur.N.Children[i]; F.M := NextMeth;
-        Stack.Add(F);
-      end;
+  for P in TAstSpans.CollectWithMethodScope(Node, [nkCall, nkAssign]) do
+    case P.Node.Kind of
+      nkCall:   CheckIfThenText(P.Node.Name,    P.Node, P.Method, FileName, Results);
+      nkAssign: CheckIfThenText(P.Node.TypeRef, P.Node, P.Method, FileName, Results);
     end;
-  finally
-    Stack.Free;
-  end;
 end;
 
 class procedure TIfThenShortCircuitDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 begin
-  WalkAndCheck(UnitNode, nil, FileName, Results);
+  WalkAndCheck(UnitNode, FileName, Results);
 end;
 
 end.

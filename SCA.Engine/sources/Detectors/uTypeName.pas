@@ -10,8 +10,12 @@ unit uTypeName;
 //   * Pointer-Aliasse heissen `PXxx`         - SCA100 PointerName
 //   * Exceptions heissen `EXxx`              - z.B. EFOpenError
 //
-// Hier checken wir nur class/record (die T-Prefix-Regel). Interfaces
-// und Exceptions koennten in Phase 2 als Naming-Framework dazukommen.
+// Hier checken wir class/record. Fuer KLASSEN gilt T verbindlich; bei
+// RECORDS wird die oben genannte R-Konvention seit dem Voll-Review
+// 2026-09-12 (Major 84) auch im CODE akzeptiert - vorher meldete der
+// Detektor 'RPoint', also genau sein eigenes Doku-Beispiel.
+// Interfaces und Exceptions koennten in Phase 2 als Naming-Framework
+// dazukommen.
 //
 // Erkennung: lexikalischer Scan. Pattern `<Ident> = class(...)` oder
 // `<Ident> = class` ohne Klammern, sowie `<Ident> = record`.
@@ -41,9 +45,6 @@ uses
   System.StrUtils,
   uFileTextCache;
 
-const
-  EMIT_SEVERITY = lsHint;
-
 function IsIdent(C: Char): Boolean; inline;
 begin
   // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
@@ -55,7 +56,35 @@ end;
 
 function IsIdentStart(C: Char): Boolean; inline;
 begin
-  Result := CharInSet(C, ['A'..'Z','a'..'z','_']);
+  // Voll-Review 2026-09-12: Zeichenklasse zentralisiert - die lokale
+  // Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentStartChar (A..Z, a..z, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentStartChar(C);
+end;
+
+// True wenn AName der RXxx-Record-Konvention folgt: 'R' + Grossbuchstabe
+// (CamelCase-Grenze wie bei der E-Heuristik) und danach mindestens ein
+// Kleinbuchstabe, ohne '_'.
+//
+// Die beiden Zusatzbedingungen trennen die Delphi-Konvention von
+// uebernommenen C-Strukturen. Am Korpus gezaehlt (16.023 Dateien): von
+// 25 Records mit 'R'+Grossbuchstabe erfuellen genau ZWEI die
+// Konvention (RTagHeader, RField in APEtag.pas); die uebrigen 23 sind
+// C-Header-Ports (RC4_KEY, REPARSE_DATA_BUFFER, RAND_METHOD,
+// RPM_Header, ...) und bleiben gemeldet.
+function IstRKonventionsRecord(const AName: string): Boolean;
+const
+  PRAEFIX_LEN = 2;   // 'R' + Grossbuchstabe
+var
+  i : Integer;
+begin
+  Result := False;
+  if Length(AName) <= PRAEFIX_LEN then Exit;
+  if (AName[1] <> 'R') or not CharInSet(AName[2], ['A'..'Z']) then Exit;
+  if Pos('_', AName) > 0 then Exit;
+  for i := PRAEFIX_LEN + 1 to Length(AName) do
+    if CharInSet(AName[i], ['a'..'z']) then Exit(True);
 end;
 
 // Liefert Position des Type-Namens wenn die Zeile `<Ident> = class`
@@ -149,6 +178,19 @@ begin
          ((k + 2 > n) or not IsIdent(Line[k + 2])) then Continue;
       // Pruefe Name
       if (Length(Name) >= 1) and CharInSet(Name[1], ['T', 't']) then Continue;
+      // RECORDS duerfen der R-Konvention folgen - der Unit-Kopf nennt
+      // 'RPoint' woertlich als konformes Beispiel, der Code meldete es
+      // trotzdem (Voll-Review 2026-09-12, Major 84: Doku und Code
+      // widersprachen sich, an der Bestands-Exe belegt). Fuer KLASSEN
+      // bleibt T verbindlich - R ist eine Record-Konvention.
+      //
+      // Bedingung wie bei der E-Heuristik CamelCase-gebunden, und
+      // zusaetzlich gegen C-Header-Ports abgegrenzt: 'RC4_KEY',
+      // 'REPARSE_DATA_BUFFER' oder 'RAND_METHOD' sind keine
+      // Delphi-Records mit R-Konvention, sondern uebernommene
+      // C-Strukturen - sie tragen '_' bzw. keinen Kleinbuchstaben und
+      // bleiben gemeldet.
+      if (NextWord = 'record') and IstRKonventionsRecord(Name) then Continue;
       // Exception-Klassen folgen der E-Prefix-Konvention (EFOpenError,
       // EYamlParseError, EArgumentException). Sind KEIN TypeName-Verstoss.
       // Heuristik: Name beginnt mit 'E' + Grossbuchstabe (CamelCase-Boundary)

@@ -27,7 +27,15 @@ unit uCharToCharPointerCast;
 //
 // Erkennung (AST-basiert, heuristisch):
 //   * Walker iteriert nkCall-Knoten
-//   * Match wenn Call-Name mit `PChar(`, `PWideChar(`, `PAnsiChar(` startet
+//   * Match wenn `PChar(`/`PWideChar(`/`PAnsiChar(` IRGENDWO im Text
+//     mit linker Wortgrenze steht - nicht nur am Anfang. Der Parser
+//     legt fuer ein Call-Statement EINEN nkCall mit dem flachen
+//     Gesamttext an; bei `StrPCopy(Buf, PChar('A'))` steht der Cast
+//     in Argument-Position, und der alte Praefix-Match sah ihn nie
+//     (Voll-Review 2026-09-12, Blocker). Gesucht wird im
+//     positionserhaltend GEBLANKTEN Text (Cast in einem
+//     String-Literal zaehlt nicht), das Argument kommt aus dem
+//     ORIGINAL an derselben Position - es ist ja selbst ein Literal.
 //   * Argument-Heuristik (innerhalb der Klammern):
 //     - 1-Zeichen-Literal: `'X'` (3 Zeichen Quotes inklusive)
 //     - Char-Ordinal: `#<digits>` (z.B. `#65`, `#$41`)
@@ -59,43 +67,86 @@ implementation
 // noinspection-file BeginEndRequired, CyclomaticComplexity, GroupedDeclaration, MagicNumber, MultipleExit, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  System.StrUtils,               // PosEx
+  uDetectorUtils,                // IsIdentChar, BlankStringLiterals
+  uAstSpans;                     // CollectWithMethodScope (Voll-Review 2026-09-12)
+
 const
   CAST_PREFIXES: array of string = [
     'pchar(', 'pwidechar(', 'pansichar('
   ];
 
-// Detektiert ob der Call-Name mit einem der PChar-Cast-Praefixe beginnt.
-// Liefert den Cast-Typ-Namen oder leer.
-function DetectPCharCast(const CallName: string): string;
+// Naechstes Cast-Vorkommen ab AFrom im GEBLANKTEN, gesenkten Text.
+// Liefert die Position des Praefix-Starts (0 = keins), den Cast-Namen
+// und die Position der oeffnenden Klammer. Linke Wortgrenze Pflicht -
+// sonst matchte 'MyPChar(' oder 'GetPAnsiChar(' mit.
+//
+// Ersetzt den alten reinen PRAEFIX-Match (Voll-Review 2026-09-12,
+// Blocker): der sah nur die Zuweisungsform 'p := PChar(...)'; jeder
+// Cast in Argument-Position eines Calls war unsichtbar, obwohl der
+// Kommentar an CheckCastText genau diesen Fall versprach.
+function NextPCharCast(const BlankLower: string; AFrom: Integer;
+  out CastType: string; out OpenParen: Integer): Integer;
 var
-  Lower : string;
-  P     : string;
+  P    : string;
+  ix   : Integer;
+  best : Integer;
 begin
-  Result := '';
-  Lower := LowerCase(TrimLeft(CallName));
+  Result := 0; CastType := ''; OpenParen := 0;
   for P in CAST_PREFIXES do
-    if (Length(Lower) >= Length(P)) and (Copy(Lower, 1, Length(P)) = P) then
+  begin
+    ix := PosEx(P, BlankLower, AFrom);
+    while ix > 0 do
     begin
-      Result := Copy(P, 1, Length(P) - 1);
-      Exit;
+      if (ix = 1) or not TDetectorUtils.IsIdentChar(BlankLower[ix - 1]) then
+        Break;
+      ix := PosEx(P, BlankLower, ix + 1);
     end;
+    if ix > 0 then
+    begin
+      best := Result;
+      if (best = 0) or (ix < best) then
+      begin
+        Result    := ix;
+        CastType  := Copy(P, 1, Length(P) - 1);
+        OpenParen := ix + Length(P) - 1;
+      end;
+    end;
+  end;
 end;
 
-// Extrahiert den Argument-Text aus `<Cast>(<arg>)`. Geht von einem Single-
-// Argument-Cast aus (komma-getrennte Args wuerden hier zusammengeworfen,
-// aber TypeCasts mit > 1 Argument gibt es nicht).
-function ExtractCastArg(const CallName: string): string;
+// Argument-Text zwischen der Klammer bei AOpenParen und ihrer
+// BALANCIERTEN Gegenklammer - aus dem ORIGINAL-Text, denn das Argument
+// ist typisch selbst ein Literal. Klammern INNERHALB von
+// Apostroph-Literalen zaehlen nicht (Quote-Zustand wird verfolgt).
+// Der alte Weg ('letzte )' der Zeile) griff bei einem Cast mitten im
+// Statement die falsche Klammer.
+function BalancedCastArg(const Text: string; AOpenParen: Integer): string;
 var
-  P, L : Integer;
+  i, Depth : Integer;
+  InStr    : Boolean;
 begin
   Result := '';
-  P := Pos('(', CallName);
-  if P <= 0 then Exit;
-  L := Length(CallName);
-  // Trailing ');' / ')' wegschneiden.
-  while (L > 0) and ((CallName[L] = ';') or (CallName[L] = ' ')) do Dec(L);
-  if (L > 0) and (CallName[L] = ')') then Dec(L);
-  Result := Trim(Copy(CallName, P + 1, L - P));
+  if (AOpenParen <= 0) or (AOpenParen > Length(Text)) or
+     (Text[AOpenParen] <> '(') then Exit;
+  Depth := 0; InStr := False;
+  // Flach gehalten (Guard-Stil): jede Bedingung eine Ebene - die
+  // verschachtelte Erstfassung riss die eigene SCA176-Schwelle.
+  for i := AOpenParen to Length(Text) do
+  begin
+    if Text[i] = '''' then
+    begin
+      InStr := not InStr;
+      Continue;
+    end;
+    if InStr then Continue;
+    if Text[i] = '(' then Inc(Depth);
+    if Text[i] <> ')' then Continue;
+    Dec(Depth);
+    if Depth = 0 then
+      Exit(Trim(Copy(Text, AOpenParen + 1, i - AOpenParen - 1)));
+  end;
 end;
 
 // True wenn Arg ein Single-Char-Literal ist: `'X'` (3 Zeichen, Quotes drumherum).
@@ -161,69 +212,57 @@ end;
 procedure CheckCastText(const Text: string; Node, CurrentMethod: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  MethName : string;
-  CastType : string;
-  Arg      : string;
+  MethName   : string;
+  CastType   : string;
+  Arg        : string;
+  BlankLower : string;
+  P, OpenIx  : Integer;
 begin
-  CastType := DetectPCharCast(Text);
-  if CastType = '' then Exit;
-  Arg := ExtractCastArg(Text);
-  if not ArgLooksLikeChar(Arg) then Exit;
-  if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
-  else MethName := '';
-  Results.Add(TLeakFinding.New(FileName, MethName, Node.Line,
-    Format('%s(Char) reinterprets codepoint as pointer - undefined behavior',
-      [CastType]),
-    fkCharToCharPointerCast));
+  // ALLE Vorkommen pruefen, nicht nur das erste: ein harmloser Cast
+  // weiter vorn (PChar(stringVar)) darf einen char-Cast dahinter nicht
+  // maskieren - die Erste-Treffer-Falle war eine eigene Blocker-Klasse
+  // des Voll-Reviews. Gemeldet wird EIN Fund je Statement (gleiche
+  // Zeile, gleiche Aussage - Doppelmeldungen truegen nur die Zahlen).
+  BlankLower := LowerCase(TDetectorUtils.BlankStringLiterals(Text));
+  P := 1;
+  repeat
+    P := NextPCharCast(BlankLower, P, CastType, OpenIx);
+    if P = 0 then Exit;
+    Arg := BalancedCastArg(Text, OpenIx);
+    if ArgLooksLikeChar(Arg) then
+    begin
+      if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
+      else MethName := '';
+      Results.Add(TLeakFinding.New(FileName, MethName, Node.Line,
+        Format('%s(Char) reinterprets codepoint as pointer - undefined behavior',
+          [CastType]),
+        fkCharToCharPointerCast));
+      Exit;
+    end;
+    P := OpenIx + 1;
+  until False;
 end;
 
-procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
+procedure WalkAndCheck(Node: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
-// Hardening v4: iterative DFS mit Frame-Tracking. Verhindert
-// STACK_OVERFLOW bei tief verschachteltem AST (siehe Audit_jvcl_segfault).
-type
-  TFrame = record
-    N : TAstNode;
-    M : TAstNode;   // CurrentMethod fuer diesen Knoten
-  end;
+// Seit Voll-Review 2026-09-12 ueber den zentralen Scope-Walk
+// (TAstSpans.CollectWithMethodScope) - Mechanik, Besuchsreihenfolge
+// und Hardening v4 (iterative DFS, Audit_jvcl_segfault) identisch
+// zur frueheren lokalen Kopie.
 var
-  Stack : TList<TFrame>;
-  Cur, F : TFrame;
-  i      : Integer;
+  P : TNodeScopePair;
 begin
-  if Node = nil then Exit;
-  Stack := TList<TFrame>.Create;
-  try
-    F.N := Node; F.M := CurrentMethod;
-    Stack.Add(F);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      case Cur.N.Kind of
-        nkCall:
-          CheckCastText(Cur.N.Name, Cur.N, Cur.M, FileName, Results);
-        nkAssign:
-          CheckCastText(Cur.N.TypeRef, Cur.N, Cur.M, FileName, Results);
-      end;
-      // Sub-Method-Boundary: nkMethod-Knoten startet eigenen Method-Scope
-      var NextMeth : TAstNode;
-      if Cur.N.Kind = nkMethod then NextMeth := Cur.N else NextMeth := Cur.M;
-      for i := Cur.N.Children.Count - 1 downto 0 do
-      begin
-        F.N := Cur.N.Children[i]; F.M := NextMeth;
-        Stack.Add(F);
-      end;
+  for P in TAstSpans.CollectWithMethodScope(Node, [nkCall, nkAssign]) do
+    case P.Node.Kind of
+      nkCall:   CheckCastText(P.Node.Name,    P.Node, P.Method, FileName, Results);
+      nkAssign: CheckCastText(P.Node.TypeRef, P.Node, P.Method, FileName, Results);
     end;
-  finally
-    Stack.Free;
-  end;
 end;
 
 class procedure TCharToCharPointerCastDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 begin
-  WalkAndCheck(UnitNode, nil, FileName, Results);
+  WalkAndCheck(UnitNode, FileName, Results);
 end;
 
 end.

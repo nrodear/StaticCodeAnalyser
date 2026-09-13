@@ -32,6 +32,8 @@ type
     // --- Finding-Inhalt ---
     [Test] procedure Test_Finding_KindAndSeverity;
     [Test] procedure Test_Finding_MissingVarMentionsControlAndField;
+    // Testluecke 138: dieselbe Fixture aus Sicht dieses Detektors
+    [Test] procedure Test_TwoDataSources_BindingViaSecond_Silent;
   end;
 
 implementation
@@ -230,6 +232,48 @@ begin
   try
     Assert.Contains(F[0].MissingVar, 'TDBEdit');
     Assert.Contains(F[0].MissingVar, 'TBooleanField');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmFieldTypeMismatch.Test_TwoDataSources_BindingViaSecond_Silent;
+// Testluecke 138 (Voll-Review 2026-09-12), Gegenstueck zu
+// Test_TwoDataSources_BindingViaSecond_KnownFalsePositive in
+// uTestDfmRequiredField: DIESELBE Fixture, anderer Detektor.
+//
+// Zwei TDataSource am selben TFDQuery, das DBEdit bindet ueber die
+// zweite. Hier ist Schweigen richtig - Typ und Feldname passen
+// zusammen, es gibt nichts zu melden. Der Test haelt fest, dass die
+// mehrdeutige DataSource-Lage diesen Detektor nicht in einen Fund
+// stolpern laesst, waehrend sie den Nachbarn einen kostet.
+//
+// Die Fixture steht bewusst zweimal im Repo, einmal je Testunit:
+// die zwei Detektoren haben getrennte Suiten, und keine soll von
+// der anderen abhaengen.
+// Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'object Form1: TForm1'#13#10 +
+  '  object qryKunden: TFDQuery'#13#10 +
+  '    object qryKundenNAME: TStringField'#13#10 +
+  '      FieldName = ''NAME'''#13#10 +
+  '      Required = True'#13#10 +
+  '    end'#13#10 +
+  '  end'#13#10 +
+  '  object dsA: TDataSource'#13#10 +
+  '    DataSet = qryKunden'#13#10 +
+  '  end'#13#10 +
+  '  object dsB: TDataSource'#13#10 +
+  '    DataSet = qryKunden'#13#10 +
+  '  end'#13#10 +
+  '  object edName: TDBEdit'#13#10 +
+  '    DataSource = dsB'#13#10 +
+  '    DataField = ''NAME'''#13#10 +
+  '  end'#13#10 +
+  'end'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(SRC);
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmFieldTypeMismatch),
+    'Typ und Feldname passen - die zweite DataSource aendert daran nichts');
   finally F.Free; end;
 end;
 

@@ -22,6 +22,11 @@ type
     [Test] procedure NumberInString_NotReported;
     [Test] procedure NumberInComment_NotReported;
     [Test] procedure DigitGrouping_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Major 58): '..' ist Range, kein Float
+    [Test] procedure RangeBound_UngroupedInteger_Reported;
+    [Test] procedure RealFloat_StillNotReported;
+    // Testluecke 141: der zeilenuebergreifende Kommentar-Zustand
+    [Test] procedure MultiLineBlockComments_OnlyRealCodeReported;
   end;
 
 implementation
@@ -158,6 +163,85 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkDigitGrouping finding');
+  finally F.Free; end;
+end;
+
+procedure TTestDigitGrouping.RangeBound_UngroupedInteger_Reported;
+// Voll-Review 2026-09-12 (Major 58): '10000..MAXBUF' - der Run endet
+// an '.', wurde als Float-Beginn uebersprungen, und die ungruppierte
+// Range-Grenze blieb ungemeldet (Bestands-Exe: 0 Funde, empirisch
+// belegt, dg1.pas). Der Delphi-Lexer erkennt '..' per Lookahead als
+// Range-Operator.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'var'#13#10 +
+  '  A: array[10000..MAXBUF] of Byte;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDigitGrouping),
+    'die linke Range-Grenze ist ein ungruppiertes Integer-Literal');
+  finally F.Free; end;
+end;
+
+procedure TTestDigitGrouping.RealFloat_StillNotReported;
+// Gegenrichtung: ein ECHTER Float (einzelner '.') bleibt die
+// dokumentierte Ausnahme - ein Lookahead-Fix, der jeden '.' meldet,
+// waere hier rot.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'const'#13#10 +
+  '  Pi5 = 31415.92653;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDigitGrouping),
+    'Float-Literale sind die dokumentierte Ausnahme');
+  finally F.Free; end;
+end;
+
+procedure TTestDigitGrouping.MultiLineBlockComments_OnlyRealCodeReported;
+// Testluecke 141 (Voll-Review 2026-09-12): der zeilenuebergreifende
+// Kommentar-Zustand war ungetestet - NumberInComment_NotReported deckt
+// nur die EINZEILIGE Form ab. Beide mehrzeiligen Formen sind hier
+// drin, { } und (* *), und beide tragen eine ungruppierte Zahl in
+// einer FORTSETZUNGSZEILE - genau dort, wo ein zurueckgesetzter
+// Zustand sie als Code lesen wuerde.
+//
+// Die Erwartung ist bewusst "genau 1" und nicht "0 aus Kommentaren":
+// die echte Zuweisung am Ende ist die Positiv-Kontrolle. Ohne sie
+// waere der Test auch dann gruen, wenn der Detektor gar nicht liefe.
+// Am gebauten Stand nachgemessen: 1 Fund, auf der Zuweisungszeile.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  '{ Diese Zahl 1234567 steht in einem'#13#10 +
+  '  mehrzeiligen Blockkommentar und darf'#13#10 +
+  '  nicht gemeldet werden. }'#13#10 +
+  '(* Auch 7654321 hier drin'#13#10 +
+  '   ueber zwei Zeilen. *)'#13#10 +
+  'procedure Echt;'#13#10 +
+  'var X: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  X := 1234567;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDigitGrouping),
+      'nur die echte Zuweisung zaehlt - beide Kommentare sind stumm');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'X := 1234567'),
+      TFindingHelper.FirstOf(F, fkDigitGrouping).LineNumber,
+      'der Fund muss auf der Code-Zeile liegen, nicht im Kommentar');
   finally F.Free; end;
 end;
 

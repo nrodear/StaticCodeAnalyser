@@ -21,6 +21,10 @@ type
     // --- Real-World FP-Audit 2026-07-12 (Welle 3, nkConditionalRange) ---
     [Test] procedure InheritedInIfdefElseBranches_NoFinding;
     [Test] procedure TwoInheritedSameIfdefBlock_StillReported;
+    // Voll-Review 2026-09-12 (Testluecke 115): Block jenseits der Wurzel
+    [Test] procedure InheritedPairInNestedBlock_Reported;
+    [Test] procedure BareAndQualifiedInheritedMixed_Reported;
+    [Test] procedure QualifiedInheritedOtherMethod_NoFinding;
   end;
 
 implementation
@@ -218,6 +222,73 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTwiceInheritedCalls),
     'zwei inherited im selben {$IFDEF}-Block laufen beide - bleibt Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestTwiceInheritedCalls.InheritedPairInNestedBlock_Reported;
+// Testluecke 115 (Voll-Review 2026-09-12): der Detektor sucht ueber
+// FindAll(nkBlock), also auch in GESCHACHTELTEN begin..end-Bloecken -
+// getestet war nur der Wurzelblock. An der Bestands-Exe verifiziert:
+// das Paar im if-Block wird gemeldet.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TChild.Run;'#13#10 +
+  'begin'#13#10 +
+  '  if X then'#13#10 +
+  '  begin'#13#10 +
+  '    inherited;'#13#10 +
+  '    inherited;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTwiceInheritedCalls),
+    'auch ein geschachtelter Block wird auf doppelte inherited geprueft');
+  finally F.Free; end;
+end;
+
+procedure TTestTwiceInheritedCalls.BareAndQualifiedInheritedMixed_Reported;
+// Mischform im SELBEN Block: bares 'inherited;' und qualifiziertes
+// 'inherited Run;'. Beide zaehlen - aber NUR, weil der qualifizierte
+// Aufruf DIESELBE Methode nennt: QualifyingInheritedInBlock vergleicht
+// LeadingInheritedIdent gegen den kurzen Methodennamen.
+//
+// Genau daran ist die erste Fassung dieses Tests gescheitert (sie nahm
+// 'inherited Bar;' und erwartete einen Fund). An der Bestands-Exe
+// gemessen: mit 'inherited Run;' 1 Fund, mit 'inherited Bar;' 0 - die
+// Gegenprobe steht direkt darunter.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TChild.Run;'#13#10 +
+  'begin'#13#10 +
+  '  inherited;'#13#10 +
+  '  inherited Run;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTwiceInheritedCalls),
+    'bare und gleichnamig qualifizierte Form zaehlen gemeinsam');
+  finally F.Free; end;
+end;
+
+procedure TTestTwiceInheritedCalls.QualifiedInheritedOtherMethod_NoFinding;
+// Gegenprobe zur Mischform: nennt der qualifizierte Aufruf eine ANDERE
+// Methode ('inherited Bar;' in TChild.Run), ist es kein doppelter
+// Aufruf derselben geerbten Methode - kein Fund (Bestands-Exe: 0).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TChild.Run;'#13#10 +
+  'begin'#13#10 +
+  '  inherited;'#13#10 +
+  '  inherited Bar;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTwiceInheritedCalls),
+    'ein qualifizierter Aufruf einer anderen Methode zaehlt nicht mit');
   finally F.Free; end;
 end;
 

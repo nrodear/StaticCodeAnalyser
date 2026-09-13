@@ -33,59 +33,70 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uFileTextCache;
+  uFileTextCache,
+  uDetectorUtils;   // ExtractFirstWord (Voll-Review 2026-09-12)
 
 const
-  EMIT_SEVERITY = lsHint;
+  // Das Wort steht in der Erkennung UND zweimal in der
+  // Namensbildung fuer den Meldetext - ab der dritten Kopie
+  // gehoert es an eine Stelle.
+  KW_STRICT     = 'strict';
 
 function ExtractFirstWord(const Line: string; out StartCol: Integer): string;
-var
-  i, n, wStart : Integer;
-  c            : Char;
+// Voll-Review 2026-09-12: zentral (ExtractFirstWordOrBracket).
+// Attribut-Zeile ('[Test]', '[Weak]', ...): '[' als Pseudo-Wort liefern.
+// Der Aufrufer behandelt es wie jeden Nicht-Keyword-Bezeichner - die
+// Section hat INHALT, denn das Attribut gehoert zum folgenden Member.
+// Vorher wurden solche Zeilen uebersprungen wie Leerzeilen, und JEDE
+// DUnitX-Fixture ('public' + nur '[Test] procedure ...' + 'end') galt
+// als leere Section - 226 False-Positives allein im eigenen
+// Testverzeichnis (Baseline-Kommentar 2026-08-04). Trifft auch
+// mehrzeilige Mengen-/Array-Konstanten, die mit '[' beginnen - dort ist
+// 'Inhalt' ebenso die sichere Richtung fuer eine Hint-Regel.
 begin
-  Result := '';
-  StartCol := 0;
-  n := Length(Line);
-  i := 1;
-  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
-  if i > n then Exit;
-  c := Line[i];
-  if c = '{' then Exit;
-  if (c = '/') and (i < n) and (Line[i + 1] = '/') then Exit;
-  if (c = '(') and (i < n) and (Line[i + 1] = '*') then Exit;
-  // Attribut-Zeile ('[Test]', '[Weak]', ...): '[' als Pseudo-Wort liefern.
-  // Der Aufrufer behandelt es wie jeden Nicht-Keyword-Bezeichner - die
-  // Section hat INHALT, denn das Attribut gehoert zum folgenden Member.
-  // Vorher wurden solche Zeilen uebersprungen wie Leerzeilen, und JEDE
-  // DUnitX-Fixture ('public' + nur '[Test] procedure ...' + 'end') galt
-  // als leere Section - 226 False-Positives allein im eigenen
-  // Testverzeichnis (Baseline-Kommentar 2026-08-04). Trifft auch
-  // mehrzeilige Mengen-/Array-Konstanten, die mit '[' beginnen - dort ist
-  // 'Inhalt' ebenso die sichere Richtung fuer eine Hint-Regel.
-  if c = '[' then
-  begin
-    StartCol := i;
-    Result := '[';
-    Exit;
-  end;
-  if not CharInSet(c, ['A'..'Z','a'..'z','_']) then Exit;
-  wStart := i;
-  StartCol := wStart;
-  while (i <= n) and CharInSet(Line[i], ['A'..'Z','a'..'z','0'..'9','_']) do
-    Inc(i);
-  Result := Copy(Line, wStart, i - wStart);
+  Result := TDetectorUtils.ExtractFirstWordOrBracket(Line, StartCol);
 end;
 
 function IsVisibilityKw(const Lower: string): Boolean; inline;
 begin
   Result := (Lower = 'private') or (Lower = 'protected')
          or (Lower = 'public')  or (Lower = 'published')
-         or (Lower = 'strict');
+         or (Lower = KW_STRICT);
 end;
 
 function IsClassEnderKw(const Lower: string): Boolean; inline;
 begin
   Result := (Lower = 'end');
+end;
+
+function SektionsName(const ALine, AErstesWort: string): string;
+// Der Name FUER DEN MELDETEXT, nicht fuer die Erkennung.
+//
+// 'strict' steht in IsVisibilityKw als eigenes Schluesselwort, weil nur
+// das erste Wort der Zeile geprueft wird. Fuer die Erkennung reicht das
+// (jede 'strict ...'-Zeile eroeffnet eine Sektion und schliesst die
+// vorige ab), fuer die MELDUNG nicht: 'Empty `strict` section' laesst
+// offen, ob private oder protected gemeint ist, und in einer Klasse mit
+// beiden sind zwei Funde nicht auseinanderzuhalten
+// (Voll-Review 2026-09-12, Testluecke 148).
+//
+// Deshalb hier das zweite Wort anhaengen, wenn es eines gibt. Die
+// Erkennung bleibt unangetastet.
+var
+  Rest : string;
+  i    : Integer;
+begin
+  Result := AErstesWort;
+  if AErstesWort <> KW_STRICT then Exit;
+  i := Pos(KW_STRICT, LowerCase(ALine));
+  if i <= 0 then Exit;
+  Rest := TrimLeft(Copy(ALine, i + Length(KW_STRICT), MaxInt));
+  i := 1;
+  while (i <= Length(Rest)) and CharInSet(Rest[i], ['a'..'z', 'A'..'Z']) do
+    Inc(i);
+  Rest := Copy(Rest, 1, i - 1);
+  if Rest <> '' then
+    Result := AErstesWort + ' ' + LowerCase(Rest);
 end;
 
 class procedure TEmptyVisibilitySectionDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -98,17 +109,34 @@ var
   Word        : string;
   Lower       : string;
   LastVis     : string;
+  // Der Name FUER DIE MELDUNG - bei 'strict' zweiteilig, sonst
+  // identisch mit LastVis (s. SektionsName).
+  LastVisName : string;
   LastVisLine : Integer;
   F           : TLeakFinding;
+  ScanState   : TCommentScanState;
+  DummyCol    : Integer;
+  Line        : string;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     LastVis := '';
+    LastVisName := '';
     LastVisLine := -1;
+    ScanState := Default(TCommentScanState);
     for i := 0 to Lines.Count - 1 do
     begin
-      Word := ExtractFirstWord(Lines[i], Col);
+      // Kommentar-Zustand UEBER Zeilen (Voll-Review 2026-09-12, Major
+      // 61, gleiche Gattung wie Major 48): die Fortsetzungszeile eines
+      // mehrzeiligen Blockkommentars wurde als Code gelesen - ein
+      // 'private ...' darin setzte LastVis (FP am folgenden end), ein
+      // Identifier-Anfang resettete eine WIRKLICH leere Section (FN).
+      // Der '['-Pseudo-Wort-Vertrag (ExtractFirstWordOrBracket im
+      // lokalen Wrapper) bleibt unveraendert - ScanCodeLine laesst
+      // '['-Zeilen stehen.
+      Line := TDetectorUtils.ScanCodeLine(Lines[i], ScanState, DummyCol);
+      Word := ExtractFirstWord(Line, Col);
       if Word = '' then Continue;
       Lower := LowerCase(Word);
       if IsVisibilityKw(Lower) then
@@ -122,11 +150,12 @@ begin
           F.LineNumber := IntToStr(LastVisLine + 1);
           F.MissingVar := Format(
             'Empty `%s` section - delete the section header or add ' +
-            'its members.', [LastVis]);
+            'its members.', [LastVisName]);
           F.SetKind(fkEmptyVisibilitySection);
           Results.Add(F);
         end;
         LastVis := Lower;
+        LastVisName := SektionsName(Line, Lower);
         LastVisLine := i;
       end
       else if IsClassEnderKw(Lower) then
@@ -139,17 +168,19 @@ begin
           F.LineNumber := IntToStr(LastVisLine + 1);
           F.MissingVar := Format(
             'Empty `%s` section at end of class - delete the section ' +
-            'header.', [LastVis]);
+            'header.', [LastVisName]);
           F.SetKind(fkEmptyVisibilitySection);
           Results.Add(F);
         end;
         LastVis := '';
+        LastVisName := '';
         LastVisLine := -1;
       end
       else
       begin
         // Anderer Identifier -> Section hat Inhalt, kein leerer Section
         LastVis := '';
+        LastVisName := '';
         LastVisLine := -1;
       end;
     end;

@@ -8,8 +8,11 @@ unit uTestCustomClassDiscovery;
 //   * Instantiable - Klassen mit Ctor/Dtor ODER Create-Call -> leak-relevant
 //   * StaticOnly   - keine Instanziierungs-Evidenz, vermutlich Utility-Klassen
 //
-// Owner-managed Parents (TForm/TFrame/TComponent/TInterfacedObject/...)
-// werden vor der Klassifizierung ausgeschlossen.
+// Owner-managed Parents (TForm/TFrame/TInterfacedObject/...) werden
+// vor der Klassifizierung ausgeschlossen. TComponent ist BEWUSST
+// nicht dabei (Voll-Review 2026-09-12, Major 52): Create(nil) ist
+// bei non-visual Components gaengig, dort leakt es - s. Unit-Kopf
+// von uCustomClassDiscovery.
 
 interface
 
@@ -25,10 +28,15 @@ type
     [Test] procedure FrameDescendant_IsSkipped;
     [Test] procedure InterfacedObjectDescendant_IsSkipped;
     [Test] procedure ExceptionDescendant_IsSkipped;
+    // Voll-Review 2026-09-12 (Major 52): nagelt die Entscheidung fest
+    [Test] procedure TComponentParent_IsNotOwnerManaged;
 
     // ---- Instantiable-Klassifikation --------------------------------------
     [Test] procedure ClassWithCtor_IsInstantiable;
     [Test] procedure ClassWithCreateCallInUnit_IsInstantiable;
+    // Minor 232 (Voll-Review 2026-09-12): Waechter gegen
+    // Create-Evidenz aus einem String-Literal
+    [Test] procedure CreateOnlyInStringLiteral_NotInstantiable;
     [Test] procedure ClassWithoutCtorOrCreate_IsStaticOnly;
 
     // ---- Edge / Multi-Hit -------------------------------------------------
@@ -40,6 +48,9 @@ type
     // Vollzaehlung SCA001, Klasse H (28.08.)
     [Test] procedure RtlNonClassName_NotDiscovered;
     [Test] procedure IsRtlNonClassName_DirectChecks;
+    // Voll-Review 2026-09-12 (Testluecke 105): TComponent ist BEWUSST
+    // nicht auf der Skip-Liste
+    [Test] procedure IsOwnerManagedParent_TComponentIsNotSkipped;
   end;
 
 implementation
@@ -320,6 +331,76 @@ begin
   Assert.IsFalse(TCustomClassDiscovery.IsRtlNonClassName('TObject'));
   Assert.IsFalse(TCustomClassDiscovery.IsRtlNonClassName('TStream'));
   Assert.IsFalse(TCustomClassDiscovery.IsRtlNonClassName(''));
+end;
+
+procedure TTestCustomClassDiscovery.TComponentParent_IsNotOwnerManaged;
+// Voll-Review 2026-09-12 (Major 52): der fruehere Unit-Kopf versprach
+// einen TComponent-Skip, den OWNER_MANAGED nie enthielt. Die
+// Entscheidung des Reviews: TComponent bleibt GETRACKT (Create(nil)
+// ist bei non-visual Components gaengig - 'false positive ist besser
+// als verpasster Leak'). Dieser Assert nagelt die gewaehlte Wahrheit
+// fest; wer TComponent doch skippen will, muss ihn bewusst umdrehen.
+begin
+  Assert.IsFalse(TCustomClassDiscovery.IsOwnerManagedParent('TComponent'),
+    'TComponent ist bewusst NICHT owner-managed-geskippt');
+  Assert.IsTrue(TCustomClassDiscovery.IsOwnerManagedParent('TForm'),
+    'Kontrolle: TForm bleibt geskippt');
+end;
+
+procedure TTestCustomClassDiscovery.IsOwnerManagedParent_TComponentIsNotSkipped;
+// Testluecke 105 (Voll-Review 2026-09-12): Unit- und Testkopf
+// versprachen einen TComponent-Skip, den OWNER_MANAGED nie enthielt.
+// Major 52 hat die Doku korrigiert - dieser Test haelt die
+// ENTSCHEIDUNG fest, damit sie nicht als Versehen zurueckgedreht wird.
+//
+// Der Grund steht im Unit-Kopf: das AOwner-Pattern raeumt nur auf, wenn
+// tatsaechlich ein Owner uebergeben wird. 'Create(nil)' ist bei
+// non-visual Components gaengig, und genau dort leakt es. Nach dem
+// Grundsatz dieser Unit ('false positive ist besser als verpasster
+// Leak') bleiben solche Klassen getrackt.
+begin
+  Assert.IsFalse(TCustomClassDiscovery.IsOwnerManagedParent('TComponent'),
+    'TComponent ist BEWUSST nicht owner-managed - s. Unit-Kopf');
+  // Ein Nachbar der Liste bleibt, was er ist - sonst waere nicht
+  // gezeigt, dass hier eine Entscheidung und kein Listenfehler steht.
+  // Bewusst TFrame und nicht TForm: letzteres steht in dieser Datei
+  // schon zweimal, ein drittes Vorkommen loeste SCA015 aus.
+  Assert.IsTrue(TCustomClassDiscovery.IsOwnerManagedParent('TFrame'));
+end;
+
+procedure TTestCustomClassDiscovery.CreateOnlyInStringLiteral_NotInstantiable;
+// Minor 232 (Voll-Review 2026-09-12) - WAECHTER, kein Fix.
+//
+// Der Posten behauptete, UnitHasCreateCall zaehle ein TFoo.Create aus
+// einem String-Literal als Instanziierungs-Evidenz. Am gebauten Stand
+// ist das NICHT reproduzierbar: zwei Dateien, die sich
+// ausschliesslich in den Anfuehrungszeichen unterscheiden, liefern
+// mit eingeschalteter Klassenentdeckung 1 bzw. 0 Leak-Funde - die
+// zitierte Fassung erzeugt keine Evidenz.
+//
+// Eine Haertung waere also Code ohne belegbare Wirkung gewesen; ich
+// habe sie zurueckgenommen. Was bleibt, ist dieser Waechter: der
+// Parser legt Aufruf-Argumente in ANDEREN Detektorpfaden sehr wohl im
+// Knotennamen ab (belegt an uDfmComponentUnused). Sollte das hier
+// einmal zutreffen, faellt dieser Test - und dann ist die Haertung
+// begruendet.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TFoo = class'#13#10 +
+  '  FDaten: TStringList;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Nutze;'#13#10 +
+  'begin'#13#10 +
+  '  Log(''TFoo.Create'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var Inst, Stat: TArray<string>;
+begin
+  RunDiscover(SRC, Inst, Stat);
+  Assert.IsFalse(ContainsName(Inst, 'TFoo'),
+    'ein TFoo.Create in einem String-Literal ist keine Instanziierung');
 end;
 
 initialization

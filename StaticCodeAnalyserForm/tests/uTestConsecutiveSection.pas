@@ -13,10 +13,15 @@ type
     [Test] procedure ConstThenConst_Reported;
     [Test] procedure TypeThenType_Reported;
     [Test] procedure VarThenVar_Reported;
+    // Voll-Review 2026-09-12 (Blocker): Inline-var-Statements sind
+    // keine Sections.
+    [Test] procedure TwoInlineVars_NoFinding;
     [Test] procedure SectionAcrossProcedure_NoFinding;
     [Test] procedure VarParamThenBodyVar_NoFinding;
     [Test] procedure MultiLineParamThenConsecutiveVar_Reported;
     [Test] procedure ConsecutiveSection_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Major 48): Kommentar-Fortsetzungszeilen
+    [Test] procedure CommentContinuationVar_NoFinding;
   end;
 
 implementation
@@ -86,6 +91,31 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkConsecutiveSection));
+  finally F.Free; end;
+end;
+
+procedure TTestConsecutiveSection.TwoInlineVars_NoFinding;
+// Zwei Inline-vars (Delphi 10.3+) im selben Rumpf sind STATEMENTS -
+// vor dem Fix meldete der zweite 'Consecutive var section', weil
+// LastSection beliebige Identifier-Zeilen ueberlebt. Das ':='-Gate
+// trennt Statement von Section; ':=' im String-Literal zaehlt nicht
+// (geblankte Zeile).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  'var A := 1;'#13#10 +
+  '  Nutze(A);'#13#10 +
+  'var B := 2;'#13#10 +
+  '  Nutze(B);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkConsecutiveSection),
+    'Inline-var-Statements duerfen keine Section-Folge melden');
   finally F.Free; end;
 end;
 
@@ -182,6 +212,32 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkConsecutiveSection),
     'echte konsekutive Body-var-Sections muessen weiter feuern');
+  finally F.Free; end;
+end;
+
+procedure TTestConsecutiveSection.CommentContinuationVar_NoFinding;
+// Voll-Review 2026-09-12 (Major 48): der Rohzeilen-Scan las die
+// Fortsetzungszeile eines mehrzeiligen Blockkommentars als Code -
+// das Wort 'var' im Kommentar setzte LastSection, und die naechste
+// ECHTE var-Section wurde als 'Consecutive var section' gemeldet.
+// Jetzt laeuft der Scan auf ScanCodeLine-bereinigten Zeilen
+// (Kommentar-Zustand ueber Zeilen).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'const'#13#10 +
+  '  A = 1;'#13#10 +
+  '{ Hinweis:'#13#10 +
+  '  var wurde hier frueher deklariert }'#13#10 +
+  'var'#13#10 +
+  '  B: Integer;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkConsecutiveSection),
+    'das var im Kommentar ist keine Section - kein Consecutive-Fund');
   finally F.Free; end;
 end;
 

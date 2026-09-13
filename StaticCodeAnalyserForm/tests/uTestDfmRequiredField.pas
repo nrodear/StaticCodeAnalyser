@@ -25,6 +25,8 @@ type
     [Test] procedure Test_Unbound_KindAndSeverity;
     [Test] procedure Test_NotVisible_KindAndSeverity;
     [Test] procedure Test_DataModuleRoot_Skipped;
+    // Testluecke 138: zwei DataSources am selben DataSet
+    [Test] procedure Test_TwoDataSources_BindingViaSecond_KnownFalsePositive;
   end;
 
 implementation
@@ -281,6 +283,65 @@ begin
     'end');
   try
     Assert.AreEqual<Integer>(0, F.Count);
+  finally F.Free; end;
+end;
+
+procedure TTestDfmRequiredField.Test_TwoDataSources_BindingViaSecond_KnownFalsePositive;
+// Testluecke 138 (Voll-Review 2026-09-12) - der Fund hier ist ein
+// FALSCH POSITIVER, gepinnt als Ist-Zustand.
+//
+// Zwei TDataSource haengen am selben TFDQuery. Das DBEdit bindet
+// ueber die ZWEITE (dsB), der Detektor sucht die Bindung aber nur
+// ueber die erste, die er findet - der Meldetext verraet es selbst
+// mit "DataSource=dsA". Das Pflichtfeld IST gebunden, gemeldet wird
+// es trotzdem.
+//
+// Zur Aufloesung muesste der Detektor ALLE DataSources eines
+// DataSets sammeln statt der ersten. Das ist eine
+// Verhaltensaenderung mit Korpuswirkung und gehoert in einen eigenen
+// Zweig; bis dahin haelt dieser Test die Grenze sichtbar. Wer sie
+// behebt, stellt die Erwartung auf 0.
+// Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'object Form1: TForm1'#13#10 +
+  '  object qryKunden: TFDQuery'#13#10 +
+  '    object qryKundenNAME: TStringField'#13#10 +
+  '      FieldName = ''NAME'''#13#10 +
+  '      Required = True'#13#10 +
+  '    end'#13#10 +
+  '  end'#13#10 +
+  '  object dsA: TDataSource'#13#10 +
+  '    DataSet = qryKunden'#13#10 +
+  '  end'#13#10 +
+  '  object dsB: TDataSource'#13#10 +
+  '    DataSet = qryKunden'#13#10 +
+  '  end'#13#10 +
+  '  object edName: TDBEdit'#13#10 +
+  '    DataSource = dsB'#13#10 +
+  '    DataField = ''NAME'''#13#10 +
+  '  end'#13#10 +
+  'end'#13#10;
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := RunOn(SRC);
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmRequiredFieldUnbound),
+      'BEKANNTER FP: die Bindung ueber die zweite DataSource wird ' +
+      'nicht gesehen');
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkDfmRequiredFieldUnbound then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit);
+    Assert.IsTrue(Pos('dsA', Hit.MissingVar) > 0,
+      'der Meldetext nennt die ERSTE DataSource - genau darin ' +
+      'besteht der Fehler: ' + Hit.MissingVar);
   finally F.Free; end;
 end;
 

@@ -44,9 +44,6 @@ uses
   uFileTextCache,
   uAstSpans;
 
-const
-  EMIT_SEVERITY = lsHint;
-
 // Steht der Bezeichner ANameLow mit Wortgrenzen INNERHALB einer
 // offenen Klammer? Beide Argumente sind bereits kleingeschrieben.
 //
@@ -159,26 +156,12 @@ end;
 // Iterativ, damit tiefe ASTs (z.B. nach Parser-Fix fuer inline-record) kein
 // Stack-Overflow ausloesen.
 procedure CollectAllTokens(Root: TAstNode; SB: TStringBuilder);
-var
-  Stack : TStack<TAstNode>;
-  Cur : TAstNode;
-  i : Integer;
+// Seit Voll-Review 2026-09-12 (Posten 89) byte-identisch in
+// TDetectorUtils.CollectNameTypeTokens - die Routine stand in DREI
+// Units (hier, uUnusedParameter, uUninitVar). Der Wrapper bleibt,
+// damit die Aufrufer in dieser Unit unveraendert bleiben.
 begin
-  if Root = nil then Exit;
-  Stack := TStack<TAstNode>.Create;
-  try
-    Stack.Push(Root);
-    while Stack.Count > 0 do
-    begin
-      Cur := Stack.Pop;
-      if Cur.Name    <> '' then SB.Append(' ').Append(Cur.Name);
-      if Cur.TypeRef <> '' then SB.Append(' ').Append(Cur.TypeRef);
-      for i := 0 to Cur.Children.Count - 1 do
-        Stack.Push(Cur.Children[i]);
-    end;
-  finally
-    Stack.Free;
-  end;
+  TDetectorUtils.CollectNameTypeTokens(Root, SB);
 end;
 
 // ===========================================================================
@@ -263,7 +246,6 @@ begin
       Exit(i - 1);
   end;
 end;
-
 
 // 1-basierter Index im gestrippten Text, an dem die 1-basierte Quellzeile
 // ALine1 beginnt. ALineFor ist monoton steigend (ein Block je Quellzeile),

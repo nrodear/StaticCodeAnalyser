@@ -30,6 +30,9 @@ type
     // Gruppe - Traeger fuer die Zeilenliste im Annotation-Hint.
     [Test] procedure Dup_RelatedLines_ListsOtherSites;
     [Test] procedure Dup_RelatedLines_ExcludesAnchorLine;
+    // Minor 243: Anker ist die kleinste Zeile, nicht die
+    // zuerst besuchte (nkAssign wird vor nkCall gelaufen)
+    [Test] procedure Dup_AnchorIsFirstOccurrence_EvenWhenInCall;
   end;
 
   // ---- DuplicateBlock (TDuplicateBlockDetector) - filebasiert -----------------------
@@ -1129,6 +1132,45 @@ begin
     Assert.IsNotNull(D, 'kein DuplicateString-Fund');
     Assert.AreEqual('6,7', D.RelatedLines,
       'RelatedLines muss die beiden anderen Fundstellen nennen');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateString.Dup_AnchorIsFirstOccurrence_EvenWhenInCall;
+// Minor 243 (Voll-Review 2026-09-12). Die Sammelschleife laeuft erst
+// ueber ALLE nkAssign und dann ueber alle nkCall. Steht das erste
+// Vorkommen eines Literals in einem AUFRUF und ein spaeteres in einer
+// ZUWEISUNG, war die zuerst besuchte Zeile die der Zuweisung - und
+// der Fund zeigte auf eine SPAETERE Stelle als das Erstvorkommen.
+//
+// Die Ankerzeile ist Teil der Fund-Identitaet (Baseline), nicht bloss
+// Anzeige. Deshalb ein eigener Test statt einer Fussnote an einem
+// vorhandenen.
+//
+// Am gebauten Stand nachgemessen: vor dem Fix Zeile 6 (die
+// Zuweisung), nach dem Fix Zeile 5 (der erste Aufruf).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'var s: string;'#13#10 +
+  'begin'#13#10 +
+  '  Log(''wiederholt'');'#13#10 +
+  '  s := ''wiederholt'';'#13#10 +
+  '  Log(''wiederholt'');'#13#10 +
+  'end;'#13#10;
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkDuplicateString),
+      'ein Literal, dreimal - genau ein Fund');
+    Hit := TFindingHelper.FirstOf(F, fkDuplicateString);
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'Log(''wiederholt'');'),
+      Hit.LineNumber,
+      'der Anker muss auf dem ERSTEN Vorkommen liegen, nicht auf der '
+      + 'zuerst besuchten Zuweisung');
   finally F.Free; end;
 end;
 

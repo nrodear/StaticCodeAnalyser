@@ -17,6 +17,8 @@ type
     [Test] procedure OnEAbortHandler_NotReported;
     [Test] procedure OnHandlerBodyStartingWithEnd_NotReported;
     [Test] procedure EmptyTypedHandler_StillReported_AfterGuards;
+    // Testluecke 148 -> hier 147: die anonyme Form ohne Variablenname
+    [Test] procedure AnonymousEmptyHandler_Reported;
   end;
 
 implementation
@@ -181,6 +183,35 @@ begin
     'echter leerer EDatabaseError-Handler muss weiter gemeldet werden');
   finally F.Free; end;
 end;
+procedure TTestEmptyOnHandler.AnonymousEmptyHandler_Reported;
+// Testluecke 147 (Voll-Review 2026-09-12): der Unit-Kopf nennt die
+// anonyme Form 'on EFoo do ;' ausdruecklich als miterfasst. Getestet
+// war sie nur in der EAbort-Unterdrueckung - also ausschliesslich in
+// dem Fall, in dem NICHTS gemeldet wird. Ein Positivtest fehlte:
+// faellt die anonyme Form aus der Erkennung, bliebe alles gruen.
+// Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Anonym;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    DoIt;'#13#10 +
+  '  except'#13#10 +
+  '    on EFoo do ;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkEmptyOnHandler),
+    'auch ohne Variablenname ist der leere Handler ein stiller Fehler');
+  finally F.Free; end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestEmptyOnHandler);
 

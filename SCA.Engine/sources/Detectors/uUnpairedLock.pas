@@ -37,7 +37,7 @@ unit uUnpairedLock;
 //   * Pro Methode (lexisch via "begin..end"-Klammerung waere zu komplex;
 //     stattdessen file-weite Suche):
 //     - Finde alle Vorkommen von `<id>.Lock;` oder `<id>.Acquire;` oder
-//       `EnterCriticalSection(<id>)` oder `RTLeventWaitFor(<id>)`.
+//       `EnterCriticalSection(<id>)`.
 //     - In den hoechstens 200 Bytes danach: erwarte `try` (case-insensitive).
 //       Das Fenster wird am Beginn der NAECHSTEN Routine abgeschnitten - ein
 //       Release in einer Nachbarmethode gehoert nicht zu diesem Acquire.
@@ -54,6 +54,24 @@ unit uUnpairedLock;
 //     schreibt, ist eine unit-uebergreifende Frage.
 //   * Re-Entrant locks die bewusst ohne try/finally arbeiten (Performance-
 //     Pfad) muessen via `// noinspection UnpairedLock` suppressed werden.
+//   * EVENTS (FPC/mORMot `RTLeventWaitFor`) sind NICHT abgedeckt, und das
+//     bleibt so. Der Kopf und der Kommentar ueber dem Regex behaupteten
+//     die Abdeckung, seit es die Unit gibt - implementiert war sie nie
+//     (Voll-Review 2026-09-12, Major 87). Nachgeholt wurde nicht die
+//     Implementierung, sondern die Messung, und die faellt eindeutig aus:
+//       - Alle 18 `RTLeventWaitFor(`-Stellen des Korpus haben im
+//         200-Zeichen-Fenster KEIN Release. Selbst mit dem Muster in der
+//         Alternation UND 'rtleventsetevent' in der Release-Liste bliebe
+//         UnlockPos = 0 -> Continue: die Erweiterung waere am gesamten
+//         Korpus beweisbar wirkungslos.
+//       - Sie waere zudem semantisch schief. Ein Lock gehoert dem Thread,
+//         der ihn nimmt; ein EVENT wird typischerweise von einem ANDEREN
+//         Thread gesetzt (doublecmd mtprocs.pas:260 wartet, der Setzer
+//         sitzt woanders). Ein fehlendes Gegenstueck in derselben Routine
+//         ist dort der Normalfall, kein Befund.
+//       - Vier der 18 Treffer sind ueberhaupt keine Aufrufe, sondern die
+//         DEKLARATIONEN der API selbst (mormot.core.os.delphi.pas:101 f.).
+//     Die Grenze ist damit gemessen und gewollt, nicht vergessen.
 //
 // Schweregrad: lsWarning - Concurrency-Bug.
 
@@ -233,7 +251,9 @@ begin
     Headers := CollectRoutineHeaderStarts(Lines, LineFor);
 
     // Pattern: `<id>.Lock;` oder `<id>.Acquire;` oder `EnterCriticalSection(`
-    // oder mORMot's `RTLeventWaitFor(` - jeweils mit folgendem try-fehlt-Check.
+    // - jeweils mit folgendem try-fehlt-Check. Events (RTLeventWaitFor)
+    // gehoeren bewusst NICHT dazu; Begruendung samt Korpus-Messung in der
+    // Limitierungen-Sektion des Unit-Kopfs.
     RE := TRegEx.Create(
       '(?i)\b((?:\w+\.)?(?:Lock|Acquire|EnterCriticalSection)|EnterCriticalSection)\s*[\(;]');
     for M in RE.Matches(Code) do

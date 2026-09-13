@@ -4,9 +4,23 @@ unit uConcurrencyExt;
 //
 //   * fkThreadResumeDeprecated           - TThread.Resume seit D2010
 //                                          deprecated, TThread.Start nutzen
-//   * fkTThreadDestroyWithoutTerminate   - FreeAndNil(MyThread) / MyThread.Free
+//   * fkTThreadDestroyWithoutTerminate   - FreeAndNil(MyThread)
 //                                          ohne vorheriges Terminate; WaitFor;
 //                                          -> Worker laeuft weiter, AV-Risiko
+//                                          BEWUSSTE GRENZE (Voll-Review
+//                                          2026-09-12, Major 47): die nackte
+//                                          '.Free'-Form wird NICHT geprueft -
+//                                          der fruehere Kopf versprach sie,
+//                                          implementiert war sie nie. Ein
+//                                          .Free-Zweig waere eine Recall-
+//                                          Erweiterung mit eigener FP-
+//                                          Charakteristik (TThread.Free ruft
+//                                          selbst Terminate+WaitFor im
+//                                          Destruktor - die Meldung traegt
+//                                          dort nur fuer FreeOnTerminate-/
+//                                          Suspended-Sonderfaelle) und
+//                                          braeuchte eine eigene Korpus-
+//                                          Messung.
 //                                          Gates 2026-07-31: TerminateThread-
 //                                          Hardkill, positiver .Finished-Guard
 //                                          und Terminated-honorierende Execute
@@ -86,8 +100,6 @@ var
   Matches      : TMatchCollection;
   Snippet      : string;
   LookBack     : Integer;
-  LineNo       : Integer;
-  F            : TLeakFinding;
   HasTerminate : Boolean;
   Ident        : string;
   DeclaredType : string;
@@ -420,15 +432,11 @@ var
 
   procedure Emit(K: TFindingKind; const Detail: string; AtPos: Integer);
   begin
-    LineNo := TDetectorUtils.LineForPos(LineFor, AtPos);
-    if LineNo <= 0 then LineNo := 1;
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := '';
-    F.LineNumber := IntToStr(LineNo);
-    F.MissingVar := Detail;
-    F.SetKind(K);
-    Results.Add(F);
+    // Seit Voll-Review 2026-09-12 zentral: TLeakFinding.NewAtPos
+    // (LineForPos-Aufloesung + Fallback Zeile 1, byte-identische
+    // Feldfolge). Der Wrapper bleibt, damit die Aufrufstellen
+    // unveraendert bleiben.
+    Results.Add(TLeakFinding.NewAtPos(FileName, LineFor, AtPos, Detail, K));
   end;
 
   // SCA113: <ident>.Resume - die ganze Regel in einer Prozedur
@@ -495,7 +503,8 @@ var
   var
     M : TMatch;   // E1019: die for-in-Variable MUSS lokal zur Schleifen-Routine sein
   begin
-      // 2) FreeAndNil(<ident>) oder <ident>.Free auf einer Zeile, davor
+      // 2) FreeAndNil(<ident>) auf einer Zeile (NUR diese Form - die
+      //    nackte .Free-Form ist bewusste Grenze, s. Unit-Kopf), davor
       //    KEIN <ident>.Terminate (in den letzten ~10 Zeilen).
       //    LookBack-Window in Bytes (gestripte Code-Laenge); ~500 chars
       //    deckt ~10 Code-Zeilen ab.

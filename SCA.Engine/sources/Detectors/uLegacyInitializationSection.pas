@@ -74,9 +74,6 @@ implementation
 uses
   uFileTextCache;
 
-const
-  EMIT_SEVERITY = lsHint;
-
 function IsIdent(C: Char): Boolean; inline;
 begin
   Result := TDetectorUtils.IsIdentChar(C);

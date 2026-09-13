@@ -1,4 +1,4 @@
-﻿unit uDivByZero;
+unit uDivByZero;
 
 // Detektor fuer potentielle Division-durch-Null (Sonar-Regel #6).
 //
@@ -88,7 +88,7 @@ type
     class function ExtractDivisor(const ExprLow: string): string; static;
     class function IsIntegerType(const TypeLow: string): Boolean; static;
     class function HasGuardingIf(MethodNode: TAstNode;
-      const VarLow: string; BeforeLine: Integer): Boolean; static;
+      const VarLow: string; DivNode: TAstNode): Boolean; static;
     // G5 (02.09., AQL-Stichprobe): Untergrenze mit einem anderen Literal
     // als 0/1 - "if Elapsed >= 1000". Schuetzt bei ">= K" fuer K >= 1 und
     // bei "> K" fuer K >= 0. Ein Cast-Wrapper (Cardinal(1000)) wird
@@ -123,7 +123,8 @@ type
     // zugewiesen bekommt (nichtnull-Ganzzahl-Literale ODER Clamp G3) und
     // mindestens einmal vor der Division (provably-nonzero).
     class function AllAssignmentsProvablyNonZero(MethodNode: TAstNode;
-      const VarLow: string; BeforeLine: Integer): Boolean; static;
+      const VarLow: string; ADivNode: TAstNode): Boolean; static;
+
     // True wenn Target im Subtree von Root liegt (Knoten-Identitaet, nicht
     // Zeilenbereich). Basis fuer die Schleifen-Enthaltenseins-Pruefungen.
     class function NodeInSubtree(Root, Target: TAstNode): Boolean; static;
@@ -333,7 +334,7 @@ begin
 end;
 
 class function TDivByZeroDetector.HasGuardingIf(MethodNode: TAstNode;
-  const VarLow: string; BeforeLine: Integer): Boolean;
+  const VarLow: string; DivNode: TAstNode): Boolean;
 var
   Ifs : TList<TAstNode>;
   IfN : TAstNode;
@@ -343,7 +344,18 @@ begin
   Ifs := MethodNode.FindAllRef(nkIfStmt);
   for IfN in Ifs do
   begin
-    if IfN.Line >= BeforeLine then Continue;
+    // Einzeiler-Idiom 'if n <> 0 then x := t div n;': if und Division
+    // teilen die Zeile, und der alte reine Zeilenvergleich (>=)
+    // uebersprang genau diesen Guard (Voll-Review 2026-09-12,
+    // Blocker). Gleiche Zeile zaehlt jetzt, wenn die Division im
+    // Subtree des if liegt. Dass eine Division im ELSE-Zweig damit
+    // ebenfalls als geschuetzt gilt, ist KEINE neue Unschaerfe - die
+    // mehrzeilige Form hat dieselbe lexikalische Grenze schon immer
+    // (ein if VOR der Divisionszeile zaehlt, egal in welchem Zweig
+    // die Division liegt).
+    if IfN.Line > DivNode.Line then Continue;
+    if (IfN.Line = DivNode.Line) and not NodeInSubtree(IfN, DivNode) then
+      Continue;
     Low := IfN.TypeRef.ToLower;
     if Low = '' then Continue;
     // Strikte Guards: die Bedingung selbst schuetzt direkt vor 0.
@@ -719,7 +731,7 @@ begin
 end;
 
 class function TDivByZeroDetector.AllAssignmentsProvablyNonZero(
-  MethodNode: TAstNode; const VarLow: string; BeforeLine: Integer): Boolean;
+  MethodNode: TAstNode; const VarLow: string; ADivNode: TAstNode): Boolean;
 // True wenn JEDE Zuweisung an VarLow im ganzen Methodenrumpf beweisbar <> 0 ist
 // (nichtnull-Ganzzahl-Literal ODER Clamp G3 wie 'Max(1,..)') UND mindestens eine
 // davon vor der Division liegt. Dann ist VarLow an der Divisionsstelle
@@ -746,13 +758,19 @@ begin
   for A in Assigns do
   begin
     if A.Name.ToLower <> VarLow then Continue;
-    // Die Divisions-Zuweisung selbst (gleiche Zeile) tragt die 'div'-RHS -
-    // sie darf die Pruefung nicht scheitern lassen und zaehlt nicht als
-    // vorherige Init.
-    if A.Line = BeforeLine then Continue;
+    // Nur die Divisions-Zuweisung SELBST (Knoten-Identitaet) ist vom
+    // Beweis ausgenommen - sie traegt die 'div'-RHS. Der fruehere
+    // Zeilen-Vergleich (A.Line = BeforeLine) nahm JEDES Statement der
+    // Divisionszeile aus: 'n := 0; x := 100 div n;' auf EINER Zeile
+    // liess das n := 0 unsichtbar, eine fruehere nichtnull-Init
+    // gewann, und ein echter EZeroDivide wurde verschluckt
+    // (Voll-Review 2026-09-12, Major 59 - verletzte den eigenen
+    // Vertrag 'sobald IRGENDEINE Zuweisung nicht beweisbar ist,
+    // brechen wir ab').
+    if A = ADivNode then Continue;
     if not (IsNonZeroIntLiteral(A.TypeRef) or IsClampedNonZero(A.TypeRef)) then
       Exit; // Result bleibt False
-    if A.Line < BeforeLine then FoundPrior := True;
+    if A.Line < ADivNode.Line then FoundPrior := True;
   end;
   Result := FoundPrior;
 end;
@@ -868,7 +886,10 @@ begin
   Ifs := MethodNode.FindAllRef(nkIfStmt);
   for IfN in Ifs do
   begin
-    if IfN.Line >= DivNode.Line then Continue;
+    // Gleiche-Zeile-Regel wie in HasGuardingIf (Einzeiler-Idiom).
+    if IfN.Line > DivNode.Line then Continue;
+    if (IfN.Line = DivNode.Line) and not NodeInSubtree(IfN, DivNode) then
+      Continue;
     Low := IfN.TypeRef.ToLower;
     if Low = '' then Continue;
     // Bail-Bedingung auf dem Divisor (dieselbe Menge wie im Exit/Raise-Zweig
@@ -941,8 +962,15 @@ begin
     // Reassign-Pruefung: nkAssign an den Divisor im Rumpf VOR der Division.
     Reassigned := False;
     Lst := MethodNode.FindAllRef(nkAssign);
+    // Same-line-Zuweisungen VOR der Division zaehlen konservativ mit
+    // (N.Line <= DivNode.Line, aber nie der Div-Knoten selbst): der
+    // Einzeiler 'begin n := GetNext; x := t div n end' reassignte den
+    // Divisor unsichtbar - die Suppression blieb und der Fund
+    // verschwand (Voll-Review 2026-09-12, Major 59; Fehltreffer
+    // unterdruecken hier nur NICHT - FP-Richtung, safe).
     for N in Lst do
-      if (N.Line < DivNode.Line) and (N.Name.ToLower = VarLow)
+      if (N.Line <= DivNode.Line) and (N <> DivNode)
+         and (N.Name.ToLower = VarLow)
          and NodeInSubtree(WhileN, N) then
       begin
         Reassigned := True;
@@ -1103,20 +1131,53 @@ begin
   end;
 end;
 
+function TeiltDurchLiteraleNull(const AExprLow: string): Boolean;
+// H1: ' div 0' bzw. ' mod 0' - aber nur, wenn die Null der GANZE
+// Divisor ist.
+//
+// Ohne die rechte Wortgrenze traf der blosse Pos-Vergleich auch
+// fuehrende Nullen: 'x div 01', 'x div 0777' und selbst ein
+// verunglueckt geschriebenes 'x div 0x10' galten als Division durch
+// Null - und zwar mit lsError, dem hoechsten Schweregrad des
+// Werkzeugs (Voll-Review 2026-09-12, Minor 241). In Pascal ist die
+// fuehrende Null erlaubt, 01 ist schlicht 1.
+//
+// Beide H1-Fundstellen (nkAssign und nkCall) riefen denselben
+// Doppel-Pos auf; die Pruefung existiert jetzt einmal.
+const
+  IDENT_ODER_ZIFFER = ['0'..'9', 'a'..'z', 'A'..'Z', '_'];
+var
+  Nadel : string;
+  p, e  : Integer;
+begin
+  for Nadel in [' div 0', ' mod 0'] do
+  begin
+    p := Pos(Nadel, AExprLow);
+    while p > 0 do
+    begin
+      e := p + Length(Nadel);   // erstes Zeichen NACH der Null
+      if (e > Length(AExprLow)) or
+         (not CharInSet(AExprLow[e], IDENT_ODER_ZIFFER)) then
+        Exit(True);
+      p := Pos(Nadel, AExprLow, p + 1);
+    end;
+  end;
+  Result := False;
+end;
 class procedure TDivByZeroDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 
   procedure Report(const Detail: string; Line: Integer; Sev: TLeakSeverity);
   var F: TLeakFinding;
   begin
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := MethodNode.Name;
-    F.LineNumber := IntToStr(Line);
-    F.MissingVar := Detail;
-    F.Severity   := Sev;
-    F.Kind       := fkDivByZero;
-    F.Confidence := KindDefaultConfidence(fkDivByZero);
+    // Factory + expliziter Severity-Override (Voll-Review 2026-09-12):
+    // die alte Fassung setzte Kind direkt, Severity=Sev und
+    // Confidence=KindDefault - New/SetKind liefert Kind +
+    // Katalog-Severity + Default-Confidence, der Override danach
+    // stellt exakt denselben Feld-Endstand her.
+    F := TLeakFinding.New(FileName, MethodNode.Name, Line, Detail,
+      fkDivByZero);
+    F.Severity := Sev;
     Results.Add(F);
   end;
 
@@ -1147,7 +1208,7 @@ begin
       ExprLow := TDetectorUtils.BlankStringLiterals(ExprLow);
 
       // H1: Literal 0
-      if (Pos(' div 0', ExprLow) > 0) or (Pos(' mod 0', ExprLow) > 0) then
+      if TeiltDurchLiteraleNull(ExprLow) then
       begin
         var Key := IntToStr(N.Line) + ':lit';
         if not Reported.ContainsKey(Key) then
@@ -1163,7 +1224,7 @@ begin
       if (Divisor = '') or (IntVars.IndexOf(Divisor) < 0) then Continue;
 
       // Gibt es einen Guard?
-      if HasGuardingIf(MethodNode, Divisor, N.Line) then Continue;
+      if HasGuardingIf(MethodNode, Divisor, N) then Continue;
 
       // G1: aufsteigende for-Schleifenvariable mit nichtnull-Literal-Start -
       // im Rumpf immer >= Start >= 1 (Real-World-FP-Audit 2026-07-12).
@@ -1183,7 +1244,7 @@ begin
       // Ausdruecken belegt (nichtnull-Literale ODER Clamp 'Max(1,..)' G3) - kann
       // an der Divisionsstelle nicht 0 sein. TP-sicher, weil jede nicht-beweisbare
       // Zuweisung die Suppression aufhebt (Real-World-Audit 2026-07-10/-12).
-      if AllAssignmentsProvablyNonZero(MethodNode, Divisor, N.Line) then Continue;
+      if AllAssignmentsProvablyNonZero(MethodNode, Divisor, N) then Continue;
 
       // G5 (#6 CFG-Schlussstueck 2026-07-24): 'if n = 0 then Handle
       // else x := a div n' - die Else-Kante dominiert die Division,
@@ -1204,7 +1265,7 @@ begin
     for var N in Nodes do
     begin
       ExprLow := TDetectorUtils.BlankStringLiterals(N.Name.ToLower);
-      if (Pos(' div 0', ExprLow) > 0) or (Pos(' mod 0', ExprLow) > 0) then
+      if TeiltDurchLiteraleNull(ExprLow) then
       begin
         var Key := IntToStr(N.Line) + ':lit';
         if not Reported.ContainsKey(Key) then

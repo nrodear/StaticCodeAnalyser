@@ -45,9 +45,6 @@ implementation
 // noinspection-file NilComparison, TooLongLine, UnsortedUses, UnusedRoutine
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
-const
-  EMIT_SEVERITY = lsError;
-
 // Pruefe ob eine Identifier-Property gesetzt + nicht-leer ist.
 function HasNonEmptyIdent(N: TComponentNode; const PropName: string): Boolean;
 var
@@ -76,6 +73,55 @@ begin
     Result := Trim(V.RawValue);
 end;
 
+// True, wenn eine der SQL-Properties der Komponente einen benannten
+// Parameter (':' + Bezeichnerstart) traegt.
+//
+// WARUM DIESES GATE (Voll-Review 2026-09-12, Blocker): FireDAC (und
+// ADO/IBX analog) dokumentiert parameter-basiertes Master-Detail als
+// Standardweg - MasterSource gesetzt, Detail-SQL mit :param, dessen
+// Name ein Master-Feld ist; FireDAC fuellt die Parameter beim
+// Master-Scroll. MasterFields/IndexFieldNames sind dort WEDER noetig
+// noch ueblich, einen Cross-Join gibt es nicht. Der Detektor meldete
+// diese dokumentierte Standard-Konfiguration als lsError/ftBug.
+//
+// Konservativ je Evidenz-Politik ('Error = bewiesen'): JEDES
+// parametrisierte SQL macht die Kopplung plausibel gewollt -> still.
+// Ein ':param', der kein Master-Feld ist, kann hier nicht vom echten
+// Fall unterschieden werden (die Master-Feldliste steht nicht im DFM).
+// '::' (SQL-Cast-Syntax) zaehlt nicht als Parameter.
+function HasParameterizedSql(N: TComponentNode): Boolean;
+const
+  SQL_PROPS : array[0..2] of string =
+    ('SQL.Strings', 'CommandText', 'SelectSQL.Strings');
+  // Ein ':' zaehlt als Parameterstart, wenn weder links noch rechts
+  // ein weiterer ':' steht ('::' = Cast) und rechts ein Bezeichner
+  // beginnt. Eigene kleine Funktion, damit die Schleife flach bleibt
+  // (die verschachtelte Erstfassung riss die eigene SCA176-Schwelle).
+  function IsParamColon(const S: string; i: Integer): Boolean;
+  begin
+    Result := (S[i] = ':')
+      and ((i = 1) or (S[i - 1] <> ':'))
+      and (S[i + 1] <> ':')
+      and CharInSet(S[i + 1], ['A'..'Z', 'a'..'z', '_']);
+  end;
+
+var
+  PropName : string;
+  V        : TPropValue;
+  S        : string;
+  i        : Integer;
+begin
+  Result := False;
+  for PropName in SQL_PROPS do
+  begin
+    if not N.TryGetProperty(PropName, V) then Continue;
+    if not (V.Kind in [pvkString, pvkStrList]) then Continue;
+    S := V.RawValue;
+    for i := 1 to Length(S) - 1 do
+      if IsParamColon(S, i) then Exit(True);
+  end;
+end;
+
 class procedure TDfmMasterDetailUnlinkedDetector.Analyze(Graph: TComponentGraph;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -100,6 +146,12 @@ begin
       HasMasterFields := HasNonEmptyString(N, 'MasterFields');
       HasIndexFields  := HasNonEmptyString(N, 'IndexFieldNames');
       if HasMasterFields or HasIndexFields then Continue;
+
+      // 3. Parameter-basiertes Master-Detail (Begruendung am Helfer):
+      // parametrisiertes Detail-SQL + MasterSource ist der dokumentierte
+      // FireDAC-Standardweg OHNE MasterFields - kein Cross-Join, kein
+      // Fund.
+      if HasParameterizedSql(N) then Continue;
 
       // -> Treffer
       F            := TLeakFinding.Create;

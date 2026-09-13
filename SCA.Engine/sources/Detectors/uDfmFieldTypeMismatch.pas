@@ -61,28 +61,18 @@ begin
 end;
 
 function FieldName(Field: TComponentNode): string;
-var V: TPropValue;
 begin
-  Result := '';
-  if Field.TryGetProperty('FieldName', V) and (V.Kind = pvkString) then
-    Result := Trim(V.RawValue);
-  if Result = '' then
-    Result := Field.Name;
+  // Voll-Review 2026-09-12: zentral (uDfmDbFieldAnalysis).
+  Result := DbFieldName(Field);
 end;
 
 function FindDataSourceForDataSet(All: TList<TComponentNode>;
   DataSet: TComponentNode): TComponentNode;
-var
-  N: TComponentNode;
-  V: TPropValue;
 begin
-  Result := nil;
-  for N in All do
-    if IsDataSourceClass(N.ClassRef)
-       and N.TryGetProperty('DataSet', V)
-       and (V.Kind = pvkIdent)
-       and SameText(Trim(V.RawValue), DataSet.Name) then
-      Exit(N);
+  // Voll-Review 2026-09-12: zentral (uDfmDbFieldAnalysis).
+  // Die alte lokale Fassung prufte TryGetProperty+pvkIdent+Trim -
+  // GetIdent/AsIdent der zentralen Fassung macht exakt dasselbe.
+  Result := uDfmDbFieldAnalysis.FindDataSourceForDataSet(All, DataSet);
 end;
 
 class procedure TDfmFieldTypeMismatchDetector.Analyze(Graph: TComponentGraph;

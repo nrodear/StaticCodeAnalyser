@@ -10,6 +10,10 @@ type
   TTestGetMemWithoutFreeMem = class
   public
     [Test] procedure GetMemWithoutTryFinally_Reported;
+    // Voll-Review 2026-09-12 (Blocker): geschachtelter Block im
+    // finally hob die Entlastung auf.
+    [Test] procedure NestedBlockInFinally_NotReported;
+    [Test] procedure FreeMemAfterClosedFinally_StillReported;
     [Test] procedure AllocMemWithoutTryFinally_Reported;
     [Test] procedure GetMemInTryFinally_NotReported;
     [Test] procedure GetMemWithoutMatchingFreeMem_NotReported;
@@ -39,6 +43,67 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+procedure TTestGetMemWithoutFreeMem.NestedBlockInFinally_NotReported;
+// Lehrbuch-Muster mit geschachteltem Block IM finally: dessen eigenes
+// 'end' liess das alte Vorkommens-Gate den Handler fuer geschlossen
+// halten - Fehlfund auf korrekt geschuetztem Code.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(N: Integer; Flag: Boolean);'#13#10 +
+  'var P: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  GetMem(P, N);'#13#10 +
+  '  try'#13#10 +
+  '    Arbeite(P);'#13#10 +
+  '  finally'#13#10 +
+  '    if Flag then begin Log; end;'#13#10 +
+  '    FreeMem(P);'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+    'geschachtelter Block im finally darf die Entlastung nicht kippen');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.FreeMemAfterClosedFinally_StillReported;
+// Gegenprobe (Review 02.09. bleibt gewahrt): schliesst das finally
+// VOR dem FreeMem wirklich (ungedecktes end), steht das FreeMem
+// draussen - der Fund ist echt und muss bleiben.
+//
+// Der GetMem steht INNERHALB des schon offenen try, und das ist
+// wesentlich: liegt das 'try' im Vorwaerts-Fenster hinter dem GetMem,
+// greift schon das fruehere Gate 'try kommt VOR FreeMem -> Pattern OK'
+// und die Handler-Logik laeuft nie an. Die erste Fassung dieses Tests
+// hatte genau diese Form und pruefte damit den falschen Pfad
+// (Testlauf 2026-09-12). Jetzt ist TryPos = 0 im Fenster, der Fund
+// haengt allein an HandlerGeschlossen - an der gebauten Exe
+// verifiziert.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(N: Integer);'#13#10 +
+  'var P: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    GetMem(P, N);'#13#10 +
+  '    Arbeite(P);'#13#10 +
+  '  finally'#13#10 +
+  '    LeaveCS;'#13#10 +
+  '  end;'#13#10 +
+  '  FreeMem(P);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(
+    TFindingHelper.Count(F, fkGetMemWithoutFreeMem) >= 1,
+    'FreeMem hinter dem geschlossenen finally ist ungeschuetzt');
+  finally F.Free; end;
+end;
 
 procedure TTestGetMemWithoutFreeMem.GetMemWithoutTryFinally_Reported;
 const SRC =

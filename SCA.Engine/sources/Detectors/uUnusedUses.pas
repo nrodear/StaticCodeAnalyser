@@ -138,6 +138,17 @@ end;
 
 class function TUnusedUsesDetector.KnownIdents(
   const UnitLow: string): TArray<string>;
+// PFLEGEHINWEIS (Voll-Review 2026-09-12, Major 90): ein Eintrag mit
+// Tippfehler ist hier kein kosmetischer Mangel, sondern ein FP-Erzeuger.
+// H2 meldet eine gemappte Unit als unused, wenn KEINER der gelisteten
+// Bezeichner vorkommt - der Eintrag, der den Nachweis liefern sollte,
+// matcht dann nie. Neun solche Eintraege standen in dieser Funktion
+// (Doppelungen mitgezaehlt).
+//
+// Jede Korrektur wurde am Korpus (16.023 Dateien) gegengeprueft, statt
+// die Schreibweise zu raten - zwei naheliegende 'Korrekturen' waeren
+// selbst tot gewesen (TMultiViewPanel und TThemeManager: je 0 Treffer).
+// Wer hier etwas ergaenzt, zaehlt den Bezeichner vorher am Korpus.
 begin
   Result := [];
 
@@ -190,7 +201,7 @@ begin
 
   else if (UnitLow = 'system.inifiles') or (UnitLow = 'inifiles') then
     Result := ['tinifile','tmeminifile','tcustominifile',
-               'thashedinitfile','treginifile']
+               'thashedstringlist','treginifile']
 
   else if UnitLow = 'system.regularexpressions' then
     Result := ['tregex','tmatch','tmatchcollection','tgroupcollection',
@@ -350,7 +361,7 @@ begin
   else if (UnitLow = 'vcl.graphics') or (UnitLow = 'graphics') then
     Result := ['tbitmap','tcanvas','tfont','tpen','tbrush',
                'tcolor','tgraphic','ticon','tpicture','tmetafile',
-               'tpenstyle','tpenstyle','tbrushedstyle','tfontstyle',
+               'tpenstyle','tbrushstyle','tfontstyle',
                'clred','clblue','clgreen','clblack','clwhite','clsyscolor',
                'colortostring','stringtocolor','rgbtocolor',
                'gettextextentpoint','tgraphicclass']
@@ -384,7 +395,7 @@ begin
 
   else if (UnitLow = 'vcl.buttons') or (UnitLow = 'buttons') then
     Result := ['tbitbtn','tspeedbutton','tglyph',
-               'tbitbtnkind','tspeedbutton']
+               'tbitbtnkind']
 
   else if (UnitLow = 'vcl.checklst') or (UnitLow = 'checklst') then
     Result := ['tchecklistbox','tcheckedstate']
@@ -534,8 +545,7 @@ begin
   else if (UnitLow = 'idssliopensslheaders') or
           (UnitLow = 'idssl') or
           (UnitLow = 'idsslopenssl') then
-    Result := ['tidssliohannlersocketopenssl','tidsslopenssl',
-               'tidssliohandleropenssl']
+    Result := ['tidssliohandlersocketopenssl','tidsslopenssl']
 
   else if (UnitLow = 'idiohandler') or (UnitLow = 'idiohandlerstack') then
     Result := ['tidiohandler','tidiohandlerstack','tidiohandlersocket']
@@ -587,11 +597,11 @@ begin
   else if (UnitLow = 'fmx.layouts') then
     Result := ['tlayout','tscaledlayout','tgridlayout','tflowlayout',
                'twraplayout','tvertscrollbox','thorzscrollbox',
-               'tscrollbox','tframedsscrollbox']
+               'tscrollbox','tframedscrollbox']
 
   else if (UnitLow = 'fmx.objects') then
     Result := ['trectangle','tcircle','tellipse','tline','tpath',
-               'timage','ttext','tselectionpoint','tcalloutrecangle']
+               'timage','ttext','tselectionpoint','tcalloutrectangle']
 
   else if (UnitLow = 'fmx.grid') then
     Result := ['tgrid','tstringgrid','tcolumn','tstringcolumn',
@@ -623,7 +633,7 @@ begin
                'treflectioneffect','tembosseffect']
 
   else if (UnitLow = 'fmx.multiview') then
-    Result := ['tmultiview','tmultitviewpanel']
+    Result := ['tmultiview']
 
   else if (UnitLow = 'fmx.calendars') then
     Result := ['tcalendarview','tdatepicker']
@@ -679,15 +689,25 @@ begin
 
   // ══ Sonstige ══════════════════════════════════════════════════════════════
 
+  // 'tthermemanager' stand hier und war tot; die naheliegende Korrektur
+  // 'tthememanager' ist es ebenfalls (0 Korpustreffer). Entfernt statt
+  // geraten. Die real haeufigen Vcl.Themes-Bezeichner waeren
+  // TStyleManager (728 Korpustreffer) und TCustomStyleServices (233) -
+  // die AUFZUNEHMEN ist aber keine Tippfehler-Korrektur mehr, sondern
+  // eine Whitelist-Erweiterung mit rund 200 betroffenen Dateien. Eigener
+  // Posten, eigene Messung (Voll-Review 2026-09-12, Major 90). Der
+  // Vcl.Styles-Zweig direkt darunter fuehrt 'tstylemanager' bereits -
+  // ein Grund mehr, die beiden Listen bewusst und nicht nebenbei
+  // anzugleichen.
   else if (UnitLow = 'vcl.themes') or (UnitLow = 'themes') then
-    Result := ['tthemeservices','tthermemanager']
+    Result := ['tthemeservices']
 
   else if (UnitLow = 'vcl.styles') or (UnitLow = 'styles') then
     Result := ['tthemeservices','tstylecollection','tstylemanager']
 
   else if (UnitLow = 'vcl.platformvcl') or
           (UnitLow = 'vcl.platformvclstyles') then
-    Result := ['tplatformvclstylsservice']
+    Result := ['tplatformvclstylesservice']
 
   else if (UnitLow = 'fmx.platform') then
     Result := ['iinterface','ifdtextinput','ifontmanager',

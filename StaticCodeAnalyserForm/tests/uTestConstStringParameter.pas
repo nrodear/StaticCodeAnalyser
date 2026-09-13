@@ -42,8 +42,13 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.IsTrue(TFindingHelper.Count(F, fkConstStringParameter) >= 1,
-      's: string ohne const muss gemeldet werden');
+    // EXAKT 1 (Voll-Review 2026-09-12, Major 50): das fruehere '>= 1'
+    // maskierte die Doppelmeldung - Class-Body-Deklaration UND
+    // Implementierungs-Header erzeugten je ein Finding fuer denselben
+    // Parameter. Seit dem Body-Gate meldet nur die Implementierung.
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkConstStringParameter),
+      's: string ohne const - genau EIN Fund (Implementierungszeile)');
   finally F.Free; end;
 end;
 

@@ -204,16 +204,23 @@ var
     S     : TAstNode;
   begin
     Result := False;
+    // STRIKT '<', nicht '<=' (Voll-Review 2026-09-12, Blocker): beim
+    // Einzeiler-Idiom 'FTimer.Free; FTimer := nil; RestartUI;' traegt
+    // das nil-Assign DIESELBE Zeile wie der Free-Call - '<=' sprang
+    // darueber und meldete das Muster, das die Regel selbst empfiehlt.
+    // Restrisiko 'FFoo := nil; FFoo.Free;' (nil-Assign VOR dem Free
+    // derselben Zeile) ist bewusst akzeptiert - der Parser liefert
+    // keine Spalten, und dieser Code waere ohnehin ein anderer Fund.
     Stmts := MethodNode.FindAllRef(nkAssign);
     for S in Stmts do
     begin
-      if S.Line <= FreeCall.Line then Continue;
+      if S.Line < FreeCall.Line then Continue;
       if IsNilAssignTo(S, IdentLow) then Exit(True);
     end;
     Stmts := MethodNode.FindAllRef(nkCall);
     for S in Stmts do
     begin
-      if S.Line <= FreeCall.Line then Continue;
+      if S.Line < FreeCall.Line then Continue;
       if IsFreeAndNilOf(S, IdentLow) then Exit(True);
     end;
   end;

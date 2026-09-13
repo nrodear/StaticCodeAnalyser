@@ -28,6 +28,14 @@ type
     // Review-MEDIUM 2026-08-09: ')' im Literal-Arm darf die Klammer-Zaehlung
     // nicht vorzeitig schliessen (sonst FN fuer den Seiteneffekt-Arm dahinter).
     [Test] procedure IfThen_ParenInLiteralArm_SideEffectStillReported;
+    // Voll-Review 2026-09-12 (Major 70): eingebettete IfThen-Formen
+    [Test] procedure EmbeddedBareInCall_Reported;
+    [Test] procedure EmbeddedBareInWrapper_Reported;
+    [Test] procedure EmbeddedQualified_Reported;
+    [Test] procedure ForeignQualifier_NoFinding;
+    // Testluecke 158: Arme ohne Klammern
+    [Test] procedure ParameterlessArms_KnownGap_NoFinding;
+    [Test] procedure ParenthesisedArms_StillReported;
   end;
 
 implementation
@@ -205,6 +213,131 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkIfThenShortCircuit),
     'Seiteneffekt-Call hinter Literal-Arm mit Klammer muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestIfThenShortCircuit.EmbeddedBareInCall_Reported;
+// Voll-Review 2026-09-12 (Major 70): der alte Anker Pos('ifthen(')=1
+// liess IfThen als ARGUMENT eines umgebenden Calls durchrutschen -
+// der Parser emittiert verschachtelte Calls nicht als eigene
+// nkCall-Knoten (Bestands-Exe: 0 Funde auf dieser Fixture, empirisch
+// belegt - silent FN).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(b: Boolean);'#13#10 +
+  'begin'#13#10 +
+  '  ShowMessage(IfThen(b, ''x'', LoadCfg()));'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkIfThenShortCircuit),
+    'IfThen als Call-Argument evaluiert beide Arme genauso');
+  finally F.Free; end;
+end;
+
+procedure TTestIfThenShortCircuit.EmbeddedBareInWrapper_Reported;
+// Geschwisterfall auf dem nkAssign-Pfad: die RHS traegt eine
+// umhuellende Funktion, die IfThen-Klammer ist nicht die erste des
+// Gesamttexts (Bestands-Exe: 0 Funde, empirisch belegt).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(b: Boolean);'#13#10 +
+  'var x: string;'#13#10 +
+  'begin'#13#10 +
+  '  x := Trim(IfThen(b, A(), B()));'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkIfThenShortCircuit),
+    'IfThen unter einer Wrapper-Funktion evaluiert beide Arme genauso');
+  finally F.Free; end;
+end;
+
+procedure TTestIfThenShortCircuit.EmbeddedQualified_Reported;
+// Auch die QUALIFIZIERTE eingebettete Form rutschte durch: der
+// Namens-Match griff zwar ('.ifthen('), aber ExtractOuterArgs setzte
+// an der ERSTEN Klammer des Gesamttexts (der ShowMessage-Klammer) an
+// - ein Top-Level-Argument, stiller Exit (Bestands-Exe: 0 Funde,
+// empirisch belegt).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(c: Boolean);'#13#10 +
+  'begin'#13#10 +
+  '  ShowMessage(Math.IfThen(c, A2(), B2()));'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkIfThenShortCircuit),
+    'qualifiziertes IfThen als Call-Argument muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestIfThenShortCircuit.ForeignQualifier_NoFinding;
+// Gegenrichtung der Lockerung: ein FREMDER Qualifier zaehlt weiterhin
+// nicht - eine fremde IfThen-Methode kann echte Lazy-Semantik haben
+// (Vertrag des Vorgaengers, gepinnt gegen Ueberschiessen der neuen
+// Vorkommen-Suche: '.' ist KEINE gueltige linke bare-Grenze).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(b: Boolean);'#13#10 +
+  'var x: string;'#13#10 +
+  'begin'#13#10 +
+  '  x := Foo.IfThen(b, A(), B());'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkIfThenShortCircuit),
+    'fremder Qualifier bleibt ausserhalb des Vertrags');
+  finally F.Free; end;
+end;
+
+procedure TTestIfThenShortCircuit.ParameterlessArms_KnownGap_NoFinding;
+// Testluecke 158 (Voll-Review 2026-09-12) - GRENZE, kein Ziel.
+//
+// 'IfThen(b, FetchA, FetchB)' ohne Klammern ist in Delphi ebenfalls
+// ein Aufruf, wenn FetchA eine parameterlose Funktion ist. Aus dem
+// Quelltext allein laesst sich das nicht von einer Variablen oder
+// Konstanten unterscheiden - und die sind der weit haeufigere Fall.
+// Die Klammer ist deshalb Bedingung (precision-first wie im ganzen
+// Detektor); der Preis ist dieser FN.
+//
+// Der Unit-Kopf zeigte bis zum Voll-Review genau die klammerlose Form
+// als Beispiel und versprach damit etwas, das der Detektor nicht tut.
+// Kopf korrigiert, Verhalten hier gepinnt.
+// Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(b: Boolean);'#13#10 +
+  'begin y := IfThen(b, FetchA, FetchB); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkIfThenShortCircuit),
+    'BEKANNTE GRENZE: ohne Klammern nicht von einer Variablen zu '
+    + 'unterscheiden');
+  finally F.Free; end;
+end;
+
+procedure TTestIfThenShortCircuit.ParenthesisedArms_StillReported;
+// Die Gegenprobe in derselben Form: NUR die Klammern unterscheiden
+// sie vom Test darueber. Ohne sie waere dessen Null auch dann
+// erklaerbar, wenn der Detektor die Zuweisungsform gar nicht sieht.
+// Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(b: Boolean);'#13#10 +
+  'begin y := IfThen(b, FetchA(), FetchB()); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkIfThenShortCircuit),
+    'mit Klammern ist es nachweislich ein Aufruf');
   finally F.Free; end;
 end;
 

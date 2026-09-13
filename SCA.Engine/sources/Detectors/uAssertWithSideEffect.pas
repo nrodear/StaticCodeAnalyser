@@ -19,10 +19,15 @@ unit uAssertWithSideEffect;
 //     ohne Call ist (`Assert(x > 0)`), kein Side-Effect. Mit Call drin
 //     ist's verdaechtig.
 //
-// Whitelist (Funktionen die KEINEN Side-Effect haben):
+// Whitelist (Funktionen die KEINEN Side-Effect haben) - die verbindliche
+// Liste ist PURE_FUNCS weiter unten; hier zur Orientierung:
 //   Length, High, Low, SizeOf, Assigned, Trim, UpperCase, LowerCase,
-//   IntToStr, StrToInt, IsNumeric, Pos, Copy, Random (read-only RNG-call,
-//   selber Det-Pfad), TryStrToXxx, Format, Concat.
+//   IntToStr, StrToInt, StrToIntDef, Pos, Copy, Concat, Format,
+//   IsNumeric, TryStrToInt, TryStrToFloat, Odd.
+//
+// Bis zum Voll-Review 2026-09-12 nannte dieser Absatz zusaetzlich
+// 'Random' und liess StrToIntDef und Odd weg - er beschrieb also eine
+// Liste, die es nicht gibt (Minor 228).
 //
 // FP-Risiko: pure Funktionen die nicht in der Whitelist sind, werden
 // als Side-Effect angesehen. Suppression-Marker bei FP. Severity Warning.
@@ -51,6 +56,15 @@ uses
 const
   // Whitelist pure-Funktion-Namen die KEINEN Side-Effect haben.
   // Lowercase fuer Vergleich.
+  //
+  // DERZEIT WIRKUNGSLOS, und das mit Absicht stehengelassen
+  // (Voll-Review 2026-09-12, Minor 228): das einzige Gate, das sie liest,
+  // fragt danach 'beginnt der Name mit einem SIDE_EFFECT_RE-Verb?'. Kein
+  // Eintrag hier faengt mit init/setup/reset/create/... an, also kann
+  // IsPure das Ergebnis heute nicht drehen. Sie ist der Schutz fuer den
+  // Tag, an dem SIDE_EFFECT_RE ein Praefix aufnimmt, das eine dieser
+  // Funktionen trifft - 'copy' und 'concat' liegen dafuer nicht weit weg.
+  // Wer sie entfernt, muss dieses Risiko bewusst uebernehmen.
   PURE_FUNCS : array[0..18] of string = (
     'length', 'high', 'low', 'sizeof', 'assigned',
     'trim', 'uppercase', 'lowercase',

@@ -15,6 +15,8 @@ type
     [Test] procedure DifferentTargets_NoFinding;
     [Test] procedure BothSameBool_NoFinding;
     [Test] procedure RedundantConditional_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Blocker): ';' vor 'else' ist nie if-else
+    [Test] procedure CaseElseAfterSemi_NotReported;
   end;
 
 implementation
@@ -112,6 +114,39 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkRedundantConditional finding');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantConditional.CaseElseAfterSemi_NotReported;
+// Voll-Review 2026-09-12 (Blocker): 'then Result := True; else' ist in
+// kompilierbarem Delphi NIE ein if-else (E2153) - das else nach dem
+// ';' gehoert zum umschliessenden case. Der Bestand konsumierte das
+// ';' (SkipOptionalSemi) und meldete 'can be simplified to Result :=
+// Cond' - semantikaendernd: bei Kind=mkA und not Flag bleibt Result im
+// Original unveraendert, der else-Zweig laeuft fuer ANDERE Kind-Werte
+// (Bestands-Exe meldet rc1.pas:9, empirisch belegt).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TKind = (mkA, mkB);'#13#10 +
+  'implementation'#13#10 +
+  'function Klassifiziere(Kind: TKind; Flag: Boolean): Boolean;'#13#10 +
+  'begin'#13#10 +
+  '  Result := False;'#13#10 +
+  '  case Kind of'#13#10 +
+  '    mkA: if Flag then Result := True;'#13#10 +
+  '  else'#13#10 +
+  '    Result := False;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkRedundantConditional),
+    'case-else nach '';'' ist kein if-else - der Vereinfachungs-Rat ' +
+    'waere semantikaendernd');
   finally F.Free; end;
 end;
 

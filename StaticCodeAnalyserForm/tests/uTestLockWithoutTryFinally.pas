@@ -14,6 +14,10 @@ type
   TTestLockWithoutTryFinally = class
   public
     [Test] procedure EnterWithoutTryFinally_Reported;
+    // Voll-Review 2026-09-12 (Blocker): TMonitor.Enter war durch drei
+    // Gates unerreichbar.
+    [Test] procedure TMonitorEnter_WithoutTryFinally_Reported;
+    [Test] procedure TMonitorEnter_WithTryFinallyExit_NoFinding;
     [Test] procedure EnterWithTryFinally_NotReported;
     [Test] procedure LockWrapperMethod_NotReported;
     [Test] procedure EnterLocalLog_NotReported;
@@ -84,6 +88,51 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+procedure TTestLockWithoutTryFinally.TMonitorEnter_WithoutTryFinally_Reported;
+// Der Kopf-Vertrag der Unit nennt TMonitor.Enter/.Exit als gedecktes
+// Paar - erreichbar war die Form nie: die Namens-Alternation matchte
+// ohne '(', das Argument-Gate verwarf den Pflicht-Parameter, und die
+// Release-Suchen kannten tmonitor.exit nicht. Dieser Test waere vor
+// dem Fix rot gewesen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.DoWork;'#13#10 +
+  'begin'#13#10 +
+  '  TMonitor.Enter(FObj);'#13#10 +
+  '  Arbeite;'#13#10 +
+  '  TMonitor.Exit(FObj);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(
+    TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+    'TMonitor.Enter ohne try/finally muss melden');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.TMonitorEnter_WithTryFinallyExit_NoFinding;
+// Gegenprobe: das korrekt geschuetzte TMonitor-Paar bleibt still.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.DoWork;'#13#10 +
+  'begin'#13#10 +
+  '  TMonitor.Enter(FObj);'#13#10 +
+  '  try'#13#10 +
+  '    Arbeite;'#13#10 +
+  '  finally'#13#10 +
+  '    TMonitor.Exit(FObj);'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLockWithoutTryFinally),
+    'das geschuetzte TMonitor-Paar darf nicht melden');
+  finally F.Free; end;
+end;
 
 procedure TTestLockWithoutTryFinally.EnterWithoutTryFinally_Reported;
 const SRC =

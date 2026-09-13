@@ -46,6 +46,9 @@ implementation
 // noinspection-file BeginEndRequired, CyclomaticComplexity, GroupedDeclaration, LongMethod, MultipleExit, RedundantJump, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uAstSpans;   // CollectWithMethodScope (Voll-Review 2026-09-12)
+
 // True wenn Text das Muster `<op>nil` enthaelt, mit op in {`=`, `<>`}
 // und 'nil' als ganzes Token (kein Identifier-Suffix). ':=', '<=', '>='
 // + nil werden NICHT als Compare gezaehlt.
@@ -117,66 +120,46 @@ begin
   until P > L;
 end;
 
-procedure WalkAndCheck(Node, CurrentMethod: TAstNode; const FileName: string;
+procedure WalkAndCheck(Node: TAstNode; const FileName: string;
   Results: TObjectList<TLeakFinding>);
-// Hardening v4: iterative DFS - siehe Audit_jvcl_segfault.
-type TFrame = record N, M: TAstNode; end;
+// Seit Voll-Review 2026-09-12 ueber den zentralen Scope-Walk
+// (TAstSpans.CollectWithMethodScope) - Mechanik, Besuchsreihenfolge
+// und Hardening v4 (iterative DFS, Audit_jvcl_segfault) identisch
+// zur frueheren lokalen Kopie.
+// Leeres Kind-Set: diese Regel prueft JEDEN Knoten (Negativ-Guard
+// statt Positiv-Filter, s. SCA126-Kommentar in der Schleife).
 var
-  Stack : TList<TFrame>;
-  Cur, F : TFrame;
-  i      : Integer;
-  Find   : TLeakFinding;
+  P        : TNodeScopePair;
   MethName : string;
-  NextMeth : TAstNode;
 begin
-  if Node = nil then Exit;
-  Stack := TList<TFrame>.Create;
-  try
-    F.N := Node; F.M := CurrentMethod;
-    Stack.Add(F);
-    while Stack.Count > 0 do
+  for P in TAstSpans.CollectWithMethodScope(Node, []) do
+  begin
+    // SCA126-Guard (Core-Audit 2026-07-18, Welle 1 des 5%-FP-Konzepts):
+    // '= nil' in einer DEKLARATION ist ein INITIALIZER, kein Nil-Vergleich.
+    // Der Parser legt Default-Parameter (`const X: T = nil`) in nkParam.TypeRef
+    // und typisierte Konstanten/Feld-Inits (`const X: T = nil;` / Feld) in
+    // nkField.TypeRef ab (Format 'Type=nil' bzw. 'Type = nil') -> ContainsNil-
+    // Compare hielt das faelschlich fuer einen '= nil'-Vergleich (~2162 FP im
+    // Real-World-Korpus, groesster Actionable-Hebel). Ein echter Nil-VERGLEICH
+    // (`if x = nil`) lebt IMMER in einem Statement-/Ausdrucks-Knoten (nkIfStmt/
+    // nkWhileStmt/nkAssign/nkCall), NIE als Name/TypeRef einer Param-/Feld-
+    // Deklaration -> der Skip ist monoton (nur Suppression) und TP-safe.
+    if (P.Node.Kind <> nkParam) and (P.Node.Kind <> nkField) and
+       (ContainsNilCompare(P.Node.Name) or ContainsNilCompare(P.Node.TypeRef)) then
     begin
-      Cur := Stack[Stack.Count - 1];
-      Stack.Delete(Stack.Count - 1);
-      // SCA126-Guard (Core-Audit 2026-07-18, Welle 1 des 5%-FP-Konzepts):
-      // '= nil' in einer DEKLARATION ist ein INITIALIZER, kein Nil-Vergleich.
-      // Der Parser legt Default-Parameter (`const X: T = nil`) in nkParam.TypeRef
-      // und typisierte Konstanten/Feld-Inits (`const X: T = nil;` / Feld) in
-      // nkField.TypeRef ab (Format 'Type=nil' bzw. 'Type = nil') -> ContainsNil-
-      // Compare hielt das faelschlich fuer einen '= nil'-Vergleich (~2162 FP im
-      // Real-World-Korpus, groesster Actionable-Hebel). Ein echter Nil-VERGLEICH
-      // (`if x = nil`) lebt IMMER in einem Statement-/Ausdrucks-Knoten (nkIfStmt/
-      // nkWhileStmt/nkAssign/nkCall), NIE als Name/TypeRef einer Param-/Feld-
-      // Deklaration -> der Skip ist monoton (nur Suppression) und TP-safe.
-      if (Cur.N.Kind <> nkParam) and (Cur.N.Kind <> nkField) and
-         (ContainsNilCompare(Cur.N.Name) or ContainsNilCompare(Cur.N.TypeRef)) then
-      begin
-        if Assigned(Cur.M) then MethName := Cur.M.Name else MethName := '';
-        Find             := TLeakFinding.Create;
-        Find.FileName    := FileName;
-        Find.MethodName  := MethName;
-        Find.LineNumber  := IntToStr(Cur.N.Line);
-        Find.MissingVar  :=
-          'Use Assigned() instead of "= nil" / "<> nil" for nil checks';
-        Find.SetKind(fkNilComparison);
-        Results.Add(Find);
-      end;
-      if Cur.N.Kind = nkMethod then NextMeth := Cur.N else NextMeth := Cur.M;
-      for i := Cur.N.Children.Count - 1 downto 0 do
-      begin
-        F.N := Cur.N.Children[i]; F.M := NextMeth;
-        Stack.Add(F);
-      end;
+      if Assigned(P.Method) then MethName := P.Method.Name
+      else MethName := '';
+      Results.Add(TLeakFinding.New(FileName, MethName, P.Node.Line,
+        'Use Assigned() instead of "= nil" / "<> nil" for nil checks',
+        fkNilComparison));
     end;
-  finally
-    Stack.Free;
   end;
 end;
 
 class procedure TNilComparisonDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 begin
-  WalkAndCheck(UnitNode, nil, FileName, Results);
+  WalkAndCheck(UnitNode, FileName, Results);
 end;
 
 end.

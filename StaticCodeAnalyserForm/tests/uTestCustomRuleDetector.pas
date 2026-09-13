@@ -34,6 +34,8 @@ type
     [Test] procedure FindingHasRuleIdAndKindCustomRule;
     [Test] procedure FindingHasCorrectLineNumber;
     [Test] procedure FileExclude_SkipsExcludedFiles;
+    // Voll-Review 2026-09-12 (Major 53): Windows-Pfade sind case-insensitiv
+    [Test] procedure FileExclude_MatchesCaseInsensitive;
     [Test] procedure FileInclude_OnlyScansIncludedFiles;
     [Test] procedure NoRules_NoFindings;
     [Test] procedure FullYamlRoundtrip_ViaTempFile;
@@ -41,6 +43,9 @@ type
     // DIREKT auf und konnten deshalb nie bemerken, dass der
     // Konfigurationsschritt die geladenen Regeln wieder loescht.
     [Test] procedure PipelineWithRepoIni_RulesSurviveConfig;
+    // Voll-Review 2026-09-12 (Testluecke 106): target wird NICHT
+    // ausgewertet - dokumentierende Pin
+    [Test] procedure TargetComment_IsNotEvaluated_KnownLimit;
   end;
 
 implementation
@@ -221,6 +226,32 @@ begin
   finally Findings.Free; end;
 end;
 
+procedure TTestCustomRuleDetector.FileExclude_MatchesCaseInsensitive;
+// Voll-Review 2026-09-12 (Major 53): der Glob-Match lief case-sensitiv
+// gegen Windows-Pfade - ein klein geschriebenes Exclude-Glob griff
+// gegen gemischt-gecaste Dateinamen nicht, die Regel lief still ins
+// Leere.
+var
+  Rule     : TCustomRule;
+  Findings : TObjectList<TLeakFinding>;
+begin
+  Rule := MakeRule('R001', 'XYZ');
+  Rule.FileExclude := ['**/*test*.pas'];   // klein geschrieben
+  TCustomRuleDetector.AddRule(Rule);
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    // Gemischt-gecaste Datei matcht das kleine Glob case-insensitiv.
+    TCustomRuleDetector.AnalyzeFile('Src/uMyTEST.pas',
+      'XYZ here'#10, Findings);
+    Assert.AreEqual<Integer>(0, Findings.Count,
+      'Exclude muss case-insensitiv greifen (Windows-Pfade)');
+    // Gegenrichtung: Nicht-Test-Datei liefert weiter.
+    TCustomRuleDetector.AnalyzeFile('Src/Production.pas',
+      'XYZ here'#10, Findings);
+    Assert.AreEqual<Integer>(1, Findings.Count);
+  finally Findings.Free; end;
+end;
+
 procedure TTestCustomRuleDetector.FileInclude_OnlyScansIncludedFiles;
 var
   Rule     : TCustomRule;
@@ -381,6 +412,39 @@ begin
     begin
       TDirectory.Delete(Dir, True);
     end;
+  end;
+end;
+
+procedure TTestCustomRuleDetector.TargetComment_IsNotEvaluated_KnownLimit;
+// Testluecke 106 (Voll-Review 2026-09-12): der Unit-Kopf sagt
+// ausdruecklich 'das Regelfeld target wird geparst und NICHT
+// ausgewertet' - festgehalten war das nirgends. Dieser Test
+// DOKUMENTIERT die Grenze: eine Regel mit Target rtComment trifft
+// trotzdem im CODE.
+//
+// Er haelt eine LUECKE fest, keinen Wunschzustand. Wird
+// Target-Filtering nachgeruestet, wird er rot und muss bewusst auf 0
+// umgestellt werden - genau das soll er leisten, damit die Aenderung
+// nicht unbemerkt an der Doku vorbeilaeuft.
+var
+  Rule     : TCustomRule;
+  Findings : TObjectList<TLeakFinding>;
+begin
+  TCustomRuleDetector.ClearRules;
+  // Bewusst NICHT das sonst uebliche 'TADOQuery': es steht in dieser
+  // Datei schon zweimal, ein drittes Vorkommen loeste SCA015 aus.
+  Rule := MakeRule('R900', 'TIdHTTP');
+  Rule.Target := rtComment;   // laut Doku wirkungslos
+  TCustomRuleDetector.AddRule(Rule);
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    TCustomRuleDetector.AnalyzeFile('probe.pas',
+      'unit Foo;'#10'  h := TIdHTTP.Create;'#10, Findings);
+    Assert.AreEqual<Integer>(1, CountByRule(Findings, 'R900'),
+      'BEKANNTE GRENZE: target wird geparst, aber nicht ausgewertet');
+  finally
+    Findings.Free;
+    TCustomRuleDetector.ClearRules;
   end;
 end;
 

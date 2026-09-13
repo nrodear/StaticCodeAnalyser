@@ -42,7 +42,6 @@ uses
   uFileTextCache;
 
 const
-  EMIT_SEVERITY  = lsHint;
   MIN_GROUP_LEN  = 5;  // ab dieser Laenge wird Gruppierung gefordert
 
 function IsIdent(C: Char): Boolean; inline;
@@ -140,8 +139,16 @@ begin
       end;
       wStart := i;
       while (i <= n) and (IsDigit(Line[i]) or (Line[i] = '_')) do Inc(i);
-      // Falls direkt ein `.` folgt -> Float-Literal, ignorieren
-      if (i <= n) and (Line[i] = '.') then
+      // Falls direkt ein `.` folgt -> Float-Literal, ignorieren.
+      // AUSSER es folgt ein ZWEITER '.' (Voll-Review 2026-09-12,
+      // Major 58): '10000..MAXBUF' ist der Range-Operator - der
+      // Delphi-Lexer erkennt '..' per Lookahead genauso -, das linke
+      // Literal ist ein normales Integer und faellt durch zur
+      // MIN_GROUP_LEN-Pruefung. Vorher wurde der Run als Float-Beginn
+      // uebersprungen und ungruppierte Range-Grenzen blieben
+      // ungemeldet.
+      if (i <= n) and (Line[i] = '.')
+         and not ((i < n) and (Line[i + 1] = '.')) then
       begin
         // Float weiter ueberspringen
         Inc(i);

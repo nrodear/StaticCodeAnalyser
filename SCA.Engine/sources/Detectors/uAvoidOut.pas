@@ -45,7 +45,6 @@ uses
   uFileTextCache;
 
 const
-  EMIT_SEVERITY = lsHint;
 
   // G1/G4 (Autopsie 2026-08-26): Direktiven, die die Signatur von aussen
   // fixieren - ABI (COM/WinAPI/DLL-Grenze) oder Basisklassen-Vertrag.

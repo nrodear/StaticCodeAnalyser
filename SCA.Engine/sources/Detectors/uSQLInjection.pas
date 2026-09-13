@@ -178,6 +178,14 @@ type
     // Spiegelung der TermOk-Regel 'rekursionsfrei gegen x := x + y').
     class function AllConcatTermsSafe(MethodNode: TAstNode;
       const RHS: string; ADepth: Integer = 0): Boolean; static;
+    // Prueft den FUEHRENDEN Konkat-Term - den einzigen, den
+    // AllConcatTermsSafe per Konstruktion nie ansieht (es inspiziert nur
+    // Tokens HINTER einem '+'). Voll-Review 2026-09-12, Major 80.
+    // AName ist die LHS: stimmt sie mit dem fuehrenden Term ueberein,
+    // liegt das Akkumulator-Idiom vor (X := X + '...') und der Term ist
+    // per Definition so sauber wie das Ziel selbst.
+    class function LeadingConcatTermSafe(MethodNode: TAstNode;
+      const AName, RHS: string): Boolean; static;
     // True wenn S ausschliesslich aus String-Literalen, Char-Codes
     // (#13, #$1B), '+'-Konkatenation und Whitespace besteht - also ein
     // zur Compile-Zeit fixer String, den kein Angreifer beeinflussen kann.
@@ -355,9 +363,12 @@ const
   // Properties/Felder die SQL-Text enthalten. Liste 2026-06-18 erweitert
   // (Audit_ErrorDetectors E-1 P1): Index-Form sql.strings[N] / commandtext.strings[N]
   // war Lücke gegen TStringList-Style-Setup.
-  SQL_PROPS: array[0..8] of string = (
+  // '.sql:=' stand hier bis zum Voll-Review 2026-09-12 (Major 81) und war
+  // toter Code: nkAssign.Name enthaelt nie ein ':='. Das bare '<x>.SQL :='
+  // faengt jetzt die Endungs-Pruefung H1b in IsAssignRisk.
+  SQL_PROPS: array[0..7] of string = (
     'sql.text', '.sql.', 'commandtext', 'sqltext',
-    'sqlcommand', 'query.sql', '.sql:=',
+    'sqlcommand', 'query.sql',
     'sql.strings[', 'commandtext.strings['
   );
 
@@ -574,6 +585,7 @@ class function TSQLInjectionDetector.AllConcatTermsSafe(MethodNode: TAstNode;
 //   ' WHERE NAME=' + QuotedStr(s) + ' OR'   -> True
 //   ' WHERE NAME=' + name                   -> False (bare Identifier)
 //   ' WHERE NAME=' + Format('%s',[name])    -> False (kein safe-cast)
+//   ' WHERE NAME=' + (Sender as TEdit).Text -> False (Klammergruppe)
 //
 // SAFE_CASTS steht seit 2026-07-05 im Unit-const-Block (auch von
 // IsSafeSqlHelperCall genutzt).
@@ -648,6 +660,34 @@ begin
       TermStart := p;
       if ident = '' then
       begin
+        // Klammergruppe statt geblanktes Literal? Ein geblanktes
+        // Literal laesst j auf Blank/Operator/Ende stehen, NIE auf
+        // '(' (Voll-Review 2026-09-12, Blocker): '+ (Sender as
+        // TEdit).Text' lief hier als 'Literal-Position' durch und
+        // unterdrueckte den Fund - die Klammer der Standard-Cast-
+        // Syntax schaltete den Detektor ab, waehrend '+ Edit1.Text'
+        // ohne Klammern gemeldet wurde. Ist der balancierte
+        // Klammerinhalt nach dem Blanken leer (verklammertes
+        // Literal), bleibt die Position sicher; jeder andere Inhalt
+        // ist ein hier nicht bewerteter Ausdruck -> konservativ
+        // unsicher (bekannte Restgrenze: auch '+ (IntToStr(x))'
+        // meldet - die verklammerte Form eines safe-casts ist im
+        // Korpus kein gaengiges Idiom).
+        if (j <= Length(Stripped)) and (Stripped[j] = '(') then
+        begin
+          Depth := 1;
+          p := j + 1;
+          while (p <= Length(Stripped)) and (Depth > 0) do
+          begin
+            if Stripped[p] = '(' then Inc(Depth)
+            else if Stripped[p] = ')' then Dec(Depth);
+            Inc(p);
+          end;
+          if Trim(Copy(Stripped, j + 1, p - j - 2)) <> '' then
+            Exit(False);
+          i := p;
+          Continue;
+        end;
         // Position war ein gestripptes Literal -> ok.
         Inc(i);
         Continue;
@@ -2131,6 +2171,67 @@ begin
   Result := False;
 end;
 
+// Position des ERSTEN '+' auf oberster Ebene - ausserhalb von
+// String-Literalen, Klammern und Indizes. 0, wenn es keines gibt.
+// Eigene Routine, damit LeadingConcatTermSafe eine Aussage bleibt und
+// nicht zwei (der Selbstscan hat die zusammengeschriebene Fassung
+// prompt mit SCA176=18 gemeldet).
+function TopLevelPlusPos(const S: string): Integer;
+var
+  i, L, Depth : Integer;
+  InStr       : Boolean;
+  c           : Char;
+begin
+  Result := 0;
+  L      := Length(S);
+  Depth  := 0;
+  InStr  := False;
+  for i := 1 to L do
+  begin
+    c := S[i];
+    if c = '''' then
+      InStr := not InStr
+    else if InStr then
+      Continue
+    else if CharInSet(c, ['(', '[']) then
+      Inc(Depth)
+    else if CharInSet(c, [')', ']']) then
+      Dec(Depth)
+    else if (c = '+') and (Depth = 0) then
+      Exit(i);
+  end;
+end;
+
+class function TSQLInjectionDetector.LeadingConcatTermSafe(MethodNode: TAstNode;
+  const AName, RHS: string): Boolean;
+// Vertrag siehe interface.
+//
+// Der Term wird NICHT mit einem zweiten Regelsatz bewertet, sondern durch
+// dieselbe Maschine geschickt: ein vorangestelltes '''_'' + ' macht ihn zu
+// einem Token HINTER einem '+'. Genau dieses Idiom nutzt die Unit schon in
+// IsTransparentHelperTerm (Argument-Pruefung) - eine Regelquelle, kein
+// Drift.
+//
+// Bewusst nur der FUEHRENDE Term und nichts sonst: die Bewertung aller
+// uebrigen Terme bleibt Wort fuer Wort die alte.
+var
+  PlusPos : Integer;
+  Lead    : string;
+begin
+  Result  := True;
+  PlusPos := TopLevelPlusPos(RHS);
+  if PlusPos = 0 then Exit;               // gar keine Konkatenation
+  Lead := Trim(Copy(RHS, 1, PlusPos - 1));
+  if Lead = '' then Exit;
+
+  // Akkumulator-Idiom: Query.SQL.Text := Query.SQL.Text + ' ORDER BY 1'.
+  // Ohne diese Ausnahme wuerde der Bestandsfall zum FP - er ist heute
+  // korrekt stumm (an der Bestands-Exe nachgemessen).
+  if SameText(Lead, Trim(AName)) then Exit;
+
+  Result := AllConcatTermsSafe(MethodNode, '''_'' + ' + Lead);
+end;
+
 class function TSQLInjectionDetector.IsAssignRisk(MethodNode: TAstNode;
   const Name, RHS: string): Boolean;
 var
@@ -2147,7 +2248,15 @@ begin
 
   // Whitelist: alle Konkat-Terme sind String-Literale oder safe-cast-Calls
   // (IntToStr, QuotedStr, ...) -> injection-sicher trotz '+'.
-  if AllConcatTermsSafe(MethodNode, RHS) then Exit;
+  //
+  // Der FUEHRENDE Term kommt seit Voll-Review 2026-09-12 (Major 80)
+  // dazu: AllConcatTermsSafe inspiziert per Konstruktion nur Tokens
+  // HINTER einem '+', also blieb 'SQL.Text := Edit1.Text + '' ORDER BY
+  // 1''' stumm, waehrend derselbe Taint hinter dem '+' gemeldet wurde
+  // (an der Bestands-Exe nachgemessen). Das Akkumulator-Idiom bleibt
+  // ausgenommen - s. LeadingConcatTermSafe.
+  if AllConcatTermsSafe(MethodNode, RHS)
+     and LeadingConcatTermSafe(MethodNode, Name, RHS) then Exit;
 
   // H1: bekannte SQL-Property im Ziel-Namen.
   // Wortgrenzen-Pruefung: 'commandtext' soll nicht 'mycommandtextra' matchen.
@@ -2155,6 +2264,15 @@ begin
   // Grenzen, fuer die anderen brauchen wir den WholeWord-Helper.
   for Kw in SQL_PROPS do
     if TDetectorUtils.ContainsWholeWordLower(Kw, NameLow) then Exit(True);
+
+  // H1b: BARES SQL-Ziel - 'DM.Query1.SQL := ...'. Hierfuer stand in
+  // SQL_PROPS ein Eintrag '.sql:=', der nie matchen konnte: nkAssign.Name
+  // traegt ausschliesslich die LHS, das ':=' landet dort nirgends (alle
+  // drei nkAssign-Erzeuger in uParser2 legen nur die linke Seite ab).
+  // Der tote Eintrag ist entfernt, die Absicht dahinter steht jetzt als
+  // Endungs-Pruefung hier - der Punkt ist die Wortgrenze, analog zum
+  // '.sql.'-Muster (Voll-Review 2026-09-12, Major 81).
+  if (NameLow = 'sql') or NameLow.EndsWith('.sql') then Exit(True);
 
   // H2: SQL-Schlüsselwort als ERSTES Literal im RHS (Position 1).
   // Nur wenn der RHS direkt mit dem SQL-Keyword beginnt – verhindert
@@ -2387,7 +2505,6 @@ class procedure TSQLInjectionDetector.AnalyzeMethod(MethodNode: TAstNode;
 
   procedure Report(const Target, RHS: string; Line: Integer);
   var
-    F             : TLeakFinding;
     Estimate      : TFixEstimate;
     DisplayTarget : string;
     ParenPos      : Integer;
@@ -2399,14 +2516,12 @@ class procedure TSQLInjectionDetector.AnalyzeMethod(MethodNode: TAstNode;
     else
       DisplayTarget := Target;
 
-    Estimate     := TSQLFixScorer.Estimate(RHS);
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := MethodNode.Name;
-    F.LineNumber := IntToStr(Line);
-    F.MissingVar := DisplayTarget + '  [' + TSQLFixScorer.FormatShort(Estimate) + ']';
-    F.SetKind(fkSQLInjection);
-    Results.Add(F);
+    Estimate := TSQLFixScorer.Estimate(RHS);
+    // Factory statt Feld-fuer-Feld (Voll-Review 2026-09-12) -
+    // identische Feldfolge, siehe TLeakFinding.New.
+    Results.Add(TLeakFinding.New(FileName, MethodNode.Name, Line,
+      DisplayTarget + '  [' + TSQLFixScorer.FormatShort(Estimate) + ']',
+      fkSQLInjection));
   end;
 
 var

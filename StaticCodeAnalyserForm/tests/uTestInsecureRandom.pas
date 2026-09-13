@@ -31,6 +31,10 @@ type
     [Test] procedure RandomOnlyInStringLiteral_NoFinding;
     // TP-Kontrolle auf dem file-basierten Pfad: ohne jedes Randomize feuert es.
     [Test] procedure RandomWithoutRandomize_FileBased_Reported;
+    // Testluecke 160: Pass 2a (Statement-Level) und RandomFrom
+    [Test] procedure StatementLevelRandom_Reported;
+    [Test] procedure StatementLevelRandom_MessageHasNoDoubleParens;
+    [Test] procedure RandomFromCall_Reported;
   end;
 
 implementation
@@ -328,6 +332,90 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkInsecureRandom),
       'random( nur im String-Literal ist kein Aufruf');
+  finally F.Free; end;
+end;
+
+{ --- Testluecke 160: der Statement-Pfad -------------------------- }
+//
+// Pass 2a sieht nkCall-Knoten - 'Random(100);' als eigene Anweisung,
+// Ergebnis verworfen. Alle Bestandstests liefen ueber die
+// Zuweisungsform (Pass 2b), der Statement-Pfad war ungetestet.
+// 'RandomFrom' kam in keinem Test vor.
+//
+// HARNESS: FindingsOf, nicht FindingsOfFile. TInsecureRandomDetector
+// ist in FindingsOfFile GAR NICHT registriert - der erste Anlauf lief
+// dort und haette drei rote Tests ergeben. compile_sanity_gate hat es
+// vor dem Bau gemeldet.
+
+procedure TTestInsecureRandom.StatementLevelRandom_Reported;
+// Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  Random(100);'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkInsecureRandom),
+    'auch ein verworfenes Ergebnis kommt aus demselben Seed');
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureRandom.StatementLevelRandom_MessageHasNoDoubleParens;
+// Der Meldetext des Statement-Pfads, und er war kaputt: nkCall.Name
+// traegt die GANZE Aufruf-Expression samt Argumenten, die Meldung
+// haengt selbst '(...)' an. Im Korpus stand deshalb zweimal
+// 'Random(PByte(Salt),SizeOf(TSHA3_256Digest))(...) without prior
+// Randomize'. Pass 2b uebergibt nur den Token und war nie betroffen.
+//
+// Der Test prueft die Abwesenheit des Musters, nicht den ganzen Satz:
+// so bleibt er gruen, wenn jemand die Formulierung aendert, und rot,
+// wenn der Schnitt wieder verlorengeht.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  Random(100);'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkInsecureRandom);
+    Assert.IsNotNull(Hit);
+    Assert.IsTrue(Pos(')(...)', Hit.MissingVar) = 0,
+      'die Argumentliste gehoert nicht in den Meldetext: '
+      + Hit.MissingVar);
+    Assert.IsTrue(Pos('Random(...)', Hit.MissingVar) > 0,
+      'gemeldet wird der blosse Aufrufname: ' + Hit.MissingVar);
+  finally F.Free; end;
+end;
+
+procedure TTestInsecureRandom.RandomFromCall_Reported;
+// 'RandomFrom' steht seit jeher in der Namensliste des Detektors, kam
+// aber in keinem Test vor - getestet waren nur Random und
+// RandomRange. Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var s: string;'#13#10 +
+  'begin'#13#10 +
+  '  s := RandomFrom([''a'', ''b'', ''c'']);'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkInsecureRandom),
+    'RandomFrom zieht aus demselben Seed');
   finally F.Free; end;
 end;
 

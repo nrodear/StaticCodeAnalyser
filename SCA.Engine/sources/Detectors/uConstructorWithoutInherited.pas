@@ -45,8 +45,8 @@ implementation
 // noinspection-file NilComparison, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
-const
-  EMIT_SEVERITY = lsWarning;
+uses
+  uAstSpans;   // FindBodyBlock/HasInheritedCall (Voll-Review 2026-09-12)
 
 function IsConstructor(MethodNode: TAstNode): Boolean; inline;
 var
@@ -65,22 +65,16 @@ end;
 // Liefert den Body-Block (nkBlock) oder nil wenn die Methode nur eine
 // Forward-Decl (Class-Body-Signatur) ist. Pattern aus uEmptyMethod.
 function FindBodyBlock(MethodNode: TAstNode): TAstNode;
-var Child: TAstNode;
 begin
-  Result := nil;
-  for Child in MethodNode.Children do
-    if Child.Kind = nkBlock then Exit(Child);
+  // Voll-Review 2026-09-12: zentral (TAstSpans.FindBodyBlock, dort
+  // der Vertrag). Der Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TAstSpans.FindBodyBlock(MethodNode);
 end;
 
 function HasInheritedCall(Node: TAstNode): Boolean;
-var
-  Child : TAstNode;
 begin
-  Result := False;
-  if Node = nil then Exit;
-  if Node.Kind = nkInherited then Exit(True);
-  for Child in Node.Children do
-    if HasInheritedCall(Child) then Exit(True);
+  // Voll-Review 2026-09-12: zentral (TAstSpans.HasInheritedCall).
+  Result := TAstSpans.HasInheritedCall(Node);
 end;
 
 function CallIsUnqualifiedCreate(const CallName: string): Boolean;

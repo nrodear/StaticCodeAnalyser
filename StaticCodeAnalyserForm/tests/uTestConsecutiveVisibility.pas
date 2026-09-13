@@ -14,6 +14,15 @@ type
     [Test] procedure AlternatingVisibility_NoFinding;
     [Test] procedure EmptyHeaderThenSame_NotReported;
     [Test] procedure ConsecutiveVisibility_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Major 48): Kommentar-Fortsetzungszeilen
+    [Test] procedure CommentContinuationPrivate_NoFinding;
+    // Voll-Review 2026-09-12 (Major 49): strict-Sichtbarkeiten
+    [Test] procedure StrictPrivateTwice_Reported;
+    [Test] procedure StrictPrivateThenPrivate_NoFinding;
+    // Voll-Review 2026-09-12 (Testluecke 101). Der strict-private-Fall
+    // steht schon oben (Major 49) - hier fehlte nur der Reset am
+    // Klassenende.
+    [Test] procedure TwoClassesEachOneSection_NoFinding;
   end;
 
 implementation
@@ -131,6 +140,115 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkConsecutiveVisibility finding');
+  finally F.Free; end;
+end;
+
+procedure TTestConsecutiveVisibility.CommentContinuationPrivate_NoFinding;
+// Voll-Review 2026-09-12 (Major 48): das Wort 'private' in der
+// Fortsetzungszeile eines mehrzeiligen Blockkommentars vergiftete den
+// Klassen-State - die Kommentarzeile wurde als zweite private-Section
+// gemeldet (Bestands-Exe: 1 FP, empirisch belegt, cv1.pas).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    FA: Integer;'#13#10 +
+  '    { Hinweis:'#13#10 +
+  '      private Daten hier }'#13#10 +
+  '    procedure P;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.P; begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkConsecutiveVisibility),
+    'private im Kommentar ist keine Visibility-Section');
+  finally F.Free; end;
+end;
+
+procedure TTestConsecutiveVisibility.StrictPrivateTwice_Reported;
+// Voll-Review 2026-09-12 (Major 49): 'strict private' wurde nicht als
+// Visibility erkannt - ExtractFirstWord lieferte 'strict', die Zeile
+// lief in den Member-Zweig, die doppelte strict-Section blieb
+// ungemeldet (Bestands-Exe: 0 Funde, empirisch belegt, sv1.pas).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  strict private'#13#10 +
+  '    FA: Integer;'#13#10 +
+  '  public'#13#10 +
+  '    procedure P;'#13#10 +
+  '  strict private'#13#10 +
+  '    FB: Integer;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.P; begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkConsecutiveVisibility),
+    'die zweite strict-private-Section ist konsekutiv');
+  finally F.Free; end;
+end;
+
+procedure TTestConsecutiveVisibility.StrictPrivateThenPrivate_NoFinding;
+// Gegenrichtung: 'strict private' und 'private' sind in Delphi
+// VERSCHIEDENE Sichtbarkeiten - getrennte Schluessel, kein Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  strict private'#13#10 +
+  '    FA: Integer;'#13#10 +
+  '  private'#13#10 +
+  '    FB: Integer;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkConsecutiveVisibility),
+    'strict private und private sind verschiedene Sichtbarkeiten');
+  finally F.Free; end;
+end;
+
+procedure TTestConsecutiveVisibility.TwoClassesEachOneSection_NoFinding;
+// Der Zustand muss am Klassenende zurueckgesetzt werden: zwei Klassen
+// mit je EINER private-Sektion sind keine Wiederholung. Ohne diesen
+// Test koennte ein vergessener Reset jede zweite Klasse einer Unit
+// melden.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TA = class'#13#10 +
+  '  private'#13#10 +
+  '    FX: Integer;'#13#10 +
+  '  end;'#13#10 +
+  '  TB = class'#13#10 +
+  '  private'#13#10 +
+  '    FZ: Integer;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkConsecutiveVisibility),
+    'der Sektions-Zustand endet mit der Klasse');
   finally F.Free; end;
 end;
 

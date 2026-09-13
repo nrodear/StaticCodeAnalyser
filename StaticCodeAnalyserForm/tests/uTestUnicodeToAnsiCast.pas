@@ -36,6 +36,13 @@ type
     // Zeigerfeld einer Variant-Sicht ist ein Typ-Pun (2026-09-04).
     [Test] procedure VariantPointerField_NotReported;
     [Test] procedure EchtesStringFeld_StillReported;
+
+    // Voll-Review 2026-09-12 (Major 85): DOKUMENTIERENDE Tests fuer die
+    // Prefix-Match-Grenze. Sie halten eine LUECKE fest, keinen Vertrag -
+    // faellt die Grenze (Recall-Paket, s. Unit-Kopf), werden sie rot und
+    // muessen bewusst auf 1 umgestellt werden.
+    [Test] procedure ArgumentPositionCast_NotReported_KnownLimit;
+    [Test] procedure MidRhsCast_NotReported_KnownLimit;
   end;
 
 implementation
@@ -327,6 +334,50 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnicodeToAnsiCast),
     'nur .VAny und .VAnsiString sind gemessen - sonst nichts');
+  finally F.Free; end;
+end;
+
+procedure TTestUnicodeToAnsiCast.ArgumentPositionCast_NotReported_KnownLimit;
+// DOKUMENTIERT EINE LUECKE, keinen gewuenschten Zustand (Voll-Review
+// 2026-09-12, Major 85). Der Match greift nur am ANFANG des
+// Knotentexts; bei 'SaveToFile(AnsiString(u))' steht der Cast in
+// Argument-Position und wird nicht gesehen - an der Bestands-Exe
+// belegt, waehrend 'a := AnsiString(u);' eine Zeile davor gemeldet
+// wird.
+//
+// Die Grenze bleibt vorerst: der Substring-Scan, der sie schliesst,
+// ist ein Recall-Paket (Korpus: 881 Casts am Anfang, 1.828 nicht) und
+// braucht einen eigenen Zweig samt FP-Stichprobe.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(u: string);'#13#10 +
+  'begin'#13#10 +
+  '  SaveToFile(AnsiString(u));'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnicodeToAnsiCast),
+    'BEKANNTE LUECKE: Cast in Argument-Position wird nicht erkannt');
+  finally F.Free; end;
+end;
+
+procedure TTestUnicodeToAnsiCast.MidRhsCast_NotReported_KnownLimit;
+// Zwillingsluecke auf dem Zuweisungs-Pfad: beginnt die RHS mit einem
+// Literal, steht der Cast nicht mehr am Anfang des TypeRef-Texts (an
+// der Bestands-Exe belegt). Siehe Kommentar im Geschwistertest.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(u: string);'#13#10 +
+  'var a: AnsiString;'#13#10 +
+  'begin'#13#10 +
+  '  a := ''x'' + AnsiString(u);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnicodeToAnsiCast),
+    'BEKANNTE LUECKE: Cast mitten im RHS wird nicht erkannt');
   finally F.Free; end;
 end;
 

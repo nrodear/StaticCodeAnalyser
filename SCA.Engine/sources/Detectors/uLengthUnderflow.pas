@@ -47,7 +47,6 @@ uses
   uFileTextCache;
 
 const
-  EMIT_SEVERITY = lsHint;
   // Schwelle: bei -1 ist es das Loop-Idiom `0 to Length-1`, bei -2 etc.
   // wird es verdaechtig (oder bei dynamisch berechnetem K).
   MIN_OFFSET_TO_FLAG = 2;
@@ -210,6 +209,8 @@ var
   Offset : Integer;
   Detail, Line : string;
   InStr : Boolean;
+  ScanState : TCommentScanState;
+  DummyCol  : Integer;
   F : TLeakFinding;
   Cached : Boolean;
 begin
@@ -217,12 +218,19 @@ begin
   if Lines = nil then Exit;
   try
     InStr := False;
+    ScanState := Default(TCommentScanState);
     for i := 0 to Lines.Count - 1 do
     begin
-      Line := Lines[i];
-      // Wir scannen jede Zeile separat - String-Literale ueber Zeilengrenzen
-      // sind in Pascal nicht ueblich. InStr wird trotzdem mitgefuehrt, weil
-      // der Lexer normalerweise so arbeitet.
+      // KOMMENTARBEREINIGT scannen (Voll-Review 2026-09-12, Blocker):
+      // die Rohzeile meldete '{ Length(buf) - 4 }' im Kommentar, und
+      // ein einzelner Apostroph in einem Kommentar ("don't") vergiftete
+      // den InStr-Zustand fuer den Dateirest - alles Folgende wurde
+      // als String uebersprungen. ScanCodeLine (Single source of truth,
+      // State ueber Zeilen) blankt Literale samt Quotes und fuellt
+      // Kommentare spaltenerhaltend (AKeepColumns) - InStr in
+      // FindMatch bleibt damit schlicht immer False.
+      Line := TDetectorUtils.ScanCodeLine(Lines[i], ScanState, DummyCol,
+        '~', True);
       var LinePos := 1;
       while LinePos <= Length(Line) do
       begin

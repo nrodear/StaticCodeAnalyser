@@ -53,7 +53,6 @@ uses
 const
   KW           = 'with';
   KW_LEN       = 4;
-  EMIT_SEVERITY = lsWarning;
 
 function IsIdent(C: Char): Boolean; inline;
 begin
@@ -73,6 +72,12 @@ end;
 // am Zeilenende noch offen ist.
 function FindWith(const Line: string; var InBlockComm: Boolean;
   var InParenStarComm: Boolean): Integer;
+// Liefert die Spalte des ersten with-Keywords - scannt die Zeile aber
+// auch NACH einem Treffer zu Ende, damit der Kommentar-Zustand des
+// Zeilenrests stimmt. Der alte Exit(i) am Treffer (Voll-Review
+// 2026-09-12, Blocker) liess ein dahinter geoeffnetes '{' unverfolgt:
+// 'with L do begin  { alte Notiz' meldete korrekt, aber die
+// auskommentierte Folgezeile 'with M do ...' meldete AUCH.
 var
   i, n  : Integer;
   InStr : Boolean;
@@ -182,7 +187,11 @@ begin
           Continue;
         end;
       end;
-      Exit(i);
+      // Treffer MERKEN, nicht Exit - der Zeilenrest muss weiter durch
+      // die Zustandsmaschine (nur der ERSTE Treffer wird gemeldet).
+      if Result = 0 then Result := i;
+      Inc(i, KW_LEN);
+      Continue;
     end;
 
     Inc(i);

@@ -42,9 +42,21 @@ type
     [Test] procedure FieldByName_OutsideLoop_NotReported;
     [Test] procedure SingleStmtLoop_ConcatAfterLoop_NotReported;
     [Test] procedure SingleStmtLoop_ConcatInBody_Reported;
+    // --- Voll-Review 2026-09-12 (Blocker): Body-Ende-Suche ohne linke
+    // Wortgrenze und ohne Tiefenzaehlung ---
+    [Test] procedure AppendInLoop_ConcatBehindAppend_StillReported;
+    [Test] procedure IdentWithEndSubstring_NoPhantomRangeInNextRoutine;
+    [Test] procedure InnerBlockEnd_DoesNotCutRange_ConcatReported;
   end;
 
 implementation
+
+// noinspection-file GodClass, LargeClass
+// Eine Testklasse je Detektor ist der Projekt-Zuschnitt: SCA110-112
+// teilen sich EINEN Detektor, seine Regressionen gehoeren in EINE
+// Fixture-Klasse. Die Methoden-/Zeilen-Schwellen reissen hier durch
+// die Blocker-Regressionen des Voll-Reviews 2026-09-12 - Aufteilen
+// wuerde die Zusammengehoerigkeit der Range-Tests zerreissen.
 
 uses
   System.SysUtils, System.Generics.Collections,
@@ -469,6 +481,104 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkStringConcatInLoop));
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.AppendInLoop_ConcatBehindAppend_StillReported;
+// Voll-Review 2026-09-12 (Blocker): die Body-Ende-Suche prueft nur die
+// RECHTE Wortgrenze - das eingebettete 'end' in 'Append(' bestand den
+// Check ('(' folgt), die Range endete mitten im Bezeichner und das
+// Concat DAHINTER lag ausserhalb jeder Range (Bestands-Exe: 0 Funde,
+// empirisch belegt). Ironie: genau das vom Detektor empfohlene
+// TStringBuilder.Append erzeugte den blinden Fleck.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'var i: Integer; s: string; SB: TStringBuilder;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 10 do'#13#10 +
+  '  begin'#13#10 +
+  '    SB.Append(IntToStr(i));'#13#10 +
+  '    s := s + IntToStr(i);'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkStringConcatInLoop),
+    'Concat hinter SB.Append im selben Loop-Body muss gemeldet werden - ' +
+    'das end-Substring von Append ist kein Body-Ende');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.IdentWithEndSubstring_NoPhantomRangeInNextRoutine;
+// Zweite Form desselben Blockers: scheiterte der Rechts-Check
+// ('Friends' - 's' folgt), gab es KEINE Weitersuche - der Loop-Header
+// blieb auf dem Stack und das begin der NAECHSTEN Routine wurde zur
+// Phantom-Loop-Range: ParamByName dort galt als in-Loop (Bestands-Exe
+// meldet ph2.pas:14, empirisch belegt).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure A;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 10 do'#13#10 +
+  '  begin'#13#10 +
+  '    Friends.Add(i);'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'procedure B(q: TFDQuery);'#13#10 +
+  'begin'#13#10 +
+  '  q.ParamByName(''x'').AsInteger := 1;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkParamByNameInLoop),
+    'ParamByName in der naechsten Routine liegt in KEINER Schleife - ' +
+    'Friends.Add darf keine Phantom-Range hinterlassen');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.InnerBlockEnd_DoesNotCutRange_ConcatReported;
+// Dritte Form: das erste echte INNERE 'end' (if-Block im Loop) beendete
+// die Range zu frueh - das Concat nach dem inneren Block war unsichtbar
+// (Bestands-Exe: 0 Funde, empirisch belegt). Jetzt zaehlt die
+// Body-Ende-Suche begin/case/try-Tiefe.
+// Fixture bewusst mit anderen Namen/Grenzen als der Append-Zwilling -
+// sonst meldet der Selbstscan die beiden als 8-Zeilen-DuplicateBlock.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Sammle;'#13#10 +
+  'var k: Integer; txt: string;'#13#10 +
+  'begin'#13#10 +
+  '  for k := 1 to 5 do'#13#10 +
+  '  begin'#13#10 +
+  '    if k > 2 then'#13#10 +
+  '    begin'#13#10 +
+  '      Log(k);'#13#10 +
+  '    end;'#13#10 +
+  '    txt := txt + IntToStr(k);'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkStringConcatInLoop),
+    'Concat nach dem inneren if-Block liegt noch im Loop-Body - ' +
+    'die Tiefenzaehlung darf die Range nicht am inneren end kappen');
   finally F.Free; end;
 end;
 

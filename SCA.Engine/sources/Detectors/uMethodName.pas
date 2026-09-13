@@ -110,9 +110,6 @@ uses
   System.Classes,      // TStringList (FFI-Typnamen-Set)
   uDetectorUtils;      // Hebel A: FFI-Binding-/Typelib-Gates (2026-07-31)
 
-const
-  EMIT_SEVERITY = lsHint;
-
 function LocalName(const FullName: string): string;
 var
   pDot : Integer;
@@ -125,23 +122,16 @@ begin
 end;
 
 function IsEventHandlerSignature(MethodNode: TAstNode): Boolean;
-// True wenn die Methode eine DFM-Event-Handler-Signatur hat - mind. 1
-// Parameter 'Sender: TObject'. Solche Methoden werden vom Form-Designer
-// per DFM gebunden und tragen per IDE-Konvention den Component-Namen als
-// kleingeschriebenes Praefix (actSaveExecute, btnSaveClick, qDataAfterScroll).
-// Spiegelt die Heuristik aus uCanBeClassMethod (Round-3-Fix); ohne diese
-// produzierte Self-Test auf realem VCL-Form-Code ~8 FPs.
-var
-  Child : TAstNode;
+// True wenn die Methode eine DFM-Event-Handler-Signatur hat - solche
+// Methoden werden vom Form-Designer per DFM gebunden und tragen per
+// IDE-Konvention den Component-Namen als kleingeschriebenes Praefix
+// (actSaveExecute, btnSaveClick, qDataAfterScroll); ohne die Ausnahme
+// produzierte Self-Test auf realem VCL-Form-Code ~8 FPs. Seit
+// Voll-Review 2026-09-12 zentral (TDetectorUtils) - diese Fassung war
+// die als 'Spiegel' dokumentierte Kopie von uCanBeClassMethod und
+// konnte bei der naechsten Heuristik-Aenderung driften.
 begin
-  Result := False;
-  for Child in MethodNode.Children do
-  begin
-    if Child.Kind <> nkParam then Continue;
-    if SameText(Child.Name, 'Sender') then Exit(True);
-    if Pos('tobject', LowerCase(Child.TypeRef)) > 0 then Exit(True);
-    Exit;                              // nur ersten Parameter pruefen
-  end;
+  Result := TDetectorUtils.IsEventHandlerSignature(MethodNode);
 end;
 
 function HasProceduralReturnType(const ATypeRef: string): Boolean;
@@ -215,46 +205,12 @@ end;
 
 function BuildMethodOwnerMap(UnitNode: TAstNode)
   : TDictionary<TAstNode, string>;
-// Ordnet jeder in einem Typ-RUMPF deklarierten Methode den Namen ihres
-// Typs zu. Notwendig, weil der AST keinen Parent-Zeiger hat: eine
-// IMPLEMENTIERUNG traegt den Typ im qualifizierten Namen ('TFoo.bar'),
-// eine DEKLARATION im Klassen-/Interface-Rumpf nicht.
-//
-// Verschachtelte Typen haengen als GESCHWISTER in der Typsektion (siehe
-// ParseNestedTypeDecl in uParser2), nicht unter dem aeusseren Knoten -
-// der Subtree-Walk je Typknoten ordnet also nichts doppelt zu.
-// Caller besitzt das Ergebnis (Free).
-const
-  // Interface-Typen fuehrt der Parser ebenfalls als nkClass; nkRecord
-  // deckt record/object mit Methoden ab.
-  OWNER_KINDS : array[0..1] of TNodeKind = (nkClass, nkRecord);
-var
-  Types : TList<TAstNode>;
-  Meths : TList<TAstNode>;
-  T, M  : TAstNode;
-  ki    : Integer;
+// Seit Voll-Review 2026-09-12 (Posten 74) byte-identisch in
+// TDetectorUtils.BuildMethodOwnerMap zentralisiert - uLongParamList
+// ist der zweite Konsument. Der Wrapper bleibt, damit die Aufrufer
+// in dieser Unit unveraendert bleiben.
 begin
-  Result := TDictionary<TAstNode, string>.Create;
-  if UnitNode = nil then Exit;
-  for ki := Low(OWNER_KINDS) to High(OWNER_KINDS) do
-  begin
-    Types := UnitNode.FindAll(OWNER_KINDS[ki]);
-    try
-      for T in Types do
-      begin
-        if T.Name = '' then Continue;
-        Meths := T.FindAll(nkMethod);
-        try
-          for M in Meths do
-            Result.AddOrSetValue(M, T.Name);
-        finally
-          Meths.Free;
-        end;
-      end;
-    finally
-      Types.Free;
-    end;
-  end;
+  Result := TDetectorUtils.BuildMethodOwnerMap(UnitNode);
 end;
 
 procedure CountMethodNameStyle(TypeNode: TAstNode;

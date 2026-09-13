@@ -124,9 +124,11 @@ begin
     TDfmFieldTypeMismatchDetector.Analyze(Graph, DfmFileName, Results);
     TDfmTabOrderConflictDetector.Analyze(Graph, DfmFileName, Results);
     TDfmForbiddenClassDetector.Analyze(Graph, DfmFileName, Results);
-    TDfmDbInUiFormDetector.Analyze(Graph, DfmFileName, Results);
-    // Aggregat-Hint NACH DbInUiForm (verbraucht dessen Findings als Input)
-    TDfmDataModuleSplitHintDetector.Aggregate(DfmFileName, Results);
+    // DbInUiForm + der davon abhaengige Aggregat-Hint sind seit dem
+    // 2026-09-12 Binder-Konsumenten und stehen deshalb in Block 5. Wer sie
+    // hierher zurueckholt, uebergibt Binding=nil und macht die Ahnenketten-
+    // Pruefung damit still wirkungslos - genau die Falle, in der
+    // GodHandler und CrossFormCoupling monatelang steckten (s.u.).
     TDfmLayerViolationDetector.Analyze(Graph, DfmFileName, Results);
     TDfmActionMismatchDetector.Analyze(Graph, DfmFileName, Results);
     TDfmMasterDetailUnlinkedDetector.Analyze(Graph, DfmFileName, Results);
@@ -196,6 +198,15 @@ begin
     // AFileName = DfmFileName (Fundort).
     TDfmComponentUnusedDetector.Analyze(Binding, Graph, RepoIdx,
       CtxSymbolRefIndex(AContext), PasFileName, DfmFileName, Results);
+    // DB-Komponente auf einer UI-Form (SCA-DbInUiForm): braucht die
+    // Bindung, um "ist die Wurzel ein DataModule?" an der Klassenkette zu
+    // entscheiden statt am Klassennamen. Stand bis 2026-09-12 in Block 2
+    // und beantwortete die Frage allein ueber den Namenssuffix - das
+    // erkannte 6 von 41 Datenmodulen im Korpus.
+    TDfmDbInUiFormDetector.Analyze(Graph, Binding, DfmFileName, Results);
+    // Aggregat-Hint NACH DbInUiForm (verbraucht dessen Findings als Input).
+    // Die beiden gehoeren zusammen und wandern nur gemeinsam.
+    TDfmDataModuleSplitHintDetector.Aggregate(DfmFileName, Results);
   except
     // AUSSER Stapelueberlauf und Abbruch (Kontrakt 2026-08-04): dieser
     // Sammelfang machte den Durchreich-Schutz in RunAllDetectors fuer

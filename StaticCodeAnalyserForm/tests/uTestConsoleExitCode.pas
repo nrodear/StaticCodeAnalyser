@@ -48,10 +48,22 @@ type
     [Test] procedure CalcExitCode_ReadErrorOnly_IsFour;
   end;
 
+  // ---- Stack-Wachposten (2026-09-12) --------------------------------
+  // Eigene Fixture: die Klasse darueber gehoert den Exit-Codes.
+  [TestFixture]
+  TTestStackReserveGuard = class
+  public
+    [Test] procedure Pe32Plus_32MB_WirdGelesen;
+    [Test] procedure Pe32_1MB_WirdGelesen;
+    [Test] procedure KeinPeFile_LiefertNull;
+    [Test] procedure NichtVorhandeneDatei_LiefertNull;
+  end;
+
 implementation
 
 uses
   System.SysUtils, System.Generics.Collections,
+  System.IOUtils,                     // TPath/TFile fuer die PE-Fixtures
   uMethodd12, uSCAConsts, uConsoleRunner;
 
 const
@@ -233,7 +245,93 @@ begin
   end;
 end;
 
+{ ---- Stack-Wachposten ----------------------------------------------- }
+
+// Baut eine MINIMALE Datei mit PE-Kopf: Offset $3C zeigt auf den
+// PE-Header, dort steht ab +$18 der Optional-Header mit Magic und ab
+// +$18+$48 die Stack-Reserve. Genau die drei Felder, die
+// PeStackReserveMB liest - mehr braucht der Vertrag nicht.
+// AMagic ist der Optional-Header-Magic: $10B = PE32, $20B = PE32+.
+// Bewusst das Magic statt eines Boolean-Schalters - ein 'APlus: Boolean'
+// waere genau der Verzweigungs-Parameter, den SCA146 zu Recht ruegt.
+function MachePeDatei(AMagic: Word; AReserve: UInt64): string;
+const
+  PE_OFS = $80;
+  MAGIC_PE32PLUS = $20B;
+var
+  Buf : TBytes;
+  i   : Integer;
+begin
+  Result := TPath.Combine(TPath.GetTempPath,
+    'sca_pe_' + TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '')
+      .Replace('-', '') + '.bin');
+  SetLength(Buf, PE_OFS + $18 + $48 + 8);
+  for i := 0 to High(Buf) do Buf[i] := 0;
+  // e_lfanew
+  PCardinal(@Buf[$3C])^ := PE_OFS;
+  PWord(@Buf[PE_OFS + $18])^ := AMagic;
+  if AMagic = MAGIC_PE32PLUS then
+    PUInt64(@Buf[PE_OFS + $18 + $48])^ := AReserve
+  else
+    PCardinal(@Buf[PE_OFS + $18 + $48])^ := Cardinal(AReserve);
+  TFile.WriteAllBytes(Result, Buf);
+end;
+
+procedure TTestStackReserveGuard.Pe32Plus_32MB_WirdGelesen;
+// 64-Bit-Form (PE32+, Magic $20B) - die Reserve steht als UInt64.
+var P : string;
+begin
+  P := MachePeDatei($20B, 32 * 1024 * 1024);
+  try
+    Assert.AreEqual<Integer>(32, PeStackReserveMB(P),
+      'PE32+ mit 32 MB muss als 32 gelesen werden');
+  finally
+    if TFile.Exists(P) then TFile.Delete(P);
+  end;
+end;
+
+procedure TTestStackReserveGuard.Pe32_1MB_WirdGelesen;
+// 32-Bit-Form (Magic $10B) - die Reserve steht als Cardinal. 1 MB ist
+// der Build-Default, also genau der Wert, vor dem der Wachposten warnt.
+var P : string;
+begin
+  P := MachePeDatei($10B, 1024 * 1024);
+  try
+    Assert.AreEqual<Integer>(1, PeStackReserveMB(P),
+      'PE32 mit 1 MB muss als 1 gelesen werden');
+  finally
+    if TFile.Exists(P) then TFile.Delete(P);
+  end;
+end;
+
+procedure TTestStackReserveGuard.KeinPeFile_LiefertNull;
+// Eine Textdatei ist kein PE. Der Wachposten darf davon nicht
+// ausgeloest werden und erst recht nicht scheitern - 0 heisst
+// 'keine Aussage', und der Aufrufer schweigt dann.
+var P : string;
+begin
+  P := TPath.Combine(TPath.GetTempPath,
+    'sca_nope_' + TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '')
+      .Replace('-', '') + '.txt');
+  TFile.WriteAllText(P, 'kein PE, nur Text');
+  try
+    Assert.AreEqual<Integer>(0, PeStackReserveMB(P),
+      'Nicht-PE liefert 0 (keine Aussage), kein Fehler');
+  finally
+    if TFile.Exists(P) then TFile.Delete(P);
+  end;
+end;
+
+procedure TTestStackReserveGuard.NichtVorhandeneDatei_LiefertNull;
+// Der Diagnose-Pfad darf einen Analyse-Lauf nie kosten.
+begin
+  Assert.AreEqual<Integer>(0,
+    PeStackReserveMB(TPath.Combine(TPath.GetTempPath, 'gibt_es_nicht_12345.exe')),
+    'fehlende Datei liefert 0 statt einer Exception');
+end;
+
 initialization
+  TDUnitX.RegisterTestFixture(TTestStackReserveGuard);
   TDUnitX.RegisterTestFixture(TTestConsoleExitCode);
 
 end.

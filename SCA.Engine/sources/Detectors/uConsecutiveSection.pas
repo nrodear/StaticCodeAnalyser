@@ -37,32 +37,14 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uFileTextCache;
-
-const
-  EMIT_SEVERITY = lsHint;
+  uFileTextCache,
+  uDetectorUtils;   // BlankStringLiterals (Inline-var-Gate)
 
 function ExtractFirstWord(const Line: string; out StartCol: Integer): string;
-var
-  i, n, wStart : Integer;
-  c            : Char;
 begin
-  Result := '';
-  StartCol := 0;
-  n := Length(Line);
-  i := 1;
-  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
-  if i > n then Exit;
-  c := Line[i];
-  if c = '{' then Exit;
-  if (c = '/') and (i < n) and (Line[i + 1] = '/') then Exit;
-  if (c = '(') and (i < n) and (Line[i + 1] = '*') then Exit;
-  if not CharInSet(c, ['A'..'Z','a'..'z','_']) then Exit;
-  wStart := i;
-  StartCol := wStart;
-  while (i <= n) and CharInSet(Line[i], ['A'..'Z','a'..'z','0'..'9','_']) do
-    Inc(i);
-  Result := Copy(Line, wStart, i - wStart);
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.ExtractFirstWord,
+  // dort der Vertrag). Der Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.ExtractFirstWord(Line, StartCol);
 end;
 
 // Paren-Delta einer Zeile ('(' minus ')'), String-Literale ('...') und
@@ -116,25 +98,49 @@ var
   IsSectionKw : Boolean;
   IsResetKw   : Boolean;
   ParenDepth  : Integer;
+  ScanState   : TCommentScanState;
+  DummyCol    : Integer;
+  Line        : string;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
     LastSection := '';
     ParenDepth  := 0;
+    ScanState   := Default(TCommentScanState);
     for i := 0 to Lines.Count - 1 do
     begin
+      // Kommentar-Zustand UEBER Zeilen (Voll-Review 2026-09-12, Major
+      // 48): die Rohzeilen-Sicht las Fortsetzungszeilen mehrzeiliger
+      // Blockkommentare als Code - stand das Wort var am Anfang einer
+      // Kommentar-Fortsetzungszeile, setzte es LastSection='var', und
+      // die naechste ECHTE var-Section
+      // wurde als 'Consecutive var section' gemeldet. ScanCodeLine
+      // entfernt Kommentare zustandsbehaftet und blankt Literale -
+      // damit ist auch das ':='-Gate unten automatisch literal-fest.
+      Line := TDetectorUtils.ScanCodeLine(Lines[i], ScanState, DummyCol);
       // Section-Erkennung NUR auf Statement-Ebene (Paren-Tiefe 0). Innerhalb
       // einer (mehrzeiligen) Parameterliste sind `const`/`var`-Zeilenanfaenge
       // Parameter-Modifier, keine Sections -> nicht werten (sonst FP auf der
       // ersten Body-`var`-Section nach `procedure Foo(... var X: T);`).
       if ParenDepth <= 0 then
       begin
-        Word := ExtractFirstWord(Lines[i], Col);
+        Word := ExtractFirstWord(Line, Col);
         if Word <> '' then
         begin
           Lower := LowerCase(Word);
           IsSectionKw := (Lower = 'const') or (Lower = 'type') or (Lower = 'var');
+          // Inline-var/const (Delphi 10.3+): 'var X := 1;' im Rumpf ist
+          // ein STATEMENT, keine Section. In einer echten Deklarations-
+          // Section ist ':=' nie legal (initialisierte Globals nutzen
+          // '='), also trennt genau dieses Token die beiden Welten.
+          // Ohne das Gate meldete der zweite Inline-var einer Methode
+          // 'Consecutive var section' (Voll-Review 2026-09-12, Blocker;
+          // LastSection ueberlebt beliebige Identifier-Zeilen).
+          // Geprueft auf der geblankten Zeile - ':=' in einem
+          // String-Literal zaehlt nicht.
+          if IsSectionKw and (Pos(':=', Line) > 0) then
+            IsSectionKw := False;
           IsResetKw := (Lower = 'procedure') or (Lower = 'function')
                     or (Lower = 'constructor') or (Lower = 'destructor')
                     or (Lower = 'begin') or (Lower = 'end')
@@ -161,7 +167,7 @@ begin
       // Paren-Tiefe der Zeile nachfuehren - NACH der Wort-Wertung, damit
       // `procedure Foo(` selbst noch als Reset auf Tiefe 0 zaehlt und erst
       // die Folgezeilen (Parameter) als "in Klammern" gelten.
-      Inc(ParenDepth, ParenDelta(Lines[i]));
+      Inc(ParenDepth, ParenDelta(Line));
       if ParenDepth < 0 then ParenDepth := 0;
     end;
   finally

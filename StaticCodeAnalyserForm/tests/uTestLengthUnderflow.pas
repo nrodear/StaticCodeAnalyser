@@ -17,6 +17,10 @@ type
   public
     // ---- Positive Varianten ------------------------------------------------
     [Test] procedure Length_MinusTwo_Reported;
+    // Voll-Review 2026-09-12 (Blocker): Kommentare als Code gescannt,
+    // Apostroph im Kommentar vergiftete den String-Zustand.
+    [Test] procedure PatternInBlockComment_NoFinding;
+    [Test] procedure ApostropheInCommentDoesNotPoisonRest;
     [Test] procedure Length_MinusFour_Reported;
     [Test] procedure DotCount_MinusThree_Reported;
     [Test] procedure DotLength_MinusFive_Reported;
@@ -34,6 +38,10 @@ type
     [Test] procedure Length_Finding_KindAndSeverity;
     [Test] procedure Length_MultipleHitsInSameMethod_AllReported;
     [Test] procedure Length_TwoHitsOnSameLine_BothReported;
+    // Testluecke 168: Kommentarzustand und Copy-Idiom
+    [Test] procedure LengthMinusInBlockComment_NoFinding;
+    [Test] procedure ApostropheInCommentThenRealExpr_StillReported;
+    [Test] procedure CopyIdiom_NoFinding;
   end;
 
 implementation
@@ -42,6 +50,53 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+procedure TTestLengthUnderflow.PatternInBlockComment_NoFinding;
+// '{ Length(buf) - 4 }' ist Kommentar - Projekt-Invariante: Kommentare
+// zaehlen NIE als Code-Use. Vor dem Fix: 1 Fehlfund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  { Length(buf) - 4 }'#13#10 +
+  '  DoWork;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLengthUnderflow),
+    'Length-Muster im Kommentar darf nicht melden');
+  finally F.Free; end;
+end;
+
+procedure TTestLengthUnderflow.ApostropheInCommentDoesNotPoisonRest;
+// Der FN-Kaskadenfall: ein einzelner Apostroph in einem Kommentar
+// ('don''t' als Prosa) setzte InStr=True fuer den Dateirest - ein
+// ECHTER Underflow zwei Zeilen spaeter wurde verschluckt.
+//
+// Die Underflow-Form ist bewusst dieselbe wie im gruenen
+// Length_MinusTwo_Reported: 'Length(s) - 2'. Die erste Fassung nahm
+// 'Length(s) - 1' - das ist laut Unit-Kopf die AUSGENOMMENE Form (das
+// 'for i := 0 to Length(s)-1'-Idiom, Schwelle K > 1) und haette auch
+// ohne Kommentar nie gemeldet. Der Test mass damit nichts
+// (Testlauf 2026-09-12).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const s: string);'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  { don''t call this yet }'#13#10 +
+  '  i := Length(s) - 2;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.IsTrue(
+    TFindingHelper.Count(F, fkLengthUnderflow) >= 1,
+    'der echte Underflow hinter dem Apostroph-Kommentar muss melden');
+  finally F.Free; end;
+end;
 
 procedure TTestLengthUnderflow.Length_MinusTwo_Reported;
 const SRC =
@@ -282,6 +337,87 @@ begin
   try
     Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkLengthUnderflow),
       'Zwei Underflows in derselben Zeile -> beide Findings');
+  finally F.Free; end;
+end;
+
+{ --- Testluecke 168 ----------------------------------------------- }
+//
+// Drei Faelle, die der Detektor RICHTIG behandelt und die trotzdem
+// kein Test festhielt. ScanCodeLine leistet das (Z.226-233): es
+// blendet Kommentare spaltenerhaltend aus und fuehrt den
+// String-Zustand ueber Zeilen.
+//
+// ANMERKUNG ZUM REVIEW: der Posten sagte fuer die ersten beiden Faelle
+// "heute rot" voraus - also dass der Detektor sie falsch behandelt.
+// Am gebauten Stand ist das NICHT reproduzierbar; beide verhalten sich
+// korrekt, und der Detektor-Kommentar beschreibt genau diese zwei
+// Faelle als bereits behoben. Die Tests pinnen deshalb das richtige
+// Verhalten, statt einen Defekt zu dokumentieren, den es nicht gibt.
+
+procedure TTestLengthUnderflow.LengthMinusInBlockComment_NoFinding;
+// Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string);'#13#10 +
+  'var n: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  { Length(s) - 3 }'#13#10 +
+  '  n := 0;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLengthUnderflow),
+    'im Kommentar steht kein Ausdruck');
+  finally F.Free; end;
+end;
+
+procedure TTestLengthUnderflow.ApostropheInCommentThenRealExpr_StillReported;
+// Die schaerfere Haelfte: ein EINZELNER Apostroph in einem Kommentar
+// ("Nico's") wuerde einen naiven String-Zustand vergiften - alles
+// dahinter gaelte als Zeichenkette, und der echte Ausdruck darunter
+// entginge der Regel. Der Test faengt genau diese Regression.
+// Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string);'#13#10 +
+  'var n: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  { Nico''''s Kommentar }'#13#10 +
+  '  n := Length(s) - 4;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkLengthUnderflow),
+    'der Apostroph im Kommentar darf den Zustand nicht vergiften');
+  finally F.Free; end;
+end;
+
+procedure TTestLengthUnderflow.CopyIdiom_NoFinding;
+// 'Copy(s, 1, Length(s) - 1)' ist das idiomatische Abschneiden des
+// letzten Zeichens - bei leerem s liefert Copy schlicht die leere
+// Zeichenkette, kein Unterlauf. Der Detektor nimmt den umschliessenden
+// Aufrufnamen aus; belegt war das nicht.
+// Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string);'#13#10 +
+  'var t: string;'#13#10 +
+  'begin'#13#10 +
+  '  t := Copy(s, 1, Length(s) - 1);'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLengthUnderflow),
+    'Copy schneidet ab, es laeuft nichts unter');
   finally F.Free; end;
 end;
 

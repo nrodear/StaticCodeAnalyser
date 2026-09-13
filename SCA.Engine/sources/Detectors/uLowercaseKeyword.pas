@@ -49,7 +49,6 @@ uses
   uFileTextCache;
 
 const
-  EMIT_SEVERITY = lsHint;
 
   // Kuratierte Keyword-Liste. Reihenfolge egal (Lookup ist linear, N<100
   // ist klein genug). Bewusst NICHT enthalten:
@@ -92,7 +91,11 @@ end;
 
 function IsIdentStart(C: Char): Boolean; inline;
 begin
-  Result := CharInSet(C, ['A'..'Z','a'..'z','_']);
+  // Voll-Review 2026-09-12: Zeichenklasse zentralisiert - die lokale
+  // Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentStartChar (A..Z, a..z, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentStartChar(C);
 end;
 
 // Liefert True, falls Word (lowercase) ein Pascal-Keyword aus der
@@ -116,10 +119,16 @@ type
 
 // Scannt eine Zeile und liefert alle Keywords, deren Schreibweise NICHT
 // lowercase ist. Beruecksichtigt String-Literale und Kommentare. Block-
-// Comm-State wird ueber Zeilen mitgefuehrt.
+// Comm-State wird ueber Zeilen mitgefuehrt - ebenso der asm-Zustand
+// (Voll-Review 2026-09-12, Major 75): zwischen `asm` und seinem `end`
+// sind XOR/SHL/AND/... x86-MNEMONICS im klassischen Uppercase-Stil
+// (JCL/Graphics32/RTL-Ports), keine Pascal-Keywords - dort wird nichts
+// gemeldet. Die Woerter `asm` und `end` selbst bleiben gepruefte
+// Pascal-Keywords; ein BASM-Sprungziel `@end:` beendet den Block nicht
+// (fuehrendes '@').
 procedure CollectMixedCaseKeywords(const Line: string;
   var InBlockComm: Boolean; var InParenStarComm: Boolean;
-  Hits: TList<TKwHit>);
+  var InAsm: Boolean; Hits: TList<TKwHit>);
 var
   i, n, wStart : Integer;
   InStr        : Boolean;
@@ -184,6 +193,19 @@ begin
       while (i <= n) and IsIdent(Line[i]) do Inc(i);
       Word := Copy(Line, wStart, i - wStart);
       Lower := LowerCase(Word);
+      if InAsm then
+      begin
+        // Nur das schliessende `end` verlaesst den Block - und nur,
+        // wenn es kein BASM-Sprungziel ('@end') ist. Alles andere im
+        // Block sind Mnemonics/Operanden, keine Pascal-Keywords.
+        if (Lower <> 'end')
+           or ((wStart > 1) and (Line[wStart - 1] = '@')) then
+          Continue;
+        InAsm := False;
+        // das `end` selbst faellt durch zur normalen Pruefung
+      end
+      else if Lower = 'asm' then
+        InAsm := True;   // `asm` selbst wird noch normal geprueft
       if IsKeyword(Lower) and (Word <> Lower) then
       begin
         Hit.Col  := wStart;
@@ -203,6 +225,7 @@ var
   Hits           : TList<TKwHit>;
   i              : Integer;
   InBlk, InParen : Boolean;
+  InAsm          : Boolean;
   Cached         : Boolean;
   Hit            : TKwHit;
 begin
@@ -212,10 +235,11 @@ begin
   try
     InBlk   := False;
     InParen := False;
+    InAsm   := False;
     for i := 0 to Lines.Count - 1 do
     begin
       Hits.Clear;
-      CollectMixedCaseKeywords(Lines[i], InBlk, InParen, Hits);
+      CollectMixedCaseKeywords(Lines[i], InBlk, InParen, InAsm, Hits);
       for Hit in Hits do
         Results.Add(TLeakFinding.New(FileName, '', i + 1,
           Format('Keyword "%s" should be lowercase ("%s") at column %d.',

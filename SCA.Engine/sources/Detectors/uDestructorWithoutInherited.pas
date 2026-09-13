@@ -41,10 +41,8 @@ uses
   System.Classes, System.StrUtils,
   uTypeIndex,        // ParentOf/TypeKindOf - Basisklasse des Destruktors
                      // (uAnalyzeContext steht bereits im interface-uses)
-  uFileTextCache;
-
-const
-  EMIT_SEVERITY = lsError;
+  uFileTextCache,
+  uAstSpans;   // FindBodyBlock/HasInheritedCall (Voll-Review 2026-09-12)
 
 function ErbtDirektVonTObject(const AMethodName: string;
   AContext: TAnalyzeContext): Boolean;
@@ -244,22 +242,16 @@ end;
 // ausnehmen, sonst feuert der Detektor auf der Signatur statt auf der
 // Implementierung. Pattern aus uEmptyMethod uebernommen.
 function FindBodyBlock(MethodNode: TAstNode): TAstNode;
-var Child: TAstNode;
 begin
-  Result := nil;
-  for Child in MethodNode.Children do
-    if Child.Kind = nkBlock then Exit(Child);
+  // Voll-Review 2026-09-12: zentral (TAstSpans.FindBodyBlock, dort
+  // der Vertrag). Der Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TAstSpans.FindBodyBlock(MethodNode);
 end;
 
 function HasInheritedCall(Node: TAstNode): Boolean;
-var
-  Child : TAstNode;
 begin
-  Result := False;
-  if Node = nil then Exit;
-  if Node.Kind = nkInherited then Exit(True);
-  for Child in Node.Children do
-    if HasInheritedCall(Child) then Exit(True);
+  // Voll-Review 2026-09-12: zentral (TAstSpans.HasInheritedCall).
+  Result := TAstSpans.HasInheritedCall(Node);
 end;
 
 // True wenn der Method-Body effektiv leer ist (`begin end;` ohne

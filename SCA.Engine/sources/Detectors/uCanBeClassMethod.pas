@@ -116,31 +116,34 @@ begin
          or HasDirectiveWord(Low, 'override')
          or HasDirectiveWord(Low, 'dynamic')
          or HasDirectiveWord(Low, 'abstract')
+         // TOT, ABER ABSICHTLICH STEHENGELASSEN (Voll-Review 2026-09-12):
+         // der Parser fuehrt 'message' weder in IsMethodDirective noch in
+         // IsMethodDirectiveIdent (uParser2.pas:180/:196) - die Direktive
+         // erreicht TypeRef nie, dieser Term ist konstant False. Der
+         // Message-Handler wird also GEMELDET, obwohl 'class' bei ihm
+         // nicht uebersetzt; gepinnt in
+         // uTestCanBeClassMethod.MessageDirective_StillReported_ParserGap.
+         // Entfernen waere falsch: sobald der Parser die Direktive lernt,
+         // ist der Term sofort richtig. Die Alternative - Lesen aus der
+         // gestrippten Quelle wie SCA054 Gate A
+         // (uUnusedParameter.pas:410) - braucht Quellzugriff, den dieser
+         // Detektor nicht hat, und waere die dritte Kopie derselben
+         // Suche. Posten 9004.
          or HasDirectiveWord(Low, 'message')      // VCL-Message-Handler
          or HasDirectiveWord(Low, 'reintroduce'); // Hide-Inherited mit gleichem Namen
 end;
 
 function IsEventHandlerSignature(MethodNode: TAstNode): Boolean;
-// True wenn die Methode eine Event-Handler-Signatur hat - mind. 1 Parameter
-// 'Sender: TObject'. Solche Methoden werden vom Form-Designer per DFM zur
-// Laufzeit an Komponenten-Events gebunden und MUESSEN Instance-Methods sein.
-// Heuristik:
-//   * Mind. ein nkParam-Child der Methode.
-//   * Erster Parameter hat Name 'Sender' (case-insensitive) ODER
-//     TypeRef matched 'tobject' (case-insensitive).
-// Faengt FormCreate(Sender: TObject), btnClick(Sender: TObject),
-// OnFilter(Sender: TObject; const Item: TItem; var Accept: Boolean) etc.
-var
-  Child : TAstNode;
+// True wenn die Methode eine Event-Handler-Signatur hat (Sender-
+// Parameter) - solche Methoden werden vom Form-Designer per DFM zur
+// Laufzeit an Komponenten-Events gebunden und MUESSEN Instance-Methods
+// sein. Seit Voll-Review 2026-09-12 zentral:
+// TDetectorUtils.IsEventHandlerSignature ist die byte-identische
+// Hebung DIESER Fassung (die uMethodName-Kopie war als 'Spiegel'
+// dokumentiert). Der Wrapper bleibt, damit die Aufrufer in dieser
+// Unit unveraendert bleiben.
 begin
-  Result := False;
-  for Child in MethodNode.Children do
-  begin
-    if Child.Kind <> nkParam then Continue;
-    if SameText(Child.Name, 'Sender') then Exit(True);
-    if Pos('tobject', LowerCase(Child.TypeRef)) > 0 then Exit(True);
-    Exit;                              // nur ersten Parameter prufen
-  end;
+  Result := TDetectorUtils.IsEventHandlerSignature(MethodNode);
 end;
 
 function HasBodyBlock(MethodNode: TAstNode): Boolean;

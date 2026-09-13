@@ -4,17 +4,26 @@ unit uCustomClassDiscovery;
 //
 // Idee: vor dem MemoryLeak-Detektor wird das AST jeder Unit nach
 // `type TXxx = class(TYyy)`-Deklarationen durchsucht. Klassen die NICHT
-// von einer Owner-managed Basis-Klasse erben (TForm, TFrame, TComponent,
-// TInterfacedObject) werden als "leakable" eingestuft und an die globale
-// LeakyClasses-Liste angehaengt.
+// von einer Owner-managed Basis-Klasse erben (TForm, TFrame,
+// TInterfacedObject, ...) werden als "leakable" eingestuft und an die
+// globale LeakyClasses-Liste angehaengt.
 //
 // Aktivierung: [Detectors]/AutoDiscoverClasses=1 in analyser.ini
 //
 // Heuristik fuer "muss NICHT freigegeben werden":
 //   * TForm / TFrame / TDataModule / TCustomForm  -> VCL-Owner-System
-//   * TComponent + Subklassen mit AOwner-Pattern  -> Parent-Cleanup
 //   * TInterfacedObject / TInterfacedPersistent   -> Reference-Counting
-//   * TBasicAction                                -> Action-List-managed
+//   * TBasicAction / TCustomAction                -> Action-List-managed
+//
+// BEWUSST NICHT auf der Skip-Liste (Voll-Review 2026-09-12, Major 52 -
+// der fruehere Kopf versprach hier einen TComponent-Skip, den die
+// Liste nie enthielt): nackte TComponent-Subklassen. Ihr
+// AOwner-Pattern raeumt nur auf, wenn tatsaechlich ein Owner uebergeben
+// wird - Create(nil) ist bei non-visual Components ein gaengiges
+// Muster, und genau dort leakt es. Nach dem Grundsatz dieser Unit
+// ('false positive ist besser als verpasster Leak') bleiben solche
+// Klassen getrackt; wer eine konkrete Komponente owner-verwaltet weiss,
+// nutzt die Suppression.
 //
 // Klassen die KEINER dieser Basis-Klassen erben (= direkt von TObject oder
 // von einer projekt-internen Klasse) werden getrackt. Bei Mehrdeutigkeit
@@ -31,8 +40,14 @@ uses
 type
   TCustomClassDiscovery = class
   public
-    // Scannt UnitNode nach Klassen-Deklarationen. Owner-managed Subklassen
-    // (TForm/TFrame/TComponent/TInterfacedObject etc.) werden uebersprungen,
+    // Scannt UnitNode nach Klassen-Deklarationen. Owner-managed
+    // Subklassen (TForm/TFrame/TInterfacedObject etc., vollstaendige
+    // Liste in OWNER_MANAGED) werden uebersprungen,
+    // TComponent BEWUSST NICHT - Begruendung im Unit-Kopf. Dieser
+    // Kommentar nannte TComponent bis zum Voll-Review 2026-09-12
+    // (Major 52 / Testluecke 105) mit und widersprach damit dem
+    // korrigierten Kopf; der Test
+    // IsOwnerManagedParent_TComponentIsNotSkipped pinnt es jetzt.
     // alle anderen werden in zwei Gruppen aufgeteilt:
     //
     //   InstantiableNames  - Klassen mit Konstruktor/Destruktor in der

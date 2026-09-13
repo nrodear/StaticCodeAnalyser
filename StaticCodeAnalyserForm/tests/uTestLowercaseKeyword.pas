@@ -20,6 +20,9 @@ type
     [Test] procedure KeywordInBlockComment_NoFinding;
     [Test] procedure IdentifierWithKeywordSubstr_NoFinding;
     [Test] procedure LowercaseKeyword_KindAndSeverity;
+    // Voll-Review 2026-09-12 (Major 75): asm-Bloecke
+    [Test] procedure AsmMnemonics_NoFinding;
+    [Test] procedure UppercaseAfterAsmEnd_StillReported;
   end;
 
 implementation
@@ -158,6 +161,52 @@ begin
         Exit;
       end;
     Assert.Fail('expected fkLowercaseKeyword finding');
+  finally F.Free; end;
+end;
+
+procedure TTestLowercaseKeyword.AsmMnemonics_NoFinding;
+// Voll-Review 2026-09-12 (Major 75): der Scanner kannte keinen
+// asm-Zustand - XOR/SHL im klassischen Uppercase-BASM-Stil wurden als
+// Keyword-Verstoss gemeldet, obwohl es x86-Mnemonics sind (der
+// Harness sieht fcLow-Funde ungefiltert; an der CLI verdeckt der
+// Default-Confidence-Filter das Kind komplett).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Q(x: Integer): Integer;'#13#10 +
+  'asm'#13#10 +
+  '  XOR EAX,EAX'#13#10 +
+  '  SHL EDX,2'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLowercaseKeyword),
+    'Mnemonics im asm-Block sind keine Pascal-Keywords');
+  finally F.Free; end;
+end;
+
+procedure TTestLowercaseKeyword.UppercaseAfterAsmEnd_StillReported;
+// Gegenrichtung: NACH dem schliessenden `end` des asm-Blocks ist der
+// Scanner wieder scharf - pinnt, dass der Zustand korrekt verlassen
+// wird und Major 75 nicht ueberschiesst.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Q(x: Integer): Integer;'#13#10 +
+  'asm'#13#10 +
+  '  XOR EAX,EAX'#13#10 +
+  'end;'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  IF True then'#13#10 +
+  '    Exit;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLowercaseKeyword),
+    'nach dem asm-end wird IF wieder gemeldet');
   finally F.Free; end;
 end;
 

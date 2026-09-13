@@ -30,8 +30,8 @@ implementation
 // noinspection-file BeginEndRequired, NilComparison, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
-const
-  EMIT_SEVERITY = lsWarning;
+uses
+  uAstSpans;   // FindBodyBlock (Voll-Review 2026-09-12)
 
 // Maximale Anzahl `inherited`-Calls die DIREKTE Kinder EINES nkBlock sind
 // (= sequenziell im selben begin..end-Block, laufen also garantiert beide).
@@ -160,11 +160,10 @@ end;
 // (Class-Body-Signatur). Konsistent mit uConstructor/uDestructor-
 // WithoutInherited, deren False-Positive-Fix wir hier mitziehen.
 function FindBodyBlock(MethodNode: TAstNode): TAstNode;
-var Child: TAstNode;
 begin
-  Result := nil;
-  for Child in MethodNode.Children do
-    if Child.Kind = nkBlock then Exit(Child);
+  // Voll-Review 2026-09-12: zentral (TAstSpans.FindBodyBlock, dort
+  // der Vertrag). Der Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TAstSpans.FindBodyBlock(MethodNode);
 end;
 
 class procedure TTwiceInheritedCallsDetector.AnalyzeUnit(UnitNode: TAstNode;

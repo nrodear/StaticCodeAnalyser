@@ -41,9 +41,6 @@ uses
   System.StrUtils,
   uFileTextCache;
 
-const
-  EMIT_SEVERITY = lsWarning;
-
 function IsIdent(C: Char): Boolean; inline;
 begin
   // Backlog-Welle 1, 2026-07-26: Zeichenklasse zentralisiert - die
@@ -55,7 +52,11 @@ end;
 
 function IsIdentStart(C: Char): Boolean; inline;
 begin
-  Result := CharInSet(C, ['A'..'Z','a'..'z','_']);
+  // Voll-Review 2026-09-12: Zeichenklasse zentralisiert - die lokale
+  // Fassung war zeichenweise identisch zu
+  // TDetectorUtils.IsIdentStartChar (A..Z, a..z, _). Der Wrapper
+  // bleibt, damit die Aufrufer in dieser Unit unveraendert bleiben.
+  Result := TDetectorUtils.IsIdentStartChar(C);
 end;
 
 // Sucht Spalte von `on` (Wort) wenn ein `on E: Exception do`-Pattern
@@ -69,7 +70,27 @@ var
   c        : Char;
   OnCol    : Integer;
   Word     : string;
-  wStart   : Integer;
+
+  // Ident samt Punkt-Kette ab j lesen ('System.SysUtils.Exception');
+  // geliefert wird das LETZTE Segment. Eigene Routine, weil die
+  // Kette an ZWEI Stellen gebraucht wird (Binding-/Typ-Position) -
+  // die erste Fassung trug sie doppelt und der eigene
+  // DuplicateBlock-Detektor hat es prompt gemeldet.
+  function LiesLetztesKettenSegment(var j: Integer): string;
+  var
+    wStart : Integer;
+  begin
+    wStart := j;
+    while (j <= n) and IsIdent(Line[j]) do Inc(j);
+    while (j < n) and (Line[j] = '.') and IsIdentStart(Line[j + 1]) do
+    begin
+      Inc(j);
+      wStart := j;
+      while (j <= n) and IsIdent(Line[j]) do Inc(j);
+    end;
+    Result := Copy(Line, wStart, j - wStart);
+  end;
+
 begin
   Result := 0;
   InStr  := False;
@@ -126,19 +147,30 @@ begin
       // Skip whitespace
       j := i + 2;
       while (j <= n) and CharInSet(Line[j], [' ', #9]) do Inc(j);
-      // Identifier (Binding-Variable, Name wird nicht gebraucht)
+      // Identifier: Binding-Variable ODER - anonyme Form 'on Exception
+      // do' - bereits der Typ (Voll-Review 2026-09-12, Major 63; die
+      // Form faengt die Wurzelklasse ohne Binding-Variable und war
+      // vorher unsichtbar). Punkt-Ketten ('System.SysUtils.Exception')
+      // werden mitgelesen, das LETZTE Segment entscheidet.
       if (j > n) or not IsIdentStart(Line[j]) then begin Inc(i); Continue; end;
-      while (j <= n) and IsIdent(Line[j]) do Inc(j);
-      // `:`
+      Word := LiesLetztesKettenSegment(j);
+      // `:`?
       while (j <= n) and CharInSet(Line[j], [' ', #9]) do Inc(j);
-      if (j > n) or (Line[j] <> ':') then begin Inc(i); Continue; end;
+      if (j > n) or (Line[j] <> ':') then
+      begin
+        // Kein ':' -> das gelesene Wort war der TYP (anonyme Form).
+        if SameText(Word, 'Exception') then
+        begin
+          Result := OnCol;
+          Exit;
+        end;
+        Inc(i); Continue;
+      end;
       Inc(j);
       while (j <= n) and CharInSet(Line[j], [' ', #9]) do Inc(j);
-      // `Exception` Wort (exakt, ohne Suffix)
+      // `Exception` Wort (exakt, ohne Suffix; Punkt-Kette wie oben)
       if (j > n) or not IsIdentStart(Line[j]) then begin Inc(i); Continue; end;
-      wStart := j;
-      while (j <= n) and IsIdent(Line[j]) do Inc(j);
-      Word := Copy(Line, wStart, j - wStart);
+      Word := LiesLetztesKettenSegment(j);
       if SameText(Word, 'Exception') then
       begin
         Result := OnCol;

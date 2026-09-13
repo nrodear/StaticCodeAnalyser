@@ -54,7 +54,14 @@ const
   // Generischer Direktiven-Match: Name + optional ON/OFF. Dispatch im
   // Loop nach Name - so faengt der Detektor jetzt auch {$PUSH}/{$POP}
   // (State-Save/Restore) und ignoriert alle anderen ({$DEFINE}, {$I ...}).
-  DIRECTIVE_RE = '\{\$([A-Za-z]+)\s*(ON|OFF)?\}';
+  // Zweite Alternation (Gruppen 3/4) seit Voll-Review 2026-09-12
+  // (Major 46): die KURZFORMEN {$B+}/{$B-}, {$Q+}/{$Q-} und
+  // {$R+}/{$R-} schalten dieselben
+  // Switches wie BOOLEVAL/OVERFLOWCHECKS/RANGECHECKS - vorher blieb
+  // ein per '{$R+}' geschlossenes '{$RANGECHECKS OFF}' als falscher
+  // Fund stehen, und ein nacktes '{$R-}' war unsichtbar. Exakt EIN
+  // Schaltzeichen, dadurch keine Kollision mit '{$R *.res}'.
+  DIRECTIVE_RE = '\{\$(?:([A-Za-z]+)\s*(ON|OFF)?|([BQRbqr])([+-]))\}';
 
   // Switch-Direktiven deren OFF/ON-Balance wir tracken (lower-case).
   TRACKED : array[0..4] of string = (
@@ -66,6 +73,19 @@ begin
   for T in TRACKED do
     if Name = T then Exit(True);
   Result := False;
+end;
+
+// Kurzform-Schalter auf den getrackten Langform-Namen mappen
+// ({$B+/-} = BOOLEVAL, {$Q+/-} = OVERFLOWCHECKS, {$R+/-} = RANGECHECKS).
+function KurzformName(Ch: Char): string;
+begin
+  case Ch of
+    'b', 'B': Result := 'booleval';
+    'q', 'Q': Result := 'overflowchecks';
+    'r', 'R': Result := 'rangechecks';
+  else
+    Result := '';
+  end;
 end;
 
 // Flache Kopie eines OFF-Dict (Name -> 1-based OFF-Line) fuer {$PUSH}.
@@ -175,6 +195,20 @@ begin
       Code := StripNonDirectiveComments(Lines[i]);
       for M in RE.Matches(Code) do
       begin
+        // Kurzform-Alternation (Gruppen 3/4)? Der Count-Guard schuetzt
+        // vor der Delphi-12-Groups-Falle: fuer eine im Match NICHT
+        // partizipierende Gruppe oberhalb der hoechsten belegten kann
+        // der Indexzugriff werfen (Lehre aus uSQLInjection).
+        if (M.Groups.Count > 4) and M.Groups[3].Success then
+        begin
+          Name := KurzformName(M.Groups[3].Value[1]);
+          if Name = '' then Continue;
+          if M.Groups[4].Value = '-' then
+            LastOff.AddOrSetValue(Name, i + 1)   // wie 'OFF'
+          else
+            LastOff.Remove(Name);                // '+' schliesst wie 'ON'
+          Continue;
+        end;
         Name := LowerCase(M.Groups[1].Value);
         if Name = 'push' then
           // Aktuellen Zustand sichern - alle bis hier offenen OFFs werden

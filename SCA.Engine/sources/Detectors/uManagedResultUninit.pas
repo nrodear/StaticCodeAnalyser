@@ -67,8 +67,15 @@ unit uManagedResultUninit;
 // Warum praktisch FP-frei: VOR dem ersten textuellen Write gibt es keinen
 // legalen Weg, wie Result definierten Inhalt haette - die einzigen
 // Seitenkanaele (absolute-Alias, @Result, var/out-Durchreichung, asm)
-// werden als Write bzw. Skip behandelt. Branch-Blindheit kostet nur
-// False NEGATIVES (Write im then-Zweig VOR dem Lesen dahinter), nie FPs;
+// werden als Write bzw. Skip behandelt. Branch-Blindheit kostet
+// ueberwiegend False NEGATIVES (Write im then-Zweig VOR dem Lesen
+// dahinter) - die fruehere Behauptung 'nie FPs' war zu stark: der
+// Walker meldet in DOKUMENTREIHENFOLGE, beim Separator-Join-Idiom
+// ('if i > 0 then Result := Result + Sep + A[i] else Result := A[i]')
+// stand der Lese-Arm vor dem Schreib-Arm und wurde als FP gemeldet,
+// obwohl die erste Iteration immer den else-Arm nimmt. Seit
+// Voll-Review 2026-09-12 (Major 76) gilt ein if mit bar schreibendem
+// Arm deshalb konservativ als Write (s. IfArmSchreibtBar);
 // Pfad-Analyse ist Variante 1 (spaeteres Inkrement, CFG).
 //
 // Kollisionsregel (User-Entscheid): wo SCA196 feuert, bleibt SCA121
@@ -136,37 +143,24 @@ type
 // Extrahiert den Return-Typ aus 'function:RetType[;direktive...]'
 // (gleiche TypeRef-Konvention wie uRoutineResultAssigned).
 function ExtractReturnType(const TypeRef: string): string;
-var
-  c, s : Integer;
 begin
-  Result := '';
-  c := Pos(':', TypeRef);
-  if c = 0 then Exit;
-  Result := Copy(TypeRef, c + 1, MaxInt);
-  s := Pos(';', Result);
-  if s > 0 then Result := Copy(Result, 1, s - 1);
-  Result := Trim(Result);
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.ExtractReturnType(TypeRef);
 end;
 
 function IsFunctionMethod(const TypeRef: string): Boolean;
-var
-  ColonPos, SemiPos : Integer;
 begin
-  ColonPos := Pos(':', TypeRef);
-  if ColonPos = 0 then Exit(False);
-  SemiPos := Pos(';', TypeRef);
-  Result := (SemiPos = 0) or (ColonPos < SemiPos);
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.IsFunctionTypeRef(TypeRef);
 end;
 
 function IsBodyless(const TypeRef: string): Boolean;
-var
-  Low : string;
 begin
-  Low := LowerCase(TypeRef);
-  Result := (Pos(';abstract',  Low) > 0) or
-            (Pos(';forward',   Low) > 0) or
-            (Pos(';external',  Low) > 0) or
-            (Pos(';dispid',    Low) > 0);
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.IsBodylessTypeRef(TypeRef);
 end;
 
 function HasOwnBodyBlock(N: TAstNode): Boolean;
@@ -182,30 +176,10 @@ end;
 // der Walker saehe nie einen Result-Write -> Methode skippen (Kopie der
 // SCA121-Logik, dort seit Real-World 2026-06-28 zero-FN belegt).
 function HasAbsoluteResultAlias(MethodNode: TAstNode): Boolean;
-var
-  LocalVars : TList<TAstNode>;
-  LV  : TAstNode;
-  Low : string;
-  p, j : Integer;
 begin
-  Result := False;
-  LocalVars := MethodNode.FindAll(nkLocalVar);
-  try
-    for LV in LocalVars do
-    begin
-      Low := LowerCase(LV.TypeRef);
-      p := Pos('absolute', Low);
-      if p = 0 then Continue;
-      j := p + 8;
-      while (j <= Length(Low)) and (Low[j] <= ' ') do Inc(j);
-      if (Copy(Low, j, 6) = RESULT_IDENT)
-         and ((j + 6 > Length(Low))
-              or not CharInSet(Low[j + 6], ['a'..'z', '0'..'9', '_'])) then
-        Exit(True);
-    end;
-  finally
-    LocalVars.Free;
-  end;
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.HasAbsoluteResultAlias(MethodNode);
 end;
 
 // Entfernt '...'-String-Literale (ersetzt sie durch ein Leerzeichen, damit
@@ -260,23 +234,12 @@ end;
 
 // Word-boundary-Lookup von Needle in Haystack (beide lowercased).
 function ContainsIdentifier(const Haystack, Needle: string): Boolean;
-var
-  pIx           : Integer;
-  Before, After : Char;
 begin
-  Result := False;
-  if Needle = '' then Exit;
-  pIx := Pos(Needle, Haystack);
-  while pIx > 0 do
-  begin
-    if pIx = 1 then Before := ' ' else Before := Haystack[pIx - 1];
-    if pIx + Length(Needle) > Length(Haystack) then After := ' '
-    else After := Haystack[pIx + Length(Needle)];
-    if (not TDetectorUtils.IsIdentChar(Before)) and
-       (not TDetectorUtils.IsIdentChar(After)) then
-      Exit(True);
-    pIx := PosEx(Needle, Haystack, pIx + 1);
-  end;
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.
+  // ContainsWholeWordLower - gleicher Kontrakt: beide bereits
+  // lowercased, IsIdentChar-Wortgrenzen; '.', '[', '^' sind keine
+  // Identifier-Zeichen und zaehlen weiter als Boundary).
+  Result := TDetectorUtils.ContainsWholeWordLower(Needle, Haystack);
 end;
 
 // True wenn der (literal-bereinigte, lowercased) Ausdruck Result als
@@ -473,19 +436,10 @@ end;
 // uRoutineResultAssigned, hier ohne Konkat-Schleife: erst kompaktieren,
 // dann einmal LowerCase).
 function NormalizeLhs(const S: string): string;
-var
-  i, o : Integer;
 begin
-  SetLength(Result, Length(S));
-  o := 0;
-  for i := 1 to Length(S) do
-    if S[i] > ' ' then
-    begin
-      Inc(o);
-      Result[o] := S[i];
-    end;
-  SetLength(Result, o);
-  Result := LowerCase(Result);
+  // Voll-Review 2026-09-12: zentral (Method-TypeRef-Vertragssektion
+  // in uDetectorUtils). Wrapper bleibt fuer die lokalen Aufrufer.
+  Result := TDetectorUtils.NormalizeLhsLower(S);
 end;
 
 // --- Dokument-Reihenfolge-Walker -------------------------------------------
@@ -625,10 +579,68 @@ begin
     St.Written := True;
 end;
 
+// True wenn ein ARM des if-Statements Result (oder den FnName-Alias)
+// bar zuweist, OHNE es dabei zu lesen. Geprueft werden die direkten
+// Statement-Kinder und - fuer den else-Zweig - die Kinder eines
+// direkten nkElseBranch (ParseIfStmt haengt das then-Statement direkt
+// an, das else-Statement unter nkElseBranch).
+//
+// Voll-Review 2026-09-12 (Major 76): schreibt ein Arm bar, kann die
+// Laufzeit diesen Arm zuerst nehmen - ein Read im Geschwister-Arm ist
+// dann kein beweisbarer Uninitialized-Read mehr. Das Separator-Join-
+// Idiom 'for i := ... do if i > 0 then Result := Result + Sep + A[i]
+// else Result := A[i]' nimmt in der ERSTEN Iteration immer den
+// else-Arm; der alte Walker meldete den then-Arm in Dokumentreihen-
+// folge als FP und widerlegte damit die Kopf-Behauptung 'Branch-
+// Blindheit kostet nie FPs'.
+function IfArmSchreibtBar(IfNode: TAstNode; const St: TScanState): Boolean;
+
+  function ArmSchreibtBar(Arm: TAstNode): Boolean;
+  var
+    LhsNorm : string;
+    RhsLow  : string;
+    Rhs     : TRhsUse;
+    HeadKind: Integer;
+  begin
+    Result := False;
+    if Arm.Kind <> nkAssign then Exit;
+    LhsNorm  := NormalizeLhs(Arm.Name);
+    HeadKind := LhsHead(LhsNorm, RESULT_IDENT);
+    if (HeadKind = 0) and (St.FnNameLow <> '') then
+      HeadKind := LhsHead(LhsNorm, St.FnNameLow);
+    if HeadKind <> 1 then Exit;                    // nur die BARE Zuweisung
+    RhsLow := StripStringLiterals(LowerCase(Arm.TypeRef));
+    ClassifyResultUses(RhsLow, Rhs);
+    Result := not Rhs.Reads;
+  end;
+
+var
+  Child, ElseChild : TAstNode;
+begin
+  Result := False;
+  for Child in IfNode.Children do
+  begin
+    if ArmSchreibtBar(Child) then Exit(True);
+    if Child.Kind = nkElseBranch then
+      for ElseChild in Child.Children do
+        if ArmSchreibtBar(ElseChild) then Exit(True);
+  end;
+end;
+
 procedure WalkNode(N: TAstNode; var St: TScanState);
 var
   Child : TAstNode;
 begin
+  // Major 76 (Voll-Review 2026-09-12): if-Statement mit einem bar
+  // schreibenden Arm -> ohne CFG ist kein Read der Geschwister-Arme
+  // beweisbar; konservativ gilt das ganze if als Write (FN-Richtung,
+  // nie FP). Bestandsverhalten dahinter unveraendert: eine bare
+  // Zuweisung in einem Arm setzte Written schon immer global.
+  if (N.Kind = nkIfStmt) and IfArmSchreibtBar(N, St) then
+  begin
+    St.Written := True;
+    Exit;
+  end;
   case N.Kind of
     nkAssign: HandleAssign(N, St);
     nkCall:   HandleCall(N, St);

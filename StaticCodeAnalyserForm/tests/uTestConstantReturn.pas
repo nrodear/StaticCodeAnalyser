@@ -32,9 +32,20 @@ type
     [Test] procedure DottedResultMember_StillReported;
     [Test] procedure DottedResultMemberInIfHead_StillReported;
     [Test] procedure ResultInStringLiteral_StillReported;
+    // Voll-Review 2026-09-12 (Testluecke 103): ExtractExitArg-Normalisierung
+    [Test] procedure ExitMinusOneMatchesResultMinusOne_Reported;
+    [Test] procedure ExitMinusOneDiffersFromResult_NotReported;
   end;
 
 implementation
+
+// noinspection-file GodClass
+// Eine Test-Fixture je Detektor ist die Projektkonvention; die Klasse
+// waechst mit jedem gepinnten Fall. Mit den zwei Faellen aus
+// Testluecke 103 (Voll-Review 2026-09-12) hat sie die
+// 20-Methoden-Schwelle ueberschritten - Aufteilen wuerde die Faelle
+// desselben Detektors auseinanderreissen. Gleicher Marker und gleiche
+// Begruendung wie in uTestDuplicate und uTestTodoComment.
 
 uses
   System.SysUtils, System.Generics.Collections,
@@ -414,6 +425,49 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkConstantReturn) >= 1,
     'result im String ist kein Code-Use');
+  finally F.Free; end;
+end;
+
+procedure TTestConstantReturn.ExitMinusOneMatchesResultMinusOne_Reported;
+// Testluecke 103 (Voll-Review 2026-09-12): der Parser liefert 'Exit(-1)'
+// als '- 1' - mit Leerzeichen zwischen Vorzeichen und Ziffer. Ohne die
+// Normalisierung in ExtractExitArg faellt das NICHT mit 'Result := -1'
+// zusammen, und der Fund geht verloren (der Kommentar in
+// uConstantReturn beschreibt genau diesen Verlust). Die Normalisierung
+// war ungetestet. An der gebauten Exe verifiziert.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function F(A: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if A > 0 then'#13#10 +
+  '    Exit(-1);'#13#10 +
+  '  Result := -1;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkConstantReturn),
+    'Exit(-1) und Result := -1 sind dasselbe Literal');
+  finally F.Free; end;
+end;
+
+procedure TTestConstantReturn.ExitMinusOneDiffersFromResult_NotReported;
+// Die Gegenprobe, ohne die der Test darueber wertlos waere: liefern die
+// Pfade VERSCHIEDENE Werte, ist es kein konstanter Rueckgabewert. Sonst
+// koennte eine zu grosszuegige Normalisierung alles gleich machen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function G(A: Integer): Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if A > 0 then'#13#10 +
+  '    Exit(-1);'#13#10 +
+  '  Result := 7;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkConstantReturn),
+    '-1 und 7 sind nicht derselbe Rueckgabewert');
   finally F.Free; end;
 end;
 

@@ -70,8 +70,19 @@ const
   // paralleles Match mutierte deren Subject/Offsets. Das Pattern kommt
   // jetzt pro Thread aus TRegExMatches.CachedEx; [roNotEmpty] entspricht
   // exakt dem Default des alten Ein-Arg-TRegEx.Create.
+  // TMonitor-Alternation ZUERST und mit konsumiertem '(' - so laufen
+  // TMonitor.Enter(Obj)/TryEnter(Obj) denselben Weg wie
+  // EnterCriticalSection(handle) und werden nicht von den Gates fuer
+  // parameterlose Acquire-Methoden verworfen. Vor dem Voll-Review
+  // 2026-09-12 (Blocker) war TMonitor.Enter trotz Kopf-Vertrag
+  // UNERREICHBAR: die (\w+)-Alternation matchte ohne '(',
+  // MatchHasArguments verwarf den Pflicht-Parameter (die alte
+  // Begruendung 'TMonitor.Enter nimmt keine Parameter' war faktisch
+  // falsch - es ist class procedure Enter(const AObject: TObject)),
+  // und die Release-Suchen kannten tmonitor.exit nicht.
   LOCK_ENTER_PATTERN =
-    '(?i)\b(?:(\w+)\.(Enter|Acquire|BeginWrite)\b|EnterCriticalSection\s*\()';
+    '(?i)\b(?:TMonitor\s*\.\s*(?:Enter|TryEnter)\s*\(' +
+    '|(\w+)\.(Enter|Acquire|BeginWrite)\b|EnterCriticalSection\s*\()';
 
 function FindNextNonSpacePos(const Code: string; Start: Integer): Integer;
 // Skipt Whitespace + Newlines ab Start. Liefert die Position des
@@ -267,9 +278,13 @@ end;
 
 function MatchHasArguments(const Code: string; M: TMatch): Boolean;
 // True wenn das Match einem Pattern '<ident>.Acquire(arg, ...)' folgt -
-// mit NICHT-LEEREN Args. Echte Lock-Acquire-Methoden (TCriticalSection,
-// TMonitor.Enter) nehmen KEINE Parameter; Cache-/Pool-Acquire dagegen
-// nimmt einen Key (z.B. gAstFileCache.Acquire(FileName)).
+// mit NICHT-LEEREN Args. Die hier gemeinten Lock-Acquire-Methoden
+// (TCriticalSection.Acquire/Enter) nehmen keine Parameter;
+// Cache-/Pool-Acquire dagegen nimmt einen Key (z.B.
+// gAstFileCache.Acquire(FileName)). TMonitor.Enter(Obj) nimmt sehr
+// wohl einen Parameter - diese Form laeuft ueber die eigene
+// Pattern-Alternation mit konsumiertem '(' und erreicht dieses Gate
+// nie (Voll-Review 2026-09-12).
 //
 // Heuristik: nach dem Match das naechste Non-Space-Zeichen pruefen. Wenn
 // '(' und das uebernaechste Non-Space-Zeichen NICHT ')' ist, hat der Call
@@ -361,16 +376,86 @@ begin
   end;
 end;
 
+// ---------------------------------------------------------------------
+// Gemeinsamer Release-Suchkern (Voll-Review 2026-09-12): die Suche nach
+// '<call>(<handle>)' mit Ketten-Vergleich stand nach dem TMonitor-Fix
+// DREIMAL im Code - als LeaveCriticalSection-Schleife in
+// SegmentReleasesLock, als TMonitor.Exit-Fassung und (abweichend, s. u.)
+// als HasLeaveCriticalSectionForHandle fuer den Split-Wrapper. Die
+// ersten beiden sind bis aufs Call-Token identisch und laufen jetzt
+// ueber HasReleaseCallForHandle. Die Split-Wrapper-Fassung
+// HasLeaveCriticalSectionForHandle bleibt EIGENSTAENDIG: sie vergleicht
+// bewusst nur den fuehrenden Ident OHNE Punkt-Kette und exakt - eine
+// dokumentiert andere Semantik, keine vierte Kopie.
+
+const
+  MONITOR_EXIT_LOW = 'tmonitor.exit';
+
+// '@'-Skip + Ident-Kette (inkl. '.') ab Position q im lowercased Text;
+// q steht danach HINTER der Kette.
+function ReadHandleChainAt(const SegLow: string; var q: Integer): string;
+var
+  hStart : Integer;
+begin
+  while (q <= Length(SegLow)) and CharInSet(SegLow[q], [' ', '@']) do
+    Inc(q);
+  hStart := q;
+  while (q <= Length(SegLow)) and
+        CharInSet(SegLow[q], ['a'..'z', '0'..'9', '_', '.']) do Inc(q);
+  Result := Copy(SegLow, hStart, q - hStart);
+end;
+
+// Die Enter-Seite traegt je nach Form das volle Handle ('flock.cs')
+// oder nur ein Glied - Gleichheit oder Ketten-Endstueck zaehlt
+// (beidseitig).
+function HandleMatchesChain(const Handle, LHandle: string): Boolean;
+begin
+  Result := (Handle <> '') and
+    ((Handle = LHandle) or Handle.EndsWith('.' + LHandle) or
+     LHandle.EndsWith('.' + Handle));
+end;
+
+// True wenn im (lowercased) Segment ein '<ACallLow>(<handle>)' steht,
+// dessen Handle-Kette zu LHandle passt. ACallLow wird als Substring
+// gesucht (Namespace-Praefixe wie 'mormot.core.os.LeaveCriticalSection'
+// matchen mit - gewollt, wie die fruehere Inline-Fassung).
+function HasReleaseCallForHandle(const SegLow, ACallLow,
+  LHandle: string): Boolean;
+var
+  p, q : Integer;
+begin
+  Result := False;
+  if LHandle = '' then Exit;
+  p := Pos(ACallLow, SegLow);
+  while p > 0 do
+  begin
+    q := p + Length(ACallLow);
+    while (q <= Length(SegLow)) and (SegLow[q] = ' ') do Inc(q);
+    if (q <= Length(SegLow)) and (SegLow[q] = '(') then
+    begin
+      Inc(q);
+      if HandleMatchesChain(ReadHandleChainAt(SegLow, q), LHandle) then
+        Exit(True);
+    end;
+    p := PosEx(ACallLow, SegLow, p + 1);
+  end;
+end;
+
+// TMonitor-Gegenstueck zu HasLeaveCriticalSectionForHandle:
+// 'tmonitor.exit(<handle>)' im Segment, Ketten-Vergleich wie im
+// finally-Gate (konservativ: mehr erkannte Releases -> weniger Skips
+// -> TP-sicher).
+function HasMonitorExitForHandle(const SegLow, LHandle: string): Boolean;
+begin
+  Result := HasReleaseCallForHandle(SegLow, MONITOR_EXIT_LOW, LHandle);
+end;
+
 function SegmentReleasesLock(const SegLow, IdLow: string): Boolean;
 // True wenn im (lowercased) Segment ein Release auf DENSELBEN Lock steht:
 // <id>.Leave/.Release/.Exit/.EndWrite bzw. LeaveCriticalSection(<id>...).
 // Flag-Guards ('if InsideCrit then Section.Leave;') stoeren nicht -
 // gesucht wird das Token, nicht die Anweisungsform (FP-Voll-Audit
 // 2026-08-15, Klasse 'Release im umschliessenden finally, Flag-gesteuert').
-var
-  p, q   : Integer;
-  Handle : string;
-
   // Treffer nur an WORTGRENZE: 'lock.leave' darf nicht in 'block.leave'
   // matchen - sonst wuerde ein fremder Lock als Release gutgeschrieben
   // und der Fund faelschlich auf fcLow gestuft. Ein '.' davor bleibt
@@ -397,39 +482,18 @@ begin
      BoundedHit(IdLow + '.release') or
      BoundedHit(IdLow + '.exit') or
      BoundedHit(IdLow + '.endwrite') then Exit(True);
+  // TMonitor-Form: das Release heisst TMonitor.Exit(<handle>), der
+  // Handle steht im Argument, nicht vor dem Punkt.
+  if HasMonitorExitForHandle(SegLow, IdLow) then Exit(True);
   // Gegenpruefung 2026-08-26 (MAJOR): die fruehere Fassung suchte IdLow
   // als nacktes Substring in einem 80-Zeichen-Fenster AB dem Token -
   // 'section' matchte damit in 'leavecriticalSECTION' selbst, und 'cs'
   // in JEDEM fremden Handle. Ein echter TP (Release des falschen Locks
   // im finally) waere als fcLow gefiltert worden. Jetzt: den ERSTEN
-  // Ident hinter der Klammer parsen (Muster HasLeaveCriticalSection-
-  // ForHandle) und auf Gleichheit bzw. letztes Kettenglied pruefen.
-  p := Pos('leavecriticalsection', SegLow);
-  while p > 0 do
-  begin
-    q := p + Length('leavecriticalsection');
-    while (q <= Length(SegLow)) and (SegLow[q] = ' ') do Inc(q);
-    if (q <= Length(SegLow)) and (SegLow[q] = '(') then
-    begin
-      Inc(q);
-      while (q <= Length(SegLow)) and
-            CharInSet(SegLow[q], [' ', '@']) do Inc(q);
-      Handle := '';
-      while (q <= Length(SegLow)) and
-            CharInSet(SegLow[q], ['a'..'z', '0'..'9', '_', '.']) do
-      begin
-        Handle := Handle + SegLow[q];
-        Inc(q);
-      end;
-      // Enter-Seite traegt je nach Form das volle Handle ('flock.cs')
-      // oder nur ein Glied - Gleichheit oder Ketten-Endstueck zaehlt.
-      if (Handle <> '') and
-         ((Handle = IdLow) or
-          Handle.EndsWith('.' + IdLow) or IdLow.EndsWith('.' + Handle)) then
-        Exit(True);
-    end;
-    p := PosEx('leavecriticalsection', SegLow, p + 1);
-  end;
+  // Ident hinter der Klammer parsen und auf Gleichheit bzw. letztes
+  // Kettenglied pruefen - seit Voll-Review 2026-09-12 ueber den
+  // gemeinsamen Kern HasReleaseCallForHandle (identische Semantik).
+  Result := HasReleaseCallForHandle(SegLow, 'leavecriticalsection', IdLow);
 end;
 
 function EnclosingOrAdjacentFinallyReleases(const Code: string;
@@ -873,9 +937,11 @@ begin
   seg := Copy(Code, M.Index, bodyEnd - M.Index + 1);
   segLow := LowerCase(seg);
   if isWinApi then
-    // WinAPI-Split-Wrapper: kein LeaveCriticalSection(<selber Handle>) im selben
+    // WinAPI-/TMonitor-Split-Wrapper: kein LeaveCriticalSection(<selber
+    // Handle>) und kein TMonitor.Exit(<selber Handle>) im selben
     // Routinen-Body -> Release an paired Geschwister-Methode delegiert (FP).
     hasRelease := HasLeaveCriticalSectionForHandle(segLow, lhandle)
+      or HasMonitorExitForHandle(segLow, lhandle)
   else
     hasRelease :=
       (Pos(lident + '.leave', segLow) > 0) or
@@ -884,6 +950,47 @@ begin
       (Pos(lident + '.endwrite', segLow) > 0) or
       (Pos(lident + '.leavecriticalsection', segLow) > 0);
   Result := not hasRelease;
+end;
+
+// Lock-Identifier (Meldetext) und Gate-Bezeichner (lower, fuer das
+// finally-Gate) aus dem Enter-Match bestimmen. Aus AnalyzeUnit
+// ausgegliedert (Voll-Review 2026-09-12) - der Klammer-Formen-Zweig kam
+// mit dem TMonitor-Fix dazu und trieb die dortige Komplexitaet weiter.
+// Aus dem Match-WERT statt Groups[1]: die EnterCriticalSection-
+// Alternation hat keine Capture-Group 1, und M.Groups[1] wirft in
+// Delphi 12 'Index ueberschreitet das Maximum'.
+procedure ExtractLockIdent(const Code: string; const M: TMatch;
+  out LockIdent, GateIdLow: string);
+var
+  q : Integer;
+begin
+  GateIdLow := '';
+  LockIdent := M.Value;
+  if (LockIdent <> '') and (LockIdent[Length(LockIdent)] = '(') then
+  begin
+    // Klammer-Formen (EnterCriticalSection( / TMonitor.Enter( ): der
+    // LOCK ist das erste Argument - Handle-Bezeichner hinter der
+    // Klammer extrahieren. VOR dem Punkt-Zweig, denn 'TMonitor.Enter('
+    // traegt einen Punkt, aber 'tmonitor' ist der Klassenname, nicht
+    // der Lock.
+    q := FindNextNonSpacePos(Code, M.Index + M.Length);
+    while (q > 0) and (q <= Length(Code)) and
+          CharInSet(Code[q], ['A'..'Z', 'a'..'z', '0'..'9', '_', '.']) do
+    begin
+      GateIdLow := GateIdLow + Code[q];
+      Inc(q);
+    end;
+    GateIdLow := LowerCase(GateIdLow);
+    if Pos('tmonitor', LowerCase(LockIdent)) > 0 then
+      LockIdent := 'TMonitor.Enter(' + GateIdLow + ')'
+    else
+      LockIdent := 'EnterCriticalSection(...)';
+  end
+  else if Pos('.', LockIdent) > 0 then
+  begin
+    LockIdent := Copy(LockIdent, 1, Pos('.', LockIdent) - 1);
+    GateIdLow := LowerCase(LockIdent);
+  end;
 end;
 
 class procedure TLockWithoutTryFinallyDetector.AnalyzeUnit(
@@ -903,7 +1010,6 @@ var
   LockIdent : string;
   LockRe    : TRegEx;
   GateIdLow : string;    // Lock-Bezeichner (lower) fuer das finally-Gate
-  q         : Integer;
 begin
   LockRe := TRegExMatches.CachedEx(LOCK_ENTER_PATTERN, [roNotEmpty]);
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
@@ -981,30 +1087,7 @@ begin
       LineNo := TDetectorUtils.LineForPos(LineFor, M.Index);
       if LineNo <= 0 then LineNo := 1;
 
-      // Lock-Identifier aus dem Match-Wert extrahieren statt Groups[1]:
-      // die EnterCriticalSection-Alternation hat keine Capture-Group 1, und
-      // M.Groups[1] wirft in Delphi 12 'Index ueberschreitet das Maximum'.
-      LockIdent := M.Value;
-      if Pos('.', LockIdent) > 0 then
-      begin
-        LockIdent := Copy(LockIdent, 1, Pos('.', LockIdent) - 1);
-        GateIdLow := LowerCase(LockIdent);
-      end
-      else
-      begin
-        // EnterCriticalSection( - Handle-Bezeichner hinter der Klammer
-        // fuer das finally-Gate extrahieren (erste Ident-Kette).
-        GateIdLow := '';
-        q := FindNextNonSpacePos(Code, M.Index + M.Length);
-        while (q > 0) and (q <= Length(Code)) and
-              CharInSet(Code[q], ['A'..'Z', 'a'..'z', '0'..'9', '_', '.']) do
-        begin
-          GateIdLow := GateIdLow + Code[q];
-          Inc(q);
-        end;
-        GateIdLow := LowerCase(GateIdLow);
-        LockIdent := 'EnterCriticalSection(...)';
-      end;
+      ExtractLockIdent(Code, M, LockIdent, GateIdLow);
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;

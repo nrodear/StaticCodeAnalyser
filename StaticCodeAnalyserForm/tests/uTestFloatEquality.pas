@@ -81,6 +81,9 @@ type
     // Waechter-Idiom (Kundenkorpus SVGIconImageList, 29.08.)
     [Test] procedure ZeroGuardOnParameter_NotReported;
     [Test] procedure ZeroTestWithoutAssignment_StillReported;
+    // Voll-Review 2026-09-12 (Major 65): const-Block ueber alle Eintraege
+    [Test] procedure SecondConstEntry_NameCollision_NotReported;
+    [Test] procedure RealComparison_AfterConstBlock_StillReported;
   end;
 
 implementation
@@ -1142,6 +1145,56 @@ begin
   try Assert.IsTrue(TFindingHelper.Count(F, fkFloatEquality) > 0,
         'ohne Zuweisung im then-Zweig bleibt der Fund - d ist ein ' +
         'Rechenergebnis, das durch Rundung knapp an der Null vorbeigeht');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.SecondConstEntry_NameCollision_NotReported;
+// Voll-Review 2026-09-12 (Major 65): PrecededByConstKeyword prueft
+// nur das direkt vorangehende Wort - beim ZWEITEN const-Eintrag stand
+// dort ';', das Gate griff nicht, und die Konstanten-BINDUNG
+// 'Scale = 1.5' wurde bei Namenskollision mit einer Float-Var als
+// Vergleich gemeldet (Bestands-Exe: 1 FP, empirisch belegt, fe1.pas).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    Scale: Double;'#13#10 +
+  '  end;'#13#10 +
+  'const'#13#10 +
+  '  Margin = 10;'#13#10 +
+  '  Scale = 1.5;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFloatEquality),
+    'der zweite const-Eintrag ist eine Bindung, kein Vergleich');
+  finally F.Free; end;
+end;
+
+procedure TTestFloatEquality.RealComparison_AfterConstBlock_StillReported;
+// Gegenrichtung: ein ECHTER Vergleich nach einem const-Block darf vom
+// Rueckwaerts-Scan nicht bis zum const durchgereicht werden - die
+// Skip-Zeichenmenge bricht an ':' (Zuweisung) bzw. Keywords.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'const'#13#10 +
+  '  Eps = 0.1;'#13#10 +
+  'implementation'#13#10 +
+  'procedure P(Scale: Double);'#13#10 +
+  'begin'#13#10 +
+  '  if Scale = 1.5 then'#13#10 +
+  '    Tu;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFloatEquality),
+    'ein echter Float-Vergleich bleibt gemeldet');
   finally F.Free; end;
 end;
 

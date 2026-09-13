@@ -41,30 +41,16 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uFileTextCache;
-
-const
-  EMIT_SEVERITY = lsHint;
+  uFileTextCache,
+  uDetectorUtils;   // ExtractFirstWord (Voll-Review 2026-09-12)
 
 function ExtractFirstWord(const Line: string): string;
 var
-  i, n, wStart : Integer;
-  c            : Char;
+  Dummy : Integer;
 begin
-  Result := '';
-  n := Length(Line);
-  i := 1;
-  while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
-  if i > n then Exit;
-  c := Line[i];
-  if c = '{' then Exit;
-  if (c = '/') and (i < n) and (Line[i + 1] = '/') then Exit;
-  if (c = '(') and (i < n) and (Line[i + 1] = '*') then Exit;
-  if not CharInSet(c, ['A'..'Z','a'..'z','_']) then Exit;
-  wStart := i;
-  while (i <= n) and CharInSet(Line[i], ['A'..'Z','a'..'z','0'..'9','_']) do
-    Inc(i);
-  Result := Copy(Line, wStart, i - wStart);
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.ExtractFirstWord);
+  // diese Unit braucht die Spalte nicht.
+  Result := TDetectorUtils.ExtractFirstWord(Line, Dummy);
 end;
 
 function IsVisibilityKw(const Lower: string): Boolean; inline;
@@ -73,21 +59,27 @@ begin
          or (Lower = 'public')  or (Lower = 'published');
 end;
 
-// True wenn nach dem ersten Wort (Visibility-Keyword) noch nicht-leerer
-// Inhalt auf der Zeile steht. Faengt den Style ab, in dem Member und
-// Visibility auf einer Zeile zusammenstehen: `public procedure A;`
-// statt `public\n  procedure A;`. Ohne den Check wuerde der Detektor
-// glauben, die Section habe keine Member, und das zweite `public`
-// nicht als konsekutiv erkennen.
-function LineHasContentAfter(const Line, FirstWord: string): Boolean;
+// Zeilenrest nach den ersten AWords (Whitespace-getrennten) Woertern,
+// TrimLeft-bereinigt. Ersetzt das fruehere LineHasContentAfter: die
+// strict-Formen brauchen den Rest nach ZWEI Woertern ('strict private
+// procedure A;'), und der laengenbasierte Schnitt der alten Fassung
+// waere bei Mehrfach-Blanks zwischen den Woertern danebengegangen.
+// Faengt weiterhin den Style ab, in dem Member und Visibility auf
+// einer Zeile stehen ('public procedure A;') - ohne den Check glaubte
+// der Detektor, die Section habe keine Member, und erkennt das zweite
+// 'public' nicht als konsekutiv.
+function RestAfterWords(const Line: string; AWords: Integer): string;
 var
-  Trimmed, Rest : string;
+  i, n, w : Integer;
 begin
-  Result := False;
-  Trimmed := TrimLeft(Line);
-  if Length(Trimmed) <= Length(FirstWord) then Exit;
-  Rest := TrimLeft(Copy(Trimmed, Length(FirstWord) + 1, MaxInt));
-  Result := Rest <> '';
+  n := Length(Line);
+  i := 1;
+  for w := 1 to AWords do
+  begin
+    while (i <= n) and CharInSet(Line[i], [' ', #9]) do Inc(i);
+    while (i <= n) and not CharInSet(Line[i], [' ', #9]) do Inc(i);
+  end;
+  Result := TrimLeft(Copy(Line, i, MaxInt));
 end;
 
 class procedure TConsecutiveVisibilityDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -97,9 +89,14 @@ var
   Cached      : Boolean;
   i           : Integer;
   Word, L     : string;
+  W2          : string;
+  VisWords    : Integer;
   SeenVis     : TStringList;
   CurrentVis  : string;
   CurHasMembs : Boolean;
+  ScanState   : TCommentScanState;
+  DummyCol    : Integer;
+  Line        : string;
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
@@ -108,11 +105,38 @@ begin
     SeenVis.CaseSensitive := False;
     CurrentVis := '';
     CurHasMembs := False;
+    ScanState := Default(TCommentScanState);
     for i := 0 to Lines.Count - 1 do
     begin
-      Word := ExtractFirstWord(Lines[i]);
+      // Kommentar-Zustand UEBER Zeilen (Voll-Review 2026-09-12, Major
+      // 48): ein 'end' oder 'private' in der Fortsetzungszeile eines
+      // mehrzeiligen Blockkommentars resettete bzw. vergiftete den
+      // Klassen-State. ScanCodeLine entfernt Kommentare
+      // zustandsbehaftet und blankt Literale.
+      Line := TDetectorUtils.ScanCodeLine(Lines[i], ScanState, DummyCol);
+      Word := ExtractFirstWord(Line);
       if Word = '' then Continue;
       L := LowerCase(Word);
+      VisWords := 1;
+      // strict private / strict protected (Voll-Review 2026-09-12,
+      // Major 49): 'strict' allein ist keine Visibility - der
+      // Schluessel wird aus BEIDEN Woertern gebildet und getrennt von
+      // 'private'/'protected' gefuehrt (Delphi behandelt sie als
+      // eigene Sichtbarkeiten; das SonarDelphi-Pendant deckt
+      // strict-Sections ab). Vorher lief die Zeile in den
+      // Member-Zweig: die Doppel-strict-Section blieb ungemeldet UND
+      // die VORHERIGE Section galt faelschlich als 'hat Member'.
+      if L = 'strict' then
+      begin
+        W2 := LowerCase(ExtractFirstWord(RestAfterWords(Line, 1)));
+        if (W2 = 'private') or (W2 = 'protected') then
+        begin
+          L := 'strict ' + W2;
+          VisWords := 2;
+        end
+        else
+          Continue;
+      end;
       // `end` schliesst Klassen-Block (oder andere) - State zuruecksetzen
       if L = 'end' then
       begin
@@ -121,7 +145,7 @@ begin
         CurHasMembs := False;
         Continue;
       end;
-      if IsVisibilityKw(L) then
+      if IsVisibilityKw(L) or (VisWords = 2) then
       begin
         // Dieselbe Visibility schon mit Membern gesehen?
         if SeenVis.IndexOf(L) >= 0 then
@@ -135,7 +159,10 @@ begin
         // Same-line Member: `public procedure A;` zaehlt schon als
         // "Member gesehen" - sonst erkennen wir bei `public ...
         // public ...` die Wiederholung nicht.
-        if LineHasContentAfter(Lines[i], Word) then
+        // Auf der BEREINIGTEN Zeile (ein Kommentar hinter der
+        // Visibility zaehlte vorher als Member) und nach VisWords
+        // Woertern (strict-Formen sind zweiwortig).
+        if RestAfterWords(Line, VisWords) <> '' then
         begin
           if SeenVis.IndexOf(L) < 0 then SeenVis.Add(L);
           CurHasMembs := True;

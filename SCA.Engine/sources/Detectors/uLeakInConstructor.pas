@@ -126,27 +126,23 @@ const
 
 function IsIdentChar(C: Char): Boolean;
 begin
-  Result := CharInSet(C, ['a'..'z', 'A'..'Z', '0'..'9', '_']);
+  // Voll-Review 2026-09-12: Zeichenklasse zentralisiert - die lokale
+  // Fassung war zeichenweise identisch zu TDetectorUtils.IsIdentChar
+  // (eine der zwei letzten echten Vollkopien der Synthese). Der
+  // Wrapper bleibt, damit die Aufrufer in dieser Unit unveraendert
+  // bleiben.
+  Result := TDetectorUtils.IsIdentChar(C);
 end;
 
 // Ganzwort-Suche in bereits gelowertem Text: 'ftimer' matcht 'ftimer.free'
 // und 'freeandnil(ftimer)', aber NICHT 'ftimer2' oder 'xftimer'.
 function ContainsIdent(const HaystackLow, IdentLow: string): Boolean;
-var
-  P, Start, L : Integer;
 begin
-  Result := False;
-  L := Length(IdentLow);
-  if (L = 0) or (HaystackLow = '') then Exit;
-  Start := 1;
-  repeat
-    P := PosEx(IdentLow, HaystackLow, Start);
-    if P = 0 then Exit;
-    if ((P = 1) or not IsIdentChar(HaystackLow[P - 1])) and
-       ((P + L > Length(HaystackLow)) or not IsIdentChar(HaystackLow[P + L])) then
-      Exit(True);
-    Start := P + 1;
-  until False;
+  // Voll-Review 2026-09-12: zentral (TDetectorUtils.
+  // ContainsWholeWordLower - gleicher Kontrakt: bereits gelowerter
+  // Haystack, IsIdentChar-Wortgrenzen beidseitig). Parameterreihen-
+  // folge dort (Needle, Haystack).
+  Result := TDetectorUtils.ContainsWholeWordLower(IdentLow, HaystackLow);
 end;
 
 // 'Self.FFoo' -> 'ffoo'; 'Self.FFoo.Bar' -> 'ffoo.bar'. Trim + lowercase.
@@ -461,6 +457,33 @@ begin
   Result := LooksLikeThreadClass(Ctor, Dtors);
 end;
 
+// True, wenn der Ctor selbst einen gleichnamigen LOKAL oder PARAMETER
+// deklariert - dann ist der f-praefixierte LHS KEIN Feld. Vor diesem
+// Gate wurde 'var fs: TFileStream' im Ctor als allokiertes Feld
+// gesammelt und der Destruktor-Abgleich meldete lsError auf korrektem
+// Code (Voll-Review 2026-09-12, Blocker). Bewusst NICHT auf
+// 'F'+Grossbuchstabe verengt - das verloere den mORMot-Stil 'fOwner'.
+// (Analogon: ScopeDeclaresIdent in uLeakDetector2.)
+function CtorDeclaresIdent(MethodNode: TAstNode;
+  const NameLow: string): Boolean;
+var
+  Kind    : TNodeKind;
+  N       : TAstNode;
+  NameRaw : string;
+begin
+  Result := False;
+  if (MethodNode = nil) or (NameLow = '') then Exit;
+  for Kind in [nkLocalVar, nkParam] do
+    for N in MethodNode.FindAllRef(Kind) do
+    begin
+      NameRaw := N.Name;
+      for var Mod_ in ['var ', 'const ', 'out '] do
+        if NameRaw.ToLower.StartsWith(Mod_) then
+          NameRaw := Copy(NameRaw, Length(Mod_) + 1, MaxInt);
+      if NameRaw.ToLower = NameLow then Exit(True);
+    end;
+end;
+
 // Sammelt die im Ctor allokierten F-Feldnamen (lowercase, dedupliziert) und
 // liefert die Zeile der ERSTEN Allokation (MaxInt wenn keine).
 // Hier greifen [G2] und [G3].
@@ -487,6 +510,8 @@ begin
 
     FieldLow := BareIdentPrefix(LhsLow);
     if FieldLow = '' then Continue;
+    // Ctor-LOKALE und Parameter mit f-Praefix sind keine Felder.
+    if CtorDeclaresIdent(MethodNode, FieldLow) then Continue;
     // Schon erfasst (Mehrfach-Allokation desselben Feldes in verschiedenen
     // Zweigen): nur die Zeile nachziehen, die Gates nicht erneut fahren.
     if Fields.IndexOf(FieldLow) >= 0 then
