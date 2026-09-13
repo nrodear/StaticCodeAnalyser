@@ -20,6 +20,8 @@ type
     [Test] procedure EnumOperands_ViaPipeline_NotReported;
     [Test] procedure EnumOperands_NoContext_StillReported;
     [Test] procedure PointerOperands_ViaPipeline_StillReported;
+    // Posten 268: das nie gebaute Same-Cast-Gate
+    [Test] procedure MixedCast_Reported;
   end;
 
 implementation
@@ -28,6 +30,41 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 268: mixed-cast ist GEWOLLT ein Fund ---------------- }
+//
+// Der Unit-Kopf versprach ein Same-Cast-Gate ("beide Casts muessen das
+// selbe Token benutzen"). Gebaut wurde es nie - der Regex hat zwei
+// unabhaengige Alternationen, und der Meldetext nennt BEIDE Casts
+// ('%s/%s subtraction'), was nur Sinn ergibt, wenn sie verschieden sein
+// koennen.
+//
+// Es wird auch nicht nachgebaut: die Korpus-Vollzaehlung liefert 35
+// Funde, davon NULL mixed-cast. Das Gate waere wirkungslos und koennte
+// nur FNs erzeugen.
+//
+// Dieser Test verheiratet Kopf und Code: er ist heute gruen und wird
+// rot, sobald jemand das versprochene Gate doch einbaut, ohne den Kopf
+// erneut zu lesen. An der gebauten Exe gemessen: 1 Fund.
+
+procedure TTestPointerSubtraction.MixedCast_Reported;
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(P1, P2: Pointer);'#13#10 +
+  'var d: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  d := Cardinal(P1) - Integer(P2);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkPointerSubtraction),
+      'zwei VERSCHIEDENE 32-Bit-Casts sind derselbe Ueberlauf');
+  finally F.Free; end;
+end;
+
 
 procedure TTestPointerSubtraction.CardinalSubtraction_Reported;
 const SRC =

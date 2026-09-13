@@ -31,9 +31,18 @@ unit uPointerSubtraction;
 //   * Strip Strings + Kommentare.
 //   * Pattern: `(Cardinal|LongWord|Integer|LongInt)(<id>) - (Cardinal|...
 //     |LongWord|Integer|LongInt)(<id>)` - zwei 32-Bit-Casts mit Minus.
-//   * Heuristik: beide Casts muessen das selbe Cast-Token benutzen
-//     (mixed-cast `Cardinal(a) - Integer(b)` waere selten und vermutlich
-//     bewusst).
+//   * Die beiden Cast-Token duerfen VERSCHIEDEN sein: `Cardinal(a) -
+//     Integer(b)` wird gemeldet, und der Meldetext nennt beide Casts
+//     ('%s/%s subtraction ...') - er waere sinnlos, koennten sie nicht
+//     verschieden sein. Hier stand frueher ein Same-Cast-Gate als
+//     ABSICHT; gebaut wurde es nie, der Regex hat zwei unabhaengige
+//     Alternationen.
+//     Es wird auch bewusst nicht nachgebaut: die Korpus-Vollzaehlung vom
+//     2026-09-13 (27 Repos, strict/hint) liefert 35 Funde, davon NULL
+//     mixed-cast (16x Longint/Longint, 14x Integer/Integer, 5x
+//     Cardinal/Cardinal). Das Gate waere wirkungslos und koennte nur FNs
+//     erzeugen, sobald jemand doch mixed-cast schreibt.
+//     Waechter: uTestPointerSubtraction MixedCast_Reported.
 //
 // Limitierungen:
 //   * Single-File-lexisch. Casts ueber Variablen (`x := Cardinal(p1);
