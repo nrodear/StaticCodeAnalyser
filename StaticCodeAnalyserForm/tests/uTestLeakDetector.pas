@@ -83,6 +83,10 @@ type
     [Test] procedure Leak_NilWithoutFree_ReportsError;
     [Test] procedure Leak_DoubleCreate_KnownLimitation_NoFinding;
     [Test] procedure Leak_ObjectListAdd_FieldReceiver_NoFinding;
+    // Posten 255: Verbform und String-Literal sind kein Create
+    [Test] procedure Leak_FactoryBodyVerbForm_NotAFactory_NoFinding;
+    [Test] procedure Leak_FactoryBodyCreateInStringLiteral_NotAFactory_NoFinding;
+    [Test] procedure Leak_FactoryBodyCtorSuffix_StillReported;
   end;
 
   // nested-Gate, Factory-ohne-Klammern, die Typen-Matrix der leaky
@@ -1824,6 +1828,96 @@ begin
       'lokale Factory mit Klammern (BuildList) ohne Free bleibt ein Leak');
   finally F.Free; end;
 end;
+
+{ --- Posten 255: was als Factory-Beweis zaehlt ------------------- }
+//
+// IsLocalFactory nahm ein rohes Pos('.create') im RHS als Beweis,
+// dass die gerufene Routine Ownership uebergibt. Der Schwesterpfad
+// HasCreateAssign beantwortet dieselbe Frage laengst mit
+// MatchesCreate, das Konstruktor-Suffix von Verbform trennt.
+//
+// Alle drei Erwartungen am gebauten Stand gemessen: heute liefern
+// ALLE DREI Fixturen 1 Fund. Die ersten beiden sind damit rot und
+// werden mit dem Fix gruen; die dritte ist die Positiv-Kontrolle.
+
+procedure TTestMemoryLeakBorrowed.Leak_FactoryBodyVerbForm_NotAFactory_NoFinding;
+// Verbform: 'Created' ist ein Feldzugriff, kein Konstruktor.
+// Heute 1 Fund, nach dem Fix 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.BuildList: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := FStamp.Created;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := BuildList();'#13#10+
+  '  list.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'eine Verbform beweist keinen Ownership-Transfer');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakBorrowed.Leak_FactoryBodyCreateInStringLiteral_NotAFactory_NoFinding;
+// Der Create steht in einem STRING-LITERAL. Im Korpus real
+// vorhanden (Codegeneratoren, die Pascal-Quelltext bauen).
+// Heute 1 Fund, nach dem Fix 0.
+//
+// Dieser Test ist zugleich der Waechter fuer die REIHENFOLGE: wer
+// MatchesCreate einsetzt und das Blanken weglaesst, sieht hier rot
+// - hinter 'create' steht dann das schliessende Quote, also ein
+// Nicht-Ident-Zeichen, und Fall B des Matchers greift.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.BuildList: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := DoIt(''T.Create'');'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := BuildList();'#13#10+
+  '  list.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'ein Create im String-Literal ist kein Konstruktoraufruf');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakBorrowed.Leak_FactoryBodyCtorSuffix_StillReported;
+// POSITIV-KONTROLLE. Ein echtes Konstruktor-Suffix bleibt ein
+// Ownership-Transfer - vor wie nach dem Fix 1 Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.BuildList: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := TStringList.CreateNew;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := BuildList();'#13#10+
+  '  list.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+      'CreateNew ist ein Konstruktor und uebergibt Ownership');
+  finally F.Free; end;
+end;
+
 
 procedure TTestMemoryLeakCtorVariants.Leak_IfThenAssignElseBeginBlock_OuterFinallyFrees_NoFinding;
 // Regression: TDuplicateStringDetector.AnalyzeUnit produzierte einen

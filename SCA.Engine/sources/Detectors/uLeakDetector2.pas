@@ -664,6 +664,8 @@ var
     Methods, Assigns : TList<TAstNode>;
     Mth, A           : TAstNode;
     TargetLow, LhsLow: string;
+    RhsBlank         : string;
+    Dummy            : Integer;
   begin
     Result := False;
     if CalleeLow = '' then Exit;
@@ -690,7 +692,29 @@ var
       begin
         LhsLow := A.Name.ToLower;
         if (LhsLow = 'result') or (LhsLow = CalleeLow) then
-          if Pos('.create', A.TypeRef.ToLower) > 0 then Exit(True);
+        begin
+          // Voll-Review 2026-09-13: der rohe Pos('.create') nahm auch
+          // Verbformen ('Result := FStamp.Created') und Vorkommen in
+          // STRING-LITERALEN als Ownership-BEWEIS. Letzteres liegt real im
+          // Korpus vor - Codegeneratoren, die Pascal-Quelltext bauen (jcl
+          // JclPreProcessorContainer2DTemplates.pas:585/615, Alcinoe
+          // Grijjy.SymbolTranslator.pas:84, cnwizards CnIniFilerWizard.pas
+          // :964). Sie bleiben heute folgenlos, weil sie string liefern und
+          // SCA001.NotLeakyType vorher greift - der Beweis war trotzdem
+          // falsch gefuehrt.
+          //
+          // Dieselbe Frage beantwortet der Schwesterpfad HasCreateAssign
+          // ueber MatchesCreate; das trennt Ctor-Suffix ('.CreateNew',
+          // Fall C) von Verbform ('.created', Fall D).
+          //
+          // Das Blanken muss VORHER passieren: in doit('t.create') ist das
+          // Zeichen hinter 'create' das schliessende Quote, also ein
+          // Nicht-Ident-Zeichen, und MatchesCreate lieferte ueber Fall B
+          // True. BlankStringLiterals ist laengenerhaltend, der
+          // Case-Vergleich in Fall C bleibt damit gueltig.
+          RhsBlank := TDetectorUtils.BlankStringLiterals(A.TypeRef);
+          if MatchesCreate(RhsBlank, RhsBlank.ToLower, Dummy) then Exit(True);
+        end;
       end;
     end;
   end;
