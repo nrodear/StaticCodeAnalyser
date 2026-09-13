@@ -21,6 +21,9 @@ type
     // Review-MEDIUM 2026-08-09: API-Name nur IM String-Literal einer
     // Fehlermeldung - Literal-Inhalt zaehlt nie als Code.
     [Test] procedure ApiNameInsideLiteral_NotReported;
+    // Posten 265: das Concat-Gate lief auf dem Rohtext
+    [Test] procedure PlusOnlyInsideLiteral_NotReported;
+    [Test] procedure EscapedQuoteThenRealConcat_StillReported;
   end;
 
 implementation
@@ -30,6 +33,62 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 265: das Concat-Gate auf der geblankten Fassung ----- }
+//
+// Der Nachweis 'ohne Konkatenation kein Pattern' stand VOR der Zeile,
+// die Low berechnet - er lief also auf dem ROHTEXT und hob den
+// Literal-Blank fuer sein eigenes Gate wieder auf. Ein Pluszeichen im
+// Pfad-Literal genuegte, um den Verdacht zu begruenden.
+//
+// Reihenfolgefehler aus dem Literal-Blank-Nachruestvorgang
+// (Review-MEDIUM 2026-08-09): das Concat-Gate wurde damals nicht
+// mitgezogen.
+//
+// Beide Erwartungen an der gebauten Exe gemessen.
+
+procedure TTestPathTraversal.PlusOnlyInsideLiteral_NotReported;
+// Das einzige Pluszeichen steht IM Pfad-Literal. Kein
+// zusammengesetzter Pfad, kein User-Input am Code-Operator - und
+// trotzdem heute 1 Fund im Error-Tier. Nach dem Fix 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  TFile.WriteAllText(''c:\out+log.txt'', Memo1.Lines.Text);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkPathTraversal),
+      'ein + im Literal ist keine Konkatenation');
+  finally F.Free; end;
+end;
+
+procedure TTestPathTraversal.EscapedQuoteThenRealConcat_StillReported;
+// GEGENPROBE, und zugleich der Waechter fuer den Blanker: ein Literal
+// mit verdoppeltem Apostroph, danach eine ECHTE Konkatenation mit
+// User-Input. Vor wie nach dem Fix 1 Fund. Wird rot, wenn jemand
+// BlankStringLiterals das Escape-Verhalten nimmt - dann endet das
+// Literal zu frueh und das + verschwindet in der geblankten Zone.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  TFile.WriteAllText(''don''''t'' + Edit1.Text, ''x'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkPathTraversal),
+      'eine echte Konkatenation mit Edit1.Text bleibt ein Fund');
+  finally F.Free; end;
+end;
+
 
 procedure TTestPathTraversal.CrossStatementBlob_NotReported;
 // T3-Gate 2026-07-31: seit Statement-Generic-Calls ihren vollen Text
