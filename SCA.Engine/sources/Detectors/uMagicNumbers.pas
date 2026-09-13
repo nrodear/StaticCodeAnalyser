@@ -52,6 +52,24 @@ begin
             ((N and (N - 1)) = 0);
 end;
 
+// Steht an Position i - direkt hinter einer Ziffernfolge - die Fortsetzung
+// eines FLOAT-Literals? Das ist ein '.' mit Ziffer dahinter oder ein
+// Exponent ('e' plus Ziffer, mit optionalem Vorzeichen). ACondLow ist
+// bereits lowercase, 'E' braucht also keine eigene Behandlung.
+function IstFloatFortsetzung(const ACondLow: string; i: Integer): Boolean;
+var
+  n : Integer;
+begin
+  n := Length(ACondLow);
+  if i >= n then Exit(False);
+  if (ACondLow[i] = '.') and CharInSet(ACondLow[i + 1], ['0'..'9']) then
+    Exit(True);
+  if ACondLow[i] <> 'e' then Exit(False);
+  if CharInSet(ACondLow[i + 1], ['0'..'9']) then Exit(True);
+  Result := (i + 1 < n) and CharInSet(ACondLow[i + 1], ['+', '-'])
+            and CharInSet(ACondLow[i + 2], ['0'..'9']);
+end;
+
 class function TMagicNumberDetector.ExtractMagicNumber(
   const CondLow: string; out NumStr: string): Boolean;
 // Sucht Vergleichsoperator gefolgt von Zahl: '> 100', '<50', '(Count>=5)', etc.
@@ -124,8 +142,26 @@ begin
         Inc(i);
       end;
 
-      // Nur Integer-Zahl, kein Float / Hex
-      if (Digits <> '') and (Digits <> '-') and not IsTrivial(Digits) then
+      // Nur Integer-Zahl, kein Float / Hex.
+      //
+      // Hex faellt schon vorher heraus: '$' ist keine Ziffer, Digits bleibt
+      // leer. Float dagegen NICHT - der Ziffern-Scan haelt am Dezimalpunkt
+      // an und meldete den so entstandenen Ganzzahl-Torso ungeprueft
+      // weiter. 'if X > 3.5' ergab bis 2026-09-13 'Magic number "3"'.
+      // Der Kommentar beschrieb die Absicht, es gab nur keine Wache, die
+      // sie durchsetzt.
+      //
+      // Sichtbar wurde die Willkuer an der Trivial-Pruefung: sie griff am
+      // Torso, also verschwand '2.5' (als '2' trivial) und '3.5' wurde
+      // gemeldet.
+      //
+      // Folgt auf die Ziffernfolge '.'+Ziffer oder ein Exponent
+      // ('e'+Ziffer bzw. 'e'+Vorzeichen+Ziffer - CondLow ist bereits
+      // lowercase), ist es ein Float-Literal und dieses Vorkommen wird
+      // uebersprungen. Korpus: -67 von 4.494 SCA014-Funden (61 Dezimal-
+      // punkte, 6 Exponenten), 0 Adds.
+      if (Digits <> '') and (Digits <> '-') and not IsTrivial(Digits)
+         and not IstFloatFortsetzung(CondLow, i) then
       begin
         NumStr := Digits;
         Exit(True);
