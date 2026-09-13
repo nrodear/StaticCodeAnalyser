@@ -116,6 +116,19 @@ begin
          or HasDirectiveWord(Low, 'override')
          or HasDirectiveWord(Low, 'dynamic')
          or HasDirectiveWord(Low, 'abstract')
+         // TOT, ABER ABSICHTLICH STEHENGELASSEN (Voll-Review 2026-09-12):
+         // der Parser fuehrt 'message' weder in IsMethodDirective noch in
+         // IsMethodDirectiveIdent (uParser2.pas:180/:196) - die Direktive
+         // erreicht TypeRef nie, dieser Term ist konstant False. Der
+         // Message-Handler wird also GEMELDET, obwohl 'class' bei ihm
+         // nicht uebersetzt; gepinnt in
+         // uTestCanBeClassMethod.MessageDirective_StillReported_ParserGap.
+         // Entfernen waere falsch: sobald der Parser die Direktive lernt,
+         // ist der Term sofort richtig. Die Alternative - Lesen aus der
+         // gestrippten Quelle wie SCA054 Gate A
+         // (uUnusedParameter.pas:410) - braucht Quellzugriff, den dieser
+         // Detektor nicht hat, und waere die dritte Kopie derselben
+         // Suche. Posten 9004.
          or HasDirectiveWord(Low, 'message')      // VCL-Message-Handler
          or HasDirectiveWord(Low, 'reintroduce'); // Hide-Inherited mit gleichem Namen
 end;

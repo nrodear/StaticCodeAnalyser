@@ -38,7 +38,7 @@ type
     [Test] procedure HomonymClasses_ConservativeSkip;
     // Voll-Review 2026-09-12 (Testluecke 126): die drei Skips
     [Test] procedure EventHandlerSignature_Skipped;
-    [Test] procedure MessageDirective_Skipped;
+    [Test] procedure MessageDirective_StillReported_ParserGap;
     [Test] procedure ReintroduceDirective_Skipped;
   end;
 
@@ -642,9 +642,31 @@ begin
   finally F.Free; end;
 end;
 
-procedure TTestCanBeClassMethod.MessageDirective_Skipped;
-// VCL-Message-Handler: die Direktive bindet die Methode an die
-// Instanz-Dispatch-Tabelle, 'class' waere dort nicht moeglich.
+procedure TTestCanBeClassMethod.MessageDirective_StillReported_ParserGap;
+// PIN AUF EINEN BEKANNTEN DEFEKT - die erwartete 1 ist ein FALSCH
+// POSITIVER FUND, kein gewuenschtes Verhalten.
+//
+// Sachlage: ein VCL-Message-Handler kann keine Klassenmethode werden,
+// die Direktive bindet ihn an die Instanz-Dispatch-Tabelle.
+// IsPolymorphicMethod (uCanBeClassMethod.pas:119) verspricht den Skip
+// auch - nur kann er nie greifen: der Parser fuehrt 'message' weder in
+// IsMethodDirective noch in IsMethodDirectiveIdent
+// (uParser2.pas:180 bzw. :196), ParseMethodDirectives bricht davor ab,
+// und im TypeRef steht davon nichts. HasDirectiveWord(Low, 'message')
+// ist damit konstant False - eine tote Regel.
+//
+// Der Befund ist im Projekt bekannt und an anderer Stelle bereits
+// geloest: SCA054 liest die Direktive seit dem 27.08. aus der
+// GESTRIPPTEN QUELLE (Gate A, uUnusedParameter.pas:410, -1.019 Funde).
+// Dieser Detektor hat keinen Quellzugriff (kein AcquireLines), eine
+// dritte Kopie der Direktiven-Suche ist ausdruecklich unerwuenscht
+// (uUnusedParameter.pas:447 warnt, dass die zwei vorhandenen bereits
+// auseinanderlaufen). Die Behebung braucht deshalb einen eigenen Zweig
+// und einen Bau - Posten 9004 im Restposten-Verzeichnis.
+//
+// WER DEN PARSER REPARIERT, sieht diesen Test rot: dann ist die
+// Erwartung auf 0 zu stellen, der Name auf '_Skipped' zurueckzunehmen
+// und dieser Kommentarblock zu loeschen.
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
@@ -662,8 +684,9 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
-    'message-Handler koennen keine Klassenmethoden sein');
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCanBeClassMethod),
+    'BEKANNTER FP: der Parser reicht die message-Direktive nicht ins ' +
+    'TypeRef, der Skip in IsPolymorphicMethod ist tot (Posten 9004)');
   finally F.Free; end;
 end;
 

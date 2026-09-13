@@ -113,6 +113,15 @@ end;
 function MethodHasAnyContractDirective(const TypeRefLow: string): Boolean;
 // Polymorphe/Vertrags-Direktiven, die die Signatur fixieren -> string-Param
 // kann nicht lokal auf const umgestellt werden (Basisklasse/Interface-Vertrag).
+//
+// EINSCHRAENKUNG (Voll-Review 2026-09-12): der 'message'-Term unten ist
+// konstant False. Der Parser kennt die Direktive nicht
+// (uParser2.pas:180/:196), sie erreicht TypeRef nie. Message-Handler sind
+// hier also NICHT geschuetzt - praktisch faellt das kaum auf, weil ihr
+// einziger Parameter ein 'var'-Message-Record ist und keine Zeichenkette,
+// aber die Zusage im Kopf stimmt nur, sobald der Parser nachzieht.
+// Gleiche Ursache und gleiche Behandlung wie in uCanBeClassMethod:119;
+// Behebung ueber Posten 9004 (eigener Zweig, Parser + Bau).
 begin
   Result := MethodHasDirective(TypeRefLow, 'virtual')  or MethodHasDirective(TypeRefLow, 'override') or
             MethodHasDirective(TypeRefLow, 'dynamic')  or MethodHasDirective(TypeRefLow, 'message')  or
