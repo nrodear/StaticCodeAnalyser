@@ -52,7 +52,44 @@ begin
   Result := CharInSet(C, ['0'..'9']);
 end;
 
-// Findet alle for-to-Range-Verletzungen in einer Code-Zeile.
+function IsTokenGap(C: Char): Boolean; inline;
+// Trennzeichen zwischen den Token des for-Kopfes.
+//
+// Voll-Review 2026-09-13: die acht Skip-Schleifen in ScanLine akzeptierten
+// nur ' '. Ein einziger Tabulator an einer beliebigen Trennstelle liess den
+// Match komplett ausfallen - an der Sonde belegt (strict / min-severity
+// hint, Datei mit downto-Vorfilter):
+//   for i := 10 to 1 do Bar(i);          -> 1 Fund
+//   for<TAB>i := 10 to 1 do Bar(i);      -> 0
+// Der Kopfkommentar der Unit erwaehnt keine Blank-only-Konvention; es war
+// eine Luecke, keine gesetzte Grenze. Gleiche Konvention wie
+// IsArgsArrayStart in uSQLInjection.
+//
+// MONOTON: ein zusaetzlich uebersprungener Trenner kann einen Match nur
+// herstellen, nie einen bestehenden aufheben. Alle acht Stellen sind reine
+// Vorwaerts-Skips zwischen Token; die Typ-Annotations-Schleife
+// ('for var x: T :=') vergleicht gar keine Blanks und bleibt unberuehrt.
+//
+// Korpuswirkung 0: auf 16.024 Quelldateien - 572 davon MIT Tabulatoren -
+// hat die Regel weder vorher noch nachher einen Fund; dort steht kein
+// einziger for-Kopf mit Tab. Der Korpus kann den Fall nicht belegen, er
+// widerlegt ihn aber auch nicht.
+begin
+  Result := CharInSet(C, [' ', #9]);
+end;
+
+// Findet den ERSTEN for-to-Range-Verstoss einer Code-Zeile; der Caller ruft
+// je Quellzeile genau einmal. Stehen zwei Verstoesse auf EINER physischen
+// Zeile, meldet der Detektor nur den vorderen - an der Sonde gemessen
+// (zwei Verstoesse in einer Zeile -> 1 Fund, dieselben zwei auf zwei Zeilen
+// -> 2). Der frueher hier stehende Satz "findet ALLE Verletzungen einer
+// Zeile" war damit falsch (Voll-Review 2026-09-13).
+//
+// BEWUSSTE GRENZE, kein Fix: eine Caller-Schleife ab MatchCol+1 waere ein
+// zweiter, ungesicherter Wiedereinstiegspfad. Was am Exit WIRKLICH kaputt
+// war - der verlorene Kommentar-Zustand - ist unten behoben; der
+// Zeilenscan laeuft jetzt in jedem Fall bis zum Ende durch.
+//
 // Liefert die 1-basierte Spalte des `for`-Keywords plus die From/To-Werte
 // in `Snippet` zurueck. Wert 0 = kein Match.
 //
@@ -146,19 +183,19 @@ begin
     end;
 
     // Versuche, ein `for ... to ... do` ab Position i zu matchen.
-    if (i + 3 <= n) and SameText(Copy(Line, i, 3), 'for') and
+    if (not Result) and (i + 3 <= n) and SameText(Copy(Line, i, 3), 'for') and
        ((i = 1) or (not IsIdent(Line[i - 1]))) and
        ((i + 3 > n) or (not IsIdent(Line[i + 3]))) then
     begin
       // Variable einlesen
       p := i + 3;
-      while (p <= n) and (Line[p] = ' ') do Inc(p);
+      while (p <= n) and IsTokenGap(Line[p]) do Inc(p);
       // Schleifenvariable - skip `var` Inline-Decl
       if (p + 3 <= n) and SameText(Copy(Line, p, 3), 'var') and
          ((p + 3 > n) or (not IsIdent(Line[p + 3]))) then
       begin
         Inc(p, 3);
-        while (p <= n) and (Line[p] = ' ') do Inc(p);
+        while (p <= n) and IsTokenGap(Line[p]) do Inc(p);
       end;
       Start := p;
       while (p <= n) and IsIdent(Line[p]) do Inc(p);
@@ -167,7 +204,7 @@ begin
         Inc(i); Continue;
       end;
       // Optionaler ': Typ' bei 'for var x: T :=' - bis zum := skippen
-      while (p <= n) and (Line[p] = ' ') do Inc(p);
+      while (p <= n) and IsTokenGap(Line[p]) do Inc(p);
       if (p <= n) and (Line[p] = ':') and ((p = n) or (Line[p + 1] <> '=')) then
       begin
         // Typ-Annotation - bis ':=' weiterlaufen
@@ -176,7 +213,7 @@ begin
       end;
 
       // ':='
-      while (p <= n) and (Line[p] = ' ') do Inc(p);
+      while (p <= n) and IsTokenGap(Line[p]) do Inc(p);
       if (p + 1 > n) or (Line[p] <> ':') or (Line[p+1] <> '=') then
       begin
         Inc(i); Continue;
@@ -184,7 +221,7 @@ begin
       Inc(p, 2);
 
       // From-Wert: optionales '-', dann Ziffern
-      while (p <= n) and (Line[p] = ' ') do Inc(p);
+      while (p <= n) and IsTokenGap(Line[p]) do Inc(p);
       Start := p;
       if (p <= n) and (Line[p] = '-') then Inc(p);
       q := p;
@@ -199,7 +236,7 @@ begin
       // `to` (Word-Boundary). p + 2 <= n stellt schon sicher dass
       // Line[p + 2] existiert (p + 2 > n waere tot durch das erste
       // Guard); deshalb nur ein IsIdent-Check.
-      while (p <= n) and (Line[p] = ' ') do Inc(p);
+      while (p <= n) and IsTokenGap(Line[p]) do Inc(p);
       if not ((p + 2 <= n) and SameText(Copy(Line, p, 2), 'to') and
               not IsIdent(Line[p + 2])) then
       begin
@@ -208,7 +245,7 @@ begin
       Inc(p, 2);
 
       // To-Wert
-      while (p <= n) and (Line[p] = ' ') do Inc(p);
+      while (p <= n) and IsTokenGap(Line[p]) do Inc(p);
       Start := p;
       if (p <= n) and (Line[p] = '-') then Inc(p);
       q := p;
@@ -229,7 +266,7 @@ begin
       // nach 'to' MUSS auf derselben Zeile ein Wert folgen, nach 'do'
       // nicht. Genau der dominante Formatierungsfall (Body auf
       // Folgezeile) blieb dadurch ungemeldet.
-      while (p <= n) and (Line[p] = ' ') do Inc(p);
+      while (p <= n) and IsTokenGap(Line[p]) do Inc(p);
       if not ((p + 1 <= n) and SameText(Copy(Line, p, 2), 'do') and
               ((p + 2 > n) or not IsIdent(Line[p + 2]))) then
       begin
@@ -242,7 +279,21 @@ begin
         MatchCol := i;
         Snippet  := Trim(Copy(Line, i, p + 2 - i));
         Result   := True;
-        Exit;
+        // KEIN Exit (Voll-Review 2026-09-13): der Rest der Zeile wird
+        // weitergescannt, damit InBlockComm/InParenStarComm den Zustand
+        // ueber das Zeilenende hinweg richtig tragen. Vorher stieg die
+        // Funktion hier aus und liess ein hinter dem Treffer GEOEFFNETES
+        // '{' oder '(*' unbemerkt - der Caller hielt die Folgezeilen fuer
+        // Code. An der Sonde belegt (Datei mit downto-Vorfilter):
+        //   for i := 10 to 1 do Bar(i);  {
+        //     for i := 10 to 1 do Bar(i);
+        //   }
+        // ergab 2 Funde statt 1; dieselbe Datei ohne den Treffer in der
+        // ersten Zeile ergab richtig 0. Der zweite war ein FP im
+        // Error-Tier.
+        //
+        // Der Match-Versuch oben ist mit 'not Result' gegattert, es bleibt
+        // also beim ERSTEN Treffer je Zeile - siehe Kopfkommentar.
       end;
       // Sonst weiter scannen - vielleicht gibt es spaeter noch ein for
     end;

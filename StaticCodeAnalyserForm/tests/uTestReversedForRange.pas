@@ -34,6 +34,12 @@ type
     [Test] procedure Reversed_MultipleHitsInSameMethod_AllReported;
     // Voll-Review 2026-09-12 (Blocker): do am Zeilenende war blind
     [Test] procedure Reversed_DoAtLineEnd_Reported;
+    // Posten 271: Tabulator als Trennzeichen
+    [Test] procedure Reversed_TabBetweenTokens_Reported;
+    // Posten 270: der Exit liess den Kommentar-Zustand fallen
+    [Test] procedure CommentOpenedAfterMatch_NoSecondFinding;
+    [Test] procedure TwoViolationsOnOneLine_OnlyFirstReported;
+    [Test] procedure TwoViolationsOnTwoLines_BothReported;
   end;
 
 implementation
@@ -42,6 +48,108 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 270+271: Tabulatoren und der verlorene Kommentar ----- }
+//
+// ZWEI Defekte in ScanLine, beide an der gebauten Exe gemessen.
+//
+// MESSHINWEIS, weil er sonst Zeit kostet: die Regel hat im CLI-Pfad
+// einen Vorfilter auf 'downto' - eine Datei ohne dieses Wort wird nie
+// gescannt (Posten 999: 92,4 % des Korpus). Der TEST-Harness ruft den
+// Detektor direkt und kennt den Vorfilter nicht, deshalb brauchen die
+// Fixturen hier kein downto. Wer die Faelle von Hand an der Exe
+// nachmisst, MUSS eine downto-Zeile ergaenzen, sonst misst er 0 und
+// haelt das fuer den Fix.
+
+procedure TTestReversedForRange.Reversed_TabBetweenTokens_Reported;
+// POSTEN 271: die acht Trenner-Skips akzeptierten nur das Leerzeichen.
+// Ein einziger Tabulator hinter dem for liess den Match ausfallen.
+// An der Exe gemessen: heute 0 Funde, nach dem Fix 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for'#9'i := 10 to 1 do Bar(i);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkReversedForRange),
+      'ein Tabulator zwischen den Token ist ein Trenner wie das Blank');
+  finally F.Free; end;
+end;
+
+procedure TTestReversedForRange.CommentOpenedAfterMatch_NoSecondFinding;
+// POSTEN 270, der eigentliche Defekt: nach einem Treffer stieg ScanLine
+// per Exit aus und liess ein DAHINTER geoeffnetes Blockkommentar-Zeichen
+// unbemerkt. Der Caller hielt die Folgezeilen fuer Code und meldete das
+// auskommentierte for gleich mit - ein FP im Error-Tier.
+// An der Exe gemessen: heute 2 Funde, nach dem Fix 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 10 to 1 do Bar(i);  {'#13#10 +
+  '    for i := 10 to 1 do Bar(i);'#13#10 +
+  '  }'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkReversedForRange),
+      'das for im Blockkommentar ist kein Code');
+  finally F.Free; end;
+end;
+
+procedure TTestReversedForRange.TwoViolationsOnOneLine_OnlyFirstReported;
+// POSTEN 270, die dokumentierte GRENZE: je Zeile ein Fund. Der
+// Kopfkommentar versprach frueher alle. Der Waechter haelt die Grenze
+// fest - und die Nachbarprobe (dieselben zwei Verstoesse auf ZWEI
+// Zeilen) liefert 2, damit sichtbar bleibt, dass es an der Zeile haengt.
+// An der Exe gemessen: heute 1, nach dem Fix 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var i, j: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 10 to 1 do Bar(i); for j := 9 to 2 do Bar(j);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkReversedForRange),
+      'BEKANNTE GRENZE: der Detektor meldet je Zeile den ersten Verstoss');
+  finally F.Free; end;
+end;
+
+procedure TTestReversedForRange.TwoViolationsOnTwoLines_BothReported;
+// Die Nachbarprobe zur Grenze oben. Heute wie nachher 2.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var i, j: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 10 to 1 do Bar(i);'#13#10 +
+  '  for j := 9 to 2 do Bar(j);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(2,
+      TFindingHelper.Count(F, fkReversedForRange),
+      'auf zwei Zeilen sind es zwei Funde');
+  finally F.Free; end;
+end;
+
 
 procedure TTestReversedForRange.Reversed_TenToOne_Reported;
 const SRC =
