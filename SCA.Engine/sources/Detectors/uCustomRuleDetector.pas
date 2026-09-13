@@ -50,7 +50,6 @@ type
   TCustomRuleDetector = class
   strict private
     class var FRules: TList<TCustomRule>;
-    class var FLoaded: Boolean;
     class function ParsePatternType(const S: string): TPatternType; static;
     class function ParseTarget(const S: string): TRuleTarget; static;
     class function ParseSeverity(const S: string): TLeakSeverity; static;
@@ -100,7 +99,6 @@ uses
 class procedure TCustomRuleDetector.Init;
 begin
   FRules := TList<TCustomRule>.Create;
-  FLoaded := False;
 end;
 
 class procedure TCustomRuleDetector.Done;
@@ -111,7 +109,6 @@ end;
 class procedure TCustomRuleDetector.ClearRules;
 begin
   FRules.Clear;
-  FLoaded := False;
 end;
 
 class procedure TCustomRuleDetector.AddRule(const ARule: TCustomRule);
@@ -137,7 +134,6 @@ begin
     R.PatternRegex := TRegEx.Create('\b' + TRegEx.Escape(R.Pattern) + '\b',
       [roCompiled]);
   FRules.Add(R);
-  FLoaded := True;
 end;
 
 class function TCustomRuleDetector.RuleCount: Integer;
@@ -196,64 +192,84 @@ begin
 end;
 
 class procedure TCustomRuleDetector.LoadFromYaml(const FileName: string);
+// ALLES ODER NICHTS (Review 2026-09-13). Frueher ging jede fertig geparste
+// Regel sofort nach FRules - eine Exception in Regel N liess die Regeln
+// 1..N-1 stehen, und HasRules meldete darauf True. Kein heutiger Konsument
+// nahm davon Schaden (der CLI bricht mit Exit 99 ab, der INI-Weg ruft
+// ClearRules selbst), aber die Unit-API gab den Teilsatz heraus, und der
+// naechste Konsument haette ihn geglaubt.
+//
+// ClearRules bleibt bewusst VORNE, nicht erst beim Veroeffentlichen: ein
+// gescheiterter Load hinterlaesst so einen LEEREN Regelsatz - nie einen
+// halben und nie den alten. Das haelt den Kopfvertrag "Vorherige Rules
+// werden ueberschrieben" auch im Fehlerfall.
 var
   Root: TYamlNode;
   Rules: TYamlNode;
   i: Integer;
   Item: TYamlNode;
   R: TCustomRule;
+  Staged: TList<TCustomRule>;
 begin
   ClearRules;
-  Root := TYamlParser.ParseFile(FileName);
+  Staged := TList<TCustomRule>.Create;
   try
-    if Root.Kind <> yntMapping then
-      raise EYamlParseError.Create('Top-Level muss Mapping sein');
+    Root := TYamlParser.ParseFile(FileName);
+    try
+      if Root.Kind <> yntMapping then
+        raise EYamlParseError.Create('Top-Level muss Mapping sein');
 
-    Rules := Root.GetChild('rules');
-    if (Rules = nil) or (Rules.Kind <> yntSequence) then
-      Exit;
+      Rules := Root.GetChild('rules');
+      if (Rules = nil) or (Rules.Kind <> yntSequence) then
+        Exit;
 
-    for i := 0 to Rules.ItemCount - 1 do
-    begin
-      Item := Rules.GetItem(i);
-      if Item.Kind <> yntMapping then
-        Continue;
-
-      R := Default (TCustomRule);
-      R.ID := Item.GetString('id');
-      R.Name := Item.GetString('name');
-      R.Description := Item.GetString('description');
-      R.Severity := ParseSeverity(Item.GetString('severity', 'warning'));
-      R.Pattern := Item.GetString('pattern');
-      R.PatternType := ParsePatternType(Item.GetString('pattern-type',
-        'substring'));
-      R.Target := ParseTarget(Item.GetString('target', 'any'));
-      R.Message := Item.GetString('message', R.Description);
-      R.FixHint := Item.GetString('fix-hint');
-      R.FileInclude := Item.GetSequenceStrings('file-include');
-      R.FileExclude := Item.GetSequenceStrings('file-exclude');
-
-      // Pflicht-Felder
-      if (R.ID = '') or (R.Pattern = '') then
-        Continue;
-
-      // Regex pre-compilen damit RuntimeFehler im AnalyzeFile-Hot-Path
-      // nicht jedes Match teurer machen.
-      if R.PatternType = ptRegex then
+      for i := 0 to Rules.ItemCount - 1 do
       begin
-        try
-          R.PatternRegex := TRegEx.Create(R.Pattern, [roCompiled]);
-        except
-          on E: Exception do
-            raise Exception.CreateFmt('Custom rule %s: invalid regex "%s": %s',
-              [R.ID, R.Pattern, E.Message]);
+        Item := Rules.GetItem(i);
+        if Item.Kind <> yntMapping then
+          Continue;
+
+        R := Default (TCustomRule);
+        R.ID := Item.GetString('id');
+        R.Name := Item.GetString('name');
+        R.Description := Item.GetString('description');
+        R.Severity := ParseSeverity(Item.GetString('severity', 'warning'));
+        R.Pattern := Item.GetString('pattern');
+        R.PatternType := ParsePatternType(Item.GetString('pattern-type',
+          'substring'));
+        R.Target := ParseTarget(Item.GetString('target', 'any'));
+        R.Message := Item.GetString('message', R.Description);
+        R.FixHint := Item.GetString('fix-hint');
+        R.FileInclude := Item.GetSequenceStrings('file-include');
+        R.FileExclude := Item.GetSequenceStrings('file-exclude');
+
+        // Pflicht-Felder
+        if (R.ID = '') or (R.Pattern = '') then
+          Continue;
+
+        // Regex pre-compilen damit RuntimeFehler im AnalyzeFile-Hot-Path
+        // nicht jedes Match teurer machen.
+        if R.PatternType = ptRegex then
+        begin
+          try
+            R.PatternRegex := TRegEx.Create(R.Pattern, [roCompiled]);
+          except
+            on E: Exception do
+              raise Exception.CreateFmt(
+                'Custom rule %s: invalid regex "%s": %s',
+                [R.ID, R.Pattern, E.Message]);
+          end;
         end;
+        Staged.Add(R);
       end;
-      AddRule(R);
+    finally
+      Root.Free;
     end;
-    FLoaded := True;
+    // Erst hier veroeffentlichen - ab dieser Zeile ist der Satz vollstaendig.
+    for R in Staged do
+      AddRule(R);
   finally
-    Root.Free;
+    Staged.Free;
   end;
 end;
 

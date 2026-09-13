@@ -34,6 +34,9 @@ type
     [Test] procedure WordPattern_AddRuleAndYaml_SameHits;
     [Test] procedure RegexPattern_Matches;
     [Test] procedure InvalidRegex_ThrowsAtLoad;
+    // Posten 234: ein gescheiterter Load laesst nichts Halbes stehen
+    [Test] procedure InvalidRegex_LeavesNoPartialRuleSet;
+    [Test] procedure ValidYaml_PublishesAllRules;
     [Test] procedure FindingHasRuleIdAndKindCustomRule;
     [Test] procedure FindingHasCorrectLineNumber;
     [Test] procedure FileExclude_SkipsExcludedFiles;
@@ -518,6 +521,83 @@ begin
       Assert.AreEqual<Integer>(ViaAdd,
         CountByRule(Findings, 'R011'),
         'AddRule und LoadFromYaml muessen gleich viele Treffer liefern');
+    finally Findings.Free; end;
+  finally
+    TFile.Delete(TempFile);
+  end;
+end;
+
+{ --- Posten 234: alles oder nichts beim Laden -------------------- }
+//
+// InvalidRegex_ThrowsAtLoad prueft NUR, dass geworfen wird. Was danach
+// in FRules steht, hat bis zum Voll-Review niemand nachgesehen - und
+// es stand dort der Teilsatz bis zur kaputten Regel.
+//
+// Der erste Test ist der Nachweis: er war VOR dem Fix rot (RuleCount
+// = 1 statt 0), am gebauten Stand nachgemessen. Der zweite ist die
+// Gegenrichtung - er wird rot, wenn beim Staging-Umbau jemand die
+// Veroeffentlichung am Ende der Routine vergisst.
+
+procedure TTestCustomRuleDetector.InvalidRegex_LeavesNoPartialRuleSet;
+// Drei Regeln, die mittlere kaputt. Nach der Exception darf KEINE
+// stehengeblieben sein - auch nicht die gueltige davor.
+const SRC =
+  'rules:'#10+
+  '  - id: OK1'#10+
+  '    pattern: "Alpha"'#10+
+  '    pattern-type: substring'#10+
+  '  - id: BAD'#10+
+  '    pattern: "[unbalanced"'#10+
+  '    pattern-type: regex'#10+
+  '  - id: OK2'#10+
+  '    pattern: "Beta"'#10+
+  '    pattern-type: substring'#10;
+var
+  TempFile : string;
+begin
+  TempFile := TPath.GetTempFileName;
+  try
+    TFile.WriteAllText(TempFile, SRC, TEncoding.UTF8);
+    Assert.WillRaise(
+      procedure begin TCustomRuleDetector.LoadFromYaml(TempFile) end,
+      Exception);
+    Assert.AreEqual<Integer>(0, TCustomRuleDetector.RuleCount,
+      'ein gescheiterter Load hinterlaesst keinen halben Regelsatz');
+  finally
+    TFile.Delete(TempFile);
+  end;
+end;
+
+procedure TTestCustomRuleDetector.ValidYaml_PublishesAllRules;
+// Die Gegenprobe zum Staging: drei gueltige Regeln muessen vollstaendig
+// ankommen UND anschliessend wirklich matchen.
+const
+  SRC =
+    'rules:'#10+
+    '  - id: T001'#10+
+    '    pattern: "Alpha"'#10+
+    '  - id: T002'#10+
+    '    pattern: "Beta"'#10+
+    '  - id: T003'#10+
+    '    pattern: "Gamma"'#10;
+  PAS = 'a := Alpha;'#10'b := Beta;'#10'c := Gamma;'#10;
+var
+  TempFile : string;
+  Findings : TObjectList<TLeakFinding>;
+begin
+  TempFile := TPath.GetTempFileName;
+  try
+    TFile.WriteAllText(TempFile, SRC, TEncoding.UTF8);
+    TCustomRuleDetector.LoadFromYaml(TempFile);
+    Assert.AreEqual<Integer>(3, TCustomRuleDetector.RuleCount,
+      'alle drei Regeln muessen veroeffentlicht sein');
+
+    Findings := TObjectList<TLeakFinding>.Create(True);
+    try
+      TCustomRuleDetector.AnalyzeFile('test.pas', PAS, Findings);
+      Assert.AreEqual<Integer>(1, CountByRule(Findings, 'T001'));
+      Assert.AreEqual<Integer>(1, CountByRule(Findings, 'T002'));
+      Assert.AreEqual<Integer>(1, CountByRule(Findings, 'T003'));
     finally Findings.Free; end;
   finally
     TFile.Delete(TempFile);
