@@ -129,6 +129,39 @@ def pruefe_leere_deklarationsbloecke(pfad, befunde):
             break
 
 
+
+def pruefe_doppeltes_routinenende(pfad, befunde):
+    """Zwei 'end;' in Spalte 0 direkt hintereinander.
+
+    In diesem Projekt schliesst ein 'end;' in Spalte 0 immer eine
+    Routine - nested routines sind eingerueckt. Zwei davon in Folge
+    heisst also: eine Routine wurde zweimal beendet, und der Compiler
+    liest das zweite als Unit-Ende ohne Punkt (E2029 "'.' erwartet, aber
+    ';' gefunden").
+
+    Entstanden 2026-09-13 an uTestCanBeClassMethod: ein Patch-Skript
+    schnitt den alten Testrumpf am 'end;' von 'finally F.Free; end;' ab
+    und liess das Routinen-'end;' stehen. Weder struct_gate noch dieses
+    Gate sahen es - der Bau brach.
+
+    Gegen den Bestand geprueft: NULL Vorkommen ueber alle .pas des
+    Projekts, die Regel ist also nicht laut.
+    """
+    L = zeilen(pfad)
+    vorher = None
+    vorher_nr = 0
+    for i, ln in enumerate(L, 1):
+        s = ln.rstrip()
+        if not s.strip() or s.lstrip().startswith('//'):
+            continue
+        if s == 'end;' and vorher == 'end;':
+            befunde.append('%s:%d  zweites "end;" in Spalte 0 direkt nach '
+                           'Zeile %d - eine Routine wird doppelt beendet '
+                           '(E2029)'
+                           % (os.path.basename(pfad), i, vorher_nr))
+        vorher = s
+        vorher_nr = i
+
 # --------------------------------------------------------------------------
 # 3) Enum-Werte, die es nicht gibt
 # --------------------------------------------------------------------------
@@ -318,6 +351,7 @@ def main():
     for d in dateien:
         pruefe_apostrophe(d, befunde)
         pruefe_leere_deklarationsbloecke(d, befunde)
+        pruefe_doppeltes_routinenende(d, befunde)
         pruefe_enums(d, deklariert, befunde)
         if os.sep + 'tests' + os.sep in d.replace('/', os.sep):
             pruefe_fixture_klassen(d, befunde)

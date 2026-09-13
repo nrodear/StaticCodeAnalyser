@@ -839,7 +839,6 @@ begin
     'ohne public-Sektion bleibt der ;class-Suffix erhalten');
   finally F.Free; end;
 end;
-end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestCanBeClassMethod);
