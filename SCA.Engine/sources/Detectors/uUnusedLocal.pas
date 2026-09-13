@@ -44,9 +44,6 @@ uses
   uFileTextCache,
   uAstSpans;
 
-const
-  EMIT_SEVERITY = lsHint;
-
 // Steht der Bezeichner ANameLow mit Wortgrenzen INNERHALB einer
 // offenen Klammer? Beide Argumente sind bereits kleingeschrieben.
 //
@@ -249,7 +246,6 @@ begin
       Exit(i - 1);
   end;
 end;
-
 
 // 1-basierter Index im gestrippten Text, an dem die 1-basierte Quellzeile
 // ALine1 beginnt. ALineFor ist monoton steigend (ein Block je Quellzeile),

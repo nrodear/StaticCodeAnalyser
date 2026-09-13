@@ -75,7 +75,6 @@ uses
   uDetectorUtils;   // OwnerTypeNameLower (nested-type-Bucketing, 2026-07-28)
 
 const
-  EMIT_SEVERITY = lsHint;
 
   // Klassen-Familien, die wegen RTTI/DFM/Streaming public bleiben muessen
   RTTI_DRIVEN_BASES: array[0..3] of string = (

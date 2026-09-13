@@ -49,7 +49,6 @@ uses
   uFileTextCache;
 
 const
-  EMIT_SEVERITY = lsHint;
 
   // Kuratierte Keyword-Liste. Reihenfolge egal (Lookup ist linear, N<100
   // ist klein genug). Bewusst NICHT enthalten:

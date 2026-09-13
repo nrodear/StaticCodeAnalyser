@@ -120,7 +120,6 @@ uses
   uFileTextCache;
 
 const
-  EMIT_SEVERITY = lsHint;
   // Konfigurierbar via INI [Detectors] MaxCaseBranches=N.
   // DetectorMaxCaseBranches in uSCAConsts wird von RepoSettings gesetzt;
   // Default 10. <=0 = Fallback auf 10.

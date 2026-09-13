@@ -44,9 +44,6 @@ uses
   uFileTextCache,
   uDetectorUtils;   // ExtractFirstWord (Voll-Review 2026-09-12)
 
-const
-  EMIT_SEVERITY = lsHint;
-
 function ExtractFirstWord(const Line: string): string;
 var
   Dummy : Integer;

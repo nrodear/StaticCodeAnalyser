@@ -171,9 +171,6 @@ implementation
 // SqlDangerousStatement: dieser Detektor enthaelt seine eigenen SQL-Pattern-
 // Strings ('grant all' / ' to public') als Such-Needles - Self-Match, kein Bug.
 
-const
-  EMIT_SEVERITY = lsError;
-
 class function TSqlDangerousStatementDetector.FindDangerousVerb(
   const Low: string; out Verb, AfterVerb: string): Boolean;
 const

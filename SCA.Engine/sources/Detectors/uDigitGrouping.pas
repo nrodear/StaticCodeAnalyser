@@ -42,7 +42,6 @@ uses
   uFileTextCache;
 
 const
-  EMIT_SEVERITY  = lsHint;
   MIN_GROUP_LEN  = 5;  // ab dieser Laenge wird Gruppierung gefordert
 
 function IsIdent(C: Char): Boolean; inline;

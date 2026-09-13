@@ -49,7 +49,6 @@ uses
 const
   KW            = 'asm';
   KW_LEN        = 3;
-  EMIT_SEVERITY = lsWarning;
 
 function IsIdent(C: Char): Boolean; inline;
 begin

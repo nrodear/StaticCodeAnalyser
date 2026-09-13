@@ -40,9 +40,6 @@ uses
   uFileTextCache,
   uDetectorUtils;   // BlankStringLiterals (Inline-var-Gate)
 
-const
-  EMIT_SEVERITY = lsHint;
-
 function ExtractFirstWord(const Line: string; out StartCol: Integer): string;
 begin
   // Voll-Review 2026-09-12: zentral (TDetectorUtils.ExtractFirstWord,

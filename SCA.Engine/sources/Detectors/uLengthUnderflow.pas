@@ -47,7 +47,6 @@ uses
   uFileTextCache;
 
 const
-  EMIT_SEVERITY = lsHint;
   // Schwelle: bei -1 ist es das Loop-Idiom `0 to Length-1`, bei -2 etc.
   // wird es verdaechtig (oder bei dynamisch berechnetem K).
   MIN_OFFSET_TO_FLAG = 2;

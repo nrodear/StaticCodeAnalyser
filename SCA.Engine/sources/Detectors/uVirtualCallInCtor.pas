@@ -68,9 +68,6 @@ uses
   uFileTextCache,
   uDetectorUtils;   // OwnerTypeNameLower (Nested-Klassen-Zuordnung)
 
-const
-  EMIT_SEVERITY = lsError;
-
 // ---------------------------------------------------------------------------
 // FP-Gate (2026-07-31, 30%-Real-World-Audit sca-rw-after119)
 // FP-Klasse: Event-Handler-ZUWEISUNG wird als Aufruf gewertet.

@@ -35,9 +35,6 @@ implementation
 uses
   uFileTextCache;
 
-const
-  EMIT_SEVERITY = lsHint;
-
 function HasTrailingWs(const Line: string; out FirstWsCol: Integer): Boolean;
 var
   n : Integer;

@@ -45,9 +45,6 @@ implementation
 // noinspection-file NilComparison, TooLongLine, UnsortedUses, UnusedRoutine
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
-const
-  EMIT_SEVERITY = lsError;
-
 // Pruefe ob eine Identifier-Property gesetzt + nicht-leer ist.
 function HasNonEmptyIdent(N: TComponentNode; const PropName: string): Boolean;
 var

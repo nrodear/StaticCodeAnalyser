@@ -53,7 +53,6 @@ uses
 const
   KW           = 'with';
   KW_LEN       = 4;
-  EMIT_SEVERITY = lsWarning;
 
 function IsIdent(C: Char): Boolean; inline;
 begin

@@ -44,9 +44,6 @@ uses
   uFileTextCache,
   uAstSpans;   // FindBodyBlock/HasInheritedCall (Voll-Review 2026-09-12)
 
-const
-  EMIT_SEVERITY = lsError;
-
 function ErbtDirektVonTObject(const AMethodName: string;
   AContext: TAnalyzeContext): Boolean;
 // True, wenn die Klasse des Destruktors DIREKT von TObject erbt.

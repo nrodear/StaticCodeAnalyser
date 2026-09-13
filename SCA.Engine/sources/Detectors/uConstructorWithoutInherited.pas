@@ -48,9 +48,6 @@ implementation
 uses
   uAstSpans;   // FindBodyBlock/HasInheritedCall (Voll-Review 2026-09-12)
 
-const
-  EMIT_SEVERITY = lsWarning;
-
 function IsConstructor(MethodNode: TAstNode): Boolean; inline;
 var
   TR : string;

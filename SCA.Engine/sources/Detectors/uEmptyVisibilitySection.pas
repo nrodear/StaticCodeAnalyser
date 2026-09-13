@@ -37,7 +37,6 @@ uses
   uDetectorUtils;   // ExtractFirstWord (Voll-Review 2026-09-12)
 
 const
-  EMIT_SEVERITY = lsHint;
   // Das Wort steht in der Erkennung UND zweimal in der
   // Namensbildung fuer den Meldetext - ab der dritten Kopie
   // gehoert es an eine Stelle.

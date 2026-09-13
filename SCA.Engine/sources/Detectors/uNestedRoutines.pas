@@ -114,7 +114,6 @@ uses
   uFileTextCache;
 
 const
-  EMIT_SEVERITY = lsHint;
 
   // Routinen-Schluesselwoerter, die der Zeilen-Automat als Kopf wertet.
   // `class procedure`/`class function` stehen bewusst NICHT drin: der

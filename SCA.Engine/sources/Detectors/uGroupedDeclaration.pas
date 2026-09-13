@@ -43,9 +43,6 @@ uses
   System.StrUtils,
   uFileTextCache;
 
-const
-  EMIT_SEVERITY = lsHint;
-
 function IsIdentStart(C: Char): Boolean; inline;
 begin
   // Voll-Review 2026-09-12: Zeichenklasse zentralisiert - die lokale

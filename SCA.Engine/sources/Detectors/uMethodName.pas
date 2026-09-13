@@ -110,9 +110,6 @@ uses
   System.Classes,      // TStringList (FFI-Typnamen-Set)
   uDetectorUtils;      // Hebel A: FFI-Binding-/Typelib-Gates (2026-07-31)
 
-const
-  EMIT_SEVERITY = lsHint;
-
 function LocalName(const FullName: string): string;
 var
   pDot : Integer;

@@ -35,9 +35,6 @@ uses
   System.StrUtils,
   uFileTextCache;
 
-const
-  EMIT_SEVERITY = lsHint;
-
 function FindDoubleSemi(const Line: string; var InBlockComm: Boolean;
   var InParenStarComm: Boolean): Integer;
 var

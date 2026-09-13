@@ -40,9 +40,6 @@ uses
   uFileTextCache,
   uDetectorUtils;   // BlankStringLiterals (Klammer-Bilanz)
 
-const
-  EMIT_SEVERITY = lsError;
-
 function IsIdentChar(C: Char): Boolean; inline;
 begin
   Result := CharInSet(C, ['A'..'Z','a'..'z','0'..'9','_','.']);

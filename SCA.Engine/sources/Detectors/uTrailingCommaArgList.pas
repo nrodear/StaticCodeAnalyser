@@ -42,9 +42,6 @@ uses
   System.StrUtils,
   uFileTextCache;
 
-const
-  EMIT_SEVERITY = lsHint;
-
 // Liefert die 1-basierte Spalte des trailing-Kommas (Zeichen `,`) wenn
 // die Zeile ein `,` enthaelt, danach nur Whitespace, dann `)`. 0 sonst.
 function FindTrailingComma(const Line: string; var InBlockComm: Boolean;

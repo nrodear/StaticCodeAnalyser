@@ -71,9 +71,6 @@ uses
   uFileTextCache,
   uDetectorUtils;   // ExtractFirstWord (Voll-Review 2026-09-12)
 
-const
-  EMIT_SEVERITY = lsHint;
-
 // Zeilenweiser Kommentar-/String-Strip MIT Zustand ueber Zeilengrenzen
 // (Autopsie 2026-08-26, Fix C; Vorbild uTautologicalExpr). Der alte
 // Detektor kannte Blockkommentare nur, wenn die Zeile damit BEGANN -

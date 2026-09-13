@@ -33,9 +33,6 @@ implementation
 uses
   uAstSpans;   // FindBodyBlock (Voll-Review 2026-09-12)
 
-const
-  EMIT_SEVERITY = lsWarning;
-
 // Maximale Anzahl `inherited`-Calls die DIREKTE Kinder EINES nkBlock sind
 // (= sequenziell im selben begin..end-Block, laufen also garantiert beide).
 // Der Methoden-Rumpf selbst ist ein nkBlock (ParseBlock) -> der Kanonik-Bug

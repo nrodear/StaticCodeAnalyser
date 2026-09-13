@@ -36,7 +36,6 @@ uses
   uFileTextCache;
 
 const
-  EMIT_SEVERITY = lsHint;
   TAB           = #9;
 
 class procedure TTabulationCharacterDetector.AnalyzeUnit(UnitNode: TAstNode;

@@ -45,9 +45,6 @@ uses
   uFileTextCache,
   uDetectorUtils;   // ExtractFirstWord (Voll-Review 2026-09-12)
 
-const
-  EMIT_SEVERITY = lsHint;
-
 // True wenn Lower einem strukturellen Section-Keyword entspricht, das
 // IMMER auf Spalte 1 stehen sollte (auch wenn es im Code nochmal in
 // anderem Kontext vorkommt waere das ungewoehnlich).
