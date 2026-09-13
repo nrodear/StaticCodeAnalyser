@@ -24,6 +24,9 @@ type
     // (dort feuern DoAction UND Verwaist; nach dem Fix nur Verwaist).
     [Test] procedure Gate_ItemListBoundHandler_NoFinding;
     [Test] procedure Gate_ItemListOtherHandler_StillDetected;
+    // Testluecke 137: Bindung im ELTERN-DFM zaehlt mit
+    [Test] procedure Test_BoundInParentDfm_NoFinding;
+    [Test] procedure Test_UnboundInParentDfm_StillDetected;
   end;
 
 implementation
@@ -31,9 +34,10 @@ implementation
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
+  System.Classes, System.IOUtils,
   uAstNode, uParser2,
   uDfmParser, uComponentGraph,
-  uFormBinder,
+  uFormBinder, uDfmRepoIndex,
   uDfmOrphanHandler;
 
 function RunOn(const DfmSrc, PasSrc: string): TObjectList<TLeakFinding>;
@@ -316,6 +320,157 @@ begin
   try
     Assert.AreEqual<Integer>(1, Count(F, fkDfmOrphanHandler),
       'fremder item-Handler rettet die verwaiste Methode nicht');
+  finally F.Free; end;
+end;
+
+{ --- Bindung im ELTERN-DFM (Testluecke 137) --------------------------------- }
+//
+// Analyze sammelt die gebundenen Handler nicht nur aus dem eigenen
+// Binding, sondern laeuft die Parent-Kette hoch (Z.125-135, samt
+// SammleItemListBindungen am jeweiligen FormNode). Damit gilt eine
+// published Methode der KIND-Klasse, die ein Knopf im ELTERN-DFM per
+// OnClick bindet, nicht als verwaist.
+//
+// Diese Anti-FP-Eigenschaft war ungetestet: alle Bestandstests binden
+// ueber TFormBinder.Bind, dort ist Parent immer nil, und die while-
+// Schleife dreht sich genau einmal. Faellt der Aufstieg weg, faellt
+// heute kein Test - der FP kaeme still zurueck.
+//
+// Der Harness benutzt deshalb BindWithParents mit einem TDfmRepoIndex
+// ueber beide Units, so wie uDfmAnalysisRunner im Repo-Lauf.
+// Am gebauten Stand nachgemessen (gebunden 0, ungebunden 1).
+
+function RunKindMitEltern(const AParentDfm: string): TObjectList<TLeakFinding>;
+// Legt Eltern- und Kind-Unit ab, indiziert beide und untersucht das
+// KIND. AParentDfm ist der einzige Unterschied zwischen den zwei Tests:
+// einmal mit OnClick-Bindung, einmal ohne.
+const
+  PARENT_PAS =
+    'unit uBase;'#13#10 +
+    'interface'#13#10 +
+    'uses Vcl.Forms, Vcl.StdCtrls, System.Classes;'#13#10 +
+    'type'#13#10 +
+    '  TBaseForm = class(TForm)'#13#10 +
+    '    btnGo: TButton;'#13#10 +
+    '  end;'#13#10 +
+    'var BaseForm: TBaseForm;'#13#10 +
+    'implementation'#13#10 +
+    'end.';
+  CHILD_PAS =
+    'unit uChild;'#13#10 +
+    'interface'#13#10 +
+    'uses Vcl.Forms, System.Classes, uBase;'#13#10 +
+    'type'#13#10 +
+    '  TChildForm = class(TBaseForm)'#13#10 +
+    '  published'#13#10 +
+    '    procedure SharedClick(Sender: TObject);'#13#10 +
+    '  end;'#13#10 +
+    'var ChildForm: TChildForm;'#13#10 +
+    'implementation'#13#10 +
+    'procedure TChildForm.SharedClick(Sender: TObject);'#13#10 +
+    'begin'#13#10 +
+    '  DoSomething;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+  CHILD_DFM =
+    'inherited ChildForm: TChildForm'#13#10 +
+    'end';
+var
+  DfmParser : TDfmParser;
+  Graph     : TComponentGraph;
+  PasParser : TParser2;
+  UnitNode  : TAstNode;
+  Binding   : TFormBinding;
+  RepoIdx   : TDfmRepoIndex;
+  FileList  : TStringList;
+  Tmp, ChildFn, ParentFn : string;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+  Tmp := TPath.Combine(TPath.GetTempPath, 'sca_orph_' + TGuid.NewGuid.ToString);
+  TDirectory.CreateDirectory(Tmp);
+  try
+    ChildFn  := TPath.Combine(Tmp, 'uChild.pas');
+    ParentFn := TPath.Combine(Tmp, 'uBase.pas');
+    TFile.WriteAllText(ChildFn,  CHILD_PAS,  TEncoding.UTF8);
+    TFile.WriteAllText(ParentFn, PARENT_PAS, TEncoding.UTF8);
+    // Das ELTERN-DFM muss neben der Eltern-.pas liegen: BindWithParents
+    // sucht es ueber den RepoIndex genau dort.
+    TFile.WriteAllText(TPath.Combine(Tmp, 'uBase.dfm'), AParentDfm,
+      TEncoding.UTF8);
+
+    DfmParser := TDfmParser.Create;
+    try
+      Graph := DfmParser.ParseSource(CHILD_DFM);
+    finally
+      DfmParser.Free;
+    end;
+
+    PasParser := TParser2.Create;
+    try
+      UnitNode := PasParser.ParseFile(ChildFn);
+    finally
+      PasParser.Free;
+    end;
+
+    RepoIdx := TDfmRepoIndex.Create;
+    try
+      FileList := TStringList.Create;
+      try
+        FileList.Add(ChildFn);
+        FileList.Add(ParentFn);
+        RepoIdx.Build(FileList);
+      finally
+        FileList.Free;
+      end;
+
+      Binding := TFormBinder.BindWithParents(Graph, UnitNode, RepoIdx);
+      try
+        TDfmOrphanHandlerDetector.Analyze(Binding, 'uChild.dfm', Result);
+      finally
+        Binding.Free;
+        UnitNode.Free;
+        Graph.Free;
+      end;
+    finally
+      RepoIdx.Free;
+    end;
+  finally
+    if TDirectory.Exists(Tmp) then TDirectory.Delete(Tmp, True);
+  end;
+end;
+
+procedure TTestDfmOrphanHandler.Test_BoundInParentDfm_NoFinding;
+// Der Knopf steht im Eltern-DFM und bindet SharedClick; die Methode ist
+// im Kind published. Kein Orphan - der Aufstieg ueber Walker.Parent
+// findet die Bindung.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunKindMitEltern(
+    'object BaseForm: TBaseForm'#13#10 +
+    '  object btnGo: TButton'#13#10 +
+    '    OnClick = SharedClick'#13#10 +
+    '  end'#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmOrphanHandler),
+      'im Eltern-DFM gebunden ist gebunden');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmOrphanHandler.Test_UnboundInParentDfm_StillDetected;
+// Die Gegenprobe: derselbe Aufbau, nur OHNE die OnClick-Zeile im
+// Eltern-DFM. Ohne sie waere der Test darueber auch dann gruen, wenn der
+// Detektor an geerbten Aufbauten grundsaetzlich schwiege.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunKindMitEltern(
+    'object BaseForm: TBaseForm'#13#10 +
+    '  object btnGo: TButton'#13#10 +
+    '  end'#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, Count(F, fkDfmOrphanHandler),
+      'nirgends gebunden - der Handler ist verwaist');
   finally F.Free; end;
 end;
 
