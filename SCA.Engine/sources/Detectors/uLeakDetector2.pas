@@ -2399,7 +2399,7 @@ end;
 
 // Gibt die (gestrippte) QUELLZEILE S die Variable AVarLow frei?
 //
-// Wortgleich die fruehere lokale LineFreesVar des finally-Scans
+// Hervorgegangen aus der frueheren lokalen LineFreesVar des finally-Scans
 // (FreeInFinallyRegionBySource) samt ihrer Helfer BoundedLeft und
 // CollapseDotSpacing - seit 2026-09-04 auf Unit-Ebene, weil das
 // K-nested-Gate dieselbe Frage stellt. Eine dritte Fassung der
@@ -2482,8 +2482,23 @@ var
 
 begin
   Low := LowerCase(CollapseDotSpacing(S));
+  // '.disposeof' (Chargen-Review 2026-09-13): die AST-Fassung GibtVarFrei
+  // kennt die Nadel seit der SCA001-Gross-Triage 2026-07-18, die
+  // Zeilenfassung wurde beim Hochziehen auf Unit-Ebene am 2026-09-04 nicht
+  // nachgezogen. An der gebauten Exe gemessen, gleiche Fixture, nur die
+  // Freigabezeile getauscht:
+  //   FreeAndNil(list);  0 Funde     list.Destroy;   0 Funde
+  //   list.Free;         0 Funde     list.DisposeOf; 1 FUND
+  //   Beep;              1 Fund   <- der DisposeOf-Lauf war bit-genau der
+  //                                  Kontrollfall OHNE jede Freigabe.
+  // Korpus: 28 '.DisposeOf'-Stellen in 7 Dateien, keine erzeugt heute einen
+  // SCA001-Fund -> Bewegung 0.
+  //
+  // Der Typecast-Zweig von GibtVarFrei bleibt bewusst draussen: er braucht
+  // die t-Praefix-Pruefung am Kopf-Ident, die es hier nicht gibt.
   Result := BoundedLeft(Low, AVarLow + '.free', False)
          or BoundedLeft(Low, AVarLow + '.destroy', False)
+         or BoundedLeft(Low, AVarLow + '.disposeof', False)
          or BoundedLeft(Low, 'freeandnil(' + AVarLow, True)
          or BoundedLeft(Low, 'freeandnil(self.' + AVarLow, True);
 end;

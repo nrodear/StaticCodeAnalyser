@@ -120,6 +120,9 @@ type
     [Test] procedure Leak_CreateInForLoop_NoFree_ReportsError;
     [Test] procedure Leak_TwoVars_OnlyOneFreed_ReportsOneError;
     [Test] procedure Leak_FreeInTryBody_NotFinally_ReportsWarning;
+    // Posten 256: DisposeOf fehlte in der Zeilenfassung
+    [Test] procedure Leak_DisposeOfInNestedRoutine_NoFinding;
+    [Test] procedure Leak_NestedDisposesOtherVar_OuterStillReported;
   end;
 
   // try/finally-Geometrien: Regionen, Schachtelung, Wortgrenzen.
@@ -1224,6 +1227,92 @@ begin
       'Free in geschachtelter Routine ist kein Leck');
   finally F.Free; end;
 end;
+
+{ --- Posten 256: DisposeOf ist eine Freigabe -------------------- }
+//
+// Die AST-Fassung GibtVarFrei kennt .DisposeOf seit der
+// SCA001-Gross-Triage 2026-07-18. Die ZEILENFASSUNG ZeileGibtVarFrei,
+// aus der frueheren LineFreesVar hervorgegangen, wurde beim
+// Hochziehen auf Unit-Ebene am 2026-09-04 nicht nachgezogen - beide
+// Konsumenten (K-nested-Gate und finally-Scan) sahen die Nadel nicht.
+//
+// An der gebauten Exe gemessen, gleiche Fixture, nur die
+// Freigabezeile getauscht:
+//   FreeAndNil(list);  0 Funde     list.Destroy;   0 Funde
+//   list.Free;         0 Funde     list.DisposeOf; 1 FUND
+//   Beep;              1 Fund
+// Der DisposeOf-Lauf war bit-genau der Kontrollfall ohne jede
+// Freigabe - deshalb ist der erste Test heute rot.
+
+procedure TTestMemoryLeakTypeMatrix.Leak_DisposeOfInNestedRoutine_NoFinding;
+// Wie Leak_FreeInNestedRoutine_NoFinding, nur mit DisposeOf.
+// Heute 1 Fund, nach dem Fix 0.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Outer;'#13#10+
+  'var'#13#10+
+  '  list: TStringList;'#13#10+
+  ''#13#10+
+  '  procedure Cleanup;'#13#10+
+  '  begin'#13#10+
+  '    list.DisposeOf;'#13#10+
+  '  end;'#13#10+
+  ''#13#10+
+  'begin'#13#10+
+  '  list := TStringList.Create;'#13#10+
+  '  Cleanup;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'DisposeOf in geschachtelter Routine ist kein Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakTypeMatrix.Leak_NestedDisposesOtherVar_OuterStillReported;
+// GEGENPROBE zur Wortgrenze: die geschachtelte Routine entsorgt NUR b.
+// Eine zu grobe Nadel schluckt beide Funde, eine fehlende laesst zwei
+// stehen - beides macht den Test rot.
+// Heute 2 Funde (DisposeOf wirkt nicht), nach dem Fix 1, und der
+// heisst 'a'.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Outer;'#13#10+
+  'var'#13#10+
+  '  a, b: TStringList;'#13#10+
+  ''#13#10+
+  '  procedure Cleanup;'#13#10+
+  '  begin'#13#10+
+  '    b.DisposeOf;'#13#10+
+  '  end;'#13#10+
+  ''#13#10+
+  'begin'#13#10+
+  '  a := TStringList.Create;'#13#10+
+  '  b := TStringList.Create;'#13#10+
+  '  Cleanup;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'nur a bleibt - b ist im Nested entsorgt');
+    Fnd := TFindingHelper.FirstOf(F, fkMemoryLeak);
+    Assert.IsNotNull(Fnd, 'Fund erwartet');
+    Assert.AreEqual('a', Fnd.MissingVar, 'der verbleibende Fund ist a');
+  finally F.Free; end;
+end;
+
 
 procedure TTestMemoryLeakTypeMatrix.Leak_NestedFreesOtherVar_OuterStillReported;
 // GEGENPROBE, und der eigentliche Waechter: die geschachtelte Routine
