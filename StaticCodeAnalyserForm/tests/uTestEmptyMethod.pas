@@ -34,6 +34,9 @@ type
     [Test] procedure EmptyBody_CommentedOutCode_StillReported;
     [Test] procedure EmptyBody_NoComment_StillReported;
     [Test] procedure EmptyBody_CommentAfterEnd_StillReported;
+    // Testluecke 146: die Einzeilen-Grenze des Intent-Kommentars
+    [Test] procedure EmptyBody_MultiLineIntentStartsOnOpener_NoFinding;
+    [Test] procedure EmptyBody_IntentOnlyOnSecondLine_KnownGap_Reported;
   end;
 
 implementation
@@ -278,6 +281,60 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyMethod),
     'Kommentar HINTER dem end ist kein Intent-Kommentar des Rumpfes');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyMethod.EmptyBody_MultiLineIntentStartsOnOpener_NoFinding;
+// Testluecke 146 (Voll-Review 2026-09-12), erste Haelfte: ein
+// mehrzeiliger Blockkommentar unterdrueckt sehr wohl - SOLANGE die
+// Absicht schon auf der OEFFNENDEN Zeile steht. CommentTextOfLine
+// nimmt bei fehlendem Schlusszeichen den Rest der Zeile.
+// Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure MitMehrzeiler;'#13#10 +
+  'begin'#13#10 +
+  '  { Absichtlich leer, weil die Basisklasse'#13#10 +
+  '    bereits alles Noetige erledigt. }'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyMethod),
+    'Absicht auf der oeffnenden Zeile genuegt');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyMethod.EmptyBody_IntentOnlyOnSecondLine_KnownGap_Reported;
+// Zweite Haelfte, und hier ist die GRENZE: steht auf der oeffnenden
+// Zeile nur die Klammer, traegt sie keinen Text - und die
+// Fortsetzungszeile hat kein Kommentarzeichen, aus dem
+// CommentTextOfLine etwas holen koennte. Der Rumpf gilt als
+// unerklaert leer.
+//
+// Der Fund ist die dokumentierte Einzeilen-Grenze aus dem Unit-Kopf
+// ("mehr braucht ein leerer Rumpf nicht"), kein Ziel. Wer den Sammler
+// auf echte Mehrzeiligkeit umstellt, sieht hier rot und stellt die
+// Erwartung auf 0. Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure NurZweiteZeile;'#13#10 +
+  'begin'#13#10 +
+  '  {'#13#10 +
+  '    Absichtlich leer, weil die Basisklasse alles erledigt.'#13#10 +
+  '  }'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyMethod),
+    'BEKANNTE GRENZE: die oeffnende Zeile traegt keinen Text');
   finally F.Free; end;
 end;
 

@@ -38,6 +38,10 @@ uses
 
 const
   EMIT_SEVERITY = lsHint;
+  // Das Wort steht in der Erkennung UND zweimal in der
+  // Namensbildung fuer den Meldetext - ab der dritten Kopie
+  // gehoert es an eine Stelle.
+  KW_STRICT     = 'strict';
 
 function ExtractFirstWord(const Line: string; out StartCol: Integer): string;
 // Voll-Review 2026-09-12: zentral (ExtractFirstWordOrBracket).
@@ -58,12 +62,42 @@ function IsVisibilityKw(const Lower: string): Boolean; inline;
 begin
   Result := (Lower = 'private') or (Lower = 'protected')
          or (Lower = 'public')  or (Lower = 'published')
-         or (Lower = 'strict');
+         or (Lower = KW_STRICT);
 end;
 
 function IsClassEnderKw(const Lower: string): Boolean; inline;
 begin
   Result := (Lower = 'end');
+end;
+
+function SektionsName(const ALine, AErstesWort: string): string;
+// Der Name FUER DEN MELDETEXT, nicht fuer die Erkennung.
+//
+// 'strict' steht in IsVisibilityKw als eigenes Schluesselwort, weil nur
+// das erste Wort der Zeile geprueft wird. Fuer die Erkennung reicht das
+// (jede 'strict ...'-Zeile eroeffnet eine Sektion und schliesst die
+// vorige ab), fuer die MELDUNG nicht: 'Empty `strict` section' laesst
+// offen, ob private oder protected gemeint ist, und in einer Klasse mit
+// beiden sind zwei Funde nicht auseinanderzuhalten
+// (Voll-Review 2026-09-12, Testluecke 148).
+//
+// Deshalb hier das zweite Wort anhaengen, wenn es eines gibt. Die
+// Erkennung bleibt unangetastet.
+var
+  Rest : string;
+  i    : Integer;
+begin
+  Result := AErstesWort;
+  if AErstesWort <> KW_STRICT then Exit;
+  i := Pos(KW_STRICT, LowerCase(ALine));
+  if i <= 0 then Exit;
+  Rest := TrimLeft(Copy(ALine, i + Length(KW_STRICT), MaxInt));
+  i := 1;
+  while (i <= Length(Rest)) and CharInSet(Rest[i], ['a'..'z', 'A'..'Z']) do
+    Inc(i);
+  Rest := Copy(Rest, 1, i - 1);
+  if Rest <> '' then
+    Result := AErstesWort + ' ' + LowerCase(Rest);
 end;
 
 class procedure TEmptyVisibilitySectionDetector.AnalyzeUnit(UnitNode: TAstNode;
@@ -76,6 +110,9 @@ var
   Word        : string;
   Lower       : string;
   LastVis     : string;
+  // Der Name FUER DIE MELDUNG - bei 'strict' zweiteilig, sonst
+  // identisch mit LastVis (s. SektionsName).
+  LastVisName : string;
   LastVisLine : Integer;
   F           : TLeakFinding;
   ScanState   : TCommentScanState;
@@ -86,6 +123,7 @@ begin
   if Lines = nil then Exit;
   try
     LastVis := '';
+    LastVisName := '';
     LastVisLine := -1;
     ScanState := Default(TCommentScanState);
     for i := 0 to Lines.Count - 1 do
@@ -113,11 +151,12 @@ begin
           F.LineNumber := IntToStr(LastVisLine + 1);
           F.MissingVar := Format(
             'Empty `%s` section - delete the section header or add ' +
-            'its members.', [LastVis]);
+            'its members.', [LastVisName]);
           F.SetKind(fkEmptyVisibilitySection);
           Results.Add(F);
         end;
         LastVis := Lower;
+        LastVisName := SektionsName(Line, Lower);
         LastVisLine := i;
       end
       else if IsClassEnderKw(Lower) then
@@ -130,17 +169,19 @@ begin
           F.LineNumber := IntToStr(LastVisLine + 1);
           F.MissingVar := Format(
             'Empty `%s` section at end of class - delete the section ' +
-            'header.', [LastVis]);
+            'header.', [LastVisName]);
           F.SetKind(fkEmptyVisibilitySection);
           Results.Add(F);
         end;
         LastVis := '';
+        LastVisName := '';
         LastVisLine := -1;
       end
       else
       begin
         // Anderer Identifier -> Section hat Inhalt, kein leerer Section
         LastVis := '';
+        LastVisName := '';
         LastVisLine := -1;
       end;
     end;

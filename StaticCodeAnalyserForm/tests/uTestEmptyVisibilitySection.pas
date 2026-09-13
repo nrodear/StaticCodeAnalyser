@@ -17,6 +17,9 @@ type
     [Test] procedure EmptyDespiteAttributeInNextSection_StillReported;
     // Voll-Review 2026-09-12 (Major 61): Kommentar-Fortsetzungszeilen
     [Test] procedure CommentContinuationPrivate_NoPhantomSection;
+    // Testluecke 148: strict-Sichtbarkeiten, leer wie gefuellt
+    [Test] procedure EmptyStrictPrivate_ReportedWithFullName;
+    [Test] procedure FilledStrictSections_NoFinding;
   end;
 
 implementation
@@ -176,6 +179,73 @@ begin
   try Assert.AreEqual<Integer>(0,
     TFindingHelper.Count(F, fkEmptyVisibilitySection),
     'private im Kommentar eroeffnet keine Section');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyVisibilitySection.EmptyStrictPrivate_ReportedWithFullName;
+// Testluecke 148 (Voll-Review 2026-09-12). Zwei Aussagen in einem
+// Test, weil die zweite ohne die erste nichts wert waere:
+//
+// 1. Eine leere strict-private-Sektion wird gemeldet. IsVisibilityKw
+//    fuehrt nur das Wort strict (geprueft wird das erste Wort der
+//    Zeile) - fuer die Erkennung reicht das, belegt war es nie.
+// 2. Der Meldetext nennt die VOLLE Sichtbarkeit. Vorher stand dort
+//    "Empty `strict` section", und in einer Klasse mit strict private
+//    UND strict protected waren zwei Funde nicht auseinanderzuhalten.
+//    SektionsName haengt jetzt das zweite Wort an.
+// Am gebauten Stand nachgemessen: 1 Fund (vor der Textkorrektur).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TLeer = class'#13#10 +
+  '  strict private'#13#10 +
+  '  strict protected'#13#10 +
+  '    procedure Da;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TLeer.Da; begin DoIt; end;'#13#10 +
+  'end.'#13#10;
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkEmptyVisibilitySection),
+      'die leere strict-private-Sektion ist genau ein Fund');
+    Hit := TFindingHelper.FirstOf(F, fkEmptyVisibilitySection);
+    Assert.IsTrue(Pos('strict private', Hit.MissingVar) > 0,
+      'der Text muss die volle Sichtbarkeit nennen - gemeldet wurde: '
+      + Hit.MissingVar);
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyVisibilitySection.FilledStrictSections_NoFinding;
+// Die Gegenprobe: dieselben zwei Sichtbarkeiten, beide mit Member.
+// Ohne sie bliebe offen, ob der Fund oben an der Leere haengt oder
+// daran, dass strict ueberhaupt vorkommt.
+// Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TVoll = class'#13#10 +
+  '  strict private'#13#10 +
+  '    FX: Integer;'#13#10 +
+  '  strict protected'#13#10 +
+  '    procedure Auch;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TVoll.Auch; begin DoIt; end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkEmptyVisibilitySection),
+    'gefuellte strict-Sektionen sind keine leeren');
   finally F.Free; end;
 end;
 
