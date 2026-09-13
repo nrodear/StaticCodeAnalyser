@@ -369,21 +369,29 @@ begin
 end;
 
 procedure TTestCustomClassDiscovery.CreateOnlyInStringLiteral_NotInstantiable;
-// Minor 232 (Voll-Review 2026-09-12) - WAECHTER, kein Fix.
+// Minor 232 (Voll-Review 2026-09-12).
 //
-// Der Posten behauptete, UnitHasCreateCall zaehle ein TFoo.Create aus
-// einem String-Literal als Instanziierungs-Evidenz. Am gebauten Stand
-// ist das NICHT reproduzierbar: zwei Dateien, die sich
-// ausschliesslich in den Anfuehrungszeichen unterscheiden, liefern
-// mit eingeschalteter Klassenentdeckung 1 bzw. 0 Leak-Funde - die
-// zitierte Fassung erzeugt keine Evidenz.
+// UnitHasCreateCall zaehlte ein TFoo.Create aus einem String-Literal
+// als Instanziierungs-Evidenz - die Klasse galt damit als
+// leak-relevant, obwohl sie nirgends erzeugt wird. Behoben, indem
+// MatchesCreate den Text vorher durch BlankStringLiterals schickt.
 //
-// Eine Haertung waere also Code ohne belegbare Wirkung gewesen; ich
-// habe sie zurueckgenommen. Was bleibt, ist dieser Waechter: der
-// Parser legt Aufruf-Argumente in ANDEREN Detektorpfaden sehr wohl im
-// Knotennamen ab (belegt an uDfmComponentUnused). Sollte das hier
-// einmal zutreffen, faellt dieser Test - und dann ist die Haertung
-// begruendet.
+// DIESER TEST HAT EINEN IRRTUM VON MIR AUFGEDECKT, und das ist der
+// Grund, warum er so ausfuehrlich kommentiert ist. Ich hatte die
+// Haertung schon eingebaut und dann WIEDER ZURUECKGENOMMEN, weil ein
+// CLI-Versuch sie nicht zu stuetzen schien: zwei Dateien, die sich
+// nur in den Anfuehrungszeichen unterscheiden, ergaben 1 bzw. 0
+// LEAK-Funde. Daraus habe ich geschlossen, das Literal erzeuge keine
+// Evidenz.
+//
+// Der Schluss war falsch, weil er die falsche EBENE gemessen hat. Ob
+// eine Klasse instanziierbar HEISST, entscheidet die Entdeckung; ob
+// daraus ein Leak-Fund wird, haengt an weiteren Bedingungen. Null
+// Leaks beweisen also nicht "nicht instanziierbar". Erst dieser Test,
+// der die Entdeckung DIREKT befragt, hat es gezeigt - er lief rot.
+//
+// Lehre fuer die naechste Charge: einen Befund auf der Ebene messen,
+// auf der er behauptet wird, nicht auf einer nachgelagerten.
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
