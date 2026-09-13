@@ -121,6 +121,31 @@ begin
       while (j <= n) and (ArgDepth > 0) do
       begin
         c := Line[j];
+        // Kommentare im Klammer-Inhalt ueberspringen (Voll-Review
+        // 2026-09-12, Minor 227). Der AEUSSERE Scanner kennt alle drei
+        // Formen laengst; dieser hier kannte nur String-Literale, und
+        // ein Komma in einem Kommentar - 'Assert(X > 0 { a, b })' -
+        // galt als Argumenttrenner. Ergebnis: der Detektor hielt eine
+        // Meldung fuer vorhanden und schwieg.
+        //
+        // Reihenfolge: '(*' MUSS vor dem '('-Zweig stehen, sonst
+        // zaehlt der Kommentaranfang als geoeffnete Klammer und die
+        // Tiefe geht verloren.
+        if (c = '/') and (j < n) and (Line[j + 1] = '/') then Break;
+        if c = '{' then
+        begin
+          pClose := PosEx('}', Line, j + 1);
+          if pClose = 0 then Break;   // Kommentar laeuft ueber die Zeile
+          j := pClose + 1;
+          Continue;
+        end;
+        if (c = '(') and (j < n) and (Line[j + 1] = '*') then
+        begin
+          pClose := PosEx('*)', Line, j + 2);
+          if pClose = 0 then Break;
+          j := pClose + 2;
+          Continue;
+        end;
         if c = '(' then Inc(ArgDepth)
         else if c = ')' then Dec(ArgDepth)
         else if (c = ',') and (ArgDepth = 1) then HasTopComma := True
