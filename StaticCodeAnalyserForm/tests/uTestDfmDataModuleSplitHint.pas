@@ -53,7 +53,10 @@ begin
   try
     Graph := Parser.ParseSource(Src);
     try
-      TDfmDbInUiFormDetector.Analyze(Graph, FileName, Result);
+      // Binding = nil: dieser Harness prueft die Aggregation, nicht die
+      // Wurzel-Erkennung. Ohne Bindung entscheidet der Klassenname wie vor
+      // dem 2026-09-12 - die Fixturen hier heissen darum weiter TForm1.
+      TDfmDbInUiFormDetector.Analyze(Graph, nil, FileName, Result);
       TDfmDataModuleSplitHintDetector.Aggregate(FileName, Result);
     finally
       Graph.Free;

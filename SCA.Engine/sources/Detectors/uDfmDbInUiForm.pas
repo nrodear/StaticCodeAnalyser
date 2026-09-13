@@ -9,11 +9,24 @@ unit uDfmDbInUiForm;
 // Connection-Pooling unmoeglich und fuehren dazu, dass das Schliessen der
 // Form die Verbindung beendet.
 //
-// Heuristik:
-//   * Root-Klasse Suffix 'DataModule' -> nicht zu pruefen (das ist genau
-//     das gewuenschte Pattern).
-//   * Sonst: alle DB-Komponenten (TADOConnection, TFDQuery, ...) im
-//     Komponenten-Baum melden.
+// Ist die Wurzel ein DataModule?
+//   1. VORRANG: die aufgeloeste Klassenkette der zugehoerigen .pas. Endet
+//      sie in TDataModule, ist die Wurzel eines - egal wie sie heisst.
+//   2. RUECKFALL, wenn keine Kette da ist (keine .pas, Parse-Fehler,
+//      Single-File-Lauf): Klassenname endet auf 'DataModule'.
+// Sonst: alle DB-Komponenten (TADOConnection, TFDQuery, ...) im
+// Komponenten-Baum melden.
+//
+// WARUM DER NAME NUR NOCH RUECKFALL IST (Voll-Review 2026-09-12,
+// Verdacht 297 - am Korpus BESTAETIGT): der Suffix-Test allein erkannte
+// 6 von 41 direkten TDataModule-Nachfahren, also 15 %. Durchgefallen sind
+// unter anderem die verbreitete Praefix-Konvention (TdmMain, TdmodURI),
+// abgekuerzte Formen (TDM, TDMDS, TCustomersDM), sprechende Namen
+// (TEntitiesModule, TGlobalModule, TImagesModule), die JVCL-Action-Module
+// (TJvPlugIn, TJvDBActions) - und sogar der IDE-Vorgabename TDataModule1,
+// weil der auf '1' endet. Auf 36 Korpusdateien standen dadurch 72 Funde,
+// deren Meldetext sich selbst widerspricht: "lives on dmMain (TdmMain) -
+// move to a TDataModule", wo TdmMain bereits eines IST.
 //
 // Erkennung der DB-Klassen ueber die bestehende Whitelist aus
 // uDfmDbFieldAnalysis (DataSetClass / DataSourceClass) plus ein paar
@@ -26,13 +39,15 @@ interface
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
-  uComponentGraph, uDfmDbFieldAnalysis;
+  uComponentGraph, uDfmDbFieldAnalysis, uFormBinder;
 
 type
   TDfmDbInUiFormDetector = class
   public
-    class procedure Analyze(Graph: TComponentGraph; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+    // ABinding darf nil sein (Single-File-Lauf, fehlende .pas): dann
+    // entscheidet allein der Klassenname wie vor dem 2026-09-12.
+    class procedure Analyze(Graph: TComponentGraph; ABinding: TFormBinding;
+      const FileName: string; Results: TObjectList<TLeakFinding>);
   end;
 
 implementation
@@ -41,7 +56,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.StrUtils;
+  System.StrUtils, uDetectorUtils;   // FirstParentToken (Ahnen-Token)
 
 const
   // Connection-Klassen, die auch nicht auf eine UI-Form gehoeren - durch
@@ -68,16 +83,49 @@ begin
          or IsConnectionClass(ClassRef);
 end;
 
-function IsDataModuleRoot(const ClassRef: string): Boolean;
-// Schluesselheuristik: Klassen-Name endet auf 'DataModule' (Delphi-
-// Konvention fuer TDataModule-Nachfahren). Deckt 'TDataModule',
-// 'TMainDataModule', 'TPersonsDataModule' etc. ab.
+function IsDataModuleRootByName(const ClassRef: string): Boolean;
+// RUECKFALL-Heuristik: Klassen-Name endet auf 'DataModule' (eine der
+// Delphi-Konventionen fuer TDataModule-Nachfahren). Deckt 'TDataModule',
+// 'TMainDataModule', 'TPersonsDataModule' ab - und sonst wenig, siehe
+// die Zahlen im Unit-Kopf. Bleibt nur fuer Laeufe ohne aufgeloeste
+// Klassenkette; alleinstehend war sie die Ursache von 72 Korpus-FPs.
 begin
   Result := EndsText('DataModule', ClassRef);
 end;
 
+function IsDataModuleRootByAncestry(ABinding: TFormBinding): Boolean;
+// VORRANG-Pruefung: die Klassenkette der zugehoerigen .pas hochlaufen und
+// sehen, ob sie in TDataModule endet.
+//
+// Warum die SPITZE der Kette und nicht die eigene Klasse: der Binder
+// stoppt die Aufloesung an den VCL-Wurzeln (TForm/TFrame/TDataModule/...).
+// Bei 'TdmMain = class(TDataModule)' ist Parent deshalb nil und der Ahn
+// steht direkt in FormClass.TypeRef; bei 'TdmKunden = class(TdmBasis)'
+// haengt eine Bindung dazwischen, und erst deren TypeRef nennt
+// TDataModule. Dasselbe Muster benutzt IsAncestorChainResolved in
+// uDfmDeadEvent.
+//
+// Mehrdeutige Ahnen (derselbe Klassenname in mehreren Units) werden NICHT
+// gesondert behandelt: anders als bei uDfmDeadEvent, wo aus einer
+// geratenen Kette ein behaupteter Absturz wurde, kostet ein Fehlgriff hier
+// hoechstens einen unterdrueckten Hinweis auf eine fremde, gleichnamigen
+// Klasse - und in die sichere Richtung.
+var
+  Top : TFormBinding;
+begin
+  Result := False;
+  if ABinding = nil then Exit;
+  Top := ABinding;
+  while Top.Parent <> nil do
+    Top := Top.Parent;
+  if Top.FormClass = nil then Exit;
+  Result := SameText(TDetectorUtils.FirstParentToken(Top.FormClass.TypeRef),
+                     'TDataModule');
+end;
+
 class procedure TDfmDbInUiFormDetector.Analyze(Graph: TComponentGraph;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  ABinding: TFormBinding; const FileName: string;
+  Results: TObjectList<TLeakFinding>);
 var
   All  : TList<TComponentNode>;
   Root : TComponentNode;
@@ -88,7 +136,11 @@ begin
   if Graph.Roots.Count = 0 then Exit;
 
   Root := Graph.Roots[0];
-  if IsDataModuleRoot(Root.ClassRef) then Exit;
+  // Reihenfolge ist Absicht: die Kette schlaegt den Namen. Der Name bleibt
+  // als zweite Chance stehen, damit ein Lauf ohne .pas nicht SCHLECHTER
+  // wird als vorher.
+  if IsDataModuleRootByAncestry(ABinding) then Exit;
+  if IsDataModuleRootByName(Root.ClassRef) then Exit;
 
   All := Graph.EnumerateAll;
   try
