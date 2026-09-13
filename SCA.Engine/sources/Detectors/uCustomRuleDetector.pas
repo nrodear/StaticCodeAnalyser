@@ -38,7 +38,7 @@ type
     Severity: TLeakSeverity;
     Pattern: string; // raw pattern text
     PatternType: TPatternType;
-    PatternRegex: TRegEx; // pre-compiled wenn PatternType=ptRegex
+    PatternRegex: TRegEx; // pre-compiled fuer ptRegex UND ptWord (AddRule)
     // GEPARST, ABER NIE GELESEN - siehe AnalyzeFile.
     Target: TRuleTarget;
     Message: string; // optional, fallback = Description
@@ -115,8 +115,28 @@ begin
 end;
 
 class procedure TCustomRuleDetector.AddRule(const ARule: TCustomRule);
+// ptWord bekommt seinen '\b<escaped>\b'-Regex HIER einmal, nicht in
+// MatchPattern je Datei. Gemessen 2026-09-13: ein TRegEx.Create mit
+// roCompiled kostet 8-10 us; bei 13.419 Korpusdateien schlaegt das je
+// Wortregel mit gut 0,1 s zu Buche.
+//
+// WARUM HIER UND NICHT IN LoadFromYaml: AddRule ist der EINZIGE Schreiber
+// von FRules - LoadFromYaml geht selbst durch AddRule. Wer nur den
+// YAML-Weg vorkompiliert, laesst jede programmatisch gesetzte ptWord-Regel
+// mit einem leeren TRegEx-Record stehen; uTestCustomRuleDetector.MakeRule
+// fuellt PatternRegex naemlich nur fuer ptRegex.
+//
+// Die Instanz wird ueber alle Dateien geteilt. Das ist zulaessig, weil
+// geladene Custom-Rules den Parallelmodus abschalten
+// (uStaticAnalyzer2.pas, HasRules-Gate) - genau wie fuer ptRegex heute.
+var
+  R: TCustomRule;
 begin
-  FRules.Add(ARule);
+  R := ARule;
+  if R.PatternType = ptWord then
+    R.PatternRegex := TRegEx.Create('\b' + TRegEx.Escape(R.Pattern) + '\b',
+      [roCompiled]);
+  FRules.Add(R);
   FLoaded := True;
 end;
 
@@ -354,7 +374,6 @@ var
   Lines: TArray<string>;
   i: Integer;
   Match: TMatch;
-  WordRx: TRegEx;
 begin
   Matches := TList<Integer>.Create;
   Lines := Source.Split([#13#10, #10, #13]);
@@ -367,14 +386,12 @@ begin
 
     ptWord:
       // Word-Match = Pattern als ganzes Wort, case-sensitive.
-      // Implementiert via Regex \b<pattern>\b mit Pattern escaped.
-      begin
-        WordRx := TRegEx.Create('\b' + TRegEx.Escape(R.Pattern) + '\b',
-          [roCompiled]);
-        for i := 0 to High(Lines) do
-          if WordRx.IsMatch(Lines[i]) then
-            Matches.Add(i + 1);
-      end;
+      // Der Regex '\b<escaped>\b' liegt seit AddRule vorkompiliert in
+      // PatternRegex. IsMatch statt Match: gebraucht wird nur die
+      // Zeilennummer, und IsMatch baut kein TMatch-Gruppenobjekt.
+      for i := 0 to High(Lines) do
+        if R.PatternRegex.IsMatch(Lines[i]) then
+          Matches.Add(i + 1);
 
     ptRegex:
       for i := 0 to High(Lines) do
