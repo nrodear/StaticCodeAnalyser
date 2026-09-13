@@ -29,6 +29,9 @@ type
     // --- Doku-Quickwins 2026-07-25: dekorative Klassen unterdrueckt ---
     [Test] procedure Test_DecorativeClasses_NotReported;
     [Test] procedure Test_DecorativeSuppression_RealMismatch_StillReported;
+    // Testluecke 139: inherited-Knoten externer Parent-Libs
+    [Test] procedure Test_InheritedNode_NotReported;
+    [Test] procedure Test_PlainNodeSameFixture_StillReported;
   end;
 
 implementation
@@ -408,6 +411,67 @@ begin
     Assert.AreEqual<Integer>(1, Count(F, fkDfmSchemaMismatch),
       'echter Mismatch (TButton ohne Field) muss trotz Label-Suppression feuern');
     Assert.Contains(F[0].MissingVar, 'btnGo');
+  finally F.Free; end;
+end;
+
+// Die .pas ist fuer beide Testluecke-139-Tests DIESELBE - eine leere
+// TForm1 ohne published Felder. Nur das DFM unterscheidet sich, und
+// genau darin besteht die Aussage des Paares. Als gemeinsame
+// Konstante, damit der Unterschied nicht in zwei fast gleichen
+// Bloecken untergeht (und der Selbstscan keinen DuplicateBlock
+// meldet).
+const
+  SM139_PAS =
+    'unit uMain;'#13#10 +
+    'interface'#13#10 +
+    'uses Vcl.Forms, Vcl.ExtCtrls;'#13#10 +
+    'type'#13#10 +
+    '  TForm1 = class(TForm)'#13#10 +
+    '  end;'#13#10 +
+    'var Form1: TForm1;'#13#10 +
+    'implementation'#13#10 +
+    'end.'#13#10;
+
+procedure TTestDfmSchemaMismatch.Test_InheritedNode_NotReported;
+// Testluecke 139 (Voll-Review 2026-09-12): die IsInherited-
+// Unterdrueckung hatte keinen Test - kein Fixture enthielt einen
+// inherited-Knoten. Laut Kommentar am Gate bringt sie in pyscripter
+// 24 Funde auf 0: ein geerbter Knoten wird von der ELTERNFORM
+// gestreamt, sein published Feld steht in der Elternklasse, und die
+// kennt dieser Detektor nicht.
+//
+// Die Fixture hat KEIN published Feld fuer pnlAusEltern - ohne die
+// Unterdrueckung waere das ein Fund.
+// Am gebauten Stand nachgemessen: 0 Funde.
+const DFM =
+  'object Form1: TForm1'#13#10 +
+  '  inherited pnlAusEltern: TPanel'#13#10 +
+  '  end'#13#10 +
+  'end'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM, SM139_PAS);
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmSchemaMismatch),
+    'geerbte Knoten gehoeren der Elternklasse');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmSchemaMismatch.Test_PlainNodeSameFixture_StillReported;
+// Die Gegenprobe, und sie ist hier unverzichtbar: dieselbe leere
+// Klasse, derselbe Aufbau - nur heisst es 'object' statt
+// 'inherited'. Ohne sie waere der Test darueber auch dann gruen,
+// wenn der Detektor an dieser Fixture generell nichts findet.
+// Am gebauten Stand nachgemessen: 1 Fund.
+const DFM =
+  'object Form1: TForm1'#13#10 +
+  '  object pnlFehlt: TPanel'#13#10 +
+  '  end'#13#10 +
+  'end'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM, SM139_PAS);
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmSchemaMismatch),
+    'ein normaler Knoten ohne published Feld ist Schema-Drift');
   finally F.Free; end;
 end;
 
