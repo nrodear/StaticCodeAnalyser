@@ -162,6 +162,47 @@ begin
     H.StartsWith('169.254.') or H.StartsWith('fe80:');
 end;
 
+function IsXmlNamespaceIdentityUrl(const Url: string): Boolean;
+// Die URL benennt einen XML-Namespace bzw. ein Schema - eine IDENTITAET,
+// die nie abgerufen wird. Verankert am HOST (ExtractHost liefert lowercase,
+// ohne Port, ohne userinfo).
+//
+// Voll-Review 2026-09-13: vorher stand hier eine reine Pos()-Pruefung ueber
+// die GANZE URL. Sie riss echte Endpunkte STILL mit - die Whitelist steht
+// VOR den Gates F/M/D/T, ein Treffer verlaesst die Match-Schleife sofort.
+// An der Sonde belegt (strict / min-severity hint; je 0 Funde vorher, je 1
+// nachher - die markerfreie Kontroll-URL derselben Form meldet 1):
+//   http://api.contoso-shop.de/schemas/v1/users     Marker im PFAD
+//   http://api.contoso-shop.de/v1/users?xmlns=1     Marker im QUERY
+//   http://myschemas-api.contoso-shop.de/v1/users   Marker in der WORTMITTE
+//   http://umleitung.contoso-shop.de/go?to=w3.org   Marker im QUERY-WERT
+// Dieselbe Fehlerklasse hat ExtractHost 2026-08-16 fuer die
+// Loopback-Pruefung schon einmal beseitigt; nur hier blieb sie stehen.
+//
+// Korpuswirkung EXAKT 0: die Whitelist greift auf 16.024 Quelldateien genau
+// dreimal, alle drei mit Host-Label 'schemas.' (Alcinoe AndroidMerger.dpr,
+// jcl ConditionParserMain.pas und JclMsBuild.pas). xmlns, namespaces,
+// w3.org und xmlsoap.org haben NULL Korpus-Treffer; sie stehen wie
+// 'registryname' in GATE M unbelegt mit drin, weil sie die Absicht der
+// Liste benennen.
+//
+// RESTRISIKO BENANNT: eine Namespace-URI mit fremdem Host und dem Marker
+// nur im Pfad (http://firma.de/xmlns/typen) wird jetzt gemeldet.
+// Vollstaendig war der Filter dort ohnehin nie - http://tempuri.org/,
+// http://purl.org/dc/ und http://www.opengis.net/gml tragen keinen der
+// Marker und sind schon heute Funde. Wer den Pfad-Fall braucht,
+// unterdrueckt ihn per Suppression-Marker.
+var
+  H : string;
+begin
+  H := ExtractHost(Url);
+  Result := (H = 'w3.org')      or H.EndsWith('.w3.org') or
+            (H = 'xmlsoap.org') or H.EndsWith('.xmlsoap.org') or
+            H.StartsWith('schemas.') or
+            H.StartsWith('xmlns.') or
+            H.StartsWith('namespaces.');
+end;
+
 // ===========================================================================
 // SCA115-FP-Paket (Autopsie 2026-08-27)
 // ---------------------------------------------------------------------------
@@ -545,12 +586,10 @@ begin
       // Loopback-, IPC- und Doku-/Test-Adressen: kein erreichbarer Endpunkt
       // (enthaelt GATE P, den FQDN-Wurzelpunkt-Schnitt in ExtractHost)
       if IsNonRoutableOrReservedHost(Url) then Continue;
-      // XML-Namespace-Whitelist (URL ist eine Identitaet, kein Call)
-      if (Pos('xmlns', LowerCase(Url)) > 0) or
-         (Pos('schemas',     LowerCase(Url)) > 0) or
-         (Pos('w3.org',      LowerCase(Url)) > 0) or
-         (Pos('xmlsoap.org', LowerCase(Url)) > 0) or
-         (Pos('namespaces',  LowerCase(Url)) > 0) then Continue;
+      // XML-Namespace-Whitelist (URL ist eine Identitaet, kein Call) - am
+      // HOST verankert; Herleitung und Korpuszahlen stehen bei
+      // IsXmlNamespaceIdentityUrl.
+      if IsXmlNamespaceIdentityUrl(Url) then Continue;
       // --- SCA115-FP-Paket 2026-08-27, Reihenfolge = aufsteigende Kosten ---
       // GATE F: Host ist nur ein Format-Platzhalter (reiner String-Vergleich)
       if IsFormatPlaceholderHost(Url) then Continue;
