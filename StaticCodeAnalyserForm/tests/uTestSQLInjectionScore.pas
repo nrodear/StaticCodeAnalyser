@@ -36,6 +36,9 @@ type
     // ---- Boundary / Defensive ---------------------------------------------
     [Test] procedure ThreePluses_BoundaryEasyScore2;
     [Test] procedure EmptyRHS_DefensiveScore1;
+    // Posten 273: + im Literal ist SQL-Text, keine Verkettung
+    [Test] procedure PlusInsideLiteral_NotCounted;
+    [Test] procedure TwoRealConcats_StillScore2;
   end;
 
 implementation
@@ -43,6 +46,45 @@ implementation
 uses
   System.SysUtils,
   uSQLInjectionScore;
+
+{ --- Posten 273: das + im SQL-Text ist keine Delphi-Verkettung -- }
+//
+// CountPlus und HasFunctionCallConcat liefen auf dem rohen RHS. Der
+// Parser reicht Stringliterale MIT Inhalt durch, also zaehlte jedes +
+// des SQL-TEXTES mit - und '+' ist auf MSSQL der Konkat-Operator, in
+// jedem Dialekt die Addition. Der Score mass dadurch teilweise die
+// Arithmetik im Statement statt den Behebungsaufwand.
+//
+// An der gebauten Exe gemessen:
+//   S := 'SELECT a+b+c FROM t WHERE x = '+V;   Fix 2/5
+//   S := 'SELECT * FROM t WHERE x = '+V;       Fix 1/5
+// Beide haben genau EINE Delphi-Verkettung.
+//
+// HasStructuralConcat laeuft bewusst weiter auf dem UNGEBLANKTEN Text:
+// seine Marker brauchen den Literal-Inhalt ('from'), den das Blanken
+// gerade ausloescht.
+
+procedure TTestSQLInjectionScore.PlusInsideLiteral_NotCounted;
+// Zwei Pluszeichen im SQL-Text, eine echte Verkettung.
+// Vor dem Fix Score 2, nach dem Fix 1.
+var E: TFixEstimate;
+begin
+  E := TSQLFixScorer.Estimate('''SELECT a+b+c FROM t WHERE x = ''+V');
+  Assert.AreEqual<Integer>(1, E.Score,
+    'nur die Delphi-Verkettung zaehlt, nicht die SQL-Arithmetik');
+end;
+
+procedure TTestSQLInjectionScore.TwoRealConcats_StillScore2;
+// GEGENPROBE: zwei ECHTE Verkettungen, kein + im Literal.
+// Vor wie nach dem Fix Score 2 - der Fix darf nicht zu viel wegnehmen.
+var E: TFixEstimate;
+begin
+  E := TSQLFixScorer.Estimate(
+    '''WHERE x = ''+A+'' AND y = ''+B');
+  Assert.AreEqual<Integer>(2, E.Score,
+    'zwei echte Verkettungen bleiben Score 2');
+end;
+
 
 procedure TTestSQLInjectionScore.SinglePlus_TrivialScore1;
 var E: TFixEstimate;
@@ -85,7 +127,12 @@ var E: TFixEstimate;
 begin
   // STRUCTURAL-Marker matchen `'from ''+'` (Parser-Repraesentation des
   // SQL-Strings inkl. Quote-Marker). Vgl. uSQLInjectionScore.HasStructuralConcat
-  E := TSQLFixScorer.Estimate('SELECT * FROM ''+TableName');
+  // PARSER-TREU seit Posten 273: der RHS ist quote-BALANCIERT, so wie
+  // ihn der Parser liefert. Vorher fehlte das oeffnende Quote; das
+  // war folgenlos, solange niemand die Literale blankte - seit
+  // CountPlus auf der geblankten Fassung laeuft, waere der halbe
+  // Ausdruck ein offenes Literal und TotalPlus faelschlich 0.
+  E := TSQLFixScorer.Estimate('''SELECT * FROM ''+TableName');
   Assert.AreEqual<Integer>(4, E.Score);
   Assert.AreEqual(Ord(fdHard), Ord(E.Difficulty));
 end;
@@ -94,8 +141,9 @@ procedure TTestSQLInjectionScore.StructuralWithManyPluses_VeryHardScore5;
 // Struktureller Teil + viele Pluses (>2) -> Very Hard (5)
 var E: TFixEstimate;
 begin
+  // Quote-balanciert, siehe StructuralFrom_HardScore4.
   E := TSQLFixScorer.Estimate(
-    'SELECT * FROM ''+Tbl WHERE a = +A AND b = +B AND c = +C');
+    '''SELECT * FROM ''+Tbl WHERE a = +A AND b = +B AND c = +C');
   Assert.AreEqual<Integer>(5, E.Score);
   Assert.AreEqual(Ord(fdVeryHard), Ord(E.Difficulty));
 end;

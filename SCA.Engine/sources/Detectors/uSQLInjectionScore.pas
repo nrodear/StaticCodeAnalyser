@@ -69,6 +69,9 @@ implementation
 // noinspection-file BeginEndRequired, CyclomaticComplexity, LongMethod, MagicNumber, TooLongLine, UnsortedUses, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uDetectorUtils;   // BlankStringLiterals
+
 { ---- Hilfsfunktionen ---- }
 
 class function TSQLFixScorer.CountPlus(const S: string): Integer;
@@ -125,6 +128,7 @@ end;
 class function TSQLFixScorer.Estimate(const RHS: string): TFixEstimate;
 var
   Low         : string;
+  LowBlank    : string;
   TotalPlus   : Integer;
   IsStructural: Boolean;
   HasFuncCall : Boolean;
@@ -143,9 +147,22 @@ begin
   Suggestion := '';
 
   Low         := RHS.ToLower;
-  TotalPlus   := CountPlus(Low);
+  // Ein '+' INNERHALB eines Stringliterals ist SQL-Text - auf MSSQL der
+  // Konkat-Operator, in jedem Dialekt die Addition -, keine Delphi-
+  // Verkettung. Es blaehte Score und Reason-Zahl auf: der Score mass
+  // dadurch teilweise die Arithmetik im Statement statt den
+  // Behebungsaufwand. An der gebauten Exe gemessen:
+  //   S := 'SELECT a+b+c FROM t WHERE x = '+V;   Fix 2/5
+  //   S := 'SELECT * FROM t WHERE x = '+V;       Fix 1/5
+  // Beide haben genau EINE Delphi-Verkettung.
+  //
+  // HasStructuralConcat laeuft BEWUSST weiter auf Low: seine Marker
+  // brauchen den Literal-INHALT ('from'), den BlankStringLiterals gerade
+  // ausblankt (Posten 272 - das Quote in den Markern ist das Gate).
+  LowBlank    := TDetectorUtils.BlankStringLiterals(Low);
+  TotalPlus   := CountPlus(LowBlank);
   IsStructural := HasStructuralConcat(Low);
-  HasFuncCall := HasFunctionCallConcat(Low);
+  HasFuncCall := HasFunctionCallConcat(LowBlank);
   // ── Score-Berechnung (alle Branches setzen Score explizit) ───────────────
   if IsStructural then
   begin
