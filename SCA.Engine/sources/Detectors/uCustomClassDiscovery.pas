@@ -85,7 +85,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.SysUtils, System.Character;
+  System.SysUtils, System.Character,
+  uDetectorUtils;   // BlankStringLiterals (Minor 232)
 
 const
   // Basis-Klassen die NICHT als Leak-Pflicht gelten.
@@ -207,7 +208,16 @@ var
   begin
     Result := False;
     if Txt = '' then Exit;
-    Lower := LowerCase(Txt);
+    // String-Literale blanken, BEVOR gesucht wird (Voll-Review
+    // 2026-09-12, Minor 232): 'TFoo.Create' als TEXT - in einem
+    // Code-Generator-Template, einer PascalScript-Signatur oder einer
+    // Log-Meldung - ist keine Instanziierung und darf die Klasse nicht
+    // als leak-relevant markieren. Dieselbe Haertung wie in
+    // uDateFormatSettings und uDivByZero.
+    //
+    // BlankStringLiterals statt Strip: laengenerhaltend, damit die
+    // Positionsarithmetik unten (P, Idx, PrevCh) unveraendert gilt.
+    Lower := LowerCase(TDetectorUtils.BlankStringLiterals(Txt));
     Idx   := 0;
     repeat
       P := Pos(Prefix, Lower, Idx + 1);
