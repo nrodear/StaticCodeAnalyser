@@ -26,7 +26,13 @@ unit uCognitiveComplexity;
 //       Score 7575 statt 121) - eine reine Metrik-Verfaelschung. Siehe
 //       CountInMethod: direkte nkIfStmt-Kinder eines nkElseBranch erben
 //       die Tiefe des UMGEBENDEN if, nicht die erhoehte.
-//   B3: +1 pro boolean-Operator-Sequenz (and/or/xor) in if-Bedingung.
+//   B3: +1 pro boolean-OPERATOR (and/or/xor) in if-Bedingung.
+//       Sonar zaehlt hier Sequenzen: 'a and b and c' gibt dort EINEN
+//       Punkt, hier ZWEI. Bewusste Vereinfachung - die Sequenzerkennung
+//       braeuchte einen Ausdrucksbaum, den dieser Detektor nicht hat.
+//       Der Kopf behauptete bis zum Voll-Review 2026-09-12 das
+//       Sonar-Verhalten und widersprach damit der Zaehlschleife
+//       (Minor 230).
 //
 // Schwellwert: DetectorMaxCognitive (Default 15 - Sonar-Industry-
 // Standard). > 15 bedeutet "schwer mental zu folgen".

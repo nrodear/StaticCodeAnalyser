@@ -29,8 +29,14 @@ unit uConcatToFormat;
 //
 // Befund-Schweregrad: lsWarning. Roter Stripe im IDE-Editor entsteht
 // ueber uIDELineHighlighter (SeverityAccent ergibt ACCENT_WARNING ~
-// Amber). Wer einen echten roten Balken will, kann unten `EMIT_SEVERITY`
-// auf `lsError` setzen (ACCENT_ERROR = sattes Rot).
+// Amber).
+//
+// Der Schweregrad kommt aus dem KIND-KATALOG (uSCAConsts, dort steht
+// fkConcatToFormat mit DefaultSeverity lsWarning) und laesst sich ueber
+// Profil bzw. analyser.ini umstellen - NICHT hier in der Unit. Bis zum
+// Voll-Review 2026-09-12 versprach dieser Absatz eine lokale Konstante
+// EMIT_SEVERITY, die zwar dastand, aber von niemandem gelesen wurde
+// (Minor 231); sie ist jetzt entfernt.
 //
 // Die Logik laeuft - analog zu uSQLInjection - auf der flachen TypeRef-
 // String-Repraesentation des RHS (der Parser flacht arithmetische
@@ -58,12 +64,6 @@ type
     // 4 Termen (3 '+') gewinnt Format() klar an Lesbarkeit. -61% Noise, echte
     // lange Ketten bleiben Fund.
     const MIN_NON_LITERAL_PLUS = 3;
-
-    // Default-Severity. Steuert die Farbe des IDE-Balkens:
-    //   lsError   -> ACCENT_ERROR   (sattes Rot)
-    //   lsWarning -> ACCENT_WARNING (Amber/Orange)
-    //   lsHint    -> ACCENT_HINT    (Gruen)
-    const EMIT_SEVERITY = lsWarning;
 
     // Zaehlt '+' Operatoren ausserhalb von String-Literalen.
     // Liefert ausserdem in OutHasLiteral / OutHasNonLiteral zurueck, ob
