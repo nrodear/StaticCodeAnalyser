@@ -32,6 +32,10 @@ type
     [Test] procedure Test_Finding_KindAndSeverity;
     [Test] procedure Test_Hint_MentionsCountAndExtractName;
     [Test] procedure Test_BothIndividualAndAggregate_Coexist;
+    // Minor 238: das Unit-Praefix nur bei KLEINEM u kappen
+    [Test] procedure Test_LowercaseUPrefix_Stripped;
+    [Test] procedure Test_UppercaseUName_NotStripped;
+    [Test] procedure Test_LowercaseUThenLowercase_StillStripped;
   end;
 
 implementation
@@ -297,6 +301,109 @@ begin
       'Drei Einzel-DbInUiForm-Findings bleiben');
     Assert.AreEqual<Integer>(1, Count(F, fkDfmDataModuleSplitHint),
       'Plus ein Aggregat-Hint');
+  finally F.Free; end;
+end;
+
+{ --- Minor 238: das Unit-Praefix im Vorschlagsnamen -------------- }
+//
+// Der Refactor-Vorschlag leitet sich aus dem Dateinamen ab. Das 'u'
+// davor wurde mit StartsText geprueft - case-INSENSITIV -, also auch
+// ein grosses 'U' gekappt. Aus 'Unit4.dfm' wurde der Vorschlag
+// 'Tnit4DataModule'; im Korpus steht dieser Fund wirklich.
+//
+// Der Fix prueft klein-u, sonst nichts. Die vom Review zusaetzlich
+// vorgeschlagene Bedingung "Folgezeichen gross" waere zu scharf: der
+// Korpus hat vier Funde aus 'ufJvDBMove.dfm', wo auf das Praefix ein
+// kleines 'f' folgt und das Kappen richtig ist. Der dritte Test haelt
+// genau diesen Fall.
+// Alle drei am gebauten Stand verprobt.
+//
+// Die drei Fixturen sind identisch bis auf den DATEINAMEN - der ist
+// der Prueffall. Der Selbstscan meldet dafuer zwei zusaetzliche
+// DuplicateBlock-Hints; in Testunits per Profil-Politik kein Mangel.
+
+procedure TTestDfmDataModuleSplitHint.Test_LowercaseUPrefix_Stripped;
+// Der Normalfall, heute schon richtig - als Positiv-Kontrolle.
+const DFM =
+  'object F: TForm'#13#10 +
+  '  object Conn: TADOConnection end'#13#10 +
+  '  object Qry: TADOQuery end'#13#10 +
+  '  object DS: TDataSource end'#13#10 +
+  'end';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := RunDbInUiThenAggregate(DFM, 'uMainForm.dfm');
+  try
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkDfmDataModuleSplitHint then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit);
+    Assert.IsTrue(Pos('TMainFormDataModule', Hit.MissingVar) > 0,
+      'kleines u ist das Unit-Praefix und faellt weg - gemeldet wurde: ' + Hit.MissingVar);
+  finally F.Free; end;
+end;
+
+procedure TTestDfmDataModuleSplitHint.Test_UppercaseUName_NotStripped;
+// DER FEHLERFALL. Heute liefert er TserFormDataModule.
+const DFM =
+  'object F: TForm'#13#10 +
+  '  object Conn: TADOConnection end'#13#10 +
+  '  object Qry: TADOQuery end'#13#10 +
+  '  object DS: TDataSource end'#13#10 +
+  'end';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := RunDbInUiThenAggregate(DFM, 'UserForm.dfm');
+  try
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkDfmDataModuleSplitHint then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit);
+    Assert.IsTrue(Pos('TUserFormDataModule', Hit.MissingVar) > 0,
+      'grosses U gehoert zum Namen - gemeldet wurde: ' + Hit.MissingVar);
+  finally F.Free; end;
+end;
+
+procedure TTestDfmDataModuleSplitHint.Test_LowercaseUThenLowercase_StillStripped;
+// Die Gegenprobe zur verworfenen Zusatzbedingung: nach dem Praefix
+// darf auch ein Kleinbuchstabe stehen. Form aus dem Korpus.
+const DFM =
+  'object F: TForm'#13#10 +
+  '  object Conn: TADOConnection end'#13#10 +
+  '  object Qry: TADOQuery end'#13#10 +
+  '  object DS: TDataSource end'#13#10 +
+  'end';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := RunDbInUiThenAggregate(DFM, 'ufJvDBMove.dfm');
+  try
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkDfmDataModuleSplitHint then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit);
+    Assert.IsTrue(Pos('TfJvDBMoveDataModule', Hit.MissingVar) > 0,
+      'auch vor kleinem f ist das u das Praefix - gemeldet wurde: ' + Hit.MissingVar);
   finally F.Free; end;
 end;
 
