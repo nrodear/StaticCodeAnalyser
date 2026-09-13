@@ -40,6 +40,11 @@ type
     [Test] procedure EventHandlerSignature_Skipped;
     [Test] procedure MessageDirective_StillReported_ParserGap;
     [Test] procedure ReintroduceDirective_Skipped;
+    // Posten 9007 (Voll-Review 2026-09-12, beim EMIT_SEVERITY-Kehraus
+    // gefunden): const-Sektion + public-Sektion verliert ;class
+    [Test] procedure ConstPlusPublicSection_KnownFalsePositive;
+    [Test] procedure SameWithoutConstSection_NoFinding;
+    [Test] procedure SameWithoutPublicSection_NoFinding;
   end;
 
 implementation
@@ -713,6 +718,127 @@ begin
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkCanBeClassMethod),
     'reintroduce bleibt eine Instanzmethode');
   finally F.Free; end;
+end;
+
+{ --- Posten 9007: const-Sektion kostet den ;class-Suffix ---------- }
+//
+// GEFUNDEN BEIM AUFRAEUMEN, nicht gesucht: nach dem Entfernen der toten
+// EMIT_SEVERITY-Konstante aus uTooLongLine meldete der Selbstscan dort
+// UnusedSuppression - der noinspection-Marker fuer CanBeClassMethod
+// hatte nichts mehr zu unterdruecken. Die Konstante war also nicht
+// inert: sie hat einen FALSCH POSITIVEN erzeugt.
+//
+// AUSLOESER, an einer 2x2x2-Matrix GEMESSEN statt geraten: es braucht
+// BEIDES - eine const-Sektion im Implementierungsteil UND eine
+// explizite public-Sektion in der Klassendeklaration. Fehlt eines von
+// beiden, bleibt der Fund aus. Leerzeilen und die Frage, ob der
+// Methodenkopf ein- oder mehrzeilig ist, spielen KEINE Rolle - das
+// hatte ich zuerst angenommen und die Matrix hat es widerlegt.
+//
+// Wirkung: im TypeRef fehlt der ;class-Suffix, IsAlreadyClassMethod
+// sieht eine gewoehnliche Methode - und der Detektor raet, man solle
+// sie zur Klassenmethode machen, die sie schon ist.
+//
+// Vermutete Stelle: uParser2:790 haengt ;class index-basiert an
+// Children[BeforeCount]; bei mehrzeiligem Kopf trifft der Index
+// offenbar einen anderen Knoten. NICHT hier behoben - der ;class-Suffix
+// wird auch von uFieldLeak und uVirtualCallInCtor gelesen, eine
+// Parseraenderung braucht Bau und A/B ueber mehrere Regeln.
+//
+// Korpuswirkung heute: KEINE. fkCanBeClassMethod ist fcLow und steht
+// im Referenzlauf nicht (0 Vorkommen in der A/B-SARIF vom 13.09.).
+// Alle drei am gebauten Stand nachgemessen.
+//
+// Die drei Fixturen unterscheiden sich absichtlich in je EINER
+// Variablen - das ist die Matrix. Der Selbstscan meldet dafuer drei
+// zusaetzliche DuplicateBlock-Hints; in Testunits per Profil-Politik
+// kein Mangel.
+
+procedure TTestCanBeClassMethod.ConstPlusPublicSection_KnownFalsePositive;
+// Die 1 ist der DEFEKT. Wer 9007 behebt, stellt sie auf 0.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    class procedure Go(A: Integer; const B: string;'#13#10 +
+  '      C: Integer = 0);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'const'#13#10 +
+  '  X = 1;'#13#10 +
+  'class procedure TFoo.Go(A: Integer;'#13#10 +
+  '  const B: string; C: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  DoIt;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkCanBeClassMethod),
+    'BEKANNTER FP (Posten 9007): Go IST bereits eine Klassenmethode');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.SameWithoutConstSection_NoFinding;
+// Erste Gegenprobe: identisch bis auf die fehlende const-Sektion.
+// Sie allein macht den Unterschied.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    class procedure Go(A: Integer; const B: string;'#13#10 +
+  '      C: Integer = 0);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'class procedure TFoo.Go(A: Integer;'#13#10 +
+  '  const B: string; C: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  DoIt;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkCanBeClassMethod),
+    'ohne const-Sektion bleibt der ;class-Suffix erhalten');
+  finally F.Free; end;
+end;
+
+procedure TTestCanBeClassMethod.SameWithoutPublicSection_NoFinding;
+// Zweite Gegenprobe: MIT const, aber OHNE public-Sektion. Erst beides
+// zusammen loest den FP aus - ohne diesen Test wuerde man die
+// const-Sektion fuer die alleinige Ursache halten.
+// Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '    class procedure Go;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'const'#13#10 +
+  '  X = 1;'#13#10 +
+  'class procedure TFoo.Go;'#13#10 +
+  'begin'#13#10 +
+  '  DoIt;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkCanBeClassMethod),
+    'ohne public-Sektion bleibt der ;class-Suffix erhalten');
+  finally F.Free; end;
+end;
 end;
 
 initialization
