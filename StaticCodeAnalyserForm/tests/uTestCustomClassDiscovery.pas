@@ -34,6 +34,9 @@ type
     // ---- Instantiable-Klassifikation --------------------------------------
     [Test] procedure ClassWithCtor_IsInstantiable;
     [Test] procedure ClassWithCreateCallInUnit_IsInstantiable;
+    // Minor 232 (Voll-Review 2026-09-12): Waechter gegen
+    // Create-Evidenz aus einem String-Literal
+    [Test] procedure CreateOnlyInStringLiteral_NotInstantiable;
     [Test] procedure ClassWithoutCtorOrCreate_IsStaticOnly;
 
     // ---- Edge / Multi-Hit -------------------------------------------------
@@ -363,6 +366,41 @@ begin
   // Bewusst TFrame und nicht TForm: letzteres steht in dieser Datei
   // schon zweimal, ein drittes Vorkommen loeste SCA015 aus.
   Assert.IsTrue(TCustomClassDiscovery.IsOwnerManagedParent('TFrame'));
+end;
+
+procedure TTestCustomClassDiscovery.CreateOnlyInStringLiteral_NotInstantiable;
+// Minor 232 (Voll-Review 2026-09-12) - WAECHTER, kein Fix.
+//
+// Der Posten behauptete, UnitHasCreateCall zaehle ein TFoo.Create aus
+// einem String-Literal als Instanziierungs-Evidenz. Am gebauten Stand
+// ist das NICHT reproduzierbar: zwei Dateien, die sich
+// ausschliesslich in den Anfuehrungszeichen unterscheiden, liefern
+// mit eingeschalteter Klassenentdeckung 1 bzw. 0 Leak-Funde - die
+// zitierte Fassung erzeugt keine Evidenz.
+//
+// Eine Haertung waere also Code ohne belegbare Wirkung gewesen; ich
+// habe sie zurueckgenommen. Was bleibt, ist dieser Waechter: der
+// Parser legt Aufruf-Argumente in ANDEREN Detektorpfaden sehr wohl im
+// Knotennamen ab (belegt an uDfmComponentUnused). Sollte das hier
+// einmal zutreffen, faellt dieser Test - und dann ist die Haertung
+// begruendet.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TFoo = class'#13#10 +
+  '  FDaten: TStringList;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Nutze;'#13#10 +
+  'begin'#13#10 +
+  '  Log(''TFoo.Create'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var Inst, Stat: TArray<string>;
+begin
+  RunDiscover(SRC, Inst, Stat);
+  Assert.IsFalse(ContainsName(Inst, 'TFoo'),
+    'ein TFoo.Create in einem String-Literal ist keine Instanziierung');
 end;
 
 initialization
