@@ -204,6 +204,25 @@ var
   Bare, Hit      : string;
   HasRandomize   : Boolean;
 
+  function NameFuerMeldung(const AFullName: string): string;
+  // uParser2 legt in nkCall.Name die GANZE Aufruf-Expression ab, samt
+  // '(args)'. Die Meldung haengt selbst '(...)' an - ohne diesen Schnitt
+  // steht dort 'Random(PByte(Salt),SizeOf(...))(...)'
+  // (Voll-Review 2026-09-12, Minor zu Testluecke 160; im Korpus zwei
+  // Meldungen betroffen). Pass 2b uebergibt schon den blossen Token,
+  // deshalb faellt es nur am Statement-Pfad auf.
+  //
+  // Qualifizierer bleibt stehen ('System.Random'), Gross-/Kleinschreibung
+  // auch - anders als bei BareNameLower, das fuer den VERGLEICH normiert.
+  var
+    p : Integer;
+  begin
+    Result := AFullName;
+    p := Pos('(', Result);
+    if p > 1 then
+      Result := TrimRight(Copy(Result, 1, p - 1));
+  end;
+
   procedure Emit(ALine: Integer; const ACallName: string);
   begin
     // Factory statt Feld-fuer-Feld (Voll-Review 2026-09-12) -
@@ -246,7 +265,7 @@ begin
         // nur unqualified / System. / Math. ist die globale RTL-Random.
         var Q := CallQualifierLower(N.Name);
         if (Q = '') or (Q = 'system') or (Q = 'math') or (Q = 'self') then
-          Emit(N.Line, N.Name);
+          Emit(N.Line, NameFuerMeldung(N.Name));
       end;
     end;
   finally

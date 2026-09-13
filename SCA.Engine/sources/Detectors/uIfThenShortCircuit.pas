@@ -5,13 +5,25 @@ unit uIfThenShortCircuit;
 // unabhaengig von cond.
 //
 // Pattern (Bug / Performance / Side-Effects):
-//   x := Math.IfThen(IsCacheHit, FetchFromCache, FetchFromDb);
-//   //                          ^^^^^^^^^^^^^^  ^^^^^^^^^^^^
-//   //                          beide Calls laufen IMMER!
+//   x := Math.IfThen(IsCacheHit, FetchFromCache(), FetchFromDb());
+//   //                           ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+//   //                           beide Calls laufen IMMER!
 //
-//   x := IfThen(WantSafeMode, RiskyOperation, SafeOperation);
-//   //                        ^^^^^^^^^^^^^^  RiskyOp laeuft AUCH wenn
-//   //                                        WantSafeMode True ist!
+//   x := IfThen(WantSafeMode, RiskyOperation(), SafeOperation());
+//   //                        ^^^^^^^^^^^^^^^^  RiskyOp laeuft AUCH wenn
+//   //                                          WantSafeMode True ist!
+//
+// GEMELDET WIRD NUR DIE KLAMMERFORM. Ein Arm ohne Klammern
+// ('IfThen(b, FetchA, FetchB)') ist zwar in Delphi ebenfalls ein Aufruf,
+// wenn FetchA eine parameterlose Funktion ist - aus dem Quelltext allein
+// laesst sich das aber nicht von einer Variablen oder Konstanten
+// unterscheiden, und die sind der weit haeufigere Fall. Die Klammer ist
+// deshalb Bedingung (precision-first wie im ganzen Detektor); der Preis
+// ist ein FN fuer parameterlose Aufrufe.
+// Bis zum Voll-Review 2026-09-12 zeigten die Beispiele oben die
+// klammerlose Form und versprachen damit etwas, das der Detektor nicht
+// tut (Testluecke 158; gepinnt in
+// uTestIfThenShortCircuit.ParameterlessArms_KnownGap_NoFinding).
 //
 // Korrekt: klassisches if-then-else mit Short-Circuit-Semantik.
 //   if IsCacheHit then

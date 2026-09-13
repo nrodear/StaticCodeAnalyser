@@ -33,6 +33,9 @@ type
     [Test] procedure EmbeddedBareInWrapper_Reported;
     [Test] procedure EmbeddedQualified_Reported;
     [Test] procedure ForeignQualifier_NoFinding;
+    // Testluecke 158: Arme ohne Klammern
+    [Test] procedure ParameterlessArms_KnownGap_NoFinding;
+    [Test] procedure ParenthesisedArms_StillReported;
   end;
 
 implementation
@@ -289,6 +292,52 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkIfThenShortCircuit),
     'fremder Qualifier bleibt ausserhalb des Vertrags');
+  finally F.Free; end;
+end;
+
+procedure TTestIfThenShortCircuit.ParameterlessArms_KnownGap_NoFinding;
+// Testluecke 158 (Voll-Review 2026-09-12) - GRENZE, kein Ziel.
+//
+// 'IfThen(b, FetchA, FetchB)' ohne Klammern ist in Delphi ebenfalls
+// ein Aufruf, wenn FetchA eine parameterlose Funktion ist. Aus dem
+// Quelltext allein laesst sich das nicht von einer Variablen oder
+// Konstanten unterscheiden - und die sind der weit haeufigere Fall.
+// Die Klammer ist deshalb Bedingung (precision-first wie im ganzen
+// Detektor); der Preis ist dieser FN.
+//
+// Der Unit-Kopf zeigte bis zum Voll-Review genau die klammerlose Form
+// als Beispiel und versprach damit etwas, das der Detektor nicht tut.
+// Kopf korrigiert, Verhalten hier gepinnt.
+// Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(b: Boolean);'#13#10 +
+  'begin y := IfThen(b, FetchA, FetchB); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkIfThenShortCircuit),
+    'BEKANNTE GRENZE: ohne Klammern nicht von einer Variablen zu '
+    + 'unterscheiden');
+  finally F.Free; end;
+end;
+
+procedure TTestIfThenShortCircuit.ParenthesisedArms_StillReported;
+// Die Gegenprobe in derselben Form: NUR die Klammern unterscheiden
+// sie vom Test darueber. Ohne sie waere dessen Null auch dann
+// erklaerbar, wenn der Detektor die Zuweisungsform gar nicht sieht.
+// Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(b: Boolean);'#13#10 +
+  'begin y := IfThen(b, FetchA(), FetchB()); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkIfThenShortCircuit),
+    'mit Klammern ist es nachweislich ein Aufruf');
   finally F.Free; end;
 end;
 
