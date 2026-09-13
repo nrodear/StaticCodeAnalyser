@@ -41,6 +41,14 @@ type
 
     // --- Finding-Inhalt / Einstufung ---
     [Test] procedure Test_Finding_KindSeverityConfidenceAndMessage;
+
+    // ---- Testluecke 130: die drei ungetesteten Skip-Pfade ------------------
+    [Test] procedure Test_OwnProjectFrameClass_NotDetected;        // S4
+    [Test] procedure Test_UnknownFrameClass_StillDetected;         // S4-Gegenprobe
+    [Test] procedure Test_InlineSubtree_NotDetected;               // inline
+    [Test] procedure Test_InheritedComponent_NotDetected;          // inherited
+    [Test] procedure Test_NameOnlyInConstLiteral_NotDetected;      // S3 je Komponente
+    [Test] procedure Test_OtherTextInConstLiteral_StillDetected;   // S3-Gegenprobe
   end;
 
 implementation
@@ -460,6 +468,212 @@ begin
     Assert.AreEqual(fcLow, F[0].Confidence);
     Assert.Contains(F[0].MissingVar, 'btnOrphan');
     Assert.Contains(F[0].MissingVar, 'TButton');
+  finally F.Free; end;
+end;
+
+{ --- Testluecke 130 (Voll-Review 2026-09-12): die drei stummen Skip-Pfade --- }
+//
+// S4 (Z.350-351), der inline/inherited-Skip (Z.354) und S3 je Komponente
+// (Z.366) hatten keinen Test. Der Bestandstest Test_FindComponentInCode_Silent
+// deckt NUR die file-globale Haelfte von S3 ab (Z.325, 'FindComponent(' im
+// Quelltext schaltet die ganze Datei stumm) - nicht den Namen im
+// String-Literal einer EINZELNEN Komponente.
+//
+// Alle sechs Faelle sind am gebauten Stand nachgemessen (0/1/0/0/0/1). Der
+// Detektor emittiert mit fcLow und ist unter dem Vorgabe-Filter
+// MinConfidence=medium an der CLI unsichtbar; gemessen wurde deshalb mit
+// einer eigenen analyser.ini (MinConfidence=low) in einem separaten
+// APPDATA - die Konfiguration des Nutzers bleibt unberuehrt.
+//
+// Die sechs Fixturen sind fast gleich; jede Gegenprobe unterscheidet sich
+// absichtlich in genau einer Sache von ihrem Partner (Klasse im Repo ja/nein,
+// 'inline' statt 'object', Name im Literal ja/nein). Der Selbstscan meldet
+// dafuer fuenf zusaetzliche DuplicateBlock-Hints - in Testunits kein Mangel
+// (Profil-Politik), und ein Generator statt literaler Fixturen wuerde den
+// einen Unterschied verstecken, um den es geht.
+
+procedure TTestDfmComponentUnused.Test_OwnProjectFrameClass_NotDetected;
+// S4: TMyFrame ist im Repo-Index (uOther deklariert die Klasse) -> visuelle
+// Vererbung bzw. eingebetteter Frame, konservativ ueberspringen.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TForm1 = class(TForm)'#13#10 +
+  '  fraEmbedded: TMyFrame;'#13#10 +
+  'end;'#13#10 +
+  'var Form1: TForm1;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+const PAS_OTHER =
+  'unit uOther;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TMyFrame = class(TFrame)'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+const DFM =
+  'object Form1: TForm1'#13#10 +
+  '  object fraEmbedded: TMyFrame'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DFM, PAS_MAIN, PAS_OTHER);
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmComponentUnused),
+    'projekteigene Frame-Klasse wird uebersprungen');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmComponentUnused.Test_UnknownFrameClass_StillDetected;
+// Die Gegenprobe zu S4, und sie traegt die ganze Aussage: identisches DFM,
+// identische uMain - nur deklariert KEINE Unit die Klasse TMyFrame. Ohne
+// diesen Test bliebe offen, ob oben der Repo-Index gegriffen hat oder
+// einfach der Name 'fraEmbedded' irgendwo durchgerutscht ist.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TForm1 = class(TForm)'#13#10 +
+  '  fraEmbedded: TMyFrame;'#13#10 +
+  'end;'#13#10 +
+  'var Form1: TForm1;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+const DFM =
+  'object Form1: TForm1'#13#10 +
+  '  object fraEmbedded: TMyFrame'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DFM, PAS_MAIN, '');
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmComponentUnused),
+    'unbekannte Klasse: der S4-Skip darf NICHT greifen');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmComponentUnused.Test_InlineSubtree_NotDetected;
+// 'inline' statt 'object' - eingebetteter Frame, Laufzeit-Sub-Objekt.
+// HasInlineAncestorOrSelf laeuft die Parent-Kette hoch, weil IsInline nur am
+// inline-Knoten selbst steht. Gegenprobe ist der Test darueber: dieselbe
+// Datei mit 'object' meldet.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms;'#13#10 +
+  'type TForm1 = class(TForm)'#13#10 +
+  '  fraEmbedded: TMyFrame;'#13#10 +
+  'end;'#13#10 +
+  'var Form1: TForm1;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+const DFM =
+  'object Form1: TForm1'#13#10 +
+  '  inline fraEmbedded: TMyFrame'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DFM, PAS_MAIN, '');
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmComponentUnused),
+    'inline-Subtree wird uebersprungen');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmComponentUnused.Test_InheritedComponent_NotDetected;
+// 'inherited btnX' - in der Eltern-Form deklariertes Member. Der
+// Bestandstest Test_UnusedComponent_Detected ist die Gegenprobe in Reinform:
+// gleiche Struktur mit 'object' -> Fund.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms, Vcl.StdCtrls;'#13#10 +
+  'type TForm1 = class(TForm)'#13#10 +
+  '  btnX: TButton;'#13#10 +
+  'end;'#13#10 +
+  'var Form1: TForm1;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+const DFM =
+  'object Form1: TForm1'#13#10 +
+  '  inherited btnX: TButton'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DFM, PAS_MAIN, '');
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmComponentUnused),
+    'inherited-Komponente wird uebersprungen');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmComponentUnused.Test_NameOnlyInConstLiteral_NotDetected;
+// S3 JE KOMPONENTE (Z.366) - und die Fixture ist bewusst eine const-
+// Deklaration, nicht ein ShowMessage('btnX ...').
+//
+// WARUM DAS DER UNTERSCHIED IST: Aufruf-Argumente landen im NAMEN des
+// nkCall-Knotens (ParsePrimary haengt die Klammerinhalte an), und
+// CollectCodeTokens tokenisiert Node.Name - ein Name im Call-Argument waere
+// also schon ueber U3 (Z.363) still, eine Zeile VOR S3. const-Eintraege
+// dagegen sind nkField-Knoten, und genau die ueberspringt CollectCodeTokens
+// (Z.108). Der Rohtext-Scan CollectStringLiteralTokens sieht das Literal
+// trotzdem. Damit ist S3 der einzige Pfad, der hier greifen kann.
+//
+// 'FindComponent(' steht bewusst NICHT in der Fixture - sonst haette die
+// file-globale Haelfte von S3 (Z.325) schon vorher abgebrochen.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms, Vcl.StdCtrls;'#13#10 +
+  'type TForm1 = class(TForm)'#13#10 +
+  '  btnX: TButton;'#13#10 +
+  'end;'#13#10 +
+  'const'#13#10 +
+  '  SHinweis = ''btnX konnte nicht geladen werden'';'#13#10 +
+  'var Form1: TForm1;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+const DFM =
+  'object Form1: TForm1'#13#10 +
+  '  object btnX: TButton'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DFM, PAS_MAIN, '');
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmComponentUnused),
+    'Name in einem String-Literal -> koennte per Name aufgeloest werden');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmComponentUnused.Test_OtherTextInConstLiteral_StillDetected;
+// Gegenprobe zu S3: dieselbe Datei, dasselbe const - nur ohne den
+// Komponentennamen im Literal. Ohne sie waere der Test darueber auch dann
+// gruen, wenn die blosse Anwesenheit eines const-Abschnitts stoert.
+const PAS_MAIN =
+  'unit uMain;'#13#10 +
+  'interface'#13#10 +
+  'uses Vcl.Forms, Vcl.StdCtrls;'#13#10 +
+  'type TForm1 = class(TForm)'#13#10 +
+  '  btnX: TButton;'#13#10 +
+  'end;'#13#10 +
+  'const'#13#10 +
+  '  SHinweis = ''Etwas konnte nicht geladen werden'';'#13#10 +
+  'var Form1: TForm1;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+const DFM =
+  'object Form1: TForm1'#13#10 +
+  '  object btnX: TButton'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunDetector(DFM, PAS_MAIN, '');
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmComponentUnused),
+    'ohne den Namen im Literal greift S3 nicht');
   finally F.Free; end;
 end;
 
