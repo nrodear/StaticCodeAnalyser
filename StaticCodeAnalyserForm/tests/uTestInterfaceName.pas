@@ -19,6 +19,8 @@ type
     [Test] procedure MixedUnit_OnlyPlainInterfaceReported;
     [Test] procedure TypelibFile_NotReported;
     [Test] procedure NonTypelibFile_Gegenprobe_Reported;
+    // Posten 254: fwd-Deklaration ist kein eigener Typ
+    [Test] procedure ForwardDeclaration_ReportedOnce;
   end;
 
 implementation
@@ -232,7 +234,7 @@ const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
   'type'#13#10 +
-  '  _SiteMembershipCondition = interface;'#13#10 +
+  '  _SiteMembershipCondition = interface end;'#13#10 +
   '  Service = interface end;'#13#10 +
   'implementation'#13#10 +
   'end.';
@@ -251,7 +253,7 @@ const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
   'type'#13#10 +
-  '  _SiteMembershipCondition = interface;'#13#10 +
+  '  _SiteMembershipCondition = interface end;'#13#10 +
   '  Service = interface end;'#13#10 +
   'implementation'#13#10 +
   'end.';
@@ -260,6 +262,39 @@ begin
   F := InterfaceFindingsForFile(SRC, '.pas');
   try Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkInterfaceName),
     'ohne Typelib-Namensmuster bleiben beide Funde');
+  finally F.Free; end;
+end;
+
+{ --- Posten 254: die Vorwaertsdeklaration zaehlt nicht mit ------- }
+//
+// `Foo = interface;` deklariert keinen eigenen Typ und erzeugt keinen
+// AST-Knoten. FindBadInterfaceName prueft nach dem Wort `interface`
+// aber nur noch den Namen und meldet - zusammen mit der
+// Volldeklaration also ZWEI Funde fuer EINEN Typ.
+//
+// Im Korpus zweimal (cnwizards TestTypeDefs.pas, TBob und TBobDisp);
+// von den 4.568 fwd-Deklarationen, die Gate 1 passieren, traegt keine
+// einen Namen ohne Volldeklaration in derselben Datei - es geht kein
+// Typ verloren, nur das Duplikat.
+// Am gebauten Stand gemessen: 2 Funde. Nach dem Fix: 1.
+
+procedure TTestInterfaceName.ForwardDeclaration_ReportedOnce;
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  Foo = interface;'#13#10 +
+  '  Foo = interface'#13#10 +
+  '    procedure Qux;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkInterfaceName),
+    'Vorwaertsdeklaration und Volldeklaration sind EIN Typ');
   finally F.Free; end;
 end;
 
