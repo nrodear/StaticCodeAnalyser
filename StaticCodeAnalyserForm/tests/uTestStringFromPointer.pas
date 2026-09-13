@@ -16,6 +16,10 @@ type
     // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
     [Test] procedure ManagedStringOperand_NotReported;
     [Test] procedure LpwstrPointerOperand_Reported;
+    // Posten 274: String-Aliase und die Double-Cast-Grenze
+    [Test] procedure TFileNameOperand_NotReported;
+    [Test] procedure TCaptionOperand_NotReported;
+    [Test] procedure DoubleCast_NotReported_KnownLimit;
   end;
 
 implementation
@@ -24,6 +28,80 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 274: STRTYPES kennt jetzt TFileName und TCaption --- }
+//
+// STRTYPES listete nur die RTL-Kern-String-Typen. `type TFileName =
+// string` (System.SysUtils) und `type TCaption = string`
+// (Vcl.Controls) sind semantisch dasselbe - sie tragen einen
+// Laengenpraefix, ein Cast daraus kann nicht ueberlesen.
+//
+// An der gebauten Exe gemessen: beide Fixturen liefern heute je 1
+// Fund, nach der Ergaenzung 0. Am Korpus entfaellt keiner der 48
+// Funde - fuer jeden wurde der deklarierte Operandentyp nachgesehen.
+
+procedure TTestStringFromPointer.TFileNameOperand_NotReported;
+// Heute 1 Fund, nach der Ergaenzung 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var PName: TFileName; s: string;'#13#10 +
+  'begin'#13#10 +
+  '  s := string(PName);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkStringFromPointer),
+      'TFileName ist ein String-Alias, kein Pointer');
+  finally F.Free; end;
+end;
+
+procedure TTestStringFromPointer.TCaptionOperand_NotReported;
+// Heute 1 Fund, nach der Ergaenzung 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var PCap: TCaption; s: string;'#13#10 +
+  'begin'#13#10 +
+  '  s := string(PCap);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkStringFromPointer),
+      'TCaption ist ein String-Alias, kein Pointer');
+  finally F.Free; end;
+end;
+
+procedure TTestStringFromPointer.DoubleCast_NotReported_KnownLimit;
+// BEKANNTE GRENZE, jetzt festgenagelt: der Kopf versprach frueher, ein
+// 'string(PChar(x))' werde "zur Sicherheit auch geflaggt". Der Regex
+// hat das nie getan - hinter dem Bezeichner verlangt er unmittelbar
+// ein ")", ein inneres "(" bricht den Match ab.
+// An der gebauten Exe gemessen: 0 Funde. Der Test haelt die Grenze
+// fest, damit Kopf und Code nicht wieder auseinanderlaufen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var P: Pointer; s: string;'#13#10 +
+  'begin'#13#10 +
+  '  s := string(PChar(P));'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkStringFromPointer),
+      'BEKANNTE GRENZE: der Double-Cast bricht den Regex-Match ab');
+  finally F.Free; end;
+end;
+
 
 procedure TTestStringFromPointer.StringFromPByte_Reported;
 // Variable muss mit P+Grossbuchstabe beginnen (lex-Heuristik in uSCA160).
