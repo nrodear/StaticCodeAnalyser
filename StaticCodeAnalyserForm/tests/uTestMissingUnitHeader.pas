@@ -23,6 +23,11 @@ type
     // uebersprungen, /src/ meldet weiter.
     [Test] procedure UnitInTestsDir_NotReported;
     [Test] procedure UnitInSrcDir_StillReported;
+    // Posten 178: Hint-Direktiven und ihre Abgrenzung
+    [Test] procedure UnitDeclWithDeprecatedDirective_HeaderFound_NoFinding;
+    [Test] procedure UnitDeclWithDeprecatedDirective_NoHeader_Reported;
+    [Test] procedure UnitDeclWithPlatformDirective_HeaderFound_NoFinding;
+    [Test] procedure ProseLineWithHintWord_NotTakenAsClause_Reported;
   end;
 
 implementation
@@ -32,6 +37,98 @@ uses
   System.Generics.Collections,
   uSCAConsts, uMethodd12, uAstNode, uParser2, uMissingUnitHeader,
   uTestFindingHelper;
+
+{ --- Posten 178: die Hint-Direktiven in der unit-Klausel --------- }
+//
+// LineIsUnitDecl akzeptiert 'unit foo deprecated ''x'';' und die
+// uebrigen Hint-Direktiven (platform, experimental, library). Dieser
+// Zweig war ungetestet - ebenso die Gegenprobe, dass eine PROSAZEILE
+// mit einem Hint-Wort nicht faelschlich als Klausel durchgeht.
+//
+// Alle vier am gebauten Stand gemessen.
+
+procedure TTestMissingUnitHeader.UnitDeclWithDeprecatedDirective_HeaderFound_NoFinding;
+// DER DISKRIMINIERENDE FALL: erkennt LineIsUnitDecl die Zeile mit
+// Direktive NICHT, findet es den Kopfkommentar dahinter nicht und
+// meldet. Gemessen: 0 - der Zweig traegt.
+const SRC =
+  'unit foo deprecated ''veraltet'';'#13#10 +
+  ''#13#10 +
+  '// Kopfkommentar der Unit.'#13#10 +
+  ''#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMissingUnitHeader),
+      'die Hint-Direktive gehoert zur unit-Klausel');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingUnitHeader.UnitDeclWithDeprecatedDirective_NoHeader_Reported;
+// Die Positiv-Kontrolle daneben: dieselbe Direktive, aber KEIN
+// Kopfkommentar. Gemessen: 1. Ohne sie waere der Test oben auch bei
+// abgeschalteter Regel gruen.
+const SRC =
+  'unit foo deprecated ''veraltet'';'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMissingUnitHeader),
+      'ohne Kopfkommentar bleibt der Fund faellig');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingUnitHeader.UnitDeclWithPlatformDirective_HeaderFound_NoFinding;
+// Zweite Direktivenform - 'platform' steht ohne Stringargument.
+const SRC =
+  'unit foo platform;'#13#10 +
+  ''#13#10 +
+  '// Kopfkommentar der Unit.'#13#10 +
+  ''#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMissingUnitHeader),
+      'auch platform gehoert zur unit-Klausel');
+  finally F.Free; end;
+end;
+
+procedure TTestMissingUnitHeader.ProseLineWithHintWord_NotTakenAsClause_Reported;
+// DIE GEGENPROBE: eine Prosazeile, die das Hint-Wort enthaelt, darf
+// nicht als unit-Klausel gelten. Sonst wuerde der Detektor den
+// Kopfkommentar an der falschen Stelle suchen und schweigen.
+// Gemessen: 1 - die Zeile wird richtig als Prosa behandelt.
+const SRC =
+  'unit foo;'#13#10 +
+  'interface'#13#10 +
+  '// Diese Unit ist deprecated und wird entfernt.'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMissingUnitHeader),
+      'eine Prosazeile mit Hint-Wort ist keine unit-Klausel');
+  finally F.Free; end;
+end;
+
 
 procedure TTestMissingUnitHeader.NoHeader_Reported;
 const SRC =
