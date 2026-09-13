@@ -177,7 +177,16 @@ begin
   if HitName = '' then Exit;
   // Defense gegen False-Positive: User reicht explizit TFormatSettings
   // durch ('strtodate(s, FormatSettings)' ist sicher).
-  if MentionsFormatSettings(Text) then Exit;
+  //
+  // AUF DEM GESTRIPPTEN TEXT, wie die Suche darueber (Voll-Review
+  // 2026-09-12, Minor 235): bis dahin las die Unterdrueckung den ROHEN
+  // Text und liess sich von einem blossen Vorkommen in einem
+  // String-Literal ausloesen -
+  //   s := FormatDateTime('FormatSettings yyyy-mm-dd', d);
+  // war still, obwohl gar keine TFormatSettings uebergeben werden. Die
+  // Asymmetrie war der Fehler: wer den Treffer im gestrippten Text
+  // sucht, muss die Ausnahme dort auch suchen.
+  if MentionsFormatSettings(LowText) then Exit;
   if Assigned(CurrentMethod) then MethName := CurrentMethod.Name
   else MethName := '';
   Results.Add(TLeakFinding.New(FileName, MethName, Node.Line,

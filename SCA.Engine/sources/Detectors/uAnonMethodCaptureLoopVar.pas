@@ -187,7 +187,16 @@ var
     Tail := Copy(Blank, AnonM.Index, MaxInt);
     if not VarRE.IsMatch(Tail) then Exit;
     // Synchron ausgefuehrte Closure -> kein Deferred-Capture-Bug.
-    if HasSyncMarker(Expr) then Exit;
+    //
+    // AUF DEM GEBLANKTEN TEXT, wie Regex und Tail-Schnitt darueber
+    // (Voll-Review 2026-09-12, Minor 226): bis dahin las das Gate den
+    // ROHEN Ausdruck, und ein Sync-Wort in einem beliebigen
+    // String-Literal des Closure-Rumpfs -
+    //   Log('siehe Synchronize im Handbuch');
+    // - schaltete den Fund still ab. BlankStringLiterals ist
+    // laengenerhaltend, die Suche findet also weiterhin jedes ECHTE
+    // Vorkommen an derselben Stelle.
+    if HasSyncMarker(Blank) then Exit;
     Reported.AddOrSetValue(N.Line, True);
     F            := TLeakFinding.Create;
     F.FileName   := FileName;

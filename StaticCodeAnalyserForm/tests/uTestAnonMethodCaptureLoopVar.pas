@@ -23,6 +23,8 @@ type
     [Test] procedure BareForEachMarker_NotReported;
     [Test] procedure SortComparerMarker_NotReported;
     [Test] procedure UnknownCallee_StillReported;
+    // Minor 226: das Sync-Gate las den ROHEN Ausdruck
+    [Test] procedure SyncWordOnlyInStringLiteral_StillReported;
   end;
 
 implementation
@@ -280,6 +282,41 @@ begin
   try Assert.AreEqual<Integer>(1,
     TFindingHelper.Count(F, fkAnonMethodCaptureLoopVar),
     'ohne Marker bleibt die By-Reference-Falle ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestAnonMethodCaptureLoopVar.SyncWordOnlyInStringLiteral_StillReported;
+// Minor 226 (Voll-Review 2026-09-12). Das Sync-Gate durchsuchte den
+// ROHEN Ausdruck nach Synchronize/Queue/ForceQueue - ein solches Wort
+// in einem beliebigen String-Literal des Closure-Rumpfs, etwa in einer
+// Log-Meldung, schaltete den Fund still ab. Regex und Tail-Schnitt
+// darueber arbeiten laengst auf dem geblankten Text; nur die Ausnahme
+// nicht.
+//
+// Die Gegenprobe gibt es schon: SyncClosureWithLoopVar_NotReported
+// prueft den ECHTEN Synchronize-Aufruf - der muss weiterhin
+// unterdruecken, sonst waere aus der Verengung eine Verbreiterung
+// geworden.
+// Am gebauten Stand nachgemessen: vor dem Fix 0 Funde, danach 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 0 to 10 do'#13#10 +
+  '    TThread.CreateAnonymousThread('#13#10 +
+  '      procedure'#13#10 +
+  '      begin'#13#10 +
+  '        Log(''siehe Synchronize im Handbuch'');'#13#10 +
+  '        Verarbeite(i);'#13#10 +
+  '      end).Start;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkAnonMethodCaptureLoopVar),
+    'ein Sync-Wort im Literal ist kein Synchronize-Aufruf');
   finally F.Free; end;
 end;
 
