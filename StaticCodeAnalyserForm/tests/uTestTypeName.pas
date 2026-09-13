@@ -26,6 +26,9 @@ type
     [Test] procedure ErrorSuffix_NoFinding;
     [Test] procedure ExceptionSuffix_NoFinding;
     [Test] procedure GenericClassDecl_Reported;
+    // Posten 278: die fehlende CamelCase-Grenze ist Absicht
+    [Test] procedure VendorPrefixCamelCase_NoFinding;
+    [Test] procedure NoTPrefix_StillReported;
   end;
 
 implementation
@@ -34,6 +37,64 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 278: der T-Zweig bleibt bewusst ohne CamelCase-Grenze }
+//
+// Der T-Zweig prueft nur das erste Zeichen. Die E-Heuristik und
+// IstRKonventionsRecord verlangen zusaetzlich einen Grossbuchstaben an
+// Position 2 - der T-Zweig ist der einzige ohne diese Grenze, und der
+// Kopfkommentar sagte dazu nichts.
+//
+// Die Laxheit BLEIBT. Am Korpus gemessen wuerde die Grenze 1.401
+// zusaetzliche Hints erzeugen; 1.344 davon treffen das verbreitete
+// Idiom 'T' + Vendor-/Formularpraefix (TfrmMain 78x, TdmMain 13x), und
+// der Meldetext "rename to start with T" waere fuer jeden von ihnen
+// selbstwidersprechend.
+//
+// Dieser Test haelt die Entscheidung fest - er wird rot, sobald jemand
+// die Grenze doch einbaut. An der gebauten Exe gemessen: 0 Funde fuer
+// die Vendor-Praefixe, 1 fuer den echten Verstoss.
+
+procedure TTestTypeName.VendorPrefixCamelCase_NoFinding;
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TfrmMain = class'#13#10 +
+  '  end;'#13#10 +
+  '  TdmMain = class'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTypeName),
+      'T plus Vendor-Praefix ist gaengiges Delphi und bleibt still');
+  finally F.Free; end;
+end;
+
+procedure TTestTypeName.NoTPrefix_StillReported;
+// Die Positiv-Kontrolle daneben - ohne sie waere der Test oben auch bei
+// einer komplett abgeschalteten Regel gruen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  MyThing = class'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTypeName),
+      'ein Klassenname ohne T bleibt ein Fund');
+  finally F.Free; end;
+end;
+
 
 procedure TTestTypeName.TPrefix_NoFinding;
 const SRC =
