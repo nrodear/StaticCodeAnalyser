@@ -23,6 +23,9 @@ type
     // Voll-Review 2026-09-12 (Major 75): asm-Bloecke
     [Test] procedure AsmMnemonics_NoFinding;
     [Test] procedure UppercaseAfterAsmEnd_StillReported;
+    // Posten 260: der '&'-Escape macht Keywords zu Identifiern
+    [Test] procedure EscapedIdentifier_NoFinding;
+    [Test] procedure EscapedIdentifierThenRealKeyword_StillReported;
   end;
 
 implementation
@@ -163,6 +166,64 @@ begin
     Assert.Fail('expected fkLowercaseKeyword finding');
   finally F.Free; end;
 end;
+
+{ --- Posten 260: der '&'-Escape -------------------------------- }
+//
+// Der Scanner kannte den Delphi-Escape nicht: das & fiel schlicht
+// durch, danach begann das Wort regulaer, IsKeyword schlug an und die
+// Grossschreibung wurde geruegt. `&Type`, `&To`, `&Set` sind aber
+// IDENTIFIER - Java-, COM- und Redis-Namen, Property-Namen -, und die
+// Kleinschreib-Konvention gilt fuer sie nicht.
+//
+// Der Kopfkommentar der Unit fuehrt als bewusste Ausnahmen nur die
+// kontextsensitiven Woerter (default/read/write/name/message) auf;
+// der Escape-Fall stand dort nicht, war also keine gewollte Grenze.
+//
+// Beide Erwartungen an der gebauten Exe gemessen. ACHTUNG beim
+// Nachmessen: SCA064 ist fcLow und braucht MinConfidence=low in der
+// ini - mit den Vorgaben liefern beide Fixturen 0 Funde.
+
+procedure TTestLowercaseKeyword.EscapedIdentifier_NoFinding;
+// Heute 2 Funde (Zeile 5 und 6), nach dem Fix 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Y: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Y := Bar.&Type;'#13#10 +
+  '  Bar.&To := Y;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkLowercaseKeyword),
+      'ein Wort hinter & ist ein Identifier, kein Keyword');
+  finally F.Free; end;
+end;
+
+procedure TTestLowercaseKeyword.EscapedIdentifierThenRealKeyword_StillReported;
+// GEGENPROBE auf DERSELBEN Zeile: der Escape darf nur sich selbst
+// stillstellen, nicht den Rest der Zeile. Heute 2 Funde (beide auf
+// Zeile 5), nach dem Fix genau 1 - das 'End'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Y: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Y := Bar.&Type; End;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkLowercaseKeyword),
+      'das End hinter dem Escape bleibt ein Keyword');
+  finally F.Free; end;
+end;
+
 
 procedure TTestLowercaseKeyword.AsmMnemonics_NoFinding;
 // Voll-Review 2026-09-12 (Major 75): der Scanner kannte keinen

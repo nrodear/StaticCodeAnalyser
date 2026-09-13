@@ -254,8 +254,15 @@ begin
     // - jeweils mit folgendem try-fehlt-Check. Events (RTLeventWaitFor)
     // gehoeren bewusst NICHT dazu; Begruendung samt Korpus-Messung in der
     // Limitierungen-Sektion des Unit-Kopfs.
+    // Die zweite Alternative war 'EnterCriticalSection' ein zweites Mal -
+    // historische Doppelung: als das Muster um den optionalen Qualifizierer
+    // '(?:\w+\.)?' erweitert wurde, blieb die urspruengliche, damit
+    // subsumierte Alternative fuer den unqualifizierten Aufruf stehen.
+    // Entfernt beim Voll-Review 2026-09-13. Ueber alle 18.800 Korpusdateien
+    // sind nicht nur die Trefferzahlen, sondern die vollstaendigen
+    // Trefferlisten (Position und Gruppe-1-Text) identisch.
     RE := TRegEx.Create(
-      '(?i)\b((?:\w+\.)?(?:Lock|Acquire|EnterCriticalSection)|EnterCriticalSection)\s*[\(;]');
+      '(?i)\b((?:\w+\.)?(?:Lock|Acquire|EnterCriticalSection))\s*[\(;]');
     for M in RE.Matches(Code) do
     begin
       AfterPos := M.Index + M.Length;

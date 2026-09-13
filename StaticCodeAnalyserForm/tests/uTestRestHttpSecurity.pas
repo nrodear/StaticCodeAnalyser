@@ -48,6 +48,9 @@ type
     [Test] procedure EmptySecureProtocols_Reported;
     [Test] procedure IgnoreCertificateErrors_Reported;
     [Test] procedure OnVerifyPeerNil_Reported;
+    // Posten 269: die Whitelist traf Pfad, Query und Wortmitte
+    [Test] procedure XmlNamespaceMarkerInPath_StillReported;
+    [Test] procedure XmlNamespaceHostAnchored_NotReported;
   end;
 
 implementation
@@ -173,6 +176,62 @@ begin
     'http://unix: ist ein UNIX-Domain-Socket (lokales IPC), kein Remote-HTTP');
   finally F.Free; end;
 end;
+
+{ --- Posten 269: die Namespace-Whitelist am HOST ---------------- }
+//
+// Fuenf Marker wurden mit Pos() ueber die GANZE URL geprueft. Damit traf
+// 'schemas' auch als Pfadsegment, 'xmlns' als Query-Name, 'myschemas' in
+// der Wortmitte eines Hosts und 'w3.org' als Query-WERT. Weil die
+// Whitelist VOR den Gates F/M/D/T steht und der Treffer die Schleife per
+// Continue verlaesst, war der Fund still weg.
+//
+// Dieselbe Fehlerklasse hat ExtractHost 2026-08-16 fuer die
+// Loopback-Pruefung schon einmal beseitigt; nur hier blieb sie stehen.
+//
+// Beide Erwartungen an der gebauten Exe gemessen. Der Host
+// contoso-shop.de ist bewusst gewaehlt: example.* faellt sonst schon in
+// IsNonRoutableOrReservedHost - dieselbe Falle, die HttpRemoteUrl_
+// Reported dokumentiert.
+
+procedure TTestRestHttpSecurity.XmlNamespaceMarkerInPath_StillReported;
+// Vier echte Endpunkte, die nur einen Marker IRGENDWO tragen.
+// Heute 0 Funde, nach dem Fix 4.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'const U1 = ''http://api.contoso-shop.de/schemas/v1/users'';'#13#10 +
+  'const U2 = ''http://api.contoso-shop.de/v1/users?xmlns=1'';'#13#10 +
+  'const U3 = ''http://myschemas-api.contoso-shop.de/v1/users'';'#13#10 +
+  'const U4 = ''http://umleitung.contoso-shop.de/go?to=w3.org'';';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(4,
+      TFindingHelper.Count(F, fkHttpInsteadOfHttps),
+      'ein Namespace-Marker im Pfad oder Query macht aus einem '
+      + 'Endpunkt keine Identitaet');
+  finally F.Free; end;
+end;
+
+procedure TTestRestHttpSecurity.XmlNamespaceHostAnchored_NotReported;
+// GEGENPROBE, die drei Korpus-Belege der Whitelist plus w3.org.
+// Vor wie nach dem Fix 0 - die echten Namespace-Hosts duerfen nicht
+// verlorengehen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'const U1 = ''http://schemas.android.com/tools'';'#13#10 +
+  'const U2 = ''http://schemas.microsoft.com/developer/msbuild/2003'';'#13#10 +
+  'const U3 = ''http://www.w3.org/2001/XMLSchema-instance'';';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkHttpInsteadOfHttps),
+      'am Host verankerte Namespace-URIs bleiben Identitaeten');
+  finally F.Free; end;
+end;
+
 
 procedure TTestRestHttpSecurity.XmlNamespace_NotReported;
 const SRC =

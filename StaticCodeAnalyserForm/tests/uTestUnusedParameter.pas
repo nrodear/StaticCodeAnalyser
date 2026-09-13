@@ -94,6 +94,9 @@ type
     // Voll-Review 2026-09-12: Handler-Amnestie exakt statt Substring
     [Test] procedure TObjectListFirstParam_UnusedStillReported;
     [Test] procedure SenderTObject_UnusedSecondParam_NotReported;
+    // Posten 282: das Break verlor den zweiten Alias derselben Zeile
+    [Test] procedure TwoAbsoluteAliasesOnOneLine_NotReported;
+    [Test] procedure TwoAbsoluteAliasesOnTwoLines_NotReported;
   end;
 
 implementation
@@ -907,6 +910,69 @@ begin
     'overload allein ist keine message-Direktive - Fund bleibt');
   finally F.Free; end;
 end;
+
+{ --- Posten 282: mehrere absolute-Aliase in EINER Zeile --------- }
+//
+// Gate B sammelt die Alias-Zielnamen aus der QUELLZEILE des
+// nkLocalVar-Knotens und brach nach dem ersten Treffer ab - "ein Alias
+// je Deklarationszeile". Der Aufrufkontext ist aber "ein
+// nkLocalVar-KIND = ein Aufruf", und Pascal erlaubt mehrere
+// Deklarationen je physischer Zeile. Beide Kinder lesen dann DIESELBE
+// Zeile, und das zweite bekam das Ziel des ersten.
+//
+// An der gebauten Exe gemessen, gleiche Deklarationen:
+//   mit Zeilenumbruch  0 Funde
+//   in EINER Zeile     1 Fund ('Other')
+
+procedure TTestUnusedParameter.TwoAbsoluteAliasesOnOneLine_NotReported;
+// DER NACHWEIS. Heute 1 Fund, nach dem Fix 0.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(var Buf: Integer; var Other: Integer);'#13#10 +
+  'var'#13#10 +
+  '  A: Byte absolute Buf; B: Word absolute Other;'#13#10 +
+  'begin'#13#10 +
+  '  A := 1;'#13#10 +
+  '  B := 2;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUnusedParameter),
+      'beide Aliase einer Zeile entlasten ihren jeweiligen Parameter');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedParameter.TwoAbsoluteAliasesOnTwoLines_NotReported;
+// Die Kontrolle: dieselben Deklarationen mit Zeilenumbruch.
+// Vor wie nach dem Fix 0 - sie zeigt, dass es an der ZEILE hing
+// und nicht an den Deklarationen.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(var Buf: Integer; var Other: Integer);'#13#10 +
+  'var'#13#10 +
+  '  A: Byte absolute Buf;'#13#10 +
+  '  B: Word absolute Other;'#13#10 +
+  'begin'#13#10 +
+  '  A := 1;'#13#10 +
+  '  B := 2;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUnusedParameter),
+      'mit Umbruch war es schon immer richtig');
+  finally F.Free; end;
+end;
+
 
 procedure TTestUnusedParameter.AbsoluteAliasOnParam_NotReported;
 // GATE B (-414 Funde): 'var P: Byte absolute Buf;' legt P auf die Storage von

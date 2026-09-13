@@ -26,6 +26,9 @@ type
     // Tooling-Haertung (SCA006-Crash 2026-07-13): indizierter LHS darf den
     // Regex-Bau nicht crashen; normaler Fund muss trotzdem kommen.
     [Test] procedure IndexedLhsListVar_NoCrash_NormalStillReported;
+    // Posten 275: Pass 1 war case-sensitiv, der Rest der Kette nicht
+    [Test] procedure TListLowercaseType_Reported;
+    [Test] procedure TListLowercaseCreate_Reported;
   end;
 
 implementation
@@ -34,6 +37,65 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 275: Pass 1 war die einzige case-sensitive Stufe ---- }
+//
+// Pass 1 rief TRegEx.Match ohne Options-Parameter, also case-SENSITIV.
+// Pass 2 baut seinen Regex mit roIgnoreCase, und der Prefilter in
+// uStaticAnalyzer2 gatet auf 'tlist<' ebenfalls case-insensitiv - Pass 1
+// war die einzige Stufe der Kette, die auf der Schreibung bestand.
+// Pascal ist case-insensitiv; kein Kopfkommentar behauptet eine
+// Konvention, es war ein Versehen.
+//
+// An der gebauten Exe gemessen, dieselbe Sonde mit nur einem Zeichen
+// Unterschied:
+//   L := TList<TFoo>.Create;   1 Fund
+//   L := tlist<TFoo>.Create;   0
+//   L := TList<TFoo>.create;   0
+// Beide Tests unten sind damit heute rot.
+
+procedure TTestTObjectListWithoutOwnership.TListLowercaseType_Reported;
+// Der Typname klein geschrieben. Heute 0 Funde, nach dem Fix 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: tlist<TFoo>;'#13#10 +
+  'begin'#13#10 +
+  '  L := tlist<TFoo>.Create;'#13#10 +
+  '  L.Add(TFoo.Create);'#13#10 +
+  '  L.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(
+      TFindingHelper.Count(F, fkTObjectListWithoutOwnership) >= 1,
+      'tlist ist derselbe Typ wie TList');
+  finally F.Free; end;
+end;
+
+procedure TTestTObjectListWithoutOwnership.TListLowercaseCreate_Reported;
+// Der Konstruktor klein geschrieben. Heute 0 Funde, nach dem Fix 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TList<TFoo>;'#13#10 +
+  'begin'#13#10 +
+  '  L := TList<TFoo>.create;'#13#10 +
+  '  L.Add(TFoo.Create);'#13#10 +
+  '  L.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(
+      TFindingHelper.Count(F, fkTObjectListWithoutOwnership) >= 1,
+      'create ist derselbe Konstruktor wie Create');
+  finally F.Free; end;
+end;
+
 
 procedure TTestTObjectListWithoutOwnership.TListAddCreate_Reported;
 const SRC =

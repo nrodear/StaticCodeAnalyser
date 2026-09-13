@@ -52,6 +52,24 @@ begin
             ((N and (N - 1)) = 0);
 end;
 
+// Steht an Position i - direkt hinter einer Ziffernfolge - die Fortsetzung
+// eines FLOAT-Literals? Das ist ein '.' mit Ziffer dahinter oder ein
+// Exponent ('e' plus Ziffer, mit optionalem Vorzeichen). ACondLow ist
+// bereits lowercase, 'E' braucht also keine eigene Behandlung.
+function IstFloatFortsetzung(const ACondLow: string; i: Integer): Boolean;
+var
+  n : Integer;
+begin
+  n := Length(ACondLow);
+  if i >= n then Exit(False);
+  if (ACondLow[i] = '.') and CharInSet(ACondLow[i + 1], ['0'..'9']) then
+    Exit(True);
+  if ACondLow[i] <> 'e' then Exit(False);
+  if CharInSet(ACondLow[i + 1], ['0'..'9']) then Exit(True);
+  Result := (i + 1 < n) and CharInSet(ACondLow[i + 1], ['+', '-'])
+            and CharInSet(ACondLow[i + 2], ['0'..'9']);
+end;
+
 class function TMagicNumberDetector.ExtractMagicNumber(
   const CondLow: string; out NumStr: string): Boolean;
 // Sucht Vergleichsoperator gefolgt von Zahl: '> 100', '<50', '(Count>=5)', etc.
@@ -124,8 +142,37 @@ begin
         Inc(i);
       end;
 
-      // Nur Integer-Zahl, kein Float / Hex
-      if (Digits <> '') and (Digits <> '-') and not IsTrivial(Digits) then
+      // Nur Integer-Zahl, kein Float / Hex.
+      //
+      // Hex faellt schon vorher heraus: '$' ist keine Ziffer, Digits bleibt
+      // leer. Float dagegen NICHT - der Ziffern-Scan haelt am Dezimalpunkt
+      // an und meldete den so entstandenen Ganzzahl-Torso ungeprueft
+      // weiter. 'if X > 3.5' ergab bis 2026-09-13 'Magic number "3"'.
+      // Der Kommentar beschrieb die Absicht, es gab nur keine Wache, die
+      // sie durchsetzt.
+      //
+      // Sichtbar wurde die Willkuer an der Trivial-Pruefung: sie griff am
+      // Torso, also verschwand '2.5' (als '2' trivial) und '3.5' wurde
+      // gemeldet.
+      //
+      // Folgt auf die Ziffernfolge '.'+Ziffer oder ein Exponent
+      // ('e'+Ziffer bzw. 'e'+Vorzeichen+Ziffer - CondLow ist bereits
+      // lowercase), ist es ein Float-Literal und dieses Vorkommen wird
+      // uebersprungen. Korpus, am A/B des Referenzlaufs 2026-09-13
+      // nachgemessen: -70 von 5.084 SCA014-Funden (64 Dezimalpunkte, 6
+      // Exponenten), 0 Adds. Die frueher hier stehenden -67 / 4.494 kamen
+      // aus einem anders zugeschnittenen Lauf.
+      //
+      // WAS DAS KOSTET, damit es niemand fuer einen reinen FP-Fix haelt:
+      // die Regel ist damit fuer JEDES Float-Literal blind, nicht nur fuer
+      // den Torso. Unter den 70 Wegfaellen sind 44x '255.0', 9x '3.0' und
+      // 6x '-9E18' - '255.0' in einer if-Bedingung IST eine Magic Number,
+      // sie wird jetzt nicht mehr gemeldet. Die Alternative waere gewesen,
+      // das VOLLE Literal zu melden statt es zu ueberspringen; das ist ein
+      // eigenes Paket (Meldetext, Trivial-Pruefung auf Floats, FP-Messung)
+      // und kein Nebenprodukt dieser Korrektur.
+      if (Digits <> '') and (Digits <> '-') and not IsTrivial(Digits)
+         and not IstFloatFortsetzung(CondLow, i) then
       begin
         NumStr := Digits;
         Exit(True);

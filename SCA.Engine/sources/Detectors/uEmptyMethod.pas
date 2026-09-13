@@ -103,6 +103,24 @@ begin
   end;
 end;
 
+// Schlusszeichen eines auf DIESER Zeile geoeffneten und hier NICHT wieder
+// geschlossenen Blockkommentars ('}' oder '*)'), sonst ''. ACommentStart ist
+// das Ergebnis von CommentStartOfLine.
+function OpenBlockCommentCloser(const ALine: string;
+  ACommentStart: Integer): string;
+begin
+  Result := '';
+  if ACommentStart <= 0 then Exit;
+  if Copy(ALine, ACommentStart, 1) = '{' then
+  begin
+    if Pos('}', ALine, ACommentStart) = 0 then Result := '}';
+  end
+  else if Copy(ALine, ACommentStart, 2) = '(*' then
+  begin
+    if Pos('*)', ALine, ACommentStart) = 0 then Result := '*)';
+  end;
+end;
+
 function CommentLooksLikeIntent(const AText: string): Boolean;
 // Inhaltlich = mindestens ein Buchstabe/Ziffer. NICHT als Absicht zaehlen:
 //   * Compiler-Direktiven ('{$REGION}', '{$IFDEF}') - Werkzeug, keine Aussage
@@ -154,6 +172,32 @@ class function TEmptyMethodDetector.BodyHasIntentComment(Lines: TStringList;
 // leeren Rumpfes. Die erste Fassung pruefte den Kommentar VOR dem
 // end-Abbruch und schaltete solche Faelle mit still - die Probe fiel darauf
 // herein (die Kontrolle im Probe-File trug genau so einen Kommentar).
+//
+// MEHRZEILIGE BLOCKKOMMENTARE (Voll-Review 2026-09-13): die Zeilenzerlegung
+// kannte nur zwei Faelle - hier faengt ein Kommentar an, oder es ist Code.
+// Die dritte Sorte, die FORTSETZUNGSZEILE, fiel in den Code-Zweig. Zwei
+// Fehler auf einmal:
+//   * ein 'end' im Prosatext beendete den Rumpf-Scan vorzeitig
+//   * ein '//' INNERHALB von '{ ... }' galt als eigener Kommentar und
+//     konnte als Absicht durchgehen
+// Der zweite Fall ist der haeufigere. Im Korpus stehen drei Rumpfe, deren
+// ganzer Inhalt auskommentiert ist - am A/B des Referenzlaufs 2026-09-13
+// nachgemessen, und zwar auf ZWEI verschiedenen Wegen:
+//   Indy IdStackDotNet.pas:1022 und :1037 - der Rumpf ist ein '{ ... }'
+//     mit einer URL darin; das '//' aus 'http://' galt als eigener
+//     Zeilenkommentar und sein Text als Absicht.
+//   jvcl .../fReports.pas:79 - hier ist es KEINE URL: der Rumpf ist ein
+//     '(* ... *)'-Block, und das '{ Iterate }' hinter einem for darin
+//     lieferte die vermeintliche Absicht.
+// Die frueher hier genannten Stellen (IdNTLM.pas:679/:711) waren FALSCH -
+// diese Datei liefert weder vor noch nach dem Fix einen EmptyMethod-Fund.
+// Auskommentierter Code ist keine Absicht - das sagt CommentLooksLikeIntent
+// selbst -, er wurde hier nur nie als solcher gesehen.
+//
+// EINSCHRAENKUNG, die dazugehoert: die beiden Indy-Rumpfe sind nur deshalb
+// leer, weil der Ein-Zweig-Modus die '{$IFDEF DOTNET_2_OR_ABOVE}'-Anweisung
+// verwirft. Das ist Bestandsverhalten und nicht Folge dieses Fixes, aber es
+// heisst, dass zwei der drei neuen Funde auf einer IFDEF-Annahme sitzen.
 var
   i, Last  : Integer;
   Raw      : string;
@@ -161,15 +205,30 @@ var
   pCmt     : Integer;
   pEnd     : Integer;
   pBegin   : Integer;
+  Closer   : string;   // '}' / '*)' solange ein Blockkommentar offen ist
+  pClose   : Integer;
 begin
   Result := False;
   if (Lines = nil) or (ABeginLine <= 0) or (ABeginLine > Lines.Count) then Exit;
   Last := ABeginLine + MAX_EMPTY_BODY_LINES;
   if Last > Lines.Count then Last := Lines.Count;
+  Closer := '';
   for i := ABeginLine to Last do
   begin
     Raw  := Lines[i - 1];
+
+    // Fortsetzungszeile: bis zum Schlusszeichen ist alles Kommentartext.
+    // Schliesst er hier nicht, traegt die Zeile weder Code noch Absicht.
+    if Closer <> '' then
+    begin
+      pClose := Pos(Closer, Raw);
+      if pClose = 0 then Continue;
+      Raw := Copy(Raw, pClose + Length(Closer), MaxInt);
+      Closer := '';
+    end;
+
     pCmt := CommentStartOfLine(Raw);
+    Closer := OpenBlockCommentCloser(Raw, pCmt);
     // Code-Anteil = alles vor dem Kommentar.
     if pCmt > 0 then Code := Copy(Raw, 1, pCmt - 1) else Code := Raw;
     Code := LowerCase(Code);

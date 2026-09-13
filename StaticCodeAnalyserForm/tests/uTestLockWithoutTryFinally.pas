@@ -80,6 +80,9 @@ type
     // noch in einem FREMDEN Handle matchen - sonst wird ein echter TP
     // als fcLow gefiltert.
     [Test] procedure EcsWrongHandleInFinally_HighConfidence;
+    // Posten 259: Nadeln sind Praefixe gaengiger Membernamen
+    [Test] procedure ReleaseHandleInFinally_HighConfidence;
+    [Test] procedure UnlockInFinally_HighConfidence;
   end;
 
 implementation
@@ -807,6 +810,79 @@ begin
       'ohne jede finally-Deckung -> fcHigh (Error-Tier unter der Politik)');
   finally F.Free; end;
 end;
+
+{ --- Posten 259: die rechte Wortgrenze -------------------------- }
+//
+// BoundedHit prueft die linke Wortgrenze und steigt dann sofort aus.
+// Die vier Nadeln ('.leave', '.release', '.exit', '.endwrite') sind
+// aber Praefixe gaengiger Membernamen - ReleaseHandle, ReleaseLock,
+// ExitPage, LeaveGroup. Ohne rechte Grenze geht die Nadel in einem
+// beliebig langen Bezeichner auf, ein FREMDER Aufruf wird als Release
+// gutgeschrieben, und ein echter Fund faellt auf fcLow - unter der
+// Vorgabe FindingMinConfidence=medium also unsichtbar.
+//
+// An der gebauten Exe gemessen, gleicher Rumpf, nur die
+// finally-Zeile getauscht:
+//   FLock.Leave;          Hint  (fcLow, richtig - echtes Release)
+//   FLock.Release;        Hint  (fcLow, richtig)
+//   FLock.Unlock;         Error (fcHigh, richtig - kein Release)
+//   FLock.ReleaseHandle;  Hint  (fcLow, FALSCH)
+
+procedure TTestLockWithoutTryFinally.ReleaseHandleInFinally_HighConfidence;
+// DER NACHWEIS. ReleaseHandle ist kein Lock-Release; heute wird der
+// Fund trotzdem auf fcLow gestuft (Hint statt Error).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  FLock.Enter;'#13#10 +
+  '  FList := GetList;'#13#10 +
+  '  try'#13#10 +
+  '    DoStuff;'#13#10 +
+  '  finally'#13#10 +
+  '    FLock.ReleaseHandle;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+      'GetList kann werfen - der Fund selbst bleibt');
+    Assert.IsTrue(
+      TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).Confidence = fcHigh,
+      'ReleaseHandle ist kein Release des Locks -> fcHigh');
+  finally F.Free; end;
+end;
+
+procedure TTestLockWithoutTryFinally.UnlockInFinally_HighConfidence;
+// GEGENPROBE. Ein Name, der mit keiner Nadel anfaengt - heute schon
+// fcHigh. Haelt fest, dass der Nachweis oben nicht bloss an einem
+// insgesamt kaputten Confidence-Gate gruen wird.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  FLock.Enter;'#13#10 +
+  '  FList := GetList;'#13#10 +
+  '  try'#13#10 +
+  '    DoStuff;'#13#10 +
+  '  finally'#13#10 +
+  '    FLock.Unlock;'#13#10 +
+  '  end;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkLockWithoutTryFinally) >= 1,
+      'GetList kann werfen - der Fund selbst bleibt');
+    Assert.IsTrue(
+      TFindingHelper.FirstOf(F, fkLockWithoutTryFinally).Confidence = fcHigh,
+      'Unlock ist keine der vier Release-Nadeln -> fcHigh');
+  finally F.Free; end;
+end;
+
 
 procedure TTestLockWithoutTryFinally.EcsWrongHandleInFinally_HighConfidence;
 // Reviewer-Szenario: das finally released ein ANDERES Handle (SendCS) -

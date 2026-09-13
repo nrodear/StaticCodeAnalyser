@@ -8,8 +8,11 @@ unit uInterfaceName;
 // statt Implementierung.
 //
 // Erkennung: lexikalisch ueber die Zeile. Pattern `<Ident> = interface`
-// (optional `<Ident> = interface(IParent)`, `<Ident> = interface; (fwd)`,
-// auch mit GUID `['{...}']`). Name muss mit `I` beginnen.
+// (optional `<Ident> = interface(IParent)`, auch mit GUID `['{...}']`).
+// Name muss mit `I` beginnen. Die Vorwaertsdeklaration
+// `<Ident> = interface;` wird UEBERSPRUNGEN - sie deklariert keinen
+// eigenen Typ, und die Volldeklaration desselben Namens steht in derselben
+// Unit und meldet den Verstoss genau einmal.
 //
 // AUSNAHMEN (Hebel A, 30%-Audit 2026-07-31 - 15.707 Funde, 100 % FP im
 // Sample):
@@ -147,6 +150,22 @@ begin
       NextWord := LowerCase(Copy(Line, j, k - j));
       if (NextWord <> 'interface') and (NextWord <> 'dispinterface') then
         Continue;
+      // Vorwaertsdeklaration `Foo = interface;` ueberspringen (Voll-Review
+      // 2026-09-13). Sie deklariert keinen eigenen Typ und erzeugt keinen
+      // AST-Knoten; zusammen mit der Volldeklaration ergab sie ZWEI Funde
+      // fuer EINEN Typ (Korpus: cnwizards TestTypeDefs.pas, TBob Z.24+97
+      // und TBobDisp Z.25+100 - die einzigen zwei Faelle).
+      // Am A/B des Referenzlaufs 2026-09-13 nachgemessen: 35 -> 33.
+      // Die frueher hier stehenden 15 -> 13 kamen aus einem anders
+      // zugeschnittenen Lauf; die BEWEGUNG von -2 stimmte.
+      //
+      // Kein Typ geht dabei verloren: von den 4.568 Vorwaertsdeklarationen
+      // des Korpus, die Gate 1 passieren, traegt KEINE einen Namen ohne
+      // Volldeklaration in derselben Datei. k steht hinter dem Wort
+      // 'interface' und wird danach nicht mehr gebraucht - keine neue
+      // Variable noetig.
+      while (k <= n) and CharInSet(Line[k], [' ', #9]) do Inc(k);
+      if (k <= n) and (Line[k] = ';') then Continue;
       // Pruefe Name
       if (Length(Name) >= 1) and CharInSet(Name[1], ['I', 'i']) then Continue;
       Result := Start;
@@ -184,11 +203,11 @@ begin
     begin
       Col := FindBadInterfaceName(Lines[i], InBlk, InParen, Name);
       if Col <= 0 then Continue;
-      // Gate 2 (Hebel A): ObjC-/JNI-Bridge-Interface. Deckt auch die
-      // Vorwaerts-Deklaration ab (`EKEventStore = interface;` erzeugt
-      // KEINEN AST-Knoten) - nachgeschlagen wird der NAME, und die
-      // vollstaendige Deklaration desselben Namens steht weiter unten
-      // in derselben Unit.
+      // Gate 2 (Hebel A): ObjC-/JNI-Bridge-Interface. Nachgeschlagen wird
+      // der NAME (`EKEventStore`). Die Vorwaerts-Deklaration erreicht diese
+      // Stelle seit dem fwd-Skip in FindBadInterfaceName nicht mehr; sie
+      // erzeugt ohnehin keinen AST-Knoten, gegated wird die vollstaendige
+      // Deklaration weiter unten in derselben Unit.
       if FfiTypes = nil then
         FfiTypes := TDetectorUtils.CollectFfiBindingTypes(UnitNode);
       if TDetectorUtils.IsFfiBindingTypeName(FfiTypes, Name) then Continue;

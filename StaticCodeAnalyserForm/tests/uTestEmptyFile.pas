@@ -16,6 +16,9 @@ type
     // Voll-Review 2026-09-12 (Major 60): Arbeit leistende Units
     [Test] procedure InitializationOnlyUnit_NoFinding;
     [Test] procedure IncludeOnlyUnit_NoFinding;
+    // Minor 246: Deklarations-Woerter in Kommentaren zaehlen nicht
+    [Test] procedure DeclKeywordOnlyInBlockComment_Reported;
+    [Test] procedure DeclKeywordInCodeAfterComment_NoFinding;
   end;
 
 implementation
@@ -126,6 +129,63 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyFile),
     'include-basierte Deklarationen sind Inhalt');
+  finally F.Free; end;
+end;
+
+{ --- Minor 246: kommentbereinigt heisst kommentbereinigt --------- }
+//
+// Der Unit-Kopf verspricht seit jeher "pro Zeile (kommentbereinigt)",
+// die Umsetzung las bis zum Voll-Review 2026-09-12 die ROHZEILE. Eine
+// leere Unit, in deren Kopfkommentar irgendwo "procedure Foo;" steht,
+// galt damit als gefuellt und wurde nie gemeldet.
+//
+// Im Korpus zwei echte Faelle, beide von Hand nachgesehen:
+// cnwizards IdeInstComp.pas (ein Beispielprogramm im Kommentar) und
+// CnPascalGrammar.pas (300 Zeilen Lizenz- und Grammatiktext). Beide
+// sind wirklich leere Units.
+// Beide Tests am gebauten Stand verprobt.
+
+procedure TTestEmptyFile.DeclKeywordOnlyInBlockComment_Reported;
+// Am gebauten Stand nachgemessen: vor dem Fix 0 Funde, danach 1.
+const SRC =
+  'unit t;'#13#10 +
+  '{'#13#10 +
+  '  Diese Unit ist leer. Der Text hier erwaehnt'#13#10 +
+  '  procedure Foo;'#13#10 +
+  '  nur als Beispiel.'#13#10 +
+  '}'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyFile),
+    'ein procedure im Kommentar ist keine Deklaration');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyFile.DeclKeywordInCodeAfterComment_NoFinding;
+// Die Gegenprobe, und sie prueft zugleich den Kommentar-ZUSTAND: nach
+// dem mehrzeiligen Kommentar folgt eine ECHTE Deklaration. Wuerde der
+// Scanner den Kommentar nicht sauber schliessen, hielte er auch sie
+// fuer Text - und die Unit gaelte faelschlich als leer.
+const SRC =
+  'unit t;'#13#10 +
+  '{'#13#10 +
+  '  Diese Unit ist NICHT leer.'#13#10 +
+  '}'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyFile),
+    'die Typdeklaration hinter dem Kommentar zaehlt');
   finally F.Free; end;
 end;
 

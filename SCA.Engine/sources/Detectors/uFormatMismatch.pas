@@ -730,9 +730,48 @@ end;
 
 // Zaehlt Top-Level-Kommas in einem Argument-Bereich (depth-tracking
 // (...)/[...]). CallText vom Aufrufer ist `<fn-args-bis-zum-)`.
-function CountTopLevelArgs(const CallText: string; StartIdx: Integer): Integer;
+// Steht i auf einem Apostroph, ueberspringt die Funktion das GANZE
+// '...'-Literal einschliesslich der ''-Escapes und liefert True; i zeigt
+// danach auf das erste Zeichen dahinter. Sonst bleibt i stehen.
+function SkipStringLiteral(const S: string; var i: Integer): Boolean;
 var
-  i, n : Integer;
+  n : Integer;
+begin
+  Result := (i <= Length(S)) and (S[i] = '''');
+  if not Result then Exit;
+  n := Length(S);
+  Inc(i);
+  while i <= n do
+  begin
+    if S[i] <> '''' then
+    begin
+      Inc(i);
+      Continue;
+    end;
+    if (i < n) and (S[i + 1] = '''') then
+      Inc(i, 2)                 // '' Escape - gehoert zum Literal
+    else
+    begin
+      Inc(i);                   // Schlussapostroph
+      Exit;
+    end;
+  end;
+end;
+
+function CountTopLevelArgs(const CallText: string; StartIdx: Integer): Integer;
+// STRING-LITERALE UEBERSPRINGEN (Voll-Review 2026-09-13): Klammern und
+// Kommas INNERHALB eines '...'-Literals sind weder Tiefe noch
+// Argument-Trenner. Ohne das beendete ein ')' im Literal den Scan zu frueh
+// - das dritte Argument (TFormatSettings) blieb ungesehen und der
+// Locale-Hint feuerte als FP; ein '(' im Literal zaehlte umgekehrt Kommas
+// HINTER dem Aufruf mit und unterdrueckte den Hint.
+//
+// Das Schwesterverfahren CountArrayArgs fuehrt diese Unterscheidung seit
+// dem FP-Audit 2026-07-06 fuer denselben Text; nachgeruestet wurde damals
+// nur eine der beiden Zaehlungen. Es benutzt SkipStringLiteral bewusst
+// NICHT: dort haengt am Literal zusaetzlich das IsEmpty-Flag.
+var
+  i, n  : Integer;
   Depth : Integer;
 begin
   Result := 1;
@@ -741,6 +780,7 @@ begin
   i := StartIdx;
   while i <= n do
   begin
+    if SkipStringLiteral(CallText, i) then Continue;
     case CallText[i] of
       '(', '[': Inc(Depth);
       ')', ']':

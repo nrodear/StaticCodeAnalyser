@@ -1,7 +1,7 @@
 unit uStringFromPointer;
 
-// Detektor: String(P) / AnsiString(P) / UTF8String(P) / RawByteString(P)
-// Cast aus typisiertem Pointer ohne Length-Prefix-Garantie.
+// Detektor: String(P) / AnsiString(P) / UTF8String(P) / RawByteString(P) /
+// WideString(P) - Cast aus typisiertem Pointer ohne Length-Prefix-Garantie.
 //
 // Pattern (Bug, Buffer-Overread):
 //   procedure Foo(Buf: PByte);
@@ -30,19 +30,29 @@ unit uStringFromPointer;
 //
 // Erkennung (lexisch, narrow):
 //   * Strip Strings + Kommentare.
-//   * Pattern: `(string|RawByteString|AnsiString|UTF8String)(<id>)` wo
-//     <id> mit `P` und einem Grossbuchstaben beginnt (Pointer-Konvention)
-//     ODER kommt aus einer Var-Liste mit `: Pointer` Typ - praktisch nur
-//     P-Praefix lexisch erkennbar.
+//   * Pattern: `(string|RawByteString|AnsiString|UTF8String|WideString)
+//     (<id>)` wo <id> mit `P` plus einem weiteren Buchstaben beginnt.
+//     Der Regex traegt (?i) - das `[A-Z]` darin ist damit KEINE
+//     Grossschreib-Bedingung: `pszText`, `pMimeTypeFromData` und `path`
+//     matchen genauso (41 von 48 Korpus-Funden haben ein klein
+//     geschriebenes zweites Zeichen). Genau dagegen steht das Typ-Gate
+//     OperandIsManagedString, dessen Kommentar das seit jeher richtig
+//     beschreibt - Kopf und Funktionskommentar widersprachen sich bis
+//     zum Voll-Review 2026-09-13.
 //   * False-Positive-Filter: `string(IntegerVar)` (Integer-zu-String) ist
 //     legitim - wird ausgeschlossen weil <id> nicht mit P beginnt.
 //
 // Limitierungen:
 //   * Single-File-lexisch. Variablen vom Typ `Pointer` ohne P-Praefix
 //     werden nicht erkannt.
-//   * `string(PChar(x))` Double-Cast wird auch geflaggt (zur Sicherheit
-//     - der innere PChar koennte aus nicht-null-terminiertem Buffer
-//     kommen).
+//   * `string(PChar(x))` Double-Cast wird NICHT geflaggt: hinter <id>
+//     verlangt der Regex unmittelbar ein `)`, ein inneres `(` bricht den
+//     Match ab. An der gebauten Exe nachgemessen 2026-09-13 - hier stand
+//     bis dahin das Gegenteil ("wird auch geflaggt zur Sicherheit"), eine
+//     Absicht, die der Regex nie umgesetzt hat.
+//   * STRTYPES kennt die Kern-String-Typen plus TFileName und TCaption.
+//     Weitere `type X = string`-Aliase (TComponentName, TbtString ...)
+//     loesen nicht auf und bleiben ein Fund; im Korpus ohne Beleg.
 //
 // Schweregrad: lsWarning - latenter Heap-Overread.
 
@@ -82,9 +92,17 @@ function OperandIsManagedString(const Code, VarName: string;
 // Record-Pointer) oder nicht aufloesbar -> weiter melden (kein TP-Verlust,
 // FP-avers). Adaptiert von uPerfHotspots.LhsDeclaredNumeric.
 const
-  STRTYPES : array[0..8] of string = (
+  // tfilename (System.SysUtils) und tcaption (Vcl.Controls) sind
+  // `type X = string` und semantisch dieselbe Sache - sie tragen einen
+  // Laengenpraefix, ein Cast daraus kann nicht ueberlesen. Nachgetragen
+  // beim Voll-Review 2026-09-13; an der gebauten Exe gemessen: eine
+  // Variable 'PName: TFileName' bzw. 'PCap: TCaption' liefert heute je
+  // 1 Fund, nach der Ergaenzung 0. Am Korpus entfaellt keiner der 48
+  // Funde - fuer jeden wurde der deklarierte Operandentyp nachgesehen.
+  STRTYPES : array[0..10] of string = (
     'string', 'unicodestring', 'ansistring', 'widestring', 'utf8string',
-    'rawutf8', 'rawbytestring', 'shortstring', 'openstring');
+    'rawutf8', 'rawbytestring', 'shortstring', 'openstring',
+    'tfilename', 'tcaption');
 var
   Before, TypeLow, T : string;
   RE : TRegEx;

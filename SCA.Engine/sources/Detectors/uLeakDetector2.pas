@@ -664,6 +664,8 @@ var
     Methods, Assigns : TList<TAstNode>;
     Mth, A           : TAstNode;
     TargetLow, LhsLow: string;
+    RhsBlank         : string;
+    Dummy            : Integer;
   begin
     Result := False;
     if CalleeLow = '' then Exit;
@@ -690,7 +692,29 @@ var
       begin
         LhsLow := A.Name.ToLower;
         if (LhsLow = 'result') or (LhsLow = CalleeLow) then
-          if Pos('.create', A.TypeRef.ToLower) > 0 then Exit(True);
+        begin
+          // Voll-Review 2026-09-13: der rohe Pos('.create') nahm auch
+          // Verbformen ('Result := FStamp.Created') und Vorkommen in
+          // STRING-LITERALEN als Ownership-BEWEIS. Letzteres liegt real im
+          // Korpus vor - Codegeneratoren, die Pascal-Quelltext bauen (jcl
+          // JclPreProcessorContainer2DTemplates.pas:585/615, Alcinoe
+          // Grijjy.SymbolTranslator.pas:84, cnwizards CnIniFilerWizard.pas
+          // :964). Sie bleiben heute folgenlos, weil sie string liefern und
+          // SCA001.NotLeakyType vorher greift - der Beweis war trotzdem
+          // falsch gefuehrt.
+          //
+          // Dieselbe Frage beantwortet der Schwesterpfad HasCreateAssign
+          // ueber MatchesCreate; das trennt Ctor-Suffix ('.CreateNew',
+          // Fall C) von Verbform ('.created', Fall D).
+          //
+          // Das Blanken muss VORHER passieren: in doit('t.create') ist das
+          // Zeichen hinter 'create' das schliessende Quote, also ein
+          // Nicht-Ident-Zeichen, und MatchesCreate lieferte ueber Fall B
+          // True. BlankStringLiterals ist laengenerhaltend, der
+          // Case-Vergleich in Fall C bleibt damit gueltig.
+          RhsBlank := TDetectorUtils.BlankStringLiterals(A.TypeRef);
+          if MatchesCreate(RhsBlank, RhsBlank.ToLower, Dummy) then Exit(True);
+        end;
       end;
     end;
   end;
@@ -2375,7 +2399,7 @@ end;
 
 // Gibt die (gestrippte) QUELLZEILE S die Variable AVarLow frei?
 //
-// Wortgleich die fruehere lokale LineFreesVar des finally-Scans
+// Hervorgegangen aus der frueheren lokalen LineFreesVar des finally-Scans
 // (FreeInFinallyRegionBySource) samt ihrer Helfer BoundedLeft und
 // CollapseDotSpacing - seit 2026-09-04 auf Unit-Ebene, weil das
 // K-nested-Gate dieselbe Frage stellt. Eine dritte Fassung der
@@ -2458,8 +2482,23 @@ var
 
 begin
   Low := LowerCase(CollapseDotSpacing(S));
+  // '.disposeof' (Chargen-Review 2026-09-13): die AST-Fassung GibtVarFrei
+  // kennt die Nadel seit der SCA001-Gross-Triage 2026-07-18, die
+  // Zeilenfassung wurde beim Hochziehen auf Unit-Ebene am 2026-09-04 nicht
+  // nachgezogen. An der gebauten Exe gemessen, gleiche Fixture, nur die
+  // Freigabezeile getauscht:
+  //   FreeAndNil(list);  0 Funde     list.Destroy;   0 Funde
+  //   list.Free;         0 Funde     list.DisposeOf; 1 FUND
+  //   Beep;              1 Fund   <- der DisposeOf-Lauf war bit-genau der
+  //                                  Kontrollfall OHNE jede Freigabe.
+  // Korpus: 28 '.DisposeOf'-Stellen in 7 Dateien, keine erzeugt heute einen
+  // SCA001-Fund -> Bewegung 0.
+  //
+  // Der Typecast-Zweig von GibtVarFrei bleibt bewusst draussen: er braucht
+  // die t-Praefix-Pruefung am Kopf-Ident, die es hier nicht gibt.
   Result := BoundedLeft(Low, AVarLow + '.free', False)
          or BoundedLeft(Low, AVarLow + '.destroy', False)
+         or BoundedLeft(Low, AVarLow + '.disposeof', False)
          or BoundedLeft(Low, 'freeandnil(' + AVarLow, True)
          or BoundedLeft(Low, 'freeandnil(self.' + AVarLow, True);
 end;

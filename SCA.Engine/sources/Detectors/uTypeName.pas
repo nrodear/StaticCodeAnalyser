@@ -176,7 +176,26 @@ begin
       while (k <= n) and CharInSet(Line[k], [' ', #9]) do Inc(k);
       if (k + 1 <= n) and SameText(Copy(Line, k, 2), 'of') and
          ((k + 2 > n) or not IsIdent(Line[k + 2])) then Continue;
-      // Pruefe Name
+      // Pruefe Name. BEWUSST OHNE CamelCase-Grenze - anders als die
+      // E-Heuristik weiter unten und IstRKonventionsRecord weiter oben,
+      // die beide einen Grossbuchstaben an Position 2 verlangen. Diese
+      // Asymmetrie ist gewollt, und der Grund ist die RICHTUNG: dort macht
+      // die Grenze die AUSNAHME enger (mehr Funde), hier wuerde sie Funde
+      // erzeugen, deren Meldetext nicht stimmt.
+      //
+      // Am Korpus gemessen (18.800 Dateien, Voll-Review 2026-09-13): eine
+      // Grenze 'T' + Grossbuchstabe/'_' braechte 1.401 zusaetzliche Hints
+      // (1.228 class + 173 record, 922 verschiedene Namen). 1.344 davon
+      // tragen nach einem Kleinbuchstaben-Anlauf sehr wohl CamelCase - das
+      // ist das verbreitete Delphi-Idiom 'T' + Vendor- oder
+      // Formularpraefix (TfrmMain 78x, TdmMain 13x, TalXxx, TdwsJSONXxx,
+      // TgoXxx), das strukturell nicht von echten C-Header-Ports wie
+      // TraceCounts oder TimerVTable zu trennen ist. Und der Meldetext
+      // ("rename to start with `T`") waere fuer jeden dieser Namen
+      // selbstwidersprechend - sie fangen ja mit T an.
+      //
+      // Fuer eine lsHint-Stilregel ist die Laxheit damit der richtige
+      // Zuschnitt. Waechter: uTestTypeName VendorPrefixCamelCase_NoFinding.
       if (Length(Name) >= 1) and CharInSet(Name[1], ['T', 't']) then Continue;
       // RECORDS duerfen der R-Konvention folgen - der Unit-Kopf nennt
       // 'RPoint' woertlich als konformes Beispiel, der Code meldete es

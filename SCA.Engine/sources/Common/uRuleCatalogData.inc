@@ -154,7 +154,7 @@ const
     (
       RuleID   : 'SCA017';
       Name     : 'WriteLn/ShowMessage in production code';
-      ShortDesc: 'Unqualified WriteLn/Write, ShowMessage(Pos) or OutputDebugString call in a non-test unit';
+      ShortDesc: 'Unqualified WriteLn, ShowMessage(Pos) or OutputDebugString call in a non-test unit';
       BadEx    : 'WriteLn(''here #3'');';
       GoodEx   : 'Logger.Debug(''reached step 3'');'
     ),

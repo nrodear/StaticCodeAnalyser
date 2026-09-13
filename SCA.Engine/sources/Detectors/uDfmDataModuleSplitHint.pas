@@ -98,7 +98,25 @@ begin
     ExtractName := ExtractFileName(FileName);
     if EndsText('.dfm', ExtractName) then
       ExtractName := Copy(ExtractName, 1, Length(ExtractName) - 4);
-    if StartsText('u', ExtractName) and (Length(ExtractName) > 1) then
+    // Das Unit-Praefix 'u' nur bei KLEINEM u kappen (Voll-Review
+    // 2026-09-12, Minor 238). StartsText vergleicht case-INSENSITIV
+    // und verstuemmelte deshalb jeden Namen mit grossem U -
+    // 'Unit4.dfm' schlug 'Tnit4DataModule' vor, 'UserForm' ergaebe
+    // 'TserFormDataModule'. Der Vorschlag ging so an den Nutzer.
+    //
+    // BEWUSST OHNE die vom Review vorgeschlagene Zusatzbedingung
+    // "Folgezeichen ist ein Grossbuchstabe": der Korpus hat vier
+    // Funde aus 'ufJvDBMove.dfm', wo das 'u' sehr wohl das
+    // Unit-Praefix ist und ein kleines 'f' folgt. Die Zusatzbedingung
+    // haette diese vier verschlechtert, um einen Fall zu retten, den
+    // schon die Gross-/Kleinschreibung loest. Gemessen an allen 13
+    // Korpus-Funden: genau EINER aendert sich, und das ist der
+    // kaputte.
+    //
+    // Rest-Grenze: eine Datei, die woertlich 'uebersicht.dfm' heisst,
+    // verliert weiterhin ihr 'u'. Ohne Woerterbuch nicht von einem
+    // Praefix zu unterscheiden.
+    if (Length(ExtractName) > 1) and (ExtractName[1] = 'u') then
       ExtractName := Copy(ExtractName, 2, MaxInt);
     if ExtractName = '' then ExtractName := 'Db';
 

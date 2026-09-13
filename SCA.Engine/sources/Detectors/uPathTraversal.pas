@@ -104,10 +104,16 @@ var
 begin
   Result := False;
   HitInput := '';
-  if Pos('+', Expr) = 0 then Exit;     // ohne Concat kein Pattern
   // Review-MEDIUM 2026-08-09: Literale blanken - '.text' im Literal-Inhalt
   // zaehlt nicht als User-Input-Token (laengenerhaltend, HitInput-Copy gueltig).
   Low := LowerCase(TDetectorUtils.BlankStringLiterals(Expr));
+  // Voll-Review 2026-09-13: der Concat-Nachweis gehoert auf DIESELBE
+  // geblankte Fassung. Er stand vorher VOR dieser Zeile, lief also auf dem
+  // Rohtext und hob den Literal-Blank fuer sein eigenes Gate wieder auf -
+  // ein '+' im Pfad-Literal machte
+  //   TFile.WriteAllText('c:\out+log.txt', Memo1.Lines.Text)
+  // zu einem Error-Tier-Fund ganz ohne Konkatenation.
+  if Pos('+', Low) = 0 then Exit;      // ohne Concat (im CODE) kein Pattern
   for Tok in USER_INPUT_TOKENS do
   begin
     // FindTokenBoundedLower statt Pos: '.text' darf NICHT in

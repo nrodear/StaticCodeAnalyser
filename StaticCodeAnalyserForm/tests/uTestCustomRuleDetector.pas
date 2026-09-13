@@ -29,8 +29,14 @@ type
     [Test] procedure SubstringPattern_Matches;
     [Test] procedure SubstringPattern_NoMatch;
     [Test] procedure WordPattern_OnlyMatchesFullWord;
+    // Posten 233: der ptWord-Regex liegt seit AddRule vorkompiliert
+    [Test] procedure WordPattern_RegexMetacharIsEscaped;
+    [Test] procedure WordPattern_AddRuleAndYaml_SameHits;
     [Test] procedure RegexPattern_Matches;
     [Test] procedure InvalidRegex_ThrowsAtLoad;
+    // Posten 234: ein gescheiterter Load laesst nichts Halbes stehen
+    [Test] procedure InvalidRegex_LeavesNoPartialRuleSet;
+    [Test] procedure ValidYaml_PublishesAllRules;
     [Test] procedure FindingHasRuleIdAndKindCustomRule;
     [Test] procedure FindingHasCorrectLineNumber;
     [Test] procedure FileExclude_SkipsExcludedFiles;
@@ -445,6 +451,156 @@ begin
   finally
     Findings.Free;
     TCustomRuleDetector.ClearRules;
+  end;
+end;
+
+{ --- Posten 233: Vorkompilierung des Wort-Regex ------------------- }
+//
+// Der ptWord-Zweig baute sich seinen Regex bis zum Voll-Review in
+// MatchPattern - also JE DATEI neu. Die Vorkompilierung sitzt jetzt in
+// AddRule, dem einzigen Schreiber von FRules.
+//
+// Die beiden Tests halten die zwei Dinge fest, die dabei kaputtgehen
+// koennen: das Escaping (sonst wird aus dem Wort ein Regex) und die
+// Gleichheit beider Eintragswege (AddRule und LoadFromYaml).
+// Der bestehende WordPattern_OnlyMatchesFullWord ist das dritte Netz:
+// er geht ueber AddRule mit ptWord und OHNE gefuelltes PatternRegex -
+// haette man in LoadFromYaml vorkompiliert, liefe er auf einen leeren
+// TRegEx-Record.
+
+procedure TTestCustomRuleDetector.WordPattern_RegexMetacharIsEscaped;
+// Das Muster enthaelt einen Punkt. Escapt trifft es nur den echten
+// 'Foo.Bar'; ohne Escaping traefe der Punkt jedes Zeichen und damit
+// auch 'FooXBar' - der Test waere dann 2 statt 1.
+var
+  Findings : TObjectList<TLeakFinding>;
+begin
+  TCustomRuleDetector.AddRule(MakeRule('R010', 'Foo.Bar', ptWord));
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    TCustomRuleDetector.AnalyzeFile('test.pas',
+      'a := Foo.Bar;'#10'b := FooXBar;'#10, Findings);
+    Assert.AreEqual<Integer>(1, CountByRule(Findings, 'R010'),
+      'der Punkt im Wortmuster ist ein Punkt, kein Regex-Platzhalter');
+  finally Findings.Free; end;
+end;
+
+procedure TTestCustomRuleDetector.WordPattern_AddRuleAndYaml_SameHits;
+// Dieselbe Wortregel auf beiden Eintragswegen, dieselbe Quelle,
+// dieselbe Trefferzahl. Wird rot, wenn nur einer der Wege
+// vorkompiliert.
+const
+  SRC =
+    'rules:'#10+
+    '  - id: R011'#10+
+    '    pattern: "Sleep"'#10+
+    '    pattern-type: word'#10;
+  PAS = 'var Sleeper: TFoo;'#10'  Sleep(100);'#10'OverSleep := True;'#10;
+var
+  TempFile : string;
+  ViaAdd   : Integer;
+  Findings : TObjectList<TLeakFinding>;
+begin
+  TCustomRuleDetector.AddRule(MakeRule('R011', 'Sleep', ptWord));
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    TCustomRuleDetector.AnalyzeFile('test.pas', PAS, Findings);
+    ViaAdd := CountByRule(Findings, 'R011');
+  finally Findings.Free; end;
+  Assert.AreEqual<Integer>(1, ViaAdd,
+    'Vorbedingung: der AddRule-Weg findet genau das echte Sleep');
+
+  TCustomRuleDetector.ClearRules;
+  TempFile := TPath.GetTempFileName;
+  try
+    TFile.WriteAllText(TempFile, SRC, TEncoding.UTF8);
+    TCustomRuleDetector.LoadFromYaml(TempFile);
+    Findings := TObjectList<TLeakFinding>.Create(True);
+    try
+      TCustomRuleDetector.AnalyzeFile('test.pas', PAS, Findings);
+      Assert.AreEqual<Integer>(ViaAdd,
+        CountByRule(Findings, 'R011'),
+        'AddRule und LoadFromYaml muessen gleich viele Treffer liefern');
+    finally Findings.Free; end;
+  finally
+    TFile.Delete(TempFile);
+  end;
+end;
+
+{ --- Posten 234: alles oder nichts beim Laden -------------------- }
+//
+// InvalidRegex_ThrowsAtLoad prueft NUR, dass geworfen wird. Was danach
+// in FRules steht, hat bis zum Voll-Review niemand nachgesehen - und
+// es stand dort der Teilsatz bis zur kaputten Regel.
+//
+// Der erste Test ist der Nachweis: er war VOR dem Fix rot (RuleCount
+// = 1 statt 0), am gebauten Stand nachgemessen. Der zweite ist die
+// Gegenrichtung - er wird rot, wenn beim Staging-Umbau jemand die
+// Veroeffentlichung am Ende der Routine vergisst.
+
+procedure TTestCustomRuleDetector.InvalidRegex_LeavesNoPartialRuleSet;
+// Drei Regeln, die mittlere kaputt. Nach der Exception darf KEINE
+// stehengeblieben sein - auch nicht die gueltige davor.
+const SRC =
+  'rules:'#10+
+  '  - id: OK1'#10+
+  '    pattern: "Alpha"'#10+
+  '    pattern-type: substring'#10+
+  '  - id: BAD'#10+
+  '    pattern: "[unbalanced"'#10+
+  '    pattern-type: regex'#10+
+  '  - id: OK2'#10+
+  '    pattern: "Beta"'#10+
+  '    pattern-type: substring'#10;
+var
+  TempFile : string;
+begin
+  TempFile := TPath.GetTempFileName;
+  try
+    TFile.WriteAllText(TempFile, SRC, TEncoding.UTF8);
+    Assert.WillRaise(
+      procedure begin TCustomRuleDetector.LoadFromYaml(TempFile) end,
+      Exception);
+    Assert.AreEqual<Integer>(0, TCustomRuleDetector.RuleCount,
+      'ein gescheiterter Load hinterlaesst keinen halben Regelsatz');
+  finally
+    TFile.Delete(TempFile);
+  end;
+end;
+
+procedure TTestCustomRuleDetector.ValidYaml_PublishesAllRules;
+// Die Gegenprobe zum Staging: drei gueltige Regeln muessen vollstaendig
+// ankommen UND anschliessend wirklich matchen.
+const
+  SRC =
+    'rules:'#10+
+    '  - id: T001'#10+
+    '    pattern: "Alpha"'#10+
+    '  - id: T002'#10+
+    '    pattern: "Beta"'#10+
+    '  - id: T003'#10+
+    '    pattern: "Gamma"'#10;
+  PAS = 'a := Alpha;'#10'b := Beta;'#10'c := Gamma;'#10;
+var
+  TempFile : string;
+  Findings : TObjectList<TLeakFinding>;
+begin
+  TempFile := TPath.GetTempFileName;
+  try
+    TFile.WriteAllText(TempFile, SRC, TEncoding.UTF8);
+    TCustomRuleDetector.LoadFromYaml(TempFile);
+    Assert.AreEqual<Integer>(3, TCustomRuleDetector.RuleCount,
+      'alle drei Regeln muessen veroeffentlicht sein');
+
+    Findings := TObjectList<TLeakFinding>.Create(True);
+    try
+      TCustomRuleDetector.AnalyzeFile('test.pas', PAS, Findings);
+      Assert.AreEqual<Integer>(1, CountByRule(Findings, 'T001'));
+      Assert.AreEqual<Integer>(1, CountByRule(Findings, 'T002'));
+      Assert.AreEqual<Integer>(1, CountByRule(Findings, 'T003'));
+    finally Findings.Free; end;
+  finally
+    TFile.Delete(TempFile);
   end;
 end;
 

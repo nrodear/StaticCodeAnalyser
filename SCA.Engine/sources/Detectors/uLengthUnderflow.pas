@@ -88,11 +88,27 @@ begin
   Result := Copy(LineLow, i + 1, nameEnd - i);
 end;
 
+// Was ein Treffer ist. Als Record und nicht als vier out-Parameter: die
+// Signatur wuchs mit MatchEnd auf sechs Parameter und der eigene
+// Detektor hat das prompt als LongParamList geruegt.
+type
+  TUnderflowMatch = record
+    Col    : Integer;  // 1-basierte Spalte des Treffers
+    EndPos : Integer;  // erste Position HINTER dem Treffer
+    Offset : Integer;  // der abgezogene Zahlwert
+    Detail : string;   // normalisierter Meldetext (Token + ' - ' + Zahl)
+  end;
+
 // Sucht ab Position StartIdx in S das naechste vollstaendige Match
 // `<Length-or-Count-Expr> - <numeric>` ausserhalb von Strings/Comments.
-// Liefert Treffer-Spalte (1-basiert) oder 0.
+// Liefert die Treffer-Spalte MatchCol (1-basiert) und MatchEnd = erste
+// Position HINTER dem Treffer; beide 0, wenn nichts gefunden wurde.
+//
+// MatchEnd ist die einzige gueltige Quelle fuer den Weiterscan des
+// Aufrufers. Length(Detail) taugt dafuer NICHT: Detail ist die
+// normalisierte Fassung mit genau einem Blank um das '-'.
 function FindMatch(const S: string; var InStr: Boolean;
-  var Offset: Integer; out MatchCol: Integer; out Detail: string): Boolean;
+  out M: TUnderflowMatch): Boolean;
 var
   i, n, p : Integer;
   c : Char;
@@ -101,9 +117,7 @@ var
   NumStart: Integer;
 begin
   Result := False;
-  MatchCol := 0;
-  Offset := 0;
-  Detail := '';
+  M := Default(TUnderflowMatch);
   n := Length(S);
   i := 1;
   while i <= n do
@@ -190,9 +204,13 @@ begin
     if not TryStrToInt(NumStr, NVal) then Continue;
     if NVal < MIN_OFFSET_TO_FLAG then Continue;
 
-    MatchCol := Start;
-    Offset   := NVal;
-    Detail   := Token + ' - ' + NumStr;
+    M.Col := Start;
+    // p steht hinter der letzten Ziffer - die ECHTE Endposition des
+    // Treffers im Quelltext, unabhaengig von der Schreibweise
+    // ('Length(a)-3' gegen 'Length(a) - 3').
+    M.EndPos := p;
+    M.Offset := NVal;
+    M.Detail := Token + ' - ' + NumStr;
     Result   := True;
     Exit;
   end;
@@ -205,9 +223,9 @@ class procedure TLengthUnderflowDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
   Lines : TStringList;
-  i, MatchCol : Integer;
-  Offset : Integer;
-  Detail, Line : string;
+  i : Integer;
+  M : TUnderflowMatch;
+  Line : string;
   InStr : Boolean;
   ScanState : TCommentScanState;
   DummyCol  : Integer;
@@ -235,13 +253,25 @@ begin
       while LinePos <= Length(Line) do
       begin
         var Sub := Copy(Line, LinePos, MaxInt);
-        if not FindMatch(Sub, InStr, Offset, MatchCol, Detail) then Break;
+        if not FindMatch(Sub, InStr, M) then Break;
 
-        // MatchCol ist die 1-basierte Position des Matches IN `Sub`. Die
-        // entsprechende Position in `Line` ist `LinePos + MatchCol - 1`.
-        // Die naechste Scan-Position liegt direkt nach dem Match.
-        var MatchAbsPos := LinePos + MatchCol - 1;
-        var NextScan    := MatchAbsPos + Length(Detail);
+        // M.Col und M.EndPos sind 1-basierte Positionen IN `Sub`; in
+        // `Line` liegen sie um LinePos-1 weiter rechts. Die naechste
+        // Scan-Position ist das erste Zeichen HINTER dem Treffer.
+        //
+        // FRUEHER stand hier `MatchAbsPos + Length(Detail)`. Detail ist die
+        // NORMALISIERTE Fassung (immer genau ein Blank um das '-') und bei
+        // kompakter Schreibweise damit bis zu zwei Zeichen ZU LANG - der
+        // Scan sprang ueber den Anfang eines direkt anschliessenden zweiten
+        // Treffers hinweg. An der gebauten Exe gemessen (MinConfidence=low,
+        // die Regel ist fcLow):
+        //   'i := Length(s)-2+Length(t)-3;'      -> 1 Fund statt 2
+        //   'i := Length(s) -2+Length(t) -3;'    -> 2 (Ueberhang nur 1)
+        //   'i := Length(s) - 2 + Length(t) - 3;' -> 2 (Ueberhang 0)
+        // Der Off-by-One-Fix von damals wurde nur an der gespreizten Form
+        // geprueft - genau ausserhalb des Zwei-Zeichen-Fensters.
+        var MatchAbsPos := LinePos + M.Col - 1;
+        var NextScan    := LinePos + M.EndPos - 1;
 
         // FP-Guard (2026-06-29): strip-trailing-Idiom Delete(s, Length(s)-K, n)
         // bzw. Copy(s, Length(s)-K, n). Delete/Copy klemmen einen negativen oder
@@ -260,7 +290,7 @@ begin
         F.LineNumber := IntToStr(i + 1);
         F.MissingVar := Format(
           'Possible underflow: %s (no guard for empty string/list?)',
-          [Detail]);
+          [M.Detail]);
         F.SetKind(fkLengthUnderflow);
         Results.Add(F);
 

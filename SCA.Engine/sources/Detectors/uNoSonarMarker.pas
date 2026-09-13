@@ -70,7 +70,19 @@ begin
       if Col <= 0 then Continue;                      // kein Zeilenkommentar
       // Kommentar-Inhalt ab hinter dem `//` auf den Marker pruefen.
       CmtRest := Copy(Lines[i], Col + 2, MaxInt);
-      if Pos(MARKER, UpperCase(CmtRest)) <= 0 then Continue;
+      // Wortgrenzen (Voll-Review 2026-09-13): ohne sie meldet jede
+      // ERWAEHNUNG des Regelnamens sich selbst. '// noinspection
+      // NoSonarMarker' und '// siehe uNoSonarMarker.pas' waren im eigenen
+      // Baum 6 von 20 Treffern, und 'NOSONARQUBE' faellt in dieselbe Klasse.
+      //
+      // Zeilenlokal ist das nicht zu bremsen: der Fund sitzt AUF der
+      // Kommentarzeile, und BuildMarkers ueberspringt Kommentarzeilen bei
+      // der Target-Suche - deshalb standen bisher drei
+      // 'noinspection-file NoSonarMarker' im Repo.
+      //
+      // ContainsWholeWordLower erwartet BEIDE Seiten klein geschrieben.
+      if not TDetectorUtils.ContainsWholeWordLower(LowerCase(MARKER),
+           LowerCase(CmtRest)) then Continue;
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := '';

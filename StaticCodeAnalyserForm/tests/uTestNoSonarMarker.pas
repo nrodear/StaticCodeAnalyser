@@ -18,6 +18,10 @@ type
     [Test] procedure NoSonarInStringLiteral_NotReported;
     [Test] procedure MultipleMarkers_AllReported;
     [Test] procedure NoSonarMarker_KindAndSeverity;
+    // Posten 264: der Marker wurde als Teilstring geprueft
+    [Test] procedure MarkerNameAsIdentifierPart_NotReported;
+    [Test] procedure NosonarqubeSubstring_NotReported;
+    [Test] procedure MarkerWithColonReason_StillReported;
   end;
 
 implementation
@@ -26,6 +30,78 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 264: der Marker als ganzes Wort -------------------- }
+//
+// Der Marker wurde als TEILSTRING geprueft. Jeder Bezeichner, der
+// 'NoSonar' enthaelt - der Regelname selbst, der Unit-Name, das Kind -
+// erfuellte das Praedikat; im eigenen Baum waren das 6 von 20
+// Treffern.
+//
+// Zeilenlokal war das nicht zu bremsen: der Fund sitzt AUF der
+// Kommentarzeile, und BuildMarkers ueberspringt Kommentarzeilen bei
+// der Target-Suche. Deshalb standen drei 'noinspection-file
+// NoSonarMarker' im Repo - die Regel hat sich selbst mundtot gemacht.
+//
+// Alle Erwartungen an der gebauten Exe gemessen. Der Detektor meldet
+// EINEN Fund je Datei, deshalb traegt jede Fixture genau einen Fall.
+
+procedure TTestNoSonarMarker.MarkerNameAsIdentifierPart_NotReported;
+// Die eigene Selbstbezichtigung: zwei Erwaehnungen des Regelnamens,
+// kein einziger echter Marker. Heute 1 Fund, nach dem Fix 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  '  // noinspection NoSonarMarker'#13#10 +
+  '  DoStuff; // siehe uNoSonarMarker.pas'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkNoSonarMarker),
+      'der Regelname in einem Kommentar ist kein NOSONAR-Marker');
+  finally F.Free; end;
+end;
+
+procedure TTestNoSonarMarker.NosonarqubeSubstring_NotReported;
+// Dieselbe Klasse von der anderen Seite: 'NOSONARQUBE' beginnt mit
+// dem Marker. Heute 1 Fund, nach dem Fix 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  '  DoStuff; // NOSONARQUBE laeuft hier nicht'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkNoSonarMarker),
+      'NOSONARQUBE ist ein anderes Wort');
+  finally F.Free; end;
+end;
+
+procedure TTestNoSonarMarker.MarkerWithColonReason_StillReported;
+// GEGENPROBE gegen Ueberstraffung: ein echter Marker mit
+// Doppelpunkt-Begruendung. Vor wie nach dem Fix 1 Fund - der
+// Doppelpunkt ist keine Wortgrenzenverletzung.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  '  DoStuff; // NOSONAR: id stammt aus einem Enum'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkNoSonarMarker),
+      'ein echter Marker bleibt ein Fund');
+  finally F.Free; end;
+end;
+
 
 procedure TTestNoSonarMarker.NoMarker_NoFinding;
 const SRC =

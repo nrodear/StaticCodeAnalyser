@@ -83,6 +83,10 @@ type
     [Test] procedure Leak_NilWithoutFree_ReportsError;
     [Test] procedure Leak_DoubleCreate_KnownLimitation_NoFinding;
     [Test] procedure Leak_ObjectListAdd_FieldReceiver_NoFinding;
+    // Posten 255: Verbform und String-Literal sind kein Create
+    [Test] procedure Leak_FactoryBodyVerbForm_NotAFactory_NoFinding;
+    [Test] procedure Leak_FactoryBodyCreateInStringLiteral_NotAFactory_NoFinding;
+    [Test] procedure Leak_FactoryBodyCtorSuffix_StillReported;
   end;
 
   // nested-Gate, Factory-ohne-Klammern, die Typen-Matrix der leaky
@@ -116,6 +120,9 @@ type
     [Test] procedure Leak_CreateInForLoop_NoFree_ReportsError;
     [Test] procedure Leak_TwoVars_OnlyOneFreed_ReportsOneError;
     [Test] procedure Leak_FreeInTryBody_NotFinally_ReportsWarning;
+    // Posten 256: DisposeOf fehlte in der Zeilenfassung
+    [Test] procedure Leak_DisposeOfInNestedRoutine_NoFinding;
+    [Test] procedure Leak_NestedDisposesOtherVar_OuterStillReported;
   end;
 
   // try/finally-Geometrien: Regionen, Schachtelung, Wortgrenzen.
@@ -1221,6 +1228,92 @@ begin
   finally F.Free; end;
 end;
 
+{ --- Posten 256: DisposeOf ist eine Freigabe -------------------- }
+//
+// Die AST-Fassung GibtVarFrei kennt .DisposeOf seit der
+// SCA001-Gross-Triage 2026-07-18. Die ZEILENFASSUNG ZeileGibtVarFrei,
+// aus der frueheren LineFreesVar hervorgegangen, wurde beim
+// Hochziehen auf Unit-Ebene am 2026-09-04 nicht nachgezogen - beide
+// Konsumenten (K-nested-Gate und finally-Scan) sahen die Nadel nicht.
+//
+// An der gebauten Exe gemessen, gleiche Fixture, nur die
+// Freigabezeile getauscht:
+//   FreeAndNil(list);  0 Funde     list.Destroy;   0 Funde
+//   list.Free;         0 Funde     list.DisposeOf; 1 FUND
+//   Beep;              1 Fund
+// Der DisposeOf-Lauf war bit-genau der Kontrollfall ohne jede
+// Freigabe - deshalb ist der erste Test heute rot.
+
+procedure TTestMemoryLeakTypeMatrix.Leak_DisposeOfInNestedRoutine_NoFinding;
+// Wie Leak_FreeInNestedRoutine_NoFinding, nur mit DisposeOf.
+// Heute 1 Fund, nach dem Fix 0.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Outer;'#13#10+
+  'var'#13#10+
+  '  list: TStringList;'#13#10+
+  ''#13#10+
+  '  procedure Cleanup;'#13#10+
+  '  begin'#13#10+
+  '    list.DisposeOf;'#13#10+
+  '  end;'#13#10+
+  ''#13#10+
+  'begin'#13#10+
+  '  list := TStringList.Create;'#13#10+
+  '  Cleanup;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'DisposeOf in geschachtelter Routine ist kein Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakTypeMatrix.Leak_NestedDisposesOtherVar_OuterStillReported;
+// GEGENPROBE zur Wortgrenze: die geschachtelte Routine entsorgt NUR b.
+// Eine zu grobe Nadel schluckt beide Funde, eine fehlende laesst zwei
+// stehen - beides macht den Test rot.
+// Heute 2 Funde (DisposeOf wirkt nicht), nach dem Fix 1, und der
+// heisst 'a'.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Outer;'#13#10+
+  'var'#13#10+
+  '  a, b: TStringList;'#13#10+
+  ''#13#10+
+  '  procedure Cleanup;'#13#10+
+  '  begin'#13#10+
+  '    b.DisposeOf;'#13#10+
+  '  end;'#13#10+
+  ''#13#10+
+  'begin'#13#10+
+  '  a := TStringList.Create;'#13#10+
+  '  b := TStringList.Create;'#13#10+
+  '  Cleanup;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'nur a bleibt - b ist im Nested entsorgt');
+    Fnd := TFindingHelper.FirstOf(F, fkMemoryLeak);
+    Assert.IsNotNull(Fnd, 'Fund erwartet');
+    Assert.AreEqual('a', Fnd.MissingVar, 'der verbleibende Fund ist a');
+  finally F.Free; end;
+end;
+
+
 procedure TTestMemoryLeakTypeMatrix.Leak_NestedFreesOtherVar_OuterStillReported;
 // GEGENPROBE, und der eigentliche Waechter: die geschachtelte Routine
 // befreit NUR b - a bleibt gemeldet. Ein Gate, das die Spannen zu
@@ -1824,6 +1917,96 @@ begin
       'lokale Factory mit Klammern (BuildList) ohne Free bleibt ein Leak');
   finally F.Free; end;
 end;
+
+{ --- Posten 255: was als Factory-Beweis zaehlt ------------------- }
+//
+// IsLocalFactory nahm ein rohes Pos('.create') im RHS als Beweis,
+// dass die gerufene Routine Ownership uebergibt. Der Schwesterpfad
+// HasCreateAssign beantwortet dieselbe Frage laengst mit
+// MatchesCreate, das Konstruktor-Suffix von Verbform trennt.
+//
+// Alle drei Erwartungen am gebauten Stand gemessen: heute liefern
+// ALLE DREI Fixturen 1 Fund. Die ersten beiden sind damit rot und
+// werden mit dem Fix gruen; die dritte ist die Positiv-Kontrolle.
+
+procedure TTestMemoryLeakBorrowed.Leak_FactoryBodyVerbForm_NotAFactory_NoFinding;
+// Verbform: 'Created' ist ein Feldzugriff, kein Konstruktor.
+// Heute 1 Fund, nach dem Fix 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.BuildList: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := FStamp.Created;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := BuildList();'#13#10+
+  '  list.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'eine Verbform beweist keinen Ownership-Transfer');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakBorrowed.Leak_FactoryBodyCreateInStringLiteral_NotAFactory_NoFinding;
+// Der Create steht in einem STRING-LITERAL. Im Korpus real
+// vorhanden (Codegeneratoren, die Pascal-Quelltext bauen).
+// Heute 1 Fund, nach dem Fix 0.
+//
+// Dieser Test ist zugleich der Waechter fuer die REIHENFOLGE: wer
+// MatchesCreate einsetzt und das Blanken weglaesst, sieht hier rot
+// - hinter 'create' steht dann das schliessende Quote, also ein
+// Nicht-Ident-Zeichen, und Fall B des Matchers greift.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.BuildList: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := DoIt(''T.Create'');'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := BuildList();'#13#10+
+  '  list.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'ein Create im String-Literal ist kein Konstruktoraufruf');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakBorrowed.Leak_FactoryBodyCtorSuffix_StillReported;
+// POSITIV-KONTROLLE. Ein echtes Konstruktor-Suffix bleibt ein
+// Ownership-Transfer - vor wie nach dem Fix 1 Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.BuildList: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := TStringList.CreateNew;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := BuildList();'#13#10+
+  '  list.Add(''x'');'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
+      'CreateNew ist ein Konstruktor und uebergibt Ownership');
+  finally F.Free; end;
+end;
+
 
 procedure TTestMemoryLeakCtorVariants.Leak_IfThenAssignElseBeginBlock_OuterFinallyFrees_NoFinding;
 // Regression: TDuplicateStringDetector.AnalyzeUnit produzierte einen

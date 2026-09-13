@@ -2,9 +2,21 @@
 
 // Bewertet den Behebungs-Aufwand einer SQL-Injection.
 //
-// Eingabe: TypeRef des nkAssign-Knotens (vollständiger RHS-Ausdruck,
-//          Stringliterale ohne Anführungszeichen, z. B.
-//          "SELECT * FROM users WHERE id = +UserId")
+// Eingabe: TypeRef des nkAssign-Knotens bzw. Name des nkCall-Knotens
+//          (vollständiger Ausdruck). Stringliterale kommen MIT
+//          Anführungszeichen: der Parser re-quotet jedes tkStrLit (innere
+//          ' bleiben verdoppelt) und setzt beim Zusammenfügen ein
+//          Leerzeichen NUR zwischen zwei Ident-Zeichen. Ein '+' steht
+//          deshalb immer quote-adjazent, unabhängig von der Formatierung
+//          der Quelle:
+//            s := 'SELECT * FROM ' + Tbl;  ->  'SELECT * FROM '+Tbl
+//            s := 'SELECT * FROM '+Tbl;    ->  'SELECT * FROM '+Tbl
+//          Genau darauf bauen die STRUCTURAL-Marker ('from ''+').
+//
+//          Hier stand bis zum Voll-Review 2026-09-13 das GEGENTEIL
+//          ("Stringliterale ohne Anführungszeichen"). Wer dem geglaubt
+//          hätte, hätte die neun Marker "repariert" und damit still
+//          gelegt - sie sind das einzige Gate für Score 4/5.
 //
 // Ausgabe: TFixEstimate mit Punktzahl 1–5, Label und Handlungsempfehlung.
 //
@@ -57,6 +69,9 @@ implementation
 // noinspection-file BeginEndRequired, CyclomaticComplexity, LongMethod, MagicNumber, TooLongLine, UnsortedUses, UnusedParameter
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uDetectorUtils;   // BlankStringLiterals
+
 { ---- Hilfsfunktionen ---- }
 
 class function TSQLFixScorer.CountPlus(const S: string): Integer;
@@ -69,8 +84,11 @@ begin
 end;
 
 // Prüft ob ein '+' direkt nach einem strukturellen SQL-Schlüsselwort steht.
-// Hinweis: Stringliterale werden vom Parser ohne Anführungszeichen übergeben,
-// sodass 'SELECT * FROM '+tbl als "SELECT * FROM +tbl" vorliegt.
+// Die Marker tragen das schliessende Quote ('from ''+' ist der Text from '+),
+// weil der Parser Literale MIT Anführungszeichen liefert (s. Unit-Kopf):
+// 'SELECT * FROM ' + tbl liegt als 'select * from '+tbl vor. Das Quote IST
+// das Gate - es beweist, dass die Konkatenation genau dort ansetzt, wo der
+// Tabellen- oder Spaltenname steht.
 class function TSQLFixScorer.HasStructuralConcat(const Low: string): Boolean;
 const
   STRUCTURAL: array[0..8] of string = (
@@ -110,6 +128,7 @@ end;
 class function TSQLFixScorer.Estimate(const RHS: string): TFixEstimate;
 var
   Low         : string;
+  LowBlank    : string;
   TotalPlus   : Integer;
   IsStructural: Boolean;
   HasFuncCall : Boolean;
@@ -128,9 +147,22 @@ begin
   Suggestion := '';
 
   Low         := RHS.ToLower;
-  TotalPlus   := CountPlus(Low);
+  // Ein '+' INNERHALB eines Stringliterals ist SQL-Text - auf MSSQL der
+  // Konkat-Operator, in jedem Dialekt die Addition -, keine Delphi-
+  // Verkettung. Es blaehte Score und Reason-Zahl auf: der Score mass
+  // dadurch teilweise die Arithmetik im Statement statt den
+  // Behebungsaufwand. An der gebauten Exe gemessen:
+  //   S := 'SELECT a+b+c FROM t WHERE x = '+V;   Fix 2/5
+  //   S := 'SELECT * FROM t WHERE x = '+V;       Fix 1/5
+  // Beide haben genau EINE Delphi-Verkettung.
+  //
+  // HasStructuralConcat laeuft BEWUSST weiter auf Low: seine Marker
+  // brauchen den Literal-INHALT ('from'), den BlankStringLiterals gerade
+  // ausblankt (Posten 272 - das Quote in den Markern ist das Gate).
+  LowBlank    := TDetectorUtils.BlankStringLiterals(Low);
+  TotalPlus   := CountPlus(LowBlank);
   IsStructural := HasStructuralConcat(Low);
-  HasFuncCall := HasFunctionCallConcat(Low);
+  HasFuncCall := HasFunctionCallConcat(LowBlank);
   // ── Score-Berechnung (alle Branches setzen Score explizit) ───────────────
   if IsStructural then
   begin

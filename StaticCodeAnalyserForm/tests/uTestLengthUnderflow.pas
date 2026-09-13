@@ -42,6 +42,9 @@ type
     [Test] procedure LengthMinusInBlockComment_NoFinding;
     [Test] procedure ApostropheInCommentThenRealExpr_StillReported;
     [Test] procedure CopyIdiom_NoFinding;
+    // Posten 258: kompakte Schreibweise verschluckte den zweiten Treffer
+    [Test] procedure Length_TwoCompactHitsOnSameLine_BothReported;
+    [Test] procedure Length_OneSpaceHitsOnSameLine_BothReported;
   end;
 
 implementation
@@ -318,6 +321,67 @@ begin
       'Zwei Underflow-Hits in derselben Methode -> 2 Findings');
   finally F.Free; end;
 end;
+
+{ --- Posten 258: der Weiterscan folgt dem Treffer --------------- }
+//
+// Detail wird als NORMALISIERTE Fassung gebaut (immer genau ein Blank
+// um das '-'), diente im Aufrufer aber doppelt: als Meldetext UND als
+// Laengenmass fuer die naechste Scan-Position. Bei kompakter
+// Schreibweise ist die Normalisierung bis zu zwei Zeichen laenger als
+// das Original - der Scan sprang ueber den Anfang eines direkt
+// anschliessenden zweiten Treffers.
+//
+// Der Off-by-One-Fix, aus dem Length_TwoHitsOnSameLine_BothReported
+// hervorging, wurde nur an der GESPREIZTEN Form geprueft - genau
+// ausserhalb des Zwei-Zeichen-Fensters.
+//
+// Alle Erwartungen an der gebauten Exe gemessen. ACHTUNG beim
+// Nachmessen von Hand: die Regel ist fcLow und braucht
+// MinConfidence=low in der ini - mit den Vorgaben liefert jede dieser
+// Zeilen 0 Funde.
+
+procedure TTestLengthUnderflow.Length_TwoCompactHitsOnSameLine_BothReported;
+// DER NACHWEIS: kompakt geschrieben, Ueberhang zwei Zeichen.
+// Heute 1 Fund, nach dem Fix 2.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const s, t: string);'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  i := Length(s)-2+Length(t)-3;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(2,
+      TFindingHelper.Count(F, fkLengthUnderflow),
+      'auch ohne Leerzeichen sind es zwei Underflows');
+  finally F.Free; end;
+end;
+
+procedure TTestLengthUnderflow.Length_OneSpaceHitsOnSameLine_BothReported;
+// DIE FENSTERKANTE: Ueberhang nur EIN Zeichen, der Sprung landet
+// gerade noch auf dem Anfang des zweiten Treffers. Heute schon 2 und
+// muss 2 bleiben - der Waechter gegen eine Ueberkorrektur, die den
+// Scan zu weit zurueckstellt und den Treffer doppelt zaehlt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const s, t: string);'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  i := Length(s) -2+Length(t) -3;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(2,
+      TFindingHelper.Count(F, fkLengthUnderflow),
+      'ein Leerzeichen Ueberhang aendert nichts an der Zahl');
+  finally F.Free; end;
+end;
+
 
 procedure TTestLengthUnderflow.Length_TwoHitsOnSameLine_BothReported;
 // Regression: vor dem Off-by-One-Fix an der LinePos-Vorschaltung sprang

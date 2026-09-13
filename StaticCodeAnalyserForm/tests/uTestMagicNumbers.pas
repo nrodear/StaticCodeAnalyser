@@ -18,6 +18,11 @@ type
     [Test] procedure ConstAssignment_NotReported;
     [Test] procedure Finding_KindAndSeverity;
     [Test] procedure ComparisonInsideLiteral_NotReported;
+    // Posten 261: der Ganzzahl-Torso eines Floats wurde gemeldet
+    [Test] procedure FloatLiteral_NotReported;
+    [Test] procedure ExponentLiteral_NotReported;
+    [Test] procedure HexLiteral_NotReported;
+    [Test] procedure FloatThenRealMagic_StillReported;
   end;
 
 implementation
@@ -26,6 +31,106 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 261: Float-Literale sind keine Magic Numbers -------- }
+//
+// Der Ziffern-Scan sammelt nur 0..9 und haelt am Dezimalpunkt an; der
+// so entstandene Ganzzahl-TORSO wurde ungeprueft gemeldet. Der
+// Kommentar 'Nur Integer-Zahl, kein Float / Hex' beschrieb die
+// Absicht - es gab nur keine Wache, die sie durchsetzt. Hex fiel
+// schon vorher heraus ('$' ist keine Ziffer), Float nicht.
+//
+// Sichtbar wurde die Willkuer an der Trivial-Pruefung: die greift am
+// Torso, also verschwand '2.5' (als '2' trivial) und '3.5' wurde
+// gemeldet. Fuer den Leser sah das nach Zufall aus.
+//
+// Alle Erwartungen an der gebauten Exe gemessen.
+
+procedure TTestMagicNumbers.FloatLiteral_NotReported;
+// Heute 1 Fund: 'Magic number "3"'. Nach dem Fix 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x, y: Double;'#13#10 +
+  'begin'#13#10 +
+  '  if x > 3.5 then x := 0;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMagicNumber),
+      'der Ganzzahlteil eines Float-Literals ist keine Magic Number');
+  finally F.Free; end;
+end;
+
+procedure TTestMagicNumbers.ExponentLiteral_NotReported;
+// Exponentschreibweise, heute ebenfalls 'Magic number "3"'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x, y: Double;'#13#10 +
+  'begin'#13#10 +
+  '  if x > 3e6 then x := 0;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMagicNumber),
+      'auch die Exponentschreibweise ist ein Float-Literal');
+  finally F.Free; end;
+end;
+
+procedure TTestMagicNumbers.HexLiteral_NotReported;
+// Die HEUTE SCHON richtige Haelfte des Kommentars, jetzt
+// festgenagelt: '$' ist keine Ziffer, Digits bleibt leer.
+// Vor wie nach dem Fix 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x, y: Double;'#13#10 +
+  'begin'#13#10 +
+  '  if x > $400 then x := 0;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMagicNumber),
+      'Hex-Literale erreichen die Ziffernschleife gar nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestMagicNumbers.FloatThenRealMagic_StillReported;
+// DIE GEGENPROBE, und sie prueft den MELDETEXT, nicht nur die Zahl:
+// heute wird der Torso '3' gemeldet, nach dem Fix die echte Magic
+// Number '1027'. Ein Test auf die blosse Anzahl waere in beiden
+// Faellen 1 und wuerde den Unterschied durchlassen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x, y: Double;'#13#10 +
+  'begin'#13#10 +
+  '  if (x > 3.5) and (y > 1027) then x := 0;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Fnd := TFindingHelper.FirstOf(F, fkMagicNumber);
+    Assert.IsNotNull(Fnd, 'die 1027 bleibt eine Magic Number');
+    Assert.IsTrue(Pos('1027', Fnd.MissingVar) > 0,
+      'gemeldet werden muss die 1027, nicht der Torso 3 - Text: '
+      + Fnd.MissingVar);
+  finally F.Free; end;
+end;
+
 
 procedure TTestMagicNumbers.MagicNumber_Reported;
 // Detector scannt nur nkIfStmt-Bedingungen (per Design konservativ), und

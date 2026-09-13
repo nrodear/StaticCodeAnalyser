@@ -45,6 +45,9 @@ type
     // ---- Locale-Hint (fkFormatLocaleHint) ---------------------------------
     [Test] procedure FormatLocale_FloatSpecWithoutSettings_Reported;
     [Test] procedure FormatLocale_FloatSpecWithSettings_NoFinding;
+    // Posten 250: Klammern in Literalen sind keine Klammern
+    [Test] procedure FormatLocale_ParenInStringArg_WithSettings_NoFinding;
+    [Test] procedure FormatLocale_ParenInStringArg_NoSettings_Reported;
     [Test] procedure FormatLocale_StringSpec_NoFinding;
   end;
 
@@ -849,4 +852,52 @@ begin
       'nackter Mismatch (2 Platzhalter, 1 Argument) feuert im File-Harness');
   finally F.Free; end;
 end;
+{ --- Posten 250: String-Literale in der Argument-Zaehlung -------- }
+//
+// CountTopLevelArgs zaehlte Klammern und Kommas roh im Text. Das
+// Schwesterverfahren CountArrayArgs fuehrt fuer denselben Text seit
+// dem FP-Audit 2026-07-06 ein InStr-Flag - nachgeruestet wurde damals
+// nur eine der beiden Zaehlungen.
+//
+// Beide Richtungen am gebauten Stand gemessen, beide Tests sind heute
+// ROT und werden mit dem Fix gruen.
+
+procedure TTestFormatMismatchExt.FormatLocale_ParenInStringArg_WithSettings_NoFinding;
+// FP-Richtung: das ')' im Literal beendet den Scan zu frueh, das
+// dritte Argument (fs) bleibt ungesehen und der Hint feuert.
+// Am gebauten Stand: 1 Fund. Nach dem Fix: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2f'', [Foo('')'')], fs); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkFormatLocaleHint),
+    'die Klammer im Literal darf die Argumentzaehlung nicht beenden');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_ParenInStringArg_NoSettings_Reported;
+// FN-Richtung, die Gegenprobe: das '(' im Literal hebt die Tiefe, das
+// Komma des UMGEBENDEN Aufrufs wird als drittes Format-Argument
+// gezaehlt und unterdrueckt den Hint.
+// Am gebauten Stand: 0 Funde. Nach dem Fix: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; b: Boolean;'#13#10+
+  'begin s := IfThen(b, Format(''%.2f'', [''('']), ''''); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkFormatLocaleHint),
+    'ohne TFormatSettings bleibt der Hint faellig - auch wenn ein '
+    + 'Literal eine Klammer traegt');
+  finally F.Free; end;
+end;
+
 end.
