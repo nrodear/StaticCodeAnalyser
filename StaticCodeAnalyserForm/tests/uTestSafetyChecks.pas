@@ -117,6 +117,10 @@ type
     [Test] procedure Div_StrictGreaterMinusOne_StillReports;      // 143 Gegenprobe
     [Test] procedure Div_NonZeroSetIncludingZero_StillReports;    // 144
     [Test] procedure Div_BreakInsideBeginBlock_NoFinding;         // 145
+    // Minor 241: die Null muss der GANZE Divisor sein
+    [Test] procedure Div_LiteralZero_StillReported;
+    [Test] procedure Div_LeadingZeroLiteral_NoFinding;
+    [Test] procedure Div_ModLeadingZeroLiteral_NoFinding;
   end;
 
   // ---- DeadCode Erweiterungen --------------------------------------------------------
@@ -758,6 +762,74 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
     'der Break im begin-Block schuetzt genauso wie der direkte');
+  finally F.Free; end;
+end;
+
+// ---------------------------------------------------------------------------
+// Minor 241: rechte Wortgrenze am Literal-Null-Gate
+// ---------------------------------------------------------------------------
+// H1 suchte ' div 0' bzw. ' mod 0' mit einem blossen Pos - ohne
+// Pruefung, ob die Null der ganze Divisor ist. In Pascal ist die
+// fuehrende Null erlaubt ('01' IST 1), und so wurden 'x div 01',
+// 'x div 0777' und selbst ein verunglueckt geschriebenes 'x div 0x10'
+// als Division durch Null gemeldet - mit lsError, dem hoechsten
+// Schweregrad des Werkzeugs.
+//
+// Korpuswirkung: KEINE. Im Korpus gibt es keine einzige Zeile mit
+// 'div 0<Ziffer>' - die Haertung wirkt vorbeugend.
+// Alle drei am gebauten Stand verprobt (vor dem Fix 1/1/1, danach
+// 1/0/0).
+
+procedure TTestDivByZeroExt.Div_LiteralZero_StillReported;
+// Die Positiv-Kontrolle, ohne die die zwei Nullen darunter nichts
+// beweisen: die echte Division durch Null muss weiterhin melden.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var a: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  a := 100 div 0;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDivByZero),
+    'div 0 bleibt eine Division durch Null');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_LeadingZeroLiteral_NoFinding;
+// 'div 01' ist eine Division durch EINS. Vor dem Fix ein lsError-FP.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var b: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  b := 100 div 01;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    '01 ist 1, nicht 0');
+  finally F.Free; end;
+end;
+
+procedure TTestDivByZeroExt.Div_ModLeadingZeroLiteral_NoFinding;
+// Dieselbe Luecke auf dem mod-Zweig - der Doppel-Pos stand zweimal im
+// Detektor, und beide Fundstellen benutzen jetzt denselben Helfer.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var c: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  c := 100 mod 0777;'#13#10 +
+  'end;'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDivByZero),
+    '0777 ist 777, nicht 0');
   finally F.Free; end;
 end;
 

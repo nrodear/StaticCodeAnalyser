@@ -1,4 +1,4 @@
-﻿unit uDivByZero;
+unit uDivByZero;
 
 // Detektor fuer potentielle Division-durch-Null (Sonar-Regel #6).
 //
@@ -1131,6 +1131,39 @@ begin
   end;
 end;
 
+function TeiltDurchLiteraleNull(const AExprLow: string): Boolean;
+// H1: ' div 0' bzw. ' mod 0' - aber nur, wenn die Null der GANZE
+// Divisor ist.
+//
+// Ohne die rechte Wortgrenze traf der blosse Pos-Vergleich auch
+// fuehrende Nullen: 'x div 01', 'x div 0777' und selbst ein
+// verunglueckt geschriebenes 'x div 0x10' galten als Division durch
+// Null - und zwar mit lsError, dem hoechsten Schweregrad des
+// Werkzeugs (Voll-Review 2026-09-12, Minor 241). In Pascal ist die
+// fuehrende Null erlaubt, 01 ist schlicht 1.
+//
+// Beide H1-Fundstellen (nkAssign und nkCall) riefen denselben
+// Doppel-Pos auf; die Pruefung existiert jetzt einmal.
+const
+  IDENT_ODER_ZIFFER = ['0'..'9', 'a'..'z', 'A'..'Z', '_'];
+var
+  Nadel : string;
+  p, e  : Integer;
+begin
+  for Nadel in [' div 0', ' mod 0'] do
+  begin
+    p := Pos(Nadel, AExprLow);
+    while p > 0 do
+    begin
+      e := p + Length(Nadel);   // erstes Zeichen NACH der Null
+      if (e > Length(AExprLow)) or
+         (not CharInSet(AExprLow[e], IDENT_ODER_ZIFFER)) then
+        Exit(True);
+      p := Pos(Nadel, AExprLow, p + 1);
+    end;
+  end;
+  Result := False;
+end;
 class procedure TDivByZeroDetector.AnalyzeMethod(MethodNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 
@@ -1175,7 +1208,7 @@ begin
       ExprLow := TDetectorUtils.BlankStringLiterals(ExprLow);
 
       // H1: Literal 0
-      if (Pos(' div 0', ExprLow) > 0) or (Pos(' mod 0', ExprLow) > 0) then
+      if TeiltDurchLiteraleNull(ExprLow) then
       begin
         var Key := IntToStr(N.Line) + ':lit';
         if not Reported.ContainsKey(Key) then
@@ -1232,7 +1265,7 @@ begin
     for var N in Nodes do
     begin
       ExprLow := TDetectorUtils.BlankStringLiterals(N.Name.ToLower);
-      if (Pos(' div 0', ExprLow) > 0) or (Pos(' mod 0', ExprLow) > 0) then
+      if TeiltDurchLiteraleNull(ExprLow) then
       begin
         var Key := IntToStr(N.Line) + ':lit';
         if not Reported.ContainsKey(Key) then
