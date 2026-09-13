@@ -2644,9 +2644,31 @@ var
     // den Funktionsnamen -> die var/out-Args bekamen keinen pessimistic-
     // Write (mormot PropNameUpper, fcHigh-FP). RegisterCallArgWrites
     // reuse't den bestehenden Guard 'Klammergruppe+Komma' 1:1: Single-
-    // Operand-Casts ('PInteger(p)^ :=') bleiben uebersprungen (FN-Schutz
-    // fuer Cast-Operand-Reads intakt), Multi-Arg-Gruppen registrieren.
-    // Nur zusaetzliche Write-Registrierung -> monoton, nie neue Funde.
+    // Operand-Casts ('PInteger(p)^ :=') bleiben uebersprungen,
+    // Multi-Arg-Gruppen registrieren. Nur zusaetzliche
+    // Write-Registrierung -> monoton, nie neue Funde.
+    //
+    // WIE WEIT DIESE UNTERDRUECKUNG REICHT (nachgemessen 2026-09-13, weil
+    // der frueher hier stehende Satz "FN-Schutz fuer Cast-Operand-Reads"
+    // eine Reichweite nahelegte, die nicht stimmt). Gemessen an der
+    // gebauten Exe, gleiche Variable, gleicher Cast, nur die Position
+    // unterschiedlich:
+    //   PFoo(raw)^.DoA();          1 Fund   <- NICHT unterdrueckt
+    //   DoSomething(PFoo(raw)^);   0 Funde
+    //   q := PInteger(p)^;         0 Funde
+    //   PInteger(p)^ := 5;         0 Funde
+    //
+    // Die Unterdrueckung ist also die REGEL und die Receiver-Form auf
+    // Statement-Ebene die Ausnahme - nicht umgekehrt. Sie greift auch
+    // ohne jedes Zuweisungsziel ('q := PInteger(p)^'), ist also keine
+    // Politik der Klasse "typecast-assignment-target", sondern eine
+    // breitere FN-Klasse: Cast-Operand = pessimistic Write.
+    //
+    // UNBEWIESEN und deshalb hier nicht behauptet: WELCHER Pfad die
+    // Unterdrueckung jeweils bewirkt. Es gibt mindestens drei Kandidaten
+    // (dieser Guard, das Cast-Unwrapping in ExtractBareIdent, ProcessAssign);
+    // die Messung trennt sie nicht. Wer hier etwas aendert, misst zuerst
+    // alle vier Formen oben nach.
     if Pos('(', A.Name) > 0 then
       RegisterCallArgWrites(A.Name, A.Line);
     LhsBare := ExtractBareIdent(A.Name);

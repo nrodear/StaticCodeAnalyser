@@ -264,6 +264,11 @@ type
     // darf ihre Sprungmarken nicht als Pseudo-Locals in den AST druecken -
     // 'goto Ret' ist kein Read einer Variablen (FastCode-PosEx-Muster).
     [Test] procedure LabelSectionAfterVars_NoPhantomLocals;
+    // Posten 279: die vier Positionen des Cast-Operanden
+    [Test] procedure CastOperandInReceiverPosition_Reported;
+    [Test] procedure CastOperandInArgumentPosition_NoFinding;
+    [Test] procedure CastOperandOnRhs_NoFinding;
+    [Test] procedure CastOperandAsAssignTarget_NoFinding;
   end;
 
 implementation
@@ -285,6 +290,112 @@ end;
 // ============================================================
 // POSITIV
 // ============================================================
+
+{ --- Posten 279: wie weit die Cast-Unterdrueckung reicht -------- }
+//
+// Der Kommentar an RegisterCallArgWrites sprach von einem "FN-Schutz
+// fuer Cast-Operand-Reads" und legte damit eine Reichweite nahe, die
+// nicht stimmt. Gemessen an der gebauten Exe - gleiche Variable,
+// gleicher Cast, nur die Position unterschiedlich:
+//   PFoo(raw)^.DoA();          1 Fund   <- NICHT unterdrueckt
+//   DoSomething(PFoo(raw)^);   0 Funde
+//   q := PInteger(p)^;         0 Funde
+//   PInteger(p)^ := 5;         0 Funde
+//
+// Die Unterdrueckung ist die REGEL, die Receiver-Form auf
+// Statement-Ebene die Ausnahme - nicht umgekehrt. Sie greift auch ohne
+// jedes Zuweisungsziel ('q := PInteger(p)^'), ist also keine Politik
+// der Klasse "typecast-assignment-target".
+//
+// Alle vier Tests sind HEUTE GRUEN. Sie aendern nichts, sie nageln das
+// gemessene Ist-Verhalten fest - ohne sie ist der Kommentar oben nur
+// eine Behauptung, und die letzte hat vier Jahre lang nicht gestimmt.
+
+procedure TTestUninitVar.CastOperandInReceiverPosition_Reported;
+// Die Ausnahme: Receiver auf Statement-Ebene.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'type PFoo = ^TFoo;'#13#10 +
+  '  TFoo = record A: Integer; procedure DoA; end;'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var raw: Pointer; p: PInteger; q: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  PFoo(raw)^.DoA();'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUninitVar),
+      'die Receiver-Form ist der einzige nicht unterdrueckte Cast-Kontext');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.CastOperandInArgumentPosition_NoFinding;
+// Argumentposition - unterdrueckt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'type PFoo = ^TFoo;'#13#10 +
+  '  TFoo = record A: Integer; procedure DoA; end;'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var raw: Pointer; p: PInteger; q: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  DoSomething(PFoo(raw)^);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUninitVar),
+      'in Argumentposition zaehlt der Cast-Operand als pessimistic Write');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.CastOperandOnRhs_NoFinding;
+// RHS OHNE Zuweisungsziel - ebenfalls unterdrueckt. Diese Zeile
+// widerlegt die Lesart, es gehe um Typecast-ZIELE.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'type PFoo = ^TFoo;'#13#10 +
+  '  TFoo = record A: Integer; procedure DoA; end;'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var raw: Pointer; p: PInteger; q: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  q := PInteger(p)^;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUninitVar),
+      'auch ohne Zuweisungsziel greift die Unterdrueckung');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.CastOperandAsAssignTarget_NoFinding;
+// Zuweisungsziel - unterdrueckt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'type PFoo = ^TFoo;'#13#10 +
+  '  TFoo = record A: Integer; procedure DoA; end;'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var raw: Pointer; p: PInteger; q: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  PInteger(p)^ := 5;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUninitVar),
+      'das Typecast-Ziel zaehlt als Write');
+  finally F.Free; end;
+end;
+
 
 procedure TTestUninitVar.NeverWritten_OnlyRead_Flagged;
 const
