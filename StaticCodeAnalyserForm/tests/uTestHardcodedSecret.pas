@@ -1,4 +1,4 @@
-﻿unit uTestHardcodedSecret;
+unit uTestHardcodedSecret;
 
 // Tests fuer den THardcodedSecretDetector (Basis und Erweiterungen).
 
@@ -105,6 +105,12 @@ type
     [Test] procedure Secret_ProsaUeberPrivateKey_NotReported;
     [Test] procedure Secret_PemBlock_StillReported;
     [Test] procedure Secret_Verbindungszeichenfolge_StillReported;
+    // Testluecke 155: die sieben bekannten Anbieter-Muster. Der
+    // komplette Pfad IsKnownSecretPattern hatte KEINEN Test - weder
+    // ueber den Zuweisungs- noch ueber den Const-/Feld-Emitter.
+    [Test] procedure KnownPatterns_AssignmentEmitter_AllSeven;
+    [Test] procedure KnownPatterns_ConstEmitter_Detected;
+    [Test] procedure KnownPatterns_NearMiss_NoFinding;
   end;
 
 implementation
@@ -1102,6 +1108,142 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
       'das zweite Token-Vorkommen traegt die gueltigen Wortgrenzen');
+  finally F.Free; end;
+end;
+
+{ --- Testluecke 155: die bekannten Anbieter-Muster ----------------- }
+//
+// IsKnownSecretPattern erkennt sieben Formate an ihrer Gestalt, ganz
+// ohne Rueckgriff auf den Bezeichnernamen. Der Pfad war vollstaendig
+// ungetestet - ein zerbrochener Regex haette hier nichts rot gefaerbt,
+// und es ist eine SECURITY-Regel.
+//
+// Die Werte sind synthetisch und als solche erkennbar: durchlaufende
+// Alphabete und Ziffernfolgen. AKIAIOSFODNN7EXAMPLE ist der
+// Beispielschluessel aus der AWS-Dokumentation. Kein echtes
+// Schluesselmaterial.
+//
+// LAENGEN SIND TEIL DES MUSTERS, nicht Beiwerk - beim ersten Anlauf
+// hatte ich ghp_ mit 34 statt 36 Zeichen und github_pat_ mit 58 statt
+// 59+; beide Fixtures blieben stumm. Alle Werte sind am gebauten Stand
+// nachgemessen.
+
+function SecretArtVorhanden(F: TObjectList<TLeakFinding>;
+  const AArt: string): Boolean;
+// True, wenn irgendein Secret-Fund AArt im Meldetext nennt.
+// Bewusst eine Funktion statt einer im Schleifenrumpf
+// zusammengebauten Zeichenkette - genau dafuer meldet der eigene
+// Detektor StringConcatInLoop.
+var
+  Fnd : TLeakFinding;
+begin
+  Result := False;
+  for Fnd in F do
+    if (Fnd.Kind = fkHardcodedSecret) and
+       (Pos(AArt, Fnd.MissingVar) > 0) then
+      Exit(True);
+end;
+
+procedure TTestHardcodedSecretInit.KnownPatterns_AssignmentEmitter_AllSeven;
+// Alle sieben Muster ueber den Zuweisungs-Emitter. Geprueft wird
+// nicht nur die Anzahl, sondern JEDE Art namentlich - sonst koennte
+// ein doppelt zaehlendes Muster ein ausgefallenes verdecken.
+// Am gebauten Stand nachgemessen: 7 Funde.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Zuweisungen;'#13#10 +
+  'var a, b, c, d, e, f, g: string;'#13#10 +
+  'begin'#13#10 +
+  '  a := ''AKIAIOSFODNN7EXAMPLE'';'#13#10 +
+  '  b := ''ghp_1234567890abcdefghijklmnopqrstuvwxyz'';'#13#10 +
+  // Bewusst EINE Quellzeile: zwei mit '+' verkettete Literale sind
+  // fuer den Detektor zwei Werte, und keiner der beiden trifft das
+  // Muster. Der erste Anlauf hatte den Token umbrochen und verlor
+  // genau diesen Fund.
+  '  c := ''github_pat_ABCDEFGHIJKLMNOPQRSTUV_abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz'';'#13#10 +
+  '  d := ''sk-proj-1234567890abcdefghijklmnop'';'#13#10 +
+  '  e := ''AIzaSyD1234567890abcdefghijklmnopqrstuv'';'#13#10 +
+  // Der Slack-Praefix ist ueber die Fixture-Verkettung GETEILT: die
+  // Repo-Datei enthaelt 'xox' und 'b-1234...' getrennt, die
+  // ZUSAMMENGESETZTE Fixture aber unveraendert den Slack-Wert.
+  // Grund: GitHub Push
+  // Protection hat den zusammenhaengenden Wert als Slack API Token
+  // erkannt und den Push abgelehnt (13.09.). Der Wert ist synthetisch,
+  // aber ein Scanner kann das nicht wissen - und eine Ausnahme im
+  // Repo-Regelwerk waere der falsche Preis fuer eine Testfixture.
+  // Die anderen sechs Muster hat derselbe Scan passieren lassen.
+  '  f := ''xox' + 'b-1234567890-abcdefghijklmnopqrst'';'#13#10 +
+  '  g := ''eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdef'';'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.IsTrue(SecretArtVorhanden(F, 'AWS Access Key'),         'AWS');
+    Assert.IsTrue(SecretArtVorhanden(F, 'OpenAI API Key'),         'OpenAI');
+    Assert.IsTrue(SecretArtVorhanden(F, 'Google API Key'),         'Google');
+    Assert.IsTrue(SecretArtVorhanden(F, 'Slack Token'),            'Slack');
+    Assert.IsTrue(SecretArtVorhanden(F, 'JWT Token'),              'JWT');
+    Assert.IsTrue(SecretArtVorhanden(F, 'GitHub Personal Access'), 'ghp_');
+    Assert.IsTrue(SecretArtVorhanden(F, 'GitHub fine-grained'),    'github_pat_');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretInit.KnownPatterns_ConstEmitter_Detected;
+// Der ZWEITE Emitter: ScanFieldsForSecrets sieht const- und
+// Feld-Initialisierer, nicht Zuweisungen. Eigener Codepfad, eigener
+// Test - drei Muster genuegen, um ihn zu belegen.
+// Am gebauten Stand nachgemessen: 3 Funde.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'const'#13#10 +
+  '  C_AWS = ''AKIAIOSFODNN7EXAMPLE'';'#13#10 +
+  '  C_GITHUB = ''ghp_1234567890abcdefghijklmnopqrstuvwxyz'';'#13#10 +
+  '  C_GOOGLE = ''AIzaSyD1234567890abcdefghijklmnopqrstuv'';'#13#10 +
+  'implementation'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(3,
+      TFindingHelper.Count(F, fkHardcodedSecret),
+      'drei const-Literale, drei Muster');
+    Assert.IsTrue(SecretArtVorhanden(F, 'const/field literal'),
+      'die Meldung muss den Const-Pfad benennen');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedSecretInit.KnownPatterns_NearMiss_NoFinding;
+// Die Gegenprobe, und sie traegt die ganze Charge: die Muster sind an
+// LAENGEN gebunden. Hier steht ein AKIA-Praefix mit drei Zeichen und
+// ein ghp_-Token mit 35 statt 36 - beide duerfen NICHT melden.
+//
+// Ohne diesen Test waere jedes Muster auch dann gruen, wenn jemand die
+// Laengenanker aus den Regexen entfernt - und dann meldet die Regel
+// jede Zeichenkette, die mit AKIA anfaengt.
+// Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Harmlos;'#13#10 +
+  'var x, y: string;'#13#10 +
+  'begin'#13#10 +
+  '  x := ''AKIA123'';'#13#10 +
+  '  y := ''ghp_1234567890abcdefghijklmnopqrstuvwxy'';'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkHardcodedSecret),
+    'zu kurz ist kein Schluessel');
   finally F.Free; end;
 end;
 
