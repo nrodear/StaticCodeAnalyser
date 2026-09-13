@@ -19,6 +19,10 @@ type
     // Voll-Review 2026-09-12 (Major 69): Kommentare zaehlen NIE als Code
     [Test] procedure BlockComment_NotReported;
     [Test] procedure TrailingLineComment_NotReported;
+    // Testluecke 156: die ungetesteten Ausgabewege
+    [Test] procedure MessageDlgLiteral_Reported;
+    [Test] procedure HintProperty_Reported;
+    [Test] procedure TextProperty_Reported;
   end;
 
 implementation
@@ -170,6 +174,69 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedString),
     'Trailing-Kommentar hinter Code ist kein Code-Use');
+  finally F.Free; end;
+end;
+
+{ --- Testluecke 156: MessageDlg, Hint, Text ---------------------- }
+//
+// Der Detektor kennt zwei Wege zum Nutzer: den Dialog-Aufruf und die
+// Text-Property. Belegt war von jedem nur EINE Auspraegung -
+// ShowMessage und Caption. MessageDlg steht zwar im Meldetext, war
+// aber nie geprueft; Hint und Text ebenso wenig.
+// Alle drei am gebauten Stand nachgemessen: je 1 Fund.
+
+procedure TTestHardcodedString.MessageDlgLiteral_Reported;
+// Der zweite Dialog-Aufruf neben ShowMessage. Faellt er aus der
+// Liste, bleibt die Suite gruen - der Meldetext nennt ihn trotzdem.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  MessageDlg(''Datei konnte nicht geladen werden'', mtError, [mbOK], 0);'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkHardcodedString),
+    'MessageDlg ist ein Ausgabeweg wie ShowMessage');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedString.HintProperty_Reported;
+// Hint ist eine eigene Property in der Liste, nicht Caption.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  Button1.Hint := ''Diesen Knopf zum Speichern druecken'';'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkHardcodedString),
+    'ein Hint ist sichtbarer Text');
+  finally F.Free; end;
+end;
+
+procedure TTestHardcodedString.TextProperty_Reported;
+// Text ist die dritte Property der Liste.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  Edit1.Text := ''Bitte hier den Namen eintragen'';'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkHardcodedString),
+    'auch ein Edit-Text ist sichtbarer Text');
   finally F.Free; end;
 end;
 

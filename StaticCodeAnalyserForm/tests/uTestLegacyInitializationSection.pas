@@ -24,6 +24,11 @@ type
     // GATE D - Routinen-Header-Wache
     [Test] procedure RoutineHeaderAfterCandidate_NoFinding;
     [Test] procedure MissingEndDot_NoFinding;
+    // Testluecke 166: Qualifizierer- und Escape-Guard
+    [Test] procedure EscapedAndQualifiedTokens_DoNotHideInit;
+    [Test] procedure EscapedTokensAlone_NoFinding;
+    // Testluecke 167: Terminator mit Leerzeichen vor dem Punkt
+    [Test] procedure EndSpaceDotTerminator_Reported;
   end;
 
 implementation
@@ -280,6 +285,111 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLegacyInitializationSection));
+  finally F.Free; end;
+end;
+
+{ --- Testluecken 166 und 167 -------------------------------------- }
+
+procedure TTestLegacyInitializationSection.EscapedAndQualifiedTokens_DoNotHideInit;
+// Testluecke 166 (Voll-Review 2026-09-12): der Rueckwaerts-Token-Walk
+// darf ein '&begin' (Escape fuer einen Bezeichner, der wie ein
+// Keyword heisst) und ein 'Rec.Case1' (Qualifizierer) NICHT als
+// Blockwoerter zaehlen - sonst verschiebt sich die Tiefe und der
+// echte Unit-Init darunter wird nicht mehr gefunden.
+//
+// Der Bestandstest RoutineHeaderAfterCandidate_NoFinding uebt nur
+// Gate D mit Komma-separierten Pseudo-Keywords; weder & noch Punkt
+// kamen je vor.
+// Am gebauten Stand nachgemessen: 1 Fund (der echte Init bleibt
+// sichtbar).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'type'#13#10 +
+  '  RSatz = record'#13#10 +
+  '    Case1: Integer;'#13#10 +
+  '  end;'#13#10 +
+  'procedure Qualifiziert(Rec: RSatz);'#13#10 +
+  'var'#13#10 +
+  '  &begin: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  &begin := 1;'#13#10 +
+  '  Rec.Case1 := 2;'#13#10 +
+  'end;'#13#10 +
+  'begin'#13#10 +
+  '  Setup;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkLegacyInitializationSection),
+    'weder &begin noch Rec.Case1 sind Blockwoerter');
+  finally F.Free; end;
+end;
+
+procedure TTestLegacyInitializationSection.EscapedTokensAlone_NoFinding;
+// Die Gegenprobe: dieselben Escape- und Qualifizierer-Formen, aber
+// KEIN Unit-Init dahinter. Wuerde der Guard fehlen und &begin als
+// Blockwort zaehlen, koennte hier ein Fund entstehen, wo keiner
+// hingehoert.
+// Am gebauten Stand nachgemessen: 0 Funde.
+//
+// Die Fixture ist mit der des Tests darueber bis auf die drei
+// Schlusszeilen identisch - genau das ist der Unterschied, um den
+// es geht. Der Selbstscan meldet dafuer einen DuplicateBlock; in
+// Testunits per Profil-Politik kein Mangel.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'type'#13#10 +
+  '  RSatz = record'#13#10 +
+  '    Case1: Integer;'#13#10 +
+  '  end;'#13#10 +
+  'procedure Qualifiziert(Rec: RSatz);'#13#10 +
+  'var'#13#10 +
+  '  &begin: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  &begin := 1;'#13#10 +
+  '  Rec.Case1 := 2;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLegacyInitializationSection),
+    'ohne Unit-Init gibt es nichts zu melden');
+  finally F.Free; end;
+end;
+
+procedure TTestLegacyInitializationSection.EndSpaceDotTerminator_Reported;
+// Testluecke 167: der Kopfkommentar (Z.44-46) nennt 'end .' mit
+// Leerzeichen vor dem Punkt als Korpus-Gewinn (op.pas:2277,
+// x86Dasm.pas:673) - dass die TOKEN-Suche das findet und nicht nur
+// eine Zeichensuche nach 'end.', war nirgends festgehalten. Wer den
+// Terminator auf eine Zeichenkette zurueckbaut, verliert die Faelle
+// still.
+// Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  DoIt;'#13#10 +
+  'end;'#13#10 +
+  'begin'#13#10 +
+  '  Setup;'#13#10 +
+  'end .'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkLegacyInitializationSection),
+    'das Leerzeichen vor dem Punkt beendet die Unit genauso');
   finally F.Free; end;
 end;
 
