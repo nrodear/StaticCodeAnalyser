@@ -89,6 +89,32 @@ begin
       Continue;
     end;
 
+    // Yoda-Form `nil = x` / `nil <> x` (Voll-Review 2026-09-13): der
+    // Operator steht RECHTS vom nil-Token, der Rueck-Walk unten findet ihn
+    // nie - die Form war bisher komplett stumm. Der Kopfkommentar
+    // beschreibt das Verfahren als "'= nil' oder '<> nil'" und nennt die
+    // Yoda-Form nicht; es war eine unbemerkte Luecke, keine Grenze.
+    //
+    // Rechts kann kein ':=' stehen - `nil := x` ist kein gueltiges Pascal,
+    // und als erstes Nicht-Blank stuende ohnehin ':' und nicht '='.
+    // '<=' liefert '<' plus '=' und wird von der '<>'-Pruefung verworfen,
+    // '>=' beginnt mit '>' und wird gar nicht getestet: dieselbe Politik
+    // wie beim Links-Scan.
+    // Deklarations-Initializer (`X: T = nil`, Default-Parameter) haben das
+    // nil RECHTS vom '='; hier folgt darauf ';' oder ')', der Scan feuert
+    // nicht - und der nkParam/nkField-Guard bleibt zusaetzlich in Kraft.
+    //
+    // j wird unten ohnehin neu gesetzt, der Fix braucht keine eigene
+    // Variable. Korpus: +44 Funde, alle TP.
+    j := P + 3;
+    while (j <= L) and (Lower[j] = ' ') do Inc(j);
+    if j <= L then
+    begin
+      if Lower[j] = '=' then Exit(True);
+      if (Lower[j] = '<') and (j < L) and (Lower[j + 1] = '>') then
+        Exit(True);
+    end;
+
     // Zurueck-walk ueber Whitespace zum eigentlichen Operator.
     j := P - 1;
     while (j >= 1) and (Lower[j] = ' ') do Dec(j);

@@ -29,6 +29,11 @@ type
 
     // ---- Finding-Inhalt ----------------------------------------------------
     [Test] procedure Finding_KindAndSeverity;
+    // Posten 263: der Operator darf auch rechts vom nil stehen
+    [Test] procedure YodaEqualsNil_Reported;
+    [Test] procedure YodaNotEqualsNil_Reported;
+    [Test] procedure YodaInParens_Reported;
+    [Test] procedure YodaLessEqual_NoFinding;
   end;
 
 implementation
@@ -37,6 +42,87 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 263: die Yoda-Form -------------------------------- }
+//
+// Die Operator-Suche walkte von der Fundstelle des nil nur nach
+// LINKS. Steht der Operator RECHTS - `nil = x` -, findet ihn der
+// Rueck-Walk nie: die Form war komplett stumm. Der Kopfkommentar
+// beschreibt das Verfahren als "'= nil' oder '<> nil'" und nennt die
+// Yoda-Form nicht, es war also eine unbemerkte Luecke und keine
+// dokumentierte Grenze; der Sonar-Pendant meldet beide Reihenfolgen.
+//
+// Alle Erwartungen an der gebauten Exe gemessen: die ersten drei
+// Fixturen liefern heute 0 Funde und sind damit rot.
+
+procedure TTestNilComparison.YodaEqualsNil_Reported;
+// Heute 0 Funde, nach dem Fix 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(x, y: TObject);'#13#10 +
+  'begin if nil = x then DoStuff; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkNilComparison),
+      'nil = x ist derselbe Vergleich wie x = nil');
+  finally F.Free; end;
+end;
+
+procedure TTestNilComparison.YodaNotEqualsNil_Reported;
+// Dasselbe fuer den Ungleich-Operator.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(x, y: TObject);'#13#10 +
+  'begin if nil <> x then DoStuff; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkNilComparison),
+      'nil <> x ist derselbe Vergleich wie x <> nil');
+  finally F.Free; end;
+end;
+
+procedure TTestNilComparison.YodaInParens_Reported;
+// Zwei Yoda-Vergleiche in EINER Bedingung. Gemeldet wird ein Fund
+// je KNOTEN, nicht je Vorkommen - genau so liegt der Korpusfall
+// (doublecmd argon2.pas:897).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(x, y: TObject);'#13#10 +
+  'begin if (nil = x) or (nil = y) then DoStuff; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkNilComparison),
+      'ein Fund je if-Knoten, auch bei zwei Yoda-Vergleichen');
+  finally F.Free; end;
+end;
+
+procedure TTestNilComparison.YodaLessEqual_NoFinding;
+// WAECHTER fuer den neuen Rechts-Scan: `<=` darf nicht als `<>`
+// gelesen werden. Die Pruefung verlangt '<' UND '>' - dieselbe
+// Politik wie beim Links-Scan. Vor wie nach dem Fix 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(x, y: TObject);'#13#10 +
+  'begin if nil <= x then DoStuff; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkNilComparison),
+      'ein <= rechts vom nil ist kein Ungleich-Vergleich');
+  finally F.Free; end;
+end;
+
 
 procedure TTestNilComparison.EqualsNil_Reported;
 const SRC =
