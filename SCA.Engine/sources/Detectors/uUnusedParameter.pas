@@ -620,7 +620,19 @@ begin
         while (e <= LL) and IsIdentChar(L[e]) do Inc(e);
         if e > p then
           Result := Result + ' ' + Copy(L, p, e - p);
-        Break;                       // ein Alias je Deklarationszeile
+        // KEIN Break (Voll-Review 2026-09-13): eine Quellzeile kann
+        // MEHRERE Deklarationen tragen -
+        //   A: Byte absolute Buf; B: Word absolute Other;
+        // Die Schleife oben laeuft ueber die nkLocalVar-KINDER, und beide
+        // Kinder einer gemeinsamen Zeile lesen dieselbe Zeile L. Mit Break
+        // bekam das zweite Kind das Ziel des ersten, und der zweite
+        // aliasierte Parameter wurde faelschlich als ungenutzt gemeldet.
+        // An der gebauten Exe gemessen, gleiche Deklarationen:
+        //   mit Zeilenumbruch     0 Funde
+        //   in EINER Zeile        1 Fund ('Other')
+        // Monoton: die Zielliste wird nur laenger, Gate B kann dadurch
+        // ausschliesslich zusaetzlich schweigen.
+        p := e;
       end;
       p := Pos('absolute', L, p + 1);
     end;
