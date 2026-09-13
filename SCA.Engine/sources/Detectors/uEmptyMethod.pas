@@ -181,11 +181,23 @@ class function TEmptyMethodDetector.BodyHasIntentComment(Lines: TStringList;
 //   * ein '//' INNERHALB von '{ ... }' galt als eigener Kommentar und
 //     konnte als Absicht durchgehen
 // Der zweite Fall ist der haeufigere. Im Korpus stehen drei Rumpfe, deren
-// ganzer Inhalt eine auskommentierte Struktur-Deklaration ist
-// (Indy IdNTLM.pas:679 und :711, fReports.pas:85); die '// 0x03'-Notizen
-// darin galten als Absichtserklaerung und haben den Fund unterdrueckt.
+// ganzer Inhalt auskommentiert ist - am A/B des Referenzlaufs 2026-09-13
+// nachgemessen, und zwar auf ZWEI verschiedenen Wegen:
+//   Indy IdStackDotNet.pas:1022 und :1037 - der Rumpf ist ein '{ ... }'
+//     mit einer URL darin; das '//' aus 'http://' galt als eigener
+//     Zeilenkommentar und sein Text als Absicht.
+//   jvcl .../fReports.pas:79 - hier ist es KEINE URL: der Rumpf ist ein
+//     '(* ... *)'-Block, und das '{ Iterate }' hinter einem for darin
+//     lieferte die vermeintliche Absicht.
+// Die frueher hier genannten Stellen (IdNTLM.pas:679/:711) waren FALSCH -
+// diese Datei liefert weder vor noch nach dem Fix einen EmptyMethod-Fund.
 // Auskommentierter Code ist keine Absicht - das sagt CommentLooksLikeIntent
 // selbst -, er wurde hier nur nie als solcher gesehen.
+//
+// EINSCHRAENKUNG, die dazugehoert: die beiden Indy-Rumpfe sind nur deshalb
+// leer, weil der Ein-Zweig-Modus die '{$IFDEF DOTNET_2_OR_ABOVE}'-Anweisung
+// verwirft. Das ist Bestandsverhalten und nicht Folge dieses Fixes, aber es
+// heisst, dass zwei der drei neuen Funde auf einer IFDEF-Annahme sitzen.
 var
   i, Last  : Integer;
   Raw      : string;

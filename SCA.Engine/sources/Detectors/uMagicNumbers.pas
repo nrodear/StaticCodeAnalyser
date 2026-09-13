@@ -158,8 +158,19 @@ begin
       // Folgt auf die Ziffernfolge '.'+Ziffer oder ein Exponent
       // ('e'+Ziffer bzw. 'e'+Vorzeichen+Ziffer - CondLow ist bereits
       // lowercase), ist es ein Float-Literal und dieses Vorkommen wird
-      // uebersprungen. Korpus: -67 von 4.494 SCA014-Funden (61 Dezimal-
-      // punkte, 6 Exponenten), 0 Adds.
+      // uebersprungen. Korpus, am A/B des Referenzlaufs 2026-09-13
+      // nachgemessen: -70 von 5.084 SCA014-Funden (64 Dezimalpunkte, 6
+      // Exponenten), 0 Adds. Die frueher hier stehenden -67 / 4.494 kamen
+      // aus einem anders zugeschnittenen Lauf.
+      //
+      // WAS DAS KOSTET, damit es niemand fuer einen reinen FP-Fix haelt:
+      // die Regel ist damit fuer JEDES Float-Literal blind, nicht nur fuer
+      // den Torso. Unter den 70 Wegfaellen sind 44x '255.0', 9x '3.0' und
+      // 6x '-9E18' - '255.0' in einer if-Bedingung IST eine Magic Number,
+      // sie wird jetzt nicht mehr gemeldet. Die Alternative waere gewesen,
+      // das VOLLE Literal zu melden statt es zu ueberspringen; das ist ein
+      // eigenes Paket (Meldetext, Trivial-Pruefung auf Floats, FP-Messung)
+      // und kein Nebenprodukt dieser Korrektur.
       if (Digits <> '') and (Digits <> '-') and not IsTrivial(Digits)
          and not IstFloatFortsetzung(CondLow, i) then
       begin

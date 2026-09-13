@@ -354,9 +354,15 @@ procedure TTestEmptyMethod.EmptyBody_CommentedOutStructInBlock_Reported;
 // galten als eigene Kommentare und damit als Absichtserklaerung - der
 // Fund war unterdrueckt. Auskommentierter Code ist keine Absicht.
 //
-// Im Korpus dreimal so vorhanden: Indy IdNTLM.pas:679 und :711 sowie
-// fReports.pas:85. Am gebauten Stand gemessen: 0 Funde (der Fehler),
-// nach dem Fix 1.
+// Im Korpus dreimal so vorhanden - am A/B des Referenzlaufs 2026-09-13
+// nachgemessen, auf ZWEI verschiedenen Wegen:
+//   Indy IdStackDotNet.pas:1022 und :1037 - URL in einem '{ }'-Rumpf,
+//     das '//' aus 'http://' lieferte die vermeintliche Absicht.
+//   jvcl .../fReports.pas:79 - KEINE URL, sondern ein '{ Iterate }'
+//     innerhalb eines '(* *)'-Rumpfes.
+// Die frueher hier genannten IdNTLM.pas:679/:711 waren FALSCH - diese
+// Datei liefert weder vor noch nach dem Fix einen EmptyMethod-Fund.
+// Am gebauten Stand gemessen: 0 Funde (der Fehler), nach dem Fix 1.
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +

@@ -154,7 +154,10 @@ begin
       // 2026-09-13). Sie deklariert keinen eigenen Typ und erzeugt keinen
       // AST-Knoten; zusammen mit der Volldeklaration ergab sie ZWEI Funde
       // fuer EINEN Typ (Korpus: cnwizards TestTypeDefs.pas, TBob Z.24+97
-      // und TBobDisp Z.25+100 - die einzigen zwei Faelle, 15 -> 13).
+      // und TBobDisp Z.25+100 - die einzigen zwei Faelle).
+      // Am A/B des Referenzlaufs 2026-09-13 nachgemessen: 35 -> 33.
+      // Die frueher hier stehenden 15 -> 13 kamen aus einem anders
+      // zugeschnittenen Lauf; die BEWEGUNG von -2 stimmte.
       //
       // Kein Typ geht dabei verloren: von den 4.568 Vorwaertsdeklarationen
       // des Korpus, die Gate 1 passieren, traegt KEINE einen Namen ohne

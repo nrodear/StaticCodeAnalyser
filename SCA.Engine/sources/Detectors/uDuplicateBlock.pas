@@ -200,7 +200,24 @@ begin
     // 'end', 'end;' und 'else' stehen in TRIVIAL_LINES und sind zugleich
     // der ZAEHLER dieses Gates. Wer sie mit ausblendet, verschiebt Zaehler
     // UND Nenner und macht das Gate an if/else-Ketten SCHWAECHER - am
-    // Korpus gemessen +84/-70 (netto +14 Funde) statt +3/-29 (netto -26).
+    // Korpus gemessen +84/-70 (netto +14 Funde) statt netto -29.
+    //
+    // WIRKUNG DIESER ZEILE, am A/B des Referenzlaufs 2026-09-13
+    // nachgemessen (nicht geschaetzt): 9.150 -> 9.121, netto -29.
+    // 30 Funde verschwinden OHNE Nachfolger, verteilt auf 27 Dateien;
+    // der Rest sind Ankerwanderungen innerhalb desselben Blocks. Alle 30
+    // sind korrekte Gate-Uebergaenge - jeder liegt vorher unter 0,5 und
+    // nachher darauf oder darueber.
+    //
+    // ABER: 21 der 30 landen auf EXAKT 0,500. Das Gate vergleicht mit
+    // '>=', ein Block mit genau halb so vielen if/end-Zeilen wie Substanz
+    // gilt also als Boilerplate. Diese 21 kaemen mit '>' allesamt zurueck.
+    // Wer an IF_END_RATIO oder am Vergleichsoperator dreht, bewegt in
+    // erster Linie sie.
+    //
+    // Eine Pruefung auf die FUNDZAHL JE DATEI sieht diese Wegfaelle nicht:
+    // in jcl/JclBinaryTrees.pas bleibt es bei 102 Funden, waehrend der
+    // Fund 2257-2271 spurlos verschwindet und ein anderer Lauf aufsplittet.
     if (Norm = '') or DupIsCommentOnly(Norm) then Continue;
     Inc(Total);
     if DupIsBranchLine(Norm) then
