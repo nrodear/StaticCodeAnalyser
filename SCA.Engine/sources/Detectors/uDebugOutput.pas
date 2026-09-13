@@ -1,10 +1,19 @@
-﻿unit uDebugOutput;
+unit uDebugOutput;
 
 // Detektor fuer Debug-Ausgaben in Produktionscode.
 // Erkennt Aufrufe von:
-//   WriteLn / Write      (Console-Output - meist vergessen)
+//   WriteLn              (Console-Output - meist vergessen)
 //   ShowMessage(Pos)     (Dialog-Popup - stoert in Produktion)
 //   OutputDebugString    (Debug-Ausgabe)
+//
+// BLOSSES Write IST KEIN ZIEL (Voll-Review 2026-09-12, Minor 236).
+// Kopf, Regelkatalog und ausgelieferte Doku versprachen jahrelang
+// 'WriteLn/Write'; DEBUG_CALLS kennt aber nur 'writeln(' und
+// 'writeln '. Beide Seiten angeglichen - und zwar die DOKU an den
+// Code, nicht umgekehrt: ein zusaetzliches Ziel brachte rund 690
+// Rohtreffer vor allen Gates in eine Regel, deren FP-Quote laut
+// .audit/fixspecs/SCA017.md ohnehin die Hauptbaustelle ist. Wer
+// 'write(' aufnehmen will, braucht eine eigene FP-Messung.
 //
 // Scope-Entscheidung 2026-07-11 (Real-World-FP-Audit, User): InputBox/InputQuery
 // (Eingabe-Primitive - liefern einen Wert statt Output) und MessageDlg/
@@ -251,6 +260,11 @@ begin
       p := LastDelimiter('.', Bare);
       if p > 0 then Bare := Copy(Bare, p + 1, MaxInt);
       Bare := Trim(Bare);
+      // 'write' bleibt in der Liste, obwohl blosses Write kein Ziel
+      // ist (s. Unit-Kopf, Minor 236): der Eintrag kostet nichts und
+      // waere sofort richtig, sollte 'write(' je in DEBUG_CALLS
+      // aufgenommen werden. Gleiche Behandlung wie die
+      // PURE_FUNCS-Whitelist in uAssertWithSideEffect.
       if (Bare = 'writeln') or (Bare = 'write')
          or (Bare = 'showmessage') or (Bare = 'showmessagepos')
          or (Bare = 'outputdebugstring') then

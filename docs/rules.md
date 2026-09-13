@@ -578,7 +578,7 @@ LogFile := TPath.Combine(GetEnvironmentVariable('LOGDIR'), 'app.log');
 ## SCA017
 **WriteLn/ShowMessage in production code**
 
-> Unqualified WriteLn/Write, ShowMessage(Pos) or OutputDebugString call in a non-test unit
+> Unqualified WriteLn, ShowMessage(Pos) or OutputDebugString call in a non-test unit
 
 | Field | Value |
 |---|---|
