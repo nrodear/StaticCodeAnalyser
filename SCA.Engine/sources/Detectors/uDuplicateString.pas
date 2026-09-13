@@ -1,4 +1,4 @@
-﻿unit uDuplicateString;
+unit uDuplicateString;
 
 // Detektor fuer mehrfach vorkommende String-Literale.
 // Strings die >= MIN_OCCURRENCES Mal im Quelltext auftauchen, sollten
@@ -36,7 +36,12 @@ begin
   if Length(S) < MIN_LENGTH then Exit(True);
   // Reine Whitespace, einzelne Sonderzeichen
   if Trim(S) = '' then Exit(True);
-  // Format-Specifier ('%s', '%d')
+  // Format-Specifier ('%s', '%d') und 'nil' sind bei MIN_LENGTH = 4
+  // UNERREICHBAR - die Laengenpruefung oben hat schon abgebrochen.
+  // Bewusst stehengelassen statt geloescht: beides ist Politik, keine
+  // Optimierung, und wer MIN_LENGTH je senkt, soll sie vorfinden
+  // statt sie neu erfinden zu muessen (Voll-Review 2026-09-12,
+  // Minor 244). Live sind heute nur 'true', 'false' und 'null'.
   if (Length(S) = 2) and (S[1] = '%') then Exit(True);
   // Pfad-Separatoren / sehr generische Werte
   if (S = 'true') or (S = 'false') or (S = 'null') or (S = 'nil') then
@@ -129,7 +134,18 @@ begin
           for S in Lst do
           begin
             if Counts.ContainsKey(S) then
-              Counts[S] := Counts[S] + 1
+            begin
+              Counts[S] := Counts[S] + 1;
+              // Anker ist die KLEINSTE Zeile, nicht die zuerst
+              // besuchte (Voll-Review 2026-09-12, Minor 243). Die
+              // Schleife laeuft erst ueber alle nkAssign und dann
+              // ueber alle nkCall - steht das erste Vorkommen eines
+              // Literals in einem Aufruf und ein spaeteres in einer
+              // Zuweisung, zeigte der Fund vorher auf die SPAETERE
+              // Zeile. Die Ankerzeile ist Teil der Fund-Identitaet.
+              if N.Line < FirstLine[S] then
+                FirstLine[S] := N.Line;
+            end
             else
             begin
               Counts.Add(S, 1);
@@ -173,6 +189,14 @@ begin
                              [Display, Cnt]);
       if Sites.TryGetValue(Pair.Key, SiteList) then
       begin
+        // Aufsteigend, aus demselben Grund wie der Anker: die
+        // Sammelreihenfolge ist nkAssign-vor-nkCall, nicht
+        // Zeilenreihenfolge. GRENZE, bewusst so gelassen: bei mehr
+        // als MAX_RELATED_SITES Vorkommen behaelt der Deckel die
+        // zuerst BESUCHTEN, nicht die zeilenmaessig ersten - die
+        // Liste ist dann eine sortierte Stichprobe, keine
+        // Reihenfolge-Garantie.
+        SiteList.Sort;
         F.RelatedLines := TDetectorUtils.JoinSitesExceptAnchor(SiteList,
                             FirstLine[Pair.Key]);
       end;
