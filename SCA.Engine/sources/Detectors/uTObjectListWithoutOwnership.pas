@@ -91,7 +91,19 @@ begin
         try
           for N in Assigns do
           begin
-            Mtch := TRegEx.Match(N.TypeRef, TLIST_CREATE_RE);
+            // roIgnoreCase wie in Pass 2 (s.u.): Pascal ist case-insensitiv,
+            // 'tlist<TFoo>.create' ist derselbe Aufruf. Der Prefilter in
+            // uStaticAnalyzer2 (['tlist<']) und Pass 2 gaten bereits
+            // case-insensitiv - Pass 1 war die EINZIGE case-sensitive Stufe
+            // der Kette (Voll-Review 2026-09-13). An der gebauten Exe
+            // gemessen, dieselbe Sonde mit nur einem Zeichen Unterschied:
+            //   L := TList<TFoo>.Create;   1 Fund
+            //   L := tlist<TFoo>.Create;   0
+            //   L := TList<TFoo>.create;   0
+            // Die Abgrenzung bleibt intakt: das fuehrende '\b' schuetzt
+            // 'TObjectList' / 'TThreadList' / 'TMyTList' unabhaengig von der
+            // Schreibung - der Look-Behind wird nur zusaetzlich strenger.
+            Mtch := TRegEx.Match(N.TypeRef, TLIST_CREATE_RE, [roIgnoreCase]);
             if not Mtch.Success then Continue;
             VarName := N.Name;
             TypeArg := Mtch.Groups[1].Value;
