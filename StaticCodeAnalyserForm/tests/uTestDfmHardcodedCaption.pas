@@ -51,6 +51,9 @@ type
     // (jvcl-Wrapper, pyscripter-Muster) gated SEHR WOHL.
     [Test] procedure Gate_Regime_IdentSubstring_StillReported;
     [Test] procedure Gate_Regime_JvGnugettextWrapper_NotReported;
+    // Testluecke 134: die zwei fehlenden Gegenrichtungen
+    [Test] procedure Gate_RealTypeSectionEndsResBlock_StillReported;
+    [Test] procedure Gate_Glyph_SymbolFontOnFormOnly_KnownGap_StillReported;
   end;
 
 implementation
@@ -532,6 +535,70 @@ begin
   try
     Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption),
       'JvGnugettext ist der jvcl-gettext-Wrapper - echtes Regime');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.Gate_RealTypeSectionEndsResBlock_StillReported;
+// Testluecke 134, Gegenrichtung zu Gate_ResIdentWithKeywordPrefix: der
+// wortgenaue Test muss beim ECHTEN Sektionswechsel weiterhin abbrechen.
+// Hier steht ein richtiges 'type' zwischen dem resourcestring-Block und
+// der Zuweisung - 'SPflicht' ist damit KEIN Res-Ident mehr, und die
+// Caption gehoert gemeldet.
+//
+// Ohne diesen Test bliebe der Sektionswechsel einseitig abgesichert: wer
+// ihn ganz entfernte (Block laeuft bis Dateiende), saehe nur gruen.
+//
+// Der resourcestring steht bewusst als EINZEILER ('resourcestring SEgal =
+// ...'): das ist ein eigener Zweig im Sammler (uDfmHardcodedCaption
+// Z.206-215, den Rest der Zeile gleich einlesen), er kommt in keinem
+// anderen Test vor - und er vermeidet nebenbei den dritten identischen
+// 'resourcestring'-Zeilenzwilling, den der Selbstscan sonst meldet.
+// Am gebauten Stand nachgemessen: 1 Fund.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormT: TFormT'#13#10'  object BtnT: TButton'#13#10 +
+    '    Caption = ''Zwischentext'''#13#10'  end'#13#10'end',
+    'unit sektionsprobe;'#13#10'interface'#13#10'implementation'#13#10 +
+    'resourcestring SEgal = ''Nicht verwendet'';'#13#10 +
+    'type'#13#10 +
+    '  TSchalter = (sAn, sAus);'#13#10 +
+    'procedure TFormT.Init;'#13#10'begin'#13#10 +
+    '  BtnT.Caption := SPflicht;'#13#10'end;'#13#10'end.');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
+      'ein echtes type beendet den Block - SPflicht ist kein Res-Ident');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.Gate_Glyph_SymbolFontOnFormOnly_KnownGap_StillReported;
+// Testluecke 134, DOKUMENTIERTE GRENZE von G1 - der Fund hier ist eine
+// bewusste Ungenauigkeit, kein Ziel.
+//
+// Das Glyph-Gate liest Font.Name AM KNOTEN SELBST. Setzt die Form den
+// Symbolfont und erbt das Kind ihn ueber ParentFont, sieht das Gate am
+// Kind kein Font.Name und meldet dessen Ein-Zeichen-Caption. Zur
+// Aufloesung muesste der Detektor die ParentFont-Kette auswerten - das
+// ist mehr als eine Gate-Bedingung und steht bewusst nicht in v1.
+//
+// Der Pin macht die Grenze sichtbar: wer die Kette nachruestet, sieht
+// hier rot und stellt die Erwartung auf 0. Die Gegenprobe ist der
+// Nachbar Gate_Glyph_SymbolFontSingleChar_NotReported - dort traegt das
+// Kind den Font selbst und wird korrekt uebersprungen.
+// Am gebauten Stand nachgemessen: 1 Fund.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(
+    'object FormP: TFormP'#13#10 +
+    '  Font.Name = ''Wingdings'''#13#10 +
+    '  object BtnP: TButton'#13#10 +
+    '    ParentFont = True'#13#10 +
+    '    Caption = ''a'''#13#10 +
+    '  end'#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
+      'BEKANNTE GRENZE: geerbter Symbolfont wird nicht erkannt');
   finally F.Free; end;
 end;
 
