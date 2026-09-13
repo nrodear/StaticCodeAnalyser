@@ -24,6 +24,10 @@ type
     [Test] procedure CommentOpenedAfterHit_FollowingLinesNotScanned;
     [Test] procedure TwoEmptyCallsOnOneLine_BothReported;
     [Test] procedure EmptyArgumentList_KindAndSeverity;
+    // Posten 198: mehrzeiliger Kommentar-Zustand
+    [Test] procedure CallThenMultiLineCommentOpened_NoSecondFinding;
+    [Test] procedure CallThenParenStarOpened_NoSecondFinding;
+    [Test] procedure CallAfterMultiLineCommentClose_StillReported;
   end;
 
 implementation
@@ -32,6 +36,81 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 198: mehrzeilige Kommentare ueber die Zeilengrenze --- }
+//
+// EmptyParensInComment behandelt nur EINZEILIGE // und {..}. Der
+// Zeilenuebertrag von InBlockComm/InParenStarComm war unbelegt - und
+// genau dort sitzt in verwandten Detektoren das Zustandsleck.
+//
+// An der gebauten Exe geprueft: FindEmptyArgLists sammelt je Zeile
+// ALLE Spalten in eine Liste und steigt am Treffer NICHT aus. Der
+// Detektor ist deshalb nicht betroffen - anders als
+// uSuperfluousSemicolon, uGotoStatement und uGroupedDeclaration in
+// derselben Charge. Diese Tests nageln das fest.
+
+procedure TTestEmptyArgumentList.CallThenMultiLineCommentOpened_NoSecondFinding;
+// Treffer, danach ein ueber zwei Zeilen offener Kommentar mit einem
+// weiteren () darin. Vor wie nach der Ergaenzung 1 Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  Bar();  {'#13#10+
+  '    Baz();'#13#10+
+  '  }'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkEmptyArgumentList),
+      'das () im Blockkommentar ist kein Aufruf');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyArgumentList.CallThenParenStarOpened_NoSecondFinding;
+// Dasselbe fuer die (* *)-Form.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  Bar();  (*'#13#10+
+  '    Baz();'#13#10+
+  '  *)'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkEmptyArgumentList),
+      'das () im (* *)-Kommentar ist kein Aufruf');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyArgumentList.CallAfterMultiLineCommentClose_StillReported;
+// Gegenrichtung: hinter dem Kommentarende zaehlt wieder Code.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  Bar(1);  {'#13#10+
+  '    Notiz'#13#10+
+  '  }'#13#10+
+  '  Baz();'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkEmptyArgumentList),
+      'nach dem Kommentarende wird wieder gemeldet');
+  finally F.Free; end;
+end;
+
 
 procedure TTestEmptyArgumentList.NoCall_NoFinding;
 const SRC =
