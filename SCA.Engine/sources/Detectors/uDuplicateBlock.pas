@@ -135,6 +135,33 @@ begin
   end;
 end;
 
+// Reine Kommentarzeile: '//...' oder ein in EINER Zeile geschlossener
+// {}-Block. Geteilt zwischen IsTrivial (Fenster-Filter, Pass 1) und
+// IsBranchingBoilerplate (Gate-Nenner) - beide muessen dieselbe Vorstellung
+// von "keine Substanz" haben, sonst bewertet das Gate einen Nenner, den das
+// verglichene Fenster gar nicht enthaelt.
+function DupIsCommentOnly(const NormalizedLine: string): Boolean;
+begin
+  Result := NormalizedLine.StartsWith('//') or
+            (NormalizedLine.StartsWith('{') and
+             NormalizedLine.EndsWith('}'));
+end;
+
+// Der ZAEHLER von IsBranchingBoilerplate: Zeilen, die nur Verzweigungs-
+// Geruest tragen. Steht bewusst neben DupIsCommentOnly - die beiden sind
+// Zaehler und Nenner desselben Bruchs, und wer einen anfasst, muss den
+// anderen im Blick haben.
+function DupIsBranchLine(const NormalizedLine: string): Boolean;
+begin
+  Result := NormalizedLine.StartsWith('if ') or
+            NormalizedLine.StartsWith('else if ') or
+            (NormalizedLine = 'else') or
+            (NormalizedLine = 'end') or
+            (NormalizedLine = 'end;') or
+            NormalizedLine.StartsWith('end ') or
+            NormalizedLine.StartsWith('end;');
+end;
+
 class function TDuplicateBlockDetector.IsTrivial(
   const NormalizedLine: string): Boolean;
 var
@@ -143,10 +170,7 @@ begin
   for T in TRIVIAL_LINES do
     if NormalizedLine = T then Exit(True);
   // Reine Kommentar-Zeilen sind ebenfalls trivial fuer die Block-Erkennung
-  if NormalizedLine.StartsWith('//') then Exit(True);
-  if NormalizedLine.StartsWith('{') and NormalizedLine.EndsWith('}') then
-    Exit(True);
-  Result := False;
+  Result := DupIsCommentOnly(NormalizedLine);
 end;
 
 class function TDuplicateBlockDetector.IsBranchingBoilerplate(
@@ -166,15 +190,20 @@ begin
   begin
     if (i < 0) or (i >= Lines.Count) then Continue;
     Norm := NormalizeLine(Lines[i]);
-    if Norm = '' then Continue; // Leerzeilen nicht zaehlen
+    // Leerzeilen UND reine Kommentarzeilen sind keine Substanz: Pass 1 wirft
+    // sie ueber IsTrivial aus dem Fenster, das hier bewertet wird. Sie im
+    // NENNER mitzuzaehlen hat das Gate an kommentierten if/end-Ketten
+    // verwaessert - dieselbe Validierungskette faellt mit drei
+    // Kommentarzeilen von 4/8 auf 4/11 und rutscht unter die 50 %.
+    //
+    // BEWUSST NICHT IsTrivial, obwohl der Review genau das vorschlug:
+    // 'end', 'end;' und 'else' stehen in TRIVIAL_LINES und sind zugleich
+    // der ZAEHLER dieses Gates. Wer sie mit ausblendet, verschiebt Zaehler
+    // UND Nenner und macht das Gate an if/else-Ketten SCHWAECHER - am
+    // Korpus gemessen +84/-70 (netto +14 Funde) statt +3/-29 (netto -26).
+    if (Norm = '') or DupIsCommentOnly(Norm) then Continue;
     Inc(Total);
-    if Norm.StartsWith('if ') or
-       Norm.StartsWith('else if ') or
-       (Norm = 'else') or
-       (Norm = 'end') or
-       (Norm = 'end;') or
-       Norm.StartsWith('end ') or
-       Norm.StartsWith('end;') then
+    if DupIsBranchLine(Norm) then
       Inc(IfEnd);
   end;
   if Total = 0 then Exit(False);

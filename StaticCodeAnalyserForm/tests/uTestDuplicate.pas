@@ -45,6 +45,9 @@ type
     [Test] procedure Block_TrivialLinesIgnored_NoFinding;
     [Test] procedure Block_ThreeIdenticalBlocks_ReportsOnce;
     [Test] procedure Block_BranchingBoilerplate_NoFinding;
+    // Posten 242: Kommentare verwaesserten den Gate-Nenner
+    [Test] procedure Block_CommentedBranchingBoilerplate_NoFinding;
+    [Test] procedure Block_IfElseChain_StillReported;
     [Test] procedure Block_DifferentWhitespace_StillDetected;
     [Test] procedure Block_DifferentCase_StillDetected;
     [Test] procedure Block_CommentsBetween_StillDetected;
@@ -1241,6 +1244,151 @@ begin
     Assert.AreEqual('3', D.LineNumber, 'Anker muss das Erst-Vorkommen sein');
     Assert.AreEqual('13', D.RelatedLines,
       'RelatedLines muss auf das Zweit-Vorkommen zeigen');
+  finally F.Free; end;
+end;
+
+{ --- Posten 242: der Gate-Nenner zaehlte, was Pass 1 wegwirft ----- }
+//
+// IsBranchingBoilerplate misst den if/end-Anteil auf den ORIGINAL-
+// Zeilen des Bereichs. Pass 1 wirft triviale Zeilen ueber IsTrivial
+// aus dem verglichenen Fenster - unter anderem reine Kommentarzeilen.
+// Das Gate zaehlte sie trotzdem im Nenner mit und bewertete damit
+// einen Block, den es so nie gab.
+//
+// Wirkung: eine kommentierte Validierungskette rutscht unter die
+// 50 %-Schwelle und wird zum Fund. Am gebauten Stand gemessen
+// (Sonden ueber die Exe, dieselbe Kette in zwei Methoden):
+//   1 Kommentarzeile je if  -> 8/16 = 0,50 -> geskippt (0 Funde)
+//   2 Kommentarzeilen je if -> 8/22 = 0,36 -> GEMELDET (1 Fund)
+//   3 Kommentarzeilen je if -> GEMELDET (1 Fund)
+// Der gemeldete Bereich der 2er-Variante ist 6-27: 8 if-Zeilen und
+// 14 Kommentarzeilen. Nach dem Fix bleiben 8 von 8 - Anteil 1,0,
+// also Boilerplate, also 0 Funde.
+
+procedure TTestDuplicateBlock.Block_CommentedBranchingBoilerplate_NoFinding;
+// DER NACHWEIS. Dieselbe Kette wie in Block_BranchingBoilerplate_
+// NoFinding, nur mit zwei Kommentarzeilen vor jedem if. VOR dem Fix
+// 1 Fund (am gebauten Stand gemessen), nach dem Fix 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.A;'#13#10+
+  'begin'#13#10+
+  '  // Pruefe Bedingung 1 Teil 0'#13#10+
+  '  // Pruefe Bedingung 1 Teil 1'#13#10+
+  '  if not Valid1 then Exit;'#13#10+
+  '  // Pruefe Bedingung 2 Teil 0'#13#10+
+  '  // Pruefe Bedingung 2 Teil 1'#13#10+
+  '  if not Valid2 then Exit;'#13#10+
+  '  // Pruefe Bedingung 3 Teil 0'#13#10+
+  '  // Pruefe Bedingung 3 Teil 1'#13#10+
+  '  if not Valid3 then Exit;'#13#10+
+  '  // Pruefe Bedingung 4 Teil 0'#13#10+
+  '  // Pruefe Bedingung 4 Teil 1'#13#10+
+  '  if not Valid4 then Exit;'#13#10+
+  '  // Pruefe Bedingung 5 Teil 0'#13#10+
+  '  // Pruefe Bedingung 5 Teil 1'#13#10+
+  '  if not Valid5 then Exit;'#13#10+
+  '  // Pruefe Bedingung 6 Teil 0'#13#10+
+  '  // Pruefe Bedingung 6 Teil 1'#13#10+
+  '  if not Valid6 then Exit;'#13#10+
+  '  // Pruefe Bedingung 7 Teil 0'#13#10+
+  '  // Pruefe Bedingung 7 Teil 1'#13#10+
+  '  if not Valid7 then Exit;'#13#10+
+  '  // Pruefe Bedingung 8 Teil 0'#13#10+
+  '  // Pruefe Bedingung 8 Teil 1'#13#10+
+  '  if not Valid8 then Exit;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.B;'#13#10+
+  'begin'#13#10+
+  '  // Pruefe Bedingung 1 Teil 0'#13#10+
+  '  // Pruefe Bedingung 1 Teil 1'#13#10+
+  '  if not Valid1 then Exit;'#13#10+
+  '  // Pruefe Bedingung 2 Teil 0'#13#10+
+  '  // Pruefe Bedingung 2 Teil 1'#13#10+
+  '  if not Valid2 then Exit;'#13#10+
+  '  // Pruefe Bedingung 3 Teil 0'#13#10+
+  '  // Pruefe Bedingung 3 Teil 1'#13#10+
+  '  if not Valid3 then Exit;'#13#10+
+  '  // Pruefe Bedingung 4 Teil 0'#13#10+
+  '  // Pruefe Bedingung 4 Teil 1'#13#10+
+  '  if not Valid4 then Exit;'#13#10+
+  '  // Pruefe Bedingung 5 Teil 0'#13#10+
+  '  // Pruefe Bedingung 5 Teil 1'#13#10+
+  '  if not Valid5 then Exit;'#13#10+
+  '  // Pruefe Bedingung 6 Teil 0'#13#10+
+  '  // Pruefe Bedingung 6 Teil 1'#13#10+
+  '  if not Valid6 then Exit;'#13#10+
+  '  // Pruefe Bedingung 7 Teil 0'#13#10+
+  '  // Pruefe Bedingung 7 Teil 1'#13#10+
+  '  if not Valid7 then Exit;'#13#10+
+  '  // Pruefe Bedingung 8 Teil 0'#13#10+
+  '  // Pruefe Bedingung 8 Teil 1'#13#10+
+  '  if not Valid8 then Exit;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDuplicateBlock),
+    'Kommentare machen aus einer if-Kette keinen extrahierbaren Block');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateBlock.Block_IfElseChain_StillReported;
+// Die Gegenrichtung: eine if/else-Kette OHNE Kommentare darf sich
+// durch den Fix nicht bewegen. Am gebauten Stand 1 Fund
+// (Bereich 5-19, Anteil 7/15 = 0,47 - knapp unter der Schwelle);
+// nach dem Fix unveraendert 1, weil kein Kommentar im Nenner steckt.
+//
+// Der Test ist zugleich der Waechter gegen die vom Review
+// vorgeschlagene IsTrivial-Variante in der Nachbarroutine: dort
+// stehen 'end', 'end;' und 'else' in TRIVIAL_LINES und sind
+// gleichzeitig der ZAEHLER des Gates. Wer sie ausblendet,
+// verschiebt Zaehler und Nenner zusammen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.A;'#13#10+
+  'begin'#13#10+
+  '  if P1 = 0 then'#13#10+
+  '    DoA;'#13#10+
+  '  else'#13#10+
+  '    DoB;'#13#10+
+  '  if P2 = 0 then'#13#10+
+  '    DoA;'#13#10+
+  '  else'#13#10+
+  '    DoB;'#13#10+
+  '  if P3 = 0 then'#13#10+
+  '    DoA;'#13#10+
+  '  else'#13#10+
+  '    DoB;'#13#10+
+  '  if P4 = 0 then'#13#10+
+  '    DoA;'#13#10+
+  '  else'#13#10+
+  '    DoB;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.B;'#13#10+
+  'begin'#13#10+
+  '  if P1 = 0 then'#13#10+
+  '    DoA;'#13#10+
+  '  else'#13#10+
+  '    DoB;'#13#10+
+  '  if P2 = 0 then'#13#10+
+  '    DoA;'#13#10+
+  '  else'#13#10+
+  '    DoB;'#13#10+
+  '  if P3 = 0 then'#13#10+
+  '    DoA;'#13#10+
+  '  else'#13#10+
+  '    DoB;'#13#10+
+  '  if P4 = 0 then'#13#10+
+  '    DoA;'#13#10+
+  '  else'#13#10+
+  '    DoB;'#13#10+
+  'end;'
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDuplicateBlock),
+    'die kommentarlose if/else-Kette bleibt ein Fund');
   finally F.Free; end;
 end;
 
