@@ -179,6 +179,81 @@ def sammle_deklarierte_enums():
     return werte
 
 
+def _codeteil(zeile):
+    """'//'-Kommentar abschneiden, aber nur AUSSERHALB eines Literals.
+
+    Die naive Variante (ohne_kommentar) reicht hier nicht: Fixture-Zeilen
+    tragen '//' regelmaessig INNERHALB des Literals, und ein Abschnitt an
+    der falschen Stelle macht aus einer korrekten Zeile einen Fehlalarm.
+    """
+    out = []
+    instr = False
+    i = 0
+    while i < len(zeile):
+        c = zeile[i]
+        if c == "'":
+            if instr and i + 1 < len(zeile) and zeile[i + 1] == "'":
+                out.append("''")
+                i += 2
+                continue
+            instr = not instr
+        if (not instr) and c == '/' and i + 1 < len(zeile) \
+           and zeile[i + 1] == '/':
+            break
+        out.append(c)
+        i += 1
+    return ''.join(out).rstrip()
+
+
+def pruefe_unbeendete_konstante(pfad, befunde):
+    """Fixture-Konstante, die nicht mit ';' abgeschlossen wird.
+
+    Eine 'const SRC = ...'-Deklaration endet entweder mit '+' (ein
+    weiteres Literal folgt) oder mit ';'. Fehlt beides und danach beginnt
+    der var-Block oder der Rumpf, laeuft die Deklaration in den Code
+    hinein und der Bau bricht.
+
+    Entstanden 2026-09-13 an uTestDuplicate: ein Patch-Skript baute die
+    letzte Fixture-Zeile als "  'end;'" statt "  'end;';". Weder
+    struct_gate noch die Selbstpruefung von insert_test.py sahen es -
+    Nico musste den Bau von Hand reparieren.
+
+    ENG GEFASST, und das ist Absicht. Die erste Fassung pruefte jede
+    Literal-Zeile vor einem 'var'/'begin' und lieferte 52 Fehlalarme im
+    Produktivcode - allesamt case-Labels der Form "'>': if ... then" mit
+    'begin' auf der Folgezeile. Deshalb gilt die Pruefung nur in
+    Testdateien und nur INNERHALB einer offenen const-Deklaration.
+    """
+    L = zeilen(pfad)
+    im_const = False
+    for i, ln in enumerate(L[:-1]):
+        s = _codeteil(ln).strip()
+        low = s.lower()
+        if low == 'const' or low.startswith('const '):
+            im_const = True
+            if s.endswith(';'):
+                im_const = False
+            continue
+        if not im_const:
+            continue
+        if not s:
+            continue
+        if s.endswith(';'):
+            im_const = False
+            continue
+        if not s.startswith("'"):
+            continue
+        if s.endswith('+'):
+            continue
+        nxt = _codeteil(L[i + 1]).strip()
+        if nxt == 'begin' or nxt == 'var' or nxt.startswith('var '):
+            befunde.append(
+                '%s:%d  const-Deklaration endet weder auf "+" noch auf '
+                '";", danach folgt "%s" - der Bau bricht'
+                % (os.path.basename(pfad), i + 1, nxt.split()[0]))
+            im_const = False
+
+
 def ohne_kommentar(text):
     out = []
     for ln in text.split('\n'):
@@ -354,6 +429,7 @@ def main():
         pruefe_doppeltes_routinenende(d, befunde)
         pruefe_enums(d, deklariert, befunde)
         if os.sep + 'tests' + os.sep in d.replace('/', os.sep):
+            pruefe_unbeendete_konstante(d, befunde)
             pruefe_fixture_klassen(d, befunde)
             pruefe_harness(d, kind2cls, helfer, befunde, warnungen)
     for w in warnungen:

@@ -1383,7 +1383,7 @@ const SRC =
   '    DoA;'#13#10+
   '  else'#13#10+
   '    DoB;'#13#10+
-  'end;'
+  'end;';
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOfFile(SRC);
