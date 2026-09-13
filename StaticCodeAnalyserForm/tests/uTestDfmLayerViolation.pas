@@ -21,6 +21,9 @@ type
     // --- Mehr Varianten ---
     [Test] procedure Test_GroupBoxAsContainer_EditInside_NoFinding;
     [Test] procedure Test_Finding_MissingVarMentionsComponentAndClass;
+    // Testluecke 135: die Wurzel-Suffix-Heuristik als Grenze festnageln
+    [Test] procedure Test_IdeDefaultRootName_KnownGap_NoFinding;
+    [Test] procedure Test_FormSuffixRootName_SameLayout_Reported;
   end;
 
 implementation
@@ -151,6 +154,84 @@ begin
   try
     Assert.Contains(F[0].MissingVar, 'edUser');
     Assert.Contains(F[0].MissingVar, 'TEdit');
+  finally F.Free; end;
+end;
+
+{ --- Wurzel-Suffix-Heuristik: die Phase-1-Grenze ---------------------------- }
+//
+// Testluecke 135 (Voll-Review 2026-09-12). IsFormOrFrameRoot fragt
+// EndsText('Form') bzw. EndsText('Frame') am Klassennamen. 'TForm1' - der
+// Name, den die IDE jeder neuen Form gibt - endet auf '1', und der
+// Detektor verlaesst die Datei komplett.
+//
+// Das ist die im Unit-Kopf dokumentierte Phase-1-Vereinfachung, war aber
+// nirgends als Test fixiert: wer die Heuristik "verbessert", saehe keine
+// rote Ampel und wuesste nicht, dass er eine gemessene Grenze verschiebt.
+//
+// GEMESSEN, damit die Groesse der Grenze im Text steht und nicht geraten
+// wird: von 949 direkten TForm/TFrame-Nachfahren im Korpus tragen 647
+// keinen Form/Frame-Suffix. Auf die DFM-Wurzeln gerechnet sieht der
+// Detektor 607 Formen und uebergeht 1.372 - also knapp ein Drittel
+// Abdeckung.
+//
+// Die Behebung (Wurzel ueber die Klassenkette bestimmen, wie es
+// uDfmDbInUiForm seit dem 2026-09-12 tut) ERHOEHT den Recall statt FPs
+// zu senken und braucht deshalb einen eigenen Zweig mit FP-Stichprobe -
+// Posten 9005 im Restposten-Verzeichnis.
+
+function LayoutMitWurzel(const AWurzelKlasse: string): string;
+// Beide Tests des Paares benutzen DENSELBEN Rumpf - der einzige
+// Unterschied ist die Wurzelklasse, und genau das ist die Aussage. Als
+// gemeinsame Funktion statt als zwei fast gleiche Literale: so steht der
+// Unterschied als ein Argument da, und der Selbstscan meldet keinen
+// DuplicateString-Zwilling.
+// Drei direkte Kinder: zwei Eingabefelder (INPUT_CONTROLS) und ein Knopf,
+// der dort NICHT steht - so belegt die Erwartung 2 statt 3 nebenbei, dass
+// die Whitelist greift.
+//
+// Die Zeile '  end' steht dreimal und der Selbstscan meldet dafuer einen
+// DuplicateString. Sie gehoert zur DFM-Syntax und steht so in jeder
+// Fixture dieser Datei; in Testunits ist das per Profil-Politik kein
+// Mangel. Eine Schleife statt der Literale hat es nur verschoben - dann
+// ruegt StringConcatInLoop das Result := Result + ... (ausprobiert und
+// wieder verworfen).
+begin
+  Result :=
+    'object F1: ' + AWurzelKlasse + #13#10 +
+    '  object edName: TEdit'#13#10 +
+    '  end'#13#10 +
+    '  object edMail: TEdit'#13#10 +
+    '  end'#13#10 +
+    '  object btnOk: TButton'#13#10 +
+    '  end'#13#10 +
+    'end';
+end;
+
+procedure TTestDfmLayerViolation.Test_IdeDefaultRootName_KnownGap_NoFinding;
+// Die Null hier ist die GRENZE, nicht das Ziel. Am gebauten Stand
+// nachgemessen: 0 Funde.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(LayoutMitWurzel('TForm1'));
+  try
+    Assert.AreEqual<Integer>(0, Count(F, fkDfmLayerViolation),
+      'BEKANNTE GRENZE: TForm1 endet nicht auf Form, der Detektor '
+      + 'verlaesst die Datei');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmLayerViolation.Test_FormSuffixRootName_SameLayout_Reported;
+// Die Gegenprobe, und sie traegt die Aussage: GLEICHES Layout, nur die
+// Wurzelklasse heisst TMainForm statt TForm1. Ohne sie bliebe offen, ob
+// die Null oben am Namen liegt oder am Aufbau der Fixture.
+// Am gebauten Stand nachgemessen: 2 Funde (die zwei TEdit; der TButton
+// zaehlt nicht als Eingabe-Control).
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(LayoutMitWurzel('TMainForm'));
+  try
+    Assert.AreEqual<Integer>(2, Count(F, fkDfmLayerViolation),
+      'derselbe Aufbau unter passendem Namen wird sehr wohl gemeldet');
   finally F.Free; end;
 end;
 

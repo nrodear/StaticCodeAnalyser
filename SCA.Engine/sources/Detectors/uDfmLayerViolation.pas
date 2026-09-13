@@ -11,7 +11,12 @@ unit uDfmLayerViolation;
 // Heuristik:
 //   * Root ist eine Form/Frame (Suffix 'Form'/'Frame', kein 'DataModule').
 //   * Direkte Children der Root sind in einer Input-Control-Whitelist
-//     (TEdit, TMemo, TComboBox, TButton, ...).
+//     (TEdit, TMemo, TComboBox, TListBox, ... plus die DB-Varianten).
+//     TButton steht dort NICHT und stand nie dort - der Kopf behauptete
+//     es bis zum Voll-Review 2026-09-12. Ein Knopf direkt auf der Form
+//     ist normal (OK/Abbrechen); gemeint sind Eingabefelder, deren
+//     Gruppierung die Wiederverwendbarkeit ausmacht. Die verbindliche
+//     Liste ist INPUT_CONTROLS + DB_INPUTS weiter unten.
 //   * Action/Image/Menu-Listen sind Container-frei OK (TActionList,
 //     TImageList, TMainMenu, TPopupMenu, TTimer, ...).
 //
