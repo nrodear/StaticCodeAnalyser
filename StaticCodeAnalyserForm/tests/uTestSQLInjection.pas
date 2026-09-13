@@ -182,6 +182,8 @@ type
     // Sicherheit an der ZUWEISUNG (usermanager-UserHost-Muster).
     [Test] procedure SQL_LocalFilledViaIfThenEscaped_NoFinding;
     [Test] procedure SQL_LocalFilledViaIfThenRaw_StillReported;
+    // Posten 272: das Quote in den STRUCTURAL-Markern ist das Gate
+    [Test] procedure StructuralMarker_IndependentOfSourceSpacing;
   end;
 
 implementation
@@ -514,6 +516,57 @@ begin
     Assert.AreEqual(lsError, Hit.Severity);
   finally F.Free; end;
 end;
+
+{ --- Posten 272: die Marker tragen das Quote mit Absicht -------- }
+//
+// Der Unit-Kopf von uSQLInjectionScore behauptete das GEGENTEIL des
+// Tatsaechlichen: 'Stringliterale ohne Anfuehrungszeichen'. Die neun
+// STRUCTURAL-Marker sind exakt auf das Gegenteil gebaut ('from ''+').
+// Wer dem Kommentar geglaubt und die Marker "repariert" haette, haette
+// alle neun stillgelegt - und damit das einzige Gate fuer Score 4/5,
+// an dem 33 der 87 Korpus-Funde haengen. Kein Test haette das gefangen.
+//
+// Dieser Test ist die fehlende Absicherung. Er fixiert den
+// Parser-Vertrag von der Wirkungsseite: BEIDE Quellformatierungen
+// muessen denselben Score liefern, weil der Parser das + ohnehin
+// quote-adjazent normalisiert.
+// An der gebauten Exe gemessen: beide Fix 4/5. Streicht jemand das
+// Quote aus den Markern, faellt es auf 1/5 und der Test wird rot.
+
+procedure TTestSQLInjectionExt.StructuralMarker_IndependentOfSourceSpacing;
+const SRC_SPACED =
+  'unit t; implementation'#13#10+
+  'procedure Foo(const Tbl: string);'#13#10+
+  'var S: string;'#13#10+
+  'begin S := ''SELECT * FROM '' + Tbl; end;';
+const SRC_TIGHT =
+  'unit t; implementation'#13#10+
+  'procedure Foo(const Tbl: string);'#13#10+
+  'var S: string;'#13#10+
+  'begin S := ''SELECT * FROM ''+Tbl; end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC_SPACED);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSQLInjection);
+    Assert.IsNotNull(Hit, 'mit Leerzeichen: Fund erwartet');
+    Assert.Contains(Hit.MissingVar, '4/5',
+      'strukturelle Konkatenation ist Score 4 - gemeldet: '
+      + Hit.MissingVar);
+  finally F.Free; end;
+
+  F := TFindingHelper.FindingsOf(SRC_TIGHT);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSQLInjection);
+    Assert.IsNotNull(Hit, 'ohne Leerzeichen: Fund erwartet');
+    Assert.Contains(Hit.MissingVar, '4/5',
+      'die Quellformatierung darf den Score nicht aendern - '
+      + 'gemeldet: ' + Hit.MissingVar);
+  finally F.Free; end;
+end;
+
 
 procedure TTestSQLInjectionExt.SQL_Finding_MissingVarMentionsTargetAndFixScore;
 // MissingVar enthaelt: LHS-Target + FormatShort-Estimate (Score X/5 ...).

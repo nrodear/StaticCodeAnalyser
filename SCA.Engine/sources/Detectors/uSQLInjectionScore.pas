@@ -2,9 +2,21 @@
 
 // Bewertet den Behebungs-Aufwand einer SQL-Injection.
 //
-// Eingabe: TypeRef des nkAssign-Knotens (vollständiger RHS-Ausdruck,
-//          Stringliterale ohne Anführungszeichen, z. B.
-//          "SELECT * FROM users WHERE id = +UserId")
+// Eingabe: TypeRef des nkAssign-Knotens bzw. Name des nkCall-Knotens
+//          (vollständiger Ausdruck). Stringliterale kommen MIT
+//          Anführungszeichen: der Parser re-quotet jedes tkStrLit (innere
+//          ' bleiben verdoppelt) und setzt beim Zusammenfügen ein
+//          Leerzeichen NUR zwischen zwei Ident-Zeichen. Ein '+' steht
+//          deshalb immer quote-adjazent, unabhängig von der Formatierung
+//          der Quelle:
+//            s := 'SELECT * FROM ' + Tbl;  ->  'SELECT * FROM '+Tbl
+//            s := 'SELECT * FROM '+Tbl;    ->  'SELECT * FROM '+Tbl
+//          Genau darauf bauen die STRUCTURAL-Marker ('from ''+').
+//
+//          Hier stand bis zum Voll-Review 2026-09-13 das GEGENTEIL
+//          ("Stringliterale ohne Anführungszeichen"). Wer dem geglaubt
+//          hätte, hätte die neun Marker "repariert" und damit still
+//          gelegt - sie sind das einzige Gate für Score 4/5.
 //
 // Ausgabe: TFixEstimate mit Punktzahl 1–5, Label und Handlungsempfehlung.
 //
@@ -69,8 +81,11 @@ begin
 end;
 
 // Prüft ob ein '+' direkt nach einem strukturellen SQL-Schlüsselwort steht.
-// Hinweis: Stringliterale werden vom Parser ohne Anführungszeichen übergeben,
-// sodass 'SELECT * FROM '+tbl als "SELECT * FROM +tbl" vorliegt.
+// Die Marker tragen das schliessende Quote ('from ''+' ist der Text from '+),
+// weil der Parser Literale MIT Anführungszeichen liefert (s. Unit-Kopf):
+// 'SELECT * FROM ' + tbl liegt als 'select * from '+tbl vor. Das Quote IST
+// das Gate - es beweist, dass die Konkatenation genau dort ansetzt, wo der
+// Tabellen- oder Spaltenname steht.
 class function TSQLFixScorer.HasStructuralConcat(const Low: string): Boolean;
 const
   STRUCTURAL: array[0..8] of string = (
