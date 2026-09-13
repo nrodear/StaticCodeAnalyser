@@ -37,6 +37,9 @@ type
     // Testluecke 146: die Einzeilen-Grenze des Intent-Kommentars
     [Test] procedure EmptyBody_MultiLineIntentStartsOnOpener_NoFinding;
     [Test] procedure EmptyBody_IntentOnlyOnSecondLine_KnownGap_Reported;
+    // Posten 247: Fortsetzungszeilen sind Kommentar, nicht Code
+    [Test] procedure EmptyBody_CommentedOutStructInBlock_Reported;
+    [Test] procedure EmptyBody_EndInBlockCommentProse_NoFinding;
   end;
 
 implementation
@@ -335,6 +338,68 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyMethod),
     'BEKANNTE GRENZE: die oeffnende Zeile traegt keinen Text');
+  finally F.Free; end;
+end;
+
+{ --- Posten 247: die dritte Sorte Zeile -------------------------- }
+//
+// Die Zeilenzerlegung kannte zwei Faelle - hier faengt ein Kommentar
+// an, oder es ist Code. Die FORTSETZUNGSZEILE eines mehrzeiligen
+// Blockkommentars fiel in den Code-Zweig, und das kostete in beide
+// Richtungen. Beide Erwartungen am gebauten Stand gemessen.
+
+procedure TTestEmptyMethod.EmptyBody_CommentedOutStructInBlock_Reported;
+// ADDITIVE Richtung, das haeufigere Muster. Der ganze Rumpf ist eine
+// auskommentierte Struktur-Deklaration; die '// 0x03'-Notizen DARIN
+// galten als eigene Kommentare und damit als Absichtserklaerung - der
+// Fund war unterdrueckt. Auskommentierter Code ist keine Absicht.
+//
+// Im Korpus dreimal so vorhanden: Indy IdNTLM.pas:679 und :711 sowie
+// fReports.pas:85. Am gebauten Stand gemessen: 0 Funde (der Fehler),
+// nach dem Fix 1.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure ReadStruct;'#13#10 +
+  'begin'#13#10 +
+  '{'#13#10 +
+  '    _type: UInt32;   // 0x03'#13#10 +
+  '    flags: UInt32;   // 0xA0808205'#13#10 +
+  '}'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkEmptyMethod),
+    'ein // INNERHALB von { } ist kein eigener Kommentar und keine '
+    + 'Absichtserklaerung');
+  finally F.Free; end;
+end;
+
+procedure TTestEmptyMethod.EmptyBody_EndInBlockCommentProse_NoFinding;
+// SUBTRAKTIVE Richtung. 'endet' im Prosatext enthaelt 'end' - die
+// Fortsetzungszeile galt als Code, der Rumpf-Scan brach dort ab und
+// sah die echte Absicht zwei Zeilen weiter nie.
+// Am gebauten Stand gemessen: 1 Fund (der Fehler), nach dem Fix 0.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Alt;'#13#10 +
+  'begin'#13#10 +
+  '{'#13#10 +
+  '  hier endet die alte Implementierung'#13#10 +
+  '}'#13#10 +
+  '  // absichtlich leer - kommt in v2 zurueck'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkEmptyMethod),
+    'ein end im Prosatext beendet keinen Rumpf');
   finally F.Free; end;
 end;
 
