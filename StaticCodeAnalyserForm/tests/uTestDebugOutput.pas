@@ -66,6 +66,9 @@ type
     [Test] procedure Debug_SystemQualifiedDespiteOwnMethod_StillReported;
     // Voll-Review 2026-09-12 (Testluecke 127): 'writeln ' mit Leerzeichen
     [Test] procedure Debug_WritelnWithSpaceBeforeParen_Reported;
+    // Posten 237: der nkAssign-RHS-Zweig war 32 Tests lang ungedeckt
+    [Test] procedure Debug_WriteLnInAssignedAnonMethod_ReportsWarning;
+    [Test] procedure Debug_OutputDebugStringInInlineVarAnon_Reported;
   end;
 
 implementation
@@ -629,6 +632,69 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDebugOutput),
     'writeln mit Leerzeichen vor der Klammer ist derselbe Debug-Ausgang');
+  finally F.Free; end;
+end;
+
+{ --- Posten 237: der Assign-Zweig ist der einzige Weg dorthin ----- }
+//
+// Der Voll-Review hielt die nkAssign-Schleife in AnalyzeUnit fuer eine
+// Karteileiche - beide Beispiele in ihrem Kommentar waren falsch
+// (InputBox ist seit 2026-07-11 kein Ziel, und WriteLnHelper trifft
+// die Nadel 'writeln(' gar nicht), und am Korpus liefert der Zweig 0
+// von 1.287 SCA017-Funden.
+//
+// Er traegt trotzdem, und zwar allein: der Parser sammelt den RHS
+// einer Zuweisung als FLACHEN Text ein und legt darin keine
+// nkCall-Knoten an. Eine anonyme Methode rechts vom := ist deshalb
+// NUR ueber diesen Zweig sichtbar. Keiner der 32 Bestandstests deckte
+// das ab - ein spaeteres Entfernen der Schleife waere gruen
+// durchgelaufen und haette eine FN-Klasse eingebaut.
+//
+// Beide Erwartungen am gebauten Stand gemessen (Sonde ueber die Exe):
+// je 1 Fund, gemeldet auf der Zeile der ZUWEISUNG.
+
+procedure TTestDebugOutput.Debug_WriteLnInAssignedAnonMethod_ReportsWarning;
+// Feldzuweisung. Der WriteLn steckt im abgeflachten RHS-Text.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'type TProc0 = reference to procedure;'#13#10 +
+  'var FProc: TProc0;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  FProc := procedure begin WriteLn(''x''); end;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDebugOutput),
+    'ein WriteLn in einer zugewiesenen anonymen Methode ist nur ueber '
+    + 'den nkAssign-RHS sichtbar');
+  finally F.Free; end;
+end;
+
+procedure TTestDebugOutput.Debug_OutputDebugStringInInlineVarAnon_Reported;
+// Dasselbe fuer den Inline-var-Zweig des Parsers, der den RHS in einer
+// eigenen Routine einsammelt - zwei Pfade, zwei Waechter.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'type TProc0 = reference to procedure;'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var Q: TProc0;'#13#10 +
+  'begin'#13#10 +
+  '  Q := procedure begin OutputDebugString(''x''); end;'#13#10 +
+  '  Q();'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDebugOutput),
+    'OutputDebugString in einer zugewiesenen anonymen Methode');
   finally F.Free; end;
 end;
 

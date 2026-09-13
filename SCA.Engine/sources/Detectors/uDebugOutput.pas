@@ -354,8 +354,8 @@ var
 
   // Helper - prueft einen Call-/RHS-String gegen die DEBUG_CALLS-Liste
   // und emittiert ggf. einen Befund. Wird sowohl fuer nkCall.Name als
-  // auch nkAssign.TypeRef aufgerufen (z.B. 's := InputBox(...)' hat
-  // den InputBox-Aufruf in nkAssign.TypeRef, nicht als eigene nkCall).
+  // auch fuer nkAssign.TypeRef aufgerufen - die Begruendung dafuer steht
+  // an der Assign-Schleife am Ende von AnalyzeUnit.
   procedure CheckCallText(const CallText: string; Line: Integer);
   var
     NameLow : string;
@@ -483,8 +483,25 @@ begin
         finally
           Calls.Free;
         end;
-        // Auch nkAssign-RHS pruefen - Aufrufe wie 's := InputBox(...)' oder
-        // 'Result := WriteLnHelper(...)' leben im TypeRef der Zuweisung.
+        // Auch nkAssign-RHS pruefen. Die beiden frueheren Beispiele
+        // ('s := InputBox(...)' und 'Result := WriteLnHelper(...)') waren
+        // BEIDE falsch: InputBox ist seit der Scope-Entscheidung
+        // 2026-07-11 kein Ziel mehr, und 'WriteLnHelper(' trifft die Nadel
+        // 'writeln(' gar nicht. Der Zweig traegt trotzdem - und zwar
+        // allein: der Parser sammelt den RHS einer Zuweisung als FLACHEN
+        // Text ein und legt darin KEINE nkCall-Knoten an. Eine anonyme
+        // Methode auf der rechten Seite -
+        //     FProc := procedure begin WriteLn('x'); end;
+        // - ist deshalb NUR hier sichtbar; ueber die nkCall-Schleife kaeme
+        // sie nie. Gemeldet wird die Zeile der ZUWEISUNG, nicht die des
+        // WriteLn.
+        //
+        // Korpuswirkung 2026-09-13 (strict/hint, MinConfidence=low): 0 von
+        // 1.287 SCA017-Funden stammen aus diesem Zweig. Er ist der Schutz
+        // gegen eine FN-Klasse, kein Fundlieferant - das ist der Grund,
+        // ihn zu behalten, und der Grund, warum er sich tot anfuehlt.
+        // Waechter dagegen: uTestDebugOutput
+        // Debug_WriteLnInAssignedAnonMethod_ReportsWarning.
         Assigns := UnitNode.FindAll(nkAssign);
         try
           for N in Assigns do
