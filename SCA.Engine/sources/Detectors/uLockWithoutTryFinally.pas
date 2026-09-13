@@ -456,21 +456,42 @@ function SegmentReleasesLock(const SegLow, IdLow: string): Boolean;
 // Flag-Guards ('if InsideCrit then Section.Leave;') stoeren nicht -
 // gesucht wird das Token, nicht die Anweisungsform (FP-Voll-Audit
 // 2026-08-15, Klasse 'Release im umschliessenden finally, Flag-gesteuert').
-  // Treffer nur an WORTGRENZE: 'lock.leave' darf nicht in 'block.leave'
-  // matchen - sonst wuerde ein fremder Lock als Release gutgeschrieben
-  // und der Fund faelschlich auf fcLow gestuft. Ein '.' davor bleibt
-  // erlaubt: 'FData.Lock.Leave' ist derselbe Lock, nur qualifiziert
-  // (der Enter-Regex captured ohnehin nur das letzte Glied vor .Enter).
+  // Treffer nur an WORTGRENZE, und zwar BEIDSEITIG:
+  //   links  - 'lock.leave' darf nicht in 'block.leave' matchen, sonst
+  //            wird ein FREMDER Lock als Release gutgeschrieben;
+  //   rechts - 'flock.release' darf nicht in 'flock.releasehandle'
+  //            matchen, sonst wird GAR KEIN Release gutgeschrieben.
+  // In beiden Faellen faellt ein echter Fund auf fcLow und ist unter
+  // FindingMinConfidence=medium (Vorgabe) unsichtbar.
+  //
+  // Ein '.' links bleibt erlaubt: 'FData.Lock.Leave' ist derselbe Lock, nur
+  // qualifiziert (der Enter-Regex captured ohnehin nur das letzte Glied vor
+  // .Enter). Rechts sind ';', '(' und Blank die normalen Nachfolger.
+  //
+  // Die rechte Grenze fehlte bis zum Chargen-Review 2026-09-13, obwohl die
+  // vier Nadeln ('.leave', '.release', '.exit', '.endwrite') Praefixe
+  // gaengiger Membernamen sind. An der gebauten Exe gemessen, gleicher
+  // Rumpf, nur die finally-Zeile getauscht:
+  //   FLock.Leave;          Hint  (fcLow, richtig - echtes Release)
+  //   FLock.Release;        Hint  (fcLow, richtig)
+  //   FLock.Unlock;         Error (fcHigh, richtig - kein Release)
+  //   FLock.ReleaseHandle;  Hint  (fcLow, FALSCH - muss fcHigh sein)
   function BoundedHit(const Needle: string): Boolean;
   var
-    q : Integer;
+    q, rr : Integer;
   begin
     Result := False;
     q := Pos(Needle, SegLow);
     while q > 0 do
     begin
       if (q = 1) or not CharInSet(SegLow[q - 1],
-        ['a'..'z', '0'..'9', '_']) then Exit(True);
+        ['a'..'z', '0'..'9', '_']) then
+      begin
+        rr := q + Length(Needle);       // erstes Zeichen HINTER dem Treffer
+        if (rr > Length(SegLow)) or
+           not CharInSet(SegLow[rr], ['a'..'z', '0'..'9', '_']) then
+          Exit(True);
+      end;
       q := PosEx(Needle, SegLow, q + 1);
     end;
   end;
