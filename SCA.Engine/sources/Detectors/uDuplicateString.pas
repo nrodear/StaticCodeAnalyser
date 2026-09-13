@@ -9,6 +9,7 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uAstNode, uSCAConsts, uMethodd12,
+  System.Math,      // Min - haelt den Anker-Vergleich flach
   uDetectorUtils;   // JoinSitesExceptAnchor - geteiltes RelatedLines-Format
 
 type
@@ -143,8 +144,11 @@ begin
               // Literals in einem Aufruf und ein spaeteres in einer
               // Zuweisung, zeigte der Fund vorher auf die SPAETERE
               // Zeile. Die Ankerzeile ist Teil der Fund-Identitaet.
-              if N.Line < FirstLine[S] then
-                FirstLine[S] := N.Line;
+              //
+              // Min statt eines if: der Vergleich haette hier die
+              // fuenfte Verschachtelungsebene aufgemacht, und der
+              // eigene DeepNesting-Detektor hat das prompt gemeldet.
+              FirstLine[S] := Min(FirstLine[S], N.Line);
             end
             else
             begin
