@@ -193,11 +193,27 @@ def pruefe_fixture_klassen(pfad, befunde):
                 cur = m.group(1)
             m = RE_DECL.match(ln)
             if m and cur:
+                # Doppelte Deklaration desselben Namens in derselben
+                # Klasse - der Compiler meldet sie ZUERST (E2252/E2254),
+                # noch vor der doppelten Implementierung. Passiert beim
+                # Nachruesten von Tests, wenn der Name schon existiert
+                # (2026-09-13: StrictPrivateTwice_Reported).
+                if decl.get(m.group(1).lower()) == cur:
+                    befunde.append('%s:%d  %s ist in %s DOPPELT deklariert '
+                                   '(E2252/E2254)'
+                                   % (os.path.basename(pfad), nr,
+                                      m.group(1), cur))
                 decl[m.group(1).lower()] = cur
         else:
             m = RE_IMPL.match(ln)
             if m:
-                impl[m.group(2).lower()] = (m.group(1), nr)
+                key = m.group(2).lower()
+                if key in impl and impl[key][0].lower() == m.group(1).lower():
+                    befunde.append('%s:%d  %s.%s ist DOPPELT implementiert '
+                                   '(E2004)'
+                                   % (os.path.basename(pfad), nr,
+                                      m.group(1), m.group(2)))
+                impl[key] = (m.group(1), nr)
     for name, (kls, nr) in impl.items():
         if name in decl and decl[name].lower() != kls.lower():
             befunde.append('%s:%d  %s ist in %s deklariert, aber als %s '

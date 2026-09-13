@@ -19,8 +19,9 @@ type
     // Voll-Review 2026-09-12 (Major 49): strict-Sichtbarkeiten
     [Test] procedure StrictPrivateTwice_Reported;
     [Test] procedure StrictPrivateThenPrivate_NoFinding;
-    // Voll-Review 2026-09-12 (Testluecke 101)
-    [Test] procedure StrictPrivateTwice_Reported;
+    // Voll-Review 2026-09-12 (Testluecke 101). Der strict-private-Fall
+    // steht schon oben (Major 49) - hier fehlte nur der Reset am
+    // Klassenende.
     [Test] procedure TwoClassesEachOneSection_NoFinding;
   end;
 
@@ -220,33 +221,6 @@ begin
   try Assert.AreEqual<Integer>(0,
     TFindingHelper.Count(F, fkConsecutiveVisibility),
     'strict private und private sind verschiedene Sichtbarkeiten');
-  finally F.Free; end;
-end;
-
-procedure TTestConsecutiveVisibility.StrictPrivateTwice_Reported;
-// Testluecke 101 (Voll-Review 2026-09-12): fuer 'strict private' /
-// 'strict protected' gab es keine Fixture. Das Schluesselwort besteht
-// aus ZWEI Woertern - ein Scanner, der nur das letzte liest, wuerde
-// 'strict private' und 'private' verwechseln. An der gebauten Exe
-// verifiziert.
-const SRC =
-  'unit t;'#13#10 +
-  'interface'#13#10 +
-  'type'#13#10 +
-  '  TA = class'#13#10 +
-  '  strict private'#13#10 +
-  '    FX: Integer;'#13#10 +
-  '  strict private'#13#10 +
-  '    FY: Integer;'#13#10 +
-  '  end;'#13#10 +
-  'implementation'#13#10 +
-  'end.';
-var F: TObjectList<TLeakFinding>;
-begin
-  F := TFindingHelper.FindingsOfFile(SRC);
-  try Assert.AreEqual<Integer>(1,
-    TFindingHelper.Count(F, fkConsecutiveVisibility),
-    'zweimal strict private in derselben Klasse ist eine Wiederholung');
   finally F.Free; end;
 end;
 

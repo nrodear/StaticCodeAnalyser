@@ -238,7 +238,10 @@ var
   R32    : Cardinal;
   R64    : UInt64;
 begin
-  Result := 0;
+  // Kein Default-0 vorweg: der if/else unten belegt Result auf jedem
+  // Erfolgspfad, der except-Zweig auf jedem Fehlerpfad. Ein
+  // vorgezogenes 'Result := 0' waere toter Code - der Compiler sagt
+  // das auch (H2077, dcc64-Lauf 2026-09-13).
   try
     Stream := TFileStream.Create(AExePath, fmOpenRead or fmShareDenyNone);
     try
