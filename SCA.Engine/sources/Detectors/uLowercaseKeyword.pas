@@ -193,6 +193,20 @@ begin
       while (i <= n) and IsIdent(Line[i]) do Inc(i);
       Word := Copy(Line, wStart, i - wStart);
       Lower := LowerCase(Word);
+      // Voll-Review 2026-09-13: ein '&' unmittelbar vor dem Wort ist der
+      // Delphi-Escape. `&Type`, `&To`, `&Set` sind dann IDENTIFIER - Java-,
+      // COM- und Redis-Namen, Property-Namen -, keine Keywords; die
+      // Kleinschreib-Konvention gilt fuer sie nicht. Der Scanner kannte den
+      // Escape gar nicht: '&' fiel durch bis zum Inc(i), danach begann das
+      // Wort regulaer.
+      //
+      // Der Skip steht VOR der asm-Logik, damit ein `&asm` keinen Block
+      // oeffnet und ein `&end` keinen schliesst. Im BASM-Block selbst gibt
+      // es den '&'-Escape nicht, dort aendert sich also nichts.
+      //
+      // Korpus: 181 von 64.165 SCA064-Funden sind solche Escapes, alle
+      // handgeprueft und alle FP.
+      if (wStart > 1) and (Line[wStart - 1] = '&') then Continue;
       if InAsm then
       begin
         // Nur das schliessende `end` verlaesst den Block - und nur,
