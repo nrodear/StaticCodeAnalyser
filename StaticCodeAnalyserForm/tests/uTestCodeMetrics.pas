@@ -70,6 +70,8 @@ type
     [Test] procedure DeepNesting_DeepForLoops_ReportsHint;
     [Test] procedure DeepNesting_DeepCases_ReportsHint;
     [Test] procedure DeepNesting_RepeatLoops_Counted;
+    [Test] procedure DeepNesting_FiveWhileLoops_ReportsWhileAsDeepest;
+    [Test] procedure DeepNesting_FourWhileLoops_NoFinding;
     [Test] procedure DeepNesting_TwoMethodsOneDeep_OnlyDeepReported;
     // ---- 'else if'-Kette (Autopsie 2026-08-27) ------------------------------
     [Test] procedure DeepNesting_ElseIfChainOneLine_NoFinding;
@@ -631,6 +633,63 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.IsTrue(TFindingHelper.Count(F, fkDeepNesting) >= 1);
+  finally F.Free; end;
+end;
+
+procedure TTestDeepNestingExt.DeepNesting_FiveWhileLoops_ReportsWhileAsDeepest;
+// Testluecke 128 (Voll-Review 2026-09-12): nkWhileStmt steht in
+// COUNTING_KINDS, war aber als einziger der fuenf Kinds ohne Fixture -
+// if/for/repeat/case sind alle abgedeckt. Faellt nkWhileStmt aus der
+// Menge, faellt kein Test.
+//
+// Der Meldetext wird mitgeprueft, nicht nur die Anzahl: 'while' im
+// KindName beweist, dass die Tiefe wirklich von den Schleifen kommt und
+// nicht von etwas anderem im Rumpf.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  while A1 do'#13#10+
+  '    while A2 do'#13#10+
+  '      while A3 do'#13#10+
+  '        while A4 do'#13#10+
+  '          while A5 do DoDeepWhile;'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkDeepNesting),
+      'fuenf while ueber der Vorgabe 4 sind genau ein Fund');
+    Hit := TFindingHelper.FirstOf(F, fkDeepNesting);
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'DoDeepWhile'), Hit.LineNumber,
+      'Anker ist die innerste Schleife');
+    Assert.IsTrue(Pos('Depth 5 (while from line', Hit.MissingVar) > 0,
+      'while muss als tiefster Kind gemeldet werden - gemeldet wurde: ' +
+      Hit.MissingVar);
+  finally F.Free; end;
+end;
+
+procedure TTestDeepNestingExt.DeepNesting_FourWhileLoops_NoFinding;
+// Die Gegenprobe zum Test darueber - ohne sie waere er auch dann gruen,
+// wenn while die Tiefe gar nicht traebe und der Fund von der Methode
+// selbst kaeme. Vier Schleifen treffen die Vorgabe exakt (>, nicht >=).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  while A1 do'#13#10+
+  '    while A2 do'#13#10+
+  '      while A3 do'#13#10+
+  '        while A4 do DoIt;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeepNesting),
+    'Tiefe 4 ist die Vorgabe selbst und noch kein Fund');
   finally F.Free; end;
 end;
 
