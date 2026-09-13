@@ -517,6 +517,22 @@ type
     [Test] procedure Field_OwnerLookalikeIdent_StillReported;
   end;
 
+  // ---- FieldLeak: das Uebergabe-Gate (Testluecke 152) -------------------
+  // Eigene Fixture statt vier weiterer Methoden in
+  // TTestFieldLeakOwnership: die trug schon 15 Tests, und der
+  // Selbstscan meldete mit meinen vieren prompt LargeClass. Dieselbe
+  // Antwort wie am 05.09., als die Sammelklasse in sechs sequenzielle
+  // Fixtures geteilt wurde - das Thema ist scharf genug fuer eine
+  // eigene: IsHandedToOwner ist ein Gate mit drei Zusagen.
+  [TestFixture]
+  TTestFieldLeakHandover = class
+  public
+    [Test] procedure FieldHandedAsArgument_NoFinding;
+    [Test] procedure FieldNotHanded_StillReported;
+    [Test] procedure FieldIsReceiverNotArgument_StillReported;
+    [Test] procedure SimilarFieldNameHanded_OtherStillReported;
+  end;
+
   // Freigabe-Orte AUSSERHALB des Destruktors, die als gleichwertig
   // gelten (Parser-Gate-Backlog 2026-07-31, Konzept 4e/1 + Klassen
   // L/J vom 30./31.08.) - je mit TP-Gegenprobe.
@@ -5688,6 +5704,151 @@ begin
 end;
 
 { --- Parser-Gate-Backlog 2026-07-31 (Konzept 4e/1) ------------------------- }
+
+{ --- Testluecke 152: IsHandedToOwner ------------------------------- }
+//
+// Das Gate unterdrueckt den Fund, wenn das erzeugte Feld im
+// Konstruktor als ARGUMENT an einen Aufruf geht: der Empfaenger kann
+// die Ownership nehmen, dann ist das fehlende Free kein Leck. Der
+// Kommentar am Gate nennt es die groesste FP-Quelle des Detektors
+// (SynEdit-Highlighter, +2410 SCA001 in der Recall-Messung
+// 2026-07-15) - getestet war es nie.
+//
+// Vier Faelle, weil das Gate drei Zusagen macht: es greift bei
+// Uebergabe, NICHT beim Empfaenger und NICHT bei einem nur
+// aehnlichen Namen. Alle vier am gebauten Stand nachgemessen.
+
+procedure TTestFieldLeakHandover.FieldHandedAsArgument_NoFinding;
+// Kanonisch das SynEdit-Muster: AddAttribute(FAttri) im Ctor, kein
+// Free im Dtor. Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TA = class'#13#10+
+  '  FAttri: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TA.Create;'#13#10+
+  'begin'#13#10+
+  '  FAttri := TStringList.Create;'#13#10+
+  '  AddAttribute(FAttri);'#13#10+
+  'end;'#13#10+
+  'destructor TA.Destroy;'#13#10+
+  'begin'#13#10+
+  '  inherited;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+    'uebergeben heisst: der Empfaenger koennte es freigeben');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeakHandover.FieldNotHanded_StillReported;
+// TP-Gegenprobe: dieselbe Klasse OHNE die Uebergabe. Ohne sie waere
+// oben auch dann gruen, wenn der Detektor die Konstellation gar nicht
+// erreicht. Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TB = class'#13#10+
+  '  FAttri: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TB.Create;'#13#10+
+  'begin'#13#10+
+  '  FAttri := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'destructor TB.Destroy;'#13#10+
+  'begin'#13#10+
+  '  inherited;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+    'ohne Uebergabe bleibt das Leck ein Leck');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeakHandover.FieldIsReceiverNotArgument_StillReported;
+// Die schaerfste der drei Zusagen: das Gate prueft ausschliesslich den
+// Text AB der ersten Klammer. 'FAttri.DoIt(17)' ist eine BENUTZUNG des
+// Feldes, keine Uebergabe - der Empfaenger ist das Feld selbst. Wer
+// die Pruefung auf "Feldname kommt im Call vor" verkuerzt, macht aus
+// jeder Methodenverwendung eine Ownership-Uebergabe und verliert die
+// halbe Regel. Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TC = class'#13#10+
+  '  FAttri: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TC.Create;'#13#10+
+  'begin'#13#10+
+  '  FAttri := TStringList.Create;'#13#10+
+  '  FAttri.DoIt(17);'#13#10+
+  'end;'#13#10+
+  'destructor TC.Destroy;'#13#10+
+  'begin'#13#10+
+  '  inherited;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+    'das Feld ist Empfaenger, nicht Argument - keine Uebergabe');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeakHandover.SimilarFieldNameHanded_OtherStillReported;
+// Wortgrenze: uebergeben wird FListView, gemeldet werden muss FList.
+// Ein Praefix-Vergleich statt des Wortgrenzen-Matches wuerde FList
+// mitdecken und ein echtes Leck verschlucken.
+// Am gebauten Stand nachgemessen: 1 Fund, und zwar auf FList.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TD = class'#13#10+
+  '  FList: TStringList;'#13#10+
+  '  FListView: TStringList;'#13#10+
+  'public'#13#10+
+  '  constructor Create;'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TD.Create;'#13#10+
+  'begin'#13#10+
+  '  FList := TStringList.Create;'#13#10+
+  '  FListView := TStringList.Create;'#13#10+
+  '  AddAttribute(FListView);'#13#10+
+  'end;'#13#10+
+  'destructor TD.Destroy;'#13#10+
+  'begin'#13#10+
+  '  inherited;'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'genau ein Leck - FListView ist uebergeben, FList nicht');
+    Hit := TFindingHelper.FirstOf(F, fkMemoryLeak);
+    Assert.IsTrue(Pos('FList:', Hit.MissingVar) > 0,
+      'der Fund muss auf FList liegen, nicht auf FListView: '
+      + Hit.MissingVar);
+  finally F.Free; end;
+end;
+
 
 procedure TTestFieldLeakDtorSubstitutes.Field_FreedInBeforeDestruction_NoFinding;
 // jvcl JvInspector.pas 302/303/307/311/317/325/332/817/1057/1242/1385 und

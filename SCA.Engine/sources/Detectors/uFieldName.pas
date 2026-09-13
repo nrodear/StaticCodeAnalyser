@@ -56,17 +56,46 @@ begin
   Result := TDetectorUtils.ExtractFirstWord(Line, StartCol);
 end;
 
+const
+  // Das Wort steht in der Skip-Liste, in der Sichtbarkeits-
+  // Verzweigung und in der Namensbildung - ab der dritten Kopie
+  // gehoert es an eine Stelle.
+  KW_STRICT = 'strict';
+
 function IsMethodOrPropertyDecl(const Lower: string): Boolean; inline;
 begin
   Result := (Lower = 'procedure') or (Lower = 'function')
          or (Lower = 'constructor') or (Lower = 'destructor')
          or (Lower = 'property') or (Lower = 'class')
          or (Lower = 'const') or (Lower = 'type') or (Lower = 'case')
-         or (Lower = 'var') or (Lower = 'strict')
+         or (Lower = 'var') or (Lower = KW_STRICT)
          // Param-Modifier Continuation-Lines von multi-line Method-Headers
          // ('  out X: T; var Y: T):...') - sonst werden 'out'/'inout' als
          // Field-Name geflaggt.
          or (Lower = 'out') or (Lower = 'inout');
+end;
+
+function ZweitesWortIstGeschuetzt(const ALine: string): Boolean;
+// Fuer 'strict private' / 'strict protected': liefert True, wenn nach dem
+// Wort 'strict' eine der beiden GEPRUEFTEN Sichtbarkeiten folgt.
+//
+// 'strict public'/'strict published' gibt es in Delphi nicht; die Pruefung
+// auf genau zwei Woerter ist deshalb keine Einschraenkung, sondern haelt
+// die Zeile eng - eine Fortsetzungszeile, die zufaellig mit 'strict'
+// beginnt, kippt so nicht die Sichtbarkeit der ganzen Klasse.
+var
+  Rest : string;
+  i    : Integer;
+begin
+  Result := False;
+  i := Pos(KW_STRICT, LowerCase(ALine));
+  if i <= 0 then Exit;
+  Rest := TrimLeft(Copy(ALine, i + Length(KW_STRICT), MaxInt));
+  i := 1;
+  while (i <= Length(Rest)) and CharInSet(Rest[i], ['a'..'z', 'A'..'Z']) do
+    Inc(i);
+  Rest := LowerCase(Copy(Rest, 1, i - 1));
+  Result := (Rest = 'private') or (Rest = 'protected');
 end;
 
 // Paren-Delta einer Zeile ('(' minus ')'), String-Literale und
@@ -213,7 +242,21 @@ begin
         begin InCheckVis := False; St.InConstType := False; Continue; end;
       if Lower = 'published' then
         begin InCheckVis := False; St.InConstType := False; Continue; end;
-      if Lower = 'strict' then Continue;
+      // 'strict private' / 'strict protected': das erste Wort der Zeile ist
+      // 'strict', die Sichtbarkeit steht im ZWEITEN. Bis zum Voll-Review
+      // 2026-09-12 wurde die Zeile nur uebersprungen - InCheckVis blieb
+      // False, und JEDES Feld einer strict-Sektion war fuer diese Regel
+      // unsichtbar (Testluecke 153). Der Unit-Kopf verspricht
+      // 'private/protected', und strict private IST private.
+      if Lower = KW_STRICT then
+      begin
+        if ZweitesWortIstGeschuetzt(Lines[i]) then
+        begin
+          InCheckVis := True;
+          St.InConstType := False;
+        end;
+        Continue;
+      end;
       if Lower = 'end' then
       begin
         InClass := False;
