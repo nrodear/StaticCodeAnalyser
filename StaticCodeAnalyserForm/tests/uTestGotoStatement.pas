@@ -39,6 +39,10 @@ type
     // ---- Finding-Inhalt / FindingKind / Severity ----
     [Test] procedure Goto_Finding_KindAndSeverity;
     [Test] procedure Goto_Finding_LinePopulated;
+    // Posten 205: Zustandsleck am Treffer
+    [Test] procedure GotoThenCommentOpened_NoSecondFinding;
+    [Test] procedure GotoThenParenStarOpened_NoSecondFinding;
+    [Test] procedure GotoOnlyInMultiLineComment_NoFinding;
   end;
 
 implementation
@@ -49,6 +53,84 @@ uses
   uTestFindingHelper;
 
 // ---- Positive Varianten ----
+
+{ --- Posten 205: der Kommentar-Zustand ueber Zeilengrenzen -------- }
+//
+// FindGoto stieg am Treffer per Exit aus und liess ein dahinter
+// GEOEFFNETES '{' oder '(*' unverfolgt - der fehleranfaelligste Teil
+// der Funktion war damit zugleich der ungetestete.
+//
+// An der gebauten Exe gemessen: die erste Fixture ergab 2 Funde statt
+// 1; dieselbe Datei mit 'Beep;' statt des ersten goto ergab richtig 0.
+// Gleiche Fehlerklasse wie in uWithStatement und uReversedForRange.
+
+procedure TTestGotoStatement.GotoThenCommentOpened_NoSecondFinding;
+// DER NACHWEIS. Heute 2 Funde, nach dem Fix 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'label Fin;'#13#10+
+  'begin'#13#10+
+  '  goto Fin;  {'#13#10+
+  '  goto Fin;'#13#10+
+  '  }'#13#10+
+  'Fin:'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkGotoStatement),
+      'das goto im Blockkommentar ist kein Code');
+  finally F.Free; end;
+end;
+
+procedure TTestGotoStatement.GotoThenParenStarOpened_NoSecondFinding;
+// Dasselbe fuer die (* *)-Form - eigener Zustand, eigener Pfad.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'label Fin;'#13#10+
+  'begin'#13#10+
+  '  goto Fin;  (*'#13#10+
+  '  goto Fin;'#13#10+
+  '  *)'#13#10+
+  'Fin:'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkGotoStatement),
+      'das goto im (* *)-Kommentar ist kein Code');
+  finally F.Free; end;
+end;
+
+procedure TTestGotoStatement.GotoOnlyInMultiLineComment_NoFinding;
+// Ohne Treffer vor dem Kommentar: heute schon 0, muss 0 bleiben.
+// Zeigt, dass der Fehler am TREFFER hing.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'label Fin;'#13#10+
+  'begin'#13#10+
+  '  Beep;  {'#13#10+
+  '  goto Fin;'#13#10+
+  '  }'#13#10+
+  'Fin:'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkGotoStatement),
+      'ohne vorangehenden Treffer war der Kommentar schon immer dicht');
+  finally F.Free; end;
+end;
+
 
 procedure TTestGotoStatement.Goto_SimpleJump_Reported;
 const SRC =
