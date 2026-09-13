@@ -38,6 +38,10 @@ type
     [Test] procedure Length_Finding_KindAndSeverity;
     [Test] procedure Length_MultipleHitsInSameMethod_AllReported;
     [Test] procedure Length_TwoHitsOnSameLine_BothReported;
+    // Testluecke 168: Kommentarzustand und Copy-Idiom
+    [Test] procedure LengthMinusInBlockComment_NoFinding;
+    [Test] procedure ApostropheInCommentThenRealExpr_StillReported;
+    [Test] procedure CopyIdiom_NoFinding;
   end;
 
 implementation
@@ -333,6 +337,87 @@ begin
   try
     Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkLengthUnderflow),
       'Zwei Underflows in derselben Zeile -> beide Findings');
+  finally F.Free; end;
+end;
+
+{ --- Testluecke 168 ----------------------------------------------- }
+//
+// Drei Faelle, die der Detektor RICHTIG behandelt und die trotzdem
+// kein Test festhielt. ScanCodeLine leistet das (Z.226-233): es
+// blendet Kommentare spaltenerhaltend aus und fuehrt den
+// String-Zustand ueber Zeilen.
+//
+// ANMERKUNG ZUM REVIEW: der Posten sagte fuer die ersten beiden Faelle
+// "heute rot" voraus - also dass der Detektor sie falsch behandelt.
+// Am gebauten Stand ist das NICHT reproduzierbar; beide verhalten sich
+// korrekt, und der Detektor-Kommentar beschreibt genau diese zwei
+// Faelle als bereits behoben. Die Tests pinnen deshalb das richtige
+// Verhalten, statt einen Defekt zu dokumentieren, den es nicht gibt.
+
+procedure TTestLengthUnderflow.LengthMinusInBlockComment_NoFinding;
+// Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string);'#13#10 +
+  'var n: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  { Length(s) - 3 }'#13#10 +
+  '  n := 0;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLengthUnderflow),
+    'im Kommentar steht kein Ausdruck');
+  finally F.Free; end;
+end;
+
+procedure TTestLengthUnderflow.ApostropheInCommentThenRealExpr_StillReported;
+// Die schaerfere Haelfte: ein EINZELNER Apostroph in einem Kommentar
+// ("Nico's") wuerde einen naiven String-Zustand vergiften - alles
+// dahinter gaelte als Zeichenkette, und der echte Ausdruck darunter
+// entginge der Regel. Der Test faengt genau diese Regression.
+// Am gebauten Stand nachgemessen: 1 Fund.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string);'#13#10 +
+  'var n: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  { Nico''''s Kommentar }'#13#10 +
+  '  n := Length(s) - 4;'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkLengthUnderflow),
+    'der Apostroph im Kommentar darf den Zustand nicht vergiften');
+  finally F.Free; end;
+end;
+
+procedure TTestLengthUnderflow.CopyIdiom_NoFinding;
+// 'Copy(s, 1, Length(s) - 1)' ist das idiomatische Abschneiden des
+// letzten Zeichens - bei leerem s liefert Copy schlicht die leere
+// Zeichenkette, kein Unterlauf. Der Detektor nimmt den umschliessenden
+// Aufrufnamen aus; belegt war das nicht.
+// Am gebauten Stand nachgemessen: 0 Funde.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(s: string);'#13#10 +
+  'var t: string;'#13#10 +
+  'begin'#13#10 +
+  '  t := Copy(s, 1, Length(s) - 1);'#13#10 +
+  'end;'#13#10 +
+  'end.'#13#10;
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLengthUnderflow),
+    'Copy schneidet ab, es laeuft nichts unter');
   finally F.Free; end;
 end;
 
