@@ -524,7 +524,6 @@ var
   MethodByName    : TDictionary<string, TAstNode>;
   Methods         : TList<TAstNode>;
   M, Ctor, Call   : TAstNode;
-  CtorList        : TList<TAstNode>;
   CallList        : TList<TAstNode>;
   Target, LowName : string;
   VMethod         : TAstNode;
@@ -535,9 +534,16 @@ var
   // FP-Gate 2026-07-31 (Event-Zuweisung): Zeile -> Zuweisungsziel + zugewiesener
   // RHS-Bezeichner, lazy befuellt.
   InhAssignLines  : TDictionary<Integer, TInhAssignInfo>;
+  // Perf (Chargen-Review 2026-09-14, Posten 286): die Methodenliste der
+  // UNIT ist klassen-invariant, wurde aber ZWEIMAL PRO KLASSE neu
+  // erlaufen - O(Klassen x Methoden) Baumlaeufe plus zwei
+  // TList-Allokationen je Klasse. Einmal vor der Schleife holen genuegt;
+  // beide Verwender filtern ohnehin selbst auf den Besitzertyp.
+  AllUnitMethods  : TList<TAstNode>;
 begin
   InhAssignLines := nil;
   ClassList := UnitNode.FindAll(nkClass);
+  AllUnitMethods := UnitNode.FindAll(nkMethod);
   try
     for ClassNode in ClassList do
     begin
@@ -573,9 +579,9 @@ begin
         // war unsichtbar, FN). Gleiche Falle wie in uVisibilityCheck
         // am 2026-07-28 geschlossen; der Parser-Zensus nennt 2951
         // Nested-Impl-Header in 91 Korpusdateien.
-        CtorList := UnitNode.FindAll(nkMethod);
-        try
-          for M in CtorList do
+        // AllUnitMethods statt eines eigenen Laufs - s. Kopf.
+        begin
+          for M in AllUnitMethods do
             if TDetectorUtils.OwnerTypeNameLower(M.Name)
                = LowerCase(ClassNode.Name) then
             begin
@@ -585,24 +591,19 @@ begin
               // Klassen-Subtree-Header-Node.
               MethodByName.AddOrSetValue(LowName, M);
             end;
-        finally
-          CtorList.Free;
         end;
 
         // Constructor-Impls finden.
         ClassImplCtors := TList<TAstNode>.Create;
         try
-          CtorList := UnitNode.FindAll(nkMethod);
-          try
-            for Ctor in CtorList do
+          begin
+            for Ctor in AllUnitMethods do
               // Besitzertyp-Match statt Praefix - s. Kommentar an der
               // MethodByName-Sammlung oben (Voll-Review 2026-09-12).
               if IsConstructor(Ctor) and
                  (TDetectorUtils.OwnerTypeNameLower(Ctor.Name)
                   = LowerCase(ClassNode.Name)) then
                 ClassImplCtors.Add(Ctor);
-          finally
-            CtorList.Free;
           end;
 
           AlreadyReported := TList<string>.Create;
@@ -708,6 +709,7 @@ begin
     end;
   finally
     ClassList.Free;
+    AllUnitMethods.Free;
     InhAssignLines.Free;   // nil-sicher (TObject.Free prueft Self)
   end;
 end;
