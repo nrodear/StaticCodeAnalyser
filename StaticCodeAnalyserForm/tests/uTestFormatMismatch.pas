@@ -51,6 +51,15 @@ type
     [Test] procedure FormatLocale_ParenInStringArg_WithSettings_NoFinding;
     [Test] procedure FormatLocale_ParenInStringArg_NoSettings_Reported;
     [Test] procedure FormatLocale_StringSpec_NoFinding;
+    // Posten 201: die uebrigen vier Float-Spezifizierer
+    [Test] procedure FormatLocale_SpecG_WithoutSettings_Reported;
+    [Test] procedure FormatLocale_SpecG_WithSettings_NoFinding;
+    [Test] procedure FormatLocale_SpecE_WithoutSettings_Reported;
+    [Test] procedure FormatLocale_SpecE_WithSettings_NoFinding;
+    [Test] procedure FormatLocale_SpecN_WithoutSettings_Reported;
+    [Test] procedure FormatLocale_SpecN_WithSettings_NoFinding;
+    [Test] procedure FormatLocale_SpecM_WithoutSettings_Reported;
+    [Test] procedure FormatLocale_SpecM_WithSettings_NoFinding;
   end;
 
   // ---- Real-World-FP-Triage 2026-06-25 (SCA005, 25-Repo-Korpus) ----------------------
@@ -388,6 +397,153 @@ end;
 // =============================================================================
 // FormatMismatch-Erweiterung
 // =============================================================================
+
+{ --- Posten 201: HasFloatSpec kennt vier Spezifizierer ----------- }
+//
+// Getestet war nur '%f'. HasFloatSpec fuehrt aber auch %g, %e, %n und
+// %m - jeder davon ist locale-abhaengig, und jeder hing allein an der
+// Zeichenliste. Ein Tippfehler darin haette vier stille FN erzeugt.
+//
+// Alle am gebauten Stand gemessen, je als Paar ohne/mit
+// TFormatSettings. Das Paar ordnet die 0 dem Settings-Argument zu und
+// nicht irgendeinem anderen Gate.
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecG_WithoutSettings_Reported;
+// '%.2g' ohne TFormatSettings. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2g'', [x]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'auch %.2g ist locale-abhaengig');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecG_WithSettings_NoFinding;
+// Dasselbe MIT TFormatSettings. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2g'', [x], fs); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'mit TFormatSettings ist %.2g abgesichert');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecE_WithoutSettings_Reported;
+// '%.2e' ohne TFormatSettings. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2e'', [x]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'auch %.2e ist locale-abhaengig');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecE_WithSettings_NoFinding;
+// Dasselbe MIT TFormatSettings. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2e'', [x], fs); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'mit TFormatSettings ist %.2e abgesichert');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecN_WithoutSettings_Reported;
+// '%.2n' ohne TFormatSettings. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2n'', [x]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'auch %.2n ist locale-abhaengig');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecN_WithSettings_NoFinding;
+// Dasselbe MIT TFormatSettings. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2n'', [x], fs); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'mit TFormatSettings ist %.2n abgesichert');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecM_WithoutSettings_Reported;
+// '%.2m' ohne TFormatSettings. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2m'', [x]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'auch %.2m ist locale-abhaengig');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecM_WithSettings_NoFinding;
+// Dasselbe MIT TFormatSettings. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2m'', [x], fs); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'mit TFormatSettings ist %.2m abgesichert');
+  finally F.Free; end;
+end;
+
 
 procedure TTestFormatMismatchExt.Format_OnePlaceholderTwoArgs_ReportsError;
 const SRC =
