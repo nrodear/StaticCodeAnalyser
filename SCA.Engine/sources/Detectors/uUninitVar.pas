@@ -865,6 +865,40 @@ procedure CollectNestedMethodRangesViaSource(Lines: TStringList;
 // (nested = mindestens 2 Leading-Spaces, distinct vom 0-indent Outer-
 // Header). Pro nested-Header: count begin/end-Paare bis matching
 // outer 'end;', dann Range eintragen.
+//
+// ROHE ZEILEN - GEPRUEFT UND FOLGENLOS (Paket 9002, Rest von Major 86,
+// gemessen 2026-09-15). Dieser Scanner liest ungestrippte Quellzeilen
+// (Lines[i] unten) und bildet darum auch fuer einen Header, der in
+// einem BLOCKKOMMENTAR steht, einen Range. Der Befund aus dem
+// Voll-Review sah darin ein FN-Risiko: der Phantom-Range koennte
+// echten Code ueberdecken und dessen Variablen als "in nested routine
+// benutzt" gelten lassen.
+//
+// AM VERHALTEN WIDERLEGT. Drei Fixturen, die sich nur in diesen Zeilen
+// unterscheiden, an der Exe gemessen:
+//     echte nested routine, die Total liest        0 Funde (unterdrueckt)
+//     dieselbe Routine im Blockkommentar           1 Fund
+//     dieselben Zeilen laengenerhaltend geblankt   1 Fund
+// Die Suppression greift also (Zeile 1 beweist, dass der Mechanismus
+// lebt), aber ein Phantom-Header loest sie NICHT aus. Grund: die
+// INHALTS-Leser der Ranges - IsVarUsedInNestedRanges (:717) und
+// IsVarReadInNestedRoutineFromSource (:775) - nehmen seit 4fc52198
+// (12.09.) AStrippedLow entgegen. Im gestrippten Text steht der
+// Variablenname nicht mehr, der falsche Range laeuft ins Leere.
+//
+// KORPUS BESTAETIGT DAS: alle 13.419 .pas auf Zeilen untersucht, deren
+// Signatur sich zwischen roh und gestrippt aendert (19.974 Zeilen in
+// 1.629 Dateien, davon 104 echte Phantom-Header); diese 1.629 Dateien
+// einzeln gegen die Exe gemessen, in einem Spiegelbaum mit erhaltener
+// Pfadstruktur (1.084 davon fahren relative {$I}-Includes und messen
+// als lose Kopie anders). 4.887 Laeufe, Bewegung: NULL.
+//
+// Deshalb wird hier NICHT gestrippt. Ein Strip waere machbar (lazy, ab
+// ResolveActualMethodStart), aendert aber kein einziges Ergebnis - und
+// UninitVar ist Rang 3 der teuersten Detektoren (10.265 ms, 6,5 % der
+// Scanzeit). Ein Eingriff ohne Wirkung ist dort Risiko ohne Gegenwert.
+// Wer die Ranges kuenftig fuer etwas anderes nutzt als eine
+// gestrippte Inhaltspruefung, muss das hier neu bewerten.
 var
   i, EndLine, Depth : Integer;
   L, LTrim : string;
