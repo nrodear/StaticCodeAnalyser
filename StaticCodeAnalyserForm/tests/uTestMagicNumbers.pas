@@ -23,11 +23,19 @@ type
     [Test] procedure ExponentLiteral_NotReported;
     [Test] procedure HexLiteral_NotReported;
     [Test] procedure FloatThenRealMagic_StillReported;
+    // Posten 172: Zweierpotenz-Pfad und der ini-Override von IsTrivial
+    [Test] procedure PowerOfTwo512_NotReported;
+    [Test] procedure PowerOfTwo2048_Reported_ObereGrenze;
+    [Test] procedure NonPowerOfTwo513_Reported_Kontrolle;
+    [Test] procedure TrivialsOverride_ReplacesDefaultList;
   end;
 
 implementation
 
 uses
+  // System.Classes: TrivialsOverride_ReplacesDefaultList tauscht die
+  // globale TStringList DetectorMagicTrivials aus (Posten 172).
+  System.Classes,
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
@@ -129,6 +137,140 @@ begin
       'gemeldet werden muss die 1027, nicht der Torso 3 - Text: '
       + Fnd.MissingVar);
   finally F.Free; end;
+end;
+
+
+{ --- Posten 172: Zweierpotenzen und die ini-Trivials ------------- }
+//
+// Zwei Pfade von IsTrivial waren ungetestet: die Zweierpotenz-Regel
+// (bis 1024, ausserhalb des if/else) und der Override aus
+// analyser.ini. Der Override ERSETZT die Default-Liste, er ergaenzt
+// sie nicht - genau so eine Kante braucht einen Vertragstest.
+//
+// Alles an der Exe gemessen, der Override end-to-end ueber eine
+// eigene analyser.ini mit MagicNumberTrivials=7:
+//
+//         Default-ini   ini mit "=7"
+//   7          1              0
+//   100        0              1     <- ersetzt, nicht ergaenzt
+//   512        0              0     <- Zweierpotenz, vom Override
+//   513        1              1        unberuehrt
+
+procedure TTestMagicNumbers.PowerOfTwo512_NotReported;
+// Zweierpotenzen bis 1024 sind idiomatische Bit-/Puffer-
+// Konstanten. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(x: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  if x = 512 then Beep;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMagicNumber),
+      '512 ist eine Zweierpotenz und damit trivial');
+  finally F.Free; end;
+end;
+
+procedure TTestMagicNumbers.PowerOfTwo2048_Reported_ObereGrenze;
+// Die Grenze der Regel ist 1024, nicht "jede Zweierpotenz".
+// Gemessen: 1. Ohne diesen Test waere ein versehentlich
+// entfernter Deckel unsichtbar.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(x: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  if x = 2048 then Beep;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMagicNumber),
+      '2048 liegt ueber der 1024-Grenze und wird gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestMagicNumbers.NonPowerOfTwo513_Reported_Kontrolle;
+// KONTROLLE zur 512: eins daneben, und der Fund kommt.
+// Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(x: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  if x = 513 then Beep;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMagicNumber),
+      '513 ist keine Zweierpotenz');
+  finally F.Free; end;
+end;
+
+procedure TTestMagicNumbers.TrivialsOverride_ReplacesDefaultList;
+// VERTRAGSTEST fuer den ini-Override. IsTrivial prueft die
+// globale Liste im if-Zweig und die Defaults NUR im else -
+// eine gesetzte Liste ersetzt sie also komplett. Das ist
+// bewusst so, aber ueberraschend: wer "1024" ergaenzen will,
+// verliert 0/1/2/-1/10/100, wenn er sie nicht mitschreibt.
+//
+// End-to-end an der Exe gegengeprueft (analyser.ini mit
+// MagicNumberTrivials=7): 7 -> 0 Funde, 100 -> 1 Fund.
+//
+// Der globale Zustand wird hier gesichert und im finally
+// zurueckgestellt - eine Testreihenfolge darf davon nichts
+// merken.
+const
+  SRC_7 =
+    'unit t; implementation'#13#10 +
+    'procedure Foo(x: Integer);'#13#10 +
+    'begin'#13#10 +
+    '  if x = 7 then Beep;'#13#10 +
+    'end;';
+  SRC_100 =
+    'unit t; implementation'#13#10 +
+    'procedure Foo(x: Integer);'#13#10 +
+    'begin'#13#10 +
+    '  if x = 100 then Beep;'#13#10 +
+    'end;';
+var
+  F     : TObjectList<TLeakFinding>;
+  Alt   : TStringList;
+  Eigen : Boolean;
+begin
+  Alt   := DetectorMagicTrivials;
+  Eigen := False;
+  try
+    DetectorMagicTrivials := TStringList.Create;
+    Eigen := True;
+    DetectorMagicTrivials.CaseSensitive := False;
+    DetectorMagicTrivials.Sorted        := True;
+    DetectorMagicTrivials.Add('7');
+
+    F := TFindingHelper.FindingsOf(SRC_7);
+    try
+      Assert.AreEqual<Integer>(0,
+        TFindingHelper.Count(F, fkMagicNumber),
+        '7 steht in der Override-Liste und ist damit trivial');
+    finally F.Free; end;
+
+    F := TFindingHelper.FindingsOf(SRC_100);
+    try
+      Assert.AreEqual<Integer>(1,
+        TFindingHelper.Count(F, fkMagicNumber),
+        'die Override-Liste ERSETZT die Defaults - 100 ist jetzt keine Trivialzahl mehr');
+    finally F.Free; end;
+  finally
+    if Eigen then DetectorMagicTrivials.Free;
+    DetectorMagicTrivials := Alt;
+  end;
 end;
 
 
