@@ -502,6 +502,16 @@ begin
   AddD('BoolAlwaysTrue', fkBoolAlwaysTrue, TBoolAlwaysTrueDetector.AnalyzeUnit);
   AddD3('ConstantReturn', fkConstantReturn, TConstantReturnDetector.AnalyzeUnit);
   AddD('HardcodedString', fkHardcodedString, THardcodedStringDetector.AnalyzeUnit);
+  // PAKET 9016 (Posten 220, 2026-09-14): dem Vorfilter fehlt '.lock',
+  // obwohl der Detektor-Regex '.Lock' fuehrt. Eine Datei, die nur diese
+  // Schreibweise benutzt, wird nie gescannt. GEMESSEN, ohne Bau: jede
+  // Korpusdatei mit '.lock' und ohne eines der vier Token bekam eine
+  // Kommentarzeile 'tcriticalsection' angehaengt (sonst unveraendert)
+  // und wurde gescannt - 51 Funde in 21 Dateien, die der Vorfilter
+  // heute verschluckt. Gleiche Gattung wie Paket 9008 (SCA151) und
+  // 9010 (SCA129): eigener Zweig, AQL-Stichprobe VOR dem Merge,
+  // Laufzeit gegenmessen. Nicht hier mitnehmen - ein Recall-Paket
+  // ueberdeckt jeden anderen Vertrag einer Charge.
   AddD('UnpairedLock', fkUnpairedLock, TUnpairedLockDetector.AnalyzeUnit, ['tcriticalsection', 'tmonitor', '.enter', '.acquire']);
   AddD('MoveSizeOfPointer', fkMoveSizeOfPointer, TMoveSizeOfPointerDetector.AnalyzeUnit, ['move(', 'fillchar(']);
   AddD('WithMultipleTargets', fkWithMultipleTargets, TWithMultipleTargetsDetector.AnalyzeUnit);
