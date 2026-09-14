@@ -495,9 +495,19 @@ var
     else if SubRefs > 0 then
     begin
       // Sub-Klassen-Methode ruft den Member -> protected reicht.
+      //
+      // Der Text sagte bis 2026-09-14 "used by subclasses only" (Posten
+      // 289). Das ist falsch, sobald OwnRefs > 0 ist: dieser Zweig
+      // gewinnt schon bei EINEM Sub-Klassen-Aufruf, egal wie oft die
+      // eigene Klasse den Member ruft. An der Exe belegt - TBase.Helfer,
+      // dreimal aus TBase.Eigen und einmal aus TSub.Kind gerufen, trug
+      // trotzdem "subclasses only". Die EMPFEHLUNG bleibt richtig
+      // (protected deckt die eigene Klasse mit ab), nur die Begruendung
+      // war es nicht - und Meldetexte gehen in den Fingerprint.
       K := fkCanBeProtected;
-      Msg := Format('Tighten encapsulation: %s.%s is used by '
-        + 'subclasses only - move from `public` to `protected`. '
+      Msg := Format('Tighten encapsulation: %s.%s is used only within '
+        + 'the class and its subclasses - move from `public` to '
+        + '`protected`. '
         + 'Quick-Fix: move declaration into a `protected` section of %s.%s',
         [ClassNode.Name, Member.Name, ClassNode.Name, SingleFileSuffix]);
     end

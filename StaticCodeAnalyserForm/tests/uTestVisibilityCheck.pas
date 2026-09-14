@@ -66,6 +66,8 @@ type
     [Test] procedure RttiBase_PlainParent_UnusedPublicMember_Kontrolle;
     [Test] procedure RttiBase_PlatformParent_Skipped_KnownLimit;
     [Test] procedure RttiBase_CustomFormParent_Reported_KnownLimit;
+    // Posten 289: der Meldetext behauptete "subclasses only" trotz OwnRefs
+    [Test] procedure CanBeProtected_OwnAndSubRefs_MessageNamesBoth;
   end;
 
 implementation
@@ -403,6 +405,74 @@ begin
     Assert.AreEqual(lsHint, Hit.Severity);
   finally F.Free; end;
 end;
+
+procedure TTestVisibilityCheck.CanBeProtected_OwnAndSubRefs_MessageNamesBoth;
+// Posten 289. Der SubRefs-Zweig gewinnt schon bei EINEM
+// Sub-Klassen-Aufruf, egal wie oft die eigene Klasse den Member
+// ruft: TBase.Helfer wird dreimal aus TBase.Eigen und einmal aus
+// TSub.Kind gerufen. Der Meldetext behauptete trotzdem "used by
+// subclasses only".
+//
+// Die EMPFEHLUNG war nie falsch - protected deckt die eigene
+// Klasse mit ab. Falsch war die Begruendung, und Meldetexte gehen
+// in den SARIF-Fingerprint (RuleID + Pfad + Zeile + Meldung).
+//
+// An der Exe gemessen: genau ein CanBeProtected-Fund auf dieser
+// Fixture, auf der Zeile von Helfer.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TBase = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure Helfer;'#13#10 +
+  '    procedure Eigen;'#13#10 +
+  '  end;'#13#10 +
+  '  TSub = class(TBase)'#13#10 +
+  '  public'#13#10 +
+  '    procedure Kind;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TBase.Helfer;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'procedure TBase.Eigen;'#13#10 +
+  'begin'#13#10 +
+  '  Helfer;'#13#10 +
+  '  Helfer;'#13#10 +
+  '  Helfer;'#13#10 +
+  'end;'#13#10 +
+  'procedure TSub.Kind;'#13#10 +
+  'begin'#13#10 +
+  '  Helfer;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkCanBeProtected),
+      'ein Sub-Aufruf neben drei eigenen ergibt CanBeProtected');
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkCanBeProtected then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit);
+    Assert.Contains(Hit.MissingVar,
+      'within the class and its subclasses',
+      'der Meldetext muss die eigene Klasse mitnennen');
+    Assert.IsFalse(Hit.MissingVar.Contains('subclasses only'),
+      'die alte, faktisch falsche Formulierung darf nicht zurueck');
+  finally F.Free; end;
+end;
+
 
 procedure TTestVisibilityCheck.CanBeProtected_KindAndSeverity;
 const SRC =
