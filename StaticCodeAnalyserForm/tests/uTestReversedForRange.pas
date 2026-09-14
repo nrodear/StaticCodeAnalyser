@@ -56,19 +56,20 @@ uses
 // ZWEI Defekte in ScanLine, beide an der gebauten Exe gemessen.
 //
 // MESSHINWEIS, weil er sonst Zeit kostet: die Regel hat im CLI-Pfad
-// einen Vorfilter auf 'downto' - eine Datei ohne dieses Wort wird nie
-// gescannt (Posten 999: 92,4 % des Korpus). Der TEST-Harness ruft den
-// Detektor direkt und kennt den Vorfilter nicht, deshalb brauchen die
-// Fixturen hier kein downto. Wer die Faelle von Hand an der Exe
-// nachmisst, MUSS eine downto-Zeile ergaenzen, sonst misst er 0 und
-// haelt das fuer den Fix.
+// einen Vorfilter. Er stand bis Paket 9008 auf 'downto' - dem Wort der
+// KORREKTEN Form - und blendete damit 91,2 % der .pas-Dateien aus;
+// seither steht er auf 'for '. Der TEST-Harness FindingsOfFile ruft den
+// Detektor direkt und kennt keinen Vorfilter, deshalb brauchen die
+// Fixturen hier nichts davon. Wer einen Fall von Hand an der Exe
+// nachmisst, braucht ein 'for ' in der Datei - sonst misst er 0 und
+// haelt das fuer den Befund.
 
 { --- Paket 9008: der Vorfilter war INVERTIERT ------------------- }
 //
 // Der Vorfilter verlangte das Wort der KORREKTEN Form. Die Regel
 // sucht aber den Fall, in dem jemand genau dieses Wort VERGESSEN
 // hat - wer es vergisst, hat es womoeglich nirgends im File
-// stehen. 92,4 % des Korpus waren damit blind.
+// stehen. 12.244 von 13.419 .pas-Dateien waren damit blind (91,2 %).
 //
 // Nur die volle Pipeline sieht den Vorfilter; FindingsOfFile ruft
 // den Detektor direkt und meldet auch heute schon.

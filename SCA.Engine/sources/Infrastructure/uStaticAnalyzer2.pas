@@ -473,16 +473,21 @@ begin
   //     nur 'for i := 10 to 1 do'                    0 Funde
   //     dieselbe Datei plus 'for j := 5 downto 1 do' 1 Fund
   //
-  // 92,4 % des Korpus (14.799 von 16.024 Dateien) trugen kein 'downto'
-  // und waren damit blind. KORPUSWIRKUNG TROTZDEM NULL: in 13.419
-  // .pas-Dateien gibt es KEINE einzige Schleife dieser Form, weder in
+  // 91,2 % der .pas-Dateien (12.244 von 13.419) trugen kein 'downto'
+  // und waren damit blind. KORPUSWIRKUNG TROTZDEM NULL: in denselben
+  // 13.419 Dateien gibt es KEINE einzige Schleife dieser Form, weder in
   // den gescannten noch in den blinden. Der Fehler ist ein stiller
   // Nullzeilen-Bug, den dieser Korpus schlicht nicht enthaelt - die
   // Blindheit war real, ihr Ertrag hier ist leer.
   //
   // NEUES TOKEN 'for ': das Muster braucht eine Zaehlschleife, und
-  // billiger laesst sich diese Regel nicht vorfiltern. Laufzeit nach
-  // dem Bau gegenmessen - es kommen 14.799 Dateien dazu.
+  // billiger laesst sich diese Regel nicht vorfiltern.
+  //
+  // NACH DEM BAU GEMESSEN (--time-detectors): der Detektor sieht jetzt
+  // 8.964 Dateien statt 1.175, also +7.790. Er kostet dabei 1.196 ms
+  // von 343 s Gesamtlauf - 0,35 %. Da das SEIN GESAMTAUFWAND ist, sind
+  // die Mehrkosten der Erweiterung damit nach oben abgeschlossen.
+  // 4.454 Dateien ohne 'for ' bleiben weiterhin uebersprungen.
   AddD('ReversedForRange',fkReversedForRange,TReversedForRangeDetector.AnalyzeUnit, ['for ']);
   AddD3('SelfAssignment',  fkSelfAssignment,  TSelfAssignmentDetector.AnalyzeUnit);
   AddD3('MissingRaise',    fkMissingRaise,    TMissingRaiseDetector.AnalyzeUnit);
@@ -540,6 +545,12 @@ begin
   //    3 x Direct3D-Puffer (jvcl D3DFont.pas) - KEIN Mutex; die faengt
   //        jetzt der Lock-mit-Argumenten-Guard im Detektor ab
   // Netto also +48 echte Funde.
+  //
+  // NACH DEM BAU BESTAETIGT: der Referenzlauf bewegt sich um exakt +48
+  // (752.409 -> 752.457), SCA153 193 -> 241, null Drops, und keine der
+  // 142 anderen Regeln ruehrt sich. Alle 48 Adds nachgeprueft: 13
+  // Schreibweisen, ALLE argumentlos, kein 'Lock(' darunter - die drei
+  // D3D-Puffer fehlen in der Liste, der Guard greift.
   //
   // ZWEITE LUECKE DERSELBEN LISTE, gefunden von der Kontroll-Fixture
   // zum Guard: 'EnterCriticalSection' (die Windows-API, ohne Punkt)
