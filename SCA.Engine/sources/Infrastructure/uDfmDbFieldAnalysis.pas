@@ -63,6 +63,21 @@ function DbFieldName(Field: TComponentNode): string;
 // DataSet-Property (pvkIdent) auf den DataSet zeigt. Typisch 1:1 -
 // es kann mehrere geben, wir nehmen die erste; die offene
 // Multi-DataSource-Frage ist seit der Hebung an EINER Stelle loesbar.
+//
+// "TYPISCH 1:1" IST JETZT GEMESSEN (2026-09-14, Posten 299): von 2.917
+// DFM-Dateien des Referenzkorpus tragen 16 ueberhaupt zwei oder mehr
+// TDataSource - und KEINE EINZIGE zwei davon am selben DataSet. Die
+// Begruendung traegt also weiter.
+//
+// Der Fehlalarm, den die Grenze erzeugen KANN, ist trotzdem real und
+// gepinnt (uTestDfmRequiredField, Test_TwoDataSources_BindingViaSecond_
+// KnownFalsePositive): bindet das Steuerelement ueber die zweite
+// Quelle, findet die Bucket-Suche unter der ersten nichts und meldet
+// ein ungebundenes Pflichtfeld - der Meldetext verraet sich selbst mit
+// dem Namen der falschen Quelle. Wer das angeht, sammelt ALLE Quellen
+// des DataSets und prueft die Buckets unter jeder; die naive Skizze
+// dazu liess bei der Gegenpruefung eine Liste unerzeugt und drei
+// Funktionen ohne Aufrufer zurueck.
 function FindDataSourceForDataSet(All: TList<TComponentNode>;
   DataSet: TComponentNode): TComponentNode;
 

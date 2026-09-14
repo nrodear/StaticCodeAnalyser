@@ -72,6 +72,20 @@ unit uUnpairedLock;
 //       - Vier der 18 Treffer sind ueberhaupt keine Aufrufe, sondern die
 //         DEKLARATIONEN der API selbst (mormot.core.os.delphi.pas:101 f.).
 //     Die Grenze ist damit gemessen und gewollt, nicht vergessen.
+//   * `.Enter` steht NICHT in der Acquire-Alternation, und das ist
+//     ebenfalls kein Versehen (Posten 308, vermessen 2026-09-14). Der
+//     Fall gehoert dem SCHWESTERDETEKTOR: uLockWithoutTryFinally fuehrt
+//     TCriticalSection.Enter/.Leave und TMonitor.Enter/.Exit in seinem
+//     Kopfvertrag, matcht sie und pinnt sie mit einem eigenen Test. An
+//     der Exe gemessen, 'FCS.Enter; DoStuff; FCS.Leave;' ohne
+//     try/finally:
+//         SCA153 (hier)                 0 Funde
+//         SCA109 LockWithoutTryFinally  1 Fund, Error-Stufe
+//     Der Fall ist also NICHT unsichtbar - er ist nur woanders
+//     zustaendig. Und die Erweiterung waere wirkungslos: 'Enter' in die
+//     Alternation aufzunehmen bewegt am Korpus NULL Funde (193 vorher,
+//     193 nachher, zeichengleiche Trefferliste ueber alle 13.419
+//     Dateien).
 //
 // Schweregrad: lsWarning - Concurrency-Bug.
 
