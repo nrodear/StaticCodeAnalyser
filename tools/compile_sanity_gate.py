@@ -175,7 +175,16 @@ def sammle_deklarierte_enums():
     for prefix in ('fk', 'nk', 'fc', 'ls', 'ms'):
         pat = prefix + r'[A-Z][A-Za-z0-9_]*'
         werte |= set(re.findall(r'^\s*(' + pat + r')\s*[,)]', alle, re.M))
-        werte |= set(re.findall(r'[(,]\s*(' + pat + r')\s*[,)]', alle))
+        # LOOKAHEAD statt verbrauchendem Trennzeichen. Die alte Fassung
+        # frass das nachfolgende Komma, und bei mehreren Werten auf EINER
+        # Zeile fand sie nur jeden zweiten:
+        #     nkIndex, nkDot, nkDeref,
+        # -> nkIndex (Muster 1), nkDot (Muster 2), nkDeref FEHLT, weil
+        # sein fuehrendes Komma schon zu nkDot gehoerte. Ergebnis war ein
+        # Fehlalarm "unbekannter Enum-Wert nkDeref" auf einer Datei, die
+        # ihn korrekt deklariert - er lief zwei Chargen mit, weil er nur
+        # im --all-Lauf auftaucht.
+        werte |= set(re.findall(r'[(,]\s*(' + pat + r')\s*(?=[,)])', alle))
     return werte
 
 
