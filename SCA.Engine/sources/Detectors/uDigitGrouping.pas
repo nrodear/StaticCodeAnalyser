@@ -13,8 +13,8 @@ unit uDigitGrouping;
 //   * Match auf eine Sequenz von >= MIN_GROUP_LEN aufeinanderfolgenden
 //     Ziffern (Default 5), mit linker Wortgrenze (kein Identifier-Teil
 //     wie `Var123456`) und ohne `_` in der Sequenz.
-//   * Hex (`$DEADBEEF`) und float (`3.14`) werden ausgenommen - andere
-//     Konvention.
+//   * Hex (`$DEADBEEF`), binaer (`%10101010`) und float (`3.14`) werden
+//     ausgenommen - dort gilt eine andere Gruppierungskonvention.
 //
 // Schweregrad: lsHint - reines Lesbarkeits-Refactor, kein Bug.
 
@@ -120,6 +120,28 @@ begin
       Inc(i);
       while (i <= n) and CharInSet(Line[i],
         ['0'..'9', 'A'..'F', 'a'..'f', '_']) do Inc(i);
+      Continue;
+    end;
+    // Binaer: `%...` - dieselbe Begruendung wie bei Hex (Chargen-Review
+    // 2026-09-14, Posten 300). Der Unit-Kopf nimmt Hex und Float aus,
+    // weil dort ANDERE Gruppierungskonventionen gelten - fuer
+    // Binaerliterale gilt genau dasselbe: sie werden nach Nibbles oder
+    // Bytes gruppiert, nicht nach Tausendern. Ohne diesen Zweig fiel
+    // das '%' durch alle Faelle und der Ziffern-Run startete an der
+    // ersten Binaerziffer.
+    //
+    // An der Exe belegt:  const X = %1010101010101010;  1 Fund
+    //                     const X = $FFFFFFFF;          0
+    //                     const X = 1234567890;         1 (richtig)
+    //
+    // KORPUSWIRKUNG 0: die Regel liefert im Referenzlauf ueberhaupt
+    // keine Funde. Im Quelltext stehen 81 Binaerliterale mit >= 5
+    // Ziffern in 6 Dateien - sie waeren die Kandidaten, sobald die
+    // Regel jemand einschaltet.
+    if c = '%' then
+    begin
+      Inc(i);
+      while (i <= n) and CharInSet(Line[i], ['0', '1', '_']) do Inc(i);
       Continue;
     end;
     // Ziffern-Run starten
