@@ -35,14 +35,184 @@ type
     // Review 02.09.: ein Handler entlastet nur, solange sein try noch
     // OFFEN ist.
     [Test] procedure AllocInClosedTry_FreeMemOutside_StillReported;
+    // Posten 204: Balance-Scan, zweiter Regex-Arm und die
+    // nil-setzende Freigabe-Variante
+    [Test] procedure NestedBlockInOpenTryFinally_NotReported;
+    [Test] procedure FreeMemAfterNestedBlockAndEnd_StillReported;
+    [Test] procedure ReallocMemWithoutTryFinally_Reported;
+    [Test] procedure ReallocMemAsWordPartOnly_NoFinding;
+    [Test] procedure FreeMemAndNilPairing_StillReported;
+    [Test] procedure UnknownReleaseCall_NoFinding;
   end;
 
 implementation
+
+// noinspection-file GodClass, LargeClass
+// Mit Posten 204 fuehrt die Fixture 24 Faelle auf ueber 500 Zeilen.
+// Eine DUnitX-Fixture ist eine flache Liste unabhaengiger Faelle;
+// aufteilen hiesse ein zweites Testmodul samt Projektdatei-Eingriff.
 
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 204: drei ungepruefte Pfade -------------------------- }
+//
+// Drei Dinge hatte kein Test beruehrt: der Balance-Scan, wenn im
+// offenen Schutzblock ein geschachtelter Anweisungsblock steht; der
+// zweite Arm des Anforderungs-Regex; und das im Kopfkommentar
+// zugesagte Erkennen der nil-setzenden Freigabe-Variante.
+//
+// Alle Erwartungen an der Exe gemessen.
+
+procedure TTestGetMemWithoutFreeMem.NestedBlockInOpenTryFinally_NotReported;
+// Der Balance-Scan: ein geschachtelter Anweisungsblock VOR
+// der Freigabe darf den Schutzblock nicht vorzeitig
+// schliessen. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(N: Integer; Flag: Boolean);'#13#10 +
+  'var P: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  BeginWork;'#13#10 +
+  '  try'#13#10 +
+  '    GetMem(P, N);'#13#10 +
+  '    Arbeite(P);'#13#10 +
+  '  finally'#13#10 +
+  '    if Flag then begin Log; end;'#13#10 +
+  '    FreeMem(P); end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+      'ein innerer Block beendet den Schutzblock nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.FreeMemAfterNestedBlockAndEnd_StillReported;
+// DIE KLAMMER dazu: dieselbe Struktur, die Freigabe hinter
+// dem geschlossenen Schutzblock. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(N: Integer; Flag: Boolean);'#13#10 +
+  'var P: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  BeginWork;'#13#10 +
+  '  try'#13#10 +
+  '    GetMem(P, N);'#13#10 +
+  '    Arbeite(P);'#13#10 +
+  '  finally'#13#10 +
+  '    if Flag then begin Log; end;'#13#10 +
+  '    end; FreeMem(P);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+      'hinter dem Schutzblock zaehlt die Freigabe nicht mehr');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.ReallocMemWithoutTryFinally_Reported;
+// Der zweite Arm des Anforderungs-Regex - bis heute ohne
+// jeden Test. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var p: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  ReallocMem(p, 2048);'#13#10 +
+  '  DoStuff(p);'#13#10 +
+  '  FreeMem(p);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+      'auch die Neuanforderung braucht ihre Freigabe');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.ReallocMemAsWordPartOnly_NoFinding;
+// DIE KLAMMER: derselbe Name als TEIL eines laengeren
+// Bezeichners. Gemessen: 0 - die Wortgrenze traegt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var p: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  MyReallocMem(p, 2048);'#13#10 +
+  '  DoStuff(p);'#13#10 +
+  '  FreeMem(p);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+      'ein laengerer Bezeichner ist keine Anforderung');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.FreeMemAndNilPairing_StillReported;
+// Die nil-setzende Freigabe-Variante. Der Kopfkommentar
+// sagt sie zu; ein Test dafuer fehlte. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var p: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  GetMem(p, 1024);'#13#10 +
+  '  DoStuff(p);'#13#10 +
+  '  FreeMemAndNil(p);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+      'die nil-setzende Variante zaehlt als Freigabe');
+  finally F.Free; end;
+end;
+
+procedure TTestGetMemWithoutFreeMem.UnknownReleaseCall_NoFinding;
+// Gegenprobe: ein fremder Aufruf mit aehnlichem Namen ist
+// keine Freigabe. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var p: Pointer;'#13#10 +
+  'begin'#13#10 +
+  '  GetMem(p, 1024);'#13#10 +
+  '  DoStuff(p);'#13#10 +
+  '  ReleaseBuffer(p);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkGetMemWithoutFreeMem),
+      'ein fremder Aufruf gibt nichts frei');
+  finally F.Free; end;
+end;
+
 
 procedure TTestGetMemWithoutFreeMem.NestedBlockInFinally_NotReported;
 // Lehrbuch-Muster mit geschachteltem Block IM finally: dessen eigenes
