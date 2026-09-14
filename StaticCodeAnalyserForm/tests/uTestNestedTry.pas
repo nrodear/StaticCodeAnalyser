@@ -17,6 +17,9 @@ type
     [Test] procedure SequentialTry_NoFinding;
     [Test] procedure NestedTry_StillReported_Kontrolle;
     [Test] procedure NestedTryInMultiLineComment_NoFinding;
+    // Posten 303: begin zaehlt nicht in die Tiefe (bekannte Grenze)
+    [Test] procedure NestedTryAfterPlainBlock_NotReported_KnownLimit;
+    [Test] procedure NestedTryWithoutPlainBlock_Reported;
   end;
 
 implementation
@@ -103,6 +106,86 @@ begin
     Assert.AreEqual<Integer>(0,
       TFindingHelper.Count(F, fkNestedTry),
       'die Schachtelung im Blockkommentar ist kein Code');
+  finally F.Free; end;
+end;
+
+
+{ --- Posten 303: die Tiefenheuristik zaehlt begin nicht mit ------ }
+//
+// Die Heuristik kennt nur zwei Token: 'try' erhoeht die Tiefe, 'end'
+// senkt sie. 'begin' zaehlt NICHT mit - also senkt jedes 'end', das
+// ein gewoehnliches begin schliesst, faelschlich die try-Tiefe.
+//
+// An der Exe belegt, zwei Fixturen mit EINEM Unterschied:
+//   try / DoA;              / try..finally..end / finally..end   1 Fund
+//   try / begin DoA; end;   / try..finally..end / finally..end   0 !!
+// Der begin..end-Block frisst die Tiefe, das geschachtelte try wird
+// nicht mehr gesehen.
+//
+// NICHT GEFIXT - eine Nachbildung ueber 6.958 try-haltige Korpusdateien
+// zeigt warum: zaehlt man begin/case/asm/record naiv als Oeffner mit,
+// steigt die Regel von 6.244 auf 50.068 Treffer (+43.824). Ein
+// korrekter Fix muss die Tiefe INNERHALB des umschliessenden try
+// fuehren statt global - das ist ein Scanner-Umbau mit eigener
+// FP-Messung, kein Nebenbei-Fix.
+//
+// Die beiden Tests pinnen das Ist-Verhalten. Der zweite wird rot,
+// sobald jemand das Paket umsetzt - und genau dann soll das auffallen.
+
+procedure TTestNestedTry.NestedTryAfterPlainBlock_NotReported_KnownLimit;
+// DIE FN-KLASSE. Gemessen: 0 - das geschachtelte try wird uebersehen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  try'#13#10+
+  '    begin'#13#10+
+  '      DoA;'#13#10+
+  '    end;'#13#10+
+  '    try'#13#10+
+  '      B;'#13#10+
+  '    finally'#13#10+
+  '      C;'#13#10+
+  '    end;'#13#10+
+  '  finally'#13#10+
+  '    D;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkNestedTry),
+      'BEKANNTE GRENZE: ein begin..end vor dem inneren try frisst die Tiefe');
+  finally F.Free; end;
+end;
+
+procedure TTestNestedTry.NestedTryWithoutPlainBlock_Reported;
+// DIESELBE Verschachtelung ohne den begin..end-Block. Gemessen: 1.
+// Das Paar zeigt, dass allein der Block den Unterschied macht.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  try'#13#10+
+  '    DoA;'#13#10+
+  '    try'#13#10+
+  '      B;'#13#10+
+  '    finally'#13#10+
+  '      C;'#13#10+
+  '    end;'#13#10+
+  '  finally'#13#10+
+  '    D;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkNestedTry),
+      'ohne den Block wird die Schachtelung gesehen');
   finally F.Free; end;
 end;
 
