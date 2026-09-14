@@ -33,6 +33,12 @@ type
     // Minor 243: Anker ist die kleinste Zeile, nicht die
     // zuerst besuchte (nkAssign wird vor nkCall gelaufen)
     [Test] procedure Dup_AnchorIsFirstOccurrence_EvenWhenInCall;
+    // Posten 197: Anker, RelatedLines, Escape und Anzeige-Kuerzung
+    [Test] procedure Dup_FirstInCall_AnchorIsSmallestLine;
+    [Test] procedure Dup_RelatedLinesAscendingWithoutAnchor;
+    [Test] procedure Dup_EscapedQuote_CountedAsOneLiteral;
+    [Test] procedure Dup_LongLiteral_TruncatedTo27Plus3;
+    [Test] procedure Dup_ThirtyCharLiteral_NotTruncated_Grenze;
   end;
 
   // ---- DuplicateBlock (TDuplicateBlockDetector) - filebasiert -----------------------
@@ -88,6 +94,161 @@ implementation
 // =============================================================================
 // DuplicateString-Tests
 // =============================================================================
+
+{ --- Posten 197: Anker, Fundstellen, Escape, Kuerzung ------------ }
+//
+// Vier Zusagen des Detektors standen nur im Code:
+//   * der Anker ist die KLEINSTE Zeile, obwohl die Sammelschleife
+//     erst alle nkAssign und dann alle nkCall besucht,
+//   * RelatedLines ist aufsteigend und ohne den Anker,
+//   * ExtractStrings loest das ''-Escape auf,
+//   * der Anzeigetext wird ab 31 Zeichen auf 27 + "..." gekuerzt.
+//
+// Alle vier an der Exe gemessen.
+
+procedure TTestDuplicateString.Dup_FirstInCall_AnchorIsSmallestLine;
+// Das ERSTE Vorkommen steht in einem Aufruf (Zeile 5), die zwei
+// folgenden in Zuweisungen (6 und 7). Die Sammelschleife sieht
+// die Zuweisungen ZUERST - ohne das Min() zeigte der Fund auf
+// Zeile 6. Gemessen: Zeile 5.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  Bar(''wiederholt'');'#13#10+
+  '  s := ''wiederholt'';'#13#10+
+  '  s := ''wiederholt'';'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkDuplicateString);
+    Assert.IsNotNull(Hit, 'kein DuplicateString-Fund');
+    Assert.AreEqual('5', Hit.LineNumber,
+      'der Anker ist die kleinste Zeile, nicht die zuerst besuchte');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateString.Dup_RelatedLinesAscendingWithoutAnchor;
+// Dieselbe Fixture, andere Zusage: RelatedLines nennt die
+// UEBRIGEN Stellen aufsteigend, ohne den Anker.
+//
+// ACHTUNG, der EINZIGE Wert dieser Charge, der nicht an der Exe
+// gemessen ist: RelatedLines exportiert die CLI in KEINEM Format -
+// nicht in SARIF (relatedLocations bleibt leer), nicht in JSON, nicht
+// im HTML. Der Wert ist hergeleitet:
+//   * die Zeilennummern 5/6/7 sind gemessen - der Anker steht auf 5,
+//     also entsprechen die Knotenzeilen den Quellzeilen,
+//   * der Anker faellt raus und die Liste wird sortiert
+//     (uDuplicateString: SiteList.Sort + JoinSitesExceptAnchor),
+//   * das Trennzeichen ist ein Komma OHNE Leerzeichen
+//     (uDetectorUtils: SB.Append(',')).
+// Wird dieser Test rot, ist zuerst dort nachzusehen - nicht am
+// Detektor.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  Bar(''wiederholt'');'#13#10+
+  '  s := ''wiederholt'';'#13#10+
+  '  s := ''wiederholt'';'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkDuplicateString);
+    Assert.IsNotNull(Hit, 'kein DuplicateString-Fund');
+    Assert.AreEqual('6,7', Hit.RelatedLines,
+      'RelatedLines: aufsteigend, ohne die Ankerzeile');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateString.Dup_EscapedQuote_CountedAsOneLiteral;
+// ExtractStrings loest ''-Escapes auf: die drei Zeilen
+// tragen EIN Literal, und der Meldetext zeigt das
+// aufgeloeste Apostroph. Gemessen: "it's here" 3x.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := ''it''''s here'';'#13#10+
+  '  s := ''it''''s here'';'#13#10+
+  '  s := ''it''''s here'';'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkDuplicateString);
+    Assert.IsNotNull(Hit, 'kein DuplicateString-Fund');
+    Assert.Contains(Hit.MissingVar, 'it''s here',
+      'das Escape muss aufgeloest im Meldetext stehen');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateString.Dup_LongLiteral_TruncatedTo27Plus3;
+// 40 Zeichen: der Anzeigetext wird auf 27 gekuerzt und
+// bekommt "..." angehaengt. Gemessen: 27 A und drei
+// Punkte.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := ''AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'';'#13#10+
+  '  s := ''AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'';'#13#10+
+  '  s := ''AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'';'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkDuplicateString);
+    Assert.IsNotNull(Hit, 'kein DuplicateString-Fund');
+    Assert.Contains(Hit.MissingVar, 'AAAAAAAAAAAAAAAAAAAAAAAAAAA...',
+      'ueberlanges Literal muss auf 27 Zeichen plus ... gekuerzt werden');
+  finally F.Free; end;
+end;
+
+procedure TTestDuplicateString.Dup_ThirtyCharLiteral_NotTruncated_Grenze;
+// DIE GRENZE daneben: genau 30 Zeichen bleiben ganz
+// stehen (die Pruefung ist > 30, nicht >= 30).
+// Gemessen: 30 B, kein "...".
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string;'#13#10+
+  'begin'#13#10+
+  '  s := ''BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'';'#13#10+
+  '  s := ''BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'';'#13#10+
+  '  s := ''BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'';'#13#10+
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkDuplicateString);
+    Assert.IsNotNull(Hit, 'kein DuplicateString-Fund');
+    Assert.Contains(Hit.MissingVar, 'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB" 3x',
+      'genau 30 Zeichen duerfen nicht gekuerzt werden');
+  finally F.Free; end;
+end;
+
 
 procedure TTestDuplicateString.Dup_ThreeOccurrences_ReportsHint;
 const SRC =
