@@ -40,6 +40,11 @@ type
     // Gate 7 (2026-08-28): der praeprozessor-blind geparste Dual-Mode-
     // Header ist gar kein Methodenkopf.
     [Test] procedure DualModeHeader_AndItsTwoBoundaries;
+    // Posten 174: die Gegenprobe zur Amnestie und ihre drei Kanten
+    [Test] procedure EventHandlerName_WithoutSenderParam_Reported;
+    [Test] procedure EventHandlerSenderName_ForeignType_NotReported;
+    [Test] procedure EventHandlerSender_SecondParam_Reported;
+    [Test] procedure EventHandlerQualifiedTObject_NotReported;
   end;
 
 implementation
@@ -50,7 +55,7 @@ implementation
 // Verankerung der Segment-Muster ueberhaupt pruefbar ist.
 // ClassPerFile: die Klassen stehen in QUELLTEXT-STRINGS der
 // Fixtures, nicht als zweite Klasse dieser Unit.
-// GodClass: mit Gate 7 steht die Fixture bei 21 Testmethoden, eine ueber
+// GodClass: die Fixture steht bei 27 Testmethoden, sieben ueber
 // der Schwelle von uGodClass (MAX_METHODS=20). Eine DUnitX-Fixture ist
 // eine flache Liste unabhaengiger Faelle - "in fokussierte Einheiten
 // aufteilen" waere hier kein Gewinn, sondern ein zweites Testmodul samt
@@ -662,6 +667,129 @@ begin
     F.Free;
   end;
 end;
+
+{ --- Posten 174: die Amnestie braucht ihre Klammer ---------------- }
+//
+// EventHandlerSender_NotReported darunter erwartet 0 fuer
+// btnSaveClick(Sender: TObject). Diese 0 belegte bisher nichts: sie
+// koennte genauso vom Namen kommen wie vom Gate. Der erste Test hier
+// ist die fehlende Gegenprobe - DERSELBE Name, nur ohne
+// Handler-Signatur, meldet. Die drei danach halten die drei Kanten
+// des Gates fest, die bisher niemand beschrieben hat.
+//
+// Alle vier an der Exe gemessen.
+
+procedure TTestMethodName.EventHandlerName_WithoutSenderParam_Reported;
+// DIE KLAMMER: gleicher Name, Erstparameter Integer.
+// Gemessen: 1. Damit gehoert die 0 im Nachbartest dem Gate.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TForm1 = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure btnSaveClick(AIndex: Integer);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TForm1.btnSaveClick(AIndex: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Speichern;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMethodName),
+      'ohne Handler-Signatur ist btnSaveClick ein Naming-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestMethodName.EventHandlerSenderName_ForeignType_NotReported;
+// Das Gate hat ZWEI Wege: Parametername 'Sender' ODER Typ
+// TObject. Hier traegt nur der Name, der Typ ist Integer.
+// Gemessen: 0 - der Name allein genuegt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TForm1 = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure btnSaveClick(Sender: Integer);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TForm1.btnSaveClick(Sender: Integer);'#13#10 +
+  'begin'#13#10 +
+  '  Speichern;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMethodName),
+      'der Parametername Sender traegt die Amnestie allein');
+  finally F.Free; end;
+end;
+
+procedure TTestMethodName.EventHandlerSender_SecondParam_Reported;
+// Geprueft wird NUR der erste Parameter (das Exit in
+// TDetectorUtils.IsEventHandlerSignature). Ein Sender an
+// zweiter Stelle amnestiert nicht. Gemessen: 1.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TForm1 = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure btnSaveClick(AIndex: Integer; Sender: TObject);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TForm1.btnSaveClick(AIndex: Integer; Sender: TObject);'#13#10 +
+  'begin'#13#10 +
+  '  Speichern;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMethodName),
+      'nur der ERSTE Parameter entscheidet ueber die Amnestie');
+  finally F.Free; end;
+end;
+
+procedure TTestMethodName.EventHandlerQualifiedTObject_NotReported;
+// Qualifizierter Typ, fremder Parametername: die Amnestie muss
+// ueber die Qualifier-Kappung von FirstParentToken laufen.
+// Gemessen: 0.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TForm1 = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure btnSaveClick(Sender2: System.TObject);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TForm1.btnSaveClick(Sender2: System.TObject);'#13#10 +
+  'begin'#13#10 +
+  '  Speichern;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMethodName),
+      'System.TObject ist TObject - die Qualifier-Kappung traegt');
+  finally F.Free; end;
+end;
+
 
 procedure TTestMethodName.EventHandlerSender_NotReported;
 // Waechter fuer die DFM-Event-Handler-Amnestie: btnSaveClick(Sender:
