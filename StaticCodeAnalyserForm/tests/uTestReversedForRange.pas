@@ -40,6 +40,8 @@ type
     [Test] procedure CommentOpenedAfterMatch_NoSecondFinding;
     [Test] procedure TwoViolationsOnOneLine_OnlyFirstReported;
     [Test] procedure TwoViolationsOnTwoLines_BothReported;
+    // Paket 9008: der Vorfilter verlangte das Wort der korrekten Form
+    [Test] procedure PrefilterDoesNotRequireDownto_Reported;
   end;
 
 implementation
@@ -60,6 +62,46 @@ uses
 // Fixturen hier kein downto. Wer die Faelle von Hand an der Exe
 // nachmisst, MUSS eine downto-Zeile ergaenzen, sonst misst er 0 und
 // haelt das fuer den Fix.
+
+{ --- Paket 9008: der Vorfilter war INVERTIERT ------------------- }
+//
+// Der Vorfilter verlangte das Wort der KORREKTEN Form. Die Regel
+// sucht aber den Fall, in dem jemand genau dieses Wort VERGESSEN
+// hat - wer es vergisst, hat es womoeglich nirgends im File
+// stehen. 92,4 % des Korpus waren damit blind.
+//
+// Nur die volle Pipeline sieht den Vorfilter; FindingsOfFile ruft
+// den Detektor direkt und meldet auch heute schon.
+
+procedure TTestReversedForRange.PrefilterDoesNotRequireDownto_Reported;
+// Eine Datei OHNE das Wort der korrekten Form - und genau
+// darum ging es. Vorher gemessen: 0. Nachher: 1.
+//
+// Am Korpus bringt der Fix nichts: in 13.419 Dateien gibt
+// es keine einzige Schleife dieser Form. Der stille
+// Nullzeilen-Bug kommt hier schlicht nicht vor - die
+// Blindheit war trotzdem real.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  for i := 10 to 1 do'#13#10 +
+  '    Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkReversedForRange),
+      'eine Zaehlschleife muss auch ohne das Wort downto gescannt werden');
+  finally F.Free; end;
+end;
+
 
 procedure TTestReversedForRange.Reversed_TabBetweenTokens_Reported;
 // POSTEN 271: die acht Trenner-Skips akzeptierten nur das Leerzeichen.

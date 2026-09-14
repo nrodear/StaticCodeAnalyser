@@ -462,7 +462,28 @@ begin
   AddD('InterfaceName',   fkInterfaceName,   TInterfaceNameDetector.AnalyzeUnit);
   // AContext-fuehrend seit dem tplFixtureDir-Anker (ScanRootDir)
   AddD('MethodName',       fkMethodName,      TMethodNameDetector.AnalyzeUnit);
-  AddD('ReversedForRange',fkReversedForRange,TReversedForRangeDetector.AnalyzeUnit, ['downto']);
+  // PAKET 9008 UMGESETZT (2026-09-14): der Vorfilter war INVERTIERT.
+  // Er verlangte 'downto' - also das Token der KORREKTEN Form. Die
+  // Regel sucht aber 'for i := 10 to 1 do', den Fall, in dem jemand
+  // downto VERGESSEN hat. Wer es vergisst, hat es womoeglich nirgends
+  // im File stehen; genau dann wurde nicht gescannt.
+  //
+  // An der Exe belegt, Minimalpaar - einziger Unterschied ist eine
+  // zweite, voellig unbeteiligte Schleife MIT downto:
+  //     nur 'for i := 10 to 1 do'                    0 Funde
+  //     dieselbe Datei plus 'for j := 5 downto 1 do' 1 Fund
+  //
+  // 92,4 % des Korpus (14.799 von 16.024 Dateien) trugen kein 'downto'
+  // und waren damit blind. KORPUSWIRKUNG TROTZDEM NULL: in 13.419
+  // .pas-Dateien gibt es KEINE einzige Schleife dieser Form, weder in
+  // den gescannten noch in den blinden. Der Fehler ist ein stiller
+  // Nullzeilen-Bug, den dieser Korpus schlicht nicht enthaelt - die
+  // Blindheit war real, ihr Ertrag hier ist leer.
+  //
+  // NEUES TOKEN 'for ': das Muster braucht eine Zaehlschleife, und
+  // billiger laesst sich diese Regel nicht vorfiltern. Laufzeit nach
+  // dem Bau gegenmessen - es kommen 14.799 Dateien dazu.
+  AddD('ReversedForRange',fkReversedForRange,TReversedForRangeDetector.AnalyzeUnit, ['for ']);
   AddD3('SelfAssignment',  fkSelfAssignment,  TSelfAssignmentDetector.AnalyzeUnit);
   AddD3('MissingRaise',    fkMissingRaise,    TMissingRaiseDetector.AnalyzeUnit);
   AddD3('RoutineResultUnassigned', fkRoutineResultUnassigned, TRoutineResultAssignedDetector.AnalyzeUnit);
@@ -502,18 +523,52 @@ begin
   AddD('BoolAlwaysTrue', fkBoolAlwaysTrue, TBoolAlwaysTrueDetector.AnalyzeUnit);
   AddD3('ConstantReturn', fkConstantReturn, TConstantReturnDetector.AnalyzeUnit);
   AddD('HardcodedString', fkHardcodedString, THardcodedStringDetector.AnalyzeUnit);
-  // PAKET 9016 (Posten 220, 2026-09-14): dem Vorfilter fehlt '.lock',
-  // obwohl der Detektor-Regex '.Lock' fuehrt. Eine Datei, die nur diese
-  // Schreibweise benutzt, wird nie gescannt. GEMESSEN, ohne Bau: jede
-  // Korpusdatei mit '.lock' und ohne eines der vier Token bekam eine
-  // Kommentarzeile 'tcriticalsection' angehaengt (sonst unveraendert)
-  // und wurde gescannt - 51 Funde in 21 Dateien, die der Vorfilter
-  // heute verschluckt. Gleiche Gattung wie Paket 9008 (SCA151) und
-  // 9010 (SCA129): eigener Zweig, AQL-Stichprobe VOR dem Merge,
-  // Laufzeit gegenmessen. Nicht hier mitnehmen - ein Recall-Paket
-  // ueberdeckt jeden anderen Vertrag einer Charge.
-  AddD('UnpairedLock', fkUnpairedLock, TUnpairedLockDetector.AnalyzeUnit, ['tcriticalsection', 'tmonitor', '.enter', '.acquire']);
-  AddD('MoveSizeOfPointer', fkMoveSizeOfPointer, TMoveSizeOfPointerDetector.AnalyzeUnit, ['move(', 'fillchar(']);
+  // PAKET 9016 UMGESETZT (2026-09-14): '.lock' ergaenzt. Der
+  // Detektor-Regex fuehrt '.Lock' seit jeher, der Vorfilter nicht -
+  // eine Datei, die nur diese Schreibweise benutzt, wurde nie
+  // gescannt.
+  //
+  // VOLLZAEHLIG GEMESSEN statt gesampelt (51 ist ein kleines Los):
+  // jede Korpusdatei mit '.lock' und ohne eines der bisherigen Token
+  // bekam eine Kommentarzeile 'tcriticalsection' angehaengt, sonst
+  // unveraendert, und wurde gescannt. Ergebnis: 51 Funde in 21
+  // Dateien. Von Hand beurteilt:
+  //   48 x '<etwas>Safe.Lock;' (mORMot TSynLocker) - echte Sperren,
+  //        Stichprobe mormot.core.datetime.pas:1856 geoeffnet:
+  //        'safe.Lock; time := newtimesys; safe.UnLock;' ohne
+  //        try/finally, also genau der Bug der Regel
+  //    3 x Direct3D-Puffer (jvcl D3DFont.pas) - KEIN Mutex; die faengt
+  //        jetzt der Lock-mit-Argumenten-Guard im Detektor ab
+  // Netto also +48 echte Funde.
+  //
+  // ZWEITE LUECKE DERSELBEN LISTE, gefunden von der Kontroll-Fixture
+  // zum Guard: 'EnterCriticalSection' (die Windows-API, ohne Punkt)
+  // steht im Regex des Detektors, aber in keinem Token - '.enter'
+  // verlangt den Punkt, 'tcriticalsection' das fuehrende t. Belegt mit
+  // demselben Minimalpaar: dieselbe Routine meldet 0 ohne und 1 mit
+  // einer Kommentarzeile 'tcriticalsection'. Korpus: 14 Dateien
+  // betroffen, ERTRAG NULL - alle 14 benutzen die API korrekt mit
+  // try/finally. Blindheit real, Ausbeute leer.
+  AddD('UnpairedLock', fkUnpairedLock, TUnpairedLockDetector.AnalyzeUnit, ['tcriticalsection', 'tmonitor', '.enter', '.acquire', '.lock', 'entercriticalsection']);
+  // PAKET 9010 UMGESETZT (2026-09-14): der Regex des Detektors fuehrt
+  // VIER Verben (Move, FillChar, CopyMemory, ZeroMemory), der Vorfilter
+  // fuehrte zwei. Eine Datei, die nur CopyMemory oder ZeroMemory
+  // benutzt, wurde nie gescannt.
+  //
+  // An der Exe belegt, vier Sonden mit demselben Muster
+  // 'SizeOf(PByte)' als Groessenargument:
+  //     Move(...)        1 Fund      FillChar(...)   1 Fund
+  //     CopyMemory(...)  0           ZeroMemory(...) 0
+  // und dieselben zwei Nuller melden, sobald irgendwo im File eine
+  // Kommentarzeile mit 'move(' steht - der Vorfilter war die einzige
+  // Ursache.
+  //
+  // KORPUSWIRKUNG NULL, und das ist gemessen: kein einziger der 13.419
+  // Dateien enthaelt das echte Muster in einer heute blinden Datei. Die
+  // 17 Textstellen, die eine erste Nachbildung fand, sind allesamt
+  // 'Anzahl * SizeOf(PTyp)' - also das Kopieren eines Zeiger-ARRAYS und
+  // damit korrekt. Der blinde Fleck ist trotzdem real und jetzt zu.
+  AddD('MoveSizeOfPointer', fkMoveSizeOfPointer, TMoveSizeOfPointerDetector.AnalyzeUnit, ['move(', 'fillchar(', 'copymemory(', 'zeromemory(']);
   AddD('WithMultipleTargets', fkWithMultipleTargets, TWithMultipleTargetsDetector.AnalyzeUnit);
   AddD('GetMemWithoutFreeMem', fkGetMemWithoutFreeMem, TGetMemWithoutFreeMemDetector.AnalyzeUnit, ['getmem', 'allocmem', 'reallocmem']);
   AddD('SetLengthAppendInLoop', fkSetLengthAppendInLoop, TSetLengthAppendInLoopDetector.AnalyzeUnit, ['setlength']);

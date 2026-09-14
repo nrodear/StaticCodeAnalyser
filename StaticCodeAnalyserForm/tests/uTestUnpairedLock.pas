@@ -61,6 +61,13 @@ type
     [Test] procedure LineNumberSurvivesBlockComment;
     [Test] procedure LineNumberSurvivesStringLiterals;
     [Test] procedure TwoBareLocks_BothLinesReported;
+    // Paket 9016: zwei Vorfilter-Luecken und das Lock mit Argumenten
+    [Test] procedure LockWithArguments_NoFinding;
+    [Test] procedure LockWithoutArguments_Reported_Kontrolle;
+    // nur ueber die volle Pipeline sichtbar - FindingsOfFile
+    // umgeht den Vorfilter
+    [Test] procedure PrefilterKnowsDottedLock_Reported;
+    [Test] procedure PrefilterKnowsEnterCriticalSection_Reported;
   end;
 
 implementation
@@ -88,6 +95,132 @@ uses
 // Genau das pruefen die zwei letzten Tests.
 //
 // Alle Zahlen und Zeilen an der Exe gemessen.
+
+{ --- Paket 9016: der Vorfilter und das Lock mit Argumenten ------- }
+//
+// Zwei Sachen, die zusammengehoeren: der Vorfilter kannte zwei der
+// Schreibweisen nicht, die der Regex sehr wohl fuehrt - und die
+// erste davon macht eine Form sichtbar, die gar keine Sperre ist.
+//
+// Die zwei Pipeline-Tests sind die einzigen, die den Vorfilter
+// ueberhaupt sehen koennen: FindingsOfFile ruft den Detektor direkt.
+
+procedure TTestUnpairedLock.LockWithArguments_NoFinding;
+// KEIN MUTEX. Die Sperren dieser Familie nehmen keine
+// Argumente - TSynLocker.Lock, TCriticalSection.Acquire,
+// TMonitor.Enter sind alle argumentlos. Mit Argumenten
+// heisst Lock etwas anderes, hier das Mappen eines
+// Grafikpuffers.
+//
+// Vor dem Guard gemessen: 1 (ein Fehlfund). Nach dem Guard:
+// 0. Im Korpus haengen genau drei Funde daran, alle im
+// selben jvcl-Modul.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Render;'#13#10 +
+  'begin'#13#10 +
+  '  FCS.Enter;'#13#10 +
+  '  m_pVB.Lock(0, 0, Pointer(pVertices), 8192);'#13#10 +
+  '  Draw;'#13#10 +
+  '  m_pVB.Unlock;'#13#10 +
+  '  FCS.Leave;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUnpairedLock),
+      'ein Lock mit Argumenten ist kein Mutex');
+  finally F.Free; end;
+end;
+
+procedure TTestUnpairedLock.LockWithoutArguments_Reported_Kontrolle;
+// DIE KLAMMER: dieselbe Routine, dem Lock nur die Argumente
+// genommen. Gemessen: 1, vor und nach dem Guard. Damit
+// haengt die Null oben an der Klammer und nicht am Namen
+// oder am Empfaenger.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Render;'#13#10 +
+  'begin'#13#10 +
+  '  FCS.Enter;'#13#10 +
+  '  m_pVB.Lock;'#13#10 +
+  '  Draw;'#13#10 +
+  '  m_pVB.Unlock;'#13#10 +
+  '  FCS.Leave;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnpairedLock),
+      'ohne Argumente ist es die Sperre und bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnpairedLock.PrefilterKnowsDottedLock_Reported;
+// VORFILTER, erste Luecke. Diese Datei traegt keines der
+// alten Token - kein tcriticalsection, kein tmonitor, kein
+// .enter, kein .acquire. Der Regex fuehrt ".Lock" seit
+// jeher, der Vorfilter kannte es nicht, also wurde die
+// Datei nie gescannt.
+//
+// Vorher gemessen: 0. Nachher: 1.
+//
+// Am Korpus verdeckte diese eine Luecke 51 Funde in 21
+// Dateien - vollzaehlig durchgesehen, 48 echte Sperren
+// (mORMot TSynLocker) und die drei Grafikpuffer, die jetzt
+// der Guard oben abfaengt.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Zaehle;'#13#10 +
+  'begin'#13#10 +
+  '  FLocker.Lock;'#13#10 +
+  '  Inc(FCount);'#13#10 +
+  '  FLocker.UnLock;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnpairedLock),
+      'eine Datei mit nur .Lock muss gescannt werden');
+  finally F.Free; end;
+end;
+
+procedure TTestUnpairedLock.PrefilterKnowsEnterCriticalSection_Reported;
+// VORFILTER, zweite Luecke - gefunden von der
+// Kontroll-Fixture zum Guard, nicht gesucht. Die
+// Windows-API schreibt sich OHNE Punkt, damit greift
+// weder ".enter" noch "tcriticalsection" (dem fehlt das
+// fuehrende t nicht, aber der API-Name traegt es nicht).
+//
+// Vorher gemessen: 0. Nachher: 1.
+//
+// Korpus: 14 Dateien betroffen, Ertrag NULL - alle
+// benutzen die API korrekt mit try/finally. Die Blindheit
+// war trotzdem real.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Zaehle;'#13#10 +
+  'begin'#13#10 +
+  '  EnterCriticalSection(FSection);'#13#10 +
+  '  Inc(FCount);'#13#10 +
+  '  LeaveCriticalSection(FSection);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnpairedLock),
+      'auch die punktlose Windows-API muss gescannt werden');
+  finally F.Free; end;
+end;
+
 
 procedure TTestUnpairedLock.RtlEventWaitFor_AcquireInstead_Kontrolle;
 // DIE KLAMMER zu RtlEventWaitFor_NotCovered_ByDesign: dieselbe
