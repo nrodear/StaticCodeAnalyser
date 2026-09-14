@@ -31,6 +31,9 @@ type
     [Test] procedure StubFile_FiveEmptyBodies_Silenced;
     [Test] procedure StubFile_FourEmptyBodies_CountLimbMissed_StillReported;
     [Test] procedure StubFile_RatioBelowLimit_StillReported;
+    // Posten 296: der Besitzertyp statt des ersten Segments
+    [Test] procedure NestedClassFromTObject_Demoted;
+    [Test] procedure NestedClassFromComponent_StaysError;
   end;
 
 implementation
@@ -39,6 +42,91 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 296: nested Klassen am richtigen Typ beurteilen ------ }
+//
+// ErbtDirektVonTObject nahm den Text vor dem ERSTEN Punkt als
+// Klassennamen. Bei 'TOuter.TInner.Destroy' war das 'touter' - der
+// TypeIndex-Lookup lieferte damit das Urteil der FALSCHEN Klasse, und
+// die Demotion auf fcMedium blieb aus.
+//
+// An der Exe gemessen (TInner : TObject, verschachtelt in
+// TOuter : TComponent):
+//   destructor TOuter.TInner.Destroy   Error    <- an TOuter beurteilt
+//   destructor TInner.Destroy          Warning  <- richtig demotet
+// Derselbe Typ, zwei verschiedene Urteile - allein wegen der
+// Verschachtelung.
+
+procedure TTestDestructorWithoutInherited.NestedClassFromTObject_Demoted;
+// DER NACHWEIS. Heute Error (fcHigh), nach dem Fix Warning (fcMedium).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TOuter = class(TComponent)'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      TInner = class(TObject)'#13#10+
+  '      public'#13#10+
+  '        destructor Destroy; override;'#13#10+
+  '      end;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'destructor TOuter.TInner.Destroy;'#13#10+
+  'begin'#13#10+
+  '  FX.Free;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Fnd := TFindingHelper.FirstOf(F, fkDestructorWithoutInherited);
+    Assert.IsNotNull(Fnd, 'der Konventionsbruch bleibt ein Fund');
+    Assert.IsTrue(Fnd.Confidence = fcMedium,
+      'TInner erbt direkt von TObject - beurteilt werden muss TInner, '
+      + 'nicht der Wirt TOuter');
+  finally F.Free; end;
+end;
+
+procedure TTestDestructorWithoutInherited.NestedClassFromComponent_StaysError;
+// DIE GEGENPROBE, damit der Fix nicht pauschal demotet: derselbe
+// verschachtelte Aufbau, aber TInner erbt von TComponent. Dann ist
+// das fehlende inherited ein echtes Leck und bleibt fcHigh.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TOuter = class(TObject)'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      TInner = class(TComponent)'#13#10+
+  '      public'#13#10+
+  '        destructor Destroy; override;'#13#10+
+  '      end;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'destructor TOuter.TInner.Destroy;'#13#10+
+  'begin'#13#10+
+  '  FX.Free;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Fnd := TFindingHelper.FirstOf(F, fkDestructorWithoutInherited);
+    Assert.IsNotNull(Fnd, 'Fund erwartet');
+    Assert.IsTrue(Fnd.Confidence = fcHigh,
+      'TInner erbt von TComponent - das fehlende inherited ueberspringt '
+      + 'echte Aufraeumarbeit');
+  finally F.Free; end;
+end;
+
 
 procedure TTestDestructorWithoutInherited.DtorWithInherited_NoFinding;
 const SRC =

@@ -42,7 +42,8 @@ uses
   uTypeIndex,        // ParentOf/TypeKindOf - Basisklasse des Destruktors
                      // (uAnalyzeContext steht bereits im interface-uses)
   uFileTextCache,
-  uAstSpans;   // FindBodyBlock/HasInheritedCall (Voll-Review 2026-09-12)
+  uAstSpans,   // FindBodyBlock/HasInheritedCall (Voll-Review 2026-09-12)
+  uDetectorUtils;  // OwnerTypeNameLower (nested-type, Posten 296)
 
 function ErbtDirektVonTObject(const AMethodName: string;
   AContext: TAnalyzeContext): Boolean;
@@ -62,17 +63,31 @@ function ErbtDirektVonTObject(const AMethodName: string;
 //
 // Ohne TypeIndex (nil) oder ohne Klassennamen wird NICHT demotet - im
 // Zweifel bleibt der Fund so streng wie bisher.
+//
+// BESITZERTYP, NICHT ERSTES SEGMENT (Chargen-Review 2026-09-14, Posten
+// 296): frueher stand hier Copy(AMethodName, 1, Pos('.')-1). Bei einer
+// nested Klasse - 'TOuter.TInner.Destroy' - lieferte das 'touter', und
+// ParentOf/TypeKindOf beurteilten damit die FALSCHE Klasse.
+//
+// An der Exe belegt (TInner : TObject in TOuter : TComponent):
+//   destructor TOuter.TInner.Destroy   Error    <- an TOuter beurteilt
+//   destructor TInner.Destroy          Warning  <- richtig demotet
+//   destructor TThing.Destroy (TComponent) Error
+// Der geschachtelte Fall gehoert in dieselbe Zeile wie der flache.
+//
+// OwnerTypeNameLower liefert bei genau EINEM Punkt dasselbe wie vorher
+// (268.570 von 271.521 Korpus-Headern) - der Normalfall bewegt sich
+// nicht. Gleiche Falle wie in uVisibilityCheck (2026-07-28) und
+// uVirtualCallInCtor (Voll-Review).
 var
-  Punkt : Integer;
   Klasse, Eltern : string;
   Idx : TTypeIndex;
 begin
   Result := False;
   Idx := CtxTypeIndex(AContext);
   if Idx = nil then Exit;
-  Punkt := Pos('.', AMethodName);
-  if Punkt <= 1 then Exit;   // kein qualifizierter Name -> kein Urteil
-  Klasse := LowerCase(Copy(AMethodName, 1, Punkt - 1));
+  Klasse := TDetectorUtils.OwnerTypeNameLower(AMethodName);
+  if Klasse = '' then Exit;   // kein qualifizierter Name -> kein Urteil
   Eltern := Idx.ParentOf(Klasse);
   // Leer = kein Parent im Index. Das heisst "class" ohne Basis, also
   // implizit TObject - genau der Fall. Eine unbekannte Klasse liefert
