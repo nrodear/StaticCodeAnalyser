@@ -28,6 +28,8 @@ type
     [Test] procedure Format_WidthSpecifier_CorrectCount;
     [Test] procedure Format_StarWidthAndPrecision_NoFinding;
     [Test] procedure Format_NestedInsideAdd_NoFinding;
+    // Posten 291: der diskriminierende Partner dazu
+    [Test] procedure Format_NestedInsideAdd_Mismatch_Reported;
     [Test] procedure Format_StringContentParsed_CorrectCount;
     [Test] procedure Format_EscapedQuoteInString_CorrectCount;
     // Real-world Pattern aus mORMot-artigen deutschen Meldungen mit
@@ -277,8 +279,19 @@ begin
 end;
 
 procedure TTestFormatMismatch.Format_NestedInsideAdd_NoFinding;
-// Results.Add(Format('%d %s',[v,k])) – Format ist verschachteltes Argument,
-// kein eigenständiger Aufruf → kein Befund.
+// Posten 291: die Begruendung, die hier stand, war FALSCH. Sie
+// lautete "Format ist verschachteltes Argument, kein eigenstaendiger
+// Aufruf -> kein Befund". An der Exe widerlegt:
+//   Results.Add(Format('%d %s', [A, B]))   0 Funde
+//   Results.Add(Format('%d %s', [A]))      1 FUND
+// Der Detektor analysiert verschachtelte Format-Aufrufe sehr wohl.
+// Diese Fixture war nur deshalb gruen, weil Platzhalter- und
+// Argumentzahl uebereinstimmen - sie hat nie etwas geprueft, was
+// ihr Name behauptet.
+//
+// Sie bleibt als das, was sie wirklich belegt: passende Zahlen
+// melden nicht, auch verschachtelt. Der diskriminierende Fall steht
+// direkt darunter.
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -290,7 +303,27 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
-      'Format() als Argument in Add() – kein Befund');
+      'passende Platzhalter- und Argumentzahl meldet nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatch.Format_NestedInsideAdd_Mismatch_Reported;
+// DER DISKRIMINIERENDE FALL zu dem Test darueber: dieselbe
+// Verschachtelung, aber ein Argument zu wenig. Wenn die alte
+// Begruendung stimmte, muesste auch das schweigen.
+// An der Exe gemessen: 1 Fund - die Verschachtelung schuetzt nicht.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  Results.Add(Format(''%d  %s'', [Pair.Value]));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFormatMismatch),
+      'auch als verschachteltes Argument wird Format geprueft');
   finally F.Free; end;
 end;
 
