@@ -41,6 +41,12 @@ type
     [Test] procedure Unused_ImplIncludeWithoutCaller_StillReported;
 
     [Test] procedure Unused_Finding_KindSeverityConfidence;
+    // Posten 216: Enumerator-Whitelist und Direktiven am Standalone
+    [Test] procedure EnumeratorRoutines_NoFinding;
+    [Test] procedure PlainUnusedRoutine_Kontrolle_Reported;
+    [Test] procedure OverrideDirective_NoFinding;
+    [Test] procedure ForwardDirective_NoFinding;
+    [Test] procedure MessageDirective_Reported_KnownLimit;
   end;
 
 implementation
@@ -49,6 +55,131 @@ uses
   System.SysUtils, System.Classes, System.IOUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 216: zwei Whitelists ohne Test ----------------------- }
+//
+// IsEnumeratorRoutine (movenext/getenumerator/current) und
+// HasExternalReferenceDirective am Standalone waren beide ungetestet -
+// ein Tippfehler in einer der Listen haette stille FP erzeugt, ohne
+// dass ein Test rot wird.
+//
+// ACHTUNG, Verwechslungsgefahr: Unused_ExternalImport_NoFinding testet
+// die LINK-Gate-Form 'cdecl; external ''libLocalAuth''' - das ist ein
+// ANDERER Pfad als die Direktiven hier.
+//
+// Alle am gebauten Stand gemessen.
+
+procedure TTestUnusedRoutine.EnumeratorRoutines_NoFinding;
+// Die Enumerator-Whitelist: von der for-in-Maschinerie gerufen, nie
+// im Quelltext. Gemessen: 0.
+const SRC =
+  'unit t; interface'#13#10+
+  'implementation'#13#10+
+  'function GetEnumerator: TEnum;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'function MoveNext: Boolean;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUnusedRoutine),
+      'Enumerator-Routinen ruft die for-in-Maschinerie');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedRoutine.PlainUnusedRoutine_Kontrolle_Reported;
+// POSITIV-KONTROLLE. Gemessen: 1. Ohne sie waeren die NoFinding-
+// Tests auch bei abgeschalteter Regel gruen.
+const SRC =
+  'unit t; interface'#13#10+
+  'implementation'#13#10+
+  'function Schlummert: TEnum;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnusedRoutine),
+      'eine gewoehnliche ungenutzte Routine bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedRoutine.OverrideDirective_NoFinding;
+// HasExternalReferenceDirective, Form ';override'. Gemessen: 0.
+const SRC =
+  'unit t; interface'#13#10+
+  'implementation'#13#10+
+  'procedure Foo; override;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUnusedRoutine),
+      'override wird von aussen gerufen');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedRoutine.ForwardDirective_NoFinding;
+// Zweite Direktivenform ';forward'. Gemessen: 0.
+const SRC =
+  'unit t; interface'#13#10+
+  'implementation'#13#10+
+  'procedure Foo; forward;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUnusedRoutine),
+      'eine forward-Deklaration ist keine ungenutzte Routine');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedRoutine.MessageDirective_Reported_KnownLimit;
+// BEKANNTE GRENZE, hier erstmals belegt: ';message' steht in der
+// Direktivenliste des Postens, wird aber NICHT unterdrueckt.
+// Gemessen: 1.
+//
+// Ursache ist nicht dieser Detektor, sondern der Parser: er kennt
+// die message-Direktive nicht (Paket 9004 - zwei tote Regeln und
+// zwei Phantom-Felder je Deklaration, 5.128 Vorkommen im Korpus).
+// Solange das offen ist, kann HasExternalReferenceDirective die
+// Direktive gar nicht sehen.
+//
+// Der Test pinnt das Ist-Verhalten, damit die Luecke sichtbar bleibt
+// und beim Aufraeumen von 9004 auffaellt.
+const SRC =
+  'unit t; interface'#13#10+
+  'implementation'#13#10+
+  'procedure Foo; message WM_USER;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnusedRoutine),
+      'BEKANNTE GRENZE: die message-Direktive erreicht den Detektor nicht (Paket 9004)');
+  finally F.Free; end;
+end;
+
 
 procedure TTestUnusedRoutine.Unused_StandaloneImpl_Reported;
 // Klassischer Fall: Routine nur in implementation, nirgends gerufen.
