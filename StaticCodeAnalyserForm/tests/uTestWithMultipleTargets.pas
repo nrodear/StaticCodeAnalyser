@@ -24,6 +24,10 @@ type
     [Test] procedure WithCallResultAndSecondTarget_Reported;
     [Test] procedure WithIndexedAndSecondTarget_Reported;
     [Test] procedure WithGenericAndSecondTarget_Reported;
+    // Posten 224: die Fail-open-Zusage des Klammer-Gates
+    [Test] procedure UnbalancedParens_FailOpen_StillReported;
+    [Test] procedure CommasInsideParens_Filtered_NoFinding;
+    [Test] procedure TwoTargets_Kontrolle_Reported;
   end;
 
 implementation
@@ -32,6 +36,77 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 224: der Fail-open-Vertrag des Klammer-Gates --------- }
+//
+// Der Unit-Kopf sagt woertlich: "Bleibt der Kopf unentscheidbar (kein
+// do auf Tiefe 0 im Fenster, unbalancierte Klammern), bleibt der Fund
+// stehen - der Filter darf nur entfernen, nie hinzufuegen."
+//
+// Alle Bestandstests pruefen nur die ENTFERN-Richtung. Die Zusage
+// selbst - dass ein unentscheidbarer Kopf ein Fund BLEIBT - war
+// unbelegt. Genau sie ist die gefaehrliche: ein Filter, der im Zweifel
+// unterdrueckt, verliert Funde lautlos.
+//
+// Alle drei am gebauten Stand gemessen.
+
+procedure TTestWithMultipleTargets.UnbalancedParens_FailOpen_StillReported;
+// DIE ZUSAGE: unbalancierte Klammern im Kopf, der Filter kann nicht
+// entscheiden. Gemessen: 1 - der Fund bleibt stehen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  with Foo(A, B do Bar;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkWithMultipleTargets),
+      'ein unentscheidbarer Kopf bleibt ein Fund - der Filter darf nur entfernen');
+  finally F.Free; end;
+end;
+
+procedure TTestWithMultipleTargets.CommasInsideParens_Filtered_NoFinding;
+// Die ENTFERN-Richtung zum Vergleich: dieselben Kommas, aber
+// balanciert geklammert - also EIN Ziel, keine Mehrfachliste.
+// Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  with Foo(A, B, C) do Bar;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkWithMultipleTargets),
+      'Kommas innerhalb einer Klammer trennen keine with-Ziele');
+  finally F.Free; end;
+end;
+
+procedure TTestWithMultipleTargets.TwoTargets_Kontrolle_Reported;
+// Der einfache Positivfall daneben. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  with A, B do Bar;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkWithMultipleTargets),
+      'zwei echte Ziele bleiben ein Fund');
+  finally F.Free; end;
+end;
+
 
 procedure TTestWithMultipleTargets.WithTwoTargets_Reported;
 const SRC =
