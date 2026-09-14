@@ -1,4 +1,4 @@
-﻿unit uTestPerfHotspots;
+unit uTestPerfHotspots;
 
 // Tests fuer TPerfHotspotsDetector (SCA110-112).
 

@@ -1,4 +1,4 @@
-﻿unit uTestUseAfterFree;
+unit uTestUseAfterFree;
 
 interface
 

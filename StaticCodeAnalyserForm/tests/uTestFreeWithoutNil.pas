@@ -1,4 +1,4 @@
-﻿unit uTestFreeWithoutNil;
+unit uTestFreeWithoutNil;
 
 interface
 
