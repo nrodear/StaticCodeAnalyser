@@ -20,6 +20,18 @@ type
     [Test] procedure FreeAndNilOnSameLine_NoFinding_KnownLimit;
     [Test] procedure FreeAndNilOnField_Reported;
     [Test] procedure FreeAndNilOnSelfQualifiedField_NoFinding_KnownLimit;
+    // Posten 202, zweite Runde: die zwei fehlenden Klammern und
+    // drei ungeschriebene Grenzen des Zeilenvergleichs
+    [Test] procedure FreeAndNilInMultiLineComment_Kontrolle;
+    [Test] procedure FreeAndNilOnSeparateLines_Kontrolle;
+    [Test] procedure BraceInStringLiteral_DoesNotSilenceRest_Reported;
+    [Test] procedure RealBraceComment_SilencesRest_Kontrolle;
+    [Test] procedure LineCommentBetweenStatements_NoFinding_KnownLimit;
+    [Test] procedure DirectiveBetweenStatements_NoFinding_KnownLimit;
+    [Test] procedure DirectiveAfterStatements_Kontrolle;
+    [Test] procedure PatternOnlyInStringLiterals_NoFinding;
+    [Test] procedure BlockCommentClosesMidLine_RestIsCode_Reported;
+    [Test] procedure UnclosedBlockComment_NoFinding_Kontrolle;
   end;
 
 implementation
@@ -34,6 +46,256 @@ uses
 // Der Detektor hatte vier Tests. Was fehlte, waren genau die Faelle,
 // an denen sein Vertrag haengt. Alle vier hier am gebauten Stand
 // gemessen und festgenagelt - keiner aendert Verhalten.
+
+{ --- Posten 202, zweite Runde: die Klammern und drei Grenzen ----- }
+//
+// Die drei im Posten genannten Luecken sind seit der ersten Runde
+// gepinnt. Beim Nachmessen fiel auf, dass zwei dieser Nullen keine
+// Klammer hatten - und dass drei Grenzen des Zeilenvergleichs
+// nirgends stehen, obwohl sie im Feld vorkommen.
+//
+// Alle Zahlen an der Exe gemessen.
+
+procedure TTestFreeAndNilHint.FreeAndNilInMultiLineComment_Kontrolle;
+// DIE KLAMMER zu FreeAndNilInMultiLineComment_NoFinding:
+// dieselbe Fixture ohne die zwei Kommentarklammern.
+// Gemessen: 1. Damit gehoert die Null dort dem Kommentar.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TObject;'#13#10+
+  'begin'#13#10+
+  '  Beep;'#13#10+
+  '  L.Free;'#13#10+
+  '  L := nil;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFreeAndNilHint),
+      'ohne Kommentarklammern ist dasselbe Muster ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeAndNilHint.FreeAndNilOnSeparateLines_Kontrolle;
+// DIE KLAMMER zu FreeAndNilOnSameLine_NoFinding_KnownLimit:
+// dieselben zwei Anweisungen auf zwei Zeilen. Gemessen: 1.
+// Sie klammert zugleich die Zeilen-Grenzen weiter unten.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TObject;'#13#10+
+  'begin'#13#10+
+  '  L.Free;'#13#10+
+  '  L := nil;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFreeAndNilHint),
+      'auf zwei Zeilen wird dasselbe Muster gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeAndNilHint.BraceInStringLiteral_DoesNotSilenceRest_Reported;
+// Die geschweifte Klammer steht in einem Literal. Das
+// Literal-Ausblenden laeuft VOR der Kommentar-Erkennung
+// (uDetectorUtils.pas:1287 vor :1294) - sonst oeffnete diese
+// Klammer einen Kommentar und JEDER Fund bis Dateiende fiele
+// weg. Am Helfer ist nur der Fall "// im Literal" gepinnt,
+// die geschweifte Klammer nicht. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TObject; S: string;'#13#10+
+  'begin'#13#10+
+  '  S := ''a { b'';'#13#10+
+  '  L.Free;'#13#10+
+  '  L := nil;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFreeAndNilHint),
+      'eine Klammer im Literal oeffnet keinen Kommentar');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeAndNilHint.RealBraceComment_SilencesRest_Kontrolle;
+// Die Klammer dazu: dieselbe Zeile, die Klammer aber
+// AUSSERHALB des Literals. Gemessen: 0 - jetzt ist es ein
+// echter Kommentar, und der Rest der Datei liegt darin.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TObject; S: string;'#13#10+
+  'begin'#13#10+
+  '  S := ''a''; { b'#13#10+
+  '  L.Free;'#13#10+
+  '  L := nil;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkFreeAndNilHint),
+      'eine Klammer ausserhalb des Literals oeffnet sehr wohl');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeAndNilHint.LineCommentBetweenStatements_NoFinding_KnownLimit;
+// GRENZE: der Zeilenscan BLANKT eine Kommentarzeile, er
+// entfernt sie nicht - die leere Zeile schiebt sich zwischen
+// die beiden Anweisungen, und der Vergleich prueft nur
+// benachbarte Zeilen. Gemessen: 0.
+//
+// Die Klammer ist FreeAndNilOnSeparateLines_Kontrolle weiter
+// oben: dieselbe Fixture ohne die Kommentarzeile meldet.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TObject;'#13#10+
+  'begin'#13#10+
+  '  L.Free;'#13#10+
+  '  // dazwischen'#13#10+
+  '  L := nil;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkFreeAndNilHint),
+      'BEKANNTE GRENZE: eine Kommentarzeile dazwischen unterbricht');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeAndNilHint.DirectiveBetweenStatements_NoFinding_KnownLimit;
+// Dieselbe Grenze mit einer bedingten Uebersetzung dazwischen -
+// und das ist die feldrelevante Form: so steht es in echtem
+// Delphi-Code oft. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TObject;'#13#10+
+  'begin'#13#10+
+  '  L.Free;'#13#10+
+  '  {$IFDEF DEBUG}'#13#10+
+  '  L := nil;'#13#10+
+  '  {$ENDIF}'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkFreeAndNilHint),
+      'BEKANNTE GRENZE: eine Direktive dazwischen unterbricht');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeAndNilHint.DirectiveAfterStatements_Kontrolle;
+// Die Klammer dazu: dieselbe Fixture, nur die oeffnende
+// Direktivzeile entfaellt - die schliessende bleibt stehen,
+// damit sich genau EINE Zeile unterscheidet. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TObject;'#13#10+
+  'begin'#13#10+
+  '  L.Free;'#13#10+
+  '  L := nil;'#13#10+
+  '  {$ENDIF}'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFreeAndNilHint),
+      'hinter dem Paar stoert dieselbe Direktive nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeAndNilHint.PatternOnlyInStringLiterals_NoFinding;
+// Der Kopfvertrag sagt woertlich zu, ein Muster in einem
+// Log-Text zaehle nicht. Genau dieser Satz hatte keinen
+// Test. Gemessen: 0; die Klammer ist
+// FreeAndNilOnSeparateLines_Kontrolle mit denselben zwei
+// Zeilen ohne Anfuehrungszeichen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TObject; S: string;'#13#10+
+  'begin'#13#10+
+  '  S := ''L.Free;'';'#13#10+
+  '  S := ''L := nil;'';'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkFreeAndNilHint),
+      'das Muster in Literalen ist kein Code');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeAndNilHint.BlockCommentClosesMidLine_RestIsCode_Reported;
+// Der Kommentar endet MITTEN in der Zeile, dahinter steht
+// echter Code. Der Scanner muss den Zustand zuruecksetzen und
+// in derselben Zeile weiterlaufen - stuende dort ein Abbruch
+// statt eines Weiter, faende er das Muster nicht.
+// Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TObject;'#13#10+
+  'begin'#13#10+
+  '  { alt'#13#10+
+  '  Old.Free; }  L.Free;'#13#10+
+  '  L := nil;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFreeAndNilHint),
+      'nach der schliessenden Klammer ist der Zeilenrest Code');
+  finally F.Free; end;
+end;
+
+procedure TTestFreeAndNilHint.UnclosedBlockComment_NoFinding_Kontrolle;
+// Die Klammer dazu: genau die schliessende Klammer durch ein
+// Leerzeichen ersetzt, sonst identisch. Gemessen: 0 - der
+// Kommentar bleibt offen und verschluckt den Rest.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var L: TObject;'#13#10+
+  'begin'#13#10+
+  '  { alt'#13#10+
+  '  Old.Free;    L.Free;'#13#10+
+  '  L := nil;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkFreeAndNilHint),
+      'ohne schliessende Klammer bleibt alles Kommentar');
+  finally F.Free; end;
+end;
+
 
 procedure TTestFreeAndNilHint.FreeAndNilInMultiLineComment_NoFinding;
 // Das Muster steht KOMPLETT in einem ueber drei Zeilen offenen
