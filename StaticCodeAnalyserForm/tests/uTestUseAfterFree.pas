@@ -27,6 +27,9 @@ type
     // Real-World 2026-06-23: Destruktor-Header + qualifizierter Member
     [Test] procedure DestructorHeader_NotReported;
     [Test] procedure QualifiedMemberOfOtherObject_NotReported;
+    // Posten 284: die Abbruchbedingung des Vorwaerts-Scans
+    [Test] procedure ForwardScan_EndElseBetween_StillReported;
+    [Test] procedure ForwardScan_EndSemicolonBetween_NoFinding_KnownLimit;
   end;
 
 implementation
@@ -35,6 +38,85 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 284: wo der Vorwaerts-Scan wirklich abbricht --------- }
+//
+// Der Kopfkommentar dieser Regel versprach bis 2026-09-14 "Wort end
+// -> Method-Ende; abbrechen". Das sagt fuer beide Fixturen hier 0
+// voraus. RE_END_OF_METHOD (uUseAfterFree.pas:110) bricht aber nur am
+// ZEILENANFAENGIGEN "end;" ab oder am naechsten Routinen-Keyword -
+// ueber "end else", "end)" und Konsorten laeuft der Scan hinweg.
+//
+// Beide an der Exe gemessen. Das Verhalten ist plausibel und bleibt;
+// falsch war nur der Kommentar, der jetzt die Regex beschreibt.
+
+procedure TTestUseAfterFree.ForwardScan_EndElseBetween_StillReported;
+// Das "end" des then-Zweigs traegt kein Semikolon - der Scan
+// laeuft weiter und findet den Use. Gemessen: 1.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Flag: Boolean);'#13#10 +
+  'var'#13#10 +
+  '  L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  L.Free;'#13#10 +
+  '  if Flag then'#13#10 +
+  '  begin'#13#10 +
+  '    Beep;'#13#10 +
+  '  end'#13#10 +
+  '  else'#13#10 +
+  '    Beep;'#13#10 +
+  '  L.Add(''x'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'end ohne Semikolon beendet den Vorwaertsscan nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.ForwardScan_EndSemicolonBetween_NoFinding_KnownLimit;
+// DIE GEGENPROBE, und zugleich die bekannte Grenze: dieselbe
+// Fixture mit "end;" statt "end else" - der Scan bricht ab und
+// der Use bleibt unentdeckt. Gemessen: 0. Ein echter
+// Use-after-free hinter einem geschlossenen if-Block wird also
+// nicht gemeldet; das ist die defensive Seite der Heuristik.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'uses System.Classes;'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo(Flag: Boolean);'#13#10 +
+  'var'#13#10 +
+  '  L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  L.Free;'#13#10 +
+  '  if Flag then'#13#10 +
+  '  begin'#13#10 +
+  '    Beep;'#13#10 +
+  '  end;'#13#10 +
+  '  L.Add(''x'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'BEKANNTE GRENZE: zeilenanfaengiges end; beendet den Scan');
+  finally F.Free; end;
+end;
+
 
 procedure TTestUseAfterFree.FreeThenUse_Reported;
 const SRC =

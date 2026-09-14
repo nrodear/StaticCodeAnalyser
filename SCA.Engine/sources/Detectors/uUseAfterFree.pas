@@ -29,7 +29,15 @@ unit uUseAfterFree;
 //   * Forward-Scan im selben File-Text bis Methoden-Ende oder Reassign:
 //       - `<ident> :=`   -> Variable wieder gueltig, abbrechen
 //       - `<ident> :`    -> neue var-Sektion, anderer Scope, abbrechen
-//       - Wort 'end'     -> Method-Ende (heuristisch, defensiv); abbrechen
+//       - zeilenanfaengiges `end;` ODER das naechste Routinen-Keyword
+//         (procedure/function/constructor/destructor, auch als class-Form)
+//         -> Method-Ende (heuristisch, defensiv); abbrechen.
+//         GENAU DAS und nichts weiter - s. RE_END_OF_METHOD unten. Hier
+//         stand bis 2026-09-14 "Wort 'end'", was einen Abbruch an JEDEM
+//         end versprach. An der Exe gemessen: mit `end` + `else`
+//         zwischen Free und Use meldet der Detektor (1), mit `end;` an
+//         derselben Stelle nicht (0). Beide Faelle sind in
+//         uTestUseAfterFree als ForwardScan_*-Paar gepinnt.
 //       - `<ident>.<X>`  -> USE -> Befund
 //       - `<ident>(`     -> Aufruf als Function-Argument -> USE -> Befund
 //   * Bewusst NICHT geflaggt: `<ident> := nil` (das ist Reassign).
