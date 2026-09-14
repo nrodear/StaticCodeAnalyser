@@ -83,6 +83,26 @@ type
     [Test] procedure SqlDanger_FixturePath_Suppressed;
     [Test] procedure SqlDanger_ProductionPath_StillError;
     [Test] procedure SqlDanger_TestsSubstringInDirName_StillReported;
+    // Posten 208: Rechtevergabe, Spalten-Loeschung und die drei
+    // Loesch-Anweisungen jenseits der Tabelle
+    [Test] procedure SqlDanger_GrantAllToPublic_Reported;
+    [Test] procedure SqlDanger_GrantAllToNamedRole_NoFinding;
+    [Test] procedure SqlDanger_GrantAllInCall_Reported;
+    [Test] procedure SqlDanger_GrantAllMidLiteral_NoFinding;
+    [Test] procedure SqlDanger_ProsePublications_Reported_KnownLimit;
+    [Test] procedure SqlDanger_ProseWithoutPublic_NoFinding;
+    [Test] procedure SqlDanger_AlterTableDropColumn_Reported;
+    [Test] procedure SqlDanger_AlterTableDropColumnIfExists_NoFinding;
+    [Test] procedure SqlDanger_AlterDropColumnInCall_Reported;
+    [Test] procedure SqlDanger_AlterTableMidLiteral_NoFinding;
+    [Test] procedure SqlDanger_DropViewPlain_Reported;
+    [Test] procedure SqlDanger_DropViewIfExists_NoFinding;
+    [Test] procedure SqlDanger_DropIndexPlain_Reported;
+    [Test] procedure SqlDanger_DropIndexIfExists_NoFinding;
+    [Test] procedure SqlDanger_DropDatabasePlain_Reported;
+    [Test] procedure SqlDanger_DropDatabaseIfExists_NoFinding;
+    [Test] procedure SqlDanger_AlterPlaceholderTemplate_StillReported;
+    [Test] procedure SqlDanger_DropDatabasePlaceholderTemplate_NoFinding;
   end;
 
 implementation
@@ -127,6 +147,352 @@ begin
     P.Free;
   end;
 end;
+
+{ --- Posten 208: die Sonderzweige ohne jede Abdeckung ------------ }
+//
+// Drei Zweige des Detektors hatte repo-weit kein Fixture beruehrt:
+// die Rechtevergabe an die Allgemeinheit, das Loeschen einer Spalte
+// und die Loesch-Anweisungen jenseits von Tabellen (Sicht, Index,
+// Datenbank - abgedeckt war nur die Tabelle).
+//
+// Jedes Positiv hat seine Kontrolle, und die unterscheidet sich in
+// genau einer Stelle. Zusaetzlich je eine Grenzsonde: steht die
+// Anweisung MITTEN im Literal statt am Anfang, greift der Anker
+// nicht.
+//
+// Alle Erwartungen an der Exe gemessen.
+
+procedure TTestSqlDangerousStatement.SqlDanger_GrantAllToPublic_Reported;
+// Rechtevergabe an die Allgemeinheit. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''GRANT ALL ON customers TO PUBLIC''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'GRANT ALL an PUBLIC ist die gefaehrliche Form');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_GrantAllToNamedRole_NoFinding;
+// DIE KONTROLLE: dieselbe Anweisung an eine benannte Rolle.
+// Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''GRANT ALL ON customers TO app_user''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'an eine benannte Rolle ist die Vergabe in Ordnung');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_GrantAllInCall_Reported;
+// Derselbe Text im Aufruf-Pfad statt in der Zuweisung -
+// zwei getrennte Zweige im Detektor. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.ExecSQL(''GRANT ALL ON customers TO PUBLIC''); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'auch als Aufrufargument wird die Vergabe erkannt');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_GrantAllMidLiteral_NoFinding;
+// GRENZE: die Anweisung steht mitten im Satz, nicht am
+// Anfang des Literals. Gemessen: 0 - der Anker verlangt den
+// Anfang.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''Please GRANT ALL rights TO PUBLIC now''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'mitten im Literal ist es keine Anweisung');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_ProsePublications_Reported_KnownLimit;
+// FEHLFUND-KANAL, gemessen und hier festgehalten: englische
+// Prosa. "Grant allowance to publications was denied" ist
+// kein SQL, wird aber gemeldet - der Anker sieht "grant",
+// die Allgemeinheits-Pruefung sieht "public" in
+// "publications". Gemessen: 1.
+//
+// Nicht gefixt: die Abgrenzung braeuchte eine Wortgrenze
+// rechts von "public", und das ist eine eigene Messung
+// wert. Im Korpus tritt der Kanal nicht auf.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var msg: string;'#13#10 +
+  'begin msg := ''Grant allowance to publications was denied''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'BEKANNTE GRENZE: Prosa mit publications loest die Regel aus');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_ProseWithoutPublic_NoFinding;
+// DIE KLAMMER dazu: dieselbe Prosa, ein Wort anders.
+// Gemessen: 0. Damit haengt der Fehlfund oben an genau
+// diesem Wort.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var msg: string;'#13#10 +
+  'begin msg := ''Grant allowance to subscribers was denied''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'ohne das Wort publications schweigt die Regel');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_AlterTableDropColumn_Reported;
+// Spalte loeschen - Datenverlust ohne Rueckfahrkarte.
+// Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''ALTER TABLE customers DROP COLUMN email''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'DROP COLUMN ist eine gefaehrliche Aenderung');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_AlterTableDropColumnIfExists_NoFinding;
+// DIE KONTROLLE: dieselbe Anweisung mit der
+// Existenz-Bedingung. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''ALTER TABLE customers DROP COLUMN IF EXISTS email''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'mit IF EXISTS ist die Anweisung abgesichert');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_AlterDropColumnInCall_Reported;
+// Aufruf-Pfad. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.ExecSQL(''ALTER TABLE customers DROP COLUMN email''); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'auch als Aufrufargument wird DROP COLUMN erkannt');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_AlterTableMidLiteral_NoFinding;
+// GRENZE, wie oben: mitten im Satz. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''Cannot ALTER TABLE customers DROP COLUMN email here''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'mitten im Literal ist es keine Anweisung');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_DropViewPlain_Reported;
+// Sicht loeschen. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''DROP VIEW v_active_customers''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'DROP VIEW ohne Bedingung wird gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_DropViewIfExists_NoFinding;
+// Kontrolle. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''DROP VIEW IF EXISTS v_active_customers''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'mit IF EXISTS nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_DropIndexPlain_Reported;
+// Index loeschen. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''DROP INDEX idx_orders_customer''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'DROP INDEX ohne Bedingung wird gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_DropIndexIfExists_NoFinding;
+// Kontrolle. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''DROP INDEX IF EXISTS idx_orders_customer''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'mit IF EXISTS nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_DropDatabasePlain_Reported;
+// Datenbank loeschen - die teuerste der vier.
+// Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''DROP DATABASE staging_copy''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'DROP DATABASE ohne Bedingung wird gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_DropDatabaseIfExists_NoFinding;
+// Kontrolle. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery;'#13#10 +
+  'begin q.SQL.Text := ''DROP DATABASE IF EXISTS staging_copy''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'mit IF EXISTS nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_AlterPlaceholderTemplate_StillReported;
+// GRENZE des Platzhalter-Gates: ein Baustein mit
+// Platzhaltern, aus einer Getter-Funktion zurueckgegeben.
+// Fuer die Loesch-Anweisungen unterdrueckt das Gate
+// (s. naechster Test) - fuer die Spalten-Aenderung NICHT.
+// Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TProvider.GetSql(AId: TQueryId): string;'#13#10 +
+  'begin'#13#10 +
+  '  Result := ''ALTER TABLE %s DROP COLUMN %s'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'BEKANNTE GRENZE: das Platzhalter-Gate deckt ALTER nicht ab');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_DropDatabasePlaceholderTemplate_NoFinding;
+// DER KONTRAST dazu, gleicher Aufbau, andere Anweisung:
+// hier greift das Platzhalter-Gate. Gemessen: 0.
+// Erst das Paar macht die Asymmetrie sichtbar.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function TProvider.GetSql(AId: TQueryId): string;'#13#10 +
+  'begin'#13#10 +
+  '  Result := ''DROP DATABASE %s'';'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'fuer DROP DATABASE greift das Platzhalter-Gate');
+  finally F.Free; end;
+end;
+
 
 procedure TTestSqlDangerousStatement.SqlDanger_UpdateWithoutWhere_Reported;
 const SRC =
