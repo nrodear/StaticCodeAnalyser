@@ -156,7 +156,11 @@ const SRC =
   'procedure Foo;'#13#10 +
   'var x: Integer;'#13#10 +
   'begin'#13#10 +
-  '  x := 0;'#13#10 +
+  // Posten 292: stand vorher als 'x := 0;' da - eine ZUWEISUNG.
+  // Der Detektor scannt nur if-Bedingungen, der Test war damit
+  // gruen, ohne den Trivial-Pfad je zu erreichen. Jetzt in einer
+  // if-Bedingung; an der Exe gemessen: 0.
+  '  if x = 0 then x := 1;'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -171,7 +175,9 @@ const SRC =
   'procedure Foo;'#13#10 +
   'var x: Integer;'#13#10 +
   'begin'#13#10 +
-  '  x := 1;'#13#10 +
+  // Posten 292: dieselbe Blindstelle wie bei TrivialZero.
+  // An der Exe gemessen: 0.
+  '  if x = 1 then x := 0;'#13#10 +
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
@@ -184,9 +190,20 @@ procedure TTestMagicNumbers.ConstAssignment_NotReported;
 // const-Sektionen sind die korrekte Stelle fuer Numerik-Literale -
 // dort soll der Detector NICHT flaggen.
 const SRC =
+  // Posten 292: die Fixture bestand vorher nur aus der
+  // const-Sektion und einem leeren Rumpf - ohne if-Bedingung
+  // erreichte sie den Detektor nie. Jetzt wird die Konstante in
+  // einer Bedingung BENUTZT: das ist der Fall, den die Regel
+  // belohnen soll (benannte Konstante statt Magic Number).
+  // An der Exe gemessen: 0 - und mit der nackten 1027 statt
+  // MAX_RETRIES waeren es 1.
   'unit t; implementation'#13#10 +
-  'const MAX_RETRIES = 1024;'#13#10 +
-  'begin end.';
+  'const MAX_RETRIES = 1027;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var x: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  if x = MAX_RETRIES then x := 0;'#13#10 +
+  'end;';
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
