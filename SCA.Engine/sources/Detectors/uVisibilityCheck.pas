@@ -82,6 +82,48 @@ const
   );
 
 function IsRttiDriven(const Parents: string): Boolean;
+// BEKANNTE GRENZE, vermessen am 2026-09-14 (Posten 287, Paket 9014).
+//
+// Der Test ist ein Substring ueber die GANZE Elternliste, und die vier
+// Namen oben tragen das Delphi-Typpraefix mit. Beides zusammen trifft
+// nicht das, was gemeint ist ("erbt von Form/Frame/DataModule/
+// Component"), sondern die Zeichenfolge 't'+Familienwort irgendwo im
+// Text. Das geht in BEIDE Richtungen daneben.
+//
+// An der gebauten Exe gemessen, jeweils eine Klasse mit einem
+// ungenutzten public-Member:
+//
+//   class(TBaseService)           1 Fund   Grundlinie
+//   class(TPlatformService)       0        FALSCHE Amnestie ('plaTFORMs')
+//   class(TCnStatementFormatter)  0        FALSCHE Amnestie
+//   class(TForm)                  0        richtig
+//   class(TCustomForm)            1        BLINDER FLECK
+//   class(TMainForm)              1        BLINDER FLECK
+//
+// 'TCustomForm' und 'TMainForm' enthalten kein 'tform' - vor dem 'Form'
+// steht ein 'm' bzw. ein 'n'. Die zwei haeufigsten Formularbasen des
+// Oekosystems fallen also durch, waehrend jedes 'Platform' amnestiert
+// wird.
+//
+// KORPUS (33.711 Klassendeklarationen mit Elternliste): 336 Klassen
+// werden heute amnestiert, die es nicht sein sollten, und 1.084 nicht
+// amnestiert, die es sein sollten (Soll = ein Elternname ENDET auf das
+// Familienwort an einer CamelCase-Grenze).
+//
+// NICHT HIER GEFIXT: das ist keine Wortgrenzen-Korrektur, sondern eine
+// Amnestie-Verschiebung fuer 1.420 Klassen in beide Richtungen. Die
+// Drops (mehr Amnestie) und die Adds (weniger) brauchen je eine eigene
+// FP-Messung und einen eigenen Bau - Paket 9014, eigener Zweig.
+//
+// UND DIE MESSUNG MUSS REPO-WEISE LAUFEN. Im Referenzlauf ueber den
+// ganzen Korpus hat diese Familie (SCA049/050/051/052) NULL Funde:
+// HasExternalRefs winkt jeden Member durch, der irgendwo im Los
+// referenziert wird, und bei 16.024 Dateien in einem Projekt ist das
+// jeder. Gemessen am 2026-09-14: vcl-styles-utils allein 91
+// UnusedPublicMember, dasselbe Repo mit python4delphi daneben 85,
+// ganzer Korpus 0. Wer 9014 am Referenzlauf misst, sieht keine
+// Wirkung - nicht weil es keine gibt.
+// Waechter: uTestVisibilityCheck, die drei RttiBase_*-Tests.
 var
   Lower : string;
   B : string;
@@ -142,7 +184,6 @@ class procedure TVisibilityCheckDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   Classes : TList<TAstNode>;
   ClassNode, Vis, Member : TAstNode;
-  PublicMembers : TList<TAstNode>;
   ClassNameByLow : TDictionary<string, TAstNode>;
   ChildrenOf : TDictionary<string, TList<string>>;
   OtherCls : TAstNode;
@@ -156,11 +197,13 @@ var
   //  * MethodsByClassLow: Impl-Methoden gruppiert nach Segment vor dem
   //    ersten '.' des gelowerten Namens (Bucket enthaelt damit ALLE
   //    Kandidaten fuer jeden StartsWith('<prefix>.')-Match).
-  //  * MethodNamesLow/-Norm: LowerCase(Name) bzw. NormalizeIdent(Name)
-  //    pro Methode genau einmal statt pro (Member x Methode).
+  //  * MethodNamesNorm: NormalizeIdent(Name) pro Methode genau einmal
+  //    statt pro (Member x Methode). Das Schwester-Dictionary
+  //    MethodNamesLow wurde befuellt und NIE gelesen - entfernt beim
+  //    Chargen-Review 2026-09-14, zusammen mit der ebenfalls nie
+  //    befuellten Liste PublicMembers.
   //  * BodyCache: lazy gelowerte Body-Strings pro Methode (s. TBodyTextCache).
   MethodsByClassLow : TObjectDictionary<string, TList<TAstNode>>;
-  MethodNamesLow : TDictionary<TAstNode, string>;
   MethodNamesNorm : TDictionary<TAstNode, string>;
   BodyCache : TObjectDictionary<TAstNode, TBodyTextCache>;
   MethNode : TAstNode;
@@ -461,9 +504,19 @@ var
     else if SubRefs > 0 then
     begin
       // Sub-Klassen-Methode ruft den Member -> protected reicht.
+      //
+      // Der Text sagte bis 2026-09-14 "used by subclasses only" (Posten
+      // 289). Das ist falsch, sobald OwnRefs > 0 ist: dieser Zweig
+      // gewinnt schon bei EINEM Sub-Klassen-Aufruf, egal wie oft die
+      // eigene Klasse den Member ruft. An der Exe belegt - TBase.Helfer,
+      // dreimal aus TBase.Eigen und einmal aus TSub.Kind gerufen, trug
+      // trotzdem "subclasses only". Die EMPFEHLUNG bleibt richtig
+      // (protected deckt die eigene Klasse mit ab), nur die Begruendung
+      // war es nicht - und Meldetexte gehen in den Fingerprint.
       K := fkCanBeProtected;
-      Msg := Format('Tighten encapsulation: %s.%s is used by '
-        + 'subclasses only - move from `public` to `protected`. '
+      Msg := Format('Tighten encapsulation: %s.%s is used only within '
+        + 'the class and its subclasses - move from `public` to '
+        + '`protected`. '
         + 'Quick-Fix: move declaration into a `protected` section of %s.%s',
         [ClassNode.Name, Member.Name, ClassNode.Name, SingleFileSuffix]);
     end
@@ -503,7 +556,6 @@ var
 
 begin
   Classes := UnitNode.FindAll(nkClass);
-  PublicMembers := TList<TAstNode>.Create;
   ClassNameByLow := TDictionary<string, TAstNode>.Create;
   ChildrenOf := TDictionary<string, TList<string>>.Create;
   // Perf: einmal pro Unit holen statt pro public-Member (heute ~10-50
@@ -517,7 +569,6 @@ begin
     [doOwnsValues]);
   MethodsByClassLow := TObjectDictionary<string, TList<TAstNode>>.Create(
     [doOwnsValues]);
-  MethodNamesLow := TDictionary<TAstNode, string>.Create;
   MethodNamesNorm := TDictionary<TAstNode, string>.Create;
   BodyCache := TObjectDictionary<TAstNode, TBodyTextCache>.Create(
     [doOwnsValues]);
@@ -530,7 +581,6 @@ begin
     for MethNode in AllUnitMethods do
     begin
       NameLow := LowerCase(MethNode.Name);
-      MethodNamesLow.AddOrSetValue(MethNode, NameLow);
       // Trim(LowerCase(S)) = LowerCase(Trim(S)) = NormalizeIdent(S)
       MethodNamesNorm.AddOrSetValue(MethNode, Trim(NameLow));
       // Besitzertyp statt erstem Segment (2026-07-28): seit der Parser
@@ -615,13 +665,11 @@ begin
       ChildList.Free;
     ChildrenOf.Free;
     ClassNameByLow.Free;
-    PublicMembers.Free;
     Classes.Free;
     AllUnitMethods.Free;
     DescendantsCache.Free;     // doOwnsValues -> innere TList<string> mit weg
     BodyCache.Free;            // doOwnsValues -> TBodyTextCache mit weg
     MethodNamesNorm.Free;
-    MethodNamesLow.Free;
     MethodsByClassLow.Free;    // doOwnsValues -> Buckets mit weg
   end;
 end;

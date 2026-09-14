@@ -61,7 +61,7 @@ type
 implementation
 
 uses
-  uConstStringParameter;  // MethodHasDirective = Wortgrenzen-Match
+  uDetectorUtils;  // ContainsWholeWordLower
 
 function SubtreeMentionsIdent(Root: TAstNode; const IdentLow: string): Boolean;
 // Wortgrenzen-Suche des Idents in den flachen Text-Repraesentationen
@@ -85,8 +85,19 @@ begin
     begin
       N := Stack[Stack.Count - 1];
       Stack.Delete(Stack.Count - 1);
-      if MethodHasDirective(LowerCase(N.Name), IdentLow) or
-         MethodHasDirective(LowerCase(N.TypeRef), IdentLow) then Exit(True);
+      // Chargen-Review 2026-09-14 (Posten 285): vorher lief das ueber
+      // uConstStringParameter.MethodHasDirective - ein Import aus einem
+      // FREMDEN Detektor, nur um einen Wortgrenzen-Match zu bekommen.
+      // Der zentrale Helfer leistet dasselbe.
+      //
+      // FUNDZAHL-NEUTRAL, und der Grund gehoert dazu: die beiden
+      // Grenzklassen unterscheiden sich in 'A'..'Z' (IsIdentChar kennt
+      // sie, MethodHasDirective nicht). Hier ist der Heuhaufen aber
+      // bereits LowerCase, ein Grossbuchstabe kann also gar nicht
+      // auftreten - fuer DIESE Aufrufstelle sind beide identisch.
+      if TDetectorUtils.ContainsWholeWordLower(IdentLow, LowerCase(N.Name)) or
+         TDetectorUtils.ContainsWholeWordLower(IdentLow, LowerCase(N.TypeRef))
+      then Exit(True);
       for i := 0 to N.Children.Count - 1 do
         Stack.Add(N.Children[i]);
     end;

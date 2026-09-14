@@ -18,6 +18,9 @@ type
     [Test] procedure PrivateMethodWithoutDoc_NotReported;
     [Test] procedure CreateDestroy_AlwaysSkipped;
     [Test] procedure PublishedMethod_NotReported;
+    // Posten 188: der property-Pfad (RE_MEMBER_PROPERTY)
+    [Test] procedure PropertyWithoutDoc_Reported;
+    [Test] procedure PropertyWithDoc_NoFinding;
   end;
 
 implementation
@@ -26,6 +29,61 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 188: der property-Pfad ------------------------------- }
+//
+// RE_MEMBER_PROPERTY hatte keinen einzigen Test - weder Positiv noch
+// Negativ. Die Regel ist default-off, der Pfad damit besonders leicht
+// unbemerkt zu brechen.
+//
+// Beide an der Exe gemessen.
+
+procedure TTestPublicMemberWithoutDoc.PropertyWithoutDoc_Reported;
+// Gemessen: 1.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    property Bar: Integer read FBar;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkPublicMemberWithoutDoc),
+      'eine public property ohne Doku ist ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestPublicMemberWithoutDoc.PropertyWithDoc_NoFinding;
+// Dieselbe property mit /// darueber. Gemessen: 0.
+// Das Paar ordnet die 0 der DOKU zu und nicht einem anderen Gate.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  public'#13#10 +
+  '    /// <summary>Die Bar.</summary>'#13#10 +
+  '    property Bar: Integer read FBar;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkPublicMemberWithoutDoc),
+      'mit Doku-Kommentar ist die property in Ordnung');
+  finally F.Free; end;
+end;
+
 
 procedure TTestPublicMemberWithoutDoc.PublicMethodWithoutDoc_Reported;
 const SRC =

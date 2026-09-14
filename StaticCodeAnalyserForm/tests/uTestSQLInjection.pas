@@ -184,6 +184,18 @@ type
     [Test] procedure SQL_LocalFilledViaIfThenRaw_StillReported;
     // Posten 272: das Quote in den STRUCTURAL-Markern ist das Gate
     [Test] procedure StructuralMarker_IndependentOfSourceSpacing;
+    // Posten 196: der Fix-Score am echten Parser-RHS, elf Stufen
+    [Test] procedure SQL_Score_ValueConcat_IsTrivialOne;
+    [Test] procedure SQL_Score_StructuralConcat_IsHardFour;
+    [Test] procedure SQL_Score_LineBreakBeforePlus_StaysHard;
+    [Test] procedure SQL_Score_TwoPluses_StayHard;
+    [Test] procedure SQL_Score_ThreePluses_BecomeVeryHard;
+    [Test] procedure SQL_Score_BareCall_StaysHard;
+    [Test] procedure SQL_Score_ParenCall_BecomesVeryHard;
+    [Test] procedure SQL_Score_ThreeValueTerms_AreEasy;
+    [Test] procedure SQL_Score_ManyValueTerms_AreMedium;
+    [Test] procedure SQL_Score_PlusInsideLiteral_NotCounted;
+    [Test] procedure SQL_Score_ParenCastConcat_IsMedium;
   end;
 
 implementation
@@ -410,6 +422,285 @@ end;
 // =============================================================================
 // SQLInjection-Erweiterungen
 // =============================================================================
+
+{ --- Posten 196: der Score, am ECHTEN Parser-RHS gepinnt --------- }
+//
+// Der Bestandstest prueft nur die Zeichenfolge "/5" - jeder der
+// fuenf Scores erfuellt das. Die Kopplung zwischen Scorer und
+// Parser-Normalisierung war damit nirgends festgenagelt, obwohl
+// genau daran die strukturellen Marker haengen.
+//
+// Alle zwoelf Scores an der Exe gemessen, jeder aus dem Meldetext
+// des Funds gelesen.
+
+procedure TTestSQLInjectionExt.SQL_Score_ValueConcat_IsTrivialOne;
+// WERT-Kontext: der Tabellenname steht IM Literal, verkettet
+// wird nur ein Wert. Gemessen: 1/5.
+//
+// Das Gegenstueck ist der Test direkt darunter - gleiche
+// Verkettungszahl, einziger Unterschied ist die Stellung des
+// Bezeichners zum Quote.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const A: string);'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM t WHERE a = '' + A;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSQLInjection);
+    Assert.IsNotNull(Hit, 'kein SQLInjection-Fund');
+    Assert.Contains(Hit.MissingVar, 'Fix 1/5',
+      'ein verketteter Wert ist trivial zu beheben');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_Score_StructuralConcat_IsHardFour;
+// STRUKTUR-Kontext: derselbe eine Verkettungsschritt, aber
+// der Bezeichner steht quote-adjazent hinter FROM - er baut
+// die Struktur der Anweisung, nicht ihren Wert.
+// Gemessen: 4/5.
+//
+// Zusammen mit dem Test darueber ist die Kopplung
+// Scorer/Parser gepinnt: die Normalisierung des
+// Verkettungszeichens entscheidet ueber drei Score-Stufen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const Tbl: string);'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM '' + Tbl;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSQLInjection);
+    Assert.IsNotNull(Hit, 'kein SQLInjection-Fund');
+    Assert.Contains(Hit.MissingVar, 'Fix 4/5',
+      'ein struktureller Baustein ist schwer zu beheben');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_Score_LineBreakBeforePlus_StaysHard;
+// Dritte Quellformatierung: Zeilenumbruch VOR dem
+// Verkettungszeichen. Der Parser normalisiert, der Score
+// bleibt. Gemessen: 4/5.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const Tbl: string);'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM '''#13#10 +
+  '    + Tbl;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSQLInjection);
+    Assert.IsNotNull(Hit, 'kein SQLInjection-Fund');
+    Assert.Contains(Hit.MissingVar, 'Fix 4/5',
+      'die Quellformatierung darf den Score nicht bewegen');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_Score_TwoPluses_StayHard;
+// Zwei Verkettungen, struktureller Marker. Gemessen: 4/5.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const Tbl, A: string);'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM '' + Tbl + '' WHERE a = 1'';'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSQLInjection);
+    Assert.IsNotNull(Hit, 'kein SQLInjection-Fund');
+    Assert.Contains(Hit.MissingVar, 'Fix 4/5',
+      'zwei Verkettungen bleiben unter der Schwelle');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_Score_ThreePluses_BecomeVeryHard;
+// Eine Verkettung mehr, sonst dieselbe Zeile. Gemessen: 5/5.
+// Das pinnt den LINKEN Zweig der Hoechststufen-Klausel.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const Tbl, A: string);'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM '' + Tbl + '' WHERE a = '' + A;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSQLInjection);
+    Assert.IsNotNull(Hit, 'kein SQLInjection-Fund');
+    Assert.Contains(Hit.MissingVar, 'Fix 5/5',
+      'ab drei Verkettungen ist es die Hoechststufe');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_Score_BareCall_StaysHard;
+// Ein blanker Bezeichner hinter dem Verkettungszeichen.
+// Gemessen: 4/5 - eine Verkettung, kein Klammerpaar.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM '' + GetTable;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSQLInjection);
+    Assert.IsNotNull(Hit, 'kein SQLInjection-Fund');
+    Assert.Contains(Hit.MissingVar, 'Fix 4/5',
+      'ein blanker Bezeichner hebt den Score nicht auf fuenf');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_Score_ParenCall_BecomesVeryHard;
+// DERSELBE Bezeichner in Klammern, sonst Zeichen fuer
+// Zeichen dieselbe Zeile. Gemessen: 5/5.
+//
+// Das pinnt den RECHTEN Zweig der Hoechststufen-Klausel -
+// die Verkettungszahl ist in beiden Faellen eins. Ohne
+// diesen Test bliebe das Streichen des rechten Zweigs
+// unbemerkt: alle anderen Vorschlaege haengen am linken.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM '' + (GetTable);'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSQLInjection);
+    Assert.IsNotNull(Hit, 'kein SQLInjection-Fund');
+    Assert.Contains(Hit.MissingVar, 'Fix 5/5',
+      'ein Klammerausdruck hebt den Score auf fuenf');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_Score_ThreeValueTerms_AreEasy;
+// Gleiche Verkettungszahl wie die Hoechststufe oben, aber
+// ohne strukturellen Marker - reine Werte. Gemessen: 2/5.
+// Griffe der Marker zu weit, staende hier 5.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const A, B: string);'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM t WHERE a = '' + A + '' AND b = '' + B;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSQLInjection);
+    Assert.IsNotNull(Hit, 'kein SQLInjection-Fund');
+    Assert.Contains(Hit.MissingVar, 'Fix 2/5',
+      'reine Wertverkettungen bleiben einfach');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_Score_ManyValueTerms_AreMedium;
+// Sieben Verkettungen im Wert-Kontext - der Zweig fuer vier
+// und mehr. Gemessen: 3/5.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(const A, B, C, E: string);'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM t WHERE a = '' + A + '' AND b = '' + B + '' AND c = '' + C + '' AND d = '' + E;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSQLInjection);
+    Assert.IsNotNull(Hit, 'kein SQLInjection-Fund');
+    Assert.Contains(Hit.MissingVar, 'Fix 3/5',
+      'viele Wertverkettungen sind mittelschwer');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_Score_PlusInsideLiteral_NotCounted;
+// Die Pluszeichen stehen INNERHALB des Literals (Arithmetik
+// in der Anweisung). Sie duerfen nicht als Verkettung
+// zaehlen. Gemessen: 1/5.
+//
+// Ohne das Ausblanken der Literale waeren es drei
+// Verkettungen und damit Score 2 - dass 2 ein real
+// erreichbarer Wert ist, zeigt der Test weiter oben.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var q: TFDQuery; V: string;'#13#10 +
+  'begin'#13#10 +
+  '  q.SQL.Text := ''SELECT a+b+c FROM t WHERE x = '' + V;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSQLInjection);
+    Assert.IsNotNull(Hit, 'kein SQLInjection-Fund');
+    Assert.Contains(Hit.MissingVar, 'Fix 1/5',
+      'Arithmetik im Literal ist keine Verkettung');
+  finally F.Free; end;
+end;
+
+procedure TTestSQLInjectionExt.SQL_Score_ParenCastConcat_IsMedium;
+// Klammer direkt hinter dem Verkettungszeichen, hier ein
+// Typumwandlungs-Ausdruck. Beweist, dass die
+// Funktionsaufruf-Erkennung am ECHTEN Parser-RHS greift -
+// die Einheitentests fuettern ihr sonst einen handgetippten
+// String. Gemessen: 3/5.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Suche(Sender: TObject);'#13#10 +
+  'begin'#13#10 +
+  '  Query.SQL.Text := ''SELECT * FROM T WHERE name=''+(Sender as TEdit).Text;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkSQLInjection);
+    Assert.IsNotNull(Hit, 'kein SQLInjection-Fund');
+    Assert.Contains(Hit.MissingVar, 'Fix 3/5',
+      'der Klammer-Ausdruck wird am echten RHS erkannt');
+  finally F.Free; end;
+end;
+
 
 procedure TTestSQLInjectionExt.SQL_AssignSelectStarConcat_IntToStrSafe_NoFinding;
 // 'WHERE id = ' + IntToStr(Id) ist tatsaechlich injection-sicher -

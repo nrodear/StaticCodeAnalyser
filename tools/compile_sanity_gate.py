@@ -333,8 +333,16 @@ def pruefe_fixture_klassen(pfad, befunde):
 # 5) Harness kennt den Detektor nicht
 # --------------------------------------------------------------------------
 def lade_harness_wissen():
+    # AddD, AddD2, AddD3 - die Registry hat mehrere Ueberladungen, und
+    # die Ziffer entscheidet nur ueber Vorfilter/Kontext, nicht ueber
+    # die Zuordnung Kind -> Detektor. Die alte Fassung band nur 'AddD('
+    # und uebersah damit JEDEN AddD3-Detektor: kind2cls hatte keinen
+    # Eintrag, pruefe_harness sprang still ueber ihn hinweg, und vier
+    # Tests standen im falschen Helfer, ohne dass das Gate etwas sagte
+    # (Bau vom 2026-09-14: sieben rote Tests, vier davon aus dieser
+    # Luecke).
     kind2cls = {}
-    for m in re.finditer(r"AddD\(\s*'[^']*'\s*,\s*(fk[A-Za-z0-9_]+)\s*,\s*"
+    for m in re.finditer(r"AddD\d?\(\s*'[^']*'\s*,\s*(fk[A-Za-z0-9_]+)\s*,\s*"
                          r"(T[A-Za-z0-9_]+)\.", lies(REGISTRY)):
         kind2cls.setdefault(m.group(1).lower(), set()).add(m.group(2).lower())
     HL = lies(HARNESS).replace('\r\n', '\n').split('\n')

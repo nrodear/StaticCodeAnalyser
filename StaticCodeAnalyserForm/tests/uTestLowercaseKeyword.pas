@@ -26,6 +26,10 @@ type
     // Posten 260: der '&'-Escape macht Keywords zu Identifiern
     [Test] procedure EscapedIdentifier_NoFinding;
     [Test] procedure EscapedIdentifierThenRealKeyword_StillReported;
+    // Posten 171: mehrzeiliger Kommentar-Zustand
+    [Test] procedure KeywordInMultiLineBlockComment_NoFinding;
+    [Test] procedure KeywordInMultiLineParenStarComment_NoFinding;
+    [Test] procedure KeywordAfterMultiLineCommentClose_StillReported;
   end;
 
 implementation
@@ -221,6 +225,88 @@ begin
     Assert.AreEqual<Integer>(1,
       TFindingHelper.Count(F, fkLowercaseKeyword),
       'das End hinter dem Escape bleibt ein Keyword');
+  finally F.Free; end;
+end;
+
+
+{ --- Posten 171: der Kommentar-Zustand ueber Zeilengrenzen ------- }
+//
+// KeywordInBlockComment_NoFinding prueft nur EINZEILIGE Kommentare.
+// Der Zeilenuebertrag von InBlockComm/InParenStarComm - der
+// fehleranfaelligste Teil des Scanners - war unbelegt.
+//
+// Der Scanner ist hier NICHT betroffen von dem Zustandsleck, das in
+// derselben Charge uSuperfluousSemicolon, uGotoStatement und
+// uGroupedDeclaration getroffen hat: er sammelt je Zeile alle Woerter
+// und steigt am Treffer nicht aus. An der gebauten Exe geprueft -
+// 'BEGIN' vor einem geoeffneten Kommentar und 'END;' darin ergeben
+// zusammen genau 1 Fund. Diese Tests nageln das fest.
+//
+// ACHTUNG beim Nachmessen von Hand: SCA064 ist fcLow und braucht
+// MinConfidence=low in der ini, sonst liefert jede Fixture 0.
+
+procedure TTestLowercaseKeyword.KeywordInMultiLineBlockComment_NoFinding;
+// Grossgeschriebenes Keyword INNERHALB eines ueber zwei Zeilen
+// offenen {..}. Vor wie nach der Ergaenzung 1 Fund - und zwar der
+// echte 'BEGIN', nicht das auskommentierte 'END;'.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'BEGIN'#13#10 +
+  '  Beep;  {'#13#10 +
+  '  END;'#13#10 +
+  '  }'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkLowercaseKeyword),
+      'nur das echte BEGIN zaehlt, das END im Kommentar nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestLowercaseKeyword.KeywordInMultiLineParenStarComment_NoFinding;
+// Dasselbe fuer die (* *)-Form - eigener Zustand, eigener Pfad.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'BEGIN'#13#10 +
+  '  Beep;  (*'#13#10 +
+  '  END;'#13#10 +
+  '  *)'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkLowercaseKeyword),
+      'auch der (* *)-Zustand traegt ueber die Zeilengrenze');
+  finally F.Free; end;
+end;
+
+procedure TTestLowercaseKeyword.KeywordAfterMultiLineCommentClose_StillReported;
+// Die Gegenrichtung: hinter dem Kommentarende zaehlt wieder Code.
+// Wuerde der Zustand nicht ZURUECKGESETZT, bliebe der Rest der Unit
+// stumm - dieser Test faengt das.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  Beep;  {'#13#10 +
+  '  Notiz'#13#10 +
+  '  }'#13#10 +
+  '  END;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkLowercaseKeyword),
+      'nach dem Kommentarende wird wieder gemeldet');
   finally F.Free; end;
 end;
 

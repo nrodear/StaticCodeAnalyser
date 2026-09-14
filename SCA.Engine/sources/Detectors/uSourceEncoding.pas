@@ -299,13 +299,35 @@ begin
   end;
 
   // ---- Gruppe B (Security), orthogonal zu allen Encoding-Gates ------------
-  if Info.HasBidi then
+  //
+  // ABER NICHT ORTHOGONAL ZUR ENCODING-FRAGE (Chargen-Review 2026-09-14,
+  // Posten 304): S1 und S2 suchen UTF-8-Sequenzen im Bytestrom. In einer
+  // Datei, die dieser Detektor GERADE SELBST als ANSI eingestuft hat
+  // (kein BOM, kein gueltiges UTF-8, s. E3 weiter unten), ist diese
+  // Lesart unbegruendet: der Compiler liest die Bytes dort als
+  // Codepage-Zeichen. Die drei Bytes E2 80 AE sind in Latin-1 schlicht
+  // 'a-Zirkumflex, Euro, Registered' - kein Trojan-Source-Risiko.
+  //
+  // An der Exe belegt: eine Datei mit Latin-1-Umlauten (also
+  // UNGUELTIGEM UTF-8) UND der Bytefolge E2 80 AE bekam sowohl
+  // SourceAnsiNonAscii ALS AUCH SourceBidiOverride - zwei Verdikte, die
+  // einander widersprechen.
+  //
+  // Korpuswirkung 0: der Referenzlauf hat weder SourceBidiOverride noch
+  // SourceZeroWidth ueberhaupt einen Fund. Das Gate ist Vorsorge.
+  //
+  // UTF-8 OHNE BOM bleibt ausdruecklich drin: dort ist die Bytefolge
+  // gueltiges UTF-8 und die Warnung berechtigt. Ausgenommen wird nur
+  // der Fall 'kein BOM UND kein gueltiges UTF-8'.
+  var IstAnsi := (Info.BomKind = sbkNone) and Info.HasNonAscii
+                 and (not Info.StrictUtf8);
+  if Info.HasBidi and (not IstAnsi) then
     Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstBidiLine),
       'Bidirectional override control character (e.g. U+202E) - Trojan Source ' +
       'risk (CVE-2021-42574): the code can read differently than it compiles. ' +
       'Remove the control character.',
       fkSourceBidiOverride));
-  if Info.HasZeroWidth then
+  if Info.HasZeroWidth and (not IstAnsi) then
     Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstZeroWidthLine),
       'Invisible / zero-width character (e.g. U+200B) in source - hidden-text ' +
       'abuse vector (CWE-1007). Almost never legitimate; remove it (U+200D can ' +

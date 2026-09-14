@@ -70,10 +70,34 @@ const
   // Layout.
   MAX_ORTE = 3;
 
+function NurDateiname(const APfad: string): string;
+// ExtractFileName trennt unter Windows NUR am '\' (LastDelimiter ueber
+// DriveDelim + PathDelim). Die CLI nimmt aber auch Vorwaertsschraegstriche
+// entgegen - jedes Skript, jede CI-Zeile, jede aus einer POSIX-Shell
+// kopierte Zeile bringt sie mit. Mit ExtractFileName stand dann der GANZE
+// Pfad im Meldetext, und Meldetexte gehen in den Fingerprint (RuleID +
+// Pfad + Zeile + Meldung): derselbe Quelltext lieferte zwei verschiedene
+// Funde, je nachdem wie der Aufrufer den Pfad geschrieben hat.
+//
+// An der Exe belegt (2026-09-14, Posten 162), dieselbe Datei zweimal:
+//   --file C:\...\e5.pas   ->  'with IB (e5.pas:8), ...'
+//   --file C:/.../e5.pas   ->  'with IB (/Users/ngerlach/AppData/...'
+//
+// Korpuswirkung 0: der Referenzlauf hat 196 SCA198-Meldungen, keine
+// einzige mit '/' im Ortsteil - er laeuft mit Backslash-Wurzel.
+var
+  i : Integer;
+begin
+  Result := APfad;
+  for i := Length(Result) downto 1 do
+    if CharInSet(Result[i], ['\', '/']) then
+      Exit(Copy(Result, i + 1, MaxInt));
+end;
+
 function OrtText(const D: TInterfaceDecl): string;
 begin
   Result := Format('%s (%s:%d)',
-    [D.Name, ExtractFileName(D.FileName), D.Line]);
+    [D.Name, NurDateiname(D.FileName), D.Line]);
 end;
 
 function SelbeStelle(const A, B: TInterfaceDecl): Boolean;

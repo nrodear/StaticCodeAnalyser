@@ -34,6 +34,10 @@ type
     [Test] procedure YodaNotEqualsNil_Reported;
     [Test] procedure YodaInParens_Reported;
     [Test] procedure YodaLessEqual_NoFinding;
+    // Posten 182: die dokumentierten Skip-Pfade links vom nil
+    [Test] procedure LessEqualNil_NoFinding;
+    [Test] procedure GreaterEqualNil_NoFinding;
+    [Test] procedure EqualsNil_Kontrolle_Reported;
   end;
 
 implementation
@@ -120,6 +124,66 @@ begin
     Assert.AreEqual<Integer>(0,
       TFindingHelper.Count(F, fkNilComparison),
       'ein <= rechts vom nil ist kein Ungleich-Vergleich');
+  finally F.Free; end;
+end;
+
+
+{ --- Posten 182: die Skip-Pfade LINKS vom nil -------------------- }
+//
+// Der Kopf dokumentiert, dass ':= nil', '<= nil' und '>= nil'
+// ausgesondert werden. Getestet war davon nichts. Die Yoda-Haelfte des
+// Postens ist mit Charge 2 erledigt (samt Waechter fuer die RECHTE
+// Seite) - hier fehlt die LINKE.
+//
+// Beide am gebauten Stand gemessen: 0. Die Positiv-Kontrolle daneben
+// liefert 1 und schliesst aus, dass ein anderes Gate die Fixturen
+// stumm stellt.
+
+procedure TTestNilComparison.LessEqualNil_NoFinding;
+// Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(x: TObject);'#13#10 +
+  'begin if x <= nil then DoStuff; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkNilComparison),
+      'ein <= nil ist kein Assigned-Vergleich');
+  finally F.Free; end;
+end;
+
+procedure TTestNilComparison.GreaterEqualNil_NoFinding;
+// Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(x: TObject);'#13#10 +
+  'begin if x >= nil then DoStuff; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkNilComparison),
+      'ein >= nil ist kein Assigned-Vergleich');
+  finally F.Free; end;
+end;
+
+procedure TTestNilComparison.EqualsNil_Kontrolle_Reported;
+// POSITIV-KONTROLLE zu den beiden darueber. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(x: TObject);'#13#10 +
+  'begin if x = nil then DoStuff; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkNilComparison),
+      '= nil bleibt der Fund');
   finally F.Free; end;
 end;
 

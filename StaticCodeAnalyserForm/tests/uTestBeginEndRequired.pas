@@ -21,6 +21,10 @@ type
     [Test] procedure ThenWithLineComment_NextLineStatement_Reported;
     // AQL 31.08.: Zeilenanker bei einer Zeile, die abschliesst UND oeffnet
     [Test] procedure ClosingAndOpeningLine_ReportsOnOwnLine;
+    // Posten 294: der case-else als bekannte Grenze
+    [Test] procedure CaseElseSingleStatement_Reported_KnownLimit;
+    [Test] procedure CaseElseStatementList_Reported_KnownLimit;
+    [Test] procedure IfElseWithoutBegin_Kontrolle_Reported;
   end;
 
 implementation
@@ -29,6 +33,103 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 294: der case-else ist KEIN if-else ------------------ }
+//
+// Der Detektor unterscheidet nicht zwischen if-else und case-else. In
+// einem case nimmt der else-Zweig aber eine ANWEISUNGSLISTE: alles bis
+// zum 'end' gehoert dazu. Die Begruendung der Regel - 'ein spaeter
+// angefuegtes Statement faellt sonst aus dem Zweig heraus' - trifft
+// dort also gar nicht zu.
+//
+// An der Exe gemessen:
+//   case K of 1: DoA; else DoB; end;            1 Fund
+//   case K of 1: DoA; else DoB; DoC; end;       1 Fund  <-- auch mit
+//       ZWEI Anweisungen, obwohl beide zum else gehoeren
+//   if C then DoA else DoB;                     2 Funde (korrekt)
+//   if C then begin ... end else begin ... end; 0       (korrekt)
+//
+// NICHT GEAENDERT, und der Grund ist eine Messung: 4.681 der 285.942
+// SCA045-Funde des Korpus (1,6 %) haengen an einem case-else. Das ist
+// ein Recall-Paket mit eigenem Zweig, eigenem Bau und eigener
+// FP-Stichprobe - nicht ein Nebenbei-Fix in einer gemischten Charge.
+// Dazu kommt: SCA045 ist im Meilenstein-Katalog als "Konvention statt
+// Korrektheit - Profil ist die Antwort" eingeordnet und im
+// Projekt-eigenen Profil abgewaehlt. Ob die 4.681 verschwinden sollen,
+// ist eine Produktentscheidung.
+//
+// Die beiden Tests pinnen das IST-Verhalten. Sie werden rot, sobald
+// jemand das Paket umsetzt - und genau dann soll das auffallen.
+
+procedure TTestBeginEndRequired.CaseElseSingleStatement_Reported_KnownLimit;
+// Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  case K of'#13#10+
+  '    1: DoA;'#13#10+
+  '  else'#13#10+
+  '    DoB;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkBeginEndRequired),
+      'BEKANNTE GRENZE: der case-else wird wie ein if-else behandelt');
+  finally F.Free; end;
+end;
+
+procedure TTestBeginEndRequired.CaseElseStatementList_Reported_KnownLimit;
+// Der schaerfere Fall: ZWEI Anweisungen im else-Zweig. Beide gehoeren
+// zum else - ein begin..end wuerde daran nichts aendern. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  case K of'#13#10+
+  '    1: DoA;'#13#10+
+  '  else'#13#10+
+  '    DoB;'#13#10+
+  '    DoC;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkBeginEndRequired),
+      'BEKANNTE GRENZE: auch eine Anweisungsliste im case-else wird gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestBeginEndRequired.IfElseWithoutBegin_Kontrolle_Reported;
+// Die Kontrolle: beim if-else ist die Meldung richtig - ein
+// angefuegtes Statement fiele dort wirklich aus dem Zweig.
+// Gemessen: 2 (then-Zweig und else-Zweig).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if C then'#13#10+
+  '    DoA'#13#10+
+  '  else'#13#10+
+  '    DoB;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(2,
+      TFindingHelper.Count(F, fkBeginEndRequired),
+      'beim if-else ist die Forderung nach begin..end berechtigt');
+  finally F.Free; end;
+end;
+
 
 procedure TTestBeginEndRequired.ThenBegin_NoFinding;
 const SRC =

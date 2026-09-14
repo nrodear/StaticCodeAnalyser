@@ -82,6 +82,12 @@ type
     // inaktiv, schwaechere Zusage) -> fcMedium-Katalogdefault bleibt.
     [Test] procedure VerifiedFinding_HighConfidence;
     [Test] procedure InMemoryFinding_KeepsMediumConfidence;
+    // Posten 192: der noreturn-Pfad
+    [Test] procedure NoReturnCallee_NoFinding;
+    [Test] procedure WithoutNoReturnDirective_Kontrolle_Reported;
+    // Posten 193: der STUB_FILE-Skip und seine Schwelle
+    [Test] procedure StubFile_FiveEmptyBodies_Silenced;
+    [Test] procedure StubFile_FourEmptyBodies_BelowThreshold_Reported;
   end;
 
 implementation
@@ -135,6 +141,152 @@ begin
       TFile.Delete(TempPath);
   end;
 end;
+
+{ --- Posten 192: der ';noreturn'-Pfad ---------------------------- }
+//
+// Eine Funktion, deren Rumpf nur eine als noreturn markierte Routine
+// ruft, kann Result gar nicht setzen - und muss geschwiegen werden.
+// Der Pfad (NoReturnLow-Aufbau plus die ContainsKey-Ausnahme im
+// Raise-Helper-Loop) war bei 50 Tests der Klasse ungetestet; keiner
+// nennt noreturn.
+//
+// Beide am gebauten Stand gemessen - ein Paar mit EINEM Wort
+// Unterschied, damit die Zuordnung eindeutig ist.
+
+{ --- Posten 193: der STUB_FILE-Skip ------------------------------ }
+//
+// Eine Unit, die ueberwiegend aus leeren Function-Stubs besteht, ist
+// ein Geruest und kein Fehler - ab STUB_FILE_MIN_EMPTY leeren Rumpfen
+// UND einem Anteil ueber der Schwelle schweigt der Detektor ganz.
+// Beide Schwellwerte waren ungetestet.
+//
+// Am gebauten Stand gemessen, ein Paar direkt an der Kante:
+//   5 leere Stubs -> 0 Funde   (Skip greift)
+//   4 leere Stubs -> 4 Funde   (unter der Schwelle, alle gemeldet)
+// Der Schwesterdetektor uDestructorWithoutInherited hat genau dieses
+// Testpaar seit laengerem; hier fehlte es.
+
+procedure TTestRoutineResultAssigned.StubFile_FiveEmptyBodies_Silenced;
+// Gemessen: 0.
+const SRC =
+  'unit t; interface'#13#10+
+  'implementation'#13#10+
+  'function F0: Integer;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  ''#13#10+
+  'function F1: Integer;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  ''#13#10+
+  'function F2: Integer;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  ''#13#10+
+  'function F3: Integer;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  ''#13#10+
+  'function F4: Integer;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  ''#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkRoutineResultUnassigned),
+      'eine Geruest-Unit aus leeren Stubs schweigt ganz');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.StubFile_FourEmptyBodies_BelowThreshold_Reported;
+// EINEN Stub weniger - die Kante. Gemessen: 4 Funde.
+// Ohne dieses Gegenstueck belegte der Test darueber nur, DASS
+// geschwiegen wird, nicht dass eine SCHWELLE dahintersteht.
+const SRC =
+  'unit t; interface'#13#10+
+  'implementation'#13#10+
+  'function F0: Integer;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  ''#13#10+
+  'function F1: Integer;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  ''#13#10+
+  'function F2: Integer;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  ''#13#10+
+  'function F3: Integer;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  ''#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(4,
+      TFindingHelper.Count(F, fkRoutineResultUnassigned),
+      'unter der Stub-Schwelle wird jeder leere Rumpf gemeldet');
+  finally F.Free; end;
+end;
+
+
+procedure TTestRoutineResultAssigned.NoReturnCallee_NoFinding;
+// Gemessen: 0.
+const SRC =
+  'unit t; interface'#13#10+
+  'implementation'#13#10+
+  'procedure Fail; noreturn;'#13#10+
+  'begin'#13#10+
+  '  raise Exception.Create(''x'');'#13#10+
+  'end;'#13#10+
+  'function Bar: Integer;'#13#10+
+  'begin'#13#10+
+  '  Fail;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkRoutineResultUnassigned),
+      'wer nur eine noreturn-Routine ruft, kann Result nicht setzen');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.WithoutNoReturnDirective_Kontrolle_Reported;
+// DIESELBE Unit ohne die Direktive. Gemessen: 1. Der Unterschied ist
+// genau das Wort 'noreturn' - damit ist der Pfad eindeutig zugeordnet
+// und nicht bloss irgendein Gate.
+const SRC =
+  'unit t; interface'#13#10+
+  'implementation'#13#10+
+  'procedure Fail;'#13#10+
+  'begin'#13#10+
+  '  raise Exception.Create(''x'');'#13#10+
+  'end;'#13#10+
+  'function Bar: Integer;'#13#10+
+  'begin'#13#10+
+  '  Fail;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkRoutineResultUnassigned),
+      'ohne die Direktive bleibt der Fund faellig');
+  finally F.Free; end;
+end;
+
 
 procedure TTestRoutineResultAssigned.AbsoluteResultAlias_NoFinding;
 // FP-Fix (Real-World 2026-06-28): 'X: T absolute Result' - Schreibzugriffe via

@@ -71,6 +71,21 @@ end;
 // (*...*) startet bzw. am Zeilenende noch offen bleibt.
 function FindGoto(const Line: string; var InBlockComm: Boolean;
   var InParenStarComm: Boolean): Integer;
+// Liefert die Spalte des ersten goto - scannt die Zeile aber auch NACH
+// einem Treffer zu Ende, damit der Kommentar-Zustand des Zeilenrests
+// stimmt. Der alte Exit am Treffer (Chargen-Review 2026-09-14) liess ein
+// dahinter geoeffnetes '{' oder '(*' unverfolgt: der Caller hielt die
+// Folgezeilen fuer Code und meldete das auskommentierte goto MIT.
+//
+// An der gebauten Exe gemessen:
+//     goto Fin;  {
+//     goto Fin;
+//     }
+//   ergab 2 Funde statt 1. Dieselbe Datei mit 'Beep;' in der ersten
+//   Zeile - also ohne Treffer vor dem '{' - ergab richtig 0.
+//
+// Gleiche Fehlerklasse und gleiche Loesung wie in uWithStatement.FindWith
+// und uReversedForRange.ScanLine.
 var
   i, n   : Integer;
   InStr  : Boolean;
@@ -173,8 +188,8 @@ begin
           Continue;
         end;
       end;
-      Result := i;
-      Exit;
+      if Result = 0 then
+        Result := i;   // KEIN Exit - s. Kopfkommentar
     end;
     Inc(i);
   end;

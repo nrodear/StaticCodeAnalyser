@@ -138,6 +138,25 @@ begin
     begin
       M := Pair.Value;
       if not IsSenderEventHandler(M) then Continue;
+      // PAKET 9017 (Posten 298, vermessen 2026-09-14): BoundHandlers
+      // kennt nur die DFM-Seite - Ereignisse der Komponenten und die
+      // Eintraege einer ItemList. Wer die DFM-Bindung entfernt und den
+      // Handler im CODE verdrahtet ('Button1.OnClick := HandleClick;'),
+      // die Methode aber in der published-Sektion stehen laesst, wo die
+      // Entwicklungsumgebung sie angelegt hat, bekommt hier einen
+      // Fehlfund: "no component binds it", obwohl sie aktiv benutzt wird.
+      //
+      // KORPUS, zweimal unabhaengig gezaehlt: von 391 Funden ueber alle
+      // Repos tragen 75 in 40 Dateien im Nachbar-Quelltext eine solche
+      // Zuweisung. Das sind 19 Prozent der Regel - rein subtrahierend.
+      //
+      // NICHT IN DIESER CHARGE, aus einem Grund, der nichts mit der
+      // Groesse zu tun hat: der Fix muss die Nachbar-.pas als TEXT lesen,
+      // und der Testharness dieser Familie legt gar keine Datei an (RunOn
+      // reicht 'test.dfm' durch). Es braucht also zuerst ein
+      // Platten-Harness, sonst ist das neue Gate nicht testbar - und ein
+      // ungetestetes Gate in einer Regel, die 19 Prozent ihrer Funde
+      // verliert, ist der falsche Handel.
       if BoundHandlers.ContainsKey(LowerCase(M.Name)) then Continue;
 
       F            := TLeakFinding.Create;

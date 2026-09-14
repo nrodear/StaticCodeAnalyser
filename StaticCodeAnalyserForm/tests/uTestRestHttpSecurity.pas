@@ -51,6 +51,10 @@ type
     // Posten 269: die Whitelist traf Pfad, Query und Wortmitte
     [Test] procedure XmlNamespaceMarkerInPath_StillReported;
     [Test] procedure XmlNamespaceHostAnchored_NotReported;
+    // Posten 190: die drei ungetesteten TLS-Emit-Pfade
+    [Test] procedure IndyVerifyModeEmpty_Reported;
+    [Test] procedure IndyOldProtocolMethod_Reported;
+    [Test] procedure SecureProtocolsWithSsl3_Reported;
   end;
 
 implementation
@@ -229,6 +233,81 @@ begin
     Assert.AreEqual<Integer>(0,
       TFindingHelper.Count(F, fkHttpInsteadOfHttps),
       'am Host verankerte Namespace-URIs bleiben Identitaeten');
+  finally F.Free; end;
+end;
+
+
+{ --- Posten 190: drei von sechs TLS-Emit-Pfaden ohne Test -------- }
+//
+// Der Detektor kennt sechs Wege, eine TLS-Pruefung abzuschalten.
+// Drei davon waren ungetestet: die leere VerifyMode-Menge, die
+// veralteten SSLOptions.Method-Werte und SecureProtocols mit SSL3/TLS1.
+// Jeder haengt an einem eigenen Regex - ein Tippfehler darin waere
+// unbemerkt geblieben.
+//
+// Alle drei an der Exe gemessen (je 1 Fund) und wie die Nachbartests
+// mit einer Zeilen-Assertion versehen.
+
+procedure TTestRestHttpSecurity.IndyVerifyModeEmpty_Reported;
+// Pfad 2d: leere Menge = keine Zertifikatspruefung.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  Http.SSLOptions.VerifyMode := [];'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Fnd := TFindingHelper.FirstOf(F, fkDisabledTlsVerification);
+    Assert.IsNotNull(Fnd, 'eine leere VerifyMode-Menge schaltet die Pruefung ab');
+    Assert.AreEqual('4', Fnd.LineNumber,
+      'der Fund muss auf der Anweisungszeile sitzen');
+  finally F.Free; end;
+end;
+
+procedure TTestRestHttpSecurity.IndyOldProtocolMethod_Reported;
+// Pfad 2e: SSLv3 ist seit POODLE tot.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  Http.SSLOptions.Method := sslvSSLv3;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Fnd := TFindingHelper.FirstOf(F, fkDisabledTlsVerification);
+    Assert.IsNotNull(Fnd, 'SSLv3 ist ein veraltetes Protokoll');
+    Assert.AreEqual('4', Fnd.LineNumber,
+      'der Fund muss auf der Anweisungszeile sitzen');
+  finally F.Free; end;
+end;
+
+procedure TTestRestHttpSecurity.SecureProtocolsWithSsl3_Reported;
+// Pfad 2f: SecureProtocols mit veralteten Mitgliedern.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  Client.SecureProtocols := [SSL3, TLS1];'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Fnd := TFindingHelper.FirstOf(F, fkDisabledTlsVerification);
+    Assert.IsNotNull(Fnd, 'SSL3/TLS1 in SecureProtocols sind veraltet');
+    Assert.AreEqual('4', Fnd.LineNumber,
+      'der Fund muss auf der Anweisungszeile sitzen');
   finally F.Free; end;
 end;
 

@@ -220,6 +220,31 @@ begin
       end
       else if Lower = 'asm' then
         InAsm := True;   // `asm` selbst wird noch normal geprueft
+      // PAKET 9018 (2026-09-14, beim Selbstscan einer Testdatei
+      // gefunden): links steht keine Punkt-Pruefung. Ein Bezeichner
+      // unmittelbar hinter einem Punkt ist aber NIE ein
+      // Schluesselwort - er ist ein Member.
+      //
+      //   L.Contains(1)      1 Fund: 'Keyword "Contains" should be
+      //                      lowercase'
+      //   L.Enthaelt(1)      0
+      //
+      // Der Wortgrenzen-Test benutzt IsIdentChar, und ein Punkt ist
+      // keins - deshalb faellt der Member durch.
+      //
+      // KORPUS: 2.754 solcher Stellen in 628 Dateien, davon 2.025 mal
+      // 'Contains' (jedes TList.Contains, jedes Assert.Contains), dazu
+      // Final, Register, Operator, Object, Abstract, Label, Requires,
+      // Implements. Der Fix waere eine Zeile - ist AtPos > 1 und das
+      // Zeichen davor ein Punkt, dann kein Schluesselwort -, rein
+      // subtrahierend.
+      //
+      // WARUM ES TROTZDEM EIN EIGENES PAKET IST: die Regel ist fcLow
+      // und faellt im Referenzlauf komplett heraus (SCA064 hat dort 0
+      // Funde). Die 2.754 sieht nur, wer die Konfidenzschwelle senkt -
+      // ein A/B gegen die Referenz wuerde also NICHTS zeigen, und der
+      // Nachweis braucht einen eigenen Messaufbau. Genau dieselbe
+      // Falle wie bei der Sichtbarkeitsfamilie (Paket 9014).
       if IsKeyword(Lower) and (Word <> Lower) then
       begin
         Hit.Col  := wStart;

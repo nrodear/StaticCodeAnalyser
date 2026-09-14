@@ -35,6 +35,11 @@ type
     [Test] procedure AbiFromClassDeclaration_NotReported;
     [Test] procedure DeclWithoutAbiForwardingExc_StillReported;
     [Test] procedure AmbiguousMethodNameAcrossClasses_StillReported;
+    // Posten 301: StartsWith(log) ohne Ausschlussliste
+    [Test] procedure NonLoggerLogPrefix_Silenced_KnownLimit;
+    [Test] procedure LogicalPrefix_Silenced_KnownLimit;
+    [Test] procedure RealLogger_Silenced_Kontrolle;
+    [Test] procedure NoLogAtAll_Reported_Kontrolle;
   end;
 
 implementation
@@ -43,6 +48,130 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 301: die Asymmetrie der beiden log-Pfade ------------- }
+//
+// Der Detektor schweigt, wenn ein Handler LOGGT und den Fluss VERLAESST
+// (HasLog UND HasLeave). Fuer Bezeichner, die auf "log" ENDEN, gibt es
+// eine Ausschlussliste (dialog, catalog, ...); fuer das StartsWith
+// nicht. "Logout" und "LogicalCompare" setzen HasLog also wie ein
+// echter Logger und schalten einen ECHTEN Swallow-Handler stumm.
+//
+// Alle vier an der Exe gemessen.
+//
+// NICHT GEFIXT: die Abgrenzung ist eine Wortliste, keine Regel -
+// "LogInteger" ist ein Logger, "LogicalToDevice" nicht. Und sie liesse
+// sich nicht validieren: eine Suche ueber alle except-Bloecke des
+// Korpus mit einem Nicht-Logger-log*-Aufruf UND einem Leave-Muster
+// liefert NULL Treffer. Eine geratene Liste waere schlechter als die
+// dokumentierte Grenze.
+
+procedure TTestExceptionTooGeneral.NonLoggerLogPrefix_Silenced_KnownLimit;
+// DIE GRENZE. Logout ist kein Logger, der Handler verschluckt die
+// Exception wirklich. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  try'#13#10+
+  '    A;'#13#10+
+  '  except'#13#10+
+  '    on E: Exception do'#13#10+
+  '    begin'#13#10+
+  '      Logout;'#13#10+
+  '      Exit;'#13#10+
+  '    end;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkExceptionTooGeneral),
+      'BEKANNTE GRENZE: jeder log*-Bezeichner setzt HasLog');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptionTooGeneral.LogicalPrefix_Silenced_KnownLimit;
+// Zweite Auspraegung derselben Grenze. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  try'#13#10+
+  '    A;'#13#10+
+  '  except'#13#10+
+  '    on E: Exception do'#13#10+
+  '    begin'#13#10+
+  '      LogicalCompare(A, B);'#13#10+
+  '      Exit;'#13#10+
+  '    end;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkExceptionTooGeneral),
+      'BEKANNTE GRENZE: auch LogicalCompare setzt HasLog');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptionTooGeneral.RealLogger_Silenced_Kontrolle;
+// Die berechtigte Unterdrueckung daneben. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  try'#13#10+
+  '    A;'#13#10+
+  '  except'#13#10+
+  '    on E: Exception do'#13#10+
+  '    begin'#13#10+
+  '      LogError(E);'#13#10+
+  '      Exit;'#13#10+
+  '    end;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkExceptionTooGeneral),
+      'ein echter Logger mit Leave-Muster darf schweigen');
+  finally F.Free; end;
+end;
+
+procedure TTestExceptionTooGeneral.NoLogAtAll_Reported_Kontrolle;
+// Und die Positiv-Kontrolle: ohne Log-Aufruf bleibt der Fund.
+// Gemessen: 1. Ohne sie belegten die drei Nullen darueber nichts.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  try'#13#10+
+  '    A;'#13#10+
+  '  except'#13#10+
+  '    on E: Exception do'#13#10+
+  '    begin'#13#10+
+  '      Beep;'#13#10+
+  '      Exit;'#13#10+
+  '    end;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkExceptionTooGeneral),
+      'ein Handler ohne Log verschluckt und wird gemeldet');
+  finally F.Free; end;
+end;
+
 
 procedure TTestExceptionTooGeneral.OnException_Reported;
 const SRC =

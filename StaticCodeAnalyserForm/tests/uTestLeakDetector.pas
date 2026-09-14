@@ -244,6 +244,11 @@ type
     [Test] procedure Leak_ReassignedThenFree_KnownLimitation_NoFinding;
     [Test] procedure Leak_FreeOnlyInIfBranch_KnownLimitation_NoFinding;
     [Test] procedure Leak_UseAfterFree_KnownLimitation_NoFinding;
+    // Posten 302: der space-lose as-Zweig war fuer fremde Bezeichner offen
+    [Test] procedure Leak_ResultForeignAsIdentifier_ReportsError;
+    [Test] procedure Leak_ResultVarAsInterface_NoFinding;
+    [Test] procedure Leak_FieldForeignAsIdentifier_ReportsError;
+    [Test] procedure Leak_FieldVarAsInterface_NoFinding;
   end;
 
   // Referenz-Aliasing (zwei Refs auf ein Objekt) und die
@@ -580,6 +585,39 @@ type
     // weil der Dateiname hier die Testvariable ist -
     // TFindingHelper.FindingsOf gibt ihn nicht frei.
     function FieldLeakCount(const ASrc, AFileName: string): Integer;
+  end;
+
+  // ---- Posten 164: die ZEILENFASSUNG der DisposeOf-Erkennung ------
+  //
+  // ZeileGibtVarFrei liest die Quellzeile, nicht den Baum. Der
+  // Bestandstest Leak_DisposeOf_NoFinding laeuft ueber den
+  // Baum-Pfad (FindingsOf) und deckt diese Fassung NICHT ab - die
+  // fehlende DisposeOf-Nadel blieb deshalb unsichtbar, bis sie in
+  // Charge 2 nachgetragen wurde.
+  //
+  // EIGENE Fixture, weil die drei thematisch passenden voll sind:
+  // TypeMatrix und Borrowed stehen mit je 21 Methoden schon ueber
+  // der Schwelle von 20, TryGeometry erreicht sie mit dem ersten
+  // neuen Test.
+  //
+  // Alle neun Erwartungen an der Exe gemessen. FUENF davon waeren
+  // ohne die Nadel rot gewesen und schliessen damit die Luecke des
+  // Postens; die vier mit dem Waechter-Hinweis waren auch vorher
+  // gruen (an einer Vorher-Simulation gemessen: Nadel durch einen
+  // Namen ersetzt, den keine der beiden Fassungen kennt).
+  [TestFixture]
+  TTestMemoryLeakDisposeOfSource = class
+  public
+    [Test] procedure Leak_DisposeOfInFinally_NoFinding;
+    [Test] procedure Leak_DisposeOfInFinally_Kontrolle;
+    [Test] procedure Leak_DisposeOfOutsideFinally_StillWarns;
+    [Test] procedure Leak_AlignedDotDisposeOfInFinally_NoFinding;
+    [Test] procedure Leak_TypecastDisposeOfInFinally_KnownLimit;
+    [Test] procedure Leak_DisposeOfLeftWordBoundaryInFinally_StillWarns;
+    [Test] procedure Leak_DisposeOfBothVarsInFinally_Kontrolle;
+    [Test] procedure Leak_AlignedDotDisposeOfInNestedRoutine_NoFinding;
+    [Test] procedure Leak_NestedRoutineWithoutFree_Kontrolle;
+    [Test] procedure Leak_TypecastDisposeOfInNestedRoutine_KnownLimit;
   end;
 
 implementation
@@ -3078,6 +3116,130 @@ end;
   ==================================================================== }
 
 // --- A: Wrong-Free / Mismatched Free (10 Tests) ---
+
+{ --- Posten 302: die tote 'as'-ohne-Space-Toleranz ---------- }
+//
+// uLeakDetector2 hielt an zwei Stellen eine zweite, space-lose Form des
+// Interface-Casts fuer moeglich: Variablenname + "as" + Buchstabe. Der
+// Parser liefert die nie (JoinTokInto setzt zwischen zwei Identifier-
+// Zeichen immer ein Blank), erreichbar war der Zweig nur noch fuer
+// FREMDE Bezeichner - und die schalteten ein echtes Leck stumm.
+//
+// Die vier Tests decken beide Fundstellen ab, je Paar aus Wirkung und
+// Kontrolle. Ohne die Kontrollen waeren die beiden 1er auch mit einer
+// kaputten Fixture gruen.
+
+procedure TTestMemoryLeakAdvanced.Leak_ResultForeignAsIdentifier_ReportsError;
+// IsReturnedAsResult: 'DataAsString' ist eine ANDERE Variable.
+// Vor dem Fix an der Exe gemessen: 0 Funde, das Leck von 'data'
+// war unterdrueckt. Kontrolle 'DataXsString' meldete 1.
+const SRC =
+  'unit t; interface'#13#10+
+  'uses System.Classes;'#13#10+
+  'type TFoo = class'#13#10+
+  '  function Get: TStringList;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'function TFoo.Get: TStringList;'#13#10+
+  'var data: TStringList;'#13#10+
+  'begin'#13#10+
+  '  data := TStringList.Create;'#13#10+
+  '  data.Add(''x'');'#13#10+
+  '  Result := DataAsString;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'fremder Bezeichner mit as-Silbe darf kein Ownership-Transfer sein');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_ResultVarAsInterface_NoFinding;
+// Die berechtigte Unterdrueckung daneben - und zugleich der Beleg,
+// dass der Space-Zweig traegt: an Zeichen 5 steht ein Blank, der
+// geloeschte Zweig KANN hier nicht gegriffen haben. Gemessen: 0.
+const SRC =
+  'unit t; interface'#13#10+
+  'uses System.Classes;'#13#10+
+  'type TFoo = class'#13#10+
+  '  function Get: TStringList;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'function TFoo.Get: TStringList;'#13#10+
+  'var data: TStringList;'#13#10+
+  'begin'#13#10+
+  '  data := TStringList.Create;'#13#10+
+  '  data.Add(''x'');'#13#10+
+  '  Result := data as IFoo;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'echter Interface-Cast als Ergebnis - der Refcount uebernimmt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_FieldForeignAsIdentifier_ReportsError;
+// Zweite Fundstelle, Feldtransfer in IsPassedToOwner. Vor dem Fix
+// gemessen: 0; Kontrolle 'ItemsXsString' meldete 1.
+const SRC =
+  'unit t; interface'#13#10+
+  'uses System.Classes;'#13#10+
+  'type TBar = class'#13#10+
+  '  FCache: string;'#13#10+
+  '  procedure Go;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'procedure TBar.Go;'#13#10+
+  'var items: TStringList;'#13#10+
+  'begin'#13#10+
+  '  items := TStringList.Create;'#13#10+
+  '  items.Add(''x'');'#13#10+
+  '  FCache := ItemsAsString;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'auch im Feldpfad ist die as-Silbe kein Transfer');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_FieldVarAsInterface_NoFinding;
+// Kontrolle zum Feldpfad. Gemessen: 0.
+const SRC =
+  'unit t; interface'#13#10+
+  'uses System.Classes;'#13#10+
+  'type TBar = class'#13#10+
+  '  FCache: string;'#13#10+
+  '  procedure Go;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'procedure TBar.Go;'#13#10+
+  'var items: TStringList;'#13#10+
+  'begin'#13#10+
+  '  items := TStringList.Create;'#13#10+
+  '  items.Add(''x'');'#13#10+
+  '  FCache := items as IFoo;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'echter Interface-Cast ins Feld - der Refcount uebernimmt');
+  finally F.Free; end;
+end;
+
 
 procedure TTestMemoryLeakAdvanced.Leak_ExceptFreeExit_NormalFreeSameTry_NoWarning;
 // FP-Gate Prio 5, regionsbezogen erweitert (01.09.). Nachbau von
@@ -8043,6 +8205,345 @@ begin
   try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) >= 1,
     'das im ZWEITEN Konstruktor erzeugte, nie freigegebene Feld ist ' +
     'ein Leak');
+  finally F.Free; end;
+end;
+
+{ ---- Posten 164: DisposeOf in der Zeilenfassung ---------------- }
+
+procedure TTestMemoryLeakDisposeOfSource.Leak_DisposeOfInFinally_NoFinding;
+// Der Kern des Postens: DisposeOf in einer finally-Region.
+// Gemessen: 0.
+//
+// Dass hier wirklich die ZEILENFASSUNG entscheidet und nicht
+// der Baum, zeigt das Paar weiter unten: die Typecast-Form
+// kennt der Baum sehr wohl, gemeldet wird sie trotzdem.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var'#13#10 +
+  '  list: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  list := nil;'#13#10 +
+  '  try'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '    if (list <> nil) then FreeAndNil(list);'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '  finally'#13#10 +
+  '    list.DisposeOf;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'DisposeOf im finally gibt frei wie Free');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakDisposeOfSource.Leak_DisposeOfInFinally_Kontrolle;
+// DIE KLAMMER: dieselbe Fixture, im finally nur eine
+// fremde Anweisung. Gemessen: 1.
+// Auch VOR dem DisposeOf-Fix gruen - reiner Waechter, kein Luecken-Schliesser.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var'#13#10 +
+  '  list: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  list := nil;'#13#10 +
+  '  try'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '    if (list <> nil) then FreeAndNil(list);'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '  finally'#13#10 +
+  '    Beep;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'ohne Freigabe im finally bleibt der Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakDisposeOfSource.Leak_DisposeOfOutsideFinally_StillWarns;
+// Dasselbe DisposeOf, aber HINTER dem finally-Block.
+// Gemessen: 1 - die Region entscheidet, nicht das Wort.
+// Auch VOR dem DisposeOf-Fix gruen - reiner Waechter, kein Luecken-Schliesser.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var'#13#10 +
+  '  list: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  list := nil;'#13#10 +
+  '  try'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '    if (list <> nil) then FreeAndNil(list);'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '  finally'#13#10 +
+  '    Beep;'#13#10 +
+  '  end;'#13#10 +
+  '  list.DisposeOf;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'DisposeOf ausserhalb der Region rettet nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakDisposeOfSource.Leak_AlignedDotDisposeOfInFinally_NoFinding;
+// Ausgerichteter Punkt (Leerzeichen vor dem Punkt) - die
+// Schreibweise kommt real vor. Kreuzung aus der
+// Punkt-Normalisierung und der neuen Nadel. Gemessen: 0.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var'#13#10 +
+  '  list: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  list := nil;'#13#10 +
+  '  try'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '    if (list <> nil) then FreeAndNil(list);'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '  finally'#13#10 +
+  '    list      .DisposeOf;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'auch mit ausgerichtetem Punkt wird die Freigabe erkannt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakDisposeOfSource.Leak_TypecastDisposeOfInFinally_KnownLimit;
+// GRENZE, bewusst so: ein Typecast vor dem Punkt wird von
+// der Zeilenfassung nicht erkannt. Gemessen: 1, also ein
+// Fehlfund - aber ein dokumentierter (uLeakDetector2:2512).
+//
+// Im heutigen Korpus gibt es KEIN Live-Vorkommen dieser
+// Form: die einzige Textstelle steht in einem
+// Blockkommentar. Der Test pinnt eine Absicht, keinen Fall.
+// Auch VOR dem DisposeOf-Fix gruen - reiner Waechter, kein Luecken-Schliesser.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var'#13#10 +
+  '  list: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  list := nil;'#13#10 +
+  '  try'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '    if (list <> nil) then FreeAndNil(list);'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '  finally'#13#10 +
+  '    TStringList(list).DisposeOf;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'BEKANNTE GRENZE: Typecast vor dem Punkt wird nicht erkannt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakDisposeOfSource.Leak_DisposeOfLeftWordBoundaryInFinally_StillWarns;
+// LINKE Wortgrenze: freigegeben wird "mylist", nicht
+// "list" - die Nadel darf nicht im laengeren Namen
+// zuschlagen. Gemessen: 1 (der Fund gilt "list").
+//
+// Der Name sagt LINKE Grenze, weil die rechte offen ist:
+// die Nadel wird ohne Rechts-Pruefung gesetzt, "list
+// .DisposeOfChildren" gilt als Freigabe. Das ist Bestand
+// fuer alle drei Direkt-Nadeln und wird hier ausdruecklich
+// NICHT gepinnt - ein Test mit Erwartung 0 wuerde einen
+// maskierten Leck-Fund festschreiben.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var'#13#10 +
+  '  list, mylist: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  list := nil;'#13#10 +
+  '  mylist := nil;'#13#10 +
+  '  try'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '    if (list <> nil) then FreeAndNil(list);'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '    mylist := TStringList.Create;'#13#10 +
+  '    if (mylist <> nil) then FreeAndNil(mylist);'#13#10 +
+  '    mylist := TStringList.Create;'#13#10 +
+  '  finally'#13#10 +
+  '    mylist.DisposeOf;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'die Nadel darf nicht im laengeren Namen zuschlagen');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakDisposeOfSource.Leak_DisposeOfBothVarsInFinally_Kontrolle;
+// DIE KLAMMER dazu: dieselbe Fixture, im finally beide
+// Variablen freigegeben. Gemessen: 0.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var'#13#10 +
+  '  list, mylist: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  list := nil;'#13#10 +
+  '  mylist := nil;'#13#10 +
+  '  try'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '    if (list <> nil) then FreeAndNil(list);'#13#10 +
+  '    list := TStringList.Create;'#13#10 +
+  '    mylist := TStringList.Create;'#13#10 +
+  '    if (mylist <> nil) then FreeAndNil(mylist);'#13#10 +
+  '    mylist := TStringList.Create;'#13#10 +
+  '  finally'#13#10 +
+  '    mylist.DisposeOf;'#13#10 +
+  '    list.DisposeOf;'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'sind beide freigegeben, bleibt nichts uebrig');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakDisposeOfSource.Leak_AlignedDotDisposeOfInNestedRoutine_NoFinding;
+// Der zweite Konsument der Zeilenfassung: die Freigabe
+// steht in einer geschachtelten Routine. Gemessen: 0.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Outer;'#13#10 +
+  'var'#13#10 +
+  '  list: TStringList;'#13#10 +
+  '  procedure Cleanup;'#13#10 +
+  '  begin'#13#10 +
+  '    list      .DisposeOf;'#13#10 +
+  '  end;'#13#10 +
+  'begin'#13#10 +
+  '  list := TStringList.Create;'#13#10 +
+  '  Cleanup;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'die Freigabe in der geschachtelten Routine zaehlt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakDisposeOfSource.Leak_NestedRoutineWithoutFree_Kontrolle;
+// DIE KLAMMER dazu, Zeichen fuer Zeichen dieselbe Fixture
+// mit einer fremden Anweisung statt der Freigabe.
+// Gemessen: 1.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Outer;'#13#10 +
+  'var'#13#10 +
+  '  list: TStringList;'#13#10 +
+  '  procedure Cleanup;'#13#10 +
+  '  begin'#13#10 +
+  '    Beep;'#13#10 +
+  '  end;'#13#10 +
+  'begin'#13#10 +
+  '  list := TStringList.Create;'#13#10 +
+  '  Cleanup;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'ohne Freigabe in der geschachtelten Routine bleibt der Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakDisposeOfSource.Leak_TypecastDisposeOfInNestedRoutine_KnownLimit;
+// Dieselbe Grenze wie oben, auf dem zweiten Konsumenten.
+// Gemessen: 1.
+// Auch VOR dem DisposeOf-Fix gruen - reiner Waechter, kein Luecken-Schliesser.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Outer;'#13#10 +
+  'var'#13#10 +
+  '  list: TStringList;'#13#10 +
+  '  procedure Cleanup;'#13#10 +
+  '  begin'#13#10 +
+  '    TStringList(list).DisposeOf;'#13#10 +
+  '  end;'#13#10 +
+  'begin'#13#10 +
+  '  list := TStringList.Create;'#13#10 +
+  '  Cleanup;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'BEKANNTE GRENZE: auch hier faellt der Typecast durch');
   finally F.Free; end;
 end;
 

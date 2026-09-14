@@ -28,6 +28,8 @@ type
     [Test] procedure Format_WidthSpecifier_CorrectCount;
     [Test] procedure Format_StarWidthAndPrecision_NoFinding;
     [Test] procedure Format_NestedInsideAdd_NoFinding;
+    // Posten 291: der diskriminierende Partner dazu
+    [Test] procedure Format_NestedInsideAdd_Mismatch_Reported;
     [Test] procedure Format_StringContentParsed_CorrectCount;
     [Test] procedure Format_EscapedQuoteInString_CorrectCount;
     // Real-world Pattern aus mORMot-artigen deutschen Meldungen mit
@@ -49,6 +51,15 @@ type
     [Test] procedure FormatLocale_ParenInStringArg_WithSettings_NoFinding;
     [Test] procedure FormatLocale_ParenInStringArg_NoSettings_Reported;
     [Test] procedure FormatLocale_StringSpec_NoFinding;
+    // Posten 201: die uebrigen vier Float-Spezifizierer
+    [Test] procedure FormatLocale_SpecG_WithoutSettings_Reported;
+    [Test] procedure FormatLocale_SpecG_WithSettings_NoFinding;
+    [Test] procedure FormatLocale_SpecE_WithoutSettings_Reported;
+    [Test] procedure FormatLocale_SpecE_WithSettings_NoFinding;
+    [Test] procedure FormatLocale_SpecN_WithoutSettings_Reported;
+    [Test] procedure FormatLocale_SpecN_WithSettings_NoFinding;
+    [Test] procedure FormatLocale_SpecM_WithoutSettings_Reported;
+    [Test] procedure FormatLocale_SpecM_WithSettings_NoFinding;
   end;
 
   // ---- Real-World-FP-Triage 2026-06-25 (SCA005, 25-Repo-Korpus) ----------------------
@@ -277,8 +288,19 @@ begin
 end;
 
 procedure TTestFormatMismatch.Format_NestedInsideAdd_NoFinding;
-// Results.Add(Format('%d %s',[v,k])) – Format ist verschachteltes Argument,
-// kein eigenständiger Aufruf → kein Befund.
+// Posten 291: die Begruendung, die hier stand, war FALSCH. Sie
+// lautete "Format ist verschachteltes Argument, kein eigenstaendiger
+// Aufruf -> kein Befund". An der Exe widerlegt:
+//   Results.Add(Format('%d %s', [A, B]))   0 Funde
+//   Results.Add(Format('%d %s', [A]))      1 FUND
+// Der Detektor analysiert verschachtelte Format-Aufrufe sehr wohl.
+// Diese Fixture war nur deshalb gruen, weil Platzhalter- und
+// Argumentzahl uebereinstimmen - sie hat nie etwas geprueft, was
+// ihr Name behauptet.
+//
+// Sie bleibt als das, was sie wirklich belegt: passende Zahlen
+// melden nicht, auch verschachtelt. Der diskriminierende Fall steht
+// direkt darunter.
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -290,7 +312,27 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkFormatMismatch),
-      'Format() als Argument in Add() – kein Befund');
+      'passende Platzhalter- und Argumentzahl meldet nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatch.Format_NestedInsideAdd_Mismatch_Reported;
+// DER DISKRIMINIERENDE FALL zu dem Test darueber: dieselbe
+// Verschachtelung, aber ein Argument zu wenig. Wenn die alte
+// Begruendung stimmte, muesste auch das schweigen.
+// An der Exe gemessen: 1 Fund - die Verschachtelung schuetzt nicht.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  Results.Add(Format(''%d  %s'', [Pair.Value]));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkFormatMismatch),
+      'auch als verschachteltes Argument wird Format geprueft');
   finally F.Free; end;
 end;
 
@@ -355,6 +397,153 @@ end;
 // =============================================================================
 // FormatMismatch-Erweiterung
 // =============================================================================
+
+{ --- Posten 201: HasFloatSpec kennt vier Spezifizierer ----------- }
+//
+// Getestet war nur '%f'. HasFloatSpec fuehrt aber auch %g, %e, %n und
+// %m - jeder davon ist locale-abhaengig, und jeder hing allein an der
+// Zeichenliste. Ein Tippfehler darin haette vier stille FN erzeugt.
+//
+// Alle am gebauten Stand gemessen, je als Paar ohne/mit
+// TFormatSettings. Das Paar ordnet die 0 dem Settings-Argument zu und
+// nicht irgendeinem anderen Gate.
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecG_WithoutSettings_Reported;
+// '%.2g' ohne TFormatSettings. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2g'', [x]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'auch %.2g ist locale-abhaengig');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecG_WithSettings_NoFinding;
+// Dasselbe MIT TFormatSettings. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2g'', [x], fs); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'mit TFormatSettings ist %.2g abgesichert');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecE_WithoutSettings_Reported;
+// '%.2e' ohne TFormatSettings. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2e'', [x]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'auch %.2e ist locale-abhaengig');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecE_WithSettings_NoFinding;
+// Dasselbe MIT TFormatSettings. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2e'', [x], fs); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'mit TFormatSettings ist %.2e abgesichert');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecN_WithoutSettings_Reported;
+// '%.2n' ohne TFormatSettings. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2n'', [x]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'auch %.2n ist locale-abhaengig');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecN_WithSettings_NoFinding;
+// Dasselbe MIT TFormatSettings. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2n'', [x], fs); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'mit TFormatSettings ist %.2n abgesichert');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecM_WithoutSettings_Reported;
+// '%.2m' ohne TFormatSettings. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2m'', [x]); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'auch %.2m ist locale-abhaengig');
+  finally F.Free; end;
+end;
+
+procedure TTestFormatMismatchExt.FormatLocale_SpecM_WithSettings_NoFinding;
+// Dasselbe MIT TFormatSettings. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var s: string; x: Double; fs: TFormatSettings;'#13#10+
+  'begin s := Format(''%.2m'', [x], fs); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkFormatLocaleHint),
+      'mit TFormatSettings ist %.2m abgesichert');
+  finally F.Free; end;
+end;
+
 
 procedure TTestFormatMismatchExt.Format_OnePlaceholderTwoArgs_ReportsError;
 const SRC =

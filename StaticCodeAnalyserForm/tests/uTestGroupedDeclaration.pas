@@ -19,6 +19,10 @@ type
     [Test] procedure ParameterGrouped_NotReported;
     [Test] procedure FieldGrouped_Reported;
     [Test] procedure GroupedDeclaration_KindAndSeverity;
+    // Posten 206: Zustandsleck am Treffer (vier var-Parameter)
+    [Test] procedure DeclThenCommentOpened_NoSecondFinding;
+    [Test] procedure DeclThenParenStarOpened_NoSecondFinding;
+    [Test] procedure DeclOnlyInMultiLineComment_NoFinding;
   end;
 
 implementation
@@ -27,6 +31,86 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 206: vier Zustaende ueber die Zeilengrenze ----------- }
+//
+// FindGroupedDecl fuehrt VIER Zustaende ueber Zeilen mit: InBlockComm,
+// InParenStarComm, ParenDepth und Gate. Der Exit am Treffer liess sie
+// alle vier falsch zurueck.
+//
+// An der gebauten Exe gemessen: die erste Fixture ergab 2 Funde statt
+// 1; dieselbe Datei mit 'A: Integer;' - also ohne Treffer vor dem '{' -
+// ergab richtig 0.
+
+procedure TTestGroupedDeclaration.DeclThenCommentOpened_NoSecondFinding;
+// DER NACHWEIS. Heute 2 Funde, nach dem Fix 1.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TFoo = class'#13#10+
+  '    A, B: Integer;  {'#13#10+
+  '    C, D: Integer;'#13#10+
+  '    }'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkGroupedDeclaration),
+      'die Deklaration im Blockkommentar ist kein Code');
+  finally F.Free; end;
+end;
+
+procedure TTestGroupedDeclaration.DeclThenParenStarOpened_NoSecondFinding;
+// Dasselbe fuer die (* *)-Form.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TFoo = class'#13#10+
+  '    A, B: Integer;  (*'#13#10+
+  '    C, D: Integer;'#13#10+
+  '    *)'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkGroupedDeclaration),
+      'die Deklaration im (* *)-Kommentar ist kein Code');
+  finally F.Free; end;
+end;
+
+procedure TTestGroupedDeclaration.DeclOnlyInMultiLineComment_NoFinding;
+// Ohne Treffer vor dem Kommentar: heute schon 0, muss 0 bleiben.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TFoo = class'#13#10+
+  '    A: Integer;  {'#13#10+
+  '    C, D: Integer;'#13#10+
+  '    }'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkGroupedDeclaration),
+      'ohne vorangehenden Treffer war der Kommentar schon immer dicht');
+  finally F.Free; end;
+end;
+
 
 procedure TTestGroupedDeclaration.CaseLabelsWithStatement_NoFinding;
 // 'vaOne, vaTwo: DoIt;' im case-Rumpf erfuellte das Muster (>=2

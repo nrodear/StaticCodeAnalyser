@@ -105,6 +105,26 @@ end;
 function FindGroupedDecl(const Line: string; var InBlockComm: Boolean;
   var InParenStarComm: Boolean; var ParenDepth: Integer;
   var Gate: TCaseGate): Integer;
+// Liefert die Spalte der ersten gruppierten Deklaration - scannt die
+// Zeile aber auch NACH einem Treffer zu Ende. Der alte Exit am Treffer
+// (Chargen-Review 2026-09-14) liess VIER mitgefuehrte Zustaende falsch
+// zurueck: InBlockComm, InParenStarComm, ParenDepth und Gate.
+//
+// An der gebauten Exe gemessen:
+//     A, B: Integer;  {
+//     C, D: Integer;
+//     }
+//   ergab 2 Funde statt 1. Dieselbe Datei mit 'A: Integer;' in der
+//   ersten Zeile - also ohne Treffer vor dem '{' - ergab richtig 0.
+//
+// Der ParenDepth-Uebertrag ist hier besonders heikel: er ist laut
+// Posten 206 der einzige Grund fuer das var-Parameter-Design. Ein
+// Treffer VOR einer oeffnenden Klammer haette die Tiefe verschluckt und
+// den mehrzeiligen Methodenkopf der Folgezeile als Deklarationsliste
+// gelesen.
+//
+// Gleiche Fehlerklasse und gleiche Loesung wie in uWithStatement.FindWith
+// und uReversedForRange.ScanLine.
 type
   TStateKind = (skScan, skAfterIdent, skExpectId2);
 var
@@ -217,11 +237,8 @@ begin
               // Stelle sicher, dass weiterer Identifier (Typ) folgt
               j := i + 1;
               while (j <= n) and CharInSet(Line[j], [' ', #9]) do Inc(j);
-              if (j <= n) and IsIdentStart(Line[j]) then
-              begin
-                Result := FirstCol;
-                Exit;
-              end;
+              if (j <= n) and IsIdentStart(Line[j]) and (Result = 0) then
+                Result := FirstCol;   // KEIN Exit - s. Kopfkommentar
             end;
             // Reset; aktuelles `:` ist konsumiert.
             State := skScan;

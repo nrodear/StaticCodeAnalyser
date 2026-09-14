@@ -4,14 +4,14 @@ unit uDivByZero;
 //
 // Drei Heuristiken:
 //
-//   H1 – Literale Null: 'div 0' oder 'mod 0' im Ausdruck
+//   H1 - Literale Null: 'div 0' oder 'mod 0' im Ausdruck
 //        Immer Fehler (EZeroDivide).
 //
-//   H2 – Parameter als Divisor ohne Guard:
+//   H2 - Parameter als Divisor ohne Guard:
 //        Integer-Parameter wird als Divisor verwendet ohne vorherige
 //        if-Bedingung wie 'param > 0' oder 'param <> 0'.
 //
-//   H3 – Lokale Integer-Variable als Divisor ohne Guard:
+//   H3 - Lokale Integer-Variable als Divisor ohne Guard:
 //        Wie H2 aber fuer lokale Vars statt Parameter.
 //
 // Erkannte Guards (in if-Bedingungen ZWISCHEN Methodenanfang und Division):

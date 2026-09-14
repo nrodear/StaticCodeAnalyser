@@ -174,6 +174,66 @@ var
     end;
   end;
 
+  // Matchendes 'until' zum 'repeat' - dieselbe Bauform wie
+  // FindMatchingEnd darueber, und aus demselben Grund (Posten 184,
+  // 2026-09-14): der repeat-Zweig suchte sein Ende mit einem nackten
+  // PosEx('until', ...) - ohne Wortgrenzen und ohne Tiefe, also mit
+  // exakt der Signatur, die fuenf Zeilen weiter oben schon einmal ein
+  // Blocker war. Zwei belegte Ausfaelle, je mit ihrer Klammer an der
+  // Exe gemessen:
+  //
+  //   'WaitUntilReady(n);' im Rumpf, Concat dahinter    0 statt 1
+  //   dasselbe mit 'WaitForReady(n);'                   1
+  //   aeusseres repeat, Concat hinter dem inneren       0 statt 1
+  //   dasselbe ohne die innere Schleife                 1
+  //
+  // Korpus: 731 verkuerzte Bloecke in 210 Dateien, 30 davon mit einem
+  // Detektor-Muster im verlorenen Stueck (42 Concat-Treffer, keine
+  // ParamByName/FieldByName); der Substring-Defekt trifft 4 Bloecke.
+  //
+  // Die Tiefenzaehlung SUBTRAHIERT auch: ein punkt-qualifizierter
+  // Bezeichner namens Repeat (TSkTileMode.Repeat - MatchKeyword laesst
+  // ihn durch, '.' ist kein Ident-Zeichen) oeffnete bisher eine
+  // Phantom-Range bis zum naechsten 'until' IRGENDWO in der Datei,
+  // quer durch fremde Routinen. Ab jetzt verbraucht die Zaehlung das
+  // 'until' der echten Schleife und die Phantom-Range entfaellt. Im
+  // Korpus 12 Dateien mit dieser Schreibweise, heute ohne messbaren
+  // Fehlfund - aber jedes kuenftige Concat in so einem Fenster waere
+  // einer gewesen.
+  //
+  // LOKALE LAENGEN statt WordLen: MatchKeyword setzt WordLen auch
+  // dann, wenn es False liefert, und an genau diesem Seiteneffekt
+  // traegt die Unit schon eine Narbe (s. 'var KwLen := WordLen' im
+  // for/while-Zweig).
+  function FindMatchingUntil(From: Integer): Integer;
+  const
+    LEN_REPEAT = 6;
+    LEN_UNTIL  = 5;
+  var
+    Depth, p : Integer;
+  begin
+    Result := 0;
+    Depth  := 0;
+    p := From;
+    while p <= n do
+    begin
+      if MatchKeyword('repeat', p) then
+      begin
+        Inc(Depth);
+        Inc(p, LEN_REPEAT);
+        Continue;
+      end;
+      if MatchKeyword('until', p) then
+      begin
+        if Depth = 0 then Exit(p);
+        Dec(Depth);
+        Inc(p, LEN_UNTIL);
+        Continue;
+      end;
+      Inc(p);
+    end;
+  end;
+
 begin
   L := LowerCase(Code);
   n := Length(L);
@@ -221,9 +281,9 @@ begin
       begin
         // repeat-Body startet direkt hinter 'repeat'.
         R.StartPos := i + 6;
-        // Suche das matchende 'until' - hier vereinfacht: erstes 'until'
-        // auf gleicher Tiefe. Fuer MVP geht ein simpler PosEx-Match.
-        KeywordEnd := PosEx('until', L, R.StartPos);
+        // Matchendes 'until' mit Wortgrenzen und Tiefe - Begruendung
+        // und Messung am Kopf von FindMatchingUntil.
+        KeywordEnd := FindMatchingUntil(R.StartPos);
         if KeywordEnd > 0 then
         begin
           R.EndPos := KeywordEnd - 1;

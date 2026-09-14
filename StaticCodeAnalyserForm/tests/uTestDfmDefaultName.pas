@@ -28,6 +28,8 @@ type
     [Test] procedure Test_Finding_MissingVarContainsNameAndClass;
     [Test] procedure Test_Finding_SeverityIsHint;
     [Test] procedure Test_Finding_KindIsDfmDefaultName;
+    // Posten 290: die zweite Haelfte der Grenze von Test_FormItselfWithDigit
+    [Test] procedure Test_FormItselfPlainTForm_Detected;
   end;
 
 implementation
@@ -155,7 +157,7 @@ procedure TTestDfmDefaultName.Test_FormItselfWithDigit_NotDetected;
 // 'Form2: TForm2' - Klassen-Suffix 'Form2' enthaelt selbst Ziffer; nach
 // Abzug bleibt nichts uebrig -> kein Default-Name. Wenn die Form als
 // 'Form2: TForm' deklariert ist, wuerde der Detektor allerdings 'Form2'
-// als Default ansehen (siehe Folgetest).
+// als Default ansehen - das haelt Test_FormItselfPlainTForm_Detected fest.
 var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn('object Form2: TForm2 end');
@@ -165,6 +167,26 @@ begin
 end;
 
 { --- Vorkommen in Verschachtelung --- }
+
+procedure TTestDfmDefaultName.Test_FormItselfPlainTForm_Detected;
+// DER FOLGETEST, auf den der Kommentar oben verweist. Er fehlte -
+// Posten 290. Die interessante Haelfte der Grenze stand damit als
+// blosse Behauptung im Kommentar.
+//
+// Ohne Ziffer im Klassennamen bleibt nach Abzug des Suffixes ein
+// Rest uebrig, und die Root-Form selbst gilt als Default-Name.
+// An der Exe gemessen, .dfm+.pas-Paar im Verzeichnisscan:
+//   object Form2: TForm    -> 1 Fund   (hier)
+//   object Form2: TForm2   -> 0        (Test darueber)
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn('object Form2: TForm end');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmDefaultName),
+      'Root-Form ohne Ziffer im Klassennamen gilt als Default-Name');
+  finally F.Free; end;
+end;
+
 
 procedure TTestDfmDefaultName.Test_DefaultNameInDeeplyNested_StillDetected;
 var F: TObjectList<TLeakFinding>;

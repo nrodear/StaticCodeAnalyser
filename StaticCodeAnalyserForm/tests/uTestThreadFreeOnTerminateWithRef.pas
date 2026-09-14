@@ -21,6 +21,10 @@ type
     [Test] procedure AccessBeforeLateFoT_NotReported;
     // Voll-Review 2026-09-12 (Major 83): Schreibzugriff NACH Start
     [Test] procedure LhsWriteAfterStart_Reported;
+    // Posten 212: der RHS-Read-Pfad der Assign-Schleife
+    [Test] procedure RhsReadAfterStart_Reported;
+    [Test] procedure CallAfterStart_Kontrolle_Reported;
+    [Test] procedure NoAccessAfterStart_NoFinding;
   end;
 
 implementation
@@ -29,6 +33,85 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 212: der RHS-Read-Pfad von Pass 2 -------------------- }
+//
+// Alle Positiv-Tests liefen ueber den CALL-Pfad (WaitFor). Pass 2
+// kennt aber auch die Assign-Schleife: ein LESENDER Zugriff auf der
+// rechten Seite einer Zuweisung nach dem Start ist genauso gefaehrlich
+// - der Thread kann sich zwischen Start und Lesen selbst freigeben.
+// Dieser Zweig war ungetestet.
+//
+// Zwei der drei Teilpunkte des Postens sind mit Charge 1 erledigt.
+// Alle drei Erwartungen hier am gebauten Stand gemessen.
+
+procedure TTestThreadFreeOnTerminateWithRef.RhsReadAfterStart_Reported;
+// DER UNGETESTETE PFAD: Lesen auf der rechten Seite. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var T: TMyThread; Done: Boolean;'#13#10+
+  'begin'#13#10+
+  '  T := TMyThread.Create(True);'#13#10+
+  '  T.FreeOnTerminate := True;'#13#10+
+  '  T.Start;'#13#10+
+  '  Done := T.Finished;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkThreadFreeOnTerminateWithRef),
+      'auch ein lesender Zugriff nach Start ist ein Zugriff');
+  finally F.Free; end;
+end;
+
+procedure TTestThreadFreeOnTerminateWithRef.CallAfterStart_Kontrolle_Reported;
+// Der bekannte Call-Pfad daneben, zum Vergleich. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var T: TMyThread;'#13#10+
+  'begin'#13#10+
+  '  T := TMyThread.Create(True);'#13#10+
+  '  T.FreeOnTerminate := True;'#13#10+
+  '  T.Start;'#13#10+
+  '  T.WaitFor;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkThreadFreeOnTerminateWithRef),
+      'der Call-Pfad meldet wie bisher');
+  finally F.Free; end;
+end;
+
+procedure TTestThreadFreeOnTerminateWithRef.NoAccessAfterStart_NoFinding;
+// Die Gegenprobe: gar kein Zugriff nach dem Start. Gemessen: 0.
+// Ohne sie belegten die beiden darueber nur, DASS gemeldet wird -
+// nicht, dass der ZUGRIFF der Ausloeser ist.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'var T: TMyThread;'#13#10+
+  'begin'#13#10+
+  '  T := TMyThread.Create(True);'#13#10+
+  '  T.FreeOnTerminate := True;'#13#10+
+  '  T.Start;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkThreadFreeOnTerminateWithRef),
+      'ohne Zugriff nach Start gibt es nichts zu melden');
+  finally F.Free; end;
+end;
+
 
 procedure TTestThreadFreeOnTerminateWithRef.AccessAfterFreeOnTerminate_Reported;
 const SRC =

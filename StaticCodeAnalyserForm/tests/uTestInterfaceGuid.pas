@@ -5,7 +5,12 @@ unit uTestInterfaceGuid;
 // Der Einzeldatei-Harness (FindingsOfFile) laeuft OHNE Scan-Index. SCA198
 // vergleicht dann nur innerhalb der Datei - genau das ist hier pruefbar.
 // Die projektweite Seite (uInterfaceGuidIndex.Build ueber mehrere Dateien)
-// hat eigene Tests weiter unten, die den Index direkt fuellen.
+// deckt Index_BuildOverThreeFiles_SitesOfFindsAll ab; der Test legt drei
+// echte Dateien an, weil Build Pfade nimmt und keinen Quelltext.
+//
+// Dieser Absatz behauptete bis 2026-09-14 "eigene Tests weiter unten,
+// die den Index direkt fuellen" - die gab es nie, unten standen nur
+// NormalizeGuid- und ScanFile-Tests (Posten 162).
 
 interface
 
@@ -67,6 +72,11 @@ type
     [Test] procedure NormalizeGuid_AcceptsCanonicalForm;
     [Test] procedure NormalizeGuid_RejectsNonGuid;
     [Test] procedure ScanFile_ReadsNameLineAndGuid;
+    // Posten 162: MAX_ORTE-Kuerzung und die projektweite Index-Seite
+    [Test] procedure DuplicateGuid_FourSites_NoTruncation;
+    [Test] procedure DuplicateGuid_FiveSites_TruncatedByOne;
+    [Test] procedure DuplicateGuid_EightSites_TruncatedByFour;
+    [Test] procedure Index_BuildOverThreeFiles_SitesOfFindsAll;
   end;
 
 implementation
@@ -79,6 +89,10 @@ implementation
 // eigentlich gescannt wird. Genau das soll ein Fixture nicht.
 
 uses
+  // System.IOUtils: Index_BuildOverThreeFiles_SitesOfFindsAll legt drei
+  // echte Dateien an - TInterfaceGuidIndex.Build nimmt Pfade, keinen
+  // Quelltext (Posten 162).
+  System.IOUtils,
   System.SysUtils, System.Classes, System.Generics.Collections,
   uSCAConsts, uMethodd12, uInterfaceGuidIndex,
   uTestFindingHelper;
@@ -431,6 +445,224 @@ begin
       'gleicher Name = dieselbe Deklaration, kein GUID-Diebstahl');
   finally F.Free; end;
 end;
+
+{ --- Posten 162: die projektweite Seite und die Kuerzung --------- }
+//
+// Der Kopf dieser Unit behauptete, die projektweite Seite
+// (TInterfaceGuidIndex.Build ueber mehrere Dateien) habe "eigene
+// Tests weiter unten". Die gab es nicht - nur NormalizeGuid- und
+// ScanFile-Tests. Ebenso ungetestet: die MAX_ORTE-Kuerzung, die den
+// Meldetext ab dem vierten anderen Ort mit "+N more" abschliesst.
+//
+// Alle Erwartungen an der Exe gemessen.
+
+procedure TTestInterfaceGuid.DuplicateGuid_FourSites_NoTruncation;
+// Vier Interfaces, also drei ANDERE Orte je Fund - genau
+// MAX_ORTE. Gemessen: volle Liste, kein "+N more".
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  IA = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  IB = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  IC = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  ID = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkDuplicateInterfaceGuid);
+    Assert.IsNotNull(Hit,
+      'die Fixture muss ueberhaupt einen Fund liefern');
+    Assert.Contains(Hit.MissingVar, 'ID (',
+      'erwarteter Ortsteil fehlt: ID (');
+    Assert.IsFalse(Hit.MissingVar.Contains('more'),
+      'hier darf nicht gekuerzt werden');
+  finally F.Free; end;
+end;
+
+procedure TTestInterfaceGuid.DuplicateGuid_FiveSites_TruncatedByOne;
+// Fuenf Interfaces, vier andere Orte - einer zu viel.
+// Gemessen: drei Orte plus ", +1 more".
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  IA = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  IB = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  IC = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  ID = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  IE = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkDuplicateInterfaceGuid);
+    Assert.IsNotNull(Hit,
+      'die Fixture muss ueberhaupt einen Fund liefern');
+    Assert.Contains(Hit.MissingVar, ', +1 more',
+      'erwarteter Ortsteil fehlt: , +1 more');
+  finally F.Free; end;
+end;
+
+procedure TTestInterfaceGuid.DuplicateGuid_EightSites_TruncatedByFour;
+// Acht Interfaces, sieben andere. Gemessen: ", +4 more".
+// Zusammen mit dem Test darueber ist damit belegt, dass
+// die Zahl mitzaehlt und nicht konstant ist.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  IA = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  IB = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  IC = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  ID = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  IE = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  IF = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  IG = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  '  IH = interface'#13#10 +
+  '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+  '    procedure Tu;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkDuplicateInterfaceGuid);
+    Assert.IsNotNull(Hit,
+      'die Fixture muss ueberhaupt einen Fund liefern');
+    Assert.Contains(Hit.MissingVar, ', +4 more',
+      'erwarteter Ortsteil fehlt: , +4 more');
+  finally F.Free; end;
+end;
+
+procedure TTestInterfaceGuid.Index_BuildOverThreeFiles_SitesOfFindsAll;
+// Die projektweite Seite, die der Unit-Kopf versprochen hat.
+// Drei Dateien, dieselbe GUID, drei verschiedene Interfaces:
+// Build muss alle drei fuehren und SitesOf sie zurueckgeben.
+//
+// An der Exe gegengeprueft (Verzeichnisscan ueber dieselben drei
+// Units): jeder der drei Funde nennt die beiden anderen.
+const
+  VORLAGE =
+    'unit %s;'#13#10 +
+    'interface'#13#10 +
+    'type'#13#10 +
+    '  I%s = interface'#13#10 +
+    '    [''{11111111-2222-3333-4444-555555555555}'']'#13#10 +
+    '    procedure Tu;'#13#10 +
+    '  end;'#13#10 +
+    'implementation'#13#10 +
+    'end.';
+var
+  Index  : TInterfaceGuidIndex;
+  Dateien: TStringList;
+  Ordner : string;
+  Pfad   : string;
+  SL     : TStringList;
+  Stellen: TArray<TInterfaceDecl>;
+  i      : Integer;
+  Buch   : string;
+begin
+  Ordner := TPath.Combine(TPath.GetTempPath,
+    'sca_guididx_' + TGuid.NewGuid.ToString
+      .Replace('{', '').Replace('}', '')
+      .Replace('-', ''));
+  TDirectory.CreateDirectory(Ordner);
+  Dateien := TStringList.Create;
+  try
+    for i := 0 to 2 do
+    begin
+      Buch := Chr(Ord('A') + i);
+      Pfad := TPath.Combine(Ordner, 'u' + Buch + '.pas');
+      SL := TStringList.Create;
+      try
+        SL.Text := Format(VORLAGE, ['u' + Buch, Buch]);
+        SL.SaveToFile(Pfad, TEncoding.UTF8);
+      finally SL.Free; end;
+      Dateien.Add(Pfad);
+    end;
+
+    Index := TInterfaceGuidIndex.Create;
+    try
+      Assert.IsTrue(Index.IsEmpty,
+        'vor dem Build ist der Index leer');
+      Index.Build(Dateien);
+      Assert.IsFalse(Index.IsEmpty,
+        'nach dem Build ueber drei Dateien nicht mehr');
+      Assert.AreEqual<Integer>(3, Index.Count,
+        'Count zaehlt FUNDSTELLEN, nicht GUIDs');
+      Stellen := Index.SitesOf(
+        TInterfaceGuidIndex.NormalizeGuid('{11111111-2222-3333-4444-555555555555}'));
+      Assert.AreEqual<Integer>(3, Length(Stellen),
+        'SitesOf muss alle drei Dateien nennen');
+    finally Index.Free; end;
+  finally
+    Dateien.Free;
+    TDirectory.Delete(Ordner, True);
+  end;
+end;
+
 
 procedure TTestInterfaceGuid.NormalizeGuid_AcceptsCanonicalForm;
 begin

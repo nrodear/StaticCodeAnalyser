@@ -1,5 +1,30 @@
 unit uTestUnpairedLock;
 
+// Tests fuer SCA153 (Acquire ohne try/finally).
+//
+// WAS DIESE TESTS PRUEFEN UND WAS NICHT (gemessen 2026-09-14, Posten
+// 220): der Harness FindingsOfFile ruft den Detektor DIREKT. In der
+// Produktion liegt davor ein Token-Vorfilter -
+// ['tcriticalsection', 'tmonitor', '.enter', '.acquire'],
+// uStaticAnalyzer2.pas:505. Von den Fixtures dieser Datei tragen ELF
+// keines dieser Token; sie erreichen den Detektor im echten Lauf also
+// nie, darunter vier POSITIV-Tests (LockWithoutTryFinally_Reported,
+// EnterCriticalSectionWithoutTry_Reported, Finding_KindAndSeverity,
+// MethodNamedLockWithRealAcquire_StillReported).
+//
+// Das ist keine dritte Detektormenge, sondern eine dritte EBENE: die
+// Tests hier sind richtig und pruefen den Detektor, sie beweisen aber
+// nichts ueber den Auslieferungspfad. An der Exe belegt, dieselbe
+// Routine zweimal: 'FLocker.Lock;' -> 0 Funde, 'FLocker.Acquire;'
+// -> 1.
+//
+// Der fehlende Token '.lock' verdeckt am Korpus 51 echte Funde in 21
+// Dateien (Messung: jede Kandidatendatei mit einer Kommentarzeile
+// 'tcriticalsection' versehen, sonst unveraendert, und gescannt).
+// Das ist ein RECALL-Paket mit eigenem Zweig - siehe die Notiz an der
+// Registrierung. Hier wird es ausdruecklich NICHT als bekannte Grenze
+// gepinnt: ein gruener Test auf einen gemessenen Defekt zementiert ihn.
+
 interface
 
 uses
@@ -29,14 +54,196 @@ type
     // Voll-Review 2026-09-12 (Major 87): Events sind bewusst NICHT
     // abgedeckt - dokumentierender Test, kein Vertrag auf Abdeckung
     [Test] procedure RtlEventWaitFor_NotCovered_ByDesign;
+    // Posten 220: die fehlende Klammer zur Event-Grenze und der
+    // bis dahin ungeprueffte Fund-Anker
+    [Test] procedure RtlEventWaitFor_AcquireInstead_Kontrolle;
+    [Test] procedure Finding_LineNumberIsAcquireLine;
+    [Test] procedure LineNumberSurvivesBlockComment;
+    [Test] procedure LineNumberSurvivesStringLiterals;
+    [Test] procedure TwoBareLocks_BothLinesReported;
   end;
 
 implementation
 
 uses
+  // System.Classes: TwoBareLocks_BothLinesReported sammelt die
+  // Fundzeilen selbst - TFindingHelper hat kein NthOf (Posten 220).
+  System.Classes,
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 220: die Klammer zur Grenze und der Fund-Anker ------- }
+//
+// Teil (a) des Postens ist ueberholt: die Behauptung, das
+// Event-Muster sei abgedeckt, steht seit dem Voll-Review nicht mehr
+// im Kopf, und RtlEventWaitFor_NotCovered_ByDesign pinnt die Null.
+// Was fehlte, ist die KLAMMER daneben - ohne sie belegt die Null
+// nichts.
+//
+// Teil (b) ist frisch: kein einziger Test hat je die Fundzeile
+// geprueft. Der Anker kommt aus LineForPos ueber den GESTRIPPTEN
+// Text (uUnpairedLock.pas:248-249, 326) - Kommentare und Literale
+// werden durch Leerzeichen ersetzt, damit die Zeilenzaehlung haelt.
+// Genau das pruefen die zwei letzten Tests.
+//
+// Alle Zahlen und Zeilen an der Exe gemessen.
+
+procedure TTestUnpairedLock.RtlEventWaitFor_AcquireInstead_Kontrolle;
+// DIE KLAMMER zu RtlEventWaitFor_NotCovered_ByDesign: dieselbe
+// Routine, die zwei Event-Aufrufe durch ein Paar aus Acquire und
+// Release ersetzt. Gemessen: 1 auf Zeile 4. Damit gehoert die
+// Null dort dem Regex und nicht der Fixture.
+//
+// Die Klammer gilt auf HARNESS-Ebene: FindingsOfFile ruft den
+// Detektor direkt und kennt den Vorfilter nicht. In der
+// Produktion traegt diese Fixture das Token ".acquire", die
+// gepinnte daneben gar keines - beide waeren dort stumm, aber
+// aus verschiedenen Gruenden.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure TFoo.Warte;'#13#10 +
+  'begin'#13#10 +
+  '  FGuard.Acquire;'#13#10 +
+  '  DoStuff;'#13#10 +
+  '  FGuard.Release;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnpairedLock),
+      'ein echtes Acquire ohne try/finally wird gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestUnpairedLock.Finding_LineNumberIsAcquireLine;
+// Der Fund-Anker ist die Zeile des Acquire, nicht die des
+// Methodenkopfs und nicht die des Release. Gemessen:
+// Zeile 4.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  FCS.Acquire;'#13#10 +
+  '  DoStuff;'#13#10 +
+  '  FCS.Release;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkUnpairedLock);
+    Assert.IsNotNull(Hit, 'kein UnpairedLock-Fund');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FCS.Acquire'),
+      Hit.LineNumber,
+      'der Fund muss auf der Acquire-Zeile stehen');
+  finally F.Free; end;
+end;
+
+procedure TTestUnpairedLock.LineNumberSurvivesBlockComment;
+// Der Anker wird ueber den GESTRIPPTEN Text berechnet.
+// Wuerde der Strip Zeichen entfernen statt sie durch
+// Leerzeichen zu ersetzen, verschoebe ein mehrzeiliger
+// Kommentar davor die Zeilennummer. Gemessen: Zeile 7.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  { ein'#13#10 +
+  '    mehrzeiliger'#13#10 +
+  '    Kommentar }'#13#10 +
+  '  FCS.Acquire;'#13#10 +
+  '  DoStuff;'#13#10 +
+  '  FCS.Release;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkUnpairedLock);
+    Assert.IsNotNull(Hit, 'kein UnpairedLock-Fund');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FCS.Acquire'),
+      Hit.LineNumber,
+      'ein mehrzeiliger Kommentar darf den Anker nicht verschieben');
+  finally F.Free; end;
+end;
+
+procedure TTestUnpairedLock.LineNumberSurvivesStringLiterals;
+// Dasselbe fuer ausgeblendete Zeichenkettenliterale.
+// Gemessen: Zeile 6.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  Log(''erste Zeile'');'#13#10 +
+  '  Log(''zweite'');'#13#10 +
+  '  FCS.Acquire;'#13#10 +
+  '  DoStuff;'#13#10 +
+  '  FCS.Release;'#13#10 +
+  'end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Hit := TFindingHelper.FirstOf(F, fkUnpairedLock);
+    Assert.IsNotNull(Hit, 'kein UnpairedLock-Fund');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FCS.Acquire'),
+      Hit.LineNumber,
+      'ausgeblendete Literale duerfen den Anker nicht verschieben');
+  finally F.Free; end;
+end;
+
+procedure TTestUnpairedLock.TwoBareLocks_BothLinesReported;
+// Zwei Routinen, zwei Funde - und beide muessen ihre EIGENE
+// Zeile tragen. Gemessen: Zeile 4 und Zeile 10, in
+// Dokumentreihenfolge.
+//
+// TFindingHelper hat kein NthOf; die Liste wird deshalb hier
+// selbst gefiltert.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure P;'#13#10 +
+  'begin'#13#10 +
+  '  FCS.Acquire;'#13#10 +
+  '  DoStuff;'#13#10 +
+  '  FCS.Release;'#13#10 +
+  'end;'#13#10 +
+  'procedure Q;'#13#10 +
+  'begin'#13#10 +
+  '  FOther.Acquire;'#13#10 +
+  '  DoMore;'#13#10 +
+  '  FOther.Release;'#13#10 +
+  'end;';
+var
+  F     : TObjectList<TLeakFinding>;
+  Fnd   : TLeakFinding;
+  Zeilen: TStringList;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  Zeilen := TStringList.Create;
+  try
+    for Fnd in F do
+      if Fnd.Kind = fkUnpairedLock then Zeilen.Add(Fnd.LineNumber);
+    Assert.AreEqual<Integer>(2, Zeilen.Count,
+      'beide Routinen muessen je einen Fund liefern');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FCS.Acquire'),
+      Zeilen[0], 'erster Fund auf der ersten Acquire-Zeile');
+    Assert.AreEqual(TFindingHelper.LineOf(SRC, 'FOther.Acquire'),
+      Zeilen[1], 'zweiter Fund auf der zweiten Acquire-Zeile');
+  finally
+    Zeilen.Free;
+    F.Free;
+  end;
+end;
+
 
 procedure TTestUnpairedLock.LockWithoutTryFinally_Reported;
 const SRC =

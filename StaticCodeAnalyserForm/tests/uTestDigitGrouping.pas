@@ -27,6 +27,10 @@ type
     [Test] procedure RealFloat_StillNotReported;
     // Testluecke 141: der zeilenuebergreifende Kommentar-Zustand
     [Test] procedure MultiLineBlockComments_OnlyRealCodeReported;
+    // Posten 300: Binaerliterale folgen der Hex-Ausnahme
+    [Test] procedure BinaryLiteral_NoFinding;
+    [Test] procedure HexLiteral_NoFinding_Kontrolle;
+    [Test] procedure DecimalLiteral_Kontrolle_Reported;
   end;
 
 implementation
@@ -35,6 +39,69 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 300: Binaerliterale wie Hex ausnehmen ---------------- }
+//
+// Der Unit-Kopf nimmt Hex und Float aus, weil dort eine ANDERE
+// Gruppierungskonvention gilt. Fuer Binaerliterale gilt genau
+// dasselbe - sie werden nach Nibbles oder Bytes gruppiert, nicht nach
+// Tausendern. Das '%' fiel aber durch alle Zweige, und der Ziffern-Run
+// startete an der ersten Binaerziffer.
+//
+// Alle drei an der Exe gemessen. KORPUSWIRKUNG 0: die Regel liefert im
+// Referenzlauf ueberhaupt keine Funde; im Quelltext stehen 81
+// Binaerliterale mit >= 5 Ziffern in 6 Dateien - sie waeren die
+// Kandidaten, sobald jemand die Regel einschaltet.
+
+procedure TTestDigitGrouping.BinaryLiteral_NoFinding;
+// DER NACHWEIS. Heute 1 Fund, nach dem Fix 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'const X = %1010101010101010;'#13#10 +
+  'begin end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkDigitGrouping),
+      'ein Binaerliteral wird nach Bits gruppiert, nicht nach Tausendern');
+  finally F.Free; end;
+end;
+
+procedure TTestDigitGrouping.HexLiteral_NoFinding_Kontrolle;
+// Die bereits richtige Nachbarausnahme, zum Vergleich. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'const X = $FFFFFFFF;'#13#10 +
+  'begin end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkDigitGrouping),
+      'Hex war schon immer ausgenommen');
+  finally F.Free; end;
+end;
+
+procedure TTestDigitGrouping.DecimalLiteral_Kontrolle_Reported;
+// POSITIV-KONTROLLE. Gemessen: 1 - die Regel wirkt weiterhin dort,
+// wo Tausendergruppen die richtige Konvention sind.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'const X = 1234567890;'#13#10 +
+  'begin end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkDigitGrouping),
+      'eine lange Dezimalzahl bleibt ein Fund');
+  finally F.Free; end;
+end;
+
 
 procedure TTestDigitGrouping.SmallNumber_NoFinding;
 const SRC =

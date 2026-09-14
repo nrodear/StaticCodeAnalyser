@@ -32,14 +32,470 @@ type
     // TP-Waechter fuer den else-Peek: '..end else SetLength(..)' ist
     // Teil des Schleifenstatements und MUSS Fund bleiben.
     [Test] procedure GrowInElseBranchOfLoopStatement_StillReported;
+    // Posten 207: der repeat-Zweig in TP-Richtung, plus seine drei Grenzen
+    [Test] procedure GrowInsideRepeatBody_Reported;
+    [Test] procedure GrowAfterCaseBlockInRepeatBody_Reported;
+    [Test] procedure GrowAfterBeginBlockInRepeatBody_Reported;
+    [Test] procedure GrowAfterTryFinallyInRepeatBody_Reported;
+    [Test] procedure GrowAfterInnerRepeatInOuterBody_Reported;
+    [Test] procedure AfterNestedRepeatUntil_NotReported;
+    [Test] procedure GrowInsideRepeatBodyOfExistingFixture_Reported;
+    [Test] procedure GrowInRepeatWithInlineRecordVar_KnownLimit;
+    [Test] procedure GrowInRepeatWithInlineIntVar_Kontrolle;
+    [Test] procedure GrowBeyondWindowInRepeatBody_KnownLimit;
+    [Test] procedure GrowInsideWindowInRepeatBody_Kontrolle;
+    [Test] procedure NestedLoopsGrowInInnerBody_DoubleReport_KnownLimit;
   end;
 
 implementation
+
+// noinspection-file GodClass, LargeClass, DuplicateBlock
+// Eine DUnitX-Fixture ist eine flache Liste unabhaengiger Faelle -
+// mit Posten 207 sind es 28 Methoden auf ueber 700 Zeilen, und die
+// Fixtures aehneln sich absichtlich (sie unterscheiden sich je in
+// EINER Zeile, das ist ihr Zweck). Dieselbe Zeile aus demselben
+// Grund in uTestDuplicate.pas.
 
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 207: der repeat-Zweig in TP-Richtung ----------------- }
+//
+// RumpfEndetVorGrow fuehrt seit langem einen eigenen Zweig fuer
+// repeat-Schleifen (uSetLengthAppendInLoop.pas:233-257). Getestet war
+// er nur in Gating-Richtung: AfterRepeatUntil_NotReported erwartet
+// eine Null, und daneben stand keine Eins.
+//
+// Die zwoelf Faelle hier sind an der Exe gemessen. Sie decken die
+// vier Rumpfformen ab, die den Blockzaehler in :241/:247 fuellen,
+// die geschachtelte Schleife in beiden Richtungen, und die zwei
+// bekannten Grenzen des Zweigs.
+
+procedure TTestSetLengthAppendInLoop.GrowInsideRepeatBody_Reported;
+// DER Posten selbst: waechst das Feld im Rumpf, ist es
+// derselbe quadratische Realloc wie in einer Zaehlschleife.
+// Gemessen: 1.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Sammle(var A: TArray<Integer>);'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  I := 0;'#13#10+
+  '  repeat'#13#10+
+  '    SetLength(A, Length(A) + 1);'#13#10+
+  '    A[High(A)] := I;'#13#10+
+  '    Inc(I);'#13#10+
+  '  until I > 9;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'Wachsen im repeat-Rumpf muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.GrowAfterCaseBlockInRepeatBody_Reported;
+// Genau die Form, die der Detektor-Kopf (:122-123) als Grund
+// nennt, warum Guard B verworfen wurde - und die bis heute
+// nicht gepinnt war. Ein Verzweigungsblock oeffnet und
+// schliesst im Rumpf, das Wachsen folgt danach. Gemessen: 1.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Sammle(var A: TArray<Integer>; Art: Integer);'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  I := 0;'#13#10+
+  '  repeat'#13#10+
+  '    case Art of'#13#10+
+  '      1: Inc(I);'#13#10+
+  '    end;'#13#10+
+  '    SetLength(A, Length(A) + 1);'#13#10+
+  '    A[High(A)] := I;'#13#10+
+  '  until I > 9;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'ein geschlossener Verzweigungsblock beendet den Rumpf nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.GrowAfterBeginBlockInRepeatBody_Reported;
+// Dieselbe Aussage mit einem Anweisungsblock statt der
+// Verzweigung. Beide Schluesselwoerter stehen in :241 in
+// EINEM Zweig - ein Refactor koennte sie trennen, und dann
+// faengt dieser Test die Haelfte, die der Nachbar nicht
+// faengt. Gemessen: 1.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Sammle(var A: TArray<Integer>; Art: Integer);'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  I := 0;'#13#10+
+  '  repeat'#13#10+
+  '    if Art = 1 then'#13#10+
+  '    begin'#13#10+
+  '      Inc(I);'#13#10+
+  '    end;'#13#10+
+  '    SetLength(A, Length(A) + 1);'#13#10+
+  '  until I > 9;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'ein geschlossener Anweisungsblock beendet den Rumpf nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.GrowAfterTryFinallyInRepeatBody_Reported;
+// Dritte Form: ein Schutzblock im Rumpf. Gemessen: 1.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Sammle(var A: TArray<Integer>);'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  I := 0;'#13#10+
+  '  repeat'#13#10+
+  '    try'#13#10+
+  '      Inc(I);'#13#10+
+  '    finally'#13#10+
+  '      Dec(I);'#13#10+
+  '    end;'#13#10+
+  '    SetLength(A, Length(A) + 1);'#13#10+
+  '    Inc(I);'#13#10+
+  '  until I > 9;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'ein geschlossener Schutzblock beendet den Rumpf nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.GrowAfterInnerRepeatInOuterBody_Reported;
+// Eine innere Schleife wird im Rumpf geoeffnet UND
+// geschlossen; das Wachsen steht danach, immer noch im
+// aeusseren Rumpf. Das trifft den Zaehler in :249-255.
+// Gemessen: 1.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Sammle(var A: TArray<Integer>);'#13#10+
+  'var I, J: Integer;'#13#10+
+  'begin'#13#10+
+  '  I := 0;'#13#10+
+  '  repeat'#13#10+
+  '    J := 0;'#13#10+
+  '    repeat'#13#10+
+  '      Inc(J);'#13#10+
+  '    until J > 2;'#13#10+
+  '    SetLength(A, Length(A) + 1);'#13#10+
+  '    Inc(I);'#13#10+
+  '  until I > 9;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'nach einer geschlossenen inneren Schleife laeuft der Rumpf weiter');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.AfterNestedRepeatUntil_NotReported;
+// DIE MINIMALKLAMMER zum Test darueber: Zeichen fuer Zeichen
+// dieselbe Fixture, das Wachsen nur hinter das aeussere Ende
+// verschoben. Gemessen: 0.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Sammle(var A: TArray<Integer>);'#13#10+
+  'var I, J: Integer;'#13#10+
+  'begin'#13#10+
+  '  I := 0;'#13#10+
+  '  repeat'#13#10+
+  '    J := 0;'#13#10+
+  '    repeat'#13#10+
+  '      Inc(J);'#13#10+
+  '    until J > 2;'#13#10+
+  '    Inc(I);'#13#10+
+  '  until I > 9;'#13#10+
+  '  SetLength(A, Length(A) + 1);'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'hinter der Schleife ist das Wachsen einmalig, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.GrowInsideRepeatBodyOfExistingFixture_Reported;
+// Die Kontrolle, die AfterRepeatUntil_NotReported nie hatte:
+// dessen Fixture, das Wachsen in den Rumpf gezogen.
+// Gemessen: 1. Damit ist die Null dort dem Ort des Wachsens
+// zuzuschreiben und nicht der Fixture.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Merke(var Liste: TArray<string>; Name: string);'#13#10+
+  'begin'#13#10+
+  '  repeat'#13#10+
+  '    Name := Trim(Name);'#13#10+
+  '    SetLength(Liste, Length(Liste) + 1);'#13#10+
+  '  until Name <> '''';'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'dieselbe Fixture meldet, sobald das Wachsen im Rumpf steht');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.GrowInRepeatWithInlineRecordVar_KnownLimit;
+// GRENZE 1, ein Gate zu viel: eine inline deklarierte
+// Verbundvariable im Rumpf traegt ein Ende, das der Zaehler
+// nicht erwartet - er faellt auf null und haelt den Rumpf
+// fuer beendet. Der echte Fund entfaellt. Gemessen: 0.
+//
+// Gilt fuer die einzeilige UND die mehrzeilige Schreibweise.
+// Dieselbe Deklaration im var-Abschnitt der Routine gatet
+// NICHT - die Grenze sitzt nur an der Deklaration im Rumpf.
+// Im Korpus kommt die Form nicht vor (0 Dateien).
+//
+// Die Fixture ist ein DOPPEL-Artefakt: die Exe meldet auf ihr
+// zusaetzlich einen ungenutzten Parameter, obwohl A benutzt
+// wird - der Parser verliert nach der Verbunddeklaration den
+// Rest des Rumpfs. Heute folgenlos, weil dieser Detektor die
+// Datei selbst liest (:339) und den Baum nie anfasst. Ein
+// kuenftiger baumgestuetzter Nachfolger waere hier aus dem
+// FALSCHEN Grund gruen.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Sammle(var A: TArray<Integer>);'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  I := 0;'#13#10+
+  '  repeat'#13#10+
+  '    var R: record X: Integer; end;'#13#10+
+  '    R.X := I;'#13#10+
+  '    SetLength(A, Length(A) + 1);'#13#10+
+  '    Inc(I);'#13#10+
+  '  until I > 9;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'BEKANNTE GRENZE: inline deklarierte Verbundvariable gatet den Fund weg');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.GrowInRepeatWithInlineIntVar_Kontrolle;
+// Die Klammer zur Grenze: dieselbe Fixture mit einer
+// gewoehnlichen inline-Deklaration statt der Verbundform.
+// Gemessen: 1.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Sammle(var A: TArray<Integer>);'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  I := 0;'#13#10+
+  '  repeat'#13#10+
+  '    var R: Integer;'#13#10+
+  '    R := I;'#13#10+
+  '    SetLength(A, Length(A) + 1);'#13#10+
+  '    Inc(I);'#13#10+
+  '  until I > 9;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'eine gewoehnliche inline-Deklaration gatet nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.GrowBeyondWindowInRepeatBody_KnownLimit;
+// GRENZE 2, das Suchfenster: der Scanner sieht ab dem
+// Schleifenkopf nur 600 Zeichen weit (:316). Liegt das
+// Wachsen dahinter, faellt der Fund aus. Gemessen: 0.
+//
+// ACHTUNG beim Aendern: der Kippunkt liegt bei DIESER
+// Fuellzeilenbreite zwischen 11 Zeilen (noch 1 Fund) und 12
+// Zeilen (0 Funde). Wer die Namen kuerzt oder die Fixture
+// umformatiert, verschiebt ihn und dreht beide Pins still um.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Sammle(var A: TArray<Integer>);'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  I := 0;'#13#10+
+  '  repeat'#13#10+
+  '    Zwischenschritt01 := Zwischenschritt01 + 1;'#13#10+
+  '    Zwischenschritt02 := Zwischenschritt02 + 1;'#13#10+
+  '    Zwischenschritt03 := Zwischenschritt03 + 1;'#13#10+
+  '    Zwischenschritt04 := Zwischenschritt04 + 1;'#13#10+
+  '    Zwischenschritt05 := Zwischenschritt05 + 1;'#13#10+
+  '    Zwischenschritt06 := Zwischenschritt06 + 1;'#13#10+
+  '    Zwischenschritt07 := Zwischenschritt07 + 1;'#13#10+
+  '    Zwischenschritt08 := Zwischenschritt08 + 1;'#13#10+
+  '    Zwischenschritt09 := Zwischenschritt09 + 1;'#13#10+
+  '    Zwischenschritt10 := Zwischenschritt10 + 1;'#13#10+
+  '    Zwischenschritt11 := Zwischenschritt11 + 1;'#13#10+
+  '    Zwischenschritt12 := Zwischenschritt12 + 1;'#13#10+
+  '    Zwischenschritt13 := Zwischenschritt13 + 1;'#13#10+
+  '    Zwischenschritt14 := Zwischenschritt14 + 1;'#13#10+
+  '    Zwischenschritt15 := Zwischenschritt15 + 1;'#13#10+
+  '    Zwischenschritt16 := Zwischenschritt16 + 1;'#13#10+
+  '    Zwischenschritt17 := Zwischenschritt17 + 1;'#13#10+
+  '    Zwischenschritt18 := Zwischenschritt18 + 1;'#13#10+
+  '    Zwischenschritt19 := Zwischenschritt19 + 1;'#13#10+
+  '    Zwischenschritt20 := Zwischenschritt20 + 1;'#13#10+
+  '    Zwischenschritt21 := Zwischenschritt21 + 1;'#13#10+
+  '    Zwischenschritt22 := Zwischenschritt22 + 1;'#13#10+
+  '    Zwischenschritt23 := Zwischenschritt23 + 1;'#13#10+
+  '    Zwischenschritt24 := Zwischenschritt24 + 1;'#13#10+
+  '    Zwischenschritt25 := Zwischenschritt25 + 1;'#13#10+
+  '    SetLength(A, Length(A) + 1);'#13#10+
+  '    Inc(I);'#13#10+
+  '  until I > 9;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'BEKANNTE GRENZE: hinter dem 600-Zeichen-Fenster faellt der Fund aus');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.GrowInsideWindowInRepeatBody_Kontrolle;
+// Die Klammer zum Fenster: acht Fuellzeilen statt
+// fuenfundzwanzig, sonst gleich. Gemessen: 1.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Sammle(var A: TArray<Integer>);'#13#10+
+  'var I: Integer;'#13#10+
+  'begin'#13#10+
+  '  I := 0;'#13#10+
+  '  repeat'#13#10+
+  '    Zwischenschritt01 := Zwischenschritt01 + 1;'#13#10+
+  '    Zwischenschritt02 := Zwischenschritt02 + 1;'#13#10+
+  '    Zwischenschritt03 := Zwischenschritt03 + 1;'#13#10+
+  '    Zwischenschritt04 := Zwischenschritt04 + 1;'#13#10+
+  '    Zwischenschritt05 := Zwischenschritt05 + 1;'#13#10+
+  '    Zwischenschritt06 := Zwischenschritt06 + 1;'#13#10+
+  '    Zwischenschritt07 := Zwischenschritt07 + 1;'#13#10+
+  '    Zwischenschritt08 := Zwischenschritt08 + 1;'#13#10+
+  '    SetLength(A, Length(A) + 1);'#13#10+
+  '    Inc(I);'#13#10+
+  '  until I > 9;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'innerhalb des Fensters wird derselbe Fund gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestSetLengthAppendInLoop.NestedLoopsGrowInInnerBody_DoubleReport_KnownLimit;
+// GRENZE 3: bei geschachtelten Schleifen wird dasselbe
+// Wachsen ZWEIMAL gemeldet, einmal je Schleife - der
+// Break in :394 verhindert Mehrfachmeldungen je SCHLEIFE,
+// nicht je ZEILE. Gemessen: 2, beide auf derselben Zeile.
+//
+// Das gilt fuer geschachtelte Schleifen ALLGEMEIN, nicht nur
+// fuer diese Schleifenart - zwei geschachtelte Zaehlschleifen
+// liefern ebenfalls 2. Wer das aendern will, aendert es fuer
+// alle Schachtelungen und bewegt Korpusfunde: eigener Posten
+// mit A/B-Lauf, keine Testluecke.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure Sammle(var A: TArray<Integer>);'#13#10+
+  'var I, J: Integer;'#13#10+
+  'begin'#13#10+
+  '  I := 0;'#13#10+
+  '  repeat'#13#10+
+  '    J := 0;'#13#10+
+  '    repeat'#13#10+
+  '      SetLength(A, Length(A) + 1);'#13#10+
+  '      Inc(J);'#13#10+
+  '    until J > 2;'#13#10+
+  '    Inc(I);'#13#10+
+  '  until I > 9;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(2,
+      TFindingHelper.Count(F, fkSetLengthAppendInLoop),
+      'BEKANNTE GRENZE: geschachtelte Schleifen melden dasselbe Wachsen doppelt');
+  finally F.Free; end;
+end;
+
 
 procedure TTestSetLengthAppendInLoop.ForLoopWithGrow_Reported;
 const SRC =

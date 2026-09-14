@@ -47,11 +47,32 @@ type
     [Test] procedure AppendInLoop_ConcatBehindAppend_StillReported;
     [Test] procedure IdentWithEndSubstring_NoPhantomRangeInNextRoutine;
     [Test] procedure InnerBlockEnd_DoesNotCutRange_ConcatReported;
+    // Posten 184: die dritte Schleifenart - Grundfaelle, zwei
+    // behobene Defekte und die zwei Subtraktionen des Fix
+    [Test] procedure Repeat_ConcatInBody_Reported;
+    [Test] procedure Repeat_ConcatAfterLoop_NotReported;
+    [Test] procedure Repeat_ParamByNameInBody_Reported;
+    [Test] procedure Repeat_FieldByNameInBody_Reported;
+    [Test] procedure Repeat_IdentContainingUntil_StillReported;
+    [Test] procedure Repeat_IdentWithoutUntil_Kontrolle;
+    [Test] procedure Repeat_NestedLoop_OuterTailStillReported;
+    [Test] procedure Repeat_NoNestedLoop_Kontrolle;
+    [Test] procedure Repeat_KeywordInComment_StillReported;
+    [Test] procedure Repeat_KeywordInLiteral_StillReported;
+    [Test] procedure Repeat_KeywordsInTwoLiterals_NoRange;
+    [Test] procedure Repeat_RealKeywords_Kontrolle;
+    [Test] procedure Repeat_DottedMemberNamed_NoPhantomRange;
+    [Test] procedure Repeat_UnbalancedOuterLoop_NoRange_KnownLimit;
   end;
 
 implementation
 
-// noinspection-file GodClass, LargeClass
+// noinspection-file GodClass, LargeClass, DuplicateBlock
+// DuplicateBlock seit Posten 184: die vier Minimal-Differenz-Paare
+// unterscheiden sich absichtlich in genau EINER Zeile - darin liegt
+// ihr ganzer Beweis, sie duerfen sich nicht unterscheiden. Ein
+// zeilengenauer Marker greift hier nicht: der Fund haengt an der
+// ersten Zeile des Fixture-Literals, nicht am Methodenkopf.
 // Eine Testklasse je Detektor ist der Projekt-Zuschnitt: SCA110-112
 // teilen sich EINEN Detektor, seine Regressionen gehoeren in EINE
 // Fixture-Klasse. Die Methoden-/Zeilen-Schwellen reissen hier durch
@@ -62,6 +83,436 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 184: der repeat-Zweig von FindLoopRanges ------------- }
+//
+// Alle 23 Bestandsfixtures nutzen Zaehl- oder Kopfschleifen; die
+// dritte Schleifenart hatte keine einzige. Beim Vermessen wurde aus
+// der Testluecke eine Codeluecke: der Zweig suchte sein Ende mit
+// einem nackten Teilstring-Vergleich, ohne Wortgrenzen und ohne
+// Tiefe - genau die Signatur, die fuenf Zeilen weiter oben schon
+// einmal ein Blocker war. Der Fix (FindMatchingUntil) steht in
+// demselben Commit wie diese Tests.
+//
+// Die Erwartungen unten sind die Zahlen NACH dem Fix. Wo sie sich
+// vom heutigen Stand unterscheiden, steht die Vorher-Zahl im
+// Kommentar - beide sind gemessen.
+
+procedure TTestPerfHotspots.Repeat_ConcatInBody_Reported;
+// Grundfall der dritten Schleifenart. Gemessen: 1.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Sammler;'#13#10 +
+  'var buf: string; idx: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  idx := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    buf := buf + IntToStr(idx);'#13#10 +
+  '    Inc(idx);'#13#10 +
+  '  until idx > 10;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkStringConcatInLoop),
+      'Verkettung im repeat-Rumpf ist derselbe Hotspot');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.Repeat_ConcatAfterLoop_NotReported;
+// Die Klammer dazu: dieselbe Struktur, die Verkettung hinter
+// dem Schleifenende. Gemessen: 0.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Zaehler;'#13#10 +
+  'var puffer: string; z: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  z := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    Inc(z);'#13#10 +
+  '  until z > 4;'#13#10 +
+  '  puffer := puffer + ''nach dem Loop'';'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkStringConcatInLoop),
+      'hinter der Schleife ist die Verkettung einmalig');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.Repeat_ParamByNameInBody_Reported;
+// Zweites Muster derselben Range. Gemessen: 1.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Blaettern(qry: TFDQuery);'#13#10 +
+  'begin'#13#10 +
+  '  qry.Open;'#13#10 +
+  '  repeat'#13#10 +
+  '    qry.ParamByName(''id'').AsInteger := 7;'#13#10 +
+  '    qry.Next;'#13#10 +
+  '  until qry.Eof;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkParamByNameInLoop),
+      'ParamByName im repeat-Rumpf wird gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.Repeat_FieldByNameInBody_Reported;
+// Drittes Muster. Gemessen: 1.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Auslesen(ds: TDataSet);'#13#10 +
+  'begin'#13#10 +
+  '  ds.First;'#13#10 +
+  '  repeat'#13#10 +
+  '    Lbl.Caption := ds.FieldByName(''Name'').AsString;'#13#10 +
+  '    ds.Next;'#13#10 +
+  '  until ds.Eof;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkFieldByNameInLoop),
+      'FieldByName im repeat-Rumpf wird gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.Repeat_IdentContainingUntil_StillReported;
+// DER ERSTE DEFEKT: ein Bezeichner, der die Silbe des
+// Schleifenendes enthaelt, beendete die Range mitten im
+// Wort - die Verkettung dahinter lag ausserhalb.
+// Vor dem Fix gemessen: 0. Nach dem Fix: 1.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Warten;'#13#10 +
+  'var zeile: string; n: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  n := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    WaitUntilReady(n);'#13#10 +
+  '    zeile := zeile + IntToStr(n);'#13#10 +
+  '    Inc(n);'#13#10 +
+  '  until n > 10;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkStringConcatInLoop),
+      'ein Bezeichner mit der Endsilbe beendet die Schleife nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.Repeat_IdentWithoutUntil_Kontrolle;
+// Die Klammer: derselbe Rumpf, ein einziger Bezeichner
+// anders. Vor UND nach dem Fix 1 - sie zeigt, dass die 0
+// oben allein an der Endsilbe hing.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Warten;'#13#10 +
+  'var zeile: string; n: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  n := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    WaitForReady(n);'#13#10 +
+  '    zeile := zeile + IntToStr(n);'#13#10 +
+  '    Inc(n);'#13#10 +
+  '  until n > 10;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkStringConcatInLoop),
+      'ohne die Endsilbe wurde derselbe Fall immer gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.Repeat_NestedLoop_OuterTailStillReported;
+// DER ZWEITE DEFEKT, im Korpus der groessere: die aeussere
+// Schleife endete am Ende der INNEREN, ihr Rest war
+// unsichtbar. Vor dem Fix gemessen: 0. Nach dem Fix: 1.
+//
+// Korpusflaeche: 731 verkuerzte Bloecke in 210 Dateien, 30
+// davon mit einem Detektor-Muster im verlorenen Stueck.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Schachteln;'#13#10 +
+  'var text: string; a, b: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  a := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    b := 0;'#13#10 +
+  '    repeat'#13#10 +
+  '      Inc(b);'#13#10 +
+  '    until b > 2;'#13#10 +
+  '    text := text + IntToStr(a);'#13#10 +
+  '    Inc(a);'#13#10 +
+  '  until a > 6;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkStringConcatInLoop),
+      'der Rest der aeusseren Schleife gehoert noch zu ihr');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.Repeat_NoNestedLoop_Kontrolle;
+// Die Klammer: dieselbe Routine ohne die innere Schleife.
+// Vor UND nach dem Fix 1.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Schachteln;'#13#10 +
+  'var text: string; a, b: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  a := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    b := 0;'#13#10 +
+  '    Inc(b);'#13#10 +
+  '    text := text + IntToStr(a);'#13#10 +
+  '    Inc(a);'#13#10 +
+  '  until a > 6;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkStringConcatInLoop),
+      'ohne innere Schleife wurde derselbe Fall immer gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.Repeat_KeywordInComment_StillReported;
+// Der Kommentar-Strip auf dem Pfad der dritten
+// Schleifenart: die Endsilbe in einem Kommentar darf die
+// Range nicht kappen. Gemessen: 1, vor und nach dem Fix.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Kommentiert;'#13#10 +
+  'var rest: string; p: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  p := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    // warten until das Geraet bereit meldet'#13#10 +
+  '    rest := rest + IntToStr(p);'#13#10 +
+  '    Inc(p);'#13#10 +
+  '  until p > 8;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkStringConcatInLoop),
+      'ein Kommentar beendet die Schleife nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.Repeat_KeywordInLiteral_StillReported;
+// Dasselbe fuer ein Zeichenkettenliteral im Rumpf.
+// Gemessen: 1, vor und nach dem Fix.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Protokolliert;'#13#10 +
+  'var eintrag: string; w: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  w := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    Log(''warte until bereit'');'#13#10 +
+  '    eintrag := eintrag + IntToStr(w);'#13#10 +
+  '    Inc(w);'#13#10 +
+  '  until w > 8;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkStringConcatInLoop),
+      'ein Literal beendet die Schleife nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.Repeat_KeywordsInTwoLiterals_NoRange;
+// Die Gegenrichtung zum Literal-Ausblenden: beide
+// Schluesselwoerter stehen in GETRENNTEN Literalen, die
+// Verkettung dazwischen. Ohne das Ausblenden umspannte die
+// Phantom-Range sie. Gemessen: 0, vor und nach dem Fix.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Phantom;'#13#10 +
+  'var wert: string;'#13#10 +
+  'begin'#13#10 +
+  '  Log(''repeat'');'#13#10 +
+  '  wert := wert + ''Stueck'';'#13#10 +
+  '  Log(''until'');'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkStringConcatInLoop),
+      'Literale oeffnen keine Schleife');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.Repeat_RealKeywords_Kontrolle;
+// Die Klammer dazu: dieselben drei Zeilen ohne
+// Anfuehrungszeichen. Gemessen: 1.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Phantom;'#13#10 +
+  'var wert: string;'#13#10 +
+  'begin'#13#10 +
+  '  repeat'#13#10 +
+  '  wert := wert + ''Stueck'';'#13#10 +
+  '  until True;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkStringConcatInLoop),
+      'echte Schluesselwoerter oeffnen sehr wohl eine Schleife');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.Repeat_DottedMemberNamed_NoPhantomRange;
+// DIE SUBTRAKTIONS-SEITE DES FIX. Ein punktqualifiziertes
+// Aufzaehlungsglied traegt denselben Namen wie das
+// Schluesselwort; die linke Wortgrenze laesst es durch, weil
+// der Punkt kein Bezeichnerzeichen ist. Bisher oeffnete es
+// eine Range bis zum naechsten Schleifenende IRGENDWO in der
+// Datei - hier quer in eine fremde Routine, und der
+// ParamByName-Aufruf in KEINER Schleife wurde gemeldet.
+//
+// Vor dem Fix gemessen: 1 (ein Fehlfund). Nach dem Fix: 0,
+// weil die Tiefenzaehlung das Ende der echten Schleife
+// verbraucht. Im Korpus tragen 12 Dateien diese
+// Schreibweise.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure A(q: TFDQuery);'#13#10 +
+  'begin'#13#10 +
+  '  SetTile(TSkTileMode.Repeat, TSkTileMode.Decal);'#13#10 +
+  '  q.ParamByName(''x'').AsInteger := 1;'#13#10 +
+  'end;'#13#10 +
+  'procedure B;'#13#10 +
+  'var i: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  i := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    Inc(i);'#13#10 +
+  '  until i > 3;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkParamByNameInLoop),
+      'ein punktqualifiziertes Glied oeffnet keine Schleife');
+  finally F.Free; end;
+end;
+
+procedure TTestPerfHotspots.Repeat_UnbalancedOuterLoop_NoRange_KnownLimit;
+// Die zweite Subtraktion, und die ehrlichere: fehlt der
+// aeusseren Schleife ihr Ende (unvollstaendiger Quelltext),
+// verbraucht die Tiefenzaehlung das Ende der inneren und
+// findet keins mehr - es entsteht GAR KEINE aeussere Range.
+// Vor dem Fix gemessen: 1 (die zu kurze Range deckte die
+// Verkettung noch). Nach dem Fix: 0.
+//
+// Das ist der Preis der Tiefenzaehlung, derselbe wie beim
+// begin/end-Zwilling. Im Korpus kostet er nichts: die sieben
+// Musterfunde in Bloecken ohne tiefengematchtes Ende liegen
+// alle zusaetzlich in echten Schleifen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Unbalanciert;'#13#10 +
+  'var s: string; i, j: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  i := 0;'#13#10 +
+  '  repeat'#13#10 +
+  '    s := s + IntToStr(i);'#13#10 +
+  '    j := 0;'#13#10 +
+  '    repeat'#13#10 +
+  '      Inc(j);'#13#10 +
+  '    until j > 2;'#13#10 +
+  '    Inc(i);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkStringConcatInLoop),
+      'BEKANNTE GRENZE: ohne Schleifenende entsteht keine Range');
+  finally F.Free; end;
+end;
+
 
 procedure TTestPerfHotspots.StringConcat_InForLoop_Reported;
 const SRC =

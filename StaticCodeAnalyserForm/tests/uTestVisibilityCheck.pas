@@ -62,6 +62,12 @@ type
     // OtherRefs-Skip muss den BESITZERTYP vergleichen, nicht das erste
     // Namenssegment
     [Test] procedure NestedClass_OnlyOwnCallers_CanBeStrictPrivate;
+    // ---- Posten 287 / Paket 9014: Amnestie per Substring -----------------
+    [Test] procedure RttiBase_PlainParent_UnusedPublicMember_Kontrolle;
+    [Test] procedure RttiBase_PlatformParent_Skipped_KnownLimit;
+    [Test] procedure RttiBase_CustomFormParent_Reported_KnownLimit;
+    // Posten 289: der Meldetext behauptete "subclasses only" trotz OwnRefs
+    [Test] procedure CanBeProtected_OwnAndSubRefs_MessageNamesBoth;
   end;
 
 implementation
@@ -71,6 +77,88 @@ uses
   uSCAConsts, uMethodd12,
   uSymbolReferenceIndex,
   uTestFindingHelper;
+
+{ --- Posten 287 / Paket 9014: IsRttiDriven trifft Zeichenfolgen -- }
+//
+// Der Amnestie-Test ist ein Substring ueber die ganze Elternliste,
+// und die vier Basisnamen tragen das Typpraefix mit. Das geht in
+// beide Richtungen daneben, und beide Richtungen stehen hier fest.
+// Korpus: 336 Klassen zu viel amnestiert, 1.084 zu wenig - deshalb
+// eigener Zweig und eigener Bau, s. Kopf von IsRttiDriven.
+//
+// Alle drei an der Exe gemessen. Der Kontrolltest ist die Klammer:
+// ohne ihn belegte die 0 im Platform-Test nichts.
+
+procedure TTestVisibilityCheck.RttiBase_PlainParent_UnusedPublicMember_Kontrolle;
+// KONTROLLE. Gewoehnliche Basis, keine Amnestie. Gemessen: 1.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TFoo = class(TBaseService)'#13#10 +
+  '  public'#13#10 +
+  '    procedure NeverCalled;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.NeverCalled; begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnusedPublicMember),
+      'gewoehnliche Basis - der ungenutzte public-Member wird gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestVisibilityCheck.RttiBase_PlatformParent_Skipped_KnownLimit;
+// GRENZE 1, falsche Amnestie: 'tplatformservice' enthaelt
+// die Zeichenfolge 'tform' (plaTFORMservice). Gemessen: 0.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TFoo = class(TPlatformService)'#13#10 +
+  '  public'#13#10 +
+  '    procedure NeverCalled;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.NeverCalled; begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUnusedPublicMember),
+      'BEKANNTE GRENZE: Platform-Basen werden faelschlich amnestiert');
+  finally F.Free; end;
+end;
+
+procedure TTestVisibilityCheck.RttiBase_CustomFormParent_Reported_KnownLimit;
+// GRENZE 2, blinder Fleck: 'tcustomform' enthaelt KEIN
+// 'tform' - vor dem 'Form' steht ein 'm'. Dieselbe Luecke
+// trifft TMainForm. Gemessen: 1, obwohl die Klasse ein Formular
+// ist und die DFM-Bindung ihre public-Member braucht.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TFoo = class(TCustomForm)'#13#10 +
+  '  public'#13#10 +
+  '    procedure NeverCalled;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.NeverCalled; begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnusedPublicMember),
+      'BEKANNTE GRENZE: TCustomForm faellt durch die Amnestie');
+  finally F.Free; end;
+end;
+
 
 procedure TTestVisibilityCheck.PublicMethod_OnlyOwnCallers_CanBePrivate;
 const SRC =
@@ -317,6 +405,74 @@ begin
     Assert.AreEqual(lsHint, Hit.Severity);
   finally F.Free; end;
 end;
+
+procedure TTestVisibilityCheck.CanBeProtected_OwnAndSubRefs_MessageNamesBoth;
+// Posten 289. Der SubRefs-Zweig gewinnt schon bei EINEM
+// Sub-Klassen-Aufruf, egal wie oft die eigene Klasse den Member
+// ruft: TBase.Helfer wird dreimal aus TBase.Eigen und einmal aus
+// TSub.Kind gerufen. Der Meldetext behauptete trotzdem "used by
+// subclasses only".
+//
+// Die EMPFEHLUNG war nie falsch - protected deckt die eigene
+// Klasse mit ab. Falsch war die Begruendung, und Meldetexte gehen
+// in den SARIF-Fingerprint (RuleID + Pfad + Zeile + Meldung).
+//
+// An der Exe gemessen: genau ein CanBeProtected-Fund auf dieser
+// Fixture, auf der Zeile von Helfer.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TBase = class'#13#10 +
+  '  public'#13#10 +
+  '    procedure Helfer;'#13#10 +
+  '    procedure Eigen;'#13#10 +
+  '  end;'#13#10 +
+  '  TSub = class(TBase)'#13#10 +
+  '  public'#13#10 +
+  '    procedure Kind;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TBase.Helfer;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'procedure TBase.Eigen;'#13#10 +
+  'begin'#13#10 +
+  '  Helfer;'#13#10 +
+  '  Helfer;'#13#10 +
+  '  Helfer;'#13#10 +
+  'end;'#13#10 +
+  'procedure TSub.Kind;'#13#10 +
+  'begin'#13#10 +
+  '  Helfer;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkCanBeProtected),
+      'ein Sub-Aufruf neben drei eigenen ergibt CanBeProtected');
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkCanBeProtected then
+      begin
+        Hit := Fnd;
+        Break;
+      end;
+    Assert.IsNotNull(Hit);
+    Assert.Contains(Hit.MissingVar,
+      'within the class and its subclasses',
+      'der Meldetext muss die eigene Klasse mitnennen');
+    Assert.IsFalse(Hit.MissingVar.Contains('subclasses only'),
+      'die alte, faktisch falsche Formulierung darf nicht zurueck');
+  finally F.Free; end;
+end;
+
 
 procedure TTestVisibilityCheck.CanBeProtected_KindAndSeverity;
 const SRC =

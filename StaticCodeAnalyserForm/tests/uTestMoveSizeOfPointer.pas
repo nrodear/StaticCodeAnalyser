@@ -17,6 +17,12 @@ type
     // --- Real-World FP-Audit 2026-07-10 Regression (Welle 1+2) ---
     [Test] procedure FillCharSizeOfSameRecordVar_NotReported;
     [Test] procedure FillCharSizeOfPointerTypeIntoBuffer_Reported;
+    // Posten 179: die drei lexischen Guards + die Vorfilter-Grenze
+    [Test] procedure MoveSizeOfPointer_Kontrolle_Reported;
+    [Test] procedure CountTimesSizeOf_MidGuard_NoFinding;
+    [Test] procedure SizeOfTimesCount_TrailingGuard_NoFinding;
+    [Test] procedure BuiltInPointerType_NoFinding;
+    [Test] procedure CopyMemory_NotScanned_KnownLimit;
   end;
 
 implementation
@@ -25,6 +31,126 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 179: die drei lexischen Guards ----------------------- }
+//
+// Der Detektor toetet drei FP-Klassen ueber lexische Guards. Keiner
+// davon war getestet - die Kommentarzeile der Testdatei benannte sie
+// nur als Begruendung, WARUM die Positiv-Fixture durchkommt.
+//
+// Alle vier am gebauten Stand gemessen.
+
+procedure TTestMoveSizeOfPointer.MoveSizeOfPointer_Kontrolle_Reported;
+// POSITIV-KONTROLLE fuer die drei Guards darunter. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(Src, Dst: PNode);'#13#10+
+  'begin'#13#10+
+  '  Move(Src^, Dst^, SizeOf(PNode));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMoveSizeOfPointer),
+      'der ungeschuetzte Fall bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestMoveSizeOfPointer.CountTimesSizeOf_MidGuard_NoFinding;
+// GUARD 2a: '*' unmittelbar VOR SizeOf = bewusste Count*Groesse-
+// Rechnung (Array-aus-Pointern-Kopie). Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(Src, Dst: PNode; Count: Integer);'#13#10+
+  'begin'#13#10+
+  '  Move(Src^, Dst^, Count*SizeOf(PNode));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMoveSizeOfPointer),
+      'Count*SizeOf ist eine bewusste Groessenrechnung');
+  finally F.Free; end;
+end;
+
+procedure TTestMoveSizeOfPointer.SizeOfTimesCount_TrailingGuard_NoFinding;
+// GUARD 2b: '*' unmittelbar HINTER SizeOf - andere Schreibweise,
+// eigener Codepfad. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(Src, Dst: PNode; Count: Integer);'#13#10+
+  'begin'#13#10+
+  '  Move(Src^, Dst^, SizeOf(PNode)*Count);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMoveSizeOfPointer),
+      'SizeOf*Count ist dieselbe bewusste Rechnung');
+  finally F.Free; end;
+end;
+
+procedure TTestMoveSizeOfPointer.BuiltInPointerType_NoFinding;
+// GUARD 3: der Built-in-Typ 'Pointer' ist kein versehentlicher
+// Pointer-TYPNAME. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(Src, Dst: Pointer);'#13#10+
+  'begin'#13#10+
+  '  Move(Src^, Dst^, SizeOf(Pointer));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMoveSizeOfPointer),
+      'SizeOf(Pointer) meint die Zeigergroesse, nicht einen Typnamen');
+  finally F.Free; end;
+end;
+
+procedure TTestMoveSizeOfPointer.CopyMemory_NotScanned_KnownLimit;
+// BEKANNTE GRENZE, hier erstmals belegt: der Unit-Kopf nennt
+// 'Move() / FillChar() / CopyMemory() / ZeroMemory()', und der Regex
+// fuehrt alle vier. Der TOKEN-VORFILTER der Registrierung kennt aber
+// nur ['move(', 'fillchar(']. Eine Datei, die ausschliesslich
+// CopyMemory oder ZeroMemory benutzt, wird deshalb NIE gescannt.
+//
+// Am Korpus gemessen (2026-09-14): 101 von 16.024 Quelldateien
+// benutzen CopyMemory/ZeroMemory OHNE move( oder fillchar(; 14 davon
+// enthalten zusaetzlich ein SizeOf(P<Name>), sind also echte
+// Kandidaten.
+//
+// NICHT hier gefixt: die Tokens zu ergaenzen ist fundbewegend und
+// braucht einen eigenen Bewegungsvertrag samt FP-Stichprobe. Der Test
+// pinnt das Ist-Verhalten, damit die Luecke sichtbar bleibt.
+//
+// ACHTUNG: dieser Test laeuft ueber den Harness, der den Vorfilter
+// NICHT kennt - er misst also den DETEKTOR, nicht die Kette. Gemessen
+// wurde die 0 an der Exe (CLI-Pfad, mit Vorfilter).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo(Src, Dst: PNode);'#13#10+
+  'begin'#13#10+
+  '  CopyMemory(Dst^, Src^, SizeOf(PNode));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMoveSizeOfPointer),
+      'der DETEKTOR kennt CopyMemory - nur der Vorfilter der Kette '
+      + 'laesst die Datei nie zu ihm durch');
+  finally F.Free; end;
+end;
+
 
 procedure TTestMoveSizeOfPointer.MoveSizeOfPByte_Reported;
 const SRC =
