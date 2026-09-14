@@ -618,6 +618,37 @@ begin
   end;
 
   // nkCall: ExecSQL('DELETE FROM logs');
+  //
+  // ASYMMETRIE ZUM ASSIGN-PFAD, vermessen 2026-09-14 (Posten 305):
+  // hier wird AfterVerb berechnet und WEGGEWORFEN. Die drei Gates des
+  // Assign-Zweiges oben - Platzhalter-Baustein, Nicht-Literal-Bau,
+  // spaeter angehaengtes WHERE - laufen in diesem Zweig nicht. An der
+  // Exe belegt, derselbe Text zweimal:
+  //
+  //   Reg.Add('DELETE FROM %s');      1 Fund, lsError
+  //   S := 'DELETE FROM %s';          0 Funde
+  //
+  // Das ist eine Luecke und keine gewaehlte Grenze - der Kopfkommentar
+  // beschreibt das Platzhalter-Gate ausfuehrlich und nennt keine
+  // Call-Pfad-Ausnahme.
+  //
+  // NICHT GESCHLOSSEN, aus zwei gemessenen Gruenden:
+  //
+  // 1. KORPUSWIRKUNG NULL. Von den 16 SCA058-Funden des Referenzlaufs
+  //    faellt keiner in diese Klasse - kein einziger Call-Fund traegt
+  //    einen Platzhalter-Baustein.
+  // 2. DER NAHELIEGENDE FIX REISST EINE NEUE LUECKE AUF. "Wende
+  //    IsPlaceholderObject an, wenn der Callee nicht zur Exec-Familie
+  //    gehoert" ist NICHT symmetrisch zum Assign-Zweig: dort steht
+  //    zusaetzlich IsExecSinkTarget auf dem ZIEL, und im Call-Pfad
+  //    traegt N.Name die Empfaenger-Kette. Wer nur HasExecSinkCall
+  //    prueft, laesst genau die Empfaenger durch, die der Assign-Zweig
+  //    faengt - in einer Regel der Error-Stufe, wo jeder Fehlfund
+  //    teuer ist.
+  //
+  // Beide Seiten sind in uTestSqlDangerousStatement gepinnt
+  // (SqlDanger_CallPathPlaceholder_*). Wer das angeht, braucht die
+  // Symmetrie VOLLSTAENDIG und einen eigenen Bewegungsvertrag.
   Calls := MethodNode.FindAll(nkCall);
   try
     for N in Calls do

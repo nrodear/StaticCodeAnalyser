@@ -103,6 +103,10 @@ type
     [Test] procedure SqlDanger_DropDatabaseIfExists_NoFinding;
     [Test] procedure SqlDanger_AlterPlaceholderTemplate_StillReported;
     [Test] procedure SqlDanger_DropDatabasePlaceholderTemplate_NoFinding;
+    // Posten 305: Platzhalter-Gate fehlt im Aufruf-Pfad
+    [Test] procedure SqlDanger_CallPathPlaceholder_Reported_KnownLimit;
+    [Test] procedure SqlDanger_AssignPathPlaceholder_NoFinding;
+    [Test] procedure SqlDanger_CallPathRealStatement_Reported;
   end;
 
 implementation
@@ -161,6 +165,76 @@ end;
 // nicht.
 //
 // Alle Erwartungen an der Exe gemessen.
+
+{ --- Posten 305: der Aufruf-Pfad kennt das Platzhalter-Gate nicht }
+//
+// Der Zuweisungs-Pfad unterdrueckt einen Baustein mit Platzhaltern -
+// der Aufruf-Pfad berechnet dieselbe Information und wirft sie weg.
+// Das ist eine Luecke, keine gewaehlte Grenze (der Kopfkommentar
+// beschreibt das Gate und nennt keine Ausnahme).
+//
+// Nicht geschlossen: Korpuswirkung null, und der naheliegende Fix
+// waere gerade NICHT symmetrisch - Begruendung am Aufruf-Zweig in
+// uSqlDangerousStatement. Die drei Tests halten den Ist-Zustand
+// fest, damit eine spaetere Korrektur SICHTBAR wird.
+
+procedure TTestSqlDangerousStatement.SqlDanger_CallPathPlaceholder_Reported_KnownLimit;
+// GRENZE: derselbe Baustein im Aufruf. Gemessen: 1, auf der
+// Error-Stufe.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Reg: TSqlRegistry;'#13#10 +
+  'begin Reg.Add(''DELETE FROM %s''); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'BEKANNTE GRENZE: der Aufruf-Pfad unterdrueckt Bausteine nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_AssignPathPlaceholder_NoFinding;
+// DIE KLAMMER, und der eigentliche Beweis: derselbe Text in
+// einer Zuweisung. Gemessen: 0. Damit haengt die 1 oben am
+// PFAD und nicht am Text.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var S: string;'#13#10 +
+  'begin S := ''DELETE FROM %s''; end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'in der Zuweisung greift das Platzhalter-Gate');
+  finally F.Free; end;
+end;
+
+procedure TTestSqlDangerousStatement.SqlDanger_CallPathRealStatement_Reported;
+// Und die Gegenprobe zur Grenze: eine echte Anweisung ohne
+// Platzhalter im selben Aufruf-Pfad. Gemessen: 1 - hier ist
+// der Fund richtig, und er MUSS bleiben, wenn das Gate
+// eines Tages nachgezogen wird.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var Reg: TSqlRegistry;'#13#10 +
+  'begin Reg.Add(''DELETE FROM orders''); end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkSqlDangerousStatement),
+      'eine echte Anweisung im Aufruf bleibt ein Fund');
+  finally F.Free; end;
+end;
+
 
 procedure TTestSqlDangerousStatement.SqlDanger_GrantAllToPublic_Reported;
 // Rechtevergabe an die Allgemeinheit. Gemessen: 1.
