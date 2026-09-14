@@ -200,6 +200,29 @@ begin
         if NameLow.StartsWith('writeln(')      or
            NameLow.StartsWith('write(')        or
            NameLow.StartsWith('outputdebug')   or
+           // ASYMMETRIE, bewusst stehengelassen (Chargen-Review
+           // 2026-09-14, Posten 301): der Schwesterpfad
+           // CallIdLooksLikeLogger schliesst acht Woerter aus, die
+           // zufaellig auf 'log' ENDEN (dialog, catalog, ...). Fuer
+           // das StartsWith hier gibt es keine solche Liste - 'Logout'
+           // und 'LogicalCompare' setzen HasLog wie ein echter Logger.
+           //
+           // An der Exe belegt (Handler mit Leave-Muster):
+           //   Logout; Exit;            0 Funde  <- stumm, FALSCH
+           //   LogicalCompare(A,B); Exit;  0      <- stumm, FALSCH
+           //   LogError(E); Exit;       0         richtig
+           //   Beep; Exit;              1         richtig
+           //
+           // NICHT gefixt, weil die Abgrenzung eine WORTLISTE ist und
+           // keine Regel: 'LogInteger' und 'LogI' sind Logger,
+           // 'LogicalToDevice' und 'LogonInfoVTable' nicht - ein
+           // Praefix-Test trennt das nicht. Und die Liste liesse sich
+           // hier nicht am Korpus validieren: eine Suche ueber alle
+           // except-Bloecke mit einem Nicht-Logger-log*-Aufruf UND
+           // einem Leave-Muster liefert NULL Treffer. Eine geratene
+           // Liste waere schlechter als die dokumentierte Grenze.
+           // Waechter: uTestExceptionTooGeneral
+           // NonLoggerLogPrefix_Silenced_KnownLimit.
            NameLow.StartsWith('log')           or
            NameLow.StartsWith('showmessage(')  or
            NameLow.StartsWith('savetofile(')   or
