@@ -30,6 +30,8 @@ type
     [Test] procedure IndentedFinalization_Reported;
     [Test] procedure IndentedUnitKeyword_Reported;
     [Test] procedure NonIndentedFinalization_NoFinding;
+    // Posten 307: Mehrzeilenstrings hebeln das Blanking aus
+    [Test] procedure MultiLineStringContent_Reported_KnownLimit;
   end;
 
 implementation
@@ -50,6 +52,45 @@ uses
 // Vorkommen von 'finalization' und 'unit' mit Einrueckung stehen in
 // der NoFinding-Fixture SampleCodeInStarComment_NoFinding - dort
 // stecken sie IM Kommentar und belegen den Pfad gerade nicht.)
+
+{ --- Posten 307: Delphi-12-Mehrzeilenstrings -------------------- }
+//
+// Der Kopf von BlankCommentsStateful behauptete, ein Zustand ueber
+// Zeilen sei nicht noetig, weil "Pascal-Strings an der Zeilengrenze
+// enden". Seit Delphi 12 stimmt das nicht mehr: Mehrzeilen-Literale
+// (''' ) laufen ueber beliebig viele Zeilen, und ihr Inhalt wird hier
+// als Code gelesen.
+//
+// An der Exe gemessen: 1 Fund auf der Textzeile.
+//
+// NICHT behoben - das braucht einen dritten Zustand neben InBrace und
+// InStar, und die Abgrenzung zum gewoehnlichen ''-Escape ist nicht
+// trivial (''' ist auch das Ende von 'a''). Korpusflaeche: 45 echte
+// Mehrzeilen-Oeffner in 16 von 16.024 Dateien.
+
+procedure TTestUnitLevelKeywordIndent.MultiLineStringContent_Reported_KnownLimit;
+// Der Text im Mehrzeilen-String traegt ein eingeruecktes
+// 'implementation'. Gemessen: 1 Fund - der String-Inhalt wird als
+// Code gelesen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'const S = '''''''#13#10 +
+  '  implementation ist hier nur Text'#13#10 +
+  '  '''''';'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnitLevelKeywordIndent),
+      'BEKANNTE GRENZE: der Inhalt eines Delphi-12-Mehrzeilenstrings '
+      + 'wird als Code gelesen');
+  finally F.Free; end;
+end;
+
 
 procedure TTestUnitLevelKeywordIndent.IndentedFinalization_Reported;
 // Gemessen: 1.

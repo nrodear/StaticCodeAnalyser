@@ -101,9 +101,27 @@ end;
 //
 // String-Literale muessen mitgeblankt werden, sonst schaltet eine
 // geschweifte Klammer INNERHALB eines Literals (etwa der Konstantentext
-// '{$R-}') InBrace an und verschluckt den Rest der Datei. Ein Zustand
-// ueber Zeilen braucht es dafuer nicht - Pascal-Strings enden an der
-// Zeilengrenze.
+// '{$R-}') InBrace an und verschluckt den Rest der Datei.
+//
+// EINSCHRAENKUNG (Chargen-Review 2026-09-14, Posten 307): hier stand
+// bis dahin "Ein Zustand ueber Zeilen braucht es dafuer nicht -
+// Pascal-Strings enden an der Zeilengrenze". Das gilt seit Delphi 12
+// nicht mehr: Mehrzeilen-Stringliterale (''') laufen ueber beliebig
+// viele Zeilen, und ihr Inhalt wird hier als Code gelesen.
+//
+// An der Exe belegt: eine Unit mit
+//     const S = '''
+//       implementation ist hier nur Text
+//       ''';
+// meldet einen Einrueckungsverstoss auf der Textzeile.
+//
+// NICHT behoben: das braucht einen dritten Zustand neben InBrace und
+// InStar, und die Abgrenzung zum gewoehnlichen ''-Escape ist nicht
+// trivial (''' ist auch das Ende von 'a''). Korpusflaeche: 45 echte
+// Mehrzeilen-Oeffner in 16 von 16.024 Dateien - klein genug, um es
+// als eigenes Paket zu fuehren statt hier mitzunehmen.
+// Waechter: uTestUnitLevelKeywordIndent
+// MultiLineStringContent_Reported_KnownLimit.
 procedure BlankCommentsStateful(const Line: string; var InBrace, InStar: Boolean;
   out Clean: string);
 var
