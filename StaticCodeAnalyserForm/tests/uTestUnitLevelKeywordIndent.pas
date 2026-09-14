@@ -26,6 +26,10 @@ type
     [Test] procedure CodeAfterCommentBlock_StillReported;
     [Test] procedure UsesWithDirectiveTail_ReportedWithColumn;
     [Test] procedure BraceInsideStringLiteral_DoesNotSwallowFile;
+    // Posten 219: finalization und unit als eingerueckte Faelle
+    [Test] procedure IndentedFinalization_Reported;
+    [Test] procedure IndentedUnitKeyword_Reported;
+    [Test] procedure NonIndentedFinalization_NoFinding;
   end;
 
 implementation
@@ -34,6 +38,72 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 219: die beiden ungetesteten Strict-Keywords --------- }
+//
+// IsStrictSectionKw fuehrt vier Keywords. Als eingerueckte
+// Positiv-Faelle getestet waren nur 'implementation' und
+// 'initialization'; 'finalization' und 'unit' laufen durch denselben
+// Pfad, hingen aber allein an der Keywordliste.
+//
+// Alle drei am gebauten Stand gemessen. (Die einzigen sonstigen
+// Vorkommen von 'finalization' und 'unit' mit Einrueckung stehen in
+// der NoFinding-Fixture SampleCodeInStarComment_NoFinding - dort
+// stecken sie IM Kommentar und belegen den Pfad gerade nicht.)
+
+procedure TTestUnitLevelKeywordIndent.IndentedFinalization_Reported;
+// Gemessen: 1.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  '  finalization'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnitLevelKeywordIndent),
+      'ein eingeruecktes finalization ist ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnitLevelKeywordIndent.IndentedUnitKeyword_Reported;
+// Gemessen: 1. Das vierte Keyword der Liste.
+const SRC =
+  '  unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnitLevelKeywordIndent),
+      'ein eingeruecktes unit ist ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnitLevelKeywordIndent.NonIndentedFinalization_NoFinding;
+// Die Gegenprobe zum ersten Test. Gemessen: 0.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'finalization'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUnitLevelKeywordIndent),
+      'am Zeilenanfang ist finalization in Ordnung');
+  finally F.Free; end;
+end;
+
 
 procedure TTestUnitLevelKeywordIndent.FlushLeftKeywords_NoFinding;
 const SRC =
