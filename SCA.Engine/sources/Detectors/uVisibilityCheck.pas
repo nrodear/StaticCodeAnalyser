@@ -142,7 +142,6 @@ class procedure TVisibilityCheckDetector.AnalyzeUnit(UnitNode: TAstNode;
 var
   Classes : TList<TAstNode>;
   ClassNode, Vis, Member : TAstNode;
-  PublicMembers : TList<TAstNode>;
   ClassNameByLow : TDictionary<string, TAstNode>;
   ChildrenOf : TDictionary<string, TList<string>>;
   OtherCls : TAstNode;
@@ -156,11 +155,13 @@ var
   //  * MethodsByClassLow: Impl-Methoden gruppiert nach Segment vor dem
   //    ersten '.' des gelowerten Namens (Bucket enthaelt damit ALLE
   //    Kandidaten fuer jeden StartsWith('<prefix>.')-Match).
-  //  * MethodNamesLow/-Norm: LowerCase(Name) bzw. NormalizeIdent(Name)
-  //    pro Methode genau einmal statt pro (Member x Methode).
+  //  * MethodNamesNorm: NormalizeIdent(Name) pro Methode genau einmal
+  //    statt pro (Member x Methode). Das Schwester-Dictionary
+  //    MethodNamesLow wurde befuellt und NIE gelesen - entfernt beim
+  //    Chargen-Review 2026-09-14, zusammen mit der ebenfalls nie
+  //    befuellten Liste PublicMembers.
   //  * BodyCache: lazy gelowerte Body-Strings pro Methode (s. TBodyTextCache).
   MethodsByClassLow : TObjectDictionary<string, TList<TAstNode>>;
-  MethodNamesLow : TDictionary<TAstNode, string>;
   MethodNamesNorm : TDictionary<TAstNode, string>;
   BodyCache : TObjectDictionary<TAstNode, TBodyTextCache>;
   MethNode : TAstNode;
@@ -503,7 +504,6 @@ var
 
 begin
   Classes := UnitNode.FindAll(nkClass);
-  PublicMembers := TList<TAstNode>.Create;
   ClassNameByLow := TDictionary<string, TAstNode>.Create;
   ChildrenOf := TDictionary<string, TList<string>>.Create;
   // Perf: einmal pro Unit holen statt pro public-Member (heute ~10-50
@@ -517,7 +517,6 @@ begin
     [doOwnsValues]);
   MethodsByClassLow := TObjectDictionary<string, TList<TAstNode>>.Create(
     [doOwnsValues]);
-  MethodNamesLow := TDictionary<TAstNode, string>.Create;
   MethodNamesNorm := TDictionary<TAstNode, string>.Create;
   BodyCache := TObjectDictionary<TAstNode, TBodyTextCache>.Create(
     [doOwnsValues]);
@@ -530,7 +529,6 @@ begin
     for MethNode in AllUnitMethods do
     begin
       NameLow := LowerCase(MethNode.Name);
-      MethodNamesLow.AddOrSetValue(MethNode, NameLow);
       // Trim(LowerCase(S)) = LowerCase(Trim(S)) = NormalizeIdent(S)
       MethodNamesNorm.AddOrSetValue(MethNode, Trim(NameLow));
       // Besitzertyp statt erstem Segment (2026-07-28): seit der Parser
@@ -615,13 +613,11 @@ begin
       ChildList.Free;
     ChildrenOf.Free;
     ClassNameByLow.Free;
-    PublicMembers.Free;
     Classes.Free;
     AllUnitMethods.Free;
     DescendantsCache.Free;     // doOwnsValues -> innere TList<string> mit weg
     BodyCache.Free;            // doOwnsValues -> TBodyTextCache mit weg
     MethodNamesNorm.Free;
-    MethodNamesLow.Free;
     MethodsByClassLow.Free;    // doOwnsValues -> Buckets mit weg
   end;
 end;
