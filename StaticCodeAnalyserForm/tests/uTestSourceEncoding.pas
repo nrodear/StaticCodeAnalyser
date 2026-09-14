@@ -90,6 +90,9 @@ type
     [Test] procedure Detect_S3_UntrustedDecode_NoS3_ButE3;
     [Test] procedure Detect_S3_StrictUtf8NoBom_CyrillicIdent_S3;
     [Test] procedure Detect_S3_Utf8Bom_CyrillicIdent_S3;
+    // Posten 304: S1/S2 nur wo die UTF-8-Lesart begruendet ist
+    [Test] procedure Detect_Bidi_NotInAnsiFile;
+    [Test] procedure Detect_Bidi_StillFiresInUtf8WithoutBom;
   end;
 
 implementation
@@ -373,6 +376,52 @@ begin
   try Assert.AreEqual<Integer>(1, CountKind(F, fkSourceUtf32));
   finally F.Free; end;
 end;
+
+{ --- Posten 304: S1/S2 nicht in ANSI-Dateien --------------------- }
+//
+// S1 und S2 suchen UTF-8-Sequenzen im Bytestrom. In einer Datei, die
+// dieser Detektor GERADE SELBST als ANSI eingestuft hat (kein BOM,
+// kein gueltiges UTF-8), ist diese Lesart unbegruendet - der Compiler
+// liest die Bytes dort als Codepage-Zeichen. E2 80 AE ist in Latin-1
+// schlicht drei harmlose Zeichen.
+//
+// An der Exe belegt: eine Datei mit Latin-1-Umlauten UND der
+// Bytefolge E2 80 AE bekam sowohl SourceAnsiNonAscii ALS AUCH
+// SourceBidiOverride - zwei einander widersprechende Verdikte.
+//
+// Korpuswirkung 0: der Referenzlauf hat weder S1 noch S2 ueberhaupt
+// einen Fund.
+
+procedure TTestSourceEncoding.Detect_Bidi_NotInAnsiFile;
+// Latin-1-Umlaute machen die Datei zu ANSI (ungueltiges UTF-8); die
+// Bidi-Bytefolge darf dann nicht mehr als U+202E gelesen werden.
+// Heute: SourceAnsiNonAscii UND SourceBidiOverride. Nach dem Gate nur
+// noch das erste.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := DetectBytes(Cat(Cat(Ascii('// '), TBytes.Create($E4, $F6, $FC)),
+                       TBytes.Create($E2, $80, $AE)));
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkSourceBidiOverride),
+      'in einer ANSI-Datei ist E2 80 AE kein Bidi-Override');
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceAnsiNonAscii),
+      'das ANSI-Verdikt selbst bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Detect_Bidi_StillFiresInUtf8WithoutBom;
+// DIE ABGRENZUNG: ohne BOM, aber GUELTIGES UTF-8. Dort ist die
+// Bytefolge wirklich U+202E und die Warnung berechtigt - das Gate
+// darf sie nicht mitnehmen. Vor wie nach dem Fix 1.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := DetectBytes(Cat(Ascii('// '), TBytes.Create($E2, $80, $AE)));
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceBidiOverride),
+      'gueltiges UTF-8 ohne BOM bleibt geprueft');
+  finally F.Free; end;
+end;
+
 
 procedure TTestSourceEncoding.Detect_Bidi_S1;
 var F: TObjectList<TLeakFinding>;
