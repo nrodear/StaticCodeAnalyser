@@ -17,6 +17,9 @@ type
     [Test] procedure RedundantConditional_KindAndSeverity;
     // Voll-Review 2026-09-12 (Blocker): ';' vor 'else' ist nie if-else
     [Test] procedure CaseElseAfterSemi_NotReported;
+    // Posten 189: except-else und die Kontrolle daneben
+    [Test] procedure ExceptElseBranch_NoFinding;
+    [Test] procedure PlainRedundantConditional_Kontrolle_Reported;
   end;
 
 implementation
@@ -25,6 +28,59 @@ uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
+
+{ --- Posten 189: das ';' vor 'else' im except-Zweig -------------- }
+//
+// Die case-else-Haelfte des Postens ist mit Charge 1 erledigt und
+// gepinnt. Offen war die except-else-Variante: auch dort steht ein
+// ';' VOR dem else, und auch dort ist es legal - der Detektor darf
+// das nicht als redundantes if/else lesen.
+//
+// Beide am gebauten Stand gemessen.
+
+procedure TTestRedundantConditional.ExceptElseBranch_NoFinding;
+// Gemessen: 0. Das else gehoert zum except, nicht zu einem if.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Foo: Boolean;'#13#10+
+  'begin'#13#10+
+  '  try'#13#10+
+  '    A;'#13#10+
+  '  except'#13#10+
+  '    on E: Exception do Result := True;'#13#10+
+  '  else'#13#10+
+  '    Result := False;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkRedundantConditional),
+      'das else eines except-Blocks ist kein redundantes if/else');
+  finally F.Free; end;
+end;
+
+procedure TTestRedundantConditional.PlainRedundantConditional_Kontrolle_Reported;
+// POSITIV-KONTROLLE daneben. Gemessen: 1. Ohne sie waere der Test
+// oben auch bei abgeschalteter Regel gruen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function Foo(c: Boolean): Boolean;'#13#10+
+  'begin'#13#10+
+  '  if c then Result := True else Result := False;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkRedundantConditional),
+      'das echte if/else bleibt ein Fund');
+  finally F.Free; end;
+end;
+
 
 procedure TTestRedundantConditional.NormalCond_NoFinding;
 const SRC =
