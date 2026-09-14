@@ -82,6 +82,39 @@ const
   );
 
 function IsRttiDriven(const Parents: string): Boolean;
+// BEKANNTE GRENZE, vermessen am 2026-09-14 (Posten 287, Paket 9014).
+//
+// Der Test ist ein Substring ueber die GANZE Elternliste, und die vier
+// Namen oben tragen das Delphi-Typpraefix mit. Beides zusammen trifft
+// nicht das, was gemeint ist ("erbt von Form/Frame/DataModule/
+// Component"), sondern die Zeichenfolge 't'+Familienwort irgendwo im
+// Text. Das geht in BEIDE Richtungen daneben.
+//
+// An der gebauten Exe gemessen, jeweils eine Klasse mit einem
+// ungenutzten public-Member:
+//
+//   class(TBaseService)           1 Fund   Grundlinie
+//   class(TPlatformService)       0        FALSCHE Amnestie ('plaTFORMs')
+//   class(TCnStatementFormatter)  0        FALSCHE Amnestie
+//   class(TForm)                  0        richtig
+//   class(TCustomForm)            1        BLINDER FLECK
+//   class(TMainForm)              1        BLINDER FLECK
+//
+// 'TCustomForm' und 'TMainForm' enthalten kein 'tform' - vor dem 'Form'
+// steht ein 'm' bzw. ein 'n'. Die zwei haeufigsten Formularbasen des
+// Oekosystems fallen also durch, waehrend jedes 'Platform' amnestiert
+// wird.
+//
+// KORPUS (33.711 Klassendeklarationen mit Elternliste): 336 Klassen
+// werden heute amnestiert, die es nicht sein sollten, und 1.084 nicht
+// amnestiert, die es sein sollten (Soll = ein Elternname ENDET auf das
+// Familienwort an einer CamelCase-Grenze).
+//
+// NICHT HIER GEFIXT: das ist keine Wortgrenzen-Korrektur, sondern eine
+// Amnestie-Verschiebung fuer 1.420 Klassen in beide Richtungen. Die
+// Drops (mehr Amnestie) und die Adds (weniger) brauchen je eine eigene
+// FP-Messung und einen eigenen Bau - Paket 9014, eigener Zweig.
+// Waechter: uTestVisibilityCheck, die drei RttiBase_*-Tests.
 var
   Lower : string;
   B : string;
