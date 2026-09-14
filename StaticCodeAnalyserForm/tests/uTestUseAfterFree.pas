@@ -1,4 +1,4 @@
-unit uTestUseAfterFree;
+﻿unit uTestUseAfterFree;
 
 interface
 
@@ -30,9 +30,38 @@ type
     // Posten 284: die Abbruchbedingung des Vorwaerts-Scans
     [Test] procedure ForwardScan_EndElseBetween_StillReported;
     [Test] procedure ForwardScan_EndSemicolonBetween_NoFinding_KnownLimit;
+    // Posten 217: .Destroy/.DisposeOf, Geschwister-Free, Index-Zugriff
+    [Test] procedure DestroyAliasThenUse_Reported;
+    [Test] procedure DisposeOfAliasThenUse_Reported;
+    [Test] procedure NoFreeAlias_ThenUse_Kontrolle;
+    [Test] procedure SiblingFree_AfterFreeAndNil_NoFinding;
+    [Test] procedure SiblingFree_RealUse_Kontrolle;
+    [Test] procedure SiblingFreeGuard_FreeInstance_Reported;
+    [Test] procedure SiblingFree_ThenRealUse_ExactlyOne;
+    [Test] procedure CfgFilter_ElseUse_Kontrolle;
+    [Test] procedure IndexUseAfterFree_Reported;
+    [Test] procedure BareOccurrence_NoAccessor_Kontrolle;
+    [Test] procedure CallOnFreedVar_Reported;
+    [Test] procedure SiblingGuardNotForDestroy_Reported;
+    [Test] procedure SiblingGuardNotForDisposeOf_Reported;
+    [Test] procedure CfgFilter_IfElseDestroy_NoFinding;
+    [Test] procedure DestroyAsFieldAssignment_NoFinding;
+    [Test] procedure DestroyAsFieldAssignment_Kontrolle;
+    [Test] procedure DestroyWithArgument_NoFinding;
+    [Test] procedure DestroyWithArgument_Kontrolle;
+    // ueber die volle Pipeline - nur dort ist der Vorfilter sichtbar
+    [Test] procedure DestroyAlias_WithoutFreeToken_PrefilterSkips_KnownLimit;
+    [Test] procedure DestroyAlias_WithFreeToken_Kontrolle;
   end;
 
 implementation
+
+// noinspection-file GodClass, LargeClass, DuplicateBlock
+// Eine DUnitX-Fixture ist eine flache Liste unabhaengiger Faelle; mit
+// Posten 217 sind es 36 Methoden. Und die Paare MUESSEN sich aehneln:
+// eine Klammer, die sich in mehr als einer Zeile unterscheidet,
+// belegt nichts mehr. DuplicateBlock stand schon vorher mit zwei
+// Funden in dieser Datei, aus demselben Grund.
 
 uses
   System.SysUtils, System.Generics.Collections,
@@ -49,6 +78,524 @@ uses
 //
 // Beide an der Exe gemessen. Das Verhalten ist plausibel und bleibt;
 // falsch war nur der Kommentar, der jetzt die Regex beschreibt.
+
+{ --- Posten 217: die zwei Freigabe-Aliase und zwei stille Pfade -- }
+//
+// Die 2026-06-18 ergaenzten Aliase .Destroy und .DisposeOf hatten
+// keinen einzigen Test - weder positiv noch als Gegenprobe. Ebenso
+// ungetestet: der Geschwister-Zweig (ein zweites Free hinter dem
+// ersten beendet die Suche) und der Index-Zugriff als Nutzung.
+//
+// ZUM HARNESS: alle Tests bis auf die letzten zwei rufen
+// FindingsOfFile und umgehen damit den Token-Vorfilter. Die
+// Fixtures tragen trotzdem eine echte Freigabe (oder eine
+// Kommentarzeile), damit sie AUCH in der Produktion gescannt
+// wuerden - sonst waeren die Zahlen hier und dort verschieden.
+//
+// Alle Erwartungen an der Exe gemessen, mit gesetztem
+// Konfidenz-Filter: fkUseAfterFree ist fcLow und faellt ohne ihn
+// stumm aus.
+
+procedure TTestUseAfterFree.DestroyAliasThenUse_Reported;
+// Der erste Alias. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var M: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  M := TStringList.Create;'#13#10 +
+  '  M.Free;'#13#10 +
+  'end;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  L.Destroy;'#13#10 +
+  '  L.Add(''x'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'Destroy ist eine Freigabe wie Free');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.DisposeOfAliasThenUse_Reported;
+// Der zweite Alias. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var M: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  M := TStringList.Create;'#13#10 +
+  '  M.Free;'#13#10 +
+  'end;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  L.DisposeOf;'#13#10 +
+  '  L.Add(''x'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'DisposeOf ist eine Freigabe wie Free');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.NoFreeAlias_ThenUse_Kontrolle;
+// DIE KLAMMER zu beiden: derselbe Aufbau mit einer Methode,
+// die nichts freigibt. Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var M: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  M := TStringList.Create;'#13#10 +
+  '  M.Free;'#13#10 +
+  'end;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  L.Clear;'#13#10 +
+  '  L.Add(''x'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'ohne Freigabe ist die Folgenutzung harmlos');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.SiblingFree_AfterFreeAndNil_NoFinding;
+// Der Geschwister-Zweig: hinter der Freigabe steht ein
+// ZWEITES Free auf derselben Variablen - das typische
+// Aufraeummuster. Die Suche endet dort, ohne zu melden.
+// Gemessen: 0.
+//
+// Die Fixture ist absichtlich geradlinig (kein if/else):
+// sonst koennte der Ablauffilter die Null erklaeren und der
+// Test pruefte den falschen Mechanismus.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  FreeAndNil(L);'#13#10 +
+  '  L.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'ein zweites Free ist keine Nutzung');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.SiblingFree_RealUse_Kontrolle;
+// DIE KLAMMER dazu: dieselbe Fixture, nur die letzte Zeile
+// ist eine echte Nutzung. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  FreeAndNil(L);'#13#10 +
+  '  L.Clear;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'eine echte Nutzung hinter der Freigabe wird gemeldet');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.SiblingFreeGuard_FreeInstance_Reported;
+// Der Geschwister-Zweig prueft auf Wortgrenze: FreeInstance
+// beginnt mit Free, ist aber nicht Free. Gemessen: 1.
+// Ohne die Wortgrenze waere hier eine echte Nutzung stumm.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  FreeAndNil(L);'#13#10 +
+  '  L.FreeInstance;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'FreeInstance ist nicht Free - die Wortgrenze traegt');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.SiblingFree_ThenRealUse_ExactlyOne;
+// Geschwister-Free UND danach eine echte Nutzung: genau ein
+// Fund, auf der Nutzungszeile. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  FreeAndNil(L);'#13#10 +
+  '  L.Free;'#13#10 +
+  '  L.Clear;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'das Geschwister-Free verdeckt die spaetere Nutzung nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.CfgFilter_ElseUse_Kontrolle;
+// Zur Abgrenzung: dieselbe Nutzung in einem else-Zweig, den
+// die Freigabe nie erreicht. Gemessen: 0 - hier greift der
+// Ablauffilter, nicht der Geschwister-Zweig.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(Cond: Boolean);'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  if Cond then'#13#10 +
+  '    FreeAndNil(L)'#13#10 +
+  '  else'#13#10 +
+  '    L.Clear;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'unerreichbare Nutzung wird vom Ablauffilter verworfen');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.IndexUseAfterFree_Reported;
+// Der Index-Zugriff als Nutzung - eigener Zweig neben dem
+// Punkt-Zugriff. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList; S: string;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  L.Free;'#13#10 +
+  '  S := L[0];'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'ein Index-Zugriff nach der Freigabe ist eine Nutzung');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.BareOccurrence_NoAccessor_Kontrolle;
+// DIE KLAMMER: dasselbe Vorkommen ohne Zugriff. Der Kopf
+// nennt das ausdruecklich als bewusst nicht geflaggt (zu
+// viele Fehlfunde). Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList; S: string;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  L.Free;'#13#10 +
+  '  S := L;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'das blosse Vorkommen ist kein Zugriff');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.CallOnFreedVar_Reported;
+// Der dritte Nutzungs-Zweig: die Variable als Funktion
+// gerufen. Die Fixture ist synthetisch - so schreibt das
+// niemand -, aber sie trifft genau diesen Zweig.
+// Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList; S: string;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  L.Free;'#13#10 +
+  '  S := L(0);'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'ein Aufruf auf der freigegebenen Variablen ist eine Nutzung');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.SiblingGuardNotForDestroy_Reported;
+// Der Geschwister-Zweig gilt NUR fuer Free. Das ist richtig
+// so: TObject.Free traegt den nil-Schutz, Destroy nicht -
+// nach FreeAndNil dereferenziert Destroy eine nil-Referenz.
+// Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  FreeAndNil(L);'#13#10 +
+  '  L.Destroy;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'Destroy hinter FreeAndNil ist ein echter Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.SiblingGuardNotForDisposeOf_Reported;
+// Dasselbe fuer den zweiten Alias. Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  FreeAndNil(L);'#13#10 +
+  '  L.DisposeOf;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'DisposeOf hinter FreeAndNil ist ein echter Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.CfgFilter_IfElseDestroy_NoFinding;
+// Und die Klammer dazu: dasselbe Destroy in einem Zweig, den
+// die Freigabe nie erreicht. Gemessen: 0 - das Muster wird
+// also nicht blind gemeldet.
+const SRC =
+  'unit t; implementation'#13#10 +
+  '// .free'#13#10 +
+  'procedure Foo(Cond: Boolean);'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  if Cond then'#13#10 +
+  '    FreeAndNil(L)'#13#10 +
+  '  else'#13#10 +
+  '    L.Destroy;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'unerreichbares Destroy wird verworfen');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.DestroyAsFieldAssignment_NoFinding;
+// GRENZE DER ALIASE, im Feld belegt: "vTable.Destroy := ..."
+// weist einem FELD einen Zeiger zu, es gibt nichts frei.
+// Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  '// .free'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var vTable: PVTable;'#13#10 +
+  'begin'#13#10 +
+  '  vTable := PVTable.Create;'#13#10 +
+  '  vTable.Destroy := @SomeDestroyDispatcher;'#13#10 +
+  '  vTable.execute := @SomeExecuteDispatcher;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'eine Zuweisung an ein Feld namens Destroy gibt nichts frei');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.DestroyAsFieldAssignment_Kontrolle;
+// DIE KLAMMER: dieselbe Fixture, das ":= @..." entfernt.
+// Gemessen: 1.
+const SRC =
+  'unit t; implementation'#13#10 +
+  '// .free'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var vTable: PVTable;'#13#10 +
+  'begin'#13#10 +
+  '  vTable := PVTable.Create;'#13#10 +
+  '  vTable.Destroy;'#13#10 +
+  '  vTable.execute := @SomeExecuteDispatcher;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'ohne Zuweisung ist es ein Aufruf und damit eine Freigabe');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.DestroyWithArgument_NoFinding;
+// Zweite Grenze: "fCx.Destroy(fGlobalObj)" ist eine
+// gleichnamige Methode mit Argument, keine Freigabe.
+// Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  '// .free'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var fCx: TQuickJSContext;'#13#10 +
+  'begin'#13#10 +
+  '  fCx := TQuickJSContext.Create;'#13#10 +
+  '  fCx.Destroy(fGlobalObj);'#13#10 +
+  '  fCx.Done;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'Destroy mit Argument ist eine fremde Methode');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.DestroyWithArgument_Kontrolle;
+// DIE KLAMMER: dasselbe ohne Argument. Gemessen: 1.
+// Die DisposeOf-Spiegelbilder beider Grenzen sind ebenfalls
+// gemessen (0 und 1) und verhalten sich gleich; sie stehen
+// hier nicht noch einmal.
+const SRC =
+  'unit t; implementation'#13#10 +
+  '// .free'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var fCx: TQuickJSContext;'#13#10 +
+  'begin'#13#10 +
+  '  fCx := TQuickJSContext.Create;'#13#10 +
+  '  fCx.Destroy;'#13#10 +
+  '  fCx.Done;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'ohne Argument ist Destroy die Freigabe');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.DestroyAlias_WithoutFreeToken_PrefilterSkips_KnownLimit;
+// DIE EINZIGEN ZWEI TESTS UEBER DIE VOLLE PIPELINE - und
+// nur so sichtbar: der Vorfilter dieser Regel kennt nur
+// [".free", "freeandnil"]. Eine Datei, die ausschliesslich
+// den Alias Destroy benutzt, wird nie gescannt.
+// Gemessen: 0, obwohl derselbe Quelltext ueber
+// FindingsOfFile 1 liefert.
+//
+// KEIN Anlass, die Tokenliste anzufassen: 504 der 13.419
+// Korpusdateien werden dadurch uebersprungen, und ein
+// geoeffneter Vorfilter bringt auf genau diesen Dateien
+// NULL zusaetzliche Funde. Der Pin haelt nur fest, was ist.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  L.Destroy;'#13#10 +
+  '  L.Add(''x'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'BEKANNTE GRENZE: ohne Free-Token laeuft der Detektor nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestUseAfterFree.DestroyAlias_WithFreeToken_Kontrolle;
+// DIE KLAMMER: derselbe Fall, aber eine zweite Routine
+// enthaelt ein echtes Free - damit traegt die Datei das
+// Token und wird gescannt. Gemessen: 1 ueber dieselbe
+// Pipeline.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var M: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  M := TStringList.Create;'#13#10 +
+  '  M.Free;'#13#10 +
+  'end;'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '  L := TStringList.Create;'#13#10 +
+  '  L.Destroy;'#13#10 +
+  '  L.Add(''x'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUseAfterFree),
+      'mit Free-Token irgendwo in der Datei laeuft er');
+  finally F.Free; end;
+end;
+
 
 procedure TTestUseAfterFree.ForwardScan_EndElseBetween_StillReported;
 // Das "end" des then-Zweigs traegt kein Semikolon - der Scan
