@@ -136,7 +136,7 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
-      'Passwort-Literal – Error');
+      'Passwort-Literal - Error');
   finally F.Free; end;
 end;
 
@@ -152,7 +152,7 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
-      'Token-Literal – Error');
+      'Token-Literal - Error');
   finally F.Free; end;
 end;
 
@@ -168,7 +168,7 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkHardcodedSecret),
-      'API-Key-Literal – Error');
+      'API-Key-Literal - Error');
   finally F.Free; end;
 end;
 
@@ -184,7 +184,7 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
-      'Passwort aus Funktion – kein Befund');
+      'Passwort aus Funktion - kein Befund');
   finally F.Free; end;
 end;
 
@@ -200,7 +200,7 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkHardcodedSecret),
-      'Passwort aus Parameter – kein Befund');
+      'Passwort aus Parameter - kein Befund');
   finally F.Free; end;
 end;
 
