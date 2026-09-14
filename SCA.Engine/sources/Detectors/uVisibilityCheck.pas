@@ -114,6 +114,15 @@ function IsRttiDriven(const Parents: string): Boolean;
 // Amnestie-Verschiebung fuer 1.420 Klassen in beide Richtungen. Die
 // Drops (mehr Amnestie) und die Adds (weniger) brauchen je eine eigene
 // FP-Messung und einen eigenen Bau - Paket 9014, eigener Zweig.
+//
+// UND DIE MESSUNG MUSS REPO-WEISE LAUFEN. Im Referenzlauf ueber den
+// ganzen Korpus hat diese Familie (SCA049/050/051/052) NULL Funde:
+// HasExternalRefs winkt jeden Member durch, der irgendwo im Los
+// referenziert wird, und bei 16.024 Dateien in einem Projekt ist das
+// jeder. Gemessen am 2026-09-14: vcl-styles-utils allein 91
+// UnusedPublicMember, dasselbe Repo mit python4delphi daneben 85,
+// ganzer Korpus 0. Wer 9014 am Referenzlauf misst, sieht keine
+// Wirkung - nicht weil es keine gibt.
 // Waechter: uTestVisibilityCheck, die drei RttiBase_*-Tests.
 var
   Lower : string;
