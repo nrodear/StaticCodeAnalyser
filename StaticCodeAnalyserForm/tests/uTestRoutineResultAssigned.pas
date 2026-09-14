@@ -82,6 +82,9 @@ type
     // inaktiv, schwaechere Zusage) -> fcMedium-Katalogdefault bleibt.
     [Test] procedure VerifiedFinding_HighConfidence;
     [Test] procedure InMemoryFinding_KeepsMediumConfidence;
+    // Posten 192: der noreturn-Pfad
+    [Test] procedure NoReturnCallee_NoFinding;
+    [Test] procedure WithoutNoReturnDirective_Kontrolle_Reported;
   end;
 
 implementation
@@ -135,6 +138,68 @@ begin
       TFile.Delete(TempPath);
   end;
 end;
+
+{ --- Posten 192: der ';noreturn'-Pfad ---------------------------- }
+//
+// Eine Funktion, deren Rumpf nur eine als noreturn markierte Routine
+// ruft, kann Result gar nicht setzen - und muss geschwiegen werden.
+// Der Pfad (NoReturnLow-Aufbau plus die ContainsKey-Ausnahme im
+// Raise-Helper-Loop) war bei 50 Tests der Klasse ungetestet; keiner
+// nennt noreturn.
+//
+// Beide am gebauten Stand gemessen - ein Paar mit EINEM Wort
+// Unterschied, damit die Zuordnung eindeutig ist.
+
+procedure TTestRoutineResultAssigned.NoReturnCallee_NoFinding;
+// Gemessen: 0.
+const SRC =
+  'unit t; interface'#13#10+
+  'implementation'#13#10+
+  'procedure Fail; noreturn;'#13#10+
+  'begin'#13#10+
+  '  raise Exception.Create(''x'');'#13#10+
+  'end;'#13#10+
+  'function Bar: Integer;'#13#10+
+  'begin'#13#10+
+  '  Fail;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkRoutineResultUnassigned),
+      'wer nur eine noreturn-Routine ruft, kann Result nicht setzen');
+  finally F.Free; end;
+end;
+
+procedure TTestRoutineResultAssigned.WithoutNoReturnDirective_Kontrolle_Reported;
+// DIESELBE Unit ohne die Direktive. Gemessen: 1. Der Unterschied ist
+// genau das Wort 'noreturn' - damit ist der Pfad eindeutig zugeordnet
+// und nicht bloss irgendein Gate.
+const SRC =
+  'unit t; interface'#13#10+
+  'implementation'#13#10+
+  'procedure Fail;'#13#10+
+  'begin'#13#10+
+  '  raise Exception.Create(''x'');'#13#10+
+  'end;'#13#10+
+  'function Bar: Integer;'#13#10+
+  'begin'#13#10+
+  '  Fail;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkRoutineResultUnassigned),
+      'ohne die Direktive bleibt der Fund faellig');
+  finally F.Free; end;
+end;
+
 
 procedure TTestRoutineResultAssigned.AbsoluteResultAlias_NoFinding;
 // FP-Fix (Real-World 2026-06-28): 'X: T absolute Result' - Schreibzugriffe via
