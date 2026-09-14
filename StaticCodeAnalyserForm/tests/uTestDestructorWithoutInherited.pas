@@ -81,13 +81,23 @@ var
   F   : TObjectList<TLeakFinding>;
   Fnd : TLeakFinding;
 begin
-  F := TFindingHelper.FindingsOfFile(SRC);
+  // FindingsViaPipeline wie beim flachen Zwilling darueber, und aus
+  // demselben Grund: der TypeIndex entsteht NUR dort. Ohne ihn steigt
+  // ErbtDirektVonTObject sofort aus (Idx = nil), das Gate faellt
+  // konservativ aus und die Herabstufung bleibt weg. Der erste Anlauf
+  // stand in FindingsOfFile und war damit rot, obwohl der Detektor
+  // richtig arbeitet - an der Exe liefert dieselbe Fixture Warning.
+  F := TFindingHelper.FindingsViaPipeline(SRC);
   try
-    Fnd := TFindingHelper.FirstOf(F, fkDestructorWithoutInherited);
-    Assert.IsNotNull(Fnd, 'der Konventionsbruch bleibt ein Fund');
-    Assert.IsTrue(Fnd.Confidence = fcMedium,
-      'TInner erbt direkt von TObject - beurteilt werden muss TInner, '
-      + 'nicht der Wirt TOuter');
+    for Fnd in F do
+      if Fnd.Kind = fkDestructorWithoutInherited then
+      begin
+        Assert.AreEqual<TLeakSeverity>(lsWarning, Fnd.Severity,
+          'TInner erbt direkt von TObject - beurteilt werden muss TInner, '
+          + 'nicht der Wirt TOuter');
+        Exit;
+      end;
+    Assert.Fail('der Konventionsbruch bleibt ein Fund, nur milder');
   finally F.Free; end;
 end;
 

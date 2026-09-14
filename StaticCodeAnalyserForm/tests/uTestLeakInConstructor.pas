@@ -107,7 +107,7 @@ const SRC =
   'end.';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOfFile(SRC);
+  F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0,
     TFindingHelper.Count(F, fkLeakInConstructor),
     'eine Ctor-lokale Variable mit f-Praefix ist kein Feld');

@@ -194,7 +194,7 @@ const SRC =
   'end.';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOfFile(SRC);
+  F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(0,
       TFindingHelper.Count(F, fkRoutineResultUnassigned),
@@ -228,7 +228,7 @@ const SRC =
   'end.';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOfFile(SRC);
+  F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(4,
       TFindingHelper.Count(F, fkRoutineResultUnassigned),
@@ -253,7 +253,7 @@ const SRC =
   'end.';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOfFile(SRC);
+  F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(0,
       TFindingHelper.Count(F, fkRoutineResultUnassigned),
@@ -279,7 +279,7 @@ const SRC =
   'end.';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOfFile(SRC);
+  F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(1,
       TFindingHelper.Count(F, fkRoutineResultUnassigned),
