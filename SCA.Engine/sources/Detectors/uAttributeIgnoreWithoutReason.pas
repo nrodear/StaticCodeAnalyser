@@ -61,7 +61,28 @@ begin
     RE := TRegEx.Create(IGNORE_NO_ARG_RE, [roIgnoreCase]);
     for i := 0 to Lines.Count - 1 do
     begin
+      // ScanCodeLine MUSS auch fuer uebersprungene Zeilen laufen -
+      // State traegt den Kommentar-Zustand ueber die Zeilengrenze.
       Code := TDetectorUtils.ScanCodeLine(Lines[i], State, Dummy);
+      // FP-Gate wie bei den vier Geschwistern der Attribut-Familie
+      // (uAttributeDuplicate, -Misalignment, -CategoryWithoutString,
+      // -TestFixtureWithoutTests): dieser Detektor war der einzige
+      // ohne. Ohne das Gate liest der Regex einen Array-Index mit
+      // einer Variablen namens 'Ignore' als Attribut.
+      //
+      // An der Exe belegt (Chargen-Review 2026-09-14, Posten 293):
+      //   [Ignore] vor einer Methode          1 Fund  (richtig)
+      //   [Ignore('kaputt')]                  0       (richtig)
+      //   X := A[Ignore];                     1 Fund  FALSCH
+      //   X := 1 +  /  A[Ignore];             1 Fund  FALSCH
+      //
+      // KORPUSWIRKUNG 0: der Regex hat ueber alle 16.024
+      // Quelldateien NULL Treffer - weder echte noch falsche. Das
+      // Gate ist Vorsorge, kein Aufraeumen. Es kostet dafuer auch
+      // nichts: die enge Regex-Form (nur '[Ignore]' bzw.
+      // '[Ignore()]') laesst ohnehin kaum Fehldeutungen zu.
+      if not TDetectorUtils.IsLikelyAttributePosition(Lines, i) then
+        Continue;
       try
         if not RE.IsMatch(Code) then Continue;
       except

@@ -16,6 +16,10 @@ type
     [Test] procedure IgnoreNoArg_Reported;
     [Test] procedure IgnoreEmptyParens_Reported;
     [Test] procedure IgnoreWithMessage_NotReported;
+    // Posten 293: IsLikelyAttributePosition wie bei den Geschwistern
+    [Test] procedure ArrayIndexNamedIgnore_NoFinding;
+    [Test] procedure ArrayIndexOnContinuationLine_NoFinding;
+    [Test] procedure RealIgnoreAttribute_Kontrolle_Reported;
   end;
 
   [TestFixture]
@@ -68,6 +72,85 @@ uses
   uTestFindingHelper;
 
 { TTestAttributeIgnoreWithoutReason }
+
+{ --- Posten 293: das FP-Gate der Attribut-Familie ---------------- }
+//
+// Dieser Detektor war der EINZIGE der Familie ohne
+// IsLikelyAttributePosition - die vier anderen Klassen in DIESER Datei
+// testen Detektoren, die das Gate seit dem FP-Fix 2026-06-21 fuehren.
+// Ohne das Gate liest der Regex einen Array-Index mit einer Variablen
+// namens 'Ignore' als Attribut.
+//
+// Alle vier an der Exe gemessen; die beiden Index-Fixturen sind heute
+// ROT.
+//
+// KORPUSWIRKUNG 0: der Regex hat ueber alle 16.024 Quelldateien NULL
+// Treffer - weder echte noch falsche. Das Gate ist Vorsorge, kein
+// Aufraeumen.
+
+procedure TTestAttributeIgnoreWithoutReason.ArrayIndexNamedIgnore_NoFinding;
+// DER NACHWEIS. Heute 1 Fund, nach dem Gate 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var A: array of Integer; Ignore, X: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  X := A[Ignore];'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkAttributeIgnoreWithoutReason),
+      'ein Array-Index ist keine Attribut-Position');
+  finally F.Free; end;
+end;
+
+procedure TTestAttributeIgnoreWithoutReason.ArrayIndexOnContinuationLine_NoFinding;
+// Dieselbe Klasse ueber eine Fortsetzungszeile - genau der Fall, fuer
+// den das Gate seine EXPR_CONT-Listen fuehrt. Heute 1, danach 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var A: array of Integer; Ignore, X: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  X := 1 +'#13#10 +
+  '    A[Ignore];'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkAttributeIgnoreWithoutReason),
+      'eine Ausdrucks-Fortsetzung ist keine Attribut-Position');
+  finally F.Free; end;
+end;
+
+procedure TTestAttributeIgnoreWithoutReason.RealIgnoreAttribute_Kontrolle_Reported;
+// POSITIV-KONTROLLE. Gemessen: 1, und muss 1 bleiben - ein Gate, das
+// zu viel wegnimmt, faellt hier auf.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TFooTests = class'#13#10 +
+  '    [Ignore]'#13#10 +
+  '    procedure Bar;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkAttributeIgnoreWithoutReason),
+      'ein echtes [Ignore] ohne Begruendung bleibt ein Fund');
+  finally F.Free; end;
+end;
+
 
 procedure TTestAttributeIgnoreWithoutReason.IgnoreNoArg_Reported;
 const SRC =
