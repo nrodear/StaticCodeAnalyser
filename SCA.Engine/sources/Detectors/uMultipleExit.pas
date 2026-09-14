@@ -25,7 +25,31 @@ unit uMultipleExit;
 //     existieren im Baum gar nicht. Ein Exit dort verlaesst die nested
 //     Routine, nicht die Methode: Nicht-Zaehlen ist korrekt, es folgt
 //     aber aus der LOESCHUNG, nicht aus eigenen Knoten.
-//   * Anonyme Methoden bekommen tatsaechlich eigene nkMethod-Knoten.
+//   * Anonyme Methoden: die Begruendung von 2026-09-05 stimmte auch
+//     nicht. Sie bekommen KEINE eigenen nkMethod-Knoten - ein Lambda
+//     mit 8 Exits in Argument-Position liefert null Funde, weder fuer
+//     sich noch fuer den Wirt (an der Exe gemessen 2026-09-14, Posten
+//     180). Sie werden von den RHS-/Argument-Scannern als Flachtext
+//     konsumiert, genau wie nested routines verworfen werden.
+//
+// PARSER-ARTEFAKT, Paket 9015 (2026-09-14, beim Vermessen von Posten
+// 180 gefunden): eine ZUGEWIESENE anonyme Methode mit EIGENER
+// var-/const-Sektion schiebt ihren Rumpf in den Wirt. Der RHS-Scan von
+// uParser2 (ParseCallOrAssign, ~Z.3440) endet am ersten ';' auf
+// Nest-Tiefe 0 - und das ist bei einer eigenen Deklarationssektion
+// deren Semikolon, noch vor dem 'begin'. Der Rest wird als Rumpf des
+// WIRTS geparst.
+//
+//   Wirt 5 Exits + Lambda 2 Exits, Lambda MIT var-Sektion   -> 'has 7'
+//   dieselbe Fixture ohne die eine var-Zeile                -> kein Fund
+//
+// Das trifft nicht nur diese Regel, sondern JEDEN AST-Detektor - der
+// Lambda-Rumpf wird dem Wirt zugerechnet. Korpus: 74 solche
+// Zuweisungen in 44 Dateien (183 anonyme Methoden in Ausdrucks-
+// Position tragen eine eigene Sektion, davon 109 in Argument-Position,
+// und die lecken nicht). Eigener Zweig, eigener Bau: die Bewegung
+// haengt an allen AST-Regeln gleichzeitig.
+// Waechter: uTestMultipleExit, die vier AnonMethod*-Tests.
 //
 // ZAEHLER-VOLLZAEHLUNG 2026-09-05 (O2-Triage "Metrik nur als Zaehler-
 // Korrektheit messen"): alle 625 Korpus-Funde (rw61) gegen eine
