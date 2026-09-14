@@ -47,14 +47,51 @@
 //
 //   Das ist KEINE gute Grenze, nur eine bewusst noch nicht gezogene:
 //   ein Substring-Scan mit linker Wortgrenze wuerde sie schliessen. Er
-//   ist hier bewusst NICHT eingebaut, weil er ein RECALL-PAKET ist -
-//   am Korpus gezaehlt (16.023 Dateien, Shape-Naeherung): 881 Casts
-//   stehen am Statement-/RHS-Anfang, 1.828 nicht. Die Regel wuerde sich
-//   also verdreifachen. Solche Bewegungen bekommen im Projekt einen
-//   eigenen Zweig und einen eigenen Bau, sonst ueberdecken sie jeden
-//   anderen Vertrag der Charge - und die 1.828 brauchen vorher eine
-//   FP-Stichprobe (Alcinoe faehrt A-Suffix-Helfer, die schon heute die
-//   ASCII_SAFE_OPERAND_PREFIXES-Liste fuellen).
+//   ist hier bewusst NICHT eingebaut, weil er ein RECALL-PAKET ist.
+//
+//   PAKET 9001 - DIE GEFORDERTE FP-STICHPROBE IST GEFAHREN (2026-09-15),
+//   ERGEBNIS: NICHT UMSETZEN.
+//
+//   Zuerst die Zahlen dieses Absatzes selbst, sie waren falsch: hier
+//   stand "16.023 Dateien, 881 am Anfang / 1.828 nicht". Die
+//   Grundgesamtheit stimmt nicht - der rekursive Scan nimmt nur *.pas,
+//   und davon hat der Korpus 13.419 (die 16.023 zaehlen .dpr/.inc/.dpk
+//   mit, die nie gescannt werden). Neu gezaehlt, Kommentare und
+//   String-Literale ausgeschlossen: 3.890 Cast-Vorkommen, davon 2.517
+//   mit linker Wortgrenze. Dieselbe Falle wie in Paket 9008 - die
+//   Einheit gehoert zur Aussage.
+//
+//   Was Variante b braechte: rund 550 zusaetzliche Funde (Korridor
+//   390-735), die Regel ginge von 414 auf etwa 990. Drops null, der
+//   Prefix-Match ist eine echte Teilmenge des Wortgrenzen-Matches.
+//
+//   Woran es scheitert, ist die FP-QUOTE DER ADDS. Vier unabhaengige
+//   Handpruefungen mit unterschiedlichen Stichproben kommen auf 18 %,
+//   29 %, 50 % und 64 %. Die Spanne ist so breit, weil die Adds stark
+//   konzentriert liegen (Alcinoe allein stellt rund ein Drittel, und
+//   genau dessen A-Suffix-Helfer fuellen die
+//   ASCII_SAFE_OPERAND_PREFIXES-Liste). Verlaesslich ist daher nur die
+//   Aussage, die ALLE vier teilen: die Quote liegt weit ueber dem, was
+//   das Projekt fuer eine ganze neue Fundklasse traegt. Fuer eine Regel
+//   auf Error-Tier ist das zu teuer.
+//
+//   ZWEI HARTE VORBEDINGUNGEN, falls es doch einmal jemand angeht:
+//   (1) ExtractCastOperand (:189) und ArgIsEmptyLiteral (:167) holen den
+//       Operanden ueber einen FESTEN Offset ab Position 1. Wird nur
+//       DetectAnsiCast umgestellt, lesen beide ab der falschen Stelle -
+//       Variante b ist dann nicht ungenau, sondern kaputt.
+//   (2) Die Wortgrenze ist nicht optional, sondern konstitutiv. Ohne
+//       sie steigen die Kandidaten von 822 auf 2.091; die 1.269
+//       Mehrtreffer verteilen sich auf 123 gewoehnliche Bezeichner -
+//       FastSetRawByteString (195x), FastNewRawByteString (132x),
+//       PSGetAnsiString (119x), PShortString (54x) und so weiter.
+//
+//   NOCH EINE BLINDE STELLE, bei der Messung nebenbei gefunden und
+//   bisher nirgends notiert: in if-, while-, until-, case-Bedingungen
+//   und for-in-Ausdruecken entsteht gar kein besuchter Knoten. Dort
+//   feuert der Detektor auch dann nicht, wenn der Cast in
+//   Prefix-Position steht - an der Exe belegt. Variante b wuerde daran
+//   nichts aendern; 84 der 822 Kandidaten liegen genau dort.
 //
 //   Die zwei Formen sind als dokumentierende Tests festgehalten
 //   (ArgumentPositionCast_NotReported_KnownLimit,
