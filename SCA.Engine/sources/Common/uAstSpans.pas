@@ -126,7 +126,7 @@ type
     /// bleiben lokal.
     class function FindBodyBlock(AMethod: TAstNode): TAstNode; static;
     /// True wenn der Teilbaum irgendwo ein nkInherited traegt
-    /// (rekursiv; nil-fest). Vorher zweimal byte-gleich in
+    /// (iterative DFS, nil-fest). Vorher zweimal byte-gleich in
     /// uConstructorWithoutInherited/uDestructorWithoutInherited.
     class function HasInheritedCall(ANode: TAstNode): Boolean; static;
     /// Iterative Preorder-DFS ohne Rekursions-Stack (Hardening v4,
@@ -175,14 +175,40 @@ begin
 end;
 
 class function TAstSpans.HasInheritedCall(ANode: TAstNode): Boolean;
+// ITERATIVE DFS statt rekursivem Abstieg (Hardening v4,
+// Audit_jvcl_segfault) - Chargen-Review 2026-09-14, Posten 295.
+//
+// Die Rekursion stammt aus den beiden Detektor-Kopien, die der
+// Voll-Review hierher zentralisiert hat; dabei ist sie mitgewandert.
+// Damit sass die Hardening-Verletzung nicht mehr in EINEM Detektor,
+// sondern in einem GETEILTEN Helfer - direkt neben SubtreeContains,
+// das denselben Baum seit jeher iterativ laeuft.
+//
+// Reihenfolge-neutral: die Funktion fragt nur, OB irgendwo ein
+// nkInherited liegt. Ein anderer Besuchsreihenfolge kann das Ergebnis
+// nicht aendern, nur den Zeitpunkt des Exit(True).
 var
-  Child : TAstNode;
+  Stack : TList<TAstNode>;
+  Cur   : TAstNode;
+  i     : Integer;
 begin
   Result := False;
   if ANode = nil then Exit;
-  if ANode.Kind = nkInherited then Exit(True);
-  for Child in ANode.Children do
-    if HasInheritedCall(Child) then Exit(True);
+  Stack := TList<TAstNode>.Create;
+  try
+    Stack.Add(ANode);
+    while Stack.Count > 0 do
+    begin
+      Cur := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      if Cur = nil then Continue;
+      if Cur.Kind = nkInherited then Exit(True);
+      for i := 0 to Cur.Children.Count - 1 do
+        Stack.Add(Cur.Children[i]);
+    end;
+  finally
+    Stack.Free;
+  end;
 end;
 
 class function TAstSpans.SubtreeContains(ARoot, ATarget: TAstNode): Boolean;
