@@ -123,6 +123,37 @@ begin
         end;
         if ListVars.Count = 0 then Continue;
 
+        // KEINE ZEITLICHE ORDNUNG - bekannte Grenze, vermessen am
+        // 2026-09-14 (Posten 306). ListVars ist eine reine Namens-Map je
+        // Methode: welche Zeile die Zuweisung trug und welche das Add,
+        // vergleicht niemand. Wird eine Variable wiederverwendet, faellt
+        // das Add der FRUEHEREN Inkarnation der spaeteren Zuweisung zur
+        // Last.
+        //
+        // An der Exe belegt, das Paar unterscheidet sich in EINER Zeile
+        // am METHODENENDE:
+        //
+        //   L := TObjectList<TFoo>.Create; L.Add(TFoo.Create); L.Free;
+        //     -> 0 Funde, richtig (die Liste besitzt)
+        //   dieselbe Methode plus 'L := TList<TFoo>.Create; L.Free;'
+        //     -> 1 Fund auf der Add-ZEILE, mit dem Meldetext
+        //        'TList<TFoo> "l"' - obwohl dort eine TObjectList stand
+        //
+        // Der Schwesterdetektor uThreadFreeOnTerminateWithRef fuehrt fuer
+        // dieselbe Frage ein Zeilen-Gate; hier fehlt es.
+        //
+        // NICHT GEFIXT, zwei Gruende - beide gemessen:
+        // * Korpuswirkung null. Am Referenzkorpus bewegt eine Zeitleiste
+        //   keinen einzigen Fund.
+        // * Der Fix bringt einen NEUEN blinden Fleck. Der
+        //   Qualifier-Strip zwei Zeilen darueber macht aus 'FA.List' und
+        //   'FB.List' denselben Schluessel; heute verfaelscht das nur den
+        //   Meldetext, mit einer Zeitleiste wuerde es Funde
+        //   UNTERDRUECKEN. Wer die Ordnung nachruestet, muss den Strip
+        //   zuerst aufloesen.
+        // Waechter: uTestTObjectListWithoutOwnership, die drei
+        // Reuse_*-Tests.
+
         // Pass 2: Add(T.Create)-Patterns matchen.
         Calls := M.FindAll(nkCall);
         try

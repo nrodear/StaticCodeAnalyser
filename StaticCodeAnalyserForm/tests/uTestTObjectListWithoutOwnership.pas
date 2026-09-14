@@ -29,6 +29,10 @@ type
     // Posten 275: Pass 1 war case-sensitiv, der Rest der Kette nicht
     [Test] procedure TListLowercaseType_Reported;
     [Test] procedure TListLowercaseCreate_Reported;
+    // Posten 306: Wiederverwendung derselben Variablen
+    [Test] procedure Reuse_OwningListOnly_NoFinding;
+    [Test] procedure Reuse_LaterNonOwningAssign_Reported_KnownLimit;
+    [Test] procedure Reuse_BothNonOwning_Reported;
   end;
 
 implementation
@@ -53,6 +57,97 @@ uses
 //   L := tlist<TFoo>.Create;   0
 //   L := TList<TFoo>.create;   0
 // Beide Tests unten sind damit heute rot.
+
+{ --- Posten 306: die Variablen-Wiederverwendung ------------------ }
+//
+// Der zweite Durchgang kennt keine zeitliche Ordnung: welche Zeile
+// die Zuweisung trug und welche das Hinzufuegen, vergleicht niemand.
+// Wird eine Variable wiederverwendet, faellt das Hinzufuegen der
+// FRUEHEREN Inkarnation der SPAETEREN Zuweisung zur Last.
+//
+// Nicht gefixt - Korpuswirkung null, und der Fix brauchte zuerst
+// eine Aufloesung des Qualifier-Strips (Begruendung am Detektor).
+// Die drei Tests halten den Ist-Zustand fest.
+
+procedure TTestTObjectListWithoutOwnership.Reuse_OwningListOnly_NoFinding;
+// Die besitzende Liste allein - kein Fund, richtig so.
+// Gemessen: 0.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TObjectList<TFoo>;'#13#10 +
+  'begin'#13#10 +
+  '  L := TObjectList<TFoo>.Create;'#13#10 +
+  '  L.Add(TFoo.Create);'#13#10 +
+  '  L.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkTObjectListWithoutOwnership),
+      'die besitzende Liste gibt ihre Elemente frei');
+  finally F.Free; end;
+end;
+
+procedure TTestTObjectListWithoutOwnership.Reuse_LaterNonOwningAssign_Reported_KnownLimit;
+// GRENZE: dieselbe Methode plus ZWEI Zeilen am ENDE, die
+// dieselbe Variable neu belegen. Das Hinzufuegen oben
+// gehoert nach wie vor zur besitzenden Liste - gemeldet
+// wird es trotzdem, und der Meldetext nennt sogar den
+// spaeteren Typ. Gemessen: 1.
+//
+// Das Paar mit dem Test darueber ist der ganze Beweis: eine
+// Zeile am Methodenende kippt das Urteil ueber eine Zeile
+// weiter oben.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TObjectList<TFoo>;'#13#10 +
+  'begin'#13#10 +
+  '  L := TObjectList<TFoo>.Create;'#13#10 +
+  '  L.Add(TFoo.Create);'#13#10 +
+  '  L.Free;'#13#10 +
+  '  L := TList<TFoo>.Create;'#13#10 +
+  '  L.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkTObjectListWithoutOwnership),
+      'BEKANNTE GRENZE: eine spaetere Zuweisung faerbt das fruehere Hinzufuegen');
+  finally F.Free; end;
+end;
+
+procedure TTestTObjectListWithoutOwnership.Reuse_BothNonOwning_Reported;
+// Und die Gegenprobe: beide Inkarnationen sind nicht
+// besitzend, das Hinzufuegen gehoert wirklich zu einer
+// davon. Gemessen: 1 - hier ist der Fund richtig und MUSS
+// bleiben, wenn die Ordnung eines Tages nachgeruestet wird.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var L: TObjectList<TFoo>;'#13#10 +
+  'begin'#13#10 +
+  '  L := TList<TFoo>.Create;'#13#10 +
+  '  L.Add(TFoo.Create);'#13#10 +
+  '  L.Free;'#13#10 +
+  '  L := TList<TFoo>.Create;'#13#10 +
+  '  L.Free;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkTObjectListWithoutOwnership),
+      'ohne besitzende Liste ist der Fund berechtigt');
+  finally F.Free; end;
+end;
+
 
 procedure TTestTObjectListWithoutOwnership.TListLowercaseType_Reported;
 // Der Typname klein geschrieben. Heute 0 Funde, nach dem Fix 1.
