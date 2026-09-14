@@ -244,6 +244,11 @@ type
     [Test] procedure Leak_ReassignedThenFree_KnownLimitation_NoFinding;
     [Test] procedure Leak_FreeOnlyInIfBranch_KnownLimitation_NoFinding;
     [Test] procedure Leak_UseAfterFree_KnownLimitation_NoFinding;
+    // Posten 302: der space-lose as-Zweig war fuer fremde Bezeichner offen
+    [Test] procedure Leak_ResultForeignAsIdentifier_ReportsError;
+    [Test] procedure Leak_ResultVarAsInterface_NoFinding;
+    [Test] procedure Leak_FieldForeignAsIdentifier_ReportsError;
+    [Test] procedure Leak_FieldVarAsInterface_NoFinding;
   end;
 
   // Referenz-Aliasing (zwei Refs auf ein Objekt) und die
@@ -3078,6 +3083,130 @@ end;
   ==================================================================== }
 
 // --- A: Wrong-Free / Mismatched Free (10 Tests) ---
+
+{ --- Posten 302: die tote 'as'-ohne-Space-Toleranz ---------- }
+//
+// uLeakDetector2 hielt an zwei Stellen eine zweite, space-lose Form des
+// Interface-Casts fuer moeglich: Variablenname + "as" + Buchstabe. Der
+// Parser liefert die nie (JoinTokInto setzt zwischen zwei Identifier-
+// Zeichen immer ein Blank), erreichbar war der Zweig nur noch fuer
+// FREMDE Bezeichner - und die schalteten ein echtes Leck stumm.
+//
+// Die vier Tests decken beide Fundstellen ab, je Paar aus Wirkung und
+// Kontrolle. Ohne die Kontrollen waeren die beiden 1er auch mit einer
+// kaputten Fixture gruen.
+
+procedure TTestMemoryLeakAdvanced.Leak_ResultForeignAsIdentifier_ReportsError;
+// IsReturnedAsResult: 'DataAsString' ist eine ANDERE Variable.
+// Vor dem Fix an der Exe gemessen: 0 Funde, das Leck von 'data'
+// war unterdrueckt. Kontrolle 'DataXsString' meldete 1.
+const SRC =
+  'unit t; interface'#13#10+
+  'uses System.Classes;'#13#10+
+  'type TFoo = class'#13#10+
+  '  function Get: TStringList;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'function TFoo.Get: TStringList;'#13#10+
+  'var data: TStringList;'#13#10+
+  'begin'#13#10+
+  '  data := TStringList.Create;'#13#10+
+  '  data.Add(''x'');'#13#10+
+  '  Result := DataAsString;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'fremder Bezeichner mit as-Silbe darf kein Ownership-Transfer sein');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_ResultVarAsInterface_NoFinding;
+// Die berechtigte Unterdrueckung daneben - und zugleich der Beleg,
+// dass der Space-Zweig traegt: an Zeichen 5 steht ein Blank, der
+// geloeschte Zweig KANN hier nicht gegriffen haben. Gemessen: 0.
+const SRC =
+  'unit t; interface'#13#10+
+  'uses System.Classes;'#13#10+
+  'type TFoo = class'#13#10+
+  '  function Get: TStringList;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'function TFoo.Get: TStringList;'#13#10+
+  'var data: TStringList;'#13#10+
+  'begin'#13#10+
+  '  data := TStringList.Create;'#13#10+
+  '  data.Add(''x'');'#13#10+
+  '  Result := data as IFoo;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'echter Interface-Cast als Ergebnis - der Refcount uebernimmt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_FieldForeignAsIdentifier_ReportsError;
+// Zweite Fundstelle, Feldtransfer in IsPassedToOwner. Vor dem Fix
+// gemessen: 0; Kontrolle 'ItemsXsString' meldete 1.
+const SRC =
+  'unit t; interface'#13#10+
+  'uses System.Classes;'#13#10+
+  'type TBar = class'#13#10+
+  '  FCache: string;'#13#10+
+  '  procedure Go;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'procedure TBar.Go;'#13#10+
+  'var items: TStringList;'#13#10+
+  'begin'#13#10+
+  '  items := TStringList.Create;'#13#10+
+  '  items.Add(''x'');'#13#10+
+  '  FCache := ItemsAsString;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'auch im Feldpfad ist die as-Silbe kein Transfer');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakAdvanced.Leak_FieldVarAsInterface_NoFinding;
+// Kontrolle zum Feldpfad. Gemessen: 0.
+const SRC =
+  'unit t; interface'#13#10+
+  'uses System.Classes;'#13#10+
+  'type TBar = class'#13#10+
+  '  FCache: string;'#13#10+
+  '  procedure Go;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'procedure TBar.Go;'#13#10+
+  'var items: TStringList;'#13#10+
+  'begin'#13#10+
+  '  items := TStringList.Create;'#13#10+
+  '  items.Add(''x'');'#13#10+
+  '  FCache := items as IFoo;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkMemoryLeak),
+      'echter Interface-Cast ins Feld - der Refcount uebernimmt');
+  finally F.Free; end;
+end;
+
 
 procedure TTestMemoryLeakAdvanced.Leak_ExceptFreeExit_NormalFreeSameTry_NoWarning;
 // FP-Gate Prio 5, regionsbezogen erweitert (01.09.). Nachbau von

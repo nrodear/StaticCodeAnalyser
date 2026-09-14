@@ -1184,16 +1184,28 @@ begin
     Trimmed := Trim(A.TypeRef.ToLower);
     // Exakter Match: 'Result := varname'
     if Trimmed = VarNameLow then Exit(True);
-    // Explicit cast: 'Result := varname as IFoo' (mit/ohne Whitespace
-    // - JoinTokInto produziert ' as ', aber legacy-Parser-Output kann
-    // weiterhin 'asIFoo' liefern - beide tolerieren).
+    // Explicit cast: 'Result := varname as IFoo' - NUR mit Leerzeichen.
+    //
+    // Hier stand bis 2026-09-14 eine zweite, space-lose Variante
+    // ('varname' + 'as' + Buchstabe), begruendet mit "legacy-Parser-
+    // Output". Diesen Output gibt es nicht: alle drei nkAssign-RHS-Bauer
+    // in uParser2 (Z. 2459, 3273, 3464) haengen die Token ueber
+    // JoinTokInto aneinander, und JoinTokInto setzt zwischen zwei
+    // Identifier-Zeichen IMMER ein Blank (uParser2.pas:247) - 'varname'
+    // endet auf einem, 'as' beginnt mit einem. An der gebauten Exe
+    // gegengeprueft: 'Result := data as IFoo' bleibt unterdrueckt, und
+    // dort KANN nur der Space-Zweig greifen (Zeichen 5 ist das Blank).
+    //
+    // Erreichbar war der space-lose Zweig damit nur noch fuer FREMDE
+    // Bezeichner: 'Result := DataAsString' zerfaellt in 'data'+'as'+'s'
+    // und schaltete das Leck der lokalen 'data' stumm. Gemessen: mit dem
+    // Zweig 0 Funde, ohne ihn 1; die Kontrolle 'DataXsString' meldet
+    // beide Male 1.
+    //
+    // Korpus: 0 betroffene Stellen. 2.143 Zuweisungen haben die Textform
+    // '<Ziel> := <Bezeichner mit as>;', aber bei keiner ist der Praefix
+    // vor dem 'as' eine lokale Variable, die ein Objekt haelt.
     if Trimmed.StartsWith(VarNameLow + ' as ') then Exit(True);
-    if Trimmed.StartsWith(VarNameLow) and
-       (Length(Trimmed) >= Length(VarNameLow) + 3) and
-       (Trimmed[Length(VarNameLow) + 1] = 'a') and
-       (Trimmed[Length(VarNameLow) + 2] = 's') and
-       CharInSet(Trimmed[Length(VarNameLow) + 3], ['a'..'z', '_']) then
-      Exit(True);
   end;
 
   // A: modernes 'Exit(varname)' = Result-Transfer + Sprung. Parser legt
@@ -2076,8 +2088,15 @@ begin
     //
     // Parser inseriert seit JoinTokInto Spaces zwischen Identifier-
     // Tokens, daher 'notifier as IInterface' -> 'notifier as iinterface'.
-    // Wir akzeptieren beide Varianten (mit/ohne Whitespace) damit der
-    // Detektor robust gegen Parser-Aenderungen bleibt.
+    //
+    // Die space-lose Zweitform ('varname'+'as'+Buchstabe) ist am
+    // 2026-09-14 entfallen - dieselbe tote Toleranz wie in
+    // IsReturnedAsResult, dort ist die Begruendung ausfuehrlich notiert.
+    // Kurz: JoinTokInto garantiert das Blank, erreichbar war der Zweig
+    // nur noch fuer fremde Bezeichner. An der Exe gemessen, Feldpfad:
+    // 'FCache := DataAsString' unterdrueckte das Leck der lokalen 'data'
+    // (0 Funde), die Kontrolle 'DataXsString' meldete 1, und
+    // 'FCache := data as IFoo' bleibt ueber den Space-Zweig stumm.
     var RHSLow := Trim(N.TypeRef.ToLower);
     var IsTransferShape := False;
     if RHSLow = VarNameLow then
@@ -2085,11 +2104,7 @@ begin
     else if RHSLow.StartsWith(VarNameLow) then
     begin
       var Rest := Trim(Copy(RHSLow, Length(VarNameLow) + 1, MaxInt));
-      // 'as <typename>' ODER 'as<typename>' (legacy Parser-Output).
       if Rest.StartsWith('as ') then
-        IsTransferShape := True
-      else if (Length(Rest) >= 3) and (Rest[1] = 'a') and (Rest[2] = 's') and
-              CharInSet(Rest[3], ['a'..'z', '_']) then
         IsTransferShape := True;
     end;
     if IsTransferShape then
