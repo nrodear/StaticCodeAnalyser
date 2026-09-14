@@ -54,7 +54,7 @@ const SRC =
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try
     Assert.AreEqual<Integer>(0,
       TFindingHelper.Count(F, fkRedundantConditional),
@@ -73,7 +73,7 @@ const SRC =
   'end;';
 var F: TObjectList<TLeakFinding>;
 begin
-  F := TFindingHelper.FindingsOf(SRC);
+  F := TFindingHelper.FindingsOfFile(SRC);
   try
     Assert.AreEqual<Integer>(1,
       TFindingHelper.Count(F, fkRedundantConditional),
