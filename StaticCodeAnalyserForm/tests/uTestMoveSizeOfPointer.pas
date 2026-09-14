@@ -23,6 +23,8 @@ type
     [Test] procedure SizeOfTimesCount_TrailingGuard_NoFinding;
     [Test] procedure BuiltInPointerType_NoFinding;
     [Test] procedure CopyMemory_NotScanned_KnownLimit;
+    // Paket 9010: CopyMemory und ZeroMemory fehlten im Vorfilter
+    [Test] procedure PrefilterKnowsCopyMemory_Reported;
   end;
 
 implementation
@@ -39,6 +41,45 @@ uses
 // nur als Begruendung, WARUM die Positiv-Fixture durchkommt.
 //
 // Alle vier am gebauten Stand gemessen.
+
+{ --- Paket 9010: zwei der vier Verben fehlten im Vorfilter ------ }
+//
+// Der Regex des Detektors fuehrt vier Verben, der Vorfilter fuehrte
+// zwei. Eine Datei, die nur die anderen beiden benutzt, wurde nie
+// gescannt.
+//
+// An der Exe belegt, dasselbe Groessenargument in allen vieren:
+//   Move 1, FillChar 1, CopyMemory 0, ZeroMemory 0
+// und die zwei Nuller melden, sobald irgendwo im File eine
+// Kommentarzeile mit dem ersten Verb steht.
+
+procedure TTestMoveSizeOfPointer.PrefilterKnowsCopyMemory_Reported;
+// Vorher gemessen: 0. Nachher: 1.
+//
+// Korpuswirkung null: die 17 Textstellen, die eine erste
+// Nachbildung fand, sind alle "Anzahl mal Zeigergroesse" -
+// das Kopieren eines Zeiger-ARRAYS und damit korrekt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'var'#13#10 +
+  '  Buf: array[0..255] of Byte;'#13#10 +
+  'begin'#13#10 +
+  '  CopyMemory(@Buf[0], @Buf[1], SizeOf(PByte));'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkMoveSizeOfPointer),
+      'auch CopyMemory muss den Vorfilter passieren');
+  finally F.Free; end;
+end;
+
 
 procedure TTestMoveSizeOfPointer.MoveSizeOfPointer_Kontrolle_Reported;
 // POSITIV-KONTROLLE fuer die drei Guards darunter. Gemessen: 1.

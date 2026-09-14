@@ -282,6 +282,29 @@ begin
       AfterPos := M.Index + M.Length;
       if AfterPos > Length(Code) then Continue;
 
+      // `Lock(` MIT Argumenten ist kein Mutex (Paket 9016, 2026-09-14).
+      // Die Sperren dieser Familie nehmen keine: TSynLocker.Lock,
+      // TCriticalSection.Acquire, TMonitor.Enter - alle argumentlos.
+      // Mit Argumenten heisst `Lock` etwas anderes, typisch das Mappen
+      // eines Grafikpuffers:
+      //     m_pVB.Lock(0, 0, Pointer(pVertices), D3DLOCK_DISCARD);
+      // Das ist keine Sperre, die ein try/finally braucht, und die
+      // Meldung "Ausnahme haelt die Sperre dauerhaft" trifft nicht zu.
+      //
+      // GEMESSEN: von den 169 heutigen Funden nutzt KEIN EINZIGER diese
+      // Form - der Guard nimmt also nichts weg. Er verhindert genau die
+      // drei Fehlfunde, die mit dem neuen '.lock'-Vorfilterzeichen
+      // sichtbar wuerden (jvcl D3DFont.pas:717, 853, 972).
+      //
+      // NUR fuer `Lock`: EnterCriticalSection(Section) nimmt sein
+      // Argument zu Recht, und Acquire bleibt unberuehrt.
+      //
+      // Gruppe 1 traegt den Aufrufnamen OHNE Trennzeichen und ohne den
+      // Leerraum davor - damit greift der Test auch bei `Foo.Lock (`.
+      if (Code[AfterPos - 1] = '(') and
+         EndsText('lock', M.Groups[1].Value) then
+        Continue;
+
       // Snippet nach dem Lock-Aufruf (max 200 Zeichen) lowercased.
       // FP-Guard (FP-Audit Stufe 2, 2026-08-16): das Fenster endet spaetestens
       // am Beginn der naechsten Routine. Delphi-Lock-Fassaden sind 3-5 Zeilen
