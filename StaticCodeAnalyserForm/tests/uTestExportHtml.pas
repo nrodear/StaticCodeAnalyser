@@ -256,7 +256,16 @@ end;
 procedure TTestExportHtml.DataSort_NichtNumerischeZeile_BrichtDasAttributNicht;
 // Ein Anfuehrungszeichen im Zeilenfeld haette das Attribut
 // aufgebrochen und den Rest der Zeile zu Markup gemacht.
-// data-sort traegt jetzt eine garantierte Zahl.
+//
+// ERWARTETER WERT IST 0, NICHT 12. StrToIntDef konvertiert den GANZEN
+// String oder gar nicht - '12" onmouseover=...' ist keine Zahl, also
+// greift der Default. Das ist genau richtig: ein Sortierschluessel, der
+// aus Muell entsteht, soll keine Ordnung vortaeuschen. Eine Variante,
+// die fuehrende Ziffern rettet, waere mehr Code fuer einen Fall, den
+// der Korpus in 231.571 Zeilen kein einziges Mal enthaelt.
+//
+// Der erste Anlauf dieses Tests erwartete "12" und war damit rot -
+// mein Irrtum, nicht der des Codes.
 var
   L    : TObjectList<TLeakFinding>;
   F    : TLeakFinding;
@@ -275,10 +284,23 @@ begin
   finally
     L.Free;
   end;
-  Assert.AreEqual<Integer>(0, Pos('onmouseover=''', Html),
-    'aus dem Zeilenfeld darf kein Attribut entstehen');
-  Assert.IsTrue(Pos('data-sort="12"', Html) > 0,
-    'data-sort muss die normalisierte Zahl tragen');
+  // Mit dem ECHTEN Anfuehrungszeichen pruefen. Der erste Anlauf suchte
+  // nach onmouseover=' (Apostroph) und war gruen, ohne irgendetwas zu
+  // belegen - im HTML stuende ein Anfuehrungszeichen.
+  //
+  // Das WORT onmouseover kommt sehr wohl vor: die Anzeige-Zelle zeigt
+  // den Originaltext escapet (onmouseover=&quot;). Geprueft wird also
+  // nicht seine Abwesenheit, sondern dass daraus kein AKTIVES Attribut
+  // geworden ist.
+  Assert.AreEqual<Integer>(0, Pos('onmouseover="', Html),
+    'aus dem Zeilenfeld darf kein aktives Attribut entstehen');
+  Assert.IsTrue(Pos('data-sort="0"', Html) > 0,
+    'unbrauchbare Zeilenangabe -> data-sort traegt den Default 0');
+  // Gegenrichtung: wer den Wert kuenftig "rettet", indem er fuehrende
+  // Ziffern herausschneidet, macht den Kommentar oben ungueltig und
+  // soll hier stolpern.
+  Assert.AreEqual<Integer>(0, Pos('data-sort="12"', Html),
+    'fuehrende Ziffern werden NICHT gerettet - das ist Absicht');
 end;
 
 procedure TTestExportHtml.DataSort_GewoehnlicheZeile_Unveraendert;
