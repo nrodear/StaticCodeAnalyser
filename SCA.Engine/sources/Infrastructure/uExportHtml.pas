@@ -2014,7 +2014,17 @@ begin
         SB.Append('" data-rule="');
         SB.Append(HtmlEscape(KindNm));
         SB.Append('" data-search="');
-        SB.Append(HtmlEscape(SearchBlob));
+        // Voll-Review, umgesetzt 2026-09-15: hier stand HtmlEscape, also
+        // der ELEMENT-Vertrag. Der macht aus einem Umbruch ein literales
+        // '<br>' - im Attribut waere das Datenmuell, und die JS-Suche
+        // faende danach '<br>' statt des Umbruchs. HtmlAttrEscapeMultiline
+        // gibt es fuer genau diesen Fall; es setzt '&#10;', woraus der
+        // Parser im dataset ein echtes LF macht.
+        //
+        // Latent wie die Nachbarstelle: kein einziger der 752.457
+        // Meldetexte des Referenzlaufs traegt einen Zeilenumbruch.
+        // MissingVar ist der Teil des Blobs, der einen bekommen koennte.
+        SB.Append(HtmlAttrEscapeMultiline(SearchBlob));
         SB.Append('" data-conf="');
         SB.Append(ConfNm);
         SB.Append('" data-qf="');
@@ -2045,8 +2055,24 @@ begin
         SB.Append(ConfNm);
         SB.Append('</span></td>');
         SB.Append('<td>'); SB.Append(HtmlEscape(F.TypeText)); SB.Append('</td>');
-        // Zeile mit data-sort als rein numerischer Wert
-        SB.Append('<td class="num" data-sort="' + F.LineNumber + '">');
+        // Zeile mit data-sort als rein numerischer Wert.
+        //
+        // Voll-Review, umgesetzt 2026-09-15: F.LineNumber ging hier
+        // UNGEPRUEFT in einen Attributwert, waehrend die Anzeige eine
+        // Zeile darunter escapet wird - ein Anfuehrungszeichen im Wert
+        // haette das Attribut aufgebrochen. Statt zu escapen wird der
+        // Wert jetzt NORMALISIERT: der Kommentar oben sagt "rein
+        // numerischer Wert", also soll dort auch garantiert eine Zahl
+        // stehen. StrToIntDef ist dieselbe Technik, die diese Unit
+        // wenige Zeilen weiter oben (LineNo) schon benutzt.
+        //
+        // Am Korpus ist der Fall latent: 231.571 Zeilen eines
+        // CSV-Exports, das Line-Feld IMMER rein numerisch. Der Fix ist
+        // Haertung gegen kuenftige Detektoren, kein Reparieren eines
+        // laufenden Schadens - die ANZEIGE darunter behaelt bewusst den
+        // Originaltext.
+        SB.Append('<td class="num" data-sort="' +
+                  IntToStr(StrToIntDef(F.LineNumber, 0)) + '">');
         SB.Append(HtmlEscape(F.LineNumber));
         SB.Append('</td>');
         SB.Append('<td>'); SB.Append(HtmlEscape(F.MethodName)); SB.Append('</td>');
