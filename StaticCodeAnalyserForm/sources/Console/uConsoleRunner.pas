@@ -1190,6 +1190,93 @@ var
   Files     : TStringList;
   RepoInfo  : string;
   Settings  : TRepoSettings;
+
+  function SchreibeLeereBerichte: Integer;
+  // --diff/--branch ohne geaenderte Dateien: die angeforderten Berichte
+  // trotzdem schreiben, nur eben leer.
+  //
+  // WARUM (Voll-Review, umgesetzt 2026-09-15): bis hierher stieg der
+  // Lauf mit cecClean aus, BEVOR irgendein Report entstand. Fuer eine
+  // Pipeline ist das die schlechtere von zwei Welten - sie findet
+  // entweder gar nichts (und bricht) oder, schlimmer, den Report des
+  // VORIGEN Laufs und meldet dessen Befunde als aktuell.
+  //
+  // Dass es ein Defekt und keine Absicht ist, zeigt der Vergleich mit
+  // dem Nachbarfall: ein Scan auf ein LEERES VERZEICHNIS schreibt die
+  // Berichte sehr wohl (an der Exe geprueft - out.sarif 269 KB,
+  // out.csv 253 Bytes). Dieselbe Lage, zwei Verhalten.
+  //
+  // Die Writer vertragen eine leere Liste; das ist keine Annahme,
+  // sondern durch ExportCsvUndJson_VertragenNil und denselben
+  // Leerverzeichnis-Lauf belegt.
+  //
+  // FOLGEARBEIT, bewusst nicht hier: der Bericht-Block im Hauptpfad
+  // fuehrt dieselben fuenf Writer noch einmal, samt gleichfoermigem
+  // try/except. Ihn und diese Funktion auf einen gemeinsamen Helfer zu
+  // ziehen waere richtig, ist aber ein Umbau von rund hundert Zeilen
+  // im kritischsten CLI-Pfad - eigener Commit, eigener Bau.
+  var
+    Leer : TObjectList<TLeakFinding>;
+  begin
+    Result := Integer(cecClean);
+    if (Args.ReportSarif = '') and (Args.ReportHtml = '') and
+       (Args.ReportCsv = '') and (Args.ReportJson = '') and
+       (Args.SonarExport = '') then
+      Exit;
+    Leer := TObjectList<TLeakFinding>.Create(True);
+    try
+      try
+        if Args.ReportSarif <> '' then
+        begin
+          TSARIFWriter.WriteFile(Args.ReportSarif, Leer, Args.BaseDir,
+                                 SCA_VERSION, SCA_TOOLNAME);
+          if not Args.Quiet then
+            WriteLn('SARIF report written (no findings): ', Args.ReportSarif);
+        end;
+        if Args.ReportHtml <> '' then
+        begin
+          TExporterHtml.Run(Leer, '', Args.ReportHtml, Args.BaseDir);
+          if not Args.Quiet then
+            WriteLn('HTML report written (no findings): ', Args.ReportHtml);
+        end;
+        if Args.ReportCsv <> '' then
+        begin
+          TExporter.ExportCsv(Leer, Args.ReportCsv, Args.BaseDir);
+          if not Args.Quiet then
+            WriteLn('CSV report written (no findings): ', Args.ReportCsv);
+        end;
+        if Args.ReportJson <> '' then
+        begin
+          TExporter.ExportJson(Leer, Args.ReportJson, Args.BaseDir);
+          if not Args.Quiet then
+            WriteLn('JSON report written (no findings): ', Args.ReportJson);
+        end;
+        if Args.SonarExport <> '' then
+        begin
+          // AKeepDowngraded wie im Hauptpfad durchreichen, auch wenn es
+          // bei null Funden nichts bewirkt - der Aufruf soll sich nicht
+          // vom Normalfall unterscheiden. Rueckgabewert (Zahl der
+          // Funde ausserhalb der BaseDir) ist hier immer 0.
+          TSonarGenericWriter.WriteFile(Args.SonarExport, Leer, Args.BaseDir,
+                                        Args.SonarKeepDowngraded);
+          if not Args.Quiet then
+            WriteLn('Sonar report written (no findings): ', Args.SonarExport);
+        end;
+      except
+        // noinspection ExceptionTooGeneral (CLI-Action-Grenze: Top-Level-Report auf stderr)
+        on E: Exception do
+        begin
+          // Gleiche Wertung wie im Hauptpfad: ein angeforderter, aber
+          // nicht geschriebener Bericht ist ein Werkzeugfehler.
+          WriteLn(ErrOutput, 'Report write error: ', E.Message);
+          Result := Integer(cecToolError);
+        end;
+      end;
+    finally
+      Leer.Free;
+    end;
+  end;
+
 begin
   // Sofort-Exits
   if Args.ParseError <> '' then
@@ -1587,7 +1674,8 @@ begin
         begin
           if not Args.Quiet then
             WriteLn('No .pas files differ in range ', Args.Diff, '. ', RepoInfo);
-          Exit(Integer(cecClean));
+          // Berichte trotzdem schreiben - s. SchreibeLeereBerichte.
+          Exit(SchreibeLeereBerichte);
         end;
         if not Args.Quiet then
           WriteLn(RepoInfo);
@@ -1610,7 +1698,8 @@ begin
         begin
           if not Args.Quiet then
             WriteLn('No VCS-changed .pas files found. ', RepoInfo);
-          Exit(Integer(cecClean));
+          // Berichte trotzdem schreiben - s. SchreibeLeereBerichte.
+          Exit(SchreibeLeereBerichte);
         end;
         if not Args.Quiet then
           WriteLn(Format('Analyzing %d changed file(s). %s', [Files.Count, RepoInfo]));

@@ -69,6 +69,10 @@ type
     // Charge 18 (07.09., Nachauftrag): Befund-Details oeffnen seitlich
     // im Drawer wie im Detektor-Katalog - die Klappzeile ist Geschichte.
     [Test] procedure FindingDetails_OpenInSideDrawer;
+    // Attributwerte brauchen mehr als den Element-Vertrag
+    [Test] procedure DataSort_NichtNumerischeZeile_BrichtDasAttributNicht;
+    [Test] procedure DataSort_GewoehnlicheZeile_Unveraendert;
+    [Test] procedure DataSearch_UmbruchWirdAttributsicher;
   end;
 
 
@@ -233,6 +237,134 @@ begin
     Findings.Free;
   end;
 end;
+
+{ --- Attributwerte: Element-Vertrag reicht dort nicht ----------- }
+//
+// Zwei Stellen aus dem Voll-Review, beide am Korpus LATENT und
+// beide trotzdem echt:
+//   * data-sort bekam F.LineNumber voellig ungeschuetzt, waehrend
+//     die Anzeige eine Zeile darunter escapet wurde.
+//   * data-search wurde mit HtmlEscape gefuellt - dem
+//     ELEMENT-Vertrag, der aus einem Umbruch ein literales <br>
+//     macht. Im Attribut ist das Datenmuell.
+//
+// Gemessen: das Line-Feld ist in 231.571 CSV-Zeilen IMMER rein
+// numerisch, und keiner der 752.457 Meldetexte des Referenzlaufs
+// traegt einen Zeilenumbruch. Die Fixturen hier erzwingen beides,
+// weil der Korpus es nicht liefert.
+
+procedure TTestExportHtml.DataSort_NichtNumerischeZeile_BrichtDasAttributNicht;
+// Ein Anfuehrungszeichen im Zeilenfeld haette das Attribut
+// aufgebrochen und den Rest der Zeile zu Markup gemacht.
+//
+// ERWARTETER WERT IST 0, NICHT 12. StrToIntDef konvertiert den GANZEN
+// String oder gar nicht - '12" onmouseover=...' ist keine Zahl, also
+// greift der Default. Das ist genau richtig: ein Sortierschluessel, der
+// aus Muell entsteht, soll keine Ordnung vortaeuschen. Eine Variante,
+// die fuehrende Ziffern rettet, waere mehr Code fuer einen Fall, den
+// der Korpus in 231.571 Zeilen kein einziges Mal enthaelt.
+//
+// Der erste Anlauf dieses Tests erwartete "12" und war damit rot -
+// mein Irrtum, nicht der des Codes.
+var
+  L    : TObjectList<TLeakFinding>;
+  F    : TLeakFinding;
+  Html : string;
+begin
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    F := TLeakFinding.Create;
+    F.SetKind(fkMemoryLeak);
+    F.FileName   := 'src\uMain.pas';
+    F.MethodName := 'TFoo.Bar';
+    F.LineNumber := '12" onmouseover="alert(1)';
+    F.MissingVar := 'list';
+    L.Add(F);
+    Html := RenderFindings(L);
+  finally
+    L.Free;
+  end;
+  // Mit dem ECHTEN Anfuehrungszeichen pruefen. Der erste Anlauf suchte
+  // nach onmouseover=' (Apostroph) und war gruen, ohne irgendetwas zu
+  // belegen - im HTML stuende ein Anfuehrungszeichen.
+  //
+  // Das WORT onmouseover kommt sehr wohl vor: die Anzeige-Zelle zeigt
+  // den Originaltext escapet (onmouseover=&quot;). Geprueft wird also
+  // nicht seine Abwesenheit, sondern dass daraus kein AKTIVES Attribut
+  // geworden ist.
+  Assert.AreEqual<Integer>(0, Pos('onmouseover="', Html),
+    'aus dem Zeilenfeld darf kein aktives Attribut entstehen');
+  Assert.IsTrue(Pos('data-sort="0"', Html) > 0,
+    'unbrauchbare Zeilenangabe -> data-sort traegt den Default 0');
+  // Gegenrichtung: wer den Wert kuenftig "rettet", indem er fuehrende
+  // Ziffern herausschneidet, macht den Kommentar oben ungueltig und
+  // soll hier stolpern.
+  Assert.AreEqual<Integer>(0, Pos('data-sort="12"', Html),
+    'fuehrende Ziffern werden NICHT gerettet - das ist Absicht');
+end;
+
+procedure TTestExportHtml.DataSort_GewoehnlicheZeile_Unveraendert;
+// DIE KLAMMER. Ohne sie waere ein Fix, der data-sort immer auf
+// 0 setzt, ebenfalls gruen.
+var
+  L    : TObjectList<TLeakFinding>;
+  F    : TLeakFinding;
+  Html : string;
+begin
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    F := TLeakFinding.Create;
+    F.SetKind(fkMemoryLeak);
+    F.FileName   := 'src\uMain.pas';
+    F.MethodName := 'TFoo.Bar';
+    F.LineNumber := '4711';
+    F.MissingVar := 'list';
+    L.Add(F);
+    Html := RenderFindings(L);
+  finally
+    L.Free;
+  end;
+  Assert.IsTrue(Pos('data-sort="4711"', Html) > 0,
+    'die normale Zeilennummer steht unveraendert im Attribut');
+end;
+
+procedure TTestExportHtml.DataSearch_UmbruchWirdAttributsicher;
+// Mit dem Element-Vertrag stand hier ein literales <br> und die
+// Volltextsuche haette danach gesucht statt nach dem Umbruch.
+var
+  L    : TObjectList<TLeakFinding>;
+  F    : TLeakFinding;
+  Html : string;
+begin
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    F := TLeakFinding.Create;
+    F.SetKind(fkMemoryLeak);
+    F.FileName   := 'src\uMain.pas';
+    F.MethodName := 'TFoo.Bar';
+    F.LineNumber := '42';
+    F.MissingVar := 'erste'#10'zweite';
+    L.Add(F);
+    Html := RenderFindings(L);
+  finally
+    L.Free;
+  end;
+  // Den Attributwert EXAKT ausschneiden, nicht mit einem festen Fenster
+  // arbeiten: der Detailtext wird weiter unten auch als Zellinhalt
+  // gerendert, und DORT ist ein <br> voellig richtig. Ein zu grosses
+  // Fenster wuerde genau das einfangen und den Test falsch rot machen.
+  var P := Pos('data-search="', Html);
+  Assert.IsTrue(P > 0, 'data-search muss es geben');
+  Inc(P, Length('data-search="'));
+  var E := Pos('"', Html, P);
+  Assert.IsTrue(E > P, 'data-search muss geschlossen sein');
+  var Wert := Copy(Html, P, E - P);
+  Assert.AreEqual<Integer>(0, Pos('<br>', Wert),
+    'im Attributwert darf kein literales <br> stehen: ' + Wert);
+  Assert.IsTrue(Pos('zweite', Wert) > 0,
+    'der Text hinter dem Umbruch muss suchbar bleiben: ' + Wert);
+end;
+
 
 procedure TTestExportHtml.FrI18nEscapesHaveSingleBackslash;
 var
