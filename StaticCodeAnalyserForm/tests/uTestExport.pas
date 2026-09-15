@@ -50,6 +50,9 @@ type
     [Test] procedure ExportCsv_FormelPraefixImDateinamen_Entschaerft;
     [Test] procedure ExportCsv_HarmloserDateiname_Unveraendert;
     [Test] procedure ExportCsv_MinusInDetailspalte_Entschaerft;
+    // Jira-Detailteil war hart deutsch, die Tabelle darueber nicht
+    [Test] procedure JiraDetailteil_FolgtDerSprache;
+    [Test] procedure JiraDetailteil_DeutschBleibtDeutsch;
   end;
 
 implementation
@@ -64,6 +67,8 @@ implementation
 
 uses
   System.IOUtils,
+  uLocalization,   // SetLanguage/CurrentLanguage - der Jira-Detailteil
+                   // laesst sich nur mit Sprachwechsel pruefen
   uExport;
 
 procedure TTestExport.RelativeDisplayPath_UsesForwardSlashes;
@@ -554,6 +559,85 @@ begin
     'das Array muss geschlossen sein - ein abgebrochener Schreibvorgang '
     + 'faellt sonst nicht auf');
 end;
+
+{ --- Jira-Detailteil: dieselbe Sprache wie die Tabelle ---------- }
+//
+// Im Detailteil standen die Severity-Namen HART DEUTSCH (Fehler,
+// Warnung, Hinweis), dazu "Z.", "Vorher:" und "Nachher:" -
+// waehrend die Tabelle im SELBEN Dokument ueber _() geht. Bei
+// englischer Oberflaeche widersprach sich ein und derselbe
+// Bericht: oben "Error", unten "Fehler".
+//
+// Der Test muss die SPRACHE WECHSELN, sonst prueft er nichts: in
+// deutscher Oberflaeche war die harte Zeichenkette ja zufaellig
+// richtig. Muster und Wiederherstellung wie in uTestFixHint.
+
+procedure TTestExport.JiraDetailteil_FolgtDerSprache;
+// Vor dem Fix stand bei SetLanguage(en) trotzdem "Fehler" und
+// "Vorher:" im Detailteil - der Test waere rot gewesen.
+var
+  L       : TObjectList<TLeakFinding>;
+  F       : TLeakFinding;
+  AlteSpr : string;
+  Txt     : string;
+begin
+  AlteSpr := CurrentLanguage;
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    SetLanguage('en');
+    F := TLeakFinding.Create;
+    F.SetKind(fkMemoryLeak);
+    F.FileName   := 'src/uMain.pas';
+    F.MethodName := 'TFoo.Bar';
+    F.LineNumber := '42';
+    F.MissingVar := 'list';
+    L.Add(F);
+    Txt := TExporter.BuildJiraText(L, '', [lsError, lsWarning, lsHint]);
+  finally
+    L.Free;
+    SetLanguage(AlteSpr);
+  end;
+  Assert.IsNotEmpty(Txt, 'Jira-Text ist leer - Fixture greift nicht');
+  Assert.AreEqual<Integer>(0, Pos('Fehler', Txt),
+    'bei englischer Sprache darf kein deutsches Severity-Wort stehen');
+  Assert.AreEqual<Integer>(0, Pos('Vorher:', Txt),
+    'auch die Code-Labels folgen der Sprache');
+  Assert.AreEqual<Integer>(0, Pos('Nachher:', Txt),
+    'auch die Code-Labels folgen der Sprache');
+end;
+
+procedure TTestExport.JiraDetailteil_DeutschBleibtDeutsch;
+// DIE KLAMMER. Ohne sie waere ein Fix, der die Labels ganz
+// weglaesst, ebenfalls gruen. In deutscher Oberflaeche MUSS das
+// deutsche Wort erscheinen - und zwar aus der .po, nicht aus dem
+// Quelltext.
+var
+  L       : TObjectList<TLeakFinding>;
+  F       : TLeakFinding;
+  AlteSpr : string;
+  Txt     : string;
+begin
+  AlteSpr := CurrentLanguage;
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    SetLanguage('de');
+    F := TLeakFinding.Create;
+    F.SetKind(fkMemoryLeak);
+    F.FileName   := 'src/uMain.pas';
+    F.MethodName := 'TFoo.Bar';
+    F.LineNumber := '42';
+    F.MissingVar := 'list';
+    L.Add(F);
+    Txt := TExporter.BuildJiraText(L, '', [lsError, lsWarning, lsHint]);
+  finally
+    L.Free;
+    SetLanguage(AlteSpr);
+  end;
+  Assert.IsTrue(Pos('Fehler', Txt) > 0,
+    'in deutscher Oberflaeche steht das deutsche Wort: '
+    + Copy(Txt, 1, 200));
+end;
+
 
 procedure TTestExport.ExportCsvUndJson_VertragenNil;
 // Beide Writer pruefen auf nil (Assigned(Findings)). Der Sonar-Writer

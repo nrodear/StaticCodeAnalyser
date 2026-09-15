@@ -607,18 +607,30 @@ begin
         if (SourceFile <> '') and not SameSourceFile(F.FileName, SourceFile) then
           Continue;
 
+        // Voll-Review, umgesetzt 2026-09-15: hier standen die drei
+        // Severity-Namen HART DEUTSCH ('Fehler', 'Warnung', 'Hinweis'),
+        // waehrend die Tabelle weiter oben im SELBEN Dokument
+        // _('Error') / _('Warning') / _('Hint') benutzt. Bei englischer
+        // Oberflaeche widersprach sich ein und derselbe Bericht: oben
+        // "Error", unten "Fehler". Jetzt beide Stellen ueber dieselben
+        // msgids - neue Eintraege brauchte es dafuer keine, alle drei
+        // stehen seit jeher in i18n/*.po.
         case F.Severity of
-          lsError   : SevLabel := '{color:red}*Fehler*{color}';
-          lsWarning : SevLabel := '{color:#b07000}Warnung{color}';
-          lsHint    : SevLabel := '{color:#5a8000}Hinweis{color}';
+          lsError   : SevLabel := Format('{color:red}*%s*{color}', [_('Error')]);
+          lsWarning : SevLabel := Format('{color:#b07000}%s{color}', [_('Warning')]);
+          lsHint    : SevLabel := Format('{color:#5a8000}%s{color}', [_('Hint')]);
         else
           SevLabel := '';
         end;
 
-        // Header pro Befund: "h4. <Severity> - Z. <line> - <Kind> - <Detail>"
+        // Header pro Befund: "h4. <Severity> - <Line> <nr> - <Kind> - <Detail>"
+        // Das abgekuerzte 'Z.' war die vierte harte Stelle; _('Line')
+        // fuehrt die Tabellenueberschrift oben ohnehin schon.
         SB.Append('h4. ');
         SB.Append(SevLabel);
-        SB.Append(' - Z. ');
+        SB.Append(' - ');
+        SB.Append(_('Line'));
+        SB.Append(' ');
         SB.Append(JiraEscape(F.LineNumber));
         if F.MethodName <> '' then
         begin
@@ -636,16 +648,18 @@ begin
           SB.Append('bq. ');
           SB.AppendLine(JiraEscape(Hint.Description));
         end;
+        // Auch diese beiden waren hart deutsch; 'Before:'/'After:'
+        // stehen bereits als msgid in i18n/*.po.
         if Hint.Before <> '' then
         begin
-          SB.AppendLine('*Vorher:*');
+          SB.AppendLine(Format('*%s*', [_('Before:')]));
           SB.AppendLine('{code:delphi}');
           SB.AppendLine(Hint.Before);
           SB.AppendLine('{code}');
         end;
         if Hint.After <> '' then
         begin
-          SB.AppendLine('*Nachher:*');
+          SB.AppendLine(Format('*%s*', [_('After:')]));
           SB.AppendLine('{code:delphi}');
           SB.AppendLine(Hint.After);
           SB.AppendLine('{code}');

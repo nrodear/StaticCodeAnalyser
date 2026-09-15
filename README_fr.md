@@ -845,44 +845,73 @@ svn export "$REPOS" "$WC" -r "$TXN" --quiet
 "$ANALYSER" --path "$WC" --full --quiet
 EXIT=$?
 rm -rf "$WC"
-exit $EXIT
+
+# IMPORTANT : SVN bloque le commit pour TOUT code de sortie non nul, et
+# ne montre au committeur que ce qui est écrit sur stderr. Le code brut
+# ne doit donc pas être transmis tel quel ici - sinon les conseils et
+# les avertissements bloquent aussi, contrairement au tableau
+# ci-dessous. La graduation revient au hook, pas à l'outil.
+if [ "$EXIT" -ge 3 ]; then
+  echo "SCA : commit bloqué (code $EXIT)." >&2
+  exit 1
+fi
+exit 0
 ```
 
 Correspondance des codes de sortie :
 - 0 = propre → commit autorisé
 - 1 = conseils uniquement → commit autorisé
-- 2 = avertissements → commit autorisé (ou blocage via la logique du hook)
+- 2 = avertissements → commit autorisé (pour les bloquer, utiliser
+  `-ge 2` ci-dessus au lieu de `-ge 3`)
 - 3 = erreurs → **commit bloqué**
+- 99 = erreur d'outil (arguments invalides, rapport non inscriptible) →
+  **commit bloqué**. Un scan qui n'a pas eu lieu ne doit pas ressembler
+  à un scan propre ; la règle `-ge 3` ci-dessus le couvre.
 
-### `--parallel` — défectueux, ne pas utiliser
+### `--parallel` — correct, mais sans intérêt
 
-> **Cette option est connue comme défectueuse depuis le 2026-08-08.** Il
-> était écrit ici auparavant que le résultat était identique octet pour
-> octet à une exécution sérielle. Cette affirmation était fausse et n'a
-> jamais été mesurée — le test derrière elle ne vérifiait que l'étape de
-> fusion, jamais un vrai scan.
+> **Corrigé le 2026-09-15.** Il était écrit ici « défectueux, ne pas
+> utiliser » jusqu'à aujourd'hui. C'était obsolète depuis le
+> 2026-08-20 : l'option a été réparée, et cette section a passé près
+> d'un mois à avertir d'un bug corrigé.
 
-Onze détecteurs partagent des instances `TRegEx` globales à l'unité. Un
-`TRegEx` est un record autour d'**un** objet moteur partagé dont le sujet
-et les offsets sont modifiés à chaque correspondance ; deux workers dans le
-même détecteur se corrompent donc mutuellement l'état. Mesuré sur un corpus
-réel : cinq exécutions sérielles ont produit un seul hash SARIF identique ;
-treize exécutions parallèles ont produit **treize résultats différents**,
-avec **40 vrais résultats perdus** et trois résultats de sévérité Error
-*inventés*. Lancer `--parallel --parallel-workers 1` reproduit le résultat
-sériel octet pour octet, ce qui désigne la concurrence comme cause plutôt
-qu'un chemin de code différent.
+**Mesuré le 2026-09-15**, un dépôt de 137 fichiers source, quatre
+exécutions (une sérielle, trois parallèles) : **un seul hash SARIF
+octet pour octet sur les quatre**, 9 086 résultats chacune, zéro ajout
+et zéro suppression dans le diff multiset. Le résultat est déterministe
+et identique à l'exécution sérielle.
 
-Il n'y a rien à arbitrer, car il n'y a aucun gain de vitesse à perdre :
-24,3 s en sériel contre 27,7–41 s en parallèle sur 2/4/8/16/28 workers —
-monotonement pire. L'ancien chiffre « environ 3 % de gain » n'est pas
-reproductible. Environ la moitié du temps mur est la *pré-phase sérielle*
-(parsing, index de symboles et de types), que l'option ne touche pas.
+**Simplement, cela n'apporte rien.** Mesuré sur le plus grand dépôt
+unique du corpus de test (jvcl), deux exécutions chacune : 95,5 s et
+94,7 s en sériel, 93,4 s et 93,3 s en parallèle — environ 1,8 %, donc
+du bruit. La raison figure plus bas dans la section architecture : une
+bonne part du temps mur est la *pré-phase sérielle* (parsing, index de
+symboles et de types), que l'option ne touche pas. L'avertissement sur
+stderr dit la même chose.
 
-L'utiliser aujourd'hui imprime un avertissement sur stderr. La réparation
-propre consiste à donner à chaque détecteur son propre `TRegEx` par appel —
-le projet a déjà résolu exactement cette classe de bug une fois, dans
-`uRegExMatches`, et a simplement oublié ces onze unités.
+La recommandation reste donc « ne pas l'activer » — mais pour une autre
+raison qu'avant : non parce qu'elle nuit, mais parce qu'elle n'apporte
+rien.
+
+<details>
+<summary>Ce qui était cassé autrefois (historique, corrigé depuis le 2026-08-20)</summary>
+
+Onze détecteurs partageaient des instances `TRegEx` globales à l'unité.
+Un `TRegEx` est un record autour d'**un** objet moteur partagé dont le
+sujet et les offsets sont modifiés à chaque correspondance ; deux
+workers dans le même détecteur se corrompaient donc mutuellement
+l'état. Mesuré à l'époque : cinq exécutions sérielles ont produit un
+seul hash SARIF identique ; treize exécutions parallèles ont produit
+**treize résultats différents**, avec 40 vrais résultats perdus et
+trois résultats de sévérité Error *inventés*.
+
+La leçon la plus ancienne est la plus importante : l'affirmation
+initiale « identique octet pour octet » n'avait jamais été mesurée — le
+test derrière elle ne vérifiait que l'étape de fusion, jamais un vrai
+scan. C'est pourquoi cette section porte désormais des nombres
+d'exécutions et des hashs plutôt qu'une affirmation.
+
+</details>
 
 ---
 
