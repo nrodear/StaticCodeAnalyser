@@ -829,44 +829,69 @@ svn export "$REPOS" "$WC" -r "$TXN" --quiet
 "$ANALYSER" --path "$WC" --full --quiet
 EXIT=$?
 rm -rf "$WC"
-exit $EXIT
+
+# WICHTIG: SVN blockiert den Commit bei JEDEM Exit-Code ungleich 0 und
+# zeigt dem Committer nur das, was auf stderr steht. Der Rohcode darf
+# hier also nicht durchgereicht werden - sonst blockieren auch Hints
+# und Warnings, entgegen der Tabelle unten. Die Abstufung trifft der
+# Hook, nicht das Werkzeug.
+if [ "$EXIT" -ge 3 ]; then
+  echo "SCA: Commit blockiert (Exit $EXIT)." >&2
+  exit 1
+fi
+exit 0
 ```
 
 Exit-Code-Mapping:
 - 0 = clean → commit erlaubt
 - 1 = nur Hints → commit erlaubt
-- 2 = Warnings → commit erlaubt (oder blockieren via Hook-Logik)
+- 2 = Warnings → commit erlaubt (oder blockieren, indem oben `-ge 2`
+  statt `-ge 3` steht)
 - 3 = Errors → **commit blockiert**
+- 99 = Werkzeugfehler (ungültige Argumente, Report nicht schreibbar) →
+  **commit blockiert**. Ein Scan, der gar nicht stattgefunden hat, darf
+  nicht wie ein sauberer Scan aussehen; die `-ge 3`-Regel oben fängt
+  ihn mit.
 
-### `--parallel` — defekt, nicht benutzen
+### `--parallel` — korrekt, aber ohne Nutzen
 
-> **Dieser Schalter ist seit dem 2026-08-08 als defekt bekannt.** Hier
-> stand zuvor, das Ergebnis sei byte-identisch zum seriellen Lauf. Diese
-> Zusage war falsch und war nie gemessen — der Test dahinter prüfte nur
-> den Merge-Schritt, nie einen echten Scan.
+> **Korrigiert am 2026-09-15.** Hier stand bis heute „defekt, nicht
+> benutzen". Das war seit dem 2026-08-20 überholt: der Schalter ist
+> repariert, und dieser Abschnitt hat fast einen Monat lang vor einem
+> behobenen Fehler gewarnt.
 
-Elf Detektoren teilen sich unit-globale `TRegEx`-Instanzen. Ein `TRegEx`
+**Gemessen am 2026-09-15**, ein Repo mit 137 Quelldateien, vier Läufe
+(einmal seriell, dreimal parallel): **ein einziger SARIF-Byte-Hash für
+alle vier**, 9.086 Funde jeweils, im Multiset-Diff null Adds und null
+Drops. Das Ergebnis ist deterministisch und identisch zum seriellen Lauf.
+
+**Nur bringt es nichts.** Auf dem größten Einzelrepo des Testkorpus
+(jvcl) gemessen, je zwei Läufe: seriell 95,5 s und 94,7 s, parallel
+93,4 s und 93,3 s — rund 1,8 % und damit im Rauschen. Der Grund steht
+weiter unten in der Architektur: ein guter Teil der Wandzeit ist die
+*serielle Vor-Phase* (Parsen, Symbol- und Typindex), die der Schalter
+gar nicht berührt. Die Hinweismeldung auf stderr sagt dasselbe.
+
+Die Empfehlung bleibt also, ihn wegzulassen — aber aus einem anderen
+Grund als bisher: nicht weil er schadet, sondern weil er nichts nützt.
+
+<details>
+<summary>Was einmal kaputt war (Historie, seit 2026-08-20 behoben)</summary>
+
+Elf Detektoren teilten sich unit-globale `TRegEx`-Instanzen. Ein `TRegEx`
 ist ein Record um **eine** geteilte Engine-Instanz, deren Subject und
 Offsets bei jedem Match verändert werden — zwei Worker im selben Detektor
-zerstören sich gegenseitig den Zustand. An einem echten Korpus gemessen:
-fünf serielle Läufe ergaben einen einzigen identischen SARIF-Hash,
-dreizehn parallele Läufe ergaben **dreizehn verschiedene Ergebnisse**, mit
-**40 verlorenen echten Funden** und drei *erfundenen* Befunden der Stufe
-Error. Mit `--parallel --parallel-workers 1` ist der Lauf byte-identisch
-zum seriellen — das belegt die Nebenläufigkeit als Ursache, nicht einen
-anderen Codepfad.
+zerstörten sich gegenseitig den Zustand. Damals gemessen: fünf serielle
+Läufe ergaben einen identischen SARIF-Hash, dreizehn parallele Läufe
+**dreizehn verschiedene Ergebnisse**, mit 40 verlorenen echten Funden und
+drei *erfundenen* Befunden der Stufe Error.
 
-Dabei gibt es nichts abzuwägen, weil es keinen Geschwindigkeitsvorteil zu
-verlieren gibt: seriell 24,3 s gegen 27,7–41 s parallel über 2/4/8/16/28
-Worker — monoton schlechter. Die frühere Angabe „rund 3 % schneller" ist
-nicht reproduzierbar. Etwa die Hälfte der Wandzeit ist die *serielle
-Vor-Phase* (Parsen, Symbol- und Typindex), die der Schalter gar nicht
-berührt.
+Die Lehre daran ist die ältere und die wichtigere: Die ursprüngliche
+Zusage „byte-identisch" war nie gemessen worden — der Test dahinter
+prüfte nur den Merge-Schritt, nie einen echten Scan. Deshalb stehen in
+diesem Abschnitt jetzt Laufzahlen und Hashes statt einer Behauptung.
 
-Wer ihn heute setzt, bekommt eine Warnung auf stderr. Die saubere
-Reparatur wäre, jedem Detektor seine eigene `TRegEx` pro Aufruf zu geben —
-das Projekt hat genau diese Fehlerklasse in `uRegExMatches` schon einmal
-gelöst und dabei diese elf Units übersehen.
+</details>
 
 ---
 

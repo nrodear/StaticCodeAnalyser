@@ -820,42 +820,67 @@ svn export "$REPOS" "$WC" -r "$TXN" --quiet
 "$ANALYSER" --path "$WC" --full --quiet
 EXIT=$?
 rm -rf "$WC"
-exit $EXIT
+
+# IMPORTANT: SVN blocks the commit on ANY non-zero exit code, and shows
+# the committer only what went to stderr. So the raw code must not be
+# passed through here - otherwise hints and warnings block too, contrary
+# to the table below. The grading is the hook's job, not the tool's.
+if [ "$EXIT" -ge 3 ]; then
+  echo "SCA: commit blocked (exit $EXIT)." >&2
+  exit 1
+fi
+exit 0
 ```
 
 Exit code mapping:
 - 0 = clean → commit allowed
 - 1 = hints only → commit allowed
-- 2 = warnings → commit allowed (or block via hook logic)
+- 2 = warnings → commit allowed (to block them, use `-ge 2` above
+  instead of `-ge 3`)
 - 3 = errors → **commit blocked**
+- 99 = tool error (bad arguments, report not writable) → **commit
+  blocked**. A scan that never happened must not look like a clean one;
+  the `-ge 3` rule above covers it.
 
-### `--parallel` — broken, do not use
+### `--parallel` — correct, but pointless
 
-> **This switch is defective as of 2026-08-08.** It was previously
-> documented here as byte-identical to a serial run. That claim was
-> wrong, and it was never measured — the test behind it only checked the
-> merge step, never a real scan.
+> **Corrected on 2026-09-15.** This section read "broken, do not use"
+> until today. It had been obsolete since 2026-08-20: the switch was
+> repaired, and this text spent almost a month warning about a fixed
+> bug.
 
-Eleven detectors share unit-global `TRegEx` instances. A `TRegEx` is a
+**Measured on 2026-09-15**, a repository of 137 source files, four runs
+(one serial, three parallel): **a single SARIF byte hash across all
+four**, 9,086 findings each, zero adds and zero drops in the multiset
+diff. The result is deterministic and identical to the serial run.
+
+**It just does not buy anything.** Measured on the largest single
+repository of the test corpus (jvcl), two runs each: serial 95.5 s and
+94.7 s, parallel 93.4 s and 93.3 s — about 1.8 %, which is noise. The
+reason appears in the architecture section below: a good share of the
+wall time is the *serial pre-phase* (parsing, symbol and type indexes),
+which the switch does not touch. The stderr notice says the same.
+
+So the recommendation stays "leave it off" — but for a different reason
+than before: not because it hurts, but because it gains nothing.
+
+<details>
+<summary>What used to be broken (history, fixed since 2026-08-20)</summary>
+
+Eleven detectors shared unit-global `TRegEx` instances. A `TRegEx` is a
 record around **one** shared engine object whose subject and offsets are
-mutated on every match, so two workers hitting the same detector corrupt
-each other's state. Measured on a real corpus: five serial runs produced
-one identical SARIF hash; thirteen parallel runs produced **thirteen
-different results**, with **40 real findings lost** and three
-error-severity findings *invented*. Running `--parallel --parallel-workers 1`
-reproduces the serial result byte-for-byte, which pins the cause on
-concurrency rather than a different code path.
+mutated on every match, so two workers hitting the same detector
+corrupted each other's state. Measured back then: five serial runs
+produced one identical SARIF hash; thirteen parallel runs produced
+**thirteen different results**, with 40 real findings lost and three
+error-severity findings *invented*.
 
-There is nothing to trade off, because there is no speed-up to lose:
-serial 24.3 s versus 27.7–41 s parallel across 2/4/8/16/28 workers —
-monotonically worse. The earlier "saves about 3 %" figure is not
-reproducible. Roughly half the wall time is the *serial pre-phase*
-(parsing, symbol and type indexes), which the switch does not touch.
+The older lesson is the more important one: the original "byte-identical"
+claim had never been measured — the test behind it only checked the merge
+step, never a real scan. That is why this section now carries run counts
+and hashes instead of an assertion.
 
-Using it now prints a warning on stderr. The clean repair is to give each
-detector its own `TRegEx` per call — the project already solved exactly
-this class of bug once, in `uRegExMatches`, and simply missed these eleven
-units.
+</details>
 
 ---
 
