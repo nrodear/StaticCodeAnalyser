@@ -18,6 +18,50 @@
 //   – Bedingte Kompilierung ($IFDEF)
 //   – Typen aus unbekannten (nicht gemappten) Units
 //   Befunde sind daher immer Warnungen, keine Fehler.
+//
+// ===================================================================
+// IM CLI LAEUFT DIESER DETEKTOR NICHT. Befund vom 2026-09-15, offen.
+// ===================================================================
+//
+// Die Kette, jede Stelle nachgesehen:
+//   uStaticAnalyzer2.pas:262   schaltet fkUnusedUses ab, solange
+//                              AIncludeUsesCheck False ist
+//   uEngineApi.pas:324         TAnalysisRequest.Default setzt
+//                              UsesCheck := False
+//   uConsoleRunner.pas         setzt das Feld NIE - null Vorkommen von
+//                              'UsesCheck' in der ganzen Unit
+//
+// Form-GUI (uMainForm:1285/1379/2598) und IDE-Plugin
+// (uIDEAnalyserForm:4802, uIDEAnalyseRunner:272) setzen es korrekt aus
+// Settings.UsesCheck; uRepoSettings:1679 liest [Detectors] UsesCheck
+// auch sauber aus der ini. Nur der CLI-Pfad laesst es auf dem Default
+// stehen - damit ist der ini-Schalter dort wirkungslos, obwohl ihn die
+// Doku an vier Stellen verspricht (docs/rules/de/SCA007.md,
+// README_de.md, docs/configuration_de.md, SCA.Engine/API_de.md).
+//
+// Schaerfer noch: uRepoSettings:375 definiert das Profil 'strict' als
+// "alle + opt-in Detektoren (UsesCheck)". Der Referenzlauf faehrt genau
+// dieses Profil - und bekommt die Regel trotzdem nicht.
+//
+// DREI UNABHAENGIGE BELEGE, dass es wirklich so ist:
+//   * Referenzlauf 752.457 Funde: SCA007 = 0, auf 13.419 Dateien
+//   * 27 repo-weise Laeufe mit [Detectors] UsesCheck=1 in einer
+//     APPDATA-Kopie: in JEDEM Repo 0, auch in vcl-styles-utils
+//   * --time-detectors listet 180 Detektoren mit CallCount - UnusedUses
+//     kommt darin ueberhaupt nicht vor
+//
+// Die 0 ist also NICHT die Losbildungsfalle (die traefe hier auch
+// sachlich nicht: AnalyzeUnit bekommt keinen Projektkontext, CollectText
+// baut den Suchtext allein aus DIESEM AST - was in anderen Units steht,
+// kann der Detektor gar nicht wissen).
+//
+// NICHT HIER GEFIXT, mit Absicht: das Feld durchzureichen ist eine
+// Zeile, legt aber nach Nachbildung groessenordnungsmaessig 24.000
+// Funde frei, deren FP-Quote UNGEMESSEN ist. Das ist ein Recall-Paket
+// und bekommt nach Projektregel einen eigenen Zweig, einen eigenen Bau
+// und vorher eine FP-Stichprobe. Derselbe Defekttyp ist fuer
+// AutoDiscoverClasses schon einmal aufgetreten und in uEngineApi:460ff
+// als BUGFIX 2026-07-15 dokumentiert.
 
 interface
 
@@ -699,8 +743,36 @@ begin
   // Vcl.Styles-Zweig direkt darunter fuehrt 'tstylemanager' bereits -
   // ein Grund mehr, die beiden Listen bewusst und nicht nebenbei
   // anzugleichen.
+  //
+  // PAKET 9003 UMGESETZT (2026-09-15): die zwei Namen sind jetzt drin.
+  // Es ist eine reine ERGAENZUNG, und die kann per Konstruktion keine
+  // neuen Funde erzeugen - ein zusaetzlicher Whitelist-Eintrag liefert
+  // nur weitere Verwendungsnachweise, also hoechstens WENIGER Funde.
+  // Gemessen (Nachbildung mit Ein-Zweig-IFDEF-Sicht, gegen alle 40
+  // Fixturen aus uTestUnusedUses validiert): rund 124 Drops, 0 Adds.
+  //
+  // NICHT MITGEMACHT, obwohl es naheliegt: 'tstylemanager' aus dem
+  // Vcl.Styles-Zweig darunter zu ENTFERNEN. Das erzeugt 4 Adds, und
+  // einer davon ist beweisbar falsch - der Zweig wird ueber den
+  // Kurznamen-Fallback KnownIdents(ShortLow) (:793) AUCH fuer
+  // FMX.Styles gezogen, und FMX.Styles deklariert ein eigenes
+  // 'TStyleManager = class sealed'. python4delphi
+  // Source/fmx/WrapFmxStyles.pas nutzt genau dieses und haette keinen
+  // anderen Nachweis: heute korrekt stumm, nach der Entfernung ein
+  // Fehlfund. Die Doppelfuehrung sieht nach Redundanz aus und ist
+  // keine.
+  //
+  // ACHTUNG BEIM NACHMESSEN: im CLI ist diese Regel ABGESCHALTET (siehe
+  // Kopfkommentar). Der Referenzlauf zeigt 0 Funde und 0 Bewegung -
+  // wer die 124 sehen will, muss ueber Form-GUI oder IDE-Plugin messen.
+  //
+  // OFFEN, gemessen aber nicht umgesetzt: 'styleservices' (die Funktion
+  // aus Vcl.Themes) soll laut Messung der wirksamste fehlende Eintrag
+  // ueberhaupt sein. Nicht mit aufgenommen, weil diese Zahl nur aus
+  // einer Nachbildung stammt und nicht gegengeprueft ist - eigener
+  // Posten, eigene Messung.
   else if (UnitLow = 'vcl.themes') or (UnitLow = 'themes') then
-    Result := ['tthemeservices']
+    Result := ['tthemeservices','tstylemanager','tcustomstyleservices']
 
   else if (UnitLow = 'vcl.styles') or (UnitLow = 'styles') then
     Result := ['tthemeservices','tstylecollection','tstylemanager']

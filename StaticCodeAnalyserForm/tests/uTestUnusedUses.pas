@@ -67,11 +67,139 @@ type
     [Test] procedure Uses_HashedStringList_H2_NoFinding;
     [Test] procedure Uses_IdSslIoHandlerSocket_H2_NoFinding;
     [Test] procedure Uses_UnknownIdentOfMappedUnit_StillReported;
+    // Paket 9003: Vcl.Themes-Whitelist um die zwei haeufigsten
+    // Bezeichner erweitert (TStyleManager, TCustomStyleServices)
+    [Test] procedure Uses_VclThemes_StyleManagerUsed_H2_NoFinding;
+    [Test] procedure Uses_VclThemes_CustomStyleServicesUsed_H2_NoFinding;
+    [Test] procedure Uses_VclThemes_NothingUsed_ReportsWarning;
+    // pinnt die Doppelfuehrung tstylemanager im Vcl.Styles-Zweig
+    [Test] procedure Uses_FmxStyles_StyleManagerUsed_NoFinding;
   end;
 
 implementation
 
 { ---- UnusedUses ---- }
+
+{ --- Paket 9003: Vcl.Themes-Whitelist ---------------------------- }
+//
+// Die Liste fuehrte fuer Vcl.Themes nur TThemeServices. Die zwei
+// haeufigsten Bezeichner der Unit - TStyleManager und
+// TCustomStyleServices - fehlten, und ohne Nachweis meldete die
+// Regel die uses-Zeile als ungenutzt.
+//
+// ERWARTUNGEN AUS DEM CODE ABGELEITET, NICHT AN DER EXE GEMESSEN -
+// und das ist hier kein Versaeumnis, sondern der Befund selbst:
+// SCA007 laeuft im CLI ueberhaupt nicht (uConsoleRunner setzt
+// Req.UsesCheck nie, siehe Kopfkommentar von uUnusedUses). Es gibt
+// keinen Kommandozeilenweg, auf dem man diese Regel messen koennte.
+// Im Test-Harness laeuft sie, weil FindingsOf den Detektor direkt
+// ruft und das Gate in uStaticAnalyzer2 umgeht.
+
+procedure TTestUnusedUses.Uses_VclThemes_StyleManagerUsed_H2_NoFinding;
+// H2: TStyleManager als Typ -> Vcl.Themes wird gebraucht.
+// Vor der Whitelist-Erweiterung: 1 Fund (kein Nachweis, weil
+// der Name nicht in der Liste stand). Danach: 0.
+//
+// Bewusst UNQUALIFIZIERT geschrieben - ein
+// "Vcl.Themes.TStyleManager" haette schon ueber H1 einen
+// Nachweis geliefert und den Test wertlos gemacht.
+const SRC =
+  'unit t;'#13#10+
+  'uses Vcl.Themes;'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var svc: TStyleManager;'#13#10+
+  'begin'#13#10+
+  '  svc := nil;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUnusedUses),
+      'TStyleManager beweist Vcl.Themes - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Uses_VclThemes_CustomStyleServicesUsed_H2_NoFinding;
+// Der zweite neue Name, gleiche Mechanik. Vorher 1, jetzt 0.
+const SRC =
+  'unit t;'#13#10+
+  'uses Vcl.Themes;'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var svc: TCustomStyleServices;'#13#10+
+  'begin'#13#10+
+  '  svc := nil;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUnusedUses),
+      'TCustomStyleServices beweist Vcl.Themes - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Uses_VclThemes_NothingUsed_ReportsWarning;
+// DIE KLAMMER: dieselbe uses-Zeile, aber kein Bezeichner der
+// Unit im Code. Muss weiterhin melden - sonst haette die
+// Erweiterung die Regel fuer Vcl.Themes stillgelegt statt
+// praeziser gemacht.
+const SRC =
+  'unit t;'#13#10+
+  'uses Vcl.Themes;'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  DoSomething;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnusedUses),
+      'ohne jeden Nachweis bleibt Vcl.Themes ein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Uses_FmxStyles_StyleManagerUsed_NoFinding;
+// REGRESSIONSSCHUTZ, heute schon gruen - und genau deshalb
+// hier: er pinnt etwas, das wie Redundanz aussieht und keine
+// ist.
+//
+// Der Vcl.Styles-Zweig fuehrt tstylemanager ebenfalls. Das
+// sieht nach einer Dublette zum Vcl.Themes-Zweig aus, seit
+// dieser den Namen auch hat - aber der Zweig wird ueber den
+// Kurznamen-Fallback KnownIdents(ShortLow) AUCH fuer
+// FMX.Styles gezogen, und FMX.Styles hat ein EIGENES
+// TStyleManager (class sealed). Wer die vermeintliche
+// Doppelfuehrung aufraeumt, macht aus dieser Fixture einen
+// Fehlfund. Gemessen: die Entfernung kostet 4 Adds, einer
+// davon nachweislich falsch (python4delphi
+// Source/fmx/WrapFmxStyles.pas).
+const SRC =
+  'unit t;'#13#10+
+  'uses FMX.Styles;'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var svc: TStyleManager;'#13#10+
+  'begin'#13#10+
+  '  svc := nil;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUnusedUses),
+      'FMX.Styles hat ein eigenes TStyleManager - kein Befund');
+  finally F.Free; end;
+end;
+
 
 procedure TTestUnusedUses.Uses_UnknownUnit_ReportsWarning;
 // Unit die im Code nirgends vorkommt → Warning
