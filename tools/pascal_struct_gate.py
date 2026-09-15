@@ -261,6 +261,70 @@ def check_test_decl_impl(path, lines, out):
                                  'implementiert (E2065)' % m.group(1)))
 
 
+FREI_ROUTINE = re.compile(r'^(?:function|procedure)\s+(\w+)\s*[(:;]')
+
+
+def check_helper_used_before_decl(path, lines, out):
+    """E2003: freistehende Routine benutzt, bevor sie deklariert ist.
+
+    Pascal verlangt Deklaration vor Benutzung. Eine Testunit haelt ihre
+    Helfer (ExportBytes, RenderFindings, ...) oft MITTEN zwischen den
+    Methoden; wer neue Tests oben einfuegt, setzt sie damit vor die
+    Helfer - der Compiler meldet 'Undeklarierter Bezeichner', und das
+    faellt erst im Bau auf.
+
+    Genau so ist am 15.09. ein Bau gescheitert: drei frisch eingefuegte
+    Tests standen ueber ExportBytes/TextOhnePraeambel, sechs E2003.
+
+    ZWEI DINGE, die der erste Anlauf dieses Checks falsch machte und die
+    ihn ueber den ganzen Baum 34 Fehlalarme melden liessen:
+
+    * Eine Routine kann im INTERFACE (oder per 'forward') bekannt
+      gemacht und erst weit unten implementiert werden - dann ist jede
+      Nutzung dazwischen legal. Deshalb zaehlt die FRUEHESTE Nennung im
+      ganzen File, nicht die Implementierung.
+    * Kommentare sind kein Code. Ohne Strip meldete der Check die Zeile
+      '// Nur fuer HardcodedPathFindingsFor (Gate A ...)' als Nutzung.
+      Dieselbe Falle, vor der der Kopfkommentar von strip_noise schon
+      warnt - ein Gate mit Fehlalarmen wird ignoriert.
+
+    Nur freistehende Routinen (ohne Klassenpraefix, Spalte 1) werden
+    geprueft: Methoden einer Klasse duerfen sich in beliebiger
+    Reihenfolge rufen, weil die Klassendeklaration sie vorab bekannt
+    macht, und nested Routinen sind eingerueckt.
+    """
+    # Auf dem GESTRIPPTEN Text arbeiten - Zeilen und Spalten bleiben
+    # erhalten, nur Kommentar- und Literalinhalt wird zu Leerzeichen.
+    sauber = strip_noise('\n'.join(lines)).split('\n')
+
+    dekl = {}
+    for i, z in enumerate(sauber):
+        m = FREI_ROUTINE.match(z)
+        if m:
+            dekl.setdefault(m.group(1), i)
+    if not dekl:
+        return
+
+    impl, _, _ = section_bounds(lines)
+    if impl < 0:
+        return
+
+    for i in range(impl, len(sauber)):
+        z = sauber[i]
+        if FREI_ROUTINE.match(z):
+            continue                      # die Deklarationszeile selbst
+        for name, wo in dekl.items():
+            # (?<![.\w]) schliesst QUALIFIZIERTE Aufrufe aus. Sonst zaehlt
+            # 'TDetectorUtils.IsIdentChar(x)' als Nutzung der gleichnamigen
+            # freistehenden Wrapper-Funktion weiter unten - in
+            # uUnusedLocal.pas gibt es genau diese Paarung, und der erste
+            # Anlauf hat sie prompt gemeldet.
+            if i < wo and re.search(r'(?<![.\w])%s\s*\(' % re.escape(name), z):
+                out.append((path, i + 1,
+                            "'%s' wird hier benutzt, aber erst in Zeile %d "
+                            "deklariert (E2003)" % (name, wo + 1)))
+
+
 IF_VERSION = re.compile(r'\{\$IF[^}]*(RTLVersion|CompilerVersion)[^}]*\}',
                         re.I)
 
@@ -324,6 +388,7 @@ def main():
         check_bodies_before_initialization(rel, lines, out)
         check_var_type_matches_create(rel, lines, out)
         check_test_decl_impl(rel, lines, out)
+        check_helper_used_before_decl(rel, lines, out)
 
     if not out:
         print('GATE GRUEN: %d Datei(en) geprueft, keine Strukturbefunde.'
