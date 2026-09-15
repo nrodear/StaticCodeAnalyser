@@ -41,12 +41,18 @@ type
     [Test] procedure MultiLineFindingHasEndLine;
     [Test] procedure EndLineBeforeStartIsNotWritten;
     [Test] procedure UnparsableLineNumber_EndLineNeverBelowStart;
+    // Fingerprint-Formel und helpUri (Haertung 2026-09-15)
+    [Test] procedure FingerprintFolgtDerVereinbartenFormel;
+    [Test] procedure HelpUriIstAbsolutOderFehlt;
   end;
 
 implementation
 
 uses
-  System.IOUtils, System.StrUtils;
+  System.IOUtils, System.StrUtils,
+  System.Hash;     // THashSHA2 - FingerprintFolgtDerVereinbartenFormel
+                   // rechnet den Hash unabhaengig nach, statt ihn nur
+                   // mit sich selbst zu vergleichen
 
 { ---- Helpers ---- }
 
@@ -509,6 +515,115 @@ begin
     finally Root.Free; end;
   finally Findings.Free; end;
 end;
+
+{ --- Fingerprint-FORMEL und helpUri ----------------------------- }
+
+procedure TTestExportSARIF.FingerprintFolgtDerVereinbartenFormel;
+// FingerprintHashIsStable weiter oben prueft nur, dass derselbe
+// Input denselben Hash gibt - das bliebe auch dann gruen, wenn
+// jemand die Formel komplett austauscht. Dieser Test pinnt die
+// FORMEL selbst: SHA256 ueber "RuleId|Pfad|Zeile|Meldetext",
+// UTF-8.
+//
+// Die Formel ist am Referenzlauf verifiziert, nicht aus dem Code
+// abgeschrieben: SCA002 / Alcinoe/.../Unit1.pas / 146 /
+// "Empty except block" ergibt nachgerechnet 92cffd08... - genau
+// den Wert, den der Lauf ausweist.
+//
+// WOZU: der UTF-8-Round-Trip in FingerprintHash ist am 15.09.
+// entfallen (er war wirkungslos - GetHashString kodiert selbst).
+// Dieser Test belegt, dass der Export dabei byte-identisch bleibt,
+// und faengt kuenftige Aenderungen: wer auf UTF-16-Bytes umstellt,
+// bewegt alle Fingerprints und wird hier rot.
+var
+  F     : TObjectList<TLeakFinding>;
+  Root  : TJSONObject;
+  R     : TJSONObject;
+  Hash, Erwartet, Uri, Txt, Regel : string;
+  Zeile : Integer;
+begin
+  F := TObjectList<TLeakFinding>.Create(True);
+  try
+    F.Add(MakeFinding(fkNilDeref, lsWarning, 'src\X.pas', 7, 'obj'));
+    Root := ParseSARIF(TSARIFWriter.ToJsonString(F, '', '0.8.0', 'T'));
+    try
+      R := GetFirstResult(Root);
+      Regel := R.GetValue<string>('ruleId');
+      Txt   := R.GetValue<TJSONObject>('message').GetValue<string>('text');
+      Uri   := R.GetValue<TJSONArray>('locations').Items[0]
+                .GetValue<TJSONObject>('physicalLocation')
+                .GetValue<TJSONObject>('artifactLocation')
+                .GetValue<string>('uri');
+      Zeile := R.GetValue<TJSONArray>('locations').Items[0]
+                .GetValue<TJSONObject>('physicalLocation')
+                .GetValue<TJSONObject>('region')
+                .GetValue<Integer>('startLine');
+      Hash  := R.GetValue<TJSONObject>('partialFingerprints')
+                .GetValue<string>('primaryLocationLineHash');
+      // Genau die vier Bestandteile, in genau dieser Reihenfolge,
+      // getrennt durch '|'.
+      Erwartet := THashSHA2.GetHashString(
+        Regel + '|' + Uri + '|' + IntToStr(Zeile) + '|' + Txt);
+      Assert.AreEqual(LowerCase(Erwartet), LowerCase(Hash),
+        'der Fingerprint muss SHA256 ueber Regel|Pfad|Zeile|Text sein - '
+        + 'weicht er ab, hat jemand Eingabe oder Kodierung geaendert '
+        + 'und damit JEDEN bestehenden GitHub-Alert entwertet');
+    finally
+      Root.Free;
+    end;
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestExportSARIF.HelpUriIstAbsolutOderFehlt;
+// helpUri bekam am 15.09. denselben Leer-Guard, den informationUri
+// zwei Zeilen darueber schon hatte. Ohne ihn entstuende bei einem
+// Katalog OHNE informationUri die RELATIVE Referenz
+// '/blob/main/docs/rules.md#scaXXX' - SARIF verlangt dort eine
+// absolute URI.
+//
+// Der Review sprach von einer LEEREN URI; das trifft nicht zu, der
+// Pfadrest kommt immer mit. Deshalb prueft dieser Test auf
+// ABSOLUT, nicht auf nichtleer.
+//
+// Mit dem ausgelieferten Katalog ist der Guard kalt - 198 von 198
+// Regeln tragen einen vollstaendigen Link. Bis heute nannte kein
+// einziger Test helpUri.
+var
+  F     : TObjectList<TLeakFinding>;
+  Root  : TJSONObject;
+  Rules : TJSONArray;
+  i     : Integer;
+  U     : string;
+  Obj   : TJSONObject;
+begin
+  F := TObjectList<TLeakFinding>.Create(True);
+  try
+    F.Add(MakeFinding(fkNilDeref, lsWarning, 'src\X.pas', 7, 'obj'));
+    Root := ParseSARIF(TSARIFWriter.ToJsonString(F, '', '0.8.0', 'T'));
+    try
+      Rules := Root.GetValue<TJSONArray>('runs').Items[0]
+                   .GetValue<TJSONObject>('tool')
+                   .GetValue<TJSONObject>('driver')
+                   .GetValue<TJSONArray>('rules');
+      Assert.IsTrue(Rules.Count > 0, 'kein rules-Block im SARIF');
+      for i := 0 to Rules.Count - 1 do
+      begin
+        Obj := Rules.Items[i] as TJSONObject;
+        if not Obj.TryGetValue<string>('helpUri', U) then Continue;
+        // Vorhanden? Dann muss er absolut sein.
+        Assert.IsTrue(U.StartsWith('http://') or U.StartsWith('https://'),
+          'helpUri muss eine absolute URI sein, ist aber: ' + U);
+      end;
+    finally
+      Root.Free;
+    end;
+  finally
+    F.Free;
+  end;
+end;
+
 
 procedure TTestExportSARIF.UnparsableLineNumber_EndLineNeverBelowStart;
 // Der Fall, in dem die beiden Zeilenzahl-Pfade AUSEINANDERLAUFEN und der

@@ -128,14 +128,40 @@ function FingerprintHash(const RuleID, RelPath: string; LineNo: Integer;
 // SHA256 ueber RuleID + Pfad + Zeile + Message - GitHub nutzt das fuer
 // Cross-Commit-Dedup. Identische Findings auf demselben Pfad/Zeile
 // werden nicht doppelt angezeigt.
-var
-  Bytes : TBytes;
-  Hash  : string;
+//
+// KEIN UTF-8-ROUND-TRIP MEHR (2026-09-15). Hier stand ein
+// GetBytes/GetString-Paar vor dem Hashen. Es war WIRKUNGSLOS:
+// THashSHA2.GetHashString(string) ruft ueber Update(const Input:
+// string) selbst TEncoding.UTF8.GetBytes (System.Hash.pas:1254-1257) -
+// der Round-Trip erzeugte also nur dieselbe Zeichenkette noch einmal.
+//
+// DAS IST EINE VEREINFACHUNG, KEIN FIX - und diese Unterscheidung ist
+// hier der ganze Punkt. Der Voll-Review vermutete, die Wandlung
+// veraendere fehlerhaftes UTF-16 VOR dem Hashen und koenne so zwei
+// verschiedene Funde auf denselben Fingerprint werfen. Nachgemessen am
+// Referenzlauf: 752.457 Funde, 752.412 verschiedene Fingerprints,
+// ECHTE Kollisionen (gleicher Hash, verschiedenes Identitaetstupel):
+// NULL. Der Export bleibt byte-identisch.
+//
+// DIE GRENZE BLEIBT, sie sitzt nur woanders: ein unpaariges Surrogat
+// wird von TEncoding.UTF8 durch U+FFFD ersetzt, und das passiert IN
+// GetHashString - also auch ohne diese Zeilen. Zwei Meldetexte, die
+// sich nur in einem kaputten Surrogat unterscheiden, haetten weiterhin
+// denselben Fingerprint. Wer das wirklich beheben will, muss ueber
+// UTF-16-Bytes hashen (TEncoding.BigEndianUnicode) - das bewegt dann
+// ALLE 752.457 Fingerprints auf einen Schlag und ist ein eigenes
+// Paket.
+//
+// OFFENER POSTEN, bei dieser Messung gefunden und NICHT hier behoben:
+// unpaarige Surrogate entstehen im Korpus tatsaechlich - 16 Stueck,
+// nicht beim Lesen, sondern weil acht feste Abschnitt-Stellen ein
+// Surrogatpaar mitten durchschneiden (uDuplicateString.pas:186
+// Copy(Display, 1, 27), uHardcodedPath.pas:326 und sechs weitere). Ein
+// Detektor, der seinen eigenen Meldetext mitten in einem Zeichen
+// kappt, ist das eigentliche Thema - eigener Posten.
 begin
-  Bytes := TEncoding.UTF8.GetBytes(
+  Result := THashSHA2.GetHashString(
     RuleID + '|' + RelPath + '|' + IntToStr(LineNo) + '|' + Message);
-  Hash := THashSHA2.GetHashString(TEncoding.UTF8.GetString(Bytes));
-  Result := Hash;
 end;
 
 { ---- Streaming-Emitter ---- }
@@ -577,8 +603,28 @@ begin
       // Help-URI: GitHub zeigt das im Detail-Panel - Anker auf konsoli-
       // dierte docs/rules.md (per-file SCA001.md generiert tools/gen-rules-
       // docs.py wenn Python verfuegbar; bis dahin Anker-Links).
-      E.PairStr('helpUri', Format('%s/blob/main/docs/rules.md#%s',
-        [TRuleCatalog.ToolUri, LowerCase(M.ID)]));
+      //
+      // DERSELBE LEER-GUARD wie bei informationUri oben (Z. 534), und
+      // aus demselben Grund: ToolUri kommt aus dem Katalog, und
+      // informationUri ist dort nach rules/sca-rules.schema.json
+      // OPTIONAL - Pflicht sind nur name und version. Fehlt der
+      // Schluessel, entstand hier die relative Referenz
+      // "/blob/main/docs/rules.md#scaXXX"; SARIF verlangt fuer helpUri
+      // aber eine absolute URI. Weglassen ist erlaubt, am
+      // reportingDescriptor ist einzig id Pflicht.
+      //
+      // PRAEZISIERUNG ZUM REVIEW-WORTLAUT: der Defekt waere eine
+      // UNVOLLSTAENDIGE URI, keine LEERE - der Pfadrest kommt immer
+      // mit. Wer nach einem leeren String sucht, findet nichts.
+      //
+      // Am Referenzlauf ist der Zweig kalt: 198 von 198 Regeln tragen
+      // einen vollstaendigen helpUri, 0 leer, 0 mit falschem Anker. Mit
+      // dem ausgelieferten Katalog aendert der Guard kein einziges Byte;
+      // mit einem Katalog OHNE informationUri fielen 198 unvollstaendige
+      // Links weg statt falsch dazustehen.
+      if TRuleCatalog.ToolUri <> '' then
+        E.PairStr('helpUri', Format('%s/blob/main/docs/rules.md#%s',
+          [TRuleCatalog.ToolUri, LowerCase(M.ID)]));
 
       E.EndObj;
       E.FlushChunk(False);
