@@ -255,6 +255,29 @@ end;
 class function TExporter.CsvEscape(const S: string): string;
 // CSV-Escaping nach RFC 4180: Anfuehrungszeichen verdoppeln, Wert in "" einschliessen
 // wenn er Sonderzeichen (Semikolon, Anfuehrungszeichen, Zeilenumbruch) enthaelt.
+//
+// FORMEL-NEUTRALISIERUNG (Voll-Review, umgesetzt 2026-09-15, CWE-1236).
+// Beginnt ein Feld mit = + - @ (oder TAB/CR), wertet Excel seinen Inhalt
+// als FORMEL aus. Das RFC-Quoting schuetzt davor NICHT - in "=cmd|..."
+// sieht Excel weiterhin eine Formel, die Anfuehrungszeichen gehoeren zur
+// CSV-Syntax, nicht zum Zellinhalt. Der uebliche Schutz ist ein
+// vorangestellter Apostroph: Excel liest ihn als "das ist Text" und
+// zeigt ihn nicht an.
+//
+// DER ANGRIFFSWEG IST BELEGT, nicht theoretisch. Der Korpus selbst ist
+// sauber - 231.571 Datenzeilen aus einem jvcl-Export, KEIN einziges
+// Feld mit Formel-Praefix -, und ueber die Detail-Spalte kommt man auch
+// nicht hinein: zitiert ein Detektor Quelltext (SCA015 "..." 3x -
+// extract as a constant), steht das Anfuehrungszeichen davor. Der Weg
+// ist der DATEINAME. Eine Datei '=cmd_test.pas' landet ungeschuetzt am
+// Anfang der File-Spalte - an der Exe nachgestellt und bestaetigt. Wer
+// fremden Code scannt (CI, Pull Request) und den Bericht in Excel
+// oeffnet, fuehrt fremde Formeln aus.
+//
+// Im Normalbetrieb aendert das nichts: bei null betroffenen Feldern von
+// 231.571 ist der Zweig schlicht kalt.
+const
+  FORMEL_START = ['=', '+', '-', '@', #9, #13];
 var
   NeedsQuote : Boolean;
 begin
@@ -266,6 +289,10 @@ begin
   Result := Result.Replace(#13#10, ' ', [rfReplaceAll]);
   Result := Result.Replace(#13, ' ', [rfReplaceAll]);
   Result := Result.Replace(#10, ' ', [rfReplaceAll]);
+  // Nach dem Zeilenumbruch-Ersatz pruefen, nicht davor: ein fuehrendes
+  // CR ist dann schon ein Leerzeichen und damit harmlos.
+  if (Result <> '') and CharInSet(Result[1], FORMEL_START) then
+    Result := '''' + Result;
   if NeedsQuote then
     Result := '"' + Result + '"';
 end;

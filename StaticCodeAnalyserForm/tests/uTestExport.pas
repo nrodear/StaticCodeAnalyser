@@ -46,6 +46,10 @@ type
     [Test] procedure ExportCsv_MitBomUndForwardSlashes;
     [Test] procedure ExportJson_OhneBomUndForwardSlashes;
     [Test] procedure ExportCsvUndJson_VertragenNil;
+    // Formel-Neutralisierung im CSV (CWE-1236)
+    [Test] procedure ExportCsv_FormelPraefixImDateinamen_Entschaerft;
+    [Test] procedure ExportCsv_HarmloserDateiname_Unveraendert;
+    [Test] procedure ExportCsv_MinusInDetailspalte_Entschaerft;
   end;
 
 implementation
@@ -61,6 +65,130 @@ implementation
 uses
   System.IOUtils,
   uExport;
+
+{ --- Formel-Neutralisierung im CSV (CWE-1236) ------------------- }
+//
+// Beginnt ein Feld mit = + - @, wertet Excel es als FORMEL aus. Das
+// RFC-4180-Quoting schuetzt nicht: die Anfuehrungszeichen gehoeren
+// zur CSV-Syntax, nicht zum Zellinhalt.
+//
+// Der Weg hinein ist der DATEINAME, an der Exe nachgestellt: eine
+// Datei namens "=cmd_test.pas" landet ungeschuetzt am Anfang der
+// File-Spalte. Ueber die Detail-Spalte geht es NICHT - zitiert ein
+// Detektor Quelltext, steht ein Anfuehrungszeichen davor.
+//
+// Der Korpus selbst ist sauber (231.571 Datenzeilen, null
+// betroffene Felder). Der Fix ist Schutz vor FREMDEM Code, nicht
+// Reparatur eines laufenden Schadens.
+
+procedure TTestExport.ExportCsv_FormelPraefixImDateinamen_Entschaerft;
+// Vor dem Fix stand "=cmd_test.pas" blank am Feldanfang und
+// Excel haette die Zelle als Formel ausgewertet. Jetzt geht ein
+// Apostroph voran - Excel liest ihn als "das ist Text" und
+// zeigt ihn nicht an.
+var
+  L : TObjectList<TLeakFinding>;
+  F : TLeakFinding;
+  B : TBytes;
+  T : string;
+begin
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    F := TLeakFinding.Create;
+    F.SetKind(fkMemoryLeak);
+    F.FileName   := '=cmd_test.pas';
+    F.MethodName := 'TFoo.Bar';
+    F.LineNumber := '42';
+    F.MissingVar := 'list';
+    L.Add(F);
+    B := ExportBytes('.csv',
+      procedure(AL: TObjectList<TLeakFinding>; AZiel: string)
+      begin
+        TExporter.ExportCsv(AL, AZiel, '');
+      end, L);
+  finally
+    L.Free;
+  end;
+  T := TextOhnePraeambel(B);
+  Assert.IsTrue(T.Contains('''=cmd_test.pas'),
+    'dem Dateinamen mit = muss ein Apostroph vorangehen: '
+    + Copy(T, 1, 200));
+  Assert.AreEqual<Integer>(0,
+    Pos(#13#10 + '=cmd_test.pas', T),
+    'kein Feld darf mehr nackt mit = beginnen');
+end;
+
+procedure TTestExport.ExportCsv_HarmloserDateiname_Unveraendert;
+// DIE KLAMMER. Ohne sie koennte der Fix jedem Feld einen
+// Apostroph voranstellen und der Test oben waere trotzdem
+// gruen. Ein gewoehnlicher Name muss Byte fuer Byte so
+// bleiben, wie er war - im Korpus sind das 231.571 von
+// 231.571 Zeilen.
+var
+  L : TObjectList<TLeakFinding>;
+  F : TLeakFinding;
+  B : TBytes;
+  T : string;
+begin
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    F := TLeakFinding.Create;
+    F.SetKind(fkMemoryLeak);
+    F.FileName   := 'src/uMain.pas';
+    F.MethodName := 'TFoo.Bar';
+    F.LineNumber := '42';
+    F.MissingVar := 'list';
+    L.Add(F);
+    B := ExportBytes('.csv',
+      procedure(AL: TObjectList<TLeakFinding>; AZiel: string)
+      begin
+        TExporter.ExportCsv(AL, AZiel, '');
+      end, L);
+  finally
+    L.Free;
+  end;
+  T := TextOhnePraeambel(B);
+  Assert.IsTrue(T.Contains('src/uMain.pas'),
+    'der gewoehnliche Pfad steht unveraendert im Bericht'
+    + Copy(T, 1, 200));
+  Assert.AreEqual<Integer>(0, Pos('''src', T),
+    'und bekommt KEINEN Apostroph');
+end;
+
+procedure TTestExport.ExportCsv_MinusInDetailspalte_Entschaerft;
+// Nicht nur die File-Spalte. Ein Detailtext, der mit einem
+// Minus beginnt, ist in Excel ebenso eine Formel - hier ueber
+// die MissingVar-Spalte geprueft, damit der Schutz nicht
+// versehentlich nur an einer Stelle haengt.
+var
+  L : TObjectList<TLeakFinding>;
+  F : TLeakFinding;
+  B : TBytes;
+  T : string;
+begin
+  L := TObjectList<TLeakFinding>.Create(True);
+  try
+    F := TLeakFinding.Create;
+    F.SetKind(fkMemoryLeak);
+    F.FileName   := 'src/uMain.pas';
+    F.MethodName := 'TFoo.Bar';
+    F.LineNumber := '42';
+    F.MissingVar := '-1+1';
+    L.Add(F);
+    B := ExportBytes('.csv',
+      procedure(AL: TObjectList<TLeakFinding>; AZiel: string)
+      begin
+        TExporter.ExportCsv(AL, AZiel, '');
+      end, L);
+  finally
+    L.Free;
+  end;
+  T := TextOhnePraeambel(B);
+  Assert.IsTrue(T.Contains('''-1+1'),
+    'auch die Detail-Spalte wird entschaerft: '
+    + Copy(T, 1, 200));
+end;
+
 
 procedure TTestExport.RelativeDisplayPath_UsesForwardSlashes;
 // DER Waechter des BLOCKERs vom 08.09.: liegt die Datei unter der
