@@ -218,7 +218,8 @@ msgstr ""
 msgid "After (solution)"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:715
+#: SCA.Engine/sources/Infrastructure/uExport.pas:662
+#: SCA.Engine/sources/Infrastructure/uExport.pas:756
 msgid "After:"
 msgstr ""
 
@@ -323,7 +324,7 @@ msgstr ""
 msgid "Applies to the plugin user interface only - detector messages, findings and exports are never translated. The list holds the built-in translations plus every i18n\\<code>.po file placed next to the plugin BPL. Captions already on screen switch after an IDE restart."
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:519
+#: SCA.Engine/sources/Infrastructure/uExport.pas:546
 msgid "As of: "
 msgstr ""
 
@@ -388,7 +389,8 @@ msgstr ""
 msgid "Before (problem)"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:710
+#: SCA.Engine/sources/Infrastructure/uExport.pas:655
+#: SCA.Engine/sources/Infrastructure/uExport.pas:751
 msgid "Before:"
 msgstr ""
 
@@ -428,7 +430,7 @@ msgstr ""
 msgid "Branch:"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:355
+#: SCA.Engine/sources/Common/uMethodd12.pas:380
 #: SCA.SharedUI/sources/uRuleListBox.pas:140
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:562
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1431
@@ -591,7 +593,7 @@ msgstr ""
 msgid "Code (>>> marks the line that triggered the rule)"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:359
+#: SCA.Engine/sources/Common/uMethodd12.pas:384
 #: SCA.SharedUI/sources/uRuleListBox.pas:144
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:566
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1435
@@ -602,14 +604,14 @@ msgstr ""
 msgid "Code Quality"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:356
+#: SCA.Engine/sources/Common/uMethodd12.pas:381
 #: SCA.SharedUI/sources/uRuleListBox.pas:141
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:563
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1432
 msgid "Code Smell"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:670
+#: SCA.Engine/sources/Infrastructure/uExport.pas:711
 msgid "Code analysis: "
 msgstr ""
 
@@ -822,7 +824,7 @@ msgstr ""
 msgid "Destructor does not call inherited - resource leak"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:524
+#: SCA.Engine/sources/Infrastructure/uExport.pas:551
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:299
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2656
 msgid "Detail"
@@ -886,7 +888,7 @@ msgstr ""
 msgid "Duplicates"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:682
+#: SCA.Engine/sources/Infrastructure/uExport.pas:723
 msgid "ERROR"
 msgstr ""
 
@@ -922,14 +924,15 @@ msgstr ""
 msgid "Enable silent analysis (editor right-click menu)"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:333
-#: SCA.Engine/sources/Infrastructure/uExport.pas:536
+#: SCA.Engine/sources/Common/uMethodd12.pas:358
+#: SCA.Engine/sources/Infrastructure/uExport.pas:563
+#: SCA.Engine/sources/Infrastructure/uExport.pas:619
 #: SCA.SharedUI/sources/uRuleListBox.pas:129
 #: StaticCodeAnalyserIDE/uIDEMessages.pas:56
 msgid "Error"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:564
+#: SCA.Engine/sources/Infrastructure/uExport.pas:591
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:458
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3248
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1650
@@ -1044,7 +1047,7 @@ msgstr ""
 msgid "Finding"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:574
+#: SCA.Engine/sources/Infrastructure/uExport.pas:601
 msgid "Findings in detail"
 msgstr ""
 
@@ -1117,7 +1120,7 @@ msgstr ""
 msgid "Grouped variable/field declaration - one per line"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:684
+#: SCA.Engine/sources/Infrastructure/uExport.pas:725
 msgid "HINT"
 msgstr ""
 
@@ -1151,18 +1154,19 @@ msgstr ""
 msgid "Hide"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:335
-#: SCA.Engine/sources/Infrastructure/uExport.pas:544
+#: SCA.Engine/sources/Common/uMethodd12.pas:360
+#: SCA.Engine/sources/Infrastructure/uExport.pas:571
+#: SCA.Engine/sources/Infrastructure/uExport.pas:621
 #: SCA.SharedUI/sources/uRuleListBox.pas:131
 #: StaticCodeAnalyserIDE/uIDEMessages.pas:58
 msgid "Hint"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:705
+#: SCA.Engine/sources/Infrastructure/uExport.pas:746
 msgid "Hint: "
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:567
+#: SCA.Engine/sources/Infrastructure/uExport.pas:594
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:460
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3256
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1660
@@ -1304,7 +1308,7 @@ msgstr ""
 msgid "Kind (profile token)"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:690
+#: SCA.Engine/sources/Infrastructure/uExport.pas:731
 msgid "L. "
 msgstr ""
 
@@ -1339,7 +1343,8 @@ msgstr ""
 msgid "Likely bugs / risky patterns. Review before merge."
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:524
+#: SCA.Engine/sources/Infrastructure/uExport.pas:551
+#: SCA.Engine/sources/Infrastructure/uExport.pas:632
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:293
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:458
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:960
@@ -1405,7 +1410,7 @@ msgstr ""
 msgid "Message"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:524
+#: SCA.Engine/sources/Infrastructure/uExport.pas:551
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:295
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:235
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:457
@@ -1813,8 +1818,8 @@ msgstr ""
 msgid "Re-run analysis for current file"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:330
-#: SCA.Engine/sources/Common/uMethodd12.pas:360
+#: SCA.Engine/sources/Common/uMethodd12.pas:355
+#: SCA.Engine/sources/Common/uMethodd12.pas:385
 #: SCA.SharedUI/sources/uRuleListBox.pas:145
 msgid "Read Error"
 msgstr ""
@@ -1876,7 +1881,7 @@ msgstr ""
 msgid "Result of managed type is read before it is assigned"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:524
+#: SCA.Engine/sources/Infrastructure/uExport.pas:551
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:298
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:229
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:460
@@ -1994,7 +1999,7 @@ msgstr ""
 msgid "Security"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:358
+#: SCA.Engine/sources/Common/uMethodd12.pas:383
 #: SCA.SharedUI/sources/uRuleListBox.pas:143
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:565
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1434
@@ -2060,7 +2065,7 @@ msgstr ""
 msgid "Settings: %s - changes take effect on the next analysis run."
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:524
+#: SCA.Engine/sources/Infrastructure/uExport.pas:551
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:296
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:461
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:963
@@ -2184,7 +2189,7 @@ msgstr ""
 msgid "String literal repeated - extract to a constant or resourcestring"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:563
+#: SCA.Engine/sources/Infrastructure/uExport.pas:590
 msgid "Summary"
 msgstr ""
 
@@ -2375,14 +2380,14 @@ msgstr ""
 msgid "Vulnerabilities: %d, Hotspots: %d, File errors: %d"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:357
+#: SCA.Engine/sources/Common/uMethodd12.pas:382
 #: SCA.SharedUI/sources/uRuleListBox.pas:142
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:564
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1433
 msgid "Vulnerability"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:683
+#: SCA.Engine/sources/Infrastructure/uExport.pas:724
 msgid "WARNING"
 msgstr ""
 
@@ -2390,14 +2395,15 @@ msgstr ""
 msgid "WARNING: this token is stored as PLAINTEXT in analyser.ini. Save it again here to DPAPI-encrypt it for your account."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uMethodd12.pas:334
-#: SCA.Engine/sources/Infrastructure/uExport.pas:540
+#: SCA.Engine/sources/Common/uMethodd12.pas:359
+#: SCA.Engine/sources/Infrastructure/uExport.pas:567
+#: SCA.Engine/sources/Infrastructure/uExport.pas:620
 #: SCA.SharedUI/sources/uRuleListBox.pas:130
 #: StaticCodeAnalyserIDE/uIDEMessages.pas:57
 msgid "Warning"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:565
+#: SCA.Engine/sources/Infrastructure/uExport.pas:592
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:459
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3252
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1655
@@ -2508,7 +2514,7 @@ msgstr ""
 msgid "goto weakens structured control flow"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:517
+#: SCA.Engine/sources/Infrastructure/uExport.pas:544
 msgid "h2. Code analysis: "
 msgstr ""
 
@@ -2516,11 +2522,11 @@ msgstr ""
 msgid "if X then Y := True else Y := False - assign expression directly"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:694
+#: SCA.Engine/sources/Infrastructure/uExport.pas:735
 msgid "in"
 msgstr ""
 
-#: SCA.Engine/sources/Infrastructure/uExport.pas:558
+#: SCA.Engine/sources/Infrastructure/uExport.pas:585
 msgid "no findings"
 msgstr ""
 
