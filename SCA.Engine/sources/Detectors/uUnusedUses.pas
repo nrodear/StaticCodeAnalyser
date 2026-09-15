@@ -19,9 +19,9 @@
 //   – Typen aus unbekannten (nicht gemappten) Units
 //   Befunde sind daher immer Warnungen, keine Fehler.
 //
-// ═══════════════════════════════════════════════════════════════════
+// ===================================================================
 // IM CLI LAEUFT DIESER DETEKTOR NICHT. Befund vom 2026-09-15, offen.
-// ═══════════════════════════════════════════════════════════════════
+// ===================================================================
 //
 // Die Kette, jede Stelle nachgesehen:
 //   uStaticAnalyzer2.pas:262   schaltet fkUnusedUses ab, solange
