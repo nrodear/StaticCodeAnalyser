@@ -54,6 +54,14 @@ type
     // Testluecke 134: die zwei fehlenden Gegenrichtungen
     [Test] procedure Gate_RealTypeSectionEndsResBlock_StillReported;
     [Test] procedure Gate_Glyph_SymbolFontOnFormOnly_KnownGap_StillReported;
+    // G4 Init-Ueberschreiben (Vertrag im Unit-Kopf)
+    [Test] procedure G4_FormCreateZuweisung_NichtGemeldet;
+    [Test] procedure G4_EventZuweisung_WirdGemeldet;
+    [Test] procedure G4_SelbstreferenzInInit_WirdGemeldet;
+    [Test] procedure G4_EineAufrufstufe_NichtGemeldet;
+    [Test] procedure G4_GebundenerCreateHandler_NichtGemeldet;
+    [Test] procedure G4_FremdklassenZuweisung_WirdGemeldet;
+    [Test] procedure G4_ConstructorZuweisung_NichtGemeldet;
   end;
 
 implementation
@@ -460,7 +468,7 @@ begin
     'end.');
   try
     Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
-      'Zuweisung aus Nicht-resourcestring gated nicht (TP-Gegenprobe)');
+      'Zuweisung aus Nicht-resourcestring in NICHT-Init-Routine gated nicht (seit G4 ist der Routinen-Kontext das Kriterium)');
   finally F.Free; end;
 end;
 
@@ -570,6 +578,207 @@ begin
       'ein echtes type beendet den Block - SPflicht ist kein Res-Ident');
   finally F.Free; end;
 end;
+
+{ --- G4 INIT-UEBERSCHREIBEN (2026-09-16) ------------------------- }
+//
+// Vertrag und Vermessung im Unit-Kopf. Die Klammern zuerst: G4
+// skippt NUR Init-Kontexte - die grosszuegige Variante hatte in
+// der Handpruefung 56 % Fehlskips (Event-Zuweisungen sind der
+// Normalfall "DFM ist der Grundzustand").
+
+procedure TTestDfmHardcodedCaption.G4_FormCreateZuweisung_NichtGemeldet;
+// Der Kernfall: FormCreate ersetzt die Caption unbedingt - der
+// DFM-Wert ist ein toter Platzhalter. Vor G4: 1 Fund (dieser
+// Test war ROT).
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormG: TFormG'#13#10 +
+    '  object LblG: TLabel'#13#10 +
+    '    Caption = ''Platzhalter'''#13#10 +
+    '  end'#13#10 +
+    'end',
+    'unit g4probe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure TFormG.FormCreate(Sender: TObject);'#13#10 +
+    'begin'#13#10 +
+    '  LblG.Caption := HoleText;'#13#10 +
+    'end;'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption),
+      'Init-Zuweisung skippt den DFM-Platzhalter');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.G4_EventZuweisung_WirdGemeldet;
+// DIE KLAMMER: im Event-Handler ist der DFM-Text der korrekte
+// GRUNDZUSTAND bis zum Klick (btnTest Run -> Stop).
+// 14 der 25 grosszuegigen Stichproben-Drops waren genau das.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormG: TFormG'#13#10 +
+    '  object LblG: TLabel'#13#10 +
+    '    Caption = ''Platzhalter'''#13#10 +
+    '  end'#13#10 +
+    'end',
+    'unit g4probe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure TFormG.BtnKlick(Sender: TObject);'#13#10 +
+    'begin'#13#10 +
+    '  LblG.Caption := HoleText;'#13#10 +
+    'end;'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
+      'Event-Zuweisung skippt NICHT - der DFM-Text ist der Grundzustand');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.G4_SelbstreferenzInInit_WirdGemeldet;
+// RHS-Selbstreferenz: der DFM-Wert ist das FORMAT-TEMPLATE und
+// erreicht den Nutzer als Textbasis doch (33 Faelle im
+// Delphi-Korpus, ABOUT.pas-Muster).
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormG: TFormG'#13#10 +
+    '  object LblG: TLabel'#13#10 +
+    '    Caption = ''Platzhalter'''#13#10 +
+    '  end'#13#10 +
+    'end',
+    'unit g4probe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure TFormG.FormCreate(Sender: TObject);'#13#10 +
+    'begin'#13#10 +
+    '  LblG.Caption := Format(LblG.Caption, [Version]);'#13#10 +
+    'end;'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
+      'Selbstreferenz skippt NICHT - der DFM-Wert ist das Template');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.G4_EineAufrufstufe_NichtGemeldet;
+// Das LoadLocale-/SetLabels-Muster: die Zuweisung liegt eine
+// Aufrufstufe unter FormCreate.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormG: TFormG'#13#10 +
+    '  object LblG: TLabel'#13#10 +
+    '    Caption = ''Platzhalter'''#13#10 +
+    '  end'#13#10 +
+    'end',
+    'unit g4probe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure TFormG.SetzeTexte;'#13#10 +
+    'begin'#13#10 +
+    '  LblG.Caption := HoleText;'#13#10 +
+    'end;'#13#10 +
+    'procedure TFormG.FormCreate(Sender: TObject);'#13#10 +
+    'begin'#13#10 +
+    '  SetzeTexte;'#13#10 +
+    'end;'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption),
+      'eine Aufrufstufe unter Init skippt');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.G4_GebundenerCreateHandler_NichtGemeldet;
+// Der Lazarus-Kanal: OnCreate ist an einen FREI benannten
+// Handler gebunden (CondFormCREATE-Klasse der Vermessung) - die
+// Namensliste allein traefe ihn nicht, der Graph liefert ihn.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormG: TFormG'#13#10 +
+    '  OnCreate = MeinStart'#13#10 +
+    '  object LblG: TLabel'#13#10 +
+    '    Caption = ''Platzhalter'''#13#10 +
+    '  end'#13#10 +
+    'end',
+    'unit g4probe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure TFormG.MeinStart(Sender: TObject);'#13#10 +
+    'begin'#13#10 +
+    '  LblG.Caption := HoleText;'#13#10 +
+    'end;'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption),
+      'DFM-gebundener Create-Handler zaehlt als Init-Kontext');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.G4_FremdklassenZuweisung_WirdGemeldet;
+// Qualifizierte Zuweisung (zwei Punkte) ist eine FREMDE Referenz
+// auf ein anderes Objekt - die Ein-Punkt-LHS-Regel schliesst sie
+// aus (TES5Edit-False-Drop-Klasse der Vermessung).
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormG: TFormG'#13#10 +
+    '  object LblG: TLabel'#13#10 +
+    '    Caption = ''Platzhalter'''#13#10 +
+    '  end'#13#10 +
+    'end',
+    'unit g4probe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure TAnderer.Tu;'#13#10 +
+    'begin'#13#10 +
+    '  Frame.LblG.Caption := HoleText;'#13#10 +
+    'end;'#13#10 +
+    'procedure TFormG.FormCreate(Sender: TObject);'#13#10 +
+    'begin'#13#10 +
+    '  Tu;'#13#10 +
+    'end;'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
+      'Fremdreferenz mit Qualifier skippt NICHT');
+  finally F.Free; end;
+end;
+
+
+procedure TTestDfmHardcodedCaption.G4_ConstructorZuweisung_NichtGemeldet;
+// Der constructor-Kanal haengt an W='constructor', nicht am
+// Routinennamen. Er war der EINZIGE, der den LastDelimiter-Off-by-one
+// des ersten Baus ueberlebte - beide Seiten der Aufloesung trugen
+// konsistent den falschen Namen. Genau deshalb braucht der Zweig
+// eigene Abdeckung: ein Namens-Defekt macht ihn nicht rot.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormG: TFormG'#13#10 +
+    '  object LblG: TLabel'#13#10 +
+    '    Caption = ''Platzhalter'''#13#10 +
+    '  end'#13#10 +
+    'end',
+    'unit g4probe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'constructor TFormG.Create(AOwner: TComponent);'#13#10 +
+    'begin'#13#10 +
+    '  LblG.Caption := HoleText;'#13#10 +
+    'end;'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption),
+      'constructor-Zuweisung skippt den DFM-Platzhalter');
+  finally F.Free; end;
+end;
+
 
 procedure TTestDfmHardcodedCaption.Gate_Glyph_SymbolFontOnFormOnly_KnownGap_StillReported;
 // Testluecke 134, DOKUMENTIERTE GRENZE von G1 - der Fund hier ist eine
