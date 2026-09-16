@@ -61,6 +61,7 @@ type
     [Test] procedure G4_EineAufrufstufe_NichtGemeldet;
     [Test] procedure G4_GebundenerCreateHandler_NichtGemeldet;
     [Test] procedure G4_FremdklassenZuweisung_WirdGemeldet;
+    [Test] procedure G4_ConstructorZuweisung_NichtGemeldet;
   end;
 
 implementation
@@ -746,6 +747,35 @@ begin
   try
     Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
       'Fremdreferenz mit Qualifier skippt NICHT');
+  finally F.Free; end;
+end;
+
+
+procedure TTestDfmHardcodedCaption.G4_ConstructorZuweisung_NichtGemeldet;
+// Der constructor-Kanal haengt an W='constructor', nicht am
+// Routinennamen. Er war der EINZIGE, der den LastDelimiter-Off-by-one
+// des ersten Baus ueberlebte - beide Seiten der Aufloesung trugen
+// konsistent den falschen Namen. Genau deshalb braucht der Zweig
+// eigene Abdeckung: ein Namens-Defekt macht ihn nicht rot.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOnFiles(
+    'object FormG: TFormG'#13#10 +
+    '  object LblG: TLabel'#13#10 +
+    '    Caption = ''Platzhalter'''#13#10 +
+    '  end'#13#10 +
+    'end',
+    'unit g4probe;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'constructor TFormG.Create(AOwner: TComponent);'#13#10 +
+    'begin'#13#10 +
+    '  LblG.Caption := HoleText;'#13#10 +
+    'end;'#13#10 +
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, CountKind(F, fkDfmHardcodedCaption),
+      'constructor-Zuweisung skippt den DFM-Platzhalter');
   finally F.Free; end;
 end;
 

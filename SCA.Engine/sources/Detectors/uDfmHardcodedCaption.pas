@@ -250,7 +250,13 @@ var
         Break;
       end;
     R := Trim(R);
-    P := R.LastDelimiter('.') + 1;
+    // TStringHelper.LastDelimiter ist 0-BASIERT (anders als die
+    // gleichnamige globale SysUtils-Funktion), Copy 1-basiert: +2 ist
+    // die Position NACH dem Punkt; ohne Punkt wird -1+2=1 der ganze
+    // Name. Mit +1 lieferte KopfName '.formcreate' - jeder
+    // Namensvergleich schlug fehl, das Gate lief im ersten Bau leer
+    // (3 rote Tests), nur der namenslose constructor-Kanal trug.
+    P := R.LastDelimiter('.') + 2;
     Result := LowerCase(Trim(Copy(R, P, MaxInt)));
   end;
 
