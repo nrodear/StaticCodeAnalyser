@@ -74,6 +74,11 @@ type
                                     //   im SARIF; default = Path)
     CustomRules   : string;         // --custom-rules <analyser-rules.yml>
     Profile       : string;         // --profile <name>         (siehe sca-rules.json)
+    Dialect       : string;         // --dialect delphi|fpc     ('' = nicht angegeben ->
+                                    // Engine-Default dlDelphi; String statt Enum, damit
+                                    // 'nicht angegeben' von 'explizit delphi' unter-
+                                    // scheidbar bleibt - Profile-Muster, wichtig sobald
+                                    // in A6 der ini-Schluessel dazukommt)
     MinSeverity   : string;         // --min-severity hint|warning|error
     // ---- Baseline / CI-Exit-Codes ----
     Baseline      : string;         // --baseline <file.json>     filter known findings
@@ -445,6 +450,11 @@ begin
       GetValue(Result.CustomRules, '--custom-rules')
     else if A = '--profile' then
       GetValue(Result.Profile, '--profile')
+    // Wert-Schalter (GetValue!) - darf NICHT in CLI_SCHALTER_OHNE_WERT,
+    // sonst wird '--dialect=fpc' hart abgelehnt. Wertpruefung strom-
+    // abwaerts im Konsistenz-Block (Muster --fail-on).
+    else if A = '--dialect' then
+      GetValue(Result.Dialect, '--dialect')
     else if A = '--min-severity' then
       GetValue(Result.MinSeverity, '--min-severity')
     // Baseline + CI-Exit-Codes
@@ -536,6 +546,29 @@ begin
     Inc(i);
   end;
   if Errored then Exit;
+
+  // --dialect: Wertemenge HART pruefen, bevor irgendetwas laeuft. Ein
+  // Tippfehler, der still auf den Delphi-Default faellt, waere der
+  // wirkungslose Schalter aus der SCA007-Lehre - das CI glaubte dann,
+  // es scanne Lazarus, und scannt nichts davon.
+  if (Result.Dialect <> '') and
+     not (SameText(Result.Dialect, 'delphi') or
+          SameText(Result.Dialect, 'fpc')) then
+  begin
+    if SameText(Result.Dialect, 'auto') then
+      // Absichtlich ein EIGENER Text: 'auto' ist kein Tippfehler,
+      // sondern ein geplanter Modus (Verzeichnis-Erkennung, Paket A6).
+      // Wer ihn heute setzt, soll wissen, dass er kommt - und dass der
+      // Lauf ihn NICHT still durch delphi ersetzt hat.
+      Result.ParseError :=
+        '--dialect=auto ist noch nicht implementiert (Auto-Erkennung ' +
+        'je Verzeichnis kommt als eigenes Paket). Gueltig: delphi, fpc'
+    else
+      Result.ParseError := Format(
+        'Ungueltiger Wert fuer --dialect: "%s". Gueltig: delphi, fpc',
+        [Result.Dialect]);
+    Exit;
+  end;
 
   // --sonar-test und --sonar-init sind Standalone-Aktionen ohne Pfad-Pflicht.
   if Result.SonarTest or Result.SonarInit then Exit;
@@ -692,6 +725,9 @@ begin
   WriteLn('  --min-severity <lvl>  hint|warning|error - skip detectors below');
   WriteLn('                        this severity threshold.');
   WriteLn('                        Overrides [Rules] MinSeverity in analyser.ini.');
+  WriteLn('  --dialect <d>         delphi|fpc - source dialect of the scanned tree.');
+  WriteLn('                        fpc additionally collects *.pp units (Lazarus /');
+  WriteLn('                        Free Pascal). Default: delphi (unchanged runs).');
   WriteLn('');
   WriteLn('CI / Baseline:');
   WriteLn('  --baseline <file>     Drop findings whose fingerprint matches a known');
@@ -1608,6 +1644,11 @@ begin
       Req.ConfigRoot      := Args.Path;
       Req.Profile         := Args.Profile;
       Req.MinSeverityName := Args.MinSeverity;
+      // Dialekt (Lazarus A2): ParseArgs hat die Wertemenge schon hart
+      // geprueft - hier bleibt nur die Uebersetzung. '' und 'delphi'
+      // lassen den Init-Default dlDelphi stehen.
+      if SameText(Args.Dialect, 'fpc') then
+        Req.Dialect := dlFpc;
       // Perf Stufe 2 (2026-07-25): opt-in Per-File-Parallelisierung.
       // Gate-Rueckfall auf seriell (AutoDiscovery/Custom-Rules/Timings)
       // entscheidet die Engine selbst (uStaticAnalyzer2).

@@ -129,6 +129,7 @@ uses
   uTestPerfHotspots in 'uTestPerfHotspots.pas',
   uTestConcurrencyExt in 'uTestConcurrencyExt.pas',
   uTestEngineApi in 'uTestEngineApi.pas',
+  uTestStaticFiles in 'uTestStaticFiles.pas',
   uTestRestHttpSecurity in 'uTestRestHttpSecurity.pas',
   uTestPublicMemberWithoutDoc in 'uTestPublicMemberWithoutDoc.pas',
   uTestNamingExt in 'uTestNamingExt.pas',
