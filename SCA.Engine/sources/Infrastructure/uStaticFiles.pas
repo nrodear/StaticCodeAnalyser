@@ -4,6 +4,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Masks, System.IOUtils,
+  uSCAConsts,      // TSourceDialect - der Scan-Dialekt entscheidet die Dateimaske
   uIgnoreList;
 
 type
@@ -13,6 +14,22 @@ type
   TScanTickProc = reference to procedure(FilesFound: Integer);
 
   TStaticFiles = class
+  private
+    // VOR den Properties deklariert - Delphi verlangt das Feld textuell
+    // vor der class property, sonst E2003. Default dlDelphi (Ord 0,
+    // Zero-Init von class vars).
+    class var FScanDialect: TSourceDialect;
+
+    // ALogSkip (optional): wird pro uebersprungener Datei/Verzeichnis mit
+    // einem klartext-Grund aufgerufen. Geht in StaticCodeAnalyser_scan.log
+    // damit "warum ist datei X nicht im Scan-Output" diagnostizierbar wird,
+    // ohne den Errors-Channel zu fluten (der landet im UI-Grid).
+    class procedure ScanRec(const Path: string; List: TStringList;
+      Depth: Integer; Errors: TStringList; ATick: TScanTickProc;
+      AIgnore: TIgnoreList;
+      var TickCounter: Integer;
+      ALogSkip: TProc<string> = nil); static;
+  public
     class function GetAllPasFilesRecursive(const Path: string)
       : TStringList; static;
 
@@ -35,16 +52,26 @@ type
     // Der Search-Stop bei `.git`/`.svn` faengt Repos ohne Delphi-Projekt-
     // datei (z.B. einzelne `.pas` in einem Git-Repo) ab.
     class function FindProjectRoot(const AFilePath: string): string; static;
-  private
-    // ALogSkip (optional): wird pro uebersprungener Datei/Verzeichnis mit
-    // einem klartext-Grund aufgerufen. Geht in StaticCodeAnalyser_scan.log
-    // damit "warum ist datei X nicht im Scan-Output" diagnostizierbar wird,
-    // ohne den Errors-Channel zu fluten (der landet im UI-Grid).
-    class procedure ScanRec(const Path: string; List: TStringList;
-      Depth: Integer; Errors: TStringList; ATick: TScanTickProc;
-      AIgnore: TIgnoreList;
-      var TickCounter: Integer;
-      ALogSkip: TProc<string> = nil); static;
+
+    // Scan-Dialekt als VIEW-STATE (Lazarus-Paket A2, 2026-09-16).
+    //
+    // Dasselbe Muster wie die IFDEF-Sicht des Lexers (gLexerIfdefDefines):
+    // TAnalysisSession.Run sichert den alten Wert, ApplyIfdefView setzt
+    // ihn aus Req.Dialect, das Run-finally restauriert - alles unter
+    // GEngineLock. Der State lebt HIER beim Konsumenten, weil der erste
+    // Verbraucher die Dateisammlung ist (ScanRec, Sammel-Zeit), nicht
+    // der Lexer (Parse-Zeit).
+    //
+    // BEWUSST NICHT in uSCAConsts als Config-Global: der Dialekt ist
+    // Sicht, keine Config - ResetEngineConfigDefaults darf ihn nicht
+    // anfassen, und ApplyConfig (laeuft NACH ApplyIfdefView) darf ihn
+    // nicht ueberschreiben koennen.
+    //
+    // Wer den Setter ausserhalb von Run benutzt (Tests!), restauriert
+    // im try/finally - globaler State im residenten Testprozess ist
+    // sonst die dokumentierte Quelle abhaengiger Tests.
+    class property ScanDialect: TSourceDialect read FScanDialect
+      write FScanDialect;
   end;
 
 implementation
@@ -120,7 +147,18 @@ begin
             Continue;
           end;
           {$WARN SYMBOL_PLATFORM ON}
-          if MatchesMask(SearchRec.Name, '*.pas') then
+          // Dialekt-Maske (Lazarus-Paket A2): dlDelphi nimmt wie eh und
+          // je nur *.pas - die erste Bedingung ist der unveraenderte
+          // Bestand, der or-Zweig ist dort kalt (Kurzschluss), der
+          // Default-Lauf bleibt byte-identisch. dlFpc nimmt *.pp dazu:
+          // im Lazarus-Baum sind das 676 Dateien / ~399k Code-Zeilen,
+          // 614 davon echte Units mit 'unit'-Kopf. .lpr und .inc kommen
+          // BEWUSST noch nicht (Paket A3 - .lpr braucht die
+          // Endungs-Gates, .inc einen Produktentscheid, weil keine der
+          // 666 .inc eine Unit ist).
+          if MatchesMask(SearchRec.Name, '*.pas')
+             or ((FScanDialect = dlFpc)
+                 and MatchesMask(SearchRec.Name, '*.pp')) then
           begin
             FullPath := IncludeTrailingPathDelimiter(Path) + SearchRec.Name;
             // Benutzer-Ignore-Liste: Datei wird stillschweigend uebersprungen.

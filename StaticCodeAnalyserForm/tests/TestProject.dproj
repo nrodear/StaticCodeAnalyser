@@ -210,6 +210,7 @@
         <DCCReference Include="uTestPerfHotspots.pas"/>
         <DCCReference Include="uTestConcurrencyExt.pas"/>
         <DCCReference Include="uTestEngineApi.pas"/>
+        <DCCReference Include="uTestStaticFiles.pas"/>
         <DCCReference Include="uTestRestHttpSecurity.pas"/>
         <DCCReference Include="uTestPublicMemberWithoutDoc.pas"/>
         <DCCReference Include="uTestNamingExt.pas"/>

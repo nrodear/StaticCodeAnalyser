@@ -183,6 +183,29 @@ type
     fcHigh
   );
 
+  // Quelltext-Dialekt des Scans (Lazarus-Paket A2, 2026-09-16).
+  //
+  // Eine SCAN-SICHT wie die IFDEF-Defines, KEINE Detektor-Config: der
+  // Dialekt bestimmt, welche Dateien der Verzeichnis-Walk einsammelt
+  // (dlFpc nimmt *.pp dazu - die klassische Free-Pascal-Unit-Endung),
+  // nicht welche Regeln laufen. Er wandert deshalb als Feld im
+  // TScanRequest und wird in ApplyIfdefView angewandt (laeuft IMMER,
+  // auch bei SkipConfig=True), nie in ApplyConfig. Der View-State lebt
+  // in uStaticFiles beim Konsumenten; hier steht nur der Typ, weil ihn
+  // Request (uEngineApi) und Sammler (uStaticFiles) beide sehen muessen.
+  //
+  // BEWUSST KEIN dlAuto: die Verzeichnis-Erkennung braucht eine
+  // Tie-Break-Regel (895 vs. 1.994 erkannte Dateien im Referenzkorpus,
+  // je nachdem wer bei .dproj+.lpi im selben Ordner gewinnt) und einen
+  // Fallback fuer die 44,6 % Korpusdateien ohne jede Projektdatei -
+  // eigenes Paket (A6). Bis dahin lehnt die CLI --dialect=auto mit
+  // klarem Fehler ab, statt still auf delphi zu fallen: ein stiller
+  // Fallback waere exakt der wirkungslose Schalter der SCA007-Lehre.
+  TSourceDialect = (
+    dlDelphi,   // heutiges Verhalten, Default - sammelt nur *.pas
+    dlFpc       // Free Pascal / Lazarus - sammelt zusaetzlich *.pp
+  );
+
   // Art des Befundes
   TFindingKind = (
     fkMemoryLeak,       // Speicherleck (uLeakDetector2)

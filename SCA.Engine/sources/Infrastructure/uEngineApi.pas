@@ -130,6 +130,11 @@ type
                                         // (mORMot2/Indy-Muster). Init setzt True (DEFAULT seit
                                         // 06.09.2026, Messlauf rw70b); False = Include-blind
                                         // (CLI --no-include-defines).
+    Dialect        : TSourceDialect;    // Quelltext-Dialekt (Lazarus-Paket A2): dlFpc sammelt beim
+                                        // Verzeichnis-Walk zusaetzlich *.pp ein. SCAN-SICHT wie
+                                        // IfdefDefines - Run wendet sie IMMER an, auch bei
+                                        // SkipConfig=True (ApplyIfdefView). Init setzt dlDelphi;
+                                        // damit ist jeder Bestandslauf byte-identisch.
     CustomRulesPath: string;            // YAML mit Custom-Rules ('' = keine)
     BaselinePath   : string;            // Findings gegen diese Baseline-JSON filtern ('' = aus)
     WriteBaselinePath: string;          // aktuelle Findings als neue Baseline schreiben ('' = aus)
@@ -282,6 +287,7 @@ uses
   uPathOverrides,   // TPathOverrides.Clear im Direkt-Modus (Config-Riegel 2026-07-04)
   uDetectorUtils,   // IsTestFixturePath (TFixtureFilter)
   uProjectFiles,    // ssProject/ssProjectGroup (Konzept_ScanScope_2026-07-20)
+  uStaticFiles,     // TStaticFiles.ScanDialect - Dialekt-View-State (Lazarus A2)
   uNotIncludedInProject;   // SCA194 - verwaiste .pas/.dfm im Projektordner
 
 var
@@ -324,6 +330,8 @@ begin
   Result.UsesCheck       := False;
   Result.AutoDiscover    := False;
   Result.IfdefDefines    := DefaultIfdefDefines;
+  Result.Dialect         := dlDelphi;   // Lazarus-Opt-in NUR explizit - ein anderer
+                                        // Default bewegte sofort den Referenzlauf
   Result.IncludeDefines  := True;    // DEFAULT seit 06.09.2026 (Nico-GO nach
                                      // Messlauf rw70b: Errors 1.006->950, die
                                      // SCA166-Include-Blindheits-Familie faellt
@@ -430,6 +438,12 @@ begin
   else
     gLexerIfdefSkipEnabled := False;
   gLexerIncludeDefinesEnabled := Req.IncludeDefines;
+  // Dialekt-Sicht (Lazarus A2): derselbe Vertrag wie die IFDEF-Sicht -
+  // Request-Eigenschaft, laeuft auch bei SkipConfig=True. Konsument ist
+  // die Dateisammlung (uStaticFiles.ScanRec), nicht der Lexer; deshalb
+  // liegt der State dort und nicht in uLexer. Run sichert und
+  // restauriert ihn zusammen mit den Lexer-Werten.
+  TStaticFiles.ScanDialect := Req.Dialect;
 end;
 
 procedure TAnalysisSession.ApplyConfig(const Req: TScanRequest);
@@ -643,10 +657,12 @@ begin
   var AlterIfdefSkip := False;
   var AlterInclDefines := False;
   var AlteIfdefDefines: TArray<string> := nil;
+  var AlterDialekt := dlDelphi;
   GEngineLock.Enter;
   try
   AlterIfdefSkip   := gLexerIfdefSkipEnabled;
   AlterInclDefines := gLexerIncludeDefinesEnabled;
+  AlterDialekt     := TStaticFiles.ScanDialect;
   if gLexerIfdefDefines <> nil then
     AlteIfdefDefines := gLexerIfdefDefines.ToStringArray;
   // Die IFDEF-Sicht IMMER anwenden - auch bei SkipConfig=True (Form/
@@ -859,6 +875,7 @@ begin
     LexerIfdefClear;
     gLexerIfdefSkipEnabled      := AlterIfdefSkip;
     gLexerIncludeDefinesEnabled := AlterInclDefines;
+    TStaticFiles.ScanDialect    := AlterDialekt;
     for var AltDef in AlteIfdefDefines do
       LexerIfdefAddDefine(AltDef);
     GEngineLock.Leave;

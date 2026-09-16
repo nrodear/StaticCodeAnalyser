@@ -34,6 +34,12 @@ type
     [Test] procedure WertSchalter_MitLeerzeichen;
     [Test] procedure FailOn_MitGleichheitszeichen;
     [Test] procedure FailOn_GrossgeschriebenKommtRohAn;
+    // --dialect (Lazarus A2): Wertemenge hart, auto mit eigenem Text
+    [Test] procedure Dialect_FpcMitGleichheitszeichen;
+    [Test] procedure Dialect_FpcMitLeerzeichen;
+    [Test] procedure Dialect_NichtAngegeben_BleibtLeer;
+    [Test] procedure Dialect_UngueltigerWert_ParseError;
+    [Test] procedure Dialect_Auto_ParseErrorMitHinweis;
   end;
 
 implementation
@@ -166,6 +172,77 @@ begin
   Assert.AreEqual('error', A.FailOn,
     '--fail-on=error muss weiter ankommen');
 end;
+
+{ --- --dialect (Lazarus A2) -------------------------------------- }
+//
+// Der Schalter waehlt den Quelltext-Dialekt; fpc sammelt beim
+// Verzeichnis-Walk zusaetzlich *.pp ein. Die Wertemenge wird HART
+// geprueft: ein Tippfehler, der still auf den Delphi-Default
+// fiele, waere der wirkungslose Schalter aus der SCA007-Lehre.
+
+procedure TTestConsoleParseArgs.Dialect_FpcMitGleichheitszeichen;
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--dialect=fpc']);
+  Assert.AreEqual<string>('', A.ParseError,
+    '--dialect=fpc ist gueltig: ' + A.ParseError);
+  Assert.AreEqual<string>('fpc', A.Dialect,
+    'der Wert muss ankommen, nicht im ''=''-Splitter verschwinden');
+end;
+
+procedure TTestConsoleParseArgs.Dialect_FpcMitLeerzeichen;
+// Beide Schreibweisen muessen dasselbe ergeben - GetValue nimmt
+// bei fehlendem = das Folgeargument.
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--dialect', 'fpc']);
+  Assert.AreEqual<string>('', A.ParseError);
+  Assert.AreEqual<string>('fpc', A.Dialect);
+end;
+
+procedure TTestConsoleParseArgs.Dialect_NichtAngegeben_BleibtLeer;
+// DIE KLAMMER: ohne den Schalter bleibt das Feld leer - nur so
+// bleibt nicht angegeben von explizit delphi unterscheidbar
+// (wichtig, sobald in A6 der ini-Schluessel dazukommt und die
+// Praezedenz CLI-gewinnt-gegen-ini gebaut wird).
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B]);
+  Assert.AreEqual<string>('', A.ParseError);
+  Assert.AreEqual<string>('', A.Dialect,
+    'ohne Schalter bleibt Dialect leer (= Engine-Default dlDelphi)');
+end;
+
+procedure TTestConsoleParseArgs.Dialect_UngueltigerWert_ParseError;
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--dialect=lazarus']);
+  Assert.IsTrue(A.ParseError <> '',
+    'ein unbekannter Dialekt muss ein Parse-Fehler sein, nicht still der Delphi-Default');
+  Assert.IsTrue(Pos('--dialect', A.ParseError) > 0,
+    'die Meldung muss den Schalter nennen: ' + A.ParseError);
+end;
+
+procedure TTestConsoleParseArgs.Dialect_Auto_ParseErrorMitHinweis;
+// auto ist kein Tippfehler, sondern ein GEPLANTER Modus
+// (Verzeichnis-Erkennung, Paket A6). Er bekommt einen eigenen
+// Fehlertext, damit niemand glaubt, der Lauf haette automatisch
+// erkannt - er hat abgelehnt.
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--dialect=auto']);
+  Assert.IsTrue(A.ParseError <> '',
+    'auto ist noch nicht implementiert und muss abgelehnt werden');
+  Assert.IsTrue(Pos('nicht implementiert', A.ParseError) > 0,
+    'der Text muss sagen, dass auto GEPLANT und nicht falsch ist: '
+    + A.ParseError);
+end;
+
 
 procedure TTestConsoleParseArgs.FailOn_GrossgeschriebenKommtRohAn;
 // Die eigentliche Frage hinter dem entfernten Zweig, die der erste

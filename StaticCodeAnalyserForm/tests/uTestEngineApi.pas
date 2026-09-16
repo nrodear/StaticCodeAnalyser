@@ -253,6 +253,12 @@ begin
   Assert.AreEqual<Integer>(4, Length(R.IfdefDefines),
     'Init traegt die vier Default-Defines');
   Assert.AreEqual<string>('MSWINDOWS', R.IfdefDefines[0]);
+  // Lazarus A2: der Dialekt-Default MUSS dlDelphi sein - jeder andere
+  // Wert bewegte SOFORT den Referenzlauf (752.457), weil dlFpc beim
+  // Verzeichnis-Walk zusaetzlich *.pp einsammelt. Der Delphi-Korpus
+  // enthaelt 9 .pp-Dateien.
+  Assert.AreEqual<Integer>(Ord(dlDelphi), Ord(R.Dialect),
+    'Dialekt-Default = dlDelphi, sonst bewegt sich der Referenzlauf');
 end;
 
 const
