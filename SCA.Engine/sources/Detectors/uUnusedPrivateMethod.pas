@@ -1,4 +1,4 @@
-unit uUnusedPrivateMethod;
+﻿unit uUnusedPrivateMethod;
 
 // Detektor: private Methode wird in der Unit nie aufgerufen.
 //
@@ -129,6 +129,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  uStaticFiles,   // Formdatei-Paarung (Lazarus A4)
   System.RegularExpressions, System.IOUtils,
   uDetectorUtils, uFileTextCache;
 
@@ -152,8 +153,10 @@ var
 begin
   Result := TDictionary<string, Boolean>.Create;
   if PasFileName = '' then Exit;
-  DfmPath := ChangeFileExt(PasFileName, '.dfm');
-  if not TFile.Exists(DfmPath) then Exit;
+  // Lazarus A4: ohne den .lfm-Fallback galten Event-Handler von
+  // .lfm-Formen als unbenutzt - eine FN-Welle in jeder LCL-Form.
+  DfmPath := TStaticFiles.PairedFormFile(PasFileName);
+  if DfmPath = '' then Exit;
   try
     DfmText := TFile.ReadAllText(DfmPath);
   except

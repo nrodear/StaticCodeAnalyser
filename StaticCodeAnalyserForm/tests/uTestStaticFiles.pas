@@ -49,6 +49,12 @@ type
     [Test] procedure FpcDialekt_SammeltAuchLpr;
     [Test] procedure FpcDialekt_IncBleibtDraussen;
     [Test] procedure DelphiDefault_LprUndPpBleibenDraussen;
+    // A4: Formdatei-Paarung (PairedFormFile/PairedUnitFile/IsFormFileName)
+    [Test] procedure PairedFormFile_DelphiDefault_IgnoriertLfm;
+    [Test] procedure PairedFormFile_Fpc_FaelltAufLfmZurueck;
+    [Test] procedure PairedFormFile_DfmHatVorrang;
+    [Test] procedure PairedUnitFile_Fpc_FindetPpSchwester;
+    [Test] procedure IsFormFileName_FolgtDemDialekt;
   end;
 
 implementation
@@ -234,6 +240,98 @@ begin
   Assert.AreEqual<Integer>(1, Length(Namen),
     'dlDelphi sammelt auch nach A3 nur .pas');
   Assert.AreEqual<string>('a.pas', Namen[0]);
+end;
+
+procedure TTestStaticFiles.PairedFormFile_DelphiDefault_IgnoriertLfm;
+// DIE KLAMMER der A4-Paarung: der DELPHI-Referenzkorpus enthaelt 234
+// .lfm neben einer .pas ohne .dfm - wuerde der Default sie paaren,
+// bewegte sich die Referenz 752.457. dlDelphi darf NUR .dfm sehen.
+begin
+  W('form.pas');
+  W('form.lfm');
+  Assert.AreEqual<string>('', TStaticFiles.PairedFormFile(
+    TPath.Combine(FDir, 'form.pas')),
+    'dlDelphi paart keine .lfm - sonst bewegt sich der Referenzlauf');
+end;
+
+procedure TTestStaticFiles.PairedFormFile_Fpc_FaelltAufLfmZurueck;
+var
+  Alt : TSourceDialect;
+begin
+  W('form.pas');
+  W('form.lfm');
+  Alt := TStaticFiles.ScanDialect;
+  try
+    TStaticFiles.ScanDialect := dlFpc;
+    Assert.IsTrue(TStaticFiles.PairedFormFile(
+      TPath.Combine(FDir, 'form.pas')).EndsWith('form.lfm'),
+      'dlFpc findet die .lfm, wenn keine .dfm existiert');
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+end;
+
+procedure TTestStaticFiles.PairedFormFile_DfmHatVorrang;
+// Wo beide liegen (im Delphi-Korpus genau 1 Fall), gewinnt die .dfm -
+// auch bei dlFpc. Ohne diesen Pin koennte eine Umsortierung der
+// Kandidaten still die Formquelle wechseln.
+var
+  Alt : TSourceDialect;
+begin
+  W('form.pas');
+  W('form.dfm');
+  W('form.lfm');
+  Alt := TStaticFiles.ScanDialect;
+  try
+    TStaticFiles.ScanDialect := dlFpc;
+    Assert.IsTrue(TStaticFiles.PairedFormFile(
+      TPath.Combine(FDir, 'form.pas')).EndsWith('form.dfm'),
+      '.dfm hat Vorrang vor .lfm, auch bei dlFpc');
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+end;
+
+procedure TTestStaticFiles.PairedUnitFile_Fpc_FindetPpSchwester;
+// 149 der 1.010 Lazarus-.lfm liegen neben einer .pp ohne .pas - die
+// Rueckpaarung (Suppression-Host, Caption-Regime-Gate) muss sie
+// finden. Bei dlDelphi bleibt dieselbe Lage leer: die Klammer haengt
+// im selben Test, damit beide Richtungen an EINEM Dateibild haengen.
+var
+  Alt : TSourceDialect;
+  Lfm : string;
+begin
+  W('form.pp');
+  W('form.lfm');
+  Lfm := TPath.Combine(FDir, 'form.lfm');
+  Assert.AreEqual<string>('', TStaticFiles.PairedUnitFile(Lfm),
+    'dlDelphi kennt keine .pp-Schwester');
+  Alt := TStaticFiles.ScanDialect;
+  try
+    TStaticFiles.ScanDialect := dlFpc;
+    Assert.IsTrue(TStaticFiles.PairedUnitFile(Lfm).EndsWith('form.pp'),
+      'dlFpc findet die .pp-Schwester der .lfm');
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+end;
+
+procedure TTestStaticFiles.IsFormFileName_FolgtDemDialekt;
+var
+  Alt : TSourceDialect;
+begin
+  Assert.IsTrue(TStaticFiles.IsFormFileName('u.dfm'), '.dfm immer');
+  Assert.IsFalse(TStaticFiles.IsFormFileName('u.lfm'),
+    '.lfm ist bei dlDelphi KEINE Formdatei (Suppression-Umleitung!)');
+  Alt := TStaticFiles.ScanDialect;
+  try
+    TStaticFiles.ScanDialect := dlFpc;
+    Assert.IsTrue(TStaticFiles.IsFormFileName('u.lfm'), '.lfm bei dlFpc');
+    Assert.IsFalse(TStaticFiles.IsFormFileName('u.pas'),
+      'eine Unit ist nie eine Formdatei');
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
 end;
 
 initialization

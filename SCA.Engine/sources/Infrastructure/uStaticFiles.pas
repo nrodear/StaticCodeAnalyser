@@ -86,6 +86,34 @@ type
     // Wirten VOR TAnalysisSession.Run, der View-State ist dort noch
     // der des Vorlaufs.
     class function IsUnitLikeFile(const AFileName: string): Boolean; static;
+
+    // ---- Formdatei-Paarung (Lazarus-Paket A4) ----------------------
+    //
+    // DIE Paarungsfrage Unit <-> Formdatei, dialektbewusst: '.dfm'
+    // immer und mit VORRANG, '.lfm' nur bei dlFpc. Vor A4 fuehrten
+    // fuenf Engine-Stellen je ein eigenes ChangeFileExt('.dfm') und
+    // drei die Rueckrichtung - die 1.010 Lazarus-.lfm waren damit
+    // fuer alle ~20 DFM-Detektoren unsichtbar, obwohl der DFM-Parser
+    // LFM nachweislich liest (Recherche: 1.009 Formulare, 0 Read
+    // Errors, Koederquote 98,2 %).
+    //
+    // GATE-PFLICHT: der DELPHI-Referenzkorpus enthaelt 234 .lfm neben
+    // einer .pas ohne .dfm - eine ungegatete Paarung bewegte die
+    // Referenz 752.457. Bei dlDelphi probieren beide Funktionen
+    // AUSSCHLIESSLICH die Delphi-Endungen; der Default-Lauf bleibt
+    // byte-identisch.
+
+    // Existierende Formdatei zur Unit ('' wenn keine). Vorrang .dfm -
+    // wo beide liegen (im Delphi-Korpus 1 Fall), gewinnt die .dfm.
+    class function PairedFormFile(const AUnitFile: string): string; static;
+
+    // Existierende Schwester-Unit zur Formdatei ('' wenn keine).
+    // Bei dlFpc auch '.pp' - 149 der 1.010 Lazarus-.lfm liegen neben
+    // einer .pp-Unit ohne .pas.
+    class function PairedUnitFile(const AFormFile: string): string; static;
+
+    // Traegt der Name eine Formdatei-Endung des aktiven Dialekts?
+    class function IsFormFileName(const AFileName: string): Boolean; static;
   end;
 
 implementation
@@ -450,6 +478,40 @@ begin
   Result := Low.EndsWith('.pas');
   if (not Result) and (FScanDialect = dlFpc) then
     Result := Low.EndsWith('.pp') or Low.EndsWith('.lpr');
+end;
+
+class function TStaticFiles.PairedFormFile(const AUnitFile: string): string;
+begin
+  Result := ChangeFileExt(AUnitFile, '.dfm');
+  if TFile.Exists(Result) then Exit;
+  if FScanDialect = dlFpc then
+  begin
+    Result := ChangeFileExt(AUnitFile, '.lfm');
+    if TFile.Exists(Result) then Exit;
+  end;
+  Result := '';
+end;
+
+class function TStaticFiles.PairedUnitFile(const AFormFile: string): string;
+begin
+  Result := ChangeFileExt(AFormFile, '.pas');
+  if TFile.Exists(Result) then Exit;
+  if FScanDialect = dlFpc then
+  begin
+    Result := ChangeFileExt(AFormFile, '.pp');
+    if TFile.Exists(Result) then Exit;
+  end;
+  Result := '';
+end;
+
+class function TStaticFiles.IsFormFileName(const AFileName: string): Boolean;
+var
+  Low : string;
+begin
+  Low := LowerCase(AFileName);
+  Result := Low.EndsWith('.dfm');
+  if (not Result) and (FScanDialect = dlFpc) then
+    Result := Low.EndsWith('.lfm');
 end;
 
 end.

@@ -60,6 +60,7 @@ type
 implementation
 
 uses
+  uStaticFiles,   // Formdatei-Paarung (Lazarus A4)
   System.Classes,            // TStringList (Nachbar-.pas)
   System.StrUtils,           // StartsText (resourcestring-Blockenden)
   uDetectorUtils,            // StripStringsAndComments (G2/G3-Suche)
@@ -179,7 +180,11 @@ var
   Lhs, Rhs  : string;
 begin
   ARegime := False;
-  PasFile := ChangeFileExt(ADfmFile, '.pas');
+  // Lazarus A4: die Schwester-Unit einer .lfm kann eine .pp sein
+  // (149 der 1.010 Lazarus-.lfm). PairedUnitFile prueft Existenz;
+  // '' heisst: kein Regime-Gate moeglich, wie bisher bei fehlender .pas.
+  PasFile := TStaticFiles.PairedUnitFile(ADfmFile);
+  if PasFile = '' then Exit;
   Lines := AcquireLines(PasFile, Cached);
   if Lines = nil then Exit;
   try

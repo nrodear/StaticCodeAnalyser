@@ -338,6 +338,15 @@ end;
 // die liest den View-State, der zur VCS-Filter-Zeit noch nicht
 // gesetzt ist (s. Kommentar an GetChangedPasFiles). Der Dialekt
 // kommt hier als Parameter durch die ganze Kette.
+function EndetAufFormEndung(const APath: string;
+  ADialect: TSourceDialect): Boolean;
+// Lazarus A4: .lfm nur bei dlFpc - der Delphi-Korpus traegt 237 .lfm,
+// eine ungegatete Aufnahme aenderte --branch/--diff-Laeufe.
+begin
+  Result := APath.ToLower.EndsWith('.dfm')
+    or ((ADialect = dlFpc) and APath.ToLower.EndsWith('.lfm'));
+end;
+
 function EndetAufUnitEndung(const APath: string;
   ADialect: TSourceDialect): Boolean;
 var
@@ -370,10 +379,17 @@ var
     T := Trim(ARelPath);
     if EndetAufUnitEndung(T, ADialect) then
       P := IncludeTrailingPathDelimiter(ARepoRoot) + T.Replace('/', '\')
-    else if T.ToLower.EndsWith('.dfm') then
+    else if EndetAufFormEndung(T, ADialect) then
     begin
       AsPas := TPath.ChangeExtension(T, '.pas');
       P := IncludeTrailingPathDelimiter(ARepoRoot) + AsPas.Replace('/', '\');
+      // Lazarus A4: .lfm neben .pp - existiert die .pas nicht, den
+      // .pp-Kandidaten probieren (das FileExists unten entscheidet).
+      if (ADialect = dlFpc) and (not FileExists(P)) then
+      begin
+        AsPas := TPath.ChangeExtension(T, '.pp');
+        P := IncludeTrailingPathDelimiter(ARepoRoot) + AsPas.Replace('/', '\');
+      end;
     end
     else
       Exit;
@@ -536,13 +552,22 @@ var
       else
         P := IncludeTrailingPathDelimiter(ARepoRoot) + T.Replace('/', '\');
     end
-    else if T.ToLower.EndsWith('.dfm') then
+    else if EndetAufFormEndung(T, ADialect) then
     begin
       AsPas := TPath.ChangeExtension(T, '.pas');
       if TPath.IsPathRooted(AsPas) then
         P := AsPas
       else
         P := IncludeTrailingPathDelimiter(ARepoRoot) + AsPas.Replace('/', '\');
+      // Lazarus A4: .lfm neben .pp - s. git-Zweig.
+      if (ADialect = dlFpc) and (not FileExists(P)) then
+      begin
+        AsPas := TPath.ChangeExtension(T, '.pp');
+        if TPath.IsPathRooted(AsPas) then
+          P := AsPas
+        else
+          P := IncludeTrailingPathDelimiter(ARepoRoot) + AsPas.Replace('/', '\');
+      end;
     end
     else
       Exit;
@@ -728,10 +753,16 @@ begin
         Path := IncludeTrailingPathDelimiter(Root) + T.Replace('/', '\');
         if FileExists(Path) then Result.Add(Path);
       end
-      else if T.ToLower.EndsWith('.dfm') then
+      else if EndetAufFormEndung(T, ADialect) then
       begin
         AsPas := TPath.ChangeExtension(T, '.pas');
         Path := IncludeTrailingPathDelimiter(Root) + AsPas.Replace('/', '\');
+        // Lazarus A4: .lfm neben .pp - s. git-Zweig.
+        if (ADialect = dlFpc) and (not FileExists(Path)) then
+        begin
+          AsPas := TPath.ChangeExtension(T, '.pp');
+          Path := IncludeTrailingPathDelimiter(Root) + AsPas.Replace('/', '\');
+        end;
         if FileExists(Path) then Result.Add(Path);
       end;
     end;

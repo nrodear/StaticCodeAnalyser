@@ -1,4 +1,4 @@
-unit uNotIncludedInProject;
+﻿unit uNotIncludedInProject;
 
 // Detektor SCA194 - NotIncludedInProject (User-Anforderung 2026-07-22).
 //
@@ -109,6 +109,7 @@ type
 implementation
 
 uses
+  uStaticFiles,   // IsUnitLikeFile/IsFormFileName + .pp-Schluessel (Lazarus A4)
   System.IOUtils,
   uDetectorUtils,    // IsIdentChar (uses-Scan, SCA195)
   uFileTextCache;    // AcquireLines/ReleaseLines - Projektdateien liegen nach
@@ -370,7 +371,6 @@ var
   var
     SR   : TSearchRec;
     Full : string;
-    Ext  : string;
     Excl : Boolean;
     Dir  : string;
   begin
@@ -399,11 +399,34 @@ var
         end
         else
         begin
-          Ext := LowerCase(ExtractFileExt(SR.Name));
-          if (Ext <> '.pas') and (Ext <> '.dfm') then Continue;
+          // Lazarus A4: dieselben zwei Fragen wie ueberall - Unit-
+          // Endungen des Dialekts plus Formdatei-Endungen. Bei
+          // dlDelphi identisch zur alten Zweierliste.
+          //
+          // KORREKTUR nach dem ersten Bau (26 rote Tests, alle
+          // "got 0"): hier stand F statt SR.Name - F ist die
+          // Laufvariable der SPAETEREN for-Schleife und war waehrend
+          // des Walks leer, der Filter verwarf damit JEDE Datei. Und
+          // die Add-Weiche unten haette bei dlFpc eine .pp in die
+          // DFM-Liste gesteckt (Ext='.pas'-Vergleich statt der
+          // Unit-Frage). Lehre: eine Variablen-Ersetzung braucht die
+          // umgebenden zwanzig Zeilen, nicht die eine.
+          // .lpr ist bei dlFpc zwar Unit-artig fuer die SAMMLUNG, aber
+          // hier gilt die Kopf-Politik ".dpr/.dpk werden nie gesammelt"
+          // (die Programm-Hauptdatei kann sich nicht selbst als Orphan
+          // melden) - die .lpr ist das Lazarus-Pendant zur .dpr.
+          // SameText statt String-Helper: SR.Name ist TFileName, ein
+          // benannter string-Typ - TStringHelper greift dort nicht
+          // (E2018 im ersten Bauversuch).
+          if SameText(ExtractFileExt(SR.Name), '.lpr') then Continue;
+          if not (TStaticFiles.IsUnitLikeFile(SR.Name)
+                  or TStaticFiles.IsFormFileName(SR.Name)) then Continue;
           Full := IncludeTrailingPathDelimiter(APath) + SR.Name;
           if Assigned(AIgnore) and AIgnore.IsIgnored(Full) then Continue;
-          if Ext = '.pas' then DiskPas.Add(Full) else DiskDfm.Add(Full);
+          if TStaticFiles.IsUnitLikeFile(SR.Name) then
+            DiskPas.Add(Full)
+          else
+            DiskDfm.Add(Full);
           if (DiskPas.Count + DiskDfm.Count) >= MAX_WALK_FILES then
           begin
             Aborted := True;   // Cap erreicht - Walk sauber beenden
@@ -527,6 +550,14 @@ begin
     for F in DiskDfm do
     begin
       Comp := ChangeFileExt(F, '.pas');
+      // Lazarus A4: die Schwester einer .lfm kann eine .pp sein -
+      // SCHLUESSEL-Vergleich gegen die Projektliste, bewusst ohne
+      // Plattenzugriff (der Detektor fragt 'im Projekt?', nicht
+      // 'auf Platte?').
+      if (TStaticFiles.ScanDialect = dlFpc)
+         and (not ProjSet.ContainsKey(NormKey(Comp)))
+         and (not UsedOrphans.ContainsKey(NormKey(Comp))) then
+        Comp := ChangeFileExt(F, '.pp');
       if ProjSet.ContainsKey(NormKey(Comp)) then Continue;
       if UsedOrphans.ContainsKey(NormKey(Comp)) then
         Orphans.AddObject(F, TObject(3))
