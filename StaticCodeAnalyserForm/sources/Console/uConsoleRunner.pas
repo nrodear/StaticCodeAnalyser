@@ -1220,6 +1220,19 @@ end;
 
 { ---- Run ---- }
 
+// Uebersetzt den validierten --dialect-String in den Engine-Typ. EINE
+// Stelle fuer alle Konsumenten im Runner (Req.Dialect UND die
+// VCS-Filter, die VOR Run laufen und den View-State nicht sehen).
+// '' und 'delphi' -> dlDelphi; die Wertemenge hat ParseArgs bereits
+// hart geprueft.
+function CliDialekt(const Args: TCliArgs): TSourceDialect;
+begin
+  if SameText(Args.Dialect, 'fpc') then
+    Result := dlFpc
+  else
+    Result := dlDelphi;
+end;
+
 class function TConsoleRunner.Run(const Args: TCliArgs): Integer;
 var
   Findings  : TObjectList<TLeakFinding>;
@@ -1644,11 +1657,9 @@ begin
       Req.ConfigRoot      := Args.Path;
       Req.Profile         := Args.Profile;
       Req.MinSeverityName := Args.MinSeverity;
-      // Dialekt (Lazarus A2): ParseArgs hat die Wertemenge schon hart
-      // geprueft - hier bleibt nur die Uebersetzung. '' und 'delphi'
-      // lassen den Init-Default dlDelphi stehen.
-      if SameText(Args.Dialect, 'fpc') then
-        Req.Dialect := dlFpc;
+      // Dialekt (Lazarus A2/A3): eine Uebersetzungsstelle fuer Request
+      // und VCS-Filter - s. CliDialekt.
+      Req.Dialect := CliDialekt(Args);
       // Perf Stufe 2 (2026-07-25): opt-in Per-File-Parallelisierung.
       // Gate-Rueckfall auf seriell (AutoDiscovery/Custom-Rules/Timings)
       // entscheidet die Engine selbst (uStaticAnalyzer2).
@@ -1698,7 +1709,8 @@ begin
       // Diff-Mode A<->B: nur zwischen Commits geaenderte Dateien (PR-Review).
       if Args.Diff <> '' then
       begin
-        Files := TVcsChanges.GetChangedPasFilesDiff(Args.Path, Args.Diff, RepoInfo, Settings);
+        Files := TVcsChanges.GetChangedPasFilesDiff(Args.Path, Args.Diff, RepoInfo, Settings,
+          CliDialekt(Args));
         // nil und leer sind zwei WELTEN (G7-1): nil heisst, git konnte die
         // Frage nicht beantworten - kein Repo, kein git, Range nicht
         // aufloesbar (Shallow-Clone ohne gefetchte Base ist der GitHub-
@@ -1728,7 +1740,8 @@ begin
       // Branch-Mode: VCS-geaenderte Dateien ermitteln, dann analysieren
       else if Args.Branch then
       begin
-        Files := TVcsChanges.GetChangedPasFilesAuto(Args.Path, RepoInfo, Settings);
+        Files := TVcsChanges.GetChangedPasFilesAuto(Args.Path, RepoInfo, Settings,
+          CliDialekt(Args));
         // s. --diff oben: nil = VCS-Fehler, leer = ehrlich nichts geaendert.
         if Files = nil then
         begin

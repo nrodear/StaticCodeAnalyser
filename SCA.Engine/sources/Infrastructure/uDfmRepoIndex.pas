@@ -86,7 +86,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uParser2;
+  uParser2,
+  uStaticFiles;   // IsUnitLikeFile - Dialekt-Endungen (Lazarus A3)
 
 constructor TDfmRepoIndex.Create;
 begin
@@ -119,7 +120,10 @@ begin
   begin
     FN := FileList[I];
     if FN = '' then Continue;
-    if not SameText(ExtractFileExt(FN), '.pas') then Continue;
+    // Lazarus A3: .pp/.lpr sind bei dlFpc vollwertige Units fuer den
+    // Index - das harte '.pas'-Gate hielt sie draussen (dokumentierte
+    // A2-Degradation). Bei dlDelphi identisches Verhalten wie zuvor.
+    if not TStaticFiles.IsUnitLikeFile(FN) then Continue;
     ScanUnit(FN);
   end;
 end;

@@ -1,4 +1,4 @@
-unit uInterfaceGuidIndex;
+﻿unit uInterfaceGuidIndex;
 
 // Scan-weiter Index der Interface-GUIDs (SCA197 / SCA198).
 //
@@ -126,6 +126,7 @@ implementation
 uses
   System.StrUtils,
   uFileTextCache,   // TryLoadLinesWithFallback - Laden ohne Cache-Eintrag
+  uStaticFiles,     // IsUnitLikeFile - Dialekt-Endungen (Lazarus A3)
   uDetectorUtils;
 
 function IstLeerraum(C: Char): Boolean;
@@ -378,7 +379,9 @@ begin
   if AFiles = nil then Exit;
   for i := 0 to AFiles.Count - 1 do
   begin
-    if not SameText(ExtractFileExt(AFiles[i]), '.pas') then Continue;
+    // Lazarus A3: dieselbe Endungsfrage wie im DfmRepoIndex - siehe
+    // Kommentar dort.
+    if not TStaticFiles.IsUnitLikeFile(AFiles[i]) then Continue;
     Decls := nil;
     Lines := TStringList.Create;
     try
