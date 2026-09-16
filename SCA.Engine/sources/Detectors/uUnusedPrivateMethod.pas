@@ -278,6 +278,125 @@ begin
   Result := Lo + 1;
 end;
 
+// GATE F: {$I}-CODE-INCLUDE IM IMPLEMENTATION-TEIL (Lazarus-Paket, 2026-09-16).
+//
+// Der 2-Treffer-Scan beweist "nie gerufen" nur, wenn der komplette
+// Unit-Rumpf im Unit-TEXT steht. Der FPC-/LCL-Hausstil legt die
+// Implementierungen in {$I xxx.inc}-Dateien (lcl/comctrls.pp usw.) -
+// Implementierungskopf UND Aufrufe sind dann unsichtbar, und praktisch
+// jede private Methode faellt unter die Toleranz. Belegt an
+// lcl/comboex.pas: SetCaption hat im Unit-Text exakt 2 Treffer
+// (Deklaration + property-write); der dritte, der den Fund verhindern
+// wuerde, steht in include/comboex.inc.
+// Korpus-Messung (rw98_g4/rw_laz08/rw_laz09, 16.09.):
+//   Delphi 0 von 110 Funden betroffen (nach der .lrs-Ausnahme),
+//   Lazarus-Default 70 von 225, Lazarus-fpc 1.082 von 1.279 (84,6 %);
+//   die A3-FP-Stichprobe hatte 89 % der .pp-Adds als genau diese
+//   FP-Klasse ausgewiesen.
+// Politik: reine Unterdrueckung der GANZEN Unit (wie Gate E Blanket) -
+// Include-EXPANSION waere recall-erhaltend, braeuchte aber die
+// FPC-Include-Pfad-Aufloesung (lcl/include/, Suchpfade, Makros) und
+// bleibt ein moeglicher Ausbau, falls die Rest-Funde es wert sind.
+//
+// NICHT als Code-Include zaehlen:
+//   * {$I+} / {$I-}  - IO-Check-Schalter, kein Dateiname
+//   * {$I %MAKRO%}   - Compiler-Info-Include, expandiert zu einem
+//                      String-LITERAL, nie zu Code
+//   * {$I x.lrs}     - Lazarus-Ressourcen-Blob (String-Daten fuer
+//                      LazarusResources.Add, traegt keine Aufrufe)
+//
+// Direktiven ueberleben StripStringsAndComments NICHT ({...} ist dort
+// ein Kommentar), deshalb laeuft der Scan auf den ROHEN Zeilen. Die
+// implementation-Grenze kommt aus dem GESTRIPPTEN Code (kommentarfest);
+// auf den Rohzeilen werden erst die STRING-LITERALE geblankt (Pascal-
+// Strings enden an der Zeile - ein '{$I x}' oder '//' IM String zaehlt
+// sonst falsch; die Lazarus-codetools reden in Strings UND Kommentaren
+// ueber genau diese Direktiven), dann wird ein '//' vor der Direktive
+// beachtet (auskommentierte Direktiven zaehlen nie). Bewusste Grenze:
+// eine von einem MEHRZEILIGEN Blockkommentar umschlossene
+// Direktivenzeile wuerde faelschlich zaehlen (Unit still, milde FN) -
+// das ist keine zweite Kommentar-Zustandsmaschine wert.
+function Sca147HasImplementationInclude(Lines: TStrings;
+  const ACodeLow: string; const LineFor: TArray<Integer>): Boolean;
+
+  function IstCodeInclude(const AArg: string): Boolean;
+  var
+    A : string;
+  begin
+    A := LowerCase(Trim(AArg));
+    Result := (A <> '') and (A[1] <> '%')
+      and not ((Length(A) >= 4) and (Copy(A, Length(A) - 3, 4) = '.lrs'));
+  end;
+
+  // Inhalte einzeiliger Pascal-Strings durch Spaces ersetzen. Jedes
+  // Apostroph togglet; das Escape '' ist zwei Toggles und damit von
+  // selbst richtig. Ein an der Zeile offen bleibender String (nur in
+  // kaputter Quelle) blankt bis zum Zeilenende - konservativ.
+  procedure BlankeStrings(var L: string);
+  var
+    j     : Integer;
+    InStr : Boolean;
+  begin
+    InStr := False;
+    for j := 1 to Length(L) do
+      if L[j] = '''' then
+      begin
+        InStr := not InStr;
+        L[j] := ' ';
+      end
+      else if InStr then
+        L[j] := ' ';
+  end;
+
+const
+  IMPL_LEN = 14;   // Length('implementation')
+var
+  P, i, k, ArgStart, ArgEnd, SlashPos : Integer;
+  L : string;
+begin
+  Result := False;
+  // implementation-Klausel im kommentarfreien Code suchen (Ident-
+  // Grenzen; das ERSTE echte Vorkommen ist die Klausel - als
+  // Bezeichner ist das Wort reserviert).
+  P := 0;
+  repeat
+    P := Pos('implementation', ACodeLow, P + 1);
+    if P = 0 then Exit;
+  until ((P = 1) or not Sca147IsIdentCh(ACodeLow[P - 1]))
+        and ((P + IMPL_LEN > Length(ACodeLow))
+             or not Sca147IsIdentCh(ACodeLow[P + IMPL_LEN]));
+  if P - 1 > High(LineFor) then Exit;
+
+  // Rohe Zeilen ab der implementation-Zeile (LineFor ist 0-basiert).
+  for i := LineFor[P - 1] to Lines.Count - 1 do
+  begin
+    L := LowerCase(Lines[i]);
+    BlankeStrings(L);
+    SlashPos := Pos('//', L);
+    k := 0;
+    repeat
+      k := Pos('{$i', L, k + 1);
+      if k = 0 then Break;
+      if (SlashPos > 0) and (k > SlashPos) then Break;
+      // Kurzform '{$i ' oder Langform '{$include ' - '{$if...' und die
+      // Schalterform '{$i+}'/'{$i-}' fallen durch beide Pruefungen.
+      ArgStart := 0;
+      if (k + 3 <= Length(L)) and CharInSet(L[k + 3], [' ', #9]) then
+        ArgStart := k + 4
+      else if (Copy(L, k, 9) = '{$include') and (k + 9 <= Length(L))
+              and CharInSet(L[k + 9], [' ', #9]) then
+        ArgStart := k + 10;
+      if ArgStart > 0 then
+      begin
+        ArgEnd := Pos('}', L, ArgStart);
+        if (ArgEnd > 0)
+           and IstCodeInclude(Copy(L, ArgStart, ArgEnd - ArgStart)) then
+          Exit(True);
+      end;
+    until False;
+  end;
+end;
+
 // GATE A: traegt die Deklaration ab AStart eine 'message'-Direktive?
 //
 // 'message' ist KEINE Parser-Direktive (uParser2.IsMethodDirectiveTok kennt
@@ -684,6 +803,11 @@ begin
     // Perf (2026-07-05): P1-strip-cache - geteilter Strip via Context-Cache.
     Code := LowerCase(TDetectorUtils.StripStringsAndCommentsCached(
       Lines, LineFor, AContext, FileName, ' '));
+    // GATE F: liegt der Unit-Rumpf (teilweise) in {$I}-Includes, kann
+    // der Text-Scan "nie gerufen" nicht beweisen - ganze Unit still
+    // (Vertrag und Messzahlen am Funktionskommentar). Vor dem
+    // WordIdx-Aufbau: der Index waere umsonst gebaut.
+    if Sca147HasImplementationInclude(Lines, Code, LineFor) then Exit;
     // Perf P1: einmaliger Index (Code ist bereits lowercase -> Keys identisch
     // zum frueheren case-sensitiven '\b'+methlow+'\b'-Match).
     WordIdx := TDetectorUtils.BuildWordPositionIndex(Code);
