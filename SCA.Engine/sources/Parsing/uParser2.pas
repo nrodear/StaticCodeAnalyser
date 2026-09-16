@@ -689,6 +689,26 @@ begin
         begin Next; ParseVarLikeSection(Root, nkVarSection); end;
       tkKwConst:
         begin Next; ParseVarLikeSection(Root, nkConstSection); end;
+      tkKwProcedure, tkKwFunction,
+      tkKwConstructor, tkKwDestructor,
+      tkKwOperator:
+        begin
+          // TOP-LEVEL-ROUTINEN (Lazarus-Paket, 2026-09-17): program-/
+          // library-Dateien und kopf-lose Fragmente tragen ihre
+          // Routinen DIREKT auf Top-Ebene - es gibt dort kein
+          // 'implementation'. Bis hierher verschluckte der else-Default
+          // sie tokenweise: JEDER AST-Detektor war in solchen Dateien
+          // blind (SCA002-Befund der A3-Stichprobe; Delphi-Korpus 109
+          // program/library-.pas mit 303 Routinen, Lazarus-fpc 635
+          // Dateien mit 3.397 Routinen - .lpr eingeschlossen).
+          // Der HAUPTBLOCK ('begin ... end.') bleibt bewusst ungeparst:
+          // er ist semantisch der initialization-Block, und deren
+          // Ruempfe skippt der Parser als Bestandspolitik ueberall.
+          // FImplNode nur besetzen, wenn noch keine implementation lief
+          // - die IFDEF-Body-Recovery braucht ein Ziel auf Root-Ebene.
+          if FImplNode = nil then FImplNode := Root;
+          ParseMethodImpl(Root);
+        end;
       tkKwInitialization, tkKwFinalization:
         begin
           Next;

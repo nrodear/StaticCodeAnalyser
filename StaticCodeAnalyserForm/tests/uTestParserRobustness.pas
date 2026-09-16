@@ -186,6 +186,11 @@ type
     // unterscheiden. Der Test haelt fest, dass der Schaden eine
     // FEHLZUORDNUNG ist - und kein Token-Verlust.
     [Test] procedure IfdefSemicolonElse_DirectlyInCaseArm_KnownGap_NothingLost;
+    // Top-Level-Routinen program/library (Vertrag am ParseUnit-Zweig)
+    [Test] procedure Parser_ProgramTopLevelRoutine_EmptyExceptDetected;
+    [Test] procedure Parser_LibraryTopLevelRoutine_EmptyExceptDetected;
+    [Test] procedure Parser_ProgramMainBlock_StaysUnparsed;
+    [Test] procedure Parser_UnitWithMethod_UnchangedByTopLevelBranch;
   end;
 
 implementation
@@ -4032,6 +4037,114 @@ begin
     finally Root.Free; end;
   finally Parser.Free; end;
 end;
+
+// --- Top-Level-Routinen in program/library (2026-09-17) ---
+// Vertrag am neuen ParseUnit-Zweig: Routinen auf Top-Ebene landen
+// als nkMethod im AST; der HAUPTBLOCK bleibt ungeparst
+// (initialization-Politik). Gemessen ueber SCA002 EmptyExcept -
+// die Regel des A3-Befunds, der die Blindheit aufdeckte.
+
+procedure TTestParserRobustness.Parser_ProgramTopLevelRoutine_EmptyExceptDetected;
+// Der Kernfall: die top-level-Prozedur einer program-Datei ist
+// jetzt ein nkMethod. Vor dem ParseUnit-Zweig verschluckte der
+// else-Default sie tokenweise - 0 Funde (dieser Test war ROT).
+const SRC =
+  'program p;'#13#10 +
+  'procedure TopLevel;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Beep;'#13#10 +
+  '  except'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'begin'#13#10 +
+  '  TopLevel;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkEmptyExcept),
+    'top-level-Routine einer program-Datei ist im AST sichtbar');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_LibraryTopLevelRoutine_EmptyExceptDetected;
+// library-Dateien tragen dieselbe Struktur (A3-Befund nennt
+// beide); die exports-Klausel darf den Parse nicht stoeren.
+const SRC =
+  'library l;'#13#10 +
+  'function Werk: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Result := 0;'#13#10 +
+  '  try'#13#10 +
+  '    Result := 1;'#13#10 +
+  '  except'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'exports Werk;'#13#10 +
+  'begin'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkEmptyExcept),
+    'top-level-Routine einer library-Datei ist im AST sichtbar');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_ProgramMainBlock_StaysUnparsed;
+// POLITIK-PIN (kippbar): der Hauptblock ist semantisch der
+// initialization-Block, und deren Ruempfe skippt der Parser
+// ueberall (ParseUnit tkKwInitialization: SkipTo end). Ein
+// except NUR im Hauptblock bleibt daher unsichtbar - wer den
+// Hauptblock parsen will, muss BEIDE Politiken zusammen kippen.
+const SRC =
+  'program p;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Beep;'#13#10 +
+  '  except'#13#10 +
+  '  end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkEmptyExcept),
+    'Hauptblock bleibt ungeparst (initialization-Politik)');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_UnitWithMethod_UnchangedByTopLevelBranch;
+// GEGENPROBE: der neue Top-Level-Zweig aendert den unit-Pfad
+// nicht - Methodenimplementierungen laufen weiter ueber
+// ParseImplementationSection.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TFoo = class'#13#10 +
+  '  procedure Tu;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Tu;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Beep;'#13#10 +
+  '  except'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkEmptyExcept),
+    'unit-Pfad unveraendert');
+  finally F.Free; end;
+end;
+
 
 procedure TTestParserRobustness.Parser_EmptyStmtBeforeBlockEnd_FollowingMethodTopLevel;
 // Derselbe Fehler ohne try: ein ueberzaehliges ';' als letzte Anweisung
