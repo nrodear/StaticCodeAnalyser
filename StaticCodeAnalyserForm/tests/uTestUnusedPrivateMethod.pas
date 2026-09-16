@@ -56,6 +56,15 @@ type
     // GATE E - Voll-Review 2026-09-12 (Blocker): class(IFoo) OHNE
     // Basisklasse (implizit TObject) - Eintrag 0 ist das Interface.
     [Test] procedure InterfaceOnlyParentList_Blanket_NotReported;
+    // Gate F: {$I}-Include im implementation-Teil (Vertrag am Detektor)
+    [Test] procedure GateF_ImplementationInclude_UnitSilenced;
+    [Test] procedure GateF_IncludeLongForm_UnitSilenced;
+    [Test] procedure GateF_InterfaceInclude_StillReported;
+    [Test] procedure GateF_IoSwitch_StillReported;
+    [Test] procedure GateF_LrsInclude_StillReported;
+    [Test] procedure GateF_MacroInclude_StillReported;
+    [Test] procedure GateF_CommentedInclude_StillReported;
+    [Test] procedure GateF_IncludeInString_StillReported;
   end;
 
 implementation
@@ -568,6 +577,229 @@ begin
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedPrivateMethod));
   finally F.Free; end;
 end;
+
+{ --- GATE F: {$I}-Include im implementation-Teil (2026-09-16) --- }
+//
+// Vertrag und Messzahlen am Funktionskommentar von
+// Sca147HasImplementationInclude. Die Fixtures lassen die
+// Implementierung der privaten Methode bewusst WEG - sie "liegt in
+// der inc", genau die belegte FP-Klasse (lcl/comboex.pas).
+
+procedure TTestUnusedPrivateMethod.GateF_ImplementationInclude_UnitSilenced;
+// Der Kernfall: Code-Include im implementation-Teil -> der
+// 2-Treffer-Scan kann nichts beweisen, Unit still. Vor Gate F:
+// 1 Fund (dieser Test war ROT).
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure UnusedHelper;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  '{$I helpers.inc}'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
+  'begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkUnusedPrivateMethod),
+    'Code-Include im implementation-Teil schaltet die Unit still');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedPrivateMethod.GateF_IncludeLongForm_UnitSilenced;
+// Die Langform {$INCLUDE ...} ist dieselbe Direktive.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure UnusedHelper;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  '{$INCLUDE helpers.inc}'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
+  'begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkUnusedPrivateMethod),
+    'Langform {$INCLUDE} schaltet ebenfalls still');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedPrivateMethod.GateF_InterfaceInclude_StillReported;
+// DIE KLAMMER: ein Include im INTERFACE-Teil (Define-Includes wie
+// jedi.inc, JCL-/JVCL-Hausstil) laesst den implementation-Rumpf
+// vollstaendig - der Scan bleibt beweiskraeftig.
+const SRC =
+  'unit t; interface'#13#10 +
+  '{$I jedi.inc}'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure UnusedHelper;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
+  'begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkUnusedPrivateMethod),
+    'Interface-Include gated NICHT - der Rumpf ist vollstaendig');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedPrivateMethod.GateF_IoSwitch_StillReported;
+// {$I-}/{$I+} sind IO-Check-Schalter, keine Includes (kein
+// Whitespace nach dem I).
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure UnusedHelper;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  '{$I-}'#13#10 +
+  '{$I+}'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
+  'begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkUnusedPrivateMethod),
+    'IO-Schalter {$I-} ist kein Include');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedPrivateMethod.GateF_LrsInclude_StillReported;
+// .lrs ist ein Lazarus-Ressourcen-Blob (String-Daten fuer
+// LazarusResources.Add) - kann keinen Methodenaufruf tragen.
+// Die Ausnahme haelt den Delphi-Korpus bei exakt NULL Bewegung
+// (2 gemessene .lrs-Faelle: uCEFBrowserWindow, python4delphi).
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure UnusedHelper;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  '{$I t.lrs}'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
+  'begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkUnusedPrivateMethod),
+    '.lrs-Ressourcen-Include gated NICHT');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedPrivateMethod.GateF_MacroInclude_StillReported;
+// {$I %MAKRO%} expandiert zu einem String-LITERAL (FPC-Info-
+// Include), nie zu Code.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure UnusedHelper;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  '{$I %FPCVERSION%}'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
+  'begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkUnusedPrivateMethod),
+    'Compiler-Makro-Include gated NICHT');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedPrivateMethod.GateF_CommentedInclude_StillReported;
+// Auskommentierte Direktiven zaehlen NIE (Projektlinie:
+// Kommentare sind kein Code).
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure UnusedHelper;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  '// {$I helpers.inc}'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
+  'begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkUnusedPrivateMethod),
+    'auskommentiertes Include gated NICHT');
+  finally F.Free; end;
+end;
+
+
+procedure TTestUnusedPrivateMethod.GateF_IncludeInString_StillReported;
+// Ein '{$I x}' in einem STRING-Literal ist keine aktive
+// Direktive - die Lazarus-codetools reden in Strings ueber genau
+// diese Syntax (linkscanner.pas). Ohne das String-Blanken schaltete
+// so eine Zeile die Unit faelschlich still.
+const SRC =
+  'unit t; interface'#13#10 +
+  'type'#13#10 +
+  '  TFoo = class'#13#10 +
+  '  private'#13#10 +
+  '    procedure UnusedHelper;'#13#10 +
+  '  public'#13#10 +
+  '    procedure DoStuff;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'const IncSample = ''{$I helpers.inc}'';'#13#10 +
+  'procedure TFoo.DoStuff;'#13#10 +
+  'begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkUnusedPrivateMethod),
+    'Include in einem String-Literal gated NICHT');
+  finally F.Free; end;
+end;
+
 
 procedure TTestUnusedPrivateMethod.InterfaceOnlyParentList_Blanket_NotReported;
 // Voll-Review 2026-09-12 (Blocker): 'TFoo = class(IFremd)' ist
