@@ -191,6 +191,7 @@ type
     [Test] procedure Parser_LibraryTopLevelRoutine_EmptyExceptDetected;
     [Test] procedure Parser_ProgramMainBlock_StaysUnparsed;
     [Test] procedure Parser_UnitWithMethod_UnchangedByTopLevelBranch;
+    [Test] procedure Parser_ObjectDeclLeak_InUnit_NoPhantomMethod;
   end;
 
 implementation
@@ -4142,6 +4143,36 @@ begin
   try Assert.AreEqual<Integer>(1,
     TFindingHelper.Count(F, fkEmptyExcept),
     'unit-Pfad unveraendert');
+  finally F.Free; end;
+end;
+
+
+procedure TTestParserRobustness.Parser_ObjectDeclLeak_InUnit_NoPhantomMethod;
+// HAERTUNGS-KLAMMER: in einer STRUKTURIERTEN Unit (interface/
+// implementation gesehen) bleiben durchgesickerte Routine-Tokens
+// verschluckt wie bisher. Turbo-Pascal-object-Deklarationen
+// (aggpas-Klasse) sickern nach dem type-Ausstieg bis in den
+// ParseUnit-Loop; der ungehaertete Top-Level-Zweig machte daraus
+// Phantom-nkMethods (LongParamList auf der DEKLARATION - dieser
+// Test war an dem Stand ROT) und ParseMethodImpl frass bei
+// rumpflosen Koepfen nachfolgende type-Abschnitte (7 verlorene
+// GodClass-Funde an IDocList/IDocDict im Korpus-A/B).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  ' arc = object'#13#10 +
+  '   constructor Construct(a ,b ,c ,d ,e ,f : double );'#13#10 +
+  '   procedure init(x0 ,y0 ,rx ,ry ,angle ,sweep : double );'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLongParamList),
+    'object-Deklaration wird kein Phantom-nkMethod');
   finally F.Free; end;
 end;
 
