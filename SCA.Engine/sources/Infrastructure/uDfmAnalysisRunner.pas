@@ -1,4 +1,4 @@
-unit uDfmAnalysisRunner;
+﻿unit uDfmAnalysisRunner;
 
 // Orchestriert die DFM-basierte Analyse fuer eine einzelne Form-/Frame-/
 // DataModule-Unit:
@@ -35,6 +35,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  uStaticFiles,   // Formdatei-Paarung (Lazarus A4)
   System.SysUtils, System.IOUtils,
   uDfmParser, uComponentGraph, uDfmBinaryReader,
   uParser2, uAstNode, uFormBinder, uSymbolReferenceIndex,
@@ -80,8 +81,11 @@ begin
   OwnsUnitNode := False;
 
   // Phase-1-Filename-Konvention: u<X>.pas -> u<X>.dfm im gleichen Ordner.
-  DfmFileName := TPath.ChangeExtension(PasFileName, '.dfm');
-  if not TFile.Exists(DfmFileName) then Exit;
+  // Lazarus A4: bei dlFpc faellt die Paarung auf u<X>.lfm zurueck -
+  // .dfm behaelt Vorrang. Der DFM-Parser liest LFM unveraendert
+  // (Recherche 16.09.: 1.009 Formulare, 0 Read Errors).
+  DfmFileName := TStaticFiles.PairedFormFile(PasFileName);
+  if DfmFileName = '' then Exit;
 
   try
     // TDfmBinaryReader transparent: liefert Text-DFMs unveraendert

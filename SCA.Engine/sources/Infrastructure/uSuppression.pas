@@ -1,4 +1,4 @@
-unit uSuppression;
+﻿unit uSuppression;
 
 // Filter fuer 'noinspection'-Kommentare im Quelltext.
 //
@@ -179,6 +179,9 @@ implementation
 // noinspection-file BeginEndRequired, ConsecutiveSection, CyclomaticComplexity, GroupedDeclaration, IfElseBegin, RedundantJump, TodoComment, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedParameter, UnusedPublicMember
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  uStaticFiles;   // Formdatei-Paarung (Lazarus A4)
+
 class function TSuppression.KindFromName(const Name: string;
   out Kind: TFindingKind): Boolean;
 // Delegiert an KIND_META-Reverse-Lookup in uSCAConsts (single source
@@ -295,10 +298,14 @@ end;
 function ResolveMarkerHostFile(const FileName: string): string;
 begin
   Result := FileName;
-  if SameText(ExtractFileExt(FileName), '.dfm') then
+  // Lazarus A4: gilt genauso fuer .lfm (bei dlFpc), und die
+  // Schwester-Unit kann eine .pp sein. Wird diese Stelle vergessen,
+  // landen Formdatei-Findings am falschen Marker-Host - deshalb
+  // stand sie in der A4-Inventur als stille Schadensquelle.
+  if TStaticFiles.IsFormFileName(FileName) then
   begin
-    var PasFile := ChangeFileExt(FileName, '.pas');
-    if FileExists(PasFile) then Result := PasFile;
+    var PasFile := TStaticFiles.PairedUnitFile(FileName);
+    if PasFile <> '' then Result := PasFile;
   end;
 end;
 

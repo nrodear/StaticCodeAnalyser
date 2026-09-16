@@ -1,4 +1,4 @@
-unit uFormBinder;
+﻿unit uFormBinder;
 
 // Verbindet einen DFM-Komponentengraph mit dem Pascal-AST der zugehoerigen
 // Form-Klasse.
@@ -138,6 +138,7 @@ implementation
 // sofort danach freigegeben, nil-out waere redundant).
 
 uses
+  uStaticFiles,   // Formdatei-Paarung (Lazarus A4)
   System.IOUtils, System.StrUtils,
   uDfmParser, uDfmBinaryReader, uParser2,
   uCrashDiag;  // EStackExhausted - Kontrakt 2026-08-04
@@ -469,8 +470,9 @@ class function TFormBinder.BindWithParents(Graph: TComponentGraph;
     // weiter - die Pascal-Class wird trotzdem gebunden, sodass
     // HasHandler/HasPublishedField fuer geerbte Methoden funktionieren.
     ParentGraph   := nil;
-    ParentDfmFile := TPath.ChangeExtension(ParentUnitFile, '.dfm');
-    if TFile.Exists(ParentDfmFile) then
+    // Lazarus A4: .lfm-Fallback bei dlFpc, .dfm behaelt Vorrang.
+    ParentDfmFile := TStaticFiles.PairedFormFile(ParentUnitFile);
+    if ParentDfmFile <> '' then
     begin
       try
         Source := TDfmBinaryReader.ReadFile(ParentDfmFile);

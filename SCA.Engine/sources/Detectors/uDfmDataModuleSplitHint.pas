@@ -1,4 +1,4 @@
-unit uDfmDataModuleSplitHint;
+﻿unit uDfmDataModuleSplitHint;
 
 // Detektor: aggregiert mehrere fkDfmDbInUiForm-Befunde auf derselben Form
 // zu einem einzigen "extract to data module"-Refactor-Hint, sobald die
@@ -96,7 +96,10 @@ begin
     // Refactor-Name vorschlagen aus dem File-Basename. Wenn Datei
     // 'uMainForm.dfm' heisst -> 'TMainFormDataModule' als Default-Vorschlag.
     ExtractName := ExtractFileName(FileName);
-    if EndsText('.dfm', ExtractName) then
+    // Lazarus A4: .lfm gleich behandeln - die Stelle wird nur
+    // erreicht, wenn die Datei als Formdatei analysiert wurde, bei
+    // dlDelphi also nie fuer .lfm. Beide Endungen sind 4 Zeichen.
+    if EndsText('.dfm', ExtractName) or EndsText('.lfm', ExtractName) then
       ExtractName := Copy(ExtractName, 1, Length(ExtractName) - 4);
     // Das Unit-Praefix 'u' nur bei KLEINEM u kappen (Voll-Review
     // 2026-09-12, Minor 238). StartsText vergleicht case-INSENSITIV

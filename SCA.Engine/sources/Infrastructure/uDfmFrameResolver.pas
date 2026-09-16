@@ -1,4 +1,4 @@
-unit uDfmFrameResolver;
+﻿unit uDfmFrameResolver;
 
 // Cross-Unit-Resolver fuer Frame-Composition. Wenn ein DFM eine
 // Frame-Instance enthaelt
@@ -80,6 +80,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  uStaticFiles,   // Formdatei-Paarung (Lazarus A4)
   System.SysUtils, System.IOUtils,
   uDfmParser, uDfmBinaryReader;
 
@@ -103,8 +104,9 @@ begin
   PasFile := RepoIndex.GetUnitForClass(FrameClassRef);
   if (PasFile = '') or not TFile.Exists(PasFile) then Exit;
 
-  DfmFile := TPath.ChangeExtension(PasFile, '.dfm');
-  if not TFile.Exists(DfmFile) then Exit;
+  // Lazarus A4: .lfm-Fallback bei dlFpc, .dfm behaelt Vorrang.
+  DfmFile := TStaticFiles.PairedFormFile(PasFile);
+  if DfmFile = '' then Exit;
 
   try
     Source := TDfmBinaryReader.ReadFile(DfmFile);
