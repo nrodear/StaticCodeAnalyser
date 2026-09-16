@@ -578,7 +578,9 @@ begin
   finally F.Free; end;
 end;
 
-{ --- GATE F: {$I}-Include im implementation-Teil (2026-09-16) --- }
+// --- GATE F: Dollar-I-Include im implementation-Teil (2026-09-16) ---
+// (kein {}-Abschnittskommentar: '{$I}' IM Kommentartext wuerde ihn am
+// inneren '}' beenden - { } schachtelt nicht, Pitfall 7.)
 //
 // Vertrag und Messzahlen am Funktionskommentar von
 // Sca147HasImplementationInclude. Die Fixtures lassen die
