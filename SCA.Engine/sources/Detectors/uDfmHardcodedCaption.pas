@@ -79,8 +79,11 @@ uses
   uDetectorUtils,            // StripStringsAndComments (G2/G3-Suche)
   uFileTextCache;            // AcquireLines (Prozess-Cache)
 
-// noinspection-file CanBeClassMethod, ConsecutiveSection, NilComparison, TooLongLine, UnsortedUses
-// Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
+// noinspection-file NilComparison
+// "= nil" ist hier idiomatisch (Projektlinie). Die vier weiteren Kinds des
+// frueheren Stil-Clusters (CanBeClassMethod, ConsecutiveSection, TooLongLine,
+// UnsortedUses) treffen seit dem G4-Umbau nichts mehr - Marker reduziert
+// (UnusedSuppression-Bestandsfund, 2026-09-16).
 
 const
   // Default-Whitelist der UI-Text-Properties. Konfigurierbar machen in
