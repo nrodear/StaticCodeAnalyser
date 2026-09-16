@@ -47,6 +47,11 @@ type
     [Test] procedure RecordArrayInitializerFields_NotReported;
     [Test] procedure NegativeNumericConst_StillReported;
     [Test] procedure TypedScalarConst_StillReported;
+    // Once-Guard-Gate SCA119 (Vertrag am Detektor)
+    [Test] procedure OnceGuard_TypedConstAssigned_NotReported;
+    [Test] procedure OnceGuard_TypedConstWithoutAssign_StillReported;
+    [Test] procedure OnceGuard_UntypedConst_StillReported;
+    [Test] procedure OnceGuard_AssignToOtherName_StillReported;
   end;
 
 implementation
@@ -584,6 +589,104 @@ begin
     'Negative Zahlkonstante muss weiter gemeldet werden');
   finally F.Free; end;
 end;
+
+// --- Once-Guard-Gate SCA119 (2026-09-16, Vertrag am Detektor) ---
+
+procedure TTestNamingExt.OnceGuard_TypedConstAssigned_NotReported;
+// Das FPC-Once-Guard-Idiom: die typisierte Konstante ist eine
+// ZUSTANDSVARIABLE, UPPER_SNAKE geht am Gegenstand vorbei
+// (97 von 399 Lazarus-fpc-Funden). Vor dem Gate: 1 Fund
+// (dieser Test war ROT).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'const'#13#10 +
+  '  busyFlag: Boolean = False;'#13#10 +
+  'begin'#13#10 +
+  '  if busyFlag then Exit;'#13#10 +
+  '  busyFlag := True;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLocalConstantName),
+    'zugewiesene typisierte Konstante ist kein Naming-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNamingExt.OnceGuard_TypedConstWithoutAssign_StillReported;
+// DIE KLAMMER: typisiert allein reicht nicht - ohne Zuweisung
+// ist es eine echte Konstante und bleibt ein Fund.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'const'#13#10 +
+  '  waitFactor: Integer = 250;'#13#10 +
+  'begin'#13#10 +
+  '  Sleep(waitFactor);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkLocalConstantName),
+    'typisierte Konstante ohne Zuweisung bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNamingExt.OnceGuard_UntypedConst_StillReported;
+// Untypisierten Konstanten KANN nicht zugewiesen werden - das
+// Gate verlangt die Typannotation (TypeRef-Form 'Typ=Wert').
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'const'#13#10 +
+  '  maxRetries = 3;'#13#10 +
+  'begin'#13#10 +
+  '  Sleep(maxRetries);'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkLocalConstantName),
+    'untypisierte Konstante bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestNamingExt.OnceGuard_AssignToOtherName_StillReported;
+// Die Zuweisung muss GENAU den Konstantennamen treffen -
+// eine fremde LHS laesst den Fund stehen.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'const'#13#10 +
+  '  limitValue: Integer = 10;'#13#10 +
+  'begin'#13#10 +
+  '  otherVar := limitValue;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkLocalConstantName),
+    'Zuweisung an fremden Namen gated nicht');
+  finally F.Free; end;
+end;
+
 
 procedure TTestNamingExt.TypedScalarConst_StillReported;
 // WAECHTER: skalar-typisierte Konstante ist genau der Fall, den die Regel

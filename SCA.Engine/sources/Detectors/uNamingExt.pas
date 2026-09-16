@@ -254,6 +254,27 @@ begin
   Result := True;
 end;
 
+function MethodAssignsToName(M: TAstNode; const AName: string): Boolean;
+// True, wenn im Teilbaum der Methode eine Zuweisung auf genau diesen
+// (unqualifizierten) Namen liegt - nkAssign traegt den LHS-Namen.
+// Fuer das Once-Guard-Gate: der Teilbaum schliesst nested procedures
+// ein; ein gleichnamiger Local einer nested proc wuerde mitzaehlen
+// (dann Unit still, milde FN) - bewusst konservativ, die Kombination
+// "typisierte Konstante + gleichnamige Zuweisung" ist eng genug.
+var
+  Assigns : TList<TAstNode>;
+  A       : TAstNode;
+begin
+  Result  := False;
+  Assigns := M.FindAll(nkAssign);
+  try
+    for A in Assigns do
+      if SameText(A.Name, AName) then Exit(True);
+  finally
+    Assigns.Free;
+  end;
+end;
+
 class procedure TNamingExtDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
@@ -301,6 +322,22 @@ begin
   // nkMethod-Knotens. Der Parser legt lokale const X = Wert; Eintraege
   // als nkField unter einer nkConstSection ab (siehe uParser2.pas:386 +
   // uFormatMismatch.pas:420 fuer das Muster).
+  //
+  // ONCE-GUARD-GATE (Lazarus-Paket, 2026-09-16): eine TYPISIERTE lokale
+  // Konstante, der im RUMPF zugewiesen wird, ist eine ZUSTANDSVARIABLE,
+  // keine Konstante - das FPC-Once-Guard-Idiom
+  //   const Done: Boolean = False;
+  //   begin if Done then Exit; Done := True; ...
+  // (schreibbare typisierte Konstanten: FPC-Default, Delphi unter
+  // {$J+}; in praktisch jeder LCL-Widgetset-Register-Prozedur). Die
+  // UPPER_SNAKE_CASE-Empfehlung zielt auf Konstanten-LITERALE und geht
+  // hier am Gegenstand vorbei (A3-FP-Stichprobe 16.09.).
+  // Korpus-Vermessung (rw98_g4/rw_laz08/rw_laz09): Delphi 27 von
+  // 1.535, Lazarus-fpc 97 von 399, Lazarus-Default 8 von 220.
+  // Typisiert heisst TypeRef 'Typ=Wert' (Splitkonvention aus
+  // ParseVarLikeSection) - nur solchen Konstanten KANN ueberhaupt
+  // zugewiesen werden; die Zuweisung liefert der AST als nkAssign mit
+  // dem LHS-Namen. Reine Unterdrueckung, kein neuer Meldepfad.
   Methods := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
@@ -337,6 +374,11 @@ begin
             // Initialisiererlisten, strukturierte Konstanten und
             // String-/Char-Literale ohne Typannotation. Reine Unterdrueckung.
             if ConstIsExemptFromNaming(K.TypeRef) then Continue;
+            // Once-Guard-Gate (Vertrag am Sektions-Kommentar oben):
+            // typisiert + Zuweisung im Methoden-Teilbaum -> Zustands-
+            // variable, kein Fund.
+            if (Pos('=', K.TypeRef) > 1)
+               and MethodAssignsToName(M, K.Name) then Continue;
 
             F            := TLeakFinding.Create;
             F.FileName   := FileName;
