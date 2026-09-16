@@ -38,6 +38,19 @@
 //      nicht. Der alte Phase-2-Plan hier ("nur bei gnugettext-uses
 //      MELDEN") ist damit invertiert widerlegt: gerade dort ist die
 //      Meldung falsch.
+//   G4 INIT-UEBERSCHREIBEN (2026-09-16, an BEIDEN Korpora vermessen
+//      und adversarisch geprueft): die Nachbar-Unit weist DERSELBEN
+//      Komponenten-Property in einem INIT-Kontext einen neuen Wert zu
+//      (constructor/FormCreate/FormShow/Loaded/AfterConstruction/
+//      DFM-gebundene OnCreate-/OnShow-Handler, plus EINE Aufrufstufe).
+//      Delphi: 467 von 24.980 Funden; Lazarus traegt zusaetzlich die
+//      frei benannten CREATE-Handler. BEWUSST NICHT jede Zuweisung:
+//      im Event-/if-Kontext ist der DFM-Text der korrekte GRUNDZUSTAND
+//      (Handpruefung: 56 % Fehlskips grosszuegig vs. 9 % Init).
+//      RHS-Selbstreferenz ('Caption := Format(Caption, ...)') skippt
+//      nie - dort ist der DFM-Wert das Template. TAction ist KEIN
+//      G4-Kanal: eine im DFM GESPEICHERTE Caption weicht per
+//      VCL-/LCL-Semantik bewusst von der Action ab und ueberlebt sie.
 // Marker-/Zuweisungs-Suche laeuft auf gestripptem Quelltext
 // (StripStringsAndComments) - Kommentare und String-Literale zaehlen
 // nie als Code-Use.
@@ -160,12 +173,43 @@ begin
   Result := False;
 end;
 
-procedure LadeNachbarPas(const ADfmFile: string; out ARegime: Boolean;
-  AResIdents: TStringList; AZuweisungen: TStringList);
+// noinspection LongParamList - interner Ein-Aufrufer-Helfer, der die
+// EINE .pas-Lektuere auf vier Gates verteilt (G2/G3/G4/Res). Ein
+// Parameter-Record fuer genau einen Aufrufer verdoppelte nur die
+// Deklarationen; die sechs Parameter SIND der Vertrag der Funktion.
+procedure LadeNachbarPas(const ADfmFile: string;
+  AInitHandler: TStrings; out ARegime: Boolean;
+  AResIdents: TStringList; AZuweisungen: TStringList;
+  AUeberschrieben: TStringList);
 // Liest die Nachbar-.pas der DFM EINMAL je Datei: Uebersetzungs-Regime-
 // Marker (G3), resourcestring-Identmenge und die 'Comp.Prop := Ident;'-
 // Zuweisungen (G2, als 'comp.prop=ident'-Zeilen in AZuweisungen).
 // Suche auf gestripptem Text - Kommentare/Strings zaehlen nie.
+//
+// G4 INIT-UEBERSCHREIB-GATE (2026-09-16, vermessen an beiden Korpora):
+// AUeberschrieben bekommt die 'comp.prop'-Schluessel, deren Property
+// die Unit in einem INIT-KontEXT zuweist - dann ist der DFM-Wert ein
+// toter Designer-Platzhalter, der den Nutzer nie erreicht.
+//
+// Init-Kontext heisst: constructor, FormCreate, FormShow, Loaded,
+// AfterConstruction, die im DFM an der WURZEL gebundenen OnCreate-/
+// OnShow-Handler (AInitHandler, aus dem Graph), oder eine Routine, die
+// aus so einem Kontext heraus GERUFEN wird (EINE Stufe -
+// LoadLocale-/SetLabels-Muster). BEWUSST NICHT jede Zuweisung: die
+// grosszuegige Variante hatte in der Handpruefung 56 % Fehlskips
+// (14 von 25) - eine Zuweisung im Event-Handler oder if-Zweig heisst,
+// der DFM-Text ist der korrekte GRUNDZUSTAND bis zum Ereignis
+// (btnTest 'Run' -> 'Stop' erst beim Klick). Die Init-Variante hatte
+// 1 Fehlskip von 11.
+//
+// Der eine Restfehler war die RHS-SELBSTREFERENZ
+// ('Caption := Format(Caption, ...)' - der DFM-Wert ist das Template
+// und erreicht den Nutzer als Textbasis doch, 33 Faelle im
+// Delphi-Korpus): solche Zuweisungen skippen nicht.
+//
+// Der LHS-Vertrag (genau EIN Punkt, valide Idents) schliesst
+// Fremdklassen-Zuweisungen ('Frame.edPath.Text := ...') von selbst
+// aus - die belegte False-Drop-Klasse der Qualifier-Variante.
 var
   PasFile   : string;
   Lines     : TStringList;
@@ -177,7 +221,88 @@ var
   WCol       : Integer;
   Rest       : string;
   PosAssign, PosDot, PosSemi : Integer;
-  Lhs, Rhs  : string;
+  Lhs, Rhs, RhsVoll, LhsKey  : string;
+  AktRoutine : string;              // lowercase, '' = vor der ersten Routine
+  AktIstInit : Boolean;
+  InitNamen  : TStringList;         // Routinen mit Init-Basis-Kontext
+  InitCalls  : TStringList;         // aus Init-Basis-Ruempfen gerufene Idents
+  ZuwJeRout  : TStringList;         // 'routine|comp.prop' je G4-Kandidat
+  i, j       : Integer;
+
+  function KopfName(const AKopf: string; AKeyLen: Integer): string;
+  // Routinenname aus einer Kopfzeile: Rest nach dem Keyword, Spaces um
+  // Punkte entfernen (die Stichprobe fand 'TMainForm .FormCreate' -
+  // real existierender jvcl-Code), dann das Segment nach dem letzten
+  // Punkt bis '(' / ';' / ':'.
+  var
+    R : string;
+    P : Integer;
+  begin
+    R := Trim(Copy(AKopf, AKeyLen + 1, MaxInt));
+    R := R.Replace(' .', '.').Replace('. ', '.');
+    for P := 1 to Length(R) do
+      if CharInSet(R[P], ['(', ';', ':']) then
+      begin
+        R := Copy(R, 1, P - 1);
+        Break;
+      end;
+    R := Trim(R);
+    P := R.LastDelimiter('.') + 1;
+    Result := LowerCase(Trim(Copy(R, P, MaxInt)));
+  end;
+
+  procedure SammleAufrufe(const AZeileLow: string);
+  // Idents, denen '(' oder ';' folgt, aus einer Init-Basis-Rumpfzeile
+  // in InitCalls - die EINE Aufrufstufe. Grosszuegig: ein gesammelter
+  // Nicht-Routinen-Name schadet nicht, weil nur Namen zaehlen, unter
+  // denen auch Zuweisungen haengen. Eigene Routine, damit die
+  // Zeichen-Schleife den Haupt-Pass nicht verschachtelt (Selbstscan).
+  var
+    i, j, k : Integer;
+  begin
+    i := 1;
+    while i <= Length(AZeileLow) do
+    begin
+      if not IstIdentZeichen(AZeileLow[i]) then
+      begin
+        Inc(i);
+        Continue;
+      end;
+      j := i;
+      while (j <= Length(AZeileLow)) and IstIdentZeichen(AZeileLow[j]) do
+        Inc(j);
+      k := j;
+      while (k <= Length(AZeileLow)) and (AZeileLow[k] = ' ') do
+        Inc(k);
+      if (k <= Length(AZeileLow))
+         and CharInSet(AZeileLow[k], ['(', ';']) then
+        InitCalls.Add(Copy(AZeileLow, i, j - i));
+      i := j;
+    end;
+  end;
+
+  function EnthaeltWort(const AText, AWort: string): Boolean;
+  // Ident-Grenzen-Suche (case-insensitiv); '.' im Wort ist erlaubt
+  // (comp.prop). Fuer den Selbstreferenz-Check.
+  var
+    TL, WL : string;
+    P, St  : Integer;
+  begin
+    Result := False;
+    TL := LowerCase(AText);
+    WL := LowerCase(AWort);
+    St := 1;
+    repeat
+      P := Pos(WL, TL, St);
+      if P = 0 then Exit;
+      if ((P = 1) or not IstIdentZeichen(TL[P - 1]))
+         and ((P + Length(WL) > Length(TL))
+              or not IstIdentZeichen(TL[P + Length(WL)])) then
+        Exit(True);
+      St := P + 1;
+    until False;
+  end;
+
 begin
   ARegime := False;
   // Lazarus A4: die Schwester-Unit einer .lfm kann eine .pp sein
@@ -194,63 +319,114 @@ begin
   end;
   ARegime := HatRegimeMarker(LowerCase(Code));
   InResBlock := False;
-  for S in Code.Split([#10]) do
-  begin
-    Lhs := Trim(S);
-    if Lhs = '' then Continue;
-    // Erstes WORT der Zeile (wortgenau, Voll-Review 2026-09-12, Major
-    // 56): der fruehere Praefix-Match (StartsText) beendete den
-    // resourcestring-Block schon bei Res-Idents mit Keyword-PRAEFIX
-    // ('typeCaption = ...', 'endUserNote = ...') - dieser und alle
-    // folgenden Res-Idents fehlten im G2-Gate, und die Caption wurde
-    // gemeldet, obwohl die .pas sie nachweislich zur Laufzeit ersetzt.
-    W := LowerCase(TDetectorUtils.ExtractFirstWord(Lhs, WCol));
-    if W = 'resourcestring' then
+  AktRoutine := '';
+  AktIstInit := False;
+  InitNamen := TStringList.Create;
+  InitCalls := TStringList.Create;
+  ZuwJeRout := TStringList.Create;
+  try
+    InitNamen.Sorted := True; InitNamen.Duplicates := dupIgnore;
+    InitNamen.CaseSensitive := False;
+    InitCalls.Sorted := True; InitCalls.Duplicates := dupIgnore;
+    InitCalls.CaseSensitive := False;
+    for S in Code.Split([#10]) do
     begin
-      InResBlock := True;
-      // Einzeiler 'resourcestring SFoo = ...' (vorher matchte nur die
-      // alleinstehende Zeile): den Rest der Zeile gleich einsammeln.
-      Rest := TrimLeft(Copy(Lhs, WCol + Length('resourcestring'), MaxInt));
-      if Rest <> '' then
+      Lhs := Trim(S);
+      if Lhs = '' then Continue;
+      // Erstes WORT der Zeile (wortgenau, Voll-Review 2026-09-12, Major
+      // 56): der fruehere Praefix-Match (StartsText) beendete den
+      // resourcestring-Block schon bei Res-Idents mit Keyword-PRAEFIX
+      // ('typeCaption = ...', 'endUserNote = ...') - dieser und alle
+      // folgenden Res-Idents fehlten im G2-Gate, und die Caption wurde
+      // gemeldet, obwohl die .pas sie nachweislich zur Laufzeit ersetzt.
+      W := LowerCase(TDetectorUtils.ExtractFirstWord(Lhs, WCol));
+      // G4: Routinen-Tracking. Der Kopf bestimmt, in welchem Kontext
+      // die folgenden Zuweisungen liegen.
+      if (W = 'procedure') or (W = 'function')
+         or (W = 'constructor') or (W = 'destructor') then
       begin
-        PosAssign := Pos('=', Rest);
-        if PosAssign > 1 then
-          AResIdents.Add(LowerCase(Trim(Copy(Rest, 1, PosAssign - 1))));
-      end;
-      Continue;
-    end;
-    if InResBlock then
-    begin
-      // Abschnittswechsel beendet den Block - wortgenau (s.o.).
-      if (W = 'var') or (W = 'const') or (W = 'type')
-         or (W = 'procedure') or (W = 'function')
-         or (W = 'implementation') or (W = 'begin') or (W = 'end')
-         or (W = 'uses') then
-        InResBlock := False
-      else
+        AktRoutine := KopfName(Lhs, WCol - 1 + Length(W));
+        AktIstInit := (W = 'constructor')
+          or (AktRoutine = 'formcreate') or (AktRoutine = 'formshow')
+          or (AktRoutine = 'loaded') or (AktRoutine = 'afterconstruction')
+          or ((AInitHandler <> nil)
+              and (AInitHandler.IndexOf(AktRoutine) >= 0));
+        if AktIstInit and (AktRoutine <> '') then
+          InitNamen.Add(AktRoutine);
+        // faellt durch: die resourcestring-Blockende-Logik unten kennt
+        // 'procedure'/'function' ebenfalls.
+      end
+      else if AktIstInit then
+        SammleAufrufe(LowerCase(Lhs));
+      if W = 'resourcestring' then
       begin
-        PosAssign := Pos('=', Lhs);
-        if PosAssign > 1 then
-          AResIdents.Add(LowerCase(Trim(Copy(Lhs, 1, PosAssign - 1))));
+        InResBlock := True;
+        // Einzeiler 'resourcestring SFoo = ...' (vorher matchte nur die
+        // alleinstehende Zeile): den Rest der Zeile gleich einsammeln.
+        Rest := TrimLeft(Copy(Lhs, WCol + Length('resourcestring'), MaxInt));
+        if Rest <> '' then
+        begin
+          PosAssign := Pos('=', Rest);
+          if PosAssign > 1 then
+            AResIdents.Add(LowerCase(Trim(Copy(Rest, 1, PosAssign - 1))));
+        end;
         Continue;
       end;
+      if InResBlock then
+      begin
+        // Abschnittswechsel beendet den Block - wortgenau (s.o.).
+        if (W = 'var') or (W = 'const') or (W = 'type')
+           or (W = 'procedure') or (W = 'function')
+           or (W = 'implementation') or (W = 'begin') or (W = 'end')
+           or (W = 'uses') then
+          InResBlock := False
+        else
+        begin
+          PosAssign := Pos('=', Lhs);
+          if PosAssign > 1 then
+            AResIdents.Add(LowerCase(Trim(Copy(Lhs, 1, PosAssign - 1))));
+          Continue;
+        end;
+      end;
+      // 'Comp.Prop := ...' einsammeln (genau EIN Punkt links, valide
+      // Idents). G2 verlangt zusaetzlich einen reinen Ident vor ';'
+      // rechts; G4 nimmt jede RHS ausser der Selbstreferenz.
+      PosAssign := Pos(':=', Lhs);
+      if PosAssign = 0 then Continue;
+      RhsVoll := Trim(Copy(Lhs, PosAssign + 2, MaxInt));
+      Lhs := Trim(Copy(Lhs, 1, PosAssign - 1));
+      if Lhs = '' then Continue;
+      PosDot := Pos('.', Lhs);
+      if (PosDot <= 1) or (Pos('.', Lhs, PosDot + 1) > 0) then Continue;
+      // System.SysUtils.IsValidIdent - TDetectorUtils hat keins.
+      if not (IsValidIdent(Copy(Lhs, 1, PosDot - 1))
+              and IsValidIdent(Copy(Lhs, PosDot + 1, MaxInt))) then Continue;
+      LhsKey := LowerCase(Lhs);
+      // G4-Kandidat: in einer Routine, ohne RHS-Selbstreferenz.
+      if (AktRoutine <> '') and (not EnthaeltWort(RhsVoll, LhsKey)) then
+        ZuwJeRout.Add(AktRoutine + '|' + LhsKey);
+      // G2 unveraendert: reiner Ident bis ';'.
+      PosSemi := Pos(';', RhsVoll);
+      if PosSemi = 0 then Continue;
+      Rhs := Trim(Copy(RhsVoll, 1, PosSemi - 1));
+      if (Rhs = '') or not IsValidIdent(Rhs) then Continue;
+      AZuweisungen.Add(LhsKey + '=' + LowerCase(Rhs));
     end;
-    // 'Comp.Prop := Ident;' einsammeln (genau EIN Punkt links, reiner
-    // Ident rechts) - O(1)-Lookup je Fund statt Regex je Fund.
-    PosAssign := Pos(':=', Lhs);
-    if PosAssign = 0 then Continue;
-    PosSemi := Pos(';', Lhs);
-    if (PosSemi = 0) or (PosSemi < PosAssign) then Continue;
-    Rhs := Trim(Copy(Lhs, PosAssign + 2, PosSemi - PosAssign - 2));
-    Lhs := Trim(Copy(Lhs, 1, PosAssign - 1));
-    if (Rhs = '') or (Lhs = '') then Continue;
-    PosDot := Pos('.', Lhs);
-    if (PosDot <= 1) or (Pos('.', Lhs, PosDot + 1) > 0) then Continue;
-    // System.SysUtils.IsValidIdent - TDetectorUtils hat keins.
-    if not (IsValidIdent(Copy(Lhs, 1, PosDot - 1))
-            and IsValidIdent(Copy(Lhs, PosDot + 1, MaxInt))
-            and IsValidIdent(Rhs)) then Continue;
-    AZuweisungen.Add(LowerCase(Lhs) + '=' + LowerCase(Rhs));
+    // G4 aufloesen: Zuweisungen aus Init-Basis-Routinen direkt, dazu
+    // aus Routinen, die eine Init-Basis-Routine ruft (eine Stufe).
+    for i := 0 to ZuwJeRout.Count - 1 do
+    begin
+      S := ZuwJeRout[i];
+      j := Pos('|', S);
+      Rest := Copy(S, 1, j - 1);          // Routinenname
+      LhsKey := Copy(S, j + 1, MaxInt);   // comp.prop
+      if (InitNamen.IndexOf(Rest) >= 0) or (InitCalls.IndexOf(Rest) >= 0) then
+        AUeberschrieben.Add(LhsKey);
+    end;
+  finally
+    ZuwJeRout.Free;
+    InitCalls.Free;
+    InitNamen.Free;
   end;
 end;
 
@@ -265,6 +441,9 @@ var
   Regime     : Boolean;
   ResIdents  : TStringList;
   Zuweisungen: TStringList;
+  Ueberschrieben : TStringList;
+  InitHandler    : TStringList;
+  Ev         : string;
   ZuwIdx     : Integer;
   RhsIdent   : string;
 begin
@@ -272,13 +451,31 @@ begin
 
   ResIdents := TStringList.Create;
   Zuweisungen := TStringList.Create;
+  Ueberschrieben := TStringList.Create;
+  InitHandler := TStringList.Create;
   All := Graph.EnumerateAll;
   try
     ResIdents.CaseSensitive := False;
     ResIdents.Sorted := True;
     ResIdents.Duplicates := dupIgnore;
     Zuweisungen.CaseSensitive := False;
-    LadeNachbarPas(FileName, Regime, ResIdents, Zuweisungen);
+    Ueberschrieben.CaseSensitive := False;
+    Ueberschrieben.Sorted := True;
+    Ueberschrieben.Duplicates := dupIgnore;
+    InitHandler.CaseSensitive := False;
+    InitHandler.Sorted := True;
+    InitHandler.Duplicates := dupIgnore;
+    // G4: die an der DFM-WURZEL gebundenen Create-/Show-Handler zaehlen
+    // als Init-Kontext - Lazarus bindet OnCreate oft an frei benannte
+    // Handler (CondFormCREATE-Klasse der Vermessung), die die
+    // Namensliste (FormCreate/...) nicht traefe.
+    for N in Graph.Roots do
+      for Ev in ['OnCreate', 'OnShow'] do
+        if N.TryGetProperty(Ev, V) and (V.Kind = pvkIdent)
+           and (Trim(V.RawValue) <> '') then
+          InitHandler.Add(LowerCase(Trim(V.RawValue)));
+    LadeNachbarPas(FileName, InitHandler, Regime, ResIdents, Zuweisungen,
+      Ueberschrieben);
 
     for N in All do
     begin
@@ -305,6 +502,13 @@ begin
         // G3 UEBERSETZUNGS-REGIME: die Form uebersetzt ihre DFM-Texte
         // zur Laufzeit - der String IST die msgid-Quelle.
         if Regime then Continue;
+        // G4 INIT-UEBERSCHREIBEN: die Unit setzt genau diese Property
+        // in einem Init-Kontext neu - der DFM-Wert erreicht den Nutzer
+        // nie (Vertrag und Grenzen im Kommentar an LadeNachbarPas;
+        // Delphi-Vermessung: 467 von 24.980, Fehlskip-Quote 1/11 in
+        // der Handpruefung gegen 14/25 der grosszuegigen Variante).
+        if Ueberschrieben.IndexOf(LowerCase(N.Name + '.' + P)) >= 0 then
+          Continue;
 
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
@@ -317,6 +521,8 @@ begin
     end;
   finally
     All.Free;
+    InitHandler.Free;
+    Ueberschrieben.Free;
     Zuweisungen.Free;
     ResIdents.Free;
   end;
