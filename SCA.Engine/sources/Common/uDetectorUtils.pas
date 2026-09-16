@@ -751,9 +751,24 @@ class function TDetectorUtils.IsTestFixturePath(const FileName: string;
 //                    '/unittest/' + '/unittests/' + '/unittesting/' ab).
 //                    Neue Regeln bitte NICHT in diesem Modus anlegen.
 const
-  TEST_PATH_RULES : array[0..27] of TTestPathRule = (
+  TEST_PATH_RULES : array[0..32] of TTestPathRule = (
     // ---- Basename ----------------------------------------------------
     (Pattern: 'uTest*.pas';      Mode: tmBaseName;     Levels: [tplFixture, tplSecret]),
+    // Lazarus A3 - .pp/.lpr-Pendants, und zwar NUR die mit gemessener
+    // Wirkung: von 14 denkbaren Pendant-Mustern treffen im ganzen
+    // Lazarus-Baum genau DREI Dateien etwas, das nicht ohnehin unter
+    // einer Pfad-Segment-Regel (test/, demos/, ... - endungsunabhaengig!)
+    // liegt: clienttest.lpr, iprotest.lpr, ContextHelpDemo.lpr. Die
+    // uebrigen Pendants waeren tote Eintraege - und tote Whitelist-
+    // Eintraege waren ein eigener Review-Major (SCA007-Whitelist).
+    // Die drei .pp-Secret-Muster kommen dazu, weil Secrets in
+    // Testdateien die teuerste FP-Klasse sind und die Muster im
+    // Segment-Fall bereits dieselbe Politik fahren.
+    (Pattern: 'uTest*.pp';       Mode: tmBaseName;     Levels: [tplFixture, tplSecret]),
+    (Pattern: '*test.pp';        Mode: tmBaseName;     Levels: [tplSecret]),
+    (Pattern: '*tests.pp';       Mode: tmBaseName;     Levels: [tplSecret]),
+    (Pattern: '*test.lpr';       Mode: tmBaseName;     Levels: [tplFixture, tplSecret]),
+    (Pattern: '*Demo.lpr';       Mode: tmBaseName;     Levels: [tplFixture]),
     (Pattern: '*_Test.pas';      Mode: tmBaseName;     Levels: [tplFixture]),
     (Pattern: '*_Tests.pas';     Mode: tmBaseName;     Levels: [tplFixture]),
     (Pattern: '*TestSuite*.pas'; Mode: tmBaseName;     Levels: [tplFixture]),

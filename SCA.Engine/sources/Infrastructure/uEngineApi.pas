@@ -801,9 +801,9 @@ begin
         end;
         try
           if Req.VcsRange <> '' then
-            Files := TVcsChanges.GetChangedPasFilesDiff(Req.Path, Req.VcsRange, Info, VcsSettings)
+            Files := TVcsChanges.GetChangedPasFilesDiff(Req.Path, Req.VcsRange, Info, VcsSettings, Req.Dialect)
           else
-            Files := TVcsChanges.GetChangedPasFilesAuto(Req.Path, Info, VcsSettings);
+            Files := TVcsChanges.GetChangedPasFilesAuto(Req.Path, Info, VcsSettings, Req.Dialect);
           try
             if Files = nil then
               // VCS-Fehler (kein Repo, kein git, Range nicht aufloesbar).

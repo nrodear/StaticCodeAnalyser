@@ -42,11 +42,13 @@ type
     [Test] procedure DelphiDefault_SammeltNurPas;
     // Die Wirkung: dlFpc nimmt *.pp dazu - rekursiv.
     [Test] procedure FpcDialekt_SammeltAuchPp;
-    // Die Grenzen bleiben: EXCLUDED_DIRS gilt auch fuer .pp,
-    // und andere Endungen (.lpr!) bleiben draussen - die kommen
-    // erst mit Paket A3.
+    // Die Grenzen bleiben: EXCLUDED_DIRS gilt auch fuer .pp.
     [Test] procedure FpcDialekt_ExcludedDirsGeltenAuchFuerPp;
-    [Test] procedure FpcDialekt_LprBleibtDraussen;
+    // A3: .lpr ist drin, .inc bleibt draussen (Produktentscheid),
+    // und der Delphi-Default bleibt bei .pas allein.
+    [Test] procedure FpcDialekt_SammeltAuchLpr;
+    [Test] procedure FpcDialekt_IncBleibtDraussen;
+    [Test] procedure DelphiDefault_LprUndPpBleibenDraussen;
   end;
 
 implementation
@@ -169,12 +171,12 @@ begin
   Assert.AreEqual<string>('a.pp', Namen[0]);
 end;
 
-procedure TTestStaticFiles.FpcDialekt_LprBleibtDraussen;
-// Scope-Pin fuer Paket A3: .lpr (Lazarus-Hauptprogramme) kommt BEWUSST
-// noch nicht mit - erst wenn die Endungs-Gates stromabwaerts
-// (Encoding-Familie, Indizes, VCS-Filter, Fixture-Masken) nachgezogen
-// sind. Faellt dieser Test rot, hat jemand A3 begonnen: dann gehoert
-// er bewusst umgestellt, nicht geloescht.
+procedure TTestStaticFiles.FpcDialekt_SammeltAuchLpr;
+// Paket A3: .lpr (Lazarus-Hauptprogramme) kommt in die dlFpc-Maske -
+// die Endungs-Gates stromabwaerts (Encoding, Indizes, VCS, Fixture-
+// Masken) sind im selben Paket nachgezogen. Dieser Test war bis A3 der
+// Scope-Pin '.lpr bleibt draussen' und ist BEWUSST umgestellt, wie
+// sein eigener Kommentar es verlangte.
 var
   Namen : TArray<string>;
   Alt   : TSourceDialect;
@@ -188,9 +190,50 @@ begin
   finally
     TStaticFiles.ScanDialect := Alt;
   end;
-  Assert.AreEqual<Integer>(1, Length(Namen),
-    '.lpr ist Paket A3, nicht A2 - heute nur .pas und .pp');
+  Assert.AreEqual<Integer>(2, Length(Namen),
+    'dlFpc sammelt seit A3 auch .lpr');
   Assert.AreEqual<string>('a.pp', Namen[0]);
+  Assert.AreEqual<string>('haupt.lpr', Namen[1]);
+end;
+
+procedure TTestStaticFiles.FpcDialekt_IncBleibtDraussen;
+// Scope-Pin fuer den PRODUKTENTSCHEID: .inc wird KEIN Scanziel. Keine
+// der 666 .inc im Lazarus-Baum ist eine Unit; 89,4 % sind per
+// {%MainUnit} deklarierte Fragmente ihrer Wirts-Unit - Fragment-
+// Parsing ohne Kontext erfaende Funde. Wer den Entscheid kippt (das
+// kann nur Nico), stellt diesen Test bewusst um.
+var
+  Namen : TArray<string>;
+  Alt   : TSourceDialect;
+begin
+  W('a.pp');
+  W('fragment.inc');
+  Alt := TStaticFiles.ScanDialect;
+  try
+    TStaticFiles.ScanDialect := dlFpc;
+    Namen := Sammle;
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+  Assert.AreEqual<Integer>(1, Length(Namen),
+    '.inc ist Include-Traeger, kein Scanziel (Produktentscheid A3)');
+  Assert.AreEqual<string>('a.pp', Namen[0]);
+end;
+
+procedure TTestStaticFiles.DelphiDefault_LprUndPpBleibenDraussen;
+// DIE KLAMMER der A3-Erweiterung, Delphi-Seite: der Default sammelt
+// weiterhin NUR .pas - der Delphi-Korpus enthaelt 145 .lpr und 9 .pp,
+// jede stille Aufnahme bewegte den Referenzlauf.
+var
+  Namen : TArray<string>;
+begin
+  W('a.pas');
+  W('b.pp');
+  W('haupt.lpr');
+  Namen := Sammle;
+  Assert.AreEqual<Integer>(1, Length(Namen),
+    'dlDelphi sammelt auch nach A3 nur .pas');
+  Assert.AreEqual<string>('a.pas', Namen[0]);
 end;
 
 initialization

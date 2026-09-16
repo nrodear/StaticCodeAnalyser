@@ -72,6 +72,20 @@ type
     // sonst die dokumentierte Quelle abhaengiger Tests.
     class property ScanDialect: TSourceDialect read FScanDialect
       write FScanDialect;
+
+    // DIE eine Endungsfrage des aktiven Dialekts (Lazarus-Paket A3):
+    // '.pas' immer; '.pp' und '.lpr' nur bei dlFpc. Alle nachgelagerten
+    // Endungs-Gates (DfmRepo-/GuidIndex, Encoding-Familie) fragen HIER,
+    // statt eigene '.pas'-Literale zu fuehren - sonst degradiert jede
+    // neue Endung stillschweigend (A2 hatte genau diese Degradationen
+    // dokumentiert: .pp ohne Encoding-Funde, .pp nicht in den Indizes).
+    //
+    // Bei dlDelphi ist das Verhalten byte-gleich zum alten Literal -
+    // der or-Zweig ist kalt. uVcsChanges bekommt den Dialekt als
+    // PARAMETER statt ueber diesen State: die VCS-Filter laufen in den
+    // Wirten VOR TAnalysisSession.Run, der View-State ist dort noch
+    // der des Vorlaufs.
+    class function IsUnitLikeFile(const AFileName: string): Boolean; static;
   end;
 
 implementation
@@ -147,18 +161,17 @@ begin
             Continue;
           end;
           {$WARN SYMBOL_PLATFORM ON}
-          // Dialekt-Maske (Lazarus-Paket A2): dlDelphi nimmt wie eh und
-          // je nur *.pas - die erste Bedingung ist der unveraenderte
-          // Bestand, der or-Zweig ist dort kalt (Kurzschluss), der
-          // Default-Lauf bleibt byte-identisch. dlFpc nimmt *.pp dazu:
-          // im Lazarus-Baum sind das 676 Dateien / ~399k Code-Zeilen,
-          // 614 davon echte Units mit 'unit'-Kopf. .lpr und .inc kommen
-          // BEWUSST noch nicht (Paket A3 - .lpr braucht die
-          // Endungs-Gates, .inc einen Produktentscheid, weil keine der
-          // 666 .inc eine Unit ist).
-          if MatchesMask(SearchRec.Name, '*.pas')
-             or ((FScanDialect = dlFpc)
-                 and MatchesMask(SearchRec.Name, '*.pp')) then
+          // Dialekt-Maske (Lazarus-Pakete A2+A3): dlDelphi nimmt wie eh
+          // und je nur *.pas - IsUnitLikeFile prueft .pas zuerst, der
+          // Rest ist dort kalt, der Default-Lauf bleibt byte-identisch.
+          // dlFpc nimmt *.pp dazu (A2: 676 Dateien / ~399k Code-Zeilen
+          // im Lazarus-Baum) und *.lpr (A3: die Lazarus-Hauptprogramme,
+          // 484 Dateien / ~46k Code-Zeilen, 482 davon mit program-Kopf).
+          // .inc kommt BEWUSST nicht: keine der 666 .inc ist eine Unit,
+          // 89,4 % sind per {%MainUnit} deklarierte Fragmente einer
+          // Wirts-Unit - Fragment-Parsing ohne Kontext erfaende Funde
+          // (Produktentscheid im Konzept, Abschnitt A3).
+          if IsUnitLikeFile(SearchRec.Name) then
           begin
             FullPath := IncludeTrailingPathDelimiter(Path) + SearchRec.Name;
             // Benutzer-Ignore-Liste: Datei wird stillschweigend uebersprungen.
@@ -424,6 +437,19 @@ begin
     Inc(Steps);
   end;
   Result := Fallback;
+end;
+
+class function TStaticFiles.IsUnitLikeFile(const AFileName: string): Boolean;
+// '.pas' zuerst - bei dlDelphi ist alles danach kalt und das Verhalten
+// gleich dem alten MatchesMask('*.pas'). Vertrag und Konsumenten: siehe
+// Deklarationskommentar.
+var
+  Low : string;
+begin
+  Low := LowerCase(AFileName);
+  Result := Low.EndsWith('.pas');
+  if (not Result) and (FScanDialect = dlFpc) then
+    Result := Low.EndsWith('.pp') or Low.EndsWith('.lpr');
 end;
 
 end.

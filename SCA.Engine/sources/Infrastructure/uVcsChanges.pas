@@ -1,4 +1,4 @@
-unit uVcsChanges;
+﻿unit uVcsChanges;
 
 // Ermittelt geaenderte .pas-Dateien aus einem VCS-Repository (Git oder SVN).
 //
@@ -20,6 +20,7 @@ interface
 
 uses
   System.Classes, System.SysUtils,
+  uSCAConsts,      // TSourceDialect - Dialekt-Endungen (Lazarus A3)
   uRepoSettings;
 
 type
@@ -45,14 +46,22 @@ type
     // Zustand, den die Exit-4-Mechanik fuer Lesefehler ausschliesst.
     // Kein Base-Branch ist KEIN Fehler (dokumentierter Rueckfall auf
     // den Working-Tree).
+    // ADialect (Lazarus A3): dlFpc nimmt .pp/.lpr wie .pas. Als
+    // PARAMETER statt ueber TStaticFiles.ScanDialect, weil die
+    // VCS-Filter in den Wirten VOR TAnalysisSession.Run laufen -
+    // der View-State traegt dort noch den Vorlauf. Default dlDelphi
+    // = alle Bestandsaufrufer unveraendert (Form/IDE bekommen den
+    // Dialekt erst mit der A6-UI).
     class function GetChangedPasFiles(const ARepoRoot: string;
       AKind: TVcsKind; out AInfo: string;
-      ASettings: TRepoSettings = nil): TStringList; static;
+      ASettings: TRepoSettings = nil;
+      ADialect: TSourceDialect = dlDelphi): TStringList; static;
 
     // Kombi-Aufruf: Detect + GetChanged in einem Schritt.
     class function GetChangedPasFilesAuto(const APath: string;
       out AInfo: string;
-      ASettings: TRepoSettings = nil): TStringList; static;
+      ASettings: TRepoSettings = nil;
+      ADialect: TSourceDialect = dlDelphi): TStringList; static;
 
     // Diff-Mode A<->B: liefert alle .pas/.dfm-Dateien die zwischen den
     // beiden Commits geaendert wurden. ARange ist eine git-Ref-Range im
@@ -71,7 +80,8 @@ type
     // fuer committed-vs-committed Vergleiche (PR-Review-Use-Case).
     class function GetChangedPasFilesDiff(const APath, ARange: string;
       out AInfo: string;
-      ASettings: TRepoSettings = nil): TStringList; static;
+      ASettings: TRepoSettings = nil;
+      ADialect: TSourceDialect = dlDelphi): TStringList; static;
   private
     // Ruft '<exe> <args>' im RepoRoot auf und gibt stdout zurueck.
     // Result True wenn Exit-Code 0 war.
@@ -85,9 +95,11 @@ type
     class function ResolveExe(const AName: string): string; static;
 
     class function GetGitChanges(const ARepoRoot: string;
-      ASettings: TRepoSettings; out AInfo: string): TStringList; static;
+      ASettings: TRepoSettings; out AInfo: string;
+      ADialect: TSourceDialect): TStringList; static;
     class function GetSvnChanges(const ARepoRoot: string;
-      ASettings: TRepoSettings; out AInfo: string): TStringList; static;
+      ASettings: TRepoSettings; out AInfo: string;
+      ADialect: TSourceDialect): TStringList; static;
   end;
 
 implementation
@@ -321,8 +333,25 @@ end;
 
 { ---- Git ---- }
 
+// Endungsfrage der VCS-Filter (Lazarus A3): '.pas' immer, '.pp' und
+// '.lpr' nur bei dlFpc. Bewusst NICHT TStaticFiles.IsUnitLikeFile -
+// die liest den View-State, der zur VCS-Filter-Zeit noch nicht
+// gesetzt ist (s. Kommentar an GetChangedPasFiles). Der Dialekt
+// kommt hier als Parameter durch die ganze Kette.
+function EndetAufUnitEndung(const APath: string;
+  ADialect: TSourceDialect): Boolean;
+var
+  Low : string;
+begin
+  Low := APath.ToLower;
+  Result := Low.EndsWith('.pas');
+  if (not Result) and (ADialect = dlFpc) then
+    Result := Low.EndsWith('.pp') or Low.EndsWith('.lpr');
+end;
+
 class function TVcsChanges.GetGitChanges(const ARepoRoot: string;
-  ASettings: TRepoSettings; out AInfo: string): TStringList;
+  ASettings: TRepoSettings; out AInfo: string;
+  ADialect: TSourceDialect): TStringList;
 var
   Output, Base : string;
   ExitCode     : Cardinal;
@@ -339,7 +368,7 @@ var
   var P, T, AsPas: string;
   begin
     T := Trim(ARelPath);
-    if T.ToLower.EndsWith('.pas') then
+    if EndetAufUnitEndung(T, ADialect) then
       P := IncludeTrailingPathDelimiter(ARepoRoot) + T.Replace('/', '\')
     else if T.ToLower.EndsWith('.dfm') then
     begin
@@ -471,7 +500,8 @@ end;
 { ---- SVN ---- }
 
 class function TVcsChanges.GetSvnChanges(const ARepoRoot: string;
-  ASettings: TRepoSettings; out AInfo: string): TStringList;
+  ASettings: TRepoSettings; out AInfo: string;
+  ADialect: TSourceDialect): TStringList;
 // SVN hat kein Branch-Diff-Konzept wie Git (Branches sind Repository-Kopien).
 // Wir liefern nur Working-Copy-Aenderungen via 'svn status'.
 //
@@ -498,7 +528,7 @@ var
   var P, T, AsPas: string;
   begin
     T := Trim(ARelPath);
-    if T.ToLower.EndsWith('.pas') then
+    if EndetAufUnitEndung(T, ADialect) then
     begin
       // svn liefert i.d.R. relative Pfade mit Backslash unter Windows
       if TPath.IsPathRooted(T) then
@@ -582,11 +612,11 @@ end;
 
 class function TVcsChanges.GetChangedPasFiles(const ARepoRoot: string;
   AKind: TVcsKind; out AInfo: string;
-  ASettings: TRepoSettings): TStringList;
+  ASettings: TRepoSettings; ADialect: TSourceDialect): TStringList;
 begin
   case AKind of
-    vkGit : Result := GetGitChanges(ARepoRoot, ASettings, AInfo);
-    vkSvn : Result := GetSvnChanges(ARepoRoot, ASettings, AInfo);
+    vkGit : Result := GetGitChanges(ARepoRoot, ASettings, AInfo, ADialect);
+    vkSvn : Result := GetSvnChanges(ARepoRoot, ASettings, AInfo, ADialect);
   else
     // vkNone explizit uebergeben: kein Repo ist hier ein FEHLER des
     // Aufrufs, keine leere Aenderungsmenge.
@@ -597,7 +627,7 @@ end;
 
 class function TVcsChanges.GetChangedPasFilesAuto(const APath: string;
   out AInfo: string;
-  ASettings: TRepoSettings): TStringList;
+  ASettings: TRepoSettings; ADialect: TSourceDialect): TStringList;
 var
   Root : string;
   Kind : TVcsKind;
@@ -611,12 +641,12 @@ begin
     AInfo  := 'Kein Git-/SVN-Repository in oder oberhalb von "' + APath + '"';
     Exit;
   end;
-  Result := GetChangedPasFiles(Root, Kind, AInfo, ASettings);
+  Result := GetChangedPasFiles(Root, Kind, AInfo, ASettings, ADialect);
 end;
 
 class function TVcsChanges.GetChangedPasFilesDiff(const APath, ARange: string;
   out AInfo: string;
-  ASettings: TRepoSettings = nil): TStringList;
+  ASettings: TRepoSettings; ADialect: TSourceDialect): TStringList;
 // Strategie:
 //   1. APath -> git-Repo-Root finden (DetectRepo, vkGit erwartet)
 //   2. git diff --name-only --diff-filter=ACMR <ARange>
@@ -693,7 +723,7 @@ begin
     begin
       var T := Trim(Line);
       if T = '' then Continue;
-      if T.ToLower.EndsWith('.pas') then
+      if EndetAufUnitEndung(T, ADialect) then
       begin
         Path := IncludeTrailingPathDelimiter(Root) + T.Replace('/', '\');
         if FileExists(Path) then Result.Add(Path);

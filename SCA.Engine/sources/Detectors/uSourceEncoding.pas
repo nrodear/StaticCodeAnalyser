@@ -1,4 +1,4 @@
-unit uSourceEncoding;
+﻿unit uSourceEncoding;
 
 // Detektor-Familie "Datei-Encoding / Unicode-Sicherheit" (Welle 1 + 2).
 // Prueft die GANZE Datei auf Byte-Ebene (eigener Read via AnalyzeFileEncoding -
@@ -70,7 +70,8 @@ implementation
 // noinspection-file MultipleExit, TooLongLine, UnsortedUses, UnusedParameter
 
 uses
-  System.Classes, System.Character, System.IOUtils, uFileTextCache, uLexer;
+  System.Classes, System.Character, System.IOUtils, uFileTextCache, uLexer,
+  uStaticFiles;   // IsUnitLikeFile - Dialekt-Endungen (Lazarus A3)
 
 function IsLegacyDosEofOnly(const FileName: string): Boolean;
 // FP-Gate (Real-World-Audit 2026-07-31, FP-Klasse 'legacy-dos-eof-marker'):
@@ -125,7 +126,13 @@ var
   Ext : string;
 begin
   Ext := LowerCase(ExtractFileExt(FileName));
-  Result := (Ext = '.pas') or (Ext = '.dpr') or (Ext = '.dpk') or (Ext = '.inc');
+  // Lazarus A3: die Dialekt-Endungen (.pp/.lpr bei dlFpc) kommen von
+  // der EINEN Endungsfrage in TStaticFiles statt als fuenfte und
+  // sechste Literale hier - A2 hatte dokumentiert, dass gesammelte
+  // .pp sonst keine Encoding-Funde bekommen. Bei dlDelphi ist der
+  // Zusatz kalt, die Vierer-Liste verhaelt sich wie seit jeher.
+  Result := (Ext = '.pas') or (Ext = '.dpr') or (Ext = '.dpk') or (Ext = '.inc')
+    or TStaticFiles.IsUnitLikeFile(FileName);
 end;
 
 function LineOr1(L: Integer): Integer; inline;
