@@ -680,10 +680,13 @@ begin
   WriteLn('Input:');
   WriteLn('  --path <dir>          Project root, recursive scan (default mode = --full)');
   WriteLn('  --file <pas>          Single .pas file');
-  WriteLn('  --project <dproj>     Scan the project''s DCCReference file list');
-  WriteLn('                        (search-path units are NOT included - the list');
-  WriteLn('                        is exactly what the .dproj references)');
-  WriteLn('  --project-group <groupproj>');
+  WriteLn('  --project <dproj|lpi|lpk>');
+  WriteLn('                        Scan the project''s file list (DCCReference for');
+  WriteLn('                        .dproj; Lazarus Units/Files for .lpi/.lpk - the');
+  WriteLn('                        Lazarus forms imply --dialect=fpc). Search-path');
+  WriteLn('                        units are NOT included - the list is exactly');
+  WriteLn('                        what the project file references.');
+  WriteLn('  --project-group <groupproj|lpg>');
   WriteLn('                        Scan all projects of the group (deduplicated)');
   WriteLn('  --index-root <dir>    Build the cross-unit index over this directory');
   WriteLn('                        while analysing only the file list (default for');
