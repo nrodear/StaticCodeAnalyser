@@ -274,6 +274,9 @@ type
     [Test] procedure TpObjectConstrPrefix_Parenless_NotReported;
     [Test] procedure ReadBeforeConstruct_StillReported;
     [Test] procedure NonConstrMember_OnlyUse_StillReported;
+    // FPC-{%H-}-Suppression (Vertrag an RawLineHasHMinusFor)
+    [Test] procedure HMinusMarkedRead_NotReported;
+    [Test] procedure HMinusUnmarkedReadOfSameVar_StillReported;
   end;
 
 implementation
@@ -4799,6 +4802,62 @@ begin
   try Assert.AreEqual<Integer>(1,
     TFindingHelper.Count(F, fkUninitVar),
     'Nicht-Init-Verb gated nicht');
+  finally F.Free; end;
+end;
+
+
+// --- FPC-{%H-}-Suppression (2026-09-17, Vertrag an RawLineHasHMinusFor) ---
+
+procedure TTestUninitVar.HMinusMarkedRead_NotReported;
+// Der Entwickler bindet {%H-} an das Vorkommen (mormot-Muster
+// 'cached := v xor {%H-}cache[h]' - LHS ist eine ANDERE Variable,
+// sonst waere die Zeile der Write-Zeilen-Skip; und kein Call-Arg,
+// sonst griffe der Pessimistic-Write. Beide Fallen an der Exe
+// gemessen). Explizit deklarierte Absicht, wird wie noinspection
+// respektiert. Vor dem Gate: 1 Fund (ROT).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Demo;'#13#10 +
+  'var'#13#10 +
+  '  x, cache: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  x := 1 xor {%H-}cache;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkUninitVar),
+    'markiertes Read-Vorkommen unterdrueckt den Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.HMinusUnmarkedReadOfSameVar_StillReported;
+// DIE KLAMMER: der Marker unterdrueckt nur SEIN Vorkommen - das
+// UNMARKIERTE Read derselben (nie geschriebenen) Variable auf der
+// Folgezeile bleibt ein Fund. Eine variablenWEITE Suppression
+// gaebe hier 0.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Demo;'#13#10 +
+  'var'#13#10 +
+  '  x, y, b: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  x := {%H-}b + 1;'#13#10 +
+  '  y := b + 2;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkUninitVar),
+    'Marker wirkt je Zeile, nicht variablenweit');
   finally F.Free; end;
 end;
 

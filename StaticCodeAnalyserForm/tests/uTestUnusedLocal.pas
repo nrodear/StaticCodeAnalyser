@@ -42,6 +42,9 @@ type
     [Test] procedure Local_ProceduralTypeParam_NotReported;
     [Test] procedure Local_VarWithProceduralType_NotReported;
     [Test] procedure Local_NameAlsoInsideCall_StillReported;
+    // FPC-{%H-}-Suppression (Vertrag an DeclLineHasHMinusFor)
+    [Test] procedure HMinusMarkedDecl_NotReported;
+    [Test] procedure HMinusFirstOfPair_SecondStillReported;
   end;
 
 implementation
@@ -439,6 +442,57 @@ begin
     'Signaturname in einer Variablendeklaration ist keine Variable');
   finally F.Free; end;
 end;
+
+// --- FPC-{%H-}-Suppression (2026-09-17, Vertrag an DeclLineHasHMinusFor) ---
+
+procedure TTestUnusedLocal.HMinusMarkedDecl_NotReported;
+// Lazarus-Idiom (cmdlinedebugger.pp): der Marker an der
+// Deklaration unterdrueckt den Unused-Hint des FPC - und damit
+// auch unseren. Vor dem Gate: 1 Fund (ROT).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Demo;'#13#10 +
+  'var'#13#10 +
+  '  {%H-}spare: string;'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkUnusedLocalVar),
+    'markierte Deklaration unterdrueckt den Unused-Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedLocal.HMinusFirstOfPair_SecondStillReported;
+// DIE KLAMMER: in 'var {%H-}eins, zwei' bindet der Marker nur
+// an EINS - zwei bleibt ein Fund. Der Namens-Anker der Pruefung
+// verhindert die Zeilen-Pauschale.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Demo;'#13#10 +
+  'var'#13#10 +
+  '  {%H-}eins, zwei: string;'#13#10 +
+  'begin'#13#10 +
+  '  Beep;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkUnusedLocalVar),
+    'Marker bindet an den einen Namen, nicht an die Zeile');
+  finally F.Free; end;
+end;
+
 
 procedure TTestUnusedLocal.Local_NameAlsoInsideCall_StillReported;
 // TP-GEGENPROBE, und der Grund fuer die Wortgrenzen-Pruefung: die

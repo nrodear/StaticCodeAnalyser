@@ -78,6 +78,40 @@ end;
 // procedure/function-Header. Der AST kann beides als nkLocalVar liefern
 // weil ParseMethodImpl-Cleanup nested-Methods nicht sauber traegt;
 // dieser Filter haelt FPs am Reporting-Punkt ab.
+function DeclLineHasHMinusFor(Lines: TStringList; LineNo1: Integer;
+  const AName: string): Boolean;
+// {%H-}-SUPPRESSION (Lazarus-Paket, 2026-09-17): FPC/Lazarus bindet
+// den Marker an das FOLGENDE Symbol ('var {%H-}LineEndMatch: String;')
+// - der Entwickler unterdrueckt dort explizit den Unused-/Hint des
+// Compilers; das respektieren wir wie einen noinspection-Marker.
+// ROHE Zeile, weil der Strip {..}-Direktiven blankt. ZWEITE Kopie des
+// Musters (Erstfassung: uUninitVar.RawLineHasHMinusFor, dort mit der
+// kompletten Vermessung) - Rule of Three, bei einer dritten Kopie
+// extrahieren. Bindet an GENAU den markierten Namen: 'var {%H-}a, b'
+// unterdrueckt a, nicht b.
+var
+  Raw : string;
+  NameLow : string;
+  P, Q : Integer;
+begin
+  Result := False;
+  if (Lines = nil) or (LineNo1 <= 0) or (LineNo1 > Lines.Count) then Exit;
+  Raw := LowerCase(Lines[LineNo1 - 1]);
+  NameLow := LowerCase(AName);
+  P := 0;
+  repeat
+    P := Pos('{%h-}', Raw, P + 1);
+    if P = 0 then Exit;
+    Q := P + 5;
+    while (Q <= Length(Raw)) and (Raw[Q] = ' ') do Inc(Q);
+    if (Copy(Raw, Q, Length(NameLow)) = NameLow)
+       and ((Q + Length(NameLow) > Length(Raw))
+            or not CharInSet(Raw[Q + Length(NameLow)],
+                             ['a'..'z', '0'..'9', '_'])) then
+      Exit(True);
+  until False;
+end;
+
 function LooksLikeRealLocalVar(Lines: TStringList; LineNo1: Integer;
   const AName: string): Boolean;
 var
@@ -406,6 +440,8 @@ begin
         // nested Routine und KEIN unused Local - der AST-Knoten kommt
         // nur durch eine Parser-Eigenart in den nkLocalVar-Strom.
         if not LooksLikeRealLocalVar(Lines, LV.Line, LV.Name) then Continue;
+        // {%H-}-Suppression (Vertrag an DeclLineHasHMinusFor).
+        if DeclLineHasHMinusFor(Lines, LV.Line, LV.Name) then Continue;
 
         // QUELLTEXT-GEGENPROBE (Audit 2026-07-31, siehe Block oben).
         // Einmalige Lazy-Initialisierung fuer diese Routine.
