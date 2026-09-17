@@ -1,4 +1,4 @@
-unit uDfmLayerViolation;
+﻿unit uDfmLayerViolation;
 
 // Detektor: Eingabe-Control liegt direkt auf einer TForm statt eingebettet
 // in einem TPanel / TGroupBox / TPageControl.
@@ -44,7 +44,8 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.StrUtils;
+  System.StrUtils,
+  uStaticFiles;   // ScanDialect (FPC-Dialekt-Gate 2026-09-18)
 
 const
   // Input-Controls, die im Designer typisch in einem Panel landen sollten.
@@ -84,6 +85,14 @@ var
   F     : TLeakFinding;
   I     : Integer;
 begin
+  // FPC-DIALEKT-GATE (A6/C3, 2026-09-18 - Kapitel-5-Produktentscheid 3,
+  // autonom entschieden): unter LCL sitzen Eingabefelder KONVENTIONS-
+  // GEMAESS direkt auf der Form - 55,7 % der Korpus-LFM tun es, die
+  // 364 fpc-Funde (rw_laz27, deckungsgleich mit der Konzeptmessung)
+  // waeren 364 Ratschlaege gegen die Plattform-Konvention. Gleiches
+  // Muster wie SCA129: View-State-gebunden, keine Datei-Heuristik;
+  // Delphi (505 Funde) und der Default-Arm bleiben unberuehrt.
+  if TStaticFiles.ScanDialect = dlFpc then Exit;
   if Graph = nil then Exit;
   if Graph.Roots.Count = 0 then Exit;
 

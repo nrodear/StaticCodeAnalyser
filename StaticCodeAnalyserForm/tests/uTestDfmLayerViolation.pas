@@ -1,4 +1,4 @@
-unit uTestDfmLayerViolation;
+﻿unit uTestDfmLayerViolation;
 
 interface
 
@@ -24,6 +24,9 @@ type
     // Testluecke 135: die Wurzel-Suffix-Heuristik als Grenze festnageln
     [Test] procedure Test_IdeDefaultRootName_KnownGap_NoFinding;
     [Test] procedure Test_FormSuffixRootName_SameLayout_Reported;
+    // FPC-Dialekt-Gate (A6/C3)
+    [Test] procedure FpcDialect_EditOnForm_NotReported;
+    [Test] procedure DelphiDialect_EditOnForm_StillReported;
   end;
 
 implementation
@@ -31,6 +34,7 @@ implementation
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12, uDfmParser, uComponentGraph,
+  uStaticFiles,   // ScanDialect (FPC-Dialekt-Gate-Tests)
   uDfmLayerViolation;
 
 function RunOn(const Src: string): TObjectList<TLeakFinding>;
@@ -219,6 +223,49 @@ begin
       + 'verlaesst die Datei');
   finally F.Free; end;
 end;
+
+procedure TTestDfmLayerViolation.FpcDialect_EditOnForm_NotReported;
+// FPC-Dialekt-Gate (A6/C3, Vertrag am Detektor): unter LCL ist das
+// Eingabefeld direkt auf der Form die KONVENTION (55,7 % der
+// Korpus-LFM). Globaler View-State -> try/finally-Restaurierung.
+// Vor dem Gate: 1 Fund (dieser Test war ROT).
+var
+  F : TObjectList<TLeakFinding>;
+  Alt : TSourceDialect;
+begin
+  Alt := TStaticFiles.ScanDialect;
+  TStaticFiles.ScanDialect := dlFpc;
+  try
+    F := RunOn('object frmMain: TMainForm object ed: TEdit end end');
+    try
+      Assert.AreEqual<Integer>(0, Count(F, fkDfmLayerViolation),
+        'unter dlFpc meldet SCA041 nicht');
+    finally F.Free; end;
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+end;
+
+procedure TTestDfmLayerViolation.DelphiDialect_EditOnForm_StillReported;
+// DIE KLAMMER: explizit dlDelphi - der Delphi-Pfad (505
+// Korpusfunde) bleibt vollstaendig.
+var
+  F : TObjectList<TLeakFinding>;
+  Alt : TSourceDialect;
+begin
+  Alt := TStaticFiles.ScanDialect;
+  TStaticFiles.ScanDialect := dlDelphi;
+  try
+    F := RunOn('object frmMain: TMainForm object ed: TEdit end end');
+    try
+      Assert.AreEqual<Integer>(1, Count(F, fkDfmLayerViolation),
+        'unter dlDelphi bleibt der Fund');
+    finally F.Free; end;
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+end;
+
 
 procedure TTestDfmLayerViolation.Test_FormSuffixRootName_SameLayout_Reported;
 // Die Gegenprobe, und sie traegt die Aussage: GLEICHES Layout, nur die
