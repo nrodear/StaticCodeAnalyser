@@ -1,4 +1,4 @@
-unit uTestStaticFiles;
+﻿unit uTestStaticFiles;
 
 // Tests fuer die Dateisammlung (TStaticFiles) - die ERSTEN ueberhaupt:
 // bis zum Lazarus-Paket A2 (2026-09-16) hatte uStaticFiles null
@@ -55,6 +55,8 @@ type
     [Test] procedure PairedFormFile_DfmHatVorrang;
     [Test] procedure PairedUnitFile_Fpc_FindetPpSchwester;
     [Test] procedure IsFormFileName_FolgtDemDialekt;
+    // P4.6: FindProjectRoot-Lazarus-Marker (A6/C5)
+    [Test] procedure FindProjectRoot_LpiZaehltNurImFpcDialekt;
   end;
 
 implementation
@@ -315,6 +317,45 @@ begin
     TStaticFiles.ScanDialect := Alt;
   end;
 end;
+
+procedure TTestStaticFiles.FindProjectRoot_LpiZaehltNurImFpcDialekt;
+// P4.6 (A6/C5): .lpi/.lpk/.lpr sind Wurzel-Marker NUR unter dlFpc -
+// der Delphi-Korpus traegt 195 .lpi, dialektfrei waere das eine
+// Index-Root-Verschiebung fuer Delphi-Einzeldatei-Scans (Konzept
+// nennt P4.6 selbst riskant). View-State mit try/finally.
+var
+  Dir, Sub, Root : string;
+  Alt : TSourceDialect;
+begin
+  Dir := TPath.Combine(TPath.GetTempPath,
+    'sca_lpiroot_' + TGUID.NewGuid.ToString.Trim(['{', '}']));
+  Sub := TPath.Combine(Dir, 'src');
+  TDirectory.CreateDirectory(Sub);
+  try
+    TFile.WriteAllText(TPath.Combine(Dir, 'p.lpi'), '<CONFIG/>');
+    TFile.WriteAllText(TPath.Combine(Sub, 'a.pas'), 'unit a;');
+    Alt := TStaticFiles.ScanDialect;
+    TStaticFiles.ScanDialect := dlFpc;
+    try
+      Root := TStaticFiles.FindProjectRoot(TPath.Combine(Sub, 'a.pas'));
+      Assert.AreEqual(IncludeTrailingPathDelimiter(Dir), Root,
+        'unter dlFpc ist das .lpi-Verzeichnis die Wurzel');
+      TStaticFiles.ScanDialect := dlDelphi;
+      Root := TStaticFiles.FindProjectRoot(TPath.Combine(Sub, 'a.pas'));
+      // KLAMMER: unter dlDelphi zaehlt die .lpi NICHT. Bewusst nur
+      // AreNotEqual gegen das .lpi-Verzeichnis: was stattdessen
+      // gefunden wird (Sub-Fallback oder ein zufaelliges .git/.dproj
+      // OBERHALB des Temp-Baums), haengt an der Maschine.
+      Assert.AreNotEqual(IncludeTrailingPathDelimiter(Dir), Root,
+        'unter dlDelphi ignoriert die Wurzelsuche .lpi-Dateien');
+    finally
+      TStaticFiles.ScanDialect := Alt;
+    end;
+  finally
+    try TDirectory.Delete(Dir, True); except end;
+  end;
+end;
+
 
 procedure TTestStaticFiles.IsFormFileName_FolgtDemDialekt;
 var

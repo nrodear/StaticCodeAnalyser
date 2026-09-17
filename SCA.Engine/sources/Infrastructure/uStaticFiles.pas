@@ -435,6 +435,31 @@ class function TStaticFiles.FindProjectRoot(const AFilePath: string): string;
       FindClose(SR);
       Exit(True);
     end;
+    // P4.6 (A6/C5, 2026-09-18), NUR dlFpc: die Lazarus-Pendants
+    // .lpi/.lpk/.lpr zaehlen als Projektwurzel-Marker. Das Konzept
+    // stuft die dialektFREIE Variante als riskant ein - der
+    // Delphi-Korpus traegt 195 .lpi, ein frueherer Wurzel-Treffer
+    // aenderte dort den Index-Root von Einzeldatei-Scans und damit
+    // die Cross-Unit-Sicht. Hinter dem View-State ist der
+    // Delphi-Pfad mechanisch unveraendert.
+    if ScanDialect = dlFpc then
+    begin
+      if FindFirst(IncludeTrailingPathDelimiter(Dir) + '*.lpi', faAnyFile, SR) = 0 then
+      begin
+        FindClose(SR);
+        Exit(True);
+      end;
+      if FindFirst(IncludeTrailingPathDelimiter(Dir) + '*.lpk', faAnyFile, SR) = 0 then
+      begin
+        FindClose(SR);
+        Exit(True);
+      end;
+      if FindFirst(IncludeTrailingPathDelimiter(Dir) + '*.lpr', faAnyFile, SR) = 0 then
+      begin
+        FindClose(SR);
+        Exit(True);
+      end;
+    end;
   end;
 
   function IsVcsRoot(const Dir: string): Boolean;
