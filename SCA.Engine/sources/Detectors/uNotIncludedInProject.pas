@@ -558,6 +558,15 @@ begin
          and (not ProjSet.ContainsKey(NormKey(Comp)))
          and (not UsedOrphans.ContainsKey(NormKey(Comp))) then
         Comp := ChangeFileExt(F, '.pp');
+      // A5 (2026-09-17): auch das PROGRAMM kann der Formdatei-Host
+      // sein - Lazarus legt die Hauptform-.lfm neben die .lpr
+      // (Korpusfall examples/affinetransforms: project1.lfm +
+      // project1.lpr). Ohne diese Stufe war die .lfm im .lpi-Scan
+      // ein Orphan-FP des frischen A5-Pfads.
+      if (TStaticFiles.ScanDialect = dlFpc)
+         and (not ProjSet.ContainsKey(NormKey(Comp)))
+         and (not UsedOrphans.ContainsKey(NormKey(Comp))) then
+        Comp := ChangeFileExt(F, '.lpr');
       if ProjSet.ContainsKey(NormKey(Comp)) then Continue;
       if UsedOrphans.ContainsKey(NormKey(Comp)) then
         Orphans.AddObject(F, TObject(3))
@@ -578,15 +587,15 @@ begin
            begin
              AResults.Add(TLeakFinding.New(Orphans[i], '', 1,
                'Source file is in the project folder but not referenced by the ' +
-               'project (.dproj/.groupproj) - orphaned / dead unit?',
+               'project file - orphaned / dead unit?',
                fkNotIncludedInProject));
              Inc(Result);
            end;
         1: if Emit194 then
            begin
              AResults.Add(TLeakFinding.New(Orphans[i], '', 1,
-               'Form file (.dfm) is in the project folder but its unit is not ' +
-               'referenced by the project (.dproj/.groupproj) - orphaned form?',
+               'Form file (.dfm/.lfm) is in the project folder but its unit is ' +
+               'not referenced by the project file - orphaned form?',
                fkNotIncludedInProject));
              Inc(Result);
            end;
@@ -594,17 +603,17 @@ begin
            begin
              AResults.Add(TLeakFinding.New(Orphans[i], '', 1,
                'Unit is used by the project (via uses, compiled through the ' +
-               'search path) but not included in the project file ' +
-               '(.dproj/.groupproj) - add it to the project',
+               'search path) but not included in the project file - ' +
+               'add it to the project',
                fkUsedButNotInProject));
              Inc(Result);
            end;
         3: if Emit195 then
            begin
              AResults.Add(TLeakFinding.New(Orphans[i], '', 1,
-               'Form file (.dfm) belongs to a unit that is used by the ' +
-               'project but not included in the project file ' +
-               '(.dproj/.groupproj) - add the unit (and its form) to the project',
+               'Form file (.dfm/.lfm) belongs to a unit that is used by the ' +
+               'project but not included in the project file - ' +
+               'add the unit (and its form) to the project',
                fkUsedButNotInProject));
              Inc(Result);
            end;

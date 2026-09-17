@@ -1,4 +1,4 @@
-unit uTestNotIncludedInProject;
+﻿unit uTestNotIncludedInProject;
 
 // Tests fuer SCA194 - TNotIncludedInProjectDetector (uNotIncludedInProject).
 // Fixtures on-the-fly in ein Temp-Verzeichnis (kein Repo-Fixture-Sync).
@@ -61,13 +61,15 @@ type
     [Test] procedure GroupMemberDprRoot_UsedUnit_Flagged195;
     [Test] procedure UsesInMultilineString_DoesNotCount;
     [Test] procedure DpkContainsUnit_Flagged195;
+    [Test] procedure LfmNebenLpr_ImFpcDialekt_KeinOrphan;
   end;
 
 implementation
 
 uses
   System.SysUtils, System.Classes, System.IOUtils, System.Generics.Collections,
-  uMethodd12, uSCAConsts, uIgnoreList, uNotIncludedInProject;
+  uMethodd12, uSCAConsts, uIgnoreList, uNotIncludedInProject,
+  uStaticFiles;   // ScanDialect (A5-.lpr-Host-Test)
 
 procedure TTestNotIncludedInProject.Setup;
 begin
@@ -913,6 +915,36 @@ begin
     found.Free;
   end;
 end;
+
+procedure TTestNotIncludedInProject.LfmNebenLpr_ImFpcDialekt_KeinOrphan;
+// A5-Korpusfall examples/affinetransforms: die Hauptform-.lfm
+// liegt neben der .lpr. Die Formdatei-Host-Kaskade prueft seit A5
+// .pas -> .pp -> .lpr; ohne die dritte Stufe war project1.lfm im
+// .lpi-Probelauf ein Orphan-FP (an der Exe gemessen, 17.09.).
+// ScanDialect ist globaler View-State: try/finally-Restaurierung.
+var
+  lpr, lfm : string;
+  cnt : Integer;
+  found : TStringList;
+  Alt : TSourceDialect;
+begin
+  lpr := W('haupt.lpr');
+  lfm := W('haupt.lfm');
+  Alt := TStaticFiles.ScanDialect;
+  TStaticFiles.ScanDialect := dlFpc;
+  try
+    found := RunDetect([lpr], FDir, cnt);
+    try
+      Assert.AreEqual<Integer>(0, cnt,
+        'die .lfm neben ihrer projektierten .lpr ist kein Orphan');
+    finally
+      found.Free;
+    end;
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+end;
+
 
 procedure TTestNotIncludedInProject.KindGating_DeadOnlyEmits194;
 var
