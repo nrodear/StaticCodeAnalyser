@@ -730,7 +730,9 @@ begin
   WriteLn('                        Overrides [Rules] MinSeverity in analyser.ini.');
   WriteLn('  --dialect <d>         delphi|fpc - source dialect of the scanned tree.');
   WriteLn('                        fpc additionally collects *.pp units (Lazarus /');
-  WriteLn('                        Free Pascal). Default: delphi (unchanged runs).');
+  WriteLn('                        Free Pascal). Default: delphi (unchanged runs),');
+  WriteLn('                        or [Scan] Dialect=... from analyser.ini when the');
+  WriteLn('                        switch is omitted (the switch always wins).');
   WriteLn('');
   WriteLn('CI / Baseline:');
   WriteLn('  --baseline <file>     Drop findings whose fingerprint matches a known');
@@ -1228,12 +1230,30 @@ end;
 // VCS-Filter, die VOR Run laufen und den View-State nicht sehen).
 // '' und 'delphi' -> dlDelphi; die Wertemenge hat ParseArgs bereits
 // hart geprueft.
+//
+// INI-FALLBACK [Scan] Dialect=delphi|fpc (A6, 2026-09-18): greift NUR
+// wenn --dialect NICHT angegeben wurde (Args.Dialect='' ist der
+// Explizit-Sentinel aus ParseArgs - dieselbe Mechanik wie --profile).
+// Die Praezedenz liegt damit am REQUEST-BAU, nicht in der Apply-Kette:
+// ApplyConfig laeuft NACH ApplyIfdefView, ein ini-Spiegel dort haette
+// den bereits angewendeten Request-Wert ueberschrieben (dokumentierte
+// Reihenfolge-Falle, Konzept Abschnitt 0 Punkt 5). Ein unbekannter
+// ini-Wert (auch 'auto') faellt still auf dlDelphi - die ini ist kein
+// Kommando-Kanal mit Fehlerdialog; die harte Validierung gehoert dem
+// CLI-Schalter.
 function CliDialekt(const Args: TCliArgs): TSourceDialect;
+var
+  IniWert : string;
 begin
   if SameText(Args.Dialect, 'fpc') then
-    Result := dlFpc
-  else
-    Result := dlDelphi;
+    Exit(dlFpc);
+  if Args.Dialect = '' then
+  begin
+    IniWert := TRepoSettings.QuickReadStr('Scan', 'Dialect', '');
+    if SameText(IniWert, 'fpc') then
+      Exit(dlFpc);
+  end;
+  Result := dlDelphi;
 end;
 
 class function TConsoleRunner.Run(const Args: TCliArgs): Integer;
