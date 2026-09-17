@@ -553,20 +553,12 @@ begin
   // es scanne Lazarus, und scannt nichts davon.
   if (Result.Dialect <> '') and
      not (SameText(Result.Dialect, 'delphi') or
-          SameText(Result.Dialect, 'fpc')) then
+          SameText(Result.Dialect, 'fpc') or
+          SameText(Result.Dialect, 'auto')) then
   begin
-    if SameText(Result.Dialect, 'auto') then
-      // Absichtlich ein EIGENER Text: 'auto' ist kein Tippfehler,
-      // sondern ein geplanter Modus (Verzeichnis-Erkennung, Paket A6).
-      // Wer ihn heute setzt, soll wissen, dass er kommt - und dass der
-      // Lauf ihn NICHT still durch delphi ersetzt hat.
-      Result.ParseError :=
-        '--dialect=auto ist noch nicht implementiert (Auto-Erkennung ' +
-        'je Verzeichnis kommt als eigenes Paket). Gueltig: delphi, fpc'
-    else
-      Result.ParseError := Format(
-        'Ungueltiger Wert fuer --dialect: "%s". Gueltig: delphi, fpc',
-        [Result.Dialect]);
+    Result.ParseError := Format(
+      'Ungueltiger Wert fuer --dialect: "%s". Gueltig: delphi, fpc, auto',
+      [Result.Dialect]);
     Exit;
   end;
 
@@ -728,7 +720,10 @@ begin
   WriteLn('  --min-severity <lvl>  hint|warning|error - skip detectors below');
   WriteLn('                        this severity threshold.');
   WriteLn('                        Overrides [Rules] MinSeverity in analyser.ini.');
-  WriteLn('  --dialect <d>         delphi|fpc - source dialect of the scanned tree.');
+  WriteLn('  --dialect <d>         delphi|fpc|auto - source dialect of the scanned');
+  WriteLn('                        tree. auto resolves ONCE at the scan root (first');
+  WriteLn('                        folder upwards with project files decides; a');
+  WriteLn('                        mixed folder picks delphi and prints a hint).');
   WriteLn('                        fpc additionally collects *.pp units (Lazarus /');
   WriteLn('                        Free Pascal). Default: delphi (unchanged runs),');
   WriteLn('                        or [Scan] Dialect=... from analyser.ini when the');
@@ -1241,17 +1236,88 @@ end;
 // ini-Wert (auch 'auto') faellt still auf dlDelphi - die ini ist kein
 // Kommando-Kanal mit Fehlerdialog; die harte Validierung gehoert dem
 // CLI-Schalter.
+function ErmittleAutoDialekt(const AStartPfad: string): TSourceDialect;
+// --dialect=auto (A6/C2, V1-ZUSCHNITT - autonome Entscheidung
+// 2026-09-18): Aufloesung EINMAL an der SCAN-WURZEL, aufwaerts bis
+// zur Laufwerkswurzel; die erste Ebene mit Projektdateien entscheidet.
+// Tie-Break bei BEIDEN Arten auf derselben Ebene: DELPHI gewinnt
+// (die konservative Wahl der Konzept-Messung - 895 statt 1.994
+// umgeschaltete Dateien) plus stderr-Hinweis, explizit zu waehlen.
+// Ohne Fund: dlDelphi (44,6 % der Korpusdateien haben keine
+// Projektdatei aufwaerts - der Default darf nicht raten).
+//
+// BEWUSSTE V1-GRENZE (im Hilfetext dokumentiert): das Konzept misst
+// die Erkennung JE VERZEICHNIS - der Dialekt ist aber globaler
+// View-State (TStaticFiles.ScanDialect), eine per-Datei-Sicht waere
+// ein Architektur-Umbau an jeder Konsumstelle. Fuer Mischbaeume
+// (CEF4Delphi: Delphi- UND Lazarus-Demos) gilt: Wurzel entscheidet,
+// Hinweis empfiehlt den expliziten Schalter je Teilbaum.
+var
+  Dir, Vorher : string;
+  HatDelphi, HatLaz : Boolean;
+
+  function Existiert(const AMaske: string): Boolean;
+  var SR: TSearchRec;
+  begin
+    Result := FindFirst(TPath.Combine(Dir, AMaske), faAnyFile, SR) = 0;
+    if Result then FindClose(SR);
+  end;
+
+begin
+  Result := dlDelphi;
+  if AStartPfad = '' then Exit;
+  if TFile.Exists(AStartPfad) then
+    Dir := ExtractFilePath(TPath.GetFullPath(AStartPfad))
+  else
+    Dir := IncludeTrailingPathDelimiter(TPath.GetFullPath(AStartPfad));
+  Vorher := '';
+  while (Dir <> '') and (Dir <> Vorher) do
+  begin
+    HatDelphi := Existiert('*.dpr') or Existiert('*.dproj');
+    HatLaz    := Existiert('*.lpi') or Existiert('*.lpk');
+    if HatDelphi and HatLaz then
+    begin
+      WriteLn(ErrOutput,
+        'Hinweis: --dialect=auto fand Delphi- UND Lazarus-Projekt' +
+        'dateien in ' + ExcludeTrailingPathDelimiter(Dir) +
+        ' - nutze delphi (Tie-Break). Fuer Mischbaeume --dialect ' +
+        'explizit setzen.');
+      Exit(dlDelphi);
+    end;
+    if HatLaz then Exit(dlFpc);
+    if HatDelphi then Exit(dlDelphi);
+    Vorher := Dir;
+    Dir := ExtractFilePath(ExcludeTrailingPathDelimiter(Dir));
+  end;
+end;
+
+function AutoBasisPfad(const Args: TCliArgs): string;
+// Der Pfad, an dem die Auto-Aufloesung ansetzt - je nach Modus.
+begin
+  if Args.Path <> '' then Exit(Args.Path);
+  if Args.ProjectFile <> '' then Exit(Args.ProjectFile);
+  if Args.GroupFile <> '' then Exit(Args.GroupFile);
+  if Args.SingleFile <> '' then Exit(Args.SingleFile);
+  Result := GetCurrentDir;   // --diff/--branch arbeiten im Repo-CWD
+end;
+
 function CliDialekt(const Args: TCliArgs): TSourceDialect;
 var
   IniWert : string;
 begin
   if SameText(Args.Dialect, 'fpc') then
     Exit(dlFpc);
+  if SameText(Args.Dialect, 'auto') then
+    Exit(ErmittleAutoDialekt(AutoBasisPfad(Args)));
   if Args.Dialect = '' then
   begin
     IniWert := TRepoSettings.QuickReadStr('Scan', 'Dialect', '');
     if SameText(IniWert, 'fpc') then
       Exit(dlFpc);
+    // ini-'auto' ist erlaubt, seit auto implementiert ist (C2) -
+    // gleiche Aufloesung wie der Schalter.
+    if SameText(IniWert, 'auto') then
+      Exit(ErmittleAutoDialekt(AutoBasisPfad(Args)));
   end;
   Result := dlDelphi;
 end;
