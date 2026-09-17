@@ -85,6 +85,9 @@ type
     // Faellt der Hook einem Refactoring zum Opfer, waechst das
     // 32-Bit-Plugin wieder auf das 1,3-GB-Plateau der Messreihe.
     [Test] procedure ReleaseTransientCaches_EmptiesTextCache;
+    // P5.7: FPC-Define-Satz unter dlFpc (A6/C7)
+    [Test] procedure FpcDialektErgaenztFpcDefine_LeakImFpcZweigSichtbar;
+    [Test] procedure DelphiDialektErgaenztKeinFpcDefine;
   end;
 
 implementation
@@ -999,6 +1002,90 @@ begin
   Assert.AreEqual('', GateStatsReport,
     'ohne Zaehlung gibt es keinen Bericht');
 end;
+
+// --- P5.7: FPC-Define-Satz unter dlFpc (A6/C7, 2026-09-18) ---
+
+procedure TTestEngineApi.FpcDialektErgaenztFpcDefine_LeakImFpcZweigSichtbar;
+// Ein-Zweig-Sicht mit fremdem Define (DUMMY) unter dlFpc: C7
+// ergaenzt FPC/LCL automatisch - der {$IFDEF FPC}-Zweig ist die
+// kompilierte Wahrheit dieses Dialekts. An der Exe gemessen:
+// ohne C7 0 Leaks (dieser Test war ROT), mit explizitem
+// --define FPC 1 (Kanalbeweis).
+const FPC_ZWEIG_SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var sl: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '{$IFDEF FPC}'#13#10 +
+  '  sl := TStringList.Create;'#13#10 +
+  '  sl.Add(''x'');'#13#10 +
+  '{$ENDIF}'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var
+  Req : TScanRequest;
+  Ses : TAnalysisSession;
+  Res : TScanResult;
+  Fn  : string;
+begin
+  Fn := TPath.Combine(FDir, 'c7probe.pas');
+  TFile.WriteAllText(Fn, FPC_ZWEIG_SRC, TEncoding.UTF8);
+  Req := TScanRequest.Init;
+  Req.IfdefDefines := ['DUMMY'];   // Ein-Zweig-Sicht AKTIV, FPC fehlt
+  Req.Dialect := dlFpc;
+  Req.Scope := ssSingleFile;
+  Req.Path  := Fn;
+  Ses := TAnalysisSession.Create;
+  try
+    Res := Ses.Run(Req);
+    try
+      Assert.AreEqual<Integer>(1, ZaehleMemoryLeaks(Res),
+        'dlFpc + aktive Ein-Zweig-Sicht sieht den FPC-Zweig');
+    finally Res.Free; end;
+  finally Ses.Free; end;
+end;
+
+procedure TTestEngineApi.DelphiDialektErgaenztKeinFpcDefine;
+// DIE KLAMMER: unter dlDelphi wird NICHTS ergaenzt - der
+// FPC-Zweig bleibt in der Ein-Zweig-Sicht uebersprungen.
+const FPC_ZWEIG_SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Bar;'#13#10 +
+  'var sl: TStringList;'#13#10 +
+  'begin'#13#10 +
+  '{$IFDEF FPC}'#13#10 +
+  '  sl := TStringList.Create;'#13#10 +
+  '  sl.Add(''x'');'#13#10 +
+  '{$ENDIF}'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var
+  Req : TScanRequest;
+  Ses : TAnalysisSession;
+  Res : TScanResult;
+  Fn  : string;
+begin
+  Fn := TPath.Combine(FDir, 'c7probe.pas');
+  TFile.WriteAllText(Fn, FPC_ZWEIG_SRC, TEncoding.UTF8);
+  Req := TScanRequest.Init;
+  Req.IfdefDefines := ['DUMMY'];   // Ein-Zweig-Sicht AKTIV, FPC fehlt
+  Req.Dialect := dlDelphi;
+  Req.Scope := ssSingleFile;
+  Req.Path  := Fn;
+  Ses := TAnalysisSession.Create;
+  try
+    Res := Ses.Run(Req);
+    try
+      Assert.AreEqual<Integer>(0, ZaehleMemoryLeaks(Res),
+        'dlDelphi laesst den Define-Satz unangetastet');
+    finally Res.Free; end;
+  finally Ses.Free; end;
+end;
+
 
 procedure TTestEngineApi.GateStats_CountsAndPassesThrough;
 // Gezaehlt wird NUR der Treffer (Gate liefert True). Ein Gate, das nicht
