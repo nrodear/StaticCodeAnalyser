@@ -48,6 +48,9 @@ type
     [Test] procedure Leak_PassedToConstructor_NoFinding;
     [Test] procedure Leak_FunctionCallAssign_NoFreeReportsWarning;
     [Test] procedure Leak_FunctionCallAssign_WithFree_NoFinding;
+    // FPC/FCL-LeakyClasses (P5.3)
+    [Test] procedure Leak_TFPListCreateWithoutFree_ReportsError;
+    [Test] procedure Leak_TFPListCreateWithFree_NoFinding;
   end;
 
   // Geliehene Referenzen (Getter, Typecasts, Indexed-Access),
@@ -1492,6 +1495,53 @@ begin
       'Indexed-Property-Ergebnis ist geliehen, kein Leak');
   finally F.Free; end;
 end;
+
+// --- FPC/FCL-LeakyClasses (P5.3, 2026-09-18) ---
+// Vertrag am DEFAULT_LEAKY_CLASSES-Block (uSCAConsts): die
+// FPC-Container sind owner-managed wie ihre RTL-Pendants.
+
+procedure TTestMemoryLeak.Leak_TFPListCreateWithoutFree_ReportsError;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var l: TFPList;'#13#10+
+  'begin'#13#10+
+  '  l := TFPList.Create;'#13#10+
+  '  l.Add(nil);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    // Vor P5.3 stand TFPList nicht in der Liste - 0 Funde, dieser
+    // Test war ROT (der TStringList-Zwilling oben beweist den Kanal).
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'TFPList ohne Free ist ein Leak wie TList');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeak.Leak_TFPListCreateWithFree_NoFinding;
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var l: TFPList;'#13#10+
+  'begin'#13#10+
+  '  l := TFPList.Create;'#13#10+
+  '  try'#13#10+
+  '    l.Add(nil);'#13#10+
+  '  finally'#13#10+
+  '    l.Free;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'sauber freigegebene TFPList meldet nicht');
+  finally F.Free; end;
+end;
+
 
 procedure TTestMemoryLeak.Leak_FunctionCallAssign_WithFree_NoFinding;
 const SRC =
