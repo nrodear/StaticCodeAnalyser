@@ -3267,6 +3267,42 @@ var
     end;
   end;
 
+  function RawLineHasHMinusFor(ARawIdx0: Integer;
+    const ANameLow: string): Boolean;
+  // {%H-}-SUPPRESSION (Lazarus-Paket, 2026-09-17): FPC/Lazarus bindet
+  // den Marker an das FOLGENDE Symbol ('v xor {%H-}cache[h]') - der
+  // Entwickler deklariert dort explizit "uninitialisiert-Zugriff ist
+  // gewollt". Das ist die Lazarus-Entsprechung unserer noinspection-
+  // Marker und wird respektiert: das markierte Vorkommen zaehlt nicht
+  // als Erst-Read. Auf der ROHEN Zeile geprueft - der Strip blankt
+  // {..}-Direktiven weg. Politik zeilengenau: steht der Marker vor
+  // IRGENDEINEM Vorkommen des Namens, zaehlt die ganze Zeile nicht
+  // (zwei Vorkommen derselben Var, nur eines markiert, sind im Korpus
+  // nicht belegt - 9 Marker-Fundstellen gesamt). Vermessen (rw104/
+  // rw_laz20/21): Delphi 5, fpc 2, default 1 SCA166-Funde auf solchen
+  // Zeilen; die PAUSCHALE Zeilen-Suppression aller Regeln wurde
+  // datenbasiert VERWORFEN (>95 % der 372/1.077 Marker-Zeilen-Funde
+  // sind Naming-/Doku-Koinzidenz ohne Entwickler-Aussage).
+  var
+    Raw : string;
+    P, Q : Integer;
+  begin
+    Result := False;
+    if (Lines = nil) or (ARawIdx0 < 0) or (ARawIdx0 >= Lines.Count) then Exit;
+    Raw := LowerCase(Lines[ARawIdx0]);
+    P := 0;
+    repeat
+      P := PosEx('{%h-}', Raw, P + 1);
+      if P = 0 then Exit;
+      Q := P + 5;
+      while (Q <= Length(Raw)) and (Raw[Q] = ' ') do Inc(Q);
+      if (Copy(Raw, Q, Length(ANameLow)) = ANameLow)
+         and ((Q + Length(ANameLow) > Length(Raw))
+              or not IsIdentChar(Raw[Q + Length(ANameLow)])) then
+        Exit(True);
+    until False;
+  end;
+
   function FindFirstReadLine(const NameLow: string;
     DeclLine, FirstWriteLine, MethodStartLine, MethodEndLine: Integer): Integer;
   // Findet die erste Source-Zeile MIT einem Identifier-Match INNERHALB
@@ -3442,6 +3478,9 @@ var
             //    plain Read der Var (name steht vor dem ` do `).
             if StartsStr('with ', TrimLeft(L)) and
                ((Pos(' do', L) = 0) or (P < Pos(' do', L))) then
+              begin P := P + NL; Continue; end;
+            // 5) {%H-}-Suppression (Vertrag an RawLineHasHMinusFor).
+            if RawLineHasHMinusFor(i, NameLow) then
               begin P := P + NL; Continue; end;
             Exit(i + 1);
           end;
