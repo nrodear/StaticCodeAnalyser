@@ -443,7 +443,20 @@ begin
   // die Dateisammlung (uStaticFiles.ScanRec), nicht der Lexer; deshalb
   // liegt der State dort und nicht in uLexer. Run sichert und
   // restauriert ihn zusammen mit den Lexer-Werten.
-  TStaticFiles.ScanDialect := Req.Dialect;
+  //
+  // A5 (2026-09-17): ein LAZARUS-PROJEKT-Scope (.lpi/.lpk/.lpg als
+  // Scan-Ziel) ERZWINGT dlFpc - das ist KEIN dlAuto (das abgelehnte
+  // Raten je Verzeichnis), sondern die deterministische Konsequenz
+  // einer expliziten Nutzerangabe: eine Lazarus-Projektdatei IST FPC.
+  // Ohne den Zwang liefe der .lpi-Scan mit Delphi-Sicht - keine
+  // .lfm-Paarung, keine .pp-Schwestern, SCA129 mit falscher Praemisse.
+  if (Req.Scope in [ssProject, ssProjectGroup])
+     and (SameText(ExtractFileExt(Req.Path), '.lpi')
+          or SameText(ExtractFileExt(Req.Path), '.lpk')
+          or SameText(ExtractFileExt(Req.Path), '.lpg')) then
+    TStaticFiles.ScanDialect := dlFpc
+  else
+    TStaticFiles.ScanDialect := Req.Dialect;
 end;
 
 procedure TAnalysisSession.ApplyConfig(const Req: TScanRequest);
@@ -715,11 +728,28 @@ begin
         // Member-.dpr gezogene Unit bekaeme sonst 194 statt 195.
         MemberProjs := TStringList.Create;
         try
+          // A5 (2026-09-17): Endungs-Dispatch (Konzept P4.5) - .lpi/
+          // .lpk/.lpg sind die Lazarus-Pendants der .dproj-Schiene.
+          // Der Dialekt ist fuer diese Scopes bereits in ApplyIfdefView
+          // auf dlFpc erzwungen (Doku dort).
           if Req.Scope = ssProject then
-            ProjList := TProjectFiles.FromDproj(Req.Path, ProjErr, Warnings)
+          begin
+            if SameText(ExtractFileExt(Req.Path), '.lpi') then
+              ProjList := TProjectFiles.FromLpi(Req.Path, ProjErr, Warnings)
+            else if SameText(ExtractFileExt(Req.Path), '.lpk') then
+              ProjList := TProjectFiles.FromLpk(Req.Path, ProjErr, Warnings)
+            else
+              ProjList := TProjectFiles.FromDproj(Req.Path, ProjErr, Warnings);
+          end
           else
-            ProjList := TProjectFiles.FromGroupproj(Req.Path, ProjErr,
-              Warnings, MemberProjs);
+          begin
+            if SameText(ExtractFileExt(Req.Path), '.lpg') then
+              ProjList := TProjectFiles.FromLpg(Req.Path, ProjErr,
+                Warnings, MemberProjs)
+            else
+              ProjList := TProjectFiles.FromGroupproj(Req.Path, ProjErr,
+                Warnings, MemberProjs);
+          end;
           try
             Files.AddStrings(ProjList);
           finally

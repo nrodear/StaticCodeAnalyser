@@ -37,6 +37,13 @@ type
     [Test] procedure Group_RelativeProjectPath_Resolved;
     [Test] procedure Group_OneBrokenProject_WarnsAndContinues;
     [Test] procedure Group_NothingResolvable_ErrorMsg;
+    // ---- Lazarus-Leser A5 ----------------------------------------------
+    [Test] procedure Lpi_Legacy_UnitsResolved_SessionEntrySkipped;
+    [Test] procedure Lpi_Modern_UnitsResolved;
+    [Test] procedure Lpi_IncEntry_NotInList;
+    [Test] procedure Lpk_Items_IncSkipped_PasResolved;
+    [Test] procedure Lpg_Union_TwoTargets_Deduplicated;
+    [Test] procedure Lpi_MissingFile_WarningAndSkip;
   end;
 
 implementation
@@ -324,6 +331,161 @@ begin
     Warn.Free;
   end;
 end;
+
+{ ---- Lazarus-Leser A5 (2026-09-17) ---- }
+// Vertraege an den Lesern in uProjectFiles: verankerte Pfade,
+// IsPartOfProject-Filter, .inc-Scope-Pin, beide Listenformate.
+
+procedure TTestProjectFiles.Lpi_Legacy_UnitsResolved_SessionEntrySkipped;
+var
+  Lpi  : string;
+  Err  : string;
+  L    : TStringList;
+begin
+  WriteFile('p\main.lpr', 'program main; begin end.');
+  WriteFile('p\unit1.pas', 'unit unit1; interface implementation end.');
+  WriteFile('p\offen.pas', 'unit offen; interface implementation end.');
+  Lpi := WriteFile('p\test.lpi',
+    '<?xml version="1.0"?><CONFIG><ProjectOptions>' + sLineBreak +
+    '<Units Count="3">' + sLineBreak +
+    '<Unit0><Filename Value="main.lpr"/><IsPartOfProject Value="True"/></Unit0>' + sLineBreak +
+    '<Unit1><Filename Value="unit1.pas"/><IsPartOfProject Value="True"/></Unit1>' + sLineBreak +
+    '<Unit2><Filename Value="offen.pas"/><EditorIndex Value="1"/></Unit2>' + sLineBreak +
+    '</Units></ProjectOptions></CONFIG>');
+  L := TProjectFiles.FromLpi(Lpi, Err);
+  try
+    Assert.AreEqual('', Err);
+    // Der Session-Eintrag (Unit2 OHNE IsPartOfProject - 133 solcher
+    // Reste im Korpus) darf NICHT in die Scanliste.
+    Assert.AreEqual(2, L.Count, 'lpr + pas, Session-Eintrag gefiltert');
+  finally L.Free; end;
+end;
+
+procedure TTestProjectFiles.Lpi_Modern_UnitsResolved;
+var
+  Lpi : string;
+  Err : string;
+  L   : TStringList;
+begin
+  WriteFile('p\a.pas', 'unit a; interface implementation end.');
+  WriteFile('p\b.pp', 'unit b; interface implementation end.');
+  Lpi := WriteFile('p\test.lpi',
+    '<?xml version="1.0"?><CONFIG><ProjectOptions><Units>' + sLineBreak +
+    '<Unit><Filename Value="a.pas"/><IsPartOfProject Value="True"/></Unit>' + sLineBreak +
+    '<Unit><Filename Value="b.pp"/><IsPartOfProject Value="True"/></Unit>' + sLineBreak +
+    '</Units></ProjectOptions></CONFIG>');
+  L := TProjectFiles.FromLpi(Lpi, Err);
+  try
+    Assert.AreEqual('', Err);
+    // Das MODERNE Listenformat (131 von 512 Korpus-.lpi): <Unit>
+    // unnummeriert wiederholt - der Praefix-Match ist basisfrei.
+    Assert.AreEqual(2, L.Count, 'beide Units des modernen Formats');
+  finally L.Free; end;
+end;
+
+procedure TTestProjectFiles.Lpi_IncEntry_NotInList;
+var
+  Lpi : string;
+  Err : string;
+  L   : TStringList;
+begin
+  WriteFile('p\a.pas', 'unit a; interface implementation end.');
+  WriteFile('p\teil.inc', '// fragment');
+  Lpi := WriteFile('p\test.lpi',
+    '<?xml version="1.0"?><CONFIG><ProjectOptions><Units>' + sLineBreak +
+    '<Unit><Filename Value="a.pas"/><IsPartOfProject Value="True"/></Unit>' + sLineBreak +
+    '<Unit><Filename Value="teil.inc"/><IsPartOfProject Value="True"/></Unit>' + sLineBreak +
+    '</Units></ProjectOptions></CONFIG>');
+  L := TProjectFiles.FromLpi(Lpi, Err);
+  try
+    // .inc ist per Produktentscheid KEIN Scanziel (Scope-Pin in
+    // uTestStaticFiles) - auch nicht ueber die Projektliste.
+    Assert.AreEqual(1, L.Count, '.inc bleibt draussen');
+  finally L.Free; end;
+end;
+
+procedure TTestProjectFiles.Lpk_Items_IncSkipped_PasResolved;
+var
+  Lpk : string;
+  Err : string;
+  L   : TStringList;
+begin
+  WriteFile('p\werk.pas', 'unit werk; interface implementation end.');
+  WriteFile('p\impl.inc', '// fragment');
+  Lpk := WriteFile('p\paket.lpk',
+    '<?xml version="1.0"?><CONFIG><Package Version="5">' + sLineBreak +
+    '<Files Count="2">' + sLineBreak +
+    '<Item1><Filename Value="werk.pas"/><Type Value="Unit"/></Item1>' + sLineBreak +
+    '<Item2><Filename Value="impl.inc"/><Type Value="Include"/></Item2>' + sLineBreak +
+    '</Files></Package></CONFIG>');
+  L := TProjectFiles.FromLpk(Lpk, Err);
+  try
+    Assert.AreEqual('', Err);
+    // Item1..N ist EINS-basiert (die andere Basis als .lpi-Unit0!
+    // - Konzept P4.2, die wahrscheinlichste stille Fehlerquelle).
+    Assert.AreEqual(1, L.Count, 'Unit ja, Include nein');
+  finally L.Free; end;
+end;
+
+procedure TTestProjectFiles.Lpg_Union_TwoTargets_Deduplicated;
+var
+  Lpg  : string;
+  Err  : string;
+  L    : TStringList;
+  Memb : TStringList;
+begin
+  WriteFile('g\shared.pas', 'unit shared; interface implementation end.');
+  WriteFile('g\nur1.pas', 'unit nur1; interface implementation end.');
+  WriteFile('g\p1.lpi',
+    '<?xml version="1.0"?><CONFIG><ProjectOptions><Units>' + sLineBreak +
+    '<Unit><Filename Value="shared.pas"/><IsPartOfProject Value="True"/></Unit>' + sLineBreak +
+    '<Unit><Filename Value="nur1.pas"/><IsPartOfProject Value="True"/></Unit>' + sLineBreak +
+    '</Units></ProjectOptions></CONFIG>');
+  WriteFile('g\p2.lpi',
+    '<?xml version="1.0"?><CONFIG><ProjectOptions><Units>' + sLineBreak +
+    '<Unit><Filename Value="shared.pas"/><IsPartOfProject Value="True"/></Unit>' + sLineBreak +
+    '</Units></ProjectOptions></CONFIG>');
+  Lpg := WriteFile('g\gruppe.lpg',
+    '<?xml version="1.0"?><CONFIG><ProjectGroup FileVersion="2"><Targets>' + sLineBreak +
+    '<Target FileName="p1.lpi"/>' + sLineBreak +
+    '<Target FileName="p2.lpi"/>' + sLineBreak +
+    '</Targets></ProjectGroup></CONFIG>');
+  Memb := TStringList.Create;
+  L := TProjectFiles.FromLpg(Lpg, Err, nil, Memb);
+  try
+    Assert.AreEqual('', Err);
+    Assert.AreEqual(2, L.Count, 'Union dedupliziert shared.pas');
+    Assert.AreEqual(2, Memb.Count, 'beide Member erfasst');
+  finally
+    L.Free;
+    Memb.Free;
+  end;
+end;
+
+procedure TTestProjectFiles.Lpi_MissingFile_WarningAndSkip;
+var
+  Lpi  : string;
+  Err  : string;
+  Warn : TStringList;
+  L    : TStringList;
+begin
+  WriteFile('p\da.pas', 'unit da; interface implementation end.');
+  Lpi := WriteFile('p\test.lpi',
+    '<?xml version="1.0"?><CONFIG><ProjectOptions><Units>' + sLineBreak +
+    '<Unit><Filename Value="da.pas"/><IsPartOfProject Value="True"/></Unit>' + sLineBreak +
+    '<Unit><Filename Value="fehlt.pas"/><IsPartOfProject Value="True"/></Unit>' + sLineBreak +
+    '</Units></ProjectOptions></CONFIG>');
+  Warn := TStringList.Create;
+  L := TProjectFiles.FromLpi(Lpi, Err, Warn);
+  try
+    Assert.AreEqual(1, L.Count, 'nur die existierende Datei');
+    Assert.AreEqual(1, Warn.Count, 'Warnung fuer die fehlende');
+  finally
+    L.Free;
+    Warn.Free;
+  end;
+end;
+
 
 procedure TTestProjectFiles.Group_NothingResolvable_ErrorMsg;
 var

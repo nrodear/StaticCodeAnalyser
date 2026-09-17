@@ -48,6 +48,34 @@ type
     class function FromGroupproj(const AGroupFile: string;
       out AErrorMsg: string; AWarnings: TStrings = nil;
       AMemberProjects: TStrings = nil): TStringList; static;
+
+    // Lazarus-Paket A5 (2026-09-17). Alle drei Leser liefern wie die
+    // Delphi-Pendants absolute, deduplizierte Quelldatei-Listen; der
+    // Caller besitzt Result (im Fehlerfall leer, AErrorMsg gesetzt).
+    //
+    // .lpi -> Units der CONFIG/ProjectOptions/Units-Liste mit
+    // IsPartOfProject=True (die Liste fuehrt auch Editor-Session-
+    // Reste OHNE das Flag - 133 von 1.687 Eintraegen im Korpus).
+    // BEIDE Formate: Legacy '<Units Count="N"><Unit0>..' (380 Dateien
+    // im Korpus, NULL-basiert) und Modern '<Units><Unit>..' (131) -
+    // der Sammler nimmt alle Element-Kinder, deren Name mit 'Unit'
+    // beginnt, und ist damit basisfrei.
+    class function FromLpi(const ALpiFile: string;
+      out AErrorMsg: string; AWarnings: TStrings = nil): TStringList; static;
+
+    // .lpk -> CONFIG/Package/Files-Items (Legacy '<Files Count>
+    // <Item1>..' EINS-basiert / Modern '<Item>'); Type=Include-Items
+    // (.inc) werden uebersprungen - .inc ist per Produktentscheid
+    // kein Scanziel (Scope-Pin-Test in uTestStaticFiles).
+    class function FromLpk(const ALpkFile: string;
+      out AErrorMsg: string; AWarnings: TStrings = nil): TStringList; static;
+
+    // .lpg -> Union der Target-.lpi/.lpk-Listen (CONFIG/ProjectGroup/
+    // Targets/Target@FileName), Semantik wie FromGroupproj inkl.
+    // AMemberProjects (aufgeloeste Member-Vollpfade).
+    class function FromLpg(const ALpgFile: string;
+      out AErrorMsg: string; AWarnings: TStrings = nil;
+      AMemberProjects: TStrings = nil): TStringList; static;
   end;
 
 implementation
@@ -55,7 +83,7 @@ implementation
 // noinspection-file NestedTry, TooLongLine
 
 uses
-  System.IOUtils, System.Variants,
+  System.IOUtils, System.Variants, System.StrUtils,
   Winapi.ActiveX,
   Xml.XMLDoc, Xml.XMLIntf;
 
@@ -184,6 +212,23 @@ begin
   end;
 end;
 
+procedure NimmQuelldateiAuf(ASeen, AInto: TStrings; const AFull: string;
+  AWarnings: TStrings);
+// Gemeinsamer Aufnahme-Schritt aller Listen-Leser (Dedup, Existenz-
+// Warnung, Add) - Rule of Three: mit FromLpi/FromLpk waere das die
+// dritte Kopie des FromDproj-Blocks gewesen (Selbstscan A5).
+begin
+  if ASeen.IndexOf(AFull) >= 0 then Exit;   // Dedup (case-insensitiv)
+  ASeen.Add(AFull);
+  if not FileExists(AFull) then
+  begin
+    if Assigned(AWarnings) then
+      AWarnings.Add(Format('Referenzierte Datei fehlt: %s', [AFull]));
+    Exit;
+  end;
+  AInto.Add(AFull);
+end;
+
 class function TProjectFiles.FromDproj(const ADprojFile: string;
   out AErrorMsg: string; AWarnings: TStrings): TStringList;
 var
@@ -208,15 +253,7 @@ begin
       // Nur Pascal-Quellen; DCCReference listet auch .dcu-/Lib-Referenzen.
       if not SameText(ExtractFileExt(Inc0), '.pas') then Continue;
       if not ResolveInclude(BaseDir, Inc0, AWarnings, Full) then Continue;
-      if Seen.IndexOf(Full) >= 0 then Continue;   // Dedup (case-insensitiv)
-      Seen.Add(Full);
-      if not FileExists(Full) then
-      begin
-        if Assigned(AWarnings) then
-          AWarnings.Add(Format('Referenzierte Datei fehlt: %s', [Full]));
-        Continue;
-      end;
-      Result.Add(Full);
+      NimmQuelldateiAuf(Seen, Result, Full, AWarnings);
     end;
   finally
     Seen.Free;
@@ -280,6 +317,258 @@ begin
   finally
     Seen.Free;
     Projects.Free;
+  end;
+end;
+
+{ ---- Lazarus-Leser (A5, 2026-09-17) ---- }
+
+function LoadLazDocument(const AXmlFile: string; out ADoc: IXMLDocument;
+  out AErrorMsg: string): Boolean;
+// Wie LoadIncludes, aber liefert das DOKUMENT: die Lazarus-Formate
+// adressieren Werte ueber VERANKERTE Pfade + Value-Attribute, nicht
+// ueber einen Element-Namen mit Include-Attribut.
+var
+  Com : TComGuard;
+begin
+  Result    := False;
+  ADoc      := nil;
+  AErrorMsg := '';
+  if not FileExists(AXmlFile) then
+  begin
+    AErrorMsg := Format('Datei nicht gefunden: %s', [AXmlFile]);
+    Exit;
+  end;
+  Com.Init;
+  try
+    ADoc := LoadXMLDocument(AXmlFile);
+    Result := ADoc <> nil;
+  except
+    on E: Exception do
+    begin
+      ADoc := nil;
+      AErrorMsg := Format('%s nicht lesbar: %s', [AXmlFile, E.Message]);
+    end;
+  end;
+  Com.Done;
+end;
+
+function KindMitNamen(const AParent: IXMLNode;
+  const ALocal: string): IXMLNode;
+// Erstes Element-Kind mit diesem LocalName; nil wenn keins. Der
+// verankerte Abstieg (CONFIG -> ProjectOptions -> Units) statt einer
+// rekursiven Filename-Suche - sonst fischt man Fremdknoten mit
+// (Konzept P4.1).
+var
+  i : Integer;
+  C : IXMLNode;
+begin
+  Result := nil;
+  if AParent = nil then Exit;
+  for i := 0 to AParent.ChildNodes.Count - 1 do
+  begin
+    C := AParent.ChildNodes[i];
+    if (C.NodeType = ntElement) and SameText(C.LocalName, ALocal) then
+      Exit(C);
+  end;
+end;
+
+function AttrValue(const ANode: IXMLNode; const AAttr: string): string;
+begin
+  Result := '';
+  if (ANode <> nil) and ANode.HasAttribute(AAttr) then
+    Result := VarToStr(ANode.Attributes[AAttr]);
+end;
+
+function IstLazarusQuellEndung(const AFileName: string): Boolean;
+// Was aus .lpi/.lpk in die SCANLISTE darf: die unit-artigen Endungen
+// des fpc-Dialekts (vgl. TStaticFiles.IsUnitLikeFile). .inc bleibt
+// draussen (Produktentscheid, Scope-Pin-Test), .lfm kommt ueber die
+// Formdatei-PAARUNG statt ueber die Projektliste.
+var
+  Ext : string;
+begin
+  Ext := LowerCase(ExtractFileExt(AFileName));
+  Result := (Ext = '.pas') or (Ext = '.pp') or (Ext = '.lpr');
+end;
+
+class function TProjectFiles.FromLpi(const ALpiFile: string;
+  out AErrorMsg: string; AWarnings: TStrings): TStringList;
+var
+  Doc      : IXMLDocument;
+  UnitsN   : IXMLNode;
+  Child    : IXMLNode;
+  Seen     : TStringList;
+  BaseDir  : string;
+  FN, Full : string;
+  i        : Integer;
+begin
+  Result := TStringList.Create;
+  AErrorMsg := '';
+  if not LoadLazDocument(ALpiFile, Doc, AErrorMsg) then Exit;
+  Seen := TStringList.Create;
+  Seen.CaseSensitive := False;
+  Seen.Sorted := True;
+  Seen.Duplicates := dupIgnore;
+  try
+    UnitsN := KindMitNamen(KindMitNamen(Doc.DocumentElement,
+      'ProjectOptions'), 'Units');
+    if UnitsN = nil then
+    begin
+      // 1 Korpusfall ohne Units-Liste: leere Liste + Warnung, kein
+      // harter Fehler (Muster: FromDproj ohne DCCReference).
+      if Assigned(AWarnings) then
+        AWarnings.Add(Format('Keine Units-Liste in %s', [ALpiFile]));
+      Exit;
+    end;
+    BaseDir := ExtractFilePath(TPath.GetFullPath(ALpiFile));
+    for i := 0 to UnitsN.ChildNodes.Count - 1 do
+    begin
+      Child := UnitsN.ChildNodes[i];
+      if Child.NodeType <> ntElement then Continue;
+      // Legacy 'Unit0'..'UnitN' (NULL-basiert) wie Modern 'Unit' -
+      // der Praefix-Match ist basisfrei.
+      if not StartsText('Unit', Child.LocalName) then Continue;
+      // Editor-Session-Reste tragen KEIN IsPartOfProject.
+      if not SameText(AttrValue(KindMitNamen(Child, 'IsPartOfProject'),
+        'Value'), 'True') then Continue;
+      FN := AttrValue(KindMitNamen(Child, 'Filename'), 'Value');
+      if FN = '' then Continue;
+      if not IstLazarusQuellEndung(FN) then Continue;
+      if not ResolveInclude(BaseDir, FN, AWarnings, Full) then Continue;
+      NimmQuelldateiAuf(Seen, Result, Full, AWarnings);
+    end;
+  finally
+    Seen.Free;
+    Doc := nil;
+  end;
+end;
+
+class function TProjectFiles.FromLpk(const ALpkFile: string;
+  out AErrorMsg: string; AWarnings: TStrings): TStringList;
+var
+  Doc      : IXMLDocument;
+  FilesN   : IXMLNode;
+  Child    : IXMLNode;
+  Seen     : TStringList;
+  BaseDir  : string;
+  FN, Full : string;
+  i        : Integer;
+begin
+  Result := TStringList.Create;
+  AErrorMsg := '';
+  if not LoadLazDocument(ALpkFile, Doc, AErrorMsg) then Exit;
+  Seen := TStringList.Create;
+  Seen.CaseSensitive := False;
+  Seen.Sorted := True;
+  Seen.Duplicates := dupIgnore;
+  try
+    FilesN := KindMitNamen(KindMitNamen(Doc.DocumentElement,
+      'Package'), 'Files');
+    if FilesN = nil then
+    begin
+      if Assigned(AWarnings) then
+        AWarnings.Add(Format('Keine Files-Liste in %s', [ALpkFile]));
+      Exit;
+    end;
+    BaseDir := ExtractFilePath(TPath.GetFullPath(ALpkFile));
+    for i := 0 to FilesN.ChildNodes.Count - 1 do
+    begin
+      Child := FilesN.ChildNodes[i];
+      if Child.NodeType <> ntElement then Continue;
+      // Legacy 'Item1'..'ItemN' (EINS-basiert - die andere Basis als
+      // .lpi, Konzept P4.2!) wie Modern 'Item' - Praefix-Match.
+      if not StartsText('Item', Child.LocalName) then Continue;
+      FN := AttrValue(KindMitNamen(Child, 'Filename'), 'Value');
+      if FN = '' then Continue;
+      // Type=Include (.inc) faellt schon am Endungsfilter; der Filter
+      // hier ist die Politik, nicht das Type-Attribut - ein Item ohne
+      // Type-Knoten (Modern) wird gleich behandelt.
+      if not IstLazarusQuellEndung(FN) then Continue;
+      if not ResolveInclude(BaseDir, FN, AWarnings, Full) then Continue;
+      NimmQuelldateiAuf(Seen, Result, Full, AWarnings);
+    end;
+  finally
+    Seen.Free;
+    Doc := nil;
+  end;
+end;
+
+class function TProjectFiles.FromLpg(const ALpgFile: string;
+  out AErrorMsg: string; AWarnings: TStrings;
+  AMemberProjects: TStrings): TStringList;
+var
+  Doc       : IXMLDocument;
+  TargetsN  : IXMLNode;
+  Child     : IXMLNode;
+  Seen      : TStringList;
+  BaseDir   : string;
+  Ref, Full : string;
+  ProjErr   : string;
+  ProjFiles : TStringList;
+  F         : string;
+  i, OkCount: Integer;
+begin
+  Result := TStringList.Create;
+  AErrorMsg := '';
+  if not LoadLazDocument(ALpgFile, Doc, AErrorMsg) then Exit;
+  Seen := TStringList.Create;
+  Seen.CaseSensitive := False;
+  Seen.Sorted := True;
+  Seen.Duplicates := dupIgnore;
+  try
+    TargetsN := KindMitNamen(KindMitNamen(Doc.DocumentElement,
+      'ProjectGroup'), 'Targets');
+    if TargetsN = nil then
+    begin
+      AErrorMsg := Format('Keine Targets-Liste in %s', [ALpgFile]);
+      Exit;
+    end;
+    BaseDir := ExtractFilePath(TPath.GetFullPath(ALpgFile));
+    OkCount := 0;
+    for i := 0 to TargetsN.ChildNodes.Count - 1 do
+    begin
+      Child := TargetsN.ChildNodes[i];
+      if Child.NodeType <> ntElement then Continue;
+      if not SameText(Child.LocalName, 'Target') then Continue;
+      Ref := AttrValue(Child, 'FileName');
+      if Ref = '' then Continue;
+      if not ResolveInclude(BaseDir, Ref, AWarnings, Full) then Continue;
+      if SameText(ExtractFileExt(Full), '.lpi') then
+        ProjFiles := FromLpi(Full, ProjErr, AWarnings)
+      else if SameText(ExtractFileExt(Full), '.lpk') then
+        ProjFiles := FromLpk(Full, ProjErr, AWarnings)
+      else
+      begin
+        if Assigned(AWarnings) then
+          AWarnings.Add(Format('Target uebersprungen (Endung): %s', [Full]));
+        Continue;
+      end;
+      try
+        if ProjErr <> '' then
+        begin
+          if Assigned(AWarnings) then
+            AWarnings.Add(Format('Projekt uebersprungen: %s', [ProjErr]));
+          Continue;
+        end;
+        Inc(OkCount);
+        if Assigned(AMemberProjects) then
+          AMemberProjects.Add(Full);
+        for F in ProjFiles do
+          if Seen.IndexOf(F) < 0 then
+          begin
+            Seen.Add(F);
+            Result.Add(F);
+          end;
+      finally
+        ProjFiles.Free;
+      end;
+    end;
+    if (OkCount = 0) and (TargetsN.ChildNodes.Count > 0) then
+      AErrorMsg := Format(
+        'Kein Projekt der Gruppe aufloesbar: %s', [ALpgFile]);
+  finally
+    Seen.Free;
+    Doc := nil;
   end;
 end;
 
