@@ -1661,7 +1661,23 @@ const
     'TRestServer', 'TRestClientUri',
     'TSynLogFile', 'TSynLog',
     'TSynMonitor', 'TSynLocker',
-    'TSynBackgroundThreadMethod'
+    'TSynBackgroundThreadMethod',
+    // FPC/FCL/LCL (Lazarus-Paket P5.3, 2026-09-18): owner-managed
+    // Container und Bild-Klassen des FPC-Oekosystems - das Pendant
+    // zum mORMot-Block darueber. Vermessen an beiden Korpora
+    // (Obergrenzen der .Create-Vorkommen: Lazarus 699, Delphi 63 -
+    // doublecmd & Co. sind FPC-Code im Delphi-Korpus, die Typen sind
+    // dialektfrei leak-traechtig, deshalb KEIN dlFpc-Gate). Die
+    // fgl-Generics (TFPGList & Co.) haben kaum DIREKTE .Create-Stellen
+    // - genutzt wird das Alias-/Ableitungs-Muster 'TMyList =
+    // TFPGList<X>' -, sie stehen hier als BASEN fuer die Descendants-
+    // Discovery (uCustomClassDiscovery haengt Ableitungen nur an,
+    // wenn die Basis gelistet ist).
+    'TFPList', 'TFPObjectList',
+    'TFPHashList', 'TFPHashObjectList',
+    'TFPObjectHashTable', 'TFPStringHashTable', 'TFPDataHashTable',
+    'TFPGList', 'TFPGObjectList', 'TFPGMap',
+    'TLazIntfImage', 'TFPMemoryImage'
   ];
   // Default-Trivial-Liste fuer uMagicNumbers.
   DEFAULT_MAGIC_TRIVIALS: array of string = [
