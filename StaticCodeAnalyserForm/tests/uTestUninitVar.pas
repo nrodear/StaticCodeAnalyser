@@ -269,6 +269,11 @@ type
     [Test] procedure CastOperandInArgumentPosition_NoFinding;
     [Test] procedure CastOperandOnRhs_NoFinding;
     [Test] procedure CastOperandAsAssignTarget_NoFinding;
+    // Constr*-Init-Verb (Vertrag an IsInitVerb)
+    [Test] procedure TpObjectConstruct_Paren_NotReported;
+    [Test] procedure TpObjectConstrPrefix_Parenless_NotReported;
+    [Test] procedure ReadBeforeConstruct_StillReported;
+    [Test] procedure NonConstrMember_OnlyUse_StillReported;
   end;
 
 implementation
@@ -4693,6 +4698,110 @@ begin
       'das zweite Kontextwort der Liste ist eine echte, sichtbare Variable');
   finally F.Free; end;
 end;
+
+// --- Constr*-Init-Verb (Lazarus-Paket 2026-09-17) ---
+// Vertrag am IsInitVerb-Kommentar: Turbo-Pascal-object-Konstruktoren
+// (aggpas 'ras.Construct'/'rgba.ConstrDbl') initialisieren den
+// Value-Receiver. Der Typ ist absichtlich NICHT aufloesbar (fremder
+// object-Typ) - genau die Korpuslage der .lpr-Demos.
+
+procedure TTestUninitVar.TpObjectConstruct_Paren_NotReported;
+// Klammer-Form: Construct(...) initialisiert - der spaetere
+// Zugriff ist KEIN read-before-write. Vor dem Gate: 1 Fund
+// (dieser Test war ROT).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Demo;'#13#10 +
+  'var'#13#10 +
+  '  ras: rasterizer_scanline;'#13#10 +
+  'begin'#13#10 +
+  '  ras.Construct(@renb );'#13#10 +
+  '  ras.add_path(@trans );'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkUninitVar),
+    'Construct(...) initialisiert den Receiver');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.TpObjectConstrPrefix_Parenless_NotReported;
+// Parenlose Form (aggpas schreibt beides) - laeuft ueber den
+// Hook-1a-Zweig mit derselben Allowlist.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Demo;'#13#10 +
+  'var'#13#10 +
+  '  ras: rasterizer_scanline;'#13#10 +
+  'begin'#13#10 +
+  '  ras.Construct;'#13#10 +
+  '  ras.add_path(@trans );'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkUninitVar),
+    'parenloses Construct initialisiert ebenfalls');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.ReadBeforeConstruct_StillReported;
+// DIE KLAMMER: ein Feld-Read VOR dem Konstruktor bleibt ein
+// read-before-write - das Gate registriert nur den Write an der
+// Construct-Zeile, monoton.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Demo;'#13#10 +
+  'var'#13#10 +
+  '  ras: rasterizer_scanline;'#13#10 +
+  'begin'#13#10 +
+  '  if ras.flag then Beep;'#13#10 +
+  '  ras.Construct;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkUninitVar),
+    'Read vor Construct bleibt Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestUninitVar.NonConstrMember_OnlyUse_StillReported;
+// Gegenprobe: ein NICHT-Init-Verb (add_path) auf dem nie
+// initialisierten Receiver bleibt Fund - die Allowlist ist eng.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  'procedure Demo;'#13#10 +
+  'var'#13#10 +
+  '  ras: rasterizer_scanline;'#13#10 +
+  'begin'#13#10 +
+  '  ras.add_path(@trans );'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkUninitVar),
+    'Nicht-Init-Verb gated nicht');
+  finally F.Free; end;
+end;
+
 
 procedure TTestUninitVar.LabelSectionAfterVars_NoPhantomLocals;
 // FastCode-PosEx-Muster (mormot.core.base/FastcodePosExUnit): die

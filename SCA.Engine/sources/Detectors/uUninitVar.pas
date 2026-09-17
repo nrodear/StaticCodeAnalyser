@@ -1332,8 +1332,19 @@ function IsInitVerb(const MethodLow: string): Boolean;
 // Typ NICHT als in-Unit-Record aufloesbar ist (cross-unit). 'from' ergaenzt
 // From*-Initialiser (mORMot T.FromHttpDate / TSynDate.From) - From* ist ein
 // Init-Idiom das praktisch nie mit einem Value-Reader kollidiert.
+//
+// 'constr' ergaenzt (Lazarus-Paket 2026-09-17): das Turbo-Pascal-object-
+// Konstruktor-Idiom ('ras.Construct;', 'rgba.ConstrDbl(1,1,1)' - aggpas-
+// Hausstil, seit dem program-Parser-Paket in .lpr-Demos sichtbar) IST die
+// Initialisierung des Value-Receivers; der Typ ist nie aufloesbar, weil
+// der Parser '= object'-Typen nicht kennt. Vermessen (rw103/rw_laz18/19):
+// 1.323 von 1.453 fpc-SCA166-Funden (91 %), 351 von 424 im Lazarus-
+// Default, exakt NULL von 41 im Delphi-Korpus - Delphi-Klassen
+// konstruieren via Create, eine Kollision mit einem echten Klassen-
+// Member 'Construct*' auf uninitialisierter Referenz ist dort leer.
 begin
   Result := StartsStr('init', MethodLow) or StartsStr('from', MethodLow) or
+            StartsStr('constr', MethodLow) or
             (MethodLow = 'start') or (MethodLow = 'full') or
             (MethodLow = 'hash')  or (MethodLow = 'reset') or
             (MethodLow = 'done')  or (MethodLow = 'prepare');
