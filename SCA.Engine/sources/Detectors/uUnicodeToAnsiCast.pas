@@ -126,7 +126,8 @@ implementation
 // noinspection-file BeginEndRequired, GroupedDeclaration, RedundantJump, TooLongLine, UnsortedUses
 // noinspection-file UnusedParameter
 uses
-  uAstSpans;   // CollectWithMethodScope (Voll-Review 2026-09-12)
+  uStaticFiles,   // ScanDialect (FPC-Dialekt-Gate 2026-09-17)
+  uAstSpans;      // CollectWithMethodScope (Voll-Review 2026-09-12)
 
 // AContext ist der Kontext-Parameter aus der AddD-Registrierung (B10, 2026-08-16).
 // Er wird HIER bewusst noch nicht gelesen: die Umstellung ist ein eigener,
@@ -383,6 +384,23 @@ class procedure TUnicodeToAnsiCastDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext);
 begin
+  // FPC-DIALEKT-GATE (Lazarus-Paket, 2026-09-17) - die ERSTE
+  // dialektbedingte Regelanpassung (Praezedenz fuer A6): unter FPC
+  // (Default-Modi objfpc/delphi) ist 'string' ein 8-BIT-String -
+  // die Praemisse der Regel ("Quelle ist UTF-16, der Cast verliert
+  // Zeichen") gilt dort nicht. Vollzaehlung der 26 fpc-Funde
+  // (rw_laz21, 17.09.): ueberwiegend Pointer-Reinterpret-Idiome der
+  // codetools ('Name:=AnsiString(Key)' auf Map-Pointern) und No-Op-
+  // Casts von string; die 9 Wide-/UnicodeString-Quellen (propedits,
+  // lclproc) sind BEWUSSTE Konvertierungs-Dispatcher, deren Konversion
+  // der Zweck ist. Die alte P5.1-Stichprobe mass 76 % FP - fuer eine
+  // Warning-/Bug-Tier-Regel untragbar (Evidenz-Politik: 12-19 %).
+  // Der Skip haengt am View-State TStaticFiles.ScanDialect (von
+  // ApplyIfdefView gesetzt, Run-finally restauriert) - NICHT an einer
+  // Datei-Heuristik: derselbe Baum liefert unter --dialect=fpc keine,
+  // ohne Schalter die vollen Funde ({$mode delphiunicode}-Exoten
+  // nehmen wir als dokumentierte Grenze in Kauf).
+  if TStaticFiles.ScanDialect = dlFpc then Exit;
   WalkAndCheck(UnitNode, FileName, Results);
 end;
 

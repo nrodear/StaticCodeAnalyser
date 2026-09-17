@@ -1,4 +1,4 @@
-unit uTestUnicodeToAnsiCast;
+﻿unit uTestUnicodeToAnsiCast;
 
 // Tests fuer den TUnicodeToAnsiCastDetector.
 
@@ -43,6 +43,9 @@ type
     // muessen bewusst auf 1 umgestellt werden.
     [Test] procedure ArgumentPositionCast_NotReported_KnownLimit;
     [Test] procedure MidRhsCast_NotReported_KnownLimit;
+    // FPC-Dialekt-Gate (Vertrag am Detektor)
+    [Test] procedure FpcDialect_NotReported;
+    [Test] procedure DelphiDialect_StillReported;
   end;
 
 implementation
@@ -50,6 +53,7 @@ implementation
 uses
   System.SysUtils, System.Generics.Collections,
   uSCAConsts, uMethodd12,
+  uStaticFiles,   // ScanDialect (FPC-Dialekt-Gate)
   uTestFindingHelper;
 
 procedure TTestUnicodeToAnsiCast.AnsiStringCast_Reported;
@@ -361,6 +365,62 @@ begin
     'BEKANNTE LUECKE: Cast in Argument-Position wird nicht erkannt');
   finally F.Free; end;
 end;
+
+// --- FPC-Dialekt-Gate (2026-09-17, Vertrag am Detektor) ---
+// TStaticFiles.ScanDialect ist GLOBALER View-State: setzen nur im
+// try/finally mit Restaurierung, sonst kippen Folgetests.
+
+procedure TTestUnicodeToAnsiCast.FpcDialect_NotReported;
+// Unter FPC ist string 8-bit - die UTF-16-Verlust-Praemisse der
+// Regel gilt nicht (76 %-FP-Messung P5.1; Vollzaehlung am Detektor-
+// Kommentar). Vor dem Gate: 1 Fund (dieser Test war ROT).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(u: UnicodeString);'#13#10 +
+  'var a: AnsiString;'#13#10 +
+  'begin a := AnsiString(u); end;';
+var
+  F: TObjectList<TLeakFinding>;
+  Alt: TSourceDialect;
+begin
+  Alt := TStaticFiles.ScanDialect;
+  TStaticFiles.ScanDialect := dlFpc;
+  try
+    F := TFindingHelper.FindingsOf(SRC);
+    try Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUnicodeToAnsiCast),
+      'unter dlFpc meldet SCA129 nicht');
+    finally F.Free; end;
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+end;
+
+procedure TTestUnicodeToAnsiCast.DelphiDialect_StillReported;
+// DIE KLAMMER: explizit dlDelphi gesetzt (nicht nur der Default-
+// Zustand) - der Delphi-Pfad bleibt vollstaendig.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo(u: UnicodeString);'#13#10 +
+  'var a: AnsiString;'#13#10 +
+  'begin a := AnsiString(u); end;';
+var
+  F: TObjectList<TLeakFinding>;
+  Alt: TSourceDialect;
+begin
+  Alt := TStaticFiles.ScanDialect;
+  TStaticFiles.ScanDialect := dlDelphi;
+  try
+    F := TFindingHelper.FindingsOf(SRC);
+    try Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnicodeToAnsiCast),
+      'unter dlDelphi bleibt der Fund');
+    finally F.Free; end;
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+end;
+
 
 procedure TTestUnicodeToAnsiCast.MidRhsCast_NotReported_KnownLimit;
 // Zwillingsluecke auf dem Zuweisungs-Pfad: beginnt die RHS mit einem
