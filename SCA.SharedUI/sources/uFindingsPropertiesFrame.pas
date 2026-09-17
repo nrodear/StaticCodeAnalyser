@@ -638,9 +638,14 @@ begin
   if (A = '') or (B = '') then Exit;
   ExtA := LowerCase(ExtractFileExt(A));
   ExtB := LowerCase(ExtractFileExt(B));
-  // Beide muessen .pas vs .dfm sein (eine Richtung oder die andere).
-  if not (((ExtA = '.pas') and (ExtB = '.dfm')) or
-          ((ExtA = '.dfm') and (ExtB = '.pas'))) then Exit;
+  // Unit-vs-Formdatei, eine Richtung oder die andere. Seit A6/C9
+  // dialektFREI auch die Lazarus-Paare (.pas/.lfm, .pp/.lfm): reine
+  // ANZEIGE-Gruppierung - die Funde stammen aus einem beendeten Lauf,
+  // der aktuelle View-State ist hier ohne Belang.
+  if not (((ExtA = '.pas') and ((ExtB = '.dfm') or (ExtB = '.lfm'))) or
+          ((ExtB = '.pas') and ((ExtA = '.dfm') or (ExtA = '.lfm'))) or
+          ((ExtA = '.pp') and (ExtB = '.lfm')) or
+          ((ExtB = '.pp') and (ExtA = '.lfm'))) then Exit;
   // Selbe Datei abzueglich Extension. SameText fuer case-insensitive
   // FS auf Windows.
   Result := SameText(ChangeFileExt(A, ''), ChangeFileExt(B, ''));

@@ -1203,6 +1203,22 @@ begin
   end;
 end;
 
+function FormDialekt: TSourceDialect;
+// A6/C9 (2026-09-18): die Standalone-Form respektiert denselben
+// ini-Schluessel wie die CLI ([Scan] Dialect=delphi|fpc, C1) - die
+// analyser.ini ist der etablierte Konfigurationskanal der Form
+// (uRepoSettings-Doku: 'per Hand in analyser.ini'). AUTONOME
+// ENTSCHEIDUNG: ein VISUELLES Control folgt erst mit offener IDE -
+// ein blinder uMainForm.dfm-Umbau waere das groesste Rot-Risiko der
+// Charge; 'auto' bleibt CLI-Sache (die Wurzel-Aufloesung lebt dort)
+// und faellt hier bewusst auf dlDelphi.
+begin
+  if SameText(TRepoSettings.QuickReadStr('Scan', 'Dialect', ''), 'fpc') then
+    Result := dlFpc
+  else
+    Result := dlDelphi;
+end;
+
 function TForm2.ScopeForPath(const APath: string): TScanScope;
 var
   P : string;
@@ -1210,10 +1226,15 @@ begin
   Result := ssRecursive;
   P := Trim(APath);
   if not FileExists(P) then Exit;
-  if SameText(ExtractFileExt(P), '.dproj') then
+  if SameText(ExtractFileExt(P), '.dproj')
+     or SameText(ExtractFileExt(P), '.lpi')
+     or SameText(ExtractFileExt(P), '.lpk') then
     Result := ssProject
-  else if SameText(ExtractFileExt(P), '.groupproj') then
+  else if SameText(ExtractFileExt(P), '.groupproj')
+       or SameText(ExtractFileExt(P), '.lpg') then
     Result := ssProjectGroup;
+  // .lpi/.lpk/.lpg (A6/C9): der Engine-Dispatch (A5) uebernimmt die
+  // Leser; der Dialekt-Zwang dlFpc haengt in ApplyIfdefView am Scope.
 end;
 
 function TForm2.DirOfProjectPath(const APath: string): string;
@@ -1281,6 +1302,7 @@ begin
           // Engine-Dispatch (Aufloesungs-Filter), Auto-IndexRoot haelt die
           // Cross-Unit-Indizes auf Verzeichnis-Breite (Engine-Default).
           Req.Scope      := ScopeForPath(path);
+          Req.Dialect    := FormDialekt;   // A6/C9: [Scan] Dialect wie CLI
           Req.Path       := path;
           Req.UsesCheck  := Settings.UsesCheck;
           Req.IgnoreList := Ignore;
@@ -1374,6 +1396,7 @@ begin
         var Req := TScanRequest.Init;
         Req.SkipConfig            := True;
         Req.Scope                 := ssSingleFile;
+        Req.Dialect               := FormDialekt;   // A6/C9
         Req.Path                  := AFilePath;
         Req.SingleFileProjectRoot := DirOfProjectPath(Projectpath.Text);
         Req.UsesCheck             := Settings.UsesCheck;
@@ -2059,7 +2082,10 @@ var
   isDfm : Boolean;
   err   : string;
 begin
-  isDfm := EndsText('.dfm', AAbsPath);
+  // .lfm (A6/C9): reine ANZEIGE-Weiche - ein .lfm-Fund aus einem
+  // fpc-Lauf soll denselben Betrachter bekommen wie eine .dfm,
+  // unabhaengig vom aktuellen View-State (der Lauf ist vorbei).
+  isDfm := EndsText('.dfm', AAbsPath) or EndsText('.lfm', AAbsPath);
   // Einmal lesen, beide Entscheidungen daraus. Absichtlich bei JEDEM
   // Doppelklick neu: so wirkt eine Aenderung an der INI sofort, ohne dass
   // erst ein Analyselauf sie einliest.
@@ -2594,6 +2620,7 @@ begin
         var Req := TScanRequest.Init;
         Req.SkipConfig := True;
         Req.Scope      := ssFileList;
+        Req.Dialect    := FormDialekt;   // A6/C9
         Req.Files      := Files.ToStringArray;
         Req.UsesCheck  := Settings.UsesCheck;
         Req.Progress   := procedure(C, T: Integer) begin ProgressCallback(C, T); end;
