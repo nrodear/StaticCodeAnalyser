@@ -186,6 +186,12 @@ type
     // unterscheiden. Der Test haelt fest, dass der Schaden eine
     // FEHLZUORDNUNG ist - und kein Token-Verlust.
     [Test] procedure IfdefSemicolonElse_DirectlyInCaseArm_KnownGap_NothingLost;
+    // Top-Level-Routinen program/library (Vertrag am ParseUnit-Zweig)
+    [Test] procedure Parser_ProgramTopLevelRoutine_EmptyExceptDetected;
+    [Test] procedure Parser_LibraryTopLevelRoutine_EmptyExceptDetected;
+    [Test] procedure Parser_ProgramMainBlock_StaysUnparsed;
+    [Test] procedure Parser_UnitWithMethod_UnchangedByTopLevelBranch;
+    [Test] procedure Parser_ObjectDeclLeak_InUnit_NoPhantomMethod;
   end;
 
 implementation
@@ -4032,6 +4038,151 @@ begin
     finally Root.Free; end;
   finally Parser.Free; end;
 end;
+
+// --- Top-Level-Routinen in program/library (2026-09-17) ---
+// Vertrag am neuen ParseUnit-Zweig: Routinen auf Top-Ebene landen
+// als nkMethod im AST; der HAUPTBLOCK bleibt ungeparst
+// (initialization-Politik). Gemessen ueber SCA002 EmptyExcept -
+// die Regel des A3-Befunds, der die Blindheit aufdeckte.
+
+procedure TTestParserRobustness.Parser_ProgramTopLevelRoutine_EmptyExceptDetected;
+// Der Kernfall: die top-level-Prozedur einer program-Datei ist
+// jetzt ein nkMethod. Vor dem ParseUnit-Zweig verschluckte der
+// else-Default sie tokenweise - 0 Funde (dieser Test war ROT).
+const SRC =
+  'program p;'#13#10 +
+  'procedure TopLevel;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Beep;'#13#10 +
+  '  except'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'begin'#13#10 +
+  '  TopLevel;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkEmptyExcept),
+    'top-level-Routine einer program-Datei ist im AST sichtbar');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_LibraryTopLevelRoutine_EmptyExceptDetected;
+// library-Dateien tragen dieselbe Struktur (A3-Befund nennt
+// beide); die exports-Klausel darf den Parse nicht stoeren.
+const SRC =
+  'library l;'#13#10 +
+  'function Werk: Integer;'#13#10 +
+  'begin'#13#10 +
+  '  Result := 0;'#13#10 +
+  '  try'#13#10 +
+  '    Result := 1;'#13#10 +
+  '  except'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'exports Werk;'#13#10 +
+  'begin'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkEmptyExcept),
+    'top-level-Routine einer library-Datei ist im AST sichtbar');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_ProgramMainBlock_StaysUnparsed;
+// POLITIK-PIN (kippbar): der Hauptblock ist semantisch der
+// initialization-Block, und deren Ruempfe skippt der Parser
+// ueberall (ParseUnit tkKwInitialization: SkipTo end). Ein
+// except NUR im Hauptblock bleibt daher unsichtbar - wer den
+// Hauptblock parsen will, muss BEIDE Politiken zusammen kippen.
+const SRC =
+  'program p;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Beep;'#13#10 +
+  '  except'#13#10 +
+  '  end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkEmptyExcept),
+    'Hauptblock bleibt ungeparst (initialization-Politik)');
+  finally F.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_UnitWithMethod_UnchangedByTopLevelBranch;
+// GEGENPROBE: der neue Top-Level-Zweig aendert den unit-Pfad
+// nicht - Methodenimplementierungen laufen weiter ueber
+// ParseImplementationSection.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type TFoo = class'#13#10 +
+  '  procedure Tu;'#13#10 +
+  'end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Tu;'#13#10 +
+  'begin'#13#10 +
+  '  try'#13#10 +
+  '    Beep;'#13#10 +
+  '  except'#13#10 +
+  '  end;'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkEmptyExcept),
+    'unit-Pfad unveraendert');
+  finally F.Free; end;
+end;
+
+
+procedure TTestParserRobustness.Parser_ObjectDeclLeak_InUnit_NoPhantomMethod;
+// HAERTUNGS-KLAMMER: in einer STRUKTURIERTEN Unit (interface/
+// implementation gesehen) bleiben durchgesickerte Routine-Tokens
+// verschluckt wie bisher. Der Durchsicker braucht die VERERBUNGS-Form
+// 'kind = object(basis)' (agg_bezier_arc-Klasse, deren Z.87/96 im
+// ungehaerteten Korpus-A/B als Phantom-Adds standen): erst sie wirft
+// den type-Parser so ab, dass die Deklarationen bis in den
+// ParseUnit-Loop sickern - dort machte der ungehaertete Zweig
+// Phantom-nkMethods daraus, und ParseMethodImpl frass bei rumpflosen
+// Koepfen nachfolgende type-Abschnitte (7 verlorene GodClass-Funde an
+// IDocList/IDocDict). Die erste Testfassung nutzte 'object' OHNE
+// Vererbung und pruefte unwissentlich den BESTANDSKANAL
+// (ParseInterfaceSection parst die Deklaration selbst, seit jeher
+// 1 Fund) - Erwartung 0 war dort an JEDEM Stand rot. LEHRE: eine
+// Wirkrichtungs-Probe braucht BEIDE Referenzpunkte, alt UND neu.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  ' basis = object'#13#10 +
+  '  end;'#13#10 +
+  ' kind = object(basis )'#13#10 +
+  '   constructor Construct(a ,b ,c ,d ,e ,f : double );'#13#10 +
+  '   procedure init(x0 ,y0 ,rx ,ry ,angle ,sweep : double );'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLongParamList),
+    'object-Deklaration wird kein Phantom-nkMethod');
+  finally F.Free; end;
+end;
+
 
 procedure TTestParserRobustness.Parser_EmptyStmtBeforeBlockEnd_FollowingMethodTopLevel;
 // Derselbe Fehler ohne try: ein ueberzaehliges ';' als letzte Anweisung

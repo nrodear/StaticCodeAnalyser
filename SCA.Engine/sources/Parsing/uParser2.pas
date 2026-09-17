@@ -649,7 +649,9 @@ end;
 procedure TParser2.ParseUnit(Root: TAstNode);
 var
   T: TToken;
+  SahSection: Boolean;   // interface/implementation bereits gesehen?
 begin
+  SahSection := False;
   if Eat(tkKwUnit) then
   begin
     if Tok.Kind = tkIdent then
@@ -666,12 +668,14 @@ begin
       tkKwInterface:
         begin
           var INode := Root.Add(nkInterface, 'interface', T.Line, T.Col);
+          SahSection := True;
           Next;
           ParseInterfaceSection(INode);
         end;
       tkKwImplementation:
         begin
           var INode := Root.Add(nkImplementation, 'implementation', T.Line, T.Col);
+          SahSection := True;
           Next;
           ParseImplementationSection(INode);
         end;
@@ -689,6 +693,43 @@ begin
         begin Next; ParseVarLikeSection(Root, nkVarSection); end;
       tkKwConst:
         begin Next; ParseVarLikeSection(Root, nkConstSection); end;
+      tkKwProcedure, tkKwFunction,
+      tkKwConstructor, tkKwDestructor,
+      tkKwOperator:
+        // TOP-LEVEL-ROUTINEN (Lazarus-Paket, 2026-09-17): program-/
+        // library-Dateien, kopf-lose Fragmente und unit-Skripte OHNE
+        // interface/implementation (TES5Edit-/JvInterpreter-Klasse)
+        // tragen ihre Routinen DIREKT auf Top-Ebene. Bis hierher
+        // verschluckte der else-Default sie tokenweise: JEDER
+        // AST-Detektor war in solchen Dateien blind (SCA002-Befund der
+        // A3-Stichprobe; Delphi-Korpus 109 program/library-.pas mit
+        // 303 Routinen, Lazarus-fpc 635 Dateien mit 3.397 Routinen -
+        // .lpr eingeschlossen).
+        //
+        // NUR solange KEINE Section lief (SahSection): in strukturierten
+        // Units sind Routine-Tokens auf dieser Ebene DURCHSICKER aus
+        // Resync-Randfaellen (Turbo-Pascal-object-Typen der aggpas,
+        // TLB-Importe, mORMot-Makros) - dort sind es meist RUMPFLOSE
+        // Deklarationen, und ParseMethodImpl wuerde den NACHFOLGENDEN
+        // type-Abschnitt als lokale Sektion fressen (gemessen: IDocList/
+        // IDocDict verloren ihre GodClass-Funde, 7 Drops). Fuer sie
+        // bleibt das Bestandsverhalten: still verschlucken. Die
+        // Durchsicker-Behandlung strukturierter Units braucht erst eine
+        // ParseMethodImpl-Haertung gegen rumpflose Koepfe - eigenes
+        // Paket.
+        //
+        // Der HAUPTBLOCK ('begin ... end.') bleibt bewusst ungeparst:
+        // er ist semantisch der initialization-Block, und deren
+        // Ruempfe skippt der Parser als Bestandspolitik ueberall.
+        if SahSection then
+          Next
+        else
+        begin
+          // FImplNode nur besetzen, wenn noch keine implementation lief
+          // - die IFDEF-Body-Recovery braucht ein Ziel auf Root-Ebene.
+          if FImplNode = nil then FImplNode := Root;
+          ParseMethodImpl(Root);
+        end;
       tkKwInitialization, tkKwFinalization:
         begin
           Next;
