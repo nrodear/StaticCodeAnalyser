@@ -4150,18 +4150,25 @@ end;
 procedure TTestParserRobustness.Parser_ObjectDeclLeak_InUnit_NoPhantomMethod;
 // HAERTUNGS-KLAMMER: in einer STRUKTURIERTEN Unit (interface/
 // implementation gesehen) bleiben durchgesickerte Routine-Tokens
-// verschluckt wie bisher. Turbo-Pascal-object-Deklarationen
-// (aggpas-Klasse) sickern nach dem type-Ausstieg bis in den
-// ParseUnit-Loop; der ungehaertete Top-Level-Zweig machte daraus
-// Phantom-nkMethods (LongParamList auf der DEKLARATION - dieser
-// Test war an dem Stand ROT) und ParseMethodImpl frass bei
-// rumpflosen Koepfen nachfolgende type-Abschnitte (7 verlorene
-// GodClass-Funde an IDocList/IDocDict im Korpus-A/B).
+// verschluckt wie bisher. Der Durchsicker braucht die VERERBUNGS-Form
+// 'kind = object(basis)' (agg_bezier_arc-Klasse, deren Z.87/96 im
+// ungehaerteten Korpus-A/B als Phantom-Adds standen): erst sie wirft
+// den type-Parser so ab, dass die Deklarationen bis in den
+// ParseUnit-Loop sickern - dort machte der ungehaertete Zweig
+// Phantom-nkMethods daraus, und ParseMethodImpl frass bei rumpflosen
+// Koepfen nachfolgende type-Abschnitte (7 verlorene GodClass-Funde an
+// IDocList/IDocDict). Die erste Testfassung nutzte 'object' OHNE
+// Vererbung und pruefte unwissentlich den BESTANDSKANAL
+// (ParseInterfaceSection parst die Deklaration selbst, seit jeher
+// 1 Fund) - Erwartung 0 war dort an JEDEM Stand rot. LEHRE: eine
+// Wirkrichtungs-Probe braucht BEIDE Referenzpunkte, alt UND neu.
 const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
   'type'#13#10 +
-  ' arc = object'#13#10 +
+  ' basis = object'#13#10 +
+  '  end;'#13#10 +
+  ' kind = object(basis )'#13#10 +
   '   constructor Construct(a ,b ,c ,d ,e ,f : double );'#13#10 +
   '   procedure init(x0 ,y0 ,rx ,ry ,angle ,sweep : double );'#13#10 +
   '  end;'#13#10 +
