@@ -1,4 +1,4 @@
-unit uFixHint;
+﻿unit uFixHint;
 
 // Loesungs-Hinweise pro Befund-Typ.
 //
@@ -4226,7 +4226,7 @@ begin
 
     fkSourceUtf8NoBom:
     begin
-      Result.Description := _('UTF-8 source without BOM - Delphi compiler reads it as ANSI (mojibake)');
+      Result.Description := _('UTF-8 source without BOM - Delphi reads it as ANSI, FPC as UTF-8 (mojibake on Delphi)');
       Result.Before :=
         '// file saved as UTF-8 WITHOUT a BOM, containing non-ASCII text.'#13#10 +
         '// The compiler has no BOM, so it decodes the bytes as ANSI'#13#10 +
@@ -4311,7 +4311,7 @@ begin
     begin
       Result.Description := _('UTF-32 source - compiler rejects it with fatal error F2438');
       Result.Before :=
-        '// file saved as UTF-32 / UCS-4. The Delphi compiler aborts with:'#13#10 +
+        '// file saved as UTF-32 / UCS-4. No Pascal compiler accepts this; Delphi aborts with:'#13#10 +
         '//   F2438 UCS-4 text encoding not supported. Convert to UCS-2 or UTF-8';
       Result.After :=
         '// Convert the file to UTF-8 (with BOM) or UTF-16.';

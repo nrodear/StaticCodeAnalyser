@@ -1487,7 +1487,7 @@ msgstr "▶ Analysieren"
 msgid "📄 File"
 msgstr "📄 Datei"
 
-msgid "UTF-8 source without BOM - Delphi compiler reads it as ANSI (mojibake)"
+msgid "UTF-8 source without BOM - Delphi reads it as ANSI, FPC as UTF-8 (mojibake on Delphi)"
 msgstr "UTF-8-Quelltext ohne BOM - der Delphi-Compiler liest ihn als ANSI (Mojibake)"
 
 msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"
