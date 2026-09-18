@@ -20,7 +20,12 @@
 //   Befunde sind daher immer Warnungen, keine Fehler.
 //
 // ===================================================================
-// IM CLI LAEUFT DIESER DETEKTOR NICHT. Befund vom 2026-09-15, offen.
+// IM CLI LAEUFT DIESER DETEKTOR NICHT. Befund vom 2026-09-15 -
+// GEFIXT 2026-09-19 (Zweig sca007-cli-recall): uConsoleRunner setzt
+// Req.UsesCheck jetzt ueber EffektiverUsesCheck (ini-Schalter ODER
+// Profil 'strict'). Der Kettenbefund darunter bleibt als Doku des
+// Defekts stehen; das FREIGABE-GATE (FP-Stichprobe am gebauten Stand
+// VOR dem Merge) steht im Vertrag der Charge.
 // ===================================================================
 //
 // Die Kette, jede Stelle nachgesehen:
