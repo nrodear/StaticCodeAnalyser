@@ -183,7 +183,7 @@ begin
       // Anzeige-Text kuerzen
       Display := Pair.Key;
       if Length(Display) > 30 then
-        Display := Copy(Display, 1, 27) + '...';
+        Display := TDetectorUtils.TruncateSurrogateSafe(Display, 27) + '...';
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;

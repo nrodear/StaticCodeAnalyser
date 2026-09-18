@@ -236,6 +236,17 @@ type
     // (Namensvetter, bewusst getrennt).
     class function SplitTopLevelArgs(const Args: string): TArray<string>; static;
 
+    // Kuerzt S auf hoechstens AMaxUnits UTF-16-Code-Units, OHNE ein
+    // Surrogatpaar zu durchschneiden: endet der Schnitt auf einem
+    // High-Surrogat (erste Haelfte eines non-BMP-Zeichens, z. B. Emoji),
+    // faellt auch dieses weg - ein blankes Copy(S,1,N) liesse sonst
+    // kaputtes UTF-16 im Meldetext zurueck (Prueferbefund 2026-09-15:
+    // acht Abschnitt-Stellen in fuenf Detektoren). Gleiche Zusicherung
+    // wie Crop in uFindingCopyText (Jira-Befund). Die Ellipse haengt
+    // der Aufrufer an - ihre Form ist je Detektor verschieden.
+    class function TruncateSurrogateSafe(const S: string;
+      AMaxUnits: Integer): string; static;
+
     // === ZEILEN-SCANNER (Strings + Kommentare) =========================
     // Single source of truth fuer die String-/Kommentar-Zustandsmaschine.
     // Frueher hatten uFloatEquality und uNoSonarMarker je eine eigene Kopie
@@ -1109,6 +1120,19 @@ begin
   finally
     parts.Free;
   end;
+end;
+
+class function TDetectorUtils.TruncateSurrogateSafe(const S: string;
+  AMaxUnits: Integer): string;
+// Direkter Bereichstest statt Char-Helper - haelt uDetectorUtils frei
+// von System.Character. Ein Low-Surrogat am Schnittende bleibt stehen:
+// dann liegt das PAAR vollstaendig im Ergebnis (oder die Quelle war
+// schon vorher kaputt - das repariert eine Kuerzung nicht).
+begin
+  Result := Copy(S, 1, AMaxUnits);
+  if (Result <> '') and (Result[Length(Result)] >= #$D800) and
+     (Result[Length(Result)] <= #$DBFF) then
+    SetLength(Result, Length(Result) - 1);
 end;
 
 class function TDetectorUtils.BlankNonCode(const Line: string;

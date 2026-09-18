@@ -323,7 +323,7 @@ begin
 
             Display := S;
             if Length(Display) > 40 then
-              Display := Copy(Display, 1, 37) + '...';
+              Display := TDetectorUtils.TruncateSurrogateSafe(Display, 37) + '...';
 
             F            := TLeakFinding.Create;
             F.FileName   := FileName;

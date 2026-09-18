@@ -73,6 +73,13 @@ type
     [Test] procedure Unqualified_NoDot_Unchanged;
     [Test] procedure Unqualified_EmptyAndTrailingDot;
     [Test] procedure Unqualified_LowerVariant_LowercasesLastSegment;
+    // ---- TruncateSurrogateSafe (Audit Fundbewegend 2026-09-15, P4) ----
+    [Test] procedure Trunc_CutInsideSurrogatePair_DropsHighHalf;
+    [Test] procedure Trunc_CutBehindPair_KeepsPairComplete;
+    [Test] procedure Trunc_ShortInput_Unchanged;
+    [Test] procedure Trunc_BmpOnly_PlainCut;
+    [Test] procedure Trunc_ZeroMax_Empty;
+    [Test] procedure Trunc_LoneHighAtCut_AlsoDropped;
     // ---- IsIdentChar / Zeichenklasse (Backlog-Welle 1, 2026-07-26) ----
     [Test] procedure IdentChar_LettersAndDigitsAndUnderscore;
     [Test] procedure IdentChar_RangeNeighboursAreNoIdent;
@@ -550,6 +557,48 @@ begin
   Assert.AreEqual('doit',
     TDetectorUtils.UnqualifiedNameLastLower('TOuter.TInner.DoIt'));
   Assert.AreEqual('bar', TDetectorUtils.UnqualifiedNameLastLower('Bar'));
+end;
+
+{ ---- TruncateSurrogateSafe (Audit Fundbewegend 2026-09-15, P4) ---- }
+// UTF-16-Kuerzung darf nie ein Surrogatpaar durchschneiden. Fixture-
+// Zeichen: U+1F600 (Emoji) = High #$D83D + Low #$DE00, zwei Code-Units.
+
+procedure TTestDetectorUtils.Trunc_CutInsideSurrogatePair_DropsHighHalf;
+begin
+  // Schnitt bei 3 traefe die Paar-Mitte: das High-Surrogat muss mit weg.
+  Assert.AreEqual('ab',
+    TDetectorUtils.TruncateSurrogateSafe('ab' + #$D83D#$DE00, 3));
+end;
+
+procedure TTestDetectorUtils.Trunc_CutBehindPair_KeepsPairComplete;
+begin
+  // Schnitt bei 4 endet HINTER dem Low-Surrogat: Paar bleibt komplett.
+  Assert.AreEqual('ab' + #$D83D#$DE00,
+    TDetectorUtils.TruncateSurrogateSafe('ab' + #$D83D#$DE00 + 'cd', 4));
+end;
+
+procedure TTestDetectorUtils.Trunc_ShortInput_Unchanged;
+begin
+  Assert.AreEqual('abc', TDetectorUtils.TruncateSurrogateSafe('abc', 27));
+end;
+
+procedure TTestDetectorUtils.Trunc_BmpOnly_PlainCut;
+begin
+  Assert.AreEqual('abc', TDetectorUtils.TruncateSurrogateSafe('abcdef', 3));
+end;
+
+procedure TTestDetectorUtils.Trunc_ZeroMax_Empty;
+begin
+  Assert.AreEqual('', TDetectorUtils.TruncateSurrogateSafe('abc', 0));
+end;
+
+procedure TTestDetectorUtils.Trunc_LoneHighAtCut_AlsoDropped;
+begin
+  // Schon kaputte Quelle (unpaariges High genau am Schnitt): auch dann
+  // bleibt kein haengendes High zurueck - die Kuerzung repariert die
+  // Quelle nicht, erzeugt aber selbst nie neues kaputtes UTF-16.
+  Assert.AreEqual('a',
+    TDetectorUtils.TruncateSurrogateSafe('a' + #$D83D + 'b', 2));
 end;
 
 { ---- IsIdentChar / Zeichenklasse (Backlog-Welle 1, 2026-07-26) ---- }

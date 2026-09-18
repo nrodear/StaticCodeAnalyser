@@ -831,7 +831,7 @@ begin
          IsKnownSecretPattern(A.TypeRef, PatKind) then
       begin
         if Length(A.TypeRef) > MAX_VAL_LEN then
-          LitShort := Copy(A.TypeRef, 1, MAX_VAL_LEN - 4) + '...'''
+          LitShort := TDetectorUtils.TruncateSurrogateSafe(A.TypeRef, MAX_VAL_LEN - 4) + '...'''
         else
           LitShort := A.TypeRef;
         Results.Add(TLeakFinding.New(FileName, MethodNode.Name, A.Line,
@@ -876,7 +876,7 @@ begin
 
       // Literal-Wert auf MAX_VAL_LEN Zeichen kürzen
       if Length(A.TypeRef) > MAX_VAL_LEN then
-        LitShort := Copy(A.TypeRef, 1, MAX_VAL_LEN - 4) + '...'''
+        LitShort := TDetectorUtils.TruncateSurrogateSafe(A.TypeRef, MAX_VAL_LEN - 4) + '...'''
       else
         LitShort := A.TypeRef;
 
@@ -1018,7 +1018,7 @@ begin
       if THardcodedSecretDetector.IsKnownSecretPattern(Literal, PatKind) then
       begin
         if Length(Literal) > MAX_VAL_LEN then
-          LitShort := Copy(Literal, 1, MAX_VAL_LEN - 4) + '...'''
+          LitShort := TDetectorUtils.TruncateSurrogateSafe(Literal, MAX_VAL_LEN - 4) + '...'''
         else
           LitShort := Literal;
         Results.Add(TLeakFinding.New(FileName, '', N.Line,
@@ -1066,7 +1066,7 @@ begin
         Continue;
 
       if Length(Literal) > MAX_VAL_LEN then
-        LitShort := Copy(Literal, 1, MAX_VAL_LEN - 4) + '...'''
+        LitShort := TDetectorUtils.TruncateSurrogateSafe(Literal, MAX_VAL_LEN - 4) + '...'''
       else
         LitShort := Literal;
       Results.Add(TLeakFinding.New(FileName, '', N.Line,
