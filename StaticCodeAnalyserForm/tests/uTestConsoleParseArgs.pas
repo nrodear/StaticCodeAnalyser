@@ -40,6 +40,12 @@ type
     [Test] procedure Dialect_NichtAngegeben_BleibtLeer;
     [Test] procedure Dialect_UngueltigerWert_ParseError;
     [Test] procedure Dialect_Auto_ParseErrorMitHinweis;
+    // ---- FixtureFilterAnker (Blocker-Fix, Audit 2026-09-15 P1) ----
+    [Test] procedure Anker_PathGewinnt;
+    [Test] procedure Anker_FileModus_IstDateiVerzeichnis;
+    [Test] procedure Anker_ProjektModus_IstProjektVerzeichnis;
+    [Test] procedure Anker_GruppenModus_IstGruppenVerzeichnis;
+    [Test] procedure Anker_OhneZiel_BleibtLeer;
   end;
 
 implementation
@@ -265,6 +271,66 @@ begin
     'der Wert kommt roh an - kleingeschrieben wird er erst bei der '
     + 'Auswertung. AreEqual steht hier bewusst case-SENSITIV, sonst '
     + 'prueft der Fall gar nichts');
+end;
+
+{ ---- FixtureFilterAnker (Blocker-Fix, Audit 2026-09-15 P1) ---- }
+// Der Test-Fixture-Filter braucht eine Scanwurzel als Anker. In
+// --file/--project/--project-group war er leer (Args.Path-Exklusivitaet)
+// und der Filter warf explizit benannte Ziele unter .../tests/...
+// komplett weg. Diese Tests pinnen die Anker-Kaskade.
+
+procedure TTestConsoleParseArgs.Anker_PathGewinnt;
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs(['--path', 'C:\repo\src']);
+  Assert.AreEqual('C:\repo\src', FixtureFilterAnker(A));
+end;
+
+procedure TTestConsoleParseArgs.Anker_FileModus_IstDateiVerzeichnis;
+// GENAU das Minimalpaar des Audits: --file auf eine Datei unter
+// .../tests/... muss denselben Anker ergeben wie --path auf ihr
+// Verzeichnis - vorher war der Anker leer und der Filter matchte
+// '/tests/' im Absolutpfad.
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs(
+    ['--file', 'D:\korpus\tests\examples\ArrowButton\Unit1.pas']);
+  Assert.AreEqual('D:\korpus\tests\examples\ArrowButton',
+    FixtureFilterAnker(A));
+end;
+
+procedure TTestConsoleParseArgs.Anker_ProjektModus_IstProjektVerzeichnis;
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs(
+    ['--project', 'D:\korpus\Samples\Demo\App.dproj']);
+  Assert.AreEqual('D:\korpus\Samples\Demo', FixtureFilterAnker(A));
+end;
+
+procedure TTestConsoleParseArgs.Anker_GruppenModus_IstGruppenVerzeichnis;
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs(
+    ['--project-group', 'D:\korpus\All.groupproj']);
+  Assert.AreEqual('D:\korpus', FixtureFilterAnker(A));
+end;
+
+procedure TTestConsoleParseArgs.Anker_OhneZiel_BleibtLeer;
+// Der Fehlwert '' heisst "kein Anker" und laesst dem Filter sein
+// dokumentiertes Alt-Verhalten. GetCurrentDir waere ein STILLER
+// Verhaltenswechsel, der vom Aufrufort abhinge. Real erreichen ihn
+// nur Grenzfaelle - --diff/--branch erzwingen --path schon im Parser
+// (ihr Anker ist also immer gesetzt); der Test pinnt den Fehlwert
+// trotzdem, damit niemand ihn "hilfreich" auf CWD umbiegt.
+var
+  A : TCliArgs;
+begin
+  A := TConsoleRunner.ParseArgs([]);
+  Assert.AreEqual('', FixtureFilterAnker(A));
 end;
 
 initialization
