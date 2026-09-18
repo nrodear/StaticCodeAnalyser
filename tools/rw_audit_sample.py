@@ -31,6 +31,7 @@ import json
 import os
 import random
 import re
+import urllib.parse
 
 RESULT_RX = re.compile(
     rb'"ruleId":\s*"(SCA\d+)",\s*"level":\s*"(\w+)",\s*"message":\s*\{\s*'
@@ -63,7 +64,10 @@ def read_findings(path):
                     break
                 if pos + m.end() > watermark:
                     per_rule[m.group(1).decode()].append(
-                        (m.group(2).decode(), unescape(m.group(4)),
+                        # unquote NUR auf die uri (Gruppe 4) - der
+                        # Meldetext (3) darf ein woertliches %20 behalten.
+                        (m.group(2).decode(),
+                         urllib.parse.unquote(unescape(m.group(4))),
                          int(m.group(5)), unescape(m.group(3))))
                     watermark = pos + m.end()
             if eof:

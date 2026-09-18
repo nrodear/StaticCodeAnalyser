@@ -10,7 +10,7 @@ Usage:
     --levels error,warning --exclude StaticCodeAnalyser \
     --out sca-realworld-byDetector.json
 """
-import argparse, json, os, sys, collections
+import argparse, json, os, sys, collections, urllib.parse
 
 
 def load_sarif(path):
@@ -49,6 +49,9 @@ def norm_uri(uri):
         uri = uri[8:]
     elif uri.startswith("file://"):
         uri = uri[7:]
+    # Seit der Emit-Kodierung (2026-09-19) kommen Leerzeichen als %20 -
+    # fuer Pfadvergleiche/--exclude muss der ROHE Pfad herhalten.
+    uri = urllib.parse.unquote(uri)
     return uri.replace("/", os.sep)
 
 

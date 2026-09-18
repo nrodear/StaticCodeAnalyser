@@ -44,6 +44,10 @@ type
     // Fingerprint-Formel und helpUri (Haertung 2026-09-15)
     [Test] procedure FingerprintFolgtDerVereinbartenFormel;
     [Test] procedure HelpUriIstAbsolutOderFehlt;
+    // uri-Prozentkodierung am Emit-Punkt (Audit Fundbewegend, Posten 3)
+    [Test] procedure UriMitLeerzeichenWirdProzentkodiert;
+    [Test] procedure UriProzentzeichenWirdZuerstKodiert;
+    [Test] procedure FingerprintBleibtAufRohemPfad;
   end;
 
 implementation
@@ -616,6 +620,101 @@ begin
         Assert.IsTrue(U.StartsWith('http://') or U.StartsWith('https://'),
           'helpUri muss eine absolute URI sein, ist aber: ' + U);
       end;
+    finally
+      Root.Free;
+    end;
+  finally
+    F.Free;
+  end;
+end;
+
+{ --- uri-Prozentkodierung am Emit-Punkt (Audit Fundbewegend, P3) --- }
+
+procedure TTestExportSARIF.UriMitLeerzeichenWirdProzentkodiert;
+// SARIF verlangt in artifactLocation.uri eine URI - ein rohes
+// Leerzeichen ist dort ungueltig. Am Referenzkorpus tragen 406 uris
+// Leerzeichen ('Demo App'-artige Verzeichnisse, Messung 19.09.).
+var
+  F    : TObjectList<TLeakFinding>;
+  Root : TJSONObject;
+  Uri  : string;
+begin
+  F := TObjectList<TLeakFinding>.Create(True);
+  try
+    F.Add(MakeFinding(fkNilDeref, lsWarning, 'src\Demo App\X.pas', 7, 'obj'));
+    Root := ParseSARIF(TSARIFWriter.ToJsonString(F, '', '0.8.0', 'T'));
+    try
+      Uri := GetFirstResult(Root).GetValue<TJSONArray>('locations').Items[0]
+               .GetValue<TJSONObject>('physicalLocation')
+               .GetValue<TJSONObject>('artifactLocation')
+               .GetValue<string>('uri');
+      Assert.AreEqual('src/Demo%20App/X.pas', Uri);
+    finally
+      Root.Free;
+    end;
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestExportSARIF.UriProzentzeichenWirdZuerstKodiert;
+// Ambiguitaetsschutz: ein Dateiname, der LITERAL '%20' enthaelt, muss
+// als '%2520' rausgehen - sonst laese jeder Konsument nach dem
+// Dekodieren ein Leerzeichen, das nie im Pfad stand.
+var
+  F    : TObjectList<TLeakFinding>;
+  Root : TJSONObject;
+  Uri  : string;
+begin
+  F := TObjectList<TLeakFinding>.Create(True);
+  try
+    F.Add(MakeFinding(fkNilDeref, lsWarning, 'src\a%20b.pas', 7, 'obj'));
+    Root := ParseSARIF(TSARIFWriter.ToJsonString(F, '', '0.8.0', 'T'));
+    try
+      Uri := GetFirstResult(Root).GetValue<TJSONArray>('locations').Items[0]
+               .GetValue<TJSONObject>('physicalLocation')
+               .GetValue<TJSONObject>('artifactLocation')
+               .GetValue<string>('uri');
+      Assert.AreEqual('src/a%2520b.pas', Uri);
+    finally
+      Root.Free;
+    end;
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestExportSARIF.FingerprintBleibtAufRohemPfad;
+// DIE Falle des Postens (Audit 2026-09-15): wuerde die Kodierung in
+// MakeRelative statt am Emit sitzen, wanderte der Fingerprint jedes
+// betroffenen Funds mit - GitHub meldete jeden Alert einmalig "neu".
+// Dieser Test pinnt: der Hash laeuft ueber den ROHEN Relativpfad
+// (mit Leerzeichen), waehrend die uri kodiert rausgeht.
+var
+  F    : TObjectList<TLeakFinding>;
+  Root : TJSONObject;
+  R    : TJSONObject;
+  Hash, Txt, Regel, RohErwartet, KodiertWaere : string;
+begin
+  F := TObjectList<TLeakFinding>.Create(True);
+  try
+    F.Add(MakeFinding(fkNilDeref, lsWarning, 'src\Demo App\X.pas', 7, 'obj'));
+    Root := ParseSARIF(TSARIFWriter.ToJsonString(F, '', '0.8.0', 'T'));
+    try
+      R     := GetFirstResult(Root);
+      Regel := R.GetValue<string>('ruleId');
+      Txt   := R.GetValue<TJSONObject>('message').GetValue<string>('text');
+      Hash  := R.GetValue<TJSONObject>('partialFingerprints')
+                .GetValue<string>('primaryLocationLineHash');
+      RohErwartet := THashSHA2.GetHashString(
+        Regel + '|src/Demo App/X.pas|7|' + Txt);
+      KodiertWaere := THashSHA2.GetHashString(
+        Regel + '|src/Demo%20App/X.pas|7|' + Txt);
+      Assert.AreEqual(LowerCase(RohErwartet), LowerCase(Hash),
+        'Fingerprint muss ueber den ROHEN Pfad laufen');
+      Assert.AreNotEqual(LowerCase(KodiertWaere), LowerCase(Hash),
+        'liefe der Hash ueber die kodierte uri, waere jeder betroffene '
+        + 'GitHub-Alert einmalig neu');
     finally
       Root.Free;
     end;
