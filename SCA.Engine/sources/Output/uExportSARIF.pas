@@ -152,13 +152,12 @@ function FingerprintHash(const RuleID, RelPath: string; LineNo: Integer;
 // ALLE 752.457 Fingerprints auf einen Schlag und ist ein eigenes
 // Paket.
 //
-// OFFENER POSTEN, bei dieser Messung gefunden und NICHT hier behoben:
-// unpaarige Surrogate entstehen im Korpus tatsaechlich - 16 Stueck,
-// nicht beim Lesen, sondern weil acht feste Abschnitt-Stellen ein
-// Surrogatpaar mitten durchschneiden (uDuplicateString.pas:186
-// Copy(Display, 1, 27), uHardcodedPath.pas:326 und sechs weitere). Ein
-// Detektor, der seinen eigenen Meldetext mitten in einem Zeichen
-// kappt, ist das eigentliche Thema - eigener Posten.
+// Nachtrag 2026-09-19: der hier notierte Folgeposten (acht Abschnitt-
+// Stellen, die ein Surrogatpaar durchschneiden konnten) ist umgesetzt -
+// alle acht kuerzen jetzt ueber TDetectorUtils.TruncateSurrogateSafe.
+// Die damals gemessene 16er-Zahl war am Referenzlauf vom 19.09. nicht
+// mehr reproduzierbar (drei Messwege, null Treffer; Details im
+// C1-Vertrag der A-Charge) - die Haertung gilt darum als Null-Bewegung.
 begin
   Result := THashSHA2.GetHashString(
     RuleID + '|' + RelPath + '|' + IntToStr(LineNo) + '|' + Message);
