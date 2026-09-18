@@ -492,6 +492,15 @@ begin
       // Packages nicht) - Review 2026-07-30, vorher garantierter No-Op.
       F := ChangeFileExt(AProjectFile, '.dpk');
       if FileExists(F) then CollectUsesNames(F, UsedNames, True);
+      // .lpr (A6/C6, 2026-09-18): das Lazarus-Programm ist die
+      // uses-Wurzel eines .lpi-Scans. ANDERS als die .dpr steht die
+      // .lpr normalerweise SCHON in der Projektliste (FromLpi nimmt
+      // sie als Unit0 auf, IsPartOfProject=True) - dann ist diese
+      // Zeile idempotent (UsedNames dedupliziert). Sie deckt den
+      // Randfall .lpi ohne gelistete .lpr, damit der Rat 194/195
+      // nicht am Listenzustand haengt.
+      F := ChangeFileExt(AProjectFile, '.lpr');
+      if FileExists(F) then CollectUsesNames(F, UsedNames);
     end;
 
     // Gruppen-Scan (Review 2026-07-30): die Wurzeln der MEMBER-Projekte
@@ -506,6 +515,10 @@ begin
         if FileExists(F) then CollectUsesNames(F, UsedNames);
         F := ChangeFileExt(AMemberProjects[i], '.dpk');
         if FileExists(F) then CollectUsesNames(F, UsedNames, True);
+        // .lpg-Member sind .lpi/.lpk-Pfade (A6/C6) - gleiche
+        // .lpr-Nachziehung wie oben, gleiche Idempotenz.
+        F := ChangeFileExt(AMemberProjects[i], '.lpr');
+        if FileExists(F) then CollectUsesNames(F, UsedNames);
       end;
 
     // Verwaiste .pas klassifizieren: benutzt (fkUsedButNotInProject) oder

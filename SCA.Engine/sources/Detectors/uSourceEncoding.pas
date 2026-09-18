@@ -289,9 +289,9 @@ begin
   if Info.BomKind in [sbkUtf32LE, sbkUtf32BE] then
   begin
     Results.Add(TLeakFinding.New(FileName, '', 1,
-      'UTF-32 / UCS-4 source file - the Delphi compiler rejects this with fatal ' +
-      'error F2438 ("UCS-4 text encoding not supported"). Convert the file to ' +
-      'UTF-8 (with BOM) or UTF-16.',
+      'UTF-32 / UCS-4 source file - no Pascal compiler accepts this ' +
+      '(Delphi: fatal F2438 "UCS-4 text encoding not supported"). Convert ' +
+      'the file to UTF-8 (with BOM) or UTF-16.',
       fkSourceUtf32));
     Exit;
   end;
@@ -391,7 +391,7 @@ begin
   else if (Info.BomKind = sbkUtf8) and (not Info.StrictUtf8) then
     Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstInvalidLine),
       'Invalid UTF-8 sequence under a UTF-8 BOM (overlong / surrogate / ' +
-      'out-of-range code point). The Delphi compiler silently substitutes ' +
+      'out-of-range code point). The compiler silently substitutes ' +
       'U+FFFD -> data corruption. Re-encode the file as clean UTF-8.',
       fkSourceInvalidUtf8))
   else if (Info.BomKind = sbkNone) and Info.HasNonAscii and Info.StrictUtf8 then
@@ -401,10 +401,10 @@ begin
     // (fcMedium); nur Kommentar = der Compiler verwirft Kommentare (fcLow, opt-in).
     if Outside then
       Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstNonAsciiLine),
-        'UTF-8 without BOM: non-ASCII in a string literal or identifier. The ' +
-        'Delphi compiler reads BOM-less files as ANSI (GetACP, e.g. CP-1252) -> ' +
-        'mojibake at runtime. Fix: save as UTF-8 WITH BOM, or build with ' +
-        '--codepage:65001.',
+        'UTF-8 without BOM: non-ASCII in a string literal or identifier. ' +
+        'Delphi reads BOM-less files as ANSI (GetACP, e.g. CP-1252) -> ' +
+        'mojibake at runtime; FPC defaults to UTF-8. Fix: save as UTF-8 ' +
+        'WITH BOM, or build with --codepage:65001.',
         fkSourceUtf8NoBom, fcMedium))
     else
       Results.Add(TLeakFinding.New(FileName, '', LineOr1(Info.FirstNonAsciiLine),

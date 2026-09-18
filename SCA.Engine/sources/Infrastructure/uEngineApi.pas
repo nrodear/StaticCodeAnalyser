@@ -426,7 +426,18 @@ procedure TAnalysisSession.ApplyIfdefView(const Req: TScanRequest);
 // die Sicht seines Requests, nicht den Zufallszustand des Vorlaufs.
 var
   Def : string;
+  EffDialekt : TSourceDialect;
 begin
+  // Effektiven Dialekt VOR dem Define-Block bestimmen - der
+  // FPC-Define-Satz (unten) haengt daran.
+  if (Req.Scope in [ssProject, ssProjectGroup])
+     and (SameText(ExtractFileExt(Req.Path), '.lpi')
+          or SameText(ExtractFileExt(Req.Path), '.lpk')
+          or SameText(ExtractFileExt(Req.Path), '.lpg')) then
+    EffDialekt := dlFpc
+  else
+    EffDialekt := Req.Dialect;
+
   LexerIfdefClear;
   if Length(Req.IfdefDefines) > 0 then
   begin
@@ -434,6 +445,20 @@ begin
     for Def in Req.IfdefDefines do
       if Trim(Def) <> '' then
         LexerIfdefAddDefine(Trim(Def));
+    // P5.7 (A6/C7, 2026-09-18): laeuft die Ein-Zweig-Sicht unter
+    // dlFpc, gehoeren 'FPC' und 'LCL' in den Define-Satz - ohne sie
+    // nimmt der Ein-Zweig-Lexer die {$IFDEF FPC}-Zweige NICHT, und
+    // genau die sind unter diesem Dialekt die kompilierte Wahrheit.
+    // BEWUSST NUR bei bereits aktiver Sicht (Req.IfdefDefines nicht
+    // leer): der Doppelzweig-Default - und damit JEDER Referenzlauf -
+    // bleibt unberuehrt; der Dialekt schaltet keine fremde Achse ein.
+    // Widgetset-/CPU-/OS-Defines bleiben Sache des Nutzers (Kapitel-5-
+    // Entscheid 4: alle Widgetsets scannen, keins vordefinieren).
+    if EffDialekt = dlFpc then
+    begin
+      LexerIfdefAddDefine('FPC');
+      LexerIfdefAddDefine('LCL');
+    end;
   end
   else
     gLexerIfdefSkipEnabled := False;
@@ -450,13 +475,9 @@ begin
   // einer expliziten Nutzerangabe: eine Lazarus-Projektdatei IST FPC.
   // Ohne den Zwang liefe der .lpi-Scan mit Delphi-Sicht - keine
   // .lfm-Paarung, keine .pp-Schwestern, SCA129 mit falscher Praemisse.
-  if (Req.Scope in [ssProject, ssProjectGroup])
-     and (SameText(ExtractFileExt(Req.Path), '.lpi')
-          or SameText(ExtractFileExt(Req.Path), '.lpk')
-          or SameText(ExtractFileExt(Req.Path), '.lpg')) then
-    TStaticFiles.ScanDialect := dlFpc
-  else
-    TStaticFiles.ScanDialect := Req.Dialect;
+  // (Berechnung seit C7 oben als EffDialekt - der Define-Satz braucht
+  // denselben Wert.)
+  TStaticFiles.ScanDialect := EffDialekt;
 end;
 
 procedure TAnalysisSession.ApplyConfig(const Req: TScanRequest);

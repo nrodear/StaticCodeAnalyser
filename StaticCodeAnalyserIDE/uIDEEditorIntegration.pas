@@ -178,6 +178,16 @@ begin
   // Bei einer .dfm-Datei auf die zugehoerige .pas umleiten, falls sie im
   // gleichen Ordner existiert. Der Analyse-Runner sucht die .dfm dann
   // selbst wieder ueber TPath.ChangeExtension.
+  //
+  // A6/C10-INVENTUR-ABSCHLUSS (2026-09-18, autonom entschieden):
+  // BEWUSST delphi-only. Das Plugin laeuft in der Delphi-IDE und
+  // scannt deren AKTIVES Projekt - dlFpc-Funde (.lfm/.pp) entstehen
+  // auf diesem Pfad nie; eine .lfm-Weiche hier waere toter Code.
+  // Gleiches gilt fuer uIDEAnalyserForm (SafeClose-Designer-Schutz -
+  // .lfm oeffnet keinen Delphi-Designer) und uIDEWatchMode
+  // (CompanionOf). Damit sind alle 16 Stellen der A4-Paarungs-
+  // Inventur behandelt: 12 Engine (A4/A5), 2 Form-UI (C9), 2 IDE
+  // (dieser Entscheid).
   if Path.EndsWith('.dfm', True) then
   begin
     AsPas := TPath.ChangeExtension(Path, '.pas');

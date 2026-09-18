@@ -1,4 +1,4 @@
-unit uTestConsoleParseArgs;
+﻿unit uTestConsoleParseArgs;
 
 // Tests fuer TConsoleRunner.ParseArgs - die Zerlegung der Kommandozeile.
 //
@@ -228,19 +228,20 @@ begin
 end;
 
 procedure TTestConsoleParseArgs.Dialect_Auto_ParseErrorMitHinweis;
-// auto ist kein Tippfehler, sondern ein GEPLANTER Modus
-// (Verzeichnis-Erkennung, Paket A6). Er bekommt einen eigenen
-// Fehlertext, damit niemand glaubt, der Lauf haette automatisch
-// erkannt - er hat abgelehnt.
+// UMGEWIDMET (A6/C2, 2026-09-18): auto ist jetzt IMPLEMENTIERT
+// (V1: Aufloesung an der Scan-Wurzel, Vertrag an ErmittleAutoDialekt
+// in uConsoleRunner) - ParseArgs akzeptiert den Wert ohne Fehler.
+// Der Name des Tests bleibt, damit die Historie der Umwidmung im
+// Blame sichtbar ist; er prueft jetzt die AKZEPTANZ. Vor C2 war
+// dieser Inhalt rot (auto lieferte einen ParseError).
 var
   A : TCliArgs;
 begin
   A := TConsoleRunner.ParseArgs([QUELLE_A, QUELLE_B, '--dialect=auto']);
-  Assert.IsTrue(A.ParseError <> '',
-    'auto ist noch nicht implementiert und muss abgelehnt werden');
-  Assert.IsTrue(Pos('nicht implementiert', A.ParseError) > 0,
-    'der Text muss sagen, dass auto GEPLANT und nicht falsch ist: '
-    + A.ParseError);
+  Assert.AreEqual('', A.ParseError,
+    'auto ist seit C2 ein gueltiger Wert');
+  Assert.AreEqual('auto', A.Dialect.ToLower,
+    'der Wert kommt roh im Args-Feld an');
 end;
 
 

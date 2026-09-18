@@ -62,6 +62,7 @@ type
     [Test] procedure UsesInMultilineString_DoesNotCount;
     [Test] procedure DpkContainsUnit_Flagged195;
     [Test] procedure LfmNebenLpr_ImFpcDialekt_KeinOrphan;
+    [Test] procedure LprUsesWurzel_MachtOrphanZuUsed195;
   end;
 
 implementation
@@ -942,6 +943,47 @@ begin
     end;
   finally
     TStaticFiles.ScanDialect := Alt;
+  end;
+end;
+
+
+procedure TTestNotIncludedInProject.LprUsesWurzel_MachtOrphanZuUsed195;
+// A6/C6: bei einem .lpi-Scan ist die .lpr die uses-Wurzel - eine
+// Unit, die NUR sie zieht, ist 195 (add to project), nicht 194
+// (dead). Der Regelfall ist durch FromLpi gedeckt (die .lpr steht
+// in der Liste); dieser Test prueft den RANDFALL .lpi OHNE
+// gelistete .lpr - die Detect-Nachziehung via AProjectFile.
+var
+  lpi, haupt : string;
+  Proj : TStringList;
+  Res  : TObjectList<TLeakFinding>;
+  i : Integer;
+  Gefunden : Boolean;
+begin
+  haupt := W('projekt.lpr');
+  TFile.WriteAllText(haupt,
+    'program projekt; uses uNurVomLpr; begin end.');
+  TFile.WriteAllText(W('uNurVomLpr.pas'),
+    'unit uNurVomLpr; interface implementation end.');
+  lpi := TPath.Combine(FDir, 'projekt.lpi');
+  Proj := TStringList.Create;
+  Res  := TObjectList<TLeakFinding>.Create(True);
+  try
+    // Projektliste bewusst LEER (der Randfall) - nur AProjectFile
+    // zeigt auf die .lpi, die .lpr liegt daneben.
+    TNotIncludedInProjectDetector.Detect(Proj, FDir, Res, nil, lpi);
+    Gefunden := False;
+    for i := 0 to Res.Count - 1 do
+      if Res[i].FileName.ToLower.Contains('unurvomlpr') then
+      begin
+        Gefunden := True;
+        Assert.AreEqual<Integer>(Ord(fkUsedButNotInProject), Ord(Res[i].Kind),
+          'die nur von der .lpr gezogene Unit ist 195, nicht 194');
+      end;
+    Assert.IsTrue(Gefunden, 'uNurVomLpr muss gemeldet werden');
+  finally
+    Res.Free;
+    Proj.Free;
   end;
 end;
 

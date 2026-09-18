@@ -1502,7 +1502,7 @@ msgid "📄 File"
 msgstr "📄 Fichier"
 
 # ---- Encoding-/Unicode-Familie + neuere Detektoren -------------------------
-msgid "UTF-8 source without BOM - Delphi compiler reads it as ANSI (mojibake)"
+msgid "UTF-8 source without BOM - Delphi reads it as ANSI, FPC as UTF-8 (mojibake on Delphi)"
 msgstr "Source UTF-8 sans BOM - le compilateur Delphi le lit comme de l'ANSI (mojibake)"
 
 msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"

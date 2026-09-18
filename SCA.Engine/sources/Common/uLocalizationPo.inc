@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2233 Zeilen, 77591 Bytes
+  // i18n\de.po - 2233 Zeilen, 75373 Bytes
   CPoLines_de: array[0..2232] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -1504,7 +1504,7 @@ const
     'msgid "'#$1F4C4' File"',
     'msgstr "'#$1F4C4' Datei"',
     '',
-    'msgid "UTF-8 source without BOM - Delphi compiler reads it as ANSI (mojibake)"',
+    'msgid "UTF-8 source without BOM - Delphi reads it as ANSI, FPC as UTF-8 (mojibake on Delphi)"',
     'msgstr "UTF-8-Quelltext ohne BOM - der Delphi-Compiler liest ihn als ANSI (Mojibake)"',
     '',
     'msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"',
@@ -2522,7 +2522,7 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2229 Zeilen, 81245 Bytes
+  // i18n\fr.po - 2229 Zeilen, 79031 Bytes
   CPoLines_fr: array[0..2228] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -4028,7 +4028,7 @@ const
     'msgstr "'#$1F4C4' Fichier"',
     '',
     '# ---- Encoding-/Unicode-Familie + neuere Detektoren -------------------------',
-    'msgid "UTF-8 source without BOM - Delphi compiler reads it as ANSI (mojibake)"',
+    'msgid "UTF-8 source without BOM - Delphi reads it as ANSI, FPC as UTF-8 (mojibake on Delphi)"',
     'msgstr "Source UTF-8 sans BOM - le compilateur Delphi le lit comme de l''ANSI (mojibake)"',
     '',
     'msgid "Invalid UTF-8 sequence - compiler substitutes U+FFFD (data corruption)"',
