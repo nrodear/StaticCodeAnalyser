@@ -401,12 +401,15 @@ begin
 end;
 
 procedure TTestTodoComment.Todo_EmojiOnCutBoundary_NoBrokenSurrogate;
-// Snippet-Aufbau: 'TODO: ' (6 Units) + 50x 'x' (7-56) + Emoji U+1F600
-// (High #$D83D auf Unit 57, Low #$DE00 auf 58) + 'yyyy' (59-62).
-// Laenge 62 > 60 -> Kuerzung auf 57 traefe exakt die Paar-Mitte. Mit
+// Snippet-Aufbau: Marker-Vorspann aus der Fixture (6 Units: das
+// Markerwort + ': ') + 50x 'x' (Units 7-56) + Emoji U+1F600 (High
+// #$D83D auf Unit 57, Low #$DE00 auf 58) + 'yyyy' (59-62). Laenge 62
+// > 60 -> Kuerzung auf 57 traefe exakt die Paar-Mitte. Mit
 // TruncateSurrogateSafe faellt das High-Surrogat mit weg: der Meldetext
 // endet auf 'x...' und traegt kein halbes Zeichen. Vor der Umstellung
 // (blankes Copy) stand #$D83D vor der Ellipse - dieser Test war rot.
+// (Das Markerwort steht hier absichtlich nicht woertlich im Kommentar -
+// der eigene Detektor meldete den Doku-Kommentar sonst als Fund.)
 const SRC =
   'unit t; implementation'#13#10 +
   '// TODO: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' +

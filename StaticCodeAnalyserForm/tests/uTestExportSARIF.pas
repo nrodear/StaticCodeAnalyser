@@ -4,6 +4,13 @@ unit uTestExportSARIF;
 // Strategie: SARIF-Output erzeugen, dann mit System.JSON re-parsen
 // und die Pflicht-Felder aus SARIF v2.1.0 verifizieren.
 
+// noinspection-file GodClass
+// Eine Test-Fixture je Exporter ist die Projektkonvention; mit den drei
+// uri-Prozentkodierungs-Tests (19.09.) hat die Klasse die 20-Methoden-
+// Schwelle ueberschritten. Aufteilen wuerde die Faelle desselben
+// Writers auseinanderreissen - gleicher Marker und gleiche Begruendung
+// wie in uTestTodoComment und uTestDuplicate.
+
 interface
 
 uses

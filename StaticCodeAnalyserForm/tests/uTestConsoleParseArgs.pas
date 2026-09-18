@@ -50,12 +50,16 @@ type
 
 implementation
 
-// KEIN noinspection HardcodedPath, obwohl QUELLE_B ein Laufwerksliteral
-// ist und die Schwester-Fixtures den Marker fuehren: gemessen (Selbstscan
-// 08.09.) feuert der Detektor hier gar nicht - er gated in Test-Units auf
-// Argumente von Assertionen und Test-Vektorhelfern, eine const-Deklaration
-// faellt nicht darunter. Ein Marker, der nichts unterdrueckt, ist selbst
-// ein Fund (SCA165), und den hat der eigene Scan prompt gemeldet.
+// noinspection-file HardcodedPath
+// Die woertlichen Laufwerkspfade SIND die Testdaten dieser Fixtures
+// (ParseArgs-Argumente, FixtureFilterAnker-Kaskade) - gleiche
+// Einordnung wie in uTestDetectorUtils. Der fruehere Kommentar an
+// dieser Stelle begruendete das FEHLEN des Markers mit einer Messung
+// vom 08.09. ("Detektor gated auf Assertionen, const faellt nicht
+// darunter") - der Selbstscan vom 19.09. widerlegt sie: SCA016 feuert
+// inzwischen auch auf QUELLE_B und auf Argument-Literale. Messungen
+// altern; der Marker unterdrueckt jetzt real Funde und ist damit kein
+// SCA165-Kandidat mehr.
 
 uses
   uConsoleRunner;
