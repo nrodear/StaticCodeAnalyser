@@ -108,7 +108,9 @@ implementation
 
 uses
   System.Classes,      // TStringList (FFI-Typnamen-Set)
-  uDetectorUtils;      // Hebel A: FFI-Binding-/Typelib-Gates (2026-07-31)
+  System.StrUtils,     // PosEx (Gate 8: Codewort-Suche)
+  uDetectorUtils,      // Hebel A: FFI-Binding-/Typelib-Gates (2026-07-31)
+  uFileTextCache;      // AcquireLines/ReleaseLines (Gate 8, F4 2026-09-19)
 
 function LocalName(const FullName: string): string;
 var
@@ -319,6 +321,74 @@ begin
   end;
 end;
 
+function HatCodewort(const TextLow, WortLow: string): Boolean;
+// Wortgenaue Suche im gestrippten lowercase-Text: Treffer nur, wenn
+// links und rechts KEIN Identifier-Zeichen anschliesst - 'objcclass'
+// matcht nicht in einem Bezeichner wie 'tobjcclasshelper'.
+var
+  P, E : Integer;
+begin
+  Result := False;
+  P := Pos(WortLow, TextLow);
+  while P > 0 do
+  begin
+    E := P + Length(WortLow);
+    if ((P = 1) or
+        not CharInSet(TextLow[P - 1], ['a'..'z', '0'..'9', '_'])) and
+       ((E > Length(TextLow)) or
+        not CharInSet(TextLow[E], ['a'..'z', '0'..'9', '_'])) then
+      Exit(True);
+    P := PosEx(WortLow, TextLow, P + 1);
+  end;
+end;
+
+function IstFpcBindingUnit(const FileName: string;
+  AContext: TAnalyzeContext): Boolean;
+// Gate 8 (F4, 2026-09-19): FPC kennt eigene Fremdsprachen-Klassenarten
+// - objcclass/objccategory (Objective-C) und cppclass (C++). Deren
+// Methodennamen SIND die Selektoren/Symbole der fremden API
+// (sendEvent, nextEventMatchingMask_untilDate_inMode_dequeue) - eine
+// PascalCase-Meldung ist dort durchweg falsch. Der Parser kennt diese
+// Syntax nicht als Klassenart (die Deklaration faellt in den
+// Alias-Fallback von ParseTypeSection, die Methoden werden als freie
+// Deklarationen aufgesammelt), deshalb entscheidet der GESTRIPPTE
+// Quelltext DATEIWEIT: enthaelt er eines der Schluesselwoerter als
+// Codewort, schweigt SCA106 fuer die ganze Datei - auch fuer die
+// Implementierungs-Ruempfe der Bindings. Strings und Kommentare
+// zaehlen nicht (die Lazarus-Codetools fuehren 'objcclass' als
+// String-Literal in Schluesselwortlisten - dort greift das Gate
+// NICHT, verifiziert per Nachbildung).
+//
+// GEMESSEN 2026-09-19 (f_messung2/f_messung5): rw_laz40/41 je -1.272
+// (lcl/interfaces/cocoa 1.177 von 1.286 + customdrawn-cocoaproc),
+// rw116_e -351 (doublecmd/CEF4Delphi tragen FPC-ObjC-Code im
+// Delphi-Korpus). qt/gtk/aggpas bleiben BEWUSST gemeldet: das sind
+// normale Pascal-Klassen mit API-Spiegel-Namen bzw. ein C-Port ohne
+// formalen FFI-Marker - dafuer gibt es kein praezises Kriterium.
+//
+// Ist die Datei nicht lesbar (Test-Harness FindingsOf/
+// MethodFindingsFor mit Platzhalter-Namen), bleibt das Gate still aus
+// - dieselbe Politik wie der D4-Textkanal von SCA007.
+var
+  Lines   : TStringList;
+  Cached  : Boolean;
+  LineFor : TArray<Integer>;
+  TextLow : string;
+begin
+  Result := False;
+  Lines := AcquireLines(FileName, Cached, nil);
+  if Lines = nil then Exit;
+  try
+    TextLow := LowerCase(TDetectorUtils.StripStringsAndCommentsCached(
+      Lines, LineFor, AContext, FileName));
+  finally
+    ReleaseLines(Lines, Cached);
+  end;
+  Result := HatCodewort(TextLow, 'objcclass') or
+            HatCodewort(TextLow, 'objccategory') or
+            HatCodewort(TextLow, 'cppclass');
+end;
+
 class procedure TMethodNameDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>;
   AContext: TAnalyzeContext);
@@ -341,6 +411,9 @@ var
   // beides lowercase. Wird erst beim ersten Kandidaten gebaut.
   Seen       : TDictionary<string, Boolean>;
   SeenKey    : string;
+  // Gate 8, ebenfalls LAZY: das dateiweite FPC-Bindings-Gate wird erst
+  // beim ersten Kandidaten gerechnet (einmal je Datei, Strip gecacht).
+  BindingGeprueft : Boolean;
 begin
   // Gate 4 (Hebel A): generierte Typelib-Importe komplett ausnehmen.
   if TDetectorUtils.IsGeneratedTypelibFile(FileName) then Exit;
@@ -376,6 +449,7 @@ begin
   CamelTypes := nil;
   OwnerMap   := nil;
   Seen     := nil;
+  BindingGeprueft := False;
   Methods  := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
@@ -392,6 +466,17 @@ begin
       // Event-Handler (Sender: TObject als 1. Param) -> per IDE-Designer
       // benannt (actSaveExecute, btnSaveClick, ...). Style-Regel passt nicht.
       if IsEventHandlerSignature(M) then Continue;
+
+      // Gate 8 (F4, 2026-09-19): FPC-Fremdsprachen-Bindings dateiweit
+      // ausnehmen (objcclass/objccategory/cppclass im gestrippten
+      // Quelltext - Begruendung + Messung an IstFpcBindingUnit).
+      // Trifft es, schweigt die GANZE Datei (Exit im try, finally
+      // raeumt die nil-sicheren LAZY-Strukturen).
+      if not BindingGeprueft then
+      begin
+        BindingGeprueft := True;
+        if IstFpcBindingUnit(FileName, AContext) then Exit;
+      end;
 
       // --- Hebel A: ABI-gebundene Namen (2026-07-31) ------------------
       // TypeRef traegt die Direktiven case-normalisiert als ';dir'-Kette
