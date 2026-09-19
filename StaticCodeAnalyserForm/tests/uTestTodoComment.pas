@@ -44,6 +44,9 @@ type
     [Test] procedure Todo_GuardsDoNotSwallowRealMarker;
     [Test] procedure Todo_StringLiteralAfterClosedBrace_NoFinding;
     [Test] procedure Todo_InParenStarComment_KnownGap;
+    // Audit Fundbewegend 2026-09-15, P4: die 57er-Kuerzung darf kein
+    // Surrogatpaar durchschneiden (Kanalbeweis fuer TruncateSurrogateSafe).
+    [Test] procedure Todo_EmojiOnCutBoundary_NoBrokenSurrogate;
   end;
 
 implementation
@@ -394,6 +397,40 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkTodoComment),
     'BEKANNTE LUECKE: (*..*) wird nicht gescannt');
+  finally F.Free; end;
+end;
+
+procedure TTestTodoComment.Todo_EmojiOnCutBoundary_NoBrokenSurrogate;
+// Snippet-Aufbau: Marker-Vorspann aus der Fixture (6 Units: das
+// Markerwort + ': ') + 50x 'x' (Units 7-56) + Emoji U+1F600 (High
+// #$D83D auf Unit 57, Low #$DE00 auf 58) + 'yyyy' (59-62). Laenge 62
+// > 60 -> Kuerzung auf 57 traefe exakt die Paar-Mitte. Mit
+// TruncateSurrogateSafe faellt das High-Surrogat mit weg: der Meldetext
+// endet auf 'x...' und traegt kein halbes Zeichen. Vor der Umstellung
+// (blankes Copy) stand #$D83D vor der Ellipse - dieser Test war rot.
+// (Das Markerwort steht hier absichtlich nicht woertlich im Kommentar -
+// der eigene Detektor meldete den Doku-Kommentar sonst als Fund.)
+const SRC =
+  'unit t; implementation'#13#10 +
+  '// TODO: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' +
+  #$D83D#$DE00 + 'yyyy'#13#10 +
+  'procedure Foo; begin end;';
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+  Hit : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkTodoComment));
+    Hit := nil;
+    for Fnd in F do
+      if Fnd.Kind = fkTodoComment then begin Hit := Fnd; Break; end;
+    Assert.IsNotNull(Hit);
+    Assert.IsTrue(Hit.MissingVar.EndsWith('x...'),
+      'Kuerzung endet vor dem Emoji: ' + Hit.MissingVar);
+    Assert.AreEqual<Integer>(0, Pos(#$D83D, Hit.MissingVar),
+      'kein haengendes High-Surrogat im Meldetext');
   finally F.Free; end;
 end;
 

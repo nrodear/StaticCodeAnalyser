@@ -183,6 +183,20 @@ type
 function ApplyFailOnPolicy(Raw: Integer; const FailOn: string;
   ReadErrors: Integer): Integer;
 
+// Scanwurzel fuer den Test-Fixture-Filter - Blocker-Fix (Audit
+// Fundbewegend 2026-09-15, Posten 1): in --file/--project/
+// --project-group ist Args.Path per Exklusivitaetsregel leer, und ohne
+// Anker prueft IsTestFixturePath den ABSOLUTEN Pfad als Substring - ein
+// explizit benanntes Ziel unter .../tests/... wurde damit komplett
+// leergefiltert (Minimalpaar an der Exe: --path 5 Funde, --file 0).
+// Der Anker ist das Verzeichnis des benannten Ziels; Fixture-Muster
+// zaehlen nur UNTERHALB - exakt die --path-Semantik auf dasselbe
+// Verzeichnis. --diff/--branch/--vcs behalten mit '' das dokumentierte
+// Alt-Verhalten (Repo-CWD-Laeufe, nicht Teil des vermessenen Postens).
+// In der interface-Sektion aus demselben Grund wie ApplyFailOnPolicy:
+// testbar ohne Run-Seiteneffekt.
+function FixtureFilterAnker(const Args: TCliArgs): string;
+
 // Stack-Reserve aus dem PE-Header von AExePath in MB; 0 wenn die Datei
 // kein lesbarer PE ist. Steht im Interface, damit der Wachposten
 // testbar bleibt (gleiche Begruendung wie bei ApplyFailOnPolicy) - der
@@ -1315,6 +1329,21 @@ begin
   Result := GetCurrentDir;   // --diff/--branch arbeiten im Repo-CWD
 end;
 
+function FixtureFilterAnker(const Args: TCliArgs): string;
+// Vertrag siehe interface. Dieselbe Kaskade wie AutoBasisPfad, aber
+// mit ZWEI bewussten Abweichungen: Datei-Modi liefern das VERZEICHNIS
+// (IsTestFixturePath erwartet als Anker eine Wurzel, keine Datei),
+// und der Fehlwert ist '' statt GetCurrentDir - er heisst "kein
+// Anker", und der Filter behaelt dann sein dokumentiertes
+// Alt-Verhalten, statt still am Zufalls-CWD zu haengen.
+begin
+  if Args.Path <> '' then Exit(Args.Path);
+  if Args.ProjectFile <> '' then Exit(ExtractFileDir(Args.ProjectFile));
+  if Args.GroupFile <> '' then Exit(ExtractFileDir(Args.GroupFile));
+  if Args.SingleFile <> '' then Exit(ExtractFileDir(Args.SingleFile));
+  Result := '';
+end;
+
 function CliDialekt(const Args: TCliArgs): TSourceDialect;
 var
   IniWert : string;
@@ -1968,8 +1997,13 @@ begin
         // sind jetzt TFixtureFilter.Apply in der Engine. Verhalten
         // unveraendert; der Punkt war, dass EXE und Plugin dieselbe
         // Regel rufen KOENNEN, statt dass sie nur hier existiert.
+        //
+        // Anker via FixtureFilterAnker statt Args.Path (Blocker-Fix,
+        // s. Deklaration): --file/--project/--project-group haben
+        // KEIN Args.Path, und ohne Anker warf der Filter explizit
+        // benannte Ziele unter .../tests/... komplett weg.
         var FixtureDropped := TFixtureFilter.Apply(Findings,
-          Args.Path, DroppedFiles);
+          FixtureFilterAnker(Args), DroppedFiles);
 
         // ERSTE-MINUTEN-FALLE (Durchlauf 2026-08-02): der Filter greift bei
         // Profil 'default' automatisch, und zu den Mustern gehoeren

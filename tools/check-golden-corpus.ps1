@@ -61,7 +61,9 @@ $Findings = $Sarif.runs[0].results
 # Findings pro Datei gruppieren (Basename)
 $ByFile = @{}
 foreach ($r in $Findings) {
-    $uri = $r.locations[0].physicalLocation.artifactLocation.uri
+    # unquote: Leerzeichen stehen seit der Emit-Kodierung (2026-09-19)
+    # als %20 in der uri - der Basename-Vergleich braucht den rohen Namen.
+    $uri = [System.Uri]::UnescapeDataString($r.locations[0].physicalLocation.artifactLocation.uri)
     $base = [System.IO.Path]::GetFileName($uri)
     if (-not $ByFile.ContainsKey($base)) {
         $ByFile[$base] = @()

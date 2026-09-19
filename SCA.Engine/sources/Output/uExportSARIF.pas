@@ -115,6 +115,26 @@ begin
   Result := StringReplace(Rel, '\', '/', [rfReplaceAll]);
 end;
 
+function PercentEncodeUriPath(const APath: string): string;
+// RFC-3986-Prozentkodierung fuer den uri-EMIT - und NUR dort. Der
+// unkodierte RelPath bleibt Eingang von FingerprintHash: eine Kodierung
+// VOR dem Hash haette jeden betroffenen primaryLocationLineHash bewegt
+// und GitHub-Alerts einmalig als "neu" gemeldet (Audit Fundbewegend
+// 2026-09-15, Posten 3 - die Falle sitzt in MakeRelative, nicht hier).
+//
+// Kodiersatz bewusst minimal: '%' (zuerst, sonst wuerde ein echtes
+// '%20' im Dateinamen ambig), Leerzeichen, '#' (Fragment-Trenner),
+// '?' (Query-Trenner). Am Referenzkorpus kommt davon ausschliesslich
+// das Leerzeichen vor (406 uris, 19.09.); Klammern & Co. sind
+// sub-delims und in Pfaden erlaubt. Forward-Slashes sind Trenner und
+// bleiben roh.
+begin
+  Result := StringReplace(APath,  '%', '%25', [rfReplaceAll]);
+  Result := StringReplace(Result, ' ', '%20', [rfReplaceAll]);
+  Result := StringReplace(Result, '#', '%23', [rfReplaceAll]);
+  Result := StringReplace(Result, '?', '%3F', [rfReplaceAll]);
+end;
+
 function ParseLineNumber(const S: string): Integer;
 // LineNumber kommt im TLeakFinding als String - SARIF braucht Integer.
 // Bei Parse-Fehler 1 (SARIF erlaubt nicht 0).
@@ -152,13 +172,12 @@ function FingerprintHash(const RuleID, RelPath: string; LineNo: Integer;
 // ALLE 752.457 Fingerprints auf einen Schlag und ist ein eigenes
 // Paket.
 //
-// OFFENER POSTEN, bei dieser Messung gefunden und NICHT hier behoben:
-// unpaarige Surrogate entstehen im Korpus tatsaechlich - 16 Stueck,
-// nicht beim Lesen, sondern weil acht feste Abschnitt-Stellen ein
-// Surrogatpaar mitten durchschneiden (uDuplicateString.pas:186
-// Copy(Display, 1, 27), uHardcodedPath.pas:326 und sechs weitere). Ein
-// Detektor, der seinen eigenen Meldetext mitten in einem Zeichen
-// kappt, ist das eigentliche Thema - eigener Posten.
+// Nachtrag 2026-09-19: der hier notierte Folgeposten (acht Abschnitt-
+// Stellen, die ein Surrogatpaar durchschneiden konnten) ist umgesetzt -
+// alle acht kuerzen jetzt ueber TDetectorUtils.TruncateSurrogateSafe.
+// Die damals gemessene 16er-Zahl war am Referenzlauf vom 19.09. nicht
+// mehr reproduzierbar (drei Messwege, null Treffer; Details im
+// C1-Vertrag der A-Charge) - die Haertung gilt darum als Null-Bewegung.
 begin
   Result := THashSHA2.GetHashString(
     RuleID + '|' + RelPath + '|' + IntToStr(LineNo) + '|' + Message);
@@ -488,7 +507,7 @@ begin
         E.BeginObjValue;
         E.BeginObjPair('physicalLocation');
         E.BeginObjPair('artifactLocation');
-        E.PairStr('uri', RelPath);
+        E.PairStr('uri', PercentEncodeUriPath(RelPath));
         E.EndObj;                                      // artifactLocation
         E.EndObj;                                      // physicalLocation
         E.EndObj;                                      // location
@@ -677,7 +696,9 @@ begin
         E.BeginObjValue;
         E.BeginObjPair('physicalLocation');
         E.BeginObjPair('artifactLocation');
-        E.PairStr('uri', RelPath);
+        // Kodiert NUR hier am Emit - RelPath selbst bleibt roh, er ist
+        // Fingerprint-Eingang (s. PercentEncodeUriPath).
+        E.PairStr('uri', PercentEncodeUriPath(RelPath));
         E.EndObj;
         E.BeginObjPair('region');
         E.PairInt('startLine', LineNo);

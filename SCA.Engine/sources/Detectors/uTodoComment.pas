@@ -348,7 +348,7 @@ begin
         // alle Bestandsfunde mit Kommentar-plus-Code-Zeilen bewegt.
         Snippet := Trim(Copy(Line, MarkerPos, MaxInt));
         if Length(Snippet) > 60 then
-          Snippet := Copy(Snippet, 1, 57) + '...';
+          Snippet := TDetectorUtils.TruncateSurrogateSafe(Snippet, 57) + '...';
 
         Results.Add(TLeakFinding.New(FileName, '', i + 1,
           Snippet, fkTodoComment));
