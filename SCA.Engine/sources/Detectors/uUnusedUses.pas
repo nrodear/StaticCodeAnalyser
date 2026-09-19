@@ -79,6 +79,19 @@ type
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
+
+    // F3 (2026-09-19): blankt jede uses-Klausel (vom Wort 'uses' bis
+    // zum naechsten ';') im GESTRIPPTEN lowercase-Text zu Leerzeichen.
+    // Vertrag: die uses-Klauseln selbst duerfen im Quelltext-Kanal
+    // keinen Verwendungsnachweis liefern - dieselbe Politik, mit der
+    // CollectText nkUsesItem-Knoten ausschliesst. Ohne das Blanken
+    // naehrt 'uses FMX.Controls.Presentation;' den H1-Praefixtest
+    // 'controls.' und deckt faelschlich die Eltern-Unit FMX.Controls
+    // (FN-Muster der D4-Abnahme). Fehlt das ';' (abgerissener Text),
+    // bleibt die Klausel stehen - lieber ein fehlender Fund als der
+    // halbe Suchtext weg. Public und static, damit der Vertrag direkt
+    // testbar ist.
+    class procedure BlankeUsesKlauseln(var Text: string); static;
   private
     // Baut zwei Corpus-Varianten:
     //   RawText  – lowercase, Punkte erhalten (fuer H1: 'sysutils.')
@@ -106,19 +119,6 @@ type
 
     // Bekannte oeffentliche Bezeichner einer Unit (fuer H2)
     class function KnownIdents(const UnitLow: string): TArray<string>; static;
-
-    // F3 (2026-09-19): blankt jede uses-Klausel (vom Wort 'uses' bis
-    // zum naechsten ';') im GESTRIPPTEN lowercase-Text zu Leerzeichen.
-    // Vertrag: die uses-Klauseln selbst duerfen im Quelltext-Kanal
-    // keinen Verwendungsnachweis liefern - dieselbe Politik, mit der
-    // CollectText nkUsesItem-Knoten ausschliesst. Ohne das Blanken
-    // naehrt 'uses FMX.Controls.Presentation;' den H1-Praefixtest
-    // 'controls.' und deckt faelschlich die Eltern-Unit FMX.Controls
-    // (FN-Muster der D4-Abnahme). Fehlt das ';' (abgerissener Text),
-    // bleibt die Klausel stehen - lieber ein fehlender Fund als der
-    // halbe Suchtext weg. Public und static, damit der Vertrag direkt
-    // testbar ist.
-    class procedure BlankeUsesKlauseln(var Text: string); static;
   end;
 
 implementation
