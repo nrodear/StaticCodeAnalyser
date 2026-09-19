@@ -22,6 +22,12 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 > [sonar-config.md](sonar-config.md).
 
 
+## `[Scan]`
+
+| Clé | Type | Défaut | Signification |
+|---|---|---|---|
+| `Dialect` | String | _(vide)_ | Dialecte source sans option `--dialect` : `delphi` ou `fpc` (Lazarus/Free Pascal : collecte `*.pp`/`*.lpr`, apparie `.lfm`, defines FPC/LCL, saute les règles spécifiques Delphi SCA041/SCA129/SCA185). Vide = delphi. L'option CLI et un scan de projet `.lpi`/`.lpk`/`.lpg` gagnent toujours ; l'interface bascule cette clé par clic droit sur la barre d'état. |
+
 ## `[Rules]`
 
 | Clé | Type | Défaut | Signification |
@@ -46,7 +52,7 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 | `FormatFunctions` | String | _(vide)_ | Fonctions supplémentaires de type `Format` pour la vérification des marqueurs (SCA005). |
 | `MagicNumberTrivials` | String | _(vide)_ | Nombres que SCA014 accepte sans constante nommée. |
 | `IncludeTests` | Bool | `False` | Analyser aussi les répertoires de tests. Désactivé par défaut — les fixtures produisent du bruit. |
-| `UsesCheck` | Bool | `False` | Activer le détecteur coûteux de clauses `uses` inutilisées. |
+| `UsesCheck` | Bool | `False` | Activer le détecteur coûteux de clauses `uses` inutilisées (SCA007). Le profil `strict` l'active indépendamment de cette clé. |
 | `MaxFileMB` | Integer | `5` | Les fichiers plus volumineux sont ignorés. |
 | `LongMethodMaxBodyLines` | Integer | `50` | Seuil SCA012 : lignes de corps. |
 | `LongMethodMaxStatements` | Integer | `30` | Seuil SCA012 : instructions. |

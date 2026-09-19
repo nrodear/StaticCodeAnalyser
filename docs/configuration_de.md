@@ -22,6 +22,12 @@ Lauf, in dem sie angegeben werden.
 > [sonar-config.md](sonar-config.md).
 
 
+## `[Scan]`
+
+| Schlüssel | Typ | Default | Bedeutung |
+|---|---|---|---|
+| `Dialect` | String | _(leer)_ | Quelltext-Dialekt ohne `--dialect`-Schalter: `delphi` oder `fpc` (Lazarus/Free Pascal: sammelt `*.pp`/`*.lpr`, paart `.lfm`, FPC/LCL-Defines, überspringt die Delphi-spezifischen Regeln SCA041/SCA129/SCA185). Leer = delphi. Der CLI-Schalter und ein `.lpi`/`.lpk`/`.lpg`-Projekt-Scan gewinnen immer; die GUI schaltet den Schlüssel per Rechtsklick auf die Statusleiste um. |
+
 ## `[Rules]`
 
 | Schluessel | Typ | Standard | Bedeutung |
@@ -46,7 +52,7 @@ Lauf, in dem sie angegeben werden.
 | `FormatFunctions` | String | _(leer)_ | Zusaetzliche Format-artige Funktionen fuer die Platzhalter-Pruefung (SCA005). |
 | `MagicNumberTrivials` | String | _(leer)_ | Zahlen, die SCA014 ohne benannte Konstante durchgehen laesst. |
 | `IncludeTests` | Bool | `False` | Testverzeichnisse mitscannen. Standardmaessig aus - Fixtures erzeugen Rauschen. |
-| `UsesCheck` | Bool | `False` | Den teuren Unused-Uses-Detektor einschalten. |
+| `UsesCheck` | Bool | `False` | Den teuren Unused-Uses-Detektor (SCA007) einschalten. Das Profil `strict` aktiviert ihn unabhängig von diesem Schlüssel. |
 | `MaxFileMB` | Integer | `5` | Groessere Dateien werden uebersprungen. |
 | `LongMethodMaxBodyLines` | Integer | `50` | Schwelle SCA012: Rumpfzeilen. |
 | `LongMethodMaxStatements` | Integer | `30` | Schwelle SCA012: Anweisungen. |

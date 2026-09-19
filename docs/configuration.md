@@ -21,6 +21,12 @@ given in.
 > [sonar-config.md](sonar-config.md).
 
 
+## `[Scan]`
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `Dialect` | String | _(empty)_ | Source dialect when no `--dialect` switch is given: `delphi` or `fpc` (Lazarus/Free Pascal: collects `*.pp`/`*.lpr`, pairs `.lfm`, FPC/LCL defines, skips the Delphi-only rules SCA041/SCA129/SCA185). Empty = delphi. The CLI switch and an `.lpi`/`.lpk`/`.lpg` project scan always win; the GUI toggles this key via right-click on the status bar. |
+
 ## `[Rules]`
 
 | Key | Type | Default | Meaning |
@@ -45,7 +51,7 @@ given in.
 | `FormatFunctions` | String | _(empty)_ | Additional `Format`-like functions for the placeholder check (SCA005). |
 | `MagicNumberTrivials` | String | _(empty)_ | Numbers SCA014 accepts without a named constant. |
 | `IncludeTests` | Bool | `False` | Scan test directories too. Off by default - fixtures produce noise. |
-| `UsesCheck` | Bool | `False` | Enable the expensive unused-uses detector. |
+| `UsesCheck` | Bool | `False` | Enable the expensive unused-uses detector (SCA007). The `strict` profile enables it regardless of this key. |
 | `MaxFileMB` | Integer | `5` | Files above this size are skipped. |
 | `LongMethodMaxBodyLines` | Integer | `50` | SCA012 threshold: body lines. |
 | `LongMethodMaxStatements` | Integer | `30` | SCA012 threshold: statements. |
