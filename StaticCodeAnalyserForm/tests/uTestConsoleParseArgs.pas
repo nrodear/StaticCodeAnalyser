@@ -55,7 +55,10 @@ type
 
 implementation
 
-// noinspection-file HardcodedPath
+// noinspection-file HardcodedPath, GodClass
+// GodClass (D-Charge 19.09.): die AutoV2-Verdikt-Tests hoben die
+// Fixture ueber die 20-Methoden-Schwelle - eine Testklasse je
+// CLI-Helfer-Familie ist die Projektkonvention (wie uTestTodoComment).
 // Die woertlichen Laufwerkspfade SIND die Testdaten dieser Fixtures
 // (ParseArgs-Argumente, FixtureFilterAnker-Kaskade) - gleiche
 // Einordnung wie in uTestDetectorUtils. Der fruehere Kommentar an

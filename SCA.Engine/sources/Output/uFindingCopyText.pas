@@ -87,6 +87,11 @@ const
   // Summary-Zeile in Listen, dort zaehlt jedes Zeichen.
   MAX_HEAD_LEN = 80;
   ELLIPSIS     = '...';
+  // Format-Skelette der Datei-Ebene (D1-Umzug): dreimal wiederholt =
+  // Rule of Three; als Konstante ist die Form ausserdem die ehrlichere
+  // Schreibweise fuer "immer dasselbe Layout".
+  SUMMARY_BULLET = '* %s: %d';       // Jira-Panel-Zeile
+  SEV_CELL       = '[%-7s] ';        // Clipboard-Severity-Spalte
 
 function FindingCopyModeFromInt(AValue: Integer): TFindingCopyMode;
 begin
@@ -321,7 +326,12 @@ begin
     SB.Append(_('h2. Code analysis: '));
     SB.AppendLine(JiraEscape(ExtractFileName(SourceFile)));
     SB.Append(_('As of: '));
-    SB.AppendLine(FormatDateTime('yyyy-mm-dd hh:nn', Now));
+    // SCA128-Fix (Chargen-Review D): ':' und '-' im Muster sind
+    // LOCALE-Separator-Platzhalter - unter fremdem Locale stand hier
+    // ein anderes Zeichen. Invariant-Settings + gequotete Literale
+    // machen den Stempel byte-stabil, egal wo der Report entsteht.
+    SB.AppendLine(FormatDateTime('yyyy"-"mm"-"dd hh":"nn', Now,
+      TFormatSettings.Invariant));
     SB.AppendLine('');
 
     SB.AppendLine(Format('|| %s || %s || %s || %s || %s ||',
@@ -365,10 +375,10 @@ begin
     SB.AppendLine('');
     SB.AppendLine(Format('{panel:title=%s|borderColor=#ccc|bgColor=#f8f8f8}',
       [_('Summary')]));
-    SB.AppendLine(Format('* %s: %d', [_('Errors'),   nErr]));
-    SB.AppendLine(Format('* %s: %d', [_('Warnings'), nWrn]));
+    SB.AppendLine(Format(SUMMARY_BULLET, [_('Errors'),   nErr]));
+    SB.AppendLine(Format(SUMMARY_BULLET, [_('Warnings'), nWrn]));
     if lsHint in SeverityFilter then
-      SB.AppendLine(Format('* %s: %d', [_('Hints'),  nHnt]));
+      SB.AppendLine(Format(SUMMARY_BULLET, [_('Hints'),  nHnt]));
     SB.AppendLine('{panel}');
 
     // ---- Befunde im Detail mit Loesungs-Hinweisen ----
@@ -497,9 +507,9 @@ begin
           Continue;
 
         case F.Severity of
-          lsError   : Sev := Format('[%-7s] ', [_('ERROR')]);
-          lsWarning : Sev := Format('[%-7s] ', [_('WARNING')]);
-          lsHint    : Sev := Format('[%-7s] ', [_('HINT')]);
+          lsError   : Sev := Format(SEV_CELL, [_('ERROR')]);
+          lsWarning : Sev := Format(SEV_CELL, [_('WARNING')]);
+          lsHint    : Sev := Format(SEV_CELL, [_('HINT')]);
         else
           Sev := '          ';
         end;

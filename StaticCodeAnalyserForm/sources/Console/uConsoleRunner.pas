@@ -1401,6 +1401,85 @@ begin
   Result := GetCurrentDir;   // --diff/--branch arbeiten im Repo-CWD
 end;
 
+procedure PartitioniereAutoV2(const Args: TCliArgs; var Req: TScanRequest;
+  var AlleDateien: TStringList; var ZweiteFiles: TArray<string>);
+// dlAuto V2 (D5): Partitionsschritt des Doppellaufs - Enumeration
+// unter dlFpc-Sicht (Obermengen-Endungen, try/finally-restauriert),
+// Verdikt je Datei via AutoDialektFuerDatei, dann eine von drei
+// Ausgaengen: (a) Mischbaum -> Req wird der delphi-ssFileList-Lauf,
+// ZweiteFiles traegt die fpc-Partition, AlleDateien bleibt fuer den
+// Merge; (b) einheitlicher Baum -> Req.Dialect wird das bestaetigte
+// Verdikt, ssRecursive bleibt; (c) Enumeration fehlgeschlagen ->
+// V1-Verhalten (Wurzelverdikt steht schon in Req.Dialect), Hinweis
+// auf stderr. Eigene Routine statt inline in Run: der Block hat der
+// Schachtelung dort eine Tiefe zu viel gegeben (SCA018, Selbstscan
+// der D-Charge) - dieselbe Begruendung wie bei den Invocations der
+// SARIF-Emitter.
+var
+  AltDialekt : TSourceDialect;
+  EnumErr    : string;
+  DirCache   : TDictionary<string, TSourceDialect>;
+  PartDelphi : TStringList;
+  PartFpc    : TStringList;
+  Datei      : string;
+begin
+  AltDialekt := TStaticFiles.ScanDialect;
+  EnumErr    := '';
+  // Obermengen-Endungen: unter dlFpc sammelt IsUnitLikeFile
+  // .pas UND .pp/.lpr - die Partition entscheidet je Datei.
+  TStaticFiles.ScanDialect := dlFpc;
+  try
+    AlleDateien := TStaticFiles.TryGetAllPasFiles(Args.Path, EnumErr);
+  finally
+    TStaticFiles.ScanDialect := AltDialekt;
+  end;
+  if (EnumErr <> '') or (AlleDateien = nil) or (AlleDateien.Count = 0) then
+  begin
+    FreeAndNil(AlleDateien);
+    if EnumErr <> '' then
+      WriteLn(ErrOutput,
+        'Hinweis: --dialect=auto ohne Datei-Partition (' +
+        EnumErr + ') - Wurzelverdikt gilt fuer den ganzen Baum.');
+    Exit;
+  end;
+
+  DirCache   := TDictionary<string, TSourceDialect>.Create;
+  PartDelphi := TStringList.Create;
+  PartFpc    := TStringList.Create;
+  try
+    for Datei in AlleDateien do
+      if AutoDialektFuerDatei(Datei, Args.Path,
+           Req.Dialect, DirCache) = dlFpc then
+        PartFpc.Add(Datei)
+      else
+        PartDelphi.Add(Datei);
+    if (PartDelphi.Count > 0) and (PartFpc.Count > 0) then
+    begin
+      WriteLn(ErrOutput, Format(
+        'Hinweis: --dialect=auto V2 - Mischbaum: %d Dateien ' +
+        'delphi, %d fpc (Doppellauf).',
+        [PartDelphi.Count, PartFpc.Count]));
+      Req.Scope     := ssFileList;
+      Req.Files     := PartDelphi.ToStringArray;
+      Req.Dialect   := dlDelphi;
+      Req.IndexRoot := Args.IndexRoot;
+      ZweiteFiles   := PartFpc.ToStringArray;
+    end
+    else
+    begin
+      // Einheitlicher Baum: EIN ssRecursive-Lauf mit dem per-Datei
+      // bestaetigten Verdikt (praeziser als V1, gleiche Mechanik).
+      if PartFpc.Count > 0 then Req.Dialect := dlFpc
+      else                      Req.Dialect := dlDelphi;
+      FreeAndNil(AlleDateien);
+    end;
+  finally
+    PartDelphi.Free;
+    PartFpc.Free;
+    DirCache.Free;
+  end;
+end;
+
 function FixtureFilterAnker(const Args: TCliArgs): string;
 // Vertrag siehe interface. Dieselbe Kaskade wie AutoBasisPfad, aber
 // mit ZWEI bewussten Abweichungen: Datei-Modi liefern das VERZEICHNIS
@@ -2029,69 +2108,7 @@ begin
         // reicht), --project erzwingt den Dialekt per Scope (A5),
         // --diff/--vcs bleiben dokumentiert V1.
         if SameText(Args.Dialect, 'auto') then
-        begin
-          var AltDialekt := TStaticFiles.ScanDialect;
-          var EnumErr := '';
-          // Obermengen-Endungen: unter dlFpc sammelt IsUnitLikeFile
-          // .pas UND .pp/.lpr - die Partition entscheidet je Datei.
-          TStaticFiles.ScanDialect := dlFpc;
-          try
-            AutoAlleDateien := TStaticFiles.TryGetAllPasFiles(
-              Args.Path, EnumErr);
-          finally
-            TStaticFiles.ScanDialect := AltDialekt;
-          end;
-          if (EnumErr <> '') or (AutoAlleDateien = nil)
-             or (AutoAlleDateien.Count = 0) then
-          begin
-            // Enumeration fehlgeschlagen: V1-Verhalten (Wurzelverdikt
-            // steht schon in Req.Dialect via CliDialekt). NICHT still:
-            FreeAndNil(AutoAlleDateien);
-            if EnumErr <> '' then
-              WriteLn(ErrOutput,
-                'Hinweis: --dialect=auto ohne Datei-Partition (' +
-                EnumErr + ') - Wurzelverdikt gilt fuer den ganzen Baum.');
-          end
-          else
-          begin
-            var DirCache := TDictionary<string, TSourceDialect>.Create;
-            var PartDelphi := TStringList.Create;
-            var PartFpc    := TStringList.Create;
-            try
-              for var Datei in AutoAlleDateien do
-                if AutoDialektFuerDatei(Datei, Args.Path,
-                     Req.Dialect, DirCache) = dlFpc then
-                  PartFpc.Add(Datei)
-                else
-                  PartDelphi.Add(Datei);
-              if (PartDelphi.Count > 0) and (PartFpc.Count > 0) then
-              begin
-                WriteLn(ErrOutput, Format(
-                  'Hinweis: --dialect=auto V2 - Mischbaum: %d Dateien ' +
-                  'delphi, %d fpc (Doppellauf).',
-                  [PartDelphi.Count, PartFpc.Count]));
-                Req.Scope     := ssFileList;
-                Req.Files     := PartDelphi.ToStringArray;
-                Req.Dialect   := dlDelphi;
-                Req.IndexRoot := Args.IndexRoot;
-                AutoZweiteFiles := PartFpc.ToStringArray;
-              end
-              else
-              begin
-                // Einheitlicher Baum: EIN ssRecursive-Lauf mit dem
-                // per-Datei bestaetigten Verdikt (praeziser als V1,
-                // gleiche Mechanik).
-                if PartFpc.Count > 0 then Req.Dialect := dlFpc
-                else                      Req.Dialect := dlDelphi;
-                FreeAndNil(AutoAlleDateien);
-              end;
-            finally
-              PartDelphi.Free;
-              PartFpc.Free;
-              DirCache.Free;
-            end;
-          end;
-        end;
+          PartitioniereAutoV2(Args, Req, AutoAlleDateien, AutoZweiteFiles);
       end;
 
       // Zentraler Engine-Aufruf (ersetzt die bisher 3x duplizierte

@@ -4,7 +4,10 @@ unit uTestExportSARIF;
 // Strategie: SARIF-Output erzeugen, dann mit System.JSON re-parsen
 // und die Pflicht-Felder aus SARIF v2.1.0 verifizieren.
 
-// noinspection-file GodClass
+// noinspection-file GodClass, HardcodedPath
+// HardcodedPath (D-Charge 19.09.): die absoluten Fixture-Pfade
+// ('C:\Temp Dir\x.pas', UNC) SIND die Testdaten der file://-Schema-
+// Tests - gleiche Einordnung wie uTestDetectorUtils/uTestConsoleParseArgs.
 // Eine Test-Fixture je Exporter ist die Projektkonvention; mit den drei
 // uri-Prozentkodierungs-Tests (19.09.) hat die Klasse die 20-Methoden-
 // Schwelle ueberschritten. Aufteilen wuerde die Faelle desselben
