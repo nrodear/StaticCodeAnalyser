@@ -232,6 +232,18 @@ type
     class function QuickReadBool(const ASection, AKey: string;
       ADefault: Boolean): Boolean; static;
     class function QuickReadStr(const ASection, AKey, ADefault: string): string; static;
+    // Gegenstueck zu QuickReadStr fuer GENAU EINEN Schluessel: schreibt
+    // kommentar-erhaltend (TCommentPreservingIni) und laesst jede andere
+    // Zeile der analyser.ini unangetastet. Bewusst KEIN Modell-Weg
+    // (Property + Save): Save schreibt das ganze bekannte Modell und
+    // wuerde einen hier ergaenzten Schluessel fortan in JEDE ini
+    // stempeln - fuer leichtgewichtige Kanaele wie [Scan] Dialect (C1)
+    // ist der Einzelschreiber der drift-freie Weg. False, wenn die ini
+    // fehlt oder nicht schreibbar ist - der Aufrufer MELDET das; ein
+    // stiller Schreibfehlschlag war das Kernargument, mit dem der
+    // BaseDir-Vertrag verworfen wurde (Audit 2026-09-15).
+    class function QuickWriteStr(const ASection, AKey,
+      AValue: string): Boolean; static;
     procedure EnsureConfigExists;
 
     function ConfigFilePath: string;
@@ -1376,6 +1388,35 @@ begin
       Ini.Free;
     end;
   except
+  end;
+end;
+
+class function TRepoSettings.QuickWriteStr(const ASection, AKey,
+  AValue: string): Boolean;
+// Vertrag siehe interface. TCommentPreservingIni statt TMemIniFile:
+// die analyser.ini traegt selbstdokumentierende Kommentare neben jedem
+// Wert, und ein Voll-Rewrite wuerde sie verlieren (Lehre der
+// Kommentar-Charge 2026-08-21). UpdateFile schreibt nur bei echter
+// Aenderung.
+var
+  Ini     : TCommentPreservingIni;
+  CfgPath : string;
+begin
+  Result := False;
+  try
+    CfgPath := TRepoSettings.ResolvedConfigPath;
+    if (CfgPath = '') or not FileExists(CfgPath) then Exit;
+    Ini := TCommentPreservingIni.Create(CfgPath);
+    try
+      Ini.WriteString(ASection, AKey, AValue);
+      Ini.UpdateFile;
+      Result := True;
+    finally
+      Ini.Free;
+    end;
+  except
+    // Ergebnis bleibt False - der Aufrufer meldet den Fehlschlag.
+    Result := False;
   end;
 end;
 

@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2233 Zeilen, 75373 Bytes
-  CPoLines_de: array[0..2232] of string = (
+  // i18n\de.po - 2245 Zeilen, 75774 Bytes
+  CPoLines_de: array[0..2244] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2247,7 +2247,19 @@ const
     'msgstr "Detektor-Info gespeichert: %s"',
     '',
     'msgid "Detector info export failed: "',
-    'msgstr "Detektor-Info-Export fehlgeschlagen: "'
+    'msgstr "Detektor-Info-Export fehlgeschlagen: "',
+    '',
+    'msgid "Dialect: Delphi (default)"',
+    'msgstr "Dialekt: Delphi (Standard)"',
+    '',
+    'msgid "Dialect: FPC/Lazarus"',
+    'msgstr "Dialekt: FPC/Lazarus"',
+    '',
+    'msgid "Dialect set to %s - applies to the next analysis run."',
+    'msgstr "Dialekt auf %s gesetzt - wirkt beim naechsten Analyse-Lauf."',
+    '',
+    'msgid "analyser.ini is not writable - dialect unchanged."',
+    'msgstr "analyser.ini ist nicht schreibbar - Dialekt unveraendert."'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -2522,8 +2534,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2229 Zeilen, 79031 Bytes
-  CPoLines_fr: array[0..2228] of string = (
+  // i18n\fr.po - 2241 Zeilen, 79441 Bytes
+  CPoLines_fr: array[0..2240] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4752,7 +4764,19 @@ const
     'msgstr "Infos d'#$00E9'tecteurs enregistr'#$00E9'es : %s"',
     '',
     'msgid "Detector info export failed: "',
-    'msgstr "'#$00C9'chec de l''export des infos d'#$00E9'tecteurs : "'
+    'msgstr "'#$00C9'chec de l''export des infos d'#$00E9'tecteurs : "',
+    '',
+    'msgid "Dialect: Delphi (default)"',
+    'msgstr "Dialecte : Delphi (par d'#$00E9'faut)"',
+    '',
+    'msgid "Dialect: FPC/Lazarus"',
+    'msgstr "Dialecte : FPC/Lazarus"',
+    '',
+    'msgid "Dialect set to %s - applies to the next analysis run."',
+    'msgstr "Dialecte r'#$00E9'gl'#$00E9' sur %s - prend effet '#$00E0' la prochaine analyse."',
+    '',
+    'msgid "analyser.ini is not writable - dialect unchanged."',
+    'msgstr "analyser.ini n''est pas accessible en '#$00E9'criture - dialecte inchang'#$00E9'."'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

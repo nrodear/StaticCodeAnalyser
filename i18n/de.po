@@ -2231,3 +2231,15 @@ msgstr "Detektor-Info gespeichert: %s"
 
 msgid "Detector info export failed: "
 msgstr "Detektor-Info-Export fehlgeschlagen: "
+
+msgid "Dialect: Delphi (default)"
+msgstr "Dialekt: Delphi (Standard)"
+
+msgid "Dialect: FPC/Lazarus"
+msgstr "Dialekt: FPC/Lazarus"
+
+msgid "Dialect set to %s - applies to the next analysis run."
+msgstr "Dialekt auf %s gesetzt - wirkt beim naechsten Analyse-Lauf."
+
+msgid "analyser.ini is not writable - dialect unchanged."
+msgstr "analyser.ini ist nicht schreibbar - Dialekt unveraendert."
