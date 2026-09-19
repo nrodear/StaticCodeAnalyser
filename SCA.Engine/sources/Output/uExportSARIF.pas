@@ -80,7 +80,8 @@ implementation
 
 uses
   System.Classes, System.IOUtils, System.Hash, System.StrUtils,
-  uSCAConsts, uRuleCatalog, uFindingFingerprint;
+  uSCAConsts, uRuleCatalog, uFindingFingerprint,
+  uReportFileWriter;   // atomarer Stream (C-Charge 2026-09-19)
 
 { ---- Helpers ---- }
 
@@ -842,8 +843,13 @@ begin
   var Dir := ExtractFilePath(AFileName);
   if (Dir <> '') and not DirectoryExists(Dir) then
     ForceDirectories(Dir);
+  // ATOMAR seit der C-Charge 2026-09-19: der Emitter schreibt auf die
+  // .sca-tmp des Writers; erst CommitAtomic tauscht aufs Ziel. Ein
+  // Abbruch mitten im Chunk-Strom (Platte voll, Kill) hinterlaesst
+  // damit NIE einen halben Report unter dem Zielnamen - vorher war
+  // genau das der Charge-22-Restposten.
   try
-    FS := TFileStream.Create(AFileName, fmCreate);
+    FS := TReportFileWriter.BeginAtomic(AFileName);
   except
     on Ex: EFCreateError do
       raise EInOutError.Create(Ex.Message);
@@ -862,9 +868,11 @@ begin
     finally
       E.Free;
     end;
-  finally
-    FS.Free;
+  except
+    TReportFileWriter.RollbackAtomic(FS, AFileName);
+    raise;
   end;
+  TReportFileWriter.CommitAtomic(FS, AFileName);
 end;
 
 end.
