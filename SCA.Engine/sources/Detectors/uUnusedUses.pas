@@ -89,6 +89,18 @@ type
     // Letzter Namensbestandteil: 'System.Classes' -> 'classes'
     class function ShortName(const QualName: string): string; static;
 
+    // True, wenn der (lowercase) Unit-Name dotless ist ODER sein erstes
+    // Segment ein Embarcadero-Unit-Scope-Namespace ist (System, Vcl,
+    // FMX, ...). Gate fuer den Kurznamen-Fallback von KnownIdents:
+    // NUR dann bezeichnet der Kurzname dieselbe RTL/VCL/FMX-Unit wie
+    // der volle Name. C-Charge 2026-09-19 (SCA007-FP-Stichprobe der
+    // Recall-Freigabe): ohne das Gate fiel 'Alcinoe.FMX.StdCtrls' auf
+    // KnownIdents('stdctrls') - die VCL-Identliste - zurueck, TButton &
+    // Co. kommen in der Fremd-Unit natuerlich nicht vor, und die Unit
+    // wurde trotz TALButton-Nutzung gemeldet. Gemessen am rw112-Lauf:
+    // exakt 374 solcher Funde (mORMot 277, Alcinoe 88, ...).
+    class function IstRtlNamespace(const UnitLow: string): Boolean; static;
+
     // Units die nie gemeldet werden sollen
     class function IsAlwaysNeeded(const UnitLow: string): Boolean; static;
 
@@ -112,6 +124,32 @@ begin
   p := LastDelimiter('.', QualName);
   if p > 0 then Result := Copy(QualName, p + 1, MaxInt)
   else          Result := QualName;
+end;
+
+class function TUnusedUsesDetector.IstRtlNamespace(
+  const UnitLow: string): Boolean;
+// Vertrag siehe Deklaration. Die Liste sind die Unit-Scope-Namespaces
+// der Delphi-RTL/-Frameworks; ein dotless Name liefert True, weil der
+// Kurznamen-Fallback dort ohnehin ein No-Op ist (ShortName = Name).
+// FMX steht MIT ABSICHT drin: der dokumentierte Nutz-Fall des
+// Fallbacks ist FMX.Styles -> KnownIdents('styles') (TStyleManager-
+// Nachweis fuer python4delphi/WrapFmxStyles, s. Kommentar an der
+// Vcl.Themes-Tabelle).
+const
+  NAMESPACES: array[0..16] of string = (
+    'system', 'winapi', 'vcl', 'fmx', 'data', 'datasnap', 'xml',
+    'soap', 'web', 'rest', 'bde', 'ibx', 'firedac', 'posix',
+    'androidapi', 'iosapi', 'macapi');
+var
+  P    : Integer;
+  Erst : string;
+begin
+  P := Pos('.', UnitLow);
+  if P = 0 then Exit(True);
+  Erst := Copy(UnitLow, 1, P - 1);
+  for var NS in NAMESPACES do
+    if Erst = NS then Exit(True);
+  Result := False;
 end;
 
 class function TUnusedUsesDetector.IsAlwaysNeeded(const UnitLow: string): Boolean;
@@ -866,7 +904,12 @@ begin
       if not Found then
       begin
         var Idents := KnownIdents(UnitLow);
-        if Length(Idents) = 0 then
+        // Kurznamen-Fallback NUR fuer RTL-Namespaces (C-Charge
+        // 2026-09-19): eine fremde Unit wie 'Alcinoe.FMX.StdCtrls'
+        // fiele sonst auf die VCL-'stdctrls'-Identliste zurueck und
+        // wuerde trotz Nutzung ihrer EIGENEN Typen gemeldet - das
+        // FP-Muster 1 der Recall-Freigabe-Stichprobe.
+        if (Length(Idents) = 0) and IstRtlNamespace(UnitLow) then
           Idents := KnownIdents(ShortLow);
 
         // Unbekannte Unit (kein Mapping): Verwendung nicht bestimmbar.

@@ -333,6 +333,7 @@
         <DCCReference Include="..\SCA.Engine\sources\Output\uExportSonarGeneric.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Output\uFixHint.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Output\uFindingCopyText.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Output\uReportFileWriter.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Output\uSonarPush.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Parsing\uAstNode.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Parsing\uCFG.pas"/>

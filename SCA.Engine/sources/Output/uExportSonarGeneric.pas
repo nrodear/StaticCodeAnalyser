@@ -90,7 +90,8 @@ implementation
 uses
   System.Classes,          // TStream/TFileStream/TStringStream fuer EmitReport
   System.IOUtils, System.JSON, System.StrUtils,
-  uRuleCatalog;
+  uRuleCatalog,
+  uReportFileWriter;   // atomarer Stream (C-Charge 2026-09-19)
 
 { ---- Helpers ---- }
 
@@ -618,12 +619,18 @@ begin
   // KEIN BOM (2026-08-08): RFC 8259 par.8.1 verbietet die Praeambel fuer
   // JSON-Austausch. SonarQube verzeiht sie, jedes jq/Node-Skript in der
   // Kette nicht. Wir schreiben rohe UTF-8-Bytes, also entsteht gar keine.
-  FS := TFileStream.Create(AFileName, fmCreate);
+  //
+  // ATOMAR seit der C-Charge 2026-09-19 (Muster SARIF-Writer): erst
+  // .sca-tmp, Commit tauscht - ein Abbruch laesst nie einen halben
+  // Report unter dem Zielnamen.
+  FS := TReportFileWriter.BeginAtomic(AFileName);
   try
     EmitReport(FS, AFindings, ABaseDir, AKeepDowngraded, Result);
-  finally
-    FS.Free;
+  except
+    TReportFileWriter.RollbackAtomic(FS, AFileName);
+    raise;
   end;
+  TReportFileWriter.CommitAtomic(FS, AFileName);
 end;
 
 end.

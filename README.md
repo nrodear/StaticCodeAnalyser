@@ -688,25 +688,32 @@ matters in CI, not just on screen.
 
 ### Conditional compilation (`{$IFDEF}`)
 
-By default the analyser reads **every** `{$IFDEF}` branch, including code
-that never compiles for your target — a frequent source of odd findings
-(duplicate declarations, dead branches). Three switches change that:
+**Since 2026-09-05 the analyser parses ONE branch by default** — the
+Windows compiler view, with the define set `MSWINDOWS, WIN64, UNICODE,
+CONDITIONALEXPRESSIONS`. One branch is what a Delphi compiler actually
+translates; reading every `{$IFDEF}` branch (the old default) was a
+frequent source of odd findings — duplicate declarations, dead
+branches. Three switches control the behaviour:
 
 | Switch | Effect |
 |---|---|
-| `--ifdef-aware` | Skip `{$IFDEF X}` branches whose `X` is not in the define set. Automatically on for `--profile selftest-quiet`, off otherwise. |
-| `--define X[,Y,Z]` | The define set. Can be repeated; values accumulate. |
-| `--no-ifdef-aware` | Force all branches back on. Wins over `--ifdef-aware` regardless of the order on the command line. |
+| `--ifdef-aware` | The explicit form of the default — a documenting no-op since 2026-09-05. |
+| `--define X[,Y,Z]` | Replace the default define set with your own. |
+| `--no-ifdef-aware` | Opt out: parse **all** branches (the pre-2026-09-05 behaviour). Wins over `--ifdef-aware` regardless of the order on the command line. |
 
-They only make sense together: **`--ifdef-aware` without `--define` runs
-with an empty define set**, so nearly every conditional branch is thrown
-away — and the failure mode is not an error message, it is silently
-missing findings. Give it the defines your build actually uses:
+`--ifdef-aware` without `--define` keeps the default set above — it
+does **not** run with an empty set. If your build uses different
+defines, pass them explicitly; the failure mode of a wrong set is not
+an error message, it is silently missing findings:
 
 ```powershell
-analyser.d12.exe --path . --full --ifdef-aware `
-  --define MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS
+analyser.d12.exe --path . --full `
+  --define MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS,MY_FEATURE
 ```
+
+`--dialect=fpc` extends the effective one-branch view with the
+FPC/LCL defines; `--dialect=auto` resolves the dialect from the
+project files at the scan root (see `--help`).
 
 ### Full switch reference
 
@@ -838,9 +845,11 @@ Exit code mapping:
 - 2 = warnings → commit allowed (to block them, use `-ge 2` above
   instead of `-ge 3`)
 - 3 = errors → **commit blocked**
+- 4 = read errors (files the scan could not read) → **commit blocked**;
+  a scan that skipped files must not look like a clean one
 - 99 = tool error (bad arguments, report not writable) → **commit
   blocked**. A scan that never happened must not look like a clean one;
-  the `-ge 3` rule above covers it.
+  the `-ge 3` rule above covers both.
 
 ### `--parallel` — correct, but pointless
 
