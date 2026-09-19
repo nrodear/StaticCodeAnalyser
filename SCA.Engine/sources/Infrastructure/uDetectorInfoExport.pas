@@ -1,4 +1,4 @@
-unit uDetectorInfoExport;
+﻿unit uDetectorInfoExport;
 
 // "Detector Info": alle Regeln des Katalogs als eigenstaendige, offline
 // funktionierende HTML-Seite - seit 07.09. als ROLLENORIENTIERTE
@@ -70,7 +70,7 @@ implementation
 
 uses
   uExportHtml,     // TExporterHtml.HtmlEscape - keine dritte Escape-Kopie
-  uExport,         // TExporter.SaveUtf8WithBom - EIN Ort fuer die BOM-Politik
+  uReportFileWriter,   // SaveUtf8WithBom - EIN Ort fuer BOM-Politik + atomares Schreiben
   uWorkbenchStyle, // geteilter CSS-Kern beider HTML-Exporte (07.09.)
   uWorkbenchI18n;  // geteilte Oberflaechentexte de/en/fr (07.09.)
 
@@ -838,7 +838,7 @@ begin
     // Ueber den Konventions-Helfer, nicht direkt SaveToFile: die
     // BOM-Politik der Exporte lebt an EINER Stelle, und TEncoding.UTF8
     // schriebe in Delphi 12 gar kein BOM (Chargen-Review 06.09.).
-    TExporter.SaveUtf8WithBom(SL, AFileName);
+    TReportFileWriter.SaveUtf8WithBom(SL, AFileName);
   finally
     SL.Free;
   end;

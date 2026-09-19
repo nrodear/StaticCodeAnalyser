@@ -328,6 +328,7 @@ contains
   uExportSonarGeneric in '..\SCA.Engine\sources\Output\uExportSonarGeneric.pas',
   uFixHint in '..\SCA.Engine\sources\Output\uFixHint.pas',
   uFindingCopyText in '..\SCA.Engine\sources\Output\uFindingCopyText.pas',
+  uReportFileWriter in '..\SCA.Engine\sources\Output\uReportFileWriter.pas',
   uSonarPush in '..\SCA.Engine\sources\Output\uSonarPush.pas',
   uAstNode in '..\SCA.Engine\sources\Parsing\uAstNode.pas',
   uCFG in '..\SCA.Engine\sources\Parsing\uCFG.pas',

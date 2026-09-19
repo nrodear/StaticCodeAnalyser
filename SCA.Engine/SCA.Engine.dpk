@@ -290,6 +290,7 @@ contains
   uExportSARIF in 'sources\Output\uExportSARIF.pas',
   uExportSonarGeneric in 'sources\Output\uExportSonarGeneric.pas',
   uFindingCopyText in 'sources\Output\uFindingCopyText.pas',
+  uReportFileWriter in 'sources\Output\uReportFileWriter.pas',
   uFixHint in 'sources\Output\uFixHint.pas',
   uSonarPush in 'sources\Output\uSonarPush.pas',
   uAstNode in 'sources\Parsing\uAstNode.pas',

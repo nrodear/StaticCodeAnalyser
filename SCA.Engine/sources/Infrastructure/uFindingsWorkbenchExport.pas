@@ -80,7 +80,8 @@ implementation
 uses
   System.Generics.Defaults,   // TComparer fuer die Dropdown-Listen
   uExportHtml,     // TExporterHtml.HtmlEscape - keine dritte Escape-Kopie
-  uExport,         // TExporter.SaveUtf8WithBom - EIN Ort fuer die BOM-Politik
+  uExport,         // TExporter.RelativeDisplayPath (die Schreibwege
+                   // liegen seit der C-Charge in uReportFileWriter)
   uFixHint,        // TFixHintResolver.FixHint - fundspezifischer Hinweistext
   uRuleCatalog,
   uWorkbenchStyle, // geteilter CSS-Kern der Workbench-Seiten

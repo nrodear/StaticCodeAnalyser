@@ -53,8 +53,9 @@ type
     // verdoppeln. Fuer grosse Berichte ist das der Unterschied
     // zwischen 'laeuft' und 'out of memory'.
     //
-    // Seit 08.09. reine Delegation an TExporter.SaveBuilderUtf8 - die
-    // Stueckelung samt Surrogat-Behandlung steht dort, weil CSV und
+    // Seit 08.09. reine Delegation - die Stueckelung samt Surrogat-
+    // Behandlung steht seit der C-Charge 2026-09-19 in
+    // TReportFileWriter.SaveBuilderUtf8 (Output, ATOMAR), weil CSV und
     // JSON denselben Weg gehen. Hier bleibt der Einstiegspunkt, weil
     // "mit BOM" fuer HTML eine Vertragsaussage ist und nicht bei jedem
     // Aufruf neu entschieden werden soll.
@@ -156,7 +157,7 @@ implementation
 
 uses
   System.IOUtils,          // TPath (Relativpfad-Anzeige, HtmlDisplayPath)
-  uExport, uFixHint, uRuleCatalog, uQuickFix, uBaseline,
+  uExport, uReportFileWriter, uFixHint, uRuleCatalog, uQuickFix, uBaseline,
   uLocalization,           // CurrentLanguage - Regeltexte folgen der App-Sprache
   uWorkbenchStyle;         // geteilter CSS-Kern beider HTML-Exporte (07.09.)
 
@@ -431,15 +432,16 @@ end;
 class procedure TExporterHtml.SaveBuilderUtf8WithBom(
   ABuilder: TStringBuilder; const FileName: string);
 // Reine Delegation seit 08.09.: die stueckweise Kodierung samt der
-// Surrogat-Behandlung steht jetzt in TExporter.SaveBuilderUtf8, weil
-// CSV und JSON sie genauso brauchen (Modul-Codereview, MAJOR zum
-// OOM-Muster in uExport). Begruendung dort an der Deklaration.
+// Surrogat-Behandlung steht seit der C-Charge 2026-09-19 in
+// TReportFileWriter.SaveBuilderUtf8 (Output, ATOMAR), weil CSV und
+// JSON sie genauso brauchen (urspruenglich Modul-Codereview, MAJOR
+// zum OOM-Muster). Begruendung dort an der Deklaration.
 //
 // Der Einstiegspunkt bleibt bestehen, weil ihn ausser dem HTML-Report
 // auch der V2-Fundbericht und uTestExportHtml rufen - und weil "mit
 // BOM" fuer HTML eine Vertragsaussage ist, keine Option.
 begin
-  TExporter.SaveBuilderUtf8(ABuilder, FileName, True);
+  TReportFileWriter.SaveBuilderUtf8(ABuilder, FileName, True);
 end;
 
 class procedure TExporterHtml.Run(Findings: TObjectList<TLeakFinding>;

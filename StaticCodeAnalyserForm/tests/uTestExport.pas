@@ -53,6 +53,13 @@ type
     // Jira-Detailteil war hart deutsch, die Tabelle darueber nicht
     [Test] procedure JiraDetailteil_FolgtDerSprache;
     [Test] procedure JiraDetailteil_DeutschBleibtDeutsch;
+    // ---- Atomares Schreiben (C-Charge 2026-09-19) ----
+    // Charge-22-Restposten: halb geschriebene Reports blieben unter dem
+    // Zielnamen liegen. Jetzt: erst .sca-tmp, dann atomarer Tausch.
+    [Test] procedure Atomar_KeinTempRestNachErfolg;
+    [Test] procedure Atomar_UeberschreibtBestehendesZiel;
+    [Test] procedure Atomar_RollbackLaesstZielUnveraendert;
+    [Test] procedure Atomar_CommitTauschtAufsZiel;
   end;
 
 implementation
@@ -243,7 +250,7 @@ begin
       SL := TStringList.Create;
       try
         SL.Add('{"a":1}');
-        TExporter.SaveUtf8WithBom(SL, Ziel);
+        TReportFileWriter.SaveUtf8WithBom(SL, Ziel);
       finally
         SL.Free;
       end;
@@ -253,7 +260,7 @@ begin
       SB := TStringBuilder.Create;
       try
         SB.AppendLine('{"a":1}');
-        TExporter.SaveBuilderUtf8(SB, Ziel, AWeg = swBuilderMitBom);
+        TReportFileWriter.SaveBuilderUtf8(SB, Ziel, AWeg = swBuilderMitBom);
       finally
         SB.Free;
       end;
@@ -665,6 +672,98 @@ begin
   T := TextOhnePraeambel(B).Trim;
   Assert.IsTrue(T.StartsWith('[') and T.EndsWith(']'),
     'JSON bleibt ein gueltiges, leeres Array: ' + T);
+end;
+
+{ ---- Atomares Schreiben (C-Charge 2026-09-19) ---- }
+
+procedure TTestExport.Atomar_KeinTempRestNachErfolg;
+// Der Erfolgspfad muss die .sca-tmp AUFGERAEUMT haben - ein
+// zurueckbleibendes Temp neben jedem Report waere der neue Muell,
+// den der Posten gerade abschaffen will.
+var
+  SB   : TStringBuilder;
+  Ziel : string;
+begin
+  Ziel := TPath.Combine(TPath.GetTempPath, 'sca_test_atomar_rest.json');
+  SB := TStringBuilder.Create;
+  try
+    SB.Append('{"a":1}');
+    TReportFileWriter.SaveBuilderUtf8(SB, Ziel, False);
+    Assert.IsTrue(TFile.Exists(Ziel), 'das Ziel muss existieren');
+    Assert.IsFalse(TFile.Exists(Ziel + '.sca-tmp'),
+      'die Temp-Datei muss nach dem Tausch verschwunden sein');
+  finally
+    SB.Free;
+    if TFile.Exists(Ziel) then TFile.Delete(Ziel);
+  end;
+end;
+
+procedure TTestExport.Atomar_UeberschreibtBestehendesZiel;
+// MOVEFILE_REPLACE_EXISTING: ein bestehender alter Report wird in
+// einem Schritt ersetzt (RenameFile allein wuerde an einem
+// existierenden Ziel scheitern - genau deshalb MoveFileEx).
+var
+  SB   : TStringBuilder;
+  Ziel : string;
+begin
+  Ziel := TPath.Combine(TPath.GetTempPath, 'sca_test_atomar_replace.json');
+  TFile.WriteAllText(Ziel, 'ALTER REPORT');
+  SB := TStringBuilder.Create;
+  try
+    SB.Append('{"neu":1}');
+    TReportFileWriter.SaveBuilderUtf8(SB, Ziel, False);
+    Assert.AreEqual('{"neu":1}', TFile.ReadAllText(Ziel),
+      'der alte Report muss ersetzt sein');
+  finally
+    SB.Free;
+    if TFile.Exists(Ziel) then TFile.Delete(Ziel);
+  end;
+end;
+
+procedure TTestExport.Atomar_RollbackLaesstZielUnveraendert;
+// DER Vertrag des Postens: bricht ein Stream-Writer ab (SARIF/Sonar
+// nutzen das Trio), bleibt der ALTE Report unter dem Zielnamen stehen -
+// nie ein halber neuer.
+var
+  FS   : TFileStream;
+  Ziel : string;
+  B    : TBytes;
+begin
+  Ziel := TPath.Combine(TPath.GetTempPath, 'sca_test_atomar_rollback.sarif');
+  TFile.WriteAllText(Ziel, 'ALTER REPORT');
+  try
+    FS := TReportFileWriter.BeginAtomic(Ziel);
+    B := TEncoding.UTF8.GetBytes('HALBER NEUER');
+    FS.WriteBuffer(B[0], Length(B));
+    TReportFileWriter.RollbackAtomic(FS, Ziel);
+    Assert.AreEqual('ALTER REPORT', TFile.ReadAllText(Ziel),
+      'Rollback darf das Ziel nicht anfassen');
+    Assert.IsFalse(TFile.Exists(Ziel + '.sca-tmp'),
+      'Rollback raeumt die Temp-Datei weg');
+  finally
+    if TFile.Exists(Ziel) then TFile.Delete(Ziel);
+  end;
+end;
+
+procedure TTestExport.Atomar_CommitTauschtAufsZiel;
+var
+  FS   : TFileStream;
+  Ziel : string;
+  B    : TBytes;
+begin
+  Ziel := TPath.Combine(TPath.GetTempPath, 'sca_test_atomar_commit.sarif');
+  TFile.WriteAllText(Ziel, 'ALTER REPORT');
+  try
+    FS := TReportFileWriter.BeginAtomic(Ziel);
+    B := TEncoding.UTF8.GetBytes('NEUER REPORT');
+    FS.WriteBuffer(B[0], Length(B));
+    TReportFileWriter.CommitAtomic(FS, Ziel);
+    Assert.AreEqual('NEUER REPORT', TFile.ReadAllText(Ziel));
+    Assert.IsFalse(TFile.Exists(Ziel + '.sca-tmp'),
+      'Commit laesst kein Temp zurueck');
+  finally
+    if TFile.Exists(Ziel) then TFile.Delete(Ziel);
+  end;
 end;
 
 initialization
