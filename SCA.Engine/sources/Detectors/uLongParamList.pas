@@ -30,6 +30,47 @@ uses
 // Schwellwert kommt aus uSCAConsts.DetectorMaxParams (analyser.ini ->
 // LongParamListMaxParams). Default 5.
 
+// GATE FFI (H1, 2026-09-20): True, wenn AOwnerLow ein
+// FPC-Fremdsprachen-Binding ist (objcclass/objccategory/
+// objcprotocol/cppclass). Dessen Parameterzahl ist die Signatur der
+// FREMDEN API - der Autor kann sie nicht kuerzen, ohne die Bindung zu
+// brechen. Beleg (G-Abnahme 20.09.): cocoa_extra.pas meldete 10 und
+// 11 Parameter, beides ObjC-Selektoren.
+//
+// FREISTEHEND statt inline: der Selbstscan der H-Charge hat
+// AnalyzeUnit mit dem Gate auf CC 25 gehoben (SCA176, Limit 15).
+// ABindings/AGeholt sind var-Parameter, damit die LAZY-Beschaffung
+// ueber die Schleifendurchlaeufe haelt: die Datei wird erst ab dem
+// ersten Kandidaten ueber der Schwelle gelesen, die Liste danach
+// genau einmal je Datei gebaut.
+type
+  // Lazy-Zustand des Gates, gebuendelt: als fuenf einzelne
+  // var-Parameter hob der Helfer den eigenen Detektor ueber die
+  // Parameterschwelle (SCA013 am eigenen Code, Selbstscan der
+  // H-Charge) und trug zwei Boolean-Schalter (SCA146).
+  TBindingCache = record
+    Namen   : TStringList;   // Binding-Typnamen der Datei
+    Geholt  : Boolean;       // Datei schon einmal angefasst?
+    Lines   : TStringList;   // gehaltene Zeilen (Freigabe im finally)
+    Cached  : Boolean;       // gehoeren die Zeilen dem Textcache?
+  end;
+
+function IstBindingBesitzer(const AOwnerLow, AFileName: string;
+  AContext: TAnalyzeContext; var ACache: TBindingCache): Boolean;
+begin
+  if AOwnerLow = '' then Exit(False);
+  if not ACache.Geholt then
+  begin
+    ACache.Geholt := True;
+    ACache.Lines := AcquireLines(AFileName, ACache.Cached,
+      CtxFileTextCache(AContext));
+    if ACache.Lines <> nil then
+      ACache.Namen := TDetectorUtils.CollectFpcBindingTypeNames(
+        ACache.Lines, AContext, AFileName);
+  end;
+  Result := TDetectorUtils.IsFfiBindingTypeName(ACache.Namen, AOwnerLow);
+end;
+
 class procedure TLongParamListDetector.AnalyzeUnit(UnitNode: TAstNode;
   const FileName: string; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
@@ -42,12 +83,9 @@ var
   MaxParams  : Integer;   // TD-1: Schwelle per-Scan aus AContext.Config
   OwnerMap   : TDictionary<TAstNode, string>;
   OwnerLow   : string;
-  // GATE FFI (H1): beide LAZY - eine Datei ohne Kandidaten ueber der
+  // GATE FFI (H1): LAZY - eine Datei ohne Kandidaten ueber der
   // Schwelle zahlt weder Dateizugriff noch Listenaufbau.
-  FpcBindings    : TStringList;
-  BindingsGeholt : Boolean;
-  Lines          : TStringList;
-  Cached         : Boolean;
+  Bindings : TBindingCache;
 begin
   // TD-1 (2026-07-06): Schwelle einmal aus dem Context lesen (scan-konstant).
   MaxParams := CfgMaxParams(AContext);
@@ -55,10 +93,7 @@ begin
   // Implementation auftauchen → mit Methodennamen deduplizieren.
   Reported := TDictionary<string, Boolean>.Create;
   OwnerMap := nil;
-  FpcBindings    := nil;
-  BindingsGeholt := False;
-  Lines          := nil;
-  Cached         := False;
+  Bindings := Default(TBindingCache);
   Methods  := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
@@ -84,27 +119,10 @@ begin
         if OwnerMap.TryGetValue(M, OwnerLow) then
           OwnerLow := LowerCase(OwnerLow);
       end;
-      // GATE FFI (H1, 2026-09-20): Der Besitzertyp ist ein
-      // FPC-Fremdsprachen-Binding (objcclass/objccategory/
-      // objcprotocol/cppclass). Dessen Parameterzahl ist die Signatur
-      // der FREMDEN API - der Autor kann sie nicht kuerzen, ohne die
-      // Bindung zu brechen. Beleg (G-Abnahme 20.09.): cocoa_extra.pas
-      // meldete 10 und 11 Parameter, beides ObjC-Selektoren.
-      // LAZY in zwei Stufen: Datei erst ab dem ersten Kandidaten ueber
-      // der Schwelle lesen, Liste danach einmal je Datei.
-      if OwnerLow <> '' then
-      begin
-        if not BindingsGeholt then
-        begin
-          BindingsGeholt := True;
-          Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
-          if Lines <> nil then
-            FpcBindings := TDetectorUtils.CollectFpcBindingTypeNames(
-              Lines, AContext, FileName);
-        end;
-        if TDetectorUtils.IsFfiBindingTypeName(FpcBindings, OwnerLow) then
-          Continue;
-      end;
+      // GATE FFI (H1): Besitzertyp spiegelt eine fremde API
+      // (Herleitung und LAZY-Vertrag an IstBindingBesitzer).
+      if IstBindingBesitzer(OwnerLow, FileName, AContext, Bindings) then
+        Continue;
 
       Key := OwnerLow + '.' + TDetectorUtils.UnqualifiedNameLastLower(M.Name)
              + ':' + IntToStr(ParamCount);
@@ -124,8 +142,8 @@ begin
     Methods.Free;
     Reported.Free;
     OwnerMap.Free;
-    FpcBindings.Free;
-    ReleaseLines(Lines, Cached);
+    Bindings.Namen.Free;
+    ReleaseLines(Bindings.Lines, Bindings.Cached);
   end;
 end;
 

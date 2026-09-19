@@ -2354,6 +2354,24 @@ var
   pEq, i  : Integer;
   Name    : string;
 
+  // Typname LINKS vom '=', normalisiert - oder '' wenn dort kein
+  // reiner Bezeichner steht (dann ist die Zeile keine Typdeklaration,
+  // sondern z. B. eine Zuweisung 'Foo.Bar := objcclass;').
+  // Generic-Parameter werden abgeschnitten: 'tfoo<t>' -> 'tfoo'.
+  function TypNameLinks(const ALinks: string): string;
+  var
+    j : Integer;
+  begin
+    Result := Trim(ALinks);
+    j := Pos('<', Result);
+    if j > 0 then Result := Trim(Copy(Result, 1, j - 1));
+    if Result = '' then Exit;
+    if not CharInSet(Result[1], ['a'..'z', '_']) then Exit('');
+    for j := 1 to Length(Result) do
+      if not CharInSet(Result[j], ['a'..'z', '0'..'9', '_']) then
+        Exit('');
+  end;
+
   // True, wenn Rest mit einer der vier Arten als WORT beginnt.
   function BeginntMitArt(const S: string): Boolean;
   var
@@ -2389,22 +2407,8 @@ begin
       // 'packed' ist vor record/class erlaubt und schadet hier nicht.
       if Copy(Rest, 1, 7) = 'packed ' then Rest := TrimLeft(Copy(Rest, 8, MaxInt));
       if not BeginntMitArt(Rest) then Continue;
-      Name := Trim(Copy(Z, 1, pEq - 1));
-      // Generics abschneiden ('tfoo<t>' -> 'tfoo') und Rest pruefen:
-      // uebrig bleiben muss ein reiner Bezeichner, sonst ist es keine
-      // Typdeklaration (z. B. eine Zuweisung im Rumpf).
-      var pLt := Pos('<', Name);
-      if pLt > 0 then Name := Trim(Copy(Name, 1, pLt - 1));
-      if Name = '' then Continue;
-      if not CharInSet(Name[1], ['a'..'z', '_']) then Continue;
-      var Ok := True;
-      for var k := 1 to Length(Name) do
-        if not CharInSet(Name[k], ['a'..'z', '0'..'9', '_']) then
-        begin
-          Ok := False;
-          Break;
-        end;
-      if Ok then Result.Add(Name);
+      Name := TypNameLinks(Copy(Z, 1, pEq - 1));
+      if Name <> '' then Result.Add(Name);
     end;
   except
     // Exception-Sicherheit: die Liste gehoert noch UNS, solange die
