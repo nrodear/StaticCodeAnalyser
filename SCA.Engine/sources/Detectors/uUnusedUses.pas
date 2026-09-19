@@ -79,6 +79,19 @@ type
   public
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
+
+    // F3 (2026-09-19): blankt jede uses-Klausel (vom Wort 'uses' bis
+    // zum naechsten ';') im GESTRIPPTEN lowercase-Text zu Leerzeichen.
+    // Vertrag: die uses-Klauseln selbst duerfen im Quelltext-Kanal
+    // keinen Verwendungsnachweis liefern - dieselbe Politik, mit der
+    // CollectText nkUsesItem-Knoten ausschliesst. Ohne das Blanken
+    // naehrt 'uses FMX.Controls.Presentation;' den H1-Praefixtest
+    // 'controls.' und deckt faelschlich die Eltern-Unit FMX.Controls
+    // (FN-Muster der D4-Abnahme). Fehlt das ';' (abgerissener Text),
+    // bleibt die Klausel stehen - lieber ein fehlender Fund als der
+    // halbe Suchtext weg. Public und static, damit der Vertrag direkt
+    // testbar ist.
+    class procedure BlankeUsesKlauseln(var Text: string); static;
   private
     // Baut zwei Corpus-Varianten:
     //   RawText  – lowercase, Punkte erhalten (fuer H1: 'sysutils.')
@@ -117,6 +130,7 @@ implementation
 
 uses
   System.Classes,    // TStringList (Quelltext-Kanal, D4)
+  System.StrUtils,   // PosEx (F3: uses-Klauseln blanken)
   uDetectorUtils,    // StripStringsAndCommentsCached (D4)
   uFileTextCache;    // AcquireLines/ReleaseLines (D4)
 
@@ -129,6 +143,39 @@ begin
   p := LastDelimiter('.', QualName);
   if p > 0 then Result := Copy(QualName, p + 1, MaxInt)
   else          Result := QualName;
+end;
+
+class procedure TUnusedUsesDetector.BlankeUsesKlauseln(var Text: string);
+// Vertrag siehe Deklaration. Der Text kommt aus StripStringsAndComments
+// (Strings/Kommentare/Direktiven bereits weg) und ist lowercase - das
+// Wort 'uses' kann dort nur als Klausel-Anfang stehen (reserviert;
+// String-Vorkommen sind geblankt). Wortgrenzen links UND rechts: auch
+// der Punkt zaehlt als Grenzverletzung, damit ein pathologisches
+// 'x.uses' aus kaputtem Quelltext keine Klausel beginnt.
+var
+  P, E, K : Integer;
+  L       : Integer;
+begin
+  L := Length(Text);
+  P := 1;
+  while True do
+  begin
+    P := PosEx('uses', Text, P);
+    if P = 0 then Exit;
+    if ((P = 1) or
+        not CharInSet(Text[P - 1], ['a'..'z', '0'..'9', '_', '.'])) and
+       ((P + 4 > L) or
+        not CharInSet(Text[P + 4], ['a'..'z', '0'..'9', '_', '.'])) then
+    begin
+      E := PosEx(';', Text, P + 4);
+      if E = 0 then Exit;   // kein Abschluss: Klausel stehen lassen
+      for K := P to E do
+        Text[K] := ' ';
+      P := E + 1;
+    end
+    else
+      Inc(P, 4);
+  end;
 end;
 
 class function TUnusedUsesDetector.IstRtlNamespace(
@@ -348,10 +395,17 @@ begin
                'isobjectprop','propcount','tpropcount']
 
   else if (UnitLow = 'system.variants') or (UnitLow = 'variants') then
+    // F2 (2026-09-19): 'variant'/'olevariant' ergaenzt. Der TYP ist
+    // zwar ein Compiler-Builtin, aber jede Operation auf ihm (Zuweisung,
+    // Vergleich, Konvertierung) braucht die Variants-Unit zur Laufzeit -
+    // eine Datei, die Variant-Variablen fuehrt, nutzt die uses-Zeile
+    // also real (KnownIdents-Luecke der D-Charge-Stichprobe; Korpus-
+    // Zaehlung im F2-Vertrag).
     Result := ['vartype','varastype','varisnull','varisempty',
                'vartostr','tvardata','varclear','varisarray',
                'varislongint','varisstring','vartostrdef',
-               'varisordinal','varisfloat','varisdispatched']
+               'varisordinal','varisfloat','varisdispatched',
+               'variant','olevariant']
 
   else if (UnitLow = 'system.character') or (UnitLow = 'character') then
     Result := ['tcharacter','isletter','isdigit','iswhitespace',
@@ -497,9 +551,14 @@ begin
                'tprinterorientation','abortdoc']
 
   else if (UnitLow = 'vcl.dbctrls') or (UnitLow = 'dbctrls') then
+    // F2 (2026-09-19): 'tfielddatalink' ergaenzt - wer eigene
+    // DB-Controls baut, nutzt DbCtrls oft NUR fuer diese Klasse und
+    // bekam die uses-Zeile als unused gemeldet (KnownIdents-Luecke
+    // der D-Charge-Stichprobe). Der Kurzname-Zweig gilt auch fuer
+    // die LCL-dbctrls (TFieldDataLink ist dort dieselbe Rolle).
     Result := ['tdbedit','tdblabel','tdbmemo','tdbcombobox','tdblistbox',
                'tdbcheckbox','tdbradiogroup','tdbimage','tdbnavigator',
-               'tdbtext','tdbrichtext','tnavbutton']
+               'tdbtext','tdbrichtext','tnavbutton','tfielddatalink']
 
   else if (UnitLow = 'vcl.dbgrids') or (UnitLow = 'dbgrids') then
     Result := ['tdbgrid','tdbgridcolumn','tdbgridcolumns',
@@ -903,6 +962,9 @@ begin
     try
       Gestript := TDetectorUtils.StripStringsAndCommentsCached(
         SrcLines, LineFor, nil, FileName).ToLower;
+      // F3 (2026-09-19): uses-Klauseln liefern keinen Nachweis -
+      // Vertrag und FN-Muster an der Deklaration von BlankeUsesKlauseln.
+      BlankeUsesKlauseln(Gestript);
       RawSB.Append(' ');
       WordSB.Append(' ');
       for Ch in Gestript do

@@ -81,6 +81,15 @@ type
     [Test] procedure Datei_QualifizierterRumpfAufruf_H1_NoFinding;
     [Test] procedure Datei_IdentNurInNestedProc_H2_NoFinding;
     [Test] procedure Datei_OhneNutzung_UsesZeileIstKeinNachweis;
+    // ---- F2 (2026-09-19): KnownIdents-Luecken variants/dbctrls ----
+    [Test] procedure Uses_Variants_VariantVar_H2_NoFinding;
+    [Test] procedure Uses_Variants_OleVariantVar_H2_NoFinding;
+    [Test] procedure Uses_DbCtrls_TFieldDataLink_H2_NoFinding;
+    [Test] procedure Uses_Variants_NothingUsed_ReportsWarning;
+    // ---- F3 (2026-09-19): uses-Klauseln naehren den Textkanal nicht ----
+    [Test] procedure Datei_ElternUnit_NurUsesZeileDeckt_ReportsWarning;
+    [Test] procedure Datei_ElternUnit_QualifizierteNutzung_NoFinding;
+    [Test] procedure BlankeUsesKlauseln_OhneSemikolon_LaesstTextStehen;
   end;
 
 implementation
@@ -1005,6 +1014,92 @@ begin
   finally F.Free; end;
 end;
 
+{ --- F2 (2026-09-19): KnownIdents-Luecken variants/dbctrls --------- }
+//
+// Zwei Luecken aus der D-Charge-Stichprobe: 'Variants' fuehrte den
+// TYP Variant/OleVariant nicht (nur Var*-Funktionen), 'DbCtrls'
+// fuehrte TFieldDataLink nicht. Beide Muster sind an der BESTEHENDEN
+// Exe belegt (f23_fix: je 1 Fund trotz Nutzung) - nach der
+// Listen-Erweiterung 0.
+
+procedure TTestUnusedUses.Uses_Variants_VariantVar_H2_NoFinding;
+// Eine Variant-Variable braucht die Variants-Unit zur Laufzeit
+// (Operationen auf dem Builtin-Typ). Vorher: 1 Fund. Jetzt: 0.
+const SRC =
+  'unit t;'#13#10 +
+  'uses Variants;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'var v: Variant;'#13#10 +
+  'begin'#13#10 +
+  '  v := 1;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+    'der Variant-Typ beweist die Variants-Unit - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Uses_Variants_OleVariantVar_H2_NoFinding;
+// Der zweite neue Name, gleiche Mechanik.
+const SRC =
+  'unit t;'#13#10 +
+  'uses Variants;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'var v: OleVariant;'#13#10 +
+  'begin'#13#10 +
+  '  v := 1;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+    'OleVariant beweist die Variants-Unit - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Uses_DbCtrls_TFieldDataLink_H2_NoFinding;
+// Eigene DB-Controls nutzen DbCtrls oft NUR ueber TFieldDataLink.
+const SRC =
+  'unit t;'#13#10 +
+  'uses Vcl.DbCtrls;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'var dl: TFieldDataLink;'#13#10 +
+  'begin'#13#10 +
+  '  dl := nil;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+    'TFieldDataLink beweist Vcl.DbCtrls - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Uses_Variants_NothingUsed_ReportsWarning;
+// DIE KLAMMER: dieselbe uses-Zeile ohne jeden Variants-Bezeichner
+// muss weiterhin melden - sonst haette die Erweiterung die Regel
+// fuer Variants stillgelegt statt praeziser gemacht.
+const SRC =
+  'unit t;'#13#10 +
+  'uses Variants;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'begin'#13#10 +
+  '  DoSomething;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
+    'ohne jeden Nachweis bleibt Variants ein Befund');
+  finally F.Free; end;
+end;
+
 { ---- D4: Quelltext-Kanal (2026-09-19) ---- }
 // FP-Muster 2 der Recall-Freigabe: CollectText sieht nur AST-Namen -
 // Nutzungen, die allein in Rumpf-STATEMENTS leben, fehlten im Suchtext.
@@ -1118,6 +1213,86 @@ begin
       'ohne Nutzung meldet die Regel weiter - die eigene uses-Zeile '
       + 'ist kein Nachweis');
   finally F.Free; end;
+end;
+
+{ ---- F3 (2026-09-19): uses-Klauseln naehren den Textkanal nicht ---- }
+// Das FN-Muster der D4-Abnahme: 'uses FMX.Controls.Presentation;'
+// enthaelt 'controls.' und deckte ueber H1 faelschlich die
+// Eltern-Unit FMX.Controls. Seit F3 blankt der Textkanal jede
+// uses-Klausel - dieselbe Politik, mit der CollectText nkUsesItem
+// ausschliesst. An der BESTEHENDEN Exe belegt (f23_fix/eltern.pas:
+// heute 0 Funde trotz ungenutztem FMX.Controls).
+
+procedure TTestUnusedUses.Datei_ElternUnit_NurUsesZeileDeckt_ReportsWarning;
+// VOR F3: 0 Funde - die uses-Zeile der Kind-Unit deckte die Eltern-
+// Unit. Jetzt: FMX.Controls wird gemeldet (kein Ident der Liste im
+// Code); FMX.Controls.Presentation bleibt still (TPresentedControl
+// nutzt sie real, und ohne eigenes Mapping meldet H2 ohnehin nicht).
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses FMX.Controls, FMX.Controls.Presentation;'#13#10+
+    'implementation'#13#10+
+    'procedure Probe;'#13#10+
+    'var p: TPresentedControl;'#13#10+
+    'begin'#13#10+
+    '  p := nil;'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
+      'die uses-Zeile der Kind-Unit ist kein Nachweis fuer die '
+      + 'Eltern-Unit - FMX.Controls muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Datei_ElternUnit_QualifizierteNutzung_NoFinding;
+// GEGENPROBE: dieselben uses-Zeilen, aber der Rumpf nutzt die
+// Eltern-Unit QUALIFIZIERT - das ist ein echter H1-Nachweis und
+// muss das Blanken ueberleben.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses FMX.Controls, FMX.Controls.Presentation;'#13#10+
+    'implementation'#13#10+
+    'procedure Probe;'#13#10+
+    'var c: FMX.Controls.TControl;'#13#10+
+    '    p: TPresentedControl;'#13#10+
+    'begin'#13#10+
+    '  c := nil; p := nil;'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+      'qualifizierte Nutzung im Rumpf bleibt ein H1-Nachweis');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.BlankeUsesKlauseln_OhneSemikolon_LaesstTextStehen;
+// Der Randstein des Blank-Vertrags, direkt an der Routine geprueft:
+// (a) eine abgerissene Klausel ohne ';' bleibt stehen (sonst
+// verschwaende der halbe Suchtext und erzeugte Fehlfunde), (b) eine
+// vollstaendige Klausel wird exakt bis zum ';' geblankt, (c) ein
+// Bezeichner, der mit 'uses' nur BEGINNT, ist keine Klausel.
+var
+  S : string;
+begin
+  S := 'unit t; uses vcl.forms';                  // kein ';' dahinter
+  TUnusedUsesDetector.BlankeUsesKlauseln(S);
+  Assert.AreEqual('unit t; uses vcl.forms', S,
+    'ohne Abschluss-Semikolon bleibt die Klausel unangetastet');
+
+  S := 'x uses a.b, c; y uses2 z';
+  TUnusedUsesDetector.BlankeUsesKlauseln(S);
+  // 'uses a.b, c;' (Position 3..14) wird zu 12 Leerzeichen - die
+  // Erwartung ist konstruiert statt getippt, damit kein Zaehlfehler
+  // im Literal den Test verfaelscht.
+  Assert.AreEqual('x ' + StringOfChar(' ', 12) + ' y uses2 z', S,
+    'Klausel exakt bis zum Semikolon geblankt; uses2 ist keine Klausel');
 end;
 
 end.

@@ -45,6 +45,11 @@ type
     [Test] procedure EventHandlerSenderName_ForeignType_NotReported;
     [Test] procedure EventHandlerSender_SecondParam_Reported;
     [Test] procedure EventHandlerQualifiedTObject_NotReported;
+    // Gate 8 (F4, 2026-09-19): FPC-Fremdsprachen-Bindings dateiweit
+    [Test] procedure ObjcclassFile_AllMethodsSkipped;
+    [Test] procedure CppclassFile_AllMethodsSkipped;
+    [Test] procedure ObjcclassOnlyInString_StillReported;
+    [Test] procedure ObjcclassAsIdentSubstring_StillReported;
   end;
 
 implementation
@@ -71,9 +76,13 @@ uses
   uSCAConsts, uMethodd12,
   uTestFindingHelper;
 
-// Laeuft NUR SCA106 mit KONTROLLIERTEM Dateinamen. SCA106 ist rein
-// AST-basiert und liest die Datei nicht - der Name wird nur fuer das
-// *_TLB.pas-Gate gebraucht, eine echte Datei ist nicht noetig.
+// Laeuft NUR SCA106 mit KONTROLLIERTEM Dateinamen. Der Name wird fuer
+// das *_TLB.pas-Gate gebraucht; eine echte Datei ist nicht noetig -
+// seit Gate 8 (F4, 2026-09-19) liest SCA106 die Datei zwar fuer das
+// FPC-Bindings-Gate, aber auf einen Platzhalter-Namen liefert
+// AcquireLines nil und das Gate bleibt still aus (dokumentierte
+// Politik, wie der D4-Textkanal von SCA007). Die Gate-8-Tests nutzen
+// deshalb FindingsOfFile (echte Temp-Datei).
 function MethodFindingsFor(const ASource, AFileName: string)
   : TObjectList<TLeakFinding>;
 var
@@ -849,6 +858,104 @@ begin
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
     'TObjectList<T> als erster Parameter ist KEIN Event-Handler - ' +
     'der kleingeschriebene Name muss gemeldet werden');
+  finally F.Free; end;
+end;
+
+{ --- Gate 8 (F4, 2026-09-19): FPC-Fremdsprachen-Bindings ------------ }
+//
+// objcclass/objccategory/cppclass sind FPC-Klassenarten fuer
+// Objective-C-/C++-Bindings - die Methodennamen SIND die Selektoren
+// der fremden API. Das Gate entscheidet DATEIWEIT ueber den
+// gestrippten Quelltext (der Parser kennt die Syntax nicht als
+// Klassenart). Diese Tests laufen ueber FindingsOfFile: das Gate
+// braucht eine ECHTE Datei, auf Platzhalter-Namen bleibt es still aus.
+
+procedure TTestMethodName.ObjcclassFile_AllMethodsSkipped;
+// Das cocoa-Muster des Laz-Korpus: objcclass-Deklaration, lowercase-
+// Selektoren. VOR Gate 8 meldete SCA106 hier (die Methoden werden als
+// freie Deklarationen aufgesammelt, sobald die Typsektion am
+// 'procedure' endet). Jetzt: die ganze Datei schweigt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TCocoaFoo = objcclass(NSObject)'#13#10 +
+  '    procedure sendEvent(theEvent: NSEvent);'#13#10 +
+  '    function isRunning: Boolean;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMethodName),
+    'objcclass-Datei: Selektoren sind ABI-Namen - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestMethodName.CppclassFile_AllMethodsSkipped;
+// Dasselbe fuer die C++-Klassenart. ZWEI Methoden mit Absicht: der
+// Alias-Fallback des Parsers verschluckt die erste Deklaration bis
+// zum ';' - erst die zweite wird als freie Deklaration aufgesammelt
+// und meldete VOR Gate 8 (an der Exe belegt: 1 Fund; mit nur einer
+// Methode waere die Fixture ohne den Fix schon gruen und wertlos).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TQtFoo = cppclass(QWidget)'#13#10 +
+  '    procedure setClickable(b: Boolean);'#13#10 +
+  '    function isEnabled: Boolean;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMethodName),
+    'cppclass-Datei: gespiegelte C++-Namen - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestMethodName.ObjcclassOnlyInString_StillReported;
+// GEGENPROBE Strip-Politik: Das Wort steht nur in einem String-
+// Literal (das Muster der Lazarus-Codetools: Schluesselwortlisten).
+// Das Gate darf NICHT greifen - der lowercase-Name bleibt gemeldet.
+const SRC =
+  'unit t;'#13#10 +
+  'implementation'#13#10 +
+  'const KW = ''objcclass'';'#13#10 +
+  'procedure doStuff; begin end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
+    'Wort nur im String-Literal - Gate bleibt aus, Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestMethodName.ObjcclassAsIdentSubstring_StillReported;
+// GEGENPROBE Wortgrenze: 'objcclass' als SUBSTRING eines Bezeichners
+// (TObjcClassHelper) zaehlt nicht. Die Klasse traegt bewusst eine
+// zweite PascalCase-Methode, damit die CamelType-Amnestie (Gate 6,
+// 'ausnahmslos camelCase') nicht greift und der Fund wirklich am
+// Wortgrenzen-Check haengt.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TObjcClassHelper = class'#13#10 +
+  '    procedure doThing;'#13#10 +
+  '    procedure DoOther;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMethodName),
+    'Substring in einem Bezeichner ist kein Codewort - Fund bleibt');
   finally F.Free; end;
 end;
 
