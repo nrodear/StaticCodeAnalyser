@@ -47,6 +47,8 @@ type
     [Test] procedure OverrideDirective_NoFinding;
     [Test] procedure ForwardDirective_NoFinding;
     [Test] procedure MessageDirective_Reported_KnownLimit;
+    // ---- H5 (2026-09-20): Include-Ziel mit ungueltigen Zeichen ----
+    [Test] procedure IncludeZielMitUngueltigenZeichen_KeinAbbruch;
   end;
 
 implementation
@@ -632,6 +634,39 @@ begin
     'sca_test_inc_ohneaufrufer.inc', 'const CIrgendwas = 1;'),
     'ein Include ohne den Namen entlastet die Routine nicht');
 end;
+
+{ ---- H5 (2026-09-20): Include-Ziel aus fremdem Quelltext -------- }
+
+procedure TTestUnusedRoutine.IncludeZielMitUngueltigenZeichen_KeinAbbruch;
+// Das {$I ...}-Muster steht in fremdem Quelltext auch INNERHALB von
+// Stringliteralen - die Lazarus-codetools-Tests setzen Pascal als
+// Literal zusammen. Das Ziel trug dort ein Anfuehrungszeichen, und
+// TPath.IsPathRooted warf EInOutArgumentException: der GANZE Detektor
+// brach fuer die Datei ab und meldete stattdessen einen SCA006-Fehler
+// (2 Funde je Laz-Lauf). Der Test faehrt genau dieses Muster.
+//
+// Geprueft wird das BEOBACHTBARE: die Analyse laeuft durch und findet
+// die tote Routine. Vor H5 kam hier keine Antwort, sondern ein
+// Detektor-Abbruch.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'implementation'#13#10 +
+  const QUELLE = {$I mi"Xed.Inc};#13#10 +
+  'procedure NieGerufen;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedRoutine),
+      'die Analyse muss durchlaufen - ein ungueltiges Include-Ziel darf '
+      + 'den Detektor nicht abbrechen');
+  finally F.Free; end;
+end;
+
 
 initialization
   TDUnitX.RegisterTestFixture(TTestUnusedRoutine);
