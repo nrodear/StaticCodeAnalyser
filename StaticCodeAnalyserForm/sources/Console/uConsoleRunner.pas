@@ -245,6 +245,7 @@ uses
   System.IOUtils, System.Math,
   System.Generics.Defaults,           // TComparer fuer Detector-Timings-Sort
   uStaticAnalyzer2, uVcsChanges, uRepoSettings, uEngineApi,   // uSCAConsts seit D5 im interface-uses
+  uStaticFiles,                       // ScanDialect/TryGetAllPasFiles (dlAuto V2, D5)
   uExportSARIF, uExportHtml, uExport, uCustomRuleDetector,
   uExportSonarGeneric, uSonarConfig,
   uDetectorUtils,                     // TDetectorUtils.IsTestFixturePath
