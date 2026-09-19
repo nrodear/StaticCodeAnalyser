@@ -1,4 +1,4 @@
-unit uFuzzyComboSearch;
+﻿unit uFuzzyComboSearch;
 
 // Macht eine TComboBox tippbar und filtert ihre Liste per Fuzzy-Suche.
 //
@@ -59,6 +59,17 @@ type
     FHostChange : TNotifyEvent;
     FHostSelect : TNotifyEvent;
     FHostKeyUp  : TKeyEvent;
+    FHostKeyDown: TKeyEvent;
+    // E4-Aufloesung (D6, 2026-09-19): True zwischen Escape-KeyDOWN und
+    // dem dadurch ausgeloesten CBN_CLOSEUP. Der Blaetter-Fall (Liste
+    // offen, cursel per Pfeil verschoben, dann Escape) haengt sonst an
+    // der Windows-Fassung: stellt sie die cursel beim Escape-Zuklappen
+    // nicht zurueck, wuerde der CLOSEUP-Commit den ABBRUCH in eine
+    // Auswahl verwandeln. Das Flag macht Escape deterministisch zur
+    // Nicht-Geste - unabhaengig vom Revert-Verhalten. cgCloseUp
+    // generell zu entschaerfen ging nicht: der MAUS-Klick-Commit
+    // laeuft ueber dieselbe Notification (Live-Vorrang-Kommentar).
+    FEscapeCloseUp : Boolean;
     FHostCloseUp: TNotifyEvent;
     FHostExit   : TNotifyEvent;
     // Auswahl, die beim Blaettern entsteht, aber noch NICHT an den Host
@@ -79,6 +90,8 @@ type
     procedure ComboChange(Sender: TObject);
     procedure ComboSelect(Sender: TObject);
     procedure ComboCloseUp(Sender: TObject);
+    procedure ComboKeyDown(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
     procedure ComboExit(Sender: TObject);
     procedure CommitSelection(AGesture: TCommitGesture);
     procedure ComboKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -304,6 +317,7 @@ begin
     FCombo.OnCloseUp := FHostCloseUp;
     FCombo.OnExit    := FHostExit;
     FCombo.OnKeyUp   := FHostKeyUp;
+    FCombo.OnKeyDown := FHostKeyDown;
   end;
   FAll.Free;
   inherited;
@@ -319,6 +333,7 @@ begin
   FHostChange  := ACombo.OnChange;
   FHostSelect  := ACombo.OnSelect;
   FHostKeyUp   := ACombo.OnKeyUp;
+  FHostKeyDown := ACombo.OnKeyDown;
   FHostCloseUp := ACombo.OnCloseUp;
   FHostExit    := ACombo.OnExit;
 
@@ -331,6 +346,7 @@ begin
   ACombo.OnCloseUp    := ComboCloseUp;
   ACombo.OnExit       := ComboExit;
   ACombo.OnKeyUp      := ComboKeyUp;
+  ACombo.OnKeyDown    := ComboKeyDown;
 
   // Commit-Gedaechtnis und Schnappschuss zieht Resync aus dem
   // Ist-Zustand der Combo - Attach ist nur der Sonderfall "erster Sync".
@@ -916,11 +932,39 @@ begin
   end;
 end;
 
+procedure TFuzzyComboSearch.ComboKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+// Escape-KeyDOWN laeuft VOR dem CBN_CLOSEUP, das Windows daraufhin
+// schickt - nur hier laesst sich das Zuklappen als ABBRUCH markieren
+// (Vertrag am Feld FEscapeCloseUp). Kein IsListDropped-Gate: bei
+// geschlossener Liste folgt kein CloseUp, und das KeyUp-Netz raeumt
+// das Flag synchron wieder ab, bevor eine fremde Geste es saehe.
+begin
+  if Key = VK_ESCAPE then
+    FEscapeCloseUp := True;
+  if Assigned(FHostKeyDown) then
+  begin
+    FHostKeyDown(Sender, Key, Shift);
+  end;
+end;
+
 procedure TFuzzyComboSearch.ComboCloseUp(Sender: TObject);
 // CBN_CLOSEUP - die dokumentierte Stelle fuer teure Verarbeitung.
 // OHNE Einzeltreffer-Annahme: ein Zuklappen kommt auch von Escape.
 begin
-  CommitSelection(cgCloseUp);
+  if FEscapeCloseUp then
+  begin
+    // Escape-induziert (E4/D6): der Abbruch legt den committeten
+    // Zustand zurueck und meldet NICHTS - egal ob diese Windows-
+    // Fassung die cursel selbst revertet oder nicht.
+    FEscapeCloseUp := False;
+    FTimer.Enabled := False;
+    FPending       := '';
+    FHasPending    := False;
+    RestoreAllAndSelect(FCommitted);
+  end
+  else
+    CommitSelection(cgCloseUp);
   if Assigned(FHostCloseUp) then
   begin
     FHostCloseUp(FCombo);
@@ -946,6 +990,11 @@ end;
 procedure TFuzzyComboSearch.ComboKeyUp(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
+  // Netz zum Escape-Flag (E4/D6): war die Liste geschlossen, kam kein
+  // CloseUp als Konsument - das KeyUp desselben Escape raeumt synchron
+  // ab, bevor irgendeine andere Geste das Flag sehen koennte.
+  if Key = VK_ESCAPE then
+    FEscapeCloseUp := False;
   if Assigned(FCombo) and (Key = VK_ESCAPE) and FIsFiltering then
   begin
     // Escape verwirft die Eingabe und stellt den vorigen Zustand her.
