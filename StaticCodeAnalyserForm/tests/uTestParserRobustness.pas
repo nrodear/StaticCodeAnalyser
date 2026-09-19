@@ -192,6 +192,19 @@ type
     [Test] procedure Parser_ProgramMainBlock_StaysUnparsed;
     [Test] procedure Parser_UnitWithMethod_UnchangedByTopLevelBranch;
     [Test] procedure Parser_ObjectDeclLeak_InUnit_NoPhantomMethod;
+
+    // ---- G1 (2026-09-19): FPC-Fremdsprachen-Klassenarten ---------------
+    // objcclass/objccategory/objcprotocol/cppclass sind fuer den Lexer
+    // Bezeichner; vor G1 fiel die Deklaration in den Alias-Fallback,
+    // die Member liefen als freie Deklarationen und die Klasse
+    // existierte fuer keinen AST-Detektor (F-Charge-Messbasis: 46 Laz-
+    // + 16 realworld-Dateien; SCA106 meldete die Selektoren als freie
+    // Methoden). Die AST-Tests waren vor G1 ROT (kein nkClass-Knoten).
+    [Test] procedure Parser_Objcclass_ClassAndMembersInAst;
+    [Test] procedure Parser_ObjcprotocolExternalName_InAst;
+    [Test] procedure Parser_ObjcclassForward_FollowingTypeSurvives;
+    [Test] procedure Parser_Cppclass_MembersInAst;
+    [Test] procedure Parser_Objcclass_FollowingMethodLeakDetected;
   end;
 
 implementation
@@ -4217,6 +4230,171 @@ begin
         'ein ueberzaehliges Semikolon darf die naechste Routine nicht kosten');
     finally Root.Free; end;
   finally Parser.Free; end;
+end;
+
+{ ---- G1 (2026-09-19): FPC-Fremdsprachen-Klassenarten --------------- }
+//
+// Die Tests nutzen die Bestandshelfer ClassByName und MethodNamesOf
+// (oben in dieser Unit). MethodNamesOf sammelt REKURSIV - Member
+// haengen nicht direkt an der Klasse, sondern an einem
+// nkVisibilitySection-Knoten (ohne Sichtbarkeitswort: 'published'),
+// genau so lesen auch die Detektoren. Die erste Fassung dieser Tests
+// zaehlte DIREKTE Kinder und bekam darum 0: der Parser war in
+// Ordnung, der Zaehler nicht (Bau 2 der G-Charge). Namen statt
+// Anzahl belegen zusaetzlich, dass die RICHTIGEN Member ankommen.
+
+procedure TTestParserRobustness.Parser_Objcclass_ClassAndMembersInAst;
+// Das cocoa-Muster: external-Praeambel, Eltern-Liste, zwei Selektoren.
+// Vor G1: kein nkClass-Knoten (Alias-Fallback), die Methoden liefen
+// als freie Deklarationen - dieser Test war ROT.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TCocoaApp = objcclass external (NSApplication)'#13#10+
+  '    procedure sendEvent(theEvent: NSEvent);'#13#10+
+  '    function isRunning: Boolean;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  CN     : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      CN := ClassByName(Root, 'TCocoaApp');
+      Assert.IsNotNull(CN, 'objcclass muss als nkClass im AST stehen');
+      Assert.AreEqual('sendEvent,isRunning', MethodNamesOf(CN),
+        'beide Selektoren sind Member der Klasse, keine freien Deklarationen');
+      Assert.Contains(CN.TypeRef.ToLower, 'nsapplication',
+        'die Eltern-Liste gehoert in TypeRef (FFI-Anker-Vererbung)');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_ObjcprotocolExternalName_InAst;
+// Die VOLLE Praeambel mit Eltern dahinter - so steht sie im
+// Lazarus-Korpus ('objcclass external name ''ExternalClassName''
+// (ObjCSuperClassName, ProtocolName)'). Erst diese Kombination
+// BEWEIST, dass 'external', 'name' UND das Stringliteral konsumiert
+// werden: bleibt eines davon stehen, findet ParseClassBody kein '('
+// mehr und TypeRef bleibt leer (genau das Symptom in Bau 3, weil
+// 'external' als tkKwExternal und nicht als tkIdent kommt).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  MyAppDelegate = objcprotocol external name ''NSApplicationDelegate'''#13#10+
+  '      (NSObjectProtocol)'#13#10+
+  '    procedure applicationWillTerminate(note: NSNotification);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  CN     : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      CN := ClassByName(Root, 'MyAppDelegate');
+      Assert.IsNotNull(CN, 'objcprotocol muss als nkClass im AST stehen');
+      Assert.AreEqual('applicationWillTerminate', MethodNamesOf(CN),
+        'der Selektor ist Member des Protokolls - die external-name-'
+        + 'Praeambel darf nichts verschluckt haben');
+      Assert.Contains(CN.TypeRef.ToLower, 'nsobjectprotocol',
+        'nach name ''<symbol>'' muss die Elternliste noch erkannt '
+        + 'werden - sonst blieb ein Praeambel-Token stehen');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_ObjcclassForward_FollowingTypeSurvives;
+// Forward-Deklaration wie bei class: 'X = objcclass;' darf die
+// Typsektion nicht beschaedigen - der Folgetyp bleibt im AST.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  NSButton = objcclass;'#13#10+
+  '  TFolge = class'#13#10+
+  '    procedure DoIt;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Assert.IsNotNull(ClassByName(Root, 'TFolge'),
+        'der Typ nach der objcclass-Forward-Decl muss erhalten bleiben');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_Cppclass_MembersInAst;
+// Die C++-Klassenart, gleiche Mechanik.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TQtFoo = cppclass(QWidget)'#13#10+
+  '    procedure setClickable(b: Boolean);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  CN     : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      CN := ClassByName(Root, 'TQtFoo');
+      Assert.IsNotNull(CN, 'cppclass muss als nkClass im AST stehen');
+      Assert.AreEqual('setClickable', MethodNamesOf(CN),
+        'die gespiegelte Methode ist Member der Klasse');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_Objcclass_FollowingMethodLeakDetected;
+// Robustheits-Klammer im Stil der Schwester-Tests: nach der
+// objcclass-Deklaration muss die implementation voll analysierbar
+// bleiben (vor G1 hing das nur am Zufall der Recovery).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TCocoaApp = objcclass(NSObject)'#13#10+
+  '    procedure sendEvent(theEvent: NSEvent);'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.Test;'#13#10+
+  'var L: TStringList;'#13#10+
+  'begin'#13#10+
+  '  L := TStringList.Create;'#13#10+
+  '  // L.Free fehlt!'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'Leak in der Methode nach der objcclass-Decl muss erkannt werden');
+  finally F.Free; end;
 end;
 
 end.

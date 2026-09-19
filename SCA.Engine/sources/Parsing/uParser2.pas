@@ -132,6 +132,14 @@ type
     // Konsumiert die optionale Praeambel `helper for <type>` nach
     // `record` oder `class` in einer Typ-Deklaration.
     procedure SkipHelperFor;
+    // True fuer die FPC-Fremdsprachen-Klassenarten objcclass/
+    // objccategory/objcprotocol (Objective-C) und cppclass (C++) -
+    // fuer den Delphi-Lexer gewoehnliche Bezeichner (G1, 2026-09-19).
+    function IstFpcKlassenart(const AValue: string): Boolean;
+    // Konsumiert die optionale FPC-Bindings-Praeambel
+    // `external [name '<symbol>']` zwischen Klassenart und
+    // Eltern-Liste/Rumpf. Falls Tok nicht 'external' ist: no-op.
+    procedure SkipFpcBindingPraeambel;
     // Konsumiert beliebig viele Attributklauseln `[...]` an der aktuellen
     // Position (Backlog 4e #4, 2026-08-01). Falls Tok nicht `[` ist: no-op.
     procedure SkipAttributeClauses;
@@ -576,6 +584,56 @@ begin
     Next;
 end;
 
+function TParser2.IstFpcKlassenart(const AValue: string): Boolean;
+// Vertrag siehe Deklaration. Bewusst OHNE 'objcprotocol'-Sonderweg:
+// alle vier Arten werden als nkClass gefuehrt - dieselbe Lesart, mit
+// der der Parser Delphi-Interfaces als nkClass fuehrt (Detektoren
+// arbeiten auf Members, kein Spezial-Handling noetig).
+begin
+  Result := SameText(AValue, 'objcclass') or
+            SameText(AValue, 'objccategory') or
+            SameText(AValue, 'objcprotocol') or
+            SameText(AValue, 'cppclass');
+end;
+
+procedure TParser2.SkipFpcBindingPraeambel;
+// Konsumiert `external` und optional `name '<symbol>'` zwischen der
+// FPC-Klassenart und der Eltern-Liste bzw. dem Rumpf:
+//   NSButton = objcclass external (NSControl) ... end;
+//   NSDelegate = objcprotocol external name 'NSApplicationDelegate' ...
+// UNGLEICHE TOKENISIERUNG, wie schon bei abstract/sealed in
+// ParseClassBody: 'external' ist ein ECHTES Schluesselwort
+// (tkKwExternal, es steht als Routinen-Direktive in der Lexer-
+// Tabelle), 'name' dagegen kommt als tkIdent. Ein tkIdent-Test auf
+// 'external' greift also NIE - dann bleibt die Praeambel stehen,
+// ParseClassBody findet statt '(' das 'external' vor und die
+// Elternliste landet im Member-Churn: TypeRef bleibt leer (Bau 3 der
+// G-Charge; Symptom war 'Member ok, TypeRef leer').
+// Die Eltern-Liste danach uebernimmt ParseClassBody in
+// ClassNode.TypeRef - damit greift die bestehende FFI-Anker-
+// Vererbung (nsobject & Co.) in
+// TDetectorUtils.CollectFfiBindingTypes automatisch.
+begin
+  if Tok.Kind <> tkKwExternal then Exit;
+  Next; // 'external'
+  if (Tok.Kind = tkIdent) and SameText(Tok.Value, 'name') then
+  begin
+    Next; // 'name'
+    // tkStrLit heisst das Stringliteral-Token. NICHT 'tkString': das
+    // ist ein Wert von System.TTypeKind - deklariert in System.pas,
+    // also OHNE jede uses-Klausel in jeder Unit sichtbar. Es kompiliert
+    // dann nicht gegen TTokenKind (E2010, Bau 1 der G-Charge). 22
+    // solcher Fallennamen teilen sich das 'tk'-Praefix mit unserem
+    // Token-Enum, ohne darin vorzukommen: tkArray, tkChar, tkClass,
+    // tkRecord, tkSet, tkMethod, tkPointer, tkProcedure, tkVariant,
+    // tkInterface, tkInteger, tkFloat, tkString, ... Die Keyword-Token
+    // schuetzt ihr 'tkKw'-Praefix (tkKwString, tkKwClass) - bei neuen
+    // NICHT-Keyword-Token immer gegen uLexer.TTokenKind gegenlesen.
+    if Tok.Kind = tkStrLit then
+      Next; // '<symbol>'
+  end;
+end;
+
 function TParser2.Eat(K: TTokenKind): Boolean;
 var
   Dummy: TToken;
@@ -986,6 +1044,39 @@ begin
     Eat(tkKwPacked);
 
     T := Tok;
+
+    // FPC-Fremdsprachen-Klassenarten (G1, 2026-09-19): objcclass/
+    // objccategory/objcprotocol/cppclass sind fuer den Delphi-Lexer
+    // gewoehnliche Bezeichner. Bis G1 fiel die Deklaration in den
+    // Alias-Fallback: er frass bis zum ersten ';' (erste Feld- oder
+    // Methodendeklaration), die restlichen Member liefen als
+    // Pseudo-Aliase durch, und das erste 'procedure' beendete per
+    // Exit die GANZE Typsektion - die Methoden wurden als freie
+    // Deklarationen aufgesammelt, Klassen existierten fuer keinen
+    // AST-Detektor (Messbasis der F-Charge: 46 Laz- + 16
+    // realworld-Dateien). Jetzt: wie eine Klasse parsen - die
+    // 'external [name ...]'-Praeambel wird uebersprungen, die
+    // Eltern-Liste uebernimmt ParseClassBody in TypeRef (damit
+    // greift die nsobject/jobject-Anker-Vererbung der FFI-Gates
+    // automatisch). Forward-Deklaration ('X = objcclass;') wie bei
+    // class. SCA106 bleibt davon unberuehrt - dessen Gate 8 deckt
+    // die betroffenen Dateien DATEIWEIT.
+    if (T.Kind = tkIdent) and IstFpcKlassenart(T.Value) then
+    begin
+      Next;
+      if Tok.Kind = tkSemicolon then
+        Eat(tkSemicolon)                    // Forward-Decl
+      else
+      begin
+        SkipFpcBindingPraeambel;
+        var BNode := SecNode.Add(nkClass, Name, T.Line, T.Col);
+        ParseClassBody(BNode, SecNode);
+        Eat(tkSemicolon);
+      end;
+      GuardAdvance(StartCount);
+      Continue;
+    end;
+
     case T.Kind of
       tkKwClass:
         begin

@@ -4956,7 +4956,7 @@ The file has no BOM, contains non-ASCII bytes, and is not valid UTF-8 - so it is
 | Tags | `encoding`, `convention` |
 | Detector | `uSourceEncoding.pas` |
 
-The source file is UTF-16 (LE or BE). It compiles, but UTF-16 source is unusual and causes friction with text tooling (git diff, grep, external hooks, code review). The convention is UTF-8 with BOM.
+The source file is UTF-16 (LE or BE). It compiles, but UTF-16 source is unusual and causes friction with text tooling (git diff, grep, external hooks, code review). The convention is UTF-8 with BOM. Under the FPC dialect (--dialect=fpc or a Lazarus project) the finding is reported as an ERROR instead: Free Pascal rejects UTF-16 source, the file does not compile at all.
 
 ```pascal
 // BAD
