@@ -799,6 +799,23 @@ const
     ''#13#10 +
     ';'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
+    ';  [Scan] - source dialect (Delphi / Lazarus-FPC)'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
+    ''#13#10 +
+    '[Scan]'#13#10 +
+    ''#13#10 +
+    '; Dialect (string, default: empty = delphi)'#13#10 +
+    '; Source dialect when no --dialect switch is given. fpc additionally'#13#10 +
+    '; collects *.pp/*.lpr units, pairs .lfm form files, parses with the'#13#10 +
+    '; FPC/LCL defines and skips the Delphi-only rules SCA041/SCA129/SCA185.'#13#10 +
+    '; The CLI switch and an .lpi/.lpk/.lpg project scan always win; the'#13#10 +
+    '; GUI toggles this key via right-click on the status bar.'#13#10 +
+    'Dialect='#13#10 +
+    ';Dialect=delphi'#13#10 +
+    ';Dialect=fpc'#13#10 +
+    ''#13#10 +
+    ';'#13#10 +
+    '; ------------------------------------------------------------'#13#10 +
     ';  [Rules] - rule-set filter (profile + severity threshold)'#13#10 +
     '; ------------------------------------------------------------'#13#10 +
     ''#13#10 +
