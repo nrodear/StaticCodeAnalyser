@@ -74,6 +74,9 @@ type
     [Test] procedure Outside_PureAscii_False;
     [Test] procedure Detect_Utf8NoBom_InString_fcMedium;
     [Test] procedure Detect_Utf8NoBom_InComment_fcLow;
+    // ---- SCA185-dlFpc-Gate (Lazarus-Folge B1, 2026-09-19) -----------------
+    [Test] procedure Detect_Utf8NoBom_FpcDialekt_Skipped;
+    [Test] procedure Detect_Ansi_FpcDialekt_E3Bleibt;
     // ---- S3 Homoglyph / Non-ASCII-Identifier ------------------------------
     [Test] procedure Ident_NonAscii_True;
     [Test] procedure Ident_InString_False;
@@ -99,7 +102,8 @@ implementation
 
 uses
   System.SysUtils, System.Generics.Collections, System.IOUtils,
-  uFileTextCache, uSourceEncoding, uMethodd12, uSCAConsts;
+  uFileTextCache, uSourceEncoding, uMethodd12, uSCAConsts,
+  uStaticFiles;   // ScanDialect (SCA185-dlFpc-Gate, Lazarus-Folge B1)
 
 { ---- Helpers ------------------------------------------------------------- }
 
@@ -335,6 +339,51 @@ begin
   F := DetectBytes(Cat(Ascii('unit x;'), TBytes.Create($C3, $A9)));
   try Assert.AreEqual<Integer>(1, CountKind(F, fkSourceUtf8NoBom));
   finally F.Free; end;
+end;
+
+procedure TTestSourceEncoding.Detect_Utf8NoBom_FpcDialekt_Skipped;
+// SCA185-dlFpc-Gate (Lazarus-Folge B1): unter FPC/Lazarus ist BOM-loses
+// UTF-8 die Norm (die Lazarus-IDE speichert selbst ohne BOM) - E1 ist
+// dort strukturell FP und wird geskippt. Dieselben Bytes wie im
+// Bestandstest Detect_Utf8NoBom_E1, der die dlDefault-Gegenrichtung
+// (1 Fund) weiter pinnt. Globaler View-State -> try/finally.
+// Vor dem Gate: 1 Fund (dieser Test war ROT).
+var
+  F   : TObjectList<TLeakFinding>;
+  Alt : TSourceDialect;
+begin
+  Alt := TStaticFiles.ScanDialect;
+  TStaticFiles.ScanDialect := dlFpc;
+  try
+    F := DetectBytes(Cat(Ascii('unit x;'), TBytes.Create($C3, $A9)));
+    try
+      Assert.AreEqual<Integer>(0, CountKind(F, fkSourceUtf8NoBom),
+        'unter dlFpc meldet SCA185 nicht - BOM-los ist dort die Norm');
+    finally F.Free; end;
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+end;
+
+procedure TTestSourceEncoding.Detect_Ansi_FpcDialekt_E3Bleibt;
+// Gegenprobe der Gate-Breite: der Skip trifft NUR E1. Echtes
+// 8-bit-ANSI (E3/SCA189) ist auch unter FPC nicht portabel und muss
+// unter dlFpc weiter gemeldet werden.
+var
+  F   : TObjectList<TLeakFinding>;
+  Alt : TSourceDialect;
+begin
+  Alt := TStaticFiles.ScanDialect;
+  TStaticFiles.ScanDialect := dlFpc;
+  try
+    F := DetectBytes(Cat(Ascii('Gr'), Cat(TBytes.Create($F6), Ascii('sse'))));
+    try
+      Assert.AreEqual<Integer>(1, CountKind(F, fkSourceAnsiNonAscii),
+        'E3 bleibt unter dlFpc aktiv - der Skip gilt nur E1');
+    finally F.Free; end;
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
 end;
 
 procedure TTestSourceEncoding.Detect_InvalidUtf8_E2;
