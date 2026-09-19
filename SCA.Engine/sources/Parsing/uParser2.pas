@@ -611,7 +611,17 @@ begin
   if (Tok.Kind = tkIdent) and SameText(Tok.Value, 'name') then
   begin
     Next; // 'name'
-    if Tok.Kind = tkString then
+    // tkStrLit heisst das Stringliteral-Token. NICHT 'tkString': das
+    // ist ein Wert von System.TTypeKind - deklariert in System.pas,
+    // also OHNE jede uses-Klausel in jeder Unit sichtbar. Es kompiliert
+    // dann nicht gegen TTokenKind (E2010, Bau 1 der G-Charge). 22
+    // solcher Fallennamen teilen sich das 'tk'-Praefix mit unserem
+    // Token-Enum, ohne darin vorzukommen: tkArray, tkChar, tkClass,
+    // tkRecord, tkSet, tkMethod, tkPointer, tkProcedure, tkVariant,
+    // tkInterface, tkInteger, tkFloat, tkString, ... Die Keyword-Token
+    // schuetzt ihr 'tkKw'-Praefix (tkKwString, tkKwClass) - bei neuen
+    // NICHT-Keyword-Token immer gegen uLexer.TTokenKind gegenlesen.
+    if Tok.Kind = tkStrLit then
       Next; // '<symbol>'
   end;
 end;

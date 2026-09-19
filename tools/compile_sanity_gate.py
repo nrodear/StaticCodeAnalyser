@@ -271,6 +271,62 @@ def ohne_kommentar(text):
     return '\n'.join(out)
 
 
+# --------------------------------------------------------------------------
+# 3b) Token-Vokabular je Parser (G-Charge 2026-09-19)
+# --------------------------------------------------------------------------
+# Das 'tk'-Praefix laeuft BEWUSST nicht ueber sammle_deklarierte_enums:
+# eine projektweite Werteliste taugt hier nicht. Im Repo gibt es ZWEI
+# Token-Enums mit ueberlappenden Namen (uLexer.TTokenKind fuer Pascal,
+# uDfmLexer.TDfmTokenKind fuer DFM - letzteres fuehrt tkString,
+# tkInteger, tkFloat, tkSet), und darueber liegt System.TTypeKind aus
+# System.pas, das OHNE uses-Klausel in jeder Unit sichtbar ist und 22
+# weitere tk-Namen mitbringt (tkArray, tkClass, tkRecord, tkMethod,
+# tkPointer, tkString, ...). Ein projektweiter Namenstopf wuerde also
+# genau den Fehler durchlassen, der diese Pruefung ausgeloest hat:
+# 'tkString' in uParser2 (Bau 1 der G-Charge, E2010 'Inkompatible
+# Typen: TTokenKind und TTypeKind') ist projektweit bekannt - nur eben
+# aus dem FALSCHEN Enum. Deshalb je Konsument-Unit gegen GENAU ihr
+# Token-Enum pruefen.
+TOKEN_VOKABULAR = {
+    'uparser2.pas': ('SCA.Engine/sources/Parsing/uLexer.pas', 'TTokenKind'),
+    'udfmparser.pas': ('SCA.Engine/sources/Parsing/uDfmLexer.pas',
+                       'TDfmTokenKind'),
+}
+
+
+def _enum_werte(pfad, typname):
+    """Werteliste einer Enum-Deklaration 'TName = (a, b, c);'."""
+    t = lies(pfad)
+    m = re.search(re.escape(typname) + r'\s*=\s*\((.*?)\)\s*;', t, re.S)
+    if not m:
+        return set()
+    rumpf = re.sub(r'//[^\n]*', '', m.group(1))
+    rumpf = re.sub(r'\{.*?\}', '', rumpf, flags=re.S)
+    return set(x.strip() for x in rumpf.replace('\n', ' ').split(',')
+               if x.strip())
+
+
+def pruefe_token_vokabular(pfad, befunde):
+    """tk-Bezeichner eines Parsers gegen SEIN Token-Enum. Faengt E2010
+    (Wert aus System.TTypeKind oder dem anderen Lexer)."""
+    eintrag = TOKEN_VOKABULAR.get(os.path.basename(pfad).lower())
+    if not eintrag:
+        return
+    quelle, typ = eintrag
+    erlaubt = _enum_werte(os.path.join(REPO, quelle), typ)
+    if not erlaubt:
+        befunde.append('%s  Token-Enum %s in %s nicht lesbar - Pruefung '
+                       'haette still gepasst'
+                       % (os.path.basename(pfad), typ, quelle))
+        return
+    t = ohne_kommentar(lies(pfad))
+    for sym in sorted(set(re.findall(r'\b(tk[A-Z][A-Za-z0-9_]*)\b', t))):
+        if sym not in erlaubt:
+            befunde.append('%s  Token-Wert nicht in %s.%s (E2010): %s'
+                           % (os.path.basename(pfad), os.path.basename(quelle),
+                              typ, sym))
+
+
 def pruefe_enums(pfad, deklariert, befunde):
     """Benutzte fk/nk/fc/ls/ms-Werte gegen die Deklarationen. Faengt
     E2003 ('msInstanceMethod' statt 'msInstance')."""
@@ -445,6 +501,7 @@ def main():
         pruefe_leere_deklarationsbloecke(d, befunde)
         pruefe_doppeltes_routinenende(d, befunde)
         pruefe_enums(d, deklariert, befunde)
+        pruefe_token_vokabular(d, befunde)
         if os.sep + 'tests' + os.sep in d.replace('/', os.sep):
             pruefe_unbeendete_konstante(d, befunde)
             pruefe_fixture_klassen(d, befunde)
