@@ -55,6 +55,10 @@ type
     [Test] procedure UriMitLeerzeichenWirdProzentkodiert;
     [Test] procedure UriProzentzeichenWirdZuerstKodiert;
     [Test] procedure FingerprintBleibtAufRohemPfad;
+    // file://-Schema fuer absolute uris (Teil B des Postens, D2)
+    [Test] procedure UriAbsoluterPfad_BekommtFileSchema;
+    [Test] procedure UriUncPfad_BekommtFileSchema;
+    [Test] procedure FingerprintBleibtRohBeiAbsolutemPfad;
   end;
 
 implementation
@@ -722,6 +726,98 @@ begin
       Assert.AreNotEqual(LowerCase(KodiertWaere), LowerCase(Hash),
         'liefe der Hash ueber die kodierte uri, waere jeder betroffene '
         + 'GitHub-Alert einmalig neu');
+    finally
+      Root.Free;
+    end;
+  finally
+    F.Free;
+  end;
+end;
+
+
+{ --- file://-Schema fuer absolute uris (Teil B, D2 2026-09-19) --- }
+
+procedure TTestExportSARIF.UriAbsoluterPfad_BekommtFileSchema;
+// Eine Datei AUSSERHALB der BaseDir bleibt absolut - in --project der
+// Normalfall. SARIF verlangt eine URI; der Interface-Kommentar von
+// WriteFile versprach 'file:// URI' seit jeher, geliefert wurde bis D2
+// ein roher Windows-Pfad (der Audit-Befund 'entgegen der eigenen
+// Vertragsdoku').
+var
+  F    : TObjectList<TLeakFinding>;
+  Root : TJSONObject;
+  Uri  : string;
+begin
+  F := TObjectList<TLeakFinding>.Create(True);
+  try
+    F.Add(MakeFinding(fkNilDeref, lsWarning, 'C:\Temp Dir\x.pas', 7, 'obj'));
+    Root := ParseSARIF(TSARIFWriter.ToJsonString(F, 'D:\anderswo', '0.8.0', 'T'));
+    try
+      Uri := GetFirstResult(Root).GetValue<TJSONArray>('locations').Items[0]
+               .GetValue<TJSONObject>('physicalLocation')
+               .GetValue<TJSONObject>('artifactLocation')
+               .GetValue<string>('uri');
+      Assert.AreEqual('file:///C:/Temp%20Dir/x.pas', Uri);
+    finally
+      Root.Free;
+    end;
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestExportSARIF.UriUncPfad_BekommtFileSchema;
+// UNC: '//srv/share/...' wird zu 'file://srv/share/...' - der Host
+// wandert in die Authority, kein drittes Slash.
+var
+  F    : TObjectList<TLeakFinding>;
+  Root : TJSONObject;
+  Uri  : string;
+begin
+  F := TObjectList<TLeakFinding>.Create(True);
+  try
+    F.Add(MakeFinding(fkNilDeref, lsWarning, '\\srv\share\x.pas', 7, 'obj'));
+    Root := ParseSARIF(TSARIFWriter.ToJsonString(F, 'D:\anderswo', '0.8.0', 'T'));
+    try
+      Uri := GetFirstResult(Root).GetValue<TJSONArray>('locations').Items[0]
+               .GetValue<TJSONObject>('physicalLocation')
+               .GetValue<TJSONObject>('artifactLocation')
+               .GetValue<string>('uri');
+      Assert.AreEqual('file://srv/share/x.pas', Uri);
+    finally
+      Root.Free;
+    end;
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestExportSARIF.FingerprintBleibtRohBeiAbsolutemPfad;
+// Wie bei der Prozentkodierung: das Schema haengt NUR an der uri.
+// Der Hash laeuft ueber den rohen absoluten Pfad - sonst waere jeder
+// --project-Alert nach D2 einmalig "neu".
+var
+  F    : TObjectList<TLeakFinding>;
+  Root : TJSONObject;
+  R    : TJSONObject;
+  Hash, Txt, Regel : string;
+begin
+  F := TObjectList<TLeakFinding>.Create(True);
+  try
+    F.Add(MakeFinding(fkNilDeref, lsWarning, 'C:\Temp Dir\x.pas', 7, 'obj'));
+    Root := ParseSARIF(TSARIFWriter.ToJsonString(F, 'D:\anderswo', '0.8.0', 'T'));
+    try
+      R     := GetFirstResult(Root);
+      Regel := R.GetValue<string>('ruleId');
+      Txt   := R.GetValue<TJSONObject>('message').GetValue<string>('text');
+      Hash  := R.GetValue<TJSONObject>('partialFingerprints')
+                .GetValue<string>('primaryLocationLineHash');
+      Assert.AreEqual(
+        LowerCase(THashSHA2.GetHashString(
+          Regel + '|C:/Temp Dir/x.pas|7|' + Txt)),
+        LowerCase(Hash),
+        'Fingerprint muss ueber den rohen absoluten Pfad laufen - '
+        + 'ohne Schema, ohne %20');
     finally
       Root.Free;
     end;

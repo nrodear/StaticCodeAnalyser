@@ -49,6 +49,15 @@ def unescape(raw):
             .replace('\\/', '/').replace('\\"', '"').replace('\\\\', '\\'))
 
 
+def strip_file_schema(u):
+    """file://-Strip (D2, 2026-09-19): absolute uris tragen das Schema."""
+    if u.startswith('file:///'):
+        return u[8:]
+    if u.startswith('file://'):
+        return u[7:]
+    return u
+
+
 def read_findings(path):
     """Alle results des SARIF als {rule: [(level, file, line, message), ...]}."""
     per_rule = collections.defaultdict(list)
@@ -66,8 +75,10 @@ def read_findings(path):
                     per_rule[m.group(1).decode()].append(
                         # unquote NUR auf die uri (Gruppe 4) - der
                         # Meldetext (3) darf ein woertliches %20 behalten.
+                        # file://-Strip (D2) vor dem unquote.
                         (m.group(2).decode(),
-                         urllib.parse.unquote(unescape(m.group(4))),
+                         urllib.parse.unquote(strip_file_schema(
+                             unescape(m.group(4)))),
                          int(m.group(5)), unescape(m.group(3))))
                     watermark = pos + m.end()
             if eof:

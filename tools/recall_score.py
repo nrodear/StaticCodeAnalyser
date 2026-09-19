@@ -21,7 +21,13 @@ LNR = re.compile(r'"startLine":\s*(\d+)')
 def norm(p):
     # unquote: seit der Emit-Kodierung (2026-09-19) stehen Leerzeichen
     # als %20 in der uri - Vergleichsmengen brauchen den rohen Pfad.
-    return urllib.parse.unquote(p.replace("\\/", "/")).replace("\\", "/")
+    # file://-Strip (D2): absolute uris tragen jetzt das Schema.
+    p = p.replace("\\/", "/")
+    if p.startswith("file:///"):
+        p = p[8:]
+    elif p.startswith("file://"):
+        p = p[7:]
+    return urllib.parse.unquote(p).replace("\\", "/")
 
 
 def load_sarif(path, key='folder'):
