@@ -203,6 +203,20 @@ function FixtureFilterAnker(const Args: TCliArgs): string;
 // Vertrag ist an synthetischen PE32- und PE32+-Koepfen gepinnt.
 function PeStackReserveMB(const AExePath: string): Integer;
 
+// Ob der Lauf den opt-in UnusedUses-Detektor (SCA007) faehrt.
+// Recall-Fix 2026-09-19 (G13-Befund 15.09., Kette im Kopf von
+// uUnusedUses): der CLI setzte Req.UsesCheck NIE - damit war der
+// ini-Schalter [Detectors] UsesCheck dort wirkungslos (Doku verspricht
+// ihn an vier Stellen), und das Profil 'strict' ("alle + opt-in
+// Detektoren", uRepoSettings) lieferte SCA007 trotzdem nie.
+//   AIniUsesCheck - Settings.UsesCheck ([Detectors] UsesCheck)
+//   AProfil       - das EFFEKTIVE Profil (Settings.Profile traegt zum
+//                   Aufrufzeitpunkt bereits die --profile-Praezedenz)
+// In der interface-Sektion aus demselben Grund wie ApplyFailOnPolicy:
+// testbar ohne Run-Seiteneffekt.
+function EffektiverUsesCheck(AIniUsesCheck: Boolean;
+  const AProfil: string): Boolean;
+
 implementation
 
 // noinspection-file BeginEndRequired, CanBeClassMethod, ConsecutiveSection, DebugOutput, ExceptOnException, GroupedDeclaration, IfElseBegin, InsecureCryptoAlgorithm, NestedRoutine, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedPublicMember
@@ -1778,6 +1792,14 @@ begin
       // Dialekt (Lazarus A2/A3): eine Uebersetzungsstelle fuer Request
       // und VCS-Filter - s. CliDialekt.
       Req.Dialect := CliDialekt(Args);
+      // Opt-in UnusedUses/SCA007 (Recall-Fix 2026-09-19): bis hierher
+      // wurde das Feld NIE gesetzt - Init-Default False, und
+      // uStaticAnalyzer2 gatet den Detektor darauf. Der ini-Schalter
+      // und die strict-Zusage ("alle + opt-in") greifen erst mit
+      // dieser Zeile auch im CLI. Settings.Profile traegt an dieser
+      // Stelle bereits die --profile-Praezedenz.
+      Req.UsesCheck := EffektiverUsesCheck(Settings.UsesCheck,
+        Settings.Profile);
       // Perf Stufe 2 (2026-07-25): opt-in Per-File-Parallelisierung.
       // Gate-Rueckfall auf seriell (AutoDiscovery/Custom-Rules/Timings)
       // entscheidet die Engine selbst (uStaticAnalyzer2).
@@ -2386,6 +2408,17 @@ begin
   end;
   // Unbekannter Wert -> Default
   Result := Raw;
+end;
+
+function EffektiverUsesCheck(AIniUsesCheck: Boolean;
+  const AProfil: string): Boolean;
+// Vertrag siehe interface. 'strict' haengt hier bewusst am NAMEN und
+// nicht an TRuleCatalog.GetProfile: strict ist als AllKinds definiert,
+// eine Kind-Mengen-Pruefung koennte den opt-in-Charakter also gar
+// nicht ausdruecken - genau deshalb existiert das UsesCheck-Gate in
+// uStaticAnalyzer2 als EIGENER Schalter neben dem Profil.
+begin
+  Result := AIniUsesCheck or SameText(AProfil, 'strict');
 end;
 
 end.

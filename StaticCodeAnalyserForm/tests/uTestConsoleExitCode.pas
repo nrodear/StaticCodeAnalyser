@@ -59,6 +59,20 @@ type
     [Test] procedure NichtVorhandeneDatei_LiefertNull;
   end;
 
+  // ---- Opt-in UsesCheck/SCA007 (Recall-Fix 2026-09-19) --------------
+  // Eigene Fixture aus demselben Grund. Pinnt die CLI-Politik, mit der
+  // SCA007 ueberhaupt laeuft: ini-Schalter ODER Profil 'strict'. Bis
+  // zum Fix setzte der CLI das Request-Feld nie - der Detektor lief in
+  // KEINEM CLI-Lauf (G13-Befund, Kette im Kopf von uUnusedUses).
+  [TestFixture]
+  TTestEffektiverUsesCheck = class
+  public
+    [Test] procedure IniSchalter_Greift;
+    [Test] procedure ProfilStrict_Greift_AuchOhneIni;
+    [Test] procedure ProfilStrict_IstCaseInsensitiv;
+    [Test] procedure DefaultProfilOhneIni_BleibtAus;
+  end;
+
 implementation
 
 uses
@@ -330,8 +344,44 @@ begin
     'fehlende Datei liefert 0 statt einer Exception');
 end;
 
+{ ---- TTestEffektiverUsesCheck ---- }
+
+procedure TTestEffektiverUsesCheck.IniSchalter_Greift;
+// [Detectors] UsesCheck=1 muss den Detektor auch ausserhalb von strict
+// einschalten - die Doku verspricht den Schalter an vier Stellen, und
+// genau er war im CLI wirkungslos (27 repo-weise Laeufe, alle 0).
+begin
+  Assert.IsTrue(EffektiverUsesCheck(True, 'default'));
+end;
+
+procedure TTestEffektiverUsesCheck.ProfilStrict_Greift_AuchOhneIni;
+// uRepoSettings definiert strict als "alle + opt-in Detektoren
+// (UsesCheck)" - der Referenzlauf faehrt genau dieses Profil und bekam
+// die Regel trotzdem nie.
+begin
+  Assert.IsTrue(EffektiverUsesCheck(False, 'strict'));
+end;
+
+procedure TTestEffektiverUsesCheck.ProfilStrict_IstCaseInsensitiv;
+// Profilnamen kommen aus ini UND --profile; die uebrige Profil-
+// Aufloesung (TRuleCatalog) ist case-insensitiv - diese Weiche muss
+// es genauso sein, sonst haengt der Detektor an der Schreibweise.
+begin
+  Assert.IsTrue(EffektiverUsesCheck(False, 'STRICT'));
+end;
+
+procedure TTestEffektiverUsesCheck.DefaultProfilOhneIni_BleibtAus;
+// Gegenprobe: der opt-in-Charakter bleibt. Default-Profil ohne
+// ini-Schalter laeuft weiterhin OHNE den teuren Detektor - alles
+// andere waere ein stiller Recall-Schub in jedem CI-Lauf.
+begin
+  Assert.IsFalse(EffektiverUsesCheck(False, 'default'));
+  Assert.IsFalse(EffektiverUsesCheck(False, ''));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestStackReserveGuard);
   TDUnitX.RegisterTestFixture(TTestConsoleExitCode);
+  TDUnitX.RegisterTestFixture(TTestEffektiverUsesCheck);
 
 end.
