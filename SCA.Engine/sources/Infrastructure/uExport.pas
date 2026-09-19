@@ -40,8 +40,10 @@ uses
   uSCAConsts, uMethodd12, uFixHint, uLocalization, uRuleCatalog;
 
 type
-  // Bitset zur Severity-Auswahl beim Jira-/Clipboard-Export.
-  TSeverityFilter = set of TLeakSeverity;
+  // D1-Umzug 2026-09-19: der Typ lebt jetzt in uSCAConsts (Common,
+  // neben TLeakSeverity), weil auch Output ihn braucht. Alias fuer
+  // bestehende Konsumenten dieses Namensraums.
+  TSeverityFilter = uSCAConsts.TSeverityFilter;
 
   TExporter = class
   public
@@ -55,17 +57,11 @@ type
     class procedure ExportJson(Findings: TObjectList<TLeakFinding>;
       const FileName: string; const ABaseDir: string = ''); static;
 
-    // Jira-Wiki-Markup fuer Befunde einer einzelnen Datei. Severity-Auswahl
-    // ueber Filter-Set (z.B. [lsError, lsWarning] fuer Fehler+Warnungen).
-    // Liefert den fertigen Text - speichern oder in die Zwischenablage uebergeben
-    // ist Sache des Aufrufers.
-    class function BuildJiraText(Findings: TObjectList<TLeakFinding>;
-      const SourceFile: string; const SeverityFilter: TSeverityFilter): string; static;
-
-    // Liefert einen Zwischenablage-tauglichen Plain-Text mit Fehler+Warnung
-    // fuer eine einzelne Datei. Format: "<Severity> [Zeile] <Regel>: <Detail>"
-    class function BuildClipboardText(Findings: TObjectList<TLeakFinding>;
-      const SourceFile: string; const SeverityFilter: TSeverityFilter): string; static;
+    // BuildJiraText/BuildClipboardText/JiraEscape stehen seit D1
+    // (2026-09-19) in TFindingCopyText (uFindingCopyText, Output) -
+    // reine Textbauer ohne Datei-I/O, Schwestern von BuildJiraMini.
+    // Der Umzug ist der zweite Teil der SCA141-Folgearbeit (TExporter
+    // 584 -> unter die 500er-Schwelle).
 
     // Erzeugt einen kompletten, in sich geschlossenen HTML-Report (inkl. CSS).
     // SourceFile ist optional - wenn '' gesetzt, werden alle Befunde gelistet.
@@ -94,12 +90,9 @@ type
       ABaseDir: string): string; static;
     // Kanonischer Name eines Befund-Kinds (fuer CSV/JSON/Jira/HTML).
     class function KindToName(Kind: TFindingKind): string; static;
-    // Vergleicht Datei-Pfade case-insensitiv und mit normalisierten
-    // Trennern. Ein Befund kann mit absolutem oder relativem Pfad
-    // vorliegen, deshalb muss der kuerzere Pfad ein Suffix des laengeren
-    // sein - an einer TRENNERGRENZE. Gleichnamige Units aus verschiedenen
-    // Ordnern fallen dadurch NICHT mehr zusammen (bis 08.09. taten sie
-    // es, siehe Rumpf).
+    // Pfadvergleich (Tail an Trennergrenze) - seit D1 Delegation an
+    // TDetectorUtils.SameSourceFile (Common), Vertrag und Doku dort.
+    // Bleibt hier als Einstiegspunkt fuer uExportHtml und die Tests.
     class function SameSourceFile(const A, B: string): Boolean; static;
     // JSON-String-Escaping - public, weil uExportHtml es fuer den
     // sca-meta-Block (#10) braucht (wie KindToName/SameSourceFile).
@@ -107,7 +100,6 @@ type
 
   private
     class function CsvEscape(const S: string): string; static;
-    class function JiraEscape(const S: string): string; static;
   end;
 
 implementation
@@ -118,7 +110,8 @@ implementation
 uses
   System.IOUtils,          // TPath (RelativeDisplayPath)
   uExportHtml,
-  uReportFileWriter;   // atomare Schreibwege (C-Charge 2026-09-19)
+  uReportFileWriter,   // atomare Schreibwege (C-Charge 2026-09-19)
+  uDetectorUtils;      // SameSourceFile-Delegation (D1 2026-09-19)
 
 class function TExporter.RelativeDisplayPath(const AFileName,
   ABaseDir: string): string;
@@ -328,338 +321,12 @@ end;
 
 { ---- Jira / Clipboard / HTML ----------------------------------------------- }
 
-class function TExporter.JiraEscape(const S: string): string;
-// In Jira-Wiki-Markup haben |, *, _, +, -, [, ], {, } eigene Bedeutung.
-// Per Backslash-Escape neutralisieren. Zeilenumbrueche durch Leerzeichen
-// ersetzen, weil Tabellenzeilen nicht ueber Zeilenumbrueche gehen.
-var
-  Ch: Char;
-  SB: TStringBuilder;
-begin
-  SB := TStringBuilder.Create;
-  try
-    for Ch in S do
-      case Ch of
-        #13, #10 : SB.Append(' ');
-        '|', '*', '_', '+', '-', '[', ']', '{', '}', '\':
-          begin SB.Append('\'); SB.Append(Ch); end;
-      else
-        SB.Append(Ch);
-      end;
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
 class function TExporter.SameSourceFile(const A, B: string): Boolean;
-// Vergleicht Datei-Pfade case-insensitiv und mit normalisierten Trennern.
-//
-// BIS 08.09. verglich diese Funktion NUR den Basisnamen. In einer
-// Projektgruppe mit mehreren Ordnern galten damit D:\projA\uMain.pas und
-// D:\projB\uMain.pas als dieselbe Datei, und der Einzeldatei-Export zog
-// die Befunde beider zusammen - ohne dass der Leser es sehen konnte
-// (Modul-Codereview, MAJOR). Gleichnamige Units sind in Delphi-
-// Projektgruppen der Normalfall, nicht die Ausnahme.
-//
-// Warum kein schlichter Volltextvergleich: der Aufrufer haelt mal einen
-// absoluten, mal einen relativen Pfad, je nachdem woher der Befund kommt.
-// Deshalb der TAIL-Vergleich - der kuerzere Pfad muss ein Suffix des
-// laengeren sein, UND ZWAR AN EINER TRENNERGRENZE. Ohne diese Bedingung
-// waere 'D:\xsrc\uMain.pas' dasselbe wie 'src\uMain.pas'.
-//
-// Fehlt einer Seite der Verzeichnisanteil ganz, bleibt es beim
-// Basisnamen - mehr Information liegt dann schlicht nicht vor.
-
-  // NICHT ExtractFileName verwenden. Es schneidet unter Windows nur an
-  // '\' und ':' ab (System.SysUtils: LastDelimiter([PathDelim,
-  // DriveDelim]), PathDelim = '\'), der Vorwaerts-Schraegstrich ist dort
-  // KEIN Trenner. Auf dem oben zu '/' normalisierten Pfad findet es also
-  // nichts mehr und liefert aus 'D:/a/uMain.pas' ein '/a/uMain.pas' -
-  // der Basisnamen-Vergleich waere damit immer falsch.
-  //
-  // Genau daran ist der erste Anlauf dieses Umbaus gescheitert, und die
-  // Python-Nachbildung hat es VERDECKT: dort kennt split('/') den
-  // Trenner sehr wohl. Eine Nachbildung muss die Pfad-Semantik der
-  // Zielsprache nachbilden, nicht die der eigenen.
-  function Basisname(const S: string): string;
-  var
-    i : Integer;
-  begin
-    for i := Length(S) downto 1 do
-      if CharInSet(S[i], ['/', ':']) then
-        Exit(Copy(S, i + 1, MaxInt));
-    Result := S;
-  end;
-
-var
-  NA, NB, Kurz, Lang : string;
+// Seit D1 (2026-09-19) reine Delegation: der Pfadvergleich ist
+// Querschnitt fuer Infrastructure UND Output und lebt darum in
+// TDetectorUtils (Common) - Doku und Tail-Vertrag dort.
 begin
-  Result := False;
-  if (A = '') or (B = '') then Exit;
-
-  NA := StringReplace(A, '\', '/', [rfReplaceAll]);
-  NB := StringReplace(B, '\', '/', [rfReplaceAll]);
-
-  if (Pos('/', NA) = 0) or (Pos('/', NB) = 0) then
-    Exit(SameText(Basisname(NA), Basisname(NB)));
-
-  if Length(NA) < Length(NB) then
-  begin
-    Kurz := NA;
-    Lang := NB;
-  end
-  else
-  begin
-    Kurz := NB;
-    Lang := NA;
-  end;
-
-  if Length(Kurz) = Length(Lang) then
-    Exit(SameText(Kurz, Lang));
-
-  Result := SameText(Copy(Lang, Length(Lang) - Length(Kurz) + 1, MaxInt),
-                     Kurz)
-    and (Lang[Length(Lang) - Length(Kurz)] = '/');
-end;
-
-class function TExporter.BuildJiraText(Findings: TObjectList<TLeakFinding>;
-  const SourceFile: string; const SeverityFilter: TSeverityFilter): string;
-var
-  SB         : TStringBuilder;
-  F          : TLeakFinding;
-  nErr, nWrn : Integer;
-  nHnt       : Integer;
-  rowCount   : Integer;
-  Hint       : TFixHint;
-  SevLabel   : string;
-begin
-  SB := TStringBuilder.Create;
-  try
-    nErr := 0; nWrn := 0; nHnt := 0;
-
-    SB.Append(_('h2. Code analysis: '));
-    SB.AppendLine(JiraEscape(ExtractFileName(SourceFile)));
-    SB.Append(_('As of: '));
-    SB.AppendLine(FormatDateTime('yyyy-mm-dd hh:nn', Now));
-    SB.AppendLine('');
-
-    SB.AppendLine(Format('|| %s || %s || %s || %s || %s ||',
-      [_('Severity'), _('Line'), _('Method'), _('Rule'), _('Detail')]));
-
-    rowCount := 0;
-    if Assigned(Findings) then
-      for F in Findings do
-      begin
-        if not (F.Severity in SeverityFilter) then Continue;
-        if (SourceFile <> '') and not SameSourceFile(F.FileName, SourceFile) then
-          Continue;
-
-        case F.Severity of
-          lsError   : begin
-                        SB.Append(Format('| {color:red}*%s*{color}', [_('Error')]));
-                        Inc(nErr);
-                      end;
-          lsWarning : begin
-                        SB.Append(Format('| {color:#b07000}%s{color}', [_('Warning')]));
-                        Inc(nWrn);
-                      end;
-          lsHint    : begin
-                        SB.Append(Format('| {color:#5a8000}%s{color}', [_('Hint')]));
-                        Inc(nHnt);
-                      end;
-        end;
-        SB.Append(' | ');     SB.Append(JiraEscape(F.LineNumber));
-        SB.Append(' | ');     SB.Append(JiraEscape(F.MethodName));
-        SB.Append(' | ');     SB.Append(JiraEscape(KindToName(F.Kind)));
-        SB.Append(' | ');     SB.Append(JiraEscape(F.MissingVar));
-        SB.AppendLine(' |');
-        Inc(rowCount);
-      end;
-
-    if rowCount = 0 then
-    begin
-      SB.AppendLine(Format('| _%s_ | | | | |', [_('no findings')]));
-    end;
-
-    SB.AppendLine('');
-    SB.AppendLine(Format('{panel:title=%s|borderColor=#ccc|bgColor=#f8f8f8}',
-      [_('Summary')]));
-    SB.AppendLine(Format('* %s: %d', [_('Errors'),   nErr]));
-    SB.AppendLine(Format('* %s: %d', [_('Warnings'), nWrn]));
-    if lsHint in SeverityFilter then
-      SB.AppendLine(Format('* %s: %d', [_('Hints'),  nHnt]));
-    SB.AppendLine('{panel}');
-
-    // ---- Befunde im Detail mit Loesungs-Hinweisen ----
-    if rowCount > 0 then
-    begin
-      SB.AppendLine('');
-      SB.AppendLine('h3. ' + _('Findings in detail'));
-      SB.AppendLine('');
-
-      for F in Findings do
-      begin
-        if not (F.Severity in SeverityFilter) then Continue;
-        if (SourceFile <> '') and not SameSourceFile(F.FileName, SourceFile) then
-          Continue;
-
-        // Voll-Review, umgesetzt 2026-09-15: hier standen die drei
-        // Severity-Namen HART DEUTSCH ('Fehler', 'Warnung', 'Hinweis'),
-        // waehrend die Tabelle weiter oben im SELBEN Dokument
-        // _('Error') / _('Warning') / _('Hint') benutzt. Bei englischer
-        // Oberflaeche widersprach sich ein und derselbe Bericht: oben
-        // "Error", unten "Fehler". Jetzt beide Stellen ueber dieselben
-        // msgids - neue Eintraege brauchte es dafuer keine, alle drei
-        // stehen seit jeher in i18n/*.po.
-        case F.Severity of
-          lsError   : SevLabel := Format('{color:red}*%s*{color}', [_('Error')]);
-          lsWarning : SevLabel := Format('{color:#b07000}%s{color}', [_('Warning')]);
-          lsHint    : SevLabel := Format('{color:#5a8000}%s{color}', [_('Hint')]);
-        else
-          SevLabel := '';
-        end;
-
-        // Header pro Befund: "h4. <Severity> - <Line> <nr> - <Kind> - <Detail>"
-        // Das abgekuerzte 'Z.' war die vierte harte Stelle; _('Line')
-        // fuehrt die Tabellenueberschrift oben ohnehin schon.
-        SB.Append('h4. ');
-        SB.Append(SevLabel);
-        SB.Append(' - ');
-        SB.Append(_('Line'));
-        SB.Append(' ');
-        SB.Append(JiraEscape(F.LineNumber));
-        if F.MethodName <> '' then
-        begin
-          SB.Append(' - ');
-          SB.Append(JiraEscape(F.MethodName));
-        end;
-        SB.Append(' - ');
-        SB.Append(JiraEscape(KindToName(F.Kind)));
-        SB.Append(' - ');
-        SB.AppendLine(JiraEscape(F.MissingVar));
-
-        Hint := TFixHintResolver.FixHint(F);
-        if Hint.Description <> '' then
-        begin
-          SB.Append('bq. ');
-          SB.AppendLine(JiraEscape(Hint.Description));
-        end;
-        // Auch diese beiden waren hart deutsch; 'Before:'/'After:'
-        // stehen bereits als msgid in i18n/*.po.
-        if Hint.Before <> '' then
-        begin
-          SB.AppendLine(Format('*%s*', [_('Before:')]));
-          SB.AppendLine('{code:delphi}');
-          SB.AppendLine(Hint.Before);
-          SB.AppendLine('{code}');
-        end;
-        if Hint.After <> '' then
-        begin
-          SB.AppendLine(Format('*%s*', [_('After:')]));
-          SB.AppendLine('{code:delphi}');
-          SB.AppendLine(Hint.After);
-          SB.AppendLine('{code}');
-        end;
-        SB.AppendLine('');
-      end;
-    end;
-
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
-class function TExporter.BuildClipboardText(Findings: TObjectList<TLeakFinding>;
-  const SourceFile: string; const SeverityFilter: TSeverityFilter): string;
-
-  procedure AppendIndented(SB: TStringBuilder; const Block: string;
-    const Prefix: string);
-  // Mehrzeiligen Block (Vorher/Nachher) zeilenweise mit Praefix versehen.
-  var
-    SL: TStringList;
-    Line: string;
-  begin
-    SL := TStringList.Create;
-    try
-      SL.Text := Block;
-      // Letzte leere Zeile der TStringList.Text-Konvention abfangen
-      if (SL.Count > 0) and (SL[SL.Count - 1] = '') then
-        SL.Delete(SL.Count - 1);
-      for Line in SL do
-      begin
-        SB.Append(Prefix);
-        SB.AppendLine(Line);
-      end;
-    finally
-      SL.Free;
-    end;
-  end;
-
-var
-  SB   : TStringBuilder;
-  F    : TLeakFinding;
-  Sev  : string;
-  Hint : TFixHint;
-begin
-  SB := TStringBuilder.Create;
-  try
-    SB.Append(_('Code analysis: '));
-    SB.AppendLine(ExtractFileName(SourceFile));
-    SB.AppendLine(StringOfChar('-', 60));
-
-    if Assigned(Findings) then
-      for F in Findings do
-      begin
-        if not (F.Severity in SeverityFilter) then Continue;
-        if (SourceFile <> '') and not SameSourceFile(F.FileName, SourceFile) then
-          Continue;
-
-        case F.Severity of
-          lsError   : Sev := Format('[%-7s] ', [_('ERROR')]);
-          lsWarning : Sev := Format('[%-7s] ', [_('WARNING')]);
-          lsHint    : Sev := Format('[%-7s] ', [_('HINT')]);
-        else
-          Sev := '          ';
-        end;
-
-        SB.Append(Sev);
-        SB.Append(_('L. '));
-        SB.Append(F.LineNumber);
-        if F.MethodName <> '' then
-        begin
-          SB.Append(' ' + _('in') + ' ');
-          SB.Append(F.MethodName);
-        end;
-        SB.Append('  ');
-        SB.Append(KindToName(F.Kind));
-        SB.Append(': ');
-        SB.AppendLine(F.MissingVar);
-
-        Hint := TFixHintResolver.FixHint(F);
-        if Hint.Description <> '' then
-        begin
-          SB.Append('  ' + _('Hint: '));
-          SB.AppendLine(Hint.Description);
-        end;
-        if Hint.Before <> '' then
-        begin
-          SB.AppendLine('  ' + _('Before:'));
-          AppendIndented(SB, Hint.Before, '    ');
-        end;
-        if Hint.After <> '' then
-        begin
-          SB.AppendLine('  ' + _('After:'));
-          AppendIndented(SB, Hint.After, '    ');
-        end;
-        SB.AppendLine('');
-      end;
-
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
+  Result := TDetectorUtils.SameSourceFile(A, B);
 end;
 
 // ---- HTML-Report: nur Delegationen, Implementation in uExportHtml ----
