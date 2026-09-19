@@ -3797,7 +3797,7 @@
       "kind": "SourceUtf16",
       "name": "UTF-16 source file",
       "shortDescription": "UTF-16 source - compiles, but unusual and text-tool-unfriendly",
-      "fullDescription": "The source file is UTF-16 (LE or BE). It compiles, but UTF-16 source is unusual and causes friction with text tooling (git diff, grep, external hooks, code review). The convention is UTF-8 with BOM.",
+      "fullDescription": "The source file is UTF-16 (LE or BE). It compiles, but UTF-16 source is unusual and causes friction with text tooling (git diff, grep, external hooks, code review). The convention is UTF-8 with BOM. Under the FPC dialect (--dialect=fpc or a Lazarus project) the finding is reported as an ERROR instead: Free Pascal rejects UTF-16 source, the file does not compile at all.",
       "defaultSeverity": "Hint",
       "type": "Code Smell",
       "tags": ["encoding", "convention"],

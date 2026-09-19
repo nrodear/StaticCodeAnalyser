@@ -297,11 +297,34 @@ begin
   end;
   if Info.BomKind in [sbkUtf16LE, sbkUtf16BE] then
   begin
-    Results.Add(TLeakFinding.New(FileName, '', 1,
-      'UTF-16 source file. It compiles, but UTF-16 source is unusual and causes ' +
-      'friction with text tools (git diff, grep, external hooks). Convention is ' +
-      'UTF-8 with BOM.',
-      fkSourceUtf16));
+    // G2 (2026-09-19, Untersuchungs-Posten 3.5): FPC LEHNT
+    // UTF-16-Quelltext AB - unter dlFpc ist die Datei nicht
+    // 'unusual, but compiles', sondern baut schlicht nicht.
+    // Severity dann Error und ein Text ohne das 'It compiles';
+    // unter dlDelphi bleibt Meldung und Hint-Stufe unveraendert
+    // (Fund-Identitaet der Delphi-Referenz unberuehrt).
+    // Referenz-Bewegung: null - der Lazarus-Korpus traegt keine
+    // UTF-16-Datei, der Delphi-Korpus laeuft unter dlDelphi.
+    if TStaticFiles.ScanDialect = dlFpc then
+    begin
+      var F := TLeakFinding.New(FileName, '', 1,
+        'UTF-16 source file. Free Pascal rejects UTF-16 source - the ' +
+        'file does not compile under FPC. Re-encode it as UTF-8.',
+        fkSourceUtf16);
+      F.Severity := lsError;
+      // Kind-Default ist fcLow (als Stilfrage bewusst leise, im
+      // Default-Lauf unter MinConfidence=fcMedium unsichtbar). Ein
+      // Baubruch ist keine Stilfrage, und der BOM-Beweis ist hart -
+      // unter dlFpc muss der Fund jeden Lauf erreichen.
+      F.Confidence := fcHigh;
+      Results.Add(F);
+    end
+    else
+      Results.Add(TLeakFinding.New(FileName, '', 1,
+        'UTF-16 source file. It compiles, but UTF-16 source is unusual and causes ' +
+        'friction with text tools (git diff, grep, external hooks). Convention is ' +
+        'UTF-8 with BOM.',
+        fkSourceUtf16));
     Exit;
   end;
 

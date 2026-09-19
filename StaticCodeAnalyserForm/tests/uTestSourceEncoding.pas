@@ -77,6 +77,9 @@ type
     // ---- SCA185-dlFpc-Gate (Lazarus-Folge B1, 2026-09-19) -----------------
     [Test] procedure Detect_Utf8NoBom_FpcDialekt_Skipped;
     [Test] procedure Detect_Ansi_FpcDialekt_E3Bleibt;
+    // ---- SCA190-dlFpc-Severity (G2, 2026-09-19) ---------------------------
+    [Test] procedure Detect_Utf16_FpcDialekt_ErrorStattHint;
+    [Test] procedure Detect_Utf16_DelphiDialekt_BleibtHint;
     // ---- S3 Homoglyph / Non-ASCII-Identifier ------------------------------
     [Test] procedure Ident_NonAscii_True;
     [Test] procedure Ident_InString_False;
@@ -384,6 +387,62 @@ begin
   finally
     TStaticFiles.ScanDialect := Alt;
   end;
+end;
+
+procedure TTestSourceEncoding.Detect_Utf16_FpcDialekt_ErrorStattHint;
+// SCA190-dlFpc-Severity (G2): FPC lehnt UTF-16-Quelltext ab - unter
+// dlFpc ist E4 ein Error mit eigenem Text ('does not compile'), kein
+// 'unusual, but compiles'-Hint. Dieselben Bytes wie Detect_Utf16_E4
+// (der die dlDefault-Richtung pinnt). Vor G2: lsHint - dieser Test
+// war ROT. Globaler View-State -> try/finally.
+var
+  F   : TObjectList<TLeakFinding>;
+  X   : TLeakFinding;
+  Alt : TSourceDialect;
+begin
+  Alt := TStaticFiles.ScanDialect;
+  TStaticFiles.ScanDialect := dlFpc;
+  try
+    F := DetectBytes(TBytes.Create($FF, $FE, $75, $00, $6E, $00));
+    try
+      Assert.AreEqual<Integer>(1, CountKind(F, fkSourceUtf16),
+        'die UTF-16-Datei wird auch unter dlFpc genau einmal gemeldet');
+      for X in F do
+        if X.Kind = fkSourceUtf16 then
+        begin
+          Assert.IsTrue(X.Severity = lsError,
+            'unter dlFpc ist UTF-16 ein Error - FPC baut die Datei nicht');
+          Assert.IsTrue(X.Confidence = fcHigh,
+            'ein Baubruch traegt fcHigh - das Kind-Default fcLow '
+            + 'waere im Default-Lauf unsichtbar');
+          Assert.Contains(X.MissingVar, 'does not compile',
+            'der fpc-Text darf nicht das Delphi-''It compiles'' tragen');
+        end;
+    finally F.Free; end;
+  finally
+    TStaticFiles.ScanDialect := Alt;
+  end;
+end;
+
+procedure TTestSourceEncoding.Detect_Utf16_DelphiDialekt_BleibtHint;
+// GEGENPROBE: unter dem Delphi-Default bleiben Stufe und Text exakt
+// die alten - die Fund-Identitaet der Delphi-Referenz haengt daran.
+var
+  F : TObjectList<TLeakFinding>;
+  X : TLeakFinding;
+begin
+  F := DetectBytes(TBytes.Create($FF, $FE, $75, $00, $6E, $00));
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkSourceUtf16));
+    for X in F do
+      if X.Kind = fkSourceUtf16 then
+      begin
+        Assert.IsTrue(X.Severity = lsHint,
+          'unter dlDelphi bleibt E4 ein Hint');
+        Assert.Contains(X.MissingVar, 'It compiles',
+          'der Delphi-Meldetext bleibt unveraendert');
+      end;
+  finally F.Free; end;
 end;
 
 procedure TTestSourceEncoding.Detect_InvalidUtf8_E2;
