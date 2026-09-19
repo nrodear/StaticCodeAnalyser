@@ -20,6 +20,22 @@ unit uDfmActionMismatch;
 // Erkennung: Property 'Action' (pvkIdent, nicht leer) UND 'OnClick'
 // (pvkIdent, nicht leer) auf derselben Komponente.
 //
+// AUSNAHME identisches Ziel (F1, 2026-09-19): Zeigt der explizite
+// OnClick auf DENSELBEN Handler, den auch das OnExecute der gebundenen
+// Action traegt, ist die Verdrahtung nicht mehrdeutig - beide Wege
+// laufen in dieselbe Prozedur. Die Lazarus-IDE SCHREIBT diese
+// Kombination als Speicher-Artefakt in jedes LFM (der OnClick der
+// gebundenen Action wird mitgespeichert), Delphi tut das nicht.
+// Messung am Lazarus-Korpus (rw_laz41, f_messung4): ALLE 104
+// SCA043-Funde waren dieses Muster - die gebundene Action stand
+// jedes Mal im selben LFM und ihr OnExecute war der OnClick-Handler.
+// Der Nachweis laeuft ueber den ComponentGraph (Action-Komponente per
+// Name); ist die Action dort nicht auffindbar (fremdes Modul, z. B.
+// DataModule), bleibt der Fund - identisches Ziel ist dann nicht
+// beweisbar. BEWUSST KEINE Namens-Heuristik (OnClick = ActionName +
+// 'Execute'): sie wuerde echte Widersprueche verschlucken, bei denen
+// das OnExecute der Action woandershin zeigt.
+//
 // Schweregrad: lsWarning, FindingType: ftBug.
 
 interface
@@ -43,14 +59,23 @@ implementation
 class procedure TDfmActionMismatchDetector.Analyze(Graph: TComponentGraph;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
-  All  : TList<TComponentNode>;
-  N    : TComponentNode;
-  Act, Clk : TPropValue;
-  F    : TLeakFinding;
+  All    : TList<TComponentNode>;
+  ByName : TDictionary<string, TComponentNode>;
+  N      : TComponentNode;
+  ActN   : TComponentNode;
+  Act, Clk, Ex : TPropValue;
+  F      : TLeakFinding;
 begin
   if Graph = nil then Exit;
   All := Graph.EnumerateAll;
+  ByName := TDictionary<string, TComponentNode>.Create;
   try
+    // Namensindex fuer den Action-Lookup (identisches-Ziel-Ausnahme,
+    // Kopfkommentar). Duplikatnamen sind in einem DFM illegal;
+    // AddOrSetValue laesst den letzten gewinnen.
+    for N in All do
+      ByName.AddOrSetValue(Trim(N.Name).ToLower, N);
+
     for N in All do
     begin
       if not N.TryGetProperty('Action', Act) then Continue;
@@ -60,6 +85,15 @@ begin
       if not N.TryGetProperty('OnClick', Clk) then Continue;
       if Clk.Kind <> pvkIdent then Continue;
       if Trim(Clk.RawValue) = '' then Continue;
+
+      // Identisches Ziel: OnExecute der gebundenen Action ist genau
+      // der OnClick-Handler -> kein Widerspruch, kein Fund
+      // (Lazarus-LFM-Artefakt; Begruendung + Messung im Kopfkommentar).
+      if ByName.TryGetValue(Trim(Act.RawValue).ToLower, ActN) and
+         ActN.TryGetProperty('OnExecute', Ex) and
+         (Ex.Kind = pvkIdent) and
+         SameText(Trim(Ex.RawValue), Trim(Clk.RawValue)) then
+        Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
@@ -74,6 +108,7 @@ begin
       Results.Add(F);
     end;
   finally
+    ByName.Free;
     All.Free;
   end;
 end;

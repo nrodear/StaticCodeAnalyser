@@ -21,6 +21,12 @@ type
     [Test] procedure Test_MultipleButtonsWithConflict_AllReported;
     [Test] procedure Test_MenuItemAndOnClick_Detected;
     [Test] procedure Test_NoButtonAtAll_NoFinding;
+
+    // --- F1 (2026-09-19): identisches Ziel = kein Widerspruch ---
+    [Test] procedure Test_SameTarget_LazArtifact_NoFinding;
+    [Test] procedure Test_SameTarget_CaseInsensitive_NoFinding;
+    [Test] procedure Test_ActionOnExecuteDiffers_StillReported;
+    [Test] procedure Test_ActionNotInDfm_NamePatternAlone_StillReported;
   end;
 
 implementation
@@ -176,6 +182,88 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := RunOn(DFM);
   try Assert.AreEqual<Integer>(0, Count(F, fkDfmActionMismatch));
+  finally F.Free; end;
+end;
+
+{ --- F1 (2026-09-19): identisches Ziel = kein Widerspruch ----------- }
+//
+// Die Lazarus-IDE speichert beim Binden einer Action den OnClick der
+// Action MIT ins LFM (OnClick = <OnExecute-Handler der Action>) -
+// Delphi tut das nicht. Messung am Laz-Korpus: ALLE 104 SCA043-Funde
+// waren dieses Artefakt, die gebundene Action stand jedes Mal im
+// selben LFM. Der Fix vergleicht ueber den ComponentGraph das
+// OnExecute der gebundenen Action mit dem OnClick - NICHT die Namen.
+
+procedure TTestDfmActionMismatch.Test_SameTarget_LazArtifact_NoFinding;
+// Das Lazarus-Muster: OnClick zeigt exakt auf den OnExecute-Handler
+// der gebundenen Action (die realistisch in einer ActionList nistet).
+// VOR F1: 1 Fund. Jetzt: 0 - identisches Ziel ist kein Widerspruch.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object al: TActionList'#13#10 +
+  '    object ActSave: TAction'#13#10 +
+  '      OnExecute = ActSaveExecute'#13#10 +
+  '    end'#13#10 +
+  '  end'#13#10 +
+  '  object b: TButton'#13#10 +
+  '    Action = ActSave'#13#10 +
+  '    OnClick = ActSaveExecute'#13#10 +
+  '  end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmActionMismatch),
+    'OnClick == Action.OnExecute ist das Lazarus-LFM-Artefakt - kein Befund');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmActionMismatch.Test_SameTarget_CaseInsensitive_NoFinding;
+// DFM-Idents sind case-insensitiv - der Vergleich muss SameText sein.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object actsave: TAction OnExecute = actsaveexecute end'#13#10 +
+  '  object b: TButton Action = ActSave OnClick = ACTSAVEEXECUTE end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try Assert.AreEqual<Integer>(0, Count(F, fkDfmActionMismatch),
+    'Ziel-Vergleich und Action-Lookup muessen case-insensitiv sein');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmActionMismatch.Test_ActionOnExecuteDiffers_StillReported;
+// GEGENPROBE: das OnExecute der Action zeigt WOANDERSHIN - der
+// explizite OnClick gewinnt zur Laufzeit, die Action-Verdrahtung ist
+// tot. Genau der Smell, den die Regel meldet - muss bleiben.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object ActSave: TAction OnExecute = DoRealSave end'#13#10 +
+  '  object b: TButton Action = ActSave OnClick = ActSaveExecute end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmActionMismatch),
+    'abweichendes OnExecute ist ein echter Widerspruch - Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmActionMismatch.Test_ActionNotInDfm_NamePatternAlone_StillReported;
+// GEGENPROBE gegen eine Namens-Heuristik: OnClick heisst zwar
+// ActionName+'Execute', aber die Action steht NICHT in diesem DFM
+// (z. B. DataModule) - identisches Ziel ist nicht beweisbar, der
+// Fund bleibt. Wer hier eine Namensregel einbaut, macht diesen Test rot.
+const DFM =
+  'object F: TF'#13#10 +
+  '  object b: TButton Action = ActSave OnClick = ActSaveExecute end'#13#10 +
+  'end';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := RunOn(DFM);
+  try Assert.AreEqual<Integer>(1, Count(F, fkDfmActionMismatch),
+    'ohne auffindbare Action bleibt der Fund - keine Namens-Heuristik');
   finally F.Free; end;
 end;
 
