@@ -4277,14 +4277,19 @@ begin
 end;
 
 procedure TTestParserRobustness.Parser_ObjcprotocolExternalName_InAst;
-// Protokoll mit external name '<symbol>' und OHNE Eltern-Klammer -
-// die Praeambel (external + name + Stringliteral) darf weder als
-// Eltern noch als Member enden.
+// Die VOLLE Praeambel mit Eltern dahinter - so steht sie im
+// Lazarus-Korpus ('objcclass external name ''ExternalClassName''
+// (ObjCSuperClassName, ProtocolName)'). Erst diese Kombination
+// BEWEIST, dass 'external', 'name' UND das Stringliteral konsumiert
+// werden: bleibt eines davon stehen, findet ParseClassBody kein '('
+// mehr und TypeRef bleibt leer (genau das Symptom in Bau 3, weil
+// 'external' als tkKwExternal und nicht als tkIdent kommt).
 const SRC =
   'unit t;'#13#10+
   'interface'#13#10+
   'type'#13#10+
   '  MyAppDelegate = objcprotocol external name ''NSApplicationDelegate'''#13#10+
+  '      (NSObjectProtocol)'#13#10+
   '    procedure applicationWillTerminate(note: NSNotification);'#13#10+
   '  end;'#13#10+
   'implementation'#13#10+
@@ -4303,6 +4308,9 @@ begin
       Assert.AreEqual('applicationWillTerminate', MethodNamesOf(CN),
         'der Selektor ist Member des Protokolls - die external-name-'
         + 'Praeambel darf nichts verschluckt haben');
+      Assert.Contains(CN.TypeRef.ToLower, 'nsobjectprotocol',
+        'nach name ''<symbol>'' muss die Elternliste noch erkannt '
+        + 'werden - sonst blieb ein Praeambel-Token stehen');
     finally Root.Free; end;
   finally Parser.Free; end;
 end;

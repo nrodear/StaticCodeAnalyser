@@ -601,12 +601,20 @@ procedure TParser2.SkipFpcBindingPraeambel;
 // FPC-Klassenart und der Eltern-Liste bzw. dem Rumpf:
 //   NSButton = objcclass external (NSControl) ... end;
 //   NSDelegate = objcprotocol external name 'NSApplicationDelegate' ...
-// 'external' und 'name' sind hier contextual (tkIdent); die Eltern-
-// Liste danach uebernimmt ParseClassBody in ClassNode.TypeRef - damit
-// greift die bestehende FFI-Anker-Vererbung (nsobject & Co.) in
+// UNGLEICHE TOKENISIERUNG, wie schon bei abstract/sealed in
+// ParseClassBody: 'external' ist ein ECHTES Schluesselwort
+// (tkKwExternal, es steht als Routinen-Direktive in der Lexer-
+// Tabelle), 'name' dagegen kommt als tkIdent. Ein tkIdent-Test auf
+// 'external' greift also NIE - dann bleibt die Praeambel stehen,
+// ParseClassBody findet statt '(' das 'external' vor und die
+// Elternliste landet im Member-Churn: TypeRef bleibt leer (Bau 3 der
+// G-Charge; Symptom war 'Member ok, TypeRef leer').
+// Die Eltern-Liste danach uebernimmt ParseClassBody in
+// ClassNode.TypeRef - damit greift die bestehende FFI-Anker-
+// Vererbung (nsobject & Co.) in
 // TDetectorUtils.CollectFfiBindingTypes automatisch.
 begin
-  if (Tok.Kind <> tkIdent) or not SameText(Tok.Value, 'external') then Exit;
+  if Tok.Kind <> tkKwExternal then Exit;
   Next; // 'external'
   if (Tok.Kind = tkIdent) and SameText(Tok.Value, 'name') then
   begin
