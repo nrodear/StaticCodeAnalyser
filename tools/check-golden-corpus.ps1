@@ -63,7 +63,9 @@ $ByFile = @{}
 foreach ($r in $Findings) {
     # unquote: Leerzeichen stehen seit der Emit-Kodierung (2026-09-19)
     # als %20 in der uri - der Basename-Vergleich braucht den rohen Namen.
-    $uri = [System.Uri]::UnescapeDataString($r.locations[0].physicalLocation.artifactLocation.uri)
+    # file://-Strip (D2): absolute uris tragen jetzt das Schema.
+    $uri = $r.locations[0].physicalLocation.artifactLocation.uri -replace '^file:///','' -replace '^file://',''
+    $uri = [System.Uri]::UnescapeDataString($uri)
     $base = [System.IO.Path]::GetFileName($uri)
     if (-not $ByFile.ContainsKey($base)) {
         $ByFile[$base] = @()

@@ -1,4 +1,4 @@
-unit uExportSARIF;
+﻿unit uExportSARIF;
 
 // SARIF v2.1.0 Export.
 //
@@ -134,6 +134,28 @@ begin
   Result := StringReplace(Result, ' ', '%20', [rfReplaceAll]);
   Result := StringReplace(Result, '#', '%23', [rfReplaceAll]);
   Result := StringReplace(Result, '?', '%3F', [rfReplaceAll]);
+end;
+
+function UriFromPath(const APath: string): string;
+// Teil B des URI-Postens (Audit Fundbewegend 2026-09-15, in der
+// A-Charge bewusst vertagt, D2 2026-09-19): RelPath kann absolut
+// geblieben sein - eine Datei AUSSERHALB der BaseDir ist in
+// --project/--project-group der NORMALFALL, nicht die Ausnahme.
+// SARIF verlangt in artifactLocation.uri eine URI, und ein roher
+// Windows-Pfad ('C:/...') ist keine:
+//   Laufwerk  'C:/x'        -> 'file:///C:/x'
+//   UNC       '//srv/sh/x'  -> 'file://srv/sh/x'
+//   relativ   'src/x'       -> unveraendert (nur Prozentkodierung)
+// Der Doppelpunkt bleibt ROH: RFC 3986 erlaubt ':' im Pfadsegment,
+// und file:///C:/... ist die Form, die GitHub und die SARIF-Viewer
+// erwarten. Fingerprint-Eingang bleibt der unkodierte RelPath
+// (dieselbe Falle wie bei der Prozentkodierung - s. dort).
+begin
+  Result := PercentEncodeUriPath(APath);
+  if (Length(APath) >= 2) and (APath[2] = ':') then
+    Result := 'file:///' + Result
+  else if (Length(APath) >= 2) and (APath[1] = '/') and (APath[2] = '/') then
+    Result := 'file:' + Result;
 end;
 
 function ParseLineNumber(const S: string): Integer;
@@ -508,7 +530,7 @@ begin
         E.BeginObjValue;
         E.BeginObjPair('physicalLocation');
         E.BeginObjPair('artifactLocation');
-        E.PairStr('uri', PercentEncodeUriPath(RelPath));
+        E.PairStr('uri', UriFromPath(RelPath));
         E.EndObj;                                      // artifactLocation
         E.EndObj;                                      // physicalLocation
         E.EndObj;                                      // location
@@ -699,7 +721,7 @@ begin
         E.BeginObjPair('artifactLocation');
         // Kodiert NUR hier am Emit - RelPath selbst bleibt roh, er ist
         // Fingerprint-Eingang (s. PercentEncodeUriPath).
-        E.PairStr('uri', PercentEncodeUriPath(RelPath));
+        E.PairStr('uri', UriFromPath(RelPath));
         E.EndObj;
         E.BeginObjPair('region');
         E.PairInt('startLine', LineNo);

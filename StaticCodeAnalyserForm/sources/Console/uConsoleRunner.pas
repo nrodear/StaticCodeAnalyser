@@ -33,6 +33,7 @@ interface
 
 uses
   System.Classes, System.SysUtils, System.Generics.Collections,
+  uSCAConsts,   // TSourceDialect (AutoDialektFuerDatei, D5)
   uMethodd12;
 
 type
@@ -217,6 +218,21 @@ function PeStackReserveMB(const AExePath: string): Integer;
 function EffektiverUsesCheck(AIniUsesCheck: Boolean;
   const AProfil: string): Boolean;
 
+// dlAuto V2 (D5, 2026-09-19; Zuschnitt Konzept_DlAutoV2): Dialekt-
+// Verdikt fuer EINE Datei - Aufwaertssuche vom Dateiverzeichnis bis
+// einschliesslich AWurzel, die erste Ebene mit Projektdateien
+// entscheidet (Tie-Break Delphi wie in ErmittleAutoDialekt, aber OHNE
+// je-Datei-stderr - den Mischbaum-Hinweis gibt die Wurzel-Aufloesung
+// einmal); ohne Fund gilt AWurzelVerdikt. Der Wurzel-Fallback ist die
+// Antwort auf den Messbefund der V2-Vermessung: im Lazarus-Baum haben
+// 45 % der Dateien KEINE Projektdatei aufwaerts (lcl/, components/).
+// ADirCache memoisiert das Verdikt je Verzeichnis (ein Korpus-Lauf
+// fragt zehntausende Dateien in wenigen tausend Verzeichnissen).
+// In der interface-Sektion: testbar ohne Run (Temp-Baum-Harness).
+function AutoDialektFuerDatei(const ADateiPfad, AWurzel: string;
+  AWurzelVerdikt: TSourceDialect;
+  ADirCache: TDictionary<string, TSourceDialect>): TSourceDialect;
+
 implementation
 
 // noinspection-file BeginEndRequired, CanBeClassMethod, ConsecutiveSection, DebugOutput, ExceptOnException, GroupedDeclaration, IfElseBegin, InsecureCryptoAlgorithm, NestedRoutine, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedLocalVar, UnusedPublicMember
@@ -228,7 +244,8 @@ implementation
 uses
   System.IOUtils, System.Math,
   System.Generics.Defaults,           // TComparer fuer Detector-Timings-Sort
-  uSCAConsts, uStaticAnalyzer2, uVcsChanges, uRepoSettings, uEngineApi,
+  uStaticAnalyzer2, uVcsChanges, uRepoSettings, uEngineApi,   // uSCAConsts seit D5 im interface-uses
+  uStaticFiles,                       // ScanDialect/TryGetAllPasFiles (dlAuto V2, D5)
   uExportSARIF, uExportHtml, uExport, uCustomRuleDetector,
   uExportSonarGeneric, uSonarConfig,
   uDetectorUtils,                     // TDetectorUtils.IsTestFixturePath
@@ -749,13 +766,17 @@ begin
   WriteLn('                        this severity threshold.');
   WriteLn('                        Overrides [Rules] MinSeverity in analyser.ini.');
   WriteLn('  --dialect <d>         delphi|fpc|auto - source dialect of the scanned');
-  WriteLn('                        tree. auto resolves ONCE at the scan root (first');
-  WriteLn('                        folder upwards with project files decides; a');
-  WriteLn('                        mixed folder picks delphi and prints a hint).');
-  WriteLn('                        fpc additionally collects *.pp units (Lazarus /');
-  WriteLn('                        Free Pascal). Default: delphi (unchanged runs),');
-  WriteLn('                        or [Scan] Dialect=... from analyser.ini when the');
-  WriteLn('                        switch is omitted (the switch always wins).');
+  WriteLn('                        tree. auto (V2 since 2026-09-19) resolves PER');
+  WriteLn('                        FILE for --path scans: the first folder upwards');
+  WriteLn('                        with project files decides (tie picks delphi);');
+  WriteLn('                        files without one inherit the scan-root verdict.');
+  WriteLn('                        A mixed tree runs both partitions and merges the');
+  WriteLn('                        findings (hint on stderr). Other scopes resolve');
+  WriteLn('                        once at the root as before. fpc additionally');
+  WriteLn('                        collects *.pp units (Lazarus / Free Pascal).');
+  WriteLn('                        Default: delphi (unchanged runs), or [Scan]');
+  WriteLn('                        Dialect=... from analyser.ini when the switch');
+  WriteLn('                        is omitted (the switch always wins).');
   WriteLn('');
   WriteLn('CI / Baseline:');
   WriteLn('  --baseline <file>     Drop findings whose fingerprint matches a known');
@@ -1319,6 +1340,58 @@ begin
   end;
 end;
 
+function AutoDialektFuerDatei(const ADateiPfad, AWurzel: string;
+  AWurzelVerdikt: TSourceDialect;
+  ADirCache: TDictionary<string, TSourceDialect>): TSourceDialect;
+// Vertrag siehe interface. Dieselbe Ebenen-Logik wie
+// ErmittleAutoDialekt, nur (a) nach OBEN durch AWurzel begrenzt,
+// (b) mit Verdikt-Cache je Verzeichnis und (c) ohne stderr.
+var
+  Dir, Wurzel, Vorher : string;
+  Kette               : TStringList;
+  HatDelphi, HatLaz   : Boolean;
+  i                   : Integer;
+
+  function Existiert(const AMaske: string): Boolean;
+  var SR: TSearchRec;
+  begin
+    Result := FindFirst(TPath.Combine(Dir, AMaske), faAnyFile, SR) = 0;
+    if Result then FindClose(SR);
+  end;
+
+begin
+  Result := AWurzelVerdikt;
+  if ADateiPfad = '' then Exit;
+  Dir    := IncludeTrailingPathDelimiter(
+              ExtractFilePath(TPath.GetFullPath(ADateiPfad)));
+  Wurzel := IncludeTrailingPathDelimiter(TPath.GetFullPath(AWurzel));
+  Kette  := TStringList.Create;
+  try
+    Vorher := '';
+    while (Dir <> '') and (Dir <> Vorher) do
+    begin
+      if Assigned(ADirCache) and ADirCache.TryGetValue(Dir, Result) then
+        Break;
+      Kette.Add(Dir);
+      HatDelphi := Existiert('*.dpr') or Existiert('*.dproj');
+      HatLaz    := Existiert('*.lpi') or Existiert('*.lpk');
+      if HatDelphi then begin Result := dlDelphi; Break; end;  // inkl. Tie-Break
+      if HatLaz    then begin Result := dlFpc;    Break; end;
+      // Wurzel war die letzte gepruefte Ebene - darueber entscheidet
+      // nur noch das Wurzelverdikt (Result traegt es schon).
+      if SameText(Dir, Wurzel) then Break;
+      Vorher := Dir;
+      Dir := ExtractFilePath(ExcludeTrailingPathDelimiter(Dir));
+    end;
+    // Kaskaden-Cache: jedes besuchte Verzeichnis erbt das Verdikt.
+    if Assigned(ADirCache) then
+      for i := 0 to Kette.Count - 1 do
+        ADirCache.AddOrSetValue(Kette[i], Result);
+  finally
+    Kette.Free;
+  end;
+end;
+
 function AutoBasisPfad(const Args: TCliArgs): string;
 // Der Pfad, an dem die Auto-Aufloesung ansetzt - je nach Modus.
 begin
@@ -1327,6 +1400,85 @@ begin
   if Args.GroupFile <> '' then Exit(Args.GroupFile);
   if Args.SingleFile <> '' then Exit(Args.SingleFile);
   Result := GetCurrentDir;   // --diff/--branch arbeiten im Repo-CWD
+end;
+
+procedure PartitioniereAutoV2(const Args: TCliArgs; var Req: TScanRequest;
+  var AlleDateien: TStringList; var ZweiteFiles: TArray<string>);
+// dlAuto V2 (D5): Partitionsschritt des Doppellaufs - Enumeration
+// unter dlFpc-Sicht (Obermengen-Endungen, try/finally-restauriert),
+// Verdikt je Datei via AutoDialektFuerDatei, dann eine von drei
+// Ausgaengen: (a) Mischbaum -> Req wird der delphi-ssFileList-Lauf,
+// ZweiteFiles traegt die fpc-Partition, AlleDateien bleibt fuer den
+// Merge; (b) einheitlicher Baum -> Req.Dialect wird das bestaetigte
+// Verdikt, ssRecursive bleibt; (c) Enumeration fehlgeschlagen ->
+// V1-Verhalten (Wurzelverdikt steht schon in Req.Dialect), Hinweis
+// auf stderr. Eigene Routine statt inline in Run: der Block hat der
+// Schachtelung dort eine Tiefe zu viel gegeben (SCA018, Selbstscan
+// der D-Charge) - dieselbe Begruendung wie bei den Invocations der
+// SARIF-Emitter.
+var
+  AltDialekt : TSourceDialect;
+  EnumErr    : string;
+  DirCache   : TDictionary<string, TSourceDialect>;
+  PartDelphi : TStringList;
+  PartFpc    : TStringList;
+  Datei      : string;
+begin
+  AltDialekt := TStaticFiles.ScanDialect;
+  EnumErr    := '';
+  // Obermengen-Endungen: unter dlFpc sammelt IsUnitLikeFile
+  // .pas UND .pp/.lpr - die Partition entscheidet je Datei.
+  TStaticFiles.ScanDialect := dlFpc;
+  try
+    AlleDateien := TStaticFiles.TryGetAllPasFiles(Args.Path, EnumErr);
+  finally
+    TStaticFiles.ScanDialect := AltDialekt;
+  end;
+  if (EnumErr <> '') or (AlleDateien = nil) or (AlleDateien.Count = 0) then
+  begin
+    FreeAndNil(AlleDateien);
+    if EnumErr <> '' then
+      WriteLn(ErrOutput,
+        'Hinweis: --dialect=auto ohne Datei-Partition (' +
+        EnumErr + ') - Wurzelverdikt gilt fuer den ganzen Baum.');
+    Exit;
+  end;
+
+  DirCache   := TDictionary<string, TSourceDialect>.Create;
+  PartDelphi := TStringList.Create;
+  PartFpc    := TStringList.Create;
+  try
+    for Datei in AlleDateien do
+      if AutoDialektFuerDatei(Datei, Args.Path,
+           Req.Dialect, DirCache) = dlFpc then
+        PartFpc.Add(Datei)
+      else
+        PartDelphi.Add(Datei);
+    if (PartDelphi.Count > 0) and (PartFpc.Count > 0) then
+    begin
+      WriteLn(ErrOutput, Format(
+        'Hinweis: --dialect=auto V2 - Mischbaum: %d Dateien ' +
+        'delphi, %d fpc (Doppellauf).',
+        [PartDelphi.Count, PartFpc.Count]));
+      Req.Scope     := ssFileList;
+      Req.Files     := PartDelphi.ToStringArray;
+      Req.Dialect   := dlDelphi;
+      Req.IndexRoot := Args.IndexRoot;
+      ZweiteFiles   := PartFpc.ToStringArray;
+    end
+    else
+    begin
+      // Einheitlicher Baum: EIN ssRecursive-Lauf mit dem per-Datei
+      // bestaetigten Verdikt (praeziser als V1, gleiche Mechanik).
+      if PartFpc.Count > 0 then Req.Dialect := dlFpc
+      else                      Req.Dialect := dlDelphi;
+      FreeAndNil(AlleDateien);
+    end;
+  finally
+    PartDelphi.Free;
+    PartFpc.Free;
+    DirCache.Free;
+  end;
 end;
 
 function FixtureFilterAnker(const Args: TCliArgs): string;
@@ -1371,6 +1523,12 @@ var
   Files     : TStringList;
   RepoInfo  : string;
   Settings  : TRepoSettings;
+  // dlAuto V2 (D5): Zustand des Partitions-Doppellaufs. Alle drei
+  // werden im nil-Vorspann initialisiert und im grossen finally
+  // freigegeben - derselbe Lebenszyklus wie Findings/Files.
+  AutoAlleDateien : TStringList;
+  AutoZweiteFiles : TArray<string>;
+  FindingsFpc     : TObjectList<TLeakFinding>;
 
   function SchreibeLeereBerichte: Integer;
   // --diff/--branch ohne geaenderte Dateien: die angeforderten Berichte
@@ -1509,6 +1667,9 @@ begin
   Findings := nil;
   Files    := nil;
   Settings := nil;
+  AutoAlleDateien := nil;
+  AutoZweiteFiles := nil;
+  FindingsFpc     := nil;
   try
     // Custom-Rules laden BEVOR die Analyse startet (uStaticAnalyzer2
     // ruft TCustomRuleDetector.AnalyzeFile pro Datei auf - HasRules-Check
@@ -1935,6 +2096,20 @@ begin
           WriteLn('Analyzing recursively: ', Args.Path);
         Req.Scope := ssRecursive;
         Req.Path  := Args.Path;
+
+        // dlAuto V2 (D5, 2026-09-19; Zuschnitt Konzept_DlAutoV2,
+        // Option A - Partitions-Doppellauf im CLI, KEIN per-File-
+        // View-State in der Engine): --dialect=auto klassifiziert
+        // jede Datei einzeln (AutoDialektFuerDatei) statt nur die
+        // Wurzel. In Mischbaeumen (9 der 28 Korpus-Repos!) laeuft
+        // die fpc-Partition als EIGENER ssFileList-Lauf mit dlFpc;
+        // die Findings werden unten in Enumerationsreihenfolge
+        // gemergt, alles Nachgelagerte sieht EINE Liste.
+        // Nur ssRecursive: --file hat genau eine Datei (V1-Aufwaerts
+        // reicht), --project erzwingt den Dialekt per Scope (A5),
+        // --diff/--vcs bleiben dokumentiert V1.
+        if SameText(Args.Dialect, 'auto') then
+          PartitioniereAutoV2(Args, Req, AutoAlleDateien, AutoZweiteFiles);
       end;
 
       // Zentraler Engine-Aufruf (ersetzt die bisher 3x duplizierte
@@ -1950,6 +2125,75 @@ begin
       finally
         Ses.Free;
       end;
+
+      // dlAuto V2, zweiter Teillauf (fpc-Partition) + deterministischer
+      // Merge. Die Nachverarbeitung (Fixture-Filter, Baseline, Reports,
+      // Exit-Code) laeuft danach unveraendert auf der EINEN Liste.
+      if Length(AutoZweiteFiles) > 0 then
+      begin
+        var Req2 := Req;                    // Record-Kopie: Profil/Defines/... identisch
+        Req2.Files   := AutoZweiteFiles;
+        Req2.Dialect := dlFpc;
+        var Ses2 := TAnalysisSession.Create;
+        try
+          var Res2 := Ses2.Run(Req2);
+          try
+            FindingsFpc := Res2.ReleaseFindings;
+          finally
+            Res2.Free;
+          end;
+        finally
+          Ses2.Free;
+        end;
+        // Merge in GESAMT-Enumerationsreihenfolge (AutoAlleDateien),
+        // innerhalb einer Datei stabil - zwei auto-Laeufe hinterein-
+        // ander liefern damit identische Reihenfolge (Determinismus-
+        // Zusage des Konzepts).
+        var NachDatei := TDictionary<string, TList<TLeakFinding>>.Create;
+        var Gemerged  := TObjectList<TLeakFinding>.Create(True);
+        try
+          for var Quelle in [Findings, FindingsFpc] do
+            for var Fnd in Quelle do
+            begin
+              var Liste: TList<TLeakFinding>;
+              if not NachDatei.TryGetValue(Fnd.FileName, Liste) then
+              begin
+                Liste := TList<TLeakFinding>.Create;
+                NachDatei.Add(Fnd.FileName, Liste);
+              end;
+              Liste.Add(Fnd);
+            end;
+          // Ownership wandert Fund fuer Fund nach Gemerged.
+          Findings.OwnsObjects    := False;
+          FindingsFpc.OwnsObjects := False;
+          for var Datei in AutoAlleDateien do
+          begin
+            var Liste: TList<TLeakFinding>;
+            if NachDatei.TryGetValue(Datei, Liste) then
+            begin
+              for var Fnd in Liste do
+                Gemerged.Add(Fnd);
+              Liste.Clear;
+            end;
+          end;
+          // Sicherheitsnetz: Funde ausserhalb der Enumerationsliste
+          // (darf es bei ssFileList nicht geben) haengen hinten an,
+          // statt zu leaken oder still zu verschwinden.
+          for var Paar in NachDatei do
+            for var Fnd in Paar.Value do
+              Gemerged.Add(Fnd);
+          FreeAndNil(Findings);
+          FreeAndNil(FindingsFpc);
+          Findings := Gemerged;
+          Gemerged := nil;
+        finally
+          for var Paar in NachDatei do
+            Paar.Value.Free;
+          NachDatei.Free;
+          Gemerged.Free;
+        end;
+      end;
+      FreeAndNil(AutoAlleDateien);
 
       // --parallel angenommen, aber seriell gelaufen? Das sagen. Der
       // Rueckfall ist Absicht (Determinismus geht vor Tempo), aber
@@ -2270,6 +2514,8 @@ begin
       FreeAndNil(gSuppressionTelemetry);
     Findings.Free;
     Files.Free;
+    FindingsFpc.Free;        // dlAuto V2: nur im Exception-Fall noch belegt
+    AutoAlleDateien.Free;    // dlAuto V2: dito
     // G2-5-Hook: alle Reports und ContextHashes sind geschrieben - ab
     // hier ist der Text-Cache totes Gewicht. Im Einmal-Prozess der CLI
     // fast symbolisch, aber derselbe Vertrag wie bei den residenten

@@ -90,7 +90,9 @@ foreach ($run in $sarif.runs) {
         $loc = $r.locations[0].physicalLocation
         # unquote: Leerzeichen stehen seit der Emit-Kodierung (2026-09-19)
         # als %20 in der uri - der PR-Kommentar zeigt den rohen Pfad.
-        $uri = [System.Uri]::UnescapeDataString($loc.artifactLocation.uri)
+        # file://-Strip (D2): absolute uris tragen jetzt das Schema.
+        $uri = $loc.artifactLocation.uri -replace '^file:///','' -replace '^file://',''
+        $uri = [System.Uri]::UnescapeDataString($uri)
         $line = if ($loc.region.startLine) { $loc.region.startLine } else { 0 }
 
         $results += [PSCustomObject]@{

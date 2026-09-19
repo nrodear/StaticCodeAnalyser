@@ -148,6 +148,16 @@ type
     /// </remarks>
     class function CommonDirOf(AFiles: TStrings): string; static;
 
+    // Vergleicht Datei-Pfade case-insensitiv und mit normalisierten
+    // Trennern: der kuerzere Pfad muss ein Suffix des laengeren sein,
+    // AN EINER TRENNERGRENZE (sonst waere 'D:/xsrc/uMain.pas' gleich
+    // 'src/uMain.pas'). Fehlt einer Seite jeder Verzeichnisanteil,
+    // bleibt es beim Basisnamen-Vergleich. D1-Umzug 2026-09-19 aus
+    // TExporter (dort bleibt eine Delegation): der Vergleich ist
+    // Querschnitt fuer Infrastructure UND Output. Historie und
+    // ExtractFileName-Falle im Implementations-Kommentar.
+    class function SameSourceFile(const A, B: string): Boolean; static;
+
     // Sucht Needle in Haystack, beide bereits lower-case, mit Wortgrenzen-
     // Pruefung links UND rechts. Liefert 1-basierte Position oder 0.
     // Beispiele:
@@ -1133,6 +1143,77 @@ begin
   if (Result <> '') and (Result[Length(Result)] >= #$D800) and
      (Result[Length(Result)] <= #$DBFF) then
     SetLength(Result, Length(Result) - 1);
+end;
+
+class function TDetectorUtils.SameSourceFile(const A, B: string): Boolean;
+// Vergleicht Datei-Pfade case-insensitiv und mit normalisierten Trennern.
+//
+// BIS 08.09. verglich diese Funktion NUR den Basisnamen. In einer
+// Projektgruppe mit mehreren Ordnern galten damit D:\projA\uMain.pas und
+// D:\projB\uMain.pas als dieselbe Datei, und der Einzeldatei-Export zog
+// die Befunde beider zusammen - ohne dass der Leser es sehen konnte
+// (Modul-Codereview, MAJOR). Gleichnamige Units sind in Delphi-
+// Projektgruppen der Normalfall, nicht die Ausnahme.
+//
+// Warum kein schlichter Volltextvergleich: der Aufrufer haelt mal einen
+// absoluten, mal einen relativen Pfad, je nachdem woher der Befund kommt.
+// Deshalb der TAIL-Vergleich - der kuerzere Pfad muss ein Suffix des
+// laengeren sein, UND ZWAR AN EINER TRENNERGRENZE. Ohne diese Bedingung
+// waere 'D:\xsrc\uMain.pas' dasselbe wie 'src\uMain.pas'.
+//
+// Fehlt einer Seite der Verzeichnisanteil ganz, bleibt es beim
+// Basisnamen - mehr Information liegt dann schlicht nicht vor.
+
+  // NICHT ExtractFileName verwenden. Es schneidet unter Windows nur an
+  // '\' und ':' ab (System.SysUtils: LastDelimiter([PathDelim,
+  // DriveDelim]), PathDelim = '\'), der Vorwaerts-Schraegstrich ist dort
+  // KEIN Trenner. Auf dem oben zu '/' normalisierten Pfad findet es also
+  // nichts mehr und liefert aus 'D:/a/uMain.pas' ein '/a/uMain.pas' -
+  // der Basisnamen-Vergleich waere damit immer falsch.
+  //
+  // Genau daran ist der erste Anlauf dieses Umbaus gescheitert, und die
+  // Python-Nachbildung hat es VERDECKT: dort kennt split('/') den
+  // Trenner sehr wohl. Eine Nachbildung muss die Pfad-Semantik der
+  // Zielsprache nachbilden, nicht die der eigenen.
+  function Basisname(const S: string): string;
+  var
+    i : Integer;
+  begin
+    for i := Length(S) downto 1 do
+      if CharInSet(S[i], ['/', ':']) then
+        Exit(Copy(S, i + 1, MaxInt));
+    Result := S;
+  end;
+
+var
+  NA, NB, Kurz, Lang : string;
+begin
+  Result := False;
+  if (A = '') or (B = '') then Exit;
+
+  NA := StringReplace(A, '\', '/', [rfReplaceAll]);
+  NB := StringReplace(B, '\', '/', [rfReplaceAll]);
+
+  if (Pos('/', NA) = 0) or (Pos('/', NB) = 0) then
+    Exit(SameText(Basisname(NA), Basisname(NB)));
+
+  if Length(NA) < Length(NB) then
+  begin
+    Kurz := NA;
+    Lang := NB;
+  end
+  else
+  begin
+    Kurz := NB;
+    Lang := NA;
+  end;
+
+  if Length(Kurz) = Length(Lang) then
+    Exit(SameText(Kurz, Lang));
+
+  Result := SameText(Copy(Lang, Length(Lang) - Length(Kurz) + 1, MaxInt),
+                     Kurz)
+    and (Lang[Length(Lang) - Length(Kurz)] = '/');
 end;
 
 class function TDetectorUtils.BlankNonCode(const Line: string;

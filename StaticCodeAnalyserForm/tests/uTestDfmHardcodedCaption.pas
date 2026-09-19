@@ -30,6 +30,10 @@ type
 
     // --- Finding-Inhalt ---
     [Test] procedure Test_Finding_LineNumberMatchesValueLine;
+    // ---- G5 Designer-Default -> fcLow (D3, 2026-09-19) ----
+    [Test] procedure G5_CaptionGleichName_WirdFcLow;
+    [Test] procedure G5_CaptionGleichKlassenname_WirdFcLow;
+    [Test] procedure G5_EchterText_BehaeltDefaultConfidence;
     [Test] procedure Test_Finding_MissingVarContainsComponentAndValue;
     [Test] procedure Test_Finding_SeverityIsHint;
     [Test] procedure Test_Finding_KindIsHardcodedCaption;
@@ -808,6 +812,75 @@ begin
   try
     Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
       'BEKANNTE GRENZE: geerbter Symbolfont wird nicht erkannt');
+  finally F.Free; end;
+end;
+
+{ ---- G5 Designer-Default -> fcLow (D3, 2026-09-19) ---- }
+// Caption gleich Komponenten- oder Klassenname ist der Designer-
+// Vorschlagswert, kein getexteter UI-String - fuer den i18n-Zweck der
+// Regel ohne Nutzwert (rw76: 7,4 % aller Funde). DEMOTE auf fcLow
+// statt Skip: unterm fcMedium-Default unsichtbar, --min-confidence low
+// holt die Designer-Reste gezielt zurueck.
+
+procedure TTestDfmHardcodedCaption.G5_CaptionGleichName_WirdFcLow;
+// Vor G5: Confidence blieb auf dem SetKind-Default - dieser Test war ROT.
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := RunOn(
+    'object Form1: TForm1'#13#10 +
+    '  Caption = ''Form1'''#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption),
+      'der Fund bleibt - G5 demotet, es skippt nicht');
+    for Fnd in F do
+      if Fnd.Kind = fkDfmHardcodedCaption then
+        Assert.IsTrue(Fnd.Confidence = fcLow,
+          'Caption=Name ist Designer-Default -> fcLow');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.G5_CaptionGleichKlassenname_WirdFcLow;
+// Die zweite Auspraegung: 'TButton' (oder 'Button' - der Designer
+// mancher Versionen laesst das T weg) als Caption eines TButton.
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := RunOn(
+    'object Form1: TForm1'#13#10 +
+    '  object MeinKnopf: TButton'#13#10 +
+    '    Caption = ''TButton'''#13#10 +
+    '  end'#13#10 +
+    'end');
+  try
+    for Fnd in F do
+      if Fnd.Kind = fkDfmHardcodedCaption then
+        Assert.IsTrue(Fnd.Confidence = fcLow,
+          'Caption=Klassenname ist Designer-Default -> fcLow - auch '
+          + 'wenn der Instanzname (MeinKnopf) laengst umbenannt ist');
+  finally F.Free; end;
+end;
+
+procedure TTestDfmHardcodedCaption.G5_EchterText_BehaeltDefaultConfidence;
+// Gegenprobe der Gate-Breite: ein bewusst getexteter String darf
+// NICHT demotet werden - sonst haette G5 die Regel stillgelegt.
+var
+  F   : TObjectList<TLeakFinding>;
+  Fnd : TLeakFinding;
+begin
+  F := RunOn(
+    'object Form1: TForm1'#13#10 +
+    '  Caption = ''Kundenliste bearbeiten'''#13#10 +
+    'end');
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkDfmHardcodedCaption));
+    for Fnd in F do
+      if Fnd.Kind = fkDfmHardcodedCaption then
+        Assert.IsFalse(Fnd.Confidence = fcLow,
+          'echter UI-Text behaelt die Default-Confidence');
   finally F.Free; end;
 end;
 

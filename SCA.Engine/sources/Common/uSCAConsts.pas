@@ -167,6 +167,14 @@ type
     lsHint
   );
 
+  // Bitset zur Severity-Auswahl (Jira-/Clipboard-Export, Filter).
+  // D1-Umzug 2026-09-19 aus uExport hierher: der Typ wird von
+  // Infrastructure (uExport) UND Output (uFindingCopyText) gebraucht,
+  // und Output darf Infrastructure nicht uses'en - die gemeinsame
+  // Heimat ist Common, direkt neben dem Element-Typ. uExport haelt
+  // einen Typ-Alias fuer bestehende Konsumenten.
+  TSeverityFilter = set of TLeakSeverity;
+
   // Konfidenz eines Befundes - wie sicher der Detektor ist, dass es KEIN
   // False-Positive ist. Orthogonal zur Severity (die sagt: wie schlimm
   // WENN echt). Ordering bewusst aufsteigend (fcLow=0 < fcHigh=2), damit

@@ -100,7 +100,7 @@ implementation
 
 uses
   System.SysUtils, System.Types, Vcl.Dialogs, Vcl.Clipbrd,
-  uExport, uSCAConsts, uLocalization, uSonarPush,
+  uExport, uSCAConsts, uLocalization, uSonarPush, uFindingCopyText,
   uExportSARIF,        // TSARIFWriter (SARIF-Eintrag im Menue)
   uEngineApi,          // SCA_DEFAULT_TOOLNAME
   uDetectorInfoExport, // Regelkatalog-Seite (Detector info)
@@ -374,7 +374,7 @@ begin
   end;
   // Standard: Fehler + Warnungen. Hinweise sind oft zu viel fuer ein Ticket.
   filterSet := [lsError, lsWarning];
-  jiraText := TExporter.BuildJiraText(FAll, src, filterSet);
+  jiraText := TFindingCopyText.BuildJiraText(FAll, src, filterSet);
   // Zwischenablage kann gerade von einem anderen Prozess gesperrt sein
   // (RDP, Clipboard-Manager) - dann EClipboardException. Statusmeldung
   // statt Dialog, wie der Datei-Kommentar es fuer alle Handler zusagt
@@ -406,7 +406,7 @@ begin
     FOnStatus(_('Clipboard: please select a row first (file not unambiguous).'));
     Exit;
   end;
-  text := TExporter.BuildClipboardText(FAll, src, [lsError, lsWarning]);
+  text := TFindingCopyText.BuildClipboardText(FAll, src, [lsError, lsWarning]);
   // Gesperrte Zwischenablage -> Statusmeldung statt Default-Dialog,
   // Begruendung wie in DoExportJira.
   try

@@ -89,6 +89,9 @@ type
     [Test] procedure ArrowBrowseOpen_ThenMouseClick_CommitsClickedEntry;
     [Test] procedure NoMatchesRow_ClickInStaleWindow_DoesNotCommit;
     [Test] procedure SeparatorAtEnd_RestoresPreviousSelection;
+    // E4-Aufloesung (D6, 2026-09-19): Escape ist NIE eine Geste.
+    [Test] procedure EscapeBrowse_CloseUpCommitsNothing;
+    [Test] procedure EscapeClosedList_DoesNotPoisonNextClick;
   end;
 
 implementation
@@ -706,6 +709,50 @@ begin
     'Blaettern-Echos duerfen die Liste nicht reduzieren');
   Assert.AreEqual<Integer>(0, FChangeCount,
     'Blaettern allein meldet weiterhin nicht');
+end;
+
+{ ---- E4-Aufloesung: Escape ist NIE eine Geste (D6, 2026-09-19) ---- }
+
+procedure TTestFuzzyComboEvents.EscapeBrowse_CloseUpCommitsNothing;
+// DER E4-Fall des Combo-Reviews vom 06.09. ("nur am gebauten Stand
+// messbar"): Liste offen, per Pfeil auf einen anderen Eintrag
+// geblaettert (cursel geaendert, SELCHANGE gefeuert), dann Escape.
+// Ob Windows die cursel beim Escape-Zuklappen zurueckstellt, haengt
+// an der Fassung - der Harness stellt sie NICHT zurueck und prueft
+// damit genau die boese Haelfte: ohne das Escape-Flag machte der
+// CLOSEUP-Commit aus dem Abbruch eine Auswahl. VOR D6 war dieser
+// Test ROT.
+var
+  Key : Word;
+begin
+  FCombo.ItemIndex := 5;
+  SendNotify(CBN_SELCHANGE);           // Blaettern in der offenen Liste
+  Key := VK_ESCAPE;
+  FCombo.OnKeyDown(FCombo, Key, []);   // Escape-KeyDown VOR dem CloseUp
+  SendNotify(CBN_CLOSEUP);             // das Escape-induzierte Zuklappen
+  Assert.AreEqual<Integer>(0, FChangeCount,
+    'Escape ist ein Abbruch - das CloseUp darf nicht committen');
+  Key := VK_ESCAPE;
+  FCombo.OnKeyUp(FCombo, Key, []);
+end;
+
+procedure TTestFuzzyComboEvents.EscapeClosedList_DoesNotPoisonNextClick;
+// Netz-Gegenprobe: Escape bei GESCHLOSSENER Liste erzeugt kein
+// CloseUp - das KeyUp desselben Escape muss das Flag abraeumen,
+// sonst wuerde der NAECHSTE Maus-Klick-Commit faelschlich als
+// Abbruch verworfen.
+var
+  Key : Word;
+begin
+  Key := VK_ESCAPE;
+  FCombo.OnKeyDown(FCombo, Key, []);   // Liste zu: kein CloseUp folgt
+  Key := VK_ESCAPE;
+  FCombo.OnKeyUp(FCombo, Key, []);     // Netz raeumt ab
+  FCombo.ItemIndex := 5;
+  SendNotify(CBN_SELCHANGE);
+  SendNotify(CBN_CLOSEUP);             // echter Maus-Weg
+  Assert.AreEqual<Integer>(1, FChangeCount,
+    'der naechste Klick-Commit darf vom frueheren Escape nichts spueren');
 end;
 
 end.

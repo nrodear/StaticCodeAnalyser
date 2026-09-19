@@ -192,8 +192,13 @@ def je_regel_pass():
         if m and cur is not None:
             # unquote: Leerzeichen kommen seit der Emit-Kodierung
             # (2026-09-19) als %20 - Fixture-Muster matchen auf roh.
-            u = urllib.parse.unquote(
-                m.group(1).replace('\\/', '/').replace('\\\\', '\\'))
+            # file://-Strip (D2): absolute uris tragen das Schema.
+            u = m.group(1).replace('\\/', '/').replace('\\\\', '\\')
+            if u.startswith('file:///'):
+                u = u[8:]
+            elif u.startswith('file://'):
+                u = u[7:]
+            u = urllib.parse.unquote(u)
             if ist_fixture(u):
                 ges[cur][1] += 1
             cur = None                       # nur die ERSTE uri je result

@@ -1,4 +1,4 @@
-unit uFindingCopyText;
+﻿unit uFindingCopyText;
 
 // Baut den Text, den der KLICK auf eine Befund-Zeile in die Zwischenablage
 // legt - gesteuert durch [UI] ClipboardOnClick (TRepoSettings, Werte 1..3,
@@ -17,6 +17,7 @@ unit uFindingCopyText;
 interface
 
 uses
+  System.Generics.Collections,   // TObjectList (Datei-Ebene, D1)
   uSCAConsts, uMethodd12, uFixHint;
 
 type
@@ -36,6 +37,29 @@ type
     class function Build(F: TLeakFinding; AMode: TFindingCopyMode;
       const AHint: TFixHint): string; overload; static;
 
+    // ---- Datei-Ebene (D1-Umzug 2026-09-19 aus TExporter) ----
+    // Die drei sind reine TEXTBAUER ohne Datei-I/O und Schwestern von
+    // BuildJiraMini - darum leben sie hier (Output) und nicht mehr in
+    // der Infrastructure; zugleich Teil 2 der SCA141-Folgearbeit.
+
+    // Jira-Wiki-Markup fuer Befunde einer einzelnen Datei. Severity-
+    // Auswahl ueber Filter-Set (z.B. [lsError, lsWarning]). Liefert den
+    // fertigen Text - speichern oder Zwischenablage ist Aufrufer-Sache.
+    class function BuildJiraText(Findings: TObjectList<TLeakFinding>;
+      const SourceFile: string;
+      const SeverityFilter: TSeverityFilter): string; static;
+
+    // Zwischenablage-tauglicher Plain-Text mit Fehler+Warnung fuer eine
+    // einzelne Datei. Format: "<Severity> [Zeile] <Regel>: <Detail>"
+    class function BuildClipboardText(Findings: TObjectList<TLeakFinding>;
+      const SourceFile: string;
+      const SeverityFilter: TSeverityFilter): string; static;
+
+    // Jira-Wiki-Escaping (|, *, _, ... per Backslash; Umbrueche zu
+    // Leerzeichen). Public, weil auch BuildJiraMini-Nachbarn im
+    // UI-Umfeld Jira-Text bauen koennten - heute intern genutzt.
+    class function JiraEscape(const S: string): string; static;
+
   private
     class function BuildJiraMini(F: TLeakFinding;
       const AHint: TFixHint): string; static;
@@ -50,7 +74,9 @@ implementation
 
 uses
   System.SysUtils, System.Character,
-  uClaudePrompt, uLocalization;
+  System.Classes,      // TStringList (AppendIndented, D1)
+  uClaudePrompt, uLocalization,
+  uDetectorUtils;      // SameSourceFile (D1)
 
 const
   // Fakten-Zeilen werden einzeilig gehalten und hart gekuerzt - ein
@@ -61,6 +87,11 @@ const
   // Summary-Zeile in Listen, dort zaehlt jedes Zeichen.
   MAX_HEAD_LEN = 80;
   ELLIPSIS     = '...';
+  // Format-Skelette der Datei-Ebene (D1-Umzug): dreimal wiederholt =
+  // Rule of Three; als Konstante ist die Form ausserdem die ehrlichere
+  // Schreibweise fuer "immer dasselbe Layout".
+  SUMMARY_BULLET = '* %s: %d';       // Jira-Panel-Zeile
+  SEV_CELL       = '[%-7s] ';        // Clipboard-Severity-Spalte
 
 function FindingCopyModeFromInt(AValue: Integer): TFindingCopyMode;
 begin
@@ -205,10 +236,12 @@ class function TFindingCopyText.BuildJiraMini(F: TLeakFinding;
   const AHint: TFixHint): string;
 // 1 Headline (Jira-Summary-Zeile), Leerzeile, dann exakt 5 Fakten als
 // Wiki-Bullets. Bewusst OHNE Jira-Tabellen-Markup: einfache Bullets
-// brauchen kein Escaping-Regelwerk (TExporter.JiraEscape liegt in der
-// Infrastructure-Schicht; Wiederverwendung wuerde die Schichtung
-// Output <- Infrastructure invertieren - Zentralisierung erst beim
-// dritten Escape-Konsumenten, Rule of Three).
+// brauchen kein Escaping-Regelwerk. (Das Schichtungs-Argument von
+// frueher - JiraEscape lag in der Infrastructure - ist seit dem
+// D1-Umzug hinfaellig: JiraEscape lebt jetzt in DIESER Klasse; die
+// Bullets bleiben trotzdem escaping-frei, weil OneLine/Crop die
+// kritischen Umbrueche ohnehin glaetten und ein Mini-Issue lesbar
+// bleiben soll.)
 var
   SB : TStringBuilder;
 begin
@@ -247,5 +280,277 @@ begin
     SB.Free;
   end;
 end;
+
+
+{ ---- Datei-Ebene: Jira-/Clipboard-Text (D1-Umzug 2026-09-19) ---- }
+
+class function TFindingCopyText.JiraEscape(const S: string): string;
+// In Jira-Wiki-Markup haben |, *, _, +, -, [, ], {, } eigene Bedeutung.
+// Per Backslash-Escape neutralisieren. Zeilenumbrueche durch Leerzeichen
+// ersetzen, weil Tabellenzeilen nicht ueber Zeilenumbrueche gehen.
+var
+  Ch: Char;
+  SB: TStringBuilder;
+begin
+  SB := TStringBuilder.Create;
+  try
+    for Ch in S do
+      case Ch of
+        #13, #10 : SB.Append(' ');
+        '|', '*', '_', '+', '-', '[', ']', '{', '}', '\':
+          begin SB.Append('\'); SB.Append(Ch); end;
+      else
+        SB.Append(Ch);
+      end;
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+class function TFindingCopyText.BuildJiraText(Findings: TObjectList<TLeakFinding>;
+  const SourceFile: string; const SeverityFilter: TSeverityFilter): string;
+var
+  SB         : TStringBuilder;
+  F          : TLeakFinding;
+  nErr, nWrn : Integer;
+  nHnt       : Integer;
+  rowCount   : Integer;
+  Hint       : TFixHint;
+  SevLabel   : string;
+begin
+  SB := TStringBuilder.Create;
+  try
+    nErr := 0; nWrn := 0; nHnt := 0;
+
+    SB.Append(_('h2. Code analysis: '));
+    SB.AppendLine(JiraEscape(ExtractFileName(SourceFile)));
+    SB.Append(_('As of: '));
+    // SCA128-Fix (Chargen-Review D): ':' und '-' im Muster sind
+    // LOCALE-Separator-Platzhalter - unter fremdem Locale stand hier
+    // ein anderes Zeichen. Invariant-Settings + gequotete Literale
+    // machen den Stempel byte-stabil, egal wo der Report entsteht.
+    SB.AppendLine(FormatDateTime('yyyy"-"mm"-"dd hh":"nn', Now,
+      TFormatSettings.Invariant));
+    SB.AppendLine('');
+
+    SB.AppendLine(Format('|| %s || %s || %s || %s || %s ||',
+      [_('Severity'), _('Line'), _('Method'), _('Rule'), _('Detail')]));
+
+    rowCount := 0;
+    if Assigned(Findings) then
+      for F in Findings do
+      begin
+        if not (F.Severity in SeverityFilter) then Continue;
+        if (SourceFile <> '') and not TDetectorUtils.SameSourceFile(F.FileName, SourceFile) then
+          Continue;
+
+        case F.Severity of
+          lsError   : begin
+                        SB.Append(Format('| {color:red}*%s*{color}', [_('Error')]));
+                        Inc(nErr);
+                      end;
+          lsWarning : begin
+                        SB.Append(Format('| {color:#b07000}%s{color}', [_('Warning')]));
+                        Inc(nWrn);
+                      end;
+          lsHint    : begin
+                        SB.Append(Format('| {color:#5a8000}%s{color}', [_('Hint')]));
+                        Inc(nHnt);
+                      end;
+        end;
+        SB.Append(' | ');     SB.Append(JiraEscape(F.LineNumber));
+        SB.Append(' | ');     SB.Append(JiraEscape(F.MethodName));
+        SB.Append(' | ');     SB.Append(JiraEscape(KindName(F.Kind)));
+        SB.Append(' | ');     SB.Append(JiraEscape(F.MissingVar));
+        SB.AppendLine(' |');
+        Inc(rowCount);
+      end;
+
+    if rowCount = 0 then
+    begin
+      SB.AppendLine(Format('| _%s_ | | | | |', [_('no findings')]));
+    end;
+
+    SB.AppendLine('');
+    SB.AppendLine(Format('{panel:title=%s|borderColor=#ccc|bgColor=#f8f8f8}',
+      [_('Summary')]));
+    SB.AppendLine(Format(SUMMARY_BULLET, [_('Errors'),   nErr]));
+    SB.AppendLine(Format(SUMMARY_BULLET, [_('Warnings'), nWrn]));
+    if lsHint in SeverityFilter then
+      SB.AppendLine(Format(SUMMARY_BULLET, [_('Hints'),  nHnt]));
+    SB.AppendLine('{panel}');
+
+    // ---- Befunde im Detail mit Loesungs-Hinweisen ----
+    if rowCount > 0 then
+    begin
+      SB.AppendLine('');
+      SB.AppendLine('h3. ' + _('Findings in detail'));
+      SB.AppendLine('');
+
+      for F in Findings do
+      begin
+        if not (F.Severity in SeverityFilter) then Continue;
+        if (SourceFile <> '') and not TDetectorUtils.SameSourceFile(F.FileName, SourceFile) then
+          Continue;
+
+        // Voll-Review, umgesetzt 2026-09-15: hier standen die drei
+        // Severity-Namen HART DEUTSCH ('Fehler', 'Warnung', 'Hinweis'),
+        // waehrend die Tabelle weiter oben im SELBEN Dokument
+        // _('Error') / _('Warning') / _('Hint') benutzt. Bei englischer
+        // Oberflaeche widersprach sich ein und derselbe Bericht: oben
+        // "Error", unten "Fehler". Jetzt beide Stellen ueber dieselben
+        // msgids - neue Eintraege brauchte es dafuer keine, alle drei
+        // stehen seit jeher in i18n/*.po.
+        case F.Severity of
+          lsError   : SevLabel := Format('{color:red}*%s*{color}', [_('Error')]);
+          lsWarning : SevLabel := Format('{color:#b07000}%s{color}', [_('Warning')]);
+          lsHint    : SevLabel := Format('{color:#5a8000}%s{color}', [_('Hint')]);
+        else
+          SevLabel := '';
+        end;
+
+        // Header pro Befund: "h4. <Severity> - <Line> <nr> - <Kind> - <Detail>"
+        // Das abgekuerzte 'Z.' war die vierte harte Stelle; _('Line')
+        // fuehrt die Tabellenueberschrift oben ohnehin schon.
+        SB.Append('h4. ');
+        SB.Append(SevLabel);
+        SB.Append(' - ');
+        SB.Append(_('Line'));
+        SB.Append(' ');
+        SB.Append(JiraEscape(F.LineNumber));
+        if F.MethodName <> '' then
+        begin
+          SB.Append(' - ');
+          SB.Append(JiraEscape(F.MethodName));
+        end;
+        SB.Append(' - ');
+        SB.Append(JiraEscape(KindName(F.Kind)));
+        SB.Append(' - ');
+        SB.AppendLine(JiraEscape(F.MissingVar));
+
+        Hint := TFixHintResolver.FixHint(F);
+        if Hint.Description <> '' then
+        begin
+          SB.Append('bq. ');
+          SB.AppendLine(JiraEscape(Hint.Description));
+        end;
+        // Auch diese beiden waren hart deutsch; 'Before:'/'After:'
+        // stehen bereits als msgid in i18n/*.po.
+        if Hint.Before <> '' then
+        begin
+          SB.AppendLine(Format('*%s*', [_('Before:')]));
+          SB.AppendLine('{code:delphi}');
+          SB.AppendLine(Hint.Before);
+          SB.AppendLine('{code}');
+        end;
+        if Hint.After <> '' then
+        begin
+          SB.AppendLine(Format('*%s*', [_('After:')]));
+          SB.AppendLine('{code:delphi}');
+          SB.AppendLine(Hint.After);
+          SB.AppendLine('{code}');
+        end;
+        SB.AppendLine('');
+      end;
+    end;
+
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+class function TFindingCopyText.BuildClipboardText(Findings: TObjectList<TLeakFinding>;
+  const SourceFile: string; const SeverityFilter: TSeverityFilter): string;
+
+  procedure AppendIndented(SB: TStringBuilder; const Block: string;
+    const Prefix: string);
+  // Mehrzeiligen Block (Vorher/Nachher) zeilenweise mit Praefix versehen.
+  var
+    SL: TStringList;
+    Line: string;
+  begin
+    SL := TStringList.Create;
+    try
+      SL.Text := Block;
+      // Letzte leere Zeile der TStringList.Text-Konvention abfangen
+      if (SL.Count > 0) and (SL[SL.Count - 1] = '') then
+        SL.Delete(SL.Count - 1);
+      for Line in SL do
+      begin
+        SB.Append(Prefix);
+        SB.AppendLine(Line);
+      end;
+    finally
+      SL.Free;
+    end;
+  end;
+
+var
+  SB   : TStringBuilder;
+  F    : TLeakFinding;
+  Sev  : string;
+  Hint : TFixHint;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.Append(_('Code analysis: '));
+    SB.AppendLine(ExtractFileName(SourceFile));
+    SB.AppendLine(StringOfChar('-', 60));
+
+    if Assigned(Findings) then
+      for F in Findings do
+      begin
+        if not (F.Severity in SeverityFilter) then Continue;
+        if (SourceFile <> '') and not TDetectorUtils.SameSourceFile(F.FileName, SourceFile) then
+          Continue;
+
+        case F.Severity of
+          lsError   : Sev := Format(SEV_CELL, [_('ERROR')]);
+          lsWarning : Sev := Format(SEV_CELL, [_('WARNING')]);
+          lsHint    : Sev := Format(SEV_CELL, [_('HINT')]);
+        else
+          Sev := '          ';
+        end;
+
+        SB.Append(Sev);
+        SB.Append(_('L. '));
+        SB.Append(F.LineNumber);
+        if F.MethodName <> '' then
+        begin
+          SB.Append(' ' + _('in') + ' ');
+          SB.Append(F.MethodName);
+        end;
+        SB.Append('  ');
+        SB.Append(KindName(F.Kind));
+        SB.Append(': ');
+        SB.AppendLine(F.MissingVar);
+
+        Hint := TFixHintResolver.FixHint(F);
+        if Hint.Description <> '' then
+        begin
+          SB.Append('  ' + _('Hint: '));
+          SB.AppendLine(Hint.Description);
+        end;
+        if Hint.Before <> '' then
+        begin
+          SB.AppendLine('  ' + _('Before:'));
+          AppendIndented(SB, Hint.Before, '    ');
+        end;
+        if Hint.After <> '' then
+        begin
+          SB.AppendLine('  ' + _('After:'));
+          AppendIndented(SB, Hint.After, '    ');
+        end;
+        SB.AppendLine('');
+      end;
+
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
 
 end.

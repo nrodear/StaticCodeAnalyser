@@ -77,7 +77,8 @@ uses
   uLocalization,   // SetLanguage/CurrentLanguage - der Jira-Detailteil
                    // laesst sich nur mit Sprachwechsel pruefen
   uExport,
-  uReportFileWriter;   // die umgezogenen, jetzt atomaren Schreibwege
+  uReportFileWriter,   // die umgezogenen, jetzt atomaren Schreibwege
+  uFindingCopyText;    // BuildJiraText (D1-Umzug 2026-09-19)
 
 procedure TTestExport.RelativeDisplayPath_UsesForwardSlashes;
 // DER Waechter des BLOCKERs vom 08.09.: liegt die Datei unter der
@@ -600,7 +601,7 @@ begin
     F.LineNumber := '42';
     F.MissingVar := 'list';
     L.Add(F);
-    Txt := TExporter.BuildJiraText(L, '', [lsError, lsWarning, lsHint]);
+    Txt := TFindingCopyText.BuildJiraText(L, '', [lsError, lsWarning, lsHint]);
   finally
     L.Free;
     SetLanguage(AlteSpr);
@@ -636,7 +637,7 @@ begin
     F.LineNumber := '42';
     F.MissingVar := 'list';
     L.Add(F);
-    Txt := TExporter.BuildJiraText(L, '', [lsError, lsWarning, lsHint]);
+    Txt := TFindingCopyText.BuildJiraText(L, '', [lsError, lsWarning, lsHint]);
   finally
     L.Free;
     SetLanguage(AlteSpr);
