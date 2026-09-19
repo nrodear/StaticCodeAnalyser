@@ -46,6 +46,11 @@ type
     [Test] procedure Anker_ProjektModus_IstProjektVerzeichnis;
     [Test] procedure Anker_GruppenModus_IstGruppenVerzeichnis;
     [Test] procedure Anker_OhneZiel_BleibtLeer;
+    // ---- dlAuto V2: Verdikt je Datei (D5, 2026-09-19) ----
+    [Test] procedure AutoV2_DelphiProjektEbene_GewinntFuerDatei;
+    [Test] procedure AutoV2_LazarusProjektEbene_GewinntFuerDatei;
+    [Test] procedure AutoV2_OhneProjektAufwaerts_NimmtWurzelverdikt;
+    [Test] procedure AutoV2_TieEbene_GewinntDelphi;
   end;
 
 implementation
@@ -64,6 +69,8 @@ implementation
 uses
   System.SysUtils,   // TStringHelper.ToLower (Dialect_Auto-Test) - ohne
                      // die Unit expandiert der Inline-Helper nicht (H2443)
+  System.IOUtils,    // TPath/TDirectory/TFile (AutoV2-Temp-Baum, D5)
+  uSCAConsts,        // TSourceDialect/dlFpc (AutoV2-Tests, D5)
   uConsoleRunner;
 
 // WARUM --file UND NICHT --path: bei --path setzt ParseArgs am Ende
@@ -337,6 +344,86 @@ var
 begin
   A := TConsoleRunner.ParseArgs([]);
   Assert.AreEqual('', FixtureFilterAnker(A));
+end;
+
+{ ---- dlAuto V2: Verdikt je Datei (D5, 2026-09-19) ---- }
+// Temp-Baum-Harness: wurzel/ mit dsub (.dproj), lsub (.lpi) und frei/
+// (nichts). Die Kaskade: erste Projektdatei-Ebene aufwaerts gewinnt,
+// Tie-Break Delphi, sonst Wurzelverdikt.
+
+function BaueAutoBaum: string;
+begin
+  Result := TPath.Combine(TPath.GetTempPath,
+    'sca_autov2_' + TGuid.NewGuid.ToString
+      .Replace('{', '').Replace('}', '').Replace('-', ''));
+  TDirectory.CreateDirectory(TPath.Combine(Result, 'dsub'));
+  TDirectory.CreateDirectory(TPath.Combine(Result, 'lsub'));
+  TDirectory.CreateDirectory(TPath.Combine(Result, 'frei'));
+  TDirectory.CreateDirectory(TPath.Combine(Result, 'tie'));
+  TFile.WriteAllText(TPath.Combine(Result, 'dsub\a.dproj'), 'x');
+  TFile.WriteAllText(TPath.Combine(Result, 'lsub\b.lpi'), 'x');
+  TFile.WriteAllText(TPath.Combine(Result, 'tie\c.dproj'), 'x');
+  TFile.WriteAllText(TPath.Combine(Result, 'tie\d.lpi'), 'x');
+end;
+
+procedure TTestConsoleParseArgs.AutoV2_DelphiProjektEbene_GewinntFuerDatei;
+var Wurzel: string;
+begin
+  Wurzel := BaueAutoBaum;
+  try
+    Assert.IsTrue(dlDelphi = AutoDialektFuerDatei(
+      TPath.Combine(Wurzel, 'dsub\u.pas'), Wurzel, dlFpc, nil),
+      'die .dproj-Ebene schlaegt das fpc-Wurzelverdikt');
+  finally
+    TDirectory.Delete(Wurzel, True);
+  end;
+end;
+
+procedure TTestConsoleParseArgs.AutoV2_LazarusProjektEbene_GewinntFuerDatei;
+var Wurzel: string;
+begin
+  Wurzel := BaueAutoBaum;
+  try
+    Assert.IsTrue(dlFpc = AutoDialektFuerDatei(
+      TPath.Combine(Wurzel, 'lsub\u.pas'), Wurzel, dlDelphi, nil),
+      'die .lpi-Ebene schlaegt das delphi-Wurzelverdikt');
+  finally
+    TDirectory.Delete(Wurzel, True);
+  end;
+end;
+
+procedure TTestConsoleParseArgs.AutoV2_OhneProjektAufwaerts_NimmtWurzelverdikt;
+// Der Messbefund hinter dem Fallback: im Lazarus-Baum haben 45 % der
+// Dateien keine Projektdatei aufwaerts (lcl/, components/) - sie
+// muessen das WURZELverdikt erben, nicht stumpf dlDelphi.
+var Wurzel: string;
+begin
+  Wurzel := BaueAutoBaum;
+  try
+    Assert.IsTrue(dlFpc = AutoDialektFuerDatei(
+      TPath.Combine(Wurzel, 'frei\u.pas'), Wurzel, dlFpc, nil),
+      'ohne Projektdatei aufwaerts erbt die Datei das Wurzelverdikt');
+    Assert.IsTrue(dlDelphi = AutoDialektFuerDatei(
+      TPath.Combine(Wurzel, 'frei\u.pas'), Wurzel, dlDelphi, nil),
+      'Gegenrichtung: delphi-Wurzelverdikt wird genauso geerbt');
+  finally
+    TDirectory.Delete(Wurzel, True);
+  end;
+end;
+
+procedure TTestConsoleParseArgs.AutoV2_TieEbene_GewinntDelphi;
+// Dieselbe konservative Wahl wie V1 (895 statt 1.994 umgeschaltete
+// Dateien in der Konzept-Messung) - nur ohne je-Datei-stderr.
+var Wurzel: string;
+begin
+  Wurzel := BaueAutoBaum;
+  try
+    Assert.IsTrue(dlDelphi = AutoDialektFuerDatei(
+      TPath.Combine(Wurzel, 'tie\u.pas'), Wurzel, dlFpc, nil),
+      'Tie-Break bleibt Delphi');
+  finally
+    TDirectory.Delete(Wurzel, True);
+  end;
 end;
 
 initialization
