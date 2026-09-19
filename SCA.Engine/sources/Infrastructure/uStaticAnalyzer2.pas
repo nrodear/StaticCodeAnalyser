@@ -513,10 +513,10 @@ begin
   AddD3('AbstractNotImpl', fkAbstractNotImpl, TAbstractNotImplDetector.AnalyzeUnit);
   AddD3('LeakInConstructor', fkLeakInConstructor, TLeakInConstructorDetector.AnalyzeUnit);
   AddD('IntegerOverflow', fkIntegerOverflow, TIntegerOverflowDetector.AnalyzeUnit, ['int64']);
-  AddD3('GodClass', fkGodClass, TGodClassDetector.AnalyzeUnit);
+  AddD('GodClass', fkGodClass, TGodClassDetector.AnalyzeUnit);
   AddD3('FreeWithoutNil', fkFreeWithoutNil, TFreeWithoutNilDetector.AnalyzeUnit);
   AddD3('MultipleExit', fkMultipleExit, TMultipleExitDetector.AnalyzeUnit);
-  AddD3('LargeClass', fkLargeClass, TLargeClassDetector.AnalyzeUnit);
+  AddD('LargeClass', fkLargeClass, TLargeClassDetector.AnalyzeUnit);
   AddD3('UnsortedUses', fkUnsortedUses, TUnsortedUsesDetector.AnalyzeUnit);
   AddD('MissingUnitHeader', fkMissingUnitHeader, TMissingUnitHeaderDetector.AnalyzeUnit);
   AddD('FloatEquality', fkFloatEquality, TFloatEqualityDetector.AnalyzeUnit, ['double', 'single', 'extended', 'currency', 'real']);

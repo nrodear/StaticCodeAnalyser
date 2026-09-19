@@ -43,6 +43,9 @@ type
     // --- Feld-ADDS (Charge 10): Komma-Listen + Keyword-Namen ---
     [Test] procedure CommaListFields_CountPerName;
     [Test] procedure KeywordNamedField_Counted;
+    // ---- H1: FPC-Fremdsprachen-Bindings (2026-09-20) ----
+    [Test] procedure Objcclass_NotReported;
+    [Test] procedure Objcclass_NachbarklasseWeiterhinGemeldet;
   end;
 
 implementation
@@ -655,6 +658,77 @@ begin
       'ein Keyword-benanntes Feld ist ein Feld');
   finally F.Free; end;
 end;
+
+{ ---- H1 (2026-09-20): FPC-Fremdsprachen-Bindings -------------- }
+//
+// Typen, die mit objcclass/objccategory/objcprotocol/cppclass
+// deklariert sind, SPIEGELN eine fremde API: Methodenzahl,
+// Parameterzahl, Rumpflaenge und Aufrufer sind vom Framework
+// vorgegeben. Strukturbefunde beschreiben dort nicht den Entwurf
+// des Autors. Der zweite Test jeder Familie ist der WICHTIGE: er
+// pinnt, dass das Gate TYPGENAU wirkt - eine gewoehnliche
+// Nachbarklasse in DERSELBEN Datei meldet weiter. Ein dateiweites
+// Gate haette am Laz-Korpus 59 von 86 Funden mitgerissen.
+
+procedure TTestGodClass.Objcclass_NotReported;
+// 25 Selektoren an einem objcclass - vor H1 ein God-Class-Befund
+// (G-Abnahme 20.09.: TCocoaButton, 25 Methoden).
+var
+  SB : TStringBuilder;
+  i  : Integer;
+  F  : TObjectList<TLeakFinding>;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('unit t; interface');
+    SB.AppendLine('type');
+    SB.AppendLine('  TCocoaButton = objcclass(NSButton)');
+    for i := 1 to 25 do
+      SB.AppendLine(Format('    procedure setTag%d(v: Integer);', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('implementation');
+    SB.AppendLine('end.');
+    F := GodClassFindingsForFile(SB.ToString, '.pas');
+    try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkGodClass),
+      'ein objcclass spiegelt die fremde API - kein God-Class-Befund');
+    finally F.Free; end;
+  finally
+    SB.Free;
+  end;
+end;
+
+procedure TTestGodClass.Objcclass_NachbarklasseWeiterhinGemeldet;
+// GEGENPROBE zur Reichweite: dieselbe Datei traegt zusaetzlich eine
+// GEWOEHNLICHE Klasse ueber der Schwelle. Genau ein Befund.
+var
+  SB : TStringBuilder;
+  i  : Integer;
+  F  : TObjectList<TLeakFinding>;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('unit t; interface');
+    SB.AppendLine('type');
+    SB.AppendLine('  TCocoaButton = objcclass(NSButton)');
+    for i := 1 to 25 do
+      SB.AppendLine(Format('    procedure setTag%d(v: Integer);', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('  TMeineKlasse = class(TObject)');
+    for i := 1 to 25 do
+      SB.AppendLine(Format('    procedure DoIt%d(v: Integer);', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('implementation');
+    SB.AppendLine('end.');
+    F := GodClassFindingsForFile(SB.ToString, '.pas');
+    try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkGodClass),
+      'die gewoehnliche Nachbarklasse bleibt ein Befund - das Gate '
+      + 'wirkt typgenau, nicht dateiweit');
+    finally F.Free; end;
+  finally
+    SB.Free;
+  end;
+end;
+
 
 initialization
   TDUnitX.RegisterTestFixture(TTestGodClass);

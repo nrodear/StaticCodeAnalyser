@@ -80,6 +80,11 @@ type
     [Test] procedure Trunc_BmpOnly_PlainCut;
     [Test] procedure Trunc_ZeroMax_Empty;
     [Test] procedure Trunc_LoneHighAtCut_AlsoDropped;
+    // ---- CollectFpcBindingTypeNames (H1, 2026-09-20) ----
+    [Test] procedure FpcBinding_AlleVierArten_Erkannt;
+    [Test] procedure FpcBinding_NurImStringLiteral_NichtErkannt;
+    [Test] procedure FpcBinding_GewoehnlicheKlasse_NichtErkannt;
+    [Test] procedure FpcBinding_GenericUndPacked_Normalisiert;
     // ---- IsIdentChar / Zeichenklasse (Backlog-Welle 1, 2026-07-26) ----
     [Test] procedure IdentChar_LettersAndDigitsAndUnderscore;
     [Test] procedure IdentChar_RangeNeighboursAreNoIdent;
@@ -1113,6 +1118,99 @@ begin
   R := TDetectorUtils.ScanCodeLine('A(*x*)B', State, Col);
   Assert.AreEqual('AB', R,
     'Vorgabe: Kommentar ENTFERNT, Zeile wird kuerzer');
+end;
+
+{ ---- CollectFpcBindingTypeNames (H1, 2026-09-20) ---- }
+//
+// Der Helfer entscheidet, welche Typen einer Unit eine FREMDE API
+// spiegeln (objcclass/objccategory/objcprotocol/cppclass). Vier
+// Strukturregeln haengen daran (SCA013/138/141/147), deshalb wird er
+// hier direkt geprueft statt nur ueber die Detektoren.
+// Er liest den GESTRIPPTEN Text - AContext=nil, FileName egal.
+
+function BindingNamen(const ASource: string): string;
+var
+  SL      : TStringList;
+  Namen   : TStringList;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := ASource;
+    Namen := TDetectorUtils.CollectFpcBindingTypeNames(SL, nil, 'x.pas');
+    try
+      Result := Namen.CommaText;
+    finally
+      Namen.Free;
+    end;
+  finally
+    SL.Free;
+  end;
+end;
+
+procedure TTestDetectorUtils.FpcBinding_AlleVierArten_Erkannt;
+// Die Liste ist sortiert (Sorted=True) - die Erwartung steht deshalb
+// in alphabetischer, nicht in Quelltext-Reihenfolge.
+begin
+  Assert.AreEqual('tcat,tcpp,tobj,tprot',
+    BindingNamen(
+      'type'#13#10 +
+      '  TObj = objcclass(NSObject)'#13#10 +
+      '  end;'#13#10 +
+      '  TCat = objccategory(NSString)'#13#10 +
+      '  end;'#13#10 +
+      '  TProt = objcprotocol external name ''NSFoo'''#13#10 +
+      '  end;'#13#10 +
+      '  TCpp = cppclass(QWidget)'#13#10 +
+      '  end;'),
+    'alle vier FPC-Klassenarten muessen erkannt werden');
+end;
+
+procedure TTestDetectorUtils.FpcBinding_NurImStringLiteral_NichtErkannt;
+// DIE ENTSCHEIDENDE GEGENPROBE: die Lazarus-Codetools fuehren
+// 'objcclass' als Schluesselwort-Literal in Listen. Dort darf das
+// Gate NICHT greifen, sonst legte es den halben codetools-Baum stumm.
+// Am Korpus verifiziert: pascalparsertool.pas liefert 0 Namen.
+begin
+  Assert.AreEqual('',
+    BindingNamen(
+      'const'#13#10 +
+      '  KW = ''objcclass'';'#13#10 +
+      '  KW2: string = ''tfoo = cppclass'';'),
+    'in Strings zaehlt das Schluesselwort nicht');
+end;
+
+procedure TTestDetectorUtils.FpcBinding_GewoehnlicheKlasse_NichtErkannt;
+// Nachbarklassen in derselben Datei bleiben unangetastet - genau
+// dafuer ist das Gate TYPGENAU und nicht dateiweit (gemessen: ein
+// dateiweites Gate haette 59 von 86 Funden mitgerissen).
+begin
+  Assert.AreEqual('tbinding',
+    BindingNamen(
+      'type'#13#10 +
+      '  TNormal = class(TObject)'#13#10 +
+      '  end;'#13#10 +
+      '  TBinding = objcclass(NSObject)'#13#10 +
+      '  end;'#13#10 +
+      '  TAuchNormal = class(TComponent)'#13#10 +
+      '  end;'),
+    'nur der Binding-Typ, nicht seine Nachbarn');
+end;
+
+procedure TTestDetectorUtils.FpcBinding_GenericUndPacked_Normalisiert;
+// 'packed' davor und Generic-Parameter dahinter duerfen den Namen
+// nicht verfaelschen; ein Nicht-Bezeichner links vom '=' (Zuweisung
+// im Rumpf) darf gar nicht erst als Typname gelten.
+begin
+  Assert.AreEqual('tgen,tpack',
+    BindingNamen(
+      'type'#13#10 +
+      '  TPack = packed objcclass(NSObject)'#13#10 +
+      '  end;'#13#10 +
+      '  TGen<T> = objcclass(NSObject)'#13#10 +
+      '  end;'#13#10 +
+      'begin'#13#10 +
+      '  Foo.Bar := objcclass;'),
+    'packed/Generics normalisiert, Zuweisung ist keine Deklaration');
 end;
 
 initialization

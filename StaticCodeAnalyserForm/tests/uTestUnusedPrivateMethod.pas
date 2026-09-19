@@ -65,6 +65,9 @@ type
     [Test] procedure GateF_MacroInclude_StillReported;
     [Test] procedure GateF_CommentedInclude_StillReported;
     [Test] procedure GateF_IncludeInString_StillReported;
+    // ---- H1: FPC-Fremdsprachen-Bindings (2026-09-20) ----
+    [Test] procedure GateH_ObjcclassSelektor_NotReported;
+    [Test] procedure GateH_NachbarklasseWeiterhinGemeldet;
   end;
 
 implementation
@@ -835,6 +838,74 @@ begin
     'Blanket-Fall - kein appears-unused auf Interface-Bedienern');
   finally F.Free; end;
 end;
+
+{ ---- H1 (2026-09-20): FPC-Fremdsprachen-Bindings -------------- }
+//
+// objcclass & Co. spiegeln eine FREMDE API. Der zweite Test ist
+// der wichtige: er pinnt, dass das Gate TYPGENAU wirkt - eine
+// gewoehnliche Nachbarklasse DERSELBEN Datei meldet weiter.
+
+procedure TTestUnusedPrivateMethod.GateH_ObjcclassSelektor_NotReported;
+// Der Selektor wird von der Objective-C-Runtime gerufen, nie
+// namentlich aus dieser Unit. Vor H1: 1 Fund (G-Abnahme 20.09.:
+// menuNeedsUpdate, popoverWillClose, popoverDidClose).
+// BEWUSST nur EIN Elternteil: mit einem Protokoll als zweitem
+// Elternteil griffe schon GATE E, und der Test pruefte das
+// falsche Gate.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TCocoaDelegate = objcclass(NSObject)'#13#10 +
+  '  private'#13#10 +
+  '    procedure menuNeedsUpdate(m: NSMenu);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TCocoaDelegate.menuNeedsUpdate(m: NSMenu);'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkUnusedPrivateMethod),
+    'ein objcclass-Selektor ist kein ungenutzter privater Code');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedPrivateMethod.GateH_NachbarklasseWeiterhinGemeldet;
+// GEGENPROBE zur Reichweite: dieselbe Datei, zusaetzlich eine
+// gewoehnliche Klasse mit echtem totem privatem Code.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TCocoaDelegate = objcclass(NSObject)'#13#10 +
+  '  private'#13#10 +
+  '    procedure menuNeedsUpdate(m: NSMenu);'#13#10 +
+  '  end;'#13#10 +
+  '  TMeineKlasse = class(TObject)'#13#10 +
+  '  private'#13#10 +
+  '    procedure NieGerufen;'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TCocoaDelegate.menuNeedsUpdate(m: NSMenu);'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'procedure TMeineKlasse.NieGerufen;'#13#10 +
+  'begin'#13#10 +
+  'end;'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkUnusedPrivateMethod),
+    'die gewoehnliche Nachbarklasse bleibt ein Befund - typgenau');
+  finally F.Free; end;
+end;
+
 
 initialization
   TDUnitX.RegisterTestFixture(TTestUnusedPrivateMethod);

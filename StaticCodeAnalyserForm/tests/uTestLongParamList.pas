@@ -22,12 +22,16 @@ type
     // Voll-Review 2026-09-12 (Major 74): Dedup ueber (Besitzertyp, Name)
     [Test] procedure ClassMethodDeclPlusImpl_OneFinding;
     [Test] procedure SameNameDifferentTypes_TwoFindings;
+    // ---- H1: FPC-Fremdsprachen-Bindings (2026-09-20) ----
+    [Test] procedure Objcclass_NotReported;
+    [Test] procedure Objcclass_NachbarklasseWeiterhinGemeldet;
   end;
 
 implementation
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils, System.Classes, System.IOUtils,
+  System.Generics.Collections,
   uSCAConsts, uMethodd12,
   uParser2, uAstNode, uAnalyzeContext, uLongParamList,
   uTestFindingHelper;
@@ -205,6 +209,97 @@ begin
     'gleichnamige Methoden verschiedener Typen sind ZWEI Befunde');
   finally F.Free; end;
 end;
+
+{ ---- H1 (2026-09-20): FPC-Fremdsprachen-Bindings -------------- }
+//
+// objcclass & Co. spiegeln eine FREMDE API. Der zweite Test ist
+// der wichtige: er pinnt, dass das Gate TYPGENAU wirkt - eine
+// gewoehnliche Nachbarklasse DERSELBEN Datei meldet weiter.
+
+// Das Gate liest den Quelltext - FindingsOf uebergibt einen
+// Platzhalter-Namen, dort bliebe es still aus. Diese beiden Tests
+// brauchen deshalb eine ECHTE Datei (Muster aus uTestGodClass).
+function LongParamFindingsForFile(const ASource: string)
+  : TObjectList<TLeakFinding>;
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Path   : string;
+  SL     : TStringList;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+  Path := TPath.Combine(TPath.GetTempPath,
+    'sca_lpl_' + TGuid.NewGuid.ToString.Replace('{', '')
+      .Replace('}', '').Replace('-', '') + '.pas');
+  SL := TStringList.Create;
+  try
+    SL.Text := ASource;
+    SL.SaveToFile(Path, TEncoding.UTF8);
+  finally
+    SL.Free;
+  end;
+  try
+    Parser := TParser2.Create;
+    try
+      Root := Parser.ParseFile(Path);
+      try
+        TLongParamListDetector.AnalyzeUnit(Root, Path, Result);
+      finally
+        Root.Free;
+      end;
+    finally
+      Parser.Free;
+    end;
+  finally
+    if TFile.Exists(Path) then TFile.Delete(Path);
+  end;
+end;
+
+procedure TTestLongParamList.Objcclass_NotReported;
+// 7 Parameter an einem ObjC-Selektor - die Signatur gibt die
+// fremde API vor (G-Abnahme 20.09.: cocoa_extra.pas mit 10 und
+// 11 Parametern).
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TCocoaView = objcclass(NSView)'#13#10 +
+  '    procedure drawRect(a, b, c, d, e, f, g: Integer);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := LongParamFindingsForFile(SRC);
+  try Assert.AreEqual<Integer>(0,
+    TFindingHelper.Count(F, fkLongParamList),
+    'die Parameterzahl eines ObjC-Selektors ist nicht behebbar');
+  finally F.Free; end;
+end;
+
+procedure TTestLongParamList.Objcclass_NachbarklasseWeiterhinGemeldet;
+// GEGENPROBE zur Reichweite: genau ein Befund.
+const SRC =
+  'unit t;'#13#10 +
+  'interface'#13#10 +
+  'type'#13#10 +
+  '  TCocoaView = objcclass(NSView)'#13#10 +
+  '    procedure drawRect(a, b, c, d, e, f, g: Integer);'#13#10 +
+  '  end;'#13#10 +
+  '  TMeineKlasse = class(TObject)'#13#10 +
+  '    procedure DoIt(a, b, c, d, e, f, g: Integer);'#13#10 +
+  '  end;'#13#10 +
+  'implementation'#13#10 +
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := LongParamFindingsForFile(SRC);
+  try Assert.AreEqual<Integer>(1,
+    TFindingHelper.Count(F, fkLongParamList),
+    'die gewoehnliche Nachbarklasse bleibt ein Befund - typgenau');
+  finally F.Free; end;
+end;
+
 
 initialization
   TDUnitX.RegisterTestFixture(TTestLongParamList);

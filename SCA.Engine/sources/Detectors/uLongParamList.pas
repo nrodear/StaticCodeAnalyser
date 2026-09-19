@@ -23,7 +23,9 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  uDetectorUtils;   // OwnerTypeNameLower + BuildMethodOwnerMap (Major 74)
+  System.Classes,    // TStringList (GATE FFI)
+  uDetectorUtils,    // OwnerTypeNameLower + BuildMethodOwnerMap (Major 74)
+  uFileTextCache;    // AcquireLines/ReleaseLines (GATE FFI, H1)
 
 // Schwellwert kommt aus uSCAConsts.DetectorMaxParams (analyser.ini ->
 // LongParamListMaxParams). Default 5.
@@ -40,6 +42,12 @@ var
   MaxParams  : Integer;   // TD-1: Schwelle per-Scan aus AContext.Config
   OwnerMap   : TDictionary<TAstNode, string>;
   OwnerLow   : string;
+  // GATE FFI (H1): beide LAZY - eine Datei ohne Kandidaten ueber der
+  // Schwelle zahlt weder Dateizugriff noch Listenaufbau.
+  FpcBindings    : TStringList;
+  BindingsGeholt : Boolean;
+  Lines          : TStringList;
+  Cached         : Boolean;
 begin
   // TD-1 (2026-07-06): Schwelle einmal aus dem Context lesen (scan-konstant).
   MaxParams := CfgMaxParams(AContext);
@@ -47,6 +55,10 @@ begin
   // Implementation auftauchen → mit Methodennamen deduplizieren.
   Reported := TDictionary<string, Boolean>.Create;
   OwnerMap := nil;
+  FpcBindings    := nil;
+  BindingsGeholt := False;
+  Lines          := nil;
+  Cached         := False;
   Methods  := UnitNode.FindAll(nkMethod);
   try
     for M in Methods do
@@ -72,6 +84,28 @@ begin
         if OwnerMap.TryGetValue(M, OwnerLow) then
           OwnerLow := LowerCase(OwnerLow);
       end;
+      // GATE FFI (H1, 2026-09-20): Der Besitzertyp ist ein
+      // FPC-Fremdsprachen-Binding (objcclass/objccategory/
+      // objcprotocol/cppclass). Dessen Parameterzahl ist die Signatur
+      // der FREMDEN API - der Autor kann sie nicht kuerzen, ohne die
+      // Bindung zu brechen. Beleg (G-Abnahme 20.09.): cocoa_extra.pas
+      // meldete 10 und 11 Parameter, beides ObjC-Selektoren.
+      // LAZY in zwei Stufen: Datei erst ab dem ersten Kandidaten ueber
+      // der Schwelle lesen, Liste danach einmal je Datei.
+      if OwnerLow <> '' then
+      begin
+        if not BindingsGeholt then
+        begin
+          BindingsGeholt := True;
+          Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
+          if Lines <> nil then
+            FpcBindings := TDetectorUtils.CollectFpcBindingTypeNames(
+              Lines, AContext, FileName);
+        end;
+        if TDetectorUtils.IsFfiBindingTypeName(FpcBindings, OwnerLow) then
+          Continue;
+      end;
+
       Key := OwnerLow + '.' + TDetectorUtils.UnqualifiedNameLastLower(M.Name)
              + ':' + IntToStr(ParamCount);
       if Reported.ContainsKey(Key) then Continue;
@@ -90,6 +124,8 @@ begin
     Methods.Free;
     Reported.Free;
     OwnerMap.Free;
+    FpcBindings.Free;
+    ReleaseLines(Lines, Cached);
   end;
 end;
 

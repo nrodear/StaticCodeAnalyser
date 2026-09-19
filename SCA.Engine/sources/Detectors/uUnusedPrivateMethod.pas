@@ -789,11 +789,13 @@ var
   IfaceScrat : TStringList;
   IfaceMemb  : TDictionary<string, Boolean>;
   IfaceState : TSca147IfaceState;
+  FpcBindings : TStringList;   // GATE H, lazy
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   WordIdx := nil;   // Perf P1: nil-sicher im finally
   TypeIdx := nil;   // Gate E: erst beim ersten Melde-Kandidaten gebaut
+  FpcBindings := nil;   // GATE H: dito, nil-sicher im finally
   try
     // 2026-07-04: lokale Strip-Kopie durch zentrale TDetectorUtils-Fassung
     // ersetzt (Audit Duplikations-Rest). Verhaltensgleich zur alten Variante:
@@ -891,6 +893,24 @@ begin
               // Aufrufer bleibt ein legitimer Fund.
               if Sca147TypeRefHasDirective(Mth.TypeRef, 'override') then Continue;
 
+              // GATE H (H1, 2026-09-20): Der Besitzertyp ist ein
+              // FPC-Fremdsprachen-Binding (objcclass/objccategory/
+              // objcprotocol/cppclass). Seine Methoden sind SELEKTOREN
+              // der fremden API - gerufen wird per Objective-C-Runtime
+              // bzw. vom C++-Vtable, nie namentlich aus dieser Unit.
+              // 'ungenutzt' ist dort weder wahr noch behebbar.
+              // Beleg (G-Abnahme 20.09.): menuNeedsUpdate,
+              // popoverWillClose, popoverDidClose,
+              // control_textView_doCommandBySelector - 6 Funde, alle
+              // Cocoa-Delegate-Callbacks. LAZY: die Liste kostet einen
+              // Durchlauf ueber den ohnehin gestrippten Text, und zwar
+              // erst ab dem ersten Melde-Kandidaten.
+              if FpcBindings = nil then
+                FpcBindings := TDetectorUtils.CollectFpcBindingTypeNames(
+                  Lines, AContext, FileName);
+              if TDetectorUtils.IsFfiBindingTypeName(FpcBindings, C.Name) then
+                Continue;
+
               // GATE E: Interface-Implementierung (Interface-Dispatch).
               if IfaceState = ifsUnknown then
               begin
@@ -942,6 +962,7 @@ begin
   finally
     TypeIdx.Free;
     WordIdx.Free;
+    FpcBindings.Free;   // GATE H
     ReleaseLines(Lines, Cached);
   end;
 end;
