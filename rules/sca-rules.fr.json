@@ -173,7 +173,7 @@
     },
     "SCA043": {
       "name": "Le composant a Action et OnClick",
-      "shortDescription": "Action et OnClick sont tous deux définis - Action l'emporte, OnClick est du code mort"
+      "shortDescription": "Action et OnClick sont tous deux définis - le OnClick explicite l'emporte, le câblage TAction est mort"
     },
     "SCA044": {
       "name": "Longue concaténation - préférer Format()",

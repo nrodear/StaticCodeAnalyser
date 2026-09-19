@@ -1023,7 +1023,7 @@ Form2.UserName := 'x';   // property on Form2
 | Tags | `dfm`, `layout` |
 | Detector | `uDfmLayerViolation.pas` |
 
-Layered layout (Form > Panel > Group > Controls) makes resizing, DPI-scaling, and theming significantly easier. Wrap controls in a layout container.
+Layered layout (Form > Panel > Group > Controls) makes resizing, DPI-scaling, and theming significantly easier. Wrap controls in a layout container. FPC/Lazarus dialect: this rule is skipped when the scan runs with --dialect=fpc (or an .lpi/.lpk/.lpg project) - the VCL layer model it checks does not apply to LCL forms.
 
 ---
 
@@ -1045,7 +1045,7 @@ Spaghetti indicator: one handler dispatching dozens of events is hard to read, h
 ## SCA043
 **Component has Action + OnClick**
 
-> Action and OnClick both set - Action wins, OnClick is dead code
+> Action and OnClick both set - the explicit OnClick wins, the TAction glue is dead
 
 | Field | Value |
 |---|---|
@@ -1053,7 +1053,7 @@ Spaghetti indicator: one handler dispatching dozens of events is hard to read, h
 | Tags | `dfm`, `dead-code` |
 | Detector | `uDfmActionMismatch.pas` |
 
-When a `TAction` is assigned, VCL routes events through the action object and the `OnClick` never fires. Pick one or call the `OnClick` body from the action's `OnExecute`.
+When both are set, the EXPLICIT OnClick handler wins at runtime: TControl.Click calls FOnClick whenever it is assigned and does not point at the action's OnExecute - only otherwise does ActionLink.Execute run (same logic in TMenuItem.Click). The double wiring is the smell: one of the two paths is dead. NOT reported when the OnClick points at exactly the OnExecute handler of the bound action found in the same DFM/LFM - both paths then run the same procedure (the Lazarus IDE stores that combination as a saving artifact in every LFM).
 
 ---
 
@@ -2579,7 +2579,7 @@ type IService = interface ['{...}'] end;
 | Tags | `naming`, `convention` |
 | Detector | `uMethodName.pas` |
 
-Delphi convention is PascalCase (UpperCamel) for routines and methods: `DoSomething`, not `doSomething` or `do_something`. Operator overloads and identifiers starting with `_` are exempted. Matches SonarDelphi communitydelphi:MethodName. AST-based: checks `nkMethod.Name` (qualified `TFoo.bar` splits on the dot).
+Delphi convention is PascalCase (UpperCamel) for routines and methods: `DoSomething`, not `doSomething` or `do_something`. Operator overloads and identifiers starting with `_` are exempted. Matches SonarDelphi communitydelphi:MethodName. AST-based: checks `nkMethod.Name` (qualified `TFoo.bar` splits on the dot). File-wide exemptions: generated type-library imports (*_TLB.pas) and units declaring FPC foreign-language classes (objcclass/objccategory/cppclass) - their method names ARE the selectors/symbols of the foreign API; `external` routines, `cdecl` type methods and FFI binding types (JNI/ObjC import anchors) are exempted per method.
 
 ```pascal
 // BAD
@@ -3229,7 +3229,7 @@ WriteLn(DateToStr(Now, FS));
 | Tags | `encoding`, `unicode`, `data-loss`, `sonardelphi` |
 | Detector | `uUnicodeToAnsiCast.pas` |
 
-Casting a `UnicodeString` (or any string typed expression - Delphi `string` is `UnicodeString` since XE) to one of the lossy 8-bit string families (`AnsiString`, `RawByteString`, `ShortString`) goes through the implicit `DefaultSystemCodePage` conversion. Every codepoint outside the active code page is silently replaced with `?`. Emoji, non-Latin scripts, and even some Western accented letters disappear, but the assignment compiles cleanly and runs without exception - so the bug surfaces only when the data round-trips back through a Unicode aware consumer (a different DB, an HTTP API, an Excel export). Use a deliberate encoding helper (`UTF8Encode`, `TEncoding.UTF8.GetBytes`, `WideStringToUTF8` ...) instead. Detector walks `nkCall` nodes whose name starts (case-insensitive) with `AnsiString(`, `RawByteString(` or `ShortString(`. `UTF8String(...)` is deliberately NOT flagged: `UTF8String` is `type AnsiString(CP_UTF8)`, so the cast emits exactly the same code as the recommended `UTF8Encode` and is lossless regardless of the system code page. The one remaining lossy sub-case, `UTF8String(<already 8-bit>)`, is an accepted false negative (zero occurrences across the reference corpus). Empty string-literal arguments (`AnsiString('')`) are not flagged. Casts to `string` (= `UnicodeString` in modern Delphi) are also not flagged. Accepts the false-positive that the input might already be the same 8-bit type (redundant cast, still suspicious as a smell). Empty string-literal arguments (`AnsiString('')`) are not flagged. Casts to `string` (= `UnicodeString` in modern Delphi) are also not flagged. Accepts the false-positive that the input might already be the same 8-bit type (redundant cast, still suspicious as a smell). Maps to Sonar-Delphi `UnicodeToAnsiCastCheck`.
+Casting a UnicodeString (or any string typed expression - Delphi string is UnicodeString since XE) to one of the lossy 8-bit string families (AnsiString, RawByteString, ShortString) goes through the implicit DefaultSystemCodePage conversion. Every codepoint outside the active code page is silently replaced with ?. Emoji, non-Latin scripts, and even some Western accented letters disappear, but the assignment compiles cleanly and runs without exception - so the bug surfaces only when the data round-trips back through a Unicode aware consumer (a different DB, an HTTP API, an Excel export). Use a deliberate encoding helper (UTF8Encode, TEncoding.UTF8.GetBytes, WideStringToUTF8 ...) instead. Detector walks nkCall nodes whose name starts (case-insensitive) with AnsiString(, RawByteString( or ShortString(. UTF8String(...) is deliberately NOT flagged: UTF8String is type AnsiString(CP_UTF8), so the cast emits exactly the same code as the recommended UTF8Encode and is lossless regardless of the system code page. The one remaining lossy sub-case, UTF8String(<already 8-bit>), is an accepted false negative (zero occurrences across the reference corpus). Empty string-literal arguments (AnsiString('')) are not flagged. Casts to string (= UnicodeString in modern Delphi) are also not flagged. Accepts the false-positive that the input might already be the same 8-bit type (redundant cast, still suspicious as a smell). Empty string-literal arguments (AnsiString('')) are not flagged. Casts to string (= UnicodeString in modern Delphi) are also not flagged. Accepts the false-positive that the input might already be the same 8-bit type (redundant cast, still suspicious as a smell). Maps to Sonar-Delphi UnicodeToAnsiCastCheck. FPC/Lazarus dialect: this rule is skipped when the scan runs with --dialect=fpc - under FPC the default string type IS 8-bit (UTF-8 by Lazarus convention), so the cast is not a lossy Unicode narrowing there.
 
 ```pascal
 // BAD
@@ -4843,7 +4843,7 @@ end;
 | Tags | `encoding`, `bom`, `portability` |
 | Detector | `uSourceEncoding.pas` |
 
-A source file saved as UTF-8 without a byte-order mark and containing non-ASCII characters is read by the Delphi compiler as ANSI (system code page, GetACP) - producing mojibake in string literals and comments at runtime, and the result is machine-dependent. Fix: save as UTF-8 with BOM, or compile the project with --codepage:65001.
+A source file saved as UTF-8 without a byte-order mark and containing non-ASCII characters is read by the Delphi compiler as ANSI (system code page, GetACP) - producing mojibake in string literals and comments at runtime, and the result is machine-dependent. Fix: save as UTF-8 with BOM, or compile the project with --codepage:65001. FPC/Lazarus dialect: this rule is skipped when the scan runs with --dialect=fpc - BOM-less UTF-8 is the Lazarus NORM (the Lazarus IDE itself saves without BOM, and FPC reads UTF-8 by default), so a missing BOM is not a defect there. The sibling rules (invalid UTF-8, ANSI sources) stay active.
 
 ```pascal
 // BAD

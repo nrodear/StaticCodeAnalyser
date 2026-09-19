@@ -173,7 +173,7 @@
     },
     "SCA043": {
       "name": "Komponente hat Action und OnClick",
-      "shortDescription": "Action und OnClick sind beide gesetzt - Action gewinnt, OnClick ist toter Code"
+      "shortDescription": "Action und OnClick sind beide gesetzt - der explizite OnClick gewinnt, die TAction-Verdrahtung ist tot"
     },
     "SCA044": {
       "name": "Lange String-Verkettung - besser Format()",
