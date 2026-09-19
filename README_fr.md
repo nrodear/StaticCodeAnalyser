@@ -709,27 +709,34 @@ de sortie, il compte en CI, pas seulement à l'écran.
 
 ### Compilation conditionnelle (`{$IFDEF}`)
 
-Par défaut, l'analyseur lit **chaque** branche `{$IFDEF}`, y compris le
-code qui ne compile jamais pour votre cible — une source fréquente de
-résultats étranges (déclarations en double, branches mortes). Trois
-options changent cela :
+**Depuis le 05.09.2026, l'analyseur parse UNE branche par défaut** —
+la vue du compilateur Windows, avec le jeu de defines `MSWINDOWS,
+WIN64, UNICODE, CONDITIONALEXPRESSIONS`. Une branche, c'est ce qu'un
+compilateur Delphi traduit réellement ; lire chaque branche `{$IFDEF}`
+(l'ancien défaut) était une source fréquente de résultats étranges —
+déclarations en double, branches mortes. Trois options contrôlent le
+comportement :
 
 | Option | Effet |
 |---|---|
-| `--ifdef-aware` | Ignore les branches `{$IFDEF X}` dont le `X` n'est pas dans le jeu de defines. Automatiquement actif pour `--profile selftest-quiet`, inactif sinon. |
-| `--define X[,Y,Z]` | Le jeu de defines. Répétable ; les valeurs s'accumulent. |
-| `--no-ifdef-aware` | Force la réactivation de toutes les branches. Gagne contre `--ifdef-aware`, quel que soit l'ordre sur la ligne de commande. |
+| `--ifdef-aware` | La forme explicite du défaut — un no-op documentaire depuis le 05.09.2026. |
+| `--define X[,Y,Z]` | Remplace le jeu de defines par le vôtre. |
+| `--no-ifdef-aware` | Opt-out : parser **toutes** les branches (le comportement d'avant le 05.09.2026). Gagne contre `--ifdef-aware`, quel que soit l'ordre sur la ligne de commande. |
 
-Elles n'ont de sens qu'ensemble : **`--ifdef-aware` sans `--define` tourne
-avec un jeu de defines vide**, presque chaque branche conditionnelle est
-donc jetée — et le mode de défaillance n'est pas un message d'erreur, mais
-des résultats qui manquent en silence. Donnez-lui les defines que votre
-build utilise réellement :
+`--ifdef-aware` sans `--define` garde le jeu par défaut ci-dessus — il
+ne tourne **pas** avec un jeu vide. Si votre build utilise d'autres
+defines, donnez-les explicitement ; le mode de défaillance d'un jeu
+erroné n'est pas un message d'erreur, mais des résultats qui manquent
+en silence :
 
 ```powershell
-analyser.d12.exe --path . --full --ifdef-aware `
-  --define MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS
+analyser.d12.exe --path . --full `
+  --define MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS,MA_FONCTION
 ```
+
+`--dialect=fpc` étend la vue mono-branche effective avec les defines
+FPC/LCL ; `--dialect=auto` résout le dialecte depuis les fichiers
+projet à la racine du scan (voir `--help`).
 
 ### Référence complète des options
 
@@ -864,9 +871,12 @@ Correspondance des codes de sortie :
 - 2 = avertissements → commit autorisé (pour les bloquer, utiliser
   `-ge 2` ci-dessus au lieu de `-ge 3`)
 - 3 = erreurs → **commit bloqué**
+- 4 = erreurs de lecture (fichiers que le scan n'a pas pu lire) →
+  **commit bloqué** ; un scan qui a sauté des fichiers ne doit pas
+  ressembler à un scan propre
 - 99 = erreur d'outil (arguments invalides, rapport non inscriptible) →
   **commit bloqué**. Un scan qui n'a pas eu lieu ne doit pas ressembler
-  à un scan propre ; la règle `-ge 3` ci-dessus le couvre.
+  à un scan propre ; la règle `-ge 3` ci-dessus couvre les deux.
 
 ### `--parallel` — correct, mais sans intérêt
 

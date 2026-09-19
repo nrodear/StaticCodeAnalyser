@@ -695,26 +695,32 @@ nicht nur die Anzeige, sondern auch CI.
 
 ### Bedingte Kompilierung (`{$IFDEF}`)
 
-Standardmäßig liest der Analyser **jeden** `{$IFDEF}`-Zweig, also auch
-Code, der für deine Zielplattform nie übersetzt wird — eine häufige
-Quelle merkwürdiger Funde (Doppel-Deklarationen, tote Zweige). Drei
-Schalter ändern das:
+**Seit dem 05.09.2026 parst der Analyser standardmäßig EINEN Zweig** —
+die Windows-Compiler-Sicht mit dem Define-Set `MSWINDOWS, WIN64,
+UNICODE, CONDITIONALEXPRESSIONS`. Ein Zweig ist das, was ein
+Delphi-Compiler real übersetzt; jeden `{$IFDEF}`-Zweig zu lesen (der
+alte Default) war eine häufige Quelle merkwürdiger Funde —
+Doppel-Deklarationen, tote Zweige. Drei Schalter steuern das Verhalten:
 
 | Schalter | Wirkung |
 |---|---|
-| `--ifdef-aware` | Überspringt `{$IFDEF X}`-Zweige, deren `X` nicht im Define-Set steht. Bei `--profile selftest-quiet` automatisch an, sonst aus. |
-| `--define X[,Y,Z]` | Das Define-Set. Mehrfach angebbar, die Werte summieren sich. |
-| `--no-ifdef-aware` | Schaltet alle Zweige wieder ein. Gewinnt gegen `--ifdef-aware`, unabhängig von der Reihenfolge auf der Kommandozeile. |
+| `--ifdef-aware` | Die explizite Form des Defaults — seit 05.09.2026 ein dokumentierender No-Op. |
+| `--define X[,Y,Z]` | Ersetzt das Default-Define-Set durch dein eigenes. |
+| `--no-ifdef-aware` | Opt-out: **alle** Zweige parsen (das Verhalten vor dem 05.09.2026). Gewinnt gegen `--ifdef-aware`, unabhängig von der Reihenfolge auf der Kommandozeile. |
 
-Sie ergeben nur zusammen Sinn: **`--ifdef-aware` ohne `--define` läuft
-mit leerem Define-Set**, wirft also fast jeden konditionalen Zweig weg —
-und der Fehlermodus ist keine Meldung, sondern stumm fehlende Funde. Gib
-ihm die Defines, die dein Build wirklich benutzt:
+`--ifdef-aware` ohne `--define` läuft mit dem Default-Set oben — es
+läuft **nicht** mit leerem Set. Nutzt dein Build andere Defines, gib
+sie explizit an; der Fehlermodus eines falschen Sets ist keine
+Meldung, sondern stumm fehlende Funde:
 
 ```powershell
-analyser.d12.exe --path . --full --ifdef-aware `
-  --define MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS
+analyser.d12.exe --path . --full `
+  --define MSWINDOWS,WIN64,UNICODE,CONDITIONALEXPRESSIONS,MEIN_FEATURE
 ```
+
+`--dialect=fpc` ergänzt die effektive Ein-Zweig-Sicht um die
+FPC/LCL-Defines; `--dialect=auto` löst den Dialekt aus den
+Projektdateien an der Scan-Wurzel auf (siehe `--help`).
 
 ### Vollständige Schalter-Referenz
 
@@ -848,10 +854,13 @@ Exit-Code-Mapping:
 - 2 = Warnings → commit erlaubt (oder blockieren, indem oben `-ge 2`
   statt `-ge 3` steht)
 - 3 = Errors → **commit blockiert**
+- 4 = Read Errors (Dateien, die der Scan nicht lesen konnte) →
+  **commit blockiert**; ein Scan, der Dateien übersprungen hat, darf
+  nicht wie ein sauberer aussehen
 - 99 = Werkzeugfehler (ungültige Argumente, Report nicht schreibbar) →
   **commit blockiert**. Ein Scan, der gar nicht stattgefunden hat, darf
   nicht wie ein sauberer Scan aussehen; die `-ge 3`-Regel oben fängt
-  ihn mit.
+  beide mit.
 
 ### `--parallel` — korrekt, aber ohne Nutzen
 
