@@ -24,6 +24,9 @@ type
     [Test] procedure MixedUnit_OnlyAppClassReported;
     [Test] procedure TypelibFile_NotReported;
     [Test] procedure NonTypelibFile_Gegenprobe_Reported;
+    // ---- H1: FPC-Fremdsprachen-Bindings (2026-09-20) ----
+    [Test] procedure Objcclass_NotReported;
+    [Test] procedure Objcclass_NachbarklasseWeiterhinGemeldet;
   end;
 
   // Eigene Fixture fuer die Parser-Feld-Zaehler-Tests - abgespalten
@@ -43,9 +46,6 @@ type
     // --- Feld-ADDS (Charge 10): Komma-Listen + Keyword-Namen ---
     [Test] procedure CommaListFields_CountPerName;
     [Test] procedure KeywordNamedField_Counted;
-    // ---- H1: FPC-Fremdsprachen-Bindings (2026-09-20) ----
-    [Test] procedure Objcclass_NotReported;
-    [Test] procedure Objcclass_NachbarklasseWeiterhinGemeldet;
   end;
 
 implementation
