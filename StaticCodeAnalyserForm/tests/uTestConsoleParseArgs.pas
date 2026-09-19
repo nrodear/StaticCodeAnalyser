@@ -62,6 +62,8 @@ implementation
 // SCA165-Kandidat mehr.
 
 uses
+  System.SysUtils,   // TStringHelper.ToLower (Dialect_Auto-Test) - ohne
+                     // die Unit expandiert der Inline-Helper nicht (H2443)
   uConsoleRunner;
 
 // WARUM --file UND NICHT --path: bei --path setzt ParseArgs am Ende
