@@ -148,6 +148,12 @@ type
     // und 'Baseline schreiben' weiter alles sehen (Plugin-Semantik).
     FBaselineSet    : TBaselineSet;
     FGridMenu       : TPopupMenu;
+    // Dialekt-Umschalter (Lazarus-Folge B2, 2026-09-19): Rechtsklick auf
+    // die StatusBar. BEWUSST ein Laufzeit-Menue statt eines DFM-Controls -
+    // der C9-Entscheid in FormDialekt nennt den blinden DFM-Umbau das
+    // groesste Rot-Risiko, und die Toolbar-Leisten sind voll (SearchEdit
+    // ist right-anchored). Muster: FGridMenu.
+    FDialektMenu    : TPopupMenu;
     // Zwischenablage ENTPRELLT (Vorbild Plugin-Fix 2026-08-03,
     // FClipCopyTimer in uIDEAnalyserForm): vorher schrieb JEDER
     // Auswahlwechsel - auch jeder Pfeiltasten-Schritt, die VCL feuert
@@ -237,6 +243,10 @@ type
     procedure GridMenuCopyClick(Sender: TObject);
     procedure GridMenuCopyJiraClick(Sender: TObject);
     procedure GridMenuSuppressClick(Sender: TObject);
+    // --- Dialekt-Umschalter an der StatusBar (Lazarus-Folge B2) ---
+    procedure BuildDialektMenu;
+    procedure DialektMenuPopup(Sender: TObject);
+    procedure DialektItemClick(Sender: TObject);
     procedure WireTiles;
     procedure TileClickSeverity(Sender: TObject);
     procedure TileClickType(Sender: TObject);
@@ -491,6 +501,7 @@ begin
 
   FBaselineSet := TBaselineSet.Create;
   BuildGridMenu;
+  BuildDialektMenu;
 
   FClipTimer := TTimer.Create(Self);
   FClipTimer.Interval := 120;        // wie im Plugin: eine Kopie nach Idle
@@ -1165,6 +1176,24 @@ begin
   end;
 end;
 
+function FormDialekt: TSourceDialect;
+// A6/C9 (2026-09-18): die Standalone-Form respektiert denselben
+// ini-Schluessel wie die CLI ([Scan] Dialect=delphi|fpc, C1) - die
+// analyser.ini ist der etablierte Konfigurationskanal der Form
+// (uRepoSettings-Doku: 'per Hand in analyser.ini'). Seit B2
+// (2026-09-19) gibt es dafuer auch ein Laufzeit-Control: Rechtsklick
+// auf die StatusBar (FDialektMenu) - der C9-Vorbehalt gegen einen
+// blinden DFM-Umbau bleibt damit gewahrt. 'auto' bleibt CLI-Sache
+// (die Wurzel-Aufloesung lebt dort) und faellt hier bewusst auf
+// dlDelphi. Steht VOR ApplyDetectorConfig: der Indikator dort liest
+// den Dialekt (freistehende Funktion, kein forward).
+begin
+  if SameText(TRepoSettings.QuickReadStr('Scan', 'Dialect', ''), 'fpc') then
+    Result := dlFpc
+  else
+    Result := dlDelphi;
+end;
+
 procedure TForm2.ApplyDetectorConfig(Settings: TRepoSettings;
   AClearDiscovery: Boolean);
 begin
@@ -1198,26 +1227,20 @@ begin
     StatusBar1.Panels[2].Text :=
       Format(_('Rule-set: Profile=%s, MinSeverity=%s'),
         [Settings.Profile, Settings.MinSeverity]);
+    // Dialekt sichtbar machen (Lazarus-Folge B2): Laeufe sind seit C1
+    // ini-sensitiv, und ein still auf fpc gedrehter Lauf war in der
+    // Form unsichtbar (Beobachtbarkeits-Lehre). Technisches Suffix
+    // OHNE eigene msgid - der Format-Text oben bleibt unveraendert,
+    // damit die bestehenden de/fr-Uebersetzungen nicht brechen.
+    // Umschalten: Rechtsklick auf die Statusleiste (FDialektMenu).
+    if FormDialekt = dlFpc then
+      StatusBar1.Panels[2].Text :=
+        StatusBar1.Panels[2].Text + ', Dialect=fpc';
   except
     // INI-Wert defekt darf den Lauf nicht abbrechen.
   end;
 end;
 
-function FormDialekt: TSourceDialect;
-// A6/C9 (2026-09-18): die Standalone-Form respektiert denselben
-// ini-Schluessel wie die CLI ([Scan] Dialect=delphi|fpc, C1) - die
-// analyser.ini ist der etablierte Konfigurationskanal der Form
-// (uRepoSettings-Doku: 'per Hand in analyser.ini'). AUTONOME
-// ENTSCHEIDUNG: ein VISUELLES Control folgt erst mit offener IDE -
-// ein blinder uMainForm.dfm-Umbau waere das groesste Rot-Risiko der
-// Charge; 'auto' bleibt CLI-Sache (die Wurzel-Aufloesung lebt dort)
-// und faellt hier bewusst auf dlDelphi.
-begin
-  if SameText(TRepoSettings.QuickReadStr('Scan', 'Dialect', ''), 'fpc') then
-    Result := dlFpc
-  else
-    Result := dlDelphi;
-end;
 
 function TForm2.ScopeForPath(const APath: string): TScanScope;
 var
@@ -3191,6 +3214,73 @@ begin
   FGridMenu.Items.Add(MI);
 
   ResultGrid.PopupMenu := FGridMenu;
+end;
+
+procedure TForm2.BuildDialektMenu;
+// Dialekt-Umschalter (Lazarus-Folge B2): Rechtsklick auf die StatusBar.
+// Schreibt denselben ini-Schluessel, den FormDialekt liest ([Scan]
+// Dialect, C1) - die Form bekommt damit sehen UND umschalten, ohne den
+// DFM-Umbau, den der C9-Entscheid als Rot-Risiko eingestuft hat. Die
+// Items tragen den ini-Wert im Hint (Muster LanguageItemClick).
+var
+  MI : TMenuItem;
+begin
+  FDialektMenu := TPopupMenu.Create(Self);
+  FDialektMenu.OnPopup := DialektMenuPopup;
+
+  MI := TMenuItem.Create(FDialektMenu);
+  MI.Caption   := _('Dialect: Delphi (default)');
+  // noinspection HardcodedString (Hint traegt hier den INI-WERT als
+  // Datencontainer, keinen UI-Text - ShowHint ist nicht gesetzt;
+  // gleiche Rolle wie der Sprachcode in LanguageItemClick)
+  MI.Hint      := 'delphi';
+  MI.RadioItem := True;
+  MI.OnClick   := DialektItemClick;
+  FDialektMenu.Items.Add(MI);
+
+  MI := TMenuItem.Create(FDialektMenu);
+  MI.Caption   := _('Dialect: FPC/Lazarus');
+  // noinspection HardcodedString (s. oben - ini-Wert, kein UI-Text)
+  MI.Hint      := 'fpc';
+  MI.RadioItem := True;
+  MI.OnClick   := DialektItemClick;
+  FDialektMenu.Items.Add(MI);
+
+  StatusBar1.PopupMenu := FDialektMenu;
+end;
+
+procedure TForm2.DialektMenuPopup(Sender: TObject);
+// Haken FRISCH aus der ini, nicht aus einem gemerkten Zustand: die
+// analyser.ini ist ein Hand-Kanal und kann extern geaendert worden
+// sein, waehrend die Form laeuft (dieselbe je-Lauf-frisch-Politik wie
+// ApplyDetectorConfig).
+var
+  Fpc : Boolean;
+  i   : Integer;
+begin
+  Fpc := FormDialekt = dlFpc;
+  for i := 0 to FDialektMenu.Items.Count - 1 do
+    FDialektMenu.Items[i].Checked :=
+      SameText(FDialektMenu.Items[i].Hint, 'fpc') = Fpc;
+end;
+
+procedure TForm2.DialektItemClick(Sender: TObject);
+// Schreibt [Scan] Dialect ueber den Einzelschluessel-Schreiber
+// (kommentar-erhaltend) und MELDET das Ergebnis - ein stiller
+// Schreibfehlschlag war das Kernargument gegen den BaseDir-Vertrag.
+// Wirkung beim NAECHSTEN Lauf (FormDialekt liest je Lauf frisch),
+// wie ClipboardOnClick - die Meldung sagt es dazu.
+var
+  Wert : string;
+begin
+  if not (Sender is TMenuItem) then Exit;
+  Wert := TMenuItem(Sender).Hint;
+  if TRepoSettings.QuickWriteStr('Scan', 'Dialect', Wert) then
+    StatusBar1.Panels[2].Text :=
+      Format(_('Dialect set to %s - applies to the next analysis run.'), [Wert])
+  else
+    StatusBar1.Panels[2].Text :=
+      _('analyser.ini is not writable - dialect unchanged.');
 end;
 
 procedure TForm2.GridMenuPopup(Sender: TObject);

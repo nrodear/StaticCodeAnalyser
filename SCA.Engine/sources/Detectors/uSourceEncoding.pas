@@ -396,6 +396,17 @@ begin
       fkSourceInvalidUtf8))
   else if (Info.BomKind = sbkNone) and Info.HasNonAscii and Info.StrictUtf8 then
   begin
+    // Lazarus-Folge B1 (2026-09-19): unter dlFpc ist BOM-loses UTF-8
+    // die NORM - die Lazarus-IDE speichert selbst ohne BOM, FPC liest
+    // UTF-8 per Default (der Meldetext unten sagt es woertlich). E1
+    // beschreibt also reines DELPHI-Compilerverhalten und waere unter
+    // dlFpc strukturell 100 % FP (fpc-Lauf 19.09.: 76 Funde, alle
+    // dieser Klasse). Gleiches Gate-Muster wie SCA129/SCA041. E3
+    // (echtes 8-bit-ANSI, unten) bleibt bewusst AKTIV - das ist auch
+    // unter FPC nicht portabel; nach E1 kann keine andere Meldung
+    // dieser Kette mehr greifen (else-if, E3 verlangt not StrictUtf8),
+    // das Exit erzeugt daher nie ein Durchfallen.
+    if TStaticFiles.ScanDialect = dlFpc then Exit;
     // E1: Nicht-ASCII ohne BOM. Outside (oben in EINEM Lex-Durchgang ermittelt)
     // bestimmt die Confidence: String-Literal/Code = echtes Laufzeit-Mojibake
     // (fcMedium); nur Kommentar = der Compiler verwirft Kommentare (fcLow, opt-in).
