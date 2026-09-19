@@ -4233,34 +4233,15 @@ begin
 end;
 
 { ---- G1 (2026-09-19): FPC-Fremdsprachen-Klassenarten --------------- }
-
-// Liefert den ersten nkClass-Knoten mit dem Namen (nil wenn keiner) -
-// rekursiv ueber FindAll, damit die Lage der Typsektion egal ist.
-function KlassenKnoten(Root: TAstNode; const AName: string): TAstNode;
-var
-  L : TList<TAstNode>;
-  N : TAstNode;
-begin
-  Result := nil;
-  L := Root.FindAll(nkClass);
-  try
-    for N in L do
-      if SameText(N.Name, AName) then Exit(N);
-  finally
-    L.Free;
-  end;
-end;
-
-// Anzahl der DIREKTEN nkMethod-Kinder eines Knotens.
-function MethodenZahl(N: TAstNode): Integer;
-var
-  C : TAstNode;
-begin
-  Result := 0;
-  if N = nil then Exit;
-  for C in N.Children do
-    if C.Kind = nkMethod then Inc(Result);
-end;
+//
+// Die Tests nutzen die Bestandshelfer ClassByName und MethodNamesOf
+// (oben in dieser Unit). MethodNamesOf sammelt REKURSIV - Member
+// haengen nicht direkt an der Klasse, sondern an einem
+// nkVisibilitySection-Knoten (ohne Sichtbarkeitswort: 'published'),
+// genau so lesen auch die Detektoren. Die erste Fassung dieser Tests
+// zaehlte DIREKTE Kinder und bekam darum 0: der Parser war in
+// Ordnung, der Zaehler nicht (Bau 2 der G-Charge). Namen statt
+// Anzahl belegen zusaetzlich, dass die RICHTIGEN Member ankommen.
 
 procedure TTestParserRobustness.Parser_Objcclass_ClassAndMembersInAst;
 // Das cocoa-Muster: external-Praeambel, Eltern-Liste, zwei Selektoren.
@@ -4285,9 +4266,9 @@ begin
   try
     Root := Parser.ParseSource(SRC);
     try
-      CN := KlassenKnoten(Root, 'TCocoaApp');
+      CN := ClassByName(Root, 'TCocoaApp');
       Assert.IsNotNull(CN, 'objcclass muss als nkClass im AST stehen');
-      Assert.AreEqual<Integer>(2, MethodenZahl(CN),
+      Assert.AreEqual('sendEvent,isRunning', MethodNamesOf(CN),
         'beide Selektoren sind Member der Klasse, keine freien Deklarationen');
       Assert.Contains(CN.TypeRef.ToLower, 'nsapplication',
         'die Eltern-Liste gehoert in TypeRef (FFI-Anker-Vererbung)');
@@ -4317,10 +4298,11 @@ begin
   try
     Root := Parser.ParseSource(SRC);
     try
-      CN := KlassenKnoten(Root, 'MyAppDelegate');
+      CN := ClassByName(Root, 'MyAppDelegate');
       Assert.IsNotNull(CN, 'objcprotocol muss als nkClass im AST stehen');
-      Assert.AreEqual<Integer>(1, MethodenZahl(CN),
-        'der Selektor ist Member des Protokolls');
+      Assert.AreEqual('applicationWillTerminate', MethodNamesOf(CN),
+        'der Selektor ist Member des Protokolls - die external-name-'
+        + 'Praeambel darf nichts verschluckt haben');
     finally Root.Free; end;
   finally Parser.Free; end;
 end;
@@ -4346,7 +4328,7 @@ begin
   try
     Root := Parser.ParseSource(SRC);
     try
-      Assert.IsNotNull(KlassenKnoten(Root, 'TFolge'),
+      Assert.IsNotNull(ClassByName(Root, 'TFolge'),
         'der Typ nach der objcclass-Forward-Decl muss erhalten bleiben');
     finally Root.Free; end;
   finally Parser.Free; end;
@@ -4372,9 +4354,9 @@ begin
   try
     Root := Parser.ParseSource(SRC);
     try
-      CN := KlassenKnoten(Root, 'TQtFoo');
+      CN := ClassByName(Root, 'TQtFoo');
       Assert.IsNotNull(CN, 'cppclass muss als nkClass im AST stehen');
-      Assert.AreEqual<Integer>(1, MethodenZahl(CN),
+      Assert.AreEqual('setClickable', MethodNamesOf(CN),
         'die gespiegelte Methode ist Member der Klasse');
     finally Root.Free; end;
   finally Parser.Free; end;
