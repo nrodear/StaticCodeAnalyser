@@ -3230,6 +3230,9 @@ begin
 
   MI := TMenuItem.Create(FDialektMenu);
   MI.Caption   := _('Dialect: Delphi (default)');
+  // noinspection HardcodedString (Hint traegt hier den INI-WERT als
+  // Datencontainer, keinen UI-Text - ShowHint ist nicht gesetzt;
+  // gleiche Rolle wie der Sprachcode in LanguageItemClick)
   MI.Hint      := 'delphi';
   MI.RadioItem := True;
   MI.OnClick   := DialektItemClick;
@@ -3237,6 +3240,7 @@ begin
 
   MI := TMenuItem.Create(FDialektMenu);
   MI.Caption   := _('Dialect: FPC/Lazarus');
+  // noinspection HardcodedString (s. oben - ini-Wert, kein UI-Text)
   MI.Hint      := 'fpc';
   MI.RadioItem := True;
   MI.OnClick   := DialektItemClick;
