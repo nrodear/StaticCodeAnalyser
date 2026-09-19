@@ -228,7 +228,7 @@ begin
       // Snippet ab `with` bis Zeilenende, getrimmt + ggf. abgeschnitten
       Snippet := Trim(Copy(Line, MatchCol, MaxInt));
       if Length(Snippet) > 80 then
-        Snippet := Copy(Snippet, 1, 77) + '...';
+        Snippet := TDetectorUtils.TruncateSurrogateSafe(Snippet, 77) + '...';
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;

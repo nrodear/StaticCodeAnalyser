@@ -11,7 +11,7 @@ ausgeloest haben; ohne Kontrolle wuerde man das als Treffer fehlzaehlen.
 Usage:
   python tools/recall_score.py --sarif sca-mutants.sarif --manifest mutants/_manifest.json
 """
-import argparse, json, collections, re
+import argparse, json, collections, re, urllib.parse
 
 RID = re.compile(r'"ruleId":\s*"(SCA\d+)"')
 URI = re.compile(r'"uri":\s*"([^"]+)"')
@@ -19,7 +19,9 @@ LNR = re.compile(r'"startLine":\s*(\d+)')
 
 
 def norm(p):
-    return p.replace("\\/", "/").replace("\\", "/")
+    # unquote: seit der Emit-Kodierung (2026-09-19) stehen Leerzeichen
+    # als %20 in der uri - Vergleichsmengen brauchen den rohen Pfad.
+    return urllib.parse.unquote(p.replace("\\/", "/")).replace("\\", "/")
 
 
 def load_sarif(path, key='folder'):
