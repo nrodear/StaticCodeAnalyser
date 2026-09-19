@@ -105,7 +105,6 @@ implementation
 
 uses
   System.StrUtils,
-  System.IOUtils,   // TPath - Include-Pfad relativ zur Unit aufloesen
   uFileTextCache, uDetectorUtils, uAstSpans;
 
 const
@@ -240,6 +239,18 @@ end;
 // Nicht auffindbar (Compiler-Suchpfad, generierte Datei) = KEIN Beleg,
 // und ohne Beleg wird nicht unterdrueckt: sonst stillte ein toter
 // Include-Verweis die ganze Unit.
+// True fuer einen absoluten Pfad - OHNE Zeichenvalidierung, damit ein
+// Ziel aus fremdem Quelltext nie eine Ausnahme ausloest (Herleitung an
+// der Aufrufstelle). Bewusst genau die drei Formen, die Windows als
+// verwurzelt ansieht: Laufwerksangabe, UNC/Wurzel-Backslash, Slash.
+function IstAbsoluterPfad(const APfad: string): Boolean;
+begin
+  Result := False;
+  if APfad = '' then Exit;
+  if CharInSet(APfad[1], ['\', '/']) then Exit(True);
+  Result := (Length(APfad) >= 2) and (APfad[2] = ':');
+end;
+
 procedure HaengeIncludeDatei(const ABasisDatei, AZiel: string;
   AContext: TAnalyzeContext; SB: TStringBuilder);
 var
@@ -247,7 +258,19 @@ var
   IncLines  : TStringList;
   IncCached : Boolean;
 begin
-  if TPath.IsPathRooted(AZiel) then
+  // H5 (2026-09-20): NICHT TPath.IsPathRooted - das validiert den
+  // Pfad (DoIsPathRooted mit ValidateParam=True) und WIRFT bei
+  // ungueltigen Zeichen EInOutArgumentException. Genau die Ausnahme,
+  // die der Kommentar unten fuer TPath.GetFullPath ausschliesst: das
+  // Ziel kommt aus FREMDEM Quelltext, und dort steht das
+  // '{$I ...}'-Muster auch INNERHALB von Stringliteralen - im
+  // Laz-Korpus stellt codetools/tests/testfinddeclaration.pas
+  // Pascal-Quelltext als Literal zusammen, das Ziel trug ein
+  // Anfuehrungszeichen und riss den ganzen Detektor fuer die Datei
+  // ab ('Detector UnusedRoutine failed: EInOutArgumentException').
+  // Die Frage 'absolut?' ist ohne Validierung entscheidbar: Laufwerk
+  // ('c:...'), UNC bzw. Wurzel ('\...' / '/...').
+  if IstAbsoluterPfad(AZiel) then
     Voll := AZiel
   else
     // Bewusst nur zusammengesetzt, NICHT ueber TPath.GetFullPath
