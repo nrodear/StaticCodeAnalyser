@@ -722,6 +722,19 @@ analyser.d12.exe --path . --full `
 FPC/LCL-Defines; `--dialect=auto` löst den Dialekt aus den
 Projektdateien an der Scan-Wurzel auf (siehe `--help`).
 
+### Lazarus / Free Pascal (FPC)
+
+Der Analyser scannt Lazarus-Projekte nativ — gleiche Engine, gleiche
+Regeln, dialektbewusst:
+
+| Was | Wie |
+|---|---|
+| **Dialekt-Schalter** | `--dialect fpc` — sammelt zusätzlich `*.pp`- und `*.lpr`-Units, paart `.lfm`-Formulardateien, parst die Ein-Zweig-Sicht mit den FPC/LCL-Defines und schaltet die drei Delphi-spezifischen Regeln unten ab. `--dialect auto` löst je Datei auf (siehe IFDEF-Abschnitt oben). |
+| **Projekt-Scan** | `--project` nimmt `.lpi` / `.lpk` (und `--project-group` nimmt `.lpg`) und **erzwingt den fpc-Dialekt** für diesen Lauf. |
+| **Default ohne Schalter** | `[Scan] Dialect=delphi\|fpc` in der `analyser.ini` (der Schalter gewinnt immer). Die GUI liest denselben Schlüssel und bietet einen Umschalter per **Rechtsklick auf die Statusleiste**; ein aktiver fpc-Dialekt erscheint als `Dialect=fpc` im Rule-Set-Indikator. |
+| **Delphi-spezifische Regeln, unter fpc abgeschaltet** | `SCA041` (das VCL-Schichtmodell gilt nicht für LCL), `SCA129` (FPC-`string` ist 8-bit/UTF-8 — der Cast ist dort keine verlustbehaftete Verengung), `SCA185` (BOM-loses UTF-8 ist die Lazarus-**Norm**; die Prüfungen auf kaputtes UTF-8 und ANSI bleiben aktiv). Details auf den Regelseiten. |
+| **IDE-Plugin** | Nur Delphi-IDE (bewusst) — Lazarus-Nutzer scannen per CLI oder Standalone-GUI. |
+
 ### Vollständige Schalter-Referenz
 
 `analyser.d12.exe --help` (auch `-h`, `-?`, `/?`) druckt jeden Schalter
