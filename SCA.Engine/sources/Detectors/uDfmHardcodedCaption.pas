@@ -525,6 +525,22 @@ begin
         F.LineNumber := IntToStr(V.Line);
         F.MissingVar := Format('%s.%s = ''%s''', [N.Name, P, V.RawValue]);
         F.SetKind(fkDfmHardcodedCaption);
+        // G5 DESIGNER-DEFAULT (D3 2026-09-19, Nico-Entscheid "mach
+        // 1-4"): Caption ist EXAKT der Komponentenname ('Form1') oder
+        // der Klassenname mit/ohne fuehrendes T ('TButton'/'Button') -
+        // der Vorschlagswert des Designers, nie ein getexteter
+        // UI-String. Die Meldung waere nicht FALSCH (objektiv
+        // hardcodiert), aber fuer den i18n-Zweck der Regel ohne
+        // Nutzwert (rw76-Vollzaehlung: 1.838 von 24.980 = 7,4 %;
+        // rw114-Nachzaehlung der Namens-Klasse: 1.373 exakt).
+        // DEMOTE statt Skip: fcLow faellt unterm fcMedium-Default aus
+        // dem Lauf, --min-confidence low holt die Designer-Reste
+        // zurueck - wer unfertige UIs jagt, kann das gezielt.
+        if SameText(V.RawValue, N.Name)
+           or SameText(V.RawValue, N.ClassRef)
+           or ((Length(N.ClassRef) > 1) and (N.ClassRef[1] = 'T')
+               and SameText(V.RawValue, Copy(N.ClassRef, 2, MaxInt))) then
+          F.Confidence := fcLow;
         Results.Add(F);
       end;
     end;
