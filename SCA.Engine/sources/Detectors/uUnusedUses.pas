@@ -115,6 +115,11 @@ implementation
 // dient der UnusedUses-Erkennung - Self-Match, kein realer Krypto-Einsatz.
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+uses
+  System.Classes,    // TStringList (Quelltext-Kanal, D4)
+  uDetectorUtils,    // StripStringsAndCommentsCached (D4)
+  uFileTextCache;    // AcquireLines/ReleaseLines (D4)
+
 { ---- Hilfsmethoden ---- }
 
 class function TUnusedUsesDetector.ShortName(const QualName: string): string;
@@ -867,11 +872,56 @@ var
   ShortLow   : string;
   Found      : Boolean;
   F          : TLeakFinding;
+  SrcLines   : TStringList;
+  SrcCached  : Boolean;
+  LineFor    : TArray<Integer>;
+  Gestript   : string;
+  Ch         : Char;
 begin
   RawSB  := TStringBuilder.Create;
   WordSB := TStringBuilder.Create;
   try
     CollectText(UnitNode, RawSB, WordSB);
+
+    // D4 (2026-09-19, FP-Muster 2 der Recall-Freigabe-Stichprobe):
+    // CollectText sieht nur AST-NAMEN (Node.Name/TypeRef) - eine
+    // Nutzung, die allein in Rumpf-STATEMENTS lebt (Application.
+    // HelpCommand in einer nested procedure, TFieldDataLink.Create,
+    // Variant-Zuweisungen), fehlte im Suchtext, und die uses-Zeile
+    // wurde trotz Nutzung gemeldet. ADDITIVER Quelltext-Kanal: der
+    // kommentar- UND string-gestrippte Dateitext wird an beide
+    // Suchtexte ANGEHAENGT. Strings gestrippt aus derselben Politik,
+    // aus der der AST-Weg Literale nie sah: ein Bezeichner IN einem
+    // Literal ist kein Verwendungsnachweis. Mehr Suchtext kann Funde
+    // nur ENTFERNEN, nie erzeugen - richtungssicher. Ist die Datei
+    // nicht lesbar (Test-Harness FindingsOf mit Platzhalter-Namen),
+    // bleibt es still beim AST-Text - die Bestandsfixturen behalten
+    // ihren Vertrag, und genau dafuer ist der Kanal ADDITIV statt
+    // ersetzend.
+    SrcLines := AcquireLines(FileName, SrcCached, nil);
+    if SrcLines <> nil then
+    try
+      Gestript := TDetectorUtils.StripStringsAndCommentsCached(
+        SrcLines, LineFor, nil, FileName).ToLower;
+      RawSB.Append(' ');
+      WordSB.Append(' ');
+      for Ch in Gestript do
+      begin
+        if CharInSet(Ch, ['a'..'z', '0'..'9', '_', '.']) then
+          RawSB.Append(Ch)
+        else
+          RawSB.Append(' ');
+        if CharInSet(Ch, ['a'..'z', '0'..'9', '_']) then
+          WordSB.Append(Ch)
+        else
+          WordSB.Append(' ');
+      end;
+      RawSB.Append(' ');
+      WordSB.Append(' ');
+    finally
+      ReleaseLines(SrcLines, SrcCached);
+    end;
+
     RawText  := RawSB.ToString;
     WordText := WordSB.ToString;
   finally

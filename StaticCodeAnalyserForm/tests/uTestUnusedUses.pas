@@ -77,9 +77,18 @@ type
     // ---- Kurznamen-Fallback nur fuer RTL-Namespaces (C-Charge 19.09.) ----
     [Test] procedure Uses_FremdeDottedUnit_KeinFallback_NoFinding;
     [Test] procedure Uses_FmxStyles_NothingUsed_ReportsWarning;
+    // ---- D4: Quelltext-Kanal (Rumpf-Statements zaehlen als Nachweis) ----
+    [Test] procedure Datei_QualifizierterRumpfAufruf_H1_NoFinding;
+    [Test] procedure Datei_IdentNurInNestedProc_H2_NoFinding;
+    [Test] procedure Datei_OhneNutzung_UsesZeileIstKeinNachweis;
   end;
 
 implementation
+
+uses
+  System.IOUtils,   // TPath/TFile (D4-Tempdatei-Harness)
+  uAstNode, uParser2,
+  uUnusedUses;      // direkter AnalyzeUnit-Ruf (D4-Quelltext-Kanal)
 
 { ---- UnusedUses ---- }
 
@@ -993,6 +1002,121 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
     'ohne jeden gelisteten Bezeichner bleibt die Unit unused');
+  finally F.Free; end;
+end;
+
+{ ---- D4: Quelltext-Kanal (2026-09-19) ---- }
+// FP-Muster 2 der Recall-Freigabe: CollectText sieht nur AST-Namen -
+// Nutzungen, die allein in Rumpf-STATEMENTS leben, fehlten im Suchtext.
+// Der additive Quelltext-Kanal braucht eine ECHTE Datei; FindingsOf
+// uebergibt einen Platzhalter-Namen und prueft damit weiter den reinen
+// AST-Weg (die 40 Bestandsfixturen behalten so ihren Vertrag). Diese
+// Tests gehen deshalb ueber eine Tempdatei + direkten AnalyzeUnit-Ruf.
+
+function FindingsAusDatei(const Source: string): TObjectList<TLeakFinding>;
+var
+  Parser   : TParser2;
+  Root     : TAstNode;
+  TempPath : string;
+  SL       : TStringList;
+begin
+  Result := TObjectList<TLeakFinding>.Create(True);
+  TempPath := TPath.Combine(TPath.GetTempPath,
+    'sca_uses_' + TGuid.NewGuid.ToString
+      .Replace('{', '').Replace('}', '').Replace('-', '') + '.pas');
+  SL := TStringList.Create;
+  try
+    SL.Text := Source;
+    SL.SaveToFile(TempPath, TEncoding.UTF8);
+  finally
+    SL.Free;
+  end;
+  try
+    Parser := TParser2.Create;
+    try
+      Root := Parser.ParseFile(TempPath);
+      try
+        TUnusedUsesDetector.AnalyzeUnit(Root, TempPath, Result);
+      finally
+        Root.Free;
+      end;
+    finally
+      Parser.Free;
+    end;
+  finally
+    if TFile.Exists(TempPath) then TFile.Delete(TempPath);
+  end;
+end;
+
+procedure TTestUnusedUses.Datei_QualifizierterRumpfAufruf_H1_NoFinding;
+// H1 ueber den Quelltext-Kanal: der qualifizierte Aufruf steht NUR im
+// Statement-Rumpf. Vor D4 war das ein Fund (der AST-Suchtext kannte
+// die Zeile nicht) - dieser Test war ROT.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses Vcl.Dialogs;'#13#10+
+    'implementation'#13#10+
+    'procedure Zeige;'#13#10+
+    'begin'#13#10+
+    '  Vcl.Dialogs.ShowMessage(''hi'');'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+      'der qualifizierte Rumpf-Aufruf ist ein H1-Nachweis');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Datei_IdentNurInNestedProc_H2_NoFinding;
+// Exakt die Form von Fund 4 der Freigabe-Stichprobe
+// (JvPageSetupTitled): der Forms-Bezeichner lebt in einer NESTED
+// procedure - im AST-Suchtext unsichtbar. Vor D4 ROT.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses Forms;'#13#10+
+    'implementation'#13#10+
+    'procedure Aussen;'#13#10+
+    '  procedure Innen;'#13#10+
+    '  begin'#13#10+
+    '    Application.ProcessMessages;'#13#10+
+    '  end;'#13#10+
+    'begin'#13#10+
+    '  Innen;'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+      'Application in der nested proc ist ein H2-Nachweis fuer Forms');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Datei_OhneNutzung_UsesZeileIstKeinNachweis;
+// Gegenprobe der Kanal-Breite: die uses-Zeile selbst steht jetzt im
+// Suchtext ('uses vcl.dialogs;') - sie darf WEDER als H1-Praefix
+// ('dialogs.' folgt dort nie ein Punkt) NOCH als H2-Ident zaehlen.
+// Ohne echte Nutzung bleibt der Fund.
+var F: TObjectList<TLeakFinding>;
+begin
+  F := FindingsAusDatei(
+    'unit t;'#13#10+
+    'interface'#13#10+
+    'uses Vcl.Dialogs;'#13#10+
+    'implementation'#13#10+
+    'procedure Nix;'#13#10+
+    'begin'#13#10+
+    '  DoSomething;'#13#10+
+    'end;'#13#10+
+    'end.');
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
+      'ohne Nutzung meldet die Regel weiter - die eigene uses-Zeile '
+      + 'ist kein Nachweis');
   finally F.Free; end;
 end;
 
