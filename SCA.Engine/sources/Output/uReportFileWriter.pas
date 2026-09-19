@@ -190,8 +190,7 @@ begin
     except
       // Abbruch mitten im Schreiben: Temp weg, Ziel bleibt unberuehrt -
       // genau der Vertrag dieser Unit. Der Fehler geht weiter.
-      Stream.Free;
-      Stream := nil;
+      FreeAndNil(Stream);
       System.SysUtils.DeleteFile(Temp);
       raise;
     end;
