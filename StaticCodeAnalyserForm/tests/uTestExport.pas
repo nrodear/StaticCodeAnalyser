@@ -76,7 +76,8 @@ uses
   System.IOUtils,
   uLocalization,   // SetLanguage/CurrentLanguage - der Jira-Detailteil
                    // laesst sich nur mit Sprachwechsel pruefen
-  uExport;
+  uExport,
+  uReportFileWriter;   // die umgezogenen, jetzt atomaren Schreibwege
 
 procedure TTestExport.RelativeDisplayPath_UsesForwardSlashes;
 // DER Waechter des BLOCKERs vom 08.09.: liegt die Datei unter der
