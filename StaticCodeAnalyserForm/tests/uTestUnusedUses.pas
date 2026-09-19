@@ -74,6 +74,9 @@ type
     [Test] procedure Uses_VclThemes_NothingUsed_ReportsWarning;
     // pinnt die Doppelfuehrung tstylemanager im Vcl.Styles-Zweig
     [Test] procedure Uses_FmxStyles_StyleManagerUsed_NoFinding;
+    // ---- Kurznamen-Fallback nur fuer RTL-Namespaces (C-Charge 19.09.) ----
+    [Test] procedure Uses_FremdeDottedUnit_KeinFallback_NoFinding;
+    [Test] procedure Uses_FmxStyles_NothingUsed_ReportsWarning;
   end;
 
 implementation
@@ -197,6 +200,62 @@ begin
     Assert.AreEqual<Integer>(0,
       TFindingHelper.Count(F, fkUnusedUses),
       'FMX.Styles hat ein eigenes TStyleManager - kein Befund');
+  finally F.Free; end;
+end;
+
+{ --- Kurznamen-Fallback nur fuer RTL-Namespaces (C-Charge 19.09.) --- }
+
+procedure TTestUnusedUses.Uses_FremdeDottedUnit_KeinFallback_NoFinding;
+// FP-Muster 1 der SCA007-Recall-Freigabe: 'Alcinoe.FMX.StdCtrls' fiel
+// auf KnownIdents('stdctrls') - die VCL-Identliste - zurueck; TButton
+// & Co. kommen in der Fremd-Unit nicht vor, und die uses-Zeile wurde
+// trotz Nutzung ihrer EIGENEN Typen (TALButton-Cast) gemeldet.
+// Jetzt: kein Fallback fuer Nicht-RTL-Namespaces -> ohne verlaessliche
+// Identliste KEINE Meldung (die dokumentierte Detektor-Politik
+// 'lieber false negative als false positive').
+// Vor dem Gate: 1 Fund - dieser Test war ROT.
+const SRC =
+  'unit t;'#13#10+
+  'uses Alcinoe.FMX.StdCtrls;'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var b: TALButton;'#13#10+
+  'begin'#13#10+
+  '  b := nil;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0,
+      TFindingHelper.Count(F, fkUnusedUses),
+      'fremde dotted Unit ohne eigene Identliste darf nicht ueber '
+      + 'die VCL-Kurznamenliste gemeldet werden');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Uses_FmxStyles_NothingUsed_ReportsWarning;
+// DIE KLAMMER zum Gate: der Fallback bleibt fuer RTL-Namespaces
+// AKTIV. FMX.Styles hat keinen eigenen Tabelleneintrag und lebt vom
+// Kurznamen-Fallback auf 'styles' - ohne jeden Bezeichner im Code
+// muss die Meldung weiter kommen, sonst haette das Gate den
+// Fallback stillgelegt statt eingegrenzt.
+const SRC =
+  'unit t;'#13#10+
+  'uses FMX.Styles;'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'begin'#13#10+
+  '  DoSomething;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1,
+      TFindingHelper.Count(F, fkUnusedUses),
+      'RTL-Namespace behaelt den Kurznamen-Fallback - FMX.Styles '
+      + 'ohne Nutzung bleibt ein Befund');
   finally F.Free; end;
 end;
 
