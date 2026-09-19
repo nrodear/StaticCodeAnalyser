@@ -46,6 +46,18 @@ uses
 
 type
   TDfmActionMismatchDetector = class
+  private
+    // True, wenn die Komponente die Property als nicht-leeren
+    // Identifier traegt (die Melde-Vorbedingung fuer Action/OnClick).
+    class function HatIdentProp(N: TComponentNode;
+      const PropName: string; out V: TPropValue): Boolean;
+    // True, wenn das OnExecute der per Namen aufgeloesten Action
+    // exakt der OnClick-Handler ist (identisches Ziel, kein
+    // Widerspruch - Herleitung im Kopfkommentar). Nicht auffindbare
+    // Action oder fehlendes/leeres OnExecute -> False (melden).
+    class function ZieleIdentisch(
+      ByName: TDictionary<string, TComponentNode>;
+      const Act, Clk: TPropValue): Boolean;
   public
     class procedure Analyze(Graph: TComponentGraph; const FileName: string;
       Results: TObjectList<TLeakFinding>);
@@ -56,14 +68,33 @@ implementation
 // noinspection-file GroupedDeclaration, NilComparison, TooLongLine, UnsortedUses
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
+class function TDfmActionMismatchDetector.HatIdentProp(N: TComponentNode;
+  const PropName: string; out V: TPropValue): Boolean;
+begin
+  Result := N.TryGetProperty(PropName, V) and (V.Kind = pvkIdent) and
+            (Trim(V.RawValue) <> '');
+end;
+
+class function TDfmActionMismatchDetector.ZieleIdentisch(
+  ByName: TDictionary<string, TComponentNode>;
+  const Act, Clk: TPropValue): Boolean;
+var
+  ActN : TComponentNode;
+  Ex   : TPropValue;
+begin
+  Result := ByName.TryGetValue(Trim(Act.RawValue).ToLower, ActN) and
+            ActN.TryGetProperty('OnExecute', Ex) and
+            (Ex.Kind = pvkIdent) and
+            SameText(Trim(Ex.RawValue), Trim(Clk.RawValue));
+end;
+
 class procedure TDfmActionMismatchDetector.Analyze(Graph: TComponentGraph;
   const FileName: string; Results: TObjectList<TLeakFinding>);
 var
   All    : TList<TComponentNode>;
   ByName : TDictionary<string, TComponentNode>;
   N      : TComponentNode;
-  ActN   : TComponentNode;
-  Act, Clk, Ex : TPropValue;
+  Act, Clk : TPropValue;
   F      : TLeakFinding;
 begin
   if Graph = nil then Exit;
@@ -78,22 +109,13 @@ begin
 
     for N in All do
     begin
-      if not N.TryGetProperty('Action', Act) then Continue;
-      if Act.Kind <> pvkIdent then Continue;
-      if Trim(Act.RawValue) = '' then Continue;
-
-      if not N.TryGetProperty('OnClick', Clk) then Continue;
-      if Clk.Kind <> pvkIdent then Continue;
-      if Trim(Clk.RawValue) = '' then Continue;
+      if not HatIdentProp(N, 'Action', Act) then Continue;
+      if not HatIdentProp(N, 'OnClick', Clk) then Continue;
 
       // Identisches Ziel: OnExecute der gebundenen Action ist genau
       // der OnClick-Handler -> kein Widerspruch, kein Fund
       // (Lazarus-LFM-Artefakt; Begruendung + Messung im Kopfkommentar).
-      if ByName.TryGetValue(Trim(Act.RawValue).ToLower, ActN) and
-         ActN.TryGetProperty('OnExecute', Ex) and
-         (Ex.Kind = pvkIdent) and
-         SameText(Trim(Ex.RawValue), Trim(Clk.RawValue)) then
-        Continue;
+      if ZieleIdentisch(ByName, Act, Clk) then Continue;
 
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
