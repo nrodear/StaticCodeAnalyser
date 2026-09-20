@@ -75,7 +75,20 @@ type
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>);
   private
-    class function CountInMethod(MethodNode: TAstNode): Integer; static;
+    // ACollectChain=False (Normalfall) baut KEINE Zeichenkette -
+    // dieselbe Begruendung wie in uDeepNesting.Walk: der DFS laeuft
+    // ueber jeden Knoten jeder Methode. AnalyzeUnit ruft ein
+    // ZWEITES Mal, nur fuer meldende Methoden.
+    //
+    // ACHTUNG, ANDERER VERTRAG ALS BEI SCA018: dort IST die
+    // Gliederzahl die gemeldete Tiefe. Hier ist die Kette der
+    // TIEFSTE PFAD der Methode - sie veranschaulicht den
+    // Verschachtelungsanteil der Punktzahl, ist aber NICHT deren
+    // Nachrechnung (die Punktzahl zaehlt auch flache Verzweigungen
+    // und boolesche Operatoren).
+    class function CountInMethod(MethodNode: TAstNode;
+      ACollectChain: Boolean = False;
+      AChain: PString = nil): Integer; static;
     class function CountBooleanOpsInCond(const CondText: string): Integer; static;
   end;
 
@@ -97,6 +110,10 @@ end;
 
 type
   TStackEntry = record
+    // L1: Kette der Konstrukte bis zu diesem Knoten. Bei
+    // ACollectChain=False durchgehend leer - die Zuweisung an ein
+    // Kind ist dann eine reine Referenzzaehler-Erhoehung.
+    Chain : string;
     Node  : TAstNode;
     Depth : Integer;     // Verschachtelungstiefe relativ zum Method-Root
   end;
@@ -112,8 +129,35 @@ begin
   Result := TDetectorUtils.CountBooleanOpsLower(CondText);
 end;
 
+// L1: Anzeigename eines Konstrukts. Dieselben Woerter wie in
+// uDeepNesting.KindName - die Ketten zweier Regeln sollen nicht wie
+// zwei Werkzeuge aussehen.
+//
+// NICHT ZUSAMMENLEGEN, ohne das hier zu lesen: die Listen sind
+// absichtlich verschieden lang. uDeepNesting kennt fuenf Konstrukte,
+// diese hier sechs - nkOnHandler kommt dazu, weil SCA018 Exception-
+// Handler bewusst NICHT als Verschachtelung zaehlt (COUNTING_KINDS
+// dort: "Nur logische Verschachtelung"), SCA176 aber schon. Gleich
+// ist die ABBILDUNG Kind -> Wort, verschieden die AUSWAHL der Kinds.
+// Wer beide Listen angleicht, aendert stillschweigend, was SCA018
+// meldet.
+function NodeKindName(Kind: TNodeKind): string;
+begin
+  case Kind of
+    nkIfStmt     : Result := 'if';
+    nkForStmt    : Result := 'for';
+    nkWhileStmt  : Result := 'while';
+    nkRepeatStmt : Result := 'repeat';
+    nkCaseStmt   : Result := 'case';
+    nkOnHandler  : Result := 'on';
+  else
+    Result := '?';
+  end;
+end;
+
 class function TCognitiveComplexityDetector.CountInMethod(
-  MethodNode: TAstNode): Integer;
+  MethodNode: TAstNode; ACollectChain: Boolean;
+  AChain: PString): Integer;
 var
   Stack : TList<TStackEntry>;
   Entry, Child : TStackEntry;
@@ -121,8 +165,12 @@ var
   ChildDepth : Integer;
   ElseIfDepth : Integer;   // Tiefe fuer ein direktes nkIfStmt-Kind (else if)
   IsControlFlow : Boolean;
+  MaxDepth : Integer;      // L1: tiefste erreichte Ebene
+  ChildChain : string;
 begin
   Result := 0;
+  MaxDepth := -1;
+  if ACollectChain and (AChain <> nil) then AChain^ := '';
   if MethodNode = nil then Exit;
   Stack := TList<TStackEntry>.Create;
   try
@@ -131,6 +179,7 @@ begin
     begin
       Entry.Node  := MethodNode.Children[i];
       Entry.Depth := 0;
+      Entry.Chain := '';
       Stack.Add(Entry);
     end;
 
@@ -157,6 +206,33 @@ begin
           end;
       end;
 
+      // L1: die Kette waechst an genau den Knoten, die auch die
+      // Verschachtelung erhoehen. Festgehalten wird der Pfad zur
+      // TIEFSTEN Stelle; bei Gleichstand gewinnt der erste
+      // (striktes >), genau wie in uDeepNesting.
+      ChildChain := Entry.Chain;
+      if ACollectChain and IsControlFlow then
+      begin
+        if ChildChain = '' then
+          ChildChain := NodeKindName(Entry.Node.Kind)
+        else
+        // Der Akkumulator ist an die VERSCHACHTELUNGSTIEFE gebunden,
+        // nicht an die Knotenzahl: gemessen liegen 98,1 % der
+        // SCA018-Funde bei Tiefe <= 8, das Maximum im Korpus ist 16.
+        // Ein TStringBuilder scheidet hier ausserdem aus, weil die
+        // Kette PFADABHAENGIG ist - jeder Stack-Frame traegt seine
+        // eigene, und die Zweige divergieren. Ein Builder hat genau
+        // einen Puffer und koennte das nicht abbilden.
+        // noinspection StringConcatInLoop
+          ChildChain := ChildChain + CHAIN_SEP +
+                        NodeKindName(Entry.Node.Kind);
+        if Entry.Depth > MaxDepth then
+        begin
+          MaxDepth := Entry.Depth;
+          if AChain <> nil then AChain^ := ChildChain;
+        end;
+      end;
+
       // Verschachtelung: wenn Control-Flow, Depth+1 fuer Children.
       if IsControlFlow then ChildDepth := Entry.Depth + 1
       else                  ChildDepth := Entry.Depth;
@@ -181,6 +257,7 @@ begin
         Child.Node  := Entry.Node.Children[i];
         if Child.Node.Kind = nkIfStmt then Child.Depth := ElseIfDepth
         else                               Child.Depth := ChildDepth;
+        Child.Chain := ChildChain;
         Stack.Add(Child);
       end;
     end;
@@ -198,6 +275,7 @@ var
   CC      : Integer;
   Limit   : Integer;
   F       : TLeakFinding;
+  Chain   : string;   // L1: nur fuer meldende Methoden gefuellt
 begin
   Limit := QuickReadIntDef('Detectors', 'CognitiveLimit', DEF_COGNITIVE_LIMIT);
   Methods := UnitNode.FindAll(nkMethod);
@@ -206,6 +284,9 @@ begin
     begin
       CC := CountInMethod(M);
       if CC <= Limit then Continue;
+      // Kette erst JETZT bauen - nur fuer meldende Methoden.
+      Chain := '';
+      CountInMethod(M, True, @Chain);
       F            := TLeakFinding.Create;
       F.FileName   := FileName;
       F.MethodName := M.Name;
@@ -216,6 +297,7 @@ begin
         'inverting guard conditions.',
         [CC, Limit]);
       F.SetKind(fkCognitiveComplexity);
+      F.StructureChain := Chain;
       Results.Add(F);
     end;
   finally

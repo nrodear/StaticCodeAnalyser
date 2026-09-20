@@ -47,6 +47,12 @@ type
   TAnnotationOverlay = class(TForm)
   private
     FBorderPanel    : TPanel;   // 3px linker Rand (Rot)
+    // M6 (2026-09-20): die drei uebrigen Rahmenkanten. Der linke
+    // Rand IST FBorderPanel (nur dicker) - zusammen ergeben die
+    // vier einen geschlossenen Rahmen in der Severity-Farbe.
+    FEdgeTop        : TPanel;
+    FEdgeBottom     : TPanel;
+    FEdgeRight      : TPanel;
     FContentArea    : TPanel;   // rechts davon: Titel + Desc + Fix
     FPanelTitle     : TPanel;
     FLblTitle       : TLabel;   // "⚠  Memory Leak – ..."
@@ -182,6 +188,10 @@ const
   STRIPE_W       = 3;
   // Mindesthoehen in Pixeln (96 DPI-Baseline); ShowAt skaliert dynamisch.
   MIN_TITLE_H    = 20;
+  // M1 (2026-09-20): Staerke des Rahmens um das ganze Panel. Er
+  // traegt die Severity-Farbe, dieselbe wie Streifen und Titelzeile -
+  // kein zweites Farbsystem.
+  BORDER_W       = 1;
   MIN_DESC_H     = 18;
   // Maximale Description-Hoehe in Pixeln — verhindert dass das Overlay
   // halb-bildschirmgross wird bei sehr langen Texten. ~220px deckt
@@ -252,6 +262,17 @@ constructor TAnnotationOverlay.Create(AOwner: TComponent);
 begin
   inherited CreateNew(AOwner);
   BorderStyle := bsNone;
+  // Der Rahmen kommt aus vier Rand-Panels, nicht aus BorderWidth -
+  // siehe die Erzeugung unten. BorderWidth war der zweite Versuch
+  // und hat am Bau vom 20.09. nur oben und links einen Rand
+  // erzeugt: die Align-Kinder ragten unten und rechts darueber
+  // hinaus.
+  // StyleElements leeren wie bei JEDEM Panel dieser Unit (dort steht
+  // ueberall "VCL-Theme nicht ueberschreiben"). Fuer die Form war es
+  // bisher egal, weil ihr Hintergrund vollstaendig verdeckt war - mit
+  // BorderWidth ist er der RAHMEN, und ein aktiver VCL-Style wuerde ihn
+  // in Style-Farbe statt in Color malen.
+  StyleElements := [];
   Color       := DefaultSurface;
   Visible     := False;
   // KRITISCH (Multi-Monitor-Setup):
@@ -277,7 +298,40 @@ begin
   // fuer alle Panels und das Badge-Label unten.
   StyleElements := [];
 
-  // ---- 3px linker Rand (Farb-Stripe) ----
+  // ---- Rahmen: vier Kanten in der Severity-Farbe ----
+  // Die Reihenfolge IST die Align-Reihenfolge: waagerechte Kanten
+  // zuerst, damit sie ueber die volle Breite laufen und die
+  // Senkrechten dazwischen sitzen. Ein Panel kann kein anderes
+  // Align-Kind ueberdecken - genau das war das Problem der beiden
+  // Vorversuche (Margin an EINEM Kind, dann BorderWidth).
+  FEdgeTop                := TPanel.Create(Self);
+  FEdgeTop.Parent         := Self;
+  FEdgeTop.Align          := alTop;
+  FEdgeTop.Height         := BORDER_W;
+  FEdgeTop.BevelOuter     := bvNone;
+  FEdgeTop.StyleElements  := [];
+  FEdgeTop.ParentBackground := False;
+  FEdgeTop.Color          := ACCENT_ERROR;
+
+  FEdgeBottom                := TPanel.Create(Self);
+  FEdgeBottom.Parent         := Self;
+  FEdgeBottom.Align          := alBottom;
+  FEdgeBottom.Height         := BORDER_W;
+  FEdgeBottom.BevelOuter     := bvNone;
+  FEdgeBottom.StyleElements  := [];
+  FEdgeBottom.ParentBackground := False;
+  FEdgeBottom.Color          := ACCENT_ERROR;
+
+  FEdgeRight                := TPanel.Create(Self);
+  FEdgeRight.Parent         := Self;
+  FEdgeRight.Align          := alRight;
+  FEdgeRight.Width          := BORDER_W;
+  FEdgeRight.BevelOuter     := bvNone;
+  FEdgeRight.StyleElements  := [];
+  FEdgeRight.ParentBackground := False;
+  FEdgeRight.Color          := ACCENT_ERROR;
+
+  // ---- linke Kante = der 3px-Farb-Stripe ----
   FBorderPanel                := TPanel.Create(Self);
   FBorderPanel.Parent         := Self;
   FBorderPanel.Align          := alLeft;
@@ -291,6 +345,8 @@ begin
   FContentArea                := TPanel.Create(Self);
   FContentArea.Parent         := Self;
   FContentArea.Align          := alClient;
+  // Kein AlignWithMargins hier - der Rand kommt aus BorderWidth der
+  // Form und gilt damit fuer BEIDE Kinder (Streifen und Inhalt).
   FContentArea.BevelOuter     := bvNone;
   FContentArea.StyleElements  := [];
   FContentArea.ParentBackground := False;
@@ -668,11 +724,21 @@ begin
     EffAccent := ACCENT_ERROR;
   TitleBg := EffAccent;
   BadgeBg := EffAccent;
+  // Der Formhintergrund bleibt auf der Akzentfarbe: er ist zwar
+  // vollstaendig von den Kanten und FContentArea verdeckt, aber
+  // waehrend des Morphs (MoveWindow vor dem Realign) blitzt er
+  // kurz auf - in Akzentfarbe faellt das nicht auf.
+  Color := EffAccent;
   if IsLightColor(EffAccent) then
     HeaderFg := clBlack
   else
     HeaderFg := clWhite;
   FBorderPanel.Color   := EffAccent;
+  // Die drei uebrigen Kanten tragen dieselbe Farbe - der Rahmen ist
+  // EIN Element, auch wenn er aus vier Panels besteht.
+  FEdgeTop.Color       := EffAccent;
+  FEdgeBottom.Color    := EffAccent;
+  FEdgeRight.Color     := EffAccent;
   FPanelTitle.Color    := TitleBg;
   FContentArea.Color   := TitleBg;
   FLblBadge.Color      := BadgeBg;
@@ -735,8 +801,11 @@ begin
   //   von TitleH auf TotalH. Desc/Fix-Panels werden sichtbar.
   // Wenn AStartWidth=0: Stage 0 wird uebersprungen, direkt Stage 1
   //   (alte Default-Auffalt - kein W-Morph).
-  FCollapsedHeight := TitleH;
-  FExpandedHeight  := TotalH;
+  // +2*BORDER_W: TitleH/TotalH sind INHALTShoehen. BorderWidth frisst
+  // oben und unten je BORDER_W vom Client - ohne den Zuschlag wuerde
+  // der Rahmen den Inhalt beschneiden statt ihn zu umgeben.
+  FCollapsedHeight := TitleH + 2 * BORDER_W;
+  FExpandedHeight  := TotalH + 2 * BORDER_W;
   FStartWidth      := AStartWidth;
 
   // Position via raw Win32 — SetBounds wuerde VCL-Logik triggern die
@@ -744,14 +813,16 @@ begin
   // Editor-Client-Koordinaten gehen direkt in MoveWindow.
   if AStartWidth > 0 then
   begin
-    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AStartWidth, TitleH, False);
+    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AStartWidth,
+                              TitleH + 2 * BORDER_W, False);
     Winapi.Windows.InvalidateRect(Handle, nil, True);
     FExpandStage := 0;             // erster Tick wird W-grow machen
     FExpandTimer.Interval := 80;
   end
   else
   begin
-    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AWidth, TitleH, False);
+    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AWidth,
+                              TitleH + 2 * BORDER_W, False);
     Winapi.Windows.InvalidateRect(Handle, nil, True);
     FExpandStage := 1;             // erster Tick wird H-grow machen
     FExpandTimer.Interval := 250;

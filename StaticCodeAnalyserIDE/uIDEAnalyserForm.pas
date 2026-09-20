@@ -4133,6 +4133,7 @@ begin
     // passt laut Messung 0.3 mehrheitlich nicht in die Restbreite).
     Entries[Count].RuleName := KindName(F.Kind);
     Entries[Count].RelatedLines := F.RelatedLines;
+    Entries[Count].StructureChain := F.StructureChain;
     Entries[Count].Color    := EditorAccent(DispSev,
                                  GCachedEditorScheme, GCachedEditorBgDark);
     Entries[Count].Fix      := FH.After;
@@ -4711,6 +4712,7 @@ begin
     // Synchron zur Frame-Schleife: Kurzform-Quelle des Nur-Text-Hints.
     Result[Count].RuleName := KindName(F.Kind);
     Result[Count].RelatedLines := F.RelatedLines;
+    Result[Count].StructureChain := F.StructureChain;
     Result[Count].Color    := EditorAccent(DispSev,
                                 GCachedEditorScheme, GCachedEditorBgDark);
     Result[Count].Fix      := FH.After;

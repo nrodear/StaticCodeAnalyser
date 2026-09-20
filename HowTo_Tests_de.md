@@ -72,14 +72,31 @@ springt zur Assertion.
 
 ### IDE ohne TestInsight (Win32 oder Win64)
 
-`TestProject.exe` als Standalone-Konsole laufen — DUnitX-Console-Logger
-wird verwendet (siehe `TestProject.dpr` Z18-20):
+> **ACHTUNG — mit dem heutigen Stand des Repos geht das NICHT, und der
+> Konsolenlauf sieht trotzdem nach Erfolg aus.**
+> `TestProject.dproj` setzt `TESTINSIGHT` als `DCC_Define` in der
+> **Base**-PropertyGroup, also fuer JEDE Konfiguration und Plattform.
+> Damit greift im `.dpr` das `{$IFNDEF TESTINSIGHT}` nicht, die EXE
+> bekommt das **GUI**-Subsystem statt Console und laeuft ueber
+> `TestInsight.DUnitX` statt ueber den Console-Logger. Ohne
+> TestInsight-Server in der IDE beendet sie sofort per `Halt(0)`:
+> **kein stdout, keine NUnit-XML, Exit-Code 0.**
+>
+> Gemessen am 2026-09-20 an beiden frisch gebauten EXEn (Win32 und
+> Win64): PE-Subsystem 2 = GUI, 0 Zeilen Ausgabe, Exit 0.
+>
+> **Exit-Code 0 ist hier also KEIN Testbeweis** - er ist von "alles
+> gruen" nicht zu unterscheiden. Ergebnisse gibt es nur im
+> TestInsight-Panel der IDE. Wer den Konsolenlauf wirklich will, muss
+> `TESTINSIGHT` vorher aus der Base-Gruppe der `.dproj` nehmen.
+
+Der urspruengliche Weg (nur gueltig OHNE das Define):
 
 ```powershell
 ".\Output\Tests\Win64 Release\TestProject.exe"
 ```
 
-Exit-Code 0 = alle gruen. Failures kommen als stdout + nunit-XML
+Dann gilt: Exit-Code 0 = alle gruen, Failures als stdout + nunit-XML
 neben der EXE (per `DUnitX.Loggers.Xml.NUnit`).
 
 ### Subset laufen lassen

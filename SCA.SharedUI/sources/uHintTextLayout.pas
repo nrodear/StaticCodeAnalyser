@@ -25,6 +25,10 @@ const
   // Speichern in der IDE kippen.
   HINT_ELLIPSIS = #$2026;   // Horizontal Ellipsis
   HINT_SEP      = #$2014;   // Em Dash
+  // M1 (2026-09-20): Trenner der BREADCRUMB-Form. Nur dort - die
+  // zweiteilige Kurzform behaelt ihren Em-Dash, damit Regeln ohne
+  // Kette unveraendert aussehen.
+  HINT_CRUMB    = #$203A;   // Single Right-Pointing Angle Quotation
 
 // Kurzform des Text-Hints: 'Badge <Em-Dash> Regelname'. Leere Teile
 // fallen weg (nur Badge bzw. nur Regelname), beide leer -> ''.
@@ -35,6 +39,15 @@ function ComposeTextHint(const ABadge, ARuleName: string): string;
 // Leeres ASites faellt weg - dann identisch zur zweiteiligen Form.
 function ComposeTextHint(const ABadge, ARuleName,
   ASites: string): string; overload;
+
+// BREADCRUMB-Form fuer den Level-1-Hint: 'Badge > Regel > Kette'.
+// AChain ist TLeakFinding.StructureChain (heute SCA018 und SCA176).
+//
+// Ist die Kette leer, faellt das Ergebnis auf die zweiteilige
+// Kurzform ZURUECK - samt ihrem Em-Dash. Das ist Absicht: 95 % der
+// Regeln fuehren keine Kette, und die sollen aussehen wie bisher.
+function ComposeBreadcrumbHint(const ABadge, ARuleName,
+  AChain: string): string;
 
 // 'Auch in Zeile(n): 6, 7, 12, 45 ...' aus dem Rohwert von
 // TLeakFinding.RelatedLines (komma-getrennte Zeilennummern).
@@ -156,6 +169,22 @@ begin
   if Sites = '' then Exit(Kurz);
   if Kurz  = '' then Exit(Sites);
   Result := Format('%s %s %s', [Kurz, HINT_SEP, Sites]);
+end;
+
+function ComposeBreadcrumbHint(const ABadge, ARuleName,
+  AChain: string): string;
+var
+  Kurz, Kette : string;
+begin
+  Kette := Trim(AChain);
+  if Kette = '' then
+    Exit(ComposeTextHint(ABadge, ARuleName));
+  Kurz := Trim(ABadge);
+  if Trim(ARuleName) <> '' then
+    if Kurz = '' then Kurz := Trim(ARuleName)
+    else Kurz := Kurz + ' ' + HINT_CRUMB + ' ' + Trim(ARuleName);
+  if Kurz = '' then Exit(Kette);
+  Result := Kurz + ' ' + HINT_CRUMB + ' ' + Kette;
 end;
 
 function FormatRelatedLines(const ARelated: string): string;

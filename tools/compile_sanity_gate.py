@@ -214,6 +214,71 @@ def _codeteil(zeile):
     return ''.join(out).rstrip()
 
 
+def pruefe_uses_zuerst(pfad, befunde):
+    """uses steht NICHT als erste Klausel nach interface/implementation.
+
+    Pascal erlaubt die uses-Klausel nur UNMITTELBAR nach
+    "interface" bzw. "implementation". Steht vorher irgendeine andere
+    Deklaration - ein const-Block, ein type, eine forward-Routine -,
+    meldet dcc32 E2029 "Deklaration erwartet, aber 'USES' gefunden"
+    und danach jeden einzelnen Bezeichner der ueberlesenen
+    uses-Klausel als undeklariert. Aus EINEM verrutschten Block
+    werden so 50+ Folgefehler, und die eigentliche Ursache steht
+    ganz oben in einer langen Liste.
+
+    Genau so ist der M1-Bau am 2026-09-20 gescheitert: eine neue
+    Konstante MAX_HINT_CHARS wurde direkt hinter "implementation"
+    eingefuegt statt in den const-Block dahinter.
+
+    Geprueft wird nur die SPALTE 0 - eine uses-Klausel und die
+    Klauseln, die sie verdraengen koennen, stehen immer dort. Ein
+    eingeruecktes "function" im Rumpf einer Klasse bleibt so
+    ausserhalb der Betrachtung.
+    """
+    # Was eine uses-Klausel verdraengt. "label"/"threadvar" sind der
+    # Vollstaendigkeit halber dabei, im Projekt kommen sie nicht vor.
+    KLAUSELN = ('const', 'type', 'var', 'resourcestring',
+                'threadvar', 'label', 'function', 'procedure',
+                'constructor', 'destructor', 'operator')
+    ENDE = ('initialization', 'finalization', 'end.')
+    sektion = None      # Name der offenen Sektion, None = keine
+    sperre = None       # (Zeilennr, Wort) der ersten anderen Klausel
+    imblock = False     # in einem { }- oder (* *)-Kommentar
+    for i, roh in enumerate(zeilen(pfad)):
+        z = _codeteil(roh)
+        # Blockkommentare grob ueberspringen. Genauer muss es nicht
+        # sein: die Pruefung sieht ohnehin nur Spalte 0 an.
+        if imblock:
+            if '}' in z or '*)' in z:
+                imblock = False
+            continue
+        if (z.lstrip().startswith('{')
+                or z.lstrip().startswith('(*')) \
+           and not ('}' in z or '*)' in z):
+            imblock = True
+            continue
+        if z[:1].isspace() or not z.strip():
+            continue
+        wort = z.strip().split()[0].rstrip(';').lower()
+        if wort in ('interface', 'implementation'):
+            sektion, sperre = wort, None
+            continue
+        if sektion is None:
+            continue
+        if wort in ENDE:
+            sektion, sperre = None, None
+            continue
+        if wort == 'uses' and sperre is not None:
+            befunde.append(
+                '%s:%d  uses steht nach %s (Zeile %d) statt '
+                'direkt hinter %s (E2029)'
+                % (os.path.basename(pfad), i + 1, sperre[1], sperre[0],
+                   sektion))
+            sektion, sperre = None, None
+            continue
+        if wort in KLAUSELN and sperre is None:
+            sperre = (i + 1, wort)
+
 def pruefe_unbeendete_konstante(pfad, befunde):
     """Fixture-Konstante, die nicht mit ';' abgeschlossen wird.
 
@@ -533,6 +598,7 @@ def main():
         pruefe_enums(d, deklariert, befunde)
         pruefe_token_vokabular(d, befunde)
         pruefe_include_in_fixture(d, befunde)
+        pruefe_uses_zuerst(d, befunde)
         if os.sep + 'tests' + os.sep in d.replace('/', os.sep):
             pruefe_unbeendete_konstante(d, befunde)
             pruefe_fixture_klassen(d, befunde)

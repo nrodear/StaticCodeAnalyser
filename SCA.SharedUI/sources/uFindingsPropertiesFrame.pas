@@ -860,6 +860,7 @@ begin
   // Properties-Cache und ueberlebt den Tab-Wechsel; was hier fehlt,
   // ist danach weg (derselbe Fehlermodus wie bei EndLine oben).
   Result.RelatedLines := F.RelatedLines;
+  Result.StructureChain := F.StructureChain;
 end;
 
 procedure TFindingsPropertiesFrame.StoreInCache(const AFileName: string);

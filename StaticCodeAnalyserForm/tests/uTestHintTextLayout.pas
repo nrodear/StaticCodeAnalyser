@@ -34,6 +34,10 @@ type
     [Test] procedure Staged_LongestStageWins_WhenItFits;
     [Test] procedure Staged_FallsBackToShorterStage_WhenTooNarrow;
     [Test] procedure Staged_NoStageFits_ShortensTheLastOne;
+    // ---- M1 (2026-09-20): Breadcrumb-Form fuer Level 1 ----
+    [Test] procedure Crumb_WithChain_UsesAngleSeparators;
+    [Test] procedure Crumb_WithoutChain_FallsBackToShortForm;
+    [Test] procedure Crumb_OnlyChain_StandsAlone;
   end;
 
   // Eigene Fixture, nicht bloss Ordnungsliebe: die Schnappschuss-Regel
@@ -323,6 +327,42 @@ begin
   Assert.AreNotEqual(Snap, EncodeLineSnapshot('x'),
     'Encode muss injektiv bleiben - sonst kollidieren die beiden Zeilen');
 end;
+
+{ ---- M1 (2026-09-20): Breadcrumb-Form ---------------------------- }
+
+procedure TTestHintTextLayout.Crumb_WithChain_UsesAngleSeparators;
+// Mit Kette: dreiteiliger Breadcrumb mit Winkel-Trennern.
+begin
+  Assert.AreEqual(
+    '!' + ' ' + HINT_CRUMB + ' DeepNesting ' + HINT_CRUMB + ' if ' + #$2192 + ' for',
+    ComposeBreadcrumbHint('!', 'DeepNesting',
+      'if ' + #$2192 + ' for'),
+    'Badge, Regel und Kette mit Winkel-Trenner');
+end;
+
+procedure TTestHintTextLayout.Crumb_WithoutChain_FallsBackToShortForm;
+// OHNE Kette MUSS die bisherige Kurzform herauskommen - samt
+// Em-Dash. 95 % der Regeln fuehren keine Kette, die sollen
+// unveraendert aussehen. Waere das nicht so, aenderte diese Charge
+// das Bild fuer fast alle Funde.
+begin
+  Assert.AreEqual(ComposeTextHint('!', 'DeepNesting'),
+    ComposeBreadcrumbHint('!', 'DeepNesting', ''),
+    'ohne Kette identisch zur Kurzform');
+  Assert.AreEqual(ComposeTextHint('!', 'DeepNesting'),
+    ComposeBreadcrumbHint('!', 'DeepNesting', '   '),
+    'auch reine Leerzeichen zaehlen als keine Kette');
+end;
+
+procedure TTestHintTextLayout.Crumb_OnlyChain_StandsAlone;
+// Ohne Badge und Regelname bleibt die Kette allein stehen - ohne
+// fuehrenden Trenner.
+begin
+  Assert.AreEqual('if ' + #$2192 + ' for',
+    ComposeBreadcrumbHint('', '', 'if ' + #$2192 + ' for'),
+    'kein fuehrender Trenner, wenn die Kette allein steht');
+end;
+
 
 initialization
   TDUnitX.RegisterTestFixture(TTestHintTextLayout);

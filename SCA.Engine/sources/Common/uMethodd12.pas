@@ -7,6 +7,16 @@ uses
   uSCAConsts, uLocalization;  // _() — SeverityText/TypeText lokalisierbar
 
 const
+  // Trenner der Verschachtelungskette (TLeakFinding.StructureChain).
+  // EIN Ort fuer ALLE Erzeuger und Leser: SCA018 und SCA176 fuellen
+  // die Kette, Editor/HTML/Export zeigen sie. Mit einer zweiten
+  // Schreibweise saehe dieselbe Kette je nach Quelle anders aus.
+  // Zeichen als CODE, nicht als Literal - dieselbe Konvention wie in
+  // uHintTextLayout: die Quelltexte sind nicht durchgaengig
+  // UTF-8-markiert, ein rohes Pfeil-Literal koennte beim Speichern
+  // in der IDE kippen.
+  CHAIN_SEP = ' ' + #$2192 + ' ';
+
   // Suffix, den uLeakDetector2 an MissingVar haengt, wenn nicht eine
   // Variable leckt, sondern ein Funktions-RUECKGABEWERT, den der Aufrufer
   // nicht freigibt. Deutsch, weil er seit jeher so im Fund steht - und
@@ -91,6 +101,7 @@ type
     // Baselines unberuehrt - und genau deshalb bewegt dieses Feld
     // AUCH KEINE Fundzahl.
     StructureChain: string;
+
     // Setzt Confidence := fcHigh (Default). Bestehende Detektoren erzeugen
     // Befunde binaer und gelten damit als hochkonfident.
     constructor Create;
