@@ -182,6 +182,10 @@ const
   STRIPE_W       = 3;
   // Mindesthoehen in Pixeln (96 DPI-Baseline); ShowAt skaliert dynamisch.
   MIN_TITLE_H    = 20;
+  // M1 (2026-09-20): Staerke des Rahmens um das ganze Panel. Er
+  // traegt die Severity-Farbe, dieselbe wie Streifen und Titelzeile -
+  // kein zweites Farbsystem.
+  BORDER_W       = 1;
   MIN_DESC_H     = 18;
   // Maximale Description-Hoehe in Pixeln — verhindert dass das Overlay
   // halb-bildschirmgross wird bei sehr langen Texten. ~220px deckt
@@ -291,6 +295,13 @@ begin
   FContentArea                := TPanel.Create(Self);
   FContentArea.Parent         := Self;
   FContentArea.Align          := alClient;
+  // M1 (2026-09-20): 1 px Rand rundherum. Der Rahmen wird NICHT
+  // gemalt - er ist der Formhintergrund, den der eingerueckte
+  // Inhalt stehen laesst. Ein Paint-Override waere hier wirkungslos:
+  // die Kindpanels decken die Form vollstaendig ab.
+  FContentArea.AlignWithMargins := True;
+  FContentArea.Margins.SetBounds(BORDER_W, BORDER_W, BORDER_W,
+                                 BORDER_W);
   FContentArea.BevelOuter     := bvNone;
   FContentArea.StyleElements  := [];
   FContentArea.ParentBackground := False;
@@ -668,6 +679,10 @@ begin
     EffAccent := ACCENT_ERROR;
   TitleBg := EffAccent;
   BadgeBg := EffAccent;
+  // M1 (2026-09-20): der 1-px-Rahmen. Er wird nicht gemalt, sondern
+  // ist der Formhintergrund, den die Margins von FContentArea stehen
+  // lassen - deshalb genuegt es, die Formfarbe zu setzen.
+  Color := EffAccent;
   if IsLightColor(EffAccent) then
     HeaderFg := clBlack
   else

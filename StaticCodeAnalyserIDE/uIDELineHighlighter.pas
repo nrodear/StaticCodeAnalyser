@@ -194,6 +194,10 @@ type
     // ofnFileClosing) - er prueft stattdessen IsWindow(FSavedEditorWnd).
     FSavedEditorWnd  : HWND;
     FSavedCharHeight : Integer;      // DPI-aware Zeilenhoehe aus Context.EditorState
+    // M1: Zeichenbreite derselben Quelle. Die 100-Zeichen-Deckelung
+    // beider Hint-Stufen wird daraus GEMESSEN statt in Pixeln geraten -
+    // so haelt sie bei jeder DPI und jeder Editor-Schriftgroesse.
+    FSavedCharWidth  : Integer;
     // Pro markierter Zeile der zuletzt gerenderte CodeRect (Editor-Client-
     // Koordinaten). Wird in BeginPaint geleert (nur bei ForceFullRepaint),
     // in PaintLine fuer jede markierte Zeile aktualisiert.
@@ -611,6 +615,13 @@ procedure RefreshShowOnHoverCache; overload;
 procedure RefreshShowOnHoverCache(AValue: Boolean); overload;
 
 implementation
+const
+  // M1 (2026-09-20, Nicos Vorgabe): beide Hint-Stufen werden auf diese
+  // Zeichenzahl gedeckelt. EIN Ort fuer beide - Level 1 (Breadcrumb im
+  // Editor) und Level 2 (Panel) sollen dieselbe Kante haben, sonst
+  // wirkt das Aufklappen wie ein Sprung.
+  MAX_HINT_CHARS = 100;
+
 
 // noinspection-file BeginEndRequired, CanBeClassMethod, CanBeUnitPrivate, ClassPerFile, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DeepNesting, EmptyExcept, EmptyMethod, GodClass, GroupedDeclaration, LargeClass, LongMethod, LongParamList, MagicNumber, MultipleExit, NestedRoutine, NestedTry, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter, UnusedPublicMember
 // OTAPI-Plugin: empty-except schluckt IDE-API-Failures (sonst killt jeder
@@ -801,7 +812,7 @@ end;
 
 function DrawTextHint(ACanvas: TCanvas; const AMark: TFindingMark;
   AAccent: TColor; const ACodeRect: TRect; ATextEndX: Integer;
-  out ADrawnRect: TRect): Boolean;
+  out ADrawnRect: TRect; ACharWidth: Integer = 0): Boolean;
 // Nur-Text-Variante der Mini-Infobar (Konzept AnnotationHint_NurText
 // 2026-08-09, Weg B): EINE Zeile Text rechts vom Code - und KEIN
 // FillRect. Genau das macht den Hint echt transparent: der Editor-
@@ -828,6 +839,7 @@ var
   Icon  : string;
   Sz    : TSize;
   BX,BY : Integer;
+  Verf  : Integer;   // M1: verfuegbare Breite, auf 100 Zeichen gedeckelt
   Saved : TCanvasTextState;
 begin
   Result     := False;
@@ -861,11 +873,22 @@ begin
     // (nur Ankerzeilen), in derselben Groessenordnung wie die String-
     // Konkatenationen dieses Pfads; die Heap-Storm-Lehre betraf eine
     // Closure JE ZELLE eines Grids.
+    // M1 (2026-09-20): laengste Stufe ist jetzt der BREADCRUMB
+    // (Badge > Regel > Verschachtelungskette). Ohne Kette liefert
+    // ComposeBreadcrumbHint die bisherige Kurzform zurueck - fuer
+    // die 95 % Regeln ohne Kette aendert sich also nichts.
+    // Die Fundstellen-Stufe bleibt dahinter: sie und die Kette
+    // schliessen einander aus (SCA015/021 fuehren keine Kette).
+    Verf := ACodeRect.Right - BX;
+    if (ACharWidth > 0) and (Verf > MAX_HINT_CHARS * ACharWidth) then
+      Verf := MAX_HINT_CHARS * ACharWidth;
     Text := FitStagedHint(
-      [ComposeTextHint(Icon + AMark.Badge, AMark.RuleName,
+      [ComposeBreadcrumbHint(Icon + AMark.Badge, AMark.RuleName,
+                             AMark.StructureChain),
+       ComposeTextHint(Icon + AMark.Badge, AMark.RuleName,
                        FormatRelatedLines(AMark.RelatedLines)),
        Text],
-      ACodeRect.Right - BX,
+      Verf,
       function(S: string): Integer
       begin
         Result := ACanvas.TextWidth(S);
@@ -2523,6 +2546,7 @@ begin
   FSavedEditor     := nil;
   FSavedEditorWnd  := 0;
   FSavedCharHeight := 0;
+  FSavedCharWidth  := 0;
   FHoveredLine     := -1;
   // FLastPaintedFile leeren, damit der naechste PaintLine-Tick als
   // "neue Datei" detektiert wird und sauber neu startet. Sonst koennten
@@ -3006,6 +3030,14 @@ begin
     AWidth := HitRect.Right - HitRect.Left;
     if AWidth < 200 then AWidth := 200;
   end;
+  // M1 (2026-09-20): Breite auf MAX_HINT_CHARS Zeichen deckeln. Auf
+  // einem breiten Bildschirm zog sich das Panel sonst ueber die volle
+  // Code-Breite - Text, den niemand zeilenweise verfolgt. Gemessen an
+  // der ZEICHENBREITE des Editors statt in Pixeln: so gilt dieselbe
+  // Grenze bei jeder DPI und jeder Schriftgroesse.
+  if (FSavedCharWidth > 0) and
+     (AWidth > MAX_HINT_CHARS * FSavedCharWidth) then
+    AWidth := MAX_HINT_CHARS * FSavedCharWidth;
   LineH := FSavedCharHeight;
   if LineH < 16 then LineH := 20;  // Fallback wenn CharHeight nicht gesetzt
   try
@@ -3158,7 +3190,8 @@ begin
   if GTextOnlyHint then
   begin
     if DrawTextHint(Context.Canvas, AMark, AStripeCol, ACodeRect,
-                    ATextEndX, HintR) then
+                    ATextEndX, HintR,
+                    Context.EditorState.CharWidth) then
       FRenderedHintRects.AddOrSetValue(ALine, HintR)
     else
       FRenderedHintRects.Remove(ALine);
@@ -3251,6 +3284,7 @@ begin
   CodeRect         := Context.LineState.CodeRect;
   // CharHeight fuer DPI-bewusstes Overlay-Sizing in EditorMouseMove verwenden.
   FSavedCharHeight := Context.EditorState.CharHeight;
+  FSavedCharWidth  := Context.EditorState.CharWidth;
   // Rect cachen damit EditorMouseMove pro Zeile den Hit-Test machen kann.
   FRenderedRects.AddOrSetValue(Line, CodeRect);
   // VisibleTextRect.Right = X-Pixel wo der sichtbare Code-Text endet.

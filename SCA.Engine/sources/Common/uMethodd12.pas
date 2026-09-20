@@ -11,7 +11,11 @@ const
   // EIN Ort fuer ALLE Erzeuger und Leser: SCA018 und SCA176 fuellen
   // die Kette, Editor/HTML/Export zeigen sie. Mit einer zweiten
   // Schreibweise saehe dieselbe Kette je nach Quelle anders aus.
-  CHAIN_SEP = ' → ';
+  // Zeichen als CODE, nicht als Literal - dieselbe Konvention wie in
+  // uHintTextLayout: die Quelltexte sind nicht durchgaengig
+  // UTF-8-markiert, ein rohes Pfeil-Literal koennte beim Speichern
+  // in der IDE kippen.
+  CHAIN_SEP = ' ' + #$2192 + ' ';
 
   // Suffix, den uLeakDetector2 an MissingVar haengt, wenn nicht eine
   // Variable leckt, sondern ein Funktions-RUECKGABEWERT, den der Aufrufer
