@@ -129,9 +129,18 @@ begin
   Result := TDetectorUtils.CountBooleanOpsLower(CondText);
 end;
 
-// L1: Anzeigename eines Konstrukts. Bewusst dieselben Woerter wie
-// in uDeepNesting.KindName - die beiden Ketten muessen gleich
-// aussehen, sonst wirken zwei Regeln wie zwei Werkzeuge.
+// L1: Anzeigename eines Konstrukts. Dieselben Woerter wie in
+// uDeepNesting.KindName - die Ketten zweier Regeln sollen nicht wie
+// zwei Werkzeuge aussehen.
+//
+// NICHT ZUSAMMENLEGEN, ohne das hier zu lesen: die Listen sind
+// absichtlich verschieden lang. uDeepNesting kennt fuenf Konstrukte,
+// diese hier sechs - nkOnHandler kommt dazu, weil SCA018 Exception-
+// Handler bewusst NICHT als Verschachtelung zaehlt (COUNTING_KINDS
+// dort: "Nur logische Verschachtelung"), SCA176 aber schon. Gleich
+// ist die ABBILDUNG Kind -> Wort, verschieden die AUSWAHL der Kinds.
+// Wer beide Listen angleicht, aendert stillschweigend, was SCA018
+// meldet.
 function NodeKindName(Kind: TNodeKind): string;
 begin
   case Kind of
