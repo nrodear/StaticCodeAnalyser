@@ -76,6 +76,21 @@ type
     // einmalig alle Funde als 'neu' sehen. Ein eigenes Feld nicht.
     // Die Anzeige entscheidet, WIE VIELE davon sie zeigt.
     RelatedLines: string;
+    // K1 (2026-09-20): Verschachtelungskette zur Fundstelle, von aussen
+    // nach innen, z. B. 'if → for → while → if'. Fuellt heute nur
+    // SCA018 (uDeepNesting), leer bei allen anderen Regeln.
+    //
+    // WOFUER: die reduzierte Vorher/Nachher-Darstellung im
+    // Editor-Overlay (Konzept_ReduzierteFixKette_2026-09-20). Die
+    // Kette IST bei dieser Regel der Befund - die gemeldete Tiefe ist
+    // genau ihre Gliederzahl.
+    //
+    // AUS DEMSELBEN GRUND WIE RelatedLines NICHT IM MELDETEXT: der
+    // SARIF-Fingerprint hasht die Meldung, der Baseline-Fingerprint
+    // zusaetzlich MissingVar. Ein eigenes Feld laesst bestehende
+    // Baselines unberuehrt - und genau deshalb bewegt dieses Feld
+    // AUCH KEINE Fundzahl.
+    StructureChain: string;
     // Setzt Confidence := fcHigh (Default). Bestehende Detektoren erzeugen
     // Befunde binaer und gelten damit als hochkonfident.
     constructor Create;

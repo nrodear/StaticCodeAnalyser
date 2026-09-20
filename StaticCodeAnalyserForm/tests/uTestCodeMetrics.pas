@@ -1,4 +1,4 @@
-unit uTestCodeMetrics;
+﻿unit uTestCodeMetrics;
 
 // Tests fuer Code-Metrik-Detektoren: LongParamList, MagicNumbers,
 // LongMethod (Erweiterungen), DeepNesting (Erweiterungen).
@@ -73,6 +73,11 @@ type
     [Test] procedure DeepNesting_FiveWhileLoops_ReportsWhileAsDeepest;
     [Test] procedure DeepNesting_FourWhileLoops_NoFinding;
     [Test] procedure DeepNesting_TwoMethodsOneDeep_OnlyDeepReported;
+    // ---- K1 (2026-09-20): Verschachtelungskette am Fund ----------
+    [Test] procedure Chain_MirrorsReportedDepth;
+    [Test] procedure Chain_MixedConstructs_OuterToInner;
+    [Test] procedure Chain_ElseIfChain_CountedLikeTheDepth;
+    [Test] procedure Chain_EmptyWhenNoFinding;
     // ---- 'else if'-Kette (Autopsie 2026-08-27) ------------------------------
     [Test] procedure DeepNesting_ElseIfChainOneLine_NoFinding;
     [Test] procedure DeepNesting_ElseIfCascadeOwnLine_NoFinding;
@@ -1230,6 +1235,115 @@ begin
   try Assert.AreEqual<Integer>(1,
     TFindingHelper.Count(F, fkCyclomaticComplexity),
     'xor ist ein Verzweigungsoperator und zaehlt mit');
+  finally F.Free; end;
+end;
+
+{ ---- K1 (2026-09-20): Verschachtelungskette --------------------- }
+//
+// Die Kette begruendet die gemeldete Zahl: ihre Gliederzahl IST die
+// gemeldete Tiefe. Genau das pruefen die Tests - nicht nur, dass
+// irgendein Text entsteht.
+
+function ChainOf(F: TObjectList<TLeakFinding>): string;
+// Die Kette des ersten DeepNesting-Fundes.
+var X: TLeakFinding;
+begin
+  Result := '';
+  for X in F do
+    if X.Kind = fkDeepNesting then Exit(X.StructureChain);
+end;
+
+procedure TTestDeepNestingExt.Chain_MirrorsReportedDepth;
+// Fuenf geschachtelte if = Tiefe 5 = fuenf Glieder.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    if B then'#13#10+
+  '      if C then'#13#10+
+  '        if D then'#13#10+
+  '          if E then'#13#10+
+  '            DoIt;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual('if → if → if → if → if', ChainOf(F),
+      'fuenf Glieder - so viele wie die gemeldete Tiefe');
+  finally F.Free; end;
+end;
+
+procedure TTestDeepNestingExt.Chain_MixedConstructs_OuterToInner;
+// Reihenfolge von AUSSEN nach INNEN, gemischte Konstrukte.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    for I := 1 to 3 do'#13#10+
+  '      while B do'#13#10+
+  '        case C of'#13#10+
+  '          1: if D then DoIt;'#13#10+
+  '        end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual('if → for → while → case → if', ChainOf(F),
+      'von aussen nach innen, jedes Konstrukt mit seinem Namen');
+  finally F.Free; end;
+end;
+
+procedure TTestDeepNestingExt.Chain_ElseIfChain_CountedLikeTheDepth;
+// DIE WICHTIGE PROBE: eine else-if-Kette ist EINE mehrarmige
+// Verzweigung - die Tiefenzaehlung ueberspringt sie seit der
+// Autopsie 2026-08-27, und die Kette MUSS dasselbe tun. Sonst
+// widerspraeche die Anzeige der gemeldeten Zahl.
+// Hier: 4x verschachtelt + else-if-Kette; die Kette darf die
+// else-Glieder nicht mitzaehlen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    if B then'#13#10+
+  '      if C then'#13#10+
+  '        if D then'#13#10+
+  '          if E then DoIt'#13#10+
+  '          else if F then DoIt2'#13#10+
+  '          else if G then DoIt3;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual('if → if → if → if → if', ChainOf(F),
+      'die else-if-Glieder zaehlen nicht - wie bei der Tiefe');
+  finally F.Free; end;
+end;
+
+procedure TTestDeepNestingExt.Chain_EmptyWhenNoFinding;
+// Ohne Fund keine Kette - und vor allem: andere Regeln bekommen
+// das Feld nie gefuellt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    if B then'#13#10+
+  '      DoIt;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkDeepNesting),
+      'Tiefe 2 liegt unter der Schwelle');
+    Assert.AreEqual('', ChainOf(F),
+      'ohne Fund bleibt die Kette leer');
   finally F.Free; end;
 end;
 
