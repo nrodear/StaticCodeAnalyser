@@ -299,6 +299,9 @@ type
     [Test] procedure Leak_TestDirSegment_Suppressed;
     // Ownership-Sink Core-Audit 2026-07-18: Container-Add im BEDINGUNGS-Kontext.
     [Test] procedure Leak_AddNodeInCondition_OwnershipRecognized;
+    // --- I1 (2026-09-20): Anhaengen an den Rueckgabewert ---
+    [Test] procedure Leak_ResultMemberAssign_OwnershipRecognized;
+    [Test] procedure Leak_FremdesObjektMemberAssign_StillReported;
   end;
 
   // SearchFree-Haertung (DisposeOf/Typecast/with), Werttyp-Return,
@@ -8596,5 +8599,52 @@ begin
       'BEKANNTE GRENZE: auch hier faellt der Typecast durch');
   finally F.Free; end;
 end;
+
+{ ---- I1 (2026-09-20): Result.<Member> := var --------------------- }
+
+procedure TTestMemoryLeakContainerOwnership.Leak_ResultMemberAssign_OwnershipRecognized;
+// Das Muster aus dem Korpus (doublecmd udarwinfswatch.deepCopy und
+// lcl cocoawslistview): das erzeugte Objekt wird an den
+// Rueckgabewert gehaengt und verlaesst damit den Methodenrumpf.
+// Vor I1 ein Fund - dieser Test war ROT.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'function Kopie: TSitzung;'#13#10 +
+  'var list: TObjectList;'#13#10 +
+  'begin'#13#10 +
+  '  list := TObjectList.Create;'#13#10 +
+  '  Result := TSitzung.Create;'#13#10 +
+  '  Result._list := list;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'an den Rueckgabewert gehaengt = Ownership verlaesst die Methode');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakContainerOwnership.Leak_FremdesObjektMemberAssign_StillReported;
+// GEGENPROBE zur Reichweite: ein BELIEBIGES fremdes Objekt als
+// Empfaenger ist KEIN belegter Transfer - wird dort nichts
+// freigegeben, leckt das Objekt. Die Verallgemeinerung ist am
+// 2026-08-05 schon einmal an roten Bestandstests gescheitert;
+// I1 deckt bewusst nur Result ab.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Fuellen(anderes: TSitzung);'#13#10 +
+  'var list: TObjectList;'#13#10 +
+  'begin'#13#10 +
+  '  list := TObjectList.Create;'#13#10 +
+  '  anderes._list := list;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'nur Result ist ein belegter Empfaenger - sonst bleibt es ein Leck');
+  finally F.Free; end;
+end;
+
 
 end.

@@ -231,13 +231,70 @@ end;
 class procedure TUnusedUsesDetector.CollectText(Node: TAstNode;
   RawSB, WordSB: TStringBuilder);
 
+  // I2 (2026-09-20): Inhalte von Stringliteralen ausblenden.
+  //
+  // Der Parser rekonstruiert Literale in Name/TypeRef in ihrer
+  // Pascal-Form (QuoteStrLit: aeussere Hochkommata, inneres '' wieder
+  // verdoppelt) - sie sind hier also an der Quotierung erkennbar. Ohne
+  // dieses Ausblenden zaehlte der AST-Kanal Literaltext als
+  // Verwendungsnachweis: 'Log(''computed-column variant'')' belegte
+  // die Unit Variants und unterdrueckte den Fund (an der Exe belegt:
+  // mit dem Wort 0 Funde, ohne es 1).
+  //
+  // Das ist genau die Politik, die der D4-Quelltext-Kanal unten schon
+  // fuehrt ('ein Bezeichner IN einem Literal ist kein
+  // Verwendungsnachweis') - dessen Begruendung nahm dabei an, "der
+  // AST-Weg sah Literale nie". Diese Annahme war falsch; hier wird sie
+  // eingeloest, statt zwei Kanaele mit verschiedenen Regeln zu fahren.
+  //
+  // GEMESSEN (i_messung_sca007): 394 Faelle im Delphi-Korpus, 29 im
+  // Lazarus-Korpus, in denen der EINZIGE Nachweis aus einem Literal
+  // stammt - sie werden zu Funden.
+  function OhneLiterale(const S: string): string;
+  var
+    i   : Integer;
+    InS : Boolean;
+    SB  : TStringBuilder;
+  begin
+    if Pos('''', S) = 0 then Exit(S);   // Normalfall: nichts zu tun
+    SB := TStringBuilder.Create;
+    try
+      InS := False;
+      i := 1;
+      while i <= Length(S) do
+      begin
+        if S[i] = '''' then
+        begin
+          // Verdoppeltes '' INNERHALB eines Literals ist ein Zeichen
+          // des Literals, kein Ende - beide blanken und weiter.
+          if InS and (i < Length(S)) and (S[i + 1] = '''') then
+          begin
+            SB.Append('  ');
+            Inc(i, 2);
+            Continue;
+          end;
+          InS := not InS;
+          SB.Append(' ');
+        end
+        else if InS then
+          SB.Append(' ')
+        else
+          SB.Append(S[i]);
+        Inc(i);
+      end;
+      Result := SB.ToString;
+    finally
+      SB.Free;
+    end;
+  end;
+
   procedure Add(const S: string);
   var
     Low : string;
     Ch  : Char;
   begin
     if S = '' then Exit;
-    Low := S.ToLower;
+    Low := OhneLiterale(S).ToLower;
     // Raw: lowercase, Punkte beibehalten, sonstiges durch Leerzeichen
     RawSB.Append(' ');
     for Ch in Low do

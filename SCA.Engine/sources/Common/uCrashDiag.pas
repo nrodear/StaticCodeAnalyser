@@ -25,8 +25,13 @@ unit uCrashDiag;
 //
 // Describe() haengt deshalb an:
 //   * die Exception-KLASSE (die RTL-Message nennt sie nicht),
-//   * die Modulbasis dieses Laufs und die modulRELATIVE Adresse - stabil
-//     ueber Laeufe hinweg und gegen eine Detailed-Map aufloesbar,
+//   * die modulRELATIVE Adresse - stabil ueber Laeufe hinweg und gegen
+//     eine Detailed-Map aufloesbar. Die absolute Modulbasis steht seit
+//     I3 (2026-09-20) NICHT mehr im Text: sie ist die einzige
+//     laufabhaengige Zahl (ASLR) und machte denselben Fehler in zwei
+//     Laeufen zu zwei verschiedenen FUNDEN - der Text landet als
+//     SCA006-Meldung in SARIF und Baseline. Begruendung an
+//     ModuleRelative,
 //   * bei Hardware-Exceptions den NT-Statuscode. Der unterscheidet die
 //     Ursachen, die dieselbe Meldung erzeugen koennen - vor allem
 //     $C0000005 (echte Zugriffsverletzung) von $C00000FD (Stapel
@@ -112,14 +117,29 @@ begin
   // Fehlattribution, die diese Unit der RTL vorwirft. Basis trotzdem
   // nennen - der Leser sieht sofort, dass eine RTL-Modulangabe nicht
   // stimmen kann.
+  // I3 (2026-09-20): Die Modulbasis steht NICHT MEHR im Text. Sie ist
+  // die einzige laufabhaengige Zahl hier (ASLR laedt das Modul bei
+  // jedem Start woandershin), und dieser Text wird zum MELDETEXT eines
+  // Fundes: SCA006 traegt ihn eins zu eins. Zahlen im Meldetext sind
+  // Teil der Fund-Identitaet - mit der Basis darin war derselbe Fehler
+  // in zwei Laeufen zwei verschiedene Funde. Beleg: die G-Abnahme
+  // (20.09.) zeigte drei SCA006-Funde als Drop+Add-Paar, allein weil
+  // '$370000' zu '$960000' geworden war; Baselines und Byte-A/B
+  // konnten diese Funde nie halten.
+  //
+  // Der DIAGNOSTISCHE Wert bleibt: aufloesbar gegen eine Detailed-Map
+  // ist ohnehin nur die modulRELATIVE Adresse, und die steht weiter da
+  // (ebenso die Bildgroesse - auch sie ist je Build konstant). Fuer die
+  // beiden Ausserhalb-Faelle gibt es keine deterministische Zahl: die
+  // Adresse gehoert dann einem FREMDEN Modul, dessen Lage ebenfalls
+  // ASLR bestimmt. Dort zaehlt die Aussage, nicht der Zahlenwert.
   if Addr < Base then
-    Result := Format(' [Modulbasis $%x, Adresse liegt DARUNTER - nicht dieses Modul]',
-                     [Base])
+    Result := ' [Adresse liegt DARUNTER (unter der Modulbasis) - nicht dieses Modul]'
   else if (Size > 0) and (Addr >= Base + Size) then
-    Result := Format(' [Modulbasis $%x, Bildgroesse $%x, Adresse liegt DARUEBER - nicht dieses Modul]',
-                     [Base, Size])
+    Result := Format(' [Bildgroesse $%x, Adresse liegt DARUEBER - nicht dieses Modul]',
+                     [Size])
   else
-    Result := Format(' [Modulbasis $%x, modulrelativ $%x]', [Base, Addr - Base]);
+    Result := Format(' [modulrelativ $%x]', [Addr - Base]);
 end;
 
 // EExternal.ExceptionRecord ist als 'platform' markiert (Windows-only).

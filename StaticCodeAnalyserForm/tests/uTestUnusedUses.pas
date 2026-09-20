@@ -90,6 +90,9 @@ type
     [Test] procedure Datei_ElternUnit_NurUsesZeileDeckt_ReportsWarning;
     [Test] procedure Datei_ElternUnit_QualifizierteNutzung_NoFinding;
     [Test] procedure BlankeUsesKlauseln_OhneSemikolon_LaesstTextStehen;
+    // ---- I2 (2026-09-20): Literaltext ist kein Nachweis ----
+    [Test] procedure Uses_IdentNurImStringLiteral_ReportsWarning;
+    [Test] procedure Uses_IdentImCode_BleibtNachweis;
   end;
 
 implementation
@@ -1294,5 +1297,56 @@ begin
   Assert.AreEqual('x ' + StringOfChar(' ', 12) + ' y uses2 z', S,
     'Klausel exakt bis zum Semikolon geblankt; uses2 ist keine Klausel');
 end;
+
+{ ---- I2 (2026-09-20): Stringliterale sind kein Nachweis ---------- }
+// Der AST-Kanal sammelte Name/TypeRef der Knoten - und der Parser
+// legt Stringliterale dort in Pascal-Form ab (QuoteStrLit). Damit
+// belegte blosser Literaltext eine uses-Zeile. An der BESTEHENDEN
+// Exe belegt: mit dem Wort im Literal 0 Funde, ohne es 1.
+// Der D4-Quelltext-Kanal fuehrt diese Politik laengst - seine
+// Begruendung nahm nur faelschlich an, der AST-Weg sehe nie Literale.
+
+procedure TTestUnusedUses.Uses_IdentNurImStringLiteral_ReportsWarning;
+// Das Wort "variant" steht NUR in einem Stringliteral. Vor I2 war das
+// ein Nachweis fuer Variants und der Fund verschwand - dieser Test
+// war ROT. (Korpus-Muster: delphimvcframework mainformu.pas,
+// Log(...computed-column variant), in der F-Abnahme als
+// unerwarteter Drop aufgefallen.)
+const SRC =
+  'unit t;'#13#10 +
+  'uses Variants;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'begin'#13#10 +
+  '  Log(''computed-column variant'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkUnusedUses),
+    'ein Bezeichner IN einem Literal ist kein Verwendungsnachweis');
+  finally F.Free; end;
+end;
+
+procedure TTestUnusedUses.Uses_IdentImCode_BleibtNachweis;
+// GEGENPROBE: dasselbe Wort als echter TYP im Code bleibt ein
+// Nachweis - das Ausblenden darf nur Literale treffen.
+const SRC =
+  'unit t;'#13#10 +
+  'uses Variants;'#13#10 +
+  'implementation'#13#10 +
+  'procedure TFoo.Bar;'#13#10 +
+  'var v: Variant;'#13#10 +
+  'begin'#13#10 +
+  '  Log(''nichts hier'');'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkUnusedUses),
+    'der Variant-Typ im CODE beweist die Unit weiterhin');
+  finally F.Free; end;
+end;
+
 
 end.

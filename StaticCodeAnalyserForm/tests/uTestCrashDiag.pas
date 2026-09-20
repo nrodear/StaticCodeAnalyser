@@ -19,7 +19,7 @@ type
   TTestCrashDiag = class
   public
     [Test] procedure Describe_Plain_NamesClassAndMessage;
-    [Test] procedure Describe_Plain_ReportsModuleBase;
+    [Test] procedure Describe_Plain_ReportsModuleRelativeAddress;
     [Test] procedure Describe_External_ReportsNtStatus;
     [Test] procedure Describe_External_ReportsModuleRelativeAddress;
     [Test] procedure Describe_AddressBelowBase_SaysSo;
@@ -65,19 +65,33 @@ begin
                 'Originalmeldung fehlt im Text: ' + S);
 end;
 
-procedure TTestCrashDiag.Describe_Plain_ReportsModuleBase;
+procedure TTestCrashDiag.Describe_Plain_ReportsModuleRelativeAddress;
 var S: string;
 begin
   // Innerhalb eines except-Blocks liefert ExceptAddr eine Adresse, also
-  // muss die Modulbasis mitkommen - ohne sie ist die Adresse wertlos.
+  // muss die modulRELATIVE Adresse mitkommen - sie ist der Wert, der
+  // gegen eine Detailed-Map aufloesbar ist.
+  //
+  // Die zweite Zusicherung ist der eigentliche Vertrag seit I3: die
+  // absolute Modulbasis darf NICHT mehr im Text stehen. Sie ist die
+  // einzige laufabhaengige Zahl (ASLR), und dieser Text wird zum
+  // SCA006-MELDETEXT - mit ihr darin war derselbe Fehler in zwei
+  // Laeufen zwei verschiedene Funde (G-Abnahme 20.09.: drei
+  // SCA006-Funde erschienen als Drop+Add-Paar, allein weil die Basis
+  // von $370000 auf $960000 gewandert war).
+  // Die Vorfassung dieses Tests forderte das GEGENTEIL - sie stammt
+  // aus der Zeit, als der Text nur ins Log ging.
   try
     raise EListError.Create('egal');
   except
     on E: EListError do
       S := DescribeException(E);
   end;
-  Assert.IsTrue(Pos('Modulbasis', S) > 0,
-                'Modulbasis fehlt - Adresse waere nicht aufloesbar: ' + S);
+  Assert.IsTrue(Pos('modulrelativ', S) > 0,
+                'modulrelative Adresse fehlt - nicht aufloesbar: ' + S);
+  Assert.IsTrue(Pos('Modulbasis', S) = 0,
+                'die ASLR-abhaengige Modulbasis macht den Meldetext '
+                + 'laufabhaengig und darf nicht mehr vorkommen: ' + S);
 end;
 
 procedure TTestCrashDiag.Describe_External_ReportsNtStatus;

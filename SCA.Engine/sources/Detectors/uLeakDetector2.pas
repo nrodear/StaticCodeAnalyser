@@ -16,6 +16,8 @@
 //   var := X.AppendChild(...)
 //   FField := var                Var-zu-Feld: Method-Scope abgegeben
 //   FField := var as ISomething   (Interface-Refcount uebernimmt Lifetime)
+//   Result.Member := var         an den Rueckgabewert gehaengt (I1) -
+//                                wer das Ergebnis bekommt, bekommt es mit
 //   inherited Create(var, …)    Elternkonstruktor übernimmt
 //   AnyClass.Create(var, …)     anderer Konstruktor übernimmt
 //   Container.Add(...var...)     TObjectList/TObjectDictionary/...
@@ -2134,6 +2136,29 @@ begin
         if (not Assigned(AUnitNode)) or (Pos('[', LHSOrig) = 0) then
           Exit(True);
       end;
+      // I1 (2026-09-20): 'Result.<Member> := varName'. Das Objekt wird
+      // an das ZURUECKGEGEBENE Objekt gehaengt und verlaesst damit den
+      // Methoden-Scope - dieselbe Begruendung wie beim laengst
+      // vorhandenen 'Result := varName', nur eine Ebene tiefer. Wer
+      // das Ergebnis bekommt, bekommt das Angehaengte mit.
+      //
+      // BEWUSST nur 'Result.': eine Zuweisung an ein beliebiges fremdes
+      // Objekt ('Other.Field := var') ist KEIN belegter Transfer - der
+      // Versuch, das zu verallgemeinern, ist am 2026-08-05 an zwei
+      // roten Bestandstests gescheitert (Notiz unten). Bei Result ist
+      // der Empfaenger dagegen per Sprachsemantik der Rueckgabewert.
+      //
+      // Index-Vorbehalt wie oben: 'Result.Items[i] := Var' faellt durch
+      // zum Empfaenger-Veto, weil das letzte Kettensegment entscheidet.
+      //
+      // GEMESSEN (i_messung_sca001): genau EIN Fund je Korpus -
+      // doublecmd udarwinfswatch.pas:381 ('Result._list := list' in
+      // deepCopy) und lcl cocoawslistview.pas:125
+      // ('Result.styleHandler := styleHandler'). Beide von Hand als
+      // echter Transfer bestaetigt.
+      if SameText(Copy(LHSOrig, 1, 7), 'result.') and
+         ((not Assigned(AUnitNode)) or (Pos('[', LHSOrig) = 0)) then
+        Exit(True);
       // BEWUSST NICHT erweitert auf beliebige Zuweisungsziele (Versuch vom
       // 2026-08-05, nach zwei roten Bestandstests zurueckgenommen):
       // 'LOther := LItem' sieht wie eine Weitergabe aus, ist aber keine -
