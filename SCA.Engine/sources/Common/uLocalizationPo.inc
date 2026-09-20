@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2245 Zeilen, 78007 Bytes
-  CPoLines_de: array[0..2244] of string = (
+  // i18n\de.po - 2248 Zeilen, 75794 Bytes
+  CPoLines_de: array[0..2247] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -972,6 +972,9 @@ const
     '',
     'msgid "Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore"',
     'msgstr "Aktionen-Menue: Branch-Aenderungen, Abbrechen, Export, Einstellungen, Ignorieren"',
+    '',
+    'msgid "Before"',
+    'msgstr "Vorher"',
     '',
     'msgid "After"',
     'msgstr "Nachher"',
@@ -2534,8 +2537,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2241 Zeilen, 81682 Bytes
-  CPoLines_fr: array[0..2240] of string = (
+  // i18n\fr.po - 2244 Zeilen, 79472 Bytes
+  CPoLines_fr: array[0..2243] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -3501,6 +3504,9 @@ const
     '',
     'msgid "Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore"',
     'msgstr "Menu Actions : modifications de branche, annuler, exporter, param'#$00E8'tres, ignorer"',
+    '',
+    'msgid "Before"',
+    'msgstr "Avant"',
     '',
     'msgid "After"',
     'msgstr "Apr'#$00E8's"',

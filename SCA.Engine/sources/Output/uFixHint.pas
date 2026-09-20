@@ -16,6 +16,11 @@
 //     Code-Reviews, Jira-Tickets und Claude-AI-Prompts sind in der Praxis
 //     englisch, eine Lokalisierung wuerde nur das Mischmasch zwischen
 //     Quellcode-Beispielen und Erklaertext erhoehen.
+//     PRAEZISIERT 2026-09-21: das gilt fuer den CODE. Die ETIKETTEN,
+//     mit denen eine UI die beiden Seiten beschriftet, werden sehr wohl
+//     uebersetzt - das Editor-Overlay zeigt seit N2 'Vorher'/'Nachher'
+//     vor den Ketten (Entscheid 2026-09-20). Uebersetzt wird dort also
+//     das Etikett, nie der Beispielcode dahinter.
 
 interface
 

@@ -136,7 +136,13 @@ type
       const AFix: string = '';
       const AFileName: string = '';
       ALineNo: Integer = 0;
-      AStartWidth: Integer = 0);
+      AStartWidth: Integer = 0;
+      // N2 (2026-09-21): die beiden Ketten. Sind sie gesetzt,
+      // ERSETZEN sie den Nachher-Codeblock (Konzept E6) - sonst
+      // stuende dieselbe Aussage zweimal da. Fuer alle Regeln
+      // ohne Kette bleibt das Overlay unveraendert.
+      const ABeforeChain: string = '';
+      const AAfterChain: string = '');
     procedure HideOverlay;
     // True wenn AScreenPos in einem AZonePx x AZonePx grossen Quadrat um den
     // Close-[x]-Button (Mittelpunkt) liegt. Wird von uIDELineHighlighter
@@ -612,7 +618,9 @@ procedure TAnnotationOverlay.ShowAt(AEditor: TWinControl;
   const AFix: string;
   const AFileName: string;
   ALineNo: Integer;
-  AStartWidth: Integer);
+  AStartWidth: Integer;
+  const ABeforeChain: string;
+  const AAfterChain: string);
 const
   FIX_HEADER_H = 22;  // kleine "✓ After"-Header-Zeile
   MAX_FIX_H    = 200; // ~10 Zeilen Consolas 9pt
@@ -626,6 +634,8 @@ var
   HeaderFg                 : TColor;     // Auto-Kontrast fuer Schrift auf EffAccent
   WindowBase               : TColor;
   HasFix                   : Boolean;
+  Kette                    : string;  // N2: VORHER/NACHHER
+  FixTxt                   : string;  // Kette ODER Codeblock
 
   function MeasureWrapped(const AText: string; AFont: TFont): Integer;
   // DT_CALCRECT mit der gegebenen Font-Metrik; verfuegbare Breite ist die
@@ -652,7 +662,28 @@ begin
   // Editor muss da sein — sonst keine Sinn das Overlay zu zeigen.
   if not Assigned(AEditor) or not AEditor.HandleAllocated then Exit;
 
-  HasFix := Trim(AFix) <> '';
+  // N2: die Kette ersetzt den Block, wenn es eine gibt.
+  // Praefixe UEBERSETZT (Entscheid 2026-09-20) - anders als die
+  // Code-Beispiele selbst, die laut uFixHint-Kopf englisch
+  // bleiben. Hier sind es ETIKETTEN, kein Code.
+  // EINMAL aufloesen, nicht je Zeile: der Pfad laeuft bei jedem
+  // Hover.
+  Kette := '';
+  if Trim(ABeforeChain) <> '' then
+    Kette := _('Before') + '  ' + Trim(ABeforeChain);
+  if Trim(AAfterChain) <> '' then
+  begin
+    if Kette <> '' then Kette := Kette + sLineBreak;
+    Kette := Kette + _('After') + '  ' + Trim(AAfterChain);
+  end;
+  if Kette <> '' then
+    FixTxt := Kette
+  else
+    FixTxt := AFix;
+  HasFix := Trim(FixTxt) <> '';
+  // Der Header sagt bereits "Nachher". Traegt der Block die Kette,
+  // steht das Wort schon als Praefix darin - der Header entfaellt.
+  FLblFixHeader.Visible := HasFix and (Kette = '');
 
   // Hoehen DPI-bewusst aus der Editor-Zeilenhoehe ableiten.
   TitleH := Max(MIN_TITLE_H, ALineH);
@@ -663,7 +694,13 @@ begin
   try
     DescH := MeasureWrapped(ADesc, FLblDesc.Font) + 2 * DESC_PAD_V;
     if HasFix then
-      FixH := FIX_HEADER_H + MeasureWrapped(AFix, FLblFix.Font) + DESC_PAD_V
+      // FIX_HEADER_H nur, wenn der Header auch sichtbar ist - sonst
+      // bekaeme der Kettenblock eine leere Zeile Vorlauf.
+      if Kette <> '' then
+        FixH := MeasureWrapped(FixTxt, FLblFix.Font) + DESC_PAD_V
+      else
+        FixH := FIX_HEADER_H + MeasureWrapped(FixTxt, FLblFix.Font)
+                + DESC_PAD_V
     else
       FixH := 0;
   finally
@@ -705,7 +742,7 @@ begin
     and (AWidth   = FLastW) and (ALineH   = FLastLineH)
     and (ATitle   = FLastTitle) and (ADesc = FLastDesc)
     and (ABadge   = FLastBadge) and (AAccentColor = FLastAccent)
-    and (AFix     = FLastFix)
+    and (FixTxt   = FLastFix)
     and (WindowBase = FLastWindowBase)
   then
     Exit;
@@ -769,7 +806,7 @@ begin
   // alClient-Layout kollabiert automatisch wenn das Panel unsichtbar ist.
   if HasFix then
   begin
-    FLblFix.Caption    := AFix;
+    FLblFix.Caption    := FixTxt;
     FPanelFix.Color    := WindowBase;     // gleiche Basis wie Description
     FLblFix.Font.Color := FLblDesc.Font.Color;
     FPanelFix.Visible  := True;
@@ -788,7 +825,7 @@ begin
   FLastTitle      := ATitle;
   FLastDesc       := ADesc;
   FLastBadge      := ABadge;
-  FLastFix        := AFix;
+  FLastFix        := FixTxt;
   FLastAccent     := AAccentColor;
   FLastWindowBase := WindowBase;
 
