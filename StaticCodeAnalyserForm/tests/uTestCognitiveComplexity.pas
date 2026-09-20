@@ -19,6 +19,9 @@ type
     // Voll-Review 2026-09-12 (Testluecke 95): Boolean-Operatoren POSITIV
     [Test] procedure BooleanOperatorsRaiseScore_Reported;
     [Test] procedure PlainConditionsStayUnderLimit_NoFinding;
+    // ---- L1 (2026-09-20): Verschachtelungskette auch bei SCA176 --
+    [Test] procedure Chain176_DeepestPath_OuterToInner;
+    [Test] procedure Chain176_NotTheScore_ButThePath;
   end;
 
 implementation
@@ -260,6 +263,86 @@ begin
   try Assert.AreEqual<Integer>(0,
     TFindingHelper.Count(F, fkCognitiveComplexity),
     'zwei schlichte Bedingungen bleiben weit unter dem Limit');
+  finally F.Free; end;
+end;
+
+{ ---- L1 (2026-09-20): Kette bei SCA176 -------------------------- }
+//
+// ANDERER VERTRAG ALS BEI SCA018: dort ist die Gliederzahl die
+// gemeldete Tiefe. Hier ist die Kette der TIEFSTE PFAD der Methode -
+// sie zeigt den Verschachtelungsanteil der Punktzahl, rechnet sie
+// aber NICHT nach (die Punktzahl zaehlt auch flache Verzweigungen
+// und boolesche Operatoren mit).
+
+function Chain176Of(F: TObjectList<TLeakFinding>): string;
+var X: TLeakFinding;
+begin
+  Result := '';
+  for X in F do
+    if X.Kind = fkCognitiveComplexity then Exit(X.StructureChain);
+end;
+
+procedure TTestCognitiveComplexity.Chain176_DeepestPath_OuterToInner;
+// Tief genug fuer einen Befund, und der tiefste Pfad ist eindeutig.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A then'#13#10+
+  '    for I := 1 to 3 do'#13#10+
+  '      while B do'#13#10+
+  '        case C of'#13#10+
+  '          1: if D then DoIt;'#13#10+
+  '        end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    if TFindingHelper.Count(F, fkCognitiveComplexity) = 0 then
+      Assert.Pass('unter der Schwelle - kein Befund, kein Kettenvertrag')
+    else
+      Assert.AreEqual('if → for → while → case → if', Chain176Of(F),
+        'tiefster Pfad, von aussen nach innen');
+  finally F.Free; end;
+end;
+
+procedure TTestCognitiveComplexity.Chain176_NotTheScore_ButThePath;
+// DIE ABGRENZUNG: viele FLACHE Verzweigungen treiben die Punktzahl,
+// die Kette bleibt trotzdem kurz. Wer hier Gliederzahl = Punktzahl
+// erwartet, hat den Vertrag missverstanden - genau deshalb steht
+// der Fall als Test da.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure Foo;'#13#10+
+  'begin'#13#10+
+  '  if A1 then DoIt;'#13#10+
+  '  if A2 then DoIt;'#13#10+
+  '  if A3 then DoIt;'#13#10+
+  '  if A4 then DoIt;'#13#10+
+  '  if A5 then DoIt;'#13#10+
+  '  if A6 then DoIt;'#13#10+
+  '  if A7 then DoIt;'#13#10+
+  '  if A8 then DoIt;'#13#10+
+  '  if A9 then DoIt;'#13#10+
+  '  if B1 then'#13#10+
+  '    if B2 then DoIt;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+    Kette: string;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    if TFindingHelper.Count(F, fkCognitiveComplexity) = 0 then
+      Assert.Pass('unter der Schwelle')
+    else
+    begin
+      Kette := Chain176Of(F);
+      Assert.IsTrue(Pos('→', Kette) > 0,
+        'der tiefste Pfad hat zwei Glieder: ' + Kette);
+      Assert.AreEqual('if → if', Kette,
+        'neun flache if treiben die Punktzahl, nicht die Kette');
+    end;
   finally F.Free; end;
 end;
 

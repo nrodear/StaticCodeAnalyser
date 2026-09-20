@@ -69,10 +69,6 @@ const
   COUNTING_KINDS : set of TNodeKind =
     [nkIfStmt, nkForStmt, nkWhileStmt, nkRepeatStmt, nkCaseStmt];
 
-  // Trenner der Verschachtelungskette. EIN Ort - die Anzeige
-  // uebernimmt die Zeichenkette unveraendert, damit Editor, HTML
-  // und Export nicht drei Schreibweisen bekommen.
-  CHAIN_SEP = ' → ';
 
 class function TDeepNestingDetector.KindName(Kind: TNodeKind): string;
 begin
