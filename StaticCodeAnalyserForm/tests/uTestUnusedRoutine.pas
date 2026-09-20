@@ -652,7 +652,7 @@ const SRC =
   'unit t;'#13#10 +
   'interface'#13#10 +
   'implementation'#13#10 +
-  const QUELLE = {$I mi"Xed.Inc};#13#10 +
+  'const QUELLE = ''{$I mi"Xed.Inc}'';'#13#10 +
   'procedure NieGerufen;'#13#10 +
   'begin'#13#10 +
   'end;'#13#10 +
