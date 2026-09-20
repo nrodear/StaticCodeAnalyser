@@ -19,6 +19,9 @@ type
     [Test] procedure MixedUnit_OnlyAppClassReported;
     [Test] procedure TypelibFile_NotReported;
     [Test] procedure NonTypelibFile_Gegenprobe_Reported;
+    // ---- H1: FPC-Fremdsprachen-Bindings (2026-09-20) ----
+    [Test] procedure Objcclass_NotReported;
+    [Test] procedure Objcclass_NachbarklasseWeiterhinGemeldet;
   end;
 
 implementation
@@ -327,6 +330,75 @@ begin
     SB.Free;
   end;
 end;
+
+{ ---- H1 (2026-09-20): FPC-Fremdsprachen-Bindings -------------- }
+//
+// Typen, die mit objcclass/objccategory/objcprotocol/cppclass
+// deklariert sind, SPIEGELN eine fremde API: Methodenzahl,
+// Parameterzahl, Rumpflaenge und Aufrufer sind vom Framework
+// vorgegeben. Strukturbefunde beschreiben dort nicht den Entwurf
+// des Autors. Der zweite Test jeder Familie ist der WICHTIGE: er
+// pinnt, dass das Gate TYPGENAU wirkt - eine gewoehnliche
+// Nachbarklasse in DERSELBEN Datei meldet weiter. Ein dateiweites
+// Gate haette am Laz-Korpus 59 von 86 Funden mitgerissen.
+
+procedure TTestLargeClass.Objcclass_NotReported;
+// 550 Zeilen objcclass-Rumpf - das ist der Umfang der FREMDEN API
+// (G-Abnahme: TCocoaTableListView, 598 Zeilen).
+var
+  SB : TStringBuilder;
+  i  : Integer;
+  F  : TObjectList<TLeakFinding>;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('unit t; interface');
+    SB.AppendLine('type');
+    SB.AppendLine('  TCocoaTableListView = objcclass(NSTableView)');
+    for i := 1 to 550 do
+      SB.AppendLine(Format('    procedure setTag%d(v: Integer);', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('implementation');
+    SB.AppendLine('end.');
+    F := LargeClassFindingsForFile(SB.ToString, '.pas');
+    try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkLargeClass),
+      'ein objcclass spiegelt die fremde API - kein Large-Class-Befund');
+    finally F.Free; end;
+  finally
+    SB.Free;
+  end;
+end;
+
+procedure TTestLargeClass.Objcclass_NachbarklasseWeiterhinGemeldet;
+// GEGENPROBE zur Reichweite (s. Kopf): genau ein Befund.
+var
+  SB : TStringBuilder;
+  i  : Integer;
+  F  : TObjectList<TLeakFinding>;
+begin
+  SB := TStringBuilder.Create;
+  try
+    SB.AppendLine('unit t; interface');
+    SB.AppendLine('type');
+    SB.AppendLine('  TCocoaTableListView = objcclass(NSTableView)');
+    for i := 1 to 550 do
+      SB.AppendLine(Format('    procedure setTag%d(v: Integer);', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('  TMeineKlasse = class(TObject)');
+    for i := 1 to 550 do
+      SB.AppendLine(Format('    procedure DoIt%d(v: Integer);', [i]));
+    SB.AppendLine('  end;');
+    SB.AppendLine('implementation');
+    SB.AppendLine('end.');
+    F := LargeClassFindingsForFile(SB.ToString, '.pas');
+    try Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkLargeClass),
+      'die gewoehnliche Nachbarklasse bleibt ein Befund - typgenau');
+    finally F.Free; end;
+  finally
+    SB.Free;
+  end;
+end;
+
 
 initialization
   TDUnitX.RegisterTestFixture(TTestLargeClass);

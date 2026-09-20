@@ -626,6 +626,36 @@ type
     class function IsFfiBindingTypeName(AFfiTypes: TStringList;
       const ATypeName: string): Boolean; static;
 
+    /// <summary>Typnamen (lowercase) einer Unit, die mit einer
+    /// FPC-Fremdsprachen-Klassenart deklariert sind - objcclass,
+    /// objccategory, objcprotocol (Objective-C) oder cppclass (C++).
+    /// Ergebnis ist sortiert und wird mit IsFfiBindingTypeName
+    /// abgefragt; der Aufrufer gibt die Liste frei.</summary>
+    /// <remarks>
+    ///   H1 (2026-09-20). Solche Typen SPIEGELN eine fremde API: ihre
+    ///   Methodennamen sind Selektoren, ihre Parameterzahl, ihr
+    ///   Methodenumfang und ihre Laenge sind vom Framework vorgegeben.
+    ///   Strukturregeln (SCA013/138/141/147) beschreiben dort nicht die
+    ///   Entwurfsqualitaet des AUTORS - sie sind nicht behebbar.
+    ///
+    ///   Der Nachweis laeuft ueber den GESTRIPPTEN Quelltext und nicht
+    ///   ueber den AST: der Parser fuehrt die vier Arten seit G1 zwar
+    ///   als nkClass, vermerkt aber nirgends, WELCHES Schluesselwort
+    ///   die Deklaration eroeffnet hat (TAstNode hat kein Feld dafuer).
+    ///   Strings und Kommentare zaehlen deshalb nicht mit - die
+    ///   Lazarus-Codetools fuehren 'objcclass' als Schluesselwort-
+    ///   Literal, dort darf das Gate NICHT greifen.
+    ///
+    ///   WARUM TYPGENAU und nicht dateiweit wie das SCA106-Gate 8:
+    ///   gemessen am Laz-Korpus (h_messung1) liegen in den
+    ///   Kandidaten-Dateien 86 Funde dieser vier Regeln, aber nur 27
+    ///   INNERHALB eines Binding-Typs - ein dateiweites Gate haette 59
+    ///   Funde an gewoehnlichen Nachbarklassen mitgerissen.
+    /// </remarks>
+    class function CollectFpcBindingTypeNames(ALines: TStrings;
+      AContext: TAnalyzeContext; const AFileName: string)
+      : TStringList; static;
+
     // True wenn die Methode eine Event-Handler-Signatur hat - erster
     // nkParam heisst 'Sender' (case-insensitive) oder sein TypeRef
     // enthaelt 'tobject'. Solche Methoden werden vom Form-Designer per
@@ -2303,6 +2333,90 @@ begin
   Seg := LowerCase(UnqualifiedNameLast(Trim(ATypeName)));
   if Seg = '' then Exit;
   Result := AFfiTypes.IndexOf(Seg) >= 0;
+end;
+
+class function TDetectorUtils.CollectFpcBindingTypeNames(ALines: TStrings;
+  AContext: TAnalyzeContext; const AFileName: string): TStringList;
+// Vertrag siehe Deklaration. Gesucht wird die Typdeklaration
+//   <name> = [packed] objcclass|objccategory|objcprotocol|cppclass ...
+// im gestrippten, lowercase gelesenen Quelltext. Bewusst zeilenweise:
+// FPC schreibt Klassenart und Typnamen immer auf dieselbe Zeile (im
+// Korpus ausnahmslos), und eine Zeilenregel kann keine fremde
+// Deklaration einfangen.
+const
+  ARTEN : array[0..3] of string = (
+    'objcclass', 'objccategory', 'objcprotocol', 'cppclass');
+var
+  LineFor : TArray<Integer>;
+  Code    : string;
+  Zeilen  : TArray<string>;
+  Z, Rest : string;
+  pEq, i  : Integer;
+  Name    : string;
+
+  // Typname LINKS vom '=', normalisiert - oder '' wenn dort kein
+  // reiner Bezeichner steht (dann ist die Zeile keine Typdeklaration,
+  // sondern z. B. eine Zuweisung 'Foo.Bar := objcclass;').
+  // Generic-Parameter werden abgeschnitten: 'tfoo<t>' -> 'tfoo'.
+  function TypNameLinks(const ALinks: string): string;
+  var
+    j : Integer;
+  begin
+    Result := Trim(ALinks);
+    j := Pos('<', Result);
+    if j > 0 then Result := Trim(Copy(Result, 1, j - 1));
+    if Result = '' then Exit;
+    if not CharInSet(Result[1], ['a'..'z', '_']) then Exit('');
+    for j := 1 to Length(Result) do
+      if not CharInSet(Result[j], ['a'..'z', '0'..'9', '_']) then
+        Exit('');
+  end;
+
+  // True, wenn Rest mit einer der vier Arten als WORT beginnt.
+  function BeginntMitArt(const S: string): Boolean;
+  var
+    j, L : Integer;
+  begin
+    Result := False;
+    for j := Low(ARTEN) to High(ARTEN) do
+    begin
+      L := Length(ARTEN[j]);
+      if (Length(S) >= L) and (Copy(S, 1, L) = ARTEN[j]) and
+         ((Length(S) = L) or
+          not CharInSet(S[L + 1], ['a'..'z', '0'..'9', '_'])) then
+        Exit(True);
+    end;
+  end;
+
+begin
+  Result := TStringList.Create;
+  Result.CaseSensitive := False;
+  Result.Duplicates    := dupIgnore;
+  Result.Sorted        := True;      // IndexOf = Binaersuche
+  if ALines = nil then Exit;
+  try
+    Code := LowerCase(StripStringsAndCommentsCached(
+      ALines, LineFor, AContext, AFileName));
+    Zeilen := Code.Split([#10]);
+    for i := 0 to High(Zeilen) do
+    begin
+      Z := Zeilen[i];
+      pEq := Pos('=', Z);
+      if pEq = 0 then Continue;
+      Rest := TrimLeft(Copy(Z, pEq + 1, MaxInt));
+      // 'packed' ist vor record/class erlaubt und schadet hier nicht.
+      if Copy(Rest, 1, 7) = 'packed ' then Rest := TrimLeft(Copy(Rest, 8, MaxInt));
+      if not BeginntMitArt(Rest) then Continue;
+      Name := TypNameLinks(Copy(Z, 1, pEq - 1));
+      if Name <> '' then Result.Add(Name);
+    end;
+  except
+    // Exception-Sicherheit: die Liste gehoert noch UNS, solange die
+    // Funktion nicht normal zurueckkehrt (gleiche Politik wie
+    // CollectFfiBindingTypes).
+    Result.Free;
+    raise;
+  end;
 end;
 
 class function TDetectorUtils.ExtractFirstWord(const Line: string;

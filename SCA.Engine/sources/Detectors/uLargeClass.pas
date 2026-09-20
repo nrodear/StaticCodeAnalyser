@@ -43,13 +43,15 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TLargeClassDetector = class
   public
+    // AContext seit H1 (2026-09-20): das FPC-Bindings-Gate liest
+    // den gestrippten Quelltext und teilt sich dessen Cache.
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -59,6 +61,7 @@ implementation
 
 uses
   System.Classes,                // TStringList fuer das FFI-Typ-Set
+  uFileTextCache,                // AcquireLines (FPC-Bindings, H1)
   uDetectorUtils,                // FFI-Binding-Gate (Shared Service, Hebel A)
   uAstSpans;                     // Teilbaum-Maximum (B1, vormals DeepMaxLine)
 
@@ -78,7 +81,8 @@ begin
 end;
 
 class procedure TLargeClassDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   Classes  : TList<TAstNode>;
   AllMeths : TList<TAstNode>;
@@ -142,7 +146,28 @@ begin
       // Gate 2: ObjC-/JNI-Bridge-Typ. Nachschlag ueber den TYPNAMEN, nicht
       // ueber die Datei - Nachbarklassen derselben Unit bleiben Fund.
       if FfiTypes = nil then
+      begin
         FfiTypes := TDetectorUtils.CollectFfiBindingTypes(UnitNode);
+        // H1 (2026-09-20): FPC-Fremdsprachen-Klassenarten dazu -
+        // die Laenge eines objcclass-Rumpfes ist der Umfang der
+        // FREMDEN API (G-Abnahme 20.09.: TCocoaTableListView, 598
+        // Zeilen). Gleiche Einspeisung wie in uGodClass.
+        var Lines: TStringList;
+        var Cached: Boolean;
+        Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
+        if Lines <> nil then
+        try
+          var Fpc := TDetectorUtils.CollectFpcBindingTypeNames(
+            Lines, AContext, FileName);
+          try
+            FfiTypes.AddStrings(Fpc);
+          finally
+            Fpc.Free;
+          end;
+        finally
+          ReleaseLines(Lines, Cached);
+        end;
+      end;
       if TDetectorUtils.IsFfiBindingTypeName(FfiTypes, ClassName) then Continue;
 
       F            := TLeakFinding.Create;

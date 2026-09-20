@@ -86,13 +86,15 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
-  uAstNode, uSCAConsts, uMethodd12;
+  uAstNode, uSCAConsts, uMethodd12, uAnalyzeContext;
 
 type
   TGodClassDetector = class
   public
+    // AContext seit H1 (2026-09-20): das FPC-Bindings-Gate liest
+    // den gestrippten Quelltext und teilt sich dessen Cache.
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
-      Results: TObjectList<TLeakFinding>);
+      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   end;
 
 implementation
@@ -143,7 +145,8 @@ begin
 end;
 
 class procedure TGodClassDetector.AnalyzeUnit(UnitNode: TAstNode;
-  const FileName: string; Results: TObjectList<TLeakFinding>);
+  const FileName: string; Results: TObjectList<TLeakFinding>;
+  AContext: TAnalyzeContext);
 var
   Classes : TList<TAstNode>;
   C, Child : TAstNode;
@@ -220,7 +223,33 @@ begin
       // derselben Unit bleiben unangetastet. Deckt auch verschachtelte
       // Typen ab (IsFfiBindingTypeName vergleicht das letzte Namenssegment).
       if FfiTypes = nil then
+      begin
         FfiTypes := TDetectorUtils.CollectFfiBindingTypes(UnitNode);
+        // H1 (2026-09-20): dieselbe Liste traegt jetzt auch die
+        // FPC-Fremdsprachen-Klassenarten (objcclass & Co.). Die
+        // AST-Anker von CollectFfiBindingTypes erreichen sie nur
+        // zufaellig - NUR wenn die Elternkette in DIESER Unit auf
+        // nsobject/jobject trifft; TCocoaApplication = objcclass(NSApplication)
+        // tut das nicht. Ein God-Class-Befund beschreibt dort
+        // ohnehin den Umfang der FREMDEN API, nicht den Entwurf
+        // des Autors (G-Abnahme 20.09.: +19 Funde, u. a.
+        // NSCollectionViewFix mit 22 Methoden).
+        var Lines: TStringList;
+        var Cached: Boolean;
+        Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
+        if Lines <> nil then
+        try
+          var Fpc := TDetectorUtils.CollectFpcBindingTypeNames(
+            Lines, AContext, FileName);
+          try
+            FfiTypes.AddStrings(Fpc);
+          finally
+            Fpc.Free;
+          end;
+        finally
+          ReleaseLines(Lines, Cached);
+        end;
+      end;
       if TDetectorUtils.IsFfiBindingTypeName(FfiTypes, C.Name) then Continue;
 
       // Real-World-FP-Audit 2026-07-10: leere `class(...);`-Einzeiler
