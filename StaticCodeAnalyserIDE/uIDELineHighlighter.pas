@@ -98,6 +98,12 @@ type
     // TLeakFinding.RelatedLines - der Nur-Text-Hint zeigt sie in seiner
     // laengsten Stufe, s. DrawTextHint.
     RelatedLines : string;
+    // Verschachtelungskette zur Fundstelle (K1/L1), Rohwert aus
+    // TLeakFinding.StructureChain - heute nur SCA018 und SCA176.
+    // Der Nur-Text-Hint zeigt sie als Breadcrumb in seiner laengsten
+    // Stufe, s. DrawTextHint. Leer bei allen anderen Regeln; dann
+    // faellt der Hint auf die bisherige Kurzform zurueck.
+    StructureChain : string;
     Color    : TColor;          // Stripe-Farbe (staerkste Severity)
     Fix      : string;          // After-Code (leer im Multi-Mode)
     Severity : TFindingSeverity;// fuer Stripe-Ranking
@@ -173,6 +179,8 @@ type
     RuleName : string;
     // s. TFindingMark.RelatedLines.
     RelatedLines : string;
+    // s. TFindingMark.StructureChain.
+    StructureChain : string;
     Color    : TColor;
     Fix      : string;
     Severity : TFindingSeverity;
@@ -615,13 +623,6 @@ procedure RefreshShowOnHoverCache; overload;
 procedure RefreshShowOnHoverCache(AValue: Boolean); overload;
 
 implementation
-const
-  // M1 (2026-09-20, Nicos Vorgabe): beide Hint-Stufen werden auf diese
-  // Zeichenzahl gedeckelt. EIN Ort fuer beide - Level 1 (Breadcrumb im
-  // Editor) und Level 2 (Panel) sollen dieselbe Kante haben, sonst
-  // wirkt das Aufklappen wie ein Sprung.
-  MAX_HINT_CHARS = 100;
-
 
 // noinspection-file BeginEndRequired, CanBeClassMethod, CanBeUnitPrivate, ClassPerFile, ConcatToFormat, ConsecutiveSection, CyclomaticComplexity, DeepNesting, EmptyExcept, EmptyMethod, GodClass, GroupedDeclaration, LargeClass, LongMethod, LongParamList, MagicNumber, MultipleExit, NestedRoutine, NestedTry, PublicMemberWithoutDoc, RedundantJump, TooLongLine, UnsortedUses, UnusedParameter, UnusedPublicMember
 // OTAPI-Plugin: empty-except schluckt IDE-API-Failures (sonst killt jeder
@@ -639,6 +640,11 @@ uses
 
 const
   STRIPE_WIDTH_PX  = 3;
+  // M1 (2026-09-20, Nicos Vorgabe): beide Hint-Stufen werden auf diese
+  // Zeichenzahl gedeckelt. EIN Ort fuer beide - Level 1 (Breadcrumb im
+  // Editor) und Level 2 (Panel) sollen dieselbe Kante haben, sonst
+  // wirkt das Aufklappen wie ein Sprung.
+  MAX_HINT_CHARS  = 100;
   // Obergrenze fuer die Zeilen, die EIN Befund markieren darf. Reine
   // Schadensbegrenzung gegen ein fehlerhaftes EndLine, kein fachliches
   // Limit. Der Wert ist bewusst weit ueber allem angesetzt, was eine
@@ -1721,6 +1727,7 @@ begin
     Result.Desc     := Strongest.Desc;
     Result.Badge    := Strongest.Badge;
     Result.RelatedLines := Strongest.RelatedLines;
+    Result.StructureChain := Strongest.StructureChain;
     Result.RuleName := Strongest.RuleName;
     Result.Color    := Strongest.Color;
     Result.Fix      := Strongest.Fix;
@@ -1799,6 +1806,9 @@ begin
   // Ankerzeile. Eine Fortsetzungszeile ist kein Fund und darf sie nicht
   // fuehren (Review 2026-08-21).
   Result.RelatedLines := '';
+  // Dieselbe Begruendung: die Kette beschreibt die Fundstelle, und
+  // die liegt in der Ankerzeile.
+  Result.StructureChain := '';
   Result.IsMulti  := False;
   // Ebenfalls NICHT erben: der Zeilentext-Schnappschuss von Ziel 2 gehoert
   // der ANKERZEILE. Eine Fortsetzungszeile mit fremdem Schnappschuss

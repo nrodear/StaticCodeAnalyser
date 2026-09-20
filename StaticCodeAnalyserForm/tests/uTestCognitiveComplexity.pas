@@ -1,4 +1,4 @@
-unit uTestCognitiveComplexity;
+﻿unit uTestCognitiveComplexity;
 
 interface
 
