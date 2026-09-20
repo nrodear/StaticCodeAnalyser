@@ -3048,6 +3048,16 @@ begin
   if (FSavedCharWidth > 0) and
      (AWidth > MAX_HINT_CHARS * FSavedCharWidth) then
     AWidth := MAX_HINT_CHARS * FSavedCharWidth;
+  // M6 (2026-09-20): und in den SICHTBAREN Editor hinein deckeln. AWidth
+  // kommt aus HitRect (dem CodeRect), das bei horizontalem Scrollen ueber
+  // den Client hinausreichen kann. Das Overlay ist ein WS_CHILD des
+  // Editors und wird an dessen Rand HART abgeschnitten (s. Kopf von
+  // uIDEAnnotationOverlay) - die letzte Pixelspalte faellt dann weg, und
+  // mit ihr die rechte Rahmenkante. Genau das war am Bau vom 20.09. zu
+  // sehen ("unten und rechts fehlt").
+  if Assigned(FSavedEditor) and (FSavedEditor.ClientWidth > 0) and
+     (P.X + AWidth > FSavedEditor.ClientWidth) then
+    AWidth := FSavedEditor.ClientWidth - P.X;
   LineH := FSavedCharHeight;
   if LineH < 16 then LineH := 20;  // Fallback wenn CharHeight nicht gesetzt
   try

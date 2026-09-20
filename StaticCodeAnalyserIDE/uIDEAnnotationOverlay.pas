@@ -47,6 +47,12 @@ type
   TAnnotationOverlay = class(TForm)
   private
     FBorderPanel    : TPanel;   // 3px linker Rand (Rot)
+    // M6 (2026-09-20): die drei uebrigen Rahmenkanten. Der linke
+    // Rand IST FBorderPanel (nur dicker) - zusammen ergeben die
+    // vier einen geschlossenen Rahmen in der Severity-Farbe.
+    FEdgeTop        : TPanel;
+    FEdgeBottom     : TPanel;
+    FEdgeRight      : TPanel;
     FContentArea    : TPanel;   // rechts davon: Titel + Desc + Fix
     FPanelTitle     : TPanel;
     FLblTitle       : TLabel;   // "⚠  Memory Leak – ..."
@@ -256,13 +262,11 @@ constructor TAnnotationOverlay.Create(AOwner: TComponent);
 begin
   inherited CreateNew(AOwner);
   BorderStyle := bsNone;
-  // M4 (2026-09-20): der Rahmen. BorderWidth reserviert einen Rand,
-  // den KEIN Align-Kind ueberdecken darf - deshalb hier und nicht
-  // als Margin an FContentArea: der Severity-Streifen ist alLeft und
-  // haette den linken Rand voll abgedeckt. Genau das war am Bau vom
-  // 20.09. zu sehen: kein kompletter Rahmen. Gefuellt wird er vom
-  // Formhintergrund, den ShowAt auf die Severity-Farbe setzt.
-  BorderWidth := BORDER_W;
+  // Der Rahmen kommt aus vier Rand-Panels, nicht aus BorderWidth -
+  // siehe die Erzeugung unten. BorderWidth war der zweite Versuch
+  // und hat am Bau vom 20.09. nur oben und links einen Rand
+  // erzeugt: die Align-Kinder ragten unten und rechts darueber
+  // hinaus.
   // StyleElements leeren wie bei JEDEM Panel dieser Unit (dort steht
   // ueberall "VCL-Theme nicht ueberschreiben"). Fuer die Form war es
   // bisher egal, weil ihr Hintergrund vollstaendig verdeckt war - mit
@@ -294,7 +298,40 @@ begin
   // fuer alle Panels und das Badge-Label unten.
   StyleElements := [];
 
-  // ---- 3px linker Rand (Farb-Stripe) ----
+  // ---- Rahmen: vier Kanten in der Severity-Farbe ----
+  // Die Reihenfolge IST die Align-Reihenfolge: waagerechte Kanten
+  // zuerst, damit sie ueber die volle Breite laufen und die
+  // Senkrechten dazwischen sitzen. Ein Panel kann kein anderes
+  // Align-Kind ueberdecken - genau das war das Problem der beiden
+  // Vorversuche (Margin an EINEM Kind, dann BorderWidth).
+  FEdgeTop                := TPanel.Create(Self);
+  FEdgeTop.Parent         := Self;
+  FEdgeTop.Align          := alTop;
+  FEdgeTop.Height         := BORDER_W;
+  FEdgeTop.BevelOuter     := bvNone;
+  FEdgeTop.StyleElements  := [];
+  FEdgeTop.ParentBackground := False;
+  FEdgeTop.Color          := ACCENT_ERROR;
+
+  FEdgeBottom                := TPanel.Create(Self);
+  FEdgeBottom.Parent         := Self;
+  FEdgeBottom.Align          := alBottom;
+  FEdgeBottom.Height         := BORDER_W;
+  FEdgeBottom.BevelOuter     := bvNone;
+  FEdgeBottom.StyleElements  := [];
+  FEdgeBottom.ParentBackground := False;
+  FEdgeBottom.Color          := ACCENT_ERROR;
+
+  FEdgeRight                := TPanel.Create(Self);
+  FEdgeRight.Parent         := Self;
+  FEdgeRight.Align          := alRight;
+  FEdgeRight.Width          := BORDER_W;
+  FEdgeRight.BevelOuter     := bvNone;
+  FEdgeRight.StyleElements  := [];
+  FEdgeRight.ParentBackground := False;
+  FEdgeRight.Color          := ACCENT_ERROR;
+
+  // ---- linke Kante = der 3px-Farb-Stripe ----
   FBorderPanel                := TPanel.Create(Self);
   FBorderPanel.Parent         := Self;
   FBorderPanel.Align          := alLeft;
@@ -687,15 +724,21 @@ begin
     EffAccent := ACCENT_ERROR;
   TitleBg := EffAccent;
   BadgeBg := EffAccent;
-  // M1 (2026-09-20): der 1-px-Rahmen. Er wird nicht gemalt, sondern
-  // ist der Formhintergrund, den die Margins von FContentArea stehen
-  // lassen - deshalb genuegt es, die Formfarbe zu setzen.
+  // Der Formhintergrund bleibt auf der Akzentfarbe: er ist zwar
+  // vollstaendig von den Kanten und FContentArea verdeckt, aber
+  // waehrend des Morphs (MoveWindow vor dem Realign) blitzt er
+  // kurz auf - in Akzentfarbe faellt das nicht auf.
   Color := EffAccent;
   if IsLightColor(EffAccent) then
     HeaderFg := clBlack
   else
     HeaderFg := clWhite;
   FBorderPanel.Color   := EffAccent;
+  // Die drei uebrigen Kanten tragen dieselbe Farbe - der Rahmen ist
+  // EIN Element, auch wenn er aus vier Panels besteht.
+  FEdgeTop.Color       := EffAccent;
+  FEdgeBottom.Color    := EffAccent;
+  FEdgeRight.Color     := EffAccent;
   FPanelTitle.Color    := TitleBg;
   FContentArea.Color   := TitleBg;
   FLblBadge.Color      := BadgeBg;
