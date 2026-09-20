@@ -306,6 +306,36 @@ def _enum_werte(pfad, typname):
                if x.strip())
 
 
+RE_INCLUDE_DIREKTIVE = re.compile(r'\{\$(?:I|INCLUDE)[ \t]', re.I)
+
+
+def pruefe_include_in_fixture(pfad, befunde):
+    """'{$I datei}' AUSSERHALB eines Stringliterals in einer Testunit.
+
+    Faengt F1026 ('Datei nicht gefunden'). Fixtures fuehren das
+    Include-Muster als TESTDATEN - dann gehoert es in ein Literal. Ohne
+    Hochkommata fuehrt der COMPILER die Direktive aus und sucht die
+    Datei. Genau so verloren gegangen (H-Charge, 2026-09-20): ein
+    Einfuege-Skript liess die Hochkommata weg, weil Python benachbarte
+    String-Literale verkettet - aus "  '...''{$I x}''...'" wurde
+    "  ...{$I x}...".
+
+    Nur tests/: im Produktivcode sind Include-Direktiven normal. Die
+    Paritaetszaehlung der Hochkommata bis zur Fundstelle reicht, weil
+    ein Pascal-Literal nie ueber das Zeilenende geht.
+    """
+    if os.sep + 'tests' + os.sep not in pfad.replace('/', os.sep):
+        return
+    for i, ln in enumerate(zeilen(pfad), 1):
+        code = _codeteil(ln)
+        for m in RE_INCLUDE_DIREKTIVE.finditer(code):
+            if code[:m.start()].count("'") % 2 == 0:
+                befunde.append(
+                    '%s:%d  Include-Direktive ausserhalb eines Literals '
+                    '(F1026) - in Fixtures gehoert sie in Hochkommata: %s'
+                    % (os.path.basename(pfad), i, ln.strip()[:60]))
+
+
 def pruefe_token_vokabular(pfad, befunde):
     """tk-Bezeichner eines Parsers gegen SEIN Token-Enum. Faengt E2010
     (Wert aus System.TTypeKind oder dem anderen Lexer)."""
@@ -502,6 +532,7 @@ def main():
         pruefe_doppeltes_routinenende(d, befunde)
         pruefe_enums(d, deklariert, befunde)
         pruefe_token_vokabular(d, befunde)
+        pruefe_include_in_fixture(d, befunde)
         if os.sep + 'tests' + os.sep in d.replace('/', os.sep):
             pruefe_unbeendete_konstante(d, befunde)
             pruefe_fixture_klassen(d, befunde)
