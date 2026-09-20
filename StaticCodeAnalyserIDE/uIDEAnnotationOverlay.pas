@@ -256,6 +256,19 @@ constructor TAnnotationOverlay.Create(AOwner: TComponent);
 begin
   inherited CreateNew(AOwner);
   BorderStyle := bsNone;
+  // M4 (2026-09-20): der Rahmen. BorderWidth reserviert einen Rand,
+  // den KEIN Align-Kind ueberdecken darf - deshalb hier und nicht
+  // als Margin an FContentArea: der Severity-Streifen ist alLeft und
+  // haette den linken Rand voll abgedeckt. Genau das war am Bau vom
+  // 20.09. zu sehen: kein kompletter Rahmen. Gefuellt wird er vom
+  // Formhintergrund, den ShowAt auf die Severity-Farbe setzt.
+  BorderWidth := BORDER_W;
+  // StyleElements leeren wie bei JEDEM Panel dieser Unit (dort steht
+  // ueberall "VCL-Theme nicht ueberschreiben"). Fuer die Form war es
+  // bisher egal, weil ihr Hintergrund vollstaendig verdeckt war - mit
+  // BorderWidth ist er der RAHMEN, und ein aktiver VCL-Style wuerde ihn
+  // in Style-Farbe statt in Color malen.
+  StyleElements := [];
   Color       := DefaultSurface;
   Visible     := False;
   // KRITISCH (Multi-Monitor-Setup):
@@ -295,13 +308,8 @@ begin
   FContentArea                := TPanel.Create(Self);
   FContentArea.Parent         := Self;
   FContentArea.Align          := alClient;
-  // M1 (2026-09-20): 1 px Rand rundherum. Der Rahmen wird NICHT
-  // gemalt - er ist der Formhintergrund, den der eingerueckte
-  // Inhalt stehen laesst. Ein Paint-Override waere hier wirkungslos:
-  // die Kindpanels decken die Form vollstaendig ab.
-  FContentArea.AlignWithMargins := True;
-  FContentArea.Margins.SetBounds(BORDER_W, BORDER_W, BORDER_W,
-                                 BORDER_W);
+  // Kein AlignWithMargins hier - der Rand kommt aus BorderWidth der
+  // Form und gilt damit fuer BEIDE Kinder (Streifen und Inhalt).
   FContentArea.BevelOuter     := bvNone;
   FContentArea.StyleElements  := [];
   FContentArea.ParentBackground := False;
@@ -750,8 +758,11 @@ begin
   //   von TitleH auf TotalH. Desc/Fix-Panels werden sichtbar.
   // Wenn AStartWidth=0: Stage 0 wird uebersprungen, direkt Stage 1
   //   (alte Default-Auffalt - kein W-Morph).
-  FCollapsedHeight := TitleH;
-  FExpandedHeight  := TotalH;
+  // +2*BORDER_W: TitleH/TotalH sind INHALTShoehen. BorderWidth frisst
+  // oben und unten je BORDER_W vom Client - ohne den Zuschlag wuerde
+  // der Rahmen den Inhalt beschneiden statt ihn zu umgeben.
+  FCollapsedHeight := TitleH + 2 * BORDER_W;
+  FExpandedHeight  := TotalH + 2 * BORDER_W;
   FStartWidth      := AStartWidth;
 
   // Position via raw Win32 — SetBounds wuerde VCL-Logik triggern die
@@ -759,14 +770,16 @@ begin
   // Editor-Client-Koordinaten gehen direkt in MoveWindow.
   if AStartWidth > 0 then
   begin
-    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AStartWidth, TitleH, False);
+    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AStartWidth,
+                              TitleH + 2 * BORDER_W, False);
     Winapi.Windows.InvalidateRect(Handle, nil, True);
     FExpandStage := 0;             // erster Tick wird W-grow machen
     FExpandTimer.Interval := 80;
   end
   else
   begin
-    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AWidth, TitleH, False);
+    Winapi.Windows.MoveWindow(Handle, AClientX, AClientY, AWidth,
+                              TitleH + 2 * BORDER_W, False);
     Winapi.Windows.InvalidateRect(Handle, nil, True);
     FExpandStage := 1;             // erster Tick wird H-grow machen
     FExpandTimer.Interval := 250;
