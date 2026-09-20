@@ -160,7 +160,7 @@ rate.
 | `Element.<Name>` | Bool | `True` | **Kill switch per UI element of the IDE plugin.** `0` disables exactly that element without uninstalling - for when one of them disturbs the IDE. Takes effect after an IDE restart; skipped elements are reported via debug output (prefix `SCA-UI`). Valid names: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `OptionsPageSCA`, `OptionsPageSonar`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` is deliberately not switchable - it carries the teardown of all the others. The standalone EXE ignores these keys. |
 | `ClipboardOnClick` | Integer | `1` | What a row click copies: `1` nothing, `2` Jira mini issue, `3` Markdown prompt. |
 | `EditorColorScheme` | String | `default` | Colour scheme of the editor marker stripe and overlay title bar. |
-| `OverlayPosition` | String | `sameline` | Where the hover overlay anchors relative to the finding line. |
+| `OverlayPosition` | String | `below` | Where the hover overlay anchors relative to the finding line. `below` (default) starts one line below it, at the start of the line; `sameline` overlays the finding line itself. |
 | `OverlayShowOnHover` | Bool | `False` | Show the overlay on hover instead of on click. |
 | `OverlayTextOnly` | Bool | `False` | Replace the overlay window with a transparent one-line hint. |
 
@@ -193,7 +193,7 @@ section.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `ExternalEditor` | String | _(empty)_ | Full path to an editor. If set, it opens **every** file type - including `.dfm` - and the Delphi IDE is no longer used. |
-| `ExternalEditorArgs` | String | `-g "%file%:%line%"` | Arguments. Placeholders: `%file%`, `%line%`, `%col%`, `%dir%`, `%%`. The default matches Visual Studio Code. |
+| `ExternalEditorArgs` | String | `-g "%file%:%line%"` | Arguments. Placeholders: `%file%`, `%line%`, `%col%`, `%dir%`, `%%`. The default matches Visual Studio Code. The Lazarus IDE accepts a file name only - use `%file%` there; it cannot jump to the line. |
 | `DfmTarget` | String | `ide` | What a `.dfm` finding opens when no external editor is set: `ide` or `viewer` (built-in text viewer, which can jump to the line). |
 
 ## `[Sonar]`

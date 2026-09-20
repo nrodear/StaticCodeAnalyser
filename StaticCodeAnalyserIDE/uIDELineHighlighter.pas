@@ -963,11 +963,17 @@ end;
 function GetOverlayPositionSetting: string;
 // Liefert [UI] OverlayPosition aus analyser.ini. Frische Read pro Aufruf,
 // aber nur einmal pro Hover-Enter (= neue Finding-Zeile) - nicht im
-// MouseMove-Hot-Path. Default 'sameline' wenn INI nicht lesbar.
+// MouseMove-Hot-Path.
+//
+// Der Rueckfall bei unlesbarer INI kommt aus DEF_OVERLAY_POSITION statt
+// aus einem zweiten Literal: vor J1 (2026-09-20) standen hier
+// 'sameline' und in uRepoSettings der Default - zwei Quellen fuer
+// dieselbe Aussage, und beim Default-Wechsel faellt genau eine davon
+// durchs Raster.
 var
   S : TRepoSettings;
 begin
-  Result := 'sameline';
+  Result := DEF_OVERLAY_POSITION;
   S := TRepoSettings.Create;
   try
     try

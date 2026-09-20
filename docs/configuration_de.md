@@ -166,7 +166,7 @@ dort traegt der strukturelle Grund, nicht die Rate.
 | `Element.<Name>` | Bool | `True` | **Not-Aus je UI-Element des IDE-Plugins.** `0` legt genau dieses Element still, ohne Deinstallation - fuer den Fall, dass eines die IDE stoert. Wirkt erst nach IDE-Neustart; uebersprungene Elemente meldet das Plugin per Debug-Ausgabe (Praefix `SCA-UI`). Gueltige Namen: `SharedUiHooks`, `DockForm`, `LineHighlighter`, `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `OptionsPageSCA`, `OptionsPageSonar`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` ist bewusst NICHT abschaltbar - er traegt den Abbau aller uebrigen. Die eigenstaendige EXE liest diese Schluessel nicht. |
 | `ClipboardOnClick` | Integer | `1` | Was ein Zeilenklick kopiert: `1` nichts, `2` Jira-Mini-Ticket, `3` Markdown-Prompt. |
 | `EditorColorScheme` | String | `default` | Farbschema von Editor-Markerstreifen und Overlay-Titelleiste. |
-| `OverlayPosition` | String | `sameline` | Wo sich das Hover-Overlay relativ zur Fundzeile verankert. |
+| `OverlayPosition` | String | `below` | Wo sich das Hover-Overlay relativ zur Fundzeile verankert. `below` (Standard) beginnt eine Zeile darunter am Zeilenanfang; `sameline` legt sich ueber die Fundzeile. |
 | `OverlayShowOnHover` | Bool | `False` | Overlay beim Ueberfahren statt beim Klick zeigen. |
 | `OverlayTextOnly` | Bool | `False` | Das Overlay-Fenster durch einen transparenten Einzeiler ersetzen. |
 
@@ -199,7 +199,7 @@ diesen Abschnitt nicht.
 | Schluessel | Typ | Standard | Bedeutung |
 |---|---|---|---|
 | `ExternalEditor` | String | _(leer)_ | Voller Pfad zu einem Editor. Ist er gesetzt, uebernimmt er **alle** Dateiarten - auch `.dfm` - und die Delphi-IDE wird nicht mehr angesprochen. |
-| `ExternalEditorArgs` | String | `-g "%file%:%line%"` | Argumente. Platzhalter: `%file%`, `%line%`, `%col%`, `%dir%`, `%%`. Der Standard passt zu Visual Studio Code. |
+| `ExternalEditorArgs` | String | `-g "%file%:%line%"` | Argumente. Platzhalter: `%file%`, `%line%`, `%col%`, `%dir%`, `%%`. Der Standard passt zu Visual Studio Code. Die Lazarus-IDE nimmt nur einen Dateinamen - dort `%file%` verwenden; einen Zeilensprung kann sie nicht. |
 | `DfmTarget` | String | `ide` | Was ein `.dfm`-Befund oeffnet, wenn kein externer Editor gesetzt ist: `ide` oder `viewer` (eingebauter Textbetrachter, der zuverlaessig zur Zeile springt). |
 
 ## `[Sonar]`

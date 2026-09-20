@@ -166,7 +166,7 @@ l'argument repose sur la raison structurelle plutôt que sur le taux.
 | `Element.<Nom>` | Bool | `True` | **Coupe-circuit par élément d'interface du plugin IDE.** `0` désactive exactement cet élément sans désinstaller — pour le cas où l'un d'eux perturbe l'IDE. Prend effet après un redémarrage de l'IDE ; les éléments ignorés sont signalés en sortie de débogage (préfixe `SCA-UI`). Noms valides : `SharedUiHooks`, `DockForm`, `LineHighlighter`, `AnnotationOverlay`, `WatchMode`, `WarmUpCaches`, `ViewMenuItem`, `EditorContextMenu`, `OptionsPageSCA`, `OptionsPageSonar`, `FindingsProperties`, `AboutBox`, `ToolsMenuItem`. `PackageWizard` n'est délibérément pas désactivable — il porte le démontage de tous les autres. L'exécutable autonome ignore ces clés. |
 | `ClipboardOnClick` | Integer | `1` | Ce qu'un clic sur une ligne copie : `1` rien, `2` mini-ticket Jira, `3` invite Markdown. |
 | `EditorColorScheme` | String | `default` | Palette de la bande de marqueurs de l'éditeur et de la barre de titre de la surimpression. |
-| `OverlayPosition` | String | `sameline` | Ancrage de la surimpression au survol par rapport à la ligne du résultat. |
+| `OverlayPosition` | String | `below` | Ancrage de la surimpression au survol par rapport à la ligne du résultat. `below` (par défaut) commence une ligne en dessous, en début de ligne ; `sameline` recouvre la ligne du résultat. |
 | `OverlayShowOnHover` | Bool | `False` | Afficher la surimpression au survol plutôt qu'au clic. |
 | `OverlayTextOnly` | Bool | `False` | Remplacer la fenêtre de surimpression par un conseil transparent sur une ligne. |
 
@@ -199,7 +199,7 @@ cette section.
 | Clé | Type | Défaut | Signification |
 |---|---|---|---|
 | `ExternalEditor` | String | _(vide)_ | Chemin complet vers un éditeur. S'il est défini, il ouvre **tous** les types de fichiers — y compris `.dfm` — et l'IDE Delphi n'est plus sollicité. |
-| `ExternalEditorArgs` | String | `-g "%file%:%line%"` | Arguments. Marqueurs : `%file%`, `%line%`, `%col%`, `%dir%`, `%%`. La valeur par défaut correspond à Visual Studio Code. |
+| `ExternalEditorArgs` | String | `-g "%file%:%line%"` | Arguments. Marqueurs : `%file%`, `%line%`, `%col%`, `%dir%`, `%%`. La valeur par défaut correspond à Visual Studio Code. L'EDI Lazarus n'accepte qu'un nom de fichier - utiliser `%file%` ; il ne peut pas sauter à la ligne. |
 | `DfmTarget` | String | `ide` | Ce qu'ouvre un résultat `.dfm` lorsqu'aucun éditeur externe n'est défini : `ide` ou `viewer` (visionneuse de texte intégrée, qui atteint la ligne de façon fiable). |
 
 ## `[Sonar]`

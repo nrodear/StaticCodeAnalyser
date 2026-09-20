@@ -59,7 +59,12 @@ const
   DEF_OVERLAY_TEXT_ONLY      = False;
   DEF_EDITOR_COLOR_SCHEME    = 'default';
   DEF_LANGUAGE               = 'en';
-  DEF_OVERLAY_POSITION       = 'sameline';
+  // J1 (2026-09-20, Nicos Ansage am gebauten D13-Plugin): zurueck auf
+  // 'below'. Das Overlay legt sich dann nicht mehr ueber die Fundzeile,
+  // sondern beginnt eine Zeile DARUNTER am ZEILENANFANG - die Fundzeile
+  // bleibt lesbar. 'below' war schon einmal der Default; der Wechsel auf
+  // 'sameline' stammt aus der Inline-Titelleisten-Charge.
+  DEF_OVERLAY_POSITION       = 'below';
   // [UI] ClipboardOnClick: 1 = Zwischenablage nicht anfassen (Default),
   // 2 = Jira-Mini-Issue, 3 = Claude-AI-Prompt (Verhalten vor 2026-08-12).
   // Default BEWUSST 1: ein Zeilen-Klick, der ungefragt die systemweite
@@ -488,12 +493,13 @@ type
 
     // Position des Hover-AnnotationOverlay zur Befund-Zeile. Aus [UI]
     // OverlayPosition gelesen. Erlaubte Werte:
-    //   'sameline' (Default) - Overlay startet AUF der Finding-Zeile selbst
+    //   'below' (Default)    - Overlay startet eine Zeile UNTER der Finding-
+    //                          Zeile, am ZEILENANFANG (CodeRect.Left) und in
+    //                          voller Code-Breite - die Befund-Zeile bleibt
+    //                          lesbar. Seit J1 (2026-09-20) wieder Default.
+    //   'sameline'           - Overlay startet AUF der Finding-Zeile selbst
     //                          (Title-Bar ueberlagert die Zeile, faltet
     //                          nach unten auf)
-    //   'below'              - Overlay startet eine Zeile UNTER der Finding-
-    //                          Zeile (alte Default - Befund-Zeile bleibt
-    //                          sichtbar)
     // Aenderung erfordert IDE-Neustart (Wert wird in uIDELineHighlighter
     // einmalig zur ShowAt-Zeit gelesen).
     property OverlayPosition: string read FOverlayPosition write FOverlayPosition;
@@ -1003,6 +1009,7 @@ const
     ';ExternalEditor=C:\Program Files\Microsoft VS Code\Code.exe'#13#10 +
     ';ExternalEditor=C:\Program Files\Notepad++\notepad++.exe'#13#10 +
     ';ExternalEditor=C:\Program Files\Sublime Text\subl.exe'#13#10 +
+    ';ExternalEditor=C:\lazarus\lazarus.exe'#13#10 +
     ''#13#10 +
     '; ExternalEditorArgs (string, default: -g "%file%:%line%")'#13#10 +
     '; Arguments for the editor. Placeholders (case does not matter):'#13#10 +
@@ -1037,6 +1044,15 @@ const
     ';ExternalEditorArgs=%file%/%line%'#13#10 +
     '; IntelliJ / Rider:'#13#10 +
     ';ExternalEditorArgs=--line %line% "%file%"'#13#10 +
+    '; Lazarus - OPENS THE FILE ONLY, no jump to the line:'#13#10 +
+    ';ExternalEditorArgs=%file%'#13#10 +
+    ';   The Lazarus IDE takes plain file names and nothing else. Checked'#13#10 +
+    ';   in its own source (Lazarus 4.8): MaybeOpenEditorFiles expands the'#13#10 +
+    ';   parameter as a path and calls OpenEditorFile without a line, and'#13#10 +
+    ';   the single-instance channel only knows the parameter "file".'#13#10 +
+    ';   A "%file%:%line%" would therefore be read as a FILE NAME, would'#13#10 +
+    ';   not be found, and nothing would open at all. Use one of the'#13#10 +
+    ';   editors above if you want the jump.'#13#10 +
     ''#13#10 +
     '; DfmTarget (string, default: ide)'#13#10 +
     '; What a double-click on a .dfm finding opens WHEN no external editor'#13#10 +
@@ -1085,16 +1101,17 @@ const
     'Theme=system'#13#10 +
     ';Theme=dark'#13#10 +
     ''#13#10 +
-    '; OverlayPosition (string, default: sameline)'#13#10 +
+    '; OverlayPosition (string, default: below)'#13#10 +
     '; Position of the hover annotation overlay in the editor:'#13#10 +
+    ';   below    = the overlay starts one line BELOW the finding line,'#13#10 +
+    ';              at the start of the line and in full code width -'#13#10 +
+    ';              the finding line stays readable (default)'#13#10 +
     ';   sameline = the overlay starts ON the finding line (the title bar'#13#10 +
     ';              covers the line; it unfolds downwards)'#13#10 +
-    ';   below    = the overlay starts one line BELOW the finding line'#13#10 +
-    ';              (the former default - the finding line stays visible)'#13#10 +
     '; Also configurable via Tools > Options > Third Party >'#13#10 +
     '; Static Code Analyser. A change requires an IDE restart.'#13#10 +
-    'OverlayPosition=sameline'#13#10 +
-    ';OverlayPosition=below'#13#10 +
+    'OverlayPosition=below'#13#10 +
+    ';OverlayPosition=sameline'#13#10 +
     ''#13#10 +
     '; OverlayTextOnly (bool 0/1, default: 0)'#13#10 +
     '; Text-only variant of the annotation hint in the IDE editor:'#13#10 +
@@ -1838,7 +1855,7 @@ begin
     FLanguage        := Trim(Ini.ReadString('UI', 'Language',        DEF_LANGUAGE)).ToLower;
     FOverlayPosition := Trim(Ini.ReadString('UI', 'OverlayPosition', DEF_OVERLAY_POSITION)).ToLower;
     if (FOverlayPosition <> 'sameline') and (FOverlayPosition <> 'below') then
-      FOverlayPosition := 'sameline';  // unbekannter Wert -> Default
+      FOverlayPosition := DEF_OVERLAY_POSITION;  // unbekannter Wert -> Default
 
     // [UI] ClipboardOnClick (1..3, s. Property-Doku). Validierung wie bei
     // OverlayPosition: unbekannter Wert -> Default (= nicht anfassen).

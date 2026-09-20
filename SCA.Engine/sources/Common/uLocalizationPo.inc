@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2245 Zeilen, 75774 Bytes
+  // i18n\de.po - 2245 Zeilen, 78007 Bytes
   CPoLines_de: array[0..2244] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -1713,8 +1713,8 @@ const
     'msgid "No sonar-project.properties found in "',
     'msgstr "Keine sonar-project.properties gefunden in "',
     '',
-    'msgid "One line below"',
-    'msgstr "Eine Zeile darunter"',
+    'msgid "One line below (default)"',
+    'msgstr "Eine Zeile darunter (Standard)"',
     '',
     'msgid "Open analyser.ini"',
     'msgstr "analyser.ini '#$00F6'ffnen"',
@@ -1731,8 +1731,8 @@ const
     'msgid "Running health-check (this may take up to ~15s)..."',
     'msgstr "Systempr'#$00FC'fung l'#$00E4'uft (kann bis zu ~15 s dauern)..."',
     '',
-    'msgid "Same line at end (default)"',
-    'msgstr "Gleiche Zeile am Ende (Standard)"',
+    'msgid "Same line at end"',
+    'msgstr "Gleiche Zeile am Ende"',
     '',
     'msgid "Save once to create it."',
     'msgstr "Einmal speichern, um sie anzulegen."',
@@ -2534,7 +2534,7 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2241 Zeilen, 79441 Bytes
+  // i18n\fr.po - 2241 Zeilen, 81682 Bytes
   CPoLines_fr: array[0..2240] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -4246,8 +4246,8 @@ const
     'msgid "No sonar-project.properties found in "',
     'msgstr "Aucun fichier sonar-project.properties trouv'#$00E9' dans "',
     '',
-    'msgid "One line below"',
-    'msgstr "Une ligne en dessous"',
+    'msgid "One line below (default)"',
+    'msgstr "Une ligne en dessous (par d'#$00E9'faut)"',
     '',
     'msgid "Open analyser.ini"',
     'msgstr "Ouvrir analyser.ini"',
@@ -4264,8 +4264,8 @@ const
     'msgid "Running health-check (this may take up to ~15s)..."',
     'msgstr "V'#$00E9'rification en cours (jusqu'#$2019#$00E0' ~15 s)..."',
     '',
-    'msgid "Same line at end (default)"',
-    'msgstr "M'#$00EA'me ligne, '#$00E0' la fin (par d'#$00E9'faut)"',
+    'msgid "Same line at end"',
+    'msgstr "M'#$00EA'me ligne, '#$00E0' la fin"',
     '',
     'msgid "Save once to create it."',
     'msgstr "Enregistrez une fois pour le cr'#$00E9'er."',
