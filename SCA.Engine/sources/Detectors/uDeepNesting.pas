@@ -40,9 +40,18 @@ type
     class procedure AnalyzeUnit(UnitNode: TAstNode; const FileName: string;
       Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil);
   private
+    // ACollectChain=False (der Normalfall) baut KEINE Zeichenkette -
+    // der Walk laeuft ueber jeden Knoten jeder Methode, und eine
+    // Verkettung je Verschachtelungsknoten waere korpusweit eine
+    // Allokationslawine in genau dem Pfad, der diesem Plugin schon
+    // einen Stack-Overflow beschert hat. AnalyzeUnit ruft den Walk
+    // deshalb ein ZWEITES Mal - nur fuer die Methoden, die wirklich
+    // einen Fund erzeugen (korpusweit 3.452 von Millionen).
     class procedure Walk(Node: TAstNode; Depth: Integer;
       var DeepestLine, DeepestDepth: Integer;
-      var DeepestKind: TNodeKind); static;
+      var DeepestKind: TNodeKind;
+      ACollectChain: Boolean = False;
+      ADeepestChain: PString = nil); static;
     class function KindName(Kind: TNodeKind): string; static;
   end;
 
@@ -60,6 +69,11 @@ const
   COUNTING_KINDS : set of TNodeKind =
     [nkIfStmt, nkForStmt, nkWhileStmt, nkRepeatStmt, nkCaseStmt];
 
+  // Trenner der Verschachtelungskette. EIN Ort - die Anzeige
+  // uebernimmt die Zeichenkette unveraendert, damit Editor, HTML
+  // und Export nicht drei Schreibweisen bekommen.
+  CHAIN_SEP = ' → ';
+
 class function TDeepNestingDetector.KindName(Kind: TNodeKind): string;
 begin
   case Kind of
@@ -75,7 +89,8 @@ end;
 
 class procedure TDeepNestingDetector.Walk(Node: TAstNode; Depth: Integer;
   var DeepestLine, DeepestDepth: Integer;
-  var DeepestKind: TNodeKind);
+  var DeepestKind: TNodeKind;
+  ACollectChain: Boolean; ADeepestChain: PString);
 // FIX (jvcl-Audit 2026-06-07): iterative DFS statt rekursivem Walk.
 // Bei tief verschachteltem AST (z.B. JvId3v2.pas mit langen
 // if-then-else-Ketten) sprengte Walk(Self) den Default-Stack mit
@@ -115,19 +130,25 @@ type
   TFrame = record
     N : TAstNode;
     D : Integer;
+    // Kette der Konstrukte von aussen bis zu diesem Knoten. Bei
+    // ACollectChain=False bleibt sie durchgehend leer; die
+    // Zuweisung an ein Kind ist dann eine reine
+    // Referenzzaehler-Erhoehung, keine Kopie.
+    C : string;
   end;
 var
   Stack    : TList<TFrame>;
   Cur      : TFrame;
   Child    : TAstNode;
   NewDepth : Integer;
+  NewChain : string;
   IsElseIf : Boolean;
   F        : TFrame;
 begin
   if Node = nil then Exit;
   Stack := TList<TFrame>.Create;
   try
-    F.N := Node; F.D := Depth;
+    F.N := Node; F.D := Depth; F.C := '';
     Stack.Add(F);
     while Stack.Count > 0 do
     begin
@@ -141,17 +162,29 @@ begin
         // 2026-08-27: einzige Add-Stelle) - der case-else-Zweig ist ein
         // nkCaseArm und faellt hier bewusst NICHT hinein.
         IsElseIf := (Cur.N.Kind = nkElseBranch) and (Child.Kind = nkIfStmt);
+        NewChain := Cur.C;
         if (Child.Kind in COUNTING_KINDS) and not IsElseIf then
         begin
           Inc(NewDepth);
+          // Die Kette waechst an GENAU den Knoten, die auch die
+          // Tiefe erhoehen - damit ist ihre Gliederzahl immer die
+          // gemeldete Tiefe, und das else-if-Kettenglied wird hier
+          // wie dort nicht mitgezaehlt.
+          if ACollectChain then
+            if NewChain = '' then
+              NewChain := KindName(Child.Kind)
+            else
+              NewChain := NewChain + CHAIN_SEP + KindName(Child.Kind);
           if NewDepth > DeepestDepth then
           begin
             DeepestDepth := NewDepth;
             DeepestLine  := Child.Line;
             DeepestKind  := Child.Kind;
+            if ACollectChain and (ADeepestChain <> nil) then
+              ADeepestChain^ := NewChain;
           end;
         end;
-        F.N := Child; F.D := NewDepth;
+        F.N := Child; F.D := NewDepth; F.C := NewChain;
         Stack.Add(F);
       end;
     end;
@@ -170,6 +203,10 @@ var
   DeepestKind   : TNodeKind;
   F             : TLeakFinding;
   MaxNesting    : Integer;   // TD-1: Schwelle per-Scan aus AContext.Config
+  Chain         : string;    // K1: nur fuer Fundmethoden gefuellt
+  ChainLine     : Integer;
+  ChainDepth    : Integer;
+  ChainKind     : TNodeKind;
 begin
   // TD-1 (2026-07-06): Schwelle einmal aus dem Context lesen (scan-konstant).
   MaxNesting := CfgMaxNesting(AContext);
@@ -184,6 +221,16 @@ begin
 
       if DeepestDepth > MaxNesting then
       begin
+        // Erst JETZT die Kette bauen: nur fuer Methoden, die
+        // wirklich melden. Zweiter Lauf derselben Funktion statt
+        // einer zweiten Implementierung - sonst drifteten die
+        // beiden Tiefenmodelle (else-if-Regel!) frueher oder
+        // spaeter auseinander.
+        Chain        := '';
+        ChainLine    := 0;
+        ChainDepth   := 0;
+        ChainKind    := nkUnknown;
+        Walk(M, 0, ChainLine, ChainDepth, ChainKind, True, @Chain);
         F            := TLeakFinding.Create;
         F.FileName   := FileName;
         F.MethodName := M.Name;
@@ -193,6 +240,7 @@ begin
           [DeepestDepth, KindName(DeepestKind),
            DeepestLine, MaxNesting]);
         F.SetKind(fkDeepNesting);
+        F.StructureChain := Chain;
         Results.Add(F);
       end;
     end;

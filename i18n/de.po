@@ -1696,8 +1696,8 @@ msgstr "Keine Befunde zum Schreiben. Bitte zuerst eine Analyse ausführen."
 msgid "No sonar-project.properties found in "
 msgstr "Keine sonar-project.properties gefunden in "
 
-msgid "One line below"
-msgstr "Eine Zeile darunter"
+msgid "One line below (default)"
+msgstr "Eine Zeile darunter (Standard)"
 
 msgid "Open analyser.ini"
 msgstr "analyser.ini öffnen"
@@ -1714,8 +1714,8 @@ msgstr "Alle Befunde zurücksetzen (Panels und Markierungen leeren)"
 msgid "Running health-check (this may take up to ~15s)..."
 msgstr "Systemprüfung läuft (kann bis zu ~15 s dauern)..."
 
-msgid "Same line at end (default)"
-msgstr "Gleiche Zeile am Ende (Standard)"
+msgid "Same line at end"
+msgstr "Gleiche Zeile am Ende"
 
 msgid "Save once to create it."
 msgstr "Einmal speichern, um sie anzulegen."

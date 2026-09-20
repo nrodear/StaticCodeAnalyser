@@ -398,8 +398,9 @@ const
   SECT_H_INIT = 332;
 begin
   // Annotation-Overlay Position. Combo mit zwei Modi:
-  //   sameline (Default) - Overlay startet AUF der Finding-Zeile
-  //   below             - Overlay startet eine Zeile unter der Finding-Zeile
+  //   below (Default)   - Overlay startet eine Zeile UNTER der Finding-
+  //                       Zeile, am Zeilenanfang (J1, 2026-09-20)
+  //   sameline          - Overlay startet AUF der Finding-Zeile
   // Aenderung greift erst nach IDE-Neustart (Cache in uIDELineHighlighter).
   grpDisplay              := TGroupBox.Create(Self);
   grpDisplay.Parent       := AParent;
@@ -423,9 +424,12 @@ begin
   cboOverlayPos.Top       := INNER_TOP;
   cboOverlayPos.Width     := 240;
   cboOverlayPos.Style     := csDropDownList;
-  cboOverlayPos.Items.Add(_('Same line at end (default)'));
-  cboOverlayPos.Items.Add(_('One line below'));
-  cboOverlayPos.ItemIndex := 0;
+  // Reihenfolge NICHT tauschen - LoadDisplaySection/SaveDisplaySection
+  // bilden 0=sameline, 1=below ab. Der Default-Hinweis wandert mit dem
+  // Default (J1, 2026-09-20), die Indizes bleiben.
+  cboOverlayPos.Items.Add(_('Same line at end'));
+  cboOverlayPos.Items.Add(_('One line below (default)'));
+  cboOverlayPos.ItemIndex := 1;
 
   lblOverlayPosInfo          := TLabel.Create(Self);
   lblOverlayPosInfo.Parent   := grpDisplay;

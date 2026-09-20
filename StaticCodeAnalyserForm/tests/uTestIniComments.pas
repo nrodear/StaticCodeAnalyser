@@ -38,6 +38,8 @@ type
     [Test] procedure SectionAndKey_MatchCaseInsensitively;
     [Test] procedure UnchangedValue_LeavesFileUntouched;
     [Test] procedure BoolAndInteger_UseTheSameShapeAsBefore;
+    // ---- J1 (2026-09-20): Default der Overlay-Position ----
+    [Test] procedure OverlayPosition_DefaultIsBelow;
   end;
 
 implementation
@@ -290,6 +292,35 @@ begin
   Assert.IsTrue(HasLine('OverlayShowOnHover=0'));
   Assert.IsTrue(HasLine(CLIP_SET));
 end;
+
+{ ---- J1 (2026-09-20): Default der Overlay-Position ---------------- }
+
+procedure TTestIniComments.OverlayPosition_DefaultIsBelow;
+// Ohne Eintrag in der INI steht die Overlay-Position auf "below": das
+// Overlay beginnt eine Zeile UNTER der Fundzeile am Zeilenanfang,
+// die Fundzeile bleibt lesbar. Bis J1 war "sameline" der Default.
+//
+// Der Test haengt am KONSTRUKTOR, nicht an Load - er fasst die
+// APPDATA-INI also nicht an (die driftet sonst, siehe die
+// UI-Test-Lehre).
+//
+// Zweitens gepinnt: die Konstante, die der Highlighter als Rueckfall
+// nutzt. Vor J1 stand dort ein zweites Literal - beim Default-Wechsel
+// faellt so eine Zweitfassung durchs Raster.
+var
+  S : TRepoSettings;
+begin
+  Assert.AreEqual('below', DEF_OVERLAY_POSITION,
+    'die Default-Konstante ist die EINE Quelle fuer beide Leser');
+  S := TRepoSettings.Create;
+  try
+    Assert.AreEqual('below', S.OverlayPosition,
+      'frische Einstellungen ohne INI-Eintrag muessen below liefern');
+  finally
+    S.Free;
+  end;
+end;
+
 
 initialization
   TDUnitX.RegisterTestFixture(TTestIniComments);
