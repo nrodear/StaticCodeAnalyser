@@ -28,6 +28,7 @@ interface
 
 uses
   DUnitX.TestFramework,
+  System.SysUtils,               // Trim/LowerCase - N1-Kettentests
   System.Generics.Collections,   // TObjectList - ApplyToFindings
   uSCAConsts, uMethodd12, uFixHint,
   uEvidenceTiering,   // der Deckel, der den Bug vom 29.08. ausloeste

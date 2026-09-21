@@ -446,6 +446,23 @@ RTL_TYPEN = {
     'TRegEx': 'System.RegularExpressions',
 }
 
+# Dasselbe fuer FUNKTIONEN - die Luecke, durch die am 2026-09-21 der
+# ZWEITE rote Bau ging: Trim/LowerCase in einer Testunit ohne
+# System.SysUtils. Die Typtabelle oben konnte das nicht sehen.
+#
+# Nur als freier Aufruf gezaehlt, also NICHT nach einem Punkt: 's.Trim'
+# ist der String-Helper und braucht kein uses.
+RTL_FUNKTIONEN = {
+    'Trim': 'System.SysUtils',
+    'LowerCase': 'System.SysUtils',
+    'UpperCase': 'System.SysUtils',
+    'SameText': 'System.SysUtils',
+    'StringReplace': 'System.SysUtils',
+    'IntToStr': 'System.SysUtils',
+    'StrToIntDef': 'System.SysUtils',
+    'FreeAndNil': 'System.SysUtils',
+}
+
 
 def pruefe_rtl_uses(pfad, befunde):
     """Benutzter RTL-Typ, dessen Unit in keiner uses-Klausel steht."""
@@ -483,6 +500,25 @@ def pruefe_rtl_uses(pfad, befunde):
             '%s  %s benutzt, aber %s steht in keiner '
             'uses-Klausel (E2003)'
             % (os.path.basename(pfad), typ.rstrip('<'), unit))
+
+    for fn, unit in RTL_FUNKTIONEN.items():
+        # (?<![.&\w]) schliesst den String-Helper 's.Trim' aus und
+        # verhindert Teiltreffer in laengeren Bezeichnern.
+        if not re.search(r'(?<![.&\w])' + fn + r'\s*\(', code):
+            continue
+        kurz = unit.split('.')[-1]
+        if re.search(r'\b' + re.escape(unit) + r'\b', benutzt) or \
+           re.search(r'\b' + re.escape(kurz) + r'\b', benutzt):
+            continue
+        # Eine Unit, die selbst so eine Routine deklariert, meint ihre
+        # eigene - kein Befund.
+        if re.search(r'\b(?:function|procedure)\s+' + fn + r'\b',
+                     code, re.I):
+            continue
+        befunde.append(
+            '%s  %s() benutzt, aber %s steht in keiner '
+            'uses-Klausel (E2003)'
+            % (os.path.basename(pfad), fn, unit))
 
 def pruefe_enums(pfad, deklariert, befunde):
     """Benutzte fk/nk/fc/ls/ms-Werte gegen die Deklarationen. Faengt
