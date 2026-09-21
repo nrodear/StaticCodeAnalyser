@@ -1,4 +1,4 @@
-unit uCrashDiag;
+﻿unit uCrashDiag;
 
 // Auswertbarer Diagnosetext fuer abgefangene Exceptions.
 //
@@ -25,13 +25,15 @@ unit uCrashDiag;
 //
 // Describe() haengt deshalb an:
 //   * die Exception-KLASSE (die RTL-Message nennt sie nicht),
-//   * die modulRELATIVE Adresse - stabil ueber Laeufe hinweg und gegen
-//     eine Detailed-Map aufloesbar. Die absolute Modulbasis steht seit
-//     I3 (2026-09-20) NICHT mehr im Text: sie ist die einzige
-//     laufabhaengige Zahl (ASLR) und machte denselben Fehler in zwei
-//     Laeufen zu zwei verschiedenen FUNDEN - der Text landet als
-//     SCA006-Meldung in SARIF und Baseline. Begruendung an
-//     ModuleRelative,
+//   * bei EXTERNEN Exceptions die modulRELATIVE Adresse, gegen eine
+//     Detailed-Map aufloesbar. Zwei Einschraenkungen, beide aus
+//     Abnahmen gelernt: die absolute Modulbasis steht seit I3
+//     (2026-09-20) nicht mehr im Text (ASLR - derselbe Fehler war in
+//     zwei Laeufen zwei verschiedene FUNDE), und seit O1 (2026-09-21)
+//     entfaellt die Adresse bei GEWORFENEN Exceptions ganz: sie ist
+//     zwar je Build konstant, wandert aber mit jedem Neubau, und der
+//     Text bildet als SCA006-Meldung die Identitaet eines Fundes.
+//     Begruendung an ModuleRelative und in DescribeException,
 //   * bei Hardware-Exceptions den NT-Statuscode. Der unterscheidet die
 //     Ursachen, die dieselbe Meldung erzeugen koennen - vor allem
 //     $C0000005 (echte Zugriffsverletzung) von $C00000FD (Stapel
@@ -71,9 +73,13 @@ type
   {$WARN SYMBOL_DEPRECATED ON}
 
 /// <summary>
-///   Exception-Klasse, Meldung und - soweit ermittelbar - modulrelative
-///   Fehleradresse samt NT-Statuscode. Nie leer, nie werfend: diese
-///   Funktion laeuft in Fehlerpfaden und darf den Fehler nicht ersetzen.
+///   Exception-Klasse und Meldung, bei EXTERNEN Exceptions zusaetzlich
+///   NT-Statuscode und - soweit ermittelbar - die modulrelative
+///   Fehleradresse. Eine im Code geworfene Exception bekommt KEINE
+///   Adresse: sie wandert bei jedem Bau, und dieser Text bildet die
+///   Identitaet eines SCA006-Fundes (s. Rumpf).
+///   Nie leer, nie werfend: diese Funktion laeuft in Fehlerpfaden und
+///   darf den Fehler nicht ersetzen.
 /// </summary>
 function DescribeException(E: Exception): string;
 
@@ -129,7 +135,13 @@ begin
   //
   // Der DIAGNOSTISCHE Wert bleibt: aufloesbar gegen eine Detailed-Map
   // ist ohnehin nur die modulRELATIVE Adresse, und die steht weiter da
-  // (ebenso die Bildgroesse - auch sie ist je Build konstant). Fuer die
+  // (ebenso die Bildgroesse - auch sie ist je Build konstant).
+  // NACHTRAG O1 (2026-09-21): "je Build konstant" hat sich als zu
+  // schwach erwiesen - ueber zwei Builds wandert auch sie, und die
+  // N-Abnahme zeigte dadurch 2 Drops + 2 Adds je Lazarus-Lauf. Diese
+  // Funktion ist unveraendert, aber ihr Aufrufer ruft sie nur noch
+  // fuer EExternal; bei geworfenen Exceptions gibt es gar keine
+  // Adresse mehr im Text. Fuer die
   // beiden Ausserhalb-Faelle gibt es keine deterministische Zahl: die
   // Adresse gehoert dann einem FREMDEN Modul, dessen Lage ebenfalls
   // ASLR bestimmt. Dort zaehlt die Aussage, nicht der Zahlenwert.
@@ -179,9 +191,33 @@ begin
   // interessiert hier nicht - nur dass die urspruengliche Meldung
   // durchkommt. Genau der Fall, fuer den ein pauschaler Fang richtig ist.
   try
-    Result := Format('%s: %s%s%s',
-                     [E.ClassName, E.Message,
-                      StatusInfo(E), AddressInfo(FaultAddress(E))]);
+    // O1 (2026-09-21): Adresse NUR bei EExternal - dieselbe Grenze,
+    // die StatusInfo schon zieht.
+    //
+    // I3 hat die ASLR-Basis aus dem Text genommen und die
+    // modulRELATIVE Adresse mit der Begruendung "je Build konstant"
+    // stehen lassen. Genau da liegt der Rest: je Build konstant ist
+    // eben NICHT ueber Builds stabil. Der Text ist der MELDETEXT
+    // eines Fundes (SCA006) und bildet dessen Identitaet - mit einer
+    // Zahl darin, die jeder Neubau verschiebt, gilt derselbe Befund
+    // nach jedem Bau als neu. GEMESSEN an der N-Abnahme (21.09.):
+    // beide Lazarus-Laeufe trugen 2 Drops + 2 Adds, Datei und Zeile
+    // identisch, allein weil $514152 zu $514202 geworden war.
+    //
+    // Warum die Unterscheidung nach EExternal die richtige ist:
+    // bei einem Absturz (AV, Stack Overflow) ist die Adresse das
+    // EINZIGE, was die Stelle eingrenzt - dort bleibt sie. Bei einer
+    // im Code GEWORFENEN Exception nennt die Meldung die Ursache
+    // bereits ("Parser-Watchdog: ueber 200000 Token-Aufrufe"), und
+    // ExceptAddr zeigt nur auf die raise-Zeile. Am Korpus gemessen
+    // stammt JEDER Fund mit Adresse aus genau diesem Fall - kein
+    // einziger echter Absturz.
+    if E is EExternal then
+      Result := Format('%s: %s%s%s',
+                       [E.ClassName, E.Message,
+                        StatusInfo(E), AddressInfo(FaultAddress(E))])
+    else
+      Result := Format('%s: %s', [E.ClassName, E.Message]);
   except
     Result := E.ClassName + ': ' + E.Message;
   end;

@@ -19,7 +19,7 @@ type
   TTestCrashDiag = class
   public
     [Test] procedure Describe_Plain_NamesClassAndMessage;
-    [Test] procedure Describe_Plain_ReportsModuleRelativeAddress;
+    [Test] procedure Describe_Plain_HasNoAddressAtAll;
     [Test] procedure Describe_External_ReportsNtStatus;
     [Test] procedure Describe_External_ReportsModuleRelativeAddress;
     [Test] procedure Describe_AddressBelowBase_SaysSo;
@@ -65,7 +65,7 @@ begin
                 'Originalmeldung fehlt im Text: ' + S);
 end;
 
-procedure TTestCrashDiag.Describe_Plain_ReportsModuleRelativeAddress;
+procedure TTestCrashDiag.Describe_Plain_HasNoAddressAtAll;
 var S: string;
 begin
   // Innerhalb eines except-Blocks liefert ExceptAddr eine Adresse, also
@@ -87,11 +87,24 @@ begin
     on E: EListError do
       S := DescribeException(E);
   end;
-  Assert.IsTrue(Pos('modulrelativ', S) > 0,
-                'modulrelative Adresse fehlt - nicht aufloesbar: ' + S);
+  // O1 (2026-09-21): GEDREHT. I3 forderte hier die modulrelative
+  // Adresse; die ist zwar je Build konstant, wandert aber mit JEDEM
+  // Neubau - und dieser Text bildet die Identitaet eines SCA006-
+  // Fundes. Bei einer GEWORFENEN Exception traegt sie ohnehin nichts
+  // bei: sie zeigt auf die raise-Zeile, und die Meldung nennt die
+  // Ursache schon. Die Gegenprobe steht in
+  // Describe_External_ReportsModuleRelativeAddress - dort, bei einem
+  // echten Absturz, MUSS die Adresse weiterhin erscheinen.
+  Assert.IsTrue(Pos('modulrelativ', S) = 0,
+                'eine geworfene Exception darf keine Adresse tragen - '
+                + 'sie wandert bei jedem Bau und macht den Fund '
+                + 'instabil: ' + S);
   Assert.IsTrue(Pos('Modulbasis', S) = 0,
                 'die ASLR-abhaengige Modulbasis macht den Meldetext '
                 + 'laufabhaengig und darf nicht mehr vorkommen: ' + S);
+  Assert.IsTrue(Pos('EListError', S) > 0,
+                'Klasse und Meldung muessen bleiben - nur die Adresse '
+                + 'faellt weg: ' + S);
 end;
 
 procedure TTestCrashDiag.Describe_External_ReportsNtStatus;
