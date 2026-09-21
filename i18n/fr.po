@@ -964,6 +964,9 @@ msgstr "Prompt IA copié dans le presse-papiers : %s, ligne %s (%s)"
 msgid "Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore"
 msgstr "Menu Actions : modifications de branche, annuler, exporter, paramètres, ignorer"
 
+msgid "Before"
+msgstr "Avant"
+
 msgid "After"
 msgstr "Après"
 

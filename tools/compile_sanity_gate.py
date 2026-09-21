@@ -422,6 +422,104 @@ def pruefe_token_vokabular(pfad, befunde):
                               typ, sym))
 
 
+# --------------------------------------------------------------------
+# 3c) RTL-Typ ohne seine uses-Unit (N-Charge 2026-09-21)
+# --------------------------------------------------------------------
+# Delphi loest Bezeichner NICHT transitiv auf: eine Unit sieht nur,
+# was in ihren EIGENEN uses-Klauseln steht. Wer TStringList benutzt,
+# ohne System.Classes einzubinden, bekommt E2003 - und danach eine
+# lange Folgekaskade, weil der Parser an der ersten unbekannten
+# Deklaration aus dem Tritt geraet (gemessen am 2026-09-21: EIN
+# fehlendes System.Classes in uFixHint = 36 Fehlerzeilen).
+#
+# Die Tabelle ist bewusst kurz und enthaelt nur EINDEUTIGE Namen -
+# "TList" steht z.B. NICHT drin: den Namen gibt es
+# sowohl in System.Classes als auch (generisch) in
+# System.Generics.Collections.
+RTL_TYPEN = {
+    'TStringList': 'System.Classes',
+    'TStringBuilder': 'System.SysUtils',
+    'TDictionary<': 'System.Generics.Collections',
+    'TObjectList<': 'System.Generics.Collections',
+    'TObjectDictionary<': 'System.Generics.Collections',
+    'TStopwatch': 'System.Diagnostics',
+    'TRegEx': 'System.RegularExpressions',
+}
+
+# Dasselbe fuer FUNKTIONEN - die Luecke, durch die am 2026-09-21 der
+# ZWEITE rote Bau ging: Trim/LowerCase in einer Testunit ohne
+# System.SysUtils. Die Typtabelle oben konnte das nicht sehen.
+#
+# Nur als freier Aufruf gezaehlt, also NICHT nach einem Punkt: 's.Trim'
+# ist der String-Helper und braucht kein uses.
+RTL_FUNKTIONEN = {
+    'Trim': 'System.SysUtils',
+    'LowerCase': 'System.SysUtils',
+    'UpperCase': 'System.SysUtils',
+    'SameText': 'System.SysUtils',
+    'StringReplace': 'System.SysUtils',
+    'IntToStr': 'System.SysUtils',
+    'StrToIntDef': 'System.SysUtils',
+    'FreeAndNil': 'System.SysUtils',
+}
+
+
+def pruefe_rtl_uses(pfad, befunde):
+    """Benutzter RTL-Typ, dessen Unit in keiner uses-Klausel steht."""
+    t = lies(pfad)
+    # Kommentare UND Zeichenketten weg: Fixture-Literale in den
+    # Testunits enthalten massenhaft Pascal-Code, der hier nicht
+    # zaehlt - er wird ja nicht von DIESER Unit compiliert.
+    code = []
+    for z in t.split('\n'):
+        code.append(_codeteil(z))
+    code = '\n'.join(code)
+    code = re.sub(r"'(?:[^']|'')*'", '', code)
+    code = re.sub(r"\{[^}]*\}", ' ', code, flags=re.S)
+    # Alle uses-Klauseln der Datei (interface UND implementation).
+    benutzt = ' '.join(
+        m.group(1) for m in re.finditer(
+            r"\buses\b(.*?);", code, re.S | re.I))
+    for typ, unit in RTL_TYPEN.items():
+        if typ.endswith('<'):
+            muster = r"\b" + re.escape(typ)
+        else:
+            muster = r"\b" + re.escape(typ) + r"\b"
+        if not re.search(muster, code):
+            continue
+        # Voll qualifiziert (System.Classes.TStringList) braucht kein
+        # uses - dann steht der Unitname direkt davor.
+        if re.search(re.escape(unit) + r"\s*\." + re.escape(
+                     typ.rstrip('<')), code):
+            continue
+        kurz = unit.split('.')[-1]
+        if re.search(r"\b" + re.escape(unit) + r"\b", benutzt) or \
+           re.search(r"\b" + re.escape(kurz) + r"\b", benutzt):
+            continue
+        befunde.append(
+            '%s  %s benutzt, aber %s steht in keiner '
+            'uses-Klausel (E2003)'
+            % (os.path.basename(pfad), typ.rstrip('<'), unit))
+
+    for fn, unit in RTL_FUNKTIONEN.items():
+        # (?<![.&\w]) schliesst den String-Helper 's.Trim' aus und
+        # verhindert Teiltreffer in laengeren Bezeichnern.
+        if not re.search(r'(?<![.&\w])' + fn + r'\s*\(', code):
+            continue
+        kurz = unit.split('.')[-1]
+        if re.search(r'\b' + re.escape(unit) + r'\b', benutzt) or \
+           re.search(r'\b' + re.escape(kurz) + r'\b', benutzt):
+            continue
+        # Eine Unit, die selbst so eine Routine deklariert, meint ihre
+        # eigene - kein Befund.
+        if re.search(r'\b(?:function|procedure)\s+' + fn + r'\b',
+                     code, re.I):
+            continue
+        befunde.append(
+            '%s  %s() benutzt, aber %s steht in keiner '
+            'uses-Klausel (E2003)'
+            % (os.path.basename(pfad), fn, unit))
+
 def pruefe_enums(pfad, deklariert, befunde):
     """Benutzte fk/nk/fc/ls/ms-Werte gegen die Deklarationen. Faengt
     E2003 ('msInstanceMethod' statt 'msInstance')."""
@@ -599,6 +697,7 @@ def main():
         pruefe_token_vokabular(d, befunde)
         pruefe_include_in_fixture(d, befunde)
         pruefe_uses_zuerst(d, befunde)
+        pruefe_rtl_uses(d, befunde)
         if os.sep + 'tests' + os.sep in d.replace('/', os.sep):
             pruefe_unbeendete_konstante(d, befunde)
             pruefe_fixture_klassen(d, befunde)

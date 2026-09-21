@@ -4134,6 +4134,7 @@ begin
     Entries[Count].RuleName := KindName(F.Kind);
     Entries[Count].RelatedLines := F.RelatedLines;
     Entries[Count].StructureChain := F.StructureChain;
+    Entries[Count].AfterChain := FH.AfterChain;
     Entries[Count].Color    := EditorAccent(DispSev,
                                  GCachedEditorScheme, GCachedEditorBgDark);
     Entries[Count].Fix      := FH.After;
@@ -4713,6 +4714,7 @@ begin
     Result[Count].RuleName := KindName(F.Kind);
     Result[Count].RelatedLines := F.RelatedLines;
     Result[Count].StructureChain := F.StructureChain;
+    Result[Count].AfterChain := FH.AfterChain;
     Result[Count].Color    := EditorAccent(DispSev,
                                 GCachedEditorScheme, GCachedEditorBgDark);
     Result[Count].Fix      := FH.After;

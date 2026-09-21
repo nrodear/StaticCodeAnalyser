@@ -16,6 +16,11 @@
 //     Code-Reviews, Jira-Tickets und Claude-AI-Prompts sind in der Praxis
 //     englisch, eine Lokalisierung wuerde nur das Mischmasch zwischen
 //     Quellcode-Beispielen und Erklaertext erhoehen.
+//     PRAEZISIERT 2026-09-21: das gilt fuer den CODE. Die ETIKETTEN,
+//     mit denen eine UI die beiden Seiten beschriftet, werden sehr wohl
+//     uebersetzt - das Editor-Overlay zeigt seit N2 'Vorher'/'Nachher'
+//     vor den Ketten (Entscheid 2026-09-20). Uebersetzt wird dort also
+//     das Etikett, nie der Beispielcode dahinter.
 
 interface
 
@@ -28,6 +33,19 @@ type
     Description : string;   // Einzeilige Problembeschreibung (lokalisiert)
     Before      : string;   // Code-Beispiel "Vorher" (Englisch)
     After       : string;   // Code-Beispiel "Nachher" (Englisch)
+    // N1 (2026-09-21): das NACHHER-Beispiel auf eine Zeile
+    // eingedampft - die Methodennamen in AUFRUFreihenfolge,
+    // z.B. "ProcessOrder() → ShipItem()". Leer, wenn
+    // sich keine ableiten laesst.
+    //
+    // Nur fuer die Regeln aus CHAIN_RULES gefuellt (Konzept E1,
+    // Opt-in je Regel). Gegenstueck ist die VORHER-Kette, die aber
+    // NICHT hier steht: die kommt aus dem ECHTEN Code der
+    // Fundstelle und haengt am Fund (TLeakFinding.StructureChain).
+    // Sie darf auch gar nicht hierher - TFixHint wird memoisiert,
+    // und ein fundabhaengiger Wert im Cache waere exakt der
+    // Memoize-Bug von 2026-07-26.
+    AfterChain  : string;
   end;
 
   TFixHintResolver = class
@@ -67,6 +85,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  System.Classes,   // TStringList - N1-Kettenableitung
   uRuleCatalog;   // Katalog-Fallback (Checklist-Drift-Fix 2026-07-24)
 
 const
@@ -129,6 +148,206 @@ begin
   if FCache.TryGetValue(Key, Result) then Exit;
   Result := Build(Finding);
   FCache.AddOrSetValue(Key, Result);
+end;
+
+const
+  // Regeln, fuer die eine Kette gebaut wird (Konzept E1). Bewusst
+  // eine kurze, explizite Liste statt einer Heuristik ueber alle
+  // Kinds.
+  //
+  // GEMESSEN an den LAUFZEIT-Texten (Hand-Zweig, sonst Katalog-
+  // Rueckfall): 20 Kinds wuerden ohne dieses Gate eine Kette
+  // liefern - und 18 davon Unsinn, weil die Beispiele dort keine
+  // Zerlegung zeigen, sondern beliebige Aufrufe:
+  //   fkCaseStatementSize         of() -> Assigned()
+  //   fkPointerArithmeticOnString Foo() -> PChar() -> Inc() -> Length()
+  //   fkDfmHardcodedCaption       TMainForm() -> _() -> TranslateComponent()
+  // Tragfaehig ist die Kette nur, wo das Beispiel eine echte
+  // Zerlegung in benannte Routinen zeigt.
+  CHAIN_RULES = [fkDeepNesting, fkCyclomaticComplexity,
+                 fkCognitiveComplexity];
+
+function IstBezeichnerZeichen(C: Char; AErstes: Boolean): Boolean;
+begin
+  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']);
+  if (not Result) and (not AErstes) then
+    Result := CharInSet(C, ['0'..'9']);
+end;
+
+// Zeilenkommentare entfernen. Die Beispieltexte bestehen zu einem
+// guten Teil aus erklaerenden //-Zeilen, und die fuehren Woerter mit
+// Klammern ("extract it into a method and call it once.") - ohne
+// Strippen landen die in der Kette.
+function OhneZeilenkommentar(const AText: string): string;
+var
+  Zeilen : TArray<string>;
+  i, p   : Integer;
+begin
+  Zeilen := AText.Split([sLineBreak, #10]);
+  for i := 0 to High(Zeilen) do
+  begin
+    p := Pos('//', Zeilen[i]);
+    if p > 0 then Zeilen[i] := Copy(Zeilen[i], 1, p - 1);
+  end;
+  Result := string.Join(sLineBreak, Zeilen);
+end;
+
+// Alle Bezeichner, die im Text direkt vor einer "(" stehen - also
+// aufgerufen werden. Schluesselwoerter sind ausgenommen: "if (",
+// "while (" und Konsorten sind keine Aufrufe.
+procedure SammleAufrufe(const AText: string; AZiel: TStringList);
+const
+  KEIN_AUFRUF : array[0..18] of string = (
+    'if', 'while', 'for', 'case', 'and', 'or', 'not',
+    'exit', 'result', 'to', 'do', 'then', 'else',
+    'begin', 'end', 'procedure', 'function', 'inherited', 'of');
+var
+  i, s : Integer;
+  W    : string;
+  k    : Integer;
+  Kein : Boolean;
+begin
+  i := 1;
+  while i <= Length(AText) do
+  begin
+    if IstBezeichnerZeichen(AText[i], True) then
+    begin
+      s := i;
+      while (i <= Length(AText))
+            and IstBezeichnerZeichen(AText[i], False) do
+        Inc(i);
+      W := Copy(AText, s, i - s);
+      // Leerraum zwischen Bezeichner und Klammer ueberspringen.
+      k := i;
+      while (k <= Length(AText)) and (AText[k] = ' ') do Inc(k);
+      if (k <= Length(AText)) and (AText[k] = '(')
+         and ((s = 1) or (AText[s - 1] <> '.')) then
+      begin
+        Kein := False;
+        for var N in KEIN_AUFRUF do
+          if SameText(N, W) then begin Kein := True; Break; end;
+        if (not Kein) and (AZiel.IndexOf(W) < 0) then
+          AZiel.Add(W);
+      end;
+    end
+    else
+      Inc(i);
+  end;
+end;
+
+// NACHHER-Kette: Einstiegsroutine + die von ihr gerufenen Namen.
+//
+// Der EINSTIEG ist die deklarierte Routine, die von keiner anderen
+// deklarierten Routine gerufen wird. Die naheliegende Alternative
+// "die mit den meisten Aufrufen" ist an SCA176 GEMESSEN falsch:
+// dort ruft jede der beiden genau einen Namen, und der Gleichstand
+// kippte auf den Helfer - die Kette las sich
+// "ShipItem() → Ship()" statt "ProcessOrder() → ShipItem()".
+//
+// Quelltextreihenfolge taugt als Einstieg ebenfalls nicht: in den
+// Beispielen stehen die ausgelagerten Helfer VOR ihrem Aufrufer.
+// Genau deshalb steht im Entscheid "Aufrufreihenfolge".
+// Text einer Routine ab AVon bis zur naechsten Deklaration. AVon zeigt
+// HINTER den Routinennamen - stuende es davor, enthielte der Rumpf den
+// eigenen Kopf 'Name(' und die Routine gaelte als selbst gerufen. Die
+// Starts sind NICHT sortiert (erst alle procedure, dann alle
+// function), deshalb der kleinste Start oberhalb statt Starts[i+1].
+function RumpfVon(const AText: string; AStarts: TList<Integer>;
+  AVon: Integer): string;
+var
+  i, e : Integer;
+begin
+  e := Length(AText) + 1;
+  for i := 0 to AStarts.Count - 1 do
+    if (AStarts[i] > AVon) and (AStarts[i] < e) then e := AStarts[i];
+  Result := Copy(AText, AVon, e - AVon);
+end;
+
+function DeriveAfterChain(const AAfter: string): string;
+var
+  Txt      : string;
+  Namen    : TStringList;
+  Starts   : TList<Integer>;
+  Gerufen  : TStringList;
+  Rufe     : TStringList;
+  i, p, s, e : Integer;
+  W, Wurzel  : string;
+  Anzahl     : Integer;
+begin
+  Result := '';
+  if Trim(AAfter) = '' then Exit;
+  Txt := OhneZeilenkommentar(AAfter);
+  Namen   := TStringList.Create;
+  Starts  := TList<Integer>.Create;
+  Gerufen := TStringList.Create;
+  Rufe    := TStringList.Create;
+  try
+    // Deklarationen einsammeln: "procedure Name" / "function Name".
+    for var Schlues in ['procedure ', 'function '] do
+    begin
+      p := 1;
+      repeat
+        p := Pos(Schlues, LowerCase(Txt), p);
+        if p = 0 then Break;
+        s := p + Length(Schlues);
+        while (s <= Length(Txt)) and (Txt[s] = ' ') do Inc(s);
+        e := s;
+        while (e <= Length(Txt))
+              and IstBezeichnerZeichen(Txt[e], e = s) do
+          Inc(e);
+        if e > s then
+        begin
+          W := Copy(Txt, s, e - s);
+          if Namen.IndexOf(W) < 0 then
+          begin
+            Namen.Add(W);
+            Starts.Add(s);
+          end;
+        end;
+        p := s;
+      until False;
+    end;
+    if Namen.Count = 0 then Exit;
+
+    // Welche der deklarierten Namen werden ueberhaupt gerufen?
+    //
+    // NUR IN DEN RUEMPFEN suchen, nicht im Gesamttext: der
+    // Deklarationskopf 'procedure ShipItem(' enthaelt selbst ein
+    // 'Name(' und wuerde die Routine als gerufen ausweisen. Dann
+    // gaebe es NIE eine Wurzel und die Kette bliebe immer leer.
+    for i := 0 to Namen.Count - 1 do
+      SammleAufrufe(RumpfVon(Txt, Starts,
+                             Starts[i] + Length(Namen[i])), Gerufen);
+    Wurzel := '';
+    Anzahl := 0;
+    for i := 0 to Namen.Count - 1 do
+      if Gerufen.IndexOf(Namen[i]) < 0 then
+      begin
+        Wurzel := Namen[i];
+        Inc(Anzahl);
+      end;
+    // Genau EINE Wurzel ist der verwertbare Fall. Null bedeutet
+    // einen Zyklus, mehrere bedeuten unabhaengige Routinen - in
+    // beiden Faellen gibt es keine Aufrufreihenfolge, und eine
+    // geratene waere schlechter als keine.
+    if Anzahl <> 1 then Exit;
+
+    SammleAufrufe(RumpfVon(Txt, Starts,
+                           Starts[Namen.IndexOf(Wurzel)] + Length(Wurzel)),
+                  Rufe);
+    i := Rufe.IndexOf(Wurzel);
+    if i >= 0 then Rufe.Delete(i);
+    if Rufe.Count = 0 then Exit;
+
+    Result := Wurzel + '()';
+    for i := 0 to Rufe.Count - 1 do
+      Result := Result + CHAIN_SEP + Rufe[i] + '()';
+  finally
+    Rufe.Free;
+    Gerufen.Free;
+    Starts.Free;
+    Namen.Free;
+  end;
 end;
 
 class function TFixHintResolver.Build(const Finding: TLeakFinding): TFixHint;
@@ -4368,6 +4587,13 @@ begin
     Result.Before      := Meta.BadExample;
     Result.After       := Meta.GoodExample;
   end;
+
+  // N1: NACHHER-Kette. HINTER dem Katalog-Rueckfall, damit sie fuer
+  // beide Quellen gilt - SCA018/SCA022 fuehren einen Hand-Zweig,
+  // SCA176 faellt auf den Katalog zurueck. Vor dem Rueckfall stuende
+  // sie fuer SCA176 vor leerem Text.
+  if Finding.Kind in CHAIN_RULES then
+    Result.AfterChain := DeriveAfterChain(Result.After);
 end;
 
 initialization

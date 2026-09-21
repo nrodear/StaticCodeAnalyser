@@ -956,6 +956,9 @@ msgstr "KI-Prompt in Zwischenablage: %s, Zeile %s (%s)"
 msgid "Actions menu: Branch-Changes, Cancel, Export, Settings, Ignore"
 msgstr "Aktionen-Menue: Branch-Aenderungen, Abbrechen, Export, Einstellungen, Ignorieren"
 
+msgid "Before"
+msgstr "Vorher"
+
 msgid "After"
 msgstr "Nachher"
 

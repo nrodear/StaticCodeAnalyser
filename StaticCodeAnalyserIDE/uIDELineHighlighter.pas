@@ -104,6 +104,11 @@ type
     // Stufe, s. DrawTextHint. Leer bei allen anderen Regeln; dann
     // faellt der Hint auf die bisherige Kurzform zurueck.
     StructureChain : string;
+    // N2 (2026-09-21): das Gegenstueck - die NACHHER-Kette aus
+    // dem Beispieltext (TFixHint.AfterChain). Zusammen ergeben die
+    // beiden die VORHER/NACHHER-Darstellung im Overlay; einzeln
+    // wird nur die vorhandene Zeile gezeigt.
+    AfterChain : string;
     Color    : TColor;          // Stripe-Farbe (staerkste Severity)
     Fix      : string;          // After-Code (leer im Multi-Mode)
     Severity : TFindingSeverity;// fuer Stripe-Ranking
@@ -181,6 +186,8 @@ type
     RelatedLines : string;
     // s. TFindingMark.StructureChain.
     StructureChain : string;
+    // s. TFindingMark.AfterChain.
+    AfterChain : string;
     Color    : TColor;
     Fix      : string;
     Severity : TFindingSeverity;
@@ -1728,6 +1735,7 @@ begin
     Result.Badge    := Strongest.Badge;
     Result.RelatedLines := Strongest.RelatedLines;
     Result.StructureChain := Strongest.StructureChain;
+    Result.AfterChain := Strongest.AfterChain;
     Result.RuleName := Strongest.RuleName;
     Result.Color    := Strongest.Color;
     Result.Fix      := Strongest.Fix;
@@ -1809,6 +1817,7 @@ begin
   // Dieselbe Begruendung: die Kette beschreibt die Fundstelle, und
   // die liegt in der Ankerzeile.
   Result.StructureChain := '';
+  Result.AfterChain := '';
   Result.IsMulti  := False;
   // Ebenfalls NICHT erben: der Zeilentext-Schnappschuss von Ziel 2 gehoert
   // der ANKERZEILE. Eine Fortsetzungszeile mit fremdem Schnappschuss
@@ -3077,7 +3086,8 @@ begin
 
     GAnnotationOverlay.ShowAt(FSavedEditor, P.X, P.Y, AWidth, LineH,
       Mark.Title, Mark.Desc, Mark.Badge, Mark.Color, Mark.Fix,
-      FLastPaintedFile, AHitLine, EstBadgeW);
+      FLastPaintedFile, AHitLine, EstBadgeW,
+      Mark.StructureChain, Mark.AfterChain);
     FHoveredLine := AHitLine;
     // Hide-on-mouse-leave Timer aktivieren.
     FHoverWatch.Enabled := True;

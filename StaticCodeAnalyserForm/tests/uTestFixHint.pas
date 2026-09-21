@@ -1,4 +1,4 @@
-unit uTestFixHint;
+﻿unit uTestFixHint;
 
 // Tests fuer TFixHintResolver (uFixHint) - Schwerpunkt Memoize-Cache.
 //
@@ -28,6 +28,7 @@ interface
 
 uses
   DUnitX.TestFramework,
+  System.SysUtils,               // Trim/LowerCase - N1-Kettentests
   System.Generics.Collections,   // TObjectList - ApplyToFindings
   uSCAConsts, uMethodd12, uFixHint,
   uEvidenceTiering,   // der Deckel, der den Bug vom 29.08. ausloeste
@@ -66,6 +67,10 @@ type
     [Test] procedure CappedErrorStillGetsTheLeakHint;
     [Test] procedure MemoryLeakVariantNamesTheThreeForms;
     [Test] procedure ReturnValueSuffixIsSharedWithProduction;
+    // ---- N1 (2026-09-21): NACHHER-Kette ------------------------
+    [Test] procedure AfterChainForCognitiveIsCallOrder;
+    [Test] procedure AfterChainEmptyWhenExampleHasNoRoutines;
+    [Test] procedure AfterChainOnlyForTheThreeChainRules;
   end;
 
 implementation
@@ -417,6 +422,91 @@ procedure TTestFixHint.ReturnValueSuffixIsSharedWithProduction;
 begin
   Assert.AreEqual(SFX_RETURN_VALUE, LEAK_RETURN_VALUE_SUFFIX,
     'Testerwartung und Produktionskonstante muessen deckungsgleich sein');
+end;
+
+{ ---- N1 (2026-09-21): die NACHHER-Kette ------------------------- }
+//
+// Die Kette dampft das Nachher-BEISPIEL auf eine Zeile ein. Sie kommt
+// aus dem Katalog bzw. dem Hand-Zweig, ist also pro Regel konstant -
+// anders als die VORHER-Kette, die am Fund haengt.
+
+function MakeKindFinding(AKind: TFindingKind): TLeakFinding;
+begin
+  Result := TLeakFinding.New('Demo.pas', 'DoWork', 42, '', AKind);
+  Result.Severity := lsWarning;
+end;
+
+procedure TTestFixHint.AfterChainForCognitiveIsCallOrder;
+// SCA176 hat KEINEN Hand-Zweig und faellt auf den Regelkatalog
+// zurueck. Der Test belegt beides auf einmal: dass die Kette am
+// Katalogtext entsteht und dass sie in AUFRUFreihenfolge steht.
+//
+// Die Reihenfolge ist der eigentliche Vertrag. Im Beispiel steht
+// der HELFER ZUERST (ShipItem), der Aufrufer darunter - eine
+// Ableitung nach Quelltextreihenfolge lieferte also genau die
+// falsche Richtung.
+var
+  F : TLeakFinding;
+  H : TFixHint;
+begin
+  F := MakeKindFinding(fkCognitiveComplexity);
+  try
+    H := TFixHintResolver.FixHint(F);
+    Assert.AreEqual('ProcessOrder() → ShipItem()', H.AfterChain,
+      'Aufrufer zuerst, dann der ausgelagerte Helfer');
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestFixHint.AfterChainEmptyWhenExampleHasNoRoutines;
+// SCA018 ist die Gegenprobe: sein Nachher-Beispiel sind Guard
+// Clauses (dreimal Exit), es deklariert KEINE Routinen. Hier darf
+// keine Kette entstehen - eine erfundene waere schlimmer als keine.
+// Der Fall ist kein Randfall, sondern eine der drei Regeln, fuer
+// die die Kette ueberhaupt gebaut wird.
+var
+  F : TLeakFinding;
+  H : TFixHint;
+begin
+  F := MakeKindFinding(fkDeepNesting);
+  try
+    H := TFixHintResolver.FixHint(F);
+    Assert.AreEqual('', H.AfterChain,
+      'ohne deklarierte Routinen darf keine Kette entstehen');
+    Assert.IsTrue(Trim(H.After) <> '',
+      'der Nachher-BLOCK muss trotzdem da sein - nur die Kette ' +
+      'fehlt');
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestFixHint.AfterChainOnlyForTheThreeChainRules;
+// Das Opt-in aus Konzept E1.
+//
+// GEPRUEFT AN fkNestedTry, und die Wahl ist der Kern des Tests: sein
+// Nachher-Beispiel WUERDE eine Kette liefern (gemessen:
+// 'ProcessFileSafely() -> LogError()'), es steht nur nicht in
+// CHAIN_RULES. Damit faellt der Test um, sobald das Gate wegfaellt.
+// Eine Regel wie SCA001, deren Beispiel gar keine Routinen
+// deklariert, waere hier WERTLOS gewesen - dort ist die Kette auch
+// ohne Gate leer, und der Test waere gruen, ohne etwas zu belegen.
+var
+  F : TLeakFinding;
+  H : TFixHint;
+begin
+  F := MakeKindFinding(fkNestedTry);
+  try
+    H := TFixHintResolver.FixHint(F);
+    Assert.AreEqual('', H.AfterChain,
+      'nur SCA018/SCA022/SCA176 fuehren eine Kette');
+    Assert.IsTrue(Pos('procedure ', LowerCase(H.After)) > 0,
+      'Vorbedingung des Tests: das Beispiel MUSS Routinen ' +
+      'deklarieren, sonst waere die Kette auch ohne Gate leer');
+  finally
+    F.Free;
+  end;
 end;
 
 end.
