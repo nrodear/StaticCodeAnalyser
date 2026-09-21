@@ -85,6 +85,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
+  System.Classes,   // TStringList - N1-Kettenableitung
   uRuleCatalog;   // Katalog-Fallback (Checklist-Drift-Fix 2026-07-24)
 
 const
