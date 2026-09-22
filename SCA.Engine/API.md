@@ -238,7 +238,7 @@ A third-party consumer needs **only the package**, no engine source:
 
 - `.dproj`: `UsePackages=true` and `DCC_UsePackage` contains `SCA.Engine;rtl`.
 - **No** engine source directory in `DCC_UnitSearchPath`.
-- At runtime `SCA.Engine.bpl` must be findable (global BPL directory or next to
+- At runtime `SCA.Engine290.bpl` must be findable (global BPL directory or next to
   the `.exe`).
 - `uses uEngineApi;` (+ `uMethodd12`, `uSCAConsts` for detail access) — all from
   the package.

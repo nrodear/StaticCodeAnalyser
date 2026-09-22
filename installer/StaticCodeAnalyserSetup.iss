@@ -54,8 +54,8 @@
 ;     -> MainSource StaticCodeAnalyser.IDE.d12.dpk
 ;     -> BPL:  StaticCodeAnalyser.IDE.d12.bpl
 ;     -> requires: rtl, vcl, vclwinx, designide, SCA.Engine, SCA.SharedUI
-;   SCA.Engine\SCA.Engine.dpk          -> SCA.Engine.bpl
-;   SCA.SharedUI\SCA.SharedUI.dpk      -> SCA.SharedUI.bpl
+;   SCA.Engine\SCA.Engine.dpk          -> SCA.Engine290.bpl
+;   SCA.SharedUI\SCA.SharedUI.dpk      -> SCA.SharedUI290.bpl
 ; Die dproj setzt KEIN DCC_BplOutput -> BPLs landen im D12-Standard-BPL-Ordner
 ; (C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl).
 ;
@@ -81,6 +81,19 @@
   #define SCAPluginBpl "StaticCodeAnalyser.Plugin.d12.bpl"
 #else
   #define SCAPluginBpl "StaticCodeAnalyser.IDE.d12.bpl"
+#endif
+
+; Versions-Suffix der LAUFZEITpakete (Q1, 2026-09-21). Die beiden .dpk
+; tragen {$LIBSUFFIX AUTO}; unter D12 haengt der Compiler damit "290"
+; an. Grund: beide Bpl-Ordner stehen im PATH, und ein Laufzeitpaket
+; wird IMMER darueber aufgeloest - gleichnamige BPLs zweier
+; Generationen liessen D12 die Fassung von D13 laden (belegt am
+; 2026-09-19 und 2026-09-20, beide Male roter IDE-Start).
+; Die Plugin-BPL oben bleibt OHNE Suffix: sie steht mit vollem Pfad in
+; den Known Packages, dort sucht der Loader nicht.
+; Fuer einen D13-Zweig ist hier "370" zu setzen.
+#ifndef SCARtlSuffix
+  #define SCARtlSuffix "290"
 #endif
 
 ; BDS-Registry-Schluessel D12 (HKCU):
@@ -271,8 +284,8 @@ Source: "{#SCABplSourceDir}\{#SCAPluginBpl}"; DestDir: "{app}\bpl\d12"; \
 ; Registry-Enumeration liefert die Werte pfad-alphabetisch, "...\SCA.*" kommt
 ; vor "...\StaticCodeAnalyser.*" — die Abhaengigkeiten sind also zuerst da.
 ; Das ist eine dokumentierte Uebergangsloesung bis zur Monolith-BPL (P1-Ziel).
-Source: "{#SCABplSourceDir}\SCA.Engine.bpl";   DestDir: "{app}\bpl\d12"; Flags: ignoreversion
-Source: "{#SCABplSourceDir}\SCA.SharedUI.bpl"; DestDir: "{app}\bpl\d12"; Flags: ignoreversion
+Source: "{#SCABplSourceDir}\SCA.Engine{#SCARtlSuffix}.bpl";   DestDir: "{app}\bpl\d12"; Flags: ignoreversion
+Source: "{#SCABplSourceDir}\SCA.SharedUI{#SCARtlSuffix}.bpl"; DestDir: "{app}\bpl\d12"; Flags: ignoreversion
 Source: "{#SCABplSourceDir}\{#SCAPluginBpl}";  DestDir: "{app}\bpl\d12"; Flags: ignoreversion
 #endif
 
@@ -328,10 +341,10 @@ Name: "{userprograms}\Static Code Analyser for Delphi\Uninstall Static Code Anal
 ; zusaetzlich raeumt CurUninstallStepChanged (usUninstall) als Gurt+Hosentraeger.
 #ifndef SCA_MONOLITH
 Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
-  ValueName: "{app}\bpl\d12\SCA.Engine.bpl"; \
+  ValueName: "{app}\bpl\d12\SCA.Engine{#SCARtlSuffix}.bpl"; \
   ValueData: "Static Code Analyser - Engine"; Flags: uninsdeletevalue
 Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \
-  ValueName: "{app}\bpl\d12\SCA.SharedUI.bpl"; \
+  ValueName: "{app}\bpl\d12\SCA.SharedUI{#SCARtlSuffix}.bpl"; \
   ValueData: "Static Code Analyser - Shared UI"; Flags: uninsdeletevalue
 #endif
 Root: HKCU; Subkey: "{#KnownPackages23}"; ValueType: string; \

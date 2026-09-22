@@ -61,6 +61,46 @@ def ist_stand():
     return stand
 
 
+def pruefe_suffix_paarung(befunde):
+    """{$LIBSUFFIX} in der .dpk und <DllSuffix> in der .dproj muessen
+    BEIDE da sein oder BEIDE fehlen.
+
+    Der Paketname entsteht an drei unabhaengigen Stellen (Konzept
+    MultiVersionRelease, Abschnitt 23): die .dpk-Direktive bestimmt den
+    Namen, den der COMPILER schreibt, das .dproj-Element den, den
+    MSBuild und die IDE ERWARTEN. Fehlt eines von beiden, laeuft der
+    Compilerlauf GRUEN durch und die IDE meldet erst beim Laden
+    "Package kann nicht geladen werden" - eine Fehlersuche, die
+    zuverlaessig in die falsche Richtung fuehrt, weil der Bau ja
+    funktioniert hat.
+
+    Am 2026-08-23 hat genau diese Luecke einen ganzen Tag gekostet.
+
+    Die dritte Stelle (<OutputName>) braucht es nur, wenn .dproj- und
+    .dpk-Name auseinandergehen; hier heissen sie paarweise gleich, und
+    das prueft die Schleife mit.
+    """
+    for dproj in dprojs():
+        dpk = dproj[:-len('.dproj')] + '.dpk'
+        if not os.path.exists(dpk):
+            continue                      # .dpr-Projekte haben keine .dpk
+        rel = os.path.relpath(dproj, REPO).replace(chr(92), '/')
+        d_txt = io.open(dproj, encoding='utf-8', errors='replace').read()
+        k_txt = io.open(dpk, encoding='utf-8', errors='replace').read()
+        hat_dproj = '<DllSuffix>' in d_txt
+        hat_dpk = 'LIBSUFFIX' in k_txt
+        if hat_dpk and not hat_dproj:
+            befunde.append(
+                '  %s  .dpk traegt {$LIBSUFFIX}, .dproj hat kein '
+                '<DllSuffix> - die IDE sucht den unsuffixierten Namen'
+                % rel)
+        elif hat_dproj and not hat_dpk:
+            befunde.append(
+                '  %s  .dproj traegt <DllSuffix>, .dpk hat kein '
+                '{$LIBSUFFIX} - der Compiler schreibt den '
+                'unsuffixierten Namen' % rel)
+
+
 def main():
     ist = ist_stand()
     if '--update' in sys.argv:
@@ -76,6 +116,9 @@ def main():
 
     soll = json.loads(io.open(BASELINE, encoding='utf-8').read())
     abweichungen = []
+    # Q7 (2026-09-21): unabhaengig von der Baseline - die Paarung muss
+    # immer stimmen, auch bei einem frisch aufgenommenen Projekt.
+    pruefe_suffix_paarung(abweichungen)
     for p in sorted(set(soll) | set(ist)):
         if p not in ist:
             abweichungen.append('  %s  ENTFERNT oder nicht mehr versioniert' % p)

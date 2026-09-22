@@ -54,8 +54,8 @@ bibliothèque Win32.
 
 | Cible de build | Plateforme | Prérequis |
 |---|---|---|
-| SCA.Engine.bpl | Win32 + Win64 | rtl, rien d'externe |
-| SCA.SharedUI.bpl | **Win32 uniquement** | rtl, vcl, designide (IDE uniquement) |
+| SCA.Engine290.bpl | Win32 + Win64 | rtl, rien d'externe |
+| SCA.SharedUI290.bpl | **Win32 uniquement** | rtl, vcl, designide (IDE uniquement) |
 | StaticCodeAnalyser.exe (autonome) | Win32 + Win64 | rien d'externe |
 | StaticCodeAnalyser.IDE.bpl | **Win32 uniquement** | rtl, vcl, designide |
 | **TestProject.exe** | Win32 + Win64 | **DUnitX** + (Win32 : TestInsight) |

@@ -44,7 +44,7 @@ das Projekt später umstellen.
 1. Delphi 12 öffnen, `StaticCodeAnalyser.d12.groupproj` laden (oder
    `SCA.LSP\SCA.LSP.dproj` einzeln öffnen und der Gruppe hinzufügen).
 2. Zuerst **SCA.Engine** (Package) bauen — dieselbe Plattform/Config wie
-   SCA.LSP, damit die `SCA.Engine.bpl` gefunden wird (Pfad ggf. in den
+   SCA.LSP, damit die `SCA.Engine290.bpl` gefunden wird (Pfad ggf. in den
    IDE-Package-Suchpfad aufnehmen bzw. bpl neben die Exe legen).
 3. Dann **SCA.LSP** bauen → `SCA.LSP\<Platform>\<Config>\SCA.LSP.exe`.
 

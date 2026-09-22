@@ -46,6 +46,13 @@
         <Base>true</Base>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
+        <!-- Q1/Q2 (2026-09-21): Versions-Suffix. Dies ist die
+             MSBuild-Seite; die wirksame Seite ist {$LIBSUFFIX AUTO}
+             in der .dpk. Fehlt EINE der beiden, compiliert es durch
+             und die IDE meldet erst beim Laden "Package kann nicht
+             geladen werden" - die Suche geht dann in die falsche
+             Richtung (Konzept MultiVersionRelease, Abschnitt 23). -->
+        <DllSuffix>$(Auto)</DllSuffix>
         <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
         <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
         <DCC_E>false</DCC_E>
