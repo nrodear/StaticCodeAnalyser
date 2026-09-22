@@ -57,6 +57,34 @@ if [ ! -f "$pot_file" ]; then
   echo "i18n/template.pot fehlt - erst 'python tools/i18n_extract.py' laufen lassen." >&2
   exit 2
 fi
+
+#    FRISCHE-PRUEFUNG (2026-09-21). Die Voraussetzung oben stand nur als
+#    Kommentar da, und niemand hat sie geprueft. Am 21.09. war die .pot
+#    sechs Tage alt: sie fuehrte noch die Combo-Strings VOR J1, und das
+#    Audit meldete drei Strings als fehlend, die in de.po und fr.po
+#    laengst standen. Eine Stunde Suche an der falschen Stelle.
+#
+#    Die Gegenrichtung ist die gefaehrlichere: eine stale .pot VERSTECKT
+#    jeden neu hinzugekommenen Quell-String und meldet 100 % Abdeckung,
+#    waehrend die Oberflaeche still auf Englisch faellt.
+#
+#    Exit 2 wie beim fehlenden .pot - in beiden Faellen ist nicht das
+#    Ergebnis falsch, sondern die Eingabe. Bewusst NICHT Exit 1: der ist
+#    fuer echte Luecken reserviert, und ein Gate, das aus zwei Gruenden
+#    denselben Code liefert, wird missverstanden.
+# '|| true' ist Pflicht: unter 'set -e' beendet eine fehlschlagende
+# Kommandosubstitution das Skript SOFORT und STUMM. grep -l liefert 1,
+# wenn keine Datei passt - also im Normalfall. Ohne den Auffang stand
+# hier Exit 1 ganz ohne Meldung, und das sieht von aussen aus wie
+# "fehlende Strings". Die Gegenprobe hat es gezeigt, nicht das Lesen.
+juenger="$(find "$repo_root" -type f -name '*.pas' -newer "$pot_file"            -not -path '*/__history/*' -exec grep -l '_(' {} + 2>/dev/null            | head -3 || true)"
+if [ -n "$juenger" ]; then
+  echo "i18n/template.pot ist STALE - diese Quelldateien sind juenger:" >&2
+  echo "$juenger" | sed 's|^|  |' >&2
+  echo "Erst 'python tools/i18n_extract.py' laufen lassen, sonst sind" >&2
+  echo "fehlende UND vorhandene Strings gleichermassen unzuverlaessig." >&2
+  exit 2
+fi
 # EINE Extraktionskette fuer beide Seiten. Sie stand hier zweimal, und
 # die zwei Kopien MUESSEN zeichengleich bleiben: weicht eine sed-Stufe
 # ab, meldet comm die Differenz als fehlende Uebersetzungen. Genau so
