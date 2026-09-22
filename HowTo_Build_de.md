@@ -199,8 +199,8 @@ noch nicht unterstuetzt). Das Plugin muss also 32-bit sein.
 Du hast jetzt drei `.bpl`-Dateien in
 `C:\Users\Public\Documents\Embarcadero\Studio\23.0\Bpl\`:
 
-- `SCA.Engine.bpl`
-- `SCA.SharedUI.bpl`
+- `SCA.Engine290.bpl`
+- `SCA.SharedUI290.bpl`
 - `StaticCodeAnalyser.IDE.d12.bpl`
 
 ### 5.2 Der IDE sagen, dass sie das Plugin laden soll
@@ -323,7 +323,7 @@ der Fix aussieht.
 | **Plugin-Menue fehlt nach Neustart** | Falsche Plattform (Win64 statt Win32 gebaut) oder falscher Pfad in `Tools → Options → Packages`. |
 | **Standalone crasht nach ein paar Sekunden bei grossem Projekt** | Stack-Patch nicht angewendet. `tools\patch-stack-size.ps1` neu ausfuehren. |
 | **EXE meldet "file not found" beim Start** | Du hast die EXE aus ihrem `Output\…`-Ordner verschoben. Entweder zurueck, oder die `.dcu`/`.bpl`-Files mit kopieren. |
-| **"Cannot find SCA.Engine.bpl"** beim Plugin-Laden | Plugin findet `SCA.Engine.bpl` ueber den Delphi-Search-Path. Engine fuer dieselbe Plattform (Win32) und Konfiguration (Release) bauen. |
+| **"Cannot find SCA.Engine290.bpl"** beim Plugin-Laden | Plugin findet `SCA.Engine290.bpl` ueber den Delphi-Search-Path. Engine fuer dieselbe Plattform (Win32) und Konfiguration (Release) bauen. |
 | **Undeklarierter Bezeichner, obwohl er sichtbar in der Quelle steht** | Ein Paket zieht die Unit aus dem **DCP** eines anderen Pakets, nicht aus der Quelle. Ist das DCP aelter als die Quelle, compilierst du gegen den alten Stand - und der Compiler zeigt auf die Aufrufstelle, nicht auf das veraltete Artefakt. `python tools\stale_artifacts_check.py` laufen lassen, dann in der Reihenfolge `SCA.Engine` -> `SCA.SharedUI` -> Plugin neu bauen. |
 
 ---

@@ -61,8 +61,8 @@ Der Dev-3-Package-Satz, in dieser Reihenfolge in der IDE bauen (Release/Win32):
 
 | # | Projekt | dpk | erzeugte BPL |
 |---|---------|-----|--------------|
-| 1 | `SCA.Engine\SCA.Engine.dproj` | `SCA.Engine.dpk` | `SCA.Engine.bpl` |
-| 2 | `SCA.SharedUI\SCA.SharedUI.dpk` | `SCA.SharedUI.dpk` | `SCA.SharedUI.bpl` |
+| 1 | `SCA.Engine\SCA.Engine.dproj` | `SCA.Engine.dpk` | `SCA.Engine290.bpl` |
+| 2 | `SCA.SharedUI\SCA.SharedUI.dpk` | `SCA.SharedUI.dpk` | `SCA.SharedUI290.bpl` |
 | 3 | `StaticCodeAnalyserIDE\StaticCodeAnalyser.IDE.d12.dproj` | `StaticCodeAnalyser.IDE.d12.dpk` | `StaticCodeAnalyser.IDE.d12.bpl` |
 
 BPL-Ausgabeort: die dproj setzt **kein** `DCC_BplOutput` → die BPLs landen im
@@ -181,7 +181,7 @@ Installer ueberschreibt `rules\sca-rules.json` bei jedem Update.
 | 7 | Silent-Install `StaticCodeAnalyserSetup-*.exe /VERYSILENT /NORESTART` | identisches Ergebnis wie #1; Exit-Code 0 |
 | 8 | Deinstallation (IDE zu) | Registry-Werte weg (Known + Disabled Packages), danach Dateien weg; IDE startet sauber ohne Fehlermeldung |
 | 9 | **Privacy-Netzwerk-Gate**: Install + IDE-Session unter Netzwerk-Monitor (z. B. lokale Firewall-Logs) | 0 ausgehende Verbindungen von Setup und Plugin |
-| 10 | Variante B: Registry-Ladereihenfolge | `SCA.Engine.bpl`/`SCA.SharedUI.bpl`-Eintraege vorhanden; IDE-Start ohne "Modul nicht gefunden"; falls doch: Monolith-Variante vorziehen (bekannte Grenze der Uebergangsloesung) |
+| 10 | Variante B: Registry-Ladereihenfolge | `SCA.Engine290.bpl`/`SCA.SharedUI290.bpl`-Eintraege vorhanden; IDE-Start ohne "Modul nicht gefunden"; falls doch: Monolith-Variante vorziehen (bekannte Grenze der Uebergangsloesung) |
 
 Die Tabelle ist an der D12-Schiene entstanden; zwischen den Varianten
 unterscheiden sich Registry-Zweig und Zielordner, der Ablauf nicht. Am

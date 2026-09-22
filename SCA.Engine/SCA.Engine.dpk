@@ -24,6 +24,38 @@
 // Entwurfszeit-Package ist". Mit dem Eintrag ist der Menuepunkt
 // gar nicht erst da.
 {$RUNONLY}
+// Q1 (2026-09-21): Versions-Suffix im Paketnamen.
+//
+// AUTO haengt die Compilerversion an - unter D12 "290", unter D13
+// "370". Damit heissen die BPLs beider Generationen verschieden,
+// und genau das ist der Zweck: BEIDE Bpl-Ordner stehen im PATH,
+// und der Windows-Loader nimmt beim Aufloesen einer
+// requires-Abhaengigkeit den ERSTEN Treffer. Solange die Namen
+// gleich waren, lud D12 die BPL von D13 - am 2026-09-19 und
+// erneut am 2026-09-20 belegt, beide Male ein roter IDE-Start,
+// beim zweiten Mal mit einem Symbol, das es in der fremden
+// Fassung noch nicht gab.
+//
+// AUTO und nicht bedingt: ein {$IF RTLVersion}-Konstrukt scheitert
+// hier mit E2026 - der Suffix ist eine Eigenschaft des PROJEKTS,
+// keine des Quelltexts (Versuch vom 2026-08-23). Der Preis, dass
+// auch D12 einen Suffix bekommt, ist bewusst bezahlt; Installer und
+// Doku ziehen in dieser Charge nach.
+//
+// NUR DIE LAUFZEITPAKETE tragen ihn, die beiden Designtime-Pakete
+// (IDE/Plugin) NICHT. Das ist kein Versehen: ein Designtime-Paket
+// steht mit ABSOLUTEM Pfad in den Known Packages, dort sucht der
+// Loader gar nicht erst ueber den PATH. Ein Laufzeitpaket kann so
+// nicht registriert werden - seine requires-Aufloesung geht
+// zwangslaeufig ueber den PATH, und nur dort kollidieren zwei
+// Generationen. Ein Suffix an den d12-Paketen haette sie
+// "...d12290.bpl" genannt und Installer, GetIt und Release-Skript
+// mitgerissen, ohne ein einziges Problem zu loesen.
+//
+// Die .dproj braucht denselben Wert als <DllSuffix> - sonst
+// compiliert es durch und die IDE sucht trotzdem den
+// unsuffixierten Namen (Konzept Abschnitt 23, die DREI Stellen).
+{$LIBSUFFIX AUTO}
 {$R *.res}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
