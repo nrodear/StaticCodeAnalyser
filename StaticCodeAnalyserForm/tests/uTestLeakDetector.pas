@@ -4266,13 +4266,16 @@ procedure TTestMemoryLeakSearchFree.Leak_OwnerCreateInCallee_Pipeline_NoFinding;
 // echte Session samt TypeIndex - erst hier kann
 // IsComponentOwnerCreate die TComponent-Ahnenlinie der im
 // CALLEE erzeugten Klasse beweisen. Dieser Test ist ohne a4 rot.
+// S8: implementation-only wie der gruene Politik-Test - die
+// interface-Fassung lieferte im ssSource-Pfad der Pipeline keine
+// SCA001-Funde (an der EXE mit Datei-Scan dagegen schon); der
+// TypeIndex sieht die implementation-Typdeklaration genauso.
 const SRC =
   'unit t;'#13#10+
-  'interface'#13#10+
+  'implementation'#13#10+
   'type'#13#10+
   '  TMeinPanel = class(TComponent)'#13#10+
   '  end;'#13#10+
-  'implementation'#13#10+
   'function TFoo.BauePanel: TMeinPanel;'#13#10+
   'begin'#13#10+
   '  Result := TMeinPanel.Create(FHost);'#13#10+
@@ -4299,13 +4302,13 @@ procedure TTestMemoryLeakSearchFree.Leak_NonComponentCallee_Pipeline_StillReport
 // GEGENPROBE zu a4: dieselbe Form, aber die erzeugte Klasse ist
 // KEIN TComponent - der TypeIndex loest sie auf und lehnt ab,
 // der Fund bleibt (als RV-Hint).
+// S8: implementation-only, s. Anmerkung im Positivtest.
 const SRC =
   'unit t;'#13#10+
-  'interface'#13#10+
+  'implementation'#13#10+
   'type'#13#10+
   '  TMeinDing = class(TObject)'#13#10+
   '  end;'#13#10+
-  'implementation'#13#10+
   'function TFoo.BaueDing: TMeinDing;'#13#10+
   'begin'#13#10+
   '  Result := TMeinDing.Create(FHost);'#13#10+
@@ -8378,10 +8381,16 @@ begin
 end;
 
 procedure TTestMemoryLeakCalleeClasses.LocalCalleeTwoParams_StillReported;
-// Die Grenze des Gates, absichtlich gezogen: bei mehr als EINEM
-// Parameter muesste die Argumentposition aufgeloest werden, und ein
-// Fehlgriff dort maskiert ein echtes Leck. Solange das nicht gemessen
-// ist, bleibt der Fund stehen.
+// GEDREHT in S8 (Bau 2026-09-23): dieser Test dokumentierte die
+// alte 1-Parameter-Grenze - "solange das nicht gemessen ist,
+// bleibt der Fund stehen". G2 hat GENAU diese Messung
+// nachgeliefert: die Argumentposition wird aufgeloest
+// (ArgPositionOf, nur der exakte Top-Level-Ident zaehlt) und der
+// KORRESPONDIERENDE Parameter geprueft. Item steht an Position 2,
+// TBar.AddItem legt Parameter 2 in FItems.Add - der Fund faellt
+// jetzt ZU RECHT. Der Name bleibt fuer die Historie; die
+// Positions-Gegenprobe (falsches Argument -> Fund bleibt) liegt
+// in Leak_MultiParamCalleeStoresOtherArg_StillReported.
 const SRC =
   'unit t;'+#13#10+
   'interface'+#13#10+
@@ -8404,8 +8413,9 @@ const SRC =
 var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
-  try Assert.IsTrue(TFindingHelper.Count(F, fkMemoryLeak) > 0,
-        'zwei Parameter - das Gate haelt sich bewusst heraus');
+  try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+        'seit G2 wird die Argumentposition aufgeloest - der Callee' +
+        ' uebernimmt nachweislich, der Fund entfaellt');
   finally F.Free; end;
 end;
 
