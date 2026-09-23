@@ -349,6 +349,7 @@ type
     [Test] procedure Leak_ForeignOnAssign_StaysProven_Pipeline;
     [Test] procedure Leak_CtorWithoutSelfReg_StaysProven_Pipeline;
     [Test] procedure Leak_DangerBetweenShieldAndFree_StillWarns_Pipeline;
+    [Test] procedure Leak_ShieldedFarFreeAndNil_NoFinding_Pipeline;
     [Test] procedure Leak_EscapeByCall_StaysNeverFreed;
     [Test] procedure Leak_FofVariant_SurvivesErrorSeverity;
     [Test] procedure Leak_ReturnValue_HintTier;
@@ -4713,6 +4714,45 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'Verarbeite(FHost) kann werfen - das Schild traegt nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_ShieldedFarFreeAndNil_NoFinding_Pipeline;
+// U7 (U-Abnahme, der einzige fehlende rw-Drop): dieselbe
+// FarFree-Form, aber das Free hinter dem Schild ist ein
+// FreeAndNil - GibtVarFrei kennt diese Form nicht, die
+// Haupterkennung schon (deshalb ist der Fund ueberhaupt FOF).
+// An der EXE belegt (Probe uM5): ohne den Fix bleibt der Fund.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var a, o: TStringList;'#13#10+
+  'begin'#13#10+
+  '  a := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    o := TStringList.Create;'#13#10+
+  '    try'#13#10+
+  '      o.LoadFromFile(chr(97));'#13#10+
+  '    except'#13#10+
+  '      on E: Exception do'#13#10+
+  '      begin'#13#10+
+  '        FLog := E.Message;'#13#10+
+  '      end;'#13#10+
+  '    end;'#13#10+
+  '    FVar.Free;'#13#10+
+  '    FreeAndNil(o);'#13#10+
+  '  finally'#13#10+
+  '    a.Free;'#13#10+
+  '  end;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'FreeAndNil hinter dem Schild ist dasselbe Free ' +
+      'wie o.Free - das Schild traegt');
   finally F.Free; end;
 end;
 

@@ -3611,6 +3611,21 @@ class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
     Result := True;
   end;
 
+  function FreeAndNilAufVar(const ALow: string): Boolean;
+  // U7 (U-Abnahme: der einzige fehlende rw-Drop): GibtVarFrei
+  // kennt die FreeAndNil-Form bewusst nicht - seine uebrigen
+  // Konsumenten decken sie getrennt. HIER gehoert sie dazu:
+  // httpprothandler gibt LStr per FreeAndNil(LStr) hinter dem
+  // Schild frei, und die Haupterkennung hat genau dieses
+  // FreeAndNil laengst als das Free des FOF-Befunds gezaehlt.
+  var
+    p : Integer;
+  begin
+    p := Pos('freeandnil(' + VarNameLow + ')', ALow);
+    Result := (p > 0)
+      and ((p = 1) or not IsIdentChar(ALow[p - 1]));
+  end;
+
   function FreieZeileNach(AGrenze, ATryZeile: Integer): Boolean;
   // Review-Fix S7 (MAJOR): das Free muss UNMITTELBAR und
   // UNBEDINGT hinter dem try stehen, sonst traegt das Schild
@@ -3657,7 +3672,9 @@ class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
            and ((N.Line <= AGrenze + 2)
                 or StreckeHarmlos(ATryZeile, N.Line))
            and (GibtVarFrei(N.Name.ToLower, VarNameLow)
-                or GibtVarFrei(N.TypeRef.ToLower, VarNameLow)) then
+                or GibtVarFrei(N.TypeRef.ToLower, VarNameLow)
+                or FreeAndNilAufVar(N.Name.ToLower)
+                or FreeAndNilAufVar(N.TypeRef.ToLower)) then
           Exit(True);
         for C in N.Children do
         begin
