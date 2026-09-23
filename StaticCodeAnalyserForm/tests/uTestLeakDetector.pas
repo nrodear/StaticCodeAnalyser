@@ -323,6 +323,19 @@ type
     [Test] procedure Leak_SupportsFirstArg_NoFinding;
     // ---- S4 (Messplan 2026-09-23): Varianten + Tier -------------
     [Test] procedure Leak_ProvenLeak_ErrorTierWithVariant;
+    // ---- S7 (Review-Luecken) ------------------------------
+    [Test] procedure Leak_CastArgToStoringCallee_StillSuppressed;
+    [Test] procedure Leak_FactoryExceptCleanup_StillReported;
+    [Test] procedure Leak_AbortingHandler_StillWarns;
+    [Test] procedure Leak_CodeBetweenShieldAndFree_StillWarns;
+    [Test] procedure Leak_AliasAssign_NotProven;
+    [Test] procedure Leak_OwnerishCreateArg_NotProven;
+    [Test] procedure Leak_InterfaceDeclType_NotProven;
+    [Test] procedure Leak_NestedCommaArg_PositionHolds;
+    // ---- S7: Pipeline-Tests (TypeIndex + Evidenz-Politik) ----
+    [Test] procedure Leak_OwnerCreateInCallee_Pipeline_NoFinding;
+    [Test] procedure Leak_NonComponentCallee_Pipeline_StillReported;
+    [Test] procedure Leak_ProvenSurvivesPolicy_Pipeline;
     [Test] procedure Leak_EscapeByCall_StaysNeverFreed;
     [Test] procedure Leak_FofVariant_SurvivesErrorSeverity;
     [Test] procedure Leak_ReturnValue_HintTier;
@@ -4136,8 +4149,10 @@ begin
 end;
 
 procedure TTestMemoryLeakSearchFree.Leak_ExceptShieldedFree_NoFinding;
-// G3: Allokation im try, der except-Handler schluckt ALLES (kein
-// raise, kein exit), das Free steht HINTER dem try - jeder Pfad
+// G3: Allokation UNMITTELBAR VOR dem inneren try (1-Zeilen-
+// Bindung; der Review-Hinweis S7 stellte den frueheren
+// Kommentar "im try" richtig), der except-Handler schluckt
+// ALLES, das Free steht direkt HINTER dem try - jeder Pfad
 // erreicht es. Messplan-Faelle upixmapmanager/uopendocthumb.
 // Das umgebende try..finally einer ANDEREN Variable setzt
 // HasFinally, sonst entsteht die FOF-Meldung gar nicht erst.
@@ -4243,6 +4258,334 @@ begin
   Result := nil;
   for X in F do
     if X.Kind = fkMemoryLeak then Exit(X);
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_OwnerCreateInCallee_Pipeline_NoFinding;
+// S7 (Review-MAJOR): a4 war stumm-gruen, weil der Raw-Harness
+// keinen AContext baut. FindingsViaPipeline laeuft ueber die
+// echte Session samt TypeIndex - erst hier kann
+// IsComponentOwnerCreate die TComponent-Ahnenlinie der im
+// CALLEE erzeugten Klasse beweisen. Dieser Test ist ohne a4 rot.
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TMeinPanel = class(TComponent)'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'function TFoo.BauePanel: TMeinPanel;'#13#10+
+  'begin'#13#10+
+  '  Result := TMeinPanel.Create(FHost);'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var p: TMeinPanel;'#13#10+
+  'begin'#13#10+
+  '  p := BauePanel();'#13#10+
+  '  p.Tag := 1;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'die Factory erzeugt mit Owner-Argument und die ' +
+      'Klasse ist TComponent-Abkoemmling - a4 muss ' +
+      'unterdruecken');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_NonComponentCallee_Pipeline_StillReported;
+// GEGENPROBE zu a4: dieselbe Form, aber die erzeugte Klasse ist
+// KEIN TComponent - der TypeIndex loest sie auf und lehnt ab,
+// der Fund bleibt (als RV-Hint).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'type'#13#10+
+  '  TMeinDing = class(TObject)'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'function TFoo.BaueDing: TMeinDing;'#13#10+
+  'begin'#13#10+
+  '  Result := TMeinDing.Create(FHost);'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var p: TMeinDing;'#13#10+
+  'begin'#13#10+
+  '  p := BaueDing();'#13#10+
+  '  p.Tag := 1;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'kein TComponent - die Owner-Konvention gilt nicht, ' +
+      'der Fund bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_ProvenSurvivesPolicy_Pipeline;
+// S7 (Review-VERDACHT): der Kern von Nicos Tier-Entscheid ist,
+// was NACH der Evidenz-Politik uebrig bleibt. Raw-Harness-Tests
+// sehen die Detektor-Schwere; erst die Pipeline beweist, dass
+// proven/fcHigh den Deckel UEBERLEBT (Error) waehrend der
+// Escape-Fall auf Warning gedeckelt wird.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  obj.Add(chr(97));'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Baz;'#13#10+
+  'var obj2: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj2 := TStringList.Create;'#13#10+
+  '  Unbekannt(obj2);'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'proven/fcHigh ueberlebt die Politik als Error');
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'der Escape-Fall bleibt fcMedium und wird auf ' +
+      'Warning gedeckelt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_CastArgToStoringCallee_StillSuppressed;
+// S7/Monotonie-Pin: die ALTE Klasse-F-Suppression deckte auch
+// Cast-Argumente (Ablegen(TObject(obj)) ist derselbe Zeiger).
+// Der Positions-Umbau MUSS eine Obermenge bleiben - dieser Test
+// pinnt den Rueckfall; ohne ihn waere der Cast-Fall ein neuer
+// Fehlalarm (ADD ausserhalb des Bewegungsvertrags).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Ablegen(AItem: TObject);'#13#10+
+  'begin'#13#10+
+  '  FListe := AItem;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  Ablegen(TObject(obj));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Cast-Argument ist derselbe Zeiger - die alte ' +
+      'Suppression muss erhalten bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_FactoryExceptCleanup_StillReported;
+// S7/MAJOR-Fix-Pin: das kanonische Factory-Idiom
+// "except Result.Free; raise" ist FEHLERPFAD-Cleanup, kein
+// Besitzverbleib - der Aufrufer ohne Free leckt auf dem
+// Erfolgspfad. Vor dem Fix las der (c)-Zweig das Handler-Free
+// als Ownership und der Fund verschwand komplett.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.Baue: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    Result.Add(chr(97));'#13#10+
+  '  except'#13#10+
+  '    Result.Free;'#13#10+
+  '    raise;'#13#10+
+  '  end;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var liste: TStringList;'#13#10+
+  'begin'#13#10+
+  '  liste := Baue();'#13#10+
+  '  liste.Add(chr(98));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsHint),
+      'Handler-Free ist Cleanup, kein Besitzverbleib - ' +
+      'der RV-Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_AbortingHandler_StillWarns;
+// S7/MAJOR-Fix-Pin: Abort wirft EAbort - ein Handler mit Abort
+// schluckt NICHT, das Free hinter dem try wird uebersprungen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList; s: TStringList;'#13#10+
+  'begin'#13#10+
+  '  s := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    obj := TStringList.Create;'#13#10+
+  '    try'#13#10+
+  '      obj.LoadFromFile(chr(97));'#13#10+
+  '    except'#13#10+
+  '      Abort;'#13#10+
+  '    end;'#13#10+
+  '    obj.Free;'#13#10+
+  '  finally'#13#10+
+  '    s.Free;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'Abort raist EAbort weiter - das Schild darf nicht ' +
+      'greifen');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_CodeBetweenShieldAndFree_StillWarns;
+// S7/MAJOR-Fix-Pin: liegt zwischen dem geschirmten try und dem
+// Free weiterer Code, kann DER werfen - das Objekt leckt genau
+// so, wie der FOF-Befund behauptet. Das Schild verlangt seit S7
+// Unmittelbarkeit (<= 2 Zeilen).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList; s: TStringList;'#13#10+
+  'begin'#13#10+
+  '  s := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    obj := TStringList.Create;'#13#10+
+  '    try'#13#10+
+  '      obj.LoadFromFile(chr(97));'#13#10+
+  '    except'#13#10+
+  '      on E: Exception do'#13#10+
+  '        FLog := E.Message;'#13#10+
+  '    end;'#13#10+
+  '    s.LoadFromFile(chr(98));'#13#10+
+  '    s.SaveToFile(chr(99));'#13#10+
+  '    obj.Free;'#13#10+
+  '  finally'#13#10+
+  '    s.Free;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'dazwischenliegender Code kann werfen - das Schild ' +
+      'traegt nicht');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_AliasAssign_NotProven;
+// S7: P2 einzeln - eine Alias-Zuweisung ist eine Escape-
+// Gelegenheit, der Fund bleibt never-freed/fcMedium.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList; alias: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  alias := obj;'#13#10+
+  '  alias.Add(chr(97));'#13#10+
+  'end;';
+var
+  F : TObjectList<TLeakFinding>;
+  L : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    L := ErsterLeak(F);
+    Assert.IsTrue((L <> nil) and (L.MemoryLeakVariant = 'never-freed'),
+      'P2: Zuweisung an ein anderes Ziel disqualifiziert ' +
+      'proven');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_OwnerishCreateArg_NotProven;
+// S7: P3 einzeln - ein unaufloesbares Create-Argument (Feld) ist
+// Owner-Verdacht.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create(FHost);'#13#10+
+  '  obj.Add(chr(97));'#13#10+
+  'end;';
+var
+  F : TObjectList<TLeakFinding>;
+  L : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    L := ErsterLeak(F);
+    Assert.IsTrue((L = nil) or (L.MemoryLeakVariant <> 'proven-leak'),
+      'P3: Owner-verdaechtiges Create-Argument ' +
+      'disqualifiziert proven');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_InterfaceDeclType_NotProven;
+// S7: P4 einzeln - Interface-Deklarationstyp heisst Refcount-
+// Beteiligung, proven scheidet aus.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: IMyThing;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  obj.Add(chr(97));'#13#10+
+  'end;';
+var
+  F : TObjectList<TLeakFinding>;
+  L : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    L := ErsterLeak(F);
+    Assert.IsTrue((L = nil) or (L.MemoryLeakVariant <> 'proven-leak'),
+      'P4: Interface-Typ disqualifiziert proven');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_NestedCommaArg_PositionHolds;
+// S7: das Komma IN der verschachtelten Klammer darf die
+// Positionszaehlung nicht verschieben - Foo(a, b) ist EIN
+// Argument, unsere Variable steht an Position ZWEI und der
+// Callee legt Position zwei ab.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Ablegen(AName: string; AItem: TStringList; ATiefe: Integer);'#13#10+
+  'begin'#13#10+
+  '  FListe := AItem;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  Ablegen(Verbinde(chr(97), chr(98)), obj, 3);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'das verschachtelte Komma zaehlt nicht - Position ' +
+      'zwei trifft AItem');
+  finally F.Free; end;
 end;
 
 procedure TTestMemoryLeakSearchFree.Leak_ProvenLeak_ErrorTierWithVariant;
