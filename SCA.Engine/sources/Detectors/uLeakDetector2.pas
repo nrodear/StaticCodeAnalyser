@@ -176,6 +176,11 @@ type
     // Handler gehoert. Begruendung, Belege und Gegenbeleg stehen am Rumpf.
     // G3 (Messplan 2026-09-23): s. Implementationskommentar.
     // S4 (Messplan 2026-09-23): s. Implementationskommentar.
+    // noinspection LongParamList (6: die proven-Pruefung braucht
+    // Methode, Variable, Deklarationstyp, Quellzeilen, Unit-AST
+    // und Kontext - ein Parameterobjekt fuer eine interne
+    // static-Hilfsfunktion mit EINER Aufrufstelle waere Zeremonie;
+    // TAstNode kennt keine Parent-Kette, sonst entfiele AUnitNode.)
     class function ProvenNoEscape(MethodNode: TAstNode;
       const VarNameLow, ADeclTypeRef: string;
       const AStrippedLines: TArray<string>;
