@@ -321,6 +321,11 @@ type
     [Test] procedure Leak_AsInterfaceCast_NoFinding;
     // ---- G1 (Messplan 2026-09-23): Supports-Uebernahme ---------
     [Test] procedure Leak_SupportsFirstArg_NoFinding;
+    // ---- S4 (Messplan 2026-09-23): Varianten + Tier -------------
+    [Test] procedure Leak_ProvenLeak_ErrorTierWithVariant;
+    [Test] procedure Leak_EscapeByCall_StaysNeverFreed;
+    [Test] procedure Leak_FofVariant_SurvivesErrorSeverity;
+    [Test] procedure Leak_ReturnValue_HintTier;
     // ---- G3 (Messplan 2026-09-23): schluckendes try..except -----
     [Test] procedure Leak_ExceptShieldedFree_NoFinding;
     [Test] procedure Leak_ExceptShieldRaises_StillWarns;
@@ -1010,10 +1015,12 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'list.Free außerhalb finally – Warning');
-    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
-      'other korrekt freigegeben – kein Error');
+    // S4 (2026-09-23): freed-outside-finally ist Error-Tier - die
+    // Aussage ist syntaktisch beweisbar (Vollzaehlung 12,7 % FP).
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'list.Free außerhalb finally – Error (Tier-Umbau)');
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'other korrekt freigegeben – kein Warning');
   finally F.Free; end;
 end;
 
@@ -1041,8 +1048,8 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'list.Free ausserhalb finally (mit nested begin/end im finally) bleibt Warning');
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'list.Free ausserhalb finally (mit nested begin/end im finally) - Error seit S4');
   finally F.Free; end;
 end;
 
@@ -1171,8 +1178,10 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'Funktionsaufruf-Zuweisung ohne Free – Warning');
+    // S4: return-value-not-freed ist bis zur Neubewertung Hint
+    // (Vollzaehlung: 93,5 % FP, 2 echte Lecks von 31).
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsHint),
+      'Funktionsaufruf-Zuweisung ohne Free – Hint (S4)');
   finally F.Free; end;
 end;
 
@@ -2769,8 +2778,8 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'Free im try-Rumpf statt finally – Warning');
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'Free im try-Rumpf statt finally – Error (S4)');
   finally F.Free; end;
 end;
 
@@ -3120,10 +3129,10 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'list.Free nach try/finally – Warning');
-    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
-      'other korrekt freigegeben – kein Error');
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'list.Free nach try/finally – Error (S4)');
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'other korrekt freigegeben – kein Warning');
   finally F.Free; end;
 end;
 
@@ -3385,7 +3394,7 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try
     Assert.AreEqual<Integer>(1,
-      TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'Allokation haengt NICHT am try - das Fenster davor bleibt ungeschuetzt, ' +
       'der Handler-Free deckt es nicht ab');
   finally F.Free; end;
@@ -3467,7 +3476,7 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try
     Assert.AreEqual<Integer>(1,
-      TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'ohne Normalpfad-Free deckt der Handler nur den Ausnahmefall ab - ' +
       'der Erfolgspfad leckt weiter');
   finally F.Free; end;
@@ -4226,6 +4235,134 @@ begin
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'Free im try: der Ausnahmepfad ueberspringt es - ' +
       'der Befund muss bleiben');
+  finally F.Free; end;
+end;
+function ErsterLeak(F: TObjectList<TLeakFinding>): TLeakFinding;
+var X: TLeakFinding;
+begin
+  Result := nil;
+  for X in F do
+    if X.Kind = fkMemoryLeak then Exit(X);
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_ProvenLeak_ErrorTierWithVariant;
+// S4: keinerlei Weitergabe, kein Owner-Create, kein Interface-Typ
+// -> vierte Variante proven-leak, fcHigh (die Evidenz-Politik
+// laesst lsError damit passieren).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  obj.Add(chr(97));'#13#10+
+  'end;';
+var
+  F : TObjectList<TLeakFinding>;
+  L : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'proven-leak traegt die Detektor-Schwere lsError');
+    L := ErsterLeak(F);
+    Assert.AreEqual('proven-leak', L.MemoryLeakVariant,
+      'ohne jede Escape-Gelegenheit ist der Fund proven');
+    Assert.IsTrue(L.Confidence = fcHigh,
+      'fcHigh, damit die Evidenz-Politik den Error nicht ' +
+      'auf Warning deckelt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_EscapeByCall_StaysNeverFreed;
+// GEGENPROBE: EINE Uebergabe an eine unbekannte Routine genuegt,
+// und der Fund ist nur noch never-freed/fcMedium - die Politik
+// deckelt ihn wie bisher auf Warning. Ohne diese Probe waere ein
+// Immer-proven-Fehler unsichtbar.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  Unbekannt(obj);'#13#10+
+  'end;';
+var
+  F : TObjectList<TLeakFinding>;
+  L : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'die Uebergabe beweist keinen Besitzuebergang - der ' +
+      'Fund bleibt');
+    L := ErsterLeak(F);
+    Assert.AreEqual('never-freed', L.MemoryLeakVariant,
+      'mit Escape-Gelegenheit ist der Fund NICHT proven');
+    Assert.IsTrue(L.Confidence <> fcHigh,
+      'never-freed behaelt die Default-Konfidenz');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_FofVariant_SurvivesErrorSeverity;
+// S4-Kern: freed-outside-finally traegt jetzt lsError - die ALTE
+// Ableitung (lsError => never-freed) wuerde die Variante
+// verfaelschen. Das explizite Feld muss sie tragen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var list: TStringList; s: TStringList;'#13#10+
+  'begin'#13#10+
+  '  list := TStringList.Create;'#13#10+
+  '  s := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    list.Add(chr(97));'#13#10+
+  '  finally'#13#10+
+  '    s.Free;'#13#10+
+  '  end;'#13#10+
+  '  list.Free;'#13#10+
+  'end;';
+var
+  F : TObjectList<TLeakFinding>;
+  L : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'FOF ist Error-Tier (S4)');
+    L := ErsterLeak(F);
+    Assert.AreEqual('freed-outside-finally',
+      L.MemoryLeakVariant,
+      'das Varianten-FELD ueberlebt die Error-Schwere - ' +
+      'die alte Ableitung haette never-freed gelesen');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_ReturnValue_HintTier;
+// S4: return-value-not-freed -> Hint bis zur Neubewertung.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.Baue: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var liste: TStringList;'#13#10+
+  'begin'#13#10+
+  '  liste := Baue();'#13#10+
+  '  liste.Add(chr(97));'#13#10+
+  'end;';
+var
+  F : TObjectList<TLeakFinding>;
+  L : TLeakFinding;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsHint),
+      'RV-Variante ist Hint-Tier (S4)');
+    L := ErsterLeak(F);
+    Assert.AreEqual('return-value-not-freed',
+      L.MemoryLeakVariant, 'Variante bleibt benannt');
   finally F.Free; end;
 end;
 procedure TTestMemoryLeakSearchFree.Leak_SupportsFirstArg_NoFinding;
@@ -5763,10 +5900,10 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'list.Free ausserhalb finally -> Warning');
-    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
-      'other korrekt im finally -> kein Error');
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'list.Free ausserhalb finally -> Error (S4)');
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'other korrekt im finally -> kein Warning');
   finally F.Free; end;
 end;
 

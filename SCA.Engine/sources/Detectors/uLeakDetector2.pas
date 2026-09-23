@@ -175,6 +175,9 @@ type
     // Allokation (AAllocLine) unmittelbar an genau dem try haengt, zu dem der
     // Handler gehoert. Begruendung, Belege und Gegenbeleg stehen am Rumpf.
     // G3 (Messplan 2026-09-23): s. Implementationskommentar.
+    // S4 (Messplan 2026-09-23): s. Implementationskommentar.
+    class function ProvenNoEscape(MethodNode: TAstNode;
+      const VarNameLow, ADeclTypeRef: string): Boolean; static;
     class function ExceptShieldedFree(MethodNode: TAstNode;
       const VarNameLow: string; AAllocLine: Integer): Boolean; static;
     class function HasExceptPathFree(MethodNode: TAstNode;
@@ -2904,6 +2907,184 @@ begin
       Exit(True);
 end;
 
+class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
+  const VarNameLow, ADeclTypeRef: string): Boolean;
+// S4 (Messplan 2026-09-23): die proven-leak-Klassifikation. True nur,
+// wenn KEINES der Praedikate anschlaegt, mit denen die TP-Retention
+// des Messplans simuliert wurde:
+//   P1/P5  Variable steht in IRGENDEINER Argumentliste (Uebergabe an
+//          fremde Methode oder freie Routine - ob mit oder ohne
+//          Besitzuebergang, ist hier egal: proven heisst, die Frage
+//          stellt sich gar nicht erst)
+//   P2     Variable steht auf der RECHTEN Seite einer Zuweisung an
+//          etwas anderes (Feld, Result, Alias, Index-Ziel)
+//   P3     der Konstruktor erhaelt ein Argument, das sich nicht als
+//          WERTTYP aufloesen laesst (Owner-Verdacht; ein String-/
+//          Integer-Parameter wie Create(TarFileName) zaehlt NICHT -
+//          dieselbe Aufloesung, die die Auditoren vorgenommen haben)
+//   P4     der Deklarationstyp ist ein Interface (I+Grossbuchstabe)
+//
+// Die Gate-Kette davor hat bereits bewiesen, dass KEIN Free und kein
+// nachweislicher Besitzuebergang existiert; ProvenNoEscape verlangt
+// zusaetzlich, dass nicht einmal eine GELEGENHEIT dazu bestand.
+// Gemessen (152 Verdikte): von den bestehenden Funden dieser Klasse
+// waren 39 von 50 echte Lecks - die Fehlerquote der Klasse liegt
+// damit um Faktor ~10 unter der von never-freed insgesamt.
+//
+// MONOTON in der MELDUNG: die Funktion aendert keine Fundmenge, nur
+// Variante/Konfidenz/Schwere eines ohnehin gemeldeten Funds.
+
+  function IstWertTypLow(const ATypLow: string): Boolean;
+  const
+    WERT : array[0..21] of string = (
+      'string', 'ansistring', 'widestring', 'shortstring',
+      'tfilename', 'integer', 'cardinal', 'int64',
+      'uint64', 'nativeint', 'longint', 'longword',
+      'word', 'byte', 'boolean', 'char',
+      'double', 'single', 'extended', 'currency',
+      'tdatetime', 'pointer');
+  var W: string;
+  begin
+    for W in WERT do
+      if ATypLow = W then Exit(True);
+    Result := False;
+  end;
+
+  function DeklTypLowVon(const AIdentLow: string): string;
+  // Typ einer Lokalen/eines Parameters DIESER Methode, erster
+  // Typ-Ident, lower. Leer = nicht aufloesbar (Feld, Global).
+  var
+    N : TAstNode;
+  begin
+    Result := '';
+    // Zwei getrennte Schleifen - ein for-in ueber ein Array-Literal
+    // von Objektlisten ist kein verlaessliches Delphi-Konstrukt.
+    for N in MethodNode.FindAllRef(nkLocalVar) do
+      if TDetectorUtils.UnqualifiedNameLast(N.Name).ToLower
+         = AIdentLow then
+        Exit(FirstTypeIdentLow(N.TypeRef.ToLower));
+    for N in MethodNode.FindAllRef(nkParam) do
+      if TDetectorUtils.UnqualifiedNameLast(N.Name).ToLower
+         = AIdentLow then
+        Exit(FirstTypeIdentLow(N.TypeRef.ToLower));
+  end;
+
+  function TextHatUebergabe(const ALow: string): Boolean;
+  // P1/P5: varname als Argument - dem Wortanfang geht (Leerraum
+  // uebersprungen) eine oeffnende Klammer oder ein Komma voraus.
+  // Receiver-Nutzung (var.Methode) hat davor Zeilenanfang/Operator
+  // und zaehlt nicht.
+  var
+    p, davor : Integer;
+  begin
+    Result := False;
+    p := Pos(VarNameLow, ALow);
+    while p > 0 do
+    begin
+      if ((p = 1) or not IsIdentChar(ALow[p - 1]))
+         and ((p + Length(VarNameLow) > Length(ALow))
+              or not IsIdentChar(ALow[p + Length(VarNameLow)])) then
+      begin
+        davor := p - 1;
+        while (davor >= 1) and (ALow[davor] = ' ') do Dec(davor);
+        if (davor >= 1) and CharInSet(ALow[davor], ['(', ',']) then
+          Exit(True);
+      end;
+      p := PosEx(VarNameLow, ALow, p + 1);
+    end;
+  end;
+
+  function CreateArgIstOwnerVerdacht(const ARhsLow: string): Boolean;
+  // P3: Argumentliste des Create pruefen. nil/leer/Werttypen sind
+  // unverdaechtig; ein unaufloesbarer Ident (Feld, Self, Global)
+  // gilt konservativ als Owner-Verdacht.
+  var
+    pC, pK, Tiefe, i, s : Integer;
+    Arg : string;
+
+    function ArgVerdacht(const A: string): Boolean;
+    var
+      T : string;
+      k : Integer;
+    begin
+      Result := False;
+      if (A = '') or (A = 'nil')
+         or (A = 'true') or (A = 'false') then Exit;
+      if A[1] = '''' then Exit;          // String-Literal
+      if CharInSet(A[1], ['0'..'9', '$', '-']) then Exit; // Zahl
+      for k := 1 to Length(A) do
+        if not IsIdentChar(A[k]) then Exit(True); // Ausdruck: Verdacht
+      T := DeklTypLowVon(A);
+      if T = '' then Exit(True);       // nicht aufloesbar: Verdacht
+      Result := not IstWertTypLow(T);
+    end;
+
+  begin
+    Result := False;
+    pC := Pos('.create', ARhsLow);
+    if pC <= 0 then Exit;
+    pK := PosEx('(', ARhsLow, pC);
+    if pK <= 0 then Exit;                          // Create ohne Args
+    Tiefe := 1; s := pK + 1;
+    for i := pK + 1 to Length(ARhsLow) do
+    begin
+      case ARhsLow[i] of
+        '(', '[': Inc(Tiefe);
+        ')', ']':
+          begin
+            Dec(Tiefe);
+            if Tiefe = 0 then
+            begin
+              Arg := Trim(Copy(ARhsLow, s, i - s));
+              Exit(ArgVerdacht(Arg));
+            end;
+          end;
+        ',':
+          if Tiefe = 1 then
+          begin
+            Arg := Trim(Copy(ARhsLow, s, i - s));
+            if ArgVerdacht(Arg) then Exit(True);
+            s := i + 1;
+          end;
+      end;
+    end;
+  end;
+
+var
+  Stack : TList<TAstNode>;
+  N, C  : TAstNode;
+  NLow, TLow : string;
+begin
+  Result := False;
+  // P4: Interface-Deklarationstyp
+  if (Length(ADeclTypeRef) >= 2) and (ADeclTypeRef[1] = 'I')
+     and CharInSet(ADeclTypeRef[2], ['A'..'Z']) then Exit;
+  Stack := TList<TAstNode>.Create;
+  try
+    Stack.Add(MethodNode);
+    while Stack.Count > 0 do
+    begin
+      N := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      NLow := N.Name.ToLower;
+      TLow := N.TypeRef.ToLower;
+      // P1/P5 in Aufrufname und RHS-Text
+      if TextHatUebergabe(NLow) or TextHatUebergabe(TLow) then Exit;
+      // P2: Zuweisung an etwas anderes mit var in der RHS
+      if (N.Kind = nkAssign) and (NLow <> VarNameLow)
+         and TDetectorUtils.ContainsWholeWordLower(VarNameLow, TLow) then
+        Exit;
+      // P3: die Create-Zuweisung an UNSERE Variable
+      if (N.Kind = nkAssign) and (NLow = VarNameLow)
+         and CreateArgIstOwnerVerdacht(TLow) then Exit;
+      for C in N.Children do Stack.Add(C);
+    end;
+    Result := True;
+  finally
+    Stack.Free;
+  end;
+end;
+
 class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
   const VarNameLow: string; AAllocLine: Integer): Boolean;
 // G3 (Messplan 2026-09-23): der FOF-Befund behauptet "eine Ausnahme
@@ -4577,19 +4758,29 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
   // nicht nebenbei - dieser Anlauf hat zwei Fehler gebraucht, bis das
   // klar war.
 
+  // S4 (Messplan 2026-09-23): AVariant benennt die SCA001-Form
+  // EXPLIZIT (das Feld traegt sie ins SARIF), AConf hebt bzw.
+  // senkt die Konfidenz je Form - fcHigh laesst die Evidenz-
+  // Politik lsError passieren (Tier-Vertrag: fcHigh -> Error,
+  // fcMedium -> hoechstens Warning). Die Severity-Entscheide
+  // stammen aus dem Messplan-Audit und Nicos Zuschnitt vom
+  // 23.09.: proven-leak + freed-outside-finally -> Error,
+  // return-value -> Hint bis zur Neubewertung.
   procedure AddFinding(const MissingVar: string; Sev: TLeakSeverity;
-    VLine: Integer);
+    VLine: Integer; const AVariant: string;
+    AConf: TFindingConfidence);
   var
     F: TLeakFinding;
   begin
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := MethodNode.Name;
-    F.LineNumber := IntToStr(VLine);
-    F.MissingVar := MissingVar;
-    F.Severity   := Sev;
-    F.Kind       := fkMemoryLeak;
-    F.Confidence := KindDefaultConfidence(fkMemoryLeak);
+    F             := TLeakFinding.Create;
+    F.FileName    := FileName;
+    F.MethodName  := MethodNode.Name;
+    F.LineNumber  := IntToStr(VLine);
+    F.MissingVar  := MissingVar;
+    F.Severity    := Sev;
+    F.Kind        := fkMemoryLeak;
+    F.Confidence  := AConf;
+    F.LeakVariant := AVariant;
     Results.Add(F);
   end;
 
@@ -4707,7 +4898,19 @@ begin
           // Gates): der Subtree-Walk laeuft dann nur fuer Variablen, die
           // tatsaechlich gemeldet wuerden - Hot-Path-Schutz.
           if Gate('SCA001.NoOwnershipTransfer', not LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then
-            AddFinding(V.Name, lsError, ReportLine);
+            // S4: besteht der Fund auch die PROVEN-Kriterien
+            // (keinerlei Weitergabe, kein Owner-Create, kein
+            // Interface-Typ), traegt er die vierte Variante und
+            // fcHigh - die Evidenz-Politik laesst ihn dann als
+            // Error durch. Der Rest bleibt never-freed/fcMedium
+            // und wird wie bisher auf Warning gedeckelt.
+            if ProvenNoEscape(MethodNode, VarNameLow, V.TypeRef) then
+              AddFinding(V.Name, lsError, ReportLine,
+                         'proven-leak', fcHigh)
+            else
+              AddFinding(V.Name, lsError, ReportLine,
+                         'never-freed',
+                         KindDefaultConfidence(fkMemoryLeak));
         end
         else if not FreeInFin and HasFinally
              and not HasExceptPathFree(MethodNode, VarNameLow, ReportLine)
@@ -4764,7 +4967,15 @@ begin
                   not FreeInFinallyRegionBySource(MethodNode, StrippedLines,
                                                   VarNameLow)
                   and not LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then
-            AddFinding(V.Name, lsWarning, ReportLine);
+            // S4/Nicos Entscheid: die Aussage "Free steht neben
+            // dem finally" ist syntaktisch beweisbar und nach dem
+            // Messplan (71/71 vollgezaehlt, 12,7 % FP; nach G3
+            // niedriger) Error-Tier-tauglich. fcHigh, damit die
+            // Politik den lsError nicht deckelt; die Variante
+            // kommt aus dem FELD - die alte Dekodierung ueber die
+            // Schwere wuerde hier never-freed lesen.
+            AddFinding(V.Name, lsError, ReportLine,
+                       'freed-outside-finally', fcHigh);
         end;
 
         Continue;
@@ -4804,7 +5015,13 @@ begin
         if Gate('SCA001.LastUseIsOwnershipTransfer', LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then Continue;
         var ReportLine := FuncAssignLine;
         if ReportLine = 0 then ReportLine := V.Line;
-        AddFinding(V.Name + LEAK_RETURN_VALUE_SUFFIX, lsWarning, ReportLine);
+        // S4/Nicos Entscheid: 93,5 % FP in der Vollzaehlung (29
+        // von 31, nur 2 echte Lecks) - bis zur Neubewertung nach
+        // den G1/G2-Fixes faellt die Variante aus der Standard-
+        // Sicht (Hint), bleibt aber im Referenzlauf erhalten.
+        AddFinding(V.Name + LEAK_RETURN_VALUE_SUFFIX, lsHint, ReportLine,
+                   'return-value-not-freed',
+                   KindDefaultConfidence(fkMemoryLeak));
       end;
     end;
   finally

@@ -118,9 +118,21 @@ class function TFixHintResolver.HintVariant(const Finding: TLeakFinding): Intege
 // sonst entsteht exakt derselbe Memoize-Bug erneut.
 begin
   Result := 0;
-  if (Finding.Kind = fkMemoryLeak) and (Finding.OriginalSeverity <> lsError) and
-     (Pos(SFX_RETURN_VALUE, Finding.MissingVar) > 0) then
-    Result := 1;
+  // S4 (2026-09-23): die Variante kommt jetzt aus dem expliziten
+  // Feld (MemoryLeakVariant mit Ableitungs-Fallback) - seit dem
+  // Tier-Umbau traegt auch freed-outside-finally lsError, die alte
+  // Severity-Dekodierung haette FOF-Funden den never-freed-Hint
+  // gegeben. VIER Formen brauchen ZWEI Bits (s. Key-Kommentar):
+  //   0 = never-freed UND proven-leak (gleicher Hint-Text - proven
+  //       ist dieselbe Aussage mit hoeherer Konfidenz)
+  //   1 = return-value-not-freed
+  //   2 = freed-outside-finally
+  if Finding.Kind = fkMemoryLeak then
+  begin
+    var V := Finding.MemoryLeakVariant;
+    if V = 'return-value-not-freed' then Exit(1);
+    if V = 'freed-outside-finally' then Exit(2);
+  end;
 end;
 
 class function TFixHintResolver.FixHint(const Finding: TLeakFinding): TFixHint;
@@ -138,12 +150,14 @@ begin
     FCache.Clear;
     FCacheLang := CurrentLanguage;
   end;
-  // Kind shl 9 laesst 9 Bit frei: 8 Bit Severity (Ord <= 2) plus 1 Bit
-  // Variante. Bewusst KEIN Ausklammern von fkMemoryLeak aus dem Memoize:
-  // SCA001 ist der volumenstaerkste Detektor, ein Build()-Aufruf pro Fund
-  // waere genau die Gettext-plus-3-KB-Allokation, gegen die der Cache
-  // ueberhaupt eingefuehrt wurde. Ein zusaetzlicher Slot ist billiger.
-  Key := (Ord(Finding.Kind) shl 9) or (Ord(Finding.OriginalSeverity) shl 1)
+  // S4: Kind shl 10 laesst 10 Bit frei - 8 Bit Severity (Ord <= 2,
+  // shl 2) plus ZWEI Bit Variante (vier SCA001-Formen). Bewusst
+  // KEIN Ausklammern von fkMemoryLeak aus dem Memoize: SCA001 ist
+  // der volumenstaerkste Detektor, ein Build()-Aufruf pro Fund
+  // waere genau die Gettext-plus-3-KB-Allokation, gegen die der
+  // Cache ueberhaupt eingefuehrt wurde. Zusaetzliche Slots sind
+  // billiger.
+  Key := (Ord(Finding.Kind) shl 10) or (Ord(Finding.OriginalSeverity) shl 2)
          or HintVariant(Finding);
   if FCache.TryGetValue(Key, Result) then Exit;
   Result := Build(Finding);
@@ -359,13 +373,14 @@ begin
   case Finding.Kind of
 
     fkMemoryLeak:
-      // OriginalSeverity, NICHT Severity: die Evidenz-Politik deckelt
-      // jeden fkMemoryLeak auf lsWarning (fcMedium), und zwar bevor ein
-      // Export hier ankommt - am Referenzkorpus 568 von 568 Funden. Wer
-      // Severity liest, schickt zu JEDEM echten Leck den Hinweis "Free is
-      // outside the protecting finally block", also zu einem Free, das es
-      // gar nicht gibt.
-      if Finding.OriginalSeverity = lsError then
+      // S4 (2026-09-23): entschieden wird ueber MemoryLeakVariant
+      // (explizites Feld, Ableitungs-Fallback fuer Altpfade) -
+      // NICHT ueber Severity: die Evidenz-Politik deckelt, und
+      // seit dem Tier-Umbau traegt auch freed-outside-finally
+      // lsError. proven-leak teilt den never-freed-Text: dieselbe
+      // Aussage, nur mit hoeherer Konfidenz gemeldet.
+      if (Finding.MemoryLeakVariant = 'never-freed')
+         or (Finding.MemoryLeakVariant = 'proven-leak') then
       begin
         Result.Description := _('Object created but never freed (memory leak)');
         Result.Before :=
@@ -385,9 +400,10 @@ begin
           '// Tip: enable ReportMemoryLeaksOnShutdown := True'#13#10 +
           '//      during development to surface leaks at exit.';
       end
-      // Achtung: dieser Zweig liest MissingVar - er ist der Grund fuer das
-      // Variantenbit in HintVariant. Bedingung dort mitpflegen!
-      else if Pos(SFX_RETURN_VALUE, Finding.MissingVar) > 0 then
+      // Achtung: die Zweigwahl hier MUSS mit HintVariant
+      // uebereinstimmen (Cache-Slot je Variante) - wer hier einen
+      // Zweig ergaenzt, pflegt dort die Bits mit.
+      else if Finding.MemoryLeakVariant = 'return-value-not-freed' then
       begin
         Result.Description := _('Function return value is not freed by the caller');
         Result.Before :=
