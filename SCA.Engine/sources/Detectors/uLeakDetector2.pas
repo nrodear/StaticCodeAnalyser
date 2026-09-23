@@ -3231,8 +3231,10 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
       // dass der AST sie normalerweise sieht - die Quelltext-
       // Fassung sichert gegen die T1-Gattung (verlorene
       // Statements) ab.
+      PosDp := Pos(':=', Zeile);
       if Zeile.TrimLeft.StartsWith(VarNameLow + '.on')
-         and (Pos(':=', Zeile) > 0) then Exit(True);
+         and (PosDp > 0)
+         and (Trim(Copy(Zeile, PosDp + 2, MaxInt)).TrimRight([';']) <> 'nil') then Exit(True);
       if Zeile.TrimLeft.StartsWith('for ') then Continue;
       PosDp := Pos(':=', Zeile);
       if (PosDp > 0)
@@ -3300,8 +3302,8 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
   var
     Methods : TList<TAstNode>;
     Mth : TAstNode;
-    Tiefe, Z, Von, Bis, PosDp : Integer;
-    Zeile, RHS : string;
+    Tiefe, Z, Von, Bis, PosDp, PosSemi, Start, LStart, k : Integer;
+    Zeile, RHS, LHS : string;
   begin
     Result := False;
     if (AUnitNode = nil) or (Length(AStrippedLines) = 0) then Exit;
@@ -3321,10 +3323,39 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
         for Z := Von to Bis do
         begin
           Zeile := AStrippedLines[Z - 1].ToLower;
-          PosDp := Pos(':=', Zeile);
-          if PosDp <= 0 then Continue;
-          RHS := Copy(Zeile, PosDp + 2, MaxInt).Trim;
-          if (RHS = 'self') or (RHS = 'self;') then Exit(True);
+          // F8 (Review): ALLE ':=' der Zeile pruefen (Mehr-
+          // Statement-Zeilen), RHS bis zum Semikolon. Und die
+          // LHS muss ein EIGENES Feld/eine Registry sein -
+          // 'FChild.Parent := Self' verdrahtet nur ein Kind-
+          // objekt, das mit dem Objekt stirbt: kein Escape.
+          Start := 1;
+          repeat
+            PosDp := PosEx(':=', Zeile, Start);
+            if PosDp <= 0 then Break;
+            PosSemi := PosEx(';', Zeile, PosDp);
+            if PosSemi > 0 then
+              RHS := Trim(Copy(Zeile, PosDp + 2,
+                          PosSemi - PosDp - 2))
+            else
+              RHS := Trim(Copy(Zeile, PosDp + 2, MaxInt));
+            if RHS = 'self' then
+            begin
+              LStart := 1;
+              for k := PosDp - 1 downto 1 do
+                if Zeile[k] = ';' then
+                begin
+                  LStart := k + 1;
+                  Break;
+                end;
+              LHS := Trim(Copy(Zeile, LStart, PosDp - LStart));
+              if StartsStr('self.', LHS) then
+                Delete(LHS, 1, 5);
+              k := Pos('[', LHS);
+              if k > 0 then LHS := Copy(LHS, 1, k - 1);
+              if Pos('.', LHS) = 0 then Exit(True);
+            end;
+            Start := PosDp + 2;
+          until False;
         end;
       end;
       if TI = nil then Break;
@@ -3370,8 +3401,11 @@ begin
       // On*-Properties tragen die Callback-Semantik. Der
       // Praefix-Match traefe auch 'v.online := x' - kostet
       // hoechstens die proven-Einstufung, nie den Fund.
+      // F7 (Review): 'v.OnX := nil' haengt den Handler AB -
+      // keine Lebenszeitverlaengerung, proven bleibt.
       if (N.Kind = nkAssign)
-         and StartsStr(VarNameLow + '.on', NLow) then Exit;
+         and StartsStr(VarNameLow + '.on', NLow)
+         and (Trim(TLow) <> 'nil') then Exit;
       // P3: die Create-Zuweisung an UNSERE Variable
       if (N.Kind = nkAssign) and (NLow = VarNameLow) then
       begin
@@ -3468,46 +3502,109 @@ class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
       if HandlerBrichtAus(C) then Exit(True);
   end;
 
-  function ZwischenzeilenHarmlos(AVon, ABis: Integer): Boolean;
-  // U3: die Quellzeilen ECHT ZWISCHEN AVon und ABis (beide
-  // exklusiv) koennen nicht werfen. Harmlos sind Struktur-
-  // zeilen (end/else/begin, leer - Kommentare sind bereits
-  // weggestrippt) und Ein-Statement-Free-Zeilen (Free/
-  // FreeAndNil/DisposeOf einer ANDEREN Variablen: das Cleanup-
-  // Ketten-Idiom; ein werfender Destruktor bricht jede solche
-  // Kette, das nimmt auch der Rest des Detektors in Kauf).
-  // Deckel 8 Zwischenzeilen; ohne Quelltext (Raw-Harness)
-  // greift nur die alte 2-Zeilen-Marge.
+  function ZeileHarmlos(const ARoh: string): Boolean;
+  // U3/F5 (Review-MAJOR): eine Zwischenzeile gilt NUR dann als
+  // harmlos, wenn sie Struktur ist (end/else/begin/except/
+  // finally/try - ein leerer Schluck-Handler ist nach dem
+  // Strip nur Struktur; Kommentare sind weggestrippt) oder ein
+  // REINES Cleanup-Statement: <identkette>.Free,
+  // FreeAndNil(<identkette>), <identkette>.DisposeOf - je mit
+  // optionalem Semikolon und OHNE jeden weiteren Ausdruck.
+  // 'if X then Tmp.Free' oder 'FreeAndNil(FArr[i])' koennen in
+  // Bedingung bzw. Indexausdruck werfen und sind NICHT
+  // harmlos. Restrisiko bleibt der werfende Destruktor selbst
+  // und ein werfender Property-Getter in der Receiver-Kette -
+  // beides nimmt der Rest des Detektors genauso in Kauf.
   var
-    Z, PosSemi : Integer;
-    Zeile : string;
+    Z, Kern : string;
+    k : Integer;
   begin
-    Result := False;
-    if ABis - AVon > 9 then Exit;
-    if Length(AStrippedLines) < ABis - 1 then Exit;
-    for Z := AVon + 1 to ABis - 1 do
-    begin
-      Zeile := Trim(AStrippedLines[Z - 1]).ToLower;
-      // 'except'/'finally'/'try' als nackte Zeilen: ein LEERER Schluck-
-      // Handler ist nach dem Strip nur noch Struktur - genau
-      // die G3-Belegfaelle (upixmapmanager 2203, uopendocthumb
-      // 90) tragen ihr 'except' zwischen MaxDescLine und Free.
-      if (Zeile = '') or (Zeile = 'end') or (Zeile = 'end;')
-         or (Zeile = 'else') or (Zeile = 'begin')
-         or (Zeile = 'except') or (Zeile = 'finally')
-         or (Zeile = 'try') then Continue;
-      // Ein-Statement-Zeile? (kein zweites Semikolon in der Mitte)
-      PosSemi := Pos(';', Zeile);
-      if (PosSemi > 0) and (PosSemi < Length(Zeile)) then Exit;
-      if Zeile.EndsWith('.free;') or Zeile.EndsWith('.free')
-         or Zeile.StartsWith('freeandnil(')
-         or (Pos('.disposeof', Zeile) > 0) then Continue;
+    Z := Trim(ARoh).ToLower;
+    Result := (Z = '') or (Z = 'end') or (Z = 'end;')
+              or (Z = 'else') or (Z = 'begin')
+              or (Z = 'except') or (Z = 'finally')
+              or (Z = 'try');
+    if Result then Exit;
+    if Z.EndsWith(';') then
+      Z := Trim(Copy(Z, 1, Length(Z) - 1));
+    if Z.EndsWith('.free') then
+      Kern := Copy(Z, 1, Length(Z) - 5)
+    else if Z.EndsWith('.disposeof') then
+      Kern := Copy(Z, 1, Length(Z) - 10)
+    else if Z.StartsWith('freeandnil(') and Z.EndsWith(')') then
+      Kern := Copy(Z, 12, Length(Z) - 12)
+    else
       Exit;
-    end;
+    if Kern = '' then Exit;
+    for k := 1 to Length(Kern) do
+      if not (IsIdentChar(Kern[k]) or (Kern[k] = '.')) then Exit;
     Result := True;
   end;
 
-  function FreieZeileNach(AGrenze: Integer): Boolean;
+  function TextuellesTryEnde(ATryZeile: Integer): Integer;
+  // U3/F2 (Review-BLOCKER): die AST-Grenze MaxDescLine liegt
+  // VOR dem textuellen Ende des try-Konstrukts - dazwischen
+  // stehen Handler-Fortsetzungszeilen (DebugLn-Argumente ueber
+  // zwei Zeilen, codetoolsoptions 1198), die KEIN Gefahrencode
+  // sind: sie gehoeren zum Statement des Handlers und laufen
+  // unter dessen Schutz. Der Klammerzaehler auf den gestrippten
+  // Zeilen (try/begin/case oeffnen, end schliesst) liefert das
+  // echte Ende; 0 = nicht bestimmbar, dann greift nur die alte
+  // Marge.
+  var
+    Z, k, Tiefe, Deckel : Integer;
+    Zeile, W : string;
+  begin
+    Result := 0;
+    if (ATryZeile < 1) or (ATryZeile > Length(AStrippedLines)) then Exit;
+    Tiefe := 0;
+    Deckel := ATryZeile + 400;
+    if Deckel > Length(AStrippedLines) then
+      Deckel := Length(AStrippedLines);
+    for Z := ATryZeile to Deckel do
+    begin
+      Zeile := AStrippedLines[Z - 1].ToLower;
+      k := 1;
+      while k <= Length(Zeile) do
+        if IsIdentChar(Zeile[k]) then
+        begin
+          W := '';
+          while (k <= Length(Zeile)) and IsIdentChar(Zeile[k]) do
+          begin
+            W := W + Zeile[k];
+            Inc(k);
+          end;
+          if (W = 'try') or (W = 'begin') or (W = 'case') then
+            Inc(Tiefe)
+          else if W = 'end' then
+          begin
+            Dec(Tiefe);
+            if Tiefe = 0 then Exit(Z);
+          end;
+        end
+        else
+          Inc(k);
+    end;
+  end;
+
+  function StreckeHarmlos(ATryZeile, AFreiZeile: Integer): Boolean;
+  // U3: jede Zeile zwischen dem textuellen try-Ende und dem
+  // Free muss harmlos sein (Deckel 8). Ohne Quelltext
+  // (Raw-Harness) bleibt nur die alte 2-Zeilen-Marge.
+  var
+    TE, Z : Integer;
+  begin
+    Result := False;
+    if Length(AStrippedLines) < AFreiZeile - 1 then Exit;
+    TE := TextuellesTryEnde(ATryZeile);
+    if (TE = 0) or (AFreiZeile <= TE) then Exit;
+    if AFreiZeile - TE > 9 then Exit;
+    for Z := TE + 1 to AFreiZeile - 1 do
+      if not ZeileHarmlos(AStrippedLines[Z - 1]) then Exit;
+    Result := True;
+  end;
+
+  function FreieZeileNach(AGrenze, ATryZeile: Integer): Boolean;
   // Review-Fix S7 (MAJOR): das Free muss UNMITTELBAR und
   // UNBEDINGT hinter dem try stehen, sonst traegt das Schild
   // nicht:
@@ -3536,15 +3633,22 @@ class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
         Stack.Delete(Stack.Count - 1);
         Bedingt.Delete(Bedingt.Count - 1);
         if N.Kind = nkExceptBlock then Continue;
-        if N.Kind in [nkIfStmt, nkCaseStmt] then IstBedingt := True;
+        // F1 (Review-BLOCKER): bedingt zaehlt nur ein if/case,
+        // das NACH dem try beginnt. Liegt das ganze Schild
+        // samt Free im SELBEN Arm (upixmapmanager: case-Arm,
+        // uopendocthumb/codetoolsoptions: if-Rumpf), ist das
+        // Free relativ zum try unbedingt - der Arm, der das
+        // try erreicht hat, erreicht auch das Free.
+        if (N.Kind in [nkIfStmt, nkCaseStmt])
+           and (N.Line > ATryZeile) then IstBedingt := True;
         if (not IstBedingt)
            and (N.Line > AGrenze)
            // U3: das alte 2-Zeilen-Fenster ODER belegt
-           // harmlose Zwischenzeilen (Monotonie: die alte
-           // Marge bleibt als Disjunktion vollstaendig
-           // erhalten - U3 kann nur ZUSAETZLICH unterdruecken).
+           // harmlose Zwischenzeilen hinter dem TEXTUELLEN
+           // try-Ende (die alte Marge bleibt als Disjunktion
+           // vollstaendig erhalten).
            and ((N.Line <= AGrenze + 2)
-                or ZwischenzeilenHarmlos(AGrenze, N.Line))
+                or StreckeHarmlos(ATryZeile, N.Line))
            and (GibtVarFrei(N.Name.ToLower, VarNameLow)
                 or GibtVarFrei(N.TypeRef.ToLower, VarNameLow)) then
           Exit(True);
@@ -3560,25 +3664,56 @@ class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
     end;
   end;
 
-  function RumpfSpringtHeraus(N: TAstNode): Boolean;
-  // U3 (Handpruefung packagelinks.pas:482): ein exit/break/
-  // continue im TRY-RUMPF springt am Free hinter dem try
-  // VORBEI - 'jeder Pfad erreicht das Free' gilt dann nicht,
-  // das Leck auf dem Sprung-Pfad ist real. raise/Abort im
-  // Rumpf sind dagegen unkritisch: die faengt genau der
-  // schluckende Handler. Der except-Block selbst ist hier
-  // ausgenommen (dafuer ist HandlerBrichtAus zustaendig).
+  function RumpfSpringtHeraus(N: TAstNode;
+    AInSchleife: Boolean): Boolean;
+  // U3 (Handpruefung packagelinks.pas:482): ein Sprung im
+  // TRY-RUMPF am Free hinter dem try VORBEI - 'jeder Pfad'
+  // 'erreicht das Free' gilt dann nicht, das Leck auf dem
+  // Sprung-Pfad ist real. raise/Abort im Rumpf sind dagegen
+  // unkritisch: die faengt genau der schluckende Handler.
+  // F4 (Review-BLOCKER): KIND-basiert, nicht Namens-basiert -
+  // der Parser legt fuer 'Continue := False' (Variable namens
+  // Continue, belegtes Korpus-Muster) bewusst ein nkAssign mit
+  // Name continue an. Und break/continue binden an die
+  // INNERSTE Schleife: liegt die komplett im Rumpf, bleibt der
+  // Fluss im try und das Free dahinter wird erreicht - nur
+  // exit zaehlt ueberall. Der except-Block ist ausgenommen
+  // (dafuer ist HandlerBrichtAus zustaendig).
   var
     C : TAstNode;
-    L : string;
   begin
-    if N.Kind = nkExceptBlock then Exit(False);
-    L := N.Name.ToLower;
-    Result := (L = 'exit') or StartsStr('exit(', L)
-              or (L = 'break') or (L = 'continue');
-    if Result then Exit;
+    Result := False;
+    if N.Kind = nkExceptBlock then Exit;
+    if N.Kind = nkExit then Exit(True);
+    if (not AInSchleife)
+       and (N.Kind in [nkBreak, nkContinue]) then Exit(True);
+    if N.Kind in [nkForStmt, nkWhileStmt, nkRepeatStmt] then
+      AInSchleife := True;
     for C in N.Children do
-      if RumpfSpringtHeraus(C) then Exit(True);
+      if RumpfSpringtHeraus(C, AInSchleife) then Exit(True);
+  end;
+
+  function FaengtBasisException(N: TAstNode): Boolean;
+  // F6 (Review-VERDACHT + Memory-Lehre 2026-08-25: ein except
+  // NUR mit on-Handlern re-raist alles Unpassende): selektive
+  // Handler schirmen nicht - es sei denn, eine Klausel faengt
+  // die Basisklasse Exception selbst (letzter Punkt-Teil des
+  // Klausel-Typs; 'EIdHTTPProtocolException' matcht NICHT).
+  var
+    C : TAstNode;
+    T : string;
+    p : Integer;
+  begin
+    Result := False;
+    if N.Kind = nkOnHandler then
+    begin
+      T := Trim(N.TypeRef.ToLower);
+      p := LastDelimiter('.', T);
+      if p > 0 then T := Copy(T, p + 1, MaxInt);
+      if T = 'exception' then Exit(True);
+    end;
+    for C in N.Children do
+      if FaengtBasisException(C) then Exit(True);
   end;
 
 var
@@ -3598,14 +3733,18 @@ begin
     if HasDescendantKind(ExBlock, nkRaise) then Continue;
     if HandlerBrichtAus(ExBlock) then Continue;
     // U3: Sprung aus dem RUMPF umgeht das Free dahinter.
-    if RumpfSpringtHeraus(TryNode) then Continue;
+    if RumpfSpringtHeraus(TryNode, False) then Continue;
+    // F6: on-Klauseln fangen selektiv - ohne eine Klausel auf
+    // die Basisklasse Exception schirmt der Handler nicht.
+    if HasDescendantKind(ExBlock, nkOnHandler)
+       and not FaengtBasisException(ExBlock) then Continue;
     // (a) Allokation unmittelbar davor (1 Zeile, dieselbe Bindung
     // wie HasExceptPathFree) oder im try
     TryEnde := MaxDescLine(TryNode);
     if (AAllocLine < TryNode.Line - 1) or (AAllocLine > TryEnde) then
       Continue;
     // (c) Free hinter dem try-Ende
-    if FreieZeileNach(TryEnde) then Exit(True);
+    if FreieZeileNach(TryEnde, TryNode.Line) then Exit(True);
   end;
 end;
 

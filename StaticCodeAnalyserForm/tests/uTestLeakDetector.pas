@@ -345,6 +345,10 @@ type
     [Test] procedure Leak_CtorSelfRegNoArgs_NotProven_Pipeline;
     [Test] procedure Leak_ShieldedFarFree_NoFinding_Pipeline;
     [Test] procedure Leak_ShieldBodyContinue_StillReported_Pipeline;
+    // ---- Review-Gegenproben (U5/U6) ----
+    [Test] procedure Leak_ForeignOnAssign_StaysProven_Pipeline;
+    [Test] procedure Leak_CtorWithoutSelfReg_StaysProven_Pipeline;
+    [Test] procedure Leak_DangerBetweenShieldAndFree_StillWarns_Pipeline;
     [Test] procedure Leak_EscapeByCall_StaysNeverFreed;
     [Test] procedure Leak_FofVariant_SurvivesErrorSeverity;
     [Test] procedure Leak_ReturnValue_HintTier;
@@ -4459,23 +4463,28 @@ procedure TTestMemoryLeakSearchFree.Leak_CtorSelfRegistration_NotProven_Pipeline
 // ueber die Registry selbst, proven ist nicht beweisbar.
 // Ohne U2 ROT.
 const SRC =
+// F3 (Review-BLOCKER): die Fixture-Klasse heisst bewusst
+// TStringList - IsLeakyType matcht den Deklarationstyp-NAMEN
+// gegen die LeakyClasses-Baseline (AutoDiscover ist in der
+// Pipeline aus); eine TReg-Klasse erreichte den Detektor nie
+// und der Test war vakuum-rot.
   'unit t; implementation'#13#10+
   'type'#13#10+
-  '  TReg = class(TObject)'#13#10+
+  '  TStringList = class(TObject)'#13#10+
   '  public'#13#10+
   '    class var FListe: array of TObject;'#13#10+
   '    constructor Create(AOwner: TObject);'#13#10+
   '  end;'#13#10+
-  'constructor TReg.Create(AOwner: TObject);'#13#10+
+  'constructor TStringList.Create(AOwner: TObject);'#13#10+
   'begin'#13#10+
   '  inherited Create;'#13#10+
   '  SetLength(FListe, Length(FListe) + 1);'#13#10+
   '  FListe[Length(FListe) - 1] := Self;'#13#10+
   'end;'#13#10+
   'procedure TFoo.Bar;'#13#10+
-  'var r: TReg;'#13#10+
+  'var r: TStringList;'#13#10+
   'begin'#13#10+
-  '  r := TReg.Create(nil);'#13#10+
+  '  r := TStringList.Create(nil);'#13#10+
   '  r.ToString;'#13#10+
   'end;'#13#10+
   'end.';
@@ -4497,23 +4506,24 @@ procedure TTestMemoryLeakSearchFree.Leak_CtorSelfRegNoArgs_NotProven_Pipeline;
 // durch, der KlasseVorCreate-Fallback liefert den Namen.
 // Ohne den Fallback ROT.
 const SRC =
+// F3: leaky Klassenname, s. Anmerkung im Schwestertest.
   'unit t; implementation'#13#10+
   'type'#13#10+
-  '  TReg = class(TObject)'#13#10+
+  '  TStringList = class(TObject)'#13#10+
   '  public'#13#10+
   '    class var FListe: array of TObject;'#13#10+
   '    constructor Create;'#13#10+
   '  end;'#13#10+
-  'constructor TReg.Create;'#13#10+
+  'constructor TStringList.Create;'#13#10+
   'begin'#13#10+
   '  inherited Create;'#13#10+
   '  SetLength(FListe, Length(FListe) + 1);'#13#10+
   '  FListe[Length(FListe) - 1] := Self;'#13#10+
   'end;'#13#10+
   'procedure TFoo.Bar;'#13#10+
-  'var r: TReg;'#13#10+
+  'var r: TStringList;'#13#10+
   'begin'#13#10+
-  '  r := TReg.Create;'#13#10+
+  '  r := TStringList.Create;'#13#10+
   '  r.ToString;'#13#10+
   'end;'#13#10+
   'end.';
@@ -4609,6 +4619,100 @@ begin
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'das continue umgeht das Free - der FOF-Befund ' +
       'muss stehen bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_ForeignOnAssign_StaysProven_Pipeline;
+// Review-Gegenprobe zu U1: die On-Zuweisung eines FREMDEN
+// Objekts darf proven nicht kosten - nur die eigene Variable
+// haengt sich an einen Callback. Pinnt den Praefix-Match
+// gegen eine Verallgemeinerung auf beliebige On-Zeilen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var v: TStringList;'#13#10+
+  'begin'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  FButton.OnClick := HandleClick;'#13#10+
+  '  v.Add(chr(97));'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'fremde Event-Verdrahtung beruehrt v nicht - proven bleibt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_CtorWithoutSelfReg_StaysProven_Pipeline;
+// Review-Gegenprobe zu U2: ein unit-lokaler Ctor OHNE
+// Selbstregistrierung (nur Feld-Initialisierung) darf proven
+// nicht kosten - die RHS-exakt-self-Regel muss die
+// Unterscheidung tragen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'type'#13#10+
+  '  TStringList = class(TObject)'#13#10+
+  '  public'#13#10+
+  '    constructor Create(AOwner: TObject);'#13#10+
+  '  end;'#13#10+
+  'constructor TStringList.Create(AOwner: TObject);'#13#10+
+  'begin'#13#10+
+  '  inherited Create;'#13#10+
+  '  FOwner := AOwner;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var r: TStringList;'#13#10+
+  'begin'#13#10+
+  '  r := TStringList.Create(nil);'#13#10+
+  '  r.ToString;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'kein Self-Escape im Ctor - proven bleibt Error');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_DangerBetweenShieldAndFree_StillWarns_Pipeline;
+// Review-Gegenprobe zu U3 (via Pipeline - der Raw-Harness
+// erreicht die Zeilen-Klassifikation nie): eine WERFBARE
+// Zwischenzeile zwischen Schild und Free bricht die Strecke,
+// der FOF-Befund bleibt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var a, o: TStringList;'#13#10+
+  'begin'#13#10+
+  '  a := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    o := TStringList.Create;'#13#10+
+  '    try'#13#10+
+  '      o.LoadFromFile(chr(97));'#13#10+
+  '    except'#13#10+
+  '      on E: Exception do'#13#10+
+  '      begin'#13#10+
+  '        FLog := E.Message;'#13#10+
+  '      end;'#13#10+
+  '    end;'#13#10+
+  '    Verarbeite(FHost);'#13#10+
+  '    o.Free;'#13#10+
+  '  finally'#13#10+
+  '    a.Free;'#13#10+
+  '  end;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'Verarbeite(FHost) kann werfen - das Schild traegt nicht');
   finally F.Free; end;
 end;
 
