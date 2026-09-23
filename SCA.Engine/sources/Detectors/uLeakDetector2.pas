@@ -3465,6 +3465,13 @@ class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
 //
 // MONOTON wie HasExceptPathFree: nur negiert im lsWarning-Zweig,
 // der lsError-Pfad ist unberuehrt.
+//
+// SCA176 (18/15, Selbstscan U-Charge): die Gate-Kette des
+// Schilds - Handler schluckt, on-Klauseln decken, Rumpf ohne
+// Sprung, Alloc-Bindung, Free-Position - ist eine bewusst
+// FLACHE Folge dokumentierter Einzelbedingungen; jede in eine
+// eigene Ebene zu heben wuerde die Lesbarkeit der Kette
+// zerstoeren, die genau der Reviewgegenstand ist.
 
   function MaxDescLine(N: TAstNode): Integer;
   // Expliziter Vergleich statt System.Math.Max - die Unit fuehrt
@@ -3552,7 +3559,7 @@ class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
   // echte Ende; 0 = nicht bestimmbar, dann greift nur die alte
   // Marge.
   var
-    Z, k, Tiefe, Deckel : Integer;
+    Z, k, WortAnfang, Tiefe, Deckel : Integer;
     Zeile, W : string;
   begin
     Result := 0;
@@ -3568,12 +3575,12 @@ class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
       while k <= Length(Zeile) do
         if IsIdentChar(Zeile[k]) then
         begin
-          W := '';
+          // Wort per Copy statt zeichenweiser Konkatenation
+          // (der eigene SCA110 stand zu Recht auf der Schleife).
+          WortAnfang := k;
           while (k <= Length(Zeile)) and IsIdentChar(Zeile[k]) do
-          begin
-            W := W + Zeile[k];
             Inc(k);
-          end;
+          W := Copy(Zeile, WortAnfang, k - WortAnfang);
           if (W = 'try') or (W = 'begin') or (W = 'case') then
             Inc(Tiefe)
           else if W = 'end' then
