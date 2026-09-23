@@ -46,7 +46,7 @@ Lauf, in dem sie angegeben werden.
 |---|---|---|---|
 | `LeakyClasses` | String | _(leer)_ | Zusaetzliche Klassen, die SCA001 als leck-faehig behandelt, kommagetrennt. |
 | `ExcludeLeakyClasses` | String | _(leer)_ | Klassen, die aus dieser Liste wieder entfernt werden. |
-| `OwnershipSinks` | String | _(leer)_ | Routinen, die die Ownership eines uebergebenen Objekts uebernehmen. Standardmaessig leer - siehe DETECTORS. |
+| `OwnershipSinks` | String | _(leer)_ | Routinen, die die Ownership eines uebergebenen Objekts uebernehmen (nackte Routinennamen, kommagetrennt). Standardmaessig leer - siehe DETECTORS. Am Korpus belegte Kandidaten fuer Framework-Code (S4-Audit 2026-09-23): `AddItem` (mORMot `TPdfDictionary`/`TPdfArray` besitzen ihre Elemente), `Add` an Alcinoe `TALXMLNodeList` / doublecmd `TDirectoryHotlist` / fpjson-Objekten. VORSICHT: Namen wirken global - ein gelisteter Name unterdrueckt SCA001 fuer JEDE gleichnamige Routine; genau deshalb bleibt der Default leer. |
 | `AutoDiscoverClasses` | Bool | `False` | Leck-faehige Klassen waehrend des Scans entdecken und protokollieren. |
 | `CustomRulesFile` | String | _(leer)_ | YAML-Datei mit eigenen Regeln. |
 | `FormatFunctions` | String | _(leer)_ | Zusaetzliche Format-artige Funktionen fuer die Platzhalter-Pruefung (SCA005). |

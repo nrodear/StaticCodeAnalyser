@@ -66,6 +66,8 @@ type
     //     die Varianten trotzdem noch auseinanderhalten.
     [Test] procedure CappedErrorStillGetsTheLeakHint;
     [Test] procedure MemoryLeakVariantNamesTheThreeForms;
+    // S7 (Review): der neue Produktions-Shape nach dem Tier-Umbau.
+    [Test] procedure FofErrorShapeGetsFinallyHint;
     [Test] procedure ReturnValueSuffixIsSharedWithProduction;
     // ---- N1 (2026-09-21): NACHHER-Kette ------------------------
     [Test] procedure AfterChainForCognitiveIsCallOrder;
@@ -372,6 +374,31 @@ begin
       'und bekommt NICHT den finally-Hinweis');
   finally
     L.Free;
+  end;
+end;
+
+procedure TTestFixHint.FofErrorShapeGetsFinallyHint;
+// S7 (Review-MAJOR): seit S4 traegt freed-outside-finally
+// lsError PLUS das explizite Varianten-Feld. Die ALTE
+// Severity-Dekodierung haette diesem Shape den never-freed-Hint
+// gegeben (Verweis auf ein fehlendes Free, das es gibt). Dieser
+// Test ist gegen die alte uFixHint-Fassung ROT - er pinnt die
+// Feld-Entscheidung in Build UND den eigenen Cache-Slot.
+var
+  F : TLeakFinding;
+  H : TFixHint;
+begin
+  F := MakeLeak('liste', lsError);
+  try
+    F.LeakVariant := 'freed-outside-finally';
+    H := TFixHintResolver.FixHint(F);
+    Assert.Contains(H.Before + H.After, MARK_FINALLY,
+      'FOF-Error-Shape muss den finally-Hint bekommen');
+    Assert.IsTrue(Pos(MARK_ERROR, H.Before + H.After) = 0,
+      'nicht den never-freed-Hint - genau die Falle der ' +
+      'alten Severity-Dekodierung');
+  finally
+    F.Free;
   end;
 end;
 

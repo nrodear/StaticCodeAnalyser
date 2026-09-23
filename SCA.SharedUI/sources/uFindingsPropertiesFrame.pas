@@ -861,6 +861,7 @@ begin
   // ist danach weg (derselbe Fehlermodus wie bei EndLine oben).
   Result.RelatedLines := F.RelatedLines;
   Result.StructureChain := F.StructureChain;
+  Result.LeakVariant := F.LeakVariant;
 end;
 
 procedure TFindingsPropertiesFrame.StoreInCache(const AFileName: string);

@@ -124,8 +124,11 @@ type
     // Variablen scheitern koennen. Eine zweite Funktion, die die Zeile
     // separat sucht, muesste dieselben fuenf Gates fuehren - und tat es
     // nicht (s. Historie von FindFuncCallAssignLine).
+    // G2 (Messplan 2026-09-23): AContext traegt den TypeIndex fuer
+    // die Owner-Create-Pruefung im Callee-Rumpf; nil = wie bisher.
     class function HasFunctionCallAssign(UnitNode, MethodNode: TAstNode;
-      const VarNameLow: string; out AAssignLine: Integer): Boolean; static;
+      const VarNameLow: string; out AAssignLine: Integer;
+      AContext: TAnalyzeContext = nil): Boolean; static;
     class function IsReturnedAsResult(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
     // Zweiter kanonischer Rueckgabeweg neben Result (T3-Backlog,
@@ -171,6 +174,12 @@ type
     // (Free + raise) oder per Free-im-Handler MIT Normalpfad-Free, sofern die
     // Allokation (AAllocLine) unmittelbar an genau dem try haengt, zu dem der
     // Handler gehoert. Begruendung, Belege und Gegenbeleg stehen am Rumpf.
+    // G3 (Messplan 2026-09-23): s. Implementationskommentar.
+    // S4 (Messplan 2026-09-23): s. Implementationskommentar.
+    class function ProvenNoEscape(MethodNode: TAstNode;
+      const VarNameLow, ADeclTypeRef: string): Boolean; static;
+    class function ExceptShieldedFree(MethodNode: TAstNode;
+      const VarNameLow: string; AAllocLine: Integer): Boolean; static;
     class function HasExceptPathFree(MethodNode: TAstNode;
       const VarNameLow: string; AAllocLine: Integer): Boolean; static;
     class function HasDescendantKind(Node: TAstNode;
@@ -648,8 +657,19 @@ end;
 // ('NewEditor(...)'). Der Leser bekam eine geborgte Referenz als Beleg
 // vorgesetzt, und ein noinspection-Marker ueber der echten Zeile blieb
 // wirkungslos. Deshalb liefert jetzt die Entscheidung selbst die Zeile.
+// G2: beide stehen weiter unten in der Datei, werden aber schon in
+// CalleeKeepsOwnership (nested in HasFunctionCallAssign) gebraucht.
+function RumpfUebernimmtParameter(ACand: TAstNode;
+  const AParamLow: string): Boolean; forward;
+function IsComponentOwnerCreate(MethodNode: TAstNode;
+  const VarNameLow, VarTypeLow: string; AContext: TAnalyzeContext): Boolean; forward;
+function GibtVarFrei(const ANameLow, AVarLow: string): Boolean; forward;
+function SplitCreateCall(const ATypeRefOrig: string;
+  out AClassLow, AFirstArgLow, AFirstArgOrig: string): Boolean; forward;
+
 class function TLeakDetector2.HasFunctionCallAssign(UnitNode, MethodNode: TAstNode;
-  const VarNameLow: string; out AAssignLine: Integer): Boolean;
+  const VarNameLow: string; out AAssignLine: Integer;
+  AContext: TAnalyzeContext): Boolean;
 var
   ThisClassLow : string;
 
@@ -1037,6 +1057,49 @@ var
     finally
       Stack.Free;
     end;
+    // (a2) G2 (Messplan 2026-09-23): der Rumpf legt sein Result in
+    // ein FELD oder eine INDIZIERTE Struktur ab
+    // ('fSubPaths[i] := Result', Img32.SVG.Path) - das sah der
+    // Sink-Scan oben nicht, er kennt nur Add-FAMILIEN-Aufrufe.
+    // RumpfUebernimmtParameter fuehrt exakt diese Feld-Pruefung
+    // (inkl. Lokalen-Ausschluss) und nimmt 'result' als Suchwort.
+    if RumpfUebernimmtParameter(Cand, 'result') then
+      Exit(True);
+    // (a3) Der Rumpf setzt Result.Parent - die dokumentierte
+    // VCL-Konvention: der Parent gibt seine Controls frei
+    // (Messplan-Fall CreateToolbar: Result.Parent := pnToolbars).
+    // S7 (Review): 'Result.Parent := nil' ist KEINE Abgabe, und
+    // eine per TypeIndex aufloesbare NICHT-TComponent-Klasse hat
+    // keine besitzende Parent-Semantik - beide lehnen ab.
+    // Unaufloesbar bleibt permissiv (Bestandspolitik).
+    for N in Cand.FindAllRef(nkAssign) do
+      if (N.Name.ToLower = 'result.parent')
+         and (Trim(N.TypeRef.ToLower) <> 'nil') then
+      begin
+        if AContext <> nil then
+        begin
+          var TI := CtxTypeIndex(AContext);
+          var RErg, RA1, RA2 : string;
+          if (TI <> nil) and (not TI.IsEmpty) then
+            for var RN in Cand.FindAllRef(nkAssign) do
+              if (RN.Name.ToLower = 'result')
+                 and SplitCreateCall(RN.TypeRef, RErg, RA1, RA2)
+                 and (TI.TypeKindOf(RErg) <> tkiUnknown)
+                 and not TI.IsDescendantOf(RErg, 'tcomponent') then
+                Exit(False);
+        end;
+        Exit(True);
+      end;
+    // (a4) Der Rumpf erzeugt Result mit Owner-Argument
+    // ('Result := TForm.Create(Application)', JvDockInfo). Dieselbe
+    // Pruefung wie am Aufrufer (IsComponentOwnerCreate), nur auf
+    // den CALLEE-Rumpf mit Suchwort 'result' angewandt. Der
+    // TypeIndex sichert die TComponent-Ahnenlinie ab - ohne
+    // AContext (Alt-Aufrufer) entfaellt nur DIESES Kriterium.
+    if (AContext <> nil)
+       and IsComponentOwnerCreate(Cand, 'result', '', AContext) then
+      Exit(True);
+
     // (b) Owner-Parameter in der Signatur. Die Aufrufstelle darf kein 'nil'
     //     enthalten - sonst ist der Owner moeglicherweise leer und der
     //     Aufrufer doch zustaendig (konservativ: Gate feuert dann nicht).
@@ -1697,6 +1760,37 @@ begin
       end;
     end;
 
+  // (c) G2 (Messplan 2026-09-23): der Rumpf gibt den Parameter
+  // SELBST frei (mormot GetJsonValuesAndFree: der Name sagt es,
+  // der Rumpf tut es).
+  //
+  // Review-Fix S7 (MAJOR): Frees in einem nkExceptBlock zaehlen
+  // NICHT - das kanonische Factory-Idiom
+  // 'except Result.Free; raise; end' ist Fehlerpfad-Cleanup,
+  // kein Besitzverbleib. Ueber den a2-Aufruf (Suchwort 'result')
+  // haette die alte Fassung jede defensiv geschriebene Factory
+  // fuer SCA001 unsichtbar gemacht (dieselbe Semantik, die
+  // HasExceptPathFree ausdruecklich als Cleanup einordnet).
+  // Deshalb eigener DFS mit except-Skip statt FindAllRef.
+  begin
+    var FreiStack := TList<TAstNode>.Create;
+    try
+      FreiStack.Add(ACand);
+      while FreiStack.Count > 0 do
+      begin
+        var FN := FreiStack[FreiStack.Count - 1];
+        FreiStack.Delete(FreiStack.Count - 1);
+        if FN.Kind = nkExceptBlock then Continue;
+        if GibtVarFrei(FN.Name.ToLower, AParamLow)
+           or GibtVarFrei(FN.TypeRef.ToLower, AParamLow) then
+          Exit(True);   // finally gibt FreiStack frei
+        for var FC in FN.Children do FreiStack.Add(FC);
+      end;
+    finally
+      FreiStack.Free;
+    end;
+  end;
+
   // (b) direkte Feldzuweisung: FFeld := Param
   Assigns := ACand.FindAllRef(nkAssign);
   if Assigned(Assigns) then
@@ -1724,8 +1818,119 @@ begin
     end;
 end;
 
+// G2 (Messplan 2026-09-23): Position des Arguments, das EXAKT der
+// gesuchte Bezeichner ist, in der Top-Level-Argumentliste ab der
+// oeffnenden Klammer. 0 = nicht (exakt) enthalten. Nur ein REINER
+// Ident zaehlt - 'foo(x)' als Argument-AUSDRUCK waere keine
+// Uebergabe der Variablen selbst.
+// KOMPLEXITAET BEGRUENDET (Selbstscan SCA176): dies ist ein
+// Zeichen-Parser mit String-Literal-Zustand und Klammertiefe -
+// dieselbe Bauform wie SinkSplitTopLevelArgs. Die Zustaende lassen
+// sich nicht weiter zerlegen, ohne den Literal-/Tiefen-Kontext
+// durch Parameterschleppen zu verteilen.
+function ArgPositionOf(const ANameLow: string; APKlammer: Integer;
+  const AVarLow: string): Integer;
+// Selbstscan-Refactor (S6): SEGMENT-GRENZEN statt zeichenweiser
+// Akkumulation - der eigene SCA110 hatte an vier Konkatenationen
+// recht, und der Vergleich braucht den Argumenttext gar nicht,
+// nur seine Grenzen.
+
+  function SegmentIstVar(const ANameLow: string; ASeg, AEnde: Integer;
+    const AVarLow: string): Boolean;
+  begin
+    while (ASeg <= AEnde) and (ANameLow[ASeg] = ' ') do Inc(ASeg);
+    while (AEnde >= ASeg) and (ANameLow[AEnde] = ' ') do Dec(AEnde);
+    Result := (AEnde - ASeg + 1 = Length(AVarLow))
+              and (Copy(ANameLow, ASeg, Length(AVarLow)) = AVarLow);
+  end;
+
+var
+  i, Tiefe, ArgNr, SegStart : Integer;
+  InStr : Boolean;
+begin
+  Result := 0;
+  if AVarLow = '' then Exit;
+  Tiefe := 0; ArgNr := 1; SegStart := APKlammer + 1;
+  InStr := False;
+  for i := APKlammer to Length(ANameLow) do
+  begin
+    if ANameLow[i] = '''' then InStr := not InStr;
+    if InStr then Continue;
+    case ANameLow[i] of
+      '(', '[': Inc(Tiefe);
+      ')', ']':
+        begin
+          Dec(Tiefe);
+          if Tiefe = 0 then
+          begin
+            if SegmentIstVar(ANameLow, SegStart, i - 1, AVarLow) then
+              Result := ArgNr;
+            Exit;
+          end;
+        end;
+      ',':
+        if Tiefe = 1 then
+        begin
+          if SegmentIstVar(ANameLow, SegStart, i - 1, AVarLow) then
+            Exit(ArgNr);
+          Inc(ArgNr);
+          SegStart := i + 1;
+        end;
+    else
+      // Gewoehnliche Zeichen: nur Teil des laufenden Segments -
+      // die Grenzen (SegStart..i) zaehlen, der Inhalt nicht.
+    end;
+  end;
+end;
+
+// G2: Name des Parameters an Position APos (1-basiert). Leer, wenn
+// die Position nicht existiert oder der Name kein reiner Ident
+// ist - dann lieber schweigen als falsch unterdruecken (dieselbe
+// Politik wie EinzigerParameterNameLow).
+// S7 (Review): Parametergruppen ('a, b: TFoo') legt der
+// Parser als EIN nkParam JE NAMEN ab (uParser2 ParseParams) -
+// die Positionszaehlung ueber die nkParam-Kinder stimmt damit
+// ohne eigenen Gruppen-Split; die fruehere Split-Logik war
+// toter Code und ist entfernt.
+function ParameterNameAtPos(ACand: TAstNode; APos: Integer): string;
+  // Selbstscan-Refactor (S6): der Ident-Check als Helfer nimmt
+  // der Positionsschleife zwei Ebenen (der eigene SCA018 hatte
+  // an der Tiefe recht).
+  function ReinerIdentOderLeer(const ATeil: string): string;
+  var ci: Integer;
+  begin
+    Result := ATeil;
+    if ATeil = '' then Exit;
+    for ci := 1 to Length(ATeil) do
+      if not TLeakDetector2.IsIdentChar(ATeil[ci]) then
+        Exit('');
+  end;
+
+var
+  P : TAstNode;
+  PName : string;
+  Nr : Integer;
+begin
+  Result := '';
+  if (not Assigned(ACand)) or (APos <= 0) then Exit;
+  Nr := 0;
+  for P in ACand.Children do
+  begin
+    if P.Kind <> nkParam then Continue;
+    PName := P.Name.ToLower;
+    for var Mod_ in ['var ', 'const ', 'out '] do
+      if StartsStr(Mod_, PName) then
+        PName := Trim(Copy(PName, Length(Mod_) + 1, MaxInt));
+    Inc(Nr);
+    if Nr <> APos then Continue;
+    Result := ReinerIdentOderLeer(Trim(PName));
+    Exit;
+  end;
+end;
+
 function CalleeTakesOwnershipLocal(AUnitNode, AMethodNode: TAstNode;
-  const ACalleeLow, AReceiverLow: string): Boolean;
+  const ACalleeLow, AReceiverLow: string;
+  AArgPos: Integer = 1): Boolean;
 // KLASSE F der SCA001-Vollzaehlung: der Gerufene steht in DERSELBEN Unit
 // und uebernimmt das Objekt dort - dann ist die Uebergabe ein
 // Ownership-Transfer und kein Leck.
@@ -1789,7 +1994,15 @@ begin
     if FirstTypeIdentLow(TypLow) <> KlasseCallee then Exit;
   end;
 
-  Result := RumpfUebernimmtParameter(Cand, EinzigerParameterNameLow(Cand));
+  // G2: mit AArgPos > 1 (oder mehrparametrigem Callee) zaehlt der
+  // Parameter an der ARGUMENTPOSITION; die alte 1-Parameter-Grenze
+  // bleibt der Spezialfall AArgPos=1 mit einparametrigem Callee.
+  if EinzigerParameterNameLow(Cand) <> '' then
+    Result := (AArgPos = 1)
+              and RumpfUebernimmtParameter(Cand, EinzigerParameterNameLow(Cand))
+  else
+    Result := RumpfUebernimmtParameter(Cand,
+                ParameterNameAtPos(Cand, AArgPos));
 end;
 
 class function TLeakDetector2.IsPassedToOwner(MethodNode: TAstNode;
@@ -2285,11 +2498,29 @@ begin
         if pPunkt > 0 then
           RecvLow := Trim(Copy(VorKlammer, 1, pPunkt - 1));
         if RecvLow = 'self' then RecvLow := '';
+        // G2 (Messplan 2026-09-23): nicht mehr nur einparametrige
+        // Aufrufe - die Argumentposition unserer Variablen wird
+        // bestimmt und der KORRESPONDIERENDE Parameter des Callee
+        // geprueft (Messplan-Fall EmitParam: 6 Argumente, das
+        // fuenfte wird im Rumpf abgelegt). Ein Fehlgriff in der
+        // Zuordnung wuerde ein echtes Leck maskieren - deshalb
+        // zaehlt nur der EXAKTE Ident als Top-Level-Argument.
+        var ArgPos := ArgPositionOf(NameLow, pKlammer, VarNameLow);
+        // Review-Fix S7 (MAJOR, Monotonie): die alte Bedingung
+        // (genau 1 Argument + Wortgrenzen-Treffer IRGENDWO darin)
+        // deckte auch Cast-Argumente - 'Ablegen(TObject(obj))' ist
+        // derselbe Zeiger, die Unterdrueckung war dort RICHTIG.
+        // Der exakte Ident allein haette diese Bestandsfaelle als
+        // neue Funde erscheinen lassen. Der Rueckfall haelt den
+        // Umbau als ECHTE Obermenge der alten Suppression.
         var ArgTreffer: Boolean;
-        if (ArgumenteScannen(NameLow, pKlammer, '', ArgTreffer) = 1)
-           and VarInArgs(NameLow, pKlammer + 1)
+        if (ArgPos = 0)
+           and (ArgumenteScannen(NameLow, pKlammer, '', ArgTreffer) = 1)
+           and VarInArgs(NameLow, pKlammer + 1) then
+          ArgPos := 1;
+        if (ArgPos > 0)
            and CalleeTakesOwnershipLocal(AUnitNode, MethodNode,
-                                         CalleeLow, RecvLow) then
+                                         CalleeLow, RecvLow, ArgPos) then
           Exit(True);
       end;
     end;
@@ -2752,6 +2983,345 @@ begin
       Exit(True);
 end;
 
+// KOMPLEXITAET BEGRUENDET (Selbstscan SCA176, knapp ueber der
+// Schwelle): der DFS prueft die vier P-Praedikate in EINER Schleife
+// ueber jeden Knoten - sie zu trennen hiesse vier Baumlaeufe im
+// heissesten Detektorpfad.
+class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
+  const VarNameLow, ADeclTypeRef: string): Boolean;
+// S4 (Messplan 2026-09-23): die proven-leak-Klassifikation. True nur,
+// wenn KEINES der Praedikate anschlaegt, mit denen die TP-Retention
+// des Messplans simuliert wurde:
+//   P1/P5  Variable steht in IRGENDEINER Argumentliste (Uebergabe an
+//          fremde Methode oder freie Routine - ob mit oder ohne
+//          Besitzuebergang, ist hier egal: proven heisst, die Frage
+//          stellt sich gar nicht erst)
+//   P2     Variable steht auf der RECHTEN Seite einer Zuweisung an
+//          etwas anderes (Feld, Result, Alias, Index-Ziel)
+//   P3     der Konstruktor erhaelt ein Argument, das sich nicht als
+//          WERTTYP aufloesen laesst (Owner-Verdacht; ein String-/
+//          Integer-Parameter wie Create(TarFileName) zaehlt NICHT -
+//          dieselbe Aufloesung, die die Auditoren vorgenommen haben)
+//   P4     der Deklarationstyp ist ein Interface (I+Grossbuchstabe)
+//
+// Die Gate-Kette davor hat bereits bewiesen, dass KEIN Free und kein
+// nachweislicher Besitzuebergang existiert; ProvenNoEscape verlangt
+// zusaetzlich, dass nicht einmal eine GELEGENHEIT dazu bestand.
+// Gemessen (152 Verdikte): von den bestehenden Funden dieser Klasse
+// waren 39 von 50 echte Lecks - die Fehlerquote der Klasse liegt
+// damit um Faktor ~10 unter der von never-freed insgesamt.
+//
+// MONOTON in der MELDUNG: die Funktion aendert keine Fundmenge, nur
+// Variante/Konfidenz/Schwere eines ohnehin gemeldeten Funds.
+
+  function IstWertTypLow(const ATypLow: string): Boolean;
+  const
+    WERT : array[0..21] of string = (
+      'string', 'ansistring', 'widestring', 'shortstring',
+      'tfilename', 'integer', 'cardinal', 'int64',
+      'uint64', 'nativeint', 'longint', 'longword',
+      'word', 'byte', 'boolean', 'char',
+      'double', 'single', 'extended', 'currency',
+      'tdatetime', 'pointer');
+  var W: string;
+  begin
+    for W in WERT do
+      if ATypLow = W then Exit(True);
+    Result := False;
+  end;
+
+  function DeklTypLowVon(const AIdentLow: string): string;
+  // Typ einer Lokalen/eines Parameters DIESER Methode, erster
+  // Typ-Ident, lower. Leer = nicht aufloesbar (Feld, Global).
+  var
+    N : TAstNode;
+    Anzahl : Integer;
+  begin
+    Result := '';
+    Anzahl := 0;
+    // Zwei getrennte Schleifen - ein for-in ueber ein Array-Literal
+    // von Objektlisten ist kein verlaessliches Delphi-Konstrukt.
+    // S7 (Review): FindAllRef ist SUBTREE-weit - eine gleichnamige
+    // Lokale einer GESCHACHTELTEN Routine wuerde den Methoden-
+    // Ident shadowen. Bei MEHREREN Treffern deshalb '' (nicht
+    // aufloesbar = Verdacht), nie der erstbeste.
+    for N in MethodNode.FindAllRef(nkLocalVar) do
+      if TDetectorUtils.UnqualifiedNameLast(N.Name).ToLower
+         = AIdentLow then
+      begin
+        Inc(Anzahl);
+        Result := FirstTypeIdentLow(N.TypeRef.ToLower);
+      end;
+    for N in MethodNode.FindAllRef(nkParam) do
+      if TDetectorUtils.UnqualifiedNameLast(N.Name).ToLower
+         = AIdentLow then
+      begin
+        Inc(Anzahl);
+        Result := FirstTypeIdentLow(N.TypeRef.ToLower);
+      end;
+    if Anzahl <> 1 then Result := '';
+  end;
+
+  function TextHatUebergabe(const ALow: string): Boolean;
+  // P1/P5: varname als Argument - dem Wortanfang geht (Leerraum
+  // uebersprungen) eine oeffnende Klammer oder ein Komma voraus.
+  // Receiver-Nutzung (var.Methode) hat davor Zeilenanfang/Operator
+  // und zaehlt nicht.
+  var
+    p, davor : Integer;
+  begin
+    Result := False;
+    p := Pos(VarNameLow, ALow);
+    while p > 0 do
+    begin
+      if ((p = 1) or not IsIdentChar(ALow[p - 1]))
+         and ((p + Length(VarNameLow) > Length(ALow))
+              or not IsIdentChar(ALow[p + Length(VarNameLow)])) then
+      begin
+        davor := p - 1;
+        while (davor >= 1) and (ALow[davor] = ' ') do Dec(davor);
+        // S7: auch Array-Konstruktor ([obj]) und Adressnahme
+        // (@obj) sind Escape-Gelegenheiten.
+        if (davor >= 1) and CharInSet(ALow[davor], ['(', ',', '[', '@']) then
+          Exit(True);
+      end;
+      p := PosEx(VarNameLow, ALow, p + 1);
+    end;
+  end;
+
+  // S6: ArgVerdacht auf Ebene der uebrigen Helfer gezogen - die
+  // Doppel-Schachtelung trieb die eigene SCA176-Zahl.
+  function ArgVerdacht(const A: string): Boolean;
+  var
+    T : string;
+    k : Integer;
+  begin
+    Result := False;
+    if (A = '') or (A = 'nil')
+       or (A = 'true') or (A = 'false') then Exit;
+    if A[1] = '''' then Exit;            // String-Literal
+    if CharInSet(A[1], ['0'..'9', '$', '-']) then Exit;   // Zahl
+    for k := 1 to Length(A) do
+      if not IsIdentChar(A[k]) then Exit(True);   // Ausdruck: Verdacht
+    T := DeklTypLowVon(A);
+    if T = '' then Exit(True);         // nicht aufloesbar: Verdacht
+    Result := not IstWertTypLow(T);
+  end;
+
+  function CreateArgIstOwnerVerdacht(const ARhsLow: string): Boolean;
+  // P3: Argumentliste des Create pruefen. nil/leer/Werttypen sind
+  // unverdaechtig; ein unaufloesbarer Ident (Feld, Self, Global)
+  // gilt konservativ als Owner-Verdacht.
+  var
+    pC, pK, Tiefe, i, s : Integer;
+    Arg : string;
+  begin
+    Result := False;
+    pC := Pos('.create', ARhsLow);
+    if pC <= 0 then Exit;
+    pK := PosEx('(', ARhsLow, pC);
+    if pK <= 0 then Exit;                          // Create ohne Args
+    Tiefe := 1; s := pK + 1;
+    for i := pK + 1 to Length(ARhsLow) do
+    begin
+      case ARhsLow[i] of
+        '(', '[': Inc(Tiefe);
+        ')', ']':
+          begin
+            Dec(Tiefe);
+            if Tiefe = 0 then
+            begin
+              Arg := Trim(Copy(ARhsLow, s, i - s));
+              Exit(ArgVerdacht(Arg));
+            end;
+          end;
+        ',':
+          if Tiefe = 1 then
+          begin
+            Arg := Trim(Copy(ARhsLow, s, i - s));
+            if ArgVerdacht(Arg) then Exit(True);
+            s := i + 1;
+          end;
+      end;
+    end;
+  end;
+
+var
+  Stack : TList<TAstNode>;
+  N, C  : TAstNode;
+  NLow, TLow : string;
+begin
+  Result := False;
+  // P4: Interface-Deklarationstyp
+  if (Length(ADeclTypeRef) >= 2) and (ADeclTypeRef[1] = 'I')
+     and CharInSet(ADeclTypeRef[2], ['A'..'Z']) then Exit;
+  Stack := TList<TAstNode>.Create;
+  try
+    Stack.Add(MethodNode);
+    while Stack.Count > 0 do
+    begin
+      N := Stack[Stack.Count - 1];
+      Stack.Delete(Stack.Count - 1);
+      NLow := N.Name.ToLower;
+      TLow := N.TypeRef.ToLower;
+      // P1/P5 in Aufrufname und RHS-Text
+      if TextHatUebergabe(NLow) or TextHatUebergabe(TLow) then Exit;
+      // P2: Zuweisung an etwas anderes mit var in der RHS
+      if (N.Kind = nkAssign) and (NLow <> VarNameLow)
+         and TDetectorUtils.ContainsWholeWordLower(VarNameLow, TLow) then
+        Exit;
+      // P3: die Create-Zuweisung an UNSERE Variable
+      if (N.Kind = nkAssign) and (NLow = VarNameLow)
+         and CreateArgIstOwnerVerdacht(TLow) then Exit;
+      for C in N.Children do Stack.Add(C);
+    end;
+    Result := True;
+  finally
+    Stack.Free;
+  end;
+end;
+
+class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
+  const VarNameLow: string; AAllocLine: Integer): Boolean;
+// G3 (Messplan 2026-09-23): der FOF-Befund behauptet "eine Ausnahme
+// zwischen Allokation und Free leckt". Das ist WIDERLEGT, wenn ein
+// try..except dazwischen liegt, das (a) die Allokation unmittelbar
+// einschliesst (davor oder darin), (b) JEDE Ausnahme schluckt -
+// kein raise/Abort/RaiseLastOSError, kein exit/break/continue im
+// Handler, der Fluss laeuft also garantiert hinter das try weiter
+// - und (c) das Free UNMITTELBAR (<= 2 Zeilen) und UNBEDINGT nach
+// dem Ende dieses try steht. Nur dann wird das Free auf jedem
+// Pfad erreicht: normal sowieso, im Ausnahmefall via Handler;
+// dazwischenliegender Code koennte selbst werfen (S7-Review).
+//
+// Messplan-Belege: doublecmd upixmapmanager.pas:2193 und
+// uopendocthumb.pas:76 - kompletter Bereich in try..except mit
+// Alles-Schlucker, Free dahinter; beide von den 12 Pruefpaketen
+// UND der Gegenpruefung als Fehlalarm bestaetigt.
+//
+// Bewusst NICHT abgedeckt (bleiben Funde): Free IM try-Rumpf (eine
+// Ausnahme zwischen Create und Free springt hinter das try, das
+// Free wird uebersprungen - InstallWizards:361 lehrt genau das an
+// den Zeilen davor) und "raise-freie Regionen" (statisch kann fast
+// jeder Aufruf werfen).
+//
+// Das try-ENDE ist die MAXIMALE Nachkommen-Zeile des nkTryExcept -
+// eine Untergrenze des echten 'end' (konservativ: ein Free
+// zwischen letzter Anweisung und 'end' zaehlt dann nicht als
+// dahinter, kostet also hoechstens eine Unterdrueckung).
+//
+// MONOTON wie HasExceptPathFree: nur negiert im lsWarning-Zweig,
+// der lsError-Pfad ist unberuehrt.
+
+  function MaxDescLine(N: TAstNode): Integer;
+  // Expliziter Vergleich statt System.Math.Max - die Unit fuehrt
+  // System.Math nicht, und fuer EINE Stelle lohnt kein neues uses.
+  var
+    C : TAstNode;
+    K : Integer;
+  begin
+    Result := N.Line;
+    for C in N.Children do
+    begin
+      K := MaxDescLine(C);
+      if K > Result then Result := K;
+    end;
+  end;
+
+  function HandlerBrichtAus(N: TAstNode): Boolean;
+  // exit/break/continue im Handler: der Fluss erreicht das Free
+  // dahinter NICHT - das Schild traegt dann nicht.
+  // Review-Fix S7 (MAJOR): dazu die WERFENDEN Aufrufe, die kein
+  // nkRaise-Knoten sind - Abort (EAbort, DAS Idiom fuer stilles
+  // Abbrechen), RaiseLastOSError und E.RaiseOuterException.
+  var
+    C : TAstNode;
+    L : string;
+  begin
+    L := N.Name.ToLower;
+    Result := (L = 'exit') or StartsStr('exit(', L)
+              or (L = 'break') or (L = 'continue')
+              or (L = 'abort') or StartsStr('abort(', L)
+              or StartsStr('raiselastoserror', L)
+              or (Pos('raiseouterexception', L) > 0);
+    if Result then Exit;
+    for C in N.Children do
+      if HandlerBrichtAus(C) then Exit(True);
+  end;
+
+  function FreieZeileNach(AGrenze: Integer): Boolean;
+  // Review-Fix S7 (MAJOR): das Free muss UNMITTELBAR und
+  // UNBEDINGT hinter dem try stehen, sonst traegt das Schild
+  // nicht:
+  //  * hoechstens 2 Zeilen hinter der Grenze (die Grenze ist die
+  //    letzte NACHKOMMEN-Zeile, das echte 'end' liegt dazwischen)
+  //    - liegt weiterer Code dazwischen, kann DER werfen und die
+  //    Variable leckt genau so, wie der Befund behauptet;
+  //  * nicht in einem except-Handler (laeuft normal nie) und
+  //    nicht unter if/case (bedingt ist nicht bewiesen).
+  var
+    Stack : TList<TAstNode>;
+    Bedingt : TList<Boolean>;
+    N, C  : TAstNode;
+    IstBedingt : Boolean;
+  begin
+    Result := False;
+    Stack := TList<TAstNode>.Create;
+    Bedingt := TList<Boolean>.Create;
+    try
+      Stack.Add(MethodNode);
+      Bedingt.Add(False);
+      while Stack.Count > 0 do
+      begin
+        N := Stack[Stack.Count - 1];
+        IstBedingt := Bedingt[Bedingt.Count - 1];
+        Stack.Delete(Stack.Count - 1);
+        Bedingt.Delete(Bedingt.Count - 1);
+        if N.Kind = nkExceptBlock then Continue;
+        if N.Kind in [nkIfStmt, nkCaseStmt] then IstBedingt := True;
+        if (not IstBedingt)
+           and (N.Line > AGrenze) and (N.Line <= AGrenze + 2)
+           and (GibtVarFrei(N.Name.ToLower, VarNameLow)
+                or GibtVarFrei(N.TypeRef.ToLower, VarNameLow)) then
+          Exit(True);
+        for C in N.Children do
+        begin
+          Stack.Add(C);
+          Bedingt.Add(IstBedingt);
+        end;
+      end;
+    finally
+      Bedingt.Free;
+      Stack.Free;
+    end;
+  end;
+
+var
+  Tries   : TList<TAstNode>;
+  TryNode : TAstNode;
+  ExBlock : TAstNode;
+  TryEnde : Integer;
+begin
+  Result := False;
+  if AAllocLine <= 0 then Exit;
+  Tries := MethodNode.FindAllRef(nkTryExcept);
+  for TryNode in Tries do
+  begin
+    ExBlock := TryNode.FindFirstChild(nkExceptBlock);
+    if not Assigned(ExBlock) then Continue;
+    // (b) der Handler schluckt alles und laeuft weiter
+    if HasDescendantKind(ExBlock, nkRaise) then Continue;
+    if HandlerBrichtAus(ExBlock) then Continue;
+    // (a) Allokation unmittelbar davor (1 Zeile, dieselbe Bindung
+    // wie HasExceptPathFree) oder im try
+    TryEnde := MaxDescLine(TryNode);
+    if (AAllocLine < TryNode.Line - 1) or (AAllocLine > TryEnde) then
+      Continue;
+    // (c) Free hinter dem try-Ende
+    if FreieZeileNach(TryEnde) then Exit(True);
+  end;
+end;
+
 class function TLeakDetector2.HasExceptPathFree(MethodNode: TAstNode;
   const VarNameLow: string; AAllocLine: Integer): Boolean;
 // Prio-5-Gate: True, wenn ein except-Handler den AUSNAHMEPFAD von VarName
@@ -3075,6 +3645,8 @@ class function TLeakDetector2.IsHandedToInterface(MethodNode: TAstNode;
 // Scannt nkAssign.TypeRef (RHS) und nkCall.Name im ORIGINAL-Case nach
 //   '<IIdent>(varname)'   - Interface-Hard-Cast  (IBoxedJSONValue(b))
 //   'varname as I<Ident>' - as-Cast              (obj as IMyIntf)
+//   'Supports(varname, ...)' - System.SysUtils.Supports bindet das
+//     Objekt an eine Interface-Referenz (G1, Messplan 2026-09-23).
 // I-Konvention nur im Original-Case pruefbar: 'I' + GROSSBUCHSTABE
 // ('IntToStr(b)' hat 'n' klein -> kein Interface). Ein Interface-Cast gibt
 // das Objekt an die Refcount ab - der letzte Release gibt es frei.
@@ -3117,6 +3689,45 @@ var
           Exit(True);
       end;
       p := PosEx(VarNameLow + ' as i', Low, p + 1);
+    end;
+    // Muster 3 (G1, Messplan 2026-09-23): 'supports(varname,' -
+    // System.SysUtils.Supports bindet das Objekt an eine Interface-
+    // Referenz; ab da traegt der Refcount die Lebensdauer. Das gilt
+    // fuer BEIDE Formen: mit out-Parameter uebernimmt die
+    // Ziel-Referenz, ohne haelt Supports intern kurz eine Referenz
+    // und der abschliessende Release gibt ein 0-Refcount-Objekt
+    // frei. Gemessen an 6 Korpusfunden (MVCFramework.Container,
+    // 2 Stellen x 3 Repo-Kopien): lService := ...Create...;
+    // Supports(lService, GUID, Result).
+    //
+    // NUR die Variable als ERSTES Argument - 'Supports(Other, IID,',
+    // varname)' als DRITTES waere die empfangende Seite. Linke
+    // Wortgrenze vor 'supports' schliesst 'MySupports(' aus; das
+    // Komma danach ist Pflicht (Supports hat nie nur ein Argument).
+    p := Pos('supports(' + VarNameLow, Low);
+    while p > 0 do
+    begin
+      // Review-Fix S7: ein '.' davor heisst METHODENAUFRUF eines
+      // fremden Objekts (FChecker.Supports(obj, ...)) - das
+      // beweist keine Refcount-Bindung. Zugelassen bleibt nur
+      // die RTL-Qualifikation 'SysUtils.Supports'.
+      var QualOk := True;
+      if (p > 1) and (Low[p - 1] = '.') then
+      begin
+        var qe := p - 1;
+        var qs := qe - 1;
+        while (qs >= 1) and IsIdentChar(Low[qs]) do Dec(qs);
+        QualOk := Copy(Low, qs + 1, qe - qs - 1) = 'sysutils';
+      end;
+      if QualOk and ((p = 1) or not IsIdentChar(Low[p - 1]) or (Low[p - 1] = '.')) then
+      begin
+        pr := p + 9 + Length(VarNameLow);   // hinter varname
+        // Leerraum bis zum Komma ueberspringen
+        while (pr <= Length(Low)) and (Low[pr] = ' ') do Inc(pr);
+        if (pr <= Length(Low)) and (Low[pr] = ',') then
+          Exit(True);
+      end;
+      p := PosEx('supports(' + VarNameLow, Low, p + 1);
     end;
   end;
 
@@ -4282,19 +4893,29 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
   // nicht nebenbei - dieser Anlauf hat zwei Fehler gebraucht, bis das
   // klar war.
 
+  // S4 (Messplan 2026-09-23): AVariant benennt die SCA001-Form
+  // EXPLIZIT (das Feld traegt sie ins SARIF), AConf hebt bzw.
+  // senkt die Konfidenz je Form - fcHigh laesst die Evidenz-
+  // Politik lsError passieren (Tier-Vertrag: fcHigh -> Error,
+  // fcMedium -> hoechstens Warning). Die Severity-Entscheide
+  // stammen aus dem Messplan-Audit und Nicos Zuschnitt vom
+  // 23.09.: proven-leak + freed-outside-finally -> Error,
+  // return-value -> Hint bis zur Neubewertung.
   procedure AddFinding(const MissingVar: string; Sev: TLeakSeverity;
-    VLine: Integer);
+    VLine: Integer; const AVariant: string;
+    AConf: TFindingConfidence);
   var
     F: TLeakFinding;
   begin
-    F            := TLeakFinding.Create;
-    F.FileName   := FileName;
-    F.MethodName := MethodNode.Name;
-    F.LineNumber := IntToStr(VLine);
-    F.MissingVar := MissingVar;
-    F.Severity   := Sev;
-    F.Kind       := fkMemoryLeak;
-    F.Confidence := KindDefaultConfidence(fkMemoryLeak);
+    F             := TLeakFinding.Create;
+    F.FileName    := FileName;
+    F.MethodName  := MethodNode.Name;
+    F.LineNumber  := IntToStr(VLine);
+    F.MissingVar  := MissingVar;
+    F.Severity    := Sev;
+    F.Kind        := fkMemoryLeak;
+    F.Confidence  := AConf;
+    F.LeakVariant := AVariant;
     Results.Add(F);
   end;
 
@@ -4412,10 +5033,31 @@ begin
           // Gates): der Subtree-Walk laeuft dann nur fuer Variablen, die
           // tatsaechlich gemeldet wuerden - Hot-Path-Schutz.
           if Gate('SCA001.NoOwnershipTransfer', not LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then
-            AddFinding(V.Name, lsError, ReportLine);
+          begin
+            // S4: besteht der Fund auch die PROVEN-Kriterien
+            // (keinerlei Weitergabe, kein Owner-Create, kein
+            // Interface-Typ), traegt er die vierte Variante und
+            // fcHigh - die Evidenz-Politik laesst ihn dann als
+            // Error durch. Der Rest bleibt never-freed/fcMedium
+            // und wird wie bisher auf Warning gedeckelt.
+            // (S6: Vorab-Variablen statt geschachteltem if - der
+            // eigene SCA018 stand zu Recht auf Tiefe 5.)
+            var IstProven := ProvenNoEscape(MethodNode, VarNameLow, V.TypeRef);
+            var Variante : string := 'never-freed';
+            var Konf     := KindDefaultConfidence(fkMemoryLeak);
+            if IstProven then
+            begin
+              Variante := 'proven-leak';
+              Konf     := fcHigh;
+            end;
+            AddFinding(V.Name, lsError, ReportLine, Variante, Konf);
+          end;
         end
         else if not FreeInFin and HasFinally
-             and not HasExceptPathFree(MethodNode, VarNameLow, ReportLine) then
+             and not HasExceptPathFree(MethodNode, VarNameLow, ReportLine)
+             // G3: schluckendes try..except zwischen Allokation und
+             // Free - jeder Pfad erreicht das Free (s. Impl-Kopf).
+             and not ExceptShieldedFree(MethodNode, VarNameLow, ReportLine) then
         begin
           // ---- VERTRAG DIESES ZWEIGS (festgeschrieben 2026-08-29) ----
           // Bedingung: es GIBT ein Free, die Methode hat ein try/finally,
@@ -4426,9 +5068,14 @@ begin
           // DAS IST EIN ECHTER BEFUND, kein Stilhinweis. Wer ein
           // try/finally schreibt, erklaert damit, dass der Block
           // ausnahmefest sein soll; ein Free daneben widerspricht dieser
-          // Erklaerung. Die Schwere ist lsWarning und nicht lsError, weil
-          // das Leck einen Ausnahmefall BRAUCHT - nicht, weil der Fund
-          // unsicher waere. Wer ihn als Fehlalarm zaehlt, zaehlt falsch.
+          // Erklaerung. HISTORIE: bis S4 (2026-09-23) trug der
+          // Zweig lsWarning, "weil das Leck einen Ausnahmefall
+          // BRAUCHT". Seit Nicos Tier-Entscheid traegt er lsError
+          // + fcHigh: die Aussage ist syntaktisch beweisbar und
+          // vollgezaehlt praezise (12,7 % FP, nach dem
+          // G3-Schild niedriger). Die Begruendung "braucht einen
+          // Ausnahmefall" gilt weiter - sie beschreibt jetzt den
+          // INHALT der Meldung, nicht mehr ihre Schwere.
           //
           // WARUM DAS HIER STEHT: die Vollzaehlung vom 28.08. verteilte 59
           // Funde dieser Klasse (10,4 % aller SCA001) auf zwoelf
@@ -4459,14 +5106,23 @@ begin
           // finally-Mis-Attachment-Fix (2026-07-13): der AST sagt "nicht im
           // finally", aber in der QUELLE liegt der Free doch in einer finally-
           // Region (nested-/cond-comp-/'F:=nil;try'-Parser-Fehlattachierung) ->
-          // dann ebenfalls kein Befund. NUR dieser lsWarning-Zweig; der Leak-
-          // (lsError-)Pfad oben ist unberuehrt -> kann nie einen Leak maskieren.
+          // dann ebenfalls kein Befund. NUR dieser FOF-Zweig
+          // (seit S4 lsError, s.o.); der never-freed-Pfad oben ist
+          // unberuehrt -> kann nie einen Leak maskieren.
           EnsureStripped;
           if Gate('SCA001.WarnFreeOutsideFinally',
                   not FreeInFinallyRegionBySource(MethodNode, StrippedLines,
                                                   VarNameLow)
                   and not LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then
-            AddFinding(V.Name, lsWarning, ReportLine);
+            // S4/Nicos Entscheid: die Aussage "Free steht neben
+            // dem finally" ist syntaktisch beweisbar und nach dem
+            // Messplan (71/71 vollgezaehlt, 12,7 % FP; nach G3
+            // niedriger) Error-Tier-tauglich. fcHigh, damit die
+            // Politik den lsError nicht deckelt; die Variante
+            // kommt aus dem FELD - die alte Dekodierung ueber die
+            // Schwere wuerde hier never-freed lesen.
+            AddFinding(V.Name, lsError, ReportLine,
+                       'freed-outside-finally', fcHigh);
         end;
 
         Continue;
@@ -4476,7 +5132,8 @@ begin
       var FuncAssignLine : Integer;
       if Gate('SCA001.NoFunctionCallAssign',
               not HasFunctionCallAssign(UnitNode, MethodNode, VarNameLow,
-                                        FuncAssignLine)) then Continue;
+                                        FuncAssignLine,
+                                        AContext)) then Continue;
 
       if Gate('SCA001.IsReturnedAsResult', IsReturnedAsResult(MethodNode, VarNameLow)) then Continue;
       if Gate('SCA001.IsAssignedToOutParam', IsAssignedToOutParam(MethodNode, VarNameLow)) then Continue;
@@ -4505,7 +5162,13 @@ begin
         if Gate('SCA001.LastUseIsOwnershipTransfer', LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then Continue;
         var ReportLine := FuncAssignLine;
         if ReportLine = 0 then ReportLine := V.Line;
-        AddFinding(V.Name + LEAK_RETURN_VALUE_SUFFIX, lsWarning, ReportLine);
+        // S4/Nicos Entscheid: 93,5 % FP in der Vollzaehlung (29
+        // von 31, nur 2 echte Lecks) - bis zur Neubewertung nach
+        // den G1/G2-Fixes faellt die Variante aus der Standard-
+        // Sicht (Hint), bleibt aber im Referenzlauf erhalten.
+        AddFinding(V.Name + LEAK_RETURN_VALUE_SUFFIX, lsHint, ReportLine,
+                   'return-value-not-freed',
+                   KindDefaultConfidence(fkMemoryLeak));
       end;
     end;
   finally

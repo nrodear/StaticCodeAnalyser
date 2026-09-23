@@ -101,6 +101,14 @@ type
     // Baselines unberuehrt - und genau deshalb bewegt dieses Feld
     // AUCH KEINE Fundzahl.
     StructureChain: string;
+    // S4 (Messplan 2026-09-23): explizit gesetzte SCA001-Variante.
+    // Noetig, weil die Ableitung in MemoryLeakVariant die Formen
+    // aus OriginalSeverity+Suffix DEKODIERT - seit dem Tier-Umbau
+    // traegt aber auch freed-outside-finally lsError, und eine
+    // vierte Form (proven-leak) kam dazu. Leer = Ableitungs-
+    // Fallback (uFieldLeak und Altpfade setzen nichts).
+    // NICHT im Fingerprint - dieselbe Politik wie StructureChain.
+    LeakVariant: string;
 
     // Setzt Confidence := fcHigh (Default). Bestehende Detektoren erzeugen
     // Befunde binaer und gelten damit als hochkonfident.
@@ -337,6 +345,13 @@ function TLeakFinding.MemoryLeakVariant: string;
 // erkennbar (am Referenzkorpus: 568 von 568 Funden gedeckelt).
 begin
   if Kind <> fkMemoryLeak then Exit('');
+  // S4: der Detektor setzt die Variante seit dem Tier-Umbau
+  // explizit - die Dekodierung unten bleibt als Fallback fuer
+  // Funde, die das Feld nicht fuellen (uFieldLeak, Direktbau in
+  // Tests). Sie kann proven-leak und das neue FOF-Error-Tier
+  // nicht unterscheiden, der Fallback ist also nur historisch
+  // korrekt.
+  if LeakVariant <> '' then Exit(LeakVariant);
   if OriginalSeverity = lsError then
     Result := 'never-freed'
   else if Pos(LEAK_RETURN_VALUE_SUFFIX, MissingVar) > 0 then
