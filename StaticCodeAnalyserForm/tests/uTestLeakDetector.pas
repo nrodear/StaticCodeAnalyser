@@ -319,6 +319,10 @@ type
     // --- Inkr.2 (2026-07-19): iface-cast / raise / Instanz-Factory ---
     [Test] procedure Leak_InterfaceHardCast_NoFinding;
     [Test] procedure Leak_AsInterfaceCast_NoFinding;
+    // ---- G1 (Messplan 2026-09-23): Supports-Uebernahme ---------
+    [Test] procedure Leak_SupportsFirstArg_NoFinding;
+    [Test] procedure Leak_SupportsThirdArg_StillReported;
+    [Test] procedure Leak_MySupportsPrefix_StillReported;
     [Test] procedure Leak_RaisedVar_NoFinding;
     [Test] procedure Leak_InstanceFactoryCreate_NoFinding;
     [Test] procedure Leak_TypeCreateSuffix_StillError;          // TP-Gegenprobe
@@ -4111,6 +4115,70 @@ begin
   finally F.Free; end;
 end;
 
+procedure TTestMemoryLeakSearchFree.Leak_SupportsFirstArg_NoFinding;
+// G1 (Messplan 2026-09-23): Supports(obj, IID, Result) bindet obj an
+// eine Interface-Referenz - ab da traegt der Refcount die
+// Lebensdauer. 6 Korpusfunde (MVCFramework.Container, 2 Stellen x 3
+// Repo-Kopien) waren als FP vollgezaehlt.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  Supports(obj, IMyIntf, Ergebnis);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Supports bindet an den Refcount - kein Leak');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_SupportsThirdArg_StillReported;
+// Die GEGENPROBE zur Wortstellung: als DRITTES Argument ist die
+// Variable die EMPFANGENDE Seite eines fremden Supports-Aufrufs -
+// das sagt ueber ihre eigene Lebensdauer nichts. Ohne diese Probe
+// waere ein Substring-Treffer irgendwo in der Argumentliste gruen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  Supports(Quelle, IMyIntf, obj);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'als drittes Argument empfaengt obj nur - der Fund ' +
+      'muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_MySupportsPrefix_StillReported;
+// Wortgrenzen-Gegenprobe: MySupports(...) ist NICHT die RTL-Routine.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  MySupports(obj, IMyIntf, Ergebnis);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'fremde MySupports-Routine beweist keine ' +
+      'Interface-Uebernahme');
+  finally F.Free; end;
+end;
 procedure TTestMemoryLeakSearchFree.Leak_RaisedVar_NoFinding;
 // Inkr.2 (Batch 8 'raise LException'): 'raise E' uebernimmt Ownership -
 // die RTL gibt das Objekt im Exception-Handler frei.

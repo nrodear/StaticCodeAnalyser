@@ -3075,6 +3075,8 @@ class function TLeakDetector2.IsHandedToInterface(MethodNode: TAstNode;
 // Scannt nkAssign.TypeRef (RHS) und nkCall.Name im ORIGINAL-Case nach
 //   '<IIdent>(varname)'   - Interface-Hard-Cast  (IBoxedJSONValue(b))
 //   'varname as I<Ident>' - as-Cast              (obj as IMyIntf)
+//   'Supports(varname, ...)' - System.SysUtils.Supports bindet das
+//     Objekt an eine Interface-Referenz (G1, Messplan 2026-09-23).
 // I-Konvention nur im Original-Case pruefbar: 'I' + GROSSBUCHSTABE
 // ('IntToStr(b)' hat 'n' klein -> kein Interface). Ein Interface-Cast gibt
 // das Objekt an die Refcount ab - der letzte Release gibt es frei.
@@ -3117,6 +3119,33 @@ var
           Exit(True);
       end;
       p := PosEx(VarNameLow + ' as i', Low, p + 1);
+    end;
+    // Muster 3 (G1, Messplan 2026-09-23): 'supports(varname,' -
+    // System.SysUtils.Supports bindet das Objekt an eine Interface-
+    // Referenz; ab da traegt der Refcount die Lebensdauer. Das gilt
+    // fuer BEIDE Formen: mit out-Parameter uebernimmt die
+    // Ziel-Referenz, ohne haelt Supports intern kurz eine Referenz
+    // und der abschliessende Release gibt ein 0-Refcount-Objekt
+    // frei. Gemessen an 6 Korpusfunden (MVCFramework.Container,
+    // 2 Stellen x 3 Repo-Kopien): lService := ...Create...;
+    // Supports(lService, GUID, Result).
+    //
+    // NUR die Variable als ERSTES Argument - 'Supports(Other, IID,',
+    // varname)' als DRITTES waere die empfangende Seite. Linke
+    // Wortgrenze vor 'supports' schliesst 'MySupports(' aus; das
+    // Komma danach ist Pflicht (Supports hat nie nur ein Argument).
+    p := Pos('supports(' + VarNameLow, Low);
+    while p > 0 do
+    begin
+      if (p = 1) or not IsIdentChar(Low[p - 1]) then
+      begin
+        pr := p + 9 + Length(VarNameLow);   // hinter varname
+        // Leerraum bis zum Komma ueberspringen
+        while (pr <= Length(Low)) and (Low[pr] = ' ') do Inc(pr);
+        if (pr <= Length(Low)) and (Low[pr] = ',') then
+          Exit(True);
+      end;
+      p := PosEx('supports(' + VarNameLow, Low, p + 1);
     end;
   end;
 
