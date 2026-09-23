@@ -182,7 +182,8 @@ type
       AUnitNode: TAstNode;
       AContext: TAnalyzeContext): Boolean; static;
     class function ExceptShieldedFree(MethodNode: TAstNode;
-      const VarNameLow: string; AAllocLine: Integer): Boolean; static;
+      const VarNameLow: string; AAllocLine: Integer;
+      const AStrippedLines: TArray<string>): Boolean; static;
     class function HasExceptPathFree(MethodNode: TAstNode;
       const VarNameLow: string; AAllocLine: Integer): Boolean; static;
     class function HasDescendantKind(Node: TAstNode;
@@ -3250,6 +3251,29 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
     end;
   end;
 
+  function KlasseVorCreate(const ARhsLow: string): string;
+  // U2-Robustheit: SplitCreateCall verlangt eine Klammer -
+  // 'r := TReg.Create;' (argloser Ctor) fiele durch. Fuer die
+  // Registry-Pruefung reicht der Klassenname der klammerlosen
+  // Form; leer, wenn die RHS kein Create-Aufruf ist.
+  var
+    R : string;
+    p, k : Integer;
+  begin
+    Result := '';
+    R := ARhsLow.Trim;
+    if R.EndsWith(';') then
+      R := Copy(R, 1, Length(R) - 1).Trim;
+    if not R.EndsWith('.create') then Exit;
+    R := Copy(R, 1, Length(R) - 7);
+    p := LastDelimiter('.', R);
+    if p > 0 then R := Copy(R, p + 1, MaxInt);
+    if R = '' then Exit;
+    for k := 1 to Length(R) do
+      if not IsIdentChar(R[k]) then Exit;
+    Result := R;
+  end;
+
   function CtorRegistriertSelf(AClassLow: string): Boolean;
   // U2 (FP-Messung rw127, 2026-09-23): DW.OSTimer x2 stand als
   // proven im Error-Tier, obwohl der BASISKLASSEN-Konstruktor
@@ -3347,8 +3371,11 @@ begin
       if (N.Kind = nkAssign) and (NLow = VarNameLow) then
       begin
         if CreateArgIstOwnerVerdacht(TLow) then Exit;
-        // U2: Ctor-Selbstregistrierung (s. CtorRegistriertSelf).
-        if SplitCreateCall(TLow, U2Klasse, U2Arg, U2ArgOrig)
+        // U2: Ctor-Selbstregistrierung (s. CtorRegistriertSelf);
+        // klammerlose Creates ueber den Fallback.
+        if not SplitCreateCall(TLow, U2Klasse, U2Arg, U2ArgOrig) then
+          U2Klasse := KlasseVorCreate(TLow);
+        if (U2Klasse <> '')
            and CtorRegistriertSelf(U2Klasse) then Exit;
       end;
       for C in N.Children do Stack.Add(C);
@@ -3363,16 +3390,22 @@ begin
 end;
 
 class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
-  const VarNameLow: string; AAllocLine: Integer): Boolean;
+  const VarNameLow: string; AAllocLine: Integer;
+  const AStrippedLines: TArray<string>): Boolean;
 // G3 (Messplan 2026-09-23): der FOF-Befund behauptet "eine Ausnahme
 // zwischen Allokation und Free leckt". Das ist WIDERLEGT, wenn ein
 // try..except dazwischen liegt, das (a) die Allokation unmittelbar
 // einschliesst (davor oder darin), (b) JEDE Ausnahme schluckt -
 // kein raise/Abort/RaiseLastOSError, kein exit/break/continue im
 // Handler, der Fluss laeuft also garantiert hinter das try weiter
-// - und (c) das Free UNMITTELBAR (<= 2 Zeilen) und UNBEDINGT nach
-// dem Ende dieses try steht. Nur dann wird das Free auf jedem
-// Pfad erreicht: normal sowieso, im Ausnahmefall via Handler;
+// - und (c) das Free UNBEDINGT nach dem Ende dieses try steht,
+// entweder UNMITTELBAR (<= 2 Zeilen) oder mit nachweislich
+// HARMLOSEN Zwischenzeilen (U3, FP-Messung rw127: nur
+// end/else/begin/leer oder selbst ein Ein-Statement-Free -
+// httpprothandler.pas:107 traegt zwischen Handler-Ende und
+// FreeAndNil(LStr) zwei 'end;' und das FreeAndNil(LHTTP)).
+// Nur dann wird das Free auf jedem Pfad erreicht: normal
+// sowieso, im Ausnahmefall via Handler; anderer
 // dazwischenliegender Code koennte selbst werfen (S7-Review).
 //
 // Messplan-Belege: doublecmd upixmapmanager.pas:2193 und
@@ -3430,6 +3463,45 @@ class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
       if HandlerBrichtAus(C) then Exit(True);
   end;
 
+  function ZwischenzeilenHarmlos(AVon, ABis: Integer): Boolean;
+  // U3: die Quellzeilen ECHT ZWISCHEN AVon und ABis (beide
+  // exklusiv) koennen nicht werfen. Harmlos sind Struktur-
+  // zeilen (end/else/begin, leer - Kommentare sind bereits
+  // weggestrippt) und Ein-Statement-Free-Zeilen (Free/
+  // FreeAndNil/DisposeOf einer ANDEREN Variablen: das Cleanup-
+  // Ketten-Idiom; ein werfender Destruktor bricht jede solche
+  // Kette, das nimmt auch der Rest des Detektors in Kauf).
+  // Deckel 8 Zwischenzeilen; ohne Quelltext (Raw-Harness)
+  // greift nur die alte 2-Zeilen-Marge.
+  var
+    Z, PosSemi : Integer;
+    Zeile : string;
+  begin
+    Result := False;
+    if ABis - AVon > 9 then Exit;
+    if Length(AStrippedLines) < ABis - 1 then Exit;
+    for Z := AVon + 1 to ABis - 1 do
+    begin
+      Zeile := Trim(AStrippedLines[Z - 1]).ToLower;
+      // 'except'/'finally'/'try' als nackte Zeilen: ein LEERER Schluck-
+      // Handler ist nach dem Strip nur noch Struktur - genau
+      // die G3-Belegfaelle (upixmapmanager 2203, uopendocthumb
+      // 90) tragen ihr 'except' zwischen MaxDescLine und Free.
+      if (Zeile = '') or (Zeile = 'end') or (Zeile = 'end;')
+         or (Zeile = 'else') or (Zeile = 'begin')
+         or (Zeile = 'except') or (Zeile = 'finally')
+         or (Zeile = 'try') then Continue;
+      // Ein-Statement-Zeile? (kein zweites Semikolon in der Mitte)
+      PosSemi := Pos(';', Zeile);
+      if (PosSemi > 0) and (PosSemi < Length(Zeile)) then Exit;
+      if Zeile.EndsWith('.free;') or Zeile.EndsWith('.free')
+         or Zeile.StartsWith('freeandnil(')
+         or (Pos('.disposeof', Zeile) > 0) then Continue;
+      Exit;
+    end;
+    Result := True;
+  end;
+
   function FreieZeileNach(AGrenze: Integer): Boolean;
   // Review-Fix S7 (MAJOR): das Free muss UNMITTELBAR und
   // UNBEDINGT hinter dem try stehen, sonst traegt das Schild
@@ -3461,7 +3533,13 @@ class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
         if N.Kind = nkExceptBlock then Continue;
         if N.Kind in [nkIfStmt, nkCaseStmt] then IstBedingt := True;
         if (not IstBedingt)
-           and (N.Line > AGrenze) and (N.Line <= AGrenze + 2)
+           and (N.Line > AGrenze)
+           // U3: das alte 2-Zeilen-Fenster ODER belegt
+           // harmlose Zwischenzeilen (Monotonie: die alte
+           // Marge bleibt als Disjunktion vollstaendig
+           // erhalten - U3 kann nur ZUSAETZLICH unterdruecken).
+           and ((N.Line <= AGrenze + 2)
+                or ZwischenzeilenHarmlos(AGrenze, N.Line))
            and (GibtVarFrei(N.Name.ToLower, VarNameLow)
                 or GibtVarFrei(N.TypeRef.ToLower, VarNameLow)) then
           Exit(True);
@@ -3475,6 +3553,27 @@ class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
       Bedingt.Free;
       Stack.Free;
     end;
+  end;
+
+  function RumpfSpringtHeraus(N: TAstNode): Boolean;
+  // U3 (Handpruefung packagelinks.pas:482): ein exit/break/
+  // continue im TRY-RUMPF springt am Free hinter dem try
+  // VORBEI - 'jeder Pfad erreicht das Free' gilt dann nicht,
+  // das Leck auf dem Sprung-Pfad ist real. raise/Abort im
+  // Rumpf sind dagegen unkritisch: die faengt genau der
+  // schluckende Handler. Der except-Block selbst ist hier
+  // ausgenommen (dafuer ist HandlerBrichtAus zustaendig).
+  var
+    C : TAstNode;
+    L : string;
+  begin
+    if N.Kind = nkExceptBlock then Exit(False);
+    L := N.Name.ToLower;
+    Result := (L = 'exit') or StartsStr('exit(', L)
+              or (L = 'break') or (L = 'continue');
+    if Result then Exit;
+    for C in N.Children do
+      if RumpfSpringtHeraus(C) then Exit(True);
   end;
 
 var
@@ -3493,6 +3592,8 @@ begin
     // (b) der Handler schluckt alles und laeuft weiter
     if HasDescendantKind(ExBlock, nkRaise) then Continue;
     if HandlerBrichtAus(ExBlock) then Continue;
+    // U3: Sprung aus dem RUMPF umgeht das Free dahinter.
+    if RumpfSpringtHeraus(TryNode) then Continue;
     // (a) Allokation unmittelbar davor (1 Zeile, dieselbe Bindung
     // wie HasExceptPathFree) oder im try
     TryEnde := MaxDescLine(TryNode);
@@ -5128,6 +5229,20 @@ var
     StrippedLines := Code.Split([#10]);
   end;
 
+  function G3Schild(AMethod: TAstNode; const AVarLow: string;
+    AZeile: Integer): Boolean;
+  // U3: ExceptShieldedFree braucht seit der Zwischenzeilen-
+  // Pruefung die gestrippten Quellzeilen; dieser Wrapper
+  // stellt sie lazy bereit, ohne die else-if-Kette der
+  // Aufrufstelle umzubauen. Parameter statt Zugriff auf die
+  // Schleifenvariablen - nested Routinen sehen keine
+  // inline-vars (E1019-Familie).
+  begin
+    EnsureStripped;
+    Result := ExceptShieldedFree(AMethod, AVarLow, AZeile,
+                                 StrippedLines);
+  end;
+
 begin
   StrippedReady := False;
   SrcLines      := nil;
@@ -5242,7 +5357,7 @@ begin
              and not HasExceptPathFree(MethodNode, VarNameLow, ReportLine)
              // G3: schluckendes try..except zwischen Allokation und
              // Free - jeder Pfad erreicht das Free (s. Impl-Kopf).
-             and not ExceptShieldedFree(MethodNode, VarNameLow, ReportLine) then
+             and not G3Schild(MethodNode, VarNameLow, ReportLine) then
         begin
           // ---- VERTRAG DIESES ZWEIGS (festgeschrieben 2026-08-29) ----
           // Bedingung: es GIBT ein Free, die Methode hat ein try/finally,
