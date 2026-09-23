@@ -3217,6 +3217,12 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
       if Pos(' absolute ' + VarNameLow, Zeile) > 0 then Exit(True);
       if Z <= DeklZeile then Continue;
       if TextHatUebergabe(Zeile) then Exit(True);
+      // U1 auch hier: die Zuweisungsform ist simpel genug,
+      // dass der AST sie normalerweise sieht - die Quelltext-
+      // Fassung sichert gegen die T1-Gattung (verlorene
+      // Statements) ab.
+      if Zeile.TrimLeft.StartsWith(VarNameLow + '.on')
+         and (Pos(':=', Zeile) > 0) then Exit(True);
       if Zeile.TrimLeft.StartsWith('for ') then Continue;
       PosDp := Pos(':=', Zeile);
       if (PosDp > 0)
@@ -3252,6 +3258,17 @@ begin
       if (N.Kind = nkAssign) and (NLow <> VarNameLow)
          and TDetectorUtils.ContainsWholeWordLower(VarNameLow, TLow) then
         Exit;
+      // U1 (FP-Messung rw127, 2026-09-23): Event-Registrierung
+      // AUF der Variablen - 'v.OnX := Handler' verlaengert die
+      // Lebenszeit ueber den Callback; die beiden Kamera-Faelle
+      // der proven-Vollpruefung (DW.Camera.iOS.pas:417 und die
+      // CodeReader-Kopie) geben das Objekt erst im Handler frei.
+      // Receiver-Zuweisungen bleiben sonst erlaubt - nur
+      // On*-Properties tragen die Callback-Semantik. Der
+      // Praefix-Match traefe auch 'v.online := x' - kostet
+      // hoechstens die proven-Einstufung, nie den Fund.
+      if (N.Kind = nkAssign)
+         and StartsStr(VarNameLow + '.on', NLow) then Exit;
       // P3: die Create-Zuweisung an UNSERE Variable
       if (N.Kind = nkAssign) and (NLow = VarNameLow)
          and CreateArgIstOwnerVerdacht(TLow) then Exit;
