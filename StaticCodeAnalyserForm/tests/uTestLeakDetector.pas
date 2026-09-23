@@ -321,6 +321,10 @@ type
     [Test] procedure Leak_AsInterfaceCast_NoFinding;
     // ---- G1 (Messplan 2026-09-23): Supports-Uebernahme ---------
     [Test] procedure Leak_SupportsFirstArg_NoFinding;
+    // ---- G3 (Messplan 2026-09-23): schluckendes try..except -----
+    [Test] procedure Leak_ExceptShieldedFree_NoFinding;
+    [Test] procedure Leak_ExceptShieldRaises_StillWarns;
+    [Test] procedure Leak_FreeInsideShieldedTry_StillWarns;
     // ---- G2 (Messplan 2026-09-23): unit-lokale Callee-Ownership -
     [Test] procedure Leak_FactoryStoresResultInIndexedField_NoFinding;
     [Test] procedure Leak_FactorySetsResultParent_NoFinding;
@@ -4122,6 +4126,108 @@ begin
   finally F.Free; end;
 end;
 
+procedure TTestMemoryLeakSearchFree.Leak_ExceptShieldedFree_NoFinding;
+// G3: Allokation im try, der except-Handler schluckt ALLES (kein
+// raise, kein exit), das Free steht HINTER dem try - jeder Pfad
+// erreicht es. Messplan-Faelle upixmapmanager/uopendocthumb.
+// Das umgebende try..finally einer ANDEREN Variable setzt
+// HasFinally, sonst entsteht die FOF-Meldung gar nicht erst.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList; s: TStringList;'#13#10+
+  'begin'#13#10+
+  '  s := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    obj := TStringList.Create;'#13#10+
+  '    try'#13#10+
+  '      obj.LoadFromFile(chr(97));'#13#10+
+  '    except'#13#10+
+  '      on E: Exception do'#13#10+
+  '        FLog := E.Message;'#13#10+
+  '    end;'#13#10+
+  '    obj.Free;'#13#10+
+  '  finally'#13#10+
+  '    s.Free;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'schluckender Handler + Free hinter dem try: jeder ' +
+      'Pfad erreicht das Free');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_ExceptShieldRaises_StillWarns;
+// GEGENPROBE: der Handler wirft WEITER - eine Ausnahme verlaesst
+// das try, das Free dahinter wird uebersprungen. Der Befund muss
+// bleiben. (raise im Handler zaehlt fuer HasExceptPathFree nur
+// ZUSAMMEN mit einem Handler-Free - hier gibt der Handler nichts
+// frei.)
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList; s: TStringList;'#13#10+
+  'begin'#13#10+
+  '  s := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    obj := TStringList.Create;'#13#10+
+  '    try'#13#10+
+  '      obj.LoadFromFile(chr(97));'#13#10+
+  '    except'#13#10+
+  '      raise;'#13#10+
+  '    end;'#13#10+
+  '    obj.Free;'#13#10+
+  '  finally'#13#10+
+  '    s.Free;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'weiterwerfender Handler schuetzt nicht - der ' +
+      'FOF-Befund muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_FreeInsideShieldedTry_StillWarns;
+// GEGENPROBE zur Free-Position: das Free steht IM try. Eine
+// Ausnahme zwischen Allokation und Free springt in den Handler und
+// HINTER das try - das Free wird uebersprungen, das Objekt leckt.
+// Genau die Lehre der InstallWizards-Zeilen im Messplan.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList; s: TStringList;'#13#10+
+  'begin'#13#10+
+  '  s := TStringList.Create;'#13#10+
+  '  try'#13#10+
+  '    obj := TStringList.Create;'#13#10+
+  '    try'#13#10+
+  '      obj.LoadFromFile(chr(97));'#13#10+
+  '      obj.Free;'#13#10+
+  '    except'#13#10+
+  '      on E: Exception do'#13#10+
+  '        FLog := E.Message;'#13#10+
+  '    end;'#13#10+
+  '  finally'#13#10+
+  '    s.Free;'#13#10+
+  '  end;'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'Free im try: der Ausnahmepfad ueberspringt es - ' +
+      'der Befund muss bleiben');
+  finally F.Free; end;
+end;
 procedure TTestMemoryLeakSearchFree.Leak_SupportsFirstArg_NoFinding;
 // G1 (Messplan 2026-09-23): Supports(obj, IID, Result) bindet obj an
 // eine Interface-Referenz - ab da traegt der Refcount die

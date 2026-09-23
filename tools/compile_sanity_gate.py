@@ -461,6 +461,8 @@ RTL_FUNKTIONEN = {
     'IntToStr': 'System.SysUtils',
     'StrToIntDef': 'System.SysUtils',
     'FreeAndNil': 'System.SysUtils',
+    'Max': 'System.Math',
+    'Min': 'System.Math',
 }
 
 

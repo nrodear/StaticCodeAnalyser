@@ -174,6 +174,9 @@ type
     // (Free + raise) oder per Free-im-Handler MIT Normalpfad-Free, sofern die
     // Allokation (AAllocLine) unmittelbar an genau dem try haengt, zu dem der
     // Handler gehoert. Begruendung, Belege und Gegenbeleg stehen am Rumpf.
+    // G3 (Messplan 2026-09-23): s. Implementationskommentar.
+    class function ExceptShieldedFree(MethodNode: TAstNode;
+      const VarNameLow: string; AAllocLine: Integer): Boolean; static;
     class function HasExceptPathFree(MethodNode: TAstNode;
       const VarNameLow: string; AAllocLine: Integer): Boolean; static;
     class function HasDescendantKind(Node: TAstNode;
@@ -2901,6 +2904,120 @@ begin
       Exit(True);
 end;
 
+class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
+  const VarNameLow: string; AAllocLine: Integer): Boolean;
+// G3 (Messplan 2026-09-23): der FOF-Befund behauptet "eine Ausnahme
+// zwischen Allokation und Free leckt". Das ist WIDERLEGT, wenn ein
+// try..except dazwischen liegt, das (a) die Allokation unmittelbar
+// einschliesst (davor oder darin), (b) JEDE Ausnahme schluckt -
+// kein raise, kein exit/break/continue im Handler, der Fluss
+// laeuft also garantiert hinter das try weiter - und (c) das Free
+// NACH dem Ende dieses try steht. Auf jedem Pfad wird das Free
+// dann erreicht: normal sowieso, im Ausnahmefall via Handler.
+//
+// Messplan-Belege: doublecmd upixmapmanager.pas:2193 und
+// uopendocthumb.pas:76 - kompletter Bereich in try..except mit
+// Alles-Schlucker, Free dahinter; beide von den 12 Pruefpaketen
+// UND der Gegenpruefung als Fehlalarm bestaetigt.
+//
+// Bewusst NICHT abgedeckt (bleiben Funde): Free IM try-Rumpf (eine
+// Ausnahme zwischen Create und Free springt hinter das try, das
+// Free wird uebersprungen - InstallWizards:361 lehrt genau das an
+// den Zeilen davor) und "raise-freie Regionen" (statisch kann fast
+// jeder Aufruf werfen).
+//
+// Das try-ENDE ist die MAXIMALE Nachkommen-Zeile des nkTryExcept -
+// eine Untergrenze des echten 'end' (konservativ: ein Free
+// zwischen letzter Anweisung und 'end' zaehlt dann nicht als
+// dahinter, kostet also hoechstens eine Unterdrueckung).
+//
+// MONOTON wie HasExceptPathFree: nur negiert im lsWarning-Zweig,
+// der lsError-Pfad ist unberuehrt.
+
+  function MaxDescLine(N: TAstNode): Integer;
+  // Expliziter Vergleich statt System.Math.Max - die Unit fuehrt
+  // System.Math nicht, und fuer EINE Stelle lohnt kein neues uses.
+  var
+    C : TAstNode;
+    K : Integer;
+  begin
+    Result := N.Line;
+    for C in N.Children do
+    begin
+      K := MaxDescLine(C);
+      if K > Result then Result := K;
+    end;
+  end;
+
+  function HandlerBrichtAus(N: TAstNode): Boolean;
+  // exit/break/continue im Handler: der Fluss erreicht das Free
+  // dahinter NICHT - das Schild traegt dann nicht.
+  var
+    C : TAstNode;
+    L : string;
+  begin
+    L := N.Name.ToLower;
+    Result := (L = 'exit') or StartsStr('exit(', L)
+              or (L = 'break') or (L = 'continue');
+    if Result then Exit;
+    for C in N.Children do
+      if HandlerBrichtAus(C) then Exit(True);
+  end;
+
+  function FreieZeileNach(AGrenze: Integer): Boolean;
+  // Ein Free der Variablen auf einer Zeile OBERHALB der Grenze,
+  // ausserhalb jedes except-Blocks braucht es hier nicht extra:
+  // hinter dem try-Ende KANN kein Handler dieses try liegen, und
+  // ein Free im Handler eines SPAETEREN try gibt genauso frei.
+  var
+    Stack : TList<TAstNode>;
+    N, C  : TAstNode;
+  begin
+    Result := False;
+    Stack := TList<TAstNode>.Create;
+    try
+      Stack.Add(MethodNode);
+      while Stack.Count > 0 do
+      begin
+        N := Stack[Stack.Count - 1];
+        Stack.Delete(Stack.Count - 1);
+        if (N.Line > AGrenze)
+           and (GibtVarFrei(N.Name.ToLower, VarNameLow)
+                or GibtVarFrei(N.TypeRef.ToLower, VarNameLow)) then
+          Exit(True);
+        for C in N.Children do Stack.Add(C);
+      end;
+    finally
+      Stack.Free;
+    end;
+  end;
+
+var
+  Tries   : TList<TAstNode>;
+  TryNode : TAstNode;
+  ExBlock : TAstNode;
+  TryEnde : Integer;
+begin
+  Result := False;
+  if AAllocLine <= 0 then Exit;
+  Tries := MethodNode.FindAllRef(nkTryExcept);
+  for TryNode in Tries do
+  begin
+    ExBlock := TryNode.FindFirstChild(nkExceptBlock);
+    if not Assigned(ExBlock) then Continue;
+    // (b) der Handler schluckt alles und laeuft weiter
+    if HasDescendantKind(ExBlock, nkRaise) then Continue;
+    if HandlerBrichtAus(ExBlock) then Continue;
+    // (a) Allokation unmittelbar davor (1 Zeile, dieselbe Bindung
+    // wie HasExceptPathFree) oder im try
+    TryEnde := MaxDescLine(TryNode);
+    if (AAllocLine < TryNode.Line - 1) or (AAllocLine > TryEnde) then
+      Continue;
+    // (c) Free hinter dem try-Ende
+    if FreieZeileNach(TryEnde) then Exit(True);
+  end;
+end;
+
 class function TLeakDetector2.HasExceptPathFree(MethodNode: TAstNode;
   const VarNameLow: string; AAllocLine: Integer): Boolean;
 // Prio-5-Gate: True, wenn ein except-Handler den AUSNAHMEPFAD von VarName
@@ -4593,7 +4710,10 @@ begin
             AddFinding(V.Name, lsError, ReportLine);
         end
         else if not FreeInFin and HasFinally
-             and not HasExceptPathFree(MethodNode, VarNameLow, ReportLine) then
+             and not HasExceptPathFree(MethodNode, VarNameLow, ReportLine)
+             // G3: schluckendes try..except zwischen Allokation und
+             // Free - jeder Pfad erreicht das Free (s. Impl-Kopf).
+             and not ExceptShieldedFree(MethodNode, VarNameLow, ReportLine) then
         begin
           // ---- VERTRAG DIESES ZWEIGS (festgeschrieben 2026-08-29) ----
           // Bedingung: es GIBT ein Free, die Methode hat ein try/finally,
