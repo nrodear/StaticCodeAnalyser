@@ -45,7 +45,7 @@ given in.
 |---|---|---|---|
 | `LeakyClasses` | String | _(empty)_ | Extra classes SCA001 treats as leak-capable, comma-separated. |
 | `ExcludeLeakyClasses` | String | _(empty)_ | Classes removed from that list again. |
-| `OwnershipSinks` | String | _(empty)_ | Routines that take ownership of a passed object. Empty by default - see DETECTORS. |
+| `OwnershipSinks` | String | _(empty)_ | Routines that take ownership of a passed object (bare routine names, comma-separated). Empty by default - see DETECTORS. Corpus-verified candidates for framework code (S4 audit 2026-09-23): `AddItem` (mORMot `TPdfDictionary`/`TPdfArray` own their items), `Add` on Alcinoe `TALXMLNodeList` / doublecmd `TDirectoryHotlist` / fpjson objects. CAUTION: names act globally - a listed name suppresses SCA001 for EVERY routine of that name, which is why the default stays empty. |
 | `AutoDiscoverClasses` | Bool | `False` | Discover leak-capable classes during the scan and log them. |
 | `CustomRulesFile` | String | _(empty)_ | YAML file with custom rules. |
 | `FormatFunctions` | String | _(empty)_ | Additional `Format`-like functions for the placeholder check (SCA005). |

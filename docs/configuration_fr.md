@@ -46,7 +46,7 @@ l'emportent sur le fichier, pour l'exécution où elles sont indiquées.
 |---|---|---|---|
 | `LeakyClasses` | String | _(vide)_ | Classes supplémentaires que SCA001 considère comme sujettes aux fuites, séparées par des virgules. |
 | `ExcludeLeakyClasses` | String | _(vide)_ | Classes retirées de cette liste. |
-| `OwnershipSinks` | String | _(vide)_ | Routines qui prennent la propriété d'un objet transmis. Vide par défaut — voir DETECTORS. |
+| `OwnershipSinks` | String | _(vide)_ | Routines qui prennent la propriété d'un objet transmis (noms de routines simples, séparés par des virgules). Vide par défaut — voir DETECTORS. Candidats vérifiés sur le corpus (audit S4 2026-09-23) : `AddItem` (mORMot `TPdfDictionary`/`TPdfArray`), `Add` sur Alcinoe `TALXMLNodeList` / doublecmd `TDirectoryHotlist` / objets fpjson. ATTENTION : les noms agissent globalement — un nom listé supprime SCA001 pour TOUTE routine de ce nom ; c'est pourquoi le défaut reste vide. |
 | `AutoDiscoverClasses` | Bool | `False` | Découvrir les classes sujettes aux fuites pendant l'analyse et les journaliser. |
 | `CustomRulesFile` | String | _(vide)_ | Fichier YAML de règles personnalisées. |
 | `FormatFunctions` | String | _(vide)_ | Fonctions supplémentaires de type `Format` pour la vérification des marqueurs (SCA005). |
