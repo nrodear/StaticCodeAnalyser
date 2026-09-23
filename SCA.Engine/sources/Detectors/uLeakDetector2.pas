@@ -178,7 +178,9 @@ type
     // S4 (Messplan 2026-09-23): s. Implementationskommentar.
     class function ProvenNoEscape(MethodNode: TAstNode;
       const VarNameLow, ADeclTypeRef: string;
-      const AStrippedLines: TArray<string>): Boolean; static;
+      const AStrippedLines: TArray<string>;
+      AUnitNode: TAstNode;
+      AContext: TAnalyzeContext): Boolean; static;
     class function ExceptShieldedFree(MethodNode: TAstNode;
       const VarNameLow: string; AAllocLine: Integer): Boolean; static;
     class function HasExceptPathFree(MethodNode: TAstNode;
@@ -2990,7 +2992,9 @@ end;
 // heissesten Detektorpfad.
 class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
   const VarNameLow, ADeclTypeRef: string;
-  const AStrippedLines: TArray<string>): Boolean;
+  const AStrippedLines: TArray<string>;
+  AUnitNode: TAstNode;
+  AContext: TAnalyzeContext): Boolean;
 // S4 (Messplan 2026-09-23): die proven-leak-Klassifikation. True nur,
 // wenn KEINES der Praedikate anschlaegt, mit denen die TP-Retention
 // des Messplans simuliert wurde:
@@ -3231,11 +3235,81 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
     end;
   end;
 
+  function MaxZeileVon(N: TAstNode): Integer;
+  // wie ExceptShieldedFree.MaxDescLine - expliziter Vergleich,
+  // die Unit fuehrt System.Math nicht.
+  var
+    C : TAstNode;
+    K : Integer;
+  begin
+    Result := N.Line;
+    for C in N.Children do
+    begin
+      K := MaxZeileVon(C);
+      if K > Result then Result := K;
+    end;
+  end;
+
+  function CtorRegistriertSelf(AClassLow: string): Boolean;
+  // U2 (FP-Messung rw127, 2026-09-23): DW.OSTimer x2 stand als
+  // proven im Error-Tier, obwohl der BASISKLASSEN-Konstruktor
+  // das Objekt in einer class-var-Registry ablegt
+  // ('FTimers[Length(FTimers) - 1] := Self;') und der Fire-Pfad
+  // es spaeter selbst freigibt. Deshalb: die Kette der
+  // Create-Klasse ueber den TypeIndex aufsteigen und jeden
+  // Konstruktor, der IN DIESER UNIT implementiert ist, auf
+  // eine Self-Zuweisung pruefen - QUELLTEXTBASIERT (RHS
+  // exakt 'self'), weil der Index-LHS
+  // ('FTimers[Length(...)] := ...') dem Parser nicht als
+  // glatter nkAssign zugesichert ist (T1-Lehre). Bewusst NUR
+  // die Zuweisungsform: 'X := TKind.Create(Self)' (Self als
+  // Owner-ARGUMENT an Kindobjekte) ist das Standard-Idiom
+  // fast jedes Containers und darf proven nicht kosten.
+  // Ohne TypeIndex endet die Kette nach der Create-Klasse
+  // selbst; ohne Quelltext (Raw-Harness) greift U2 nicht -
+  // dieselbe Konvention wie P6.
+  var
+    Methods : TList<TAstNode>;
+    Mth : TAstNode;
+    Tiefe, Z, Von, Bis, PosDp : Integer;
+    Zeile, RHS : string;
+  begin
+    Result := False;
+    if (AUnitNode = nil) or (Length(AStrippedLines) = 0) then Exit;
+    var TI := CtxTypeIndex(AContext);
+    Methods := AUnitNode.FindAllRef(nkMethod);   // Cache: nie freigeben
+    Tiefe := 0;
+    while (AClassLow <> '') and (Tiefe < 12) do
+    begin
+      for Mth in Methods do
+      begin
+        if Mth.Name.ToLower <> AClassLow + '.create' then Continue;
+        Von := Mth.Line;
+        if Von < 1 then Von := 1;
+        Bis := MaxZeileVon(Mth) + 2;
+        if Bis > Length(AStrippedLines) then
+          Bis := Length(AStrippedLines);
+        for Z := Von to Bis do
+        begin
+          Zeile := AStrippedLines[Z - 1].ToLower;
+          PosDp := Pos(':=', Zeile);
+          if PosDp <= 0 then Continue;
+          RHS := Copy(Zeile, PosDp + 2, MaxInt).Trim;
+          if (RHS = 'self') or (RHS = 'self;') then Exit(True);
+        end;
+      end;
+      if TI = nil then Break;
+      AClassLow := TI.ParentOf(AClassLow);
+      Inc(Tiefe);
+    end;
+  end;
+
 var
   Stack : TList<TAstNode>;
   N, C  : TAstNode;
   NLow, TLow : string;
   MaxZeile : Integer;
+  U2Klasse, U2Arg, U2ArgOrig : string;
 begin
   Result := False;
   // P4: Interface-Deklarationstyp
@@ -3270,8 +3344,13 @@ begin
       if (N.Kind = nkAssign)
          and StartsStr(VarNameLow + '.on', NLow) then Exit;
       // P3: die Create-Zuweisung an UNSERE Variable
-      if (N.Kind = nkAssign) and (NLow = VarNameLow)
-         and CreateArgIstOwnerVerdacht(TLow) then Exit;
+      if (N.Kind = nkAssign) and (NLow = VarNameLow) then
+      begin
+        if CreateArgIstOwnerVerdacht(TLow) then Exit;
+        // U2: Ctor-Selbstregistrierung (s. CtorRegistriertSelf).
+        if SplitCreateCall(TLow, U2Klasse, U2Arg, U2ArgOrig)
+           and CtorRegistriertSelf(U2Klasse) then Exit;
+      end;
       for C in N.Children do Stack.Add(C);
     end;
     // P6 erst NACH dem AST-Durchlauf: er laeuft nur fuer
@@ -5147,7 +5226,8 @@ begin
             // T1: StrippedLines ist hier garantiert gefuellt -
             // EnsureStripped lief oben vor dem Nested-Gate.
             var IstProven := ProvenNoEscape(MethodNode, VarNameLow,
-                                            V.TypeRef, StrippedLines);
+                                            V.TypeRef, StrippedLines,
+                                            UnitNode, AContext);
             var Variante : string := 'never-freed';
             var Konf     := KindDefaultConfidence(fkMemoryLeak);
             if IstProven then
