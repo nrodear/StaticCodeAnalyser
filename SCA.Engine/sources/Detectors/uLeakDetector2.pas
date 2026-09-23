@@ -177,7 +177,8 @@ type
     // G3 (Messplan 2026-09-23): s. Implementationskommentar.
     // S4 (Messplan 2026-09-23): s. Implementationskommentar.
     class function ProvenNoEscape(MethodNode: TAstNode;
-      const VarNameLow, ADeclTypeRef: string): Boolean; static;
+      const VarNameLow, ADeclTypeRef: string;
+      const AStrippedLines: TArray<string>): Boolean; static;
     class function ExceptShieldedFree(MethodNode: TAstNode;
       const VarNameLow: string; AAllocLine: Integer): Boolean; static;
     class function HasExceptPathFree(MethodNode: TAstNode;
@@ -2988,7 +2989,8 @@ end;
 // ueber jeden Knoten - sie zu trennen hiesse vier Baumlaeufe im
 // heissesten Detektorpfad.
 class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
-  const VarNameLow, ADeclTypeRef: string): Boolean;
+  const VarNameLow, ADeclTypeRef: string;
+  const AStrippedLines: TArray<string>): Boolean;
 // S4 (Messplan 2026-09-23): die proven-leak-Klassifikation. True nur,
 // wenn KEINES der Praedikate anschlaegt, mit denen die TP-Retention
 // des Messplans simuliert wurde:
@@ -3003,6 +3005,24 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
 //          Integer-Parameter wie Create(TarFileName) zaehlt NICHT -
 //          dieselbe Aufloesung, die die Auditoren vorgenommen haben)
 //   P4     der Deklarationstyp ist ein Interface (I+Grossbuchstabe)
+//   P6     QUELLTEXT-Zusatzscan (T1, Abnahme-Handpruefung
+//          2026-09-23): der AST verliert nachweislich
+//          Verwendungen - drei belegte Blindstellen aus der
+//          proven-Stichprobe: (a) 'Buffer.Write(M)' bzw. .Read -
+//          read/write sind Property-Klausel-Keywords, der
+//          Suffix-Sammler des Parsers bricht am Punkt-Keyword
+//          ab und die ARGUMENTE stehen in keinem Knotentext
+//          (fBalls, beide Kopien); (b) 'inherited Objects[I] := V' -
+//          der inherited-Zweig verliert die RHS
+//          (JclStringLists, beide Setter); (c)
+//          'AData: PtrInt absolute AIcon' - der Overlay-Alias ist
+//          im AST unsichtbar (unetworkthread). Fuer das
+//          ERROR-TIER gilt: lieber zu wenig proven als ein
+//          falsches Error - der Scan disqualifiziert deshalb
+//          konservativ auf den ROHEN Methoden-Quellzeilen.
+//          Der eigentliche Parser-Posten (Keyword-Member) ist
+//          separat notiert: er hat korpusweite
+//          Zweitrundeneffekte und braucht einen eigenen Vertrag.
 //
 // Die Gate-Kette davor hat bereits bewiesen, dass KEIN Free und kein
 // nachweislicher Besitzuebergang existiert; ProvenNoEscape verlangt
@@ -3146,15 +3166,76 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
     end;
   end;
 
+  function QuelltextZeigtEscape(AMaxZeile: Integer): Boolean;
+  // P6 (T1): Zusatzscan auf den gestrippten Quellzeilen der
+  // Methode - er faengt, was der AST verliert (Kopfkommentar).
+  // Drei Regeln, alle in die KONSERVATIVE Richtung (ein
+  // Fehltreffer kostet nur die proven-Einstufung, nie den Fund):
+  //   * absolute-Overlay auf die Variable, im ganzen
+  //     Methodenbereich inkl. Deklarationen;
+  //   * P1 auf der Zeile (TextHatUebergabe), erst NACH der
+  //     Deklarationszeile der Variablen - in 'a, m: T;' steht
+  //     ein Komma vor m, das ist keine Uebergabe;
+  //   * RHS-Regel: die Variable rechts eines ':=' (deckt die
+  //     verlorene inherited-RHS; auch LESE-Nutzung zaehlt -
+  //     Alias-Potential). for-Zeilen sind ausgenommen:
+  //     'for i := 0 to m.Count' ist reine Zaehl-Iteration und
+  //     ein HAEUFIGES echtes Leck-Muster; die P1-Regel bleibt
+  //     auch dort aktiv.
+  // Leeres AStrippedLines (EnsureStripped-Fehlschlag, Raw-Test-
+  // Harness ohne echte Datei): Scan entfaellt - dieselbe
+  // Konvention wie FreeInNestedRoutineBySource.
+  var
+    Z, Von, Bis, DeklZeile, PosDp : Integer;
+    Zeile : string;
+    LV : TAstNode;
+  begin
+    Result := False;
+    if Length(AStrippedLines) = 0 then Exit;
+    // Deklarationszeile der Variablen: kleinste passende
+    // nkLocalVar-Zeile (bei Shadowing die fruehere - mehr
+    // gescannte Zeilen sind die sichere Richtung).
+    DeklZeile := 0;
+    for LV in MethodNode.FindAllRef(nkLocalVar) do
+      if (TDetectorUtils.UnqualifiedNameLast(LV.Name).ToLower = VarNameLow)
+         and ((DeklZeile = 0) or (LV.Line < DeklZeile)) then
+        DeklZeile := LV.Line;
+    Von := MethodNode.Line;
+    if Von < 1 then Von := 1;
+    // +2: das letzte Statement einer Methode kann hinter der
+    // groessten AST-Zeile liegen (dieselbe Marge wie
+    // ExceptShieldedFree). Zeilen der Folgedeklaration treffen
+    // hoechstens faelschlich - konservative Richtung.
+    Bis := AMaxZeile + 2;
+    if Bis > Length(AStrippedLines) then
+      Bis := Length(AStrippedLines);
+    for Z := Von to Bis do
+    begin
+      Zeile := AStrippedLines[Z - 1].ToLower;
+      // Ohne Wortgrenze am Ende: 'absolute aiconx' traefe
+      // 'aicon' mit - faelschlich disqualifiziert, sicher.
+      if Pos(' absolute ' + VarNameLow, Zeile) > 0 then Exit(True);
+      if Z <= DeklZeile then Continue;
+      if TextHatUebergabe(Zeile) then Exit(True);
+      if Zeile.TrimLeft.StartsWith('for ') then Continue;
+      PosDp := Pos(':=', Zeile);
+      if (PosDp > 0)
+         and TDetectorUtils.ContainsWholeWordLower(VarNameLow,
+               Copy(Zeile, PosDp + 2, MaxInt)) then Exit(True);
+    end;
+  end;
+
 var
   Stack : TList<TAstNode>;
   N, C  : TAstNode;
   NLow, TLow : string;
+  MaxZeile : Integer;
 begin
   Result := False;
   // P4: Interface-Deklarationstyp
   if (Length(ADeclTypeRef) >= 2) and (ADeclTypeRef[1] = 'I')
      and CharInSet(ADeclTypeRef[2], ['A'..'Z']) then Exit;
+  MaxZeile := MethodNode.Line;
   Stack := TList<TAstNode>.Create;
   try
     Stack.Add(MethodNode);
@@ -3162,6 +3243,7 @@ begin
     begin
       N := Stack[Stack.Count - 1];
       Stack.Delete(Stack.Count - 1);
+      if N.Line > MaxZeile then MaxZeile := N.Line;
       NLow := N.Name.ToLower;
       TLow := N.TypeRef.ToLower;
       // P1/P5 in Aufrufname und RHS-Text
@@ -3175,6 +3257,9 @@ begin
          and CreateArgIstOwnerVerdacht(TLow) then Exit;
       for C in N.Children do Stack.Add(C);
     end;
+    // P6 erst NACH dem AST-Durchlauf: er laeuft nur fuer
+    // Kandidaten, die der AST bereits als proven sieht.
+    if QuelltextZeigtEscape(MaxZeile) then Exit;
     Result := True;
   finally
     Stack.Free;
@@ -5042,7 +5127,10 @@ begin
             // und wird wie bisher auf Warning gedeckelt.
             // (S6: Vorab-Variablen statt geschachteltem if - der
             // eigene SCA018 stand zu Recht auf Tiefe 5.)
-            var IstProven := ProvenNoEscape(MethodNode, VarNameLow, V.TypeRef);
+            // T1: StrippedLines ist hier garantiert gefuellt -
+            // EnsureStripped lief oben vor dem Nested-Gate.
+            var IstProven := ProvenNoEscape(MethodNode, VarNameLow,
+                                            V.TypeRef, StrippedLines);
             var Variante : string := 'never-freed';
             var Konf     := KindDefaultConfidence(fkMemoryLeak);
             if IstProven then
