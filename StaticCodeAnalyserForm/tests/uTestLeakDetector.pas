@@ -335,6 +335,10 @@ type
     // ---- S7: Pipeline-Tests (TypeIndex + Evidenz-Politik) ----
     [Test] procedure Leak_RvHint_VisibleInPipeline;
     [Test] procedure Leak_ProvenSurvivesPolicy_Pipeline;
+    // ---- T1: Quelltextscan gegen die Parser-Blindstellen ----
+    [Test] procedure Leak_KeywordMemberArg_NotProven_Pipeline;
+    [Test] procedure Leak_InheritedIndexAssign_NotProven_Pipeline;
+    [Test] procedure Leak_AbsoluteOverlay_NotProven_Pipeline;
     [Test] procedure Leak_EscapeByCall_StaysNeverFreed;
     [Test] procedure Leak_FofVariant_SurvivesErrorSeverity;
     [Test] procedure Leak_ReturnValue_HintTier;
@@ -4327,6 +4331,93 @@ begin
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'der Escape-Fall bleibt fcMedium und wird auf ' +
       'Warning gedeckelt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_KeywordMemberArg_NotProven_Pipeline;
+// T1 (Abnahme-Handpruefung 2026-09-23): read/write sind
+// Property-Klausel-Keywords - der Suffix-Sammler des Parsers
+// bricht bei 'Buffer.Write(M)' am Punkt-Keyword ab, die Argumente
+// stehen in KEINEM Knotentext, und der AST-only-proven-Check
+// stufte ein uebergebenes Objekt als Error ein (fBalls, beide
+// Kopien; per EXE-Mikroprobe belegt: Buffer.Schreib(M) -> never-
+// freed, Buffer.Write(M) -> proven). Der P6-Quelltextscan
+// sieht die Klammer vor M. Ohne den Fix ist dieser Test ROT
+// (lsError statt lsWarning).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.A2;'#13#10+
+  'var M: TStringList;'#13#10+
+  'begin'#13#10+
+  '  M := TStringList.Create;'#13#10+
+  '  Buffer.Write(M);'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'die Uebergabe steht im Quelltext - proven waere ein ' +
+      'falsches Error-Tier');
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'der Fund selbst bleibt: never-freed, auf Warning ' +
+      'gedeckelt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_InheritedIndexAssign_NotProven_Pipeline;
+// T1: der inherited-Statement-Zweig des Parsers verliert die
+// RHS der Zuweisung - 'inherited Objects[Index] := V' liess V
+// als proven durchgehen (JclStringLists, beide Setter; per
+// EXE-Mikroprobe belegt: dieselbe Zuweisung OHNE inherited
+// ergibt never-freed). Die P6-RHS-Regel sieht V rechts des
+// ':='. Ohne den Fix ROT.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.B3;'#13#10+
+  'var V: TStringList;'#13#10+
+  'begin'#13#10+
+  '  V := TStringList.Create;'#13#10+
+  '  inherited Objects[3] := V;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'V wird an die geerbte Property uebergeben - kein proven');
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'der Fund bleibt als never-freed/Warning');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_AbsoluteOverlay_NotProven_Pipeline;
+// T1: ein absolute-Overlay ist im AST unsichtbar - jede
+// Nutzung des Alias ist eine Nutzung der Variablen
+// (unetworkthread: das Icon-Handle wandert ueber den Alias
+// hinaus). P6 disqualifiziert die Variable schon bei der
+// Overlay-DEKLARATION. Ohne den Fix ROT.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var icon: TStringList;'#13#10+
+  '    data: NativeInt absolute icon;'#13#10+
+  'begin'#13#10+
+  '  icon := TStringList.Create;'#13#10+
+  '  Melde(data);'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'das absolute-Overlay ist ein Alias - proven ist ' +
+      'nicht beweisbar');
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'der Fund bleibt als never-freed/Warning');
   finally F.Free; end;
 end;
 
