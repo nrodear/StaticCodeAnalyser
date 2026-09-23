@@ -124,8 +124,11 @@ type
     // Variablen scheitern koennen. Eine zweite Funktion, die die Zeile
     // separat sucht, muesste dieselben fuenf Gates fuehren - und tat es
     // nicht (s. Historie von FindFuncCallAssignLine).
+    // G2 (Messplan 2026-09-23): AContext traegt den TypeIndex fuer
+    // die Owner-Create-Pruefung im Callee-Rumpf; nil = wie bisher.
     class function HasFunctionCallAssign(UnitNode, MethodNode: TAstNode;
-      const VarNameLow: string; out AAssignLine: Integer): Boolean; static;
+      const VarNameLow: string; out AAssignLine: Integer;
+      AContext: TAnalyzeContext = nil): Boolean; static;
     class function IsReturnedAsResult(MethodNode: TAstNode;
       const VarNameLow: string): Boolean; static;
     // Zweiter kanonischer Rueckgabeweg neben Result (T3-Backlog,
@@ -648,8 +651,17 @@ end;
 // ('NewEditor(...)'). Der Leser bekam eine geborgte Referenz als Beleg
 // vorgesetzt, und ein noinspection-Marker ueber der echten Zeile blieb
 // wirkungslos. Deshalb liefert jetzt die Entscheidung selbst die Zeile.
+// G2: beide stehen weiter unten in der Datei, werden aber schon in
+// CalleeKeepsOwnership (nested in HasFunctionCallAssign) gebraucht.
+function RumpfUebernimmtParameter(ACand: TAstNode;
+  const AParamLow: string): Boolean; forward;
+function IsComponentOwnerCreate(MethodNode: TAstNode;
+  const VarNameLow, VarTypeLow: string; AContext: TAnalyzeContext): Boolean; forward;
+function GibtVarFrei(const ANameLow, AVarLow: string): Boolean; forward;
+
 class function TLeakDetector2.HasFunctionCallAssign(UnitNode, MethodNode: TAstNode;
-  const VarNameLow: string; out AAssignLine: Integer): Boolean;
+  const VarNameLow: string; out AAssignLine: Integer;
+  AContext: TAnalyzeContext): Boolean;
 var
   ThisClassLow : string;
 
@@ -1037,6 +1049,30 @@ var
     finally
       Stack.Free;
     end;
+    // (a2) G2 (Messplan 2026-09-23): der Rumpf legt sein Result in
+    // ein FELD oder eine INDIZIERTE Struktur ab
+    // ('fSubPaths[i] := Result', Img32.SVG.Path) - das sah der
+    // Sink-Scan oben nicht, er kennt nur Add-FAMILIEN-Aufrufe.
+    // RumpfUebernimmtParameter fuehrt exakt diese Feld-Pruefung
+    // (inkl. Lokalen-Ausschluss) und nimmt 'result' als Suchwort.
+    if RumpfUebernimmtParameter(Cand, 'result') then
+      Exit(True);
+    // (a3) Der Rumpf setzt Result.Parent - die dokumentierte
+    // VCL-Konvention: der Parent gibt seine Controls frei
+    // (Messplan-Fall CreateToolbar: Result.Parent := pnToolbars).
+    for N in Cand.FindAllRef(nkAssign) do
+      if N.Name.ToLower = 'result.parent' then
+        Exit(True);
+    // (a4) Der Rumpf erzeugt Result mit Owner-Argument
+    // ('Result := TForm.Create(Application)', JvDockInfo). Dieselbe
+    // Pruefung wie am Aufrufer (IsComponentOwnerCreate), nur auf
+    // den CALLEE-Rumpf mit Suchwort 'result' angewandt. Der
+    // TypeIndex sichert die TComponent-Ahnenlinie ab - ohne
+    // AContext (Alt-Aufrufer) entfaellt nur DIESES Kriterium.
+    if (AContext <> nil)
+       and IsComponentOwnerCreate(Cand, 'result', '', AContext) then
+      Exit(True);
+
     // (b) Owner-Parameter in der Signatur. Die Aufrufstelle darf kein 'nil'
     //     enthalten - sonst ist der Owner moeglicherweise leer und der
     //     Aufrufer doch zustaendig (konservativ: Gate feuert dann nicht).
@@ -1697,6 +1733,15 @@ begin
       end;
     end;
 
+  // (c) G2 (Messplan 2026-09-23): der Rumpf gibt den Parameter
+  // SELBST frei (mormot GetJsonValuesAndFree: der Name sagt es,
+  // der Rumpf tut es). Dieselbe Freigabe-Erkennung wie im
+  // Hauptpfad; dieselbe Ein-Pfad-Politik wie (a)/(b) - siehe
+  // Funktionskopf.
+  if Assigned(Calls) then
+    for C in Calls do
+      if GibtVarFrei(C.Name.ToLower, AParamLow) then Exit(True);
+
   // (b) direkte Feldzuweisung: FFeld := Param
   Assigns := ACand.FindAllRef(nkAssign);
   if Assigned(Assigns) then
@@ -1724,8 +1769,98 @@ begin
     end;
 end;
 
+// G2 (Messplan 2026-09-23): Position des Arguments, das EXAKT der
+// gesuchte Bezeichner ist, in der Top-Level-Argumentliste ab der
+// oeffnenden Klammer. 0 = nicht (exakt) enthalten. Nur ein REINER
+// Ident zaehlt - 'foo(x)' als Argument-AUSDRUCK waere keine
+// Uebergabe der Variablen selbst.
+function ArgPositionOf(const ANameLow: string; APKlammer: Integer;
+  const AVarLow: string): Integer;
+var
+  i, Tiefe, ArgNr : Integer;
+  InStr : Boolean;
+  Arg   : string;
+begin
+  Result := 0;
+  if AVarLow = '' then Exit;
+  Tiefe := 0; ArgNr := 1; Arg := ''; InStr := False;
+  for i := APKlammer to Length(ANameLow) do
+  begin
+    if ANameLow[i] = '''' then InStr := not InStr;
+    if InStr then Continue;
+    case ANameLow[i] of
+      '(', '[':
+        begin
+          Inc(Tiefe);
+          if Tiefe > 1 then Arg := Arg + ANameLow[i];
+        end;
+      ')', ']':
+        begin
+          Dec(Tiefe);
+          if Tiefe = 0 then Break;
+          Arg := Arg + ANameLow[i];
+        end;
+      ',':
+        if Tiefe = 1 then
+        begin
+          if Trim(Arg) = AVarLow then Exit(ArgNr);
+          Inc(ArgNr);
+          Arg := '';
+        end
+        else
+          Arg := Arg + ANameLow[i];
+    else
+      if Tiefe >= 1 then Arg := Arg + ANameLow[i];
+    end;
+  end;
+  if Trim(Arg) = AVarLow then Result := ArgNr;
+end;
+
+// G2: Name des Parameters an Position APos (1-basiert), Gruppen
+// ('a, b: TFoo') zaehlen als mehrere Positionen. Leer, wenn die
+// Position nicht existiert oder der Name kein reiner Ident ist -
+// dann lieber schweigen als falsch unterdruecken (dieselbe Politik
+// wie EinzigerParameterNameLow).
+function ParameterNameAtPos(ACand: TAstNode; APos: Integer): string;
+var
+  P : TAstNode;
+  Teile : TArray<string>;
+  Teil, PName : string;
+  Nr, i : Integer;
+begin
+  Result := '';
+  if (not Assigned(ACand)) or (APos <= 0) then Exit;
+  Nr := 0;
+  for P in ACand.Children do
+  begin
+    if P.Kind <> nkParam then Continue;
+    PName := P.Name.ToLower;
+    for var Mod_ in ['var ', 'const ', 'out '] do
+      if StartsStr(Mod_, PName) then
+        PName := Trim(Copy(PName, Length(Mod_) + 1, MaxInt));
+    Teile := PName.Split([',']);
+    for i := 0 to High(Teile) do
+    begin
+      Inc(Nr);
+      if Nr = APos then
+      begin
+        Teil := Trim(Teile[i]);
+        // reiner Ident? (IsCleanIdent ist nested und hier
+        // nicht sichtbar - dieselbe Regel lokal)
+        var Ok := Teil <> '';
+        for var ci := 1 to Length(Teil) do
+          if not TLeakDetector2.IsIdentChar(Teil[ci]) then
+            begin Ok := False; Break; end;
+        if Ok then Result := Teil;
+        Exit;
+      end;
+    end;
+  end;
+end;
+
 function CalleeTakesOwnershipLocal(AUnitNode, AMethodNode: TAstNode;
-  const ACalleeLow, AReceiverLow: string): Boolean;
+  const ACalleeLow, AReceiverLow: string;
+  AArgPos: Integer = 1): Boolean;
 // KLASSE F der SCA001-Vollzaehlung: der Gerufene steht in DERSELBEN Unit
 // und uebernimmt das Objekt dort - dann ist die Uebergabe ein
 // Ownership-Transfer und kein Leck.
@@ -1789,7 +1924,15 @@ begin
     if FirstTypeIdentLow(TypLow) <> KlasseCallee then Exit;
   end;
 
-  Result := RumpfUebernimmtParameter(Cand, EinzigerParameterNameLow(Cand));
+  // G2: mit AArgPos > 1 (oder mehrparametrigem Callee) zaehlt der
+  // Parameter an der ARGUMENTPOSITION; die alte 1-Parameter-Grenze
+  // bleibt der Spezialfall AArgPos=1 mit einparametrigem Callee.
+  if EinzigerParameterNameLow(Cand) <> '' then
+    Result := (AArgPos = 1)
+              and RumpfUebernimmtParameter(Cand, EinzigerParameterNameLow(Cand))
+  else
+    Result := RumpfUebernimmtParameter(Cand,
+                ParameterNameAtPos(Cand, AArgPos));
 end;
 
 class function TLeakDetector2.IsPassedToOwner(MethodNode: TAstNode;
@@ -2285,11 +2428,17 @@ begin
         if pPunkt > 0 then
           RecvLow := Trim(Copy(VorKlammer, 1, pPunkt - 1));
         if RecvLow = 'self' then RecvLow := '';
-        var ArgTreffer: Boolean;
-        if (ArgumenteScannen(NameLow, pKlammer, '', ArgTreffer) = 1)
-           and VarInArgs(NameLow, pKlammer + 1)
+        // G2 (Messplan 2026-09-23): nicht mehr nur einparametrige
+        // Aufrufe - die Argumentposition unserer Variablen wird
+        // bestimmt und der KORRESPONDIERENDE Parameter des Callee
+        // geprueft (Messplan-Fall EmitParam: 6 Argumente, das
+        // fuenfte wird im Rumpf abgelegt). Ein Fehlgriff in der
+        // Zuordnung wuerde ein echtes Leck maskieren - deshalb
+        // zaehlt nur der EXAKTE Ident als Top-Level-Argument.
+        var ArgPos := ArgPositionOf(NameLow, pKlammer, VarNameLow);
+        if (ArgPos > 0)
            and CalleeTakesOwnershipLocal(AUnitNode, MethodNode,
-                                         CalleeLow, RecvLow) then
+                                         CalleeLow, RecvLow, ArgPos) then
           Exit(True);
       end;
     end;
@@ -4505,7 +4654,8 @@ begin
       var FuncAssignLine : Integer;
       if Gate('SCA001.NoFunctionCallAssign',
               not HasFunctionCallAssign(UnitNode, MethodNode, VarNameLow,
-                                        FuncAssignLine)) then Continue;
+                                        FuncAssignLine,
+                                        AContext)) then Continue;
 
       if Gate('SCA001.IsReturnedAsResult', IsReturnedAsResult(MethodNode, VarNameLow)) then Continue;
       if Gate('SCA001.IsAssignedToOutParam', IsAssignedToOutParam(MethodNode, VarNameLow)) then Continue;

@@ -321,6 +321,13 @@ type
     [Test] procedure Leak_AsInterfaceCast_NoFinding;
     // ---- G1 (Messplan 2026-09-23): Supports-Uebernahme ---------
     [Test] procedure Leak_SupportsFirstArg_NoFinding;
+    // ---- G2 (Messplan 2026-09-23): unit-lokale Callee-Ownership -
+    [Test] procedure Leak_FactoryStoresResultInIndexedField_NoFinding;
+    [Test] procedure Leak_FactorySetsResultParent_NoFinding;
+    [Test] procedure Leak_FactoryOnlyReturns_StillReported;
+    [Test] procedure Leak_MultiParamCalleeStores_NoFinding;
+    [Test] procedure Leak_MultiParamCalleeStoresOtherArg_StillReported;
+    [Test] procedure Leak_CalleeFreesParam_NoFinding;
     [Test] procedure Leak_SupportsThirdArg_StillReported;
     [Test] procedure Leak_MySupportsPrefix_StillReported;
     [Test] procedure Leak_RaisedVar_NoFinding;
@@ -4177,6 +4184,165 @@ begin
     Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
       'fremde MySupports-Routine beweist keine ' +
       'Interface-Uebernahme');
+  finally F.Free; end;
+end;
+procedure TTestMemoryLeakSearchFree.Leak_FactoryStoresResultInIndexedField_NoFinding;
+// G2/a2: die unit-lokale Factory legt ihr Result in eine INDIZIERTE
+// Feld-Struktur - der Sink-Scan kannte nur Add-Familien-AUFRUFE.
+// Messplan-Fall Img32.SVG.Path (fSubPaths[i] := Result).
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.NeuerPfad: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := TStringList.Create;'#13#10+
+  '  FSubPaths[FZahl] := Result;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var p: TStringList;'#13#10+
+  'begin'#13#10+
+  '  p := NeuerPfad();'#13#10+
+  '  p.Add(chr(97));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'die Factory haelt ihr Result im Feld-Array - der ' +
+      'Aufrufer borgt nur');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_FactorySetsResultParent_NoFinding;
+// G2/a3: Result.Parent := ... im Factory-Rumpf - der VCL-Parent
+// gibt seine Controls frei (Messplan-Fall CreateToolbar).
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.BaueLeiste: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := TStringList.Create;'#13#10+
+  '  Result.Parent := FPanel;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var leiste: TStringList;'#13#10+
+  'begin'#13#10+
+  '  leiste := BaueLeiste();'#13#10+
+  '  leiste.Add(chr(97));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Result.Parent uebergibt an die VCL-Hierarchie');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_FactoryOnlyReturns_StillReported;
+// GEGENPROBE zu a2-a4: eine Factory, die ihr Result NUR erzeugt und
+// zurueckgibt, uebertraegt den Besitz an den Aufrufer - der Fund
+// MUSS bleiben. Ohne diese Probe waere jede der drei Erweiterungen
+// auch mit einem Immer-True-Fehler gruen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'function TFoo.BaueListe: TStringList;'#13#10+
+  'begin'#13#10+
+  '  Result := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var liste: TStringList;'#13#10+
+  'begin'#13#10+
+  '  liste := BaueListe();'#13#10+
+  '  liste.Add(chr(97));'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'reine Rueckgabe-Factory: der Aufrufer besitzt und ' +
+      'gibt nie frei');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_MultiParamCalleeStores_NoFinding;
+// G2/(3): mehrparametriger unit-lokaler Callee, der den Parameter an
+// der ARGUMENTPOSITION unserer Variablen in ein Feld legt
+// (Messplan-Fall EmitParam mit 6 Argumenten). Die alte
+// 1-Parameter-Grenze liess genau das durch.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Ablegen(AName: string; AItem: TStringList; ATiefe: Integer);'#13#10+
+  'begin'#13#10+
+  '  FListe := AItem;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  Ablegen(chr(97), obj, 3);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'der Callee legt das zweite Argument in ein Feld - ' +
+      'Besitzuebergang');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_MultiParamCalleeStoresOtherArg_StillReported;
+// GEGENPROBE zur POSITIONSZUORDNUNG: derselbe Callee legt nur den
+// DRITTEN Parameter ab; unsere Variable steht an Position zwei.
+// Eine Zuordnung nach dem Muster "irgendein Parameter wird
+// abgelegt" wuerde hier faelschlich unterdruecken - und genau so
+// ein Fehlgriff maskiert echte Lecks.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Ablegen(AName: string; AItem: TStringList; AAnderes: TStringList);'#13#10+
+  'begin'#13#10+
+  '  FListe := AAnderes;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  Ablegen(chr(97), obj, FSonst);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'abgelegt wird der DRITTE Parameter - unsere Variable ' +
+      'an Position zwei bleibt ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_CalleeFreesParam_NoFinding;
+// G2/(4): der unit-lokale Callee gibt den Parameter SELBST frei
+// (Messplan-Fall mormot GetJsonValuesAndFree).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Verbrauchen(AItem: TStringList);'#13#10+
+  'begin'#13#10+
+  '  AItem.SaveToFile(chr(97));'#13#10+
+  '  AItem.Free;'#13#10+
+  'end;'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var obj: TStringList;'#13#10+
+  'begin'#13#10+
+  '  obj := TStringList.Create;'#13#10+
+  '  Verbrauchen(obj);'#13#10+
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'der Callee verbraucht und gibt frei - kein Leak beim ' +
+      'Aufrufer');
   finally F.Free; end;
 end;
 procedure TTestMemoryLeakSearchFree.Leak_RaisedVar_NoFinding;
