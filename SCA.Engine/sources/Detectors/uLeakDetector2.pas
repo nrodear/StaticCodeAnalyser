@@ -1780,46 +1780,64 @@ end;
 // oeffnenden Klammer. 0 = nicht (exakt) enthalten. Nur ein REINER
 // Ident zaehlt - 'foo(x)' als Argument-AUSDRUCK waere keine
 // Uebergabe der Variablen selbst.
+// KOMPLEXITAET BEGRUENDET (Selbstscan SCA176): dies ist ein
+// Zeichen-Parser mit String-Literal-Zustand und Klammertiefe -
+// dieselbe Bauform wie SinkSplitTopLevelArgs. Die Zustaende lassen
+// sich nicht weiter zerlegen, ohne den Literal-/Tiefen-Kontext
+// durch Parameterschleppen zu verteilen.
 function ArgPositionOf(const ANameLow: string; APKlammer: Integer;
   const AVarLow: string): Integer;
+// Selbstscan-Refactor (S6): SEGMENT-GRENZEN statt zeichenweiser
+// Akkumulation - der eigene SCA110 hatte an vier Konkatenationen
+// recht, und der Vergleich braucht den Argumenttext gar nicht,
+// nur seine Grenzen.
+
+  function SegmentIstVar(const ANameLow: string; ASeg, AEnde: Integer;
+    const AVarLow: string): Boolean;
+  begin
+    while (ASeg <= AEnde) and (ANameLow[ASeg] = ' ') do Inc(ASeg);
+    while (AEnde >= ASeg) and (ANameLow[AEnde] = ' ') do Dec(AEnde);
+    Result := (AEnde - ASeg + 1 = Length(AVarLow))
+              and (Copy(ANameLow, ASeg, Length(AVarLow)) = AVarLow);
+  end;
+
 var
-  i, Tiefe, ArgNr : Integer;
+  i, Tiefe, ArgNr, SegStart : Integer;
   InStr : Boolean;
-  Arg   : string;
 begin
   Result := 0;
   if AVarLow = '' then Exit;
-  Tiefe := 0; ArgNr := 1; Arg := ''; InStr := False;
+  Tiefe := 0; ArgNr := 1; SegStart := APKlammer + 1;
+  InStr := False;
   for i := APKlammer to Length(ANameLow) do
   begin
     if ANameLow[i] = '''' then InStr := not InStr;
     if InStr then Continue;
     case ANameLow[i] of
-      '(', '[':
-        begin
-          Inc(Tiefe);
-          if Tiefe > 1 then Arg := Arg + ANameLow[i];
-        end;
+      '(', '[': Inc(Tiefe);
       ')', ']':
         begin
           Dec(Tiefe);
-          if Tiefe = 0 then Break;
-          Arg := Arg + ANameLow[i];
+          if Tiefe = 0 then
+          begin
+            if SegmentIstVar(ANameLow, SegStart, i - 1, AVarLow) then
+              Result := ArgNr;
+            Exit;
+          end;
         end;
       ',':
         if Tiefe = 1 then
         begin
-          if Trim(Arg) = AVarLow then Exit(ArgNr);
+          if SegmentIstVar(ANameLow, SegStart, i - 1, AVarLow) then
+            Exit(ArgNr);
           Inc(ArgNr);
-          Arg := '';
-        end
-        else
-          Arg := Arg + ANameLow[i];
+          SegStart := i + 1;
+        end;
     else
-      if Tiefe >= 1 then Arg := Arg + ANameLow[i];
+      // Gewoehnliche Zeichen: nur Teil des laufenden Segments -
+      // die Grenzen (SegStart..i) zaehlen, der Inhalt nicht.
     end;
   end;
-  if Trim(Arg) = AVarLow then Result := ArgNr;
 end;
 
 // G2: Name des Parameters an Position APos (1-basiert), Gruppen
@@ -1828,10 +1846,23 @@ end;
 // dann lieber schweigen als falsch unterdruecken (dieselbe Politik
 // wie EinzigerParameterNameLow).
 function ParameterNameAtPos(ACand: TAstNode; APos: Integer): string;
+  // Selbstscan-Refactor (S6): der Ident-Check als Helfer nimmt
+  // der Positionsschleife zwei Ebenen (der eigene SCA018 hatte
+  // an der Tiefe recht).
+  function ReinerIdentOderLeer(const ATeil: string): string;
+  var ci: Integer;
+  begin
+    Result := ATeil;
+    if ATeil = '' then Exit;
+    for ci := 1 to Length(ATeil) do
+      if not TLeakDetector2.IsIdentChar(ATeil[ci]) then
+        Exit('');
+  end;
+
 var
   P : TAstNode;
   Teile : TArray<string>;
-  Teil, PName : string;
+  PName : string;
   Nr, i : Integer;
 begin
   Result := '';
@@ -1848,18 +1879,9 @@ begin
     for i := 0 to High(Teile) do
     begin
       Inc(Nr);
-      if Nr = APos then
-      begin
-        Teil := Trim(Teile[i]);
-        // reiner Ident? (IsCleanIdent ist nested und hier
-        // nicht sichtbar - dieselbe Regel lokal)
-        var Ok := Teil <> '';
-        for var ci := 1 to Length(Teil) do
-          if not TLeakDetector2.IsIdentChar(Teil[ci]) then
-            begin Ok := False; Break; end;
-        if Ok then Result := Teil;
-        Exit;
-      end;
+      if Nr <> APos then Continue;
+      Result := ReinerIdentOderLeer(Trim(Teile[i]));
+      Exit;
     end;
   end;
 end;
@@ -2907,6 +2929,10 @@ begin
       Exit(True);
 end;
 
+// KOMPLEXITAET BEGRUENDET (Selbstscan SCA176, knapp ueber der
+// Schwelle): der DFS prueft die vier P-Praedikate in EINER Schleife
+// ueber jeden Knoten - sie zu trennen hiesse vier Baumlaeufe im
+// heissesten Detektorpfad.
 class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
   const VarNameLow, ADeclTypeRef: string): Boolean;
 // S4 (Messplan 2026-09-23): die proven-leak-Klassifikation. True nur,
@@ -2994,6 +3020,25 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
     end;
   end;
 
+  // S6: ArgVerdacht auf Ebene der uebrigen Helfer gezogen - die
+  // Doppel-Schachtelung trieb die eigene SCA176-Zahl.
+  function ArgVerdacht(const A: string): Boolean;
+  var
+    T : string;
+    k : Integer;
+  begin
+    Result := False;
+    if (A = '') or (A = 'nil')
+       or (A = 'true') or (A = 'false') then Exit;
+    if A[1] = '''' then Exit;            // String-Literal
+    if CharInSet(A[1], ['0'..'9', '$', '-']) then Exit;   // Zahl
+    for k := 1 to Length(A) do
+      if not IsIdentChar(A[k]) then Exit(True);   // Ausdruck: Verdacht
+    T := DeklTypLowVon(A);
+    if T = '' then Exit(True);         // nicht aufloesbar: Verdacht
+    Result := not IstWertTypLow(T);
+  end;
+
   function CreateArgIstOwnerVerdacht(const ARhsLow: string): Boolean;
   // P3: Argumentliste des Create pruefen. nil/leer/Werttypen sind
   // unverdaechtig; ein unaufloesbarer Ident (Feld, Self, Global)
@@ -3001,24 +3046,6 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
   var
     pC, pK, Tiefe, i, s : Integer;
     Arg : string;
-
-    function ArgVerdacht(const A: string): Boolean;
-    var
-      T : string;
-      k : Integer;
-    begin
-      Result := False;
-      if (A = '') or (A = 'nil')
-         or (A = 'true') or (A = 'false') then Exit;
-      if A[1] = '''' then Exit;          // String-Literal
-      if CharInSet(A[1], ['0'..'9', '$', '-']) then Exit; // Zahl
-      for k := 1 to Length(A) do
-        if not IsIdentChar(A[k]) then Exit(True); // Ausdruck: Verdacht
-      T := DeklTypLowVon(A);
-      if T = '' then Exit(True);       // nicht aufloesbar: Verdacht
-      Result := not IstWertTypLow(T);
-    end;
-
   begin
     Result := False;
     pC := Pos('.create', ARhsLow);
@@ -4898,19 +4925,25 @@ begin
           // Gates): der Subtree-Walk laeuft dann nur fuer Variablen, die
           // tatsaechlich gemeldet wuerden - Hot-Path-Schutz.
           if Gate('SCA001.NoOwnershipTransfer', not LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then
+          begin
             // S4: besteht der Fund auch die PROVEN-Kriterien
             // (keinerlei Weitergabe, kein Owner-Create, kein
             // Interface-Typ), traegt er die vierte Variante und
             // fcHigh - die Evidenz-Politik laesst ihn dann als
             // Error durch. Der Rest bleibt never-freed/fcMedium
             // und wird wie bisher auf Warning gedeckelt.
-            if ProvenNoEscape(MethodNode, VarNameLow, V.TypeRef) then
-              AddFinding(V.Name, lsError, ReportLine,
-                         'proven-leak', fcHigh)
-            else
-              AddFinding(V.Name, lsError, ReportLine,
-                         'never-freed',
-                         KindDefaultConfidence(fkMemoryLeak));
+            // (S6: Vorab-Variablen statt geschachteltem if - der
+            // eigene SCA018 stand zu Recht auf Tiefe 5.)
+            var IstProven := ProvenNoEscape(MethodNode, VarNameLow, V.TypeRef);
+            var Variante : string := 'never-freed';
+            var Konf     := KindDefaultConfidence(fkMemoryLeak);
+            if IstProven then
+            begin
+              Variante := 'proven-leak';
+              Konf     := fcHigh;
+            end;
+            AddFinding(V.Name, lsError, ReportLine, Variante, Konf);
+          end;
         end
         else if not FreeInFin and HasFinally
              and not HasExceptPathFree(MethodNode, VarNameLow, ReportLine)
