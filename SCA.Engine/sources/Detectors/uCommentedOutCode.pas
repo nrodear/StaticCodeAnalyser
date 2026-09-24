@@ -896,6 +896,11 @@ var
   RegStart : Integer;
   RegEnd   : Integer;
   RegCol   : Integer;
+  // W1: gestrippte Zeilen fuer das Brueckenkriterium (geteilter
+  // Strip-Cache, einmal pro Datei - derselbe, den auch der
+  // Leak-Detektor nutzt).
+  StripLineFor : TArray<Integer>;
+  Stripped     : TArray<string>;
 
   procedure FlushRegion;
   var
@@ -921,10 +926,49 @@ var
     RegStart := 0;
   end;
 
+  function ReineKommentarzeile(AIdx: Integer): Boolean;
+  // W1 (Nico 2026-09-24): Brueckenkriterium der Block-Bildung.
+  // Die Zeile traegt Text, und der Strip laesst NICHTS uebrig -
+  // also Kommentar pur (Prosa, Leerkommentar, Blockkommentar-
+  // Fortsetzung). Leerzeilen brechen die Region (nicht
+  // 'durchgehend'), Code sowieso. Compiler-Direktiven
+  // ('{$...'/'(*$...') sind AKTIVER Code, auch wenn der Strip sie
+  // wie Kommentare tilgt - sie verbinden nicht.
+  var
+    R : string;
+  begin
+    Result := False;
+    if (AIdx < 0) or (AIdx >= Lines.Count)
+       or (AIdx >= Length(Stripped)) then Exit;
+    R := Trim(Lines[AIdx]);
+    if R = '' then Exit;
+    if R.StartsWith('{$') or R.StartsWith('(*$') then Exit;
+    Result := Trim(Stripped[AIdx]) = '';
+  end;
+
+  function BrueckeDurchgehend(AErsteZeile, ALetzteZeile: Integer): Boolean;
+  // Alle 1-basierten Zwischenzeilen des Bereichs muessen reine
+  // Kommentarzeilen sein; ein leerer Bereich (adjazente Funde)
+  // ist trivial durchgehend - die alte Luecke-0-Semantik ist
+  // damit vollstaendig enthalten.
+  var
+    z : Integer;
+  begin
+    Result := False;
+    for z := AErsteZeile to ALetzteZeile do
+      if not ReineKommentarzeile(z - 1) then Exit;
+    Result := True;
+  end;
+
 begin
   Lines := AcquireLines(FileName, Cached, CtxFileTextCache(AContext));
   if Lines = nil then Exit;
   try
+    // W1: einmal pro Datei (cached); schlaegt der Strip fehl,
+    // bleibt Stripped leer und die Brueckenpruefung faellt auf
+    // die alte Adjazenz-Semantik zurueck.
+    Stripped := TDetectorUtils.StripStringsAndCommentsCached(
+      Lines, StripLineFor, AContext, FileName, ' ').Split([#10]);
     InBlk      := False;
     ParenStar.Offen        := False;
     ParenStar.IstDirektive := False;
@@ -953,11 +997,16 @@ begin
       // FP-Schutz 3 (Audit 2026-07-31): Adapter-Doku-Header - der Kommentar
       // dokumentiert die Signatur der Routine, die direkt darunter steht.
       if IsAdapterDocHeader(Lines, i) then Continue;
-      // Region-Granularitaet (Produktentscheidung Nico 2026-09-05):
-      // direkt aufeinanderfolgende gemeldete Zeilen bilden EINEN Fund.
-      // Luecke 0 ist die strengste Lesart von "zusammenhaengend" -
-      // eine luecken-tolerante Bildung wuerde ungemeldete Prosa- oder
-      // Leerkommentarzeilen mit beanspruchen. Einzeiler behalten
+      // Region-Granularitaet (Produktentscheidung Nico 2026-09-05,
+      // ERWEITERT 2026-09-24/W1): eine Region ist der
+      // DURCHGEHENDE Kommentar - gemeldete Zeilen verschmelzen
+      // auch ueber reine Kommentar-Brueckenzeilen (Prosa,
+      // Leerkommentar, Blockkommentar-Fortsetzung) hinweg;
+      // Leerzeilen, Code und Compiler-Direktiven brechen.
+      // Messung rw129: 10.317 -> 6.919 Funde - ein Drittel der
+      // alten Meldungen waren Fragmente EINES Blocks
+      // (FMX.Skia.Canvas.GL: acht Meldungen fuer eine einzige
+      // auskommentierte Prozedur-Familie). Einzeiler behalten
       // WOERTLICH die alte Meldung (77 % der Regionen, rw63: 7.964
       // von 10.317) - deren Fund-Identitaet und Baselines bleiben
       // stehen; nur Mehrzeilen-Bloecke wechseln auf die Block-Meldung
@@ -965,7 +1014,7 @@ begin
       // Spalte. Suppression wirkt damit am ANKER fuer den ganzen
       // Block; ein Marker auf einer Folgezeile unterdrueckt nicht
       // mehr einzeln (dokumentierte Folge der Entscheidung).
-      if (RegStart > 0) and (i + 1 = RegEnd + 1) then
+      if (RegStart > 0) and BrueckeDurchgehend(RegEnd + 1, i) then
         RegEnd := i + 1
       else
       begin
