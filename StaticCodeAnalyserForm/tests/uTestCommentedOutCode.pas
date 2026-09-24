@@ -46,6 +46,12 @@ type
     [Test] procedure SingleLine_KeepsPerLineMessage;
     // Voll-Review 2026-09-12 (Testluecke 97): FP-Schutz 2
     [Test] procedure InlineCommentAfterCode_NotReported;
+    // --- W1 (Nico 2026-09-24): Region = DURCHGEHENDER Kommentar ---
+    // Gemeldete Zeilen verschmelzen auch ueber reine
+    // Kommentar-Brueckenzeilen; Leerzeile/Direktive brechen.
+    [Test] procedure ProseBridge_OneBlockFinding;
+    [Test] procedure EmptyLineBreaks_TwoFindings;
+    [Test] procedure DirectiveBreaks_TwoFindings;
   end;
 
 implementation
@@ -590,6 +596,73 @@ begin
   try Assert.AreEqual<Integer>(1,
     TFindingHelper.Count(F, fkCommentedOutCode),
     'nur der Kommentar auf eigener Zeile zaehlt');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.ProseBridge_OneBlockFinding;
+// W1: zwei code-artige Kommentarzeilen, dazwischen eine reine
+// PROSA-Kommentarzeile (selbst kein Fund) - der Kommentar ist
+// durchgehend, also EINE Region und EIN Fund. Ohne W1 ROT
+// (zwei Funde; Messung rw129: ein Drittel aller SCA070-
+// Meldungen waren solche Fragmente).
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  { X := GetValue(1); Inc(X); }'#13#10 +
+  '  { the old branch kept for reference }'#13#10 +
+  '  { Y := GetValue(2); Dec(Y); }'#13#10 +
+  '  DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkCommentedOutCode),
+      'durchgehender Kommentar = eine Region = ein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.EmptyLineBreaks_TwoFindings;
+// GEGENPROBE: eine LEERZEILE unterbricht - 'durchgehend' ist
+// woertlich gemeint, zwei getrennte Bloecke bleiben zwei Funde.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  { X := GetValue(1); Inc(X); }'#13#10 +
+  ''#13#10 +
+  '  { Y := GetValue(2); Dec(Y); }'#13#10 +
+  '  DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkCommentedOutCode),
+      'Leerzeile bricht die Region');
+  finally F.Free; end;
+end;
+
+procedure TTestCommentedOutCode.DirectiveBreaks_TwoFindings;
+// GEGENPROBE: eine Compiler-Direktive ist AKTIVER Code - auch
+// wenn der Strip sie wie einen Kommentar tilgt, verbindet sie
+// keine Regionen.
+const SRC =
+  'unit t; implementation'#13#10 +
+  'procedure Foo;'#13#10 +
+  'begin'#13#10 +
+  '  { X := GetValue(1); Inc(X); }'#13#10 +
+  '  {$DEFINE ALTLAST}'#13#10 +
+  '  { Y := GetValue(2); Dec(Y); }'#13#10 +
+  '  DoStuff;'#13#10 +
+  'end;';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOfFile(SRC);
+  try
+    Assert.AreEqual<Integer>(2, TFindingHelper.Count(F, fkCommentedOutCode),
+      'Direktive bricht die Region');
   finally F.Free; end;
 end;
 
