@@ -547,6 +547,10 @@ type
     [Test] procedure Field_FreedViaDestroyMethod_NoFinding;
     [Test] procedure Field_TwoClassesIndependent_OnlyLeakingReported;
     [Test] procedure Field_FreedViaAlias_NoFinding;
+    // ZUGFeRD-Pins (Nutzerbefund 2026-09-24): nested public
+    // type + Free-Kette hinter Self-qualifiziertem Helferruf.
+    [Test] procedure Field_NestedTypeFreeChain_NoFinding;
+    [Test] procedure Field_NestedTypeMissingOneFree_ReportsThatField;
   end;
 
   // Owner-/Uebergabe-Gates: der Fund entfaellt, wenn ein ANDERER die
@@ -6805,6 +6809,121 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak));
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_NestedTypeFreeChain_NoFinding;
+// ZUGFeRD-Pin (Nutzerbefund 2026-09-24, uZUGFeRD.pas): eine
+// Klasse mit GESCHACHTELTEM public-type-Block (nested class +
+// TObjectList-Alias), zwei TSQLQuery-Feldern und einem Dtor,
+// der erst einen Self-qualifizierten Helfer ruft und dann die
+// Free-Kette fuehrt. Der Analyzer des Nutzers meldete
+// FStoreQuery trotz vorhandenem Free - die HEUTIGE Engine ist
+// nachweislich still (drei EXE-Mikroproben, uProbeZugferd*).
+// Dieser Test PINNT das: kein kuenftiger Parser-/Detektor-
+// Umbau darf den FP einfuehren. Fixture in Produktionsform
+// (TSQLQuery steht in der DEFAULT_LEAKY_CLASSES-Baseline,
+// Create(nil) wie im Original).
+const SRC =
+  'unit t; interface'#13#10+
+  'type TVgfkValidator = class'#13#10+
+  'public'#13#10+
+  '  type'#13#10+
+  '    TValidationResult = class'#13#10+
+  '    private'#13#10+
+  '      FMessage: string;'#13#10+
+  '    end;'#13#10+
+  '    TValidationResultList = TObjectList<TValidationResult>;'#13#10+
+  'private'#13#10+
+  '  FConnection: TObject;'#13#10+
+  '  FFakturenausgangQuery: TSQLQuery;'#13#10+
+  '  FStoreQuery: TSQLQuery;'#13#10+
+  '  procedure CleanupResults;'#13#10+
+  'public'#13#10+
+  '  constructor Create(aConnection: TObject);'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TVgfkValidator.Create(aConnection: TObject);'#13#10+
+  'begin'#13#10+
+  '  FConnection := aConnection;'#13#10+
+  '  FFakturenausgangQuery := TSQLQuery.Create(nil);'#13#10+
+  '  FStoreQuery := TSQLQuery.Create(nil);'#13#10+
+  'end;'#13#10+
+  'procedure TVgfkValidator.CleanupResults;'#13#10+
+  'begin'#13#10+
+  '  FConnection := nil;'#13#10+
+  'end;'#13#10+
+  'destructor TVgfkValidator.Destroy;'#13#10+
+  'begin'#13#10+
+  '  Self.CleanupResults;'#13#10+
+  '  FFakturenausgangQuery.Free;'#13#10+
+  '  FStoreQuery.Free;'#13#10+
+  '  inherited Destroy;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'beide Felder werden im Dtor freigegeben - jeder ' +
+      'Fund waere der Nutzer-FP');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_NestedTypeMissingOneFree_ReportsThatField;
+// GEGENPROBE zum Pin (Vakuum-Schutz, IsLeakyType-Lehre der
+// U-Charge): dieselbe Struktur OHNE das FStoreQuery-Free MUSS
+// genau dieses Feld melden - sonst haette der Negativ-Test
+// den Detektor nie erreicht. An der EXE belegt: die Probe
+// liefert WORTGLEICH den Nutzer-Meldetext.
+const SRC =
+  'unit t; interface'#13#10+
+  'type TVgfkValidator = class'#13#10+
+  'public'#13#10+
+  '  type'#13#10+
+  '    TValidationResult = class'#13#10+
+  '    private'#13#10+
+  '      FMessage: string;'#13#10+
+  '    end;'#13#10+
+  '    TValidationResultList = TObjectList<TValidationResult>;'#13#10+
+  'private'#13#10+
+  '  FConnection: TObject;'#13#10+
+  '  FFakturenausgangQuery: TSQLQuery;'#13#10+
+  '  FStoreQuery: TSQLQuery;'#13#10+
+  '  procedure CleanupResults;'#13#10+
+  'public'#13#10+
+  '  constructor Create(aConnection: TObject);'#13#10+
+  '  destructor Destroy; override;'#13#10+
+  'end;'#13#10+
+  'implementation'#13#10+
+  'constructor TVgfkValidator.Create(aConnection: TObject);'#13#10+
+  'begin'#13#10+
+  '  FConnection := aConnection;'#13#10+
+  '  FFakturenausgangQuery := TSQLQuery.Create(nil);'#13#10+
+  '  FStoreQuery := TSQLQuery.Create(nil);'#13#10+
+  'end;'#13#10+
+  'procedure TVgfkValidator.CleanupResults;'#13#10+
+  'begin'#13#10+
+  '  FConnection := nil;'#13#10+
+  'end;'#13#10+
+  'destructor TVgfkValidator.Destroy;'#13#10+
+  'begin'#13#10+
+  '  Self.CleanupResults;'#13#10+
+  '  FFakturenausgangQuery.Free;'#13#10+
+  '  inherited Destroy;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'ohne das Free muss genau ein Fund kommen');
+    Assert.Contains(ErsterLeak(F).MissingVar, 'FStoreQuery',
+      'und zwar fuer FStoreQuery, nicht fuer das ' +
+      'korrekt freigegebene Schwesterfeld');
   finally F.Free; end;
 end;
 
