@@ -350,6 +350,10 @@ type
     [Test] procedure Leak_CtorWithoutSelfReg_StaysProven_Pipeline;
     [Test] procedure Leak_DangerBetweenShieldAndFree_StillWarns_Pipeline;
     [Test] procedure Leak_ShieldedFarFreeAndNil_NoFinding_Pipeline;
+    // ---- Z2: Index-Property-Ablage = Escape ----
+    [Test] procedure Leak_IndexPropertyStore_NoFinding_Pipeline;
+    [Test] procedure Leak_InheritedIndexStore_NoFinding_Pipeline;
+    [Test] procedure Leak_IndexStoreOtherVar_StillReported_Pipeline;
     [Test] procedure Leak_EscapeByCall_StaysNeverFreed;
     [Test] procedure Leak_FofVariant_SurvivesErrorSeverity;
     [Test] procedure Leak_ReturnValue_HintTier;
@@ -1051,11 +1055,15 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    // S4 (2026-09-23): freed-outside-finally ist Error-Tier - die
-    // Aussage ist syntaktisch beweisbar (Vollzaehlung 12,7 % FP).
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
-      'list.Free außerhalb finally – Error (Tier-Umbau)');
-    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+    // S4 hob FOF auf Error (Simulation 12,7 % FP); Z1 (25.09.)
+    // drehte zurueck auf Warning - die Realmessung zeigte stabil
+    // 40 % FP in zwei unabhaengigen Stichproben.
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'list.Free außerhalb finally – Warning (seit Z1)');
+    // Z1-Nachzieher (Bau-Befund): die Gegenprobe prueft das
+    // JEWEILS ANDERE Level - seit FOF wieder Warning ist,
+    // heisst sie: NICHTS ist Error.
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'other korrekt freigegeben – kein Warning');
   finally F.Free; end;
 end;
@@ -1084,7 +1092,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'list.Free ausserhalb finally (mit nested begin/end im finally) - Error seit S4');
   finally F.Free; end;
 end;
@@ -2814,7 +2822,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'Free im try-Rumpf statt finally – Error (S4)');
   finally F.Free; end;
 end;
@@ -3165,9 +3173,12 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'list.Free nach try/finally – Error (S4)');
-    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+    // Z1-Nachzieher (Bau-Befund): die Gegenprobe prueft das
+    // JEWEILS ANDERE Level - seit FOF wieder Warning ist,
+    // heisst sie: NICHTS ist Error.
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'other korrekt freigegeben – kein Warning');
   finally F.Free; end;
 end;
@@ -3430,7 +3441,7 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try
     Assert.AreEqual<Integer>(1,
-      TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'Allokation haengt NICHT am try - das Fenster davor bleibt ungeschuetzt, ' +
       'der Handler-Free deckt es nicht ab');
   finally F.Free; end;
@@ -3512,7 +3523,7 @@ begin
   F := TFindingHelper.FindingsOfFile(SRC);
   try
     Assert.AreEqual<Integer>(1,
-      TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'ohne Normalpfad-Free deckt der Handler nur den Ausnahmefall ab - ' +
       'der Erfolgspfad leckt weiter');
   finally F.Free; end;
@@ -4387,12 +4398,13 @@ begin
 end;
 
 procedure TTestMemoryLeakSearchFree.Leak_InheritedIndexAssign_NotProven_Pipeline;
-// T1: der inherited-Statement-Zweig des Parsers verliert die
-// RHS der Zuweisung - 'inherited Objects[Index] := V' liess V
-// als proven durchgehen (JclStringLists, beide Setter; per
-// EXE-Mikroprobe belegt: dieselbe Zuweisung OHNE inherited
-// ergibt never-freed). Die P6-RHS-Regel sieht V rechts des
-// ':='. Ohne den Fix ROT.
+// T1, in Z2 auf die neue Politik gedreht (Bau-Befund): die
+// inherited-Index-Zuweisung disqualifizierte in T1 das proven
+// (P6-RHS-Regel); seit Z2 ist dieselbe Ablage ein ESCAPE und
+// unterdrueckt den Fund KOMPLETT - der Jcl-Fall war laut
+// Y-Zweitpruefer auch als Warning noch ein Fehlalarm (die
+// Liste besitzt via CanFreeObjects). lsError=0 pinnt weiter
+// die T1-Aussage, die Gesamt-0 die Z2-Aussage.
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.B3;'#13#10+
@@ -4408,8 +4420,9 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'V wird an die geerbte Property uebergeben - kein proven');
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'der Fund bleibt als never-freed/Warning');
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'seit Z2 unterdrueckt die Index-Ablage den Fund ' +
+      'ganz (IndexPropertyEscape)');
   finally F.Free; end;
 end;
 
@@ -4626,7 +4639,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'das continue umgeht das Free - der FOF-Befund ' +
       'muss stehen bleiben');
   finally F.Free; end;
@@ -4721,7 +4734,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'Verarbeite(FHost) kann werfen - das Schild traegt nicht');
   finally F.Free; end;
 end;
@@ -4762,6 +4775,80 @@ begin
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'FreeAndNil hinter dem Schild ist dasselbe Free ' +
       'wie o.Free - das Schild traegt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_IndexPropertyStore_NoFinding_Pipeline;
+// Z2 (Nicos Entscheid 25.09.): die Ablage ueber eine Index-
+// Property ist dieselbe Escape-Gelegenheit wie die Add-Senken
+// - die Referenz entkommt, never-freed ist keine belastbare
+// Aussage mehr. Vollzaehlung rw131: 14 Funde dieser Gattung,
+// alles Container-Caches (fviewer-Thumbnails, SynGen-Attribute
+// usw.). Ohne Z2 ROT.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var v: TStringList;'#13#10+
+  'begin'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  FListe.Objects[3] := v;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'die Referenz entkommt in den Container - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_InheritedIndexStore_NoFinding_Pipeline;
+// Z2, inherited-Form (JclStringLists 973/1015): der AST
+// verliert die RHS dieser Zuweisung (T-Charge-Befund), das
+// Gate arbeitet deshalb auf den gestrippten Quellzeilen.
+// Der Y-Zweitpruefer belegte: die Liste besitzt die Wrapper
+// (CanFreeObjects/FreeObjects). Ohne Z2 ROT.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.PutObj(Index: Integer);'#13#10+
+  'var v: TStringList;'#13#10+
+  'begin'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  inherited Objects[Index] := v;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'auch die inherited-Index-Ablage ist ein Escape');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_IndexStoreOtherVar_StillReported_Pipeline;
+// GEGENPROBE: in den Container wandert eine ANDERE Variable -
+// v bleibt never-freed und muss gemeldet werden (Warning).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var v, w: TStringList;'#13#10+
+  'begin'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  w := TStringList.Create;'#13#10+
+  '  FListe.Objects[3] := w;'#13#10+
+  '  v.Add(chr(97));'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'nur w entkommt - v bleibt ein Fund');
+    Assert.Contains(ErsterLeak(F).MissingVar, 'v',
+      'und zwar v');
   finally F.Free; end;
 end;
 
@@ -4852,7 +4939,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'Abort raist EAbort weiter - das Schild darf nicht ' +
       'greifen');
   finally F.Free; end;
@@ -4888,7 +4975,7 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'dazwischenliegender Code kann werfen - das Schild ' +
       'traegt nicht');
   finally F.Free; end;
@@ -5053,9 +5140,10 @@ begin
 end;
 
 procedure TTestMemoryLeakSearchFree.Leak_FofVariant_SurvivesErrorSeverity;
-// S4-Kern: freed-outside-finally traegt jetzt lsError - die ALTE
-// Ableitung (lsError => never-freed) wuerde die Variante
-// verfaelschen. Das explizite Feld muss sie tragen.
+// S4-Kern, in Z1 auf das neue Warning-Tier gedreht: die
+// Variante kommt aus dem expliziten FELD und muss die Schwere
+// UEBERLEBEN - egal ob Error (S4) oder Warning (Z1). Die alte
+// Ableitung ueber die Schwere wuerde hier never-freed lesen.
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.Bar;'#13#10+
@@ -5076,8 +5164,8 @@ var
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
-      'FOF ist Error-Tier (S4)');
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'FOF ist seit Z1 Warning-Tier');
     L := ErsterLeak(F);
     Assert.AreEqual('freed-outside-finally',
       L.MemoryLeakVariant,
@@ -6648,9 +6736,12 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'list.Free ausserhalb finally -> Error (S4)');
-    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+    // Z1-Nachzieher (Bau-Befund): die Gegenprobe prueft das
+    // JEWEILS ANDERE Level - seit FOF wieder Warning ist,
+    // heisst sie: NICHTS ist Error.
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'other korrekt im finally -> kein Warning');
   finally F.Free; end;
 end;

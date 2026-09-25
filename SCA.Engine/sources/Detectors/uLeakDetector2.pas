@@ -5348,9 +5348,12 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
   // senkt die Konfidenz je Form - fcHigh laesst die Evidenz-
   // Politik lsError passieren (Tier-Vertrag: fcHigh -> Error,
   // fcMedium -> hoechstens Warning). Die Severity-Entscheide
-  // stammen aus dem Messplan-Audit und Nicos Zuschnitt vom
-  // 23.09.: proven-leak + freed-outside-finally -> Error,
-  // return-value -> Hint bis zur Neubewertung.
+  // stammen aus dem Messplan-Audit und Nicos Zuschnitten vom
+  // 23./25.09.: NUR proven-leak -> Error (FP-Messung rw131:
+  // 0/17 in der Vollpruefung), freed-outside-finally seit Z1
+  // wieder Warning (40 % FP in ZWEI unabhaengigen Stichproben
+  // - die 12,7 % der Messplan-Simulation hielten der
+  // Realmessung nicht stand), return-value -> Hint.
   procedure AddFinding(const MissingVar: string; Sev: TLeakSeverity;
     VLine: Integer; const AVariant: string;
     AConf: TFindingConfidence);
@@ -5409,6 +5412,65 @@ var
     EnsureStripped;
     Result := ExceptShieldedFree(AMethod, AVarLow, AZeile,
                                  StrippedLines);
+  end;
+
+  function IndexAblageImQuelltext(AMethod: TAstNode;
+    const AVarLow: string): Boolean;
+  // Z2 (Nicos Entscheid 25.09., FP-Messung rw131): die
+  // Ablage ueber eine INDEX-Property - 'Liste.Objects[i] := v',
+  // 'Items[Hash] := v', 'Dict[Key] := v', auch die inherited-Form
+  // der JclStringLists - ist dieselbe Escape-Gelegenheit wie
+  // die Add-Senken, die LastUseIsOwnershipTransfer laengst
+  // unterdrueckt: die Referenz entkommt der Methode, und ob
+  // der Container besitzt, ist statisch nicht entscheidbar
+  // (TStrings.Objects besitzt opt-in, TJclStringList via
+  // CanFreeObjects - Pruefer-Beleg der Y-Messung). QUELLTEXT-
+  // basiert wie P6, weil der AST genau diese Zuweisungen
+  // verlieren kann (T-Charge: inherited-RHS, Index-LHS).
+  // Muster je Methodenzeile: LHS endet auf ']', dann ':=',
+  // RHS ist EXAKT die Variable. Vollzaehlung: rw 14 /
+  // laz 4 / laz-fpc 5 Funde, alle der Gattung nach
+  // Container-Caches. Ohne Quelltext (Raw-Harness) greift
+  // das Gate nicht - dieselbe Konvention wie P6/G3.
+    function LetzteZeile(N: TAstNode): Integer;
+    // wie ExceptShieldedFree.MaxDescLine - dessen nested
+    // Fassung ist hier nicht im Scope.
+    var
+      C : TAstNode;
+      K : Integer;
+    begin
+      Result := N.Line;
+      for C in N.Children do
+      begin
+        K := LetzteZeile(C);
+        if K > Result then Result := K;
+      end;
+    end;
+  var
+    Von, Bis, Z, PosDp, k : Integer;
+    Zeile, RHS, LHS : string;
+  begin
+    Result := False;
+    EnsureStripped;
+    if Length(StrippedLines) = 0 then Exit;
+    Von := AMethod.Line;
+    if Von < 1 then Von := 1;
+    Bis := LetzteZeile(AMethod) + 2;
+    if Bis > Length(StrippedLines) then
+      Bis := Length(StrippedLines);
+    for Z := Von to Bis do
+    begin
+      Zeile := StrippedLines[Z - 1].ToLower;
+      PosDp := Pos(':=', Zeile);
+      if PosDp <= 0 then Continue;
+      RHS := Trim(Copy(Zeile, PosDp + 2, MaxInt));
+      if RHS.EndsWith(';') then
+        RHS := Trim(Copy(RHS, 1, Length(RHS) - 1));
+      if RHS <> AVarLow then Continue;
+      LHS := Trim(Copy(Zeile, 1, PosDp - 1));
+      k := Length(LHS);
+      if (k > 0) and (LHS[k] = ']') then Exit(True);
+    end;
   end;
 
 begin
@@ -5496,6 +5558,10 @@ begin
           // fremden Konstruktor. Bewusst ERST hier (nicht bei den uebrigen
           // Gates): der Subtree-Walk laeuft dann nur fuer Variablen, die
           // tatsaechlich gemeldet wuerden - Hot-Path-Schutz.
+          // Z2: Index-Property-Ablage = Escape (s. Helfer).
+          if Gate('SCA001.IndexPropertyEscape',
+                  IndexAblageImQuelltext(MethodNode, VarNameLow)) then
+            Continue;
           if Gate('SCA001.NoOwnershipTransfer', not LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then
           begin
             // S4: besteht der Fund auch die PROVEN-Kriterien
@@ -5582,15 +5648,20 @@ begin
                   not FreeInFinallyRegionBySource(MethodNode, StrippedLines,
                                                   VarNameLow)
                   and not LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then
-            // S4/Nicos Entscheid: die Aussage "Free steht neben
-            // dem finally" ist syntaktisch beweisbar und nach dem
-            // Messplan (71/71 vollgezaehlt, 12,7 % FP; nach G3
-            // niedriger) Error-Tier-tauglich. fcHigh, damit die
-            // Politik den lsError nicht deckelt; die Variante
-            // kommt aus dem FELD - die alte Dekodierung ueber die
-            // Schwere wuerde hier never-freed lesen.
-            AddFinding(V.Name, lsError, ReportLine,
-                       'freed-outside-finally', fcHigh);
+            // Z1/Nicos Entscheid 25.09.: ZURUECK auf Warning.
+            // Der S4-Entscheid (Error) beruhte auf den 12,7 %
+            // FP der Messplan-Simulation; die Realmessungen
+            // (rw127: 8/20, rw131: 8/20 - zwei unabhaengige
+            // Stichproben) zeigen stabil 40 % FP, getragen
+            // von gate-resistenten Klassen (SynHighlighter-
+            // Duplikatfamilie, nichts-wirft-dazwischen,
+            // Feld-Besitzuebergang). Das Error-Tier ist damit
+            // wieder die reine proven-Menge (0/17 FP). Die
+            // Variante bleibt im FELD - Hint-Kette und
+            // SARIF-variant sind schwereunabhaengig.
+            AddFinding(V.Name, lsWarning, ReportLine,
+                       'freed-outside-finally',
+                       KindDefaultConfidence(fkMemoryLeak));
         end;
 
         Continue;
