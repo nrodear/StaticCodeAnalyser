@@ -71,11 +71,14 @@ type
     // 'class var'. False die gewoehnliche Instanz-Methode.
     // Wie FindMethod, aber ALLE Treffer (ueberladene Konstruktoren!).
     // Der Aufrufer besitzt die Liste.
-    // AA (Bau-Befund 2026-09-25): nested nkClass-Knoten heissen KURZ
+    // AA/AB2 (Review-MAJOR Perf): nested nkClass-Knoten heissen KURZ
     // und liegen als GESCHWISTER der Aussenklasse - die eindeutige
-    // Qualifikation kommt aus den METHODENNAMEN (s. Implementierung).
-    class function QualifiedClassName(UnitNode: TAstNode;
-      const ClassName: string): string; static;
+    // Qualifikation kommt aus den METHODENNAMEN. EIN Durchlauf je
+    // Unit (die per-Klasse-Suche war O(Klassen x Methoden) mit
+    // Split-Allokation je Paar; s. Implementierung fuer die
+    // Zuordnungs- und Kollisionsregeln).
+    class function BuildNestedQualMap(UnitNode: TAstNode;
+      Classes: TList<TAstNode>): TDictionary<string, string>; static;
     class function FindMethods(UnitNode: TAstNode; const Kind: string;
       const ClassName: string; AScope: TMethodScope = msInstance)
       : TList<TAstNode>; static;
@@ -152,48 +155,63 @@ begin
   end;
 end;
 
-class function TFieldLeakDetector.QualifiedClassName(UnitNode: TAstNode;
-  const ClassName: string): string;
-// AA: nested nkClass-Knoten heissen KURZ ('TInner') und liegen als
-// GESCHWISTER der Aussenklasse (ParseNestedTypeDecl haengt sie via
-// ASiblingTarget an - Bau-Befund des ersten AA-Anlaufs: die
-// Subtree-Suche fand deshalb nie eine Aussenklasse). Die
-// IMPLEMENTIERUNGEN tragen die Wahrheit: 'TAussen.TInner.Create'.
-// Liefert die eindeutige Qualifikation aus den Methodennamen,
-// sonst den Kurznamen: (a) existiert eine 2-Segment-Methode
-// 'K.M', ist K eine normale Aussenklasse; (b) mehrere
-// VERSCHIEDENE Praefixe (gleichnamige nested in zwei Klassen)
-// sind nicht zuordenbar - dann Kurzname wie vor AA (kein Fund
-// statt eines falsch zugeordneten).
+class function TFieldLeakDetector.BuildNestedQualMap(UnitNode: TAstNode;
+  Classes: TList<TAstNode>): TDictionary<string, string>;
+// AB2 (Review-MAJORs Perf + Kollision): EIN Durchlauf ueber die
+// gecachte Methodenliste statt einer Suche je Klasse. Der Map-
+// Wert ist die Qualifikation oder '' fuer NICHT qualifizieren.
+// Regeln:
+//  * 2-Segment-Methode 'K.M': K ist eine normale Aussenklasse
+//    -> '' (auch wenn zusaetzlich nested-Formen existieren -
+//    dann ist die Zuordnung ohnehin mehrdeutig)
+//  * >=3 Segmente: vorletztes Segment -> Praefix-Kandidat;
+//    zwei VERSCHIEDENE Praefixe -> '' (mehrdeutig)
+//  * Kurzname MEHRFACH unter den nkClass-Knoten (Top-Level +
+//    gleichnamige nested, oder zwei nested in verschiedenen
+//    Klassen) -> '': die Knoten-genaue Zuordnung ist ueber
+//    Namen nicht moeglich (Review-Verdachte Kreuz-Zuordnung) -
+//    dann lieber KEIN Fund als ein falsch zugeordneter.
 var
   Methods : TList<TAstNode>;
-  M : TAstNode;
+  M, C : TAstNode;
   Segs : TArray<string>;
-  Kand, P : string;
+  KLow, P, Alt : string;
   i : Integer;
 begin
-  Result := ClassName;
-  Kand := '';
+  Result := TDictionary<string, string>.Create;
+  // Kurzname-Mehrfachdeklarationen sperren
+  for C in Classes do
+  begin
+    if C.Name = '' then Continue;
+    KLow := C.Name.ToLower;
+    if Result.ContainsKey(KLow) then
+      Result[KLow] := ''
+    else
+      Result.Add(KLow, '?');   // ? = noch offen
+  end;
   Methods := UnitNode.FindAllRef(nkMethod);   // Cache: nie freigeben
   for M in Methods do
   begin
     Segs := M.Name.Split(['.']);
     if Length(Segs) = 2 then
     begin
-      if SameText(Segs[0], ClassName) then Exit;
+      KLow := Segs[0].ToLower;
+      if Result.ContainsKey(KLow) then
+        Result[KLow] := '';
       Continue;
     end;
     if Length(Segs) < 3 then Continue;
-    if not SameText(Segs[High(Segs) - 1], ClassName) then Continue;
+    KLow := Segs[High(Segs) - 1].ToLower;
+    if not Result.TryGetValue(KLow, Alt) then Continue;
+    if Alt = '' then Continue;
     P := Segs[0];
     for i := 1 to High(Segs) - 1 do
       P := P + '.' + Segs[i];
-    if Kand = '' then
-      Kand := P
-    else if not SameText(Kand, P) then
-      Exit;
+    if Alt = '?' then
+      Result[KLow] := P
+    else if not SameText(Alt, P) then
+      Result[KLow] := '';
   end;
-  if Kand <> '' then Result := Kand;
 end;
 
 class function TFieldLeakDetector.FindMethods(UnitNode: TAstNode;
@@ -1088,6 +1106,7 @@ var
   Cleanup      : TAstNode;
   EventCleanup : TAstNode;
   QualName     : string;
+  QualMap      : TDictionary<string, string>;
   ClassDtor    : TAstNode;
   DisposeCleanup : TAstNode;
   FieldNameLow : string;
@@ -1114,6 +1133,7 @@ begin
        CtxScanRoot(AContext), tplFixtureDir) then Exit;
 
   Classes := UnitNode.FindAll(nkClass);
+  QualMap := BuildNestedQualMap(UnitNode, Classes);
   try
     for ClassNode in Classes do
     begin
@@ -1128,7 +1148,9 @@ begin
       // Y1-Punktregel der Finder unveraendert; fuer normale
       // Klassen ist QualName = Name, Bestandsfunde bleiben
       // byte-gleich.
-      QualName := QualifiedClassName(UnitNode, ClassNode.Name);
+      if not QualMap.TryGetValue(ClassNode.Name.ToLower, QualName)
+         or (QualName = '') or (QualName = '?') then
+        QualName := ClassNode.Name;
 
       // ALLE Konstruktoren der Klasse suchen (Voll-Review 2026-09-12,
       // Major 64): vorher lief die ganze Pruefung nur auf dem ERSTEN
@@ -1307,6 +1329,7 @@ begin
       end;
     end;
   finally
+    QualMap.Free;
     Classes.Free;
   end;
 end;
