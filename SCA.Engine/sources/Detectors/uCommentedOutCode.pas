@@ -952,6 +952,10 @@ var
     // zerriss am Korpus 499 rw- und 235 laz-Bloecke ECHTER
     // auskommentierter Regionen (CEF-Beispiele, projectintf).
     // Der seltene Fehlbrueck bleibt der billigere Fehler.
+    // Was BLEIBT (W1-Original, im AB3-Revert versehentlich
+    // mit entfernt - Bau-Befund): eine ZEILENFUEHRENDE
+    // Direktive ist eindeutig aktiver Code und bricht.
+    if R.StartsWith('{$') or R.StartsWith('(*$') then Exit;
     Result := Trim(Stripped[AIdx]) = '';
   end;
 
