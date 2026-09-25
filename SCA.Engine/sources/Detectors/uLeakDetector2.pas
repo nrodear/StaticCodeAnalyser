@@ -5348,9 +5348,12 @@ class procedure TLeakDetector2.AnalyzeMethod(UnitNode, MethodNode: TAstNode;
   // senkt die Konfidenz je Form - fcHigh laesst die Evidenz-
   // Politik lsError passieren (Tier-Vertrag: fcHigh -> Error,
   // fcMedium -> hoechstens Warning). Die Severity-Entscheide
-  // stammen aus dem Messplan-Audit und Nicos Zuschnitt vom
-  // 23.09.: proven-leak + freed-outside-finally -> Error,
-  // return-value -> Hint bis zur Neubewertung.
+  // stammen aus dem Messplan-Audit und Nicos Zuschnitten vom
+  // 23./25.09.: NUR proven-leak -> Error (FP-Messung rw131:
+  // 0/17 in der Vollpruefung), freed-outside-finally seit Z1
+  // wieder Warning (40 % FP in ZWEI unabhaengigen Stichproben
+  // - die 12,7 % der Messplan-Simulation hielten der
+  // Realmessung nicht stand), return-value -> Hint.
   procedure AddFinding(const MissingVar: string; Sev: TLeakSeverity;
     VLine: Integer; const AVariant: string;
     AConf: TFindingConfidence);
@@ -5582,15 +5585,20 @@ begin
                   not FreeInFinallyRegionBySource(MethodNode, StrippedLines,
                                                   VarNameLow)
                   and not LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then
-            // S4/Nicos Entscheid: die Aussage "Free steht neben
-            // dem finally" ist syntaktisch beweisbar und nach dem
-            // Messplan (71/71 vollgezaehlt, 12,7 % FP; nach G3
-            // niedriger) Error-Tier-tauglich. fcHigh, damit die
-            // Politik den lsError nicht deckelt; die Variante
-            // kommt aus dem FELD - die alte Dekodierung ueber die
-            // Schwere wuerde hier never-freed lesen.
-            AddFinding(V.Name, lsError, ReportLine,
-                       'freed-outside-finally', fcHigh);
+            // Z1/Nicos Entscheid 25.09.: ZURUECK auf Warning.
+            // Der S4-Entscheid (Error) beruhte auf den 12,7 %
+            // FP der Messplan-Simulation; die Realmessungen
+            // (rw127: 8/20, rw131: 8/20 - zwei unabhaengige
+            // Stichproben) zeigen stabil 40 % FP, getragen
+            // von gate-resistenten Klassen (SynHighlighter-
+            // Duplikatfamilie, nichts-wirft-dazwischen,
+            // Feld-Besitzuebergang). Das Error-Tier ist damit
+            // wieder die reine proven-Menge (0/17 FP). Die
+            // Variante bleibt im FELD - Hint-Kette und
+            // SARIF-variant sind schwereunabhaengig.
+            AddFinding(V.Name, lsWarning, ReportLine,
+                       'freed-outside-finally',
+                       KindDefaultConfidence(fkMemoryLeak));
         end;
 
         Continue;

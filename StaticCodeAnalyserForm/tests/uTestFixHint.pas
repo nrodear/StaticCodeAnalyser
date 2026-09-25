@@ -388,7 +388,9 @@ var
   F : TLeakFinding;
   H : TFixHint;
 begin
-  F := MakeLeak('liste', lsError);
+  // Z1: Produktions-Shape seit dem 25.09. wieder lsWarning -
+  // der Hint haengt am Varianten-FELD, nicht an der Schwere.
+  F := MakeLeak('liste', lsWarning);
   try
     F.LeakVariant := 'freed-outside-finally';
     H := TFixHintResolver.FixHint(F);
