@@ -551,6 +551,11 @@ type
     // type + Free-Kette hinter Self-qualifiziertem Helferruf.
     [Test] procedure Field_NestedTypeFreeChain_NoFinding;
     [Test] procedure Field_NestedTypeMissingOneFree_ReportsThatField;
+    // Y1 (ZUGFeRD-Nutzerbefund, 2. Runde 2026-09-25): nested
+    // class MIT eigenem Ctor/Dtor - der Finder griff den
+    // falschen Destructor.
+    [Test] procedure Field_NestedClassDtorFirst_NoFinding;
+    [Test] procedure Field_NestedClassDtorFirst_RealLeakStillReported;
   end;
 
   // Owner-/Uebergabe-Gates: der Fund entfaellt, wenn ein ANDERER die
@@ -6924,6 +6929,124 @@ begin
     Assert.Contains(ErsterLeak(F).MissingVar, 'FStoreQuery',
       'und zwar fuer FStoreQuery, nicht fuer das ' +
       'korrekt freigegebene Schwesterfeld');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_NestedClassDtorFirst_NoFinding;
+// Y1 (ZUGFeRD-Nutzerbefund, 2. Runde): die nested class hat
+// einen EIGENEN Ctor/Dtor, deren Implementierungen
+// ('TAussen.TInner.Destroy') in Dateireihenfolge VOR den
+// aeusseren stehen. FindMethods matchte per
+// StartsWith(Klasse+'.') und griff den NESTED Destructor -
+// SearchFree sah nur FErrorList.Free, und ALLE Query-Felder
+// galten als Leck. An der Vor-Fix-EXE belegt (uProbeY1: beide
+// Felder gemeldet). Ohne Y1 ROT.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TAussen = class'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      TInner = class'#13#10+
+  '      private'#13#10+
+  '        FErrorList: TStringList;'#13#10+
+  '      public'#13#10+
+  '        constructor Create;'#13#10+
+  '        destructor Destroy; override;'#13#10+
+  '      end;'#13#10+
+  '  private'#13#10+
+  '    FQueryA: TSQLQuery;'#13#10+
+  '    FQueryB: TSQLQuery;'#13#10+
+  '  public'#13#10+
+  '    constructor Create;'#13#10+
+  '    destructor Destroy; override;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TAussen.TInner.Create;'#13#10+
+  'begin'#13#10+
+  '  FErrorList := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'destructor TAussen.TInner.Destroy;'#13#10+
+  'begin'#13#10+
+  '  FErrorList.Free;'#13#10+
+  '  inherited Destroy;'#13#10+
+  'end;'#13#10+
+  'constructor TAussen.Create;'#13#10+
+  'begin'#13#10+
+  '  FQueryA := TSQLQuery.Create(nil);'#13#10+
+  '  FQueryB := TSQLQuery.Create(nil);'#13#10+
+  'end;'#13#10+
+  'destructor TAussen.Destroy;'#13#10+
+  'begin'#13#10+
+  '  FQueryA.Free;'#13#10+
+  '  FQueryB.Free;'#13#10+
+  '  inherited Destroy;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'der AEUSSERE Destroy gibt beide Felder frei - ' +
+      'jeder Fund hiesse: falscher Dtor gegriffen');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_NestedClassDtorFirst_RealLeakStillReported;
+// GEGENPROBE (Vakuum-Schutz): dieselbe Struktur, aber der
+// aeussere Destroy vergisst FQueryB - genau DAS Feld muss
+// kommen. Beweist zugleich, dass nach Y1 der RICHTIGE
+// Destructor gescannt wird.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TAussen = class'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      TInner = class'#13#10+
+  '      private'#13#10+
+  '        FErrorList: TStringList;'#13#10+
+  '      public'#13#10+
+  '        constructor Create;'#13#10+
+  '        destructor Destroy; override;'#13#10+
+  '      end;'#13#10+
+  '  private'#13#10+
+  '    FQueryA: TSQLQuery;'#13#10+
+  '    FQueryB: TSQLQuery;'#13#10+
+  '  public'#13#10+
+  '    constructor Create;'#13#10+
+  '    destructor Destroy; override;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TAussen.TInner.Create;'#13#10+
+  'begin'#13#10+
+  '  FErrorList := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'destructor TAussen.TInner.Destroy;'#13#10+
+  'begin'#13#10+
+  '  FErrorList.Free;'#13#10+
+  '  inherited Destroy;'#13#10+
+  'end;'#13#10+
+  'constructor TAussen.Create;'#13#10+
+  'begin'#13#10+
+  '  FQueryA := TSQLQuery.Create(nil);'#13#10+
+  '  FQueryB := TSQLQuery.Create(nil);'#13#10+
+  'end;'#13#10+
+  'destructor TAussen.Destroy;'#13#10+
+  'begin'#13#10+
+  '  FQueryA.Free;'#13#10+
+  '  inherited Destroy;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'das vergessene Feld muss gemeldet werden');
+    Assert.Contains(ErsterLeak(F).MissingVar, 'FQueryB',
+      'und zwar FQueryB - nicht das freigegebene FQueryA');
   finally F.Free; end;
 end;
 
