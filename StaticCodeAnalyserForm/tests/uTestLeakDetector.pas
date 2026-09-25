@@ -1055,11 +1055,15 @@ var F: TObjectList<TLeakFinding>;
 begin
   F := TFindingHelper.FindingsOf(SRC);
   try
-    // S4 (2026-09-23): freed-outside-finally ist Error-Tier - die
-    // Aussage ist syntaktisch beweisbar (Vollzaehlung 12,7 % FP).
+    // S4 hob FOF auf Error (Simulation 12,7 % FP); Z1 (25.09.)
+    // drehte zurueck auf Warning - die Realmessung zeigte stabil
+    // 40 % FP in zwei unabhaengigen Stichproben.
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'list.Free außerhalb finally – Error (Tier-Umbau)');
-    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'list.Free außerhalb finally – Warning (seit Z1)');
+    // Z1-Nachzieher (Bau-Befund): die Gegenprobe prueft das
+    // JEWEILS ANDERE Level - seit FOF wieder Warning ist,
+    // heisst sie: NICHTS ist Error.
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'other korrekt freigegeben – kein Warning');
   finally F.Free; end;
 end;
@@ -3171,7 +3175,10 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'list.Free nach try/finally – Error (S4)');
-    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+    // Z1-Nachzieher (Bau-Befund): die Gegenprobe prueft das
+    // JEWEILS ANDERE Level - seit FOF wieder Warning ist,
+    // heisst sie: NICHTS ist Error.
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'other korrekt freigegeben – kein Warning');
   finally F.Free; end;
 end;
@@ -4391,12 +4398,13 @@ begin
 end;
 
 procedure TTestMemoryLeakSearchFree.Leak_InheritedIndexAssign_NotProven_Pipeline;
-// T1: der inherited-Statement-Zweig des Parsers verliert die
-// RHS der Zuweisung - 'inherited Objects[Index] := V' liess V
-// als proven durchgehen (JclStringLists, beide Setter; per
-// EXE-Mikroprobe belegt: dieselbe Zuweisung OHNE inherited
-// ergibt never-freed). Die P6-RHS-Regel sieht V rechts des
-// ':='. Ohne den Fix ROT.
+// T1, in Z2 auf die neue Politik gedreht (Bau-Befund): die
+// inherited-Index-Zuweisung disqualifizierte in T1 das proven
+// (P6-RHS-Regel); seit Z2 ist dieselbe Ablage ein ESCAPE und
+// unterdrueckt den Fund KOMPLETT - der Jcl-Fall war laut
+// Y-Zweitpruefer auch als Warning noch ein Fehlalarm (die
+// Liste besitzt via CanFreeObjects). lsError=0 pinnt weiter
+// die T1-Aussage, die Gesamt-0 die Z2-Aussage.
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.B3;'#13#10+
@@ -4412,8 +4420,9 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'V wird an die geerbte Property uebergeben - kein proven');
-    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'der Fund bleibt als never-freed/Warning');
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'seit Z2 unterdrueckt die Index-Ablage den Fund ' +
+      'ganz (IndexPropertyEscape)');
   finally F.Free; end;
 end;
 
@@ -6729,7 +6738,10 @@ begin
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'list.Free ausserhalb finally -> Error (S4)');
-    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+    // Z1-Nachzieher (Bau-Befund): die Gegenprobe prueft das
+    // JEWEILS ANDERE Level - seit FOF wieder Warning ist,
+    // heisst sie: NICHTS ist Error.
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
       'other korrekt im finally -> kein Warning');
   finally F.Free; end;
 end;
