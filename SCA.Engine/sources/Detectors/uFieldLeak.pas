@@ -1038,6 +1038,8 @@ var
   // ueberlebender Funde (= Identitaetswechsel im SARIF-Diff).
   Cleanup      : TAstNode;
   EventCleanup : TAstNode;
+  QualName     : string;
+  Aeussere     : TAstNode;
   ClassDtor    : TAstNode;
   DisposeCleanup : TAstNode;
   FieldNameLow : string;
@@ -1069,32 +1071,54 @@ begin
     begin
       if ClassNode.Name = '' then Continue;
 
+      // AA (Nested-Recall, 2026-09-25): der QUALIFIZIERTE
+      // Klassenname. Die Implementierungen einer
+      // GESCHACHTELTEN Klasse heissen 'TAussen.TInner.Create' -
+      // mit dem kurzen Namen fand die Suche sie nie (Y1
+      // schloss nur die Praefix-Kollision der AUSSENKLASSE
+      // aus, der Recall-Teil fehlte): die Felder nested
+      // Klassen wurden NIE geprueft. Die aeussere Klasse ist
+      // der nkClass-Knoten, dessen Subtree diesen ClassNode
+      // enthaelt; eine Ebene genuegt (tiefere Schachtelung
+      // mit eigenen Ctor-Feldern ist im Korpus nicht belegt,
+      // Vollzaehlung 2026-09-25: 9 Kandidaten, alle
+      // einstufig). Mit dem Qualnamen greifen Praefix-Match
+      // und Y1-Punktregel der Finder unveraendert.
+      QualName := ClassNode.Name;
+      for Aeussere in Classes do
+        if (Aeussere <> ClassNode) and
+           Aeussere.FindAllRef(nkClass).Contains(ClassNode) then
+        begin
+          QualName := Aeussere.Name + '.' + ClassNode.Name;
+          Break;
+        end;
+
       // ALLE Konstruktoren der Klasse suchen (Voll-Review 2026-09-12,
       // Major 64): vorher lief die ganze Pruefung nur auf dem ERSTEN
       // Ctor in Dateireihenfolge - ein Leak im ueberladenen zweiten
       // Konstruktor war unsichtbar.
-      Ctors := FindMethods(UnitNode, 'constructor', ClassNode.Name);
+      Ctors := FindMethods(UnitNode, 'constructor', QualName);
       if Ctors.Count = 0 then
       begin
         Ctors.Free;
         Continue; // ohne Konstruktor nichts zu pruefen
       end;
 
-      Dtor := FindMethod(UnitNode, 'destructor', ClassNode.Name);
+      Dtor := FindMethod(UnitNode, 'destructor', QualName);
       // BeforeDestruction laeuft garantiert VOR Destroy (TObject.Free ->
       // BeforeDestruction -> Destroy). jvcl JvInspector/JvInspExtraEditors
       // raeumen ihre Felder ausschliesslich dort auf.
-      Cleanup := FindMethodNamed(UnitNode, ClassNode.Name, 'beforedestruction');
+      Cleanup := FindMethodNamed(UnitNode, QualName, 'beforedestruction');
       // KLASSE L (30.08.): OnDestroy-Event als Freigabeort. Wie
       // BeforeDestruction eine reine Erweiterung des SUCHRAUMS - sie
       // kann einen Fund nur unterdruecken, nie einen erzeugen.
-      EventCleanup := FindDestroyEventHandler(UnitNode, ClassNode.Name);
+      EventCleanup := FindDestroyEventHandler(UnitNode, QualName);
       // Dritter Ort: der class destructor (fuer 'class var'-Felder).
-      ClassDtor := FindMethod(UnitNode, 'destructor', ClassNode.Name,
+      ClassDtor := FindMethod(UnitNode, 'destructor', QualName,
                                msClassMethod);
       // Fuenfter Ort: die Dispose-Methode des .NET-Musters.
       DisposeCleanup := FindDisposeMethod(UnitNode, ClassNode,
-                                          ClassNode.Name);
+                                          QualName);
 
       Fields := ClassNode.FindAll(nkField);
       try
@@ -1173,10 +1197,10 @@ begin
           // Destroy gerufenen Helper-Methode DERSELBEN Klasse (FreeBlockList).
           if not FreeFound then
             FreeFound := IsFreedViaOwnHelper(UnitNode, Dtor,
-                           ClassNode.Name.ToLower, FieldNameLow);
+                           QualName.ToLower, FieldNameLow);
           if not FreeFound then
             FreeFound := IsFreedViaOwnHelper(UnitNode, Cleanup,
-                           ClassNode.Name.ToLower, FieldNameLow);
+                           QualName.ToLower, FieldNameLow);
 
           // FP-Gate (2026-07-31, FP-Klasse 3a): Owner ist ein Schwester-FELD,
           // das im Destroy freigegeben wird (FEndTimer mit Owner FPanel) - der
@@ -1226,7 +1250,7 @@ begin
           begin
             F            := TLeakFinding.Create;
             F.FileName   := FileName;
-            F.MethodName := ClassNode.Name + '.Destroy';
+            F.MethodName := QualName + '.Destroy';
             F.LineNumber := IntToStr(Field.Line);
             if Dtor = nil then
               F.MissingVar := Format(
@@ -1235,7 +1259,7 @@ begin
             else
               F.MissingVar := Format(
                 '%s: created in %s.Create but not freed in Destroy',
-                [Field.Name, ClassNode.Name]);
+                [Field.Name, QualName]);
             F.SetKind(fkMemoryLeak);
             Results.Add(F);
           end;

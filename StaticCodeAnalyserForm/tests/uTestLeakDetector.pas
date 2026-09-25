@@ -560,6 +560,10 @@ type
     // falschen Destructor.
     [Test] procedure Field_NestedClassDtorFirst_NoFinding;
     [Test] procedure Field_NestedClassDtorFirst_RealLeakStillReported;
+    // AA (Nested-Recall 2026-09-25): nested Klassen finden
+    // jetzt ihre EIGENEN Methoden.
+    [Test] procedure Field_NestedClassOwnField_LeakReported;
+    [Test] procedure Field_NestedClassFreesOwnField_NoFinding;
   end;
 
   // Owner-/Uebergabe-Gates: der Fund entfaellt, wenn ein ANDERER die
@@ -7138,6 +7142,89 @@ begin
       'das vergessene Feld muss gemeldet werden');
     Assert.Contains(ErsterLeak(F).MissingVar, 'FQueryB',
       'und zwar FQueryB - nicht das freigegebene FQueryA');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_NestedClassOwnField_LeakReported;
+// AA: die Implementierung heisst TAussen.TInner.Create -
+// FindMethods suchte nur 'tinner.'-Praefixe, die Felder
+// nested Klassen wurden NIE geprueft (an der Vor-Fix-EXE
+// belegt: uProbeAA meldet NICHTS). Seit AA laeuft die Suche
+// ueber den qualifizierten Namen. Ohne AA ROT.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TAussen = class'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      TInner = class'#13#10+
+  '      private'#13#10+
+  '        FData: TStringList;'#13#10+
+  '      public'#13#10+
+  '        constructor Create;'#13#10+
+  '        destructor Destroy; override;'#13#10+
+  '      end;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TAussen.TInner.Create;'#13#10+
+  'begin'#13#10+
+  '  inherited Create;'#13#10+
+  '  FData := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'destructor TAussen.TInner.Destroy;'#13#10+
+  'begin'#13#10+
+  '  inherited Destroy;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'das Ctor-erzeugte Feld der nested Klasse ohne ' +
+      'Dtor-Free muss gemeldet werden');
+    Assert.Contains(ErsterLeak(F).MissingVar, 'FData',
+      'und zwar FData');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_NestedClassFreesOwnField_NoFinding;
+// GEGENPROBE: der nested-Dtor gibt frei - kein Fund. Deckt
+// zugleich die Y1/AA-Interaktion: derselbe Dtor, der fuer
+// die AUSSENKLASSE tabu ist (Y1), ist fuer die nested die
+// richtige Fundstelle.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TAussen = class'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      TInner = class'#13#10+
+  '      private'#13#10+
+  '        FData: TStringList;'#13#10+
+  '      public'#13#10+
+  '        constructor Create;'#13#10+
+  '        destructor Destroy; override;'#13#10+
+  '      end;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TAussen.TInner.Create;'#13#10+
+  'begin'#13#10+
+  '  inherited Create;'#13#10+
+  '  FData := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'destructor TAussen.TInner.Destroy;'#13#10+
+  'begin'#13#10+
+  '  FData.Free;'#13#10+
+  '  inherited Destroy;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'der nested-Dtor gibt FData frei');
   finally F.Free; end;
 end;
 
