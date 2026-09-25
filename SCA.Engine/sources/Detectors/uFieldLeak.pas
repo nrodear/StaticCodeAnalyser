@@ -71,6 +71,11 @@ type
     // 'class var'. False die gewoehnliche Instanz-Methode.
     // Wie FindMethod, aber ALLE Treffer (ueberladene Konstruktoren!).
     // Der Aufrufer besitzt die Liste.
+    // AA (Bau-Befund 2026-09-25): nested nkClass-Knoten heissen KURZ
+    // und liegen als GESCHWISTER der Aussenklasse - die eindeutige
+    // Qualifikation kommt aus den METHODENNAMEN (s. Implementierung).
+    class function QualifiedClassName(UnitNode: TAstNode;
+      const ClassName: string): string; static;
     class function FindMethods(UnitNode: TAstNode; const Kind: string;
       const ClassName: string; AScope: TMethodScope = msInstance)
       : TList<TAstNode>; static;
@@ -145,6 +150,50 @@ begin
   finally
     L.Free;
   end;
+end;
+
+class function TFieldLeakDetector.QualifiedClassName(UnitNode: TAstNode;
+  const ClassName: string): string;
+// AA: nested nkClass-Knoten heissen KURZ ('TInner') und liegen als
+// GESCHWISTER der Aussenklasse (ParseNestedTypeDecl haengt sie via
+// ASiblingTarget an - Bau-Befund des ersten AA-Anlaufs: die
+// Subtree-Suche fand deshalb nie eine Aussenklasse). Die
+// IMPLEMENTIERUNGEN tragen die Wahrheit: 'TAussen.TInner.Create'.
+// Liefert die eindeutige Qualifikation aus den Methodennamen,
+// sonst den Kurznamen: (a) existiert eine 2-Segment-Methode
+// 'K.M', ist K eine normale Aussenklasse; (b) mehrere
+// VERSCHIEDENE Praefixe (gleichnamige nested in zwei Klassen)
+// sind nicht zuordenbar - dann Kurzname wie vor AA (kein Fund
+// statt eines falsch zugeordneten).
+var
+  Methods : TList<TAstNode>;
+  M : TAstNode;
+  Segs : TArray<string>;
+  Kand, P : string;
+  i : Integer;
+begin
+  Result := ClassName;
+  Kand := '';
+  Methods := UnitNode.FindAllRef(nkMethod);   // Cache: nie freigeben
+  for M in Methods do
+  begin
+    Segs := M.Name.Split(['.']);
+    if Length(Segs) = 2 then
+    begin
+      if SameText(Segs[0], ClassName) then Exit;
+      Continue;
+    end;
+    if Length(Segs) < 3 then Continue;
+    if not SameText(Segs[High(Segs) - 1], ClassName) then Continue;
+    P := Segs[0];
+    for i := 1 to High(Segs) - 1 do
+      P := P + '.' + Segs[i];
+    if Kand = '' then
+      Kand := P
+    else if not SameText(Kand, P) then
+      Exit;
+  end;
+  if Kand <> '' then Result := Kand;
 end;
 
 class function TFieldLeakDetector.FindMethods(UnitNode: TAstNode;
@@ -1039,7 +1088,6 @@ var
   Cleanup      : TAstNode;
   EventCleanup : TAstNode;
   QualName     : string;
-  Aeussere     : TAstNode;
   ClassDtor    : TAstNode;
   DisposeCleanup : TAstNode;
   FieldNameLow : string;
@@ -1072,26 +1120,15 @@ begin
       if ClassNode.Name = '' then Continue;
 
       // AA (Nested-Recall, 2026-09-25): der QUALIFIZIERTE
-      // Klassenname. Die Implementierungen einer
-      // GESCHACHTELTEN Klasse heissen 'TAussen.TInner.Create' -
-      // mit dem kurzen Namen fand die Suche sie nie (Y1
-      // schloss nur die Praefix-Kollision der AUSSENKLASSE
-      // aus, der Recall-Teil fehlte): die Felder nested
-      // Klassen wurden NIE geprueft. Die aeussere Klasse ist
-      // der nkClass-Knoten, dessen Subtree diesen ClassNode
-      // enthaelt; eine Ebene genuegt (tiefere Schachtelung
-      // mit eigenen Ctor-Feldern ist im Korpus nicht belegt,
-      // Vollzaehlung 2026-09-25: 9 Kandidaten, alle
-      // einstufig). Mit dem Qualnamen greifen Praefix-Match
-      // und Y1-Punktregel der Finder unveraendert.
-      QualName := ClassNode.Name;
-      for Aeussere in Classes do
-        if (Aeussere <> ClassNode) and
-           Aeussere.FindAllRef(nkClass).Contains(ClassNode) then
-        begin
-          QualName := Aeussere.Name + '.' + ClassNode.Name;
-          Break;
-        end;
+      // Klassenname aus den METHODENNAMEN (s.
+      // QualifiedClassName) - mit dem kurzen Namen fand die
+      // Suche nested Implementierungen ('TAussen.TInner.Create')
+      // nie, die Felder geschachtelter Klassen wurden NIE
+      // geprueft. Mit dem Qualnamen greifen Praefix-Match und
+      // Y1-Punktregel der Finder unveraendert; fuer normale
+      // Klassen ist QualName = Name, Bestandsfunde bleiben
+      // byte-gleich.
+      QualName := QualifiedClassName(UnitNode, ClassNode.Name);
 
       // ALLE Konstruktoren der Klasse suchen (Voll-Review 2026-09-12,
       // Major 64): vorher lief die ganze Pruefung nur auf dem ERSTEN
