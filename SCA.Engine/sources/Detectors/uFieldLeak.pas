@@ -171,12 +171,13 @@ class function TFieldLeakDetector.BuildNestedQualMap(UnitNode: TAstNode;
 //    Klassen) -> '': die Knoten-genaue Zuordnung ist ueber
 //    Namen nicht moeglich (Review-Verdachte Kreuz-Zuordnung) -
 //    dann lieber KEIN Fund als ein falsch zugeordneter.
+const
+  MIN_NESTED_SEGS = 3;   // TAussen.TInner.Methode
 var
   Methods : TList<TAstNode>;
   M, C : TAstNode;
   Segs : TArray<string>;
   KLow, P, Alt : string;
-  i : Integer;
 begin
   Result := TDictionary<string, string>.Create;
   // Kurzname-Mehrfachdeklarationen sperren
@@ -193,20 +194,22 @@ begin
   for M in Methods do
   begin
     Segs := M.Name.Split(['.']);
-    if Length(Segs) = 2 then
+    // Selbstscan AB (SCA014): 2 Segmente = 'Klasse.Methode',
+    // ab MIN_NESTED_SEGS traegt das vorletzte Segment eine
+    // geschachtelte Klasse.
+    if Length(Segs) = MIN_NESTED_SEGS - 1 then
     begin
       KLow := Segs[0].ToLower;
       if Result.ContainsKey(KLow) then
         Result[KLow] := '';
       Continue;
     end;
-    if Length(Segs) < 3 then Continue;
+    if Length(Segs) < MIN_NESTED_SEGS then Continue;
     KLow := Segs[High(Segs) - 1].ToLower;
     if not Result.TryGetValue(KLow, Alt) then Continue;
     if Alt = '' then Continue;
-    P := Segs[0];
-    for i := 1 to High(Segs) - 1 do
-      P := P + '.' + Segs[i];
+    // string.Join statt Concat-Schleife (eigener SCA110).
+    P := string.Join('.', Segs, 0, High(Segs));
     if Alt = '?' then
       Result[KLow] := P
     else if not SameText(Alt, P) then
