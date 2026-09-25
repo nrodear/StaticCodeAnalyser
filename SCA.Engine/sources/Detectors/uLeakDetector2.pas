@@ -2,10 +2,13 @@
 
 // AST-basierter Speicherleck-Detektor (Sonar-Regel #1).
 //
-// Erkannte Muster:
-//   lsError   – Objekt per .Create erzeugt, nie freigegeben
-//   lsWarning – Free außerhalb des finally-Blocks (obwohl try/finally vorhanden)
-//   lsWarning – Objekt von Funktion zurückbekommen, nie freigegeben
+// Erkannte Muster (Stand Z1, 25.09.2026 - Variante im Feld
+// LeakVariant bzw. SARIF properties.variant):
+//   lsWarning – never-freed: Objekt per .Create erzeugt, nie freigegeben
+//   lsWarning – freed-outside-finally: Free außerhalb des finally
+//   lsHint    – return-value-not-freed: Rückgabewert nie freigegeben
+//   lsError   – proven-leak: nie freigegeben OHNE jede Escape-Gelegenheit
+//               (einzige Error-Variante; FP-Messung rw131: 0/17)
 //
 // Ownership-Transfer (kein Befund):
 //   Result := var                Funktion gibt Ownership ab
@@ -2413,10 +2416,14 @@ begin
       //   ADest.FBuckets[I] := NewBucket         (JCL HashMaps/HashSets, 4x)
       //   fComponentsSchemas.O[AName] := lSchema (DMVC OpenAPI3)
       //   TJSONObject(aJSON).O[Name] := o        (TES5Edit)
-      // NICHT unterdrueckt, weil das Empfaenger-Veto greift (bewusster
-      // Preis, s. IsForeignIndexedTarget):
-      //   Items[HashVal] := HashStrings          (JVCL JvSALHashList)
-      //   DataList.Objects[I] := Info
+      // HIER nicht unterdrueckt (Empfaenger-Veto, s.
+      // IsForeignIndexedTarget) - aber seit Z2 (25.09.) nimmt
+      // das QUELLTEXT-Gate SCA001.IndexPropertyEscape diese
+      // Formen im never-freed-Pfad: Items[HashVal] := X
+      // (JvSALHashList) und DataList.Objects[I] := Info sind
+      // dort gemessene FP-Ruecknahmen (alle handgeprueft).
+      // Die zwei Politiken ergaenzen sich: dieses AST-Gate
+      // bleibt eng, das Z2-Gate deckt die Index-Ablage.
       if Assigned(AUnitNode) and IsForeignIndexedTarget(LHSOrig) then
         Exit(True);
     end;
@@ -5432,6 +5439,35 @@ var
   // laz 4 / laz-fpc 5 Funde, alle der Gattung nach
   // Container-Caches. Ohne Quelltext (Raw-Harness) greift
   // das Gate nicht - dieselbe Konvention wie P6/G3.
+    function WurzelIstLokal(const ALhsLow: string): Boolean;
+    // Review-BLOCKER AB: die Ablage in ein LOKALES Array/Objekt
+    // haelt die Referenz IN der Methode - das ist kein Escape,
+    // das Leck ist real (raw.pas 'res[i] := w', BDecode,
+    // scanfpcerrormsgfiles - 3 der 15 Z2-Drops waren falsch).
+    // Wurzel = erster Ident der LHS (nach optionalem
+    // 'inherited '/'self.'-Praefix ist sie NIE lokal); lokal
+    // heisst: als nkLocalVar/nkParam DIESER Methode deklariert.
+    var
+      W : string;
+      i : Integer;
+      N : TAstNode;
+    begin
+      Result := False;
+      W := ALhsLow;
+      if W.StartsWith('inherited ')
+         or W.StartsWith('self.') then Exit;
+      i := 1;
+      while (i <= Length(W)) and IsIdentChar(W[i]) do Inc(i);
+      W := Copy(W, 1, i - 1);
+      if W = '' then Exit;
+      for N in AMethod.FindAllRef(nkLocalVar) do
+        if TDetectorUtils.UnqualifiedNameLast(N.Name).ToLower = W then
+          Exit(True);
+      for N in AMethod.FindAllRef(nkParam) do
+        if TDetectorUtils.UnqualifiedNameLast(N.Name).ToLower = W then
+          Exit(True);
+    end;
+
     function LetzteZeile(N: TAstNode): Integer;
     // wie ExceptShieldedFree.MaxDescLine - dessen nested
     // Fassung ist hier nicht im Scope.
@@ -5447,7 +5483,7 @@ var
       end;
     end;
   var
-    Von, Bis, Z, PosDp, k : Integer;
+    Von, Bis, Z, PosDp, PosSemi, Start, LStart, k : Integer;
     Zeile, RHS, LHS : string;
   begin
     Result := False;
@@ -5455,21 +5491,47 @@ var
     if Length(StrippedLines) = 0 then Exit;
     Von := AMethod.Line;
     if Von < 1 then Von := 1;
-    Bis := LetzteZeile(AMethod) + 2;
+    // Review-Fix AB: KEIN +2-Overshoot - das Escape-Gate darf
+    // nicht ueber Zeilen der Folgeroutine unterdruecken (ein
+    // gleichnamiges 'X[i] := v' dort nahm einen proven-
+    // Kandidaten mit). Konservativ heisst hier: WENIGER
+    // unterdruecken - anders als bei P6/G3, wo die Marge
+    // verlorene End-Statements deckt.
+    Bis := LetzteZeile(AMethod);
     if Bis > Length(StrippedLines) then
       Bis := Length(StrippedLines);
     for Z := Von to Bis do
     begin
       Zeile := StrippedLines[Z - 1].ToLower;
-      PosDp := Pos(':=', Zeile);
-      if PosDp <= 0 then Continue;
-      RHS := Trim(Copy(Zeile, PosDp + 2, MaxInt));
-      if RHS.EndsWith(';') then
-        RHS := Trim(Copy(RHS, 1, Length(RHS) - 1));
-      if RHS <> AVarLow then Continue;
-      LHS := Trim(Copy(Zeile, 1, PosDp - 1));
-      k := Length(LHS);
-      if (k > 0) and (LHS[k] = ']') then Exit(True);
+      // Review-Fix AB (F8-Lehre): ALLE ':=' der Zeile pruefen,
+      // RHS bis zum Semikolon - Mehr-Statement-Zeilen und
+      // 'for i := 0 to n do Objects[i] := v' entgingen dem
+      // Ersttreffer-Pos.
+      Start := 1;
+      repeat
+        PosDp := PosEx(':=', Zeile, Start);
+        if PosDp <= 0 then Break;
+        PosSemi := PosEx(';', Zeile, PosDp);
+        if PosSemi > 0 then
+          RHS := Trim(Copy(Zeile, PosDp + 2, PosSemi - PosDp - 2))
+        else
+          RHS := Trim(Copy(Zeile, PosDp + 2, MaxInt));
+        if RHS = AVarLow then
+        begin
+          LStart := 1;
+          for k := PosDp - 1 downto 1 do
+            if Zeile[k] = ';' then
+            begin
+              LStart := k + 1;
+              Break;
+            end;
+          LHS := Trim(Copy(Zeile, LStart, PosDp - LStart));
+          k := Length(LHS);
+          if (k > 0) and (LHS[k] = ']')
+             and not WurzelIstLokal(LHS) then Exit(True);
+        end;
+        Start := PosDp + 2;
+      until False;
     end;
   end;
 
@@ -5559,6 +5621,9 @@ begin
           // Gates): der Subtree-Walk laeuft dann nur fuer Variablen, die
           // tatsaechlich gemeldet wuerden - Hot-Path-Schutz.
           // Z2: Index-Property-Ablage = Escape (s. Helfer).
+          // (Der Hot-Path-Kommentar VOR diesem Block gehoert
+          // zum NoOwnershipTransfer-Gate darunter - Review-
+          // Hinweis AB gegen die Fehlzuordnung.)
           if Gate('SCA001.IndexPropertyEscape',
                   IndexAblageImQuelltext(MethodNode, VarNameLow)) then
             Continue;
@@ -5602,14 +5667,15 @@ begin
           // DAS IST EIN ECHTER BEFUND, kein Stilhinweis. Wer ein
           // try/finally schreibt, erklaert damit, dass der Block
           // ausnahmefest sein soll; ein Free daneben widerspricht dieser
-          // Erklaerung. HISTORIE: bis S4 (2026-09-23) trug der
-          // Zweig lsWarning, "weil das Leck einen Ausnahmefall
-          // BRAUCHT". Seit Nicos Tier-Entscheid traegt er lsError
-          // + fcHigh: die Aussage ist syntaktisch beweisbar und
-          // vollgezaehlt praezise (12,7 % FP, nach dem
-          // G3-Schild niedriger). Die Begruendung "braucht einen
-          // Ausnahmefall" gilt weiter - sie beschreibt jetzt den
-          // INHALT der Meldung, nicht mehr ihre Schwere.
+          // Erklaerung. HISTORIE: bis S4 (23.09.) lsWarning;
+          // S4 hob auf lsError/fcHigh (Simulation 12,7 % FP);
+          // Z1 (25.09.) drehte ZURUECK auf lsWarning - die
+          // Realmessungen (rw127 und rw131, zwei unabhaengige
+          // Stichproben) zeigten stabil 40 % FP, getragen von
+          // gate-resistenten Klassen. Die Begruendung "braucht
+          // einen Ausnahmefall" beschreibt den INHALT der
+          // Meldung; das Error-Level gehoert seit Z1 allein
+          // der proven-Variante.
           //
           // WARUM DAS HIER STEHT: die Vollzaehlung vom 28.08. verteilte 59
           // Funde dieser Klasse (10,4 % aller SCA001) auf zwoelf

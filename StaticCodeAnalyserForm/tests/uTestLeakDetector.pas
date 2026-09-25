@@ -354,6 +354,9 @@ type
     [Test] procedure Leak_IndexPropertyStore_NoFinding_Pipeline;
     [Test] procedure Leak_InheritedIndexStore_NoFinding_Pipeline;
     [Test] procedure Leak_IndexStoreOtherVar_StillReported_Pipeline;
+    // Review-Fixes AB (Z2b):
+    [Test] procedure Leak_LocalArrayStore_StillReported_Pipeline;
+    [Test] procedure Leak_IndexStoreSecondStatement_NoFinding_Pipeline;
     [Test] procedure Leak_EscapeByCall_StaysNeverFreed;
     [Test] procedure Leak_FofVariant_SurvivesErrorSeverity;
     [Test] procedure Leak_ReturnValue_HintTier;
@@ -564,6 +567,10 @@ type
     // jetzt ihre EIGENEN Methoden.
     [Test] procedure Field_NestedClassOwnField_LeakReported;
     [Test] procedure Field_NestedClassFreesOwnField_NoFinding;
+    // Review-Fixes AB2: Kollisions-Guards + tiefe Schachtelung.
+    [Test] procedure Field_AmbiguousNestedName_NoFinding;
+    [Test] procedure Field_NestedNameCollidesTopLevel_NoFinding;
+    [Test] procedure Field_TwoLevelNested_LeakReported;
   end;
 
   // Owner-/Uebergabe-Gates: der Fund entfaellt, wenn ein ANDERER die
@@ -1068,7 +1075,7 @@ begin
     // JEWEILS ANDERE Level - seit FOF wieder Warning ist,
     // heisst sie: NICHTS ist Error.
     Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
-      'other korrekt freigegeben – kein Warning');
+      'other korrekt freigegeben – kein Error');
   finally F.Free; end;
 end;
 
@@ -2827,7 +2834,7 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'Free im try-Rumpf statt finally – Error (S4)');
+      'Free im try-Rumpf statt finally – Warning (seit Z1)');
   finally F.Free; end;
 end;
 
@@ -3178,12 +3185,12 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'list.Free nach try/finally – Error (S4)');
+      'list.Free nach try/finally – Warning (seit Z1)');
     // Z1-Nachzieher (Bau-Befund): die Gegenprobe prueft das
     // JEWEILS ANDERE Level - seit FOF wieder Warning ist,
     // heisst sie: NICHTS ist Error.
     Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
-      'other korrekt freigegeben – kein Warning');
+      'other korrekt freigegeben – kein Error');
   finally F.Free; end;
 end;
 
@@ -4853,6 +4860,54 @@ begin
       'nur w entkommt - v bleibt ein Fund');
     Assert.Contains(ErsterLeak(F).MissingVar, 'v',
       'und zwar v');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_LocalArrayStore_StillReported_Pipeline;
+// Review-BLOCKER AB: die Ablage in ein LOKALES Array haelt
+// die Referenz IN der Methode - kein Escape, das Leck ist
+// real (raw.pas res[i] := w; 3 der 15 Z2-Drops waren
+// falsch). WurzelIstLokal muss das Gate zuruecknehmen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var arr: array of TObject;'#13#10+
+  'var v: TStringList;'#13#10+
+  'var i: Integer;'#13#10+
+  'begin'#13#10+
+  '  SetLength(arr, 4);'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  arr[i] := v;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'lokales Ziel = kein Escape - der Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_IndexStoreSecondStatement_NoFinding_Pipeline;
+// Review-Fix AB (F8-Lehre): die Index-Ablage als ZWEITES
+// Statement einer Zeile entging dem Ersttreffer-Pos - das
+// Gate muss alle ':=' der Zeile pruefen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var v: TStringList;'#13#10+
+  'begin'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  FIdx := FIdx + 1; FListe.Objects[FIdx] := v;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'auch das zweite Statement der Zeile ist ein Escape');
   finally F.Free; end;
 end;
 
@@ -6741,12 +6796,12 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'list.Free ausserhalb finally -> Error (S4)');
+      'list.Free ausserhalb finally -> Warning (seit Z1)');
     // Z1-Nachzieher (Bau-Befund): die Gegenprobe prueft das
     // JEWEILS ANDERE Level - seit FOF wieder Warning ist,
     // heisst sie: NICHTS ist Error.
     Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
-      'other korrekt im finally -> kein Warning');
+      'other korrekt im finally -> kein Error');
   finally F.Free; end;
 end;
 
@@ -7225,6 +7280,131 @@ begin
   try
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'der nested-Dtor gibt FData frei');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_AmbiguousNestedName_NoFinding;
+// AB2-Guard (b): ZWEI nested Klassen gleichen Kurznamens in
+// verschiedenen Aussenklassen - die Namens-Zuordnung ist
+// mehrdeutig, die Map sperrt, KEIN Fund (lieber keiner als
+// ein falsch zugeordneter).
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TA = class'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      TInner = class'#13#10+
+  '      private'#13#10+
+  '        FData: TStringList;'#13#10+
+  '      public'#13#10+
+  '        constructor Create;'#13#10+
+  '      end;'#13#10+
+  '  end;'#13#10+
+  '  TB = class'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      TInner = class'#13#10+
+  '      public'#13#10+
+  '        constructor Create;'#13#10+
+  '      end;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TA.TInner.Create;'#13#10+
+  'begin'#13#10+
+  '  FData := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'constructor TB.TInner.Create;'#13#10+
+  'begin'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'mehrdeutiger Kurzname - keine Zuordnung, kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_NestedNameCollidesTopLevel_NoFinding;
+// AB2-Guard (Kurzname-Doppel): eine METHODENLOSE Top-Level-
+// Klasse und eine gleichnamige nested - ohne den Guard erbte
+// die Top-Level-Klasse die fremde Qualifikation und wuerde
+// gegen den NESTED-Ctor geprueft (Review-Verdacht
+// Kreuz-Zuordnung).
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TFoo = class'#13#10+
+  '  private'#13#10+
+  '    FLeer: Integer;'#13#10+
+  '  end;'#13#10+
+  '  TBar = class'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      TFoo = class'#13#10+
+  '      private'#13#10+
+  '        FData: TStringList;'#13#10+
+  '      public'#13#10+
+  '        constructor Create;'#13#10+
+  '        destructor Destroy; override;'#13#10+
+  '      end;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TBar.TFoo.Create;'#13#10+
+  'begin'#13#10+
+  '  FData := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'destructor TBar.TFoo.Destroy;'#13#10+
+  'begin'#13#10+
+  '  FData.Free;'#13#10+
+  '  inherited Destroy;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'Kurzname-Kollision gesperrt - keine Kreuz-Zuordnung');
+  finally F.Free; end;
+end;
+
+procedure TTestFieldLeak.Field_TwoLevelNested_LeakReported;
+// AB2: zwei Ebenen Schachtelung (Korpus: 539 Header mit drei
+// Punkten) - das vorletzte Segment traegt die Klasse, das
+// Praefix die volle Kette.
+const SRC =
+  'unit t; interface'#13#10+
+  'type'#13#10+
+  '  TA = class'#13#10+
+  '  public'#13#10+
+  '    type'#13#10+
+  '      TB = class'#13#10+
+  '      public'#13#10+
+  '        type'#13#10+
+  '          TC = class'#13#10+
+  '          private'#13#10+
+  '            FData: TStringList;'#13#10+
+  '          public'#13#10+
+  '            constructor Create;'#13#10+
+  '          end;'#13#10+
+  '      end;'#13#10+
+  '  end;'#13#10+
+  'implementation'#13#10+
+  'constructor TA.TB.TC.Create;'#13#10+
+  'begin'#13#10+
+  '  FData := TStringList.Create;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'auch zweistufig geschachtelt findet den Ctor - ' +
+      'ohne Dtor-Free ein Fund');
   finally F.Free; end;
 end;
 

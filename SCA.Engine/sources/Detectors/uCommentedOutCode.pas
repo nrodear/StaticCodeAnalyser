@@ -942,6 +942,19 @@ var
        or (AIdx >= Length(Stripped)) then Exit;
     R := Trim(Lines[AIdx]);
     if R = '' then Exit;
+    // DOKUMENTIERTE GRENZE (Review AB, datenbasiert VERWORFEN):
+    // eine CODE-Zeile aus purem String-Literal (Const-Tabelle
+    // zwischen zwei Kommentaren) wird nach dem Strip leer und
+    // brueckt faelschlich - genau wie eine Direktive HINTER
+    // einem Kommentar. Beide sind roh nicht von Kommentar-
+    // INNENZEILEN mit Strings/Direktiven-Text unterscheidbar:
+    // ein Quote-/Direktiven-Ausschluss auf der Rohzeile
+    // zerriss am Korpus 499 rw- und 235 laz-Bloecke ECHTER
+    // auskommentierter Regionen (CEF-Beispiele, projectintf).
+    // Der seltene Fehlbrueck bleibt der billigere Fehler.
+    // Was BLEIBT (W1-Original, im AB3-Revert versehentlich
+    // mit entfernt - Bau-Befund): eine ZEILENFUEHRENDE
+    // Direktive ist eindeutig aktiver Code und bricht.
     if R.StartsWith('{$') or R.StartsWith('(*$') then Exit;
     Result := Trim(Stripped[AIdx]) = '';
   end;

@@ -118,11 +118,11 @@ class function TFixHintResolver.HintVariant(const Finding: TLeakFinding): Intege
 // sonst entsteht exakt derselbe Memoize-Bug erneut.
 begin
   Result := 0;
-  // S4 (2026-09-23): die Variante kommt jetzt aus dem expliziten
-  // Feld (MemoryLeakVariant mit Ableitungs-Fallback) - seit dem
-  // Tier-Umbau traegt auch freed-outside-finally lsError, die alte
-  // Severity-Dekodierung haette FOF-Funden den never-freed-Hint
-  // gegeben. VIER Formen brauchen ZWEI Bits (s. Key-Kommentar):
+  // S4 (23.09.): die Variante kommt aus dem expliziten Feld
+  // (MemoryLeakVariant mit Ableitungs-Fallback). Seit Z1
+  // (25.09.) traegt FOF wieder lsWarning - die Feld-Quelle
+  // bleibt der Grund: eine Severity-Dekodierung wuerde bei
+  // JEDEM Politik-Wechsel die Hints verwuerfeln. VIER Formen brauchen ZWEI Bits (s. Key-Kommentar):
   //   0 = never-freed UND proven-leak (gleicher Hint-Text - proven
   //       ist dieselbe Aussage mit hoeherer Konfidenz)
   //   1 = return-value-not-freed
