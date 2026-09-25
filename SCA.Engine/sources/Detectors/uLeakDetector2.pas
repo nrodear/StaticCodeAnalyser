@@ -5432,6 +5432,35 @@ var
   // laz 4 / laz-fpc 5 Funde, alle der Gattung nach
   // Container-Caches. Ohne Quelltext (Raw-Harness) greift
   // das Gate nicht - dieselbe Konvention wie P6/G3.
+    function WurzelIstLokal(const ALhsLow: string): Boolean;
+    // Review-BLOCKER AB: die Ablage in ein LOKALES Array/Objekt
+    // haelt die Referenz IN der Methode - das ist kein Escape,
+    // das Leck ist real (raw.pas 'res[i] := w', BDecode,
+    // scanfpcerrormsgfiles - 3 der 15 Z2-Drops waren falsch).
+    // Wurzel = erster Ident der LHS (nach optionalem
+    // 'inherited '/'self.'-Praefix ist sie NIE lokal); lokal
+    // heisst: als nkLocalVar/nkParam DIESER Methode deklariert.
+    var
+      W : string;
+      i : Integer;
+      N : TAstNode;
+    begin
+      Result := False;
+      W := ALhsLow;
+      if W.StartsWith('inherited ')
+         or W.StartsWith('self.') then Exit;
+      i := 1;
+      while (i <= Length(W)) and IsIdentChar(W[i]) do Inc(i);
+      W := Copy(W, 1, i - 1);
+      if W = '' then Exit;
+      for N in AMethod.FindAllRef(nkLocalVar) do
+        if TDetectorUtils.UnqualifiedNameLast(N.Name).ToLower = W then
+          Exit(True);
+      for N in AMethod.FindAllRef(nkParam) do
+        if TDetectorUtils.UnqualifiedNameLast(N.Name).ToLower = W then
+          Exit(True);
+    end;
+
     function LetzteZeile(N: TAstNode): Integer;
     // wie ExceptShieldedFree.MaxDescLine - dessen nested
     // Fassung ist hier nicht im Scope.
@@ -5447,7 +5476,7 @@ var
       end;
     end;
   var
-    Von, Bis, Z, PosDp, k : Integer;
+    Von, Bis, Z, PosDp, PosSemi, Start, LStart, k : Integer;
     Zeile, RHS, LHS : string;
   begin
     Result := False;
@@ -5455,21 +5484,47 @@ var
     if Length(StrippedLines) = 0 then Exit;
     Von := AMethod.Line;
     if Von < 1 then Von := 1;
-    Bis := LetzteZeile(AMethod) + 2;
+    // Review-Fix AB: KEIN +2-Overshoot - das Escape-Gate darf
+    // nicht ueber Zeilen der Folgeroutine unterdruecken (ein
+    // gleichnamiges 'X[i] := v' dort nahm einen proven-
+    // Kandidaten mit). Konservativ heisst hier: WENIGER
+    // unterdruecken - anders als bei P6/G3, wo die Marge
+    // verlorene End-Statements deckt.
+    Bis := LetzteZeile(AMethod);
     if Bis > Length(StrippedLines) then
       Bis := Length(StrippedLines);
     for Z := Von to Bis do
     begin
       Zeile := StrippedLines[Z - 1].ToLower;
-      PosDp := Pos(':=', Zeile);
-      if PosDp <= 0 then Continue;
-      RHS := Trim(Copy(Zeile, PosDp + 2, MaxInt));
-      if RHS.EndsWith(';') then
-        RHS := Trim(Copy(RHS, 1, Length(RHS) - 1));
-      if RHS <> AVarLow then Continue;
-      LHS := Trim(Copy(Zeile, 1, PosDp - 1));
-      k := Length(LHS);
-      if (k > 0) and (LHS[k] = ']') then Exit(True);
+      // Review-Fix AB (F8-Lehre): ALLE ':=' der Zeile pruefen,
+      // RHS bis zum Semikolon - Mehr-Statement-Zeilen und
+      // 'for i := 0 to n do Objects[i] := v' entgingen dem
+      // Ersttreffer-Pos.
+      Start := 1;
+      repeat
+        PosDp := PosEx(':=', Zeile, Start);
+        if PosDp <= 0 then Break;
+        PosSemi := PosEx(';', Zeile, PosDp);
+        if PosSemi > 0 then
+          RHS := Trim(Copy(Zeile, PosDp + 2, PosSemi - PosDp - 2))
+        else
+          RHS := Trim(Copy(Zeile, PosDp + 2, MaxInt));
+        if RHS = AVarLow then
+        begin
+          LStart := 1;
+          for k := PosDp - 1 downto 1 do
+            if Zeile[k] = ';' then
+            begin
+              LStart := k + 1;
+              Break;
+            end;
+          LHS := Trim(Copy(Zeile, LStart, PosDp - LStart));
+          k := Length(LHS);
+          if (k > 0) and (LHS[k] = ']')
+             and not WurzelIstLokal(LHS) then Exit(True);
+        end;
+        Start := PosDp + 2;
+      until False;
     end;
   end;
 
@@ -5559,6 +5614,9 @@ begin
           // Gates): der Subtree-Walk laeuft dann nur fuer Variablen, die
           // tatsaechlich gemeldet wuerden - Hot-Path-Schutz.
           // Z2: Index-Property-Ablage = Escape (s. Helfer).
+          // (Der Hot-Path-Kommentar VOR diesem Block gehoert
+          // zum NoOwnershipTransfer-Gate darunter - Review-
+          // Hinweis AB gegen die Fehlzuordnung.)
           if Gate('SCA001.IndexPropertyEscape',
                   IndexAblageImQuelltext(MethodNode, VarNameLow)) then
             Continue;

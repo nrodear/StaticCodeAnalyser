@@ -354,6 +354,9 @@ type
     [Test] procedure Leak_IndexPropertyStore_NoFinding_Pipeline;
     [Test] procedure Leak_InheritedIndexStore_NoFinding_Pipeline;
     [Test] procedure Leak_IndexStoreOtherVar_StillReported_Pipeline;
+    // Review-Fixes AB (Z2b):
+    [Test] procedure Leak_LocalArrayStore_StillReported_Pipeline;
+    [Test] procedure Leak_IndexStoreSecondStatement_NoFinding_Pipeline;
     [Test] procedure Leak_EscapeByCall_StaysNeverFreed;
     [Test] procedure Leak_FofVariant_SurvivesErrorSeverity;
     [Test] procedure Leak_ReturnValue_HintTier;
@@ -4853,6 +4856,54 @@ begin
       'nur w entkommt - v bleibt ein Fund');
     Assert.Contains(ErsterLeak(F).MissingVar, 'v',
       'und zwar v');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_LocalArrayStore_StillReported_Pipeline;
+// Review-BLOCKER AB: die Ablage in ein LOKALES Array haelt
+// die Referenz IN der Methode - kein Escape, das Leck ist
+// real (raw.pas res[i] := w; 3 der 15 Z2-Drops waren
+// falsch). WurzelIstLokal muss das Gate zuruecknehmen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var arr: array of TObject;'#13#10+
+  'var v: TStringList;'#13#10+
+  'var i: Integer;'#13#10+
+  'begin'#13#10+
+  '  SetLength(arr, 4);'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  arr[i] := v;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'lokales Ziel = kein Escape - der Fund muss bleiben');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_IndexStoreSecondStatement_NoFinding_Pipeline;
+// Review-Fix AB (F8-Lehre): die Index-Ablage als ZWEITES
+// Statement einer Zeile entging dem Ersttreffer-Pos - das
+// Gate muss alle ':=' der Zeile pruefen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var v: TStringList;'#13#10+
+  'begin'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  FIdx := FIdx + 1; FListe.Objects[FIdx] := v;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'auch das zweite Statement der Zeile ist ein Escape');
   finally F.Free; end;
 end;
 
