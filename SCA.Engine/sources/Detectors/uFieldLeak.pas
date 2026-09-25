@@ -177,6 +177,16 @@ begin
     for M in Methods do
     begin
       if not M.Name.ToLower.StartsWith(ClsLow) then Continue;
+      // Y1 (ZUGFeRD-FP 2026-09-25, Nutzerbefund): die Methoden
+      // einer GESCHACHTELTEN Klasse beginnen mit demselben
+      // Praefix ('TAussen.TNested.Destroy') - ein weiterer
+      // Punkt im Rest heisst: nicht unsere Methode. Ohne den
+      // Check griff der Einzel-Finder den nested Destructor
+      // (steht in Dateireihenfolge VOR dem aeusseren),
+      // SearchFree sah dessen Rumpf statt des echten Destroy,
+      // und ALLE ctor-erzeugten Felder der Aussenklasse
+      // galten als Leck (drei FPs je Validator-Klasse).
+      if Pos('.', M.Name, Length(ClsLow) + 1) > 0 then Continue;
       TypLow := M.TypeRef.ToLower;
       if (Pos(';class', TypLow) > 0) <> (AScope = msClassMethod) then
         Continue;
@@ -330,6 +340,10 @@ begin
     for M in Methods do
     begin
       if not M.Name.ToLower.StartsWith(ClsLow) then Continue;
+      // Y1: nested-Klassen-Methoden ausschliessen (s.
+      // FindMethods) - sonst griffe ein 'TAussen.TNested.'-
+      // FormDestroy als Event-Handler der Aussenklasse.
+      if Pos('.', M.Name, Length(ClsLow) + 1) > 0 then Continue;
       Kurz := Copy(M.Name.ToLower, Length(ClsLow) + 1, MaxInt);
       // 'destroy' allein ist der Destruktor, nicht der Handler.
       if (Kurz = '') or (Kurz = 'destroy') then Continue;
