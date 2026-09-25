@@ -5414,6 +5414,65 @@ var
                                  StrippedLines);
   end;
 
+  function IndexAblageImQuelltext(AMethod: TAstNode;
+    const AVarLow: string): Boolean;
+  // Z2 (Nicos Entscheid 25.09., FP-Messung rw131): die
+  // Ablage ueber eine INDEX-Property - 'Liste.Objects[i] := v',
+  // 'Items[Hash] := v', 'Dict[Key] := v', auch die inherited-Form
+  // der JclStringLists - ist dieselbe Escape-Gelegenheit wie
+  // die Add-Senken, die LastUseIsOwnershipTransfer laengst
+  // unterdrueckt: die Referenz entkommt der Methode, und ob
+  // der Container besitzt, ist statisch nicht entscheidbar
+  // (TStrings.Objects besitzt opt-in, TJclStringList via
+  // CanFreeObjects - Pruefer-Beleg der Y-Messung). QUELLTEXT-
+  // basiert wie P6, weil der AST genau diese Zuweisungen
+  // verlieren kann (T-Charge: inherited-RHS, Index-LHS).
+  // Muster je Methodenzeile: LHS endet auf ']', dann ':=',
+  // RHS ist EXAKT die Variable. Vollzaehlung: rw 14 /
+  // laz 4 / laz-fpc 5 Funde, alle der Gattung nach
+  // Container-Caches. Ohne Quelltext (Raw-Harness) greift
+  // das Gate nicht - dieselbe Konvention wie P6/G3.
+    function LetzteZeile(N: TAstNode): Integer;
+    // wie ExceptShieldedFree.MaxDescLine - dessen nested
+    // Fassung ist hier nicht im Scope.
+    var
+      C : TAstNode;
+      K : Integer;
+    begin
+      Result := N.Line;
+      for C in N.Children do
+      begin
+        K := LetzteZeile(C);
+        if K > Result then Result := K;
+      end;
+    end;
+  var
+    Von, Bis, Z, PosDp, k : Integer;
+    Zeile, RHS, LHS : string;
+  begin
+    Result := False;
+    EnsureStripped;
+    if Length(StrippedLines) = 0 then Exit;
+    Von := AMethod.Line;
+    if Von < 1 then Von := 1;
+    Bis := LetzteZeile(AMethod) + 2;
+    if Bis > Length(StrippedLines) then
+      Bis := Length(StrippedLines);
+    for Z := Von to Bis do
+    begin
+      Zeile := StrippedLines[Z - 1].ToLower;
+      PosDp := Pos(':=', Zeile);
+      if PosDp <= 0 then Continue;
+      RHS := Trim(Copy(Zeile, PosDp + 2, MaxInt));
+      if RHS.EndsWith(';') then
+        RHS := Trim(Copy(RHS, 1, Length(RHS) - 1));
+      if RHS <> AVarLow then Continue;
+      LHS := Trim(Copy(Zeile, 1, PosDp - 1));
+      k := Length(LHS);
+      if (k > 0) and (LHS[k] = ']') then Exit(True);
+    end;
+  end;
+
 begin
   StrippedReady := False;
   SrcLines      := nil;
@@ -5499,6 +5558,10 @@ begin
           // fremden Konstruktor. Bewusst ERST hier (nicht bei den uebrigen
           // Gates): der Subtree-Walk laeuft dann nur fuer Variablen, die
           // tatsaechlich gemeldet wuerden - Hot-Path-Schutz.
+          // Z2: Index-Property-Ablage = Escape (s. Helfer).
+          if Gate('SCA001.IndexPropertyEscape',
+                  IndexAblageImQuelltext(MethodNode, VarNameLow)) then
+            Continue;
           if Gate('SCA001.NoOwnershipTransfer', not LastUseIsOwnershipTransfer(MethodNode, VarNameLow)) then
           begin
             // S4: besteht der Fund auch die PROVEN-Kriterien

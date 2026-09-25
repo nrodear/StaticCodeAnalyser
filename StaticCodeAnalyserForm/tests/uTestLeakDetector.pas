@@ -350,6 +350,10 @@ type
     [Test] procedure Leak_CtorWithoutSelfReg_StaysProven_Pipeline;
     [Test] procedure Leak_DangerBetweenShieldAndFree_StillWarns_Pipeline;
     [Test] procedure Leak_ShieldedFarFreeAndNil_NoFinding_Pipeline;
+    // ---- Z2: Index-Property-Ablage = Escape ----
+    [Test] procedure Leak_IndexPropertyStore_NoFinding_Pipeline;
+    [Test] procedure Leak_InheritedIndexStore_NoFinding_Pipeline;
+    [Test] procedure Leak_IndexStoreOtherVar_StillReported_Pipeline;
     [Test] procedure Leak_EscapeByCall_StaysNeverFreed;
     [Test] procedure Leak_FofVariant_SurvivesErrorSeverity;
     [Test] procedure Leak_ReturnValue_HintTier;
@@ -4762,6 +4766,80 @@ begin
     Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
       'FreeAndNil hinter dem Schild ist dasselbe Free ' +
       'wie o.Free - das Schild traegt');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_IndexPropertyStore_NoFinding_Pipeline;
+// Z2 (Nicos Entscheid 25.09.): die Ablage ueber eine Index-
+// Property ist dieselbe Escape-Gelegenheit wie die Add-Senken
+// - die Referenz entkommt, never-freed ist keine belastbare
+// Aussage mehr. Vollzaehlung rw131: 14 Funde dieser Gattung,
+// alles Container-Caches (fviewer-Thumbnails, SynGen-Attribute
+// usw.). Ohne Z2 ROT.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var v: TStringList;'#13#10+
+  'begin'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  FListe.Objects[3] := v;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'die Referenz entkommt in den Container - kein Fund');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_InheritedIndexStore_NoFinding_Pipeline;
+// Z2, inherited-Form (JclStringLists 973/1015): der AST
+// verliert die RHS dieser Zuweisung (T-Charge-Befund), das
+// Gate arbeitet deshalb auf den gestrippten Quellzeilen.
+// Der Y-Zweitpruefer belegte: die Liste besitzt die Wrapper
+// (CanFreeObjects/FreeObjects). Ohne Z2 ROT.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.PutObj(Index: Integer);'#13#10+
+  'var v: TStringList;'#13#10+
+  'begin'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  inherited Objects[Index] := v;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.Count(F, fkMemoryLeak),
+      'auch die inherited-Index-Ablage ist ein Escape');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_IndexStoreOtherVar_StillReported_Pipeline;
+// GEGENPROBE: in den Container wandert eine ANDERE Variable -
+// v bleibt never-freed und muss gemeldet werden (Warning).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.Bar;'#13#10+
+  'var v, w: TStringList;'#13#10+
+  'begin'#13#10+
+  '  v := TStringList.Create;'#13#10+
+  '  w := TStringList.Create;'#13#10+
+  '  FListe.Objects[3] := w;'#13#10+
+  '  v.Add(chr(97));'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsViaPipeline(SRC, fcLow);
+  try
+    Assert.AreEqual<Integer>(1, TFindingHelper.Count(F, fkMemoryLeak),
+      'nur w entkommt - v bleibt ein Fund');
+    Assert.Contains(ErsterLeak(F).MissingVar, 'v',
+      'und zwar v');
   finally F.Free; end;
 end;
 
