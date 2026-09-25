@@ -2,10 +2,13 @@
 
 // AST-basierter Speicherleck-Detektor (Sonar-Regel #1).
 //
-// Erkannte Muster:
-//   lsError   – Objekt per .Create erzeugt, nie freigegeben
-//   lsWarning – Free außerhalb des finally-Blocks (obwohl try/finally vorhanden)
-//   lsWarning – Objekt von Funktion zurückbekommen, nie freigegeben
+// Erkannte Muster (Stand Z1, 25.09.2026 - Variante im Feld
+// LeakVariant bzw. SARIF properties.variant):
+//   lsWarning – never-freed: Objekt per .Create erzeugt, nie freigegeben
+//   lsWarning – freed-outside-finally: Free außerhalb des finally
+//   lsHint    – return-value-not-freed: Rückgabewert nie freigegeben
+//   lsError   – proven-leak: nie freigegeben OHNE jede Escape-Gelegenheit
+//               (einzige Error-Variante; FP-Messung rw131: 0/17)
 //
 // Ownership-Transfer (kein Befund):
 //   Result := var                Funktion gibt Ownership ab
@@ -2413,10 +2416,14 @@ begin
       //   ADest.FBuckets[I] := NewBucket         (JCL HashMaps/HashSets, 4x)
       //   fComponentsSchemas.O[AName] := lSchema (DMVC OpenAPI3)
       //   TJSONObject(aJSON).O[Name] := o        (TES5Edit)
-      // NICHT unterdrueckt, weil das Empfaenger-Veto greift (bewusster
-      // Preis, s. IsForeignIndexedTarget):
-      //   Items[HashVal] := HashStrings          (JVCL JvSALHashList)
-      //   DataList.Objects[I] := Info
+      // HIER nicht unterdrueckt (Empfaenger-Veto, s.
+      // IsForeignIndexedTarget) - aber seit Z2 (25.09.) nimmt
+      // das QUELLTEXT-Gate SCA001.IndexPropertyEscape diese
+      // Formen im never-freed-Pfad: Items[HashVal] := X
+      // (JvSALHashList) und DataList.Objects[I] := Info sind
+      // dort gemessene FP-Ruecknahmen (alle handgeprueft).
+      // Die zwei Politiken ergaenzen sich: dieses AST-Gate
+      // bleibt eng, das Z2-Gate deckt die Index-Ablage.
       if Assigned(AUnitNode) and IsForeignIndexedTarget(LHSOrig) then
         Exit(True);
     end;
@@ -5660,14 +5667,15 @@ begin
           // DAS IST EIN ECHTER BEFUND, kein Stilhinweis. Wer ein
           // try/finally schreibt, erklaert damit, dass der Block
           // ausnahmefest sein soll; ein Free daneben widerspricht dieser
-          // Erklaerung. HISTORIE: bis S4 (2026-09-23) trug der
-          // Zweig lsWarning, "weil das Leck einen Ausnahmefall
-          // BRAUCHT". Seit Nicos Tier-Entscheid traegt er lsError
-          // + fcHigh: die Aussage ist syntaktisch beweisbar und
-          // vollgezaehlt praezise (12,7 % FP, nach dem
-          // G3-Schild niedriger). Die Begruendung "braucht einen
-          // Ausnahmefall" gilt weiter - sie beschreibt jetzt den
-          // INHALT der Meldung, nicht mehr ihre Schwere.
+          // Erklaerung. HISTORIE: bis S4 (23.09.) lsWarning;
+          // S4 hob auf lsError/fcHigh (Simulation 12,7 % FP);
+          // Z1 (25.09.) drehte ZURUECK auf lsWarning - die
+          // Realmessungen (rw127 und rw131, zwei unabhaengige
+          // Stichproben) zeigten stabil 40 % FP, getragen von
+          // gate-resistenten Klassen. Die Begruendung "braucht
+          // einen Ausnahmefall" beschreibt den INHALT der
+          // Meldung; das Error-Level gehoert seit Z1 allein
+          // der proven-Variante.
           //
           // WARUM DAS HIER STEHT: die Vollzaehlung vom 28.08. verteilte 59
           // Funde dieser Klasse (10,4 % aller SCA001) auf zwoelf

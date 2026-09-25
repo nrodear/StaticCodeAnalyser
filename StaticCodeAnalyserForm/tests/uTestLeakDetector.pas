@@ -1075,7 +1075,7 @@ begin
     // JEWEILS ANDERE Level - seit FOF wieder Warning ist,
     // heisst sie: NICHTS ist Error.
     Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
-      'other korrekt freigegeben – kein Warning');
+      'other korrekt freigegeben – kein Error');
   finally F.Free; end;
 end;
 
@@ -2834,7 +2834,7 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'Free im try-Rumpf statt finally – Error (S4)');
+      'Free im try-Rumpf statt finally – Warning (seit Z1)');
   finally F.Free; end;
 end;
 
@@ -3185,12 +3185,12 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'list.Free nach try/finally – Error (S4)');
+      'list.Free nach try/finally – Warning (seit Z1)');
     // Z1-Nachzieher (Bau-Befund): die Gegenprobe prueft das
     // JEWEILS ANDERE Level - seit FOF wieder Warning ist,
     // heisst sie: NICHTS ist Error.
     Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
-      'other korrekt freigegeben – kein Warning');
+      'other korrekt freigegeben – kein Error');
   finally F.Free; end;
 end;
 
@@ -6796,12 +6796,12 @@ begin
   F := TFindingHelper.FindingsOf(SRC);
   try
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
-      'list.Free ausserhalb finally -> Error (S4)');
+      'list.Free ausserhalb finally -> Warning (seit Z1)');
     // Z1-Nachzieher (Bau-Befund): die Gegenprobe prueft das
     // JEWEILS ANDERE Level - seit FOF wieder Warning ist,
     // heisst sie: NICHTS ist Error.
     Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
-      'other korrekt im finally -> kein Warning');
+      'other korrekt im finally -> kein Error');
   finally F.Free; end;
 end;
 
