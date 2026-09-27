@@ -339,6 +339,10 @@ type
     [Test] procedure Leak_KeywordMemberArg_NotProven_Pipeline;
     [Test] procedure Leak_InheritedIndexAssign_NotProven_Pipeline;
     [Test] procedure Leak_AbsoluteOverlay_NotProven_Pipeline;
+    // ---- AC3: Keyword-Member jetzt im AST (Raw = ohne P6) ----
+    [Test] procedure Leak_KeywordMemberArg_AstSeesEscape;
+    [Test] procedure Leak_KeywordMemberArg_IdentTwin_StaysWarning;
+    [Test] procedure Leak_KeywordMemberResultAssign_AstSeesEscape;
     // ---- U-Charge: Error-Tier-Reinigung (FP-Messung rw127) --
     [Test] procedure Leak_OnEventAssign_NotProven_Pipeline;
     [Test] procedure Leak_CtorSelfRegistration_NotProven_Pipeline;
@@ -4379,13 +4383,16 @@ end;
 procedure TTestMemoryLeakSearchFree.Leak_KeywordMemberArg_NotProven_Pipeline;
 // T1 (Abnahme-Handpruefung 2026-09-23): read/write sind
 // Property-Klausel-Keywords - der Suffix-Sammler des Parsers
-// bricht bei 'Buffer.Write(M)' am Punkt-Keyword ab, die Argumente
-// stehen in KEINEM Knotentext, und der AST-only-proven-Check
+// brach bei 'Buffer.Write(M)' am Punkt-Keyword ab, die Argumente
+// standen in KEINEM Knotentext, und der AST-only-proven-Check
 // stufte ein uebergebenes Objekt als Error ein (fBalls, beide
 // Kopien; per EXE-Mikroprobe belegt: Buffer.Schreib(M) -> never-
 // freed, Buffer.Write(M) -> proven). Der P6-Quelltextscan
-// sieht die Klammer vor M. Ohne den Fix ist dieser Test ROT
-// (lsError statt lsWarning).
+// sieht die Klammer vor M. Seit AC3 (27.09.) parst der tkDot-
+// Zweig die Keyword-Member und auch der AST sieht die Uebergabe
+// (Raw-Pin: Leak_KeywordMemberArg_AstSeesEscape) - dieser Test
+// pinnt weiter die PIPELINE-Aussage: P6 und AST duerfen sich
+// nie widersprechen, der Fund bleibt Warning.
 const SRC =
   'unit t; implementation'#13#10+
   'procedure TFoo.A2;'#13#10+
@@ -4462,6 +4469,89 @@ begin
       'nicht beweisbar');
     Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
       'der Fund bleibt als never-freed/Warning');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_KeywordMemberArg_AstSeesEscape;
+// AC3 (27.09.): der Parser-Fix zum T1-Befund - der tkDot-Zweig
+// von ParsePrimary nimmt die 6 Keyword-Member (write/read/exit/
+// result/break/continue), nkCall traegt 'Buffer.Write(M)' samt
+// Argument. RAW-Harness (FindingsOf, Platzhalter-Datei): P6 hat
+// keine Quellzeilen (ProvenNoEscape steigt bei leerem
+// AStrippedLines aus) - hier zeigt sich die REINE AST-Wirkung.
+// Ohne den Parser-Fix ist dieser Test ROT (lsError: M ist im
+// AST unsichtbar, AST-only-proven), mit Fix sieht P1 die
+// Klammer vor M im nkCall-Namen.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.A3;'#13#10+
+  'var M: TStringList;'#13#10+
+  'begin'#13#10+
+  '  M := TStringList.Create;'#13#10+
+  '  Buffer.Write(M);'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'die Uebergabe steht jetzt im nkCall-Namen - AST-proven ' +
+      'waere ein falsches Error-Tier');
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'der Fund selbst bleibt: never-freed als Warning');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_KeywordMemberArg_IdentTwin_StaysWarning;
+// AC3-Anker: identische Fixture, aber der Member heisst 'Schreib'
+// (tkIdent) - dieser Weg war NIE kaputt und ist in beiden Welten
+// Warning. Der Zwilling bindet den AstSeesEscape-Pin ans KEYWORD:
+// kippt er mit, liegt der Bruch woanders (Kandidatenbildung,
+// P1-Logik), nicht im tkDot-Zweig.
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.A4;'#13#10+
+  'var M: TStringList;'#13#10+
+  'begin'#13#10+
+  '  M := TStringList.Create;'#13#10+
+  '  Buffer.Schreib(M);'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'Ident-Member war immer sichtbar - kein proven');
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'never-freed als Warning');
+  finally F.Free; end;
+end;
+
+procedure TTestMemoryLeakSearchFree.Leak_KeywordMemberResultAssign_AstSeesEscape;
+// AC3, zweite Gattung: 'R.Result := M' - vorher beendete Result
+// die LHS-Kette, die ganze Zuweisung fehlte im AST (nkCall('R'))
+// und M galt als nie verwendet -> AST-proven. Mit dem Fix ist es
+// ein nkAssign('R.Result') mit M in der RHS -> P2-Escape. Raw,
+// ohne P6 - ohne den Parser-Fix ROT (lsError).
+const SRC =
+  'unit t; implementation'#13#10+
+  'procedure TFoo.A5;'#13#10+
+  'var M: TStringList;'#13#10+
+  'begin'#13#10+
+  '  M := TStringList.Create;'#13#10+
+  '  R.Result := M;'#13#10+
+  'end;'#13#10+
+  'end.';
+var F: TObjectList<TLeakFinding>;
+begin
+  F := TFindingHelper.FindingsOf(SRC);
+  try
+    Assert.AreEqual<Integer>(0, TFindingHelper.CountSev(F, fkMemoryLeak, lsError),
+      'M steht auf der RHS einer sichtbaren Zuweisung - kein proven');
+    Assert.AreEqual<Integer>(1, TFindingHelper.CountSev(F, fkMemoryLeak, lsWarning),
+      'der Fund bleibt: never-freed als Warning');
   finally F.Free; end;
 end;
 

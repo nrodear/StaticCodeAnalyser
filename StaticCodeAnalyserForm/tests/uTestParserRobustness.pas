@@ -71,6 +71,12 @@ type
     // als Methoden-/Event-Handler-Name (Lexer -> tkKwExit)
     [Test] procedure Parser_KeywordMethodNameUnqualified_Captured;
     [Test] procedure Parser_KeywordMethodNameQualified_Captured;
+    // AC3: Keyword-MEMBER in der Anweisungs-Punktkette
+    // ('Buffer.Write(M)', 'Msg.Result := ...') - vorher brach der
+    // Suffix-Sammler am Punkt-Keyword ab und SkipToSemicolon frass
+    // Argumente bzw. die ganze Zuweisung.
+    [Test] procedure Parser_KeywordMemberCall_ArgumentsCaptured;
+    [Test] procedure Parser_KeywordMemberAssign_RhsCaptured;
     // --- Parser Mechanismus A (2026-07-26): Inline-const im Rumpf ---
     [Test] procedure Parser_InlineConst_EmitsConstSectionField;
     [Test] procedure Parser_InlineConst_TypedEmitsTypeAndValue;
@@ -1294,6 +1300,92 @@ begin
       Assert.IsNotNull(ImplN, 'implementation-Node fehlt');
       Assert.AreEqual('TForm1.Exit', TopLevelMethodNames(ImplN),
         'qualifizierte keyword-benannte Methode muss als nkMethod erfasst werden');
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_KeywordMemberCall_ArgumentsCaptured;
+// AC3 (T1-Beleg 2026-09-23): 'Buffer.Write(M)' - Write ist
+// Property-Klausel-Keyword; der tkIdent-only-Check im tkDot-Zweig
+// von ParsePrimary brach die Kette nach dem Punkt ab, der Aufrufer
+// legte nkCall('Buffer') an und SkipToSemicolon frass '(M)' aus
+// jedem Knotentext (Korpus: 4.990 rw-Statements dieser Form).
+// Der Pin verlangt den VOLLEN Namen inkl. Argument - ohne den Fix
+// ist er rot (Name='Buffer').
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.A;'#13#10+
+  'begin'#13#10+
+  '  Buffer.Write(M);'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Calls  : TList<TAstNode>;
+  Gefunden : Boolean;
+  Namen  : string;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Calls := Root.FindAll(nkCall);
+      try
+        Gefunden := False;
+        Namen := '';
+        for var C in Calls do
+        begin
+          if Namen <> '' then Namen := Namen + ',';
+          Namen := Namen + C.Name;
+          if SameText(C.Name, 'Buffer.Write(M)') then Gefunden := True;
+        end;
+        Assert.IsTrue(Gefunden,
+          'nkCall muss die volle Kette samt Argument tragen ' +
+          '(Buffer.Write(M)), Ist: ' + Namen);
+      finally Calls.Free; end;
+    finally Root.Free; end;
+  finally Parser.Free; end;
+end;
+
+procedure TTestParserRobustness.Parser_KeywordMemberAssign_RhsCaptured;
+// AC3, zweite Gattung: 'Msg.Result := 42' - Result nach dem Punkt
+// beendete die LHS-Kette, ParseCallOrAssign sah nie das ':=' und
+// legte nkCall('Msg') ab; die ZUWEISUNG fehlte komplett im AST
+// (1.591 rw-Statements der .result-Form). Ohne den Fix ist der
+// Pin rot (kein nkAssign vorhanden).
+const SRC =
+  'unit t;'#13#10+
+  'interface'#13#10+
+  'implementation'#13#10+
+  'procedure TFoo.B;'#13#10+
+  'begin'#13#10+
+  '  Msg.Result := 42;'#13#10+
+  'end;'#13#10+
+  'end.';
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  Zuw    : TList<TAstNode>;
+  Fund   : TAstNode;
+begin
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC);
+    try
+      Zuw := Root.FindAll(nkAssign);
+      try
+        Fund := nil;
+        for var A in Zuw do
+          if SameText(A.Name, 'Msg.Result') then Fund := A;
+        Assert.IsNotNull(Fund,
+          'die Zuweisung an das Keyword-Member muss als nkAssign ' +
+          'mit voller LHS-Kette ankommen');
+        Assert.IsTrue(Pos('42', Fund.TypeRef) > 0,
+          'die RHS muss erhalten bleiben, Ist: ' + Fund.TypeRef);
+      finally Zuw.Free; end;
     finally Root.Free; end;
   finally Parser.Free; end;
 end;

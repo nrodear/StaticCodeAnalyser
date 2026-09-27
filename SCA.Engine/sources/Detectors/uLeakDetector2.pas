@@ -3027,9 +3027,13 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
 //          Verwendungen - drei belegte Blindstellen aus der
 //          proven-Stichprobe: (a) 'Buffer.Write(M)' bzw. .Read -
 //          read/write sind Property-Klausel-Keywords, der
-//          Suffix-Sammler des Parsers bricht am Punkt-Keyword
-//          ab und die ARGUMENTE stehen in keinem Knotentext
-//          (fBalls, beide Kopien); (b) 'inherited Objects[I] := V' -
+//          Suffix-Sammler des Parsers brach am Punkt-Keyword
+//          ab und die ARGUMENTE standen in keinem Knotentext
+//          (fBalls, beide Kopien; seit AC3 27.09. parst der
+//          tkDot-Zweig die 6er-Keyword-Liste als Member und P1
+//          sieht die Uebergabe auch im AST - P6 bleibt fuer
+//          diese Gattung der Guertel zum Hosentraeger);
+//          (b) 'inherited Objects[I] := V' -
 //          der inherited-Zweig verliert die RHS
 //          (JclStringLists, beide Setter); (c)
 //          'AData: PtrInt absolute AIcon' - der Overlay-Alias ist
@@ -3037,9 +3041,8 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
 //          ERROR-TIER gilt: lieber zu wenig proven als ein
 //          falsches Error - der Scan disqualifiziert deshalb
 //          konservativ auf den ROHEN Methoden-Quellzeilen.
-//          Der eigentliche Parser-Posten (Keyword-Member) ist
-//          separat notiert: er hat korpusweite
-//          Zweitrundeneffekte und braucht einen eigenen Vertrag.
+//          (b) und (c) bleiben offene Parser-Posten mit
+//          eigenem Vertrag.
 //
 // Die Gate-Kette davor hat bereits bewiesen, dass KEIN Free und kein
 // nachweislicher Besitzuebergang existiert; ProvenNoEscape verlangt

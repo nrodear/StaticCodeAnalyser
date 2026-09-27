@@ -3632,7 +3632,22 @@ begin
       tkDot:
         begin
           Next;
-          if Tok.Kind = tkIdent then
+          // AC3 (Parser-Posten Keyword-Member, T1-Beleg 2026-09-23):
+          // nicht-reservierte Standard-Routinen-Namen sind zulaessige
+          // MEMBER - 'Buffer.Write(M)', 'Stream.Read(B, N)',
+          // 'Msg.Result := 1'. Der Lexer tokenisiert sie als Keyword;
+          // der reine tkIdent-Check brach die Kette am Punkt-Keyword
+          // ab, der Aufrufer legte nkCall('Buffer') an und
+          // SkipToSemicolon frass die ARGUMENTE aus jedem Knotentext
+          // (EXE-Mikroprobe: 'Buffer.Schreib(M)' vollstaendig,
+          // 'Buffer.Write(M)' Totalverlust; Korpus: 4.990 rw- und
+          // 1.181 laz-Statements dieser Form). Dieselbe 6er-Liste wie
+          // an der Methoden-Namen-Position (IsRoutineNameKeyword):
+          // nach einem '.' steht in gueltigem Delphi immer ein
+          // Member; reservierte Woerter bleiben draussen, die
+          // Recovery kaputter Quellen ('X.' vor einem end) ist
+          // unveraendert.
+          if (Tok.Kind = tkIdent) or IsRoutineNameKeyword(Tok.Kind) then
             S := S + '.' + Next.Value;
         end;
       tkLBracket:
