@@ -3027,9 +3027,13 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
 //          Verwendungen - drei belegte Blindstellen aus der
 //          proven-Stichprobe: (a) 'Buffer.Write(M)' bzw. .Read -
 //          read/write sind Property-Klausel-Keywords, der
-//          Suffix-Sammler des Parsers bricht am Punkt-Keyword
-//          ab und die ARGUMENTE stehen in keinem Knotentext
-//          (fBalls, beide Kopien); (b) 'inherited Objects[I] := V' -
+//          Suffix-Sammler des Parsers brach am Punkt-Keyword
+//          ab und die ARGUMENTE standen in keinem Knotentext
+//          (fBalls, beide Kopien; seit AC3 27.09. parst der
+//          tkDot-Zweig die 6er-Keyword-Liste als Member und P1
+//          sieht die Uebergabe auch im AST - P6 bleibt fuer
+//          diese Gattung der Guertel zum Hosentraeger);
+//          (b) 'inherited Objects[I] := V' -
 //          der inherited-Zweig verliert die RHS
 //          (JclStringLists, beide Setter); (c)
 //          'AData: PtrInt absolute AIcon' - der Overlay-Alias ist
@@ -3037,9 +3041,8 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
 //          ERROR-TIER gilt: lieber zu wenig proven als ein
 //          falsches Error - der Scan disqualifiziert deshalb
 //          konservativ auf den ROHEN Methoden-Quellzeilen.
-//          Der eigentliche Parser-Posten (Keyword-Member) ist
-//          separat notiert: er hat korpusweite
-//          Zweitrundeneffekte und braucht einen eigenen Vertrag.
+//          (b) und (c) bleiben offene Parser-Posten mit
+//          eigenem Vertrag.
 //
 // Die Gate-Kette davor hat bereits bewiesen, dass KEIN Free und kein
 // nachweislicher Besitzuebergang existiert; ProvenNoEscape verlangt
@@ -3250,20 +3253,6 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
     end;
   end;
 
-  function MaxZeileVon(N: TAstNode): Integer;
-  // wie ExceptShieldedFree.MaxDescLine - expliziter Vergleich,
-  // die Unit fuehrt System.Math nicht.
-  var
-    C : TAstNode;
-    K : Integer;
-  begin
-    Result := N.Line;
-    for C in N.Children do
-    begin
-      K := MaxZeileVon(C);
-      if K > Result then Result := K;
-    end;
-  end;
 
   function KlasseVorCreate(const ARhsLow: string): string;
   // U2-Robustheit: SplitCreateCall verlangt eine Klammer -
@@ -3324,7 +3313,7 @@ class function TLeakDetector2.ProvenNoEscape(MethodNode: TAstNode;
         if Mth.Name.ToLower <> AClassLow + '.create' then Continue;
         Von := Mth.Line;
         if Von < 1 then Von := 1;
-        Bis := MaxZeileVon(Mth) + 2;
+        Bis := TAstSpans.SubtreeMaxLine(Mth) + 2;
         if Bis > Length(AStrippedLines) then
           Bis := Length(AStrippedLines);
         for Z := Von to Bis do
@@ -3480,20 +3469,6 @@ class function TLeakDetector2.ExceptShieldedFree(MethodNode: TAstNode;
 // eigene Ebene zu heben wuerde die Lesbarkeit der Kette
 // zerstoeren, die genau der Reviewgegenstand ist.
 
-  function MaxDescLine(N: TAstNode): Integer;
-  // Expliziter Vergleich statt System.Math.Max - die Unit fuehrt
-  // System.Math nicht, und fuer EINE Stelle lohnt kein neues uses.
-  var
-    C : TAstNode;
-    K : Integer;
-  begin
-    Result := N.Line;
-    for C in N.Children do
-    begin
-      K := MaxDescLine(C);
-      if K > Result then Result := K;
-    end;
-  end;
 
   function HandlerBrichtAus(N: TAstNode): Boolean;
   // exit/break/continue im Handler: der Fluss erreicht das Free
@@ -3771,7 +3746,9 @@ begin
        and not FaengtBasisException(ExBlock) then Continue;
     // (a) Allokation unmittelbar davor (1 Zeile, dieselbe Bindung
     // wie HasExceptPathFree) oder im try
-    TryEnde := MaxDescLine(TryNode);
+    // AC1 (Review): TAstSpans.SubtreeMaxLine statt lokalem Klon -
+    // wertgleich (Wurzel mitgezaehlt, nil -> 0).
+    TryEnde := TAstSpans.SubtreeMaxLine(TryNode);
     if (AAllocLine < TryNode.Line - 1) or (AAllocLine > TryEnde) then
       Continue;
     // (c) Free hinter dem try-Ende
@@ -3881,17 +3858,21 @@ var
   StartL, EndL, li, MethStart, MethEnd : Integer;
   WithTryLine : Integer;   // A2: Zeile des einzigen 'with <var> do try' (0 = Gate aus)
 
-  function TryEndLine(FinLine1: Integer): Integer;
+  function TryEndLine(FinLine1, AMaxLine: Integer): Integer;
   const
     OPENERS : array[0..5] of string = ('begin','try','case','asm','record','object');
   var
     depth, k, j, p, len : Integer;
-    low, w : string;
+    low, w, PrevW : string;
     isOpener : Boolean;
     oi : Integer;
   begin
     depth := 0;
-    for k := FinLine1 to Length(StrippedLines) do
+    PrevW := '';
+    // AC2 (Review-Bestandsverdacht): Deckel auf die Methode -
+    // ohne ihn lief die Suche je finally-Zeile bis ans
+    // DATEIENDE, wenn depth nie unter 0 fiel.
+    for k := FinLine1 to AMaxLine do
     begin
       low := LowerCase(StrippedLines[k - 1]);
       len := Length(low);
@@ -3906,6 +3887,14 @@ var
           isOpener := False;
           for oi := 0 to High(OPENERS) do
             if w = OPENERS[oi] then begin isOpener := True; Break; end;
+          // AC2: 'procedure(...) of object' oeffnet KEINEN Rumpf
+          // (dieselbe Falle wie im Parser,
+          // SkipDeclBalancedToSemicolon) - ohne die Ausnahme
+          // zaehlte jedes Event-Typ-Literal einen Oeffner ohne
+          // end und die Region lief in den Fallback.
+          if isOpener and (w = 'object') and (PrevW = 'of') then
+            isOpener := False;
+          PrevW := w;
           if isOpener then Inc(depth)
           else if w = 'end' then
           begin
@@ -3917,7 +3906,7 @@ var
           Inc(j);
       end;
     end;
-    Result := Length(StrippedLines);      // Fallback: bis Dateiende
+    Result := AMaxLine;                   // Fallback: Methodenende
   end;
 
   // A2 (SCA009-Triage 2026-07-24): das klassische Dialog-Idiom
@@ -4059,8 +4048,7 @@ begin
   for StartL := MethStart to MethEnd do
   begin
     if not LineHasFinally(StrippedLines[StartL - 1]) then Continue;
-    EndL := TryEndLine(StartL);
-    if EndL > MethEnd then EndL := MethEnd;    // Region auf die Methode klammern
+    EndL := TryEndLine(StartL, MethEnd);
     for li := StartL to EndL do
       if (li >= 1) and (li <= Length(StrippedLines)) then
       begin
@@ -5468,20 +5456,6 @@ var
           Exit(True);
     end;
 
-    function LetzteZeile(N: TAstNode): Integer;
-    // wie ExceptShieldedFree.MaxDescLine - dessen nested
-    // Fassung ist hier nicht im Scope.
-    var
-      C : TAstNode;
-      K : Integer;
-    begin
-      Result := N.Line;
-      for C in N.Children do
-      begin
-        K := LetzteZeile(C);
-        if K > Result then Result := K;
-      end;
-    end;
   var
     Von, Bis, Z, PosDp, PosSemi, Start, LStart, k : Integer;
     Zeile, RHS, LHS : string;
@@ -5497,7 +5471,7 @@ var
     // Kandidaten mit). Konservativ heisst hier: WENIGER
     // unterdruecken - anders als bei P6/G3, wo die Marge
     // verlorene End-Statements deckt.
-    Bis := LetzteZeile(AMethod);
+    Bis := TAstSpans.SubtreeMaxLine(AMethod);
     if Bis > Length(StrippedLines) then
       Bis := Length(StrippedLines);
     for Z := Von to Bis do
