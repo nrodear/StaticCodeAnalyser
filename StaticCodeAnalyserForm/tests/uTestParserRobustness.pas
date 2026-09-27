@@ -1326,7 +1326,7 @@ var
   Root   : TAstNode;
   Calls  : TList<TAstNode>;
   Gefunden : Boolean;
-  Namen  : string;
+  Erster : string;
 begin
   Parser := TParser2.Create;
   try
@@ -1335,16 +1335,18 @@ begin
       Calls := Root.FindAll(nkCall);
       try
         Gefunden := False;
-        Namen := '';
+        // Diagnose: der ERSTE Call-Name reicht - die Fixture hat
+        // genau einen (vor dem Fix 'Buffer', danach die volle Kette);
+        // ein Sammel-Concat in der Schleife waere nur SCA110-Futter.
+        Erster := '';
         for var C in Calls do
         begin
-          if Namen <> '' then Namen := Namen + ',';
-          Namen := Namen + C.Name;
+          if Erster = '' then Erster := C.Name;
           if SameText(C.Name, 'Buffer.Write(M)') then Gefunden := True;
         end;
         Assert.IsTrue(Gefunden,
           'nkCall muss die volle Kette samt Argument tragen ' +
-          '(Buffer.Write(M)), Ist: ' + Namen);
+          '(Buffer.Write(M)), erster Call ist: ' + Erster);
       finally Calls.Free; end;
     finally Root.Free; end;
   finally Parser.Free; end;
