@@ -58,6 +58,22 @@ remplace l'autre :
   dépouiller un grand rapport à son bureau. Son nom de fichier proposé
   porte la date : `sca_codereview_AAAA-MM-JJ.html`.
 
+**Budget de lignes du tableau HTML.** Le tableau affiche au plus
+20 000 résultats ; `--html-max-rows <n>` modifie cette limite (`0` =
+illimité, une valeur illisible retombe sur la valeur par défaut et non
+sur l'illimité). Le rapport grossit d'environ 4 Ko par résultat : un
+scan de corpus complet sans budget produirait des gigaoctets. Ce que
+le budget écarte n'est jamais silencieux : une bannière au-dessus du
+tableau annonce le nombre de résultats masqués, et la synthèse les
+compte **tous**. Filtre, recherche et tri ne portent que sur les
+lignes affichées.
+
+**Avec quel jeu de règles ce rapport a été produit.** Le bloc
+`sca-meta` lisible par machine, dans l'en-tête de la page, porte
+`profile` : le nom du profil de règles utilisé. Une valeur vide
+signifie *aucun filtre de profil* — tous les détecteurs ont tourné —
+et n'équivaut pas au profil curé `default`.
+
 La page d'atelier conserve la documentation de règle **une fois par
 règle**, l'extrait de code en texte brut et aucune copie du texte de
 recherche par résultat — c'est pourquoi elle reste environ deux fois

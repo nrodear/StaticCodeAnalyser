@@ -55,6 +55,21 @@ their look, but they are separate pages and neither replaces the other:
   suggested file name carries the date:
   `sca_codereview_YYYY-MM-DD.html`.
 
+**Row budget of the HTML table.** The table renders at most 20,000
+findings; `--html-max-rows <n>` changes that (`0` = unlimited, an
+unreadable value falls back to the default rather than to unlimited).
+The report grows by roughly 4 KB per finding, so a full corpus run
+without a budget would produce gigabytes. What the budget drops is
+never silent: a banner above the table names the number of hidden
+findings, and the summary keeps counting **all** of them. Filter,
+search and sorting only ever work on the rendered rows.
+
+**Which rule set produced this report.** The machine-readable
+`sca-meta` block in the page head carries `profile`: the name of the
+rule profile the scan ran with. An empty value means *no profile
+filter* — every detector ran — and is not the same as the curated
+`default` profile.
+
 The workbench page keeps the rule documentation **once per rule**, the
 source excerpt as plain text, and no per-finding copy of the search
 text — which is why it stays roughly half the size the same report used

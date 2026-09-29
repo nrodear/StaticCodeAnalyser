@@ -64,6 +64,8 @@ type
     Diff          : string;         // --diff <sha1>..<sha2>  PR-Review-Mode
     ReportSarif   : string;         // --report-sarif <out.sarif>
     ReportHtml    : string;         // --report-html  <out.html>  Self-contained Code-Review-Report
+    HtmlMaxRows   : string;         // --html-max-rows <n>  Zeilendeckel des HTML-Berichts
+                                    //   leer = Voreinstellung (20.000), 0 = unbegrenzt
     // CSV und JSON gab es bis 2026-08-08 NUR im GUI-Exportmenue -
     // ausgerechnet die zwei Formate, zu denen man in einem Skript
     // greift (Excel, Ticket-Automatisierung), waren die einzigen, die
@@ -485,6 +487,8 @@ begin
       GetValue(Result.ReportSarif, '--report-sarif')
     else if A = '--report-html' then
       GetValue(Result.ReportHtml, '--report-html')
+    else if A = '--html-max-rows' then
+      GetValue(Result.HtmlMaxRows, '--html-max-rows')
     else if A = '--report-csv' then
       GetValue(Result.ReportCsv, '--report-csv')
     else if A = '--report-json' then
@@ -741,6 +745,10 @@ begin
   WriteLn('Output:');
   WriteLn('  --report-sarif <file> Write SARIF v2.1.0 report to <file>');
   WriteLn('  --report-html  <file> Write self-contained HTML Code-Review report');
+  WriteLn('  --html-max-rows <n>   Row budget of the HTML table (default 20000,');
+  WriteLn('                        0 = unlimited). Findings beyond the budget');
+  WriteLn('                        are named by a banner; the summary still');
+  WriteLn('                        counts all of them.');
   WriteLn('  --report-csv   <file> Write findings as CSV (UTF-8 with BOM, so');
   WriteLn('                        Excel reads it correctly)');
   WriteLn('  --report-json  <file> Write findings as JSON array');
@@ -1517,6 +1525,22 @@ begin
   Result := dlDelphi;
 end;
 
+function HtmlZeilenBudget(const Args: TCliArgs): Integer;
+// AD3 (29.09.): --html-max-rows. Vorher war der Deckel des
+// HTML-Berichts (HTML_MAX_ROWS_DEFAULT = 20.000) per CLI nicht
+// erreichbar - AMaxRows existierte als Parameter, aber kein Schalter
+// reichte ihn durch. Konvention wie in TExporterHtml.Run:
+//   -1 = Voreinstellung, 0 = unbegrenzt, n > 0 = genau n Zeilen.
+// Ein unlesbarer Wert faellt auf die Voreinstellung zurueck (nicht auf
+// 0): ein Tippfehler darf keinen GB-Bericht ausloesen.
+begin
+  if Trim(Args.HtmlMaxRows) = '' then
+    Exit(-1);
+  Result := StrToIntDef(Trim(Args.HtmlMaxRows), -1);
+  if Result < 0 then
+    Result := -1;
+end;
+
 class function TConsoleRunner.Run(const Args: TCliArgs): Integer;
 var
   Findings  : TObjectList<TLeakFinding>;
@@ -1580,7 +1604,7 @@ var
           // Null-Fund-Bericht ist das tragbar; der Normalpfad unten
           // schreibt das effektive Profil.
           TExporterHtml.Run(Leer, '', Args.ReportHtml, Args.BaseDir,
-                            -1, Args.Profile);
+                            HtmlZeilenBudget(Args), Args.Profile);
           if not Args.Quiet then
             WriteLn('HTML report written (no findings): ', Args.ReportHtml);
         end;
@@ -2398,7 +2422,7 @@ begin
         // hat es oben ueberschrieben, sonst steht der INI-Wert drin) -
         // genau das gehoert in den sca-meta-Block.
         TExporterHtml.Run(Findings, '', Args.ReportHtml, Args.BaseDir,
-                          -1, Settings.Profile);
+                          HtmlZeilenBudget(Args), Settings.Profile);
         if not Args.Quiet then
           WriteLn('HTML report written: ', Args.ReportHtml);
       except

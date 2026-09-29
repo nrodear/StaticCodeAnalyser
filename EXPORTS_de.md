@@ -56,6 +56,22 @@ anderen:
   Berichts am Schreibtisch. Sein Dateinamen-Vorschlag trägt das Datum:
   `sca_codereview_JJJJ-MM-TT.html`.
 
+**Zeilenbudget der HTML-Tabelle.** Die Tabelle rendert höchstens
+20.000 Funde; `--html-max-rows <n>` ändert das (`0` = unbegrenzt, ein
+unlesbarer Wert fällt auf die Voreinstellung zurück, nicht auf
+unbegrenzt). Der Bericht wächst um rund 4 KB je Fund — ein voller
+Korpuslauf ohne Budget ergäbe Gigabytes. Was das Budget weglässt,
+bleibt nie stillschweigend: ein Banner über der Tabelle nennt die
+Zahl der versteckten Funde, und die Zusammenfassung zählt weiterhin
+**alle**. Filter, Suche und Sortierung arbeiten nur auf den
+gerenderten Zeilen.
+
+**Mit welchem Regelsatz der Bericht entstand.** Der maschinenlesbare
+`sca-meta`-Block im Seitenkopf trägt `profile`: den Namen des
+Regelprofils des Laufs. Ein leerer Wert heißt *kein Profilfilter* —
+alle Detektoren liefen — und ist nicht dasselbe wie das kuratierte
+Profil `default`.
+
 Die Workbench-Seite hält die Regel-Doku **einmal je Regel**, den
 Quellausschnitt als reinen Text und keine Kopie des Suchtexts je Fund —
 deshalb bleibt sie rund halb so groß wie derselbe Bericht vorher. Beide
