@@ -400,7 +400,10 @@ begin
   // FBaseDir mitgeben: sonst zeigt der Report nur Basisdateinamen und
   // gleichnamige Units aus verschiedenen Ordnern sind nicht
   // unterscheidbar (Audit 2026-08-08).
-  TExporterHtml.Run(FFindings, '', AFileName, FBaseDir, -1, FProfile);
+  var Opts: THtmlReportOptions;   // Initialize: MaxRows = -1
+  Opts.BaseDir := FBaseDir;
+  Opts.Profile := FProfile;
+  TExporterHtml.Run(FFindings, AFileName, Opts);
 end;
 
 function TScanResult.CountSeverity(ASev: TLeakSeverity): Integer;

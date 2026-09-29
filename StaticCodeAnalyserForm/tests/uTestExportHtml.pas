@@ -35,6 +35,9 @@ type
     [Test] procedure MaxRows_Zero_RendersEverything;
     [Test] procedure MaxRows_BelowLimit_ShowsNoBanner;
     // AD1: Profilname im sca-meta-Block.
+    // AE: der Options-Record und sein sicherer Ausgangszustand.
+    [Test] procedure Options_RohDeklariert_HatDefaults;
+    [Test] procedure Options_RohDeklariert_BerichtBleibtGedeckelt;
     [Test] procedure Meta_Profile_IsWrittenWhenGiven;
     [Test] procedure Meta_Profile_EmptyMeansNoFilter;
     [Test] procedure ChunkedWrite_SplitsBetweenSurrogates_Intact;
@@ -119,7 +122,9 @@ begin
     Fnd.MethodName := 'TestMethod';
     Findings.Add(Fnd);
     Fn := NeueTempDatei('sca-test-prof-', '.html');
-    TExporterHtml.Run(Findings, '', Fn, '', -1, AProfil);
+    var Opts: THtmlReportOptions;
+    Opts.Profile := AProfil;
+    TExporterHtml.Run(Findings, Fn, Opts);
     Result := TFile.ReadAllText(Fn, TEncoding.UTF8);
     if TFile.Exists(Fn) then TFile.Delete(Fn);
   finally
@@ -150,7 +155,9 @@ begin
       Findings.Add(Fnd);
     end;
     Fn := NeueTempDatei('sca-test-cap-', '.html');
-    TExporterHtml.Run(Findings, '', Fn, '', AMaxRows);
+    var Opts: THtmlReportOptions;
+    Opts.MaxRows := AMaxRows;
+    TExporterHtml.Run(Findings, Fn, Opts);
     Result := TFile.ReadAllText(Fn, TEncoding.UTF8);
     if TFile.Exists(Fn) then
     begin
@@ -188,7 +195,8 @@ var
 begin
   Fn := NeueTempDatei('sca-test-vertrag-', '.html');
   try
-    TExporterHtml.Run(Findings, '', Fn, '');
+    var Opts: THtmlReportOptions;
+    TExporterHtml.Run(Findings, Fn, Opts);
     Result := TFile.ReadAllText(Fn, TEncoding.UTF8);
   finally
     if TFile.Exists(Fn) then
@@ -255,7 +263,9 @@ begin
     Fn := TPath.Combine(TPath.GetTempPath,
       'sca-test-html-' + TGUID.NewGuid.ToString + '.html');
     try
-      TExporterHtml.Run(Findings, FIXTURE_PAS, Fn);
+      var Opts: THtmlReportOptions;
+      Opts.SourceFile := FIXTURE_PAS;
+      TExporterHtml.Run(Findings, Fn, Opts);
       Result := TFile.ReadAllText(Fn, TEncoding.UTF8);
     finally
       if TFile.Exists(Fn) then
@@ -456,6 +466,59 @@ begin
     'ohne Budget darf kein Banner erscheinen');
 end;
 
+procedure TTestExportHtml.Options_RohDeklariert_HatDefaults;
+// AE (29.09.): der WICHTIGSTE Test am Options-Record. Eine rohe
+// Deklaration muss MaxRows = -1 liefern (Voreinstellung), NICHT 0 -
+// denn 0 heisst 'unbegrenzt'. Ohne class operator Initialize laesst
+// Delphi nicht-verwaltete Felder uninitialisiert (dieselbe Falle wie
+// bei TBaselineScope), und ein zufaelliges 0 haette bei einem
+// Korpuslauf einen Gigabyte-Bericht zur Folge - die teure Richtung.
+var
+  O : THtmlReportOptions;
+begin
+  Assert.AreEqual<Integer>(-1, O.MaxRows,
+    'MaxRows muss -1 (Voreinstellung) sein - 0 waere unbegrenzt');
+  Assert.AreEqual('', O.SourceFile, 'SourceFile leer = Repo-Modus');
+  Assert.AreEqual('', O.BaseDir,    'BaseDir leer = nur Basisdateinamen');
+  Assert.AreEqual('', O.Profile,    'Profile leer = kein Profilfilter');
+end;
+
+procedure TTestExportHtml.Options_RohDeklariert_BerichtBleibtGedeckelt;
+// Die Wirkung desselben Vertrags am ECHTEN Bericht: mit einem roh
+// deklarierten Record muessen mehr Funde als das Zeilenbudget zur
+// Kuerzung samt Banner fuehren. Waere MaxRows versehentlich 0, liefe
+// der Bericht unbegrenzt und dieser Test faellt auf.
+var
+  Findings : TObjectList<TLeakFinding>;
+  O        : THtmlReportOptions;
+  Fn, Html : string;
+  i        : Integer;
+  Fnd      : TLeakFinding;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    for i := 1 to 5 do
+    begin
+      Fnd := TLeakFinding.Create;
+      Fnd.SetKind(fkMemoryLeak);
+      Fnd.FileName   := FIXTURE_PAS;
+      Fnd.LineNumber := IntToStr(i);
+      Fnd.MissingVar := 'list' + IntToStr(i);
+      Fnd.MethodName := 'TestMethod';
+      Findings.Add(Fnd);
+    end;
+    O.MaxRows := 2;   // Rest des Records bleibt Voreinstellung
+    Fn := NeueTempDatei('sca-test-opt-', '.html');
+    TExporterHtml.Run(Findings, Fn, O);
+    Html := TFile.ReadAllText(Fn, TEncoding.UTF8);
+    if TFile.Exists(Fn) then TFile.Delete(Fn);
+    Assert.IsTrue(Html.Contains(BANNER_MARKER),
+      'das Budget aus dem Record muss greifen und das Banner zeigen');
+  finally
+    Findings.Free;
+  end;
+end;
+
 procedure TTestExportHtml.Meta_Profile_IsWrittenWhenGiven;
 // AD1 (29.09.): der sca-meta-Block schrieb bis dahin HART einen
 // Leerstring - kein Bericht sagte, mit welchem Regelsatz er entstand.
@@ -591,7 +654,8 @@ begin
     Fnd.Severity   := lsHint;
     Findings.Add(Fnd);
     Fn := NeueTempDatei('sca-test-rr-', '.html');
-    TExporterHtml.Run(Findings, '', Fn, '');
+    var Opts: THtmlReportOptions;
+    TExporterHtml.Run(Findings, Fn, Opts);
     Result := TFile.ReadAllText(Fn, TEncoding.UTF8);
     if TFile.Exists(Fn) then TFile.Delete(Fn);
   finally
@@ -663,7 +727,9 @@ begin
       'Literal '#0' und '#4' im Text'));
     Fn := NeueTempDatei('sca-test-ctl-', '.html');
     try
-      TExporterHtml.Run(Findings, FIXTURE_PAS, Fn);
+      var Opts: THtmlReportOptions;
+      Opts.SourceFile := FIXTURE_PAS;
+      TExporterHtml.Run(Findings, Fn, Opts);
       Html := TFile.ReadAllText(Fn, TEncoding.UTF8);
     finally
       if TFile.Exists(Fn) then
@@ -876,7 +942,8 @@ begin
     Findings.Add(MakeFinding(fkMemoryLeak, FIXTURE_PAS, 1, 'x not freed'));
     Fn := NeueTempDatei('sca-test-bom-', '.html');
     try
-      TExporterHtml.Run(Findings, '', Fn, '');
+      var Opts: THtmlReportOptions;
+      TExporterHtml.Run(Findings, Fn, Opts);
       Bytes := TFile.ReadAllBytes(Fn);
       Txt   := TFile.ReadAllText(Fn, TEncoding.UTF8);
     finally
