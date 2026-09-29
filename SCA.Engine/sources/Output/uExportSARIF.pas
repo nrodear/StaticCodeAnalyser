@@ -473,6 +473,24 @@ end;
 
 { ---- Dokument-Emission ---- }
 
+procedure EmitUriBaseId(E: TSarifJsonEmitter;
+  const ABaseDir, AUri: string); inline;
+// AD5: benennt die Wurzel eines RELATIVEN uri (runs[0].
+// originalUriBaseIds.SRCROOT). Zwei Emit-Stellen brauchen exakt diese
+// Bedingung - results und die Invocation-Diagnosen -, und beide
+// muessen dieselbe Antwort geben, sonst zeigen sie auf verschiedene
+// Wurzeln.
+//
+// Absolute Pfade (Datei ausserhalb der BaseDir - in
+// --project/--project-group der Normalfall) macht UriFromPath zu
+// file://...; die tragen ihre Wurzel selbst. Bewusst am URI-PRAEFIX
+// geprueft statt an TPath.IsPathRooted: das warf im Analysepfad schon
+// einmal (H5, 2026-09-20).
+begin
+  if (ABaseDir <> '') and not StartsStr('file:', AUri) then
+    E.PairStr('uriBaseId', 'SRCROOT');
+end;
+
 procedure EmitRunDiagnostics(E: TSarifJsonEmitter;
   const AFindings: TObjectList<TLeakFinding>; const ABaseDir: string);
 // runs[0].invocations[] - Lauf-Diagnosen als toolExecutionNotifications.
@@ -532,9 +550,7 @@ begin
         E.BeginObjPair('artifactLocation');
         var DiagUri := UriFromPath(RelPath);
         E.PairStr('uri', DiagUri);
-        // AD5: dieselbe Wurzel wie bei den results (gleiche Pruefung).
-        if (ABaseDir <> '') and not StartsStr('file:', DiagUri) then
-          E.PairStr('uriBaseId', 'SRCROOT');
+        EmitUriBaseId(E, ABaseDir, DiagUri);
         E.EndObj;                                      // artifactLocation
         E.EndObj;                                      // physicalLocation
         E.EndObj;                                      // location
@@ -747,14 +763,7 @@ begin
         // Fingerprint-Eingang (s. PercentEncodeUriPath).
         var LocUri := UriFromPath(RelPath);
         E.PairStr('uri', LocUri);
-        // AD5: Wurzel nur benennen, wenn der uri WIRKLICH relativ ist.
-        // Absolute Pfade (Datei ausserhalb der BaseDir - in
-        // --project/--project-group der Normalfall) macht UriFromPath zu
-        // file://...; die tragen ihre Wurzel selbst. Bewusst am
-        // Uri-Praefix geprueft statt an TPath.IsPathRooted: das warf im
-        // Analysepfad schon einmal (H5, 2026-09-20).
-        if (ABaseDir <> '') and not StartsStr('file:', LocUri) then
-          E.PairStr('uriBaseId', 'SRCROOT');
+        EmitUriBaseId(E, ABaseDir, LocUri);
         E.EndObj;
         E.BeginObjPair('region');
         E.PairInt('startLine', LineNo);

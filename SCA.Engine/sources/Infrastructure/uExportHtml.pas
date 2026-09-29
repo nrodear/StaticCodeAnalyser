@@ -51,6 +51,13 @@ type
     // damit strukturell tot: kein Bericht sagte, mit welchem Regelsatz
     // er entstand - genau das entscheidet aber, ob eine kurze
     // Fundliste 'sauber' oder 'weggefiltert' bedeutet.
+    // noinspection LongParamList (6 mit AProfile): die Signatur ist ueber
+    // drei Chargen gewachsen und beschreibt inzwischen einen kompletten
+    // Berichtsauftrag - Quelle, Ziel, Wurzel, Budget, Profil. Sauber
+    // waere ein Options-Record; der beruehrt aber alle Aufrufer samt
+    // sieben Teststellen und ist deshalb als eigener Posten notiert,
+    // nicht nebenbei in AD1 erledigt. Alle sechs sind benannt und
+    // haben Defaults, die Aufrufe bleiben lesbar.
     class procedure Run(Findings: TObjectList<TLeakFinding>;
       const SourceFile: string; const FileName: string;
       const ABaseDir: string = ''; AMaxRows: Integer = -1;
