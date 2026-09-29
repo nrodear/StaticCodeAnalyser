@@ -293,6 +293,14 @@ begin
         var Rid: string;
         if F.RuleID <> '' then Rid := F.RuleID
         else Rid := TRuleCatalog.GetRuleCanonical(F.Kind).ID;
+        // AD4 (29.09.): kanonisch ist 'ruleId' - so heisst das Feld in
+        // SARIF und im Sonar-Export, und nur diese eine Schreibweise
+        // sollte ein Skript kennen muessen. Das alte 'ruleID' bleibt
+        // DANEBEN stehen: das JSON ist ein veroeffentlichtes Format (seit
+        // 0.9.18 ueber GetIt), ein stilles Umbenennen braeche bestehende
+        // Leser. Gleicher Wert, kein Alias-Vorrang; 'ruleID' ist
+        // deprecated und faellt fruehestens mit einem Major-Schnitt.
+        SB.Append('"ruleId": "');   SB.Append(JsonEscape(Rid));                SB.Append('", ');
         SB.Append('"ruleID": "');   SB.Append(JsonEscape(Rid));                SB.Append('", ');
         SB.Append('"detail": "');   SB.Append(JsonEscape(F.MissingVar));       SB.Append('"');
         if i < Findings.Count - 1 then

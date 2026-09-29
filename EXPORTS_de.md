@@ -100,6 +100,12 @@ daran erkennt.
 Bis einschließlich **v0.9.14** trugen die JSON-Exporte ein BOM; auf
 diesem Stand also entfernen oder mit `utf-8-sig` lesen.
 
+**Regel-ID in `--report-json`.** Jeder Eintrag trägt die Regel-ID
+zweimal: `ruleId` ist die kanonische Schreibweise — dieselbe, die SARIF
+und der Sonar-Export verwenden — und `ruleID` ist der Name vor 0.9.19,
+der erhalten bleibt, damit bestehende Leser nicht brechen. Gleicher
+Wert in beiden; `ruleId` bevorzugen, `ruleID` gilt als veraltet.
+
 ---
 
 ## Workflow 1 — CI-Gate: Build scheitert bei neuen Funden

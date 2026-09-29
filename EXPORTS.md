@@ -96,6 +96,12 @@ exception and keeps its BOM, because that is how Excel recognises UTF-8.
 Up to and including **v0.9.14** the JSON exports did carry a BOM; if you
 are on that build, strip it or read with `utf-8-sig`.
 
+**Rule id in `--report-json`.** Each entry carries the rule id twice:
+`ruleId` is the canonical spelling — the same one SARIF and the Sonar
+export use — and `ruleID` is the pre-0.9.19 name, kept so existing
+readers do not break. Same value in both; prefer `ruleId`, treat
+`ruleID` as deprecated.
+
 ---
 
 ## Workflow 1 — CI gate: fail the build on new findings

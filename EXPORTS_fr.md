@@ -103,6 +103,12 @@ garde son BOM, car c'est ainsi qu'Excel reconnaît l'UTF-8.
 Jusqu'à la **v0.9.14** incluse, les exports JSON portaient un BOM ; sur
 ce build, retirez-le ou lisez avec `utf-8-sig`.
 
+**Identifiant de règle dans `--report-json`.** Chaque entrée porte
+l'identifiant deux fois : `ruleId` est l'écriture canonique — la même
+que SARIF et l'export Sonar — et `ruleID` est le nom antérieur à
+0.9.19, conservé pour ne pas casser les lecteurs existants. Même
+valeur dans les deux ; préférer `ruleId`, `ruleID` est déprécié.
+
 ---
 
 ## Workflow 1 — Gate CI : faire échouer le build sur les nouveaux résultats
