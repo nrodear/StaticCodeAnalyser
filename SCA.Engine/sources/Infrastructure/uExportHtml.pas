@@ -29,39 +29,56 @@ uses
   uSCAConsts, uMethodd12;
 
 type
-  TExporterHtml = class
+  // AE (29.09.): der Zuschnitt EINES HTML-Berichts. Ersetzt die fuenf
+  // Einzelparameter, zu denen TExporterHtml.Run ueber drei Chargen
+  // gewachsen war (SCA013, zuletzt per noinspection begruendet).
+  //
+  // WARUM EIN RECORD MIT Initialize und nicht bloss Default-Parameter:
+  // MaxRows hat die Voreinstellung -1, NICHT 0 - und 0 heisst
+  // 'unbegrenzt'. Eine rohe Deklaration ('var O: THtmlReportOptions;')
+  // laesst nicht-verwaltete Felder uninitialisiert (dieselbe Falle wie
+  // bei TBaselineScope, s. uBaseline); MaxRows waere dann zufaellig 0
+  // und der Bericht eines Korpuslaufs ein Gigabyte-Dokument. Initialize
+  // legt deshalb den sicheren Ausgangszustand fest.
+  THtmlReportOptions = record
   public
-    // ABaseDir: Wurzel fuer die ANZEIGE der Dateipfade. Leer = nur der
+    // Einzeldatei-Bericht: nur Befunde dieser Datei, mit
+    // Quellausschnitt. Leer = alle Befunde (Repo-Modus).
+    SourceFile : string;
+    // Wurzel fuer die ANZEIGE der Dateipfade. Leer = nur der
     // Basisdateiname (bisheriges Verhalten). Mit Wurzel steht der
     // Relativpfad im Report - sonst sind gleichnamige Units aus
-    // verschiedenen Ordnern im Report nicht unterscheidbar (Audit
-    // 2026-08-08: zwei uSame.pas erschienen beide als 'uSame.pas', die
-    // Ordnernamen kamen im ganzen Report nicht vor).
-    // AMaxRows: Obergrenze fuer die in die Tabelle gerenderten Zeilen.
+    // verschiedenen Ordnern nicht unterscheidbar (Audit 2026-08-08:
+    // zwei uSame.pas erschienen beide als 'uSame.pas', die Ordnernamen
+    // kamen im ganzen Report nicht vor).
+    BaseDir    : string;
+    // Name des Regelprofils, mit dem gescannt wurde - er landet im
+    // sca-meta-Block. LEER heisst 'kein Profilfilter, alle Detektoren'
+    // und ist NICHT dasselbe wie das kuratierte Profil 'default'.
+    Profile    : string;
+    // Obergrenze der in die Tabelle gerenderten Zeilen.
     //   -1 = Voreinstellung (HTML_MAX_ROWS_DEFAULT), 0 = unbegrenzt.
     // Ohne Grenze ist der Bericht eines grossen Korpus ein OOM: der
-    // Umfang waechst linear mit der Fundzahl, und niemand liest 560.000
-    // Tabellenzeilen. Wird gekuerzt, sagt das ein Banner im Bericht -
-    // stillschweigend zu kuerzen waere schlimmer als der Absturz, weil
-    // der Leser die Luecke nicht sieht.
-    // AProfile: Name des Regelprofils, mit dem gescannt wurde - er
-    // landet im sca-meta-Block. LEER heisst 'kein Profilfilter, alle
-    // Detektoren' und ist NICHT dasselbe wie das kuratierte Profil
-    // 'default'. Vor AD1 (29.09.) schrieb der Block hart '' und war
-    // damit strukturell tot: kein Bericht sagte, mit welchem Regelsatz
-    // er entstand - genau das entscheidet aber, ob eine kurze
-    // Fundliste 'sauber' oder 'weggefiltert' bedeutet.
-    // noinspection LongParamList (6 mit AProfile): die Signatur ist ueber
-    // drei Chargen gewachsen und beschreibt inzwischen einen kompletten
-    // Berichtsauftrag - Quelle, Ziel, Wurzel, Budget, Profil. Sauber
-    // waere ein Options-Record; der beruehrt aber alle Aufrufer samt
-    // sieben Teststellen und ist deshalb als eigener Posten notiert,
-    // nicht nebenbei in AD1 erledigt. Alle sechs sind benannt und
-    // haben Defaults, die Aufrufe bleiben lesbar.
+    // Umfang waechst linear mit der Fundzahl (gemessen 4,3 KB je Fund),
+    // und niemand liest 560.000 Tabellenzeilen. Wird gekuerzt, sagt das
+    // ein Banner im Bericht - stillschweigend zu kuerzen waere
+    // schlimmer als der Absturz, weil der Leser die Luecke nicht sieht.
+    MaxRows    : Integer;
+    // noinspection AvoidOut
+    // 'out' ist hier nicht gewaehlt, sondern vom Compiler vorgeschrieben
+    // (Signatur von class operator Initialize) - dieselbe Lage wie bei
+    // TBaselineScope; es ruft niemand auf.
+    class operator Initialize(out Dest: THtmlReportOptions);
+  end;
+
+  TExporterHtml = class
+  public
+    // Schreibt den Bericht nach FileName. Zuschnitt s.
+    // THtmlReportOptions - eine rohe Deklaration reicht, Initialize
+    // setzt die Voreinstellungen.
     class procedure Run(Findings: TObjectList<TLeakFinding>;
-      const SourceFile: string; const FileName: string;
-      const ABaseDir: string = ''; AMaxRows: Integer = -1;
-      const AProfile: string = ''); static;
+      const FileName: string;
+      const AOptions: THtmlReportOptions); static;
     class function DefaultFileName(const SourceFile: string;
       const TargetDir: string): string; static;
     // Schreibt den Inhalt eines TStringBuilder als UTF-8 mit BOM,
@@ -460,9 +477,21 @@ begin
   TReportFileWriter.SaveBuilderUtf8(ABuilder, FileName, True);
 end;
 
+class operator THtmlReportOptions.Initialize(out Dest: THtmlReportOptions);
+// Sicherer Ausgangszustand. MaxRows MUSS hier gesetzt werden: -1 ist
+// die Voreinstellung, 0 hiesse 'unbegrenzt' - ein uninitialisiertes Feld
+// waere also nicht bloss falsch, sondern genau die teure Richtung
+// (Gigabyte-Bericht bei einem Korpuslauf). Die Strings sind verwaltet
+// und ohnehin leer; sie stehen der Vollstaendigkeit halber hier.
+begin
+  Dest.SourceFile := '';
+  Dest.BaseDir    := '';
+  Dest.Profile    := '';
+  Dest.MaxRows    := -1;
+end;
+
 class procedure TExporterHtml.Run(Findings: TObjectList<TLeakFinding>;
-  const SourceFile: string; const FileName: string;
-  const ABaseDir: string; AMaxRows: Integer; const AProfile: string);
+  const FileName: string; const AOptions: THtmlReportOptions);
 const
   SNIPPET_CONTEXT = 3;  // Zeilen vor und nach der Befund-Zeile
   TOP_DETECTORS_N = 10; // Anzahl Eintraege in der Top-Liste und im "Top10"-Filter
@@ -482,6 +511,13 @@ const
   HEALTH_GREEN_MAX  = 49;
   HEALTH_YELLOW_MAX = 499;
 var
+  // AE: Aliase auf AOptions. Der Rumpf ist ueber 3.000 Zeilen lang und
+  // liest diese Werte an rund zwanzig Stellen - ihn dafuer flaechig
+  // umzuschreiben waere reines Regressionsrisiko ohne Gegenwert. Die
+  // drei Zuweisungen unten sind die ganze Anbindung.
+  SourceFile : string;
+  ABaseDir   : string;
+  AProfile   : string;
   SB        : TStringBuilder;
   F         : TLeakFinding;
   // T1: Zeilenbudget. RowsDropped steht VOR der Tabelle fest, damit
@@ -547,6 +583,10 @@ var
   end;
 
 begin
+  SourceFile := AOptions.SourceFile;
+  ABaseDir   := AOptions.BaseDir;
+  AProfile   := AOptions.Profile;
+
   if SourceFile = '' then
     Title := 'Code Review'
   else
@@ -717,7 +757,7 @@ begin
           Inc(SecCount, KindEntry.Value);
       end;
 
-  MaxRows := AMaxRows;
+  MaxRows := AOptions.MaxRows;
   if MaxRows < 0 then
     MaxRows := HTML_MAX_ROWS_DEFAULT;
   RowsEmitted := 0;

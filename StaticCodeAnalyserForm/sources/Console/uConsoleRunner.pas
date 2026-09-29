@@ -1603,8 +1603,11 @@ var
           // reines INI-Profil ist also noch nicht aufgeloest. Fuer den
           // Null-Fund-Bericht ist das tragbar; der Normalpfad unten
           // schreibt das effektive Profil.
-          TExporterHtml.Run(Leer, '', Args.ReportHtml, Args.BaseDir,
-                            HtmlZeilenBudget(Args), Args.Profile);
+          var LeerOpts: THtmlReportOptions;
+          LeerOpts.BaseDir := Args.BaseDir;
+          LeerOpts.MaxRows := HtmlZeilenBudget(Args);
+          LeerOpts.Profile := Args.Profile;
+          TExporterHtml.Run(Leer, Args.ReportHtml, LeerOpts);
           if not Args.Quiet then
             WriteLn('HTML report written (no findings): ', Args.ReportHtml);
         end;
@@ -2421,8 +2424,11 @@ begin
         // AD1: Settings.Profile ist das EFFEKTIVE Profil (Args.Profile
         // hat es oben ueberschrieben, sonst steht der INI-Wert drin) -
         // genau das gehoert in den sca-meta-Block.
-        TExporterHtml.Run(Findings, '', Args.ReportHtml, Args.BaseDir,
-                          HtmlZeilenBudget(Args), Settings.Profile);
+        var HtmlOpts: THtmlReportOptions;
+        HtmlOpts.BaseDir := Args.BaseDir;
+        HtmlOpts.MaxRows := HtmlZeilenBudget(Args);
+        HtmlOpts.Profile := Settings.Profile;
+        TExporterHtml.Run(Findings, Args.ReportHtml, HtmlOpts);
         if not Args.Quiet then
           WriteLn('HTML report written: ', Args.ReportHtml);
       except
