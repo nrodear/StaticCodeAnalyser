@@ -530,7 +530,11 @@ begin
         E.BeginObjValue;
         E.BeginObjPair('physicalLocation');
         E.BeginObjPair('artifactLocation');
-        E.PairStr('uri', UriFromPath(RelPath));
+        var DiagUri := UriFromPath(RelPath);
+        E.PairStr('uri', DiagUri);
+        // AD5: dieselbe Wurzel wie bei den results (gleiche Pruefung).
+        if (ABaseDir <> '') and not StartsStr('file:', DiagUri) then
+          E.PairStr('uriBaseId', 'SRCROOT');
         E.EndObj;                                      // artifactLocation
         E.EndObj;                                      // physicalLocation
         E.EndObj;                                      // location
@@ -675,6 +679,26 @@ begin
   E.EndObj;                                            // driver
   E.EndObj;                                            // tool
 
+  // AD5 (29.09.): runs[0].originalUriBaseIds. Die uris der Funde sind
+  // relativ zu ABaseDir - ohne eine benannte Wurzel ist ein relativer
+  // SARIF-uri fuer den Konsumenten nicht aufloesbar, er muss raten
+  // (SARIF 2.1.0 par.3.4.4). SRCROOT ist der Name, den die
+  // SARIF-Viewer und GitHub erwarten.
+  // NUR wenn ABaseDir gesetzt ist: ohne BaseDir laesst MakeRelative die
+  // Pfade ABSOLUT, eine Wurzelangabe waere dann schlicht falsch.
+  // Der Fingerprint bleibt unberuehrt - er haengt am unkodierten
+  // RelPath, nicht am uri (dieselbe Falle wie bei der Prozentkodierung).
+  if ABaseDir <> '' then
+  begin
+    E.BeginObjPair('originalUriBaseIds');
+    E.BeginObjPair('SRCROOT');
+    E.PairStr('uri', UriFromPath(
+      StringReplace(IncludeTrailingPathDelimiter(
+        TPath.GetFullPath(ABaseDir)), '\', '/', [rfReplaceAll])));
+    E.EndObj;                                          // SRCROOT
+    E.EndObj;                                          // originalUriBaseIds
+  end;
+
   EmitRunDiagnostics(E, AFindings, ABaseDir);
 
   // runs[0].results[] - pro Finding direkt streamen, kein DOM.
@@ -721,7 +745,16 @@ begin
         E.BeginObjPair('artifactLocation');
         // Kodiert NUR hier am Emit - RelPath selbst bleibt roh, er ist
         // Fingerprint-Eingang (s. PercentEncodeUriPath).
-        E.PairStr('uri', UriFromPath(RelPath));
+        var LocUri := UriFromPath(RelPath);
+        E.PairStr('uri', LocUri);
+        // AD5: Wurzel nur benennen, wenn der uri WIRKLICH relativ ist.
+        // Absolute Pfade (Datei ausserhalb der BaseDir - in
+        // --project/--project-group der Normalfall) macht UriFromPath zu
+        // file://...; die tragen ihre Wurzel selbst. Bewusst am
+        // Uri-Praefix geprueft statt an TPath.IsPathRooted: das warf im
+        // Analysepfad schon einmal (H5, 2026-09-20).
+        if (ABaseDir <> '') and not StartsStr('file:', LocUri) then
+          E.PairStr('uriBaseId', 'SRCROOT');
         E.EndObj;
         E.BeginObjPair('region');
         E.PairInt('startLine', LineNo);

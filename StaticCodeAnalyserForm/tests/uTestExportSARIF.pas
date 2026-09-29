@@ -38,6 +38,9 @@ type
     [Test] procedure ResultHasRuleIdAndLevel;
     [Test] procedure ResultLocationHasFileAndLine;
     [Test] procedure RelativePathsAreUsedWhenBaseDirSet;
+    // AD5: benannte Wurzel fuer relative uris.
+    [Test] procedure UriBaseId_WirdMitBaseDirGesetzt;
+    [Test] procedure UriBaseId_FehltOhneBaseDir;
     [Test] procedure FingerprintHashIsStable;
     [Test] procedure SeverityMapsCorrectly;
     [Test] procedure EmptyFindingsListProducesEmptyResults;
@@ -264,6 +267,94 @@ begin
       Assert.AreEqual<Integer>(100,
         (PhysLoc.GetValue<TJSONObject>('region')
                 .GetValue<TJSONNumber>('startLine')).AsInt);
+    finally
+      Root.Free;
+    end;
+  finally
+    Findings.Free;
+  end;
+end;
+
+procedure TTestExportSARIF.UriBaseId_WirdMitBaseDirGesetzt;
+// AD5 (29.09.): ein RELATIVER uri ohne benannte Wurzel ist fuer den
+// Konsumenten nicht aufloesbar (SARIF 2.1.0 par.3.4.4) - GitHub und die
+// Viewer muessen raten, wogegen sie ihn aufloesen. Mit BaseDir tragen
+// die Funde jetzt uriBaseId=SRCROOT, und runs[0] benennt SRCROOT.
+// Ohne den Fix ist dieser Test ROT (beide Schluessel fehlen).
+var
+  Findings : TObjectList<TLeakFinding>;
+  S        : string;
+  Root     : TJSONObject;
+  Run      : TJSONObject;
+  Loc      : TJSONObject;
+  TempDir  : string;
+  BaseUri  : string;
+begin
+  TempDir := TPath.Combine(TPath.GetTempPath, 'sca-test-basid');
+  TDirectory.CreateDirectory(TempDir);
+  TDirectory.CreateDirectory(TPath.Combine(TempDir, 'src'));
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, lsError,
+      TPath.Combine(TempDir, 'src\Foo.pas'), 5, 'list'));
+    S := TSARIFWriter.ToJsonString(Findings, TempDir, '0.8.0', 'T');
+    Root := ParseSARIF(S);
+    try
+      Run := (Root.GetValue<TJSONArray>('runs').Items[0] as TJSONObject);
+      BaseUri := Run.GetValue<TJSONObject>('originalUriBaseIds')
+                    .GetValue<TJSONObject>('SRCROOT')
+                    .GetValue<string>('uri');
+      Assert.IsTrue(BaseUri.StartsWith('file:'),
+        'die Wurzel muss eine file-URI sein, ist: ' + BaseUri);
+      Assert.IsTrue(BaseUri.EndsWith('/'),
+        'eine Verzeichnis-URI endet auf / - sonst haengt der Konsument ' +
+        'den Relativpfad an den letzten Ordnernamen an: ' + BaseUri);
+      Loc := (GetFirstResult(Root)
+                .GetValue<TJSONArray>('locations').Items[0] as TJSONObject)
+                .GetValue<TJSONObject>('physicalLocation')
+                .GetValue<TJSONObject>('artifactLocation');
+      Assert.AreEqual('SRCROOT', Loc.GetValue<string>('uriBaseId'),
+        'der relative uri braucht seine benannte Wurzel');
+      Assert.AreEqual('src/Foo.pas', Loc.GetValue<string>('uri'),
+        'der uri selbst bleibt unveraendert relativ');
+    finally
+      Root.Free;
+    end;
+  finally
+    Findings.Free;
+    TDirectory.Delete(TempDir, True);
+  end;
+end;
+
+procedure TTestExportSARIF.UriBaseId_FehltOhneBaseDir;
+// Gegenprobe und VERTRAG: ohne BaseDir laesst MakeRelative die Pfade
+// ABSOLUT (Datei ausserhalb der Wurzel ist in --project der Normalfall).
+// UriFromPath macht daraus file://... - solche uris tragen ihre Wurzel
+// selbst, eine SRCROOT-Angabe waere schlicht falsch. Der Test haelt
+// fest, dass AD5 NICHT pauschal stempelt.
+var
+  Findings : TObjectList<TLeakFinding>;
+  S        : string;
+  Root     : TJSONObject;
+  Run      : TJSONObject;
+  Loc      : TJSONObject;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Findings.Add(MakeFinding(fkMemoryLeak, lsError,
+      'D:\anderswo\Foo.pas', 5, 'list'));
+    S := TSARIFWriter.ToJsonString(Findings, '', '0.8.0', 'T');
+    Root := ParseSARIF(S);
+    try
+      Run := (Root.GetValue<TJSONArray>('runs').Items[0] as TJSONObject);
+      Assert.IsNull(Run.FindValue('originalUriBaseIds'),
+        'ohne BaseDir darf keine Wurzel behauptet werden');
+      Loc := (GetFirstResult(Root)
+                .GetValue<TJSONArray>('locations').Items[0] as TJSONObject)
+                .GetValue<TJSONObject>('physicalLocation')
+                .GetValue<TJSONObject>('artifactLocation');
+      Assert.IsNull(Loc.FindValue('uriBaseId'),
+        'ein absoluter file-uri braucht und bekommt keine Wurzel');
     finally
       Root.Free;
     end;

@@ -103,6 +103,14 @@ garde son BOM, car c'est ainsi qu'Excel reconnaît l'UTF-8.
 Jusqu'à la **v0.9.14** incluse, les exports JSON portaient un BOM ; sur
 ce build, retirez-le ou lisez avec `utf-8-sig`.
 
+**Résolution des chemins dans SARIF.** Si `--base-dir` est défini (la
+CLI le fait pointer sur `--path`), les uris des résultats sont
+relatives et `runs[0]` nomme leur racine via
+`originalUriBaseIds.SRCROOT` ; chaque emplacement porte
+`uriBaseId: "SRCROOT"`. Sans répertoire de base, les chemins restent
+absolus et deviennent des uris `file://`, qui portent leur propre
+racine : aucun `uriBaseId` n'est alors émis.
+
 **Identifiant de règle dans `--report-json`.** Chaque entrée porte
 l'identifiant deux fois : `ruleId` est l'écriture canonique — la même
 que SARIF et l'export Sonar — et `ruleID` est le nom antérieur à

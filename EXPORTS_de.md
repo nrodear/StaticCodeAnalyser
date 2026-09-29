@@ -100,6 +100,13 @@ daran erkennt.
 Bis einschließlich **v0.9.14** trugen die JSON-Exporte ein BOM; auf
 diesem Stand also entfernen oder mit `utf-8-sig` lesen.
 
+**Wie die Pfade in SARIF aufgelöst werden.** Ist `--base-dir` gesetzt
+(die CLI setzt es auf `--path` vor), sind die Fund-uris relativ, und
+`runs[0]` benennt ihre Wurzel als `originalUriBaseIds.SRCROOT`; jede
+Fundstelle trägt `uriBaseId: "SRCROOT"`. Ohne Basisverzeichnis
+bleiben die Pfade absolut und werden zu `file://`-uris — die tragen
+ihre Wurzel selbst, deshalb wird dann kein `uriBaseId` geschrieben.
+
 **Regel-ID in `--report-json`.** Jeder Eintrag trägt die Regel-ID
 zweimal: `ruleId` ist die kanonische Schreibweise — dieselbe, die SARIF
 und der Sonar-Export verwenden — und `ruleID` ist der Name vor 0.9.19,
