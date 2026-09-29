@@ -34,6 +34,9 @@ type
     [Test] procedure MaxRows_Truncates_AndNamesTheGap;
     [Test] procedure MaxRows_Zero_RendersEverything;
     [Test] procedure MaxRows_BelowLimit_ShowsNoBanner;
+    // AD1: Profilname im sca-meta-Block.
+    [Test] procedure Meta_Profile_IsWrittenWhenGiven;
+    [Test] procedure Meta_Profile_EmptyMeansNoFilter;
     [Test] procedure ChunkedWrite_SplitsBetweenSurrogates_Intact;
     // T6 (HTML-Review 2026-08-05): ein zerlegter Teilen-Link darf die
     // Initialisierung nicht kippen.
@@ -97,6 +100,31 @@ function NeueTempDatei(const APrefix, AExt: string): string;
 begin
   Result := TPath.Combine(TPath.GetTempPath,
     APrefix + TGUID.NewGuid.ToString + AExt);
+end;
+
+function RenderMitProfil(const AProfil: string): string;
+// Ein Fund, Bericht mit gegebenem Profilnamen - fuer den sca-meta-Test.
+var
+  Findings : TObjectList<TLeakFinding>;
+  Fnd      : TLeakFinding;
+  Fn       : string;
+begin
+  Findings := TObjectList<TLeakFinding>.Create(True);
+  try
+    Fnd := TLeakFinding.Create;
+    Fnd.SetKind(fkMemoryLeak);
+    Fnd.FileName   := FIXTURE_PAS;
+    Fnd.LineNumber := '1';
+    Fnd.MissingVar := 'list not freed';
+    Fnd.MethodName := 'TestMethod';
+    Findings.Add(Fnd);
+    Fn := NeueTempDatei('sca-test-prof-', '.html');
+    TExporterHtml.Run(Findings, '', Fn, '', -1, AProfil);
+    Result := TFile.ReadAllText(Fn, TEncoding.UTF8);
+    if TFile.Exists(Fn) then TFile.Delete(Fn);
+  finally
+    Findings.Free;
+  end;
 end;
 
 function RenderCapped(ACount, AMaxRows: Integer): string;
@@ -426,6 +454,28 @@ begin
   H := RenderCapped(5, 0);
   Assert.IsFalse(H.Contains(BANNER_MARKER),
     'ohne Budget darf kein Banner erscheinen');
+end;
+
+procedure TTestExportHtml.Meta_Profile_IsWrittenWhenGiven;
+// AD1 (29.09.): der sca-meta-Block schrieb bis dahin HART einen
+// Leerstring - kein Bericht sagte, mit welchem Regelsatz er entstand.
+// Ohne den Fix ist dieser Test ROT.
+var Html : string;
+begin
+  Html := RenderMitProfil('strict');
+  Assert.IsTrue(Html.Contains('"profile":"strict"'),
+    'sca-meta muss den Profilnamen tragen');
+end;
+
+procedure TTestExportHtml.Meta_Profile_EmptyMeansNoFilter;
+// Gegenprobe und VERTRAG: leer heisst 'kein Profilfilter' (alle
+// Detektoren) - NICHT das kuratierte Profil 'default'. Der Block
+// darf hier also nichts erfinden.
+var Html : string;
+begin
+  Html := RenderMitProfil('');
+  Assert.IsTrue(Html.Contains('"profile":""'),
+    'ohne Profil bleibt das Feld leer');
 end;
 
 procedure TTestExportHtml.MaxRows_BelowLimit_ShowsNoBanner;

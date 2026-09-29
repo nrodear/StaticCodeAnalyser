@@ -1574,7 +1574,13 @@ var
         end;
         if Args.ReportHtml <> '' then
         begin
-          TExporterHtml.Run(Leer, '', Args.ReportHtml, Args.BaseDir);
+          // AD1: hier steht nur Args.Profile zur Verfuegung - dieser
+          // Frueh-Ausstieg laeuft VOR dem Settings.Load (s.u.), ein
+          // reines INI-Profil ist also noch nicht aufgeloest. Fuer den
+          // Null-Fund-Bericht ist das tragbar; der Normalpfad unten
+          // schreibt das effektive Profil.
+          TExporterHtml.Run(Leer, '', Args.ReportHtml, Args.BaseDir,
+                            -1, Args.Profile);
           if not Args.Quiet then
             WriteLn('HTML report written (no findings): ', Args.ReportHtml);
         end;
@@ -2388,7 +2394,11 @@ begin
         // Repo gescannt wurde; Findings tragen pro Item ihren eigenen FileName.
         // Args.BaseDir defaultet auf Args.Path (s. Arg-Parsing) - damit
         // stehen im Report Relativpfade statt blosser Dateinamen.
-        TExporterHtml.Run(Findings, '', Args.ReportHtml, Args.BaseDir);
+        // AD1: Settings.Profile ist das EFFEKTIVE Profil (Args.Profile
+        // hat es oben ueberschrieben, sonst steht der INI-Wert drin) -
+        // genau das gehoert in den sca-meta-Block.
+        TExporterHtml.Run(Findings, '', Args.ReportHtml, Args.BaseDir,
+                          -1, Settings.Profile);
         if not Args.Quiet then
           WriteLn('HTML report written: ', Args.ReportHtml);
       except
