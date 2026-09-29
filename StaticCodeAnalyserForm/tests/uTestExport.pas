@@ -45,6 +45,8 @@ type
     // Die beiden Writer als GANZES - Praeambel UND Inhalt.
     [Test] procedure ExportCsv_MitBomUndForwardSlashes;
     [Test] procedure ExportJson_OhneBomUndForwardSlashes;
+    // AD4: kanonische Regel-ID-Schreibweise + Kompatibilitaets-Alias.
+    [Test] procedure ExportJson_RuleIdKanonischUndAlias;
     [Test] procedure ExportCsvUndJson_VertragenNil;
     // Formel-Neutralisierung im CSV (CWE-1236)
     [Test] procedure ExportCsv_FormelPraefixImDateinamen_Entschaerft;
@@ -533,6 +535,40 @@ begin
     + 'war der BLOCKER: ' + Copy(T, 1, 200));
   Assert.AreEqual<Integer>(0, Pos('src\uMain.pas', T),
     'kein Windows-Trenner im Relativpfad');
+end;
+
+procedure TTestExport.ExportJson_RuleIdKanonischUndAlias;
+// AD4 (29.09.): der JSON-Export schrieb die Regel-ID als 'ruleID',
+// SARIF und Sonar schreiben 'ruleId'. Wer drei Formate nebeneinander
+// auswertet, stolperte ueber die eine abweichende Schreibweise.
+// Jetzt steht die kanonische Form da - und die alte DANEBEN, weil das
+// JSON ein veroeffentlichtes Format ist (0.9.18 via GetIt) und ein
+// stilles Umbenennen bestehende Leser braeche.
+//
+// Ohne den Fix ist die erste Assertion ROT.
+var
+  L : TObjectList<TLeakFinding>;
+  B : TBytes;
+  T : string;
+begin
+  L := EineFundliste;
+  try
+    B := ExportBytes('.json',
+      procedure(AL: TObjectList<TLeakFinding>; AZiel: string)
+      begin
+        TExporter.ExportJson(AL, AZiel, 'D:\proj');
+      end, L);
+  finally
+    L.Free;
+  end;
+
+  T := TextOhnePraeambel(B);
+  Assert.IsTrue(T.Contains('"ruleId": "'),
+    'die kanonische Schreibweise ruleId fehlt (so heisst das Feld ' +
+    'in SARIF und Sonar): ' + Copy(T, 1, 200));
+  Assert.IsTrue(T.Contains('"ruleID": "'),
+    'der Kompatibilitaets-Alias ruleID muss bleiben - das Format ' +
+    'ist veroeffentlicht');
 end;
 
 procedure TTestExport.ExportJson_OhneBomUndForwardSlashes;

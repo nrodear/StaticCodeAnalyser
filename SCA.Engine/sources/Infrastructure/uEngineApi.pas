@@ -198,6 +198,7 @@ type
   private
     FFindings : TObjectList<TLeakFinding>;
     FBaseDir  : string;
+    FProfile  : string;   // AD1: nur fuer den HTML-Meta-Block
     // Kohorten-Stempel der Evidenz-Politik (Gegenpruefungs-MINOR
     // 2026-08-26): der Politik-Zustand DES SCANS, der diese Funde erzeugt
     // hat. WriteSarif reicht ihn explizit an den Writer durch - damit
@@ -206,7 +207,11 @@ type
     FConfidenceProps : Boolean;
     function CountSeverity(ASev: TLeakSeverity): Integer;
   public
-    constructor Create(AFindings: TObjectList<TLeakFinding>; const ABaseDir: string);
+    // AProfile (AD1): Profilname des Laufs - nur Durchreiche an den
+    // HTML-Report, damit dessen sca-meta sagt, mit welchem Regelsatz
+    // die Zahlen entstanden sind.
+    constructor Create(AFindings: TObjectList<TLeakFinding>; const ABaseDir: string;
+      const AProfile: string = '');
     destructor  Destroy; override;
 
     // Export-Helfer (Version = SCA_VERSION, BaseDir = aus dem Scan).
@@ -359,11 +364,12 @@ end;
 { TScanResult }
 
 constructor TScanResult.Create(AFindings: TObjectList<TLeakFinding>;
-  const ABaseDir: string);
+  const ABaseDir: string; const AProfile: string);
 begin
   inherited Create;
   FFindings := AFindings;
   FBaseDir  := ABaseDir;
+  FProfile  := AProfile;
 end;
 
 destructor TScanResult.Destroy;
@@ -394,7 +400,7 @@ begin
   // FBaseDir mitgeben: sonst zeigt der Report nur Basisdateinamen und
   // gleichnamige Units aus verschiedenen Ordnern sind nicht
   // unterscheidbar (Audit 2026-08-08).
-  TExporterHtml.Run(FFindings, '', AFileName, FBaseDir);
+  TExporterHtml.Run(FFindings, '', AFileName, FBaseDir, -1, FProfile);
 end;
 
 function TScanResult.CountSeverity(ASev: TLeakSeverity): Integer;
@@ -917,7 +923,7 @@ begin
       try TBaseline.Write(Findings, Req.WriteBaselinePath, BlScope); except end;
   end;
 
-  Result := TScanResult.Create(Findings, BaseDir);
+  Result := TScanResult.Create(Findings, BaseDir, Req.Profile);
   // Kohorten-Stempel: uStaticAnalyzer2 hat ihn soeben fuer DIESEN Scan
   // gesetzt (unter dem Engine-Lock, also race-frei uebernehmbar).
   Result.FConfidenceProps := uSCAConsts.LastScanEvidenceTiering;

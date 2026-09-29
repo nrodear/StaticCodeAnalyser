@@ -55,6 +55,21 @@ their look, but they are separate pages and neither replaces the other:
   suggested file name carries the date:
   `sca_codereview_YYYY-MM-DD.html`.
 
+**Row budget of the HTML table.** The table renders at most 20,000
+findings; `--html-max-rows <n>` changes that (`0` = unlimited, an
+unreadable value falls back to the default rather than to unlimited).
+The report grows by roughly 4 KB per finding, so a full corpus run
+without a budget would produce gigabytes. What the budget drops is
+never silent: a banner above the table names the number of hidden
+findings, and the summary keeps counting **all** of them. Filter,
+search and sorting only ever work on the rendered rows.
+
+**Which rule set produced this report.** The machine-readable
+`sca-meta` block in the page head carries `profile`: the name of the
+rule profile the scan ran with. An empty value means *no profile
+filter* — every detector ran — and is not the same as the curated
+`default` profile.
+
 The workbench page keeps the rule documentation **once per rule**, the
 source excerpt as plain text, and no per-finding copy of the search
 text — which is why it stays roughly half the size the same report used
@@ -80,6 +95,19 @@ exception and keeps its BOM, because that is how Excel recognises UTF-8.
 
 Up to and including **v0.9.14** the JSON exports did carry a BOM; if you
 are on that build, strip it or read with `utf-8-sig`.
+
+**Resolving the paths in SARIF.** When `--base-dir` is set (the CLI
+defaults it to `--path`), finding uris are relative and `runs[0]`
+names their root as `originalUriBaseIds.SRCROOT`; every location
+carries `uriBaseId: "SRCROOT"`. Without a base directory the paths
+stay absolute and become `file://` uris, which carry their own root —
+no `uriBaseId` is emitted then, because claiming one would be wrong.
+
+**Rule id in `--report-json`.** Each entry carries the rule id twice:
+`ruleId` is the canonical spelling — the same one SARIF and the Sonar
+export use — and `ruleID` is the pre-0.9.19 name, kept so existing
+readers do not break. Same value in both; prefer `ruleId`, treat
+`ruleID` as deprecated.
 
 ---
 

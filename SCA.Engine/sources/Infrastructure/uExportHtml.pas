@@ -8,9 +8,10 @@
 //   TExporterHtml.Run(...)          - schreibt die HTML-Datei
 //   TExporterHtml.DefaultFileName(..) - liefert den Standard-Dateinamen
 //
-// Wird intern von TExporter.ExportHtml / TExporter.DefaultHtmlFileName
-// als Delegation aufgerufen, sodass der Aufrufer weiterhin nur uExport
-// in seinen uses braucht.
+// Aufrufer rufen TExporterHtml DIREKT (CLI, Engine-Facade, GUI-Menu).
+// Die frueheren Delegationen TExporter.ExportHtml /
+// TExporter.DefaultHtmlFileName sind in AD2 (29.09.) entfallen: sie
+// hatten keinen Aufrufer und verschluckten ABaseDir/AMaxRows.
 //
 // HTML-spezifische Helper: BuildCodeSnippet liegt privat in dieser
 // Unit, HtmlEscape ist public (geteilt mit uDetectorInfoExport).
@@ -43,9 +44,24 @@ type
     // Tabellenzeilen. Wird gekuerzt, sagt das ein Banner im Bericht -
     // stillschweigend zu kuerzen waere schlimmer als der Absturz, weil
     // der Leser die Luecke nicht sieht.
+    // AProfile: Name des Regelprofils, mit dem gescannt wurde - er
+    // landet im sca-meta-Block. LEER heisst 'kein Profilfilter, alle
+    // Detektoren' und ist NICHT dasselbe wie das kuratierte Profil
+    // 'default'. Vor AD1 (29.09.) schrieb der Block hart '' und war
+    // damit strukturell tot: kein Bericht sagte, mit welchem Regelsatz
+    // er entstand - genau das entscheidet aber, ob eine kurze
+    // Fundliste 'sauber' oder 'weggefiltert' bedeutet.
+    // noinspection LongParamList (6 mit AProfile): die Signatur ist ueber
+    // drei Chargen gewachsen und beschreibt inzwischen einen kompletten
+    // Berichtsauftrag - Quelle, Ziel, Wurzel, Budget, Profil. Sauber
+    // waere ein Options-Record; der beruehrt aber alle Aufrufer samt
+    // sieben Teststellen und ist deshalb als eigener Posten notiert,
+    // nicht nebenbei in AD1 erledigt. Alle sechs sind benannt und
+    // haben Defaults, die Aufrufe bleiben lesbar.
     class procedure Run(Findings: TObjectList<TLeakFinding>;
       const SourceFile: string; const FileName: string;
-      const ABaseDir: string = ''; AMaxRows: Integer = -1); static;
+      const ABaseDir: string = ''; AMaxRows: Integer = -1;
+      const AProfile: string = ''); static;
     class function DefaultFileName(const SourceFile: string;
       const TargetDir: string): string; static;
     // Schreibt den Inhalt eines TStringBuilder als UTF-8 mit BOM,
@@ -446,7 +462,7 @@ end;
 
 class procedure TExporterHtml.Run(Findings: TObjectList<TLeakFinding>;
   const SourceFile: string; const FileName: string;
-  const ABaseDir: string; AMaxRows: Integer);
+  const ABaseDir: string; AMaxRows: Integer; const AProfile: string);
 const
   SNIPPET_CONTEXT = 3;  // Zeilen vor und nach der Befund-Zeile
   TOP_DETECTORS_N = 10; // Anzahl Eintraege in der Top-Liste und im "Top10"-Filter
@@ -1371,7 +1387,7 @@ begin
     SB.Append    ('","generatedAt":"');
     SB.Append    (JsonForScript(WhenStr));
     SB.Append    ('","profile":"');
-    SB.Append    (JsonForScript(''));  // Profil nicht an Run uebergeben -> leer
+    SB.Append    (JsonForScript(AProfile));  // AD1: leer = kein Profilfilter
     SB.Append    ('","counts":{"total":');
     SB.Append    (IntToStr(nTotal));
     SB.Append    (',"error":');

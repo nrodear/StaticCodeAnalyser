@@ -58,6 +58,22 @@ remplace l'autre :
   dépouiller un grand rapport à son bureau. Son nom de fichier proposé
   porte la date : `sca_codereview_AAAA-MM-JJ.html`.
 
+**Budget de lignes du tableau HTML.** Le tableau affiche au plus
+20 000 résultats ; `--html-max-rows <n>` modifie cette limite (`0` =
+illimité, une valeur illisible retombe sur la valeur par défaut et non
+sur l'illimité). Le rapport grossit d'environ 4 Ko par résultat : un
+scan de corpus complet sans budget produirait des gigaoctets. Ce que
+le budget écarte n'est jamais silencieux : une bannière au-dessus du
+tableau annonce le nombre de résultats masqués, et la synthèse les
+compte **tous**. Filtre, recherche et tri ne portent que sur les
+lignes affichées.
+
+**Avec quel jeu de règles ce rapport a été produit.** Le bloc
+`sca-meta` lisible par machine, dans l'en-tête de la page, porte
+`profile` : le nom du profil de règles utilisé. Une valeur vide
+signifie *aucun filtre de profil* — tous les détecteurs ont tourné —
+et n'équivaut pas au profil curé `default`.
+
 La page d'atelier conserve la documentation de règle **une fois par
 règle**, l'extrait de code en texte brut et aucune copie du texte de
 recherche par résultat — c'est pourquoi elle reste environ deux fois
@@ -86,6 +102,20 @@ garde son BOM, car c'est ainsi qu'Excel reconnaît l'UTF-8.
 
 Jusqu'à la **v0.9.14** incluse, les exports JSON portaient un BOM ; sur
 ce build, retirez-le ou lisez avec `utf-8-sig`.
+
+**Résolution des chemins dans SARIF.** Si `--base-dir` est défini (la
+CLI le fait pointer sur `--path`), les uris des résultats sont
+relatives et `runs[0]` nomme leur racine via
+`originalUriBaseIds.SRCROOT` ; chaque emplacement porte
+`uriBaseId: "SRCROOT"`. Sans répertoire de base, les chemins restent
+absolus et deviennent des uris `file://`, qui portent leur propre
+racine : aucun `uriBaseId` n'est alors émis.
+
+**Identifiant de règle dans `--report-json`.** Chaque entrée porte
+l'identifiant deux fois : `ruleId` est l'écriture canonique — la même
+que SARIF et l'export Sonar — et `ruleID` est le nom antérieur à
+0.9.19, conservé pour ne pas casser les lecteurs existants. Même
+valeur dans les deux ; préférer `ruleId`, `ruleID` est déprécié.
 
 ---
 
