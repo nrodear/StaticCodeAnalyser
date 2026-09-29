@@ -8,9 +8,10 @@
 //   TExporterHtml.Run(...)          - schreibt die HTML-Datei
 //   TExporterHtml.DefaultFileName(..) - liefert den Standard-Dateinamen
 //
-// Wird intern von TExporter.ExportHtml / TExporter.DefaultHtmlFileName
-// als Delegation aufgerufen, sodass der Aufrufer weiterhin nur uExport
-// in seinen uses braucht.
+// Aufrufer rufen TExporterHtml DIREKT (CLI, Engine-Facade, GUI-Menu).
+// Die frueheren Delegationen TExporter.ExportHtml /
+// TExporter.DefaultHtmlFileName sind in AD2 (29.09.) entfallen: sie
+// hatten keinen Aufrufer und verschluckten ABaseDir/AMaxRows.
 //
 // HTML-spezifische Helper: BuildCodeSnippet liegt privat in dieser
 // Unit, HtmlEscape ist public (geteilt mit uDetectorInfoExport).

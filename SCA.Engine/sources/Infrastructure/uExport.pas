@@ -63,16 +63,13 @@ type
     // Der Umzug ist der zweite Teil der SCA141-Folgearbeit (TExporter
     // 584 -> unter die 500er-Schwelle).
 
-    // Erzeugt einen kompletten, in sich geschlossenen HTML-Report (inkl. CSS).
-    // SourceFile ist optional - wenn '' gesetzt, werden alle Befunde gelistet.
-    // Implementierung in uExportHtml; diese Methode delegiert dorthin.
-    class procedure ExportHtml(Findings: TObjectList<TLeakFinding>;
-      const SourceFile: string; const FileName: string); static;
-
-    // Hilfs-Funktion: erzeugt den Standard-Dateinamen
-    // "<source-basename>_codereview_<YYYY-MM-DD>.html". Delegation an uExportHtml.
-    class function DefaultHtmlFileName(const SourceFile: string;
-      const TargetDir: string): string; static;
+    // AD2 (29.09.): die beiden HTML-Delegationen ExportHtml und
+    // DefaultHtmlFileName sind hier ERSATZLOS entfallen - sie hatten im
+    // ganzen Baum keinen Aufrufer (alle Konsumenten rufen TExporterHtml
+    // direkt) und reichten ABaseDir/AMaxRows nicht durch: wer sie kuenftig
+    // benutzt haette, haette Relativpfade und Zeilendeckel still verloren.
+    // Mit ihnen faellt auch die uses-Kante uExport -> uExportHtml (die
+    // Gegenrichtung bleibt: uExportHtml braucht die Querschnitts-Helfer).
 
     // ---- Querschnitts-Helfer (public weil uExportHtml sie braucht) ----
 
@@ -109,7 +106,6 @@ implementation
 
 uses
   System.IOUtils,          // TPath (RelativeDisplayPath)
-  uExportHtml,
   uReportFileWriter,   // atomare Schreibwege (C-Charge 2026-09-19)
   uDetectorUtils;      // SameSourceFile-Delegation (D1 2026-09-19)
 
@@ -327,20 +323,6 @@ class function TExporter.SameSourceFile(const A, B: string): Boolean;
 // TDetectorUtils (Common) - Doku und Tail-Vertrag dort.
 begin
   Result := TDetectorUtils.SameSourceFile(A, B);
-end;
-
-// ---- HTML-Report: nur Delegationen, Implementation in uExportHtml ----
-
-class function TExporter.DefaultHtmlFileName(const SourceFile: string;
-  const TargetDir: string): string;
-begin
-  Result := TExporterHtml.DefaultFileName(SourceFile, TargetDir);
-end;
-
-class procedure TExporter.ExportHtml(Findings: TObjectList<TLeakFinding>;
-  const SourceFile: string; const FileName: string);
-begin
-  TExporterHtml.Run(Findings, SourceFile, FileName);
 end;
 
 end.
