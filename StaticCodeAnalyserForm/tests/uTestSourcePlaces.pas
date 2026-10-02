@@ -47,6 +47,12 @@ type
     [Test] procedure HashOf_MatchesBuilder;
     [Test] procedure ConditionalRanges_FromMarkers;
 
+    // ---- P4 Argumentliste / P5 uses / P8 Bezeichner ----
+    [Test] procedure CallOf_SeveralArguments_FallsBackToArgumentParts;
+    [Test] procedure UsesEntries_BySection;
+    [Test] procedure CollectUsesEntries_HandTree_SkipsMismatch;
+    [Test] procedure IdentifiersIn_SkipsLiteralsHexAndExponent;
+
     // ---- Vertrag ----
     [Test] procedure Version_IsOne;
   end;
@@ -498,6 +504,156 @@ begin
     Assert.AreEqual<Integer>(1, Length(Ranges));
     Assert.AreEqual<Integer>(LineOf(SRC, '{$IFDEF'), Ranges[0].StartLine);
     Assert.AreEqual<Integer>(LineOf(SRC, '{$ENDIF'), Ranges[0].EndLine);
+  finally
+    P.Free;
+    DeleteFile(Path);
+  end;
+end;
+
+{ ---- P4 Argumentliste / P5 uses / P8 Bezeichner ---- }
+
+procedure TTestSourcePlaces.CallOf_SeveralArguments_FallsBackToArgumentParts;
+const
+  SRC =
+    'unit t; implementation'#13#10 +
+    'procedure Foo;'#13#10 +
+    'begin'#13#10 +
+    '  ExecuteFmt(''x %'', [a]);'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  P    : TSourcePlaces;
+  Path : string;
+  Info : TRefactorInfo;
+begin
+  Path := WriteTemp(SRC);
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.Open(Path));
+    Info := P.CallOf(LineOf(SRC, 'ExecuteFmt'), ColOf(SRC, 'ExecuteFmt'),
+      'ExecuteFmt');
+    try
+      Assert.IsTrue(Assigned(Info), 'zwei Argumente: die Argumentliste');
+      Assert.AreEqual<Integer>(3, Length(Info.Parts));
+      Assert.AreEqual(ROLE_ARGUMENT, Info.Parts[1].Role);
+      Assert.AreEqual('[a]', P.TextOf(Info.Parts[2]));
+      Assert.IsFalse(Info.FixSafe);
+    finally
+      Info.Free;
+    end;
+  finally
+    P.Free;
+    DeleteFile(Path);
+  end;
+end;
+
+procedure TTestSourcePlaces.UsesEntries_BySection;
+const
+  SRC =
+    'unit t;'#13#10 +
+    'interface'#13#10 +
+    'uses'#13#10 +
+    '  SysUtils, System.Classes;'#13#10 +
+    'implementation'#13#10 +
+    'uses Vcl.Forms;'#13#10 +
+    'end.';
+var
+  P       : TSourcePlaces;
+  Path    : string;
+  Entries : TArray<TRefactorSpan>;
+begin
+  Path := WriteTemp(SRC);
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.Open(Path));
+    Entries := P.UsesEntries(usInterface);
+    Assert.AreEqual<Integer>(2, Length(Entries));
+    Assert.AreEqual(ROLE_UNIT, Entries[0].Role);
+    Assert.AreEqual('SysUtils', P.TextOf(Entries[0]));
+    Assert.AreEqual('SysUtils', Entries[0].Resolved);
+    Assert.AreEqual('System.Classes', P.TextOf(Entries[1]),
+      'der qualifizierte Name ist EIN Eintrag');
+    Entries := P.UsesEntries(usImplementation);
+    Assert.AreEqual<Integer>(1, Length(Entries));
+    Assert.AreEqual('Vcl.Forms', P.TextOf(Entries[0]));
+    Assert.AreEqual<Integer>(3, Length(P.UsesEntries(usAny)));
+  finally
+    P.Free;
+    DeleteFile(Path);
+  end;
+end;
+
+procedure TTestSourcePlaces.CollectUsesEntries_HandTree_SkipsMismatch;
+const
+  L4 = '  SysUtils, Classes;';
+var
+  Root, Intf, UsesN : TAstNode;
+  Lines   : TStringList;
+  Entries : TArray<TRefactorSpan>;
+begin
+  Lines := TStringList.Create;
+  Root  := TAstNode.Create(nkUnit, '', 1, 1);
+  try
+    Lines.Add('unit t;');
+    Lines.Add('interface');
+    Lines.Add('uses');
+    Lines.Add(L4);
+    Intf  := Root.Add(nkInterface, 'interface', 2, 1);
+    UsesN := Intf.Add(nkUses, 'uses', 3, 1);
+    UsesN.Add(nkUsesItem, 'SysUtils', 4, Pos('SysUtils', L4));
+    UsesN.Add(nkUsesItem, 'Classes',  4, Pos('Classes', L4));
+    // Knoten, dessen Name nicht zum Quelltext an seiner Position passt:
+    // wird ausgelassen statt falsch beschrieben.
+    UsesN.Add(nkUsesItem, 'Forms', 4, Pos('SysUtils', L4));
+    Entries := TSourcePlaces.CollectUsesEntries(Root, Lines, usInterface);
+    Assert.AreEqual<Integer>(2, Length(Entries));
+    Assert.AreEqual('SysUtils',
+      TRefactorInfoBuilder.SpanText(Lines, Entries[0]));
+    Assert.AreEqual('Classes',
+      TRefactorInfoBuilder.SpanText(Lines, Entries[1]));
+    Assert.AreEqual<Integer>(0,
+      Length(TSourcePlaces.CollectUsesEntries(Root, Lines, usImplementation)));
+    Assert.AreEqual<Integer>(0,
+      Length(TSourcePlaces.CollectUsesEntries(nil, Lines, usAny)));
+  finally
+    Root.Free;
+    Lines.Free;
+  end;
+end;
+
+procedure TTestSourcePlaces.IdentifiersIn_SkipsLiteralsHexAndExponent;
+const
+  SRC =
+    'unit t; implementation'#13#10 +
+    'procedure Foo;'#13#10 +
+    'begin'#13#10 +
+    '  r := Foo(x1, ''abc'', $FF, 1e5) + #13; // Bar'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  P      : TSourcePlaces;
+  Path   : string;
+  Info   : TRefactorInfo;
+  Idents : TArray<TRefactorSpan>;
+begin
+  Path := WriteTemp(SRC);
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.Open(Path));
+    Info := P.StatementAt(LineOf(SRC, 'r :='), ColOf(SRC, 'r :='));
+    try
+      Assert.IsTrue(Assigned(Info));
+      Idents := P.IdentifiersIn(Info.Span);
+      Assert.AreEqual<Integer>(3, Length(Idents),
+        'r, Foo, x1 - nicht abc, FF, e5, Bar');
+      Assert.AreEqual('r',   Idents[0].Resolved);
+      Assert.AreEqual('Foo', Idents[1].Resolved);
+      Assert.AreEqual('x1',  Idents[2].Resolved);
+      Assert.AreEqual(ROLE_IDENT, Idents[1].Role);
+      Assert.AreEqual('Foo', P.TextOf(Idents[1]));
+    finally
+      Info.Free;
+    end;
   finally
     P.Free;
     DeleteFile(Path);

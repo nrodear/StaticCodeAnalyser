@@ -90,6 +90,14 @@ type
     class function TryDescribeCall(AUnitNode: TAstNode; ALines: TStrings;
       ALine, ACol: Integer): TRefactorInfo; static;
 
+    // Aufruf mit BELIEBIG vielen Argumenten:  ExecuteFmt('..', [a, b]);
+    // ROLE_TARGET ist der Aufrufkopf, je Argument ein ROLE_ARGUMENT-Bereich
+    // (keine Zerlegung in Terme, ValueType rvUnknown, FixSafe False).
+    // Liefert nil ohne Klammer, bei leerer Argumentliste und wenn hinter
+    // der schliessenden Klammer mehr als ';' steht.
+    class function TryDescribeCallArgs(AUnitNode: TAstNode; ALines: TStrings;
+      ALine, ACol: Integer): TRefactorInfo; static;
+
     // Gegenprobe gegen den AST-Knoten: True wenn der ROLE_TARGET-Teilbereich
     // von AInfo - ohne Leerraum, ohne Gross/Klein - gleich AExpected ist.
     // Ein Detektor, der KEINE '+'-Zahl zum Gegenpruefen hat, sichert damit
@@ -122,6 +130,9 @@ type
       out APlusCount: Integer): Boolean; static;
     class procedure ClassifyParts(const AView: TArray<string>;
       AInfo: TRefactorInfo); static;
+    // Kopf + je Argument ein ROLE_ARGUMENT; ',' trennt auf Tiefe 1.
+    class function SplitArguments(const AView: TArray<string>;
+      AInfo: TRefactorInfo): Boolean; static;
     // Zerlegt und klassifiziert auf einer schon gebauten AInfo.
     class function FillChain(AInfo: TRefactorInfo; ALines: TStrings;
       ACallMode: Boolean; AExpectedPlus: Integer): Boolean; static;
@@ -505,6 +516,118 @@ begin
   Result := True;
 end;
 
+class function TRefactorConcat.SplitArguments(const AView: TArray<string>;
+  AInfo: TRefactorInfo): Boolean;
+var
+  Li, J    : Integer;
+  LineNo   : Integer;
+  V        : string;
+  C        : Char;
+  Depth    : Integer;
+  SeenOpen : Boolean;   // oeffnende Klammer des Aufrufs gesehen
+  Closed   : Boolean;   // schliessende Klammer gesehen
+  HaveSig  : Boolean;
+  SigLine  : Integer;
+  SigCol   : Integer;
+  ArgOpen  : Boolean;
+  ArgLine  : Integer;
+  ArgCol   : Integer;
+
+  procedure CloseArg;
+  begin
+    AInfo.AddPart(TRefactorSpan.Make(ROLE_ARGUMENT, ArgLine, ArgCol,
+      SigLine, SigCol + 1));
+    ArgOpen := False;
+  end;
+
+begin
+  Result   := False;
+  Depth    := 0;
+  SeenOpen := False;
+  Closed   := False;
+  HaveSig  := False;
+  SigLine  := 0;
+  SigCol   := 0;
+  ArgOpen  := False;
+  ArgLine  := 0;
+  ArgCol   := 0;
+
+  for Li := 0 to High(AView) do
+  begin
+    V := AView[Li];
+    LineNo := AInfo.Span.StartLine + Li;
+    J := 1;
+    if Li = 0 then J := AInfo.Span.StartCol;
+    while J <= Length(V) do
+    begin
+      C := V[J];
+      if C <= ' ' then
+      begin
+        Inc(J);
+        Continue;
+      end;
+
+      if (Depth = 0) and (C = ';') then
+      begin
+        if (Li < High(AView)) or (J < Length(V)) then Exit;
+        Inc(J);
+        Continue;
+      end;
+      if Closed then Exit;   // hinter ')' darf nur noch ';' stehen
+
+      if (not SeenOpen) and (Depth = 0) and (C = '(') then
+      begin
+        if not HaveSig then Exit;   // kein Kopf vor der Klammer
+        AInfo.AddPart(TRefactorSpan.Make(ROLE_TARGET, AInfo.Span.StartLine,
+          AInfo.Span.StartCol, SigLine, SigCol + 1));
+        SeenOpen := True;
+        Depth    := 1;
+        Inc(J);
+        Continue;
+      end;
+
+      if SeenOpen and (Depth = 1) then
+      begin
+        if C = ',' then
+        begin
+          if not ArgOpen then Exit;   // leeres Argument
+          CloseArg;
+          Inc(J);
+          Continue;
+        end;
+        if C = ')' then
+        begin
+          if not ArgOpen then Exit;   // leere Argumentliste
+          CloseArg;
+          Depth  := 0;
+          Closed := True;
+          Inc(J);
+          Continue;
+        end;
+      end;
+
+      if (C = '(') or (C = '[') then
+        Inc(Depth)
+      else if (C = ')') or (C = ']') then
+      begin
+        if Depth = 0 then Exit;
+        Dec(Depth);
+      end;
+      if SeenOpen and not ArgOpen then
+      begin
+        ArgOpen := True;
+        ArgLine := LineNo;
+        ArgCol  := J;
+      end;
+      HaveSig := True;
+      SigLine := LineNo;
+      SigCol  := J;
+      Inc(J);
+    end;
+  end;
+  Result := Closed;
+end;
+
 class procedure TRefactorConcat.ClassifyParts(const AView: TArray<string>;
   AInfo: TRefactorInfo);
 var
@@ -573,6 +696,20 @@ begin
   if Assigned(Result) and not FillChain(Result, ALines, True,
     ANY_PLUS_COUNT) then
     FreeAndNil(Result);
+end;
+
+class function TRefactorConcat.TryDescribeCallArgs(AUnitNode: TAstNode;
+  ALines: TStrings; ALine, ACol: Integer): TRefactorInfo;
+var
+  View : TArray<string>;
+begin
+  Result := TRefactorInfoBuilder.TryBuildForStatement(AUnitNode, ALines,
+    ALine, ACol);
+  if not Assigned(Result) then Exit;
+  View := TRefactorInfoBuilder.CodeViewOf(ALines, Result.Span);
+  if (Length(View) = 0) or not SplitArguments(View, Result) then
+    FreeAndNil(Result);
+  // FixSafe bleibt False: ohne Zerlegung der Argumente ist nichts bewiesen.
 end;
 
 class function TRefactorConcat.TargetMatches(ALines: TStrings;

@@ -52,6 +52,13 @@ type
     [Test] procedure Call_NoParens_ReturnsNil;
     [Test] procedure Call_EmptyArgumentList_ReturnsNil;
 
+    // ---- Aufruf mit mehreren Argumenten (ROLE_ARGUMENT) ----
+    [Test] procedure CallArgs_ThreeArguments_Described;
+    [Test] procedure CallArgs_NestedCommas_StayInsideArgument;
+    [Test] procedure CallArgs_CommaInLiteral_Ignored;
+    [Test] procedure CallArgs_PartOfLargerExpression_ReturnsNil;
+    [Test] procedure CallArgs_EmptyOrMissingParens_ReturnsNil;
+
     // ---- Gegenprobe gegen den AST-Knoten ----
     [Test] procedure TargetMatches_IgnoresWhitespaceAndCase;
     [Test] procedure TargetMatches_OtherStatement_False;
@@ -626,6 +633,114 @@ begin
   Lines := MakeLines(['Refresh();']);
   try
     Assert.IsFalse(Assigned(DescribeCallAt(Lines, 1, 'Refresh')));
+  finally
+    Lines.Free;
+  end;
+end;
+
+{ ---- Aufruf mit mehreren Argumenten ---- }
+
+function DescribeCallArgsAt(ALines: TStringList; ALine: Integer;
+  const AStartText: string): TRefactorInfo;
+begin
+  Result := TRefactorConcat.TryDescribeCallArgs(nil, ALines, ALine,
+    Pos(AStartText, ALines[ALine - 1]));
+end;
+
+procedure TTestRefactorConcat.CallArgs_ThreeArguments_Described;
+var
+  Lines : TStringList;
+  Info  : TRefactorInfo;
+begin
+  Lines := MakeLines(['  ExecuteFmt(''SELECT % FROM %'', [a, b], x);']);
+  try
+    Info := DescribeCallArgsAt(Lines, 1, 'ExecuteFmt');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual<Integer>(4, Length(Info.Parts), 'Kopf + drei Argumente');
+      Assert.AreEqual(ROLE_TARGET, Info.Parts[0].Role);
+      Assert.AreEqual('ExecuteFmt', PartText(Lines, Info, 0));
+      Assert.AreEqual(ROLE_ARGUMENT, Info.Parts[1].Role);
+      Assert.AreEqual('''SELECT % FROM %''', PartText(Lines, Info, 1));
+      Assert.AreEqual('[a, b]', PartText(Lines, Info, 2),
+        'das Komma in den eckigen Klammern trennt kein Argument');
+      Assert.AreEqual('x', PartText(Lines, Info, 3));
+      Assert.IsFalse(Info.FixSafe, 'ohne Zerlegung ist nichts bewiesen');
+      Assert.AreEqual<Integer>(2, Info.InsertLine);
+    finally
+      Info.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorConcat.CallArgs_NestedCommas_StayInsideArgument;
+var
+  Lines : TStringList;
+  Info  : TRefactorInfo;
+begin
+  Lines := MakeLines(['F(G(a, b), c);']);
+  try
+    Info := DescribeCallArgsAt(Lines, 1, 'F(');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual<Integer>(3, Length(Info.Parts));
+      Assert.AreEqual('G(a, b)', PartText(Lines, Info, 1));
+      Assert.AreEqual('c', PartText(Lines, Info, 2));
+    finally
+      Info.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorConcat.CallArgs_CommaInLiteral_Ignored;
+var
+  Lines : TStringList;
+  Info  : TRefactorInfo;
+begin
+  Lines := MakeLines(['F(''a, b'', c);']);
+  try
+    Info := DescribeCallArgsAt(Lines, 1, 'F(');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual<Integer>(3, Length(Info.Parts));
+      Assert.AreEqual('''a, b''', PartText(Lines, Info, 1));
+    finally
+      Info.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorConcat.CallArgs_PartOfLargerExpression_ReturnsNil;
+var
+  Lines : TStringList;
+begin
+  Lines := MakeLines(['if F(a, b) then X;']);
+  try
+    Assert.IsFalse(Assigned(DescribeCallArgsAt(Lines, 1, 'F(')),
+      'hinter der Klammer steht mehr als ein Semikolon');
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorConcat.CallArgs_EmptyOrMissingParens_ReturnsNil;
+var
+  Lines : TStringList;
+begin
+  Lines := MakeLines(['F();', 'Refresh;', 'F(, a);']);
+  try
+    Assert.IsFalse(Assigned(DescribeCallArgsAt(Lines, 1, 'F(')),
+      'leere Argumentliste');
+    Assert.IsFalse(Assigned(DescribeCallArgsAt(Lines, 2, 'Refresh')),
+      'keine Klammer');
+    Assert.IsFalse(Assigned(DescribeCallArgsAt(Lines, 3, 'F(')),
+      'leeres erstes Argument');
   finally
     Lines.Free;
   end;

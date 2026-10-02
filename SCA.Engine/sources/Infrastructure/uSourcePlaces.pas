@@ -34,9 +34,12 @@ unit uSourcePlaces;
 //                 Hash (uRefactorInfoBuilder)
 //   ChainOf       '+'-Kette einer Zuweisung: Ziel, Literale, Operanden,
 //                 FixSafe (uRefactorConcat)
-//   CallOf        Aufruf mit EINEM Argument: Kopf + Kette
+//   CallOf        Aufruf: Kopf + Kette des einen Arguments, sonst Kopf +
+//                 je Argument ein Bereich
 //   NodesAt       AST-Knoten einer Art auf einer Zeile - der Weg vom Fund
 //                 (Zeile) zur Startposition (Spalte) und zum Zielnamen
+//   UsesEntries   Unit-Namen der uses-Klauseln mit Spalten
+//   IdentifiersIn Bezeichner in einem Bereich
 //   CodeViewOf / TextOf / HashOf   Sicht, Text und Hash eines Bereichs
 //   ConditionalRanges              {$IFDEF}-Bereiche der Datei
 //
@@ -78,6 +81,10 @@ type
     EndLine   : Integer;
   end;
 
+  // Welche uses-Klauseln UsesEntries liefert. usAny schliesst auch eine
+  // uses-Klausel direkt unter dem Programm-/Library-Knoten ein.
+  TUsesSection = (usAny, usInterface, usImplementation);
+
   TSourcePlaces = class
   private
     FFileName : string;
@@ -106,11 +113,32 @@ type
     function ChainOf(ALine, ACol: Integer;
       const AExpectedTarget: string = ''): TRefactorInfo;
 
-    // P4 - Aufruf mit genau einem Argument an (ALine, ACol). AExpectedHead
-    // ist der Aufrufkopf vor der ersten Klammer (bei nkCall der Teil von
-    // TNodeRef.Name vor '('); '' = keine Gegenprobe.
+    // P4 - Aufruf-Anweisung an (ALine, ACol). Bei GENAU EINEM Argument
+    // dessen '+'-Kette (ROLE_LITERAL/ROLE_OPERAND, mit FixSafe), sonst je
+    // Argument ein ROLE_ARGUMENT-Bereich ohne Zerlegung. ROLE_TARGET ist in
+    // beiden Faellen der Aufrufkopf. AExpectedHead ist der Kopf vor der
+    // ersten Klammer (bei nkCall der Teil von TNodeRef.Name vor '(');
+    // '' = keine Gegenprobe.
     function CallOf(ALine, ACol: Integer;
       const AExpectedHead: string = ''): TRefactorInfo;
+
+    // P5 - alle Unit-Namen der uses-Klauseln als ROLE_UNIT-Bereiche, in
+    // Quelltext-Reihenfolge; Resolved traegt den Namen, wie er dasteht
+    // ('SysUtils' oder 'System.SysUtils'). Ein Eintrag, dessen Quelltext
+    // nicht zum Namen des Knotens passt (Name ueber Zeilen verteilt), wird
+    // ausgelassen statt falsch beschrieben.
+    function UsesEntries(ASection: TUsesSection = usAny): TArray<TRefactorSpan>;
+    class function CollectUsesEntries(ARoot: TAstNode; ALines: TStrings;
+      ASection: TUsesSection): TArray<TRefactorSpan>; static;
+
+    // P8 - Bezeichner in einem Bereich der geoeffneten Datei als
+    // ROLE_IDENT-Bereiche (Resolved = das Wort), Strings und Kommentare
+    // ausgeblendet, Hex-/Zeichen-Literale ($FF, #13) und Exponenten (1e5)
+    // nicht mitgezaehlt. Schluesselwoerter werden NICHT gefiltert - das
+    // entscheidet der Konsument.
+    function IdentifiersIn(const ASpan: TRefactorSpan): TArray<TRefactorSpan>;
+    class function CollectIdentifiers(const AView: TArray<string>;
+      const ASpan: TRefactorSpan): TArray<TRefactorSpan>; static;
 
     // P2 - alle Knoten der Arten AKinds, die auf ALine BEGINNEN, nach
     // Spalte aufsteigend. Leer ohne Datei oder ohne Treffer. Zwei Treffer
@@ -223,10 +251,154 @@ function TSourcePlaces.CallOf(ALine, ACol: Integer;
 begin
   Result := nil;
   if not IsOpen then Exit;
+  // Erst die Ein-Argument-Kette, sonst die Argumentliste.
   Result := TRefactorConcat.TryDescribeCall(FRoot, FLines, ALine, ACol);
+  if not Assigned(Result) then
+    Result := TRefactorConcat.TryDescribeCallArgs(FRoot, FLines, ALine, ACol);
   if Assigned(Result) and (AExpectedHead <> '')
      and not TRefactorConcat.TargetMatches(FLines, Result, AExpectedHead) then
     FreeAndNil(Result);
+end;
+
+{ ---- P5 ---- }
+
+class function TSourcePlaces.CollectUsesEntries(ARoot: TAstNode;
+  ALines: TStrings; ASection: TUsesSection): TArray<TRefactorSpan>;
+var
+  Items : TArray<TRefactorSpan>;
+  Count : Integer;
+
+  procedure AddItems(AUses: TAstNode);
+  var
+    k, c : Integer;
+    Item : TAstNode;
+    L    : string;
+  begin
+    if not Assigned(AUses) or not Assigned(AUses.Children) then Exit;
+    for k := 0 to AUses.Children.Count - 1 do
+    begin
+      Item := AUses.Children[k];
+      if Item.Kind <> nkUsesItem then Continue;
+      if (Item.Line < 1) or (Item.Line > ALines.Count) or (Item.Col < 1) then
+        Continue;
+      L := ALines[Item.Line - 1];
+      c := Item.Col;
+      while (c <= Length(L))
+        and (TRefactorInfoBuilder.IsIdentChar(L[c]) or (L[c] = '.')) do
+        Inc(c);
+      // Der Quelltext an der Knotenposition muss den Namen tragen - sonst
+      // beschreibt der Bereich etwas anderes als der Knoten.
+      if not SameText(Copy(L, Item.Col, c - Item.Col), Item.Name) then
+        Continue;
+      if Count = Length(Items) then
+        SetLength(Items, Count * 2 + 8);
+      Items[Count] := TRefactorSpan.Make(ROLE_UNIT, Item.Line, Item.Col,
+        Item.Line, c);
+      Items[Count].Resolved := Item.Name;
+      Inc(Count);
+    end;
+  end;
+
+  procedure AddSection(ANode: TAstNode);
+  var
+    j : Integer;
+  begin
+    if not Assigned(ANode) or not Assigned(ANode.Children) then Exit;
+    for j := 0 to ANode.Children.Count - 1 do
+      if ANode.Children[j].Kind = nkUses then
+        AddItems(ANode.Children[j]);
+  end;
+
+var
+  i : Integer;
+  N : TAstNode;
+begin
+  Result := nil;
+  Items  := nil;
+  Count  := 0;
+  if not Assigned(ARoot) or not Assigned(ALines)
+     or not Assigned(ARoot.Children) then Exit;
+  for i := 0 to ARoot.Children.Count - 1 do
+  begin
+    N := ARoot.Children[i];
+    case N.Kind of
+      nkUses:
+        if ASection = usAny then AddItems(N);
+      nkInterface:
+        if ASection in [usAny, usInterface] then AddSection(N);
+      nkImplementation:
+        if ASection in [usAny, usImplementation] then AddSection(N);
+    end;
+  end;
+  SetLength(Items, Count);
+  Result := Items;
+end;
+
+function TSourcePlaces.UsesEntries(
+  ASection: TUsesSection): TArray<TRefactorSpan>;
+begin
+  Result := nil;
+  if not IsOpen then Exit;
+  Result := CollectUsesEntries(FRoot, FLines, ASection);
+end;
+
+{ ---- P8 ---- }
+
+class function TSourcePlaces.CollectIdentifiers(const AView: TArray<string>;
+  const ASpan: TRefactorSpan): TArray<TRefactorSpan>;
+var
+  Items  : TArray<TRefactorSpan>;
+  Count  : Integer;
+  Li, J  : Integer;
+  K      : Integer;
+  LineNo : Integer;
+  V      : string;
+  Prev   : Char;
+begin
+  Result := nil;
+  Items  := nil;
+  Count  := 0;
+  for Li := 0 to High(AView) do
+  begin
+    V := AView[Li];
+    LineNo := ASpan.StartLine + Li;
+    J := 1;
+    while J <= Length(V) do
+    begin
+      if not TRefactorInfoBuilder.IsIdentStart(V[J]) then
+      begin
+        Inc(J);
+        Continue;
+      end;
+      K := J;
+      while (K <= Length(V)) and TRefactorInfoBuilder.IsIdentChar(V[K]) do
+        Inc(K);
+      Prev := #0;
+      if J > 1 then Prev := V[J - 1];
+      // Hinter '$'/'#' ist es ein Hex- bzw. Zeichen-Literal, hinter einer
+      // Ziffer der Exponent einer Zahl - kein Bezeichner.
+      if not CharInSet(Prev, ['$', '#', '0'..'9']) then
+      begin
+        if Count = Length(Items) then
+          SetLength(Items, Count * 2 + 8);
+        Items[Count] := TRefactorSpan.Make(ROLE_IDENT, LineNo, J, LineNo, K);
+        Items[Count].Resolved := Copy(V, J, K - J);
+        Inc(Count);
+      end;
+      J := K;
+    end;
+  end;
+  SetLength(Items, Count);
+  Result := Items;
+end;
+
+function TSourcePlaces.IdentifiersIn(
+  const ASpan: TRefactorSpan): TArray<TRefactorSpan>;
+begin
+  Result := nil;
+  if not IsOpen then Exit;
+  Result := CollectIdentifiers(TRefactorInfoBuilder.CodeViewOf(FLines, ASpan),
+    ASpan);
 end;
 
 { ---- P2 ---- }

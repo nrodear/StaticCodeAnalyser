@@ -49,6 +49,8 @@ const
   ROLE_LITERAL   = 'literal';    // String-Literal
   ROLE_OPERAND   = 'operand';    // eingefuegter Nicht-Literal-Operand
   ROLE_UNIT      = 'unit';       // Unit-Bezeichner in einer uses-Klausel
+  ROLE_ARGUMENT  = 'argument';   // ein Argument eines Aufrufs (ohne Zerlegung)
+  ROLE_IDENT     = 'ident';      // ein Bezeichner in der Code-Sicht
 
 type
   // Was ueber den Wert eines Teilbereichs bekannt ist. rvNonString wird

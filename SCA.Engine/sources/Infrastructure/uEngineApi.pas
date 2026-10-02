@@ -59,6 +59,7 @@ type
   TSourcePlaces    = uSourcePlaces.TSourcePlaces;
   TNodeRef         = uSourcePlaces.TNodeRef;
   TSourceLineRange = uSourcePlaces.TSourceLineRange;
+  TUsesSection     = uSourcePlaces.TUsesSection;
   TNodeKinds       = uAstSpans.TNodeKinds;
   TNodeKind        = uAstNode.TNodeKind;   // Werte wie TNodeKind.nkAssign
   TRefactorInfo    = uRefactorInfo.TRefactorInfo;
