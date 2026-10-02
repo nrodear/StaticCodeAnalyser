@@ -273,7 +273,7 @@ const
     (
       RuleID   : 'SCA043';
       Name     : 'Komponente hat Action und OnClick';
-      ShortDesc: 'Action und OnClick sind beide gesetzt - Action gewinnt, OnClick ist toter Code'
+      ShortDesc: 'Action und OnClick sind beide gesetzt - der explizite OnClick gewinnt, die TAction-Verdrahtung ist tot'
     ),
     // SCA044
     (
@@ -1574,7 +1574,7 @@ const
       RuleID   : 'SCA043';
       Name     : 'Le composant a Action et OnClick';
       ShortDesc: 'Action et OnClick sont tous deux d' + #$E9 +
-        'finis - Action l''emporte, OnClick est du code mort'
+        'finis - le OnClick explicite l''emporte, le c' + #$E2 + 'blage TAction est mort'
     ),
     // SCA044
     (

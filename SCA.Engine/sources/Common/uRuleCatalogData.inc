@@ -388,9 +388,9 @@ const
     (
       RuleID   : 'SCA043';
       Name     : 'Component has Action + OnClick';
-      ShortDesc: 'Action and OnClick both set - Action wins, OnClick is dead code';
-      BadEx    : 'object btnSave: TButton' + #13#10 + '  Action = actSave' + #13#10 +
-        '  OnClick = btnSaveClick   // never fires' + #13#10 + 'end';
+      ShortDesc: 'Action and OnClick both set - the explicit OnClick wins, the TAction glue is dead';
+      BadEx    : 'object btnSave: TButton' + #13#10 + '  Action = actSave   // its OnExecute never fires' +
+        #13#10 + '  OnClick = btnSaveClick   // THIS one fires' + #13#10 + 'end';
       GoodEx   : 'object btnSave: TButton' + #13#10 +
         '  Action = actSave   // the action carries the handler' + #13#10 + 'end' + #13#10 + #13#10 +
         '// or drop Action and keep OnClick - but not both'
