@@ -84,6 +84,16 @@ type
     // EveryFindingKindHasMqrMapping enforced dass alle Kinds gemappt sind.
     CleanCodeAttribute : string;        // 'LAWFUL'/'LOGICAL'/'FOCUSED'/...
     Impacts            : TArray<TSonarImpact>;
+    // Quellstellen-Dienst (Konzept_SourceRefactor_Quellstellen §4): worauf
+    // die Funde dieser Regel ankern und ob ein Umschreiber auf ihrem Signal
+    // schreiben darf. Reine Datenseite - kein Detektor liest das.
+    //   Anchor : 'statement' | 'assign' | 'call' | 'assign-or-call'
+    //            | 'uses-item'; leer = nicht angegeben (wie 'statement')
+    //   FixMode: 'none' | 'assisted' | 'auto'; leer = nicht angegeben
+    //            (wie 'none')
+    // Im Fallback (uRuleCatalogData.inc) beide leer.
+    Anchor             : string;
+    FixMode            : string;
   end;
 
   // Uebersetzbare Textfelder einer Regel - der Inhalt eines Sprach-Overlays
@@ -624,6 +634,11 @@ begin
         Meta.BadExample  := Examples.GetValue<string>('bad', '');
         Meta.GoodExample := Examples.GetValue<string>('good', '');
       end;
+
+      // Quellstellen-Dienst: Anker und Fix-Politik, optional. Test
+      // AnchorAndFixModeUseKnownValues haelt die Wertemenge.
+      Meta.Anchor  := RObj.GetValue<string>('anchor', '');
+      Meta.FixMode := RObj.GetValue<string>('fixMode', '');
 
       // SonarQube MQR-Felder (cleanCodeAttribute + impacts). Optional in der
       // JSON - Rules ohne diese Felder bekommen leere Werte. Test

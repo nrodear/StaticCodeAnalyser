@@ -65,6 +65,15 @@ type
     [Test] procedure ToolInfoIsPopulated;
     // Lookup ueber ID muss alle Kinds zurueckliefern koennen.
     [Test] procedure GetRuleByIDRoundtrip;
+    // Quellstellen-Dienst (Konzept_SourceRefactor_Quellstellen §4): anchor
+    // und fixMode sind optional, aber wenn gesetzt, nur aus der bekannten
+    // Wertemenge - ein Tippfehler in der JSON darf nicht still als
+    // "unbekannter Anker" durchrutschen.
+    [Test] procedure AnchorAndFixModeUseKnownValues;
+    // Die beiden Pilot-Regeln des Moduls tragen Anker und Politik: SCA044
+    // (Zuweisung, automatisch) und SCA003 (Zuweisung oder Aufruf, nur
+    // assistiert - Autopsie 7 TP / 55 FP).
+    [Test] procedure RefactorPilotRulesCarryAnchorAndFixMode;
 
     // Profile-Loader (sca-rules.json -> profiles.*):
     //
@@ -1042,6 +1051,58 @@ begin
     if TFile.Exists(Pfad) then TFile.Delete(Pfad);
     TRuleCatalog.Reload;   // echten Katalog wiederherstellen
   end;
+end;
+
+{ ---- Quellstellen-Dienst: anchor / fixMode ---- }
+
+procedure TTestRuleCatalog.AnchorAndFixModeUseKnownValues;
+const
+  ANCHORS   : array[0..4] of string = ('statement', 'assign', 'call',
+    'assign-or-call', 'uses-item');
+  FIX_MODES : array[0..2] of string = ('none', 'assisted', 'auto');
+
+  function InList(const AValue: string; const AList: array of string): Boolean;
+  var
+    i : Integer;
+  begin
+    Result := False;
+    for i := Low(AList) to High(AList) do
+      if AList[i] = AValue then
+        Exit(True);
+  end;
+
+var
+  K    : TFindingKind;
+  Meta : TRuleMeta;
+begin
+  for K := Low(TFindingKind) to High(TFindingKind) do
+  begin
+    Meta := TRuleCatalog.GetRuleCanonical(K);
+    if Meta.ID = '' then Continue;
+    Assert.IsTrue((Meta.Anchor = '') or InList(Meta.Anchor, ANCHORS),
+      Meta.ID + ': unbekannter anchor ''' + Meta.Anchor + '''');
+    Assert.IsTrue((Meta.FixMode = '') or InList(Meta.FixMode, FIX_MODES),
+      Meta.ID + ': unbekannter fixMode ''' + Meta.FixMode + '''');
+    // Eine Regel, die automatisch umgeschrieben werden darf, braucht
+    // einen Anker - sonst weiss kein Modul, wo.
+    if Meta.FixMode = 'auto' then
+      Assert.IsTrue(Meta.Anchor <> '', Meta.ID + ': fixMode auto ohne anchor');
+  end;
+end;
+
+procedure TTestRuleCatalog.RefactorPilotRulesCarryAnchorAndFixMode;
+var
+  Meta : TRuleMeta;
+begin
+  Meta := TRuleCatalog.GetRuleCanonical(fkConcatToFormat);
+  Assert.AreEqual('assign', Meta.Anchor, 'SCA044 ankert an der Zuweisung');
+  Assert.AreEqual('auto', Meta.FixMode, 'SCA044 darf automatisch umgeschrieben werden');
+
+  Meta := TRuleCatalog.GetRuleCanonical(fkSQLInjection);
+  Assert.AreEqual('assign-or-call', Meta.Anchor,
+    'SCA003 meldet Zuweisungen und Aufrufe');
+  Assert.AreEqual('assisted', Meta.FixMode,
+    'SCA003 ist ein Review-Zeiger - nur assistiert, nie automatisch');
 end;
 
 end.

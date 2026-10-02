@@ -131,6 +131,8 @@
       "cwe": ["CWE-89"],
       "owasp": ["A03:2021-Injection"],
       "detectorUnit": "uSQLInjection.pas",
+      "anchor": "assign-or-call",
+      "fixMode": "assisted",
       "examples": {
         "bad":  "Query.SQL.Text := 'SELECT * FROM Users WHERE Name=''' + UserName + '''';",
         "good": "Query.SQL.Text := 'SELECT * FROM Users WHERE Name=:n';\nQuery.ParamByName('n').AsString := UserName;"
@@ -938,6 +940,8 @@
       "type": "Code Smell",
       "tags": ["maintainability", "string-formatting"],
       "detectorUnit": "uConcatToFormat.pas",
+      "anchor": "assign",
+      "fixMode": "auto",
       "examples": {
         "bad":  "Msg := 'User ' + Name + ' has ' + IntToStr(N) + ' open tickets';",
         "good": "Msg := Format('User %s has %d open tickets', [Name, N]);"
