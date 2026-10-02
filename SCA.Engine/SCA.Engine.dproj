@@ -331,6 +331,7 @@
         <DCCReference Include="sources\Infrastructure\uProjectFiles.pas"/>
         <DCCReference Include="sources\Infrastructure\uRepoSettings.pas"/>
         <DCCReference Include="sources\Infrastructure\uSonarConfig.pas"/>
+        <DCCReference Include="sources\Infrastructure\uSourcePlaces.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticAnalyzer2.pas"/>
         <DCCReference Include="sources\Infrastructure\uStaticFiles.pas"/>
         <DCCReference Include="sources\Infrastructure\uSuppression.pas"/>

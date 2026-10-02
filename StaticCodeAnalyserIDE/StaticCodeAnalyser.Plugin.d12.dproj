@@ -319,6 +319,7 @@
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uPathOverrides.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uRepoSettings.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSonarConfig.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uSourcePlaces.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uStaticAnalyzer2.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uParallelScan.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Infrastructure\uProjectFiles.pas"/>

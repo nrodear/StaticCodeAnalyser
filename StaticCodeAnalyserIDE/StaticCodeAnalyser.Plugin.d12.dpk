@@ -314,6 +314,7 @@ contains
   uPathOverrides in '..\SCA.Engine\sources\Infrastructure\uPathOverrides.pas',
   uRepoSettings in '..\SCA.Engine\sources\Infrastructure\uRepoSettings.pas',
   uSonarConfig in '..\SCA.Engine\sources\Infrastructure\uSonarConfig.pas',
+  uSourcePlaces in '..\SCA.Engine\sources\Infrastructure\uSourcePlaces.pas',
   uStaticAnalyzer2 in '..\SCA.Engine\sources\Infrastructure\uStaticAnalyzer2.pas',
   uParallelScan in '..\SCA.Engine\sources\Infrastructure\uParallelScan.pas',
   uProjectFiles in '..\SCA.Engine\sources\Infrastructure\uProjectFiles.pas',

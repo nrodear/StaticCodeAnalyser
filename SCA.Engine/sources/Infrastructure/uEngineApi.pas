@@ -46,7 +46,23 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uMethodd12, uSCAConsts, uIgnoreList;
+  uMethodd12, uSCAConsts, uIgnoreList,
+  // Quellstellen-Dienst fuer Fremd-Konsumenten (Modul "Source Refactor"):
+  // ueber die Aliase unten reicht dem Konsumenten dieses eine uses.
+  uAstNode, uAstSpans, uRefactorInfo, uSourcePlaces;
+
+type
+  // ---- Quellstellen-Dienst (Konzept_SourceRefactor_Quellstellen) -------
+  // Der Konsument fragt Datei + Position ab und bekommt beschriebene
+  // Stellen; der Dienst liest nur, meldet nichts und laeuft ausserhalb des
+  // Scans. Vertragsversion: uSourcePlaces.SOURCE_PLACES_VERSION.
+  TSourcePlaces    = uSourcePlaces.TSourcePlaces;
+  TNodeRef         = uSourcePlaces.TNodeRef;
+  TSourceLineRange = uSourcePlaces.TSourceLineRange;
+  TNodeKinds       = uAstSpans.TNodeKinds;
+  TNodeKind        = uAstNode.TNodeKind;   // Werte wie TNodeKind.nkAssign
+  TRefactorInfo    = uRefactorInfo.TRefactorInfo;
+  TRefactorSpan    = uRefactorInfo.TRefactorSpan;
 
 const
   // Tool-Identitaet fuer SARIF tool.driver.name. Die Engine-Version kommt
