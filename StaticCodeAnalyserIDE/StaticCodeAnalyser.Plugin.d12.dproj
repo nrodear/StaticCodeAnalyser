@@ -108,6 +108,9 @@
         <DCCReference Include="..\SCA.Engine\sources\Common\uLocalization.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uMethodd12.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uQuickFix.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uRefactorConcat.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uRefactorInfo.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Common\uRefactorInfoBuilder.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uRegExMatches.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uRuleCatalog.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Common\uSCAConsts.pas"/>
