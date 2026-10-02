@@ -20,6 +20,7 @@ uses
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
   uFindingCopyText,
   uQuickFix,
+  uFindingActions,                         // Aktionen fremder Anbieter am Fund (Grid-Menue)
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uIDEColors, uLocalization,
   uRecentPaths, uScanTargetDialog,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
@@ -75,6 +76,10 @@ type
     // Grid-Kontextmenue mit der expliziten Kopier-Geste ("Copy AI
     // prompt"). Owner = Frame, kein manuelles Free noetig.
     FGridMenu       : TPopupMenu;
+    // Aktionen fremder Anbieter zum aktuell angeklickten Fund (uFindingActions,
+    // Konzept Quellstellen §15 H1). Je Popup frisch erfragt; der Index im
+    // Array steht im Tag des Menuepunkts (GRID_ACTION_TAG + Index).
+    FGridActions    : TArray<TFindingAction>;
     FCurrentBaseDir : string;
     FFilterCombo       : TComboBox;
     // Fuzzy-Suche der Filter-Combo; gehoert dem Frame (Owner=Self).
@@ -472,6 +477,10 @@ type
     procedure GridMenuCopyPromptClick(Sender: TObject);
     procedure GridMenuCopyJiraClick(Sender: TObject);
     procedure GridMenuPopup(Sender: TObject);
+    // Klick auf einen dynamischen Eintrag aus uFindingActions: fuehrt
+    // Execute des Anbieters aus; Fehler des Anbieters landen in der
+    // Status-Bar, nicht in der IDE.
+    procedure GridMenuActionClick(Sender: TObject);
     // Wendet einen Quick-Fix DIREKT im IDE-Editor an (TIDEEditor.
     // ApplyLineReplacement). Trigger: F4 auf der Grid-Zeile. No-op
     // wenn der Befund-Kind keinen Quick-Fix-Provider hat oder der
@@ -2783,19 +2792,89 @@ begin
   end;
 end;
 
+const
+  // Tag der dynamischen Grid-Menuepunkte aus uFindingActions: der Trenner
+  // traegt GRID_ACTION_TAG - 1, die Aktionen GRID_ACTION_TAG + Index. Die
+  // festen Eintraege (Copy AI prompt / Copy Jira issue) haben Tag 0.
+  GRID_ACTION_TAG = 7000;
+
 procedure TAnalyserFrame.GridMenuPopup(Sender: TObject);
 // Ohne gueltige Befund-Zeile ist die Kopier-Geste sinnlos - Eintraege
 // deaktivieren (Muster wie das EXE-Grid-Menue in GridMenuPopup).
+//
+// Danach die Aktionen FREMDER Anbieter (uFindingActions, Konzept
+// Quellstellen Abschnitt 15 H1): je Popup frisch erfragt, hinter einem
+// Trenner angehaengt, beim naechsten Popup wieder abgeraeumt. Ein
+// deaktivierter Eintrag traegt seinen Grund in der Beschriftung - der
+// Benutzer soll sehen, WARUM sich eine Stelle nicht umformen laesst.
+// Ein Anbieter, der beim Erfragen wirft, nimmt nur seine Eintraege mit,
+// nicht das Menue.
 var
   HasRow : Boolean;
   i      : Integer;
+  F      : TLeakFinding;
+  MI     : TMenuItem;
 begin
   HasRow := Assigned(FDisplayedFindings)
         and (FResultGrid.Row >= 1)
         and (FResultGrid.Row <= FDisplayedFindings.Count);
+  for i := FGridMenu.Items.Count - 1 downto 0 do
+    if FGridMenu.Items[i].Tag >= GRID_ACTION_TAG - 1 then
+      FGridMenu.Items[i].Free;
   for i := 0 to FGridMenu.Items.Count - 1 do
   begin
     FGridMenu.Items[i].Enabled := HasRow;
+  end;
+  FGridActions := nil;
+  if not HasRow then Exit;
+  F := FDisplayedFindings[FResultGrid.Row - 1];
+  if not Assigned(F) then Exit;
+
+  try
+    FGridActions := TFindingActions.ActionsFor(F);
+  except
+    on EStackExhausted do raise;
+    on E: Exception do
+    begin
+      StatusMode(Format(_('Finding actions: provider failed - %s'), [E.Message]));
+      FGridActions := nil;
+    end;
+  end;
+  if Length(FGridActions) = 0 then Exit;
+
+  MI := TMenuItem.Create(FGridMenu);
+  MI.Caption := '-';
+  MI.Tag     := GRID_ACTION_TAG - 1;
+  FGridMenu.Items.Add(MI);
+  for i := 0 to High(FGridActions) do
+  begin
+    MI := TMenuItem.Create(FGridMenu);
+    if FGridActions[i].Hint <> '' then
+      MI.Caption := Format('%s  (%s)', [FGridActions[i].Caption, FGridActions[i].Hint])
+    else
+      MI.Caption := FGridActions[i].Caption;
+    MI.Hint    := FGridActions[i].Hint;
+    MI.Enabled := FGridActions[i].Enabled and Assigned(FGridActions[i].Execute);
+    MI.Tag     := GRID_ACTION_TAG + i;
+    MI.OnClick := GridMenuActionClick;
+    FGridMenu.Items.Add(MI);
+  end;
+end;
+
+procedure TAnalyserFrame.GridMenuActionClick(Sender: TObject);
+var
+  Idx : Integer;
+begin
+  if not (Sender is TMenuItem) then Exit;
+  Idx := TMenuItem(Sender).Tag - GRID_ACTION_TAG;
+  if (Idx < 0) or (Idx > High(FGridActions)) then Exit;
+  if not Assigned(FGridActions[Idx].Execute) then Exit;
+  try
+    FGridActions[Idx].Execute(Sender);
+  except
+    on EStackExhausted do raise;
+    on E: Exception do
+      StatusMode(Format(_('Finding action failed: %s'), [E.Message]));
   end;
 end;
 

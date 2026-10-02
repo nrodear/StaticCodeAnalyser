@@ -2246,3 +2246,9 @@ msgstr "Dialekt auf %s gesetzt - wirkt beim naechsten Analyse-Lauf."
 
 msgid "analyser.ini is not writable - dialect unchanged."
 msgstr "analyser.ini ist nicht schreibbar - Dialekt unveraendert."
+
+msgid "Finding actions: provider failed - %s"
+msgstr "Fund-Aktionen: Anbieter meldet Fehler - %s"
+
+msgid "Finding action failed: %s"
+msgstr "Fund-Aktion fehlgeschlagen: %s"

@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2248 Zeilen, 75794 Bytes
-  CPoLines_de: array[0..2247] of string = (
+  // i18n\de.po - 2254 Zeilen, 78222 Bytes
+  CPoLines_de: array[0..2253] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2262,7 +2262,13 @@ const
     'msgstr "Dialekt auf %s gesetzt - wirkt beim naechsten Analyse-Lauf."',
     '',
     'msgid "analyser.ini is not writable - dialect unchanged."',
-    'msgstr "analyser.ini ist nicht schreibbar - Dialekt unveraendert."'
+    'msgstr "analyser.ini ist nicht schreibbar - Dialekt unveraendert."',
+    '',
+    'msgid "Finding actions: provider failed - %s"',
+    'msgstr "Fund-Aktionen: Anbieter meldet Fehler - %s"',
+    '',
+    'msgid "Finding action failed: %s"',
+    'msgstr "Fund-Aktion fehlgeschlagen: %s"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -2537,8 +2543,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2244 Zeilen, 79472 Bytes
-  CPoLines_fr: array[0..2243] of string = (
+  // i18n\fr.po - 2250 Zeilen, 81901 Bytes
+  CPoLines_fr: array[0..2249] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4782,7 +4788,13 @@ const
     'msgstr "Dialecte r'#$00E9'gl'#$00E9' sur %s - prend effet '#$00E0' la prochaine analyse."',
     '',
     'msgid "analyser.ini is not writable - dialect unchanged."',
-    'msgstr "analyser.ini n''est pas accessible en '#$00E9'criture - dialecte inchang'#$00E9'."'
+    'msgstr "analyser.ini n''est pas accessible en '#$00E9'criture - dialecte inchang'#$00E9'."',
+    '',
+    'msgid "Finding actions: provider failed - %s"',
+    'msgstr "Actions du r'#$00E9'sultat : le fournisseur a '#$00E9'chou'#$00E9' - %s"',
+    '',
+    'msgid "Finding action failed: %s"',
+    'msgstr "L''action a '#$00E9'chou'#$00E9' : %s"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

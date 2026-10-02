@@ -94,6 +94,7 @@ contains
   uCompatSet in 'sources\Common\uCompatSet.pas',
   uCrashDiag in 'sources\Common\uCrashDiag.pas',
   uDetectorUtils in 'sources\Common\uDetectorUtils.pas',
+  uFindingActions in 'sources\Common\uFindingActions.pas',
   uJsonFormat in 'sources\Common\uJsonFormat.pas',
   uLocalization in 'sources\Common\uLocalization.pas',
   uMethodd12 in 'sources\Common\uMethodd12.pas',
