@@ -4,6 +4,14 @@ unit uQuickFix;
 // die der Aufrufer dem User vorlegen (oder via IDE-Editor-Writer direkt
 // anwenden) kann.
 //
+// EINGEFROREN seit 2026-10-03 (Konzept_SourceRefactor_Quellstellen,
+// Abschnitt 5.4, Entscheidung Nico): KEINE neuen Provider mehr. Das Umschreiben von
+// Quelltext wandert in das Modul "Source Refactor" (reDelphix), das die
+// Stellen ueber TSourcePlaces (uSourcePlaces) bezieht; die vier Provider
+// hier werden dort als Rezepte nachgebaut, danach kann diese Unit
+// entfallen. Der Core soll keinen Quelltext des Anwenders mehr veraendern
+// - diese Unit ist heute die einzige Stelle, die es tut.
+//
 // Bewusst pure-text + AST-frei + unit-testbar - die IDE-/Editor-Integration
 // (IOTAEditWriter / Clipboard) liegt im konsumierenden Layer (IDE-Plugin
 // bzw. Standalone-Form), damit sich der Engine auch CLI-headless triggern

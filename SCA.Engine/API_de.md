@@ -221,6 +221,46 @@ TFindingType      = (ftBug, ftCodeSmell, ftVulnerability,
                      ftSecurityHotspot, ftCodeDuplication, ftFileError);
 ```
 
+### 3.8 Quellstellen: `TSourcePlaces` (`uSourcePlaces`)
+
+Beschreibt Stellen einer Quelldatei **auf Anfrage** — für Konsumenten, die Code umschreiben wollen (z. B. das Modul „Source Refactor"). Der Dienst liest nur: kein Scan läuft, kein Fund, Feld oder Export wird berührt, und kein Detektor benutzt ihn. Eine Instanz je Datei; `uEngineApi` exportiert alle Typen, dieses eine `uses` reicht.
+
+```pascal
+Places := TSourcePlaces.Create;
+try
+  if Places.Open(FileName) then
+  begin
+    Nodes := Places.NodesAt(Line, [TNodeKind.nkAssign]);   // Fundzeile -> AST-Knoten
+    if Length(Nodes) = 1 then
+    begin
+      Info := Places.ChainOf(Nodes[0].Line, Nodes[0].Col, Nodes[0].Name);
+      try
+        if Assigned(Info) and Info.FixSafe then
+          ...                                              // Umformung bauen
+      finally
+        Info.Free;
+      end;
+    end;
+  end;
+finally
+  Places.Free;
+end;
+```
+
+| Member | Liefert | Bedeutung |
+|--------|---------|-----------|
+| `Open(FileName)` / `Close` | `Boolean` | Liest Zeilen und AST der Datei selbst (kein Scan-Cache, kein Engine-Lock). `False`, wenn nicht lesbar. |
+| `StatementAt(Line, Col)` | `TRefactorInfo` | Die dort beginnende Anweisung: Bereich mit Spalten, Flags, Einfügepunkt, Hash. `nil`, wenn ihr Ende nicht bestimmbar ist. |
+| `ChainOf(Line, Col, ExpectedTarget)` | `TRefactorInfo` | Zuweisung mit `+`-Kette: Ziel, Literale, Operanden, `FixSafe`. Das Ziel wird gegen `ExpectedTarget` geprüft (`TNodeRef.Name`). |
+| `CallOf(Line, Col, ExpectedHead)` | `TRefactorInfo` | Aufruf-Anweisung: Kopf plus Kette des einen Arguments, sonst je Argument ein `argument`-Teil. |
+| `NodesAt(Line, Kinds)` | `TArray<TNodeRef>` | AST-Knoten der Arten, die auf der Zeile beginnen, nach Spalte sortiert. Zwei Treffer heißen: mehrdeutig. |
+| `UsesEntries(Section)` | `TArray<TRefactorSpan>` | Jeder Unit-Name der `uses`-Klauseln mit Bereich (`Resolved` = Name wie geschrieben). |
+| `IdentifiersIn(Span)` | `TArray<TRefactorSpan>` | Bezeichner in einem Bereich; Strings und Kommentare ausgeblendet. |
+| `CodeViewOf` / `TextOf` / `HashOf` | | Spaltentreue Code-Sicht, Rohtext und SHA-256 eines Bereichs. `HashOf` vor dem Schreiben nachrechnen, um eine geänderte Datei zu erkennen. |
+| `ConditionalRanges` | `TArray<TSourceLineRange>` | `{$IFDEF}`-Bereiche der Datei. |
+
+Koordinaten sind 1-basiert; `EndCol` zeigt **hinter** das letzte Zeichen. Jedes Primitiv ist total (`nil` oder leer statt Exception). `SOURCE_PLACES_VERSION` (= 1) benennt die Vertragsversion. Je Regel kann `rules/sca-rules.json` `anchor` (worauf die Funde ankern) und `fixMode` (`none` / `assisted` / `auto`) tragen; gelesen über `TRuleCatalog` (`TRuleMeta.Anchor`, `TRuleMeta.FixMode`).
+
 ---
 
 ## 4. Lebenszyklus / Threading

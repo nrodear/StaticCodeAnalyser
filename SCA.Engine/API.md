@@ -219,6 +219,46 @@ TFindingType      = (ftBug, ftCodeSmell, ftVulnerability,
                      ftSecurityHotspot, ftCodeDuplication, ftFileError);
 ```
 
+### 3.8 Source places: `TSourcePlaces` (`uSourcePlaces`)
+
+Describes places in a source file **on request** — for consumers that want to rewrite code (e.g. the "Source Refactor" module). It only reads: no scan runs, no finding, field or export is touched, and no detector uses it. One instance per file; `uEngineApi` re-exports all types, so this one `uses` is enough.
+
+```pascal
+Places := TSourcePlaces.Create;
+try
+  if Places.Open(FileName) then
+  begin
+    Nodes := Places.NodesAt(Line, [TNodeKind.nkAssign]);   // finding line -> AST nodes
+    if Length(Nodes) = 1 then
+    begin
+      Info := Places.ChainOf(Nodes[0].Line, Nodes[0].Col, Nodes[0].Name);
+      try
+        if Assigned(Info) and Info.FixSafe then
+          ...                                              // build the rewrite
+      finally
+        Info.Free;
+      end;
+    end;
+  end;
+finally
+  Places.Free;
+end;
+```
+
+| Member | Returns | Meaning |
+|--------|---------|---------|
+| `Open(FileName)` / `Close` | `Boolean` | Reads lines and AST of the file itself (no scan cache, no engine lock). `False` if unreadable. |
+| `StatementAt(Line, Col)` | `TRefactorInfo` | The statement starting there: span with columns, flags, insert point, hash. `nil` if its end cannot be determined. |
+| `ChainOf(Line, Col, ExpectedTarget)` | `TRefactorInfo` | Assignment with a `+` chain: target, literals, operands, `FixSafe`. The target is cross-checked against `ExpectedTarget` (use `TNodeRef.Name`). |
+| `CallOf(Line, Col, ExpectedHead)` | `TRefactorInfo` | Call statement: head plus the chain of a single argument, otherwise one `argument` part per argument. |
+| `NodesAt(Line, Kinds)` | `TArray<TNodeRef>` | AST nodes of the given kinds that start on that line, sorted by column. Two hits mean the line is ambiguous. |
+| `UsesEntries(Section)` | `TArray<TRefactorSpan>` | Every unit name of the `uses` clauses with its span (`Resolved` = the name as written). |
+| `IdentifiersIn(Span)` | `TArray<TRefactorSpan>` | Identifiers inside a span; strings and comments excluded. |
+| `CodeViewOf` / `TextOf` / `HashOf` | | Column-true code view, raw text and SHA-256 of a span. Recompute `HashOf` before writing to detect a changed file. |
+| `ConditionalRanges` | `TArray<TSourceLineRange>` | `{$IFDEF}` ranges of the file. |
+
+Coordinates are 1-based; `EndCol` points **behind** the last character. Every primitive is total (`nil` or empty instead of an exception). `SOURCE_PLACES_VERSION` (= 1) names the contract version. Per rule, `rules/sca-rules.json` may carry `anchor` (what the findings anchor on) and `fixMode` (`none` / `assisted` / `auto`); read them via `TRuleCatalog` (`TRuleMeta.Anchor`, `TRuleMeta.FixMode`).
+
 ---
 
 ## 4. Lifecycle / threading

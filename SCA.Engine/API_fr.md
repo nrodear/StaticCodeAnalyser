@@ -224,6 +224,46 @@ TFindingType      = (ftBug, ftCodeSmell, ftVulnerability,
                      ftSecurityHotspot, ftCodeDuplication, ftFileError);
 ```
 
+### 3.8 Emplacements source : `TSourcePlaces` (`uSourcePlaces`)
+
+Décrit des emplacements d'un fichier source **à la demande** — pour les consommateurs qui veulent réécrire du code (p. ex. le module « Source Refactor »). Le service ne fait que lire : aucun scan ne tourne, aucun résultat, champ ou export n'est touché, et aucun détecteur ne l'utilise. Une instance par fichier ; `uEngineApi` réexporte tous les types, ce seul `uses` suffit.
+
+```pascal
+Places := TSourcePlaces.Create;
+try
+  if Places.Open(FileName) then
+  begin
+    Nodes := Places.NodesAt(Line, [TNodeKind.nkAssign]);   // ligne du résultat -> nœuds AST
+    if Length(Nodes) = 1 then
+    begin
+      Info := Places.ChainOf(Nodes[0].Line, Nodes[0].Col, Nodes[0].Name);
+      try
+        if Assigned(Info) and Info.FixSafe then
+          ...                                              // construire la réécriture
+      finally
+        Info.Free;
+      end;
+    end;
+  end;
+finally
+  Places.Free;
+end;
+```
+
+| Membre | Retourne | Signification |
+|--------|----------|---------------|
+| `Open(FileName)` / `Close` | `Boolean` | Lit lui-même les lignes et l'AST du fichier (ni cache de scan, ni verrou moteur). `False` si illisible. |
+| `StatementAt(Line, Col)` | `TRefactorInfo` | L'instruction qui commence là : plage avec colonnes, indicateurs, point d'insertion, hachage. `nil` si sa fin est indéterminable. |
+| `ChainOf(Line, Col, ExpectedTarget)` | `TRefactorInfo` | Affectation avec chaîne `+` : cible, littéraux, opérandes, `FixSafe`. La cible est contre-vérifiée avec `ExpectedTarget` (`TNodeRef.Name`). |
+| `CallOf(Line, Col, ExpectedHead)` | `TRefactorInfo` | Instruction d'appel : tête plus chaîne de l'argument unique, sinon une partie `argument` par argument. |
+| `NodesAt(Line, Kinds)` | `TArray<TNodeRef>` | Nœuds AST des sortes données qui commencent sur cette ligne, triés par colonne. Deux résultats = ambiguïté. |
+| `UsesEntries(Section)` | `TArray<TRefactorSpan>` | Chaque nom d'unité des clauses `uses` avec sa plage (`Resolved` = le nom tel qu'écrit). |
+| `IdentifiersIn(Span)` | `TArray<TRefactorSpan>` | Identificateurs dans une plage ; chaînes et commentaires exclus. |
+| `CodeViewOf` / `TextOf` / `HashOf` | | Vue code fidèle aux colonnes, texte brut et SHA-256 d'une plage. Recalculer `HashOf` avant d'écrire pour détecter un fichier modifié. |
+| `ConditionalRanges` | `TArray<TSourceLineRange>` | Plages `{$IFDEF}` du fichier. |
+
+Les coordonnées sont à base 1 ; `EndCol` pointe **derrière** le dernier caractère. Chaque primitive est totale (`nil` ou vide plutôt qu'une exception). `SOURCE_PLACES_VERSION` (= 1) nomme la version du contrat. Par règle, `rules/sca-rules.json` peut porter `anchor` (sur quoi ancrent les résultats) et `fixMode` (`none` / `assisted` / `auto`) ; lus via `TRuleCatalog` (`TRuleMeta.Anchor`, `TRuleMeta.FixMode`).
+
 ---
 
 ## 4. Cycle de vie / threading
