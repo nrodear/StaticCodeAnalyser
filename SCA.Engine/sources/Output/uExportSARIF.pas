@@ -32,6 +32,10 @@ interface
 
 uses
   System.SysUtils, System.Generics.Collections,
+  // StrUtils INTERFACE-seitig: EmitUriBaseId ist inline und ruft die
+  // Inline-Funktion StartsStr - aus der implementation-uses heraus
+  // verweigert dcc32 die Expansion (H2445, Bau 2026-10-04).
+  System.StrUtils,
   uMethodd12;
 
 type
@@ -79,7 +83,7 @@ implementation
 // Self-scan Stil-Cluster - im jeweiligen File idiomatisch oder Hot-Path-bedingt.
 
 uses
-  System.Classes, System.IOUtils, System.Hash, System.StrUtils,
+  System.Classes, System.IOUtils, System.Hash,
   uSCAConsts, uRuleCatalog, uFindingFingerprint,
   uReportFileWriter;   // atomarer Stream (C-Charge 2026-09-19)
 

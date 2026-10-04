@@ -283,7 +283,8 @@ var
   Stripped : string;
   Dummy    : Integer;
 begin
-  Result := False;
+  // Keine Vorab-Zuweisung an Result: jeder Weg endet in Exit(True) oder
+  // in der Zuweisung hinter der Schleife (dcc32 H2077 beim Bau 2026-10-04).
   State := Default(TCommentScanState);
   for Li := ASpan.StartLine to ASpan.EndLine do
   begin
