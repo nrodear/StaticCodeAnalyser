@@ -58,6 +58,7 @@ contains
   uRdxRecipes in 'source\uRdxRecipes.pas',
   uRdxScopeTable in 'source\uRdxScopeTable.pas',
   uRdxRecipeRunner in 'source\uRdxRecipeRunner.pas',
+  uRdxLog in 'source\uRdxLog.pas',
   uRdxEditor in 'source\uRdxEditor.pas',
   uRdxProvider in 'source\uRdxProvider.pas',
   uRdxRegister in 'source\uRdxRegister.pas';

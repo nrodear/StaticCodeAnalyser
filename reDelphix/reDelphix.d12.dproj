@@ -120,6 +120,7 @@
         <DCCReference Include="source\uRdxRecipes.pas"/>
         <DCCReference Include="source\uRdxScopeTable.pas"/>
         <DCCReference Include="source\uRdxRecipeRunner.pas"/>
+        <DCCReference Include="source\uRdxLog.pas"/>
         <DCCReference Include="source\uRdxEditor.pas"/>
         <DCCReference Include="source\uRdxProvider.pas"/>
         <DCCReference Include="source\uRdxRegister.pas"/>

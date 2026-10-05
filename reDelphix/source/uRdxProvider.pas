@@ -103,10 +103,10 @@ type
 implementation
 
 uses
-  Winapi.Windows,   // OutputDebugString - Diagnose ohne UI (DebugView)
   Vcl.Clipbrd,
   uRuleCatalog,
-  uRdxEditor;
+  uRdxEditor,
+  uRdxLog;          // Protokoll: DebugView + %TEMP%\reDelphix.log
 
 const
   CAP_SHOW     = 'Stelle zeigen';
@@ -200,9 +200,9 @@ procedure TRdxProvider.RegisterAtHost;
 begin
   if FToken = 0 then
     FToken := TFindingActions.Register(Provide);
-  OutputDebugString(PChar(Format('reDelphix: registriert, Token %d, '
-    + 'Anbieter gesamt %d, Scope-Tabelle %d Eintraege aus %s',
-    [FToken, TFindingActions.ProviderCount, FScopes.Count, FScopes.Source])));
+  RdxLog('registriert, Token %d, Anbieter gesamt %d, Scope-Tabelle %d '
+    + 'Eintraege aus %s',
+    [FToken, TFindingActions.ProviderCount, FScopes.Count, FScopes.Source]);
 end;
 
 procedure TRdxProvider.UnregisterAtHost;
@@ -395,8 +395,9 @@ var
   Info       : TRefactorInfo;
   IsCall     : Boolean;
   Why        : string;
-  BufferText : string;
-  Opened     : Boolean;
+  BufferText   : string;
+  BufferSource : string;
+  Opened       : Boolean;
 begin
   Result := nil;
   FActions.Clear;
@@ -424,9 +425,15 @@ begin
     // dann passen die beschriebenen Bereiche zu dem Text, in den nachher
     // geschrieben wird (ungespeicherte Aenderungen!). Sonst die Platte.
     if TRdxEditor.TryReadBuffer(AFinding.FileName, BufferText) then
-      Opened := FPlaces.OpenSource(AFinding.FileName, BufferText)
+    begin
+      BufferSource := 'Editor-Puffer';
+      Opened := FPlaces.OpenSource(AFinding.FileName, BufferText);
+    end
     else
+    begin
+      BufferSource := 'Platte';
       Opened := FPlaces.Open(AFinding.FileName);
+    end;
     if not Opened then
     begin
       Add(Result, DIAG_PREFIX + 'Datei nicht lesbar', '', False, nil);
@@ -446,9 +453,9 @@ begin
     Meta    := TRuleCatalog.GetRuleCanonical(AFinding.Kind);
     Anchor  := LowerCase(Meta.Anchor);
     FixMode := LowerCase(Meta.FixMode);
-    OutputDebugString(PChar(Format('reDelphix: %s %s:%d anchor=%s fixMode=%s',
+    RdxLog('Provide %s %s:%d anchor=%s fixMode=%s quelle=%s',
       [AFinding.ResolvedRuleId, ExtractFileName(AFinding.FileName), Line,
-       Anchor, FixMode])));
+       Anchor, FixMode, BufferSource]);
 
     Info := TRdxRecipeRunner.DescribeAnchor(FPlaces, Line, Anchor, IsCall, Why);
     if Assigned(Info) then

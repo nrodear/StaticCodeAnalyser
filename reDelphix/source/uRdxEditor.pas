@@ -5,32 +5,29 @@ unit uRdxEditor;
 // (Konzept_SourceRefactor_Quellstellen Abschnitt 15.4b: H2/H3 wohnen im
 // Modul).
 //
-// NUR VOM ZEILENANFANG AUS - KEINE SPALTENARITHMETIK IM EDITOR
+// SCHREIBEN UEBER IOTAEditWriter MIT BYTE-POSITIONEN AUS DEMSELBEN PUFFER
 //
-// IOTAEditPosition rechnet in ANZEIGE-Spalten (Tabulatoren expandiert),
-// die Bereiche aus TSourcePlaces zaehlen ZEICHEN, und ob Read(N) den
-// Cursor bewegt, ist nicht verbuergt - die erste Fassung (AH16) nahm es
-// an und verglich dann ab Spalte 1 ("Quelltext im Editor weicht vom Scan
-// ab", 2026-10-06, bei identischem Text auf Platte und im Editor).
-// Deshalb arbeitet ReplaceSpan jetzt ausschliesslich mit Operationen,
-// die am ZEILENANFANG beginnen:
-//   * Zeilen eines mehrzeiligen Bereichs werden von unten her mit
-//     BackspaceDelete am Zeilenanfang zusammengezogen (loescht den
-//     Umbruch, egal ob CRLF oder LF),
-//   * die so entstandene EINE Zeile wird komplett geloescht (Delete
-//     zaehlt Zeichen) und als Praefix + neuer Text + Suffix neu
-//     eingefuegt - dasselbe Muster wie der Zeilen-Quick-Fix des Plugins.
-// Fuer die Markierung (SelectSpan) rechnet die IDE selbst die Zeichen-
-// in Anzeigespalten um (IOTAEditView.ConvertPos).
+// Zwei Anlaeufe ueber die Cursor-API (IOTAEditPosition) sind am 2026-10-06
+// gescheitert: Read bewegt den Cursor nicht verbuergt (AH16), und
+// GotoLine/MoveBOL/BackspaceDelete am Zeilenanfang zogen keine Zeilen
+// zusammen (AH17) - die Cursor-API ist zeilengebunden und rechnet in
+// Anzeigespalten. Deshalb jetzt der klassische Weg der IDE-Erweiterungen:
+//   * der Puffer wird als UTF-8-BYTES gelesen (IOTAEditReader),
+//   * Zeilenanfaenge und die Byte-Offsets von (Zeile, Zeichen-Spalte)
+//     werden aus GENAU diesen Bytes berechnet,
+//   * der Bereich wird mit CreateUndoableWriter.CopyTo/DeleteTo/Insert
+//     ersetzt - Reader- und Writer-Positionen sind derselbe Byte-Raum.
+// Spalten der IDE kommen nirgends vor; Tabulatoren, Umlaute und
+// Zeilenenden (CRLF/LF/CR) sind damit gleichgueltig.
 //
 // NICHTS WIRD BLIND GESCHRIEBEN
 //
-// Vor jeder Aenderung wird der Bereich im EDITOR-PUFFER (IOTAEditReader)
-// mit dem Text verglichen, den der Scan beschrieben hat; nach dem
-// Zusammenziehen wird die Zeile ein zweites Mal gegengelesen. Weicht
-// etwas ab, nennt die Meldung die erste Stelle aus beiden Fassungen.
-// Jede Aenderung laeuft ueber die Cursor-API der IDE und ist mit Strg+Z
-// ruecknehmbar.
+// Vor dem Schreiben wird der Bereich zweimal gegen den Scan-Text geprueft:
+// als Zeilen (SpanText, wie der Dienst ihn gebildet hat) und als Bytes
+// (der Ausschnitt, der tatsaechlich geloescht wird). Weicht etwas ab,
+// nennt die Meldung die erste Stelle aus beiden Fassungen. Jeder Schritt
+// steht im Protokoll (uRdxLog, %TEMP%\reDelphix.log). Die Aenderung ist
+// mit Strg+Z ruecknehmbar (CreateUndoableWriter).
 
 interface
 
@@ -46,9 +43,9 @@ type
       const ASpan: TRefactorSpan; out AError: string): Boolean; static;
 
     // Ersetzt den Bereich durch ANewText - nur wenn der Puffer dort
-    // AExpected enthaelt (Zeilenumbrueche als #10 verglichen). ANewText
-    // ersetzt den Bereich auf EINER Zeile; ein mehrzeiliger Bereich wird
-    // dabei zusammengezogen.
+    // AExpected enthaelt (Zeilenumbrueche als #10 verglichen). Praefix
+    // vor dem Bereich und Suffix dahinter bleiben stehen; ein
+    // mehrzeiliger Bereich wird dabei zu dem, was ANewText vorgibt.
     class function ReplaceSpan(const AFile: string;
       const ASpan: TRefactorSpan; const AExpected, ANewText: string;
       out AError: string): Boolean; static;
@@ -71,17 +68,22 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes,
+  System.SysUtils, System.Classes, System.Generics.Collections,
   ToolsAPI,
-  uRefactorInfoBuilder;   // SpanText: derselbe Bereichstext wie beim Scan
+  uRefactorInfoBuilder,   // SpanText: derselbe Bereichstext wie beim Scan
+  uRdxLog;
 
 const
-  SNoEditor  = 'Datei ist nicht im Editor geoeffnet';
-  SNoView    = 'Editor-Ansicht nicht verfuegbar';
-  SNoBuffer  = 'Editor-Puffer nicht lesbar';
-  SDiffers   = 'Quelltext im Editor weicht vom Scan ab - nicht geschrieben';
-  SJoinFail  = 'Zeilen liessen sich nicht zusammenziehen - Strg+Z';
-  SJoinDiff  = 'Zeile nach dem Zusammenziehen anders als erwartet - Strg+Z';
+  SNoEditor = 'Datei ist nicht im Editor geoeffnet';
+  SNoView   = 'Editor-Ansicht nicht verfuegbar';
+  SNoBuffer = 'Editor-Puffer nicht lesbar';
+  SNoWriter = 'Editor-Puffer nicht beschreibbar';
+  SDiffers  = 'Quelltext im Editor weicht vom Scan ab - nicht geschrieben';
+
+function WithLogHint(const AMsg: string): string;
+begin
+  Result := AMsg + ' [Protokoll: ' + RdxLogPath + ']';
+end;
 
 function TryGetSourceEditor(const AFile: string; AOpen: Boolean;
   out ASrc: IOTASourceEditor): Boolean;
@@ -126,8 +128,94 @@ begin
   Result := APos <> nil;
 end;
 
+function ReadBufferBytes(const ASrc: IOTASourceEditor;
+  out ABytes: TBytes): Boolean;
+// IOTAEditReader liefert UTF-8-Bytes in Bloecken; der Reader wird vor
+// dem Verlassen freigegeben - solange er lebt, darf niemand in den
+// Puffer schreiben.
+const
+  BLOCK = 16384;
+var
+  Reader : IOTAEditReader;
+  Chunk  : TBytes;
+  Got    : Integer;
+  Total  : Integer;
+begin
+  Result := False;
+  SetLength(ABytes, 0);
+  if ASrc = nil then Exit;
+  Reader := ASrc.CreateReader;
+  if Reader = nil then Exit;
+  try
+    Total := 0;
+    repeat
+      SetLength(Chunk, BLOCK);
+      Got := Reader.GetText(Total, PAnsiChar(@Chunk[0]), BLOCK);
+      if Got > 0 then
+      begin
+        SetLength(ABytes, Total + Got);
+        Move(Chunk[0], ABytes[Total], Got);
+        Inc(Total, Got);
+      end;
+    until Got < BLOCK;
+  finally
+    Reader := nil;
+  end;
+  Result := Length(ABytes) > 0;
+end;
+
+procedure LineStartsOf(const ABytes: TBytes; AStarts: TList<Integer>);
+// Byte-Offset (0-basiert) jedes Zeilenanfangs; Terminatoren CRLF, LF und
+// CR - dieselbe Trennung wie TStringList.Text.
+var
+  i, n : Integer;
+begin
+  AStarts.Clear;
+  AStarts.Add(0);
+  i := 0;
+  n := Length(ABytes);
+  while i < n do
+  begin
+    if ABytes[i] = 13 then
+    begin
+      if (i + 1 < n) and (ABytes[i + 1] = 10) then
+        Inc(i, 2)
+      else
+        Inc(i);
+      AStarts.Add(i);
+    end
+    else if ABytes[i] = 10 then
+    begin
+      Inc(i);
+      AStarts.Add(i);
+    end
+    else
+      Inc(i);
+  end;
+end;
+
+function OffsetOf(AStarts: TList<Integer>; ALines: TStrings;
+  ALine, ACol: Integer; out AOffset: Integer): Boolean;
+// Byte-Offset der Zeichen-Spalte ACol (1-basiert) in Zeile ALine: Anfang
+// der Zeile plus UTF-8-Laenge der Zeichen davor. ACol hinter dem
+// Zeilenende landet am Zeilenende.
+begin
+  AOffset := 0;
+  Result := (ALine >= 1) and (ALine <= ALines.Count) and (ALine <= AStarts.Count);
+  if not Result then Exit;
+  AOffset := AStarts[ALine - 1]
+    + Length(UTF8Encode(Copy(ALines[ALine - 1], 1, ACol - 1)));
+end;
+
+function NormalizeEol(const S: string): string;
+begin
+  Result := StringReplace(S, #13#10, #10, [rfReplaceAll]);
+  Result := StringReplace(Result, #13, #10, [rfReplaceAll]);
+end;
+
 function Visible(const S: string): string;
-// Zeilenumbrueche und Tabulatoren sichtbar machen - fuer die Meldung.
+// Zeilenumbrueche und Tabulatoren sichtbar machen - fuer Meldung und
+// Protokoll.
 begin
   Result := StringReplace(S, #10, '\n', [rfReplaceAll]);
   Result := StringReplace(Result, #13, '\r', [rfReplaceAll]);
@@ -154,17 +242,7 @@ begin
     Visible(Copy(AExpected, From, CTX)), Visible(Copy(AActual, From, CTX))]);
 end;
 
-function BufferLines(const AFile: string; ALines: TStringList): Boolean;
-// Der Puffer als Zeilen - TStringList.Text trennt CRLF, LF und CR.
-var
-  Text : string;
-begin
-  Result := TRdxEditor.TryReadBuffer(AFile, Text);
-  if Result then
-    ALines.Text := Text;
-end;
-
-function DisplayPosOf(const AView: IOTAEditView; ALines: TStringList;
+function DisplayPosOf(const AView: IOTAEditView; ALines: TStrings;
   ALine, ACol: Integer): TOTAEditPos;
 // Zeichen-Spalte -> Anzeige-Spalte ueber die IDE selbst. TOTACharPos
 // zaehlt die UTF-8-Bytes der Zeile (so handhaben es GExperts & Co.);
@@ -185,18 +263,44 @@ end;
 
 { TRdxEditor }
 
+class function TRdxEditor.TryReadBuffer(const AFile: string;
+  out AText: string): Boolean;
+var
+  Src   : IOTASourceEditor;
+  Bytes : TBytes;
+begin
+  Result := False;
+  AText  := '';
+  if not TryGetSourceEditor(AFile, False, Src) then Exit;
+  try
+    if not ReadBufferBytes(Src, Bytes) then Exit;
+    AText  := TEncoding.UTF8.GetString(Bytes);
+    Result := AText <> '';
+  except
+    on E: Exception do
+    begin
+      RdxLog('TryReadBuffer %s: %s', [ExtractFileName(AFile), E.Message]);
+      AText  := '';
+      Result := False;
+    end;
+  end;
+end;
+
 class function TRdxEditor.SelectSpan(const AFile: string;
   const ASpan: TRefactorSpan; out AError: string): Boolean;
 var
-  Src    : IOTASourceEditor;
-  View   : IOTAEditView;
-  EdPos  : IOTAEditPosition;
-  Block  : IOTAEditBlock;
-  Lines  : TStringList;
-  P      : TOTAEditPos;
+  Src   : IOTASourceEditor;
+  View  : IOTAEditView;
+  EdPos : IOTAEditPosition;
+  Block : IOTAEditBlock;
+  Lines : TStringList;
+  Text  : string;
+  P     : TOTAEditPos;
 begin
   Result := False;
   AError := '';
+  RdxLog('SelectSpan %s %d:%d-%d:%d', [ExtractFileName(AFile),
+    ASpan.StartLine, ASpan.StartCol, ASpan.EndLine, ASpan.EndCol]);
   if not ASpan.IsValid then
   begin
     AError := 'kein gueltiger Bereich';
@@ -216,11 +320,12 @@ begin
         AError := SNoView;
         Exit;
       end;
-      if not BufferLines(AFile, Lines) then
+      if not TryReadBuffer(AFile, Text) then
       begin
         AError := SNoBuffer;
         Exit;
       end;
+      Lines.Text := Text;
       Block := View.Block;
       if Block = nil then
       begin
@@ -229,9 +334,11 @@ begin
       end;
       Block.Reset;
       P := DisplayPosOf(View, Lines, ASpan.StartLine, ASpan.StartCol);
+      RdxLog('  Anfang Zeichen %d -> Anzeige %d', [ASpan.StartCol, P.Col]);
       if not EdPos.Move(P.Line, P.Col) then Exit;
       Block.BeginBlock;
       P := DisplayPosOf(View, Lines, ASpan.EndLine, ASpan.EndCol);
+      RdxLog('  Ende Zeichen %d -> Anzeige %d', [ASpan.EndCol, P.Col]);
       if not EdPos.Move(P.Line, P.Col) then Exit;
       Block.EndBlock;
       View.MoveViewToCursor;
@@ -243,6 +350,7 @@ begin
     end;
   finally
     Lines.Free;
+    if AError <> '' then RdxLog('  SelectSpan FEHLER: ' + AError);
   end;
 end;
 
@@ -250,40 +358,53 @@ class function TRdxEditor.ReplaceSpan(const AFile: string;
   const ASpan: TRefactorSpan; const AExpected, ANewText: string;
   out AError: string): Boolean;
 var
-  Src     : IOTASourceEditor;
-  View    : IOTAEditView;
-  EdPos   : IOTAEditPosition;
-  Lines   : TStringList;
-  Actual  : string;
-  First   : string;
-  Last    : string;
-  Joined  : string;
-  NewLine : string;
-  Probe   : string;
-  L       : Integer;
+  Src      : IOTASourceEditor;
+  View     : IOTAEditView;
+  EdPos    : IOTAEditPosition;
+  Bytes    : TBytes;
+  Lines    : TStringList;
+  Starts   : TList<Integer>;
+  Actual   : string;
+  StartPos : Integer;
+  EndPos   : Integer;
+  Slice    : string;
+  Writer   : IOTAEditWriter;
+  NewUtf8  : UTF8String;
+  After    : string;
 begin
   Result := False;
   AError := '';
+  RdxLog('ReplaceSpan %s %d:%d-%d:%d, neu "%s"', [ExtractFileName(AFile),
+    ASpan.StartLine, ASpan.StartCol, ASpan.EndLine, ASpan.EndCol,
+    Visible(ANewText)]);
   if not ASpan.IsValid or (AExpected = '') then
   begin
     AError := 'kein gueltiger Bereich';
+    RdxLog('  FEHLER: ' + AError);
     Exit;
   end;
   if not TryGetSourceEditor(AFile, True, Src) then
   begin
     AError := SNoEditor;
+    RdxLog('  FEHLER: ' + AError);
     Exit;
   end;
-  Lines := TStringList.Create;
+  Lines  := TStringList.Create;
+  Starts := TList<Integer>.Create;
   try
     try
-      // 1) Puffer lesen und den Bereich gegen den Scan-Text pruefen -
-      //    derselbe Bereichstext wie beim Beschreiben (SpanText).
-      if not BufferLines(AFile, Lines) then
+      // 1) Puffer als Bytes und als Zeilen
+      if not ReadBufferBytes(Src, Bytes) then
       begin
         AError := SNoBuffer;
         Exit;
       end;
+      Lines.Text := TEncoding.UTF8.GetString(Bytes);
+      LineStartsOf(Bytes, Starts);
+      RdxLog('  Puffer: %d Bytes, %d Zeilen, %d Zeilenanfaenge',
+        [Length(Bytes), Lines.Count, Starts.Count]);
+
+      // 2) Bereich als Zeilen gegen den Scan-Text
       if ASpan.EndLine > Lines.Count then
       begin
         AError := SDiffers + Format(' (Zeile %d, der Puffer hat %d Zeilen)',
@@ -294,120 +415,73 @@ begin
       if Actual <> AExpected then
       begin
         AError := SDiffers + DescribeMismatch(AExpected, Actual);
+        RdxLog('  Scan  : "%s"', [Visible(AExpected)]);
+        RdxLog('  Editor: "%s"', [Visible(Actual)]);
         Exit;
       end;
 
-      // 2) Was aus den Zeilen des Bereichs wird: Praefix der ersten,
-      //    neuer Text, Suffix der letzten - auf EINER Zeile.
-      First   := Lines[ASpan.StartLine - 1];
-      Last    := Lines[ASpan.EndLine - 1];
-      NewLine := Copy(First, 1, ASpan.StartCol - 1) + ANewText
-        + Copy(Last, ASpan.EndCol, MaxInt);
-      Joined := First;
-      for L := ASpan.StartLine + 1 to ASpan.EndLine do
-        Joined := Joined + Lines[L - 1];
-
-      if not TryGetView(Src, View, EdPos) then
+      // 3) Byte-Offsets aus demselben Puffer; der Ausschnitt muss den
+      //    Scan-Text ergeben - sonst stimmt die Offset-Rechnung nicht.
+      if not OffsetOf(Starts, Lines, ASpan.StartLine, ASpan.StartCol, StartPos)
+         or not OffsetOf(Starts, Lines, ASpan.EndLine, ASpan.EndCol, EndPos)
+         or (EndPos <= StartPos) or (EndPos > Length(Bytes)) then
       begin
-        AError := SNoView;
+        AError := Format('Position im Puffer nicht berechenbar (%d..%d von %d)',
+          [StartPos, EndPos, Length(Bytes)]);
+        Exit;
+      end;
+      Slice := NormalizeEol(TEncoding.UTF8.GetString(Bytes, StartPos,
+        EndPos - StartPos));
+      RdxLog('  Bytes %d..%d (%d): "%s"', [StartPos, EndPos, EndPos - StartPos,
+        Visible(Slice)]);
+      if Slice <> AExpected then
+      begin
+        AError := 'Byte-Bereich weicht vom Scan ab - nicht geschrieben'
+          + DescribeMismatch(AExpected, Slice);
         Exit;
       end;
 
-      // 3) Fortsetzungszeilen von unten her anziehen: Backspace am
-      //    Zeilenanfang loescht genau den Umbruch davor.
-      for L := ASpan.EndLine downto ASpan.StartLine + 1 do
+      // 4) Schreiben: Praefix kopieren, Bereich verwerfen, neuen Text
+      //    einfuegen; der Rest wird beim Freigeben des Writers kopiert.
+      Writer := Src.CreateUndoableWriter;
+      if Writer = nil then
       begin
-        if not (EdPos.GotoLine(L) and EdPos.MoveBOL
-                and EdPos.BackspaceDelete(1)) then
-        begin
-          AError := SJoinFail;
-          Exit;
-        end;
+        AError := SNoWriter;
+        Exit;
       end;
+      try
+        Writer.CopyTo(StartPos);
+        Writer.DeleteTo(EndPos);
+        NewUtf8 := UTF8Encode(ANewText);
+        Writer.Insert(PAnsiChar(NewUtf8));
+      finally
+        Writer := nil;
+      end;
+      RdxLog('  geschrieben: %d Bytes entfernt, %d Bytes eingefuegt',
+        [EndPos - StartPos, Length(NewUtf8)]);
 
-      // 4) Gegenprobe: die zusammengezogene Zeile muss exakt die
-      //    Verkettung der Bereichszeilen sein.
-      if not (EdPos.GotoLine(ASpan.StartLine) and EdPos.MoveBOL) then
+      // 5) Nachkontrolle fuers Protokoll: die Zeile danach.
+      if TryReadBuffer(AFile, After) then
       begin
-        AError := SJoinFail;
-        Exit;
+        Lines.Text := After;
+        if ASpan.StartLine <= Lines.Count then
+          RdxLog('  Zeile %d jetzt: "%s"', [ASpan.StartLine,
+            Visible(Lines[ASpan.StartLine - 1])]);
       end;
-      Probe := EdPos.Read(Length(Joined));
-      if Probe <> Joined then
-      begin
-        AError := SJoinDiff + DescribeMismatch(Joined, Probe);
-        Exit;
-      end;
-
-      // 5) Die ganze Zeile ersetzen - Delete zaehlt Zeichen, der Umbruch
-      //    am Ende bleibt stehen.
-      if not (EdPos.GotoLine(ASpan.StartLine) and EdPos.MoveBOL) then
-      begin
-        AError := SJoinFail;
-        Exit;
-      end;
-      if (Length(Joined) > 0) and not EdPos.Delete(Length(Joined)) then
-      begin
-        AError := 'Loeschen im Editor fehlgeschlagen - Strg+Z';
-        Exit;
-      end;
-      EdPos.InsertText(NewLine);
-      View.MoveViewToCursor;
-      View.Paint;
+      if TryGetView(Src, View, EdPos) then
+        View.Paint;
       Result := True;
     except
       on E: Exception do
-        AError := E.Message;
+        AError := E.ClassName + ': ' + E.Message;
     end;
   finally
+    Starts.Free;
     Lines.Free;
-  end;
-end;
-
-class function TRdxEditor.TryReadBuffer(const AFile: string;
-  out AText: string): Boolean;
-// IOTAEditReader liefert UTF-8-Bytes in Bloecken; der Reader wird vor
-// dem Verlassen freigegeben - solange er lebt, darf niemand in den
-// Puffer schreiben.
-const
-  BLOCK = 16384;
-var
-  Src    : IOTASourceEditor;
-  Reader : IOTAEditReader;
-  Buf    : TBytes;
-  Chunk  : TBytes;
-  Got    : Integer;
-  Total  : Integer;
-begin
-  Result := False;
-  AText  := '';
-  if not TryGetSourceEditor(AFile, False, Src) then Exit;
-  try
-    Reader := Src.CreateReader;
-    if Reader = nil then Exit;
-    try
-      SetLength(Buf, 0);
-      Total := 0;
-      repeat
-        SetLength(Chunk, BLOCK);
-        Got := Reader.GetText(Total, PAnsiChar(@Chunk[0]), BLOCK);
-        if Got > 0 then
-        begin
-          SetLength(Buf, Total + Got);
-          Move(Chunk[0], Buf[Total], Got);
-          Inc(Total, Got);
-        end;
-      until Got < BLOCK;
-    finally
-      Reader := nil;
-    end;
-    AText  := TEncoding.UTF8.GetString(Buf);
-    Result := AText <> '';
-  except
-    on E: Exception do
+    if AError <> '' then
     begin
-      AText  := '';
-      Result := False;
+      RdxLog('  FEHLER: ' + AError);
+      AError := WithLogHint(AError);
     end;
   end;
 end;
