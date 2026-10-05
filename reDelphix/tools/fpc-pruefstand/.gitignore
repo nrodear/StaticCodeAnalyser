@@ -1,0 +1,7 @@
+out/
+runner.pas
+uDetectorUtils.pas
+uRefactor*.pas
+uSourcePlaces.pas
+uFindingActions.pas
+uTest*.pas

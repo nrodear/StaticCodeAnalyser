@@ -1,0 +1,64 @@
+package reDelphix.d12;
+
+// ---------------------------------------------------------------------
+// reDelphix - Modul "Source Refactor" fuer den Static Code Analyser.
+// Entwurfszeit-Paket: es lebt nur in der IDE, neben dem SCA-Plugin
+// (Konzept_SourceRefactor_Quellstellen, Abschnitt 15).
+//
+// Es linkt gegen SCA.Engine (Quellstellen-Dienst TSourcePlaces und die
+// Registry "Aktionen am Fund"), NICHT gegen ein Plugin-Paket. Deshalb
+// muss in der IDE die Plugin-Variante StaticCodeAnalyser.IDE.d12
+// (requires SCA.Engine, SCA.SharedUI) installiert sein - neben dem
+// Monolithen StaticCodeAnalyser.Plugin.d12 laesst sich SCA.Engine.bpl
+// nicht laden (doppelt enthaltene Units).
+//
+// {$DESIGNONLY} ist massgeblich fuer die gebaute BPL, der Eintrag in der
+// .dproj nur der MSBuild-Spiegel - beide gehoeren zusammen (Erfahrung
+// im Kopf von StaticCodeAnalyser.IDE.d12.dpk).
+// ---------------------------------------------------------------------
+{$R *.res}
+// Scope-Tabelle als RCDATA (data\unitscopes.rc -> BRCC32 legt die .res
+// neben die dpk). Eine unitscopes.txt neben der BPL hat Vorrang.
+{$R 'unitscopes.res'}
+{$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
+{$ALIGN 8}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA ON}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS ON}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS ON}
+{$OPTIMIZATION OFF}
+{$OVERFLOWCHECKS ON}
+{$RANGECHECKS ON}
+{$REFERENCEINFO ON}
+{$SAFEDIVIDE OFF}
+{$STACKFRAMES ON}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST OFF}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
+{$DEFINE DEBUG}
+{$ENDIF IMPLICITBUILDING}
+{$DESCRIPTION 'reDelphix - Source Refactor fuer den Static Code Analyser'}
+{$DESIGNONLY}
+{$IMPLICITBUILD ON}
+
+requires
+  rtl,
+  vcl,
+  designide,
+  SCA.Engine;
+
+contains
+  uRdxRecipes in 'source\uRdxRecipes.pas',
+  uRdxScopeTable in 'source\uRdxScopeTable.pas',
+  uRdxEditor in 'source\uRdxEditor.pas',
+  uRdxProvider in 'source\uRdxProvider.pas',
+  uRdxRegister in 'source\uRdxRegister.pas';
+
+end.
