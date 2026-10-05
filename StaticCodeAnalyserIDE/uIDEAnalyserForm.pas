@@ -4859,6 +4859,19 @@ function FindingsAtEditorLine(const AFile: string;
 var
   Found : TArray<TLeakFinding>;
 
+  function AlreadyFound(F: TLeakFinding): Boolean;
+  // Derselbe Fund kann aus zwei Scans (Dock + Silent, Projekt + Datei)
+  // in der Liste stehen - im Menue soll er einmal erscheinen.
+  var
+    k : Integer;
+  begin
+    Result := False;
+    for k := 0 to High(Found) do
+      if (Found[k].Kind = F.Kind) and (Found[k].LineInt = F.LineInt)
+         and (Found[k].MissingVar = F.MissingVar) then
+        Exit(True);
+  end;
+
   procedure Collect(AList: TList<TLeakFinding>);
   var
     F : TLeakFinding;
@@ -4866,7 +4879,8 @@ var
     if not Assigned(AList) then Exit;
     for F in AList do
       if Assigned(F) and SameText(F.FileName, AFile)
-         and (ALine >= F.LineInt) and (ALine <= F.SpanEnd) then
+         and (ALine >= F.LineInt) and (ALine <= F.SpanEnd)
+         and not AlreadyFound(F) then
       begin
         SetLength(Found, Length(Found) + 1);
         Found[High(Found)] := F;
@@ -5452,14 +5466,23 @@ begin
       APopup.Items.Add(Sep);
       ASlot.ActionItems.Add(Sep);
     end;
+    // Eine Kopfzeile je Fund (Regel + Meldung, nicht klickbar), darunter
+    // die Aktionen ohne Praefix - so steht die Regel-ID genau einmal.
     RuleId := Found[i].ResolvedRuleId;
+    Item := TMenuItem.Create(nil);
+    Item.Caption := Format('%s  %s', [RuleId,
+      TrimRight(Copy(Found[i].MissingVar, 1, 60))]);
+    Item.Enabled := False;
+    Item.Tag     := -1;
+    APopup.Items.Add(Item);
+    ASlot.ActionItems.Add(Item);
     for k := 0 to High(Acts) do
     begin
       Item := TMenuItem.Create(nil);
       if Acts[k].Hint <> '' then
-        Item.Caption := Format('%s: %s  (%s)', [RuleId, Acts[k].Caption, Acts[k].Hint])
+        Item.Caption := Format('%s  (%s)', [Acts[k].Caption, Acts[k].Hint])
       else
-        Item.Caption := Format('%s: %s', [RuleId, Acts[k].Caption]);
+        Item.Caption := Acts[k].Caption;
       Item.Hint    := Acts[k].Hint;
       Item.Enabled := Acts[k].Enabled and Assigned(Acts[k].Execute);
       Item.Tag     := Length(ASlot.Actions);
