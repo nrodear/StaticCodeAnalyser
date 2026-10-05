@@ -50,6 +50,14 @@ type
     // uses-Eintrag dieses Namens NICHT auf eine RTL-Unit expandiert werden.
     class function ProjectHasUnit(const AShortName,
       ANearFile: string): Boolean; static;
+
+    // Liefert den aktuellen EDITOR-PUFFER der Datei (IOTAEditReader,
+    // UTF-8 -> string) - nur wenn die Datei in der IDE offen ist; sie
+    // wird dafuer nicht geoeffnet. False sonst. Der Anbieter beschreibt
+    // die Stellen auf diesem Text, nicht auf der Platte: ungespeicherte
+    // Aenderungen sind sonst ein Widerspruch zwischen Scan und Editor.
+    class function TryReadBuffer(const AFile: string;
+      out AText: string): Boolean; static;
   end;
 
 implementation
@@ -114,6 +122,34 @@ begin
   Result := 0;
   for i := 1 to Length(S) do
     if S[i] = C then Inc(Result);
+end;
+
+function Visible(const S: string): string;
+// Zeilenumbrueche und Tabulatoren sichtbar machen - fuer die Meldung.
+begin
+  Result := StringReplace(S, #10, '\n', [rfReplaceAll]);
+  Result := StringReplace(Result, #13, '\r', [rfReplaceAll]);
+  Result := StringReplace(Result, #9, '\t', [rfReplaceAll]);
+end;
+
+function DescribeMismatch(const AExpected, AActual: string): string;
+// Erste abweichende Stelle samt Umfeld aus beiden Texten - damit der
+// Benutzer sieht, WAS im Editor anders ist als im Scan (ungespeicherte
+// Aenderung, verschobene Zeile, veralteter Fund).
+const
+  CTX = 24;
+var
+  i, n : Integer;
+  From : Integer;
+begin
+  n := Length(AExpected);
+  if Length(AActual) < n then n := Length(AActual);
+  i := 1;
+  while (i <= n) and (AExpected[i] = AActual[i]) do Inc(i);
+  From := i - 8;
+  if From < 1 then From := 1;
+  Result := Format(' (ab Zeichen %d: Scan "%s", Editor "%s")', [i,
+    Visible(Copy(AExpected, From, CTX)), Visible(Copy(AActual, From, CTX))]);
 end;
 
 { TRdxEditor }
@@ -228,7 +264,7 @@ begin
     Norm := NormalizeEol(Raw);
     if Copy(Norm, 1, Length(AExpected)) <> AExpected then
     begin
-      AError := SDiffers;
+      AError := SDiffers + DescribeMismatch(AExpected, Norm);
       Exit;
     end;
     EolLen := 1;
@@ -254,6 +290,54 @@ begin
   except
     on E: Exception do
       AError := E.Message;
+  end;
+end;
+
+class function TRdxEditor.TryReadBuffer(const AFile: string;
+  out AText: string): Boolean;
+// IOTAEditReader liefert UTF-8-Bytes in Bloecken; der Reader wird vor
+// dem Verlassen freigegeben - solange er lebt, darf niemand in den
+// Puffer schreiben.
+const
+  BLOCK = 16384;
+var
+  Src    : IOTASourceEditor;
+  Reader : IOTAEditReader;
+  Buf    : TBytes;
+  Chunk  : TBytes;
+  Got    : Integer;
+  Total  : Integer;
+begin
+  Result := False;
+  AText  := '';
+  if not TryGetSourceEditor(AFile, False, Src) then Exit;
+  try
+    Reader := Src.CreateReader;
+    if Reader = nil then Exit;
+    try
+      SetLength(Buf, 0);
+      Total := 0;
+      repeat
+        SetLength(Chunk, BLOCK);
+        Got := Reader.GetText(Total, PAnsiChar(@Chunk[0]), BLOCK);
+        if Got > 0 then
+        begin
+          SetLength(Buf, Total + Got);
+          Move(Chunk[0], Buf[Total], Got);
+          Inc(Total, Got);
+        end;
+      until Got < BLOCK;
+    finally
+      Reader := nil;
+    end;
+    AText  := TEncoding.UTF8.GetString(Buf);
+    Result := AText <> '';
+  except
+    on E: Exception do
+    begin
+      AText  := '';
+      Result := False;
+    end;
   end;
 end;
 

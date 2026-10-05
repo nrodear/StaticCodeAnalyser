@@ -391,10 +391,12 @@ var
   Meta    : TRuleMeta;
   Anchor  : string;
   FixMode : string;
-  Line    : Integer;
-  Info    : TRefactorInfo;
-  IsCall  : Boolean;
-  Why     : string;
+  Line       : Integer;
+  Info       : TRefactorInfo;
+  IsCall     : Boolean;
+  Why        : string;
+  BufferText : string;
+  Opened     : Boolean;
 begin
   Result := nil;
   FActions.Clear;
@@ -418,7 +420,14 @@ begin
     Exit;
   end;
   try
-    if not FPlaces.Open(AFinding.FileName) then
+    // Der EDITOR-PUFFER ist die Wahrheit, wenn die Datei offen ist: nur
+    // dann passen die beschriebenen Bereiche zu dem Text, in den nachher
+    // geschrieben wird (ungespeicherte Aenderungen!). Sonst die Platte.
+    if TRdxEditor.TryReadBuffer(AFinding.FileName, BufferText) then
+      Opened := FPlaces.OpenSource(AFinding.FileName, BufferText)
+    else
+      Opened := FPlaces.Open(AFinding.FileName);
+    if not Opened then
     begin
       Add(Result, DIAG_PREFIX + 'Datei nicht lesbar', '', False, nil);
       Exit;
