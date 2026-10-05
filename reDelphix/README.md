@@ -65,9 +65,15 @@ gespeicherten Datei - ungespeicherte Aenderungen sind damit kein
 Widerspruch. Vor jedem Schreiben vergleicht `uRdxEditor.ReplaceSpan` den
 Bereich im Puffer mit dem beschriebenen Text; weicht er ab (Puffer seit
 dem Oeffnen des Menues geaendert, Fund aus einem alten Scan), passiert
-nichts, und die Meldung nennt die erste abweichende Stelle. Jede
-Aenderung ist mit Strg+Z ruecknehmbar. Die Fundliste des Plugins wird
-nicht neu geladen - nach einer Umformung die Datei erneut scannen.
+nichts, und die Meldung nennt die erste abweichende Stelle. Geschrieben wird ueber
+`IOTAEditWriter` mit Byte-Positionen, die aus demselben Puffer gerechnet
+sind; jede Aenderung ist mit Strg+Z ruecknehmbar. Die Fundliste des
+Plugins wird nicht neu geladen - nach einer Umformung die Datei erneut
+scannen.
+
+**Protokoll:** `%TEMP%\reDelphix.log` (und DebugView) - jeder Schritt von
+Anbieter, Markieren und Ersetzen mit Quelle (Puffer/Platte), Bytes,
+Offsets und Gruenden. Bei einer Fehlermeldung zuerst dort nachsehen.
 
 ## Scope-Tabelle pflegen
 
