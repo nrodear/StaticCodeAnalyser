@@ -59,11 +59,15 @@ Projekt, abhaengig von `SCA.Engine`) und liegt im SCA-Repo unter
 | Parametrisierte Vorlage in die Zwischenablage | SCA003 (`fixMode: assisted`) | baut `:p1..:pn` und `ParamByName`-Zeilen; schreibt NIE in den Editor |
 | uses: X -> Scope.X | Fund in einer uses-Klausel | qualifiziert den Eintrag; Mehrdeutiges (Forms: VCL/FMX) nur bei erkennbarem Rahmenwerk, nie bei gleichnamiger Projekt-Unit |
 
-Vor jedem Schreiben vergleicht `uRdxEditor.ReplaceSpan` den Bereich im
-Editor-Puffer mit dem Text, den der Scan beschrieben hat; weicht er ab,
-passiert nichts. Jede Aenderung ist mit Strg+Z ruecknehmbar. Die Fundliste
-des Plugins wird nicht neu geladen - nach einer Umformung die Datei erneut
-scannen.
+Beschrieben werden die Stellen auf dem **Editor-Puffer** der offenen Datei
+(`TRdxEditor.TryReadBuffer` -> `TSourcePlaces.OpenSource`), nicht auf der
+gespeicherten Datei - ungespeicherte Aenderungen sind damit kein
+Widerspruch. Vor jedem Schreiben vergleicht `uRdxEditor.ReplaceSpan` den
+Bereich im Puffer mit dem beschriebenen Text; weicht er ab (Puffer seit
+dem Oeffnen des Menues geaendert, Fund aus einem alten Scan), passiert
+nichts, und die Meldung nennt die erste abweichende Stelle. Jede
+Aenderung ist mit Strg+Z ruecknehmbar. Die Fundliste des Plugins wird
+nicht neu geladen - nach einer Umformung die Datei erneut scannen.
 
 ## Scope-Tabelle pflegen
 
