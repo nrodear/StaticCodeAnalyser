@@ -40,6 +40,14 @@ unit uSourcePlaces;
 //                 (Zeile) zur Startposition (Spalte) und zum Zielnamen
 //   UsesEntries   Unit-Namen der uses-Klauseln mit Spalten
 //   IdentifiersIn Bezeichner in einem Bereich
+//   DeclaredTypeOf Typname eines Bezeichners an einer Zeile (uTypeResolver:
+//                 Parameter, lokale Variable, Feld, Unit-Global). ChainOf
+//                 und CallOf nutzen das selbst (AH12, 2026-10-05): ein
+//                 Operand, der ein blosser Bezeichner ist, wird ueber
+//                 seinen deklarierten Typ rvString bzw. rvNonString,
+//                 Resolved traegt den Typnamen, FixSafe wird neu abgeleitet.
+//                 Vorher blieb 'Marker: string' rvUnknown - 98 % der
+//                 SCA044-Funde am Korpus waren so nie fix-sicher.
 //   CodeViewOf / TextOf / HashOf   Sicht, Text und Hash eines Bereichs
 //   ConditionalRanges              {$IFDEF}-Bereiche der Datei
 //
@@ -56,7 +64,8 @@ interface
 
 uses
   System.Classes,
-  uAstNode, uAstSpans, uRefactorInfo;   // TNodeKinds kommt aus uAstSpans
+  uAstNode, uAstSpans, uRefactorInfo,   // TNodeKinds kommt aus uAstSpans
+  uTypeResolver;                        // P9: deklarierter Typ eines Bezeichners
 
 const
   // Vertragsversion. Aenderungen an Signaturen, Rollen oder Koordinaten
@@ -90,6 +99,11 @@ type
     FFileName : string;
     FLines    : TStringList;   // nil, solange nichts geoeffnet ist
     FRoot     : TAstNode;      // AST der Datei, nil ohne Datei
+    FTypes    : TTypeResolver; // lazy aus FRoot, lebt bis Close
+    function Types: TTypeResolver;
+    // Operanden, die blosse Bezeichner sind, ueber den deklarierten Typ
+    // klassifizieren und FixSafe neu ableiten (s. Kopf, DeclaredTypeOf).
+    procedure ResolveOperandTypes(AInfo: TRefactorInfo);
   public
     constructor Create;
     destructor Destroy; override;
@@ -157,6 +171,12 @@ type
     // P7 - {$IFDEF}-Bereiche der Datei (Zeile der oeffnenden bis Zeile der
     // schliessenden Direktive), in Quelltext-Reihenfolge.
     function ConditionalRanges: TArray<TSourceLineRange>;
+
+    // P9 - deklarierter Typ (nackter, klein geschriebener Typname) des
+    // Bezeichners AName an Zeile ALine: Parameter oder lokale Variable der
+    // umschliessenden Routine, sonst Klassenfeld/Unit-Global; '' wenn
+    // unbekannt. Ohne Datei ''.
+    function DeclaredTypeOf(ALine: Integer; const AName: string): string;
   end;
 
 implementation
@@ -208,6 +228,7 @@ end;
 
 procedure TSourcePlaces.Close;
 begin
+  FreeAndNil(FTypes);
   FreeAndNil(FRoot);
   FreeAndNil(FLines);
   FFileName := '';
@@ -244,6 +265,7 @@ begin
   if Assigned(Result) and (AExpectedTarget <> '')
      and not TRefactorConcat.TargetMatches(FLines, Result, AExpectedTarget) then
     FreeAndNil(Result);
+  ResolveOperandTypes(Result);
 end;
 
 function TSourcePlaces.CallOf(ALine, ACol: Integer;
@@ -258,6 +280,83 @@ begin
   if Assigned(Result) and (AExpectedHead <> '')
      and not TRefactorConcat.TargetMatches(FLines, Result, AExpectedHead) then
     FreeAndNil(Result);
+  ResolveOperandTypes(Result);
+end;
+
+{ ---- P9 ---- }
+
+function IsPlainIdent(const S: string): Boolean;
+// Ein nackter Bezeichner - kein Punkt, keine Klammer, kein Operator.
+var
+  i : Integer;
+begin
+  Result := (S <> '') and TRefactorInfoBuilder.IsIdentStart(S[1]);
+  if not Result then Exit;
+  for i := 2 to Length(S) do
+    if not TRefactorInfoBuilder.IsIdentChar(S[i]) then
+      Exit(False);
+end;
+
+function TSourcePlaces.Types: TTypeResolver;
+begin
+  if (FTypes = nil) and Assigned(FRoot) then
+    FTypes := TTypeResolver.Create(FRoot);
+  Result := FTypes;
+end;
+
+function TSourcePlaces.DeclaredTypeOf(ALine: Integer;
+  const AName: string): string;
+var
+  R : TTypeResolver;
+begin
+  Result := '';
+  if not IsOpen or (Trim(AName) = '') or (ALine < 1) then Exit;
+  R := Types;
+  if Assigned(R) then
+    Result := R.ResolveTypeAt(LowerCase(Trim(AName)), ALine);
+end;
+
+procedure TSourcePlaces.ResolveOperandTypes(AInfo: TRefactorInfo);
+// Der Zerleger (uRefactorConcat) kennt ohne AST nur Literale und bekannte
+// Aufrufe als String. Hier bekommen Operanden, die ein blosser Bezeichner
+// sind, ihren deklarierten Typ: String-Typen und Char -> rvString (Format
+// nimmt beide fuer %s), Zahlen/Boolean/Datum -> rvNonString, sonst bleibt
+// rvUnknown. Nie herabstufen. Danach FixSafe nach derselben Regel wie
+// ClassifyParts neu ableiten: jeder Term rvString, kein Kommentar, kein
+// $IFDEF - ein Term mit Operator auf oberster Ebene ist kein Bezeichner
+// und bleibt rvUnknown, also bleibt FixSafe dort False.
+var
+  i     : Integer;
+  Text  : string;
+  T     : string;
+  AllOk : Boolean;
+begin
+  if not Assigned(AInfo) then Exit;
+  for i := 0 to High(AInfo.Parts) do
+  begin
+    if AInfo.Parts[i].Role <> ROLE_OPERAND then Continue;
+    if AInfo.Parts[i].ValueType <> rvUnknown then Continue;
+    Text := Trim(TextOf(AInfo.Parts[i]));
+    if not IsPlainIdent(Text) then Continue;
+    T := DeclaredTypeOf(AInfo.Parts[i].StartLine, Text);
+    if T = '' then Continue;
+    AInfo.Parts[i].Resolved := T;
+    if IsStringTypeName(T) or (T = 'char') or (T = 'widechar')
+       or (T = 'ansichar') then
+      AInfo.Parts[i].ValueType := rvString
+    else if IsNumericTypeName(T) then
+      AInfo.Parts[i].ValueType := rvNonString;
+  end;
+  AllOk := Length(AInfo.Parts) > 1;
+  for i := 0 to High(AInfo.Parts) do
+    if (AInfo.Parts[i].Role <> ROLE_TARGET)
+       and (AInfo.Parts[i].ValueType <> rvString) then
+    begin
+      AllOk := False;
+      Break;
+    end;
+  AInfo.FixSafe := AllOk and not (rfHasComment in AInfo.Flags)
+    and not (rfInConditional in AInfo.Flags);
 end;
 
 { ---- P5 ---- }

@@ -130,6 +130,7 @@ uses
   uTestRefactorInfoBuilder in 'uTestRefactorInfoBuilder.pas',
   uTestRefactorConcat in 'uTestRefactorConcat.pas',
   uTestSourcePlaces in 'uTestSourcePlaces.pas',
+  uTestSourcePlacesTypes in 'uTestSourcePlacesTypes.pas',
   uTestFindingActions in 'uTestFindingActions.pas',
   uTestPerfHotspots in 'uTestPerfHotspots.pas',
   uTestConcurrencyExt in 'uTestConcurrencyExt.pas',

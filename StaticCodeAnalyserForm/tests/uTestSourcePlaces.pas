@@ -54,6 +54,9 @@ type
     [Test] procedure IdentifiersIn_SkipsLiteralsHexAndExponent;
 
     // ---- Vertrag ----
+    // (P9 DeclaredTypeOf und die Typaufloesung der Operanden stehen in
+    // uTestSourcePlacesTypes - sie brauchen den echten Parser, der
+    // FPC-Pruefstand faehrt diese Unit mit einem Stub.)
     [Test] procedure Version_IsOne;
   end;
 
