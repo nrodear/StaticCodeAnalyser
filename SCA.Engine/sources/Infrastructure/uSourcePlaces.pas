@@ -26,6 +26,12 @@ unit uSourcePlaces;
 //     jederzeit aufrufbar - die Doku_01-Leitplanke "Engine nur fuer
 //     kurzlebige Ein-Scan-Prozesse" betrifft den Scan, nicht das Lesen
 //     einer Datei. Preis: ein Datei-Read je Open.
+//   * OpenSource nimmt den Text vom Host entgegen (AH15, 2026-10-06): im
+//     IDE-Plugin ist der Editor-Puffer die Wahrheit, nicht die Platte.
+//     reDelphix beschrieb Stellen aus der gespeicherten Datei und
+//     verweigerte dann das Schreiben in den geaenderten Puffer ("Quelltext
+//     im Editor weicht vom Scan ab") - richtig verweigert, aber fuer den
+//     Benutzer unverstaendlich.
 //   * Sie schreibt nichts. Das Umschreiben ist Sache des Moduls.
 //
 // DIE PRIMITIVE
@@ -112,6 +118,13 @@ type
     // ist - dann ist nichts geoeffnet. Ein vorher geoeffneter Stand wird
     // in jedem Fall verworfen.
     function Open(const AFileName: string): Boolean;
+    // Wie Open, aber aus ASource statt von der Platte - fuer einen Host,
+    // der den EDITOR-PUFFER kennt (IDE: ungespeicherte Aenderungen). Die
+    // Bereiche beziehen sich dann auf genau diesen Text; wer anschliessend
+    // in denselben Puffer schreibt, vergleicht gegen dieselbe Wahrheit.
+    // AFileName ist nur der Name, der in FileName steht (Diagnose,
+    // Fund-Abgleich); gelesen wird die Datei nicht. False bei leerem Text.
+    function OpenSource(const AFileName, ASource: string): Boolean;
     procedure Close;
     function IsOpen: Boolean;
     property FileName: string read FFileName;
@@ -176,6 +189,10 @@ type
     // Bezeichners AName an Zeile ALine: Parameter oder lokale Variable der
     // umschliessenden Routine, sonst Klassenfeld/Unit-Global; '' wenn
     // unbekannt. Ohne Datei ''.
+    // ALine ist die ANKERZEILE einer Anweisung (Zeile eines AST-Knotens):
+    // der Resolver begrenzt Routinen ueber die letzte Knoten-Zeile, eine
+    // Fortsetzungszeile der letzten Anweisung liegt ausserhalb jeder
+    // Routine und loest nur noch Felder/Globale auf.
     function DeclaredTypeOf(ALine: Integer; const AName: string): string;
   end;
 
@@ -219,6 +236,25 @@ begin
   Parser := TParser2.Create;
   try
     FRoot := Parser.ParseFile(AFileName);
+  finally
+    Parser.Free;
+  end;
+  FFileName := AFileName;
+  Result := True;
+end;
+
+function TSourcePlaces.OpenSource(const AFileName, ASource: string): Boolean;
+var
+  Parser : TParser2;
+begin
+  Close;
+  Result := False;
+  if ASource = '' then Exit;
+  FLines := TStringList.Create;
+  FLines.Text := ASource;   // trennt CRLF, LF und CR wie der Lexer
+  Parser := TParser2.Create;
+  try
+    FRoot := Parser.ParseSource(ASource);
   finally
     Parser.Free;
   end;
@@ -338,7 +374,13 @@ begin
     if AInfo.Parts[i].ValueType <> rvUnknown then Continue;
     Text := Trim(TextOf(AInfo.Parts[i]));
     if not IsPlainIdent(Text) then Continue;
-    T := DeclaredTypeOf(AInfo.Parts[i].StartLine, Text);
+    // An der ANKERZEILE der Anweisung aufloesen, nicht an der Zeile des
+    // Terms: der Resolver begrenzt eine Routine ueber die letzte
+    // KNOTEN-Zeile ihres Teilbaums, und ein Term auf einer Fortsetzungs-
+    // zeile der letzten Anweisung liegt dahinter - 'Tag' auf Zeile 3
+    // einer dreizeiligen Kette am Routinenende blieb so unbekannt
+    // (reDelphix.Test, Rewrite_MultiLineChain_Enabled, 2026-10-06).
+    T := DeclaredTypeOf(AInfo.Span.StartLine, Text);
     if T = '' then Continue;
     AInfo.Parts[i].Resolved := T;
     if IsStringTypeName(T) or (T = 'char') or (T = 'widechar')

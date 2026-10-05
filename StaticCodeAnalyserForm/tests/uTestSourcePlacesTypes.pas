@@ -25,6 +25,16 @@ type
     [Test] procedure ChainOf_ResolvesPlainIdentifierOperands;
     [Test] procedure ChainOf_CharOperand_IsString;
     [Test] procedure ChainOf_NeverDowngradesKnownCalls;
+    // Die Kette ist die LETZTE Anweisung der Routine und geht ueber drei
+    // Zeilen: der Resolver begrenzt die Routine ueber die letzte
+    // Knoten-Zeile, die Fortsetzungszeilen liegen dahinter. Aufgeloest
+    // wird deshalb an der Ankerzeile der Anweisung (reDelphix.Test,
+    // Rewrite_MultiLineChain_Enabled, rot am 2026-10-06).
+    [Test] procedure ChainOf_MultiLineLastStatement_ResolvesLaterLines;
+    // OpenSource (AH15): derselbe Text aus dem Speicher statt von der
+    // Platte liefert dieselben Bereiche und Typen - der IDE-Puffer ist
+    // fuer reDelphix die Wahrheit, nicht die gespeicherte Datei.
+    [Test] procedure OpenSource_MatchesOpenFromFile;
   end;
 
 implementation
@@ -229,6 +239,95 @@ begin
     end;
   finally
     P.Free;
+    DeleteFile(Path);
+  end;
+end;
+
+procedure TTestSourcePlacesTypes.ChainOf_MultiLineLastStatement_ResolvesLaterLines;
+const
+  SRC =
+    'unit t; interface'#13#10 +
+    'type TFoo = class'#13#10 +
+    '  procedure Bar(Id: Integer; const Tag: string);'#13#10 +
+    'end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure TFoo.Bar(Id: Integer; const Tag: string);'#13#10 +
+    'var Marker, r: string;'#13#10 +
+    'begin'#13#10 +
+    '  r := Marker + '' a '''#13#10 +
+    '    + IntToStr(Id) + '' b '''#13#10 +
+    '    + Tag;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  P    : TSourcePlaces;
+  Path : string;
+  Info : TRefactorInfo;
+  Last : Integer;
+begin
+  Path := WriteTemp(SRC);
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.Open(Path));
+    Info := P.ChainOf(LineOf(SRC, 'r := Marker'), ColOf(SRC, 'r := Marker'), 'r');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Last := High(Info.Parts);
+      Assert.AreEqual('Tag', P.TextOf(Info.Parts[Last]));
+      Assert.IsTrue(Info.Parts[Last].StartLine > Info.Span.StartLine,
+        'der Term liegt auf einer Fortsetzungszeile');
+      Assert.IsTrue(Info.Parts[Last].ValueType = rvString,
+        'Tag auf der Fortsetzungszeile ist der const-Parameter');
+      Assert.AreEqual('string', Info.Parts[Last].Resolved);
+      Assert.IsTrue(Info.FixSafe);
+    finally
+      Info.Free;
+    end;
+  finally
+    P.Free;
+    DeleteFile(Path);
+  end;
+end;
+
+procedure TTestSourcePlacesTypes.OpenSource_MatchesOpenFromFile;
+var
+  P, Q         : TSourcePlaces;
+  Path         : string;
+  InfoP, InfoQ : TRefactorInfo;
+  L, C, i      : Integer;
+begin
+  Path := WriteTemp(SRC_TYPES);
+  P := TSourcePlaces.Create;
+  Q := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.Open(Path), 'von der Platte');
+    Assert.IsTrue(Q.OpenSource('puffer.pas', SRC_TYPES), 'aus dem Text');
+    Assert.AreEqual('puffer.pas', Q.FileName);
+    Assert.AreEqual<Integer>(P.LineCount, Q.LineCount);
+    L := LineOf(SRC_TYPES, 'r := Marker + ''id:''');
+    C := ColOf(SRC_TYPES, 'r := Marker + ''id:''');
+    InfoP := P.ChainOf(L, C, 'r');
+    InfoQ := Q.ChainOf(L, C, 'r');
+    try
+      Assert.IsTrue(Assigned(InfoP) and Assigned(InfoQ));
+      Assert.AreEqual<Integer>(Length(InfoP.Parts), Length(InfoQ.Parts));
+      for i := 0 to High(InfoP.Parts) do
+      begin
+        Assert.AreEqual(P.TextOf(InfoP.Parts[i]), Q.TextOf(InfoQ.Parts[i]));
+        Assert.IsTrue(InfoP.Parts[i].ValueType = InfoQ.Parts[i].ValueType,
+          'Typ von Teil ' + IntToStr(i));
+      end;
+      Assert.IsTrue(InfoP.FixSafe = InfoQ.FixSafe);
+      Assert.AreEqual(P.HashOf(InfoP.Span), Q.HashOf(InfoQ.Span));
+    finally
+      InfoP.Free;
+      InfoQ.Free;
+    end;
+    Assert.IsFalse(Q.OpenSource('leer.pas', ''), 'leerer Text oeffnet nichts');
+    Assert.IsFalse(Q.IsOpen);
+  finally
+    P.Free;
+    Q.Free;
     DeleteFile(Path);
   end;
 end;
