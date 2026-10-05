@@ -213,6 +213,20 @@ begin
   Result := StringReplace(Result, #13, #10, [rfReplaceAll]);
 end;
 
+function BufferEol(const ABytes: TBytes): string;
+// Das Zeilenende, das der Puffer benutzt: CRLF, wenn es darin vorkommt,
+// sonst LF (ein Puffer ohne Umbruch bekommt CRLF).
+var
+  i : Integer;
+begin
+  Result := #13#10;
+  for i := 0 to High(ABytes) - 1 do
+    if ABytes[i] = 13 then
+      Exit(#13#10)
+    else if ABytes[i] = 10 then
+      Exit(#10);
+end;
+
 function Visible(const S: string): string;
 // Zeilenumbrueche und Tabulatoren sichtbar machen - fuer Meldung und
 // Protokoll.
@@ -443,6 +457,8 @@ begin
 
       // 4) Schreiben: Praefix kopieren, Bereich verwerfen, neuen Text
       //    einfuegen; der Rest wird beim Freigeben des Writers kopiert.
+      //    Zeilenumbrueche im neuen Text sind #10 (Vertrag von TRdxEdit)
+      //    und bekommen das Zeilenende des Puffers.
       Writer := Src.CreateUndoableWriter;
       if Writer = nil then
       begin
@@ -452,7 +468,8 @@ begin
       try
         Writer.CopyTo(StartPos);
         Writer.DeleteTo(EndPos);
-        NewUtf8 := UTF8Encode(ANewText);
+        NewUtf8 := UTF8Encode(StringReplace(ANewText, #10, BufferEol(Bytes),
+          [rfReplaceAll]));
         Writer.Insert(PAnsiChar(NewUtf8));
       finally
         Writer := nil;

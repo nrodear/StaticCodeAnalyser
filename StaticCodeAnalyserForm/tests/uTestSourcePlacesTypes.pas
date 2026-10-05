@@ -35,6 +35,9 @@ type
     // Platte liefert dieselben Bereiche und Typen - der IDE-Puffer ist
     // fuer reDelphix die Wahrheit, nicht die gespeicherte Datei.
     [Test] procedure OpenSource_MatchesOpenFromFile;
+    // P10 (AH19): Abschnittszeilen und Zeilentext - fuer ein Modul, das
+    // eine uses-Klausel anlegen muss.
+    [Test] procedure SectionLine_AndLineText;
   end;
 
 implementation
@@ -329,6 +332,32 @@ begin
     P.Free;
     Q.Free;
     DeleteFile(Path);
+  end;
+end;
+
+procedure TTestSourcePlacesTypes.SectionLine_AndLineText;
+var
+  P : TSourcePlaces;
+begin
+  P := TSourcePlaces.Create;
+  try
+    Assert.AreEqual<Integer>(0, P.SectionLine(TUsesSection.usInterface), 'ohne Datei 0');
+    Assert.AreEqual('', P.LineText(1), 'ohne Datei leer');
+
+    Assert.IsTrue(P.OpenSource('t.pas', SRC_TYPES));
+    Assert.AreEqual<Integer>(1, P.SectionLine(TUsesSection.usInterface),
+      'interface steht auf Zeile 1 (hinter unit t;)');
+    Assert.AreEqual<Integer>(6, P.SectionLine(TUsesSection.usImplementation));
+    Assert.AreEqual<Integer>(0, P.SectionLine(TUsesSection.usAny), 'usAny liefert 0');
+    Assert.AreEqual('implementation', P.LineText(6));
+    Assert.AreEqual('', P.LineText(0));
+    Assert.AreEqual('', P.LineText(999));
+
+    Assert.IsTrue(P.OpenSource('p.dpr', 'program p;'#13#10'begin'#13#10'end.'));
+    Assert.AreEqual<Integer>(0, P.SectionLine(TUsesSection.usImplementation),
+      'ein Programm hat keinen implementation-Abschnitt');
+  finally
+    P.Free;
   end;
 end;
 

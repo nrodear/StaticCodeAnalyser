@@ -55,7 +55,19 @@ Projekt, abhaengig von `SCA.Engine`) und liegt im SCA-Repo unter
 | Aktion | Regel | Verhalten |
 |---|---|---|
 | Stelle zeigen | alle mit beschreibbarer Anweisung | markiert den exakten Bereich im Editor |
-| Format() aus Verkettung bilden | SCA044 (`fixMode: auto`) | ersetzt die Terme durch `Format('...%s...', [..])`; nur wenn jeder Operand beweisbar ein String ist, `System.SysUtils` in der uses steht und die Literale kein SQL sind |
+| Format() aus Verkettung bilden | SCA044 (`fixMode: auto`) | ersetzt die Terme durch `Format('...%s...', [..])`; nur wenn jeder Operand beweisbar ein String ist und die Literale kein SQL sind. Fehlt `System.SysUtils` (dort lebt `Format`), wird es als zweite Ersetzung in die uses-Klausel eingefuegt - der Menuetext sagt `+ uses System.SysUtils` |
+
+**uses-Ergaenzung im Einzelnen** (`TRdxRecipeRunner.PlanUses`): die Unit
+kommt in die uses-Klausel des implementation-Abschnitts, sonst in die des
+interface-Abschnitts; in der Schreibweise der Datei (`System.SysUtils`,
+wenn die Klausel qualifizierte Namen traegt oder leer ist, sonst
+`SysUtils`); eine sortierte Liste bleibt sortiert (dasselbe Kriterium wie
+SCA142), in eine unsortierte kommt der Name vorn. Angehaengt wird nur,
+wenn hinter dem letzten Eintrag direkt das `;` folgt - steht dort ein
+`in`-Pfad, ein Kommentar oder eine Direktive, wird vor dem letzten Eintrag
+eingefuegt. Ohne jede uses-Klausel wird hinter `implementation` eine neue
+angelegt. Beide Ersetzungen laufen von unten nach oben (erst die Kette,
+dann die Klausel darueber), damit die Bereiche gueltig bleiben.
 | Parametrisierte Vorlage in die Zwischenablage | SCA003 (`fixMode: assisted`) | baut `:p1..:pn` und `ParamByName`-Zeilen; schreibt NIE in den Editor |
 | uses: X -> Scope.X | Fund in einer uses-Klausel | qualifiziert den Eintrag; Mehrdeutiges (Forms: VCL/FMX) nur bei erkennbarem Rahmenwerk, nie bei gleichnamiger Projekt-Unit |
 
@@ -91,13 +103,20 @@ Ressource.
 d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 
 * `uTestRdxRecipes` - Literal-Codec, Format()-Bau, SQL-Vorlage,
-  Scope-Tabelle (reine Textlogik).
+  Scope-Tabelle, uses-Schreibweise/-Sortierung/-Einfuegestelle (reine
+  Textlogik).
 * `uTestRdxSca044` - Ende zu Ende je Variante des Detektors SCA044:
   Parser, Detektor, `TSourcePlaces`, `uRdxRecipeRunner` - aktiv bei
   String-Lokalen/Parametern/Feldern, Char, `.ToString`, bekannten
   RTL-Aufrufen, mehrzeilig, Steuerzeichen, `%`; ausgegraut mit Grund bei
   Integer, unbekanntem Ausdruck, Kommentar, `$IFDEF`, SQL-Text,
-  fehlendem SysUtils, mehrdeutiger Zeile; Idempotenz nach dem Umschreiben.
+  mehrdeutiger Zeile; Idempotenz nach dem Umschreiben. uses-Ergaenzung:
+  vorhanden (qualifiziert/unqualifiziert) -> nichts; fehlend -> sortiert
+  eingefuegt, Schreibweise der Datei, implementation vor interface,
+  mehrzeilige Klausel, `in`-Pfad hinter dem letzten Eintrag, keine Klausel
+  -> neue hinter `implementation`; zweite Kette nach der ersten Umformung
+  braucht nichts mehr. Die Tests wenden beide Ersetzungen auf den Text an
+  und lassen den Detektor erneut laufen.
 
 Ohne Delphi (nur die Textlogik, FPC 3.2.2):
 

@@ -46,6 +46,8 @@ unit uSourcePlaces;
 //                 (Zeile) zur Startposition (Spalte) und zum Zielnamen
 //   UsesEntries   Unit-Namen der uses-Klauseln mit Spalten
 //   IdentifiersIn Bezeichner in einem Bereich
+//   SectionLine   Zeile von 'interface' / 'implementation' (0 = fehlt)
+//   LineText      Text einer Zeile der geoeffneten Datei
 //   DeclaredTypeOf Typname eines Bezeichners an einer Zeile (uTypeResolver:
 //                 Parameter, lokale Variable, Feld, Unit-Global). ChainOf
 //                 und CallOf nutzen das selbst (AH12, 2026-10-05): ein
@@ -188,6 +190,17 @@ type
     // schliessenden Direktive), in Quelltext-Reihenfolge.
     function ConditionalRanges: TArray<TSourceLineRange>;
 
+    // P10 - Zeile des Abschnitts-Schluesselworts ('interface' bzw.
+    // 'implementation'); 0, wenn der Abschnitt fehlt (Programm,
+    // Bibliothek) oder keine Datei offen ist. usAny liefert 0. Ein
+    // Modul, das eine uses-Klausel ANLEGEN muss (AH19: Format() braucht
+    // System.SysUtils), haengt sie hinter diese Zeile.
+    function SectionLine(ASection: TUsesSection): Integer;
+    // Text der Zeile ALine (1-basiert) der geoeffneten Datei; ''
+    // ausserhalb. Fuer Entscheidungen am Zeilenrest (steht hinter dem
+    // letzten uses-Eintrag ein 'in'-Pfad?), ohne die Datei erneut zu lesen.
+    function LineText(ALine: Integer): string;
+
     // P9 - deklarierter Typ (nackter, klein geschriebener Typname) des
     // Bezeichners AName an Zeile ALine: Parameter oder lokale Variable der
     // umschliessenden Routine, sonst Klassenfeld/Unit-Global; '' wenn
@@ -320,6 +333,38 @@ begin
      and not TRefactorConcat.TargetMatches(FLines, Result, AExpectedHead) then
     FreeAndNil(Result);
   ResolveOperandTypes(Result);
+end;
+
+{ ---- P10 ---- }
+
+function TSourcePlaces.SectionLine(ASection: TUsesSection): Integer;
+var
+  Want : TNodeKind;
+  i    : Integer;
+  N    : TAstNode;
+begin
+  Result := 0;
+  if not IsOpen or not Assigned(FRoot) or not Assigned(FRoot.Children) then Exit;
+  case ASection of
+    usInterface:      Want := nkInterface;
+    usImplementation: Want := nkImplementation;
+  else
+    Exit;
+  end;
+  // Die Abschnittsknoten haengen direkt an der Wurzel (uParser2: Root.Add).
+  for i := 0 to FRoot.Children.Count - 1 do
+  begin
+    N := FRoot.Children[i];
+    if N.Kind = Want then
+      Exit(N.Line);
+  end;
+end;
+
+function TSourcePlaces.LineText(ALine: Integer): string;
+begin
+  Result := '';
+  if not IsOpen or (ALine < 1) or (ALine > FLines.Count) then Exit;
+  Result := FLines[ALine - 1];
 end;
 
 { ---- P9 ---- }

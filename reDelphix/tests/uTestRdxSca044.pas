@@ -13,8 +13,9 @@ unit uTestRdxSca044;
 // und den Term-Arten, die Zerleger und Typaufloesung kennen: Literal,
 // Steuerzeichen, bekannter RTL-Aufruf, .ToString, Bezeichner mit
 // deklariertem Typ (Parameter, lokale Variable, Feld, Char), Integer,
-// unbekannter Ausdruck - dazu Kommentar, $IFDEF, SQL-Text, fehlendes
-// SysUtils, mehrdeutige Zeile und die Idempotenz nach dem Umschreiben.
+// unbekannter Ausdruck - dazu Kommentar, $IFDEF, SQL-Text, mehrdeutige
+// Zeile und die Idempotenz nach dem Umschreiben. Fehlt System.SysUtils
+// (Format lebt dort), wird die uses-Klausel ergaenzt (AH19, 2026-10-06).
 
 interface
 
@@ -49,11 +50,23 @@ type
     [Test] procedure Rewrite_CommentInChain_Disabled;
     [Test] procedure Rewrite_InsideIfdef_Disabled;
     [Test] procedure Rewrite_SqlText_Disabled;
-    [Test] procedure Rewrite_MissingSysUtils_Disabled;
     [Test] procedure Rewrite_TwoAssignsOnLine_Disabled;
 
     // ---- Idempotenz ----
     [Test] procedure Rewrite_AppliedOnce_NoSecondFinding;
+
+    // ---- uses System.SysUtils (AH19) ----
+    // Format() lebt in System.SysUtils. Fehlt die Unit, wird sie als
+    // zweite Ersetzung in die uses-Klausel eingefuegt - nicht ausgegraut.
+    [Test] procedure Uses_SysUtilsPresent_NoEdit;
+    [Test] procedure Uses_Missing_SortedInsert_Qualified;
+    [Test] procedure Uses_Missing_UnqualifiedStyle;
+    [Test] procedure Uses_Missing_UnsortedList_Front;
+    [Test] procedure Uses_Missing_ImplementationClausePreferred;
+    [Test] procedure Uses_Missing_MultiLineClause_Append;
+    [Test] procedure Uses_Missing_NoClause_CreatedAfterImplementation;
+    [Test] procedure Uses_Missing_InPathAfterLast_InsertsBeforeLast;
+    [Test] procedure Uses_Missing_AppliedOnce_SecondChainNeedsNothing;
   end;
 
 implementation
@@ -185,6 +198,70 @@ begin
     Places.Free;
     DeleteFile(Path);
   end;
+end;
+
+const
+  // Eine Kette aus lokaler Variable, Parameter und Feld - fix-sicher.
+  CHAIN = '  Text := Marker + ''a'' + Tag + ''b'' + FName;';
+
+// Die Unit mit einer anderen (oder keiner) uses-Zeile im interface.
+function WithUses(const ABody, AUsesLine: string): string;
+begin
+  Result := StringReplace(UnitWith(ABody), 'uses System.SysUtils;', AUsesLine, []);
+end;
+
+function EditOf(const AOutcome: TRdxFormatOutcome): TRdxEdit;
+begin
+  Result.Span     := AOutcome.Span;
+  Result.Expected := AOutcome.Expected;
+  Result.NewText  := AOutcome.NewText;
+end;
+
+// Wendet eine Ersetzung so an, wie es der Editor taete: der Bereich
+// (1-basiert, EndCol exklusiv) wird durch den neuen Text ersetzt, #10 im
+// neuen Text wird zum Zeilenumbruch der Quelle. Prueft vorher, dass der
+// Bereich den erwarteten Text traegt.
+function ApplyEdit(const ASource: string; const AEdit: TRdxEdit): string;
+var
+  SL     : TStringList;
+  i      : Integer;
+  Joined : string;
+  Prefix : string;
+  Suffix : string;
+  Old    : string;
+begin
+  SL := TStringList.Create;
+  try
+    SL.Text := ASource;
+    Joined := '';
+    for i := AEdit.Span.StartLine to AEdit.Span.EndLine do
+    begin
+      if i > AEdit.Span.StartLine then Joined := Joined + #10;
+      Joined := Joined + SL[i - 1];
+    end;
+    Prefix := Copy(SL[AEdit.Span.StartLine - 1], 1, AEdit.Span.StartCol - 1);
+    Suffix := Copy(SL[AEdit.Span.EndLine - 1], AEdit.Span.EndCol, MaxInt);
+    Old := Copy(Joined, Length(Prefix) + 1,
+      Length(Joined) - Length(Prefix) - Length(Suffix));
+    Assert.AreEqual(AEdit.Expected, Old, 'der Bereich traegt den erwarteten Text');
+    for i := AEdit.Span.EndLine downto AEdit.Span.StartLine do
+      SL.Delete(i - 1);
+    SL.Insert(AEdit.Span.StartLine - 1, Prefix
+      + StringReplace(AEdit.NewText, #10, #13#10, [rfReplaceAll]) + Suffix);
+    Result := SL.Text;
+  finally
+    SL.Free;
+  end;
+end;
+
+// Alle Ersetzungen des Ergebnisses, von unten nach oben wie der Anbieter:
+// erst die Kette, dann die uses-Klausel darueber.
+function ApplyOutcome(const ASource: string;
+  const AOutcome: TRdxFormatOutcome): string;
+begin
+  Result := ApplyEdit(ASource, EditOf(AOutcome));
+  if AOutcome.NeedsUses then
+    Result := ApplyEdit(Result, AOutcome.UsesEdit);
 end;
 
 { ---- Detektor-Heuristik ---- }
@@ -385,18 +462,6 @@ begin
   Assert.IsTrue(Pos('SCA003', O.Reason) > 0, O.Reason);
 end;
 
-procedure TTestRdxSca044.Rewrite_MissingSysUtils_Disabled;
-var
-  Src : string;
-  O   : TRdxFormatOutcome;
-begin
-  Src := StringReplace(UnitWith(
-    '  Text := Marker + ''a'' + Tag + ''b'' + FName;'),
-    'uses System.SysUtils;', 'uses System.Classes;', []);
-  Assert.IsFalse(RunRecipe(Src, 'Text := Marker', O));
-  Assert.IsTrue(Pos('SysUtils', O.Reason) > 0, O.Reason);
-end;
-
 procedure TTestRdxSca044.Rewrite_TwoAssignsOnLine_Disabled;
 var
   O : TRdxFormatOutcome;
@@ -426,6 +491,173 @@ begin
     'nach dem Umschreiben meldet SCA044 nichts mehr');
   Assert.IsFalse(RunRecipe(After, 'Text := Format', O2),
     'ein zweiter Lauf hat nichts mehr umzuformen');
+end;
+
+{ ---- uses System.SysUtils (AH19) ---- }
+
+procedure TTestRdxSca044.Uses_SysUtilsPresent_NoEdit;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Qualifiziert ...
+  Assert.IsTrue(RunRecipe(UnitWith(CHAIN), 'Text := Marker', O), O.Reason);
+  Assert.IsFalse(O.NeedsUses, 'System.SysUtils steht in der uses-Klausel');
+  Assert.AreEqual('', O.UsesName);
+  Assert.IsTrue(Pos('uses', O.Hint) = 0, O.Hint);
+  // ... und unqualifiziert zaehlt gleichermassen.
+  Assert.IsTrue(RunRecipe(WithUses(CHAIN, 'uses SysUtils;'), 'Text := Marker', O),
+    O.Reason);
+  Assert.IsFalse(O.NeedsUses, 'SysUtils ohne Praefix genuegt');
+end;
+
+procedure TTestRdxSca044.Uses_Missing_SortedInsert_Qualified;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  Src := WithUses(CHAIN, 'uses System.Classes, Vcl.Forms;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses, 'System.SysUtils fehlt');
+  Assert.AreEqual('System.SysUtils', O.UsesName, 'die Datei schreibt qualifiziert');
+  Assert.AreEqual('Vcl.Forms', O.UsesEdit.Expected,
+    'eingefuegt wird vor dem ersten groesseren Eintrag - die Liste bleibt sortiert (SCA142)');
+  Assert.AreEqual('System.SysUtils, Vcl.Forms', O.UsesEdit.NewText);
+  Assert.AreEqual<Integer>(LineOf(Src, 'uses System.Classes'), O.UsesEdit.Span.StartLine);
+  Assert.IsTrue(O.UsesEdit.Span.StartLine < O.Span.StartLine,
+    'die uses-Ersetzung liegt oberhalb der Kette');
+  Assert.IsTrue(Pos('+ uses System.SysUtils', O.Hint) > 0, O.Hint);
+
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses System.Classes, System.SysUtils, Vcl.Forms;', After) > 0, After);
+  Assert.IsTrue(Pos('Text := Format(''%sa%sb%s'', [Marker, Tag, FName]);', After) > 0, After);
+  Assert.AreEqual<Integer>(0, DetectorFindings(After));
+end;
+
+procedure TTestRdxSca044.Uses_Missing_UnqualifiedStyle;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Eine Datei, die 'Classes, Windows' schreibt, bekommt 'SysUtils'.
+  Src := WithUses(CHAIN, 'uses Classes, Windows;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  Assert.AreEqual('SysUtils', O.UsesName);
+  Assert.AreEqual('Windows', O.UsesEdit.Expected);
+  Assert.AreEqual('SysUtils, Windows', O.UsesEdit.NewText);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses Classes, SysUtils, Windows;', After) > 0, After);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_UnsortedList_Front;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Unsortierte Liste: der Neue kommt vorn - dort faellt er auf und
+  // erzeugt keinen neuen SCA142-Fund, denn der steht dort schon.
+  Src := WithUses(CHAIN, 'uses Windows, Classes;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  Assert.AreEqual('Windows', O.UsesEdit.Expected);
+  Assert.AreEqual('SysUtils, Windows', O.UsesEdit.NewText);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses SysUtils, Windows, Classes;', After) > 0, After);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_ImplementationClausePreferred;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Gibt es eine uses-Klausel im implementation-Abschnitt, gehoert die
+  // Unit dorthin - die Schnittstelle bleibt schlank.
+  Src := StringReplace(WithUses(CHAIN, 'uses System.Classes;'),
+    'implementation'#13#10, 'implementation'#13#10'uses System.Math;'#13#10, []);
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  Assert.AreEqual('System.Math', O.UsesEdit.Expected);
+  Assert.AreEqual('System.Math, System.SysUtils', O.UsesEdit.NewText);
+  Assert.AreEqual<Integer>(LineOf(Src, 'uses System.Math'), O.UsesEdit.Span.StartLine);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses System.Math, System.SysUtils;', After) > 0, After);
+  Assert.IsTrue(Pos('uses System.Classes;', After) > 0, 'die interface-Klausel bleibt');
+  Assert.AreEqual<Integer>(0, DetectorFindings(After));
+end;
+
+procedure TTestRdxSca044.Uses_Missing_MultiLineClause_Append;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Mehrzeilige Klausel, der Neue ist groesser als alle: angehaengt an
+  // den letzten Eintrag, dessen Zeile direkt mit ';' schliesst.
+  Src := WithUses(CHAIN, 'uses'#13#10'  System.Classes,'#13#10'  System.Math;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  Assert.AreEqual('System.Math', O.UsesEdit.Expected);
+  Assert.AreEqual('System.Math, System.SysUtils', O.UsesEdit.NewText);
+  Assert.AreEqual<Integer>(LineOf(Src, '  System.Math;'), O.UsesEdit.Span.StartLine);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('  System.Classes,'#13#10'  System.Math, System.SysUtils;', After) > 0, After);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_NoClause_CreatedAfterImplementation;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Keine uses-Klausel: hinter 'implementation' wird eine angelegt.
+  Src := WithUses(CHAIN, '');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  Assert.AreEqual('System.SysUtils', O.UsesName, 'ohne Vorbild qualifiziert');
+  Assert.AreEqual('implementation', O.UsesEdit.Expected);
+  Assert.AreEqual('implementation'#10#10'uses'#10'  System.SysUtils;', O.UsesEdit.NewText);
+  Assert.AreEqual<Integer>(LineOf(Src, 'implementation'), O.UsesEdit.Span.StartLine);
+  Assert.AreEqual<Integer>(1, O.UsesEdit.Span.StartCol);
+  Assert.AreEqual<Integer>(Length('implementation') + 1, O.UsesEdit.Span.EndCol);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('implementation'#13#10#13#10'uses'#13#10'  System.SysUtils;'#13#10
+    + 'procedure TFoo.Run', After) > 0, After);
+  Assert.AreEqual<Integer>(0, DetectorFindings(After));
+end;
+
+procedure TTestRdxSca044.Uses_Missing_InPathAfterLast_InsertsBeforeLast;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Der Neue waere anzuhaengen, aber hinter dem letzten Eintrag steht
+  // ein 'in'-Pfad (Projektdatei): dann VOR den letzten - immer gueltig.
+  // Der Bereich des Eintrags umfasst nur den Namen, nicht den Pfad.
+  Src := WithUses(CHAIN, 'uses System.Classes, uFoo in ''uFoo.pas'', Vcl.Forms in ''Vcl.Forms.pas'';');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  Assert.AreEqual('Vcl.Forms', O.UsesEdit.Expected);
+  Assert.AreEqual('System.SysUtils, Vcl.Forms', O.UsesEdit.NewText);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses System.Classes, uFoo in ''uFoo.pas'', System.SysUtils, Vcl.Forms in ''Vcl.Forms.pas'';',
+    After) > 0, After);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_AppliedOnce_SecondChainNeedsNothing;
+var
+  Src, After : string;
+  O, O2      : TRdxFormatOutcome;
+begin
+  // Zwei Ketten, SysUtils fehlt. Nach der ersten Umformung (mit uses)
+  // braucht die zweite keine uses-Ersetzung mehr.
+  Src := WithUses(CHAIN + #13#10 +
+    '  Text := Tag + ''c'' + Marker + ''d'' + FName;', 'uses System.Classes;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.IsTrue(O.NeedsUses);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses System.Classes, System.SysUtils;', After) > 0, After);
+  Assert.AreEqual<Integer>(1, DetectorFindings(After), 'die zweite Kette steht noch');
+  Assert.IsTrue(RunRecipe(After, 'Text := Tag', O2), O2.Reason);
+  Assert.IsFalse(O2.NeedsUses, 'System.SysUtils ist jetzt da');
+  Assert.AreEqual('Format(''%sc%sd%s'', [Tag, Marker, FName])', O2.NewText);
 end;
 
 initialization

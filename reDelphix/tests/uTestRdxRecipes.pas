@@ -48,6 +48,11 @@ type
     // ---- uses ----------------------------------------------------------
     [Test] procedure Framework_FromUnitNames;
     [Test] procedure HasUnit_ShortAndQualified;
+    // uses-Klausel ergaenzen (AH19): Schreibweise der Datei, Sortierung
+    // wie SCA142, Einfuegestelle.
+    [Test] procedure UsesNameFor_FollowsFileStyle;
+    [Test] procedure IsSortedUses_CompareText;
+    [Test] procedure SortedInsertIndex_KeepsOrder_UnsortedGoesFront;
     [Test] procedure Scope_Load_IgnoresCommentsAndDedupes;
     [Test] procedure Scope_Resolve_VclAndFmx;
     [Test] procedure Scope_Resolve_CommonBeforeFramework;
@@ -323,6 +328,44 @@ begin
   Assert.IsTrue(TRdxRecipes.HasUnit(['sysutils'], 'SysUtils'));
   Assert.IsFalse(TRdxRecipes.HasUnit(['System.Types'], 'Math'));
   Assert.IsFalse(TRdxRecipes.HasUnit(nil, 'Math'));
+end;
+
+procedure TTestRdxRecipes.UsesNameFor_FollowsFileStyle;
+begin
+  // Ohne Vorbild oder mit qualifizierten Eintraegen: qualifiziert.
+  Assert.AreEqual('System.Math', TRdxRecipes.UsesNameFor(nil, 'Math', 'System.Math'));
+  Assert.AreEqual('System.Math',
+    TRdxRecipes.UsesNameFor(['Rdx.Fake', 'Windows'], 'Math', 'System.Math'));
+  // Nur Kurznamen: der Kurzname, damit die Klausel einheitlich bleibt.
+  Assert.AreEqual('Math',
+    TRdxRecipes.UsesNameFor(['Classes', 'Windows'], 'Math', 'System.Math'));
+end;
+
+procedure TTestRdxRecipes.IsSortedUses_CompareText;
+begin
+  Assert.IsTrue(TRdxRecipes.IsSortedUses(nil));
+  Assert.IsTrue(TRdxRecipes.IsSortedUses(['Classes']));
+  Assert.IsTrue(TRdxRecipes.IsSortedUses(['classes', 'Windows']),
+    'ohne Beachtung der Schreibung - wie SCA142');
+  Assert.IsTrue(TRdxRecipes.IsSortedUses(['System.Classes', 'System.Math', 'Vcl.Forms']));
+  Assert.IsFalse(TRdxRecipes.IsSortedUses(['Windows', 'Classes']));
+  Assert.IsFalse(TRdxRecipes.IsSortedUses(['System.Math', 'System.Classes']));
+end;
+
+procedure TTestRdxRecipes.SortedInsertIndex_KeepsOrder_UnsortedGoesFront;
+begin
+  Assert.AreEqual<Integer>(0, TRdxRecipes.SortedInsertIndex(nil, 'System.Math'),
+    'leere Liste: anhaengen = Index 0');
+  Assert.AreEqual<Integer>(1,
+    TRdxRecipes.SortedInsertIndex(['System.Classes', 'Vcl.Forms'], 'System.Math'));
+  Assert.AreEqual<Integer>(0,
+    TRdxRecipes.SortedInsertIndex(['System.Types'], 'System.Math'));
+  Assert.AreEqual<Integer>(2,
+    TRdxRecipes.SortedInsertIndex(['Classes', 'Forms'], 'Math'),
+    'groesser als alle: anhaengen');
+  Assert.AreEqual<Integer>(0,
+    TRdxRecipes.SortedInsertIndex(['Windows', 'Classes'], 'Math'),
+    'unsortiert: vorn');
 end;
 
 procedure TTestRdxRecipes.Scope_Load_IgnoresCommentsAndDedupes;

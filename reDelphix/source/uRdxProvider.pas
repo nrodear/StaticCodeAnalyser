@@ -43,15 +43,10 @@ uses
 type
   TRdxActionKind = (akShowSpan, akReplace, akSqlTemplate);
 
-  // Eine Ersetzung im Editor: Bereich, erwarteter alter Text, neuer Text.
-  TRdxEdit = record
-    Span     : TRefactorSpan;
-    Expected : string;
-    NewText  : string;
-  end;
-
   // Ein Menuepunkt samt allem, was Execute braucht. Lebt im Anbieter bis
-  // zum naechsten Provide.
+  // zum naechsten Provide. Mehrere Ersetzungen (TRdxEdit aus
+  // uRdxRecipeRunner) werden von unten nach oben ausgefuehrt, damit die
+  // Bereiche der oberen von den unteren nicht verschoben werden.
   TRdxAction = class
   private
     FKind     : TRdxActionKind;
@@ -269,6 +264,14 @@ begin
   Act.FEdits[0].Span     := Outcome.Span;
   Act.FEdits[0].Expected := Outcome.Expected;
   Act.FEdits[0].NewText  := Outcome.NewText;
+  if Outcome.NeedsUses then
+  begin
+    // Zweite Ersetzung: System.SysUtils in die uses-Klausel. Liegt
+    // oberhalb der Kette - SortEditsDescending fuehrt sie als zweite aus.
+    SetLength(Act.FEdits, 2);
+    Act.FEdits[1] := Outcome.UsesEdit;
+    SortEditsDescending(Act.FEdits);
+  end;
   Add(AList, CAP_FORMAT, Outcome.Hint, True, Act);
 end;
 

@@ -94,6 +94,26 @@ type
     // als letztes Segment ('SysUtils' trifft 'System.SysUtils').
     class function HasUnit(const AUnitNames: TArray<string>;
       const AShortName: string): Boolean; static;
+
+    // ---- uses-Klausel ergaenzen (AH19: Format() braucht System.SysUtils) --
+
+    // Der Name, unter dem eine RTL-Unit in DIESE Datei passt: der
+    // qualifizierte, wenn die Datei qualifizierte Namen benutzt oder noch
+    // keinen uses-Eintrag hat; sonst der Kurzname (eine Datei, die
+    // 'Classes, Windows' schreibt, bekommt 'SysUtils').
+    class function UsesNameFor(const AUnitNames: TArray<string>;
+      const AShortName, AQualifiedName: string): string; static;
+    // True, wenn die Namen case-insensitiv aufsteigend sortiert sind -
+    // dasselbe Kriterium wie SCA142 UnsortedUses (CompareText).
+    class function IsSortedUses(const AUnitNames: TArray<string>): Boolean;
+      static;
+    // Index des Eintrags, VOR dem ANewName einzufuegen ist, damit eine
+    // sortierte Liste sortiert bleibt; Length(AUnitNames) = anhaengen.
+    // Eine unsortierte Liste bekommt den Neuen vorn (0) - dort faellt
+    // er dem Leser am ehesten auf und erzeugt keinen neuen SCA142-Fund,
+    // denn der steht dort schon.
+    class function SortedInsertIndex(const AUnitNames: TArray<string>;
+      const ANewName: string): Integer; static;
   end;
 
 implementation
@@ -526,6 +546,41 @@ begin
   for i := 0 to High(AUnitNames) do
     if SameText(LastSegment(AUnitNames[i]), AShortName) then
       Exit(True);
+end;
+
+class function TRdxRecipes.UsesNameFor(const AUnitNames: TArray<string>;
+  const AShortName, AQualifiedName: string): string;
+var
+  i : Integer;
+begin
+  if Length(AUnitNames) = 0 then Exit(AQualifiedName);
+  for i := 0 to High(AUnitNames) do
+    if Pos('.', AUnitNames[i]) > 0 then
+      Exit(AQualifiedName);
+  Result := AShortName;
+end;
+
+class function TRdxRecipes.IsSortedUses(
+  const AUnitNames: TArray<string>): Boolean;
+var
+  i : Integer;
+begin
+  Result := True;
+  for i := 1 to High(AUnitNames) do
+    if CompareText(AUnitNames[i - 1], AUnitNames[i]) > 0 then
+      Exit(False);
+end;
+
+class function TRdxRecipes.SortedInsertIndex(
+  const AUnitNames: TArray<string>; const ANewName: string): Integer;
+var
+  i : Integer;
+begin
+  if not IsSortedUses(AUnitNames) then Exit(0);
+  for i := 0 to High(AUnitNames) do
+    if CompareText(ANewName, AUnitNames[i]) < 0 then
+      Exit(i);
+  Result := Length(AUnitNames);
 end;
 
 end.
