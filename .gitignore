@@ -38,6 +38,7 @@ SCA.LSP/SCA.LSP.res
 # compilierte Scope-Tabelle (BRCC32 legt sie neben die dpk).
 reDelphix/reDelphix.d12.res
 reDelphix/unitscopes.res
+reDelphix/tests/reDelphix.Test.res
 # FPC-Pruefstand: out/ und die je Lauf aus dem Repo kopierten Units
 # (build.sh erzeugt sie neu; die Stubs daneben sind Quelle und bleiben).
 reDelphix/tools/fpc-pruefstand/out/

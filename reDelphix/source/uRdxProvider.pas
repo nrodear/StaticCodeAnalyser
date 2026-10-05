@@ -3,9 +3,10 @@ unit uRdxProvider;
 // reDelphix - der Anbieter: haengt an Funde des SCA-Plugins Aktionen
 // (uFindingActions in SCA.Engine, Konzept_SourceRefactor_Quellstellen
 // Abschnitt 15). Je Rechtsklick auf einen Fund wird Provide gerufen; es
-// oeffnet die Datei ueber TSourcePlaces (nur lesen, kein Scan), baut aus
-// den beschriebenen Stellen Aktionen und haelt deren Daten in
-// TRdxAction-Objekten, bis das naechste Provide sie ersetzt.
+// oeffnet die Datei ueber TSourcePlaces (nur lesen, kein Scan), laesst
+// den Rezept-Laeufer (uRdxRecipeRunner) die Stellen beschreiben und
+// haelt die Daten der Aktionen in TRdxAction-Objekten, bis das naechste
+// Provide sie ersetzt.
 //
 // WAS ANGEBOTEN WIRD
 //
@@ -18,9 +19,12 @@ unit uRdxProvider;
 //   "uses: X -> Scope.X"               Fund liegt in einer uses-Klausel;
 //                                      je unqualifiziertem Eintrag der Zeile,
 //                                      dazu "alle n Eintraege"
+//   "reDelphix: <Grund>"               ausgegraut, wenn nichts davon geht -
+//                                      sonst waere "kein Eintrag" nicht von
+//                                      "Anbieter nicht geladen" zu
+//                                      unterscheiden
 //
-// Ein deaktivierter Eintrag traegt seinen Grund im Hint - der Benutzer
-// soll sehen, WARUM sich eine Stelle nicht umformen laesst.
+// Ein deaktivierter Eintrag traegt seinen Grund im Hint.
 //
 // WAS DER ANBIETER NICHT TUT
 //
@@ -34,10 +38,10 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uEngineApi, uRefactorInfo, uMethodd12, uFindingActions,
-  uRdxRecipes, uRdxScopeTable;
+  uRdxRecipes, uRdxScopeTable, uRdxRecipeRunner;
 
 type
-  TRdxActionKind = (akShowSpan, akFormatCall, akSqlTemplate, akUsesExpand);
+  TRdxActionKind = (akShowSpan, akReplace, akSqlTemplate);
 
   // Eine Ersetzung im Editor: Bereich, erwarteter alter Text, neuer Text.
   TRdxEdit = record
@@ -57,7 +61,7 @@ type
     FEdits    : TArray<TRdxEdit>;
   public
     // TNotifyEvent fuer TFindingAction.Execute. Fehler laufen als
-    // Exception zum Host, der sie in seiner Statuszeile zeigt.
+    // Exception zum Host, der sie anzeigt.
     procedure Execute(Sender: TObject);
   end;
 
@@ -67,15 +71,11 @@ type
     FPlaces    : TSourcePlaces;
     FScopes    : TRdxScopeTable;
     FToken     : Integer;
-    FUsesNames : TArray<string>;   // qualifizierte/rohe Namen der uses-Eintraege der Datei
+    FUsesNames : TArray<string>;   // Namen der uses-Eintraege der Datei
     function NewAction(AKind: TRdxActionKind;
       const AFileName: string): TRdxAction;
     procedure Add(var AList: TArray<TFindingAction>;
       const ACaption, AHint: string; AEnabled: Boolean; AAction: TRdxAction);
-    function PartsOf(AInfo: TRefactorInfo): TRdxParts;
-    function UnsafeReason(AInfo: TRefactorInfo; const AParts: TRdxParts): string;
-    function DescribeAnchor(ALine: Integer; const AAnchor: string;
-      out AIsCall: Boolean; out AWhy: string): TRefactorInfo;
     procedure AddShowSpan(var AList: TArray<TFindingAction>;
       const AFileName: string; AInfo: TRefactorInfo);
     procedure AddFormatCall(var AList: TArray<TFindingAction>;
@@ -118,25 +118,12 @@ const
 var
   GInstance : TRdxProvider = nil;
 
-function HeadOf(const ACallName: string): string;
-// nkCall.Name traegt den ganzen Aufruf samt Argumenten; der Kopf ist der
-// Teil vor der ersten Klammer.
-var
-  P : Integer;
-begin
-  Result := ACallName;
-  P := Pos('(', Result);
-  if P > 0 then
-    Result := Copy(Result, 1, P - 1);
-  Result := Trim(Result);
-end;
-
 procedure SortEditsDescending(var AEdits: TArray<TRdxEdit>);
 // Von hinten nach vorn ersetzen, damit fruehere Bereiche gueltig bleiben.
 var
-  i, j : Integer;
-  T    : TRdxEdit;
-  Later: Boolean;
+  i, j  : Integer;
+  T     : TRdxEdit;
+  Later : Boolean;
 begin
   for i := 1 to High(AEdits) do
   begin
@@ -166,7 +153,7 @@ begin
     akShowSpan:
       if not TRdxEditor.SelectSpan(FFileName, FSpan, Err) then
         raise Exception.Create(Err);
-    akFormatCall, akUsesExpand:
+    akReplace:
       for i := 0 to High(FEdits) do
         if not TRdxEditor.ReplaceSpan(FFileName, FEdits[i].Span,
              FEdits[i].Expected, FEdits[i].NewText, Err) then
@@ -252,73 +239,6 @@ begin
   AList[High(AList)] := A;
 end;
 
-function TRdxProvider.PartsOf(AInfo: TRefactorInfo): TRdxParts;
-var
-  i : Integer;
-begin
-  SetLength(Result, Length(AInfo.Parts));
-  for i := 0 to High(AInfo.Parts) do
-    Result[i] := TRdxRecipes.MakePart(AInfo.Parts[i].Role,
-      FPlaces.TextOf(AInfo.Parts[i]), AInfo.Parts[i].ValueType);
-end;
-
-function TRdxProvider.UnsafeReason(AInfo: TRefactorInfo;
-  const AParts: TRdxParts): string;
-var
-  i : Integer;
-begin
-  if rfHasComment in AInfo.Flags then Exit('Kommentar im Bereich');
-  if rfInConditional in AInfo.Flags then Exit('Bereich liegt in einem $IFDEF');
-  for i := 0 to High(AParts) do
-    if (AParts[i].Role = ROLE_OPERAND) and (AParts[i].ValueType <> rvString) then
-      Exit(Format('Operand ''%s'': Typ unbekannt',
-        [TRdxRecipes.CollapseWhitespace(AParts[i].Text)]));
-  Result := 'Kette nicht rein (Operator auf oberster Ebene)';
-end;
-
-function TRdxProvider.DescribeAnchor(ALine: Integer; const AAnchor: string;
-  out AIsCall: Boolean; out AWhy: string): TRefactorInfo;
-var
-  Kinds : TNodeKinds;
-  Nodes : TArray<TNodeRef>;
-  N     : TNodeRef;
-begin
-  Result  := nil;
-  AIsCall := False;
-  AWhy    := '';
-  if AAnchor = 'assign' then
-    Kinds := [TNodeKind.nkAssign]
-  else if AAnchor = 'call' then
-    Kinds := [TNodeKind.nkCall]
-  else
-    Kinds := [TNodeKind.nkAssign, TNodeKind.nkCall];
-  Nodes := FPlaces.NodesAt(ALine, Kinds);
-  if Length(Nodes) = 0 then
-  begin
-    AWhy := Format('keine Anweisung auf Zeile %d gefunden', [ALine]);
-    Exit;
-  end;
-  if Length(Nodes) > 1 then
-  begin
-    AWhy := Format('Zeile %d ist mehrdeutig (%d Anweisungen)',
-      [ALine, Length(Nodes)]);
-    Exit;
-  end;
-  N := Nodes[0];
-  if N.Kind = TNodeKind.nkAssign then
-    Result := FPlaces.ChainOf(N.Line, N.Col, N.Name)
-  else
-  begin
-    AIsCall := True;
-    Result := FPlaces.CallOf(N.Line, N.Col, HeadOf(N.Name));
-  end;
-  // Ohne Kette wenigstens die Anweisung selbst (fuer "Stelle zeigen").
-  if Result = nil then
-    Result := FPlaces.StatementAt(N.Line, N.Col);
-  if Result = nil then
-    AWhy := 'Anweisung laesst sich nicht beschreiben';
-end;
-
 procedure TRdxProvider.AddShowSpan(var AList: TArray<TFindingAction>;
   const AFileName: string; AInfo: TRefactorInfo);
 var
@@ -335,104 +255,62 @@ end;
 procedure TRdxProvider.AddFormatCall(var AList: TArray<TFindingAction>;
   const AFileName: string; AInfo: TRefactorInfo; const AWhy: string);
 var
-  Parts   : TRdxParts;
-  Reason  : string;
-  NewText : string;
-  Repl    : TRefactorSpan;
+  Outcome : TRdxFormatOutcome;
   Act     : TRdxAction;
-  Last    : Integer;
 begin
-  if AInfo = nil then
+  Outcome := TRdxRecipeRunner.FormatRewrite(FPlaces, AInfo, AWhy, FUsesNames);
+  if not Outcome.Enabled then
   begin
-    Add(AList, CAP_FORMAT, AWhy, False, nil);
+    Add(AList, CAP_FORMAT, Outcome.Reason, False, nil);
     Exit;
   end;
-  Parts   := PartsOf(AInfo);
-  Reason  := '';
-  NewText := '';
-  Last := High(AInfo.Parts);
-  if (Last < 1) or (AInfo.Parts[0].Role <> ROLE_TARGET) then
-    Reason := 'keine Zuweisung mit Kette'
-  else if not AInfo.FixSafe then
-    Reason := UnsafeReason(AInfo, Parts)
-  else if not TRdxRecipes.HasUnit(FUsesNames, 'SysUtils') then
-    Reason := 'System.SysUtils fehlt in uses';
-  if Reason = '' then
-    TRdxRecipes.BuildFormatCall(Parts, NewText, Reason);
-  if Reason <> '' then
-  begin
-    Add(AList, CAP_FORMAT, Reason, False, nil);
-    Exit;
-  end;
-  // Ersetzt wird vom ersten bis zum letzten Term; Ziel und ':=' bleiben.
-  Repl := TRefactorSpan.Make(ROLE_STATEMENT,
-    AInfo.Parts[1].StartLine, AInfo.Parts[1].StartCol,
-    AInfo.Parts[Last].EndLine, AInfo.Parts[Last].EndCol);
-  Act := NewAction(akFormatCall, AFileName);
+  Act := NewAction(akReplace, AFileName);
   SetLength(Act.FEdits, 1);
-  Act.FEdits[0].Span     := Repl;
-  Act.FEdits[0].Expected := FPlaces.TextOf(Repl);
-  Act.FEdits[0].NewText  := NewText;
-  if Act.FEdits[0].Expected = '' then
-  begin
-    Add(AList, CAP_FORMAT, 'Bereich nicht lesbar', False, nil);
-    Exit;
-  end;
-  Add(AList, CAP_FORMAT, Format('%d Terme, alle Strings', [Last]), True, Act);
+  Act.FEdits[0].Span     := Outcome.Span;
+  Act.FEdits[0].Expected := Outcome.Expected;
+  Act.FEdits[0].NewText  := Outcome.NewText;
+  Add(AList, CAP_FORMAT, Outcome.Hint, True, Act);
 end;
 
 procedure TRdxProvider.AddSqlTemplate(var AList: TArray<TFindingAction>;
   AInfo: TRefactorInfo; AIsCall: Boolean; const AWhy: string);
 var
-  Parts    : TRdxParts;
-  Template : string;
-  Reason   : string;
-  Act      : TRdxAction;
-  i, N     : Integer;
+  Template, Hint, Reason : string;
+  Act : TRdxAction;
 begin
   if AInfo = nil then
   begin
     Add(AList, CAP_SQL, AWhy, False, nil);
     Exit;
   end;
-  Parts := PartsOf(AInfo);
-  if (Length(Parts) = 0) or (Parts[0].Role <> ROLE_TARGET) then
-  begin
-    Add(AList, CAP_SQL, 'kein Ziel erkannt', False, nil);
-    Exit;
-  end;
-  if not TRdxRecipes.BuildSqlTemplate(Parts[0].Text, AIsCall, Parts,
-       AInfo.InsertIndent, Template, Reason) then
+  if not TRdxRecipeRunner.SqlTemplate(FPlaces, AInfo, AIsCall,
+       Template, Hint, Reason) then
   begin
     Add(AList, CAP_SQL, Reason, False, nil);
     Exit;
   end;
-  N := 0;
-  for i := 0 to High(Parts) do
-    if Parts[i].Role = ROLE_OPERAND then Inc(N);
   Act := NewAction(akSqlTemplate, '');
   Act.FTemplate := Template;
-  Add(AList, CAP_SQL, Format('%d Parameter, nichts wird geschrieben', [N]),
-    True, Act);
+  Add(AList, CAP_SQL, Hint, True, Act);
 end;
 
 procedure TRdxProvider.AddUsesActions(var AList: TArray<TFindingAction>;
   const AFileName: string; ALine: Integer);
 var
-  Section  : TUsesSection;
-  Entries  : TArray<TRefactorSpan>;
-  i        : Integer;
-  Lo, Hi   : Integer;
-  InUses   : Boolean;
-  Fw       : TRdxFramework;
-  Short    : string;
-  Q        : string;
-  Reason   : string;
-  OK       : Boolean;
-  Act      : TRdxAction;
-  All      : TArray<TRdxEdit>;
-  E        : TRdxEdit;
-  Preview  : string;
+  Section : TUsesSection;
+  Entries : TArray<TRefactorSpan>;
+  i       : Integer;
+  Lo, Hi  : Integer;
+  InUses  : Boolean;
+  Fw      : TRdxFramework;
+  Short   : string;
+  Q       : string;
+  Reason  : string;
+  OK      : Boolean;
+  Act     : TRdxAction;
+  All     : TArray<TRdxEdit>;
+  E       : TRdxEdit;
+  Preview : string;
 begin
   // Nur wenn der Fund in einer uses-Klausel liegt (Zeile des 'uses' bis
   // letzter Eintrag) - sonst stuende "uses: ..." an jedem Fund der Datei.
@@ -489,7 +367,7 @@ begin
     if Entries[i].StartLine <> ALine then Continue;
     if OK then
     begin
-      Act := NewAction(akUsesExpand, AFileName);
+      Act := NewAction(akReplace, AFileName);
       SetLength(Act.FEdits, 1);
       Act.FEdits[0] := E;
       Add(AList, 'uses: ' + Short + ' -> ' + Q, '', True, Act);
@@ -500,7 +378,7 @@ begin
   if Length(All) >= 2 then
   begin
     SortEditsDescending(All);
-    Act := NewAction(akUsesExpand, AFileName);
+    Act := NewAction(akReplace, AFileName);
     Act.FEdits := All;
     if Length(All) > 3 then Preview := Preview + ', ...';
     Add(AList, Format(CAP_USES_ALL, [Length(All)]), Preview, True, Act);
@@ -517,17 +395,12 @@ var
   Info    : TRefactorInfo;
   IsCall  : Boolean;
   Why     : string;
-  Entries : TArray<TRefactorSpan>;
-  i       : Integer;
 begin
   Result := nil;
   FActions.Clear;
   FUsesNames := nil;
   if not Assigned(AFinding) then Exit;
   Line := AFinding.LineInt;
-  // Bleibt am Ende nichts anzubieten, steht WARUM als ausgegrauter
-  // Eintrag im Menue - sonst ist "kein Eintrag" nicht von "Anbieter nicht
-  // geladen" zu unterscheiden.
   if AFinding.FileName = '' then
   begin
     Add(Result, DIAG_PREFIX + 'Fund ohne Dateiname', '', False, nil);
@@ -559,10 +432,7 @@ begin
   end;
   Info := nil;
   try
-    Entries := FPlaces.UsesEntries(TUsesSection.usAny);
-    SetLength(FUsesNames, Length(Entries));
-    for i := 0 to High(Entries) do
-      FUsesNames[i] := Entries[i].Resolved;
+    FUsesNames := TRdxRecipeRunner.UsesNamesOf(FPlaces);
 
     Meta    := TRuleCatalog.GetRuleCanonical(AFinding.Kind);
     Anchor  := LowerCase(Meta.Anchor);
@@ -571,7 +441,7 @@ begin
       [AFinding.ResolvedRuleId, ExtractFileName(AFinding.FileName), Line,
        Anchor, FixMode])));
 
-    Info := DescribeAnchor(Line, Anchor, IsCall, Why);
+    Info := TRdxRecipeRunner.DescribeAnchor(FPlaces, Line, Anchor, IsCall, Why);
     if Assigned(Info) then
       AddShowSpan(Result, AFinding.FileName, Info);
     if FixMode = 'auto' then

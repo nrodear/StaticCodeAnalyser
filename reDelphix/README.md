@@ -75,14 +75,28 @@ python tools\gen_unitscopes.py "C:\Program Files (x86)\Embarcadero\Studio\37.0"
 Eine `unitscopes.txt` neben der BPL hat Vorrang vor der eingelinkten
 Ressource.
 
-## Pruefen ohne IDE
+## Pruefen
+
+**`tests\reDelphix.Test.dproj`** (DUnitX, Konsole/TestInsight, in der
+d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
+
+* `uTestRdxRecipes` - Literal-Codec, Format()-Bau, SQL-Vorlage,
+  Scope-Tabelle (reine Textlogik).
+* `uTestRdxSca044` - Ende zu Ende je Variante des Detektors SCA044:
+  Parser, Detektor, `TSourcePlaces`, `uRdxRecipeRunner` - aktiv bei
+  String-Lokalen/Parametern/Feldern, Char, `.ToString`, bekannten
+  RTL-Aufrufen, mehrzeilig, Steuerzeichen, `%`; ausgegraut mit Grund bei
+  Integer, unbekanntem Ausdruck, Kommentar, `$IFDEF`, SQL-Text,
+  fehlendem SysUtils, mehrdeutiger Zeile; Idempotenz nach dem Umschreiben.
+
+Ohne Delphi (nur die Textlogik, FPC 3.2.2):
 
 ```
 bash tools/fpc-pruefstand/build.sh uTestRdxRecipes
 ```
 
-Die ToolsAPI-Units (`uRdxEditor`, `uRdxProvider`) sind nur in Delphi
-uebersetzbar.
+`uRdxEditor` und `uRdxProvider` sind ToolsAPI und nur im Package
+uebersetzbar; `uRdxRecipeRunner` ist der testbare Kern dazwischen.
 
 ## Grenzen (Stand 2026-10-05)
 
