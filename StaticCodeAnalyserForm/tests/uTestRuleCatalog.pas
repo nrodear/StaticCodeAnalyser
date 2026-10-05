@@ -74,6 +74,10 @@ type
     // (Zuweisung, automatisch) und SCA003 (Zuweisung oder Aufruf, nur
     // assistiert - Autopsie 7 TP / 55 FP).
     [Test] procedure RefactorPilotRulesCarryAnchorAndFixMode;
+    // AH8: dieselben zwei Felder auch im FALLBACK (einkompilierte Tabelle).
+    // Im IDE-Plugin ist der Fallback der Normalfall - ohne die Felder dort
+    // sah reDelphix bei jeder Regel fixMode '' und bot nichts an.
+    [Test] procedure FallbackCarriesAnchorAndFixMode;
 
     // Profile-Loader (sca-rules.json -> profiles.*):
     //
@@ -1103,6 +1107,41 @@ begin
     'SCA003 meldet Zuweisungen und Aufrufe');
   Assert.AreEqual('assisted', Meta.FixMode,
     'SCA003 ist ein Review-Zeiger - nur assistiert, nie automatisch');
+end;
+
+procedure TTestRuleCatalog.FallbackCarriesAnchorAndFixMode;
+// ROOT-CAUSE-ANKER (2026-10-05): AH4 brachte anchor/fixMode in die JSON,
+// aber nicht in die einkompilierte Tabelle. Das IDE-Plugin findet die JSON
+// nie (BPL im Embarcadero-Verzeichnis), also lief es im Fallback - und
+// reDelphix sah bei SCA044 fixMode '' statt 'auto': kein Menuepunkt.
+// Der Fallback wird wie in FallbackStillProvidesExamples erzwungen.
+var
+  TmpFile : string;
+  OldPath : string;
+  Meta    : TRuleMeta;
+begin
+  OldPath := TRuleCatalog.JsonFilePath;
+  TmpFile := TPath.Combine(TPath.GetTempPath,
+    'sca_broken_rules_' + TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '') + '.json');
+  TFile.WriteAllText(TmpFile, '{ das ist kein gueltiger Regelkatalog');
+  try
+    TRuleCatalog.JsonFilePath := TmpFile;
+    TRuleCatalog.Reload;
+
+    Meta := TRuleCatalog.GetRuleCanonical(fkConcatToFormat);
+    Assert.AreEqual('assign', Meta.Anchor,
+      'SCA044 im Fallback ohne anchor - uRuleCatalogData.inc regenerieren');
+    Assert.AreEqual('auto', Meta.FixMode,
+      'SCA044 im Fallback ohne fixMode - im IDE-Plugin bietet reDelphix dann nichts an');
+
+    Meta := TRuleCatalog.GetRuleCanonical(fkSQLInjection);
+    Assert.AreEqual('assign-or-call', Meta.Anchor, 'SCA003 im Fallback ohne anchor');
+    Assert.AreEqual('assisted', Meta.FixMode, 'SCA003 im Fallback ohne fixMode');
+  finally
+    TRuleCatalog.JsonFilePath := OldPath;
+    TRuleCatalog.Reload;   // echten Katalog fuer die Folgetests wiederherstellen
+    if TFile.Exists(TmpFile) then TFile.Delete(TmpFile);
+  end;
 end;
 
 end.

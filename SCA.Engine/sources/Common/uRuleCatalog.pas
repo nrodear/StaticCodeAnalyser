@@ -306,6 +306,12 @@ type
     ShortDesc : string;
     BadEx     : string;
     GoodEx    : string;
+    // AH8 (2026-10-05): Anker und Fix-Politik des Quellstellen-Dienstes
+    // auch einkompiliert. Im IDE-Plugin ist der Fallback der NORMALFALL
+    // (s. MakeFallbackMeta) - ohne diese zwei Felder sah ein Modul wie
+    // reDelphix dort bei JEDER Regel fixMode '' und bot nichts an.
+    Anchor    : string;
+    FixMode   : string;
   end;
 
 {$I uRuleCatalogData.inc}
@@ -751,6 +757,8 @@ begin
     Result.ShortDescription := RULE_CATALOG_DATA[Idx].ShortDesc;
     Result.BadExample       := RULE_CATALOG_DATA[Idx].BadEx;
     Result.GoodExample      := RULE_CATALOG_DATA[Idx].GoodEx;
+    Result.Anchor           := RULE_CATALOG_DATA[Idx].Anchor;
+    Result.FixMode          := RULE_CATALOG_DATA[Idx].FixMode;
   end;
 end;
 

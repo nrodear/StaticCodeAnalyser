@@ -126,6 +126,10 @@ def build() -> str:
             ('ShortDesc', r.get('shortDescription', '')),
             ('BadEx',     ex.get('bad', '') or ''),
             ('GoodEx',    ex.get('good', '') or ''),
+            # AH8: Quellstellen-Dienst - im IDE-Plugin ist der Fallback der
+            # Normalfall, ohne diese Felder sieht ein Modul dort nie fixMode.
+            ('Anchor',    r.get('anchor', '') or ''),
+            ('FixMode',   r.get('fixMode', '') or ''),
         ]
         L.append('    // %s' % r.get('id', '?'))
         L.append('    (')
