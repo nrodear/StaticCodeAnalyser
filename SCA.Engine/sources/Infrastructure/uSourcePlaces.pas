@@ -54,6 +54,9 @@ unit uSourcePlaces;
 //                 Resolved traegt den Typnamen, FixSafe wird neu abgeleitet.
 //                 Vorher blieb 'Marker: string' rvUnknown - 98 % der
 //                 SCA044-Funde am Korpus waren so nie fix-sicher.
+//                 ALine ist die ANKERZEILE der Anweisung: der Resolver
+//                 begrenzt Routinen ueber die letzte Knoten-Zeile, eine
+//                 Fortsetzungszeile der letzten Anweisung liegt dahinter.
 //   CodeViewOf / TextOf / HashOf   Sicht, Text und Hash eines Bereichs
 //   ConditionalRanges              {$IFDEF}-Bereiche der Datei
 //

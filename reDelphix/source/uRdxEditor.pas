@@ -1,30 +1,36 @@
 unit uRdxEditor;
 
 // reDelphix - der einzige ToolsAPI-Teil des Moduls: Bereich im Editor
-// markieren, Bereich ersetzen, Projekt-Units nachsehen
+// markieren, Bereich ersetzen, Editor-Puffer lesen, Projekt-Units nachsehen
 // (Konzept_SourceRefactor_Quellstellen Abschnitt 15.4b: H2/H3 wohnen im
 // Modul).
 //
-// ZEICHENGENAU STATT ANZEIGESPALTEN
+// NUR VOM ZEILENANFANG AUS - KEINE SPALTENARITHMETIK IM EDITOR
 //
-// IOTAEditPosition.Column und Move(Row, Col) rechnen in ANZEIGE-Spalten
-// (Tabulatoren expandiert); die Bereiche aus TSourcePlaces zaehlen
-// ZEICHEN. Der Weg dazwischen ist Read(N): es liest N Zeichen ab dem
-// Cursor und bewegt ihn dabei - so landet der Cursor ohne Umrechnung auf
-// einer Zeichen-Spalte. Dasselbe Verfahren benutzt das SCA-Plugin fuer
-// seinen Zeilen-Quick-Fix (uIDEEditorIntegration, Vollausbau 2026-08-26).
+// IOTAEditPosition rechnet in ANZEIGE-Spalten (Tabulatoren expandiert),
+// die Bereiche aus TSourcePlaces zaehlen ZEICHEN, und ob Read(N) den
+// Cursor bewegt, ist nicht verbuergt - die erste Fassung (AH16) nahm es
+// an und verglich dann ab Spalte 1 ("Quelltext im Editor weicht vom Scan
+// ab", 2026-10-06, bei identischem Text auf Platte und im Editor).
+// Deshalb arbeitet ReplaceSpan jetzt ausschliesslich mit Operationen,
+// die am ZEILENANFANG beginnen:
+//   * Zeilen eines mehrzeiligen Bereichs werden von unten her mit
+//     BackspaceDelete am Zeilenanfang zusammengezogen (loescht den
+//     Umbruch, egal ob CRLF oder LF),
+//   * die so entstandene EINE Zeile wird komplett geloescht (Delete
+//     zaehlt Zeichen) und als Praefix + neuer Text + Suffix neu
+//     eingefuegt - dasselbe Muster wie der Zeilen-Quick-Fix des Plugins.
+// Fuer die Markierung (SelectSpan) rechnet die IDE selbst die Zeichen-
+// in Anzeigespalten um (IOTAEditView.ConvertPos).
 //
 // NICHTS WIRD BLIND GESCHRIEBEN
 //
-// ReplaceSpan liest den Bereich zuerst aus dem EDITOR-PUFFER und
-// vergleicht ihn (Zeilenenden normalisiert) mit dem Text, den der Scan
-// beschrieben hat. Weicht der Puffer ab - ungespeicherte Aenderung,
-// verschobene Zeilen, veralteter Fund -, wird nicht geschrieben. Das ist
-// strenger als der Hash-Vergleich gegen die Datei auf der Platte, denn
-// geschrieben wird in den Puffer, nicht in die Datei.
-//
-// Jede Aenderung laeuft ueber die Cursor-API der IDE und ist damit mit
-// Strg+Z ruecknehmbar.
+// Vor jeder Aenderung wird der Bereich im EDITOR-PUFFER (IOTAEditReader)
+// mit dem Text verglichen, den der Scan beschrieben hat; nach dem
+// Zusammenziehen wird die Zeile ein zweites Mal gegengelesen. Weicht
+// etwas ab, nennt die Meldung die erste Stelle aus beiden Fassungen.
+// Jede Aenderung laeuft ueber die Cursor-API der IDE und ist mit Strg+Z
+// ruecknehmbar.
 
 interface
 
@@ -40,7 +46,9 @@ type
       const ASpan: TRefactorSpan; out AError: string): Boolean; static;
 
     // Ersetzt den Bereich durch ANewText - nur wenn der Puffer dort
-    // AExpected enthaelt (Zeilenumbrueche als #10 verglichen).
+    // AExpected enthaelt (Zeilenumbrueche als #10 verglichen). ANewText
+    // ersetzt den Bereich auf EINER Zeile; ein mehrzeiliger Bereich wird
+    // dabei zusammengezogen.
     class function ReplaceSpan(const AFile: string;
       const ASpan: TRefactorSpan; const AExpected, ANewText: string;
       out AError: string): Boolean; static;
@@ -63,13 +71,17 @@ type
 implementation
 
 uses
-  System.SysUtils,
-  ToolsAPI;
+  System.SysUtils, System.Classes,
+  ToolsAPI,
+  uRefactorInfoBuilder;   // SpanText: derselbe Bereichstext wie beim Scan
 
 const
-  SNoEditor = 'Datei ist nicht im Editor geoeffnet';
-  SNoView   = 'Editor-Ansicht nicht verfuegbar';
-  SDiffers  = 'Quelltext im Editor weicht vom Scan ab - nicht geschrieben';
+  SNoEditor  = 'Datei ist nicht im Editor geoeffnet';
+  SNoView    = 'Editor-Ansicht nicht verfuegbar';
+  SNoBuffer  = 'Editor-Puffer nicht lesbar';
+  SDiffers   = 'Quelltext im Editor weicht vom Scan ab - nicht geschrieben';
+  SJoinFail  = 'Zeilen liessen sich nicht zusammenziehen - Strg+Z';
+  SJoinDiff  = 'Zeile nach dem Zusammenziehen anders als erwartet - Strg+Z';
 
 function TryGetSourceEditor(const AFile: string; AOpen: Boolean;
   out ASrc: IOTASourceEditor): Boolean;
@@ -100,28 +112,18 @@ begin
   Result := ASrc <> nil;
 end;
 
-function MoveToChar(const APos: IOTAEditPosition; ALine, ACol: Integer): Boolean;
-// Cursor auf Zeile/ZEICHEN-Spalte: an den Zeilenanfang, dann ACol-1
-// Zeichen lesen - Read bewegt den Cursor um Zeichen, nicht um Spalten.
+function TryGetView(const ASrc: IOTASourceEditor; out AView: IOTAEditView;
+  out APos: IOTAEditPosition): Boolean;
+// Erste Ansicht des Editors samt Cursor-API ihres Puffers.
 begin
-  Result := APos.GotoLine(ALine) and APos.MoveBOL;
-  if Result and (ACol > 1) then
-    APos.Read(ACol - 1);
-end;
-
-function NormalizeEol(const S: string): string;
-begin
-  Result := StringReplace(S, #13#10, #10, [rfReplaceAll]);
-  Result := StringReplace(Result, #13, #10, [rfReplaceAll]);
-end;
-
-function CountChar(const S: string; C: Char): Integer;
-var
-  i : Integer;
-begin
-  Result := 0;
-  for i := 1 to Length(S) do
-    if S[i] = C then Inc(Result);
+  Result := False;
+  AView  := nil;
+  APos   := nil;
+  if (ASrc = nil) or (ASrc.EditViewCount = 0) then Exit;
+  AView := ASrc.EditViews[0];
+  if (AView = nil) or (AView.Buffer = nil) then Exit;
+  APos := AView.Buffer.EditPosition;
+  Result := APos <> nil;
 end;
 
 function Visible(const S: string): string;
@@ -134,8 +136,8 @@ end;
 
 function DescribeMismatch(const AExpected, AActual: string): string;
 // Erste abweichende Stelle samt Umfeld aus beiden Texten - damit der
-// Benutzer sieht, WAS im Editor anders ist als im Scan (ungespeicherte
-// Aenderung, verschobene Zeile, veralteter Fund).
+// Benutzer sieht, WAS im Editor anders ist als im Scan (Puffer seit dem
+// Oeffnen des Menues geaendert, verschobene Zeile, veralteter Fund).
 const
   CTX = 24;
 var
@@ -152,15 +154,46 @@ begin
     Visible(Copy(AExpected, From, CTX)), Visible(Copy(AActual, From, CTX))]);
 end;
 
+function BufferLines(const AFile: string; ALines: TStringList): Boolean;
+// Der Puffer als Zeilen - TStringList.Text trennt CRLF, LF und CR.
+var
+  Text : string;
+begin
+  Result := TRdxEditor.TryReadBuffer(AFile, Text);
+  if Result then
+    ALines.Text := Text;
+end;
+
+function DisplayPosOf(const AView: IOTAEditView; ALines: TStringList;
+  ALine, ACol: Integer): TOTAEditPos;
+// Zeichen-Spalte -> Anzeige-Spalte ueber die IDE selbst. TOTACharPos
+// zaehlt die UTF-8-Bytes der Zeile (so handhaben es GExperts & Co.);
+// fuer reinen ASCII-Code ist das die Zeichenzahl.
+var
+  CharPos : TOTACharPos;
+  Prefix  : string;
+begin
+  Result.Line := ALine;
+  Result.Col  := ACol;
+  if (ALine < 1) or (ALine > ALines.Count) then Exit;
+  Prefix := Copy(ALines[ALine - 1], 1, ACol - 1);
+  CharPos.Line      := ALine;
+  CharPos.CharIndex := Length(UTF8Encode(Prefix));
+  AView.ConvertPos(False, Result, CharPos);
+  Result.Line := ALine;
+end;
+
 { TRdxEditor }
 
 class function TRdxEditor.SelectSpan(const AFile: string;
   const ASpan: TRefactorSpan; out AError: string): Boolean;
 var
-  Src   : IOTASourceEditor;
-  View  : IOTAEditView;
-  EdPos : IOTAEditPosition;
-  Block : IOTAEditBlock;
+  Src    : IOTASourceEditor;
+  View   : IOTAEditView;
+  EdPos  : IOTAEditPosition;
+  Block  : IOTAEditBlock;
+  Lines  : TStringList;
+  P      : TOTAEditPos;
 begin
   Result := False;
   AError := '';
@@ -174,37 +207,42 @@ begin
     AError := SNoEditor;
     Exit;
   end;
+  Lines := TStringList.Create;
   try
-    Src.Show;
-    if Src.EditViewCount = 0 then
-    begin
-      AError := SNoView;
-      Exit;
+    try
+      Src.Show;
+      if not TryGetView(Src, View, EdPos) then
+      begin
+        AError := SNoView;
+        Exit;
+      end;
+      if not BufferLines(AFile, Lines) then
+      begin
+        AError := SNoBuffer;
+        Exit;
+      end;
+      Block := View.Block;
+      if Block = nil then
+      begin
+        AError := SNoView;
+        Exit;
+      end;
+      Block.Reset;
+      P := DisplayPosOf(View, Lines, ASpan.StartLine, ASpan.StartCol);
+      if not EdPos.Move(P.Line, P.Col) then Exit;
+      Block.BeginBlock;
+      P := DisplayPosOf(View, Lines, ASpan.EndLine, ASpan.EndCol);
+      if not EdPos.Move(P.Line, P.Col) then Exit;
+      Block.EndBlock;
+      View.MoveViewToCursor;
+      View.Paint;
+      Result := True;
+    except
+      on E: Exception do
+        AError := E.Message;
     end;
-    View := Src.EditViews[0];
-    if View = nil then
-    begin
-      AError := SNoView;
-      Exit;
-    end;
-    EdPos := View.Position;
-    Block := View.Block;
-    if (EdPos = nil) or (Block = nil) then
-    begin
-      AError := SNoView;
-      Exit;
-    end;
-    Block.Reset;
-    if not MoveToChar(EdPos, ASpan.StartLine, ASpan.StartCol) then Exit;
-    Block.BeginBlock;
-    if not MoveToChar(EdPos, ASpan.EndLine, ASpan.EndCol) then Exit;
-    Block.EndBlock;
-    View.MoveViewToCursor;
-    View.Paint;
-    Result := True;
-  except
-    on E: Exception do
-      AError := E.Message;
+  finally
+    Lines.Free;
   end;
 end;
 
@@ -212,14 +250,17 @@ class function TRdxEditor.ReplaceSpan(const AFile: string;
   const ASpan: TRefactorSpan; const AExpected, ANewText: string;
   out AError: string): Boolean;
 var
-  Src    : IOTASourceEditor;
-  View   : IOTAEditView;
-  EdPos  : IOTAEditPosition;
-  Breaks : Integer;
-  Raw    : string;
-  Norm   : string;
-  EolLen : Integer;
-  Len    : Integer;
+  Src     : IOTASourceEditor;
+  View    : IOTAEditView;
+  EdPos   : IOTAEditPosition;
+  Lines   : TStringList;
+  Actual  : string;
+  First   : string;
+  Last    : string;
+  Joined  : string;
+  NewLine : string;
+  Probe   : string;
+  L       : Integer;
 begin
   Result := False;
   AError := '';
@@ -233,63 +274,93 @@ begin
     AError := SNoEditor;
     Exit;
   end;
+  Lines := TStringList.Create;
   try
-    if Src.EditViewCount = 0 then
-    begin
-      AError := SNoView;
-      Exit;
-    end;
-    View := Src.EditViews[0];
-    if (View = nil) or (View.Buffer = nil) then
-    begin
-      AError := SNoView;
-      Exit;
-    end;
-    EdPos := View.Buffer.EditPosition;
-    if EdPos = nil then
-    begin
-      AError := SNoView;
-      Exit;
-    end;
+    try
+      // 1) Puffer lesen und den Bereich gegen den Scan-Text pruefen -
+      //    derselbe Bereichstext wie beim Beschreiben (SpanText).
+      if not BufferLines(AFile, Lines) then
+      begin
+        AError := SNoBuffer;
+        Exit;
+      end;
+      if ASpan.EndLine > Lines.Count then
+      begin
+        AError := SDiffers + Format(' (Zeile %d, der Puffer hat %d Zeilen)',
+          [ASpan.EndLine, Lines.Count]);
+        Exit;
+      end;
+      Actual := TRefactorInfoBuilder.SpanText(Lines, ASpan);
+      if Actual <> AExpected then
+      begin
+        AError := SDiffers + DescribeMismatch(AExpected, Actual);
+        Exit;
+      end;
 
-    // 1) Den Bereich aus dem Puffer lesen und mit dem Scan vergleichen.
-    //    Gelesen wird das CRLF-Maximum; der Vergleich laeuft normalisiert.
-    Breaks := CountChar(AExpected, #10);
-    if not MoveToChar(EdPos, ASpan.StartLine, ASpan.StartCol) then
-    begin
-      AError := SDiffers;
-      Exit;
-    end;
-    Raw  := EdPos.Read(Length(AExpected) + Breaks);
-    Norm := NormalizeEol(Raw);
-    if Copy(Norm, 1, Length(AExpected)) <> AExpected then
-    begin
-      AError := SDiffers + DescribeMismatch(AExpected, Norm);
-      Exit;
-    end;
-    EolLen := 1;
-    if Pos(#13#10, Raw) > 0 then EolLen := 2;
-    Len := Length(AExpected) + Breaks * (EolLen - 1);
+      // 2) Was aus den Zeilen des Bereichs wird: Praefix der ersten,
+      //    neuer Text, Suffix der letzten - auf EINER Zeile.
+      First   := Lines[ASpan.StartLine - 1];
+      Last    := Lines[ASpan.EndLine - 1];
+      NewLine := Copy(First, 1, ASpan.StartCol - 1) + ANewText
+        + Copy(Last, ASpan.EndCol, MaxInt);
+      Joined := First;
+      for L := ASpan.StartLine + 1 to ASpan.EndLine do
+        Joined := Joined + Lines[L - 1];
 
-    // 2) Zurueck an den Anfang (Read hat den Cursor bewegt), loeschen,
-    //    einfuegen - beides ueber den Undo-Stapel der IDE.
-    if not MoveToChar(EdPos, ASpan.StartLine, ASpan.StartCol) then
-    begin
-      AError := SDiffers;
-      Exit;
+      if not TryGetView(Src, View, EdPos) then
+      begin
+        AError := SNoView;
+        Exit;
+      end;
+
+      // 3) Fortsetzungszeilen von unten her anziehen: Backspace am
+      //    Zeilenanfang loescht genau den Umbruch davor.
+      for L := ASpan.EndLine downto ASpan.StartLine + 1 do
+      begin
+        if not (EdPos.GotoLine(L) and EdPos.MoveBOL
+                and EdPos.BackspaceDelete(1)) then
+        begin
+          AError := SJoinFail;
+          Exit;
+        end;
+      end;
+
+      // 4) Gegenprobe: die zusammengezogene Zeile muss exakt die
+      //    Verkettung der Bereichszeilen sein.
+      if not (EdPos.GotoLine(ASpan.StartLine) and EdPos.MoveBOL) then
+      begin
+        AError := SJoinFail;
+        Exit;
+      end;
+      Probe := EdPos.Read(Length(Joined));
+      if Probe <> Joined then
+      begin
+        AError := SJoinDiff + DescribeMismatch(Joined, Probe);
+        Exit;
+      end;
+
+      // 5) Die ganze Zeile ersetzen - Delete zaehlt Zeichen, der Umbruch
+      //    am Ende bleibt stehen.
+      if not (EdPos.GotoLine(ASpan.StartLine) and EdPos.MoveBOL) then
+      begin
+        AError := SJoinFail;
+        Exit;
+      end;
+      if (Length(Joined) > 0) and not EdPos.Delete(Length(Joined)) then
+      begin
+        AError := 'Loeschen im Editor fehlgeschlagen - Strg+Z';
+        Exit;
+      end;
+      EdPos.InsertText(NewLine);
+      View.MoveViewToCursor;
+      View.Paint;
+      Result := True;
+    except
+      on E: Exception do
+        AError := E.Message;
     end;
-    if not EdPos.Delete(Len) then
-    begin
-      AError := 'Loeschen im Editor fehlgeschlagen';
-      Exit;
-    end;
-    EdPos.InsertText(ANewText);
-    View.MoveViewToCursor;
-    View.Paint;
-    Result := True;
-  except
-    on E: Exception do
-      AError := E.Message;
+  finally
+    Lines.Free;
   end;
 end;
 
