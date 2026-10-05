@@ -5946,6 +5946,10 @@ end;
 // wie zuvor - sie haengen als Unregister-Seite der Adapter im
 // Verzeichnis; nur der Taktgeber ist weg.
 
+// Ein finalization-Abschnitt ist nur hinter einem initialization-Abschnitt
+// erlaubt (E2029 beim Bau vom 2026-10-05) - deshalb der leere davor.
+initialization
+
 finalization
   // AH10: Kopien der Silent-Funde fuer das Editor-Kontextmenue.
   FreeAndNil(GEditorFindings);
