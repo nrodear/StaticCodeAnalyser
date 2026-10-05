@@ -4811,6 +4811,89 @@ end;
 // Welle 1b (2026-07-20): Boolean-Result - False bei jedem Skip (busy,
 // Datei fehlt, kein Highlighter), damit Caller (Properties-Auto-Scan)
 // ihren Scan-Zeit-Cache NICHT stempeln und spaeter nachholen.
+// ---- AH10 (2026-10-05): Funde der Cursorzeile fuer das Editor-Kontextmenue --
+//
+// Die Marken des Highlighters tragen nur Texte, keine TLeakFinding. Fuer
+// die Aktionen fremder Anbieter (uFindingActions) braucht das Editor-
+// Kontextmenue aber den Fund selbst (Datei, Zeile, Regel). Zwei Quellen:
+//   1. das Dock-Fenster, falls offen (FAllFindings des Frames);
+//   2. Kopien der Funde des letzten Silent-Laufs (KeepEditorFindings) -
+//      der Silent-Lauf gibt seine Liste nach dem Markieren frei.
+// Die Kopien tragen nur die Felder, die ein Anbieter liest.
+
+var
+  GEditorFindings     : TObjectList<TLeakFinding> = nil;
+  GEditorFindingsFile : string = '';
+
+procedure KeepEditorFindings(const AFileName: string;
+  AFindings: TObjectList<TLeakFinding>);
+var
+  F, C : TLeakFinding;
+begin
+  if GEditorFindings = nil then
+    GEditorFindings := TObjectList<TLeakFinding>.Create(True);
+  GEditorFindings.Clear;
+  GEditorFindingsFile := AFileName;
+  if not Assigned(AFindings) then Exit;
+  for F in AFindings do
+  begin
+    if not Assigned(F) then Continue;
+    C := TLeakFinding.Create;
+    C.FileName   := F.FileName;
+    C.MethodName := F.MethodName;
+    C.LineNumber := F.LineNumber;
+    C.EndLine    := F.EndLine;
+    C.MissingVar := F.MissingVar;
+    C.Severity   := F.Severity;
+    C.Kind       := F.Kind;
+    C.Confidence := F.Confidence;
+    C.RuleID     := F.RuleID;
+    GEditorFindings.Add(C);
+  end;
+end;
+
+function FindingsAtEditorLine(const AFile: string;
+  ALine: Integer): TArray<TLeakFinding>;
+// Funde, deren Bereich (Ankerzeile bis SpanEnd) die Zeile einschliesst.
+// Erst das Dock-Fenster, sonst die Kopien des Silent-Laufs.
+var
+  Found : TArray<TLeakFinding>;
+
+  procedure Collect(AList: TList<TLeakFinding>);
+  var
+    F : TLeakFinding;
+  begin
+    if not Assigned(AList) then Exit;
+    for F in AList do
+      if Assigned(F) and SameText(F.FileName, AFile)
+         and (ALine >= F.LineInt) and (ALine <= F.SpanEnd) then
+      begin
+        SetLength(Found, Length(Found) + 1);
+        Found[High(Found)] := F;
+      end;
+  end;
+
+begin
+  Found := nil;
+  if Assigned(GDockableForm) and Assigned(GDockableForm.Frame) then
+    Collect(GDockableForm.Frame.FAllFindings);
+  if (Length(Found) = 0) and SameText(GEditorFindingsFile, AFile) then
+    Collect(GEditorFindings);
+  Result := Found;
+end;
+
+function CurrentEditorCaretLine: Integer;
+var
+  EditorSvc : IOTAEditorServices;
+  View      : IOTAEditView;
+begin
+  Result := 0;
+  if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
+  View := EditorSvc.TopView;
+  if Assigned(View) then
+    Result := View.CursorPos.Line;
+end;
+
 function RunSilentAnalysisForFile(const AFileName: string;
   ACenterOnFirstFinding: Boolean = True): Boolean;
 // Silent-Mode-Entrypoint: analysiert AFileName + setzt Marker direkt am
@@ -4961,6 +5044,9 @@ begin
     // weggefegt - User sah seine Befunde in Datei A nach einem Wechsel
     // zu B beim Zurueckkehren nicht mehr.
     GHighlighter.ReplaceMarksForFile(AFileName, Entries);
+    // AH10: Kopien fuer das Editor-Kontextmenue - die Liste selbst wird
+    // unten freigegeben.
+    KeepEditorFindings(AFileName, Findings);
 
     // Properties-Panel (und andere Subscriber) ueber die Silent-Findings
     // informieren. Borrowed-Refs - Subscriber klonen selbst wenn sie
@@ -5057,8 +5143,17 @@ type
     // Item-Zahl als beim Hooken und liefert dann den falschen oder gar
     // keinen Popup.
     Form        : TCustomForm;
+    // AH10 (2026-10-05): Aktionen fremder Anbieter (uFindingActions,
+    // z. B. reDelphix) zu den Funden der CURSORZEILE - dieselbe
+    // Lebensdauer wie OurItem: je Popup-Show frisch erzeugt, beim
+    // naechsten Show oder beim Abbau entfernt. Der Index im Tag des
+    // Menuepunkts zeigt in Actions.
+    ActionItems : TList<TMenuItem>;
+    Actions     : TArray<TFindingAction>;
     constructor Create(APopup: TPopupMenu; AOrig: TNotifyEvent;
       AForm: TCustomForm);
+    destructor Destroy; override;
+    procedure ClearActionItems;
   end;
 
   TEditorContextMenuHook = class(TNotifierObject, INTAEditServicesNotifier)
@@ -5070,6 +5165,10 @@ type
     function  FindEditorPopup(AForm: TCustomForm): TPopupMenu;
     procedure OnPopupHandler(Sender: TObject);
     procedure ItemClick(Sender: TObject);
+    // AH10: Eintraege der Anbieter zu den Funden der Cursorzeile anhaengen
+    // bzw. einen davon ausfuehren.
+    procedure AddActionItems(APopup: TPopupMenu; ASlot: TPopupHookSlot);
+    procedure ActionItemClick(Sender: TObject);
   protected
     // INTAEditServicesNotifier
     procedure WindowShow(const EditWindow: INTAEditWindow;
@@ -5109,6 +5208,31 @@ begin
   OrigOnPopup := AOrig;
   OurItem     := nil;
   Form        := AForm;
+  ActionItems := TList<TMenuItem>.Create;
+end;
+
+destructor TPopupHookSlot.Destroy;
+begin
+  ClearActionItems;
+  ActionItems.Free;
+  inherited;
+end;
+
+procedure TPopupHookSlot.ClearActionItems;
+// Wie der Abbau von OurItem: aus dem Popup loesen, freigeben, vergessen.
+// Defensiv gegen ein Popup, das die IDE schon zerlegt hat.
+var
+  i : Integer;
+begin
+  for i := 0 to ActionItems.Count - 1 do
+  try
+    if Assigned(Popup) and (Popup.Items.IndexOf(ActionItems[i]) >= 0) then
+      Popup.Items.Remove(ActionItems[i]);
+    ActionItems[i].Free;
+  except
+  end;
+  ActionItems.Clear;
+  Actions := nil;
 end;
 
 { TEditorContextMenuHook }
@@ -5258,6 +5382,7 @@ begin
     end;
     Slot.OurItem := nil;
   end;
+  Slot.ClearActionItems;
 
   // (2) IDE-Rebuild via Original-Handler
   if Assigned(Slot.OrigOnPopup) then
@@ -5266,14 +5391,114 @@ begin
   // (3) Frischen SCA-Item ans Ende - nur wenn Silent-Mode aktiviert ist.
   // User-Setting (Tools > Options) wird bei jedem Popup-Show frisch
   // ausgewertet, damit Aenderungen sofort wirken.
-  if not IsSilentEnabled then Exit;
+  if IsSilentEnabled then
+  begin
+    NewItem := TMenuItem.Create(nil);
+    NewItem.Caption  := _('Analyse current file (silent)');
+    NewItem.Hint     := _('Static Code Analyser: analyse this file, no dock opens');
+    NewItem.OnClick  := ItemClick;
+    Popup.Items.Add(NewItem);
+    Slot.OurItem := NewItem;
+  end;
 
-  NewItem := TMenuItem.Create(nil);
-  NewItem.Caption  := _('Analyse current file (silent)');
-  NewItem.Hint     := _('Static Code Analyser: analyse this file, no dock opens');
-  NewItem.OnClick  := ItemClick;
-  Popup.Items.Add(NewItem);
-  Slot.OurItem := NewItem;
+  // (4) AH10: Aktionen fremder Anbieter zu den Funden der Cursorzeile -
+  // unabhaengig vom Silent-Schalter, abhaengig davon, ob ein Anbieter
+  // angemeldet ist und auf der Zeile ein Fund liegt.
+  AddActionItems(Popup, Slot);
+end;
+
+procedure TEditorContextMenuHook.AddActionItems(APopup: TPopupMenu;
+  ASlot: TPopupHookSlot);
+// Haengt hinter einem Trenner je Fund der Cursorzeile die Eintraege an,
+// die die angemeldeten Anbieter liefern (Muster wie GridMenuPopup):
+// Beschriftung 'SCAnnn: Aktion  (Hint)', deaktiviert mit Grund, Index
+// im Tag. Items mit Owner=nil + nur OnClick, wie der Silent-Eintrag.
+var
+  FilePath : string;
+  Line     : Integer;
+  Found    : TArray<TLeakFinding>;
+  Acts     : TArray<TFindingAction>;
+  i, k     : Integer;
+  Sep      : TMenuItem;
+  Item     : TMenuItem;
+  RuleId   : string;
+begin
+  if TFindingActions.ProviderCount = 0 then Exit;
+  if TIDEEditor.TryGetCurrentPasFile(FilePath) <> cfrOK then Exit;
+  Line := CurrentEditorCaretLine;
+  if Line < 1 then Exit;
+  Found := FindingsAtEditorLine(FilePath, Line);
+  if Length(Found) = 0 then Exit;
+
+  Sep := nil;
+  for i := 0 to High(Found) do
+  begin
+    try
+      Acts := TFindingActions.ActionsFor(Found[i]);
+    except
+      on EStackExhausted do raise;
+      on E: Exception do
+      begin
+        OutputDebugString(PChar('SCA: finding action provider failed - '
+          + E.Message));
+        Acts := nil;
+      end;
+    end;
+    if Length(Acts) = 0 then Continue;
+    if Sep = nil then
+    begin
+      Sep := TMenuItem.Create(nil);
+      Sep.Caption := '-';
+      APopup.Items.Add(Sep);
+      ASlot.ActionItems.Add(Sep);
+    end;
+    RuleId := Found[i].ResolvedRuleId;
+    for k := 0 to High(Acts) do
+    begin
+      Item := TMenuItem.Create(nil);
+      if Acts[k].Hint <> '' then
+        Item.Caption := Format('%s: %s  (%s)', [RuleId, Acts[k].Caption, Acts[k].Hint])
+      else
+        Item.Caption := Format('%s: %s', [RuleId, Acts[k].Caption]);
+      Item.Hint    := Acts[k].Hint;
+      Item.Enabled := Acts[k].Enabled and Assigned(Acts[k].Execute);
+      Item.Tag     := Length(ASlot.Actions);
+      Item.OnClick := ActionItemClick;
+      SetLength(ASlot.Actions, Length(ASlot.Actions) + 1);
+      ASlot.Actions[High(ASlot.Actions)] := Acts[k];
+      APopup.Items.Add(Item);
+      ASlot.ActionItems.Add(Item);
+    end;
+  end;
+end;
+
+procedure TEditorContextMenuHook.ActionItemClick(Sender: TObject);
+// Der Slot wird ueber das Popup des Menuepunkts gefunden; Fehler des
+// Anbieters landen in einer Meldung - der Editor hat keine Statuszeile
+// des Plugins.
+var
+  Item : TMenuItem;
+  Menu : TMenu;
+  Slot : TPopupHookSlot;
+  Idx  : Integer;
+begin
+  if not (Sender is TMenuItem) then Exit;
+  Item := TMenuItem(Sender);
+  Menu := Item.GetParentMenu;
+  if not (Menu is TPopupMenu) then Exit;
+  if not FSlots.TryGetValue(TPopupMenu(Menu), Slot) then Exit;
+  Idx := Item.Tag;
+  if (Idx < 0) or (Idx > High(Slot.Actions)) then Exit;
+  if not Assigned(Slot.Actions[Idx].Execute) then Exit;
+  try
+    Slot.Actions[Idx].Execute(Sender);
+  except
+    on EStackExhausted do raise;
+    on E: Exception do
+      Application.MessageBox(
+        PChar(Format(_('Finding action failed: %s'), [E.Message])),
+        'Static Code Analyser', MB_OK or MB_ICONWARNING);
+  end;
 end;
 
 procedure TEditorContextMenuHook.ItemClick(Sender: TObject);
@@ -5720,5 +5945,9 @@ end;
 // Worker-Join als Barriere davor. Die Stuecke sind dieselben Prozeduren
 // wie zuvor - sie haengen als Unregister-Seite der Adapter im
 // Verzeichnis; nur der Taktgeber ist weg.
+
+finalization
+  // AH10: Kopien der Silent-Funde fuer das Editor-Kontextmenue.
+  FreeAndNil(GEditorFindings);
 
 end.
