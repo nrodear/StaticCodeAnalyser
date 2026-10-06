@@ -29,7 +29,7 @@ type
 implementation
 
 uses
-  System.SysUtils, System.Classes,
+  System.SysUtils,
   uMethodd12, uSCAConsts, uFindingActions, uFindingActionMenu;
 
 type
@@ -100,8 +100,8 @@ begin
     Lists[1] := [Act('Stelle zeigen', 'Zeile 10', True, True)];
     M := BuildFindingMenuModelFrom([F1, F2], Lists,
       [moLeadingSeparator, moHeaders]);
-    // Trenner, Kopf 1, 2 Aktionen, Kopf 2, 1 Aktion = 7 Eintraege
-    Assert.AreEqual<Integer>(7, Length(M.Entries));
+    // Trenner, Kopf 1, 2 Aktionen, Kopf 2, 1 Aktion = 6 Eintraege
+    Assert.AreEqual<Integer>(6, Length(M.Entries));
     Assert.AreEqual<Integer>(3, M.ActionCount);
     Assert.IsTrue(M.Entries[0].Kind = mkSeparator);
     Assert.AreEqual('-', M.Entries[0].Caption);

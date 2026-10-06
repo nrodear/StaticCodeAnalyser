@@ -9,8 +9,10 @@ unit uIDEFindingActionMenu;
 //
 // Tags: Trenner und Kopfzeilen tragen ATagBase - 1, Aktionen
 // ATagBase + ActionIndex. Der Kontextmenue-Haken nimmt ATagBase 0 (Index
-// in Slot.Actions, Kopfzeile -1 wie bisher), das Dock-Grid
-// GRID_ACTION_TAG (Trenner GRID_ACTION_TAG - 1 wie bisher).
+// in Slot.Actions; Kopfzeile -1 wie bisher, der Trenner trug bisher 0 und
+// jetzt -1 - kein Leser), das Dock-Grid GRID_ACTION_TAG (Trenner
+// GRID_ACTION_TAG - 1 wie bisher, danach raeumt GridMenuPopup ab Tag
+// GRID_ACTION_TAG - 1 ab).
 
 interface
 

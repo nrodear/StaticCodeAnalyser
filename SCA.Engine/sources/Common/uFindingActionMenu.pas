@@ -10,14 +10,15 @@ unit uFindingActionMenu;
 // ersten Fund mit Aktionen, je Fund optional eine deaktivierte Kopfzeile
 // 'SCAnnn  Meldung', darunter die Aktionen 'Caption  (Hint)'. Enabled
 // ist Enabled des Anbieters UND Execute zugewiesen; ActionIndex zeigt in
-// die flache Liste Actions, ueber die der Host ausfuehrt. Ein Anbieter,
-// der beim Erfragen wirft, nimmt nur seine Eintraege mit - die Meldung
-// landet in Errors, der Host protokolliert sie.
+// die flache Liste Actions, ueber die der Host ausfuehrt. Wirft ein
+// Anbieter beim Erfragen, fallen die Aktionen DIESES Funds weg (alle
+// Anbieter - TFindingActions.ActionsFor wirft als Ganzes), nie das
+// Menue; die Meldung landet in Errors, der Host protokolliert sie.
 
 interface
 
 uses
-  System.SysUtils, System.Generics.Collections,
+  System.SysUtils,
   uMethodd12, uFindingActions;
 
 type
@@ -166,9 +167,8 @@ begin
     except
       on EStackExhausted do raise;
       // noinspection ExceptionTooGeneral
-      // Vertrag der Registry: ein werfender Anbieter nimmt nur seine
-      // Eintraege mit, nie das Menue - deshalb jede Ausnahme ausser dem
-      // Stack-Ueberlauf.
+      // Ein werfender Anbieter kostet die Aktionen dieses Funds, nie das
+      // Menue - deshalb jede Ausnahme ausser dem Stack-Ueberlauf.
       on E: Exception do
       begin
         Lists[i] := nil;

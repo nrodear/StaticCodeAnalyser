@@ -25,29 +25,40 @@ uses
   uEngineApi, uRefactorInfo, uRdxRecipes;
 
 type
-  // Haelt Objekte, bis AMax weitere dazugekommen sind, und gibt dann die
-  // aeltesten frei. Der Anbieter legt hier seine Aktionsobjekte ab: ein
-  // Host, der die Aktionen MEHRERER Funde in ein Menue stellt (Editor-
-  // Kontextmenue mit zwei Funden auf einer Zeile, Gluehbirne), ruft
-  // Provide je Fund - bis Stufe B gab jedes Provide die Objekte des
-  // vorigen frei, und die Menuepunkte des ersten Funds zeigten auf
-  // freigegebene Objekte (Konzept Editor-Gluehbirne 2026-10-06, 3.3).
-  // Ein Menue referenziert nie mehr als eine Handvoll Aktionen; der
-  // Ring ist deterministisch und braucht keinen neuen Registry-Vertrag.
+  // Haelt Objekte in Chargen: BeginBatch eroeffnet eine Charge (ein
+  // Provide-Aufruf), Keep legt Objekte hinein; sind mehr als AMaxBatches
+  // Chargen offen, wird die aelteste samt Objekten freigegeben. Der
+  // Anbieter legt hier seine Aktionsobjekte ab: ein Host, der die
+  // Aktionen MEHRERER Funde in ein Menue stellt (Editor-Kontextmenue mit
+  // zwei Funden auf einer Zeile, Gluehbirne), ruft Provide je Fund - bis
+  // Stufe B gab jedes Provide die Objekte des vorigen frei, und die
+  // Menuepunkte des ersten Funds zeigten auf freigegebene Objekte
+  // (Konzept Editor-Gluehbirne 2026-10-06, 3.3). Chargen statt einer
+  // Objektzahl (Verifikations-Workflow 2026-10-07): ein Fund mit vielen
+  // Aktionen kann so innerhalb EINES Menueaufbaus nichts verdraengen.
+  // Ein Menue umfasst nie mehr als eine Handvoll Funde; der Ring ist
+  // deterministisch und braucht keinen neuen Registry-Vertrag.
   TRdxObjectRing = class
   private
-    FItems : TObjectList<TObject>;
-    FMax   : Integer;
+    FBatches : TObjectList<TObjectList<TObject>>;
+    FMax     : Integer;
+    function Current: TObjectList<TObject>;
   public
-    constructor Create(AMax: Integer);
+    constructor Create(AMaxBatches: Integer);
     destructor Destroy; override;
-    // Nimmt das Objekt in Besitz; faellt es aus dem Ring, wird es frei.
+    // Eroeffnet eine neue Charge; die aelteste faellt heraus, wenn es
+    // mehr als Max werden.
+    procedure BeginBatch;
+    // Nimmt das Objekt in die aktuelle Charge (ohne BeginBatch: in die
+    // erste); faellt die Charge aus dem Ring, wird das Objekt frei.
     procedure Keep(AObject: TObject);
-    // Zahl der gehaltenen Objekte (hoechstens Max).
+    // Zahl der gehaltenen Objekte ueber alle Chargen.
     function Count: Integer;
+    // Zahl der offenen Chargen (hoechstens Max).
+    function BatchCount: Integer;
     // True, solange das Objekt noch im Ring liegt.
     function Contains(AObject: TObject): Boolean;
-    // Obergrenze, mindestens 1.
+    // Obergrenze der Chargen, mindestens 1.
     property Max: Integer read FMax;
   end;
 
@@ -150,36 +161,62 @@ implementation
 
 { TRdxObjectRing }
 
-constructor TRdxObjectRing.Create(AMax: Integer);
+constructor TRdxObjectRing.Create(AMaxBatches: Integer);
 begin
   inherited Create;
-  if AMax < 1 then AMax := 1;
-  FMax   := AMax;
-  FItems := TObjectList<TObject>.Create(True);
+  if AMaxBatches < 1 then AMaxBatches := 1;
+  FMax     := AMaxBatches;
+  FBatches := TObjectList<TObjectList<TObject>>.Create(True);
 end;
 
 destructor TRdxObjectRing.Destroy;
 begin
-  FItems.Free;
+  FBatches.Free;   // gibt die Chargen und darin die Objekte frei
   inherited;
+end;
+
+function TRdxObjectRing.Current: TObjectList<TObject>;
+begin
+  if FBatches.Count = 0 then
+    FBatches.Add(TObjectList<TObject>.Create(True));
+  Result := FBatches[FBatches.Count - 1];
+end;
+
+procedure TRdxObjectRing.BeginBatch;
+begin
+  FBatches.Add(TObjectList<TObject>.Create(True));
+  while FBatches.Count > FMax do
+    FBatches.Delete(0);   // aelteste Charge, OwnsObjects gibt alles frei
 end;
 
 procedure TRdxObjectRing.Keep(AObject: TObject);
 begin
   if not Assigned(AObject) then Exit;
-  FItems.Add(AObject);
-  while FItems.Count > FMax do
-    FItems.Delete(0);   // aeltestes, OwnsObjects gibt es frei
+  Current.Add(AObject);
 end;
 
 function TRdxObjectRing.Count: Integer;
+var
+  i : Integer;
 begin
-  Result := FItems.Count;
+  Result := 0;
+  for i := 0 to FBatches.Count - 1 do
+    Inc(Result, FBatches[i].Count);
+end;
+
+function TRdxObjectRing.BatchCount: Integer;
+begin
+  Result := FBatches.Count;
 end;
 
 function TRdxObjectRing.Contains(AObject: TObject): Boolean;
+var
+  i : Integer;
 begin
-  Result := FItems.IndexOf(AObject) >= 0;
+  Result := False;
+  for i := 0 to FBatches.Count - 1 do
+    if FBatches[i].IndexOf(AObject) >= 0 then
+      Exit(True);
 end;
 
 { TRdxRecipeRunner }
