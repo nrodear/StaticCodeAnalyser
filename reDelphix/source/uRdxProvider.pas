@@ -43,10 +43,13 @@ uses
 type
   TRdxActionKind = (akShowSpan, akReplace, akSqlTemplate);
 
-  // Ein Menuepunkt samt allem, was Execute braucht. Lebt im Anbieter bis
-  // zum naechsten Provide. Mehrere Ersetzungen (TRdxEdit aus
-  // uRdxRecipeRunner) werden von unten nach oben ausgefuehrt, damit die
-  // Bereiche der oberen von den unteren nicht verschoben werden.
+  // Ein Menuepunkt samt allem, was Execute braucht. Lebt im Anbieter, bis
+  // MAX_ACTIONS neuere Aktionen entstanden sind (TRdxObjectRing) - nicht
+  // nur bis zum naechsten Provide, denn ein Host stellt die Aktionen
+  // mehrerer Funde in ein Menue (Stufe B, Konzept Editor-Gluehbirne
+  // 2026-10-06). Mehrere Ersetzungen (TRdxEdit aus uRdxRecipeRunner)
+  // werden von unten nach oben ausgefuehrt, damit die Bereiche der
+  // oberen von den unteren nicht verschoben werden.
   TRdxAction = class
   private
     FKind     : TRdxActionKind;
@@ -62,7 +65,7 @@ type
 
   TRdxProvider = class
   private
-    FActions   : TObjectList<TRdxAction>;
+    FActions   : TRdxObjectRing;   // besitzt die TRdxAction-Objekte
     FPlaces    : TSourcePlaces;
     FScopes    : TRdxScopeTable;
     FToken     : Integer;
@@ -161,10 +164,15 @@ end;
 
 { TRdxProvider }
 
+const
+  // Soviel Aktionsobjekte bleiben am Leben; ein Menue braucht eine
+  // Handvoll, 64 deckt auch viele Funde auf einer Zeile.
+  MAX_ACTIONS = 64;
+
 constructor TRdxProvider.Create;
 begin
   inherited Create;
-  FActions := TObjectList<TRdxAction>.Create(True);
+  FActions := TRdxObjectRing.Create(MAX_ACTIONS);
   FPlaces  := TSourcePlaces.Create;
   FScopes  := TRdxScopeTable.Create;
   FScopes.LoadDefault;   // False = keine Tabelle; uses-Aktionen sagen das
@@ -215,7 +223,7 @@ begin
   Result := TRdxAction.Create;
   Result.FKind     := AKind;
   Result.FFileName := AFileName;
-  FActions.Add(Result);
+  FActions.Keep(Result);
 end;
 
 procedure TRdxProvider.Add(var AList: TArray<TFindingAction>;
@@ -403,7 +411,8 @@ var
   Opened       : Boolean;
 begin
   Result := nil;
-  FActions.Clear;
+  // Kein FActions.Clear mehr (Stufe B): die Objekte des vorigen Provide
+  // haengen womoeglich noch an Menuepunkten desselben Menues.
   FUsesNames := nil;
   if not Assigned(AFinding) then Exit;
   Line := AFinding.LineInt;

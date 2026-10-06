@@ -21,6 +21,8 @@ uses
   uFindingCopyText,
   uQuickFix,
   uFindingActions,                         // Aktionen fremder Anbieter am Fund (Grid-Menue)
+  uFindingActionMenu,                      // das eine Menue-Modell zu den Aktionen (Stufe C)
+  uIDEFindingActionMenu,                   // Modell -> TMenuItems
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uIDEColors, uLocalization,
   uRecentPaths, uScanTargetDialog,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
@@ -2813,7 +2815,7 @@ var
   HasRow : Boolean;
   i      : Integer;
   F      : TLeakFinding;
-  MI     : TMenuItem;
+  Model  : TFindingMenuModel;
 begin
   HasRow := Assigned(FDisplayedFindings)
         and (FResultGrid.Row >= 1)
@@ -2830,35 +2832,17 @@ begin
   F := FDisplayedFindings[FResultGrid.Row - 1];
   if not Assigned(F) then Exit;
 
-  try
-    FGridActions := TFindingActions.ActionsFor(F);
-  except
-    on EStackExhausted do raise;
-    on E: Exception do
-    begin
-      StatusMode(Format(_('Finding actions: provider failed - %s'), [E.Message]));
-      FGridActions := nil;
-    end;
-  end;
-  if Length(FGridActions) = 0 then Exit;
-
-  MI := TMenuItem.Create(FGridMenu);
-  MI.Caption := '-';
-  MI.Tag     := GRID_ACTION_TAG - 1;
-  FGridMenu.Items.Add(MI);
-  for i := 0 to High(FGridActions) do
-  begin
-    MI := TMenuItem.Create(FGridMenu);
-    if FGridActions[i].Hint <> '' then
-      MI.Caption := Format('%s  (%s)', [FGridActions[i].Caption, FGridActions[i].Hint])
-    else
-      MI.Caption := FGridActions[i].Caption;
-    MI.Hint    := FGridActions[i].Hint;
-    MI.Enabled := FGridActions[i].Enabled and Assigned(FGridActions[i].Execute);
-    MI.Tag     := GRID_ACTION_TAG + i;
-    MI.OnClick := GridMenuActionClick;
-    FGridMenu.Items.Add(MI);
-  end;
+  // Stufe C (Konzept Editor-Gluehbirne 2026-10-06): dasselbe Modell wie
+  // das Editor-Kontextmenue, hier ohne Kopfzeile (ein Fund je Popup).
+  Model := BuildFindingMenuModel(TArray<TLeakFinding>.Create(F),
+    [moLeadingSeparator]);
+  for i := 0 to High(Model.Errors) do
+    StatusMode(Format(_('Finding actions: provider failed - %s'),
+      [Model.Errors[i]]));
+  FGridActions := Model.Actions;
+  if Model.IsEmpty then Exit;
+  FillPopupFromModel(FGridMenu, Model, GridMenuActionClick, GRID_ACTION_TAG,
+    FGridMenu, nil);
 end;
 
 procedure TAnalyserFrame.GridMenuActionClick(Sender: TObject);
@@ -5424,18 +5408,19 @@ end;
 procedure TEditorContextMenuHook.AddActionItems(APopup: TPopupMenu;
   ASlot: TPopupHookSlot);
 // Haengt hinter einem Trenner je Fund der Cursorzeile die Eintraege an,
-// die die angemeldeten Anbieter liefern (Muster wie GridMenuPopup):
-// Beschriftung 'SCAnnn: Aktion  (Hint)', deaktiviert mit Grund, Index
-// im Tag. Items mit Owner=nil + nur OnClick, wie der Silent-Eintrag.
+// die die angemeldeten Anbieter liefern: eine deaktivierte Kopfzeile
+// 'SCAnnn  Meldung' je Fund, darunter die Aktionen 'Caption  (Hint)',
+// deaktiviert mit Grund, Index in Slot.Actions im Tag. Items mit
+// Owner=nil + nur OnClick, wie der Silent-Eintrag. Seit Stufe C
+// (Konzept Editor-Gluehbirne 2026-10-06) kommt die Form aus
+// uFindingActionMenu - dieselbe wie im Dock-Grid und spaeter an der
+// Gluehbirne.
 var
   FilePath : string;
   Line     : Integer;
   Found    : TArray<TLeakFinding>;
-  Acts     : TArray<TFindingAction>;
-  i, k     : Integer;
-  Sep      : TMenuItem;
-  Item     : TMenuItem;
-  RuleId   : string;
+  Model    : TFindingMenuModel;
+  i        : Integer;
 begin
   if TFindingActions.ProviderCount = 0 then Exit;
   if TIDEEditor.TryGetCurrentPasFile(FilePath) <> cfrOK then Exit;
@@ -5444,55 +5429,14 @@ begin
   Found := FindingsAtEditorLine(FilePath, Line);
   if Length(Found) = 0 then Exit;
 
-  Sep := nil;
-  for i := 0 to High(Found) do
-  begin
-    try
-      Acts := TFindingActions.ActionsFor(Found[i]);
-    except
-      on EStackExhausted do raise;
-      on E: Exception do
-      begin
-        OutputDebugString(PChar('SCA: finding action provider failed - '
-          + E.Message));
-        Acts := nil;
-      end;
-    end;
-    if Length(Acts) = 0 then Continue;
-    if Sep = nil then
-    begin
-      Sep := TMenuItem.Create(nil);
-      Sep.Caption := '-';
-      APopup.Items.Add(Sep);
-      ASlot.ActionItems.Add(Sep);
-    end;
-    // Eine Kopfzeile je Fund (Regel + Meldung, nicht klickbar), darunter
-    // die Aktionen ohne Praefix - so steht die Regel-ID genau einmal.
-    RuleId := Found[i].ResolvedRuleId;
-    Item := TMenuItem.Create(nil);
-    Item.Caption := Format('%s  %s', [RuleId,
-      TrimRight(Copy(Found[i].MissingVar, 1, 60))]);
-    Item.Enabled := False;
-    Item.Tag     := -1;
-    APopup.Items.Add(Item);
-    ASlot.ActionItems.Add(Item);
-    for k := 0 to High(Acts) do
-    begin
-      Item := TMenuItem.Create(nil);
-      if Acts[k].Hint <> '' then
-        Item.Caption := Format('%s  (%s)', [Acts[k].Caption, Acts[k].Hint])
-      else
-        Item.Caption := Acts[k].Caption;
-      Item.Hint    := Acts[k].Hint;
-      Item.Enabled := Acts[k].Enabled and Assigned(Acts[k].Execute);
-      Item.Tag     := Length(ASlot.Actions);
-      Item.OnClick := ActionItemClick;
-      SetLength(ASlot.Actions, Length(ASlot.Actions) + 1);
-      ASlot.Actions[High(ASlot.Actions)] := Acts[k];
-      APopup.Items.Add(Item);
-      ASlot.ActionItems.Add(Item);
-    end;
-  end;
+  Model := BuildFindingMenuModel(Found, [moLeadingSeparator, moHeaders]);
+  for i := 0 to High(Model.Errors) do
+    OutputDebugString(PChar('SCA: finding action provider failed - '
+      + Model.Errors[i]));
+  if Model.IsEmpty then Exit;
+  ASlot.Actions := Model.Actions;
+  FillPopupFromModel(APopup, Model, ActionItemClick, 0, nil,
+    ASlot.ActionItems);
 end;
 
 procedure TEditorContextMenuHook.ActionItemClick(Sender: TObject);

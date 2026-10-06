@@ -34,7 +34,8 @@ uses
   uRdxScopeTable in '..\source\uRdxScopeTable.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
-  uTestRdxSca044 in 'uTestRdxSca044.pas';
+  uTestRdxSca044 in 'uTestRdxSca044.pas',
+  uTestRdxActionRing in 'uTestRdxActionRing.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

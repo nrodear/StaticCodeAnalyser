@@ -132,6 +132,7 @@ uses
   uTestSourcePlaces in 'uTestSourcePlaces.pas',
   uTestSourcePlacesTypes in 'uTestSourcePlacesTypes.pas',
   uTestFindingActions in 'uTestFindingActions.pas',
+  uTestFindingActionMenu in 'uTestFindingActionMenu.pas',
   uTestPerfHotspots in 'uTestPerfHotspots.pas',
   uTestConcurrencyExt in 'uTestConcurrencyExt.pas',
   uTestEngineApi in 'uTestEngineApi.pas',

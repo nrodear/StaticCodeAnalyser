@@ -113,6 +113,7 @@
         <DCCReference Include="sources\Common\uCrashDiag.pas"/>
         <DCCReference Include="sources\Common\uDetectorUtils.pas"/>
         <DCCReference Include="sources\Common\uFindingActions.pas"/>
+        <DCCReference Include="sources\Common\uFindingActionMenu.pas"/>
         <DCCReference Include="sources\Common\uJsonFormat.pas"/>
         <DCCReference Include="sources\Common\uLocalization.pas"/>
         <DCCReference Include="sources\Common\uMethodd12.pas"/>

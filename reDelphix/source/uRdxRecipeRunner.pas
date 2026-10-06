@@ -21,10 +21,36 @@ unit uRdxRecipeRunner;
 interface
 
 uses
-  System.SysUtils, System.Classes,
+  System.SysUtils, System.Classes, System.Generics.Collections,
   uEngineApi, uRefactorInfo, uRdxRecipes;
 
 type
+  // Haelt Objekte, bis AMax weitere dazugekommen sind, und gibt dann die
+  // aeltesten frei. Der Anbieter legt hier seine Aktionsobjekte ab: ein
+  // Host, der die Aktionen MEHRERER Funde in ein Menue stellt (Editor-
+  // Kontextmenue mit zwei Funden auf einer Zeile, Gluehbirne), ruft
+  // Provide je Fund - bis Stufe B gab jedes Provide die Objekte des
+  // vorigen frei, und die Menuepunkte des ersten Funds zeigten auf
+  // freigegebene Objekte (Konzept Editor-Gluehbirne 2026-10-06, 3.3).
+  // Ein Menue referenziert nie mehr als eine Handvoll Aktionen; der
+  // Ring ist deterministisch und braucht keinen neuen Registry-Vertrag.
+  TRdxObjectRing = class
+  private
+    FItems : TObjectList<TObject>;
+    FMax   : Integer;
+  public
+    constructor Create(AMax: Integer);
+    destructor Destroy; override;
+    // Nimmt das Objekt in Besitz; faellt es aus dem Ring, wird es frei.
+    procedure Keep(AObject: TObject);
+    // Zahl der gehaltenen Objekte (hoechstens Max).
+    function Count: Integer;
+    // True, solange das Objekt noch im Ring liegt.
+    function Contains(AObject: TObject): Boolean;
+    // Obergrenze, mindestens 1.
+    property Max: Integer read FMax;
+  end;
+
   // Eine Ersetzung im Editor: Bereich, erwarteter alter Text, neuer Text.
   // Zeilenumbrueche im neuen Text sind #10; der Editor setzt sie auf die
   // Zeilenenden des Puffers um.
@@ -121,6 +147,40 @@ type
   end;
 
 implementation
+
+{ TRdxObjectRing }
+
+constructor TRdxObjectRing.Create(AMax: Integer);
+begin
+  inherited Create;
+  if AMax < 1 then AMax := 1;
+  FMax   := AMax;
+  FItems := TObjectList<TObject>.Create(True);
+end;
+
+destructor TRdxObjectRing.Destroy;
+begin
+  FItems.Free;
+  inherited;
+end;
+
+procedure TRdxObjectRing.Keep(AObject: TObject);
+begin
+  if not Assigned(AObject) then Exit;
+  FItems.Add(AObject);
+  while FItems.Count > FMax do
+    FItems.Delete(0);   // aeltestes, OwnsObjects gibt es frei
+end;
+
+function TRdxObjectRing.Count: Integer;
+begin
+  Result := FItems.Count;
+end;
+
+function TRdxObjectRing.Contains(AObject: TObject): Boolean;
+begin
+  Result := FItems.IndexOf(AObject) >= 0;
+end;
 
 { TRdxRecipeRunner }
 

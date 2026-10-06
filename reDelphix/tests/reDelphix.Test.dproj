@@ -94,6 +94,7 @@
         <DCCReference Include="..\source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="uTestRdxRecipes.pas"/>
         <DCCReference Include="uTestRdxSca044.pas"/>
+        <DCCReference Include="uTestRdxActionRing.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
