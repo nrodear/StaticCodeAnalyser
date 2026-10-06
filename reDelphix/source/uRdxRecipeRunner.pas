@@ -217,7 +217,16 @@ begin
       Arg := TRdxRecipes.IntegerArgumentOf(Result[i].Text);
       if Arg <> '' then
         Result[i].ArgResolved := APlaces.DeclaredTypeOf(AInfo.Span.StartLine, Arg);
-    end;
+      // Kopf eines Member-/Index-Terms: 'V.Name' mit V: Variant.
+      if not TRdxRecipes.IsPlainIdent(Trim(Result[i].Text)) then
+      begin
+        Arg := TRdxRecipes.HeadIdentOf(Result[i].Text);
+        if Arg <> '' then
+          Result[i].HeadResolved := APlaces.DeclaredTypeOf(AInfo.Span.StartLine, Arg);
+      end;
+    end
+    else if (AInfo.Parts[i].Role = ROLE_TARGET) and (Result[i].Resolved = '') then
+      Result[i].Resolved := TargetTypeOf(APlaces, AInfo, Result[i].Text);
   end;
 end;
 
@@ -270,22 +279,17 @@ begin
   end;
   Parts := PartsOf(APlaces, AInfo);
   Last  := High(AInfo.Parts);
-  if (Last < 1) or (AInfo.Parts[0].Role <> ROLE_TARGET) then
+  // Eine Kette hat mindestens zwei Terme (Ziel + zwei Parts). Ein
+  // einzelner Term - etwa das schon umgeformte 'X := Format(...)' -
+  // ist keine (zweiter Lauf, Rewrite_AppliedOnce_NoSecondFinding).
+  if (Last < 2) or (AInfo.Parts[0].Role <> ROLE_TARGET) then
   begin
     Result.Reason := 'keine Zuweisung mit Kette';
     Exit;
   end;
-  // Ein Kommentar im Bereich ginge beim Ersetzen verloren; eine Compiler-
-  // Direktive im Bereich zaehlt der Builder ebenso als Kommentar. Dass die
-  // Anweisung in einem $IFDEF-Zweig LIEGT, sperrt seit AH20 nicht mehr.
-  if rfHasComment in AInfo.Flags then
-  begin
-    Result.Reason := 'Kommentar im Bereich';
-    Exit;
-  end;
   // Ziel mit Nicht-Unicode-String-Typ: Format liefert UnicodeString, die
   // Zuweisung wuerde konvertieren (Alcinoe, Indy: AnsiString-Ketten).
-  TType := TargetTypeOf(APlaces, AInfo, Parts[0].Text);
+  TType := Parts[0].Resolved;
   if TRdxRecipes.IsNonUnicodeStringType(TType) then
   begin
     Result.Reason := Format('Ziel ''%s'' ist %s - Format liefert UnicodeString',
@@ -301,7 +305,8 @@ begin
     First := 2;
     Result.SelfAppend := True;
   end;
-  if not TRdxRecipes.BuildFormatCall(Copy(Parts, First, Last - First + 1), Build) then
+  if not TRdxRecipes.BuildFormatCall(Copy(Parts, First, Last - First + 1),
+       Build, TType) then
   begin
     Result.Reason := Build.Reason;
     if Result.SelfAppend and (Build.Operands = 0) and (Build.Reason <> '')
@@ -324,6 +329,16 @@ begin
   if Result.Expected = '' then
   begin
     Result.Reason := 'Bereich nicht lesbar';
+    Exit;
+  end;
+  // Ein Kommentar im ERSETZTEN Bereich ginge verloren - ein Kommentar
+  // zwischen ':=' und dem ersten Term bleibt stehen und sperrt nicht
+  // (AH22; rfHasComment der Anweisung gilt ab dem Ziel). Eine Compiler-
+  // Direktive im Bereich zaehlt wie ein Kommentar. Dass die Anweisung in
+  // einem $IFDEF-Zweig LIEGT, sperrt seit AH20 nicht mehr.
+  if APlaces.SpanHasComment(Result.Span) then
+  begin
+    Result.Reason := 'Kommentar im Bereich';
     Exit;
   end;
   if Pos('{$', Result.Expected) > 0 then
@@ -354,7 +369,8 @@ begin
       [Length(Build.ByCompiler), Names]);
   end;
   if Build.Numeric > 0 then
-    Result.Hint := Result.Hint + Format(', %d als %%d', [Build.Numeric]);
+    Result.Hint := Result.Hint
+      + Format(', %d numerisch (%%d/%%u)', [Build.Numeric]);
   // Format() lebt in System.SysUtils: fehlt die Unit, kommt sie mit -
   // nicht ausgrauen, sondern die uses-Klausel ergaenzen (Nico, 2026-10-06).
   if not TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then
@@ -410,6 +426,15 @@ begin
 
   if Length(Entries) > 0 then
   begin
+    // Compiler-Direktiven in der Klausel ('uses A {$IFDEF X}, B{$ENDIF};'):
+    // jede Einfuegestelle neben einem Eintrag kann in einem Zweig liegen,
+    // der fuer ein anderes Ziel nicht uebersetzt wird - dann von Hand.
+    for i := Entries[0].StartLine to Entries[High(Entries)].EndLine do
+      if Pos('{$', APlaces.LineText(i)) > 0 then
+      begin
+        Result.Reason := Format('uses-Klausel traegt Compiler-Direktiven (Zeile %d)', [i]);
+        Exit;
+      end;
     SetLength(Names, Length(Entries));
     for i := 0 to High(Entries) do
       Names[i] := Entries[i].Resolved;

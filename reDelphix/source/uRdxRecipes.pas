@@ -44,9 +44,13 @@ type
     // Deklarierter Typ des Operanden (nackt, klein; TRefactorSpan.Resolved
     // nach TSourcePlaces.ResolveOperandTypes), sonst ''.
     Resolved    : string;
-    // Deklarierter Typ des einzigen Bezeichner-Arguments bei IntToStr(x)
-    // bzw. x.ToString - dann wird daraus %d/%u mit x statt %s (AH20).
+    // Deklarierter Typ des einzigen Bezeichner-Arguments bei IntToStr(x) -
+    // dann wird daraus %d/%u mit x statt %s (AH20). x.ToString bleibt
+    // %s: ein eigener Integer-Helper koennte anders formatieren (AH22).
     ArgResolved : string;
+    // Deklarierter Typ des KOPF-Bezeichners eines Member-/Index-Terms
+    // ('V.Name', 'V[0]' bei V: Variant) - Variant-Anzeichen (AH22).
+    HeadResolved : string;
   end;
   TRdxParts = TArray<TRdxPart>;
 
@@ -97,13 +101,24 @@ type
     // Rezept 5.1 - Format() aus einer '+'-Kette. AParts in Quelltext-
     // Reihenfolge, Parts[0] darf ROLE_TARGET sein (wird uebersprungen).
     // False mit Grund, wenn ein Operand nach der Kompilat-Regel nicht
-    // als %s taugt (JudgeOperand), kein Operand vorkommt, ein Teil keine
+    // als %s taugt (JudgeOperand), kein Operand oder kein Literal
+    // vorkommt, schon ein Format() in der Kette steht, ein Teil keine
     // Kette ist (ROLE_ARGUMENT) oder die Literale SQL ergeben.
     // IntToStr(x) / x.ToString mit bekanntem Ganzzahltyp werden %d/%u.
+    // ATargetType: deklarierter Typ des Ziels (nackt, klein), wenn bekannt;
+    // bei einem Unicode-Ziel (string/unicodestring/widestring) duerfen
+    // Nicht-Unicode-Operanden mit, Format wandelt sie wie die Zuweisung.
     class function BuildFormatCall(const AParts: TRdxParts;
-      out ABuild: TRdxFormatBuild): Boolean; overload; static;
+      out ABuild: TRdxFormatBuild;
+      const ATargetType: string = ''): Boolean; overload; static;
     class function BuildFormatCall(const AParts: TRdxParts;
       out ANewText, AReason: string): Boolean; overload; static;
+
+    // Leerraum zusammenziehen wie CollapseWhitespace, aber String-
+    // Literale im Text bleiben Zeichen fuer Zeichen erhalten: der Text
+    // eines Operanden wird so in den Format-Aufruf uebernommen
+    // (StringReplace(S, '  ', ' ', ...) behaelt die zwei Leerzeichen; AH22).
+    class function CollapseCode(const AText: string): string; static;
 
     // ---- Kompilat-Regel (AH20, Realworld-Stichprobe 2026-10-06) ----------
     //
@@ -111,26 +126,37 @@ type
     // SCA044-Stellen umformbar (Nachbildung an 200 von 2.363 Funden). Das
     // Kompilat buergt fuer mehr: eine '+'-Kette mit einem String-Literal
     // uebersetzt nur, wenn jeder Operand String-vertraeglich ist (String,
-    // Char, PChar, AnsiString, ...) - oder ein Variant. %s nimmt all das,
-    // Variant eingeschlossen (System.SysUtils.FormatBuf: vtVariant ->
-    // VariantToUnicodeString). Die Luecke: HINTER einem Variant darf ein
-    // Operand auch Zahl oder Boolean sein, und daran scheitert %s zur
-    // Laufzeit. Deshalb gilt ein Operand UNBEKANNTEN Typs, wenn seine
-    // Form ein Operand ist (Bezeichner, Member, Aufruf, Index, Cast) und
-    // er keine Variant-Anzeichen traegt; Zahlen, Zahl-Casts, Klammer-
-    // ausdruecke und Mengen bleiben gesperrt. Ein deklarierter Nicht-
-    // Unicode-String (AnsiString, RawByteString, UTF8String, ShortString,
-    // RawUtf8) sperrt ebenfalls: Format liefert UnicodeString, die
-    // Zuweisung wuerde konvertieren. Ertrag in der Nachbildung: 83 %.
+    // Char, PChar, AnsiString, Char-Array, ...) - oder ein Variant - oder
+    // ein Record mit Implicit-Operator. %s nimmt die ersten beiden
+    // (System.SysUtils.FormatBuf: vtVariant -> VariantToUnicodeString);
+    // ein Record uebersetzt im Format-Aufruf nicht (sichtbarer Fehler,
+    // Strg+Z - ohne Typinformation fremder Units nicht erkennbar).
+    // Variant ist dennoch gesperrt: ist der Wert Null oder keine
+    // Zeichenkette, wirft das Original (NullStrictConvert, Variant-
+    // Arithmetik String+Zahl) oder die ganze Kette wird '' - Format gaebe
+    // still die uebrigen Teile aus. Deshalb gilt ein Operand UNBEKANNTEN
+    // Typs, wenn seine Form ein Operand ist (Bezeichner, Member, Aufruf,
+    // Index, Cast) und er keine Variant-Anzeichen traegt; Zahlen, Zahl-
+    // Casts, Klammerausdruecke und Mengen bleiben gesperrt. Ein deklarierter
+    // Nicht-Unicode-String (AnsiString, RawByteString, UTF8String,
+    // ShortString, RawUtf8) sperrt als Ziel immer und als Operand, wenn
+    // das Ziel nicht nachweislich Unicode ist: Format liefert
+    // UnicodeString. Ertrag in der Nachbildung: 83 %.
 
-    // True, wenn der Text die Form eines Operanden hat: Bezeichner, dann
-    // beliebig '.Bezeichner', '(...)', '[...]', '^'. Literale im Text
-    // stoeren nicht. Kein Operator, keine Zahl, kein Klammerausdruck.
+    // True, wenn der Text die Form eines Operanden hat: Bezeichner (oder
+    // eine Klammergruppe mit folgendem '.', '[' oder '^', z. B.
+    // '(Sender as TButton).Caption'), dann beliebig '.Bezeichner',
+    // '(...)', '[...]', '^'. Literale im Text stoeren nicht. Kein
+    // Operator, keine Zahl, kein blosser Klammerausdruck.
     class function IsOperandShape(const AText: string): Boolean; static;
     // True bei Variant-Anzeichen: letzter Name .Value/.AsVariant/
     // FieldValues, die Bezeichner Null/Unassigned/True/False/nil, ein
-    // Variant(...)-Cast.
+    // Variant(...)-Cast, ein mit String-Literal indizierter Bezeichner
+    // (DS['Name'] = TDataSet.FieldValues).
     class function HasVariantTell(const AText: string): Boolean; static;
+    // Der erste Bezeichner des Textes ('Obj' aus 'Obj.Items[i].Name'),
+    // sonst ''.
+    class function HeadIdentOf(const AText: string): string; static;
     // RTL-Konstanten mit String-Typ: sLineBreak, PathDelim, ...
     class function IsKnownStringConst(const AText: string): Boolean; static;
     // RTL-Funktionen mit String-Ergebnis jenseits der Core-Liste
@@ -148,10 +174,11 @@ type
     // '%d' fuer vorzeichenbehaftete Ganzzahlen und Byte/Word, '%u' fuer
     // Cardinal/LongWord/UInt32/UInt64/NativeUInt, sonst ''.
     class function IntegerSpec(const ATypeLow: string): string; static;
-    // 'x' aus 'IntToStr(x)' bzw. 'x.ToString' (nur ein nackter
-    // Bezeichner), sonst ''.
+    // 'x' aus 'IntToStr(x)' (nur ein nackter Bezeichner), sonst ''.
+    // 'x.ToString' absichtlich nicht: ein eigener Helper fuer Integer
+    // kann anders formatieren als IntToStr (AH22).
     class function IntegerArgumentOf(const AText: string): string; static;
-    // IntToStr(x) / x.ToString mit x = Bezeichner bekannten Ganzzahltyps
+    // IntToStr(x) mit x = Bezeichner bekannten Ganzzahltyps
     // (APart.ArgResolved): dann Argument x und Spezifikator %d/%u.
     class function NumericArgument(const APart: TRdxPart;
       out AArgument, ASpec: string): Boolean; static;
@@ -248,11 +275,12 @@ end;
 class function TRdxRecipes.MakePart(const ARole, AText: string;
   AValueType: TRefactorValueType; const AResolved, AArgResolved: string): TRdxPart;
 begin
-  Result.Role        := ARole;
-  Result.Text        := AText;
-  Result.ValueType   := AValueType;
-  Result.Resolved    := AResolved;
-  Result.ArgResolved := AArgResolved;
+  Result.Role         := ARole;
+  Result.Text         := AText;
+  Result.ValueType    := AValueType;
+  Result.Resolved     := AResolved;
+  Result.ArgResolved  := AArgResolved;
+  Result.HeadResolved := '';
 end;
 
 class function TRdxRecipes.DecodeLiteral(const ASource: string;
@@ -473,7 +501,7 @@ const
     'lineending', 'directoryseparator', 'pathseparator', 'driveseparator');
   // Jenseits von uRefactorConcat.KNOWN_STRING_FUNCS (die der Core schon
   // als rvString liefert): Dateinamen, Teilstrings, Ersetzen, Codecs.
-  EXT_STRING_FUNCS: array[0..52] of string = (
+  EXT_STRING_FUNCS: array[0..51] of string = (
     'extractfilename', 'extractfilepath', 'extractfileext', 'extractfiledir',
     'extractfiledrive', 'changefileext', 'changefilepath',
     'includetrailingpathdelimiter', 'excludetrailingpathdelimiter',
@@ -487,7 +515,7 @@ const
     'utf8tounicodestring', 'wraptext', 'adjustlinebreaks', 'dequotedstr',
     'ansidequotedstr', 'currtostrf', 'formatcurr', 'getenvironmentvariable',
     'paramstr', 'reversestring', 'ansireversestring', 'stuffstring',
-    'guidtostring', 'concat', 'format');
+    'guidtostring', 'concat');
   TPATH_STRING_FUNCS: array[0..7] of string = (
     'tpath.combine', 'tpath.getfilename', 'tpath.getdirectoryname',
     'tpath.getextension', 'tpath.getfilenamewithoutextension',
@@ -501,7 +529,10 @@ const
 
 function IsIdentStartCh(C: Char): Boolean;
 begin
-  Result := (C = '_') or ((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z'));
+  // Zeichen > #127 wie der Core (uRefactorInfoBuilder.IsIdentStart):
+  // Bezeichner mit Umlaut sind in Delphi erlaubt.
+  Result := (C = '_') or ((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z'))
+    or (C > #127);
 end;
 
 function IsIdentCh(C: Char): Boolean;
@@ -593,7 +624,7 @@ end;
 class function TRdxRecipes.IsOperandShape(const AText: string): Boolean;
 var
   S         : string;
-  i, n      : Integer;
+  i, n, k   : Integer;
   Depth     : Integer;
   WantIdent : Boolean;
 begin
@@ -602,13 +633,29 @@ begin
   n := Length(S);
   if n = 0 then Exit;
   i := 1;
-  if S[1] = '&' then Inc(i);
   WantIdent := True;
+  // Fuehrende Klammergruppe nur mit Member-/Index-/Deref-Zugriff dahinter:
+  // '(Sender as TButton).Caption' ja, '(a + b)' nein.
+  if S[1] = '(' then
+  begin
+    Depth := 0;
+    repeat
+      if CharInSet(S[i], ['(', '[']) then Inc(Depth)
+      else if CharInSet(S[i], [')', ']']) then Dec(Depth);
+      Inc(i);
+    until (Depth = 0) or (i > n);
+    if Depth <> 0 then Exit;
+    k := i;
+    while (k <= n) and (S[k] <= ' ') do Inc(k);
+    if (k > n) or not CharInSet(S[k], ['.', '[', '^']) then Exit;
+    WantIdent := False;
+  end;
   while i <= n do
   begin
     if WantIdent then
     begin
-      if not IsIdentStartCh(S[i]) then Exit;
+      if S[i] = '&' then Inc(i);   // &Type, Item.&End
+      if (i > n) or not IsIdentStartCh(S[i]) then Exit;
       while (i <= n) and IsIdentCh(S[i]) do Inc(i);
       WantIdent := False;
       Continue;
@@ -641,6 +688,28 @@ begin
     end;
   end;
   Result := not WantIdent;
+end;
+
+// 'DS[''Name'']': ein Bezeichner, direkt mit einem String-Literal
+// indiziert, nichts dahinter - TDataSet.FieldValues (Default-Property,
+// Variant). Ein TDictionary<string, string> sieht genauso aus und wird
+// mitgesperrt (bekannte Grenze).
+function IsStringIndexedIdent(const S: string): Boolean;
+var
+  i, n  : Integer;
+  Inner : string;
+begin
+  Result := False;
+  n := Length(S);
+  i := 1;
+  if (n = 0) or not IsIdentStartCh(S[1]) then Exit;
+  while (i <= n) and IsIdentCh(S[i]) do Inc(i);
+  while (i <= n) and (S[i] <= ' ') do Inc(i);
+  if (i > n) or (S[i] <> '[') or (S[n] <> ']') then Exit;
+  Inner := Trim(Copy(S, i + 1, n - i - 1));
+  Result := (Length(Inner) >= 2) and (Inner[1] = '''')
+    and (Inner[Length(Inner)] = '''')
+    and (Pos('''', Copy(Inner, 2, Length(Inner) - 2)) = 0);
 end;
 
 class function TRdxRecipes.HasVariantTell(const AText: string): Boolean;
@@ -676,7 +745,25 @@ begin
   end;
   Head := LowerCase(Head);
   Result := InList(LowerCase(Last), VARIANT_TELLS)
-    or (Head = 'variant') or (Head = 'olevariant');
+    or (Head = 'variant') or (Head = 'olevariant')
+    or IsStringIndexedIdent(Trim(AText));
+end;
+
+class function TRdxRecipes.HeadIdentOf(const AText: string): string;
+var
+  S : string;
+  i : Integer;
+begin
+  Result := '';
+  S := Trim(AText);
+  i := 1;
+  if (i <= Length(S)) and (S[i] = '&') then Inc(i);
+  if (i > Length(S)) or not IsIdentStartCh(S[i]) then Exit;
+  while (i <= Length(S)) and IsIdentCh(S[i]) do
+  begin
+    Result := Result + S[i];
+    Inc(i);
+  end;
 end;
 
 class function TRdxRecipes.IsKnownStringConst(const AText: string): Boolean;
@@ -737,6 +824,9 @@ begin
       Exit(ovVariantRisk);
     if InList(APart.Resolved, STRING_ALIAS_TYPES) then Exit(ovString);
   end;
+  // 'V.Name', 'V[0]' mit V: Variant - spaet gebunden, der Wert ist Variant.
+  if (APart.HeadResolved = 'variant') or (APart.HeadResolved = 'olevariant') then
+    Exit(ovVariantRisk);
   if APart.ValueType = rvNonString then Exit(ovNonString);
   if APart.ValueType = rvString then Exit(ovString);
   if IsKnownStringConst(Text) or IsKnownStringFunc(Text) then Exit(ovString);
@@ -761,21 +851,183 @@ class function TRdxRecipes.IntegerArgumentOf(const AText: string): string;
 var
   T   : string;
   Low : string;
-  P   : Integer;
 begin
   Result := '';
   T := CollapseWhitespace(AText);
   Low := LowerCase(T);
   if (Copy(Low, 1, 9) = 'inttostr(') and (Low[Length(Low)] = ')') then
-    Result := Trim(Copy(T, 10, Length(T) - 10))
-  else
-  begin
-    P := Pos('.', T);
-    if (P > 1) and ((Copy(Low, P, MaxInt) = '.tostring')
-       or (Copy(Low, P, MaxInt) = '.tostring()')) then
-      Result := Copy(T, 1, P - 1);
-  end;
+    Result := Trim(Copy(T, 10, Length(T) - 10));
   if not IsPlainIdent(Result) then Result := '';
+end;
+
+class function TRdxRecipes.CollapseCode(const AText: string): string;
+var
+  i, n      : Integer;
+  LastWhite : Boolean;
+  C         : Char;
+begin
+  Result := '';
+  LastWhite := True;
+  n := Length(AText);
+  i := 1;
+  while i <= n do
+  begin
+    C := AText[i];
+    if C = '''' then
+    begin
+      // Literal Zeichen fuer Zeichen uebernehmen, '' bleibt ''.
+      Result := Result + C;
+      Inc(i);
+      while i <= n do
+      begin
+        Result := Result + AText[i];
+        if AText[i] = '''' then
+        begin
+          if (i < n) and (AText[i + 1] = '''') then
+          begin
+            Result := Result + '''';
+            Inc(i, 2);
+            Continue;
+          end;
+          Inc(i);
+          Break;
+        end;
+        Inc(i);
+      end;
+      LastWhite := False;
+      Continue;
+    end;
+    if C <= ' ' then
+    begin
+      if not LastWhite then
+        Result := Result + ' ';
+      LastWhite := True;
+    end
+    else
+    begin
+      Result := Result + C;
+      LastWhite := False;
+    end;
+    Inc(i);
+  end;
+  Result := TrimRight(Result);
+end;
+
+{ ---- Formatstring aus den Literal-Quelltexten (AH22) ----
+  Die Literale werden NICHT dekodiert und neu kodiert, sondern Token fuer
+  Token uebernommen: '#$2103' bleibt '#$2103' (in einer ANSI-Datei waere
+  das rohe Zeichen verloren), '#13' bleibt dezimal. Nur '%' in Quote-
+  Teilen wird '%%', und ein '#37' (= '%') wird ''%%''. }
+
+procedure AppendQuoted(var AFmt: string; var AInQuote: Boolean;
+  const AInner: string);
+begin
+  if not AInQuote then
+  begin
+    AFmt := AFmt + '''';
+    AInQuote := True;
+  end;
+  AFmt := AFmt + AInner;
+end;
+
+procedure AppendCode(var AFmt: string; var AInQuote: Boolean;
+  const AToken: string);
+begin
+  if AInQuote then
+  begin
+    AFmt := AFmt + '''';
+    AInQuote := False;
+  end;
+  AFmt := AFmt + AToken;
+end;
+
+// Haengt den Quelltext eines Literal-Terms ('a'#13#10'b', #$2103, 'x''y')
+// an den Formatstring an. False bei allem, was kein Literal ist.
+function AppendLiteralSource(var AFmt: string; var AInQuote: Boolean;
+  const ASource: string): Boolean;
+var
+  i, n, k : Integer;
+  Inner   : string;
+  Code    : Integer;
+  Digits  : Integer;
+  Hex     : Integer;
+  Closed  : Boolean;
+begin
+  Result := False;
+  n := Length(ASource);
+  i := 1;
+  while i <= n do
+  begin
+    if ASource[i] <= ' ' then
+    begin
+      Inc(i);
+      Continue;
+    end;
+    if ASource[i] = '''' then
+    begin
+      Inc(i);
+      Inner := '';
+      Closed := False;
+      while i <= n do
+      begin
+        if ASource[i] = '''' then
+        begin
+          if (i < n) and (ASource[i + 1] = '''') then
+          begin
+            Inner := Inner + '''''';
+            Inc(i, 2);
+            Continue;
+          end;
+          Inc(i);
+          Closed := True;
+          Break;
+        end;
+        if ASource[i] = '%' then
+          Inner := Inner + '%%'
+        else
+          Inner := Inner + ASource[i];
+        Inc(i);
+      end;
+      if not Closed then Exit;
+      AppendQuoted(AFmt, AInQuote, Inner);
+    end
+    else if ASource[i] = '#' then
+    begin
+      k := i;
+      Inc(i);
+      Code   := 0;
+      Digits := 0;
+      if (i <= n) and (ASource[i] = '$') then
+      begin
+        Inc(i);
+        while i <= n do
+        begin
+          Hex := HexValue(ASource[i]);
+          if Hex < 0 then Break;
+          Code := Code * 16 + Hex;
+          Inc(i);
+          Inc(Digits);
+          if Code > $FFFF then Exit;
+        end;
+      end
+      else
+        while (i <= n) and CharInSet(ASource[i], ['0'..'9']) do
+        begin
+          Code := Code * 10 + (Ord(ASource[i]) - Ord('0'));
+          Inc(i);
+          Inc(Digits);
+          if Code > $FFFF then Exit;
+        end;
+      if Digits = 0 then Exit;
+      if Code = Ord('%') then
+        AppendQuoted(AFmt, AInQuote, '%%')
+      else
+        AppendCode(AFmt, AInQuote, Copy(ASource, k, i - k));
+    end
+    else
+      Exit;
+  end;
+  Result := True;
 end;
 
 class function TRdxRecipes.NumericArgument(const APart: TRdxPart;
@@ -793,56 +1045,80 @@ begin
 end;
 
 class function TRdxRecipes.BuildFormatCall(const AParts: TRdxParts;
-  out ABuild: TRdxFormatBuild): Boolean;
+  out ABuild: TRdxFormatBuild; const ATargetType: string): Boolean;
 var
   i        : Integer;
   Fmt      : string;
+  InQuote  : Boolean;
   Literals : string;
+  LitCount : Integer;
   Args     : string;
   Value    : string;
   Txt      : string;
   Arg      : string;
   Spec     : string;
+  Verdict  : TRdxOperandVerdict;
+  TargetU  : Boolean;
 begin
   Result   := False;
   ABuild   := Default(TRdxFormatBuild);
   Fmt      := '';
+  InQuote  := False;
   Literals := '';
+  LitCount := 0;
   Args     := '';
+  // Unicode-Ziel: Format wandelt einen AnsiString-Operanden genauso wie
+  // die Zuweisung es taete (FormatBuf vtAnsiString -> UnicodeString).
+  TargetU := (ATargetType = 'string') or (ATargetType = 'unicodestring')
+    or (ATargetType = 'widestring');
   for i := 0 to High(AParts) do
   begin
     if AParts[i].Role = ROLE_TARGET then Continue;
-    Txt := CollapseWhitespace(AParts[i].Text);
+    Txt := CollapseCode(AParts[i].Text);
     if AParts[i].Role = ROLE_LITERAL then
     begin
-      if not DecodeLiteral(AParts[i].Text, Value) then
+      if not DecodeLiteral(AParts[i].Text, Value)
+         or not AppendLiteralSource(Fmt, InQuote, AParts[i].Text) then
       begin
         ABuild.Reason := 'Literal nicht lesbar: ' + Txt;
         Exit;
       end;
+      Inc(LitCount);
       Literals := Literals + Value;
-      Fmt := Fmt + StringReplace(Value, '%', '%%', [rfReplaceAll]);
     end
     else if AParts[i].Role = ROLE_OPERAND then
     begin
+      // Wie der Detektor (AlreadyUsesFormat): eine Kette, in der schon
+      // Format() steht, wird nicht noch einmal in Format() gepackt -
+      // sonst wuerde ein zweiter Lauf 'Format(''%s'', [Format(...)])'
+      // bauen (reDelphix.Test, Rewrite_AppliedOnce_NoSecondFinding,
+      // rot am 2026-10-06).
+      if Pos('format(', LowerCase(Txt)) > 0 then
+      begin
+        ABuild.Reason := 'Kette enthaelt schon Format()';
+        Exit;
+      end;
       if NumericArgument(AParts[i], Arg, Spec) then
       begin
         // IntToStr(n) -> %d mit n: so schriebe man es von Hand.
-        Fmt := Fmt + Spec;
+        AppendQuoted(Fmt, InQuote, Spec);
         Txt := Arg;
         Inc(ABuild.Proven);
         Inc(ABuild.Numeric);
       end
       else
-        case JudgeOperand(AParts[i]) of
+      begin
+        Verdict := JudgeOperand(AParts[i]);
+        if (Verdict = ovAnsi) and TargetU then Verdict := ovString;
+        case Verdict of
           ovString:
             begin
-              Fmt := Fmt + '%s';
+              AppendQuoted(Fmt, InQuote, '%s');
               Inc(ABuild.Proven);
             end;
           ovByCompiler:
             begin
-              Fmt := Fmt + '%s';
+              AppendQuoted(Fmt, InQuote, '%s');
               SetLength(ABuild.ByCompiler, Length(ABuild.ByCompiler) + 1);
               ABuild.ByCompiler[High(ABuild.ByCompiler)] := Txt;
             end;
@@ -861,13 +1137,15 @@ begin
             end;
           ovVariantRisk:
             begin
-              ABuild.Reason := 'Operand ''' + Txt + ''': Variant moeglich';
+              ABuild.Reason := 'Operand ''' + Txt
+                + ''': Variant moeglich (Null/Zahl: Original wirft, Format nicht)';
               Exit;
             end;
         else
           ABuild.Reason := 'Operand ''' + Txt + ''': kein einfacher Operand';
           Exit;
         end;
+      end;
       Inc(ABuild.Operands);
       if Args <> '' then Args := Args + ', ';
       Args := Args + Txt;
@@ -883,12 +1161,20 @@ begin
     ABuild.Reason := 'kein Operand in der Kette';
     Exit;
   end;
+  // Ohne Literal gibt es keinen Formatstring, nur '%s%s' - das ist keine
+  // Verbesserung (der Detektor verlangt Literal UND Nicht-Literal).
+  if LitCount = 0 then
+  begin
+    ABuild.Reason := 'kein Literal in der Kette';
+    Exit;
+  end;
   if LooksLikeSql(Literals) then
   begin
     ABuild.Reason := 'SQL-Text: Umformung gesperrt (SCA003)';
     Exit;
   end;
-  ABuild.NewText := 'Format(' + EncodeLiteral(Fmt) + ', [' + Args + '])';
+  if InQuote then Fmt := Fmt + '''';
+  ABuild.NewText := 'Format(' + Fmt + ', [' + Args + '])';
   Result := True;
 end;
 

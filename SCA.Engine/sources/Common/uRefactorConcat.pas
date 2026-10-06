@@ -715,20 +715,36 @@ end;
 class function TRefactorConcat.TargetMatches(ALines: TStrings;
   AInfo: TRefactorInfo; const AExpected: string): Boolean;
 
-  // Ohne Leerraum, klein geschrieben - der AST-Knoten traegt das Ziel als
-  // zusammengefuegte Token, der Quelltext mit beliebigem Leerraum.
+  // Ohne Leerraum, klein geschrieben, Indexinhalte zu '[]' - der AST-
+  // Knoten traegt das Ziel als zusammengefuegte Token und jeden Index als
+  // '[]' (uParser2.ParsePrimary), der Quelltext mit beliebigem Leerraum
+  // und dem echten Index. 'StatusBar1.Panels[1].Text' blieb so bis AH22
+  // unbeschreibbar (53 von 2.363 SCA044-Korpusstellen).
   function Squeeze(const S: string): string;
   var
-    i, n : Integer;
+    i, n  : Integer;
+    Depth : Integer;
   begin
     SetLength(Result, Length(S));
     n := 0;
+    Depth := 0;
     for i := 1 to Length(S) do
-      if S[i] > ' ' then
+    begin
+      if S[i] = '[' then
       begin
-        Inc(n);
-        Result[n] := S[i];
-      end;
+        Inc(Depth);
+        if Depth > 1 then Continue;
+      end
+      else if S[i] = ']' then
+      begin
+        if Depth > 0 then Dec(Depth);
+        if Depth > 0 then Continue;
+      end
+      else if (Depth > 0) or (S[i] <= ' ') then
+        Continue;
+      Inc(n);
+      Result[n] := S[i];
+    end;
     SetLength(Result, n);
     Result := LowerCase(Result);
   end;

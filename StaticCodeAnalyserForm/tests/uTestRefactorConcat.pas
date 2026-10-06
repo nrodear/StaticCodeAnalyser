@@ -62,6 +62,9 @@ type
     // ---- Gegenprobe gegen den AST-Knoten ----
     [Test] procedure TargetMatches_IgnoresWhitespaceAndCase;
     [Test] procedure TargetMatches_OtherStatement_False;
+    // AH22: der Knoten traegt jeden Index als '[]' (ParsePrimary) - ein
+    // indiziertes Ziel blieb sonst unbeschreibbar.
+    [Test] procedure TargetMatches_IndexedTarget_IgnoresIndex;
 
     // ---- Einzelfragen ----
     [Test] procedure IsLiteralView_Cases;
@@ -761,6 +764,30 @@ begin
       Assert.IsTrue(TRefactorConcat.TargetMatches(Lines, Info,
         'query.sql.text'),
         'der Knoten traegt das Ziel als zusammengefuegte Token');
+    finally
+      Info.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorConcat.TargetMatches_IndexedTarget_IgnoresIndex;
+var
+  Lines : TStringList;
+  Info  : TRefactorInfo;
+begin
+  Lines := MakeLines(['StatusBar1.Panels[ 1 ].Text := ''a'' + b;']);
+  try
+    Info := DescribeAt(Lines, 1, 'StatusBar1');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.IsTrue(TRefactorConcat.TargetMatches(Lines, Info,
+        'StatusBar1.Panels[].Text'), 'Knotenform mit leerem Index');
+      Assert.IsTrue(TRefactorConcat.TargetMatches(Lines, Info,
+        'statusbar1.panels[1].text'), 'Index im Vergleichstext wird ebenso ausgeblendet');
+      Assert.IsFalse(TRefactorConcat.TargetMatches(Lines, Info,
+        'StatusBar1.Panels'), 'ein anderes Ziel bleibt falsch');
     finally
       Info.Free;
     end;

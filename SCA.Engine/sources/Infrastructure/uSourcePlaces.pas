@@ -48,6 +48,7 @@ unit uSourcePlaces;
 //   IdentifiersIn Bezeichner in einem Bereich
 //   SectionLine   Zeile von 'interface' / 'implementation' (0 = fehlt)
 //   LineText      Text einer Zeile der geoeffneten Datei
+//   SpanHasComment Kommentar/Direktive in einem Bereich
 //   DeclaredTypeOf Typname eines Bezeichners an einer Zeile (uTypeResolver:
 //                 Parameter, lokale Variable, Feld, Unit-Global). ChainOf
 //                 und CallOf nutzen das selbst (AH12, 2026-10-05): ein
@@ -200,6 +201,11 @@ type
     // ausserhalb. Fuer Entscheidungen am Zeilenrest (steht hinter dem
     // letzten uses-Eintrag ein 'in'-Pfad?), ohne die Datei erneut zu lesen.
     function LineText(ALine: Integer): string;
+    // P11 - True, wenn im Bereich ein Kommentar steht (auch eine
+    // Compiler-Direktive). Ein Modul, das nur einen TEIL einer Anweisung
+    // ersetzt, prueft damit genau den Teil - rfHasComment der Anweisung
+    // gilt fuer die ganze Anweisung ab dem Ziel (AH22).
+    function SpanHasComment(const ASpan: TRefactorSpan): Boolean;
 
     // P9 - deklarierter Typ (nackter, klein geschriebener Typname) des
     // Bezeichners AName an Zeile ALine: Parameter oder lokale Variable der
@@ -365,6 +371,14 @@ begin
   Result := '';
   if not IsOpen or (ALine < 1) or (ALine > FLines.Count) then Exit;
   Result := FLines[ALine - 1];
+end;
+
+function TSourcePlaces.SpanHasComment(const ASpan: TRefactorSpan): Boolean;
+begin
+  Result := False;
+  if not IsOpen or not ASpan.IsValid or (ASpan.StartLine < 1)
+     or (ASpan.EndLine > FLines.Count) then Exit;
+  Result := TRefactorInfoBuilder.SpanHasComment(FLines, ASpan);
 end;
 
 { ---- P9 ---- }

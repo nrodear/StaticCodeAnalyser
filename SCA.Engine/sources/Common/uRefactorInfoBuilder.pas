@@ -99,6 +99,11 @@ type
     // benutzt wie die Suche nach dem Anweisungsende hier.
     class function IsIdentStart(C: Char): Boolean; static;
     class function IsIdentChar(C: Char): Boolean; static;
+    // True, wenn im Bereich ein Kommentar steht (oder ein Blockkommentar
+    // darin beginnt). Oeffentlich seit AH22: ein Modul, das nur einen
+    // TEIL der Anweisung ersetzt, prueft genau diesen Teil.
+    class function SpanHasComment(ALines: TStrings;
+      const ASpan: TRefactorSpan): Boolean; static;
   private
     class function SpanFits(ALines: TStrings;
       const ASpan: TRefactorSpan): Boolean; static;
@@ -108,8 +113,6 @@ type
       var AState: TCommentScanState): string; static;
     class function FindStatementEnd(ALines: TStrings; ALine, ACol: Integer;
       out ASpan: TRefactorSpan; out AHasSemicolon: Boolean): Boolean; static;
-    class function SpanHasComment(ALines: TStrings;
-      const ASpan: TRefactorSpan): Boolean; static;
     // True wenn hinter dem Bereich auf seiner letzten Zeile kein Code mehr
     // steht (Leerraum und Kommentare zaehlen nicht).
     class function TailIsBlank(ALines: TStrings;

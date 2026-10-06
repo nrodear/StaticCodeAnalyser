@@ -47,6 +47,8 @@ type
 
     // ---- Rezept: ausgegraut mit Grund ----
     [Test] procedure Rewrite_IntegerOperand_Disabled;
+    [Test] procedure Rewrite_NoLiteral_Disabled;
+    [Test] procedure Rewrite_AlreadyFormat_Disabled;
     [Test] procedure Rewrite_CommentInChain_Disabled;
     [Test] procedure Rewrite_DirectiveInSpan_Disabled;
     [Test] procedure Rewrite_SqlText_Disabled;
@@ -67,6 +69,19 @@ type
     [Test] procedure Numeric_CardinalArg_UsesU;
     [Test] procedure SelfAppend_FormatOverRest;
     [Test] procedure SelfAppend_OnlyLiterals_Disabled;
+    // AH22 (Verifikations-Workflow nach AH21): Ansi-Operand bei
+    // Unicode-Ziel, Variant-Quellen ohne Tell, Klammergruppe, Literal-
+    // Quelltext, Leerraum in Literalen, Kommentar vor der Kette,
+    // indiziertes Ziel, Direktive in der uses-Klausel.
+    [Test] procedure Compiled_AnsiOperand_UnicodeTarget_Enabled;
+    [Test] procedure Compiled_VariantMember_Disabled;
+    [Test] procedure Compiled_StringIndexed_Disabled;
+    [Test] procedure Compiled_ParenCast_Enabled;
+    [Test] procedure Rewrite_HexCharLiteral_Preserved;
+    [Test] procedure Rewrite_LiteralWhitespace_Preserved;
+    [Test] procedure Rewrite_CommentBeforeChain_Enabled;
+    [Test] procedure Rewrite_IndexedTarget_Enabled;
+    [Test] procedure Uses_Missing_DirectiveInClause_Disabled;
 
     // ---- Idempotenz ----
     [Test] procedure Rewrite_AppliedOnce_NoSecondFinding;
@@ -106,7 +121,7 @@ const
     'implementation'#13#10 +
     'procedure TFoo.Run(Id: Integer; const Tag: string);'#13#10 +
     'var Marker, Text: string; n: Integer; c: Char; Obj: TObject;'#13#10 +
-    'var Cnt: Cardinal; V: Variant; A: AnsiString;'#13#10 +
+    'var Cnt: Cardinal; V: Variant; A: AnsiString; Arr: array[0..3] of string;'#13#10 +
     'begin'#13#10;
   FOOT =
     #13#10'end;'#13#10 +
@@ -360,7 +375,9 @@ begin
   Assert.IsTrue(RunRecipe(UnitWith(
     '  Text := ''id='' + Id.ToString + '', n='' + n.ToString;'),
     'Text := ''id=''', O), O.Reason);
-  Assert.AreEqual('Format(''id=%d, n=%d'', [Id, n])', O.NewText);
+  // .ToString bleibt %s: ein eigener Integer-Helper koennte anders
+  // formatieren als IntToStr (AH22). Nur IntToStr(x) wird %d.
+  Assert.AreEqual('Format(''id=%s, n=%s'', [Id.ToString, n.ToString])', O.NewText);
 end;
 
 procedure TTestRdxSca044.Rewrite_CharOperand_Enabled;
@@ -436,6 +453,32 @@ begin
     '  Text := ''a'' + n + ''b'' + Marker;'), 'Text := ''a''', O));
   Assert.IsTrue(Pos('kein String', O.Reason) > 0, O.Reason);
   Assert.IsTrue(Pos('integer', O.Reason) > 0, 'der deklarierte Typ steht im Grund: ' + O.Reason);
+end;
+
+procedure TTestRdxSca044.Rewrite_NoLiteral_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Ohne Literal gaebe es nur '%s%s%s%s' - der Detektor meldet so etwas
+  // nicht, und das Rezept formt es auch auf Zuruf nicht um.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := Marker + Tag + FName + Marker;'), 'Text := Marker', O));
+  Assert.IsTrue(Pos('kein Literal', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Rewrite_AlreadyFormat_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Steht schon ein Format() in der Kette, wird nicht noch eines darum
+  // gebaut (der Detektor laesst solche Ketten aus; ein zweiter Lauf
+  // ueber eine umgeformte Zeile darf nichts mehr finden).
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''a'' + Format(''%d'', [n]) + ''b'' + Marker;'), 'Text := ''a''', O));
+  Assert.IsTrue(Pos('schon Format', O.Reason) > 0, O.Reason);
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := Format(''%s-%s'', [Marker, Tag]);'), 'Text := Format', O));
+  Assert.IsTrue(Pos('keine Zuweisung mit Kette', O.Reason) > 0, O.Reason);
 end;
 
 procedure TTestRdxSca044.Rewrite_CommentInChain_Disabled;
@@ -651,16 +694,27 @@ var
   Src, After : string;
   O          : TRdxFormatOutcome;
 begin
-  // Der Neue waere anzuhaengen, aber hinter dem letzten Eintrag steht
-  // ein 'in'-Pfad (Projektdatei): dann VOR den letzten - immer gueltig.
-  // Der Bereich des Eintrags umfasst nur den Namen, nicht den Pfad.
-  Src := WithUses(CHAIN, 'uses System.Classes, uFoo in ''uFoo.pas'', Vcl.Forms in ''Vcl.Forms.pas'';');
+  // Der Neue waere anzuhaengen (groesser als alle), aber hinter dem
+  // letzten Eintrag steht ein 'in'-Pfad (Projektdatei): dann VOR den
+  // letzten - immer gueltig. Der Bereich des Eintrags umfasst nur den
+  // Namen, nicht den Pfad.
+  Src := WithUses(CHAIN, 'uses Classes, Forms in ''Forms.pas'';');
   Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
   Assert.IsTrue(O.NeedsUses);
-  Assert.AreEqual('Vcl.Forms', O.UsesEdit.Expected);
-  Assert.AreEqual('System.SysUtils, Vcl.Forms', O.UsesEdit.NewText);
+  Assert.AreEqual('Forms', O.UsesEdit.Expected);
+  Assert.AreEqual('SysUtils, Forms', O.UsesEdit.NewText);
   After := ApplyOutcome(Src, O);
-  Assert.IsTrue(Pos('uses System.Classes, uFoo in ''uFoo.pas'', System.SysUtils, Vcl.Forms in ''Vcl.Forms.pas'';',
+  Assert.IsTrue(Pos('uses Classes, SysUtils, Forms in ''Forms.pas'';', After) > 0, After);
+
+  // Liegt die sortierte Stelle VOR einem 'in'-Eintrag, wird dort
+  // eingefuegt - die Liste bleibt sortiert (am 2026-10-06 falsch
+  // erwartet: 'System.SysUtils' sortiert vor 'uFoo', nicht dahinter).
+  Src := WithUses(CHAIN, 'uses System.Classes, uFoo in ''uFoo.pas'', Vcl.Forms in ''Vcl.Forms.pas'';');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Marker', O), O.Reason);
+  Assert.AreEqual('uFoo', O.UsesEdit.Expected);
+  Assert.AreEqual('System.SysUtils, uFoo', O.UsesEdit.NewText);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('uses System.Classes, System.SysUtils, uFoo in ''uFoo.pas'', Vcl.Forms in ''Vcl.Forms.pas'';',
     After) > 0, After);
 end;
 
@@ -760,9 +814,111 @@ procedure TTestRdxSca044.Compiled_AnsiOperand_Disabled;
 var
   O : TRdxFormatOutcome;
 begin
+  // Ziel unbekannten Typs (Member): der AnsiString-Operand sperrt.
   Assert.IsFalse(RunRecipe(UnitWith(
-    '  Text := ''a'' + A + ''b'' + Marker;'), 'Text := ''a''', O));
+    '  Obj.Caption := ''a'' + A + ''b'' + Marker;'), 'Obj.Caption := ''a''', O));
   Assert.IsTrue(Pos('ansistring', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Compiled_AnsiOperand_UnicodeTarget_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Ziel 'Text: string': Format wandelt A genauso wie die Zuweisung.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + A + ''b'' + Marker;'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [A, Marker])', O.NewText);
+  Assert.AreEqual<Integer>(2, O.Proven);
+end;
+
+procedure TTestRdxSca044.Compiled_VariantMember_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // V.Name mit V: Variant - spaet gebunden, der Wert ist Variant.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''a'' + V.Name + ''b'' + Marker;'), 'Text := ''a''', O));
+  Assert.IsTrue(Pos('Variant', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Compiled_StringIndexed_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // DS['Name'] = TDataSet.FieldValues (Variant): Null im Original wirft
+  // oder loescht die Kette, Format gaebe still den Rest aus.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''Kunde '' + Obj[''Name''] + '' in '' + Obj[''Ort''];'), 'Text := ''Kunde', O));
+  Assert.IsTrue(Pos('Variant', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Compiled_ParenCast_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Fuehrende Klammergruppe mit Member-Zugriff ist ein Operand.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + (Obj as TComponent).Name + ''b'' + Marker;'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [(Obj as TComponent).Name, Marker])', O.NewText);
+  Assert.AreEqual<Integer>(1, Length(O.ByCompiler));
+end;
+
+procedure TTestRdxSca044.Rewrite_HexCharLiteral_Preserved;
+var
+  O : TRdxFormatOutcome;
+begin
+  // #$2103 bleibt als Code im Formatstring - kein rohes Zeichen, das in
+  // einer ANSI-Datei verloren ginge.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''T: '' + Marker + #$2103 + Tag;'), 'Text := ''T:', O), O.Reason);
+  Assert.AreEqual('Format(''T: %s''#$2103''%s'', [Marker, Tag])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_LiteralWhitespace_Preserved;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Zwei Leerzeichen im Literal eines Operanden bleiben zwei.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + StringReplace(Tag, ''  '', '' '', [rfReplaceAll]) + ''b'' + Marker;'),
+    'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [StringReplace(Tag, ''  '', '' '', [rfReplaceAll]), Marker])',
+    O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_CommentBeforeChain_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Ein Kommentar zwischen ':=' und dem ersten Term liegt ausserhalb des
+  // ersetzten Bereichs und bleibt stehen.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := // Hinweis'#13#10 +
+    '    ''a'' + Marker + ''b'' + Tag;'), 'Text := //', O), O.Reason);
+  Assert.AreEqual('''a'' + Marker + ''b'' + Tag', O.Expected);
+  Assert.AreEqual('Format(''a%sb%s'', [Marker, Tag])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_IndexedTarget_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Der AST-Knoten traegt das Ziel als 'Arr[]' - die Gegenprobe gegen den
+  // Quelltext muss den Index ausblenden (53 Korpusstellen).
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Arr[1] := ''a'' + Marker + ''b'' + Tag;'), 'Arr[1] := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [Marker, Tag])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Uses_Missing_DirectiveInClause_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // 'uses Classes {$IFNDEF X}, Windows{$ENDIF};' - jede Einfuegestelle
+  // neben einem Eintrag kann in einem Zweig liegen: von Hand.
+  Assert.IsFalse(RunRecipe(WithUses(CHAIN,
+    'uses Classes {$IFNDEF RDX_NEVER_DEFINED}, Windows{$ENDIF};'), 'Text := Marker', O));
+  Assert.IsTrue(Pos('Direktiven', O.Reason) > 0, O.Reason);
 end;
 
 procedure TTestRdxSca044.Numeric_CardinalArg_UsesU;
@@ -774,7 +930,7 @@ begin
     '  Text := ''a'' + IntToStr(Cnt) + ''b'' + Marker;'), 'Text := ''a''', O), O.Reason);
   Assert.AreEqual('Format(''a%ub%s'', [Cnt, Marker])', O.NewText);
   Assert.AreEqual<Integer>(1, O.Numeric);
-  Assert.IsTrue(Pos('1 als %d', O.Hint) > 0, O.Hint);
+  Assert.IsTrue(Pos('1 numerisch', O.Hint) > 0, O.Hint);
 end;
 
 procedure TTestRdxSca044.SelfAppend_FormatOverRest;

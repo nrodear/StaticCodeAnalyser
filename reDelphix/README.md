@@ -81,16 +81,33 @@ darf auch eine Zahl oder ein Boolean stehen, und daran scheitert `%s` zur
 Laufzeit. Deshalb gilt ein Operand unbekannten Typs, wenn seine Form ein
 Operand ist (Bezeichner, Member, Aufruf, Index, Cast) und er keine
 Variant-Anzeichen traegt (`.Value`, `.AsVariant`, `FieldValues`, `Null`,
-`Unassigned`, `True`/`False`/`nil`, `Variant(...)`, deklariert `Variant`).
-Gesperrt bleiben Zahlen, Zahl-Casts, Klammerausdruecke, Mengen und
+`Unassigned`, `True`/`False`/`nil`, `Variant(...)`, deklariert `Variant`,
+`V.Name` mit `V: Variant`, `DS['Name']` = `TDataSet.FieldValues`). Warum
+Variant sperrt: ist der Wert Null oder keine Zeichenkette, wirft das
+Original (`NullStrictConvert`, Variant-Arithmetik String+Zahl) oder die
+ganze Kette wird leer - `Format` gaebe still die uebrigen Teile aus.
+Gesperrt bleiben Zahlen, Zahl-Casts, blosse Klammerausdruecke, Mengen und
 deklarierte Nicht-Unicode-Strings (`AnsiString`, `RawByteString`,
-`UTF8String`, `ShortString`, `RawUtf8`) als Ziel oder Operand - `Format`
-liefert `UnicodeString`, die Zuweisung wuerde konvertieren. Der Menuetext
-nennt die Herkunft: `5 Terme, 2 laut Kompilat (E.Message, Edit1.Text)`
-oder `alle bewiesen`. Bewiesen sind Literale, deklarierte String-Typen,
-RTL-Funktionen mit String-Ergebnis (`IntToStr`, `ExtractFileName`,
-`Copy`, `TPath.Combine`, ...), RTL-Konstanten (`sLineBreak`, `PathDelim`)
-und `.ToString`. Nachbildung am Korpus: 83 % statt 17 %.
+`UTF8String`, `ShortString`, `RawUtf8`) als Ziel immer und als Operand,
+wenn das Ziel nicht nachweislich Unicode ist - `Format` liefert
+`UnicodeString`. `(Sender as TButton).Caption` ist ein Operand. Der
+Menuetext nennt die Herkunft: `5 Terme, 2 laut Kompilat (E.Message,
+Edit1.Text)` oder `alle bewiesen`. Bewiesen sind Literale, deklarierte
+String-Typen, RTL-Funktionen mit String-Ergebnis (`IntToStr`,
+`ExtractFileName`, `Copy`, `TPath.Combine`, ...), RTL-Konstanten
+(`sLineBreak`, `PathDelim`) und `.ToString`. Nachbildung am Korpus: 83 %
+statt 17 %.
+
+Bekannte Grenze: ein Record mit Implicit-Operator (`Nullable<string>`)
+uebersetzt in der Kette, aber nicht im `Format`-Aufruf - der Compiler
+meldet es, Strg+Z nimmt es zurueck; ohne Typinformation fremder Units ist
+das nicht erkennbar. `x.ToString` bleibt `%s` (ein eigener Integer-Helper
+koennte anders formatieren); nur `IntToStr(x)` wird `%d`/`%u`. Die
+Literale werden Token fuer Token in den Formatstring uebernommen
+(`#$2103` bleibt `#$2103`, `#37` wird `%%`), Leerraum in String-Literalen
+eines Operanden bleibt erhalten. Ein Kommentar sperrt nur, wenn er im
+ERSETZTEN Bereich steht. Traegt die uses-Klausel Compiler-Direktiven,
+wird `System.SysUtils` nicht eingefuegt (von Hand).
 | Parametrisierte Vorlage in die Zwischenablage | SCA003 (`fixMode: assisted`) | baut `:p1..:pn` und `ParamByName`-Zeilen; schreibt NIE in den Editor |
 | uses: X -> Scope.X | Fund in einer uses-Klausel | qualifiziert den Eintrag; Mehrdeutiges (Forms: VCL/FMX) nur bei erkennbarem Rahmenwerk, nie bei gleichnamiger Projekt-Unit |
 
@@ -138,7 +155,9 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   `X := X + ...`; ausgegraut mit Grund bei Integer, Variant (deklariert
   oder `.Value`), AnsiString als Ziel oder Operand, Kommentar oder
   Direktive im Bereich, SQL-Text, mehrdeutiger Zeile, nur Literalen
-  hinter `X +`; Idempotenz nach dem Umschreiben. uses-Ergaenzung:
+  hinter `X +`, Kette ohne Literal, Kette mit `Format()` darin (ein
+  zweiter Lauf ueber eine umgeformte Zeile findet nichts mehr);
+  Idempotenz nach dem Umschreiben. uses-Ergaenzung:
   vorhanden (qualifiziert/unqualifiziert) -> nichts; fehlend -> sortiert
   eingefuegt, Schreibweise der Datei, implementation vor interface,
   mehrzeilige Klausel, `in`-Pfad hinter dem letzten Eintrag, keine Klausel

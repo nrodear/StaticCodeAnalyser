@@ -45,6 +45,14 @@ type
     [Test] procedure Format_ByCompiler_Listed;
     [Test] procedure Format_IntegerArgs_UseDAndU;
     [Test] procedure Format_VariantAndAnsi_Blocked;
+    [Test] procedure Format_NoLiteralOrAlreadyFormat_Blocked;
+    // AH22 (Verifikations-Workflow): Literal-Quelltext erhalten, Leerraum
+    // in Literalen, Variant-Quellen ohne Tell, Klammergruppe, Ansi bei
+    // Unicode-Ziel.
+    [Test] procedure Format_KeepsLiteralSource;
+    [Test] procedure CollapseCode_KeepsLiterals;
+    [Test] procedure Judge_VariantSourcesAndParenGroup;
+    [Test] procedure Format_AnsiOperand_UnicodeTarget_Allowed;
     [Test] procedure LooksLikeSql_NeedsVerbAndStructure;
 
     // ---- SQL-Vorlage ---------------------------------------------------
@@ -331,18 +339,98 @@ begin
             Lit(''' b='''),
             TRdxRecipes.MakePart(ROLE_OPERAND, 'b.ToString', rvString, '', 'boolean')];
   Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B), B.Reason);
+  // i.ToString bleibt %s: ein eigener Integer-Helper koennte anders
+  // formatieren als IntToStr (AH22).
   Assert.AreEqual(
-    'Format(''n=%d c=%u i=%d x=%s s=%s b=%s'', [n, c, i, IntToStr(x), IntToStr(a + b), b.ToString])',
+    'Format(''n=%d c=%u i=%s x=%s s=%s b=%s'', [n, c, i.ToString, IntToStr(x), IntToStr(a + b), b.ToString])',
     B.NewText);
-  Assert.AreEqual<Integer>(3, B.Numeric);
+  Assert.AreEqual<Integer>(2, B.Numeric);
   Assert.AreEqual<Integer>(6, B.Proven);
   Assert.AreEqual('%d', TRdxRecipes.IntegerSpec('byte'));
   Assert.AreEqual('%u', TRdxRecipes.IntegerSpec('uint64'));
   Assert.AreEqual('', TRdxRecipes.IntegerSpec('double'));
   Assert.AreEqual('x', TRdxRecipes.IntegerArgumentOf('IntToStr( x )'));
-  Assert.AreEqual('x', TRdxRecipes.IntegerArgumentOf('x.ToString()'));
+  Assert.AreEqual('', TRdxRecipes.IntegerArgumentOf('x.ToString()'), 'ToString bleibt %s');
   Assert.AreEqual('', TRdxRecipes.IntegerArgumentOf('IntToStr(x + 1)'));
   Assert.AreEqual('', TRdxRecipes.IntegerArgumentOf('Obj.Count.ToString'));
+end;
+
+procedure TTestRdxRecipes.Format_KeepsLiteralSource;
+var
+  Parts : TRdxParts;
+  B     : TRdxFormatBuild;
+begin
+  // Die Literale werden Token fuer Token uebernommen: #$2103 bleibt als
+  // Code stehen (in einer ANSI-Datei waere das rohe Zeichen verloren),
+  // #13 bleibt dezimal, '' bleibt '', '%' wird '%%', #37 (= '%') wird ''%%''.
+  Parts := [Lit('''Temp: '''), Op('T', rvString), Lit('#$2103'), Lit(''' at '''),
+            Op('Place', rvString)];
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B), B.Reason);
+  Assert.AreEqual('Format(''Temp: %s''#$2103'' at %s'', [T, Place])', B.NewText);
+  Parts := [Lit('''a''#13#10''b'''), Op('T', rvString), Lit('#37'), Lit('''it''''s 5%''')];
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B), B.Reason);
+  Assert.AreEqual('Format(''a''#13#10''b%s%%it''''s 5%%'', [T])', B.NewText);
+  Parts := [Lit('#13#10'), Op('T', rvString)];
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B), B.Reason);
+  Assert.AreEqual('Format(#13#10''%s'', [T])', B.NewText);
+end;
+
+procedure TTestRdxRecipes.CollapseCode_KeepsLiterals;
+begin
+  Assert.AreEqual('StringReplace(S, ''  '', '' '', [rfReplaceAll])',
+    TRdxRecipes.CollapseCode('StringReplace(S,  ''  '',   '' '','#13#10'    [rfReplaceAll])'));
+  Assert.AreEqual('Foo( a, b )', TRdxRecipes.CollapseCode('  Foo( a,'#9'b )  '),
+    'Leerraum ausserhalb von Literalen wird zu einem Leerzeichen, nicht entfernt');
+  Assert.AreEqual('''a''''b  c''', TRdxRecipes.CollapseCode('''a''''b  c'''),
+    'Quote-Verdopplung und Leerraum im Literal bleiben');
+  Assert.AreEqual('x', TRdxRecipes.CollapseCode('x'));
+  Assert.AreEqual('', TRdxRecipes.CollapseCode('   '));
+end;
+
+procedure TTestRdxRecipes.Judge_VariantSourcesAndParenGroup;
+var
+  P : TRdxPart;
+begin
+  // String-indizierter Bezeichner: TDataSet.FieldValues (Variant).
+  Assert.IsTrue(JP('DS[''Name'']', rvUnknown) = ovVariantRisk);
+  Assert.IsTrue(JP('DS [ ''Name'' ]', rvUnknown) = ovVariantRisk);
+  Assert.IsTrue(JP('Items[i]', rvUnknown) = ovByCompiler, 'Zahl-Index bleibt Kompilat');
+  Assert.IsTrue(JP('DS[''Name''].AsString', rvUnknown) = ovByCompiler, 'dahinter steht noch etwas');
+  // Kopf-Bezeichner deklariert Variant: V.Name, V[0].
+  P := TRdxRecipes.MakePart(ROLE_OPERAND, 'V.Name', rvUnknown);
+  P.HeadResolved := 'variant';
+  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovVariantRisk);
+  P.HeadResolved := 'tobject';
+  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovByCompiler);
+  Assert.AreEqual('Obj', TRdxRecipes.HeadIdentOf('Obj.Items[i].Name'));
+  Assert.AreEqual('Type', TRdxRecipes.HeadIdentOf('&Type.Name'));
+  Assert.AreEqual('', TRdxRecipes.HeadIdentOf('(a + b)'));
+  // Fuehrende Klammergruppe mit Member-Zugriff: Kompilat.
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('(Sender as TButton).Caption'));
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('(Items[i] as TFoo)[0]'));
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('(P)^.Name'));
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('(a + b)'), 'blosser Klammerausdruck');
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('(a + b) c'));
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('Item.&Type'), '& hinter dem Punkt');
+  Assert.IsTrue(JP('(Sender as TButton).Caption', rvUnknown) = ovByCompiler);
+end;
+
+procedure TTestRdxRecipes.Format_AnsiOperand_UnicodeTarget_Allowed;
+var
+  Parts : TRdxParts;
+  B     : TRdxFormatBuild;
+begin
+  // Bei einem Unicode-Ziel wandelt Format den AnsiString-Operanden wie
+  // die Zuweisung; ohne bekanntes Ziel bleibt die Sperre.
+  Parts := [Lit('''a'''), TRdxRecipes.MakePart(ROLE_OPERAND, 'A', rvString, 'ansistring'),
+            Lit('''b'''), Op('Name', rvString)];
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B, 'string'), B.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [A, Name])', B.NewText);
+  Assert.AreEqual<Integer>(2, B.Proven);
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B, 'widestring'), B.Reason);
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B, ''));
+  Assert.IsTrue(Pos('UnicodeString', B.Reason) > 0, B.Reason);
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B, 'ansistring'));
 end;
 
 procedure TTestRdxRecipes.Format_VariantAndAnsi_Blocked;
@@ -367,6 +455,27 @@ begin
   Parts := [Lit('''a'''), Op('Integer(x)', rvUnknown), Lit('''b'''), Op('Name', rvString)];
   Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B));
   Assert.IsTrue(Pos('kein String', B.Reason) > 0, B.Reason);
+end;
+
+procedure TTestRdxRecipes.Format_NoLiteralOrAlreadyFormat_Blocked;
+var
+  Parts : TRdxParts;
+  B     : TRdxFormatBuild;
+begin
+  // Nur Operanden: '%s%s' waere keine Verbesserung.
+  Parts := [Target('s'), Op('Name', rvString), Op('Tag', rvString)];
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B));
+  Assert.IsTrue(Pos('kein Literal', B.Reason) > 0, B.Reason);
+  // Ein Format() in der Kette: nicht noch eines darum bauen (der
+  // zweite Lauf ueber 'X := Format(...)' baute sonst Format('%s', [Format(...)])).
+  Parts := [Lit('''a'''), Op('Format(''%d'', [n])', rvUnknown), Lit('''b'''), Op('Name', rvString)];
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B));
+  Assert.IsTrue(Pos('schon Format', B.Reason) > 0, B.Reason);
+  Parts := [Op('SysUtils.Format(''%d'', [n])', rvUnknown)];
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B));
+  Assert.IsTrue(Pos('schon Format', B.Reason) > 0, B.Reason);
+  Assert.IsFalse(TRdxRecipes.IsKnownStringFunc('Format(''%d'', [n])'),
+    'Format steht nicht in der Liste bewiesener RTL-Funktionen');
 end;
 
 procedure TTestRdxRecipes.Format_SqlText_Blocked;

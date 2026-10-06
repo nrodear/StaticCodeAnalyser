@@ -38,6 +38,9 @@ type
     // P10 (AH19): Abschnittszeilen und Zeilentext - fuer ein Modul, das
     // eine uses-Klausel anlegen muss.
     [Test] procedure SectionLine_AndLineText;
+    // P11 (AH22): Kommentar nur im gefragten Bereich - ein Modul, das
+    // einen Teil der Anweisung ersetzt, prueft genau den Teil.
+    [Test] procedure SpanHasComment_OnlyInsideSpan;
   end;
 
 implementation
@@ -356,6 +359,39 @@ begin
     Assert.IsTrue(P.OpenSource('p.dpr', 'program p;'#13#10'begin'#13#10'end.'));
     Assert.AreEqual<Integer>(0, P.SectionLine(TUsesSection.usImplementation),
       'ein Programm hat keinen implementation-Abschnitt');
+  finally
+    P.Free;
+  end;
+end;
+
+procedure TTestSourcePlacesTypes.SpanHasComment_OnlyInsideSpan;
+const
+  SRC =
+    'unit c; interface implementation'#13#10 +
+    'procedure P; var r, a: string; begin'#13#10 +
+    '  r := a + { alt } ''x'';'#13#10 +
+    '  r := ''y'';  // Ende'#13#10 +
+    'end; end.';
+var
+  P : TSourcePlaces;
+begin
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsFalse(P.SpanHasComment(TRefactorSpan.Make(ROLE_STATEMENT, 3, 1, 3, 10)),
+      'ohne Datei False');
+    Assert.IsTrue(P.OpenSource('c.pas', SRC));
+    Assert.IsTrue(P.SpanHasComment(TRefactorSpan.Make(ROLE_STATEMENT, 3, 1, 3, 24)),
+      'ganze Zeile 3 traegt den Blockkommentar');
+    Assert.IsFalse(P.SpanHasComment(TRefactorSpan.Make(ROLE_STATEMENT, 3, 1, 3, 10)),
+      '''r := a'' liegt vor dem Kommentar');
+    Assert.IsFalse(P.SpanHasComment(TRefactorSpan.Make(ROLE_STATEMENT, 3, 19, 3, 24)),
+      '''''x''; liegt hinter dem Kommentar');
+    Assert.IsFalse(P.SpanHasComment(TRefactorSpan.Make(ROLE_STATEMENT, 4, 1, 4, 12)),
+      'Zeile 4 bis vor den Zeilenkommentar');
+    Assert.IsTrue(P.SpanHasComment(TRefactorSpan.Make(ROLE_STATEMENT, 4, 1, 4, 22)),
+      'Zeile 4 mit Zeilenkommentar');
+    Assert.IsFalse(P.SpanHasComment(TRefactorSpan.Make(ROLE_STATEMENT, 90, 1, 91, 2)),
+      'ausserhalb der Datei False');
   finally
     P.Free;
   end;
