@@ -259,3 +259,5 @@ __pycache__/
 
 # Lokales Dokumenten-Archiv (Root-Aufraeumung 2026-09-06)
 _archiv/
+# Prototypen (HTML-Mockups zu Konzepten) sind lokal wie Konzept_/Todo_
+Prototypen_*/
