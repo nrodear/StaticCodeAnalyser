@@ -365,21 +365,6 @@ begin
     First := 2;
     Result.SelfAppend := True;
   end;
-  if not TRdxRecipes.BuildFormatCall(Copy(Parts, First, Last - First + 1),
-       Build, TType) then
-  begin
-    Result.Reason := Build.Reason;
-    if Result.SelfAppend and (Build.Operands = 0) and (Build.Reason <> '')
-       and (Pos('kein Operand', Build.Reason) > 0) then
-      Result.Reason := 'hinter ' + TRdxRecipes.CollapseWhitespace(Parts[0].Text)
-        + ' stehen nur Literale';
-    Exit;
-  end;
-  Result.NewText    := Build.NewText;
-  Result.Operands   := Build.Operands;
-  Result.Proven     := Build.Proven;
-  Result.Numeric    := Build.Numeric;
-  Result.ByCompiler := Build.ByCompiler;
   // Ersetzt wird vom ersten (bzw. zweiten) bis zum letzten Term; Ziel und
   // ':=' (und bei Selbst-Anhaengen 'X +') bleiben.
   Result.Span := TRefactorSpan.Make(ROLE_STATEMENT,
@@ -395,7 +380,11 @@ begin
   // zwischen ':=' und dem ersten Term bleibt stehen und sperrt nicht
   // (AH22; rfHasComment der Anweisung gilt ab dem Ziel). Eine Compiler-
   // Direktive im Bereich zaehlt wie ein Kommentar. Dass die Anweisung in
-  // einem $IFDEF-Zweig LIEGT, sperrt seit AH20 nicht mehr.
+  // einem $IFDEF-Zweig LIEGT, sperrt seit AH20 nicht mehr. Die Pruefung
+  // steht VOR dem Format-Aufbau: ein Operand mit Kommentar darin
+  // ('{alt} Marker') hat keine Operandenform, und der Grund soll
+  // "Kommentar" heissen, nicht "kein einfacher Operand"
+  // (reDelphix.Test Rewrite_CommentInChain_Disabled, rot 2026-10-07).
   if APlaces.SpanHasComment(Result.Span) then
   begin
     Result.Reason := 'Kommentar im Bereich';
@@ -406,6 +395,21 @@ begin
     Result.Reason := 'Compiler-Direktive im Bereich';
     Exit;
   end;
+  if not TRdxRecipes.BuildFormatCall(Copy(Parts, First, Last - First + 1),
+       Build, TType) then
+  begin
+    Result.Reason := Build.Reason;
+    if Result.SelfAppend and (Build.Operands = 0) and (Build.Reason <> '')
+       and (Pos('kein Operand', Build.Reason) > 0) then
+      Result.Reason := 'hinter ' + TRdxRecipes.CollapseWhitespace(Parts[0].Text)
+        + ' stehen nur Literale';
+    Exit;
+  end;
+  Result.NewText    := Build.NewText;
+  Result.Operands   := Build.Operands;
+  Result.Proven     := Build.Proven;
+  Result.Numeric    := Build.Numeric;
+  Result.ByCompiler := Build.ByCompiler;
   Result.Hint := Format('%d Terme', [Last - First + 1]);
   if Result.SelfAppend then
     Result.Hint := Result.Hint + ' hinter '
