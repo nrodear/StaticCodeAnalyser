@@ -55,7 +55,7 @@ Projekt, abhaengig von `SCA.Engine`) und liegt im SCA-Repo unter
 | Aktion | Regel | Verhalten |
 |---|---|---|
 | Stelle zeigen | alle mit beschreibbarer Anweisung | markiert den exakten Bereich im Editor |
-| Format() aus Verkettung bilden | SCA044 (`fixMode: auto`) | ersetzt die Terme durch `Format('...%s...', [..])`; nur wenn jeder Operand beweisbar ein String ist und die Literale kein SQL sind. Fehlt `System.SysUtils` (dort lebt `Format`), wird es als zweite Ersetzung in die uses-Klausel eingefuegt - der Menuetext sagt `+ uses System.SysUtils` |
+| Format() aus Verkettung bilden | SCA044 (`fixMode: auto`) | ersetzt die Terme durch `Format('...%s...', [..])` nach der Kompilat-Regel (unten); `IntToStr(n)`/`n.ToString` mit bekanntem Ganzzahltyp werden `%d`/`%u` mit `n`; `X := X + ...` wird `X := X + Format(...)`; gesperrt bei SQL-Literalen, Kommentar oder Direktive im Bereich, Variant-Anzeichen, AnsiString-Kette. Fehlt `System.SysUtils` (dort lebt `Format`), wird es als zweite Ersetzung in die uses-Klausel eingefuegt - der Menuetext sagt `+ uses System.SysUtils` |
 
 **uses-Ergaenzung im Einzelnen** (`TRdxRecipeRunner.PlanUses`): die Unit
 kommt in die uses-Klausel des implementation-Abschnitts, sonst in die des
@@ -68,6 +68,29 @@ wenn hinter dem letzten Eintrag direkt das `;` folgt - steht dort ein
 eingefuegt. Ohne jede uses-Klausel wird hinter `implementation` eine neue
 angelegt. Beide Ersetzungen laufen von unten nach oben (erst die Kette,
 dann die Klausel darueber), damit die Bereiche gueltig bleiben.
+
+**Kompilat-Regel** (`TRdxRecipes.JudgeOperand`, Realworld-Stichprobe
+2026-10-06): mit "nur beweisbar String" waeren am Korpus hoechstens 17 %
+der SCA044-Stellen umformbar - der haeufigste Blocker waren Bezeichner
+wie `sLineBreak` und Member wie `E.Message`, die in der Datei keinen
+deklarierten Typ haben. Das Kompilat buergt aber: eine `+`-Kette mit einem
+String-Literal uebersetzt nur, wenn jeder Operand String-vertraeglich ist
+(String, Char, PChar, AnsiString, ...) oder ein Variant - und `%s` nimmt
+all das, Variant eingeschlossen. Die einzige Luecke: hinter einem Variant
+darf auch eine Zahl oder ein Boolean stehen, und daran scheitert `%s` zur
+Laufzeit. Deshalb gilt ein Operand unbekannten Typs, wenn seine Form ein
+Operand ist (Bezeichner, Member, Aufruf, Index, Cast) und er keine
+Variant-Anzeichen traegt (`.Value`, `.AsVariant`, `FieldValues`, `Null`,
+`Unassigned`, `True`/`False`/`nil`, `Variant(...)`, deklariert `Variant`).
+Gesperrt bleiben Zahlen, Zahl-Casts, Klammerausdruecke, Mengen und
+deklarierte Nicht-Unicode-Strings (`AnsiString`, `RawByteString`,
+`UTF8String`, `ShortString`, `RawUtf8`) als Ziel oder Operand - `Format`
+liefert `UnicodeString`, die Zuweisung wuerde konvertieren. Der Menuetext
+nennt die Herkunft: `5 Terme, 2 laut Kompilat (E.Message, Edit1.Text)`
+oder `alle bewiesen`. Bewiesen sind Literale, deklarierte String-Typen,
+RTL-Funktionen mit String-Ergebnis (`IntToStr`, `ExtractFileName`,
+`Copy`, `TPath.Combine`, ...), RTL-Konstanten (`sLineBreak`, `PathDelim`)
+und `.ToString`. Nachbildung am Korpus: 83 % statt 17 %.
 | Parametrisierte Vorlage in die Zwischenablage | SCA003 (`fixMode: assisted`) | baut `:p1..:pn` und `ParamByName`-Zeilen; schreibt NIE in den Editor |
 | uses: X -> Scope.X | Fund in einer uses-Klausel | qualifiziert den Eintrag; Mehrdeutiges (Forms: VCL/FMX) nur bei erkennbarem Rahmenwerk, nie bei gleichnamiger Projekt-Unit |
 
@@ -103,14 +126,19 @@ Ressource.
 d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 
 * `uTestRdxRecipes` - Literal-Codec, Format()-Bau, SQL-Vorlage,
-  Scope-Tabelle, uses-Schreibweise/-Sortierung/-Einfuegestelle (reine
-  Textlogik).
+  Scope-Tabelle, uses-Schreibweise/-Sortierung/-Einfuegestelle,
+  Kompilat-Regel (Operandenform, Variant-Anzeichen, RTL-Konstanten und
+  -Funktionen, Herkunft der Argumente, `%d`/`%u`) - reine Textlogik.
 * `uTestRdxSca044` - Ende zu Ende je Variante des Detektors SCA044:
   Parser, Detektor, `TSourcePlaces`, `uRdxRecipeRunner` - aktiv bei
   String-Lokalen/Parametern/Feldern, Char, `.ToString`, bekannten
-  RTL-Aufrufen, mehrzeilig, Steuerzeichen, `%`; ausgegraut mit Grund bei
-  Integer, unbekanntem Ausdruck, Kommentar, `$IFDEF`, SQL-Text,
-  mehrdeutiger Zeile; Idempotenz nach dem Umschreiben. uses-Ergaenzung:
+  RTL-Aufrufen, mehrzeilig, Steuerzeichen, `%`, Anweisung in einem
+  `$IFDEF`-Zweig, Member/unbekanntem Aufruf (Kompilat), `sLineBreak`,
+  `IntToStr(Integer)` als `%d` und `IntToStr(Cardinal)` als `%u`,
+  `X := X + ...`; ausgegraut mit Grund bei Integer, Variant (deklariert
+  oder `.Value`), AnsiString als Ziel oder Operand, Kommentar oder
+  Direktive im Bereich, SQL-Text, mehrdeutiger Zeile, nur Literalen
+  hinter `X +`; Idempotenz nach dem Umschreiben. uses-Ergaenzung:
   vorhanden (qualifiziert/unqualifiziert) -> nichts; fehlend -> sortiert
   eingefuegt, Schreibweise der Datei, implementation vor interface,
   mehrzeilige Klausel, `in`-Pfad hinter dem letzten Eintrag, keine Klausel
@@ -126,6 +154,24 @@ bash tools/fpc-pruefstand/build.sh uTestRdxRecipes
 
 `uRdxEditor` und `uRdxProvider` sind ToolsAPI und nur im Package
 uebersetzbar; `uRdxRecipeRunner` ist der testbare Kern dazwischen.
+
+## Korpus-Probe
+
+**`tools\probe\RdxCorpusProbe.dproj`** (Konsole, in der d12-Projektgruppe)
+faehrt Rezept 5.1 ueber eine Liste von Fundstellen (`Datei<TAB>Zeile`)
+und schreibt je Stelle eine CSV-Zeile plus eine Zusammenfassung mit den
+Gruenden - der echte Weg des Moduls ohne ToolsAPI, also die echten Zahlen
+zu jeder Regelaenderung. Die Liste kommt aus einem SARIF-Referenzlauf:
+
+```
+python reDelphix\tools\probe\sites_from_sarif.py rw137_ae.sarif SCA044 D:\git-sca-realworld sites.txt
+python reDelphix\tools\probe\sites_from_sarif.py rw137_ae.sarif SCA044 D:\git-sca-realworld sample.txt 200 44
+Output\RdxCorpusProbe\Win32 Release\RdxCorpusProbe.exe sites.txt probe.csv
+```
+
+Die zweite Form zieht eine reproduzierbare Stichprobe (N, seed). Die
+Python-Nachbildung der Regeln (Audit 2026-10-06) ist eine Obergrenze; was
+zaehlt, ist die Probe.
 
 ## Grenzen (Stand 2026-10-05)
 

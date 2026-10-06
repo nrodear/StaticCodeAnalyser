@@ -43,14 +43,30 @@ type
     [Test] procedure Rewrite_ControlCharsAndQuotes_Encoded;
     [Test] procedure Rewrite_PercentInLiteral_Escaped;
     [Test] procedure Rewrite_ThenBranchWithoutSemicolon_Enabled;
+    [Test] procedure Rewrite_InsideIfdef_Enabled;
 
     // ---- Rezept: ausgegraut mit Grund ----
     [Test] procedure Rewrite_IntegerOperand_Disabled;
-    [Test] procedure Rewrite_UnknownOperand_Disabled;
     [Test] procedure Rewrite_CommentInChain_Disabled;
-    [Test] procedure Rewrite_InsideIfdef_Disabled;
+    [Test] procedure Rewrite_DirectiveInSpan_Disabled;
     [Test] procedure Rewrite_SqlText_Disabled;
     [Test] procedure Rewrite_TwoAssignsOnLine_Disabled;
+
+    // ---- Kompilat-Regel (AH20, Realworld-Stichprobe 2026-10-06) ----
+    // Ein Operand unbekannten Typs gilt, wenn seine Form ein Operand ist
+    // und keine Variant-Anzeichen traegt; AnsiString-Ketten, Variants,
+    // Zahlen bleiben gesperrt. IntToStr(x)/x.ToString werden %d/%u.
+    // 'X := X + ...' wird 'X := X + Format(...)'.
+    [Test] procedure Compiled_MemberOperand_Enabled;
+    [Test] procedure Compiled_UnknownCallAndKnownRtlCall;
+    [Test] procedure Compiled_KnownConst_Proven;
+    [Test] procedure Compiled_VariantLocal_Disabled;
+    [Test] procedure Compiled_ValueMember_Disabled;
+    [Test] procedure Compiled_AnsiTarget_Disabled;
+    [Test] procedure Compiled_AnsiOperand_Disabled;
+    [Test] procedure Numeric_CardinalArg_UsesU;
+    [Test] procedure SelfAppend_FormatOverRest;
+    [Test] procedure SelfAppend_OnlyLiterals_Disabled;
 
     // ---- Idempotenz ----
     [Test] procedure Rewrite_AppliedOnce_NoSecondFinding;
@@ -90,6 +106,7 @@ const
     'implementation'#13#10 +
     'procedure TFoo.Run(Id: Integer; const Tag: string);'#13#10 +
     'var Marker, Text: string; n: Integer; c: Char; Obj: TObject;'#13#10 +
+    'var Cnt: Cardinal; V: Variant; A: AnsiString;'#13#10 +
     'begin'#13#10;
   FOOT =
     #13#10'end;'#13#10 +
@@ -315,8 +332,11 @@ begin
   Assert.IsTrue(RunRecipe(UnitWith(
     '  Text := Marker + ''id:'' + IntToStr(Id) + '' Milli: '' + IntToStr(n);'),
     'Text := Marker', O), O.Reason);
-  Assert.AreEqual('Format(''%sid:%s Milli: %s'', [Marker, IntToStr(Id), IntToStr(n)])',
-    O.NewText);
+  // IntToStr(Id) mit Id: Integer wird %d mit Id - so schriebe man es.
+  Assert.AreEqual('Format(''%sid:%d Milli: %d'', [Marker, Id, n])', O.NewText);
+  Assert.AreEqual<Integer>(2, O.Numeric);
+  Assert.AreEqual<Integer>(3, O.Proven);
+  Assert.AreEqual<Integer>(0, Length(O.ByCompiler));
   Assert.AreEqual('Marker + ''id:'' + IntToStr(Id) + '' Milli: '' + IntToStr(n)',
     O.Expected, 'ersetzt wird vom ersten bis zum letzten Term');
   Assert.IsTrue(O.Span.IsSingleLine);
@@ -340,7 +360,7 @@ begin
   Assert.IsTrue(RunRecipe(UnitWith(
     '  Text := ''id='' + Id.ToString + '', n='' + n.ToString;'),
     'Text := ''id=''', O), O.Reason);
-  Assert.AreEqual('Format(''id=%s, n=%s'', [Id.ToString, n.ToString])', O.NewText);
+  Assert.AreEqual('Format(''id=%d, n=%d'', [Id, n])', O.NewText);
 end;
 
 procedure TTestRdxSca044.Rewrite_CharOperand_Enabled;
@@ -364,7 +384,7 @@ begin
     '    + IntToStr(Id) + '' b '''#13#10 +
     '    + Tag;'),
     'Text := Marker', O), O.Reason);
-  Assert.AreEqual('Format(''%s a %s b %s'', [Marker, IntToStr(Id), Tag])', O.NewText);
+  Assert.AreEqual('Format(''%s a %d b %s'', [Marker, Id, Tag])', O.NewText);
   Assert.IsFalse(O.Span.IsSingleLine);
   Assert.AreEqual<Integer>(O.Span.StartLine + 2, O.Span.EndLine);
   Assert.IsTrue(Pos(#10, O.Expected) > 0, 'Expected traegt die Umbrueche');
@@ -418,15 +438,6 @@ begin
   Assert.IsTrue(Pos('integer', O.Reason) > 0, 'der deklarierte Typ steht im Grund: ' + O.Reason);
 end;
 
-procedure TTestRdxSca044.Rewrite_UnknownOperand_Disabled;
-var
-  O : TRdxFormatOutcome;
-begin
-  Assert.IsFalse(RunRecipe(UnitWith(
-    '  Text := ''a'' + Obj.ClassName + ''b'' + Marker;'), 'Text := ''a''', O));
-  Assert.IsTrue(Pos('Typ unbekannt', O.Reason) > 0, O.Reason);
-end;
-
 procedure TTestRdxSca044.Rewrite_CommentInChain_Disabled;
 var
   O : TRdxFormatOutcome;
@@ -436,18 +447,30 @@ begin
   Assert.IsTrue(Pos('Kommentar', O.Reason) > 0, O.Reason);
 end;
 
-procedure TTestRdxSca044.Rewrite_InsideIfdef_Disabled;
+procedure TTestRdxSca044.Rewrite_InsideIfdef_Enabled;
 var
   O : TRdxFormatOutcome;
 begin
-  // IFNDEF eines nie definierten Symbols: der Zweig ist aktiv, ob der
-  // Lexer inaktive Zweige ueberspringt oder nicht - die Anweisung liegt
-  // so oder so in einem bedingten Bereich.
-  Assert.IsFalse(RunRecipe(UnitWith(
+  // Die Anweisung LIEGT in einem bedingten Bereich (IFNDEF eines nie
+  // definierten Symbols, Zweig aktiv), der Bereich selbst traegt keine
+  // Direktive: ersetzt wird sein exakter Text. Bis AH19 gesperrt.
+  Assert.IsTrue(RunRecipe(UnitWith(
     '  {$IFNDEF RDX_NEVER_DEFINED}'#13#10 +
     '  Text := ''a'' + Marker + ''b'' + Tag;'#13#10 +
-    '  {$ENDIF}'), 'Text := ''a''', O));
-  Assert.IsTrue(Pos('IFDEF', O.Reason) > 0, O.Reason);
+    '  {$ENDIF}'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [Marker, Tag])', O.NewText);
+end;
+
+procedure TTestRdxSca044.Rewrite_DirectiveInSpan_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Eine Direktive IM Bereich: sie ginge beim Ersetzen verloren (der
+  // Builder zaehlt sie als Kommentar, oder die Beschreibung scheitert).
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''a'' + Marker + {$IFNDEF RDX_NEVER_DEFINED} Tag {$ELSE} FName {$ENDIF} + ''b'';'),
+    'Text := ''a''', O));
+  Assert.IsTrue(O.Reason <> '', 'ein Grund steht dabei');
 end;
 
 procedure TTestRdxSca044.Rewrite_SqlText_Disabled;
@@ -658,6 +681,129 @@ begin
   Assert.IsTrue(RunRecipe(After, 'Text := Tag', O2), O2.Reason);
   Assert.IsFalse(O2.NeedsUses, 'System.SysUtils ist jetzt da');
   Assert.AreEqual('Format(''%sc%sd%s'', [Tag, Marker, FName])', O2.NewText);
+end;
+
+{ ---- Kompilat-Regel (AH20) ---- }
+
+procedure TTestRdxSca044.Compiled_MemberOperand_Enabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Obj.ClassName hat in dieser Datei keinen deklarierten Typ - aber die
+  // Kette uebersetzt nur, wenn der Operand String-vertraeglich ist.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + Obj.ClassName + ''b'' + Marker;'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [Obj.ClassName, Marker])', O.NewText);
+  Assert.AreEqual<Integer>(1, Length(O.ByCompiler));
+  Assert.AreEqual('Obj.ClassName', O.ByCompiler[0]);
+  Assert.AreEqual<Integer>(1, O.Proven, 'Marker ist deklariert');
+  Assert.IsTrue(Pos('1 laut Kompilat (Obj.ClassName)', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSca044.Compiled_UnknownCallAndKnownRtlCall;
+var
+  O : TRdxFormatOutcome;
+begin
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + ExtractFileName(Tag) + ''b'' + Foo(Marker);'),
+    'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%sb%s'', [ExtractFileName(Tag), Foo(Marker)])', O.NewText);
+  Assert.AreEqual<Integer>(1, O.Proven, 'ExtractFileName ist RTL');
+  Assert.AreEqual<Integer>(1, Length(O.ByCompiler));
+  Assert.AreEqual('Foo(Marker)', O.ByCompiler[0]);
+end;
+
+procedure TTestRdxSca044.Compiled_KnownConst_Proven;
+var
+  O : TRdxFormatOutcome;
+begin
+  // sLineBreak war am Korpus der haeufigste unaufgeloeste Bezeichner.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + Marker + sLineBreak + Tag;'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%s%s%s'', [Marker, sLineBreak, Tag])', O.NewText);
+  Assert.AreEqual<Integer>(0, Length(O.ByCompiler));
+  Assert.IsTrue(Pos('alle bewiesen', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSca044.Compiled_VariantLocal_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Hinter einem Variant duerfte auch eine Zahl stehen - %s scheitert dann.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''a'' + V + ''b'' + Marker;'), 'Text := ''a''', O));
+  Assert.IsTrue(Pos('Variant', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Compiled_ValueMember_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''a'' + Obj.FieldByName(''x'').Value + ''b'' + Marker;'),
+    'Text := ''a''', O));
+  Assert.IsTrue(Pos('Variant', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Compiled_AnsiTarget_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Format liefert UnicodeString; die Zuweisung an AnsiString konvertiert.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  A := ''a'' + Tag + ''b'' + Marker;'), 'A := ''a''', O));
+  Assert.IsTrue(Pos('UnicodeString', O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos('Ziel', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Compiled_AnsiOperand_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := ''a'' + A + ''b'' + Marker;'), 'Text := ''a''', O));
+  Assert.IsTrue(Pos('ansistring', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.Numeric_CardinalArg_UsesU;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Cardinal kommt als vtInteger an: %d wuerde ab 2^31 negativ.
+  Assert.IsTrue(RunRecipe(UnitWith(
+    '  Text := ''a'' + IntToStr(Cnt) + ''b'' + Marker;'), 'Text := ''a''', O), O.Reason);
+  Assert.AreEqual('Format(''a%ub%s'', [Cnt, Marker])', O.NewText);
+  Assert.AreEqual<Integer>(1, O.Numeric);
+  Assert.IsTrue(Pos('1 als %d', O.Hint) > 0, O.Hint);
+end;
+
+procedure TTestRdxSca044.SelfAppend_FormatOverRest;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Ein Drittel der Korpus-Stellen: 'X := X + ...'. Format nur ueber den
+  // Rest, X bleibt vorn stehen.
+  Src := UnitWith('  Text := Text + ''a'' + Tag + ''b'' + Marker;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := Text', O), O.Reason);
+  Assert.IsTrue(O.SelfAppend);
+  Assert.AreEqual('''a'' + Tag + ''b'' + Marker', O.Expected,
+    'ersetzt wird erst hinter ''Text +''');
+  Assert.AreEqual('Format(''a%sb%s'', [Tag, Marker])', O.NewText);
+  Assert.IsTrue(Pos('hinter Text', O.Hint) > 0, O.Hint);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('Text := Text + Format(''a%sb%s'', [Tag, Marker]);', After) > 0, After);
+  Assert.AreEqual<Integer>(0, DetectorFindings(After));
+end;
+
+procedure TTestRdxSca044.SelfAppend_OnlyLiterals_Disabled;
+var
+  O : TRdxFormatOutcome;
+begin
+  // Hinter 'Text +' nur Literale: Format haette kein Argument.
+  Assert.IsFalse(RunRecipe(UnitWith(
+    '  Text := Text + ''a'' + #13#10 + ''b'' + ''c'';'), 'Text := Text', O));
+  Assert.IsTrue(Pos('nur Literale', O.Reason) > 0, O.Reason);
 end;
 
 initialization

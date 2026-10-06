@@ -39,6 +39,7 @@ SCA.LSP/SCA.LSP.res
 reDelphix/reDelphix.d12.res
 reDelphix/unitscopes.res
 reDelphix/tests/reDelphix.Test.res
+reDelphix/tools/probe/RdxCorpusProbe.res
 # FPC-Pruefstand: out/ und die je Lauf aus dem Repo kopierten Units
 # (build.sh erzeugt sie neu; die Stubs daneben sind Quelle und bleiben).
 reDelphix/tools/fpc-pruefstand/out/

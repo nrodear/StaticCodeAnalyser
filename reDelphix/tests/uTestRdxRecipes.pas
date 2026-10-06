@@ -32,10 +32,19 @@ type
     // ---- Format() ------------------------------------------------------
     [Test] procedure Format_AllStringTerms_BuildsCall;
     [Test] procedure Format_PercentIsEscaped;
-    [Test] procedure Format_UnknownOperand_Blocked;
+    [Test] procedure Format_ExpressionOperand_Blocked;
     [Test] procedure Format_SqlText_Blocked;
     [Test] procedure Format_NoOperand_Blocked;
     [Test] procedure Format_ArgumentRole_Blocked;
+    // Kompilat-Regel (AH20): Form eines Operanden, Variant-Anzeichen,
+    // RTL-Konstanten/-Funktionen, Herkunft der Argumente, %d/%u.
+    [Test] procedure Shape_AcceptsOperandForms;
+    [Test] procedure Shape_RejectsExpressions;
+    [Test] procedure Judge_DeclaredTypes;
+    [Test] procedure Judge_TextTells;
+    [Test] procedure Format_ByCompiler_Listed;
+    [Test] procedure Format_IntegerArgs_UseDAndU;
+    [Test] procedure Format_VariantAndAnsi_Blocked;
     [Test] procedure LooksLikeSql_NeedsVerbAndStructure;
 
     // ---- SQL-Vorlage ---------------------------------------------------
@@ -79,6 +88,14 @@ end;
 function Target(const AText: string): TRdxPart;
 begin
   Result := TRdxRecipes.MakePart(ROLE_TARGET, AText);
+end;
+
+// Urteil ueber einen Operanden mit Text, Core-Typklasse und deklariertem Typ.
+function JP(const AText: string; AType: TRefactorValueType;
+  const AResolved: string = ''): TRdxOperandVerdict;
+begin
+  Result := TRdxRecipes.JudgeOperand(
+    TRdxRecipes.MakePart(ROLE_OPERAND, AText, AType, AResolved));
 end;
 
 function MakeTable(const ALines: array of string): TRdxScopeTable;
@@ -184,16 +201,172 @@ begin
   Assert.AreEqual('Format(''Rabatt 5%% fuer %s'', [QuotedStr(N)])', NewText);
 end;
 
-procedure TTestRdxRecipes.Format_UnknownOperand_Blocked;
+procedure TTestRdxRecipes.Format_ExpressionOperand_Blocked;
 var
   Parts   : TRdxParts;
   NewText : string;
   Reason  : string;
 begin
-  Parts := [Lit('''a'''), Op('Name', rvUnknown), Lit('''b''')];
+  // Ein Klammerausdruck ist kein Operand - das Kompilat buergt nur fuer
+  // Bezeichner, Member, Aufrufe, Index, Cast.
+  Parts := [Lit('''a'''), Op('(Name + Tag)', rvUnknown), Lit('''b''')];
   Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, NewText, Reason));
-  Assert.IsTrue(Pos('Typ unbekannt', Reason) > 0, Reason);
+  Assert.IsTrue(Pos('kein einfacher Operand', Reason) > 0, Reason);
   Assert.IsTrue(Pos('Name', Reason) > 0, 'der Operand steht im Grund');
+end;
+
+procedure TTestRdxRecipes.Shape_AcceptsOperandForms;
+begin
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('Name'));
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('E.Message'));
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('Edit1.Text'));
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('Foo(a, b)'));
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('Items[i].Name'));
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('P^.Name'));
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('string(Buf)'));
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('x.ToString'));
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('TPath.Combine(Dir, ''a.txt'')'));
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('Q.FieldByName(''(x)'').AsString'),
+    'Klammern im Literal zaehlen nicht');
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('&Type'));
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('Foo (a)'), 'Leerraum vor der Klammer');
+  Assert.IsTrue(TRdxRecipes.IsOperandShape('Foo(a,'#13#10'  b)'), 'mehrzeiliger Aufruf');
+end;
+
+procedure TTestRdxRecipes.Shape_RejectsExpressions;
+begin
+  Assert.IsFalse(TRdxRecipes.IsOperandShape(''));
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('(a + b)'));
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('5'));
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('$FF'));
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('a and b'));
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('not x'));
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('[''a'']'));
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('-x'));
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('@x'));
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('a = b'));
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('Foo(a'), 'unbalanciert');
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('a.'), 'endet auf Punkt');
+  Assert.IsFalse(TRdxRecipes.IsOperandShape('inherited Foo'));
+end;
+
+procedure TTestRdxRecipes.Judge_DeclaredTypes;
+begin
+  Assert.IsTrue(JP('Name', rvString, 'string') = ovString, 'deklariert string');
+  Assert.IsTrue(JP('c', rvString, 'char') = ovString, 'Char nimmt %s');
+  Assert.IsTrue(JP('n', rvNonString, 'integer') = ovNonString, 'deklariert integer');
+  Assert.IsTrue(JP('A', rvString, 'ansistring') = ovAnsi,
+    'AnsiString ist String, aber kein Unicode');
+  Assert.IsTrue(JP('U', rvString, 'utf8string') = ovAnsi);
+  Assert.IsTrue(JP('R', rvString, 'rawutf8') = ovAnsi);
+  Assert.IsTrue(JP('V', rvUnknown, 'variant') = ovVariantRisk, 'deklariert Variant');
+  Assert.IsTrue(JP('V', rvUnknown, 'olevariant') = ovVariantRisk);
+  Assert.IsTrue(JP('Fn', rvUnknown, 'tfilename') = ovString, 'RTL-Alias auf string');
+  Assert.IsTrue(JP('R', rvUnknown, 'tmyrec') = ovByCompiler,
+    'fremder Typname: das Kompilat buergt');
+end;
+
+procedure TTestRdxRecipes.Judge_TextTells;
+begin
+  Assert.IsTrue(JP('E.Message', rvUnknown) = ovByCompiler);
+  Assert.IsTrue(JP('Edit1.Text', rvUnknown) = ovByCompiler);
+  Assert.IsTrue(JP('GetName(x)', rvUnknown) = ovByCompiler);
+  Assert.IsTrue(JP('Items[i]', rvUnknown) = ovByCompiler);
+  Assert.IsTrue(JP('sLineBreak', rvUnknown) = ovString, 'RTL-Konstante');
+  Assert.IsTrue(JP('PathDelim', rvUnknown) = ovString);
+  Assert.IsTrue(JP('ExtractFileName(F)', rvUnknown) = ovString,
+    'RTL-Funktion mit String-Ergebnis');
+  Assert.IsTrue(JP('SysUtils.ExtractFileName(F)', rvUnknown) = ovString);
+  Assert.IsTrue(JP('TPath.Combine(A, B)', rvUnknown) = ovString);
+  Assert.IsTrue(JP('Copy(S, 1, 3)', rvUnknown) = ovString);
+  Assert.IsTrue(JP('Obj.ExtractFileName(F)', rvUnknown) = ovByCompiler,
+    'Methode unbekannten Typs, nicht die RTL');
+  Assert.IsTrue(JP('ExtractFileName(F).Trim', rvUnknown) = ovByCompiler,
+    'die Klammer schliesst den Term nicht');
+  Assert.IsTrue(JP('Q.FieldByName(''a'').Value', rvUnknown) = ovVariantRisk,
+    '.Value kann Variant sein');
+  Assert.IsTrue(JP('Null', rvUnknown) = ovVariantRisk);
+  Assert.IsTrue(JP('True', rvUnknown) = ovVariantRisk,
+    'nur hinter einem Variant uebersetzbar');
+  Assert.IsTrue(JP('Variant(x)', rvUnknown) = ovVariantRisk);
+  Assert.IsTrue(JP('Integer(x)', rvUnknown) = ovNonString, 'Zahl-Cast');
+  Assert.IsTrue(JP('(a + b)', rvUnknown) = ovNoOperand);
+  Assert.IsTrue(JP('5', rvUnknown) = ovNoOperand);
+  Assert.IsTrue(JP('a and b', rvUnknown) = ovNoOperand);
+end;
+
+procedure TTestRdxRecipes.Format_ByCompiler_Listed;
+var
+  Parts : TRdxParts;
+  B     : TRdxFormatBuild;
+begin
+  Parts := [Target('s'), Lit('''Fehler '''), Op('E.Message', rvUnknown),
+            Lit(''' in '''), Op('Name', rvString), Lit(''' / '''),
+            Op('sLineBreak', rvUnknown)];
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B), B.Reason);
+  Assert.AreEqual('Format(''Fehler %s in %s / %s'', [E.Message, Name, sLineBreak])',
+    B.NewText);
+  Assert.AreEqual<Integer>(3, B.Operands);
+  Assert.AreEqual<Integer>(2, B.Proven, 'Name (deklariert) und sLineBreak (RTL)');
+  Assert.AreEqual<Integer>(1, Length(B.ByCompiler));
+  Assert.AreEqual('E.Message', B.ByCompiler[0]);
+  Assert.AreEqual<Integer>(0, B.Numeric);
+end;
+
+procedure TTestRdxRecipes.Format_IntegerArgs_UseDAndU;
+var
+  Parts : TRdxParts;
+  B     : TRdxFormatBuild;
+begin
+  Parts := [Lit('''n='''),
+            TRdxRecipes.MakePart(ROLE_OPERAND, 'IntToStr(n)', rvString, '', 'integer'),
+            Lit(''' c='''),
+            TRdxRecipes.MakePart(ROLE_OPERAND, 'IntToStr(c)', rvString, '', 'cardinal'),
+            Lit(''' i='''),
+            TRdxRecipes.MakePart(ROLE_OPERAND, 'i.ToString', rvString, '', 'int64'),
+            Lit(''' x='''),
+            TRdxRecipes.MakePart(ROLE_OPERAND, 'IntToStr(x)', rvString, '', ''),
+            Lit(''' s='''),
+            TRdxRecipes.MakePart(ROLE_OPERAND, 'IntToStr(a + b)', rvString, '', 'integer'),
+            Lit(''' b='''),
+            TRdxRecipes.MakePart(ROLE_OPERAND, 'b.ToString', rvString, '', 'boolean')];
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B), B.Reason);
+  Assert.AreEqual(
+    'Format(''n=%d c=%u i=%d x=%s s=%s b=%s'', [n, c, i, IntToStr(x), IntToStr(a + b), b.ToString])',
+    B.NewText);
+  Assert.AreEqual<Integer>(3, B.Numeric);
+  Assert.AreEqual<Integer>(6, B.Proven);
+  Assert.AreEqual('%d', TRdxRecipes.IntegerSpec('byte'));
+  Assert.AreEqual('%u', TRdxRecipes.IntegerSpec('uint64'));
+  Assert.AreEqual('', TRdxRecipes.IntegerSpec('double'));
+  Assert.AreEqual('x', TRdxRecipes.IntegerArgumentOf('IntToStr( x )'));
+  Assert.AreEqual('x', TRdxRecipes.IntegerArgumentOf('x.ToString()'));
+  Assert.AreEqual('', TRdxRecipes.IntegerArgumentOf('IntToStr(x + 1)'));
+  Assert.AreEqual('', TRdxRecipes.IntegerArgumentOf('Obj.Count.ToString'));
+end;
+
+procedure TTestRdxRecipes.Format_VariantAndAnsi_Blocked;
+var
+  Parts : TRdxParts;
+  B     : TRdxFormatBuild;
+begin
+  Parts := [Lit('''a'''), Op('Q.FieldByName(''x'').Value', rvUnknown),
+            Lit('''b'''), Op('Name', rvString)];
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B));
+  Assert.IsTrue(Pos('Variant', B.Reason) > 0, B.Reason);
+  Parts := [Lit('''a'''),
+            TRdxRecipes.MakePart(ROLE_OPERAND, 'A', rvString, 'ansistring'),
+            Lit('''b'''), Op('Name', rvString)];
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B));
+  Assert.IsTrue(Pos('UnicodeString', B.Reason) > 0, B.Reason);
+  Parts := [Lit('''a'''),
+            TRdxRecipes.MakePart(ROLE_OPERAND, 'V', rvUnknown, 'variant'),
+            Lit('''b'''), Op('Name', rvString)];
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B));
+  Assert.IsTrue(Pos('Variant', B.Reason) > 0, B.Reason);
+  Parts := [Lit('''a'''), Op('Integer(x)', rvUnknown), Lit('''b'''), Op('Name', rvString)];
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B));
+  Assert.IsTrue(Pos('kein String', B.Reason) > 0, B.Reason);
 end;
 
 procedure TTestRdxRecipes.Format_SqlText_Blocked;

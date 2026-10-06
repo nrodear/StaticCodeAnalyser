@@ -27,6 +27,9 @@
         <Projects Include="reDelphix\tests\reDelphix.Test.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="reDelphix\tools\probe\RdxCorpusProbe.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -107,14 +110,23 @@
     <Target Name="reDelphix_Test:Make">
         <MSBuild Projects="reDelphix\tests\reDelphix.Test.dproj" Targets="Make"/>
     </Target>
+    <Target Name="RdxCorpusProbe">
+        <MSBuild Projects="reDelphix\tools\probe\RdxCorpusProbe.dproj"/>
+    </Target>
+    <Target Name="RdxCorpusProbe:Clean">
+        <MSBuild Projects="reDelphix\tools\probe\RdxCorpusProbe.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="RdxCorpusProbe:Make">
+        <MSBuild Projects="reDelphix\tools\probe\RdxCorpusProbe.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="SCA_Engine;SCA_CLI_Demo;SCA_SharedUI;StaticCodeAnalyser_d12;StaticCodeAnalyser_IDE_d12;reDelphix_d12;TestProject;reDelphix_Test"/>
+        <CallTarget Targets="SCA_Engine;SCA_CLI_Demo;SCA_SharedUI;StaticCodeAnalyser_d12;StaticCodeAnalyser_IDE_d12;reDelphix_d12;TestProject;reDelphix_Test;RdxCorpusProbe"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="SCA_Engine:Clean;SCA_CLI_Demo:Clean;SCA_SharedUI:Clean;StaticCodeAnalyser_d12:Clean;StaticCodeAnalyser_IDE_d12:Clean;reDelphix_d12:Clean;TestProject:Clean;reDelphix_Test:Clean"/>
+        <CallTarget Targets="SCA_Engine:Clean;SCA_CLI_Demo:Clean;SCA_SharedUI:Clean;StaticCodeAnalyser_d12:Clean;StaticCodeAnalyser_IDE_d12:Clean;reDelphix_d12:Clean;TestProject:Clean;reDelphix_Test:Clean;RdxCorpusProbe:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="SCA_Engine:Make;SCA_CLI_Demo:Make;SCA_SharedUI:Make;StaticCodeAnalyser_d12:Make;StaticCodeAnalyser_IDE_d12:Make;reDelphix_d12:Make;TestProject:Make;reDelphix_Test:Make"/>
+        <CallTarget Targets="SCA_Engine:Make;SCA_CLI_Demo:Make;SCA_SharedUI:Make;StaticCodeAnalyser_d12:Make;StaticCodeAnalyser_IDE_d12:Make;reDelphix_d12:Make;TestProject:Make;reDelphix_Test:Make;RdxCorpusProbe:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

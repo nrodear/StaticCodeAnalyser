@@ -9,12 +9,14 @@ unit uRdxRecipeRunner;
 // ABLAUF FUER SCA044 (Rezept 5.1)
 //
 //   DescribeAnchor  NodesAt(Zeile, Anker) -> genau ein Knoten -> ChainOf
-//   FormatRewrite   Parts -> BuildFormatCall; Bereich = erster bis letzter
-//                   Term, Expected = dessen Text, NewText = Format(...)
+//   FormatRewrite   Parts -> BuildFormatCall (Kompilat-Regel, AH20);
+//                   Bereich = erster bis letzter Term, Expected = dessen
+//                   Text, NewText = Format(...); bei 'X := X + ...' nur
+//                   der Rest hinter 'X +'
 //
-// Ein Ergebnis mit Enabled = False traegt den Grund (Operand ohne
-// String-Typ, Kommentar im Bereich, $IFDEF, SysUtils fehlt, SQL-Text,
-// Zeile mehrdeutig, ...).
+// Ein Ergebnis mit Enabled = False traegt den Grund (Operand mit Zahl-,
+// Variant- oder AnsiString-Typ, Klammerausdruck, Kommentar oder Direktive
+// im Bereich, SQL-Text, Zeile mehrdeutig, ...).
 
 interface
 
@@ -52,6 +54,15 @@ type
     NeedsUses : Boolean;
     UsesName  : string;
     UsesEdit  : TRdxEdit;
+    // Herkunft der Argumente (AH20, Kompilat-Regel): wie viele Operanden,
+    // wie viele davon bewiesen, wie viele als %d/%u, und fuer welche nur
+    // das Kompilat buergt. SelfAppend: 'X := X + ...' - Format nur ueber
+    // den Rest, der Bereich beginnt hinter 'X +'.
+    Operands   : Integer;
+    Proven     : Integer;
+    Numeric    : Integer;
+    ByCompiler : TArray<string>;
+    SelfAppend : Boolean;
   end;
 
   TRdxRecipeRunner = class
@@ -71,17 +82,24 @@ type
       const AAnchor: string; out AIsCall: Boolean;
       out AWhy: string): TRefactorInfo; static;
 
-    // Teilbereiche mit Quelltext - die Eingabe der Rezepte.
+    // Teilbereiche mit Quelltext - die Eingabe der Rezepte. Operanden
+    // tragen ihren deklarierten Typ (Resolved) und bei IntToStr(x) /
+    // x.ToString den Typ von x (ArgResolved).
     class function PartsOf(APlaces: TSourcePlaces;
       AInfo: TRefactorInfo): TRdxParts; static;
 
-    // Warum ein Info nicht FixSafe ist - fuer den ausgegrauten Eintrag.
-    class function UnsafeReason(AInfo: TRefactorInfo;
-      const AParts: TRdxParts): string; static;
+    // Deklarierter Typ des Ziels (nackter Bezeichner oder Result), sonst ''.
+    class function TargetTypeOf(APlaces: TSourcePlaces; AInfo: TRefactorInfo;
+      const ATargetText: string): string; static;
 
-    // Rezept 5.1: Format() aus der Kette. AInfo darf nil sein (AWhy wird
-    // dann zum Grund). Fehlt System.SysUtils, traegt das Ergebnis die
-    // Einfuegung in die uses-Klausel (NeedsUses/UsesEdit).
+    // Rezept 5.1: Format() aus der Kette nach der Kompilat-Regel
+    // (uRdxRecipes.JudgeOperand). AInfo darf nil sein (AWhy wird dann
+    // zum Grund). Gesperrt: Kommentar oder Direktive im Bereich, Ziel
+    // oder Operand mit Nicht-Unicode-String-Typ, Operand mit Variant-
+    // Anzeichen, Zahl, Klammerausdruck. Dass die Anweisung in einem
+    // $IFDEF-Zweig liegt, sperrt nicht - ersetzt wird ihr exakter Text.
+    // 'X := X + ...' wird 'X := X + Format(...)'. Fehlt System.SysUtils,
+    // traegt das Ergebnis die Einfuegung in die uses-Klausel.
     class function FormatRewrite(APlaces: TSourcePlaces; AInfo: TRefactorInfo;
       const AWhy: string;
       const AUsesNames: TArray<string>): TRdxFormatOutcome; static;
@@ -183,48 +201,65 @@ end;
 class function TRdxRecipeRunner.PartsOf(APlaces: TSourcePlaces;
   AInfo: TRefactorInfo): TRdxParts;
 var
-  i : Integer;
+  i   : Integer;
+  Arg : string;
 begin
   Result := nil;
   if not Assigned(AInfo) then Exit;
   SetLength(Result, Length(AInfo.Parts));
   for i := 0 to High(AInfo.Parts) do
+  begin
     Result[i] := TRdxRecipes.MakePart(AInfo.Parts[i].Role,
-      APlaces.TextOf(AInfo.Parts[i]), AInfo.Parts[i].ValueType);
+      APlaces.TextOf(AInfo.Parts[i]), AInfo.Parts[i].ValueType,
+      AInfo.Parts[i].Resolved);
+    if AInfo.Parts[i].Role = ROLE_OPERAND then
+    begin
+      Arg := TRdxRecipes.IntegerArgumentOf(Result[i].Text);
+      if Arg <> '' then
+        Result[i].ArgResolved := APlaces.DeclaredTypeOf(AInfo.Span.StartLine, Arg);
+    end;
+  end;
 end;
 
-class function TRdxRecipeRunner.UnsafeReason(AInfo: TRefactorInfo;
-  const AParts: TRdxParts): string;
+class function TRdxRecipeRunner.TargetTypeOf(APlaces: TSourcePlaces;
+  AInfo: TRefactorInfo; const ATargetText: string): string;
 var
-  i : Integer;
+  T : string;
 begin
-  if rfHasComment in AInfo.Flags then Exit('Kommentar im Bereich');
-  if rfInConditional in AInfo.Flags then Exit('Bereich liegt in einem $IFDEF');
-  for i := 0 to High(AParts) do
-  begin
-    if AParts[i].Role <> ROLE_OPERAND then Continue;
-    if AParts[i].ValueType = rvNonString then
-    begin
-      if (i <= High(AInfo.Parts)) and (AInfo.Parts[i].Resolved <> '') then
-        Exit(Format('Operand ''%s'': kein String (%s)',
-          [TRdxRecipes.CollapseWhitespace(AParts[i].Text), AInfo.Parts[i].Resolved]));
-      Exit(Format('Operand ''%s'': kein String',
-        [TRdxRecipes.CollapseWhitespace(AParts[i].Text)]));
-    end;
-    if AParts[i].ValueType <> rvString then
-      Exit(Format('Operand ''%s'': Typ unbekannt',
-        [TRdxRecipes.CollapseWhitespace(AParts[i].Text)]));
-  end;
-  Result := 'Kette nicht rein (Operator auf oberster Ebene)';
+  Result := '';
+  T := Trim(ATargetText);
+  if not Assigned(APlaces) or not Assigned(AInfo) then Exit;
+  if not TRdxRecipes.IsPlainIdent(T) then Exit;
+  Result := APlaces.DeclaredTypeOf(AInfo.Span.StartLine, T);
+end;
+
+// Gleicher Operand ohne Leerraum und Schreibung: 'Result' = 'result'.
+function SameOperandText(const A, B: string): Boolean;
+var
+  SA, SB : string;
+  i      : Integer;
+begin
+  SA := '';
+  SB := '';
+  for i := 1 to Length(A) do
+    if A[i] > ' ' then SA := SA + A[i];
+  for i := 1 to Length(B) do
+    if B[i] > ' ' then SB := SB + B[i];
+  Result := (SA <> '') and SameText(SA, SB);
 end;
 
 class function TRdxRecipeRunner.FormatRewrite(APlaces: TSourcePlaces;
   AInfo: TRefactorInfo; const AWhy: string;
   const AUsesNames: TArray<string>): TRdxFormatOutcome;
 var
-  Parts : TRdxParts;
-  Last  : Integer;
-  Plan  : TRdxUsesPlan;
+  Parts  : TRdxParts;
+  Last   : Integer;
+  First  : Integer;
+  Build  : TRdxFormatBuild;
+  Plan   : TRdxUsesPlan;
+  TType  : string;
+  Names  : string;
+  i      : Integer;
 begin
   Result := Default(TRdxFormatOutcome);
   if AInfo = nil then
@@ -236,15 +271,54 @@ begin
   Parts := PartsOf(APlaces, AInfo);
   Last  := High(AInfo.Parts);
   if (Last < 1) or (AInfo.Parts[0].Role <> ROLE_TARGET) then
-    Result.Reason := 'keine Zuweisung mit Kette'
-  else if not AInfo.FixSafe then
-    Result.Reason := UnsafeReason(AInfo, Parts);
-  if Result.Reason = '' then
-    TRdxRecipes.BuildFormatCall(Parts, Result.NewText, Result.Reason);
-  if Result.Reason <> '' then Exit;
-  // Ersetzt wird vom ersten bis zum letzten Term; Ziel und ':=' bleiben.
+  begin
+    Result.Reason := 'keine Zuweisung mit Kette';
+    Exit;
+  end;
+  // Ein Kommentar im Bereich ginge beim Ersetzen verloren; eine Compiler-
+  // Direktive im Bereich zaehlt der Builder ebenso als Kommentar. Dass die
+  // Anweisung in einem $IFDEF-Zweig LIEGT, sperrt seit AH20 nicht mehr.
+  if rfHasComment in AInfo.Flags then
+  begin
+    Result.Reason := 'Kommentar im Bereich';
+    Exit;
+  end;
+  // Ziel mit Nicht-Unicode-String-Typ: Format liefert UnicodeString, die
+  // Zuweisung wuerde konvertieren (Alcinoe, Indy: AnsiString-Ketten).
+  TType := TargetTypeOf(APlaces, AInfo, Parts[0].Text);
+  if TRdxRecipes.IsNonUnicodeStringType(TType) then
+  begin
+    Result.Reason := Format('Ziel ''%s'' ist %s - Format liefert UnicodeString',
+      [TRdxRecipes.CollapseWhitespace(Parts[0].Text), TType]);
+    Exit;
+  end;
+  // Selbst-Anhaengen 'X := X + ...' (ein Drittel der Korpus-Stellen):
+  // Format nur ueber den Rest, X bleibt vorn - 'X := X + Format(...)'.
+  First := 1;
+  if (Last >= 3) and (AInfo.Parts[1].Role = ROLE_OPERAND)
+     and SameOperandText(Parts[1].Text, Parts[0].Text) then
+  begin
+    First := 2;
+    Result.SelfAppend := True;
+  end;
+  if not TRdxRecipes.BuildFormatCall(Copy(Parts, First, Last - First + 1), Build) then
+  begin
+    Result.Reason := Build.Reason;
+    if Result.SelfAppend and (Build.Operands = 0) and (Build.Reason <> '')
+       and (Pos('kein Operand', Build.Reason) > 0) then
+      Result.Reason := 'hinter ' + TRdxRecipes.CollapseWhitespace(Parts[0].Text)
+        + ' stehen nur Literale';
+    Exit;
+  end;
+  Result.NewText    := Build.NewText;
+  Result.Operands   := Build.Operands;
+  Result.Proven     := Build.Proven;
+  Result.Numeric    := Build.Numeric;
+  Result.ByCompiler := Build.ByCompiler;
+  // Ersetzt wird vom ersten (bzw. zweiten) bis zum letzten Term; Ziel und
+  // ':=' (und bei Selbst-Anhaengen 'X +') bleiben.
   Result.Span := TRefactorSpan.Make(ROLE_STATEMENT,
-    AInfo.Parts[1].StartLine, AInfo.Parts[1].StartCol,
+    AInfo.Parts[First].StartLine, AInfo.Parts[First].StartCol,
     AInfo.Parts[Last].EndLine, AInfo.Parts[Last].EndCol);
   Result.Expected := APlaces.TextOf(Result.Span);
   if Result.Expected = '' then
@@ -252,7 +326,35 @@ begin
     Result.Reason := 'Bereich nicht lesbar';
     Exit;
   end;
-  Result.Hint := Format('%d Terme, alle Strings', [Last]);
+  if Pos('{$', Result.Expected) > 0 then
+  begin
+    Result.Reason := 'Compiler-Direktive im Bereich';
+    Exit;
+  end;
+  Result.Hint := Format('%d Terme', [Last - First + 1]);
+  if Result.SelfAppend then
+    Result.Hint := Result.Hint + ' hinter '
+      + TRdxRecipes.CollapseWhitespace(Parts[0].Text);
+  if Length(Build.ByCompiler) = 0 then
+    Result.Hint := Result.Hint + ', alle bewiesen'
+  else
+  begin
+    Names := '';
+    for i := 0 to High(Build.ByCompiler) do
+    begin
+      if i = 3 then
+      begin
+        Names := Names + ', ...';
+        Break;
+      end;
+      if Names <> '' then Names := Names + ', ';
+      Names := Names + Build.ByCompiler[i];
+    end;
+    Result.Hint := Result.Hint + Format(', %d laut Kompilat (%s)',
+      [Length(Build.ByCompiler), Names]);
+  end;
+  if Build.Numeric > 0 then
+    Result.Hint := Result.Hint + Format(', %d als %%d', [Build.Numeric]);
   // Format() lebt in System.SysUtils: fehlt die Unit, kommt sie mit -
   // nicht ausgrauen, sondern die uses-Klausel ergaenzen (Nico, 2026-10-06).
   if not TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then
