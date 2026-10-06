@@ -165,7 +165,7 @@ begin
       Lists[i] := TFindingActions.ActionsFor(AFindings[i]);
     except
       on EStackExhausted do raise;
-      // noinspection ExceptOnException
+      // noinspection ExceptionTooGeneral
       // Vertrag der Registry: ein werfender Anbieter nimmt nur seine
       // Eintraege mit, nie das Menue - deshalb jede Ausnahme ausser dem
       // Stack-Ueberlauf.
