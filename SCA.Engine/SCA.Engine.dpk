@@ -204,6 +204,8 @@ contains
   uInstanceInvokedConstructor in 'sources\Detectors\uInstanceInvokedConstructor.pas',
   uIntegerOverflow in 'sources\Detectors\uIntegerOverflow.pas',
   uInterfaceGuid in 'sources\Detectors\uInterfaceGuid.pas',
+  uParamNameScan in 'sources\Detectors\uParamNameScan.pas',
+  uParamNameMismatch in 'sources\Detectors\uParamNameMismatch.pas',
   uInterfaceName in 'sources\Detectors\uInterfaceName.pas',
   uLargeClass in 'sources\Detectors\uLargeClass.pas',
   uLeakDetector2 in 'sources\Detectors\uLeakDetector2.pas',

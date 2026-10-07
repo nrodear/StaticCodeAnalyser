@@ -11,7 +11,7 @@
 const
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_DE : array[0..197] of TRuleOverlayData = (
+  RULE_OVERLAY_DE : array[0..198] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -273,7 +273,7 @@ const
     (
       RuleID   : 'SCA043';
       Name     : 'Komponente hat Action und OnClick';
-      ShortDesc: 'Action und OnClick sind beide gesetzt - Action gewinnt, OnClick ist toter Code'
+      ShortDesc: 'Action und OnClick sind beide gesetzt - der explizite OnClick gewinnt, die TAction-Verdrahtung ist tot'
     ),
     // SCA044
     (
@@ -1284,12 +1284,18 @@ const
       RuleID   : 'SCA198';
       Name     : 'Zwei Interfaces teilen sich dieselbe GUID';
       ShortDesc: 'Dieselbe GUID steht an mehr als einem Interface - Supports() liefert das zuerst registrierte, ohne Compilerfehler. Mit Strg+Umschalt+G eine neue erzeugen'
+    ),
+    // SCA199
+    (
+      RuleID   : 'SCA199';
+      Name     : 'ParamByName-Name passt nicht zu den SQL-Platzhaltern';
+      ShortDesc: 'ParamByName(''x'') an einer Query, deren SQL kein :x hat (zur Laufzeit ''Parameter nicht gefunden''), oder ein :y im SQL, das die Routine nie zuweist, obwohl sie die anderen Parameter der Query setzt'
     )
   );
 
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_FR : array[0..197] of TRuleOverlayData = (
+  RULE_OVERLAY_FR : array[0..198] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -1574,7 +1580,7 @@ const
       RuleID   : 'SCA043';
       Name     : 'Le composant a Action et OnClick';
       ShortDesc: 'Action et OnClick sont tous deux d' + #$E9 +
-        'finis - Action l''emporte, OnClick est du code mort'
+        'finis - le OnClick explicite l''emporte, le c' + #$E2 + 'blage TAction est mort'
     ),
     // SCA044
     (
@@ -2662,6 +2668,16 @@ const
         'me GUID figure sur plusieurs interfaces - Supports() renvoie celle enregistr' + #$E9 +
         'e en premier, sans erreur de compilation. En g' + #$E9 + 'n' + #$E9 +
         'rer un nouveau avec Ctrl+Maj+G'
+    ),
+    // SCA199
+    (
+      RuleID   : 'SCA199';
+      Name     : 'Le nom pass' + #$E9 + ' ' + #$E0 + ' ParamByName ne correspond pas aux param' + #$E8 +
+        'tres du SQL';
+      ShortDesc: 'ParamByName(''x'') sur une requ' + #$EA + 'te dont le SQL n''a pas de :x (erreur ' + #$AB +
+        ' param' + #$E8 + 'tre introuvable ' + #$BB + ' ' + #$E0 + ' l''ex' + #$E9 +
+        'cution), ou un :y dans le SQL que la routine n''affecte jamais alors qu''elle renseigne les autres param' +
+        #$E8 + 'tres de la requ' + #$EA + 'te'
     )
   );
 

@@ -14,7 +14,8 @@
       "DfmHardcodedDbCreds", "DfmDeadEvent", "DfmDuplicateBinding",
       "DfmSchemaMismatch", "DfmCircularDataSource", "DfmSqlFromUserInput",
       "DfmRequiredFieldUnbound", "DfmRequiredFieldNotVisible",
-      "DfmCrossFormCoupling", "DfmActionMismatch"
+      "DfmCrossFormCoupling", "DfmActionMismatch",
+      "ParamNameMismatch"
     ],
     "security": [
       "SQLInjection", "HardcodedSecret", "HardcodedPath",
@@ -27,7 +28,8 @@
       "DfmDuplicateBinding", "DfmDeadEvent", "DfmSchemaMismatch",
       "DfmCircularDataSource", "DfmRequiredFieldUnbound",
       "DfmRequiredFieldNotVisible", "DfmCrossFormCoupling",
-      "DfmActionMismatch", "DuplicateInterfaceGuid"
+      "DfmActionMismatch", "DuplicateInterfaceGuid",
+      "ParamNameMismatch"
     ],
     "code-quality": [
       "EmptyExcept", "UnusedUses", "MissingFinally", "DeadCode",
@@ -4065,6 +4067,65 @@
           "case": "More than four sites",
           "why": "The message lists three other locations and then '+N more'. A message carrying twenty paths is unreadable and breaks the layout of SARIF viewers; three are enough to start the search.",
           "example": "-"
+        }
+      ],
+      "cleanCodeAttribute": "LOGICAL",
+      "impacts": [
+        {
+          "softwareQuality": "RELIABILITY",
+          "severity": "MEDIUM"
+        }
+      ]
+    },
+    {
+      "id": "SCA199",
+      "kind": "ParamNameMismatch",
+      "name": "ParamByName name does not match the SQL placeholders",
+      "shortDescription": "ParamByName('x') on a query whose SQL has no :x (raises 'parameter not found' at run time), or a :y in the SQL that the routine never assigns while it sets the query's other parameters",
+      "fullDescription": "The compiler cannot see the link between Query.SQL and Query.ParamByName - both are strings. A renamed placeholder, a typo or a copied block leaves a ParamByName whose name is not in the SQL, and the mistake surfaces only when the statement runs: FireDAC, BDE, dbExpress, UniDAC, Zeos and ADO (Parameters.ParamByName) all raise 'parameter not found'. The opposite direction is reported for queries the routine creates itself: the SQL has :y, the routine binds other parameters of that query but never y - execution then fails with an unbound parameter (FireDAC: unknown data type, Oracle: ORA-01008) or silently binds NULL. The check works per routine and per query variable, reading from the routine's first 'begin', and only when it knows the query's SQL completely from literals in that routine: the query is created there (Q := TXxx.Create) or its SQL is cleared or assigned before the first Add, and every contribution is a string literal (sLineBreak and #13#10 included). Placeholders are :name outside SQL strings and comments - also :@name (ADO, SQL Server), names with $ or # (Oracle) and :\"quoted names\" - and a name counts as present if it matches either the identifier reading or the reading of Data.DB/ADODB ParseSQL, which runs to the next space, comma, semicolon or closing parenthesis; for the unknown-name direction a placeholder inside an SQL comment counts as present too, because Data.DB, ADO and IBX create it anyway. '::' casts, ':=' (PL/SQL), positional ':1', ':new.'/':old.' in trigger bodies and '?' parameters are not names. Names compare case-insensitively, as all the libraries do. Accesses that count as binding: ParamByName, Params.ParamByName, Parameters.ParamByName, FindParam, ParamValues['a;b'], and for Direct Oracle Access SetVariable, DeclareVariable, SetComplexVariable, SetLongVariable.",
+      "defaultSeverity": "Warning",
+      "type": "Bug",
+      "tags": [
+        "sql",
+        "database",
+        "parameters",
+        "runtime-error"
+      ],
+      "detectorUnit": "uParamNameMismatch.pas",
+      "examples": {
+        "bad": "Q := TFDQuery.Create(nil);\nQ.SQL.Add('SELECT name FROM customer');\nQ.SQL.Add('WHERE customer_id = :customer_id');\nQ.ParamByName('custid').AsInteger := Id;   // no :custid - raises at Open\nQ.Open;",
+        "good": "Q := TFDQuery.Create(nil);\nQ.SQL.Add('SELECT name FROM customer');\nQ.SQL.Add('WHERE customer_id = :customer_id');\nQ.ParamByName('customer_id').AsInteger := Id;\nQ.Open;"
+      },
+      "exceptions": [
+        {
+          "case": "SQL not fully known in the routine",
+          "why": "Add without a preceding Create, SQL.Clear or SQL.Text := appends to SQL that comes from the DFM or another routine. Format(), variables, constants, SQL.Assign, LoadFromFile, macros (MacroByName), Open/ExecSQL with an SQL argument and a string literal in the SQL that does not close (Oracle q-quotes are understood, backslash escapes are not) hide parts of the text. In all these cases the rule stays silent - a placeholder it cannot see would turn a correct ParamByName into a false report.",
+          "example": "qryUser.SQL.Add('AND active = :active');  // rest of the SQL in the DFM - not reported"
+        },
+        {
+          "case": "The query leaves the routine's view",
+          "why": "A query passed as a value (BindParams(Q), Result := Q, DataSource.DataSet := Q), a query on which an unknown method with arguments runs (Q.AddWhere('...')), a query mentioned in a nested routine, and a query that is not created in the routine while the routine calls an own method without arguments (BindFilter;) are not judged: any of these may change its SQL or bind its parameters out of sight. FreeAndNil/Assigned and dataset methods such as FieldByName, Locate, First or Close do not count.",
+          "example": "Q.SQL.Text := 'select ... where a = :a'; AddFilter(Q);  // not reported"
+        },
+        {
+          "case": "Unclear target",
+          "why": "A routine with a 'with' statement, with SQL/ParamByName without an object in front, or behind a cast or index (TFDQuery(X).SQL, Queries[i].SQL) is skipped as a whole: which query an access belongs to is not certain lexically.",
+          "example": "with Q do ParamByName('x').AsString := S;  // not reported"
+        },
+        {
+          "case": "Unassigned placeholder on a query the routine does not create",
+          "why": "The second direction (placeholder without assignment) is reported only for queries created in the routine. A form field or DFM query gets parameters from master-detail links (MasterSource/DataSource), from DFM Params or from other routines. It is also suppressed when Params are touched dynamically (Params[i], ParamByName(Variable), MasterSource :=) and when the SQL is a program block (BEGIN ... END, Firebird EXECUTE BLOCK, PL/SQL), where ':v' may be a local variable.",
+          "example": "qryOrders.SQL.Text := 'select ... where cust = :cust and y = :y'; qryOrders.ParamByName('y')...  // :cust from the master - not reported"
+        },
+        {
+          "case": "FindParam and Direct Oracle Access",
+          "why": "FindParam returns nil instead of raising, and whether DOA rejects a declared variable that is missing from the SQL is not established here. Both count as binding for the second direction but are not reported as unknown names.",
+          "example": "Q.FindParam('legacy');  // not reported"
+        },
+        {
+          "case": "Alternative SQL texts",
+          "why": "All SQL a routine gives a query is read as one text, including Clear/Text := resets and conditional branches. A ParamByName that matches any of the alternatives is accepted - a ParamByName aimed at an earlier statement after the SQL was replaced is a false negative on purpose.",
+          "example": "if A then Q.SQL.Text := '... :a' else Q.SQL.Text := '... :b';  // ParamByName('a') accepted"
         }
       ],
       "cleanCodeAttribute": "LOGICAL",

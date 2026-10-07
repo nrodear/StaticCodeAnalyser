@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 198 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
+All 199 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -202,6 +202,7 @@ All 198 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA196](#sca196) | Result of managed type is read before it is assigned | Warning | Bug | `uManagedResultUninit.pas` |
 | [SCA197](#sca197) | Interface declared without a GUID | Warning | Code Smell | `uInterfaceGuid.pas` |
 | [SCA198](#sca198) | Two interfaces share the same GUID | Warning | Bug | `uInterfaceGuid.pas` |
+| [SCA199](#sca199) | ParamByName name does not match the SQL placeholders | Warning | Bug | `uParamNameMismatch.pas` |
 
 ---
 
@@ -5197,4 +5198,43 @@ Supports() returns whichever was registered first.
 
 ---
 
-_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA198.md`._
+## SCA199
+**ParamByName name does not match the SQL placeholders**
+
+> ParamByName('x') on a query whose SQL has no :x (raises 'parameter not found' at run time), or a :y in the SQL that the routine never assigns while it sets the query's other parameters
+
+| Field | Value |
+|---|---|
+| Severity | Warning | Type | Bug |
+| Tags | `sql`, `database`, `parameters`, `runtime-error` |
+| Detector | `uParamNameMismatch.pas` |
+| Scope | one routine at a time (from its first `begin`), per query variable |
+
+The compiler cannot see the link between Query.SQL and Query.ParamByName - both are strings. A renamed placeholder, a typo or a copied block leaves a ParamByName whose name is not in the SQL, and the mistake surfaces only when the statement runs: FireDAC, BDE, dbExpress, UniDAC, Zeos and ADO (Parameters.ParamByName) all raise 'parameter not found'. The opposite direction is reported for queries the routine creates itself: the SQL has :y, the routine binds other parameters of that query but never y - execution then fails with an unbound parameter (FireDAC: unknown data type, Oracle: ORA-01008) or silently binds NULL. The check works per routine and per query variable, reading from the routine's first 'begin', and only when it knows the query's SQL completely from literals in that routine: the query is created there (Q := TXxx.Create) or its SQL is cleared or assigned before the first Add, and every contribution is a string literal (sLineBreak and #13#10 included). Placeholders are :name outside SQL strings and comments - also :@name (ADO, SQL Server), names with $ or # (Oracle) and :"quoted names" - and a name counts as present if it matches either the identifier reading or the reading of Data.DB/ADODB ParseSQL, which runs to the next space, comma, semicolon or closing parenthesis; for the unknown-name direction a placeholder inside an SQL comment counts as present too, because Data.DB, ADO and IBX create it anyway. '::' casts, ':=' (PL/SQL), positional ':1', ':new.'/':old.' in trigger bodies and '?' parameters are not names. Names compare case-insensitively, as all the libraries do. Accesses that count as binding: ParamByName, Params.ParamByName, Parameters.ParamByName, FindParam, ParamValues['a;b'], and for Direct Oracle Access SetVariable, DeclareVariable, SetComplexVariable, SetLongVariable.
+
+```pascal
+// BAD
+Q := TFDQuery.Create(nil);
+Q.SQL.Add('SELECT name FROM customer');
+Q.SQL.Add('WHERE customer_id = :customer_id');
+Q.ParamByName('custid').AsInteger := Id;   // no :custid - raises at Open
+Q.Open;
+
+// GOOD
+Q := TFDQuery.Create(nil);
+Q.SQL.Add('SELECT name FROM customer');
+Q.SQL.Add('WHERE customer_id = :customer_id');
+Q.ParamByName('customer_id').AsInteger := Id;
+Q.Open;
+```
+
+What the message looks like:
+
+```
+Q.ParamByName('custid'): the SQL this routine assigns to Q has no :custid
+(it has :customer_id) - raises "parameter not found" at run time
+```
+
+---
+
+_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA199.md`._

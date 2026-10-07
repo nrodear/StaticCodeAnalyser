@@ -13,7 +13,7 @@
 const
   // Index == Ord(TFindingKind) - die JSON ist positionsgleich zum Enum
   // (Test RuleIDMatchesOrdinal sichert das ab).
-  RULE_CATALOG_DATA : array[0..197] of TRuleFallbackData = (
+  RULE_CATALOG_DATA : array[0..198] of TRuleFallbackData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -388,9 +388,9 @@ const
     (
       RuleID   : 'SCA043';
       Name     : 'Component has Action + OnClick';
-      ShortDesc: 'Action and OnClick both set - Action wins, OnClick is dead code';
-      BadEx    : 'object btnSave: TButton' + #13#10 + '  Action = actSave' + #13#10 +
-        '  OnClick = btnSaveClick   // never fires' + #13#10 + 'end';
+      ShortDesc: 'Action and OnClick both set - the explicit OnClick wins, the TAction glue is dead';
+      BadEx    : 'object btnSave: TButton' + #13#10 + '  Action = actSave   // its OnExecute never fires' +
+        #13#10 + '  OnClick = btnSaveClick   // THIS one fires' + #13#10 + 'end';
       GoodEx   : 'object btnSave: TButton' + #13#10 +
         '  Action = actSave   // the action carries the handler' + #13#10 + 'end' + #13#10 + #13#10 +
         '// or drop Action and keep OnClick - but not both'
@@ -1892,6 +1892,19 @@ const
         #13#10 + '  end;' + #13#10 + #13#10 + '  IWriter = interface' + #13#10 +
         '    [''{9B7E30C4-2D18-4A55-8F61-70E5C2A4193D}'']  // Ctrl+Shift+G' + #13#10 +
         '    procedure Write(const S: string);' + #13#10 + '  end;'
+    ),
+    // SCA199
+    (
+      RuleID   : 'SCA199';
+      Name     : 'ParamByName name does not match the SQL placeholders';
+      ShortDesc: 'ParamByName(''x'') on a query whose SQL has no :x (raises ''parameter not found'' at run time), or a :y in the SQL that the routine never assigns while it sets the query''s other parameters';
+      BadEx    : 'Q := TFDQuery.Create(nil);' + #13#10 + 'Q.SQL.Add(''SELECT name FROM customer'');' + #13#10 +
+        'Q.SQL.Add(''WHERE customer_id = :customer_id'');' + #13#10 +
+        'Q.ParamByName(''custid'').AsInteger := Id;   // no :custid - raises at Open' + #13#10 +
+        'Q.Open;';
+      GoodEx   : 'Q := TFDQuery.Create(nil);' + #13#10 + 'Q.SQL.Add(''SELECT name FROM customer'');' + #13#10 +
+        'Q.SQL.Add(''WHERE customer_id = :customer_id'');' + #13#10 +
+        'Q.ParamByName(''customer_id'').AsInteger := Id;' + #13#10 + 'Q.Open;'
     )
   );
 

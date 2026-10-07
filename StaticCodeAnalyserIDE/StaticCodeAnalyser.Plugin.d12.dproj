@@ -175,6 +175,8 @@
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyFinallyBlock.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyInterface.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uInterfaceGuid.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uParamNameScan.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uParamNameMismatch.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyMethod.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyOnHandler.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyVisibilitySection.pas"/>

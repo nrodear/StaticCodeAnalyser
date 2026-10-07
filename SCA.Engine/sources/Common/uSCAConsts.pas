@@ -738,7 +738,7 @@ type
                                  //          beide die GUID. Vorwaertsdeklarationen
                                  //          (`IFoo = interface;`) sind ausgenommen -
                                  //          sie DUERFEN keine tragen.
-    fkDuplicateInterfaceGuid     // SCA198 - dieselbe GUID an zwei VERSCHIEDEN benannten
+    fkDuplicateInterfaceGuid,    // SCA198 - dieselbe GUID an zwei VERSCHIEDEN benannten
                                  //          Interfaces. Warning, nicht Error: die
                                  //          Korpusmessung 2026-08-25 zeigte auf 76 Faellen
                                  //          rund ein Drittel echte Copy-Paste-Fehler, der
@@ -749,10 +749,17 @@ type
                                  //          Laufzeitfehler. Braucht den scan-weiten
                                  //          uInterfaceGuidIndex; die Meldung nennt die
                                  //          anderen Fundstellen mit Datei und Zeile.
+    fkParamNameMismatch          // SCA199 - ParamByName('x') ohne :x im SQL derselben
+                                 //          Query (Laufzeitfehler "parameter not found")
+                                 //          bzw. ein :y im SQL, das die Routine nie
+                                 //          zuweist, obwohl sie andere Parameter der
+                                 //          Query setzt. Je Routine, nur wenn das SQL
+                                 //          vollstaendig aus Literalen bekannt ist
+                                 //          (uParamNameScan). Anlass 2026-10-07.
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Delphi-Sets
-  // tragen hoechstens 256 Elemente - aktuell sind 198 belegt (SCA198),
+  // tragen hoechstens 256 Elemente - aktuell sind 199 belegt (SCA199),
   // die Reserve ist also endlich: die Encoding-Familie allein brachte
   // 9 Kinds, die Attribut-Familie 5. Wer sich der Grenze naehert, muss
   // TFindingKinds, PFindingKinds und die Ord(K)+1-basierte SCA-ID-
@@ -1038,7 +1045,8 @@ const
     (Name: 'UsedButNotInProject';        FindingType: ftCodeSmell;    DefaultSeverity: lsHint),    // fkUsedButNotInProject
     (Name: 'ManagedResultUninit';        FindingType: ftBug;          DefaultSeverity: lsWarning), // fkManagedResultUninit
     (Name: 'InterfaceWithoutGuid';       FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkInterfaceWithoutGuid
-    (Name: 'DuplicateInterfaceGuid';     FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkDuplicateInterfaceGuid
+    (Name: 'DuplicateInterfaceGuid';     FindingType: ftBug;          DefaultSeverity: lsWarning), // fkDuplicateInterfaceGuid
+    (Name: 'ParamNameMismatch';          FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkParamNameMismatch
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
@@ -1407,6 +1415,12 @@ begin
     // Variante 1 steht aus).
     fkManagedResultUninit
     : Result := fcMedium;
+
+    // SCA199 ParamNameMismatch (neu 2026-10-07): lexikalisch, je Routine,
+    // ohne Korpusmessung. fcMedium haelt die Regel im Default-Profil
+    // sichtbar und aus dem Error-Tier; fcHigh erst nach Korpus-Messung
+    // (Drops UND Adds) wie bei SCA196.
+    fkParamNameMismatch: Result := fcMedium;
 
     // SCA040 DfmCrossFormCoupling: nach dem Erwecken der Regel (Review-
     // HIGH 2026-08-08, war mit Binding=nil komplett tot) zeigte die

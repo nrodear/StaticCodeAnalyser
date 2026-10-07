@@ -794,6 +794,10 @@
     "SCA198": {
       "name": "Deux interfaces partagent le même GUID",
       "shortDescription": "Le même GUID figure sur plusieurs interfaces - Supports() renvoie celle enregistrée en premier, sans erreur de compilation. En générer un nouveau avec Ctrl+Maj+G"
+    },
+    "SCA199": {
+      "name": "Le nom passé à ParamByName ne correspond pas aux paramètres du SQL",
+      "shortDescription": "ParamByName('x') sur une requête dont le SQL n'a pas de :x (erreur « paramètre introuvable » à l'exécution), ou un :y dans le SQL que la routine n'affecte jamais alors qu'elle renseigne les autres paramètres de la requête"
     }
   }
 }

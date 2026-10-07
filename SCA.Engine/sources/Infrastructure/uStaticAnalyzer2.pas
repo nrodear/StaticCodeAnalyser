@@ -104,7 +104,7 @@ uses
   uLowercaseKeyword, uNoSonarMarker, uEmptyArgumentList,
   uInlineAssembly, uTrailingCommaArgList, uDigitGrouping,
   uCommentedOutCode, uUnitLevelKeywordIndent, uRedundantBoolean,
-  uEmptyInterface, uInterfaceGuid, uAssertMessage, uExplicitTObjectInheritance,
+  uEmptyInterface, uInterfaceGuid, uParamNameMismatch, uAssertMessage, uExplicitTObjectInheritance,
   uGroupedDeclaration, uEmptyBlock, uExceptOnException,
   uConsecutiveSection, uRedundantJump, uClassPerFile,
   uSuperfluousSemicolon, uEmptyFinallyBlock, uAssignedAndAssignedNil,
@@ -425,6 +425,12 @@ begin
   AddD('InterfaceGuid',   fkInterfaceWithoutGuid,
        TInterfaceGuidDetector.AnalyzeUnit);
   gDetectors[Count - 1].ExtraKinds := [fkDuplicateInterfaceGuid];
+  // SCA199: ParamByName-Namen gegen die :Platzhalter im SQL derselben Query.
+  // Vorfilter: ohne einen dieser Parameterzugriffe kann die Regel nichts
+  // melden - sie braucht mindestens einen (uParamNameScan).
+  AddD('ParamNameMismatch', fkParamNameMismatch,
+       TParamNameMismatchDetector.AnalyzeUnit,
+       ['parambyname', 'setvariable', 'declarevariable', 'findparam', 'paramvalues']);
   AddD('AssertMessage',   fkAssertMessage,   TAssertMessageDetector.AnalyzeUnit);
   AddD('ExplicitTObjectInheritance',fkExplicitTObjectInheritance,TExplicitTObjectInheritanceDetector.AnalyzeUnit);
   AddD('GroupedDeclaration',fkGroupedDeclaration,TGroupedDeclarationDetector.AnalyzeUnit);
