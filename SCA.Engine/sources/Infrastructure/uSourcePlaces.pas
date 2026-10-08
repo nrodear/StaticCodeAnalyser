@@ -253,11 +253,23 @@ begin
     FreeAndNil(FLines);
     Exit;
   end;
-  // Derselbe Lade-/Namenspfad wie in Produktion (ParseFile statt
-  // ParseSource): Root.Name = Dateipfad, Encoding-Fallbacks des Parsers.
+  // Den Text EINMAL dekodieren und genau ihn parsen (Review reDelphiX
+  // 2026-10-07, Major 1): ParseFile las die Datei ein zweites Mal ueber
+  // TStringList.LoadFromFile ohne Encoding - eine BOM-lose UTF-8-Datei
+  // wurde dort als ANSI gelesen, jedes Nicht-ASCII-Zeichen zaehlte im
+  // Parser 2-3 Spalten, in FLines eine. Spalten aus NodesAt/StatementAt
+  // zeigten dann rechts neben das Ziel. ParseNamedSource haelt Root.Name
+  // und die Include-Basis wie ParseFile.
   Parser := TParser2.Create;
   try
-    FRoot := Parser.ParseFile(AFileName);
+    try
+      FRoot := Parser.ParseNamedSource(FLines.Text, AFileName);
+    except
+      // Kein halboffener Zustand (Review Minor 1): Zeilen ohne Baum
+      // wuerden IsOpen = True melden.
+      Close;
+      raise;
+    end;
   finally
     Parser.Free;
   end;
@@ -273,10 +285,15 @@ begin
   Result := False;
   if ASource = '' then Exit;
   FLines := TStringList.Create;
-  FLines.Text := ASource;   // trennt CRLF, LF und CR wie der Lexer
+  FLines.Text := ASource;   // trennt CRLF, LF und CR in Zeilen
   Parser := TParser2.Create;
   try
-    FRoot := Parser.ParseSource(ASource);
+    try
+      FRoot := Parser.ParseSource(ASource);
+    except
+      Close;   // kein halboffener Zustand (Review Minor 1)
+      raise;
+    end;
   finally
     Parser.Free;
   end;

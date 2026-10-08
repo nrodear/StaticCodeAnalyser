@@ -7,8 +7,9 @@ unit uParser2;
 //     Abschnitt, je Name ein nkUsesItem (Name wie geschrieben, Spalte
 //     des ersten Zeichens),
 //   * je sonstiger Zeile mit ':=' ein nkAssign am ersten Bezeichner
-//     (Name = Text vor ':=' ohne Leerraum), sonst je Zeile mit '(' ein
-//     nkCall (Name = Zeile ab dem Bezeichner ohne ';'),
+//     (Name = Text vor ':=' ohne Leerraum), dazu je weiterem ':=' auf
+//     derselben Zeile ein nkAssign am Bezeichner direkt davor; sonst je
+//     Zeile mit '(' ein nkCall (Name = Zeile ab dem Bezeichner ohne ';'),
 //   * fuer {$IFDEF ... {$ENDIF} einen nkConditionalRange-Marker am Root
 //     (Line = Start, TypeRef = Endzeile) - wie uParser2 im Core.
 // Tests, die darauf laufen, pruefen also die Logik von uSourcePlaces,
@@ -25,12 +26,14 @@ type
     constructor Create;
     function ParseFile(const FileName: string): TAstNode;
     function ParseSource(const Source: string): TAstNode;
+    // Wie im Core: ParseSource + Root.Name = FileName.
+    function ParseNamedSource(const Source, FileName: string): TAstNode;
   end;
 
 implementation
 
 uses
-  SysUtils, Classes;
+  SysUtils, StrUtils, Classes;
 
 constructor TParser2.Create;
 begin
@@ -57,6 +60,7 @@ function TParser2.ParseSource(const Source: string): TAstNode;
 var
   SL      : TStringList;
   i, c, p : Integer;
+  q, e    : Integer;
   L, Low  : string;
   Section : TAstNode;   // Root, Interface- oder Implementation-Knoten
   M       : TAstNode;
@@ -129,8 +133,23 @@ begin
       if L[c] = '{' then Continue;
       p := Pos(':=', L);
       if p > 0 then
+      begin
         M.Add(nkAssign, Trim(Copy(L, c, p - c)), i + 1, c).TypeRef :=
-          Trim(Copy(L, p + 2, MaxInt))
+          Trim(Copy(L, p + 2, MaxInt));
+        // weitere Zuweisungen auf derselben Zeile ('a := 1; b := 2;')
+        q := PosEx(':=', L, p + 2);
+        while q > 0 do
+        begin
+          e := q - 1;
+          while (e > 0) and (L[e] = ' ') do Dec(e);
+          s := e;
+          while (s > 1) and IsIdentCh(L[s - 1]) do Dec(s);
+          if (e >= s) and IsIdentCh(L[s]) then
+            M.Add(nkAssign, Copy(L, s, e - s + 1), i + 1, s).TypeRef :=
+              Trim(Copy(L, q + 2, MaxInt));
+          q := PosEx(':=', L, q + 2);
+        end;
+      end
       else if Pos('(', L) > 0 then
         M.Add(nkCall, StringReplace(Trim(Copy(L, c, MaxInt)), ';', '',
           [rfReplaceAll]), i + 1, c);
@@ -138,6 +157,12 @@ begin
   finally
     SL.Free;
   end;
+end;
+
+function TParser2.ParseNamedSource(const Source, FileName: string): TAstNode;
+begin
+  Result := ParseSource(Source);
+  Result.Name := FileName;
 end;
 
 function TParser2.ParseFile(const FileName: string): TAstNode;

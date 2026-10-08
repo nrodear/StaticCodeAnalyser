@@ -18,6 +18,12 @@ type
     function ParseFile(const FileName: string): TAstNode;
     // Parst einen String direkt.
     function ParseSource(const Source: string): TAstNode;
+    // Parst einen schon gelesenen Dateiinhalt so, wie ParseFile die Datei
+    // parsen wuerde (Root.Name = FileName, Include-Basis = Verzeichnis
+    // der Datei) - ohne sie ein zweites Mal von der Platte zu dekodieren.
+    // Fuer Konsumenten, die die Zeilen selbst halten (uSourcePlaces):
+    // Parser-Spalten und Zeilentext stammen dann aus DEMSELBEN String.
+    function ParseNamedSource(const Source, FileName: string): TAstNode;
   private
     FLex      : TLexer;
     // Include-Define-Tracking (Charge 14): voller Pfad der gerade
@@ -306,18 +312,23 @@ begin
         end;
       end;
     end;
-    FCurrentFilePath := FileName;
-    try
-      Result := ParseSource(SL.Text);
-    finally
-      // Ein Parser-Objekt parst mehrere Dateien nacheinander - der
-      // Pfad darf nicht in einen folgenden ParseSource-Aufruf lecken.
-      FCurrentFilePath := '';
-    end;
-    Result.Name := FileName;
+    Result := ParseNamedSource(SL.Text, FileName);
   finally
     SL.Free;
   end;
+end;
+
+function TParser2.ParseNamedSource(const Source, FileName: string): TAstNode;
+begin
+  FCurrentFilePath := FileName;
+  try
+    Result := ParseSource(Source);
+  finally
+    // Ein Parser-Objekt parst mehrere Dateien nacheinander - der
+    // Pfad darf nicht in einen folgenden ParseSource-Aufruf lecken.
+    FCurrentFilePath := '';
+  end;
+  Result.Name := FileName;
 end;
 
 function TParser2.ParseSource(const Source: string): TAstNode;

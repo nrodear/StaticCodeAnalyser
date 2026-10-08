@@ -36,6 +36,10 @@ type
     [Test] procedure NodesAt_FindsAssignAndCallOnTheirLines;
     [Test] procedure NodesAt_UnknownLine_Empty;
     [Test] procedure NodesAt_ThenChainOf_RoundTrip;
+    // Review reDelphiX 2026-10-07, Major 1: BOM-lose UTF-8-Datei mit
+    // Umlauten VOR einer zweiten Anweisung auf derselben Zeile - die
+    // Knotenspalte muss im Zeilentext auf das Ziel zeigen.
+    [Test] procedure Open_Utf8WithoutBom_ColumnsMatchLineText;
 
     // ---- P2 auf dem Handbaum ----
     [Test] procedure Collect_NilRoot_Empty;
@@ -77,15 +81,21 @@ const
     'end;'#13#10 +
     'end.';
 
+// Eindeutiger Pfad fuer eine Temp-Unit.
+function TempPasPath(const APrefix: string): string;
+begin
+  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
+    + APrefix + FormatDateTime('hhnnsszzz', Now, FormatSettings)
+    + IntToStr(Random(1000000)) + '.pas';
+end;
+
 // Schreibt ASource in eine Temp-Datei und liefert deren Pfad. Der
 // Aufrufer loescht sie.
 function WriteTemp(const ASource: string): string;
 var
   SL : TStringList;
 begin
-  Result := IncludeTrailingPathDelimiter(GetEnvironmentVariable('TEMP'))
-    + 'sca_places_' + FormatDateTime('hhnnsszzz', Now)
-    + IntToStr(Random(1000000)) + '.pas';
+  Result := TempPasPath('sca_places_');
   SL := TStringList.Create;
   try
     SL.Text := ASource;
@@ -127,6 +137,23 @@ begin
         Exit(Pos(AMarker, SL[i]));
   finally
     SL.Free;
+  end;
+end;
+
+// Schreibt ASource als UTF-8 OHNE BOM (wie viele Editoren speichern).
+function WriteTempUtf8NoBom(const ASource: string): string;
+var
+  Bytes : TBytes;
+  FS    : TFileStream;
+begin
+  Result := TempPasPath('sca_places_u8_');
+  Bytes := TEncoding.UTF8.GetBytes(ASource);
+  FS := TFileStream.Create(Result, fmCreate);
+  try
+    if Length(Bytes) > 0 then
+      FS.WriteBuffer(Bytes[0], Length(Bytes));
+  finally
+    FS.Free;
   end;
 end;
 
@@ -340,6 +367,43 @@ begin
     Assert.AreEqual<Integer>(0, Length(P.NodesAt(999, [nkAssign, nkCall])));
     Assert.AreEqual<Integer>(0, Length(P.NodesAt(0, [nkAssign, nkCall])));
     Assert.AreEqual<Integer>(0, Length(P.NodesAt(LineOf(SRC_UNIT, 'r :='), [])));
+  finally
+    P.Free;
+    DeleteFile(Path);
+  end;
+end;
+
+procedure TTestSourcePlaces.Open_Utf8WithoutBom_ColumnsMatchLineText;
+const
+  // 'Groesse' mit o-Umlaut und sz: zwei Zeichen, die in UTF-8 je zwei
+  // Bytes haben - als ANSI gelesen waeren es je zwei Zeichen.
+  UMLAUT_LINE = '  Caption := ''Gr'#$00F6#$00DF'e''; Text := ''A'' + S;';
+var
+  P     : TSourcePlaces;
+  Src   : string;
+  Path  : string;
+  Line  : Integer;
+  Nodes : TArray<TNodeRef>;
+begin
+  Src :=
+    'unit t; implementation'#13#10 +
+    'procedure Foo;'#13#10 +
+    'var Caption, Text, S: string;'#13#10 +
+    'begin'#13#10 +
+    UMLAUT_LINE + #13#10 +
+    'end;'#13#10 +
+    'end.';
+  Path := WriteTempUtf8NoBom(Src);
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.Open(Path));
+    Line := LineOf(Src, 'Text :=');
+    Assert.AreEqual(UMLAUT_LINE, P.LineText(Line), 'Zeile UTF-8 dekodiert');
+    Nodes := P.NodesAt(Line, [nkAssign]);
+    Assert.AreEqual<Integer>(2, Length(Nodes), 'zwei Zuweisungen auf der Zeile');
+    Assert.AreEqual('Text', Nodes[1].Name);
+    Assert.AreEqual<Integer>(Pos('Text :=', UMLAUT_LINE), Nodes[1].Col,
+      'Spalte im Zeilentext, nicht im ANSI-Text vom Parser');
   finally
     P.Free;
     DeleteFile(Path);
