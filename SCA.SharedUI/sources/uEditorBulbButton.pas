@@ -68,8 +68,33 @@ type
 
 implementation
 
-// Die Zahlen in UpdateRegion und Paint sind Proportionen der
+// Die Zahlen in BulbShapeOf und Paint sind Proportionen der
 // Gluehbirnenform (Prozent der Kantenlaenge), keine Konfigurationswerte.
+
+type
+  // Lage von Glaskolben und Sockel in einem S x S grossen Steuerelement.
+  // EINE Quelle fuer Fensterregion und Zeichnung - sonst schnitte die
+  // Region die gemalte Form an.
+  TBulbShape = record
+    GlassLeft  : Integer;   // Kolben: Kreis im Quadrat GlassLeft..+GlassSize, 0..GlassSize
+    GlassSize  : Integer;
+    BaseLeft   : Integer;   // Sockel: Rechteck BaseLeft..BaseRight, BaseTop..S
+    BaseRight  : Integer;
+    BaseTop    : Integer;
+  end;
+
+// Der Kolben ist ein KREIS (Nico 2026-10-08: "die Birne ist nicht rund" -
+// bis dahin eine Ellipse ueber die volle Breite bei 74 % Hoehe), mittig
+// ueber einem schmaleren Sockel, der ein Stueck unter den Kreis reicht.
+function BulbShapeOf(S: Integer): TBulbShape;
+begin
+  Result.GlassSize := (S * 76) div 100;
+  if Result.GlassSize < 4 then Result.GlassSize := 4;
+  Result.GlassLeft := (S - Result.GlassSize) div 2;
+  Result.BaseLeft  := (S * 34) div 100;
+  Result.BaseRight := S - 1 - Result.BaseLeft;
+  Result.BaseTop   := Result.GlassSize - (S * 12) div 100;
+end;
 
 const
   CLR_BULB_DEFAULT    = $0040C8FF;   // BGR: warmes Gelb
@@ -105,18 +130,23 @@ begin
     UpdateRegion;
 end;
 
-// Fensterregion = Glaskolben (Ellipse) + Sockel (Rechteck). SetWindowRgn
+// Fensterregion = Glaskolben (Kreis) + Sockel (Rechteck). SetWindowRgn
 // uebernimmt das Handle - nicht selbst freigeben.
 procedure TSCABulbButton.UpdateRegion;
 var
-  S : Integer;
+  S     : Integer;
+  Shape : TBulbShape;
   Glass, Base : HRGN;
 begin
   S := Width;
   if (S < MIN_REGION_SIZE) or (Height < MIN_REGION_SIZE) then Exit;
-  Glass := CreateEllipticRgn(0, 0, S + 1, (S * 74) div 100 + 1);
-  Base  := CreateRectRgn((S * 30) div 100, (S * 60) div 100,
-    (S * 70) div 100 + 1, S);
+  Shape := BulbShapeOf(S);
+  // +1: die Region schliesst rechts/unten aus, der Umriss liegt aber auf
+  // der letzten Spalte/Zeile des Kreises.
+  Glass := CreateEllipticRgn(Shape.GlassLeft, 0,
+    Shape.GlassLeft + Shape.GlassSize + 1, Shape.GlassSize + 1);
+  Base  := CreateRectRgn(Shape.BaseLeft, Shape.BaseTop,
+    Shape.BaseRight + 1, S);
   CombineRgn(Glass, Glass, Base, RGN_OR);
   DeleteObject(Base);
   SetWindowRgn(Handle, Glass, True);
@@ -129,36 +159,35 @@ end;
 
 procedure TSCABulbButton.Paint;
 var
-  S, GlassBottom, BaseLeft, BaseRight, BaseTop : Integer;
+  S, G, X, BaseH : Integer;
+  Shape : TBulbShape;
 begin
-  S := Width;
-  GlassBottom := (S * 74) div 100;
-  BaseLeft    := (S * 30) div 100;
-  BaseRight   := (S * 70) div 100;
-  BaseTop     := (S * 60) div 100;
+  S     := Width;
+  Shape := BulbShapeOf(S);
+  G     := Shape.GlassSize;
+  X     := Shape.GlassLeft;
+  BaseH := S - Shape.BaseTop;
 
-  // Sockel
+  // Sockel zuerst - der Kolben ueberdeckt danach seine Oberkante
   Canvas.Pen.Color := FOutlineColor;
   Canvas.Pen.Width := 1;
   Canvas.Brush.Style := bsSolid;
   Canvas.Brush.Color := CLR_BASE;
-  Canvas.Rectangle(BaseLeft, BaseTop, BaseRight + 1, S);
-  Canvas.MoveTo(BaseLeft, BaseTop + (S - BaseTop) div 3);
-  Canvas.LineTo(BaseRight, BaseTop + (S - BaseTop) div 3);
-  Canvas.MoveTo(BaseLeft, BaseTop + (2 * (S - BaseTop)) div 3);
-  Canvas.LineTo(BaseRight, BaseTop + (2 * (S - BaseTop)) div 3);
+  Canvas.Rectangle(Shape.BaseLeft, Shape.BaseTop, Shape.BaseRight + 1, S);
+  Canvas.MoveTo(Shape.BaseLeft, Shape.BaseTop + (2 * BaseH) div 3);
+  Canvas.LineTo(Shape.BaseRight, Shape.BaseTop + (2 * BaseH) div 3);
 
-  // Glaskolben
+  // Glaskolben: Kreis
   if FHot or FDown then
     Canvas.Brush.Color := CLR_BULB_HOT
   else
     Canvas.Brush.Color := FBulbColor;
-  Canvas.Ellipse(0, 0, S, GlassBottom);
+  Canvas.Ellipse(X, 0, X + G, G);
 
-  // Glanzpunkt
+  // Glanzpunkt oben links im Kreis
   Canvas.Pen.Color := clWhite;
-  Canvas.Arc(S div 5, S div 7, (S * 3) div 5, (S * 3) div 5,
-    S div 2, S div 7, S div 5, S div 2);
+  Canvas.Arc(X + G div 5, G div 5, X + (G * 3) div 5, (G * 3) div 5,
+    X + G div 2, G div 5, X + G div 5, G div 2);
 end;
 
 procedure TSCABulbButton.CMMouseEnter(var Msg: TMessage);
