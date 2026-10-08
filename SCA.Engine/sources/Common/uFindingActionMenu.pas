@@ -10,7 +10,12 @@ unit uFindingActionMenu;
 // ersten Fund mit Aktionen, je Fund optional eine deaktivierte Kopfzeile
 // 'SCAnnn  Meldung', darunter die Aktionen 'Caption  (Hint)'. Enabled
 // ist Enabled des Anbieters UND Execute zugewiesen; ActionIndex zeigt in
-// die flache Liste Actions, ueber die der Host ausfuehrt. Wirft ein
+// die flache Liste Actions, ueber die der Host ausfuehrt. Mit
+// moAvailableFixesOnly bleiben nur Aktionen, die der Benutzer JETZT
+// ausfuehren kann und die etwas aendern (Kind = fakFix, Enabled, Execute
+// zugewiesen) - die Form der Gluehbirne: kein "Stelle zeigen", keine
+// ausgegrauten Eintraege, keine Diagnosezeilen der Anbieter; ein Fund ohne
+// solche Aktion faellt samt Kopfzeile weg. Wirft ein
 // Anbieter beim Erfragen, fallen die Aktionen DIESES Funds weg (alle
 // Anbieter - TFindingActions.ActionsFor wirft als Ganzes), nie das
 // Menue; die Meldung landet in Errors, der Host protokolliert sie.
@@ -40,7 +45,7 @@ type
     function ActionCount: Integer;
   end;
 
-  TFindingMenuOption  = (moLeadingSeparator, moHeaders);
+  TFindingMenuOption  = (moLeadingSeparator, moHeaders, moAvailableFixesOnly);
   TFindingMenuOptions = set of TFindingMenuOption;
 
 const
@@ -99,6 +104,31 @@ end;
 
 { ---- Modell ---- }
 
+function IsAvailableFix(const AAction: TFindingAction): Boolean;
+begin
+  Result := (AAction.Kind = fakFix) and AAction.Enabled
+    and Assigned(AAction.Execute);
+end;
+
+// Die Aktionen eines Funds, wie sie ins Modell gehen.
+function FilterActions(const AActions: TArray<TFindingAction>;
+  AOptions: TFindingMenuOptions): TArray<TFindingAction>;
+var
+  k, n : Integer;
+begin
+  if not (moAvailableFixesOnly in AOptions) then
+    Exit(AActions);
+  SetLength(Result, Length(AActions));
+  n := 0;
+  for k := 0 to High(AActions) do
+    if IsAvailableFix(AActions[k]) then
+    begin
+      Result[n] := AActions[k];
+      Inc(n);
+    end;
+  SetLength(Result, n);
+end;
+
 procedure AddEntry(var AModel: TFindingMenuModel; AKind: TFindingMenuEntryKind;
   const ACaption, AHint: string; AEnabled: Boolean; AActionIndex: Integer);
 var
@@ -128,7 +158,7 @@ begin
   SepDone := False;
   for i := 0 to Count - 1 do
   begin
-    Acts := AActions[i];
+    Acts := FilterActions(AActions[i], AOptions);
     if Length(Acts) = 0 then Continue;
     if (moLeadingSeparator in AOptions) and not SepDone then
     begin

@@ -43,6 +43,13 @@ unit uFindingActions;
 //     geladen ist - deshalb ist das Token Pflicht, nicht Komfort.
 //   * Die Registry veraendert keinen Fund. Sie ist fuer Detektoren
 //     unsichtbar und bewegt keine Fundzahl.
+//   * Kind sagt, WAS eine Aktion ist: fakFix aendert den Code oder hilft
+//     beim Aendern (Ersetzen, uses, Vorlage in die Zwischenablage),
+//     fakNavigate fuehrt nur hin (Stelle zeigen). Die Gluehbirne im Editor
+//     zeigt nur verfuegbare fakFix - der Benutzer steht dort schon an der
+//     Stelle (Nico 2026-10-08); Kontextmenue und Dock-Grid zeigen alles.
+//     Der Wert 0 ist fakFix: ein Anbieter, der Kind nicht setzt, bleibt
+//     bei SetLength/Default(TFindingAction) eine Hilfe.
 
 interface
 
@@ -51,11 +58,16 @@ uses
   uMethodd12;
 
 type
+  // Was eine Aktion ist (siehe VERTRAG oben). fakFix MUSS Ordnungszahl 0
+  // bleiben.
+  TFindingActionKind = (fakFix, fakNavigate);
+
   TFindingAction = record
     Caption : string;        // Menuetext, bereits lokalisiert
     Hint    : string;        // was passiert bzw. warum nicht (Enabled = False)
     Enabled : Boolean;
     Execute : TNotifyEvent;  // nil bei Enabled = False erlaubt
+    Kind    : TFindingActionKind;
   end;
 
   // Liefert die Aktionen eines Anbieters zu einem Fund; leer, wenn der

@@ -235,6 +235,7 @@ begin
   A.Caption := ACaption;
   A.Hint    := AHint;
   A.Enabled := AEnabled and Assigned(AAction);
+  A.Kind    := fakFix;   // AddShowSpan stellt danach auf fakNavigate
   if Assigned(AAction) then
     A.Execute := AAction.Execute
   else
@@ -254,6 +255,9 @@ begin
   Add(AList, CAP_SHOW, Format('Zeile %d:%d bis %d:%d',
     [AInfo.Span.StartLine, AInfo.Span.StartCol,
      AInfo.Span.EndLine, AInfo.Span.EndCol - 1]), True, Act);
+  // Fuehrt nur hin - die Gluehbirne im Editor laesst das weg, der
+  // Benutzer steht dort schon an der Stelle.
+  AList[High(AList)].Kind := fakNavigate;
 end;
 
 procedure TRdxProvider.AddFormatCall(var AList: TArray<TFindingAction>;

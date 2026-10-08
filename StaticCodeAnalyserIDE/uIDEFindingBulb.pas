@@ -1,10 +1,14 @@
 unit uIDEFindingBulb;
 
 // Editor-Gluehbirne im Plugin (Konzept_GluehbirneAnzeige_2026-10-08, Weg C,
-// Arbeitsplan Stufe 2+3): an der CARET-Zeile, wenn dort ein Fund liegt und ein
-// Aktions-Anbieter (uFindingActions, z. B. reDelphix) angemeldet ist.
-// Klick, Rechtsklick oder Menue-Taste auf die Birne oeffnen dasselbe
-// Aktionsmenue wie das Editor-Kontextmenue (uFindingActionMenu).
+// Arbeitsplan Stufe 2+3): an der CARET-Zeile, wenn ein Aktions-Anbieter
+// (uFindingActions, z. B. reDelphix) zu einem Fund dort eine HILFE anbietet,
+// die jetzt ausfuehrbar ist (Nico 2026-10-08: "nur wenn Editorhilfen
+// vorhanden sind"). Klick, Rechtsklick oder Menue-Taste oeffnen das
+// Aktionsmenue aus uFindingActionMenu in der Form moAvailableFixesOnly:
+// ohne "Stelle zeigen" (der Benutzer steht schon dort), ohne ausgegraute
+// Eintraege und Diagnosezeilen - Kontextmenue und Dock-Grid zeigen weiter
+// alles.
 //
 // Die Birne ist ein echtes Steuerelement (uEditorBulbButton) als KIND des
 // Code-Editors, im Gutter rechtsbuendig vor dem Code. Der Aufbau ist der
@@ -21,12 +25,17 @@ unit uIDEFindingBulb;
 //   * Beim Scrollen wandert die Birne mit der Zeile; aus nur, wenn die
 //     Caret-Zeile nicht ganz sichtbar ist (Ausblenden waehrend des Scrollens
 //     blinkte im Prototyp).
-//   * Ob die Birne erscheint, entscheidet ein billiger Test: Fund auf der
-//     Zeile UND mindestens ein Anbieter. Die Aktionen selbst werden erst
-//     beim Klick erfragt - reDelphix parst dafuer die ganze Datei, das ist
-//     fuer jede Caret-Bewegung zu teuer (gleiches Muster wie das
-//     Kontextmenue). Der Test wird je Zeile hoechstens einmal je Sekunde
-//     wiederholt, damit ein neuer Scan die Birne nachzieht.
+//   * Ob die Birne erscheint, entscheiden zwei Stufen (WantsBulb):
+//     1. billig - Fund auf der Zeile UND mindestens ein Anbieter; je Zeile
+//        hoechstens einmal je Sekunde neu, damit ein neuer Scan nachzieht;
+//     2. teuer - die Anbieter fragen, ob eine verfuegbare Hilfe dabei ist.
+//        reDelphix parst dafuer die ganze Datei. Deshalb erst, wenn der
+//        Caret SETTLE_MS auf der Zeile ruht (Durchpfeilen fragt nie), und
+//        je Schluessel Datei+Zeile+Zeilentext+Funde nur EINMAL. Tippen auf
+//        der Zeile aendert den Schluessel; bis zur neuen Antwort gilt die
+//        alte weiter (sonst blinkte die Birne bei jedem Tastendruck).
+//     Nach einer ausgefuehrten Aktion werden alle Antworten verworfen, und
+//     das Menue selbst fragt beim Oeffnen frisch und korrigiert die Antwort.
 //   * Editoren werden als HWND gemerkt; vor jeder Benutzung IsWindow und
 //     FindControl. FreeNotification meldet geschlossene Editorfenster.
 //   * Birnen ohne Owner und ohne Name; beim Abmelden alle freigeben, bevor
@@ -82,15 +91,21 @@ const
   TIMER_CARET         = 1;     // Caret-Zeile nachfuehren (Tastatur loest kein Paint aus)
   CARET_POLL_MS       = 250;
   FINDINGS_RECHECK_MS = 1000;  // ein neuer Scan zieht die Birne spaetestens so nach
+  SETTLE_MS           = 400;   // so lange ruht der Caret, bevor die Anbieter gefragt werden
+  KEY_SEP             = #1;
   MAX_VISIBLE_SCAN    = 600;   // Obergrenze fuer TopLine..BottomLine
 
 type
-  // Was die Birne zuletzt fuer einen Editor entschieden hat.
+  // Was die Birne zuletzt fuer einen Editor entschieden hat (WantsBulb).
   TBulbLineState = record
-    FileName : string;
-    Line     : Integer;
-    Has      : Boolean;   // Fund auf der Zeile und ein Anbieter da
-    Stamp    : UInt64;    // GetTickCount64 der Entscheidung
+    FileName  : string;
+    Line      : Integer;
+    FindSig   : string;    // Fingerabdruck der Funde der Zeile; '' = keine oder kein Anbieter
+    FindStamp : UInt64;    // GetTickCount64, als FindSig bestimmt wurde
+    Key       : string;    // Datei, Zeile, Zeilentext, FindSig - wofuer HasFixes gilt
+    KeySince  : UInt64;    // seit wann der Caret auf Key ruht
+    Checked   : Boolean;   // die Anbieter wurden fuer Key gefragt
+    HasFixes  : Boolean;   // ... und boten eine verfuegbare Hilfe an
   end;
 
   TFindingBulbManager = class(TComponent)
@@ -115,10 +130,12 @@ type
     function BulbFor(AEditorWnd: HWND; AEditor: TWinControl): TSCABulbButton;
     function CaretOf(AEditor: TWinControl; out AFile: string;
       out ALine: Integer): Boolean;
-    function LineHasFindings(AEditorWnd: HWND; const AFile: string;
-      ALine: Integer): Boolean;
+    function WantsBulb(AEditorWnd: HWND; const AFile: string; ALine: Integer;
+      const ALineText: string): Boolean;
+    function HasAvailableFixes(const AFile: string; ALine: Integer): Boolean;
     function FindCaretRect(AEditor: TWinControl; ACaretLine: Integer;
-      out ALineRect: TRect; out ACodeLeft: Integer): Boolean;
+      out ALineRect: TRect; out ACodeLeft: Integer;
+      out ALineText: string): Boolean;
     procedure BulbBeforeMenu(Sender: TObject);
     procedure ActionClick(Sender: TObject);
   protected
@@ -311,9 +328,12 @@ begin
       Schedule(Ed);   // die Birne einer verlassenen Zeile muss weg
       Exit;
     end;
+    // Neu bewerten: andere Zeile, alte Fund-Antwort, oder eine Anbieter-
+    // Frage wartet darauf, dass der Caret lange genug ruht.
     if not FLineState.TryGetValue(Ed.Handle, St) or (St.Line <> Line) or
        not SameText(St.FileName, FileName) or
-       (GetTickCount64 - St.Stamp >= FINDINGS_RECHECK_MS) then
+       (GetTickCount64 - St.FindStamp >= FINDINGS_RECHECK_MS) or
+       ((St.Key <> '') and not St.Checked) then
       Schedule(Ed);
   except
   end;
@@ -346,27 +366,97 @@ begin
   Result := (AFile <> '') and (ALine >= 1);
 end;
 
-function TFindingBulbManager.LineHasFindings(AEditorWnd: HWND;
-  const AFile: string; ALine: Integer): Boolean;
+// Fingerabdruck der Funde einer Zeile: aendert ein neuer Scan sie, wird
+// die Anbieter-Antwort neu eingeholt.
+function FindingsSignature(const AFound: TArray<TLeakFinding>): string;
 var
-  St    : TBulbLineState;
-  NowMs : UInt64;
+  F  : TLeakFinding;
+  SB : TStringBuilder;
+begin
+  SB := TStringBuilder.Create;
+  try
+    for F in AFound do
+      if Assigned(F) then
+        SB.Append(Ord(F.Kind)).Append(':').Append(F.LineInt).Append(':')
+          .Append(F.MissingVar).Append(KEY_SEP);
+    Result := SB.ToString;
+  finally
+    SB.Free;
+  end;
+end;
+
+function TFindingBulbManager.WantsBulb(AEditorWnd: HWND; const AFile: string;
+  ALine: Integer; const ALineText: string): Boolean;
+var
+  St     : TBulbLineState;
+  NowMs  : UInt64;
+  Found  : TArray<TLeakFinding>;
+  Prefix : string;
+  Key    : string;
 begin
   NowMs := GetTickCount64;
-  if FLineState.TryGetValue(AEditorWnd, St) and (St.Line = ALine) and
-     SameText(St.FileName, AFile) and (NowMs - St.Stamp < FINDINGS_RECHECK_MS) then
-    Exit(St.Has);
-  St.FileName := AFile;
-  St.Line     := ALine;
-  St.Stamp    := NowMs;
-  St.Has      := (TFindingActions.ProviderCount > 0) and Assigned(FFindingsAt)
-                 and (Length(FFindingsAt(AFile, ALine)) > 0);
+  if not FLineState.TryGetValue(AEditorWnd, St) then
+    St := Default(TBulbLineState);
+
+  // Stufe 1, billig: Fund auf der Zeile und ein Anbieter da.
+  if (St.Line <> ALine) or not SameText(St.FileName, AFile) or
+     (NowMs - St.FindStamp >= FINDINGS_RECHECK_MS) then
+  begin
+    Found := nil;
+    if (TFindingActions.ProviderCount > 0) and Assigned(FFindingsAt) then
+      Found := FFindingsAt(AFile, ALine);
+    St.FileName  := AFile;
+    St.Line      := ALine;
+    St.FindSig   := FindingsSignature(Found);
+    St.FindStamp := NowMs;
+  end;
+  if St.FindSig = '' then
+  begin
+    St.Key := '';
+    FLineState.AddOrSetValue(AEditorWnd, St);
+    Exit(False);
+  end;
+
+  // Stufe 2, teuer: bietet ein Anbieter eine verfuegbare Hilfe an?
+  Prefix := AFile + KEY_SEP + IntToStr(ALine) + KEY_SEP;
+  Key    := Prefix + ALineText + KEY_SEP + St.FindSig;
+  if Key <> St.Key then
+  begin
+    // Dieselbe Zeile, nur Text oder Funde anders (Tippen): die alte
+    // Antwort gilt vorlaeufig weiter. Eine andere Zeile beginnt ohne Birne.
+    St.HasFixes := St.Checked and St.HasFixes and
+      (Copy(St.Key, 1, Length(Prefix)) = Prefix);
+    St.Key      := Key;
+    St.KeySince := NowMs;
+    St.Checked  := False;
+  end;
+  if not St.Checked and (NowMs - St.KeySince >= SETTLE_MS) then
+  begin
+    St.HasFixes := HasAvailableFixes(AFile, ALine);
+    St.Checked  := True;
+  end;
   FLineState.AddOrSetValue(AEditorWnd, St);
-  Result := St.Has;
+  Result := St.HasFixes;
+end;
+
+function TFindingBulbManager.HasAvailableFixes(const AFile: string;
+  ALine: Integer): Boolean;
+var
+  Model : TFindingMenuModel;
+  i     : Integer;
+begin
+  Result := False;
+  if not Assigned(FFindingsAt) then Exit;
+  Model := BuildFindingMenuModel(FFindingsAt(AFile, ALine),
+    [moAvailableFixesOnly]);
+  for i := 0 to High(Model.Errors) do
+    BulbLog('finding action provider failed - ' + Model.Errors[i]);
+  Result := not Model.IsEmpty;
 end;
 
 function TFindingBulbManager.FindCaretRect(AEditor: TWinControl;
-  ACaretLine: Integer; out ALineRect: TRect; out ACodeLeft: Integer): Boolean;
+  ACaretLine: Integer; out ALineRect: TRect; out ACodeLeft: Integer;
+  out ALineText: string): Boolean;
 var
   Svc   : INTACodeEditorServices;
   State : INTACodeEditorState;
@@ -376,6 +466,7 @@ begin
   Result := False;
   ALineRect := Rect(0, 0, 0, 0);
   ACodeLeft := 0;
+  ALineText := '';
   if not Supports(BorlandIDEServices, INTACodeEditorServices, Svc) then Exit;
   State := Svc.GetEditorState(AEditor);
   if not Assigned(State) then Exit;
@@ -392,6 +483,7 @@ begin
       ALineRect := LS.WholeRect;
       if ALineRect.Bottom <= ALineRect.Top then
         ALineRect.Bottom := ALineRect.Top + State.CharHeight;
+      ALineText := LS.Text;
       Exit(True);
     end;
   end;
@@ -424,6 +516,7 @@ var
   B        : TSCABulbButton;
   FileName : string;
   Line     : Integer;
+  LineText : string;
   LineRect : TRect;
   CodeLeft : Integer;
   Inp      : TEditorBulbInput;
@@ -437,9 +530,11 @@ begin
     Exit;
   end;
   try
+    // Erst die Lage (unsichtbare Zeile: nie die Anbieter fragen), dann
+    // die Entscheidung.
     if not CaretOf(Ed, FileName, Line) or
-       not LineHasFindings(AEditorWnd, FileName, Line) or
-       not FindCaretRect(Ed, Line, LineRect, CodeLeft) then
+       not FindCaretRect(Ed, Line, LineRect, CodeLeft, LineText) or
+       not WantsBulb(AEditorWnd, FileName, Line, LineText) then
     begin
       HideBulb(AEditorWnd);
       Exit;
@@ -474,7 +569,9 @@ end;
 
 // Vor dem Oeffnen: zu welchem Editor gehoert die geklickte Birne? Dessen
 // Caret-Zeile bestimmt die Funde; die Aktionen werden JETZT erfragt -
-// frisch, damit die Objekte der Anbieter zum Menue passen.
+// frisch, damit die Objekte der Anbieter zum Menue passen. Nur verfuegbare
+// Hilfen (moAvailableFixesOnly); die frische Antwort korrigiert zugleich
+// die gemerkte - ist nichts mehr da, geht die Birne danach aus.
 procedure TFindingBulbManager.BulbBeforeMenu(Sender: TObject);
 var
   Pair      : TPair<HWND, TSCABulbButton>;
@@ -484,6 +581,7 @@ var
   Line      : Integer;
   Model     : TFindingMenuModel;
   Item      : TMenuItem;
+  St        : TBulbLineState;
   i         : Integer;
 begin
   FMenu.Items.Clear;
@@ -499,11 +597,20 @@ begin
     Ed := EditorOf(EditorWnd);
     if Assigned(Ed) and Assigned(FFindingsAt) and CaretOf(Ed, FileName, Line) then
     begin
-      Model := BuildFindingMenuModel(FFindingsAt(FileName, Line), [moHeaders]);
+      Model := BuildFindingMenuModel(FFindingsAt(FileName, Line),
+        [moHeaders, moAvailableFixesOnly]);
       for i := 0 to High(Model.Errors) do
         BulbLog('finding action provider failed - ' + Model.Errors[i]);
       FActions := Model.Actions;
       FillPopupFromModel(FMenu, Model, ActionClick, 0, FMenu, nil);
+      if FLineState.TryGetValue(EditorWnd, St) then
+      begin
+        St.Checked  := True;
+        St.HasFixes := not Model.IsEmpty;
+        FLineState.AddOrSetValue(EditorWnd, St);
+      end;
+      if Model.IsEmpty then
+        Schedule(Ed);
     end;
   except
     on E: Exception do
@@ -537,6 +644,9 @@ begin
         PChar(Format(_('Finding action failed: %s'), [E.Message])),
         'Static Code Analyser', MB_OK or MB_ICONWARNING);
   end;
+  // Die Aktion hat den Text geaendert (auch ausserhalb der Zeile, etwa die
+  // uses-Klausel): keine gemerkte Antwort gilt mehr.
+  FLineState.Clear;
 end;
 
 { ---- Anmeldung ---- }

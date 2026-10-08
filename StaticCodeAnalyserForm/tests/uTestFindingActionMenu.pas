@@ -24,6 +24,13 @@ type
     [Test] procedure HeaderCaption_RuleAndTruncatedMessage;
     [Test] procedure ActionIndex_PointsIntoFlatList;
     [Test] procedure Registry_CollectsProviderErrors;
+    // Gluehbirne: nur verfuegbare Hilfen - kein Navigieren, nichts
+    // Ausgegrautes, nichts ohne Execute.
+    [Test] procedure AvailableFixesOnly_DropsNavigateDisabledAndNoExecute;
+    // Ein Fund, dem nach dem Filter nichts bleibt, faellt samt Kopf weg.
+    [Test] procedure AvailableFixesOnly_FindingWithoutFixIsSkipped;
+    // Ohne die Option bleibt alles wie bisher, auch das Navigieren.
+    [Test] procedure WithoutFilter_NavigateStays;
   end;
 
 implementation
@@ -72,6 +79,7 @@ end;
 function Act(const ACaption, AHint: string; AEnabled: Boolean;
   AWithExecute: Boolean): TFindingAction;
 begin
+  Result := Default(TFindingAction);   // Kind = fakFix
   Result.Caption := ACaption;
   Result.Hint    := AHint;
   Result.Enabled := AEnabled;
@@ -293,6 +301,78 @@ begin
     F.Free;
     Bad.Free;
     Good.Free;
+  end;
+end;
+
+function NavAct(const ACaption: string): TFindingAction;
+begin
+  Result := Act(ACaption, '', True, True);
+  Result.Kind := fakNavigate;
+end;
+
+procedure TTestFindingActionMenu.AvailableFixesOnly_DropsNavigateDisabledAndNoExecute;
+var
+  F     : TLeakFinding;
+  Lists : TArray<TArray<TFindingAction>>;
+  M     : TFindingMenuModel;
+begin
+  F := Finding('x');
+  try
+    SetLength(Lists, 1);
+    Lists[0] := [NavAct('Stelle zeigen'),
+                 Act('Ersetzen', '3 Terme', True, True),
+                 Act('Vorlage', 'kein SQL', False, False),
+                 Act('Ohne Execute', '', True, False)];
+    M := BuildFindingMenuModelFrom([F], Lists, [moHeaders, moAvailableFixesOnly]);
+    Assert.AreEqual<Integer>(1, M.ActionCount, 'nur die eine verfuegbare Hilfe');
+    Assert.AreEqual('Ersetzen', M.Actions[0].Caption);
+    Assert.AreEqual<Integer>(2, Length(M.Entries), 'Kopf und Aktion');
+    Assert.IsTrue(M.Entries[0].Kind = mkHeader);
+    Assert.IsTrue(M.Entries[1].Kind = mkAction);
+    Assert.AreEqual<Integer>(0, M.Entries[1].ActionIndex);
+  finally
+    F.Free;
+  end;
+end;
+
+procedure TTestFindingActionMenu.AvailableFixesOnly_FindingWithoutFixIsSkipped;
+var
+  F1, F2 : TLeakFinding;
+  Lists  : TArray<TArray<TFindingAction>>;
+  M      : TFindingMenuModel;
+begin
+  F1 := Finding('nur hinfuehren'); F2 := Finding('mit Hilfe');
+  try
+    SetLength(Lists, 2);
+    Lists[0] := [NavAct('Stelle zeigen'), Act('reDelphix: nichts', '', False, False)];
+    Lists[1] := [Act('uses qualifizieren', '', True, True)];
+    M := BuildFindingMenuModelFrom([F1, F2], Lists, [moHeaders, moAvailableFixesOnly]);
+    Assert.AreEqual<Integer>(2, Length(M.Entries), 'nur Kopf und Aktion des zweiten');
+    Assert.IsTrue(Pos('mit Hilfe', M.Entries[0].Caption) > 0, M.Entries[0].Caption);
+    SetLength(Lists, 1);   // nur noch der erste Fund
+    M := BuildFindingMenuModelFrom([F1], Lists, [moHeaders, moAvailableFixesOnly]);
+    Assert.IsTrue(M.IsEmpty, 'ohne Hilfe keine Gluehbirne');
+    Assert.AreEqual<Integer>(0, Length(M.Entries));
+  finally
+    F1.Free; F2.Free;
+  end;
+end;
+
+procedure TTestFindingActionMenu.WithoutFilter_NavigateStays;
+var
+  F     : TLeakFinding;
+  Lists : TArray<TArray<TFindingAction>>;
+  M     : TFindingMenuModel;
+begin
+  F := Finding('x');
+  try
+    SetLength(Lists, 1);
+    Lists[0] := [NavAct('Stelle zeigen'), Act('Vorlage', 'kein SQL', False, False)];
+    M := BuildFindingMenuModelFrom([F], Lists, [moHeaders]);
+    Assert.AreEqual<Integer>(2, M.ActionCount, 'Kontextmenue und Grid zeigen alles');
+    Assert.IsTrue(M.Actions[0].Kind = fakNavigate);
+  finally
+    F.Free;
   end;
 end;
 
