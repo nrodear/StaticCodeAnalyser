@@ -33,11 +33,13 @@ uses
   uRdxRecipes in '..\source\uRdxRecipes.pas',
   uRdxScopeTable in '..\source\uRdxScopeTable.pas',
   uRdxBufferMath in '..\source\uRdxBufferMath.pas',
+  uRdxSuppress in '..\source\uRdxSuppress.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
   uTestRdxActionRing in 'uTestRdxActionRing.pas',
-  uTestRdxBufferMath in 'uTestRdxBufferMath.pas';
+  uTestRdxBufferMath in 'uTestRdxBufferMath.pas',
+  uTestRdxSuppress in 'uTestRdxSuppress.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

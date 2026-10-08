@@ -1890,6 +1890,10 @@ msgstr ""
 msgid "Reload"
 msgstr ""
 
+#: reDelphix/source/uRdxProvider.pas:501
+msgid "Remove ineffective suppression marker"
+msgstr ""
+
 #: SCA.SharedUI/sources/uProfileViewer.pas:408
 #: SCA.SharedUI/sources/uProfileViewer.pas:674
 #: SCA.SharedUI/sources/uProfileViewer.pas:680
@@ -2230,6 +2234,14 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFindingCopyText.pas:377
 msgid "Summary"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:473
+msgid "Suppress here (// noinspection %s)"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:487
+msgid "Suppress in this file (// noinspection-file %s)"
 msgstr ""
 
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:2298

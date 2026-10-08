@@ -70,6 +70,13 @@ function DescribeMismatch(const AExpected, AActual: string): string;
 function PlanByteEdits(const ABytes: TBytes; const AEdits: TArray<TRdxEdit>;
   out APlan: TArray<TRdxByteEdit>; out AError: string): Boolean;
 
+// Wendet einen Plan von PlanByteEdits auf die Bytes an - genau so, wie der
+// IOTAEditWriter es tut (aufsteigend: Praefix kopieren, Bereich verwerfen,
+// neuen Text einfuegen, Rest kopieren). Fuer Tests und die Vorschau
+// (Vorher/Nachher) ohne Editor.
+function ApplyByteEdits(const ABytes: TBytes;
+  const APlan: TArray<TRdxByteEdit>): TBytes;
+
 implementation
 
 uses
@@ -244,6 +251,33 @@ begin
   end;
   AOut.NewText := StringReplace(AEdit.NewText, #10, AView.Eol, [rfReplaceAll]);
   Result := True;
+end;
+
+function ApplyByteEdits(const ABytes: TBytes;
+  const APlan: TArray<TRdxByteEdit>): TBytes;
+var
+  Stream : TBytesStream;
+  Ins    : TBytes;
+  P, i   : Integer;
+begin
+  Stream := TBytesStream.Create;
+  try
+    P := 0;
+    for i := 0 to High(APlan) do
+    begin
+      if APlan[i].StartPos > P then
+        Stream.WriteBuffer(ABytes[P], APlan[i].StartPos - P);
+      Ins := TEncoding.UTF8.GetBytes(APlan[i].NewText);
+      if Length(Ins) > 0 then
+        Stream.WriteBuffer(Ins[0], Length(Ins));
+      P := APlan[i].EndPos;
+    end;
+    if Length(ABytes) > P then
+      Stream.WriteBuffer(ABytes[P], Length(ABytes) - P);
+    Result := Copy(Stream.Bytes, 0, Stream.Size);
+  finally
+    Stream.Free;
+  end;
 end;
 
 function PlanByteEdits(const ABytes: TBytes; const AEdits: TArray<TRdxEdit>;

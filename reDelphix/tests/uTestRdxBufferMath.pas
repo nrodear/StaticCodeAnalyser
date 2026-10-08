@@ -50,34 +50,10 @@ begin
   Result.NewText  := ANew;
 end;
 
-// Der IOTAEditWriter in klein: aufsteigend kopieren, loeschen, einfuegen.
+// Der IOTAEditWriter in klein - uRdxBufferMath.ApplyByteEdits, als Text.
 function ApplyPlan(const ABytes: TBytes; const APlan: TArray<TRdxByteEdit>): string;
-var
-  Pos, i : Integer;
-  Out_   : TBytes;
-  Ins    : TBytes;
-  n      : Integer;
 begin
-  SetLength(Out_, 0);
-  Pos := 0;
-  for i := 0 to High(APlan) do
-  begin
-    n := Length(Out_);
-    SetLength(Out_, n + APlan[i].StartPos - Pos);
-    if APlan[i].StartPos > Pos then
-      Move(ABytes[Pos], Out_[n], APlan[i].StartPos - Pos);
-    Ins := TEncoding.UTF8.GetBytes(APlan[i].NewText);
-    n := Length(Out_);
-    SetLength(Out_, n + Length(Ins));
-    if Length(Ins) > 0 then
-      Move(Ins[0], Out_[n], Length(Ins));
-    Pos := APlan[i].EndPos;
-  end;
-  n := Length(Out_);
-  SetLength(Out_, n + Length(ABytes) - Pos);
-  if Length(ABytes) > Pos then
-    Move(ABytes[Pos], Out_[n], Length(ABytes) - Pos);
-  Result := TEncoding.UTF8.GetString(Out_);
+  Result := TEncoding.UTF8.GetString(ApplyByteEdits(ABytes, APlan));
 end;
 
 procedure TTestRdxBufferMath.LineStarts_CrLfLfCr;

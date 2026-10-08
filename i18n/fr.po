@@ -2257,3 +2257,12 @@ msgstr "Aucune action pour cette ligne"
 
 msgid "%d more findings on this line are not listed"
 msgstr "%d autres résultats sur cette ligne ne sont pas listés"
+
+msgid "Suppress here (// noinspection %s)"
+msgstr "Masquer ici (// noinspection %s)"
+
+msgid "Suppress in this file (// noinspection-file %s)"
+msgstr "Masquer dans ce fichier (// noinspection-file %s)"
+
+msgid "Remove ineffective suppression marker"
+msgstr "Retirer le marqueur de suppression sans effet"

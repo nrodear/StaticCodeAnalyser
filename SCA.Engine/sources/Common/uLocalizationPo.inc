@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2263 Zeilen, 78535 Bytes
-  CPoLines_de: array[0..2262] of string = (
+  // i18n\de.po - 2272 Zeilen, 78858 Bytes
+  CPoLines_de: array[0..2271] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2277,7 +2277,16 @@ const
     'msgstr "Keine Aktionen fuer diese Zeile"',
     '',
     'msgid "%d more findings on this line are not listed"',
-    'msgstr "%d weitere Funde auf dieser Zeile sind nicht aufgefuehrt"'
+    'msgstr "%d weitere Funde auf dieser Zeile sind nicht aufgefuehrt"',
+    '',
+    'msgid "Suppress here (// noinspection %s)"',
+    'msgstr "Hier unterdruecken (// noinspection %s)"',
+    '',
+    'msgid "Suppress in this file (// noinspection-file %s)"',
+    'msgstr "In dieser Datei unterdruecken (// noinspection-file %s)"',
+    '',
+    'msgid "Remove ineffective suppression marker"',
+    'msgstr "Wirkungslosen Unterdrueck-Marker entfernen"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -2552,8 +2561,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2259 Zeilen, 82214 Bytes
-  CPoLines_fr: array[0..2258] of string = (
+  // i18n\fr.po - 2268 Zeilen, 82527 Bytes
+  CPoLines_fr: array[0..2267] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4812,7 +4821,16 @@ const
     'msgstr "Aucune action pour cette ligne"',
     '',
     'msgid "%d more findings on this line are not listed"',
-    'msgstr "%d autres r'#$00E9'sultats sur cette ligne ne sont pas list'#$00E9's"'
+    'msgstr "%d autres r'#$00E9'sultats sur cette ligne ne sont pas list'#$00E9's"',
+    '',
+    'msgid "Suppress here (// noinspection %s)"',
+    'msgstr "Masquer ici (// noinspection %s)"',
+    '',
+    'msgid "Suppress in this file (// noinspection-file %s)"',
+    'msgstr "Masquer dans ce fichier (// noinspection-file %s)"',
+    '',
+    'msgid "Remove ineffective suppression marker"',
+    'msgstr "Retirer le marqueur de suppression sans effet"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

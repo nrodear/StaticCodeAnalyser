@@ -2261,3 +2261,12 @@ msgstr "Keine Aktionen fuer diese Zeile"
 
 msgid "%d more findings on this line are not listed"
 msgstr "%d weitere Funde auf dieser Zeile sind nicht aufgefuehrt"
+
+msgid "Suppress here (// noinspection %s)"
+msgstr "Hier unterdruecken (// noinspection %s)"
+
+msgid "Suppress in this file (// noinspection-file %s)"
+msgstr "In dieser Datei unterdruecken (// noinspection-file %s)"
+
+msgid "Remove ineffective suppression marker"
+msgstr "Wirkungslosen Unterdrueck-Marker entfernen"
