@@ -42,6 +42,7 @@ uses
   uTestRdxBufferMath in 'uTestRdxBufferMath.pas',
   uTestRdxSuppress in 'uTestRdxSuppress.pas',
   uTestRdxSimpleFixes in 'uTestRdxSimpleFixes.pas',
+  uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }

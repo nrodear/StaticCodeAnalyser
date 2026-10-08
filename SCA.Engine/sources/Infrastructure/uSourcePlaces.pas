@@ -289,7 +289,11 @@ begin
   Parser := TParser2.Create;
   try
     try
-      FRoot := Parser.ParseSource(ASource);
+      // FLines.Text, nicht ASource: der Lexer zaehlt nur LF als
+      // Zeilenende, FLines trennt auch an einem einzelnen CR - mit dem
+      // Rohtext liefen NodesAt-Zeilen und FLines/Fundzeile auseinander
+      // (Review Editorhilfen 2a, 2026-10-09; Open macht es ebenso).
+      FRoot := Parser.ParseSource(FLines.Text);
     except
       Close;   // kein halboffener Zustand (Review Minor 1)
       raise;

@@ -101,6 +101,7 @@
         <DCCReference Include="uTestRdxBufferMath.pas"/>
         <DCCReference Include="uTestRdxSuppress.pas"/>
         <DCCReference Include="uTestRdxSimpleFixes.pas"/>
+        <DCCReference Include="uTestRdxNilFix.pas"/>
         <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

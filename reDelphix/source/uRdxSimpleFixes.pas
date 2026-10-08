@@ -39,10 +39,14 @@ type
     FInBrace : Boolean;
     FInParen : Boolean;
     FInStr   : Boolean;
+    FMulti   : Integer;   // offener mehrzeiliger String: Zahl seiner Quotes, 0 = keiner
     // Je ein Schritt ab Spalte j der Zeile FText; liefern die Spalte dahinter.
     function StepComment(j: Integer): Integer;
     function StepString(j: Integer): Integer;
+    function StepQuote(j: Integer): Integer;
     function StepCode(ALineIdx, j: Integer): Integer;
+    // Zeilenanfang in einem mehrzeiligen String.
+    function StepMultiLine: Integer;
   public
     constructor Create(ALines: TStrings);
     // Zahl der Zeilen der Datei.
@@ -109,6 +113,20 @@ type
     class function FreeAndNilFix(AMap: TRdxCodeMap; ALine: Integer;
       out AEdits: TArray<TRdxEdit>; out AName: string;
       out AReason: string): Boolean; static;
+
+    // SCA085-Kontext fuer den Aufrufer - FreeAndNil braucht eine Variable:
+    // True, wenn AName irgendwo in der Datei als Property deklariert ist
+    // ('property AName'; eine Property uebersetzt als Argument nicht).
+    class function DeclaresProperty(AMap: TRdxCodeMap;
+      const AName: string): Boolean; static;
+    // True, wenn in der Routine um ALine vor dieser Zeile ein 'with' steht -
+    // ein Name kann dort ein Member des with-Ausdrucks sein.
+    class function WithBefore(AMap: TRdxCodeMap; ALine: Integer): Boolean; static;
+    // True, wenn in der Routine um ALine vor dieser Zeile 'var AName :='
+    // steht: eine Inline-Variable ohne Typangabe, die DeclaredTypeOf nicht
+    // kennt.
+    class function DeclaresInlineVar(AMap: TRdxCodeMap; ALine: Integer;
+      const AName: string): Boolean; static;
   end;
 
   // SCA126: X = nil -> not Assigned(X), X <> nil -> Assigned(X).
@@ -140,6 +158,7 @@ uses
 
 const
   MAX_REGION_LINES = 25;
+  MIN_MULTI_QUOTES = 3;   // ''' oeffnet einen mehrzeiligen String (Delphi 12)
   SPAN_075 = 'sca075';
   SPAN_085 = 'sca085';
   SPAN_126 = 'sca126';
@@ -170,6 +189,14 @@ begin
     Inc(Result);
 end;
 
+// Zahl der Quotes ab S[AAt] in Folge.
+function QuoteRun(const S: string; AAt: Integer): Integer;
+begin
+  Result := 0;
+  while (AAt + Result <= Length(S)) and (S[AAt + Result] = '''') do
+    Inc(Result);
+end;
+
 // Steht ab S[AAt] das Wort AWord (Gross/Klein egal, rechts kein
 // Bezeichnerzeichen)?
 function WordAt(const S: string; AAt: Integer; const AWord: string): Boolean;
@@ -193,6 +220,7 @@ begin
   SetLength(FSlash, ALines.Count);
   FInBrace := False;
   FInParen := False;
+  FMulti   := 0;
   for i := 0 to ALines.Count - 1 do
   begin
     FText  := ALines[i];
@@ -200,6 +228,8 @@ begin
     SetLength(FKinds, Length(FText));
     FInStr := False;
     j := 1;
+    if FMulti > 0 then
+      j := StepMultiLine;
     while j <= Length(FText) do
       if FInBrace or FInParen then
         j := StepComment(j)
@@ -243,6 +273,44 @@ begin
     FInStr := False;
 end;
 
+// Ein Quote im Code: Anfang eines Strings. Eine ungerade Zahl von
+// mindestens drei Quotes am Zeilenende beginnt einen mehrzeiligen String
+// (Delphi 12: ''' ... ''') - der endet erst in der Zeile, die mit
+// derselben Zahl Quotes beginnt.
+function TRdxCodeMap.StepQuote(j: Integer): Integer;
+var
+  q, k : Integer;
+begin
+  q := QuoteRun(FText, j);
+  if (q >= MIN_MULTI_QUOTES) and Odd(q)
+     and (SkipBlanks(FText, j + q) > Length(FText)) then
+  begin
+    FMulti := q;
+    for k := j to Length(FText) do
+      FKinds[k] := 's';
+    Exit(Length(FText) + 1);
+  end;
+  FKinds[j] := 's';
+  FInStr := True;
+  Result := j + 1;
+end;
+
+function TRdxCodeMap.StepMultiLine: Integer;
+var
+  k, Start : Integer;
+begin
+  Start := SkipBlanks(FText, 1);
+  if QuoteRun(FText, Start) = FMulti then
+  begin
+    FMulti := 0;   // schliessende Quotes; dahinter wieder Code
+    Result := Start + QuoteRun(FText, Start);
+  end
+  else
+    Result := Length(FText) + 1;
+  for k := 1 to Result - 1 do
+    FKinds[k] := 's';
+end;
+
 function TRdxCodeMap.StepCode(ALineIdx, j: Integer): Integer;
 var
   n, k : Integer;
@@ -250,10 +318,7 @@ begin
   n := Length(FText);
   Result := j + 1;
   if FText[j] = '''' then
-  begin
-    FKinds[j] := 's';
-    FInStr := True;
-  end
+    Result := StepQuote(j)
   else if (FText[j] = '/') and (j < n) and (FText[j + 1] = '/') then
   begin
     // Zeilenkommentar: der Rest der Zeile.
@@ -603,6 +668,34 @@ begin
   Result := True;
 end;
 
+// Eine Compiler-Direktive ('{$' bzw. '(*$' als Kommentar) zwischen dem
+// Token APrev und (ALine, ACol)?
+function DirectiveBetween(AMap: TRdxCodeMap; const APrev: TRdxToken;
+  ALine, ACol: Integer): Boolean;
+var
+  Li, j, First, Last : Integer;
+  L                  : string;
+begin
+  Result := False;
+  First := 1;
+  if APrev.Low <> '' then First := APrev.Line;
+  for Li := First to ALine do
+  begin
+    L := AMap.Raw(Li);
+    j := 1;
+    if (APrev.Low <> '') and (Li = APrev.Line) then j := APrev.EndCol;
+    Last := Length(L);
+    if Li = ALine then Last := ACol - 1;
+    while j <= Last do
+    begin
+      if (AMap.ClassAt(Li, j) = 'k')
+         and ((Copy(L, j, 2) = '{$') or (Copy(L, j, 3) = '(*$')) then
+        Exit(True);
+      Inc(j);
+    end;
+  end;
+end;
+
 // Zeile ALine: erste Anweisung 'X.Free;' - wie
 // uFreeAndNilHint.ExtractFreeReceiver, aber auf der Code-Sicht -, dahinter
 // hoechstens ein //-Kommentar, und nicht allein hinter then/else/do oder
@@ -635,8 +728,12 @@ begin
   Prev := PrevToken(AMap, ALine, AColX);
   if (Prev.Low = 'then') or (Prev.Low = 'else') or (Prev.Low = 'do')
      or (Prev.Low = ':') then
-    Result := Format('X.Free; ist die Anweisung hinter "%s" - das nil wuerde bedingt',
-      [Prev.Low]);
+    Exit(Format('X.Free; ist die Anweisung hinter "%s" - das nil wuerde bedingt',
+      [Prev.Low]));
+  // 'if A then {$IFDEF LOG}Log;{$ENDIF} X.Free;': ohne LOG steht X.Free;
+  // allein hinter 'then' - die Sperre oben saehe nur das ';' von Log.
+  if DirectiveBetween(AMap, Prev, ALine, AColX) then
+    Result := 'Compiler-Direktive vor X.Free; - die Anweisung davor gilt nicht immer';
 end;
 
 // Die nil-Zeile N: genau 'X := nil;' (';' optional) mit X = AName.
@@ -700,6 +797,80 @@ begin
   AEdits[1].Expected := N + #10;
   AEdits[1].NewText  := '';
   Result := True;
+end;
+
+// Beginnt mit ALow eine Routine oder ein Abschnitt (in Spalte 1)?
+function IsRoutineStart(const ALow: string): Boolean;
+begin
+  Result := (ALow = 'procedure') or (ALow = 'function') or (ALow = 'constructor')
+    or (ALow = 'destructor') or (ALow = 'operator') or (ALow = 'class')
+    or (ALow = 'initialization') or (ALow = 'finalization')
+    or (ALow = 'implementation');
+end;
+
+// Erste Zeile der Routine um ALine: rueckwaerts die naechste Zeile, deren
+// erstes Code-Token in Spalte 1 eine Routine oder einen Abschnitt beginnt
+// (Konvention: Implementierungen stehen am Zeilenanfang, lokale Routinen
+// und anonyme Methoden sind eingerueckt). 1, wenn keine kommt.
+function RoutineStartLine(AMap: TRdxCodeMap; ALine: Integer): Integer;
+var
+  Li : Integer;
+begin
+  for Li := ALine - 1 downto 1 do
+    if AMap.IsCode(Li, 1) and IsIdentStart(AMap.Raw(Li)[1])
+       and IsRoutineStart(TokenAt(AMap, Li, 1).Low) then
+      Exit(Li);
+  Result := 1;
+end;
+
+class function TRdxSimpleFixes.DeclaresProperty(AMap: TRdxCodeMap;
+  const AName: string): Boolean;
+var
+  T   : TRdxToken;
+  Low : string;
+begin
+  Result := False;
+  Low := LowerCase(AName);
+  T := NextToken(AMap, 1, 1);
+  while T.Low <> '' do
+  begin
+    if (T.Low = 'property') and (After(AMap, T).Low = Low) then
+      Exit(True);
+    T := After(AMap, T);
+  end;
+end;
+
+class function TRdxSimpleFixes.WithBefore(AMap: TRdxCodeMap;
+  ALine: Integer): Boolean;
+var
+  T : TRdxToken;
+begin
+  Result := False;
+  T := NextToken(AMap, RoutineStartLine(AMap, ALine), 1);
+  while (T.Low <> '') and (T.Line < ALine) do
+  begin
+    if T.Low = 'with' then
+      Exit(True);
+    T := After(AMap, T);
+  end;
+end;
+
+class function TRdxSimpleFixes.DeclaresInlineVar(AMap: TRdxCodeMap;
+  ALine: Integer; const AName: string): Boolean;
+var
+  T, N : TRdxToken;
+  Low  : string;
+begin
+  Result := False;
+  Low := LowerCase(AName);
+  T := NextToken(AMap, RoutineStartLine(AMap, ALine), 1);
+  while (T.Low <> '') and (T.Line < ALine) do
+  begin
+    N := After(AMap, T);
+    if (T.Low = 'var') and (N.Low = Low) and (After(AMap, N).Low = ':=') then
+      Exit(True);
+    T := N;
+  end;
 end;
 
 { ---- SCA126: Zaehlen wie der Detektor ---- }
@@ -947,6 +1118,19 @@ begin
   Result := T.Low <> '';
 end;
 
+// Ende einer Bedingung: then (if), do (while), of (case).
+function IsConditionEnd(const ATok: TRdxToken): Boolean;
+begin
+  Result := (ATok.Low = 'then') or (ATok.Low = 'do') or (ATok.Low = 'of');
+end;
+
+// Ende einer Anweisung: ';' oder end/else/until/except/finally.
+function IsStatementEnd(const ATok: TRdxToken): Boolean;
+begin
+  Result := (ATok.Low = ';') or (ATok.Low = 'end') or (ATok.Low = 'else')
+    or (ATok.Low = 'until') or (ATok.Low = 'except') or (ATok.Low = 'finally');
+end;
+
 // Darf vor einem Vergleichsglied stehen? Alles andere ('@', 'not' ohne
 // Klammer, Rechenzeichen, ein weiterer Vergleich) macht die Grenze des
 // Operanden unklar - dann keine Hilfe.
@@ -962,10 +1146,8 @@ end;
 function IsRightBoundary(const ATok: TRdxToken): Boolean;
 begin
   Result := (ATok.Low = ')') or (ATok.Low = ',') or (ATok.Low = ']')
-    or (ATok.Low = ';') or (ATok.Low = 'then') or (ATok.Low = 'do')
-    or (ATok.Low = 'of') or (ATok.Low = 'and') or (ATok.Low = 'or')
-    or (ATok.Low = 'xor') or (ATok.Low = 'end') or (ATok.Low = 'else')
-    or (ATok.Low = 'until') or (ATok.Low = 'except') or (ATok.Low = 'finally');
+    or (ATok.Low = 'and') or (ATok.Low = 'or') or (ATok.Low = 'xor')
+    or IsConditionEnd(ATok) or IsStatementEnd(ATok);
 end;
 
 // Text zwischen zwei Tokens derselben Zeile (Rohtext).
@@ -1017,10 +1199,9 @@ end;
 function IsRegionEnd(const T: TRdxToken; AAnchor: TRdxNilAnchor): Boolean;
 begin
   if AAnchor = naCondition then
-    Result := (T.Low = 'then') or (T.Low = 'do') or (T.Low = 'of')
+    Result := IsConditionEnd(T)
   else
-    Result := (T.Low = ';') or (T.Low = 'end') or (T.Low = 'else')
-      or (T.Low = 'until') or (T.Low = 'except') or (T.Low = 'finally');
+    Result := IsStatementEnd(T);
 end;
 
 function DepthDelta(const T: TRdxToken): Integer;
@@ -1134,10 +1315,23 @@ begin
       Exit(True);
 end;
 
+// Steht ATok vor einer Klammer, ist sie sicher eine Gruppe und kein
+// Aufruf: wo ein Vergleichsglied beginnen darf, hinter '=' / '<>' und hinter
+// dem Ende einer Bedingung oder Anweisung (then, else, until ...). NICHT
+// nach einem Namen, ')', ']', '>' (From<T>(..)), '^' oder '&Do' - dort ist
+// es eine Aufrufklammer.
+function IsGroupContext(const ATok: TRdxToken): Boolean;
+begin
+  Result := IsLeftBoundary(ATok) or (ATok.Low = '=') or (ATok.Low = '<>')
+    or IsConditionEnd(ATok) or IsStatementEnd(ATok);
+end;
+
 // Eine Klammer, die GENAU den Vergleich umschliesst, geht mit:
 //   not (X = nil)  -> Assigned(X)        not (X <> nil) -> not Assigned(X)
-//   (X <> nil) and -> Assigned(X) and    (keine Aufruf-/Index-Klammer,
-//   kein '.', '[', '^' dahinter)
+//   (X <> nil) and -> Assigned(X) and    (nur als Gruppe, IsGroupContext)
+// Folgt der Klammer '.', '[', '^' oder '(', gehoert sie zum Ausdruck
+// dahinter - 'not (X = nil).ToInteger' ist not((X = nil).ToInteger): dann
+// geht weder die Klammer noch das 'not' mit.
 // AFlipped ist ASpan.NewText mit umgekehrter Bedeutung - das, was mit dem
 // 'not' davor herauskommt.
 procedure WidenOverGroup(AMap: TRdxCodeMap; const AFlipped: string;
@@ -1150,17 +1344,18 @@ begin
   if (OpenT.Low <> '(') or (CloseT.Low <> ')') or (OpenT.Line <> CloseT.Line)
      or (OpenT.Line <> ASpan.First.Line) then
     Exit;
+  Behind := After(AMap, CloseT);
+  if (Behind.Low = '.') or (Behind.Low = '[') or (Behind.Low = '^')
+     or (Behind.Low = '(') then
+    Exit;
   Outer := Before(AMap, OpenT);
   if (Outer.Low = 'not') and (Outer.Line = OpenT.Line) then
   begin
     ASpan.First   := Outer;
     ASpan.Last    := CloseT;
     ASpan.NewText := AFlipped;
-    Exit;
-  end;
-  Behind := After(AMap, CloseT);
-  if not IsCallable(Outer) and (Behind.Low <> '.') and (Behind.Low <> '[')
-     and (Behind.Low <> '^') then
+  end
+  else if IsGroupContext(Outer) then
   begin
     ASpan.First := OpenT;
     ASpan.Last  := CloseT;
@@ -1219,53 +1414,89 @@ begin
   Result := '';
 end;
 
+// Passt die Zahl der Vergleiche im Code zu der im Knotentext? Eine
+// ungerade Zahl von Quotes im Knotentext heisst: der Parser hat ein
+// Literal mit Quote nicht verdoppelt (ParseIfStmt: 'C = ''''' wird
+// ''''') - dahinter blendet BlankStrings alles aus, der Knoten zaehlt zu
+// wenig. Dann genuegt: der Code hat mindestens so viele.
+function CountMatches(ACode, ANode: Integer; const ANodeText: string): Boolean;
+var
+  i, Quotes : Integer;
+begin
+  Quotes := 0;
+  for i := 1 to Length(ANodeText) do
+    if ANodeText[i] = '''' then Inc(Quotes);
+  if Odd(Quotes) then
+    Result := ACode >= ANode
+  else
+    Result := ACode = ANode;
+end;
+
+// Die Anweisung an ASite lesen und gegen den Fund pruefen. '' oder Grund.
+function ReadStatement(AMap: TRdxCodeMap; const ASite: TRdxNilSite;
+  out AScan: TNilScan): string;
+var
+  Expected : Integer;
+begin
+  AScan := Default(TNilScan);
+  Expected := TRdxNilFix.CountNilComparisons(ASite.NodeText);
+  if Expected = 0 then
+    Exit('kein nil-Vergleich im Fund');
+  if not StartsStatement(AMap, ASite) then
+    Exit('Anweisung steht nicht mehr an der gemeldeten Stelle');
+  Result := ScanStatement(AMap, ASite, AScan);
+  if Result <> '' then Exit;
+  if not CountMatches(Length(AScan.Cmps), Expected, ASite.NodeText) then
+    Exit(Format('Code und Fund passen nicht zusammen (%d statt %d Vergleiche)',
+      [Length(AScan.Cmps), Expected]));
+  if RegionHasComment(AMap, AScan.StartTok, AScan.EndTok) then
+    Result := 'Kommentar oder Direktive in der Anweisung';
+end;
+
+// Zwei einzeilige Bereiche ueberschneiden sich?
+function SpansOverlap(const A, B: TRefactorSpan): Boolean;
+begin
+  Result := (A.StartLine = B.StartLine) and (A.StartCol < B.EndCol)
+    and (B.StartCol < A.EndCol);
+end;
+
+// Alle Vergleiche planen; verschachtelte ('Find(X = nil) = nil') ergaeben
+// ueberlappende Ersetzungen - die Hilfe waere aktiv und scheiterte erst
+// beim Klick. '' oder Grund.
+function PlanAll(AMap: TRdxCodeMap; const AScan: TNilScan;
+  var APlan: TRdxNilPlan): string;
+var
+  i, k : Integer;
+begin
+  SetLength(APlan.Edits, Length(AScan.Cmps));
+  SetLength(APlan.Operands, Length(AScan.Cmps));
+  for i := 0 to High(AScan.Cmps) do
+  begin
+    Result := PlanComparison(AMap, AScan.Cmps[i], AScan.Region,
+      APlan.Edits[i], APlan.Operands[i]);
+    if Result <> '' then Exit;
+    for k := 0 to i - 1 do
+      if SpansOverlap(APlan.Edits[k].Span, APlan.Edits[i].Span) then
+        Exit('verschachtelte nil-Vergleiche');
+  end;
+  Result := '';
+end;
+
 class function TRdxNilFix.NilComparison(AMap: TRdxCodeMap;
   const ASite: TRdxNilSite; out APlan: TRdxNilPlan): Boolean;
 var
-  Expected : Integer;
-  Scan     : TNilScan;
-  i        : Integer;
+  Scan : TNilScan;
 begin
-  Result := False;
   APlan := Default(TRdxNilPlan);
-  Expected := CountNilComparisons(ASite.NodeText);
-  if Expected = 0 then
+  APlan.Reason := ReadStatement(AMap, ASite, Scan);
+  if APlan.Reason = '' then
+    APlan.Reason := PlanAll(AMap, Scan, APlan);
+  Result := APlan.Reason = '';
+  if not Result then
   begin
-    APlan.Reason := 'kein nil-Vergleich im Fund';
-    Exit;
+    APlan.Edits := nil;
+    APlan.Operands := nil;
   end;
-  if not StartsStatement(AMap, ASite) then
-  begin
-    APlan.Reason := 'Anweisung steht nicht mehr an der gemeldeten Stelle';
-    Exit;
-  end;
-  APlan.Reason := ScanStatement(AMap, ASite, Scan);
-  if APlan.Reason <> '' then Exit;
-  if Length(Scan.Cmps) <> Expected then
-  begin
-    APlan.Reason := Format('Code und Fund passen nicht zusammen (%d statt %d Vergleiche)',
-      [Length(Scan.Cmps), Expected]);
-    Exit;
-  end;
-  if RegionHasComment(AMap, Scan.StartTok, Scan.EndTok) then
-  begin
-    APlan.Reason := 'Kommentar oder Direktive in der Anweisung';
-    Exit;
-  end;
-  SetLength(APlan.Edits, Length(Scan.Cmps));
-  SetLength(APlan.Operands, Length(Scan.Cmps));
-  for i := 0 to High(Scan.Cmps) do
-  begin
-    APlan.Reason := PlanComparison(AMap, Scan.Cmps[i], Scan.Region,
-      APlan.Edits[i], APlan.Operands[i]);
-    if APlan.Reason <> '' then
-    begin
-      APlan.Edits := nil;
-      APlan.Operands := nil;
-      Exit;
-    end;
-  end;
-  Result := True;
 end;
 
 { ---- SCA126: Operanden-Pruefung ---- }

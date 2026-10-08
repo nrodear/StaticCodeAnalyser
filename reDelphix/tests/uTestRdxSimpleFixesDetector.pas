@@ -25,6 +25,8 @@ type
     [Test] procedure Sca085_RoundTrip;
     [Test] procedure Sca085_MissingSysUtils_AddsUses;
     [Test] procedure Sca085_Property_NoHelp;
+    [Test] procedure Sca085_PropertyBesideSameNamedField_NoHelp;
+    [Test] procedure Sca085_InlineVar_Helps;
     [Test] procedure Sca085_CatalogExample;
     // ---- SCA126 ----
     [Test] procedure Sca126_RoundTrip;
@@ -334,7 +336,32 @@ begin
   // Eine Property als FreeAndNil-Argument uebersetzt nicht.
   AssertNoHelp(Format(UNIT_085, ['uses System.SysUtils;', Join([
     '  Items.Free;',
-    '  Items := nil;'])]), fkFreeAndNilHint, 'nicht deklariert');
+    '  Items := nil;'])]), fkFreeAndNilHint, 'Property');
+end;
+
+procedure TTestRdxSimpleFixesDetector.Sca085_PropertyBesideSameNamedField_NoHelp;
+begin
+  // Review 2026-10-09: DeclaredTypeOf findet JEDES gleichnamige Feld der
+  // Unit (hier TRow.Items) - die Property-Sperre darf daran nicht haengen.
+  AssertNoHelp(Format(UNIT_085, [
+    'uses System.SysUtils;'#13#10'type'#13#10'  TRow = record Items: TList; end;',
+    Join([
+    '  Items.Free;',
+    '  Items := nil;'])]), fkFreeAndNilHint, 'Property');
+end;
+
+procedure TTestRdxSimpleFixesDetector.Sca085_InlineVar_Helps;
+begin
+  // 'var L := ...' ohne Typ kennt DeclaredTypeOf nicht - trotzdem eine
+  // Variable.
+  Assert.AreEqual(
+    Format(UNIT_085, ['uses System.SysUtils;', Join([
+      '  var L := TList.Create;',
+      '  FreeAndNil(L);'])]),
+    FixAll(Format(UNIT_085, ['uses System.SysUtils;', Join([
+      '  var L := TList.Create;',
+      '  L.Free;',
+      '  L := nil;'])]), fkFreeAndNilHint));
 end;
 
 procedure TTestRdxSimpleFixesDetector.Sca085_CatalogExample;

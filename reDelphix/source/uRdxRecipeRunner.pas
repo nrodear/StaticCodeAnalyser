@@ -782,6 +782,29 @@ begin
     Result.Edits := nil;
 end;
 
+// SCA085: ist AName an ALine sicher eine Variable? FreeAndNil braucht eine;
+// eine Property uebersetzt als Argument nicht (vor 10.4) bzw. umgeht ihren
+// Setter (const [ref]). Gesperrt: irgendwo in der Unit als Property
+// deklariert, ein 'with' davor in der Routine (dort bindet der Name evtl.
+// an ein Member), weder deklariert (DeclaredTypeOf: Parameter, lokal,
+// Result, Feld oder Global der Unit) noch Inline-Variable ohne Typ.
+// '' oder der Grund.
+function VariableCheck(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const AName: string): string;
+begin
+  Result := '';
+  if TRdxSimpleFixes.DeclaresProperty(AMap, AName) then
+    Exit(Format('%s ist in dieser Unit als Property deklariert - FreeAndNil '
+      + 'braucht eine Variable', [AName]));
+  if TRdxSimpleFixes.WithBefore(AMap, ALine) then
+    Exit(Format('with-Anweisung in der Routine - %s koennte ein Member sein',
+      [AName]));
+  if (APlaces.DeclaredTypeOf(ALine, AName) = '')
+     and not TRdxSimpleFixes.DeclaresInlineVar(AMap, ALine, AName) then
+    Result := Format('%s ist hier nicht als Variable bekannt (Property oder '
+      + 'Feld aus einer anderen Unit?)', [AName]);
+end;
+
 class function TRdxFixRunner.FreeAndNilFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
@@ -800,13 +823,12 @@ begin
     if not TRdxSimpleFixes.FreeAndNilFix(Map, ALine, Result.Edits,
          Result.Name, Result.Reason) then
       Exit;
+    Result.Reason := VariableCheck(APlaces, Map, ALine, Result.Name);
   finally
     Map.Free;
   end;
-  if APlaces.DeclaredTypeOf(ALine, Result.Name) = '' then
+  if Result.Reason <> '' then
   begin
-    Result.Reason := Format('%s ist in dieser Unit nicht deklariert '
-      + '(Property oder geerbtes Feld?)', [Result.Name]);
     Result.Edits := nil;
     Exit;
   end;
