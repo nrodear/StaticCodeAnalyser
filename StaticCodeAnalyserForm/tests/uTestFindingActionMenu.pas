@@ -34,6 +34,10 @@ type
     // Review 2026-10-07 Blocker 2: je Menue hoechstens
     // MAX_FINDINGS_PER_MENU Anbieter-Abfragen, der Rest zaehlt nach Omitted.
     [Test] procedure Registry_AsksAtMostMaxFindingsPerMenu;
+    // Editorhilfen E1: Unterdruecken in der Birne nur neben einer Hilfe,
+    // in jeder Form mit einem Trenner abgesetzt.
+    [Test] procedure AvailableFixesOnly_SuppressOnlyNextToAFix;
+    [Test] procedure Suppress_SeparatedFromOtherActions;
   end;
 
 implementation
@@ -314,6 +318,63 @@ function NavAct(const ACaption: string): TFindingAction;
 begin
   Result := Act(ACaption, '', True, True);
   Result.Kind := fakNavigate;
+end;
+
+function SuppressAct(const ACaption: string): TFindingAction;
+begin
+  Result := Act(ACaption, '', True, True);
+  Result.Kind := fakSuppress;
+end;
+
+procedure TTestFindingActionMenu.AvailableFixesOnly_SuppressOnlyNextToAFix;
+var
+  F1, F2 : TLeakFinding;
+  Lists  : TArray<TArray<TFindingAction>>;
+  M      : TFindingMenuModel;
+begin
+  F1 := Finding('nur unterdruecken'); F2 := Finding('mit Umbau');
+  try
+    SetLength(Lists, 2);
+    Lists[0] := [NavAct('Hinfuehren'), SuppressAct('Hier unterdruecken')];
+    Lists[1] := [Act('Umbauen', '', True, True), SuppressAct('Hier ausblenden')];
+    M := BuildFindingMenuModelFrom([F1, F2], Lists, [moHeaders, moAvailableFixesOnly]);
+    // F1: keine Hilfe -> faellt samt Unterdruecken weg (keine Birne)
+    // F2: Kopf, Hilfe, Trenner, Unterdruecken
+    Assert.AreEqual<Integer>(4, Length(M.Entries));
+    Assert.IsTrue(Pos('mit Umbau', M.Entries[0].Caption) > 0, M.Entries[0].Caption);
+    Assert.IsTrue(M.Entries[1].Kind = mkAction);
+    Assert.IsTrue(M.Entries[2].Kind = mkSeparator);
+    Assert.IsTrue(M.Entries[3].Kind = mkAction);
+    Assert.IsTrue(M.Actions[M.Entries[3].ActionIndex].Kind = fakSuppress);
+    SetLength(Lists, 1);
+    M := BuildFindingMenuModelFrom([F1], Lists, [moAvailableFixesOnly]);
+    Assert.IsTrue(M.IsEmpty, 'nur Unterdruecken: keine Birne');
+  finally
+    F1.Free; F2.Free;
+  end;
+end;
+
+procedure TTestFindingActionMenu.Suppress_SeparatedFromOtherActions;
+var
+  F     : TLeakFinding;
+  Lists : TArray<TArray<TFindingAction>>;
+  M     : TFindingMenuModel;
+begin
+  F := Finding('x');
+  try
+    SetLength(Lists, 1);
+    Lists[0] := [NavAct('Zur Stelle'), Act('Neu schreiben', '', True, True),
+                 SuppressAct('Hier'), SuppressAct('In der Datei')];
+    M := BuildFindingMenuModelFrom([F], Lists, []);
+    Assert.AreEqual<Integer>(5, Length(M.Entries), 'ein Trenner vor dem Block');
+    Assert.IsTrue(M.Entries[2].Kind = mkSeparator);
+    Assert.AreEqual<Integer>(4, M.ActionCount);
+    Lists[0] := [SuppressAct('Hier')];
+    M := BuildFindingMenuModelFrom([F], Lists, []);
+    Assert.AreEqual<Integer>(1, Length(M.Entries), 'kein Trenner am Anfang');
+  finally
+    F.Free;
+  end;
 end;
 
 procedure TTestFindingActionMenu.AvailableFixesOnly_DropsNavigateDisabledAndNoExecute;

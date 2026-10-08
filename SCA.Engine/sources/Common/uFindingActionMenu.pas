@@ -15,7 +15,10 @@ unit uFindingActionMenu;
 // ausfuehren kann und die etwas aendern (Kind = fakFix, Enabled, Execute
 // zugewiesen) - die Form der Gluehbirne: kein "Stelle zeigen", keine
 // ausgegrauten Eintraege, keine Diagnosezeilen der Anbieter; ein Fund ohne
-// solche Aktion faellt samt Kopfzeile weg. BuildFindingMenuModel fragt
+// solche Aktion faellt samt Kopfzeile weg. Unterdrueck-Aktionen
+// (fakSuppress) bleiben dort NUR, wenn der Fund eine solche Hilfe hat
+// (Editorhilfen E1). In jeder Form steht vor dem ersten Unterdrueck-
+// Eintrag eines Funds ein Trenner. BuildFindingMenuModel fragt
 // hoechstens MAX_FINDINGS_PER_MENU Funde ab (Vertrag in uFindingActions);
 // wie viele es nicht fragte, steht in Omitted. Wirft ein
 // Anbieter beim Erfragen, fallen die Aktionen DIESES Funds weg (alle
@@ -109,10 +112,14 @@ end;
 
 { ---- Modell ---- }
 
+function IsAvailable(const AAction: TFindingAction): Boolean;
+begin
+  Result := AAction.Enabled and Assigned(AAction.Execute);
+end;
+
 function IsAvailableFix(const AAction: TFindingAction): Boolean;
 begin
-  Result := (AAction.Kind = fakFix) and AAction.Enabled
-    and Assigned(AAction.Execute);
+  Result := (AAction.Kind = fakFix) and IsAvailable(AAction);
 end;
 
 // Die Aktionen eines Funds, wie sie ins Modell gehen.
@@ -131,6 +138,15 @@ begin
       Result[n] := AActions[k];
       Inc(n);
     end;
+  // Unterdruecken nur neben einer echten Hilfe (E1) - sonst erschiene die
+  // Birne auf jeder Fundzeile.
+  if n > 0 then
+    for k := 0 to High(AActions) do
+      if (AActions[k].Kind = fakSuppress) and IsAvailable(AActions[k]) then
+      begin
+        Result[n] := AActions[k];
+        Inc(n);
+      end;
   SetLength(Result, n);
 end;
 
@@ -148,11 +164,30 @@ begin
   AModel.Entries[High(AModel.Entries)] := E;
 end;
 
+// Die Aktionen EINES Funds ins Modell; Unterdruecken ist keine Hilfe und
+// wird vom Rest des Funds mit einem Trenner abgesetzt.
+procedure AddActionsOf(var AModel: TFindingMenuModel;
+  const AActs: TArray<TFindingAction>);
+var
+  k : Integer;
+begin
+  for k := 0 to High(AActs) do
+  begin
+    if (AActs[k].Kind = fakSuppress) and (k > 0)
+       and (AActs[k - 1].Kind <> fakSuppress) then
+      AddEntry(AModel, mkSeparator, '-', '', False, -1);
+    SetLength(AModel.Actions, Length(AModel.Actions) + 1);
+    AModel.Actions[High(AModel.Actions)] := AActs[k];
+    AddEntry(AModel, mkAction, FindingActionCaption(AActs[k]), AActs[k].Hint,
+      IsAvailable(AActs[k]), High(AModel.Actions));
+  end;
+end;
+
 function BuildFindingMenuModelFrom(const AFindings: TArray<TLeakFinding>;
   const AActions: TArray<TArray<TFindingAction>>;
   AOptions: TFindingMenuOptions): TFindingMenuModel;
 var
-  i, k    : Integer;
+  i       : Integer;
   Count   : Integer;
   Acts    : TArray<TFindingAction>;
   SepDone : Boolean;
@@ -173,14 +208,7 @@ begin
     if moHeaders in AOptions then
       AddEntry(Result, mkHeader, FindingHeaderCaption(AFindings[i]), '',
         False, -1);
-    for k := 0 to High(Acts) do
-    begin
-      SetLength(Result.Actions, Length(Result.Actions) + 1);
-      Result.Actions[High(Result.Actions)] := Acts[k];
-      AddEntry(Result, mkAction, FindingActionCaption(Acts[k]), Acts[k].Hint,
-        Acts[k].Enabled and Assigned(Acts[k].Execute),
-        High(Result.Actions));
-    end;
+    AddActionsOf(Result, Acts);
   end;
 end;
 

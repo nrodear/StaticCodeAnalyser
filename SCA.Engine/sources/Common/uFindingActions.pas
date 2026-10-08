@@ -50,6 +50,11 @@ unit uFindingActions;
 //     Stelle (Nico 2026-10-08); Kontextmenue und Dock-Grid zeigen alles.
 //     Der Wert 0 ist fakFix: ein Anbieter, der Kind nicht setzt, bleibt
 //     bei SetLength/Default(TFindingAction) eine Hilfe.
+//   * fakSuppress unterdrueckt den Fund (`// noinspection`-Marker). Das
+//     ist KEINE Hilfe: die Gluehbirne erscheint deswegen nicht, zeigt es
+//     aber unter den Hilfen, wenn es zu dem Fund eine gibt (Nico
+//     2026-10-08, Editorhilfen E1). Kontextmenue und Dock-Grid zeigen es
+//     immer. Ein Menue setzt die Unterdrueck-Eintraege mit einem Trenner ab.
 //   * Ein Host fragt fuer EIN Menue hoechstens MAX_FINDINGS_PER_MENU Funde
 //     ab (uFindingActionMenu.BuildFindingMenuModel; der Rest erscheint als
 //     Hinweiszeile). Ein Anbieter, der seine Aktionsobjekte haelt, muss die
@@ -71,8 +76,8 @@ const
 
 type
   // Was eine Aktion ist (siehe VERTRAG oben). fakFix MUSS Ordnungszahl 0
-  // bleiben.
-  TFindingActionKind = (fakFix, fakNavigate);
+  // bleiben; neue Arten nur hinten anhaengen.
+  TFindingActionKind = (fakFix, fakNavigate, fakSuppress);
 
   TFindingAction = record
     Caption : string;        // Menuetext, bereits lokalisiert
