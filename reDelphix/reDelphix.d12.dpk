@@ -57,6 +57,7 @@ requires
 contains
   uRdxRecipes in 'source\uRdxRecipes.pas',
   uRdxScopeTable in 'source\uRdxScopeTable.pas',
+  uRdxBufferMath in 'source\uRdxBufferMath.pas',
   uRdxRecipeRunner in 'source\uRdxRecipeRunner.pas',
   uRdxLog in 'source\uRdxLog.pas',
   uRdxEditor in 'source\uRdxEditor.pas',

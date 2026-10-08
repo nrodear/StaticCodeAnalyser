@@ -49,7 +49,7 @@ done
 [ -f "$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas" ] && \
   adapt "$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas" "$HERE/uSourcePlaces.pas"
 # Modul reDelphix: nur die ToolsAPI-freien Units (Rezepte, Scope-Tabelle).
-for u in uRdxRecipes uRdxScopeTable; do
+for u in uRdxRecipes uRdxScopeTable uRdxBufferMath; do
   [ -f "$RDX/source/$u.pas" ] && adapt "$RDX/source/$u.pas" "$HERE/$u.pas"
 done
 

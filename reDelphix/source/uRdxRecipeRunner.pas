@@ -22,7 +22,8 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uEngineApi, uRefactorInfo, uFindingActions, uRdxRecipes;
+  uEngineApi, uRefactorInfo, uFindingActions, uRdxRecipes,
+  uRdxBufferMath;   // TRdxEdit
 
 const
   // So viele Provide-Chargen haelt der Anbieter am Leben: ein Menue fragt
@@ -73,11 +74,9 @@ type
   // Eine Ersetzung im Editor: Bereich, erwarteter alter Text, neuer Text.
   // Zeilenumbrueche im neuen Text sind #10; der Editor setzt sie auf die
   // Zeilenenden des Puffers um.
-  TRdxEdit = record
-    Span     : TRefactorSpan;
-    Expected : string;
-    NewText  : string;
-  end;
+  // Seit Stufe 0 (Editorhilfen) in uRdxBufferMath, ToolsAPI-frei und
+  // getestet; der Alias haelt alle Verwender quelltext-stabil.
+  TRdxEdit = uRdxBufferMath.TRdxEdit;
 
   // Was fuer eine fehlende Unit in der uses-Klausel zu tun ist (AH19).
   TRdxUsesPlan = record

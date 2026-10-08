@@ -47,7 +47,7 @@ type
   // RDX_ACTION_BATCHES neuere Provide-Chargen entstanden sind (TRdxObjectRing) -
   // nicht nur bis zum naechsten Provide, denn ein Host stellt die
   // Aktionen mehrerer Funde in ein Menue (Stufe B, Konzept Editor-
-  // Gluehbirne 2026-10-06). Mehrere Ersetzungen (TRdxEdit aus uRdxRecipeRunner)
+  // Gluehbirne 2026-10-06). Mehrere Ersetzungen (TRdxEdit aus uRdxBufferMath)
   // werden von unten nach oben ausgefuehrt, damit die Bereiche der
   // oberen von den unteren nicht verschoben werden.
   TRdxAction = class
@@ -116,47 +116,20 @@ const
 var
   GInstance : TRdxProvider = nil;
 
-procedure SortEditsDescending(var AEdits: TArray<TRdxEdit>);
-// Von hinten nach vorn ersetzen, damit fruehere Bereiche gueltig bleiben.
-var
-  i, j  : Integer;
-  T     : TRdxEdit;
-  Later : Boolean;
-begin
-  for i := 1 to High(AEdits) do
-  begin
-    T := AEdits[i];
-    j := i - 1;
-    while j >= 0 do
-    begin
-      Later := (T.Span.StartLine > AEdits[j].Span.StartLine)
-        or ((T.Span.StartLine = AEdits[j].Span.StartLine)
-            and (T.Span.StartCol > AEdits[j].Span.StartCol));
-      if not Later then Break;
-      AEdits[j + 1] := AEdits[j];
-      Dec(j);
-    end;
-    AEdits[j + 1] := T;
-  end;
-end;
-
 { TRdxAction }
 
 procedure TRdxAction.Execute(Sender: TObject);
 var
   Err : string;
-  i   : Integer;
 begin
   case FKind of
     akShowSpan:
       if not TRdxEditor.SelectSpan(FFileName, FSpan, Err) then
         raise Exception.Create(Err);
     akReplace:
-      for i := 0 to High(FEdits) do
-        if not TRdxEditor.ReplaceSpan(FFileName, FEdits[i].Span,
-             FEdits[i].Expected, FEdits[i].NewText, Err) then
-          raise Exception.CreateFmt('%s: %s',
-            [TRdxRecipes.CollapseWhitespace(FEdits[i].Expected), Err]);
+      // Alle Ersetzungen auf einmal: geprueft, dann EIN Undo-Schritt.
+      if not TRdxEditor.ReplaceSpans(FFileName, FEdits, Err) then
+        raise Exception.Create(Err);
     akSqlTemplate:
       Clipboard.AsText := FTemplate;
   end;
@@ -275,11 +248,10 @@ begin
   Act.FEdits[0].NewText  := Outcome.NewText;
   if Outcome.NeedsUses then
   begin
-    // Zweite Ersetzung: System.SysUtils in die uses-Klausel. Liegt
-    // oberhalb der Kette - SortEditsDescending fuehrt sie als zweite aus.
+    // Zweite Ersetzung: System.SysUtils in die uses-Klausel. Die
+    // Reihenfolge ist gleichgueltig - ReplaceSpans sortiert selbst.
     SetLength(Act.FEdits, 2);
     Act.FEdits[1] := Outcome.UsesEdit;
-    SortEditsDescending(Act.FEdits);
   end;
   Add(AList, CAP_FORMAT, Outcome.Hint, True, Act);
 end;
@@ -389,7 +361,6 @@ begin
   end;
   if Length(All) >= 2 then
   begin
-    SortEditsDescending(All);
     Act := NewAction(akReplace, AFileName);
     Act.FEdits := All;
     if Length(All) > 3 then Preview := Preview + ', ...';

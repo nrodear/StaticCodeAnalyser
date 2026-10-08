@@ -91,10 +91,12 @@
         </DelphiCompile>
         <DCCReference Include="..\source\uRdxRecipes.pas"/>
         <DCCReference Include="..\source\uRdxScopeTable.pas"/>
+        <DCCReference Include="..\source\uRdxBufferMath.pas"/>
         <DCCReference Include="..\source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="uTestRdxRecipes.pas"/>
         <DCCReference Include="uTestRdxSca044.pas"/>
         <DCCReference Include="uTestRdxActionRing.pas"/>
+        <DCCReference Include="uTestRdxBufferMath.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
