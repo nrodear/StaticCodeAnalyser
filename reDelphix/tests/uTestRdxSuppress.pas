@@ -23,6 +23,8 @@ type
     [Test] procedure RemoveMarker_WholeLine;
     [Test] procedure RemoveMarker_LastLine;
     [Test] procedure RemoveMarker_TrailingCommentKeepsCode;
+    [Test] procedure RemoveMarker_BraceCommentBeforeMarker;
+    [Test] procedure RemoveMarker_InsideBlockComment_NothingToDo;
     [Test] procedure Markers_Recognized;
   end;
 
@@ -223,6 +225,56 @@ begin
     Assert.IsTrue(TRdxSuppress.RemoveMarker(L, 6, E, R), R);
     Assert.AreEqual(StringReplace(BASE_SRC, '  L := TStringList.Create;',
       '  U := ''http://x'';', []), Apply(Src, E));
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TTestRdxSuppress.RemoveMarker_BraceCommentBeforeMarker;
+var
+  Src : string;
+  L   : TStringList;
+  E   : TRdxEdit;
+  R   : string;
+begin
+  // '//' und ein Apostroph in einem {...}-Kommentar VOR dem Marker: der
+  // zeilenweise Scan schnitt ab dem inneren '//' (offenes '{' blieb
+  // stehen) bzw. hielt den Rest der Zeile fuer einen String.
+  Src := StringReplace(BASE_SRC, '  L := TStringList.Create;',
+    '  X := 1; { a // b } // noinspection Foo'#13#10
+    + '  Y := 2; { it''s } // noinspection Bar', []);
+  L := LinesOf(Src);
+  try
+    Assert.IsTrue(TRdxSuppress.RemoveMarker(L, 6, E, R), R);
+    Src := Apply(Src, E);
+  finally
+    L.Free;
+  end;
+  L := LinesOf(Src);
+  try
+    Assert.IsTrue(TRdxSuppress.RemoveMarker(L, 7, E, R), R);
+    Assert.AreEqual(StringReplace(BASE_SRC, '  L := TStringList.Create;',
+      '  X := 1; { a // b }'#13#10'  Y := 2; { it''s }', []), Apply(Src, E));
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TTestRdxSuppress.RemoveMarker_InsideBlockComment_NothingToDo;
+var
+  Src : string;
+  L   : TStringList;
+  E   : TRdxEdit;
+  R   : string;
+begin
+  // Die Zeile liegt IN einem Block-Kommentar, der Zeilen frueher beginnt:
+  // dort ist '//' kein Kommentaranfang - lieber keine Hilfe.
+  Src := StringReplace(BASE_SRC, '  L := TStringList.Create;',
+    '  {'#13#10'  // noinspection Foo'#13#10'  }', []);
+  L := LinesOf(Src);
+  try
+    Assert.IsFalse(TRdxSuppress.RemoveMarker(L, 7, E, R));
+    Assert.AreEqual('kein Marker in der Zeile', R);
   finally
     L.Free;
   end;

@@ -52,6 +52,9 @@ type
 
 implementation
 
+uses
+  uRdxSimpleFixes;   // TRdxCodeMap: Code-Sicht mit Block-Kommentaren
+
 const
   TAG          = 'noinspection';
   TAG_FILEWIDE = 'noinspection-file';
@@ -216,21 +219,20 @@ begin
   AReason := 'keine unit-Zeile gefunden';
 end;
 
-// Spalte des '//', das eine Zeile kommentiert (ausserhalb von Strings);
-// 0 = keins.
-function LineCommentCol(const AText: string): Integer;
+// Spalte des '//', das die Zeile ALine kommentiert; 0 = keins. Ueber die
+// Code-Sicht der GANZEN Datei: ein '//' in einem String, in '{...}' oder
+// '(*...*)' - auch einem, der Zeilen frueher beginnt - zaehlt nicht. Ein
+// zeilenweiser Scan schnitte sonst aus 'x; { a // b } // noinspection X'
+// ab dem inneren '//' heraus und liesse ein offenes '{' stehen.
+function LineCommentCol(ALines: TStrings; ALine: Integer): Integer;
 var
-  i     : Integer;
-  InStr : Boolean;
+  Map : TRdxCodeMap;
 begin
-  Result := 0;
-  InStr := False;
-  for i := 1 to Length(AText) - 1 do
-  begin
-    if AText[i] = '''' then
-      InStr := not InStr
-    else if not InStr and (AText[i] = '/') and (AText[i + 1] = '/') then
-      Exit(i);
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    Result := Map.LineCommentCol(ALine);
+  finally
+    Map.Free;
   end;
 end;
 
@@ -251,7 +253,7 @@ begin
     Exit;
   end;
   Text := ALines[AMarkerLine - 1];
-  Col := LineCommentCol(Text);
+  Col := LineCommentCol(ALines, AMarkerLine);
   if (Col = 0) or (Pos(TAG, LowerCase(Copy(Text, Col, MaxInt))) = 0) then
   begin
     AReason := 'kein Marker in der Zeile';
