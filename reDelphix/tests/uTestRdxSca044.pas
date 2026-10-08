@@ -82,6 +82,9 @@ type
     [Test] procedure Rewrite_CommentBeforeChain_Enabled;
     [Test] procedure Rewrite_IndexedTarget_Enabled;
     [Test] procedure Uses_Missing_DirectiveInClause_Disabled;
+    // Review Major 7: die Sperre fuer Aktionen ueber ALLE Eintraege
+    // (uses qualifizieren) - FPC-Zweig in der interface-Klausel.
+    [Test] procedure UsesDirectiveLine_FindsBranch;
 
     // ---- Idempotenz ----
     [Test] procedure Rewrite_AppliedOnce_NoSecondFinding;
@@ -919,6 +922,37 @@ begin
   Assert.IsFalse(RunRecipe(WithUses(CHAIN,
     'uses Classes {$IFNDEF RDX_NEVER_DEFINED}, Windows{$ENDIF};'), 'Text := Marker', O));
   Assert.IsTrue(Pos('Direktiven', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSca044.UsesDirectiveLine_FindsBranch;
+const
+  FPC_USES = 'uses {$IFDEF FPC}LCLIntf,{$ELSE}Windows,{$ENDIF} Classes, SysUtils;';
+var
+  Src, Path : string;
+  Places    : TSourcePlaces;
+begin
+  Src  := WithUses(CHAIN, FPC_USES);
+  Path := WriteTemp(Src);
+  Places := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(Places.Open(Path));
+    Assert.AreEqual<Integer>(LineOf(Src, '{$IFDEF FPC}'),
+      TRdxRecipeRunner.UsesDirectiveLine(Places));
+  finally
+    Places.Free;
+    DeleteFile(Path);
+  end;
+  Src  := UnitWith(CHAIN);
+  Path := WriteTemp(Src);
+  Places := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(Places.Open(Path));
+    Assert.AreEqual<Integer>(0, TRdxRecipeRunner.UsesDirectiveLine(Places),
+      'ohne Direktive keine Sperre');
+  finally
+    Places.Free;
+    DeleteFile(Path);
+  end;
 end;
 
 procedure TTestRdxSca044.Numeric_CardinalArg_UsesU;

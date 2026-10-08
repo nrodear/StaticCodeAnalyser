@@ -159,6 +159,18 @@ type
     class function PlanUses(APlaces: TSourcePlaces;
       const AShortName, AQualifiedName: string): TRdxUsesPlan; static;
 
+    // Erste Zeile mit einer Compiler-Direktive ('{$') zwischen dem ersten
+    // und dem letzten Eintrag von AEntries; 0 = keine. Ein Eintrag dort
+    // kann in einem Zweig fuer ein anderes Ziel liegen (FPC, Delphi vor
+    // XE2) - eine Ersetzung oder Einfuegung gehoert dann in Handarbeit.
+    class function DirectiveLineIn(APlaces: TSourcePlaces;
+      const AEntries: TArray<TRefactorSpan>): Integer; static;
+
+    // Dasselbe ueber JEDE uses-Klausel der Datei (interface,
+    // implementation; ohne beide die Programm-Klausel) - fuer Aktionen,
+    // die alle Eintraege anfassen (Review reDelphiX 2026-10-07, Major 7).
+    class function UsesDirectiveLine(APlaces: TSourcePlaces): Integer; static;
+
     // Rezept 5.2: parametrisierte Vorlage (nur Text).
     class function SqlTemplate(APlaces: TSourcePlaces; AInfo: TRefactorInfo;
       AIsCall: Boolean; out ATemplate, AHint, AReason: string): Boolean; static;
@@ -500,6 +512,33 @@ begin
   Result.Enabled := True;
 end;
 
+class function TRdxRecipeRunner.DirectiveLineIn(APlaces: TSourcePlaces;
+  const AEntries: TArray<TRefactorSpan>): Integer;
+var
+  i : Integer;
+begin
+  Result := 0;
+  if (APlaces = nil) or (Length(AEntries) = 0) then Exit;
+  for i := AEntries[0].StartLine to AEntries[High(AEntries)].EndLine do
+    if Pos('{$', APlaces.LineText(i)) > 0 then
+      Exit(i);
+end;
+
+class function TRdxRecipeRunner.UsesDirectiveLine(APlaces: TSourcePlaces): Integer;
+var
+  Intf, Impl : TArray<TRefactorSpan>;
+begin
+  Result := 0;
+  if APlaces = nil then Exit;
+  Intf := APlaces.UsesEntries(TUsesSection.usInterface);
+  Impl := APlaces.UsesEntries(TUsesSection.usImplementation);
+  if (Length(Intf) = 0) and (Length(Impl) = 0) then
+    Exit(DirectiveLineIn(APlaces, APlaces.UsesEntries(TUsesSection.usAny)));
+  Result := DirectiveLineIn(APlaces, Intf);
+  if Result = 0 then
+    Result := DirectiveLineIn(APlaces, Impl);
+end;
+
 class function TRdxRecipeRunner.PlanUses(APlaces: TSourcePlaces;
   const AShortName, AQualifiedName: string): TRdxUsesPlan;
 var
@@ -537,12 +576,12 @@ begin
     // Compiler-Direktiven in der Klausel ('uses A {$IFDEF X}, B{$ENDIF};'):
     // jede Einfuegestelle neben einem Eintrag kann in einem Zweig liegen,
     // der fuer ein anderes Ziel nicht uebersetzt wird - dann von Hand.
-    for i := Entries[0].StartLine to Entries[High(Entries)].EndLine do
-      if Pos('{$', APlaces.LineText(i)) > 0 then
-      begin
-        Result.Reason := Format('uses-Klausel traegt Compiler-Direktiven (Zeile %d)', [i]);
-        Exit;
-      end;
+    i := DirectiveLineIn(APlaces, Entries);
+    if i > 0 then
+    begin
+      Result.Reason := Format('uses-Klausel traegt Compiler-Direktiven (Zeile %d)', [i]);
+      Exit;
+    end;
     SetLength(Names, Length(Entries));
     for i := 0 to High(Entries) do
       Names[i] := Entries[i].Resolved;

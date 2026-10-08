@@ -295,6 +295,7 @@ var
   All     : TArray<TRdxEdit>;
   E       : TRdxEdit;
   Preview : string;
+  DirLine : Integer;
 begin
   // Nur wenn der Fund in einer uses-Klausel liegt (Zeile des 'uses' bis
   // letzter Eintrag) - sonst stuende "uses: ..." an jedem Fund der Datei.
@@ -318,6 +319,18 @@ begin
   begin
     Add(AList, 'uses: Eintraege qualifizieren',
       'Scope-Tabelle nicht geladen (unitscopes.txt)', False, nil);
+    Exit;
+  end;
+  // Direktiven in einer Klausel: ein Eintrag kann in einem Zweig fuer ein
+  // anderes Ziel stehen ('{$IFDEF FPC}LCLIntf,{$ELSE}Windows,{$ENDIF}') -
+  // qualifiziert uebersetzte FPC ihn nicht mehr (Review Major 7; dieselbe
+  // Sperre wie PlanUses).
+  DirLine := TRdxRecipeRunner.UsesDirectiveLine(FPlaces);
+  if DirLine > 0 then
+  begin
+    Add(AList, 'uses: Eintraege qualifizieren',
+      Format('uses-Klausel traegt Compiler-Direktiven (Zeile %d)', [DirLine]),
+      False, nil);
     Exit;
   end;
 
