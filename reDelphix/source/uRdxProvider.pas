@@ -19,6 +19,12 @@ unit uRdxProvider;
 //   "uses: X -> Scope.X"               Fund liegt in einer uses-Klausel;
 //                                      je unqualifiziertem Eintrag der Zeile,
 //                                      dazu "alle n Eintraege"
+//   "FreeAndNil(X) verwenden"          SCA085; X im Quelltext deklariert,
+//                                      System.SysUtils kommt notfalls mit
+//   "Assigned() statt Vergleich ..."   SCA126; alle Vergleiche der Anweisung
+//   "(TObject) entfernen"              SCA075 (nur Zeilen, ohne Parser)
+//   "Unterdruecken ..."                je Fund in Pascal-Quelltext
+//                                      (Editorhilfen Stufe 1)
 //   "reDelphix: <Grund>"               ausgegraut, wenn nichts davon geht -
 //                                      sonst waere "kein Eintrag" nicht von
 //                                      "Anbieter nicht geladen" zu
@@ -93,6 +99,9 @@ type
     // der beiden Listen (Konstruktor), nicht ein Zweig mehr in Provide.
     FTreeRecipes : TArray<TRdxRecipe>;   // brauchen den geparsten Quelltext
     FTextRecipes : TArray<TRdxRecipe>;   // brauchen nur die Zeilen
+    // Unterdruecken steht im Menue HINTER den Hilfen und hinter der
+    // Diagnose "reDelphix: <Grund>", die nur kommt, wenn keine Hilfe da ist.
+    FSuppressRecipes : TArray<TRdxRecipe>;
     function NewAction(AKind: TRdxActionKind;
       const AFileName: string): TRdxAction;
     procedure Add(var AList: TArray<TFindingAction>;
@@ -110,16 +119,24 @@ type
       const ACtx: TRdxRecipeContext);
     procedure AddUsesActions(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
+    // Editorhilfen Stufe 2a: die einfachen Hilfen (SCA075, SCA085, SCA126)
+    // ueber TRdxFixRunner - eine weitere Regel braucht hier kein Rezept.
+    procedure AddSimpleFix(var AList: TArray<TFindingAction>;
+      const ACtx: TRdxRecipeContext);
     // Text-Rezepte (Editorhilfen Stufe 1)
-    procedure AddSuppressLine(var AList: TArray<TFindingAction>;
-      const ACtx: TRdxRecipeContext);
-    procedure AddSuppressFile(var AList: TArray<TFindingAction>;
-      const ACtx: TRdxRecipeContext);
     procedure AddRemoveMarker(var AList: TArray<TFindingAction>;
+      const ACtx: TRdxRecipeContext);
+    // Zeilen- und Datei-Marker '// noinspection'.
+    procedure AddSuppress(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
     // Quelltext parsen, Anker beschreiben, Baum-Rezepte laufen lassen.
     procedure AddTreeActions(var AList: TArray<TFindingAction>;
       var ACtx: TRdxRecipeContext; AFromBuffer: Boolean; const AText: string);
+    // "reDelphix: <Grund>", wenn bis hierher kein Eintrag entstanden ist -
+    // sonst waere "keine Hilfe" nicht von "Anbieter nicht geladen" zu
+    // unterscheiden.
+    procedure AddDiagnosis(var AList: TArray<TFindingAction>;
+      const ACtx: TRdxRecipeContext);
     // Der Einstieg des Hosts (TFindingActionProvider).
     function Provide(const AFinding: TLeakFinding): TArray<TFindingAction>;
   public
@@ -158,6 +175,9 @@ const
   CAP_SQL      = 'Copy parameterized template to clipboard';
   CAP_USES_ALL = 'uses: qualify all %d entries';
   CAP_USES     = 'uses: qualify entries';
+  CAP_FREENIL  = 'Use FreeAndNil(%s)';
+  CAP_ASSIGNED = 'Use Assigned() instead of comparing with nil';
+  CAP_TOBJECT  = 'Remove (TObject) from the class declaration';
   DIAG_PREFIX  = 'reDelphix: ';
 
 var
@@ -194,15 +214,16 @@ begin
   FScopes  := TRdxScopeTable.Create;
   FScopes.LoadDefault;   // False = keine Tabelle; uses-Aktionen sagen das
   // Reihenfolge = Reihenfolge im Menue.
-  SetLength(FTreeRecipes, 4);
+  SetLength(FTreeRecipes, 5);
   FTreeRecipes[0] := AddShowSpan;
   FTreeRecipes[1] := AddFormatCall;
   FTreeRecipes[2] := AddSqlTemplate;
   FTreeRecipes[3] := AddUsesActions;
-  SetLength(FTextRecipes, 3);
+  FTreeRecipes[4] := AddSimpleFix;
+  SetLength(FTextRecipes, 1);
   FTextRecipes[0] := AddRemoveMarker;
-  FTextRecipes[1] := AddSuppressLine;
-  FTextRecipes[2] := AddSuppressFile;
+  SetLength(FSuppressRecipes, 1);
+  FSuppressRecipes[0] := AddSuppress;
 end;
 
 destructor TRdxProvider.Destroy;
@@ -464,7 +485,48 @@ begin
   end;
 end;
 
-procedure TRdxProvider.AddSuppressLine(var AList: TArray<TFindingAction>;
+// Menuetext einer einfachen Hilfe; AName ist X bei SCA085 ('' wenn der
+// Planer abgelehnt hat, bevor X feststand).
+function SimpleFixCaption(AKind: TFindingKind; const AName: string): string;
+var
+  N : string;
+begin
+  N := AName;
+  if N = '' then N := 'X';
+  case AKind of
+    fkFreeAndNilHint:
+      Result := Format(_(CAP_FREENIL), [N]);
+    fkNilComparison:
+      Result := _(CAP_ASSIGNED);
+    fkExplicitTObjectInheritance:
+      Result := _(CAP_TOBJECT);
+  else
+    Result := uSCAConsts.KindName(AKind);
+  end;
+end;
+
+procedure TRdxProvider.AddSimpleFix(var AList: TArray<TFindingAction>;
+  const ACtx: TRdxRecipeContext);
+var
+  O       : TRdxFixOutcome;
+  Caption : string;
+  Act     : TRdxAction;
+begin
+  if not TRdxFixRunner.Handles(ACtx.Finding.Kind)
+     or not IsPascalSource(ACtx.FileName) then Exit;
+  O := TRdxFixRunner.FixFor(FPlaces, ACtx.Lines, ACtx.Finding, FUsesNames);
+  Caption := SimpleFixCaption(ACtx.Finding.Kind, O.Name);
+  if not O.Enabled then
+  begin
+    Add(AList, Caption, O.Reason, False, nil);
+    Exit;
+  end;
+  Act := NewAction(akReplace, ACtx.FileName);
+  Act.FEdits := O.Edits;
+  Add(AList, Caption, O.Hint, True, Act);
+end;
+
+procedure TRdxProvider.AddSuppress(var AList: TArray<TFindingAction>;
   const ACtx: TRdxRecipeContext);
 var
   E   : TRdxEdit;
@@ -473,24 +535,12 @@ begin
   // Ein wirkungsloser Marker wird entfernt, nicht seinerseits unterdrueckt.
   if (ACtx.Finding.Kind = fkUnusedSuppression)
      or not IsPascalSource(ACtx.FileName) then Exit;
-  if not TRdxSuppress.LineMarker(ACtx.Lines, ACtx.Line, ACtx.KindName, E, Why) then
-    Exit;
-  AddReplace(AList, Format(_('Suppress here (// noinspection %s)'),
-    [ACtx.KindName]), ACtx.FileName, E, fakSuppress);
-end;
-
-procedure TRdxProvider.AddSuppressFile(var AList: TArray<TFindingAction>;
-  const ACtx: TRdxRecipeContext);
-var
-  E   : TRdxEdit;
-  Why : string;
-begin
-  if (ACtx.Finding.Kind = fkUnusedSuppression)
-     or not IsPascalSource(ACtx.FileName) then Exit;
-  if not TRdxSuppress.FileMarker(ACtx.Lines, ACtx.KindName, E, Why) then
-    Exit;
-  AddReplace(AList, Format(_('Suppress in this file (// noinspection-file %s)'),
-    [ACtx.KindName]), ACtx.FileName, E, fakSuppress);
+  if TRdxSuppress.LineMarker(ACtx.Lines, ACtx.Line, ACtx.KindName, E, Why) then
+    AddReplace(AList, Format(_('Suppress here (// noinspection %s)'),
+      [ACtx.KindName]), ACtx.FileName, E, fakSuppress);
+  if TRdxSuppress.FileMarker(ACtx.Lines, ACtx.KindName, E, Why) then
+    AddReplace(AList, Format(_('Suppress in this file (// noinspection-file %s)'),
+      [ACtx.KindName]), ACtx.FileName, E, fakSuppress);
 end;
 
 procedure TRdxProvider.AddRemoveMarker(var AList: TArray<TFindingAction>;
@@ -557,21 +607,23 @@ begin
       ACtx.IsCall, ACtx.Why);
     for R in FTreeRecipes do
       R(AList, ACtx);
-
-    if Length(AList) = 0 then
-    begin
-      if ACtx.Why <> '' then
-        Add(AList, DIAG_PREFIX + ACtx.Why, '', False, nil)
-      else if ACtx.FixMode = '' then
-        Add(AList, DIAG_PREFIX + Format(_('%s: no fixMode in the rule catalog'),
-          [ACtx.Finding.ResolvedRuleId]), '', False, nil)
-      else
-        Add(AList, DIAG_PREFIX + _('nothing to offer'), '', False, nil);
-    end;
   finally
     FreeAndNil(ACtx.Info);   // alles Noetige ist in die Aktionen kopiert
     FPlaces.Close;
   end;
+end;
+
+procedure TRdxProvider.AddDiagnosis(var AList: TArray<TFindingAction>;
+  const ACtx: TRdxRecipeContext);
+begin
+  if Length(AList) > 0 then Exit;
+  if ACtx.Why <> '' then
+    Add(AList, DIAG_PREFIX + ACtx.Why, '', False, nil)
+  else if ACtx.FixMode = '' then
+    Add(AList, DIAG_PREFIX + Format(_('%s: no fixMode in the rule catalog'),
+      [ACtx.Finding.ResolvedRuleId]), '', False, nil)
+  else
+    Add(AList, DIAG_PREFIX + _('nothing to offer'), '', False, nil);
 end;
 
 function TRdxProvider.Provide(
@@ -625,6 +677,9 @@ begin
     Ctx.Lines    := Lines;
     AddTreeActions(Result, Ctx, FromBuffer, Text);
     for R in FTextRecipes do
+      R(Result, Ctx);
+    AddDiagnosis(Result, Ctx);
+    for R in FSuppressRecipes do
       R(Result, Ctx);
   finally
     Lines.Free;

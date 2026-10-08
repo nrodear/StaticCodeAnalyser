@@ -34,12 +34,15 @@ uses
   uRdxScopeTable in '..\source\uRdxScopeTable.pas',
   uRdxBufferMath in '..\source\uRdxBufferMath.pas',
   uRdxSuppress in '..\source\uRdxSuppress.pas',
+  uRdxSimpleFixes in '..\source\uRdxSimpleFixes.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
   uTestRdxActionRing in 'uTestRdxActionRing.pas',
   uTestRdxBufferMath in 'uTestRdxBufferMath.pas',
-  uTestRdxSuppress in 'uTestRdxSuppress.pas';
+  uTestRdxSuppress in 'uTestRdxSuppress.pas',
+  uTestRdxSimpleFixes in 'uTestRdxSimpleFixes.pas',
+  uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

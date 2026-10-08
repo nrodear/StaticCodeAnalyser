@@ -2270,6 +2270,15 @@ msgstr "In dieser Datei unterdruecken (// noinspection-file %s)"
 
 msgid "Remove ineffective suppression marker"
 msgstr "Wirkungslosen Unterdrueck-Marker entfernen"
+msgid "Use FreeAndNil(%s)"
+msgstr "FreeAndNil(%s) verwenden"
+
+msgid "Use Assigned() instead of comparing with nil"
+msgstr "Assigned() statt Vergleich mit nil verwenden"
+
+msgid "Remove (TObject) from the class declaration"
+msgstr "(TObject) aus der Klassendeklaration entfernen"
+
 
 msgid "Show location"
 msgstr "Stelle zeigen"

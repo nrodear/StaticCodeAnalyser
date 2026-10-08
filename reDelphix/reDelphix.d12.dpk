@@ -59,6 +59,7 @@ contains
   uRdxScopeTable in 'source\uRdxScopeTable.pas',
   uRdxBufferMath in 'source\uRdxBufferMath.pas',
   uRdxSuppress in 'source\uRdxSuppress.pas',
+  uRdxSimpleFixes in 'source\uRdxSimpleFixes.pas',
   uRdxRecipeRunner in 'source\uRdxRecipeRunner.pas',
   uRdxLog in 'source\uRdxLog.pas',
   uRdxEditor in 'source\uRdxEditor.pas',

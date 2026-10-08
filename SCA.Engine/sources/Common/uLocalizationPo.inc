@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2320 Zeilen, 80082 Bytes
-  CPoLines_de: array[0..2319] of string = (
+  // i18n\de.po - 2329 Zeilen, 80370 Bytes
+  CPoLines_de: array[0..2328] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2287,6 +2287,15 @@ const
     '',
     'msgid "Remove ineffective suppression marker"',
     'msgstr "Wirkungslosen Unterdrueck-Marker entfernen"',
+    'msgid "Use FreeAndNil(%s)"',
+    'msgstr "FreeAndNil(%s) verwenden"',
+    '',
+    'msgid "Use Assigned() instead of comparing with nil"',
+    'msgstr "Assigned() statt Vergleich mit nil verwenden"',
+    '',
+    'msgid "Remove (TObject) from the class declaration"',
+    'msgstr "(TObject) aus der Klassendeklaration entfernen"',
+    '',
     '',
     'msgid "Show location"',
     'msgstr "Stelle zeigen"',
@@ -2609,8 +2618,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2316 Zeilen, 83827 Bytes
-  CPoLines_fr: array[0..2315] of string = (
+  // i18n\fr.po - 2325 Zeilen, 84118 Bytes
+  CPoLines_fr: array[0..2324] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4879,6 +4888,15 @@ const
     '',
     'msgid "Remove ineffective suppression marker"',
     'msgstr "Retirer le marqueur de suppression sans effet"',
+    'msgid "Use FreeAndNil(%s)"',
+    'msgstr "Utiliser FreeAndNil(%s)"',
+    '',
+    'msgid "Use Assigned() instead of comparing with nil"',
+    'msgstr "Utiliser Assigned() au lieu de comparer avec nil"',
+    '',
+    'msgid "Remove (TObject) from the class declaration"',
+    'msgstr "Retirer (TObject) de la d'#$00E9'claration de classe"',
+    '',
     '',
     'msgid "Show location"',
     'msgstr "Afficher l''emplacement"',

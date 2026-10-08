@@ -2266,6 +2266,15 @@ msgstr "Masquer dans ce fichier (// noinspection-file %s)"
 
 msgid "Remove ineffective suppression marker"
 msgstr "Retirer le marqueur de suppression sans effet"
+msgid "Use FreeAndNil(%s)"
+msgstr "Utiliser FreeAndNil(%s)"
+
+msgid "Use Assigned() instead of comparing with nil"
+msgstr "Utiliser Assigned() au lieu de comparer avec nil"
+
+msgid "Remove (TObject) from the class declaration"
+msgstr "Retirer (TObject) de la déclaration de classe"
+
 
 msgid "Show location"
 msgstr "Afficher l'emplacement"

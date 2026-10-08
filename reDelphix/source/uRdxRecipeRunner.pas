@@ -23,6 +23,8 @@ interface
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uEngineApi, uRefactorInfo, uFindingActions, uRdxRecipes,
+  uMethodd12,       // TLeakFinding
+  uSCAConsts,       // TFindingKind
   uRdxBufferMath;   // TRdxEdit
 
 const
@@ -84,6 +86,17 @@ type
     Name   : string;      // der einzufuegende Name ('System.SysUtils' / 'SysUtils')
     Edit   : TRdxEdit;    // die Ersetzung, wenn Needed und Reason = ''
     Reason : string;      // wenn Needed, aber keine Stelle bestimmbar
+  end;
+
+  // Ergebnis einer einfachen Hilfe (Editorhilfen Stufe 2a, SCA085 und
+  // SCA126): die Ersetzungen fuer EINEN Undo-Schritt und ein Hinweis fuers
+  // Menue - oder der Grund, warum es keine Hilfe gibt.
+  TRdxFixOutcome = record
+    Enabled : Boolean;
+    Edits   : TArray<TRdxEdit>;
+    Name    : string;    // SCA085: die Variable, wie sie im Puffer steht
+    Hint    : string;    // bei Enabled = True
+    Reason  : string;    // bei Enabled = False
   end;
 
   TRdxFormatOutcome = record
@@ -176,7 +189,48 @@ type
       AIsCall: Boolean; out ATemplate, AHint, AReason: string): Boolean; static;
   end;
 
+  // Editorhilfen Stufe 2a: die einfachen Hilfen aus uRdxSimpleFixes, mit
+  // dem Quellstellen-Dienst verbunden. Eine weitere Regel ist ein Zweig
+  // mehr in Handles/FixFor - der Anbieter braucht dafuer kein neues Rezept.
+  // ALines ist immer derselbe Text, aus dem APlaces geoeffnet wurde.
+  TRdxFixRunner = class
+  public
+    // True, wenn FixFor fuer diese Art eine Hilfe kennt.
+    class function Handles(AKind: TFindingKind): Boolean; static;
+
+    // Die Hilfe fuer einen Fund: Art, Zeile und Meldung aus AFinding.
+    class function FixFor(APlaces: TSourcePlaces; ALines: TStrings;
+      AFinding: TLeakFinding;
+      const AUsesNames: TArray<string>): TRdxFixOutcome; static;
+
+    // SCA075: 'class(TObject)' -> 'class' an der Spalte aus der Meldung
+    // (nur die Zeilen, kein Parser noetig).
+    class function ExplicitTObjectFix(ALines: TStrings; ALine: Integer;
+      const AMessage: string): TRdxFixOutcome; static;
+
+    // SCA085: 'X.Free;' (ALine) + 'X := nil;' -> 'FreeAndNil(X);'. X muss
+    // in dieser Unit deklariert sein (DeclaredTypeOf): eine Property
+    // uebersetzt als Argument nicht, ein geerbtes Feld ist nicht pruefbar -
+    // beides keine Hilfe. Fehlt SysUtils, kommt die uses-Einfuegung mit.
+    class function FreeAndNilFix(APlaces: TSourcePlaces; ALines: TStrings;
+      ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome; static;
+
+    // SCA126: der Fund traegt keine Spalte - umgeschrieben wird die EINE
+    // Anweisung, die auf ALine beginnt und einen nil-Vergleich traegt
+    // (NodesAt, Knotentext wie uNilComparison), und zwar mit ALLEN ihren
+    // Vergleichen. Zwei solche Anweisungen heissen mehrdeutig. Jeder
+    // Operand geht durch TRdxNilFix.NilOperandRisk.
+    class function NilComparisonFix(APlaces: TSourcePlaces; ALines: TStrings;
+      ALine: Integer): TRdxFixOutcome; static;
+  end;
+
 implementation
+
+uses
+  uRdxSimpleFixes;   // Planer SCA075/SCA085/SCA126 (reine Textlogik)
+
+const
+  R_NO_FILE = 'keine Datei geoeffnet';
 
 { TRdxObjectRing }
 
@@ -278,7 +332,7 @@ begin
   AWhy    := '';
   if not Assigned(APlaces) or not APlaces.IsOpen then
   begin
-    AWhy := 'keine Datei geoeffnet';
+    AWhy := R_NO_FILE;
     Exit;
   end;
   if AAnchor = 'assign' then
@@ -556,7 +610,7 @@ begin
   if not Assigned(APlaces) or not APlaces.IsOpen then
   begin
     Result.Needed := True;
-    Result.Reason := 'keine Datei geoeffnet';
+    Result.Reason := R_NO_FILE;
     Exit;
   end;
   AllNames := UsesNamesOf(APlaces);
@@ -672,6 +726,205 @@ begin
     if Parts[i].Role = ROLE_OPERAND then Inc(N);
   AHint  := Format('%d Parameter, nichts wird geschrieben', [N]);
   Result := True;
+end;
+
+{ TRdxFixRunner }
+
+class function TRdxFixRunner.Handles(AKind: TFindingKind): Boolean;
+begin
+  Result := AKind in [fkExplicitTObjectInheritance, fkFreeAndNilHint,
+    fkNilComparison];
+end;
+
+class function TRdxFixRunner.FixFor(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := Default(TRdxFixOutcome);
+  if not Assigned(AFinding) then
+  begin
+    Result.Reason := 'kein Fund';
+    Exit;
+  end;
+  case AFinding.Kind of
+    fkExplicitTObjectInheritance:
+      Result := ExplicitTObjectFix(ALines, AFinding.LineInt, AFinding.Message);
+    fkFreeAndNilHint:
+      Result := FreeAndNilFix(APlaces, ALines, AFinding.LineInt, AUsesNames);
+    fkNilComparison:
+      Result := NilComparisonFix(APlaces, ALines, AFinding.LineInt);
+  else
+    Result.Reason := 'keine einfache Hilfe fuer diese Regel';
+  end;
+end;
+
+class function TRdxFixRunner.ExplicitTObjectFix(ALines: TStrings;
+  ALine: Integer; const AMessage: string): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
+begin
+  Result := Default(TRdxFixOutcome);
+  if not Assigned(ALines) then
+  begin
+    Result.Reason := R_NO_FILE;
+    Exit;
+  end;
+  SetLength(Result.Edits, 1);
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    // Die Spalte steht in der Meldung ('at column N') - sie kennt den
+    // Kommentar-Zustand der Zeilen davor, ein Neuscan der Zeile nicht.
+    Result.Enabled := TRdxSimpleFixes.ExplicitTObject(Map, ALine, AMessage,
+      Result.Edits[0], Result.Reason);
+  finally
+    Map.Free;
+  end;
+  if not Result.Enabled then
+    Result.Edits := nil;
+end;
+
+class function TRdxFixRunner.FreeAndNilFix(APlaces: TSourcePlaces;
+  ALines: TStrings; ALine: Integer;
+  const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Map  : TRdxCodeMap;
+  Plan : TRdxUsesPlan;
+begin
+  Result := Default(TRdxFixOutcome);
+  if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
+  begin
+    Result.Reason := R_NO_FILE;
+    Exit;
+  end;
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    if not TRdxSimpleFixes.FreeAndNilFix(Map, ALine, Result.Edits,
+         Result.Name, Result.Reason) then
+      Exit;
+  finally
+    Map.Free;
+  end;
+  if APlaces.DeclaredTypeOf(ALine, Result.Name) = '' then
+  begin
+    Result.Reason := Format('%s ist in dieser Unit nicht deklariert '
+      + '(Property oder geerbtes Feld?)', [Result.Name]);
+    Result.Edits := nil;
+    Exit;
+  end;
+  // Der Unterschied, den der Benutzer kennen sollte: FreeAndNil setzt
+  // ERST nil, dann laeuft der Destruktor.
+  Result.Hint := Format('FreeAndNil setzt %s auf nil, bevor der Destruktor laeuft',
+    [Result.Name]);
+  if not TRdxRecipes.HasUnit(AUsesNames, 'SysUtils') then
+  begin
+    Plan := TRdxRecipeRunner.PlanUses(APlaces, 'SysUtils', 'System.SysUtils');
+    if Plan.Needed and (Plan.Reason <> '') then
+    begin
+      Result.Reason := 'System.SysUtils fehlt in uses: ' + Plan.Reason;
+      Result.Edits := nil;
+      Exit;
+    end;
+    if Plan.Needed then
+    begin
+      SetLength(Result.Edits, Length(Result.Edits) + 1);
+      Result.Edits[High(Result.Edits)] := Plan.Edit;
+      Result.Hint := Result.Hint + ' + uses ' + Plan.Name;
+    end;
+  end;
+  Result.Enabled := True;
+end;
+
+// Der Text, auf dem uNilComparison den Knoten zaehlt (Analyse
+// editorhilfen-2a, Tabelle der Knoten): Aufrufe tragen ihn im Namen,
+// raise in beiden Feldern, alle anderen Anweisungen in TypeRef.
+function NilTextOf(const ANode: TNodeRef): string;
+begin
+  case ANode.Kind of
+    TNodeKind.nkCall, TNodeKind.nkInherited:
+      Result := ANode.Name;
+    TNodeKind.nkRaise:
+      Result := ANode.Name + ' ' + ANode.TypeRef;
+  else
+    Result := ANode.TypeRef;
+  end;
+end;
+
+// Die EINE Anweisung auf ALine mit einem nil-Vergleich als SCA126-Stelle.
+// '' oder der Grund (keine, mehrdeutig).
+function PickNilSite(APlaces: TSourcePlaces; ALine: Integer;
+  out ASite: TRdxNilSite): string;
+var
+  Nodes : TArray<TNodeRef>;
+  N     : TNodeRef;
+  Hits  : Integer;
+begin
+  Result := '';
+  ASite := Default(TRdxNilSite);
+  Nodes := APlaces.NodesAt(ALine, [TNodeKind.nkIfStmt, TNodeKind.nkWhileStmt,
+    TNodeKind.nkCaseStmt, TNodeKind.nkAssign, TNodeKind.nkCall,
+    TNodeKind.nkExit, TNodeKind.nkInherited, TNodeKind.nkRaise]);
+  Hits := 0;
+  for N in Nodes do
+    if TRdxNilFix.CountNilComparisons(NilTextOf(N)) > 0 then
+    begin
+      Inc(Hits);
+      ASite.Line     := N.Line;
+      ASite.Col      := N.Col;
+      ASite.NodeText := NilTextOf(N);
+      if N.Kind in [TNodeKind.nkIfStmt, TNodeKind.nkWhileStmt,
+         TNodeKind.nkCaseStmt] then
+        ASite.Anchor := naCondition
+      else
+        ASite.Anchor := naStatement;
+    end;
+  if Hits = 0 then
+    Result := Format('keine Anweisung mit nil-Vergleich beginnt auf Zeile %d',
+      [ALine])
+  else if Hits > 1 then
+    Result := Format('Zeile %d ist mehrdeutig (%d Anweisungen mit nil-Vergleich)',
+      [ALine, Hits]);
+end;
+
+class function TRdxFixRunner.NilComparisonFix(APlaces: TSourcePlaces;
+  ALines: TStrings; ALine: Integer): TRdxFixOutcome;
+var
+  Site    : TRdxNilSite;
+  Map     : TRdxCodeMap;
+  Plan    : TRdxNilPlan;
+  TypeLow : string;
+  i       : Integer;
+begin
+  Result := Default(TRdxFixOutcome);
+  if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
+  begin
+    Result.Reason := R_NO_FILE;
+    Exit;
+  end;
+  Result.Reason := PickNilSite(APlaces, ALine, Site);
+  if Result.Reason <> '' then Exit;
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    if not TRdxNilFix.NilComparison(Map, Site, Plan) then
+    begin
+      Result.Reason := Plan.Reason;
+      Exit;
+    end;
+  finally
+    Map.Free;
+  end;
+  // Nur ein blosser Bezeichner hat einen deklarierten Typ; Ereignis- und
+  // Getter-Namen sperren auch am Ende eines Pfads.
+  for i := 0 to High(Plan.Operands) do
+  begin
+    TypeLow := '';
+    if TRdxRecipes.IsPlainIdent(Plan.Operands[i]) then
+      TypeLow := APlaces.DeclaredTypeOf(Site.Line, Plan.Operands[i]);
+    Result.Reason := TRdxNilFix.NilOperandRisk(Plan.Operands[i], TypeLow);
+    if Result.Reason <> '' then Exit;
+    if Result.Hint <> '' then Result.Hint := Result.Hint + ', ';
+    Result.Hint := Result.Hint + Plan.Edits[i].NewText;
+  end;
+  Result.Edits   := Plan.Edits;
+  Result.Enabled := True;
 end;
 
 end.

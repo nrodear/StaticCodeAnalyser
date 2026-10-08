@@ -93,12 +93,15 @@
         <DCCReference Include="..\source\uRdxScopeTable.pas"/>
         <DCCReference Include="..\source\uRdxBufferMath.pas"/>
         <DCCReference Include="..\source\uRdxSuppress.pas"/>
+        <DCCReference Include="..\source\uRdxSimpleFixes.pas"/>
         <DCCReference Include="..\source\uRdxRecipeRunner.pas"/>
         <DCCReference Include="uTestRdxRecipes.pas"/>
         <DCCReference Include="uTestRdxSca044.pas"/>
         <DCCReference Include="uTestRdxActionRing.pas"/>
         <DCCReference Include="uTestRdxBufferMath.pas"/>
         <DCCReference Include="uTestRdxSuppress.pas"/>
+        <DCCReference Include="uTestRdxSimpleFixes.pas"/>
+        <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
