@@ -23,6 +23,7 @@ uses
   uFindingActions,                         // Aktionen fremder Anbieter am Fund (Grid-Menue)
   uFindingActionMenu,                      // das eine Menue-Modell zu den Aktionen (Stufe C)
   uIDEFindingActionMenu,                   // Modell -> TMenuItems
+  uIDEFindingBulb,                         // Gluehbirne an der Caret-Zeile (Element EditorBulb)
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uIDEColors, uLocalization,
   uRecentPaths, uScanTargetDialog,
   uIDELineHighlighter, uIDEMessages, uIDEWatchMode, uIDEStatsTiles,
@@ -5814,6 +5815,14 @@ begin
   end;
 end;
 
+// Element EditorBulb: die Gluehbirne bekommt die Fund-Suche des
+// Kontextmenues hereingereicht - so kennt uIDEFindingBulb weder das
+// Dock-Fenster noch die Kopien des Silent-Laufs.
+procedure RegisterEditorBulb;
+begin
+  RegisterFindingBulb(FindingsAtEditorLine);
+end;
+
 procedure AddUiElements(ARegistry: TUiElementRegistry);
 // Vertrag steht an der Deklaration. Die SortKeys bilden die am 2026-08-10
 // gemessene Reihenfolge ab (Messung 0.5, Protokollzeilen REG 1-7);
@@ -5828,6 +5837,7 @@ const
   SK_SHARED_HOOKS   = 10;
   SK_DOCK_FORM      = 20;
   SK_LINE_HIGHLIGHT = 30;
+  SK_EDITOR_BULB    = 35;
   SK_ANNOTATION     = 40;
   SK_WATCH_MODE     = 50;
   SK_WARMUP         = 60;
@@ -5858,6 +5868,12 @@ begin
   // angehaengt; AV-sicher dank ref-counting (siehe uIDELineHighlighter).
   AddEl('LineHighlighter', SK_LINE_HIGHLIGHT,
     RegisterLineHighlighter, UnregisterLineHighlighter);
+  // Gluehbirne an der Caret-Zeile (Konzept GluehbirneAnzeige, Weg C): NACH
+  // dem LineHighlighter, denn dessen Editor-Notifier liefert die Ereignisse
+  // (kein eigener OTA-Slot); rueckwaerts abgebaut also VOR ihm. Die Funde
+  // kommen aus derselben Quelle wie beim Editor-Kontextmenue.
+  AddEl('EditorBulb', SK_EDITOR_BULB,
+    RegisterEditorBulb, UnregisterFindingBulb);
   AddEl('AnnotationOverlay', SK_ANNOTATION,
     RegisterAnnotationOverlay, UnregisterAnnotationOverlay);
   // Watch-Mode: Manager-Singleton anlegen. KEINE ToolsAPI-Calls hier -

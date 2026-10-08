@@ -107,6 +107,8 @@ contains
   uAnalyserPalette in 'sources\uAnalyserPalette.pas',
   uAnalyserTheme in 'sources\uAnalyserTheme.pas',
   uAppTheme in 'sources\uAppTheme.pas',
+  uEditorBulbButton in 'sources\uEditorBulbButton.pas',
+  uEditorBulbGeometry in 'sources\uEditorBulbGeometry.pas',
   uExportMenu in 'sources\uExportMenu.pas',
   uFindingFilter in 'sources\uFindingFilter.pas',
   uFindingGridRenderer in 'sources\uFindingGridRenderer.pas',

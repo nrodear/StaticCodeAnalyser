@@ -2252,3 +2252,9 @@ msgstr "Fund-Aktionen: Anbieter meldet Fehler - %s"
 
 msgid "Finding action failed: %s"
 msgstr "Fund-Aktion fehlgeschlagen: %s"
+
+msgid "Static Code Analyser: actions for this line"
+msgstr "Static Code Analyser: Aktionen zu dieser Zeile"
+
+msgid "No actions for this line"
+msgstr "Keine Aktionen fuer diese Zeile"

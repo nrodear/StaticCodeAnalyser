@@ -115,6 +115,7 @@
         <DCCReference Include="uIDEExpert.pas"/>
         <DCCReference Include="uIDEAnalyserForm.pas"/>
         <DCCReference Include="uIDEFindingActionMenu.pas"/>
+        <DCCReference Include="uIDEFindingBulb.pas"/>
         <DCCReference Include="uIDEFindingsPropertiesForm.pas"/>
         <DCCReference Include="uIDELineHighlighter.pas"/>
         <DCCReference Include="uIDEAnnotationOverlay.pas"/>

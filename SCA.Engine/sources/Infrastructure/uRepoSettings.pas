@@ -1173,15 +1173,17 @@ const
     '; output (DebugView, prefix SCA-UI). The standalone EXE does not read'#13#10 +
     '; these keys.'#13#10 +
     '; Valid names:'#13#10 +
-    ';   SharedUiHooks, DockForm, LineHighlighter, AnnotationOverlay,'#13#10 +
-    ';   WatchMode, WarmUpCaches, ViewMenuItem, EditorContextMenu,'#13#10 +
-    ';   OptionsPageSCA, OptionsPageSonar, FindingsProperties,'#13#10 +
-    ';   AboutBox, ToolsMenuItem'#13#10 +
+    ';   SharedUiHooks, DockForm, LineHighlighter, EditorBulb,'#13#10 +
+    ';   AnnotationOverlay, WatchMode, WarmUpCaches, ViewMenuItem,'#13#10 +
+    ';   EditorContextMenu, OptionsPageSCA, OptionsPageSonar,'#13#10 +
+    ';   FindingsProperties, AboutBox, ToolsMenuItem'#13#10 +
     '; PackageWizard is deliberately NOT switchable - it carries the'#13#10 +
     '; teardown of every other element on unload.'#13#10 +
     '; Dependent degradation: DockForm=0 also removes the View menu entry;'#13#10 +
     '; WatchMode=0 leaves the properties panel without live findings;'#13#10 +
-    '; SharedUiHooks=0 falls back to VCL default colours.'#13#10 +
+    '; SharedUiHooks=0 falls back to VCL default colours;'#13#10 +
+    '; LineHighlighter=0 also silences the EditorBulb (the light bulb'#13#10 +
+    '; at the caret line gets its editor events from there).'#13#10 +
     ';'#13#10 +
     ';Element.AnnotationOverlay=0'#13#10 +
     ''#13#10 +

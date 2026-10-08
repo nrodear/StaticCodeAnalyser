@@ -2248,3 +2248,9 @@ msgstr "Actions du résultat : le fournisseur a échoué - %s"
 
 msgid "Finding action failed: %s"
 msgstr "L'action a échoué : %s"
+
+msgid "Static Code Analyser: actions for this line"
+msgstr "Static Code Analyser : actions pour cette ligne"
+
+msgid "No actions for this line"
+msgstr "Aucune action pour cette ligne"

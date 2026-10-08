@@ -352,6 +352,8 @@
         <DCCReference Include="..\SCA.SharedUI\sources\uAnalyserPalette.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uAnalyserTheme.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uAppTheme.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uEditorBulbButton.pas"/>
+        <DCCReference Include="..\SCA.SharedUI\sources\uEditorBulbGeometry.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingGridRenderer.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingsPropertiesFrame.pas"/>
         <DCCReference Include="..\SCA.SharedUI\sources\uFindingFilter.pas"/>
@@ -372,6 +374,7 @@
         <DCCReference Include="uIDEExpert.pas"/>
         <DCCReference Include="uIDEAnalyserForm.pas"/>
         <DCCReference Include="uIDEFindingActionMenu.pas"/>
+        <DCCReference Include="uIDEFindingBulb.pas"/>
         <DCCReference Include="uIDEFindingsPropertiesForm.pas"/>
         <DCCReference Include="uIDELineHighlighter.pas"/>
         <DCCReference Include="uIDEAnnotationOverlay.pas"/>

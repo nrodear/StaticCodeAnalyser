@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2254 Zeilen, 78222 Bytes
-  CPoLines_de: array[0..2253] of string = (
+  // i18n\de.po - 2260 Zeilen, 78412 Bytes
+  CPoLines_de: array[0..2259] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2268,7 +2268,13 @@ const
     'msgstr "Fund-Aktionen: Anbieter meldet Fehler - %s"',
     '',
     'msgid "Finding action failed: %s"',
-    'msgstr "Fund-Aktion fehlgeschlagen: %s"'
+    'msgstr "Fund-Aktion fehlgeschlagen: %s"',
+    '',
+    'msgid "Static Code Analyser: actions for this line"',
+    'msgstr "Static Code Analyser: Aktionen zu dieser Zeile"',
+    '',
+    'msgid "No actions for this line"',
+    'msgstr "Keine Aktionen fuer diese Zeile"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -2543,8 +2549,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2250 Zeilen, 81901 Bytes
-  CPoLines_fr: array[0..2249] of string = (
+  // i18n\fr.po - 2256 Zeilen, 82091 Bytes
+  CPoLines_fr: array[0..2255] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4794,7 +4800,13 @@ const
     'msgstr "Actions du r'#$00E9'sultat : le fournisseur a '#$00E9'chou'#$00E9' - %s"',
     '',
     'msgid "Finding action failed: %s"',
-    'msgstr "L''action a '#$00E9'chou'#$00E9' : %s"'
+    'msgstr "L''action a '#$00E9'chou'#$00E9' : %s"',
+    '',
+    'msgid "Static Code Analyser: actions for this line"',
+    'msgstr "Static Code Analyser : actions pour cette ligne"',
+    '',
+    'msgid "No actions for this line"',
+    'msgstr "Aucune action pour cette ligne"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle
