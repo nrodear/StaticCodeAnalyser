@@ -2254,3 +2254,6 @@ msgstr "Static Code Analyser : actions pour cette ligne"
 
 msgid "No actions for this line"
 msgstr "Aucune action pour cette ligne"
+
+msgid "%d more findings on this line are not listed"
+msgstr "%d autres résultats sur cette ligne ne sont pas listés"

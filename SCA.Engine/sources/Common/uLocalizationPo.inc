@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2260 Zeilen, 78412 Bytes
-  CPoLines_de: array[0..2259] of string = (
+  // i18n\de.po - 2263 Zeilen, 78535 Bytes
+  CPoLines_de: array[0..2262] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2274,7 +2274,10 @@ const
     'msgstr "Static Code Analyser: Aktionen zu dieser Zeile"',
     '',
     'msgid "No actions for this line"',
-    'msgstr "Keine Aktionen fuer diese Zeile"'
+    'msgstr "Keine Aktionen fuer diese Zeile"',
+    '',
+    'msgid "%d more findings on this line are not listed"',
+    'msgstr "%d weitere Funde auf dieser Zeile sind nicht aufgefuehrt"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -2549,8 +2552,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2256 Zeilen, 82091 Bytes
-  CPoLines_fr: array[0..2255] of string = (
+  // i18n\fr.po - 2259 Zeilen, 82214 Bytes
+  CPoLines_fr: array[0..2258] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4806,7 +4809,10 @@ const
     'msgstr "Static Code Analyser : actions pour cette ligne"',
     '',
     'msgid "No actions for this line"',
-    'msgstr "Aucune action pour cette ligne"'
+    'msgstr "Aucune action pour cette ligne"',
+    '',
+    'msgid "%d more findings on this line are not listed"',
+    'msgstr "%d autres r'#$00E9'sultats sur cette ligne ne sont pas list'#$00E9's"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

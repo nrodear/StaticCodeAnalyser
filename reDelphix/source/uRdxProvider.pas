@@ -44,7 +44,7 @@ type
   TRdxActionKind = (akShowSpan, akReplace, akSqlTemplate);
 
   // Ein Menuepunkt samt allem, was Execute braucht. Lebt im Anbieter, bis
-  // MAX_BATCHES neuere Provide-Chargen entstanden sind (TRdxObjectRing) -
+  // RDX_ACTION_BATCHES neuere Provide-Chargen entstanden sind (TRdxObjectRing) -
   // nicht nur bis zum naechsten Provide, denn ein Host stellt die
   // Aktionen mehrerer Funde in ein Menue (Stufe B, Konzept Editor-
   // Gluehbirne 2026-10-06). Mehrere Ersetzungen (TRdxEdit aus uRdxRecipeRunner)
@@ -164,16 +164,12 @@ end;
 
 { TRdxProvider }
 
-const
-  // Soviel Provide-Chargen bleiben am Leben (je Charge alle Aktions-
-  // objekte eines Funds); ein Menue umfasst eine Handvoll Funde, 32 deckt
-  // auch viele Funde auf einer Zeile.
-  MAX_BATCHES = 32;
-
 constructor TRdxProvider.Create;
 begin
   inherited Create;
-  FActions := TRdxObjectRing.Create(MAX_BATCHES);
+  // Je Charge die Aktionsobjekte EINES Provide; wie viele am Leben
+  // bleiben, steht bei RDX_ACTION_BATCHES (uRdxRecipeRunner).
+  FActions := TRdxObjectRing.Create(RDX_ACTION_BATCHES);
   FPlaces  := TSourcePlaces.Create;
   FScopes  := TRdxScopeTable.Create;
   FScopes.LoadDefault;   // False = keine Tabelle; uses-Aktionen sagen das

@@ -90,6 +90,10 @@ msgstr ""
 msgid "%d hidden by baseline"
 msgstr ""
 
+#: StaticCodeAnalyserIDE/uIDEFindingActionMenu.pas:79
+msgid "%d more findings on this line are not listed"
+msgstr ""
+
 #: SCA.SharedUI/sources/uProfileViewer.pas:281
 msgid "%d of %d rules shown, %d selected"
 msgstr ""
@@ -1066,7 +1070,7 @@ msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2862
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5467
-#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:532
+#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:644
 msgid "Finding action failed: %s"
 msgstr ""
 
@@ -1548,7 +1552,7 @@ msgstr ""
 msgid "Nil dereference: access through a possibly nil reference"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:510
+#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:622
 msgid "No actions for this line"
 msgstr ""
 
@@ -2190,7 +2194,7 @@ msgstr ""
 msgid "Source line exceeds 120 characters - wrap or extract"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:403
+#: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:500
 msgid "Static Code Analyser: actions for this line"
 msgstr ""
 

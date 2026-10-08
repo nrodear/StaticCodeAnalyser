@@ -13,6 +13,10 @@ unit uIDEFindingActionMenu;
 // jetzt -1 - kein Leser), das Dock-Grid GRID_ACTION_TAG (Trenner
 // GRID_ACTION_TAG - 1 wie bisher, danach raeumt GridMenuPopup ab Tag
 // GRID_ACTION_TAG - 1 ab).
+//
+// Fragte das Modell nicht alle Funde ab (Omitted > 0, Obergrenze je Menue
+// aus uFindingActions), steht am Ende eine deaktivierte Hinweiszeile -
+// sonst saehe der Benutzer nicht, dass Funde fehlen.
 
 interface
 
@@ -31,6 +35,9 @@ procedure FillPopupFromModel(APopup: TPopupMenu;
   ATagBase: Integer; AOwner: TComponent; ASink: TList<TMenuItem>);
 
 implementation
+
+uses
+  System.SysUtils, uLocalization;
 
 procedure FillPopupFromModel(APopup: TPopupMenu;
   const AModel: TFindingMenuModel; AOnClick: TNotifyEvent;
@@ -62,6 +69,17 @@ begin
       Item.Tag     := ATagBase + AModel.Entries[i].ActionIndex;
       Item.OnClick := AOnClick;
     end;
+    APopup.Items.Add(Item);
+    if Assigned(ASink) then
+      ASink.Add(Item);
+  end;
+  if AModel.Omitted > 0 then
+  begin
+    Item := TMenuItem.Create(AOwner);
+    Item.Caption := Format(_('%d more findings on this line are not listed'),
+      [AModel.Omitted]);
+    Item.Enabled := False;
+    Item.Tag     := ATagBase - 1;
     APopup.Items.Add(Item);
     if Assigned(ASink) then
       ASink.Add(Item);

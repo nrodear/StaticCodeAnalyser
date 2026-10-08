@@ -53,6 +53,9 @@ type
     [Test] procedure CollapseCode_KeepsLiterals;
     [Test] procedure Judge_VariantSourcesAndParenGroup;
     [Test] procedure Format_AnsiOperand_UnicodeTarget_Allowed;
+    // Review 2026-10-07 Blocker 1: ein AnsiChar bleibt gesperrt, auch bei
+    // Unicode-Ziel - Format castet ordinal statt per Codepage.
+    [Test] procedure Format_AnsiCharOperand_UnicodeTarget_Blocked;
     [Test] procedure LooksLikeSql_NeedsVerbAndStructure;
 
     // ---- SQL-Vorlage ---------------------------------------------------
@@ -431,6 +434,23 @@ begin
   Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B, ''));
   Assert.IsTrue(Pos('UnicodeString', B.Reason) > 0, B.Reason);
   Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B, 'ansistring'));
+end;
+
+procedure TTestRdxRecipes.Format_AnsiCharOperand_UnicodeTarget_Blocked;
+var
+  Parts : TRdxParts;
+  B     : TRdxFormatBuild;
+begin
+  // 'Preis: ' + ac + ' EUR' mit ac = #$80: die Verkettung ergibt das
+  // Euro-Zeichen (Systemcodepage), Format('%s', [ac]) U+0080.
+  Parts := [Lit('''Preis: '''),
+            TRdxRecipes.MakePart(ROLE_OPERAND, 'ac', rvString, 'ansichar'),
+            Lit(''' EUR''')];
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B, 'unicodestring'));
+  Assert.IsTrue(Pos('ansichar', B.Reason) > 0, B.Reason);
+  Assert.IsTrue(Pos('Codepage', B.Reason) > 0, B.Reason);
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B, 'widestring'));
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B, ''));
 end;
 
 procedure TTestRdxRecipes.Format_VariantAndAnsi_Blocked;

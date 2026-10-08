@@ -15,7 +15,9 @@ unit uFindingActionMenu;
 // ausfuehren kann und die etwas aendern (Kind = fakFix, Enabled, Execute
 // zugewiesen) - die Form der Gluehbirne: kein "Stelle zeigen", keine
 // ausgegrauten Eintraege, keine Diagnosezeilen der Anbieter; ein Fund ohne
-// solche Aktion faellt samt Kopfzeile weg. Wirft ein
+// solche Aktion faellt samt Kopfzeile weg. BuildFindingMenuModel fragt
+// hoechstens MAX_FINDINGS_PER_MENU Funde ab (Vertrag in uFindingActions);
+// wie viele es nicht fragte, steht in Omitted. Wirft ein
 // Anbieter beim Erfragen, fallen die Aktionen DIESES Funds weg (alle
 // Anbieter - TFindingActions.ActionsFor wirft als Ganzes), nie das
 // Menue; die Meldung landet in Errors, der Host protokolliert sie.
@@ -41,6 +43,7 @@ type
     Entries : TArray<TFindingMenuEntry>;
     Actions : TArray<TFindingAction>;
     Errors  : TArray<string>;      // Meldungen werfender Anbieter
+    Omitted : Integer;             // Funde ueber MAX_FINDINGS_PER_MENU, nicht gefragt
     function IsEmpty: Boolean;
     function ActionCount: Integer;
   end;
@@ -59,7 +62,9 @@ function BuildFindingMenuModelFrom(const AFindings: TArray<TLeakFinding>;
   AOptions: TFindingMenuOptions): TFindingMenuModel;
 
 // Erfragt die Aktionen je Fund bei der Registry (TFindingActions.ActionsFor)
-// und baut daraus das Modell; Anbieterfehler kommen nach Errors.
+// und baut daraus das Modell; Anbieterfehler kommen nach Errors. Nur die
+// ersten MAX_FINDINGS_PER_MENU Funde werden gefragt, der Rest zaehlt nach
+// Omitted.
 function BuildFindingMenuModel(const AFindings: TArray<TLeakFinding>;
   AOptions: TFindingMenuOptions): TFindingMenuModel;
 
@@ -183,17 +188,21 @@ function BuildFindingMenuModel(const AFindings: TArray<TLeakFinding>;
   AOptions: TFindingMenuOptions): TFindingMenuModel;
 var
   i      : Integer;
+  Asked  : TArray<TLeakFinding>;
   Lists  : TArray<TArray<TFindingAction>>;
   Errors : TArray<string>;
   NErr   : Integer;
 begin
-  SetLength(Lists, Length(AFindings));
-  SetLength(Errors, Length(AFindings));   // hoechstens ein Fehler je Fund
+  // Obergrenze VOR dem ersten Anbieter-Aufruf: ein Anbieter haelt die
+  // Objekte nur einer begrenzten Zahl von Abfragen (Vertrag uFindingActions).
+  Asked := Copy(AFindings, 0, MAX_FINDINGS_PER_MENU);
+  SetLength(Lists, Length(Asked));
+  SetLength(Errors, Length(Asked));   // hoechstens ein Fehler je Fund
   NErr := 0;
-  for i := 0 to High(AFindings) do
+  for i := 0 to High(Asked) do
   begin
     try
-      Lists[i] := TFindingActions.ActionsFor(AFindings[i]);
+      Lists[i] := TFindingActions.ActionsFor(Asked[i]);
     except
       on EStackExhausted do raise;
       // noinspection ExceptionTooGeneral
@@ -208,8 +217,9 @@ begin
     end;
   end;
   SetLength(Errors, NErr);
-  Result := BuildFindingMenuModelFrom(AFindings, Lists, AOptions);
-  Result.Errors := Errors;
+  Result := BuildFindingMenuModelFrom(Asked, Lists, AOptions);
+  Result.Errors  := Errors;
+  Result.Omitted := Length(AFindings) - Length(Asked);
 end;
 
 end.

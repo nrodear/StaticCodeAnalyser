@@ -50,12 +50,24 @@ unit uFindingActions;
 //     Stelle (Nico 2026-10-08); Kontextmenue und Dock-Grid zeigen alles.
 //     Der Wert 0 ist fakFix: ein Anbieter, der Kind nicht setzt, bleibt
 //     bei SetLength/Default(TFindingAction) eine Hilfe.
+//   * Ein Host fragt fuer EIN Menue hoechstens MAX_FINDINGS_PER_MENU Funde
+//     ab (uFindingActionMenu.BuildFindingMenuModel; der Rest erscheint als
+//     Hinweiszeile). Ein Anbieter, der seine Aktionsobjekte haelt, muss die
+//     Objekte von deutlich MEHR Abfragen am Leben halten: zwischen Aufbau
+//     und Klick koennen weitere laufen (die Gluehbirne prueft im Hinter-
+//     grund). reDelphix haelt 8 x MAX_FINDINGS_PER_MENU Chargen
+//     (Review reDelphiX 2026-10-07, Blocker 2: bei 33 Funden auf einer
+//     Zeile zeigten Menuepunkte auf freigegebene Objekte).
 
 interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uMethodd12;
+
+const
+  // Hoechstzahl der Funde, deren Aktionen EIN Menue erfragt (VERTRAG oben).
+  MAX_FINDINGS_PER_MENU = 16;
 
 type
   // Was eine Aktion ist (siehe VERTRAG oben). fakFix MUSS Ordnungszahl 0

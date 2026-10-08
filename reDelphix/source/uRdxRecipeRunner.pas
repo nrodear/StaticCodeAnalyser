@@ -22,7 +22,14 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uEngineApi, uRefactorInfo, uRdxRecipes;
+  uEngineApi, uRefactorInfo, uFindingActions, uRdxRecipes;
+
+const
+  // So viele Provide-Chargen haelt der Anbieter am Leben: ein Menue fragt
+  // hoechstens MAX_FINDINGS_PER_MENU Funde (Vertrag uFindingActions), dazu
+  // reichlich Reserve fuer Abfragen zwischen Aufbau und Klick (Gluehbirne
+  // im Hintergrund). Review reDelphiX 2026-10-07, Blocker 2.
+  RDX_ACTION_BATCHES = 8 * MAX_FINDINGS_PER_MENU;
 
 type
   // Haelt Objekte in Chargen: BeginBatch eroeffnet eine Charge (ein
@@ -36,8 +43,9 @@ type
   // (Konzept Editor-Gluehbirne 2026-10-06, 3.3). Chargen statt einer
   // Objektzahl (Verifikations-Workflow 2026-10-07): ein Fund mit vielen
   // Aktionen kann so innerhalb EINES Menueaufbaus nichts verdraengen.
-  // Ein Menue umfasst nie mehr als eine Handvoll Funde; der Ring ist
-  // deterministisch und braucht keinen neuen Registry-Vertrag.
+  // Wie viele Funde ein Menue hoechstens umfasst, legt der Vertrag in
+  // uFindingActions fest (MAX_FINDINGS_PER_MENU); der Anbieter haelt
+  // RDX_ACTION_BATCHES Chargen, ein Vielfaches davon.
   TRdxObjectRing = class
   private
     FBatches : TObjectList<TObjectList<TObject>>;

@@ -31,6 +31,9 @@ type
     [Test] procedure AvailableFixesOnly_FindingWithoutFixIsSkipped;
     // Ohne die Option bleibt alles wie bisher, auch das Navigieren.
     [Test] procedure WithoutFilter_NavigateStays;
+    // Review 2026-10-07 Blocker 2: je Menue hoechstens
+    // MAX_FINDINGS_PER_MENU Anbieter-Abfragen, der Rest zaehlt nach Omitted.
+    [Test] procedure Registry_AsksAtMostMaxFindingsPerMenu;
   end;
 
 implementation
@@ -53,12 +56,15 @@ var
   // Traeger der Execute-Methodenzeiger in den synthetischen Aktionen;
   // lebt von initialization bis finalization (kein Leck je Test).
   GExecOwner : TStubProvider = nil;
+  // Zahl der Provide-Aufrufe aller Stubs (Obergrenze je Menue).
+  GProvideCalls : Integer = 0;
 
 function TStubProvider.Provide(
   const AFinding: TLeakFinding): TArray<TFindingAction>;
 var
   i : Integer;
 begin
+  Inc(GProvideCalls);
   if Throws then
     raise Exception.Create('kaputt');
   SetLength(Result, Length(Captions));
@@ -373,6 +379,37 @@ begin
     Assert.IsTrue(M.Actions[0].Kind = fakNavigate);
   finally
     F.Free;
+  end;
+end;
+
+procedure TTestFindingActionMenu.Registry_AsksAtMostMaxFindingsPerMenu;
+var
+  Stub  : TStubProvider;
+  Token : Integer;
+  Many  : TArray<TLeakFinding>;
+  M     : TFindingMenuModel;
+  i     : Integer;
+begin
+  Stub := TStubProvider.Create;
+  Stub.Captions := ['uses qualifizieren'];
+  SetLength(Many, MAX_FINDINGS_PER_MENU + 24);
+  for i := 0 to High(Many) do
+    Many[i] := Finding('Unit' + IntToStr(i));
+  Token := TFindingActions.Register(Stub.Provide);
+  try
+    GProvideCalls := 0;
+    M := BuildFindingMenuModel(Many, [moHeaders]);
+    Assert.AreEqual<Integer>(MAX_FINDINGS_PER_MENU, GProvideCalls,
+      'der Anbieter wird nur fuer die ersten Funde gefragt');
+    Assert.AreEqual<Integer>(MAX_FINDINGS_PER_MENU, M.ActionCount);
+    Assert.AreEqual<Integer>(24, M.Omitted);
+    M := BuildFindingMenuModel(Copy(Many, 0, 3), []);
+    Assert.AreEqual<Integer>(0, M.Omitted, 'unter der Grenze fehlt nichts');
+  finally
+    TFindingActions.Unregister(Token);
+    for i := 0 to High(Many) do
+      Many[i].Free;
+    Stub.Free;
   end;
 end;
 

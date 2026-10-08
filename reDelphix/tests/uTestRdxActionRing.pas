@@ -19,12 +19,15 @@ type
     [Test] procedure Destroy_FreesAll;
     [Test] procedure Nil_IsIgnored;
     [Test] procedure MaxBelowOne_IsOne;
+    // Review 2026-10-07 Blocker 2: ein volles Menue (MAX_FINDINGS_PER_MENU
+    // Abfragen) ueberlebt danach noch reichlich weitere Abfragen.
+    [Test] procedure FullMenu_SurvivesFurtherQueries;
   end;
 
 implementation
 
 uses
-  uRdxRecipeRunner;
+  System.SysUtils, uFindingActions, uRdxRecipeRunner;
 
 var
   GFreed : Integer = 0;
@@ -72,6 +75,39 @@ begin
     Assert.IsFalse(R.Contains(A));
     Assert.IsFalse(R.Contains(B));
     Assert.IsTrue(R.Contains(C) and R.Contains(D));
+  finally
+    R.Free;
+  end;
+end;
+
+procedure TTestRdxActionRing.FullMenu_SurvivesFurtherQueries;
+var
+  R    : TRdxObjectRing;
+  Menu : array[0..MAX_FINDINGS_PER_MENU - 1] of TCounted;
+  i    : Integer;
+begin
+  GFreed := 0;
+  R := TRdxObjectRing.Create(RDX_ACTION_BATCHES);
+  try
+    // Ein Menue: je Fund ein Provide = eine Charge mit einem Objekt.
+    for i := 0 to High(Menu) do
+    begin
+      R.BeginBatch;
+      Menu[i] := TCounted.Create;
+      R.Keep(Menu[i]);
+    end;
+    // Danach weitere Abfragen (Gluehbirne, zweites Menue), bis der Ring
+    // gerade voll ist - es darf noch nichts aus dem Menue fallen.
+    for i := 1 to RDX_ACTION_BATCHES - MAX_FINDINGS_PER_MENU do
+    begin
+      R.BeginBatch;
+      R.Keep(TCounted.Create);
+    end;
+    Assert.AreEqual<Integer>(0, GFreed, 'bis zur Grenze wird nichts frei');
+    for i := 0 to High(Menu) do
+      Assert.IsTrue(R.Contains(Menu[i]), 'Menue-Objekt ' + IntToStr(i));
+    Assert.IsTrue(RDX_ACTION_BATCHES >= 4 * MAX_FINDINGS_PER_MENU,
+      'Reserve fuer Abfragen zwischen Aufbau und Klick');
   finally
     R.Free;
   end;

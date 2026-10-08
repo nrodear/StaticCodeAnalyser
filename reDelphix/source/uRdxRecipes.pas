@@ -1069,6 +1069,11 @@ begin
   Args     := '';
   // Unicode-Ziel: Format wandelt einen AnsiString-Operanden genauso wie
   // die Zuweisung es taete (FormatBuf vtAnsiString -> UnicodeString).
+  // NICHT ein AnsiChar: FormatBuf macht bei vtChar 'Char(VChar)' - ein
+  // Ordinal-Cast ohne Codepage -, die Verkettung wandelt dagegen ueber die
+  // Systemcodepage. Ab #$80 kaeme anderer Text heraus (#$80 in CP1252: das
+  // Original ergibt das Euro-Zeichen, Format U+0080). Review reDelphiX
+  // 2026-10-07, Blocker 1.
   TargetU := (ATargetType = 'string') or (ATargetType = 'unicodestring')
     or (ATargetType = 'widestring');
   for i := 0 to High(AParts) do
@@ -1109,7 +1114,9 @@ begin
       else
       begin
         Verdict := JudgeOperand(AParts[i]);
-        if (Verdict = ovAnsi) and TargetU then Verdict := ovString;
+        if (Verdict = ovAnsi) and TargetU and
+           (AParts[i].Resolved <> 'ansichar') then
+          Verdict := ovString;
         case Verdict of
           ovString:
             begin
@@ -1131,8 +1138,12 @@ begin
             end;
           ovAnsi:
             begin
-              ABuild.Reason := 'Operand ''' + Txt + ''': ' + AParts[i].Resolved
-                + ' - Format liefert UnicodeString';
+              if AParts[i].Resolved = 'ansichar' then
+                ABuild.Reason := 'Operand ''' + Txt
+                  + ''': ansichar - Format wandelt ohne Codepage'
+              else
+                ABuild.Reason := 'Operand ''' + Txt + ''': ' + AParts[i].Resolved
+                  + ' - Format liefert UnicodeString';
               Exit;
             end;
           ovVariantRisk:
