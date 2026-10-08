@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2272 Zeilen, 78858 Bytes
-  CPoLines_de: array[0..2271] of string = (
+  // i18n\de.po - 2320 Zeilen, 80082 Bytes
+  CPoLines_de: array[0..2319] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2286,7 +2286,55 @@ const
     'msgstr "In dieser Datei unterdruecken (// noinspection-file %s)"',
     '',
     'msgid "Remove ineffective suppression marker"',
-    'msgstr "Wirkungslosen Unterdrueck-Marker entfernen"'
+    'msgstr "Wirkungslosen Unterdrueck-Marker entfernen"',
+    '',
+    'msgid "Show location"',
+    'msgstr "Stelle zeigen"',
+    '',
+    'msgid "Build Format() from concatenation"',
+    'msgstr "Format() aus Verkettung bilden"',
+    '',
+    'msgid "Copy parameterized template to clipboard"',
+    'msgstr "Parametrisierte Vorlage in die Zwischenablage"',
+    '',
+    'msgid "uses: qualify all %d entries"',
+    'msgstr "uses: alle %d Eintraege qualifizieren"',
+    '',
+    'msgid "uses: qualify entries"',
+    'msgstr "uses: Eintraege qualifizieren"',
+    '',
+    'msgid "Line %d:%d to %d:%d"',
+    'msgstr "Zeile %d:%d bis %d:%d"',
+    '',
+    'msgid "Scope table not loaded (unitscopes.txt)"',
+    'msgstr "Scope-Tabelle nicht geladen (unitscopes.txt)"',
+    '',
+    'msgid "uses clause contains compiler directives (line %d)"',
+    'msgstr "uses-Klausel traegt Compiler-Direktiven (Zeile %d)"',
+    '',
+    'msgid "own unit %s in the project"',
+    'msgstr "eigene Unit %s im Projekt"',
+    '',
+    'msgid "uses: qualify %s"',
+    'msgstr "uses: %s qualifizieren"',
+    '',
+    'msgid "file not readable"',
+    'msgstr "Datei nicht lesbar"',
+    '',
+    'msgid "%s: no fixMode in the rule catalog"',
+    'msgstr "%s: kein fixMode im Regelkatalog"',
+    '',
+    'msgid "nothing to offer"',
+    'msgstr "nichts anzubieten"',
+    '',
+    'msgid "finding without file name"',
+    'msgstr "Fund ohne Dateiname"',
+    '',
+    'msgid "file not found: %s"',
+    'msgstr "Datei nicht gefunden: %s"',
+    '',
+    'msgid "finding without line"',
+    'msgstr "Fund ohne Zeile"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -2561,8 +2609,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2268 Zeilen, 82527 Bytes
-  CPoLines_fr: array[0..2267] of string = (
+  // i18n\fr.po - 2316 Zeilen, 83827 Bytes
+  CPoLines_fr: array[0..2315] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4830,7 +4878,55 @@ const
     'msgstr "Masquer dans ce fichier (// noinspection-file %s)"',
     '',
     'msgid "Remove ineffective suppression marker"',
-    'msgstr "Retirer le marqueur de suppression sans effet"'
+    'msgstr "Retirer le marqueur de suppression sans effet"',
+    '',
+    'msgid "Show location"',
+    'msgstr "Afficher l''emplacement"',
+    '',
+    'msgid "Build Format() from concatenation"',
+    'msgstr "Construire Format() '#$00E0' partir de la concat'#$00E9'nation"',
+    '',
+    'msgid "Copy parameterized template to clipboard"',
+    'msgstr "Copier le mod'#$00E8'le param'#$00E9'tr'#$00E9' dans le presse-papiers"',
+    '',
+    'msgid "uses: qualify all %d entries"',
+    'msgstr "uses : qualifier les %d entr'#$00E9'es"',
+    '',
+    'msgid "uses: qualify entries"',
+    'msgstr "uses : qualifier les entr'#$00E9'es"',
+    '',
+    'msgid "Line %d:%d to %d:%d"',
+    'msgstr "Ligne %d:%d '#$00E0' %d:%d"',
+    '',
+    'msgid "Scope table not loaded (unitscopes.txt)"',
+    'msgstr "Table des port'#$00E9'es non charg'#$00E9'e (unitscopes.txt)"',
+    '',
+    'msgid "uses clause contains compiler directives (line %d)"',
+    'msgstr "la clause uses contient des directives de compilation (ligne %d)"',
+    '',
+    'msgid "own unit %s in the project"',
+    'msgstr "unit'#$00E9' %s propre au projet"',
+    '',
+    'msgid "uses: qualify %s"',
+    'msgstr "uses : qualifier %s"',
+    '',
+    'msgid "file not readable"',
+    'msgstr "fichier illisible"',
+    '',
+    'msgid "%s: no fixMode in the rule catalog"',
+    'msgstr "%s : pas de fixMode dans le catalogue des r'#$00E8'gles"',
+    '',
+    'msgid "nothing to offer"',
+    'msgstr "rien '#$00E0' proposer"',
+    '',
+    'msgid "finding without file name"',
+    'msgstr "r'#$00E9'sultat sans nom de fichier"',
+    '',
+    'msgid "file not found: %s"',
+    'msgstr "fichier introuvable : %s"',
+    '',
+    'msgid "finding without line"',
+    'msgstr "r'#$00E9'sultat sans ligne"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

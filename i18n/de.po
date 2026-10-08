@@ -2270,3 +2270,51 @@ msgstr "In dieser Datei unterdruecken (// noinspection-file %s)"
 
 msgid "Remove ineffective suppression marker"
 msgstr "Wirkungslosen Unterdrueck-Marker entfernen"
+
+msgid "Show location"
+msgstr "Stelle zeigen"
+
+msgid "Build Format() from concatenation"
+msgstr "Format() aus Verkettung bilden"
+
+msgid "Copy parameterized template to clipboard"
+msgstr "Parametrisierte Vorlage in die Zwischenablage"
+
+msgid "uses: qualify all %d entries"
+msgstr "uses: alle %d Eintraege qualifizieren"
+
+msgid "uses: qualify entries"
+msgstr "uses: Eintraege qualifizieren"
+
+msgid "Line %d:%d to %d:%d"
+msgstr "Zeile %d:%d bis %d:%d"
+
+msgid "Scope table not loaded (unitscopes.txt)"
+msgstr "Scope-Tabelle nicht geladen (unitscopes.txt)"
+
+msgid "uses clause contains compiler directives (line %d)"
+msgstr "uses-Klausel traegt Compiler-Direktiven (Zeile %d)"
+
+msgid "own unit %s in the project"
+msgstr "eigene Unit %s im Projekt"
+
+msgid "uses: qualify %s"
+msgstr "uses: %s qualifizieren"
+
+msgid "file not readable"
+msgstr "Datei nicht lesbar"
+
+msgid "%s: no fixMode in the rule catalog"
+msgstr "%s: kein fixMode im Regelkatalog"
+
+msgid "nothing to offer"
+msgstr "nichts anzubieten"
+
+msgid "finding without file name"
+msgstr "Fund ohne Dateiname"
+
+msgid "file not found: %s"
+msgstr "Datei nicht gefunden: %s"
+
+msgid "finding without line"
+msgstr "Fund ohne Zeile"

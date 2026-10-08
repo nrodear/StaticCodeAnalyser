@@ -2266,3 +2266,51 @@ msgstr "Masquer dans ce fichier (// noinspection-file %s)"
 
 msgid "Remove ineffective suppression marker"
 msgstr "Retirer le marqueur de suppression sans effet"
+
+msgid "Show location"
+msgstr "Afficher l'emplacement"
+
+msgid "Build Format() from concatenation"
+msgstr "Construire Format() à partir de la concaténation"
+
+msgid "Copy parameterized template to clipboard"
+msgstr "Copier le modèle paramétré dans le presse-papiers"
+
+msgid "uses: qualify all %d entries"
+msgstr "uses : qualifier les %d entrées"
+
+msgid "uses: qualify entries"
+msgstr "uses : qualifier les entrées"
+
+msgid "Line %d:%d to %d:%d"
+msgstr "Ligne %d:%d à %d:%d"
+
+msgid "Scope table not loaded (unitscopes.txt)"
+msgstr "Table des portées non chargée (unitscopes.txt)"
+
+msgid "uses clause contains compiler directives (line %d)"
+msgstr "la clause uses contient des directives de compilation (ligne %d)"
+
+msgid "own unit %s in the project"
+msgstr "unité %s propre au projet"
+
+msgid "uses: qualify %s"
+msgstr "uses : qualifier %s"
+
+msgid "file not readable"
+msgstr "fichier illisible"
+
+msgid "%s: no fixMode in the rule catalog"
+msgstr "%s : pas de fixMode dans le catalogue des règles"
+
+msgid "nothing to offer"
+msgstr "rien à proposer"
+
+msgid "finding without file name"
+msgstr "résultat sans nom de fichier"
+
+msgid "file not found: %s"
+msgstr "fichier introuvable : %s"
+
+msgid "finding without line"
+msgstr "résultat sans ligne"

@@ -149,10 +149,15 @@ uses
   uRdxLog;          // Protokoll: DebugView + %TEMP%\reDelphix.log
 
 const
-  CAP_SHOW     = 'Stelle zeigen';
-  CAP_FORMAT   = 'Format() aus Verkettung bilden';
-  CAP_SQL      = 'Parametrisierte Vorlage in die Zwischenablage';
-  CAP_USES_ALL = 'uses: alle %d Eintraege qualifizieren';
+  // Menuetexte ueber _() (Editorhilfen E6): englische msgids, de/fr in
+  // i18n/*.po. Die Gruende aus den reinen Rezept-Units (uRdxRecipes,
+  // uRdxRecipeRunner) sind noch deutsch - Pruefstand und Tests pruefen sie
+  // woertlich (Nacharbeit im Todo).
+  CAP_SHOW     = 'Show location';
+  CAP_FORMAT   = 'Build Format() from concatenation';
+  CAP_SQL      = 'Copy parameterized template to clipboard';
+  CAP_USES_ALL = 'uses: qualify all %d entries';
+  CAP_USES     = 'uses: qualify entries';
   DIAG_PREFIX  = 'reDelphix: ';
 
 var
@@ -296,7 +301,7 @@ begin
   if not Assigned(ACtx.Info) or not ACtx.Info.Span.IsValid then Exit;
   Act := NewAction(akShowSpan, ACtx.FileName);
   Act.FSpan := ACtx.Info.Span;
-  Add(AList, CAP_SHOW, Format('Zeile %d:%d bis %d:%d',
+  Add(AList, _(CAP_SHOW), Format(_('Line %d:%d to %d:%d'),
     [ACtx.Info.Span.StartLine, ACtx.Info.Span.StartCol,
      ACtx.Info.Span.EndLine, ACtx.Info.Span.EndCol - 1]), True, Act);
   // Fuehrt nur hin - die Gluehbirne im Editor laesst das weg, der
@@ -315,7 +320,7 @@ begin
     FUsesNames);
   if not Outcome.Enabled then
   begin
-    Add(AList, CAP_FORMAT, Outcome.Reason, False, nil);
+    Add(AList, _(CAP_FORMAT), Outcome.Reason, False, nil);
     Exit;
   end;
   Act := NewAction(akReplace, ACtx.FileName);
@@ -330,7 +335,7 @@ begin
     SetLength(Act.FEdits, 2);
     Act.FEdits[1] := Outcome.UsesEdit;
   end;
-  Add(AList, CAP_FORMAT, Outcome.Hint, True, Act);
+  Add(AList, _(CAP_FORMAT), Outcome.Hint, True, Act);
 end;
 
 procedure TRdxProvider.AddSqlTemplate(var AList: TArray<TFindingAction>;
@@ -342,18 +347,18 @@ begin
   if ACtx.FixMode <> 'assisted' then Exit;
   if ACtx.Info = nil then
   begin
-    Add(AList, CAP_SQL, ACtx.Why, False, nil);
+    Add(AList, _(CAP_SQL), ACtx.Why, False, nil);
     Exit;
   end;
   if not TRdxRecipeRunner.SqlTemplate(FPlaces, ACtx.Info, ACtx.IsCall,
        Template, Hint, Reason) then
   begin
-    Add(AList, CAP_SQL, Reason, False, nil);
+    Add(AList, _(CAP_SQL), Reason, False, nil);
     Exit;
   end;
   Act := NewAction(akSqlTemplate, '');
   Act.FTemplate := Template;
-  Add(AList, CAP_SQL, Hint, True, Act);
+  Add(AList, _(CAP_SQL), Hint, True, Act);
 end;
 
 procedure TRdxProvider.AddUsesActions(var AList: TArray<TFindingAction>;
@@ -395,8 +400,8 @@ begin
 
   if FScopes.Count = 0 then
   begin
-    Add(AList, 'uses: Eintraege qualifizieren',
-      'Scope-Tabelle nicht geladen (unitscopes.txt)', False, nil);
+    Add(AList, _(CAP_USES),
+      _('Scope table not loaded (unitscopes.txt)'), False, nil);
     Exit;
   end;
   // Direktiven in einer Klausel: ein Eintrag kann in einem Zweig fuer ein
@@ -406,8 +411,8 @@ begin
   DirLine := TRdxRecipeRunner.UsesDirectiveLine(FPlaces);
   if DirLine > 0 then
   begin
-    Add(AList, 'uses: Eintraege qualifizieren',
-      Format('uses-Klausel traegt Compiler-Direktiven (Zeile %d)', [DirLine]),
+    Add(AList, _(CAP_USES),
+      Format(_('uses clause contains compiler directives (line %d)'), [DirLine]),
       False, nil);
     Exit;
   end;
@@ -424,7 +429,7 @@ begin
     if OK and TRdxEditor.ProjectHasUnit(Short, ACtx.FileName) then
     begin
       OK := False;
-      Reason := 'eigene Unit ' + Short + ' im Projekt';
+      Reason := Format(_('own unit %s in the project'), [Short]);
     end;
     if OK then
     begin
@@ -448,14 +453,14 @@ begin
       Add(AList, 'uses: ' + Short + ' -> ' + Q, '', True, Act);
     end
     else
-      Add(AList, 'uses: ' + Short + ' qualifizieren', Reason, False, nil);
+      Add(AList, Format(_('uses: qualify %s'), [Short]), Reason, False, nil);
   end;
   if Length(All) >= 2 then
   begin
     Act := NewAction(akReplace, ACtx.FileName);
     Act.FEdits := All;
     if Length(All) > 3 then Preview := Preview + ', ...';
-    Add(AList, Format(CAP_USES_ALL, [Length(All)]), Preview, True, Act);
+    Add(AList, Format(_(CAP_USES_ALL), [Length(All)]), Preview, True, Act);
   end;
 end;
 
@@ -527,7 +532,7 @@ begin
     end;
     if not Opened then
     begin
-      Add(AList, DIAG_PREFIX + 'Datei nicht lesbar', '', False, nil);
+      Add(AList, DIAG_PREFIX + _('file not readable'), '', False, nil);
       Exit;
     end;
   except
@@ -558,10 +563,10 @@ begin
       if ACtx.Why <> '' then
         Add(AList, DIAG_PREFIX + ACtx.Why, '', False, nil)
       else if ACtx.FixMode = '' then
-        Add(AList, DIAG_PREFIX + ACtx.Finding.ResolvedRuleId
-          + ': kein fixMode im Regelkatalog', '', False, nil)
+        Add(AList, DIAG_PREFIX + Format(_('%s: no fixMode in the rule catalog'),
+          [ACtx.Finding.ResolvedRuleId]), '', False, nil)
       else
-        Add(AList, DIAG_PREFIX + 'nichts anzubieten', '', False, nil);
+        Add(AList, DIAG_PREFIX + _('nothing to offer'), '', False, nil);
     end;
   finally
     FreeAndNil(ACtx.Info);   // alles Noetige ist in die Aktionen kopiert
@@ -587,18 +592,18 @@ begin
   if not Assigned(AFinding) then Exit;
   if AFinding.FileName = '' then
   begin
-    Add(Result, DIAG_PREFIX + 'Fund ohne Dateiname', '', False, nil);
+    Add(Result, DIAG_PREFIX + _('finding without file name'), '', False, nil);
     Exit;
   end;
   if not FileExists(AFinding.FileName) then
   begin
-    Add(Result, DIAG_PREFIX + 'Datei nicht gefunden: ' + AFinding.FileName,
-      '', False, nil);
+    Add(Result, DIAG_PREFIX + Format(_('file not found: %s'),
+      [AFinding.FileName]), '', False, nil);
     Exit;
   end;
   if AFinding.LineInt < 1 then
   begin
-    Add(Result, DIAG_PREFIX + 'Fund ohne Zeile', '', False, nil);
+    Add(Result, DIAG_PREFIX + _('finding without line'), '', False, nil);
     Exit;
   end;
   Lines := TStringList.Create;
@@ -609,7 +614,7 @@ begin
       Lines.Text := Text
     else if not LoadFileSmart(AFinding.FileName, Lines) then
     begin
-      Add(Result, DIAG_PREFIX + 'Datei nicht lesbar', '', False, nil);
+      Add(Result, DIAG_PREFIX + _('file not readable'), '', False, nil);
       Exit;
     end;
     Ctx := Default(TRdxRecipeContext);

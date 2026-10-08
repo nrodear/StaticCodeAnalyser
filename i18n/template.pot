@@ -122,6 +122,10 @@ msgstr ""
 msgid "%s is not a valid JSON object."
 msgstr ""
 
+#: reDelphix/source/uRdxProvider.pas:566
+msgid "%s: no fixMode in the rule catalog"
+msgstr ""
+
 #: SCA.SharedUI/sources/uFindingsPropertiesFrame.pas:820
 msgid "(no file selected)"
 msgstr ""
@@ -452,6 +456,11 @@ msgstr ""
 msgid "Bugs"
 msgstr ""
 
+#: reDelphix/source/uRdxProvider.pas:323
+#: reDelphix/source/uRdxProvider.pas:338
+msgid "Build Format() from concatenation"
+msgstr ""
+
 #: SCA.SharedUI/sources/uExportMenu.pas:161
 msgid "CSV (filtered view)..."
 msgstr ""
@@ -694,6 +703,12 @@ msgstr ""
 #: StaticCodeAnalyserForm/sources/UI/uMainForm.pas:3201
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:1615
 msgid "Copy Jira issue"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:350
+#: reDelphix/source/uRdxProvider.pas:356
+#: reDelphix/source/uRdxProvider.pas:361
+msgid "Copy parameterized template to clipboard"
 msgstr ""
 
 #: SCA.SharedUI/sources/uProfileViewer.pas:623
@@ -1384,6 +1399,10 @@ msgstr ""
 msgid "Line"
 msgstr ""
 
+#: reDelphix/source/uRdxProvider.pas:304
+msgid "Line %d:%d to %d:%d"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2133
 msgid "Line ends with whitespace - diff hygiene"
 msgstr ""
@@ -1890,7 +1909,7 @@ msgstr ""
 msgid "Reload"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:501
+#: reDelphix/source/uRdxProvider.pas:506
 msgid "Remove ineffective suppression marker"
 msgstr ""
 
@@ -2024,6 +2043,10 @@ msgstr ""
 msgid "Scanning... %d found"
 msgstr ""
 
+#: reDelphix/source/uRdxProvider.pas:404
+msgid "Scope table not loaded (unitscopes.txt)"
+msgstr ""
+
 #: SCA.SharedUI/sources/uRuleListBox.pas:194
 msgid "Search ID, kind, rule text, severity or type..."
 msgstr ""
@@ -2132,6 +2155,10 @@ msgstr ""
 msgid "Show annotation overlay on hover (otherwise click marked line)"
 msgstr ""
 
+#: reDelphix/source/uRdxProvider.pas:304
+msgid "Show location"
+msgstr ""
+
 #: StaticCodeAnalyserIDE/uIDESCAOptions.pas:606
 msgid "Show only findings new since the baseline (hide the legacy backlog)"
 msgstr ""
@@ -2236,11 +2263,11 @@ msgstr ""
 msgid "Summary"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:473
+#: reDelphix/source/uRdxProvider.pas:478
 msgid "Suppress here (// noinspection %s)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:487
+#: reDelphix/source/uRdxProvider.pas:492
 msgid "Suppress in this file (// noinspection-file %s)"
 msgstr ""
 
@@ -2556,6 +2583,23 @@ msgstr ""
 msgid "except on E: Exception catches every error - prefer a specific subclass"
 msgstr ""
 
+#: reDelphix/source/uRdxProvider.pas:600
+msgid "file not found: %s"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:535
+#: reDelphix/source/uRdxProvider.pas:617
+msgid "file not readable"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:595
+msgid "finding without file name"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:606
+msgid "finding without line"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:1706
 msgid "for-loop range is reversed - the loop body never runs"
 msgstr ""
@@ -2585,12 +2629,20 @@ msgstr ""
 msgid "no findings"
 msgstr ""
 
+#: reDelphix/source/uRdxProvider.pas:569
+msgid "nothing to offer"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:2399
 msgid "on E: Exception catches everything - too broad"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2562
 msgid "out parameter - prefer Result or var"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:432
+msgid "own unit %s in the project"
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDESonarOptions.pas:414
@@ -2605,8 +2657,25 @@ msgstr ""
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
 msgstr ""
 
+#: reDelphix/source/uRdxProvider.pas:415
+msgid "uses clause contains compiler directives (line %d)"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:3752
 msgid "uses clause is not in alphabetical order"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:456
+msgid "uses: qualify %s"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:463
+msgid "uses: qualify all %d entries"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:403
+#: reDelphix/source/uRdxProvider.pas:414
+msgid "uses: qualify entries"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uClaudePrompt.pas:351
