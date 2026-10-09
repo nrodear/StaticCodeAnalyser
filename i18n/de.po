@@ -1208,8 +1208,8 @@ msgstr "IDE-Profil:"
 msgid "IDE editor service not available."
 msgstr "IDE-Editor-Service nicht verfügbar."
 
-msgid "If the finding is a false positive, say so and explain why - then suggest a `// noinspection %s` suppression marker on the affected line."
-msgstr "Falls False Positive: sag das und erkläre warum - schlage dann einen `// noinspection %s` Suppression-Marker auf der betroffenen Zeile vor."
+msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on the affected line."
+msgstr "Falls False Positive: sag das und erkläre warum - schlage dann einen `%s` Suppression-Marker auf der betroffenen Zeile vor."
 
 msgid "Ignore list..."
 msgstr "Ignore-Liste..."

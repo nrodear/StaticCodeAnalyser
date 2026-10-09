@@ -46,7 +46,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uLocalization;
+  uLocalization, uSuppression;
 
 const
   CONTEXT_LINES = 5;
@@ -350,8 +350,9 @@ begin
     SB.AppendLine('3. **' + _('Verify') + '** - ' +
       _('what to test or check after the fix to confirm the issue is gone (and no regressions).'));
     SB.AppendLine('');
-    SB.AppendLine(Format(_('If the finding is a false positive, say so and explain why - then suggest a `// noinspection %s` suppression marker on the affected line.'),
-      [KindName(F.Kind)]));
+    // Marker in der Syntax der Fund-Datei (SCA201: ';' in der .ini).
+    SB.AppendLine(Format(_('If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on the affected line.'),
+      [TSuppression.MarkerLineFor(F.FileName, F.Kind)]));
     Result := SB.ToString;
   finally
     SB.Free;

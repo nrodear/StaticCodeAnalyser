@@ -138,13 +138,18 @@ type
 
     // Liegt AFilePath in einem Plattform-Ausgabeordner (Win32, Win64,
     // Linux64, OSX64, Android, iOSDevice64 ...)? Dort liegen Deploy-Kopien
-    // der Konfigurationsdateien - sie ergaeben Doppelfunde.
-    class function IsInPlatformOutputDir(const AFilePath: string): Boolean; static;
+    // der Konfigurationsdateien - sie ergaeben Doppelfunde. ALevels: nur
+    // die letzten ALevels Ordner zaehlen (die unterhalb der Scanwurzel -
+    // ein Projekt UNTER 'D:<Trenner>dev<Trenner>Android' verliert sonst
+    // jede .ini).
+    class function IsInPlatformOutputDir(const AFilePath: string;
+      ALevels: Integer = MaxInt): Boolean; static;
 
     // Fuer TStaticFiles.ScanRec: nimmt ADir + AName in AConfigs auf, wenn
     // es eine Konfigurationsdatei ausserhalb der Ausgabeordner und der
-    // Ignore-Liste ist. AConfigs = nil -> nichts.
-    class procedure AddIfConfig(const ADir, AName: string;
+    // Ignore-Liste ist. ADepth: Tiefe von ADir unter der Scanwurzel.
+    // AConfigs = nil -> nichts.
+    class procedure AddIfConfig(const ADir, AName: string; ADepth: Integer;
       AConfigs: TStringList; AIgnore: TIgnoreList;
       ALogSkip: TProc<string>); static;
   end;
@@ -235,7 +240,7 @@ begin
           // (Produktentscheid im Konzept, Abschnitt A3).
           // SCA201: eine Konfigurationsdatei geht in die ZWEITE Liste, nie
           // in List (IsUnitLikeFile ist fuer sie False). Ohne AConfigs kalt.
-          TConfigFiles.AddIfConfig(Path, SearchRec.Name, AConfigs, AIgnore, ALogSkip);
+          TConfigFiles.AddIfConfig(Path, SearchRec.Name, Depth, AConfigs, AIgnore, ALogSkip);
           if IsUnitLikeFile(SearchRec.Name) then
           begin
             FullPath := IncludeTrailingPathDelimiter(Path) + SearchRec.Name;
@@ -607,25 +612,34 @@ begin
   Result := Name.EndsWith('.ini') and (Name <> 'analyser.ini');
 end;
 
-class function TConfigFiles.IsInPlatformOutputDir(const AFilePath: string): Boolean;
+class function TConfigFiles.IsInPlatformOutputDir(const AFilePath: string;
+  ALevels: Integer): Boolean;
 const
   // Delphi-/RAD-Plattformnamen als Ausgabeordner ($(Platform)<Trenner>$(Config)).
   OUTPUT_DIRS: array[0..9] of string = ('win32', 'win64', 'win64x',
     'linux64', 'osx64', 'osxarm64', 'android', 'android64', 'iosdevice64',
     'iossimarm64');
 var
-  Seg : string;
-  D   : string;
+  Segs  : TArray<string>;
+  First : Integer;
+  i     : Integer;
+  D     : string;
 begin
   Result := False;
-  for Seg in LowerCase(ExtractFilePath(AFilePath)).Split([PathDelim, '/']) do
+  Segs := LowerCase(ExcludeTrailingPathDelimiter(ExtractFilePath(AFilePath)))
+    .Split([PathDelim, '/']);
+  First := Length(Segs) - ALevels;
+  if First < 0 then
+    First := 0;
+  for i := First to High(Segs) do
     for D in OUTPUT_DIRS do
-      if Seg = D then
+      if Segs[i] = D then
         Exit(True);
 end;
 
 class procedure TConfigFiles.AddIfConfig(const ADir, AName: string;
-  AConfigs: TStringList; AIgnore: TIgnoreList; ALogSkip: TProc<string>);
+  ADepth: Integer; AConfigs: TStringList; AIgnore: TIgnoreList;
+  ALogSkip: TProc<string>);
 var
   FullPath : string;
   Skip     : string;
@@ -633,7 +647,7 @@ begin
   if (AConfigs = nil) or not IsConfigFile(AName) then Exit;
   FullPath := IncludeTrailingPathDelimiter(ADir) + AName;
   Skip := '';
-  if IsInPlatformOutputDir(FullPath) then
+  if IsInPlatformOutputDir(FullPath, ADepth) then
     Skip := 'Konfigurationsdatei im Ausgabeordner: '
   else if Assigned(AIgnore) and AIgnore.IsIgnored(FullPath) then
     Skip := 'Ignoriert (Datei via ignore.txt): ';

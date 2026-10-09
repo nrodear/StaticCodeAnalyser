@@ -8,6 +8,8 @@ unit uTestHardcodedIpInConfig;
 // KEIN ssRecursive: der rekursive Pfad ist im residenten Testprozess tabu
 // (uTestEngineApi, Unit-Kopf). Die Sammlung wird ueber TryGetAllPasFiles
 // direkt geprueft, die Engine ueber ssSingleFile, ssFileList und ssProject.
+// (Review 2026-10-09: ein ssRecursive-Test war hier hineingeraten - ersetzt
+// durch denselben Fall ueber ssFileList.)
 
 interface
 
@@ -23,7 +25,8 @@ type
     FDir : string;
     function WriteFile(const ARelPath, AText: string): string;
     function Run(AScope: TScanScope; const APath: string;
-      const AFiles: TArray<string>): TObjectList<TLeakFinding>;
+      const AFiles: TArray<string>;
+      const AProjectRoot: string = ''): TObjectList<TLeakFinding>;
   public
     [Setup]    procedure Setup;
     [TearDown] procedure TearDown;
@@ -39,17 +42,20 @@ type
     [Test] procedure Engine_PascalMarkerInIni_NoEffect;
     [Test] procedure Engine_MixedFileList_PascalFindingsUnchanged;
     [Test] procedure Engine_Project_CollectsIniBelowRoot;
-    [Test] procedure Engine_Recursive_TestDirBesideUnitTree_NoFinding;
+    [Test] procedure Engine_FileList_TestDirBesideUnitTree_NoFinding;
+    [Test] procedure Engine_SingleIniProjectRoot_AnchorsTestGate;
     // ---- Sammlung, Marker-Text ----
     [Test] procedure StaticFiles_ConfigListSeparated;
+    [Test] procedure StaticFiles_PlatformNameAboveRoot_Kept;
     [Test] procedure MarkerLineFor_IniUsesSemicolon;
+    [Test] procedure ClaudePrompt_IniFinding_SuggestsSemicolonMarker;
   end;
 
 implementation
 
 uses
   System.IOUtils,
-  uStaticFiles, uSuppression, uHardcodedIpInConfig;
+  uStaticFiles, uSuppression, uHardcodedIpInConfig, uClaudePrompt, uFixHint;
 
 const
   INI_HEAD = '[Database]'#13#10;
@@ -90,7 +96,7 @@ begin
 end;
 
 function TTestHardcodedIpInConfig.Run(AScope: TScanScope; const APath: string;
-  const AFiles: TArray<string>): TObjectList<TLeakFinding>;
+  const AFiles: TArray<string>; const AProjectRoot: string): TObjectList<TLeakFinding>;
 var
   Req : TScanRequest;
   Ses : TAnalysisSession;
@@ -100,6 +106,7 @@ begin
   Req.Scope := AScope;
   Req.Path  := APath;
   Req.Files := AFiles;
+  Req.SingleFileProjectRoot := AProjectRoot;
   Ses := TAnalysisSession.Create;
   try
     Res := Ses.Run(Req);
@@ -346,19 +353,19 @@ begin
   end;
 end;
 
-procedure TTestHardcodedIpInConfig.Engine_Recursive_TestDirBesideUnitTree_NoFinding;
+procedure TTestHardcodedIpInConfig.Engine_FileList_TestDirBesideUnitTree_NoFinding;
 var
-  Cfg : string;
+  Pas, Tst, Cfg : string;
   F   : TObjectList<TLeakFinding>;
   X   : TLeakFinding;
 begin
-  // Die Unit liegt nur unter src - ihre Wurzel (der Anker
-  // der Pascal-Gates) enthaelt tests\ nicht. Der Konfigurations-
-  // Durchlauf verankert das Testpfad-Gate trotzdem darueber.
-  WriteFile('src\Unit1.pas', UNIT_SRC);
-  WriteFile('tests\App.ini', INI_HEAD + INI_SERVER + #13#10);
+  // Die Unit liegt nur unter src - ihre Wurzel (der Anker der Pascal-
+  // Gates) enthaelt tests\ nicht. Der Konfigurations-Durchlauf
+  // verankert das Testpfad-Gate trotzdem darueber (ConfigAnchor).
+  Pas := WriteFile('src\Unit1.pas', UNIT_SRC);
+  Tst := WriteFile('tests\App.ini', INI_HEAD + INI_SERVER + #13#10);
   Cfg := WriteFile('config\App.ini', INI_HEAD + INI_SERVER + #13#10);
-  F := Run(ssRecursive, FDir, nil);
+  F := Run(ssFileList, FDir, [Pas, Tst, Cfg]);
   try
     Assert.AreEqual<Integer>(1, CountKind(F, fkHardcodedIpInConfig), 'nur config\App.ini');
     for X in F do
@@ -366,6 +373,31 @@ begin
         Assert.IsTrue(SameText(X.FileName, Cfg), X.FileName);
   finally
     F.Free;
+  end;
+end;
+
+procedure TTestHardcodedIpInConfig.Engine_SingleIniProjectRoot_AnchorsTestGate;
+var
+  Root, Ini       : string;
+  Alone, WithRoot : TObjectList<TLeakFinding>;
+begin
+  // Projekt unter einem Ordner 'fixtures' (Kundenablage): ohne Projekt-
+  // wurzel sieht das Testpfad-Gate den ganzen Pfad und schweigt; mit der
+  // Wurzel (IDE "aktuelle Datei", Watch-Modus) zaehlt nur der Teil
+  // darunter - wie bei den Units ueber die Index-Liste.
+  Root := TPath.Combine(FDir, 'fixtures\Customer');
+  Ini := WriteFile('fixtures\Customer\App.ini', INI_HEAD + INI_SERVER + #13#10);
+  Alone := Run(ssSingleFile, Ini, nil);
+  try
+    WithRoot := Run(ssSingleFile, Ini, nil, Root);
+    try
+      Assert.AreEqual<Integer>(0, CountKind(Alone, fkHardcodedIpInConfig), 'voller Pfad: fixtures');
+      Assert.AreEqual<Integer>(1, CountKind(WithRoot, fkHardcodedIpInConfig), 'Anker Projektwurzel');
+    finally
+      WithRoot.Free;
+    end;
+  finally
+    Alone.Free;
   end;
 end;
 
@@ -408,12 +440,60 @@ begin
   Assert.IsFalse(TConfigFiles.IsInPlatformOutputDir('C:\p\config\App.ini'));
 end;
 
+procedure TTestHardcodedIpInConfig.StaticFiles_PlatformNameAboveRoot_Kept;
+var
+  Root, Err : string;
+  Pas, Cfg  : TStringList;
+begin
+  // Ein Projekt UNTER einem Ordner 'Android' (Ablage nach Plattform): nur
+  // Ordner unterhalb der Scanwurzel zaehlen als Ausgabeordner.
+  WriteFile('Android\Kasse\App.ini', INI_SERVER);
+  WriteFile('Android\Kasse\Win64\Release\App.ini', INI_SERVER);
+  Root := TPath.Combine(FDir, 'Android\Kasse');
+  Cfg := TStringList.Create;
+  Pas := nil;
+  try
+    Pas := TStaticFiles.TryGetAllPasFiles(Root, Err, nil, nil, Cfg);
+    Assert.AreEqual<Integer>(1, Cfg.Count, Cfg.CommaText);
+    Assert.IsTrue(SameText(Cfg[0], TPath.Combine(Root, 'App.ini')), Cfg[0]);
+  finally
+    Pas.Free;
+    Cfg.Free;
+  end;
+  Assert.IsFalse(TConfigFiles.IsInPlatformOutputDir('C:\Android\Kasse\App.ini', 0));
+  Assert.IsTrue(TConfigFiles.IsInPlatformOutputDir(
+    'C:\Android\Kasse\Win64\Release\App.ini', 2));
+end;
+
 procedure TTestHardcodedIpInConfig.MarkerLineFor_IniUsesSemicolon;
 begin
   Assert.AreEqual('; noinspection HardcodedIpInConfig',
     TSuppression.MarkerLineFor('C:\p\App.ini', fkHardcodedIpInConfig));
   Assert.AreEqual('// noinspection HardcodedIpAddress',
     TSuppression.MarkerLineFor('C:\p\Unit1.pas', fkHardcodedIpAddress));
+  // Regelkarten ohne Datei (Workbench, Regel-Info): Dateiart der Regel
+  Assert.AreEqual('; noinspection HardcodedIpInConfig',
+    TSuppression.MarkerTextFor(fkHardcodedIpInConfig));
+  Assert.AreEqual('// noinspection HardcodedIpAddress',
+    TSuppression.MarkerTextFor(fkHardcodedIpAddress));
+end;
+
+procedure TTestHardcodedIpInConfig.ClaudePrompt_IniFinding_SuggestsSemicolonMarker;
+var
+  Ini    : string;
+  F      : TLeakFinding;
+  Prompt : string;
+begin
+  // Sprachunabhaengig: der Marker steht in jeder Uebersetzung woertlich.
+  Ini := WriteFile('App.ini', INI_HEAD + INI_SERVER + #13#10);
+  F := TLeakFinding.New(Ini, '', 2, MSG_SERVER, fkHardcodedIpInConfig);
+  try
+    Prompt := TClaudePrompt.Build(F, Default(TFixHint));
+  finally
+    F.Free;
+  end;
+  Assert.IsTrue(Pos('`; noinspection HardcodedIpInConfig`', Prompt) > 0, Prompt);
+  Assert.IsTrue(Pos('// noinspection', Prompt) = 0, Prompt);
 end;
 
 initialization

@@ -4156,12 +4156,12 @@
       "exceptions": [
         {
           "case": "Version numbers, OIDs and product versions",
-          "why": "Four-part numbers are often not addresses. A version keyword in the identifiers of the line (Version, Ver, Build, Revision, Release, Assembly), an OID arc (2.5.x.x, 1.3.6.x, 1.3.14.x, 1.3.101.x) or an OID name, a product prefix ('Chrome/', '\\', '-') and a public address of version form (all octets up to 31, the first up to 20) without a host word or port in the line are not reported.",
+          "why": "Four-part numbers are often not addresses. A version keyword in the identifiers of the line (Version, Ver, Build, Revision, Release, Assembly) without a host word beside it (BuildServer and ConnectionString are hosts), a version keyword directly before the number in the text ('Version 2.1.0.45'), an OID arc (2.5.x.x, 1.3.6.x, 1.3.14.x, 1.3.101.x) or an OID name, a product prefix ('Chrome/', '\\', '-') and a public address of version form (all octets up to 31, the first up to 20) without a host word or port in the line are not reported. An address in a URL, behind a UNC prefix ('\\\\10.0.0.5\\share') or with a port is always a host.",
           "example": "Ide.verProc := '1.0.0.0';  // not reported"
         },
         {
           "case": "Range bounds and number columns",
-          "why": "An IPv4 ending in .0 or .255 without a port and outside a URL is a network or broadcast bound (ranges, CIDR blocks), not a host. A literal holding two more decimal fractions is a number column (SVG paths, measurements).",
+          "why": "An IPv4 ending in .0 or .255 and an IPv6 prefix with a zero interface ID (fd12:3456::/48), each without a port and outside a URL, are network or broadcast bounds (ranges, CIDR blocks), not hosts. A literal holding two more decimal fractions and no URL or port is a number column (SVG paths, measurements).",
           "example": "Ranges: array[0..1] of string = ('10.0.0.0', '10.255.255.255');  // not reported"
         },
         {
@@ -4180,7 +4180,7 @@
       "kind": "HardcodedIpInConfig",
       "name": "IP address in a versioned configuration file",
       "shortDescription": "IPv4 or IPv6 address (private, shared or public) as a value in an .ini file of the source tree",
-      "fullDescription": "A configuration file in the source tree is versioned and shipped like code: an IP address in it pins every checkout and every installation to one network, and moving to another server or environment again needs a commit. Keep environment-specific addresses out of version control (a per-machine or per-environment file, the environment, a deployment step) or use a host name. The rule reads the .ini files of the scanned tree - in folder scans the same directory walk as the sources, in project scans below the common root of the project's units; not analyser.ini and not the copies in platform output folders such as Win32 or Win64. Lines starting with ';' or '#' are comments, section headers are skipped, and the value is everything after the first '='. Address grammar, classes and exclusions are those of SCA200; in addition keys that carry prose (description, help, hint, comment, caption, text, example, note, title, summary) and version keys are not reported. Suppress one line with a whole-line marker '; noinspection HardcodedIpInConfig' (or '#') directly above it, or the whole file with '; noinspection-file HardcodedIpInConfig'.",
+      "fullDescription": "A configuration file in the source tree is versioned and shipped like code: an IP address in it pins every checkout and every installation to one network, and moving to another server or environment again needs a commit. Keep environment-specific addresses out of version control (a per-machine or per-environment file, the environment, a deployment step) or use a host name. The rule reads the .ini files of the scanned tree - in folder scans the same directory walk as the sources, in project scans below the common root of the project's units; not analyser.ini and not the copies in platform output folders such as Win32 or Win64 below the scanned root. Lines starting with ';' or '#' are comments, section headers (also with a trailing comment) are skipped, and the value is everything after the first '='. Address grammar, classes and exclusions are those of SCA200; in addition keys that carry prose (description, help, hint, comment, caption, text, example, note, title, summary) and version keys are not reported. Suppress one line with a whole-line marker '; noinspection HardcodedIpInConfig' (or '#') directly above it, or the whole file with '; noinspection-file HardcodedIpInConfig'.",
       "defaultSeverity": "Hint",
       "type": "Security Hotspot",
       "tags": ["security", "network", "configuration"],
@@ -4194,7 +4194,7 @@
       "exceptions": [
         {
           "case": "Prose and version keys",
-          "why": "A key whose words include description, help, hint, comment, caption, text, example, note, title or summary carries text, not a setting; a version key (FileVersion, ProductVersion, Build) carries a version. Neither is reported.",
+          "why": "A key whose words include description, help, hint, comment, caption, text, example, note, title or summary carries text, not a setting - unless the value is a URL or has a port, or the key names a host (HelpServer); a version key (FileVersion, ProductVersion, Build) carries a version unless it names a host (BuildServer). Neither is reported. A host word in the key or the section ([DNS], NameServer) lets a short public address such as 8.8.8.8 count as an address.",
           "example": "description=Returns 10.1.2.3 for the lookup  ; not reported"
         },
         {

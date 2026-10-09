@@ -26,11 +26,13 @@ type
     [Test] procedure AddressInUrlWithPort_Reported;
     [Test] procedure IPv6Forms_Reported;
     [Test] procedure SmallPublicAddressWithHostWord_Reported;
+    [Test] procedure UncShareAndHostContext_Reported;
     // ---- nicht gemeldet ----
     [Test] procedure SpecialPurposeAddresses_NoFinding;
     [Test] procedure NotAnAddress_NoFinding;
     [Test] procedure VersionAndOidContext_NoFinding;
     [Test] procedure RangeBounds_NoFinding;
+    [Test] procedure VersionTextAndIPv6Prefix_NoFinding;
     [Test] procedure Comments_NoFinding;
     // ---- Fundstelle und Menge ----
     [Test] procedure Finding_KindSeverityAndMessage;
@@ -146,6 +148,17 @@ begin
   Assert.AreEqual<Integer>(0, IpCount(InUnit('  X := ''8.8.8.8'';')));
 end;
 
+procedure TTestHardcodedIpAddress.UncShareAndHostContext_Reported;
+begin
+  // Review 2026-10-09: der UNC-Kopf ist ein Host (kein Produktpfad wie
+  // 'OpenSSL\1.1.1.10'), ein Host-Wort schlaegt das Versionswort
+  // ('BuildConnStr' neben 'ConnectionString', 'FirmwareServer').
+  Assert.AreEqual<Integer>(3, IpCount(InUnit(
+    '  BackupDir := ''\\192.168.10.5\Backup\'';'#13#10 +
+    '  Conn.ConnectionString := BuildConnStr(''192.168.1.20'', 1433);'#13#10 +
+    '  FirmwareServer := ''10.0.0.5'';')));
+end;
+
 { ---- nicht gemeldet ---- }
 
 procedure TTestHardcodedIpAddress.SpecialPurposeAddresses_NoFinding;
@@ -175,6 +188,16 @@ begin
     '  FileVersion := ''172.16.5.4'';'#13#10 +
     '  OidCommonName := ''2.5.4.3'';'#13#10 +
     '  szOID_Test := ''10.20.30.40'';')));
+end;
+
+procedure TTestHardcodedIpAddress.VersionTextAndIPv6Prefix_NoFinding;
+begin
+  // Versionswort direkt vor der Zahl im Literal; IPv6-Netzpraefix ohne
+  // Interface-ID wie die IPv4-Bereichsgrenze.
+  Assert.AreEqual<Integer>(0, IpCount(InUnit(
+    '  lblAbout.Caption := ''Version 2.1.0.45'';'#13#10 +
+    '  ShowMessage(''MyApp Build 3.2.1.200'');'#13#10 +
+    '  Net := ''fd12:3456::/48'';')));
 end;
 
 procedure TTestHardcodedIpAddress.RangeBounds_NoFinding;

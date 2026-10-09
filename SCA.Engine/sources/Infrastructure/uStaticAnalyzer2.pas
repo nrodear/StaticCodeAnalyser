@@ -13,11 +13,15 @@ type
   // Analyse-Liste). ConfigFiles (SCA201): Konfigurationsdateien fuer den
   // Konfigurations-Durchlauf nach der Hauptschleife - sie stehen NIE in
   // Analyse- oder Index-Liste (die Pascal-Pipeline laese sie als Pascal).
+  // ConfigRoot: Anker des Testpfad-Gates der Konfigurationsdateien, wenn
+  // der Scan selbst keine Wurzel hat (Einzel-.ini mit Projektwurzel).
   TParseSideLists = record
     IndexFiles  : TStringList;
     ConfigFiles : TStringList;
+    ConfigRoot  : string;
     class function Make(AIndexFiles: TStringList;
-      AConfigFiles: TStringList = nil): TParseSideLists; static;
+      AConfigFiles: TStringList = nil;
+      const AConfigRoot: string = ''): TParseSideLists; static;
   end;
 
   TStaticAnalyzer2 = class
@@ -57,6 +61,10 @@ type
 
   private
     class procedure ParseFiles(FileList: TStringList; var Results: TStringList);
+    // Eine Datei; AConfigRoot verankert das Testpfad-Gate, wenn die Datei
+    // eine Konfigurationsdatei ist ('' = voller Pfad).
+    class function AnalyzeOne(const FileName, AConfigRoot: string;
+      AIncludeUsesCheck: Boolean): TObjectList<TLeakFinding>;
     class procedure ParseLeaks(FileList: TStringList;
       Results: TObjectList<TLeakFinding>;
       AProgress: TProc<Integer, Integer>;
@@ -220,6 +228,9 @@ const
   // dieser Grenze gibt es spaeter eine Range-Exception statt eines stillen
   // O(n^2)-Pfades.
   DETECTOR_CAPACITY = 220;
+  // Meldetext eines Detektor-Fehlers (fkFileReadError): Hauptlauf seriell
+  // und parallel, Konfigurations-Durchlauf.
+  DETECTOR_FAILED_FMT = 'Detector %s failed: %s';
 
 var
   // Unit-globale Detector-Liste. Wird deterministisch in der unit-
@@ -788,10 +799,11 @@ end;
 { TParseSideLists }
 
 class function TParseSideLists.Make(AIndexFiles: TStringList;
-  AConfigFiles: TStringList): TParseSideLists;
+  AConfigFiles: TStringList; const AConfigRoot: string): TParseSideLists;
 begin
   Result.IndexFiles := AIndexFiles;
   Result.ConfigFiles := AConfigFiles;
+  Result.ConfigRoot := AConfigRoot;
 end;
 
 // SCA201 in Profil und Mindestschwere dieses Scans aktiv? Ersetzt fuer den
@@ -867,27 +879,62 @@ begin
     TSuppression.CollectMarkersForScan(AFile, AContext.SuppressionMarkers);
 end;
 
+// ScanConfigFile mit dem Schutz des Hauptlaufs: eine unerwartete Ausnahme
+// (Bereichs-/Ueberlaufpruefung, Speicher) kostet nur diese Datei und
+// erscheint wie ein Detektor-Fehler; Abbruch und Stapelueberlauf gehen
+// durch, die Post-Filter des Scans laufen weiter.
+procedure ScanConfigFileGuarded(const AFile, AAnchor: string;
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
+var
+  Err : TLeakFinding;
+begin
+  try
+    ScanConfigFile(AFile, AAnchor, Results, AContext);
+  except
+    on EAbort do raise;
+    on EStackExhausted do raise;
+    // Bewusst die Wurzelklasse - derselbe Schutz wie RunAllDetectors im
+    // Hauptlauf (Review 2026-10-09): ein Fehler kostet nur diese Datei.
+    // noinspection ExceptionTooGeneral
+    on E: Exception do
+    begin
+      Err := TLeakFinding.Create;
+      Err.FileName   := AFile;
+      Err.MethodName := '';
+      Err.LineNumber := '0';
+      Err.MissingVar := Format(DETECTOR_FAILED_FMT,
+        [KIND_META[fkHardcodedIpInConfig].Name, DescribeException(E)]);
+      Err.SetKind(fkFileReadError);
+      Results.Add(Err);
+    end;
+  end;
+end;
+
 // Konfigurations-Durchlauf (SCA201 HardcodedIpInConfig, Konzept_HardcodedIp
 // 5.2): die .ini-Dateien, die TConfigFiles neben den Units gesammelt hat.
 // Laeuft nach der Hauptschleife, solange der Kontext lebt; die Funde gehen
 // danach durch dieselben Post-Filter wie alle (Suppression, Evidenz,
 // PathOverrides, Konfidenz). Bewusst OHNE FillMissingMethodNames - das
 // setzte Methodennamen aus der zuletzt gescannten .pas ein.
-procedure RunConfigPass(AConfigFiles: TStringList;
+procedure RunConfigPass(const ASide: TParseSideLists;
   Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
 var
+  Root   : string;
   Anchor : string;
   Size   : Int64;
   F      : string;
 begin
-  if (AConfigFiles = nil) or (AConfigFiles.Count = 0) then Exit;
+  if (ASide.ConfigFiles = nil) or (ASide.ConfigFiles.Count = 0) then Exit;
   if not ConfigPassEnabled(AContext) then Exit;
-  Anchor := ConfigAnchor(CtxScanRoot(AContext), AConfigFiles);
-  for F in AConfigFiles do
+  Root := CtxScanRoot(AContext);
+  if Root = '' then
+    Root := ASide.ConfigRoot;
+  Anchor := ConfigAnchor(Root, ASide.ConfigFiles);
+  for F in ASide.ConfigFiles do
   begin
     Size := ConfigFileSize(F);
     if (Size >= 0) and (Size <= CfgMaxFileBytes(AContext)) then
-      ScanConfigFile(F, Anchor, Results, AContext);
+      ScanConfigFileGuarded(F, Anchor, Results, AContext);
   end;
   if Assigned(gFileTextCache) then
     gFileTextCache.Clear;
@@ -1355,7 +1402,7 @@ begin
         F.FileName   := CaptFile;
         F.MethodName := '';
         F.LineNumber := '0';
-        F.MissingVar := Format('Detector %s failed: %s', [Name, ErrMsg]);
+        F.MissingVar := Format(DETECTOR_FAILED_FMT, [Name, ErrMsg]);
         F.SetKind(fkFileReadError);
         CaptSlot.Findings.Add(F);
       end);
@@ -2231,7 +2278,7 @@ begin
             F.FileName   := CaptFileName;
             F.MethodName := '';
             F.LineNumber := '0';
-            F.MissingVar := Format('Detector %s failed: %s',
+            F.MissingVar := Format(DETECTOR_FAILED_FMT,
                                    [Name, ErrMsg]);
             F.SetKind(fkFileReadError);
             CaptResults.Add(F);
@@ -2272,7 +2319,7 @@ begin
     // SCA201: Konfigurationsdateien - nach den Units, vor dem Context-
     // Teardown, damit die Post-Filter unten auch diese Funde sehen.
     LastPhase := 'Konfigurations-Durchlauf (SCA201)';
-    RunConfigPass(ASide.ConfigFiles, Results, Ctx);
+    RunConfigPass(ASide, Results, Ctx);
     LastPhase := 'Main-Loop fertig, post-process';
 
     // Outer-Diagnose-Try Schliessung: bei Exception VOR re-raise die letzte
@@ -2418,6 +2465,12 @@ end;
 
 class function TStaticAnalyzer2.AnalyzeLeaks(const FileName: string;
   AIncludeUsesCheck: Boolean): TObjectList<TLeakFinding>;
+begin
+  Result := AnalyzeOne(FileName, '', AIncludeUsesCheck);
+end;
+
+class function TStaticAnalyzer2.AnalyzeOne(const FileName, AConfigRoot: string;
+  AIncludeUsesCheck: Boolean): TObjectList<TLeakFinding>;
 
   procedure AddError(const Msg: string);
   var F: TLeakFinding;
@@ -2454,7 +2507,7 @@ begin
       FileList.Add(FileName);
     try
       ParseLeaks(FileList, Result, nil, AIncludeUsesCheck,
-        TParseSideLists.Make(nil, Configs));
+        TParseSideLists.Make(nil, Configs, AConfigRoot));
     except
       on E: Exception do
         AddError('Analyseabbruch: ' + DescribeException(E));
@@ -2501,11 +2554,19 @@ begin
     Exit;
   end;
 
+  // Eine Konfigurationsdatei (SCA201) braucht keinen Index, aber die
+  // Projektwurzel als Anker ihres Testpfad-Gates - wie die Units ueber die
+  // Index-Liste.
+  if TConfigFiles.IsConfigFile(FileName) then
+  begin
+    Result.Free;
+    Result := AnalyzeOne(FileName, Trim(ProjectRoot), AIncludeUsesCheck);
+    Exit;
+  end;
+
   // ProjectRoot leer oder ungueltig -> Fallback auf den klassischen
-  // Single-File-Pfad ohne Cross-Unit-Index. Eine Konfigurationsdatei
-  // braucht keinen Index (SCA201, s. einfache Ueberladung).
-  if (Trim(ProjectRoot) = '') or (not DirectoryExists(ProjectRoot))
-     or TConfigFiles.IsConfigFile(FileName) then
+  // Single-File-Pfad ohne Cross-Unit-Index.
+  if (Trim(ProjectRoot) = '') or (not DirectoryExists(ProjectRoot)) then
   begin
     Result.Free;
     Result := AnalyzeLeaks(FileName, AIncludeUsesCheck);
@@ -2614,7 +2675,9 @@ begin
     if ScanErr <> '' then
       AddError('Verzeichnis-Scan: ' + ScanErr);
 
-    if FileList.Count = 0 then
+    // Ein Ordner nur mit Konfigurationsdateien (config/, deploy/) faehrt
+    // den Konfigurations-Durchlauf wie eine einzelne .ini.
+    if (FileList.Count = 0) and (Configs.Count = 0) then
     begin
       // Kein Fehler, aber Hinweis fuer den Benutzer
       AddError('Keine .pas-Dateien im Verzeichnis gefunden');

@@ -88,6 +88,9 @@ type
     // Konfigurationsdatei '; noinspection X'.
     class function MarkerLineFor(const AFileName: string;
       AKind: TFindingKind): string; static;
+    // Dasselbe fuer eine Regelkarte ohne Datei (Workbench, Regel-Info): in
+    // der Dateiart, in der die Regel meldet - SCA201 nur in .ini.
+    class function MarkerTextFor(AKind: TFindingKind): string; static;
   private
     // Allokationsfreier case-insensitiver Substring-Check auf
     // 'noinspection' (ASCII-Folding reicht - der Tag selbst ist ASCII).
@@ -350,13 +353,25 @@ begin
     Result := ATrimmed.StartsWith('//');
 end;
 
+const
+  MARKER_PASCAL = '// noinspection ';
+  MARKER_INI    = '; noinspection ';
+
 class function TSuppression.MarkerLineFor(const AFileName: string;
   AKind: TFindingKind): string;
 begin
   if TConfigFiles.IsConfigFile(AFileName) then
-    Result := '; noinspection ' + KindName(AKind)
+    Result := MARKER_INI + KindName(AKind)
   else
-    Result := '// noinspection ' + KindName(AKind);
+    Result := MARKER_PASCAL + KindName(AKind);
+end;
+
+class function TSuppression.MarkerTextFor(AKind: TFindingKind): string;
+begin
+  if AKind = fkHardcodedIpInConfig then
+    Result := MARKER_INI + KindName(AKind)
+  else
+    Result := MARKER_PASCAL + KindName(AKind);
 end;
 
 // Liefert fuer eine .dfm-Datei die zugehoerige .pas im selben Verzeichnis -

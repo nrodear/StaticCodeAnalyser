@@ -1210,8 +1210,8 @@ msgstr ""
 msgid "IDE editor service not available."
 msgstr ""
 
-#: SCA.Engine/sources/Output/uClaudePrompt.pas:353
-msgid "If the finding is a false positive, say so and explain why - then suggest a `// noinspection %s` suppression marker on the affected line."
+#: SCA.Engine/sources/Output/uClaudePrompt.pas:354
+msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on the affected line."
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3533
