@@ -33,6 +33,7 @@ type
     [Test] procedure VersionAndOidContext_NoFinding;
     [Test] procedure RangeBounds_NoFinding;
     [Test] procedure VersionTextAndIPv6Prefix_NoFinding;
+    [Test] procedure HostVersionAndEscapedPath_NoFinding;
     [Test] procedure Comments_NoFinding;
     // ---- Fundstelle und Menge ----
     [Test] procedure Finding_KindSeverityAndMessage;
@@ -198,6 +199,18 @@ begin
     '  lblAbout.Caption := ''Version 2.1.0.45'';'#13#10 +
     '  ShowMessage(''MyApp Build 3.2.1.200'');'#13#10 +
     '  Net := ''fd12:3456::/48'';')));
+end;
+
+procedure TTestHardcodedIpAddress.HostVersionAndEscapedPath_NoFinding;
+begin
+  // Zweites Review 2026-10-09: ein Bezeichner mit Versionswort als Kopf
+  // bleibt Version, auch mit Host-Wort davor ('ServerVersion'); 'observer'
+  // ist kein Host; '\\' mitten in einem escapten Pfad ist kein UNC-Kopf.
+  Assert.AreEqual<Integer>(0, IpCount(InUnit(
+    '  if Conn.ServerVersion >= ''12.2.0.1'' then Exit;'#13#10 +
+    '  MinServerVersion := ''19.3.0.1'';'#13#10 +
+    '  FObserver.Version := ''2.1.0.45'';'#13#10 +
+    '  Json := ''{"lib":"C:\\deps\\OpenSSL\\1.1.1.10\\bin"}'';')));
 end;
 
 procedure TTestHardcodedIpAddress.RangeBounds_NoFinding;

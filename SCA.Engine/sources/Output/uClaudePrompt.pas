@@ -350,8 +350,10 @@ begin
     SB.AppendLine('3. **' + _('Verify') + '** - ' +
       _('what to test or check after the fix to confirm the issue is gone (and no regressions).'));
     SB.AppendLine('');
-    // Marker in der Syntax der Fund-Datei (SCA201: ';' in der .ini).
-    SB.AppendLine(Format(_('If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on the affected line.'),
+    // Marker in der Syntax der Fund-Datei (SCA201: ';' in der .ini), als
+    // eigene Zeile DARUEBER - ein Marker gilt fuer die naechste Code-Zeile;
+    // in einer .ini waere ein ';' hinter dem Wert Teil des Werts.
+    SB.AppendLine(Format(_('If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line directly above the affected line.'),
       [TSuppression.MarkerLineFor(F.FileName, F.Kind)]));
     Result := SB.ToString;
   finally

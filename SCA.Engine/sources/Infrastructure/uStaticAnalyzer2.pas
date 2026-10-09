@@ -2676,8 +2676,10 @@ begin
       AddError('Verzeichnis-Scan: ' + ScanErr);
 
     // Ein Ordner nur mit Konfigurationsdateien (config/, deploy/) faehrt
-    // den Konfigurations-Durchlauf wie eine einzelne .ini.
-    if (FileList.Count = 0) and (Configs.Count = 0) then
+    // den Konfigurations-Durchlauf wie eine einzelne .ini - sofern SCA201
+    // in Profil und Mindestschwere laeuft; sonst bleibt der Hinweis.
+    if (FileList.Count = 0)
+       and ((Configs.Count = 0) or not ConfigPassEnabled(nil)) then
     begin
       // Kein Fehler, aber Hinweis fuer den Benutzer
       AddError('Keine .pas-Dateien im Verzeichnis gefunden');
@@ -2686,7 +2688,7 @@ begin
 
     try
       ParseLeaks(FileList, Result, AProgress, AIncludeUsesCheck,
-        TParseSideLists.Make(nil, Configs));
+        TParseSideLists.Make(nil, Configs, Path));
     except
       on EAbort do
       begin
@@ -2763,7 +2765,7 @@ begin
     end;
     try
       ParseLeaks(Copy, Result, AProgress, AIncludeUsesCheck,
-        TParseSideLists.Make(IndexList, Configs));
+        TParseSideLists.Make(IndexList, Configs, AIndexRoot));
     except
       on EAbort do
       begin

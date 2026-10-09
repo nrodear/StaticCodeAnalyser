@@ -98,13 +98,6 @@ type
     // CamelCase-Uebergaengen getrennt ('FRootDNS_NET' -> f, root, dns, net).
     class function WordParts(const AText: string): TArray<string>; static;
 
-    // Kontext-Gates fuer eine Adresse im Text AText; AContextWords sind die
-    // Wortteile des Kontexts (Pascal: Code der Zeile ohne Literale; INI:
-    // der Schluessel). '' = melden, sonst ein kurzer Grund. Die Scanner
-    // rechnen die textweiten Teile einmal je Text, nicht je Adresse.
-    class function JudgeHit(const AHit: TIpHit; const AText: string;
-      const AContextWords: TArray<string>): string; static;
-
     // Pascal-Text OHNE Kommentare (TDetectorUtils.StripFileComments-
     // KeepStrings): alle Adressen in String-Literalen, je Zeile und
     // Adresse einmal.
@@ -131,10 +124,14 @@ const
   VERSION_WORDS: array[0..9] of string = (
     'version', 'ver', 'vers', 'verproc', 'versao', 'build', 'revision',
     'release', 'assembly', 'firmware');
-  // Komposita, die auf einen Host-Stamm enden ('nameserver', 'DNSSERVER',
-  // 'localhost') - WordParts trennt sie nicht.
-  HOST_STEMS: array[0..7] of string = (
-    'server', 'host', 'dns', 'proxy', 'gateway', 'endpoint', 'address', 'addr');
+  // Host-Komposita in einem Wort ('nameserver', 'DNSSERVER', 'localhost') -
+  // WordParts trennt sie nicht. Bewusst eine Liste, kein Suffix: 'observer'
+  // und 'ghost' enden auch auf 'server'/'host'.
+  HOST_COMPOUNDS: array[0..19] of string = (
+    'nameserver', 'nameservers', 'dnsserver', 'dnsservers', 'localhost',
+    'ipaddr', 'ipaddress', 'hostaddr', 'hostaddress', 'serveraddr',
+    'serveraddress', 'servername', 'serverip', 'hostip', 'mailserver',
+    'smtpserver', 'webserver', 'dbserver', 'proxyserver', 'proxyhost');
   OID_WORDS: array[0..1] of string = ('oid', 'oids');
   // INI-Schluessel mit Fliesstext (HeidiSQL-Funktionsdoku u. ae.).
   TEXT_WORDS: array[0..13] of string = (
@@ -664,11 +661,13 @@ begin
 end;
 
 // '://' bzw. '://[' oder ein UNC-Kopf '\\' direkt davor - in allen drei
-// Faellen ist die Adresse ein Host, keine Zahl.
+// Faellen ist die Adresse ein Host, keine Zahl. Der UNC-Kopf nur an einer
+// Token-Grenze: in 'C:\\Tools\\1.0.0.5' (JSON-/C-escaped) ist '\\' ein
+// Pfadtrenner.
 function UrlBefore(const S: string; AStart: Integer): Boolean;
 begin
   if (CharAt(S, AStart - 1) = '\') and (CharAt(S, AStart - 2) = '\') then
-    Exit(CharAt(S, AStart - 3) <> '\');
+    Exit(not IsWordChar(CharAt(S, AStart - 3)) and (CharAt(S, AStart - 3) <> '\'));
   if CharAt(S, AStart - 1) = '[' then Dec(AStart);
   Result := (AStart > 3) and (Copy(S, AStart - 3, 3) = '://');
 end;
@@ -913,31 +912,30 @@ begin
     or ((P = '/') and IsWordChar(CharAt(S, AStart - 2)));
 end;
 
-function EndsWithText(const AWord, ATail: string): Boolean;
-begin
-  Result := (Length(AWord) >= Length(ATail))
-    and (Copy(AWord, Length(AWord) - Length(ATail) + 1, MaxInt) = ATail);
-end;
-
-// Host-Wort: ein Eintrag aus HOST_WORDS oder ein Kompositum auf einem
-// Host-Stamm.
+// Host-Wort: ein Eintrag aus HOST_WORDS oder HOST_COMPOUNDS.
 function AnyHostWord(const AWords: TArray<string>): Boolean;
 var
-  W, S : string;
+  W : string;
 begin
   Result := False;
   for W in AWords do
-  begin
-    if InList(W, HOST_WORDS) then
+    if InList(W, HOST_WORDS) or InList(W, HOST_COMPOUNDS) then
       Exit(True);
-    for S in HOST_STEMS do
-      if EndsWithText(W, S) then
-        Exit(True);
-  end;
+end;
+
+// Endet der Wortlauf auf ein Versionswort? Massgeblich ist der letzte
+// Wortteil, der Kopf: 'ServerVersion' ist eine Version, 'BuildServer' ein
+// Host.
+function HeadIsVersion(const AIdent: string): Boolean;
+var
+  Parts : TArray<string>;
+begin
+  Parts := TIpAddressScan.WordParts(AIdent);
+  Result := (Length(Parts) > 0) and InList(Parts[High(Parts)], VERSION_WORDS);
 end;
 
 // Versionswort direkt vor der Zahl im Text ('Version 2.1.0.45',
-// 'MyApp Build: 3.2.1.200').
+// 'MyApp Build: 3.2.1.200'; nicht 'BuildServer=10.0.0.5').
 function VersionWordBefore(const S: string; AStart: Integer): Boolean;
 var
   i, E : Integer;
@@ -948,18 +946,50 @@ begin
   E := i;
   while (i >= 1) and IsLetter(S[i]) do
     Dec(i);
-  Result := (E > i)
-    and AnyInList(TIpAddressScan.WordParts(Copy(S, i + 1, E - i)), VERSION_WORDS);
+  Result := (E > i) and HeadIsVersion(Copy(S, i + 1, E - i));
 end;
 
-// Versionsangabe: ein Versionswort direkt vor der Zahl, oder eines im
-// Kontext ohne Host-Wort daneben ('BuildServer', 'FirmwareServer' sind
-// Hosts, 'FileVersion' nicht).
-function IsVersionContext(const AHit: TIpHit; const AText: string;
-  const AWords: TArray<string>): Boolean;
+// Ein Bezeichner im Kontext mit einem Versionswort als Kopf ('FileVersion',
+// 'Conn.ServerVersion', 'FServerInfo.Version')?
+function HasVersionHead(const ACode: string): Boolean;
+var
+  i, Start : Integer;
 begin
-  Result := VersionWordBefore(AText, AHit.Start)
-    or (AnyInList(AWords, VERSION_WORDS) and not AnyHostWord(AWords));
+  Result := False;
+  i := 1;
+  while i <= Length(ACode) do
+  begin
+    if not IsLetter(ACode[i]) or IsWordChar(CharAt(ACode, i - 1)) then
+    begin
+      Inc(i);
+      Continue;
+    end;
+    Start := i;
+    while (i <= Length(ACode)) and IsWordChar(ACode[i]) do
+      Inc(i);
+    if HeadIsVersion(Copy(ACode, Start, i - Start)) then
+      Exit(True);
+  end;
+end;
+
+type
+  // Kontext einer Adresse fuer die Gates, einmal je Zeile bzw. Text.
+  TGateContext = record
+    Words       : TArray<string>;  // Pascal: Code der Zeile ohne Literale; INI: Schluessel
+    HostWords   : TArray<string>;  // dazu nur fuer die Kleinzahl-Rettung (INI: Sektion)
+    VersionHead : Boolean;         // ein Bezeichner endet auf ein Versionswort
+    Fractions   : Integer;         // weitere Dezimalbrueche im Text
+  end;
+
+// Versionsangabe: ein Versionswort direkt vor der Zahl; ein Bezeichner mit
+// Versionswort als Kopf ('ServerVersion' - auch neben Host-Woertern); sonst
+// ein Versionswort ohne Host-Wort daneben ('Ide.verProc' ja; 'BuildServer',
+// 'BuildConnStr' neben 'ConnectionString' nein).
+function IsVersionContext(const AHit: TIpHit; const AText: string;
+  const ACtx: TGateContext): Boolean;
+begin
+  Result := VersionWordBefore(AText, AHit.Start) or ACtx.VersionHead
+    or (AnyInList(ACtx.Words, VERSION_WORDS) and not AnyHostWord(ACtx.Words));
 end;
 
 // Weitere Dezimalbrueche im Text (ausserhalb der Adressen): >= 2 heisst
@@ -1017,37 +1047,28 @@ begin
     Result := R_SMALL;
 end;
 
-// Die Gates in fester Reihenfolge. AWords: Kontext (Pascal: Code der Zeile
-// ohne Literale; INI: Schluessel); AHostWords: dazu nur fuer die Host-
-// Rettung der Kleinzahl (INI: auch die Sektion); AFractions: weitere
-// Dezimalbrueche im Text. URL, UNC und Port machen die Adresse zum Host -
-// dann greifen weder Versions-, Form- noch Zahlenkolonnen-Gate.
+// Die Gates in fester Reihenfolge ('' = melden, sonst der Grund). URL, UNC
+// und Port machen die Adresse zum Host - dann greifen weder Versions-,
+// Form- noch Zahlenkolonnen-Gate.
 function Judge(const AHit: TIpHit; const AText: string;
-  const AWords, AHostWords: TArray<string>; AFractions: Integer): string;
+  const ACtx: TGateContext): string;
 var
   Host : Boolean;
 begin
   if not TIpAddressScan.IsReportable(AHit.Cls) then
     Exit(R_CLASS);
-  if ((AHit.Family = ifV4) and IsOidArc(AHit.V4)) or AnyInList(AWords, OID_WORDS) then
+  if ((AHit.Family = ifV4) and IsOidArc(AHit.V4)) or AnyInList(ACtx.Words, OID_WORDS) then
     Exit(R_OID);
   Host := AHit.InUrl or AHit.HasPort;
-  if not Host and IsVersionContext(AHit, AText, AWords) then
+  if not Host and IsVersionContext(AHit, AText, ACtx) then
     Exit(R_VERSION);
   if HasProductPrefix(AText, AHit.Start) and not AHit.InUrl then
     Exit(R_PRODUCT);
   Result := '';
   if Host then Exit;
-  Result := JudgeForm(AHit, AHostWords);
-  if (Result = '') and (AFractions >= 2) then
+  Result := JudgeForm(AHit, ACtx.HostWords);
+  if (Result = '') and (ACtx.Fractions >= 2) then
     Result := R_SOUP;
-end;
-
-class function TIpAddressScan.JudgeHit(const AHit: TIpHit; const AText: string;
-  const AContextWords: TArray<string>): string;
-begin
-  Result := Judge(AHit, AText, AContextWords, AContextWords,
-    CountOtherFractions(AText, FindAll(AText)));
 end;
 
 { ---- Pascal-Literale ---- }
@@ -1139,21 +1160,22 @@ end;
 
 // Adressen eines Literals in die Trefferliste der Zeile (ab ALineFirst).
 procedure AddLiteralHits(var A: TArray<TCodeIpHit>; var N: Integer;
-  ALineFirst: Integer; const L: TLiteral; const AWords: TArray<string>);
+  ALineFirst: Integer; const L: TLiteral; const ALineCtx: TGateContext);
 var
   Hits : TArray<TIpHit>;
-  Frac : Integer;
+  Ctx  : TGateContext;
   H    : TIpHit;
   CH   : TCodeIpHit;
 begin
   Hits := TIpAddressScan.FindAll(L.Body);
   if Hits = nil then Exit;
-  Frac := CountOtherFractions(L.Body, Hits);
+  Ctx := ALineCtx;
+  Ctx.Fractions := CountOtherFractions(L.Body, Hits);
   for H in Hits do
   begin
     CH.Pos := L.Quote;
     CH.Hit := H;
-    CH.Reason := Judge(H, L.Body, AWords, AWords, Frac);
+    CH.Reason := Judge(H, L.Body, Ctx);
     MergeCodeHit(A, N, ALineFirst, CH);
   end;
 end;
@@ -1163,7 +1185,7 @@ var
   LineStart, LineEnd, N, LineFirst : Integer;
   Lits   : TArray<TLiteral>;
   Code   : string;
-  Words  : TArray<string>;
+  Ctx    : TGateContext;
   L      : TLiteral;
 begin
   Result := nil;
@@ -1177,9 +1199,13 @@ begin
     LineFirst := N;
     Lits := LiteralsOfLine(ACode, LineStart, LineEnd, Code);
     if Length(Lits) > 0 then
-      Words := WordParts(Code);
+    begin
+      Ctx.Words := WordParts(Code);
+      Ctx.HostWords := Ctx.Words;
+      Ctx.VersionHead := HasVersionHead(Code);
+    end;
     for L in Lits do
-      AddLiteralHits(Result, N, LineFirst, L, Words);
+      AddLiteralHits(Result, N, LineFirst, L, Ctx);
     LineStart := LineEnd + 1;
   end;
   SetLength(Result, N);
@@ -1257,19 +1283,19 @@ end;
 // Adresse ist ein Host (URL, Port, Host-Wort im Schluessel: 'HelpUrl=
 // http://...:8080', 'HelpServer=...').
 function IniReason(const AHit: TIpHit; const AValue: string;
-  const AKeyWords, AHostWords: TArray<string>; AFractions: Integer): string;
+  const ACtx: TGateContext): string;
 begin
-  Result := Judge(AHit, AValue, AKeyWords, AHostWords, AFractions);
-  if (Result = '') and AnyInList(AKeyWords, TEXT_WORDS) and not AHit.InUrl
-     and not AHit.HasPort and not AnyHostWord(AKeyWords) then
+  Result := Judge(AHit, AValue, ACtx);
+  if (Result = '') and AnyInList(ACtx.Words, TEXT_WORDS) and not AHit.InUrl
+     and not AHit.HasPort and not AnyHostWord(ACtx.Words) then
     Result := R_TEXTKEY;
 end;
 
 class function TIpAddressScan.ScanIniLines(ALines: TStrings): TArray<TIniIpHit>;
 var
-  i, N, LineFirst, Frac : Integer;
+  i, N, LineFirst : Integer;
   Section, Key, Value : string;
-  KeyWords, HostWords : TArray<string>;
+  Ctx      : TGateContext;
   Hits     : TArray<TIpHit>;
   H        : TIpHit;
   IH       : TIniIpHit;
@@ -1283,11 +1309,12 @@ begin
     if not SplitIniLine(ALines[i], Section, Key, Value) then Continue;
     Hits := FindAll(Value);
     if Hits = nil then Continue;
-    KeyWords := WordParts(Key);
+    Ctx.Words := WordParts(Key);
     // Die Sektion rettet nur die Kleinzahl ('[DNS] Primary=8.8.8.8'); als
     // Versionskontext zaehlt sie nicht ('[Server] Version=...').
-    HostWords := JoinParts(KeyWords, WordParts(Section));
-    Frac := CountOtherFractions(Value, Hits);
+    Ctx.HostWords := JoinParts(Ctx.Words, WordParts(Section));
+    Ctx.VersionHead := HasVersionHead(Key);
+    Ctx.Fractions := CountOtherFractions(Value, Hits);
     LineFirst := N;
     for H in Hits do
     begin
@@ -1295,7 +1322,7 @@ begin
       IH.Section := Section;
       IH.Key := Key;
       IH.Hit := H;
-      IH.Reason := IniReason(H, Value, KeyWords, HostWords, Frac);
+      IH.Reason := IniReason(H, Value, Ctx);
       MergeIniHit(Result, N, LineFirst, IH);
     end;
   end;
