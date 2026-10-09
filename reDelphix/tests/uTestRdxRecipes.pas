@@ -10,10 +10,18 @@ unit uTestRdxRecipes;
 //     laut Kompilat / gesperrt (Variant-Anzeichen, Zahl, Nicht-Unicode-
 //     String, AnsiChar - deklariert wie als Cast), Char als string(x),
 //     '%' -> '%%', Sperre fuer SQL-Text (SCA003), Sperre ohne Operand
+//     im with-Block beweist kein Name etwas, IntToStr(x) wird nur %d/%u,
+//     wenn der Core den Aufruf als RTL bewiesen hat
 //   * SQL-Vorlage: Zuweisung und Aufruf, Parameter nie in Quotes, ohne
-//     Query-Objekt als Kommentar
+//     Query-Objekt als Kommentar, Einrueckung mit Tabs bleibt Tabs
+//   * Fund-Abgleich: Ziel und '+'-Zahl aus den Meldungen von SCA044/SCA003,
+//     die '+'-Zaehlung von SCA044 auf dem Knotentext
+//   * uses: Schreibweise der Datei (nur Delphi-Scopes zaehlen, FPC-Weiche
+//     -> Kurzname), Nachlauf hinter dem letzten Eintrag ('in'-Pfad,
+//     Kommentar)
 //   * Rahmenwerk-Erkennung und Scope-Aufloesung in Compiler-Reihenfolge,
-//     System/Vcl projektabhaengig ungeraten
+//     System/Vcl projektabhaengig ungeraten; die echte data\unitscopes.txt
+//     schreibt die Praefixe wie DCC_Namespace (Winapi, Vcl, Datasnap)
 
 interface
 
@@ -66,6 +74,13 @@ type
     [Test] procedure Format_CharOperand_WrappedAsString;
     [Test] procedure Format_AnsiCharCast_UnicodeTarget_Blocked;
     [Test] procedure Format_VariantPlusNumericCall_Blocked;
+    // Review 2026-10-07, strittige Minor 1 und 3: with-Block und eine
+    // vom Core zurueckgenommene RTL-Annahme.
+    [Test] procedure Judge_InWith_NamesProveNothing;
+    [Test] procedure Format_IntToStrNotProvenByCore_StaysCall;
+    // Fund-Abgleich (Minor 20) und '+'-Gegenprobe (strittiger Minor 2).
+    [Test] procedure PlusCount_LikeScanConcat;
+    [Test] procedure FindingTarget_Sca044AndSca003;
 
     // ---- SQL-Vorlage ---------------------------------------------------
     [Test] procedure QueryObject_Forms;
@@ -75,6 +90,8 @@ type
     [Test] procedure SqlTemplate_ArgumentRole_Blocked;
     // Review 2026-10-07 Minor 24: String-Puffer statt Query-Objekt.
     [Test] procedure SqlTemplate_PlainStringTarget;
+    // Minor 31: Tab-Einrueckung bleibt Tab-Einrueckung.
+    [Test] procedure SqlTemplate_TabIndent_KeepsTabs;
 
     // ---- uses ----------------------------------------------------------
     [Test] procedure Framework_FromUnitNames;
@@ -82,6 +99,11 @@ type
     // uses-Klausel ergaenzen (AH19): Schreibweise der Datei, Sortierung
     // wie SCA142, Einfuegestelle.
     [Test] procedure UsesNameFor_FollowsFileStyle;
+    // Minor 35: FPC-Weiche erkennen.
+    [Test] procedure LineLooksFpcAware_Tells;
+    // Minor 42 / strittiger Nit 5: wo hinter dem letzten Eintrag
+    // angehaengt werden darf.
+    [Test] procedure UsesTail_PathCommentSemicolon;
     [Test] procedure IsSortedUses_CompareText;
     [Test] procedure SortedInsertIndex_KeepsOrder_UnsortedGoesFront;
     [Test] procedure Scope_Load_IgnoresCommentsAndDedupes;
@@ -91,6 +113,8 @@ type
     [Test] procedure Scope_Resolve_AlreadyQualified_IsFalse;
     // Review 2026-10-07 Minor 14: System.Skia gegen Vcl.Skia.
     [Test] procedure Scope_Resolve_VclVsSystem_Ambiguous_NotGuessed;
+    // Review 2026-10-07 Nit 19: die eingecheckte Tabelle.
+    [Test] procedure Scope_RealTable_PrefixSpelling;
   end;
 
 implementation
@@ -561,6 +585,110 @@ begin
   Assert.IsTrue(Pos('''Length(Marker)'': kein String', B.Reason) > 0, B.Reason);
 end;
 
+procedure TTestRdxRecipes.Judge_InWith_NamesProveNothing;
+var
+  P : TRdxPart;
+begin
+  // 'with Obj do r := ''a'' + ExtractFileName(F) + ...': der Name kann an
+  // eine Methode von Obj binden. Ausserhalb bewiesen, im with-Block nur
+  // noch laut Kompilat (strittiger Minor 1).
+  P := TRdxRecipes.MakePart(ROLE_OPERAND, 'ExtractFileName(F)', rvUnknown);
+  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovString, 'ausserhalb: RTL');
+  P.InWith := True;
+  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovByCompiler, 'RTL-Funktion im with');
+  P := TRdxRecipes.MakePart(ROLE_OPERAND, 'sLineBreak', rvUnknown);
+  P.InWith := True;
+  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovByCompiler, 'RTL-Konstante im with');
+  P := TRdxRecipes.MakePart(ROLE_OPERAND, 'Fn', rvUnknown, 'tfilename');
+  P.InWith := True;
+  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovByCompiler, 'Typ-Alias im with');
+  // Was sperrt, sperrt auch im with-Block weiter.
+  P := TRdxRecipes.MakePart(ROLE_OPERAND, 'A', rvUnknown, 'ansistring');
+  P.InWith := True;
+  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovAnsi);
+  P := TRdxRecipes.MakePart(ROLE_OPERAND, 'V', rvUnknown, 'variant');
+  P.InWith := True;
+  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovVariantRisk);
+  P := TRdxRecipes.MakePart(ROLE_OPERAND, 'Length(S)', rvUnknown);
+  P.InWith := True;
+  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovNonString);
+  Assert.IsFalse(TRdxRecipes.MakePart(ROLE_OPERAND, 'x').InWith,
+    'MakePart setzt InWith zurueck');
+end;
+
+procedure TTestRdxRecipes.Format_IntToStrNotProvenByCore_StaysCall;
+var
+  Parts : TRdxParts;
+  B     : TRdxFormatBuild;
+  P     : TRdxPart;
+begin
+  // Der Core liefert IntToStr(n) als rvString nur, wenn der Name die RTL
+  // meint; deklariert die Unit 'function IntToStr(..): Variant', nimmt er
+  // das zurueck (rvUnknown). Dann darf aus IntToStr(n) kein %d mit n
+  // werden - die eigene Funktion formatiert vielleicht anders
+  // (strittiger Minor 3). Der Aufruf bleibt stehen, laut Kompilat.
+  Parts := [Lit('''n='''),
+            TRdxRecipes.MakePart(ROLE_OPERAND, 'IntToStr(n)', rvUnknown, '', 'integer')];
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B), B.Reason);
+  Assert.AreEqual('Format(''n=%s'', [IntToStr(n)])', B.NewText);
+  Assert.AreEqual<Integer>(0, B.Numeric);
+  Assert.AreEqual<Integer>(1, Length(B.ByCompiler));
+  // Ebenso im with-Block, auch wenn der Core rvString meldet.
+  P := TRdxRecipes.MakePart(ROLE_OPERAND, 'IntToStr(n)', rvString, '', 'integer');
+  P.InWith := True;
+  Parts := [Lit('''n='''), P];
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B), B.Reason);
+  Assert.AreEqual('Format(''n=%s'', [IntToStr(n)])', B.NewText);
+  Assert.AreEqual<Integer>(0, B.Numeric);
+end;
+
+procedure TTestRdxRecipes.PlusCount_LikeScanConcat;
+begin
+  // Die Zaehlung von SCA044 (ScanConcat) auf dem abgeflachten Knotentext.
+  Assert.AreEqual<Integer>(3, TRdxRecipes.TopLevelPlusCount('''a''+Marker+''b''+Tag'));
+  Assert.AreEqual<Integer>(1, TRdxRecipes.TopLevelPlusCount('''a+b''+x'), '+ im String');
+  Assert.AreEqual<Integer>(1, TRdxRecipes.TopLevelPlusCount('''it''''s +''+x'), ''' im String');
+  Assert.AreEqual<Integer>(2, TRdxRecipes.TopLevelPlusCount('Foo(a+b)+c[1+2]+d'),
+    'Klammer- und Indextiefe');
+  Assert.AreEqual<Integer>(1, TRdxRecipes.TopLevelPlusCount('a)+b'),
+    'eine ueberzaehlige Klammer macht die Tiefe nicht negativ');
+  Assert.AreEqual<Integer>(0, TRdxRecipes.TopLevelPlusCount('Format(''%s'', [x])'));
+  Assert.AreEqual<Integer>(-1, TRdxRecipes.TopLevelPlusCount('  '));
+end;
+
+procedure TTestRdxRecipes.FindingTarget_Sca044AndSca003;
+var
+  T : string;
+  P : Integer;
+begin
+  // SCA044 (uConcatToFormat): 'Concat (%d x ''+'') -> Format(...) %s'.
+  Assert.IsTrue(TRdxRecipes.ConcatFindingTarget(
+    'Concat (3 x ''+'') -> Format(...) Arr[]', T, P));
+  Assert.AreEqual('Arr[]', T);
+  Assert.AreEqual<Integer>(3, P);
+  Assert.IsTrue(TRdxRecipes.ConcatFindingTarget(
+    'Concat (12 x ''+'') -> Format(...) Self.FName', T, P));
+  Assert.AreEqual('Self.FName', T);
+  Assert.AreEqual<Integer>(12, P);
+  Assert.IsFalse(TRdxRecipes.ConcatFindingTarget('etwas anderes', T, P));
+  Assert.AreEqual('', T);
+  Assert.AreEqual<Integer>(-1, P);
+  Assert.IsFalse(TRdxRecipes.ConcatFindingTarget(
+    'Concat (x x ''+'') -> Format(...) A', T, P), 'Zahl nicht lesbar');
+  Assert.IsFalse(TRdxRecipes.ConcatFindingTarget(
+    'Concat (3 x ''+'') -> Format(...) ', T, P), 'ohne Ziel');
+  // SCA003 (uSQLInjection): Ziel, zwei Leerzeichen, Schaetzung.
+  Assert.AreEqual('Query.SQL.Add()',
+    TRdxRecipes.SqlFindingTarget('Query.SQL.Add()  [Fix 1/5 [*    ] (Trivial)]'));
+  Assert.AreEqual('S', TRdxRecipes.SqlFindingTarget('S  [Fix 2/5 [**   ] (Leicht)]'));
+  Assert.AreEqual('', TRdxRecipes.SqlFindingTarget('ohne Schaetzung'));
+  // Vergleichsform: ein Aufruf zaehlt als 'Kopf()'.
+  Assert.AreEqual('Q.SQL.Add()', TRdxRecipes.TargetKey('Q.SQL.Add(''x''+y)'));
+  Assert.AreEqual('Q.SQL.Add()', TRdxRecipes.TargetKey('Q.SQL.Add ()'));
+  Assert.AreEqual('Text', TRdxRecipes.TargetKey(' Text '));
+  Assert.AreEqual('Arr[]', TRdxRecipes.TargetKey('Arr[]'));
+end;
+
 procedure TTestRdxRecipes.Format_VariantAndAnsi_Blocked;
 var
   Parts : TRdxParts;
@@ -705,7 +833,7 @@ var
 begin
   Parts := [Target('Query.SQL.Text'),
             Lit('''SELECT * FROM users WHERE id = '''), Op('Id', rvUnknown)];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Query.SQL.Text', False, Parts, 2,
+  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Query.SQL.Text', False, Parts, '  ',
     Template, Reason), Reason);
   Assert.AreEqual(
     '  Query.SQL.Text := ''SELECT * FROM users WHERE id = :p1'';' + sLineBreak +
@@ -721,7 +849,7 @@ begin
   Parts := [Target('Query.SQL.Add'),
             Lit('''SELECT * FROM t WHERE a = '''), Op('A', rvUnknown),
             Lit(''' AND b = '''), Op('B', rvUnknown)];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Query.SQL.Add', True, Parts, 0,
+  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Query.SQL.Add', True, Parts, '',
     Template, Reason), Reason);
   Assert.AreEqual(
     'Query.SQL.Add(''SELECT * FROM t WHERE a = :p1 AND b = :p2'');' + sLineBreak +
@@ -739,7 +867,7 @@ begin
   Parts := [Target('Q.SQL.Text'),
             Lit('''SELECT * FROM u WHERE name='''''''), Op('Name', rvUnknown),
             Lit('''''''''')];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Q.SQL.Text', False, Parts, 0,
+  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Q.SQL.Text', False, Parts, '',
     Template, Reason), Reason);
   Assert.IsTrue(Pos('WHERE name=:p1''', Template) > 0, Template);
   Assert.IsFalse(Pos(''':p1''', Template) > 0, 'kein Parameter in Quotes');
@@ -753,7 +881,7 @@ var
 begin
   Parts := [Target('ExecuteFmt'), TRdxRecipes.MakePart(ROLE_ARGUMENT, '''x'''),
             TRdxRecipes.MakePart(ROLE_ARGUMENT, '[a]')];
-  Assert.IsFalse(TRdxRecipes.BuildSqlTemplate('ExecuteFmt', True, Parts, 0,
+  Assert.IsFalse(TRdxRecipes.BuildSqlTemplate('ExecuteFmt', True, Parts, '',
     Template, Reason));
   Assert.IsTrue(Pos('Argument', Reason) > 0, Reason);
 end;
@@ -768,11 +896,32 @@ begin
   // uebersetzte nicht - die Parameterzeilen werden Kommentar mit
   // Platzhalter, die SQL-Zeile bleibt.
   Parts := [Target('S'), Lit('''SELECT * FROM t WHERE id='''), Op('Id', rvUnknown)];
-  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('S', False, Parts, 2,
+  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('S', False, Parts, '  ',
     Template, Reason), Reason);
   Assert.AreEqual(
     '  S := ''SELECT * FROM t WHERE id=:p1'';' + sLineBreak +
     '  // <Query>.ParamByName(''p1'').Value := Id;', Template);
+end;
+
+procedure TTestRdxRecipes.SqlTemplate_TabIndent_KeepsTabs;
+var
+  Parts    : TRdxParts;
+  Template : string;
+  Reason   : string;
+begin
+  // Die Einrueckung kommt als Text: zwei Tabs bleiben zwei Tabs, auch vor
+  // den ParamByName-Zeilen (bis Minor 31 wurden es zwei Leerzeichen).
+  Parts := [Target('Q.SQL.Text'), Lit('''SELECT * FROM t WHERE id='''),
+            Op('Id', rvUnknown)];
+  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('Q.SQL.Text', False, Parts, #9#9,
+    Template, Reason), Reason);
+  Assert.AreEqual(
+    #9#9'Q.SQL.Text := ''SELECT * FROM t WHERE id=:p1'';' + sLineBreak +
+    #9#9'Q.ParamByName(''p1'').Value := Id;', Template);
+  // Gemischt bleibt gemischt; was kein Tab ist, wird ein Leerzeichen.
+  Assert.AreEqual('  '#9, TRdxRecipes.IndentTextOf('  '#9));
+  Assert.AreEqual('  '#9' ', TRdxRecipes.IndentTextOf('ab'#9'c'));
+  Assert.AreEqual('', TRdxRecipes.IndentTextOf(''));
 end;
 
 { ---- uses ---- }
@@ -796,13 +945,74 @@ end;
 
 procedure TTestRdxRecipes.UsesNameFor_FollowsFileStyle;
 begin
-  // Ohne Vorbild oder mit qualifizierten Eintraegen: qualifiziert.
+  // Ohne Vorbild oder mit einem Eintrag unter einem Delphi-Scope:
+  // qualifiziert. (Keine 'System.SysUtils'/'System.Classes' im Test - der
+  // FPC-Pruefstand schreibt diese Namen in den kopierten Quellen um.)
   Assert.AreEqual('System.Math', TRdxRecipes.UsesNameFor(nil, 'Math', 'System.Math'));
   Assert.AreEqual('System.Math',
-    TRdxRecipes.UsesNameFor(['Rdx.Fake', 'Windows'], 'Math', 'System.Math'));
+    TRdxRecipes.UsesNameFor(['Classes', 'Winapi.Windows'], 'Math', 'System.Math'));
+  Assert.AreEqual('System.Math',
+    TRdxRecipes.UsesNameFor(['vcl.forms'], 'Math', 'System.Math'),
+    'der Scope gilt ohne Beachtung der Schreibung');
   // Nur Kurznamen: der Kurzname, damit die Klausel einheitlich bleibt.
   Assert.AreEqual('Math',
     TRdxRecipes.UsesNameFor(['Classes', 'Windows'], 'Math', 'System.Math'));
+  // Ein Punkt allein ist kein Delphi-Scope (Review 2026-10-07, Minor 35):
+  // 'Generics.Collections' gibt es auch unter FPC, 'Rdx.Fake' ist eine
+  // eigene Unit. Bis dahin pinnte dieser Test hier 'System.Math'.
+  Assert.AreEqual('Math',
+    TRdxRecipes.UsesNameFor(['Classes', 'Generics.Collections'], 'Math', 'System.Math'));
+  Assert.AreEqual('Math',
+    TRdxRecipes.UsesNameFor(['Rdx.Fake', 'Windows'], 'Math', 'System.Math'));
+  Assert.IsTrue(TRdxRecipes.IsRtlScopedName('FMX.Types'));
+  Assert.IsTrue(TRdxRecipes.IsRtlScopedName('Data.DB'));
+  Assert.IsFalse(TRdxRecipes.IsRtlScopedName('Generics.Collections'));
+  Assert.IsFalse(TRdxRecipes.IsRtlScopedName('MyLib.Utils'));
+  Assert.IsFalse(TRdxRecipes.IsRtlScopedName('Windows'), 'kein Punkt');
+  Assert.IsFalse(TRdxRecipes.IsRtlScopedName('.System'), 'leeres erstes Segment');
+end;
+
+procedure TTestRdxRecipes.LineLooksFpcAware_Tells;
+begin
+  Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('{$IFDEF FPC}{$mode delphi}{$ENDIF}'));
+  Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('{$IFNDEF FPC}'));
+  Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('  {$IF DEFINED(FPC)}'));
+  Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('{$MODE ObjFPC}{$H+}'));
+  Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('(*$IFDEF FPC*)'));
+  Assert.IsTrue(TRdxRecipes.LineLooksFpcAware('{$ifdef'#9'fpc}'), 'Tab statt Leerzeichen');
+  Assert.IsFalse(TRdxRecipes.LineLooksFpcAware('unit FpcTools;'), 'nur Direktiven zaehlen');
+  Assert.IsFalse(TRdxRecipes.LineLooksFpcAware('{$IFDEF MSWINDOWS}'));
+  Assert.IsFalse(TRdxRecipes.LineLooksFpcAware('{$R *.res}'));
+  Assert.IsFalse(TRdxRecipes.LineLooksFpcAware(''));
+end;
+
+procedure TTestRdxRecipes.UsesTail_PathCommentSemicolon;
+begin
+  // Das ';' folgt direkt: hinter dem Namen anhaengen.
+  Assert.AreEqual<Integer>(0, TRdxRecipes.UsesTailLength(';'));
+  Assert.AreEqual<Integer>(0, TRdxRecipes.UsesTailLength('  ;  // Rest'));
+  // 'in'-Pfad (.dpr) und Formular-Kommentar gehoeren zum Eintrag - das
+  // Anhaengen kommt hinter sie, die Liste bleibt sortiert (Minor 42).
+  Assert.AreEqual<Integer>(Length(' in ''Forms.pas'''),
+    TRdxRecipes.UsesTailLength(' in ''Forms.pas'';'));
+  Assert.AreEqual<Integer>(Length(' in ''Main.pas'' {MainForm}'),
+    TRdxRecipes.UsesTailLength(' in ''Main.pas'' {MainForm};'));
+  Assert.AreEqual<Integer>(Length(' IN ''it''''s.pas'''),
+    TRdxRecipes.UsesTailLength(' IN ''it''''s.pas'' ;'), 'Quote im Pfad, Gross-/Kleinschreibung');
+  Assert.AreEqual<Integer>(Length(' {x} (* y *)'),
+    TRdxRecipes.UsesTailLength(' {x} (* y *);'));
+  Assert.AreEqual<Integer>(Length(' (**)'), TRdxRecipes.UsesTailLength(' (**);'));
+  // Sonst nicht anhaengen (-1) - vor dem letzten Eintrag einfuegen.
+  Assert.AreEqual<Integer>(-1, TRdxRecipes.UsesTailLength(' // Formulare'), 'Zeilenkommentar');
+  Assert.AreEqual<Integer>(-1, TRdxRecipes.UsesTailLength(' in ''a.pas'''), 'kein ; auf der Zeile');
+  Assert.AreEqual<Integer>(-1, TRdxRecipes.UsesTailLength(' {$IFDEF X};'), 'Direktive');
+  Assert.AreEqual<Integer>(-1, TRdxRecipes.UsesTailLength(' (*$X*);'), 'Direktive (*$');
+  Assert.AreEqual<Integer>(-1, TRdxRecipes.UsesTailLength(' {offen'), 'Kommentar offen');
+  Assert.AreEqual<Integer>(-1, TRdxRecipes.UsesTailLength(' (*);'), '(*) oeffnet nur');
+  Assert.AreEqual<Integer>(-1, TRdxRecipes.UsesTailLength(', B;'), 'noch ein Eintrag');
+  Assert.AreEqual<Integer>(-1, TRdxRecipes.UsesTailLength(' in x;'), 'Pfad ohne Literal');
+  Assert.AreEqual<Integer>(-1, TRdxRecipes.UsesTailLength(' inherited;'), 'kein Wort in');
+  Assert.AreEqual<Integer>(-1, TRdxRecipes.UsesTailLength(''), 'Zeilenende');
 end;
 
 procedure TTestRdxRecipes.IsSortedUses_CompareText;
@@ -940,6 +1150,94 @@ begin
     Assert.IsTrue(T.Resolve('ShareContract', fwVcl, Q, Why), Why);
     Assert.AreEqual('System.Win.ShareContract', Q);
   finally
+    T.Free;
+  end;
+end;
+
+// data\unitscopes.txt des Moduls, von der Exe und vom Arbeitsverzeichnis
+// aus aufwaerts gesucht: reDelphix.Test laeuft unter Output\..., der
+// FPC-Pruefstand in reDelphix\tools\fpc-pruefstand. '' = nicht gefunden.
+function FindScopeFile: string;
+const
+  MAX_UP = 6;
+var
+  Starts : array[0..1] of string;
+  Dir    : string;
+  s, k   : Integer;
+begin
+  Starts[0] := ExtractFileDir(ParamStr(0));
+  Starts[1] := GetCurrentDir;
+  for s := Low(Starts) to High(Starts) do
+  begin
+    Dir := Starts[s];
+    for k := 0 to MAX_UP do
+    begin
+      Result := IncludeTrailingPathDelimiter(Dir) + 'reDelphix' + PathDelim
+        + 'data' + PathDelim + SCOPE_FILE_NAME;
+      if FileExists(Result) then Exit;
+      Result := IncludeTrailingPathDelimiter(Dir) + 'data' + PathDelim
+        + SCOPE_FILE_NAME;
+      if FileExists(Result) then Exit;
+      Dir := ExtractFileDir(Dir);
+    end;
+  end;
+  Result := '';
+end;
+
+// Der erste Kandidat, der mit einem Praefix in der Schreibung der
+// Installationsdateien beginnt statt in der von DCC_Namespace (Gross/Klein
+// zaehlt); '' wenn keiner.
+function FirstFileSpelling(const ACands: TArray<string>): string;
+const
+  BAD: array[0..2] of string = ('WinAPI.', 'VCL.', 'DataSnap.');
+var
+  i, k : Integer;
+begin
+  Result := '';
+  for k := 0 to High(ACands) do
+    for i := Low(BAD) to High(BAD) do
+      if Copy(ACands[k], 1, Length(BAD[i])) = BAD[i] then
+        Exit(ACands[k]);
+end;
+
+procedure TTestRdxRecipes.Scope_RealTable_PrefixSpelling;
+var
+  T      : TRdxScopeTable;
+  SL     : TStringList;
+  Path   : string;
+  Q, Why : string;
+  Hit    : string;
+  i      : Integer;
+  P, Bad : Integer;
+  First  : string;
+begin
+  // Die eingecheckte Tabelle (Review 2026-10-07, Nit 19): die Praefixe
+  // stehen so da, wie DCC_Namespace sie schreibt - Winapi, Vcl, Datasnap -
+  // und nicht wie manche Dateinamen der Installation (WinAPI.Foundation.pas).
+  // Der Name landet woertlich in der uses-Klausel des Benutzers.
+  Path := FindScopeFile;
+  Assert.IsTrue(Path <> '', 'data\unitscopes.txt nicht gefunden');
+  T  := TRdxScopeTable.Create;
+  SL := TStringList.Create;
+  try
+    Assert.IsTrue(T.LoadFromFile(Path), Path);
+    Assert.IsTrue(T.Resolve('Foundation', fwVcl, Q, Why), Why);
+    Assert.AreEqual('Winapi.Foundation', Q);
+    SL.LoadFromFile(Path);
+    Bad   := 0;
+    First := '';
+    for i := 0 to SL.Count - 1 do
+    begin
+      P := Pos('=', SL[i]);
+      if (P <= 1) or (Copy(TrimLeft(SL[i]), 1, 1) = '#') then Continue;
+      Hit := FirstFileSpelling(T.Candidates(Copy(SL[i], 1, P - 1)));
+      if Hit = '' then Continue;
+      Inc(Bad);
+      if First = '' then First := Hit;
+    end;
+    Assert.AreEqual<Integer>(0, Bad, 'Praefix in Datei-Schreibung, zuerst: ' + First);
+  finally
+    SL.Free;
     T.Free;
   end;
 end;

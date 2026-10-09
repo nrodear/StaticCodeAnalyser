@@ -51,6 +51,12 @@ type
     // Deklarierter Typ des KOPF-Bezeichners eines Member-/Index-Terms
     // ('V.Name', 'V[0]' bei V: Variant) - Variant-Anzeichen (AH22).
     HeadResolved : string;
+    // Der Term steht in einem with-Block (TSourcePlaces.InWithBlock): ein
+    // Name kann dort an ein Member des with-Ausdrucks binden. Namensregeln
+    // (RTL-Funktion, -Konstante, Typ-Alias) beweisen dann nichts; was
+    // sperrt, sperrt weiter (Review reDelphiX 2026-10-07, strittiger
+    // Minor 1).
+    InWith : Boolean;
   end;
   TRdxParts = TArray<TRdxPart>;
 
@@ -164,6 +170,13 @@ type
     //     ein #0 ginge verloren, die Verkettung behaelt ihn (Minor 10).
     //     Bekannte Grenze: ein Char UNBEKANNTEN Typs ('S[i]', 'Obj.Ch')
     //     bleibt ohne Cast.
+    //   * Im with-Block (TRdxPart.InWith) beweist kein Name etwas: RTL-
+    //     Funktion, -Konstante und Typ-Alias zaehlen dort nur noch als
+    //     Kompilat-Urteil (strittiger Minor 1). IntToStr(x) wird nur %d/%u,
+    //     wenn der Core den Aufruf als RTL bewiesen hat (ValueType
+    //     rvString): eine gleichnamige Funktion der Unit nimmt der Core
+    //     zurueck (rvUnknown), dann bleibt IntToStr(x) stehen (strittiger
+    //     Minor 3).
 
     // True, wenn der Text die Form eines Operanden hat: Bezeichner (oder
     // eine Klammergruppe mit folgendem '.', '[' oder '^', z. B.
@@ -207,9 +220,36 @@ type
     // kann anders formatieren als IntToStr (AH22).
     class function IntegerArgumentOf(const AText: string): string; static;
     // IntToStr(x) mit x = Bezeichner bekannten Ganzzahltyps
-    // (APart.ArgResolved): dann Argument x und Spezifikator %d/%u.
+    // (APart.ArgResolved): dann Argument x und Spezifikator %d/%u. Nur,
+    // wenn der Core den Aufruf als RTL bewiesen hat (ValueType rvString)
+    // und der Term nicht in einem with-Block steht.
     class function NumericArgument(const APart: TRdxPart;
       out AArgument, ASpec: string): Boolean; static;
+
+    // Zahl der '+' auf oberster Klammerebene ausserhalb von Strings - die
+    // Regel von TConcatToFormatDetector.ScanConcat (SCA044; dort privat),
+    // angewandt auf den abgeflachten Ausdruck eines Knotens
+    // (TNodeRef.TypeRef). Die vom Quelltext-Zerleger unabhaengige
+    // Gegenprobe fuer TSourcePlaces.ChainOf (Review reDelphiX 2026-10-07,
+    // strittiger Minor 2). -1 bei leerem Text.
+    class function TopLevelPlusCount(const AExpr: string): Integer; static;
+
+    // ---- Fund-Abgleich (Review reDelphiX 2026-10-07, Minor 20) ----------
+    // Der Editor-Puffer kann juenger sein als die Fundliste: nach dem
+    // Einfuegen von Zeilen steht auf der Fundzeile eine ANDERE Anweisung.
+    // Die Meldung nennt das Ziel - damit laesst sich das pruefen.
+
+    // Ziel und '+'-Zahl aus der Meldung von SCA044 ('Concat (3 x ''+'') ->
+    // Format(...) Ziel', uConcatToFormat). False (Ziel '', Zahl -1), wenn
+    // die Meldung nicht diese Form hat.
+    class function ConcatFindingTarget(const AMessage: string;
+      out ATarget: string; out APlusCount: Integer): Boolean; static;
+    // Ziel aus der Meldung von SCA003 ('Ziel  [Fix ...]', ein Aufruf als
+    // 'Kopf()'; uSQLInjection). '' ohne diese Form.
+    class function SqlFindingTarget(const AMessage: string): string; static;
+    // Vergleichsform eines Knotennamens: getrimmt, ab der ersten '(' nur
+    // noch '()' - wie SCA003 einen Aufruf meldet ('Q.SQL.Add()').
+    class function TargetKey(const AName: string): string; static;
 
     // Das Query-Objekt eines SQL-Ziels: 'Query.SQL.Text' -> 'Query',
     // 'FDQuery1.SQL.Add' -> 'FDQuery1', 'Cmd.CommandText' -> 'Cmd',
@@ -224,14 +264,19 @@ type
 
     // Rezept 5.2 - parametrisierte Vorlage (nie geschrieben, nur Text).
     // AIsCall: das Ziel ist ein Aufrufkopf (Q.SQL.Add) statt einer
-    // Zuweisung. AIndent: fuehrende Leerzeichen je Zeile. Ein Ziel ohne
+    // Zuweisung. AIndentText: Einrueckung jeder Zeile, wie sie vor der
+    // Anweisung steht - Tabs bleiben Tabs (Review 2026-10-07, Minor 31;
+    // IndentTextOf). Ein Ziel ohne
     // Query-Objekt ist ein String-Puffer ('S := ''SELECT ..'' + Id' -
     // SCA003 meldet auch den): dann stehen die ParamByName-Zeilen als
     // Kommentar mit dem Platzhalter '<Query>' da, 'S.ParamByName'
     // uebersetzte nicht (Review 2026-10-07, Minor 24).
     class function BuildSqlTemplate(const ATarget: string; AIsCall: Boolean;
-      const AParts: TRdxParts; AIndent: Integer;
+      const AParts: TRdxParts; const AIndentText: string;
       out ATemplate, AReason: string): Boolean; static;
+    // Einrueckung aus dem Zeilenanfang vor einer Anweisung: Tabs bleiben
+    // Tabs, jedes andere Zeichen wird ein Leerzeichen.
+    class function IndentTextOf(const ALinePrefix: string): string; static;
 
     // Rahmenwerk einer Datei aus ihren uses-Eintraegen (qualifizierte
     // Namen 'Vcl.*' / 'FMX.*').
@@ -245,11 +290,36 @@ type
     // ---- uses-Klausel ergaenzen (AH19: Format() braucht System.SysUtils) --
 
     // Der Name, unter dem eine RTL-Unit in DIESE Datei passt: der
-    // qualifizierte, wenn die Datei qualifizierte Namen benutzt oder noch
-    // keinen uses-Eintrag hat; sonst der Kurzname (eine Datei, die
-    // 'Classes, Windows' schreibt, bekommt 'SysUtils').
+    // qualifizierte, wenn die Datei Delphi-Unit-Scopes schreibt (ein
+    // Eintrag mit RTL-Scope, IsRtlScopedName) oder noch keinen uses-
+    // Eintrag hat; sonst der Kurzname (eine Datei, die 'Classes, Windows'
+    // oder 'Classes, Generics.Collections' schreibt, bekommt 'SysUtils' -
+    // ein Punkt allein ist kein Scope; Review 2026-10-07, Minor 35). Eine
+    // Datei mit FPC-Weiche (LineLooksFpcAware) bekommt immer den
+    // Kurznamen - das entscheidet der Aufrufer, er kennt die Zeilen.
     class function UsesNameFor(const AUnitNames: TArray<string>;
       const AShortName, AQualifiedName: string): string; static;
+    // True fuer einen qualifizierten Namen unter einem Delphi-Unit-Scope
+    // (System., Winapi., Vcl., FMX., Data., ...). 'Generics.Collections'
+    // (gibt es auch unter FPC) und 'MyLib.Utils' sind keiner.
+    class function IsRtlScopedName(const AName: string): Boolean; static;
+    // True, wenn die Zeile eine FPC-Weiche oder einen FPC-Modus traegt
+    // ('{$IFDEF FPC}', '{$IFNDEF FPC}', '{$IF DEFINED(FPC)}', '{$mode ..}',
+    // auch in der Form '(*$..*)'). FPC 3.2 kennt keine Unit-Scopes - eine
+    // solche Datei bekommt 'SysUtils', nie 'System.SysUtils'. Ein Treffer
+    // in einem Kommentar macht nur vorsichtig, nie falsch: Delphi loest
+    // den Kurznamen ueber die Vorgabe-Scopes ebenso auf.
+    class function LineLooksFpcAware(const ALine: string): Boolean; static;
+    // Nachlauf hinter dem LETZTEN Eintrag einer uses-Klausel: ARest ist
+    // der Zeilenrest direkt hinter dessen Namen. Liefert die Zahl der
+    // Zeichen, die zum Eintrag gehoeren - ein 'in'-Pfad ('in ''x.pas''')
+    // und Block-Kommentare ohne '$' ('{Form1}' der .dpr) -, wenn danach
+    // (hinter Leerraum) das ';' auf DERSELBEN Zeile folgt; 0 = das ';'
+    // folgt direkt. Dahinter darf ', Name' angehaengt werden. -1 bei allem
+    // anderen ('//'-Kommentar, Direktive, kein ';' auf der Zeile, ein
+    // weiterer Eintrag) - dann bleibt nur, VOR dem letzten einzufuegen
+    // (Review 2026-10-07, Minor 42 / strittiger Nit 5).
+    class function UsesTailLength(const ARest: string): Integer; static;
     // True, wenn die Namen case-insensitiv aufsteigend sortiert sind -
     // dasselbe Kriterium wie SCA142 UnsortedUses (CompareText).
     class function IsSortedUses(const AUnitNames: TArray<string>): Boolean;
@@ -329,6 +399,7 @@ begin
   Result.Resolved     := AResolved;
   Result.ArgResolved  := AArgResolved;
   Result.HeadResolved := '';
+  Result.InWith       := False;
 end;
 
 class function TRdxRecipes.DecodeLiteral(const ASource: string;
@@ -941,7 +1012,8 @@ end;
 // Urteil aus dem deklarierten Typ (Resolved), dem Typ des Kopf-
 // Bezeichners (HeadResolved) und der Core-Rolle (ValueType), in dieser
 // Reihenfolge; False, wenn alle drei schweigen. Ein leeres Resolved steht
-// in keiner Liste und urteilt damit nie.
+// in keiner Liste und urteilt damit nie. Im with-Block (InWith) beweist
+// ein Typ-Alias nichts - der Name kann ein Member sein.
 function DeclaredVerdictOf(const APart: TRdxPart;
   out AVerdict: TRdxOperandVerdict): Boolean;
 var
@@ -954,7 +1026,7 @@ begin
     AVerdict := ovAnsi
   else if (R = 'variant') or (R = 'olevariant') then
     AVerdict := ovVariantRisk
-  else if InList(R, STRING_ALIAS_TYPES) then
+  else if InList(R, STRING_ALIAS_TYPES) and not APart.InWith then
     AVerdict := ovString
   // 'V.Name', 'V[0]' mit V: Variant - spaet gebunden, der Wert ist Variant.
   else if (APart.HeadResolved = 'variant')
@@ -996,7 +1068,10 @@ begin
   if APart.Role = ROLE_LITERAL then Exit(ovString);
   if DeclaredVerdictOf(APart, Result) then Exit;
   if IsKnownAnsiStringFunc(Text) then Exit(ovAnsi);
-  if IsKnownStringConst(Text) or IsKnownStringFunc(Text) then Exit(ovString);
+  // Namensregeln nur ausserhalb eines with-Blocks (s. TRdxPart.InWith).
+  if not APart.InWith
+     and (IsKnownStringConst(Text) or IsKnownStringFunc(Text)) then
+    Exit(ovString);
   if HasVariantTell(Text) then Exit(ovVariantRisk);
   if CallHeadVerdictOf(CallHeadOf(Text), Result) then Exit;
   if not IsOperandShape(Text) then Exit(ovNoOperand);
@@ -1202,12 +1277,107 @@ begin
   Result := False;
   AArgument := '';
   ASpec := '';
-  if (APart.Role <> ROLE_OPERAND) or (APart.ArgResolved = '') then Exit;
+  // rvString = der Core hat 'IntToStr' als RTL bewiesen; eine gleichnamige
+  // Funktion der Unit oder ein with-Block nimmt das zurueck - dann formatiert
+  // vielleicht eine andere Routine, %d waere geraten (strittiger Minor 3).
+  if (APart.Role <> ROLE_OPERAND) or (APart.ValueType <> rvString)
+     or APart.InWith or (APart.ArgResolved = '') then Exit;
   ASpec := IntegerSpec(APart.ArgResolved);
   if ASpec = '' then Exit;
   AArgument := IntegerArgumentOf(APart.Text);
   Result := AArgument <> '';
   if not Result then ASpec := '';
+end;
+
+// Ein Zeichen AUSSERHALB eines Strings fuer TopLevelPlusCount: Klammer-
+// tiefe ('(' und '[', nie unter 0) und '+' auf Tiefe 0.
+procedure StepPlusCount(C: Char; var ADepth, ACount: Integer);
+begin
+  if (C = '(') or (C = '[') then
+    Inc(ADepth)
+  else if ((C = ')') or (C = ']')) and (ADepth > 0) then
+    Dec(ADepth)
+  else if (C = '+') and (ADepth = 0) then
+    Inc(ACount);
+end;
+
+class function TRdxRecipes.TopLevelPlusCount(const AExpr: string): Integer;
+var
+  i, n  : Integer;
+  Depth : Integer;
+  InStr : Boolean;
+  C     : Char;
+begin
+  if Trim(AExpr) = '' then Exit(-1);
+  // Zeichen fuer Zeichen wie ScanConcat: '' im String ist ein Quote,
+  // gezaehlt wird nur ausserhalb von Strings.
+  Result := 0;
+  Depth  := 0;
+  InStr  := False;
+  n := Length(AExpr);
+  i := 1;
+  while i <= n do
+  begin
+    C := AExpr[i];
+    if (C = '''') and InStr and (i < n) and (AExpr[i + 1] = '''') then
+      Inc(i)                  // '' im String: beide Quotes ueberspringen
+    else if C = '''' then
+      InStr := not InStr
+    else if not InStr then
+      StepPlusCount(C, Depth, Result);
+    Inc(i);
+  end;
+end;
+
+const
+  // Meldung von SCA044 (uConcatToFormat, Report):
+  // 'Concat (%d x ''+'') -> Format(...) %s'.
+  CONCAT_MSG_HEAD = 'Concat (';
+  CONCAT_MSG_MID  = ' x ''+'') -> Format(...) ';
+  // Meldung von SCA003 (uSQLInjection, Report): Ziel, zwei Leerzeichen,
+  // dann die Schaetzung in eckigen Klammern.
+  SQL_MSG_ESTIMATE = '  [';
+
+class function TRdxRecipes.ConcatFindingTarget(const AMessage: string;
+  out ATarget: string; out APlusCount: Integer): Boolean;
+var
+  P : Integer;
+begin
+  Result     := False;
+  ATarget    := '';
+  APlusCount := -1;
+  if Copy(AMessage, 1, Length(CONCAT_MSG_HEAD)) <> CONCAT_MSG_HEAD then Exit;
+  P := Pos(CONCAT_MSG_MID, AMessage);
+  if P = 0 then Exit;
+  APlusCount := StrToIntDef(Copy(AMessage, Length(CONCAT_MSG_HEAD) + 1,
+    P - Length(CONCAT_MSG_HEAD) - 1), -1);
+  ATarget := Trim(Copy(AMessage, P + Length(CONCAT_MSG_MID), MaxInt));
+  Result := (APlusCount >= 0) and (ATarget <> '');
+  if not Result then
+  begin
+    ATarget    := '';
+    APlusCount := -1;
+  end;
+end;
+
+class function TRdxRecipes.SqlFindingTarget(const AMessage: string): string;
+var
+  P : Integer;
+begin
+  Result := '';
+  P := Pos(SQL_MSG_ESTIMATE, AMessage);
+  if P > 1 then
+    Result := Trim(Copy(AMessage, 1, P - 1));
+end;
+
+class function TRdxRecipes.TargetKey(const AName: string): string;
+var
+  P : Integer;
+begin
+  Result := Trim(AName);
+  P := Pos('(', Result);
+  if P > 0 then
+    Result := TrimRight(Copy(Result, 1, P - 1)) + '()';
 end;
 
 // Typname eines ovAnsi-Operanden fuer Grund und AnsiChar-Ausnahme: der
@@ -1433,8 +1603,18 @@ begin
   Result := (Pos('.sql.', Low) > 0) or (Pos('.commandtext.', Low) > 0);
 end;
 
+class function TRdxRecipes.IndentTextOf(const ALinePrefix: string): string;
+var
+  i : Integer;
+begin
+  Result := ALinePrefix;
+  for i := 1 to Length(Result) do
+    if Result[i] <> #9 then
+      Result[i] := ' ';
+end;
+
 class function TRdxRecipes.BuildSqlTemplate(const ATarget: string;
-  AIsCall: Boolean; const AParts: TRdxParts; AIndent: Integer;
+  AIsCall: Boolean; const AParts: TRdxParts; const AIndentText: string;
   out ATemplate, AReason: string): Boolean;
 var
   i        : Integer;
@@ -1497,7 +1677,7 @@ begin
     Obj := QueryObjectOf(ATarget)
   else
     Obj := '// <Query>';
-  Indent := StringOfChar(' ', AIndent);
+  Indent := AIndentText;
   if AIsCall then
     Head := Trim(ATarget) + '(' + EncodeLiteral(Sql) + ');'
   else
@@ -1542,6 +1722,21 @@ begin
       Exit(True);
 end;
 
+const
+  // Erste Segmente der Delphi-Unit-Scopes (DCC_Namespace-Vorgaben und
+  // Embarcadero-Bibliotheken). Nur ein Eintrag darunter zeigt, dass eine
+  // Datei qualifiziert schreibt (Review 2026-10-07, Minor 35).
+  RTL_SCOPE_PREFIXES: array[0..16] of string = (
+    'system', 'winapi', 'vcl', 'fmx', 'data', 'xml', 'soap', 'web',
+    'datasnap', 'rest', 'posix', 'macapi', 'androidapi', 'iosapi',
+    'firedac', 'ibx', 'bde');
+  // Spuren einer FPC-Weiche, ohne Leerraum und klein (LineLooksFpcAware).
+  FPC_TELLS: array[0..4] of string = (
+    '{$mode', '(*$mode', '$ifdeffpc', '$ifndeffpc', 'defined(fpc');
+  USES_IN_WORD = 'in';
+  PAREN_OPEN   = '(*';
+  PAREN_CLOSE  = '*)';
+
 class function TRdxRecipes.UsesNameFor(const AUnitNames: TArray<string>;
   const AShortName, AQualifiedName: string): string;
 var
@@ -1549,9 +1744,121 @@ var
 begin
   if Length(AUnitNames) = 0 then Exit(AQualifiedName);
   for i := 0 to High(AUnitNames) do
-    if Pos('.', AUnitNames[i]) > 0 then
+    if IsRtlScopedName(AUnitNames[i]) then
       Exit(AQualifiedName);
   Result := AShortName;
+end;
+
+class function TRdxRecipes.IsRtlScopedName(const AName: string): Boolean;
+var
+  P : Integer;
+begin
+  P := Pos('.', AName);
+  Result := (P > 1)
+    and InList(LowerCase(Copy(AName, 1, P - 1)), RTL_SCOPE_PREFIXES);
+end;
+
+class function TRdxRecipes.LineLooksFpcAware(const ALine: string): Boolean;
+var
+  S : string;
+  i : Integer;
+begin
+  Result := False;
+  if Pos('$', ALine) = 0 then Exit;   // jede Spur ist eine Direktive
+  S := LowerCase(StringReplace(StringReplace(ALine, ' ', '', [rfReplaceAll]),
+    #9, '', [rfReplaceAll]));
+  for i := Low(FPC_TELLS) to High(FPC_TELLS) do
+    if Pos(FPC_TELLS[i], S) > 0 then
+      Exit(True);
+end;
+
+// Zeichen an AIndex, #0 ausserhalb von S.
+function CharAt(const S: string; AIndex: Integer): Char;
+begin
+  if (AIndex >= 1) and (AIndex <= Length(S)) then
+    Result := S[AIndex]
+  else
+    Result := #0;
+end;
+
+// Erste Stelle ab AFrom, die kein Leerraum ist (Length + 1 am Ende).
+function SkipBlanksFrom(const S: string; AFrom: Integer): Integer;
+begin
+  Result := AFrom;
+  while (Result <= Length(S)) and (S[Result] <= ' ') do
+    Inc(Result);
+end;
+
+// 'in' + Leerraum + String-Literal ab AFrom (der Pfad eines uses-
+// Eintrags): Index des schliessenden Quotes. 0 = dort steht kein 'in';
+// -1 = 'in' ohne auf dieser Zeile geschlossenes Literal.
+function InPathEnd(const S: string; AFrom: Integer): Integer;
+var
+  i : Integer;
+begin
+  Result := 0;
+  if not SameText(Copy(S, AFrom, Length(USES_IN_WORD)), USES_IN_WORD)
+     or IsIdentCh(CharAt(S, AFrom + Length(USES_IN_WORD))) then Exit;
+  Result := -1;
+  i := SkipBlanksFrom(S, AFrom + Length(USES_IN_WORD));
+  if CharAt(S, i) <> '''' then Exit;
+  Inc(i);
+  while i <= Length(S) do
+  begin
+    if (S[i] = '''') and (CharAt(S, i + 1) = '''') then
+      Inc(i)                 // '' im Pfad
+    else if S[i] = '''' then
+      Exit(i);
+    Inc(i);
+  end;
+end;
+
+// Block-Kommentar ab AFrom ('{..}' oder '(*..*)', keine Direktive): Index
+// seines letzten Zeichens. 0 = dort beginnt keiner; -1 = Direktive oder
+// nicht auf dieser Zeile geschlossen.
+function BlockCommentEnd(const S: string; AFrom: Integer): Integer;
+var
+  P : Integer;
+begin
+  if CharAt(S, AFrom) = '{' then
+  begin
+    if CharAt(S, AFrom + 1) = '$' then Exit(-1);
+    P := Pos('}', Copy(S, AFrom + 1, MaxInt));
+    if P = 0 then Exit(-1);
+    Exit(AFrom + P);
+  end;
+  if Copy(S, AFrom, Length(PAREN_OPEN)) <> PAREN_OPEN then Exit(0);
+  if CharAt(S, AFrom + Length(PAREN_OPEN)) = '$' then Exit(-1);
+  P := Pos(PAREN_CLOSE, Copy(S, AFrom + Length(PAREN_OPEN), MaxInt));
+  if P = 0 then Exit(-1);
+  Result := AFrom + P + Length(PAREN_OPEN);   // die ')' von '*)'
+end;
+
+class function TRdxRecipes.UsesTailLength(const ARest: string): Integer;
+var
+  i    : Integer;
+  Last : Integer;
+  Stop : Integer;
+begin
+  Result := -1;
+  Last := 0;
+  i := SkipBlanksFrom(ARest, 1);
+  Stop := InPathEnd(ARest, i);
+  if Stop < 0 then Exit;
+  if Stop > 0 then
+  begin
+    Last := Stop;
+    i := SkipBlanksFrom(ARest, Stop + 1);
+  end;
+  // Danach nur Block-Kommentare bis zum ';'.
+  while i <= Length(ARest) do
+  begin
+    if ARest[i] = ';' then Exit(Last);
+    Stop := BlockCommentEnd(ARest, i);
+    if Stop <= 0 then Exit;
+    Last := Stop;
+    i := SkipBlanksFrom(ARest, Stop + 1);
+  end;
 end;
 
 class function TRdxRecipes.IsSortedUses(
