@@ -1430,15 +1430,23 @@ var
   DirCache   : TDictionary<string, TSourceDialect>;
   PartDelphi : TStringList;
   PartFpc    : TStringList;
+  Configs    : TStringList;
   Datei      : string;
 begin
   AltDialekt := TStaticFiles.ScanDialect;
   EnumErr    := '';
+  // SCA201: Konfigurationsdateien aus demselben Lauf. Im Mischbaum gehen
+  // sie in den delphi-Teillauf (Req.Files, AnalyzeLeaksFromList trennt sie
+  // heraus) und ans Ende von AlleDateien (Merge-Reihenfolge); der fpc-
+  // Teillauf bekommt keine - sonst gaebe es jeden Fund zweimal.
+  Configs := TStringList.Create;
+  try
   // Obermengen-Endungen: unter dlFpc sammelt IsUnitLikeFile
   // .pas UND .pp/.lpr - die Partition entscheidet je Datei.
   TStaticFiles.ScanDialect := dlFpc;
   try
-    AlleDateien := TStaticFiles.TryGetAllPasFiles(Args.Path, EnumErr);
+    AlleDateien := TStaticFiles.TryGetAllPasFiles(Args.Path, EnumErr, nil,
+      nil, Configs);
   finally
     TStaticFiles.ScanDialect := AltDialekt;
   end;
@@ -1468,6 +1476,8 @@ begin
         'Hinweis: --dialect=auto V2 - Mischbaum: %d Dateien ' +
         'delphi, %d fpc (Doppellauf).',
         [PartDelphi.Count, PartFpc.Count]));
+      PartDelphi.AddStrings(Configs);
+      AlleDateien.AddStrings(Configs);
       Req.Scope     := ssFileList;
       Req.Files     := PartDelphi.ToStringArray;
       Req.Dialect   := dlDelphi;
@@ -1486,6 +1496,9 @@ begin
     PartDelphi.Free;
     PartFpc.Free;
     DirCache.Free;
+  end;
+  finally
+    Configs.Free;
   end;
 end;
 
@@ -2210,8 +2223,9 @@ begin
             end;
           end;
           // Sicherheitsnetz: Funde ausserhalb der Enumerationsliste
-          // (darf es bei ssFileList nicht geben) haengen hinten an,
-          // statt zu leaken oder still zu verschwinden.
+          // (darf es bei ssFileList nicht geben - die Konfigurations-
+          // dateien von SCA201 stehen am Ende von AutoAlleDateien) haengen
+          // hinten an, statt zu leaken oder still zu verschwinden.
           for var Paar in NachDatei do
             for var Fnd in Paar.Value do
               Gemerged.Add(Fnd);

@@ -45,11 +45,16 @@ type
 
   private
     class procedure ParseFiles(FileList: TStringList; var Results: TStringList);
+    // AConfigFiles (optional, SCA201): Konfigurationsdateien fuer den
+    // Konfigurations-Durchlauf nach der Hauptschleife. Sie stehen NIE in
+    // FileList/IndexFileList (die Pascal-Pipeline und die Indizes laesen
+    // sie als Pascal). nil = unveraendertes Verhalten.
     class procedure ParseLeaks(FileList: TStringList;
       Results: TObjectList<TLeakFinding>;
       AProgress: TProc<Integer, Integer>;
       AIncludeUsesCheck: Boolean;
-      IndexFileList: TStringList = nil);
+      IndexFileList: TStringList = nil;
+      AConfigFiles: TStringList = nil);
   end;
 
 var
@@ -124,6 +129,8 @@ uses
   uNilDeref, uMissingFinally, uDivByZero, uDeadCode,
   uLongMethod, uLongParamList, uMagicNumbers, uDuplicateString,
   uHardcodedPath, uDebugOutput, uDeepNesting,
+  uHardcodedIpAddress,   // SCA200 - IP-Adressen in String-Literalen
+  uHardcodedIpInConfig,  // SCA201 - IP-Adressen in .ini (Konfigurations-Durchlauf)
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uCustomRuleDetector,
   uDfmAnalysisRunner, uDfmRepoIndex, uSymbolReferenceIndex, uTypeIndex, uAstFileCache,
@@ -683,6 +690,12 @@ begin
   AddD3('MagicNumber',     fkMagicNumber,     TMagicNumberDetector.AnalyzeUnit);
   AddD3('DuplicateString', fkDuplicateString, TDuplicateStringDetector.AnalyzeUnit);
   AddD('HardcodedPath',   fkHardcodedPath,   THardcodedPathDetector.AnalyzeUnit);
+  // SCA200 (2026-10-09): ohne Vorfilter-Token - Ziffern, '.' und ':' stehen
+  // in jeder Datei, ein Token waere keine NOTWENDIGE Bedingung (Regel bei
+  // RequiredTokensLow). SCA201 steht NICHT hier: die .ini-Dateien laufen im
+  // Konfigurations-Durchlauf von ParseLeaks (RunConfigPass).
+  AddD('HardcodedIpAddress', fkHardcodedIpAddress,
+       THardcodedIpAddressDetector.AnalyzeUnit);
   // Seit 2026-09-05 context-faehig (Scanwurzel fuers Geltungsbereich-
   // Gate) -> volle 4-Parameter-Registrierung statt AddD3-Adapter.
   AddD('DebugOutput',      fkDebugOutput,     TDebugOutputDetector.AnalyzeUnit);
@@ -763,6 +776,53 @@ begin
         Inc(CntPerFirst[FirstOrd]);
       end;
     end;
+end;
+
+// Konfigurations-Durchlauf (SCA201 HardcodedIpInConfig, Konzept_HardcodedIp
+// 5.2): die .ini-Dateien, die TStaticFiles neben den Units gesammelt hat.
+// Laeuft nach der Hauptschleife, solange der Kontext lebt; die Funde gehen
+// danach durch dieselben Post-Filter wie alle (Suppression, Evidenz,
+// PathOverrides, Konfidenz). Bewusst OHNE FillMissingMethodNames - das
+// setzte Methodennamen aus der zuletzt gescannten .pas ein. Das Gate auf
+// Profil und Mindestschwere ersetzt IsDetectorEnabled (kein gDetectors-
+// Eintrag); Fehler einer Datei kosten nur diese Datei.
+procedure RunConfigPass(AConfigFiles: TStringList;
+  Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
+var
+  EnKinds : TFindingKinds;
+  F       : string;
+  Lines   : TStringList;
+  Cached  : Boolean;
+begin
+  if (AConfigFiles = nil) or (AConfigFiles.Count = 0) then Exit;
+  EnKinds := CfgEnabledKinds(AContext);
+  if (EnKinds <> []) and not (fkHardcodedIpInConfig in EnKinds) then Exit;
+  if Ord(TRuleCatalog.GetRuleCanonical(fkHardcodedIpInConfig).DefaultSeverity)
+     > Ord(CfgMinSeverity(AContext)) then
+    Exit;
+  for F in AConfigFiles do
+  try
+    if TFile.GetSize(F) > CfgMaxFileBytes(AContext) then Continue;
+    Lines := AcquireLines(F, Cached, CtxFileTextCache(AContext));
+    if Lines = nil then Continue;
+    try
+      THardcodedIpInConfigDetector.AnalyzeFile(F, Lines, Results, AContext);
+    finally
+      ReleaseLines(Lines, Cached);
+    end;
+    // ';'/'#'-Marker dieser Datei einsammeln, solange der Text im Cache
+    // liegt (Unused-Tracking wie im Hauptlauf).
+    if Assigned(AContext) then
+      TSuppression.CollectMarkersForScan(F, AContext.SuppressionMarkers);
+  except
+    on EAbort do raise;
+    on EStackExhausted do raise;
+    // Eine unlesbare Konfigurationsdatei ist kein Scanfehler (kein
+    // fkFileReadError und damit kein Exit-Code 4).
+    on Exception do ;
+  end;
+  if Assigned(gFileTextCache) then
+    gFileTextCache.Clear;
 end;
 
 procedure FillMissingMethodNames(Root: TAstNode;
@@ -1470,7 +1530,8 @@ end;
 
 class procedure TStaticAnalyzer2.ParseLeaks(FileList: TStringList;
   Results: TObjectList<TLeakFinding>; AProgress: TProc<Integer, Integer>;
-  AIncludeUsesCheck: Boolean; IndexFileList: TStringList);
+  AIncludeUsesCheck: Boolean; IndexFileList: TStringList;
+  AConfigFiles: TStringList);
 // MAX_FILE_BYTES kommt aus uSCAConsts.DetectorMaxFileBytes (analyser.ini ->
 // MaxFileMB * 1024 * 1024). Default 5 MB.
 
@@ -2127,6 +2188,10 @@ begin
           gFileTextCache.Clear;
       end;
     end;
+    // SCA201: Konfigurationsdateien - nach den Units, vor dem Context-
+    // Teardown, damit die Post-Filter unten auch diese Funde sehen.
+    LastPhase := 'Konfigurations-Durchlauf (SCA201)';
+    RunConfigPass(AConfigFiles, Results, Ctx);
     LastPhase := 'Main-Loop fertig, post-process';
 
     // Outer-Diagnose-Try Schliessung: bei Exception VOR re-raise die letzte
@@ -2286,7 +2351,8 @@ class function TStaticAnalyzer2.AnalyzeLeaks(const FileName: string;
   end;
 
 var
-  FileList: TStringList;
+  FileList : TStringList;
+  Configs  : TStringList;
 begin
   Result := TObjectList<TLeakFinding>.Create(True);
   if Trim(FileName) = '' then
@@ -2296,15 +2362,23 @@ begin
   end;
 
   FileList := TStringList.Create;
+  Configs  := TStringList.Create;
   try
-    FileList.Add(FileName);
+    // Eine Konfigurationsdatei (SCA201) faehrt NUR den Konfigurations-
+    // Durchlauf - als Pascal geparst ergaebe sie Lese- und Stil-Funde
+    // (IDE "aktuelle Datei" auf einem .ini-Fund).
+    if TStaticFiles.IsConfigFile(FileName) then
+      Configs.Add(FileName)
+    else
+      FileList.Add(FileName);
     try
-      ParseLeaks(FileList, Result, nil, AIncludeUsesCheck);
+      ParseLeaks(FileList, Result, nil, AIncludeUsesCheck, nil, Configs);
     except
       on E: Exception do
         AddError('Analyseabbruch: ' + DescribeException(E));
     end;
   finally
+    Configs.Free;
     FileList.Free;
   end;
 end;
@@ -2346,8 +2420,10 @@ begin
   end;
 
   // ProjectRoot leer oder ungueltig -> Fallback auf den klassischen
-  // Single-File-Pfad ohne Cross-Unit-Index.
-  if (Trim(ProjectRoot) = '') or (not DirectoryExists(ProjectRoot)) then
+  // Single-File-Pfad ohne Cross-Unit-Index. Eine Konfigurationsdatei
+  // braucht keinen Index (SCA201, s. einfache Ueberladung).
+  if (Trim(ProjectRoot) = '') or (not DirectoryExists(ProjectRoot))
+     or TStaticFiles.IsConfigFile(FileName) then
   begin
     Result.Free;
     Result := AnalyzeLeaks(FileName, AIncludeUsesCheck);
@@ -2397,6 +2473,7 @@ class function TStaticAnalyzer2.AnalyzeLeaksRecursive(const Path: string;
 
 var
   FileList : TStringList;
+  Configs  : TStringList;
   ScanErr  : string;
 begin
   Result := TObjectList<TLeakFinding>.Create(True);
@@ -2418,6 +2495,9 @@ begin
   // dann einen Status-Text setzen und Application.ProcessMessages /
   // Abort-Check durchfuehren. Bei nicht uebergebenem Callback passiert
   // nichts.
+  // SCA201: Konfigurationsdateien aus DEMSELBEN Verzeichnislauf, in eine
+  // eigene Liste (nie in FileList).
+  Configs := TStringList.Create;
   try
     FileList := TStaticFiles.TryGetAllPasFiles(Path, ScanErr,
       procedure(FilesFound: Integer)
@@ -2425,11 +2505,12 @@ begin
         if Assigned(AProgress) then
           AProgress(FilesFound, -1);
       end,
-      AIgnore);
+      AIgnore, Configs);
   except
     on EAbort do
     begin
       // Abbruch bereits waehrend des Verzeichnis-Scans
+      Configs.Free;
       FreeAndNil(Result);
       raise;
     end;
@@ -2442,6 +2523,7 @@ begin
       // (FileList ist hier unassigned - Wurf VOR dem Return -> KEIN FileList.Free;
       //  das folgende ParseLeaks-try/finally wird per Exit bewusst uebersprungen.)
       AddError('Verzeichnis-Scan fehlgeschlagen: ' + E.Message);
+      Configs.Free;
       Exit;
     end;
   end;
@@ -2457,7 +2539,7 @@ begin
     end;
 
     try
-      ParseLeaks(FileList, Result, AProgress, AIncludeUsesCheck);
+      ParseLeaks(FileList, Result, AProgress, AIncludeUsesCheck, nil, Configs);
     except
       on EAbort do
       begin
@@ -2472,6 +2554,7 @@ begin
     end;
   finally
     FileList.Free;
+    Configs.Free;
   end;
 end;
 
@@ -2495,8 +2578,10 @@ class function TStaticAnalyzer2.AnalyzeLeaksFromList(AFiles: TStringList;
 
 var
   Copy      : TStringList;
+  Configs   : TStringList;
   IndexList : TStringList;
   IndexErr  : string;
+  F         : string;
 begin
   Result := TObjectList<TLeakFinding>.Create(True);
   if (AFiles = nil) or (AFiles.Count = 0) then
@@ -2506,9 +2591,17 @@ begin
   end;
 
   Copy := TStringList.Create;
+  Configs := TStringList.Create;
   IndexList := nil;   // VOR dem try - das finally ruft IndexList.Free
   try
-    Copy.AddStrings(AFiles);
+    // SCA201: Konfigurationsdateien (Projekt-Scopes, CLI-Doppellauf)
+    // gehen in den Konfigurations-Durchlauf - nie in Analyse- oder
+    // Indexliste.
+    for F in AFiles do
+      if TStaticFiles.IsConfigFile(F) then
+        Configs.Add(F)
+      else
+        Copy.Add(F);
     // Optionales Index-Superset (Scan-Scope-Konzept 2026-07-20): Fehler bei
     // der Index-Sammlung sind NICHT fatal - dann faellt ParseLeaks intern
     // auf die Analyse-Liste zurueck (IndexFileList=nil).
@@ -2530,7 +2623,7 @@ begin
       end;
     end;
     try
-      ParseLeaks(Copy, Result, AProgress, AIncludeUsesCheck, IndexList);
+      ParseLeaks(Copy, Result, AProgress, AIncludeUsesCheck, IndexList, Configs);
     except
       on EAbort do
       begin
@@ -2542,6 +2635,7 @@ begin
     end;
   finally
     IndexList.Free;
+    Configs.Free;
     Copy.Free;
   end;
 end;

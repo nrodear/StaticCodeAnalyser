@@ -11,7 +11,7 @@
 const
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_DE : array[0..198] of TRuleOverlayData = (
+  RULE_OVERLAY_DE : array[0..200] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -1290,12 +1290,26 @@ const
       RuleID   : 'SCA199';
       Name     : 'ParamByName-Name passt nicht zu den SQL-Platzhaltern';
       ShortDesc: 'ParamByName(''x'') an einer Query, deren SQL kein :x hat (zur Laufzeit ''Parameter nicht gefunden''), oder ein :y im SQL, das die Routine nie zuweist, obwohl sie die anderen Parameter der Query setzt'
+    ),
+    // SCA200
+    (
+      RuleID   : 'SCA200';
+      Name     : 'IP-Adresse als String-Literal';
+      ShortDesc: 'Hartcodierte IPv4- oder IPv6-Adresse (privat, geteilt oder ' + #$F6 +
+        'ffentlich) in einem String-Literal - in die Konfiguration auslagern oder einen Hostnamen verwenden'
+    ),
+    // SCA201
+    (
+      RuleID   : 'SCA201';
+      Name     : 'IP-Adresse in einer versionierten Konfigurationsdatei';
+      ShortDesc: 'IPv4- oder IPv6-Adresse (privat, geteilt oder ' + #$F6 +
+        'ffentlich) als Wert in einer .ini-Datei des Quellbaums'
     )
   );
 
   // Index == Ord(TFindingKind), Drift-Guard im Leser wie bei
   // RULE_CATALOG_DATA (RuleID muss zur Position passen).
-  RULE_OVERLAY_FR : array[0..198] of TRuleOverlayData = (
+  RULE_OVERLAY_FR : array[0..200] of TRuleOverlayData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2678,6 +2692,21 @@ const
         ' param' + #$E8 + 'tre introuvable ' + #$BB + ' ' + #$E0 + ' l''ex' + #$E9 +
         'cution), ou un :y dans le SQL que la routine n''affecte jamais alors qu''elle renseigne les autres param' +
         #$E8 + 'tres de la requ' + #$EA + 'te'
+    ),
+    // SCA200
+    (
+      RuleID   : 'SCA200';
+      Name     : 'Adresse IP en litt' + #$E9 + 'ral de cha' + #$EE + 'ne';
+      ShortDesc: 'Adresse IPv4 ou IPv6 cod' + #$E9 + 'e en dur (priv' + #$E9 + 'e, partag' + #$E9 +
+        'e ou publique) dans un litt' + #$E9 + 'ral de cha' + #$EE + 'ne - la d' + #$E9 +
+        'placer dans la configuration ou utiliser un nom d''h' + #$F4 + 'te'
+    ),
+    // SCA201
+    (
+      RuleID   : 'SCA201';
+      Name     : 'Adresse IP dans un fichier de configuration versionn' + #$E9;
+      ShortDesc: 'Adresse IPv4 ou IPv6 (priv' + #$E9 + 'e, partag' + #$E9 +
+        'e ou publique) comme valeur dans un fichier .ini de l''arborescence des sources'
     )
   );
 

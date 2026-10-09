@@ -16,6 +16,16 @@
 // Die Suppression gilt fuer die naechste nicht-leere, nicht-Kommentar-Zeile.
 // Mehrere Kategorien koennen mit Komma oder Leerzeichen getrennt werden.
 //
+// Konfigurationsdateien (.ini, SCA201 - TStaticFiles.IsConfigFile) kennen
+// kein '//': dort ist der Marker eine GANZE Zeile mit ';' oder '#'
+//
+//   ; noinspection HardcodedIpInConfig
+//   Server=10.20.30.40
+//
+// (auch '; noinspection-file X'), und die Zielsuche ueberspringt ';'- und
+// '#'-Zeilen. Ein ';' hinter einem Wert ist Teil des Werts (System.IniFiles)
+// und nie ein Marker. Der Pascal-Pfad bleibt unveraendert.
+//
 // Erkannte Kategorien (case-insensitive): jeder Eintrag in KIND_META
 // (uSCAConsts.pas) plus 'All' / '*'. Die Liste wird ueber KindFromName-
 // Reverse-Lookup aufgeloest - Single source of truth ist KIND_META,
@@ -72,6 +82,12 @@ type
     class procedure CollectMarkersForScan(const FileName: string;
       AMarkers: TObjectDictionary<string,
         TList<TSuppressionMarker>>); static;
+
+    // Die Marker-Zeile, die ein Werkzeug ueber die Fundzeile schreibt
+    // (IDE/EXE "Unterdruecken"): '// noinspection X', in einer
+    // Konfigurationsdatei '; noinspection X'.
+    class function MarkerLineFor(const AFileName: string;
+      AKind: TFindingKind): string; static;
   private
     // Allokationsfreier case-insensitiver Substring-Check auf
     // 'noinspection' (ASCII-Folding reicht - der Tag selbst ist ASCII).
@@ -99,6 +115,15 @@ type
     class function ParseCommentText(const CommentText: string;
       out Kinds: TSuppressedKinds;
       out FileWide: Boolean): Boolean; static;
+    // Marker-Zeile eines Hosts: '//'-Kommentar (Pascal, mit Zustand) bzw.
+    // ganze ';'/'#'-Zeile (Konfigurationsdatei, AIniHost).
+    class function ParseHostMarkerLine(const Line: string; AIniHost: Boolean;
+      var State: TCommentScanState;
+      out Kinds: TSuppressedKinds;
+      out FileWide: Boolean): Boolean; static;
+    // Zaehlt die (getrimmte) Zeile bei der Zielsuche als Kommentar?
+    class function IsCommentOnlyLine(const ATrimmed: string;
+      AIniHost: Boolean): Boolean; static;
     class function KindFromName(const Name: string;
       out Kind: TFindingKind): Boolean; static;
     // AFailedFiles (optional): sammelt Marker-Host-Dateien, die trotz
@@ -290,6 +315,39 @@ begin
   Result := ParseCommentText(CommentText, Kinds, FileWide);
 end;
 
+class function TSuppression.ParseHostMarkerLine(const Line: string;
+  AIniHost: Boolean; var State: TCommentScanState;
+  out Kinds: TSuppressedKinds; out FileWide: Boolean): Boolean;
+var
+  T : string;
+begin
+  if not AIniHost then
+    Exit(ParseMarkerLine(Line, State, Kinds, FileWide));
+  Kinds := [];
+  FileWide := False;
+  T := TrimLeft(Line);
+  Result := (T <> '') and ((T[1] = ';') or (T[1] = '#'))
+    and ParseCommentText(Copy(T, 2, MaxInt), Kinds, FileWide);
+end;
+
+class function TSuppression.MarkerLineFor(const AFileName: string;
+  AKind: TFindingKind): string;
+begin
+  if TStaticFiles.IsConfigFile(AFileName) then
+    Result := '; noinspection ' + KindName(AKind)
+  else
+    Result := '// noinspection ' + KindName(AKind);
+end;
+
+class function TSuppression.IsCommentOnlyLine(const ATrimmed: string;
+  AIniHost: Boolean): Boolean;
+begin
+  if AIniHost then
+    Result := (ATrimmed <> '') and ((ATrimmed[1] = ';') or (ATrimmed[1] = '#'))
+  else
+    Result := ATrimmed.StartsWith('//');
+end;
+
 // Liefert fuer eine .dfm-Datei die zugehoerige .pas im selben Verzeichnis -
 // fuer .pas/andere Files unveraendert zurueck. DFM-Findings (Form-Layouts)
 // koennen keinen //-Kommentar-Marker im DFM tragen, akzeptieren aber den
@@ -429,10 +487,12 @@ var
   Cached    : Boolean;
   FileWide  : Boolean;
   HostFile  : string;
+  IniHost   : Boolean;
 begin
   Result := TDictionary<Integer, TSuppressedKinds>.Create;
   HostFile := ResolveMarkerHostFile(FileName);
   if not FileExists(HostFile) then Exit;
+  IniHost := TStaticFiles.IsConfigFile(HostFile);
 
   // Perf: AcquireLines nutzt gFileTextCache - zweiter Aufruf (BuildMarkers
   // im selben Scan) wird zum Cache-Hit, kein doppeltes I/O.
@@ -477,7 +537,9 @@ begin
     ScanState.InParenComment := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      if not ParseMarkerLine(Lines[i], ScanState, Kinds, FileWide) then Continue;
+      if not ParseHostMarkerLine(Lines[i], IniHost, ScanState, Kinds,
+               FileWide) then
+        Continue;
       // File-Wide-Marker: in Line 0 ablegen - RemoveSuppressedFindings
       // prueft Line 0 als generelle File-Vorgabe ZUSAETZLICH zum
       // line-spezifischen Match.
@@ -505,7 +567,7 @@ begin
         L := TrimLeft(Lines[j]);
         if L = '' then Continue;
         if NextNonEmpty < 0 then NextNonEmpty := j + 1;
-        if not L.StartsWith('//') then
+        if not IsCommentOnlyLine(L, IniHost) then
         begin
           NextCode := j + 1;
           Break;
@@ -556,11 +618,14 @@ begin
   try
     var ScanState: TCommentScanState;
     var FileWide: Boolean;
+    var IniHost := TStaticFiles.IsConfigFile(HostFile);
     ScanState.InBraceComment := False;
     ScanState.InParenComment := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      if not ParseMarkerLine(Lines[i], ScanState, Kinds, FileWide) then Continue;
+      if not ParseHostMarkerLine(Lines[i], IniHost, ScanState, Kinds,
+               FileWide) then
+        Continue;
       // File-Wide-Marker: TargetLine = 0 (Sonderwert fuer file-weit).
       // RemoveSuppressedFindings tagt sie beim File-Wide-Match als Consumed.
       if FileWide then
@@ -581,7 +646,7 @@ begin
       begin
         L := TrimLeft(Lines[j]);
         if L = '' then Continue;
-        if not L.StartsWith('//') then
+        if not IsCommentOnlyLine(L, IniHost) then
         begin
           TargetLine := j + 1;
           Break;

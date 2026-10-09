@@ -749,17 +749,27 @@ type
                                  //          Laufzeitfehler. Braucht den scan-weiten
                                  //          uInterfaceGuidIndex; die Meldung nennt die
                                  //          anderen Fundstellen mit Datei und Zeile.
-    fkParamNameMismatch          // SCA199 - ParamByName('x') ohne :x im SQL derselben
+    fkParamNameMismatch,         // SCA199 - ParamByName('x') ohne :x im SQL derselben
                                  //          Query (Laufzeitfehler "parameter not found")
                                  //          bzw. ein :y im SQL, das die Routine nie
                                  //          zuweist, obwohl sie andere Parameter der
                                  //          Query setzt. Je Routine, nur wenn das SQL
                                  //          vollstaendig aus Literalen bekannt ist
                                  //          (uParamNameScan). Anlass 2026-10-07.
+    fkHardcodedIpAddress,        // SCA200 - IPv4/IPv6-Adresse in einem Pascal-String-
+                                 //          Literal (privat, CGNAT, oeffentlich; nicht
+                                 //          Loopback/Doku/Multicast/...). Grammatik,
+                                 //          Klassen und Gates in uIpAddressScan.
+                                 //          Anlass Nico 2026-10-09.
+    fkHardcodedIpInConfig        // SCA201 - dieselbe Adresse in einer versionierten
+                                 //          Konfigurationsdatei (.ini). Laeuft NICHT ueber
+                                 //          die Detektor-Registry, sondern im Konfigu-
+                                 //          rations-Durchlauf von ParseLeaks (die .ini
+                                 //          darf nie in die Pascal-Pipeline).
   );
 
   // Set-Typ fuer Detector-Filter (Profile/EnabledKinds). Delphi-Sets
-  // tragen hoechstens 256 Elemente - aktuell sind 199 belegt (SCA199),
+  // tragen hoechstens 256 Elemente - aktuell sind 201 belegt (SCA201),
   // die Reserve ist also endlich: die Encoding-Familie allein brachte
   // 9 Kinds, die Attribut-Familie 5. Wer sich der Grenze naehert, muss
   // TFindingKinds, PFindingKinds und die Ord(K)+1-basierte SCA-ID-
@@ -1046,7 +1056,9 @@ const
     (Name: 'ManagedResultUninit';        FindingType: ftBug;          DefaultSeverity: lsWarning), // fkManagedResultUninit
     (Name: 'InterfaceWithoutGuid';       FindingType: ftCodeSmell;    DefaultSeverity: lsWarning), // fkInterfaceWithoutGuid
     (Name: 'DuplicateInterfaceGuid';     FindingType: ftBug;          DefaultSeverity: lsWarning), // fkDuplicateInterfaceGuid
-    (Name: 'ParamNameMismatch';          FindingType: ftBug;          DefaultSeverity: lsWarning)  // fkParamNameMismatch
+    (Name: 'ParamNameMismatch';          FindingType: ftBug;          DefaultSeverity: lsWarning), // fkParamNameMismatch
+    (Name: 'HardcodedIpAddress';         FindingType: ftSecurityHotspot; DefaultSeverity: lsWarning), // fkHardcodedIpAddress
+    (Name: 'HardcodedIpInConfig';        FindingType: ftSecurityHotspot; DefaultSeverity: lsHint)     // fkHardcodedIpInConfig
   );
 
 // Convenience-Wrapper - delegieren auf KIND_META.
@@ -1421,6 +1433,13 @@ begin
     // sichtbar und aus dem Error-Tier; fcHigh erst nach Korpus-Messung
     // (Drops UND Adds) wie bei SCA196.
     fkParamNameMismatch: Result := fcMedium;
+
+    // SCA200/SCA201 HardcodedIpAddress/-InConfig (neu 2026-10-09): Grammatik
+    // strikt, Gates aus der Korpusmessung (FPC-Lauf: Pascal-Produktivcode 38
+    // Funde, alle echte Adressen). fcMedium wie SCA016/SCA199 - im Default
+    // sichtbar, aus dem Error-Tier; Anhebung erst nach dem Delphi-Korpuslauf.
+    fkHardcodedIpAddress: Result := fcMedium;
+    fkHardcodedIpInConfig: Result := fcMedium;
 
     // SCA040 DfmCrossFormCoupling: nach dem Erwecken der Regel (Review-
     // HIGH 2026-08-08, war mit Binding=nil komplett tot) zeigte die

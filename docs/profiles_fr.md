@@ -1,7 +1,7 @@
 ﻿# Profils d'analyse
 
 Un **profil** est un ensemble de règles nommé. Il répond à une seule
-question : *lesquels des 198 détecteurs s'exécutent dans cette analyse ?*
+question : *lesquels des 201 détecteurs s'exécutent dans cette analyse ?*
 Tout le reste - seuil de sévérité, suppressions, référence - filtre
 ensuite. Le profil décide de ce qui est cherché au départ.
 
@@ -9,14 +9,14 @@ ensuite. Le profil décide de ce qui est cherché au départ.
 
 | Profil | Règles | À quoi il sert |
 |---|---|---|
-| `strict` | 198 | Tout. C'est de ce profil que dépend la promesse d'exhaustivité. |
-| `default` | 191 | Tout sauf les sept règles de pure convention de `style`. Ces sept-là représentent environ la moitié des remontées sur une grosse base de code - d'où leur absence du profil par défaut. |
-| `selftest-quiet` | 187 | `default` moins quelques règles de formatage. Utilisé quand ce dépôt s'analyse lui-même. |
+| `strict` | 201 | Tout. C'est de ce profil que dépend la promesse d'exhaustivité. |
+| `default` | 194 | Tout sauf les sept règles de pure convention de `style`. Ces sept-là représentent environ la moitié des remontées sur une grosse base de code - d'où leur absence du profil par défaut. |
+| `selftest-quiet` | 190 | `default` moins quelques règles de formatage. Utilisé quand ce dépôt s'analyse lui-même. |
 | `code-quality` | 26 | Maintenabilité : code mort, méthodes longues, complexité, uses inutilisés. |
-| `ide-fast` | 20 | Assez léger pour tourner sur chaque fichier ouvert dans l'IDE. Bugs et sécurité, pas de style. |
+| `ide-fast` | 21 | Assez léger pour tourner sur chaque fichier ouvert dans l'IDE. Bugs et sécurité, pas de style. |
 | `dfm-only` | 20 | Uniquement les contrôles sur les fichiers de fiche. |
-| `bugs-only` | 16 | Uniquement les défauts - ni smells, ni conventions. |
-| `security` | 7 | Uniquement vulnérabilités et points chauds. |
+| `bugs-only` | 17 | Uniquement les défauts - ni smells, ni conventions. |
+| `security` | 9 | Uniquement vulnérabilités et points chauds. |
 | `style` | 7 | Les règles de pure convention que `default` laisse de côté. |
 
 Les nombres sont mesurés sur le catalogue actuel, non estimés.
@@ -51,7 +51,7 @@ Chaque entrée est une liste de jetons, appliqués **de gauche à droite** :
 
 | Jeton | Effet |
 |---|---|
-| `*` | les 198 types de règles |
+| `*` | les 201 types de règles |
 | `Kind` | ajouter ce type |
 | `!Kind` ou `-Kind` | retirer ce type |
 

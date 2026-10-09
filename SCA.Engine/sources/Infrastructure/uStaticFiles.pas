@@ -24,11 +24,15 @@ type
     // einem klartext-Grund aufgerufen. Geht in StaticCodeAnalyser_scan.log
     // damit "warum ist datei X nicht im Scan-Output" diagnostizierbar wird,
     // ohne den Errors-Channel zu fluten (der landet im UI-Grid).
+    // AConfigs (optional, SCA201): Konfigurationsdateien (IsConfigFile)
+    // landen in DIESER zweiten Liste, nie in List. nil = byte-gleich zum
+    // Verhalten ohne Konfigurations-Durchlauf.
     class procedure ScanRec(const Path: string; List: TStringList;
       Depth: Integer; Errors: TStringList; ATick: TScanTickProc;
       AIgnore: TIgnoreList;
       var TickCounter: Integer;
-      ALogSkip: TProc<string> = nil); static;
+      ALogSkip: TProc<string> = nil;
+      AConfigs: TStringList = nil); static;
   public
     class function GetAllPasFilesRecursive(const Path: string)
       : TStringList; static;
@@ -38,10 +42,33 @@ type
     // gefundenen Eintraege aufgerufen - praktisch fuer UI-Responsivitaet bei
     // grossen Verzeichnis-Baeumen. AIgnore (optional) filtert Dateien
     // vor dem Hinzufuegen zur Ergebnisliste.
+    // AConfigFiles (optional, SCA201 HardcodedIpInConfig): sammelt im
+    // selben Verzeichnislauf die Konfigurationsdateien (IsConfigFile) -
+    // getrennt von der Pascal-Liste, die eine .ini nie sehen darf (rund
+    // 180 Detektoren und die Indizes laesen sie als Pascal). Der Aufrufer
+    // besitzt die Liste. nil = unveraendertes Verhalten.
     class function TryGetAllPasFiles(const Path: string;
       out ErrorMsg: string;
       ATick: TScanTickProc = nil;
+      AIgnore: TIgnoreList = nil;
+      AConfigFiles: TStringList = nil): TStringList; static;
+
+    // Nur die Konfigurationsdateien unter Path (Projekt-Scopes: die
+    // Projektliste nennt keine .ini). Fehler sind nicht fatal - dann
+    // eben weniger Dateien. Der Aufrufer besitzt das Ergebnis.
+    class function TryGetConfigFiles(const Path: string;
       AIgnore: TIgnoreList = nil): TStringList; static;
+
+    // Konfigurationsdatei fuer den Konfigurations-Durchlauf (SCA201,
+    // Konzept_HardcodedIp 5.2)? V1: '.ini', aber nicht 'analyser.ini' -
+    // die Einstellungen des Analysers selbst sind nicht die des Programms.
+    // Dialektunabhaengig.
+    class function IsConfigFile(const AFileName: string): Boolean; static;
+
+    // Liegt AFilePath in einem Plattform-Ausgabeordner (Win32, Win64,
+    // Linux64, OSX64, Android, iOSDevice64 ...)? Dort liegen Deploy-Kopien
+    // der Konfigurationsdateien - sie ergaeben Doppelfunde.
+    class function IsInPlatformOutputDir(const AFilePath: string): Boolean; static;
 
     class function ValidatePath(const Path: string): boolean;
 
@@ -134,7 +161,8 @@ class procedure TStaticFiles.ScanRec(const Path: string; List: TStringList;
   Depth: Integer; Errors: TStringList; ATick: TScanTickProc;
   AIgnore: TIgnoreList;
   var TickCounter: Integer;
-  ALogSkip: TProc<string> = nil);
+  ALogSkip: TProc<string> = nil;
+  AConfigs: TStringList = nil);
 
   procedure LogSkip(const S: string);
   begin
@@ -214,6 +242,26 @@ begin
               Continue;
             end;
             List.Add(FullPath);
+          end
+          // SCA201: Konfigurationsdatei in die ZWEITE Liste (nie in List).
+          // Der Pascal-Zweig oben bleibt textgleich; ohne AConfigs ist der
+          // Zweig kalt.
+          else if Assigned(AConfigs) and IsConfigFile(SearchRec.Name) then
+          begin
+            FullPath := IncludeTrailingPathDelimiter(Path) + SearchRec.Name;
+            if IsInPlatformOutputDir(FullPath) then
+            begin
+              LogSkip(Format('Konfigurationsdatei im Ausgabeordner: %s',
+                             [FullPath]));
+              Continue;
+            end;
+            if Assigned(AIgnore) and AIgnore.IsIgnored(FullPath) then
+            begin
+              LogSkip(Format('Ignoriert (Datei via ignore.txt): %s',
+                             [FullPath]));
+              Continue;
+            end;
+            AConfigs.Add(FullPath);
           end;
         end
         else
@@ -254,7 +302,7 @@ begin
             Continue;
           end;
           ScanRec(FullPath, List, Depth + 1, Errors, ATick, AIgnore,
-                  TickCounter, ALogSkip);
+                  TickCounter, ALogSkip, AConfigs);
         end;
 
         // Tick-Callback fuer UI-Responsivitaet/Cancel.
@@ -297,7 +345,8 @@ end;
 class function TStaticFiles.TryGetAllPasFiles(const Path: string;
   out ErrorMsg: string;
   ATick: TScanTickProc;
-  AIgnore: TIgnoreList): TStringList;
+  AIgnore: TIgnoreList;
+  AConfigFiles: TStringList): TStringList;
 // Neue API: gibt Fehler explizit zurueck, damit Caller informieren kann.
 // ATick wird waehrend des Scans periodisch aufgerufen - Aufrufer kann
 // dort ProcessMessages machen oder per Abort den Scan abbrechen.
@@ -374,7 +423,8 @@ begin
         begin
           if Assigned(CaptStream) then
             try CaptStream.WriteLine(S); except end;
-        end);
+        end,
+        AConfigFiles);
       Log(Format('=== Scan fertig: %d Dateien, %d Eintraege gepruft ===',
                  [Result.Count, TickCounter]));
     except
@@ -490,6 +540,54 @@ begin
     Inc(Steps);
   end;
   Result := Fallback;
+end;
+
+class function TStaticFiles.IsConfigFile(const AFileName: string): Boolean;
+var
+  Name : string;
+begin
+  Name := LowerCase(ExtractFileName(AFileName));
+  Result := Name.EndsWith('.ini') and (Name <> 'analyser.ini');
+end;
+
+class function TStaticFiles.IsInPlatformOutputDir(const AFilePath: string): Boolean;
+const
+  // Delphi-/RAD-Plattformnamen als Ausgabeordner ($(Platform)\$(Config)).
+  OUTPUT_DIRS: array[0..9] of string = ('win32', 'win64', 'win64x',
+    'linux64', 'osx64', 'osxarm64', 'android', 'android64', 'iosdevice64',
+    'iossimarm64');
+var
+  Seg : string;
+  D   : string;
+begin
+  Result := False;
+  for Seg in LowerCase(ExtractFilePath(AFilePath)).Split(['', '/']) do
+    for D in OUTPUT_DIRS do
+      if Seg = D then
+        Exit(True);
+end;
+
+class function TStaticFiles.TryGetConfigFiles(const Path: string;
+  AIgnore: TIgnoreList): TStringList;
+var
+  Units       : TStringList;
+  TickCounter : Integer;
+begin
+  Result := TStringList.Create;
+  if (Path = '') or not DirectoryExists(Path) then Exit;
+  Units := TStringList.Create;
+  TickCounter := 0;
+  try
+    try
+      ScanRec(Path, Units, 0, nil, nil, AIgnore, TickCounter, nil, Result);
+    except
+      on EAbort do raise;
+      // Nicht fatal: was bis hierher gefunden wurde, bleibt.
+      on Exception do ;
+    end;
+  finally
+    Units.Free;
+  end;
 end;
 
 class function TStaticFiles.IsUnitLikeFile(const AFileName: string): Boolean;

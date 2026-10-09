@@ -1,7 +1,7 @@
 ﻿# Scan-Profile
 
 Ein **Profil** ist eine benannte Regelmenge. Es beantwortet eine einzige
-Frage: *welche der 198 Detektoren laufen in diesem Scan?* Alles andere -
+Frage: *welche der 201 Detektoren laufen in diesem Scan?* Alles andere -
 Severity-Schwelle, Unterdrückungen, Baseline - filtert hinterher. Das
 Profil entscheidet, wonach überhaupt gesucht wird.
 
@@ -9,14 +9,14 @@ Profil entscheidet, wonach überhaupt gesucht wird.
 
 | Profil | Regeln | Wofür es da ist |
 |---|---|---|
-| `strict` | 198 | Alles. An diesem Profil hängt die Vollständigkeitszusage. |
-| `default` | 191 | Alles außer den sieben reinen Konventionsregeln aus `style`. Diese sieben machen auf einem großen Bestand rund die Hälfte aller Funde aus - deshalb stehen sie nicht im Default. |
-| `selftest-quiet` | 187 | `default` ohne ein paar Formatierungsregeln. Wird benutzt, wenn dieses Repository sich selbst scannt. |
+| `strict` | 201 | Alles. An diesem Profil hängt die Vollständigkeitszusage. |
+| `default` | 194 | Alles außer den sieben reinen Konventionsregeln aus `style`. Diese sieben machen auf einem großen Bestand rund die Hälfte aller Funde aus - deshalb stehen sie nicht im Default. |
+| `selftest-quiet` | 190 | `default` ohne ein paar Formatierungsregeln. Wird benutzt, wenn dieses Repository sich selbst scannt. |
 | `code-quality` | 26 | Wartbarkeit: toter Code, lange Methoden, Komplexität, unbenutzte Uses. |
-| `ide-fast` | 20 | Klein genug, um bei jeder geöffneten Datei in der IDE zu laufen. Bugs und Sicherheit, kein Stil. |
+| `ide-fast` | 21 | Klein genug, um bei jeder geöffneten Datei in der IDE zu laufen. Bugs und Sicherheit, kein Stil. |
 | `dfm-only` | 20 | Nur die Form-Datei-Prüfungen. |
-| `bugs-only` | 16 | Nur Defekte - keine Smells, keine Konventionen. |
-| `security` | 7 | Nur Verwundbarkeiten und Hotspots. |
+| `bugs-only` | 17 | Nur Defekte - keine Smells, keine Konventionen. |
+| `security` | 9 | Nur Verwundbarkeiten und Hotspots. |
 | `style` | 7 | Die reinen Konventionsregeln, die `default` weglässt. |
 
 Die Zahlen sind am aktuellen Katalog gemessen, nicht geschätzt.
@@ -52,7 +52,7 @@ rechts**:
 
 | Token | Wirkung |
 |---|---|
-| `*` | alle 198 Kinds |
+| `*` | alle 201 Kinds |
 | `Kind` | dieses Kind aufnehmen |
 | `!Kind` bzw. `-Kind` | dieses Kind entfernen |
 

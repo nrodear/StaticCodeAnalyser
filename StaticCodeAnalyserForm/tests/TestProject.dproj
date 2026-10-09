@@ -147,6 +147,8 @@
         <DCCReference Include="uTestSQLInjection.pas"/>
         <DCCReference Include="uTestHardcodedSecret.pas"/>
         <DCCReference Include="uTestHardcodedPath.pas"/>
+        <DCCReference Include="uTestHardcodedIpAddress.pas"/>
+        <DCCReference Include="uTestHardcodedIpInConfig.pas"/>
         <DCCReference Include="uTestFormatMismatch.pas"/>
         <DCCReference Include="uTestUnusedUses.pas"/>
         <DCCReference Include="uTestEmptyExcept.pas"/>
