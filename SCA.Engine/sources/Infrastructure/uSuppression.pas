@@ -16,6 +16,16 @@
 // Die Suppression gilt fuer die naechste nicht-leere, nicht-Kommentar-Zeile.
 // Mehrere Kategorien koennen mit Komma oder Leerzeichen getrennt werden.
 //
+// Konfigurationsdateien (.ini, SCA201 - TConfigFiles.IsConfigFile) kennen
+// kein '//': dort ist der Marker eine GANZE Zeile mit ';' oder '#'
+//
+//   ; noinspection HardcodedIpInConfig
+//   Server=10.20.30.40
+//
+// (auch '; noinspection-file X'), und die Zielsuche ueberspringt ';'- und
+// '#'-Zeilen. Ein ';' hinter einem Wert ist Teil des Werts (System.IniFiles)
+// und nie ein Marker. Der Pascal-Pfad bleibt unveraendert.
+//
 // Erkannte Kategorien (case-insensitive): jeder Eintrag in KIND_META
 // (uSCAConsts.pas) plus 'All' / '*'. Die Liste wird ueber KindFromName-
 // Reverse-Lookup aufgeloest - Single source of truth ist KIND_META,
@@ -72,6 +82,15 @@ type
     class procedure CollectMarkersForScan(const FileName: string;
       AMarkers: TObjectDictionary<string,
         TList<TSuppressionMarker>>); static;
+
+    // Die Marker-Zeile, die ein Werkzeug ueber die Fundzeile schreibt
+    // (IDE/EXE "Unterdruecken"): '// noinspection X', in einer
+    // Konfigurationsdatei '; noinspection X'.
+    class function MarkerLineFor(const AFileName: string;
+      AKind: TFindingKind): string; static;
+    // Dasselbe fuer eine Regelkarte ohne Datei (Workbench, Regel-Info): in
+    // der Dateiart, in der die Regel meldet - SCA201 nur in .ini.
+    class function MarkerTextFor(AKind: TFindingKind): string; static;
   private
     // Allokationsfreier case-insensitiver Substring-Check auf
     // 'noinspection' (ASCII-Folding reicht - der Tag selbst ist ASCII).
@@ -290,6 +309,71 @@ begin
   Result := ParseCommentText(CommentText, Kinds, FileWide);
 end;
 
+type
+  // Kommentarsyntax eines Marker-Hosts: Pascal ('//', mit Kommentarzustand)
+  // oder Konfigurationsdatei (ganze ';'/'#'-Zeile, SCA201).
+  TMarkerSyntax = (msPascal, msIni);
+
+function MarkerSyntaxOf(const AHostFile: string): TMarkerSyntax;
+begin
+  if TConfigFiles.IsConfigFile(AHostFile) then
+    Result := msIni
+  else
+    Result := msPascal;
+end;
+
+function IsIniCommentLine(const ATrimmed: string): Boolean;
+begin
+  Result := (ATrimmed <> '') and CharInSet(ATrimmed[1], [';', '#']);
+end;
+
+// Marker-Zeile eines Hosts: '//'-Kommentar (Pascal, mit Zustand) bzw.
+// ganze ';'/'#'-Zeile (Konfigurationsdatei).
+function ParseHostMarkerLine(const Line: string; ASyntax: TMarkerSyntax;
+  var State: TCommentScanState; out Kinds: TSuppressedKinds;
+  out FileWide: Boolean): Boolean;
+var
+  T : string;
+begin
+  if ASyntax = msPascal then
+    Exit(TSuppression.ParseMarkerLine(Line, State, Kinds, FileWide));
+  Kinds := [];
+  FileWide := False;
+  T := TrimLeft(Line);
+  Result := IsIniCommentLine(T)
+    and TSuppression.ParseCommentText(Copy(T, 2, MaxInt), Kinds, FileWide);
+end;
+
+// Zaehlt die (getrimmte) Zeile bei der Zielsuche als Kommentar?
+function IsCommentOnlyLine(const ATrimmed: string; ASyntax: TMarkerSyntax): Boolean;
+begin
+  if ASyntax = msIni then
+    Result := IsIniCommentLine(ATrimmed)
+  else
+    Result := ATrimmed.StartsWith('//');
+end;
+
+const
+  MARKER_PASCAL = '// noinspection ';
+  MARKER_INI    = '; noinspection ';
+
+class function TSuppression.MarkerLineFor(const AFileName: string;
+  AKind: TFindingKind): string;
+begin
+  if TConfigFiles.IsConfigFile(AFileName) then
+    Result := MARKER_INI + KindName(AKind)
+  else
+    Result := MARKER_PASCAL + KindName(AKind);
+end;
+
+class function TSuppression.MarkerTextFor(AKind: TFindingKind): string;
+begin
+  if AKind = fkHardcodedIpInConfig then
+    Result := MARKER_INI + KindName(AKind)
+  else
+    Result := MARKER_PASCAL + KindName(AKind);
+end;
+
 // Liefert fuer eine .dfm-Datei die zugehoerige .pas im selben Verzeichnis -
 // fuer .pas/andere Files unveraendert zurueck. DFM-Findings (Form-Layouts)
 // koennen keinen //-Kommentar-Marker im DFM tragen, akzeptieren aber den
@@ -429,10 +513,12 @@ var
   Cached    : Boolean;
   FileWide  : Boolean;
   HostFile  : string;
+  Syntax    : TMarkerSyntax;
 begin
   Result := TDictionary<Integer, TSuppressedKinds>.Create;
   HostFile := ResolveMarkerHostFile(FileName);
   if not FileExists(HostFile) then Exit;
+  Syntax := MarkerSyntaxOf(HostFile);
 
   // Perf: AcquireLines nutzt gFileTextCache - zweiter Aufruf (BuildMarkers
   // im selben Scan) wird zum Cache-Hit, kein doppeltes I/O.
@@ -477,7 +563,9 @@ begin
     ScanState.InParenComment := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      if not ParseMarkerLine(Lines[i], ScanState, Kinds, FileWide) then Continue;
+      if not ParseHostMarkerLine(Lines[i], Syntax, ScanState, Kinds,
+               FileWide) then
+        Continue;
       // File-Wide-Marker: in Line 0 ablegen - RemoveSuppressedFindings
       // prueft Line 0 als generelle File-Vorgabe ZUSAETZLICH zum
       // line-spezifischen Match.
@@ -505,7 +593,7 @@ begin
         L := TrimLeft(Lines[j]);
         if L = '' then Continue;
         if NextNonEmpty < 0 then NextNonEmpty := j + 1;
-        if not L.StartsWith('//') then
+        if not IsCommentOnlyLine(L, Syntax) then
         begin
           NextCode := j + 1;
           Break;
@@ -556,11 +644,14 @@ begin
   try
     var ScanState: TCommentScanState;
     var FileWide: Boolean;
+    var Syntax := MarkerSyntaxOf(HostFile);
     ScanState.InBraceComment := False;
     ScanState.InParenComment := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      if not ParseMarkerLine(Lines[i], ScanState, Kinds, FileWide) then Continue;
+      if not ParseHostMarkerLine(Lines[i], Syntax, ScanState, Kinds,
+               FileWide) then
+        Continue;
       // File-Wide-Marker: TargetLine = 0 (Sonderwert fuer file-weit).
       // RemoveSuppressedFindings tagt sie beim File-Wide-Match als Consumed.
       if FileWide then
@@ -581,7 +672,7 @@ begin
       begin
         L := TrimLeft(Lines[j]);
         if L = '' then Continue;
-        if not L.StartsWith('//') then
+        if not IsCommentOnlyLine(L, Syntax) then
         begin
           TargetLine := j + 1;
           Break;

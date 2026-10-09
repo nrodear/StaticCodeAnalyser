@@ -394,6 +394,7 @@ uses
   // uBaseline ist in interface uses (TBaselineSet-Feld) - hier nicht mehr
   // listen, sonst E2004 Bezeichner redeklariert.
   uSourceLineEdit,                // Suppress/Quick-Fix schreiben in die Datei
+  uSuppression,                   // MarkerLineFor - ';' in .ini, '//' sonst (SCA201)
   uQuickFix,                      // TQuickFix.ProposeFix (Ctrl+Alt+F)
   uAppTheme,                      // Hell/Dunkel der Standalone-EXE
   uStaticFiles, uRuleCatalog,
@@ -2293,7 +2294,7 @@ begin
     StatusBar1.Panels[2].Text := _('Suppress: cannot locate source line');
     Exit;
   end;
-  Marker := '// noinspection ' + KindName(f.Kind);
+  Marker := TSuppression.MarkerLineFor(absPath, f.Kind);
   if TSourceLineEdit.InsertLineAbove(absPath, lineNo, Marker, Err) then
     StatusBar1.Panels[2].Text := Format(_('Suppress inserted: %s'), [Marker])
   else

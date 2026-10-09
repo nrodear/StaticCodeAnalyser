@@ -16,7 +16,7 @@ The repository ships two components:
 
 ## Features at a glance
 
-- **198 rules (175 Pascal + 23 DFM)** — see [`DETECTORS.md`](DETECTORS.md) and [`rules/sca-rules.json`](rules/sca-rules.json) for the canonical roster (Sonar + SonarDelphi-migration + DFM + bonus)
+- **201 rules (177 Pascal + 23 DFM + 1 INI)** — see [`DETECTORS.md`](DETECTORS.md) and [`rules/sca-rules.json`](rules/sca-rules.json) for the canonical roster (Sonar + SonarDelphi-migration + DFM + bonus)
 - **Sonar-style stat tiles** above the grid: Errors / Warnings / Hints / Bugs / Code duplications / Code Quality as a letter grade **A–E** (raw score + breakdown in the tooltip)
 - **Severity filter** + **type filter** (Bug, Code Smell, Vulnerability, Security Hotspot, Code Duplication)
 - **Help panel on the right** with paired "before/after" code examples per finding

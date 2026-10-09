@@ -794,6 +794,18 @@
     "SCA198": {
       "name": "Zwei Interfaces teilen sich dieselbe GUID",
       "shortDescription": "Dieselbe GUID steht an mehr als einem Interface - Supports() liefert das zuerst registrierte, ohne Compilerfehler. Mit Strg+Umschalt+G eine neue erzeugen"
+    },
+    "SCA199": {
+      "name": "ParamByName-Name passt nicht zu den SQL-Platzhaltern",
+      "shortDescription": "ParamByName('x') an einer Query, deren SQL kein :x hat (zur Laufzeit 'Parameter nicht gefunden'), oder ein :y im SQL, das die Routine nie zuweist, obwohl sie die anderen Parameter der Query setzt"
+    },
+    "SCA200": {
+      "name": "IP-Adresse als String-Literal",
+      "shortDescription": "Hartcodierte IPv4- oder IPv6-Adresse (privat, geteilt oder öffentlich) in einem String-Literal - in die Konfiguration auslagern oder einen Hostnamen verwenden"
+    },
+    "SCA201": {
+      "name": "IP-Adresse in einer versionierten Konfigurationsdatei",
+      "shortDescription": "IPv4- oder IPv6-Adresse (privat, geteilt oder öffentlich) als Wert in einer .ini-Datei des Quellbaums"
     }
   }
 }

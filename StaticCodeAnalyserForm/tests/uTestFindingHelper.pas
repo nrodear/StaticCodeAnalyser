@@ -14,13 +14,14 @@ uses
   uNilDeref, uMissingFinally, uDivByZero, uDeadCode,
   uLongMethod, uLongParamList, uMagicNumbers, uDuplicateString,
   uHardcodedPath, uDebugOutput, uDeepNesting,
+  uHardcodedIpAddress,   // SCA200 - liest den Quelltext (FindingsOfFile)
   uTodoComment, uEmptyMethod, uFieldLeak, uDuplicateBlock,
   uCyclomaticComplexity, uWithStatement,
   uGotoStatement, uTabulationCharacter, uTooLongLine, uTrailingWhitespace,
   uLowercaseKeyword, uNoSonarMarker, uEmptyArgumentList,
   uInlineAssembly, uTrailingCommaArgList, uDigitGrouping,
   uCommentedOutCode, uUnitLevelKeywordIndent, uRedundantBoolean,
-  uEmptyInterface, uInterfaceGuid, uAssertMessage, uExplicitTObjectInheritance,
+  uEmptyInterface, uInterfaceGuid, uParamNameMismatch, uAssertMessage, uExplicitTObjectInheritance,
   uGroupedDeclaration, uEmptyBlock, uExceptOnException,
   uConsecutiveSection, uRedundantJump, uClassPerFile,
   uSuperfluousSemicolon, uEmptyFinallyBlock, uAssignedAndAssignedNil,
@@ -287,6 +288,11 @@ begin
         // Ohne Scan-Index vergleicht der Detektor nur innerhalb der Datei -
         // genau das, was ein Einzeldatei-Test pruefen kann.
         TInterfaceGuidDetector.AnalyzeUnit(Root, TempPath, Result);
+        // SCA199: liest den Quelltext je Routine (uParamNameScan), den
+        // AST nur fuer die Routinengrenzen.
+        TParamNameMismatchDetector.AnalyzeUnit(Root, TempPath, Result);
+        // SCA200: liest die Literale aus dem Quelltext (Strip-Cache).
+        THardcodedIpAddressDetector.AnalyzeUnit(Root, TempPath, Result);
         TAssertMessageDetector.AnalyzeUnit(Root, TempPath, Result);
         TExplicitTObjectInheritanceDetector.AnalyzeUnit(Root, TempPath, Result);
         TGroupedDeclarationDetector.AnalyzeUnit(Root, TempPath, Result);

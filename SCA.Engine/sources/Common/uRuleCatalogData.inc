@@ -13,7 +13,7 @@
 const
   // Index == Ord(TFindingKind) - die JSON ist positionsgleich zum Enum
   // (Test RuleIDMatchesOrdinal sichert das ab).
-  RULE_CATALOG_DATA : array[0..197] of TRuleFallbackData = (
+  RULE_CATALOG_DATA : array[0..200] of TRuleFallbackData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -2286,6 +2286,41 @@ const
         #13#10 + '  end;' + #13#10 + #13#10 + '  IWriter = interface' + #13#10 +
         '    [''{9B7E30C4-2D18-4A55-8F61-70E5C2A4193D}'']  // Ctrl+Shift+G' + #13#10 +
         '    procedure Write(const S: string);' + #13#10 + '  end;';
+      Anchor   : '';
+      FixMode  : ''
+    ),
+    // SCA199
+    (
+      RuleID   : 'SCA199';
+      Name     : 'ParamByName name does not match the SQL placeholders';
+      ShortDesc: 'ParamByName(''x'') on a query whose SQL has no :x (raises ''parameter not found'' at run time), or a :y in the SQL that the routine never assigns while it sets the query''s other parameters';
+      BadEx    : 'Q := TFDQuery.Create(nil);' + #13#10 + 'Q.SQL.Add(''SELECT name FROM customer'');' + #13#10 +
+        'Q.SQL.Add(''WHERE customer_id = :customer_id'');' + #13#10 +
+        'Q.ParamByName(''custid'').AsInteger := Id;   // no :custid - raises at Open' + #13#10 +
+        'Q.Open;';
+      GoodEx   : 'Q := TFDQuery.Create(nil);' + #13#10 + 'Q.SQL.Add(''SELECT name FROM customer'');' + #13#10 +
+        'Q.SQL.Add(''WHERE customer_id = :customer_id'');' + #13#10 +
+        'Q.ParamByName(''customer_id'').AsInteger := Id;' + #13#10 + 'Q.Open;';
+      Anchor   : '';
+      FixMode  : ''
+    ),
+    // SCA200
+    (
+      RuleID   : 'SCA200';
+      Name     : 'IP address as string literal';
+      ShortDesc: 'Hardcoded IPv4 or IPv6 address (private, shared or public) in a string literal - move it to the configuration or use a host name';
+      BadEx    : 'Client.Host := ''10.20.30.40'';';
+      GoodEx   : 'Client.Host := Settings.ReadString(''Server'', ''Host'', ''localhost'');';
+      Anchor   : '';
+      FixMode  : ''
+    ),
+    // SCA201
+    (
+      RuleID   : 'SCA201';
+      Name     : 'IP address in a versioned configuration file';
+      ShortDesc: 'IPv4 or IPv6 address (private, shared or public) as a value in an .ini file of the source tree';
+      BadEx    : '[Database]' + #13#10 + 'Server=10.20.30.40';
+      GoodEx   : '[Database]' + #13#10 + 'Server=db.example.internal';
       Anchor   : '';
       FixMode  : ''
     )

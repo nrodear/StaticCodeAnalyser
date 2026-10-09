@@ -13,7 +13,7 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2329 Zeilen, 80370 Bytes
+  // i18n\de.po - 2329 Zeilen, 78069 Bytes
   CPoLines_de: array[0..2328] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -1225,8 +1225,8 @@ const
     'msgid "IDE editor service not available."',
     'msgstr "IDE-Editor-Service nicht verf'#$00FC'gbar."',
     '',
-    'msgid "If the finding is a false positive, say so and explain why - then suggest a `// noinspection %s` suppression marker on the affected line."',
-    'msgstr "Falls False Positive: sag das und erkl'#$00E4're warum - schlage dann einen `// noinspection %s` Suppression-Marker auf der betroffenen Zeile vor."',
+    'msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line directly above the affected line."',
+    'msgstr "Falls False Positive: sag das und erkl'#$00E4're warum - schlage dann einen `%s` Suppression-Marker in einer eigenen Zeile direkt '#$00FC'ber der betroffenen Zeile vor."',
     '',
     'msgid "Ignore list..."',
     'msgstr "Ignore-Liste..."',
@@ -2618,7 +2618,7 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2325 Zeilen, 84118 Bytes
+  // i18n\fr.po - 2325 Zeilen, 81827 Bytes
   CPoLines_fr: array[0..2324] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
@@ -3838,8 +3838,8 @@ const
     'msgid "IDE editor service not available."',
     'msgstr "Le service d'''#$00E9'diteur de l''IDE n''est pas disponible."',
     '',
-    'msgid "If the finding is a false positive, say so and explain why - then suggest a `// noinspection %s` suppression marker on the affected line."',
-    'msgstr "Si le r'#$00E9'sultat est un faux positif, dites-le et expliquez pourquoi - proposez ensuite un marqueur de suppression `// noinspection %s` sur la ligne concern'#$00E9'e."',
+    'msgid "If the finding is a false positive, say so and explain why - then suggest a `%s` suppression marker on its own line directly above the affected line."',
+    'msgstr "Si le r'#$00E9'sultat est un faux positif, dites-le et expliquez pourquoi - proposez ensuite un marqueur de suppression `%s` sur une ligne '#$00E0' part, juste au-dessus de la ligne concern'#$00E9'e."',
     '',
     'msgid "Ignore list..."',
     'msgstr "Liste d''exclusions..."',

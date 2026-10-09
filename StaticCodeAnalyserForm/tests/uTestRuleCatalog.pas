@@ -698,6 +698,8 @@ begin
   Assert.IsTrue(fkHardcodedPath     in P, 'security: HardcodedPath fehlt');
   Assert.IsTrue(fkDfmHardcodedDbCreds in P, 'security: DfmHardcodedDbCreds fehlt');
   Assert.IsTrue(fkDfmSqlFromUserInput in P, 'security: DfmSqlFromUserInput fehlt');
+  Assert.IsTrue(fkHardcodedIpAddress  in P, 'security: HardcodedIpAddress fehlt');
+  Assert.IsTrue(fkHardcodedIpInConfig in P, 'security: HardcodedIpInConfig fehlt');
   // Draussen: alles andere.
   Assert.IsFalse(fkMemoryLeak  in P, 'security: MemoryLeak sollte raus');
   Assert.IsFalse(fkLongMethod  in P, 'security: LongMethod sollte raus');

@@ -38,7 +38,7 @@ uniquement » ne signifie donc jamais « programme différent », mais
 | **Markup wiki Jira** | — | ✅ | coller un résultat dans un ticket |
 | **Texte brut (presse-papiers)** | — | ✅ | les résultats d'un fichier avec avant/après, à coller |
 | **Sonar : résultat unique** | — | ✅ | un résultat choisi comme fichier external-issue sous `.sonar\external\` |
-| **Infos détecteurs (catalogue)** | — | ✅ | page HTML autonome des 198 règles — pas un export de résultats |
+| **Infos détecteurs (catalogue)** | — | ✅ | page HTML autonome des 201 règles — pas un export de résultats |
 | **Prompt IA (presse-papiers)** | — | ✅ | confier un résultat isolé à un assistant, avec son contexte de code |
 | **Télémétrie de suppression** | `--telemetry-csv <fichier>` | — | quelles règles sont le plus souvent supprimées (classement du bruit) |
 | **Durées des détecteurs** | `--time-detectors` (stdout) / `--time-detectors-out <fichier>` | — | repérer les détecteurs lents |

@@ -37,7 +37,7 @@ program" — it means *not reachable from a script*.
 | **Jira wiki markup** | — | ✅ | Pasting a finding into a ticket |
 | **Plain text (clipboard)** | — | ✅ | One file's findings with before/after, for pasting |
 | **Sonar: single finding** | — | ✅ | One selected finding as an external-issue file under `.sonar\external\` |
-| **Detector info (rule catalog)** | — | ✅ | Self-contained HTML page of all 198 rules — not a findings export |
+| **Detector info (rule catalog)** | — | ✅ | Self-contained HTML page of all 201 rules — not a findings export |
 | **AI prompt (clipboard)** | — | ✅ | Hand a single finding to an assistant, with code context |
 | **Suppression telemetry** | `--telemetry-csv <file>` | — | Which rules get suppressed most (noise ranking) |
 | **Detector timings** | `--time-detectors` (stdout) / `--time-detectors-out <file>` | — | Finding slow detectors |

@@ -16,7 +16,7 @@ Das Repository enthaelt zwei Komponenten:
 
 ## Features auf einen Blick
 
-- **198 Regeln (175 Pascal + 23 DFM)** — siehe [`DETECTORS_de.md`](DETECTORS_de.md) und [`rules/sca-rules.json`](rules/sca-rules.json) fuer den kanonischen Stand (Sonar + SonarDelphi-Migration + DFM + Bonus)
+- **201 Regeln (177 Pascal + 23 DFM + 1 INI)** — siehe [`DETECTORS_de.md`](DETECTORS_de.md) und [`rules/sca-rules.json`](rules/sca-rules.json) fuer den kanonischen Stand (Sonar + SonarDelphi-Migration + DFM + Bonus)
 - **Sonar-Style Stat-Tiles** ueber dem Grid: Fehler / Warnungen / Hinweise / Bugs / Code-Duplikate / Code-Quality als Letter-Grade **A–E** (Rohscore + Breakdown im Tooltip)
 - **Severity-Filter** + **Typ-Filter** (Bug, Code Smell, Vulnerability, Security Hotspot, Code Duplication)
 - **Help-Panel rechts** mit "Vorher/Nachher"-Code-Beispielen je Befund

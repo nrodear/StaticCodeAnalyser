@@ -216,6 +216,9 @@
         <DCCReference Include="sources\Detectors\uGotoStatement.pas"/>
         <DCCReference Include="sources\Detectors\uGroupedDeclaration.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedPath.pas"/>
+        <DCCReference Include="sources\Detectors\uIpAddressScan.pas"/>
+        <DCCReference Include="sources\Detectors\uHardcodedIpAddress.pas"/>
+        <DCCReference Include="sources\Detectors\uHardcodedIpInConfig.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedSecret.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedString.pas"/>
         <DCCReference Include="sources\Detectors\uIfElseBegin.pas"/>
@@ -227,6 +230,8 @@
         <DCCReference Include="sources\Detectors\uInstanceInvokedConstructor.pas"/>
         <DCCReference Include="sources\Detectors\uIntegerOverflow.pas"/>
         <DCCReference Include="sources\Detectors\uInterfaceGuid.pas"/>
+        <DCCReference Include="sources\Detectors\uParamNameScan.pas"/>
+        <DCCReference Include="sources\Detectors\uParamNameMismatch.pas"/>
         <DCCReference Include="sources\Detectors\uInterfaceName.pas"/>
         <DCCReference Include="sources\Detectors\uLargeClass.pas"/>
         <DCCReference Include="sources\Detectors\uLeakDetector2.pas"/>

@@ -180,6 +180,8 @@
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyFinallyBlock.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyInterface.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uInterfaceGuid.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uParamNameScan.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uParamNameMismatch.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyMethod.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyOnHandler.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uEmptyVisibilitySection.pas"/>
@@ -198,6 +200,9 @@
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uGotoStatement.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uGroupedDeclaration.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedPath.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uIpAddressScan.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedIpAddress.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedIpInConfig.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedSecret.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedString.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uIfElseBegin.pas"/>

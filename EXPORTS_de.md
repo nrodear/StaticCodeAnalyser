@@ -36,7 +36,7 @@ als CLI. „Nur in der GUI" heißt also nie „anderes Programm", sondern
 | **Jira-Wiki-Markup** | — | ✅ | Fund in ein Ticket einfügen |
 | **Klartext (Zwischenablage)** | — | ✅ | Funde einer Datei mit Vorher/Nachher, zum Einfügen |
 | **Sonar: einzelner Fund** | — | ✅ | Ein gewählter Fund als External-Issue-Datei unter `.sonar\external\` |
-| **Detektor-Info (Regelkatalog)** | — | ✅ | Self-contained HTML-Seite aller 198 Regeln — kein Fund-Export |
+| **Detektor-Info (Regelkatalog)** | — | ✅ | Self-contained HTML-Seite aller 201 Regeln — kein Fund-Export |
 | **AI-Prompt (Zwischenablage)** | — | ✅ | einzelnen Fund samt Codekontext an einen Assistenten geben |
 | **Suppression-Telemetrie** | `--telemetry-csv <Datei>` | — | welche Regeln am häufigsten unterdrückt werden |
 | **Detektor-Laufzeiten** | `--time-detectors` (stdout) / `--time-detectors-out <Datei>` | — | langsame Detektoren finden |

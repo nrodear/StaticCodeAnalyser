@@ -7,7 +7,7 @@ poignée de détecteurs bonus propres à cet outil.
 
 Légende des statuts : ✅ implémenté · 🟡 partiel · 🔲 ouvert
 
-**Résumé (2026-08-07) :** Les **198 kinds de règles** du roster canonique [`rules/sca-rules.json`](rules/sca-rules.json) sont tous implémentés et énumérés dans ce fichier (portés par **157 enregistrements de pipeline** ; plusieurs classes émettent plusieurs kinds — p. ex. `uVisibilityCheck` → 3 kinds de visibilité, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 kinds DFM ; **SCA194/SCA195 sont à portée projet, non basés sur l'AST** — émis par le dispatch du scan projet/groupe, pas par le registre de détecteurs par fichier). 44 / 50 slots de règles Sonar complets ; les 4 slots ouverts (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) exigent de l'inférence de types / une résolution inter-unités et n'ont pas encore de SCA-ID.
+**Résumé (2026-08-07) :** Les **201 kinds de règles** du roster canonique [`rules/sca-rules.json`](rules/sca-rules.json) sont tous implémentés et énumérés dans ce fichier (portés par **159 enregistrements de pipeline** ; plusieurs classes émettent plusieurs kinds — p. ex. `uVisibilityCheck` → 3 kinds de visibilité, `uPerfHotspots` → SCA110–112, `uSourceEncoding` → SCA185–193, `uDfmAnalysisRunner` → 23 kinds DFM ; **SCA194/SCA195 sont à portée projet, non basés sur l'AST** — émis par le dispatch du scan projet/groupe, pas par le registre de détecteurs par fichier ; **SCA201** provient de la passe de configuration sur les fichiers .ini). 44 / 50 slots de règles Sonar complets ; les 4 slots ouverts (#20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI) exigent de l'inférence de types / une résolution inter-unités et n'ont pas encore de SCA-ID.
 
 Les 4 slots encore ouverts exigent tous inférence de types / analyse de flux / résolution de symboles inter-unités : #20 ResultNotChecked, #22 CyclicUnitDep, #42 UnnecessaryCast, #49 DeprecatedAPI. **#16 UninitVar** dispose d'un MVP conservateur (`SCA166`) — la sensibilité complète aux chemins reste ouverte pour la phase 3.
 
@@ -152,7 +152,7 @@ Catalogue Sonar-50
 🏛 Cluster mORMot :                  9 (SCA153-161, tous complets)
 🧩 Nommage/formatage SonarDelphi : 60 (SCA060-119, section ci-dessous)
 
-🎯 Total général : 198 kinds de détecteurs (179 unités de détecteur).
+🎯 Total général : 201 kinds de détecteurs (184 unités de détecteur).
 ```
 
 ---
@@ -461,6 +461,9 @@ Les types de retour managés (famille string, tableaux dynamiques, `Variant`, in
 | SCA196 | **ManagedResultUninit** | Le Result d'un type de retour managé est lu avant sa première affectation (`Result := Result + [x]`, `Result[i] := ...` sans SetLength, `Result.Add(...)`) - traite les données périmées de l'appelant | Warning | Bug | ✅ | `uManagedResultUninit` |
 | SCA197 | **InterfaceWithoutGuid** | Interface déclarée sans GUID - Supports()/QueryInterface() ne peuvent pas la demander à l'exécution | Warning | Code Smell | ✅ | `uInterfaceGuid` |
 | SCA198 | **DuplicateInterfaceGuid** | Même GUID sur deux interfaces - Supports() renvoie la première, sans erreur de compilation | Warning | Bug | ✅ | `uInterfaceGuid` |
+| SCA199 | **ParamNameMismatch** | Nom passé à ParamByName absent des :paramètres du SQL que la routine donne à cette requête (« paramètre introuvable » à l'exécution), ou un paramètre que la routine ne lie jamais | Warning | Bug | ✅ | `uParamNameMismatch` |
+| SCA200 | **HardcodedIpAddress** | Adresse IPv4/IPv6 (privée, partagée ou publique) dans un littéral de chaîne - la déplacer dans la configuration ou utiliser un nom d'hôte ; loopback, documentation, multicast, versions et OID ne sont pas signalés | Warning | Security Hotspot | ✅ | `uHardcodedIpAddress` |
+| SCA201 | **HardcodedIpInConfig** | Adresse IPv4/IPv6 comme valeur dans un fichier .ini de l'arborescence des sources (passe de configuration, pas un détecteur par unité ; marqueurs `; noinspection`) | Hint | Security Hotspot | ✅ | `uHardcodedIpInConfig` |
 
 ## ⚙️ Configuration — SCA001 OwnershipSinks (liste blanche des fuites mémoire)
 

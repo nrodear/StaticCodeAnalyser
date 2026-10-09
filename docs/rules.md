@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 198 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
+All 201 detector rules. Single source of truth: [`rules/sca-rules.json`](../rules/sca-rules.json).
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -202,6 +202,9 @@ All 198 detector rules. Single source of truth: [`rules/sca-rules.json`](../rule
 | [SCA196](#sca196) | Result of managed type is read before it is assigned | Warning | Bug | `uManagedResultUninit.pas` |
 | [SCA197](#sca197) | Interface declared without a GUID | Warning | Code Smell | `uInterfaceGuid.pas` |
 | [SCA198](#sca198) | Two interfaces share the same GUID | Warning | Bug | `uInterfaceGuid.pas` |
+| [SCA199](#sca199) | ParamByName name does not match the SQL placeholders | Warning | Bug | `uParamNameMismatch.pas` |
+| [SCA200](#sca200) | IP address as string literal | Warning | Security Hotspot | `uHardcodedIpAddress.pas` |
+| [SCA201](#sca201) | IP address in a versioned configuration file | Hint | Security Hotspot | `uHardcodedIpInConfig.pas` |
 
 ---
 
@@ -5197,4 +5200,107 @@ Supports() returns whichever was registered first.
 
 ---
 
-_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA198.md`._
+## SCA199
+**ParamByName name does not match the SQL placeholders**
+
+> ParamByName('x') on a query whose SQL has no :x (raises 'parameter not found' at run time), or a :y in the SQL that the routine never assigns while it sets the query's other parameters
+
+| Field | Value |
+|---|---|
+| Severity | Warning | Type | Bug |
+| Tags | `sql`, `database`, `parameters`, `runtime-error` |
+| Detector | `uParamNameMismatch.pas` |
+| Scope | one routine at a time (from its first `begin`), per query variable |
+
+The compiler cannot see the link between Query.SQL and Query.ParamByName - both are strings. A renamed placeholder, a typo or a copied block leaves a ParamByName whose name is not in the SQL, and the mistake surfaces only when the statement runs: FireDAC, BDE, dbExpress, UniDAC, Zeos and ADO (Parameters.ParamByName) all raise 'parameter not found'. The opposite direction is reported for queries the routine creates itself: the SQL has :y, the routine binds other parameters of that query but never y - execution then fails with an unbound parameter (FireDAC: unknown data type, Oracle: ORA-01008) or silently binds NULL. The check works per routine and per query variable, reading from the routine's first 'begin', and only when it knows the query's SQL completely from literals in that routine: the query is created there (Q := TXxx.Create) or its SQL is cleared or assigned before the first Add, and every contribution is a string literal (sLineBreak and #13#10 included). Placeholders are :name outside SQL strings and comments - also :@name (ADO, SQL Server), names with $ or # (Oracle) and :"quoted names" - and a name counts as present if it matches either the identifier reading or the reading of Data.DB/ADODB ParseSQL, which runs to the next space, comma, semicolon or closing parenthesis; for the unknown-name direction a placeholder inside an SQL comment counts as present too, because Data.DB, ADO and IBX create it anyway. '::' casts, ':=' (PL/SQL), positional ':1', ':new.'/':old.' in trigger bodies and '?' parameters are not names. Names compare case-insensitively, as all the libraries do. Accesses that count as binding: ParamByName, Params.ParamByName, Parameters.ParamByName, FindParam, ParamValues['a;b'], and for Direct Oracle Access SetVariable, DeclareVariable, SetComplexVariable, SetLongVariable.
+
+```pascal
+// BAD
+Q := TFDQuery.Create(nil);
+Q.SQL.Add('SELECT name FROM customer');
+Q.SQL.Add('WHERE customer_id = :customer_id');
+Q.ParamByName('custid').AsInteger := Id;   // no :custid - raises at Open
+Q.Open;
+
+// GOOD
+Q := TFDQuery.Create(nil);
+Q.SQL.Add('SELECT name FROM customer');
+Q.SQL.Add('WHERE customer_id = :customer_id');
+Q.ParamByName('customer_id').AsInteger := Id;
+Q.Open;
+```
+
+What the message looks like:
+
+```
+Q.ParamByName('custid'): the SQL this routine assigns to Q has no :custid
+(it has :customer_id) - raises "parameter not found" at run time
+```
+
+---
+
+## SCA200
+**IP address as string literal**
+
+> Hardcoded IPv4 or IPv6 address (private, shared or public) in a string literal - move it to the configuration or use a host name
+
+| Field | Value |
+|---|---|
+| Severity | Warning | Type | Security Hotspot |
+| Tags | `security`, `network`, `configuration`, `portability` |
+| CWE | [CWE-547](https://cwe.mitre.org/data/definitions/547.html) |
+| OWASP | A05:2021-Security-Misconfiguration |
+| Detector | `uHardcodedIpAddress.pas` |
+
+An IP address written into the source couples the program to one network: every move to another server, another environment (development, test, production) or another customer needs a code change and a new build, and the address reveals internal topology to anyone who reads the binary. Read the address from the configuration, the command line or the environment, or use a host name that DNS resolves per environment. The rule reads string literals only - never comments - and recognises IPv4 in strict dotted-decimal form (four octets 0-255, no leading zeros) and IPv6 in every RFC 4291 form, including a zone (%eth0), brackets with a port ([...]:443) and an embedded IPv4 (::ffff:10.1.2.3). Reported are private addresses (RFC 1918, unique local fc00::/7), shared addresses (100.64.0.0/10) and public addresses. Not reported are loopback, unspecified (0.0.0.0, ::), broadcast, netmasks, link-local, the documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24, 2001:db8::/32, 3fff::/20), IETF protocol blocks, benchmarking (198.18.0.0/15), multicast and reserved space. Test units (test/spec naming and directories) are skipped. An address in an http:// URL is also reported by SCA115: the two rules describe different problems, plaintext transport and a fixed address.
+
+```pascal
+// BAD
+Client.Host := '10.20.30.40';
+
+// GOOD
+Client.Host := Settings.ReadString('Server', 'Host', 'localhost');
+```
+
+What the message looks like:
+
+```
+Hardcoded IP address '10.20.30.40' (private, RFC 1918) - move it to the configuration or use a host name
+```
+
+---
+
+## SCA201
+**IP address in a versioned configuration file**
+
+> IPv4 or IPv6 address (private, shared or public) as a value in an .ini file of the source tree
+
+| Field | Value |
+|---|---|
+| Severity | Hint | Type | Security Hotspot |
+| Tags | `security`, `network`, `configuration` |
+| CWE | [CWE-547](https://cwe.mitre.org/data/definitions/547.html) |
+| OWASP | A05:2021-Security-Misconfiguration |
+| Detector | `uHardcodedIpInConfig.pas` |
+
+A configuration file in the source tree is versioned and shipped like code: an IP address in it pins every checkout and every installation to one network, and moving to another server or environment again needs a commit. Keep environment-specific addresses out of version control (a per-machine or per-environment file, the environment, a deployment step) or use a host name. The rule reads the .ini files of the scanned tree - in folder scans the same directory walk as the sources, in project scans below the common root of the project's units; not analyser.ini and not the copies in platform output folders such as Win32 or Win64 below the scanned root. Lines starting with ';' or '#' are comments, section headers (also with a trailing comment) are skipped, and the value is everything after the first '='. Address grammar, classes and exclusions are those of SCA200; in addition keys that carry prose (description, help, hint, comment, caption, text, example, note, title, summary) and version keys are not reported. Suppress one line with a whole-line marker '; noinspection HardcodedIpInConfig' (or '#') directly above it, or the whole file with '; noinspection-file HardcodedIpInConfig'.
+
+```ini
+; BAD
+[Database]
+Server=10.20.30.40
+
+; GOOD
+[Database]
+Server=db.example.internal
+```
+
+What the message looks like:
+
+```
+IP address '10.20.30.40' (private, RFC 1918) in [Database] Server - an environment-specific address in a versioned configuration file; prefer a host name or a per-environment setting
+```
+
+---
+
+_For richer per-rule pages with badges and full examples, install Python and run `python tools/gen-rules-docs.py`. Generated files land in `docs/rules/SCA001.md`...`SCA201.md`._
