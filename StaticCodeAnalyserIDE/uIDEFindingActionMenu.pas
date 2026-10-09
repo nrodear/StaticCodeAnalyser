@@ -39,6 +39,19 @@ implementation
 uses
   System.SysUtils, uLocalization;
 
+function MenuCaptionOf(const AText: string): string;
+// TMenuItem deutet ein einzelnes '&' als Hotkey-Praefix (Vcl.Menus
+// cHotkeyPrefix): es verschwindet und das Folgezeichen wird
+// unterstrichen. Kopfzeilen tragen den Meldetext des Funds (z. B. ein
+// SCA015-Literal 'Save & Exit'), Aktionen den Text des Anbieters (samt
+// Hint in Klammern) - beides soll woertlich erscheinen, also '&' als
+// '&&' maskieren (Nit 2, Audit reDelphiX 2026-10-07). Kein
+// Anbieter setzt '&' absichtlich als Hotkey. Nur fuer Text aus dem
+// Modell; Hint, Trenner '-' und eigene Zeilen bleiben unberuehrt.
+begin
+  Result := StringReplace(AText, '&', '&&', [rfReplaceAll]);
+end;
+
 procedure FillPopupFromModel(APopup: TPopupMenu;
   const AModel: TFindingMenuModel; AOnClick: TNotifyEvent;
   ATagBase: Integer; AOwner: TComponent; ASink: TList<TMenuItem>);
@@ -58,12 +71,12 @@ begin
         end;
       mkHeader:
         begin
-          Item.Caption := AModel.Entries[i].Caption;
+          Item.Caption := MenuCaptionOf(AModel.Entries[i].Caption);
           Item.Enabled := False;
           Item.Tag     := ATagBase - 1;
         end;
     else
-      Item.Caption := AModel.Entries[i].Caption;
+      Item.Caption := MenuCaptionOf(AModel.Entries[i].Caption);
       Item.Hint    := AModel.Entries[i].Hint;
       Item.Enabled := AModel.Entries[i].Enabled;
       Item.Tag     := ATagBase + AModel.Entries[i].ActionIndex;

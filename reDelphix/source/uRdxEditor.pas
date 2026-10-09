@@ -32,6 +32,14 @@ unit uRdxEditor;
 // die letzte zurueck und ein Fehler mittendrin liess den Puffer halb
 // umgeformt). Jeder Schritt steht im Protokoll (uRdxLog,
 // %TEMP%\reDelphix.log).
+//
+// MARKIEREN UEBER DIE CURSOR-API
+//
+// SelectSpan rechnet doch in Anzeigespalten (IOTAEditPosition.Move,
+// ConvertPos); deren Felder sind SmallInt. Ein Bereich hinter Spalte
+// 32767 bzw. hinter 32766 Bytes einer Zeile wird deshalb abgelehnt
+// (uRdxBufferMath.SpanFitsEditor, Review Nit 8), ebenso einer hinter dem
+// Pufferende; ein gescheitertes Move nennt seine Position (Minor 23).
 
 interface
 
@@ -60,11 +68,18 @@ type
     class function ProjectHasUnit(const AShortName,
       ANearFile: string): Boolean; static;
 
-    // Liefert den aktuellen EDITOR-PUFFER der Datei (IOTAEditReader,
-    // UTF-8 -> string) - nur wenn die Datei in der IDE offen ist; sie
-    // wird dafuer nicht geoeffnet. False sonst. Der Anbieter beschreibt
-    // die Stellen auf diesem Text, nicht auf der Platte: ungespeicherte
-    // Aenderungen sind sonst ein Widerspruch zwischen Scan und Editor.
+    // Liest den aktuellen EDITOR-PUFFER der Datei (IOTAEditReader,
+    // UTF-8 -> string); die Datei wird dafuer nicht geoeffnet. Ergebnis
+    // nach uRdxBufferMath.ChooseTextSource: txBuffer mit AText, txDisk,
+    // wenn die Datei nicht im Editor offen ist, txBlocked, wenn sie offen,
+    // ihr Puffer aber leer oder nicht lesbar ist - dann gilt NICHT die
+    // Platte (Review Nit 24). Der Anbieter beschreibt die Stellen auf
+    // diesem Text: ungespeicherte Aenderungen sind sonst ein Widerspruch
+    // zwischen Scan und Editor.
+    class function ReadBuffer(const AFile: string;
+      out AText: string): TRdxTextSource; static;
+
+    // True nur bei txBuffer (ReadBuffer) - fuer SelectSpan.
     class function TryReadBuffer(const AFile: string;
       out AText: string): Boolean; static;
   end;
@@ -74,6 +89,8 @@ implementation
 uses
   System.SysUtils, System.Classes,
   ToolsAPI,
+  uCrashDiag,       // EStackExhausted
+  uLocalization,
   uRdxLog;
 
 const
@@ -81,6 +98,12 @@ const
   SNoView   = 'Editor-Ansicht nicht verfuegbar';
   SNoBuffer = 'Editor-Puffer nicht lesbar';
   SNoWriter = 'Editor-Puffer nicht beschreibbar';
+  // Ueber _() (Editorhilfen E6); die vier oben folgen mit dem E6-Rest.
+  S_PAST_END = 'Range %d:%d to %d:%d lies behind the end of the editor '
+    + 'buffer (%d lines) - rescan the file';
+  S_TOO_LONG = 'Line too long for the editor selection (the editor '
+    + 'reaches at most column %d)';
+  S_NO_MOVE  = 'Cannot move the editor cursor to line %d, column %d';
 
 function WithLogHint(const AMsg: string): string;
 begin
@@ -134,7 +157,9 @@ function ReadBufferBytes(const ASrc: IOTASourceEditor;
   out ABytes: TBytes): Boolean;
 // IOTAEditReader liefert UTF-8-Bytes in Bloecken; der Reader wird vor
 // dem Verlassen freigegeben - solange er lebt, darf niemand in den
-// Puffer schreiben.
+// Puffer schreiben. True, sobald ein Reader da war: ein LEERER Puffer ist
+// gelesen, nicht unlesbar (Review Nit 24 - die Entscheidung trifft
+// ChooseTextSource, ReplaceSpans meldet die Abweichung gegen den Scan).
 const
   BLOCK = 16384;
 var
@@ -163,7 +188,7 @@ begin
   finally
     Reader := nil;
   end;
-  Result := Length(ABytes) > 0;
+  Result := True;
 end;
 
 // LineStartsOf, OffsetOf, NormalizeEol, BufferEol, Visible und
@@ -173,44 +198,63 @@ function DisplayPosOf(const AView: IOTAEditView; ALines: TStrings;
   ALine, ACol: Integer): TOTAEditPos;
 // Zeichen-Spalte -> Anzeige-Spalte ueber die IDE selbst. TOTACharPos
 // zaehlt die UTF-8-Bytes der Zeile (so handhaben es GExperts & Co.);
-// fuer reinen ASCII-Code ist das die Zeichenzahl.
+// fuer reinen ASCII-Code ist das die Zeichenzahl. Vorbedingung, von
+// SelectSpan mit SpanFitsEditor geprueft: ACol und der Byte-Praefix
+// passen in die SmallInt-Felder von TOTAEditPos/TOTACharPos (Nit 8).
 var
   CharPos : TOTACharPos;
-  Prefix  : string;
 begin
   Result.Line := ALine;
   Result.Col  := ACol;
   if (ALine < 1) or (ALine > ALines.Count) then Exit;
-  Prefix := Copy(ALines[ALine - 1], 1, ACol - 1);
   CharPos.Line      := ALine;
-  CharPos.CharIndex := Length(UTF8Encode(Prefix));
+  CharPos.CharIndex := Utf8PrefixLength(ALines[ALine - 1], ACol);
   AView.ConvertPos(False, Result, CharPos);
   Result.Line := ALine;
 end;
 
 { TRdxEditor }
 
-class function TRdxEditor.TryReadBuffer(const AFile: string;
-  out AText: string): Boolean;
+class function TRdxEditor.ReadBuffer(const AFile: string;
+  out AText: string): TRdxTextSource;
 var
-  Src   : IOTASourceEditor;
-  Bytes : TBytes;
+  Src    : IOTASourceEditor;
+  Bytes  : TBytes;
+  ReadOk : Boolean;
 begin
-  Result := False;
-  AText  := '';
-  if not TryGetSourceEditor(AFile, False, Src) then Exit;
+  AText := '';
+  if not TryGetSourceEditor(AFile, False, Src) then
+    Exit(ChooseTextSource(False, False, ''));
+  ReadOk := False;
   try
-    if not ReadBufferBytes(Src, Bytes) then Exit;
-    AText  := TEncoding.UTF8.GetString(Bytes);
-    Result := AText <> '';
+    if ReadBufferBytes(Src, Bytes) then
+    begin
+      // Leerer Puffer: kein GetString auf einem leeren Array (@Bytes[0]).
+      if Length(Bytes) > 0 then
+        AText := TEncoding.UTF8.GetString(Bytes);
+      ReadOk := True;
+    end;
   except
+    on EStackExhausted do raise;
+    on EAbort do raise;
     on E: Exception do
     begin
-      RdxLog('TryReadBuffer %s: %s', [ExtractFileName(AFile), E.Message]);
-      AText  := '';
-      Result := False;
+      // Offen, aber nicht lesbar: gesperrt, nicht die Platte (Nit 24).
+      RdxLog('ReadBuffer %s: %s', [ExtractFileName(AFile), E.Message]);
+      AText := '';
+      Exit(ChooseTextSource(True, False, ''));
     end;
   end;
+  Result := ChooseTextSource(True, ReadOk, AText);
+  if Result = txBlocked then
+    RdxLog('ReadBuffer %s: im Editor offen, Puffer leer oder nicht lesbar',
+      [ExtractFileName(AFile)]);
+end;
+
+class function TRdxEditor.TryReadBuffer(const AFile: string;
+  out AText: string): Boolean;
+begin
+  Result := ReadBuffer(AFile, AText) = txBuffer;
 end;
 
 class function TRdxEditor.SelectSpan(const AFile: string;
@@ -253,6 +297,19 @@ begin
         Exit;
       end;
       Lines.Text := Text;
+      // Der Puffer kann seit dem Menueaufbau kuerzer geworden sein
+      // (Minor 23), und die Cursor-API rechnet in SmallInt-Spalten (Nit 8).
+      if ASpan.EndLine > Lines.Count then
+      begin
+        AError := Format(_(S_PAST_END), [ASpan.StartLine, ASpan.StartCol,
+          ASpan.EndLine, ASpan.EndCol, Lines.Count]);
+        Exit;
+      end;
+      if not SpanFitsEditor(Lines, ASpan) then
+      begin
+        AError := Format(_(S_TOO_LONG), [EDITOR_MAX_COLUMN]);
+        Exit;
+      end;
       Block := View.Block;
       if Block = nil then
       begin
@@ -262,16 +319,27 @@ begin
       Block.Reset;
       P := DisplayPosOf(View, Lines, ASpan.StartLine, ASpan.StartCol);
       RdxLog('  Anfang Zeichen %d -> Anzeige %d', [ASpan.StartCol, P.Col]);
-      if not EdPos.Move(P.Line, P.Col) then Exit;
+      if not EdPos.Move(P.Line, P.Col) then
+      begin
+        AError := Format(_(S_NO_MOVE), [P.Line, P.Col]);
+        Exit;
+      end;
       Block.BeginBlock;
       P := DisplayPosOf(View, Lines, ASpan.EndLine, ASpan.EndCol);
       RdxLog('  Ende Zeichen %d -> Anzeige %d', [ASpan.EndCol, P.Col]);
-      if not EdPos.Move(P.Line, P.Col) then Exit;
+      if not EdPos.Move(P.Line, P.Col) then
+      begin
+        Block.Reset;   // keinen halb begonnenen Block stehen lassen
+        AError := Format(_(S_NO_MOVE), [P.Line, P.Col]);
+        Exit;
+      end;
       Block.EndBlock;
       View.MoveViewToCursor;
       View.Paint;
       Result := True;
     except
+      on EStackExhausted do raise;
+      on EAbort do raise;
       on E: Exception do
         AError := E.Message;
     end;
@@ -353,6 +421,8 @@ begin
         View.Paint;
       Result := True;
     except
+      on EStackExhausted do raise;
+      on EAbort do raise;
       on E: Exception do
         AError := E.ClassName + ': ' + E.Message;
     end;

@@ -90,7 +90,7 @@ msgstr ""
 msgid "%d hidden by baseline"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEFindingActionMenu.pas:79
+#: StaticCodeAnalyserIDE/uIDEFindingActionMenu.pas:92
 msgid "%d more findings on this line are not listed"
 msgstr ""
 
@@ -122,7 +122,7 @@ msgstr ""
 msgid "%s is not a valid JSON object."
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:623
+#: reDelphix/source/uRdxProvider.pas:733
 msgid "%s: no fixMode in the rule catalog"
 msgstr ""
 
@@ -272,7 +272,7 @@ msgstr ""
 msgid "Analyse Branch-Changes"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5397
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5501
 msgid "Analyse current file (silent)"
 msgstr ""
 
@@ -456,8 +456,8 @@ msgstr ""
 msgid "Bugs"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:344
-#: reDelphix/source/uRdxProvider.pas:359
+#: reDelphix/source/uRdxProvider.pas:462
+#: reDelphix/source/uRdxProvider.pas:477
 msgid "Build Format() from concatenation"
 msgstr ""
 
@@ -493,6 +493,11 @@ msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:3287
 msgid "Cancelling analysis..."
+msgstr ""
+
+#: reDelphix/source/uRdxEditor.pas:324
+#: reDelphix/source/uRdxEditor.pas:333
+msgid "Cannot move the editor cursor to line %d, column %d"
 msgstr ""
 
 #: SCA.Engine/sources/Common/uRuleCatalog.pas:1393
@@ -705,9 +710,9 @@ msgstr ""
 msgid "Copy Jira issue"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:371
-#: reDelphix/source/uRdxProvider.pas:377
-#: reDelphix/source/uRdxProvider.pas:382
+#: reDelphix/source/uRdxProvider.pas:489
+#: reDelphix/source/uRdxProvider.pas:495
+#: reDelphix/source/uRdxProvider.pas:500
 msgid "Copy parameterized template to clipboard"
 msgstr ""
 
@@ -1084,7 +1089,7 @@ msgid "Finding"
 msgstr ""
 
 #: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:2863
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5468
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5572
 #: StaticCodeAnalyserIDE/uIDEFindingBulb.pas:644
 msgid "Finding action failed: %s"
 msgstr ""
@@ -1399,12 +1404,17 @@ msgstr ""
 msgid "Line"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:325
+#: reDelphix/source/uRdxProvider.pas:443
 msgid "Line %d:%d to %d:%d"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2133
 msgid "Line ends with whitespace - diff hygiene"
+msgstr ""
+
+#: reDelphix/source/uRdxEditor.pas:310
+#: reDelphix/source/uRdxProvider.pas:436
+msgid "Line too long for the editor selection (the editor reaches at most column %d)"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:3273
@@ -1860,6 +1870,10 @@ msgstr ""
 msgid "Raise inside destructor without try/except - cleanup is aborted"
 msgstr ""
 
+#: reDelphix/source/uRdxEditor.pas:304
+msgid "Range %d:%d to %d:%d lies behind the end of the editor buffer (%d lines) - rescan the file"
+msgstr ""
+
 #: SCA.SharedUI/sources/uIDEStatsTiles.pas:506
 msgid "Raw score: %d"
 msgstr ""
@@ -1909,11 +1923,11 @@ msgstr ""
 msgid "Reload"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:502
+#: reDelphix/source/uRdxProvider.pas:606
 msgid "Remove (TObject) from the class declaration"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:556
+#: reDelphix/source/uRdxProvider.pas:661
 msgid "Remove ineffective suppression marker"
 msgstr ""
 
@@ -2047,7 +2061,7 @@ msgstr ""
 msgid "Scanning... %d found"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:425
+#: reDelphix/source/uRdxProvider.pas:529
 msgid "Scope table not loaded (unitscopes.txt)"
 msgstr ""
 
@@ -2159,7 +2173,8 @@ msgstr ""
 msgid "Show annotation overlay on hover (otherwise click marked line)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:325
+#: reDelphix/source/uRdxProvider.pas:436
+#: reDelphix/source/uRdxProvider.pas:443
 msgid "Show location"
 msgstr ""
 
@@ -2233,11 +2248,11 @@ msgstr ""
 msgid "Static Code Analyser: actions for this line"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5398
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5502
 msgid "Static Code Analyser: analyse this file, no dock opens"
 msgstr ""
 
-#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5803
+#: StaticCodeAnalyserIDE/uIDEAnalyserForm.pas:5917
 msgid "Static Code Analysis"
 msgstr ""
 
@@ -2267,11 +2282,11 @@ msgstr ""
 msgid "Summary"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:539
+#: reDelphix/source/uRdxProvider.pas:644
 msgid "Suppress here (// noinspection %s)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:542
+#: reDelphix/source/uRdxProvider.pas:647
 msgid "Suppress in this file (// noinspection-file %s)"
 msgstr ""
 
@@ -2426,11 +2441,11 @@ msgstr ""
 msgid "Unit-level keyword not at column 1"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:500
+#: reDelphix/source/uRdxProvider.pas:604
 msgid "Use Assigned() instead of comparing with nil"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:498
+#: reDelphix/source/uRdxProvider.pas:602
 msgid "Use FreeAndNil(%s)"
 msgstr ""
 
@@ -2591,24 +2606,28 @@ msgstr ""
 msgid "default"
 msgstr ""
 
+#: reDelphix/source/uRdxProvider.pas:777
+msgid "editor buffer empty or not readable"
+msgstr ""
+
 #: SCA.Engine/sources/Output/uFixHint.pas:3550
 msgid "except on E: Exception catches every error - prefer a specific subclass"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:652
+#: reDelphix/source/uRdxProvider.pas:762
 msgid "file not found: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:585
-#: reDelphix/source/uRdxProvider.pas:669
+#: reDelphix/source/uRdxProvider.pas:681
+#: reDelphix/source/uRdxProvider.pas:789
 msgid "file not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:647
+#: reDelphix/source/uRdxProvider.pas:757
 msgid "finding without file name"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:658
+#: reDelphix/source/uRdxProvider.pas:768
 msgid "finding without line"
 msgstr ""
 
@@ -2641,7 +2660,7 @@ msgstr ""
 msgid "no findings"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:626
+#: reDelphix/source/uRdxProvider.pas:736
 msgid "nothing to offer"
 msgstr ""
 
@@ -2653,7 +2672,7 @@ msgstr ""
 msgid "out parameter - prefer Result or var"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:453
+#: reDelphix/source/uRdxProvider.pas:557
 msgid "own unit %s in the project"
 msgstr ""
 
@@ -2669,7 +2688,7 @@ msgstr ""
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:436
+#: reDelphix/source/uRdxProvider.pas:540
 msgid "uses clause contains compiler directives (line %d)"
 msgstr ""
 
@@ -2677,16 +2696,16 @@ msgstr ""
 msgid "uses clause is not in alphabetical order"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:477
+#: reDelphix/source/uRdxProvider.pas:581
 msgid "uses: qualify %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:484
+#: reDelphix/source/uRdxProvider.pas:588
 msgid "uses: qualify all %d entries"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:424
-#: reDelphix/source/uRdxProvider.pas:435
+#: reDelphix/source/uRdxProvider.pas:528
+#: reDelphix/source/uRdxProvider.pas:539
 msgid "uses: qualify entries"
 msgstr ""
 

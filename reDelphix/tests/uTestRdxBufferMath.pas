@@ -9,6 +9,10 @@ unit uTestRdxBufferMath;
 // Der Writer der IDE wird hier nachgestellt (ApplyPlan): Praefix kopieren,
 // Bereich verwerfen, neuen Text einfuegen, aufsteigend - so prueft der Test
 // das Ergebnis, nicht nur die Offsets.
+//
+// Dazu die SmallInt-Grenze der Editor-Markierung (Nit 8: Spalte und
+// Byte-Praefix bis 32767) und die Wahl des Textes (Nit 24: offen, aber
+// leer oder nicht lesbar, sperrt - kein stiller Rueckfall auf die Platte).
 
 interface
 
@@ -29,6 +33,13 @@ type
     [Test] procedure Plan_Overlap_Rejected;
     [Test] procedure Plan_NewTextGetsBufferEol;
     [Test] procedure Plan_EmptyExpected_Rejected;
+    [Test] procedure Plan_EmptyBuffer_Rejected;
+    // Nit 8: SmallInt-Spalten der Editor-Markierung
+    [Test] procedure EditorColumn_AsciiLimit;
+    [Test] procedure EditorColumn_MultiByteLimit;
+    [Test] procedure SpanFitsEditor_BothEnds;
+    // Nit 24: offener Puffer schlaegt die Platte, auch leer
+    [Test] procedure ChooseTextSource_OpenBufferWins;
   end;
 
 implementation
@@ -193,6 +204,83 @@ begin
   Assert.IsFalse(PlanByteEdits(B, [Edit(1, 1, 2, '', 'x')], Plan, Err),
     'blind einfuegen ist nicht erlaubt - immer gegen Text pruefen');
   Assert.IsFalse(PlanByteEdits(B, nil, Plan, Err), 'keine Ersetzung');
+end;
+
+procedure TTestRdxBufferMath.Plan_EmptyBuffer_Rejected;
+var
+  Plan : TArray<TRdxByteEdit>;
+  Err  : string;
+begin
+  // Ein geleerter Editor-Puffer kommt als 0 Bytes (Nit 24): abgelehnt mit
+  // Zeilenzahl, nicht mit einer Ausnahme.
+  Assert.IsFalse(PlanByteEdits(nil, [Edit(1, 1, 2, 'a', 'b')], Plan, Err));
+  Assert.IsTrue(Pos('0 Zeilen', Err) > 0, Err);
+  Assert.AreEqual<Integer>(0, Length(Plan));
+end;
+
+procedure TTestRdxBufferMath.EditorColumn_AsciiLimit;
+var
+  L : string;
+begin
+  L := StringOfChar('a', 40000);
+  Assert.IsTrue(EditorColumnFits(L, 1), 'Zeilenanfang');
+  Assert.IsTrue(EditorColumnFits(L, EDITOR_MAX_COLUMN),
+    'Praefix 32766 Bytes, Anzeigespalte 32767');
+  Assert.IsFalse(EditorColumnFits(L, EDITOR_MAX_COLUMN + 1),
+    'Spalte 32768 passt nicht in SmallInt');
+  Assert.IsFalse(EditorColumnFits(L, 0), 'Spalte 0 gibt es nicht');
+  Assert.IsTrue(EditorColumnFits('abc', 4), 'hinter dem letzten Zeichen');
+end;
+
+procedure TTestRdxBufferMath.EditorColumn_MultiByteLimit;
+var
+  L : string;
+begin
+  // Umlaut: 2 UTF-8-Bytes je Zeichen - die Byte-Grenze kommt bei der
+  // halben Zeichen-Spalte.
+  L := StringOfChar(#$00E4, 20000);
+  Assert.AreEqual<Integer>(32766, Utf8PrefixLength(L, 16384));
+  Assert.AreEqual<Integer>(0, Utf8PrefixLength(L, 1), 'kein Praefix');
+  Assert.IsTrue(EditorColumnFits(L, 16384), '16383 Zeichen = 32766 Bytes');
+  Assert.IsFalse(EditorColumnFits(L, 16385), '16384 Zeichen = 32768 Bytes');
+  Assert.IsFalse(EditorColumnFits(L, 20000), 'Spalte passt, Bytes nicht');
+end;
+
+procedure TTestRdxBufferMath.SpanFitsEditor_BothEnds;
+var
+  L : TStringList;
+begin
+  L := TStringList.Create;
+  try
+    L.Add('kurz := 1;');
+    L.Add(StringOfChar('a', 40000));
+    Assert.IsTrue(SpanFitsEditor(L, TRefactorSpan.Make('t', 1, 1, 1, 5)),
+      'kurze Zeile');
+    Assert.IsTrue(SpanFitsEditor(L, TRefactorSpan.Make('t', 1, 1, 2, 10)),
+      'Ende vorn in der langen Zeile');
+    Assert.IsFalse(SpanFitsEditor(L, TRefactorSpan.Make('t', 2, 1, 2, 33000)),
+      'Ende hinter Spalte 32767');
+    Assert.IsFalse(
+      SpanFitsEditor(L, TRefactorSpan.Make('t', 2, 33000, 2, 33001)),
+      'Anfang hinter Spalte 32767');
+    Assert.IsFalse(SpanFitsEditor(L, TRefactorSpan.Make('t', 2, 1, 3, 2)),
+      'Ende hinter der letzten Zeile');
+  finally
+    L.Free;
+  end;
+end;
+
+procedure TTestRdxBufferMath.ChooseTextSource_OpenBufferWins;
+begin
+  Assert.IsTrue(ChooseTextSource(True, True, 'unit u;') = txBuffer,
+    'offen und gelesen');
+  Assert.IsTrue(ChooseTextSource(False, False, '') = txDisk, 'nicht offen');
+  Assert.IsTrue(ChooseTextSource(True, True, '') = txBlocked,
+    'offen, aber leer - nicht die Platte');
+  Assert.IsTrue(ChooseTextSource(True, False, '') = txBlocked,
+    'offen, aber nicht lesbar');
+  Assert.IsTrue(ChooseTextSource(True, False, 'Rest') = txBlocked,
+    'Lesefehler zaehlt, auch mit Teiltext');
 end;
 
 initialization

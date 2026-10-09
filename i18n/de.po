@@ -2327,3 +2327,15 @@ msgstr "Datei nicht gefunden: %s"
 
 msgid "finding without line"
 msgstr "Fund ohne Zeile"
+
+msgid "editor buffer empty or not readable"
+msgstr "Editor-Puffer leer oder nicht lesbar"
+
+msgid "Line too long for the editor selection (the editor reaches at most column %d)"
+msgstr "Zeile zu lang für die Editor-Markierung (der Editor erreicht höchstens Spalte %d)"
+
+msgid "Range %d:%d to %d:%d lies behind the end of the editor buffer (%d lines) - rescan the file"
+msgstr "Bereich %d:%d bis %d:%d liegt hinter dem Ende des Editor-Puffers (%d Zeilen) - Datei neu prüfen"
+
+msgid "Cannot move the editor cursor to line %d, column %d"
+msgstr "Editor-Cursor lässt sich nicht auf Zeile %d, Spalte %d setzen"

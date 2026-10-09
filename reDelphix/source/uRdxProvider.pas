@@ -2,23 +2,44 @@ unit uRdxProvider;
 
 // reDelphix - der Anbieter: haengt an Funde des SCA-Plugins Aktionen
 // (uFindingActions in SCA.Engine, Konzept_SourceRefactor_Quellstellen
-// Abschnitt 15). Je Rechtsklick auf einen Fund wird Provide gerufen; es
+// Abschnitt 15). Je Fund eines Menues wird Provide gerufen; es
 // oeffnet die Datei ueber TSourcePlaces (nur lesen, kein Scan), laesst
 // den Rezept-Laeufer (uRdxRecipeRunner) die Stellen beschreiben und
-// haelt die Daten der Aktionen in TRdxAction-Objekten, bis das naechste
-// Provide sie ersetzt.
+// haelt die Daten der Aktionen in TRdxAction-Objekten, bis
+// RDX_ACTION_BATCHES neuere Provide-Chargen entstanden sind
+// (TRdxObjectRing).
+//
+// WELCHER TEXT GILT
+//
+// Ist die Datei im Editor offen, der Editor-Puffer - auch mit
+// ungespeicherten Aenderungen; ist der Puffer leer oder nicht lesbar,
+// kommt nur "reDelphix: Editor-Puffer leer oder nicht lesbar" und KEIN
+// Rueckfall auf die Platte (Review Nit 24). Sonst die Platte wie der Scan.
+// Die zuletzt geoeffnete Quelle bleibt offen: gleicher Name, gleiche
+// Herkunft, gleicher Text -> kein neuer Parse (Review Minor 9; ein Menue
+// fragt bis zu MAX_FINDINGS_PER_MENU Funde, die Gluehbirne jede
+// beruhigte Caret-Zeile). Die Fundzeile wird gegen den Fund geprueft
+// (Ziel, '+'-Zahl; TRdxRecipeRunner.QueryOf/Describe): steht dort nach
+// einer Bearbeitung eine andere Anweisung, entfallen die Baum-Rezepte mit
+// dem Grund "Zeile verschoben?" (Review Minor 20).
 //
 // WAS ANGEBOTEN WIRD
 //
 //   "Stelle zeigen"                    wenn sich die Anweisung des Funds
-//                                      beschreiben laesst (Anker der Regel)
-//   "Format() aus Verkettung bilden"   fixMode = auto (SCA044); aktiv nur bei
-//                                      FixSafe, SysUtils in uses, kein SQL
+//                                      beschreiben laesst (Anker der Regel);
+//                                      ausgegraut hinter Spalte 32767
+//                                      (SmallInt der Editor-Markierung)
+//   "Format() aus Verkettung bilden"   fixMode = auto (SCA044); aktiv nach
+//                                      der Kompilat-Regel (uRdxRecipes.
+//                                      JudgeOperand); fehlt System.SysUtils,
+//                                      wird es eingefuegt; kein SQL
 //   "Parametrisierte Vorlage ..."      fixMode = assisted (SCA003); nur in
 //                                      die Zwischenablage, nie geschrieben
-//   "uses: X -> Scope.X"               Fund liegt in einer uses-Klausel;
-//                                      je unqualifiziertem Eintrag der Zeile,
-//                                      dazu "alle n Eintraege"
+//   "uses: X -> Scope.X"               Fund liegt in einer uses-Klausel
+//                                      (auch der Programm-Klausel einer
+//                                      .dpr/.lpr); je unqualifiziertem
+//                                      Eintrag der Zeile, dazu "alle n
+//                                      Eintraege"
 //   "FreeAndNil(X) verwenden"          SCA085; X im Quelltext deklariert,
 //                                      System.SysUtils kommt notfalls mit
 //   "Assigned() statt Vergleich ..."   SCA126; alle Vergleiche der Anweisung
@@ -35,8 +56,9 @@ unit uRdxProvider;
 // WAS DER ANBIETER NICHT TUT
 //
 // Er schreibt nichts in eine Datei (nur in den Editor-Puffer, ueber
-// uRdxEditor mit Vergleich gegen den Scan), meldet keinen Fund und
-// ruft keinen Scan. Nach einer Umformung zeigt die Fundliste des Plugins
+// uRdxEditor mit Vergleich gegen den Text, auf dem die Aktion beim
+// Menueaufbau beschrieben wurde), meldet keinen Fund und ruft keinen
+// Scan. Nach einer Umformung zeigt die Fundliste des Plugins
 // den alten Stand, bis der Benutzer die Datei erneut scannt.
 
 interface
@@ -44,7 +66,9 @@ interface
 uses
   System.SysUtils, System.Classes,
   uEngineApi, uRefactorInfo, uMethodd12, uFindingActions,
-  uRdxRecipes, uRdxScopeTable, uRdxRecipeRunner;
+  uRdxRecipes, uRdxScopeTable,
+  uRdxBufferMath,   // TRdxTextSource, SpanFitsEditor
+  uRdxRecipeRunner;
 
 type
   TRdxActionKind = (akShowSpan, akReplace, akSqlTemplate);
@@ -54,8 +78,8 @@ type
   // nicht nur bis zum naechsten Provide, denn ein Host stellt die
   // Aktionen mehrerer Funde in ein Menue (Stufe B, Konzept Editor-
   // Gluehbirne 2026-10-06). Mehrere Ersetzungen (TRdxEdit aus uRdxBufferMath)
-  // werden von unten nach oben ausgefuehrt, damit die Bereiche der
-  // oberen von den unteren nicht verschoben werden.
+  // prueft uRdxEditor.ReplaceSpans alle gegen den Puffer und schreibt sie
+  // dann aufsteigend durch EINEN Writer - ein Undo-Schritt.
   TRdxAction = class
   private
     FKind     : TRdxActionKind;
@@ -88,10 +112,37 @@ type
   TRdxRecipe = procedure(var AList: TArray<TFindingAction>;
     const ACtx: TRdxRecipeContext) of object;
 
+  TRdxOpenResult = (orFailed, orOpened, orReused);
+
+  // Die zuletzt geoeffnete Quelle des Quellstellen-Dienstes, ueber mehrere
+  // Provide-Aufrufe gehalten (Review Minor 9, s. Kopf): bei gleichem
+  // Dateinamen, gleicher Herkunft und gleichem Text wird nicht neu geparst.
+  TRdxSourceCache = class
+  private
+    FPlaces : TSourcePlaces;
+    FName   : string;
+    FOrigin : TRdxTextSource;
+    FText   : string;          // genau der geparste bzw. gelesene Text
+  public
+    constructor Create;
+    destructor Destroy; override;
+    // txBuffer: AText parsen (TSourcePlaces.OpenSource); txDisk: die Datei
+    // (TSourcePlaces.Open, AText ist dann der Vergleichstext, den der
+    // Aufrufer von der Platte las); txBlocked: orFailed. orReused, wenn
+    // die offene Quelle passt. Wirft, was der Parser wirft - dann ist
+    // nichts offen und nichts gemerkt.
+    function Open(const AFileName: string; ASource: TRdxTextSource;
+      const AText: string): TRdxOpenResult;
+    // Schliessen und vergessen - nach einer Ausnahme in einem Rezept.
+    procedure Forget;
+    // Der Dienst; offen nach Open <> orFailed.
+    property Places: TSourcePlaces read FPlaces;
+  end;
+
   TRdxProvider = class
   private
     FActions     : TRdxObjectRing;   // besitzt die TRdxAction-Objekte
-    FPlaces      : TSourcePlaces;
+    FSource      : TRdxSourceCache;  // offene Quelle (Minor 9)
     FScopes      : TRdxScopeTable;
     FToken       : Integer;
     FUsesNames   : TArray<string>;   // Namen der uses-Eintraege der Datei
@@ -129,9 +180,11 @@ type
     // Zeilen- und Datei-Marker '// noinspection'.
     procedure AddSuppress(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
-    // Quelltext parsen, Anker beschreiben, Baum-Rezepte laufen lassen.
+    // Quelltext parsen (oder wiederverwenden), Anker beschreiben,
+    // Baum-Rezepte laufen lassen.
     procedure AddTreeActions(var AList: TArray<TFindingAction>;
-      var ACtx: TRdxRecipeContext; AFromBuffer: Boolean; const AText: string);
+      var ACtx: TRdxRecipeContext; ASource: TRdxTextSource;
+      const AText: string);
     // "reDelphix: <Grund>", wenn bis hierher kein Eintrag entstanden ist -
     // sonst waere "keine Hilfe" nicht von "Anbieter nicht geladen" zu
     // unterscheiden.
@@ -157,6 +210,7 @@ implementation
 
 uses
   Vcl.Clipbrd,
+  uCrashDiag,       // EStackExhausted
   uSCAConsts,       // KindName, fkUnusedSuppression
   uFileTextCache,   // LoadFileSmart: dieselbe Dekodierung wie der Scan
   uLocalization,
@@ -179,6 +233,14 @@ const
   CAP_ASSIGNED = 'Use Assigned() instead of comparing with nil';
   CAP_TOBJECT  = 'Remove (TObject) from the class declaration';
   DIAG_PREFIX  = 'reDelphix: ';
+  // Gleiche msgid wie in uRdxEditor (SelectSpan).
+  R_TOO_LONG   = 'Line too long for the editor selection (the editor '
+    + 'reaches at most column %d)';
+  // Fuer das Protokoll (deutsch wie die uebrigen Zeilen).
+  SOURCE_NAMES : array[TRdxTextSource] of string =
+    ('Editor-Puffer', 'Platte', 'gesperrt');
+  OPEN_NAMES   : array[TRdxOpenResult] of string =
+    ('', ', neu geparst', ', wiederverwendet');
 
 var
   GInstance : TRdxProvider = nil;
@@ -202,6 +264,53 @@ begin
   end;
 end;
 
+{ TRdxSourceCache }
+
+constructor TRdxSourceCache.Create;
+begin
+  inherited Create;
+  FPlaces := TSourcePlaces.Create;
+end;
+
+destructor TRdxSourceCache.Destroy;
+begin
+  FPlaces.Free;   // schliesst selbst
+  inherited;
+end;
+
+function TRdxSourceCache.Open(const AFileName: string;
+  ASource: TRdxTextSource; const AText: string): TRdxOpenResult;
+var
+  Opened : Boolean;
+begin
+  if FPlaces.IsOpen and SameText(FName, AFileName) and (FOrigin = ASource)
+     and (FText = AText) then
+    Exit(orReused);
+  // Erst vergessen, dann oeffnen: wirft der Parser, ist nichts offen und
+  // nichts gemerkt (TSourcePlaces schliesst sich dann selbst).
+  Forget;
+  if ASource = txBlocked then
+    Exit(orFailed);
+  if ASource = txBuffer then
+    Opened := FPlaces.OpenSource(AFileName, AText)
+  else
+    Opened := FPlaces.Open(AFileName);
+  if not Opened then
+    Exit(orFailed);
+  FName   := AFileName;
+  FOrigin := ASource;
+  FText   := AText;
+  Result  := orOpened;
+end;
+
+procedure TRdxSourceCache.Forget;
+begin
+  FPlaces.Close;
+  FName   := '';
+  FOrigin := txDisk;
+  FText   := '';
+end;
+
 { TRdxProvider }
 
 constructor TRdxProvider.Create;
@@ -210,7 +319,7 @@ begin
   // Je Charge die Aktionsobjekte EINES Provide; wie viele am Leben
   // bleiben, steht bei RDX_ACTION_BATCHES (uRdxRecipeRunner).
   FActions := TRdxObjectRing.Create(RDX_ACTION_BATCHES);
-  FPlaces  := TSourcePlaces.Create;
+  FSource  := TRdxSourceCache.Create;
   FScopes  := TRdxScopeTable.Create;
   FScopes.LoadDefault;   // False = keine Tabelle; uses-Aktionen sagen das
   // Reihenfolge = Reihenfolge im Menue.
@@ -230,7 +339,7 @@ destructor TRdxProvider.Destroy;
 begin
   UnregisterAtHost;
   FScopes.Free;
-  FPlaces.Free;
+  FSource.Free;
   FActions.Free;
   inherited;
 end;
@@ -320,6 +429,15 @@ var
   Act : TRdxAction;
 begin
   if not Assigned(ACtx.Info) or not ACtx.Info.Span.IsValid then Exit;
+  // Die Editor-Markierung rechnet in SmallInt-Spalten (Review Nit 8):
+  // weiter rechts wird die Stelle nicht angeboten, sondern begruendet.
+  if not SpanFitsEditor(ACtx.Lines, ACtx.Info.Span) then
+  begin
+    Add(AList, _(CAP_SHOW), Format(_(R_TOO_LONG), [EDITOR_MAX_COLUMN]),
+      False, nil);
+    AList[High(AList)].Kind := fakNavigate;
+    Exit;
+  end;
   Act := NewAction(akShowSpan, ACtx.FileName);
   Act.FSpan := ACtx.Info.Span;
   Add(AList, _(CAP_SHOW), Format(_('Line %d:%d to %d:%d'),
@@ -337,7 +455,7 @@ var
   Act     : TRdxAction;
 begin
   if ACtx.FixMode <> 'auto' then Exit;
-  Outcome := TRdxRecipeRunner.FormatRewrite(FPlaces, ACtx.Info, ACtx.Why,
+  Outcome := TRdxRecipeRunner.FormatRewrite(FSource.Places, ACtx.Info, ACtx.Why,
     FUsesNames);
   if not Outcome.Enabled then
   begin
@@ -371,7 +489,7 @@ begin
     Add(AList, _(CAP_SQL), ACtx.Why, False, nil);
     Exit;
   end;
-  if not TRdxRecipeRunner.SqlTemplate(FPlaces, ACtx.Info, ACtx.IsCall,
+  if not TRdxRecipeRunner.SqlTemplate(FSource.Places, ACtx.Info, ACtx.IsCall,
        Template, Hint, Reason) then
   begin
     Add(AList, _(CAP_SQL), Reason, False, nil);
@@ -385,11 +503,8 @@ end;
 procedure TRdxProvider.AddUsesActions(var AList: TArray<TFindingAction>;
   const ACtx: TRdxRecipeContext);
 var
-  Section : TUsesSection;
   Entries : TArray<TRefactorSpan>;
   i       : Integer;
-  Lo, Hi  : Integer;
-  InUses  : Boolean;
   Fw      : TRdxFramework;
   Short   : string;
   Q       : string;
@@ -403,21 +518,10 @@ var
 begin
   // Nur wenn der Fund in einer uses-Klausel liegt (Zeile des 'uses' bis
   // letzter Eintrag) - sonst stuende "uses: ..." an jedem Fund der Datei.
-  InUses := False;
-  for Section := TUsesSection.usInterface to TUsesSection.usImplementation do
-  begin
-    Entries := FPlaces.UsesEntries(Section);
-    if Length(Entries) = 0 then Continue;
-    Lo := Entries[0].StartLine - 1;
-    Hi := Entries[0].EndLine;
-    for i := 1 to High(Entries) do
-    begin
-      if Entries[i].StartLine - 1 < Lo then Lo := Entries[i].StartLine - 1;
-      if Entries[i].EndLine > Hi then Hi := Entries[i].EndLine;
-    end;
-    if (ACtx.Line >= Lo) and (ACtx.Line <= Hi) then InUses := True;
-  end;
-  if not InUses then Exit;
+  // Das Fenster kennt auch die Programm-Klausel (.dpr/.lpr/library,
+  // Review Minor 18) und beginnt auf der Zeile des 'uses', nicht eine
+  // davor (Minor 19).
+  if not TRdxRecipeRunner.LineInUsesClause(FSource.Places, ACtx.Line) then Exit;
 
   if FScopes.Count = 0 then
   begin
@@ -429,7 +533,7 @@ begin
   // anderes Ziel stehen ('{$IFDEF FPC}LCLIntf,{$ELSE}Windows,{$ENDIF}') -
   // qualifiziert uebersetzte FPC ihn nicht mehr (Review Major 7; dieselbe
   // Sperre wie PlanUses).
-  DirLine := TRdxRecipeRunner.UsesDirectiveLine(FPlaces);
+  DirLine := TRdxRecipeRunner.UsesDirectiveLine(FSource.Places);
   if DirLine > 0 then
   begin
     Add(AList, _(CAP_USES),
@@ -438,7 +542,7 @@ begin
     Exit;
   end;
 
-  Entries := FPlaces.UsesEntries(TUsesSection.usAny);
+  Entries := FSource.Places.UsesEntries(TUsesSection.usAny);
   Fw := TRdxRecipes.DetectFramework(FUsesNames);
   All := nil;
   Preview := '';
@@ -514,7 +618,8 @@ var
 begin
   if not TRdxFixRunner.Handles(ACtx.Finding.Kind)
      or not IsPascalSource(ACtx.FileName) then Exit;
-  O := TRdxFixRunner.FixFor(FPlaces, ACtx.Lines, ACtx.Finding, FUsesNames);
+  O := TRdxFixRunner.FixFor(FSource.Places, ACtx.Lines, ACtx.Finding,
+    FUsesNames);
   Caption := SimpleFixCaption(ACtx.Finding.Kind, O.Name);
   if not O.Enabled then
   begin
@@ -558,34 +663,30 @@ begin
 end;
 
 procedure TRdxProvider.AddTreeActions(var AList: TArray<TFindingAction>;
-  var ACtx: TRdxRecipeContext; AFromBuffer: Boolean; const AText: string);
+  var ACtx: TRdxRecipeContext; ASource: TRdxTextSource; const AText: string);
 var
   Meta   : TRuleMeta;
   Anchor : string;
-  Opened : Boolean;
+  Opened : TRdxOpenResult;
   R      : TRdxRecipe;
-  Source : string;
+  Done   : Boolean;
 begin
   try
     // Der EDITOR-PUFFER ist die Wahrheit, wenn die Datei offen ist: nur
     // dann passen die beschriebenen Bereiche zu dem Text, in den nachher
     // geschrieben wird (ungespeicherte Aenderungen!). Sonst die Platte.
-    if AFromBuffer then
-    begin
-      Source := 'Editor-Puffer';
-      Opened := FPlaces.OpenSource(ACtx.FileName, AText);
-    end
-    else
-    begin
-      Source := 'Platte';
-      Opened := FPlaces.Open(ACtx.FileName);
-    end;
-    if not Opened then
+    Opened := FSource.Open(ACtx.FileName, ASource, AText);
+    if Opened = orFailed then
     begin
       Add(AList, DIAG_PREFIX + _('file not readable'), '', False, nil);
       Exit;
     end;
   except
+    // Ein erschoepfter Stapel (tiefe Parser-Rekursion) wird nie
+    // verschluckt (uCrashDiag, Review Minor 33) - der Host reicht ihn
+    // weiter; EAbort ebenso (Projektregel).
+    on EStackExhausted do raise;
+    on EAbort do raise;
     on E: Exception do
     begin
       Add(AList, DIAG_PREFIX + 'Parser: ' + E.Message, '', False, nil);
@@ -593,23 +694,32 @@ begin
     end;
   end;
   ACtx.Info := nil;
+  Done := False;
   try
-    FUsesNames := TRdxRecipeRunner.UsesNamesOf(FPlaces);
+    FUsesNames := TRdxRecipeRunner.UsesNamesOf(FSource.Places);
 
     Meta         := TRuleCatalog.GetRuleCanonical(ACtx.Finding.Kind);
     Anchor       := LowerCase(Meta.Anchor);
     ACtx.FixMode := LowerCase(Meta.FixMode);
-    RdxLog('Provide %s %s:%d anchor=%s fixMode=%s quelle=%s',
+    RdxLog('Provide %s %s:%d anchor=%s fixMode=%s quelle=%s%s',
       [ACtx.Finding.ResolvedRuleId, ExtractFileName(ACtx.FileName), ACtx.Line,
-       Anchor, ACtx.FixMode, Source]);
+       Anchor, ACtx.FixMode, SOURCE_NAMES[ASource], OPEN_NAMES[Opened]]);
 
-    ACtx.Info := TRdxRecipeRunner.DescribeAnchor(FPlaces, ACtx.Line, Anchor,
-      ACtx.IsCall, ACtx.Why);
+    // Mit Gegenprobe gegen den Fund (Review Minor 20): traegt die
+    // Fundzeile nicht mehr Ziel und '+'-Zahl des Funds, ist Info nil und
+    // Why nennt den Grund ("Zeile verschoben?").
+    ACtx.Info := TRdxRecipeRunner.Describe(FSource.Places,
+      TRdxRecipeRunner.QueryOf(ACtx.Finding, Anchor), ACtx.IsCall, ACtx.Why);
     for R in FTreeRecipes do
       R(AList, ACtx);
+    Done := True;
   finally
     FreeAndNil(ACtx.Info);   // alles Noetige ist in die Aktionen kopiert
-    FPlaces.Close;
+    // Die Quelle bleibt fuer den naechsten Fund offen (Minor 9) - ausser
+    // ein Rezept ist mit einer Ausnahme ausgestiegen: die faul gebauten
+    // Teile des Dienstes (Typen, Scope-Fakten) koennten dann halb stehen.
+    if not Done then
+      FSource.Forget;
   end;
 end;
 
@@ -629,11 +739,11 @@ end;
 function TRdxProvider.Provide(
   const AFinding: TLeakFinding): TArray<TFindingAction>;
 var
-  Ctx        : TRdxRecipeContext;
-  Text       : string;
-  FromBuffer : Boolean;
-  Lines      : TStringList;
-  R          : TRdxRecipe;
+  Ctx    : TRdxRecipeContext;
+  Text   : string;
+  Source : TRdxTextSource;
+  Lines  : TStringList;
+  R      : TRdxRecipe;
 begin
   Result := nil;
   // Kein FActions.Clear mehr (Stufe B): die Objekte des vorigen Provide
@@ -658,13 +768,23 @@ begin
     Add(Result, DIAG_PREFIX + _('finding without line'), '', False, nil);
     Exit;
   end;
+  // Den Text EINMAL lesen - Puffer, sonst Platte wie der Scan. Offen, aber
+  // leer oder nicht lesbar: kein Rueckfall auf die Platte (Review Nit 24),
+  // die Aktionen schrieben in genau diesen Puffer.
+  Source := TRdxEditor.ReadBuffer(AFinding.FileName, Text);
+  if Source = txBlocked then
+  begin
+    Add(Result, DIAG_PREFIX + _('editor buffer empty or not readable'), '',
+      False, nil);
+    Exit;
+  end;
   Lines := TStringList.Create;
   try
-    // Den Text EINMAL lesen - Puffer, sonst Platte wie der Scan.
-    FromBuffer := TRdxEditor.TryReadBuffer(AFinding.FileName, Text);
-    if FromBuffer then
+    if Source = txBuffer then
       Lines.Text := Text
-    else if not LoadFileSmart(AFinding.FileName, Lines) then
+    else if LoadFileSmart(AFinding.FileName, Lines) then
+      Text := Lines.Text   // Vergleichstext fuer die offene Quelle (Minor 9)
+    else
     begin
       Add(Result, DIAG_PREFIX + _('file not readable'), '', False, nil);
       Exit;
@@ -675,7 +795,7 @@ begin
     Ctx.Line     := AFinding.LineInt;
     Ctx.KindName := uSCAConsts.KindName(AFinding.Kind);
     Ctx.Lines    := Lines;
-    AddTreeActions(Result, Ctx, FromBuffer, Text);
+    AddTreeActions(Result, Ctx, Source, Text);
     for R in FTextRecipes do
       R(Result, Ctx);
     AddDiagnosis(Result, Ctx);

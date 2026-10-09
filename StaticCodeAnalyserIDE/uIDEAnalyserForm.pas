@@ -80,8 +80,8 @@ type
     // prompt"). Owner = Frame, kein manuelles Free noetig.
     FGridMenu       : TPopupMenu;
     // Aktionen fremder Anbieter zum aktuell angeklickten Fund (uFindingActions,
-    // Konzept Quellstellen §15 H1). Je Popup frisch erfragt; der Index im
-    // Array steht im Tag des Menuepunkts (GRID_ACTION_TAG + Index).
+    // Konzept Quellstellen Abschnitt 15 H1). Je Popup frisch erfragt; der
+    // Index im Array steht im Tag des Menuepunkts (GRID_ACTION_TAG + Index).
     FGridActions    : TArray<TFindingAction>;
     FCurrentBaseDir : string;
     FFilterCombo       : TComboBox;
@@ -5124,6 +5124,9 @@ end;
 //      b) Original-OnPopup rufen -> IDE rebuilt komplett
 //      c) Frisches Item am ENDE des Popups einhaengen
 //   5) Beim Unload: Original-OnPopup wiederherstellen, Items freigeben
+//   6) Gibt die IDE ein gehooktes Popup frei, meldet das ein Waechter
+//      (TPopupFreeWatcher, FreeNotification) und der Slot verschwindet,
+//      ohne die schon mitgestorbenen Items noch einmal anzufassen
 //
 // Wichtig laut Recherche:
 //   * Item AM ENDE des Popups einhaengen (sonst Action-Manager-Konflikt)
@@ -5131,6 +5134,8 @@ end;
 //   * OnPopup-Chain, nicht Overwrite (sonst broken bei mehreren Plugins)
 
 type
+  TEditorContextMenuHook = class;   // vorwaerts: der Waechter meldet an ihn
+
   TPopupHookSlot = class
   public
     Popup       : TPopupMenu;
@@ -5154,14 +5159,36 @@ type
       AForm: TCustomForm);
     destructor Destroy; override;
     procedure ClearActionItems;
+    procedure ForgetItems;
+  end;
+
+  // Waechter fuer die gehookten IDE-Popups (Minor 6, Audit reDelphiX
+  // 2026-10-07). Der Hook selbst ist kein TComponent, kann also keine
+  // FreeNotification empfangen; diese Komponente (Owner=nil) tut es fuer
+  // ihn. Jedes gehookte Popup meldet seine Freigabe hierher, der Hook
+  // entfernt dann den Slot, solange das Popup noch ein gueltiges Objekt
+  // ist. Damit haelt FSlots nie einen Schluessel auf ein freigegebenes
+  // Popup (TObjectDictionary hasht Klassen-Schluessel ueber das virtuelle
+  // GetHashCode) und kein Slot fasst Items eines zerlegten Popups an.
+  TPopupFreeWatcher = class(TComponent)
+  private
+    FHook : TEditorContextMenuHook;
+  protected
+    procedure Notification(AComponent: TComponent;
+      Operation: TOperation); override;
+  public
+    constructor CreateFor(AHook: TEditorContextMenuHook);
   end;
 
   TEditorContextMenuHook = class(TNotifierObject, INTAEditServicesNotifier)
   private
     // Pro gehooktem Popup ein Slot mit Original-Handler + aktuellem Item.
     // doOwnsValues: bei Remove/Clear/Destroy werden Slot-Objekte freigegeben.
-    FSlots : TObjectDictionary<TPopupMenu, TPopupHookSlot>;
+    FSlots   : TObjectDictionary<TPopupMenu, TPopupHookSlot>;
+    // Meldet die Freigabe gehookter Popups (PopupFreed). Gehoert dem Hook.
+    FWatcher : TPopupFreeWatcher;
     procedure HookEditorForm(AForm: TCustomForm);
+    procedure PopupFreed(APopup: TPopupMenu);
     function  FindEditorPopup(AForm: TCustomForm): TPopupMenu;
     procedure OnPopupHandler(Sender: TObject);
     procedure ItemClick(Sender: TObject);
@@ -5220,7 +5247,10 @@ end;
 
 procedure TPopupHookSlot.ClearActionItems;
 // Wie der Abbau von OurItem: aus dem Popup loesen, freigeben, vergessen.
-// Defensiv gegen ein Popup, das die IDE schon zerlegt hat.
+// Nur rufen, solange das Popup lebt (OnPopupHandler: es ist der Sender;
+// Alt-Slot in HookEditorForm und Hook-Abbau: ein freigegebenes Popup
+// haette PopupFreed schon aus FSlots genommen). Fuer den Abbau beim
+// Schliessen des Editorfensters gilt ForgetItems.
 var
   i : Integer;
 begin
@@ -5230,9 +5260,56 @@ begin
       Popup.Items.Remove(ActionItems[i]);
     ActionItems[i].Free;
   except
+    on EStackExhausted do raise;
+    on EAbort do raise;
+    // noinspection ExceptionTooGeneral
+    // Ein einzelner Menuepunkt, der sich nicht abbauen laesst, darf die
+    // uebrigen nicht aufhalten und das Popup der IDE nicht stoeren - der
+    // Fehler geht in den Diagnose-Kanal des Plugins (DebugView).
+    on E: Exception do
+    begin
+      // noinspection DebugOutput
+      OutputDebugString(PChar('SCA: ClearActionItems - ' + E.ClassName
+        + ': ' + E.Message));
+    end;
   end;
   ActionItems.Clear;
   Actions := nil;
+end;
+
+procedure TPopupHookSlot.ForgetItems;
+// Abbau OHNE Free (Minor 6, Audit reDelphiX 2026-10-07): die Items haben
+// Owner=nil und haengen im IDE-Popup; das Popup gibt sie beim eigenen
+// Abbau selbst frei (TMenu.Destroy -> FItems.Free -> TMenuItem.Destroy:
+// 'while Count > 0 do Items[0].Free'). Ist es schon zerlegt, waere ein
+// Free hier ein Double-Free und Popup.Items ein Zugriff auf freigegebenen
+// Speicher; lebt es noch, faellt alles mit ihm. Also nur vergessen - wie
+// OurItem, das auch bisher beim Schliessen nicht angefasst wurde.
+begin
+  ActionItems.Clear;
+  Actions := nil;
+  OurItem := nil;
+  Popup   := nil;
+end;
+
+{ TPopupFreeWatcher }
+
+constructor TPopupFreeWatcher.CreateFor(AHook: TEditorContextMenuHook);
+begin
+  inherited Create(nil);
+  FHook := AHook;
+end;
+
+procedure TPopupFreeWatcher.Notification(AComponent: TComponent;
+  Operation: TOperation);
+begin
+  // inherited ZUERST und immer: es loest die Gegenrichtung
+  // (RemoveFreeNotification). Ohne das kaeme die Schleife in
+  // TComponent.RemoveFreeNotifications des Popups nie zum Ende.
+  inherited Notification(AComponent, Operation);
+  if (Operation = opRemove) and (AComponent is TPopupMenu) and
+     Assigned(FHook) then
+    FHook.PopupFreed(TPopupMenu(AComponent));
 end;
 
 { TEditorContextMenuHook }
@@ -5240,16 +5317,21 @@ end;
 constructor TEditorContextMenuHook.Create;
 begin
   inherited;
-  FSlots := TObjectDictionary<TPopupMenu, TPopupHookSlot>.Create([doOwnsValues]);
+  FSlots   := TObjectDictionary<TPopupMenu, TPopupHookSlot>.Create([doOwnsValues]);
+  FWatcher := TPopupFreeWatcher.CreateFor(Self);
 end;
 
 destructor TEditorContextMenuHook.Destroy;
 var
   Slot : TPopupHookSlot;
 begin
+  // Waechter zuerst: TComponent.Destroy meldet ihn bei allen noch lebenden
+  // Popups ab, danach kommt kein PopupFreed mehr in den Abbau hinein.
+  FreeAndNil(FWatcher);
   // Hooks loesen: pro Slot Original-OnPopup wiederherstellen (nur wenn unser
-  // Handler noch dranhaengt) und unser Item freigeben. Try/except defensive
-  // weil das Popup zwischenzeitlich vom IDE freigegeben sein koennte.
+  // Handler noch dranhaengt) und unser Item freigeben. Jedes Popup in
+  // FSlots lebt noch (ein freigegebenes hat PopupFreed schon entfernt);
+  // das try/except bleibt als zweite Linie.
   if Assigned(FSlots) then
   begin
     for Slot in FSlots.Values do
@@ -5316,6 +5398,10 @@ var
 begin
   Popup := FindEditorPopup(AForm);
   if not Assigned(Popup) then Exit;
+  // Ein Popup im Abbau (die Form wird gerade zerstoert) nicht mehr hooken:
+  // der Slot waere sofort tot, und TComponent.FreeNotification verbietet
+  // die Anmeldung an einer sterbenden Komponente (Assert).
+  if csDestroying in Popup.ComponentState then Exit;
   if FSlots.ContainsKey(Popup) then Exit;   // exakt dieser Hook sitzt schon
 
   // Alten Slot derselben Form abloesen, bevor ein zweiter entsteht.
@@ -5344,7 +5430,25 @@ begin
 
   Slot := TPopupHookSlot.Create(Popup, Popup.OnPopup, AForm);
   FSlots.Add(Popup, Slot);
+  // Freigabe des Popups melden lassen (PopupFreed). Mehrfaches Anmelden
+  // ist harmlos (TComponent.FreeNotification prueft IndexOf).
+  Popup.FreeNotification(FWatcher);
   Popup.OnPopup := OnPopupHandler;
+end;
+
+procedure TEditorContextMenuHook.PopupFreed(APopup: TPopupMenu);
+// Die IDE gibt ein gehooktes Popup frei (Editorfenster zu, IDE-Ende).
+// Gerufen aus TComponent.Destroy des Popups: das Objekt ist noch gueltig
+// (der Schluesselzugriff in FSlots ruft APopup.GetHashCode), seine Items
+// - und mit ihnen unsere Owner=nil-Kinder - hat TMenu.Destroy aber schon
+// freigegeben. Der Slot darf sie also nur noch vergessen.
+var
+  Slot : TPopupHookSlot;
+begin
+  if not Assigned(FSlots) then Exit;
+  if not FSlots.TryGetValue(APopup, Slot) then Exit;
+  Slot.ForgetItems;
+  FSlots.Remove(APopup);   // doOwnsValues -> Slot wird gefreut (ohne Items)
 end;
 
 procedure TEditorContextMenuHook.OnPopupHandler(Sender: TObject);
@@ -5513,6 +5617,7 @@ procedure TEditorContextMenuHook.WindowNotification(
   const EditWindow: INTAEditWindow; Operation: TOperation);
 var
   Popup : TPopupMenu;
+  Weg   : TPopupHookSlot;
 begin
   // Editor-Window wird zerstoert -> Slot-Eintrag entfernen damit Destroy
   // nicht auf einen freigegebenen Popup zugreift.
@@ -5530,6 +5635,11 @@ begin
   // die Einfuegeseite konnte durch die kippende Popup-Heuristik mehrere
   // Slots je Form anlegen. Erst sammeln, dann entfernen - Remove waehrend
   // der Values-Iteration invalidiert den Enumerator.
+  // Die Items des Slots werden dabei nur VERGESSEN, nicht freigegeben
+  // (ForgetItems, Minor 6 Audit reDelphiX 2026-10-07): ob die IDE das
+  // Popup vor oder nach diesem Ereignis zerlegt, ist nicht belegt; die
+  // Kinder gibt das Popup in beiden Faellen selbst frei. Ein schon
+  // freigegebenes Popup hat PopupFreed ohnehin vorher aus FSlots genommen.
   if (Operation = opRemove) and Assigned(EditWindow) then
   begin
     var Opfer := TList<TPopupMenu>.Create;
@@ -5538,7 +5648,11 @@ begin
         if Slot.Form = EditWindow.Form then
           Opfer.Add(Slot.Popup);
       for Popup in Opfer do
-        FSlots.Remove(Popup);   // doOwnsValues -> Slot wird gefreut
+      begin
+        if FSlots.TryGetValue(Popup, Weg) then
+          Weg.ForgetItems;
+        FSlots.Remove(Popup);   // doOwnsValues -> Slot wird gefreut (ohne Items)
+      end;
     finally
       Opfer.Free;
     end;

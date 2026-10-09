@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2329 Zeilen, 78069 Bytes
-  CPoLines_de: array[0..2328] of string = (
+  // i18n\de.po - 2341 Zeilen, 78679 Bytes
+  CPoLines_de: array[0..2340] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2343,7 +2343,19 @@ const
     'msgstr "Datei nicht gefunden: %s"',
     '',
     'msgid "finding without line"',
-    'msgstr "Fund ohne Zeile"'
+    'msgstr "Fund ohne Zeile"',
+    '',
+    'msgid "editor buffer empty or not readable"',
+    'msgstr "Editor-Puffer leer oder nicht lesbar"',
+    '',
+    'msgid "Line too long for the editor selection (the editor reaches at most column %d)"',
+    'msgstr "Zeile zu lang f'#$00FC'r die Editor-Markierung (der Editor erreicht h'#$00F6'chstens Spalte %d)"',
+    '',
+    'msgid "Range %d:%d to %d:%d lies behind the end of the editor buffer (%d lines) - rescan the file"',
+    'msgstr "Bereich %d:%d bis %d:%d liegt hinter dem Ende des Editor-Puffers (%d Zeilen) - Datei neu pr'#$00FC'fen"',
+    '',
+    'msgid "Cannot move the editor cursor to line %d, column %d"',
+    'msgstr "Editor-Cursor l'#$00E4'sst sich nicht auf Zeile %d, Spalte %d setzen"'
   );
 
   // i18n\en.po - 268 Zeilen, 7136 Bytes
@@ -2618,8 +2630,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2325 Zeilen, 81827 Bytes
-  CPoLines_fr: array[0..2324] of string = (
+  // i18n\fr.po - 2337 Zeilen, 82471 Bytes
+  CPoLines_fr: array[0..2336] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4944,7 +4956,19 @@ const
     'msgstr "fichier introuvable : %s"',
     '',
     'msgid "finding without line"',
-    'msgstr "r'#$00E9'sultat sans ligne"'
+    'msgstr "r'#$00E9'sultat sans ligne"',
+    '',
+    'msgid "editor buffer empty or not readable"',
+    'msgstr "tampon de l'''#$00E9'diteur vide ou illisible"',
+    '',
+    'msgid "Line too long for the editor selection (the editor reaches at most column %d)"',
+    'msgstr "Ligne trop longue pour la s'#$00E9'lection de l'''#$00E9'diteur (l'''#$00E9'diteur atteint au plus la colonne %d)"',
+    '',
+    'msgid "Range %d:%d to %d:%d lies behind the end of the editor buffer (%d lines) - rescan the file"',
+    'msgstr "La plage %d:%d '#$00E0' %d:%d se trouve apr'#$00E8's la fin du tampon de l'''#$00E9'diteur (%d lignes) - r'#$00E9'analysez le fichier"',
+    '',
+    'msgid "Cannot move the editor cursor to line %d, column %d"',
+    'msgstr "Impossible de placer le curseur de l'''#$00E9'diteur '#$00E0' la ligne %d, colonne %d"'
   );
 
 // Kuerzel aller eingebetteten .po, in Dateisystem-Sortierung. Quelle

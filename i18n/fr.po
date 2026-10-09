@@ -2323,3 +2323,15 @@ msgstr "fichier introuvable : %s"
 
 msgid "finding without line"
 msgstr "résultat sans ligne"
+
+msgid "editor buffer empty or not readable"
+msgstr "tampon de l'éditeur vide ou illisible"
+
+msgid "Line too long for the editor selection (the editor reaches at most column %d)"
+msgstr "Ligne trop longue pour la sélection de l'éditeur (l'éditeur atteint au plus la colonne %d)"
+
+msgid "Range %d:%d to %d:%d lies behind the end of the editor buffer (%d lines) - rescan the file"
+msgstr "La plage %d:%d à %d:%d se trouve après la fin du tampon de l'éditeur (%d lignes) - réanalysez le fichier"
+
+msgid "Cannot move the editor cursor to line %d, column %d"
+msgstr "Impossible de placer le curseur de l'éditeur à la ligne %d, colonne %d"

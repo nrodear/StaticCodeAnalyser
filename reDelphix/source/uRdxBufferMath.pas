@@ -13,7 +13,11 @@ unit uRdxBufferMath;
 // Bis Stufe 0 lagen diese Funktionen in der ToolsAPI-Unit uRdxEditor und
 // waren deshalb ungetestet; jetzt laufen sie in reDelphix.Test und im
 // FPC-Pruefstand (uTestRdxBufferMath) - mit Tabulator, Umlaut,
-// Surrogatpaar und kombinierendem Zeichen vor dem Bereich.
+// Surrogatpaar und kombinierendem Zeichen vor dem Bereich. Dazu zwei
+// Entscheidungen, die uRdxEditor/uRdxProvider ohne ToolsAPI treffen
+// koennen: passt eine Spalte in die SmallInt-Felder der Editor-Markierung
+// (EditorColumnFits, Review Nit 8), und welcher Text gilt fuer eine Datei
+// (ChooseTextSource, Review Nit 24).
 
 interface
 
@@ -21,7 +25,19 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uRefactorInfo;
 
+const
+  // TOTAEditPos.Col und TOTACharPos.CharIndex der ToolsAPI sind SmallInt
+  // (ToolsAPI.pas, Studio 23.0): weiter rechts kann die Editor-Markierung
+  // nicht zeigen (Review reDelphiX 2026-10-07, Nit 8).
+  EDITOR_MAX_COLUMN = 32767;
+
 type
+  // Woher der Anbieter den Text einer Datei nimmt (Review Nit 24).
+  TRdxTextSource = (
+    txBuffer,     // im Editor offen, Puffer gelesen und nicht leer
+    txDisk,       // nicht im Editor offen - die Platte, wie der Scan
+    txBlocked);   // im Editor offen, aber leer oder nicht lesbar
+
   // Eine Ersetzung im Editor: Bereich, erwarteter alter Text, neuer Text.
   // Zeilenumbrueche in Expected und NewText sind #10; beim Schreiben
   // bekommt NewText das Zeilenende des Puffers.
@@ -47,6 +63,30 @@ procedure LineStartsOf(const ABytes: TBytes; AStarts: TList<Integer>);
 // der Zeile plus UTF-8-Laenge der Zeichen davor.
 function OffsetOf(AStarts: TList<Integer>; ALines: TStrings;
   ALine, ACol: Integer; out AOffset: Integer): Boolean;
+
+// UTF-8-Laenge der Zeichen vor Zeichen-Spalte ACol (1-basiert) von ALine -
+// so zaehlen die Byte-Offsets im Puffer und TOTACharPos.CharIndex.
+function Utf8PrefixLength(const ALine: string; ACol: Integer): Integer;
+
+// True, wenn die Editor-Markierung Zeichen-Spalte ACol der Zeile ALine
+// erreicht: ACol liegt in 1..EDITOR_MAX_COLUMN, und die Anzeigespalte des
+// Byte-Praefixes (Praefix + 1, ohne Tabulatoren) ebenfalls. Tabulatoren
+// rechnet erst die IDE um (ConvertPos); die Pruefung haelt die Werte, die
+// reDelphix selbst in die SmallInt-Felder schreibt, im Bereich.
+function EditorColumnFits(const ALine: string; ACol: Integer): Boolean;
+
+// Beide Enden von ASpan nach EditorColumnFits. False auch, wenn ein Ende
+// ausserhalb von ALines liegt.
+function SpanFitsEditor(ALines: TStrings; const ASpan: TRefactorSpan): Boolean;
+
+// Welcher Text fuer eine Datei gilt: ist sie im Editor offen, NUR der
+// Puffer - leer oder nicht lesbar heisst dann txBlocked, nicht Platte.
+// Die Aktionen schreiben in den Puffer; auf dem Plattenstand beschrieben,
+// stuenden im Menue Eintraege, die dort nicht ausfuehrbar sind (Review
+// Nit 24). Die Werte heissen tx..., weil ToolsAPI tsBlocked schon belegt
+// (TOTAThreadState) und uRdxEditor beide Units sieht.
+function ChooseTextSource(AIsOpen, AReadOk: Boolean;
+  const AText: string): TRdxTextSource;
 
 // CRLF und CR -> LF.
 function NormalizeEol(const S: string): string;
@@ -131,8 +171,39 @@ begin
   Result := (ALine >= 1) and (ALine <= ALines.Count) and (ALine <= AStarts.Count)
     and (ACol >= 1);
   if not Result then Exit;
-  AOffset := AStarts[ALine - 1]
-    + Length(TEncoding.UTF8.GetBytes(Copy(ALines[ALine - 1], 1, ACol - 1)));
+  AOffset := AStarts[ALine - 1] + Utf8PrefixLength(ALines[ALine - 1], ACol);
+end;
+
+function Utf8PrefixLength(const ALine: string; ACol: Integer): Integer;
+begin
+  Result := 0;
+  if ACol <= 1 then Exit;
+  Result := Length(TEncoding.UTF8.GetBytes(Copy(ALine, 1, ACol - 1)));
+end;
+
+function EditorColumnFits(const ALine: string; ACol: Integer): Boolean;
+begin
+  Result := (ACol >= 1) and (ACol <= EDITOR_MAX_COLUMN)
+    and (Utf8PrefixLength(ALine, ACol) < EDITOR_MAX_COLUMN);
+end;
+
+function SpanFitsEditor(ALines: TStrings; const ASpan: TRefactorSpan): Boolean;
+begin
+  Result := (ALines <> nil)
+    and (ASpan.StartLine >= 1) and (ASpan.EndLine >= 1)
+    and (ASpan.StartLine <= ALines.Count) and (ASpan.EndLine <= ALines.Count)
+    and EditorColumnFits(ALines[ASpan.StartLine - 1], ASpan.StartCol)
+    and EditorColumnFits(ALines[ASpan.EndLine - 1], ASpan.EndCol);
+end;
+
+function ChooseTextSource(AIsOpen, AReadOk: Boolean;
+  const AText: string): TRdxTextSource;
+const
+  // [im Editor offen, Puffer gelesen und nicht leer]
+  CHOICE : array[Boolean, Boolean] of TRdxTextSource =
+    ((txDisk, txDisk), (txBlocked, txBuffer));
+begin
+  Result := CHOICE[AIsOpen, AReadOk and (AText <> '')];
 end;
 
 function NormalizeEol(const S: string): string;
@@ -298,7 +369,11 @@ begin
   View.Lines  := TStringList.Create;
   View.Starts := TList<Integer>.Create;
   try
-    View.Lines.Text := TEncoding.UTF8.GetString(ABytes);
+    // Ein leerer Puffer (Review Nit 24: jetzt lesbar, nicht 'nicht
+    // lesbar') hat keine Zeilen - jede Ersetzung weicht dann ab. Kein
+    // GetString auf einem leeren Array.
+    if Length(ABytes) > 0 then
+      View.Lines.Text := TEncoding.UTF8.GetString(ABytes);
     LineStartsOf(ABytes, View.Starts);
     View.Eol := BufferEol(ABytes);
     SetLength(APlan, Length(AEdits));
