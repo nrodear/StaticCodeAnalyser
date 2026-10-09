@@ -84,14 +84,22 @@ type
     // EveryFindingKindHasMqrMapping enforced dass alle Kinds gemappt sind.
     CleanCodeAttribute : string;        // 'LAWFUL'/'LOGICAL'/'FOCUSED'/...
     Impacts            : TArray<TSonarImpact>;
-    // Quellstellen-Dienst (Konzept_SourceRefactor_Quellstellen §4): worauf
-    // die Funde dieser Regel ankern und ob ein Umschreiber auf ihrem Signal
-    // schreiben darf. Reine Datenseite - kein Detektor liest das.
+    // Quellstellen-Dienst (Konzept_SourceRefactor_Quellstellen Abschnitt 4):
+    // worauf die Funde dieser Regel ankern und ob ein Umschreiber auf ihrem
+    // Signal schreiben darf. Reine Datenseite - kein Detektor liest das.
     //   Anchor : 'statement' | 'assign' | 'call' | 'assign-or-call'
-    //            | 'uses-item'; leer = nicht angegeben (wie 'statement')
+    //            | 'uses-item'; leer = nicht angegeben (wie 'statement').
+    //            'uses-item' ist RESERVIERT: keine Regel fuehrt ihn, kein
+    //            Konsument wertet ihn aus. reDelphix unterscheidet nur
+    //            'assign' und 'call', jeder andere Wert sucht beides.
     //   FixMode: 'none' | 'assisted' | 'auto'; leer = nicht angegeben
     //            (wie 'none')
-    // Im Fallback (uRuleCatalogData.inc) beide leer.
+    // Immer leer oder einer dieser Werte, klein geschrieben: der Lader
+    // nimmt nur einen bekannten JSON-String, alles andere wird leer.
+    // Leer kommt dann aus der einkompilierten Tabelle (uRuleCatalogData.inc,
+    // Minor 40) - eine aeltere Katalogdatei ohne die zwei Felder schaltet
+    // einen Umschreiber also nicht still ab. Abschalten geht ausdruecklich
+    // mit fixMode 'none'.
     Anchor             : string;
     FixMode            : string;
   end;
@@ -236,6 +244,12 @@ type
     class property UserProfilesPath: string
       read FUserProfPath write FUserProfPath;
 
+    // Die Katalogdatei, die der Lader gewaehlt hat; '' = keine gefunden,
+    // alles kommt aus der einkompilierten Tabelle. Fuer Tests, die die
+    // ROHE Datei pruefen muessen - der Lader normalisiert anchor/fixMode,
+    // ueber GetRuleCanonical ist ein Tippfehler dort nicht mehr sichtbar.
+    class function ResolvedJsonPath: string; static;
+
     // Manuell triggern (z.B. nach JsonFilePath-Aenderung). Ueblicherweise
     // nicht noetig - der erste GetRule-Call laed lazy.
     class procedure Reload; static;
@@ -328,6 +342,67 @@ type
 
 {$I uRuleCatalogOverlay.inc}
 
+const
+  // Wertemengen von anchor/fixMode - dieselben wie die enums in
+  // rules/sca-rules.schema.json. 'uses-item' ist reserviert (Nit 18,
+  // Review reDelphiX 2026-10-07: keine Regel, kein Konsument), bleibt
+  // aber gueltig - ein Katalog, der ihn setzt, faellt hier nicht still
+  // auf leer.
+  KNOWN_ANCHORS   : array[0..4] of string = ('statement', 'assign', 'call',
+    'assign-or-call', 'uses-item');
+  KNOWN_FIX_MODES : array[0..2] of string = ('none', 'assisted', 'auto');
+
+function FallbackZeileVon(K: TFindingKind; out AIdx: Integer): Boolean;
+// Zeile der einkompilierten Tabelle zu K - nur wenn Index UND RuleID zum
+// Kind passen (Drift-Guard, Begruendung s. MakeFallbackMeta). Zwei
+// Nutzer: MakeFallbackMeta und der anchor/fixMode-Rueckfall in
+// LoadFromJsonFile - eine Pruefung, nicht zwei.
+begin
+  AIdx   := Ord(K);
+  Result := (AIdx >= Low(RULE_CATALOG_DATA)) and
+            (AIdx <= High(RULE_CATALOG_DATA)) and
+            SameText(RULE_CATALOG_DATA[AIdx].RuleID,
+                     Format('SCA%.3d', [AIdx + 1]));
+end;
+
+function BekannterWert(AObj: TJSONObject; const AName, ARuleID: string;
+  const AKnown: array of string): string;
+// anchor/fixMode einer Regel: nur ein JSON-STRING aus der bekannten
+// Wertemenge zaehlt, geliefert in der Schreibweise der Liste; sonst ''.
+//
+// ANLASS (Minor 40, Review reDelphiX 2026-10-07): GetValue<string> warf
+// bei Objekt oder Array (von Hand gepflegt, "fixMode": ["auto"])
+// EJSONException. EnsureLoaded setzt FLoaded erst am Ende - danach warf
+// also JEDER Katalogzugriff erneut, bis in SARIF-Export und Fundliste.
+// Dasselbe Muster wie bei 'impacts' (GITLAK 5).
+//
+// Gross/klein egal: reDelphix vergleicht ohnehin auf LowerCase, "Auto"
+// wirkte schon vorher wie 'auto'. Ein vorhandener, aber unbrauchbarer
+// Wert geht als Diagnose raus; der Aufrufer faellt dann auf die
+// einkompilierte Tabelle zurueck.
+var
+  V   : TJSONValue;
+  Roh : string;
+  i   : Integer;
+begin
+  Result := '';
+  V := AObj.FindValue(AName);
+  if V = nil then Exit;               // nicht angegeben - der Normalfall
+  if V is TJSONString then
+  begin
+    Roh := Trim(TJSONString(V).Value);
+    if Roh = '' then Exit;            // leer = nicht angegeben
+    for i := Low(AKnown) to High(AKnown) do
+      if SameText(Roh, AKnown[i]) then
+        Exit(AKnown[i]);
+  end
+  else
+    Roh := V.ToString;                // Objekt, Array, true/false, null
+  // noinspection DebugOutput (Diagnose-Kanal, Politik s. Overlay-Warnung)
+  OutputDebugString(PChar(Format(
+    'TRuleCatalog: %s %s=%s ungueltig - ignoriert', [ARuleID, AName, Roh])));
+end;
+
 { ---- Setup ---- }
 
 class procedure TRuleCatalog.Init;
@@ -384,6 +459,12 @@ begin
   FCatalogVersion   := '';
   FLoaded := False;
   EnsureLoaded;
+end;
+
+class function TRuleCatalog.ResolvedJsonPath: string;
+begin
+  EnsureLoaded;   // erst danach steht fest, welche Datei es war
+  Result := FResolvedJsonPath;
 end;
 
 class function TRuleCatalog.AllKinds: TFindingKinds;
@@ -557,6 +638,7 @@ var
   Profiles : TJSONObject;
   ProfPair : TJSONPair;
   ProfArr  : TJSONArray;
+  Idx      : Integer;
 begin
   Json := TJSONObject.ParseJSONValue(TFile.ReadAllText(FileName));
   if not (Json is TJSONObject) then
@@ -641,10 +723,24 @@ begin
         Meta.GoodExample := Examples.GetValue<string>('good', '');
       end;
 
-      // Quellstellen-Dienst: Anker und Fix-Politik, optional. Test
-      // AnchorAndFixModeUseKnownValues haelt die Wertemenge.
-      Meta.Anchor  := RObj.GetValue<string>('anchor', '');
-      Meta.FixMode := RObj.GetValue<string>('fixMode', '');
+      // Quellstellen-Dienst: Anker und Fix-Politik, optional. Nur ein
+      // bekannter String zaehlt (BekannterWert) - ein Objekt oder Array
+      // riss mit GetValue<string> das Laden auf. Test
+      // AnchorAndFixModeUseKnownValues haelt die Wertemenge der Datei.
+      Meta.Anchor  := BekannterWert(RObj, 'anchor', Meta.ID, KNOWN_ANCHORS);
+      Meta.FixMode := BekannterWert(RObj, 'fixMode', Meta.ID, KNOWN_FIX_MODES);
+      // Leer -> einkompilierter Wert (Minor 40). Eine aeltere oder von
+      // Hand gekuerzte sca-rules.json ohne die zwei Felder (gefunden ueber
+      // den Exe-/Modul-Aufwaertswalk oder %APPDATA%) schaltete reDelphix
+      // sonst still ab: kein Fund bot mehr eine Umformung an. Abschalten
+      // geht ausdruecklich mit fixMode 'none' - das ist nicht leer.
+      if FallbackZeileVon(K, Idx) then
+      begin
+        if Meta.Anchor = '' then
+          Meta.Anchor := RULE_CATALOG_DATA[Idx].Anchor;
+        if Meta.FixMode = '' then
+          Meta.FixMode := RULE_CATALOG_DATA[Idx].FixMode;
+      end;
 
       // SonarQube MQR-Felder (cleanCodeAttribute + impacts). Optional in der
       // JSON - Rules ohne diese Felder bekommen leere Werte. Test
@@ -748,9 +844,7 @@ begin
   Result.DefaultSeverity := KindDefaultSeverity(K);
   Result.FindingType     := KindFindingType(K);
 
-  Idx := Ord(K);
-  if (Idx >= Low(RULE_CATALOG_DATA)) and (Idx <= High(RULE_CATALOG_DATA))
-     and SameText(RULE_CATALOG_DATA[Idx].RuleID, Result.ID) then
+  if FallbackZeileVon(K, Idx) then   // Index UND RuleID passen zu K
   begin
     if RULE_CATALOG_DATA[Idx].Name <> '' then
       Result.Name := RULE_CATALOG_DATA[Idx].Name;

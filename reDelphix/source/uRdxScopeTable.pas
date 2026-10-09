@@ -25,6 +25,14 @@ unit uRdxScopeTable;
 // (TRdxRecipes.DetectFramework). Ist das Rahmenwerk nicht erkennbar und
 // der Kurzname mehrdeutig, wird NICHT geraten: Resolve liefert False
 // mit Grund, der Menuepunkt bleibt ausgegraut.
+//
+// Die Vorgabe-Reihenfolge ist nicht die einzige: die SDI-/MDI-Vorlagen
+// von Delphi 12 (ObjRepos\...\SDIApp, MDIApp) setzen Vcl VOR System.
+// Steht ein Vcl.*-Kandidat neben einem unter System/Xml/Data/Datasnap/
+// Web/Soap (ohne '.Win' - die stehen in beiden Listen vorn; heute nur
+// 'skia' = FMX.Skia;System.Skia;Vcl.Skia), entscheidet allein die
+// DCC_Namespace des Projekts. Ausser in einer FMX-Datei (kein Vcl in der
+// Liste) wird dann nicht geraten (Review 2026-10-07, Minor 14).
 
 interface
 
@@ -62,7 +70,7 @@ type
     function Candidates(const AShortName: string): TArray<string>;
     // Aufloesung nach der Scope-Reihenfolge des Rahmenwerks (s. Kopf).
     // False mit Grund: schon qualifiziert, unbekannt, mehrdeutig ohne
-    // erkennbares Rahmenwerk.
+    // erkennbares Rahmenwerk, System.* gegen Vcl.* (DCC_Namespace).
     function Resolve(const AShortName: string; AFramework: TRdxFramework;
       out AQualified, AReason: string): Boolean;
 
@@ -81,6 +89,10 @@ const
   VCL_ORDER: array[0..4] of string = (
     'vcl', 'vcl.imaging', 'vcl.touch', 'vcl.samples', 'vcl.shell');
   FMX_ORDER: array[0..0] of string = ('fmx');
+  // Gemeinsame Praefixe OHNE '.Win': in der Vorgabe vor Vcl, in den
+  // SDI-/MDI-Vorlagen dahinter (s. Kopf).
+  SYSTEM_GROUP: array[0..5] of string = (
+    'system', 'xml', 'data', 'datasnap', 'web', 'soap');
 
 function PrefixOf(const AQualified: string): string;
 var
@@ -91,6 +103,19 @@ begin
     Result := ''
   else
     Result := LowerCase(Copy(AQualified, 1, P - 1));
+end;
+
+// True, wenn ein Kandidat unter einem der Praefixe steht.
+function HasPrefixIn(const ACandidates: TArray<string>;
+  const APrefixes: array of string): Boolean;
+var
+  i, k : Integer;
+begin
+  Result := False;
+  for k := 0 to High(ACandidates) do
+    for i := Low(APrefixes) to High(APrefixes) do
+      if PrefixOf(ACandidates[k]) = APrefixes[i] then
+        Exit(True);
 end;
 
 function JoinNames(const ANames: TArray<string>): string;
@@ -285,6 +310,15 @@ begin
   if Length(Cands) = 0 then
   begin
     AReason := 'nicht in der Scope-Tabelle (Projekt- oder Fremd-Unit)';
+    Exit;
+  end;
+  // System.Skia oder Vcl.Skia: haengt an der Reihenfolge in DCC_Namespace
+  // (Vorgabe- gegen SDI-/MDI-Vorlage) - nicht raten (s. Kopf).
+  if (AFramework <> fwFmx) and HasPrefixIn(Cands, VCL_ORDER)
+     and HasPrefixIn(Cands, SYSTEM_GROUP) then
+  begin
+    AReason := 'Reihenfolge System/Vcl projektabhaengig (DCC_Namespace): '
+      + JoinNames(Cands);
     Exit;
   end;
   if TryOrder(Cands, COMMON_ORDER, AQualified) then Exit(True);

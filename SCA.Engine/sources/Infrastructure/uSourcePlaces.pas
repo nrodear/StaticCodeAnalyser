@@ -21,7 +21,8 @@ unit uSourcePlaces;
 //     Fundzahl, FP-Quote, Baselines und SARIF koennen sich durch sie
 //     nicht bewegen. Kein Detektor darf sie importieren.
 //   * Sie benutzt NICHT den Datei-Cache des Scans und keinen Engine-Lock:
-//     Open liest die Datei selbst (LoadFileSmart, TParser2.ParseFile).
+//     Open liest die Datei selbst (LoadFileSmart, TParser2.ParseNamedSource
+//     auf genau dem dekodierten Text).
 //     Dadurch ist sie auch aus einem residenten Host (IDE-Plugin) heraus
 //     jederzeit aufrufbar - die Doku_01-Leitplanke "Engine nur fuer
 //     kurzlebige Ein-Scan-Prozesse" betrifft den Scan, nicht das Lesen
@@ -45,7 +46,9 @@ unit uSourcePlaces;
 //   NodesAt       AST-Knoten einer Art auf einer Zeile - der Weg vom Fund
 //                 (Zeile) zur Startposition (Spalte) und zum Zielnamen
 //   UsesEntries   Unit-Namen der uses-Klauseln mit Spalten
-//   IdentifiersIn Bezeichner in einem Bereich
+//   IdentifiersIn Bezeichner in einem Bereich (im Zusammenhang der Datei
+//                 gelesen: ein Kommentar oder String, der vor dem Bereich
+//                 beginnt, gilt auch darin - Review Nit 28)
 //   SectionLine   Zeile von 'interface' / 'implementation' (0 = fehlt)
 //   LineText      Text einer Zeile der geoeffneten Datei
 //   SpanHasComment Kommentar/Direktive in einem Bereich
@@ -60,17 +63,33 @@ unit uSourcePlaces;
 //                 ALine ist die ANKERZEILE der Anweisung: der Resolver
 //                 begrenzt Routinen ueber die letzte Knoten-Zeile, eine
 //                 Fortsetzungszeile der letzten Anweisung liegt dahinter.
+//                 Der Resolver kennt KEINE with-Bloecke: dort kann ein
+//                 Name an ein Member des with-Ausdrucks binden. ChainOf/
+//                 CallOf beweisen dort nichts (s. InWithBlock).
+//   InWithBlock   liegt eine Zeile im Rumpf einer with-Anweisung?
 //   CodeViewOf / TextOf / HashOf   Sicht, Text und Hash eines Bereichs
 //   ConditionalRanges              {$IFDEF}-Bereiche der Datei
 //
 // Jedes Primitiv ist total: nil bzw. leeres Array statt Exception, auch
 // wenn keine Datei geoeffnet ist. Einzige Ausnahme: ein Parser-Fehler in
-// Open laeuft als Exception zum Aufrufer (TParser2.ParseFile), die
-// Nicht-Lesbarkeit der Datei dagegen ist ein False.
+// Open/OpenSource laeuft als Exception zum Aufrufer (Watchdog in
+// TParser2), danach ist nichts geoeffnet; die Nicht-Lesbarkeit der Datei
+// dagegen ist ein False.
 //
 // KOORDINATEN wie uRefactorInfo: 1-basiert, EndCol zeigt HINTER das
-// letzte Zeichen. Der Vertrag traegt eine Versionsnummer
-// (SOURCE_PLACES_VERSION); ein Konsument prueft sie.
+// letzte Zeichen.
+//
+// VERTRAGSVERSION
+//
+// Der Vertrag traegt eine Versionsnummer (SOURCE_PLACES_VERSION). Sie ist
+// eine Uebersetzungszeit-Konstante: ein Konsument kann sie beim
+// Uebersetzen pruefen ($IF mit $MESSAGE ERROR) und bricht dann, wenn er
+// gegen einen geaenderten Vertrag gebaut wird. Eine zur Laufzeit
+// getauschte BPL erkennt sie nicht - das leistet die Paketbindung
+// (DCP/requires), nicht diese Zahl (Review reDelphiX 2026-10-07, Nit 27).
+// Version 1 ist der Vertrag, wie er mit dem ersten Merge nach main
+// ausgeliefert wird; was vorher auf dem Branch dazukam (OpenSource,
+// P9-P12, die Typableitung von AH12), gehoert dazu.
 
 interface
 
@@ -80,8 +99,15 @@ uses
   uTypeResolver;                        // P9: deklarierter Typ eines Bezeichners
 
 const
-  // Vertragsversion. Aenderungen an Signaturen, Rollen oder Koordinaten
-  // erhoehen sie.
+  // Vertragsversion (s. Kopf, VERTRAGSVERSION). Sie steigt mit jeder
+  // Aenderung, die einen gegen die alte Version geschriebenen Konsumenten
+  // falsch machen kann: Signaturen bestehender Primitive, Rollen,
+  // Koordinaten - und die Ableitung von FixSafe, ValueType oder Resolved,
+  // sobald sie etwas als BEWIESEN meldet, was vorher unbekannt war.
+  // Sie bleibt bei neuen Primitiven, bei neuen Parametern mit
+  // Vorgabewert und bei einer Ableitung, die nur STRENGER wird (mehr
+  // rvUnknown, seltener FixSafe) - darauf kann sich jeder Konsument der
+  // alten Version weiter verlassen.
   SOURCE_PLACES_VERSION = 1;
 
 type
@@ -112,11 +138,29 @@ type
     FLines    : TStringList;   // nil, solange nichts geoeffnet ist
     FRoot     : TAstNode;      // AST der Datei, nil ohne Datei
     FTypes    : TTypeResolver; // lazy aus FRoot, lebt bis Close
+    // Lazy aus FRoot (BuildScopeFacts), leben bis Close: die Zeilen der
+    // with-Anweisungen und die Namen der Funktionen der Unit, deren
+    // Ergebnis kein String ist (klein, letztes Namenssegment).
+    FScopeFactsBuilt : Boolean;
+    FWithRanges      : TArray<TSourceLineRange>;
+    FNonStringFuncs  : TArray<string>;
     function Types: TTypeResolver;
+    procedure BuildScopeFacts;
+    // True, wenn die Unit eine Funktion dieses Namens (klein) ohne
+    // String-Ergebnis deklariert - sie verdeckt die gleichnamige RTL.
+    function DeclaresNonStringFunc(const ANameLow: string): Boolean;
     // Operanden, die blosse Bezeichner sind, ueber den deklarierten Typ
     // klassifizieren und FixSafe neu ableiten (s. Kopf, DeclaredTypeOf).
     procedure ResolveOperandTypes(AInfo: TRefactorInfo);
+    // Ein ROLE_OPERAND-Term fuer ResolveOperandTypes; AAnchorLine ist die
+    // Ankerzeile der Anweisung (auch fuer InWithBlock).
+    procedure ClassifyOperand(var APart: TRefactorSpan; AAnchorLine: Integer);
   public
+    const
+      // ChainOf ohne '+'-Gegenprobe (wie TRefactorConcat.ANY_PLUS_COUNT;
+      // jeder negative Wert gilt so).
+      ANY_PLUS_COUNT = -1;
+
     constructor Create;
     destructor Destroy; override;
 
@@ -142,9 +186,15 @@ type
 
     // P3 - Zuweisung mit '+'-Kette an (ALine, ACol). AExpectedTarget <> ''
     // ist die Gegenprobe gegen den Knoten (TNodeRef.Name): passt das Ziel
-    // im Quelltext nicht dazu, kommt nil.
+    // im Quelltext nicht dazu, kommt nil. AExpectedPlus >= 0 ist die
+    // zweite Gegenprobe: die Zahl der '+' auf oberster Ebene, wie der
+    // Konsument sie unabhaengig gezaehlt hat (etwa aus TNodeRef.TypeRef,
+    // wie SCA044 sie meldet); weicht die Zaehlung im Quelltext ab, kommt
+    // nil - die beiden beschreiben nicht dieselbe Kette (Review reDelphiX
+    // 2026-10-07, strittiger Minor 2).
     function ChainOf(ALine, ACol: Integer;
-      const AExpectedTarget: string = ''): TRefactorInfo;
+      const AExpectedTarget: string = '';
+      AExpectedPlus: Integer = ANY_PLUS_COUNT): TRefactorInfo;
 
     // P4 - Aufruf-Anweisung an (ALine, ACol). Bei GENAU EINEM Argument
     // dessen '+'-Kette (ROLE_LITERAL/ROLE_OPERAND, mit FixSafe), sonst je
@@ -168,7 +218,10 @@ type
     // ROLE_IDENT-Bereiche (Resolved = das Wort), Strings und Kommentare
     // ausgeblendet, Hex-/Zeichen-Literale ($FF, #13) und Exponenten (1e5)
     // nicht mitgezaehlt. Schluesselwoerter werden NICHT gefiltert - das
-    // entscheidet der Konsument.
+    // entscheidet der Konsument. Der Bereich darf mitten in einem
+    // Kommentar oder String beginnen: die Datei wird bis zum Bereich
+    // mitgelesen (TRefactorInfoBuilder.CodeViewInContext; Review Nit 28).
+    // Nur einen Delphi-12-Mehrzeilenstring davor erkennt das nicht.
     function IdentifiersIn(const ASpan: TRefactorSpan): TArray<TRefactorSpan>;
     class function CollectIdentifiers(const AView: TArray<string>;
       const ASpan: TRefactorSpan): TArray<TRefactorSpan>; static;
@@ -215,7 +268,22 @@ type
     // der Resolver begrenzt Routinen ueber die letzte Knoten-Zeile, eine
     // Fortsetzungszeile der letzten Anweisung liegt ausserhalb jeder
     // Routine und loest nur noch Felder/Globale auf.
+    // with-Bloecke kennt der Resolver NICHT: in 'with Rec do r := s'
+    // liefert DeclaredTypeOf den Typ der gefundenen Deklaration von s,
+    // auch wenn der Compiler s an Rec.s bindet. Wer daraus etwas
+    // BEWEISEN will, fragt vorher InWithBlock. Bewusst kein '' im
+    // with-Block: ein Konsument, der einen gefaehrlichen Typ (Variant,
+    // Ereignis) sperrt, soll ihn auch dort weiter sehen.
     function DeclaredTypeOf(ALine: Integer; const AName: string): string;
+
+    // P12 - True, wenn ALine im Rumpf einer with-Anweisung liegt: von der
+    // Zeile des 'with' bis zur letzten Knoten-Zeile seiner Anweisung
+    // (zeilengenau - eine Anweisung auf der Zeile des with-Kopfs gilt als
+    // darin). Dort kann ein Name an ein Member des with-Ausdrucks binden
+    // statt an die Deklaration, die DeclaredTypeOf findet. ChainOf und
+    // CallOf stufen dort nichts hoch (Review reDelphiX 2026-10-07,
+    // strittiger Minor 1). Ohne Datei False.
+    function InWithBlock(ALine: Integer): Boolean;
   end;
 
 implementation
@@ -311,6 +379,9 @@ begin
   FreeAndNil(FRoot);
   FreeAndNil(FLines);
   FFileName := '';
+  FScopeFactsBuilt := False;
+  FWithRanges      := nil;
+  FNonStringFuncs  := nil;
 end;
 
 function TSourcePlaces.IsOpen: Boolean;
@@ -336,11 +407,18 @@ begin
 end;
 
 function TSourcePlaces.ChainOf(ALine, ACol: Integer;
-  const AExpectedTarget: string): TRefactorInfo;
+  const AExpectedTarget: string; AExpectedPlus: Integer): TRefactorInfo;
+var
+  Plus : Integer;
 begin
   Result := nil;
   if not IsOpen then Exit;
-  Result := TRefactorConcat.TryDescribeAssign(FRoot, FLines, ALine, ACol);
+  // Jeder negative Wert heisst "nicht gegenpruefen" - unabhaengig davon,
+  // welchen Wert uRefactorConcat dafuer vorsieht.
+  Plus := TRefactorConcat.ANY_PLUS_COUNT;
+  if AExpectedPlus >= 0 then Plus := AExpectedPlus;
+  Result := TRefactorConcat.TryDescribeAssign(FRoot, FLines, ALine, ACol,
+    Plus);
   if Assigned(Result) and (AExpectedTarget <> '')
      and not TRefactorConcat.TargetMatches(FLines, Result, AExpectedTarget) then
     FreeAndNil(Result);
@@ -416,11 +494,209 @@ begin
       Exit(False);
 end;
 
+// String-Typen und Char: Format nimmt beide fuer %s.
+function IsStringLikeTypeName(const ATypeLow: string): Boolean;
+begin
+  Result := IsStringTypeName(ATypeLow) or (ATypeLow = 'char')
+    or (ATypeLow = 'widechar') or (ATypeLow = 'ansichar');
+end;
+
+function NonStringFuncName(AMethod: TAstNode): string;
+// Name (klein, letztes Segment) einer FUNKTION, deren Ergebnis kein
+// String ist; '' fuer Prozeduren, Konstruktoren, String-Funktionen und
+// eine Implementierung ohne wiederholten Ergebnistyp (die Deklaration
+// traegt ihn). uParser2 legt TypeRef als 'art:Ergebnistyp;direktive..'
+// ab, ohne Ergebnis nur 'art'.
+var
+  P   : Integer;
+  Ret : string;
+begin
+  Result := '';
+  P := Pos(':', AMethod.TypeRef);
+  if P = 0 then Exit;
+  Ret := Copy(AMethod.TypeRef, P + 1, MaxInt);
+  P := Pos(';', Ret);
+  if P > 0 then Ret := Copy(Ret, 1, P - 1);
+  Ret := LowerCase(Trim(Ret));
+  if (Ret = '') or IsStringLikeTypeName(Ret) then Exit;
+  P := LastDelimiter('.', AMethod.Name);
+  Result := LowerCase(Copy(AMethod.Name, P + 1, MaxInt));
+end;
+
+function IsWithStatement(ANode: TAstNode; ALines: TStrings): Boolean;
+// uParser2 legt 'with X do S' als nkCall an der Position des 'with' ab
+// (Name = X), mit S als Kind - einen eigenen Knotentyp gibt es nicht.
+// Erkannt wird es am Quelltext an der Knotenposition: das Wort 'with'
+// ohne Bezeichnerzeichen dahinter.
+var
+  L : string;
+begin
+  Result := False;
+  if (ANode.Kind <> nkCall) or not Assigned(ANode.Children)
+     or (ANode.Children.Count = 0) then Exit;
+  if (ANode.Line < 1) or (ANode.Line > ALines.Count) or (ANode.Col < 1) then
+    Exit;
+  L := ALines[ANode.Line - 1];
+  Result := SameText(Copy(L, ANode.Col, 4), 'with')
+    and ((ANode.Col + 4 > Length(L))
+         or not TRefactorInfoBuilder.IsIdentChar(L[ANode.Col + 4]));
+end;
+
+function SubtreeLastLine(ANode: TAstNode): Integer;
+// Hoechste Knoten-Zeile im Teilbaum - iterativ, kein Stapelueberlauf.
+var
+  Stack : TArray<TAstNode>;
+  Top   : Integer;
+  N     : TAstNode;
+  i     : Integer;
+begin
+  Result := ANode.Line;
+  SetLength(Stack, 16);
+  Stack[0] := ANode;
+  Top := 1;
+  while Top > 0 do
+  begin
+    Dec(Top);
+    N := Stack[Top];
+    if N.Line > Result then Result := N.Line;
+    if Assigned(N.Children) then
+      for i := 0 to N.Children.Count - 1 do
+      begin
+        if Top = Length(Stack) then
+          SetLength(Stack, Top * 2);
+        Stack[Top] := N.Children[i];
+        Inc(Top);
+      end;
+  end;
+end;
+
+procedure PushChildrenReversed(ANode: TAstNode; var AStack: TArray<TAstNode>;
+  var ATop: Integer);
+// Legt die Kinder von ANode rueckwaerts auf den Stapel - der naechste Pop
+// ist das erste Kind (Pre-Order wie CollectNodesAt). Der Stapel waechst bei
+// Bedarf auf das Doppelte; er darf nicht leer angelegt sein.
+var
+  i : Integer;
+begin
+  if not Assigned(ANode.Children) then Exit;
+  for i := ANode.Children.Count - 1 downto 0 do
+  begin
+    if ATop = Length(AStack) then
+      SetLength(AStack, ATop * 2);
+    AStack[ATop] := ANode.Children[i];
+    Inc(ATop);
+  end;
+end;
+
+procedure AddName(var ANames: TArray<string>; var ACount: Integer;
+  const AName: string);
+// Haengt AName hinter ANames[0..ACount-1] an ('' = nichts). Das Array
+// waechst in Stufen; der Aufrufer kuerzt es am Ende auf ACount.
+begin
+  if AName = '' then Exit;
+  if ACount = Length(ANames) then
+    SetLength(ANames, 2 * ACount + 8);
+  ANames[ACount] := AName;
+  Inc(ACount);
+end;
+
+procedure AddLineRange(var ARanges: TArray<TSourceLineRange>;
+  var ACount: Integer; AStartLine, AEndLine: Integer);
+// Wie AddName, fuer einen Zeilenbereich.
+begin
+  if ACount = Length(ARanges) then
+    SetLength(ARanges, 2 * ACount + 4);
+  ARanges[ACount].StartLine := AStartLine;
+  ARanges[ACount].EndLine   := AEndLine;
+  Inc(ACount);
+end;
+
+function StringCallName(const AText: string): string;
+// Name (klein) der Routine hinter einem Term, den uRefactorConcat nach
+// dem NAMEN als String erkannt hat: 'trim' fuer 'Trim(x)', 'tostring'
+// fuer 'n.ToString'. '' fuer einen unit-qualifizierten Aufruf
+// ('SysUtils.Trim(x)'): der meint die RTL, kein Name der Unit verdeckt
+// ihn (andere Qualifizierer laesst IsKnownStringCall nicht zu).
+var
+  T : string;
+  i : Integer;
+begin
+  Result := '';
+  T := LowerCase(Trim(AText));
+  if TRefactorConcat.EndsWithToString(T) then Exit('tostring');
+  i := 1;
+  while (i <= Length(T))
+    and (TRefactorInfoBuilder.IsIdentChar(T[i]) or (T[i] = '.')) do
+    Inc(i);
+  if Pos('.', Copy(T, 1, i - 1)) > 0 then Exit;
+  Result := Copy(T, 1, i - 1);
+end;
+
 function TSourcePlaces.Types: TTypeResolver;
 begin
   if (FTypes = nil) and Assigned(FRoot) then
     FTypes := TTypeResolver.Create(FRoot);
   Result := FTypes;
+end;
+
+procedure TSourcePlaces.BuildScopeFacts;
+// Ein Walk ueber den ganzen Baum (iterativ wie CollectNodesAt), einmal
+// je Open. Verschachtelte Routinen verwirft uParser2 (nkNestedRange) -
+// eine dort deklarierte Funktion sieht der Walk nicht.
+var
+  Stack  : TArray<TAstNode>;
+  Top    : Integer;
+  N      : TAstNode;
+  NFuncs : Integer;
+  NWith  : Integer;
+begin
+  if FScopeFactsBuilt then Exit;
+  FScopeFactsBuilt := True;
+  if not Assigned(FRoot) or not Assigned(FLines) then Exit;
+  // AddName/AddLineRange haengen an das Vorhandene an und lassen die
+  // Arrays in Stufen wachsen; am Ende auf die belegte Zahl kuerzen.
+  NFuncs := Length(FNonStringFuncs);
+  NWith  := Length(FWithRanges);
+  SetLength(Stack, 64);
+  Stack[0] := FRoot;
+  Top := 1;
+  while Top > 0 do
+  begin
+    Dec(Top);
+    N := Stack[Top];
+    if N.Kind = nkMethod then
+      AddName(FNonStringFuncs, NFuncs, NonStringFuncName(N))
+    else if IsWithStatement(N, FLines) then
+      AddLineRange(FWithRanges, NWith, N.Line, SubtreeLastLine(N));
+    PushChildrenReversed(N, Stack, Top);
+  end;
+  SetLength(FNonStringFuncs, NFuncs);
+  SetLength(FWithRanges, NWith);
+end;
+
+function TSourcePlaces.DeclaresNonStringFunc(const ANameLow: string): Boolean;
+var
+  i : Integer;
+begin
+  Result := False;
+  if ANameLow = '' then Exit;
+  BuildScopeFacts;
+  for i := 0 to High(FNonStringFuncs) do
+    if FNonStringFuncs[i] = ANameLow then
+      Exit(True);
+end;
+
+function TSourcePlaces.InWithBlock(ALine: Integer): Boolean;
+var
+  i : Integer;
+begin
+  Result := False;
+  if not IsOpen or (ALine < 1) then Exit;
+  BuildScopeFacts;
+  for i := 0 to High(FWithRanges) do
+    if (ALine >= FWithRanges[i].StartLine)
+       and (ALine <= FWithRanges[i].EndLine) then
+      Exit(True);
 end;
 
 function TSourcePlaces.DeclaredTypeOf(ALine: Integer;
@@ -440,38 +716,32 @@ procedure TSourcePlaces.ResolveOperandTypes(AInfo: TRefactorInfo);
 // Aufrufe als String. Hier bekommen Operanden, die ein blosser Bezeichner
 // sind, ihren deklarierten Typ: String-Typen und Char -> rvString (Format
 // nimmt beide fuer %s), Zahlen/Boolean/Datum -> rvNonString, sonst bleibt
-// rvUnknown. Nie herabstufen. Danach FixSafe nach derselben Regel wie
-// ClassifyParts neu ableiten: jeder Term rvString, kein Kommentar, kein
-// $IFDEF - ein Term mit Operator auf oberster Ebene ist kein Bezeichner
-// und bleibt rvUnknown, also bleibt FixSafe dort False.
+// rvUnknown. Danach FixSafe nach derselben Regel wie ClassifyParts neu
+// ableiten: jeder Term rvString, kein Kommentar, kein $IFDEF - ein Term
+// mit Operator auf oberster Ebene ist kein Bezeichner und bleibt
+// rvUnknown, also bleibt FixSafe dort False.
+// Ein bekannter Aufruf des Zerlegers wird nie auf rvNonString gesetzt.
+// ZWEI Ausnahmen nehmen rvString zurueck (rvUnknown), weil der Name dort
+// nicht beweist, dass die RTL gemeint ist (Review reDelphiX 2026-10-07):
+//   * die Unit deklariert eine gleichnamige Funktion ohne String-Ergebnis
+//     ('function Trim(..): Variant' bindet vor System.SysUtils; ein
+//     'ToString' ohne String-Ergebnis vor dem Helper) - strittiger
+//     Minor 3. SysUtils./StrUtils.-qualifizierte Aufrufe bleiben.
+//   * die Anweisung liegt in einem with-Block (InWithBlock): ein Name,
+//     auch ein Funktionsname, kann dort an ein Member des with-Ausdrucks
+//     binden - strittiger Minor 1. Ein blosser Bezeichner bekommt dort
+//     zwar Resolved (den Typ der gefundenen Deklaration - ein Konsument,
+//     der Variant/Ansi sperrt, soll ihn sehen), aber KEIN rvString/
+//     rvNonString: bewiesen ist dort nichts.
 var
   i     : Integer;
-  Text  : string;
-  T     : string;
   AllOk : Boolean;
 begin
   if not Assigned(AInfo) then Exit;
+  // Jeder Operand an der ANKERZEILE der Anweisung (s. ClassifyOperand).
   for i := 0 to High(AInfo.Parts) do
-  begin
-    if AInfo.Parts[i].Role <> ROLE_OPERAND then Continue;
-    if AInfo.Parts[i].ValueType <> rvUnknown then Continue;
-    Text := Trim(TextOf(AInfo.Parts[i]));
-    if not IsPlainIdent(Text) then Continue;
-    // An der ANKERZEILE der Anweisung aufloesen, nicht an der Zeile des
-    // Terms: der Resolver begrenzt eine Routine ueber die letzte
-    // KNOTEN-Zeile ihres Teilbaums, und ein Term auf einer Fortsetzungs-
-    // zeile der letzten Anweisung liegt dahinter - 'Tag' auf Zeile 3
-    // einer dreizeiligen Kette am Routinenende blieb so unbekannt
-    // (reDelphix.Test, Rewrite_MultiLineChain_Enabled, 2026-10-06).
-    T := DeclaredTypeOf(AInfo.Span.StartLine, Text);
-    if T = '' then Continue;
-    AInfo.Parts[i].Resolved := T;
-    if IsStringTypeName(T) or (T = 'char') or (T = 'widechar')
-       or (T = 'ansichar') then
-      AInfo.Parts[i].ValueType := rvString
-    else if IsNumericTypeName(T) then
-      AInfo.Parts[i].ValueType := rvNonString;
-  end;
+    if AInfo.Parts[i].Role = ROLE_OPERAND then
+      ClassifyOperand(AInfo.Parts[i], AInfo.Span.StartLine);
   AllOk := Length(AInfo.Parts) > 1;
   for i := 0 to High(AInfo.Parts) do
     if (AInfo.Parts[i].Role <> ROLE_TARGET)
@@ -482,6 +752,44 @@ begin
     end;
   AInfo.FixSafe := AllOk and not (rfHasComment in AInfo.Flags)
     and not (rfInConditional in AInfo.Flags);
+end;
+
+procedure TSourcePlaces.ClassifyOperand(var APart: TRefactorSpan;
+  AAnchorLine: Integer);
+// Regeln s. ResolveOperandTypes: ein bekannter Aufruf (rvString) verliert
+// rvString, wenn sein Name hier nicht die RTL beweist; ein blosser
+// Bezeichner ohne Typ bekommt den deklarierten Typ - im with-Block
+// (InWithBlock an der Ankerzeile) nur Resolved.
+var
+  Text   : string;
+  T      : string;
+  Callee : string;
+begin
+  Text := Trim(TextOf(APart));
+  if APart.ValueType = rvString then
+  begin
+    Callee := StringCallName(Text);
+    if (Callee <> '')
+       and (InWithBlock(AAnchorLine) or DeclaresNonStringFunc(Callee)) then
+      APart.ValueType := rvUnknown;
+    Exit;
+  end;
+  if APart.ValueType <> rvUnknown then Exit;
+  if not IsPlainIdent(Text) then Exit;
+  // An der ANKERZEILE der Anweisung aufloesen, nicht an der Zeile des
+  // Terms: der Resolver begrenzt eine Routine ueber die letzte
+  // KNOTEN-Zeile ihres Teilbaums, und ein Term auf einer Fortsetzungs-
+  // zeile der letzten Anweisung liegt dahinter - 'Tag' auf Zeile 3
+  // einer dreizeiligen Kette am Routinenende blieb so unbekannt
+  // (reDelphix.Test, Rewrite_MultiLineChain_Enabled, 2026-10-06).
+  T := DeclaredTypeOf(AAnchorLine, Text);
+  if T = '' then Exit;
+  APart.Resolved := T;
+  if InWithBlock(AAnchorLine) then Exit;
+  if IsStringLikeTypeName(T) then
+    APart.ValueType := rvString
+  else if IsNumericTypeName(T) then
+    APart.ValueType := rvNonString;
 end;
 
 { ---- P5 ---- }
@@ -621,8 +929,10 @@ function TSourcePlaces.IdentifiersIn(
 begin
   Result := nil;
   if not IsOpen then Exit;
-  Result := CollectIdentifiers(TRefactorInfoBuilder.CodeViewOf(FLines, ASpan),
-    ASpan);
+  // Im Zusammenhang der Datei: der Bereich darf in einem Kommentar oder
+  // String beginnen (Review reDelphiX 2026-10-07, Nit 28).
+  Result := CollectIdentifiers(
+    TRefactorInfoBuilder.CodeViewInContext(FLines, ASpan), ASpan);
 end;
 
 { ---- P2 ---- }

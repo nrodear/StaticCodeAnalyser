@@ -65,10 +65,10 @@ type
     [Test] procedure ToolInfoIsPopulated;
     // Lookup ueber ID muss alle Kinds zurueckliefern koennen.
     [Test] procedure GetRuleByIDRoundtrip;
-    // Quellstellen-Dienst (Konzept_SourceRefactor_Quellstellen §4): anchor
-    // und fixMode sind optional, aber wenn gesetzt, nur aus der bekannten
-    // Wertemenge - ein Tippfehler in der JSON darf nicht still als
-    // "unbekannter Anker" durchrutschen.
+    // Quellstellen-Dienst (Konzept_SourceRefactor_Quellstellen Abschnitt 4):
+    // anchor und fixMode sind optional, aber wenn gesetzt, nur aus der
+    // bekannten Wertemenge - ein Tippfehler in der JSON darf nicht still
+    // als "unbekannter Anker" durchrutschen.
     [Test] procedure AnchorAndFixModeUseKnownValues;
     // Die beiden Pilot-Regeln des Moduls tragen Anker und Politik: SCA044
     // (Zuweisung, automatisch) und SCA003 (Zuweisung oder Aufruf, nur
@@ -76,8 +76,18 @@ type
     [Test] procedure RefactorPilotRulesCarryAnchorAndFixMode;
     // AH8: dieselben zwei Felder auch im FALLBACK (einkompilierte Tabelle).
     // Im IDE-Plugin ist der Fallback der Normalfall - ohne die Felder dort
-    // sah reDelphix bei jeder Regel fixMode '' und bot nichts an.
+    // sah reDelphix bei jeder Regel fixMode '' und bot nichts an. Seit
+    // Nit 11 fuer ALLE Kinds gegen die geladene JSON verglichen.
     [Test] procedure FallbackCarriesAnchorAndFixMode;
+    // Minor 40 (Review reDelphiX 2026-10-07): ein Objekt, Array oder eine
+    // Zahl als anchor/fixMode darf das Laden nicht aufreissen, ein
+    // unbekannter String nicht durchrutschen - beides wird leer und
+    // faellt auf die einkompilierte Tabelle zurueck.
+    [Test] procedure AnchorFixModeNonStringDoesNotRaise;
+    // Minor 40, zweiter Teil: eine aeltere sca-rules.json OHNE die zwei
+    // Felder schaltet reDelphix nicht still ab (Tabellenwert), ein
+    // ausdrueckliches 'none' dagegen gilt, Gross/Klein egal.
+    [Test] procedure AnchorFixModeMissingFallsBackToCompiled;
 
     // Profile-Loader (sca-rules.json -> profiles.*):
     //
@@ -135,7 +145,8 @@ type
 implementation
 
 uses
-  System.Generics.Collections, System.RegularExpressions;
+  System.Generics.Collections, System.RegularExpressions,
+  System.JSON;   // AnchorAndFixModeUseKnownValues liest die rohe Datei
 
 // Profilnamen als Konstanten. Nicht aus Ordnungsliebe: mit den drei neuen
 // Profil-Tests stand 'default' dreimal woertlich im Code, und der eigene
@@ -1062,6 +1073,12 @@ end;
 { ---- Quellstellen-Dienst: anchor / fixMode ---- }
 
 procedure TTestRuleCatalog.AnchorAndFixModeUseKnownValues;
+// Seit Minor 40 (Review reDelphiX 2026-10-07) macht der Lader aus einem
+// unbekannten Wert leer und fuellt ihn aus der einkompilierten Tabelle.
+// Ueber GetRuleCanonical saehe dieser Test einen Tippfehler in der JSON
+// also nie mehr - deshalb prueft er zuerst die ROHE Datei, aus der der
+// Katalog geladen wurde, und zwar so streng wie das Schema-enum: nur
+// Strings, Gross/Klein zaehlt. Danach den Vertrag des Laders.
 const
   ANCHORS   : array[0..4] of string = ('statement', 'assign', 'call',
     'assign-or-call', 'uses-item');
@@ -1077,10 +1094,46 @@ const
         Exit(True);
   end;
 
+  procedure PruefeRoh(ARegel: TJSONObject; const AFeld: string;
+    const AList: array of string);
+  var
+    V : TJSONValue;
+  begin
+    V := ARegel.FindValue(AFeld);
+    if V = nil then Exit;   // optional
+    Assert.IsTrue((V is TJSONString) and InList(V.Value, AList),
+      ARegel.GetValue<string>('id', '?') + ': unbekannter ' + AFeld + ' ' +
+      V.ToString + ' in rules/sca-rules.json');
+  end;
+
 var
-  K    : TFindingKind;
-  Meta : TRuleMeta;
+  K      : TFindingKind;
+  Meta   : TRuleMeta;
+  Pfad   : string;
+  Json   : TJSONValue;
+  Regeln : TJSONValue;
+  i      : Integer;
 begin
+  // 1. Die rohe Datei - dort entsteht ein Tippfehler.
+  Pfad := TRuleCatalog.ResolvedJsonPath;
+  Assert.IsNotEmpty(Pfad,
+    'rules/sca-rules.json nicht gefunden - die Rohpruefung braucht die Datei');
+  Json := TJSONObject.ParseJSONValue(TFile.ReadAllText(Pfad, TEncoding.UTF8));
+  try
+    Assert.IsTrue(Json is TJSONObject, Pfad + ' ist kein JSON-Objekt');
+    Regeln := TJSONObject(Json).FindValue('rules');
+    Assert.IsTrue(Regeln is TJSONArray, Pfad + ' ohne rules-Array');
+    for i := 0 to TJSONArray(Regeln).Count - 1 do
+      if TJSONArray(Regeln).Items[i] is TJSONObject then
+      begin
+        PruefeRoh(TJSONObject(TJSONArray(Regeln).Items[i]), 'anchor', ANCHORS);
+        PruefeRoh(TJSONObject(TJSONArray(Regeln).Items[i]), 'fixMode', FIX_MODES);
+      end;
+  finally
+    Json.Free;
+  end;
+
+  // 2. Der geladene Katalog - leer oder bekannt, und 'auto' nie ohne Anker.
   for K := Low(TFindingKind) to High(TFindingKind) do
   begin
     Meta := TRuleCatalog.GetRuleCanonical(K);
@@ -1117,11 +1170,60 @@ procedure TTestRuleCatalog.FallbackCarriesAnchorAndFixMode;
 // nie (BPL im Embarcadero-Verzeichnis), also lief es im Fallback - und
 // reDelphix sah bei SCA044 fixMode '' statt 'auto': kein Menuepunkt.
 // Der Fallback wird wie in FallbackStillProvidesExamples erzwungen.
+//
+// Nit 11 (Review reDelphiX 2026-10-07): verglichen wurden nur SCA044 und
+// SCA003. Bekam eine dritte Regel anchor/fixMode in der JSON und blieb
+// uRuleCatalogData.inc alt (die AH8-Ursache), blieb alles gruen. Jetzt
+// werden VOR dem Umschalten die Werte des echten Katalogs je Kind gemerkt
+// und nach dem Fallback-Reload je Kind verglichen. Die Gegenrichtung
+// (JSON leer, Tabelle gesetzt) sieht dieser Vergleich nicht: der Lader
+// fuellt ein leeres Feld seit Minor 40 aus der Tabelle, beide Wege
+// liefern dann denselben Wert. Die Drift selbst haelt
+// 'gen-rules-inc.py --check' in der CI.
 var
-  TmpFile : string;
-  OldPath : string;
-  Meta    : TRuleMeta;
+  TmpFile    : string;
+  OldPath    : string;
+  Meta       : TRuleMeta;
+  K          : TFindingKind;
+  JsonAnchor : array[TFindingKind] of string;
+  JsonFix    : array[TFindingKind] of string;
+  Abweichend : string;
+
+  // Je abweichendem Kind ein Eintrag ' SCAnnn (anchor/fixMode statt
+  // anchor/fixMode)' gegen die vorher gemerkten JSON-Werte; leer = gleich.
+  function FallbackAbweichungen: string;
+  var
+    Kind : TFindingKind;
+    Fb   : TRuleMeta;
+    SB   : TStringBuilder;
+  begin
+    SB := TStringBuilder.Create;
+    try
+      for Kind := Low(TFindingKind) to High(TFindingKind) do
+      begin
+        Fb := TRuleCatalog.GetRuleCanonical(Kind);
+        if (Fb.Anchor <> JsonAnchor[Kind]) or (Fb.FixMode <> JsonFix[Kind]) then
+          SB.Append(Format(' %s (%s/%s statt %s/%s)',
+            [Fb.ID, Fb.Anchor, Fb.FixMode, JsonAnchor[Kind], JsonFix[Kind]]));
+      end;
+      Result := SB.ToString;
+    finally
+      SB.Free;
+    end;
+  end;
+
 begin
+  // Ohne geladene JSON verglichen die Schleifen Fallback mit Fallback.
+  // detectorUnit fuehrt NUR die JSON, die einkompilierte Tabelle nicht.
+  Assert.IsNotEmpty(TRuleCatalog.GetRuleCanonical(fkConcatToFormat).DetectorUnit,
+    'echte sca-rules.json nicht geladen - der Vergleich waere Fallback gegen Fallback');
+  for K := Low(TFindingKind) to High(TFindingKind) do
+  begin
+    Meta := TRuleCatalog.GetRuleCanonical(K);
+    JsonAnchor[K] := Meta.Anchor;
+    JsonFix[K]    := Meta.FixMode;
+  end;
+
   OldPath := TRuleCatalog.JsonFilePath;
   TmpFile := TPath.Combine(TPath.GetTempPath,
     'sca_broken_rules_' + TGuid.NewGuid.ToString.Replace('{', '').Replace('}', '') + '.json');
@@ -1139,10 +1241,115 @@ begin
     Meta := TRuleCatalog.GetRuleCanonical(fkSQLInjection);
     Assert.AreEqual('assign-or-call', Meta.Anchor, 'SCA003 im Fallback ohne anchor');
     Assert.AreEqual('assisted', Meta.FixMode, 'SCA003 im Fallback ohne fixMode');
+
+    // Und ueber ALLE Kinds: Fallback = geladene JSON.
+    Abweichend := FallbackAbweichungen;
+    Assert.AreEqual('', Abweichend,
+      'anchor/fixMode im Fallback abweichend - uRuleCatalogData.inc regenerieren:' +
+      Abweichend);
   finally
     TRuleCatalog.JsonFilePath := OldPath;
     TRuleCatalog.Reload;   // echten Katalog fuer die Folgetests wiederherstellen
     if TFile.Exists(TmpFile) then TFile.Delete(TmpFile);
+  end;
+end;
+
+procedure TTestRuleCatalog.AnchorFixModeNonStringDoesNotRaise;
+// Vorher las der Lader beide Felder mit GetValue<string>. Ein Objekt oder
+// Array warf dort EJSONException; EnsureLoaded setzt FLoaded erst am Ende,
+// also warf danach JEDER Katalogzugriff erneut - bis in den SARIF-Export.
+// Die Erwartung kommt aus dem erzwungenen Fallback, nicht aus festen
+// Werten: bekommt SCA001 je einen Anker, bleibt der Test richtig.
+var
+  AltPfad    : string;
+  Kaputt     : string;
+  Datei      : string;
+  Tabelle044 : TRuleMeta;
+  Tabelle001 : TRuleMeta;
+  Meta       : TRuleMeta;
+begin
+  AltPfad := TRuleCatalog.JsonFilePath;
+  Kaputt  := SchreibeTempJson('{ das ist kein gueltiger Regelkatalog');
+  Datei   := SchreibeTempJson(
+    '{"rules":[' +
+    '{"id":"SCA044","kind":"ConcatToFormat","name":"n44",' +
+    '"anchor":{"x":1},"fixMode":["auto"]},' +
+    '{"id":"SCA001","kind":"MemoryLeak","name":"n1",' +
+    '"anchor":"bogus","fixMode":7}]}');
+  try
+    // Erwartung: die einkompilierte Tabelle (Fallback erzwungen).
+    TRuleCatalog.JsonFilePath := Kaputt;
+    TRuleCatalog.Reload;
+    Tabelle044 := TRuleCatalog.GetRuleCanonical(fkConcatToFormat);
+    Tabelle001 := TRuleCatalog.GetRuleCanonical(fkMemoryLeak);
+    Assert.AreEqual('auto', Tabelle044.FixMode,
+      'SCA044 fuehrt in der Tabelle fixMode auto - sonst prueft der Rueckfall nichts');
+
+    // Wirft das Laden, faellt der Test mit genau dieser Exception - vor
+    // dem Fix war es EJSONException.
+    TRuleCatalog.JsonFilePath := Datei;
+    TRuleCatalog.Reload;
+
+    Meta := TRuleCatalog.GetRuleCanonical(fkConcatToFormat);
+    Assert.AreEqual('n44', Meta.Name,
+      'die Test-JSON ist geladen, nicht der Fallback');
+    Assert.AreEqual(Tabelle044.Anchor, Meta.Anchor,
+      'SCA044: Objekt als anchor -> Tabellenwert');
+    Assert.AreEqual(Tabelle044.FixMode, Meta.FixMode,
+      'SCA044: Array als fixMode -> Tabellenwert');
+
+    Meta := TRuleCatalog.GetRuleCanonical(fkMemoryLeak);
+    Assert.AreEqual('n1', Meta.Name, 'SCA001 kommt aus der Test-JSON');
+    Assert.AreEqual(Tabelle001.Anchor, Meta.Anchor,
+      'SCA001: unbekannter anchor ''bogus'' rutschte durch');
+    Assert.AreEqual(Tabelle001.FixMode, Meta.FixMode,
+      'SCA001: Zahl als fixMode rutschte durch');
+  finally
+    TRuleCatalog.JsonFilePath := AltPfad;
+    if TFile.Exists(Datei) then TFile.Delete(Datei);
+    if TFile.Exists(Kaputt) then TFile.Delete(Kaputt);
+    TRuleCatalog.Reload;   // echten Katalog wiederherstellen
+  end;
+end;
+
+procedure TTestRuleCatalog.AnchorFixModeMissingFallsBackToCompiled;
+// Eine aeltere sca-rules.json kennt anchor/fixMode nicht. Gefunden ueber
+// den Aufwaertswalk oder %APPDATA%, ueberdeckte sie die Tabelle - und
+// reDelphix bot bei KEINEM Fund mehr etwas an. Jetzt: leeres Feld ->
+// Tabellenwert. Ein ausdrueckliches 'none' bleibt aber 'none', sonst
+// liesse sich ein Umschreiber ueber den Katalog nicht mehr abschalten.
+var
+  AltPfad : string;
+  Datei   : string;
+  Meta    : TRuleMeta;
+begin
+  AltPfad := TRuleCatalog.JsonFilePath;
+  Datei   := SchreibeTempJson(
+    '{"rules":[' +
+    '{"id":"SCA003","kind":"SQLInjection","name":"n3"},' +
+    '{"id":"SCA044","kind":"ConcatToFormat","name":"n44",' +
+    '"anchor":"CALL","fixMode":"none"}]}');
+  try
+    TRuleCatalog.JsonFilePath := Datei;
+    TRuleCatalog.Reload;
+
+    Meta := TRuleCatalog.GetRuleCanonical(fkSQLInjection);
+    Assert.AreEqual('n3', Meta.Name,
+      'die Test-JSON ist geladen, nicht der Fallback');
+    Assert.AreEqual('assign-or-call', Meta.Anchor,
+      'SCA003 ohne anchor in der Datei -> Tabellenwert');
+    Assert.AreEqual('assisted', Meta.FixMode,
+      'SCA003 ohne fixMode in der Datei -> Tabellenwert, reDelphix bleibt an');
+
+    Meta := TRuleCatalog.GetRuleCanonical(fkConcatToFormat);
+    Assert.AreEqual('call', Meta.Anchor,
+      'SCA044: ausdruecklicher anchor gilt, klein geschrieben');
+    Assert.AreEqual('none', Meta.FixMode,
+      'SCA044: ausdrueckliches none schaltet ab - kein Rueckfall auf auto');
+  finally
+    TRuleCatalog.JsonFilePath := AltPfad;
+    if TFile.Exists(Datei) then TFile.Delete(Datei);
+    TRuleCatalog.Reload;   // echten Katalog wiederherstellen
   end;
 end;
 

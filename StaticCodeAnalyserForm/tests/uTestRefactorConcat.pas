@@ -40,6 +40,10 @@ type
     [Test] procedure FixSafe_MultiLineAlone_StaysTrue;
     [Test] procedure FixSafe_UnknownOperand_False;
     [Test] procedure FixSafe_CommentInSpan_False;
+    // Review reDelphiX 2026-10-07, strittiger Major 1: eine Direktive
+    // ZWISCHEN den Termen sperrt wie ein Kommentar, auch wenn jeder Term
+    // fuer sich ein String ist.
+    [Test] procedure FixSafe_InlineDirective_False;
     [Test] procedure FixSafe_InConditionalRange_False;
     [Test] procedure FixSafe_TopLevelOperator_False;
 
@@ -451,6 +455,31 @@ begin
       Assert.IsTrue(Assigned(Info));
       Assert.IsTrue(rfHasComment in Info.Flags);
       Assert.IsFalse(Info.FixSafe, 'der Kommentar ginge verloren');
+    finally
+      Info.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorConcat.FixSafe_InlineDirective_False;
+var
+  Lines : TStringList;
+  Info  : TRefactorInfo;
+begin
+  // Direktive und Literale ohne Leerraum dazwischen: gesperrt wird ueber
+  // rfHasComment, nicht ueber die Art der Terme.
+  Lines := MakeLines([
+    'r := ''a'' + {$IFDEF X}''b''{$ELSE}''c''{$ENDIF};']);
+  try
+    Info := DescribeAt(Lines, 1, 'r :=', 1);
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual<Integer>(3, Length(Info.Parts), 'Ziel + zwei Terme');
+      Assert.IsTrue(rfHasComment in Info.Flags);
+      Assert.IsFalse(Info.FixSafe,
+        'beim Ersetzen ginge ein Zweig der Direktive verloren');
     finally
       Info.Free;
     end;

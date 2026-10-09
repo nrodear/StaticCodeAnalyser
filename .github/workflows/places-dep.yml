@@ -1,0 +1,56 @@
+# GitHub Actions workflow: haelt die Abhaengigkeit des Quellstellen-
+# Dienstes (uSourcePlaces, uRefactorInfo, uRefactorInfoBuilder,
+# uRefactorConcat) in EINER Richtung.
+#
+# Hintergrund: Der Dienst beschreibt Stellen einer Quelldatei fuer einen
+# Fremd-Konsumenten (reDelphix) - auf Anfrage, ausserhalb des Scans. Die
+# Zusage dahinter: Fundzahl, FP-Quote, Baselines und SARIF bewegen sich
+# durch ihn nicht. Das haelt nur, solange der Dienst die Engine liest und
+# die Engine den Dienst nicht kennt - kein Detektor, Parser, Exporter und
+# keine Common-Unit darf ihn importieren, auch nicht ueber uEngineApi, die
+# ihn weiterreicht.
+#
+# Das Gate braucht keinen Bau, nur Python und die uses-Klauseln unter
+# SCA.Engine/sources. Der Selbsttest laeuft zuerst: er belegt an Fixtures,
+# dass das Gate die Faelle, die es schliessen soll, auch rot meldet - ein
+# Gate kann sonst still kaputt sein.
+#
+# Lokal vorab pruefen: `python tools/places_dep_gate.py --selftest`
+#                 und: `python tools/places_dep_gate.py`
+
+name: Places-Dep
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  places-dep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Selbsttest des Gates
+        run: python3 tools/places_dep_gate.py --selftest
+
+      - name: Run places dependency gate
+        run: python3 tools/places_dep_gate.py
+
+      - name: Erklaerung (bei Fehlschlag)
+        if: failure()
+        run: |
+          echo "Regel: der Quellstellen-Dienst darf die Engine lesen,"
+          echo "die Engine darf den Dienst nicht kennen."
+          echo ""
+          echo "Verboten in Detectors/, Parsing/, Output/, Common/ und im"
+          echo "Scan (uStaticAnalyzer2): uses uSourcePlaces, uRefactorInfo,"
+          echo "uRefactorInfoBuilder, uRefactorConcat - und uEngineApi, weil"
+          echo "sie TSourcePlaces & Co. als Aliase weiterreicht."
+          echo "Verboten in den Dienst-Units: uses eines Detektors oder des"
+          echo "Scans."
+          echo ""
+          echo "Was der Konsument braucht, gehoert in den Dienst, nicht in"
+          echo "den Scan. Die Begruendung steht im Kopf von"
+          echo "tools/places_dep_gate.py."

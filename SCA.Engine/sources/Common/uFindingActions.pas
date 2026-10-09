@@ -95,6 +95,11 @@ type
   TFindingActions = class
   public
     // Meldet einen Anbieter an. Liefert das Token fuer Unregister (> 0).
+    // Token 0 = nicht angemeldet: nil-Anbieter (Assigned prueft den
+    // Code-Zeiger) oder Registry schon abgebaut. Unregister(0) ist ein
+    // No-Op. Ein nil-Anbieter zaehlte frueher in ProviderCount mit und
+    // hielt so Kontextmenue und Gluehbirne des Hosts unnoetig wach
+    // (Review reDelphiX 2026-10-07, Minor 7).
     class function Register(AProvider: TFindingActionProvider): Integer;
       static;
     // Meldet den Anbieter mit diesem Token ab. Unbekanntes Token: no-op.
@@ -107,11 +112,6 @@ type
   end;
 
 implementation
-
-// noinspection-file UnusedPublicMember
-// Die Registry wird von Host (Plugin/EXE) und Anbieter (reDelphix,
-// ausserhalb dieses Repos) benutzt; der Selbstscan sieht den Anbieter
-// nicht.
 
 uses
   System.SyncObjs;
@@ -133,6 +133,7 @@ var
   E : TEntry;
 begin
   Result := 0;
+  if not Assigned(AProvider) then Exit;
   if (GLock = nil) or (GEntries = nil) then Exit;
   GLock.Enter;
   try

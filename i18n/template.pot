@@ -49,11 +49,11 @@ msgstr ""
 msgid "\"%s\" already exists. Overwrite it?"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1476
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1570
 msgid "\"%s\" is a built-in profile and cannot be changed."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1526
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1620
 msgid "\"%s\" is a built-in profile."
 msgstr ""
 
@@ -118,7 +118,7 @@ msgstr ""
 msgid "%s contains no profiles."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1307
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1401
 msgid "%s is not a valid JSON object."
 msgstr ""
 
@@ -170,7 +170,7 @@ msgstr ""
 msgid "8-bit string cast silently drops non-codepage characters"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1491
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1585
 #: SCA.SharedUI/sources/uProfileViewer.pas:679
 msgid "A profile without rules would find nothing."
 msgstr ""
@@ -255,7 +255,7 @@ msgstr ""
 msgid "All severities"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1486
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1580
 msgid "Allowed characters: letters, digits, hyphen, underscore and dot."
 msgstr ""
 
@@ -495,7 +495,7 @@ msgstr ""
 msgid "Cancelling analysis..."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1299
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1393
 msgid "Cannot read %s: %s"
 msgstr ""
 
@@ -1066,7 +1066,7 @@ msgstr ""
 msgid "File not found: "
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1282
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1376
 msgid "File not found: %s"
 msgstr ""
 
@@ -2325,11 +2325,11 @@ msgstr ""
 msgid "Text (one-line hint, no window)"
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1471
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1565
 msgid "The profile name must not be empty."
 msgstr ""
 
-#: SCA.Engine/sources/Common/uRuleCatalog.pas:1531
+#: SCA.Engine/sources/Common/uRuleCatalog.pas:1625
 msgid "There is no profile \"%s\"."
 msgstr ""
 

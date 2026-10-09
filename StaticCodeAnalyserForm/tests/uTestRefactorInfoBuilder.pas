@@ -38,6 +38,13 @@ type
     [Test] procedure NilLines_ReturnsNil;
     [Test] procedure NoEndBeforeEof_ReturnsNil;
     [Test] procedure StartInsideParens_ReturnsNil;
+    // Review reDelphiX 2026-10-07, Minor 5: ein Delphi-12-Mehrzeilenstring
+    // ('''-Lauf am Zeilenende) in der Anweisung - nil statt eines Bereichs,
+    // der in die Folgeanweisung laeuft oder am ';' im SQL-Text endet.
+    [Test] procedure MultiLineStringLiteral_ReturnsNil;
+    // Gegenproben: escaptes Apostroph, ''' im Kommentar, Mehrzeilenstring
+    // erst HINTER dem Ende der Anweisung.
+    [Test] procedure MultiLineString_LookAlikes_StillDescribed;
 
     // ---- Flags (B5) ----
     [Test] procedure Flags_SingleLinePlain_Empty;
@@ -45,6 +52,15 @@ type
     [Test] procedure Flags_BlockCommentAcrossLines;
     [Test] procedure Flags_InConditionalRange;
     [Test] procedure Flags_NilUnitNode_NoConditional;
+    // Review reDelphiX 2026-10-07, strittiger Major 1: die uebrigen
+    // Kommentarformen im Bereich - (* *) ein- und mehrzeilig, eine
+    // Direktive zwischen zwei Termen, '//' auf einer Zwischenzeile - und
+    // '(*' in einem String, das KEIN Kommentar ist.
+    [Test] procedure Flags_ParenCommentInSpan;
+    [Test] procedure Flags_ParenCommentAcrossLines;
+    [Test] procedure Flags_InlineDirectiveInSpan;
+    [Test] procedure Flags_LineCommentOnMiddleLine;
+    [Test] procedure Flags_ParenOpenerInString_NoComment;
 
     // ---- Einfuegepunkt (B6) ----
     [Test] procedure Insert_StatementAloneOnLine;
@@ -358,6 +374,72 @@ begin
   end;
 end;
 
+procedure TTestRefactorInfoBuilder.MultiLineStringLiteral_ReturnsNil;
+var
+  Lines : TStringList;
+begin
+  // s := 'a' + Name + '''      <- oeffnet den Mehrzeilenstring
+  //   SELECT x                 <- String-Inhalt
+  //   ''' + IntToStr(n);       <- schliesst ihn, hier endet die Anweisung
+  // Q.SQL.Text := s;
+  Lines := MakeLines([
+    's := ''a'' + Name + ''''''',
+    '  SELECT x',
+    '  '''''' + IntToStr(n);',
+    'Q.SQL.Text := s;']);
+  try
+    Assert.IsFalse(Assigned(
+      TRefactorInfoBuilder.TryBuildForStatement(nil, Lines, 1, 1)),
+      'ohne Mehrzeilenstring-Kenntnis endete der Bereich erst in Zeile 4');
+    // Ein ';' im SQL-Text haette den Bereich dort beendet.
+    Lines[1] := '  SELECT x FROM t;';
+    Assert.IsFalse(Assigned(
+      TRefactorInfoBuilder.TryBuildForStatement(nil, Lines, 1, 1)),
+      'das '';'' im String-Inhalt beendet die Anweisung nicht');
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorInfoBuilder.MultiLineString_LookAlikes_StillDescribed;
+const
+  L_ESCAPED = 's := ''it'''''';';               // s := 'it''';
+  L_COMMENT = '  r := a + { '''''' }';          //   r := a + { ''' }
+  L_AFTER   = 'a := 1; s := ''''''';            // a := 1; s := '''
+var
+  Lines : TStringList;
+  Info  : TRefactorInfo;
+begin
+  Lines := MakeLines([L_ESCAPED, L_COMMENT, '    b;', L_AFTER, 'x', '''''''']);
+  try
+    Info := BuildAt(Lines, 1, 's :=');
+    try
+      Assert.IsTrue(Assigned(Info), 'escaptes Apostroph am Ende eines Strings');
+      Assert.AreEqual<Integer>(Length(L_ESCAPED) + 1, Info.Span.EndCol);
+    finally
+      Info.Free;
+    end;
+    Info := BuildAt(Lines, 2, 'r :=');
+    try
+      Assert.IsTrue(Assigned(Info), 'drei Apostrophe im Kommentar oeffnen nichts');
+      Assert.AreEqual<Integer>(3, Info.Span.EndLine);
+    finally
+      Info.Free;
+    end;
+    Info := BuildAt(Lines, 4, 'a :=');
+    try
+      Assert.IsTrue(Assigned(Info),
+        'der Mehrzeilenstring beginnt erst hinter dem Ende der Anweisung');
+      Assert.AreEqual('a := 1;',
+        TRefactorInfoBuilder.SpanText(Lines, Info.Span));
+    finally
+      Info.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
 { ---- Flags ---- }
 
 procedure TTestRefactorInfoBuilder.Flags_SingleLinePlain_Empty;
@@ -475,6 +557,126 @@ begin
       Assert.IsTrue(Assigned(Info));
       Assert.IsFalse(rfInConditional in Info.Flags,
         'ohne Unit-Knoten gibt es keine Marker - das Flag bleibt aus');
+    finally
+      Info.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorInfoBuilder.Flags_ParenCommentInSpan;
+const
+  L1 = '  r := a (* x *) + b;';
+var
+  Lines : TStringList;
+  Info  : TRefactorInfo;
+begin
+  Lines := MakeLines([L1]);
+  try
+    Info := BuildAt(Lines, 1, 'r :=');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual<Integer>(Length(L1) + 1, Info.Span.EndCol);
+      Assert.IsTrue(rfHasComment in Info.Flags, '(* *) im Bereich');
+      Assert.IsFalse(rfMultiLine in Info.Flags);
+    finally
+      Info.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorInfoBuilder.Flags_ParenCommentAcrossLines;
+const
+  L2 = '  weiter *) b;';
+var
+  Lines : TStringList;
+  Info  : TRefactorInfo;
+begin
+  Lines := MakeLines(['  r := a + (* beginnt', L2]);
+  try
+    Info := BuildAt(Lines, 1, 'r :=');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual<Integer>(2, Info.Span.EndLine);
+      Assert.AreEqual<Integer>(Length(L2) + 1, Info.Span.EndCol,
+        'der getragene (*-Zustand blendet den Anfang von Zeile 2 aus');
+      Assert.IsTrue(rfHasComment in Info.Flags);
+      Assert.IsTrue(rfMultiLine in Info.Flags);
+    finally
+      Info.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorInfoBuilder.Flags_InlineDirectiveInSpan;
+const
+  // ELSE in der Direktive ist kein Schluesselwort der Anweisung.
+  L1 = '  r := ''a'' + {$IFDEF X} b {$ELSE} c {$ENDIF};';
+var
+  Lines : TStringList;
+  Info  : TRefactorInfo;
+begin
+  Lines := MakeLines([L1]);
+  try
+    Info := BuildAt(Lines, 1, 'r :=');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual<Integer>(Length(L1) + 1, Info.Span.EndCol);
+      Assert.IsTrue(rfHasComment in Info.Flags,
+        'eine Direktive im Bereich gilt als Kommentar');
+    finally
+      Info.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorInfoBuilder.Flags_LineCommentOnMiddleLine;
+const
+  L2 = '    b;';
+var
+  Lines : TStringList;
+  Info  : TRefactorInfo;
+begin
+  Lines := MakeLines(['  r := ''a'' + // x', L2]);
+  try
+    Info := BuildAt(Lines, 1, 'r :=');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual<Integer>(2, Info.Span.EndLine);
+      Assert.AreEqual<Integer>(Length(L2) + 1, Info.Span.EndCol);
+      Assert.IsTrue(rfHasComment in Info.Flags,
+        'ein // auf einer Zwischenzeile liegt IM Bereich');
+    finally
+      Info.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorInfoBuilder.Flags_ParenOpenerInString_NoComment;
+const
+  L1 = '  r := ''(*'' + b;';
+var
+  Lines : TStringList;
+  Info  : TRefactorInfo;
+begin
+  Lines := MakeLines([L1]);
+  try
+    Info := BuildAt(Lines, 1, 'r :=');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual<Integer>(Length(L1) + 1, Info.Span.EndCol,
+        'das (* im Literal oeffnet keinen Kommentar');
+      Assert.IsFalse(rfHasComment in Info.Flags,
+        'der String hat Vorrang vor dem Kommentar-Oeffner');
     finally
       Info.Free;
     end;

@@ -15,10 +15,10 @@ unit uRdxRecipes;
 //   DetectFramework   VCL oder FMX, aus den qualifizierten uses-Eintraegen
 //
 // Die Fakten kommen aus dem Core (Teilbereiche mit Rolle und Typ), die
-// Politik steht hier: ein Format() wird nur gebaut, wenn JEDER Operand
-// beweisbar ein String ist (sonst %d-fuer-String: uebersetzt, wirft zur
-// Laufzeit EConvertError), und nie fuer SQL-Text (SCA003 - Vertrag im
-// Kopf von uRefactorConcat).
+// Politik steht hier: ein Format() wird nach der Kompilat-Regel gebaut
+// (JudgeOperand, Block "Kompilat-Regel (AH20)" unten - ein Zahl-Operand
+// hinter %s uebersetzt, wirft aber zur Laufzeit EConvertError), und nie
+// fuer SQL-Text (SCA003 - Vertrag im Kopf von uRefactorConcat).
 //
 // LITERALE
 //
@@ -92,10 +92,17 @@ type
     // Zeilenumbrueche und Tabulatoren zu einem Leerzeichen, aussen getrimmt.
     class function CollapseWhitespace(const AText: string): string; static;
 
-    // True, wenn der Text wie ein SQL-Statement aussieht: ein Statement-
-    // Verb (select/insert/update/...) UND ein Strukturwort (from/into/
-    // set/where/...) als ganze Woerter. 'Update available for' allein
-    // ist KEIN SQL.
+    // True, wenn der Text wie ein SQL-Statement aussieht. Paar-Regel
+    // (Review 2026-10-07, Nit 6), alles als ganze Woerter: ein Statement-
+    // Verb zaehlt nur mit einem Strukturwort, das grammatisch zu IHM
+    // passt und dahinter steht - select .. from/where/join/into, delete ..
+    // from/where, insert .. into/values, merge .. into, update .. set;
+    // bei create/alter/drop/truncate folgt das Objekt (table/index/view/
+    // procedure/...) direkt, hoechstens nach Zusatzwoertern wie 'or
+    // replace', 'unique', 'global temporary'. 'Update available from
+    // server' und 'Create a table of contents' sind KEIN SQL. Bekannte
+    // Grenze: 'Select a file from ' ist lexikalisch gueltiges SQL (Alias)
+    // und sperrt weiter.
     class function LooksLikeSql(const AValue: string): Boolean; static;
 
     // Rezept 5.1 - Format() aus einer '+'-Kette. AParts in Quelltext-
@@ -142,6 +149,21 @@ type
     // ShortString, RawUtf8) sperrt als Ziel immer und als Operand, wenn
     // das Ziel nicht nachweislich Unicode ist: Format liefert
     // UnicodeString. Ertrag in der Nachbildung: 83 %.
+    //
+    // Nachtraege Review reDelphiX 2026-10-07:
+    //   * Das Urteil haengt am Typ, nicht an der Schreibweise: ein Cast
+    //     auf einen Nicht-Unicode-String ('AnsiString(A)', 'AnsiChar(b)')
+    //     und RTL-Aufrufe mit Ansi-Ergebnis (UTF8Encode, AnsiToUtf8,
+    //     Utf8ToAnsi, StrPas) urteilen wie die Deklaration (Minor 12).
+    //   * Aufrufe mit Zahl-Ergebnis (Length, Ord, Pos, Round, StrToInt,
+    //     ...) sperren wie ein Zahl-Cast: in der Kette uebersetzen sie nur
+    //     hinter einem Variant ohne Anzeichen, %s wirft dann (Minor 13).
+    //   * Char/WideChar/ShortString-Operanden (deklariert, Cast oder
+    //     Chr(...)) gehen als string(x) in den Aufruf: bei vtChar/
+    //     vtWideChar/vtString haengt FormatBuf ohne Laenge an (StrLen),
+    //     ein #0 ginge verloren, die Verkettung behaelt ihn (Minor 10).
+    //     Bekannte Grenze: ein Char UNBEKANNTEN Typs ('S[i]', 'Obj.Ch')
+    //     bleibt ohne Cast.
 
     // True, wenn der Text die Form eines Operanden hat: Bezeichner (oder
     // eine Klammergruppe mit folgendem '.', '[' oder '^', z. B.
@@ -164,6 +186,12 @@ type
     // Klammer den ganzen Term abschliesst; qualifiziert nur mit
     // SysUtils/StrUtils/IOUtils.
     class function IsKnownStringFunc(const AText: string): Boolean; static;
+    // RTL-Funktionen mit Nicht-Unicode-Ergebnis (UTF8Encode, AnsiToUtf8,
+    // Utf8ToAnsi, StrPas), qualifiziert wie bei IsKnownStringFunc.
+    // StrPas(PWideChar) liefert zwar UnicodeString - das Urteil ovAnsi ist
+    // dann nur vorsichtig, nie falsch.
+    class function IsKnownAnsiStringFunc(const AText: string): Boolean;
+      static;
     // AnsiString, RawByteString, UTF8String, ShortString, RawUtf8,
     // PAnsiChar, AnsiChar.
     class function IsNonUnicodeStringType(const ATypeLow: string): Boolean;
@@ -184,12 +212,23 @@ type
       out AArgument, ASpec: string): Boolean; static;
 
     // Das Query-Objekt eines SQL-Ziels: 'Query.SQL.Text' -> 'Query',
-    // 'FDQuery1.SQL.Add' -> 'FDQuery1', 'Cmd.CommandText' -> 'Cmd'.
+    // 'FDQuery1.SQL.Add' -> 'FDQuery1', 'Cmd.CommandText' -> 'Cmd',
+    // 'DM.SQLQuery1.SQL.Text' -> 'DM.SQLQuery1' (das Glied '.SQL' ganz,
+    // nicht der Anfang von '.SQLQuery1'). Ein blosser Bezeichner
+    // ('SQLText') kommt unveraendert zurueck - das ist KEIN Query-Objekt
+    // (HasQueryObject).
     class function QueryObjectOf(const ATarget: string): string; static;
+    // True, wenn das Ziel ein Glied '.SQL' oder '.CommandText' traegt -
+    // nur dann hat QueryObjectOf ein Objekt mit ParamByName.
+    class function HasQueryObject(const ATarget: string): Boolean; static;
 
     // Rezept 5.2 - parametrisierte Vorlage (nie geschrieben, nur Text).
     // AIsCall: das Ziel ist ein Aufrufkopf (Q.SQL.Add) statt einer
-    // Zuweisung. AIndent: fuehrende Leerzeichen je Zeile.
+    // Zuweisung. AIndent: fuehrende Leerzeichen je Zeile. Ein Ziel ohne
+    // Query-Objekt ist ein String-Puffer ('S := ''SELECT ..'' + Id' -
+    // SCA003 meldet auch den): dann stehen die ParamByName-Zeilen als
+    // Kommentar mit dem Platzhalter '<Query>' da, 'S.ParamByName'
+    // uebersetzte nicht (Review 2026-10-07, Minor 24).
     class function BuildSqlTemplate(const ATarget: string; AIsCall: Boolean;
       const AParts: TRdxParts; AIndent: Integer;
       out ATemplate, AReason: string): Boolean; static;
@@ -227,12 +266,21 @@ type
 implementation
 
 const
-  SQL_VERBS: array[0..8] of string = (
-    'select', 'insert', 'update', 'delete', 'create', 'alter', 'drop',
-    'truncate', 'merge');
-  SQL_WORDS: array[0..8] of string = (
-    'from', 'into', 'set', 'where', 'table', 'values', 'join', 'index',
-    'view');
+  // Paar-Regel von LooksLikeSql (Review 2026-10-07, Nit 6): je Verb die
+  // Strukturwoerter, die grammatisch dahinter stehen koennen.
+  SQL_SELECT_WORDS: array[0..3] of string = ('from', 'where', 'join', 'into');
+  SQL_DELETE_WORDS: array[0..1] of string = ('from', 'where');
+  SQL_INSERT_WORDS: array[0..1] of string = ('into', 'values');
+  // DDL: create/alter/drop/truncate, dann hoechstens Zusatzwoerter
+  // ('or replace', 'unique', 'global temporary', 'clustered'), dann das
+  // Objekt. 'Create or open a file' und 'Create temp file' sind kein SQL.
+  SQL_DDL_VERBS: array[0..3] of string = ('create', 'alter', 'drop', 'truncate');
+  SQL_DDL_MODIFIERS: array[0..10] of string = (
+    'or', 'replace', 'alter', 'unique', 'temporary', 'temp', 'global',
+    'local', 'clustered', 'nonclustered', 'materialized');
+  SQL_DDL_OBJECTS: array[0..10] of string = (
+    'table', 'index', 'view', 'procedure', 'trigger', 'function',
+    'database', 'sequence', 'schema', 'domain', 'generator');
 
 function InList(const AValue: string; const AList: array of string): Boolean;
 var
@@ -444,34 +492,85 @@ begin
   Result := TrimRight(Result);
 end;
 
-class function TRdxRecipes.LooksLikeSql(const AValue: string): Boolean;
+// True, wenn hinter Index AFrom eines der Woerter aus AList vorkommt.
+function WordFollows(const AWords: TArray<string>; AFrom: Integer;
+  const AList: array of string): Boolean;
 var
-  Low     : string;
+  k : Integer;
+begin
+  Result := False;
+  for k := AFrom + 1 to High(AWords) do
+    if InList(AWords[k], AList) then
+      Exit(True);
+end;
+
+// True, wenn hinter dem DDL-Verb bei Index AVerb - nach Zusatzwoertern -
+// direkt ein DDL-Objekt steht ('DROP TABLE', 'CREATE OR REPLACE VIEW').
+function DdlObjectFollows(const AWords: TArray<string>; AVerb: Integer): Boolean;
+var
+  k : Integer;
+begin
+  k := AVerb + 1;
+  while (k <= High(AWords)) and InList(AWords[k], SQL_DDL_MODIFIERS) do
+    Inc(k);
+  Result := (k <= High(AWords)) and InList(AWords[k], SQL_DDL_OBJECTS);
+end;
+
+// Die Woerter (nur a..z) des klein geschriebenen Texts, in Reihenfolge.
+function LowerWordsOf(const AValue: string): TArray<string>;
+var
+  Lowered : string;
   i       : Integer;
   Word    : string;
-  HasVerb : Boolean;
-  HasWord : Boolean;
+  Words   : TArray<string>;
 
   procedure Flush;
   begin
     if Word = '' then Exit;
-    if InList(Word, SQL_VERBS) then HasVerb := True;
-    if InList(Word, SQL_WORDS) then HasWord := True;
+    SetLength(Words, Length(Words) + 1);
+    Words[High(Words)] := Word;
     Word := '';
   end;
 
 begin
-  Low := LowerCase(AValue);
-  HasVerb := False;
-  HasWord := False;
+  Lowered := LowerCase(AValue);
+  Words := nil;
   Word := '';
-  for i := 1 to Length(Low) do
-    if CharInSet(Low[i], ['a'..'z']) then
-      Word := Word + Low[i]
+  for i := 1 to Length(Lowered) do
+    if CharInSet(Lowered[i], ['a'..'z']) then
+      Word := Word + Lowered[i]
     else
       Flush;
   Flush;
-  Result := HasVerb and HasWord;
+  Result := Words;
+end;
+
+// Paar-Regel von LooksLikeSql fuer das Wort bei Index AIndex: ein
+// Statement-Verb mit einem Strukturwort, das grammatisch zu ihm passt und
+// dahinter steht, oder ein DDL-Verb mit seinem Objekt.
+function SqlPairAt(const AWords: TArray<string>; AIndex: Integer): Boolean;
+var
+  W : string;
+begin
+  W := AWords[AIndex];
+  if W = 'select' then Exit(WordFollows(AWords, AIndex, SQL_SELECT_WORDS));
+  if W = 'delete' then Exit(WordFollows(AWords, AIndex, SQL_DELETE_WORDS));
+  if W = 'insert' then Exit(WordFollows(AWords, AIndex, SQL_INSERT_WORDS));
+  if W = 'merge' then Exit(WordFollows(AWords, AIndex, ['into']));
+  if W = 'update' then Exit(WordFollows(AWords, AIndex, ['set']));
+  Result := InList(W, SQL_DDL_VERBS) and DdlObjectFollows(AWords, AIndex);
+end;
+
+class function TRdxRecipes.LooksLikeSql(const AValue: string): Boolean;
+var
+  Words : TArray<string>;
+  i     : Integer;
+begin
+  Result := False;
+  Words := LowerWordsOf(AValue);
+  for i := 0 to High(Words) do
+    if SqlPairAt(Words, i) then
+      Exit(True);
 end;
 
 { ---- Kompilat-Regel (AH20) ---- }
@@ -496,26 +595,40 @@ const
     'shortint', 'longint', 'longword', 'nativeint', 'nativeuint', 'dword',
     'single', 'double', 'extended', 'currency', 'boolean', 'bytebool',
     'wordbool', 'longbool', 'tdatetime');
+  // Aufrufe mit Zahl-/Boolean-Ergebnis: dasselbe Signal wie ein Zahl-Cast
+  // (Review 2026-10-07, Minor 13). Eine gleichnamige Projektfunktion mit
+  // String-Ergebnis wird damit nur vorsichtig gesperrt.
+  NUMERIC_FUNC_HEADS: array[0..18] of string = (
+    'length', 'ord', 'pos', 'posex', 'round', 'trunc', 'high', 'low',
+    'sizeof', 'abs', 'strtoint', 'strtointdef', 'strtoint64',
+    'strtoint64def', 'succ', 'pred', 'strtofloat', 'strtofloatdef',
+    'trystrtoint');
   KNOWN_STRING_CONSTS: array[0..8] of string = (
     'slinebreak', 'pathdelim', 'drivedelim', 'pathsep', 'emptystr',
     'lineending', 'directoryseparator', 'pathseparator', 'driveseparator');
   // Jenseits von uRefactorConcat.KNOWN_STRING_FUNCS (die der Core schon
   // als rvString liefert): Dateinamen, Teilstrings, Ersetzen, Codecs.
-  EXT_STRING_FUNCS: array[0..51] of string = (
+  EXT_STRING_FUNCS: array[0..47] of string = (
     'extractfilename', 'extractfilepath', 'extractfileext', 'extractfiledir',
     'extractfiledrive', 'changefileext', 'changefilepath',
     'includetrailingpathdelimiter', 'excludetrailingpathdelimiter',
     'includetrailingbackslash', 'excludetrailingbackslash', 'expandfilename',
     'expanduncfilename', 'extractshortpathname', 'extractrelativepath',
-    'getcurrentdir', 'copy', 'stringreplace', 'chr', 'strpas',
+    'getcurrentdir', 'copy', 'stringreplace', 'chr',
     'ansireplacestr', 'replacestr', 'replacetext', 'ansireplacetext',
     'leftstr', 'rightstr', 'midstr', 'ansileftstr', 'ansirightstr',
     'ansimidstr', 'getenumname', 'vartostr', 'vartostrdef', 'utf8tostring',
-    'utf8encode', 'utf8decode', 'utf8toansi', 'ansitoutf8',
-    'utf8tounicodestring', 'wraptext', 'adjustlinebreaks', 'dequotedstr',
-    'ansidequotedstr', 'currtostrf', 'formatcurr', 'getenvironmentvariable',
-    'paramstr', 'reversestring', 'ansireversestring', 'stuffstring',
-    'guidtostring', 'concat');
+    'utf8decode', 'utf8tounicodestring', 'wraptext', 'adjustlinebreaks',
+    'dequotedstr', 'ansidequotedstr', 'currtostrf', 'formatcurr',
+    'getenvironmentvariable', 'paramstr', 'reversestring',
+    'ansireversestring', 'stuffstring', 'guidtostring', 'concat');
+  // Mit Nicht-Unicode-Ergebnis (RawByteString, UTF8String, AnsiString) -
+  // aus EXT_STRING_FUNCS herausgeloest (Review 2026-10-07, Minor 12).
+  EXT_ANSI_STRING_FUNCS: array[0..3] of string = (
+    'utf8encode', 'ansitoutf8', 'utf8toansi', 'strpas');
+  // Operanden, die FormatBuf ohne Laenge anhaengt (vtChar, vtWideChar,
+  // vtString): sie gehen als string(x) in den Aufruf (Minor 10).
+  CHAR_LIKE_TYPES: array[0..2] of string = ('char', 'widechar', 'shortstring');
   TPATH_STRING_FUNCS: array[0..7] of string = (
     'tpath.combine', 'tpath.getfilename', 'tpath.getdirectoryname',
     'tpath.getextension', 'tpath.getfilenamewithoutextension',
@@ -783,24 +896,40 @@ begin
   Result := InList(S, KNOWN_STRING_CONSTS);
 end;
 
+// Aufrufkopf (CallHeadOf) ohne RTL-Unit-Qualifizierer: 'sysutils.copy' ->
+// 'copy'; '' bei einem fremden Qualifizierer ('obj.extractfilename' ist
+// eine Methode unbekannten Typs) oder wenn kein Aufruf vorliegt.
+function RtlHeadOf(const AHead: string): string;
+var
+  Dot : Integer;
+begin
+  Result := AHead;
+  Dot := LastDelimiter('.', Result);
+  if Dot = 0 then Exit;
+  if InList(Copy(Result, 1, Dot - 1), KNOWN_UNIT_QUALIFIERS) then
+    Result := Copy(Result, Dot + 1, MaxInt)
+  else
+    Result := '';
+end;
+
 class function TRdxRecipes.IsKnownStringFunc(const AText: string): Boolean;
 var
   Head : string;
-  Dot  : Integer;
-  Qual : string;
 begin
   Result := False;
   Head := CallHeadOf(AText);
   if Head = '' then Exit;
   if InList(Head, TPATH_STRING_FUNCS) then Exit(True);
-  Dot := LastDelimiter('.', Head);
-  if Dot > 0 then
-  begin
-    Qual := Copy(Head, 1, Dot - 1);
-    Head := Copy(Head, Dot + 1, MaxInt);
-    if not InList(Qual, KNOWN_UNIT_QUALIFIERS) then Exit;
-  end;
-  Result := InList(Head, EXT_STRING_FUNCS);
+  Head := RtlHeadOf(Head);
+  Result := (Head <> '') and InList(Head, EXT_STRING_FUNCS);
+end;
+
+class function TRdxRecipes.IsKnownAnsiStringFunc(const AText: string): Boolean;
+var
+  Head : string;
+begin
+  Head := RtlHeadOf(CallHeadOf(AText));
+  Result := (Head <> '') and InList(Head, EXT_ANSI_STRING_FUNCS);
 end;
 
 class function TRdxRecipes.IsNonUnicodeStringType(
@@ -809,30 +938,67 @@ begin
   Result := InList(ATypeLow, NON_UNICODE_STRING_TYPES);
 end;
 
+// Urteil aus dem deklarierten Typ (Resolved), dem Typ des Kopf-
+// Bezeichners (HeadResolved) und der Core-Rolle (ValueType), in dieser
+// Reihenfolge; False, wenn alle drei schweigen. Ein leeres Resolved steht
+// in keiner Liste und urteilt damit nie.
+function DeclaredVerdictOf(const APart: TRdxPart;
+  out AVerdict: TRdxOperandVerdict): Boolean;
+var
+  R : string;
+begin
+  R := APart.Resolved;
+  AVerdict := ovNoOperand;
+  Result := True;
+  if TRdxRecipes.IsNonUnicodeStringType(R) then
+    AVerdict := ovAnsi
+  else if (R = 'variant') or (R = 'olevariant') then
+    AVerdict := ovVariantRisk
+  else if InList(R, STRING_ALIAS_TYPES) then
+    AVerdict := ovString
+  // 'V.Name', 'V[0]' mit V: Variant - spaet gebunden, der Wert ist Variant.
+  else if (APart.HeadResolved = 'variant')
+     or (APart.HeadResolved = 'olevariant') then
+    AVerdict := ovVariantRisk
+  else if APart.ValueType = rvNonString then
+    AVerdict := ovNonString
+  else if APart.ValueType = rvString then
+    AVerdict := ovString
+  else
+    Result := False;
+end;
+
+// Urteil aus dem Aufrufkopf (CallHeadOf): ein Cast auf einen Nicht-
+// Unicode-String ('AnsiString(A)', 'AnsiChar(b)') urteilt wie die
+// Deklaration (Minor 12), Zahl-Cast und Aufruf mit Zahl-Ergebnis sperren
+// (Minor 13). False ohne Kopf oder bei einem anderen Kopf.
+function CallHeadVerdictOf(const AHead: string;
+  out AVerdict: TRdxOperandVerdict): Boolean;
+begin
+  AVerdict := ovNoOperand;
+  Result := AHead <> '';
+  if not Result then Exit;
+  if TRdxRecipes.IsNonUnicodeStringType(AHead) then
+    AVerdict := ovAnsi
+  else if InList(AHead, NUMERIC_CAST_HEADS)
+     or InList(AHead, NUMERIC_FUNC_HEADS) then
+    AVerdict := ovNonString
+  else
+    Result := False;
+end;
+
 class function TRdxRecipes.JudgeOperand(
   const APart: TRdxPart): TRdxOperandVerdict;
 var
   Text : string;
-  Head : string;
 begin
   Text := Trim(APart.Text);
   if APart.Role = ROLE_LITERAL then Exit(ovString);
-  if APart.Resolved <> '' then
-  begin
-    if IsNonUnicodeStringType(APart.Resolved) then Exit(ovAnsi);
-    if (APart.Resolved = 'variant') or (APart.Resolved = 'olevariant') then
-      Exit(ovVariantRisk);
-    if InList(APart.Resolved, STRING_ALIAS_TYPES) then Exit(ovString);
-  end;
-  // 'V.Name', 'V[0]' mit V: Variant - spaet gebunden, der Wert ist Variant.
-  if (APart.HeadResolved = 'variant') or (APart.HeadResolved = 'olevariant') then
-    Exit(ovVariantRisk);
-  if APart.ValueType = rvNonString then Exit(ovNonString);
-  if APart.ValueType = rvString then Exit(ovString);
+  if DeclaredVerdictOf(APart, Result) then Exit;
+  if IsKnownAnsiStringFunc(Text) then Exit(ovAnsi);
   if IsKnownStringConst(Text) or IsKnownStringFunc(Text) then Exit(ovString);
   if HasVariantTell(Text) then Exit(ovVariantRisk);
-  Head := CallHeadOf(Text);
-  if (Head <> '') and InList(Head, NUMERIC_CAST_HEADS) then Exit(ovNonString);
+  if CallHeadVerdictOf(CallHeadOf(Text), Result) then Exit;
   if not IsOperandShape(Text) then Exit(ovNoOperand);
   Result := ovByCompiler;
 end;
@@ -1044,6 +1210,61 @@ begin
   if not Result then ASpec := '';
 end;
 
+// Typname eines ovAnsi-Operanden fuer Grund und AnsiChar-Ausnahme: der
+// deklarierte Typ, sonst der Cast-Kopf ('AnsiString(A)' -> 'ansistring',
+// 'AnsiChar(b)' -> 'ansichar'), sonst - RTL-Aufruf mit Ansi-Ergebnis wie
+// UTF8Encode(S) - 'Ansi-Ergebnis' (Review 2026-10-07, Minor 12).
+function AnsiTypeOf(const APart: TRdxPart; const ATxt: string): string;
+begin
+  if InList(APart.Resolved, NON_UNICODE_STRING_TYPES) then
+    Exit(APart.Resolved);
+  Result := CallHeadOf(ATxt);
+  if not InList(Result, NON_UNICODE_STRING_TYPES) then
+    Result := 'Ansi-Ergebnis';
+end;
+
+// True fuer einen Operanden, den FormatBuf ohne Laenge anhaengt: Char/
+// WideChar/ShortString - deklariert, als Cast oder Chr(...). Ein #0 darin
+// ginge im Format verloren, die Verkettung behaelt ihn; als string(x)
+// laeuft er ueber vtUnicodeString mit Laenge (Review 2026-10-07, Minor 10).
+function NeedsStringCast(const APart: TRdxPart; const ATxt: string): Boolean;
+var
+  Head : string;
+begin
+  Head := CallHeadOf(ATxt);
+  Result := InList(APart.Resolved, CHAR_LIKE_TYPES)
+    or InList(Head, CHAR_LIKE_TYPES) or (Head = 'chr');
+end;
+
+// Grund, mit dem ein Operand die Umformung sperrt - fuer jedes Urteil
+// ausser ovString und ovByCompiler. ATxt ist der Operand wie im Aufruf.
+function OperandRejectReason(AVerdict: TRdxOperandVerdict;
+  const APart: TRdxPart; const ATxt: string): string;
+begin
+  case AVerdict of
+    ovNonString:
+      begin
+        Result := 'Operand ''' + ATxt + ''': kein String';
+        if APart.Resolved <> '' then
+          Result := Result + ' (' + APart.Resolved + ')';
+      end;
+    ovAnsi:
+      begin
+        if AnsiTypeOf(APart, ATxt) = 'ansichar' then
+          Result := 'Operand ''' + ATxt
+            + ''': ansichar - Format wandelt ohne Codepage'
+        else
+          Result := 'Operand ''' + ATxt + ''': '
+            + AnsiTypeOf(APart, ATxt) + ' - Format liefert UnicodeString';
+      end;
+    ovVariantRisk:
+      Result := 'Operand ''' + ATxt
+        + ''': Variant moeglich (Null/Zahl: Original wirft, Format nicht)';
+  else
+    Result := 'Operand ''' + ATxt + ''': kein einfacher Operand';
+  end;
+end;
+
 class function TRdxRecipes.BuildFormatCall(const AParts: TRdxParts;
   out ABuild: TRdxFormatBuild; const ATargetType: string): Boolean;
 var
@@ -1114,8 +1335,10 @@ begin
       else
       begin
         Verdict := JudgeOperand(AParts[i]);
+        // AnsiTypeOf statt Resolved: auch der Cast 'AnsiChar(b)' bleibt
+        // gesperrt (Review 2026-10-07, Minor 12).
         if (Verdict = ovAnsi) and TargetU and
-           (AParts[i].Resolved <> 'ansichar') then
+           (AnsiTypeOf(AParts[i], Txt) <> 'ansichar') then
           Verdict := ovString;
         case Verdict of
           ovString:
@@ -1129,33 +1352,15 @@ begin
               SetLength(ABuild.ByCompiler, Length(ABuild.ByCompiler) + 1);
               ABuild.ByCompiler[High(ABuild.ByCompiler)] := Txt;
             end;
-          ovNonString:
-            begin
-              ABuild.Reason := 'Operand ''' + Txt + ''': kein String';
-              if AParts[i].Resolved <> '' then
-                ABuild.Reason := ABuild.Reason + ' (' + AParts[i].Resolved + ')';
-              Exit;
-            end;
-          ovAnsi:
-            begin
-              if AParts[i].Resolved = 'ansichar' then
-                ABuild.Reason := 'Operand ''' + Txt
-                  + ''': ansichar - Format wandelt ohne Codepage'
-              else
-                ABuild.Reason := 'Operand ''' + Txt + ''': ' + AParts[i].Resolved
-                  + ' - Format liefert UnicodeString';
-              Exit;
-            end;
-          ovVariantRisk:
-            begin
-              ABuild.Reason := 'Operand ''' + Txt
-                + ''': Variant moeglich (Null/Zahl: Original wirft, Format nicht)';
-              Exit;
-            end;
         else
-          ABuild.Reason := 'Operand ''' + Txt + ''': kein einfacher Operand';
+          // ovNonString, ovAnsi, ovVariantRisk, ovNoOperand: gesperrt.
+          ABuild.Reason := OperandRejectReason(Verdict, AParts[i], Txt);
           Exit;
         end;
+        // Char/WideChar/ShortString: als string(x), sonst ginge ein #0
+        // verloren (Minor 10). ByCompiler behaelt den Text wie geschrieben.
+        if NeedsStringCast(AParts[i], Txt) then
+          Txt := 'string(' + Txt + ')';
       end;
       Inc(ABuild.Operands);
       if Args <> '' then Args := Args + ', ';
@@ -1206,16 +1411,26 @@ var
   P   : Integer;
 begin
   T   := Trim(ATarget);
-  Low := LowerCase(T);
-  P := Pos('.sql', Low);
+  // '.' hinten dran: das Glied '.SQL' ganz - 'DM.SQLQuery1.SQL.Text'
+  // traf mit Pos('.sql') schon '.SQLQuery1' und lieferte 'DM'.
+  Low := LowerCase(T) + '.';
+  P := Pos('.sql.', Low);
   if P = 0 then
-    P := Pos('.commandtext', Low);
+    P := Pos('.commandtext.', Low);
   if P = 0 then
     P := LastDelimiter('.', T);
   if P > 0 then
     Result := Copy(T, 1, P - 1)
   else
     Result := T;
+end;
+
+class function TRdxRecipes.HasQueryObject(const ATarget: string): Boolean;
+var
+  Low : string;
+begin
+  Low := LowerCase(Trim(ATarget)) + '.';
+  Result := (Pos('.sql.', Low) > 0) or (Pos('.commandtext.', Low) > 0);
 end;
 
 class function TRdxRecipes.BuildSqlTemplate(const ATarget: string;
@@ -1275,7 +1490,13 @@ begin
     PName := ':p' + IntToStr(k);
     Sql := StringReplace(Sql, '''' + PName + '''', PName, [rfReplaceAll]);
   end;
-  Obj    := QueryObjectOf(ATarget);
+  // Ohne Query-Objekt (String-Puffer 'S := ...'): 'S.ParamByName'
+  // uebersetzte nicht - die Parameterzeilen werden Kommentar mit
+  // Platzhalter, der Leser setzt sein Query-Objekt ein (Minor 24).
+  if HasQueryObject(ATarget) then
+    Obj := QueryObjectOf(ATarget)
+  else
+    Obj := '// <Query>';
   Indent := StringOfChar(' ', AIndent);
   if AIsCall then
     Head := Trim(ATarget) + '(' + EncodeLiteral(Sql) + ');'

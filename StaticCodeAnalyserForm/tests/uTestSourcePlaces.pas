@@ -25,11 +25,16 @@ type
     [Test] procedure Open_ReadsLines;
     [Test] procedure Close_ResetsEverything;
     [Test] procedure Unopened_PrimitivesAreTotal;
+    // Review reDelphiX 2026-10-07, Minor 26: wirft der Parser (Watchdog),
+    // ist danach nichts geoeffnet - auch kein vorher geoeffneter Stand.
+    [Test] procedure OpenSource_ParserThrows_NotOpen;
 
     // ---- P1 / P3 / P4 ueber die Datei ----
     [Test] procedure StatementAt_DescribesStatement;
     [Test] procedure ChainOf_WithMatchingTarget;
     [Test] procedure ChainOf_WithWrongTarget_Nil;
+    // Review strittiger Minor 2: die '+'-Gegenprobe des Konsumenten.
+    [Test] procedure ChainOf_PlusCountMismatch_Nil;
     [Test] procedure CallOf_WithMatchingHead;
 
     // ---- P2 ueber die Datei (Parser) ----
@@ -40,6 +45,13 @@ type
     // Umlauten VOR einer zweiten Anweisung auf derselben Zeile - die
     // Knotenspalte muss im Zeilentext auf das Ziel zeigen.
     [Test] procedure Open_Utf8WithoutBom_ColumnsMatchLineText;
+    // Review Minor 36: die uebrigen Dekoder-Pfade von Open - je Fall
+    // Zeilentext, Knotenspalte und Literaltext gleich dem Dateiinhalt.
+    [Test] procedure Open_Ansi1252_Umlaut;
+    [Test] procedure Open_Utf8Bom_Umlaut;
+    [Test] procedure Open_Utf16LeBom_Umlaut;
+    [Test] procedure Open_EmptyFile;
+    [Test] procedure Open_BomOnly;
 
     // ---- P2 auf dem Handbaum ----
     [Test] procedure Collect_NilRoot_Empty;
@@ -56,6 +68,9 @@ type
     [Test] procedure UsesEntries_BySection;
     [Test] procedure CollectUsesEntries_HandTree_SkipsMismatch;
     [Test] procedure IdentifiersIn_SkipsLiteralsHexAndExponent;
+    // Review Nit 28: ein Bereich, der in einem Kommentar oder String
+    // beginnt - der Zustand davor zaehlt.
+    [Test] procedure IdentifiersIn_SpanStartsInCommentOrString;
 
     // ---- Vertrag ----
     // (P9 DeclaredTypeOf und die Typaufloesung der Operanden stehen in
@@ -140,20 +155,126 @@ begin
   end;
 end;
 
-// Schreibt ASource als UTF-8 OHNE BOM (wie viele Editoren speichern).
-function WriteTempUtf8NoBom(const ASource: string): string;
+// Schreibt genau diese Bytes in eine Temp-Datei (auch 0 Bytes) und
+// liefert deren Pfad - ohne die Encoding-Wahl von TStringList.SaveToFile.
+// Der Aufrufer loescht sie.
+function WriteTempBytes(const ABytes: TBytes): string;
 var
-  Bytes : TBytes;
-  FS    : TFileStream;
+  FS : TFileStream;
 begin
-  Result := TempPasPath('sca_places_u8_');
-  Bytes := TEncoding.UTF8.GetBytes(ASource);
+  Result := TempPasPath('sca_places_b_');
   FS := TFileStream.Create(Result, fmCreate);
   try
-    if Length(Bytes) > 0 then
-      FS.WriteBuffer(Bytes[0], Length(Bytes));
+    if Length(ABytes) > 0 then
+      FS.WriteBuffer(ABytes[0], Length(ABytes));
   finally
     FS.Free;
+  end;
+end;
+
+// Schreibt ASource als UTF-8 OHNE BOM (wie viele Editoren speichern).
+function WriteTempUtf8NoBom(const ASource: string): string;
+begin
+  Result := WriteTempBytes(TEncoding.UTF8.GetBytes(ASource));
+end;
+
+// APrefix (BOM) vor ABody.
+function WithPrefix(const APrefix: array of Byte; const ABody: TBytes): TBytes;
+var
+  i : Integer;
+begin
+  SetLength(Result, Length(APrefix) + Length(ABody));
+  for i := 0 to High(APrefix) do
+    Result[i] := APrefix[i];
+  for i := 0 to High(ABody) do
+    Result[Length(APrefix) + i] := ABody[i];
+end;
+
+// Ein Byte je Zeichen - eine ANSI-Datei, wie sie ein alter Editor
+// schreibt (fuer Umlaute und sz sind Latin-1 und Windows-1252 gleich).
+function Latin1Bytes(const S: string): TBytes;
+var
+  i : Integer;
+begin
+  SetLength(Result, Length(S));
+  for i := 1 to Length(S) do
+    Result[i - 1] := Byte(Ord(S[i]));
+end;
+
+const
+  // 'Groesse' mit o-Umlaut und sz VOR einer zweiten Anweisung derselben
+  // Zeile (Review Minor 36, wie Open_Utf8WithoutBom_ColumnsMatchLineText).
+  ENC_LINE    = '  Caption := ''Gr'#$00F6#$00DF'e''; Text := ''A'' + S;';
+  ENC_LITERAL = '''Gr'#$00F6#$00DF'e''';
+
+function EncSource: string;
+begin
+  Result :=
+    'unit t; implementation'#13#10 +
+    'procedure Foo;'#13#10 +
+    'var Caption, Text, S: string;'#13#10 +
+    'begin'#13#10 +
+    ENC_LINE + #13#10 +
+    'end;'#13#10 +
+    'end.';
+end;
+
+// Oeffnet ABytes als Datei und prueft Zeilentext, Knotenspalte und den
+// Text des Literals gegen AExpectedLine/AExpectedLiteral (so, wie der
+// Dekoder die Bytes lesen MUSS).
+procedure CheckEncodedOpen(const ABytes: TBytes; const ACase,
+  AExpectedLine, AExpectedLiteral: string);
+var
+  P     : TSourcePlaces;
+  Path  : string;
+  Line  : Integer;
+  Nodes : TArray<TNodeRef>;
+  Info  : TRefactorInfo;
+begin
+  Path := WriteTempBytes(ABytes);
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.Open(Path), ACase + ': Open');
+    Line := LineOf(EncSource, 'Text :=');
+    Assert.AreEqual(AExpectedLine, P.LineText(Line), ACase + ': Zeilentext');
+    Nodes := P.NodesAt(Line, [nkAssign]);
+    Assert.AreEqual<Integer>(2, Length(Nodes), ACase + ': zwei Zuweisungen');
+    Assert.AreEqual<Integer>(Pos('Text :=', AExpectedLine), Nodes[1].Col,
+      ACase + ': Knotenspalte im Zeilentext');
+    Info := P.ChainOf(Line, Nodes[0].Col, 'Caption');
+    try
+      Assert.IsTrue(Assigned(Info), ACase + ': Kette mit einem Term');
+      Assert.AreEqual<Integer>(2, Length(Info.Parts));
+      Assert.AreEqual(AExpectedLiteral, P.TextOf(Info.Parts[1]),
+        ACase + ': Literal Zeichen fuer Zeichen');
+    finally
+      Info.Free;
+    end;
+  finally
+    P.Free;
+    DeleteFile(Path);
+  end;
+end;
+
+// 0 Bytes bzw. nur die BOM: lesbar, aber ohne Zeilen - kein Ausnahme-
+// pfad, und jedes Primitiv bleibt total.
+procedure CheckEmptyOpen(const ABytes: TBytes; const ACase: string);
+var
+  P    : TSourcePlaces;
+  Path : string;
+begin
+  Path := WriteTempBytes(ABytes);
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.Open(Path), ACase + ': eine leere Datei ist lesbar');
+    Assert.IsTrue(P.IsOpen, ACase + ': IsOpen passt zum Ergebnis');
+    Assert.AreEqual<Integer>(0, P.LineCount, ACase + ': keine Zeile');
+    Assert.AreEqual('', P.LineText(1), ACase);
+    Assert.IsFalse(Assigned(P.StatementAt(1, 1)), ACase);
+    Assert.AreEqual<Integer>(0, Length(P.NodesAt(1, [nkAssign, nkCall])), ACase);
+  finally
+    P.Free;
+    DeleteFile(Path);
   end;
 end;
 
@@ -227,9 +348,62 @@ begin
     Assert.AreEqual('', P.TextOf(S));
     Assert.AreEqual('', P.HashOf(S));
     Assert.AreEqual<Integer>(0, Length(P.ConditionalRanges));
+    // Review Minor 26: auch die uebrigen Primitive (Vertrag im Kopf).
+    Assert.IsFalse(P.IsOpen);
+    Assert.AreEqual<Integer>(0, P.LineCount);
+    Assert.IsFalse(Assigned(P.ChainOf(1, 1, 'r', 3)));
+    Assert.AreEqual<Integer>(0, Length(P.UsesEntries(usAny)));
+    Assert.AreEqual<Integer>(0, Length(P.UsesEntries(usInterface)));
+    Assert.AreEqual<Integer>(0, Length(P.IdentifiersIn(S)));
+    Assert.AreEqual<Integer>(0, P.SectionLine(usInterface));
+    Assert.AreEqual('', P.LineText(1));
+    Assert.IsFalse(P.SpanHasComment(S));
+    Assert.AreEqual('', P.DeclaredTypeOf(1, 'x'));
+    Assert.IsFalse(P.InWithBlock(1));
   finally
     P.Free;
   end;
+end;
+
+procedure TTestSourcePlaces.OpenSource_ParserThrows_NotOpen;
+{$IFNDEF FPC}
+var
+  P   : TSourcePlaces;
+  SB  : TStringBuilder;
+  Src : string;
+  i   : Integer;
+{$ENDIF}
+begin
+  {$IFDEF FPC}
+  // Der Parser-Stub des Pruefstands hat keinen Watchdog und wirft nicht.
+  Assert.Pass('Parser-Watchdog nur unter Delphi');
+  {$ELSE}
+  // Ueber 200.000 Token-Aufrufe: der Watchdog in TParser2.Next wirft.
+  SB := TStringBuilder.Create;
+  try
+    SB.Append('unit t; implementation'#13#10'procedure P;'#13#10'begin'#13#10);
+    for i := 1 to 110000 do
+      SB.Append('  x := 1;'#13#10);
+    SB.Append('end;'#13#10'end.');
+    Src := SB.ToString;
+  finally
+    SB.Free;
+  end;
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.OpenSource('ok.pas', SRC_UNIT), 'ein Stand ist offen');
+    Assert.WillRaise(
+      procedure begin P.OpenSource('watchdog.pas', Src) end,
+      Exception, 'der Parser-Fehler laeuft zum Aufrufer');
+    Assert.IsFalse(P.IsOpen, 'kein halboffener Zustand');
+    Assert.AreEqual<Integer>(0, P.LineCount);
+    Assert.AreEqual('', P.LineText(1));
+    Assert.AreEqual('', P.FileName);
+    Assert.AreEqual<Integer>(0, Length(P.NodesAt(4, [nkAssign])));
+  finally
+    P.Free;
+  end;
+  {$ENDIF}
 end;
 
 { ---- P1 / P3 / P4 ---- }
@@ -299,6 +473,44 @@ begin
   finally
     P.Free;
     DeleteFile(Path);
+  end;
+end;
+
+procedure TTestSourcePlaces.ChainOf_PlusCountMismatch_Nil;
+var
+  P    : TSourcePlaces;
+  L, C : Integer;
+  Info : TRefactorInfo;
+begin
+  // r := 'Hallo ' + Name + '!' + Name;  - drei '+' auf oberster Ebene
+  L := LineOf(SRC_UNIT, 'r :=');
+  C := ColOf(SRC_UNIT, 'r :=');
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.OpenSource('t.pas', SRC_UNIT));
+    Assert.IsFalse(Assigned(P.ChainOf(L, C, 'r', 99)),
+      'zwei Zaehlungen, die sich widersprechen: nil statt geraten');
+    Info := P.ChainOf(L, C, 'r', 3);
+    try
+      Assert.IsTrue(Assigned(Info), 'die passende Zahl liefert die Kette');
+      Assert.AreEqual<Integer>(5, Length(Info.Parts));
+    finally
+      Info.Free;
+    end;
+    Info := P.ChainOf(L, C, 'r', TSourcePlaces.ANY_PLUS_COUNT);
+    try
+      Assert.IsTrue(Assigned(Info), 'ohne Zahl keine Gegenprobe');
+    finally
+      Info.Free;
+    end;
+    Info := P.ChainOf(L, C, 'r', -7);
+    try
+      Assert.IsTrue(Assigned(Info), 'jeder negative Wert heisst: ohne Zahl');
+    finally
+      Info.Free;
+    end;
+  finally
+    P.Free;
   end;
 end;
 
@@ -408,6 +620,45 @@ begin
     P.Free;
     DeleteFile(Path);
   end;
+end;
+
+procedure TTestSourcePlaces.Open_Ansi1252_Umlaut;
+begin
+  // Ein Byte je Umlaut, kein gueltiges UTF-8: LoadFileSmart faellt auf die
+  // ANSI-Codepage zurueck. Erwartet wird, was diese Codepage aus den Bytes
+  // macht - auf einem Windows-1252-Rechner genau ENC_LINE.
+  CheckEncodedOpen(Latin1Bytes(EncSource), 'ANSI',
+    TEncoding.ANSI.GetString(Latin1Bytes(ENC_LINE)),
+    TEncoding.ANSI.GetString(Latin1Bytes(ENC_LITERAL)));
+end;
+
+procedure TTestSourcePlaces.Open_Utf8Bom_Umlaut;
+begin
+  CheckEncodedOpen(
+    WithPrefix([$EF, $BB, $BF], TEncoding.UTF8.GetBytes(EncSource)),
+    'UTF-8 mit BOM', ENC_LINE, ENC_LITERAL);
+end;
+
+procedure TTestSourcePlaces.Open_Utf16LeBom_Umlaut;
+begin
+  {$IFDEF FPC}
+  // Der LoadFileSmart-Stub des Pruefstands kennt kein UTF-16.
+  Assert.Pass('UTF-16 nur unter Delphi');
+  {$ELSE}
+  CheckEncodedOpen(
+    WithPrefix([$FF, $FE], TEncoding.Unicode.GetBytes(EncSource)),
+    'UTF-16 LE mit BOM', ENC_LINE, ENC_LITERAL);
+  {$ENDIF}
+end;
+
+procedure TTestSourcePlaces.Open_EmptyFile;
+begin
+  CheckEmptyOpen(nil, '0 Bytes');
+end;
+
+procedure TTestSourcePlaces.Open_BomOnly;
+begin
+  CheckEmptyOpen(WithPrefix([$EF, $BB, $BF], nil), 'nur UTF-8-BOM');
 end;
 
 procedure TTestSourcePlaces.NodesAt_ThenChainOf_RoundTrip;
@@ -690,11 +941,13 @@ end;
 
 procedure TTestSourcePlaces.IdentifiersIn_SkipsLiteralsHexAndExponent;
 const
+  // Review Minor 25: die Kommentare stehen IM Bereich - '// Qux' hinter
+  // dem ';' liegt draussen und bewiese die Ausblendung nicht.
   SRC =
     'unit t; implementation'#13#10 +
     'procedure Foo;'#13#10 +
     'begin'#13#10 +
-    '  r := Foo(x1, ''abc'', $FF, 1e5) + #13; // Bar'#13#10 +
+    '  r := Foo(x1 {Bar}, ''abc'', $FF, (*Baz*) 1e5) + #13; // Qux'#13#10 +
     'end;'#13#10 +
     'end.';
 var
@@ -712,10 +965,12 @@ begin
       Assert.IsTrue(Assigned(Info));
       Idents := P.IdentifiersIn(Info.Span);
       Assert.AreEqual<Integer>(3, Length(Idents),
-        'r, Foo, x1 - nicht abc, FF, e5, Bar');
+        'r, Foo, x1 - nicht Bar/Baz (Kommentar im Bereich), abc, FF, e5');
       Assert.AreEqual('r',   Idents[0].Resolved);
       Assert.AreEqual('Foo', Idents[1].Resolved);
       Assert.AreEqual('x1',  Idents[2].Resolved);
+      Assert.AreEqual('x1',  P.TextOf(Idents[2]),
+        'spaltentreu auch direkt vor dem Kommentar');
       Assert.AreEqual(ROLE_IDENT, Idents[1].Role);
       Assert.AreEqual('Foo', P.TextOf(Idents[1]));
     finally
@@ -724,6 +979,44 @@ begin
   finally
     P.Free;
     DeleteFile(Path);
+  end;
+end;
+
+procedure TTestSourcePlaces.IdentifiersIn_SpanStartsInCommentOrString;
+const
+  SRC =
+    'unit U; interface implementation'#13#10 +
+    '{ alt:'#13#10 +
+    'Foo := Bar;'#13#10 +
+    '}'#13#10 +
+    'procedure P;'#13#10 +
+    'begin'#13#10 +
+    '  s := ''Foo Bar'' + x;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  P      : TSourcePlaces;
+  L      : string;
+  Idents : TArray<TRefactorSpan>;
+begin
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.OpenSource('u.pas', SRC));
+    // Zeile 3 liegt ganz im Kommentar, der in Zeile 2 beginnt.
+    Idents := P.IdentifiersIn(TRefactorSpan.Make(ROLE_STATEMENT, 3, 1, 3,
+      Length('Foo := Bar;') + 1));
+    Assert.AreEqual<Integer>(0, Length(Idents),
+      'Foo und Bar stehen in einem Kommentar');
+    // Bereich ab 'Foo' MITTEN im Literal bis zum Zeilenende.
+    L := P.LineText(7);
+    Idents := P.IdentifiersIn(TRefactorSpan.Make(ROLE_STATEMENT, 7,
+      Pos('Foo Bar', L), 7, Length(L) + 1));
+    Assert.AreEqual<Integer>(1, Length(Idents),
+      'nur x - Foo Bar ist der Rest eines Strings');
+    Assert.AreEqual('x', Idents[0].Resolved);
+    Assert.AreEqual<Integer>(Pos('x;', L), Idents[0].StartCol);
+  finally
+    P.Free;
   end;
 end;
 

@@ -10,20 +10,29 @@ unit uRefactorConcat;
 //
 // WER DAS BENUTZT
 //
-// uConcatToFormat (SCA044) und uSQLInjection (SCA003) melden beide eine
-// '+'-Kette auf der rechten Seite einer Zuweisung. Beide kennen nur den
-// abgeflachten RHS-String (TAstNode.TypeRef) - daraus lassen sich keine
-// Spalten gewinnen. Diese Unit liest die Quellzeilen ueber den
-// uRefactorInfoBuilder und zerlegt auf dessen spaltentreuer Code-Sicht.
+// Einziger Nutzer ist der Quellstellen-Dienst: TSourcePlaces.ChainOf und
+// .CallOf (uSourcePlaces, Pull-Modell). Ein Konsument wie reDelphix hat
+// zu einem SCA044-/SCA003-Fund nur Zeile und Knoten - der AST traegt die
+// rechte Seite nur als abgeflachten String (TAstNode.TypeRef), daraus
+// lassen sich keine Spalten gewinnen. Diese Unit liest die Quellzeilen
+// ueber den uRefactorInfoBuilder und zerlegt auf dessen spaltentreuer
+// Code-Sicht. Detektoren importieren diese Unit NICHT (das Push-Modell
+// des Vorgaengers ag-refactorinfo ist verworfen); tools/places_dep_gate.py
+// haelt die Richtung.
 //
 // DIESELBE ZAEHLUNG WIE ScanConcat
 //
 // Ein '+' trennt nur auf Klammertiefe 0 ('(' und '['), ausserhalb von
 // Strings und Kommentaren - exakt die Regel von
-// TConcatToFormatDetector.ScanConcat. Der Aufrufer gibt seine eigene
-// Zaehlung als AExpectedPlus mit; weicht die Zaehlung hier davon ab,
-// kommt nil zurueck. Zwei Zaehlungen, die sich widersprechen, beschreiben
-// nicht dieselbe Kette - dann wird nichts geliefert statt geraten.
+// TConcatToFormatDetector.ScanConcat. Ein Aufrufer, der eine eigene
+// Zaehlung hat (etwa aus TNodeRef.TypeRef des Knotens), gibt sie als
+// AExpectedPlus mit; weicht die Zaehlung hier davon ab, kommt nil
+// zurueck. Zwei Zaehlungen, die sich widersprechen, beschreiben nicht
+// dieselbe Kette - dann wird nichts geliefert statt geraten.
+// AExpectedPlus ist optional: ohne Zahl (ANY_PLUS_COUNT) sichert nur
+// TargetMatches ab, dass Beschreibung und Knoten dieselbe Anweisung
+// meinen. TSourcePlaces.ChainOf reicht die Zahl durch, wenn der
+// Konsument sie mitgibt.
 //
 // WAS ALS STRING GILT (ValueType = rvString)
 //
@@ -34,6 +43,12 @@ unit uRefactorConcat;
 //   * ein Term, der auf .ToString bzw. .ToString() endet.
 // Alles andere bleibt rvUnknown. rvNonString wird hier NIE vergeben: ohne
 // Typaufloesung ist "kein String" nicht beweisbar.
+// ANNAHME bei den beiden Namensregeln: der unqualifizierte Name meint die
+// RTL-Routine bzw. den Helper. Eine gleichnamige Funktion der Unit ohne
+// String-Ergebnis ('function Trim(..): Variant') oder ein with-Block
+// koennte ihn verdecken - das sieht diese Unit ohne AST nicht.
+// TSourcePlaces prueft es gegen den AST und nimmt rvString dann zurueck
+// (Review reDelphiX 2026-10-07, strittiger Minor 3).
 //
 // WANN FixSafe
 //
@@ -51,9 +66,10 @@ unit uRefactorConcat;
 //   * FixSafe sagt nur: die Kette laesst sich verlustfrei umformen. Es
 //     sagt NICHT, dass keine andere Regel dieselbe Anweisung meldet.
 //     SCA044 klammert SQL nur ueber die linke Seite aus; baut eine lokale
-//     Variable SQL zusammen, kann SCA003 dieselbe Anweisung melden (und
-//     liefert dort FixSafe = False). Wer umschreibt, prueft deshalb vor
-//     dem Schreiben, ob ein SCA003-Fund denselben Bereich trifft, und
+//     Variable SQL zusammen, kann SCA003 dieselbe Anweisung melden (die
+//     Beschreibung ist dieselbe - FixSafe weiss von dem zweiten Fund
+//     nichts). Wer umschreibt, prueft deshalb vor dem Schreiben, ob ein
+//     SCA003-Fund denselben Bereich trifft, und
 //     laesst die Anweisung dann stehen - sonst formt ein Automat Code um,
 //     der unter Sicherheits-Review steht, und der SCA003-Fund kann sich
 //     dabei bewegen (aus der '+'-Heuristik in die Format-Heuristik).
@@ -100,7 +116,7 @@ type
 
     // Gegenprobe gegen den AST-Knoten: True wenn der ROLE_TARGET-Teilbereich
     // von AInfo - ohne Leerraum, ohne Gross/Klein - gleich AExpected ist.
-    // Ein Detektor, der KEINE '+'-Zahl zum Gegenpruefen hat, sichert damit
+    // Ein Aufrufer, der KEINE '+'-Zahl zum Gegenpruefen hat, sichert damit
     // ab, dass Beschreibung und Knoten dieselbe Anweisung meinen.
     class function TargetMatches(ALines: TStrings; AInfo: TRefactorInfo;
       const AExpected: string): Boolean; static;

@@ -6,10 +6,14 @@ unit uTestRdxRecipes;
 //
 // Was hier festgepinnt wird:
 //   * Literal-Codec: Quelltext <-> Wert, Roundtrip, Fehlformen
-//   * Format()-Bau: nur bei beweisbaren String-Operanden, '%' -> '%%',
-//     Sperre fuer SQL-Text (SCA003), Sperre ohne Operand
-//   * SQL-Vorlage: Zuweisung und Aufruf, Parameter nie in Quotes
-//   * Rahmenwerk-Erkennung und Scope-Aufloesung in Compiler-Reihenfolge
+//   * Format()-Bau nach der Kompilat-Regel (JudgeOperand, AH20): bewiesen /
+//     laut Kompilat / gesperrt (Variant-Anzeichen, Zahl, Nicht-Unicode-
+//     String, AnsiChar - deklariert wie als Cast), Char als string(x),
+//     '%' -> '%%', Sperre fuer SQL-Text (SCA003), Sperre ohne Operand
+//   * SQL-Vorlage: Zuweisung und Aufruf, Parameter nie in Quotes, ohne
+//     Query-Objekt als Kommentar
+//   * Rahmenwerk-Erkennung und Scope-Aufloesung in Compiler-Reihenfolge,
+//     System/Vcl projektabhaengig ungeraten
 
 interface
 
@@ -57,6 +61,11 @@ type
     // Unicode-Ziel - Format castet ordinal statt per Codepage.
     [Test] procedure Format_AnsiCharOperand_UnicodeTarget_Blocked;
     [Test] procedure LooksLikeSql_NeedsVerbAndStructure;
+    // Review 2026-10-07: Char als string(x) (Minor 10), Ansi-Cast wie
+    // Deklaration (Minor 12), Zahl-Aufruf gesperrt (Minor 13).
+    [Test] procedure Format_CharOperand_WrappedAsString;
+    [Test] procedure Format_AnsiCharCast_UnicodeTarget_Blocked;
+    [Test] procedure Format_VariantPlusNumericCall_Blocked;
 
     // ---- SQL-Vorlage ---------------------------------------------------
     [Test] procedure QueryObject_Forms;
@@ -64,6 +73,8 @@ type
     [Test] procedure SqlTemplate_Call;
     [Test] procedure SqlTemplate_QuotedParam_Unquoted;
     [Test] procedure SqlTemplate_ArgumentRole_Blocked;
+    // Review 2026-10-07 Minor 24: String-Puffer statt Query-Objekt.
+    [Test] procedure SqlTemplate_PlainStringTarget;
 
     // ---- uses ----------------------------------------------------------
     [Test] procedure Framework_FromUnitNames;
@@ -78,6 +89,8 @@ type
     [Test] procedure Scope_Resolve_CommonBeforeFramework;
     [Test] procedure Scope_Resolve_Unknown_NotGuessed;
     [Test] procedure Scope_Resolve_AlreadyQualified_IsFalse;
+    // Review 2026-10-07 Minor 14: System.Skia gegen Vcl.Skia.
+    [Test] procedure Scope_Resolve_VclVsSystem_Ambiguous_NotGuessed;
   end;
 
 implementation
@@ -301,6 +314,27 @@ begin
     'nur hinter einem Variant uebersetzbar');
   Assert.IsTrue(JP('Variant(x)', rvUnknown) = ovVariantRisk);
   Assert.IsTrue(JP('Integer(x)', rvUnknown) = ovNonString, 'Zahl-Cast');
+  // Review 2026-10-07 Minor 12: Cast und RTL-Aufruf mit Ansi-Ergebnis
+  // urteilen wie die Deklaration - nicht die Schreibweise entscheidet.
+  Assert.IsTrue(JP('AnsiString(A)', rvUnknown) = ovAnsi, 'Cast auf AnsiString');
+  Assert.IsTrue(JP('UTF8String(x)', rvUnknown) = ovAnsi);
+  Assert.IsTrue(JP('RawByteString(x)', rvUnknown) = ovAnsi);
+  Assert.IsTrue(JP('ShortString(x)', rvUnknown) = ovAnsi);
+  Assert.IsTrue(JP('AnsiChar(b)', rvUnknown) = ovAnsi);
+  Assert.IsTrue(JP('UTF8Encode(S)', rvUnknown) = ovAnsi, 'RawByteString-Ergebnis');
+  Assert.IsTrue(JP('AnsiToUtf8(S)', rvUnknown) = ovAnsi);
+  Assert.IsTrue(JP('SysUtils.Utf8ToAnsi(S)', rvUnknown) = ovAnsi);
+  Assert.IsTrue(JP('Obj.UTF8Encode(S)', rvUnknown) = ovByCompiler,
+    'Methode unbekannten Typs, nicht die RTL');
+  Assert.IsTrue(JP('UTF8ToString(S)', rvUnknown) = ovString,
+    'Unicode-Ergebnis bleibt String');
+  // Minor 13: Aufrufe mit Zahl-Ergebnis sperren wie ein Zahl-Cast.
+  Assert.IsTrue(JP('Length(Marker)', rvUnknown) = ovNonString, 'Length');
+  Assert.IsTrue(JP('Ord(c)', rvUnknown) = ovNonString);
+  Assert.IsTrue(JP('Round(x)', rvUnknown) = ovNonString);
+  Assert.IsTrue(JP('StrToIntDef(s, 0)', rvUnknown) = ovNonString);
+  Assert.IsTrue(JP('Obj.Length(x)', rvUnknown) = ovByCompiler,
+    'Methode unbekannten Typs');
   Assert.IsTrue(JP('(a + b)', rvUnknown) = ovNoOperand);
   Assert.IsTrue(JP('5', rvUnknown) = ovNoOperand);
   Assert.IsTrue(JP('a and b', rvUnknown) = ovNoOperand);
@@ -397,7 +431,7 @@ begin
   // String-indizierter Bezeichner: TDataSet.FieldValues (Variant).
   Assert.IsTrue(JP('DS[''Name'']', rvUnknown) = ovVariantRisk);
   Assert.IsTrue(JP('DS [ ''Name'' ]', rvUnknown) = ovVariantRisk);
-  Assert.IsTrue(JP('Items[i]', rvUnknown) = ovByCompiler, 'Zahl-Index bleibt Kompilat');
+  // Gegenstueck 'Items[i]' (Zahl-Index bleibt Kompilat): Judge_TextTells.
   Assert.IsTrue(JP('DS[''Name''].AsString', rvUnknown) = ovByCompiler, 'dahinter steht noch etwas');
   // Kopf-Bezeichner deklariert Variant: V.Name, V[0].
   P := TRdxRecipes.MakePart(ROLE_OPERAND, 'V.Name', rvUnknown);
@@ -412,7 +446,7 @@ begin
   Assert.IsTrue(TRdxRecipes.IsOperandShape('(Sender as TButton).Caption'));
   Assert.IsTrue(TRdxRecipes.IsOperandShape('(Items[i] as TFoo)[0]'));
   Assert.IsTrue(TRdxRecipes.IsOperandShape('(P)^.Name'));
-  Assert.IsFalse(TRdxRecipes.IsOperandShape('(a + b)'), 'blosser Klammerausdruck');
+  // Blosser Klammerausdruck '(a + b)': Shape_RejectsExpressions.
   Assert.IsFalse(TRdxRecipes.IsOperandShape('(a + b) c'));
   Assert.IsTrue(TRdxRecipes.IsOperandShape('Item.&Type'), '& hinter dem Punkt');
   Assert.IsTrue(JP('(Sender as TButton).Caption', rvUnknown) = ovByCompiler);
@@ -453,6 +487,80 @@ begin
   Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B, ''));
 end;
 
+procedure TTestRdxRecipes.Format_CharOperand_WrappedAsString;
+var
+  Parts : TRdxParts;
+  B     : TRdxFormatBuild;
+begin
+  // 'KEY=' + Value + Term mit Term = #0: die Verkettung endet auf #0,
+  // Format('%s', [Term]) haengt bei vtWideChar ueber StrLen nichts an.
+  // string(Term) laeuft ueber vtUnicodeString mit Laenge.
+  Parts := [Target('S'), Lit('''KEY='''), Op('Value', rvString),
+            TRdxRecipes.MakePart(ROLE_OPERAND, 'Term', rvString, 'char')];
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B), B.Reason);
+  Assert.AreEqual('Format(''KEY=%s%s'', [Value, string(Term)])', B.NewText);
+  Assert.AreEqual<Integer>(2, B.Proven, 'der Cast aendert die Herkunft nicht');
+  // WideChar, Chr(...) und Char-Cast ebenso; ein Char UNBEKANNTEN Typs
+  // ('S[i]') bleibt ohne Cast (bekannte Grenze). ByCompiler nennt den
+  // Operanden wie geschrieben.
+  Parts := [Lit('''a'''), TRdxRecipes.MakePart(ROLE_OPERAND, 'w', rvString, 'widechar'),
+            Lit('''b'''), Op('Chr(0)', rvUnknown), Lit('''c'''), Op('Char(n)', rvUnknown),
+            Lit('''d'''), Op('S[i]', rvUnknown)];
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B), B.Reason);
+  Assert.AreEqual(
+    'Format(''a%sb%sc%sd%s'', [string(w), string(Chr(0)), string(Char(n)), S[i]])',
+    B.NewText);
+  Assert.AreEqual<Integer>(2, Length(B.ByCompiler));
+  Assert.AreEqual('Char(n)', B.ByCompiler[0]);
+  // ShortString (vtString, ebenfalls ohne Laenge) - nur bei Unicode-Ziel
+  // zugelassen, dann ebenso als string(x).
+  Parts := [Lit('''a'''),
+            TRdxRecipes.MakePart(ROLE_OPERAND, 'SS', rvString, 'shortstring'),
+            Lit('''b''')];
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B, 'string'), B.Reason);
+  Assert.AreEqual('Format(''a%sb'', [string(SS)])', B.NewText);
+end;
+
+procedure TTestRdxRecipes.Format_AnsiCharCast_UnicodeTarget_Blocked;
+var
+  Parts : TRdxParts;
+  B     : TRdxFormatBuild;
+begin
+  // Der Cast 'AnsiChar(b)' ist derselbe Typ wie ein deklariertes
+  // AnsiChar: auch bei Unicode-Ziel gesperrt (FormatBuf castet ordinal).
+  Parts := [Lit('''Preis: '''), Op('AnsiChar(b)', rvUnknown), Lit(''' EUR''')];
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B, 'unicodestring'));
+  Assert.IsTrue(Pos('ansichar', B.Reason) > 0, B.Reason);
+  Assert.IsTrue(Pos('Codepage', B.Reason) > 0, B.Reason);
+  // Der Cast auf AnsiString wandelt bei Unicode-Ziel wie die Zuweisung
+  // (vtAnsiString mit Codepage); ohne bekanntes Ziel bleibt er gesperrt.
+  Parts := [Lit('''a'''), Op('AnsiString(A)', rvUnknown), Lit('''b''')];
+  Assert.IsTrue(TRdxRecipes.BuildFormatCall(Parts, B, 'string'), B.Reason);
+  Assert.AreEqual('Format(''a%sb'', [AnsiString(A)])', B.NewText);
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B, ''));
+  Assert.IsTrue(Pos('ansistring - Format liefert UnicodeString', B.Reason) > 0,
+    B.Reason);
+  // RTL-Aufruf mit Ansi-Ergebnis: ohne Typnamen nennt der Grund das
+  // Ansi-Ergebnis.
+  Parts := [Lit('''a'''), Op('UTF8Encode(S)', rvUnknown), Lit('''b''')];
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B, ''));
+  Assert.IsTrue(Pos('Ansi-Ergebnis', B.Reason) > 0, B.Reason);
+end;
+
+procedure TTestRdxRecipes.Format_VariantPlusNumericCall_Blocked;
+var
+  Parts : TRdxParts;
+  B     : TRdxFormatBuild;
+begin
+  // 'a' + Obj.Data + Length(Marker) uebersetzt nur, wenn Obj.Data ein
+  // Variant ist (ohne Anzeichen) - Format('a%s%s', [...]) wuerfe dann
+  // EConvertError (vtInteger hinter %s).
+  Parts := [Target('Text'), Lit('''a'''), Op('Obj.Data', rvUnknown),
+            Op('Length(Marker)', rvUnknown)];
+  Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B));
+  Assert.IsTrue(Pos('''Length(Marker)'': kein String', B.Reason) > 0, B.Reason);
+end;
+
 procedure TTestRdxRecipes.Format_VariantAndAnsi_Blocked;
 var
   Parts : TRdxParts;
@@ -462,11 +570,14 @@ begin
             Lit('''b'''), Op('Name', rvString)];
   Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B));
   Assert.IsTrue(Pos('Variant', B.Reason) > 0, B.Reason);
-  Parts := [Lit('''a'''),
-            TRdxRecipes.MakePart(ROLE_OPERAND, 'A', rvString, 'ansistring'),
+  // Ansi als Cast, ohne Ziel (Vorgabe ''): gesperrt wie deklariert, der
+  // Grund nennt den Cast-Typ (Minor 12). Der deklarierte AnsiString
+  // ohne Ziel steht in Format_AnsiOperand_UnicodeTarget_Allowed.
+  Parts := [Lit('''a'''), Op('RawByteString(R)', rvUnknown),
             Lit('''b'''), Op('Name', rvString)];
   Assert.IsFalse(TRdxRecipes.BuildFormatCall(Parts, B));
-  Assert.IsTrue(Pos('UnicodeString', B.Reason) > 0, B.Reason);
+  Assert.IsTrue(Pos('rawbytestring - Format liefert UnicodeString', B.Reason) > 0,
+    B.Reason);
   Parts := [Lit('''a'''),
             TRdxRecipes.MakePart(ROLE_OPERAND, 'V', rvUnknown, 'variant'),
             Lit('''b'''), Op('Name', rvString)];
@@ -539,6 +650,30 @@ begin
   Assert.IsFalse(TRdxRecipes.LooksLikeSql('Update available for '), 'Verb ohne Struktur');
   Assert.IsFalse(TRdxRecipes.LooksLikeSql('Copy from here to there'), 'Struktur ohne Verb');
   Assert.IsFalse(TRdxRecipes.LooksLikeSql('selected items: '), 'kein ganzes Wort');
+  // Paar-Regel (Review 2026-10-07, Nit 6): das Strukturwort muss zum
+  // Verb passen und dahinter stehen; DDL braucht das Objekt direkt.
+  Assert.IsFalse(TRdxRecipes.LooksLikeSql('Update available from server'),
+    'update braucht set');
+  Assert.IsFalse(TRdxRecipes.LooksLikeSql('Create a table of contents'),
+    'kein DDL-Objekt direkt hinter create');
+  Assert.IsFalse(TRdxRecipes.LooksLikeSql('Create or open a file'),
+    'or ohne DDL-Objekt');
+  Assert.IsFalse(TRdxRecipes.LooksLikeSql('from t select'),
+    'Strukturwort vor dem Verb');
+  Assert.IsTrue(TRdxRecipes.LooksLikeSql('DELETE Orders WHERE id='));
+  Assert.IsTrue(TRdxRecipes.LooksLikeSql('UPDATE  SET a= WHERE id='),
+    'Tabelle als Operand');
+  Assert.IsTrue(TRdxRecipes.LooksLikeSql('SELECT  FROM '));
+  Assert.IsTrue(TRdxRecipes.LooksLikeSql('INSERT INTO  VALUES ('));
+  Assert.IsTrue(TRdxRecipes.LooksLikeSql('MERGE INTO t'));
+  // noinspection SqlDangerousStatement (Testdaten: LooksLikeSql muss DDL ohne Objektnamen als SQL erkennen)
+  Assert.IsTrue(TRdxRecipes.LooksLikeSql('DROP TABLE '));
+  // noinspection SqlDangerousStatement (Testdaten: LooksLikeSql muss DDL ohne Objektnamen als SQL erkennen)
+  Assert.IsTrue(TRdxRecipes.LooksLikeSql('TRUNCATE TABLE '));
+  Assert.IsTrue(TRdxRecipes.LooksLikeSql('CREATE OR REPLACE VIEW v'));
+  Assert.IsTrue(TRdxRecipes.LooksLikeSql('create unique index ix on '));
+  Assert.IsTrue(TRdxRecipes.LooksLikeSql('Select a file from '),
+    'bekannte Grenze: gueltiges SQL mit Alias');
 end;
 
 { ---- SQL-Vorlage ---- }
@@ -549,7 +684,17 @@ begin
   Assert.AreEqual('FDQuery1', TRdxRecipes.QueryObjectOf('FDQuery1.SQL.Add'));
   Assert.AreEqual('Cmd', TRdxRecipes.QueryObjectOf('Cmd.CommandText'));
   Assert.AreEqual('Self.FQ', TRdxRecipes.QueryObjectOf('Self.FQ.SQL.Text'));
+  Assert.AreEqual('DM.SQLQuery1', TRdxRecipes.QueryObjectOf('DM.SQLQuery1.SQL.Text'),
+    'das Glied .SQL ganz, nicht der Anfang von .SQLQuery1');
+  // Ein blosser Bezeichner kommt unveraendert zurueck - das ist KEIN
+  // Query-Objekt; BuildSqlTemplate fragt deshalb HasQueryObject (Review
+  // 2026-10-07, Minor 24; SqlTemplate_PlainStringTarget).
   Assert.AreEqual('SQLText', TRdxRecipes.QueryObjectOf('SQLText'));
+  Assert.IsFalse(TRdxRecipes.HasQueryObject('SQLText'), 'String-Puffer');
+  Assert.IsFalse(TRdxRecipes.HasQueryObject('Self.SQLText'), 'kein Glied .SQL');
+  Assert.IsTrue(TRdxRecipes.HasQueryObject('Query.SQL.Text'));
+  Assert.IsTrue(TRdxRecipes.HasQueryObject('FDQuery1.SQL.Add'));
+  Assert.IsTrue(TRdxRecipes.HasQueryObject('Cmd.CommandText'));
 end;
 
 procedure TTestRdxRecipes.SqlTemplate_Assign;
@@ -611,6 +756,23 @@ begin
   Assert.IsFalse(TRdxRecipes.BuildSqlTemplate('ExecuteFmt', True, Parts, 0,
     Template, Reason));
   Assert.IsTrue(Pos('Argument', Reason) > 0, Reason);
+end;
+
+procedure TTestRdxRecipes.SqlTemplate_PlainStringTarget;
+var
+  Parts    : TRdxParts;
+  Template : string;
+  Reason   : string;
+begin
+  // SCA003 meldet auch einen lokalen String-Puffer: 'S.ParamByName'
+  // uebersetzte nicht - die Parameterzeilen werden Kommentar mit
+  // Platzhalter, die SQL-Zeile bleibt.
+  Parts := [Target('S'), Lit('''SELECT * FROM t WHERE id='''), Op('Id', rvUnknown)];
+  Assert.IsTrue(TRdxRecipes.BuildSqlTemplate('S', False, Parts, 2,
+    Template, Reason), Reason);
+  Assert.AreEqual(
+    '  S := ''SELECT * FROM t WHERE id=:p1'';' + sLineBreak +
+    '  // <Query>.ParamByName(''p1'').Value := Id;', Template);
 end;
 
 { ---- uses ---- }
@@ -751,6 +913,32 @@ begin
   try
     Assert.IsFalse(T.Resolve('System.Math', fwVcl, Q, Why));
     Assert.IsTrue(Pos('bereits', Why) > 0, Why);
+  finally
+    T.Free;
+  end;
+end;
+
+procedure TTestRdxRecipes.Scope_Resolve_VclVsSystem_Ambiguous_NotGuessed;
+var
+  T      : TRdxScopeTable;
+  Q, Why : string;
+begin
+  // 'Skia' ist mit der Vorgabe-Vorlage System.Skia, mit den SDI-/MDI-
+  // Vorlagen (Vcl vor System) Vcl.Skia - ohne DCC_Namespace des Projekts
+  // nicht entscheidbar.
+  T := MakeTable(['skia=FMX.Skia;System.Skia;Vcl.Skia',
+                  'sharecontract=System.Win.ShareContract;Vcl.ShareContract']);
+  try
+    Assert.IsFalse(T.Resolve('Skia', fwVcl, Q, Why));
+    Assert.IsTrue(Pos('DCC_Namespace', Why) > 0, Why);
+    Assert.IsFalse(T.Resolve('Skia', fwUnknown, Q, Why),
+      'Rahmenwerk unbekannt: VCL moeglich');
+    // Eine FMX-Datei hat kein Vcl in der Liste: System vor FMX wie bisher.
+    Assert.IsTrue(T.Resolve('Skia', fwFmx, Q, Why), Why);
+    Assert.AreEqual('System.Skia', Q);
+    // System.Win steht in beiden Vorlagen vor Vcl - eindeutig.
+    Assert.IsTrue(T.Resolve('ShareContract', fwVcl, Q, Why), Why);
+    Assert.AreEqual('System.Win.ShareContract', Q);
   finally
     T.Free;
   end;

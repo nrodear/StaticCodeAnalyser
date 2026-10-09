@@ -77,7 +77,11 @@ def read_po_lines(path):
     lines = text.split("\n")
     while lines and lines[-1] == "":
         lines.pop()
-    return lines, len(data)
+    # Bytezahl NACH der Zeilenende-Normalisierung (LF, ohne BOM): die .po
+    # liegen je nach Checkout mit CRLF oder LF auf der Platte (hier sogar
+    # gemischt) - mit len(data) haengte die Kopfzeile der .inc davon ab und
+    # jeder Lauf erzeugte einen Diff (Audit reDelphiX 2026-10-07, Nit 23).
+    return lines, len(text.encode("utf-8"))
 
 
 def scan_duplicates(lines, lang):

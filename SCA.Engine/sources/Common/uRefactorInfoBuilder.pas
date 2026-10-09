@@ -33,13 +33,20 @@ unit uRefactorInfoBuilder;
 // TDetectorUtils.ScanCodeLine aus (mit AKeepColumns = True, also
 // spaltentreu). uQuickFix hat einmal ohne das in String-Literale
 // hineingeschrieben (Upstream-Befund 7) - hier wird nichts selbst gelext.
+// Einzige Ausnahme: OpensMultiLineString erkennt den ANFANG eines
+// Delphi-12-Mehrzeilenstrings (''' am Zeilenende), den ScanCodeLine
+// bewusst nicht kennt. Es blendet nichts aus, es sagt nur "abbrechen".
 //
 // LIEFERN DARF SCHEITERN
 //
 // Laesst sich das Ende nicht sauber bestimmen (kein Abschluss innerhalb
 // von MAX_STATEMENT_LINES, unbalancierte Klammer, Startposition zeigt
-// nicht auf Code), kommt nil zurueck. Der Aufrufer meldet seinen Fund
-// dann OHNE RefactorInfo - der Fund selbst haengt nie am Builder.
+// nicht auf Code, ein Mehrzeilenstring im Bereich), kommt nil zurueck.
+// Der Aufrufer meldet seinen Fund dann OHNE RefactorInfo - der Fund
+// selbst haengt nie am Builder. Mehrzeilenstring (Review reDelphiX
+// 2026-10-07, Minor 5): die zeilenweise Code-Sicht las seinen Inhalt als
+// Code, das Anweisungsende lief in die Folgeanweisung oder endete an
+// einem ';' im SQL-Text.
 
 interface
 
@@ -75,6 +82,17 @@ type
     // letzte Zeile endet bei ASpan.EndCol - 1. Leeres Array, wenn der
     // Bereich nicht in ALines passt.
     class function CodeViewOf(ALines: TStrings;
+      const ASpan: TRefactorSpan): TArray<string>; static;
+
+    // Wie CodeViewOf, aber im Zusammenhang der Datei gelesen: die Zeilen
+    // vor dem Bereich und der Anfang seiner ersten Zeile laufen mit durch
+    // den Scanner. Ein Kommentar oder String, der VOR dem Bereich beginnt,
+    // gilt so auch darin (Review reDelphiX 2026-10-07, Nit 28: ein
+    // Bereich mitten in '{ alt: ... }' lieferte bei CodeViewOf Code).
+    // Fuer Bereiche aus FindStatementEnd ist das Ergebnis gleich - die
+    // beginnen immer auf Code. Kosten: ein Lauf ueber die Zeilen davor.
+    // Delphi-12-Mehrzeilenstrings davor kennt der Scanner nicht.
+    class function CodeViewInContext(ALines: TStrings;
       const ASpan: TRefactorSpan): TArray<string>; static;
 
     // Roher Quelltext des Bereichs, Zeilen mit #10 verbunden. Leer, wenn
@@ -113,6 +131,13 @@ type
       var AState: TCommentScanState): string; static;
     class function FindStatementEnd(ALines: TStrings; ALine, ACol: Integer;
       out ASpan: TRefactorSpan; out AHasSemicolon: Boolean): Boolean; static;
+    // True, wenn die Zeile ab AFromCol einen Delphi-12-Mehrzeilenstring
+    // oeffnet: im Code (nicht in String oder Kommentar; AState ist der
+    // Kommentarzustand am Zeilenanfang, eine Kopie) beginnt eine UNGERADE
+    // Zahl von mindestens drei Apostrophen, hinter der nur noch Leerraum
+    // steht - dieselbe Regel wie TRdxCodeMap.StepQuote im Modul.
+    class function OpensMultiLineString(const ALine: string;
+      AFromCol: Integer; AState: TCommentScanState): Boolean; static;
     // True wenn hinter dem Bereich auf seiner letzten Zeile kein Code mehr
     // steht (Leerraum und Kommentare zaehlen nicht).
     class function TailIsBlank(ALines: TStrings;
@@ -132,6 +157,10 @@ uses
 type
   // Rolle eines Wortes fuer die Suche nach dem Anweisungsende.
   TWordClass = (wcNone, wcOpener, wcEnd, wcTerminator);
+
+const
+  // ''' am Zeilenende oeffnet einen mehrzeiligen String (Delphi 12).
+  MIN_MULTI_QUOTES = 3;
 
 { ---- Zeichen- und Wortklassen ---- }
 
@@ -205,6 +234,35 @@ begin
     FromCol := 1;
     if Li = ASpan.StartLine then FromCol := ASpan.StartCol;
     View := LineView(ALines[Li - 1], FromCol, State);
+    if Li = ASpan.EndLine then
+      View := Copy(View, 1, ASpan.EndCol - 1);
+    Result[Li - ASpan.StartLine] := View;
+  end;
+end;
+
+class function TRefactorInfoBuilder.CodeViewInContext(ALines: TStrings;
+  const ASpan: TRefactorSpan): TArray<string>;
+var
+  State : TCommentScanState;
+  Li    : Integer;
+  View  : string;
+begin
+  Result := nil;
+  if not SpanFits(ALines, ASpan) then Exit;
+  State := Default(TCommentScanState);
+  // Von den Zeilen davor zaehlt nur der Kommentarzustand, nicht die Sicht.
+  for Li := 1 to ASpan.StartLine - 1 do
+    LineView(ALines[Li - 1], 1, State);
+  SetLength(Result, ASpan.EndLine - ASpan.StartLine + 1);
+  for Li := ASpan.StartLine to ASpan.EndLine do
+  begin
+    // Auch die erste Zeile ab Spalte 1: ein String oder Kommentar, der
+    // vor StartCol beginnt, reicht so in den Bereich hinein. Was davor
+    // liegt, wird danach Leerraum - wie bei CodeViewOf.
+    View := LineView(ALines[Li - 1], 1, State);
+    if Li = ASpan.StartLine then
+      View := StringOfChar(' ', ASpan.StartCol - 1)
+        + Copy(View, ASpan.StartCol, MaxInt);
     if Li = ASpan.EndLine then
       View := Copy(View, 1, ASpan.EndCol - 1);
     Result[Li - ASpan.StartLine] := View;
@@ -301,6 +359,10 @@ begin
     if Length(Stripped) < Length(Sub) then
       Exit(True);
   end;
+  // Nur ein Gurt: eine Zeile, die einen Blockkommentar OEFFNET, ist oben
+  // schon kuerzer geworden (ScanCodeLine gibt den Oeffner nicht aus), der
+  // getragene Zustand entscheidet hier nie allein (Review reDelphiX
+  // 2026-10-07, strittiger Major 1).
   Result := State.InBraceComment or State.InParenComment;
 end;
 
@@ -324,12 +386,126 @@ end;
 
 { ---- Anweisungsende ---- }
 
+function PairAt(const ALine: string; AIdx: Integer; A, B: Char): Boolean;
+// True, wenn an ALine[AIdx] (AIdx <= Length(ALine)) das Zeichenpaar AB
+// beginnt.
+begin
+  Result := (ALine[AIdx] = A) and (AIdx < Length(ALine))
+    and (ALine[AIdx + 1] = B);
+end;
+
+function StepInComment(const ALine: string; var AIdx: Integer;
+  var AState: TCommentScanState): Boolean;
+// Ein Schritt in einem Blockkommentar: AIdx rueckt um das Zeichen vor,
+// bei '*)' um beide, und der Abschluss beendet den Kommentar. False
+// ausserhalb eines Blockkommentars - dann bleibt alles unveraendert.
+begin
+  Result := AState.InBraceComment or AState.InParenComment;
+  if not Result then Exit;
+  if AState.InBraceComment then
+    AState.InBraceComment := ALine[AIdx] <> '}'
+  else if PairAt(ALine, AIdx, '*', ')') then
+  begin
+    AState.InParenComment := False;
+    Inc(AIdx);
+  end;
+  Inc(AIdx);
+end;
+
+function StepInString(const ALine: string; var AIdx: Integer): Boolean;
+// Ein Schritt in einem String: AIdx rueckt um das Zeichen vor, bei ''
+// um beide (das verdoppelte Apostroph bleibt im String). False, wenn der
+// String an AIdx endet.
+begin
+  Result := True;
+  if PairAt(ALine, AIdx, '''', '''') then
+    Inc(AIdx)
+  else if ALine[AIdx] = '''' then
+    Result := False;
+  Inc(AIdx);
+end;
+
+function IsMultiLineOpener(const ALine: string; AIdx: Integer): Boolean;
+// True, wenn an ALine[AIdx] ein Lauf von mindestens MIN_MULTI_QUOTES
+// Apostrophen beginnt, ihre Zahl ungerade ist und dahinter nur noch
+// Leerraum steht.
+var
+  q : Integer;
+begin
+  q := 0;
+  while (AIdx + q <= Length(ALine)) and (ALine[AIdx + q] = '''') do Inc(q);
+  Result := (q >= MIN_MULTI_QUOTES) and Odd(q)
+    and (Trim(Copy(ALine, AIdx + q, MaxInt)) = '');
+end;
+
+procedure NoteCommentOpener(const ALine: string; var AIdx: Integer;
+  var AState: TCommentScanState);
+// Im Code: '{' bzw. '(*' an AIdx oeffnet einen Blockkommentar; bei '(*'
+// rueckt AIdx auf den Stern.
+begin
+  if ALine[AIdx] = '{' then
+    AState.InBraceComment := True
+  else if PairAt(ALine, AIdx, '(', '*') then
+  begin
+    AState.InParenComment := True;
+    Inc(AIdx);
+  end;
+end;
+
+function StartsOnCode(ALines: TStrings; ALine, ACol: Integer): Boolean;
+// Die Startposition (1-basiert) liegt in ALines und zeigt auf Code, nicht
+// auf Leerraum.
+begin
+  Result := Assigned(ALines)
+    and (ALine >= 1) and (ALine <= ALines.Count)
+    and (ACol >= 1) and (ACol <= Length(ALines[ALine - 1]))
+    and (ALines[ALine - 1][ACol] > ' ');
+end;
+
+class function TRefactorInfoBuilder.OpensMultiLineString(const ALine: string;
+  AFromCol: Integer; AState: TCommentScanState): Boolean;
+// Dieselbe Quote- und Kommentarlogik wie ScanCodeLine ('' im String,
+// '{ }', '(* *)', '//'), nur zaehlt hier der Lauf der Apostrophe, an dem
+// im Code ein String beginnt. Die Schritte je Zustand stehen in den
+// Helfern oben (StepInComment, StepInString, NoteCommentOpener).
+var
+  j     : Integer;
+  InStr : Boolean;
+begin
+  Result := False;
+  InStr := False;
+  j := AFromCol;
+  if j < 1 then j := 1;
+  while j <= Length(ALine) do
+  begin
+    if StepInComment(ALine, j, AState) then Continue;
+    if InStr then
+    begin
+      InStr := StepInString(ALine, j);
+      Continue;
+    end;
+    if ALine[j] = '''' then
+    begin
+      if IsMultiLineOpener(ALine, j) then Exit(True);
+      // Gewoehnlicher String: der Rest des Laufs ist '' bzw. das Ende.
+      InStr := True;
+    end
+    else if PairAt(ALine, j, '/', '/') then
+      Exit                    // Rest der Zeile ist Kommentar
+    else
+      NoteCommentOpener(ALine, j, AState);
+    Inc(j);
+  end;
+end;
+
 class function TRefactorInfoBuilder.FindStatementEnd(ALines: TStrings;
   ALine, ACol: Integer; out ASpan: TRefactorSpan;
   out AHasSemicolon: Boolean): Boolean;
 var
   State    : TCommentScanState;
+  LineSt   : TCommentScanState;   // Kommentarzustand am Zeilenanfang
   Li       : Integer;
+  FromCol  : Integer;
   LastLine : Integer;
   J, K     : Integer;
   View     : string;
@@ -354,11 +530,7 @@ begin
   Result := False;
   AHasSemicolon := False;
   ASpan := Default(TRefactorSpan);
-  if not Assigned(ALines) then Exit;
-  if (ALine < 1) or (ALine > ALines.Count) then Exit;
-  if (ACol < 1) or (ACol > Length(ALines[ALine - 1])) then Exit;
-  // Die Startposition muss auf Code zeigen, nicht auf Leerraum.
-  if ALines[ALine - 1][ACol] <= ' ' then Exit;
+  if not StartsOnCode(ALines, ALine, ACol) then Exit;
 
   State    := Default(TCommentScanState);
   Depth    := 0;
@@ -370,8 +542,10 @@ begin
 
   for Li := ALine to LastLine do
   begin
-    J := 1;
-    if Li = ALine then J := ACol;
+    FromCol := 1;
+    if Li = ALine then FromCol := ACol;
+    J := FromCol;
+    LineSt := State;
     View := LineView(ALines[Li - 1], J, State);
     while J <= Length(View) do
     begin
@@ -431,6 +605,10 @@ begin
       PrevSig := C;
       Inc(J);
     end;
+    // Die Anweisung laeuft ueber diese Zeile hinaus. Oeffnet die Zeile
+    // einen Mehrzeilenstring, waeren die Folgezeilen fuer die Code-Sicht
+    // Code - ihr Ende ist dann nicht sauber bestimmbar (s. Kopf).
+    if OpensMultiLineString(ALines[Li - 1], FromCol, LineSt) then Exit;
   end;
   // Kein Abschluss innerhalb der Obergrenze bzw. bis Dateiende: nil.
 end;

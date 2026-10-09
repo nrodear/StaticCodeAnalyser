@@ -26,6 +26,12 @@ type
     [Test] procedure Unregister_UnknownToken_IsNoOp;
     [Test] procedure Execute_RunsTheProvidersCode;
     [Test] procedure DisabledAction_CarriesReasonInHint;
+    // Review reDelphiX 2026-10-07, Minor 7: nil wird nicht angemeldet.
+    [Test] procedure Register_Nil_ReturnsZeroAndCountsNothing;
+    // Review Minor 8: ein Anbieter darf WAEHREND ActionsFor die Registry
+    // aendern (Kopie unter dem Lock, Aufruf ohne Lock).
+    [Test] procedure Provider_UnregistersItselfDuringActionsFor;
+    [Test] procedure Provider_RegistersAnotherDuringActionsFor;
   end;
 
 implementation
@@ -83,6 +89,45 @@ end;
 procedure TStubProvider.DoExecute(Sender: TObject);
 begin
   Inc(Ran);
+end;
+
+const
+  // Caption der einen Aktion von TReentrantProvider (Testdaten, kein UI).
+  REENTRANT_CAPTION = 'reentrant';
+
+type
+  // Ein Anbieter, der in Provide die Registry veraendert: sich selbst
+  // abmelden (ShouldUnregisterSelf) und/oder beim ersten Aufruf einen
+  // zweiten Anbieter anmelden (Second). Liefert immer eine Aktion
+  // REENTRANT_CAPTION.
+  TReentrantProvider = class
+  private
+    FSelfToken            : Integer;
+    FShouldUnregisterSelf : Boolean;
+    FSecond               : TStubProvider;   // nil = keinen anmelden
+    FSecondToken          : Integer;
+  public
+    function Provide(const AFinding: TLeakFinding): TArray<TFindingAction>;
+    property SelfToken: Integer read FSelfToken write FSelfToken;
+    property ShouldUnregisterSelf: Boolean read FShouldUnregisterSelf
+      write FShouldUnregisterSelf;
+    property Second: TStubProvider read FSecond write FSecond;
+    // Token des in Provide angemeldeten zweiten Anbieters (0 = keiner).
+    property SecondToken: Integer read FSecondToken;
+  end;
+
+function TReentrantProvider.Provide(
+  const AFinding: TLeakFinding): TArray<TFindingAction>;
+begin
+  Result := nil;
+  if FShouldUnregisterSelf then
+    TFindingActions.Unregister(FSelfToken);
+  if Assigned(FSecond) and (FSecondToken = 0) then
+    FSecondToken := TFindingActions.Register(FSecond.Provide);
+  SetLength(Result, 1);
+  Result[0].Caption := REENTRANT_CAPTION;
+  Result[0].Enabled := False;
+  Result[0].Execute := nil;
 end;
 
 function MakeFinding(const AFile: string; ALine: Integer): TLeakFinding;
@@ -271,6 +316,85 @@ begin
   finally
     TFindingActions.Unregister(Token);
     P.Free;
+    F.Free;
+  end;
+end;
+
+procedure TTestFindingActions.Register_Nil_ReturnsZeroAndCountsNothing;
+var
+  Before : Integer;
+  Token  : Integer;
+begin
+  Before := TFindingActions.ProviderCount;
+  Token := TFindingActions.Register(nil);
+  try
+    Assert.AreEqual<Integer>(0, Token, 'Token 0 = nicht angemeldet');
+    Assert.AreEqual<Integer>(Before, TFindingActions.ProviderCount,
+      'ein nil-Anbieter zaehlt nicht - der Host bliebe sonst wach');
+  finally
+    // Unregister(0) ist ein No-Op; ein faelschlich vergebenes Token
+    // verschwindet so trotzdem wieder (die Registry ist prozessweit).
+    TFindingActions.Unregister(Token);
+  end;
+  Assert.AreEqual<Integer>(Before, TFindingActions.ProviderCount);
+end;
+
+procedure TTestFindingActions.Provider_UnregistersItselfDuringActionsFor;
+var
+  R       : TReentrantProvider;
+  F       : TLeakFinding;
+  Actions : TArray<TFindingAction>;
+begin
+  F := MakeFinding('a.pas', 1);
+  R := TReentrantProvider.Create;
+  try
+    R.ShouldUnregisterSelf := True;
+    R.SelfToken := TFindingActions.Register(R.Provide);
+    Assert.AreEqual<Integer>(1, TFindingActions.ProviderCount);
+    Actions := TFindingActions.ActionsFor(F);
+    Assert.AreEqual<Integer>(1, Length(Actions),
+      'die Aktionen dieser Runde kommen noch an');
+    Assert.AreEqual(REENTRANT_CAPTION, Actions[0].Caption);
+    Assert.AreEqual<Integer>(0, TFindingActions.ProviderCount,
+      'die Abmeldung im Provide hat gewirkt');
+    Assert.AreEqual<Integer>(0, Length(TFindingActions.ActionsFor(F)),
+      'die naechste Runde fragt ihn nicht mehr');
+  finally
+    TFindingActions.Unregister(R.SelfToken);   // No-Op, schon abgemeldet
+    R.Free;
+    F.Free;
+  end;
+end;
+
+procedure TTestFindingActions.Provider_RegistersAnotherDuringActionsFor;
+var
+  R       : TReentrantProvider;
+  S       : TStubProvider;
+  F       : TLeakFinding;
+  Actions : TArray<TFindingAction>;
+begin
+  F := MakeFinding('a.pas', 1);
+  S := TStubProvider.Create(['zweiter']);
+  R := TReentrantProvider.Create;
+  try
+    R.Second := S;
+    R.SelfToken := TFindingActions.Register(R.Provide);
+    Actions := TFindingActions.ActionsFor(F);
+    Assert.AreEqual<Integer>(1, Length(Actions),
+      'der neue Anbieter antwortet erst in der naechsten Runde');
+    Assert.AreEqual(REENTRANT_CAPTION, Actions[0].Caption);
+    Assert.IsTrue(R.SecondToken > 0, 'Register im Provide hat ein Token');
+    Assert.AreEqual<Integer>(2, TFindingActions.ProviderCount);
+    Actions := TFindingActions.ActionsFor(F);
+    Assert.AreEqual<Integer>(2, Length(Actions));
+    Assert.AreEqual(REENTRANT_CAPTION, Actions[0].Caption);
+    Assert.AreEqual('zweiter',   Actions[1].Caption,
+      'Anmeldereihenfolge: der zweite steht hinten');
+  finally
+    TFindingActions.Unregister(R.SecondToken);
+    TFindingActions.Unregister(R.SelfToken);
+    R.Free;
+    S.Free;
     F.Free;
   end;
 end;

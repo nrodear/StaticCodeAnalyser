@@ -41,6 +41,12 @@ type
     // P11 (AH22): Kommentar nur im gefragten Bereich - ein Modul, das
     // einen Teil der Anweisung ersetzt, prueft genau den Teil.
     [Test] procedure SpanHasComment_OnlyInsideSpan;
+    // Review reDelphiX 2026-10-07, strittiger Minor 1: im with-Block kann
+    // s an Rec.s binden - die Typaufloesung beweist dort nichts (P12).
+    [Test] procedure ChainOf_WithBlockShadowing_StaysUnknown;
+    // Review strittiger Minor 3: eine Funktion der Unit verdeckt den
+    // gleichnamigen RTL-Namen - der Name beweist dann keinen String.
+    [Test] procedure ChainOf_LocalFuncShadowsKnownCall_NotFixSafe;
   end;
 
 implementation
@@ -392,6 +398,116 @@ begin
       'Zeile 4 mit Zeilenkommentar');
     Assert.IsFalse(P.SpanHasComment(TRefactorSpan.Make(ROLE_STATEMENT, 90, 1, 91, 2)),
       'ausserhalb der Datei False');
+  finally
+    P.Free;
+  end;
+end;
+
+procedure TTestSourcePlacesTypes.ChainOf_WithBlockShadowing_StaysUnknown;
+const
+  SRC =
+    'unit w; interface'#13#10 +
+    'type TRec = record s: Variant; end;'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var s, r: string; Rec: TRec;'#13#10 +
+    'begin'#13#10 +
+    '  with Rec do'#13#10 +
+    '    r := ''a'' + s + ''b'' + s;'#13#10 +
+    '  r := ''c'' + s + ''d'' + s;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  P         : TSourcePlaces;
+  InL, OutL : Integer;
+  Info      : TRefactorInfo;
+begin
+  InL  := LineOf(SRC, 'r := ''a''');
+  OutL := LineOf(SRC, 'r := ''c''');
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.OpenSource('w.pas', SRC));
+    Assert.IsTrue(P.InWithBlock(InL), 'Zeile im Rumpf des with');
+    Assert.IsTrue(P.InWithBlock(LineOf(SRC, 'with Rec do')),
+      'die Zeile des with-Kopfs zaehlt mit');
+    Assert.IsFalse(P.InWithBlock(OutL), 'hinter dem with');
+    Assert.IsFalse(P.InWithBlock(LineOf(SRC, 'var s, r')));
+
+    Info := P.ChainOf(InL, ColOf(SRC, 'r := ''a'''), 'r');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual('s', P.TextOf(Info.Parts[2]));
+      Assert.IsTrue(Info.Parts[2].ValueType = rvUnknown,
+        'der Compiler bindet s an Rec.s (Variant) - nichts bewiesen');
+      Assert.AreEqual('string', Info.Parts[2].Resolved,
+        'Resolved bleibt der Typ der gefundenen Deklaration');
+      Assert.IsFalse(Info.FixSafe);
+    finally
+      Info.Free;
+    end;
+
+    Info := P.ChainOf(OutL, ColOf(SRC, 'r := ''c'''), 'r');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.IsTrue(Info.Parts[2].ValueType = rvString,
+        'Gegenprobe: ohne with ist s die lokale string-Variable');
+      Assert.IsTrue(Info.FixSafe);
+    finally
+      Info.Free;
+    end;
+  finally
+    P.Free;
+  end;
+end;
+
+procedure TTestSourcePlacesTypes.ChainOf_LocalFuncShadowsKnownCall_NotFixSafe;
+const
+  SRC =
+    'unit f; interface'#13#10 +
+    'function Trim(const S: string): Variant;'#13#10 +
+    'implementation'#13#10 +
+    'function Trim(const S: string): Variant;'#13#10 +
+    'begin'#13#10 +
+    '  Result := S;'#13#10 +
+    'end;'#13#10 +
+    'procedure P(const x, y: string);'#13#10 +
+    'var r: string;'#13#10 +
+    'begin'#13#10 +
+    '  r := ''a'' + Trim(x) + ''b'' + Trim(y);'#13#10 +
+    '  r := ''a'' + SysUtils.Trim(x) + ''b'' + QuotedStr(y);'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  P    : TSourcePlaces;
+  Info : TRefactorInfo;
+begin
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.OpenSource('f.pas', SRC));
+    Info := P.ChainOf(LineOf(SRC, 'Trim(x) + ''b'' + Trim(y)'),
+      ColOf(SRC, 'r := ''a'' + Trim'), 'r');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual('Trim(x)', P.TextOf(Info.Parts[2]));
+      Assert.IsTrue(Info.Parts[2].ValueType = rvUnknown,
+        'Trim ist hier die Funktion der Unit (Variant), nicht SysUtils.Trim');
+      Assert.IsTrue(Info.Parts[4].ValueType = rvUnknown);
+      Assert.IsFalse(Info.FixSafe);
+    finally
+      Info.Free;
+    end;
+    Info := P.ChainOf(LineOf(SRC, 'SysUtils.Trim(x)'),
+      ColOf(SRC, 'r := ''a'' + SysUtils'), 'r');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.IsTrue(Info.Parts[2].ValueType = rvString,
+        'qualifiziert: die RTL ist gemeint');
+      Assert.IsTrue(Info.Parts[4].ValueType = rvString,
+        'QuotedStr verdeckt die Unit nicht');
+      Assert.IsTrue(Info.FixSafe);
+    finally
+      Info.Free;
+    end;
   finally
     P.Free;
   end;
