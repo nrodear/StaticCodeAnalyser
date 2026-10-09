@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Regelkatalog
 
-Alle 198 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibung.
+Alle 199 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibung.
 
 | ID | Name | Schweregrad | Typ | Detektor |
 |---|---|---|---|---|
@@ -202,6 +202,7 @@ Alle 198 Detektor-Regeln. Eine ID anklicken führt zur vollständigen Beschreibu
 | [SCA196](SCA196.md) | Result eines verwalteten Typs wird gelesen, bevor es zugewiesen wurde | Warning | Bug | `uManagedResultUninit.pas` |
 | [SCA197](SCA197.md) | Interface ohne GUID deklariert | Warning | Code Smell | `uInterfaceGuid.pas` |
 | [SCA198](SCA198.md) | Zwei Interfaces teilen sich dieselbe GUID | Warning | Bug | `uInterfaceGuid.pas` |
+| [SCA199](SCA199.md) | ParamByName-Name passt nicht zu den SQL-Platzhaltern | Warning | Bug | `uParamNameMismatch.pas` |
 
 ---
 

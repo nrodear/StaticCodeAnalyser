@@ -170,6 +170,8 @@ contains
   uEmptyFinallyBlock in '..\SCA.Engine\sources\Detectors\uEmptyFinallyBlock.pas',
   uEmptyInterface in '..\SCA.Engine\sources\Detectors\uEmptyInterface.pas',
   uInterfaceGuid in '..\SCA.Engine\sources\Detectors\uInterfaceGuid.pas',
+  uParamNameScan in '..\SCA.Engine\sources\Detectors\uParamNameScan.pas',
+  uParamNameMismatch in '..\SCA.Engine\sources\Detectors\uParamNameMismatch.pas',
   uEmptyMethod in '..\SCA.Engine\sources\Detectors\uEmptyMethod.pas',
   uEmptyOnHandler in '..\SCA.Engine\sources\Detectors\uEmptyOnHandler.pas',
   uEmptyVisibilitySection in '..\SCA.Engine\sources\Detectors\uEmptyVisibilitySection.pas',

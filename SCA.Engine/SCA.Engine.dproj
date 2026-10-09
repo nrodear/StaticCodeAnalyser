@@ -222,6 +222,8 @@
         <DCCReference Include="sources\Detectors\uInstanceInvokedConstructor.pas"/>
         <DCCReference Include="sources\Detectors\uIntegerOverflow.pas"/>
         <DCCReference Include="sources\Detectors\uInterfaceGuid.pas"/>
+        <DCCReference Include="sources\Detectors\uParamNameScan.pas"/>
+        <DCCReference Include="sources\Detectors\uParamNameMismatch.pas"/>
         <DCCReference Include="sources\Detectors\uInterfaceName.pas"/>
         <DCCReference Include="sources\Detectors\uLargeClass.pas"/>
         <DCCReference Include="sources\Detectors\uLeakDetector2.pas"/>

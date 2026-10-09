@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 198 detector rules. Click an ID for full details.
+All 199 detector rules. Click an ID for full details.
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -202,6 +202,7 @@ All 198 detector rules. Click an ID for full details.
 | [SCA196](SCA196.md) | Result of managed type is read before it is assigned | Warning | Bug | `uManagedResultUninit.pas` |
 | [SCA197](SCA197.md) | Interface declared without a GUID | Warning | Code Smell | `uInterfaceGuid.pas` |
 | [SCA198](SCA198.md) | Two interfaces share the same GUID | Warning | Bug | `uInterfaceGuid.pas` |
+| [SCA199](SCA199.md) | ParamByName name does not match the SQL placeholders | Warning | Bug | `uParamNameMismatch.pas` |
 
 ---
 
