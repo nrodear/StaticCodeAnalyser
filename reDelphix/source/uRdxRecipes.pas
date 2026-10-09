@@ -250,6 +250,17 @@ type
     // Vergleichsform eines Knotennamens: getrimmt, ab der ersten '(' nur
     // noch '()' - wie SCA003 einen Aufruf meldet ('Q.SQL.Add()').
     class function TargetKey(const AName: string): string; static;
+    // True, wenn beide Ziele reines ASCII sind (jedes Zeichen #0..#127) -
+    // nur dann vergleicht der Fund-Abgleich sie (Review-Nachlese
+    // 2026-10-09). Das Ziel der Meldung stammt aus dem Scan, der eine
+    // UTF-8-Datei ohne BOM als ANSI liest (TParser2.ParseFile:
+    // LoadFromFile ohne Encoding); der Knoten stammt aus TSourcePlaces,
+    // das dieselbe Datei als UTF-8 liest (LoadFileSmart bzw. der Editor-
+    // Puffer). Ein Umlaut im Ziel unterschiede sich so trotz gleicher
+    // Anweisung. Sonst bleibt nur die '+'-Gegenprobe. Der Aufrufer gibt
+    // die Vergleichsformen (TargetKey): bei einem Aufruf zaehlen die
+    // Argumente nicht.
+    class function TargetsComparable(const A, B: string): Boolean; static;
 
     // Das Query-Objekt eines SQL-Ziels: 'Query.SQL.Text' -> 'Query',
     // 'FDQuery1.SQL.Add' -> 'FDQuery1', 'Cmd.CommandText' -> 'Cmd',
@@ -1378,6 +1389,22 @@ begin
   P := Pos('(', Result);
   if P > 0 then
     Result := TrimRight(Copy(Result, 1, P - 1)) + '()';
+end;
+
+// True, wenn S nur Zeichen #0..#127 traegt (auch fuer '').
+function IsPureAscii(const S: string): Boolean;
+var
+  C : Char;
+begin
+  Result := True;
+  for C in S do
+    if C > #127 then
+      Exit(False);
+end;
+
+class function TRdxRecipes.TargetsComparable(const A, B: string): Boolean;
+begin
+  Result := IsPureAscii(A) and IsPureAscii(B);
 end;
 
 // Typname eines ovAnsi-Operanden fuer Grund und AnsiChar-Ausnahme: der

@@ -164,9 +164,12 @@ type
     // kann juenger sein als die Fundliste, nach dem Einfuegen von Zeilen
     // steht auf der Fundzeile eine andere Anweisung. Nennt die Anfrage ein
     // Ziel, muss der Knoten der Zeile genau dieses Ziel tragen
-    // (TRdxRecipes.TargetKey); nennt sie eine '+'-Zahl, muss die Kette des
-    // Knotens (TNodeRef.TypeRef) genau so viele '+' haben - sonst nil mit
-    // Grund 'Zeile verschoben?' bzw. 'Zeile veraendert?'.
+    // (TRdxRecipes.TargetKey) - verglichen nur, wenn beide Formen reines
+    // ASCII sind (TRdxRecipes.TargetsComparable: Scan und Dienst
+    // dekodieren eine UTF-8-Datei ohne BOM verschieden); nennt sie eine
+    // '+'-Zahl, muss die Kette des Knotens (TNodeRef.TypeRef) genau so
+    // viele '+' haben - sonst nil mit Grund 'Zeile verschoben?' bzw.
+    // 'Zeile veraendert?'.
     // Eine Zuweisung beschreibt ChainOf mit der '+'-Zahl des Knotens
     // (TopLevelPlusCount, die Zaehlung von SCA044) als zweiter Gegenprobe
     // (strittiger Minor 2). Zerfaellt der Quelltext anders, kommt nur die
@@ -428,18 +431,28 @@ end;
 
 // Gegenprobe des Knotens gegen den Fund (Minor 20): '' oder der Grund.
 // Das Ziel vergleicht TargetKey (ein Aufruf zaehlt als 'Kopf()' wie in der
-// SCA003-Meldung), die '+'-Zahl gilt nur fuer eine Zuweisung.
+// SCA003-Meldung), die '+'-Zahl gilt nur fuer eine Zuweisung. Das Ziel nur
+// bei reinem ASCII auf beiden Seiten (TRdxRecipes.TargetsComparable, Review-
+// Nachlese 2026-10-09): die Meldung las der Scan als ANSI, den Knoten der
+// Dienst als UTF-8 - ein Umlaut sperrte sonst eine gueltige Aktion. Dann
+// traegt die '+'-Zahl die Gegenprobe allein.
 function MismatchOf(const AQuery: TRdxAnchorQuery;
   const ANode: TNodeRef): string;
 var
-  Plus : Integer;
+  Plus     : Integer;
+  NodeKey  : string;
+  QueryKey : string;
 begin
   Result := '';
-  if (AQuery.Target <> '') and not SameText(TRdxRecipes.TargetKey(ANode.Name),
-       TRdxRecipes.TargetKey(AQuery.Target)) then
-    Exit(Format('Zeile %d traegt %s, der Fund nennt %s - Zeile verschoben? '
-      + 'Datei neu pruefen', [AQuery.Line, TRdxRecipes.TargetKey(ANode.Name),
-      AQuery.Target]));
+  if AQuery.Target <> '' then
+  begin
+    NodeKey  := TRdxRecipes.TargetKey(ANode.Name);
+    QueryKey := TRdxRecipes.TargetKey(AQuery.Target);
+    if TRdxRecipes.TargetsComparable(NodeKey, QueryKey)
+       and not SameText(NodeKey, QueryKey) then
+      Exit(Format('Zeile %d traegt %s, der Fund nennt %s - Zeile verschoben? '
+        + 'Datei neu pruefen', [AQuery.Line, NodeKey, AQuery.Target]));
+  end;
   if (AQuery.Plus < 0) or (ANode.Kind <> TNodeKind.nkAssign) then Exit;
   Plus := TRdxRecipes.TopLevelPlusCount(ANode.TypeRef);
   if Plus <> AQuery.Plus then

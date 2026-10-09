@@ -360,10 +360,11 @@ begin
 end;
 
 procedure TParser2.ApplyExplicitLexerView;
-// Dieselbe Regel wie uEngineApi.ApplyIfdefView, nur ohne Globals: eine
-// leere Liste laesst den Skip aus (Doppelzweig-Sicht), sonst gilt die
-// Ein-Zweig-Sicht mit genau diesen Defines. AddDefine trimmt und
-// uebergeht leere Eintraege.
+// Dieselbe Regel wie uEngineApi.ApplyIfdefView, nur ohne Globals und
+// ohne dessen dlFpc-Zusatz ('FPC', 'LCL' - den gibt der Aufrufer selbst
+// mit, s. uSourcePlaces.SetIfdefDefines): eine leere Liste laesst den
+// Skip aus (Doppelzweig-Sicht), sonst gilt die Ein-Zweig-Sicht mit genau
+// diesen Defines. AddDefine trimmt und uebergeht leere Eintraege.
 var
   D : string;
 begin

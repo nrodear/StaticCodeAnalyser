@@ -9,6 +9,16 @@ program reDelphix.Test;
 //   * uTestRdxSca044   - Ende zu Ende: Parser, Detektor SCA044,
 //                        TSourcePlaces, Rezept-Laeufer - je Variante eine
 //                        Temp-Datei, derselbe Weg wie im IDE-Package
+//   * uTestRdxActionRing - Ring der Aktionsobjekte des Anbieters (Besitz,
+//                        Chargen, Grenzen)
+//   * uTestRdxBufferMath - Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung
+//                        aller Ersetzungen, Spaltengrenze, Textwahl
+//   * uTestRdxSuppress - Unterdrueck-Marker setzen und entfernen
+//   * uTestRdxSimpleFixes - Editorhilfen SCA075/SCA085 auf Text, ohne
+//                        Parser
+//   * uTestRdxNilFix   - Editorhilfe SCA126 auf Text, ohne Parser
+//   * uTestRdxSimpleFixesDetector - dieselben Hilfen gegen den echten
+//                        Detektor, Katalog-Beispiele bad -> good
 //
 // Engine-Units kommen ueber den Suchpfad aus ..\..\SCA.Engine\sources
 // (wie StaticCodeAnalyserForm\tests\TestProject), die Modul-Units aus

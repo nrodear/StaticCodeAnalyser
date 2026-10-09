@@ -48,7 +48,10 @@ uses
   System.SysUtils, System.Classes, System.Generics.Collections,
   uMethodd12, uSCAConsts, uIgnoreList,
   // Quellstellen-Dienst fuer Fremd-Konsumenten (Modul "Source Refactor"):
-  // ueber die Aliase unten reicht dem Konsumenten dieses eine uses.
+  // die Aliase unten reichen nur die Klassen- und Record-Typen weiter.
+  // Konstanten und Aufzaehlungswerte braucht der Konsument zusaetzlich
+  // per eigenem uses: ROLE_*, rv*/TRefactorValueType und rf*/TRefactorFlags
+  // aus uRefactorInfo, SOURCE_PLACES_VERSION aus uSourcePlaces.
   uAstNode, uAstSpans, uRefactorInfo, uSourcePlaces;
 
 type

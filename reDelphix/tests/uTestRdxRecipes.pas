@@ -81,6 +81,10 @@ type
     // Fund-Abgleich (Minor 20) und '+'-Gegenprobe (strittiger Minor 2).
     [Test] procedure PlusCount_LikeScanConcat;
     [Test] procedure FindingTarget_Sca044AndSca003;
+    // Review-Nachlese 2026-10-09: das Ziel nur bei reinem ASCII auf beiden
+    // Seiten vergleichen - der Scan liest UTF-8 ohne BOM als ANSI.
+    [Test] procedure TargetsComparable_AsciiBoth_True;
+    [Test] procedure TargetsComparable_NonAsciiEitherSide_False;
 
     // ---- SQL-Vorlage ---------------------------------------------------
     [Test] procedure QueryObject_Forms;
@@ -687,6 +691,43 @@ begin
   Assert.AreEqual('Q.SQL.Add()', TRdxRecipes.TargetKey('Q.SQL.Add ()'));
   Assert.AreEqual('Text', TRdxRecipes.TargetKey(' Text '));
   Assert.AreEqual('Arr[]', TRdxRecipes.TargetKey('Arr[]'));
+end;
+
+procedure TTestRdxRecipes.TargetsComparable_AsciiBoth_True;
+begin
+  // Reines ASCII auf beiden Seiten: der Fund-Abgleich vergleicht - gleiche
+  // wie ungleiche Ziele (ungleich heisst dort 'Zeile verschoben?'), auch
+  // ein leeres Ziel und die Grenze #127.
+  Assert.IsTrue(TRdxRecipes.TargetsComparable('Text', 'Text'));
+  Assert.IsTrue(TRdxRecipes.TargetsComparable('Text', 'Marker'),
+    'ungleich, aber vergleichbar');
+  Assert.IsTrue(TRdxRecipes.TargetsComparable('SL.Values[''Size'']',
+    'Q.SQL.Add()'));
+  Assert.IsTrue(TRdxRecipes.TargetsComparable('', 'Text'));
+  Assert.IsTrue(TRdxRecipes.TargetsComparable('A'#127, 'B'), '#127');
+end;
+
+procedure TTestRdxRecipes.TargetsComparable_NonAsciiEitherSide_False;
+const
+  // 'Groesse' mit Umlaut, wie der Dienst es liest (UTF-8) ...
+  AS_UTF8 = 'SL.Values[''Gr'#$00F6'sse'']';
+  // ... und wie der Scan dieselbe Datei ohne BOM liest (ANSI/cp1252): die
+  // beiden UTF-8-Bytes C3 B6 werden zu zwei Zeichen.
+  AS_ANSI = 'SL.Values[''Gr'#$00C3#$00B6'sse'']';
+begin
+  // Dieselbe Anweisung, verschieden dekodiert - ein Vergleich meldete
+  // 'Zeile verschoben?' und sperrte die Aktion.
+  Assert.IsFalse(TRdxRecipes.TargetsComparable(AS_UTF8, AS_ANSI));
+  // Ein Nicht-ASCII-Zeichen auf EINER Seite reicht.
+  Assert.IsFalse(TRdxRecipes.TargetsComparable(AS_UTF8, 'Text'), 'links');
+  Assert.IsFalse(TRdxRecipes.TargetsComparable('Text', AS_ANSI), 'rechts');
+  Assert.IsFalse(TRdxRecipes.TargetsComparable('A'#128, 'B'), '#128');
+  // Ein Aufruf zaehlt in der Vergleichsform ohne Argumente (TargetKey):
+  // ein Umlaut im Argument laesst den Vergleich stehen.
+  Assert.IsTrue(TRdxRecipes.TargetsComparable(
+    TRdxRecipes.TargetKey('Q.SQL.Add(''Gr'#$00F6'sse'')'),
+    TRdxRecipes.TargetKey('Q.SQL.Add(''Gr'#$00C3#$00B6'sse'')')),
+    'Aufruf: Kopf()');
 end;
 
 procedure TTestRdxRecipes.Format_VariantAndAnsi_Blocked;

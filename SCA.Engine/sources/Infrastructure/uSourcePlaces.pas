@@ -34,8 +34,14 @@ unit uSourcePlaces;
 //     bekommt stattdessen die EIGENE Sicht des Dienstes
 //     (TParser2.SetExplicitLexerView): fest die Doppelzweig-Sicht - der
 //     Ruhezustand im Plugin, unabhaengig von --ifdef-aware -, oder die
-//     Defines aus SetIfdefDefines. Grenze der Doppelzweig-Sicht: der
-//     Baum traegt beide Zweige; bei '{$IFDEF X} S: string {$ELSE}
+//     Defines aus SetIfdefDefines, und zwar GENAU diese: den dlFpc-Zusatz
+//     des Scans ergaenzt der Dienst nicht. Ein dlFpc-Lauf mit nicht
+//     leerer Define-Liste (dlFpc erzwingen auch .lpi/.lpk/.lpg-Projekte)
+//     nimmt 'FPC' und 'LCL' dazu (TAnalysisSession.ApplyIfdefView); fuer
+//     die Sicht seiner Funde gibt der Aufrufer die beiden selbst mit,
+//     sonst fehlen die {$IFDEF FPC}-Zweige (Review-Nachlese 2026-10-09).
+//     Grenze der Doppelzweig-Sicht: der Baum traegt beide Zweige; bei
+//     '{$IFDEF X} S: string {$ELSE}
 //     S: AnsiString {$ENDIF}' liefert DeclaredTypeOf den Typ EINES der
 //     Zweige (bei Parametern und Lokalen den des letzten, bei Feldern und
 //     Globalen den des ersten), und NodesAt kann auf einer Zeile Knoten
@@ -85,8 +91,9 @@ unit uSourcePlaces;
 //                 CallOf beweisen dort nichts (s. InWithBlock).
 //   InWithBlock   liegt eine Zeile im Rumpf einer with-Anweisung?
 //   CodeViewOf / TextOf / HashOf   Sicht, Text und Hash eines Bereichs
-//                 (in der Sicht sind Strings VIEW_FILL, Kommentare
-//                 Leerraum - Review reDelphiX 2026-10-07, Minor 4)
+//                 (in der Sicht sind Strings VIEW_FILL, Kommentare und
+//                 Direktiven Leerraum - Review reDelphiX 2026-10-07,
+//                 Minor 4)
 //   ConditionalRanges              {$IFDEF}-Bereiche der Datei
 //   SetIfdefDefines                Lexer-Sicht fuer Open/OpenSource
 //
@@ -206,7 +213,11 @@ type
     // leer (Vorgabe) = Doppelzweig-Sicht; sonst die Ein-Zweig-Sicht mit
     // genau diesen Defines - ein Konsument, der die Sicht des Laufs kennt
     // (TScanRequest.IfdefDefines), bekommt Knoten und Typen dann aus
-    // derselben Sicht wie die Funde. Eine Momentaufnahme: die Werte werden
+    // derselben Sicht wie die Funde. Ausnahme dlFpc: dort ergaenzt der
+    // Scan bei nicht leerer Liste 'FPC' und 'LCL'
+    // (TAnalysisSession.ApplyIfdefView), dieser Dienst nicht - fuer einen
+    // dlFpc-Lauf (auch .lpi/.lpk/.lpg-Projekte) gibt der Aufrufer die
+    // beiden selbst mit. Eine Momentaufnahme: die Werte werden
     // kopiert, wirken ab dem naechsten Open/OpenSource und bleiben ueber
     // Close hinweg stehen.
     procedure SetIfdefDefines(const ADefines: TArray<string>);

@@ -122,7 +122,8 @@ type
       const AExpected: string): Boolean; static;
 
     // Die vier Einzelfragen arbeiten auf der Code-Sicht EINES Terms
-    // (Strings/Kommentare sind TRefactorInfoBuilder.VIEW_FILL).
+    // (Strings sind TRefactorInfoBuilder.VIEW_FILL, Kommentare und
+    // Direktiven Leerraum).
     // True fuer ein reines String-Literal inkl. #13 / #$0D-Teilen.
     class function IsLiteralView(const AViewText: string): Boolean; static;
     // True wenn auf Klammertiefe 0 ein Operator oder Operator-Wort steht.

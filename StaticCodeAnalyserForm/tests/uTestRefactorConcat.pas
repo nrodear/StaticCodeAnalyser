@@ -468,18 +468,40 @@ var
   Lines : TStringList;
   Info  : TRefactorInfo;
 begin
-  // Direktive und Literale ohne Leerraum dazwischen: gesperrt wird ueber
-  // rfHasComment, nicht ueber die Art der Terme.
+  // Jeder Term ist fuer sich ein bewiesener String, nur die Direktive
+  // steht im Bereich. Seit Minor 4 ist sie in der Code-Sicht Leerraum: der
+  // Term 'a' endet an seinem Apostroph und bleibt ein Literal. Gesperrt
+  // wird also allein ueber rfHasComment - fiele diese Sperre aus
+  // ClassifyParts, waere FixSafe True und der Test rot. Gegenprobe in
+  // Zeile 2: dieselbe Kette ohne Direktive ist FixSafe.
   Lines := MakeLines([
-    'r := ''a'' + {$IFDEF X}''b''{$ELSE}''c''{$ENDIF};']);
+    'r := ''a'' {$IFDEF X}{$ENDIF} + ''b'' + QuotedStr(s);',
+    'r := ''a'' + ''b'' + QuotedStr(s);']);
   try
-    Info := DescribeAt(Lines, 1, 'r :=', 1);
+    Info := DescribeAt(Lines, 1, 'r :=', 2);
     try
       Assert.IsTrue(Assigned(Info));
-      Assert.AreEqual<Integer>(3, Length(Info.Parts), 'Ziel + zwei Terme');
+      Assert.AreEqual<Integer>(4, Length(Info.Parts), 'Ziel + drei Terme');
+      Assert.AreEqual('''a''', PartText(Lines, Info, 1),
+        'die Direktive gehoert zu keinem Term');
+      Assert.AreEqual(ROLE_LITERAL, Info.Parts[1].Role);
+      Assert.AreEqual(ROLE_LITERAL, Info.Parts[2].Role);
+      Assert.AreEqual(ROLE_OPERAND, Info.Parts[3].Role);
+      Assert.IsTrue(Info.Parts[1].ValueType = rvString, '''a''');
+      Assert.IsTrue(Info.Parts[2].ValueType = rvString, '''b''');
+      Assert.IsTrue(Info.Parts[3].ValueType = rvString, 'QuotedStr(s)');
       Assert.IsTrue(rfHasComment in Info.Flags);
+      Assert.IsFalse(rfInConditional in Info.Flags, 'ohne Unit-Knoten');
       Assert.IsFalse(Info.FixSafe,
-        'beim Ersetzen ginge ein Zweig der Direktive verloren');
+        'beim Ersetzen ginge die Direktive verloren');
+    finally
+      Info.Free;
+    end;
+    Info := DescribeAt(Lines, 2, 'r :=', 2);
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.IsFalse(rfHasComment in Info.Flags);
+      Assert.IsTrue(Info.FixSafe, 'Gegenprobe ohne Direktive');
     finally
       Info.Free;
     end;

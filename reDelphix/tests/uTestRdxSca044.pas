@@ -139,6 +139,13 @@ type
     // Minor 18/19: das uses-Fenster des Anbieters.
     [Test] procedure LineInUsesClause_UnitClauses;
     [Test] procedure LineInUsesClause_Program;
+
+    // ---- Review reDelphiX 2026-10-07, Engine (Minor 4 / Minor 11) ----
+    // Minor 4: Kommentare sind in der Code-Sicht Leerraum - ein Block-
+    // Kommentar vor dem ersten Term gehoert nicht zum Term.
+    [Test] procedure Rewrite_BlockCommentBeforeChain_Enabled;
+    // Minor 11: 'string[N]' ist ShortString, nicht string.
+    [Test] procedure Rewrite_ShortStringTarget_Disabled;
   end;
 
 implementation
@@ -670,11 +677,16 @@ var
   O : TRdxFormatOutcome;
 begin
   // Eine Direktive IM Bereich: sie ginge beim Ersetzen verloren. Die
-  // Beschreibung gelingt (die Direktiven sind in der Code-Sicht Fuellung,
-  // der '+'-Split bleibt intakt), SpanHasComment zaehlt die Direktive als
-  // Kommentar - der Grund heisst deshalb 'Kommentar im Bereich' (Review
-  // 2026-10-07, strittiger Minor 4; die eigene Direktiven-Pruefung auf
-  // dem Rohtext ist mit Minor 16 entfallen).
+  // Beschreibung gelingt: Direktiven sind (wie Kommentare) seit Minor 4 in
+  // der Code-Sicht Leerraum, der dritte Term ist also 'Tag {$ELSE} FName'.
+  // Der Knotentext des Parsers (TypeRef in der Doppelzweig-Sicht:
+  // 'a' + Marker + Tag FName + 'b') und die Sicht zaehlen beide 3 x '+',
+  // die Gegenprobe in DescribeNode laesst durch. FormatRewrite sperrt
+  // dann ueber SpanHasComment, das die Direktive als Kommentar zaehlt -
+  // der Grund heisst deshalb 'Kommentar im Bereich' (Review 2026-10-07,
+  // strittiger Minor 4; die eigene Direktiven-Pruefung auf dem Rohtext
+  // ist mit Minor 16 entfallen). Zaehlte die Sicht ein '+' mehr oder
+  // weniger, kaeme keine Kette, und der Grund hiesse nicht 'Kommentar'.
   Assert.IsFalse(RunRecipe(UnitWith(
     '  Text := ''a'' + Marker + {$IFNDEF RDX_NEVER_DEFINED} Tag {$ELSE} FName {$ENDIF} + ''b'';'),
     'Text := ''a''', O));
@@ -1524,6 +1536,47 @@ begin
   finally
     CloseTemp(Places, Path);
   end;
+end;
+
+{ ---- Review reDelphiX 2026-10-07, Engine (Minor 4 / Minor 11) ---- }
+
+procedure TTestRdxSca044.Rewrite_BlockCommentBeforeChain_Enabled;
+var
+  Src, After : string;
+  O          : TRdxFormatOutcome;
+begin
+  // Seit Minor 4 sind Kommentare in der Code-Sicht Leerraum, nicht mehr
+  // Fuellung: der erste Term beginnt am Apostroph, nicht am '{'. Der
+  // Kommentar liegt damit ausserhalb des ersetzten Bereichs, sperrt nicht
+  // ('Kommentar im Bereich') und bleibt nach der Ersetzung stehen. Das
+  // '//'-Gegenstueck: Rewrite_CommentBeforeChain_Enabled.
+  Src := UnitWith('  Text := {x} ''a'' + Marker + ''b'' + Tag;');
+  Assert.IsTrue(RunRecipe(Src, 'Text := {x}', O), O.Reason);
+  Assert.AreEqual('''a'' + Marker + ''b'' + Tag', O.Expected,
+    'der Bereich beginnt hinter dem Kommentar');
+  Assert.AreEqual('Format(''a%sb%s'', [Marker, Tag])', O.NewText);
+  After := ApplyOutcome(Src, O);
+  Assert.IsTrue(Pos('  Text := {x} Format(''a%sb%s'', [Marker, Tag]);', After) > 0,
+    After);
+end;
+
+procedure TTestRdxSca044.Rewrite_ShortStringTarget_Disabled;
+var
+  Src : string;
+  O   : TRdxFormatOutcome;
+begin
+  // Seit Minor 11 meldet der Dienst 'string[N]' als 'shortstring' (vorher
+  // 'string'). Format liefert UnicodeString, die Zuweisung an Buf wandelte
+  // und kuerzte - gesperrt wie ein AnsiString-Ziel
+  // (Compiled_AnsiTarget_Disabled). Gaelte Buf als 'string', liesse der
+  // UTF8String-Operand U die Umformung zu
+  // (Compiled_AnsiOperand_UnicodeTarget_Enabled) - der Test faellt also
+  // genau dann, wenn die ShortString-Erkennung fehlt.
+  Src := StringReplace(UnitWith('  Buf := ''x'' + U + ''y'' + Marker;'),
+    'begin'#13#10, 'var Buf: string[32]; U: UTF8String;'#13#10'begin'#13#10, []);
+  Assert.IsFalse(RunRecipe(Src, 'Buf := ''x''', O));
+  Assert.IsTrue(Pos('shortstring', O.Reason) > 0, O.Reason);
+  Assert.IsTrue(Pos('Ziel', O.Reason) > 0, O.Reason);
 end;
 
 initialization
