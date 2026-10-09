@@ -17,7 +17,7 @@ Le dépôt fournit deux composants :
 
 ## Les fonctionnalités en un coup d'œil
 
-- **199 règles (176 Pascal + 23 DFM)** — voir [`DETECTORS_fr.md`](DETECTORS_fr.md) et [`rules/sca-rules.json`](rules/sca-rules.json) pour l'état canonique (Sonar + migration SonarDelphi + DFM + bonus)
+- **201 règles (177 Pascal + 23 DFM + 1 INI)** — voir [`DETECTORS_fr.md`](DETECTORS_fr.md) et [`rules/sca-rules.json`](rules/sca-rules.json) pour l'état canonique (Sonar + migration SonarDelphi + DFM + bonus)
 - **Tuiles de statistiques façon Sonar** au-dessus de la grille : erreurs / avertissements / conseils / bugs / duplications de code / qualité du code en note **A–E** (score brut + détail dans l'infobulle)
 - **Filtre de sévérité** + **filtre de type** (Bug, Code Smell, Vulnerability, Security Hotspot, Code Duplication)
 - **Panneau d'aide à droite** avec des exemples de code « avant/après » pour chaque résultat

@@ -319,6 +319,39 @@ begin
   TFile.WriteAllText(Result, ASrc, TEncoding.UTF8);
 end;
 
+// Projekt-Scopes: die aufgeloeste Projektliste plus - wenn SCA201 im Profil
+// ist - die Konfigurationsdateien unter ABaseDir (.dproj/.lpi nennen keine
+// .ini; ignore.txt gilt). AnalyzeLeaksFromList trennt sie wieder heraus
+// (Konfigurations-Durchlauf). AFiles selbst bleibt unveraendert - SCA194/
+// SCA195 brauchen genau die Projektliste.
+function AnalyzeProjectFiles(AFiles: TStringList;
+  const ABaseDir, AIndexRoot: string;
+  const AReq: TScanRequest): TObjectList<TLeakFinding>;
+var
+  ScanFiles : TStringList;
+  Configs   : TStringList;
+begin
+  ScanFiles := TStringList.Create;
+  try
+    ScanFiles.AddStrings(AFiles);
+    if (AFiles.Count > 0) and
+       ((uSCAConsts.DetectorEnabledKinds = []) or
+        (fkHardcodedIpInConfig in uSCAConsts.DetectorEnabledKinds)) then
+    begin
+      Configs := TConfigFiles.Collect(ABaseDir, AReq.IgnoreList);
+      try
+        ScanFiles.AddStrings(Configs);
+      finally
+        Configs.Free;
+      end;
+    end;
+    Result := TStaticAnalyzer2.AnalyzeLeaksFromList(ScanFiles, AReq.Progress,
+      AReq.UsesCheck, AIndexRoot);
+  finally
+    ScanFiles.Free;
+  end;
+end;
+
 { TScanRequest }
 
 class function TScanRequest.Init: TScanRequest;
@@ -803,8 +836,7 @@ begin
             Findings := MakeSingleErrorList(ProjErr)
           else
           begin
-            Findings := TStaticAnalyzer2.AnalyzeLeaksFromList(
-                          Files, Req.Progress, Req.UsesCheck, EffIndexRoot);
+            Findings := AnalyzeProjectFiles(Files, BaseDir, EffIndexRoot, Req);
             // SCA194 NotIncludedInProject + SCA195 UsedButNotInProject:
             // Dateien im Projektordner ohne .dproj-Referenz - 194 = tot,
             // 195 = per uses benutzt (nur nicht projektverwaltet). Scan-

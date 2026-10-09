@@ -802,17 +802,19 @@ begin
      fkDfmHardcodedDbCreds, fkDfmDeadEvent, fkDfmDuplicateBinding,
      fkDfmSchemaMismatch, fkDfmCircularDataSource, fkDfmSqlFromUserInput,
      fkDfmRequiredFieldUnbound, fkDfmRequiredFieldNotVisible,
-     fkDfmCrossFormCoupling, fkDfmActionMismatch]);
+     fkDfmCrossFormCoupling, fkDfmActionMismatch, fkParamNameMismatch]);
   FProfiles.AddOrSetValue('security',
     [fkSQLInjection, fkHardcodedSecret, fkHardcodedPath,
-     fkDfmHardcodedDbCreds, fkDfmSqlFromUserInput]);
+     fkInsecureCryptoAlgorithm, fkCommandInjection,
+     fkDfmHardcodedDbCreds, fkDfmSqlFromUserInput,
+     fkHardcodedIpAddress, fkHardcodedIpInConfig]);
   FProfiles.AddOrSetValue('bugs-only',
     [fkMemoryLeak, fkFormatMismatch, fkNilDeref, fkDivByZero,
      fkSQLInjection, fkHardcodedSecret, fkFileReadError,
      fkDfmDuplicateBinding, fkDfmDeadEvent, fkDfmSchemaMismatch,
      fkDfmCircularDataSource, fkDfmRequiredFieldUnbound,
      fkDfmRequiredFieldNotVisible, fkDfmCrossFormCoupling,
-     fkDfmActionMismatch]);
+     fkDfmActionMismatch, fkDuplicateInterfaceGuid, fkParamNameMismatch]);
   FProfiles.AddOrSetValue('code-quality',
     [fkEmptyExcept, fkUnusedUses, fkMissingFinally, fkDeadCode,
      fkLongMethod, fkLongParamList, fkMagicNumber, fkDebugOutput,

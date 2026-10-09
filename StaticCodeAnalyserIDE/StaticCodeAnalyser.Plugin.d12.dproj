@@ -195,6 +195,9 @@
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uGotoStatement.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uGroupedDeclaration.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedPath.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uIpAddressScan.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedIpAddress.pas"/>
+        <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedIpInConfig.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedSecret.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uHardcodedString.pas"/>
         <DCCReference Include="..\SCA.Engine\sources\Detectors\uIfElseBegin.pas"/>

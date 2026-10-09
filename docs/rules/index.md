@@ -1,6 +1,6 @@
 ﻿# StaticCodeAnalyser — Rule Catalog
 
-All 199 detector rules. Click an ID for full details.
+All 201 detector rules. Click an ID for full details.
 
 | ID | Name | Severity | Type | Detector |
 |---|---|---|---|---|
@@ -203,6 +203,8 @@ All 199 detector rules. Click an ID for full details.
 | [SCA197](SCA197.md) | Interface declared without a GUID | Warning | Code Smell | `uInterfaceGuid.pas` |
 | [SCA198](SCA198.md) | Two interfaces share the same GUID | Warning | Bug | `uInterfaceGuid.pas` |
 | [SCA199](SCA199.md) | ParamByName name does not match the SQL placeholders | Warning | Bug | `uParamNameMismatch.pas` |
+| [SCA200](SCA200.md) | IP address as string literal | Warning | Security Hotspot | `uHardcodedIpAddress.pas` |
+| [SCA201](SCA201.md) | IP address in a versioned configuration file | Hint | Security Hotspot | `uHardcodedIpInConfig.pas` |
 
 ---
 

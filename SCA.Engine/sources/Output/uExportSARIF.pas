@@ -474,7 +474,7 @@ end;
 { ---- Dokument-Emission ---- }
 
 procedure EmitUriBaseId(E: TSarifJsonEmitter;
-  const ABaseDir, AUri: string); inline;
+  const ABaseDir, AUri: string);
 // AD5: benennt die Wurzel eines RELATIVEN uri (runs[0].
 // originalUriBaseIds.SRCROOT). Zwei Emit-Stellen brauchen exakt diese
 // Bedingung - results und die Invocation-Diagnosen -, und beide

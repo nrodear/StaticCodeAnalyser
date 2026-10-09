@@ -634,6 +634,7 @@ uses
   uCrashDiag,                   // EStackExhausted - nie verschlucken
   uHintTextLayout,              // FormatRelatedLines - geteilt mit dem Nur-Text-Hint
   uAppTheme,                    // ApplyTitleBarTheme - Titelzeile des Profil-Fensters
+  uSuppression,                 // MarkerLineFor - ';' in .ini, '//' sonst (SCA201)
   uProfileViewer;               // ShowProfileViewer - Hamburger-Item
 
 // noinspection-file BeginEndRequired, BooleanParam, ClassPerFile, ConsecutiveSection, EmptyExcept, ExceptOnException, GodClass, GroupedDeclaration, IfElseBegin, LargeClass, LongMethod, NestedRoutine, NestedTry, PublicField, PublicMemberWithoutDoc, RedundantJump, StringConcatInLoop, TooLongLine, UnsortedUses, UnusedPublicMember, UnusedRoutine
@@ -3010,7 +3011,7 @@ begin
     Exit;
   end;
 
-  Marker := '// noinspection ' + KindName(F.Kind);
+  Marker := TSuppression.MarkerLineFor(F.FileName, F.Kind);
   OK := TIDEEditor.InsertLineAbove(F.FileName, LineNo, Marker);
   if OK then
     StatusMode(Format(_('Suppress inserted: %s'), [Marker]))

@@ -72,7 +72,8 @@ uses
   uExportHtml,     // TExporterHtml.HtmlEscape - keine dritte Escape-Kopie
   uReportFileWriter,   // SaveUtf8WithBom - EIN Ort fuer BOM-Politik + atomares Schreiben
   uWorkbenchStyle, // geteilter CSS-Kern beider HTML-Exporte (07.09.)
-  uWorkbenchI18n;  // geteilte Oberflaechentexte de/en/fr (07.09.)
+  uWorkbenchI18n,  // geteilte Oberflaechentexte de/en/fr (07.09.)
+  uSuppression;    // TSuppression.MarkerTextFor - Marker je Dateiart
 
 const
   SEV_CSS : array[TLeakSeverity] of string = ('err', 'warn', 'hint');
@@ -787,14 +788,15 @@ begin
           [HA(R.Meta.GoodExample), H(R.Meta.GoodExample)]));
       SB.AppendLine('</div>');
     end;
-    SB.AppendLine(Format('<div class="karte" data-copy="// noinspection '
-      + '%s"><h3>' + TWorkbenchI18n.T(wtUnterdruecken, R.Lang)
+    // Marker in der Dateiart der Regel (SCA201: ';' in der .ini).
+    SB.AppendLine(Format('<div class="karte" data-copy="%s"><h3>'
+      + TWorkbenchI18n.T(wtUnterdruecken, R.Lang)
       + ' <button class="copy" onclick="kopiere(this)">'
       + TWorkbenchI18n.T(wtKopieren, R.Lang) + '</button></h3>'
-      + '<pre>// noinspection %s</pre>'
+      + '<pre>%s</pre>'
       + '<p>' + TWorkbenchI18n.T(wtUnterdrueckenText, R.Lang)
       + '</p></div>',
-      [H(KIND_META[R.K].Name), H(KIND_META[R.K].Name)]));
+      [H(TSuppression.MarkerTextFor(R.K)), H(TSuppression.MarkerTextFor(R.K))]));
     if R.Meta.ConfigKey <> '' then
       SB.AppendLine(Format('<div class="karte" data-copy="%s">'
         + '<h3>' + TWorkbenchI18n.T(wtKalibrierung, R.Lang)

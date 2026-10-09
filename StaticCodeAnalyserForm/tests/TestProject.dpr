@@ -64,6 +64,8 @@ uses
   uTestSQLInjection in 'uTestSQLInjection.pas',
   uTestHardcodedSecret in 'uTestHardcodedSecret.pas',
   uTestHardcodedPath in 'uTestHardcodedPath.pas',
+  uTestHardcodedIpAddress in 'uTestHardcodedIpAddress.pas',
+  uTestHardcodedIpInConfig in 'uTestHardcodedIpInConfig.pas',
   uTestFormatMismatch in 'uTestFormatMismatch.pas',
   uTestUnusedUses in 'uTestUnusedUses.pas',
   uTestEmptyExcept in 'uTestEmptyExcept.pas',

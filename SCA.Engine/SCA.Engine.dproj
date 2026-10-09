@@ -211,6 +211,9 @@
         <DCCReference Include="sources\Detectors\uGotoStatement.pas"/>
         <DCCReference Include="sources\Detectors\uGroupedDeclaration.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedPath.pas"/>
+        <DCCReference Include="sources\Detectors\uIpAddressScan.pas"/>
+        <DCCReference Include="sources\Detectors\uHardcodedIpAddress.pas"/>
+        <DCCReference Include="sources\Detectors\uHardcodedIpInConfig.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedSecret.pas"/>
         <DCCReference Include="sources\Detectors\uHardcodedString.pas"/>
         <DCCReference Include="sources\Detectors\uIfElseBegin.pas"/>

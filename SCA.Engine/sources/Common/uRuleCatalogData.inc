@@ -13,7 +13,7 @@
 const
   // Index == Ord(TFindingKind) - die JSON ist positionsgleich zum Enum
   // (Test RuleIDMatchesOrdinal sichert das ab).
-  RULE_CATALOG_DATA : array[0..198] of TRuleFallbackData = (
+  RULE_CATALOG_DATA : array[0..200] of TRuleFallbackData = (
     // SCA001
     (
       RuleID   : 'SCA001';
@@ -1905,6 +1905,22 @@ const
       GoodEx   : 'Q := TFDQuery.Create(nil);' + #13#10 + 'Q.SQL.Add(''SELECT name FROM customer'');' + #13#10 +
         'Q.SQL.Add(''WHERE customer_id = :customer_id'');' + #13#10 +
         'Q.ParamByName(''customer_id'').AsInteger := Id;' + #13#10 + 'Q.Open;'
+    ),
+    // SCA200
+    (
+      RuleID   : 'SCA200';
+      Name     : 'IP address as string literal';
+      ShortDesc: 'Hardcoded IPv4 or IPv6 address (private, shared or public) in a string literal - move it to the configuration or use a host name';
+      BadEx    : 'Client.Host := ''10.20.30.40'';';
+      GoodEx   : 'Client.Host := Settings.ReadString(''Server'', ''Host'', ''localhost'');'
+    ),
+    // SCA201
+    (
+      RuleID   : 'SCA201';
+      Name     : 'IP address in a versioned configuration file';
+      ShortDesc: 'IPv4 or IPv6 address (private, shared or public) as a value in an .ini file of the source tree';
+      BadEx    : '[Database]' + #13#10 + 'Server=10.20.30.40';
+      GoodEx   : '[Database]' + #13#10 + 'Server=db.example.internal'
     )
   );
 

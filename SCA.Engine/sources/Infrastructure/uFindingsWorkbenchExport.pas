@@ -84,6 +84,7 @@ uses
                    // liegen seit der C-Charge in uReportFileWriter)
   uFixHint,        // TFixHintResolver.FixHint - fundspezifischer Hinweistext
   uRuleCatalog,
+  uSuppression,    // TSuppression.MarkerTextFor - Marker je Dateiart
   uWorkbenchStyle, // geteilter CSS-Kern der Workbench-Seiten
   uWorkbenchI18n;  // geteilte Oberflaechentexte de/en/fr (07.09.)
 
@@ -1962,14 +1963,15 @@ begin
     // sie beantworten nicht "was ist das Problem", sondern "wie
     // stelle ich es leiser" (TODO-Punkt D).
     SB.AppendLine('<div class="insp-sekundaer">');
-    SB.AppendLine(Format('<div class="karte" data-copy="// noinspection '
-      + '%s"><h3>' + TWorkbenchI18n.T(wtUnterdruecken, ALang)
+    // Marker in der Dateiart der Regel (SCA201: ';' in der .ini).
+    SB.AppendLine(Format('<div class="karte" data-copy="%s"><h3>'
+      + TWorkbenchI18n.T(wtUnterdruecken, ALang)
       + ' <button class="copy" onclick="kopiere(this)">'
       + TWorkbenchI18n.T(wtKopieren, ALang) + '</button></h3>'
-      + '<pre>// noinspection %s</pre>'
+      + '<pre>%s</pre>'
       + '<p>' + TWorkbenchI18n.T(wtUnterdrueckenText, ALang)
       + '</p></div>',
-      [H(KIND_META[K].Name), H(KIND_META[K].Name)]));
+      [H(TSuppression.MarkerTextFor(K)), H(TSuppression.MarkerTextFor(K))]));
     if AMeta.ConfigKey <> '' then
       SB.AppendLine(Format('<div class="karte" data-copy="%s">'
         + '<h3>' + TWorkbenchI18n.T(wtKalibrierung, ALang)
