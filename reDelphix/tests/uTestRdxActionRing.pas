@@ -29,6 +29,14 @@ implementation
 uses
   System.SysUtils, uFindingActions, uRdxRecipeRunner;
 
+// Reserve fuer Abfragen zwischen Menueaufbau und Klick (Gluehbirne, zweites
+// Menue): Vertrag zur Uebersetzungszeit. Ein Assert auf zwei Konstanten
+// ergab W1022 ("Vergleich ergibt immer True") und haette eine Verletzung
+// erst im Testlauf gemeldet.
+{$IF RDX_ACTION_BATCHES < 4 * MAX_FINDINGS_PER_MENU}
+  {$MESSAGE ERROR 'RDX_ACTION_BATCHES braucht mindestens 4 * MAX_FINDINGS_PER_MENU Chargen'}
+{$IFEND}
+
 var
   GFreed : Integer = 0;
 
@@ -106,8 +114,6 @@ begin
     Assert.AreEqual<Integer>(0, GFreed, 'bis zur Grenze wird nichts frei');
     for i := 0 to High(Menu) do
       Assert.IsTrue(R.Contains(Menu[i]), 'Menue-Objekt ' + IntToStr(i));
-    Assert.IsTrue(RDX_ACTION_BATCHES >= 4 * MAX_FINDINGS_PER_MENU,
-      'Reserve fuer Abfragen zwischen Aufbau und Klick');
   finally
     R.Free;
   end;
