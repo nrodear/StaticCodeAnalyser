@@ -241,6 +241,31 @@ sonst ersetzt es sie in einem Zug. Danach `reDelphix.d12` bereinigen und
 neu erzeugen (siehe "Bauen und installieren"). Eine `unitscopes.txt` neben
 der BPL hat Vorrang vor der eingelinkten Ressource.
 
+## Editorhilfen in der IDE ausprobieren
+
+Profil **`editorhilfen`** in `data\profile-editorhilfen.json`: nur die
+Regeln, zu denen reDelphix eine Hilfe anbietet, plus `FileReadError`
+(Lesefehler bleiben sichtbar). Einspielen: Analyser-Fenster ->
+Profile -> **Import...** -> die Datei waehlen -> bestaetigen; danach im
+Analyser das Profil `editorhilfen` waehlen und die Datei bzw. das
+Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
+
+| Regel | Fund | Erwartete Hilfe |
+|---|---|---|
+| SCA044 ConcatToFormat | `s := 'a' + x + 'b';` | Format() aus Verkettung bilden (fehlt System.SysUtils, kommt es in uses) |
+| SCA003 SQLInjection | `Q.SQL.Text := 'SELECT ... ' + Id;` | Parametrisierte Vorlage (in die Zwischenablage, schreibt nichts) |
+| SCA075 ExplicitTObjectInheritance | `TFoo = class(TObject)` | (TObject) entfernen |
+| SCA085 FreeAndNilHint | `X.Free; X := nil;` | FreeAndNil(X) |
+| SCA126 NilComparison | `if X <> nil then` | Assigned(X) |
+| SCA165 UnusedSuppression | wirkungsloser `// noinspection`-Marker | Marker entfernen |
+| SCA142 UnsortedUses, SCA007 UnusedUses | Fund auf einer uses-Zeile | uses: Eintraege qualifizieren (Winapi.Windows, System.SysUtils ...) |
+| jede Regel ausser SCA165 | beliebig | Hier / in dieser Datei unterdruecken; Stelle zeigen (Kontextmenue) |
+
+SCA007 laeuft nur mit eingeschaltetem uses-Check (Optionen bzw.
+`[Detectors] UsesCheck=1`); SCA142 reicht fuer die uses-Hilfe. Den
+Ablauf je Aktion protokolliert `%TEMP%\reDelphix.log` (`Provide ...`,
+`neu geparst` / `wiederverwendet`).
+
 ## Pruefen
 
 **`tests\reDelphix.Test.dproj`** (DUnitX, Konsole/TestInsight, in der
