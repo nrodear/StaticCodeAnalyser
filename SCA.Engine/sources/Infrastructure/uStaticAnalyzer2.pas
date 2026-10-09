@@ -820,17 +820,19 @@ begin
 end;
 
 // Dateigroesse ohne Ausnahme (TFile.GetSize wirft bei einer verschwundenen
-// Datei); -1 = nicht (mehr) da.
+// Datei); -1 = nicht (mehr) da. Voll qualifiziert: Winapi.Windows steht
+// in den uses HINTER System.SysUtils, sein FindClose(THandle) verdeckte
+// sonst FindClose(TSearchRec) - E2010 im Bau 2026-10-09.
 function ConfigFileSize(const AFile: string): Int64;
 var
   SR : TSearchRec;
 begin
-  if FindFirst(AFile, faAnyFile, SR) <> 0 then
+  if System.SysUtils.FindFirst(AFile, faAnyFile, SR) <> 0 then
     Exit(-1);
   try
     Result := SR.Size;
   finally
-    FindClose(SR);
+    System.SysUtils.FindClose(SR);
   end;
 end;
 
