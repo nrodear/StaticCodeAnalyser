@@ -226,12 +226,23 @@ TFindingType      = (ftBug, ftCodeSmell, ftVulnerability,
 
 ### 3.8 Emplacements source : `TSourcePlaces` (`uSourcePlaces`)
 
-Décrit des emplacements d'un fichier source **à la demande** — pour les consommateurs qui veulent réécrire du code (p. ex. le module « Source Refactor »). Le service ne fait que lire : aucun scan ne tourne, aucun résultat, champ ou export n'est touché, et aucun détecteur ne l'utilise. Une instance par fichier ; `uEngineApi` réexporte tous les types, ce seul `uses` suffit.
+Décrit des emplacements d'un fichier source **à la demande** — pour les consommateurs qui veulent réécrire du code (p. ex. le module « Source Refactor » reDelphix). Le service ne fait que lire : aucun scan ne tourne, aucun résultat, champ ou export n'est touché, et aucun détecteur ne l'utilise. Une instance par fichier.
+
+`uEngineApi` réexporte les types classe et record : `TSourcePlaces`, `TNodeRef`, `TSourceLineRange`, `TUsesSection`, `TNodeKind`, `TNodeKinds`, `TRefactorInfo`, `TRefactorSpan`. Il ne réexporte **pas** les constantes ni les valeurs d'énumération : les rôles (`ROLE_*`), les types de valeur (`rv*`, `TRefactorValueType`) et les indicateurs (`rf*`, `TRefactorFlags`) demandent `uses uRefactorInfo`, la version du contrat `SOURCE_PLACES_VERSION` demande `uses uSourcePlaces`. Les deux unités font partie du package.
 
 ```pascal
 Places := TSourcePlaces.Create;
 try
-  if Places.Open(FileName) then
+  try
+    Opened := Places.Open(FileName);    // False : fichier illisible
+  except
+    on E: Exception do
+    begin
+      Log(E.Message);                   // erreur du parseur, watchdog compris
+      Opened := False;                  // rien n'est ouvert (IsOpen = False)
+    end;
+  end;
+  if Opened then
   begin
     Nodes := Places.NodesAt(Line, [TNodeKind.nkAssign]);   // ligne du résultat -> nœuds AST
     if Length(Nodes) = 1 then
@@ -252,17 +263,31 @@ end;
 
 | Membre | Retourne | Signification |
 |--------|----------|---------------|
-| `Open(FileName)` / `Close` | `Boolean` | Lit lui-même les lignes et l'AST du fichier (ni cache de scan, ni verrou moteur). `False` si illisible. |
-| `StatementAt(Line, Col)` | `TRefactorInfo` | L'instruction qui commence là : plage avec colonnes, indicateurs, point d'insertion, hachage. `nil` si sa fin est indéterminable. |
-| `ChainOf(Line, Col, ExpectedTarget)` | `TRefactorInfo` | Affectation avec chaîne `+` : cible, littéraux, opérandes, `FixSafe`. La cible est contre-vérifiée avec `ExpectedTarget` (`TNodeRef.Name`). |
-| `CallOf(Line, Col, ExpectedHead)` | `TRefactorInfo` | Instruction d'appel : tête plus chaîne de l'argument unique, sinon une partie `argument` par argument. |
+| `Open(FileName)` / `Close` | `Boolean` | Lit lui-même le fichier (ni cache de scan, ni verrou moteur) et analyse exactement le texte décodé. `False` si illisible. Une erreur du parseur (watchdog du parseur compris) **lève une exception** ; le service est ensuite fermé (`IsOpen = False`). Un texte ouvert auparavant est d'abord abandonné. |
+| `OpenSource(FileName, Source)` | `Boolean` | Comme `Open`, mais sur un texte que l'hôte transmet (IDE : le tampon de l'éditeur avec ses modifications non enregistrées). `FileName` n'est que le nom ; le fichier n'est pas lu. `False` pour un texte vide ; une erreur du parseur lève une exception comme avec `Open`. |
+| `IsOpen` / `FileName` / `LineCount` | `Boolean` / `string` / `Integer` | État du texte ouvert. |
+| `StatementAt(Line, Col)` | `TRefactorInfo` | L'instruction qui commence là : plage avec colonnes, indicateurs, point d'insertion, hachage. `nil` si sa fin est indéterminable, y compris quand elle contient une chaîne multiligne Delphi 12 (`'''`). |
+| `ChainOf(Line, Col, ExpectedTarget = '', ExpectedPlus = ANY_PLUS_COUNT)` | `TRefactorInfo` | Affectation avec chaîne `+` : cible, littéraux, opérandes, `FixSafe`. Deux contre-vérifications, chacune renvoie `nil` en cas d'écart : la cible contre `ExpectedTarget` (`TNodeRef.Name` ; `''` = pas de vérification) et le nombre de `+` au premier niveau contre `ExpectedPlus`, compté indépendamment par le consommateur (p. ex. depuis `TNodeRef.TypeRef`, comme compte SCA044). Toute valeur négative (`TSourcePlaces.ANY_PLUS_COUNT`) signifie : pas de vérification. |
+| `CallOf(Line, Col, ExpectedHead)` | `TRefactorInfo` | Instruction d'appel : tête plus chaîne de l'argument unique, sinon une partie `argument` par argument. `ExpectedHead` est la tête avant la première `(` (`''` = pas de vérification). |
 | `NodesAt(Line, Kinds)` | `TArray<TNodeRef>` | Nœuds AST des sortes données qui commencent sur cette ligne, triés par colonne. Deux résultats = ambiguïté. |
-| `UsesEntries(Section)` | `TArray<TRefactorSpan>` | Chaque nom d'unité des clauses `uses` avec sa plage (`Resolved` = le nom tel qu'écrit). |
-| `IdentifiersIn(Span)` | `TArray<TRefactorSpan>` | Identificateurs dans une plage ; chaînes et commentaires exclus. |
-| `CodeViewOf` / `TextOf` / `HashOf` | | Vue code fidèle aux colonnes, texte brut et SHA-256 d'une plage. Recalculer `HashOf` avant d'écrire pour détecter un fichier modifié. |
+| `UsesEntries(Section)` | `TArray<TRefactorSpan>` | Chaque nom d'unité des clauses `uses` avec sa plage (`Resolved` = le nom tel qu'écrit). `usAny` (par défaut) couvre aussi la clause d'un programme ou d'une bibliothèque. |
+| `IdentifiersIn(Span)` | `TArray<TRefactorSpan>` | Identificateurs dans une plage, en parties `ident` ; les mots-clés ne sont pas filtrés. Chaînes et commentaires sont exclus — même si la plage commence à l'intérieur de l'un d'eux, car le fichier est lu jusqu'à la plage. Limite : une chaîne multiligne Delphi 12 (`'''`) avant la plage n'est pas reconnue. |
+| `CodeViewOf` / `TextOf` / `HashOf` | | Vue code fidèle aux colonnes, texte brut et SHA-256 d'une plage, tous sur le texte du dernier `Open`/`OpenSource`. `HashOf` ne voit pas une modification ultérieure : pour en détecter une, rouvrir le texte actuel et comparer `HashOf(Info.Span)` à `Info.SpanHash`, ou comparer `TextOf(Span)` au tampon cible juste avant d'écrire (c'est ce que fait reDelphix). |
 | `ConditionalRanges` | `TArray<TSourceLineRange>` | Plages `{$IFDEF}` du fichier. |
+| `SectionLine(Section)` | `Integer` | Ligne du mot-clé `interface` / `implementation` ; `0` si la section manque (programme, bibliothèque) et pour `usAny`. |
+| `LineText(Line)` | `string` | Texte d'une ligne du texte ouvert ; `''` en dehors. |
+| `SpanHasComment(Span)` | `Boolean` | `True` si la plage contient un commentaire ou une directive de compilation — pour un consommateur qui ne remplace qu'une partie d'une instruction (`rfHasComment` vaut pour toute l'instruction). |
+| `DeclaredTypeOf(Line, Name)` | `string` | Type déclaré (nu, en minuscules) d'un identificateur : paramètre ou variable locale de la routine englobante, sinon champ ou global d'unité ; `''` si inconnu. `Line` est la **ligne d'ancrage** d'une instruction (ligne d'un nœud AST), pas une ligne de continuation. Ne connaît pas les blocs `with` : renvoie la déclaration trouvée même là où le compilateur lie le nom à un membre de l'expression `with`. |
+| `InWithBlock(Line)` | `Boolean` | `True` si la ligne se trouve dans le corps d'une instruction `with` (à la ligne près, de la ligne du `with` à la dernière ligne de nœud de son instruction). À interroger avant de prouver quoi que ce soit à partir de `DeclaredTypeOf`. |
+| `CollectNodesAt` / `CollectUsesEntries` / `CollectIdentifiers` | | Fonctions de classe : la même chose sur un arbre, une liste de lignes ou une vue code que l'appelant possède déjà — pour les tests et les consommateurs dotés de leur propre AST. |
 
-Les coordonnées sont à base 1 ; `EndCol` pointe **derrière** le dernier caractère. Chaque primitive est totale (`nil` ou vide plutôt qu'une exception). `SOURCE_PLACES_VERSION` (= 1) nomme la version du contrat. Par règle, `rules/sca-rules.json` peut porter `anchor` (sur quoi ancrent les résultats) et `fixMode` (`none` / `assisted` / `auto`) ; lus via `TRuleCatalog` (`TRuleMeta.Anchor`, `TRuleMeta.FixMode`).
+**`TNodeRef`** copie les champs de nœud dont un consommateur a besoin : `Kind`, `Line`, `Col`, `Name` (cible ou tête telle que le parseur l'a assemblée) et `TypeRef` (membre droit ou référence de type, aplati). L'arbre lui-même appartient au service et ne vit que jusqu'au prochain `Open`/`Close`.
+
+**Ce que `ChainOf` et `CallOf` prouvent.** Un opérande qui est un simple identificateur reçoit son type déclaré (`rvString`/`rvNonString`, `Resolved` = nom du type), et `FixSafe` est redérivé. L'inconnu reste inconnu : `rvUnknown` et `FixSafe = False` sont le cas normal. Il n'y a aucune preuve `rvString` dans un bloc `with` (`InWithBlock` ; `Resolved` nomme toujours la déclaration trouvée), ni pour un appel RTL connu ou un terme `.ToString` dont le nom est déclaré par une fonction de l'unité elle-même avec un résultat non chaîne — cette fonction masque la routine RTL (p. ex. un `function Trim(..): Variant` local à l'unité). Les appels qualifiés par `SysUtils.`/`StrUtils.` gardent leur preuve. Une fonction déclarée dans une routine imbriquée n'est pas vue (le parseur écarte les routines imbriquées).
+
+Les coordonnées sont à base 1 ; `EndCol` pointe **derrière** le dernier caractère. Chaque primitive sauf `Open`/`OpenSource` est totale (`nil`, vide, `0` ou `False` plutôt qu'une exception, même si rien n'est ouvert). `SOURCE_PLACES_VERSION` (= 1) est la version du contrat — une constante **de compilation** : un consommateur la vérifie avec `{$IF SOURCE_PLACES_VERSION <> 1}{$MESSAGE ERROR '...'}{$IFEND}` (reDelphix le fait dans `uRdxRecipeRunner`) et ne compile alors plus contre un contrat modifié. Elle ne détecte pas une BPL échangée à l'exécution ; c'est le rôle de la liaison de package (DCP/`requires`). La version augmente lors d'un changement de signature d'une primitive existante, de rôles, de coordonnées ou d'une dérivation de `FixSafe`/`ValueType`/`Resolved` qui déclare nouvellement quelque chose comme prouvé ; elle reste pour de nouvelles primitives, de nouveaux paramètres avec valeur par défaut et des dérivations qui ne font que devenir plus strictes.
+
+Par règle, `rules/sca-rules.json` peut porter `anchor` (sur quoi ancrent les résultats : `statement`, `assign`, `call`, `assign-or-call` ; `uses-item` est réservé) et `fixMode` (`none` / `assisted` / `auto`) ; lus via `TRuleCatalog` (`TRuleMeta.Anchor`, `TRuleMeta.FixMode`). Une valeur absente ou inconnue retombe sur le catalogue compilé ; on désactive une règle avec `"fixMode": "none"`.
 
 ---
 
@@ -287,8 +312,9 @@ moteur :
 - **Aucun** répertoire de sources du moteur dans `DCC_UnitSearchPath`.
 - À l'exécution, `SCA.Engine290.bpl` doit être trouvable (répertoire BPL
   global ou à côté de l'`.exe`).
-- `uses uEngineApi;` (+ `uMethodd12`, `uSCAConsts` pour l'accès au détail)
-  — le tout depuis le package.
+- `uses uEngineApi;` (+ `uMethodd12`, `uSCAConsts` pour l'accès au détail ;
+  `uRefactorInfo`, `uSourcePlaces` pour les constantes du service des
+  emplacements source, voir 3.8) — le tout depuis le package.
 
 Exemple complet, `.dpr`/`.dproj` inclus : **`SCA.CLI.Demo`**.
 
