@@ -39,6 +39,7 @@ type
     [Test] procedure Engine_PascalMarkerInIni_NoEffect;
     [Test] procedure Engine_MixedFileList_PascalFindingsUnchanged;
     [Test] procedure Engine_Project_CollectsIniBelowRoot;
+    [Test] procedure Engine_Recursive_TestDirBesideUnitTree_NoFinding;
     // ---- Sammlung, Marker-Text ----
     [Test] procedure StaticFiles_ConfigListSeparated;
     [Test] procedure MarkerLineFor_IniUsesSemicolon;
@@ -78,7 +79,7 @@ procedure TTestHardcodedIpInConfig.TearDown;
 begin
   uSCAConsts.ResetEngineConfigDefaults;
   if (FDir <> '') and TDirectory.Exists(FDir) then
-    try TDirectory.Delete(FDir, True); except end;
+    TDirectory.Delete(FDir, True);
 end;
 
 function TTestHardcodedIpInConfig.WriteFile(const ARelPath, AText: string): string;
@@ -345,6 +346,29 @@ begin
   end;
 end;
 
+procedure TTestHardcodedIpInConfig.Engine_Recursive_TestDirBesideUnitTree_NoFinding;
+var
+  Cfg : string;
+  F   : TObjectList<TLeakFinding>;
+  X   : TLeakFinding;
+begin
+  // Die Unit liegt nur unter src - ihre Wurzel (der Anker
+  // der Pascal-Gates) enthaelt tests\ nicht. Der Konfigurations-
+  // Durchlauf verankert das Testpfad-Gate trotzdem darueber.
+  WriteFile('src\Unit1.pas', UNIT_SRC);
+  WriteFile('tests\App.ini', INI_HEAD + INI_SERVER + #13#10);
+  Cfg := WriteFile('config\App.ini', INI_HEAD + INI_SERVER + #13#10);
+  F := Run(ssRecursive, FDir, nil);
+  try
+    Assert.AreEqual<Integer>(1, CountKind(F, fkHardcodedIpInConfig), 'nur config\App.ini');
+    for X in F do
+      if X.Kind = fkHardcodedIpInConfig then
+        Assert.IsTrue(SameText(X.FileName, Cfg), X.FileName);
+  finally
+    F.Free;
+  end;
+end;
+
 { ---- Sammlung, Marker-Text ---- }
 
 procedure TTestHardcodedIpInConfig.StaticFiles_ConfigListSeparated;
@@ -377,11 +401,11 @@ begin
     Pas.Free;
     Cfg.Free;
   end;
-  Assert.IsTrue(TStaticFiles.IsConfigFile('C:\x\App.INI'));
-  Assert.IsFalse(TStaticFiles.IsConfigFile('C:\x\analyser.ini'));
-  Assert.IsFalse(TStaticFiles.IsConfigFile('C:\x\Unit1.pas'));
-  Assert.IsTrue(TStaticFiles.IsInPlatformOutputDir('C:\p\Win32\Debug\App.ini'));
-  Assert.IsFalse(TStaticFiles.IsInPlatformOutputDir('C:\p\config\App.ini'));
+  Assert.IsTrue(TConfigFiles.IsConfigFile('C:\x\App.INI'));
+  Assert.IsFalse(TConfigFiles.IsConfigFile('C:\x\analyser.ini'));
+  Assert.IsFalse(TConfigFiles.IsConfigFile('C:\x\Unit1.pas'));
+  Assert.IsTrue(TConfigFiles.IsInPlatformOutputDir('C:\p\Win32\Debug\App.ini'));
+  Assert.IsFalse(TConfigFiles.IsInPlatformOutputDir('C:\p\config\App.ini'));
 end;
 
 procedure TTestHardcodedIpInConfig.MarkerLineFor_IniUsesSemicolon;

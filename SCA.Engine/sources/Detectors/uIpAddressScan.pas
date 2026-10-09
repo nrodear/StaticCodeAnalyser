@@ -137,6 +137,8 @@ const
   // IPv4-Oktettgrenzen der Klassentabelle.
   OCTET_MAX = 255;
   MAX_OCTET_DIGITS = 3;
+  V6_GROUPS = 8;          // 16-Bit-Gruppen einer IPv6-Adresse
+  V4_TAIL_GROUPS = 2;     // eine eingebettete IPv4 belegt die letzten zwei
   SMALL_OCTET_MAX = 31;   // Versionsform: alle Oktette <= 31 ...
   SMALL_FIRST_MAX = 20;   // ... und das erste <= 20
 
@@ -399,6 +401,7 @@ class function TIpAddressScan.TryParseIPv6(const S: string; out W: TIpv6Words): 
 var
   Head  : string;
   V4    : Cardinal;
+  HasV4 : Boolean;
   Need  : Integer;
   p, i  : Integer;
   G     : TArray<string>;
@@ -408,11 +411,12 @@ begin
   if (S = '') or (Pos(':::', S) > 0) then Exit;
   Head := S;
   V4 := 0;
-  Need := 8;
-  if Pos('.', S) > 0 then
+  HasV4 := Pos('.', S) > 0;
+  Need := V6_GROUPS;
+  if HasV4 then
   begin
     if not SplitV4Tail(S, Head, V4) then Exit;
-    Need := 6;
+    Need := V6_GROUPS - V4_TAIL_GROUPS;
   end;
   p := Pos('::', Head);
   if p > 0 then
@@ -422,7 +426,7 @@ begin
     G := SplitColon(Head);
     Result := (Length(G) = Need) and FillGroups(G, W, 0);
   end;
-  if Result and (Need = 6) then
+  if Result and HasV4 then
   begin
     W[6] := Word(V4 shr 16);
     W[7] := Word(V4 and $FFFF);

@@ -338,7 +338,7 @@ begin
        ((uSCAConsts.DetectorEnabledKinds = []) or
         (fkHardcodedIpInConfig in uSCAConsts.DetectorEnabledKinds)) then
     begin
-      Configs := TStaticFiles.TryGetConfigFiles(ABaseDir, AReq.IgnoreList);
+      Configs := TConfigFiles.Collect(ABaseDir, AReq.IgnoreList);
       try
         ScanFiles.AddStrings(Configs);
       finally

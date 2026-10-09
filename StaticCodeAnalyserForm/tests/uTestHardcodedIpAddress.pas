@@ -104,7 +104,7 @@ begin
     Result := TFindingHelper.Count(Res, fkHardcodedIpAddress);
   finally
     Res.Free;
-    try TDirectory.Delete(Dir, True); except end;
+    TDirectory.Delete(Dir, True);
   end;
 end;
 

@@ -16,7 +16,7 @@
 // Die Suppression gilt fuer die naechste nicht-leere, nicht-Kommentar-Zeile.
 // Mehrere Kategorien koennen mit Komma oder Leerzeichen getrennt werden.
 //
-// Konfigurationsdateien (.ini, SCA201 - TStaticFiles.IsConfigFile) kennen
+// Konfigurationsdateien (.ini, SCA201 - TConfigFiles.IsConfigFile) kennen
 // kein '//': dort ist der Marker eine GANZE Zeile mit ';' oder '#'
 //
 //   ; noinspection HardcodedIpInConfig
@@ -115,15 +115,6 @@ type
     class function ParseCommentText(const CommentText: string;
       out Kinds: TSuppressedKinds;
       out FileWide: Boolean): Boolean; static;
-    // Marker-Zeile eines Hosts: '//'-Kommentar (Pascal, mit Zustand) bzw.
-    // ganze ';'/'#'-Zeile (Konfigurationsdatei, AIniHost).
-    class function ParseHostMarkerLine(const Line: string; AIniHost: Boolean;
-      var State: TCommentScanState;
-      out Kinds: TSuppressedKinds;
-      out FileWide: Boolean): Boolean; static;
-    // Zaehlt die (getrimmte) Zeile bei der Zielsuche als Kommentar?
-    class function IsCommentOnlyLine(const ATrimmed: string;
-      AIniHost: Boolean): Boolean; static;
     class function KindFromName(const Name: string;
       out Kind: TFindingKind): Boolean; static;
     // AFailedFiles (optional): sammelt Marker-Host-Dateien, die trotz
@@ -315,37 +306,57 @@ begin
   Result := ParseCommentText(CommentText, Kinds, FileWide);
 end;
 
-class function TSuppression.ParseHostMarkerLine(const Line: string;
-  AIniHost: Boolean; var State: TCommentScanState;
-  out Kinds: TSuppressedKinds; out FileWide: Boolean): Boolean;
+type
+  // Kommentarsyntax eines Marker-Hosts: Pascal ('//', mit Kommentarzustand)
+  // oder Konfigurationsdatei (ganze ';'/'#'-Zeile, SCA201).
+  TMarkerSyntax = (msPascal, msIni);
+
+function MarkerSyntaxOf(const AHostFile: string): TMarkerSyntax;
+begin
+  if TConfigFiles.IsConfigFile(AHostFile) then
+    Result := msIni
+  else
+    Result := msPascal;
+end;
+
+function IsIniCommentLine(const ATrimmed: string): Boolean;
+begin
+  Result := (ATrimmed <> '') and CharInSet(ATrimmed[1], [';', '#']);
+end;
+
+// Marker-Zeile eines Hosts: '//'-Kommentar (Pascal, mit Zustand) bzw.
+// ganze ';'/'#'-Zeile (Konfigurationsdatei).
+function ParseHostMarkerLine(const Line: string; ASyntax: TMarkerSyntax;
+  var State: TCommentScanState; out Kinds: TSuppressedKinds;
+  out FileWide: Boolean): Boolean;
 var
   T : string;
 begin
-  if not AIniHost then
-    Exit(ParseMarkerLine(Line, State, Kinds, FileWide));
+  if ASyntax = msPascal then
+    Exit(TSuppression.ParseMarkerLine(Line, State, Kinds, FileWide));
   Kinds := [];
   FileWide := False;
   T := TrimLeft(Line);
-  Result := (T <> '') and ((T[1] = ';') or (T[1] = '#'))
-    and ParseCommentText(Copy(T, 2, MaxInt), Kinds, FileWide);
+  Result := IsIniCommentLine(T)
+    and TSuppression.ParseCommentText(Copy(T, 2, MaxInt), Kinds, FileWide);
+end;
+
+// Zaehlt die (getrimmte) Zeile bei der Zielsuche als Kommentar?
+function IsCommentOnlyLine(const ATrimmed: string; ASyntax: TMarkerSyntax): Boolean;
+begin
+  if ASyntax = msIni then
+    Result := IsIniCommentLine(ATrimmed)
+  else
+    Result := ATrimmed.StartsWith('//');
 end;
 
 class function TSuppression.MarkerLineFor(const AFileName: string;
   AKind: TFindingKind): string;
 begin
-  if TStaticFiles.IsConfigFile(AFileName) then
+  if TConfigFiles.IsConfigFile(AFileName) then
     Result := '; noinspection ' + KindName(AKind)
   else
     Result := '// noinspection ' + KindName(AKind);
-end;
-
-class function TSuppression.IsCommentOnlyLine(const ATrimmed: string;
-  AIniHost: Boolean): Boolean;
-begin
-  if AIniHost then
-    Result := (ATrimmed <> '') and ((ATrimmed[1] = ';') or (ATrimmed[1] = '#'))
-  else
-    Result := ATrimmed.StartsWith('//');
 end;
 
 // Liefert fuer eine .dfm-Datei die zugehoerige .pas im selben Verzeichnis -
@@ -487,12 +498,12 @@ var
   Cached    : Boolean;
   FileWide  : Boolean;
   HostFile  : string;
-  IniHost   : Boolean;
+  Syntax    : TMarkerSyntax;
 begin
   Result := TDictionary<Integer, TSuppressedKinds>.Create;
   HostFile := ResolveMarkerHostFile(FileName);
   if not FileExists(HostFile) then Exit;
-  IniHost := TStaticFiles.IsConfigFile(HostFile);
+  Syntax := MarkerSyntaxOf(HostFile);
 
   // Perf: AcquireLines nutzt gFileTextCache - zweiter Aufruf (BuildMarkers
   // im selben Scan) wird zum Cache-Hit, kein doppeltes I/O.
@@ -537,7 +548,7 @@ begin
     ScanState.InParenComment := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      if not ParseHostMarkerLine(Lines[i], IniHost, ScanState, Kinds,
+      if not ParseHostMarkerLine(Lines[i], Syntax, ScanState, Kinds,
                FileWide) then
         Continue;
       // File-Wide-Marker: in Line 0 ablegen - RemoveSuppressedFindings
@@ -567,7 +578,7 @@ begin
         L := TrimLeft(Lines[j]);
         if L = '' then Continue;
         if NextNonEmpty < 0 then NextNonEmpty := j + 1;
-        if not IsCommentOnlyLine(L, IniHost) then
+        if not IsCommentOnlyLine(L, Syntax) then
         begin
           NextCode := j + 1;
           Break;
@@ -618,12 +629,12 @@ begin
   try
     var ScanState: TCommentScanState;
     var FileWide: Boolean;
-    var IniHost := TStaticFiles.IsConfigFile(HostFile);
+    var Syntax := MarkerSyntaxOf(HostFile);
     ScanState.InBraceComment := False;
     ScanState.InParenComment := False;
     for i := 0 to Lines.Count - 1 do
     begin
-      if not ParseHostMarkerLine(Lines[i], IniHost, ScanState, Kinds,
+      if not ParseHostMarkerLine(Lines[i], Syntax, ScanState, Kinds,
                FileWide) then
         Continue;
       // File-Wide-Marker: TargetLine = 0 (Sonderwert fuer file-weit).
@@ -646,7 +657,7 @@ begin
       begin
         L := TrimLeft(Lines[j]);
         if L = '' then Continue;
-        if not IsCommentOnlyLine(L, IniHost) then
+        if not IsCommentOnlyLine(L, Syntax) then
         begin
           TargetLine := j + 1;
           Break;

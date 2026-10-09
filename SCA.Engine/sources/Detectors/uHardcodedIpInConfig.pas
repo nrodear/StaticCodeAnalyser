@@ -4,7 +4,7 @@ unit uHardcodedIpInConfig;
 // Konfigurationsdateien (.ini) des Quellbaums.
 //
 // KEIN Registry-Detektor: eine .ini darf nie in die Pascal-Pipeline (rund
-// 180 Detektoren und die Indizes laesen sie als Pascal). TStaticFiles
+// 180 Detektoren und die Indizes laesen sie als Pascal). TConfigFiles
 // sammelt die Dateien in eine eigene Liste, TStaticAnalyzer2.ParseLeaks
 // ruft AnalyzeFile im Konfigurations-Durchlauf nach der Hauptschleife -
 // danach laufen Suppression, Evidenz, PathOverrides und Konfidenz wie fuer
@@ -19,14 +19,16 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.Generics.Collections,
-  uSCAConsts, uMethodd12, uAnalyzeContext;
+  uSCAConsts, uMethodd12;
 
 type
   THardcodedIpInConfigDetector = class
   public
     // Eine Konfigurationsdatei, deren Zeilen der Aufrufer schon gelesen hat.
+    // ABaseDir verankert das Testpfad-Gate wie die Scanwurzel bei SCA200;
+    // leer = voller Pfad.
     class procedure AnalyzeFile(const FileName: string; Lines: TStrings;
-      Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext = nil); static;
+      Results: TObjectList<TLeakFinding>; const ABaseDir: string = ''); static;
   end;
 
 implementation
@@ -35,15 +37,14 @@ uses
   uDetectorUtils, uIpAddressScan;
 
 class procedure THardcodedIpInConfigDetector.AnalyzeFile(const FileName: string;
-  Lines: TStrings; Results: TObjectList<TLeakFinding>; AContext: TAnalyzeContext);
+  Lines: TStrings; Results: TObjectList<TLeakFinding>; const ABaseDir: string);
 var
   H : TIniIpHit;
 begin
   if (Lines = nil) or (Results = nil) then Exit;
   // Testverzeichnisse schweigen wie bei SCA200 (Segmente test/tests/spec/
   // fixtures ... gelten fuer jede Endung).
-  if TDetectorUtils.IsTestFixturePath(FileName, CtxScanRoot(AContext),
-       tplSecret) then
+  if TDetectorUtils.IsTestFixturePath(FileName, ABaseDir, tplSecret) then
     Exit;
   for H in TIpAddressScan.ScanIniLines(Lines) do
     if H.Reason = '' then
