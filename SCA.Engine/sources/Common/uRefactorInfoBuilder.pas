@@ -33,9 +33,19 @@ unit uRefactorInfoBuilder;
 // TDetectorUtils.ScanCodeLine aus (mit AKeepColumns = True, also
 // spaltentreu). uQuickFix hat einmal ohne das in String-Literale
 // hineingeschrieben (Upstream-Befund 7) - hier wird nichts selbst gelext.
-// Einzige Ausnahme: OpensMultiLineString erkennt den ANFANG eines
-// Delphi-12-Mehrzeilenstrings (''' am Zeilenende), den ScanCodeLine
-// bewusst nicht kennt. Es blendet nichts aus, es sagt nur "abbrechen".
+// Zwei Ausnahmen, beide mit den Schritt-Helfern unten (dieselbe Quote-
+// und Kommentarlogik wie ScanCodeLine):
+//   * OpensMultiLineString erkennt den ANFANG eines Delphi-12-
+//     Mehrzeilenstrings (''' am Zeilenende), den ScanCodeLine bewusst
+//     nicht kennt. Es blendet nichts aus, es sagt nur "abbrechen".
+//   * BlankComments sagt, welche der von ScanCodeLine gefuellten Spalten
+//     zu einem KOMMENTAR gehoeren, und macht sie zu Leerraum (Review
+//     reDelphiX 2026-10-07, Minor 4). ScanCodeLine fuellt Strings und
+//     Kommentare mit demselben Zeichen; ein Term der Kette begann so an
+//     einem Kommentar, und ''a''{x} galt als ein Literal. Ausblenden
+//     tut weiter nur ScanCodeLine - BlankComments fasst keine Spalte an,
+//     die dort Code blieb. ScanCodeLine selbst bleibt unveraendert: die
+//     Detektoren lesen es mit derselben Fuellung fuer beides.
 //
 // LIEFERN DARF SCHEITERN
 //
@@ -61,9 +71,9 @@ type
       // Obergrenze fuer die Suche nach dem Anweisungsende. Eine Anweisung,
       // die laenger ist, wird nicht beschrieben (nil) statt halb.
       MAX_STATEMENT_LINES = 60;
-      // Fuellzeichen der Code-Sicht fuer String-Literale und Inline-
-      // Kommentare. '~' ist in Pascal-Code ausserhalb von Strings und
-      // Kommentaren kein gueltiges Zeichen.
+      // Fuellzeichen der Code-Sicht fuer String-Literale. '~' ist in
+      // Pascal-Code ausserhalb von Strings und Kommentaren kein gueltiges
+      // Zeichen. Kommentare (auch Direktiven) sind in der Sicht Leerraum.
       VIEW_FILL = '~';
 
     // Beschreibt die Anweisung, die an (ALine, ACol) beginnt (1-basiert,
@@ -77,10 +87,11 @@ type
 
     // Spaltentreue Code-Sicht des Bereichs: je Zeile ein String, Index 0 =
     // ASpan.StartLine. Spalte N der Sicht ist Spalte N der Quellzeile.
-    // Strings und Inline-Kommentare sind VIEW_FILL, alles ausserhalb des
-    // Bereichs und abgeschnittene Kommentar-Reste sind Leerzeichen. Die
-    // letzte Zeile endet bei ASpan.EndCol - 1. Leeres Array, wenn der
-    // Bereich nicht in ALines passt.
+    // Strings sind VIEW_FILL; Kommentare und Direktiven (samt Begrenzern)
+    // und alles ausserhalb des Bereichs sind Leerzeichen - ein Kommentar
+    // trennt Code also wie Leerraum (Review reDelphiX 2026-10-07,
+    // Minor 4). Die letzte Zeile endet bei ASpan.EndCol - 1. Leeres
+    // Array, wenn der Bereich nicht in ALines passt.
     class function CodeViewOf(ALines: TStrings;
       const ASpan: TRefactorSpan): TArray<string>; static;
 
@@ -129,6 +140,12 @@ type
     // Quellzeile aufgefuellt. AState traegt offene Blockkommentare weiter.
     class function LineView(const ALine: string; AFromCol: Integer;
       var AState: TCommentScanState): string; static;
+    // AView ist ScanCodeLine(ASub, ..., VIEW_FILL, True), AState der
+    // Kommentarzustand am Anfang von ASub (eine Kopie). Liefert AView mit
+    // Leerzeichen an jeder VIEW_FILL-Spalte, die zu einem Kommentar
+    // gehoert; Strings bleiben VIEW_FILL, Code bleibt Code.
+    class function BlankComments(const ASub, AView: string;
+      AState: TCommentScanState): string; static;
     class function FindStatementEnd(ALines: TStrings; ALine, ACol: Integer;
       out ASpan: TRefactorSpan; out AHasSemicolon: Boolean): Boolean; static;
     // True, wenn die Zeile ab AFromCol einen Delphi-12-Mehrzeilenstring
@@ -204,13 +221,17 @@ end;
 class function TRefactorInfoBuilder.LineView(const ALine: string;
   AFromCol: Integer; var AState: TCommentScanState): string;
 var
-  Sub   : string;
-  View  : string;
-  Dummy : Integer;
+  Sub     : string;
+  View    : string;
+  Dummy   : Integer;
+  StartSt : TCommentScanState;   // Kommentarzustand am Anfang von Sub
 begin
   if AFromCol < 1 then AFromCol := 1;
   Sub  := Copy(ALine, AFromCol, MaxInt);
+  StartSt := AState;
   View := TDetectorUtils.ScanCodeLine(Sub, AState, Dummy, VIEW_FILL, True);
+  // Nur Strings bleiben VIEW_FILL, Kommentare werden Leerraum (Minor 4).
+  View := BlankComments(Sub, View, StartSt);
   // ScanCodeLine schneidet einen Kommentar ab, der bis zum Zeilenende
   // laeuft. Auffuellen, damit die Sicht so lang ist wie die Quellzeile.
   Result := StringOfChar(' ', AFromCol - 1) + View
@@ -449,6 +470,61 @@ begin
   begin
     AState.InParenComment := True;
     Inc(AIdx);
+  end;
+end;
+
+procedure BlankFillRange(var AView: string; AFrom, ATo: Integer);
+// Spalten AFrom..ATo der Sicht, die VIEW_FILL tragen, werden Leerzeichen.
+// Spalten hinter dem Ende der Sicht (ScanCodeLine schneidet einen bis zum
+// Zeilenende offenen Kommentar ab) gibt es nicht - LineView fuellt sie
+// ohnehin mit Leerzeichen auf.
+var
+  k : Integer;
+begin
+  for k := AFrom to ATo do
+    if (k >= 1) and (k <= Length(AView))
+       and (AView[k] = TRefactorInfoBuilder.VIEW_FILL) then
+      AView[k] := ' ';
+end;
+
+class function TRefactorInfoBuilder.BlankComments(const ASub, AView: string;
+  AState: TCommentScanState): string;
+// Derselbe Gang wie OpensMultiLineString (und ScanCodeLine): in einem
+// Kommentar, dann im String, dann Apostroph, '//', Kommentar-Oeffner.
+// Jede Spalte, die dabei zu einem Kommentar zaehlt - Begrenzer
+// eingeschlossen -, wird in der Sicht Leerraum.
+var
+  j     : Integer;
+  From  : Integer;
+  InStr : Boolean;
+begin
+  Result := AView;
+  InStr := False;
+  j := 1;
+  while j <= Length(ASub) do
+  begin
+    From := j;
+    if StepInComment(ASub, j, AState) then
+    begin
+      BlankFillRange(Result, From, j - 1);   // ein Zeichen bzw. '*)'
+      Continue;
+    end;
+    if InStr then
+    begin
+      InStr := StepInString(ASub, j);
+      Continue;
+    end;
+    if ASub[j] = '''' then
+      InStr := True
+    else if PairAt(ASub, j, '/', '/') then
+      Exit                    // Rest: von ScanCodeLine abgeschnitten
+    else
+    begin
+      NoteCommentOpener(ASub, j, AState);
+      if AState.InBraceComment or AState.InParenComment then
+        BlankFillRange(Result, From, j);     // '{' bzw. '(*'
+    end;
+    Inc(j);
   end;
 end;
 

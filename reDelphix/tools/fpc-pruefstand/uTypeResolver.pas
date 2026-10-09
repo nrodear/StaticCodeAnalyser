@@ -12,7 +12,8 @@ uses
 type
   TTypeResolver = class
   public
-    constructor Create(UnitNode: TAstNode);
+    // Signatur wie im Core (Review reDelphiX 2026-10-07, Minor 11).
+    constructor Create(UnitNode: TAstNode; AShortStringAware: Boolean = False);
     function ResolveTypeAt(const IdentLow: string; Line: Integer): string;
   end;
 
@@ -21,7 +22,8 @@ function IsNumericTypeName(const TypeLow: string): Boolean;
 
 implementation
 
-constructor TTypeResolver.Create(UnitNode: TAstNode);
+constructor TTypeResolver.Create(UnitNode: TAstNode;
+  AShortStringAware: Boolean);
 begin
   inherited Create;
 end;

@@ -27,6 +27,20 @@ unit uSourcePlaces;
 //     jederzeit aufrufbar - die Doku_01-Leitplanke "Engine nur fuer
 //     kurzlebige Ein-Scan-Prozesse" betrifft den Scan, nicht das Lesen
 //     einer Datei. Preis: ein Datei-Read je Open.
+//   * Sie liest auch die prozessweite Lexer-Sicht nicht (gLexerIfdef* in
+//     uLexer): die setzt ein laufender Scan unter GEngineLock um, und
+//     die Gluehbirne fragt per Timer, also auch WAEHREND eines Watch-
+//     oder Bulk-Scans (Review reDelphiX 2026-10-07, Minor 3). Der Parser
+//     bekommt stattdessen die EIGENE Sicht des Dienstes
+//     (TParser2.SetExplicitLexerView): fest die Doppelzweig-Sicht - der
+//     Ruhezustand im Plugin, unabhaengig von --ifdef-aware -, oder die
+//     Defines aus SetIfdefDefines. Grenze der Doppelzweig-Sicht: der
+//     Baum traegt beide Zweige; bei '{$IFDEF X} S: string {$ELSE}
+//     S: AnsiString {$ENDIF}' liefert DeclaredTypeOf den Typ EINES der
+//     Zweige (bei Parametern und Lokalen den des letzten, bei Feldern und
+//     Globalen den des ersten), und NodesAt kann auf einer Zeile Knoten
+//     beider Zweige liefern. Defines aus Include-Dateien wertet der
+//     Dienst nicht aus.
 //   * OpenSource nimmt den Text vom Host entgegen (AH15, 2026-10-06): im
 //     IDE-Plugin ist der Editor-Puffer die Wahrheit, nicht die Platte.
 //     reDelphix beschrieb Stellen aus der gespeicherten Datei und
@@ -60,6 +74,9 @@ unit uSourcePlaces;
 //                 Resolved traegt den Typnamen, FixSafe wird neu abgeleitet.
 //                 Vorher blieb 'Marker: string' rvUnknown - 98 % der
 //                 SCA044-Funde am Korpus waren so nie fix-sicher.
+//                 'string[N]' heisst hier 'shortstring', nicht 'string'
+//                 (Review reDelphiX 2026-10-07, Minor 11: sonst galt
+//                 'Buf: string[32]' als Unicode-Ziel).
 //                 ALine ist die ANKERZEILE der Anweisung: der Resolver
 //                 begrenzt Routinen ueber die letzte Knoten-Zeile, eine
 //                 Fortsetzungszeile der letzten Anweisung liegt dahinter.
@@ -68,7 +85,10 @@ unit uSourcePlaces;
 //                 CallOf beweisen dort nichts (s. InWithBlock).
 //   InWithBlock   liegt eine Zeile im Rumpf einer with-Anweisung?
 //   CodeViewOf / TextOf / HashOf   Sicht, Text und Hash eines Bereichs
+//                 (in der Sicht sind Strings VIEW_FILL, Kommentare
+//                 Leerraum - Review reDelphiX 2026-10-07, Minor 4)
 //   ConditionalRanges              {$IFDEF}-Bereiche der Datei
+//   SetIfdefDefines                Lexer-Sicht fuer Open/OpenSource
 //
 // Jedes Primitiv ist total: nil bzw. leeres Array statt Exception, auch
 // wenn keine Datei geoeffnet ist. Einzige Ausnahme: ein Parser-Fehler in
@@ -89,7 +109,9 @@ unit uSourcePlaces;
 // (DCP/requires), nicht diese Zahl (Review reDelphiX 2026-10-07, Nit 27).
 // Version 1 ist der Vertrag, wie er mit dem ersten Merge nach main
 // ausgeliefert wird; was vorher auf dem Branch dazukam (OpenSource,
-// P9-P12, die Typableitung von AH12), gehoert dazu.
+// P9-P12, die Typableitung von AH12, die eigene Lexer-Sicht samt
+// SetIfdefDefines und die Code-Sicht mit Kommentaren als Leerraum aus
+// dem Review vom 2026-10-07), gehoert dazu.
 
 interface
 
@@ -144,6 +166,10 @@ type
     FScopeFactsBuilt : Boolean;
     FWithRanges      : TArray<TSourceLineRange>;
     FNonStringFuncs  : TArray<string>;
+    // Lexer-Sicht fuer Open/OpenSource (SetIfdefDefines); nil =
+    // Doppelzweig-Sicht. Ueberlebt Close - sie gehoert dem Dienst, nicht
+    // der Datei.
+    FIfdefDefines    : TArray<string>;
     function Types: TTypeResolver;
     procedure BuildScopeFacts;
     // True, wenn die Unit eine Funktion dieses Namens (klein) ohne
@@ -175,6 +201,15 @@ type
     // AFileName ist nur der Name, der in FileName steht (Diagnose,
     // Fund-Abgleich); gelesen wird die Datei nicht. False bei leerem Text.
     function OpenSource(const AFileName, ASource: string): Boolean;
+    // Lexer-Sicht, mit der Open/OpenSource parsen (Review reDelphiX
+    // 2026-10-07, Minor 3; s. Kopf, WAS DIESE KLASSE NICHT TUT). nil bzw.
+    // leer (Vorgabe) = Doppelzweig-Sicht; sonst die Ein-Zweig-Sicht mit
+    // genau diesen Defines - ein Konsument, der die Sicht des Laufs kennt
+    // (TScanRequest.IfdefDefines), bekommt Knoten und Typen dann aus
+    // derselben Sicht wie die Funde. Eine Momentaufnahme: die Werte werden
+    // kopiert, wirken ab dem naechsten Open/OpenSource und bleiben ueber
+    // Close hinweg stehen.
+    procedure SetIfdefDefines(const ADefines: TArray<string>);
     procedure Close;
     function IsOpen: Boolean;
     property FileName: string read FFileName;
@@ -236,6 +271,8 @@ type
       const AKinds: TNodeKinds): TArray<TNodeRef>; static;
 
     // P6 - Sicht, Text und Hash eines Bereichs der geoeffneten Datei.
+    // Sicht wie TRefactorInfoBuilder.CodeViewOf: Strings VIEW_FILL,
+    // Kommentare und Direktiven Leerraum (Minor 4).
     function CodeViewOf(const ASpan: TRefactorSpan): TArray<string>;
     function TextOf(const ASpan: TRefactorSpan): string;
     function HashOf(const ASpan: TRefactorSpan): string;
@@ -263,7 +300,7 @@ type
     // P9 - deklarierter Typ (nackter, klein geschriebener Typname) des
     // Bezeichners AName an Zeile ALine: Parameter oder lokale Variable der
     // umschliessenden Routine, sonst Klassenfeld/Unit-Global; '' wenn
-    // unbekannt. Ohne Datei ''.
+    // unbekannt. Ohne Datei ''. 'string[N]' liefert 'shortstring'.
     // ALine ist die ANKERZEILE einer Anweisung (Zeile eines AST-Knotens):
     // der Resolver begrenzt Routinen ueber die letzte Knoten-Zeile, eine
     // Fortsetzungszeile der letzten Anweisung liegt ausserhalb jeder
@@ -309,6 +346,21 @@ begin
   inherited;
 end;
 
+function NewPlacesParser(const ADefines: TArray<string>): TParser2;
+// Parser mit der Sicht des Dienstes (s. Kopf und SetIfdefDefines) - nie
+// die prozessweite aus uLexer, die ein paralleler Scan unter GEngineLock
+// umsetzt.
+begin
+  Result := TParser2.Create;
+  Result.SetExplicitLexerView(ADefines);
+end;
+
+procedure TSourcePlaces.SetIfdefDefines(const ADefines: TArray<string>);
+begin
+  // Kopie: ein dynamisches Array hat kein Copy-on-Write.
+  FIfdefDefines := Copy(ADefines);
+end;
+
 function TSourcePlaces.Open(const AFileName: string): Boolean;
 var
   Parser : TParser2;
@@ -327,8 +379,9 @@ begin
   // wurde dort als ANSI gelesen, jedes Nicht-ASCII-Zeichen zaehlte im
   // Parser 2-3 Spalten, in FLines eine. Spalten aus NodesAt/StatementAt
   // zeigten dann rechts neben das Ziel. ParseNamedSource haelt Root.Name
-  // und die Include-Basis wie ParseFile.
-  Parser := TParser2.Create;
+  // wie ParseFile; die Include-Basis bleibt unter der eigenen Sicht des
+  // Dienstes ungenutzt (s. Kopf).
+  Parser := NewPlacesParser(FIfdefDefines);
   try
     try
       FRoot := Parser.ParseNamedSource(FLines.Text, AFileName);
@@ -354,7 +407,7 @@ begin
   if ASource = '' then Exit;
   FLines := TStringList.Create;
   FLines.Text := ASource;   // trennt CRLF, LF und CR in Zeilen
-  Parser := TParser2.Create;
+  Parser := NewPlacesParser(FIfdefDefines);
   try
     try
       // FLines.Text, nicht ASource: der Lexer zaehlt nur LF als
@@ -634,8 +687,10 @@ end;
 
 function TSourcePlaces.Types: TTypeResolver;
 begin
+  // ShortString-genau (Review reDelphiX 2026-10-07, Minor 11): 'string[N]'
+  // kommt als 'shortstring' zurueck. Die Detektoren behalten 'string'.
   if (FTypes = nil) and Assigned(FRoot) then
-    FTypes := TTypeResolver.Create(FRoot);
+    FTypes := TTypeResolver.Create(FRoot, True);
   Result := FTypes;
 end;
 

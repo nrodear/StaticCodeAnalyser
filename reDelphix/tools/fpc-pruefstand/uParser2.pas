@@ -28,6 +28,9 @@ type
     function ParseSource(const Source: string): TAstNode;
     // Wie im Core: ParseSource + Root.Name = FileName.
     function ParseNamedSource(const Source, FileName: string): TAstNode;
+    // Wie im Core (Review reDelphiX 2026-10-07, Minor 3). Der Stub kennt
+    // keine Direktiven - die Sicht aendert hier nichts.
+    procedure SetExplicitLexerView(const ADefines: TArray<string>);
   end;
 
 implementation
@@ -38,6 +41,11 @@ uses
 constructor TParser2.Create;
 begin
   inherited Create;
+end;
+
+procedure TParser2.SetExplicitLexerView(const ADefines: TArray<string>);
+begin
+  // Absichtlich leer: der Stub wertet keine Direktiven aus.
 end;
 
 function FirstIdentCol(const L: string): Integer;

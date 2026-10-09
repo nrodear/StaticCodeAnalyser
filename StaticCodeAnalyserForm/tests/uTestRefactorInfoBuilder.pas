@@ -30,6 +30,9 @@ type
     [Test] procedure AnonymousMethod_InnerSemicolonsIgnored;
     [Test] procedure NoSemicolon_EndsBeforeElse;
     [Test] procedure NoSemicolon_EndsBeforeEnd;
+    // Review reDelphiX 2026-10-07, Minor 4: ein Kommentar hinter dem
+    // letzten Term ist Leerraum - der Bereich endet hinter dem Code.
+    [Test] procedure NoSemicolon_EndsBeforeTrailingBlockComment;
     [Test] procedure MemberNamedLikeKeyword_IsNotTerminator;
 
     // ---- Liefern darf scheitern ----
@@ -76,6 +79,9 @@ type
 
     // ---- Code-Sicht ----
     [Test] procedure CodeView_IsColumnTrue_StringsAreFill;
+    // Minor 4: Kommentare und Direktiven sind Leerraum, nur Strings
+    // VIEW_FILL - auch direkt aneinander und ueber Zeilen getragen.
+    [Test] procedure CodeView_CommentsAreBlank_StringsAreFill;
     [Test] procedure SpanText_MultiLine_JoinedWithLf;
 
     // ---- Vertrag ----
@@ -267,6 +273,43 @@ begin
       Assert.IsTrue(Assigned(Info));
       Assert.AreEqual('r := a + b',
         TRefactorInfoBuilder.SpanText(Lines, Info.Span));
+    finally
+      Info.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorInfoBuilder.NoSemicolon_EndsBeforeTrailingBlockComment;
+const
+  L1 = '  if c then r := ''a'' + b { x }';
+  L2 = '  else r := d;';
+  L3 = '  if c then r := ''a'' + b (* x *)';
+var
+  Lines : TStringList;
+  Info  : TRefactorInfo;
+begin
+  Lines := MakeLines([L1, L2, L3, L2]);
+  try
+    Info := BuildAt(Lines, 1, 'r :=');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual<Integer>(1, Info.Span.EndLine);
+      Assert.AreEqual<Integer>(Pos('b {', L1) + 1, Info.Span.EndCol,
+        'der Bereich endet hinter b, nicht hinter dem Kommentar');
+      Assert.AreEqual('r := ''a'' + b',
+        TRefactorInfoBuilder.SpanText(Lines, Info.Span));
+      Assert.IsFalse(rfHasComment in Info.Flags,
+        'der Kommentar liegt hinter dem Bereich');
+    finally
+      Info.Free;
+    end;
+    Info := BuildAt(Lines, 3, 'r :=');
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual<Integer>(Pos('b (*', L3) + 1, Info.Span.EndCol,
+        '(* *) ebenso');
     finally
       Info.Free;
     end;
@@ -893,6 +936,58 @@ begin
         'Code steht in der Sicht an derselben Spalte wie in der Quelle');
       Assert.AreEqual('  ', Copy(View[0], 1, 2),
         'vor dem Bereich stehen Leerzeichen');
+    finally
+      Info.Free;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TTestRefactorInfoBuilder.CodeView_CommentsAreBlank_StringsAreFill;
+const
+  L1 = '  r := ''a''{x} + (* y *) b; // z';
+  // Zeile 2 beginnt im Blockkommentar aus Zeile 1; dahinter eine
+  // Direktive direkt am Literal.
+  M1 = '  s := a + { offen';
+  M2 = '  zu } ''q''{$IFDEF X} + c;';
+var
+  Lines : TStringList;
+  Info  : TRefactorInfo;
+  View  : TArray<string>;
+begin
+  Lines := MakeLines([L1, M1, M2]);
+  try
+    Info := BuildAt(Lines, 1, 'r :=');
+    try
+      Assert.IsTrue(Assigned(Info));
+      View := TRefactorInfoBuilder.CodeViewOf(Lines, Info.Span);
+      Assert.AreEqual<Integer>(1, Length(View));
+      Assert.AreEqual(StringOfChar(TRefactorInfoBuilder.VIEW_FILL, 3),
+        Copy(View[0], Pos('''a''', L1), 3), 'das Literal ist VIEW_FILL');
+      Assert.AreEqual(StringOfChar(' ', 3), Copy(View[0], Pos('{x}', L1), 3),
+        '{x} direkt am Literal ist Leerraum');
+      Assert.AreEqual(StringOfChar(' ', 7),
+        Copy(View[0], Pos('(* y *)', L1), 7), '(* *) ist Leerraum');
+      Assert.AreEqual('b', Copy(View[0], Pos('b;', L1), 1),
+        'Code bleibt an seiner Spalte');
+    finally
+      Info.Free;
+    end;
+    Info := BuildAt(Lines, 2, 's :=');
+    try
+      Assert.IsTrue(Assigned(Info));
+      View := TRefactorInfoBuilder.CodeViewOf(Lines, Info.Span);
+      Assert.AreEqual<Integer>(2, Length(View));
+      Assert.AreEqual(StringOfChar(' ', Pos('}', M2)),
+        Copy(View[1], 1, Pos('}', M2)),
+        'der getragene Kommentar samt } ist Leerraum');
+      Assert.AreEqual(StringOfChar(TRefactorInfoBuilder.VIEW_FILL, 3),
+        Copy(View[1], Pos('''q''', M2), 3));
+      Assert.AreEqual(StringOfChar(' ', Length('{$IFDEF X}')),
+        Copy(View[1], Pos('{$', M2), Length('{$IFDEF X}')),
+        'die Direktive ist Leerraum und gehoert nicht zum Literal');
+      Assert.AreEqual('c', Copy(View[1], Pos('c;', M2), 1));
     finally
       Info.Free;
     end;

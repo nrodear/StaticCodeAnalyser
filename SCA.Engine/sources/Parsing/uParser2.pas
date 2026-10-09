@@ -24,8 +24,26 @@ type
     // Fuer Konsumenten, die die Zeilen selbst halten (uSourcePlaces):
     // Parser-Spalten und Zeilentext stammen dann aus DEMSELBEN String.
     function ParseNamedSource(const Source, FileName: string): TAstNode;
+    // Explizite Lexer-Sicht (Review reDelphiX 2026-10-07, Minor 3). Ohne
+    // diesen Aufruf uebernimmt ParseSource die PROZESSWEITE Sicht aus
+    // uLexer (gLexerIfdefSkipEnabled, gLexerIfdefDefines,
+    // gLexerIncludeDefinesEnabled), die uEngineApi je Lauf unter
+    // GEngineLock setzt - der Scan-Weg, unveraendert. Danach liest DIESER
+    // Parser weder die Define-Liste noch den Skip-Schalter: ADefines leer
+    // = Doppelzweig-Sicht, sonst Ein-Zweig-Sicht mit genau diesen Defines
+    // (wie ApplyIfdefView). Das Include-Define-Tracking bleibt aus: ohne
+    // SetSourceDir ist es im Lexer ein No-Op, auch wenn der Lexer seinen
+    // Schalter an einer Include-Direktive noch liest. Fuer
+    // Konsumenten ausserhalb des Engine-Locks (uSourcePlaces): ein
+    // paralleler Scan leert und fuellt die Define-Liste, waehrend ein
+    // Leser ohne Lock darueber iteriert. Die Werte werden kopiert.
+    procedure SetExplicitLexerView(const ADefines: TArray<string>);
   private
     FLex      : TLexer;
+    // SetExplicitLexerView: True = die Globals aus uLexer gelten fuer
+    // diesen Parser nicht, FExplicitDefines ist die ganze Sicht.
+    FExplicitLexerView : Boolean;
+    FExplicitDefines   : TArray<string>;
     // Include-Define-Tracking (Charge 14): voller Pfad der gerade
     // geparsten DATEI - nur von ParseFile gesetzt (und im finally
     // geleert), damit ParseSource dem Lexer das Verzeichnis fuer die
@@ -112,6 +130,8 @@ type
     FLabelLines          : TList<Integer>;
 
     // ---- Lexer-Hilfsmethoden ----
+    // Wendet die Sicht aus SetExplicitLexerView auf den neuen FLex an.
+    procedure ApplyExplicitLexerView;
     function  Tok: TToken;
     function  Next: TToken;
     function  Eat(K: TTokenKind): Boolean;
@@ -331,6 +351,28 @@ begin
   Result.Name := FileName;
 end;
 
+procedure TParser2.SetExplicitLexerView(const ADefines: TArray<string>);
+begin
+  FExplicitLexerView := True;
+  // Kopie: ein dynamisches Array hat kein Copy-on-Write, ein Aufrufer,
+  // der seines danach aendert, aenderte sonst auch diese Sicht.
+  FExplicitDefines := Copy(ADefines);
+end;
+
+procedure TParser2.ApplyExplicitLexerView;
+// Dieselbe Regel wie uEngineApi.ApplyIfdefView, nur ohne Globals: eine
+// leere Liste laesst den Skip aus (Doppelzweig-Sicht), sonst gilt die
+// Ein-Zweig-Sicht mit genau diesen Defines. AddDefine trimmt und
+// uebergeht leere Eintraege.
+var
+  D : string;
+begin
+  if Length(FExplicitDefines) = 0 then Exit;
+  for D in FExplicitDefines do
+    FLex.AddDefine(D);
+  FLex.EnableConditionalSkipping;
+end;
+
 function TParser2.ParseSource(const Source: string): TAstNode;
 var
   Root: TAstNode;
@@ -340,8 +382,11 @@ begin
   FLabelLines := TList<Integer>.Create;   // SCA011-Goto-Guard (per-Datei)
   // A.5 Phase 1b-Wiring: globale CLI-Config auf den Lexer anwenden.
   // Wenn gLexerIfdefSkipEnabled gesetzt ist (via --ifdef-aware-Flag),
-  // werden die globalen Defines uebernommen und Skip aktiviert.
-  if gLexerIfdefSkipEnabled then
+  // werden die globalen Defines uebernommen und Skip aktiviert. Eine
+  // explizite Sicht (SetExplicitLexerView) liest die Globals gar nicht.
+  if FExplicitLexerView then
+    ApplyExplicitLexerView
+  else if gLexerIfdefSkipEnabled then
   begin
     if gLexerIfdefDefines <> nil then
       for var i := 0 to gLexerIfdefDefines.Count - 1 do
@@ -350,8 +395,11 @@ begin
   end;
   // Include-Define-Tracking (Charge 14, Opt-in): das Verzeichnis der
   // Datei ist die Basis der {$I}-Aufloesung; ohne ParseFile-Kontext
-  // (In-Memory) bleibt es leer und das Feature inaktiv.
-  if gLexerIncludeDefinesEnabled and (FCurrentFilePath <> '') then
+  // (In-Memory) bleibt es leer und das Feature inaktiv - ebenso unter
+  // einer expliziten Sicht (ohne SetSourceDir ist ProcessIncludeDefines
+  // im Lexer ein No-Op).
+  if not FExplicitLexerView and gLexerIncludeDefinesEnabled
+     and (FCurrentFilePath <> '') then
     FLex.SetSourceDir(ExtractFilePath(FCurrentFilePath));
   try
     FConsumeCount := 0; // Watchdog pro Datei zuruecksetzen

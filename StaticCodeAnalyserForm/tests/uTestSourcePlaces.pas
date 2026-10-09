@@ -35,6 +35,11 @@ type
     [Test] procedure ChainOf_WithWrongTarget_Nil;
     // Review strittiger Minor 2: die '+'-Gegenprobe des Konsumenten.
     [Test] procedure ChainOf_PlusCountMismatch_Nil;
+    // Review reDelphiX 2026-10-07, Minor 4: ein Blockkommentar am Term
+    // gehoert nicht zum Term - vor dem ersten Term nicht, direkt hinter
+    // einem Literal nicht.
+    [Test] procedure ChainOf_BlockCommentBeforeFirstTerm_NotInTerm;
+    [Test] procedure ChainOf_LiteralWithAdjacentComment_IsLiteral;
     [Test] procedure CallOf_WithMatchingHead;
 
     // ---- P2 ueber die Datei (Parser) ----
@@ -473,6 +478,76 @@ begin
   finally
     P.Free;
     DeleteFile(Path);
+  end;
+end;
+
+const
+  // Minor 4: Kommentare direkt an den Termen.
+  SRC_COMMENTS =
+    'unit c; implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var r, b, d: string;'#13#10 +
+    'begin'#13#10 +
+    '  r := {x} ''a'' + b + ''c'' + d;'#13#10 +
+    '  r := ''a''{x} + b + (* y *) ''c'' (* z *) + d;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+
+procedure TTestSourcePlaces.ChainOf_BlockCommentBeforeFirstTerm_NotInTerm;
+var
+  P    : TSourcePlaces;
+  L    : string;
+  Info : TRefactorInfo;
+begin
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.OpenSource('c.pas', SRC_COMMENTS));
+    L := P.LineText(LineOf(SRC_COMMENTS, 'r := {x}'));
+    Info := P.ChainOf(LineOf(SRC_COMMENTS, 'r := {x}'),
+      ColOf(SRC_COMMENTS, 'r := {x}'), 'r', 3);
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual<Integer>(5, Length(Info.Parts), 'Ziel + vier Terme');
+      Assert.AreEqual(ROLE_LITERAL, Info.Parts[1].Role);
+      Assert.AreEqual<Integer>(Pos('''a''', L), Info.Parts[1].StartCol,
+        'der erste Term beginnt am Apostroph, nicht am Kommentar');
+      Assert.AreEqual('''a''', P.TextOf(Info.Parts[1]));
+      Assert.IsTrue(rfHasComment in Info.Flags,
+        'die Anweisung traegt den Kommentar weiter');
+      Assert.IsFalse(Info.FixSafe);
+    finally
+      Info.Free;
+    end;
+  finally
+    P.Free;
+  end;
+end;
+
+procedure TTestSourcePlaces.ChainOf_LiteralWithAdjacentComment_IsLiteral;
+var
+  P    : TSourcePlaces;
+  Info : TRefactorInfo;
+begin
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.OpenSource('c.pas', SRC_COMMENTS));
+    Info := P.ChainOf(LineOf(SRC_COMMENTS, 'r := ''a''{x}'),
+      ColOf(SRC_COMMENTS, 'r := ''a''{x}'), 'r', 3);
+    try
+      Assert.IsTrue(Assigned(Info));
+      Assert.AreEqual<Integer>(5, Length(Info.Parts));
+      Assert.AreEqual(ROLE_LITERAL, Info.Parts[1].Role);
+      Assert.AreEqual('''a''', P.TextOf(Info.Parts[1]),
+        'ROLE_LITERAL traegt nur das Literal, nicht den Kommentar dahinter');
+      Assert.AreEqual(ROLE_LITERAL, Info.Parts[3].Role);
+      Assert.AreEqual('''c''', P.TextOf(Info.Parts[3]),
+        'Kommentar davor und dahinter gehoeren nicht zum Term');
+      Assert.AreEqual('d', P.TextOf(Info.Parts[4]));
+    finally
+      Info.Free;
+    end;
+  finally
+    P.Free;
   end;
 end;
 

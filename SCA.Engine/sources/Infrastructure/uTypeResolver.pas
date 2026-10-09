@@ -45,10 +45,21 @@ type
     // scope-genau zu so einem Namen aufloest, ist Referenz-/Werttyp - nie
     // IEEE-754-Float.
     FClassRecordNames : TDictionary<string, Boolean>;
+    // Opt-in des Konstruktors (s. dort): 'string[N]' -> 'shortstring'.
+    FShortStringAware : Boolean;
     procedure AddMethodScope(M: TAstNode);
     procedure BuildFrom(UnitNode: TAstNode);
+    // Nackter Typname einer Deklaration - ReduceToBareTypeLow, mit
+    // FShortStringAware ReduceToDeclaredTypeLow.
+    function BareTypeOf(const TypeRef: string): string;
   public
-    constructor Create(UnitNode: TAstNode);
+    // AShortStringAware (Review reDelphiX 2026-10-07, Minor 11): True
+    // traegt eine Deklaration 'string[N]' als 'shortstring' ein statt als
+    // 'string'. Vorgabe False ist das Verhalten, auf dem die Detektoren
+    // stehen - einschalten tut es nur der Quellstellen-Dienst
+    // (uSourcePlaces.DeclaredTypeOf), dessen Konsument ShortString von
+    // string trennen muss (Format liefert UnicodeString).
+    constructor Create(UnitNode: TAstNode; AShortStringAware: Boolean = False);
     destructor Destroy; override;
     // Typname (bare, lower) von IdentLow an Zeile Line; '' wenn unbekannt.
     function ResolveTypeAt(const IdentLow: string; Line: Integer): string;
@@ -74,6 +85,11 @@ function IsStringTypeName(const TypeLow: string): Boolean;
 // Reduziert einen TypeRef auf den nackten, gelowerten Typnamen (erstes
 // Ident-Token; schneidet '=Const', Array-/Klammer-Zusaetze, Whitespace ab).
 function ReduceToBareTypeLow(const TypeRef: string): string;
+// Wie ReduceToBareTypeLow, aber 'string[N]' - auch 'string [ N ]' aus
+// einer inline-var - wird 'shortstring' statt 'string' (Review reDelphiX
+// 2026-10-07, Minor 11). Fuer Konsumenten, die ShortString von string
+// trennen muessen; die Detektoren bleiben auf ReduceToBareTypeLow.
+function ReduceToDeclaredTypeLow(const TypeRef: string): string;
 
 implementation
 
@@ -154,6 +170,24 @@ begin
   end;
 end;
 
+function ReduceToDeclaredTypeLow(const TypeRef: string): string;
+// Der Basistyp ist ein Praefix des getrimmten, gelowerten TypeRef; steht
+// dahinter (nach Leerraum) eine '[', ist es die Laengenangabe eines
+// ShortString. 'string=..' (typisierte Konstante) bleibt 'string'.
+var
+  S : string;
+  i : Integer;
+begin
+  Result := ReduceToBareTypeLow(TypeRef);
+  if Result <> 'string' then Exit;
+  S := LowerCase(Trim(TypeRef));
+  i := Length(Result) + 1;
+  while (i <= Length(S)) and (S[i] <= ' ') do
+    Inc(i);
+  if (i <= Length(S)) and (S[i] = '[') then
+    Result := 'shortstring';
+end;
+
 function BareIdentLow(const NodeName: string): string;
 // nkParam.Name kann 'var x' / 'const y' / 'out z' sein -> nackten Ident nehmen
 // (letztes Wort). Sonst der Name selbst. Ergebnis gelowert.
@@ -182,9 +216,12 @@ end;
 
 { TTypeResolver }
 
-constructor TTypeResolver.Create(UnitNode: TAstNode);
+constructor TTypeResolver.Create(UnitNode: TAstNode;
+  AShortStringAware: Boolean);
 begin
   inherited Create;
+  // Vor BuildFrom: der Bau traegt die Typnamen schon ueber BareTypeOf ein.
+  FShortStringAware := AShortStringAware;
   FScopes  := TObjectList<TMethodScope>.Create(True);
   FGlobals := TDictionary<string, string>.Create;
   FClassRecordNames := TDictionary<string, Boolean>.Create;
@@ -217,6 +254,14 @@ begin
   Result := ReduceToBareTypeLow(Raw);
 end;
 
+function TTypeResolver.BareTypeOf(const TypeRef: string): string;
+begin
+  if FShortStringAware then
+    Result := ReduceToDeclaredTypeLow(TypeRef)
+  else
+    Result := ReduceToBareTypeLow(TypeRef);
+end;
+
 procedure TTypeResolver.AddMethodScope(M: TAstNode);
 var
   Sc    : TMethodScope;
@@ -236,7 +281,7 @@ begin
     for N in Nodes do
     begin
       Id := BareIdentLow(N.Name);
-      if Id <> '' then Sc.Idents.AddOrSetValue(Id, ReduceToBareTypeLow(N.TypeRef));
+      if Id <> '' then Sc.Idents.AddOrSetValue(Id, BareTypeOf(N.TypeRef));
     end;
   finally Nodes.Free; end;
 
@@ -245,7 +290,7 @@ begin
     for N in Nodes do
     begin
       Id := LowerCase(Trim(N.Name));
-      if Id <> '' then Sc.Idents.AddOrSetValue(Id, ReduceToBareTypeLow(N.TypeRef));
+      if Id <> '' then Sc.Idents.AddOrSetValue(Id, BareTypeOf(N.TypeRef));
     end;
   finally Nodes.Free; end;
 
@@ -276,7 +321,7 @@ begin
     begin
       Id := LowerCase(Trim(N.Name));
       if (Id <> '') and not FGlobals.ContainsKey(Id) then
-        FGlobals.Add(Id, ReduceToBareTypeLow(N.TypeRef));
+        FGlobals.Add(Id, BareTypeOf(N.TypeRef));
     end;
   finally Nodes.Free; end;
 

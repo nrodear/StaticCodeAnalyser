@@ -49,10 +49,29 @@ type
     [Test] procedure ChainOf_LocalFuncShadowsKnownCall_NotFixSafe;
   end;
 
+  // Review reDelphiX 2026-10-07, Minor 3 und Minor 11: die Sicht, in der
+  // der Dienst parst und Typen aufloest. Eigene Klasse, weil beide den
+  // echten Parser brauchen und TTestSourcePlacesTypes sonst ueber die
+  // Klassen-Laengengrenze (SCA141) wuechse.
+  [TestFixture]
+  TTestSourcePlacesViews = class
+  public
+    // Minor 11: 'string[N]' ist ein ShortString - lokal, inline,
+    // Unit-Global und Klassenfeld.
+    [Test] procedure DeclaredTypeOf_StringN_IsShortString;
+    // Gegenprobe zu Minor 11: ohne Opt-in bleibt der Resolver, wie die
+    // Detektoren ihn kennen ('string').
+    [Test] procedure TypeResolver_ShortStringOnlyOptIn;
+    // Minor 3: der Dienst parst in seiner EIGENEN Sicht, nicht in der
+    // prozessweiten, die ein laufender Scan gerade gesetzt hat.
+    [Test] procedure OpenSource_IgnoresGlobalIfdefView;
+  end;
+
 implementation
 
 uses
   System.SysUtils, System.Classes,
+  uAstNode, uLexer, uParser2, uTypeResolver,
   uRefactorInfo, uSourcePlaces;
 
 const
@@ -513,8 +532,170 @@ begin
   end;
 end;
 
+const
+  // Minor 11: ShortString-Deklarationen in allen Formen, die der Resolver
+  // sieht, dazu zwei 'string' als Gegenprobe. Die inline-var legt der
+  // Parser als 'string [ 16 ]' ab, die uebrigen als 'string[N]'.
+  SRC_SHORT =
+    'unit s; interface'#13#10 +
+    'type TFoo = class'#13#10 +
+    '  FBuf: string[10];'#13#10 +
+    '  procedure Bar;'#13#10 +
+    'end;'#13#10 +
+    'var GBuf: string[20]; GStr: string;'#13#10 +
+    'implementation'#13#10 +
+    'procedure TFoo.Bar;'#13#10 +
+    'var Buf: string[8]; S: string; Sh: ShortString;'#13#10 +
+    'begin'#13#10 +
+    '  var Tmp: string[16];'#13#10 +
+    '  S := Buf + Tmp + GBuf + GStr + FBuf + Sh;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+
+procedure TTestSourcePlacesViews.DeclaredTypeOf_StringN_IsShortString;
+var
+  P : TSourcePlaces;
+  L : Integer;
+begin
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.OpenSource('s.pas', SRC_SHORT));
+    L := LineOf(SRC_SHORT, 'S := Buf');
+    Assert.AreEqual('shortstring', P.DeclaredTypeOf(L, 'Buf'), 'lokal string[8]');
+    Assert.AreEqual('shortstring', P.DeclaredTypeOf(L, 'Tmp'),
+      'inline-var string [ 16 ]');
+    Assert.AreEqual('shortstring', P.DeclaredTypeOf(L, 'GBuf'),
+      'Unit-Global string[20]');
+    Assert.AreEqual('shortstring', P.DeclaredTypeOf(L, 'FBuf'),
+      'Klassenfeld string[10]');
+    Assert.AreEqual('shortstring', P.DeclaredTypeOf(L, 'Sh'), 'ShortString');
+    Assert.AreEqual('string', P.DeclaredTypeOf(L, 'S'), 'Gegenprobe lokal');
+    Assert.AreEqual('string', P.DeclaredTypeOf(L, 'GStr'), 'Gegenprobe global');
+  finally
+    P.Free;
+  end;
+end;
+
+procedure TTestSourcePlacesViews.TypeResolver_ShortStringOnlyOptIn;
+var
+  Parser : TParser2;
+  Root   : TAstNode;
+  R      : TTypeResolver;
+  L      : Integer;
+begin
+  L := LineOf(SRC_SHORT, 'S := Buf');
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC_SHORT);
+    try
+      R := TTypeResolver.Create(Root);
+      try
+        Assert.AreEqual('string', R.ResolveTypeAt('buf', L),
+          'Vorgabe: der Resolver der Detektoren bleibt unveraendert');
+        Assert.AreEqual('string', R.ResolveTypeAt('gbuf', L));
+      finally
+        R.Free;
+      end;
+      R := TTypeResolver.Create(Root, True);
+      try
+        Assert.AreEqual('shortstring', R.ResolveTypeAt('buf', L));
+        Assert.AreEqual('string', R.ResolveTypeAt('s', L));
+      finally
+        R.Free;
+      end;
+    finally
+      Root.Free;
+    end;
+  finally
+    Parser.Free;
+  end;
+  Assert.AreEqual('string', ReduceToBareTypeLow('string[8]'),
+    'ReduceToBareTypeLow bleibt, wie es war');
+  Assert.AreEqual('shortstring', ReduceToDeclaredTypeLow('string[8]'));
+  Assert.AreEqual('shortstring', ReduceToDeclaredTypeLow('String [ 8 ]'));
+  Assert.AreEqual('string', ReduceToDeclaredTypeLow('string'));
+  Assert.AreEqual('string', ReduceToDeclaredTypeLow('string=''x'''),
+    'typisierte Konstante: kein ShortString');
+  Assert.AreEqual('ansistring', ReduceToDeclaredTypeLow('AnsiString(1252)'));
+  Assert.AreEqual('', ReduceToDeclaredTypeLow(''));
+end;
+
+procedure TTestSourcePlacesViews.OpenSource_IgnoresGlobalIfdefView;
+const
+  SRC =
+    'unit v; interface implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var A, B: Integer;'#13#10 +
+    'begin'#13#10 +
+    '  {$IFDEF FOO}'#13#10 +
+    '  A := 1;'#13#10 +
+    '  {$ELSE}'#13#10 +
+    '  B := 2;'#13#10 +
+    '  {$ENDIF}'#13#10 +
+    'end;'#13#10 +
+    'end.';
+var
+  P       : TSourcePlaces;
+  OldSkip : Boolean;
+  OldDefs : TArray<string>;
+  Defs    : TArray<string>;
+  D       : string;
+  LA, LB  : Integer;
+begin
+  LA := LineOf(SRC, 'A := 1');
+  LB := LineOf(SRC, 'B := 2');
+  // Prozessweite Sicht sichern - der Testprozess ist resident.
+  OldSkip := gLexerIfdefSkipEnabled;
+  OldDefs := nil;
+  if Assigned(gLexerIfdefDefines) then
+    OldDefs := gLexerIfdefDefines.ToStringArray;
+  P := TSourcePlaces.Create;
+  try
+    // So setzt ein laufender Scan die Sicht: Ein-Zweig mit FOO.
+    LexerIfdefClear;
+    LexerIfdefAddDefine('FOO');
+    gLexerIfdefSkipEnabled := True;
+    Assert.IsTrue(P.OpenSource('v.pas', SRC));
+    Assert.AreEqual<Integer>(1, Length(P.NodesAt(LA, [nkAssign])), 'FOO-Zweig');
+    Assert.AreEqual<Integer>(1, Length(P.NodesAt(LB, [nkAssign])),
+      'auch der ELSE-Zweig: der Dienst bleibt in seiner Doppelzweig-Sicht');
+
+    // Eigene Ein-Zweig-Sicht ohne FOO: nur der ELSE-Zweig.
+    Defs := ['BAR'];
+    P.SetIfdefDefines(Defs);
+    Assert.IsTrue(P.OpenSource('v.pas', SRC));
+    Assert.AreEqual<Integer>(0, Length(P.NodesAt(LA, [nkAssign])),
+      'FOO ist in der Sicht des Dienstes nicht definiert');
+    Assert.AreEqual<Integer>(1, Length(P.NodesAt(LB, [nkAssign])));
+
+    // Eigene Sicht mit FOO, die prozessweite ist aus.
+    LexerIfdefClear;
+    gLexerIfdefSkipEnabled := False;
+    Defs := ['FOO'];
+    P.SetIfdefDefines(Defs);
+    Defs[0] := 'BAR';   // die Sicht ist eine Kopie
+    Assert.IsTrue(P.OpenSource('v.pas', SRC));
+    Assert.AreEqual<Integer>(1, Length(P.NodesAt(LA, [nkAssign])));
+    Assert.AreEqual<Integer>(0, Length(P.NodesAt(LB, [nkAssign])),
+      'der ELSE-Zweig ist aus');
+
+    // Zurueck zur Vorgabe.
+    P.SetIfdefDefines(nil);
+    Assert.IsTrue(P.OpenSource('v.pas', SRC));
+    Assert.AreEqual<Integer>(1, Length(P.NodesAt(LA, [nkAssign])));
+    Assert.AreEqual<Integer>(1, Length(P.NodesAt(LB, [nkAssign])));
+  finally
+    P.Free;
+    LexerIfdefClear;
+    for D in OldDefs do
+      LexerIfdefAddDefine(D);
+    gLexerIfdefSkipEnabled := OldSkip;
+  end;
+end;
+
 initialization
   Randomize;
   TDUnitX.RegisterTestFixture(TTestSourcePlacesTypes);
+  TDUnitX.RegisterTestFixture(TTestSourcePlacesViews);
 
 end.
