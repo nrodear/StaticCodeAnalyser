@@ -122,7 +122,7 @@ msgstr ""
 msgid "%s is not a valid JSON object."
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:770
+#: reDelphix/source/uRdxProvider.pas:779
 msgid "%s: no fixMode in the rule catalog"
 msgstr ""
 
@@ -456,8 +456,8 @@ msgstr ""
 msgid "Bugs"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:487
-#: reDelphix/source/uRdxProvider.pas:502
+#: reDelphix/source/uRdxProvider.pas:490
+#: reDelphix/source/uRdxProvider.pas:505
 msgid "Build Format() from concatenation"
 msgstr ""
 
@@ -710,9 +710,9 @@ msgstr ""
 msgid "Copy Jira issue"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:514
-#: reDelphix/source/uRdxProvider.pas:520
-#: reDelphix/source/uRdxProvider.pas:525
+#: reDelphix/source/uRdxProvider.pas:517
+#: reDelphix/source/uRdxProvider.pas:523
+#: reDelphix/source/uRdxProvider.pas:528
 msgid "Copy parameterized template to clipboard"
 msgstr ""
 
@@ -1404,7 +1404,7 @@ msgstr ""
 msgid "Line"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:468
+#: reDelphix/source/uRdxProvider.pas:471
 msgid "Line %d:%d to %d:%d"
 msgstr ""
 
@@ -1922,12 +1922,12 @@ msgstr ""
 msgid "Reload"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:621
+#: reDelphix/source/uRdxProvider.pas:624
 msgid "Remove (TObject) from the class declaration"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:685
-#: reDelphix/source/uRdxProvider.pas:688
+#: reDelphix/source/uRdxProvider.pas:694
+#: reDelphix/source/uRdxProvider.pas:697
 msgid "Remove ineffective suppression marker"
 msgstr ""
 
@@ -1937,8 +1937,20 @@ msgstr ""
 msgid "Remove rules"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:625
+#: reDelphix/source/uRdxProvider.pas:630
+msgid "Remove the empty parentheses"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:628
 msgid "Remove the empty visibility section"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:632
+msgid "Remove the redundant comparison with True/False"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:634
+msgid "Remove the redundant comparison with nil"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:1420
@@ -2065,7 +2077,7 @@ msgstr ""
 msgid "Scanning... %d found"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:554
+#: reDelphix/source/uRdxProvider.pas:557
 msgid "Scope table not loaded (unitscopes.txt)"
 msgstr ""
 
@@ -2177,8 +2189,8 @@ msgstr ""
 msgid "Show annotation overlay on hover (otherwise click marked line)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:461
-#: reDelphix/source/uRdxProvider.pas:468
+#: reDelphix/source/uRdxProvider.pas:464
+#: reDelphix/source/uRdxProvider.pas:471
 msgid "Show location"
 msgstr ""
 
@@ -2286,11 +2298,11 @@ msgstr ""
 msgid "Summary"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:664
+#: reDelphix/source/uRdxProvider.pas:673
 msgid "Suppress here (// noinspection %s)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:667
+#: reDelphix/source/uRdxProvider.pas:676
 msgid "Suppress in this file (// noinspection-file %s)"
 msgstr ""
 
@@ -2445,15 +2457,15 @@ msgstr ""
 msgid "Unit-level keyword not at column 1"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:619
+#: reDelphix/source/uRdxProvider.pas:622
 msgid "Use Assigned() instead of comparing with nil"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:617
+#: reDelphix/source/uRdxProvider.pas:620
 msgid "Use FreeAndNil(%s)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:623
+#: reDelphix/source/uRdxProvider.pas:626
 msgid "Use the condition as the Assert message"
 msgstr ""
 
@@ -2614,7 +2626,7 @@ msgstr ""
 msgid "default"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:814
+#: reDelphix/source/uRdxProvider.pas:823
 msgid "editor buffer empty or not readable"
 msgstr ""
 
@@ -2622,24 +2634,24 @@ msgstr ""
 msgid "except on E: Exception catches every error - prefer a specific subclass"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:799
+#: reDelphix/source/uRdxProvider.pas:808
 msgid "file not found: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:708
-#: reDelphix/source/uRdxProvider.pas:826
+#: reDelphix/source/uRdxProvider.pas:717
+#: reDelphix/source/uRdxProvider.pas:835
 msgid "file not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:567
+#: reDelphix/source/uRdxProvider.pas:570
 msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:794
+#: reDelphix/source/uRdxProvider.pas:803
 msgid "finding without file name"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:805
+#: reDelphix/source/uRdxProvider.pas:814
 msgid "finding without line"
 msgstr ""
 
@@ -2672,8 +2684,8 @@ msgstr ""
 msgid "no findings"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:773
-#: reDelphix/source/uRdxProvider.pas:846
+#: reDelphix/source/uRdxProvider.pas:782
+#: reDelphix/source/uRdxProvider.pas:855
 msgid "nothing to offer"
 msgstr ""
 
@@ -2685,7 +2697,7 @@ msgstr ""
 msgid "out parameter - prefer Result or var"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:584
+#: reDelphix/source/uRdxProvider.pas:587
 msgid "own unit %s in the project"
 msgstr ""
 
@@ -2697,8 +2709,8 @@ msgstr ""
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:586
-#: reDelphix/source/uRdxProvider.pas:596
+#: reDelphix/source/uRdxProvider.pas:589
+#: reDelphix/source/uRdxProvider.pas:599
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
@@ -2706,7 +2718,7 @@ msgstr ""
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:560
+#: reDelphix/source/uRdxProvider.pas:563
 msgid "uses clause contains compiler directives (line %d)"
 msgstr ""
 
@@ -2714,18 +2726,18 @@ msgstr ""
 msgid "uses clause is not in alphabetical order"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:590
+#: reDelphix/source/uRdxProvider.pas:593
 msgid "uses: qualify %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:595
-#: reDelphix/source/uRdxProvider.pas:601
+#: reDelphix/source/uRdxProvider.pas:598
+#: reDelphix/source/uRdxProvider.pas:604
 msgid "uses: qualify all %d entries"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:554
-#: reDelphix/source/uRdxProvider.pas:559
-#: reDelphix/source/uRdxProvider.pas:566
+#: reDelphix/source/uRdxProvider.pas:557
+#: reDelphix/source/uRdxProvider.pas:562
+#: reDelphix/source/uRdxProvider.pas:569
 msgid "uses: qualify entries"
 msgstr ""
 

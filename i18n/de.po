@@ -2286,6 +2286,15 @@ msgstr "Bedingung als Assert-Meldung verwenden"
 msgid "Remove the empty visibility section"
 msgstr "Leeren Sichtbarkeitsabschnitt entfernen"
 
+msgid "Remove the empty parentheses"
+msgstr "Leere Klammern entfernen"
+
+msgid "Remove the redundant comparison with True/False"
+msgstr "Überflüssigen Vergleich mit True/False entfernen"
+
+msgid "Remove the redundant comparison with nil"
+msgstr "Überflüssigen Vergleich mit nil entfernen"
+
 msgid "Show location"
 msgstr "Stelle zeigen"
 

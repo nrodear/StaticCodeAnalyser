@@ -246,6 +246,9 @@ const
   CAP_TOBJECT  = 'Remove (TObject) from the class declaration';
   CAP_ASSERT   = 'Use the condition as the Assert message';
   CAP_EMPTYSEC = 'Remove the empty visibility section';
+  CAP_NOARGS   = 'Remove the empty parentheses';
+  CAP_REDBOOL  = 'Remove the redundant comparison with True/False';
+  CAP_NILCHECK = 'Remove the redundant comparison with nil';
   DIAG_PREFIX  = 'reDelphix: ';
   // Fuer das Protokoll (deutsch wie die uebrigen Zeilen).
   SOURCE_NAMES : array[TRdxTextSource] of string =
@@ -623,6 +626,12 @@ begin
       Result := _(CAP_ASSERT);
     fkEmptyVisibilitySection:
       Result := _(CAP_EMPTYSEC);
+    fkEmptyArgumentList:
+      Result := _(CAP_NOARGS);
+    fkRedundantBoolean:
+      Result := _(CAP_REDBOOL);
+    fkAssignedAndAssignedNil:
+      Result := _(CAP_NILCHECK);
   else
     Result := uSCAConsts.KindName(AKind);
   end;

@@ -102,6 +102,7 @@
         <DCCReference Include="uTestRdxBufferMath.pas"/>
         <DCCReference Include="uTestRdxSuppress.pas"/>
         <DCCReference Include="uTestRdxSimpleFixes.pas"/>
+        <DCCReference Include="uTestRdxExprFixes.pas"/>
         <DCCReference Include="uTestRdxNilFix.pas"/>
         <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>
         <DCCReference Include="uTestRdxCodeMap.pas"/>

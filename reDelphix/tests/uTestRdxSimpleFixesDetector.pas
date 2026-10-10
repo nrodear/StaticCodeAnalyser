@@ -2,7 +2,8 @@ unit uTestRdxSimpleFixesDetector;
 
 // Editorhilfen Stufe 2a gegen den ECHTEN Core (nur Delphi, reDelphix.Test):
 // Parser, die Detektoren SCA075/SCA085/SCA126 (dazu SCA074/SCA087/SCA139
-// in der zweiten Fixture), TSourcePlaces und
+// in der zweiten, SCA066/SCA072/SCA084 in der dritten Fixture),
+// TSourcePlaces und
 // TRdxFixRunner.FixFor - derselbe Einstieg wie im Anbieter. Je Fall meldet
 // der Detektor, die Hilfe plant aus dem Fund (Art, Zeile, Meldung), die
 // Ersetzungen werden angewandt - und derselbe Detektor meldet danach
@@ -64,6 +65,27 @@ type
     [Test] procedure Sca139_CatalogExample;
   end;
 
+  // uQuickFix-Umzug (Beschluss 2026-10-09): SCA066, SCA072, SCA084.
+  [TestFixture]
+  TTestRdxSimpleFixesDetector3 = class
+  public
+    // ---- SCA066 ----
+    [Test] procedure Sca066_RoundTrip;
+    [Test] procedure Sca066_InExpression_NoHelp;
+    [Test] procedure Sca066_FpcFile_NoHelp;
+    [Test] procedure Sca066_CatalogExample;
+    // ---- SCA072 ----
+    [Test] procedure Sca072_RoundTrip;
+    [Test] procedure Sca072_LongBool_NoHelp;
+    [Test] procedure Sca072_UnknownType_NoHelp;
+    [Test] procedure Sca072_CatalogExample;
+    // ---- SCA084 ----
+    [Test] procedure Sca084_RoundTrip;
+    [Test] procedure Sca084_ProcType_NoHelp;
+    [Test] procedure Sca084_UnknownType_NoHelp;
+    [Test] procedure Sca084_CatalogExample;
+  end;
+
 implementation
 
 uses
@@ -71,6 +93,7 @@ uses
   uAstNode, uParser2, uMethodd12, uSCAConsts, uRuleCatalog,
   uExplicitTObjectInheritance, uFreeAndNilHint, uNilComparison,
   uAssertMessage, uEmptyVisibilitySection, uFreeWithoutNil,
+  uEmptyArgumentList, uRedundantBoolean, uAssignedAndAssignedNil,
   uEngineApi, uRdxBufferMath, uRdxRecipeRunner;
 
 type
@@ -128,6 +151,12 @@ begin
             TEmptyVisibilitySectionDetector.AnalyzeUnit(Root, Path, Results);
           fkFreeWithoutNil:
             TFreeWithoutNilDetector.AnalyzeUnit(Root, Path, Results);
+          fkEmptyArgumentList:
+            TEmptyArgumentListDetector.AnalyzeUnit(Root, Path, Results);
+          fkRedundantBoolean:
+            TRedundantBooleanDetector.AnalyzeUnit(Root, Path, Results);
+          fkAssignedAndAssignedNil:
+            TAssignedAndAssignedNilDetector.AnalyzeUnit(Root, Path, Results);
         else
           Assert.Fail('keine Hilfe fuer diese Art');
         end;
@@ -722,8 +751,138 @@ begin
   Assert.IsTrue(Pos('FreeAndNil(L);', Meta.GoodExample) > 0, Meta.GoodExample);
 end;
 
+{ ---- SCA066 ---- }
+
+procedure TTestRdxSimpleFixesDetector3.Sca066_RoundTrip;
+begin
+  Assert.AreEqual(InRoutine(Join([
+      'Obj := TObject.Create;',
+      'Obj.Free;'])),
+    FixAll(InRoutine(Join([
+      'Obj := TObject.Create();',
+      'Obj.Free();'])), fkEmptyArgumentList));
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca066_InExpression_NoHelp;
+begin
+  // Als Argument koennte der Name ohne Klammern als Zeiger gelten.
+  AssertNoHelp(InRoutine('if Assigned(Obj.ClassType()) then Exit;'),
+    fkEmptyArgumentList, 'Ausdrucks');
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca066_FpcFile_NoHelp;
+begin
+  AssertNoHelp(Join(['unit t;', '{$mode delphi}', 'interface',
+    'implementation', 'procedure P;', 'begin', '  Init();', 'end;', 'end.']),
+    fkEmptyArgumentList, 'FPC');
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca066_CatalogExample;
+var
+  Meta : TRuleMeta;
+begin
+  Meta := TRuleCatalog.GetRuleCanonical(fkEmptyArgumentList);
+  Assert.IsTrue(Pos('()', Meta.BadExample) > 0, Meta.BadExample);
+  Assert.AreEqual(InRoutine(Snip(Meta.GoodExample)),
+    FixAll(InRoutine(Snip(Meta.BadExample)), fkEmptyArgumentList));
+end;
+
+{ ---- SCA072 ---- }
+
+const
+  // Je eine Variable vom Typ Boolean und LongBool; der Rumpf (%s) ohne
+  // Einrueckung, wie die Katalog-Beispiele.
+  UNIT_072 =
+    'unit t;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    'procedure P;'#13#10 +
+    'var'#13#10 +
+    '  Active: Boolean;'#13#10 +
+    '  Disabled: Boolean;'#13#10 +
+    '  Win: LongBool;'#13#10 +
+    'begin'#13#10 +
+    '%s'#13#10 +
+    'end;'#13#10 +
+    'end.';
+
+procedure TTestRdxSimpleFixesDetector3.Sca072_RoundTrip;
+begin
+  Assert.AreEqual(
+    Format(UNIT_072, [Join([
+      'if Active then Exit;',
+      'if not Disabled then Exit;',
+      'while not Active do Exit;'])]),
+    FixAll(Format(UNIT_072, [Join([
+      'if Active = True then Exit;',
+      'if Disabled <> True then Exit;',
+      'while Active = False do Exit;'])]), fkRedundantBoolean));
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca072_LongBool_NoHelp;
+begin
+  // LongBool(2) ist wahr, aber nicht gleich True - die Hilfe aenderte das.
+  AssertNoHelp(Format(UNIT_072, ['if Win = True then Exit;']),
+    fkRedundantBoolean, 'Boolean');
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca072_UnknownType_NoHelp;
+begin
+  AssertNoHelp(Format(UNIT_072, ['if Flag = True then Exit;']),
+    fkRedundantBoolean, 'unbekannt');
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca072_CatalogExample;
+var
+  Meta : TRuleMeta;
+begin
+  Meta := TRuleCatalog.GetRuleCanonical(fkRedundantBoolean);
+  Assert.IsTrue(Pos('= True', Meta.BadExample) > 0, Meta.BadExample);
+  Assert.AreEqual(Format(UNIT_072, [Snip(Meta.GoodExample)]),
+    FixAll(Format(UNIT_072, [Snip(Meta.BadExample)]), fkRedundantBoolean));
+end;
+
+{ ---- SCA084 ---- }
+
+procedure TTestRdxSimpleFixesDetector3.Sca084_RoundTrip;
+begin
+  Assert.AreEqual(InRoutine(Join([
+      'if Assigned(Obj) then Exit;',
+      'if Assigned(Obj) then Exit;'])),
+    FixAll(InRoutine(Join([
+      'if Assigned(Obj) and (Obj <> nil) then Exit;',
+      'if (Obj <> nil) and Assigned(Obj) then Exit;'])),
+      fkAssignedAndAssignedNil));
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca084_ProcType_NoHelp;
+begin
+  // 'Cb <> nil' ruft die Prozedur auf, Assigned(Cb) nicht.
+  AssertNoHelp(Join(['unit t;', 'interface', 'type', '  TCall = procedure;',
+    'implementation', 'procedure P(Cb: TCall);', 'begin',
+    '  if Assigned(Cb) and (Cb <> nil) then Exit;', 'end;', 'end.']),
+    fkAssignedAndAssignedNil, 'Prozedurtyp');
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca084_UnknownType_NoHelp;
+begin
+  AssertNoHelp(InRoutine('if Assigned(Foo) and (Foo <> nil) then Exit;'),
+    fkAssignedAndAssignedNil, 'unbekannt');
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca084_CatalogExample;
+var
+  Meta : TRuleMeta;
+begin
+  Meta := TRuleCatalog.GetRuleCanonical(fkAssignedAndAssignedNil);
+  Assert.IsTrue(Pos('<> nil', Meta.BadExample) > 0, Meta.BadExample);
+  Assert.AreEqual(InRoutine(Snip(Meta.GoodExample)),
+    FixAll(InRoutine(Snip(Meta.BadExample)), fkAssignedAndAssignedNil));
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector2);
+  TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector3);
 
 end.

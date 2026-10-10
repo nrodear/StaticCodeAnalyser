@@ -46,7 +46,14 @@ type
     Reason   : string;           // warum keine Hilfe
   end;
 
-  // SCA075 und SCA085: eine bzw. zwei Zeilen, ohne Parser.
+  // Ersetzung eines Planers samt dem Bezeichner X, dessen Typ der Aufrufer
+  // noch pruefen muss (SCA072, SCA084).
+  TRdxOperandEdit = record
+    Edit : TRdxEdit;
+    Name : string;
+  end;
+
+  // Die Planer der einfachen Hilfen: Zeilen und Token, ohne Parser.
   TRdxSimpleFixes = class
   public
     // SCA075: 'class(TObject)' an der Spalte aus der Meldung ('at column
@@ -119,6 +126,47 @@ type
     // als Fehler E2010 auf (FreeAndNil nimmt const [ref] TObject).
     class function DeclaresValueType(AMap: TRdxCodeMap;
       const ATypeName: string): Boolean; static;
+    // Das erste Wort hinter 'ATypeName =' in der Datei ('record', 'class',
+    // 'procedure', 'reference' ...; 'packed' uebersprungen), klein; '' wenn
+    // die Datei den Typ nicht deklariert.
+    class function DeclaredTypeKind(AMap: TRdxCodeMap;
+      const ATypeName: string): string; static;
+  end;
+
+  // uQuickFix-Umzug (Beschluss 2026-10-09): SCA066, SCA072, SCA084 -
+  // Ausdruecke auf einer Zeile, ohne Parser.
+  TRdxExprFixes = class
+  public
+    // SCA066: 'Foo()' -> 'Foo' an der Spalte aus der Meldung (Spalte der
+    // '('). Nur, wo Delphi den Namen ohne Klammern genauso aufruft: der
+    // Aufruf ist eine ganze Anweisung ('Obj.Foo();' hinter begin, then,
+    // ';' ...) oder die ganze rechte Seite einer Zuweisung bzw. die ganze
+    // Bedingung von if/while/until. Als Argument (Ueberladung mit TFunc,
+    // Assigned(Foo())) koennte der Name als Zeiger gelten, in der eigenen
+    // Funktion als ihr Ergebnis - dort keine Hilfe.
+    class function EmptyArgs(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out AEdit: TRdxEdit;
+      out AReason: string): Boolean; static;
+
+    // SCA072: 'X = True' / 'X <> False' -> 'X', 'X = False' / 'X <> True'
+    // -> 'not X' an der Spalte aus der Meldung (Spalte des Operators). X ist
+    // ein blosser Bezeichner (bei 'Self.X' koennte eine gleichnamige lokale
+    // Variable den Typbeweis stellen); links davon beginnt ein Ausdruck ('(', ',', ':=', if, while ...), rechts von True/False endet
+    // er (')', then, do, ';' ...) - sonst bindet der Vergleich anders:
+    // 'X = True and Y' ist 'X = (True and Y)'. Dass X ein Boolean ist,
+    // prueft der Aufrufer (APlan.Name).
+    class function RedundantBool(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out APlan: TRdxOperandEdit;
+      out AReason: string): Boolean; static;
+
+    // SCA084: 'Assigned(X) and (X <> nil)' bzw. '(X <> nil) and Assigned(X)'
+    // -> 'Assigned(X)' an der Spalte aus der Meldung, alles auf einer Zeile.
+    // Der Vergleich muss geklammert sein, davor kein 'not' (es bindet nur an
+    // den ersten Teil). Dass X kein Prozedurzeiger ist ('X <> nil' ruft ihn
+    // auf, Assigned() nicht), prueft der Aufrufer (APlan.Name).
+    class function AssignedNil(AMap: TRdxCodeMap; ALine: Integer;
+      const AMessage: string; out APlan: TRdxOperandEdit;
+      out AReason: string): Boolean; static;
   end;
 
   // SCA126: X = nil -> not Assigned(X), X <> nil -> Assigned(X).
@@ -162,6 +210,38 @@ const
   // Die Quotes und verdoppelten Apostrophe zaehlen hier mit - vorsichtig.
   MAX_ASSERT_LITERAL = 255;
   R_TOBJECT_MOVED = 'class(TObject) steht nicht mehr an der gemeldeten Stelle';
+  NOT_PREFIX = 'not ';
+  SPAN_066 = 'sca066';
+  SPAN_072 = 'sca072';
+  SPAN_084 = 'sca084';
+  R_NO_COLUMN     = 'Spalte fehlt in der Meldung';
+  R_ARGS_MOVED    = '() steht nicht mehr an der gemeldeten Stelle';
+  R_BOOL_MOVED    = 'der Vergleich mit True/False steht nicht mehr an der '
+    + 'gemeldeten Stelle';
+  R_IN_EXPRESSION = 'der Aufruf ist Teil eines Ausdrucks - ohne Klammern '
+    + 'koennte der Name als Zeiger gelten';
+  R_BINDS_OTHER   = '%s - der Vergleich bindet dort anders';
+  // Token, nach denen eine Anweisung beginnt (SCA066; ':' hinter einer
+  // case-Marke).
+  STATEMENT_STARTS: array[0..9] of string = (';', 'begin', 'then', 'else',
+    'do', 'try', 'finally', 'except', 'repeat', ':');
+  // Token, hinter denen die ganze rechte Seite bzw. Bedingung beginnt.
+  WHOLE_EXPR_STARTS: array[0..3] of string = (':=', 'if', 'while', 'until');
+  // Token, hinter denen ein Aufruf als ganze Anweisung/Bedingung endet.
+  CALL_ENDS: array[0..7] of string = (';', 'end', 'else', 'until', 'then',
+    'do', 'except', 'finally');
+  // Token, hinter denen ein Teilausdruck beginnt - kein Operator bindet von
+  // links her (SCA072).
+  OPERAND_STARTS: array[0..9] of string = ('(', ',', '[', ':=', 'if',
+    'while', 'until', 'begin', ';', 'repeat');
+  // Token, mit denen ein Ausdruck endet - kein Operator bindet von rechts.
+  EXPR_ENDS: array[0..11] of string = (')', ']', ',', ';', 'then', 'do',
+    'else', 'end', 'until', 'of', 'except', 'finally');
+  // SCA084: die zehn Token der beiden Formen; '' ist X (beide Male gleich).
+  ASSIGNED_FIRST: array[0..9] of string = ('assigned', '(', '', ')', 'and',
+    '(', '', '<>', 'nil', ')');
+  NIL_FIRST: array[0..9] of string = ('(', '', '<>', 'nil', ')', 'and',
+    'assigned', '(', '', ')');
   R_FREE_MOVED    = 'X.Free; steht nicht mehr an der gemeldeten Stelle';
   R_NOT_NIL_LINE  = 'die naechste Zeile ist nicht "X := nil;"';
 
@@ -473,7 +553,27 @@ begin
   Result := 1;
 end;
 
-class function TRdxSimpleFixes.DeclaresProperty(AMap: TRdxCodeMap;
+function InList(const ALow: string; const AList: array of string): Boolean;
+var
+  S : string;
+begin
+  Result := False;
+  for S in AList do
+    if ALow = S then
+      Exit(True);
+end;
+
+// Das letzte Segment des Namens hinter ATok ('TFoo.Assert' -> 'Assert').
+function NameAfter(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
+begin
+  Result := After(AMap, ATok);
+  while (Result.Low <> '') and (After(AMap, Result).Low = '.') do
+    Result := After(AMap, After(AMap, Result));
+end;
+
+// Steht im Code der Datei eines der Woerter AKeywords, gefolgt vom Namen
+// AName (letztes Segment: 'procedure TFoo.Bar' zaehlt fuer 'Bar')?
+function DeclaresAfter(AMap: TRdxCodeMap; const AKeywords: array of string;
   const AName: string): Boolean;
 var
   T   : TRdxToken;
@@ -484,10 +584,16 @@ begin
   T := NextToken(AMap, 1, 1);
   while T.Low <> '' do
   begin
-    if (T.Low = 'property') and (After(AMap, T).Low = Low) then
+    if InList(T.Low, AKeywords) and (NameAfter(AMap, T).Low = Low) then
       Exit(True);
     T := After(AMap, T);
   end;
+end;
+
+class function TRdxSimpleFixes.DeclaresProperty(AMap: TRdxCodeMap;
+  const AName: string): Boolean;
+begin
+  Result := DeclaresAfter(AMap, ['property'], AName);
 end;
 
 class function TRdxSimpleFixes.WithBefore(AMap: TRdxCodeMap;
@@ -527,60 +633,41 @@ end;
 
 class function TRdxSimpleFixes.DeclaresRoutine(AMap: TRdxCodeMap;
   const AName: string): Boolean;
+begin
+  Result := DeclaresAfter(AMap, ['procedure', 'function'], AName);
+end;
+
+class function TRdxSimpleFixes.DeclaredTypeKind(AMap: TRdxCodeMap;
+  const ATypeName: string): string;
 var
-  T, N : TRdxToken;
+  T, K : TRdxToken;
   Low  : string;
 begin
-  Result := False;
-  Low := LowerCase(AName);
-  T := NextToken(AMap, 1, 1);
-  while T.Low <> '' do
-  begin
-    if (T.Low = 'procedure') or (T.Low = 'function') then
-    begin
-      // Das letzte Segment zaehlt: 'procedure TFoo.Assert' auch.
-      N := After(AMap, T);
-      while (N.Low <> '') and (After(AMap, N).Low = '.') do
-        N := After(AMap, After(AMap, N));
-      if N.Low = Low then
-        Exit(True);
-    end;
-    T := After(AMap, T);
-  end;
-end;
-
-// Steht hinter ATok '= record' ('= packed record'), '= object' oder
-// '= (disp)interface'?
-function StartsValueType(AMap: TRdxCodeMap; const ATok: TRdxToken): Boolean;
-var
-  K : TRdxToken;
-begin
-  Result := False;
-  K := After(AMap, ATok);
-  if K.Low <> '=' then Exit;
-  K := After(AMap, K);
-  if K.Low = 'packed' then
-    K := After(AMap, K);
-  Result := (K.Low = 'record') or (K.Low = 'object') or (K.Low = 'interface')
-    or (K.Low = 'dispinterface');
-end;
-
-class function TRdxSimpleFixes.DeclaresValueType(AMap: TRdxCodeMap;
-  const ATypeName: string): Boolean;
-var
-  T   : TRdxToken;
-  Low : string;
-begin
-  Result := False;
+  Result := '';
   Low := LowerCase(ATypeName);
   if Low = '' then Exit;
   T := NextToken(AMap, 1, 1);
   while T.Low <> '' do
   begin
-    if (T.Low = Low) and StartsValueType(AMap, T) then
-      Exit(True);
+    if (T.Low = Low) and (After(AMap, T).Low = '=') then
+    begin
+      K := After(AMap, After(AMap, T));
+      if K.Low = 'packed' then
+        K := After(AMap, K);
+      Exit(K.Low);
+    end;
     T := After(AMap, T);
   end;
+end;
+
+class function TRdxSimpleFixes.DeclaresValueType(AMap: TRdxCodeMap;
+  const ATypeName: string): Boolean;
+var
+  Kind : string;
+begin
+  Kind := DeclaredTypeKind(AMap, ATypeName);
+  Result := (Kind = 'record') or (Kind = 'object') or (Kind = 'interface')
+    or (Kind = 'dispinterface');
 end;
 
 // Kopf eines Assert-Aufrufs an (ALine, ACol): 'Assert' als Wort im Code,
@@ -595,7 +682,7 @@ begin
   Result := '';
   AOpenCol := 0;
   if ACol < 1 then
-    Exit('Spalte fehlt in der Meldung');
+    Exit(R_NO_COLUMN);
   L := AMap.Raw(ALine);
   if not WordAt(L, ACol, 'Assert') or not AMap.IsCode(ALine, ACol)
      or ((ACol > 1) and IsIdentChar(L[ACol - 1])) then
@@ -935,6 +1022,285 @@ begin
   AEdit.Span := TRefactorSpan.Make(SPAN_139, ALine, Col, ALine, FreeEnd);
   AEdit.Expected := Copy(L, Col, FreeEnd - Col);
   AEdit.NewText  := 'FreeAndNil(' + Copy(L, Col, Length(AReceiver)) + ')';
+  Result := True;
+end;
+
+{ ---- uQuickFix-Umzug: SCA066, SCA072, SCA084 ---- }
+
+// Erstes Token der Aufrufkette, die mit AName endet ('Obj.Sub.Foo',
+// 'inherited Foo'); Low = '' wenn ein Glied kein blosser Name ist
+// ('F().Foo', 'TFoo<T>.Create').
+function ChainStart(AMap: TRdxCodeMap; const AName: TRdxToken): TRdxToken;
+var
+  Dot, Prev : TRdxToken;
+begin
+  Result := AName;
+  Dot := Before(AMap, Result);
+  while Dot.Low = '.' do
+  begin
+    Prev := Before(AMap, Dot);
+    if not Prev.IsWord or IsKeyword(Prev.Low) then
+      Exit(Default(TRdxToken));
+    Result := Prev;
+    Dot := Before(AMap, Result);
+  end;
+  if Dot.Low = 'inherited' then
+    Result := Dot;
+end;
+
+// Steht zwischen dem Anfang der Routine um ALine und ALine ein Kopf
+// 'function ALow' (auch verschachtelt, auch 'TFoo.ALow')? Dort kann der
+// blosse Name das Ergebnis der Funktion meinen statt eines Aufrufs.
+function InsideOwnFunction(AMap: TRdxCodeMap; ALine: Integer;
+  const ALow: string): Boolean;
+var
+  T : TRdxToken;
+begin
+  Result := False;
+  T := NextToken(AMap, RoutineStartLine(AMap, ALine), 1);
+  while (T.Low <> '') and (T.Line <= ALine) do
+  begin
+    if (T.Low = 'function') and (NameAfter(AMap, T).Low = ALow) then
+      Exit(True);
+    T := After(AMap, T);
+  end;
+end;
+
+// Darf 'Name()' hier ohne Klammern stehen (s. EmptyArgs)? '' oder der Grund.
+function EmptyArgsContext(AMap: TRdxCodeMap;
+  const AName, AClose: TRdxToken): string;
+var
+  Start, Next : TRdxToken;
+  Prev        : string;
+begin
+  Result := '';
+  Start := ChainStart(AMap, AName);
+  if Start.Low = '' then
+    Exit('ein Glied der Aufrufkette ist kein blosser Name');
+  Prev := Before(AMap, Start).Low;
+  if not InList(Prev, STATEMENT_STARTS) and not InList(Prev, WHOLE_EXPR_STARTS) then
+    Exit(R_IN_EXPRESSION);
+  Next := After(AMap, AClose);
+  if (Next.Low <> '') and not InList(Next.Low, CALL_ENDS) then
+    Exit(R_IN_EXPRESSION);
+  if (Start.Col = AName.Col) and (Start.Line = AName.Line)
+     and InsideOwnFunction(AMap, AName.Line, AName.Low) then
+    Exit(Format('%s() in der Funktion %s - ohne Klammern meint der Name ihr '
+      + 'Ergebnis', [AName.Low, AName.Low]));
+end;
+
+class function TRdxExprFixes.EmptyArgs(AMap: TRdxCodeMap; ALine: Integer;
+  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+var
+  L       : string;
+  Col     : Integer;
+  NameTok : TRdxToken;
+  Close   : TRdxToken;
+begin
+  Result := False;
+  AEdit := Default(TRdxEdit);
+  AReason := '';
+  Col := ColumnFromMessage(AMessage);
+  if Col < 1 then
+  begin
+    AReason := R_NO_COLUMN;
+    Exit;
+  end;
+  L := AMap.Raw(ALine);
+  if (Col > Length(L)) or (L[Col] <> '(') or not AMap.IsCode(ALine, Col) then
+  begin
+    AReason := R_ARGS_MOVED;
+    Exit;
+  end;
+  // Zwischen Name und '(' sowie in den Klammern nur Leerraum - kein
+  // Kommentar, der beim Loeschen verloren ginge.
+  Close := NextToken(AMap, ALine, Col + 1);
+  NameTok := PrevToken(AMap, ALine, Col);
+  if (Close.Low <> ')') or (Close.Line <> ALine)
+     or (SkipBlanks(L, Col + 1) <> Close.Col) then
+    AReason := 'in den Klammern steht nicht nur Leerraum'
+  else if not NameTok.IsWord or IsKeyword(NameTok.Low)
+          or (NameTok.Line <> ALine) then
+    AReason := 'vor () steht kein blosser Name (Element- oder Ergebnisaufruf)'
+  else if SkipBlanks(L, NameTok.EndCol) <> Col then
+    AReason := 'zwischen Name und () steht nicht nur Leerraum'
+  else
+    AReason := EmptyArgsContext(AMap, NameTok, Close);
+  if AReason <> '' then Exit;
+  AEdit.Span := TRefactorSpan.Make(SPAN_066, ALine, NameTok.EndCol, ALine,
+    Close.EndCol);
+  AEdit.Expected := Copy(L, NameTok.EndCol, Close.EndCol - NameTok.EndCol);
+  AEdit.NewText  := '';
+  Result := True;
+end;
+
+// Die Token um den Vergleich AOp (s. RedundantBool): '' oder der Grund.
+function BoolOperandsReason(AMap: TRdxCodeMap;
+  const AOp, ALhs, ARhs: TRdxToken): string;
+var
+  Prev : TRdxToken;
+begin
+  Result := '';
+  if ((AOp.Low <> '=') and (AOp.Low <> '<>'))
+     or ((ARhs.Low <> 'true') and (ARhs.Low <> 'false'))
+     or (ARhs.Line <> AOp.Line) then
+    Exit(R_BOOL_MOVED);
+  if not ALhs.IsWord or IsKeyword(ALhs.Low) or (ALhs.Line <> AOp.Line) then
+    Exit('links vom Vergleich steht kein blosser Name');
+  Prev := Before(AMap, ALhs);
+  if Prev.Low = '.' then
+    Exit('links steht ein Pfad - sein Typ ist hier nicht beweisbar');
+  if not InList(Prev.Low, OPERAND_STARTS) then
+    Exit(Format(R_BINDS_OTHER, ['links vom Namen steht "' + Prev.Low + '"']));
+  if not InList(After(AMap, ARhs).Low, EXPR_ENDS) then
+    Exit(Format(R_BINDS_OTHER, ['hinter ' + ARhs.Low + ' geht der Ausdruck weiter']));
+end;
+
+class function TRdxExprFixes.RedundantBool(AMap: TRdxCodeMap; ALine: Integer;
+  const AMessage: string; out APlan: TRdxOperandEdit;
+  out AReason: string): Boolean;
+var
+  L            : string;
+  Col          : Integer;
+  Op, Lhs, Rhs : TRdxToken;
+begin
+  Result := False;
+  APlan := Default(TRdxOperandEdit);
+  Col := ColumnFromMessage(AMessage);
+  if Col < 1 then
+  begin
+    AReason := R_NO_COLUMN;
+    Exit;
+  end;
+  L := AMap.Raw(ALine);
+  // ':=', '<=', '>=' sind kein Vergleich auf Gleichheit.
+  if (Col > Length(L)) or not AMap.IsCode(ALine, Col)
+     or ((Col > 1) and CharInSet(L[Col - 1], [':', '<', '>'])) then
+  begin
+    AReason := R_BOOL_MOVED;
+    Exit;
+  end;
+  Op := TokenAt(AMap, ALine, Col);
+  Lhs := PrevToken(AMap, ALine, Col);
+  Rhs := After(AMap, Op);
+  AReason := BoolOperandsReason(AMap, Op, Lhs, Rhs);
+  if AReason <> '' then Exit;
+  if AMap.HasComment(ALine, Lhs.Col, Rhs.EndCol - 1) then
+  begin
+    AReason := 'Kommentar im Vergleich';
+    Exit;
+  end;
+  APlan.Name := Copy(L, Lhs.Col, Lhs.Len);
+  // '= False' und '<> True' verneinen; 'not' bindet staerker als jeder
+  // Vergleich, der Operand ist ein Name - keine Klammern noetig.
+  APlan.Edit.NewText := APlan.Name;
+  if (Op.Low = '=') = (Rhs.Low = 'false') then
+    APlan.Edit.NewText := NOT_PREFIX + APlan.Name;
+  APlan.Edit.Span := TRefactorSpan.Make(SPAN_072, ALine, Lhs.Col, ALine,
+    Rhs.EndCol);
+  APlan.Edit.Expected := Copy(L, Lhs.Col, Rhs.EndCol - Lhs.Col);
+  Result := True;
+end;
+
+// Die zehn Token ab AFirst gegen APattern ('' = X, beide Male derselbe
+// Name), alle auf der Zeile von AFirst. AToks traegt die Token.
+// Passt ATok zum Musterteil APart? '' steht fuer den Namen X: ein
+// Bezeichner, beim zweiten Mal derselbe wie in AName gemerkt.
+function TokenFits(const ATok: TRdxToken; const APart: string;
+  var AName: string): Boolean;
+begin
+  if APart <> '' then
+    Exit(ATok.Low = APart);
+  Result := ATok.IsWord and not IsKeyword(ATok.Low)
+    and ((AName = '') or (ATok.Low = AName));
+  if Result then
+    AName := ATok.Low;
+end;
+
+function MatchTokens(AMap: TRdxCodeMap; const AFirst: TRdxToken;
+  const APattern: array of string; out AToks: TArray<TRdxToken>): Boolean;
+var
+  i    : Integer;
+  Name : string;
+begin
+  Result := False;
+  SetLength(AToks, Length(APattern));
+  AToks[0] := AFirst;
+  for i := 1 to High(APattern) do
+    AToks[i] := After(AMap, AToks[i - 1]);
+  Name := '';
+  for i := 0 to High(APattern) do
+    if (AToks[i].Line <> AFirst.Line)
+       or not TokenFits(AToks[i], APattern[i], Name) then
+      Exit;
+  Result := True;
+end;
+
+// Was vor und hinter dem SCA084-Ausdruck steht: '' oder der Grund. 'not'
+// davor bindet nur an den ersten Teil, ein Selektor dahinter nur an den
+// letzten.
+function AssignedNilContext(AMap: TRdxCodeMap;
+  const AFirst, ALast: TRdxToken): string;
+var
+  Prev, Next : string;
+begin
+  Result := '';
+  Prev := Before(AMap, AFirst).Low;
+  if (Prev = 'not') or (Prev = '@') or (Prev = '.') then
+    Exit(Format('"%s" vor dem Ausdruck bindet nur an seinen ersten Teil', [Prev]));
+  Next := After(AMap, ALast).Low;
+  if (Next = '.') or (Next = '[') or (Next = '^') then
+    Exit(Format('"%s" hinter dem Ausdruck bindet nur an seinen letzten Teil', [Next]));
+end;
+
+class function TRdxExprFixes.AssignedNil(AMap: TRdxCodeMap; ALine: Integer;
+  const AMessage: string; out APlan: TRdxOperandEdit;
+  out AReason: string): Boolean;
+var
+  L     : string;
+  Col   : Integer;
+  First : TRdxToken;
+  Toks  : TArray<TRdxToken>;
+  Keep  : Integer;   // Index von 'Assigned' in Toks
+begin
+  Result := False;
+  APlan := Default(TRdxOperandEdit);
+  Col := ColumnFromMessage(AMessage);
+  if Col < 1 then
+  begin
+    AReason := R_NO_COLUMN;
+    Exit;
+  end;
+  L := AMap.Raw(ALine);
+  if (Col > Length(L)) or not AMap.IsCode(ALine, Col) then
+  begin
+    AReason := 'Assigned(X) steht nicht mehr an der gemeldeten Stelle';
+    Exit;
+  end;
+  First := TokenAt(AMap, ALine, Col);
+  if MatchTokens(AMap, First, ASSIGNED_FIRST, Toks) then
+    Keep := 0
+  else if MatchTokens(AMap, First, NIL_FIRST, Toks) then
+    Keep := 6
+  else
+  begin
+    AReason := 'kein "Assigned(X) and (X <> nil)" auf einer Zeile an der '
+      + 'Stelle (ohne Klammern um den Vergleich keine Hilfe)';
+    Exit;
+  end;
+  AReason := AssignedNilContext(AMap, First, Toks[9]);
+  if AReason <> '' then Exit;
+  if AMap.HasComment(ALine, First.Col, Toks[9].EndCol - 1) then
+  begin
+    AReason := 'Kommentar im Ausdruck';
+    Exit;
+  end;
+  APlan.Name := Copy(L, Toks[Keep + 2].Col, Toks[Keep + 2].Len);
+  APlan.Edit.Span := TRefactorSpan.Make(SPAN_084, ALine, First.Col, ALine,
+    Toks[9].EndCol);
+  APlan.Edit.Expected := Copy(L, First.Col, Toks[9].EndCol - First.Col);
+  APlan.Edit.NewText  := Copy(L, Toks[Keep].Col,
+    Toks[Keep + 3].EndCol - Toks[Keep].Col);
   Result := True;
 end;
 
@@ -1464,11 +1830,11 @@ begin
       [Before(AMap, Span.First).Low, Span.First.Low, After(AMap, Span.Last).Low]));
   // '<>' -> Assigned(X), '=' -> not Assigned(X); Flipped ist das Gegenteil.
   Span.NewText := 'Assigned(' + AOperand + ')';
-  Flipped := 'not ' + Span.NewText;
+  Flipped := NOT_PREFIX + Span.NewText;
   if not Positive then
   begin
     Flipped := Span.NewText;
-    Span.NewText := 'not ' + Span.NewText;
+    Span.NewText := NOT_PREFIX + Span.NewText;
   end;
   WidenOverGroup(AMap, Flipped, Span);
   AEdit.Span := TRefactorSpan.Make(SPAN_126, Span.First.Line, Span.First.Col,

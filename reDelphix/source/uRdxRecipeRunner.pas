@@ -358,6 +358,21 @@ type
     class function FreeWithoutNilFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AMessage: string;
       const AUsesNames: TArray<string>): TRdxFixOutcome; static;
+
+    // SCA066: 'Foo()' -> 'Foo' (TRdxExprFixes.EmptyArgs). Nicht in einer
+    // Datei mit FPC-Weiche oder FPC-Modus: in objfpc ruft erst 'Foo()' eine
+    // Prozedurvariable auf.
+    class function EmptyArgsFix(APlaces: TSourcePlaces; ALines: TStrings;
+      ALine: Integer; const AMessage: string): TRdxFixOutcome; static;
+
+    // SCA072 und SCA084: der Planer liefert die Ersetzung und den Namen X,
+    // hier die Pruefung von X - kein with; SCA072: X als Boolean deklariert
+    // (bei Variant und LongBool ist 'X = True' nicht dasselbe wie X);
+    // SCA084: Typ bekannt, kein Prozedurtyp ('X <> nil' ruft ihn auf), keine
+    // eigene Routine Assigned.
+    class function OperandFix(AKind: TFindingKind; APlaces: TSourcePlaces;
+      ALines: TStrings; ALine: Integer;
+      const AMessage: string): TRdxFixOutcome; static;
   end;
 
 implementation
@@ -386,6 +401,9 @@ const
   // Der Unterschied, den der Benutzer kennen sollte (SCA085, SCA139):
   // FreeAndNil setzt ERST nil, dann laeuft der Destruktor.
   R_FREENIL_HINT = 'FreeAndNil setzt %s auf nil, bevor der Destruktor laeuft';
+  R_WITH_MEMBER  = 'with-Anweisung in der Routine - %s koennte ein Member sein';
+  R_PROC_TYPE    = '%s hat einen Prozedurtyp - "%s <> nil" ruft ihn auf, '
+    + 'Assigned() nicht';
 
 { TRdxObjectRing }
 
@@ -1184,7 +1202,8 @@ class function TRdxFixRunner.Handles(AKind: TFindingKind): Boolean;
 begin
   Result := AKind in [fkExplicitTObjectInheritance, fkFreeAndNilHint,
     fkNilComparison, fkAssertMessage, fkEmptyVisibilitySection,
-    fkFreeWithoutNil];
+    fkFreeWithoutNil, fkEmptyArgumentList, fkRedundantBoolean,
+    fkAssignedAndAssignedNil];
 end;
 
 // X aus der SCA085-Meldung '`X.Free; X := nil;` - prefer ...'; '' ohne
@@ -1244,14 +1263,20 @@ begin
     fkFreeWithoutNil:
       Result := FreeWithoutNilFix(APlaces, ALines, AFinding.LineInt,
         AFinding.Message, AUsesNames);
+    fkEmptyArgumentList:
+      Result := EmptyArgsFix(APlaces, ALines, AFinding.LineInt,
+        AFinding.Message);
+    fkRedundantBoolean, fkAssignedAndAssignedNil:
+      Result := OperandFix(AFinding.Kind, APlaces, ALines, AFinding.LineInt,
+        AFinding.Message);
   else
     Result.Reason := 'keine einfache Hilfe fuer diese Regel';
   end;
 end;
 
-// SCA075 und SCA087: die Planer arbeiten nur auf den Zeilen, ohne Parser.
-// Spalte bzw. Abschnitt stehen in der Meldung - die Spalte kennt den
-// Kommentar-Zustand der Zeilen davor, ein Neuscan der Zeile nicht.
+// SCA075, SCA087 und SCA066: die Planer arbeiten nur auf den Zeilen, ohne
+// Parser. Spalte bzw. Abschnitt stehen in der Meldung - die Spalte kennt
+// den Kommentar-Zustand der Zeilen davor, ein Neuscan der Zeile nicht.
 function LinesOnlyFix(AKind: TFindingKind; ALines: TStrings; ALine: Integer;
   const AMessage: string): TRdxFixOutcome;
 var
@@ -1266,12 +1291,17 @@ begin
   SetLength(Result.Edits, 1);
   Map := TRdxCodeMap.Create(ALines);
   try
-    if AKind = fkEmptyVisibilitySection then
-      Result.Enabled := TRdxSimpleFixes.EmptySection(Map, ALine, AMessage,
-        Result.Edits[0], Result.Reason)
+    case AKind of
+      fkEmptyVisibilitySection:
+        Result.Enabled := TRdxSimpleFixes.EmptySection(Map, ALine, AMessage,
+          Result.Edits[0], Result.Reason);
+      fkEmptyArgumentList:
+        Result.Enabled := TRdxExprFixes.EmptyArgs(Map, ALine, AMessage,
+          Result.Edits[0], Result.Reason);
     else
       Result.Enabled := TRdxSimpleFixes.ExplicitTObject(Map, ALine, AMessage,
         Result.Edits[0], Result.Reason);
+    end;
   finally
     Map.Free;
   end;
@@ -1301,8 +1331,7 @@ begin
     Exit(Format('%s ist in dieser Unit als Property deklariert - FreeAndNil '
       + 'braucht eine Variable', [AName]));
   if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
-    Exit(Format('with-Anweisung in der Routine - %s koennte ein Member sein',
-      [AName]));
+    Exit(Format(R_WITH_MEMBER, [AName]));
   if (APlaces.DeclaredTypeOf(ALine, AName) = '')
      and not TRdxSimpleFixes.DeclaresInlineVar(AMap, ALine, AName) then
     Result := Format('%s ist hier nicht als Variable bekannt (Property oder '
@@ -1469,6 +1498,84 @@ begin
   end;
   Result.Hint := Format(R_FREENIL_HINT, [Result.Name]);
   Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
+end;
+
+class function TRdxFixRunner.EmptyArgsFix(APlaces: TSourcePlaces;
+  ALines: TStrings; ALine: Integer; const AMessage: string): TRdxFixOutcome;
+begin
+  Result := Default(TRdxFixOutcome);
+  if not Assigned(APlaces) or not APlaces.IsOpen then
+    Result.Reason := R_NO_FILE
+  else if TRdxRecipeRunner.SourceLooksFpcAware(APlaces) then
+    Result.Reason := 'Datei mit FPC-Weiche oder FPC-Modus - in objfpc ruft '
+      + 'erst Foo() eine Prozedurvariable auf'
+  else
+    Result := LinesOnlyFix(fkEmptyArgumentList, ALines, ALine, AMessage);
+end;
+
+// SCA072/SCA084: ist X an ALine sicher der Operand, fuer den die Umformung
+// gilt (s. OperandFix)? '' oder der Grund.
+function OperandReason(AKind: TFindingKind; APlaces: TSourcePlaces;
+  AMap: TRdxCodeMap; ALine: Integer; const AName: string): string;
+var
+  TypeLow, Kind : string;
+begin
+  if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
+    Exit(Format(R_WITH_MEMBER, [AName]));
+  TypeLow := APlaces.DeclaredTypeOf(ALine, AName);
+  if AKind = fkRedundantBoolean then
+  begin
+    if TypeLow = 'boolean' then
+      Exit('');
+    if TypeLow = '' then
+      TypeLow := 'unbekannt';
+    Exit(Format('%s ist hier nicht als Boolean bewiesen (Typ: %s) - bei '
+      + 'Variant oder LongBool ist "= True" nicht dasselbe', [AName, TypeLow]));
+  end;
+  if TRdxSimpleFixes.DeclaresRoutine(AMap, 'Assigned') then
+    Exit('die Unit deklariert eine eigene Routine Assigned');
+  if TypeLow = '' then
+    Exit(Format(R_NIL_TYPE_UNKNOWN, [AName]));
+  Result := TRdxNilFix.NilOperandRisk(AName, TypeLow);
+  Kind := TRdxSimpleFixes.DeclaredTypeKind(AMap, TypeLow);
+  if (Result = '') and ((Kind = 'procedure') or (Kind = 'function')
+     or (Kind = 'reference')) then
+    Result := Format(R_PROC_TYPE, [AName, AName]);
+end;
+
+class function TRdxFixRunner.OperandFix(AKind: TFindingKind;
+  APlaces: TSourcePlaces; ALines: TStrings; ALine: Integer;
+  const AMessage: string): TRdxFixOutcome;
+var
+  Map  : TRdxCodeMap;
+  Plan : TRdxOperandEdit;
+  Ok   : Boolean;
+begin
+  Result := Default(TRdxFixOutcome);
+  if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
+  begin
+    Result.Reason := R_NO_FILE;
+    Exit;
+  end;
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    if AKind = fkRedundantBoolean then
+      Ok := TRdxExprFixes.RedundantBool(Map, ALine, AMessage, Plan,
+        Result.Reason)
+    else
+      Ok := TRdxExprFixes.AssignedNil(Map, ALine, AMessage, Plan,
+        Result.Reason);
+    if Ok then
+      Result.Reason := OperandReason(AKind, APlaces, Map, ALine, Plan.Name);
+  finally
+    Map.Free;
+  end;
+  if Result.Reason <> '' then Exit;
+  Result.Name := Plan.Name;
+  SetLength(Result.Edits, 1);
+  Result.Edits[0] := Plan.Edit;
+  Result.Hint := Plan.Edit.NewText;
+  Result.Enabled := True;
 end;
 
 // Der Text, auf dem uNilComparison den Knoten zaehlt (Analyse

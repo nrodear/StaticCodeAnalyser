@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2353 Zeilen, 79149 Bytes
-  CPoLines_de: array[0..2352] of string = (
+  // i18n\de.po - 2362 Zeilen, 79441 Bytes
+  CPoLines_de: array[0..2361] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2303,6 +2303,15 @@ const
     'msgid "Remove the empty visibility section"',
     'msgstr "Leeren Sichtbarkeitsabschnitt entfernen"',
     '',
+    'msgid "Remove the empty parentheses"',
+    'msgstr "Leere Klammern entfernen"',
+    '',
+    'msgid "Remove the redundant comparison with True/False"',
+    'msgstr "'#$00DC'berfl'#$00FC'ssigen Vergleich mit True/False entfernen"',
+    '',
+    'msgid "Remove the redundant comparison with nil"',
+    'msgstr "'#$00DC'berfl'#$00FC'ssigen Vergleich mit nil entfernen"',
+    '',
     'msgid "Show location"',
     'msgstr "Stelle zeigen"',
     '',
@@ -2642,8 +2651,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2349 Zeilen, 82953 Bytes
-  CPoLines_fr: array[0..2348] of string = (
+  // i18n\fr.po - 2358 Zeilen, 83247 Bytes
+  CPoLines_fr: array[0..2357] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4927,6 +4936,15 @@ const
     '',
     'msgid "Remove the empty visibility section"',
     'msgstr "Retirer la section de visibilit'#$00E9' vide"',
+    '',
+    'msgid "Remove the empty parentheses"',
+    'msgstr "Retirer les parenth'#$00E8'ses vides"',
+    '',
+    'msgid "Remove the redundant comparison with True/False"',
+    'msgstr "Retirer la comparaison superflue avec True/False"',
+    '',
+    'msgid "Remove the redundant comparison with nil"',
+    'msgstr "Retirer la comparaison superflue avec nil"',
     '',
     'msgid "Show location"',
     'msgstr "Afficher l''emplacement"',

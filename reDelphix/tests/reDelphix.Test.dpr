@@ -14,8 +14,10 @@ program reDelphix.Test;
 //   * uTestRdxBufferMath - Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung
 //                        aller Ersetzungen, Spaltengrenze, Textwahl
 //   * uTestRdxSuppress - Unterdrueck-Marker setzen und entfernen
-//   * uTestRdxSimpleFixes - Editorhilfen SCA075/SCA085 auf Text, ohne
-//                        Parser
+//   * uTestRdxSimpleFixes - Editorhilfen SCA074/SCA075/SCA085/SCA087/
+//                        SCA139 auf Text, ohne Parser
+//   * uTestRdxExprFixes - Editorhilfen SCA066/SCA072/SCA084 (uQuickFix-
+//                        Umzug) auf Text, ohne Parser
 //   * uTestRdxNilFix   - Editorhilfe SCA126 auf Text, ohne Parser
 //   * uTestRdxSimpleFixesDetector - dieselben Hilfen gegen den echten
 //                        Detektor, Katalog-Beispiele bad -> good
@@ -53,6 +55,7 @@ uses
   uTestRdxBufferMath in 'uTestRdxBufferMath.pas',
   uTestRdxSuppress in 'uTestRdxSuppress.pas',
   uTestRdxSimpleFixes in 'uTestRdxSimpleFixes.pas',
+  uTestRdxExprFixes in 'uTestRdxExprFixes.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',
