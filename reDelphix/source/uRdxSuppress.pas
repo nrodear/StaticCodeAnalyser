@@ -304,7 +304,6 @@ begin
   Result := False;
   AEdit  := Default(TRdxEdit);
   AReason := '';
-  Head := 0;
   if (ALines = nil) or (ALines.Count = 0) or (AKindName = '') then
   begin
     AReason := 'keine Datei';
