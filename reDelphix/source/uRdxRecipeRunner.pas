@@ -91,13 +91,13 @@ type
     Reason : string;      // wenn Needed, aber keine Stelle bestimmbar
   end;
 
-  // Ergebnis einer einfachen Hilfe (Editorhilfen Stufe 2a, SCA085 und
-  // SCA126): die Ersetzungen fuer EINEN Undo-Schritt und ein Hinweis fuers
-  // Menue - oder der Grund, warum es keine Hilfe gibt.
+  // Ergebnis einer einfachen Hilfe (TRdxFixRunner): die Ersetzungen fuer
+  // EINEN Undo-Schritt und ein Hinweis fuers Menue - oder der Grund, warum
+  // es keine Hilfe gibt.
   TRdxFixOutcome = record
     Enabled : Boolean;
     Edits   : TArray<TRdxEdit>;
-    Name    : string;    // SCA085: die Variable, wie sie im Puffer steht
+    Name    : string;    // X fuer den Menuetext: SCA085 wie im Puffer, SCA139 wie in der Meldung
     Hint    : string;    // bei Enabled = True
     Reason  : string;    // bei Enabled = False
   end;
@@ -352,8 +352,9 @@ type
 
     // SCA139: 'X.Free' -> 'FreeAndNil(X)', X aus der Meldung. Dieselbe
     // Variablen-Pruefung wie SCA085; dazu kein record/object/interface
-    // dieser Unit als Typ ('X.Free' waere dort eine eigene Methode). Fehlt
-    // SysUtils, kommt die uses-Einfuegung mit.
+    // dieser Unit als Typ und keine eigene Methode Free in der Unit ('X.Free'
+    // riefe sie, FreeAndNil nicht). Fehlt SysUtils, kommt die uses-
+    // Einfuegung mit.
     class function FreeWithoutNilFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AMessage: string;
       const AUsesNames: TArray<string>): TRdxFixOutcome; static;
@@ -363,7 +364,7 @@ implementation
 
 uses
   uRdxCodeMap,       // TRdxCodeMap: Code-Sicht der Datei fuer die Planer
-  uRdxSimpleFixes,   // Planer SCA075/SCA085/SCA126 (reine Textlogik)
+  uRdxSimpleFixes,   // Planer der einfachen Hilfen (reine Textlogik)
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
 // Dieser Laeufer ist gegen Version 1 des Quellstellen-Vertrags geschrieben
@@ -1413,6 +1414,24 @@ begin
     Result := Trim(Copy(AMessage, 1, P - 1));
 end;
 
+// SCA139: ruft 'X.Free' sicher TObject.Free? FreeAndNil(X) uebergeht eine
+// eigene Methode Free - in einem record/object/interface dieser Unit oder
+// in einer Klasse dieser Unit (etwa ein Pool, der zurueckgibt statt
+// freizugeben). Typen aus anderen Units sieht das nicht; ein Record dort
+// faellt in Delphi ab 10.4 als Fehler E2010 auf. '' oder der Grund.
+function FreeMethodReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const AName: string): string;
+begin
+  Result := '';
+  if TRdxSimpleFixes.DeclaresValueType(AMap,
+       APlaces.DeclaredTypeOf(ALine, AName)) then
+    Result := Format('%s ist kein Objekt (record, object oder interface '
+      + 'dieser Unit) - Free ist eine eigene Methode', [AName])
+  else if TRdxSimpleFixes.DeclaresRoutine(AMap, 'Free') then
+    Result := 'die Unit deklariert eine eigene Methode Free - FreeAndNil '
+      + 'riefe sie nicht auf';
+end;
+
 class function TRdxFixRunner.FreeWithoutNilFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer; const AMessage: string;
   const AUsesNames: TArray<string>): TRdxFixOutcome;
@@ -1438,14 +1457,8 @@ begin
       Exit;
     end;
     Result.Reason := VariableCheck(APlaces, Map, ALine, Result.Name);
-    // 'X.Free' auf einem record/object dieser Unit ist eine eigene Methode;
-    // FreeAndNil(X) wuerde den Wert als Objekt behandeln. SCA085 beweist
-    // das ueber 'X := nil', hier fehlt dieser Beweis.
-    if (Result.Reason = '') and TRdxSimpleFixes.DeclaresValueType(Map,
-         APlaces.DeclaredTypeOf(ALine, Result.Name)) then
-      Result.Reason := Format('%s ist kein Objekt (record, object oder '
-        + 'interface dieser Unit) - Free ist eine eigene Methode',
-        [Result.Name]);
+    if Result.Reason = '' then
+      Result.Reason := FreeMethodReason(APlaces, Map, ALine, Result.Name);
   finally
     Map.Free;
   end;

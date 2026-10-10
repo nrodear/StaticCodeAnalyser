@@ -180,8 +180,8 @@ type
       const ACtx: TRdxRecipeContext);
     procedure AddUsesActions(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
-    // Editorhilfen Stufe 2a: die einfachen Hilfen (SCA075, SCA085, SCA126)
-    // ueber TRdxFixRunner - eine weitere Regel braucht hier kein Rezept.
+    // Die einfachen Editorhilfen ueber TRdxFixRunner (welche Regeln:
+    // TRdxFixRunner.Handles) - eine weitere Regel braucht hier kein Rezept.
     procedure AddSimpleFix(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
     // Text-Rezepte (Editorhilfen Stufe 1)

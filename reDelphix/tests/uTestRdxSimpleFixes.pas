@@ -486,10 +486,13 @@ end;
 procedure TTestRdxSimpleFixes.Sca074_Refusals;
 const
   // Zeile, Spalte, Teil des Grundes
-  CASES: array[0..9, 0..2] of string = (
+  CASES: array[0..11, 0..2] of string = (
     ('  Assert(X > 0, ''warum'');', '3', 'Meldung'),
     ('  Assert(X > 0 { warum });', '3', 'Kommentar'),
-    ('  Obj.Assert(X);', '7', 'Methode'),
+    ('  Obj.Assert(X);', '7', 'qualifiziert'),
+    // Gegen-Review 2026-10-10: ein Vorfahr bzw. die Deklaration selbst.
+    ('  inherited Assert(Ok);', '13', 'inherited'),
+    ('procedure Assert(B: Boolean);', '11', 'procedure'),
     ('  Assert(X);', '4', 'nicht mehr'),
     ('  Assert(X);', '0', 'Spalte'),
     ('  S := ''Assert(X)'';', '9', 'nicht mehr'),
@@ -609,6 +612,18 @@ begin
   Assert.AreEqual('', Fix087(InClass(['  {', '  public', '  }', '  private']), 6,
     'public', R), 'im Block-Kommentar');
   Assert.IsTrue(Pos('Kommentar', R) > 0, R);
+  // Gegen-Review 2026-10-10: Member-Zeilen mit '&' oder Umlaut am Anfang
+  // sieht der Detektor nicht - der Abschnitt ist trotzdem nicht leer.
+  Assert.AreEqual('', Fix087(InClass(['  strict private', '    FText: string;',
+    '  public', '    &Type: Integer;']), 7, 'public', R), '&-Bezeichner');
+  Assert.IsTrue(Pos('nicht leer', R) > 0, R);
+  Assert.AreEqual('', Fix087(InClass(['  public',
+    '    ' + #$00C4 + 'nderung: Integer;']), 5, 'public', R), 'Umlaut');
+  Assert.IsTrue(Pos('nicht leer', R) > 0, R);
+  // 'strict' allein auf der Zeile davor gehoert zu diesem Abschnitt.
+  Assert.AreEqual('', Fix087(InClass(['  strict', '  private', '  protected',
+    '    FX: Integer;']), 6, 'private', R));
+  Assert.IsTrue(Pos('strict', R) > 0, R);
   Assert.AreEqual('', Fix087(Join(['  public']), 1, 'public', R), 'letzte Zeile');
   Assert.IsTrue(R <> '');
 end;

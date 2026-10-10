@@ -59,6 +59,8 @@ type
     [Test] procedure Sca139_MissingSysUtils_AddsUses;
     [Test] procedure Sca139_Property_NoHelp;
     [Test] procedure Sca139_RecordWithFree_NoHelp;
+    // Gegen-Review 2026-10-10: eine Klasse mit eigener Methode Free (Pool).
+    [Test] procedure Sca139_OwnFreeMethod_NoHelp;
     [Test] procedure Sca139_CatalogExample;
   end;
 
@@ -227,6 +229,26 @@ begin
   Assert.IsTrue(Length(Seen) > 0, 'der Detektor meldet');
   Assert.IsFalse(PlanFix(ASource, AKind, Seen[0], Edits, Reason), 'keine Hilfe');
   Assert.IsTrue(Pos(AReasonPart, Reason) > 0, Reason);
+end;
+
+// Wie AssertNoHelp, aber fuer den Fund auf Zeile ALine.
+procedure AssertNoHelpAt(const ASource: string; AKind: TFindingKind;
+  ALine: Integer; const AReasonPart: string);
+var
+  Seen   : TArray<TSeen>;
+  S      : TSeen;
+  Edits  : TArray<TRdxEdit>;
+  Reason : string;
+begin
+  Seen := Detect(ASource, AKind);
+  for S in Seen do
+    if S.Line = ALine then
+    begin
+      Assert.IsFalse(PlanFix(ASource, AKind, S, Edits, Reason), 'keine Hilfe');
+      Assert.IsTrue(Pos(AReasonPart, Reason) > 0, Reason);
+      Exit;
+    end;
+  Assert.Fail(Format('kein Fund auf Zeile %d', [ALine]));
 end;
 
 function CountOf(const APart, AText: string): Integer;
@@ -517,11 +539,13 @@ end;
 
 procedure TTestRdxSimpleFixesDetector2.Sca074_OwnAssert_NoHelp;
 begin
-  // Eine eigene Routine Assert bindet vor System.Assert.
-  AssertNoHelp(Join(['unit t;', 'interface', 'implementation',
+  // Eine eigene Routine Assert bindet vor System.Assert. Geprueft wird der
+  // Aufruf in Zeile 9 - der Detektor meldet auch die Deklaration in
+  // Zeile 4 (Gegen-Review 2026-10-10).
+  AssertNoHelpAt(Join(['unit t;', 'interface', 'implementation',
     'procedure Assert(B: Boolean);', 'begin', 'end;',
     'procedure P;', 'begin', '  Assert(True);', 'end;', 'end.']),
-    fkAssertMessage, 'eigene Routine');
+    fkAssertMessage, 9, 'eigene Routine');
 end;
 
 procedure TTestRdxSimpleFixesDetector2.Sca074_InWith_NoHelp;
@@ -656,6 +680,16 @@ begin
     '  TRec = record'#13#10'    procedure Free;'#13#10'  end;',
     '    FRec: TRec;', 'uses System.SysUtils;',
     '  FRec.Free;']), fkFreeWithoutNil, 'kein Objekt');
+end;
+
+procedure TTestRdxSimpleFixesDetector2.Sca139_OwnFreeMethod_NoHelp;
+begin
+  // 'FBuf.Free' gibt das Objekt an den Pool zurueck; FreeAndNil(FBuf)
+  // zerstoerte es.
+  AssertNoHelp(Format(UNIT_139, [
+    '  TPooled = class'#13#10'    procedure Free; reintroduce;'#13#10'  end;',
+    '    FBuf: TPooled;', 'uses System.SysUtils;',
+    '  FBuf.Free;']), fkFreeWithoutNil, 'eigene Methode Free');
 end;
 
 procedure TTestRdxSimpleFixesDetector2.Sca139_CatalogExample;

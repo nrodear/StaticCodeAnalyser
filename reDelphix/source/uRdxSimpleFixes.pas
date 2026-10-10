@@ -1,10 +1,12 @@
 unit uRdxSimpleFixes;
 
-// reDelphix - Editorhilfen Stufe 2a (Konzept_Editorhilfen_2026-10-08,
-// Nico 2026-10-09): SCA075 class(TObject) -> class, SCA085 Free/nil ->
-// FreeAndNil, SCA126 X = nil -> not Assigned(X). OHNE ToolsAPI: aus den
-// Zeilen der Datei werden gepruefte Ersetzungen (TRdxEdit), die
-// uRdxEditor.ReplaceSpans in EINEM Undo-Schritt schreibt.
+// reDelphix - die Planer der einfachen Editorhilfen
+// (Konzept_Editorhilfen_2026-10-08). Stufe 2a (Nico 2026-10-09): SCA075
+// class(TObject) -> class, SCA085 Free/nil -> FreeAndNil, SCA126 X = nil
+// -> not Assigned(X); Stufe 2, Rest (2026-10-10): SCA074 Assert-Meldung,
+// SCA087 leerer Sichtbarkeitsabschnitt, SCA139 X.Free -> FreeAndNil(X).
+// OHNE ToolsAPI: aus den Zeilen der Datei werden gepruefte Ersetzungen
+// (TRdxEdit), die uRdxEditor.ReplaceSpans in EINEM Undo-Schritt schreibt.
 //
 // GRUNDSATZ: lieber keine Hilfe als eine falsche. Jeder Planer prueft die
 // Fundstelle mit derselben Grammatik wie der Detektor und lehnt mit einem
@@ -112,7 +114,9 @@ type
     // True, wenn die Datei ATypeName als record, object oder (disp)interface
     // deklariert ('TFoo = packed record'): 'X.Free' ist dann eine eigene
     // Methode, FreeAndNil(X) waere falsch. Ein Typ aus einer anderen Unit
-    // ist hier unbekannt (False).
+    // (auch ein Alias, ein Zeiger oder ein generischer Record 'TRec<T>')
+    // ist hier unbekannt (False) - in Delphi ab 10.4 faellt ein Record dort
+    // als Fehler E2010 auf (FreeAndNil nimmt const [ref] TObject).
     class function DeclaresValueType(AMap: TRdxCodeMap;
       const ATypeName: string): Boolean; static;
   end;
@@ -153,8 +157,9 @@ const
   SPAN_087 = 'sca087';
   SPAN_139 = 'sca139';
   R_ASSERT_MOVED  = 'Assert( steht nicht mehr an der gemeldeten Stelle';
-  // Ein Pascal-String-Literal traegt hoechstens 255 Zeichen (E2056); die
-  // Quotes und verdoppelten Apostrophe zaehlen hier mit - vorsichtig.
+  // Ein String-Literal traegt bis Delphi 11 hoechstens 255 Zeichen (E2056;
+  // Delphi 12 erlaubt mehr) - die Unit kann auch aelter uebersetzt werden.
+  // Die Quotes und verdoppelten Apostrophe zaehlen hier mit - vorsichtig.
   MAX_ASSERT_LITERAL = 255;
   R_TOBJECT_MOVED = 'class(TObject) steht nicht mehr an der gemeldeten Stelle';
   R_FREE_MOVED    = 'X.Free; steht nicht mehr an der gemeldeten Stelle';
@@ -595,10 +600,17 @@ begin
   if not WordAt(L, ACol, 'Assert') or not AMap.IsCode(ALine, ACol)
      or ((ACol > 1) and IsIdentChar(L[ACol - 1])) then
     Exit(R_ASSERT_MOVED);
-  // 'Obj.Assert(x)' ist eine Methode - nur 'System.Assert' bleibt die RTL.
+  // 'Obj.Assert(x)' / 'Unit.Assert(x)' ist nicht die RTL - nur
+  // 'System.Assert'. 'inherited Assert' bindet immer an einen Vorfahren,
+  // 'procedure Assert(' ist die Deklaration selbst (der Detektor meldet
+  // auch sie).
   Prev := PrevToken(AMap, ALine, ACol);
   if (Prev.Low = '.') and (Before(AMap, Prev).Low <> 'system') then
-    Exit('Assert ist hier eine Methode eines Objekts');
+    Exit('Assert ist hier qualifiziert - nicht System.Assert');
+  if (Prev.Low = 'inherited') or (Prev.Low = 'procedure')
+     or (Prev.Low = 'function') then
+    Exit(Format('"%s Assert" ist nicht der Aufruf von System.Assert',
+      [Prev.Low]));
   AOpenCol := SkipBlanks(L, ACol + 6);
   if (AOpenCol > Length(L)) or (L[AOpenCol] <> '(')
      or not AMap.IsCode(ALine, AOpenCol) then
@@ -746,12 +758,20 @@ begin
   end;
 end;
 
+// Beginnt ALow einen Sichtbarkeitsabschnitt oder schliesst 'end' die Klasse?
+function IsSectionWord(const ALow: string): Boolean;
+begin
+  Result := (ALow = 'private') or (ALow = 'protected') or (ALow = 'public')
+    or (ALow = 'published') or (ALow = 'strict') or (ALow = 'end');
+end;
+
 class function TRdxSimpleFixes.EmptySection(AMap: TRdxCodeMap; ALine: Integer;
   const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
 var
   L    : string;
   Name : string;
   p, q : Integer;
+  Next : TRdxToken;
 begin
   Result := False;
   AEdit := Default(TRdxEdit);
@@ -778,7 +798,8 @@ begin
   L := AMap.Raw(ALine);
   if AMap.StartsInside(ALine) or AMap.HasNonCode(ALine, 1, Length(L)) then
   begin
-    AReason := 'Kommentar auf der Zeile - er ginge beim Loeschen verloren';
+    AReason := 'Kommentar oder String auf der Zeile - er ginge beim Loeschen '
+      + 'verloren';
     Exit;
   end;
   // 'strict' ohne 'private'/'protected' auf derselben Zeile: das Wort
@@ -789,13 +810,32 @@ begin
     AReason := 'strict steht allein - es gehoert zur naechsten Zeile';
     Exit;
   end;
+  // Umgekehrt: 'strict' allein auf der Zeile davor gehoert zu DIESEM
+  // Abschnitt - ohne ihn wuerde aus 'strict' + 'protected' ein 'strict
+  // protected'.
+  if PrevToken(AMap, ALine, 1).Low = 'strict' then
+  begin
+    AReason := 'strict auf der Zeile davor gehoert zu diesem Abschnitt';
+    Exit;
+  end;
   if LowerCase(CollapseBlanks(L)) <> Name then
   begin
     AReason := Format('Zeile %d traegt nicht nur "%s" - Zeile verschoben? '
       + 'Datei neu pruefen', [ALine, Name]);
     Exit;
   end;
-  if DirectiveBefore(AMap, ALine + 1, NextToken(AMap, ALine + 1, 1)) then
+  // Leer ist der Abschnitt nur, wenn als naechstes Code ein Abschnitt oder
+  // 'end' folgt. Der Detektor sieht Zeilen nicht, die mit '&' oder einem
+  // Umlaut beginnen ('&Type: ...', 'Aenderung: ...' mit Umlaut) - deren
+  // Abschnitt haelt er faelschlich fuer leer (Gegen-Review 2026-10-10).
+  Next := NextToken(AMap, ALine + 1, 1);
+  if not IsSectionWord(Next.Low) then
+  begin
+    AReason := Format('nach dem Abschnitt folgt "%s" - er ist nicht leer',
+      [Next.Low]);
+    Exit;
+  end;
+  if DirectiveBefore(AMap, ALine + 1, Next) then
   begin
     AReason := 'Compiler-Direktive bis zum naechsten Abschnitt - der leere '
       + 'Abschnitt gilt evtl. nur in einem Zweig';
