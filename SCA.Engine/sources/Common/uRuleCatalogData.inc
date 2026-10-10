@@ -94,7 +94,7 @@ const
         '  MyUnusedHelper;   // registers its classes in its initialization section';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA008
     (
@@ -2095,7 +2095,7 @@ const
         'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA169
     (

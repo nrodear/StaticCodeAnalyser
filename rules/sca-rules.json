@@ -216,6 +216,7 @@
       "tags": ["dead-code", "uses-cleanup"],
       "configKey": "[Detectors] UsesCheck",
       "detectorUnit": "uUnusedUses.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "uses ..., MyUnusedHelper, ...;",
         "good": "uses\n  System.SysUtils, Vcl.Forms;\n\n// Or, if it must stay (initialization side effect, class registration):\nuses\n  System.SysUtils, Vcl.Forms,\n  MyUnusedHelper;   // registers its classes in its initialization section"
@@ -3386,6 +3387,7 @@
       "tags": ["control-flow", "default-case"],
       "configKey": "",
       "detectorUnit": "uDefaultCaseInCaseStatement.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "case Status of\n  stNew    : DoNew;\n  stActive : DoActive;\nend;",
         "good": "case Status of\n  stNew    : DoNew;\n  stActive : DoActive;\nelse\n  raise EProgrammerError.Create('Unhandled status');\nend;"

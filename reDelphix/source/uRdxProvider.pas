@@ -249,6 +249,11 @@ const
   CAP_NOARGS   = 'Remove the empty parentheses';
   CAP_REDBOOL  = 'Remove the redundant comparison with True/False';
   CAP_NILCHECK = 'Remove the redundant comparison with nil';
+  CAP_UNUSEDUSES = 'Remove unit %s from uses';
+  CAP_CASE_ELSE  = 'Add an empty else branch';
+  CAP_CASE_RAISE = 'Add an else branch that raises an exception';
+  // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
+  CAP_CHANGES    = '(changes behavior)';
   DIAG_PREFIX  = 'reDelphix: ';
   // Fuer das Protokoll (deutsch wie die uebrigen Zeilen).
   SOURCE_NAMES : array[TRdxTextSource] of string =
@@ -607,13 +612,41 @@ begin
   end;
 end;
 
-// Menuetext einer einfachen Hilfe; AName ist X bei SCA085/SCA139 ('' wenn
-// der Planer abgelehnt hat, bevor X feststand).
-function SimpleFixCaption(AKind: TFindingKind; const AName: string): string;
+// Menuetexte der Hilfen aus dem uQuickFix-Umzug und der Stufe 3 (SCA066,
+// SCA072, SCA084, SCA007, SCA168) - ein zweiter Verteiler (SCA091).
+// AVariant waehlt den Eintrag, AName ist die Unit bei SCA007.
+function LaterFixCaption(AKind: TFindingKind; AVariant: Integer;
+  const AName: string): string;
+begin
+  case AKind of
+    fkEmptyArgumentList:
+      Result := _(CAP_NOARGS);
+    fkRedundantBoolean:
+      Result := _(CAP_REDBOOL);
+    fkAssignedAndAssignedNil:
+      Result := _(CAP_NILCHECK);
+    fkUnusedUses:
+      Result := Format(_(CAP_UNUSEDUSES), [AName]);
+    fkDefaultCaseInCaseStatement:
+      if AVariant = 1 then
+        Result := _(CAP_CASE_RAISE)
+      else
+        Result := _(CAP_CASE_ELSE);
+  else
+    Result := uSCAConsts.KindName(AKind);
+  end;
+end;
+
+// Menuetext einer einfachen Hilfe; AOutcome.Name ist X bei SCA085/SCA139
+// und die Unit bei SCA007 ('' wenn der Planer abgelehnt hat, bevor X
+// feststand), Variant waehlt den Eintrag, ChangesBehavior haengt die
+// Kennzeichnung an (E2).
+function SimpleFixCaption(AKind: TFindingKind;
+  const AOutcome: TRdxFixOutcome): string;
 var
   N : string;
 begin
-  N := AName;
+  N := AOutcome.Name;
   if N = '' then N := 'X';
   case AKind of
     fkFreeAndNilHint, fkFreeWithoutNil:
@@ -626,38 +659,46 @@ begin
       Result := _(CAP_ASSERT);
     fkEmptyVisibilitySection:
       Result := _(CAP_EMPTYSEC);
-    fkEmptyArgumentList:
-      Result := _(CAP_NOARGS);
-    fkRedundantBoolean:
-      Result := _(CAP_REDBOOL);
-    fkAssignedAndAssignedNil:
-      Result := _(CAP_NILCHECK);
   else
-    Result := uSCAConsts.KindName(AKind);
+    Result := LaterFixCaption(AKind, AOutcome.Variant, N);
   end;
+  if AOutcome.ChangesBehavior then
+    Result := Result + ' ' + _(CAP_CHANGES);
 end;
 
 procedure TRdxProvider.AddSimpleFix(var AList: TArray<TFindingAction>;
   const ACtx: TRdxRecipeContext);
+
+  // Ein Eintrag zu AOutcome: mit seinen Ersetzungen oder gesperrt mit Grund.
+  procedure AddOutcome(const AOutcome: TRdxFixOutcome);
+  var
+    Caption : string;
+    Act     : TRdxAction;
+  begin
+    Caption := SimpleFixCaption(ACtx.Finding.Kind, AOutcome);
+    if not AOutcome.Enabled then
+    begin
+      Add(AList, Caption, AOutcome.Reason, False, nil);
+      Exit;
+    end;
+    Act := NewAction(akReplace, ACtx.FileName);
+    Act.FEdits := AOutcome.Edits;
+    Add(AList, Caption, AOutcome.Hint, True, Act);
+  end;
+
 var
-  O       : TRdxFixOutcome;
-  Caption : string;
-  Act     : TRdxAction;
+  Alt : TRdxFixOutcome;
 begin
   if not TRdxFixRunner.Handles(ACtx.Finding.Kind)
      or not IsPascalSource(ACtx.FileName)
      or (ACtx.FixMode = FIX_NONE) then Exit;
-  O := TRdxFixRunner.FixFor(FSource.Places, ACtx.Lines, ACtx.Finding,
-    FUsesNames);
-  Caption := SimpleFixCaption(ACtx.Finding.Kind, O.Name);
-  if not O.Enabled then
-  begin
-    Add(AList, Caption, O.Reason, False, nil);
-    Exit;
-  end;
-  Act := NewAction(akReplace, ACtx.FileName);
-  Act.FEdits := O.Edits;
-  Add(AList, Caption, O.Hint, True, Act);
+  AddOutcome(TRdxFixRunner.FixFor(FSource.Places, ACtx.Lines, ACtx.Finding,
+    FUsesNames));
+  // Zweiter Eintrag derselben Regel (SCA168: else mit raise).
+  Alt := TRdxFixRunner.AlternativeFixFor(FSource.Places, ACtx.Lines,
+    ACtx.Finding, FUsesNames);
+  if Alt.Variant > 0 then
+    AddOutcome(Alt);
 end;
 
 procedure TRdxProvider.AddSuppress(var AList: TArray<TFindingAction>;

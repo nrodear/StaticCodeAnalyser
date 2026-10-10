@@ -100,6 +100,13 @@ type
     Name    : string;    // X fuer den Menuetext: SCA085 wie im Puffer, SCA139 wie in der Meldung
     Hint    : string;    // bei Enabled = True
     Reason  : string;    // bei Enabled = False
+    // 0 = die Hilfe (FixFor), 1 = der zweite Eintrag (AlternativeFixFor,
+    // SCA168: else mit raise).
+    Variant : Integer;
+    // Entscheid E2 (Konzept Editorhilfen): der Menuetext traegt
+    // '(aendert Verhalten)' - SCA007 (initialization-Abschnitt der Unit),
+    // SCA168 mit raise.
+    ChangesBehavior : Boolean;
   end;
 
   // uses-Eintraege qualifizieren ('uses: X -> Scope.X', QualifyUses):
@@ -375,6 +382,30 @@ type
     class function OperandFix(AKind: TFindingKind; APlaces: TSourcePlaces;
       ALines: TStrings; ALine: Integer;
       const AMessage: string): TRdxFixOutcome; static;
+
+    // SCA007: den uses-Eintrag AUnit (die Meldung) auf ALine loeschen
+    // (TRdxStructFixes.RemoveUsesEntry). Gesperrt bei Direktiven in einer
+    // uses-Klausel. Aendert evtl. das Verhalten: der initialization-
+    // Abschnitt der Unit laeuft nicht mehr (ChangesBehavior).
+    class function UnusedUsesFix(APlaces: TSourcePlaces; ALines: TStrings;
+      ALine: Integer; const AUnit: string): TRdxFixOutcome; static;
+
+    // SCA168: ein leeres else vor das end des case auf ALine
+    // (TRdxStructFixes.CaseElse) - bedeutungsgleich.
+    class function CaseElseFix(APlaces: TSourcePlaces; ALines: TStrings;
+      ALine: Integer): TRdxFixOutcome; static;
+    // SCA168, zweiter Eintrag: else mit RAISE_UNHANDLED - aendert das
+    // Verhalten; SysUtils kommt bei Bedarf mit; nicht in Dateien mit
+    // FPC-Weiche oder FPC-Modus (FPC kennt EProgrammerError nicht).
+    class function CaseRaiseFix(APlaces: TSourcePlaces; ALines: TStrings;
+      ALine: Integer; const AUsesNames: TArray<string>): TRdxFixOutcome; static;
+
+    // Ein zweiter Menueeintrag fuer denselben Fund, Variant = 1 - heute nur
+    // SCA168 (else mit raise; Nico 2026-10-10: beide Eintraege). Variant = 0:
+    // keiner.
+    class function AlternativeFixFor(APlaces: TSourcePlaces; ALines: TStrings;
+      AFinding: TLeakFinding;
+      const AUsesNames: TArray<string>): TRdxFixOutcome; static;
   end;
 
 implementation
@@ -382,6 +413,7 @@ implementation
 uses
   uRdxCodeMap,       // TRdxCodeMap: Code-Sicht der Datei fuer die Planer
   uRdxSimpleFixes,   // Planer der einfachen Hilfen (reine Textlogik)
+  uRdxStructFixes,   // Planer SCA007/SCA168 (uses-Eintrag, case-else)
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
 // Dieser Laeufer ist gegen Version 1 des Quellstellen-Vertrags geschrieben
@@ -405,6 +437,8 @@ const
   R_FREENIL_HINT = 'FreeAndNil setzt %s auf nil, bevor der Destruktor laeuft';
   R_WITH_MEMBER  = 'with-Anweisung in der Routine - %s koennte ein Member sein';
   R_NO_HELP      = 'keine Hilfe an dieser Stelle';
+  R_CASE_ELSE_HINT  = 'alle anderen Werte: nichts tun (wie bisher)';
+  R_CASE_RAISE_HINT = 'unbehandelte Werte loesen EProgrammerError aus';
   R_PROC_TYPE    = '%s hat einen Prozedurtyp - "%s <> nil" ruft ihn auf, '
     + 'Assigned() nicht';
 
@@ -1206,7 +1240,7 @@ begin
   Result := AKind in [fkExplicitTObjectInheritance, fkFreeAndNilHint,
     fkNilComparison, fkAssertMessage, fkEmptyVisibilitySection,
     fkFreeWithoutNil, fkEmptyArgumentList, fkRedundantBoolean,
-    fkAssignedAndAssignedNil];
+    fkAssignedAndAssignedNil, fkUnusedUses, fkDefaultCaseInCaseStatement];
 end;
 
 // X aus der SCA085-Meldung '`X.Free; X := nil;` - prefer ...'; '' ohne
@@ -1221,6 +1255,30 @@ begin
   Q := Pos('.Free', AMessage, P + 1);
   if Q = 0 then Exit;
   Result := Trim(Copy(AMessage, P + 1, Q - P - 1));
+end;
+
+// Die Hilfen aus dem uQuickFix-Umzug und der Stufe 3 (SCA066, SCA072,
+// SCA084, SCA007, SCA168) - ein zweiter Verteiler, damit FixFor
+// ueberschaubar bleibt (SCA091).
+function LaterFixFor(APlaces: TSourcePlaces; ALines: TStrings;
+  AFinding: TLeakFinding): TRdxFixOutcome;
+begin
+  Result := Default(TRdxFixOutcome);
+  case AFinding.Kind of
+    fkEmptyArgumentList:
+      Result := TRdxFixRunner.EmptyArgsFix(APlaces, ALines, AFinding.LineInt,
+        AFinding.Message);
+    fkRedundantBoolean, fkAssignedAndAssignedNil:
+      Result := TRdxFixRunner.OperandFix(AFinding.Kind, APlaces, ALines,
+        AFinding.LineInt, AFinding.Message);
+    fkUnusedUses:
+      Result := TRdxFixRunner.UnusedUsesFix(APlaces, ALines, AFinding.LineInt,
+        AFinding.Message);
+    fkDefaultCaseInCaseStatement:
+      Result := TRdxFixRunner.CaseElseFix(APlaces, ALines, AFinding.LineInt);
+  else
+    Result.Reason := 'keine einfache Hilfe fuer diese Regel';
+  end;
 end;
 
 class function TRdxFixRunner.FixFor(APlaces: TSourcePlaces; ALines: TStrings;
@@ -1266,18 +1324,13 @@ begin
     fkFreeWithoutNil:
       Result := FreeWithoutNilFix(APlaces, ALines, AFinding.LineInt,
         AFinding.Message, AUsesNames);
-    fkEmptyArgumentList:
-      Result := EmptyArgsFix(APlaces, ALines, AFinding.LineInt,
-        AFinding.Message);
-    fkRedundantBoolean, fkAssignedAndAssignedNil:
-      Result := OperandFix(AFinding.Kind, APlaces, ALines, AFinding.LineInt,
-        AFinding.Message);
   else
-    Result.Reason := 'keine einfache Hilfe fuer diese Regel';
+    Result := LaterFixFor(APlaces, ALines, AFinding);
   end;
 end;
 
-// SCA075 und SCA087: die Planer arbeiten nur auf den Zeilen, ohne Parser. Spalte bzw. Abschnitt stehen in der Meldung - die Spalte kennt
+// SCA075 und SCA087: die Planer arbeiten nur auf den Zeilen, ohne Parser.
+// Spalte bzw. Abschnitt stehen in der Meldung - die Spalte kennt
 // den Kommentar-Zustand der Zeilen davor, ein Neuscan der Zeile nicht.
 function LinesOnlyFix(AKind: TFindingKind; ALines: TStrings; ALine: Integer;
   const AMessage: string): TRdxFixOutcome;
@@ -1636,6 +1689,143 @@ begin
   Result.Edits[0] := Plan.Edit;
   Result.Hint := Plan.Edit.NewText;
   Result.Enabled := True;
+end;
+
+// SCA007: die Klausel und der Eintrag zum Unit-Namen AUnit auf ALine.
+// '' oder der Grund.
+function FindUsesEntry(APlaces: TSourcePlaces; ALine: Integer;
+  const AUnit: string; out AClause: TRdxUsesClause; out AIndex: Integer): string;
+var
+  Clauses : TArray<TArray<TRefactorSpan>>;
+  c, k, n : Integer;
+begin
+  Result := '';
+  AClause := Default(TRdxUsesClause);
+  AIndex := -1;
+  n := 0;
+  Clauses := ClausesOf(APlaces);
+  for c := 0 to High(Clauses) do
+    for k := 0 to High(Clauses[c]) do
+      if (Clauses[c][k].StartLine = ALine)
+         and SameText(Clauses[c][k].Resolved, AUnit) then
+      begin
+        Inc(n);
+        AClause.Entries := Clauses[c];
+        AClause.UsesLine := UsesKeywordLine(APlaces, Clauses[c][0]);
+        AIndex := k;
+      end;
+  if n = 0 then
+    Result := Format('%s steht nicht mehr auf Zeile %d einer uses-Klausel - '
+      + 'Zeile verschoben? Datei neu pruefen', [AUnit, ALine])
+  else if n > 1 then
+    Result := Format('%s steht mehrmals auf Zeile %d', [AUnit, ALine]);
+end;
+
+class function TRdxFixRunner.UnusedUsesFix(APlaces: TSourcePlaces;
+  ALines: TStrings; ALine: Integer; const AUnit: string): TRdxFixOutcome;
+var
+  Map    : TRdxCodeMap;
+  Clause : TRdxUsesClause;
+  Index  : Integer;
+begin
+  Result := Default(TRdxFixOutcome);
+  Result.Name := Trim(AUnit);
+  Result.ChangesBehavior := True;
+  if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
+    Result.Reason := R_NO_FILE
+  else if TRdxRecipeRunner.UsesDirectiveLine(APlaces) > 0 then
+    Result.Reason := 'Direktive in einer uses-Klausel - ein Eintrag gilt evtl. '
+      + 'nur in einem Zweig'
+  else
+    Result.Reason := FindUsesEntry(APlaces, ALine, Result.Name, Clause, Index);
+  if Result.Reason <> '' then Exit;
+  SetLength(Result.Edits, 1);
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    Result.Enabled := TRdxStructFixes.RemoveUsesEntry(Map, Clause, Index,
+      Result.Edits[0], Result.Reason);
+  finally
+    Map.Free;
+  end;
+  if not Result.Enabled then
+  begin
+    Result.Edits := nil;
+    Exit;
+  end;
+  Result.Hint := Format('hat %s einen initialization-Abschnitt (Registrierung, '
+    + 'Seiteneffekt), laeuft er nicht mehr', [Result.Name]);
+end;
+
+// Eingang eines Laeufers mit Quellstellen-Dienst: ohne offene Datei nil
+// und R_NO_FILE in AOutcome.Reason; sonst die Code-Sicht (der Aufrufer gibt
+// sie frei) und Platz fuer eine Ersetzung in AOutcome.Edits.
+function OpenMapFor(APlaces: TSourcePlaces; ALines: TStrings;
+  var AOutcome: TRdxFixOutcome): TRdxCodeMap;
+begin
+  Result := nil;
+  if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
+  begin
+    AOutcome.Reason := R_NO_FILE;
+    Exit;
+  end;
+  SetLength(AOutcome.Edits, 1);
+  Result := TRdxCodeMap.Create(ALines);
+end;
+
+// SCA168: TRdxStructFixes.CaseElse mit AStatement ('' = leeres else).
+function CaseElseOutcome(APlaces: TSourcePlaces; ALines: TStrings;
+  ALine: Integer; const AStatement: string): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
+begin
+  Result := Default(TRdxFixOutcome);
+  Map := OpenMapFor(APlaces, ALines, Result);
+  if Map = nil then Exit;
+  try
+    Result.Enabled := TRdxStructFixes.CaseElse(Map, ALine, AStatement,
+      Result.Edits[0], Result.Reason);
+  finally
+    Map.Free;
+  end;
+  if not Result.Enabled then
+    Result.Edits := nil;
+end;
+
+class function TRdxFixRunner.CaseElseFix(APlaces: TSourcePlaces;
+  ALines: TStrings; ALine: Integer): TRdxFixOutcome;
+begin
+  Result := CaseElseOutcome(APlaces, ALines, ALine, '');
+  if Result.Enabled then
+    Result.Hint := R_CASE_ELSE_HINT;
+end;
+
+class function TRdxFixRunner.CaseRaiseFix(APlaces: TSourcePlaces;
+  ALines: TStrings; ALine: Integer;
+  const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  if Assigned(APlaces) and APlaces.IsOpen
+     and TRdxRecipeRunner.SourceLooksFpcAware(APlaces) then
+  begin
+    Result := Default(TRdxFixOutcome);
+    Result.Reason := 'Datei mit FPC-Weiche oder FPC-Modus - FPC kennt '
+      + 'EProgrammerError nicht';
+  end
+  else
+    Result := CaseElseOutcome(APlaces, ALines, ALine, RAISE_UNHANDLED);
+  Result.Variant := 1;
+  Result.ChangesBehavior := True;
+  if not Result.Enabled then Exit;
+  Result.Hint := R_CASE_RAISE_HINT;
+  Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
+end;
+
+class function TRdxFixRunner.AlternativeFixFor(APlaces: TSourcePlaces;
+  ALines: TStrings; AFinding: TLeakFinding;
+  const AUsesNames: TArray<string>): TRdxFixOutcome;
+begin
+  Result := Default(TRdxFixOutcome);
+  if Assigned(AFinding) and (AFinding.Kind = fkDefaultCaseInCaseStatement) then
+    Result := CaseRaiseFix(APlaces, ALines, AFinding.LineInt, AUsesNames);
 end;
 
 // Der Text, auf dem uNilComparison den Knoten zaehlt (Analyse

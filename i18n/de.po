@@ -2304,6 +2304,18 @@ msgstr "Überflüssigen Vergleich mit True/False entfernen"
 msgid "Remove the redundant comparison with nil"
 msgstr "Überflüssigen Vergleich mit nil entfernen"
 
+msgid "Remove unit %s from uses"
+msgstr "Unit %s aus uses entfernen"
+
+msgid "Add an empty else branch"
+msgstr "Leeren else-Zweig ergänzen"
+
+msgid "Add an else branch that raises an exception"
+msgstr "else-Zweig mit Exception ergänzen"
+
+msgid "(changes behavior)"
+msgstr "(ändert Verhalten)"
+
 msgid "Show location"
 msgstr "Stelle zeigen"
 

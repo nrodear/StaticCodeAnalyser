@@ -13,6 +13,7 @@
       "EmptyArgumentList",
       "RedundantBoolean",
       "AssignedAndAssignedNil",
+      "DefaultCaseInCaseStatement",
       "UnusedSuppression",
       "UnsortedUses",
       "UnusedUses",

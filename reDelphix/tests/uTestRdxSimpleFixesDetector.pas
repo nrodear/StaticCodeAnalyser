@@ -99,6 +99,21 @@ type
     [Test] procedure Catalog_EditorHelpMatchesHelps;
   end;
 
+  // Stufe 3 (uRdxStructFixes): SCA007 uses-Eintrag, SCA168 case-else.
+  [TestFixture]
+  TTestRdxSimpleFixesDetector4 = class
+  public
+    // ---- SCA007 ----
+    [Test] procedure Sca007_RoundTrip;
+    [Test] procedure Sca007_OnlyEntry_RemovesClause;
+    [Test] procedure Sca007_MarkedAsBehaviorChange;
+    // ---- SCA168 ----
+    [Test] procedure Sca168_RoundTrip;
+    [Test] procedure Sca168_Raise_AddsUses;
+    [Test] procedure Sca168_FpcFile_NoRaise;
+    [Test] procedure Sca168_CatalogExample;
+  end;
+
 implementation
 
 uses
@@ -107,6 +122,7 @@ uses
   uExplicitTObjectInheritance, uFreeAndNilHint, uNilComparison,
   uAssertMessage, uEmptyVisibilitySection, uFreeWithoutNil,
   uEmptyArgumentList, uRedundantBoolean, uAssignedAndAssignedNil,
+  uUnusedUses, uDefaultCaseInCaseStatement,
   uEngineApi, uRdxBufferMath, uRdxRecipeRunner;
 
 type
@@ -130,6 +146,27 @@ begin
     SL.SaveToFile(Result);
   finally
     SL.Free;
+  end;
+end;
+
+// Die Detektoren aus dem uQuickFix-Umzug und der Stufe 3 - ein zweiter
+// Verteiler (SCA091).
+procedure RunLaterDetector(AKind: TFindingKind; Root: TAstNode;
+  const Path: string; Results: TObjectList<TLeakFinding>);
+begin
+  case AKind of
+    fkEmptyArgumentList:
+      TEmptyArgumentListDetector.AnalyzeUnit(Root, Path, Results);
+    fkRedundantBoolean:
+      TRedundantBooleanDetector.AnalyzeUnit(Root, Path, Results);
+    fkAssignedAndAssignedNil:
+      TAssignedAndAssignedNilDetector.AnalyzeUnit(Root, Path, Results);
+    fkUnusedUses:
+      TUnusedUsesDetector.AnalyzeUnit(Root, Path, Results);
+    fkDefaultCaseInCaseStatement:
+      TDefaultCaseInCaseStatementDetector.AnalyzeUnit(Root, Path, Results);
+  else
+    Assert.Fail('keine Hilfe fuer diese Art');
   end;
 end;
 
@@ -164,14 +201,8 @@ begin
             TEmptyVisibilitySectionDetector.AnalyzeUnit(Root, Path, Results);
           fkFreeWithoutNil:
             TFreeWithoutNilDetector.AnalyzeUnit(Root, Path, Results);
-          fkEmptyArgumentList:
-            TEmptyArgumentListDetector.AnalyzeUnit(Root, Path, Results);
-          fkRedundantBoolean:
-            TRedundantBooleanDetector.AnalyzeUnit(Root, Path, Results);
-          fkAssignedAndAssignedNil:
-            TAssignedAndAssignedNilDetector.AnalyzeUnit(Root, Path, Results);
         else
-          Assert.Fail('keine Hilfe fuer diese Art');
+          RunLaterDetector(AKind, Root, Path, Results);
         end;
       finally
         Root.Free;
@@ -222,6 +253,30 @@ begin
   AEdits  := O.Edits;
   AReason := O.Reason;
   Result  := O.Enabled;
+end;
+
+// Der zweite Eintrag (TRdxFixRunner.AlternativeFixFor) fuer EINEN Fund -
+// heute nur SCA168 (else mit raise).
+function PlanAltFix(const ASource: string; AKind: TFindingKind;
+  const ASeen: TSeen): TRdxFixOutcome;
+var
+  SL      : TStringList;
+  Places  : TSourcePlaces;
+  Finding : TLeakFinding;
+begin
+  SL := TStringList.Create;
+  Places := TSourcePlaces.Create;
+  Finding := TLeakFinding.New('t.pas', '', ASeen.Line, ASeen.Msg, AKind);
+  try
+    SL.Text := ASource;
+    Assert.IsTrue(Places.OpenSource('t.pas', ASource), 'OpenSource');
+    Result := TRdxFixRunner.AlternativeFixFor(Places, SL, Finding,
+      TRdxRecipeRunner.UsesNamesOf(Places));
+  finally
+    Finding.Free;
+    Places.Free;
+    SL.Free;
+  end;
 end;
 
 // Schreibt wie der Editor: alle Ersetzungen gegen denselben Puffer geprueft.
@@ -979,9 +1034,147 @@ begin
   end;
 end;
 
+{ ---- SCA007 ---- }
+
+const
+  // uses-Klausel im implementation-Teil (%s), eine Routine ohne Bezug auf
+  // System.Classes oder System.Math - SysUtils gilt dem Detektor als
+  // immer benoetigt.
+  UNIT_007 =
+    'unit t;'#13#10 +
+    'interface'#13#10 +
+    'implementation'#13#10 +
+    '%s'#13#10 +
+    'procedure P;'#13#10 +
+    'begin'#13#10 +
+    '  Exit;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_RoundTrip;
+begin
+  // Erst der erste Eintrag, dann der letzte (ab dem Komma davor).
+  Assert.AreEqual(Format(UNIT_007, ['uses System.SysUtils;']),
+    FixAll(Format(UNIT_007,
+      ['uses System.Classes, System.SysUtils, System.Math;']), fkUnusedUses));
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_OnlyEntry_RemovesClause;
+begin
+  Assert.AreEqual(Join(['unit t;', 'interface', 'implementation',
+      'procedure P;', 'begin', '  Exit;', 'end;', 'end.']),
+    FixAll(Format(UNIT_007, ['uses' + #13#10 + '  System.Classes;']),
+      fkUnusedUses));
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca007_MarkedAsBehaviorChange;
+var
+  Src     : string;
+  Seen    : TArray<TSeen>;
+  SL      : TStringList;
+  Places  : TSourcePlaces;
+  Finding : TLeakFinding;
+  O       : TRdxFixOutcome;
+begin
+  // Entscheid E2: eine Unit kann im initialization-Abschnitt registrieren.
+  Src := Format(UNIT_007, ['uses System.Classes, System.SysUtils;']);
+  Seen := Detect(Src, fkUnusedUses);
+  Assert.AreEqual<Integer>(1, Length(Seen), 'nur System.Classes');
+  SL := TStringList.Create;
+  Places := TSourcePlaces.Create;
+  Finding := TLeakFinding.New('t.pas', '', Seen[0].Line, Seen[0].Msg,
+    fkUnusedUses);
+  try
+    SL.Text := Src;
+    Assert.IsTrue(Places.OpenSource('t.pas', Src), 'OpenSource');
+    O := TRdxFixRunner.FixFor(Places, SL, Finding,
+      TRdxRecipeRunner.UsesNamesOf(Places));
+  finally
+    Finding.Free;
+    Places.Free;
+    SL.Free;
+  end;
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.ChangesBehavior, 'Kennzeichnung (aendert Verhalten)');
+  Assert.AreEqual('System.Classes', O.Name);
+end;
+
+{ ---- SCA168 ---- }
+
+procedure TTestRdxSimpleFixesDetector4.Sca168_RoundTrip;
+begin
+  Assert.AreEqual(InRoutine(Join(['case Obj.Tag of', '  1: Exit;', 'else',
+      'end;'])),
+    FixAll(InRoutine(Join(['case Obj.Tag of', '  1: Exit;', 'end;'])),
+      fkDefaultCaseInCaseStatement));
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca168_Raise_AddsUses;
+var
+  Src, After : string;
+  Seen       : TArray<TSeen>;
+  O          : TRdxFixOutcome;
+begin
+  // Ohne SysUtils: die uses-Ergaenzung kommt mit (EProgrammerError).
+  Src := Join(['unit t;', 'interface', 'implementation', 'procedure P(X: Integer);',
+    'begin', '  case X of', '    1: Exit;', '  end;', 'end;', 'end.']);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.AreEqual<Integer>(1, O.Variant, 'zweiter Eintrag');
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.IsTrue(O.ChangesBehavior, 'Kennzeichnung (aendert Verhalten)');
+  After := Apply(Src, O.Edits);
+  Assert.IsTrue(Pos('raise EProgrammerError.Create(', After) > 0, After);
+  Assert.AreEqual<Integer>(1, CountOf('SysUtils', After), After);
+  Assert.AreEqual<Integer>(0, Length(Detect(After, fkDefaultCaseInCaseStatement)),
+    'der Detektor schweigt');
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca168_FpcFile_NoRaise;
+var
+  Src  : string;
+  Seen : TArray<TSeen>;
+  O    : TRdxFixOutcome;
+begin
+  Src := Join(['unit t;', '{$mode delphi}', 'interface', 'implementation',
+    'procedure P(X: Integer);', 'begin', '  case X of', '    1: Exit;', '  end;',
+    'end;', 'end.']);
+  Seen := Detect(Src, fkDefaultCaseInCaseStatement);
+  Assert.AreEqual<Integer>(1, Length(Seen));
+  O := PlanAltFix(Src, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.AreEqual<Integer>(1, O.Variant, 'der Eintrag steht da - gesperrt');
+  Assert.IsFalse(O.Enabled);
+  Assert.IsTrue(Pos('EProgrammerError', O.Reason) > 0, O.Reason);
+end;
+
+procedure TTestRdxSimpleFixesDetector4.Sca168_CatalogExample;
+var
+  Meta  : TRuleMeta;
+  Bad   : string;
+  Seen  : TArray<TSeen>;
+  O     : TRdxFixOutcome;
+begin
+  // 'good' traegt raise mit einem anderen Text ('Unhandled status') - die
+  // leere Hilfe schreibt das else, die zweite das raise; danach schweigt
+  // der Detektor.
+  Meta := TRuleCatalog.GetRuleCanonical(fkDefaultCaseInCaseStatement);
+  Assert.IsTrue(Pos('raise EProgrammerError.Create(', Meta.GoodExample) > 0,
+    Meta.GoodExample);
+  Bad := InRoutine(Snip(Meta.BadExample));
+  Assert.AreEqual(StringReplace(Bad, #13#10'  end;', #13#10'  else'#13#10'  end;',
+    []), FixAll(Bad, fkDefaultCaseInCaseStatement));
+  Seen := Detect(Bad, fkDefaultCaseInCaseStatement);
+  O := PlanAltFix(Bad, fkDefaultCaseInCaseStatement, Seen[0]);
+  Assert.IsTrue(O.Enabled, O.Reason);
+  Assert.AreEqual<Integer>(0, Length(Detect(Apply(Bad, O.Edits),
+    fkDefaultCaseInCaseStatement)), 'der Detektor schweigt');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector2);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector3);
+  TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector4);
 
 end.

@@ -2300,6 +2300,18 @@ msgstr "Retirer la comparaison superflue avec True/False"
 msgid "Remove the redundant comparison with nil"
 msgstr "Retirer la comparaison superflue avec nil"
 
+msgid "Remove unit %s from uses"
+msgstr "Retirer l'unité %s de uses"
+
+msgid "Add an empty else branch"
+msgstr "Ajouter une branche else vide"
+
+msgid "Add an else branch that raises an exception"
+msgstr "Ajouter une branche else qui lève une exception"
+
+msgid "(changes behavior)"
+msgstr "(modifie le comportement)"
+
 msgid "Show location"
 msgstr "Afficher l'emplacement"
 

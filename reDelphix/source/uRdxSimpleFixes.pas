@@ -908,39 +908,6 @@ begin
   SetLength(Result, n);
 end;
 
-// Beginnt an (ALine, ACol) eine Compiler-Direktive ('{$' oder '(*$')? Die
-// Code-Sicht fuehrt Direktiven als Kommentar ('k').
-function DirectiveAt(AMap: TRdxCodeMap; ALine, ACol: Integer): Boolean;
-var
-  L : string;
-begin
-  L := AMap.Raw(ALine);
-  Result := (AMap.ClassAt(ALine, ACol) = 'k')
-    and ((Copy(L, ACol, 2) = '{$') or (Copy(L, ACol, 3) = '(*$'));
-end;
-
-// Beginnt zwischen (AFromLine, 1) und dem Token ATo eine Direktive? Bis
-// Dateiende, wenn ATo leer ist.
-function DirectiveBefore(AMap: TRdxCodeMap; AFromLine: Integer;
-  const ATo: TRdxToken): Boolean;
-var
-  Li, Co, Last, Stop : Integer;
-begin
-  Result := False;
-  Last := AMap.LineCount;
-  if ATo.Low <> '' then
-    Last := ATo.Line;
-  for Li := AFromLine to Last do
-  begin
-    Stop := Length(AMap.Raw(Li));
-    if (ATo.Low <> '') and (Li = ATo.Line) then
-      Stop := ATo.Col - 1;
-    for Co := 1 to Stop do
-      if DirectiveAt(AMap, Li, Co) then
-        Exit(True);
-  end;
-end;
-
 // Beginnt ALow einen Sichtbarkeitsabschnitt oder schliesst 'end' die Klasse?
 function IsSectionWord(const ALow: string): Boolean;
 begin

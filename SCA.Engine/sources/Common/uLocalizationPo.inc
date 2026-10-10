@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2371 Zeilen, 79714 Bytes
-  CPoLines_de: array[0..2370] of string = (
+  // i18n\de.po - 2383 Zeilen, 80009 Bytes
+  CPoLines_de: array[0..2382] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2321,6 +2321,18 @@ const
     'msgid "Remove the redundant comparison with nil"',
     'msgstr "'#$00DC'berfl'#$00FC'ssigen Vergleich mit nil entfernen"',
     '',
+    'msgid "Remove unit %s from uses"',
+    'msgstr "Unit %s aus uses entfernen"',
+    '',
+    'msgid "Add an empty else branch"',
+    'msgstr "Leeren else-Zweig erg'#$00E4'nzen"',
+    '',
+    'msgid "Add an else branch that raises an exception"',
+    'msgstr "else-Zweig mit Exception erg'#$00E4'nzen"',
+    '',
+    'msgid "(changes behavior)"',
+    'msgstr "('#$00E4'ndert Verhalten)"',
+    '',
     'msgid "Show location"',
     'msgstr "Stelle zeigen"',
     '',
@@ -2660,8 +2672,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2367 Zeilen, 83512 Bytes
-  CPoLines_fr: array[0..2366] of string = (
+  // i18n\fr.po - 2379 Zeilen, 83830 Bytes
+  CPoLines_fr: array[0..2378] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4963,6 +4975,18 @@ const
     '',
     'msgid "Remove the redundant comparison with nil"',
     'msgstr "Retirer la comparaison superflue avec nil"',
+    '',
+    'msgid "Remove unit %s from uses"',
+    'msgstr "Retirer l''unit'#$00E9' %s de uses"',
+    '',
+    'msgid "Add an empty else branch"',
+    'msgstr "Ajouter une branche else vide"',
+    '',
+    'msgid "Add an else branch that raises an exception"',
+    'msgstr "Ajouter une branche else qui l'#$00E8've une exception"',
+    '',
+    'msgid "(changes behavior)"',
+    'msgstr "(modifie le comportement)"',
     '',
     'msgid "Show location"',
     'msgstr "Afficher l''emplacement"',

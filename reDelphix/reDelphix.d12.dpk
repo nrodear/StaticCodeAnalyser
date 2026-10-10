@@ -61,6 +61,7 @@ contains
   uRdxCodeMap in 'source\uRdxCodeMap.pas',
   uRdxSuppress in 'source\uRdxSuppress.pas',
   uRdxSimpleFixes in 'source\uRdxSimpleFixes.pas',
+  uRdxStructFixes in 'source\uRdxStructFixes.pas',
   uRdxRecipeRunner in 'source\uRdxRecipeRunner.pas',
   uRdxLog in 'source\uRdxLog.pas',
   uRdxEditor in 'source\uRdxEditor.pas',

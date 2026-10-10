@@ -25,6 +25,7 @@ source\uRdxRecipeRunner.pas       Rezept-Laeufer auf TSourcePlaces: Fund -> Besc
 source\uRdxRecipes.pas            reine Textlogik: Literal-Codec, Format() nach der Kompilat-Regel, SQL-Vorlage, uses-Schreibweise, Rahmenwerk
 source\uRdxScopeTable.pas         Kurzname -> qualifizierte Unit (Compiler-Reihenfolge der Scope-Liste)
 source\uRdxSimpleFixes.pas        Editorhilfen SCA066/SCA072/SCA074/SCA075/SCA084/SCA085/SCA087/SCA126/SCA139 (reine Textlogik)
+source\uRdxStructFixes.pas        Editorhilfen SCA007 (uses-Eintrag) und SCA168 (case-else), reine Textlogik
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
 source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings) und Token-Leser
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
@@ -97,6 +98,8 @@ die Engine also vorher. DCUs landen wie bei den anderen Projekten in
 | (TObject) aus der Klassendeklaration entfernen | SCA075 | `class(TObject)` -> `class` an der Spalte aus der Meldung (nur Zeilen, ohne Parser) |
 | FreeAndNil(X) verwenden | SCA139 | `X.Free` -> `FreeAndNil(X)`, auch hinter `then`/`else`/`do` (ersetzt wird nur der Ausdruck). Dieselbe Variablen-Pruefung wie SCA085; X muss ein blosser Bezeichner sein (kein `Self.X`, kein Pfad), `Free` ohne Klammern und genau einmal auf der Zeile. Gesperrt, wenn der Typ von X in der Unit ein `record`, `object` oder `interface` ist (`Free` ist dort eine eigene Methode), und bei `X.Destroy`. Fehlt `System.SysUtils`, kommt die uses-Einfuegung mit |
 | Bedingung als Assert-Meldung verwenden | SCA074 | `Assert(c)` -> `Assert(c, 'c')` an der Spalte aus der Meldung; Apostrophe der Bedingung werden verdoppelt. Nur, wenn die Klammer auf derselben Zeile schliesst und kein Kommentar darin steht; nicht bei `Obj.Assert`, nicht, wenn die Unit selbst eine Routine `Assert` deklariert, nicht im `with`-Block. Ein Literal ueber 255 Zeichen (E2056) sperrt |
+| Unit X aus uses entfernen (aendert Verhalten) | SCA007 | loescht den Eintrag der Meldung aus seiner uses-Klausel: vor dem letzten Eintrag samt Komma bis zum naechsten, den letzten ab dem Komma davor, den einzigen mit der ganzen Klausel (ganze Zeilen, wenn sie allein steht); ein `in`-Pfad geht mit. Gesperrt bei einem Kommentar im geloeschten Bereich (auch `{Form1}` hinter einer Formular-Unit) und bei Direktiven in einer uses-Klausel. Gekennzeichnet nach Entscheid E2: ein `initialization`-Abschnitt der Unit (Registrierungen) laeuft danach nicht mehr |
+| Leeren else-Zweig ergaenzen / else-Zweig mit Exception ergaenzen (aendert Verhalten) | SCA168 | zwei Eintraege (Nico 2026-10-10): ein leeres `else` vor das `end` des case (bedeutungsgleich) bzw. `else raise EProgrammerError.Create('Unhandled case');` (+ `System.SysUtils` bei Bedarf). Das `end` findet eine Token-Bilanz (begin/case/try/asm/record); steht es allein auf der Zeile, kommt das `else` in eine eigene Zeile mit derselben Einrueckung. Gesperrt bei einer Direktive zwischen `case` und `end`, wenn schon ein `else` hinter `;` steht, bei zwei `case` auf der Zeile; die raise-Variante nicht in Dateien mit FPC-Weiche oder FPC-Modus (FPC kennt EProgrammerError nicht) |
 | Leere Klammern entfernen | SCA066 | `Foo()` -> `Foo` an der Spalte aus der Meldung, auch in Deklarationen (`procedure Foo();`). Nur, wo Delphi den Namen ohne Klammern genauso aufruft: als ganze Anweisung (`Obj.Foo();`), als ganze Bedingung von `if`/`while`/`until` oder als ganze rechte Seite einer Zuweisung an eine einfache Variable, deren Typ bekannt und nicht prozedural ist (sonst liest Delphi den Namen als Zeiger). Gesperrt als Argument oder Teil eines Ausdrucks (etwa bei einer Ueberladung mit `TFunc`), bei `Arr[0]()` und `F()()`, wenn der Name eine Variable (Prozedurvariable) ist oder wie ein Ereignis heisst (`OnIdle()`), in der eigenen Funktion, im `with`-Block und in Dateien mit FPC-Weiche oder FPC-Modus. Nachfolger des alten Strg+Alt+F (uQuickFix) |
 | Ueberfluessigen Vergleich mit True/False entfernen | SCA072 | `X = True` / `X <> False` -> `X`, `X = False` / `X <> True` -> `not X`. Nur fuer einen blossen Bezeichner (kein Pfad, auch nicht `Self.X`), der in der Unit als `Boolean` deklariert ist (bei Variant und LongBool ist `= True` nicht dasselbe); links davon muss ein Ausdruck beginnen und rechts von True/False einer enden - `X = True and Y` heisst `X = (True and Y)`. Gesperrt im `with`-Block. Nachfolger von uQuickFix, der auch Pfade ohne Typpruefung umschrieb |
 | Ueberfluessigen Vergleich mit nil entfernen | SCA084 | `Assigned(X) and (X <> nil)` bzw. `(X <> nil) and Assigned(X)` -> `Assigned(X)`, alles auf einer Zeile und der Vergleich geklammert. X muss als Klasse, Interface oder Zeiger bewiesen sein (`TObject`, `Pointer`, `IInterface` oder in der Unit so deklariert, auch ueber Alias) - bei einem Funktionstyp ruft `X <> nil` ihn auf, `Assigned(X)` nicht. Gesperrt bei `not` davor (es bindet nur an den ersten Teil), bei einer Aufruf- oder Cast-Klammer (`Boolean(X <> nil) and ...`), bei einer eigenen Routine `Assigned` und im `with`-Block. Nachfolger von uQuickFix |
@@ -269,6 +272,8 @@ Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 | SCA087 EmptyVisibilitySection | `public` direkt vor `private` | leeren Abschnitt entfernen |
 | SCA139 FreeWithoutNil | `FList.Free;` (Feld, ohne `FList := nil`) | FreeAndNil(FList) |
 | SCA066 EmptyArgumentList | `DoStuff();` | leere Klammern entfernen |
+| SCA007 UnusedUses | ungenutzte Unit in uses | Unit aus uses entfernen (gekennzeichnet) - daneben "uses qualifizieren" im Kontextmenue |
+| SCA168 DefaultCaseInCaseStatement | `case` ohne `else` | leerer else-Zweig bzw. else mit Exception (gekennzeichnet) |
 | SCA072 RedundantBoolean | `if Active = True then` (Active: Boolean) | Vergleich mit True/False entfernen |
 | SCA084 AssignedAndAssignedNil | `if Assigned(Obj) and (Obj <> nil) then` | Vergleich mit nil entfernen |
 | SCA165 UnusedSuppression | wirkungsloser `// noinspection`-Marker | Marker entfernen - nur bei genau einer Art; Mehrarten- und `All`-Marker stehen gesperrt da (unter diesem Teilprofil wirken sie vielleicht nur scheinbar nicht) |
@@ -326,9 +331,10 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 * `uTestRdxQualifyUses` - die Planung von "uses: X -> Scope.X"
   (`TRdxRecipeRunner.QualifyUses`): Eintraege der Zeile, alle,
   Sortierung, FPC-Weiche, Direktiven, eigene Unit.
-* `uTestRdxSimpleFixes` / `uTestRdxNilFix` / `uTestRdxExprFixes` - die
-  Editorhilfen SCA074/SCA075/SCA085/SCA087/SCA139, SCA126 bzw.
-  SCA066/SCA072/SCA084 auf Text, ohne Parser.
+* `uTestRdxSimpleFixes` / `uTestRdxNilFix` / `uTestRdxExprFixes` /
+  `uTestRdxStructFixes` - die Editorhilfen SCA074/SCA075/SCA085/SCA087/
+  SCA139, SCA126, SCA066/SCA072/SCA084 bzw. SCA007/SCA168 auf Text, ohne
+  Parser.
 * `uTestRdxSimpleFixesDetector` - dieselben Hilfen gegen den echten
   Detektor: nach der Hilfe meldet er nichts mehr; die Katalog-Beispiele
   `bad` werden genau `good` (SCA074 und SCA139: das `good` traegt eine

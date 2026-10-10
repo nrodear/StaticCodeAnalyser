@@ -16,6 +16,8 @@ program reDelphix.Test;
 //   * uTestRdxSuppress - Unterdrueck-Marker setzen und entfernen
 //   * uTestRdxSimpleFixes - Editorhilfen SCA074/SCA075/SCA085/SCA087/
 //                        SCA139 auf Text, ohne Parser
+//   * uTestRdxStructFixes - Editorhilfen SCA007/SCA168 (uses-Eintrag,
+//                        case-else) auf Text, ohne Parser
 //   * uTestRdxExprFixes - Editorhilfen SCA066/SCA072/SCA084 (uQuickFix-
 //                        Umzug) auf Text, ohne Parser
 //   * uTestRdxNilFix   - Editorhilfe SCA126 auf Text, ohne Parser
@@ -48,6 +50,7 @@ uses
   uRdxCodeMap in '..\source\uRdxCodeMap.pas',
   uRdxSuppress in '..\source\uRdxSuppress.pas',
   uRdxSimpleFixes in '..\source\uRdxSimpleFixes.pas',
+  uRdxStructFixes in '..\source\uRdxStructFixes.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
   uTestRdxRecipes in 'uTestRdxRecipes.pas',
   uTestRdxSca044 in 'uTestRdxSca044.pas',
@@ -56,6 +59,7 @@ uses
   uTestRdxSuppress in 'uTestRdxSuppress.pas',
   uTestRdxSimpleFixes in 'uTestRdxSimpleFixes.pas',
   uTestRdxExprFixes in 'uTestRdxExprFixes.pas',
+  uTestRdxStructFixes in 'uTestRdxStructFixes.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
   uTestRdxCodeMap in 'uTestRdxCodeMap.pas',
