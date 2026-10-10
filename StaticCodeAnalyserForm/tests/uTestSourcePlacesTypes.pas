@@ -65,6 +65,12 @@ type
     // Minor 3: der Dienst parst in seiner EIGENEN Sicht, nicht in der
     // prozessweiten, die ein laufender Scan gerade gesetzt hat.
     [Test] procedure OpenSource_IgnoresGlobalIfdefView;
+    // Review reDelphiX nach Bereichen 2026-10-10, Minor 3: DeclaredTypeOf
+    // beweist - Feld der eigenen Klasse statt des ersten gleichnamigen,
+    // keine fremde lokale Konstante, ein Vorfahr von ausserhalb verdeckt,
+    // Mehrdeutiges und verschachtelte Routinen bleiben ''. Gegenprobe:
+    // der Resolver der Detektoren bleibt bei seiner Fallback-Ebene.
+    [Test] procedure DeclaredTypeOf_StrictScopes;
   end;
 
 implementation
@@ -226,7 +232,9 @@ var
   Info : TRefactorInfo;
 begin
   // Format nimmt ein Char fuer %s - der Typ-Resolver fuehrt Char unter
-  // den Ordinalen, hier zaehlt es als String.
+  // den Ordinalen, hier zaehlt es als String. Verlustfrei ist es nicht
+  // (ein #0 beendet den Text): FixSafe bleibt aus (Review reDelphiX nach
+  // Bereichen 2026-10-10, Minor 1).
   Path := WriteTemp(SRC_TYPES);
   P := TSourcePlaces.Create;
   try
@@ -237,7 +245,7 @@ begin
       Assert.IsTrue(Assigned(Info));
       Assert.IsTrue(Info.Parts[2].ValueType = rvString, 'c: Char');
       Assert.AreEqual('char', Info.Parts[2].Resolved);
-      Assert.IsTrue(Info.FixSafe);
+      Assert.IsFalse(Info.FixSafe, 'Char: angenommen, aber nicht verlustfrei');
     finally
       Info.Free;
     end;
@@ -618,6 +626,120 @@ begin
     'typisierte Konstante: kein ShortString');
   Assert.AreEqual('ansistring', ReduceToDeclaredTypeLow('AnsiString(1252)'));
   Assert.AreEqual('', ReduceToDeclaredTypeLow(''));
+end;
+
+const
+  SRC_STRICT =
+    'unit k; interface'#13#10 +
+    'type'#13#10 +
+    '  TStats = record Count: Integer; end;'#13#10 +
+    '  TBuffer = class'#13#10 +
+    '  public'#13#10 +
+    '    Count: Cardinal;'#13#10 +
+    '    function Describe: string;'#13#10 +
+    '  end;'#13#10 +
+    '  TForm1 = class(TForm)'#13#10 +
+    '    procedure Run;'#13#10 +
+    '  end;'#13#10 +
+    '  TBase = class'#13#10 +
+    '    FTag: Int64;'#13#10 +
+    '  end;'#13#10 +
+    '  TDerived = class(TBase)'#13#10 +
+    '    procedure Go;'#13#10 +
+    '  end;'#13#10 +
+    'var'#13#10 +
+    '  Tag: Integer;'#13#10 +
+    '{$IFDEF FPC}'#13#10 +
+    '  Width: Int64;'#13#10 +
+    '{$ELSE}'#13#10 +
+    '  Width: Cardinal;'#13#10 +
+    '{$ENDIF}'#13#10 +
+    'implementation'#13#10 +
+    'procedure Helper;'#13#10 +
+    'const Max: Word = 5;'#13#10 +
+    'begin'#13#10 +
+    'end;'#13#10 +
+    'var'#13#10 +
+    '  Max: Integer;'#13#10 +
+    'function TBuffer.Describe: string;'#13#10 +
+    'begin'#13#10 +
+    '  Result := ''Count: '' + IntToStr(Count);'#13#10 +
+    'end;'#13#10 +
+    'procedure TForm1.Run;'#13#10 +
+    'begin'#13#10 +
+    '  Tag := Tag + 1;'#13#10 +
+    'end;'#13#10 +
+    'procedure TDerived.Go;'#13#10 +
+    'begin'#13#10 +
+    '  FTag := Tag;'#13#10 +
+    'end;'#13#10 +
+    'procedure Plain;'#13#10 +
+    'var Limit: Integer;'#13#10 +
+    '  procedure Inner;'#13#10 +
+    '  var Limit: Int64;'#13#10 +
+    '  begin'#13#10 +
+    '    Limit := 0;'#13#10 +
+    '  end;'#13#10 +
+    'begin'#13#10 +
+    '  Limit := Max + Width;'#13#10 +
+    'end;'#13#10 +
+    'end.';
+
+procedure TTestSourcePlacesViews.DeclaredTypeOf_StrictScopes;
+var
+  P                          : TSourcePlaces;
+  Parser                     : TParser2;
+  Root                       : TAstNode;
+  R                          : TTypeResolver;
+  LDescribe, LRun, LGo, LPlain, LInner : Integer;
+begin
+  LDescribe := LineOf(SRC_STRICT, 'IntToStr(Count)');
+  LRun      := LineOf(SRC_STRICT, 'Tag := Tag + 1');
+  LGo       := LineOf(SRC_STRICT, 'FTag := Tag');
+  LPlain    := LineOf(SRC_STRICT, 'Limit := Max');
+  LInner    := LineOf(SRC_STRICT, 'Limit := 0');
+  P := TSourcePlaces.Create;
+  try
+    Assert.IsTrue(P.OpenSource('k.pas', SRC_STRICT));
+    Assert.AreEqual('cardinal', P.DeclaredTypeOf(LDescribe, 'Count'),
+      'Feld der eigenen Klasse, nicht TStats.Count');
+    Assert.AreEqual('', P.DeclaredTypeOf(LRun, 'Tag'),
+      'TForm1 erbt von TForm (ausserhalb): TForm.Tag verdeckt das Global');
+    Assert.AreEqual('int64', P.DeclaredTypeOf(LGo, 'FTag'),
+      'geerbtes Feld eines Vorfahren in dieser Unit');
+    Assert.AreEqual('integer', P.DeclaredTypeOf(LGo, 'Tag'),
+      'Vorfahrenkette ganz bekannt: das Unit-Global');
+    Assert.AreEqual('integer', P.DeclaredTypeOf(LPlain, 'Max'),
+      'das Unit-Global, nicht die lokale Konstante von Helper');
+    Assert.AreEqual('integer', P.DeclaredTypeOf(LPlain, 'Limit'));
+    Assert.AreEqual('', P.DeclaredTypeOf(LPlain, 'Width'),
+      'zwei {$IFDEF}-Zweige mit verschiedenen Typen');
+    Assert.AreEqual('', P.DeclaredTypeOf(LInner, 'Limit'),
+      'verschachtelte Routine: ihr Limit (Int64) kennt der AST nicht, das '
+      + 'Integer-Limit der aeusseren Routine waere falsch');
+  finally
+    P.Free;
+  end;
+  // Gegenprobe: die Vorgabe der Detektoren nimmt das erste nkField.
+  Parser := TParser2.Create;
+  try
+    Root := Parser.ParseSource(SRC_STRICT);
+    try
+      R := TTypeResolver.Create(Root);
+      try
+        Assert.AreEqual('integer', R.ResolveTypeAt('count', LDescribe),
+          'Vorgabe unveraendert: TStats.Count ist das erste nkField');
+        Assert.AreEqual('word', R.ResolveTypeAt('max', LPlain),
+          'Vorgabe unveraendert: die lokale Konstante von Helper zuerst');
+      finally
+        R.Free;
+      end;
+    finally
+      Root.Free;
+    end;
+  finally
+    Parser.Free;
+  end;
 end;
 
 procedure TTestSourcePlacesViews.OpenSource_IgnoresGlobalIfdefView;

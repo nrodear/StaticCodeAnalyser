@@ -584,6 +584,8 @@ begin
     if AInfo.Parts[i].Role = ROLE_OPERAND then
     begin
       Result[i].InWith := InWith;
+      Result[i].Shadowed := APlaces.DeclaresNonStringFunc(
+        TRdxRecipes.ShadowNameOf(Result[i].Text));
       ResolveOperandPart(APlaces, AInfo.Span.StartLine, Result[i]);
     end
     else if (AInfo.Parts[i].Role = ROLE_TARGET) and (Result[i].Resolved = '') then

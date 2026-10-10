@@ -77,6 +77,9 @@ type
     // Review 2026-10-07, strittige Minor 1 und 3: with-Block und eine
     // vom Core zurueckgenommene RTL-Annahme.
     [Test] procedure Judge_InWith_NamesProveNothing;
+    // Review reDelphiX nach Bereichen 2026-10-10, Minor 2: eine Funktion
+    // der Unit verdeckt einen Namen der Modul-Listen (ParamStr: Variant).
+    [Test] procedure Judge_Shadowed_NamesProveNothing;
     [Test] procedure Format_IntToStrNotProvenByCore_StaysCall;
     // Fund-Abgleich (Minor 20) und '+'-Gegenprobe (strittiger Minor 2).
     [Test] procedure PlusCount_LikeScanConcat;
@@ -618,6 +621,30 @@ begin
   Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovNonString);
   Assert.IsFalse(TRdxRecipes.MakePart(ROLE_OPERAND, 'x').InWith,
     'MakePart setzt InWith zurueck');
+end;
+
+procedure TTestRdxRecipes.Judge_Shadowed_NamesProveNothing;
+var
+  P : TRdxPart;
+begin
+  P := TRdxRecipes.MakePart(ROLE_OPERAND, 'ExtractFileName(F)', rvUnknown);
+  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovString, 'unverdeckt: RTL');
+  P.Shadowed := True;
+  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovByCompiler,
+    'verdeckt: der Name beweist keinen String');
+  P := TRdxRecipes.MakePart(ROLE_OPERAND, 'Length(S)', rvUnknown);
+  P.Shadowed := True;
+  Assert.IsTrue(TRdxRecipes.JudgeOperand(P) = ovNonString,
+    'was sperrt, sperrt weiter');
+  Assert.IsFalse(TRdxRecipes.MakePart(ROLE_OPERAND, 'x').Shadowed,
+    'MakePart setzt Shadowed zurueck');
+  Assert.AreEqual('paramstr', TRdxRecipes.ShadowNameOf('ParamStr(1)'));
+  Assert.AreEqual('slinebreak', TRdxRecipes.ShadowNameOf(' sLineBreak '));
+  Assert.AreEqual('', TRdxRecipes.ShadowNameOf('SysUtils.Trim(x)'),
+    'qualifiziert: die Unit ist genannt');
+  Assert.AreEqual('', TRdxRecipes.ShadowNameOf('TPath.GetTempPath'));
+  Assert.AreEqual('', TRdxRecipes.ShadowNameOf('Foo(a).Bar(b)'));
+  Assert.AreEqual('', TRdxRecipes.ShadowNameOf('''x'''));
 end;
 
 procedure TTestRdxRecipes.Format_IntToStrNotProvenByCore_StaysCall;
