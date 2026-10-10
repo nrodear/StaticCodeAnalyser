@@ -105,6 +105,7 @@
         <DCCReference Include="uTestRdxNilFix.pas"/>
         <DCCReference Include="uTestRdxSimpleFixesDetector.pas"/>
         <DCCReference Include="uTestRdxCodeMap.pas"/>
+        <DCCReference Include="uTestRdxQualifyUses.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

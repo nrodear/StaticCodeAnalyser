@@ -27,6 +27,7 @@ uses
   uEngineApi, uRefactorInfo, uFindingActions, uRdxRecipes,
   uMethodd12,       // TLeakFinding
   uSCAConsts,       // TFindingKind
+  uRdxScopeTable,   // TRdxScopeTable (QualifyUses)
   uRdxBufferMath;   // TRdxEdit
 
 const
@@ -100,6 +101,35 @@ type
     Hint    : string;    // bei Enabled = True
     Reason  : string;    // bei Enabled = False
   end;
+
+  // uses-Eintraege qualifizieren ('uses: X -> Scope.X', QualifyUses):
+  // warum gar nichts geht ...
+  TRdxQualifyBlock = (qbNone, qbNoTable, qbDirectives, qbFpcSwitch);
+  // ... und warum ein einzelner Eintrag nicht geht.
+  TRdxQualifyWhy = (qwOk, qwScopeTable, qwOwnUnit, qwUnsorts);
+
+  TRdxQualifyItem = record
+    Short       : string;          // Name wie in der Klausel
+    Qualified   : string;          // Ziel ('' wenn die Tabelle keins kennt)
+    Why         : TRdxQualifyWhy;  // qwOk = anbietbar
+    ScopeReason : string;          // bei qwScopeTable: Grund der Scope-Tabelle
+    Edit        : TRdxEdit;        // bei qwOk
+  end;
+
+  TRdxQualifyPlan = record
+    InClause   : Boolean;          // False: die Zeile liegt in keiner uses-Klausel
+    Block      : TRdxQualifyBlock;
+    BlockLine  : Integer;          // bei qbDirectives: Zeile der Direktive
+    Items      : TArray<TRdxQualifyItem>;   // Eintraege auf der gefragten Zeile
+    All        : TArray<TRdxEdit>; // alle qualifizierbaren Eintraege der Datei
+    AllPreview : string;           // die ersten drei Ziele, ', ...' bei mehr
+    // 'alle qualifizieren' machte eine sortierte Klausel unsortiert.
+    AllUnsorts : Boolean;
+  end;
+
+  // Kennt das Projekt eine eigene Unit dieses Kurznamens? (ToolsAPI, vom
+  // Anbieter gereicht; nil = nein.)
+  TRdxOwnUnitCheck = reference to function(const AShortName: string): Boolean;
 
   // Die Anfrage an Describe: Zeile und Anker der Regel ('assign', 'call',
   // 'assign-or-call'), dazu aus dem Fund Ziel und '+'-Zahl fuer die
@@ -251,6 +281,24 @@ type
     // Programm-Klausel (.dpr/.lpr/library; Minor 18).
     class function LineInUsesClause(APlaces: TSourcePlaces;
       ALine: Integer): Boolean; static;
+
+    // True, wenn die Datei eine FPC-Weiche oder einen FPC-Modus traegt
+    // (TRdxRecipes.LineLooksFpcAware, Review Minor 35) - irgendwo, auch
+    // ausserhalb der uses-Klauseln ('{$mode objfpc}' am Dateikopf).
+    class function SourceLooksFpcAware(APlaces: TSourcePlaces): Boolean; static;
+
+    // Was 'uses: X -> Scope.X' fuer die Zeile ALine anbieten kann (Review
+    // reDelphiX nach Bereichen 2026-10-10, Minor 11-14; bis dahin im
+    // Anbieter und ungetestet). Nichts (InClause = False) ausserhalb einer
+    // uses-Klausel. Gesperrt (Block) ohne Scope-Tabelle, bei Direktiven in
+    // einer Klausel und in einer Datei mit FPC-Weiche (FPC 3.2 kennt keine
+    // Unit-Scopes). Ein Eintrag geht nicht, wenn die Tabelle ihn nicht
+    // eindeutig aufloest, das Projekt eine eigene Unit dieses Namens hat
+    // (AIsOwnUnit) oder er eine SORTIERTE Klausel unsortiert machte (neuer
+    // SCA142-Fund; dieselbe Regel wie uUnsortedUses: CompareText ueber die
+    // Namen je Klausel). Dasselbe fuer 'alle qualifizieren' (AllUnsorts).
+    class function QualifyUses(APlaces: TSourcePlaces; AScopes: TRdxScopeTable;
+      ALine: Integer; const AIsOwnUnit: TRdxOwnUnitCheck): TRdxQualifyPlan; static;
 
     // Rezept 5.2: parametrisierte Vorlage (nur Text). Eingerueckt wie die
     // Anweisung - Tabs bleiben Tabs (Minor 31).
@@ -899,9 +947,8 @@ begin
       Exit(True);
 end;
 
-// True, wenn die Datei eine FPC-Weiche oder einen FPC-Modus traegt
-// (TRdxRecipes.LineLooksFpcAware, Review Minor 35).
-function SourceLooksFpcAware(APlaces: TSourcePlaces): Boolean;
+class function TRdxRecipeRunner.SourceLooksFpcAware(
+  APlaces: TSourcePlaces): Boolean;
 var
   L : Integer;
 begin
@@ -1318,6 +1365,120 @@ begin
   end;
   Result.Edits   := Plan.Edits;
   Result.Enabled := True;
+end;
+
+{ ---- uses-Eintraege qualifizieren (QualifyUses) ---- }
+
+// Steht die Klausel so, wie uUnsortedUses (SCA142) sie will? CompareText
+// je Nachbarpaar - gleichwertig zu 'sortierte Kopie = Original'.
+function NamesSorted(const ANames: TArray<string>): Boolean;
+var
+  k : Integer;
+begin
+  Result := True;
+  for k := 1 to High(ANames) do
+    if CompareText(ANames[k - 1], ANames[k]) > 0 then
+      Exit(False);
+end;
+
+class function TRdxRecipeRunner.QualifyUses(APlaces: TSourcePlaces;
+  AScopes: TRdxScopeTable; ALine: Integer;
+  const AIsOwnUnit: TRdxOwnUnitCheck): TRdxQualifyPlan;
+var
+  Clauses   : TArray<TArray<TRefactorSpan>>;
+  Entries   : TArray<TRefactorSpan>;
+  Names     : TArray<string>;
+  AllNames  : TArray<string>;
+  Single    : TArray<string>;
+  c, i      : Integer;
+  Fw        : TRdxFramework;
+  Item      : TRdxQualifyItem;
+  Q, Reason : string;
+  Sorted    : Boolean;
+begin
+  Result := Default(TRdxQualifyPlan);
+  if not LineInUsesClause(APlaces, ALine) then Exit;
+  Result.InClause := True;
+  if (AScopes = nil) or (AScopes.Count = 0) then
+  begin
+    Result.Block := qbNoTable;
+    Exit;
+  end;
+  // Direktiven in einer Klausel: ein Eintrag kann in einem Zweig fuer ein
+  // anderes Ziel stehen - qualifiziert uebersetzte FPC ihn nicht mehr
+  // (Review Major 7; dieselbe Sperre wie PlanUses).
+  Result.BlockLine := UsesDirectiveLine(APlaces);
+  if Result.BlockLine > 0 then
+  begin
+    Result.Block := qbDirectives;
+    Exit;
+  end;
+  // Eine FPC-Weiche oder ein FPC-Modus irgendwo in der Datei (Minor 12):
+  // die Quelle wird auch mit FPC 3.2 uebersetzt, und der kennt keine
+  // Unit-Scopes. PlanUses haelt dort die Kurznamen (Minor 35).
+  if SourceLooksFpcAware(APlaces) then
+  begin
+    Result.Block := qbFpcSwitch;
+    Exit;
+  end;
+  Fw := TRdxRecipes.DetectFramework(UsesNamesOf(APlaces));
+  Clauses := ClausesOf(APlaces);
+  for c := 0 to High(Clauses) do
+  begin
+    Entries := Clauses[c];
+    SetLength(Names, Length(Entries));
+    for i := 0 to High(Entries) do
+      Names[i] := Entries[i].Resolved;
+    Sorted := NamesSorted(Names);
+    AllNames := Copy(Names);
+    for i := 0 to High(Entries) do
+    begin
+      Item := Default(TRdxQualifyItem);
+      Item.Short := Entries[i].Resolved;
+      if (Item.Short = '') or (Pos('.', Item.Short) > 0) then Continue;
+      if not AScopes.Resolve(Item.Short, Fw, Q, Reason) then
+      begin
+        Item.Why := qwScopeTable;
+        Item.ScopeReason := Reason;
+      end
+      else if Assigned(AIsOwnUnit) and AIsOwnUnit(Item.Short) then
+        Item.Why := qwOwnUnit
+      else
+      begin
+        Item.Qualified     := Q;
+        Item.Edit.Span     := Entries[i];
+        Item.Edit.Expected := Item.Short;
+        Item.Edit.NewText  := Q;
+        AllNames[i] := Q;
+        SetLength(Result.All, Length(Result.All) + 1);
+        Result.All[High(Result.All)] := Item.Edit;
+        if Length(Result.All) <= 3 then
+        begin
+          if Result.AllPreview <> '' then
+            Result.AllPreview := Result.AllPreview + ', ';
+          Result.AllPreview := Result.AllPreview + Q;
+        end;
+        // Eine sortierte Klausel bleibt sortiert, sonst kein Angebot -
+        // der Klick erzeugte einen neuen SCA142-Fund (Minor 14).
+        if Sorted then
+        begin
+          Single := Copy(Names);
+          Single[i] := Q;
+          if not NamesSorted(Single) then
+            Item.Why := qwUnsorts;
+        end;
+      end;
+      if Entries[i].StartLine = ALine then
+      begin
+        SetLength(Result.Items, Length(Result.Items) + 1);
+        Result.Items[High(Result.Items)] := Item;
+      end;
+    end;
+    if Sorted and not NamesSorted(AllNames) then
+      Result.AllUnsorts := True;
+  end;
+  if Length(Result.All) > 3 then
+    Result.AllPreview := Result.AllPreview + ', ...';
 end;
 
 end.

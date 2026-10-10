@@ -30,7 +30,7 @@ source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
 source\uRdxLog.pas                Protokoll %TEMP%\reDelphix.log + DebugView
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 9 Testunits (siehe "Pruefen")
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 10 Testunits (siehe "Pruefen")
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 und fuehrt Tests aus
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
@@ -90,7 +90,7 @@ die Engine also vorher. DCUs landen wie bei den anderen Projekten in
 | Stelle zeigen | alle mit beschreibbarer Anweisung (Anker der Regel) | markiert den exakten Bereich im Editor. Nur Kontextmenue und Dock-Grid (`fakNavigate`), nicht die Gluehbirne. Ausgegraut, wenn der Bereich hinter Spalte 32767 bzw. hinter 32766 Bytes seiner Zeile liegt (die Editor-Markierung rechnet in SmallInt); liegt er beim Klick hinter dem Pufferende, meldet die Aktion das und markiert nichts |
 | Format() aus Verkettung bilden | SCA044 (`fixMode: auto`) | ersetzt die Terme durch `Format('...%s...', [..])` nach der Kompilat-Regel (unten). `IntToStr(n)` mit bekanntem Ganzzahltyp wird `%d`/`%u` mit `n`; `n.ToString` bleibt `%s`. Ein Char-Operand bekannten Typs geht als `string(c)` hinein, damit ein `#0` erhalten bleibt. `X := X + ...` wird `X := X + Format(...)`. Gesperrt bei SQL-Literalen, Kommentar oder Direktive im ersetzten Bereich, Variant-Anzeichen, Zahl-Operanden, Nicht-Unicode-Strings. Fehlt `System.SysUtils` (dort lebt `Format`), wird es als zweite Ersetzung in die uses-Klausel eingefuegt (unten) - der Menuetext sagt `+ uses System.SysUtils` bzw. `+ uses SysUtils` |
 | Parametrisierte Vorlage in die Zwischenablage | SCA003 (`fixMode: assisted`) | baut `:p1..:pn` und `ParamByName`-Zeilen, eingerueckt wie die Anweisung (Tabs bleiben Tabs). Ist das Ziel kein Query-Objekt (kein Glied `.SQL` oder `.CommandText`, etwa ein String-Puffer `S`), stehen die `ParamByName`-Zeilen als Kommentar mit dem Platzhalter `<Query>` da. Schreibt NIE in den Editor |
-| uses: X -> Scope.X | Fund in einer uses-Klausel, auch der Programm-Klausel einer .dpr/.lpr | qualifiziert den Eintrag, dazu "uses: alle n Eintraege qualifizieren". Mehrdeutiges (Forms: VCL/FMX) nur bei erkennbarem Rahmenwerk, nie bei gleichnamiger Projekt-Unit und nie, wenn die Reihenfolge System/Vcl der Projekt-Scopes entscheiden wuerde. Gesperrt, wenn eine uses-Klausel Compiler-Direktiven traegt oder in einem `$IFDEF`-Zweig liegt |
+| uses: X -> Scope.X | Fund in einer uses-Klausel, auch der Programm-Klausel einer .dpr/.lpr | qualifiziert den Eintrag, dazu "uses: alle n Eintraege qualifizieren". Mehrdeutiges (Forms: VCL/FMX) nur bei erkennbarem Rahmenwerk, nie bei gleichnamiger Projekt-Unit und nie, wenn die Reihenfolge System/Vcl der Projekt-Scopes entscheiden wuerde. Gesperrt, wenn eine uses-Klausel Compiler-Direktiven traegt oder in einem `$IFDEF`-Zweig liegt, und in einer Datei mit FPC-Weiche oder FPC-Modus (FPC 3.2 kennt keine Unit-Scopes). Macht der Eintrag (bzw. "alle") eine sortierte Klausel unsortiert, steht er gesperrt da (sonst kaeme ein neuer SCA142-Fund). Ein Umbau, keine Hilfe zum Fund (`fakRefactor`): nur Kontextmenue und Dock-Grid, nie die Gluehbirne, und je Menue nur einmal, auch wenn mehrere Funde auf der Zeile stehen |
 | FreeAndNil(X) verwenden | SCA085 | `X.Free;` + `X := nil;` -> `FreeAndNil(X);`. X muss in der Unit deklariert sein (keine Property, kein geerbtes Feld); gesperrt in einem `with`-Block. Fehlt `System.SysUtils`, kommt die uses-Einfuegung mit (unten) |
 | Assigned() statt Vergleich mit nil verwenden | SCA126 | schreibt ALLE nil-Vergleiche der einen Anweisung um, die auf der Fundzeile beginnt (`X = nil` -> `not Assigned(X)`). Zwei solche Anweisungen auf der Zeile heissen mehrdeutig; ein Operand vom Typ String, Variant, Menge, Array oder Prozedur/Ereignis sperrt |
 | (TObject) aus der Klassendeklaration entfernen | SCA075 | `class(TObject)` -> `class` an der Spalte aus der Meldung (nur Zeilen, ohne Parser) |
@@ -259,7 +259,7 @@ Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 | SCA085 FreeAndNilHint | `X.Free; X := nil;` | FreeAndNil(X) |
 | SCA126 NilComparison | `if X <> nil then` | Assigned(X) |
 | SCA165 UnusedSuppression | wirkungsloser `// noinspection`-Marker | Marker entfernen - nur bei genau einer Art; Mehrarten- und `All`-Marker stehen gesperrt da (unter diesem Teilprofil wirken sie vielleicht nur scheinbar nicht) |
-| SCA142 UnsortedUses, SCA007 UnusedUses | Fund auf einer uses-Zeile | uses: Eintraege qualifizieren (Winapi.Windows, System.SysUtils ...) |
+| SCA142 UnsortedUses, SCA007 UnusedUses | Fund auf einer uses-Zeile | uses: Eintraege qualifizieren (Winapi.Windows, System.SysUtils ...) - nur im Kontextmenue, nicht in der Gluehbirne: es behebt den Fund nicht |
 | jede Regel ausser SCA165 | beliebig | Hier / in dieser Datei unterdruecken; Stelle zeigen (Kontextmenue) |
 
 SCA007 laeuft nur mit eingeschaltetem uses-Check (Optionen bzw.
@@ -310,6 +310,9 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   Block-Kommentar, mehrzeiligem String, Lizenzkopf und mit `All`.
 * `uTestRdxCodeMap` - die Code-Sicht gegen `TDetectorUtils.ScanCodeLine`
   des Cores (Drift-Waechter) und der Zustand am Zeilenanfang.
+* `uTestRdxQualifyUses` - die Planung von "uses: X -> Scope.X"
+  (`TRdxRecipeRunner.QualifyUses`): Eintraege der Zeile, alle,
+  Sortierung, FPC-Weiche, Direktiven, eigene Unit.
 * `uTestRdxSimpleFixes` / `uTestRdxNilFix` - die Editorhilfen
   SCA075/SCA085 bzw. SCA126 auf Text, ohne Parser.
 * `uTestRdxSimpleFixesDetector` - dieselben Hilfen gegen den echten

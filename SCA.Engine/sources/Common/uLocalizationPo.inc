@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2341 Zeilen, 78679 Bytes
-  CPoLines_de: array[0..2340] of string = (
+  // i18n\de.po - 2347 Zeilen, 78958 Bytes
+  CPoLines_de: array[0..2346] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2324,6 +2324,12 @@ const
     'msgid "own unit %s in the project"',
     'msgstr "eigene Unit %s im Projekt"',
     '',
+    'msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"',
+    'msgstr "Datei mit FPC-Weiche oder FPC-Modus - FPC 3.2 kennt keine Unit-Scopes"',
+    '',
+    'msgid "the clause would no longer be sorted (new SCA142)"',
+    'msgstr "die Klausel waere danach unsortiert (neuer SCA142-Fund)"',
+    '',
     'msgid "uses: qualify %s"',
     'msgstr "uses: %s qualifizieren"',
     '',
@@ -2630,8 +2636,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2337 Zeilen, 82471 Bytes
-  CPoLines_fr: array[0..2336] of string = (
+  // i18n\fr.po - 2343 Zeilen, 82757 Bytes
+  CPoLines_fr: array[0..2342] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4936,6 +4942,12 @@ const
     '',
     'msgid "own unit %s in the project"',
     'msgstr "unit'#$00E9' %s propre au projet"',
+    '',
+    'msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"',
+    'msgstr "fichier avec aiguillage ou mode FPC - FPC 3.2 ne conna'#$00EE't pas les port'#$00E9'es d''unit'#$00E9'"',
+    '',
+    'msgid "the clause would no longer be sorted (new SCA142)"',
+    'msgstr "la clause ne serait plus tri'#$00E9'e (nouveau SCA142)"',
     '',
     'msgid "uses: qualify %s"',
     'msgstr "uses : qualifier %s"',

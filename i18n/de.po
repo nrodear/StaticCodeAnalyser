@@ -2307,6 +2307,12 @@ msgstr "uses-Klausel traegt Compiler-Direktiven (Zeile %d)"
 msgid "own unit %s in the project"
 msgstr "eigene Unit %s im Projekt"
 
+msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"
+msgstr "Datei mit FPC-Weiche oder FPC-Modus - FPC 3.2 kennt keine Unit-Scopes"
+
+msgid "the clause would no longer be sorted (new SCA142)"
+msgstr "die Klausel waere danach unsortiert (neuer SCA142-Fund)"
+
 msgid "uses: qualify %s"
 msgstr "uses: %s qualifizieren"
 

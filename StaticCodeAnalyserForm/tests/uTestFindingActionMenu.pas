@@ -41,6 +41,10 @@ type
     // in jeder Form mit einem Trenner abgesetzt.
     [Test] procedure AvailableFixesOnly_SuppressOnlyNextToAFix;
     [Test] procedure Suppress_SeparatedFromOtherActions;
+    // Review reDelphiX nach Bereichen 2026-10-10, Minor 13/14: ein Umbau an
+    // der Stelle (fakRefactor) steht je Menue nur einmal und nie in der
+    // Gluehbirne.
+    [Test] procedure Refactor_OncePerMenu_NeverInBulb;
   end;
 
 implementation
@@ -354,6 +358,48 @@ begin
     TFindingActions.Unregister(T);
     F.Free;
     Bad.Free;
+  end;
+end;
+
+procedure TTestFindingActionMenu.Refactor_OncePerMenu_NeverInBulb;
+var
+  F1, F2, F3 : TLeakFinding;
+  Lists      : TArray<TArray<TFindingAction>>;
+  M          : TFindingMenuModel;
+  R1, R2     : TFindingAction;
+  i, Count   : Integer;
+begin
+  F1 := Finding('Unused A'); F2 := Finding('Unused B'); F3 := Finding('Unused C');
+  try
+    R1 := Act('uses: Windows -> Winapi.Windows', '', True, True);
+    R1.Kind := fakRefactor;
+    R2 := Act('uses: qualify all 2 entries', 'Winapi.Windows, System.Classes',
+      True, True);
+    R2.Kind := fakRefactor;
+    SetLength(Lists, 3);
+    Lists[0] := [Act('Fix A', '', True, True), R1, R2];
+    Lists[1] := [R1, R2];                          // nur dieselben Umbauten
+    Lists[2] := [Act('Fix C', '', True, True), R1];
+    M := BuildFindingMenuModelFrom([F1, F2, F3], Lists, [moHeaders]);
+    Count := 0;
+    for i := 0 to High(M.Actions) do
+      if M.Actions[i].Caption = R1.Caption then
+        Inc(Count);
+    Assert.AreEqual<Integer>(1, Count, 'derselbe Umbau nur einmal');
+    Assert.AreEqual<Integer>(4, M.ActionCount, 'Fix A, R1, R2, Fix C');
+    Count := 0;
+    for i := 0 to High(M.Entries) do
+      if M.Entries[i].Kind = mkHeader then
+        Inc(Count);
+    Assert.AreEqual<Integer>(2, Count,
+      'der Fund, dem nur doppelte Umbauten blieben, faellt samt Kopf weg');
+    // Gluehbirne: nur Hilfen, kein Umbau.
+    M := BuildFindingMenuModelFrom([F1, F2, F3], Lists, [moAvailableFixesOnly]);
+    for i := 0 to High(M.Actions) do
+      Assert.IsTrue(M.Actions[i].Kind = fakFix, M.Actions[i].Caption);
+    Assert.AreEqual<Integer>(2, M.ActionCount, 'Fix A und Fix C');
+  finally
+    F1.Free; F2.Free; F3.Free;
   end;
 end;
 

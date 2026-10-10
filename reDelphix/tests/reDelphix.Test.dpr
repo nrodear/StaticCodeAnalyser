@@ -55,7 +55,8 @@ uses
   uTestRdxSimpleFixes in 'uTestRdxSimpleFixes.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
   uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
-  uTestRdxCodeMap in 'uTestRdxCodeMap.pas';
+  uTestRdxCodeMap in 'uTestRdxCodeMap.pas',
+  uTestRdxQualifyUses in 'uTestRdxQualifyUses.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

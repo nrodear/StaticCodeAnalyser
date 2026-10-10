@@ -62,9 +62,14 @@ type
     class function ReplaceSpans(const AFile: string;
       const AEdits: TArray<TRdxEdit>; out AError: string): Boolean; static;
 
-    // True, wenn eine Unit namens AShortName zum aktiven Projekt gehoert
-    // oder als AShortName.pas neben ANearFile liegt - dann darf ein
-    // uses-Eintrag dieses Namens NICHT auf eine RTL-Unit expandiert werden.
+    // True, wenn eine Unit namens AShortName zum Projekt gehoeren kann -
+    // dann darf ein uses-Eintrag dieses Namens NICHT auf eine RTL-Unit
+    // expandiert werden: AShortName.pas/.pp neben ANearFile, ein Modul
+    // irgendeines Projekts der Gruppe (nicht nur des aktiven), oder
+    // AShortName.pas/.pp in einem Verzeichnis des Unit-Suchpfads eines
+    // dieser Projekte (aktive Konfiguration; Eintraege mit Makros wie
+    // $(BDS) bleiben aussen vor - dort liegt die Bibliothek, nicht das
+    // Projekt). Review reDelphiX nach Bereichen 2026-10-10, Minor 18.
     class function ProjectHasUnit(const AShortName,
       ANearFile: string): Boolean; static;
 
@@ -435,31 +440,77 @@ begin
   end;
 end;
 
-class function TRdxEditor.ProjectHasUnit(const AShortName,
-  ANearFile: string): Boolean;
+// Liegt AShortName.pas oder .pp im Verzeichnis ADir?
+function UnitFileIn(const ADir, AShortName: string): Boolean;
 var
-  ModSvc : IOTAModuleServices;
-  Proj   : IOTAProject;
-  Info   : IOTAModuleInfo;
-  i      : Integer;
+  D : string;
+begin
+  D := IncludeTrailingPathDelimiter(ADir);
+  Result := FileExists(D + AShortName + '.pas')
+    or FileExists(D + AShortName + '.pp');
+end;
+
+// Modul des Projekts oder Datei im Unit-Suchpfad seiner aktiven
+// Konfiguration (s. ProjectHasUnit).
+function ProjectKnowsUnit(AProj: IOTAProject; const AShortName: string): Boolean;
+var
+  Info  : IOTAModuleInfo;
+  Cfgs  : IOTAProjectOptionsConfigurations;
+  Cfg   : IOTABuildConfiguration;
+  Base  : string;
+  Dirs  : TArray<string>;
+  Dir   : string;
+  i     : Integer;
 begin
   Result := False;
-  if AShortName = '' then Exit;
-  // 1) Datei gleichen Namens neben der bearbeiteten Datei
-  if (ANearFile <> '')
-     and FileExists(ExtractFilePath(ANearFile) + AShortName + '.pas') then
-    Exit(True);
-  // 2) Units des aktiven Projekts
-  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
-  Proj := ModSvc.GetActiveProject;
-  if Proj = nil then Exit;
-  for i := 0 to Proj.GetModuleCount - 1 do
+  if AProj = nil then Exit;
+  for i := 0 to AProj.GetModuleCount - 1 do
   begin
-    Info := Proj.GetModule(i);
+    Info := AProj.GetModule(i);
     if Info = nil then Continue;
     if SameText(ChangeFileExt(ExtractFileName(Info.FileName), ''), AShortName) then
       Exit(True);
   end;
+  if not Supports(AProj.ProjectOptions, IOTAProjectOptionsConfigurations, Cfgs) then
+    Exit;
+  Cfg := Cfgs.ActiveConfiguration;
+  if Cfg = nil then Exit;
+  Base := ExtractFilePath(AProj.FileName);
+  Dirs := Cfg.GetValue('DCC_UnitSearchPath', True).Split([';']);
+  for i := 0 to High(Dirs) do
+  begin
+    Dir := Trim(Dirs[i]);
+    if (Dir = '') or (Pos('$(', Dir) > 0) then Continue;
+    // Relativ zum Projektverzeichnis, ausser mit Laufwerk oder UNC.
+    if not ((Length(Dir) >= 2)
+            and ((Dir[2] = ':') or ((Dir[1] = '\') and (Dir[2] = '\')))) then
+      Dir := Base + Dir;
+    if UnitFileIn(ExpandFileName(Dir), AShortName) then
+      Exit(True);
+  end;
+end;
+
+class function TRdxEditor.ProjectHasUnit(const AShortName,
+  ANearFile: string): Boolean;
+var
+  ModSvc : IOTAModuleServices;
+  Group  : IOTAProjectGroup;
+  j      : Integer;
+begin
+  Result := False;
+  if AShortName = '' then Exit;
+  // 1) Datei gleichen Namens neben der bearbeiteten Datei
+  if (ANearFile <> '') and UnitFileIn(ExtractFilePath(ANearFile), AShortName) then
+    Exit(True);
+  // 2) Module und Suchpfade aller Projekte der Gruppe - die bearbeitete
+  //    Datei kann zu einem anderen als dem aktiven gehoeren.
+  if not Supports(BorlandIDEServices, IOTAModuleServices, ModSvc) then Exit;
+  Group := ModSvc.MainProjectGroup;
+  if Group = nil then
+    Exit(ProjectKnowsUnit(ModSvc.GetActiveProject, AShortName));
+  for j := 0 to Group.ProjectCount - 1 do
+    if ProjectKnowsUnit(Group.Projects[j], AShortName) then
+      Exit(True);
 end;
 
 end.

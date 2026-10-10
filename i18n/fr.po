@@ -2303,6 +2303,12 @@ msgstr "la clause uses contient des directives de compilation (ligne %d)"
 msgid "own unit %s in the project"
 msgstr "unité %s propre au projet"
 
+msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"
+msgstr "fichier avec aiguillage ou mode FPC - FPC 3.2 ne connaît pas les portées d'unité"
+
+msgid "the clause would no longer be sorted (new SCA142)"
+msgstr "la clause ne serait plus triée (nouveau SCA142)"
+
 msgid "uses: qualify %s"
 msgstr "uses : qualifier %s"
 

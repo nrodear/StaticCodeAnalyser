@@ -161,6 +161,11 @@ type
     procedure AddReplace(var AList: TArray<TFindingAction>;
       const ACaption, AFileName: string; const AEdit: TRdxEdit;
       AKind: TFindingActionKind);
+    // Ein Umbau an der Stelle, kein Fix des Funds (fakRefactor): nie in
+    // der Gluehbirne, im Menue je Zeile nur einmal (Review nach Bereichen
+    // 2026-10-10, Minor 13/14). AAction = nil: gesperrt mit Grund AHint.
+    procedure AddRefactor(var AList: TArray<TFindingAction>;
+      const ACaption, AHint: string; AAction: TRdxAction);
     // Baum-Rezepte
     procedure AddShowSpan(var AList: TArray<TFindingAction>;
       const ACtx: TRdxRecipeContext);
@@ -413,6 +418,13 @@ begin
   AList[High(AList)].Kind := AKind;
 end;
 
+procedure TRdxProvider.AddRefactor(var AList: TArray<TFindingAction>;
+  const ACaption, AHint: string; AAction: TRdxAction);
+begin
+  Add(AList, ACaption, AHint, Assigned(AAction), AAction);
+  AList[High(AList)].Kind := fakRefactor;
+end;
+
 // Nur Pascal-Quelltext traegt '//'-Marker (DFM-Funde nicht).
 function IsPascalSource(const AFileName: string): Boolean;
 var
@@ -503,89 +515,77 @@ end;
 procedure TRdxProvider.AddUsesActions(var AList: TArray<TFindingAction>;
   const ACtx: TRdxRecipeContext);
 var
-  Entries : TArray<TRefactorSpan>;
-  i       : Integer;
-  Fw      : TRdxFramework;
-  Short   : string;
-  Q       : string;
-  Reason  : string;
-  OK      : Boolean;
-  Act     : TRdxAction;
-  All     : TArray<TRdxEdit>;
-  E       : TRdxEdit;
-  Preview : string;
-  DirLine : Integer;
+  Plan     : TRdxQualifyPlan;
+  Item     : TRdxQualifyItem;
+  Act      : TRdxAction;
+  Reason   : string;
+  FileName : string;
 begin
-  // Nur wenn der Fund in einer uses-Klausel liegt (Zeile des 'uses' bis
-  // letzter Eintrag) - sonst stuende "uses: ..." an jedem Fund der Datei.
-  // Das Fenster kennt auch die Programm-Klausel (.dpr/.lpr/library,
-  // Review Minor 18) und beginnt auf der Zeile des 'uses', nicht eine
-  // davor (Minor 19).
-  if not TRdxRecipeRunner.LineInUsesClause(FSource.Places, ACtx.Line) then Exit;
-
-  if FScopes.Count = 0 then
-  begin
-    Add(AList, _(CAP_USES),
-      _('Scope table not loaded (unitscopes.txt)'), False, nil);
-    Exit;
-  end;
-  // Direktiven in einer Klausel: ein Eintrag kann in einem Zweig fuer ein
-  // anderes Ziel stehen ('{$IFDEF FPC}LCLIntf,{$ELSE}Windows,{$ENDIF}') -
-  // qualifiziert uebersetzte FPC ihn nicht mehr (Review Major 7; dieselbe
-  // Sperre wie PlanUses).
-  DirLine := TRdxRecipeRunner.UsesDirectiveLine(FSource.Places);
-  if DirLine > 0 then
-  begin
-    Add(AList, _(CAP_USES),
-      Format(_('uses clause contains compiler directives (line %d)'), [DirLine]),
-      False, nil);
-    Exit;
-  end;
-
-  Entries := FSource.Places.UsesEntries(TUsesSection.usAny);
-  Fw := TRdxRecipes.DetectFramework(FUsesNames);
-  All := nil;
-  Preview := '';
-  for i := 0 to High(Entries) do
-  begin
-    Short := Entries[i].Resolved;
-    if (Short = '') or (Pos('.', Short) > 0) then Continue;
-    OK := FScopes.Resolve(Short, Fw, Q, Reason);
-    if OK and TRdxEditor.ProjectHasUnit(Short, ACtx.FileName) then
+  // Die Planung liegt im Laeufer (testbar, ohne ToolsAPI); hier nur die
+  // Menuetexte. Nichts ausserhalb einer uses-Klausel - sonst stuende
+  // "uses: ..." an jedem Fund der Datei. Das Fenster kennt auch die
+  // Programm-Klausel (.dpr/.lpr/library, Review Minor 18) und beginnt auf
+  // der Zeile des 'uses' (Minor 19).
+  FileName := ACtx.FileName;
+  Plan := TRdxRecipeRunner.QualifyUses(FSource.Places, FScopes, ACtx.Line,
+    function(const AShortName: string): Boolean
     begin
-      OK := False;
-      Reason := Format(_('own unit %s in the project'), [Short]);
-    end;
-    if OK then
-    begin
-      E.Span     := Entries[i];
-      E.Expected := Short;
-      E.NewText  := Q;
-      SetLength(All, Length(All) + 1);
-      All[High(All)] := E;
-      if Length(All) <= 3 then
+      Result := TRdxEditor.ProjectHasUnit(AShortName, FileName);
+    end);
+  if not Plan.InClause then Exit;
+  case Plan.Block of
+    qbNoTable:
       begin
-        if Preview <> '' then Preview := Preview + ', ';
-        Preview := Preview + Q;
+        AddRefactor(AList, _(CAP_USES), _('Scope table not loaded (unitscopes.txt)'), nil);
+        Exit;
       end;
-    end;
-    if Entries[i].StartLine <> ACtx.Line then Continue;
-    if OK then
+    qbDirectives:
+      begin
+        AddRefactor(AList, _(CAP_USES), Format(
+          _('uses clause contains compiler directives (line %d)'),
+          [Plan.BlockLine]), nil);
+        Exit;
+      end;
+    qbFpcSwitch:
+      begin
+        AddRefactor(AList, _(CAP_USES),
+          _('file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes'),
+          nil);
+        Exit;
+      end;
+  end;
+  for Item in Plan.Items do
+  begin
+    if Item.Why = qwOk then
     begin
       Act := NewAction(akReplace, ACtx.FileName);
       SetLength(Act.FEdits, 1);
-      Act.FEdits[0] := E;
-      Add(AList, 'uses: ' + Short + ' -> ' + Q, '', True, Act);
-    end
+      Act.FEdits[0] := Item.Edit;
+      AddRefactor(AList, 'uses: ' + Item.Short + ' -> ' + Item.Qualified, '', Act);
+      Continue;
+    end;
+    case Item.Why of
+      qwOwnUnit:
+        Reason := Format(_('own unit %s in the project'), [Item.Short]);
+      qwUnsorts:
+        Reason := _('the clause would no longer be sorted (new SCA142)');
     else
-      Add(AList, Format(_('uses: qualify %s'), [Short]), Reason, False, nil);
+      Reason := Item.ScopeReason;
+    end;
+    AddRefactor(AList, Format(_('uses: qualify %s'), [Item.Short]), Reason, nil);
   end;
-  if Length(All) >= 2 then
+  if Length(Plan.All) >= 2 then
   begin
-    Act := NewAction(akReplace, ACtx.FileName);
-    Act.FEdits := All;
-    if Length(All) > 3 then Preview := Preview + ', ...';
-    Add(AList, Format(_(CAP_USES_ALL), [Length(All)]), Preview, True, Act);
+    if Plan.AllUnsorts then
+      AddRefactor(AList, Format(_(CAP_USES_ALL), [Length(Plan.All)]),
+        _('the clause would no longer be sorted (new SCA142)'), nil)
+    else
+    begin
+      Act := NewAction(akReplace, ACtx.FileName);
+      Act.FEdits := Plan.All;
+      AddRefactor(AList, Format(_(CAP_USES_ALL), [Length(Plan.All)]),
+        Plan.AllPreview, Act);
+    end;
   end;
 end;
 
@@ -806,7 +806,14 @@ begin
     Ctx.Line     := AFinding.LineInt;
     Ctx.KindName := uSCAConsts.KindName(AFinding.Kind);
     Ctx.Lines    := Lines;
-    AddTreeActions(Result, Ctx, Source, Text);
+    // Nur Pascal-Quelltext durch den Parser: ein Fund in .dfm/.dproj
+    // braeuchte sonst Parse-Zeit im UI-Thread, bekaeme eine sinnlose
+    // Diagnose und verdraengte die zuletzt geparste .pas aus dem Cache
+    // (Review nach Bereichen 2026-10-10, Minor 15).
+    if IsPascalSource(AFinding.FileName) then
+      AddTreeActions(Result, Ctx, Source, Text)
+    else
+      Ctx.Why := _('nothing to offer');
     for R in FTextRecipes do
       R(Result, Ctx);
     AddDiagnosis(Result, Ctx);
