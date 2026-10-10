@@ -22,6 +22,8 @@ type
     [Test] procedure Sca066_Variants;
     [Test] procedure Sca066_Refusals;
     [Test] procedure Sca066_OwnFunction_Refused;
+    // Gegen-Review 2026-10-10: welche Namen der Laeufer pruefen muss.
+    [Test] procedure Sca066_CalleeAndTarget;
     // ---- SCA072 ----
     [Test] procedure Sca072_Variants;
     [Test] procedure Sca072_Refusals;
@@ -29,6 +31,7 @@ type
     [Test] procedure Sca084_Variants;
     [Test] procedure Sca084_Refusals;
     [Test] procedure DeclaredTypeKind_Kinds;
+    [Test] procedure TypeKinds_ResolvedProceduralPointerLike;
   end;
 
 implementation
@@ -91,7 +94,8 @@ type
   // X (SCA072/SCA084) und der Grund.
   TFixResult = record
     Text   : string;
-    Name   : string;
+    Name   : string;   // SCA066: Callee
+    Target : string;   // SCA066: links von ':='
     Reason : string;
   end;
 
@@ -100,7 +104,7 @@ function Fix(AKind: Char; const ASource: string; ALine, ACol: Integer): TFixResu
 var
   SL   : TStringList;
   Map  : TRdxCodeMap;
-  E    : TRdxEdit;
+  Call : TRdxCallEdit;
   Plan : TRdxOperandEdit;
   Ok   : Boolean;
 begin
@@ -114,9 +118,11 @@ begin
     case AKind of
       'E':
         begin
-          Ok := TRdxExprFixes.EmptyArgs(Map, ALine, AtColumn(ACol), E,
+          Ok := TRdxExprFixes.EmptyArgs(Map, ALine, AtColumn(ACol), Call,
             Result.Reason);
-          Plan.Edit := E;
+          Plan.Edit := Call.Edit;
+          Plan.Name := Call.Callee;
+          Result.Target := Call.Target;
         end;
       'B':
         Ok := TRdxExprFixes.RedundantBool(Map, ALine, AtColumn(ACol), Plan,
@@ -159,7 +165,7 @@ end;
 
 procedure TTestRdxExprFixes.Sca066_Variants;
 const
-  CASES: array[0..10, 0..2] of string = (
+  CASES: array[0..15, 0..2] of string = (
     ('  DoStuff();', '10', '  DoStuff;'),
     ('  Obj.Refresh();', '14', '  Obj.Refresh;'),
     ('  Self.Obj.Refresh ( ) ;', '20', '  Self.Obj.Refresh ;'),
@@ -170,7 +176,12 @@ const
     ('  while More() do Step;', '13', '  while More do Step;'),
     ('  begin Init() end;', '13', '  begin Init end;'),
     ('  1: Reset();', '11', '  1: Reset;'),
-    ('  Foo(); // weg', '6', '  Foo; // weg'));
+    ('  Foo(); // weg', '6', '  Foo; // weg'),
+    ('  if Done()then Exit;', '10', '  if Done then Exit;'),
+    ('  begin Init()end;', '13', '  begin Init end;'),
+    ('procedure Foo();', '14', 'procedure Foo;'),
+    ('function TFoo.Bar(): Integer;', '18', 'function TFoo.Bar: Integer;'),
+    ('procedure Foo(); overload;', '14', 'procedure Foo; overload;'));
 var
   i : Integer;
 begin
@@ -180,7 +191,7 @@ end;
 
 procedure TTestRdxExprFixes.Sca066_Refusals;
 const
-  CASES: array[0..10, 0..2] of string = (
+  CASES: array[0..13, 0..2] of string = (
     ('  X := Foo() + 1;', '11', 'Ausdrucks'),
     ('  Bar(Foo());', '10', 'Ausdrucks'),
     ('  if Assigned(GetObj()) then Exit;', '21', 'Ausdrucks'),
@@ -191,7 +202,10 @@ const
     ('  Foo(X);', '6', 'nur Leerraum'),
     ('  Foo {x} ();', '11', 'nur Leerraum'),
     ('  S := ''Foo()'';', '12', 'nicht mehr'),
-    ('  X := TFoo<T>.Create();', '22', 'kein blosser Name'));
+    ('  X := TFoo<T>.Create();', '22', 'kein blosser Name'),
+    ('  Obj.OnIdle();', '13', 'Ereignis'),
+    ('  var P := GetProc();', '19', 'einfache Variable'),
+    ('  Self.P := GetProc();', '20', 'einfache Variable'));
 var
   i : Integer;
   F : TFixResult;
@@ -286,12 +300,13 @@ end;
 
 procedure TTestRdxExprFixes.Sca084_Variants;
 const
-  CASES: array[0..4, 0..2] of string = (
+  CASES: array[0..5, 0..2] of string = (
     ('  if Assigned(Obj) and (Obj <> nil) then ;', '6', '  if Assigned(Obj) then ;'),
     ('  if (Obj <> nil) and Assigned(Obj) then ;', '6', '  if Assigned(Obj) then ;'),
     ('  if ASSIGNED ( Obj ) and ( obj<>NIL ) then', '6', '  if ASSIGNED ( Obj ) then'),
     ('  Ok := A and Assigned(Obj) and (Obj <> nil);', '15', '  Ok := A and Assigned(Obj);'),
-    ('  if Assigned(Obj) and (Obj <> nil) and Obj.Ready then', '6', '  if Assigned(Obj) and Obj.Ready then'));
+    ('  if Assigned(Obj) and (Obj <> nil) and Obj.Ready then', '6', '  if Assigned(Obj) and Obj.Ready then'),
+    ('  if(Obj <> nil) and Assigned(Obj) then', '5', '  if Assigned(Obj) then'));
 var
   i : Integer;
 begin
@@ -305,13 +320,15 @@ end;
 
 procedure TTestRdxExprFixes.Sca084_Refusals;
 const
-  CASES: array[0..5, 0..2] of string = (
+  CASES: array[0..7, 0..2] of string = (
     ('  if not Assigned(Obj) and (Obj <> nil) then', '10', '"not"'),
     ('  if not (Obj <> nil) and Assigned(Obj) then', '10', '"not"'),
     ('  if Assigned(Obj) and Obj <> nil then', '6', 'Klammern'),
     ('  if Assigned(Obj) and (Other <> nil) then', '6', 'Klammern'),
     ('  if Assigned(Obj) and {x} (Obj <> nil) then', '6', 'Kommentar'),
-    ('  if Self.Assigned(Obj) and (Obj <> nil) then', '11', '"."'));
+    ('  if Self.Assigned(Obj) and (Obj <> nil) then', '11', 'qualifiziert'),
+    ('  if Boolean(Obj <> nil) and Assigned(Obj) then', '13', '"boolean"'),
+    ('  if System.Assigned(Obj) and (Obj <> nil) then', '13', 'qualifiziert'));
 var
   i : Integer;
   F : TFixResult;
@@ -323,6 +340,28 @@ begin
     '  if Assigned(Obj) and', '    (Obj <> nil) then', 'end.']), 4, 6);
   Assert.AreEqual('', F.Text);
   Assert.IsTrue(Pos('einer Zeile', F.Reason) > 0, F.Reason);
+end;
+
+procedure TTestRdxExprFixes.Sca066_CalleeAndTarget;
+const
+  // Zeile, Callee, Target
+  CASES: array[0..4, 0..2] of string = (
+    ('  X := Now();', 'Now', 'X'),
+    ('  Result := Foo();', 'Foo', 'Result'),
+    ('  Obj.Refresh();', '', ''),
+    ('  inherited Create();', '', ''),
+    ('  if Done() then Exit;', 'Done', ''));
+var
+  i : Integer;
+  F : TFixResult;
+begin
+  for i := 0 to High(CASES) do
+  begin
+    F := Fix('E', InUnit(CASES[i, 0]), 4, Pos('()', CASES[i, 0]));
+    Assert.IsTrue(F.Text <> '', CASES[i, 0] + ': ' + F.Reason);
+    Assert.AreEqual(CASES[i, 1], F.Name, 'Callee: ' + CASES[i, 0]);
+    Assert.AreEqual(CASES[i, 2], F.Target, 'Target: ' + CASES[i, 0]);
+  end;
 end;
 
 procedure TTestRdxExprFixes.DeclaredTypeKind_Kinds;
@@ -342,6 +381,8 @@ begin
       '  TFn = function: Integer;',
       '  TRef = reference to procedure;',
       '  TCls = class end;',
+      '  TFactory<T> = reference to function: T;',
+      '  TLookup = TFn;',
       '  // TGone = record',
       'implementation',
       'end.']);
@@ -354,6 +395,57 @@ begin
     Assert.AreEqual('class', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tcls'));
     Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tgone'), 'Kommentar');
     Assert.AreEqual('', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tlist'), 'andere Unit');
+    Assert.AreEqual('reference', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tfactory'),
+      'generische Parameter uebersprungen');
+    Assert.AreEqual('tfn', TRdxSimpleFixes.DeclaredTypeKind(Map, 'tlookup'), 'Alias');
+  finally
+    Map.Free;
+    SL.Free;
+  end;
+end;
+
+procedure TTestRdxExprFixes.TypeKinds_ResolvedProceduralPointerLike;
+var
+  SL  : TStringList;
+  Map : TRdxCodeMap;
+begin
+  SL := TStringList.Create;
+  Map := nil;
+  try
+    SL.Text := Join([
+      'unit u;',
+      'type',
+      '  TObjFunc = function: TObject;',
+      '  TLookup = TObjFunc;',
+      '  TFactory<T> = reference to function: T;',
+      '  TCls = class end;',
+      '  TClsAlias = TCls;',
+      '  PRec = ^TRec;',
+      '  TRec = record end;',
+      '  TName = string;',
+      '  TMyList = TStringList;',
+      'implementation',
+      'end.']);
+    Map := TRdxCodeMap.Create(SL);
+    Assert.AreEqual('function', TRdxExprFixes.ResolvedTypeKind(Map, 'tlookup'),
+      'Alias auf Funktionstyp');
+    Assert.AreEqual('class', TRdxExprFixes.ResolvedTypeKind(Map, 'tclsalias'));
+    Assert.AreEqual('string', TRdxExprFixes.ResolvedTypeKind(Map, 'tname'));
+    Assert.AreEqual('tstringlist', TRdxExprFixes.ResolvedTypeKind(Map, 'tmylist'),
+      'Alias auf einen Typ einer anderen Unit: dessen Name');
+    Assert.IsTrue(TRdxExprFixes.ProceduralType(Map, 'tlookup'), 'Alias');
+    Assert.IsTrue(TRdxExprFixes.ProceduralType(Map, 'tfactory'), 'generisch');
+    Assert.IsTrue(TRdxExprFixes.ProceduralType(Map, 'func'), 'Spring4D Func<T>');
+    Assert.IsTrue(TRdxExprFixes.ProceduralType(Map, 'tnotifyevent'), 'nach Name');
+    Assert.IsFalse(TRdxExprFixes.ProceduralType(Map, 'tcls'));
+    Assert.IsFalse(TRdxExprFixes.ProceduralType(Map, 'integer'));
+    Assert.IsTrue(TRdxExprFixes.PointerLikeType(Map, 'tclsalias'), 'Klasse ueber Alias');
+    Assert.IsTrue(TRdxExprFixes.PointerLikeType(Map, 'prec'), 'Zeigertyp');
+    Assert.IsTrue(TRdxExprFixes.PointerLikeType(Map, 'tobject'));
+    Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'trec'), 'Record');
+    Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'tlookup'), 'Funktionstyp');
+    Assert.IsFalse(TRdxExprFixes.PointerLikeType(Map, 'tstringlist'),
+      'andere Unit: nicht bewiesen');
   finally
     Map.Free;
     SL.Free;

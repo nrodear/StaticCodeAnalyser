@@ -74,16 +74,26 @@ type
     [Test] procedure Sca066_InExpression_NoHelp;
     [Test] procedure Sca066_FpcFile_NoHelp;
     [Test] procedure Sca066_CatalogExample;
+    // Gegen-Review 2026-10-10: prozedurales Ziel (Korpus cnwizards) und
+    // Prozedurvariable als Aufrufziel.
+    [Test] procedure Sca066_ProcTarget_NoHelp;
+    [Test] procedure Sca066_ProcVariable_NoHelp;
     // ---- SCA072 ----
     [Test] procedure Sca072_RoundTrip;
     [Test] procedure Sca072_LongBool_NoHelp;
     [Test] procedure Sca072_UnknownType_NoHelp;
     [Test] procedure Sca072_CatalogExample;
+    [Test] procedure Sca072_InWith_NoHelp;
     // ---- SCA084 ----
     [Test] procedure Sca084_RoundTrip;
     [Test] procedure Sca084_ProcType_NoHelp;
     [Test] procedure Sca084_UnknownType_NoHelp;
     [Test] procedure Sca084_CatalogExample;
+    // Gegen-Review 2026-10-10: Alias auf einen Funktionstyp, eigene Routine
+    // Assigned, Klasse aus einer anderen Unit (Zulassungsliste).
+    [Test] procedure Sca084_FuncAlias_NoHelp;
+    [Test] procedure Sca084_OwnAssigned_NoHelp;
+    [Test] procedure Sca084_OtherUnitType_NoHelp;
     // Katalogfeld editorHelp (Beschluss 2026-10-10, HTML-QF-Badge) =
     // die Regeln mit einer Hilfe dieses Moduls.
     [Test] procedure Catalog_EditorHelpMatchesHelps;
@@ -780,14 +790,48 @@ begin
     fkEmptyArgumentList, 'FPC');
 end;
 
+// Anweisungen in einer Funktion mit Ergebnis Integer - das Katalog-
+// Beispiel weist an Result zu, dessen Typ die Hilfe prueft.
+function InFunction(const AStatements: string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'implementation',
+    'function F: Integer;', 'begin',
+    '  ' + StringReplace(AStatements, #13#10, #13#10'  ', [rfReplaceAll]),
+    'end;', 'end.']);
+end;
+
 procedure TTestRdxSimpleFixesDetector3.Sca066_CatalogExample;
 var
   Meta : TRuleMeta;
 begin
   Meta := TRuleCatalog.GetRuleCanonical(fkEmptyArgumentList);
   Assert.IsTrue(Pos('()', Meta.BadExample) > 0, Meta.BadExample);
-  Assert.AreEqual(InRoutine(Snip(Meta.GoodExample)),
-    FixAll(InRoutine(Snip(Meta.BadExample)), fkEmptyArgumentList));
+  Assert.AreEqual(InFunction(Snip(Meta.GoodExample)),
+    FixAll(InFunction(Snip(Meta.BadExample)), fkEmptyArgumentList));
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca066_ProcTarget_NoHelp;
+begin
+  // cnwizards CnViewSMRUnit: Proc ist prozedural - 'Proc := PrevNextProc'
+  // laese die Funktion als Methodenzeiger statt sie aufzurufen.
+  AssertNoHelp(Join(['unit t;', 'interface', 'type',
+    '  TPrevNextProc = procedure(const S: string) of object;',
+    '  TFoo = class',
+    '    function PrevNextProc: TPrevNextProc;',
+    '    procedure Run;',
+    '  end;',
+    'implementation',
+    'function TFoo.PrevNextProc: TPrevNextProc;', 'begin', '  Result := nil;', 'end;',
+    'procedure TFoo.Run;', 'var', '  Proc: TPrevNextProc;', 'begin',
+    '  Proc := PrevNextProc();', 'end;', 'end.']),
+    fkEmptyArgumentList, 'Prozedurtyp');
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca066_ProcVariable_NoHelp;
+begin
+  AssertNoHelp(Join(['unit t;', 'interface', 'type', '  TCall = procedure;',
+    'implementation', 'procedure P(Cb: TCall);', 'begin', '  Cb();', 'end;',
+    'end.']), fkEmptyArgumentList, 'Variable');
 end;
 
 { ---- SCA072 ---- }
@@ -826,13 +870,19 @@ procedure TTestRdxSimpleFixesDetector3.Sca072_LongBool_NoHelp;
 begin
   // LongBool(2) ist wahr, aber nicht gleich True - die Hilfe aenderte das.
   AssertNoHelp(Format(UNIT_072, ['if Win = True then Exit;']),
-    fkRedundantBoolean, 'Boolean');
+    fkRedundantBoolean, 'longbool');
 end;
 
 procedure TTestRdxSimpleFixesDetector3.Sca072_UnknownType_NoHelp;
 begin
   AssertNoHelp(Format(UNIT_072, ['if Flag = True then Exit;']),
     fkRedundantBoolean, 'unbekannt');
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca072_InWith_NoHelp;
+begin
+  AssertNoHelp(Format(UNIT_072, [Join(['with TObject.Create do',
+    '  if Active = True then Exit;'])]), fkRedundantBoolean, 'with');
 end;
 
 procedure TTestRdxSimpleFixesDetector3.Sca072_CatalogExample;
@@ -871,6 +921,35 @@ procedure TTestRdxSimpleFixesDetector3.Sca084_UnknownType_NoHelp;
 begin
   AssertNoHelp(InRoutine('if Assigned(Foo) and (Foo <> nil) then Exit;'),
     fkAssignedAndAssignedNil, 'unbekannt');
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca084_FuncAlias_NoHelp;
+begin
+  // 'Lookup <> nil' ruft die Funktion auf; der Alias versteckt den Typ.
+  AssertNoHelp(Join(['unit t;', 'interface', 'type',
+    '  TObjFunc = function: TObject;', '  TLookup = TObjFunc;',
+    'implementation', 'procedure P(Lookup: TLookup);', 'begin',
+    '  if Assigned(Lookup) and (Lookup <> nil) then Exit;', 'end;', 'end.']),
+    fkAssignedAndAssignedNil, 'Prozedurtyp');
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca084_OwnAssigned_NoHelp;
+begin
+  AssertNoHelp(Join(['unit t;', 'interface', 'implementation',
+    'function Assigned(P: Pointer): Boolean;', 'begin', '  Result := True;',
+    'end;', 'procedure P;', 'var', '  Obj: TObject;', 'begin',
+    '  if Assigned(Obj) and (Obj <> nil) then Exit;', 'end;', 'end.']),
+    fkAssignedAndAssignedNil, 'eigene Routine');
+end;
+
+procedure TTestRdxSimpleFixesDetector3.Sca084_OtherUnitType_NoHelp;
+begin
+  // TStringList ist eine Klasse - beweisen laesst es sich in dieser Unit
+  // nicht; SCA084 bleibt bei der Zulassungsliste.
+  AssertNoHelp(Join(['unit t;', 'interface', 'implementation',
+    'uses System.Classes;', 'procedure P;', 'var', '  L: TStringList;', 'begin',
+    '  if Assigned(L) and (L <> nil) then Exit;', 'end;', 'end.']),
+    fkAssignedAndAssignedNil, 'nicht als Klasse');
 end;
 
 procedure TTestRdxSimpleFixesDetector3.Sca084_CatalogExample;

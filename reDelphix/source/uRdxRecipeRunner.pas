@@ -359,17 +359,19 @@ type
       ALine: Integer; const AMessage: string;
       const AUsesNames: TArray<string>): TRdxFixOutcome; static;
 
-    // SCA066: 'Foo()' -> 'Foo' (TRdxExprFixes.EmptyArgs). Nicht in einer
-    // Datei mit FPC-Weiche oder FPC-Modus: in objfpc ruft erst 'Foo()' eine
-    // Prozedurvariable auf.
+    // SCA066: 'Foo()' -> 'Foo' (TRdxExprFixes.EmptyArgs). Dazu die Typen:
+    // ein blosser Name ist keine Variable (Prozedurvariable, CallReason),
+    // links von ':=' kein prozeduraler oder unbekannter Typ; kein with-
+    // Block. Nicht in einer Datei mit FPC-Weiche oder FPC-Modus: in objfpc
+    // ruft erst 'Foo()' eine Prozedurvariable auf.
     class function EmptyArgsFix(APlaces: TSourcePlaces; ALines: TStrings;
       ALine: Integer; const AMessage: string): TRdxFixOutcome; static;
 
     // SCA072 und SCA084: der Planer liefert die Ersetzung und den Namen X,
     // hier die Pruefung von X - kein with; SCA072: X als Boolean deklariert
     // (bei Variant und LongBool ist 'X = True' nicht dasselbe wie X);
-    // SCA084: Typ bekannt, kein Prozedurtyp ('X <> nil' ruft ihn auf), keine
-    // eigene Routine Assigned.
+    // SCA084: X als Klasse, Interface oder Zeiger bewiesen (ein Funktionstyp
+    // riefe 'X <> nil' auf), keine eigene Routine Assigned.
     class function OperandFix(AKind: TFindingKind; APlaces: TSourcePlaces;
       ALines: TStrings; ALine: Integer;
       const AMessage: string): TRdxFixOutcome; static;
@@ -402,6 +404,7 @@ const
   // FreeAndNil setzt ERST nil, dann laeuft der Destruktor.
   R_FREENIL_HINT = 'FreeAndNil setzt %s auf nil, bevor der Destruktor laeuft';
   R_WITH_MEMBER  = 'with-Anweisung in der Routine - %s koennte ein Member sein';
+  R_NO_HELP      = 'keine Hilfe an dieser Stelle';
   R_PROC_TYPE    = '%s hat einen Prozedurtyp - "%s <> nil" ruft ihn auf, '
     + 'Assigned() nicht';
 
@@ -1274,8 +1277,7 @@ begin
   end;
 end;
 
-// SCA075, SCA087 und SCA066: die Planer arbeiten nur auf den Zeilen, ohne
-// Parser. Spalte bzw. Abschnitt stehen in der Meldung - die Spalte kennt
+// SCA075 und SCA087: die Planer arbeiten nur auf den Zeilen, ohne Parser. Spalte bzw. Abschnitt stehen in der Meldung - die Spalte kennt
 // den Kommentar-Zustand der Zeilen davor, ein Neuscan der Zeile nicht.
 function LinesOnlyFix(AKind: TFindingKind; ALines: TStrings; ALine: Integer;
   const AMessage: string): TRdxFixOutcome;
@@ -1294,9 +1296,6 @@ begin
     case AKind of
       fkEmptyVisibilitySection:
         Result.Enabled := TRdxSimpleFixes.EmptySection(Map, ALine, AMessage,
-          Result.Edits[0], Result.Reason);
-      fkEmptyArgumentList:
-        Result.Enabled := TRdxExprFixes.EmptyArgs(Map, ALine, AMessage,
           Result.Edits[0], Result.Reason);
     else
       Result.Enabled := TRdxSimpleFixes.ExplicitTObject(Map, ALine, AMessage,
@@ -1500,17 +1499,84 @@ begin
   Result.Enabled := AppendSysUtils(APlaces, AUsesNames, Result);
 end;
 
+// SCA066: die Namen um den Aufruf (TRdxCallEdit). Ein blosser Name mit
+// deklariertem Typ ist eine Variable - mit () eine Prozedurvariable oder
+// Methodenreferenz, die Delphi ohne () nicht ueberall aufruft. Links von
+// ':=' entscheidet der Typ (Gegen-Review 2026-10-10, Korpus cnwizards:
+// 'Proc := PrevNextProc()' mit prozeduralem Proc). Im with-Block kann ein
+// Name an ein Member binden. '' oder der Grund.
+function CallReason(APlaces: TSourcePlaces; AMap: TRdxCodeMap;
+  ALine: Integer; const APlan: TRdxCallEdit): string;
+var
+  TypeLow : string;
+begin
+  Result := '';
+  if (APlan.Callee = '') and (APlan.Target = '') then Exit;
+  if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
+    Exit(Format(R_WITH_MEMBER, [APlan.Callee + APlan.Target]));
+  if (APlan.Callee <> '')
+     and (APlaces.DeclaredTypeOf(ALine, APlan.Callee) <> '') then
+    Exit(Format('%s ist eine Variable (Prozedurtyp) - erst () ruft sie '
+      + 'sicher auf', [APlan.Callee]));
+  if APlan.Target = '' then Exit;
+  TypeLow := APlaces.DeclaredTypeOf(ALine, APlan.Target);
+  if TypeLow = '' then
+    Result := Format('Typ von %s unbekannt - ist er prozedural, liest Delphi '
+      + 'den Namen ohne () als Zeiger', [APlan.Target])
+  else if TRdxExprFixes.ProceduralType(AMap, TypeLow) then
+    Result := Format('%s hat einen Prozedurtyp (%s) - ohne () liest Delphi den '
+      + 'Namen als Zeiger', [APlan.Target, TypeLow]);
+end;
+
 class function TRdxFixRunner.EmptyArgsFix(APlaces: TSourcePlaces;
   ALines: TStrings; ALine: Integer; const AMessage: string): TRdxFixOutcome;
+var
+  Map  : TRdxCodeMap;
+  Plan : TRdxCallEdit;
 begin
   Result := Default(TRdxFixOutcome);
-  if not Assigned(APlaces) or not APlaces.IsOpen then
+  if not Assigned(APlaces) or not APlaces.IsOpen or not Assigned(ALines) then
     Result.Reason := R_NO_FILE
   else if TRdxRecipeRunner.SourceLooksFpcAware(APlaces) then
     Result.Reason := 'Datei mit FPC-Weiche oder FPC-Modus - in objfpc ruft '
-      + 'erst Foo() eine Prozedurvariable auf'
-  else
-    Result := LinesOnlyFix(fkEmptyArgumentList, ALines, ALine, AMessage);
+      + 'erst Foo() eine Prozedurvariable auf';
+  if Result.Reason <> '' then Exit;
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    if TRdxExprFixes.EmptyArgs(Map, ALine, AMessage, Plan, Result.Reason) then
+      Result.Reason := CallReason(APlaces, Map, ALine, Plan)
+    else if Result.Reason = '' then
+      Result.Reason := R_NO_HELP;
+  finally
+    Map.Free;
+  end;
+  if Result.Reason <> '' then Exit;
+  SetLength(Result.Edits, 1);
+  Result.Edits[0] := Plan.Edit;
+  Result.Enabled := True;
+end;
+
+// SCA084: X muss als Klasse, Interface oder Zeiger BEWIESEN sein - ein
+// Funktionstyp riefe 'X <> nil' auf, Assigned(X) nicht. Eine Zulassungs-
+// liste (Gegen-Review 2026-10-10: die Ausschlussliste liess Aliasse,
+// generische und qualifizierte Funktionstypen durch); im Realwelt-Korpus
+// meldet SCA084 nur vier Stellen. '' oder der Grund.
+function AssignedNilReason(AMap: TRdxCodeMap;
+  const AName, ATypeLow: string): string;
+begin
+  if TRdxSimpleFixes.DeclaresRoutine(AMap, 'Assigned') then
+    Exit('die Unit deklariert eine eigene Routine Assigned');
+  if ATypeLow = '' then
+    Exit(Format('Typ von %s unbekannt - bei einem Funktionstyp ruft '
+      + '"%s <> nil" ihn auf, Assigned() nicht', [AName, AName]));
+  Result := TRdxNilFix.NilOperandRisk(AName, ATypeLow);
+  if Result <> '' then Exit;
+  if TRdxExprFixes.ProceduralType(AMap, ATypeLow) then
+    Exit(Format(R_PROC_TYPE, [AName, AName]));
+  if not TRdxExprFixes.PointerLikeType(AMap, ATypeLow) then
+    Result := Format('%s: Typ %s ist in dieser Unit nicht als Klasse, '
+      + 'Interface oder Zeiger bewiesen - ein Funktionstyp riefe "%s <> nil" '
+      + 'auf', [AName, ATypeLow, AName]);
 end;
 
 // SCA072/SCA084: ist X an ALine sicher der Operand, fuer den die Umformung
@@ -1518,7 +1584,7 @@ end;
 function OperandReason(AKind: TFindingKind; APlaces: TSourcePlaces;
   AMap: TRdxCodeMap; ALine: Integer; const AName: string): string;
 var
-  TypeLow, Kind : string;
+  TypeLow : string;
 begin
   if TRdxSimpleFixes.WithBefore(AMap, ALine) or APlaces.InWithBlock(ALine) then
     Exit(Format(R_WITH_MEMBER, [AName]));
@@ -1532,15 +1598,7 @@ begin
     Exit(Format('%s ist hier nicht als Boolean bewiesen (Typ: %s) - bei '
       + 'Variant oder LongBool ist "= True" nicht dasselbe', [AName, TypeLow]));
   end;
-  if TRdxSimpleFixes.DeclaresRoutine(AMap, 'Assigned') then
-    Exit('die Unit deklariert eine eigene Routine Assigned');
-  if TypeLow = '' then
-    Exit(Format(R_NIL_TYPE_UNKNOWN, [AName]));
-  Result := TRdxNilFix.NilOperandRisk(AName, TypeLow);
-  Kind := TRdxSimpleFixes.DeclaredTypeKind(AMap, TypeLow);
-  if (Result = '') and ((Kind = 'procedure') or (Kind = 'function')
-     or (Kind = 'reference')) then
-    Result := Format(R_PROC_TYPE, [AName, AName]);
+  Result := AssignedNilReason(AMap, AName, TypeLow);
 end;
 
 class function TRdxFixRunner.OperandFix(AKind: TFindingKind;
@@ -1566,7 +1624,9 @@ begin
       Ok := TRdxExprFixes.AssignedNil(Map, ALine, AMessage, Plan,
         Result.Reason);
     if Ok then
-      Result.Reason := OperandReason(AKind, APlaces, Map, ALine, Plan.Name);
+      Result.Reason := OperandReason(AKind, APlaces, Map, ALine, Plan.Name)
+    else if Result.Reason = '' then
+      Result.Reason := R_NO_HELP;
   finally
     Map.Free;
   end;

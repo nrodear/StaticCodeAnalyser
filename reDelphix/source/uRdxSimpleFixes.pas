@@ -4,8 +4,9 @@ unit uRdxSimpleFixes;
 // (Konzept_Editorhilfen_2026-10-08). Stufe 2a (Nico 2026-10-09): SCA075
 // class(TObject) -> class, SCA085 Free/nil -> FreeAndNil, SCA126 X = nil
 // -> not Assigned(X); Stufe 2, Rest (2026-10-10): SCA074 Assert-Meldung,
-// SCA087 leerer Sichtbarkeitsabschnitt, SCA139 X.Free -> FreeAndNil(X).
-// OHNE ToolsAPI: aus den Zeilen der Datei werden gepruefte Ersetzungen
+// SCA087 leerer Sichtbarkeitsabschnitt, SCA139 X.Free -> FreeAndNil(X);
+// uQuickFix-Umzug (2026-10-10, TRdxExprFixes): SCA066 leere Klammern,
+// SCA072 Vergleich mit True/False, SCA084 Assigned + nil. OHNE ToolsAPI: aus den Zeilen der Datei werden gepruefte Ersetzungen
 // (TRdxEdit), die uRdxEditor.ReplaceSpans in EINEM Undo-Schritt schreibt.
 //
 // GRUNDSATZ: lieber keine Hilfe als eine falsche. Jeder Planer prueft die
@@ -51,6 +52,16 @@ type
   TRdxOperandEdit = record
     Edit : TRdxEdit;
     Name : string;
+  end;
+
+  // SCA066: die Ersetzung samt den Namen, deren Typ der Aufrufer prueft.
+  // Callee = der aufgerufene Name, wenn er allein steht ('Foo()', nicht
+  // 'Obj.Foo()' oder 'inherited Foo()'), sonst ''; Target = die Variable
+  // links von ':=' ('X := Foo()'), sonst ''.
+  TRdxCallEdit = record
+    Edit   : TRdxEdit;
+    Callee : string;
+    Target : string;
   end;
 
   // Die Planer der einfachen Hilfen: Zeilen und Token, ohne Parser.
@@ -140,19 +151,25 @@ type
     // SCA066: 'Foo()' -> 'Foo' an der Spalte aus der Meldung (Spalte der
     // '('). Nur, wo Delphi den Namen ohne Klammern genauso aufruft: der
     // Aufruf ist eine ganze Anweisung ('Obj.Foo();' hinter begin, then,
-    // ';' ...) oder die ganze rechte Seite einer Zuweisung bzw. die ganze
-    // Bedingung von if/while/until. Als Argument (Ueberladung mit TFunc,
-    // Assigned(Foo())) koennte der Name als Zeiger gelten, in der eigenen
-    // Funktion als ihr Ergebnis - dort keine Hilfe.
+    // ';' ...), die ganze Bedingung von if/while/until oder die ganze
+    // rechte Seite einer Zuweisung an eine einfache Variable - deren Typ
+    // prueft der Aufrufer (APlan.Target): ist er prozedural, liest Delphi
+    // 'Foo' als Zeiger. Dazu Deklarationen ('procedure Foo();'). Als
+    // Argument (Ueberladung mit TFunc, Assigned(Foo())) koennte der Name
+    // als Zeiger gelten; ein Ereignisname ('OnIdle()') ist eine
+    // Methodenreferenz, die ohne () nicht aufgerufen wird - dort und in der
+    // eigenen Funktion keine Hilfe. Ob ein blosser Name eine Variable ist,
+    // prueft der Aufrufer (APlan.Callee).
     class function EmptyArgs(AMap: TRdxCodeMap; ALine: Integer;
-      const AMessage: string; out AEdit: TRdxEdit;
+      const AMessage: string; out APlan: TRdxCallEdit;
       out AReason: string): Boolean; static;
 
     // SCA072: 'X = True' / 'X <> False' -> 'X', 'X = False' / 'X <> True'
     // -> 'not X' an der Spalte aus der Meldung (Spalte des Operators). X ist
     // ein blosser Bezeichner (bei 'Self.X' koennte eine gleichnamige lokale
-    // Variable den Typbeweis stellen); links davon beginnt ein Ausdruck ('(', ',', ':=', if, while ...), rechts von True/False endet
-    // er (')', then, do, ';' ...) - sonst bindet der Vergleich anders:
+    // Variable den Typbeweis stellen); links davon beginnt ein Ausdruck
+    // ('(', ',', ':=', if, while ...), rechts von True/False endet er
+    // (')', then, do, ';' ...) - sonst bindet der Vergleich anders:
     // 'X = True and Y' ist 'X = (True and Y)'. Dass X ein Boolean ist,
     // prueft der Aufrufer (APlan.Name).
     class function RedundantBool(AMap: TRdxCodeMap; ALine: Integer;
@@ -162,11 +179,30 @@ type
     // SCA084: 'Assigned(X) and (X <> nil)' bzw. '(X <> nil) and Assigned(X)'
     // -> 'Assigned(X)' an der Spalte aus der Meldung, alles auf einer Zeile.
     // Der Vergleich muss geklammert sein, davor kein 'not' (es bindet nur an
-    // den ersten Teil). Dass X kein Prozedurzeiger ist ('X <> nil' ruft ihn
-    // auf, Assigned() nicht), prueft der Aufrufer (APlan.Name).
+    // den ersten Teil), keine Aufruf- oder Cast-Klammer ('Boolean(X <> nil)').
+    // Dass X eine Klasse, ein Interface oder ein Zeiger ist ('X <> nil' ruft
+    // einen Funktionszeiger auf, Assigned() nicht), prueft der Aufrufer
+    // (APlan.Name, PointerLikeType).
     class function AssignedNil(AMap: TRdxCodeMap; ALine: Integer;
       const AMessage: string; out APlan: TRdxOperandEdit;
       out AReason: string): Boolean; static;
+
+    // Art des Typs ATypeLow nach seiner Deklaration in der Datei
+    // (DeclaredTypeKind), Aliasse bis drei Stufen aufgeloest ('TLookup =
+    // TObjFunc' -> 'function'); bei einem Typ aus einer anderen Unit der
+    // letzte Name der Kette, '' wenn die Datei ihn nicht deklariert.
+    class function ResolvedTypeKind(AMap: TRdxCodeMap;
+      const ATypeLow: string): string; static;
+    // Ein Prozedurtyp (procedure/function/reference to, auch ueber Alias),
+    // oder ein Name wie TNotifyEvent, TProc, Func? Typen aus anderen Units
+    // mit unauffaelligem Namen sieht das nicht.
+    class function ProceduralType(AMap: TRdxCodeMap;
+      const ATypeLow: string): Boolean; static;
+    // Als Klasse, Interface oder Zeiger BEWIESEN: TObject, Pointer,
+    // IInterface/IUnknown oder in dieser Unit so deklariert (auch ueber
+    // Alias). Eine Zulassungsliste - Typen anderer Units fallen heraus.
+    class function PointerLikeType(AMap: TRdxCodeMap;
+      const ATypeLow: string): Boolean; static;
   end;
 
   // SCA126: X = nil -> not Assigned(X), X <> nil -> Assigned(X).
@@ -242,6 +278,25 @@ const
     '(', '', '<>', 'nil', ')');
   NIL_FIRST: array[0..9] of string = ('(', '', '<>', 'nil', ')', 'and',
     'assigned', '(', '', ')');
+  // Wo eine Deklaration beginnt ('procedure Foo();', SCA066).
+  DECL_STARTS: array[0..3] of string = ('procedure', 'function',
+    'constructor', 'destructor');
+  // Prozedurtypen nach Name: genau diese bzw. diese Endungen (TNotifyEvent,
+  // TProc, TFunc, Spring4D Func<T> ...). NICHT 'handler' oder 'method':
+  // TIdIOHandler, TRttiMethod sind Klassen. 'tmethod' ist der Record hinter
+  // 'of object'. Geteilt von SCA066, SCA084 und SCA126.
+  PROC_TYPE_NAMES: array[0..8] of string = ('procedure', 'function',
+    'reference', 'tmethod', 'tthreadmethod', 'tpredicate', 'tthreadprocedure',
+    'func', 'proc');
+  PROC_TYPE_SUFFIXES: array[0..5] of string = ('event', 'proc', 'func',
+    'callback', 'procedure', 'function');
+  // Arten, bei denen die Alias-Aufloesung stehen bleibt.
+  TYPE_KIND_WORDS: array[0..9] of string = ('class', 'record', 'object',
+    'interface', 'dispinterface', 'reference', 'set', 'array', 'string',
+    'file');
+  // Sicher nil-vergleichbar und nicht prozedural (SCA084).
+  POINTER_TYPES: array[0..3] of string = ('tobject', 'pointer', 'iinterface',
+    'iunknown');
   R_FREE_MOVED    = 'X.Free; steht nicht mehr an der gemeldeten Stelle';
   R_NOT_NIL_LINE  = 'die naechste Zeile ist nicht "X := nil;"';
 
@@ -563,6 +618,29 @@ begin
       Exit(True);
 end;
 
+// 'OnChange', 'FOnChange' (Ereignis) bzw. 'GetItem' (Getter): ein
+// Grossbuchstabe hinter dem Praefix, sonst waere 'Online' ein Ereignis.
+function HasCapPrefix(const AIdent, APrefix: string): Boolean;
+var
+  n : Integer;
+begin
+  n := Length(APrefix);
+  Result := (Length(AIdent) > n) and (Copy(AIdent, 1, n) = APrefix)
+    and CharInSet(AIdent[n + 1], ['A'..'Z']);
+end;
+
+// Nennt ATypeLow nach seinem Namen einen Prozedurtyp (PROC_TYPE_*)?
+function NamesProcType(const ATypeLow: string): Boolean;
+var
+  T : string;
+begin
+  Result := InList(ATypeLow, PROC_TYPE_NAMES);
+  if not Result then
+    for T in PROC_TYPE_SUFFIXES do
+      if (Length(ATypeLow) > Length(T)) and EndsText(T, ATypeLow) then
+        Exit(True);
+end;
+
 // Das letzte Segment des Namens hinter ATok ('TFoo.Assert' -> 'Assert').
 function NameAfter(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
 begin
@@ -637,6 +715,24 @@ begin
   Result := DeclaresAfter(AMap, ['procedure', 'function'], AName);
 end;
 
+// Das Token hinter dem Typnamen ATok, generische Parameter uebersprungen
+// ('TFactory<T> = ...' -> '=').
+function AfterTypeParams(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
+var
+  Depth : Integer;
+begin
+  Result := After(AMap, ATok);
+  if Result.Low <> '<' then Exit;
+  Depth := 0;
+  repeat
+    if Result.Low = '<' then
+      Inc(Depth)
+    else if Result.Low = '>' then
+      Dec(Depth);
+    Result := After(AMap, Result);
+  until (Depth = 0) or (Result.Low = '') or (Result.Low = ';');
+end;
+
 class function TRdxSimpleFixes.DeclaredTypeKind(AMap: TRdxCodeMap;
   const ATypeName: string): string;
 var
@@ -649,9 +745,9 @@ begin
   T := NextToken(AMap, 1, 1);
   while T.Low <> '' do
   begin
-    if (T.Low = Low) and (After(AMap, T).Low = '=') then
+    if (T.Low = Low) and (AfterTypeParams(AMap, T).Low = '=') then
     begin
-      K := After(AMap, After(AMap, T));
+      K := After(AMap, AfterTypeParams(AMap, T));
       if K.Low = 'packed' then
         K := After(AMap, K);
       Exit(K.Low);
@@ -1066,31 +1162,91 @@ begin
   end;
 end;
 
-// Darf 'Name()' hier ohne Klammern stehen (s. EmptyArgs)? '' oder der Grund.
-function EmptyArgsContext(AMap: TRdxCodeMap;
-  const AName, AClose: TRdxToken): string;
+// Links von ':=' (AAssign) muss eine einfache Variable am Anfang einer
+// Anweisung stehen: ihr Typ entscheidet, ob Delphi 'Foo' ohne Klammern
+// aufruft oder als Prozedurwert liest - der Aufrufer prueft ihn (ATarget).
+// Pfad, Index und 'var X :=' (Typ aus der rechten Seite) sperren.
+function AssignTargetReason(AMap: TRdxCodeMap; const AAssign: TRdxToken;
+  out ATarget: string): string;
 var
-  Start, Next : TRdxToken;
-  Prev        : string;
+  Lhs : TRdxToken;
 begin
   Result := '';
+  ATarget := '';
+  Lhs := Before(AMap, AAssign);
+  if not Lhs.IsWord or IsKeyword(Lhs.Low)
+     or not InList(Before(AMap, Lhs).Low, STATEMENT_STARTS) then
+    Exit('links von := steht keine einfache Variable (Pfad, Index oder '
+      + 'var-Deklaration) - ihr Typ entscheidet ueber die Bedeutung');
+  ATarget := Copy(AMap.Raw(Lhs.Line), Lhs.Col, Lhs.Len);
+end;
+
+// Deklaration 'procedure Foo();' / 'function TFoo.Bar(): Integer;': ohne
+// Klammern dieselbe, solange ';' oder ':' folgt (keine Direktive dahinter).
+function DeclArgsReason(const ANext: TRdxToken): string;
+begin
+  Result := '';
+  if (ANext.Low <> ';') and (ANext.Low <> ':') then
+    Result := 'Deklaration: hinter () steht weder ";" noch ":"';
+end;
+
+// Darf 'Name()' hier ohne Klammern stehen (s. EmptyArgs)? '' oder der Grund;
+// ATarget wie in AssignTargetReason.
+function EmptyArgsContext(AMap: TRdxCodeMap; const AName, AClose: TRdxToken;
+  out ATarget: string): string;
+var
+  Start, Prev, Next : TRdxToken;
+  Name              : string;
+begin
+  Result := '';
+  ATarget := '';
   Start := ChainStart(AMap, AName);
   if Start.Low = '' then
     Exit('ein Glied der Aufrufkette ist kein blosser Name');
-  Prev := Before(AMap, Start).Low;
-  if not InList(Prev, STATEMENT_STARTS) and not InList(Prev, WHOLE_EXPR_STARTS) then
-    Exit(R_IN_EXPRESSION);
+  Prev := Before(AMap, Start);
   Next := After(AMap, AClose);
-  if (Next.Low <> '') and not InList(Next.Low, CALL_ENDS) then
+  if InList(Prev.Low, DECL_STARTS) then
+    Exit(DeclArgsReason(Next));
+  if (not InList(Prev.Low, STATEMENT_STARTS)
+      and not InList(Prev.Low, WHOLE_EXPR_STARTS))
+     or ((Next.Low <> '') and not InList(Next.Low, CALL_ENDS)) then
     Exit(R_IN_EXPRESSION);
+  Name := Copy(AMap.Raw(AName.Line), AName.Col, AName.Len);
+  if HasCapPrefix(Name, 'On') or HasCapPrefix(Name, 'FOn') then
+    Exit(Format('%s sieht nach Ereignis aus - eine Methodenreferenz ruft '
+      + 'Delphi ohne () nicht auf', [Name]));
   if (Start.Col = AName.Col) and (Start.Line = AName.Line)
      and InsideOwnFunction(AMap, AName.Line, AName.Low) then
-    Exit(Format('%s() in der Funktion %s - ohne Klammern meint der Name ihr '
-      + 'Ergebnis', [AName.Low, AName.Low]));
+    Exit(Format('%s() in der Funktion %s - ohne Klammern haengt die Bedeutung '
+      + 'vom Dialekt ab (Rekursion oder Ergebnis)', [Name, Name]));
+  if Prev.Low = ':=' then
+    Result := AssignTargetReason(AMap, Prev, ATarget);
+end;
+
+// Die SCA066-Ersetzung: von hinter dem Namen bis hinter ')' loeschen;
+// Callee = der Name, wenn er allein steht (kein '.' und kein 'inherited'
+// davor).
+procedure FillCallEdit(AMap: TRdxCodeMap; ALine: Integer;
+  const ANameTok, AClose: TRdxToken; var APlan: TRdxCallEdit);
+var
+  L    : string;
+  Prev : string;
+begin
+  L := AMap.Raw(ALine);
+  Prev := Before(AMap, ANameTok).Low;
+  if (Prev <> '.') and (Prev <> 'inherited') then
+    APlan.Callee := Copy(L, ANameTok.Col, ANameTok.Len);
+  APlan.Edit.Span := TRefactorSpan.Make(SPAN_066, ALine, ANameTok.EndCol, ALine,
+    AClose.EndCol);
+  APlan.Edit.Expected := Copy(L, ANameTok.EndCol, AClose.EndCol - ANameTok.EndCol);
+  // 'Done()then' -> 'Done then', nicht 'Donethen'.
+  APlan.Edit.NewText := '';
+  if (AClose.EndCol <= Length(L)) and IsIdentChar(L[AClose.EndCol]) then
+    APlan.Edit.NewText := ' ';
 end;
 
 class function TRdxExprFixes.EmptyArgs(AMap: TRdxCodeMap; ALine: Integer;
-  const AMessage: string; out AEdit: TRdxEdit; out AReason: string): Boolean;
+  const AMessage: string; out APlan: TRdxCallEdit; out AReason: string): Boolean;
 var
   L       : string;
   Col     : Integer;
@@ -1098,7 +1254,7 @@ var
   Close   : TRdxToken;
 begin
   Result := False;
-  AEdit := Default(TRdxEdit);
+  APlan := Default(TRdxCallEdit);
   AReason := '';
   Col := ColumnFromMessage(AMessage);
   if Col < 1 then
@@ -1125,12 +1281,9 @@ begin
   else if SkipBlanks(L, NameTok.EndCol) <> Col then
     AReason := 'zwischen Name und () steht nicht nur Leerraum'
   else
-    AReason := EmptyArgsContext(AMap, NameTok, Close);
+    AReason := EmptyArgsContext(AMap, NameTok, Close, APlan.Target);
   if AReason <> '' then Exit;
-  AEdit.Span := TRefactorSpan.Make(SPAN_066, ALine, NameTok.EndCol, ALine,
-    Close.EndCol);
-  AEdit.Expected := Copy(L, NameTok.EndCol, Close.EndCol - NameTok.EndCol);
-  AEdit.NewText  := '';
+  FillCallEdit(AMap, ALine, NameTok, Close, APlan);
   Result := True;
 end;
 
@@ -1202,8 +1355,6 @@ begin
   Result := True;
 end;
 
-// Die zehn Token ab AFirst gegen APattern ('' = X, beide Male derselbe
-// Name), alle auf der Zeile von AFirst. AToks traegt die Token.
 // Passt ATok zum Musterteil APart? '' steht fuer den Namen X: ein
 // Bezeichner, beim zweiten Mal derselbe wie in AName gemerkt.
 function TokenFits(const ATok: TRdxToken; const APart: string;
@@ -1217,6 +1368,8 @@ begin
     AName := ATok.Low;
 end;
 
+// Die zehn Token ab AFirst gegen APattern ('' = X, beide Male derselbe
+// Name), alle auf der Zeile von AFirst. AToks traegt die Token.
 function MatchTokens(AMap: TRdxCodeMap; const AFirst: TRdxToken;
   const APattern: array of string; out AToks: TArray<TRdxToken>): Boolean;
 var
@@ -1238,16 +1391,25 @@ end;
 
 // Was vor und hinter dem SCA084-Ausdruck steht: '' oder der Grund. 'not'
 // davor bindet nur an den ersten Teil, ein Selektor dahinter nur an den
-// letzten.
+// letzten; ein Name oder ')' davor macht die Klammer zur Aufruf- oder
+// Cast-Klammer ('Boolean(X <> nil) and ...'); '.' davor: 'Obj.Assigned'.
 function AssignedNilContext(AMap: TRdxCodeMap;
   const AFirst, ALast: TRdxToken): string;
 var
-  Prev, Next : string;
+  Prev : TRdxToken;
+  Next : string;
 begin
   Result := '';
-  Prev := Before(AMap, AFirst).Low;
-  if (Prev = 'not') or (Prev = '@') or (Prev = '.') then
-    Exit(Format('"%s" vor dem Ausdruck bindet nur an seinen ersten Teil', [Prev]));
+  Prev := Before(AMap, AFirst);
+  if Prev.Low = '.' then
+    Exit('Assigned ist hier qualifiziert - nicht die Systemroutine');
+  if (Prev.Low = 'not') or (Prev.Low = '@') then
+    Exit(Format('"%s" vor dem Ausdruck bindet nur an seinen ersten Teil',
+      [Prev.Low]));
+  if (Prev.IsWord and not IsKeyword(Prev.Low))
+     or InList(Prev.Low, [')', ']', '>', '^']) then
+    Exit(Format('"%s" vor dem Ausdruck - die Klammer gehoert zu einem Aufruf '
+      + 'oder Cast', [Prev.Low]));
   Next := After(AMap, ALast).Low;
   if (Next = '.') or (Next = '[') or (Next = '^') then
     Exit(Format('"%s" hinter dem Ausdruck bindet nur an seinen letzten Teil', [Next]));
@@ -1301,7 +1463,50 @@ begin
   APlan.Edit.Expected := Copy(L, First.Col, Toks[9].EndCol - First.Col);
   APlan.Edit.NewText  := Copy(L, Toks[Keep].Col,
     Toks[Keep + 3].EndCol - Toks[Keep].Col);
+  // 'if(X <> nil) and ...' -> 'if Assigned(X)', nicht 'ifAssigned(X)'.
+  if (First.Col > 1) and IsIdentChar(L[First.Col - 1]) then
+    APlan.Edit.NewText := ' ' + APlan.Edit.NewText;
   Result := True;
+end;
+
+class function TRdxExprFixes.ResolvedTypeKind(AMap: TRdxCodeMap;
+  const ATypeLow: string): string;
+const
+  MAX_ALIAS = 3;
+var
+  i    : Integer;
+  Next : string;
+begin
+  Result := TRdxSimpleFixes.DeclaredTypeKind(AMap, ATypeLow);
+  for i := 1 to MAX_ALIAS do
+  begin
+    if (Result = '') or not IsIdentStart(Result[1]) or IsKeyword(Result)
+       or InList(Result, TYPE_KIND_WORDS) then
+      Exit;
+    Next := TRdxSimpleFixes.DeclaredTypeKind(AMap, Result);
+    if Next = '' then
+      Exit;   // Alias auf einen Typ einer anderen Unit: dessen Name
+    Result := Next;
+  end;
+end;
+
+class function TRdxExprFixes.ProceduralType(AMap: TRdxCodeMap;
+  const ATypeLow: string): Boolean;
+var
+  Kind : string;
+begin
+  Kind := ResolvedTypeKind(AMap, ATypeLow);
+  Result := NamesProcType(ATypeLow) or NamesProcType(Kind);
+end;
+
+class function TRdxExprFixes.PointerLikeType(AMap: TRdxCodeMap;
+  const ATypeLow: string): Boolean;
+var
+  Kind : string;
+begin
+  Kind := ResolvedTypeKind(AMap, ATypeLow);
+  Result := InList(ATypeLow, POINTER_TYPES) or InList(Kind, POINTER_TYPES)
+    or InList(Kind, ['class', 'interface', 'dispinterface', '^']);
 end;
 
 { ---- SCA126: Zaehlen wie der Detektor ---- }
@@ -1949,34 +2154,16 @@ begin
     Result := '';
 end;
 
-// 'OnChange', 'FOnChange' (Ereignis) bzw. 'GetItem' (Getter): ein
-// Grossbuchstabe hinter dem Praefix, sonst waere 'Online' ein Ereignis.
-function HasCapPrefix(const AIdent, APrefix: string): Boolean;
-var
-  n : Integer;
-begin
-  n := Length(APrefix);
-  Result := (Length(AIdent) > n) and (Copy(AIdent, 1, n) = APrefix)
-    and CharInSet(AIdent[n + 1], ['A'..'Z']);
-end;
-
 class function TRdxNilFix.NilOperandRisk(const AOperand,
   ATypeLow: string): string;
 const
-  // Genau diese Namen. 'tmethod' ist der Record hinter 'of object'.
-  RISKY_TYPES: array[0..17] of string = (
+  // Genau diese Namen; Prozedurtypen dazu ueber NamesProcType.
+  RISKY_TYPES: array[0..10] of string = (
     'string', 'ansistring', 'unicodestring', 'widestring', 'shortstring',
-    'rawbytestring', 'utf8string', 'variant', 'olevariant', 'array', 'set',
-    'procedure', 'function', 'reference', 'tmethod', 'tthreadmethod',
-    'tpredicate', 'tthreadprocedure');
-  // Endungen von Prozedurtypen (TNotifyEvent, TProc, TFunc, ...). NICHT
-  // 'handler' oder 'method': TIdIOHandler, TRttiMethod sind Klassen.
-  RISKY_SUFFIXES: array[0..5] of string = (
-    'event', 'proc', 'func', 'callback', 'procedure', 'function');
+    'rawbytestring', 'utf8string', 'variant', 'olevariant', 'array', 'set');
   TYPE_RISK = '%s ist vom Typ %s - Assigned() ist dafuer nicht sicher gleichwertig';
 var
   Ident : string;
-  T     : string;
 begin
   Result := '';
   Ident := TrailingIdent(AOperand);
@@ -1985,12 +2172,8 @@ begin
     Exit(Format('%s sieht nach Ereignis oder Funktion aus - Assigned() prueft '
       + 'dann den Zeiger, nicht das Ergebnis', [Ident]));
   if ATypeLow = '' then Exit;
-  for T in RISKY_TYPES do
-    if ATypeLow = T then
-      Exit(Format(TYPE_RISK, [AOperand, ATypeLow]));
-  for T in RISKY_SUFFIXES do
-    if (Length(ATypeLow) > Length(T)) and EndsText(T, ATypeLow) then
-      Exit(Format(TYPE_RISK, [AOperand, ATypeLow]));
+  if InList(ATypeLow, RISKY_TYPES) or NamesProcType(ATypeLow) then
+    Result := Format(TYPE_RISK, [AOperand, ATypeLow]);
 end;
 
 end.
