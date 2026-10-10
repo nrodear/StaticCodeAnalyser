@@ -52,6 +52,11 @@ type
     // delegiert die Status-Pushes via StatusFindings/Progress/Mode.
     FStatusBar      : TAnalyserStatusBar;
     FAllFindings    : TObjectList<TLeakFinding>;
+    // Stand von FAllFindings fuer FindingsAtEditorLine (Review reDelphiX
+    // nach Bereichen 2026-10-10, Minor 19): Generation des letzten
+    // Voll-Befuellens bzw. je Datei (klein) des letzten Watch-Laufs.
+    FFindingsGen    : UInt64;
+    FFileGens       : TDictionary<string, UInt64>;
     // Snapshot der initial-populierten Combo-Items (FormCreate). Wird
     // in RebuildFilterCombos genutzt um nach jedem Scan auf Eintraege
     // mit > 0 Treffern zu reduzieren - und beim naechsten Scan wieder
@@ -661,6 +666,18 @@ type
   // Lokal in der Unit gehalten - kein public API. Standard-VCL-Pattern.
   TControlAccess = class(TControl);
 
+var
+  // Zaehler fuer den Stand der Fundquellen des Editors (Dock-Befuellung,
+  // Watch-Lauf, Silent-Kopien): FindingsAtEditorLine nimmt je Datei die
+  // juengere (Review reDelphiX nach Bereichen 2026-10-10, Minor 19).
+  GFindingsGeneration : UInt64 = 0;
+
+function NextFindingsGeneration: UInt64;
+begin
+  Inc(GFindingsGeneration);
+  Result := GFindingsGeneration;
+end;
+
 function ResolveBaselinePath(const AConfigured, ABaseDir: string): string;
 // Absoluter Pfad bleibt unveraendert; ein relativer wird gegen das Projekt-
 // Verzeichnis (ABaseDir) aufgeloest. Kein System.IOUtils - rooted-Check von
@@ -1004,6 +1021,7 @@ begin
   // Mindestbreite ebenfalls respektiert.
   Constraints.MinWidth    := ScaleW(FLOAT_MIN_WIDTH);
   FAllFindings       := TObjectList<TLeakFinding>.Create(True);
+  FFileGens          := TDictionary<string, UInt64>.Create;
   FDisplayedFindings := TList<TLeakFinding>.Create;
   FBaselineSet       := TBaselineSet.Create;
   // Ignore-Liste laden / Default-Datei anlegen falls nicht vorhanden
@@ -1325,6 +1343,7 @@ begin
   FreeAndNil(FAnalyseProgress);
 
   FreeAndNil(FAllFindings);
+  FreeAndNil(FFileGens);
   FreeAndNil(FDisplayedFindings);
   FreeAndNil(FBaselineSet);
   FreeAndNil(FIgnoreList);
@@ -2249,6 +2268,7 @@ begin
     Findings.OwnsObjects := False;
     for i := 0 to Findings.Count - 1 do
       FAllFindings.Add(Findings[i]);
+    FFileGens.AddOrSetValue(LowerCase(FileName), NextFindingsGeneration);
 
     // 3) Vorab gerechnete contextHashes DIESER Datei nachziehen
     // (2026-08-28). Sie stammen aus dem letzten Voll-Scan, also aus dem
@@ -2474,6 +2494,8 @@ begin
   FAllFindings.Clear;
   for i := 0 to findings.Count - 1 do
     FAllFindings.Add(findings[i]);
+  FFindingsGen := NextFindingsGeneration;
+  FFileGens.Clear;
   UpdateStats;
   // Baseline-Set fuer den "nur neue Funde"-Filter frisch laden (basiert auf
   // FRepoSettings, das PrepareAnalysis/SetupForRun vor dem Scan neu geladen
@@ -3331,6 +3353,8 @@ procedure TAnalyserFrame.ClearAllFindings;
 // gilt, weil sie an Menuepunkten haengen.
 begin
   if Assigned(FAllFindings) then FAllFindings.Clear;
+  FFindingsGen := NextFindingsGeneration;
+  if Assigned(FFileGens) then FFileGens.Clear;
   if Assigned(FDisplayedFindings) then FDisplayedFindings.Clear;
   // Der vorab gerechnete contextHash-Speicher gehoert zu den Funden, die
   // hier gerade weggeworfen werden - ohne Funde hat er keinen Frager mehr.
@@ -4811,6 +4835,7 @@ end;
 var
   GEditorFindings     : TObjectList<TLeakFinding> = nil;
   GEditorFindingsFile : string = '';
+  GEditorFindingsGen  : UInt64 = 0;   // Generation der Silent-Kopien
 
 procedure KeepEditorFindings(const AFileName: string;
   AFindings: TObjectList<TLeakFinding>);
@@ -4821,6 +4846,7 @@ begin
     GEditorFindings := TObjectList<TLeakFinding>.Create(True);
   GEditorFindings.Clear;
   GEditorFindingsFile := AFileName;
+  GEditorFindingsGen  := NextFindingsGeneration;
   if not Assigned(AFindings) then Exit;
   for F in AFindings do
   begin
@@ -4842,9 +4868,20 @@ end;
 function FindingsAtEditorLine(const AFile: string;
   ALine: Integer): TArray<TLeakFinding>;
 // Funde, deren Bereich (Ankerzeile bis SpanEnd) die Zeile einschliesst.
-// Erst das Dock-Fenster, sonst die Kopien des Silent-Laufs.
+// Je Datei aus EINER Quelle, der juengeren (Review reDelphiX nach
+// Bereichen 2026-10-10, Minor 19): das Dock, wenn es Funde dieser Datei
+// haelt und nicht aelter ist als der letzte Silent-Lauf auf ihr, sonst die
+// Kopien des Silent-Laufs. Zeilenweise gemischt zeigten Birne und
+// Kontextmenue nach einem Silent- oder Auto-Scan alte Dock-Zeilen neben
+// neuen Marken.
 var
-  Found : TArray<TLeakFinding>;
+  Found    : TArray<TLeakFinding>;
+  Frame    : TAnalyserFrame;
+  DockHas  : Boolean;
+  DockGen  : UInt64;
+  FileGen  : UInt64;
+  F        : TLeakFinding;
+  UseDock  : Boolean;
 
   function AlreadyFound(F: TLeakFinding): Boolean;
   // Derselbe Fund kann aus zwei Scans (Dock + Silent, Projekt + Datei)
@@ -4876,23 +4913,53 @@ var
 
 begin
   Found := nil;
-  if Assigned(GDockableForm) and Assigned(GDockableForm.Frame) then
-    Collect(GDockableForm.Frame.FAllFindings);
-  if (Length(Found) = 0) and SameText(GEditorFindingsFile, AFile) then
+  Frame := nil;
+  if Assigned(GDockableForm) then
+    Frame := GDockableForm.Frame;
+  DockHas := False;
+  DockGen := 0;
+  if Assigned(Frame) and Assigned(Frame.FAllFindings) then
+  begin
+    for F in Frame.FAllFindings do
+      if Assigned(F) and SameText(F.FileName, AFile) then
+      begin
+        DockHas := True;
+        Break;
+      end;
+    DockGen := Frame.FFindingsGen;
+    if Assigned(Frame.FFileGens)
+       and Frame.FFileGens.TryGetValue(LowerCase(AFile), FileGen)
+       and (FileGen > DockGen) then
+      DockGen := FileGen;
+  end;
+  UseDock := DockHas and not (SameText(GEditorFindingsFile, AFile)
+    and (GEditorFindingsGen > DockGen));
+  if UseDock then
+    Collect(Frame.FAllFindings)
+  else if SameText(GEditorFindingsFile, AFile) then
     Collect(GEditorFindings);
   Result := Found;
 end;
 
-function CurrentEditorCaretLine: Integer;
+function CurrentEditorFileAndLine(out AFile: string;
+  out ALine: Integer): Boolean;
+// Datei und Cursorzeile aus DERSELBEN View (TopView), wie die Gluehbirne
+// (Review reDelphiX nach Bereichen 2026-10-10, Minor 20): auch .dpr/.dpk/
+// .inc; in der Textansicht eines Formulars die .dfm selbst - keine
+// Umleitung auf die .pas, deren Zeilen dort nicht stehen.
 var
   EditorSvc : IOTAEditorServices;
   View      : IOTAEditView;
 begin
-  Result := 0;
+  AFile  := '';
+  ALine  := 0;
+  Result := False;
   if not Supports(BorlandIDEServices, IOTAEditorServices, EditorSvc) then Exit;
   View := EditorSvc.TopView;
-  if Assigned(View) then
-    Result := View.CursorPos.Line;
+  if not Assigned(View) or not Assigned(View.Buffer) then Exit;
+  AFile := View.Buffer.FileName;
+  ALine := View.CursorPos.Line;
+  Result := (AFile <> '') and (ALine >= 1);
 end;
 
 function RunSilentAnalysisForFile(const AFileName: string;
@@ -5530,9 +5597,7 @@ var
   i        : Integer;
 begin
   if TFindingActions.ProviderCount = 0 then Exit;
-  if TIDEEditor.TryGetCurrentPasFile(FilePath) <> cfrOK then Exit;
-  Line := CurrentEditorCaretLine;
-  if Line < 1 then Exit;
+  if not CurrentEditorFileAndLine(FilePath, Line) then Exit;
   Found := FindingsAtEditorLine(FilePath, Line);
   if Length(Found) = 0 then Exit;
 
