@@ -37,7 +37,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes,
-  uRdxBufferMath, uRdxSimpleFixes;
+  uRdxBufferMath, uRdxCodeMap, uRdxSimpleFixes;
 
 // ---- Helfer ----
 

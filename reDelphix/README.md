@@ -25,11 +25,12 @@ source\uRdxRecipes.pas            reine Textlogik: Literal-Codec, Format() nach 
 source\uRdxScopeTable.pas         Kurzname -> qualifizierte Unit (Compiler-Reihenfolge der Scope-Liste)
 source\uRdxSimpleFixes.pas        Editorhilfen SCA075/SCA085/SCA126 (reine Textlogik)
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
+source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings) und Token-Leser
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
 source\uRdxEditor.pas             ToolsAPI: Puffer lesen, Bereich markieren, Bereiche ersetzen (ein Undo-Schritt), Projekt-Units
 source\uRdxLog.pas                Protokoll %TEMP%\reDelphix.log + DebugView
 data\unitscopes.txt               die Scope-Tabelle (erzeugt), als RCDATA eingelinkt (data\unitscopes.rc)
-tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 8 Testunits (siehe "Pruefen")
+tests\reDelphix.Test.dpr/.dproj   DUnitX-Testprojekt mit 9 Testunits (siehe "Pruefen")
 tools\gen_unitscopes.py           erzeugt data\unitscopes.txt aus der Delphi-Installation
 tools\fpc-pruefstand\build.sh     baut Core-Units + Modul-Textlogik unter FPC 3.2.2 und fuehrt Tests aus
 tools\probe\RdxCorpusProbe.dpr    Korpus-Probe: Rezept 5.1 ueber eine Liste von Fundstellen, CSV
@@ -93,7 +94,7 @@ die Engine also vorher. DCUs landen wie bei den anderen Projekten in
 | FreeAndNil(X) verwenden | SCA085 | `X.Free;` + `X := nil;` -> `FreeAndNil(X);`. X muss in der Unit deklariert sein (keine Property, kein geerbtes Feld); gesperrt in einem `with`-Block. Fehlt `System.SysUtils`, kommt die uses-Einfuegung mit (unten) |
 | Assigned() statt Vergleich mit nil verwenden | SCA126 | schreibt ALLE nil-Vergleiche der einen Anweisung um, die auf der Fundzeile beginnt (`X = nil` -> `not Assigned(X)`). Zwei solche Anweisungen auf der Zeile heissen mehrdeutig; ein Operand vom Typ String, Variant, Menge, Array oder Prozedur/Ereignis sperrt |
 | (TObject) aus der Klassendeklaration entfernen | SCA075 | `class(TObject)` -> `class` an der Spalte aus der Meldung (nur Zeilen, ohne Parser) |
-| Hier / In dieser Datei unterdruecken | jeder Fund in Pascal-Quelltext | setzt `// noinspection <Art>` ueber die Fundzeile bzw. `// noinspection-file <Art>` (`fakSuppress`). Einen wirkungslosen Marker (SCA165) entfernt "Wirkungslosen Unterdrueck-Marker entfernen" stattdessen |
+| Hier / In dieser Datei unterdruecken | jeder Fund in Pascal-Quelltext | setzt `// noinspection <Art>` ueber die Fundzeile bzw. `// noinspection-file <Art>` hinter die Kopfanweisung (`fakSuppress`); ein vorhandener Marker bekommt die Art dazu, ausser er lautet `All`/`*` (dann eine eigene Zeile). Nicht angeboten, wenn die Fundzeile in einem Block-Kommentar oder mehrzeiligen String liegt. Einen wirkungslosen Marker (SCA165) entfernt "Wirkungslosen Unterdrueck-Marker entfernen" stattdessen - nur, wenn er genau EINE Art nennt; ein Mehrarten- oder `All`-Marker steht gesperrt mit Grund da, denn SCA165 kommt auch, wenn nur die Arten des aktiven Scan-Profils nichts unterdrueckt haben |
 
 **uses-Ergaenzung im Einzelnen** (`TRdxRecipeRunner.PlanUses`, fuer
 `Format()` und `FreeAndNil(X)`):
@@ -257,7 +258,7 @@ Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 | SCA075 ExplicitTObjectInheritance | `TFoo = class(TObject)` | (TObject) entfernen |
 | SCA085 FreeAndNilHint | `X.Free; X := nil;` | FreeAndNil(X) |
 | SCA126 NilComparison | `if X <> nil then` | Assigned(X) |
-| SCA165 UnusedSuppression | wirkungsloser `// noinspection`-Marker | Marker entfernen |
+| SCA165 UnusedSuppression | wirkungsloser `// noinspection`-Marker | Marker entfernen - nur bei genau einer Art; Mehrarten- und `All`-Marker stehen gesperrt da (unter diesem Teilprofil wirken sie vielleicht nur scheinbar nicht) |
 | SCA142 UnsortedUses, SCA007 UnusedUses | Fund auf einer uses-Zeile | uses: Eintraege qualifizieren (Winapi.Windows, System.SysUtils ...) |
 | jede Regel ausser SCA165 | beliebig | Hier / in dieser Datei unterdruecken; Stelle zeigen (Kontextmenue) |
 
@@ -305,7 +306,10 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   Tabulator, Umlaut, Surrogatpaar und kombinierendem Zeichen (CRLF, LF,
   CR), Pruefung aller Ersetzungen einer Aktion, Spaltengrenze 32767,
   Textwahl Puffer/Platte/gesperrt.
-* `uTestRdxSuppress` - Unterdrueck-Marker setzen und entfernen.
+* `uTestRdxSuppress` - Unterdrueck-Marker setzen und entfernen, auch in
+  Block-Kommentar, mehrzeiligem String, Lizenzkopf und mit `All`.
+* `uTestRdxCodeMap` - die Code-Sicht gegen `TDetectorUtils.ScanCodeLine`
+  des Cores (Drift-Waechter) und der Zustand am Zeilenanfang.
 * `uTestRdxSimpleFixes` / `uTestRdxNilFix` - die Editorhilfen
   SCA075/SCA085 bzw. SCA126 auf Text, ohne Parser.
 * `uTestRdxSimpleFixesDetector` - dieselben Hilfen gegen den echten
@@ -315,14 +319,14 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix
+bash tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap
 ```
 
 Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 (`uRefactor*`, `uSourcePlaces`, `uFindingActions`, `ScanCodeLine` aus
 `uDetectorUtils`) mit Stubs fuer Parser und Resolver sowie die Textlogik
 des Moduls (`uRdxRecipes`, `uRdxScopeTable`, `uRdxBufferMath`,
-`uRdxSuppress`, `uRdxSimpleFixes`). Testunits kommen aus `reDelphix\tests`,
+`uRdxSuppress`, `uRdxSimpleFixes`, `uRdxCodeMap`). Testunits kommen aus `reDelphix\tests`,
 sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
 `uTestSourcePlaces`, `uTestRefactorConcat`).
 

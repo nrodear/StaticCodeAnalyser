@@ -296,6 +296,7 @@ type
 implementation
 
 uses
+  uRdxCodeMap,       // TRdxCodeMap: Code-Sicht der Datei fuer die Planer
   uRdxSimpleFixes,   // Planer SCA075/SCA085/SCA126 (reine Textlogik)
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 

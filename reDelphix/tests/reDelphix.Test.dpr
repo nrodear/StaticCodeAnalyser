@@ -43,6 +43,7 @@ uses
   uRdxRecipes in '..\source\uRdxRecipes.pas',
   uRdxScopeTable in '..\source\uRdxScopeTable.pas',
   uRdxBufferMath in '..\source\uRdxBufferMath.pas',
+  uRdxCodeMap in '..\source\uRdxCodeMap.pas',
   uRdxSuppress in '..\source\uRdxSuppress.pas',
   uRdxSimpleFixes in '..\source\uRdxSimpleFixes.pas',
   uRdxRecipeRunner in '..\source\uRdxRecipeRunner.pas',
@@ -53,7 +54,8 @@ uses
   uTestRdxSuppress in 'uTestRdxSuppress.pas',
   uTestRdxSimpleFixes in 'uTestRdxSimpleFixes.pas',
   uTestRdxNilFix in 'uTestRdxNilFix.pas',
-  uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas';
+  uTestRdxSimpleFixesDetector in 'uTestRdxSimpleFixesDetector.pas',
+  uTestRdxCodeMap in 'uTestRdxCodeMap.pas';
 
 { keep comment here to protect the following conditional from being removed by the IDE when adding a unit }
 {$IFNDEF TESTINSIGHT}

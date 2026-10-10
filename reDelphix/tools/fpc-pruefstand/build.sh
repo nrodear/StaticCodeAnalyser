@@ -86,7 +86,7 @@ need "$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas"
 adapt "$SCA/SCA.Engine/sources/Infrastructure/uSourcePlaces.pas" "$HERE/uSourcePlaces.pas"
 # Modul reDelphix: nur die ToolsAPI-freien Units (Rezepte, Scope-Tabelle).
 # Fehlt eine, scheitern nur die Tests, die sie brauchen - deshalb Warnung.
-for u in uRdxRecipes uRdxScopeTable uRdxBufferMath uRdxSuppress uRdxSimpleFixes; do
+for u in uRdxRecipes uRdxScopeTable uRdxBufferMath uRdxCodeMap uRdxSuppress uRdxSimpleFixes; do
   if [ -f "$RDX/source/$u.pas" ]; then
     adapt "$RDX/source/$u.pas" "$HERE/$u.pas"
   else

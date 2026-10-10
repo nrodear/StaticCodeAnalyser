@@ -655,9 +655,15 @@ var
   Why : string;
 begin
   // SCA165: eine echte Hilfe (fakFix) - der Marker unterdrueckt nichts.
+  // Lehnt RemoveMarker ab (Mehrarten- oder 'All'-Marker: vielleicht nur
+  // unter dem aktuellen Profil wirkungslos), steht der Eintrag gesperrt
+  // mit dem Grund da - die Birne zaehlt nur verfuegbare Hilfen.
   if ACtx.Finding.Kind <> fkUnusedSuppression then Exit;
   if not TRdxSuppress.RemoveMarker(ACtx.Lines, ACtx.Line, E, Why) then
+  begin
+    Add(AList, _('Remove ineffective suppression marker'), Why, False, nil);
     Exit;
+  end;
   AddReplace(AList, _('Remove ineffective suppression marker'),
     ACtx.FileName, E, fakFix);
 end;
