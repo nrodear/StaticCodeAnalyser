@@ -188,6 +188,10 @@ type
     FIfdefDefines    : TArray<string>;
     function Types: TTypeResolver;
     procedure BuildScopeFacts;
+    // Helper-Typen ('class/record helper for X') dem strengen Resolver als
+    // unbekannt melden: der Parser verwirft den Zieltyp, die Member von X
+    // kaemen sonst nicht vor den Unit-Globalen (Gegen-Review 2026-10-10).
+    procedure ForgetHelperTypes(AResolver: TTypeResolver);
     // Operanden, die blosse Bezeichner sind, ueber den deklarierten Typ
     // klassifizieren und FixSafe neu ableiten (s. Kopf, DeclaredTypeOf).
     procedure ResolveOperandTypes(AInfo: TRefactorInfo);
@@ -740,8 +744,42 @@ begin
   // fremden lokalen Konstanten, Mehrdeutiges und verschachtelte Routinen
   // ''. Die Detektoren behalten die grobe Fallback-Ebene.
   if (FTypes = nil) and Assigned(FRoot) then
+  begin
     FTypes := TTypeResolver.Create(FRoot, True, True);
+    ForgetHelperTypes(FTypes);
+  end;
   Result := FTypes;
+end;
+
+procedure TSourcePlaces.ForgetHelperTypes(AResolver: TTypeResolver);
+// Die Zeile eines nkClass/nkRecord-Knotens ist die des 'class'/'record'
+// hinter dem '='; 'helper' und 'for' stehen dort mit. Ein Kommentar mit
+// diesen Woertern macht die Klasse nur vorsichtiger, nie falsch.
+var
+  Stack : TArray<TAstNode>;
+  Top   : Integer;
+  N     : TAstNode;
+  S     : string;
+begin
+  if not Assigned(AResolver) or not Assigned(FRoot) or not Assigned(FLines) then
+    Exit;
+  SetLength(Stack, 64);
+  Stack[0] := FRoot;
+  Top := 1;
+  while Top > 0 do
+  begin
+    Dec(Top);
+    N := Stack[Top];
+    if (N.Kind in [nkClass, nkRecord]) and (N.Line >= 1)
+       and (N.Line <= FLines.Count) then
+    begin
+      S := ' ' + LowerCase(StringReplace(FLines[N.Line - 1], #9, ' ',
+        [rfReplaceAll])) + ' ';
+      if (Pos(' helper ', S) > 0) and (Pos(' for ', S) > 0) then
+        AResolver.ForgetClass(N.Name);
+    end;
+    PushChildrenReversed(N, Stack, Top);
+  end;
 end;
 
 procedure TSourcePlaces.BuildScopeFacts;

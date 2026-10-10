@@ -16,6 +16,7 @@ type
     // Bereichen 2026-10-10, Minor 3: AStrict).
     constructor Create(UnitNode: TAstNode; AShortStringAware: Boolean = False;
       AStrict: Boolean = False);
+    procedure ForgetClass(const AName: string);
     function ResolveTypeAt(const IdentLow: string; Line: Integer): string;
   end;
 
@@ -28,6 +29,10 @@ constructor TTypeResolver.Create(UnitNode: TAstNode;
   AShortStringAware: Boolean; AStrict: Boolean);
 begin
   inherited Create;
+end;
+
+procedure TTypeResolver.ForgetClass(const AName: string);
+begin
 end;
 
 function TTypeResolver.ResolveTypeAt(const IdentLow: string;

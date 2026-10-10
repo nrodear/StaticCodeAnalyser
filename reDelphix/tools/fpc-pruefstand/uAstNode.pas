@@ -11,7 +11,8 @@ uses
 
 type
   TNodeKind = (nkUnit, nkInterface, nkImplementation, nkUses, nkUsesItem,
-    nkMethod, nkAssign, nkCall, nkConditionalRange);
+    nkMethod, nkAssign, nkCall, nkConditionalRange,
+    nkClass, nkRecord);   // uSourcePlaces.ForgetHelperTypes
 
   TAstNode = class
   public

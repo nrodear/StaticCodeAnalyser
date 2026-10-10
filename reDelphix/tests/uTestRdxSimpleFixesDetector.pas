@@ -35,6 +35,8 @@ type
     // Review nach Bereichen 2026-10-10, Minor 6: ein Bezeichner ohne
     // beweisbaren Typ (geerbt) kann ein Funktionszeiger sein.
     [Test] procedure Sca126_UnknownType_NoHelp;
+    // Gegen-Review: im with-Block kann der Operand ein Member sein.
+    [Test] procedure Sca126_InWith_NoHelp;
     [Test] procedure Sca126_CatalogExample;
   end;
 
@@ -448,6 +450,14 @@ begin
   AssertNoHelp(Format(UNIT_126, [Join([
     '  if FFactory = nil then',
     '    Exit(False);'])]), fkNilComparison, 'unbekannt');
+end;
+
+procedure TTestRdxSimpleFixesDetector.Sca126_InWith_NoHelp;
+begin
+  AssertNoHelp(Format(UNIT_126, [Join([
+    '  with P do',
+    '    if FList = nil then',
+    '      Exit(False);'])]), fkNilComparison, 'with');
 end;
 
 procedure TTestRdxSimpleFixesDetector.Sca126_CatalogExample;

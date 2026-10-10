@@ -647,6 +647,15 @@ const
     '  TDerived = class(TBase)'#13#10 +
     '    procedure Go;'#13#10 +
     '  end;'#13#10 +
+    '  TStrHelper = class helper for TStrings'#13#10 +
+    '    function Describe: string;'#13#10 +
+    '  end;'#13#10 +
+    '  TOuter = class'#13#10 +
+    '  type'#13#10 +
+    '    TInner = class'#13#10 +
+    '      procedure Go;'#13#10 +
+    '    end;'#13#10 +
+    '  end;'#13#10 +
     'var'#13#10 +
     '  Tag: Integer;'#13#10 +
     '{$IFDEF FPC}'#13#10 +
@@ -673,6 +682,14 @@ const
     'begin'#13#10 +
     '  FTag := Tag;'#13#10 +
     'end;'#13#10 +
+    'function TStrHelper.Describe: string;'#13#10 +
+    'begin'#13#10 +
+    '  Result := IntToStr(Tag) + ''h'';'#13#10 +
+    'end;'#13#10 +
+    'procedure TOuter.TInner.Go;'#13#10 +
+    'begin'#13#10 +
+    '  Tag := Tag - 1;'#13#10 +
+    'end;'#13#10 +
     'procedure Plain;'#13#10 +
     'var Limit: Integer;'#13#10 +
     '  procedure Inner;'#13#10 +
@@ -692,12 +709,15 @@ var
   Root                       : TAstNode;
   R                          : TTypeResolver;
   LDescribe, LRun, LGo, LPlain, LInner : Integer;
+  LHelper, LNested : Integer;
 begin
   LDescribe := LineOf(SRC_STRICT, 'IntToStr(Count)');
   LRun      := LineOf(SRC_STRICT, 'Tag := Tag + 1');
   LGo       := LineOf(SRC_STRICT, 'FTag := Tag');
   LPlain    := LineOf(SRC_STRICT, 'Limit := Max');
   LInner    := LineOf(SRC_STRICT, 'Limit := 0');
+  LHelper   := LineOf(SRC_STRICT, 'IntToStr(Tag)');
+  LNested   := LineOf(SRC_STRICT, 'Tag := Tag - 1');
   P := TSourcePlaces.Create;
   try
     Assert.IsTrue(P.OpenSource('k.pas', SRC_STRICT));
@@ -714,6 +734,10 @@ begin
     Assert.AreEqual('integer', P.DeclaredTypeOf(LPlain, 'Limit'));
     Assert.AreEqual('', P.DeclaredTypeOf(LPlain, 'Width'),
       'zwei {$IFDEF}-Zweige mit verschiedenen Typen');
+    Assert.AreEqual('', P.DeclaredTypeOf(LHelper, 'Tag'),
+      'Helper: die Member von TStrings koennen das Global verdecken');
+    Assert.AreEqual('', P.DeclaredTypeOf(LNested, 'Tag'),
+      'verschachtelter Typ: Member von TOuter unbekannt');
     Assert.AreEqual('', P.DeclaredTypeOf(LInner, 'Limit'),
       'verschachtelte Routine: ihr Limit (Int64) kennt der AST nicht, das '
       + 'Integer-Limit der aeusseren Routine waere falsch');

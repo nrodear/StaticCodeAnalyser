@@ -40,6 +40,10 @@ type
         Idents    : TDictionary<string, string>; // identLow -> bareTypeLow
         // Nur im strengen Modus (s. Konstruktor):
         ClassKey   : string;            // Klasse aus 'TFoo.Bar' (klein), '' = keine
+        // Methode eines verschachtelten Typs ('TOuter.TInner.Go'): die
+        // Member der aeusseren Klasse kennt die Kette nicht - jenseits der
+        // eigenen Namen der Routine nichts bewiesen.
+        NestedType : Boolean;
         NestStarts : TArray<Integer>;   // Spannen verschachtelter Routinen
         NestEnds   : TArray<Integer>;
         constructor Create;
@@ -97,9 +101,21 @@ type
     //   * ein Name, der in derselben Ebene mit VERSCHIEDENEN Typen
     //     vorkommt ({$IFDEF}-Zweige, gleichnamige Klassen), liefert '';
     //   * eine Zeile in einer verschachtelten Routine (nkNestedRange; der
-    //     Parser verwirft deren Deklarationen) liefert ''.
+    //     Parser verwirft deren Deklarationen) liefert '';
+    //   * eine Methode eines verschachtelten Typs ('TOuter.TInner.Go')
+    //     beweist nur ihre eigenen Namen; eine Klasse, die der Aufrufer
+    //     per ForgetClass meldet (Helper: der Parser verwirft deren
+    //     Zieltyp), gilt wie ein Vorfahr von ausserhalb.
+    //   BEKANNTE GRENZE: untypisierte Klassenkonstanten ('const Max = 10;'
+    //   im Klassenrumpf) erzeugen keinen Knoten - ein gleichnamiges
+    //   Unit-Global gilt dann als bewiesen (Review reDelphiX nach
+    //   Bereichen 2026-10-10, Gegen-Review).
     constructor Create(UnitNode: TAstNode; AShortStringAware: Boolean = False;
       AStrict: Boolean = False);
+    // Strenger Modus: Member der Klasse/des Records AName sind unbekannt -
+    // jeder Name kann dort ein Member sein (Helper-Typen). Ohne Wirkung
+    // in der Vorgabe.
+    procedure ForgetClass(const AName: string);
     destructor Destroy; override;
     // Typname (bare, lower) von IdentLow an Zeile Line; '' wenn unbekannt.
     function ResolveTypeAt(const IdentLow: string; Line: Integer): string;
@@ -530,6 +546,9 @@ begin
   Sc.LineStart := M.Line;
   Sc.LineEnd   := TAstSpans.SubtreeMaxLine(M);
   Sc.ClassKey  := StrictMethodClassKey(M.Name);
+  // 'TOuter.TInner.Go': zwei Qualifizierer - ein verschachtelter Typ.
+  Sc.NestedType := Length(M.Name) - Length(StringReplace(M.Name, '.', '',
+    [rfReplaceAll])) >= 2;
   TAstSpans.CollectNestedSpans(M, Sc.NestStarts, Sc.NestEnds);
   // Parameter, lokale Variablen (auch inline) und lokale typisierte
   // Konstanten (nkField in der const-Sektion der Routine). Lokale
@@ -633,6 +652,8 @@ begin
         Result := T;
       Exit;
     end;
+    if Best.NestedType then
+      Exit;   // Member der aeusseren Klasse unbekannt
     // Member der eigenen Klasse und ihrer Vorfahren in dieser Unit.
     Key := Best.ClassKey;
     Depth := 0;
@@ -659,6 +680,16 @@ begin
   end;
   if FGlobals.TryGetValue(IdentLow, T) and (T <> STRICT_AMBIGUOUS) then
     Result := T;
+end;
+
+procedure TTypeResolver.ForgetClass(const AName: string);
+var
+  Key : string;
+begin
+  if not FStrict then Exit;
+  Key := StrictTypeKey(AName);
+  if Key <> '' then
+    FAmbigClasses.AddOrSetValue(Key, True);
 end;
 
 function TTypeResolver.ResolveTypeAt(const IdentLow: string; Line: Integer): string;

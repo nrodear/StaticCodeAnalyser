@@ -362,6 +362,8 @@ const
   R_NO_FILE = 'keine Datei geoeffnet';
   R_NIL_TYPE_UNKNOWN = 'Typ von %s unbekannt - bei einem Funktions- oder '
     + 'Methodenzeiger ruft ''= nil'' ihn auf, Assigned() nicht';
+  R_NIL_IN_WITH = 'with-Anweisung - ein Operand koennte ein Member des '
+    + 'with-Ausdrucks sein';
 
 { TRdxObjectRing }
 
@@ -1385,6 +1387,16 @@ begin
   if Result.Reason <> '' then Exit;
   Map := TRdxCodeMap.Create(ALines);
   try
+    // Im with-Block kann ein Operand an ein Member des with-Ausdrucks
+    // binden (ein Funktionszeiger: '= nil' ruft ihn auf) - der deklarierte
+    // Typ beweist dort nichts. Dieselbe Sperre wie SCA085 (VariableCheck;
+    // Gegen-Review nach Bereichen 2026-10-10).
+    if APlaces.InWithBlock(Site.Line)
+       or TRdxSimpleFixes.WithBefore(Map, Site.Line) then
+    begin
+      Result.Reason := R_NIL_IN_WITH;
+      Exit;
+    end;
     if not TRdxNilFix.NilComparison(Map, Site, Plan) then
     begin
       Result.Reason := Plan.Reason;
