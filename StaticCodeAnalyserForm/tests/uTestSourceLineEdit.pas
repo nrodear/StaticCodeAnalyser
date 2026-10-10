@@ -32,8 +32,6 @@ type
     [Test] procedure Insert_LineOutOfRange_FailsUntouched;
 
     // ---- Ersetzen / Lesen ----
-    [Test] procedure Replace_KeepsEol_RestByteIdentical;
-    [Test] procedure ReadLine_ReturnsContentWithoutEol;
   end;
 
 implementation
@@ -216,30 +214,6 @@ begin
 end;
 
 { ---- Ersetzen / Lesen ---- }
-
-procedure TTestSourceLineEdit.Replace_KeepsEol_RestByteIdentical;
-var
-  P, Err : string;
-  B      : TBytes;
-  Want   : TBytes;
-begin
-  P := WriteBytes('rep.pas', [Ord('a'), 10, Ord('b'), Ord('b'), 10, Ord('c')]);
-  Assert.IsTrue(TSourceLineEdit.ReplaceLine(P, 2, 'XY', Err), Err);
-  B := ReadBytes(P);
-  Want := Ascii('a'#10'XY'#10'c');
-  Assert.AreEqual(Length(Want), Length(B), SByteLen);
-  Assert.IsTrue(CompareMem(@Want[0], @B[0], Length(Want)),
-    'nur der Zeileninhalt darf sich aendern');
-end;
-
-procedure TTestSourceLineEdit.ReadLine_ReturnsContentWithoutEol;
-var
-  P, Err, Text : string;
-begin
-  P := WriteBytes('rd.pas', [Ord('a'), 13, 10, Ord('b'), Ord('c'), 10]);
-  Assert.IsTrue(TSourceLineEdit.ReadLine(P, 2, Text, Err), Err);
-  Assert.AreEqual('bc', Text, False);
-end;
 
 initialization
   TDUnitX.RegisterTestFixture(TTestSourceLineEdit);

@@ -2,8 +2,9 @@ unit uSourceLineEdit;
 
 // Zeilengenaue Aenderungen an Quelldateien AUF DER PLATTE.
 //
-// Konsument ist die Standalone-EXE (Suppress-Marker einfuegen, Quick-Fix
-// anwenden - die Tasten des IDE-Plugins). Das Plugin schreibt in den
+// Konsument ist die Standalone-EXE (Suppress-Marker einfuegen, Ctrl+Alt+S
+// wie im IDE-Plugin; ReplaceLine/ReadLine fuer Ctrl+Alt+F entfielen am
+// 2026-10-10 mit uQuickFix). Das Plugin schreibt in den
 // IDE-Editor, wo Strg+Z jede Aenderung zuruecknimmt; hier gibt es kein
 // Undo. Deshalb gilt eine harte Regel: NICHTS ausser der Zielzeile darf
 // sich aendern - Kodierung (UTF-8 mit/ohne BOM, UTF-16, ANSI),
@@ -27,16 +28,6 @@ type
     /// der Zeilenumbruch dem Umfeld entnommen.</summary>
     class function InsertLineAbove(const AFileName: string; ALineNo: Integer;
       const AText: string; var AError: string): Boolean; static;
-
-    /// <summary>Ersetzt den INHALT von Zeile ALineNo (1-basiert);
-    /// deren Zeilenumbruch bleibt unangetastet.</summary>
-    class function ReplaceLine(const AFileName: string; ALineNo: Integer;
-      const ANewText: string; var AError: string): Boolean; static;
-
-    /// <summary>Liest den Inhalt von Zeile ALineNo (ohne Umbruch) mit
-    /// derselben Kodierungs-Erkennung wie die Schreibwege.</summary>
-    class function ReadLine(const AFileName: string; ALineNo: Integer;
-      var AText: string; var AError: string): Boolean; static;
   end;
 
 implementation
@@ -291,43 +282,6 @@ begin
   F.Lines[Idx] := NewLine;
 
   Result := WriteBack(AFileName, F, AError);
-end;
-
-class function TSourceLineEdit.ReplaceLine(const AFileName: string;
-  ALineNo: Integer; const ANewText: string; var AError: string): Boolean;
-var
-  F   : TSrcFile;
-  Idx : Integer;
-begin
-  Result := False;
-  if not DecodeFile(AFileName, F, AError) then Exit;
-  Idx := ALineNo - 1;
-  if (Idx < 0) or (Idx > High(F.Lines)) then
-  begin
-    AError := Format(SLineOutOfRange, [ALineNo, Length(F.Lines)]);
-    Exit;
-  end;
-  F.Lines[Idx].Text := ANewText;   // Eol der Zeile bleibt unangetastet
-  Result := WriteBack(AFileName, F, AError);
-end;
-
-class function TSourceLineEdit.ReadLine(const AFileName: string;
-  ALineNo: Integer; var AText: string; var AError: string): Boolean;
-var
-  F   : TSrcFile;
-  Idx : Integer;
-begin
-  Result := False;
-  AText  := '';
-  if not DecodeFile(AFileName, F, AError) then Exit;
-  Idx := ALineNo - 1;
-  if (Idx < 0) or (Idx > High(F.Lines)) then
-  begin
-    AError := Format(SLineOutOfRange, [ALineNo, Length(F.Lines)]);
-    Exit;
-  end;
-  AText  := F.Lines[Idx].Text;
-  Result := True;
 end;
 
 end.

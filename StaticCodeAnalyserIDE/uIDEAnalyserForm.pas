@@ -19,7 +19,6 @@ uses
   uBaseline,
   uFixHint, uIgnoreList, uRepoSettings, uRuleCatalog, uClaudePrompt,
   uFindingCopyText,
-  uQuickFix,
   uFindingActions,                         // Aktionen fremder Anbieter am Fund (Grid-Menue)
   uAnalyserPalette, uAnalyserTypes, uAnalyserTheme, uIDEColors, uLocalization,
   uRecentPaths, uScanTargetDialog,
@@ -128,8 +127,9 @@ type
     // GridSelectCell SOFORT - also bei jedem Auswahlwechsel, bei gehaltener
     // Pfeiltaste rund 30x je Sekunde. Sie ist der teuerste Posten des
     // Auswahl-Pfades: systemweiter Clipboard-Write plus, wenn es fuer die
-    // Regel einen Quick-Fix-Provider gibt, ein LoadFromFile der KOMPLETTEN
-    // Quelldatei. Nur die Ruhe-Zeile gehoert in die Zwischenablage.
+    // Regel einen Quick-Fix-Provider gab (uQuickFix, bis 2026-10-10), ein
+    // LoadFromFile der KOMPLETTEN Quelldatei. Nur die Ruhe-Zeile gehoert in
+    // die Zwischenablage.
     FClipCopyTimer          : TTimer;
 
     FPanelStats        : TPanel;
@@ -471,9 +471,9 @@ type
     procedure CopyFindingToClipboard(F: TLeakFinding);
     // Explizite Kopier-Geste (Grid-Kontextmenue "Copy AI prompt"): kopiert
     // IMMER, unabhaengig vom ini-Modus - wie das EXE-Pendant
-    // GridMenuCopyClick. INHALT hier: Claude-Prompt samt vorangestelltem
-    // Quick-Fix-Block; die EXE kopiert den Prompt OHNE diesen Block
-    // (bewusste Alt-Divergenz, s. Review 2026-08-12).
+    // GridMenuCopyClick, mit demselben INHALT: der Claude-Prompt. Der
+    // Quick-Fix-Block, den das Plugin bis 2026-10-10 voranstellte (aus
+    // uQuickFix), entfiel mit uQuickFix (Nico 2026-10-10).
     procedure CopyClaudePromptToClipboard(F: TLeakFinding);
     // Zwilling fuer das Jira-Mini-Issue. Geteilt von der KLICK-Kopie
     // ([UI] ClipboardOnClick=2) und dem Grid-Menue 'Copy Jira issue' -
@@ -2750,8 +2750,8 @@ begin
   // Zwischenablage-Kopie ENTPRELLT (2026-08-03). Sie stand frueher hier und
   // lief bei jedem Auswahlwechsel sofort - bei gehaltener Pfeiltaste rund
   // 30x je Sekunde, jedes Mal ein systemweiter Clipboard-Write und, sobald
-  // es fuer die Regel einen Quick-Fix-Provider gibt, ein LoadFromFile der
-  // KOMPLETTEN Quelldatei.
+  // es fuer die Regel einen Quick-Fix-Provider gab (bis 2026-10-10), ein
+  // LoadFromFile der KOMPLETTEN Quelldatei.
   //
   // Damit faellt auch das Application.ProcessMessages weg, das hier stand:
   // es diente einzig dazu, das Help-Panel vor dem blockierenden
@@ -2795,13 +2795,8 @@ procedure TAnalyserFrame.CopyFindingToClipboard(F: TLeakFinding);
 // entscheidet [UI] ClipboardOnClick (Nutzerentscheid 2026-08-12):
 //   fcmNone (Default) - nichts: kein Write, keine Statusmeldung, kein
 //                       Datei-Load; die Zwischenablage gehoert dem Nutzer.
-//   fcmJiraMini       - Mini-Issue aus uFindingCopyText; der Quick-Fix-
-//                       Block bleibt bewusst weg (der Fix-hint-Fakt deckt
-//                       das ab und spart den LoadFromFile der kompletten
-//                       Quelldatei).
-//   fcmClaudePrompt   - das bisherige Verhalten (Claude-Prompt samt
-//                       Quick-Fix-Block), extrahiert nach
-//                       CopyClaudePromptToClipboard.
+//   fcmJiraMini       - Mini-Issue aus uFindingCopyText.
+//   fcmClaudePrompt   - der Claude-Prompt (CopyClaudePromptToClipboard).
 var
   Mode : TFindingCopyMode;
 begin
@@ -2908,8 +2903,7 @@ end;
 procedure TAnalyserFrame.GridMenuCopyPromptClick(Sender: TObject);
 // Explizite Absicht - kopiert wie die EXE IMMER, unabhaengig von
 // [UI] ClipboardOnClick (die Option regelt nur die automatische Kopie
-// beim Zeilen-Klick). Inhalt im Plugin samt Quick-Fix-Block; die EXE
-// kopiert den nackten Prompt (Alt-Divergenz).
+// beim Zeilen-Klick). Inhalt wie in der EXE: der Prompt.
 var
   idx : Integer;
 begin
@@ -2930,11 +2924,9 @@ begin
 end;
 
 procedure TAnalyserFrame.CopyJiraIssueToClipboard(F: TLeakFinding);
-// KEIN Quick-Fix-Block - dieselbe Begruendung wie im Klick-Pfad: der
-// Fix-hint-Fakt deckt das ab und spart den LoadFromFile der kompletten
-// Quelldatei. Der Textbau steht bewusst VOR dem try (wie im Claude-
-// Zwilling): der stille except gehoert dem Clipboard-Write, ein
-// Fehler beim Bauen soll nicht lautlos verschwinden.
+// Der Textbau steht bewusst VOR dem try (wie im Claude-Zwilling): der
+// stille except gehoert dem Clipboard-Write, ein Fehler beim Bauen soll
+// nicht lautlos verschwinden.
 var
   Text : string;
 begin
@@ -2954,75 +2946,22 @@ begin
 end;
 
 procedure TAnalyserFrame.CopyClaudePromptToClipboard(F: TLeakFinding);
-// Bei Findings mit Quick-Fix-Provider wird ein "Quick-Fix"-Markdown-
-// Block vorangestellt: Original-Zeile + Fixed-Zeile direkt zum Pasten.
-// Der Claude-Prompt-Block folgt darunter wie bisher.
+// Bis 2026-10-10 stand bei vier Regeln ein "## Quick-Fix"-Block mit
+// Vorher/Nachher (uQuickFix) vor dem Prompt. Er entfiel mit uQuickFix
+// (Nico 2026-10-10): die Hilfe selbst ist Gluehbirne bzw. Ctrl+Alt+F.
+// Der Textbau steht VOR dem try - der stille except gehoert dem
+// Clipboard-Write.
 var
-  prompt    : string;
-  LineNo    : Integer;
-  OrigLine  : string;
-  Fix       : TQuickFixResult;
-  SrcLines  : TStringList;
-  QuickFixHdr : string;
+  prompt : string;
 begin
   if not Assigned(F) then Exit;
-
   prompt := BuildClaudePrompt(F);
-  QuickFixHdr := '';
-
-  // Wenn ein Quick-Fix-Provider fuer dieses Kind registriert ist,
-  // versuche die Original-Zeile zu lesen und einen Fix vorzuschlagen.
-  if TQuickFix.HasProviderFor(F.Kind) then
-  begin
-    LineNo := StrToIntDef(F.LineNumber, 0);
-    if (LineNo > 0) and (F.FileName <> '') and FileExists(F.FileName) then
-    begin
-      SrcLines := TStringList.Create;
-      try
-        try
-          SrcLines.LoadFromFile(F.FileName, TEncoding.UTF8);
-        except
-          try SrcLines.LoadFromFile(F.FileName); except SrcLines.Clear; end;
-        end;
-        if (LineNo <= SrcLines.Count) then
-        begin
-          OrigLine := SrcLines[LineNo - 1];
-          Fix := TQuickFix.ProposeFix(F, OrigLine);
-          if Fix.Applied then
-          begin
-            // Beschriftungen ueber _() wie der restliche Prompt (uClaudePrompt
-            // laeuft komplett ueber die .po) - vorher stand hier hartes
-            // Deutsch und ein EN-Nutzer bekam einen gemischt-sprachigen
-            // Prompt (Review 2026-08-12). '## Quick-Fix' ist sprachneutral.
-            QuickFixHdr :=
-              '## Quick-Fix' + sLineBreak +
-              Fix.Description + sLineBreak + sLineBreak +
-              Format(_('**Before (line %s):**'), [F.LineNumber]) + sLineBreak +
-              '```pascal' + sLineBreak + Fix.Original + sLineBreak + '```' + sLineBreak + sLineBreak +
-              _('**After (paste directly):**') + sLineBreak +
-              '```pascal' + sLineBreak + Fix.Fixed + sLineBreak + '```' + sLineBreak + sLineBreak +
-              '---' + sLineBreak + sLineBreak;
-          end;
-        end;
-      finally
-        SrcLines.Free;
-      end;
-    end;
-  end;
-
   try
-    Clipboard.AsText := QuickFixHdr + prompt;
+    Clipboard.AsText := prompt;
     if Assigned(FStatusBar) then
-    begin
-      if QuickFixHdr <> '' then
-        StatusMode(Format(
-          _('Quick-Fix + AI prompt copied to clipboard: %s, line %s (%s)'),
-          [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]))
-      else
-        StatusMode(Format(
-          _('AI prompt copied to clipboard: %s, line %s (%s)'),
-          [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]));
-    end;
+      StatusMode(Format(
+        _('AI prompt copied to clipboard: %s, line %s (%s)'),
+        [ExtractFileName(F.FileName), F.LineNumber, F.SeverityText]));
   except
     // Clipboard kann unter bestimmten IDE-Modi blockiert sein - silent skip
   end;

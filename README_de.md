@@ -403,7 +403,7 @@ Tooltip der Kachel.
 | Aktion | Wirkung |
 |--------|---------|
 | **Klick auf Zeile** | Zeigt den Befund im Hilfe-Panel; wenn die Datei in der IDE offen ist, wird ein 3-px-roter Streifen am linken Rand der zugehörigen Zeile im Editor gezeichnet. Was in die Zwischenablage geht, steuert `[UI] ClipboardOnClick`: `1` = nichts (Default), `2` = Jira-Mini-Issue, `3` = Markdown-Prompt für Claude AI |
-| **Rechtsklick → Copy AI prompt** | Kopiert den Claude-AI-Prompt (inkl. Quick-Fix-Block) — immer, unabhängig von `ClipboardOnClick` |
+| **Rechtsklick → Copy AI prompt** | Kopiert den Claude-AI-Prompt — immer, unabhängig von `ClipboardOnClick` |
 | **Doppelklick** | Datei in IDE öffnen, zur Befund-Zeile springen, Zeilen-Marker setzen |
 | **Hover (Datei-Spalte)** | Tooltip mit vollem Datei-Pfad (100 ms Delay) |
 | **Klick auf Spalten-Header** | Sortierung |

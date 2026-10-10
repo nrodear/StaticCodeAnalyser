@@ -14,7 +14,7 @@ unit uRdxSimpleFixes;
 // editorhilfen-2a-analyse, 2026-10-09). Bezeichner, Schluesselwoerter und
 // Leerraum bleiben in der Schreibweise des Puffers.
 //
-// Vorbild fuer SCA085 war der eingefrorene uQuickFix (Core) - mit zwei
+// Vorbild fuer SCA085 war uQuickFix (Core, entfernt 2026-10-10) - mit zwei
 // bewussten Unterschieden: die nil-Zeile wird mit entfernt (dort blieb sie
 // stehen), und die Stelle wird auf der Code-Sicht verankert (dort konnte
 // ein nicht verankerter Ausdruck 'X.Free;' in einem Kommentar umschreiben).

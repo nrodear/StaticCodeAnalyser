@@ -127,7 +127,6 @@ uses
   uTestVisibilityCheck in 'uTestVisibilityCheck.pas',
   uTestSynchronizeInDestructor in 'uTestSynchronizeInDestructor.pas',
   uTestLockWithoutTryFinally in 'uTestLockWithoutTryFinally.pas',
-  uTestQuickFix in 'uTestQuickFix.pas',
   uTestRefactorInfo in 'uTestRefactorInfo.pas',
   uTestRefactorInfoBuilder in 'uTestRefactorInfoBuilder.pas',
   uTestRefactorConcat in 'uTestRefactorConcat.pas',

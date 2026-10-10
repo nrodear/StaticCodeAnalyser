@@ -271,7 +271,8 @@ upload the unfiltered report and let the platform track state.
 
 Use the GUI or the IDE plugin: run, filter with the stat tiles, click a
 finding, read the before/after help. `Ctrl+Alt+S` inserts a suppression
-marker, `Ctrl+Alt+F` applies a quick fix. Findings open in the editor of
+marker; in the IDE plugin `Ctrl+Alt+F` applies the editor help (reDelphix
+package, the same as the light bulb). Findings open in the editor of
 your choice via `[Editor]` in `analyser.ini` (VS Code, Notepad++,
 Sublime, …) — that path jumps to the exact line. The Delphi IDE only
 opens the file; it offers no external line switch.

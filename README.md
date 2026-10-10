@@ -398,8 +398,8 @@ the tile's tooltip.
 
 | Action | Effect |
 |--------|--------|
-| **Click a row** | Shows the finding in the help panel; if the file is open in the IDE, a 3 px stripe is painted on the left edge of the corresponding line in the editor. What lands in the clipboard is controlled by `[UI] ClipboardOnClick`: `1` = nothing (default), `2` = Jira mini issue, `3` = Markdown prompt for Claude AI — with mode 3, a Quick-Fix provider (`RedundantBoolean`, `FreeAndNilHint`, `EmptyArgumentList`, `AssignedAndAssignedNil`) prepends the fixed line as a paste-ready code block. |
-| **Right-click → Copy AI prompt** | Copies the Claude AI Markdown prompt (incl. Quick-Fix block) — always, regardless of `ClipboardOnClick`. |
+| **Click a row** | Shows the finding in the help panel; if the file is open in the IDE, a 3 px stripe is painted on the left edge of the corresponding line in the editor. What lands in the clipboard is controlled by `[UI] ClipboardOnClick`: `1` = nothing (default), `2` = Jira mini issue, `3` = Markdown prompt for Claude AI. |
+| **Right-click → Copy AI prompt** | Copies the Claude AI Markdown prompt — always, regardless of `ClipboardOnClick`. |
 | **Double-click / Enter** | Open the file in the IDE, jump to the finding line, paint the line marker |
 | **Ctrl+Alt+F** | **Apply the editor help** of the finding — the first available help of the reDelphix package, the same one the light bulb offers (in-place via IOTAEditWriter after checking the buffer, one Ctrl+Z step). Needs reDelphix; the status bar reports the result or why there is no help. |
 | **Ctrl+Alt+S** | **Insert suppression marker** above the finding line: `// noinspection <RuleName>` (with reDelphix an existing marker gets the rule added). Next analysis run filters the finding. Ctrl+Z to revert. |

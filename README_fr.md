@@ -414,8 +414,8 @@ l'infobulle de la tuile.
 
 | Action | Effet |
 |--------|-------|
-| **Clic sur une ligne** | Affiche le résultat dans le panneau d'aide ; si le fichier est ouvert dans l'IDE, une bande de 3 px est peinte au bord gauche de la ligne correspondante dans l'éditeur. Ce qui atterrit dans le presse-papiers est contrôlé par `[UI] ClipboardOnClick` : `1` = rien (défaut), `2` = mini-ticket Jira, `3` = prompt Markdown pour Claude AI — en mode 3, un fournisseur de Quick-Fix (`RedundantBoolean`, `FreeAndNilHint`, `EmptyArgumentList`, `AssignedAndAssignedNil`) préfixe la ligne corrigée comme bloc de code prêt à coller. |
-| **Clic droit → Copy AI prompt** | Copie le prompt Markdown Claude AI (bloc Quick-Fix inclus) — toujours, quel que soit `ClipboardOnClick`. |
+| **Clic sur une ligne** | Affiche le résultat dans le panneau d'aide ; si le fichier est ouvert dans l'IDE, une bande de 3 px est peinte au bord gauche de la ligne correspondante dans l'éditeur. Ce qui atterrit dans le presse-papiers est contrôlé par `[UI] ClipboardOnClick` : `1` = rien (défaut), `2` = mini-ticket Jira, `3` = prompt Markdown pour Claude AI. |
+| **Clic droit → Copy AI prompt** | Copie le prompt Markdown Claude AI — toujours, quel que soit `ClipboardOnClick`. |
 | **Double-clic / Entrée** | Ouvre le fichier dans l'IDE, saute à la ligne du résultat, peint le marqueur de ligne |
 | **Ctrl+Alt+F** | **Appliquer l'aide d'édition** du résultat — la première aide disponible du package reDelphix, la même que propose l'ampoule (sur place via IOTAEditWriter après vérification du tampon, une seule étape Ctrl+Z). Nécessite reDelphix ; la barre d'état rapporte le résultat ou la raison de l'absence d'aide. |
 | **Ctrl+Alt+S** | **Insérer le marqueur de suppression** au-dessus de la ligne du résultat : `// noinspection <RuleName>` (avec reDelphix, un marqueur existant reçoit la règle en plus). La prochaine analyse filtre le résultat. Ctrl+Z pour revenir en arrière. |

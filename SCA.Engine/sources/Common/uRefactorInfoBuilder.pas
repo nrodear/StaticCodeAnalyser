@@ -32,8 +32,9 @@ unit uRefactorInfoBuilder;
 //
 // Strings und Kommentare blendet ausschliesslich
 // TDetectorUtils.ScanCodeLine aus (mit AKeepColumns = True, also
-// spaltentreu). uQuickFix hat einmal ohne das in String-Literale
-// hineingeschrieben (Upstream-Befund 7) - hier wird nichts selbst gelext.
+// spaltentreu). uQuickFix (entfernt 2026-10-10) hat einmal ohne das in
+// String-Literale hineingeschrieben (Upstream-Befund 7) - hier wird nichts
+// selbst gelext.
 // Zwei Ausnahmen, beide mit den Schritt-Helfern unten (dieselbe Quote-
 // und Kommentarlogik wie ScanCodeLine):
 //   * OpensMultiLineString erkennt den ANFANG eines Delphi-12-
