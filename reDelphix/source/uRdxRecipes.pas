@@ -272,6 +272,11 @@ type
     // die Vergleichsformen (TargetKey): bei einem Aufruf zaehlen die
     // Argumente nicht.
     class function TargetsComparable(const A, B: string): Boolean; static;
+    // Nur die Zeichen #0..#127 von S - die Ersatzprobe, wenn ein Ziel
+    // Nicht-ASCII traegt: der Scan liest UTF-8 ohne BOM als ANSI, der
+    // ASCII-Anteil stimmt in beiden Lesarten ueberein (Review nach
+    // Bereichen 2026-10-10, Nit 25/26).
+    class function AsciiOnly(const S: string): string; static;
 
     // Das Query-Objekt eines SQL-Ziels: 'Query.SQL.Text' -> 'Query',
     // 'FDQuery1.SQL.Add' -> 'FDQuery1', 'Cmd.CommandText' -> 'Cmd',
@@ -1425,6 +1430,16 @@ begin
   for C in S do
     if C > #127 then
       Exit(False);
+end;
+
+class function TRdxRecipes.AsciiOnly(const S: string): string;
+var
+  C : Char;
+begin
+  Result := '';
+  for C in S do
+    if C <= #127 then
+      Result := Result + C;
 end;
 
 class function TRdxRecipes.TargetsComparable(const A, B: string): Boolean;

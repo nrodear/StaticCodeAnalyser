@@ -198,9 +198,57 @@ def build_overlay() -> str:
     return '\n'.join(L) + '\n'
 
 
+SCHEMA = os.path.join(ROOT, 'rules', 'sca-rules.schema.json')
+
+
+def schema_enum(name: str):
+    """Die enum-Werte der Eigenschaft name aus dem Schema (erster Treffer
+    beim Gang durch das Schema), None ohne enum."""
+    with io.open(SCHEMA, encoding='utf-8-sig') as f:
+        stack = [json.load(f)]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            v = node.get(name)
+            if isinstance(v, dict) and isinstance(v.get('enum'), list):
+                return set(v['enum'])
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return None
+
+
+def validate_enums() -> list:
+    """anchor/fixMode jeder Regel gegen das Schema-enum (Review reDelphiX
+    nach Bereichen 2026-10-10, Nit 12): der Generator kopiert die Werte in
+    den einkompilierten Fallback, und den liest der Lader UNGEPRUEFT - ein
+    'atuo' oder 'Auto' kaeme sonst bis TRuleMeta.FixMode durch."""
+    with io.open(SRC, encoding='utf-8-sig') as f:
+        rules = json.load(f)['rules']
+    errs = []
+    for field in ('anchor', 'fixMode'):
+        allowed = schema_enum(field)
+        if allowed is None:
+            errs.append('Schema ohne enum fuer %s' % field)
+            continue
+        for r in rules:
+            if field not in r:
+                continue
+            v = r[field]
+            if not isinstance(v, str) or v not in allowed:
+                errs.append('%s: %s=%r ist nicht im Schema-enum %s'
+                            % (r.get('id', '?'), field, v, sorted(allowed)))
+    return errs
+
+
 def main() -> int:
     check = '--check' in sys.argv
     rc = 0
+    errs = validate_enums()
+    if errs:
+        for e in errs:
+            print('FEHLER: ' + e)
+        return 2
     for dst, text in ((DST, build()), (DST_OV, build_overlay())):
         old = ''
         if os.path.exists(dst):

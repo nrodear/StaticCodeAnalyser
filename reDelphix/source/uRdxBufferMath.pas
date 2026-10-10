@@ -30,11 +30,6 @@ const
   // (ToolsAPI.pas, Studio 23.0): weiter rechts kann die Editor-Markierung
   // nicht zeigen (Review reDelphiX 2026-10-07, Nit 8).
   EDITOR_MAX_COLUMN = 32767;
-  // msgid zu EDITOR_MAX_COLUMN (Format-Argument: die Spalte), EINMAL fuer
-  // Anbieter und Editor - der Aufrufer uebersetzt per _() (Review nach
-  // Bereichen 2026-10-10, Nit 34).
-  S_TOO_LONG = 'Line too long for the editor selection (the editor '
-    + 'reaches at most column %d)';
 
 type
   // Woher der Anbieter den Text einer Datei nimmt (Review Nit 24).

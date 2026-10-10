@@ -2257,19 +2257,20 @@ msgid "Static Code Analyser: actions for this line"
 msgstr "Static Code Analyser: Aktionen zu dieser Zeile"
 
 msgid "No actions for this line"
-msgstr "Keine Aktionen fuer diese Zeile"
+msgstr "Keine Aktionen für diese Zeile"
 
 msgid "%d more findings on this line are not listed"
-msgstr "%d weitere Funde auf dieser Zeile sind nicht aufgefuehrt"
+msgstr "%d weitere Funde auf dieser Zeile sind nicht aufgeführt"
 
 msgid "Suppress here (// noinspection %s)"
-msgstr "Hier unterdruecken (// noinspection %s)"
+msgstr "Hier unterdrücken (// noinspection %s)"
 
 msgid "Suppress in this file (// noinspection-file %s)"
-msgstr "In dieser Datei unterdruecken (// noinspection-file %s)"
+msgstr "In dieser Datei unterdrücken (// noinspection-file %s)"
 
 msgid "Remove ineffective suppression marker"
-msgstr "Wirkungslosen Unterdrueck-Marker entfernen"
+msgstr "Wirkungslosen Unterdrück-Marker entfernen"
+
 msgid "Use FreeAndNil(%s)"
 msgstr "FreeAndNil(%s) verwenden"
 
@@ -2278,7 +2279,6 @@ msgstr "Assigned() statt Vergleich mit nil verwenden"
 
 msgid "Remove (TObject) from the class declaration"
 msgstr "(TObject) aus der Klassendeklaration entfernen"
-
 
 msgid "Show location"
 msgstr "Stelle zeigen"
@@ -2290,10 +2290,10 @@ msgid "Copy parameterized template to clipboard"
 msgstr "Parametrisierte Vorlage in die Zwischenablage"
 
 msgid "uses: qualify all %d entries"
-msgstr "uses: alle %d Eintraege qualifizieren"
+msgstr "uses: alle %d Einträge qualifizieren"
 
 msgid "uses: qualify entries"
-msgstr "uses: Eintraege qualifizieren"
+msgstr "uses: Einträge qualifizieren"
 
 msgid "Line %d:%d to %d:%d"
 msgstr "Zeile %d:%d bis %d:%d"
@@ -2302,7 +2302,7 @@ msgid "Scope table not loaded (unitscopes.txt)"
 msgstr "Scope-Tabelle nicht geladen (unitscopes.txt)"
 
 msgid "uses clause contains compiler directives (line %d)"
-msgstr "uses-Klausel traegt Compiler-Direktiven (Zeile %d)"
+msgstr "uses-Klausel trägt Compiler-Direktiven (Zeile %d)"
 
 msgid "own unit %s in the project"
 msgstr "eigene Unit %s im Projekt"
@@ -2311,7 +2311,7 @@ msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"
 msgstr "Datei mit FPC-Weiche oder FPC-Modus - FPC 3.2 kennt keine Unit-Scopes"
 
 msgid "the clause would no longer be sorted (new SCA142)"
-msgstr "die Klausel waere danach unsortiert (neuer SCA142-Fund)"
+msgstr "die Klausel wäre danach unsortiert (neuer SCA142-Fund)"
 
 msgid "uses: qualify %s"
 msgstr "uses: %s qualifizieren"

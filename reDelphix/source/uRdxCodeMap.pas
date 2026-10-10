@@ -105,14 +105,18 @@ function Before(AMap: TRdxCodeMap; const ATok: TRdxToken): TRdxToken;
 
 implementation
 
+// Zeichen > #127 wie der Core (uRefactorInfoBuilder) und uRdxRecipes:
+// Bezeichner mit Umlaut sind in Delphi erlaubt - sonst lehnten die Planer
+// 'Uebersicht.Free' mit einem falschen Grund ab (Review nach Bereichen
+// 2026-10-10, Nit 17).
 function IsIdentStart(C: Char): Boolean;
 begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']);
+  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']) or (C > #127);
 end;
 
 function IsIdentChar(C: Char): Boolean;
 begin
-  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']);
+  Result := CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_']) or (C > #127);
 end;
 
 function IsBlank(C: Char): Boolean;

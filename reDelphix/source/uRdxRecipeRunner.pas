@@ -493,14 +493,21 @@ var
   Plus     : Integer;
   NodeKey  : string;
   QueryKey : string;
+  Same     : Boolean;
 begin
   Result := '';
   if AQuery.Target <> '' then
   begin
     NodeKey  := TRdxRecipes.TargetKey(ANode.Name);
     QueryKey := TRdxRecipes.TargetKey(AQuery.Target);
-    if TRdxRecipes.TargetsComparable(NodeKey, QueryKey)
-       and not SameText(NodeKey, QueryKey) then
+    // Mit Nicht-ASCII im Ziel wenigstens der ASCII-Anteil - sonst entfiel
+    // fuer SCA003 (ohne '+'-Probe) jede Gegenprobe (Nit 25).
+    if TRdxRecipes.TargetsComparable(NodeKey, QueryKey) then
+      Same := SameText(NodeKey, QueryKey)
+    else
+      Same := SameText(TRdxRecipes.AsciiOnly(NodeKey),
+        TRdxRecipes.AsciiOnly(QueryKey));
+    if not Same then
       Exit(Format('Zeile %d traegt %s, der Fund nennt %s - Zeile verschoben? '
         + 'Datei neu pruefen', [AQuery.Line, NodeKey, AQuery.Target]));
   end;
@@ -1155,8 +1162,24 @@ begin
     fkNilComparison];
 end;
 
+// X aus der SCA085-Meldung '`X.Free; X := nil;` - prefer ...'; '' ohne
+// diese Form.
+function FreeTargetOf(const AMessage: string): string;
+var
+  P, Q : Integer;
+begin
+  Result := '';
+  P := Pos('`', AMessage);
+  if P = 0 then Exit;
+  Q := Pos('.Free', AMessage, P + 1);
+  if Q = 0 then Exit;
+  Result := Trim(Copy(AMessage, P + 1, Q - P - 1));
+end;
+
 class function TRdxFixRunner.FixFor(APlaces: TSourcePlaces; ALines: TStrings;
   AFinding: TLeakFinding; const AUsesNames: TArray<string>): TRdxFixOutcome;
+var
+  Named : string;
 begin
   Result := Default(TRdxFixOutcome);
   if not Assigned(AFinding) then
@@ -1168,7 +1191,24 @@ begin
     fkExplicitTObjectInheritance:
       Result := ExplicitTObjectFix(ALines, AFinding.LineInt, AFinding.Message);
     fkFreeAndNilHint:
-      Result := FreeAndNilFix(APlaces, ALines, AFinding.LineInt, AUsesNames);
+      begin
+        Result := FreeAndNilFix(APlaces, ALines, AFinding.LineInt, AUsesNames);
+        // Gegenprobe gegen den Fund wie bei SCA044/SCA003 (Minor 20, hier
+        // Nit 26): die Meldung nennt X ('`X.Free; X := nil;` - ...'). Steht
+        // nach Einfuegungen oberhalb ein anderes Paar auf der Zeile, nicht
+        // umschreiben.
+        Named := FreeTargetOf(AFinding.Message);
+        if Result.Enabled and (Named <> '')
+           and not SameText(TRdxRecipes.AsciiOnly(Named),
+                            TRdxRecipes.AsciiOnly(Result.Name)) then
+        begin
+          Result.Enabled := False;
+          Result.Edits   := nil;
+          Result.Reason  := Format('Zeile %d traegt %s.Free, der Fund nennt %s - '
+            + 'Zeile verschoben? Datei neu pruefen',
+            [AFinding.LineInt, Result.Name, Named]);
+        end;
+      end;
     fkNilComparison:
       Result := NilComparisonFix(APlaces, ALines, AFinding.LineInt);
   else

@@ -338,6 +338,15 @@ begin
       end;
   else
     begin
+      // Ein EINZIGER Kandidat ist nicht mehrdeutig: eine Datei, die mit
+      // dem Kurznamen uebersetzt, hat nur diese Wahl (ComCtrls ->
+      // Vcl.ComCtrls). Geraten wird nur bei mehreren (Review nach
+      // Bereichen 2026-10-10, Nit 16; so stand es schon im Kopf).
+      if Length(Cands) = 1 then
+      begin
+        AQualified := Cands[0];
+        Exit(True);
+      end;
       AReason := 'Rahmenwerk (VCL/FMX) der Datei nicht erkennbar: '
         + JoinNames(Cands);
       Exit;

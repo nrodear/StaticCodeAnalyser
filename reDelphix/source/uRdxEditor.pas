@@ -47,6 +47,14 @@ interface
 uses
   uRefactorInfo, uRdxBufferMath;
 
+const
+  // msgid zu EDITOR_MAX_COLUMN (Format-Argument: die Spalte), EINMAL fuer
+  // Editor und Anbieter (Review nach Bereichen 2026-10-10, Nit 34). Hier
+  // und nicht in uRdxBufferMath: tools/i18n_extract.py loest nur
+  // Konstanten derselben Unit auf, und hier steht ein _(S_TOO_LONG).
+  S_TOO_LONG = 'Line too long for the editor selection (the editor '
+    + 'reaches at most column %d)';
+
 type
   TRdxEditor = class
   public

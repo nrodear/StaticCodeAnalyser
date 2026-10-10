@@ -80,6 +80,8 @@ type
     // Review reDelphiX nach Bereichen 2026-10-10, Minor 2: eine Funktion
     // der Unit verdeckt einen Namen der Modul-Listen (ParamStr: Variant).
     [Test] procedure Judge_Shadowed_NamesProveNothing;
+    // Nit 25/26: die ASCII-Ersatzprobe fuer Ziele mit Umlaut.
+    [Test] procedure AsciiOnly_KeepsAsciiPart;
     [Test] procedure Format_IntToStrNotProvenByCore_StaysCall;
     // Fund-Abgleich (Minor 20) und '+'-Gegenprobe (strittiger Minor 2).
     [Test] procedure PlusCount_LikeScanConcat;
@@ -647,6 +649,16 @@ begin
   Assert.AreEqual('', TRdxRecipes.ShadowNameOf('''x'''));
 end;
 
+procedure TTestRdxRecipes.AsciiOnly_KeepsAsciiPart;
+begin
+  Assert.AreEqual('Abfrage_.SQL.Text',
+    TRdxRecipes.AsciiOnly('Abfrage_' + #$00C4 + '.SQL.Text'), 'Unicode');
+  Assert.AreEqual('Abfrage_.SQL.Text',
+    TRdxRecipes.AsciiOnly('Abfrage_' + #$00C3 + #$201E + '.SQL.Text'),
+    'dieselbe Datei als ANSI gelesen');
+  Assert.AreEqual('', TRdxRecipes.AsciiOnly(''));
+end;
+
 procedure TTestRdxRecipes.Format_IntToStrNotProvenByCore_StaysCall;
 var
   Parts : TRdxParts;
@@ -1168,10 +1180,13 @@ var
   T      : TRdxScopeTable;
   Q, Why : string;
 begin
-  T := MakeTable(['forms=FMX.Forms;Vcl.Forms']);
+  T := MakeTable(['forms=FMX.Forms;Vcl.Forms', 'comctrls=Vcl.ComCtrls']);
   try
     Assert.IsFalse(T.Resolve('Forms', fwUnknown, Q, Why));
     Assert.IsTrue(Pos('Rahmenwerk', Why) > 0, Why);
+    // Nit 16: ein einziger Kandidat ist nicht mehrdeutig.
+    Assert.IsTrue(T.Resolve('ComCtrls', fwUnknown, Q, Why), Why);
+    Assert.AreEqual('Vcl.ComCtrls', Q);
     Assert.IsFalse(T.Resolve('Forms', fwBoth, Q, Why));
     Assert.IsFalse(T.Resolve('MyUnit', fwVcl, Q, Why));
     Assert.IsTrue(Pos('nicht in der Scope-Tabelle', Why) > 0, Why);
