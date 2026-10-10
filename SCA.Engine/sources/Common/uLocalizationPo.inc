@@ -13,8 +13,8 @@
   ========================================================================== }
 
 const
-  // i18n\de.po - 2389 Zeilen, 80178 Bytes
-  CPoLines_de: array[0..2388] of string = (
+  // i18n\de.po - 2401 Zeilen, 80511 Bytes
+  CPoLines_de: array[0..2400] of string = (
     '# German translation for Static Code Analysis Tool for Delphi.',
     '#',
     '# SEED-MIGRATION 2026-07-26: msgstr fuer alle GDeMap-Keys aus dem',
@@ -2336,6 +2336,18 @@ const
     'msgid "Put the branch in begin..end"',
     'msgstr "Zweig in begin..end setzen"',
     '',
+    'msgid "Remove the extra semicolon"',
+    'msgstr "'#$00DC'berz'#$00E4'hliges Semikolon entfernen"',
+    '',
+    'msgid "Move the keyword to column 1"',
+    'msgstr "Schl'#$00FC'sselwort an Spalte 1 setzen"',
+    '',
+    'msgid "Replace begin with initialization"',
+    'msgstr "begin durch initialization ersetzen"',
+    '',
+    'msgid "Remove the cast to %s before Free"',
+    'msgstr "Cast nach %s vor Free entfernen"',
+    '',
     'msgid "(changes behavior)"',
     'msgstr "('#$00E4'ndert Verhalten)"',
     '',
@@ -2678,8 +2690,8 @@ const
     'msgstr "\"%s\" was not imported: %s"'
   );
 
-  // i18n\fr.po - 2385 Zeilen, 84002 Bytes
-  CPoLines_fr: array[0..2384] of string = (
+  // i18n\fr.po - 2397 Zeilen, 84342 Bytes
+  CPoLines_fr: array[0..2396] of string = (
     '# French translation for Static Code Analysis Tool for Delphi.',
     '#',
     'msgid ""',
@@ -4996,6 +5008,18 @@ const
     '',
     'msgid "Put the branch in begin..end"',
     'msgstr "Mettre la branche dans begin..end"',
+    '',
+    'msgid "Remove the extra semicolon"',
+    'msgstr "Supprimer le point-virgule en trop"',
+    '',
+    'msgid "Move the keyword to column 1"',
+    'msgstr "Placer le mot-cl'#$00E9' en colonne 1"',
+    '',
+    'msgid "Replace begin with initialization"',
+    'msgstr "Remplacer begin par initialization"',
+    '',
+    'msgid "Remove the cast to %s before Free"',
+    'msgstr "Supprimer le transtypage en %s avant Free"',
     '',
     'msgid "(changes behavior)"',
     'msgstr "(modifie le comportement)"',

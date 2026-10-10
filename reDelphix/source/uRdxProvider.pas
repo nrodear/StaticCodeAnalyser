@@ -253,6 +253,10 @@ const
   CAP_CASE_ELSE  = 'Add an empty else branch';
   CAP_CASE_RAISE = 'Add an else branch that raises an exception';
   CAP_BEGIN_END  = 'Put the branch in begin..end';
+  CAP_SEMI       = 'Remove the extra semicolon';
+  CAP_INDENT     = 'Move the keyword to column 1';
+  CAP_INIT       = 'Replace begin with initialization';
+  CAP_CAST       = 'Remove the cast to %s before Free';
   // Entscheid E2: eine Hilfe, die das Verhalten aendern kann, sagt es.
   CAP_CHANGES    = '(changes behavior)';
   DIAG_PREFIX  = 'reDelphix: ';
@@ -613,6 +617,24 @@ begin
   end;
 end;
 
+// Menuetexte der Zeilen-Hilfen (SCA082, SCA071, SCA088, SCA123) - ein
+// dritter Verteiler (SCA091). AName ist der Cast-Typ bei SCA123.
+function LineFixCaption(AKind: TFindingKind; const AName: string): string;
+begin
+  case AKind of
+    fkSuperfluousSemicolon:
+      Result := _(CAP_SEMI);
+    fkUnitLevelKeywordIndent:
+      Result := _(CAP_INDENT);
+    fkLegacyInitializationSection:
+      Result := _(CAP_INIT);
+    fkCastAndFree:
+      Result := Format(_(CAP_CAST), [AName]);
+  else
+    Result := uSCAConsts.KindName(AKind);
+  end;
+end;
+
 // Menuetexte der Hilfen aus dem uQuickFix-Umzug und der Stufe 3 (SCA066,
 // SCA072, SCA084, SCA007, SCA168, SCA101, SCA099) - ein zweiter Verteiler
 // (SCA091).
@@ -637,7 +659,7 @@ begin
     fkBeginEndRequired, fkIfElseBegin:
       Result := _(CAP_BEGIN_END);
   else
-    Result := uSCAConsts.KindName(AKind);
+    Result := LineFixCaption(AKind, AName);
   end;
 end;
 

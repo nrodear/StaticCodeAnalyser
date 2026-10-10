@@ -26,6 +26,7 @@ source\uRdxRecipes.pas            reine Textlogik: Literal-Codec, Format() nach 
 source\uRdxScopeTable.pas         Kurzname -> qualifizierte Unit (Compiler-Reihenfolge der Scope-Liste)
 source\uRdxSimpleFixes.pas        Editorhilfen SCA066/SCA072/SCA074/SCA075/SCA084/SCA085/SCA087/SCA126/SCA139 (reine Textlogik)
 source\uRdxStructFixes.pas        Editorhilfen SCA007 (uses-Eintrag), SCA168 (case-else), SCA101/SCA099 (begin..end), reine Textlogik
+source\uRdxLineFixes.pas          Editorhilfen an einer Zeile SCA082/SCA071/SCA088/SCA123, reine Textlogik
 source\uRdxSuppress.pas           Unterdrueck-Marker setzen und entfernen (reine Textlogik)
 source\uRdxCodeMap.pas            Code-Sicht der Datei (Kommentare, Strings, mehrzeilige Strings) und Token-Leser
 source\uRdxBufferMath.pas         Zeile/Spalte -> Byte im UTF-8-Puffer, Pruefung aller Ersetzungen, Spaltengrenze, Textwahl
@@ -100,6 +101,10 @@ die Engine also vorher. DCUs landen wie bei den anderen Projekten in
 | Bedingung als Assert-Meldung verwenden | SCA074 | `Assert(c)` -> `Assert(c, 'c')` an der Spalte aus der Meldung; Apostrophe der Bedingung werden verdoppelt. Nur, wenn die Klammer auf derselben Zeile schliesst und kein Kommentar darin steht; nicht bei `Obj.Assert`, nicht, wenn die Unit selbst eine Routine `Assert` deklariert, nicht im `with`-Block. Ein Literal ueber 255 Zeichen (E2056) sperrt |
 | Unit X aus uses entfernen (aendert Verhalten) | SCA007 | loescht den Eintrag der Meldung aus seiner uses-Klausel: vor dem letzten Eintrag samt Komma bis zum naechsten - steht er allein auf seiner Zeile, die ganze Zeile samt `//`-Kommentar -, den letzten ab dem Komma davor, den einzigen mit der ganzen Klausel (ganze Zeilen, wenn sie allein steht); ein `in`-Pfad geht mit. Vorher wird der Fund am aktuellen Puffer nachgeprueft (dieselben Spuren wie der Detektor: `Unit.`-Bezug, bekannte Bezeichner) - ein Fund aus einem aelteren Scan bietet nichts an. Gesperrt bei einem Kommentar im geloeschten Bereich (auch `{Form1}` hinter einer Formular-Unit), bei Direktiven in einer uses-Klausel und wenn im Bereich mehr steht als dieser Eintrag. Gekennzeichnet nach Entscheid E2: der Fund ist heuristisch (danach kompilieren - ein Typ, den der Detektor nicht kennt, etwa `TDataModule`, macht ihn falsch), und ein `initialization`-Abschnitt der Unit laeuft danach nicht mehr. Strg+Alt+F fuehrt gekennzeichnete Hilfen nicht aus |
 | Leeren else-Zweig ergaenzen / else-Zweig mit Exception ergaenzen (aendert Verhalten) | SCA168 | zwei Eintraege (Nico 2026-10-10): ein leeres `else` vor das `end` des case (bedeutungsgleich) bzw. `else raise EProgrammerError.Create('Unhandled case');` (+ `System.SysUtils` bei Bedarf). Das `end` findet eine Token-Bilanz (begin/case/try/asm/record; `&End` und `@@End` zaehlen nicht); steht es allein auf der Zeile, kommt das `else` in eine eigene Zeile mit derselben Einrueckung, die raise-Zeile eingerueckt wie die Arme. Endet der letzte Arm nicht auf `;`, setzt die Hilfe es mit - sonst bande das `else` an ein `if` im Arm (`1: if B then DoA`). Gesperrt bei einer Direktive zwischen `case` und `end`, wenn schon ein `else` oder (FPC) `otherwise` hinter `;` steht, bei einem case ohne Zweige, bei zwei `case` auf der Zeile; die raise-Variante nicht in Dateien mit FPC-Weiche oder FPC-Modus (FPC kennt EProgrammerError nicht) |
+| Ueberzaehliges Semikolon entfernen | SCA082 | `; ;` an der Spalte aus der Meldung -> `;` (das zweite war eine leere Anweisung). Nur, wenn dort beide `;` Code sind (kein String) |
+| Schluesselwort an Spalte 1 setzen | SCA071 | loescht die Einrueckung vor dem Unit-Schluesselwort aus der Meldung. Nicht, wenn davor mehr als Leerraum steht (ein Kommentar ginge verloren) oder die Zeile in einem Kommentar bzw. mehrzeiligen String beginnt |
+| begin durch initialization ersetzen | SCA088 | das `begin` des Unit-Rumpfs (`begin .. end.`) wird `initialization`, Schreibweise wie das `begin`. Nur in einer Unit (in `program`/`library` ist es der Rumpf), nur wenn das `end` zu genau diesem `begin` (Token-Bilanz) vor dem Punkt steht, nicht bei einer Direktive auf der Zeile |
+| Cast nach T vor Free entfernen | SCA123 | `TFoo(X).Free` -> `X.Free` (Free ruft Destroy virtuell auf). Nur fuer Free, nur fuer einen Bezeichnerpfad als Operand (kein Aufruf, kein Index, kein `nil` - dort kann der Cast zum Uebersetzen noetig sein), nicht fuer einen Interface-Cast (`IFoo(X).Free` riefe dessen Methode) und nicht, wenn die Unit eine eigene Methode Free deklariert |
 | Zweig in begin..end setzen | SCA101, SCA099 | setzt die Anweisung hinter `then`/`else`/`do` in `begin..end` (Entscheid E7, bedeutungsgleich). SCA101: das Schluesselwort an der Spalte aus der Meldung; SCA099: das `else` hinter dem einen `end else` der Fundzeile, das der Detektor meldet (`end else if`/`end else begin` zaehlen nicht mit). Die Anweisung endet mit `;` (das `end` bekommt dann eines) oder vor `else`/`end`/`until`/`except`/`finally` (sie bekommt ein `;`, das `end` keines). Hinter dem `else` eines `case` oder `except` steht eine Anweisungsliste - dann kommt alles bis vor dessen `end` in den Block, nicht nur die erste Anweisung. Wem ein `else` gehoert, entscheidet eine Rueckwaerts-Suche wie der Compiler (dangling else: das naechste `then` ohne eigenes `else`; Bloecke und `repeat..until` werden uebersprungen); ein `;` auf oberster Ebene schliesst ein if-else aus, entscheidend ist erst das `of` bzw. `except` davor. Form: endet die Zeile des Schluesselworts mit ihm und die letzte Zeile der Anweisung mit ihr, kommen `begin` und `end` in eigene Zeilen (eingerueckt wie die Zeile des `if`/`for`/`while`/`with`/`on` bzw. des `else`; Kommentarzeilen dazwischen kommen mit in den Block); steht die Anweisung ganz auf der Zeile des Schluesselworts, kommt sie eine Stufe tiefer in eine eigene Zeile (ein folgendes `else` in die naechste); sonst inline (`begin X; end`). Gesperrt bei einem bedingten Ausdruck (Delphi 13: `X := if A then B else C`, auch verschachtelt oder als `Write`-Breite hinter `:`), wenn hinter einem `;` vor dem `else` eine Deklaration steht (`var`, `procedure` ... - der Kopf einer anonymen Methode; wem das `else` gehoert, waere unklar), bei `record` vor dem `else`, wenn in der Anweisung eine Struktur, eine anonyme Methode oder eine Inline-Deklaration steht (`var`/`const` auch in der Liste eines case-else: `begin..end` engte ihren Gueltigkeitsbereich ein), bei einer Direktive in den Zeilen vom entscheidenden Token (beim `else` das `then` bzw. `of`/`except`, sonst das Schluesselwort) bis zum Ende der Anweisung (`{$` in einem `//`-Kommentar zaehlt nicht), bei schon vorhandenem `begin` und bei leerer Anweisung |
 | Leere Klammern entfernen | SCA066 | `Foo()` -> `Foo` an der Spalte aus der Meldung, auch in Deklarationen (`procedure Foo();`). Nur, wo Delphi den Namen ohne Klammern genauso aufruft: als ganze Anweisung (`Obj.Foo();`), als ganze Bedingung von `if`/`while`/`until` oder als ganze rechte Seite einer Zuweisung an eine einfache Variable, deren Typ bekannt und nicht prozedural ist (sonst liest Delphi den Namen als Zeiger). Gesperrt als Argument oder Teil eines Ausdrucks (etwa bei einer Ueberladung mit `TFunc`), bei `Arr[0]()` und `F()()`, wenn der Name eine Variable (Prozedurvariable) ist oder wie ein Ereignis heisst (`OnIdle()`), in der eigenen Funktion, im `with`-Block und in Dateien mit FPC-Weiche oder FPC-Modus. Nachfolger des alten Strg+Alt+F (uQuickFix) |
 | Ueberfluessigen Vergleich mit True/False entfernen | SCA072 | `X = True` / `X <> False` -> `X`, `X = False` / `X <> True` -> `not X`. Nur fuer einen blossen Bezeichner (kein Pfad, auch nicht `Self.X`), der in der Unit als `Boolean` deklariert ist (bei Variant und LongBool ist `= True` nicht dasselbe); links davon muss ein Ausdruck beginnen und rechts von True/False einer enden - `X = True and Y` heisst `X = (True and Y)`. Gesperrt im `with`-Block. Nachfolger von uQuickFix, der auch Pfade ohne Typpruefung umschrieb |
@@ -277,6 +282,10 @@ Projekt scannen. Gluehbirne oder Editor-Kontextmenue auf der Fundzeile:
 | SCA168 DefaultCaseInCaseStatement | `case` ohne `else` | leerer else-Zweig bzw. else mit Exception (gekennzeichnet) |
 | SCA101 BeginEndRequired | `if Active then DoStuff;` | Zweig in begin..end setzen |
 | SCA099 IfElseBegin | `end else DoC;` | Zweig in begin..end setzen |
+| SCA082 SuperfluousSemicolon | `DoStuff;;` | ueberzaehliges Semikolon entfernen |
+| SCA071 UnitLevelKeywordIndent | `  implementation` | Schluesselwort an Spalte 1 setzen |
+| SCA088 LegacyInitializationSection | `begin ... end.` am Ende einer Unit | begin durch initialization ersetzen |
+| SCA123 CastAndFree | `TStringList(L).Free;` | Cast vor Free entfernen |
 | SCA072 RedundantBoolean | `if Active = True then` (Active: Boolean) | Vergleich mit True/False entfernen |
 | SCA084 AssignedAndAssignedNil | `if Assigned(Obj) and (Obj <> nil) then` | Vergleich mit nil entfernen |
 | SCA165 UnusedSuppression | wirkungsloser `// noinspection`-Marker | Marker entfernen - nur bei genau einer Art; Mehrarten- und `All`-Marker stehen gesperrt da (unter diesem Teilprofil wirken sie vielleicht nur scheinbar nicht) |
@@ -335,9 +344,10 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
   (`TRdxRecipeRunner.QualifyUses`): Eintraege der Zeile, alle,
   Sortierung, FPC-Weiche, Direktiven, eigene Unit.
 * `uTestRdxSimpleFixes` / `uTestRdxNilFix` / `uTestRdxExprFixes` /
-  `uTestRdxStructFixes` / `uTestRdxBlockFixes` - die Editorhilfen
-  SCA074/SCA075/SCA085/SCA087/SCA139, SCA126, SCA066/SCA072/SCA084,
-  SCA007/SCA168 bzw. SCA101/SCA099 auf Text, ohne Parser.
+  `uTestRdxStructFixes` / `uTestRdxBlockFixes` / `uTestRdxLineFixes` - die
+  Editorhilfen SCA074/SCA075/SCA085/SCA087/SCA139, SCA126,
+  SCA066/SCA072/SCA084, SCA007/SCA168, SCA101/SCA099 bzw.
+  SCA082/SCA071/SCA088/SCA123 auf Text, ohne Parser.
 * `uTestRdxSimpleFixesDetector` - dieselben Hilfen gegen den echten
   Detektor: nach der Hilfe meldet er nichts mehr; die Katalog-Beispiele
   `bad` werden genau `good` (SCA074 und SCA139: das `good` traegt eine
@@ -347,14 +357,14 @@ d12-Projektgruppe): prueft den ToolsAPI-freien Teil gegen den echten Core.
 Ohne Delphi (FPC 3.2.2):
 
 ```
-bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes
+bash reDelphix/tools/fpc-pruefstand/build.sh uTestRdxRecipes uTestRdxBufferMath uTestRdxSuppress uTestRdxSimpleFixes uTestRdxNilFix uTestRdxCodeMap uTestRdxExprFixes uTestRdxStructFixes uTestRdxBlockFixes uTestRdxLineFixes
 ```
 
 Der Pruefstand uebersetzt die Core-Units des Quellstellen-Dienstes
 (`uRefactor*`, `uSourcePlaces`, `uFindingActions`, `ScanCodeLine` aus
 `uDetectorUtils`) mit Stubs fuer Parser und Resolver sowie die Textlogik
 des Moduls (`uRdxRecipes`, `uRdxScopeTable`, `uRdxBufferMath`,
-`uRdxSuppress`, `uRdxSimpleFixes`, `uRdxStructFixes`, `uRdxCodeMap`). Testunits kommen aus `reDelphix\tests`,
+`uRdxSuppress`, `uRdxSimpleFixes`, `uRdxStructFixes`, `uRdxLineFixes`, `uRdxCodeMap`). Testunits kommen aus `reDelphix\tests`,
 sonst aus `StaticCodeAnalyserForm\tests` (Core-Tests wie
 `uTestSourcePlaces`, `uTestRefactorConcat`).
 

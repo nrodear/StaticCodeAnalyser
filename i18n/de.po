@@ -2319,6 +2319,18 @@ msgstr "else-Zweig mit Exception ergänzen"
 msgid "Put the branch in begin..end"
 msgstr "Zweig in begin..end setzen"
 
+msgid "Remove the extra semicolon"
+msgstr "Überzähliges Semikolon entfernen"
+
+msgid "Move the keyword to column 1"
+msgstr "Schlüsselwort an Spalte 1 setzen"
+
+msgid "Replace begin with initialization"
+msgstr "begin durch initialization ersetzen"
+
+msgid "Remove the cast to %s before Free"
+msgstr "Cast nach %s vor Free entfernen"
+
 msgid "(changes behavior)"
 msgstr "(ändert Verhalten)"
 

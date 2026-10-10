@@ -122,11 +122,11 @@ msgstr ""
 msgid "%s is not a valid JSON object."
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:826
+#: reDelphix/source/uRdxProvider.pas:848
 msgid "%s: no fixMode in the rule catalog"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:670
+#: reDelphix/source/uRdxProvider.pas:692
 msgid "(changes behavior)"
 msgstr ""
 
@@ -201,11 +201,11 @@ msgstr ""
 msgid "Add"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:634
+#: reDelphix/source/uRdxProvider.pas:656
 msgid "Add an else branch that raises an exception"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:636
+#: reDelphix/source/uRdxProvider.pas:658
 msgid "Add an empty else branch"
 msgstr ""
 
@@ -460,8 +460,8 @@ msgstr ""
 msgid "Bugs"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:496
-#: reDelphix/source/uRdxProvider.pas:511
+#: reDelphix/source/uRdxProvider.pas:500
+#: reDelphix/source/uRdxProvider.pas:515
 msgid "Build Format() from concatenation"
 msgstr ""
 
@@ -714,9 +714,9 @@ msgstr ""
 msgid "Copy Jira issue"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:523
-#: reDelphix/source/uRdxProvider.pas:529
-#: reDelphix/source/uRdxProvider.pas:534
+#: reDelphix/source/uRdxProvider.pas:527
+#: reDelphix/source/uRdxProvider.pas:533
+#: reDelphix/source/uRdxProvider.pas:538
 msgid "Copy parameterized template to clipboard"
 msgstr ""
 
@@ -1408,7 +1408,7 @@ msgstr ""
 msgid "Line"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:477
+#: reDelphix/source/uRdxProvider.pas:481
 msgid "Line %d:%d to %d:%d"
 msgstr ""
 
@@ -1538,6 +1538,10 @@ msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:4035
 msgid "Move / FillChar uses SizeOf(pointer-type) - copies only 4/8 bytes, not the target buffer"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:628
+msgid "Move the keyword to column 1"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:2477
@@ -1822,7 +1826,7 @@ msgstr ""
 msgid "Published method looks like an event handler but no component binds it"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:638
+#: reDelphix/source/uRdxProvider.pas:660
 msgid "Put the branch in begin..end"
 msgstr ""
 
@@ -1905,12 +1909,12 @@ msgstr ""
 msgid "Reload"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:661
+#: reDelphix/source/uRdxProvider.pas:683
 msgid "Remove (TObject) from the class declaration"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:741
-#: reDelphix/source/uRdxProvider.pas:744
+#: reDelphix/source/uRdxProvider.pas:763
+#: reDelphix/source/uRdxProvider.pas:766
 msgid "Remove ineffective suppression marker"
 msgstr ""
 
@@ -1920,24 +1924,36 @@ msgstr ""
 msgid "Remove rules"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:625
+#: reDelphix/source/uRdxProvider.pas:632
+msgid "Remove the cast to %s before Free"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:647
 msgid "Remove the empty parentheses"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:665
+#: reDelphix/source/uRdxProvider.pas:687
 msgid "Remove the empty visibility section"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:627
+#: reDelphix/source/uRdxProvider.pas:626
+msgid "Remove the extra semicolon"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:649
 msgid "Remove the redundant comparison with True/False"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:629
+#: reDelphix/source/uRdxProvider.pas:651
 msgid "Remove the redundant comparison with nil"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:631
+#: reDelphix/source/uRdxProvider.pas:653
 msgid "Remove unit %s from uses"
+msgstr ""
+
+#: reDelphix/source/uRdxProvider.pas:630
+msgid "Replace begin with initialization"
 msgstr ""
 
 #: SCA.Engine/sources/Output/uFixHint.pas:1420
@@ -2064,7 +2080,7 @@ msgstr ""
 msgid "Scanning... %d found"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:563
+#: reDelphix/source/uRdxProvider.pas:567
 msgid "Scope table not loaded (unitscopes.txt)"
 msgstr ""
 
@@ -2176,8 +2192,8 @@ msgstr ""
 msgid "Show annotation overlay on hover (otherwise click marked line)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:470
-#: reDelphix/source/uRdxProvider.pas:477
+#: reDelphix/source/uRdxProvider.pas:474
+#: reDelphix/source/uRdxProvider.pas:481
 msgid "Show location"
 msgstr ""
 
@@ -2285,11 +2301,11 @@ msgstr ""
 msgid "Summary"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:720
+#: reDelphix/source/uRdxProvider.pas:742
 msgid "Suppress here (// noinspection %s)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:723
+#: reDelphix/source/uRdxProvider.pas:745
 msgid "Suppress in this file (// noinspection-file %s)"
 msgstr ""
 
@@ -2449,15 +2465,15 @@ msgstr ""
 msgid "Unit-level keyword not at column 1"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:659
+#: reDelphix/source/uRdxProvider.pas:681
 msgid "Use Assigned() instead of comparing with nil"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:657
+#: reDelphix/source/uRdxProvider.pas:679
 msgid "Use FreeAndNil(%s)"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:663
+#: reDelphix/source/uRdxProvider.pas:685
 msgid "Use the condition as the Assert message"
 msgstr ""
 
@@ -2618,7 +2634,7 @@ msgstr ""
 msgid "default"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:870
+#: reDelphix/source/uRdxProvider.pas:892
 msgid "editor buffer empty or not readable"
 msgstr ""
 
@@ -2626,24 +2642,24 @@ msgstr ""
 msgid "except on E: Exception catches every error - prefer a specific subclass"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:855
+#: reDelphix/source/uRdxProvider.pas:877
 msgid "file not found: %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:764
-#: reDelphix/source/uRdxProvider.pas:882
+#: reDelphix/source/uRdxProvider.pas:786
+#: reDelphix/source/uRdxProvider.pas:904
 msgid "file not readable"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:576
+#: reDelphix/source/uRdxProvider.pas:580
 msgid "file with an FPC switch or FPC mode - FPC 3.2 knows no unit scopes"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:850
+#: reDelphix/source/uRdxProvider.pas:872
 msgid "finding without file name"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:861
+#: reDelphix/source/uRdxProvider.pas:883
 msgid "finding without line"
 msgstr ""
 
@@ -2676,8 +2692,8 @@ msgstr ""
 msgid "no findings"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:829
-#: reDelphix/source/uRdxProvider.pas:902
+#: reDelphix/source/uRdxProvider.pas:851
+#: reDelphix/source/uRdxProvider.pas:924
 msgid "nothing to offer"
 msgstr ""
 
@@ -2693,7 +2709,7 @@ msgstr ""
 msgid "out parameter - prefer Result or var"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:593
+#: reDelphix/source/uRdxProvider.pas:597
 msgid "own unit %s in the project"
 msgstr ""
 
@@ -2705,8 +2721,8 @@ msgstr ""
 msgid "svn not found. Install TortoiseSVN WITH the option \"command line client tools\" or set the path to svn.exe in analyser.ini."
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:595
-#: reDelphix/source/uRdxProvider.pas:605
+#: reDelphix/source/uRdxProvider.pas:599
+#: reDelphix/source/uRdxProvider.pas:609
 msgid "the clause would no longer be sorted (new SCA142)"
 msgstr ""
 
@@ -2714,7 +2730,7 @@ msgstr ""
 msgid "the modified code as a Pascal block. Keep diff minimal: only the lines that need to change. Match surrounding indentation and naming style."
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:569
+#: reDelphix/source/uRdxProvider.pas:573
 msgid "uses clause contains compiler directives (line %d)"
 msgstr ""
 
@@ -2722,18 +2738,18 @@ msgstr ""
 msgid "uses clause is not in alphabetical order"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:599
+#: reDelphix/source/uRdxProvider.pas:603
 msgid "uses: qualify %s"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:604
-#: reDelphix/source/uRdxProvider.pas:610
+#: reDelphix/source/uRdxProvider.pas:608
+#: reDelphix/source/uRdxProvider.pas:614
 msgid "uses: qualify all %d entries"
 msgstr ""
 
-#: reDelphix/source/uRdxProvider.pas:563
-#: reDelphix/source/uRdxProvider.pas:568
-#: reDelphix/source/uRdxProvider.pas:575
+#: reDelphix/source/uRdxProvider.pas:567
+#: reDelphix/source/uRdxProvider.pas:572
+#: reDelphix/source/uRdxProvider.pas:579
 msgid "uses: qualify entries"
 msgstr ""
 

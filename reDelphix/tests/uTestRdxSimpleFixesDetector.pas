@@ -3,7 +3,8 @@ unit uTestRdxSimpleFixesDetector;
 // Editorhilfen Stufe 2a gegen den ECHTEN Core (nur Delphi, reDelphix.Test):
 // Parser, die Detektoren SCA075/SCA085/SCA126 (dazu SCA074/SCA087/SCA139
 // in der zweiten, SCA066/SCA072/SCA084 in der dritten, SCA007/SCA168 in
-// der vierten, SCA101/SCA099 in der fuenften Fixture),
+// der vierten, SCA101/SCA099 in der fuenften, SCA082/SCA071/SCA088/SCA123
+// in der sechsten Fixture),
 // TSourcePlaces und
 // TRdxFixRunner.FixFor - derselbe Einstieg wie im Anbieter. Je Fall meldet
 // der Detektor, die Hilfe plant aus dem Fund (Art, Zeile, Meldung), die
@@ -134,6 +135,19 @@ type
     [Test] procedure Sca099_AnonMethodHeader_NoHelp;
   end;
 
+  // Zeilen-Hilfen (uRdxLineFixes): SCA082, SCA071, SCA088, SCA123.
+  [TestFixture]
+  TTestRdxSimpleFixesDetector6 = class
+  public
+    [Test] procedure Sca082_RoundTrip_CatalogExample;
+    [Test] procedure Sca071_RoundTrip;
+    [Test] procedure Sca071_CatalogExample;
+    [Test] procedure Sca088_RoundTrip_CatalogExample;
+    [Test] procedure Sca123_RoundTrip;
+    [Test] procedure Sca123_CatalogExample;
+    [Test] procedure Sca123_OwnFree_NoHelp;
+  end;
+
 implementation
 
 uses
@@ -143,6 +157,8 @@ uses
   uAssertMessage, uEmptyVisibilitySection, uFreeWithoutNil,
   uEmptyArgumentList, uRedundantBoolean, uAssignedAndAssignedNil,
   uUnusedUses, uDefaultCaseInCaseStatement, uBeginEndRequired, uIfElseBegin,
+  uSuperfluousSemicolon, uUnitLevelKeywordIndent, uLegacyInitializationSection,
+  uCastAndFree,
   uEngineApi, uRdxBufferMath, uRdxRecipeRunner;
 
 type
@@ -169,6 +185,24 @@ begin
   end;
 end;
 
+// Die Detektoren der Zeilen-Hilfen - ein dritter Verteiler (SCA091).
+procedure RunLineDetector(AKind: TFindingKind; Root: TAstNode;
+  const Path: string; Results: TObjectList<TLeakFinding>);
+begin
+  case AKind of
+    fkSuperfluousSemicolon:
+      TSuperfluousSemicolonDetector.AnalyzeUnit(Root, Path, Results);
+    fkUnitLevelKeywordIndent:
+      TUnitLevelKeywordIndentDetector.AnalyzeUnit(Root, Path, Results);
+    fkLegacyInitializationSection:
+      TLegacyInitializationSectionDetector.AnalyzeUnit(Root, Path, Results);
+    fkCastAndFree:
+      TCastAndFreeDetector.AnalyzeUnit(Root, Path, Results);
+  else
+    Assert.Fail('keine Hilfe fuer diese Art');
+  end;
+end;
+
 // Die Detektoren aus dem uQuickFix-Umzug und der Stufe 3 - ein zweiter
 // Verteiler (SCA091).
 procedure RunLaterDetector(AKind: TFindingKind; Root: TAstNode;
@@ -190,7 +224,7 @@ begin
     fkIfElseBegin:
       TIfElseBeginDetector.AnalyzeUnit(Root, Path, Results);
   else
-    Assert.Fail('keine Hilfe fuer diese Art');
+    RunLineDetector(AKind, Root, Path, Results);
   end;
 end;
 
@@ -1350,11 +1384,101 @@ begin
   AssertNoHelpAt(Src, fkBeginEndRequired, 16, 'anonymen Methode');
 end;
 
+{ ---- SCA082 / SCA071 / SCA088 / SCA123 ---- }
+
+// Eine Unit: interface, implementation, dann AText (CRLF), dann 'end.'.
+function InImplementation(const AText: string): string;
+begin
+  Result := Join(['unit t;', 'interface', 'implementation', AText, 'end.']);
+end;
+
+procedure TTestRdxSimpleFixesDetector6.Sca082_RoundTrip_CatalogExample;
+var
+  Meta : TRuleMeta;
+begin
+  Assert.AreEqual(InRoutine('Obj := nil;'),
+    FixAll(InRoutine('Obj := nil;;'), fkSuperfluousSemicolon));
+  Meta := TRuleCatalog.GetRuleCanonical(fkSuperfluousSemicolon);
+  Assert.AreEqual(InRoutine(Snip(Meta.GoodExample)),
+    FixAll(InRoutine(Snip(Meta.BadExample)), fkSuperfluousSemicolon));
+end;
+
+procedure TTestRdxSimpleFixesDetector6.Sca071_RoundTrip;
+begin
+  // uses meldet der Detektor nur allein auf der Zeile.
+  Assert.AreEqual(Join(['unit t;', 'interface', 'uses', '  System.SysUtils;',
+      'implementation', 'end.']),
+    FixAll(Join(['unit t;', 'interface', '  uses', '  System.SysUtils;',
+      '  implementation', 'end.']), fkUnitLevelKeywordIndent));
+end;
+
+procedure TTestRdxSimpleFixesDetector6.Sca071_CatalogExample;
+var
+  Meta      : TRuleMeta;
+  Bad, Done : string;
+begin
+  // 'good' rueckt auch 'procedure Foo' aus - das meldet die Regel nicht;
+  // verglichen wird die Zeile des Schluesselworts.
+  Meta := TRuleCatalog.GetRuleCanonical(fkUnitLevelKeywordIndent);
+  Assert.IsTrue(Pos('implementation', Snip(Meta.GoodExample)) = 1,
+    Meta.GoodExample);
+  Bad := Join(['unit t;', 'interface', Snip(Meta.BadExample), 'end.']);
+  Done := FixAll(Bad, fkUnitLevelKeywordIndent);
+  Assert.AreEqual(StringReplace(Bad, '  implementation', 'implementation', []),
+    Done);
+end;
+
+procedure TTestRdxSimpleFixesDetector6.Sca088_RoundTrip_CatalogExample;
+var
+  Meta : TRuleMeta;
+  Done : string;
+begin
+  Assert.AreEqual(InImplementation(Join(['procedure P; begin end;',
+      'initialization', '  P;'])),
+    FixAll(InImplementation(Join(['procedure P; begin end;', 'begin', '  P;'])),
+      fkLegacyInitializationSection));
+  // 'bad' traegt eine Kommentarzeile davor, 'good' nicht - 'good' steht im
+  // Ergebnis.
+  Meta := TRuleCatalog.GetRuleCanonical(fkLegacyInitializationSection);
+  Done := FixAll(Join(['unit t;', 'interface', 'implementation',
+    Snip(Meta.BadExample)]), fkLegacyInitializationSection);
+  Assert.IsTrue(Pos(Snip(Meta.GoodExample), Done) > 0, Done);
+end;
+
+procedure TTestRdxSimpleFixesDetector6.Sca123_RoundTrip;
+begin
+  Assert.AreEqual(InRoutine('Obj.Free;'),
+    FixAll(InRoutine('TStringList(Obj).Free;'), fkCastAndFree));
+end;
+
+procedure TTestRdxSimpleFixesDetector6.Sca123_CatalogExample;
+var
+  Meta      : TRuleMeta;
+  Bad, Done : string;
+begin
+  // 'good' traegt einen anderen Kommentar - verglichen wird die Ersetzung.
+  Meta := TRuleCatalog.GetRuleCanonical(fkCastAndFree);
+  Assert.IsTrue(Pos('L.Free;', Meta.GoodExample) > 0, Meta.GoodExample);
+  Bad := InImplementation(Snip(Meta.BadExample));
+  Done := FixAll(Bad, fkCastAndFree);
+  Assert.AreEqual(StringReplace(Bad, 'TStringList(L).Free;', 'L.Free;', []), Done);
+end;
+
+procedure TTestRdxSimpleFixesDetector6.Sca123_OwnFree_NoHelp;
+begin
+  // Eine eigene Methode Free in der Unit: der Cast koennte sie waehlen.
+  AssertNoHelp(Join(['unit t;', 'interface', 'type', '  TFoo = class',
+    '    procedure Free;', '  end;', 'implementation',
+    'procedure TFoo.Free; begin end;', 'procedure P(X: TObject);', 'begin',
+    '  TFoo(X).Free;', 'end;', 'end.']), fkCastAndFree, 'eigene Methode Free');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector2);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector3);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector4);
   TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector5);
+  TDUnitX.RegisterTestFixture(TTestRdxSimpleFixesDetector6);
 
 end.

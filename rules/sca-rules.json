@@ -1465,6 +1465,7 @@
       "type": "Code Smell",
       "tags": ["style", "structure"],
       "detectorUnit": "uUnitLevelKeywordIndent.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "  implementation\n\n  procedure Foo; ...",
         "good": "implementation\n\nprocedure Foo; ..."
@@ -1696,6 +1697,7 @@
       "type": "Code Smell",
       "tags": ["typo", "style"],
       "detectorUnit": "uSuperfluousSemicolon.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "DoStuff;;",
         "good": "DoStuff;"
@@ -1813,6 +1815,7 @@
       "type": "Code Smell",
       "tags": ["legacy", "modernization"],
       "detectorUnit": "uLegacyInitializationSection.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "// at end of unit:\nbegin\n  RegisterClass(TFoo);\nend.",
         "good": "initialization\n  RegisterClass(TFoo);\nend."
@@ -2488,6 +2491,7 @@
       "type": "Code Smell",
       "tags": ["memory", "destructor", "cast", "sonardelphi"],
       "detectorUnit": "uCastAndFree.pas",
+      "editorHelp": true,
       "examples": {
         "bad":  "procedure Cleanup(L: TObject);\nbegin\n  TStringList(L).Free;     // cast has no effect on dispatch\nend;",
         "good": "procedure Cleanup(L: TObject);\nbegin\n  L.Free;                  // virtual Destroy resolves at runtime\nend;"

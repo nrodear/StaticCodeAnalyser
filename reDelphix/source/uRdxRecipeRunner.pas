@@ -407,6 +407,12 @@ type
     class function BlockFix(AKind: TFindingKind; ALines: TStrings;
       ALine: Integer; const AMessage: string): TRdxFixOutcome; static;
 
+    // SCA082, SCA071, SCA088 und SCA123 (TRdxLineFixes): nur die Zeilen,
+    // bedeutungsgleich. SCA123 ausserdem nicht, wenn die Unit eine eigene
+    // Methode Free deklariert (der Cast koennte sie waehlen).
+    class function LineFix(AKind: TFindingKind; ALines: TStrings;
+      ALine: Integer; const AMessage: string): TRdxFixOutcome; static;
+
     // Ein zweiter Menueeintrag fuer denselben Fund, Variant = 1 - heute nur
     // SCA168 (else mit raise; Nico 2026-10-10: beide Eintraege). Variant = 0:
     // keiner.
@@ -422,6 +428,7 @@ uses
   uRdxCodeMap,       // TRdxCodeMap: Code-Sicht der Datei fuer die Planer
   uRdxSimpleFixes,   // Planer der einfachen Hilfen (reine Textlogik)
   uRdxStructFixes,   // Planer SCA007/SCA168 (uses-Eintrag, case-else)
+  uRdxLineFixes,     // Planer SCA082/SCA071/SCA088/SCA123 (eine Zeile)
   uUnusedUses,       // KnownIdents: SCA007-Fund am Puffer nachpruefen
   uSourcePlaces;     // SOURCE_PLACES_VERSION (Vertragspruefung unten)
 
@@ -450,6 +457,15 @@ const
   R_CASE_RAISE_HINT = 'unbehandelte Werte loesen EProgrammerError aus';
   R_BLOCK_HINT      = 'gleiche Bedeutung - nur die Form; eine weitere '
     + 'Anweisung gehoert danach sichtbar in den Zweig';
+  // Hinweise der Zeilen-Hilfen (LineFix).
+  R_SEMI_HINT   = 'das zweite ";" war eine leere Anweisung';
+  R_INDENT_HINT = 'nur Leerraum';
+  R_INIT_HINT   = 'gleiche Bedeutung - der Abschnitt kann danach ein '
+    + 'finalization bekommen';
+  R_CAST_HINT   = 'Free ruft Destroy virtuell auf - der Cast aendert daran '
+    + 'nichts';
+  LINE_FIX_KINDS: TFindingKinds = [fkSuperfluousSemicolon,
+    fkUnitLevelKeywordIndent, fkLegacyInitializationSection, fkCastAndFree];
   R_PROC_TYPE    = '%s hat einen Prozedurtyp - "%s <> nil" ruft ihn auf, '
     + 'Assigned() nicht';
 
@@ -1252,7 +1268,18 @@ begin
     fkNilComparison, fkAssertMessage, fkEmptyVisibilitySection,
     fkFreeWithoutNil, fkEmptyArgumentList, fkRedundantBoolean,
     fkAssignedAndAssignedNil, fkUnusedUses, fkDefaultCaseInCaseStatement,
-    fkBeginEndRequired, fkIfElseBegin];
+    fkBeginEndRequired, fkIfElseBegin] + LINE_FIX_KINDS;
+end;
+
+// Die Zeilen-Hilfen (uRdxLineFixes) - ein dritter Verteiler (SCA091).
+function LineFixFor(ALines: TStrings; AFinding: TLeakFinding): TRdxFixOutcome;
+begin
+  Result := Default(TRdxFixOutcome);
+  if AFinding.Kind in LINE_FIX_KINDS then
+    Result := TRdxFixRunner.LineFix(AFinding.Kind, ALines, AFinding.LineInt,
+      AFinding.Message)
+  else
+    Result.Reason := 'keine einfache Hilfe fuer diese Regel';
 end;
 
 // X aus der SCA085-Meldung '`X.Free; X := nil;` - prefer ...'; '' ohne
@@ -1292,7 +1319,7 @@ begin
       Result := TRdxFixRunner.BlockFix(AFinding.Kind, ALines, AFinding.LineInt,
         AFinding.Message);
   else
-    Result.Reason := 'keine einfache Hilfe fuer diese Regel';
+    Result := LineFixFor(ALines, AFinding);
   end;
 end;
 
@@ -1898,6 +1925,75 @@ begin
   end;
   if Result.Enabled then
     Result.Hint := R_BLOCK_HINT
+  else
+    Result.Edits := nil;
+end;
+
+// Der Hinweis einer Zeilen-Hilfe (LineFix).
+function LineHint(AKind: TFindingKind): string;
+begin
+  case AKind of
+    fkSuperfluousSemicolon:
+      Result := R_SEMI_HINT;
+    fkUnitLevelKeywordIndent:
+      Result := R_INDENT_HINT;
+    fkLegacyInitializationSection:
+      Result := R_INIT_HINT;
+  else
+    Result := R_CAST_HINT;
+  end;
+end;
+
+// Der Planer einer Zeilen-Hilfe: die Ersetzung nach AOutcome.Edits[0],
+// sonst der Grund; SCA123 mit der Pruefung auf eine eigene Methode Free
+// (wie SCA139).
+function LinePlan(AKind: TFindingKind; AMap: TRdxCodeMap; ALine: Integer;
+  const AMessage: string; var AOutcome: TRdxFixOutcome): Boolean;
+begin
+  case AKind of
+    fkSuperfluousSemicolon:
+      Result := TRdxLineFixes.DoubleSemicolon(AMap, ALine, AMessage,
+        AOutcome.Edits[0], AOutcome.Reason);
+    fkUnitLevelKeywordIndent:
+      Result := TRdxLineFixes.KeywordIndent(AMap, ALine, AMessage,
+        AOutcome.Edits[0], AOutcome.Reason);
+    fkLegacyInitializationSection:
+      Result := TRdxLineFixes.LegacyInit(AMap, ALine, AOutcome.Edits[0],
+        AOutcome.Reason);
+  else
+    Result := TRdxLineFixes.CastFree(AMap, ALine, AMessage,
+      AOutcome.Edits[0], AOutcome.Reason);
+    if Result and TRdxSimpleFixes.DeclaresRoutine(AMap, 'Free') then
+    begin
+      AOutcome.Reason := 'die Unit deklariert eine eigene Methode Free - der '
+        + 'Cast koennte sie waehlen';
+      Result := False;
+    end;
+  end;
+end;
+
+class function TRdxFixRunner.LineFix(AKind: TFindingKind; ALines: TStrings;
+  ALine: Integer; const AMessage: string): TRdxFixOutcome;
+var
+  Map : TRdxCodeMap;
+begin
+  Result := Default(TRdxFixOutcome);
+  if not Assigned(ALines) then
+  begin
+    Result.Reason := R_NO_FILE;
+    Exit;
+  end;
+  if AKind = fkCastAndFree then
+    Result.Name := TRdxLineFixes.CastTargetOf(AMessage);
+  SetLength(Result.Edits, 1);
+  Map := TRdxCodeMap.Create(ALines);
+  try
+    Result.Enabled := LinePlan(AKind, Map, ALine, AMessage, Result);
+  finally
+    Map.Free;
+  end;
+  if Result.Enabled then
+    Result.Hint := LineHint(AKind)
   else
     Result.Edits := nil;
 end;

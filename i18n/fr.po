@@ -2315,6 +2315,18 @@ msgstr "Ajouter une branche else qui lève une exception"
 msgid "Put the branch in begin..end"
 msgstr "Mettre la branche dans begin..end"
 
+msgid "Remove the extra semicolon"
+msgstr "Supprimer le point-virgule en trop"
+
+msgid "Move the keyword to column 1"
+msgstr "Placer le mot-clé en colonne 1"
+
+msgid "Replace begin with initialization"
+msgstr "Remplacer begin par initialization"
+
+msgid "Remove the cast to %s before Free"
+msgstr "Supprimer le transtypage en %s avant Free"
+
 msgid "(changes behavior)"
 msgstr "(modifie le comportement)"
 

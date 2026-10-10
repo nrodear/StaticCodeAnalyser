@@ -846,7 +846,7 @@ const
       GoodEx   : 'implementation' + #13#10 + #13#10 + 'procedure Foo; ...';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA072
     (
@@ -969,7 +969,7 @@ const
       GoodEx   : 'DoStuff;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA083
     (
@@ -1039,7 +1039,7 @@ const
       GoodEx   : 'initialization' + #13#10 + '  RegisterClass(TFoo);' + #13#10 + 'end.';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA089
     (
@@ -1478,7 +1478,7 @@ const
         '  L.Free;                  // virtual Destroy resolves at runtime' + #13#10 + 'end;';
       Anchor   : '';
       FixMode  : '';
-      EditorHelp: False
+      EditorHelp: True
     ),
     // SCA124
     (
