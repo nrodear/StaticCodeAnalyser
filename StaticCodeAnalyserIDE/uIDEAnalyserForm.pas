@@ -483,12 +483,12 @@ type
     procedure GridMenuCopyJiraClick(Sender: TObject);
     procedure GridMenuPopup(Sender: TObject);
     // Klick auf einen dynamischen Eintrag aus uFindingActions: fuehrt
-    // Execute des Anbieters aus (ExecuteAction).
+    // Execute des Anbieters aus (RunFindingAction).
     procedure GridMenuActionClick(Sender: TObject);
     // Fuehrt A aus; Fehler des Anbieters landen in der Status-Bar, nicht in
     // der IDE (Grid-Menue, Ctrl+Alt+F/S). True, wenn Execute ohne Ausnahme
     // lief.
-    function ExecuteAction(const A: TFindingAction; Sender: TObject): Boolean;
+    function RunFindingAction(const A: TFindingAction; Sender: TObject): Boolean;
     // Fuehrt fuer den Fund der Grid-Zeile die erste verfuegbare Aktion der
     // Art AKind aus der Anbieter-Registry aus (dasselbe Modell wie
     // Gluehbirne und Grid-Menue) und meldet in der Status-Bar: ADoneFmt
@@ -2881,10 +2881,10 @@ begin
   if not (Sender is TMenuItem) then Exit;
   Idx := TMenuItem(Sender).Tag - GRID_ACTION_TAG;
   if (Idx < 0) or (Idx > High(FGridActions)) then Exit;
-  ExecuteAction(FGridActions[Idx], Sender);
+  RunFindingAction(FGridActions[Idx], Sender);
 end;
 
-function TAnalyserFrame.ExecuteAction(const A: TFindingAction;
+function TAnalyserFrame.RunFindingAction(const A: TFindingAction;
   Sender: TObject): Boolean;
 begin
   Result := False;
@@ -3008,7 +3008,7 @@ begin
         Why := SkippedActionText(A);
       Continue;
     end;
-    if ExecuteAction(A, Self) then
+    if RunFindingAction(A, Self) then
       StatusMode(Format(ADoneFmt, [A.Caption]));
     Exit;
   end;

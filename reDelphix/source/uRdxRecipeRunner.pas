@@ -1714,7 +1714,8 @@ begin
   while T.Low <> '' do
   begin
     N := After(AMap, T);
-    if ((T.Low = Short) and (N.Low = '.')) or IndexText(T.Low, Idents) >= 0 then
+    if ((T.Low = Short) and (N.Low = '.'))
+       or (IndexText(T.Low, Idents) >= 0) then
       Exit(True);
     T := N;
   end;
